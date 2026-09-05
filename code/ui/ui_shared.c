@@ -5461,6 +5461,24 @@ qboolean ItemParse_cvarFloatList(itemDef_t* item, int handle) {
             multiPtr->cvarValue[multiPtr->count] = 0;
             break;
         }
+        // botlib splits a negative value into two tokens: PS_ReadToken only takes
+        // the number path when the character is a digit (l_script.c), so a leading
+        // '-' comes back through the punctuation table as P_SUB. PC_Float_Parse and
+        // PC_Int_Parse rejoin the pair; PC_String_Parse has no way to. Without this
+        // the rest of the list is read one token out of phase, which walks past the
+        // closing brace - ui/ingame_callvote.menu hits MAX_MULTI_CVARS and loses its
+        // whole itemDef, and the resolution lists in ui/ingame_options_*.menu come
+        // out shifted with no error at all.
+        if (multiPtr->cvarStr[multiPtr->count][0] == '-' &&
+            multiPtr->cvarStr[multiPtr->count][1] == '\0') {
+            const char* digits;
+
+            if (!PC_String_Parse(handle, &digits)) {
+                multiPtr->cvarValue[multiPtr->count] = 0;
+                break;
+            }
+            multiPtr->cvarStr[multiPtr->count] = String_Alloc(va("-%s", digits));
+        }
         multiPtr->cvarValue[multiPtr->count] = atof(multiPtr->cvarStr[multiPtr->count]);
 
         multiPtr->count++;
