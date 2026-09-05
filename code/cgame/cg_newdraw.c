@@ -3794,7 +3794,16 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
 void CG_MouseEvent(int x, int y) {
     int n;
 
-    if ((cg.predictedPlayerState.pm_type == PM_NORMAL || cg.predictedPlayerState.pm_type == PM_SPECTATOR) && cg.showScores == qfalse) {
+    // [QL] cgamex86.dll CG_MouseEvent @0x1003c4f0 has no early-out at all: it
+    // just converts the pointer position into 640x480 space (honouring
+    // widescreenBias) and stores cursorX/cursorY. This bail-out is Q3's, and it
+    // drops the key catcher on the first mouse move a live or spectating player
+    // makes - which is every frame the join menu is up. Losing KEYCATCH_CGAME
+    // mid-frame flips CG_AdjustFrom640 from the 4:3+bias mapping to the stretch
+    // one, so the menu tore across the screen at two different widths.
+    if (!cg.showJoinMenu &&
+        (cg.predictedPlayerState.pm_type == PM_NORMAL || cg.predictedPlayerState.pm_type == PM_SPECTATOR) &&
+        cg.showScores == qfalse) {
         trap_Key_SetCatcher(0);
         return;
     }
@@ -3859,6 +3868,19 @@ CG_EventHandling
 void CG_EventHandling(int type) {
     cgs.eventHandling = type;
     if (type == CGAME_EVENT_NONE) {
+        // [QL] cgamex86.dll CG_EventHandling @0x1003c620 dispatches on 0, 4 and 5:
+        //   type 0 -> 0x1003c570, closes "teamMenu"   (Q3 vestige, never loaded)
+        //   type 5 -> 0x1000e930, closes "joingame_menu"
+        // So in the retail binary it is event 5, not 0, that dismisses the join
+        // menu. QL's engine is the one that decides which to send on Escape, and
+        // we do not have it - ioquake3's engine only ever sends CGAME_EVENT_NONE
+        // from its Escape handler (cl_keys.c, right after it drops KEYCATCH_CGAME).
+        //
+        // ADAPTATION, not a replica: NONE is mapped onto the binary's event-5
+        // behaviour, because it is the only event this engine sends and the join
+        // menu has to come down when Escape is pressed. Without it the menu keeps
+        // painting underneath whatever Escape opens next.
+        CG_CloseMenus();
         CG_HideTeamMenu();
     } else if (type == CGAME_EVENT_TEAMMENU) {
         // CG_ShowTeamMenu();
@@ -3871,7 +3893,15 @@ void CG_KeyEvent(int key, qboolean down) {
         return;
     }
 
-    if (cg.predictedPlayerState.pm_type == PM_NORMAL || (cg.predictedPlayerState.pm_type == PM_SPECTATOR && cg.showScores == qfalse)) {
+    // [QL] The join menu holds KEYCATCH_CGAME for as long as it is up, and a
+    // player sitting in it is a spectator with the scoreboard down - exactly the
+    // case this Q3 early-out dumps the catcher for. Left alone it swallowed the
+    // first click and closed the menu before the item under the cursor ever saw
+    // it. NOT verified against the binary: cgamex86.dll's CG_KeyEvent has not
+    // been disassembled, so this guard is ours rather than a replica.
+    if (!cg.showJoinMenu &&
+        (cg.predictedPlayerState.pm_type == PM_NORMAL ||
+         (cg.predictedPlayerState.pm_type == PM_SPECTATOR && cg.showScores == qfalse))) {
         CG_EventHandling(CGAME_EVENT_NONE);
         trap_Key_SetCatcher(0);
         return;
