@@ -1096,6 +1096,28 @@ void ClientSpawn(gentity_t* ent) {
             return;
         }
     }
+
+    // [QL] respawn teleport effect.
+    //
+    // QL emits this here - as soon as the spawn point is secured - and not at
+    // the end of ClientSpawn where Q3 puts it. Verified in qagamex86.dll:
+    // ClientSpawn begins at 0x1003bc30 and the success branch of the spawn
+    // point selection is
+    //
+    //     0x1003bd44  push 0x27                  ; EV_PLAYER_TELEPORT_IN
+    //     0x1003bd46  lea  edi, [esp+0x27c]      ; spawn_origin
+    //     0x1003bd4d  mov  [client+0x8a4], 0     ; reset failed-spawn counter
+    //     0x1003bd57  call 0x1006c490            ; G_TempEntity
+    //     0x1003bd5f  mov  [client+0x2f8], 1     ; teamState.state = TEAM_ACTIVE
+    //
+    // The spectator branch (client->ps.pm_type == PM_SPECTATOR at 0x1003bc63)
+    // jumps straight to 0x1003bd5f, so spectators get no effect. The return
+    // value of G_TempEntity is discarded: unlike Q3, QL does not set
+    // tent->s.clientNum, which is why CG_EntityEvent reads es->number.
+    if (client->sess.sessionTeam != TEAM_SPECTATOR) {
+        G_TempEntity(spawn_origin, EV_PLAYER_TELEPORT_IN);
+    }
+
     client->pers.teamState.state = TEAM_ACTIVE;
 
     // always clear the kamikaze flag
