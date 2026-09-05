@@ -705,6 +705,11 @@ typedef struct {
     qboolean showScores;
     qboolean scoreBoardShowing;
 
+    // [QL] cg+0x2d10c. Set by CG_Init and cleared by CG_CloseMenus; while it is
+    // up CG_Draw2D hands the frame to CG_UpdateJoinMenu instead of the HUD.
+    // No Q3 counterpart - Q3 had no join menu, it dropped you into spectator.
+    qboolean showJoinMenu;
+
     // [QL] team-kill complaint prompt (server "complaint" verb). complaintClient is the
     // offender clientNum (or a negative status code); complaintEndTime is when the prompt
     // expires. Consumed by CG_DrawVote (binary DAT_10a5fdc8 / DAT_10a5fdcc).
@@ -1845,6 +1850,7 @@ void CG_DrawAdvertisements(void);
 void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoPlayback);
 void CG_AddPOIMarkers(void);
 void CG_CloseMenus(void);
+void CG_UpdateJoinMenu(void);
 // [QL] CG_CheckAutoFollow, CG_FilterAngles, CG_DrawDuelWeaponStats are file-static in cg_view.c.
 qboolean CG_GetLevelTimerMsec(int* msec);
 

@@ -3130,6 +3130,11 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
     CG_ShaderStateChanged();
 
     trap_S_ClearLoopingSounds(qtrue);
+
+    // [QL] cgamex86.dll CG_Init tail @0x10029fb2 stores 1 here as its very last
+    // action, so a fresh connection always comes up on the join menu instead of
+    // dropping straight into spectator. CG_UpdateJoinMenu takes it from here.
+    cg.showJoinMenu = qtrue;
 }
 
 /*
