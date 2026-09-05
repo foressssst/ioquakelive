@@ -31,6 +31,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 extern displayContextDef_t cgDC;
 menuDef_t* menuScoreboard = NULL;
 menuDef_t* menuEndScoreboard = NULL;
+// [QL] cgamex86.dll caches this one at menu-load time next to stats_menu and the
+// spectator huds (0x10006ecc, stored at 0x10ab9680). It lives in ui/intro.menu,
+// which cg_main.c already parses - id put the join menu in the intro file.
+menuDef_t* menuJoinGame = NULL;
 
 int sortedTeamPlayers[TEAM_MAXOVERLAY];
 int numSortedTeamPlayers;
@@ -2149,6 +2153,47 @@ static void CG_DrawTimeout(void) {
 CG_Draw2D
 =================
 */
+/*
+=================
+CG_UpdateJoinMenu
+
+[QL] cgamex86.dll 0x1000e9c0, single caller in CG_Draw2D at 0x10010fdd.
+
+Holds the join menu open while the player is a spectator, and tears it down
+the moment they are on a team. Quake 3 had none of this - it put you straight
+into spectator and left the team menu to a key bind.
+=================
+*/
+void CG_UpdateJoinMenu(void) {
+	menuDef_t* menu;
+
+	if (menuJoinGame == NULL) {
+		menuJoinGame = Menus_FindByName("joingame_menu");
+	}
+	menu = menuJoinGame;
+	if (menu == NULL) {
+		return;
+	}
+
+	// [QL] 0x1000e9f2: open it on the first frame it is asked for, and take the
+	// key catcher so clicks reach CG_KeyEvent/CG_MouseEvent instead of the game.
+	if (!(menu->window.flags & WINDOW_VISIBLE)) {
+		trap_Key_SetCatcher(KEYCATCH_CGAME);
+		Menus_Activate(menu);
+	}
+
+	// [QL] 0x1000ea20: cmp dword ptr [cg.snap + 0x138], 3 - once the player is
+	// no longer a spectator the menu closes itself and the HUD comes back.
+	if (cg.snap->ps.persistant[PERS_TEAM] != TEAM_SPECTATOR) {
+		CG_CloseMenus();
+		return;
+	}
+
+	// [QL] 0x1000ea30: Menu_Paint(menuJoinGame, qtrue). Forced, because the
+	// normal Menu_PaintAll pass is skipped on this path.
+	Menu_Paint(menu, qtrue);
+}
+
 static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	if (cgs.orderPending && cg.time > cgs.orderTime) {
 		CG_CheckOrderPending();
@@ -2173,6 +2218,13 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	// called from CG_Draw2D @ 0x10010e9e).
 	CG_SetWidescreen(WIDESCREEN_STRETCH);
 	CG_DrawFloatingEffects();
+
+	// [QL] 0x10010fdd, right after the floating effects: while the join menu owns
+	// the frame the HUD is skipped entirely. The scoreboard wins if it is up.
+	if (cg.showJoinMenu && !cg.scoreBoardShowing) {
+		CG_UpdateJoinMenu();
+		return;
+	}
 
 	/*
 		if (cg.cameraMode) {

@@ -1027,24 +1027,34 @@ void CG_AddPOIMarkers(void) {
 CG_CloseMenus
 
 [QL] Binary: cgamex86.dll 0x1000e880
-Closes the "ingame" menu and clears the CGAME keycatch flag.
+Closes the join menu and clears the CGAME keycatch flag. Reached from
+CG_Team_f once the player has picked a side, and from CG_UpdateJoinMenu as
+soon as the player stops being a spectator.
 ==============
 */
 void CG_CloseMenus(void) {
     extern void Item_RunScript(itemDef_t *item, const char *s);
     menuDef_t *menu;
 
-    menu = Menus_FindByName("ingame");
+    // [QL] the binary names "joingame_menu" here (0x1000e897 loads 0x10068804).
+    // The string "ingame" does not appear anywhere in cgamex86.dll - that menu
+    // belongs to the UI module, and looking it up from cgame only ever returned
+    // NULL, so this whole block used to be dead.
+    menu = Menus_FindByName("joingame_menu");
     if (menu) {
         if ((menu->window.flags & WINDOW_VISIBLE) && menu->onClose) {
             itemDef_t item;
             memset(&item, 0, sizeof(item));
             Item_RunScript(&item, menu->onClose);
         }
-        menu->window.flags &= ~(WINDOW_VISIBLE | WINDOW_HASFOCUS | WINDOW_MOUSEOVER);
+        // [QL] 0x1000e8cb: and flags, 0xffeffff9 - that is
+        // ~(WINDOW_FORCED | WINDOW_VISIBLE | WINDOW_HASFOCUS). It clears FORCED,
+        // which matters because Menu_Paint sets it, and leaves MOUSEOVER alone.
+        menu->window.flags &= ~(WINDOW_FORCED | WINDOW_VISIBLE | WINDOW_HASFOCUS);
     }
 
     trap_Key_SetCatcher(trap_Key_GetCatcher() & ~KEYCATCH_CGAME);
+    cg.showJoinMenu = qfalse;
     cg.showScores = qfalse;
 }
 
