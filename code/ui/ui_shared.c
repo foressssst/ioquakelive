@@ -497,7 +497,14 @@ qboolean PC_String_Parse(int handle, const char** out) {
     if (!trap_PC_ReadToken(handle, &token))
         return qfalse;
 
-    *(out) = String_Alloc(token.string);
+    // [QL] PC_String_Parse 0x10014c60 runs the token through
+    // Q_stricmpn(token.string, "NULL", 99999) - that is Q_stricmp - and stores
+    // the empty string when it matches, so a menu can ask for "clear this cvar"
+    // by writing a bare NULL. Q3 stored the literal four characters instead.
+    // ui/ingame_options_advanced.menu relies on it in four cvarPreset blocks
+    // (lines 3419, 3526, 3977, 4060) to switch cg_force{Team,Enemy}{Model,Skin}
+    // back off; without it those presets set the cvar to the string "NULL".
+    *(out) = String_Alloc(Q_stricmp(token.string, "NULL") == 0 ? "" : token.string);
     return qtrue;
 }
 
