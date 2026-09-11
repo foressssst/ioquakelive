@@ -113,7 +113,6 @@ vmCvar_t cg_bobpitch;
 vmCvar_t cg_bobroll;
 vmCvar_t cg_swingSpeed;
 vmCvar_t cg_shadows;
-vmCvar_t cg_gibs;
 vmCvar_t cg_drawTimer;
 vmCvar_t cg_drawFPS;
 vmCvar_t cg_drawSnapshot;
@@ -163,6 +162,30 @@ vmCvar_t cg_teamChatHeight;
 vmCvar_t cg_stats;
 vmCvar_t cg_paused;
 vmCvar_t cg_blood;
+
+// [wolfcam] electrogib tuning - see cg_local.h
+vmCvar_t cg_gibCount;
+vmCvar_t cg_gibColor;
+vmCvar_t cg_gibJump;
+vmCvar_t cg_gibVelocity;
+vmCvar_t cg_gibVelocityRandomness;
+vmCvar_t cg_gibDirScale;
+vmCvar_t cg_gibOriginOffset;
+vmCvar_t cg_gibOriginOffsetZ;
+vmCvar_t cg_gibRandomness;
+vmCvar_t cg_gibRandomnessZ;
+vmCvar_t cg_gibTime;
+vmCvar_t cg_gibStepTime;
+vmCvar_t cg_gibBounceFactor;
+vmCvar_t cg_gibGravity;
+vmCvar_t cg_gibSparksSize;
+vmCvar_t cg_gibSparksColor;
+vmCvar_t cg_gibSparksHighlight;
+vmCvar_t cg_gibFloatingVelocity;
+vmCvar_t cg_gibFloatingRandomness;
+vmCvar_t cg_gibFloatingOriginOffset;
+vmCvar_t cg_gibFloatingOriginOffsetZ;
+
 vmCvar_t cg_predictItems;
 vmCvar_t cg_deferPlayers;
 vmCvar_t cg_drawTeamOverlay;
@@ -500,7 +523,37 @@ static cvarTable_t cvarTable[] = {
     {&cg_fov, "cg_fov", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_viewsize, "cg_viewsize", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_shadows, "cg_shadows", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_gibs, "cg_gibs", "1", CVAR_ARCHIVE},
+    // [wolfcam] The electrogib tuning set, with wolfcamql's defaults. None of
+    // these names appear anywhere in cgamex86.dll - retail hardcodes every one
+    // of them - so the whole set is an addition, and leaving it untouched
+    // reproduces retail exactly.
+    //
+    // wolfcam spells the count `cg_gibs`, which is also what Quake 3 called
+    // its on/off switch for body-part gibs. Keeping that name would have made
+    // every inherited config silently wrong - a stored 0 turns the effect off
+    // and a stored 1 throws a single sphere - so the count is spelled
+    // cg_gibCount here. It is the only name that differs from wolfcam's.
+    {&cg_gibCount, "cg_gibCount", "15", CVAR_ARCHIVE},
+    {&cg_gibColor, "cg_gibColor", "", CVAR_ARCHIVE},
+    {&cg_gibJump, "cg_gibJump", "0", CVAR_ARCHIVE},
+    {&cg_gibVelocity, "cg_gibVelocity", "600", CVAR_ARCHIVE},
+    {&cg_gibVelocityRandomness, "cg_gibVelocityRandomness", "250", CVAR_ARCHIVE},
+    {&cg_gibDirScale, "cg_gibDirScale", "1.0", CVAR_ARCHIVE},
+    {&cg_gibOriginOffset, "cg_gibOriginOffset", "0", CVAR_ARCHIVE},
+    {&cg_gibOriginOffsetZ, "cg_gibOriginOffsetZ", "0", CVAR_ARCHIVE},
+    {&cg_gibRandomness, "cg_gibRandomness", "250", CVAR_ARCHIVE},
+    {&cg_gibRandomnessZ, "cg_gibRandomnessZ", "0", CVAR_ARCHIVE},
+    {&cg_gibTime, "cg_gibTime", "1000", CVAR_ARCHIVE},
+    {&cg_gibStepTime, "cg_gibStepTime", "50", CVAR_ARCHIVE},
+    {&cg_gibBounceFactor, "cg_gibBounceFactor", "0.6", CVAR_ARCHIVE},
+    {&cg_gibGravity, "cg_gibGravity", "800", CVAR_ARCHIVE},
+    {&cg_gibSparksSize, "cg_gibSparksSize", "3.5", CVAR_ARCHIVE},
+    {&cg_gibSparksColor, "cg_gibSparksColor", "", CVAR_ARCHIVE},
+    {&cg_gibSparksHighlight, "cg_gibSparksHighlight", "", CVAR_ARCHIVE},
+    {&cg_gibFloatingVelocity, "cg_gibFloatingVelocity", "125", CVAR_ARCHIVE},
+    {&cg_gibFloatingRandomness, "cg_gibFloatingRandomness", "75", CVAR_ARCHIVE},
+    {&cg_gibFloatingOriginOffset, "cg_gibFloatingOriginOffset", "30", CVAR_ARCHIVE},
+    {&cg_gibFloatingOriginOffsetZ, "cg_gibFloatingOriginOffsetZ", "0", CVAR_ARCHIVE},
     {&cg_draw2D, "cg_draw2D", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_drawStatus, "cg_drawStatus", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_drawTimer, "cg_drawTimer", "0", CVAR_ARCHIVE},
@@ -1473,10 +1526,19 @@ static void CG_RegisterSounds(void) {
     cgs.media.selectSound = trap_S_RegisterSound("sound/weapons/change.ogg", qfalse);
     cgs.media.wearOffSound = trap_S_RegisterSound("sound/items/wearoff.ogg", qfalse);
     cgs.media.useNothingSound = trap_S_RegisterSound("sound/items/use_nothing.ogg", qfalse);
-    cgs.media.gibSound = trap_S_RegisterSound("dlc_gibs/gibsplt1.ogg", qfalse);
-    cgs.media.gibBounce1Sound = trap_S_RegisterSound("dlc_gibs/gibimp1.ogg", qfalse);
-    cgs.media.gibBounce2Sound = trap_S_RegisterSound("dlc_gibs/gibimp2.ogg", qfalse);
-    cgs.media.gibBounce3Sound = trap_S_RegisterSound("dlc_gibs/gibimp3.ogg", qfalse);
+    // [QL] the dlc_gibs flesh impacts are not in a retail install either; the
+    // electrogib set below is what actually plays.
+    // [QL] 0x1002198b onwards. These ship in retail pak00; the dlc_gibs
+    // sounds above do not.
+    cgs.media.electroGibSound[0] = trap_S_RegisterSound("sound/misc/electrogib_01.ogg", qfalse);
+    cgs.media.electroGibSound[1] = trap_S_RegisterSound("sound/misc/electrogib_02.ogg", qfalse);
+    cgs.media.electroGibSound[2] = trap_S_RegisterSound("sound/misc/electrogib_03.ogg", qfalse);
+    cgs.media.electroGibSound[3] = trap_S_RegisterSound("sound/misc/electrogib_04.ogg", qfalse);
+    cgs.media.electroGibBounceSound[0] = trap_S_RegisterSound("sound/misc/electrogib_bounce_01.ogg", qfalse);
+    cgs.media.electroGibBounceSound[1] = trap_S_RegisterSound("sound/misc/electrogib_bounce_02.ogg", qfalse);
+    cgs.media.electroGibBounceSound[2] = trap_S_RegisterSound("sound/misc/electrogib_bounce_03.ogg", qfalse);
+    cgs.media.electroGibBounceSound[3] = trap_S_RegisterSound("sound/misc/electrogib_bounce_04.ogg", qfalse);
+    cgs.media.electroGibBounceSound[4] = trap_S_RegisterSound("sound/misc/electrogib_bounce_05.ogg", qfalse);
 
     cgs.media.useInvulnerabilitySound = trap_S_RegisterSound("sound/items/invul_activate.ogg", qfalse);
     cgs.media.invulnerabilityImpactSound1 = trap_S_RegisterSound("sound/items/invul_impact_01.ogg", qfalse);
@@ -1822,16 +1884,12 @@ static void CG_RegisterGraphics(void) {
     cgs.media.machinegunBrassModel = trap_R_RegisterModel("models/weapons2/shells/m_shell.md3");
     cgs.media.shotgunBrassModel = trap_R_RegisterModel("models/weapons2/shells/s_shell.md3");
 
-    cgs.media.gibAbdomen = trap_R_RegisterModel("dlc_gibs/abdomen.md3");
-    cgs.media.gibArm = trap_R_RegisterModel("dlc_gibs/arm.md3");
-    cgs.media.gibChest = trap_R_RegisterModel("dlc_gibs/chest.md3");
-    cgs.media.gibFist = trap_R_RegisterModel("dlc_gibs/fist.md3");
-    cgs.media.gibFoot = trap_R_RegisterModel("dlc_gibs/foot.md3");
-    cgs.media.gibForearm = trap_R_RegisterModel("dlc_gibs/forearm.md3");
-    cgs.media.gibIntestine = trap_R_RegisterModel("dlc_gibs/intestine.md3");
-    cgs.media.gibLeg = trap_R_RegisterModel("dlc_gibs/leg.md3");
-    cgs.media.gibSkull = trap_R_RegisterModel("dlc_gibs/skull.md3");
-    cgs.media.gibBrain = trap_R_RegisterModel("dlc_gibs/brain.md3");
+    // [QL] 0x10024343 registers ten dlc_gibs body-part models here. Not one
+    // of them exists in a retail install - dlc_gibs is downloadable content -
+    // so the handles come back 0 and the module falls through to the sphere
+    // gib everywhere. This fork does ship the models in its own pak01, which
+    // would flip that branch, so they are deliberately left unregistered:
+    // CG_GibPlayer uses the retail effect and nothing reads these handles.
 
     cgs.media.smoke2 = trap_R_RegisterModel("models/weapons2/shells/s_shell.md3");
 
@@ -1876,8 +1934,38 @@ static void CG_RegisterGraphics(void) {
     cgs.media.medalRampage = trap_R_RegisterShaderNoMip("medal_rampage");
     cgs.media.medalRevenge = trap_R_RegisterShaderNoMip("medal_revenge");
 
+    // [QL] 0x10024343. The Steam Workshop gore pack - the body-part gibs a
+    // player can install if they want Quake 3's look back. A stock Quake Live
+    // ships none of these files, so RE_RegisterModel hands back 0 for every
+    // one of them and CG_GibPlayer takes the electrogib branch. That handle
+    // being zero *is* retail's on/off switch; there is no cvar behind it.
+    //
+    // The binary keeps sixteen slots because it holds left and right variants
+    // separately, but the duplicated pairs (arm, forearm, fist, leg, foot) all
+    // point at the same file, so ten handles carry the same information.
+    cgs.media.gibSkull = trap_R_RegisterModel("dlc_gibs/skull.md3");
+    cgs.media.gibBrain = trap_R_RegisterModel("dlc_gibs/brain.md3");
+    cgs.media.gibChest = trap_R_RegisterModel("dlc_gibs/chest.md3");
+    cgs.media.gibAbdomen = trap_R_RegisterModel("dlc_gibs/abdomen.md3");
+    cgs.media.gibIntestine = trap_R_RegisterModel("dlc_gibs/intestine.md3");
+    cgs.media.gibArm = trap_R_RegisterModel("dlc_gibs/arm.md3");
+    cgs.media.gibForearm = trap_R_RegisterModel("dlc_gibs/forearm.md3");
+    cgs.media.gibFist = trap_R_RegisterModel("dlc_gibs/fist.md3");
+    cgs.media.gibLeg = trap_R_RegisterModel("dlc_gibs/leg.md3");
+    cgs.media.gibFoot = trap_R_RegisterModel("dlc_gibs/foot.md3");
+
     // [QL] freeze tag
     cgs.media.iceShardModel = trap_R_RegisterModel("models/gibs/sphere.md3");
+    // [QL] 0x100242b4 registers the same model separately as the no-gore
+    // gib. Retail pak00 ships models/gibs/sphere.md3; it does not ship a
+    // single dlc_gibs entry.
+    cgs.media.gibSphere = cgs.media.iceShardModel;
+    // [QL] 0x10023501. An animated additive sprite (deathSpike6..11.jpg,
+    // sawtooth rgbGen) defined in retail scripts/gfx.shader - the electric
+    // discharge that goes off where the body was.
+    cgs.media.deathEffectShader = trap_R_RegisterShader("deathEffect");
+    // [QL] 0x1002321e. The spark sprite that rises out of a gib.
+    cgs.media.gibSparkShader = trap_R_RegisterShader("gfx/misc/tracer");
     cgs.media.iceShardShader1 = trap_R_RegisterShader("powerups/ice1");
     cgs.media.iceShardShader2 = trap_R_RegisterShader("powerups/ice2");
     cgs.media.iceShardShader3 = trap_R_RegisterShader("powerups/ice3");
@@ -1943,7 +2031,11 @@ static void CG_RegisterGraphics(void) {
     cgs.media.escortShader = trap_R_RegisterShaderNoMip("ui/assets/statusbar/escort.png");
     cgs.media.cursor = trap_R_RegisterShaderNoMip("menu/art/3_cursor2");
     cgs.media.sizeCursor = trap_R_RegisterShaderNoMip("ui/assets/sizecursor.png");
-    cgs.media.selectCursor = trap_R_RegisterShaderNoMip("ui/assets/selectcursor.png");
+    // [QL] cgamex86.dll registers "ui/assets/3_cursor3.tga" at 0x10024d0c.
+    // "ui/assets/selectcursor.png" is in neither pak00 nor pak01, so this
+    // handle used to resolve to the default shader - invisible in practice.
+    // pak00 ships the file as .png; the renderer resolves the extension.
+    cgs.media.selectCursor = trap_R_RegisterShaderNoMip("ui/assets/3_cursor3");
     cgs.media.flagShaders[0] = trap_R_RegisterShaderNoMip("ui/assets/statusbar/flag_in_base.tga");
     cgs.media.flagShaders[1] = trap_R_RegisterShaderNoMip("ui/assets/statusbar/flag_capture.tga");
     cgs.media.flagShaders[2] = trap_R_RegisterShaderNoMip("ui/assets/statusbar/flag_missing.tga");
@@ -2833,6 +2925,56 @@ CG_LoadHudMenu();
 
 =================
 */
+/*
+=================
+Display-context shims for cgame
+
+ui_shared.c is compiled into both modules and calls these through DC->.
+The UI module wires them to Key_ and Cmd_ traps that cgame's syscall table
+does not export, so they used to be left commented out - which meant six
+NULL function pointers sitting in cgDC waiting for a menu script to reach
+them. Script_Exec did: `exec` is the first command in the join menu's nav
+bar actions, so clicking Settings called DC->executeText(NULL) and took the
+cgame VM down with SIGSEGV.
+
+executeText has a real equivalent here - trap_SendConsoleCommand appends to
+the command buffer exactly like Cmd_ExecuteText(EXEC_APPEND, ...). The rest
+drive key binding and text-field editing, which no cgame-owned menu uses, so
+they are honest no-ops rather than fake behaviour: what matters is that the
+pointers are never NULL.
+=================
+*/
+static void CG_DC_ExecuteText(int exec_when, const char* text) {
+    // cgame only ever gets EXEC_APPEND from ui_shared's Script_Exec, which is
+    // what trap_SendConsoleCommand does.
+    (void)exec_when;
+    trap_SendConsoleCommand(text);
+}
+
+static void CG_DC_SetOverstrikeMode(qboolean b) {
+    (void)b;
+}
+
+static qboolean CG_DC_GetOverstrikeMode(void) {
+    return qfalse;
+}
+
+static void CG_DC_SetBinding(int keynum, const char* binding) {
+    (void)keynum;
+    (void)binding;
+}
+
+static void CG_DC_GetBindingBuf(int keynum, char* buf, int buflen) {
+    (void)keynum;
+    if (buf && buflen > 0) {
+        buf[0] = 0;
+    }
+}
+
+static void CG_DC_Pause(qboolean b) {
+    (void)b;
+}
+
 void CG_LoadHudMenu(void) {
     char buff[1024];
     const char* hudSet;
@@ -2863,22 +3005,22 @@ void CG_LoadHudMenu(void) {
     cgDC.getCVarString = trap_Cvar_VariableStringBuffer;
     cgDC.getCVarValue = CG_Cvar_Get;
     cgDC.drawTextWithCursor = &CG_DrawTextWithCursor_DC;
-    // cgDC.setOverstrikeMode = &trap_Key_SetOverstrikeMode;
-    // cgDC.getOverstrikeMode = &trap_Key_GetOverstrikeMode;
+    cgDC.setOverstrikeMode = &CG_DC_SetOverstrikeMode;
+    cgDC.getOverstrikeMode = &CG_DC_GetOverstrikeMode;
     cgDC.startLocalSound = &trap_S_StartLocalSound;
     cgDC.ownerDrawHandleKey = &CG_OwnerDrawHandleKey;
     cgDC.feederCount = &CG_FeederCount;
     cgDC.feederItemImage = &CG_FeederItemImage;
     cgDC.feederItemText = &CG_FeederItemText;
     cgDC.feederSelection = &CG_FeederSelection;
-    // cgDC.setBinding = &trap_Key_SetBinding;
-    // cgDC.getBindingBuf = &trap_Key_GetBindingBuf;
+    cgDC.setBinding = &CG_DC_SetBinding;
+    cgDC.getBindingBuf = &CG_DC_GetBindingBuf;
     cgDC.keynumToStringBuf = &trap_Key_KeynumToStringBuf;
-    // cgDC.executeText = &trap_Cmd_ExecuteText;
+    cgDC.executeText = &CG_DC_ExecuteText;
     cgDC.Error = &Com_Error;
     cgDC.Print = &Com_Printf;
     cgDC.ownerDrawWidth = &CG_OwnerDrawWidth;
-    // cgDC.Pause = &CG_Pause;
+    cgDC.Pause = &CG_DC_Pause;
     cgDC.registerSound = &trap_S_RegisterSound;
     cgDC.startBackgroundTrack = &trap_S_StartBackgroundTrack;
     cgDC.stopBackgroundTrack = &trap_S_StopBackgroundTrack;

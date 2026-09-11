@@ -123,7 +123,18 @@ void CG_BloodTrail(localEntity_t* le) {
     vec3_t newOrigin;
     localEntity_t* blood;
 
-    step = 150;
+    // [QL] 0x1001d6a3 opens with `cmp [bloodSpray[0]], 0; je return`. In
+    // retail that shader does not resolve, so the trail is dead code and a
+    // flying gib leaves nothing behind. See CG_Bleed for the whole story.
+    if (!cgs.media.bloodSprayShaders[0]) {
+        return;
+    }
+
+    // [QL] cgamex86.dll 0x1001d6c7 rounds on 0x32, not Q3's 150: the trail
+    // drops a puff every 50 ms, so a flying gib leaves three times the blood.
+    // The shorter puff lifetime below is what pays for that - the two have to
+    // move together or the local-entity pool overruns.
+    step = 50;
     t = step * ((cg.time - cg.frametime + step) / step);
     t2 = step * (cg.time / step);
 
@@ -133,7 +144,15 @@ void CG_BloodTrail(localEntity_t* le) {
         blood = CG_SmokePuff(newOrigin, vec3_origin,
                              20,          // radius
                              1, 1, 1, 1,  // color
-                             2000,        // trailTime
+                             500,         // trailTime - [QL] 0x1001d724 pushes
+                                          // 500.0 (0x10073d68), the same
+                                          // constant CG_Bleed uses, not Q3's
+                                          // 2000. At the 50 ms step this is
+                                          // what keeps the puff count bounded:
+                                          // fifteen gibs at 20 puffs/s live
+                                          // 0.5 s each is ~150 entities, where
+                                          // Q3's 2 s would be ~600 against a
+                                          // MAX_LOCAL_ENTITIES of 512.
                              t,           // startTime
                              0,           // fadeInTime
                              0,           // flags
@@ -142,6 +161,81 @@ void CG_BloodTrail(localEntity_t* le) {
         blood->leType = LE_FALL_SCALE_FADE;
         // drop a total of 40 units over its lifetime
         blood->pos.trDelta[2] = 40;
+    }
+}
+
+/*
+================
+CG_ElectroGibTrail
+
+The stream of sparks a sphere drags behind it while it is still in the air.
+
+[wolfcam] CG_BloodTrail_ql. Structurally it is Quake 3's CG_BloodTrail with
+every number changed: a cg_gibStepTime of 50 ms instead of 150, a 3.5 unit
+spark on "gfx/misc/tracer" instead of a 20 unit blood puff, and a third of
+the gib's own lifetime instead of a flat 2000 ms.
+
+That last number is not cosmetic. At 50 ms a sphere emits twenty sparks over
+its 1000 ms life; holding each one to ~333 ms keeps about seven alive per
+sphere, so fifteen spheres cost roughly a hundred local entities at peak
+against a MAX_LOCAL_ENTITIES of 512. Pairing the short step with Quake 3's
+long lifetime is what overran the pool and crashed the client earlier in this
+port: CG_AllocLocalEntity recycles the oldest entity when the pool is full,
+including the one CG_AddLocalEntities is walking toward.
+
+CG_AddFragment only calls this while the sphere is in free fall, and
+CG_FragmentBounceMark clears leMarkType on the first impact, so the trail
+stops the moment the sphere hits something.
+================
+*/
+static void CG_ElectroGibTrail(localEntity_t* le) {
+    int t;
+    int t2;
+    int step;
+    int duration;
+    vec3_t newOrigin;
+    localEntity_t* spark;
+    qhandle_t shader;
+    vec4_t color;
+
+    shader = CG_ElectroGibSparkShader(color);
+
+    // a step of 0 would spin this loop forever; a duration of 0 gives an
+    // infinite lifeRate and a spark that never fades
+    step = cg_gibStepTime.integer;
+    if (step < 1) {
+        step = 1;
+    }
+    duration = cg_gibTime.integer / 3;
+    if (duration < 1) {
+        duration = 1;
+    }
+
+    t = step * ((cg.time - cg.frametime + step) / step);
+    t2 = step * (cg.time / step);
+
+    for (; t <= t2; t += step) {
+        BG_EvaluateTrajectory(&le->pos, t, newOrigin);
+
+        spark = CG_SmokePuff_ql(newOrigin, vec3_origin,
+                                cg_gibSparksSize.value,                  // radius
+                                color[0], color[1], color[2], color[3],  // color
+                                duration,                                // duration
+                                t,                                       // startTime
+                                0,                                       // fadeInTime
+                                0,                                       // flags
+                                shader);
+
+        spark->leType = LE_MOVE_SCALE_FADE;
+        spark->leFlags = LEF_PUFF_DONT_SCALE_NOT_KIDDING_MAN | LEF_PUFF_DONT_SCALE;
+        // drift up a total of 40 units over its lifetime
+        spark->pos.trDelta[2] = 40;
+
+        spark->refEntity.reType = RT_SPRITE;
+        VectorCopy(newOrigin, spark->refEntity.origin);
+        VectorCopy(newOrigin, spark->refEntity.oldorigin);
+        AxisCopy(axisDefault, spark->refEntity.axis);
+        spark->refEntity.rotation = 0;
     }
 }
 
@@ -157,6 +251,12 @@ void CG_FragmentBounceMark(localEntity_t* le, trace_t* trace) {
         radius = 16 + (rand() & 31);
         CG_ImpactMark(cgs.media.bloodSprayShaders[rand() & 3], trace->endpos, trace->plane.normal, random() * 360,
                       1, 1, 1, 1, qtrue, radius, qfalse);
+    } else if (le->leMarkType == LEMT_ELECTROGIB) {
+        // [wolfcam] CG_FragmentBounceMark: a ql gib scorches instead of
+        // bleeding - burnMarkShader at a fixed radius of 5, small enough
+        // that fifteen of them read as scorch specks and not as craters.
+        CG_ImpactMark(cgs.media.burnMarkShader, trace->endpos, trace->plane.normal,
+                      random() * 360, 1, 1, 1, 1, qtrue, 5, qfalse);
     } else if (le->leMarkType == LEMT_BURN) {
         radius = 8 + (rand() & 15);
         CG_ImpactMark(cgs.media.burnMarkShader, trace->endpos, trace->plane.normal, random() * 360,
@@ -177,17 +277,21 @@ void CG_FragmentBounceSound(localEntity_t* le, trace_t* trace) {
     if (le->leBounceSoundType == LEBS_BLOOD) {
         // half the gibs will make splat sounds
         if (rand() & 1) {
-            int r = rand() & 3;
-            sfxHandle_t s;
-
-            if (r == 0) {
-                s = cgs.media.gibBounce1Sound;
-            } else if (r == 1) {
-                s = cgs.media.gibBounce2Sound;
-            } else {
-                s = cgs.media.gibBounce3Sound;
-            }
-            trap_S_StartSound(trace->endpos, ENTITYNUM_WORLD, CHAN_AUTO, s);
+            // [QL] 0x1001ec27: the flesh impacts, and only with the gore
+            // DLC installed - 0x1001ec16 bails out before this otherwise.
+            // Left unregistered in this fork, so the handle is 0.
+            trap_S_StartSound(trace->endpos, ENTITYNUM_WORLD, CHAN_AUTO,
+                              cgs.media.gibBounce1Sound);
+        }
+    } else if (le->leBounceSoundType == LEBS_ELECTROGIB) {
+        // [wolfcam] CG_FragmentBounceSound: same half-the-time gate as the
+        // Quake 3 gib, then an even pick over the four electrogib_bounce
+        // samples. The fifth one this fork registers is never reached -
+        // wolfcam only knows four, and it is kept loaded rather than
+        // guessed at.
+        if (rand() & 1) {
+            trap_S_StartSound(trace->endpos, ENTITYNUM_WORLD, CHAN_AUTO,
+                              cgs.media.electroGibBounceSound[rand() % 4]);
         }
     } else if (le->leBounceSoundType == LEBS_BRASS) {
     }
@@ -277,8 +381,12 @@ void CG_AddFragment(localEntity_t* le) {
 
         trap_R_AddRefEntityToScene(&le->refEntity);
 
-        // add a blood trail
-        if (le->leBounceSoundType == LEBS_BLOOD) {
+        // [wolfcam] CG_AddFragment: the trail is keyed off leMarkType, not
+        // leBounceSoundType, so CG_FragmentBounceMark clearing the mark on
+        // impact also shuts the trail off.
+        if (le->leMarkType == LEMT_ELECTROGIB) {
+            CG_ElectroGibTrail(le);
+        } else if (le->leBounceSoundType == LEBS_BLOOD) {
             CG_BloodTrail(le);
         }
 
@@ -437,7 +545,15 @@ static void CG_AddFallScaleFade(localEntity_t* le) {
 
     re->origin[2] = le->pos.trBase[2] - (1.0 - c) * le->pos.trDelta[2];
 
-    re->radius = le->radius * (1.0 - c) + 16;
+    // [wolfcam] This function is a hand-optimised copy of
+    // CG_AddMoveScaleFade and never learned about LEF_PUFF_DONT_SCALE, so
+    // wolfcam gave it a flag of its own. Without it a spark routed through
+    // here would swell to 16 units and read as smoke.
+    if (le->leFlags & LEF_PUFF_DONT_SCALE_NOT_KIDDING_MAN) {
+        re->radius = le->radius;
+    } else {
+        re->radius = le->radius * (1.0 - c) + 16;
+    }
 
     // if the view would be "inside" the sprite, kill the sprite
     // so it doesn't add too much overdraw
@@ -666,7 +782,7 @@ void CG_AddInvulnerabilityJuiced(localEntity_t* le) {
     }
     if (t > 5000) {
         le->endTime = 0;
-        CG_GibPlayer(le->refEntity.origin);
+        CG_GibPlayer(le->refEntity.origin, NULL);
     } else {
         trap_R_AddRefEntityToScene(&le->refEntity);
     }
