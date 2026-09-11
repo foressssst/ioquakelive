@@ -1526,10 +1526,18 @@ static void CG_RegisterSounds(void) {
     cgs.media.selectSound = trap_S_RegisterSound("sound/weapons/change.ogg", qfalse);
     cgs.media.wearOffSound = trap_S_RegisterSound("sound/items/wearoff.ogg", qfalse);
     cgs.media.useNothingSound = trap_S_RegisterSound("sound/items/use_nothing.ogg", qfalse);
-    // [QL] the dlc_gibs flesh impacts are not in a retail install either; the
-    // electrogib set below is what actually plays.
-    // [QL] 0x1002198b onwards. These ship in retail pak00; the dlc_gibs
-    // sounds above do not.
+    // [QL] 0x1002198b onwards. The gore pack's flesh impacts. A stock install
+    // has none of them, so these handles stay 0 and every caller skips them -
+    // CG_FragmentBounceSound tests the same gore-pack handle CG_GibPlayer
+    // branches on (0x1001ec16) rather than the handles themselves. Registered
+    // anyway so that dropping the pack in gives the body-part gibs their audio
+    // without a code change. See content/optional/gore/README.md.
+    cgs.media.gibSound = trap_S_RegisterSound("dlc_gibs/gibsplt1.ogg", qfalse);
+    cgs.media.gibBounce1Sound = trap_S_RegisterSound("dlc_gibs/gibimp1.ogg", qfalse);
+    cgs.media.gibBounce2Sound = trap_S_RegisterSound("dlc_gibs/gibimp2.ogg", qfalse);
+    cgs.media.gibBounce3Sound = trap_S_RegisterSound("dlc_gibs/gibimp3.ogg", qfalse);
+
+    // [QL] These ship in retail pak00; the gore sounds above do not.
     cgs.media.electroGibSound[0] = trap_S_RegisterSound("sound/misc/electrogib_01.ogg", qfalse);
     cgs.media.electroGibSound[1] = trap_S_RegisterSound("sound/misc/electrogib_02.ogg", qfalse);
     cgs.media.electroGibSound[2] = trap_S_RegisterSound("sound/misc/electrogib_03.ogg", qfalse);
@@ -1935,10 +1943,17 @@ static void CG_RegisterGraphics(void) {
     cgs.media.medalRevenge = trap_R_RegisterShaderNoMip("medal_revenge");
 
     // [QL] 0x10024343. The Steam Workshop gore pack - the body-part gibs a
-    // player can install if they want Quake 3's look back. A stock Quake Live
+    // player can install if they want Quake 3's look back. Retail's pak00
     // ships none of these files, so RE_RegisterModel hands back 0 for every
     // one of them and CG_GibPlayer takes the electrogib branch. That handle
     // being zero *is* retail's on/off switch; there is no cvar behind it.
+    //
+    // This fork used to ship the pack inside its own pak01.pk3, which made
+    // the handle resolve on every install and turned the Quake 3 gore into
+    // the default - the opposite of retail, and audible as a missing bounce
+    // sound because the matching flesh impacts were never registered. The
+    // assets now sit unshipped in content/optional/gore/; see the README
+    // there for how to turn them on.
     //
     // The binary keeps sixteen slots because it holds left and right variants
     // separately, but the duplicated pairs (arm, forearm, fist, leg, foot) all

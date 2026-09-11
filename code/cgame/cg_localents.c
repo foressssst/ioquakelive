@@ -275,13 +275,27 @@ CG_FragmentBounceSound
 */
 void CG_FragmentBounceSound(localEntity_t* le, trace_t* trace) {
     if (le->leBounceSoundType == LEBS_BLOOD) {
+        // [QL] 0x1001ec16 tests the gore pack's handle and bails out before
+        // the sound when it is absent. That guard is the reason retail never
+        // plays a silent handle here: a body-part gib can only exist when the
+        // pack that carries its impact sounds is installed too.
+        //
         // half the gibs will make splat sounds
-        if (rand() & 1) {
-            // [QL] 0x1001ec27: the flesh impacts, and only with the gore
-            // DLC installed - 0x1001ec16 bails out before this otherwise.
-            // Left unregistered in this fork, so the handle is 0.
-            trap_S_StartSound(trace->endpos, ENTITYNUM_WORLD, CHAN_AUTO,
-                              cgs.media.gibBounce1Sound);
+        if (cgs.media.gibSkull && (rand() & 1)) {
+            // [QL] 0x1001ec27: `call rand; and eax, 3`, then a chain over the
+            // three flesh impacts.
+            int r = rand() & 3;
+            sfxHandle_t s;
+
+            if (r == 0) {
+                s = cgs.media.gibBounce1Sound;
+            } else if (r == 1) {
+                s = cgs.media.gibBounce2Sound;
+            } else {
+                s = cgs.media.gibBounce3Sound;
+            }
+
+            trap_S_StartSound(trace->endpos, ENTITYNUM_WORLD, CHAN_AUTO, s);
         }
     } else if (le->leBounceSoundType == LEBS_ELECTROGIB) {
         // [wolfcam] CG_FragmentBounceSound: same half-the-time gate as the
