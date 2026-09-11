@@ -316,7 +316,7 @@ void body_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int da
         return;
     }
     // [QL] Binary always gibs when health drops below threshold; client decides
-    // whether to render blood (cg_gibs/cg_blood). Removed Q3 server-side com_blood.
+    // which gib set to draw, by whether the gore content is installed.
     GibEntity(self, 0);
 }
 

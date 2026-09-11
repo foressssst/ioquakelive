@@ -218,19 +218,34 @@ typedef enum {
     LEF_PUFF_DONT_SCALE = 0x0001,  // do not scale size over time
     LEF_TUMBLE = 0x0002,           // tumble over time, used for ejecting shells
     LEF_SOUND1 = 0x0004,           // sound 1 for kamikaze
-    LEF_SOUND2 = 0x0008            // sound 2 for kamikaze
+    LEF_SOUND2 = 0x0008,           // sound 2 for kamikaze
+    // [wolfcam] LEF_PUFF_DONT_SCALE only stops the growth in
+    // CG_AddMoveScaleFade; CG_AddFallScaleFade has its own copy of that
+    // code and ignores it, so wolfcam added a second flag that the fall
+    // path honours. The electrogib sparks set both, because nothing in
+    // either function stops a later change of leType from routing them
+    // to the other handler.
+    LEF_PUFF_DONT_SCALE_NOT_KIDDING_MAN = 0x0010
 } leFlag_t;
 
 typedef enum {
     LEMT_NONE,
     LEMT_BURN,
-    LEMT_BLOOD
+    LEMT_BLOOD,
+    // [wolfcam] The electrogib sphere. It scorches rather than bleeds, and
+    // CG_AddFragment also keys the spark trail off this value, so clearing
+    // the mark on impact ends the trail too.
+    LEMT_ELECTROGIB
 } leMarkType_t;  // fragment local entities can leave marks on walls
 
 typedef enum {
     LEBS_NONE,
     LEBS_BLOOD,
-    LEBS_BRASS
+    LEBS_BRASS,
+    // [wolfcam] The electrogib sphere: one of the four electrogib_bounce
+    // samples, half the time. Quake Live has no flesh impacts to fall
+    // through from - the gore that would play them is DLC.
+    LEBS_ELECTROGIB
 } leBounceSoundType_t;  // fragment local entities can make sounds on impacts
 
 typedef struct localEntity_s {
@@ -1219,6 +1234,12 @@ typedef struct {
 
     sfxHandle_t gibSound;
     sfxHandle_t gibBounce1Sound;
+    // [QL] The no-gore gib set. cgamex86.dll registers these from
+    // sound/misc/ at 0x1002198b and picks between them and the flesh
+    // sounds with the same `are the DLC models loaded` test the gib
+    // launcher uses (0x1001bf80).
+    sfxHandle_t electroGibSound[4];
+    sfxHandle_t electroGibBounceSound[5];
     sfxHandle_t gibBounce2Sound;
     sfxHandle_t gibBounce3Sound;
     sfxHandle_t teleInSound;
@@ -1370,6 +1391,9 @@ typedef struct {
 
     // [QL] freeze tag
     qhandle_t iceShardModel;     // models/gibs/sphere.md3
+    qhandle_t gibSphere;         // [QL] same model, the no-gore gib
+    qhandle_t deathEffectShader; // [QL] "deathEffect", the electrogib flash
+    qhandle_t gibSparkShader;    // [QL] "gfx/misc/tracer", the rising sparks
     qhandle_t iceShardShader1;   // powerups/ice1
     qhandle_t iceShardShader2;   // powerups/ice2
     qhandle_t iceShardShader3;   // powerups/ice3
@@ -1614,7 +1638,6 @@ extern vmCvar_t cg_bobpitch;
 extern vmCvar_t cg_bobroll;
 extern vmCvar_t cg_swingSpeed;
 extern vmCvar_t cg_shadows;
-extern vmCvar_t cg_gibs;
 extern vmCvar_t cg_drawTimer;
 extern vmCvar_t cg_drawFPS;
 extern vmCvar_t cg_drawSnapshot;
@@ -1668,6 +1691,42 @@ extern vmCvar_t cg_teamChatHeight;
 extern vmCvar_t cg_stats;
 extern vmCvar_t cg_paused;
 extern vmCvar_t cg_blood;
+
+// [wolfcam] The electrogib tuning set, names and defaults straight from
+// wolfcamql's cvar table. None of these exist in retail Quake Live - the
+// retail client hardcodes every one of them - so they are a deliberate
+// addition on top of the ported effect, not a reconstruction of anything.
+// They are what makes the effect adjustable without a rebuild; leaving
+// every one at its default reproduces wolfcam's picture exactly.
+extern vmCvar_t cg_gibCount;
+extern vmCvar_t cg_gibColor;
+extern vmCvar_t cg_gibJump;
+extern vmCvar_t cg_gibVelocity;
+extern vmCvar_t cg_gibVelocityRandomness;
+extern vmCvar_t cg_gibDirScale;
+extern vmCvar_t cg_gibOriginOffset;
+extern vmCvar_t cg_gibOriginOffsetZ;
+extern vmCvar_t cg_gibRandomness;
+extern vmCvar_t cg_gibRandomnessZ;
+extern vmCvar_t cg_gibTime;
+extern vmCvar_t cg_gibStepTime;
+extern vmCvar_t cg_gibBounceFactor;
+extern vmCvar_t cg_gibGravity;
+extern vmCvar_t cg_gibSparksSize;
+extern vmCvar_t cg_gibSparksColor;
+extern vmCvar_t cg_gibSparksHighlight;
+extern vmCvar_t cg_gibFloatingVelocity;
+extern vmCvar_t cg_gibFloatingRandomness;
+extern vmCvar_t cg_gibFloatingOriginOffset;
+extern vmCvar_t cg_gibFloatingOriginOffsetZ;
+
+// Ceiling on cg_gibCount, which wolfcam leaves open. Each sphere costs one
+// local entity, one floating spark, and about seven live trail sparks, so
+// fifty is already ~450 of the 512 MAX_LOCAL_ENTITIES. Past the pool the
+// allocator recycles the entity CG_AddLocalEntities is walking toward and
+// the client dies; this is well clear of any setting worth using.
+#define MAX_ELECTROGIBS 50
+
 extern vmCvar_t cg_predictItems;
 extern vmCvar_t cg_deferPlayers;
 extern vmCvar_t cg_teamChatsOnly;
@@ -2064,6 +2123,18 @@ localEntity_t* CG_SmokePuff(const vec3_t p,
                             int fadeInTime,
                             int leFlags,
                             qhandle_t hShader);
+localEntity_t* CG_SmokePuff_ql(const vec3_t p,
+                               const vec3_t vel,
+                               float radius,
+                               float r,
+                               float g,
+                               float b,
+                               float a,
+                               float duration,
+                               int startTime,
+                               int fadeInTime,
+                               int leFlags,
+                               qhandle_t hShader);
 void CG_BubbleTrail(vec3_t start, vec3_t end, float spacing);
 void CG_SpawnEffect(vec3_t org);
 void CG_KamikazeEffect(vec3_t org);
@@ -2093,7 +2164,8 @@ void CG_PlayBloodSound(vec3_t origin);  // EV_OBELISKPAIN (0x45) handler
 void CG_QueueAnnouncement(sfxHandle_t sfx);
 void CG_ResetAnnouncements(void);
 
-void CG_GibPlayer(vec3_t playerOrigin);
+void CG_GibPlayer(vec3_t playerOrigin, vec3_t dir);
+qhandle_t CG_ElectroGibSparkShader(vec4_t color);
 void CG_BigExplode(vec3_t playerOrigin);
 
 void CG_Bleed(vec3_t origin, int entityNum);
