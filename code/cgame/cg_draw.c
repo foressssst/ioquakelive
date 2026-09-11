@@ -1693,59 +1693,103 @@ void CG_SetEndScoreboardMenu(void) {
 	}
 }
 
+/*
+=================
+CG_DrawScoreboard
+
+[QL] cgamex86.dll 0x1000dfd0. Three differences from the Quake 3 version this
+fork inherited, all of them in the decision of whether to draw at all:
+
+1. Quake 3 refuses to draw during warmup unless the player is holding the
+   scoreboard key - `if (cg.warmup && !cg.showScores) return qfalse;`. Quake
+   Live splits that test in two (0x1000dfe8) and keeps the death case in the
+   warmup branch:
+
+     0x1000dff6  warmup:     showScores || pm_type == PM_DEAD
+     0x1000e00b  not warmup: showScores || pm_type == PM_DEAD ||
+                             pm_type == PM_INTERMISSION
+
+   So in retail the scoreboard comes up when you die during warmup, and in
+   this fork it did not - which is most of the time on a freshly started
+   server, where warmup runs until enough players join. PM_INTERMISSION is
+   only tested outside warmup because the two cannot coexist.
+
+2. Quake 3 keeps the board up for FADE_TIME after the key is released, on
+   cg.scoreFadeTime. The binary has no such branch: 0x1000e004 and
+   0x1000e01e clear the return value and jump straight to the tail, so the
+   board disappears the frame the condition stops holding.
+
+3. With no menu to paint the binary returns false (0x1000e0c8), where this
+   fork returned true and drew nothing - which suppressed the centre-print
+   string for a scoreboard that was not on screen.
+
+The deferred-player counter is also advanced on the hidden path before being
+reset, which is why it is stepped before the early-out rather than after.
+=================
+*/
 static qboolean CG_DrawScoreboard(void) {
 	static qboolean firstTime = qtrue;
+	menuDef_t *activeMenu;
+	qboolean showing;
+	int pmType;
 
 	if (menuScoreboard) {
 		menuScoreboard->window.flags &= ~WINDOW_FORCED;
 	}
+
+	pmType = cg.predictedPlayerState.pm_type;
+	showing = qtrue;
+
 	if (cg_paused.integer) {
-		cg.deferredPlayerLoading = 0;
-		firstTime = qtrue;
-		return qfalse;
-	}
-
-	// don't draw scoreboard during death while warmup up
-	if (cg.warmup && !cg.showScores) {
-		return qfalse;
-	}
-
-	if (cg.showScores || cg.predictedPlayerState.pm_type == PM_DEAD || cg.predictedPlayerState.pm_type == PM_INTERMISSION) {
+		showing = qfalse;
+	} else if (cg.warmup) {
+		// [QL] 0x1000dff6 - dying during warmup still raises the board
+		if (!cg.showScores && pmType != PM_DEAD) {
+			showing = qfalse;
+		}
 	} else {
-		if (!CG_FadeColor(cg.scoreFadeTime, FADE_TIME)) {
-			// next time scoreboard comes up, don't print killer
-			cg.deferredPlayerLoading = 0;
-			cg.killerName[0] = 0;
-			firstTime = qtrue;
-			return qfalse;
+		// [QL] 0x1000e00b
+		if (!cg.showScores && pmType != PM_DEAD && pmType != PM_INTERMISSION) {
+			showing = qfalse;
 		}
 	}
 
-	if (menuScoreboard == NULL) {
-		CG_SetEndScoreboardMenu();
-	}
+	if (showing) {
+		if (menuScoreboard == NULL) {
+			CG_SetEndScoreboardMenu();
+		}
 
-	// [QL] Use end scoreboard during intermission, in-game scoreboard otherwise
-	{
-		menuDef_t *activeMenu;
-		if (cg.predictedPlayerState.pm_type == PM_INTERMISSION && menuEndScoreboard) {
+		// [QL] Use end scoreboard during intermission, in-game scoreboard otherwise
+		if (pmType == PM_INTERMISSION && menuEndScoreboard) {
 			activeMenu = menuEndScoreboard;
 		} else {
 			activeMenu = menuScoreboard;
 		}
 
-		if (activeMenu) {
-			if (firstTime) {
-				CG_SetScoreSelection(activeMenu);
-				firstTime = qfalse;
-			}
-			Menu_Paint(activeMenu, qtrue);
+		// [QL] 0x1000e0c8: nothing to paint means nothing is showing
+		if (activeMenu == NULL) {
+			return qfalse;
 		}
+
+		if (firstTime) {
+			CG_SetScoreSelection(activeMenu);
+			firstTime = qfalse;
+		}
+		Menu_Paint(activeMenu, qtrue);
 	}
 
 	// load any models that have been deferred
 	if (++cg.deferredPlayerLoading > 10) {
 		CG_LoadDeferredPlayers();
+	}
+
+	if (!showing) {
+		// [QL] 0x1000e170
+		cg.deferredPlayerLoading = 0;
+		firstTime = qtrue;
+		// next time scoreboard comes up, don't print killer
+		cg.killerName[0] = 0;
+		return qfalse;
 	}
 
 	return qtrue;
@@ -2192,6 +2236,15 @@ void CG_UpdateJoinMenu(void) {
 	// [QL] 0x1000ea30: Menu_Paint(menuJoinGame, qtrue). Forced, because the
 	// normal Menu_PaintAll pass is skipped on this path.
 	Menu_Paint(menu, qtrue);
+
+	// Nothing in cgame ever drew cgs.activeCursor - it is assigned in
+	// CG_MouseEvent and then never read, so the pointer was invisible on every
+	// cgame-owned menu. Drawn here with the same 16-pixel centring the UI
+	// module uses (ui_main.c:524) so the two look alike. CG_DrawPic runs the
+	// coordinates through CG_AdjustFrom640, the same mapping the menu itself
+	// just used, so the arrow lands where the cursor actually is.
+	CG_DrawPic(cgs.cursorX - 16, cgs.cursorY - 16, 32, 32,
+	           cgs.activeCursor ? cgs.activeCursor : cgs.media.selectCursor);
 }
 
 static void CG_Draw2D(stereoFrame_t stereoFrame) {
