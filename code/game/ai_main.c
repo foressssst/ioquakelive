@@ -72,6 +72,10 @@ vmCvar_t bot_report;
 vmCvar_t bot_testsolid;
 vmCvar_t bot_testclusters;
 vmCvar_t bot_developer;
+// [QL] qagamex86.dll registers this at 0x100241c0 with default "0" and flags 0 (not
+// CVAR_CHEAT, unlike the other bot debug cvars around it). It is the only bot cvar of the
+// eighty in the binary that this fork was missing.
+vmCvar_t bot_log;
 vmCvar_t bot_interbreedchar;
 vmCvar_t bot_interbreedbots;
 vmCvar_t bot_interbreedcycle;
@@ -1606,8 +1610,12 @@ int BotInitLibrary(void) {
     trap_BotLibVarSet("g_gametype", buf);
     // bot developer mode and log file
     trap_BotLibVarSet("bot_developer", bot_developer.string);
-    trap_Cvar_VariableStringBuffer("logfile", buf, sizeof(buf));
-    trap_BotLibVarSet("log", buf);
+    // [QL] 0x10023df3: the binary reads its own bot_log cvar with a 0x90-byte buffer and
+    // hands it to botlib under the name "bot_log", not "log". Quake 3 fed botlib the
+    // engine's "logfile" cvar instead, which tied the bot log to the console log and gave
+    // no way to turn one on without the other.
+    trap_Cvar_VariableStringBuffer("bot_log", buf, sizeof(buf));
+    trap_BotLibVarSet("bot_log", buf);
     // no chatting
     trap_Cvar_VariableStringBuffer("bot_nochat", buf, sizeof(buf));
     if (strlen(buf))
@@ -1675,6 +1683,7 @@ int BotAISetup(int restart) {
     trap_Cvar_Register(&bot_testsolid, "bot_testsolid", "0", CVAR_CHEAT);
     trap_Cvar_Register(&bot_testclusters, "bot_testclusters", "0", CVAR_CHEAT);
     trap_Cvar_Register(&bot_developer, "bot_developer", "0", CVAR_CHEAT);
+    trap_Cvar_Register(&bot_log, "bot_log", "0", 0);  // [QL] 0x100241c0, flags 0
     trap_Cvar_Register(&bot_interbreedchar, "bot_interbreedchar", "", 0);
     trap_Cvar_Register(&bot_interbreedbots, "bot_interbreedbots", "10", 0);
     trap_Cvar_Register(&bot_interbreedcycle, "bot_interbreedcycle", "20", 0);
