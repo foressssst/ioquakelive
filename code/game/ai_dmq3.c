@@ -5235,7 +5235,7 @@ BotDeathmatchAI
 ==================
 */
 void BotDeathmatchAI(bot_state_t* bs, float thinktime) {
-    char gender[144], name[144];
+    char gender[144], name[144], buf[144];
     char userinfo[MAX_INFO_STRING];
     int i;
 
@@ -5250,6 +5250,35 @@ void BotDeathmatchAI(bot_state_t* bs, float thinktime) {
         trap_GetUserinfo(bs->client, userinfo, sizeof(userinfo));
         Info_SetValueForKey(userinfo, "sex", gender);
         trap_SetUserinfo(bs->client, userinfo);
+        // set the team
+        //
+        // [QL] qagamex86.dll 0x1001f104, Quake 3's block kept verbatim:
+        //
+        //   0x1001f104  cmp [bs+0x1764], 0   ; bs->map_restart
+        //   0x1001f10b  jne skip
+        //   0x1001f10d  cmp [g_gametype], 1  ; GT_DUEL (Q3's GT_TOURNAMENT)
+        //   0x1001f114  je  skip
+        //   0x1001f116  lea ecx, [bs+0x12c4] ; bs->settings.team
+        //   0x1001f11d  push "team %s"
+        //   0x1001f14c  trap_EA_Command(bs->client, buf)
+        //
+        // This one command is the whole of how a bot joins a match. In
+        // Quake 3 it was nearly redundant - G_InitSessionData handed
+        // non-team gametypes a TEAM_FREE session, so a bot was already
+        // playing before it ran. Quake Live starts every client on
+        // TEAM_SPECTATOR instead and expects the UI's `team` command to be
+        // what puts them in, which is also what triggers ClientBegin on a
+        // real server (see the note in G_RunFrame). A bot has no UI, so
+        // without this it connects, spawns nothing, stays a spectator, and
+        // is neither visible nor followable.
+        //
+        // Duel is excluded because its bots join through the play queue
+        // instead, which ClientBegin already handles (0x1003b16e). A map
+        // restart is excluded because the session survives it.
+        if (!bs->map_restart && gametype != GT_DUEL) {
+            Com_sprintf(buf, sizeof(buf), "team %s", bs->settings.team);
+            trap_EA_Command(bs->client, buf);
+        }
         // set the chat gender
         if (gender[0] == 'm')
             trap_BotSetChatGender(bs->cs, CHAT_GENDERMALE);

@@ -1032,6 +1032,13 @@ void BotInterbreedEndMatch(void);
 typedef struct bot_settings_s {
     char characterfile[MAX_FILEPATH];
     float skill;
+    // [QL] qagamex86.dll keeps Quake 3's third field. G_BotConnect
+    // (0x10037447) reads it out of the "team" userinfo key that G_AddBot
+    // wrote, and BotDeathmatchAI (0x1001f116) hands it back to the server
+    // as a `team` command. Dropping it is what left bots in spectator:
+    // every client now starts on TEAM_SPECTATOR, and a bot has no UI to
+    // pick from.
+    char team[MAX_FILEPATH];
 } bot_settings_t;
 
 int BotAISetup(int restart);
