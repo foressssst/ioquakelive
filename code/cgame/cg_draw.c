@@ -36,6 +36,94 @@ menuDef_t* menuEndScoreboard = NULL;
 // which cg_main.c already parses - id put the join menu in the intro file.
 menuDef_t* menuJoinGame = NULL;
 
+// [QL] The spectator HUD. cgamex86.dll caches these right after loading the menus
+// (0x10006eb8..0x10006f12), in one run of Menus_FindByName calls whose results land in
+// consecutive globals. Note that retail looks up ONLY the comp_ variants: the strings
+// "spechud_menu" and "specfollowhud_menu" do not appear anywhere in the binary, even
+// though ui/spectator.menu and ui/spectator_follow.menu are parsed. Quake Live ships the
+// plain pair and uses the competitive one.
+//
+//   0x10ab9684  comp_spechud_menu          ui/comp_spectator.menu
+//   0x10ab9688  comp_specfollowhud_menu    ui/comp_spectator_follow.menu
+//   0x10ab968c  comp_specred_top           ui/comp_spectator.menu
+//   0x10ab9690  comp_specred_bottom        ui/comp_spectator.menu
+//   0x10ab9694  comp_specblue_top          ui/comp_spectator.menu
+//   0x10ab9698  comp_specblue_bottom       ui/comp_spectator.menu
+//
+// (The same run also caches stats_menu into 0x10ab967c. Nothing in this fork opens it
+// yet, so it is deliberately left out rather than added as a dead pointer.)
+menuDef_t* menuSpecHud = NULL;
+menuDef_t* menuSpecFollowHud = NULL;
+menuDef_t* menuSpecRedTop = NULL;
+menuDef_t* menuSpecRedBottom = NULL;
+menuDef_t* menuSpecBlueTop = NULL;
+menuDef_t* menuSpecBlueBottom = NULL;
+
+/*
+=================
+CG_CacheMenus
+
+[QL] Resolves every menu cgame keeps a pointer to. The binary does this in one place,
+right after loading the menu files (0x10006eb8), and so do we - both after the initial
+load and after `loadhud` re-parses them.
+
+That second call site matters: Menus_Reset only sets menuCount to 0, so a re-parse fills
+the same Menus[] slots with different menus and every cached pointer is silently pointing
+at the wrong one. menuScoreboard and menuEndScoreboard were already being cleared there;
+menuJoinGame was not, which meant a `loadhud` while spectating left CG_UpdateJoinMenu
+activating and painting whatever menu had landed in that slot.
+=================
+*/
+void CG_CacheMenus(void) {
+    menuJoinGame = Menus_FindByName("joingame_menu");
+    menuSpecHud = Menus_FindByName("comp_spechud_menu");
+    menuSpecFollowHud = Menus_FindByName("comp_specfollowhud_menu");
+    menuSpecRedTop = Menus_FindByName("comp_specred_top");
+    menuSpecRedBottom = Menus_FindByName("comp_specred_bottom");
+    menuSpecBlueTop = Menus_FindByName("comp_specblue_top");
+    menuSpecBlueBottom = Menus_FindByName("comp_specblue_bottom");
+}
+
+/*
+=================
+CG_DrawSpectatorHud
+
+[QL] cgamex86.dll 0x1000dad0. The spectator overlay: a main HUD plus four team banners.
+
+Which main HUD is chosen comes straight off PMF_FOLLOW (0x1000dae1: the binary tests
+ps.pm_flags & 0x1000 at snap+0x38) - following a player gets the follow HUD, free-flying
+gets the plain one. The four banners are painted unconditionally afterwards, with no null
+test in the binary; Menu_Paint already returns on NULL, so this matches.
+
+Every paint is forced (ecx = 1 at the call to Menu_Paint, 0x100609d0), because these menus
+are never activated and so never carry WINDOW_VISIBLE - the normal Menu_PaintAll pass
+would skip them. That is the same trick the join menu uses.
+
+The menus themselves are pure ownerdraw: no literal text, 38 distinct ownerdraws between
+the two files (player names, health/armor, scores, flag status, clan tags), all of which
+this fork already implements. That is why the whole feature is this function plus a cache.
+=================
+*/
+void CG_DrawSpectatorHud(void) {
+    menuDef_t* menu;
+
+    // [QL] 0x1000dad3: the scoreboard wins the frame outright.
+    if (cg.scoreBoardShowing) {
+        return;
+    }
+
+    menu = menuSpecFollowHud;
+    if (!menu || !(cg.snap->ps.pm_flags & PMF_FOLLOW)) {
+        menu = menuSpecHud;
+    }
+    Menu_Paint(menu, qtrue);
+
+    Menu_Paint(menuSpecRedTop, qtrue);
+    Menu_Paint(menuSpecRedBottom, qtrue);
+    Menu_Paint(menuSpecBlueTop, qtrue);
+    Menu_Paint(menuSpecBlueBottom, qtrue);
+}
+
 int sortedTeamPlayers[TEAM_MAXOVERLAY];
 int numSortedTeamPlayers;
 
@@ -1525,7 +1613,7 @@ CG_DrawSpectator
   then left-aligned "waiting to play" (duel) or "press ESC..." (team)
 =================
 */
-static void CG_DrawSpectator(void) {
+void CG_DrawSpectator(void) {
 	float scale, w, y;
 	const char* s;
 	vec4_t grayColor = {0.73f, 0.73f, 0.73f, 0.7f};
@@ -1558,8 +1646,12 @@ static void CG_DrawSpectator(void) {
 	w = CG_Text_Width(s, 0.18f, 0);
 	CG_Text_Paint(320 - w / 2, y, 0.18f, grayColor, s, 0, 0, 0);
 
-	// Bottom hints - left-aligned, skip when following a player
-	if (!(cg.snap->ps.pm_flags & PMF_FOLLOW)) {
+	// Bottom hints - left-aligned, skipped when the competitive follow HUD is covering
+	// this. [QL] 0x10034fbd tests BOTH halves: the cached comp_specfollowhud_menu being
+	// non-NULL *and* PMF_FOLLOW, and only then jumps to the epilogue (0x100350aa). Until
+	// the spectator menus were cached the first half was always false, so the two
+	// conditions were indistinguishable; they are not any more.
+	if (!(menuSpecFollowHud && (cg.snap->ps.pm_flags & PMF_FOLLOW))) {
 		CG_SetWidescreen(WIDESCREEN_LEFT);
 		if (cgs.gametype == GT_DUEL) {
 			CG_Text_Paint(20, 461, 0.28f, colorWhite, "waiting to play", 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
@@ -2222,6 +2314,18 @@ void CG_UpdateJoinMenu(void) {
 	// [QL] 0x1000e9f2: open it on the first frame it is asked for, and take the
 	// key catcher so clicks reach CG_KeyEvent/CG_MouseEvent instead of the game.
 	if (!(menu->window.flags & WINDOW_VISIBLE)) {
+		// CG_Init memsets cgs, so the cursor sits at (0,0) - the top left corner, well
+		// outside the menu - until the player happens to move the mouse. Every click
+		// before that first movement hit-tests there and lands as an out-of-bounds
+		// click. Retail never has this problem because its engine hands cgame an
+		// absolute pointer position (0x1003c4f0); ioquake3's sends deltas, so the
+		// starting point has to be chosen here. Centre of the 640x480 virtual screen.
+		if (cgs.cursorX == 0 && cgs.cursorY == 0) {
+			cgs.cursorX = SCREEN_WIDTH / 2;
+			cgs.cursorY = SCREEN_HEIGHT / 2;
+			cgDC.cursorx = cgs.cursorX;
+			cgDC.cursory = cgs.cursorY;
+		}
 		trap_Key_SetCatcher(KEYCATCH_CGAME);
 		Menus_Activate(menu);
 	}
@@ -2284,19 +2388,40 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 			return;
 		}
 	*/
-	if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR ||
-		((cgs.gametype == GT_CA || cgs.gametype == GT_AD) &&
-		 cg.snap->ps.pm_type == PM_SPECTATOR)) {
-		CG_SetWidescreen(WIDESCREEN_CENTER);
-		CG_DrawSpectator();
-		CG_SetWidescreen(WIDESCREEN_STRETCH);
+	// [QL] cgamex86.dll 0x10010ff7..0x100110b5. Which branch runs is decided by the
+	// predicted playerState, and the test is not Quake 3's:
+	//   0x10010ff7  test [cg.predictedPlayerState.eFlags], EF_VOTED
+	//   0x10011003  cmp  [cg.predictedPlayerState.pm_type], PM_SPECTATOR
+	// Both are what SpectatorClientEndFrame (qagamex86.dll 0x10035470) leaves on a
+	// follower - pm_type forced back to PM_SPECTATOR, EF_VOTED on a real spectator -
+	// so a spectator following somebody gets this branch too. The old test on
+	// persistant[PERS_TEAM] saw the FOLLOWED player's team and missed them.
+	if ((cg.predictedPlayerState.eFlags & EF_VOTED) ||
+		cg.predictedPlayerState.pm_type == PM_SPECTATOR) {
+		// [QL] 0x10011081: the competitive spectator overlay.
+		CG_DrawSpectatorHud();
 
-		if (stereoFrame == STEREO_CENTER)
-			CG_DrawCrosshair();
+		// [QL] 0x1001108c: crosshair, crosshair names and weapon bar are only drawn
+		// while following somebody - a free-flying spectator has no weapon to aim.
+		//
+		// Retail does NOT draw the "SPECTATOR MODE / Press MOUSE1..." text from here.
+		// CG_DrawSpectator is reached only through the CG_SPEC_MESSAGES ownerdraw
+		// (0x1003c05b), which only ui/spectator.menu and ui/spectator_follow.menu use -
+		// the two spectator HUDs retail never paints. Drawing it unconditionally here
+		// was a visible difference from the retail spectator HUD.
+		if (cg.snap->ps.pm_flags & PMF_FOLLOW) {
+			if (stereoFrame == STEREO_CENTER)
+				CG_DrawCrosshair();
 
-		CG_SetWidescreen(WIDESCREEN_CENTER);
-		CG_DrawCrosshairNames();
-		CG_SetWidescreen(WIDESCREEN_STRETCH);
+			CG_SetWidescreen(WIDESCREEN_CENTER);
+			CG_DrawCrosshairNames();
+			CG_SetWidescreen(WIDESCREEN_STRETCH);
+			CG_DrawWeaponBar();
+			// NOT PORTED: retail calls 0x1000ac30 here (WIDESCREEN_CENTER), a timed
+			// 2-second element with a 200 ms fade that the playing branch also draws,
+			// and 0x1000f700 after this block for every spectator (it tests EF_VOTED).
+			// Neither is identified yet; see bitacora/PENDIENTES.md.
+		}
 	} else {
 		// don't draw any status if dead or the scoreboard is being explicitly shown
 		if (!cg.showScores && cg.snap->ps.stats[STAT_HEALTH] > 0) {

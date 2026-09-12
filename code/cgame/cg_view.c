@@ -607,7 +607,13 @@ static void CG_DamageBlendBlob(void) {
     VectorMA(ent.origin, cg.damageY * 8, cg.refdef.viewaxis[2], ent.origin);
 
     ent.radius = cg.damageValue * 3;
-    ent.customShader = cgs.media.viewBloodShader;
+    // [QL] 0x1004da79: the shader is chosen, not fixed. The binary tests bloodSpray[0]
+    // (0x10a5f46c - the same handle CG_Bleed opens with at 0x10013da0) and takes
+    // viewBloodBlend (0x10a5f4f0) when it resolved, viewDamageBlend (0x10a5f4f4) when it
+    // did not. bloodSpray1 only resolves with the Workshop gore pack installed, so the
+    // damage tint is what a stock Quake Live actually draws, and the blood version is the
+    // opt-in. This is the same asset-presence switch that decides gibs in CG_GibPlayer.
+    ent.customShader = cgs.media.bloodSprayShaders[0] ? cgs.media.viewBloodShader : cgs.media.viewDamageShader;
     ent.shaderRGBA[0] = 255;
     ent.shaderRGBA[1] = 255;
     ent.shaderRGBA[2] = 255;
