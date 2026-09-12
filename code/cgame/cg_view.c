@@ -488,10 +488,13 @@ static int CG_CalcFov(void) {
     if (cg.predictedPlayerState.pm_type == PM_INTERMISSION) {
         // if in intermission, use a fixed value
         fov_x = 90;
-    } else if (cg.predictedPlayerState.stats[STAT_HEALTH] > 0 && cg_specFov.integer &&
-               (cg.snap->ps.pm_flags & PMF_FOLLOW) && cg.snap->ps.stats[STAT_HEALTH] > 0) {
-        // QL binary: cg_specFov.integer uses the followed player's FOV (vmCvar 0x10A671A0)
-        fov_x = (float)cg.snap->ps.stats[STAT_HEALTH];  // server sends FOV in a stat field when spectating
+    } else if (cg.snap->ps.fov && cg_specFov.integer &&
+               ((cg.snap->ps.pm_flags & PMF_FOLLOW) || cg.demoPlayback)) {
+        // [QL] binary 0x1004d731: with cg_specFov, a followed player (or a demo)
+        // is viewed with that player's own FOV, ps.fov (snap +0xc8, ps +0x9c).
+        // This used to read stats[STAT_HEALTH], so the view took the followed
+        // player's health as its FOV (161 health -> 161 degrees).
+        fov_x = (float)cg.snap->ps.fov;
     } else {
         fov_x = cg_fov.value;
         if (fov_x < 1) {
