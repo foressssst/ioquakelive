@@ -1821,8 +1821,14 @@ void CG_DrawWeaponBar(void) {
         return;
     }
 
-    isSpectating = (cg.snap->ps.pm_flags & PMF_FOLLOW) ||
-                   cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR;
+    // [QL] 0x10053129: "spectating" is the same test CG_Draw2D uses to pick its
+    // spectator branch - EF_VOTED or PM_SPECTATOR on the predicted playerState - and a
+    // spectator gets no weapon bar at all while the scoreboard is up (0x10053199).
+    isSpectating = (cg.predictedPlayerState.eFlags & EF_VOTED) ||
+                   cg.predictedPlayerState.pm_type == PM_SPECTATOR;
+    if (isSpectating && cg.scoreBoardShowing) {
+        return;
+    }
 
     // Mode 4 = Classic - use Q3-style horizontal bar (only on weapon switch)
     if (cg_weaponBar.integer == 4) {
@@ -1848,33 +1854,32 @@ void CG_DrawWeaponBar(void) {
         return;
     }
 
-    // Set layout based on mode (binary-accurate values from FUN_10053100)
-    switch (cg_weaponBar.integer) {
-        case 1: // Left
-            x = 1.0f;
-            y = 94.0f;
-            xStep = 0.0f;
-            yStep = 22.0f;
-            ammoOffset = 20;
-            textAlign = 2;  // left-aligned text offset
-            break;
-        case 2: // Right
+    // [QL] Layout, 0x10053208..0x100532af. The mode only picks the layout for a
+    // player: a SPECTATOR always gets the horizontal centred bar, whatever cg_weaponBar
+    // says, and it sits lower than a player's (y 452 against 413: 0x19d plus 0x27 when
+    // spectating). The version kept before switched on cg_weaponBar alone, so a
+    // spectator with the default left bar got a vertical bar down the side, and the
+    // centred one was placed at 436.
+    if (!isSpectating && cg_weaponBar.integer != 3) {
+        if (cg_weaponBar.integer == 2) {  // Right
             x = 623.0f;
-            y = 94.0f;
-            xStep = 0.0f;
-            yStep = 22.0f;
             ammoOffset = -3;
             textAlign = 16;
-            break;
-        case 3: // Centered
-        default:
-            x = 320.0f - (float)count * 55.0f * 0.5f;
-            y = isSpectating ? 436.0f : 413.0f;
-            xStep = 55.0f;
-            yStep = 0.0f;
+        } else {                          // Left, and any other value
+            x = 1.0f;
             ammoOffset = 20;
-            textAlign = 8;
-            break;
+            textAlign = 2;
+        }
+        y = 94.0f;
+        xStep = 0.0f;
+        yStep = 22.0f;
+    } else {                              // Centred, or spectating
+        x = 320.0f - (float)count * 55.0f * 0.5f;
+        y = isSpectating ? 452.0f : 413.0f;
+        xStep = 55.0f;
+        yStep = 0.0f;
+        ammoOffset = 20;
+        textAlign = 8;
     }
 
     trap_R_SetColor(NULL);

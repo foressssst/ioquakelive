@@ -314,6 +314,15 @@ int CG_DrawTextWidth(const char *text, float scale, int limit, int fontIndex) {
 	return w;
 }
 
+// [QL] Height counterpart of CG_DrawTextWidth. cgamex86.dll's measuring routine
+// (0x100082b0) hands back width and height through two out pointers; the numeric
+// ownerdraws use the height to drop the text onto the rect (y + height).
+int CG_DrawTextHeight(const char *text, float scale, int limit, int fontIndex) {
+	int h = 0;
+	CG_MeasureText(text, scale, fontIndex, limit, NULL, &h);
+	return h;
+}
+
 // Scale-based versions - used by ~90 direct call sites in cg_newdraw.c, cg_info.c,
 // etc.  These use the default font (index 0), matching QL's CG_Text_Paint.
 int CG_Text_Width(const char* text, float scale, int limit) {
@@ -1899,46 +1908,6 @@ static void CG_DrawIntermission(void) {
 
 /*
 =================
-CG_DrawFollow
-=================
-*/
-static qboolean CG_DrawFollow(void) {
-	// [QL] Team-specific colors for followed player name (binary-verified)
-	static vec4_t teamColorFree = { 1.0f, 1.0f, 1.0f, 1.0f };
-	static vec4_t teamColorRed  = { 1.0f, 0.5f, 0.5f, 1.0f };
-	static vec4_t teamColorBlue = { 0.5f, 0.75f, 1.0f, 1.0f };
-	static vec4_t teamColorSpec = { 0.85f, 0.85f, 0.85f, 1.0f };
-	const char* name;
-	float *nameColor;
-
-	if (!(cg.snap->ps.pm_flags & PMF_FOLLOW)) {
-		return qfalse;
-	}
-
-	{
-		float w = CG_Text_Width("following", 0.4f, 0);
-		CG_Text_Paint(320 - w / 2, 38, 0.4f, colorWhite, "following", 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
-	}
-
-	name = cgs.clientinfo[cg.snap->ps.clientNum].name;
-
-	switch (cgs.clientinfo[cg.snap->ps.clientNum].team) {
-	case TEAM_RED:       nameColor = teamColorRed; break;
-	case TEAM_BLUE:      nameColor = teamColorBlue; break;
-	case TEAM_SPECTATOR: nameColor = teamColorSpec; break;
-	default:             nameColor = teamColorFree; break;
-	}
-
-	{
-		float w = CG_Text_Width(name, 0.6f, 0);
-		CG_Text_Paint(320 - w / 2, 70, 0.6f, nameColor, name, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
-	}
-
-	return qtrue;
-}
-
-/*
-=================
 CG_DrawAmmoWarning
 =================
 */
@@ -2461,9 +2430,11 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	}
 
 	CG_SetWidescreen(WIDESCREEN_CENTER);
-	if (!CG_DrawFollow()) {
-		CG_DrawWarmup();
-	}
+	// [QL] cgamex86.dll 0x10011154..0x1001115a: the warmup/centre messages are drawn
+	// unconditionally. Quake 3's `if (!CG_DrawFollow()) CG_DrawWarmup();` is gone with
+	// CG_DrawFollow itself: retail has no "following" string at all, and the followed
+	// player's name is drawn by the spectator HUD through CG_FOLLOW_PLAYER_NAME_EX.
+	CG_DrawWarmup();
 	CG_DrawTimeout();  // [QL] pause/timeout overlay
 	CG_SetWidescreen(WIDESCREEN_STRETCH);
 
