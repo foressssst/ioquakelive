@@ -308,7 +308,7 @@ static void UI_PaintText(float x, float y, int fontIndex, float scale, const vec
 
 // Core measure: 640-space width/height for the given text.
 static void UI_MeasureText(const char* text, float scale, int fontIndex, int limit, int* w640, int* h640) {
-    int wpx = 0, hpx = 0;
+    float extents[5];
     // Convert measured screen pixels back to 640-space using the SAME scale the
     // draw path (UI_AdjustFrom640) uses - i.e. DC->xscale/yscale, which on a
     // widescreen display is the 4:3-preserving scale (vidHeight/480), not the
@@ -321,16 +321,18 @@ static void UI_MeasureText(const char* text, float scale, int fontIndex, int lim
     float size = UI_FontPixelSize(scale);
     int lim = (limit > 0) ? limit : -1;
 
-    trap_R_Font_TextExtents(text, 0, lim, size, UI_EngineFont(fontIndex), NULL, NULL, &wpx, &hpx);
+    // Width from the engine box (maxx - minx), height from the engine's line
+    // height (extents[4]), as 0x10003e05-0x10003e3c does.
+    trap_R_Font_TextExtents(text, 0, UI_EngineFont(fontIndex), size, lim, extents);
 
     if (xscale <= 0.0f)
         xscale = 1.0f;
     if (yscale <= 0.0f)
         yscale = 1.0f;
     if (w640)
-        *w640 = (int)((float)wpx / xscale);
+        *w640 = (int)((extents[2] - extents[0]) / xscale);
     if (h640)
-        *h640 = (int)((float)hpx / yscale);
+        *h640 = (int)(extents[4] / yscale);
 }
 
 int Text_Width(const char* text, float scale, int limit) {

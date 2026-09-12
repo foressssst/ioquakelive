@@ -95,7 +95,7 @@ typedef struct {
     // internally by the renderer (RegisterFont is a no-op stub); these draw and
     // measure through the engine-side glyph atlas.
     void (*Font_DrawString)(int x, int y, const char* text, int fontIndex, float scale, int limit, float* maxX, int flags);
-    void (*TextBounds)(const char* text, int start, int limit, float scale, int fontIndex, int* outX, int* outY, int* outW, int* outH);
+    void (*TextBounds)(const char* text, int start, int fontIndex, float scale, int limit, float* extents);  // extents[5]
     void (*GetGlyphInfo)(int fontIndex, int charValue, glyphInfo_t* glyph);
     void (*SetCompositionFont)(int fontIndex, float scale);
 

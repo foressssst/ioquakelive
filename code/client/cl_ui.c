@@ -879,7 +879,7 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             re.Font_DrawString(args[1], args[2], VMA(3), args[4], VMF(5), args[6], VMA(7), args[8]);
             return 0;
         case UI_R_FONT_TEXTEXTENTS:
-            re.TextBounds(VMA(1), args[2], args[3], VMF(4), args[5], VMA(6), VMA(7), VMA(8), VMA(9));
+            re.TextBounds(VMA(1), args[2], args[3], VMF(4), args[5], VMA(6));
             return 0;
         case UI_R_GETGLYPHINFO:
             re.GetGlyphInfo(args[1], args[2], VMA(3));
