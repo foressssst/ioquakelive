@@ -1520,6 +1520,8 @@ typedef struct {
     int levelStartTime;
 
     int scores1, scores2;   // from configstrings
+    char firstPlaceName[40];   // [QL] CS_SCORES1PLAYER (0x10a40400)
+    char secondPlaceName[40];  // [QL] CS_SCORES2PLAYER (0x10a40428)
     int redflag, blueflag;  // flag status from configstrings
     int flagStatus;
 
@@ -1891,7 +1893,7 @@ int  CG_GetActiveFrame(void);
 void        CG_RaceInit(int fullReset);
 const char* CG_FormatRaceTime(int msec);
 int         CG_GetOvertimeCount(void);
-const char* CG_DidLocalPlayerWin(void);
+qboolean    CG_LocalPlayerLeads(void);
 const char* CG_TranslateMapName(const char* mapname);
 void        CG_CacheCountryFlags(void);
 
@@ -1982,6 +1984,9 @@ void CG_DrawText_DC(float x, float y, float scale, vec4_t color, const char* tex
 void CG_DrawText(float x, float y, int fontIndex, float scale, vec4_t color, const char *text, float adjust, int maxChars, int textStyle);
 int CG_DrawTextWidth(const char *text, float scale, int limit, int fontIndex);
 int CG_DrawTextHeight(const char *text, float scale, int limit, int fontIndex);
+void CG_DrawTextClipped(float *maxX, float x, float y, float scale, const vec4_t color, const char *text);
+extern vmCvar_t cg_redTeamName;
+extern vmCvar_t cg_blueTeamName;
 extern int cg_currentWidescreen;
 float CG_TextWidth_DC(const char* text, float scale, int limit, int fontIndex);
 float CG_TextHeight_DC(const char* text, float scale, int limit, int fontIndex);

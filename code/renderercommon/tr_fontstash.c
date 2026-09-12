@@ -1051,7 +1051,18 @@ float fonsDrawText(FONScontext *stash, float x, float y, const char *str, const 
 
         glyph = fons__getGlyph(stash, font, codepoint, isize, iblur, FONS_GLYPH_BITMAP_REQUIRED);
         if (glyph != NULL) {
+            float penX = x;
             fons__getQuad(stash, font, prevGlyphIndex, glyph, scale, state->spacing, &x, &y, &q);
+
+            // QL: maxX is an input bound, as in the retail engine's text drawer
+            // (quakelive_steam.exe 0x444360). The first glyph whose advance ends
+            // past *maxX is not drawn: *maxX gets the pen x before it and drawing
+            // stops. A string that fits leaves *maxX untouched.
+            if (maxX && x > *maxX) {
+                *maxX = penX;
+                fons__flush(stash);
+                return x;
+            }
 
             if (stash->nverts + 6 > FONS_VERTEX_COUNT)
                 fons__flush(stash);
@@ -1068,8 +1079,6 @@ float fonsDrawText(FONScontext *stash, float x, float y, const char *str, const 
     }
     fons__flush(stash);
 
-    if (maxX)
-        *maxX = x;
     return x;
 }
 

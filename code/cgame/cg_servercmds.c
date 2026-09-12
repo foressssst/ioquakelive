@@ -940,6 +940,9 @@ void CG_SetConfigValues(void) {
 
     cgs.scores1 = atoi(CG_ConfigString(CS_SCORES1));
     cgs.scores2 = atoi(CG_ConfigString(CS_SCORES2));
+    // [QL] binary 0x100494af / 0x100494e5: the place names are cached next to the scores
+    Q_strncpyz(cgs.firstPlaceName, CG_ConfigString(CS_SCORES1PLAYER), sizeof(cgs.firstPlaceName));
+    Q_strncpyz(cgs.secondPlaceName, CG_ConfigString(CS_SCORES2PLAYER), sizeof(cgs.secondPlaceName));
     cgs.levelStartTime = atoi(CG_ConfigString(CS_LEVEL_START_TIME));
     // [QL] custom-settings bitmask (drives the RR-infected bones model), wallbang depth,
     // and the capsule-hull flag for client-side hit prediction
@@ -1043,6 +1046,10 @@ static void CG_ConfigStringModified(void) {
         cgs.scores1 = atoi(str);
     } else if (num == CS_SCORES2) {
         cgs.scores2 = atoi(str);
+    } else if (num == CS_SCORES1PLAYER) {  // [QL] binary 0x10049b0f
+        Q_strncpyz(cgs.firstPlaceName, str, sizeof(cgs.firstPlaceName));
+    } else if (num == CS_SCORES2PLAYER) {
+        Q_strncpyz(cgs.secondPlaceName, str, sizeof(cgs.secondPlaceName));
     } else if (num == CS_LEVEL_START_TIME) {
         cgs.levelStartTime = atoi(str);
     } else if (num == CS_VOTE_TIME) {

@@ -357,11 +357,8 @@ static int R_Font_ResolveId(int fontIndex) {
 void RE_Font_DrawString(int x, int y, const char *text, int fontIndex, float scale, int limit, float *maxX, int flags) {
     const char *end = NULL;
 
-    if (fontContext == NULL || text == NULL || text[0] == '\0') {
-        if (maxX)
-            *maxX = (float)x;
+    if (fontContext == NULL || text == NULL || text[0] == '\0')
         return;
-    }
 
     fonsSetFont(fontContext, R_Font_ResolveId(fontIndex));
     fonsSetSize(fontContext, scale);
