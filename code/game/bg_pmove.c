@@ -2005,9 +2005,14 @@ static void PM_Weapon(void) {
     // [QL] set EF_FIRING while attack is held with a usable weapon (lightning
     // always qualifies). PmoveSingle clears it before PM_Weapon, so this is what
     // keeps continuous-beam weapons on a steady beam and looping sound instead of
-    // flickering at the fire rate. (PM_Weapon @0x10031a50)
+    // flickering at the fire rate. (PM_Weapon starts at 0x10031990 - the 0x10031a50
+    // noted before lands mid-instruction.)
+    //
+    // [QL] 0x100319c8: the gate here is PMF_FROZEN (test cl, 4 on pm_flags loaded
+    // into ecx at 0x1003199c), not PMF_RESPAWNED - that one already returned at the
+    // top of the function (0x1003199f, test ecx, 0x200).
     if ((pm->cmd.buttons & BUTTON_ATTACK)
-        && !(pm->ps->pm_flags & PMF_RESPAWNED)
+        && !(pm->ps->pm_flags & PMF_FROZEN)
         && (pm->ps->ammo[pm->ps->weapon] != 0 || pm->ps->weapon == WP_LIGHTNING)) {
         pm->ps->eFlags |= EF_FIRING;
     }
@@ -2063,7 +2068,13 @@ static void PM_Weapon(void) {
     }
 
     // check for fire
-    if (!(pm->cmd.buttons & BUTTON_ATTACK)) {
+    //
+    // [QL] 0x10031af3..0x10031b03: a frozen player takes exactly the not-firing
+    // branch (both jumps land on 0x10031c6d). PMF_FROZEN is what the ready-up
+    // countdown sets on every connected client (CheckWarmupConditions) and what the
+    // round-based modes set during their own countdowns, so without this the
+    // countdown froze nothing and players could shoot through it.
+    if (!(pm->cmd.buttons & BUTTON_ATTACK) || (pm->ps->pm_flags & PMF_FROZEN)) {
         int spin;
         pm->ps->weaponTime = 0;
         pm->ps->weaponstate = WEAPON_READY;
