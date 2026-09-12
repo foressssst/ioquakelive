@@ -131,7 +131,7 @@ qhandle_t RE_RegisterShaderFromImage(const char* name, int lightmapIndex, image_
 void R_InitFonts(void);
 void R_FontShutdown(void);
 void RE_Font_DrawString(int x, int y, const char* text, int fontIndex, float scale, int limit, float* maxX, int flags);
-void RE_TextBounds(const char* text, int start, int limit, float scale, int fontIndex, int* outX, int* outY, int* outW, int* outH);
+void RE_TextBounds(const char* text, int start, int fontIndex, float scale, int limit, float* extents);
 void RE_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t* glyph);
 void RE_SetCompositionFont(int fontIndex, float scale);
 // dead stub kept for the legacy re.RegisterFont slot

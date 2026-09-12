@@ -377,18 +377,17 @@ void RE_Font_DrawString(int x, int y, const char *text, int fontIndex, float sca
     fonsDrawText(fontContext, (float)x, (float)y, text, end, flags, maxX);
 }
 
-void RE_TextBounds(const char *text, int start, int limit, float scale, int fontIndex, int *outX, int *outY, int *outW, int *outH) {
-    float bounds[4];
+// QL: quakelive_steam.exe 0x43cc50. extents[0..3] is fonsTextBounds' box at
+// the origin (minx, miny, maxx, maxy); extents[4] is the font's line height at
+// this size (fonsVertMetrics). The game modules take a text's width from
+// maxx - minx and its height from extents[4] - the line height, not the height
+// of the glyphs actually drawn.
+void RE_TextBounds(const char *text, int start, int fontIndex, float scale, int limit, float *extents) {
     const char *str, *end;
 
-    if (outX)
-        *outX = 0;
-    if (outY)
-        *outY = 0;
-    if (outW)
-        *outW = 0;
-    if (outH)
-        *outH = 0;
+    if (extents == NULL)
+        return;
+    extents[0] = extents[1] = extents[2] = extents[3] = extents[4] = 0.0f;
 
     if (fontContext == NULL || text == NULL)
         return;
@@ -402,18 +401,8 @@ void RE_TextBounds(const char *text, int start, int limit, float scale, int font
     str = text + (start > 0 ? start : 0);
     end = (limit > 0) ? str + limit : NULL;
 
-    fonsTextBounds(fontContext, 0.0f, 0.0f, str, end, bounds);
-
-    // Report position and size (width/height), leaving derivation of virtual
-    // 640x480 dimensions to the caller.
-    if (outX)
-        *outX = (int)bounds[0];
-    if (outY)
-        *outY = (int)bounds[1];
-    if (outW)
-        *outW = (int)(bounds[2] - bounds[0]);
-    if (outH)
-        *outH = (int)(bounds[3] - bounds[1]);
+    fonsTextBounds(fontContext, 0.0f, 0.0f, str, end, extents);
+    fonsVertMetrics(fontContext, NULL, NULL, &extents[4]);
 }
 
 void RE_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t *out) {
