@@ -1689,7 +1689,7 @@ static void CG_MapRestart(void) {
     // play the "fight" sound if this is a restart without warmup
     if (cg.warmup == 0 /* && cgs.gametype == GT_DUEL */) {
         trap_S_StartLocalSound(cgs.media.countFightSound, CHAN_ANNOUNCER);
-        CG_CenterPrint("FIGHT!", 120, GIANTCHAR_WIDTH * 2);
+        CG_CenterPrint("FIGHT!", 120, 0.5f);  // [QL] 0x1000eaea: y 120, scale 0.5
     }
     trap_Cvar_Set("cg_thirdPerson", "0");
 }
@@ -1951,13 +1951,14 @@ static void CG_ServerCommand(void) {
     }
 
     if (!strcmp(cmd, "cp")) {
-        CG_CenterPrint(CG_Argv(1), SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH);
+        // [QL] 0x1004af70: y 144 during a warmup, 90 otherwise, scale 0.4
+        CG_CenterPrint(CG_Argv(1), cg.warmup ? 144 : 90, 0.4f);
         return;
     }
 
     // [QL] pcp - center print that also prints to console
     if (!strcmp(cmd, "pcp")) {
-        CG_CenterPrint(CG_Argv(1), SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH);
+        CG_CenterPrint(CG_Argv(1), 90, 0.4f);  // [QL] 0x1004afe9: y 90, scale 0.4
         CG_Printf("%s\n", CG_Argv(1));
         return;
     }

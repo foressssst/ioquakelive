@@ -1350,14 +1350,16 @@ Called for important messages that should stay in the center of the screen
 for a few moments
 ==============
 */
-void CG_CenterPrint(const char* str, int y, int charWidth) {
+void CG_CenterPrint(const char* str, int y, float scale) {
 	char* s;
 
+	// [QL] cgamex86.dll 0x1000be10: a text scale, not a character width, and
+	// race prints sit 10 units lower.
 	Q_strncpyz(cg.centerPrint, str, sizeof(cg.centerPrint));
 
 	cg.centerPrintTime = cg.time;
-	cg.centerPrintY = y;
-	cg.centerPrintCharWidth = charWidth;
+	cg.centerPrintY = y + (cgs.gametype == GT_RACE ? 10 : 0);
+	cg.centerPrintScale = scale;
 
 	// count the number of lines for centering
 	cg.centerPrintLines = 1;
@@ -1372,31 +1374,38 @@ void CG_CenterPrint(const char* str, int y, int charWidth) {
 /*
 ===================
 CG_DrawCenterString
+
+[QL] cgamex86.dll 0x1000beb0. Visible for cg_centertime seconds, fading in the
+last 200 ms. The block starts scale * 16 * lines above the print's y; each
+line (up to 50 characters) is centred on the 640 screen, drawn at y + its
+height in font 0 with the print's scale and ITEM_TEXTSTYLE_SHADOWEDMORE, and
+the next line starts 6 units below it.
 ===================
 */
 static void CG_DrawCenterString(void) {
+	static vec4_t color;
 	char* start;
 	int l;
-	int x, y, w;
-
-	int h;
-
-	float* color;
+	int x, y, w, h;
+	int duration, remaining;
 
 	if (!cg.centerPrintTime) {
 		return;
 	}
 
-	color = CG_FadeColor(cg.centerPrintTime, 1000 * cg_centertime.value);
-	if (!color) {
+	duration = (int)(cg_centertime.value * 1000.0);
+	remaining = duration - (cg.time - cg.centerPrintTime);
+	if (cg.time - cg.centerPrintTime >= duration) {
 		return;
 	}
 
+	color[0] = color[1] = color[2] = 1.0f;
+	color[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
 	trap_R_SetColor(color);
 
 	start = cg.centerPrint;
 
-	y = cg.centerPrintY - cg.centerPrintLines * BIGCHAR_HEIGHT / 2;
+	y = (int)((float)cg.centerPrintY - cg.centerPrintScale * 16.0 * cg.centerPrintLines);
 
 	while (1) {
 		char linebuffer[1024];
@@ -1409,10 +1418,11 @@ static void CG_DrawCenterString(void) {
 		}
 		linebuffer[l] = 0;
 
-		w = CG_Text_Width(linebuffer, 0.5, 0);
-		h = CG_Text_Height(linebuffer, 0.5, 0);
+		w = CG_DrawTextWidth(linebuffer, cg.centerPrintScale, 0, 0);
+		h = CG_DrawTextHeight(linebuffer, cg.centerPrintScale, 0, 0);
 		x = (SCREEN_WIDTH - w) / 2;
-		CG_Text_Paint(x, y + h, 0.5, color, linebuffer, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+		CG_DrawText((float)x, (float)(y + h), 0, cg.centerPrintScale, color, linebuffer, 0, 0,
+		            ITEM_TEXTSTYLE_SHADOWEDMORE);
 		y += h + 6;
 
 		while (*start && (*start != '\n')) {
