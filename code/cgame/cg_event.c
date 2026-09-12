@@ -105,78 +105,81 @@ static qhandle_t CG_ModToWeaponIcon(int mod) {
 
 /*
 =============
-CG_StripColorCodes
-[QL] Strip Q3 color codes from a string (for team game obituary names)
+CG_ObitStripColors
+[QL] cgamex86.dll 0x10019065: team games strip the obituary names in place,
+dropping "^0".."^7" and any character below a space.
 =============
 */
-static void CG_StripColorCodes(char *dst, const char *src, int dstSize) {
-    int i = 0;
-    while (*src && i < dstSize - 1) {
-        if (*src == '^' && src[1] >= '0' && src[1] <= '7') {
+static void CG_ObitStripColors(char *s) {
+    const char *src = s;
+    char *dst = s;
+
+    while (*src) {
+        if (src[0] == '^' && src[1] >= '0' && src[1] <= '7') {
             src += 2;
             continue;
         }
-        if (*src >= ' ') {
-            dst[i++] = *src;
+        if ((unsigned char)*src >= ' ' || (signed char)*src < 0) {
+            *dst++ = *src;
         }
         src++;
     }
-    dst[i] = '\0';
+    *dst = '\0';
 }
 
 /*
 =============
 CG_AddObituary
-[QL] Add an obituary entry to the ring buffer (binary: CG_ScorePlum at 10018f60)
+[QL] cgamex86.dll 0x10018f60. The feed is 16 fixed slots filled in order:
+the entry takes the first inactive slot (when all 16 are taken the array
+shifts up one first). Past cg_obituaryRowSize the oldest entry is dropped and
+everything from that row on is cleared, so only the newest rows remain.
 =============
 */
 static void CG_AddObituary(const char *victimName, const char *attackerName,
                             int victimTeam, int attackerTeam,
                             int hasAttacker, qhandle_t weaponIcon) {
-    int i;
+    int idx;
+    int rowSize;
 
-    // Shift entries if we're at capacity (controlled by cg_obituaryRowSize)
-    if (cg.obituaryCount >= cg_obituaryRowSize.integer &&
-        cg_obituaryRowSize.integer > 0 && cg_obituaryRowSize.integer < MAX_OBITUARIES) {
-        for (i = 0; i < cg.obituaryCount - 1; i++) {
-            cg.obituaries[i] = cg.obituaries[i + 1];
-        }
-        cg.obituaryCount--;
-    }
-
-    // Also shift if at absolute max
-    if (cg.obituaryCount >= MAX_OBITUARIES) {
-        for (i = 0; i < MAX_OBITUARIES - 1; i++) {
-            cg.obituaries[i] = cg.obituaries[i + 1];
-        }
-        cg.obituaryCount = MAX_OBITUARIES - 1;
-    }
-
-    i = cg.obituaryCount;
-    memset(&cg.obituaries[i], 0, sizeof(cg.obituaries[i]));
-    cg.obituaries[i].active = 1;
-    cg.obituaries[i].time = cg.time;
-    cg.obituaries[i].hasAttacker = hasAttacker;
-    cg.obituaries[i].weaponIcon = weaponIcon;
-    cg.obituaries[i].victimTeam = victimTeam;
-    cg.obituaries[i].attackerTeam = attackerTeam;
-
-    if (victimName) {
-        if (cgs.gametype >= GT_TEAM) {
-            CG_StripColorCodes(cg.obituaries[i].victimName, victimName, sizeof(cg.obituaries[i].victimName));
-        } else {
-            Q_strncpyz(cg.obituaries[i].victimName, victimName, sizeof(cg.obituaries[i].victimName));
+    for (idx = 0; idx < MAX_OBITUARIES; idx++) {
+        if (!cg.obituaries[idx].active) {
+            break;
         }
     }
-    if (attackerName) {
-        if (cgs.gametype >= GT_TEAM) {
-            CG_StripColorCodes(cg.obituaries[i].attackerName, attackerName, sizeof(cg.obituaries[i].attackerName));
-        } else {
-            Q_strncpyz(cg.obituaries[i].attackerName, attackerName, sizeof(cg.obituaries[i].attackerName));
-        }
+    if (idx == MAX_OBITUARIES) {
+        memmove(&cg.obituaries[0], &cg.obituaries[1], (MAX_OBITUARIES - 1) * sizeof(cg.obituaries[0]));
+        memset(&cg.obituaries[MAX_OBITUARIES - 1], 0, sizeof(cg.obituaries[0]));
+        // retail keeps idx at 16 here and writes one slot past the array
+        idx = MAX_OBITUARIES - 1;
     }
 
-    cg.obituaryCount++;
+    cg.obituaries[idx].active = 1;
+    Q_strncpyz(cg.obituaries[idx].victimName, victimName, sizeof(cg.obituaries[idx].victimName));
+    Q_strncpyz(cg.obituaries[idx].attackerName, attackerName, sizeof(cg.obituaries[idx].attackerName));
+    cg.obituaries[idx].hasAttacker = hasAttacker;
+    cg.obituaries[idx].victimTeam = victimTeam;
+    cg.obituaries[idx].attackerTeam = attackerTeam;
+    cg.obituaries[idx].weaponIcon = weaponIcon;
+    cg.obituaries[idx].time = cg.time;
+
+    if (cgs.gametype >= GT_TEAM) {
+        CG_ObitStripColors(cg.obituaries[idx].attackerName);
+        CG_ObitStripColors(cg.obituaries[idx].victimName);
+    }
+
+    // 0x100190e1. Clamped only so an out-of-range cvar cannot move memory
+    // outside the array.
+    rowSize = cg_obituaryRowSize.integer;
+    if (rowSize < 0) {
+        rowSize = 0;
+    } else if (rowSize > MAX_OBITUARIES - 1) {
+        rowSize = MAX_OBITUARIES - 1;
+    }
+    if (idx >= cg_obituaryRowSize.integer) {
+        memmove(&cg.obituaries[0], &cg.obituaries[1], rowSize * sizeof(cg.obituaries[0]));
+        memset(&cg.obituaries[rowSize], 0, (MAX_OBITUARIES - rowSize) * sizeof(cg.obituaries[0]));
+    }
 }
 
 /*
@@ -214,7 +217,9 @@ static void CG_Obituary(entityState_t* ent) {
         CG_AddObituary(cgs.clientinfo[target].name, cgs.clientinfo[attacker].name,
                        victimTeam, attackerTeam, 1, weaponIcon);
     } else {
-        CG_AddObituary(cgs.clientinfo[target].name, NULL,
+        // retail's adder copies the attacker name unconditionally, so it
+        // never gets a NULL
+        CG_AddObituary(cgs.clientinfo[target].name, "",
                        victimTeam, 0, 0, weaponIcon);
     }
     ci = &cgs.clientinfo[target];

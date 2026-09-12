@@ -1120,11 +1120,24 @@ void ClientSpawn(gentity_t* ent) {
 
     client->pers.teamState.state = TEAM_ACTIVE;
 
-    // always clear the kamikaze flag
+    // [QL] qagamex86.dll 0x1003bd6f: kamikaze and ticking are cleared on both
+    // the entity and the playerState
     ent->s.eFlags &= ~EF_KAMIKAZE;
+    ent->client->ps.eFlags &= ~EF_KAMIKAZE;
+    ent->s.eFlags &= ~EF_TICKING;
+    ent->client->ps.eFlags &= ~EF_TICKING;
+
+    // [QL] 0x1003bd8b: EF_VOTED marks a spectator. Retail sets it for a
+    // spectator and clears it for anyone else before the flags are kept, so a
+    // spectator who joins the game loses it. The fork only kept it, and cgame
+    // went on drawing the spectator HUD for a player in the game.
+    if (client->sess.sessionTeam == TEAM_SPECTATOR) {
+        ent->client->ps.eFlags |= EF_VOTED;
+    } else {
+        ent->client->ps.eFlags &= ~EF_VOTED;
+    }
 
     // toggle the teleport bit so the client knows to not lerp
-    // and never clear the voted flag
     flags = ent->client->ps.eFlags & (EF_TELEPORT_BIT | EF_VOTED);
     flags ^= EF_TELEPORT_BIT;
 

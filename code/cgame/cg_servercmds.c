@@ -1674,6 +1674,7 @@ static void CG_MapRestart(void) {
     cg.rewardStack = 0;
     cg.intermissionStarted = qfalse;
     cg.levelShot = qfalse;
+    memset(cg.obituaries, 0, sizeof(cg.obituaries));  // [QL] 0x1004a396
 
     cgs.voteTime = 0;
 
