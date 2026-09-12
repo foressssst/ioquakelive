@@ -378,10 +378,11 @@ void RE_Font_DrawString(int x, int y, const char *text, int fontIndex, float sca
 }
 
 // QL: quakelive_steam.exe 0x43cc50. extents[0..3] is fonsTextBounds' box at
-// the origin (minx, miny, maxx, maxy); extents[4] is the font's line height at
-// this size (fonsVertMetrics). The game modules take a text's width from
-// maxx - minx and its height from extents[4] - the line height, not the height
-// of the glyphs actually drawn.
+// the origin (minx, miny, maxx, maxy); extents[4] is the font's ascender at this
+// size: 0x43ccb8 calls fonsVertMetrics(stash, &extents[4], NULL, NULL), and
+// 0x441c50 fills its second argument from font +0x7c, the ascender (+0x80 is
+// the descender, +0x84 the line height). The game modules take a text's width
+// from maxx - minx and its height from extents[4].
 void RE_TextBounds(const char *text, int start, int fontIndex, float scale, int limit, float *extents) {
     const char *str, *end;
 
@@ -402,7 +403,7 @@ void RE_TextBounds(const char *text, int start, int fontIndex, float scale, int 
     end = (limit > 0) ? str + limit : NULL;
 
     fonsTextBounds(fontContext, 0.0f, 0.0f, str, end, extents);
-    fonsVertMetrics(fontContext, NULL, NULL, &extents[4]);
+    fonsVertMetrics(fontContext, &extents[4], NULL, NULL);
 }
 
 void RE_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t *out) {
