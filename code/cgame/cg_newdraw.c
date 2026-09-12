@@ -471,19 +471,6 @@ static void CG_DrawPlayerLocation(rectDef_t* rect, float scale, vec4_t color, in
     }
 }
 
-static void CG_DrawSelectedPlayerWeapon(rectDef_t* rect) {
-    clientInfo_t* ci;
-
-    ci = cgs.clientinfo + sortedTeamPlayers[CG_GetSelectedPlayer()];
-    if (ci) {
-        if (cg_weapons[ci->curWeapon].weaponIcon) {
-            CG_DrawPic(rect->x, rect->y, rect->w, rect->h, cg_weapons[ci->curWeapon].weaponIcon);
-        } else {
-            CG_DrawPic(rect->x, rect->y, rect->w, rect->h, cgs.media.deferShader);
-        }
-    }
-}
-
 static void CG_DrawPlayerScore(rectDef_t* rect, float scale, vec4_t color, qhandle_t shader, int textStyle) {
     char num[16];
     int value = cg.snap->ps.persistant[PERS_SCORE];
@@ -620,29 +607,193 @@ static void CG_DrawPlayerHealth(rectDef_t* rect, float scale, vec4_t color, qhan
     }
 }
 
-static void CG_DrawRedScore(rectDef_t* rect, float scale, vec4_t color, qhandle_t shader, int textStyle) {
-    int value;
-    char num[16];
-    if (cgs.scores1 == SCORE_NOT_PRESENT) {
-        Com_sprintf(num, sizeof(num), "-");
-    } else {
-        Com_sprintf(num, sizeof(num), "%i", cgs.scores1);
-    }
-    value = CG_OwnerDrawTextWidth(num, scale, 0);
-    CG_OwnerDrawText(rect->x + rect->w - value, rect->y, scale, color, num, 0, 0, textStyle);
+// [QL] The individual gametypes rank players; the rest rank teams.
+// (retail: gametype >= 0 && (gametype <= GT_RACE || gametype == GT_RR))
+static qboolean CG_PlaceIsIndividual(void) {
+    return cgs.gametype >= GT_FFA && (cgs.gametype <= GT_RACE || cgs.gametype == GT_RR);
 }
 
-static void CG_DrawBlueScore(rectDef_t* rect, float scale, vec4_t color, qhandle_t shader, int textStyle) {
-    int value;
-    char num[16];
+// [QL] One "N. name...score" line, shared by 0x10032520 and 0x100329a0. The rect
+// width left after the place, score and "..." widths bounds the name, which is
+// clipped there without text style. "..." sits at that bound and only shows
+// when the name was cut (alpha 0 otherwise); the score follows it. Retail then
+// sets the colour's alpha to 1, not back to what it was. All in font 0.
+static void CG_DrawPlaceLine(rectDef_t* rect, float scale, vec4_t color, int textStyle,
+                             const char* place, const char* name, const char* score) {
+    int placeW, scoreW, dotsW;
+    int x, limit;
+    float maxX;
 
-    if (cgs.scores2 == SCORE_NOT_PRESENT) {
-        Com_sprintf(num, sizeof(num), "-");
-    } else {
-        Com_sprintf(num, sizeof(num), "%i", cgs.scores2);
+    placeW = CG_DrawTextWidth(place, scale, 0, 0);
+    scoreW = CG_DrawTextWidth(score, scale, 0, 0);
+    dotsW = CG_DrawTextWidth("...", scale, 0, 0);
+    limit = (int)(rect->w - placeW - scoreW - dotsW);
+
+    x = (int)rect->x;
+    CG_DrawText((float)x, rect->y, 0, scale, color, place, 0, 0, textStyle);
+
+    x += placeW;
+    limit += x;
+    maxX = (float)limit;
+    CG_DrawTextClipped(&maxX, (float)x, rect->y, scale, color, name);
+
+    if (maxX == (float)limit) {
+        color[3] = 0.0f;
     }
-    value = CG_OwnerDrawTextWidth(num, scale, 0);
-    CG_OwnerDrawText(rect->x + rect->w - value, rect->y, scale, color, num, 0, 0, textStyle);
+    CG_DrawText((float)limit, rect->y, 0, scale, color, "...", 0, 0, textStyle);
+    color[3] = 1.0f;
+    CG_DrawText((float)(limit + dotsW), rect->y, 0, scale, color, score, 0, 0, textStyle);
+}
+
+// [QL] Team line of the place ownerdraws: "      <team name>", score right-aligned.
+// The score goes through a 4-byte buffer, so retail shows at most 3 characters.
+static void CG_DrawPlaceTeamLine(rectDef_t* rect, float scale, vec4_t color, int textStyle,
+                                 const char* teamName, int score) {
+    char text[64];
+    char num[4];
+
+    Com_sprintf(text, sizeof(text), "      %s", teamName);
+    CG_DrawText(rect->x, rect->y, 0, scale, color, text, 0, 0, textStyle);
+
+    Q_strncpyz(num, va("%d", score), sizeof(num));
+    CG_DrawText(rect->x + (rect->w - CG_DrawTextWidth(num, scale, 0, 0)), rect->y, 0, scale, color, num, 0, 0,
+                textStyle);
+}
+
+/*
+=================
+CG_DrawFirstPlaceScore
+
+[QL] cgamex86.dll 0x10032520, CG_1ST_PLACE_SCORE. Individual gametypes:
+"1. <1st place name>...<score>" (race shows the time, "-" for none). Team
+games: the leading team's name, red on a tie, with its score.
+=================
+*/
+static void CG_DrawFirstPlaceScore(rectDef_t* rect, float scale, vec4_t color, int textStyle) {
+    char scoreText[15];
+    char teamName[64];
+    int score = cgs.scores1;
+
+    if (score == SCORE_NOT_PRESENT) {
+        if (CG_PlaceIsIndividual()) {
+            CG_DrawText(rect->x, rect->y, 0, scale, color, "1.", 0, 0, textStyle);
+        } else {
+            // Retail tests the custom name backwards here: without cg_redTeamName
+            // it prints that empty string, with one set it prints "Red Team".
+            Com_sprintf(teamName, sizeof(teamName), "      %s",
+                        cg_redTeamName.string[0] ? "Red Team" : cg_redTeamName.string);
+            CG_DrawText(rect->x, rect->y, 0, scale, color, teamName, 0, 0, textStyle);
+        }
+        return;
+    }
+
+    if (CG_PlaceIsIndividual()) {
+        if (cgs.gametype == GT_RACE) {
+            if (score != 0x7fffffff && score >= 0) {
+                Q_strncpyz(scoreText, va(" %s", CG_FormatRaceTime(score)), sizeof(scoreText));
+            } else {
+                Q_strncpyz(scoreText, " -", sizeof(scoreText));
+            }
+        } else {
+            Q_strncpyz(scoreText, va(" %d", score), sizeof(scoreText));
+        }
+        CG_DrawPlaceLine(rect, scale, color, textStyle, "1. ", cgs.firstPlaceName, scoreText);
+        return;
+    }
+
+    if (cgs.scores1 >= cgs.scores2) {
+        if (cg_redTeamName.string[0]) {
+            Q_strncpyz(teamName, cg_redTeamName.string, sizeof(teamName));
+        } else {
+            Com_sprintf(teamName, sizeof(teamName), "%s^7", "Red Team");
+        }
+    } else {
+        if (cg_blueTeamName.string[0]) {
+            Q_strncpyz(teamName, cg_blueTeamName.string, sizeof(teamName));
+        } else {
+            Com_sprintf(teamName, sizeof(teamName), "%s^7", "Blue Team");
+        }
+        score = cgs.scores2;
+    }
+    CG_DrawPlaceTeamLine(rect, scale, color, textStyle, teamName, score);
+}
+
+/*
+=================
+CG_DrawSecondPlaceScore
+
+[QL] cgamex86.dll 0x100329a0, CG_2ND_PLACE_SCORE. Individual gametypes: a
+playing local player who is not leading sees their own rank, name and score
+(race: their clientinfo score); a leader or a spectator sees the 2nd place,
+numbered "1." when tied with the first. Nothing without a second score. Team
+games: the trailing team (blue on a tie).
+=================
+*/
+static void CG_DrawSecondPlaceScore(rectDef_t* rect, float scale, vec4_t color, int textStyle) {
+    char scoreText[15];
+    char placeText[5];
+    char name[40];
+    char teamName[64];
+    int score = cgs.scores2;
+    int clientNum, rank, place;
+
+    if (score == SCORE_NOT_PRESENT) {
+        if (!CG_PlaceIsIndividual()) {
+            // Same inverted custom-name test as the first place.
+            Com_sprintf(teamName, sizeof(teamName), "      %s",
+                        cg_blueTeamName.string[0] ? "Blue Team" : cg_blueTeamName.string);
+            CG_DrawText(rect->x, rect->y, 0, scale, color, teamName, 0, 0, textStyle);
+        }
+        return;
+    }
+
+    if (CG_PlaceIsIndividual()) {
+        clientNum = cg.snap->ps.clientNum;
+        rank = cg.snap->ps.persistant[PERS_RANK] & ~RANK_TIED_FLAG;
+
+        if (!CG_LocalPlayerLeads() && cg.snap->ps.persistant[PERS_TEAM] != TEAM_SPECTATOR) {
+            Q_strncpyz(name, cgs.clientinfo[clientNum].name, sizeof(name));
+            place = rank + 1;
+            if (cgs.gametype == GT_RACE) {
+                score = cgs.clientinfo[clientNum].score;
+            } else {
+                score = cg.snap->ps.persistant[PERS_SCORE];
+            }
+        } else {
+            Q_strncpyz(name, cgs.secondPlaceName, sizeof(name));
+            place = (cgs.scores1 != cgs.scores2) ? 2 : 1;
+            score = cgs.scores2;
+        }
+
+        Q_strncpyz(placeText, va("%d. ", place), sizeof(placeText));
+        if (cgs.gametype == GT_RACE) {
+            if (score != 0x7fffffff && score > 0) {
+                Q_strncpyz(scoreText, va(" %s", CG_FormatRaceTime(score)), sizeof(scoreText));
+            } else {
+                Q_strncpyz(scoreText, " -", sizeof(scoreText));
+            }
+        } else {
+            Q_strncpyz(scoreText, va(" %d", score), sizeof(scoreText));
+        }
+        CG_DrawPlaceLine(rect, scale, color, textStyle, placeText, name, scoreText);
+        return;
+    }
+
+    if (cgs.scores1 < cgs.scores2) {
+        if (cg_redTeamName.string[0]) {
+            Q_strncpyz(teamName, cg_redTeamName.string, sizeof(teamName));
+        } else {
+            Com_sprintf(teamName, sizeof(teamName), "%s^7           ", "Red Team");
+        }
+        score = cgs.scores1;
+    } else {
+        if (cg_blueTeamName.string[0]) {
+            Q_strncpyz(teamName, cg_blueTeamName.string, sizeof(teamName));
+        } else {
+            Com_sprintf(teamName, sizeof(teamName), "%s^7           ", "Blue Team");
+        }
+    }
+    CG_DrawPlaceTeamLine(rect, scale, color, textStyle, teamName, score);
 }
 
 static void CG_DrawBlueFlagName(rectDef_t* rect, float scale, vec4_t color, int textStyle) {
@@ -760,16 +911,81 @@ static void CG_OneFlagStatus(rectDef_t* rect) {
     }
 }
 
-static void CG_DrawCTFPowerUp(rectDef_t* rect) {
-    int value;
+/*
+=================
+CG_FindItemByTypeTag
 
-    if (cgs.gametype < GT_CTF) {
+[QL] What cgamex86.dll 0x10001170 does for the two ownerdraws below: the bg_itemlist
+entry with the given giType and giTag, or NULL.
+=================
+*/
+static gitem_t* CG_FindItemByTypeTag(int type, int tag) {
+    int i;
+
+    for (i = 1; i < bg_numItems; i++) {
+        if (bg_itemlist[i].giType == type && bg_itemlist[i].giTag == tag) {
+            return &bg_itemlist[i];
+        }
+    }
+    return NULL;
+}
+
+/*
+=================
+CG_DrawPersistantPowerUp
+
+[QL] cgamex86.dll 0x100310f0, the handler of CG_CTF_POWERUP (60). Draws the icon of the
+persistant powerup (rune) in stats[STAT_RUNE], in any gametype. The case used to call a
+Quake 3 "selected team player's weapon" drawer, from a Ghidra name for the slot.
+
+CG_RegisterItemVisuals is an addition: retail relies on the icon having been registered
+already, and an unregistered one would draw the default shader.
+=================
+*/
+static void CG_DrawPersistantPowerUp(rectDef_t* rect) {
+    gitem_t* item;
+    int index;
+
+    if (!cg.snap->ps.stats[STAT_RUNE]) {
         return;
     }
-    value = cg.snap->ps.stats[STAT_PERSISTANT_POWERUP];
-    if (value) {
-        CG_RegisterItemVisuals(value);
-        CG_DrawPic(rect->x, rect->y, rect->w, rect->h, cg_items[value].icon);
+    item = CG_FindItemByTypeTag(IT_PERSISTANT_POWERUP, cg.snap->ps.stats[STAT_RUNE]);
+    if (!item) {
+        return;
+    }
+    index = (int)(item - bg_itemlist);
+    CG_RegisterItemVisuals(index);
+    CG_DrawPic(rect->x, rect->y, rect->w, rect->h, cg_items[index].icon);
+}
+
+/*
+=================
+CG_DrawPlayerHasKey
+
+[QL] cgamex86.dll 0x10031f90, the handler of CG_PLAYER_HASKEY (59). One icon per key the
+player holds - bits 1, 2 and 4 of stats[STAT_KEY], each the IT_KEY item with that tag -
+laid out left to right, each next one half the rect width further along. The case used
+to draw the persistant powerup instead, and only in CTF.
+=================
+*/
+static void CG_DrawPlayerHasKey(rectDef_t* rect) {
+    static const int keyBits[3] = {1, 2, 4};
+    float xoff = 0.0f;
+    gitem_t* item;
+    int i, index;
+
+    for (i = 0; i < 3; i++) {
+        if (!(cg.snap->ps.stats[STAT_KEY] & keyBits[i])) {
+            continue;
+        }
+        item = CG_FindItemByTypeTag(IT_KEY, keyBits[i]);
+        if (!item) {
+            continue;
+        }
+        index = (int)(item - bg_itemlist);
+        CG_RegisterItemVisuals(index);
+        CG_DrawPic(rect->x + xoff, rect->y, rect->w, rect->h, cg_items[index].icon);
+        xoff += rect->w * 0.5f;
     }
 }
 
@@ -3681,11 +3897,11 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_HARVESTER_SKULLS2D:         // 0x3a
             CG_HarvesterSkulls(&rect, scale, color, qtrue, textStyle);
             break;
-        case CG_PLAYER_HASKEY:              // 0x3b  CG_DrawCTFPowerUp (QL repurposed the slot)
-            CG_DrawCTFPowerUp(&rect);
+        case CG_PLAYER_HASKEY:              // 0x3b  -> 0x10031f90
+            CG_DrawPlayerHasKey(&rect);
             break;
-        case CG_CTF_POWERUP:                // 0x3c  CG_DrawSelectedPlayerWeapon
-            CG_DrawSelectedPlayerWeapon(&rect);
+        case CG_CTF_POWERUP:                // 0x3c  -> 0x100310f0
+            CG_DrawPersistantPowerUp(&rect);
             break;
         case CG_AREA_POWERUP:               // 0x3d
             CG_DrawAreaPowerUp(&rect, align, special, scale, color);
@@ -3724,14 +3940,14 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_MATCH_WINNER:               // 0x52
             CG_DrawMatchWinner(&rect, scale, color, textStyle);
             break;
-        case CG_1ST_PLACE_SCORE:            // 0x54  CG_DrawRedScore
-            CG_DrawRedScore(&rect, scale, color, shader, textStyle);
+        case CG_1ST_PLACE_SCORE:            // 0x54  0x10032520
+            CG_DrawFirstPlaceScore(&rect, scale, color, textStyle);
             break;
         case CG_1STPLACE_PLYR_MODEL:        // 0x55  CG_DrawSelectedPlayerModel
             CG_DrawSelectedPlayerModel(&rect);
             break;
-        case CG_2ND_PLACE_SCORE:            // 0x57  CG_DrawBlueScore
-            CG_DrawBlueScore(&rect, scale, color, shader, textStyle);
+        case CG_2ND_PLACE_SCORE:            // 0x57  0x100329a0
+            CG_DrawSecondPlaceScore(&rect, scale, color, textStyle);
             break;
         case CG_PLAYER_OBIT:                // 0x58
             CG_DrawPlayerObit(&rect, scale, color, textStyle);
