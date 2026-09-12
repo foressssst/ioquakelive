@@ -614,10 +614,14 @@ void CG_ClearChat(void) {
     cg.chatIndex = MAX_CHAT_LINES - 1;
 }
 
+// [QL] cgamex86.dll 0x10006910. A line ending in '\n' is copied without it;
+// the copy is capped at 72 characters during the intermission, 254 otherwise.
 void CG_AddChat(const char *text, int teamOnly, int extraTime) {
     int len;
+    int size;
 
     len = strlen(text);
+    size = (cg.intermissionStarted == 1) ? 0x49 : 0xff;
 
     if (cg.currentChatLine.startTime != 0) {
         // Push current line into ring buffer
@@ -629,69 +633,67 @@ void CG_AddChat(const char *text, int teamOnly, int extraTime) {
     cg.currentChatLine.endTime = cg.time + 2000 + extraTime;
     cg.currentChatLine.teamOnly = teamOnly;
 
-    Q_strncpyz(cg.currentChatLine.text, text,
-               len < CHAT_LINE_TEXT ? len + 1 : CHAT_LINE_TEXT);
+    if (len > 0 && text[len - 1] == '\n' && len <= size) {
+        size = len;
+    }
+    Q_strncpyz(cg.currentChatLine.text, text, size);
 
-    // Also print to console
+    // Also print to console. Retail's adder does not print; kept until the
+    // callers are checked against retail, so chat still reaches the console.
     CG_Printf("%s", text);
 }
 
-// [QL] Draw chat overlay - binary at 0x10006A10
-// chatRect defaults to bottom-left area (x=1, y=350, h=120 from bottom)
-void CG_DrawChat(void) {
-    int maxLines;
-    float y;
-    float x;
-    float scale;
+// [QL] cgamex86.dll 0x10006a10. Drawn by the CG_AREA_NEW_CHAT ownerdraw with
+// the menu item's rect, and by the spectator overlay. The newest line sits on
+// the rect's bottom edge (font 1, style 3, left widescreen) until it expires
+// into the ring. While the chat history is toggled on or the scoreboard is up,
+// older lines stack upwards 13 units apart: cg_chatHistoryLength of them, 4 at
+// the intermission, 2 behind the scoreboard, unstyled when more than 10. The
+// text scale is held between 0.1 and 0.22 (0 counts as 0.1).
+void CG_DrawChat(float x, float y, float w, float h, float scale) {
+    float bottom = y + h;
+    int lines = cg_chatHistoryLength.integer;
+    int style;
     int i;
 
-    // Default chat area: bottom-left
-    x = 1.0f;
-    y = 478.0f;     // near bottom of 480-high screen
-    scale = 0.18f;   // default chat text scale
+    (void)w;
 
-    maxLines = 8;    // default visible history lines
+    if (scale == 0.0f || scale < 0.1f) {
+        scale = 0.1f;
+    } else if (scale > 0.22f) {
+        scale = 0.22f;
+    }
 
-    // Draw the current (newest) chat line if active
     if (cg.currentChatLine.startTime != 0) {
-        if (cg.currentChatLine.endTime < cg.time) {
-            // Expire: push into ring buffer
+        if (cg.time > cg.currentChatLine.endTime) {
             cg.chatIndex = (cg.chatIndex + 1) % MAX_CHAT_LINES;
-            memcpy(&cg.chatLines[cg.chatIndex], &cg.currentChatLine,
-                   sizeof(cg.currentChatLine));
+            memcpy(&cg.chatLines[cg.chatIndex], &cg.currentChatLine, sizeof(cg.currentChatLine));
             memset(&cg.currentChatLine, 0, sizeof(cg.currentChatLine));
         } else {
             CG_SetWidescreen(WIDESCREEN_LEFT);
-            CG_DrawText(x, y, 1, scale, colorWhite,
-                        cg.currentChatLine.text, 0, 256, 3);
+            CG_DrawText(x, bottom, 1, scale, colorWhite, cg.currentChatLine.text, 0, 256, 3);
             CG_SetWidescreen(WIDESCREEN_STRETCH);
         }
     }
 
-    // Determine how many history lines to show
-    if (cg.snap->ps.pm_type == PM_INTERMISSION) {
-        maxLines = 4;
-    } else if (cg.showScores) {
-        maxLines = 2;
+    if (cg.predictedPlayerState.pm_type == PM_INTERMISSION) {
+        lines = 4;
+    } else if (cg.scoreBoardShowing) {
+        lines = 2;
     }
 
-    // Draw chat history lines (when +chat held or scoreboard up)
-    if ((cg.chatHistoryShowing || cg.showScores) && maxLines > 0) {
+    if ((cg.chatHistoryShowing || cg.scoreBoardShowing) && lines > 0) {
         i = cg.chatIndex;
+        style = (lines > 10) ? 0 : 3;
         do {
-            y -= 13.0f;
-            if (cg.chatLines[i].text[0]) {
-                CG_SetWidescreen(WIDESCREEN_LEFT);
-                CG_DrawText(x, y, 1, scale, colorWhite,
-                            cg.chatLines[i].text, 0, 256, 3);
-                CG_SetWidescreen(WIDESCREEN_STRETCH);
-            }
-            i--;
-            if (i < 0) {
+            bottom -= 13.0f;
+            CG_SetWidescreen(WIDESCREEN_LEFT);
+            CG_DrawText(x, bottom, 1, scale, colorWhite, cg.chatLines[i].text, 0, 256, style);
+            CG_SetWidescreen(WIDESCREEN_STRETCH);
+            if (--i < 0) {
                 i = MAX_CHAT_LINES - 1;
             }
-            maxLines--;
-        } while (maxLines != 0);
+        } while (--lines);
     }
 }
 
