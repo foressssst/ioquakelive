@@ -700,6 +700,7 @@ static void CG_ParseWarmup(void) {
 
     // Parse optional gametype override
     s = Info_ValueForKey(info, "g_gametype");
+    cg.warmupRound = 0;  // [QL] 0x10048d46
     if (*s) {
         cg.warmupGametype = atoi(s);
     } else {
@@ -729,9 +730,12 @@ static void CG_ParseWarmup(void) {
 ================
 CG_ParseWarmupInfo
 
-[QL] cgamex86.dll: CG_ParseWarmupInfo @ 0x10048c80.  Parses the round-based
-warmup countdown from CS_ROUND_WARMUP.  The binary reads two extra per-team
-counts and bumps the countdown for gametype 11 (GT_AD).
+[QL] cgamex86.dll: CG_ParseWarmupInfo @ 0x10048c80.  The server writes
+CS_ROUND_WARMUP as "\time\%d\round\%d\turn\%d\state\%d" (qagamex86.dll
+0x1008213b). time goes to cg.warmup, round to cg.warmupRound; GT_AD also reads
+turn and state and counts the round from 1. The 30-second round warning bit
+of timelimitWarnings is cleared. The old parser read "count", "redCount" and
+"blueCount", keys the server never sends, and overwrote cg.warmupCount.
 ================
 */
 static void CG_ParseWarmupInfo(void) {
@@ -741,12 +745,13 @@ static void CG_ParseWarmupInfo(void) {
     info = CG_ConfigString(CS_ROUND_WARMUP);
 
     warmup = atoi(Info_ValueForKey(info, "time"));
-    cg.warmupCount = atoi(Info_ValueForKey(info, "count"));
+    cg.warmupRound = atoi(Info_ValueForKey(info, "round"));
+    cg.timelimitWarnings &= ~8;
 
     if (cgs.gametype == GT_AD) {
-        cg.warmupFreezeCount_red = atoi(Info_ValueForKey(info, "redCount"));
-        cg.warmupFreezeCount_blue = atoi(Info_ValueForKey(info, "blueCount"));
-        cg.warmupCount++;
+        cg.warmupTurn = atoi(Info_ValueForKey(info, "turn"));
+        cg.warmupState = atoi(Info_ValueForKey(info, "state"));
+        cg.warmupRound++;
     }
 
     cg.warmup = warmup;

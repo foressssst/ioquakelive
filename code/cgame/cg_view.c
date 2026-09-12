@@ -746,9 +746,9 @@ static void CG_CheckAutoFollow(void) {
 
 // Address: 0x10029770
 // [QL] CG_GetLevelTimerMsec -- remaining (countdown) or elapsed (countup) match
-// time in msec via *msec. Returns qtrue when a timer is shown. Round-based modes
-// (CA/FT/AD/RR) only run a timer once the round has started and a roundtimelimit
-// is set; all other modes with roundStarted show no timer.
+// time in msec via *msec. Returns qtrue when a timer is shown. During a warmup
+// (cg.warmup, 0x10ab8f4c) there is no timer, except in the round-based modes
+// (CA/FT/AD/RR) once a round number has arrived (cg.warmupRound, 0x10ab8f58).
 qboolean CG_GetLevelTimerMsec(int* msec) {
     int serverTime;
     int remaining;
@@ -756,13 +756,13 @@ qboolean CG_GetLevelTimerMsec(int* msec) {
     // [QL] 0x10a403e0: freeze/timeout end time, else current time.
     serverTime = cgs.freezeEnd ? cgs.freezeEnd : cg.time;
 
-    if (cgs.roundStarted) {
+    if (cg.warmup) {
         switch (cgs.gametype) {
         case GT_CA:
         case GT_FREEZE:
         case GT_AD:
         case GT_RR:
-            if (cgs.roundtimelimit != 0) {
+            if (cg.warmupRound != 0) {
                 break;
             }
             // fall through
