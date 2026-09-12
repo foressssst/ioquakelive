@@ -1084,6 +1084,7 @@ typedef struct {
     qhandle_t weaponBarHighlightShader;  // [QL] "ui/assets/hud/weaplit2.tga"
     qhandle_t infiniteAmmoShader;        // [QL] "icons/infinite.tga"
     qhandle_t viewBloodShader;
+    qhandle_t viewDamageShader;  // [QL] viewDamageBlend, the screen-damage tint of a stock install
     qhandle_t tracerShader;
     qhandle_t crosshairShader[NUM_CROSSHAIRS];
     qhandle_t lagometerShader;
@@ -1910,6 +1911,11 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
 void CG_AddPOIMarkers(void);
 void CG_CloseMenus(void);
 void CG_UpdateJoinMenu(void);
+// [QL] menu pointer cache (binary caches these in one run at 0x10006eb8) and the
+// competitive spectator overlay (0x1000dad0).
+void CG_CacheMenus(void);
+void CG_DrawSpectatorHud(void);
+void CG_DrawSpectator(void);  // [QL] reached only via the CG_SPEC_MESSAGES ownerdraw
 // [QL] CG_CheckAutoFollow, CG_FilterAngles, CG_DrawDuelWeaponStats are file-static in cg_view.c.
 qboolean CG_GetLevelTimerMsec(int* msec);
 

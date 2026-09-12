@@ -1760,6 +1760,14 @@ static void CG_RegisterGraphics(void) {
     cgs.media.botSkillShaders[4] = trap_R_RegisterShader("menu/art/skill5.png");
 
     cgs.media.viewBloodShader = trap_R_RegisterShader("viewBloodBlend");
+    // [QL] cgamex86.dll 0x100230e7 registers "viewDamageBlend" into 0x10a5f4f4, right
+    // alongside viewBloodBlend (0x100242da -> 0x10a5f4f0). They are the two halves of one
+    // choice, not alternatives that happen to coexist: pak00's scripts/gfx.shader points
+    // viewDamageBlend at gfx/damage/damage_screen, which ships with the base game, and
+    // viewBloodBlend at dlc_gibs/blood_screen, which only the Steam Workshop gore pack
+    // brings. Registering only the blood one left a stock install drawing the default
+    // (missing-texture) shader across the screen on every hit.
+    cgs.media.viewDamageShader = trap_R_RegisterShader("viewDamageBlend");
 
     cgs.media.deferShader = trap_R_RegisterShaderNoMip("gfx/2d/defer.png");
 
@@ -3098,6 +3106,11 @@ void CG_LoadHudMenu(void) {
     CG_ParseMenu("ui/end_scoreboard_dom.menu");
     CG_ParseMenu("ui/end_scoreboard_ad.menu");
     CG_ParseMenu("ui/end_scoreboard_rr.menu");
+
+    // [QL] resolve every menu cgame keeps a pointer to, right after loading them, the
+    // way the binary does at 0x10006eb8. Doing it here rather than lazily on first use
+    // means a pointer can never outlive the Menus[] slot it came from.
+    CG_CacheMenus();
 }
 
 void CG_AssetCache(void) {

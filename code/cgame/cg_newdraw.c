@@ -3397,7 +3397,10 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             // binary falls through to the respawn message here; kept separate.
             CG_DrawVoteTimer(&rect, scale, color, textStyle);
             break;
-        case CG_SPEC_MESSAGES:              // 0x23  CG_DrawSpectator (no data source)
+        case CG_SPEC_MESSAGES:              // 0x23
+            // [QL] cgamex86.dll 0x1003c05b: this ownerdraw is the ONLY way retail
+            // reaches CG_DrawSpectator (0x10034d70). CG_Draw2D does not call it.
+            CG_DrawSpectator();
             break;
         case CG_PLAYER_HEAD:                // 0x24
             CG_DrawPlayerHead(&rect, ownerDrawFlags & CG_SHOW_2DONLY);
@@ -3793,26 +3796,32 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
 
 void CG_MouseEvent(int x, int y) {
     int n;
+    float xscale43;
+    int bias;
 
-    // [QL] cgamex86.dll CG_MouseEvent @0x1003c4f0 has no early-out at all: it
-    // just converts the pointer position into 640x480 space (honouring
-    // widescreenBias) and stores cursorX/cursorY. This bail-out is Q3's, and it
-    // drops the key catcher on the first mouse move a live or spectating player
-    // makes - which is every frame the join menu is up. Losing KEYCATCH_CGAME
-    // mid-frame flips CG_AdjustFrom640 from the 4:3+bias mapping to the stretch
-    // one, so the menu tore across the screen at two different widths.
-    if (!cg.showJoinMenu &&
-        (cg.predictedPlayerState.pm_type == PM_NORMAL || cg.predictedPlayerState.pm_type == PM_SPECTATOR) &&
-        cg.showScores == qfalse) {
-        trap_Key_SetCatcher(0);
-        return;
-    }
+    // [QL] cgamex86.dll CG_MouseEvent (0x1003c4f0) has no early-out at all: it just
+    // converts the pointer into 640x480 space, honouring widescreenBias, and stores
+    // cursorX/cursorY. Quake 3's bail-out used to sit here and dropped the key catcher
+    // on the first mouse move, which tore the menu across the screen at two widths.
+    //
+    // The body below is a deliberate replica of the UI module's _UI_MouseEvent
+    // (ui_main.c). Retail resolves menu input in the QL engine, which is not in
+    // bin.pk3, so there is no binary to copy for this half - but the UI module is a
+    // working implementation of exactly this against exactly this engine, and cgame
+    // had drifted from it. Keep the two in step.
+
+    // Convert the widescreen bias into 640-space. CG_AdjustFrom640 maps a 640 x to
+    // `x * xscale43 + widescreenBias`, so the on-screen span [0, vidWidth] corresponds
+    // to [-bias640, 640 + bias640]. Clamping to [0, 640] like before left the cursor
+    // unable to reach either edge of a widescreen display.
+    xscale43 = (4.0f * cgs.glconfig.vidHeight / 3.0f) / (float)SCREEN_WIDTH;
+    bias = (xscale43 > 0.0f) ? (int)(cgs.widescreenBias / xscale43) : 0;
 
     cgs.cursorX += x;
-    if (cgs.cursorX < 0)
-        cgs.cursorX = 0;
-    else if (cgs.cursorX > SCREEN_WIDTH)
-        cgs.cursorX = SCREEN_WIDTH;
+    if (cgs.cursorX < -bias)
+        cgs.cursorX = -bias;
+    else if (cgs.cursorX > SCREEN_WIDTH + bias)
+        cgs.cursorX = SCREEN_WIDTH + bias;
 
     cgs.cursorY += y;
     if (cgs.cursorY < 0)
@@ -3828,9 +3837,30 @@ void CG_MouseEvent(int x, int y) {
         cgs.activeCursor = cgs.media.sizeCursor;
     }
 
-    if (cgs.capturedItem) {
-        Display_MouseMove(cgs.capturedItem, x, y);
-    } else {
+    // The shared menu code hit-tests against DC->cursorx/cursory, NOT against the
+    // coordinates handed to Display_MouseMove/Display_HandleKey - see Menu_HandleKey's
+    // Rect_ContainsWidescreenPoint call. Until now those two fields were written in
+    // exactly one place, the CG_MOUSE_EVENT dispatch in cg_main.c, and written there
+    // BEFORE this function accumulates the delta. So they always lagged a mouse event
+    // behind, and before the very first mouse movement they were still (0,0) - the top
+    // left corner. Every click on the join menu therefore hit-tested outside the menu
+    // rect and went to Menus_HandleOOBClick instead of the button under the pointer.
+    //
+    // ADAPTATION, not a replica. Retail's CG_MouseEvent (0x1003c4f0) receives an
+    // ABSOLUTE pointer position, un-biases it and assigns cursorX/cursorY, so a
+    // copy-before-dispatch is always current there. ioquake3's engine sends deltas
+    // (cl_input.c CL_MouseEvent), so the fork has to publish the accumulated value
+    // itself. Retail's CG_KeyEvent (0x1003c6f0) does no menu handling at all - in Quake
+    // Live the engine resolves menu clicks, and that engine is not in bin.pk3.
+    cgDC.cursorx = cgs.cursorX;
+    cgDC.cursory = cgs.cursorY;
+
+    // [QL] _UI_MouseEvent guards this with Menu_Count(), and hands the shared code the
+    // accumulated position rather than the raw delta. cgame's own capturedItem
+    // bookkeeping is gone: ui_shared already tracks a captured item in its own
+    // `itemCapture` and Menu_HandleKey drives it, so the parallel copy here only ever
+    // diverged from it.
+    if (Menu_Count() > 0) {
         Display_MouseMove(NULL, cgs.cursorX, cgs.cursorY);
     }
 }
@@ -3889,39 +3919,51 @@ void CG_EventHandling(int type) {
 }
 
 void CG_KeyEvent(int key, qboolean down) {
-    if (!down) {
+    menuDef_t* menu;
+
+    // [QL] Deliberate replica of the UI module's _UI_KeyEvent (ui_main.c).
+    //
+    // Retail's CG_KeyEvent (cgamex86.dll 0x1003c6f0) is NOT a template for this: it
+    // does no menu handling at all. It looks up the command bound to the key and
+    // forwards it - "messagemode", "screenshot", "screenshotJPEG", "+voice" get sent
+    // to the console, "+scores" sets cg.showScores, everything else is forwarded too.
+    // In Quake Live the ENGINE resolves menu input, and that engine is not in bin.pk3.
+    //
+    // So the reference here is the UI module: a working implementation of menu input
+    // against this same engine, proven by the fact that the Escape menu accepts clicks
+    // while the cgame join menu did not. What cgame had was Quake 3's version with two
+    // additions of ours, and both were wrong:
+    //
+    //   - `if (!down) return;` threw away every key-release event. Item_HandleKey
+    //     needs the release to close its capture (Item_StopCapture), so every click
+    //     left a capture dangling and the next one was swallowed clearing it.
+    //   - A Q3 early-out dumped the key catcher whenever the join menu was not up,
+    //     which is also what the UI module does NOT do.
+    //
+    // cgame's parallel cgs.capturedItem bookkeeping is gone with it: ui_shared owns
+    // that state in `itemCapture` and Menu_HandleKey drives it.
+    if (Menu_Count() <= 0) {
         return;
     }
 
-    // [QL] The join menu holds KEYCATCH_CGAME for as long as it is up, and a
-    // player sitting in it is a spectator with the scoreboard down - exactly the
-    // case this Q3 early-out dumps the catcher for. Left alone it swallowed the
-    // first click and closed the menu before the item under the cursor ever saw
-    // it. NOT verified against the binary: cgamex86.dll's CG_KeyEvent has not
-    // been disassembled, so this guard is ours rather than a replica.
-    if (!cg.showJoinMenu &&
-        (cg.predictedPlayerState.pm_type == PM_NORMAL ||
-         (cg.predictedPlayerState.pm_type == PM_SPECTATOR && cg.showScores == qfalse))) {
-        CG_EventHandling(CGAME_EVENT_NONE);
-        trap_Key_SetCatcher(0);
+    menu = Menu_GetFocused();
+    if (menu == NULL) {
+        // Do NOT drop KEYCATCH_CGAME here, even though _UI_KeyEvent drops KEYCATCH_UI
+        // in the same spot. In cgame that flag is not just an input route: per
+        // CG_AdjustFrom640 it also selects the horizontal mapping, 4:3-centred with
+        // the widescreen bias when it is set and full-width stretch when it is not.
+        // Dropping it mid-frame makes the join menu snap from the centred layout to
+        // spanning the whole window - which is exactly what it did the first time this
+        // was written the UI module's way. The catcher belongs to CG_UpdateJoinMenu,
+        // which takes it, and CG_CloseMenus, which gives it back.
         return;
     }
 
-    // if (key == trap_Key_GetKey("teamMenu") || !Display_CaptureItem(cgs.cursorX, cgs.cursorY)) {
-    //  if we see this then we should always be visible
-    //  CG_EventHandling(CGAME_EVENT_NONE);
-    //  trap_Key_SetCatcher(0);
-    //}
-
-    Display_HandleKey(key, down, cgs.cursorX, cgs.cursorY);
-
-    if (cgs.capturedItem) {
-        cgs.capturedItem = NULL;
-    } else {
-        if (key == K_MOUSE2 && down) {
-            cgs.capturedItem = Display_CaptureItem(cgs.cursorX, cgs.cursorY);
-        }
-    }
+    // Escape is handled by the engine before it ever reaches us: cl_keys.c drops
+    // KEYCATCH_CGAME and calls CG_EVENT_HANDLING(CGAME_EVENT_NONE) on the key-down,
+    // so only the release arrives here. Passing it through is harmless and matches
+    // what the UI module does with the keys it does not special-case.
+    Menu_HandleKey(menu, key, down);
 }
 
 int CG_ClientNumFromName(const char* p) {

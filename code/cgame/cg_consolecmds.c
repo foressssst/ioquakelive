@@ -152,6 +152,14 @@ static void CG_LoadHud_f(void) {
 
     menuScoreboard = NULL;
     menuEndScoreboard = NULL;
+
+    // [QL] Menus_Reset only resets menuCount, so re-parsing refills the same Menus[]
+    // slots with different menus and every cached pointer now names the wrong one. The
+    // two scoreboards above are cleared so CG_SetEndScoreboardMenu re-resolves them by
+    // gametype; the rest are re-resolved here. Without this, `loadhud` while spectating
+    // left menuJoinGame pointing at whatever had landed in its slot, and CG_UpdateJoinMenu
+    // happily activated and painted that.
+    CG_CacheMenus();
 }
 
 static void CG_scrollScoresDown_f(void) {
