@@ -40,6 +40,10 @@ static int CG_OwnerDrawTextWidth(const char *text, float scale, int limit) {
     return CG_DrawTextWidth(text, scale, limit, cg_currentFontIndex);
 }
 
+static int CG_OwnerDrawTextHeight(const char *text, float scale, int limit) {
+    return CG_DrawTextHeight(text, scale, limit, cg_currentFontIndex);
+}
+
 // set in CG_ParseTeamInfo
 
 // static int sortedTeamPlayers[TEAM_MAXOVERLAY];
@@ -210,7 +214,10 @@ static void CG_DrawPlayerArmorValue(rectDef_t* rect, float scale, vec4_t color, 
         } else if (align == ITEM_ALIGN_RIGHT) {
             tx -= CG_OwnerDrawTextWidth(num, scale, 0);
         }
-        ty = rect->y + scale * 48.0f - 1.0f;
+        // [QL] y + text height, as retail does it (fiadd after the measuring call:
+        // health 0x1002ff1f, armor 0x1002e62f, ammo 0x1002e8df). The scale*48-1 used
+        // before put the number at a different height from retail's.
+        ty = rect->y + CG_OwnerDrawTextHeight(num, scale, 0);
         CG_OwnerDrawText(tx, ty, scale, color, num, 0, 0, textStyle);
     }
 }
@@ -269,7 +276,10 @@ static void CG_DrawPlayerAmmoValue(rectDef_t* rect, float scale, vec4_t color, q
             } else if (align == ITEM_ALIGN_RIGHT) {
                 tx -= CG_OwnerDrawTextWidth(num, scale, 0);
             }
-            ty = rect->y + scale * 48.0f - 1.0f;
+            // [QL] y + text height, as retail does it (fiadd after the measuring call:
+            // health 0x1002ff1f, armor 0x1002e62f, ammo 0x1002e8df). The scale*48-1 used
+            // before put the number at a different height from retail's.
+            ty = rect->y + CG_OwnerDrawTextHeight(num, scale, 0);
             CG_OwnerDrawText(tx, ty, scale, color, num, 0, 0, textStyle);
         }
     } else if (value == -1) {
@@ -602,7 +612,10 @@ static void CG_DrawPlayerHealth(rectDef_t* rect, float scale, vec4_t color, qhan
         } else if (align == ITEM_ALIGN_RIGHT) {
             tx -= CG_OwnerDrawTextWidth(num, scale, 0);
         }
-        ty = rect->y + scale * 48.0f - 1.0f;
+        // [QL] y + text height, as retail does it (fiadd after the measuring call:
+        // health 0x1002ff1f, armor 0x1002e62f, ammo 0x1002e8df). The scale*48-1 used
+        // before put the number at a different height from retail's.
+        ty = rect->y + CG_OwnerDrawTextHeight(num, scale, 0);
         CG_OwnerDrawText(tx, ty, scale, color, num, 0, 0, textStyle);
     }
 }
@@ -1729,14 +1742,62 @@ static void CG_DrawMatchWinner(rectDef_t *rect, float scale, vec4_t color, int t
 }
 
 // [QL] Follow player name
-static void CG_DrawFollowPlayerName(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
-    if (cg.snap && cg.snap->ps.pm_flags & PMF_FOLLOW) {
-        int clientNum = cg.snap->ps.clientNum;
-        if (clientNum >= 0 && clientNum < MAX_CLIENTS && cgs.clientinfo[clientNum].infoValid) {
-            CG_OwnerDrawText(rect->x, rect->y, scale, color,
-                va("Following - %s", cgs.clientinfo[clientNum].name), 0, 0, textStyle);
+/*
+=================
+CG_DrawFollowPlayerName
+
+[QL] cgamex86.dll 0x10033bf0, reached from CG_OwnerDraw (0x1003ba04) for
+CG_FOLLOW_PLAYER_NAME (94) and CG_FOLLOW_PLAYER_NAME_EX (95).
+
+  - The "Following - " prefix belongs ONLY to id 94 (0x10033c58: cmp ownerDraw, 0x5e).
+    The competitive spectator HUD uses 95, so retail shows just the name there; the
+    version kept before always printed "Following - <name>".
+  - In team gametypes the name takes the followed player's team colour from a table
+    at 0x10078610..0x10078650; otherwise the item's own forecolor is used.
+  - ITEM_ALIGN_CENTER shifts x back by half the text width, ITEM_ALIGN_RIGHT by the
+    whole width (0x10033cbf).
+  - Retail has no PMF_FOLLOW or infoValid test here: it names whoever the snapshot
+    playerState belongs to.
+=================
+*/
+static void CG_DrawFollowPlayerName(rectDef_t *rect, int ownerDraw, int align, float scale, vec4_t color, int textStyle) {
+    static vec4_t followRed   = {1.0f, 0.5f, 0.5f, 1.0f};
+    static vec4_t followBlue  = {0.5f, 0.75f, 1.0f, 1.0f};
+    static vec4_t followFree  = {1.0f, 1.0f, 1.0f, 1.0f};
+    static vec4_t followSpec  = {0.85f, 0.85f, 0.85f, 1.0f};
+    static vec4_t followOther = {1.0f, 0.8f, 0.2f, 1.0f};
+    clientInfo_t* ci;
+    float* nameColor;
+    char text[80];
+    float x;
+
+    if (!cg.snap) {
+        return;
+    }
+    ci = &cgs.clientinfo[cg.snap->ps.clientNum];
+
+    nameColor = color;
+    if (cgs.gametype >= GT_TEAM) {
+        switch (ci->team) {
+            case TEAM_FREE:      nameColor = followFree; break;
+            case TEAM_RED:       nameColor = followRed; break;
+            case TEAM_BLUE:      nameColor = followBlue; break;
+            case TEAM_SPECTATOR: nameColor = followSpec; break;
+            default:             nameColor = followOther; break;
         }
     }
+
+    Q_strncpyz(text, va("%s%s", (ownerDraw == CG_FOLLOW_PLAYER_NAME) ? "Following - " : "", ci->name),
+               sizeof(text));
+
+    x = rect->x;
+    if (align == ITEM_ALIGN_CENTER) {
+        x -= CG_OwnerDrawTextWidth(text, scale, 0) * 0.5f;
+    } else if (align == ITEM_ALIGN_RIGHT) {
+        x -= CG_OwnerDrawTextWidth(text, scale, 0);
+    }
+
+    CG_OwnerDrawText(x, rect->y, scale, nameColor, text, 0, 0, textStyle);
 }
 
 // [QL] Team name display
@@ -1949,21 +2010,74 @@ static void CG_DrawSpeedometer(rectDef_t *rect, float scale, vec4_t color, int t
 }
 
 // [QL] Team-colorized health display
-static void CG_DrawHealthColorized(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
-    vec4_t hcolor;
-    int health;
-    if (!cg.snap) return;
-    health = cg.snap->ps.stats[STAT_HEALTH];
-    if (health > 100) {
-        hcolor[0] = 1.0f; hcolor[1] = 1.0f; hcolor[2] = 1.0f; hcolor[3] = 1.0f;
-    } else if (health > 50) {
-        hcolor[0] = 0.0f; hcolor[1] = 1.0f; hcolor[2] = 0.0f; hcolor[3] = 1.0f;
-    } else if (health > 25) {
-        hcolor[0] = 1.0f; hcolor[1] = 1.0f; hcolor[2] = 0.0f; hcolor[3] = 1.0f;
-    } else {
-        hcolor[0] = 1.0f; hcolor[1] = 0.0f; hcolor[2] = 0.0f; hcolor[3] = 1.0f;
+/*
+=================
+CG_HealthGradientColor
+
+[QL] cgamex86.dll 0x1000ca90. The health tint used by CG_HEALTH_COLORIZED, a smooth
+gradient rather than steps:
+  max    = handicap / 100 * g_startingHealth, falling back to g_startingHealth when
+           that is below 1 or above it (0x1000cab7)
+  health <  max : (1, health/max, 0)            red towards yellow
+  health >= max : (1, 1, min(health/(2*max), 1)) yellow towards white
+The per-client value read is clientInfo_t+0x130 in the binary; it is taken here to be
+the handicap from how it is used (x / 100 * g_startingHealth) - the fork's clientInfo_t
+does not share the binary's layout, so the offset cannot be matched field for field.
+=================
+*/
+static void CG_HealthGradientColor(int clientNum, int health, vec3_t out) {
+    int handicap = 100;
+    int maxHealth;
+    float f;
+
+    if (clientNum >= 0 && clientNum < MAX_CLIENTS) {
+        handicap = cgs.clientinfo[clientNum].handicap;
     }
-    CG_OwnerDrawText(rect->x, rect->y, scale, hcolor, va("%d", health), 0, 0, textStyle);
+    maxHealth = (int)(handicap / 100.0 * cgs.startingHealth);
+    if (maxHealth < 1 || maxHealth > cgs.startingHealth) {
+        maxHealth = cgs.startingHealth;
+    }
+
+    out[0] = 1.0f;
+    if (health >= maxHealth) {
+        f = maxHealth > 0 ? health / (maxHealth * 2.0f) : 1.0f;
+        out[1] = 1.0f;
+        out[2] = (f > 1.0f) ? 1.0f : f;
+    } else {
+        f = maxHealth > 0 ? (float)health / maxHealth : 0.0f;
+        out[1] = (f > 0.0f) ? f : 0.0f;
+        out[2] = 0.0f;
+    }
+}
+
+/*
+=================
+CG_DrawHealthColorized
+
+[QL] cgamex86.dll 0x1002f6b0. Draws the item's SHADER tinted by health - the version
+kept before drew the health as a number instead. The health comes from the snapshot
+playerState, forced to 0 when the followed player's entity carries EF_DEAD
+(cg_entities[ps.clientNum], eFlags at +0x8), and the tint from CG_HealthGradientColor
+for that entity's clientNum (+0xb0). Alpha is the item's.
+=================
+*/
+static void CG_DrawHealthColorized(rectDef_t *rect, vec4_t color, qhandle_t shader) {
+    centity_t* cent;
+    int health;
+    vec4_t c;
+
+    if (!cg.snap) {
+        return;
+    }
+    cent = &cg_entities[cg.snap->ps.clientNum];
+    health = (cent->currentState.eFlags & EF_DEAD) ? 0 : cg.snap->ps.stats[STAT_HEALTH];
+
+    CG_HealthGradientColor(cent->currentState.clientNum, health, c);
+    c[3] = color[3];
+
+    trap_R_SetColor(c);
+    CG_DrawPic(rect->x, rect->y, rect->w, rect->h, shader);
+    trap_R_SetColor(NULL);
 }
 
 // [QL] Team/enemy player count
@@ -2275,38 +2389,120 @@ static void CG_DrawDuelPlayerAvatar(rectDef_t *rect, int ownerDraw) {
     }
 }
 
-// 0x74/0xce CG_DrawDuelHealthArmorBar. The binary reads live health/armor for the
-// duel player; we draw a two-part bar from the client info health/armor.
+/*
+=================
+CG_DrawDuelHealthArmorBar
+
+[QL] cgamex86.dll 0x10033040, for CG_1ST_PLYR_HEALTH_ARMOR (116) and
+CG_2ND_PLYR_HEALTH_ARMOR (206) - the health and armor bars of the competitive
+spectator HUD. Transcribed; the version kept before was an approximation that said so.
+
+  - Ids 193..282 are the second player's, everything else the first's (0x10033043).
+    The player is cgs.clientNum1stPlayer / clientNum2ndPlayer (0x10a40450/0x10a40454).
+  - Nothing is drawn unless cg_specDuelHealthArmor is set, the entity's eType passes
+    the binary's `& 0xb` test (0x10033091), and it is not EF_DEAD (0x10033166).
+  - Health and armor come from the local playerState when that player is the one the
+    snapshot belongs to, otherwise from the entity's currentState.health/armor.
+  - The scale is 2 * maxHealth, maxHealth = handicap / 100 * g_startingHealth, clamped
+    to g_startingHealth. Bars are anchored toward the middle: the FIRST player's bar is
+    right-aligned in its rect, the SECOND player's left-aligned.
+  - Health bar: 8 units tall at y+2, gold (1,0.8,0.2) unless cg_specDuelHealthColor
+    gives it the health gradient.
+  - Damage trail: while the last hit is under 2 s old (cg.damageTime for the local
+    player, pe.painTime for others), the health lost since the stored value is drawn
+    next to the bar in red, half-transparent when cg_specDuelHealthColor is set. The
+    stored value is refreshed only once the hit is older than that (0x100332ec).
+  - Armor bar: 2 units tall at y+10, cyan, width armor / scale * handicap / 100.
+=================
+*/
 static void CG_DrawDuelHealthArmorBar(rectDef_t *rect, int ownerDraw) {
-    int idx = CG_DuelPlayerIndex(ownerDraw);
-    duelScore_t *ds = &cg.duelScores[idx];
-    clientInfo_t *ci;
-    float health, armor, frac;
-    vec4_t hcolor;
+    static int lastHealth[2];
+    static vec4_t barGold      = {1.0f, 0.8f, 0.2f, 1.0f};
+    static vec4_t trailRed     = {1.0f, 0.0f, 0.0f, 1.0f};
+    static vec4_t trailRedHalf = {1.0f, 0.0f, 0.0f, 0.5f};
+    static vec4_t armorCyan    = {0.0f, 1.0f, 1.0f, 1.0f};
+    qboolean second;
+    centity_t* cent;
+    int cl, health, armor, maxHealth, damageTime;
+    qboolean local, recentHit;
+    double handicapFrac;
+    float scale, hf, df, af, barW, trailW, armorW, width;
+    vec4_t gradient;
+    float* healthColor;
 
-    if (!cg.duelScoresValid) return;
-    if (ds->clientNum < 0 || ds->clientNum >= MAX_CLIENTS) return;
-    ci = &cgs.clientinfo[ds->clientNum];
-    if (!ci->infoValid) return;
+    second = (ownerDraw >= 193 && ownerDraw <= 282);
+    cent = &cg_entities[second ? cgs.clientNum2ndPlayer : cgs.clientNum1stPlayer];
+    cl = cent->currentState.clientNum;
+    local = (cl == cg.snap->ps.clientNum);
 
-    health = (float)ci->health;
-    if (health > 0) {
-        if (health > 200) health = 200;
-        frac = health / 200.0f;
-        CG_GetColorForHealth(ci->health, ci->armor, hcolor);
-        trap_R_SetColor(hcolor);
-        CG_DrawPic(rect->x, rect->y + 2, rect->w * frac, 8, cgs.media.whiteShader);
-        trap_R_SetColor(NULL);
+    if (!cg_specDuelHealthArmor.integer || !(cent->currentState.eType & 0xb)) {
+        return;
     }
-    armor = (float)ci->armor;
-    if (armor > 0) {
-        vec4_t cyan = { 0, 1, 1, 1 };
-        if (armor > 200) armor = 200;
-        frac = armor / 200.0f;
-        trap_R_SetColor(cyan);
-        CG_DrawPic(rect->x, rect->y + 10, rect->w * frac, 4, cgs.media.whiteShader);
-        trap_R_SetColor(NULL);
+
+    if (local) {
+        health = cg.snap->ps.stats[STAT_HEALTH];
+        armor = cg.snap->ps.stats[STAT_ARMOR];
+        damageTime = (int)cg.damageTime;
+    } else {
+        health = cent->currentState.health;
+        armor = cent->currentState.armor;
+        damageTime = cent->pe.painTime;
     }
+    width = rect->w;
+    recentHit = (cg.time - damageTime) < 2000;
+
+    handicapFrac = cgs.clientinfo[cl].handicap / 100.0;
+    maxHealth = (int)(handicapFrac * cgs.startingHealth);
+    if (maxHealth < 1 || maxHealth > cgs.startingHealth) {
+        maxHealth = cgs.startingHealth;
+    }
+
+    if (cent->currentState.eFlags & EF_DEAD) {
+        return;
+    }
+
+    scale = (float)(maxHealth * 2);
+
+    hf = health / scale;
+    if (hf < 0.0f) {
+        hf = 0.0f;
+    }
+    barW = hf * width;
+
+    if (cg_specDuelHealthColor.integer) {
+        CG_HealthGradientColor(cl, health, gradient);
+        gradient[3] = 1.0f;
+        healthColor = gradient;
+    } else {
+        healthColor = barGold;
+    }
+    CG_FillRect(rect->x + (second ? 0.0f : width - barW), rect->y + 2, barW, 8, healthColor);
+
+    if (recentHit) {
+        df = (lastHealth[second] - health) / scale;
+        if (df < 0.0f) {
+            df = 0.0f;
+        }
+        if (df > hf) {
+            df = hf;
+        }
+        trailW = df * width;
+        CG_FillRect(rect->x + (second ? barW : (width - barW) - trailW), rect->y + 2, trailW, 8,
+                    cg_specDuelHealthColor.integer ? trailRedHalf : trailRed);
+    } else {
+        lastHealth[second] = health;
+    }
+
+    if (armor) {
+        af = armor / scale;
+        if (af < 0.0f) {
+            af = 0.0f;
+        }
+        armorW = (float)(af * handicapFrac) * width;
+        CG_FillRect(rect->x + (second ? 0.0f : width - armorW), rect->y + 10, armorW, 2, armorCyan);
+    }
+
+    trap_R_SetColor(NULL);
 }
 
 // 0x75-0x81/0xcf-0xdb CG_DrawDuelWeaponFrags.
@@ -2487,49 +2683,69 @@ static void CG_DrawGameTypeIcon(rectDef_t *rect) {
 }
 
 // [QL] Colorize based on player's team
+/*
+=================
+CG_DrawTeamColorized
+
+[QL] cgamex86.dll 0x1002f5d0. Tints the item's shader with the colour of the local
+playerState's team (persistant[PERS_TEAM]), taking only the alpha from the item. The
+table (0x10076264, 0x100785f0, 0x10078600, 0x10076224, 0x10076214) applies in every
+gametype - there is no team-game gate - and the shader is always drawn as a pic.
+The version kept before only coloured RED and BLUE, with other colours, and only in
+team games.
+=================
+*/
 static void CG_DrawTeamColorized(rectDef_t *rect, vec4_t color, qhandle_t shader) {
-    vec4_t teamColor;
+    static const vec3_t teamFree = {1.0f, 0.8f, 0.2f};
+    static const vec3_t teamRed  = {1.0f, 0.2f, 0.1f};
+    static const vec3_t teamBlue = {0.2f, 0.4f, 1.0f};
+    static const vec3_t teamSpec = {0.75f, 0.75f, 0.75f};
+    static const vec3_t teamNone = {1.0f, 1.0f, 1.0f};
+    const float* rgb;
+    vec4_t c;
 
-    if (cgs.gametype >= GT_TEAM) {
-        if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_RED) {
-            teamColor[0] = 1.0f; teamColor[1] = 0.2f; teamColor[2] = 0.2f; teamColor[3] = color[3];
-        } else if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_BLUE) {
-            teamColor[0] = 0.2f; teamColor[1] = 0.2f; teamColor[2] = 1.0f; teamColor[3] = color[3];
-        } else {
-            Vector4Copy(color, teamColor);
-        }
-    } else {
-        Vector4Copy(color, teamColor);
+    switch (cg.snap->ps.persistant[PERS_TEAM]) {
+        case TEAM_FREE:      rgb = teamFree; break;
+        case TEAM_RED:       rgb = teamRed; break;
+        case TEAM_BLUE:      rgb = teamBlue; break;
+        case TEAM_SPECTATOR: rgb = teamSpec; break;
+        default:             rgb = teamNone; break;
     }
+    VectorCopy(rgb, c);
+    c[3] = color[3];
 
-    trap_R_SetColor(teamColor);
-    if (shader) {
-        CG_DrawPic(rect->x, rect->y, rect->w, rect->h, shader);
-    } else {
-        CG_FillRect(rect->x, rect->y, rect->w, rect->h, teamColor);
-    }
+    trap_R_SetColor(c);
+    CG_DrawPic(rect->x, rect->y, rect->w, rect->h, shader);
     trap_R_SetColor(NULL);
 }
 
 // [QL] Colorize armor icon based on armor tier (green/yellow/red)
+/*
+=================
+CG_DrawArmorTieredColorized
+
+[QL] cgamex86.dll 0x1002f780. The tint follows the ARMOR TIER (stats[STAT_ARMORTYPE],
+ps+0xf8), not the amount: tier 0 green (0,1,0), tier 1 yellow (1,1,0), tier 2 red
+(1,0,0), alpha from the item. The version kept before stepped on the armor value with
+invented colours.
+
+For a tier outside 0..2 the binary sets the colour from an uninitialised local; that
+cannot be reproduced meaningfully, so the item colour is used as is.
+=================
+*/
 static void CG_DrawArmorTieredColorized(rectDef_t *rect, vec4_t color, qhandle_t shader) {
-    int armor = cg.snap->ps.stats[STAT_ARMOR];
-    vec4_t tierColor;
+    vec4_t c;
 
-    if (armor > 100) {
-        tierColor[0] = 1.0f; tierColor[1] = 0.2f; tierColor[2] = 0.2f; tierColor[3] = color[3];
-    } else if (armor > 50) {
-        tierColor[0] = 1.0f; tierColor[1] = 1.0f; tierColor[2] = 0.2f; tierColor[3] = color[3];
-    } else {
-        tierColor[0] = 0.2f; tierColor[1] = 1.0f; tierColor[2] = 0.2f; tierColor[3] = color[3];
+    Vector4Copy(color, c);
+    switch (cg.snap->ps.stats[STAT_ARMORTYPE]) {
+        case 0: c[0] = 0.0f; c[1] = 1.0f; c[2] = 0.0f; break;
+        case 1: c[0] = 1.0f; c[1] = 1.0f; c[2] = 0.0f; break;
+        case 2: c[0] = 1.0f; c[1] = 0.0f; c[2] = 0.0f; break;
+        default: break;
     }
 
-    trap_R_SetColor(tierColor);
-    if (shader) {
-        CG_DrawPic(rect->x, rect->y, rect->w, rect->h, shader);
-    } else {
-        CG_FillRect(rect->x, rect->y, rect->w, rect->h, tierColor);
-    }
+    trap_R_SetColor(c);
+    CG_DrawPic(rect->x, rect->y, rect->w, rect->h, shader);
     trap_R_SetColor(NULL);
 }
 
@@ -3535,7 +3751,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_SELECTED_PLYR_ACCURACY:     // 0x5d  CG_DrawFollowPlayerName (binary offset)
         case CG_FOLLOW_PLAYER_NAME:         // 0x5e/0x5f  CG_DrawFollow
         case CG_FOLLOW_PLAYER_NAME_EX:
-            CG_DrawFollowPlayerName(&rect, scale, color, textStyle);
+            CG_DrawFollowPlayerName(&rect, ownerDraw, align, scale, color, textStyle);
             break;
         case CG_SPEEDOMETER:                // 0x60
             CG_DrawSpeedometer(&rect, scale, color, textStyle);
@@ -3769,7 +3985,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             CG_DrawFlagStatusBar(&rect);
             break;
         case CG_HEALTH_COLORIZED:           // 0x152
-            CG_DrawHealthColorized(&rect, scale, color, textStyle);
+            CG_DrawHealthColorized(&rect, color, shader);
             break;
         case CG_MATCH_STATE:                // 0x153
             // [QL] force Handel Gothic (fontIndex 1), pak00 menu omits the font directive
