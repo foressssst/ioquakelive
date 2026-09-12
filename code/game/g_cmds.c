@@ -499,6 +499,24 @@ void BroadcastTeamChange(gclient_t* client, int oldTeam) {
 SetTeam
 =================
 */
+/*
+=================
+SetTeam_SpectateOnly
+
+[QL] The block SetTeam repeats in each of its three spectate branches (0x1004073d,
+0x100407dd, 0x10040c10): in Duel, choosing to spectate marks the client spectate-only
+so the play queue stops pulling them in, and tells them so with a centerprint.
+=================
+*/
+static void SetTeam_SpectateOnly(gentity_t* ent) {
+    if (g_gametype.integer != GT_DUEL) {
+        return;
+    }
+    ent->client->sess.specOnly = 1;   // gclient_t+0x36c
+    ent->client->sess.playQueue = 0;  // gclient_t+0x370
+    trap_SendServerCommand(ent - g_entities, va("cp \"%s\n\"", "You are set to spectate only"));
+}
+
 void SetTeam(gentity_t* ent, const char* s) {
     int team, oldTeam;
     gclient_t* client;
@@ -519,21 +537,40 @@ void SetTeam(gentity_t* ent, const char* s) {
         team = TEAM_SPECTATOR;
         specState = SPECTATOR_SCOREBOARD;
     } else if (!Q_stricmp(s, "follow1")) {
+        // [QL] qagamex86.dll 0x10040729: follow the leading player only if there is
+        // somebody playing, free-fly otherwise. In Duel, asking to spectate also marks
+        // the client spectate-only and takes them out of the play queue.
         team = TEAM_SPECTATOR;
-        specState = SPECTATOR_FOLLOW;
-        specClient = -1;
-    } else if (!Q_stricmp(s, "follow2")) {
-        team = TEAM_SPECTATOR;
-        specState = SPECTATOR_FOLLOW;
-        specClient = -2;
-    } else if (!Q_stricmp(s, "spectator") || !Q_stricmp(s, "s")) {
-        team = TEAM_SPECTATOR;
+        SetTeam_SpectateOnly(ent);
         if (level.numPlayingClients > 0) {
             specState = SPECTATOR_FOLLOW;
             specClient = -1;
         } else {
             specState = SPECTATOR_FREE;
         }
+    } else if (!Q_stricmp(s, "follow2")) {
+        // [QL] 0x100407c9: the second-place slot needs two players; with exactly one
+        // it falls back to following the leader, with none it free-flies.
+        team = TEAM_SPECTATOR;
+        SetTeam_SpectateOnly(ent);
+        if (level.numPlayingClients > 1) {
+            specState = SPECTATOR_FOLLOW;
+            specClient = -2;
+        } else if (level.numPlayingClients == 1) {
+            specState = SPECTATOR_FOLLOW;
+            specClient = -1;
+        } else {
+            specState = SPECTATOR_FREE;
+        }
+    } else if (!Q_stricmp(s, "spectator") || !Q_stricmp(s, "s")) {
+        // [QL] 0x10040c10: plain spectate is ALWAYS free-fly. The version kept here
+        // auto-followed the leader whenever anybody was playing, which neither retail
+        // nor Quake 3 does - and it is why the SPECTATE button of the in-game menu,
+        // whose action is `exec "team s"`, left a player who was following someone
+        // still following them instead of returning them to the free camera.
+        team = TEAM_SPECTATOR;
+        specState = SPECTATOR_FREE;
+        SetTeam_SpectateOnly(ent);
     } else if (g_gametype.integer >= GT_TEAM) {
         // if running a team game, assign player to one of the teams
         specState = SPECTATOR_NOT;
@@ -678,18 +715,24 @@ to free floating spectator mode
 =================
 */
 void StopFollowing(gentity_t* ent) {
-    ent->client->ps.persistant[PERS_TEAM] = TEAM_SPECTATOR;
-    ent->client->sess.sessionTeam = TEAM_SPECTATOR;
-    ent->client->sess.spectatorState = SPECTATOR_FREE;
-    ent->client->ps.pm_flags &= ~PMF_FOLLOW;
-    ent->r.svFlags &= ~SVF_BOT;
-    ent->client->ps.clientNum = ent - g_entities;
+    // [QL] qagamex86.dll 0x10040d10, transcribed in full. Quake 3's version was kept
+    // verbatim here and differs in a way that matters: it FORCED
+    // sess.sessionTeam = TEAM_SPECTATOR. Retail never touches the session team - it
+    // puts the player's own team back into persistant[PERS_TEAM], which the follow
+    // had overwritten with the followed player's. With the Quake 3 version, a Clan
+    // Arena player who died, followed a teammate and then stopped following was
+    // silently taken off their team.
+    //
+    // Retail also does not clear SVF_BOT, re-apply the view angles or patch up a dead
+    // player's health here; all three were Quake 3 and are gone.
+    ent->client->ps.persistant[PERS_TEAM] = ent->client->sess.sessionTeam;  // 0x10040d1c
+    ent->client->ps.pm_type = PM_SPECTATOR;                                 // 0x10040d28
+    ent->client->ps.pm_flags &= ~PMF_FOLLOW;                                // 0x10040d35
+    ent->client->sess.spectatorState = SPECTATOR_FREE;                      // 0x10040d43
+    ent->client->ps.clientNum = ent - g_entities;                           // 0x10040d6e
 
-    SetClientViewAngle(ent, ent->client->ps.viewangles);
-
-    // don't use dead view angles
-    if (ent->client->ps.stats[STAT_HEALTH] <= 0) {
-        ent->client->ps.stats[STAT_HEALTH] = 1;
+    if (ent->r.linked) {                                                    // 0x10040d74
+        trap_UnlinkEntity(ent);
     }
 }
 
