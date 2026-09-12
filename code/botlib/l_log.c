@@ -56,7 +56,9 @@ static logfile_t logfile;
 //===========================================================================
 void Log_Open(char* filename) {
     char* ospath;
-    if (!LibVarValue("log", "0"))
+    // [QL] the libvar is "bot_log", matching what qagame hands over at 0x10023e15.
+    // Quake 3 called it "log" and drove it from the engine's console logfile cvar.
+    if (!LibVarValue("bot_log", "0"))
         return;
     if (!filename || !strlen(filename)) {
         botimport.Print(PRT_MESSAGE, "openlog <filename>\n");

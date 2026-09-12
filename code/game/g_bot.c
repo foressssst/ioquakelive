@@ -583,6 +583,10 @@ qboolean G_BotConnect(int clientNum, qboolean restart) {
 
     Q_strncpyz(settings.characterfile, Info_ValueForKey(userinfo, "characterfile"), sizeof(settings.characterfile));
     settings.skill = atof(Info_ValueForKey(userinfo, "skill"));
+    // [QL] 0x10037447, the third key the binary reads here. G_AddBot put
+    // the resolved team into the userinfo a few lines above; this is where
+    // it comes back out, and BotDeathmatchAI is what acts on it.
+    Q_strncpyz(settings.team, Info_ValueForKey(userinfo, "team"), sizeof(settings.team));
 
     if (!BotAISetupClient(clientNum, &settings, restart)) {
         trap_DropClient(clientNum, "BotAISetupClient failed");
