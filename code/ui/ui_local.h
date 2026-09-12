@@ -962,7 +962,7 @@ int trap_LAN_CompareServers(int source, int sortKey, int sortDir, int s1, int s2
 int trap_MemoryRemaining(void);
 void trap_R_RegisterFont(const char* pFontname, int pointSize, fontInfo_t* font);
 void trap_R_Font_DrawString(int x, int y, const char* text, int fontIndex, float scale, int limit, float* maxX, int flags);
-void trap_R_Font_TextExtents(const char* text, int start, int limit, float scale, int fontIndex, int* outX, int* outY, int* outW, int* outH);
+void trap_R_Font_TextExtents(const char* text, int start, int fontIndex, float scale, int limit, float* extents);  // extents[5]
 void trap_R_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t* glyph);
 void trap_IME_SetCompositionFont(int fontIndex, float scale);
 void trap_S_StopBackgroundTrack(void);

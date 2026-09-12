@@ -240,13 +240,16 @@ static void CG_PaintText(float x, float y, int fontIndex, float scale, const vec
 }
 
 // Core measure: 640-space width/height for the given text.
+// [QL] cgamex86.dll 0x100082b0: width is the engine box's maxx - minx, height is
+// the engine's line height (extents[4]), both kept as floats until the final
+// division by the 640-space scale.
 static void CG_MeasureText(const char* text, float scale, int fontIndex, int limit, int* w640, int* h640) {
-	int wpx = 0, hpx = 0;
+	float extents[5];
 	float xscale, yscale;
 	float size = CG_FontPixelSize(scale);
 	int lim = (limit > 0) ? limit : -1;
 
-	trap_R_Font_TextExtents(text, 0, lim, size, CG_EngineFont(fontIndex), NULL, NULL, &wpx, &hpx);
+	trap_R_Font_TextExtents(text, 0, CG_EngineFont(fontIndex), size, lim, extents);
 
 	xscale = CG_TextXScale();
 	if (xscale <= 0.0f)
@@ -256,9 +259,9 @@ static void CG_MeasureText(const char* text, float scale, int fontIndex, int lim
 		yscale = 1.0f;
 
 	if (w640)
-		*w640 = (int)((float)wpx / xscale);
+		*w640 = (int)((extents[2] - extents[0]) / xscale);
 	if (h640)
-		*h640 = (int)((float)hpx / yscale);
+		*h640 = (int)(extents[4] / yscale);
 }
 
 // [QL] Font-pointer variants - used by DC wrappers.

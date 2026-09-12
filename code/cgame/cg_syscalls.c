@@ -234,8 +234,8 @@ void trap_R_Font_DrawString(int x, int y, const char* text, int fontIndex, float
     syscall(CG_R_FONT_DRAWSTRING, x, y, text, fontIndex, PASSFLOAT(scale), limit, maxX, flags);
 }
 
-void trap_R_Font_TextExtents(const char* text, int start, int limit, float scale, int fontIndex, int* outX, int* outY, int* outW, int* outH) {
-    syscall(CG_R_FONT_TEXTEXTENTS, text, start, limit, PASSFLOAT(scale), fontIndex, outX, outY, outW, outH);
+void trap_R_Font_TextExtents(const char* text, int start, int fontIndex, float scale, int limit, float* extents) {
+    syscall(CG_R_FONT_TEXTEXTENTS, text, start, fontIndex, PASSFLOAT(scale), limit, extents);
 }
 
 void trap_R_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t* glyph) {
