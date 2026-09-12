@@ -569,6 +569,17 @@ static void CG_CopyClientInfoModel(clientInfo_t* from, clientInfo_t* to) {
     to->headSkin = from->headSkin;
     to->modelIcon = from->modelIcon;
 
+    // [QL] modelScale travels with the three model handles, because it is derived
+    // from exactly those three: CG_CalcModelScale (0x1003d260) measures the combined
+    // legs+torso+head height and normalises it to 56 units. Copying the handles and
+    // leaving the scale behind is what made every client that reuses another client's
+    // models come out at scale 0 - CG_Player then multiplies all three axes by it and
+    // the model collapses to a point, while the shadow (taken from lerpOrigin) still
+    // draws. That is the "shadow without a body" bug, and it hit every bot after the
+    // first, because CG_UpdateAllModelScales (0x1003e4b0) only runs when CS_PLAYERINFO
+    // changes, which happens before any bot has connected.
+    to->modelScale = from->modelScale;
+
     to->newAnims = from->newAnims;
 
     memcpy(to->animations, from->animations, sizeof(to->animations));
