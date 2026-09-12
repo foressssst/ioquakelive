@@ -137,24 +137,32 @@ typedef enum {
 #define CS_SCORE2NDPLAYER 686      // Score of the duel player on the right
 #define CS_CLIENTNUM1STPLAYER 687  // ClientNum of the duel player on the left
 #define CS_CLIENTNUM2NDPLAYER 688  // ClientNum of the duel player on the right
-#define CS_ATMOSEFFECT 689         // unused, was per-map rain/snow effects
-#define CS_MOST_DAMAGEDEALT_PLYR 690
-#define CS_MOST_ACCURATE_PLYR 691
-#define CS_REDTEAMBASE 692
-#define CS_BLUETEAMBASE 693
-#define CS_BEST_ITEMCONTROL_PLYR 694
-#define CS_MOST_VALUABLE_OFFENSIVE_PLYR 695
-#define CS_MOST_VALUABLE_DEFENSIVE_PLYR 696
-#define CS_MOST_VALUABLE_PLYR 697
-#define CS_GENERIC_COUNT_RED 698
-#define CS_GENERIC_COUNT_BLUE 699
-#define CS_AD_SCORES 700
-#define CS_ROUND_WINNER 701
+// [QL] 689-703 were two slots low. qagamex86.dll 0x10056a35/0x10056920 write the
+// duel players' names to 689/690, 0x1006671e writes "atmosphere" to 691, and
+// 0x10050a33 writes the "\x\%f\y\%f\z\%f" team bases to 694/695; cgamex86.dll
+// 0x10049544-0x10049841 reads 689/690 as names, 692/693/696-699 as one block of
+// six ints and 694/695 from the flag status ownerdraw. The award names below keep
+// the fork's order shifted by two; which award is which slot is not verified.
+#define CS_NAME1STPLAYER 689       // Name of the duel player on the left
+#define CS_NAME2NDPLAYER 690       // Name of the duel player on the right
+#define CS_ATMOSEFFECT 691         // map "atmosphere" key
+#define CS_MOST_DAMAGEDEALT_PLYR 692
+#define CS_MOST_ACCURATE_PLYR 693
+#define CS_REDTEAMBASE 694
+#define CS_BLUETEAMBASE 695
+#define CS_BEST_ITEMCONTROL_PLYR 696
+#define CS_MOST_VALUABLE_OFFENSIVE_PLYR 697
+#define CS_MOST_VALUABLE_DEFENSIVE_PLYR 698
+#define CS_MOST_VALUABLE_PLYR 699
+#define CS_GENERIC_COUNT_RED 700
+#define CS_GENERIC_COUNT_BLUE 701
+#define CS_AD_SCORES 702
+#define CS_ROUND_WINNER 703
 // [QL] g_customSettings publishes to CS 704 (binary G_UpdateCvars sets 0x2c0; wolfcam's
 // CS91_CUSTOM_SETTINGS = 704). The old 702 was wrong, nothing read it. End-map vote data
 // sits at 705/706: BeginIntermission fills 0x2c1 with the map options and 0x2c2 with the
 // tallies, so the rotation map/vote strings live there. We had them at 703/704, which
-// clashed with custom settings. 703 (0x2bf) is a separate RR configstring, not touched yet.
+// clashed with custom settings. 703 (0x2bf) is CS_ROUND_WINNER after the shift above.
 #define CS_CUSTOM_SETTINGS 704
 #define CS_ROTATIONMAPS 705    // map-vote options infostring
 #define CS_ROTATIONVOTES 706   // map-vote tallies/state

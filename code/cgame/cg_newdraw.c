@@ -2521,41 +2521,60 @@ static int CG_OwnerDrawWeaponIndex(int ownerDraw) {
     }
 }
 
-// 0x67/0xc1 CG_DrawDuelPlayerName. Binary truncates to fit the plate width; we
-// draw the plain client name (with alignment). Skips empty names in warmup.
-static void CG_DrawDuelPlayerName(int ownerDraw, rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
-    int idx = CG_DuelPlayerIndex(ownerDraw);
-    duelScore_t *ds = &cg.duelScores[idx];
-    const char *name;
-    float x;
+// [QL] cgamex86.dll 0x10035bd0, CG_1ST_PLYR (0x67) / CG_2ND_PLYR (0xc1; retail
+// takes ids 0xc1-0x11a as the second player). The name is CS_NAME1STPLAYER /
+// CS_NAME2NDPLAYER, not the scores_duel client. Wider than 140 it loses one
+// character at a time until it measures under 132, then gets "...". With the
+// intermission started and no name it shows "-". Measured and drawn in the
+// item's font, aligned.
+static void CG_DrawDuelPlayerName(int ownerDraw, rectDef_t *rect, int fontIndex, float scale, vec4_t color, int textStyle, int align) {
+    char name[40];
+    char shortName[40];
+    const char *text;
+    int len, i, w;
 
-    if (!cg.duelScoresValid) {
-        return;
+    if (ownerDraw >= 0xc1 && ownerDraw <= 0x11a) {
+        Q_strncpyz(name, cgs.name2ndPlayer, sizeof(name));
+    } else {
+        Q_strncpyz(name, cgs.name1stPlayer, sizeof(name));
     }
-    if (ds->clientNum < 0 || ds->clientNum >= MAX_CLIENTS) {
-        return;
+
+    if (CG_DrawTextWidth(name, scale, 0, fontIndex) > 140) {
+        Q_strncpyz(shortName, name, sizeof(shortName));
+        len = strlen(shortName);
+        for (i = 0; i < len; i++) {
+            Q_strncpyz(shortName, name, len - i);
+            if (CG_DrawTextWidth(shortName, scale, 0, fontIndex) < 132) {
+                break;
+            }
+        }
+        Q_strncpyz(name, va("%s%s", shortName, "..."), sizeof(name));
     }
-    name = cgs.clientinfo[ds->clientNum].name;
-    if (cg.warmup && !name[0]) {
-        return;
+
+    text = (cg.intermissionStarted == 1 && !name[0]) ? "-" : name;
+
+    w = CG_DrawTextWidth(text, scale, 0, fontIndex);
+    if (align == ITEM_ALIGN_CENTER) {
+        rect->x -= w * 0.5;
+    } else if (align == ITEM_ALIGN_RIGHT) {
+        rect->x -= w;
     }
-    x = CG_OwnerDrawAlignX(rect, name, scale, align);
-    CG_OwnerDrawText(x, rect->y, scale, color, name, 0, 0, textStyle);
+    CG_DrawText(rect->x, rect->y, fontIndex, scale, color, text, 0, 0, textStyle);
 }
 
-// 0x69/0xc3 CG_DrawDuelPlayerScore. Draws the duel score; -9999/-999 draw nothing.
+// [QL] cgamex86.dll 0x10035f30, CG_1ST_PLYR_SCORE (0x69) / CG_2ND_PLYR_SCORE:
+// CS_SCORE1STPLAYER / CS_SCORE2NDPLAYER; nothing for -9999 or -999. Font 0,
+// aligned.
 static void CG_DrawDuelPlayerScore(int ownerDraw, rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
-    int idx = CG_DuelPlayerIndex(ownerDraw);
-    int score = cg.duelScores[idx].score;
+    int score = (ownerDraw == CG_1ST_PLYR_SCORE) ? cgs.score1stPlayer : cgs.score2ndPlayer;
     const char *s;
-    float x;
 
-    if (!cg.duelScoresValid || score == SCORE_NOT_PRESENT || score == -999) {
+    if (score == SCORE_NOT_PRESENT || score == -999) {
         return;
     }
-    s = va("%i", score);
-    x = CG_OwnerDrawAlignX(rect, s, scale, align);
-    CG_OwnerDrawText(x, rect->y, scale, color, s, 0, 0, textStyle);
+    s = va("%d", score);
+    CG_AlignRectText(rect, s, scale, align);
+    CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
 // 0x6a/0xc4 CG_DrawDuelPlayerFrags.
@@ -4042,7 +4061,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
 
         // ---- duel overlay: 1st player 0x67-0xc0, 2nd player 0xc1-0x11a ----
         case CG_1ST_PLYR: case CG_2ND_PLYR:                       // 0x67/0xc1
-            CG_DrawDuelPlayerName(ownerDraw, &rect, scale, color, textStyle, align);
+            CG_DrawDuelPlayerName(ownerDraw, &rect, fontIndex, scale, color, textStyle, align);
             break;
         case CG_1ST_PLYR_READY:                                   // 0x68
             CG_DrawPlayerStatusLeft(&rect);
