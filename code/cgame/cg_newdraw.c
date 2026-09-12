@@ -1377,9 +1377,6 @@ static void CG_DrawAreaTeamChat(rectDef_t* rect, float scale, vec4_t color, qhan
     CG_OwnerDrawText(rect->x, rect->y, scale, color, teamChat1, 0, 0, 0);
 }
 
-static void CG_DrawAreaChat(rectDef_t* rect, float scale, vec4_t color, qhandle_t shader) {
-    CG_OwnerDrawText(rect->x, rect->y, scale, color, teamChat2, 0, 0, 0);
-}
 
 const char* CG_GetKillerText(void) {
     const char* s = "";
@@ -3035,115 +3032,90 @@ static vec3_t obitTeamColors[] = {
     { 1.0f, 0.8f, 0.2f }        // default - orange/gold
 };
 
-// [QL] Draw obituary / kill feed (binary: FUN_1002e9b0)
-// Renders: [attacker name] [weapon icon] [victim name] per line
-// For world/suicide: just [victim name] with skull icon
-static void CG_DrawPlayerObit(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
-    int i;
-    float y;
-    int iconSize;
-    int textHeight;
+/*
+=================
+CG_DrawPlayerObit
 
-    // Expire old entries (>2000ms)
-    for (i = 0; i < cg.obituaryCount; ) {
-        if (cg.obituaries[i].active &&
-            cg.obituaries[i].time > 0 &&
-            cg.time - cg.obituaries[i].time > 2000) {
-            // Shift remaining entries down
-            int j;
-            for (j = i; j < cg.obituaryCount - 1; j++) {
-                cg.obituaries[j] = cg.obituaries[j + 1];
-            }
-            cg.obituaryCount--;
-            memset(&cg.obituaries[cg.obituaryCount], 0, sizeof(cg.obituaries[0]));
-        } else {
-            i++;
+[QL] cgamex86.dll 0x1002e9b0, CG_PLAYER_OBIT. Each of the 16 slots lives two
+seconds and fades over its last 200 ms. A line is the attacker's name (team
+coloured, only when there is an attacker), the means-of-death icon as tall as
+the text and half a text height after the name, then the victim's name two
+text heights after the attacker's. Heights come from the victim's name; the
+next line starts text height + 2 lower. Font 0, no text style, the item's
+colour is not used.
+=================
+*/
+static const float *CG_ObitTeamColor(int team) {
+    switch (team) {
+    case TEAM_FREE:
+    case TEAM_RED:
+    case TEAM_BLUE:
+    case TEAM_SPECTATOR:
+        return obitTeamColors[team];
+    default:
+        return obitTeamColors[4];
+    }
+}
+
+static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
+    static vec4_t obitColor;
+    int i;
+    int y, textH, attackerW, remaining;
+    float x, iconY, iconW, iconH;
+    const float *team;
+
+    // 0x1002e9d7: an expired slot shifts the whole array up from slot 0 and
+    // the same index is looked at again
+    for (i = 0; i < MAX_OBITUARIES; i++) {
+        if (cg.obituaries[i].time > 0 && cg.time >= cg.obituaries[i].time + 2000) {
+            memmove(&cg.obituaries[0], &cg.obituaries[1], (MAX_OBITUARIES - 1) * sizeof(cg.obituaries[0]));
+            memset(&cg.obituaries[MAX_OBITUARIES - 1], 0, sizeof(cg.obituaries[0]));
+            i--;
         }
     }
 
-    y = (float)(int)rect->y;
+    y = (int)rect->y;
 
-    for (i = 0; i < cg.obituaryCount; i++) {
-        vec4_t drawColor;
-        float alpha;
-        int dt;
-        int tw;
-        float x;
-        vec3_t *teamColor;
-
-        if (!cg.obituaries[i].active || cg.obituaries[i].time == 0) {
+    for (i = 0; i < MAX_OBITUARIES; i++) {
+        if (!cg.obituaries[i].active) {
             continue;
         }
 
-        dt = cg.time - cg.obituaries[i].time;
-        if (dt >= 2000) {
+        remaining = 2000 - (cg.time - cg.obituaries[i].time);
+        if (!cg.obituaries[i].time || remaining <= 0) {
+            // retail would draw through a NULL colour here; the pass above
+            // makes it unreachable
             continue;
         }
+        obitColor[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
 
-        // Fade out in last 200ms (binary: alpha = remaining/200.0)
-        if (2000 - dt < 200) {
-            alpha = (float)(2000 - dt) / 200.0f;
-        } else {
-            alpha = 1.0f;
+        textH = CG_DrawTextHeight(cg.obituaries[i].victimName, scale, 0, 0);
+        attackerW = 0;
+
+        if (cg.obituaries[i].hasAttacker == 1) {
+            team = CG_ObitTeamColor(cg.obituaries[i].attackerTeam);
+            VectorCopy(team, obitColor);
+            CG_DrawText(rect->x, (float)y, 0, scale, obitColor, cg.obituaries[i].attackerName, 0, 0, 0);
+            attackerW = CG_DrawTextWidth(cg.obituaries[i].attackerName, scale, 0, 0);
         }
 
-        // Compute icon size from text height at this scale
-        textHeight = CG_Text_Height("A", scale, 0);
-        iconSize = textHeight + 2;
-
-        // Reset text alignment
-        trap_R_SetColor(NULL);
-
-        x = rect->x;
-        tw = 0;
-
-        if (cg.obituaries[i].hasAttacker) {
-            // Draw attacker name with team color
-            int team = cg.obituaries[i].attackerTeam;
-            if (team < 0 || team > 3) team = 4; // default orange
-            teamColor = &obitTeamColors[team];
-            drawColor[0] = (*teamColor)[0];
-            drawColor[1] = (*teamColor)[1];
-            drawColor[2] = (*teamColor)[2];
-            drawColor[3] = alpha;
-
-            CG_OwnerDrawText(x, y, scale, drawColor, cg.obituaries[i].attackerName, 0, 0, 0);
-            tw = CG_OwnerDrawTextWidth(cg.obituaries[i].attackerName, scale, 0);
-
-            trap_R_SetColor(NULL);
-        }
-
-        // Draw weapon/skull icon
         if (cg.obituaries[i].weaponIcon) {
-            drawColor[0] = 1.0f;
-            drawColor[1] = 1.0f;
-            drawColor[2] = 1.0f;
-            drawColor[3] = alpha;
-            trap_R_SetColor(drawColor);
-
-            CG_DrawPic(x + (float)tw + (float)(iconSize / 2),
-                        y - (float)iconSize,
-                        (float)iconSize, (float)iconSize,
-                        cg.obituaries[i].weaponIcon);
-
+            obitColor[0] = obitColor[1] = obitColor[2] = 1.0f;
+            trap_R_SetColor(obitColor);
+            x = (float)attackerW + rect->x + (float)(textH / 2);
+            iconY = (float)(y - textH);
+            iconW = iconH = (float)textH;
+            CG_AdjustFrom640(&x, &iconY, &iconW, &iconH);
+            trap_R_DrawStretchPic(x, iconY, iconW, iconH, 0, 0, 1, 1, cg.obituaries[i].weaponIcon);
             trap_R_SetColor(NULL);
-            tw += iconSize * 2;
         }
 
-        // Draw victim name with team color
-        {
-            int team = cg.obituaries[i].victimTeam;
-            if (team < 0 || team > 3) team = 4;
-            teamColor = &obitTeamColors[team];
-            drawColor[0] = (*teamColor)[0];
-            drawColor[1] = (*teamColor)[1];
-            drawColor[2] = (*teamColor)[2];
-            drawColor[3] = alpha;
+        team = CG_ObitTeamColor(cg.obituaries[i].victimTeam);
+        VectorCopy(team, obitColor);
+        CG_DrawText((float)attackerW + rect->x + (float)(textH * 2), (float)y, 0, scale, obitColor,
+                    cg.obituaries[i].victimName, 0, 0, 0);
 
-            CG_OwnerDrawText(x + (float)tw, y, scale, drawColor, cg.obituaries[i].victimName, 0, 0, 0);
-        }
-
-        y += (float)(iconSize + 2);
+        y += textH + 2;
     }
 }
 
@@ -4013,10 +3985,10 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             CG_DrawSecondPlaceScore(&rect, scale, color, textStyle);
             break;
         case CG_PLAYER_OBIT:                // 0x58
-            CG_DrawPlayerObit(&rect, scale, color, textStyle);
+            CG_DrawPlayerObit(&rect, scale);
             break;
-        case CG_AREA_NEW_CHAT:              // 0x59  CG_DrawChat
-            CG_DrawAreaChat(&rect, scale, color, shader);
+        case CG_AREA_NEW_CHAT:              // 0x59  0x10006a10 via 0x1003b3c6
+            CG_DrawChat(rect.x, rect.y, rect.w, rect.h, scale);
             break;
         case CG_PLYR_END_GAME_SCORE:        // 0x5a  CG_DrawEndGameResult
             CG_DrawEndGameResult(&rect, scale, color, textStyle);

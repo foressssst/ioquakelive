@@ -122,6 +122,12 @@ void CG_DrawSpectatorHud(void) {
     Menu_Paint(menuSpecRedBottom, qtrue);
     Menu_Paint(menuSpecBlueTop, qtrue);
     Menu_Paint(menuSpecBlueBottom, qtrue);
+
+    // [QL] 0x1000db4d: the spectator menus carry no chat window, so the overlay
+    // draws one itself in the rect the player HUD's chatWindow uses.
+    if (!cg.scoreBoardShowing) {
+        CG_DrawChat(5, 287, 634, 120, 1.0f);
+    }
 }
 
 int sortedTeamPlayers[TEAM_MAXOVERLAY];
@@ -2467,8 +2473,8 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	// [QL] race timer is drawn by menu system via CG_DrawRaceTimes ownerdraw
 	// (removed hardcoded duplicate here)
 
-	// [QL] draw chat overlay
-	CG_DrawChat();
+	// [QL] no chat here: retail draws it only through the CG_AREA_NEW_CHAT
+	// ownerdraw in the HUD menus and from the spectator overlay (0x1000db98).
 
 	// don't draw center string if scoreboard is up
 	cg.scoreBoardShowing = CG_DrawScoreboard();

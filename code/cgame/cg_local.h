@@ -919,7 +919,6 @@ typedef struct {
         int         hasAttacker;    // 0 for world/suicide
         qhandle_t   weaponIcon;     // shader handle for weapon/skull icon
     } obituaries[MAX_OBITUARIES];
-    int obituaryCount;       // number of active entries
 
     // [QL] speedometer history ring buffer
     #define SPEED_HISTORY_SIZE 128
@@ -1992,6 +1991,7 @@ int CG_DrawTextHeight(const char *text, float scale, int limit, int fontIndex);
 void CG_DrawTextClipped(float *maxX, float x, float y, float scale, const vec4_t color, const char *text);
 extern vmCvar_t cg_redTeamName;
 extern vmCvar_t cg_blueTeamName;
+extern vmCvar_t cg_chatHistoryLength;
 extern int cg_currentWidescreen;
 float CG_TextWidth_DC(const char* text, float scale, int limit, int fontIndex);
 float CG_TextHeight_DC(const char* text, float scale, int limit, int fontIndex);
@@ -2220,7 +2220,7 @@ qboolean CG_ConsoleCommand(void);
 void CG_InitConsoleCommands(void);
 void CG_ClearChat(void);
 void CG_AddChat(const char *text, int teamOnly, int extraTime);
-void CG_DrawChat(void);
+void CG_DrawChat(float x, float y, float w, float h, float scale);
 void CG_InitColorWheel(void);
 
 //
