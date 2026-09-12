@@ -720,13 +720,14 @@ void SP_worldspawn(void) {
     // field in this tree's level_locals_t; other code approximates it with
     // g_training.integer. REPORTED: add level.isTraining and set it here.
 
-    // [QL] "atmosphere" key: the binary (0x1006671e) publishes it to a
-    // configstring - if present, the map's value; if absent, "" - using CS
-    // index 0x2b3 (691). This tree's CS_ATMOSEFFECT is 689, which disagrees
-    // with the binary, so the publish is omitted until the header is fixed.
-    // REPORTED: set CS_ATMOSEFFECT to 691 in bg_public.h, then:
-    //   if (G_SpawnString("atmosphere", "", &s)) trap_SetConfigstring(CS_ATMOSEFFECT, s);
-    //   else trap_SetConfigstring(CS_ATMOSEFFECT, "");
+    // [QL] "atmosphere" key: the binary (0x1006671e) publishes it to CS 0x2b3
+    // (691) - the map's value if present, "" if absent. CS_ATMOSEFFECT now sits
+    // at 691 (it was 689), so the publish is in.
+    if (G_SpawnString("atmosphere", "", &s)) {
+        trap_SetConfigstring(CS_ATMOSEFFECT, s);
+    } else {
+        trap_SetConfigstring(CS_ATMOSEFFECT, "");
+    }
 
     g_entities[ENTITYNUM_WORLD].s.number = ENTITYNUM_WORLD;
     g_entities[ENTITYNUM_WORLD].r.ownerNum = ENTITYNUM_NONE;

@@ -948,6 +948,15 @@ void CG_SetConfigValues(void) {
     // [QL] binary 0x100494af / 0x100494e5: the place names are cached next to the scores
     Q_strncpyz(cgs.firstPlaceName, CG_ConfigString(CS_SCORES1PLAYER), sizeof(cgs.firstPlaceName));
     Q_strncpyz(cgs.secondPlaceName, CG_ConfigString(CS_SCORES2PLAYER), sizeof(cgs.secondPlaceName));
+    // [QL] binary 0x100494ea: the duel slots are seeded only in duel
+    if (cgs.gametype == GT_DUEL) {
+        cgs.clientNum1stPlayer = atoi(CG_ConfigString(CS_CLIENTNUM1STPLAYER));
+        cgs.clientNum2ndPlayer = atoi(CG_ConfigString(CS_CLIENTNUM2NDPLAYER));
+        cgs.score1stPlayer = atoi(CG_ConfigString(CS_SCORE1STPLAYER));
+        cgs.score2ndPlayer = atoi(CG_ConfigString(CS_SCORE2NDPLAYER));
+        Q_strncpyz(cgs.name1stPlayer, CG_ConfigString(CS_NAME1STPLAYER), sizeof(cgs.name1stPlayer));
+        Q_strncpyz(cgs.name2ndPlayer, CG_ConfigString(CS_NAME2NDPLAYER), sizeof(cgs.name2ndPlayer));
+    }
     cgs.levelStartTime = atoi(CG_ConfigString(CS_LEVEL_START_TIME));
     // [QL] custom-settings bitmask (drives the RR-infected bones model), wallbang depth,
     // and the capsule-hull flag for client-side hit prediction
@@ -1107,6 +1116,14 @@ static void CG_ConfigStringModified(void) {
     } else if (num == CS_CLIENTNUM2NDPLAYER) {
         cgs.clientNum2ndPlayer = atoi(str);
         cg.duelPlayer2 = cgs.clientNum2ndPlayer;
+    } else if (num == CS_SCORE1STPLAYER) {  // [QL] binary 0x10049ef4-0x10049f87
+        cgs.score1stPlayer = atoi(str);
+    } else if (num == CS_SCORE2NDPLAYER) {
+        cgs.score2ndPlayer = atoi(str);
+    } else if (num == CS_NAME1STPLAYER) {
+        Q_strncpyz(cgs.name1stPlayer, str, sizeof(cgs.name1stPlayer));
+    } else if (num == CS_NAME2NDPLAYER) {
+        Q_strncpyz(cgs.name2ndPlayer, str, sizeof(cgs.name2ndPlayer));
     } else if (num == CS_ROUND_START_TIME) {
         // [QL] binary CG_ConfigStringModified (0x10049980): CS_ROUND_START_TIME
         // (0x296) writes the round start time to DAT_10a403dc. The prior handler
