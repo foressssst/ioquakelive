@@ -1200,6 +1200,8 @@ SV_InitGameVM
 Called for both a full init and a restart
 ==================
 */
+static void SV_LoadGameProgs(void);
+
 static void SV_InitGameVM(qboolean restart) {
     int i;
 
@@ -1233,19 +1235,33 @@ void SV_RestartGameProgs(void) {
     sv_gameLibHandle = NULL;
     memset(sv_vmMainTable, 0, sizeof(sv_vmMainTable));
 
-    // Reload
-    SV_InitGameProgs();
+    // Reload. SV_LoadGameProgs deliberately does not run GAME_INIT, so this
+    // is the only one, and it carries restart = qtrue as it should.
+    //
+    // Calling SV_InitGameProgs here instead ran GAME_INIT twice per
+    // map_restart - once with restart = qfalse from inside it, then again
+    // with qtrue - and the second one undid the first. That is not a cosmetic
+    // duplicate: the game starts a match by setting g_restarted and asking for
+    // a map_restart, and SP_worldspawn reads that cvar to decide between
+    // IN_PROGRESS and PRE_GAME, clearing it as it goes (qagamex86.dll
+    // 0x10066765). The first GAME_INIT therefore consumed the flag and entered
+    // IN_PROGRESS correctly, and the second, finding it cleared, dropped the
+    // level straight back into warmup. Every match ended where it began, which
+    // is a READY UP that never becomes FIGHT.
+    SV_LoadGameProgs();
     SV_InitGameVM(qtrue);
 }
 
 /*
 ===============
-SV_InitGameProgs
+SV_LoadGameProgs
 
-Called on a normal map change, not on a map_restart
+Loads qagame and publishes its vmMain table. Deliberately does NOT call
+SV_InitGameVM: the two callers need a different value for its restart flag,
+and calling it here as well is what made a map_restart run GAME_INIT twice.
 ===============
 */
-void SV_InitGameProgs(void) {
+static void SV_LoadGameProgs(void) {
     cvar_t *var;
     extern int bot_enable;
     typedef void (*dllEntryProc)(void **vmMainTable, gameImport_t *imports, int *apiVersion);
@@ -1292,7 +1308,17 @@ void SV_InitGameProgs(void) {
     dllEntry(sv_vmMainTable, &sv_gameImports, &sv_apiVersion);
 
     Com_Printf("Game DLL loaded, API version %d\n", sv_apiVersion);
+}
 
+/*
+===============
+SV_InitGameProgs
+
+Called on a normal map change, not on a map_restart
+===============
+*/
+void SV_InitGameProgs(void) {
+    SV_LoadGameProgs();
     SV_InitGameVM(qfalse);
 }
 
