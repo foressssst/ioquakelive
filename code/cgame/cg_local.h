@@ -1577,9 +1577,13 @@ typedef struct {
     qboolean roundStarted;
     int roundNum;
 
-    // [QL] duel player configstring indices
+    // [QL] duel player configstrings (0x10a40450-0x10a404af)
     int clientNum1stPlayer;
     int clientNum2ndPlayer;
+    int score1stPlayer;       // CS_SCORE1STPLAYER
+    int score2ndPlayer;       // CS_SCORE2NDPLAYER
+    char name1stPlayer[40];   // CS_NAME1STPLAYER
+    char name2ndPlayer[40];   // CS_NAME2NDPLAYER
 
     // [QL] HUD configstrings
     int teamCountRed;    // CS_TEAMCOUNT_RED  (alive red count for round modes)

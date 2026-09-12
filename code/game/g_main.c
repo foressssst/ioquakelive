@@ -2215,10 +2215,10 @@ void CalculateRanks(void) {
             if (level.numPlayingClients == 0) {
                 trap_SetConfigstring(CS_SCORE1STPLAYER, va("%i", SCORE_NOT_PRESENT));
                 trap_SetConfigstring(CS_CLIENTNUM1STPLAYER, "-1");
-                trap_SetConfigstring(CS_MOST_DAMAGEDEALT_PLYR, "");
+                trap_SetConfigstring(CS_NAME1STPLAYER, "");
                 trap_SetConfigstring(CS_SCORE2NDPLAYER, va("%i", SCORE_NOT_PRESENT));
                 trap_SetConfigstring(CS_CLIENTNUM2NDPLAYER, "-1");
-                trap_SetConfigstring(CS_MOST_ACCURATE_PLYR, "");
+                trap_SetConfigstring(CS_NAME2NDPLAYER, "");
             } else {
                 // determine p1 (lower clientNum) and p2 (higher clientNum)
                 if (level.numPlayingClients >= 2) {
@@ -2237,17 +2237,17 @@ void CalculateRanks(void) {
                 // 1st player slot
                 trap_SetConfigstring(CS_SCORE1STPLAYER, va("%i", level.clients[p1].ps.persistant[PERS_SCORE]));
                 trap_SetConfigstring(CS_CLIENTNUM1STPLAYER, va("%i", p1));
-                trap_SetConfigstring(CS_MOST_ACCURATE_PLYR, level.clients[p1].pers.netname);
+                trap_SetConfigstring(CS_NAME1STPLAYER, level.clients[p1].pers.netname);
 
                 // 2nd player slot
                 if (p2 >= 0) {
                     trap_SetConfigstring(CS_SCORE2NDPLAYER, va("%i", level.clients[p2].ps.persistant[PERS_SCORE]));
                     trap_SetConfigstring(CS_CLIENTNUM2NDPLAYER, va("%i", p2));
-                    trap_SetConfigstring(CS_MOST_DAMAGEDEALT_PLYR, level.clients[p2].pers.netname);
+                    trap_SetConfigstring(CS_NAME2NDPLAYER, level.clients[p2].pers.netname);
                 } else {
                     trap_SetConfigstring(CS_SCORE2NDPLAYER, va("%i", SCORE_NOT_PRESENT));
                     trap_SetConfigstring(CS_CLIENTNUM2NDPLAYER, "-1");
-                    trap_SetConfigstring(CS_MOST_DAMAGEDEALT_PLYR, "");
+                    trap_SetConfigstring(CS_NAME2NDPLAYER, "");
                 }
             }
         }
