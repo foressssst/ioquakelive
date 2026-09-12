@@ -800,8 +800,9 @@ typedef struct {
     int warmup;
     int warmupCount;
     int warmupGametype;     // [QL] gametype override from CS_WARMUP (-1 = use current)
-    int warmupFreezeCount_red;   // [QL] GT_AD per-team count from CS_ROUND_WARMUP
-    int warmupFreezeCount_blue;  // [QL] GT_AD per-team count from CS_ROUND_WARMUP
+    int warmupRound;             // [QL] CS_ROUND_WARMUP "round" (0x10ab8f58), +1 in GT_AD
+    int warmupTurn;              // [QL] CS_ROUND_WARMUP "turn", GT_AD only (0x10ab8f5c)
+    int warmupState;             // [QL] CS_ROUND_WARMUP "state", GT_AD only (0x10ab8f60)
     int lastAutoFireTime;        // [QL] last predicted railgun autofire (cg.time)
 
     //==========================

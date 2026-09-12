@@ -1751,22 +1751,36 @@ static void CG_DrawMapName(rectDef_t *rect, float scale, vec4_t color, int textS
     CG_OwnerDrawText(rect->x, rect->y, scale, color, CG_ConfigString(CS_MESSAGE), 0, 0, textStyle);
 }
 
-static void CG_DrawLevelTimer(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
-    int msec, mins, secs;
+// [QL] cgamex86.dll 0x1002e050: moves rect->x for a centred or right-aligned
+// text, measured in font 0. Other alignments leave it alone.
+static void CG_AlignRectText(rectDef_t *rect, const char *text, float scale, int align) {
+    if (align == ITEM_ALIGN_CENTER) {
+        rect->x -= CG_DrawTextWidth(text, scale, 0, 0) * 0.5;
+    } else if (align == ITEM_ALIGN_RIGHT) {
+        rect->x -= CG_DrawTextWidth(text, scale, 0, 0);
+    }
+}
+
+// [QL] cgamex86.dll 0x10030c00, CG_LEVELTIMER. "m:ss" from CG_GetLevelTimerMsec
+// (0x10029770), which already handles countdown/count-up, overtime and pauses;
+// "0:00" when it reports no timer. Font 0, honours the item alignment.
+static void CG_DrawLevelTimer(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
+    int msec = 0;
+    int mins = 0, tens = 0, ones = 0;
+    int secs;
     const char *s;
 
-    if (cgs.timelimit > 0) {
-        msec = (cgs.timelimit * 60000) - (cg.time - cgs.levelStartTime);
-        if (msec < 0) msec = 0;
-    } else {
-        msec = cg.time - cgs.levelStartTime;
+    if (CG_GetLevelTimerMsec(&msec) == qtrue) {
+        secs = msec / 1000;
+        mins = secs / 60;
+        secs -= mins * 60;
+        tens = secs / 10;
+        ones = secs - tens * 10;
     }
 
-    secs = msec / 1000;
-    mins = secs / 60;
-    secs %= 60;
-    s = va("%d:%02d", mins, secs);
-    CG_OwnerDrawText(rect->x, rect->y, scale, color, s, 0, 0, textStyle);
+    s = va("%i:%i%i", mins, tens, ones);
+    CG_AlignRectText(rect, s, scale, align);
+    CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
 static void CG_DrawPlayerCounts(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
@@ -1880,36 +1894,64 @@ static void CG_DrawRound(rectDef_t *rect, float scale, vec4_t color, int textSty
     }
 }
 
-// [QL] Round timer for CA/FT
-static void CG_DrawRoundTimer(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
-    if (cgs.roundStarted && cgs.roundtimelimit) {
-        int roundTime = cgs.roundStartTime;  // [QL] now cached (was atoi'd inline each frame)
-        if (roundTime) {
-            int elapsed = (cg.time - roundTime) / 1000;
-            int remaining = cgs.roundtimelimit - elapsed;
-            if (remaining >= 0 && remaining <= 30) {
-                CG_OwnerDrawText(rect->x, rect->y, scale, color,
-                    va("%d", remaining), 0, 0, textStyle);
-            }
-        }
+// [QL] cgamex86.dll 0x10033b10, CG_ROUNDTIMER. Round-based modes only
+// (CA/FT/AD/RR): the last 30 seconds of the round, in red, whole seconds
+// truncated, from 30 down to 0 while at least 1 ms is left. Hidden during a
+// warmup and before the round start time arrives. Font 0, item alignment.
+static void CG_DrawRoundTimer(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
+    int remaining;
+    const char *s;
+
+    switch (cgs.gametype) {
+    case GT_CA:
+    case GT_FREEZE:
+    case GT_AD:
+    case GT_RR:
+        break;
+    default:
+        return;
     }
+
+    remaining = cgs.roundtimelimit * 1000 - cg.time + cgs.roundStartTime;
+    if (cgs.roundStartTime <= 0 || remaining < 1 || remaining > 30000 || cg.warmup) {
+        return;
+    }
+
+    s = va("%s%d", S_COLOR_RED, remaining / 1000);
+    CG_AlignRectText(rect, s, scale, align);
+    CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] Overtime display
-static void CG_DrawOvertime(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
-    if (!cg.warmup && cgs.timelimit && cgs.timelimit_overtime) {
-        int elapsed = (cg.time - cgs.levelStartTime) / 1000;
-        int regulationTime = cgs.timelimit * 60;
-        if (elapsed > regulationTime) {
-            int otPeriods = (elapsed - regulationTime) / cgs.timelimit_overtime + 1;
-            if (otPeriods < 2) {
-                CG_OwnerDrawText(rect->x, rect->y, scale, color, "Overtime", 0, 0, textStyle);
-            } else {
-                CG_OwnerDrawText(rect->x, rect->y, scale, color,
-                    va("Overtime x%d", otPeriods), 0, 0, textStyle);
-            }
-        }
+// [QL] cgamex86.dll 0x10030d20, CG_OVERTIME (the ownerdraw case skips it during
+// a warmup, 0x1003b942). Not in the round-based modes; needs a timelimit and
+// g_overtime. "Overtime", or "Overtime xN" past the first period, N from
+// CG_GetOvertimeCount (0x1002a5f0). Font 0, item alignment.
+static void CG_DrawOvertime(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
+    int count;
+    const char *s;
+
+    switch (cgs.gametype) {
+    case GT_CA:
+    case GT_FREEZE:
+    case GT_AD:
+    case GT_RR:
+        return;
+    default:
+        break;
     }
+
+    if (!cgs.timelimit || !cgs.timelimit_overtime) {
+        return;
+    }
+
+    count = CG_GetOvertimeCount();
+    if (count <= 0) {
+        return;
+    }
+
+    s = va("Overtime%s", count > 1 ? va(" x%i", count) : "");
+    CG_AlignRectText(rect, s, scale, align);
+    CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
 // [QL] Local time display (12-hour, right-aligned)
@@ -3765,8 +3807,8 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_CAPFRAGLIMIT:               // 0xb
             CG_DrawCapFragLimit(&rect, scale, color, shader, textStyle);
             break;
-        case CG_LEVELTIMER:                 // 0xc  CG_DrawRoundTimer(level timer)
-            CG_DrawLevelTimer(&rect, scale, color, textStyle);
+        case CG_LEVELTIMER:                 // 0xc  0x10030c00
+            CG_DrawLevelTimer(&rect, scale, color, textStyle, align);
             break;
         case CG_ROUND:                      // 0xd  CG_DrawWarmup (gt CA/FT/AD/RR)
             if (cgs.gametype == GT_CA || cgs.gametype == GT_FREEZE ||
@@ -3774,11 +3816,13 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
                 CG_DrawRound(&rect, scale, color, textStyle);
             }
             break;
-        case CG_ROUNDTIMER:                 // 0xe
-            CG_DrawRoundTimer(&rect, scale, color, textStyle);
+        case CG_ROUNDTIMER:                 // 0xe  0x10033b10
+            CG_DrawRoundTimer(&rect, scale, color, textStyle, align);
             break;
-        case CG_OVERTIME:                   // 0xf
-            CG_DrawOvertime(&rect, scale, color, textStyle);
+        case CG_OVERTIME:                   // 0xf  0x10030d20
+            if (!cg.warmup) {
+                CG_DrawOvertime(&rect, scale, color, textStyle, align);
+            }
             break;
         case CG_LOCALTIME:                  // 0x10
             CG_DrawLocalTime(&rect, scale, color, textStyle);
