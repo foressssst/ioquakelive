@@ -1797,6 +1797,8 @@ extern vmCvar_t cg_screenDamageAlpha;
 extern vmCvar_t cg_screenDamageAlpha_Team;
 extern vmCvar_t cg_spectating;
 extern vmCvar_t cg_specItemTimers;
+extern vmCvar_t cg_specDuelHealthArmor;  // [QL] gates the spectator HUD health/armor bars
+extern vmCvar_t cg_specDuelHealthColor;  // [QL] health-gradient tint for those bars
 extern vmCvar_t cg_speedometer;
 extern vmCvar_t cg_flagPOIs;
 extern vmCvar_t cg_poiMaxWidth;
@@ -1979,6 +1981,7 @@ float CG_Text_Height_Font(const char* text, float scale, int limit, fontInfo_t* 
 void CG_DrawText_DC(float x, float y, float scale, vec4_t color, const char* text, float adjust, int limit, int style, int fontIndex);
 void CG_DrawText(float x, float y, int fontIndex, float scale, vec4_t color, const char *text, float adjust, int maxChars, int textStyle);
 int CG_DrawTextWidth(const char *text, float scale, int limit, int fontIndex);
+int CG_DrawTextHeight(const char *text, float scale, int limit, int fontIndex);
 extern int cg_currentWidescreen;
 float CG_TextWidth_DC(const char* text, float scale, int limit, int fontIndex);
 float CG_TextHeight_DC(const char* text, float scale, int limit, int fontIndex);
