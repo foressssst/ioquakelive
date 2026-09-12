@@ -752,7 +752,7 @@ typedef struct {
 
     // centerprinting
     int centerPrintTime;
-    int centerPrintCharWidth;
+    float centerPrintScale;  // [QL] text scale (0x10ab88c8), not a character width
     int centerPrintY;
     char centerPrint[1024];
     int centerPrintLines;
@@ -1972,7 +1972,7 @@ extern char teamChat2[256];
 
 void CG_AddLagometerFrameInfo(void);
 void CG_AddLagometerSnapshotInfo(snapshot_t* snap);
-void CG_CenterPrint(const char* str, int y, int charWidth);
+void CG_CenterPrint(const char* str, int y, float scale);
 void CG_DrawHead(float x, float y, float w, float h, int clientNum, vec3_t headAngles);
 void CG_DrawActive(stereoFrame_t stereoView);
 void CG_DrawFlagModel(float x, float y, float w, float h, int team, qboolean force2D);
@@ -1992,6 +1992,9 @@ void CG_DrawTextClipped(float *maxX, float x, float y, float scale, const vec4_t
 extern vmCvar_t cg_redTeamName;
 extern vmCvar_t cg_blueTeamName;
 extern vmCvar_t cg_chatHistoryLength;
+extern vmCvar_t cg_drawFragMessages;
+extern vmCvar_t cg_cameraOrbit;
+extern vmCvar_t g_training;
 extern int cg_currentWidescreen;
 float CG_TextWidth_DC(const char* text, float scale, int limit, int fontIndex);
 float CG_TextHeight_DC(const char* text, float scale, int limit, int fontIndex);

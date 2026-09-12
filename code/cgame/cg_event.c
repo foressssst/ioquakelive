@@ -349,19 +349,49 @@ static void CG_Obituary(entityState_t* ent) {
         return;
     }
 
-    // check for kill messages from the current clientNum
-    if (attacker == cg.snap->ps.clientNum) {
-        char* s;
+    // [QL] cgamex86.dll 0x100195d8: the frag message, only with
+    // cg_drawFragMessages. Race and Red Rover: plain. FFA/duel: place and
+    // score, or "Good Job!" in a training warmup. Freeze Tag: thawed/froze.
+    // Team games: telefragging a teammate is just noted; any other teamkill
+    // adds "Watch your fire!". "Teammate" means the victim is on the local
+    // player's team. Centred at y 90 (144 during a warmup), scale 0.3, unless
+    // cg_cameraOrbit is on.
+    if (cg_drawFragMessages.integer && attacker == cg.snap->ps.clientNum) {
+        const char* s;
+        qboolean sameTeam = cgs.gametype >= GT_TEAM &&
+                            cg.snap->ps.persistant[PERS_TEAM] == cgs.clientinfo[target].team;
 
-        if (cgs.gametype < GT_TEAM) {
-            s = va("You fragged %s\n%s place with %i", targetName,
-                   CG_PlaceString(cg.snap->ps.persistant[PERS_RANK] + 1),
-                   cg.snap->ps.persistant[PERS_SCORE]);
+        if (cgs.gametype == GT_RACE) {
+            s = va("You fragged %s.", targetName);
+        } else if (cgs.gametype < GT_TEAM) {
+            if (g_training.integer && cg.warmup) {
+                s = va("You fragged %s!\n\n\n\n\n^4Good Job!", targetName);
+            } else {
+                s = va("You fragged %s\n%s place with %i.", targetName,
+                       CG_PlaceString(cg.snap->ps.persistant[PERS_RANK] + 1),
+                       cg.snap->ps.persistant[PERS_SCORE]);
+            }
+        } else if (cgs.gametype == GT_FREEZE) {
+            if (mod == MOD_THAW) {
+                s = va("You thawed %s.", targetName);
+            } else if (mod == MOD_TELEFRAG) {
+                s = sameTeam ? va("You froze %s, your teammate.", targetName) : va("You froze %s.", targetName);
+            } else {
+                s = sameTeam ? va("You froze %s, your teammate.\n\n^1Watch your fire!^7", targetName)
+                             : va("You froze %s.", targetName);
+            }
+        } else if (cgs.gametype == GT_RR) {
+            s = va("You fragged %s.", targetName);
+        } else if (mod == MOD_TELEFRAG) {
+            s = sameTeam ? va("You fragged %s, your teammate.", targetName) : va("You fragged %s.", targetName);
         } else {
-            s = va("You fragged %s", targetName);
+            s = sameTeam ? va("You fragged %s, your teammate.\n\n^1Watch your fire!^7", targetName)
+                         : va("You fragged %s.", targetName);
         }
-        CG_CenterPrint(s, SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH);
-        // print the text message as well
+
+        if (!cg_cameraOrbit.integer) {
+            CG_CenterPrint(s, cg.warmup ? 144 : 90, 0.3f);
+        }
     }
 
     // check for double client messages
@@ -505,10 +535,11 @@ static void CG_UseItem(centity_t* cent) {
     // print a message if the local player
     if (es->number == cg.snap->ps.clientNum) {
         if (!itemNum) {
-            CG_CenterPrint("No item to use", SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH);
+            // [QL] 0x10019b53: y 144, scale 0.5 (0.25 when retail's gating cvar is 2)
+            CG_CenterPrint("No item to use", 144, 0.5f);
         } else {
             item = BG_FindItemForHoldable(itemNum);
-            CG_CenterPrint(va("Use %s", item->pickup_name), SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH);
+            CG_CenterPrint(va("Use %s", item->pickup_name), 144, 0.5f);
         }
     }
 
@@ -1644,14 +1675,14 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                         if (min > 0) {
                             CG_CenterPrint(va("%s%s%d:%02d.%03d\n%s",
                                 color, cg.race.checkpointDiff < 0 ? "-" : "+",
-                                min, sec, ms, remainStr), 120, SMALLCHAR_WIDTH);
+                                min, sec, ms, remainStr), 320, 0.3f);  // [QL] 0x1001ae4e: y 320, scale 0.3
                         } else {
                             CG_CenterPrint(va("%s%s%d.%03d\n%s",
                                 color, cg.race.checkpointDiff < 0 ? "-" : "+",
-                                sec, ms, remainStr), 120, SMALLCHAR_WIDTH);
+                                sec, ms, remainStr), 320, 0.3f);  // [QL] 0x1001ae4e: y 320, scale 0.3
                         }
                     } else {
-                        CG_CenterPrint(va("Checkpoint %d\n%s", cg.race.checkpointCount, remainStr), 120, SMALLCHAR_WIDTH);
+                        CG_CenterPrint(va("Checkpoint %d\n%s", cg.race.checkpointCount, remainStr), 320, 0.3f);  // [QL] 0x1001ae4e: y 320, scale 0.3
                     }
                 }
             }
@@ -1684,10 +1715,10 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                         else color = "^1";
                         if (min > 0) {
                             CG_CenterPrint(va("%s%s%d:%02d.%03d",
-                                color, diff < 0 ? "-" : "+", min, sec, ms), 120, SMALLCHAR_WIDTH);
+                                color, diff < 0 ? "-" : "+", min, sec, ms), 320, 0.3f);  // [QL] 0x1001ae4e: y 320, scale 0.3
                         } else {
                             CG_CenterPrint(va("%s%s%d.%03d",
-                                color, diff < 0 ? "-" : "+", sec, ms), 120, SMALLCHAR_WIDTH);
+                                color, diff < 0 ? "-" : "+", sec, ms), 320, 0.3f);  // [QL] 0x1001ae4e: y 320, scale 0.3
                         }
                         // update PB only if improved
                         if (cg.race.finishTime < cg.race.bestTime) {
@@ -1745,7 +1776,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             DEBUGNAME("EV_INFECTED");
             // [QL] infection mode - centerprint + announcement sound
             // Server sends with SVF_SINGLECLIENT so only infected player receives this
-            CG_CenterPrint("You have been infected!", 120, SMALLCHAR_WIDTH);
+            CG_CenterPrint("You have been infected!", 120, 0.5f);  // not a retail string; scale as BITE! (0x1000eaf6)
             trap_S_StartLocalSound(cgs.media.infectedSound, CHAN_ANNOUNCER);
             break;
         case EV_NEW_HIGH_SCORE:
