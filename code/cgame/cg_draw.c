@@ -241,7 +241,7 @@ static void CG_PaintText(float x, float y, int fontIndex, float scale, const vec
 
 // Core measure: 640-space width/height for the given text.
 // [QL] cgamex86.dll 0x100082b0: width is the engine box's maxx - minx, height is
-// the engine's line height (extents[4]), both kept as floats until the final
+// the font's ascender (extents[4]), both kept as floats until the final
 // division by the 640-space scale.
 static void CG_MeasureText(const char* text, float scale, int fontIndex, int limit, int* w640, int* h640) {
 	float extents[5];
