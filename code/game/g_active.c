@@ -317,21 +317,21 @@ SpectatorThink
 void SpectatorThink(gentity_t* ent, usercmd_t* ucmd) {
     pmove_t pm;
     gclient_t* client;
+    // [QL] previous upmove per client, for the jump-edge test at the bottom
+    static signed char oldUpmove[MAX_CLIENTS];
+    int clientNum;
+    qboolean jumpPressed;
 
     client = ent->client;
+    clientNum = (int)(client - level.clients);
 
-    if (client->sess.spectatorState != SPECTATOR_FOLLOW || !(client->ps.pm_flags & PMF_FOLLOW)) {
-        if (client->sess.spectatorState == SPECTATOR_FREE) {
-            if (client->noclip) {
-                client->ps.pm_type = PM_NOCLIP;
-            } else {
-                client->ps.pm_type = PM_SPECTATOR;
-            }
-        } else {
-            client->ps.pm_type = PM_FREEZE;
-        }
-
-        client->ps.speed = 400;  // faster than normal
+    // [QL] qagamex86.dll 0x10033e30. Quake 3's version was kept verbatim; retail
+    // differs in the free-fly setup and in having a way back out of follow mode.
+    if (client->sess.spectatorState != SPECTATOR_FOLLOW) {
+        // [QL] 0x10033ec9/0x10033ecc: always PM_SPECTATOR (no noclip or scoreboard
+        // freeze distinction), and 480 units of speed, not Quake 3's 400.
+        client->ps.pm_type = PM_SPECTATOR;
+        client->ps.speed = 480;
 
         // set up for pmove
         memset(&pm, 0, sizeof(pm));
@@ -353,9 +353,32 @@ void SpectatorThink(gentity_t* ent, usercmd_t* ucmd) {
     client->oldbuttons = client->buttons;
     client->buttons = ucmd->buttons;
 
+    jumpPressed = (ucmd->upmove > 0 && oldUpmove[clientNum] <= 0);
+    oldUpmove[clientNum] = ucmd->upmove;
+
     // attack button cycles through spectators
     if ((client->buttons & BUTTON_ATTACK) && !(client->oldbuttons & BUTTON_ATTACK)) {
         Cmd_FollowCycle_f(ent, 1);
+        return;  // [QL] 0x10033f62 returns straight after the cycle
+    }
+
+    // [QL] 0x10033f82..0x10033fb1: a fresh press of button 0x800 drops a follower
+    // back to free-fly (StopFollowing, 0x10040d10) - when they are a real spectator,
+    // or when team spectators are allowed a free camera (g_teamSpecFreeCam 1).
+    //
+    // What bit 0x800 means differs between the two engines, and that is why this
+    // tests upmove rather than the bit:
+    //   - Quake Live's engine (quakelive_steam.exe 0x004b542f) sets it from the jump
+    //     key: `if (in_up.active) cmd->buttons |= 0x800`, in_up being the kbutton_t
+    //     behind "+moveup" (0x004b4d80). So retail's test is "jump freshly pressed".
+    //   - ioquake3's engine sets the same bit as BUTTON_ANY, "any key at all is
+    //     down" (cl_input.c CL_CmdButtons), so testing it literally here would make
+    //     every movement key stop following.
+    // The jump key's press edge, read from upmove, is the same trigger retail uses.
+    if (jumpPressed &&
+        (client->sess.sessionTeam == TEAM_SPECTATOR ||
+         (g_teamSpecFreeCam.integer == 1 && client->sess.spectatorState == SPECTATOR_FOLLOW))) {
+        StopFollowing(ent);
     }
 }
 
@@ -1190,13 +1213,24 @@ SpectatorClientEndFrame
 ==================
 */
 void SpectatorClientEndFrame(gentity_t* ent) {
+    gclient_t* client;
     gclient_t* cl;
 
-    // if we are doing a chase cam or a remote view, grab the latest info
-    if (ent->client->sess.spectatorState == SPECTATOR_FOLLOW) {
-        int clientNum, flags;
+    // [QL] qagamex86.dll 0x10035470. Quake 3's version was kept verbatim here, and it
+    // differs from retail in the one detail the menus depend on: after copying the
+    // followed player's playerState, retail puts pm_type back to PM_SPECTATOR
+    // (0x1003550c). cgame's cg_spectating tracks pm_type == PM_SPECTATOR, and
+    // ui/ingame_about.menu swaps "RETURN to MATCH" for "JOIN MATCH" on that cvar - so
+    // with the followed player's PM_NORMAL copied in, a spectator following somebody
+    // was shown RETURN to MATCH and could not join.
+    client = ent->client;
 
-        clientNum = ent->client->sess.spectatorClient;
+    if (client->sess.spectatorState != SPECTATOR_FOLLOW) {
+        return;
+    }
+
+    {
+        int clientNum = client->sess.spectatorClient;
 
         // team follow1 and team follow2 go to whatever clients are playing
         if (clientNum == -1) {
@@ -1204,31 +1238,53 @@ void SpectatorClientEndFrame(gentity_t* ent) {
         } else if (clientNum == -2) {
             clientNum = level.follow2;
         }
+
         if (clientNum >= 0) {
             cl = &level.clients[clientNum];
-            if (cl->pers.connected == CON_CONNECTED && cl->sess.sessionTeam != TEAM_SPECTATOR) {
-                flags = (cl->ps.eFlags & ~EF_VOTED) | (ent->client->ps.eFlags & EF_VOTED);
-                ent->client->ps = cl->ps;
-                ent->client->ps.pm_flags |= PMF_FOLLOW;
-                ent->client->ps.eFlags = flags;
+            // [QL] 0x100354cd/0x100354d9: the target must be connected and not itself
+            // in PM_SPECTATOR. Retail tests pm_type, not sessionTeam - so a dead Clan
+            // Arena player who is spectating mid-round is skipped too.
+            if (cl->pers.connected == CON_CONNECTED && cl->ps.pm_type != PM_SPECTATOR) {
+                int savedPersistant[MAX_PERSISTANT];
+                int savedPing = client->ps.ping;  // [QL] 0x100354e4, ps+0x1e0
+
+                memcpy(savedPersistant, client->ps.persistant, sizeof(savedPersistant));
+                client->ps = cl->ps;
+                client->ps.pm_type = PM_SPECTATOR;      // 0x1003550c
+                client->ps.pm_flags |= PMF_FOLLOW;      // 0x10035519
+                client->ps.ping = savedPing;            // 0x10035526
+
+                if (client->sess.sessionTeam == TEAM_SPECTATOR) {
+                    // [QL] 0x1003553d: a real spectator keeps the followed player's
+                    // persistant block and is marked as having voted - spectators
+                    // take no part in votes.
+                    client->ps.eFlags |= EF_VOTED;
+                } else {
+                    // [QL] 0x10035557: a player who is on a team but spectating (dead
+                    // in a round) keeps their OWN persistant stats, taking only the
+                    // followed player's PERS_HITS for the hit feedback.
+                    memcpy(client->ps.persistant, savedPersistant, sizeof(savedPersistant));
+                    client->ps.persistant[PERS_HITS] = cl->ps.persistant[PERS_HITS];
+                }
                 return;
             }
         }
 
-        if (ent->client->ps.pm_flags & PMF_FOLLOW) {
-            // drop them to free spectators unless they are dedicated camera followers
-            if (ent->client->sess.spectatorClient >= 0) {
-                ent->client->sess.spectatorState = SPECTATOR_FREE;
+        // [QL] 0x1003558d: the follow target is gone. A player on a team, with team
+        // spectating not in free-cam, and both teams still alive, moves on to the next
+        // player (Cmd_FollowCycle_f, 0x10041130). Anyone else stops following
+        // (StopFollowing, 0x10040d10).
+        if (client->sess.spectatorClient >= 0) {
+            int redAlive, blueAlive;
+
+            Team_LivingTeamCounts(&redAlive, &blueAlive);
+            if (client->sess.sessionTeam != TEAM_SPECTATOR && !g_teamSpecFreeCam.integer &&
+                redAlive > 0 && blueAlive > 0) {
+                Cmd_FollowCycle_f(ent, 1);
+                return;
             }
-
-            ClientBegin(ent->client - level.clients);
+            StopFollowing(ent);
         }
-    }
-
-    if (ent->client->sess.spectatorState == SPECTATOR_SCOREBOARD) {
-        ent->client->ps.pm_flags |= PMF_SCOREBOARD;
-    } else {
-        ent->client->ps.pm_flags &= ~PMF_SCOREBOARD;
     }
 }
 
