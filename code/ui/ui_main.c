@@ -322,7 +322,7 @@ static void UI_MeasureText(const char* text, float scale, int fontIndex, int lim
     int lim = (limit > 0) ? limit : -1;
 
     // Width from the engine box (maxx - minx), height from the engine's line
-    // height (extents[4]), as 0x10003e05-0x10003e3c does.
+    // extents[4], the font's ascender, as 0x10003e05-0x10003e3c does.
     trap_R_Font_TextExtents(text, 0, UI_EngineFont(fontIndex), size, lim, extents);
 
     if (xscale <= 0.0f)
