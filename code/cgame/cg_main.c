@@ -1221,13 +1221,34 @@ void CG_RaceInit(int fullReset) {
 }
 
 // Address: 0x1002a500
-// Returns the local player's name (colour codes kept) for end-of-match display.
-const char* CG_DidLocalPlayerWin(void) {
-    static char name[40];
-    int clientNum = cg.snap->ps.clientNum;
+// Whether the local player holds first place. Never as a spectator. In FFA,
+// duel, race and red rover: rank 0 and not tied. In team games: the player's
+// team is ahead, red also on a tie (retail compares red with >=, blue with >).
+// Retail also copies the player's name into a local buffer it never reads.
+qboolean CG_LocalPlayerLeads(void) {
+    int rank;
+    int team;
 
-    Q_strncpyz(name, cgs.clientinfo[clientNum].name, sizeof(name));
-    return name;
+    if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR) {
+        return qfalse;
+    }
+
+    if (cgs.gametype >= GT_FFA && (cgs.gametype <= GT_RACE || cgs.gametype == GT_RR)) {
+        rank = cg.snap->ps.persistant[PERS_RANK];
+        if (rank & RANK_TIED_FLAG) {
+            return qfalse;
+        }
+        return rank == 0;
+    }
+
+    team = cgs.clientinfo[cg.snap->ps.clientNum].team;
+    if (team == TEAM_RED) {
+        return cgs.scores1 >= cgs.scores2;
+    }
+    if (team == TEAM_BLUE) {
+        return cgs.scores2 > cgs.scores1;
+    }
+    return qfalse;
 }
 
 // Address: 0x1002a5f0

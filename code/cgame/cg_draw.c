@@ -323,6 +323,32 @@ int CG_DrawTextHeight(const char *text, float scale, int limit, int fontIndex) {
 	return h;
 }
 
+// [QL] cgamex86.dll 0x100087c0: text that stops at *maxX (640 space), font 0,
+// no text style. The engine skips the first glyph that would end past the bound
+// and writes back where it stopped; a string that fits leaves *maxX unchanged,
+// which is how the place ownerdraws tell a cut name from a whole one. Retail
+// scales the bound to pixels but, unlike x, never adds the widescreen bias to
+// it; kept as is.
+void CG_DrawTextClipped(float *maxX, float x, float y, float scale, const vec4_t color, const char *text) {
+	float sx = x, sy = y;
+	float clip = 0.0f;
+
+	if (maxX)
+		clip = *maxX * CG_TextXScale();
+
+	CG_TextToScreen(&sx, &sy);
+	trap_R_SetColor(color);
+	trap_R_Font_DrawString((int)sx, (int)sy, text, 0, CG_FontPixelSize(scale), -1, maxX ? &clip : NULL, 0);
+	trap_R_SetColor(NULL);
+
+	if (maxX) {
+		if (cgs.widescreenBias > 0.0f)
+			*maxX = clip / ((cgs.glconfig.vidHeight * 4.0f / 3.0f) / 640.0f);
+		else
+			*maxX = clip / cgs.screenXScale;
+	}
+}
+
 // Scale-based versions - used by ~90 direct call sites in cg_newdraw.c, cg_info.c,
 // etc.  These use the default font (index 0), matching QL's CG_Text_Paint.
 int CG_Text_Width(const char* text, float scale, int limit) {
