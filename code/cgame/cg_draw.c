@@ -1144,14 +1144,14 @@ cg_drawRewards is tested, so hidden medals still advance and play. Retail draws
 32x32 icons with their top at y 42, one per medal, 48 apart and centred on 320,
 or past cg_drawRewardsRowSize one icon with its count at (336, 66).
 [ioquakelive] The layout the user chose on 2026-09-13, for a tidy HUD where no
-message runs into another: one medal centred on 325 as if 48 * its scale units
-wide, its top at y 137, and no count. The scale is on cg_drawRewardsImageScale
-again while the user tunes it (1 is retail's 32 units, default 0.51); the value
-they choose gets baked and the cvar removed.
+message runs into another: one medal and no count. Its size and place are on
+cvars again while the user tunes them, with the first round's names; the values
+they choose get baked and the cvars removed. cg_drawRewardsImageScale is the size
+(1 is retail's 32 units, default 0.51), cg_drawRewardsX centres the medal as if
+48 * that scale units wide (default 325), and cg_drawRewardsY is its top
+(default 137).
 ===================
 */
-#define REWARD_ICON_Y 137.0f
-
 static void CG_DrawReward(void) {
 	vec4_t color;
 	int i, remaining;
@@ -1188,7 +1188,8 @@ static void CG_DrawReward(void) {
 	}
 	scale = cg_drawRewardsImageScale.value;
 	trap_R_SetColor(color);
-	CG_DrawRewardIcon(325.0f - 48.0f * scale / 2.0f, REWARD_ICON_Y, 32.0f * scale, cg.rewardShader[0]);
+	CG_DrawRewardIcon(cg_drawRewardsX.value - 48.0f * scale / 2.0f, cg_drawRewardsY.value, 32.0f * scale,
+					  cg.rewardShader[0]);
 	trap_R_SetColor(NULL);
 }
 
