@@ -810,6 +810,8 @@ typedef struct {
     int itemPickup;
     int itemPickupTime;
     int itemPickupBlendTime;  // the pulse around the crosshair is timed separately
+    int crosshairHitTime;     // [QL] 0x10ab8fb0, set on a hit (0x10043c2e)
+    int crosshairHitType;     // [QL] 0x10ab8fb4, (generic1 >> 6) + 1
 
     int weaponSelectTime;
     int weaponAnimation;
@@ -1663,6 +1665,12 @@ extern vmCvar_t cg_crosshairX;
 extern vmCvar_t cg_crosshairY;
 extern vmCvar_t cg_crosshairSize;
 extern vmCvar_t cg_crosshairHealth;
+extern vmCvar_t cg_crosshairColor;
+extern vmCvar_t cg_crosshairBrightness;
+extern vmCvar_t cg_crosshairPulse;
+extern vmCvar_t cg_crosshairHitStyle;
+extern vmCvar_t cg_crosshairHitColor;
+extern vmCvar_t cg_crosshairHitTime;
 extern vmCvar_t cg_drawStatus;
 extern vmCvar_t cg_draw2D;
 extern vmCvar_t cg_animSpeed;
