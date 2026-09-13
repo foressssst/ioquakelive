@@ -135,6 +135,22 @@ char* Sys_ConsoleInput(void) {
 
 /*
 ==================
+Sys_SetClipboardData
+
+[CNQ3] Puts text on the system clipboard (console mark mode, Ctrl-M then
+Ctrl-C or Enter).
+==================
+*/
+void Sys_SetClipboardData(const char* text) {
+#ifndef DEDICATED
+    SDL_SetClipboardText(text);
+#else
+    (void)text;
+#endif
+}
+
+/*
+==================
 Sys_GetClipboardData
 ==================
 */
