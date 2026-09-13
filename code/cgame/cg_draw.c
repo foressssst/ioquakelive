@@ -1062,10 +1062,27 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame) {
 CG_DrawReward
 ===================
 */
+// [CPMA] medal scale-in: starts at 1.5x and eases to 1x over 300 ms
+#define REWARD_SCALE_TIME 300
+#define REWARD_SCALE_START 1.5f
+
+static float CG_RewardScale(void) {
+	float t = (float)(cg.time - cg.rewardTime);
+	float s;
+
+	if (t >= REWARD_SCALE_TIME) {
+		return 1.0f;
+	}
+	t /= REWARD_SCALE_TIME;
+	s = t * t;
+	return REWARD_SCALE_START + (1.0f - REWARD_SCALE_START) * s;
+}
+
 static void CG_DrawReward(void) {
 	float* color;
 	int i, count;
 	float x, y;
+	float iconSize;
 	char buf[32];
 
 	if (!cg_drawRewards.integer) {
@@ -1091,23 +1108,25 @@ static void CG_DrawReward(void) {
 
 	trap_R_SetColor(color);
 
+	iconSize = (ICON_SIZE - 4) * CG_RewardScale();
+
 	if (cg.rewardCount[0] >= 10) {
-		y = 56;
-		x = 320 - ICON_SIZE / 2;
-		CG_DrawPic(x, y, ICON_SIZE - 4, ICON_SIZE - 4, cg.rewardShader[0]);
+		y = 56 + (ICON_SIZE - 4 - iconSize) / 2;
+		x = 320 - iconSize / 2;
+		CG_DrawPic(x, y, iconSize, iconSize, cg.rewardShader[0]);
 		Com_sprintf(buf, sizeof(buf), "%d", cg.rewardCount[0]);
 		{
 			float tw = CG_Text_Width(buf, 0.22f, 0);
-			CG_Text_Paint((SCREEN_WIDTH - tw) / 2, y + ICON_SIZE + 12, 0.22f, color, buf, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+			CG_Text_Paint((SCREEN_WIDTH - tw) / 2, 56 + ICON_SIZE + 12, 0.22f, color, buf, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
 		}
 	} else {
 		count = cg.rewardCount[0];
 
-		y = 56;
-		x = 320 - count * ICON_SIZE / 2;
+		y = 56 + (ICON_SIZE - 4 - iconSize) / 2;
+		x = 320 - count * iconSize / 2;
 		for (i = 0; i < count; i++) {
-			CG_DrawPic(x, y, ICON_SIZE - 4, ICON_SIZE - 4, cg.rewardShader[0]);
-			x += ICON_SIZE;
+			CG_DrawPic(x, y, iconSize, iconSize, cg.rewardShader[0]);
+			x += iconSize;
 		}
 	}
 	trap_R_SetColor(NULL);
@@ -1472,8 +1491,17 @@ static void CG_DrawCrosshair(void) {
 		return;
 	}
 
-	// set color based on health
-	if (cg_crosshairHealth.integer) {
+	// [CPMA] crosshair hit feedback: override colour for cg_crosshairHitTime ms
+	if (cg_crosshairHitStyle.integer && cg.crosshairHitTime &&
+		cg.time - cg.crosshairHitTime < (int)cg_crosshairHitTime.value) {
+		vec4_t hitColor;
+		int ci = cg_crosshairHitColor.integer & 7;
+		hitColor[0] = g_color_table[ci][0];
+		hitColor[1] = g_color_table[ci][1];
+		hitColor[2] = g_color_table[ci][2];
+		hitColor[3] = 1.0f;
+		trap_R_SetColor(hitColor);
+	} else if (cg_crosshairHealth.integer) {
 		vec4_t hcolor;
 
 		CG_ColorForHealth(hcolor);

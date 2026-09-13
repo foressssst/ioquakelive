@@ -3057,11 +3057,16 @@ static const float *CG_ObitTeamColor(int team) {
     }
 }
 
+// [CPMA] slide-in time in ms and distance in virtual pixels
+#define OBIT_SLIDE_TIME 200
+#define OBIT_SLIDE_DIST 200.0f
+
 static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
     static vec4_t obitColor;
     int i;
     int y, textH, attackerW, remaining;
     float x, iconY, iconW, iconH;
+    float slideX;
     const float *team;
 
     // 0x1002e9d7: an expired slot shifts the whole array up from slot 0 and
@@ -3083,11 +3088,20 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
 
         remaining = 2000 - (cg.time - cg.obituaries[i].time);
         if (!cg.obituaries[i].time || remaining <= 0) {
-            // retail would draw through a NULL colour here; the pass above
-            // makes it unreachable
             continue;
         }
         obitColor[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
+
+        // [CPMA] slide in from the right
+        {
+            float elapsed = (float)(cg.time - cg.obituaries[i].time);
+            if (elapsed < OBIT_SLIDE_TIME) {
+                float t = elapsed / OBIT_SLIDE_TIME;
+                slideX = OBIT_SLIDE_DIST * (1.0f - t * t);
+            } else {
+                slideX = 0;
+            }
+        }
 
         textH = CG_DrawTextHeight(cg.obituaries[i].victimName, scale, 0, 0);
         attackerW = 0;
@@ -3095,14 +3109,14 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
         if (cg.obituaries[i].hasAttacker == 1) {
             team = CG_ObitTeamColor(cg.obituaries[i].attackerTeam);
             VectorCopy(team, obitColor);
-            CG_DrawText(rect->x, (float)y, 0, scale, obitColor, cg.obituaries[i].attackerName, 0, 0, 0);
+            CG_DrawText(rect->x + slideX, (float)y, 0, scale, obitColor, cg.obituaries[i].attackerName, 0, 0, 0);
             attackerW = CG_DrawTextWidth(cg.obituaries[i].attackerName, scale, 0, 0);
         }
 
         if (cg.obituaries[i].weaponIcon) {
             obitColor[0] = obitColor[1] = obitColor[2] = 1.0f;
             trap_R_SetColor(obitColor);
-            x = (float)attackerW + rect->x + (float)(textH / 2);
+            x = (float)attackerW + rect->x + slideX + (float)(textH / 2);
             iconY = (float)(y - textH);
             iconW = iconH = (float)textH;
             CG_AdjustFrom640(&x, &iconY, &iconW, &iconH);
@@ -3112,7 +3126,7 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
 
         team = CG_ObitTeamColor(cg.obituaries[i].victimTeam);
         VectorCopy(team, obitColor);
-        CG_DrawText((float)attackerW + rect->x + (float)(textH * 2), (float)y, 0, scale, obitColor,
+        CG_DrawText((float)attackerW + rect->x + slideX + (float)(textH * 2), (float)y, 0, scale, obitColor,
                     cg.obituaries[i].victimName, 0, 0, 0);
 
         y += textH + 2;
