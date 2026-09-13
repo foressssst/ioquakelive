@@ -317,12 +317,15 @@ void Cmd_Echo_f(void) {
 typedef struct cmd_function_s {
     struct cmd_function_s* next;
     char* name;
+    char* help;  // [CNQ3] help text, first line = short description
     xcommand_t function;
     completionFunc_t complete;
 } cmd_function_t;
 
 static int cmd_argc;
 static char* cmd_argv[MAX_STRING_TOKENS];                        // points into cmd_tokenized
+static int cmd_argoffsets[MAX_STRING_TOKENS];                    // [CNQ3] where each argument starts in the input
+static qboolean cmd_quoted[MAX_STRING_TOKENS];                   // [CNQ3] the argument was quoted
 static char cmd_tokenized[BIG_INFO_STRING + MAX_STRING_TOKENS];  // will have 0 bytes inserted
 static char cmd_cmd[BIG_INFO_STRING];                            // the original command we received (no token processing)
 
@@ -433,6 +436,41 @@ char* Cmd_Cmd(void) {
 }
 
 /*
+============
+Cmd_ArgOffset / Cmd_ArgIndexFromOffset / Cmd_ArgQuoted
+
+[CNQ3] Used by the console to move the cursor by arguments.
+============
+*/
+int Cmd_ArgOffset(int arg) {
+    if ((unsigned)arg >= cmd_argc) {
+        return 0;
+    }
+    return cmd_argoffsets[arg];
+}
+
+int Cmd_ArgIndexFromOffset(int offset) {
+    int i;
+
+    for (i = 0; i < cmd_argc; i++) {
+        const int start = cmd_argoffsets[i];
+        const int end = start + (int)strlen(cmd_argv[i]);
+        if (offset >= start && offset <= end) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+qboolean Cmd_ArgQuoted(int arg) {
+    if ((unsigned)arg >= cmd_argc) {
+        return qfalse;
+    }
+    return cmd_quoted[arg];
+}
+
+/*
    Replace command separators with space to prevent interpretation
    This is a hack to protect buggy qvms
    https://bugzilla.icculus.org/show_bug.cgi?id=3593
@@ -525,6 +563,8 @@ static void Cmd_TokenizeString2(const char* text_in, qboolean ignoreQuotes) {
         // NOTE TTimo this doesn't handle \" escaping
         if (!ignoreQuotes && *text == '"') {
             cmd_argv[cmd_argc] = textOut;
+            cmd_argoffsets[cmd_argc] = (int)(text + 1 - text_in);  // [CNQ3] past the opening quote
+            cmd_quoted[cmd_argc] = qtrue;
             cmd_argc++;
             text++;
             while (*text && *text != '"') {
@@ -540,6 +580,8 @@ static void Cmd_TokenizeString2(const char* text_in, qboolean ignoreQuotes) {
 
         // regular token
         cmd_argv[cmd_argc] = textOut;
+        cmd_argoffsets[cmd_argc] = (int)(text - text_in);  // [CNQ3]
+        cmd_quoted[cmd_argc] = qfalse;
         cmd_argc++;
 
         // skip until whitespace, quote, or command
@@ -620,6 +662,7 @@ void Cmd_AddCommand(const char* cmd_name, xcommand_t function) {
     cmd->name = CopyString(cmd_name);
     cmd->function = function;
     cmd->complete = NULL;
+    cmd->help = NULL;
     cmd->next = cmd_functions;
     cmd_functions = cmd;
 }
@@ -642,6 +685,48 @@ void Cmd_SetCommandCompletionFunc(const char* command, completionFunc_t complete
 
 /*
 ============
+Cmd_SetHelp / Cmd_GetHelp / Cmd_EnumHelp
+
+[CNQ3] Help text of a command, see qcommon.h.
+============
+*/
+void Cmd_SetHelp(const char* cmd_name, const char* help) {
+    cmd_function_t* cmd = Cmd_FindCommand(cmd_name);
+
+    if (!cmd || !help || !help[0]) {
+        return;
+    }
+
+    if (cmd->help) {
+        Z_Free(cmd->help);
+    }
+    cmd->help = CopyString(help);
+}
+
+qboolean Cmd_GetHelp(const char* cmd_name, const char** name, const char** help, qboolean* fromModule) {
+    cmd_function_t* cmd = Cmd_FindCommand(cmd_name);
+
+    *name = cmd ? cmd->name : NULL;
+    *help = cmd ? cmd->help : NULL;
+    // commands without a function are forwarded to cgame, game or ui
+    *fromModule = (cmd && !cmd->function) ? qtrue : qfalse;
+    return cmd != NULL;
+}
+
+void Cmd_EnumHelp(helpSearchCallback_t callback, const char* pattern) {
+    cmd_function_t* cmd;
+
+    if (!pattern || !pattern[0]) {
+        return;
+    }
+
+    for (cmd = cmd_functions; cmd; cmd = cmd->next) {
+        callback(cmd->name, cmd->help, pattern, qfalse);
+    }
+}
+
+/*
+============
 Cmd_RemoveCommand
 ============
 */
@@ -658,6 +743,9 @@ void Cmd_RemoveCommand(const char* cmd_name) {
         if (!strcmp(cmd_name, cmd->name)) {
             *back = cmd->next;
             Z_Free(cmd->name);
+            if (cmd->help) {
+                Z_Free(cmd->help);
+            }
             Z_Free(cmd);
             return;
         }
@@ -813,7 +901,12 @@ void Cmd_List_f(void) {
         if (match && !Com_Filter(match, cmd->name, qfalse))
             continue;
 
-        Com_Printf("%s\n", cmd->name);
+        if (Cvar_VariableIntegerValue("con_style") == 1) {
+            // [CNQ3] 'h' marks the commands with detailed help
+            Com_Printf(" %c  " S_COLOR_CMD "%s\n", (cmd->help && strchr(cmd->help, '\n')) ? 'h' : ' ', cmd->name);
+        } else {
+            Com_Printf("%s\n", cmd->name);
+        }
         i++;
     }
     Com_Printf("%i commands\n", i);
@@ -832,6 +925,83 @@ void Cmd_CompleteCfgName(char* args, int argNum) {
 
 /*
 ============
+Cmd_Help_f
+
+[CNQ3] help / man <cvar|command>
+============
+*/
+static void Cmd_Help_f(void) {
+    if (Cmd_Argc() != 2) {
+        Com_Printf("usage: %s <cvar|command>\n", Cmd_Argv(0));
+        return;
+    }
+
+    if (!Q_stricmp(Cmd_Argv(0), "man") && !Q_stricmp(Cmd_Argv(1), "woman")) {
+        Com_Printf("yeah... no\n");
+        return;
+    }
+
+    Com_PrintHelp(Cmd_Argv(1), Com_Printf, qtrue, qtrue, qtrue);
+}
+
+/*
+============
+Cmd_SearchHelp_f
+
+[CNQ3] searchhelp <text>: the cvars and commands whose name or help contain it
+============
+*/
+static void Cmd_PrintSearchResult(const char* name, const char* help, const char* pattern, qboolean isCvar) {
+    const char* const color = isCvar ? S_COLOR_CVAR : S_COLOR_CMD;
+    char desc[256];
+    int len;
+
+    if (!Q_stristr(name, pattern) && !(help && Q_stristr(help, pattern))) {
+        return;
+    }
+
+    if (!help || !help[0]) {
+        Com_Printf("    %s%s\n", color, name);
+        return;
+    }
+
+    len = (int)strcspn(help, "\n");
+    if (len >= (int)sizeof(desc)) {
+        len = sizeof(desc) - 1;
+    }
+    Com_Memcpy(desc, help, len);
+    desc[len] = '\0';
+    Com_Printf("    %s%s" S_COLOR_WHITE " - " S_COLOR_HELP "%s\n", color, name, desc);
+}
+
+static void Cmd_SearchHelp_f(void) {
+    if (Cmd_Argc() != 2) {
+        Com_Printf("usage: %s <text>\n", Cmd_Argv(0));
+        return;
+    }
+
+    Cmd_EnumHelp(Cmd_PrintSearchResult, Cmd_Argv(1));
+    Cvar_EnumHelp(Cmd_PrintSearchResult, Cmd_Argv(1));
+}
+
+/*
+==================
+Cmd_CompleteHelp
+==================
+*/
+static void Cmd_CompleteHelp(char* args, int argNum) {
+    if (argNum == 2) {
+        // skip "<cmd> "
+        char* p = Com_SkipTokens(args, 1, " ");
+
+        if (p > args) {
+            Field_CompleteCommand(p, qtrue, qtrue);
+        }
+    }
+}
+
+/*
+============
 Cmd_Init
 ============
 */
@@ -844,4 +1014,30 @@ void Cmd_Init(void) {
     Cmd_SetCommandCompletionFunc("vstr", Cvar_CompleteCvarName);
     Cmd_AddCommand("echo", Cmd_Echo_f);
     Cmd_AddCommand("wait", Cmd_Wait_f);
+
+    // [CNQ3] console help
+    Cmd_AddCommand("help", Cmd_Help_f);
+    Cmd_SetCommandCompletionFunc("help", Cmd_CompleteHelp);
+    Cmd_AddCommand("man", Cmd_Help_f);
+    Cmd_SetCommandCompletionFunc("man", Cmd_CompleteHelp);
+    Cmd_AddCommand("searchhelp", Cmd_SearchHelp_f);
+
+    Cmd_SetHelp("cmdlist", "lists and filters all commands\n"
+                           "The optional argument filters the list, '*' matches 0 or more characters.\n"
+                           "Example: " S_COLOR_CMD "cmdlist " S_COLOR_VAL "*list" S_COLOR_HELP " lists the commands containing 'list'");
+    Cmd_SetHelp("listcmds", "lists and filters all commands\n"
+                            "Same as " S_COLOR_CMD "cmdlist" S_COLOR_HELP ".");
+    Cmd_SetHelp("exec", "executes all the commands in a config file\n"
+                        "Usage: " S_COLOR_CMD "exec " S_COLOR_VAL "<filename>");
+    Cmd_SetHelp("vstr", "executes the value of a cvar as commands\n"
+                        "Usage: " S_COLOR_CMD "vstr " S_COLOR_CVAR "<cvar>");
+    Cmd_SetHelp("echo", "prints the arguments to the console");
+    Cmd_SetHelp("wait", "delays the following commands by N frames\n"
+                        "Usage: " S_COLOR_CMD "wait " S_COLOR_VAL "[frames]" S_COLOR_HELP ", 1 frame when omitted");
+    Cmd_SetHelp("help", "displays the help of a cvar or command\n"
+                        "Usage: " S_COLOR_CMD "help " S_COLOR_VAL "<cvar|command>");
+    Cmd_SetHelp("man", "displays the help of a cvar or command\n"
+                       "Usage: " S_COLOR_CMD "man " S_COLOR_VAL "<cvar|command>");
+    Cmd_SetHelp("searchhelp", "lists the cvars and commands whose name or help contain a text\n"
+                              "Usage: " S_COLOR_CMD "searchhelp " S_COLOR_VAL "<text>");
 }

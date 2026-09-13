@@ -471,13 +471,59 @@ void Field_KeyDownEvent(field_t* edit, int key) {
             break;
 
         case K_RIGHTARROW:
-            if (edit->cursor < len) {
+            if (Con_GetStyle() == 1 && keys[K_CTRL].down) {
+                // [CNQ3] ctrl-right: start of the next word
+                const char* c = edit->buffer + edit->cursor;
+                if (*c != ' ') {
+                    while (*c != '\0' && *c != ' ')
+                        c++;
+                }
+                while (*c != '\0' && *c == ' ')
+                    c++;
+                edit->cursor = (int)(c - edit->buffer);
+            } else if (Con_GetStyle() == 1 && keys[K_SHIFT].down) {
+                // [CNQ3] shift-right: start of the next argument
+                int currentArg, lastArg;
+                Cmd_TokenizeString(edit->buffer);
+                currentArg = Cmd_ArgIndexFromOffset(edit->cursor);
+                lastArg = Cmd_Argc() - 1;
+                if (currentArg == lastArg) {
+                    edit->cursor = len;
+                } else if (currentArg >= 0 && currentArg < lastArg) {
+                    edit->cursor = Cmd_ArgOffset(currentArg + 1);
+                }
+            } else if (edit->cursor < len) {
                 edit->cursor++;
             }
             break;
 
         case K_LEFTARROW:
-            if (edit->cursor > 0) {
+            if (Con_GetStyle() == 1 && keys[K_CTRL].down) {
+                // [CNQ3] ctrl-left: start of the previous word
+                const char* const s = edit->buffer;
+                const char* c = s + edit->cursor;
+                if (c > s && c[-1] == ' ') {
+                    while (c > s && c[-1] == ' ')
+                        c--;
+                }
+                while (c > s && c[-1] != ' ')
+                    c--;
+                edit->cursor = (int)(c - edit->buffer);
+            } else if (Con_GetStyle() == 1 && keys[K_SHIFT].down) {
+                // [CNQ3] shift-left: start of this argument, or of the previous one
+                int currentArg, currentArgOff;
+                Cmd_TokenizeString(edit->buffer);
+                currentArg = Cmd_ArgIndexFromOffset(edit->cursor);
+                if (currentArg == -1) {  // past the last argument?
+                    currentArg = Cmd_Argc() - 1;
+                }
+                currentArgOff = Cmd_ArgOffset(currentArg);
+                if (currentArgOff < edit->cursor) {
+                    edit->cursor = currentArgOff;
+                } else if (currentArg > 0) {
+                    edit->cursor = Cmd_ArgOffset(currentArg - 1);
+                }
+            } else if (edit->cursor > 0) {
                 edit->cursor--;
             }
             break;
@@ -599,6 +645,16 @@ Handles history and console scrollback
 ====================
 */
 void Console_Key(int key) {
+    // [CNQ3] mark mode gets the keys first
+    if (Con_HandleMarkMode(keys[K_CTRL].down, keys[K_SHIFT].down, key)) {
+        return;
+    }
+
+    // [CNQ3] any key but tab ends the completion cycle
+    if (key != K_TAB) {
+        Field_ResetCompletionCycle();
+    }
+
     // ctrl-L clears screen
     if (key == 'l' && keys[K_CTRL].down) {
         Cbuf_AddText("clear\n");
@@ -648,7 +704,10 @@ void Console_Key(int key) {
 
         g_consoleField.widthInChars = g_console_field_width;
 
-        CL_SaveConsoleHistory();
+        // [CNQ3] con_history 0 doesn't write consolehistory.txt
+        if (!con_history || con_history->integer) {
+            CL_SaveConsoleHistory();
+        }
 
         if (clc.state == CA_DISCONNECTED) {
             SCR_UpdateScreen();  // force an update, because the command
@@ -665,7 +724,8 @@ void Console_Key(int key) {
 
     // command history (ctrl-p ctrl-n for unix style)
 
-    if ((key == K_MWHEELUP && keys[K_SHIFT].down) || (key == K_UPARROW) || (key == K_KP_UPARROW) ||
+    // [CNQ3] con_style 1 uses shift-wheel for fast scrolling
+    if ((key == K_MWHEELUP && keys[K_SHIFT].down && Con_GetStyle() == 0) || (key == K_UPARROW) || (key == K_KP_UPARROW) ||
         ((tolower(key) == 'p') && keys[K_CTRL].down)) {
         if (nextHistoryLine - historyLine < COMMAND_HISTORY && historyLine > 0) {
             historyLine--;
@@ -674,7 +734,7 @@ void Console_Key(int key) {
         return;
     }
 
-    if ((key == K_MWHEELDOWN && keys[K_SHIFT].down) || (key == K_DOWNARROW) || (key == K_KP_DOWNARROW) ||
+    if ((key == K_MWHEELDOWN && keys[K_SHIFT].down && Con_GetStyle() == 0) || (key == K_DOWNARROW) || (key == K_KP_DOWNARROW) ||
         ((tolower(key) == 'n') && keys[K_CTRL].down)) {
         historyLine++;
         if (historyLine >= nextHistoryLine) {
@@ -685,6 +745,35 @@ void Console_Key(int key) {
         }
         g_consoleField = historyEditLines[historyLine % COMMAND_HISTORY];
         return;
+    }
+
+    // [CNQ3] con_style 1 scrolling: 2 lines per wheel step, 6 with shift or
+    // page up/down, a whole page with shift-page up/down
+    if (Con_GetStyle() == 1) {
+        if (key == K_MWHEELUP) {
+            Con_ScrollLines(keys[K_SHIFT].down ? -6 : -2);
+            return;
+        }
+        if (key == K_MWHEELDOWN) {
+            Con_ScrollLines(keys[K_SHIFT].down ? 6 : 2);
+            return;
+        }
+        if (key == K_PGUP) {
+            if (keys[K_SHIFT].down) {
+                Con_ScrollPages(-1);
+            } else {
+                Con_ScrollLines(-6);
+            }
+            return;
+        }
+        if (key == K_PGDN) {
+            if (keys[K_SHIFT].down) {
+                Con_ScrollPages(1);
+            } else {
+                Con_ScrollLines(6);
+            }
+            return;
+        }
     }
 
     // console scrolling
@@ -725,6 +814,62 @@ void Console_Key(int key) {
     // ctrl-end = bottom of console
     if (key == K_END && keys[K_CTRL].down) {
         Con_Bottom();
+        return;
+    }
+
+    // [CNQ3] ctrl-i inserts the value of the cvar, or the command of the bind, being typed
+    if (keys[K_CTRL].down && (key == 'i' || key == 'I')) {
+        const char* name;
+
+        Cmd_TokenizeString(g_consoleField.buffer);
+        name = Cmd_Argv(0);
+        if (name[0] == '\\' || name[0] == '/') {
+            name++;
+        }
+        if (name[0]) {
+            const cvar_t* const cvar = Cvar_Find(name);
+            if (cvar) {
+                Field_InsertCVarValue(&g_consoleField, cvar, qfalse);
+            } else if (Cmd_Argc() >= 2 && !Q_stricmp(name, "bind")) {
+                char keyName[MAX_TOKEN_CHARS];
+                const int keynum = Key_StringToKeynum(Cmd_Argv(1));
+                if (keynum >= 0) {
+                    Q_strncpyz(keyName, Cmd_Argv(1), sizeof(keyName));
+                    Field_InsertBindCommand(&g_consoleField, keyName, Key_GetBinding(keynum));
+                }
+            }
+        }
+        return;
+    }
+
+    // [CNQ3] ctrl-d inserts the default value of the cvar being typed
+    if (keys[K_CTRL].down && (key == 'd' || key == 'D')) {
+        const char* name;
+
+        Cmd_TokenizeString(g_consoleField.buffer);
+        name = Cmd_Argv(0);
+        if (name[0] == '\\' || name[0] == '/') {
+            name++;
+        }
+        if (name[0]) {
+            const cvar_t* const cvar = Cvar_Find(name);
+            if (cvar) {
+                Field_InsertCVarValue(&g_consoleField, cvar, qtrue);
+            }
+        }
+        return;
+    }
+
+    // [CNQ3] ctrl-f begins a new console search
+    if (keys[K_CTRL].down && (key == 'f' || key == 'F')) {
+        Q_strncpyz(g_consoleField.buffer, "\\searchconsole ", sizeof(g_consoleField.buffer));
+        g_consoleField.cursor = strlen(g_consoleField.buffer);
+        return;
+    }
+
+    // [CNQ3] (shift-)F3 finds the next match going up (or down)
+    if (key == K_F3) {
+        Con_ContinueSearch(keys[K_SHIFT].down ? qfalse : qtrue);
         return;
     }
 
@@ -1339,7 +1484,10 @@ void CL_CharEvent(int key) {
 
     // distribute the key down event to the appropriate handler
     if (Key_GetCatcher() & KEYCATCH_CONSOLE) {
-        Field_CharEvent(&g_consoleField, key);
+        // [CNQ3] typing is blocked in mark mode
+        if (!Con_SwallowCharEvent(key)) {
+            Field_CharEvent(&g_consoleField, key);
+        }
     } else if (Key_GetCatcher() & KEYCATCH_UI) {
         VM_Call(uivm, UI_KEY_EVENT, key | K_CHAR_FLAG, qtrue);
     } else if (Key_GetCatcher() & KEYCATCH_MESSAGE) {

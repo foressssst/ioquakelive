@@ -1264,6 +1264,149 @@ void Cvar_SetDescription(cvar_t* var, const char* var_description) {
 
 /*
 =====================
+Cvar_Find
+
+[CNQ3] Read-only lookup for the help and console code outside this file.
+=====================
+*/
+const cvar_t* Cvar_Find(const char* var_name) {
+    return Cvar_FindVar(var_name);
+}
+
+/*
+=====================
+Cvar_SetHelp / Cvar_GetHelp / Cvar_EnumHelp
+
+[CNQ3] A cvar's help text is its description: the first line is the short
+description shown in completion lists, the rest are the details printed by
+/help and by the console help panel.
+=====================
+*/
+void Cvar_SetHelp(const char* var_name, const char* help) {
+    cvar_t* var = Cvar_FindVar(var_name);
+
+    if (var) {
+        Cvar_SetDescription(var, help);
+    }
+}
+
+qboolean Cvar_GetHelp(const char* var_name, const char** help) {
+    cvar_t* var = Cvar_FindVar(var_name);
+
+    *help = var ? var->description : NULL;
+    return var != NULL;
+}
+
+void Cvar_EnumHelp(helpSearchCallback_t callback, const char* pattern) {
+    cvar_t* var;
+
+    if (!pattern || !pattern[0]) {
+        return;
+    }
+
+    for (var = cvar_vars; var; var = var->next) {
+        if (var->name) {
+            callback(var->name, var->description, pattern, qtrue);
+        }
+    }
+}
+
+/*
+=====================
+Cvar_PrintFirstHelpLine
+
+[CNQ3] "name <range> (default: value)". Cvars in this tree have no types, so
+the range is the one set with Cvar_CheckRange, if any.
+=====================
+*/
+void Cvar_PrintFirstHelpLine(const cvar_t* var, printf_t print) {
+    print(S_COLOR_CVAR "%s" S_COLOR_WHITE " <", var->name);
+
+    if (!var->validate) {
+        print("value");
+    } else if (var->integral) {
+        const int minV = (int)var->min;
+        const int maxV = (int)var->max;
+        const int diff = maxV - minV;
+
+        if (diff >= 0 && diff <= 3) {
+            int i;
+
+            for (i = 0; i <= diff; i++) {
+                print("%s" S_COLOR_VAL "%d", i ? S_COLOR_WHITE "|" : "", minV + i);
+            }
+        } else {
+            print(S_COLOR_VAL "%d" S_COLOR_WHITE " to " S_COLOR_VAL "%d", minV, maxV);
+        }
+    } else {
+        print(S_COLOR_VAL "%g" S_COLOR_WHITE " to " S_COLOR_VAL "%g", var->min, var->max);
+    }
+
+    print(S_COLOR_WHITE "> (default: \"" S_COLOR_VAL "%s" S_COLOR_WHITE "\")\n", var->resetString);
+}
+
+/*
+=====================
+Cvar_PrintFlags
+
+[CNQ3] "Attributes: Archived, Cheat-protected, ..." with this tree's flags,
+Quake Live's included.
+=====================
+*/
+void Cvar_PrintFlags(const cvar_t* var, printf_t print) {
+    static const struct {
+        int flag;
+        const char* name;
+    } names[] = {
+        {CVAR_ARCHIVE, "Archived"},
+        {CVAR_USERINFO, "User Info"},
+        {CVAR_SERVERINFO, "Server Info"},
+        {CVAR_SYSTEMINFO, "System Info"},
+        {CVAR_INIT, "Init"},
+        {CVAR_LATCH, "Latched"},
+        {CVAR_ROM, "Read-only"},
+        {CVAR_USER_CREATED, "User-created"},
+        {CVAR_TEMP, "Temporary"},
+        {CVAR_CHEAT, "Cheat-protected"},
+        {CVAR_NORESTART, "No Reset"},
+        {CVAR_REPLICATE, "Replicated"},
+        {CVAR_VM_CREATED, "Game module"},
+        {CVAR_PROTECTED, "Protected"},
+        {CVAR_USERSAVE, "User-saved"},
+        {CVAR_GAMERULE, "Game rule"},
+    };
+    int i;
+    int count = 0;
+    int printed = 0;
+
+    for (i = 0; i < (int)ARRAY_LEN(names); i++) {
+        if (var->flags & names[i].flag) {
+            count++;
+        }
+    }
+
+    print(count != 1 ? "Attributes: " : "Attribute: ");
+
+    for (i = 0; i < (int)ARRAY_LEN(names); i++) {
+        if (!(var->flags & names[i].flag)) {
+            continue;
+        }
+        if (printed) {
+            print(", ");
+        }
+        print("%s", names[i].name);
+        printed++;
+    }
+
+    if (!printed) {
+        print("none");
+    }
+
+    print("\n");
+}
+
+/*
+=====================
 Cvar_Register
 
 basically a slightly modified Cvar_Get for the interpreted modules
@@ -1419,6 +1562,109 @@ static void Cvar_Clear_f(void) {
 
 /*
 ============
+Cvar_Op_f
+
+[CNQ3] cvar_add / cvar_mul <cvar> <number>: like cvarAdd and cvarMult, but the
+result stays within the cvar's range and integer cvars stay integers.
+============
+*/
+static void Cvar_Op_f(void) {
+    const qboolean multiply = !Q_stricmp(Cmd_Argv(0), "cvar_mul") ? qtrue : qfalse;
+    cvar_t* var;
+    float operand;
+    float result;
+
+    if (Cmd_Argc() != 3) {
+        Com_Printf("usage: %s <cvar> <number>\n", Cmd_Argv(0));
+        return;
+    }
+
+    var = Cvar_FindVar(Cmd_Argv(1));
+    if (!var) {
+        Com_Printf("%s: variable '%s' not found\n", Cmd_Argv(0), Cmd_Argv(1));
+        return;
+    }
+
+    if (sscanf(Cmd_Argv(2), "%f", &operand) != 1 || operand != operand ||
+        operand > 1.0e30f || operand < -1.0e30f) {
+        Com_Printf("%s: '%s' isn't a finite number\n", Cmd_Argv(0), Cmd_Argv(2));
+        return;
+    }
+
+    if (var->validate && var->integral && operand != (float)(int)operand) {
+        Com_Printf("%s: " S_COLOR_CVAR "%s" S_COLOR_WHITE " only takes whole numbers\n", Cmd_Argv(0), var->name);
+        return;
+    }
+
+    result = multiply ? var->value * operand : var->value + operand;
+    if (var->validate) {
+        if (result < var->min) {
+            result = var->min;
+        } else if (result > var->max) {
+            result = var->max;
+        }
+    }
+
+    if (var->validate && var->integral) {
+        Cvar_Set2(var->name, va("%d", (int)result), qfalse);
+    } else {
+        Cvar_Set2(var->name, va("%g", result), qfalse);
+    }
+}
+
+/*
+============
+Cvar_SetEmpty_f
+
+[CNQ3] setempty <cvar>
+============
+*/
+static void Cvar_SetEmpty_f(void) {
+    if (Cmd_Argc() != 2) {
+        Com_Printf("usage: %s <cvar>\n", Cmd_Argv(0));
+        return;
+    }
+
+    if (Cvar_FindVar(Cmd_Argv(1))) {
+        Cvar_Set2(Cmd_Argv(1), "", qfalse);
+    }
+}
+
+/*
+============
+Cvar_Trim_f
+
+[CNQ3] cvar_trim [-f]: removes every user-created cvar. Unless forced it only
+runs with a local server, when all the modules have registered their cvars.
+============
+*/
+static void Cvar_Trim_f(void) {
+    cvar_t* var;
+    int count = 0;
+
+    if (!(Cmd_Argc() == 2 && !Q_stricmp(Cmd_Argv(1), "-f")) &&
+        !(com_cl_running && com_cl_running->integer && com_sv_running && com_sv_running->integer)) {
+        Com_Printf("You're not running a listen server, so not all subsystems/VMs are loaded.\n");
+        Com_Printf("This means you'd remove cvars that are probably best kept around.\n");
+        Com_Printf("If you don't care, you can force the call by running '/%s -f'.\n", Cmd_Argv(0));
+        return;
+    }
+
+    var = cvar_vars;
+    while (var) {
+        if (var->flags & CVAR_USER_CREATED) {
+            var = Cvar_Unset(var);
+            count++;
+            continue;
+        }
+        var = var->next;
+    }
+
+    Com_Printf("%d user-created cvar%s removed\n", count, count == 1 ? "" : "s");
+}
+
+/*
+============
 Cvar_Init
 
 Reads in all archived cvars
@@ -1447,4 +1693,48 @@ void Cvar_Init(void) {
     Cmd_AddCommand("cvarAdd", Cvar_Add_f);
     Cmd_AddCommand("cvarMult", Cvar_Mult_f);
     Cmd_AddCommand("clearcvar", Cvar_Clear_f);
+
+    // [CNQ3] cvar commands
+    Cmd_AddCommand("unset", Cvar_Unset_f);
+    Cmd_SetCommandCompletionFunc("unset", Cvar_CompleteCvarName);
+    Cmd_AddCommand("setempty", Cvar_SetEmpty_f);
+    Cmd_SetCommandCompletionFunc("setempty", Cvar_CompleteCvarName);
+    Cmd_AddCommand("cvar_add", Cvar_Op_f);
+    Cmd_SetCommandCompletionFunc("cvar_add", Cvar_CompleteCvarName);
+    Cmd_AddCommand("cvar_mul", Cvar_Op_f);
+    Cmd_SetCommandCompletionFunc("cvar_mul", Cvar_CompleteCvarName);
+    Cmd_AddCommand("cvar_trim", Cvar_Trim_f);
+
+    Cmd_SetHelp("toggle", "toggles a cvar between 0 and 1, or cycles through a list of values\n"
+                          "Usage: " S_COLOR_CMD "toggle " S_COLOR_CVAR "<cvar> " S_COLOR_VAL "[value1 value2 ...]");
+    Cmd_SetHelp("set", "sets a cvar, creating it when it doesn't exist\n"
+                       "Usage: " S_COLOR_CMD "set " S_COLOR_CVAR "<cvar> " S_COLOR_VAL "<value>");
+    Cmd_SetHelp("seta", "sets a cvar and saves it in the config\n"
+                        "Usage: " S_COLOR_CMD "seta " S_COLOR_CVAR "<cvar> " S_COLOR_VAL "<value>");
+    Cmd_SetHelp("reset", "resets a cvar to its default value\n"
+                         "Usage: " S_COLOR_CMD "reset " S_COLOR_CVAR "<cvar>");
+    Cmd_SetHelp("cvarlist", "lists and filters all cvars\n"
+                            "The optional argument filters the list, '*' matches 0 or more characters.\n"
+                            "Example: " S_COLOR_CMD "cvarlist " S_COLOR_VAL "*fov" S_COLOR_HELP " lists the cvars containing 'fov'");
+    Cmd_SetHelp("listcvars", "lists and filters all cvars\n"
+                             "Same as " S_COLOR_CMD "cvarlist" S_COLOR_HELP ".");
+    Cmd_SetHelp("cvar_restart", "resets all cvars to their default values\n"
+                                "User-created cvars are removed.");
+    Cmd_SetHelp("cvarAdd", "adds a number to a cvar\n"
+                           "Usage: " S_COLOR_CMD "cvarAdd " S_COLOR_CVAR "<cvar> " S_COLOR_VAL "<number>");
+    Cmd_SetHelp("cvarMult", "multiplies a cvar by a number\n"
+                            "Usage: " S_COLOR_CMD "cvarMult " S_COLOR_CVAR "<cvar> " S_COLOR_VAL "<number>");
+    Cmd_SetHelp("clearcvar", "sets a cvar to an empty string\n"
+                             "Usage: " S_COLOR_CMD "clearcvar " S_COLOR_CVAR "<cvar>");
+    Cmd_SetHelp("unset", "removes a user-created cvar\n"
+                         "Usage: " S_COLOR_CMD "unset " S_COLOR_CVAR "<cvar>");
+    Cmd_SetHelp("setempty", "sets a cvar to an empty string\n"
+                            "Usage: " S_COLOR_CMD "setempty " S_COLOR_CVAR "<cvar>");
+    Cmd_SetHelp("cvar_add", "adds a number to a cvar, staying within its range\n"
+                            "Usage: " S_COLOR_CMD "cvar_add " S_COLOR_CVAR "<cvar> " S_COLOR_VAL "<number>");
+    Cmd_SetHelp("cvar_mul", "multiplies a cvar by a number, staying within its range\n"
+                            "Usage: " S_COLOR_CMD "cvar_mul " S_COLOR_CVAR "<cvar> " S_COLOR_VAL "<number>");
+    Cmd_SetHelp("cvar_trim", "removes all user-created cvars\n"
+                             "Usage: " S_COLOR_CMD "cvar_trim " S_COLOR_VAL "[-f]\n" S_COLOR_HELP
+                             "Without -f it only runs with a local server, when every module has registered its cvars.");
 }
