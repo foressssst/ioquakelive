@@ -632,7 +632,7 @@ void CG_AddChat(const char *text, int teamOnly, int extraTime) {
     cg.currentChatLine.startTime = cg.time;
     cg.currentChatLine.endTime = cg.time + 2000 + extraTime;
     cg.currentChatLine.teamOnly = teamOnly;
-    CG_AddScrollRow(&cg.chatScrollRows, &cg.chatScrollTime);
+    CG_AddScrollRow(&cg.chatScrollRows, &cg.chatScrollTime, CHAT_FADEOUT / 10.0f);
 
     if (len > 0 && text[len - 1] == '\n' && len <= size) {
         size = len;
@@ -644,6 +644,50 @@ void CG_AddChat(const char *text, int teamOnly, int extraTime) {
     CG_Printf("%s", text);
 }
 
+/*
+[CPMA] CPMA 1.53's Chat element, used with ch_animateScroll: up to ch_chatLines recent lines
+stacked upwards from the newest, each easing in, holding and easing out (hud.cfg: fadein
+150, fadedelay 3000, time 100; Quake Live's extra time lengthens the hold), rising a row
+when a new line comes.
+*/
+static void CG_DrawCpmaChat(float x, float bottom, float scale) {
+    vec4_t color = {1.0f, 1.0f, 1.0f, 1.0f};
+    qboolean current = (cg.currentChatLine.startTime != 0);
+    int count = ch_chatLines.integer;
+    int ring = cg.chatIndex;
+    int n, start, extra;
+    const char* text;
+    float rowY = bottom + CG_ScrollRows(cg.chatScrollRows, cg.chatScrollTime, CHAT_FADEOUT / 10.0f) * 13.0f;
+
+    if (count > MAX_CHAT_LINES) {
+        count = MAX_CHAT_LINES;
+    }
+
+    CG_SetWidescreen(WIDESCREEN_LEFT);
+    for (n = 0; n < count; n++) {
+        if (current) {
+            start = cg.currentChatLine.startTime;
+            extra = cg.currentChatLine.endTime - start - 2000;
+            text = cg.currentChatLine.text;
+            current = qfalse;
+        } else {
+            start = cg.chatLines[ring].startTime;
+            extra = cg.chatLines[ring].endTime - start - 2000;
+            text = cg.chatLines[ring].text;
+            ring = (ring + MAX_CHAT_LINES - 1) % MAX_CHAT_LINES;
+        }
+        if (!start) {
+            break;
+        }
+        color[3] = CG_CpmaFade(start, CHAT_FADEIN, CHAT_FADEDELAY + (extra > 0 ? extra : 0), CHAT_FADEOUT);
+        if (color[3] <= 0.0f) {
+            break;
+        }
+        CG_DrawText(x, rowY - 13.0f * n, 1, scale, color, text, 0, 256, 3);
+    }
+    CG_SetWidescreen(WIDESCREEN_STRETCH);
+}
+
 // [QL] cgamex86.dll 0x10006a10. Drawn by the CG_AREA_NEW_CHAT ownerdraw with
 // the menu item's rect, and by the spectator overlay. The newest line sits on
 // the rect's bottom edge (font 1, style 3, left widescreen) until it expires
@@ -652,9 +696,7 @@ void CG_AddChat(const char *text, int teamOnly, int extraTime) {
 // the intermission, 2 behind the scoreboard, unstyled when more than 10. The
 // text scale is held between 0.1 and 0.22 (0 counts as 0.1).
 void CG_DrawChat(float x, float y, float w, float h, float scale) {
-    // [CPMA] ch_animateScroll: a new line rises one row into place and fades in over
-    // CPMA's 150 ms (hud.cfg Chat fadein)
-    float bottom = y + h + CG_ScrollRows(cg.chatScrollRows, cg.chatScrollTime) * 13.0f;
+    float bottom = y + h;
     int lines = cg_chatHistoryLength.integer;
     int style;
     int i;
@@ -667,22 +709,21 @@ void CG_DrawChat(float x, float y, float w, float h, float scale) {
         scale = 0.22f;
     }
 
-    if (cg.currentChatLine.startTime != 0) {
-        if (cg.time > cg.currentChatLine.endTime) {
-            cg.chatIndex = (cg.chatIndex + 1) % MAX_CHAT_LINES;
-            memcpy(&cg.chatLines[cg.chatIndex], &cg.currentChatLine, sizeof(cg.currentChatLine));
-            memset(&cg.currentChatLine, 0, sizeof(cg.currentChatLine));
-        } else {
-            vec4_t chatColor = {1.0f, 1.0f, 1.0f, 1.0f};
-            int age = cg.time - cg.currentChatLine.startTime;
+    if (cg.currentChatLine.startTime != 0 && cg.time > cg.currentChatLine.endTime) {
+        cg.chatIndex = (cg.chatIndex + 1) % MAX_CHAT_LINES;
+        memcpy(&cg.chatLines[cg.chatIndex], &cg.currentChatLine, sizeof(cg.currentChatLine));
+        memset(&cg.currentChatLine, 0, sizeof(cg.currentChatLine));
+    }
 
-            if (ch_animateScroll.integer && age < 150) {
-                chatColor[3] = age / 150.0f;
-            }
-            CG_SetWidescreen(WIDESCREEN_LEFT);
-            CG_DrawText(x, bottom, 1, scale, chatColor, cg.currentChatLine.text, 0, 256, 3);
-            CG_SetWidescreen(WIDESCREEN_STRETCH);
-        }
+    if (ch_animateScroll.integer && !cg.chatHistoryShowing && !cg.scoreBoardShowing) {
+        CG_DrawCpmaChat(x, bottom, scale);
+        return;
+    }
+
+    if (cg.currentChatLine.startTime != 0) {
+        CG_SetWidescreen(WIDESCREEN_LEFT);
+        CG_DrawText(x, bottom, 1, scale, colorWhite, cg.currentChatLine.text, 0, 256, 3);
+        CG_SetWidescreen(WIDESCREEN_STRETCH);
     }
 
     if (cg.predictedPlayerState.pm_type == PM_INTERMISSION) {
