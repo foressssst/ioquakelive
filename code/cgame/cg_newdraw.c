@@ -2221,8 +2221,9 @@ static void CG_DrawRaceStatus(rectDef_t *rect, float scale, vec4_t color, int te
         } else {
             hint = "Bind 'kill' to respawn";
         }
-        CG_OwnerDrawText(rect->x + 19.0f, rect->y + 27.0f, 0.176f, colorWhite,
-                         hint, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+        // [QL] 0x1002f400: font 0, scale 0.18, half-transparent white, shadowed
+        vec4_t hintColor = {1.0f, 1.0f, 1.0f, 0.5f};
+        CG_DrawText(rect->x + 19.0f, rect->y + 27.0f, 0, 0.18f, hintColor, hint, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
     }
 
     if (cg.race.active) {
@@ -2232,7 +2233,7 @@ static void CG_DrawRaceStatus(rectDef_t *rect, float scale, vec4_t color, int te
     } else {
         return;
     }
-    CG_OwnerDrawText(rect->x, rect->y, scale, colorYellow, s, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+    CG_DrawText(rect->x, rect->y, 0, scale, colorYellow, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);  // [QL] 0x1002f5ae
 }
 
 static void CG_DrawRaceTimes(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
@@ -2248,7 +2249,7 @@ static void CG_DrawRaceTimes(rectDef_t *rect, float scale, vec4_t color, int tex
         return;
     }
     s = va("%d:%02d.%03d", ms / 60000, (ms / 1000) % 60, ms % 1000);
-    CG_OwnerDrawText(rect->x, rect->y, scale, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+    CG_DrawText(rect->x, rect->y, 0, scale, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);  // [QL] 0x1002f5ae
 }
 
 // [QL] Speedometer ownerdraw - text-only display from speed history

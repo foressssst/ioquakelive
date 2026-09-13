@@ -815,15 +815,18 @@ void ClientUserinfoChanged(int clientNum) {
 
     // send over a subset of the userinfo keys so other clients can
     // print scoreboards, display models, and play custom sounds
+    // [QL] qagamex86.dll 0x817b8 / 0x81820 add "rp", readied up, which cgame's warmup
+    // messages read. NOT PORTED: the "p", "so", "pq", "st" and "c" keys that follow it.
     if (ent->r.svFlags & SVF_BOT) {
-        s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\skill\\%s\\tt\\%d\\tl\\%d",
+        s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\skill\\%s\\tt\\%d\\tl\\%d\\rp\\%d",
                client->pers.netname, client->sess.sessionTeam, model, headModel, c1, c2,
                client->pers.maxHealth, client->sess.wins, client->sess.losses,
-               Info_ValueForKey(userinfo, "skill"), teamTask, teamLeader);
+               Info_ValueForKey(userinfo, "skill"), teamTask, teamLeader, client->pers.ready ? 1 : 0);
     } else {
-        s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\tt\\%d\\tl\\%d",
+        s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\tt\\%d\\tl\\%d\\rp\\%d",
                client->pers.netname, client->sess.sessionTeam, model, headModel, c1, c2,
-               client->pers.maxHealth, client->sess.wins, client->sess.losses, teamTask, teamLeader);
+               client->pers.maxHealth, client->sess.wins, client->sess.losses, teamTask, teamLeader,
+               client->pers.ready ? 1 : 0);
     }
 
     trap_SetConfigstring(CS_PLAYERS + clientNum, s);

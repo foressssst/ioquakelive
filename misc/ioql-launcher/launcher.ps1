@@ -252,12 +252,68 @@ function Initialize-CpmaAnimations {
     }
 }
 
+# ---------------------------------------------------------------------------
+# Handel Gothic Ex letters the frag message. It is not ours to ship, so like the files above
+# it comes from the player's own PC: the copy installed in Windows, or one already dropped in
+# the game's fonts folder under any name. It is copied once to baseq3/fonts/handelgothicex.ttf;
+# without it the game uses Quake Live's Handel Gothic.
+
+$FragFontFamily = 'Handel Gothic Ex'
+$FragFontFile = 'handelgothicex.ttf'
+
+function Get-FontFamilyName([string]$Path) {
+    try {
+        Add-Type -AssemblyName System.Drawing
+        $fonts = New-Object System.Drawing.Text.PrivateFontCollection
+        try {
+            $fonts.AddFontFile($Path)
+            if ($fonts.Families.Count -gt 0) { return $fonts.Families[0].Name }
+        } finally { $fonts.Dispose() }
+    } catch { }
+    return $null
+}
+
+function Initialize-FragMessageFont {
+    $dir = Join-Path $env:APPDATA 'quakelive\baseq3\fonts'
+    $target = Join-Path $dir $FragFontFile
+    if (Test-Path -LiteralPath $target) { return }
+
+    $found = $null
+    foreach ($key in @('HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts', 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Fonts')) {
+        $props = Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
+        if (-not $props) { continue }
+        foreach ($p in $props.PSObject.Properties) {
+            if ($p.Name -notlike "$FragFontFamily*") { continue }
+            $file = [string]$p.Value
+            if (-not [IO.Path]::IsPathRooted($file)) { $file = Join-Path (Join-Path $env:WINDIR 'Fonts') $file }
+            if ((Test-Path -LiteralPath $file) -and (Get-FontFamilyName $file) -eq $FragFontFamily) { $found = $file; break }
+        }
+        if ($found) { break }
+    }
+    if (-not $found -and (Test-Path -LiteralPath $dir)) {
+        foreach ($f in @(Get-ChildItem -LiteralPath $dir -File -ErrorAction SilentlyContinue)) {
+            if ($f.Extension -notin @('.ttf', '.otf')) { continue }
+            if ((Get-FontFamilyName $f.FullName) -eq $FragFontFamily) { $found = $f.FullName; break }
+        }
+    }
+    if (-not $found) { return }
+
+    try {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        Copy-Item -LiteralPath $found -Destination $target -Force
+        Write-Log 'Fuente del frag message lista: Handel Gothic Ex de este PC.' 'Green'
+    } catch {
+        Write-Log ("No se pudo preparar Handel Gothic Ex: {0}. El frag message usa la Handel Gothic de Quake Live." -f $_.Exception.Message) 'Yellow'
+    }
+}
+
 function Start-Game([string]$Version, $ManifestArgs) {
     if (-not (Initialize-QuakeLiveData)) {
         Read-Host 'Presiona Enter para salir'
         exit 1
     }
     Initialize-CpmaAnimations
+    Initialize-FragMessageFont
     if ($NoLaunch) { Write-Log 'Modo -NoLaunch: no se abre el juego.'; return }
     if (-not (Test-Path -LiteralPath $GameExe)) {
         Write-Log 'El juego no esta instalado todavia y no hay conexion con el servidor.' 'Red'
