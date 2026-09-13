@@ -124,12 +124,11 @@ void fonsSetSpacing(FONScontext *s, float spacing);
 void fonsSetBlur(FONScontext *s, float blur);
 void fonsSetAlign(FONScontext *s, int align);
 void fonsSetFont(FONScontext *s, int font);
+void fonsSetExtendedColors(int extended);
 
 // Draw text.  'flags' carries the QL draw flags (colour-code control).  Returns
 // the x advance.  A non-NULL maxX is a clip bound: drawing stops before the
 // first glyph that would end past it, and *maxX receives the pen x there.
-void fonsSetExtendedColors(int extended);
-
 float fonsDrawText(FONScontext *s, float x, float y, const char *string, const char *end, int flags, float *maxX);
 
 // Measure text
