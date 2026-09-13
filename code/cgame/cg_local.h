@@ -479,6 +479,7 @@ typedef struct {
 
     int teamTask;         // task in teamplay (offence/defence)
     qboolean teamLeader;  // true when this is a team leader
+    qboolean ready;       // [QL] "rp" in the player's configstring: readied up for the match
 
     int powerups;  // so can display quad/flag status
 
@@ -1099,6 +1100,7 @@ typedef struct {
     // [CPMA] animation frames from the player's own CPMA package (zz-cpma-anim.pk3);
     // 0 when it is not installed
     qhandle_t medalFrames[6][24];
+    int fragMessageFont;  // [ioquakelive] engine font of the frag message: Handel Gothic Ex, or 0
     qhandle_t chatBalloonFrames[16];
     qhandle_t connectionShader;
 
@@ -1674,9 +1676,7 @@ extern vmCvar_t cg_draw3dIcons;
 extern vmCvar_t cg_drawIcons;
 extern vmCvar_t cg_drawAmmoWarning;
 extern vmCvar_t cg_drawCrosshair;
-extern vmCvar_t cg_drawCrosshairNames;
 extern vmCvar_t cg_drawRewards;
-extern vmCvar_t cg_drawRewardsRowSize;
 extern vmCvar_t cg_announcerRewardsVO;
 extern vmCvar_t cg_flagStyle;
 extern vmCvar_t cg_drawTeamOverlay;
@@ -1811,6 +1811,11 @@ extern vmCvar_t cg_drawCheckpointRemaining;
 extern vmCvar_t cg_drawSprites;
 extern vmCvar_t cg_drawSpriteSelf;
 extern vmCvar_t cg_enemyCrosshairNames;
+extern vmCvar_t cg_enemyCrosshairNamesOpacity;
+extern vmCvar_t cg_teammateCrosshairNames;
+extern vmCvar_t cg_teammateCrosshairNamesOpacity;
+extern vmCvar_t cg_teammateNames;
+extern vmCvar_t cg_comMaxfps;
 extern vmCvar_t cg_forceEnemyModel;
 extern vmCvar_t cg_forceEnemySkin;
 extern vmCvar_t cg_forceTeamModel;
@@ -2023,11 +2028,6 @@ void CG_DrawText_DC(float x, float y, float scale, vec4_t color, const char* tex
 void CG_DrawText(float x, float y, int fontIndex, float scale, vec4_t color, const char *text, float adjust, int maxChars, int textStyle);
 int CG_DrawTextWidth(const char *text, float scale, int limit, int fontIndex);
 int CG_DrawTextHeight(const char *text, float scale, int limit, int fontIndex);
-void CG_DrawTextInFont(float x, float y, int engineFont, float scale, const vec4_t color, const char* text, int style);
-void CG_MeasureTextInFont(const char* text, int engineFont, float scale, float* w, float* h);
-float CG_DrawTextHeightInFont(int engineFont, float scale);
-float CG_TextAdvanceInFont(const char* text, int engineFont, float scale);
-void CG_DrawRewardIcon(float x, float y, float size, qhandle_t shader);
 void CG_DrawTextClipped(float *maxX, float x, float y, float scale, const vec4_t color, const char *text);
 extern vmCvar_t cg_redTeamName;
 extern vmCvar_t cg_blueTeamName;
@@ -2035,6 +2035,8 @@ extern vmCvar_t cg_chatHistoryLength;
 extern vmCvar_t cg_drawFragMessages;
 extern vmCvar_t cg_cameraOrbit;
 extern vmCvar_t g_training;
+extern vmCvar_t g_skipTrainingEnable;
+extern vmCvar_t cg_drawPregameMessages;
 extern int cg_currentWidescreen;
 float CG_TextWidth_DC(const char* text, float scale, int limit, int fontIndex);
 float CG_TextHeight_DC(const char* text, float scale, int limit, int fontIndex);
@@ -2098,7 +2100,6 @@ void CG_ForceModelChange(void);
 //
 void CG_CheckEvents(centity_t* cent);
 const char* CG_PlaceString(int rank);
-void CG_ShowFragMessage(int target, int mod, const char* targetName);
 void CG_EntityEvent(centity_t* cent, vec3_t position);
 void CG_PainEvent(centity_t* cent, int health);
 // [QL] event-driven helpers
@@ -2307,32 +2308,6 @@ float CG_CpmaEaseOut(float x);
 float CG_CpmaFade(int start, int fadein, int fadedelay, int time);
 qboolean CG_CpmaFadingOut(int start, int fadein, int fadedelay, int time);
 float CG_CpmaSlide(int start, int time);
-
-//
-// cg_hudtune.c, [wolfcam] tuning the medals, the frag message and the centre print
-//
-typedef struct {
-    float x;           // where the lines line up
-    int align;         // 0 left, 1 centred, 2 right
-    int y;             // the print's y; the block starts above it
-    float scale;
-    int font;          // engine font
-    int style;
-    float lineSpacing;
-    vec4_t color;      // before the fade
-    int time;          // how long it shows
-    int fadeTime;      // how long it fades
-    int widescreen;
-} centerPrintLayout_t;
-
-void CG_RegisterTuneCvars(void);
-void CG_UpdateTuneCvars(void);
-void CG_DrawRewardMedals(int count, qhandle_t shader, const vec4_t fade);
-void CG_CenterPrintLayout(centerPrintLayout_t* layout);
-void CG_BuildFragMessage(int target, int mod, const char* victimName, qboolean sameTeam);
-qboolean CG_DrawFragMessageTokens(const centerPrintLayout_t* layout, const vec4_t fade);
-void CG_TestFragMessage_f(void);
-void CG_TestRewards_f(void);
 
 //
 // cg_players.c, [CPMA] cg_animateChatBalloon

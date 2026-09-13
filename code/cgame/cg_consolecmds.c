@@ -602,7 +602,6 @@ static void CG_ChatUp_f(void) {
 static void CG_ToggleChatHistory_f(void) {
     cg.chatHistoryShowing = !cg.chatHistoryShowing;
 }
-
 // =====================================================================
 // [QL] Print, kill, clientmute
 // =====================================================================
@@ -953,10 +952,7 @@ static consoleCommand_t commands[] = {
     {"-chat", CG_ChatUp_f},
     {"readyup", CG_Readyup_f},
     {"team", CG_Team_f},
-    {"togglechathistory", CG_ToggleChatHistory_f},
-    {"testfragmessage", CG_TestFragMessage_f},  // [wolfcam] tuning aids, cg_hudtune.c
-    {"testrewards", CG_TestRewards_f},
-    {"forfeit", CG_Forfeit_f},
+    {"togglechathistory", CG_ToggleChatHistory_f},    {"forfeit", CG_Forfeit_f},
     {"ragequit", CG_Ragequit_f},
     {"setteamcolor", CG_SetTeamColor_f},
     {"setenemycolor", CG_SetEnemyColor_f},

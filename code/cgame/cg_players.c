@@ -1092,6 +1092,10 @@ void CG_NewClientInfo(int clientNum) {
     v = Info_ValueForKey(configstring, "tl");
     newInfo.teamLeader = atoi(v);
 
+    // [QL] 0x1003e9c0: ready unless "rp" starts with '0', so a missing key counts as ready
+    v = Info_ValueForKey(configstring, "rp");
+    newInfo.ready = (v[0] != '0') ? qtrue : qfalse;
+
     // model
     v = Info_ValueForKey(configstring, "model");
     Q_strncpyz(newInfo.modelName, v, sizeof(newInfo.modelName));

@@ -250,12 +250,12 @@ static void CG_PaintText(float x, float y, int fontIndex, float scale, const vec
 }
 
 // Text in an engine font, as trap_R_Font_Register returns, rather than a menu font index.
-void CG_DrawTextInFont(float x, float y, int engineFont, float scale, const vec4_t color, const char* text, int style) {
+static void CG_DrawTextInFont(float x, float y, int engineFont, float scale, const vec4_t color, const char* text, int style) {
 	CG_PaintTextEngine(x, y, engineFont, scale, color, text, 0, style);
 }
 
 // 640-space width and ascender of text in an engine font, truncated as CG_MeasureText does.
-void CG_MeasureTextInFont(const char* text, int engineFont, float scale, float* w, float* h) {
+static void CG_MeasureTextInFont(const char* text, int engineFont, float scale, float* w, float* h) {
 	float extents[5];
 	float xscale = CG_TextXScale();
 	float yscale = cgs.screenYScale;
@@ -269,38 +269,6 @@ void CG_MeasureTextInFont(const char* text, int engineFont, float scale, float* 
 		*w = (float)(int)((extents[2] - extents[0]) / xscale);
 	if (h)
 		*h = (float)(int)(extents[4] / yscale);
-}
-
-// How far text moves the pen, in 640 units. The engine's box runs from the origin to the
-// last glyph, so trailing spaces are added one space advance each.
-float CG_TextAdvanceInFont(const char* text, int engineFont, float scale) {
-	float extents[5];
-	float xscale = CG_TextXScale();
-	float size = CG_FontPixelSize(scale);
-	float advance, packed;
-	int n = (int)strlen(text);
-	int spaces = 0;
-
-	if (xscale <= 0.0f)
-		xscale = 1.0f;
-	while (spaces < n && text[n - 1 - spaces] == ' ')
-		spaces++;
-
-	trap_R_Font_TextExtents(text, 0, engineFont, size, -1, extents);
-	advance = extents[2];
-	if (spaces) {
-		trap_R_Font_TextExtents("i i", 0, engineFont, size, -1, extents);
-		packed = extents[2];
-		trap_R_Font_TextExtents("ii", 0, engineFont, size, -1, extents);
-		advance += spaces * (packed - extents[2]);
-	}
-	return advance / xscale;
-}
-
-float CG_DrawTextHeightInFont(int engineFont, float scale) {
-	float h = 0.0f;
-	CG_MeasureTextInFont("A", engineFont, scale, NULL, &h);
-	return h;
 }
 
 // Core measure: 640-space width/height for the given text.
@@ -674,7 +642,10 @@ static float CG_DrawAttacker(float y) {
 		return y;
 	}
 
-	size = ICON_SIZE * 1.25;
+	// [QL] 0x10009998: a 36-unit head in the top-right corner, and under it the name,
+	// right-aligned 10 units in, in font 1 at scale 0.18 with no shadow. NOT PORTED: the
+	// team or enemy colour retail tints the head with.
+	size = 36;
 
 	angles[PITCH] = 0;
 	angles[YAW] = 180;
@@ -684,11 +655,8 @@ static float CG_DrawAttacker(float y) {
 	info = CG_ConfigString(CS_PLAYERS + clientNum);
 	name = Info_ValueForKey(info, "n");
 	y += size;
-	{
-		vec4_t halfAlpha = { 1, 1, 1, 0.5f };
-		float tw = CG_Text_Width(name, 0.3f, 0);
-		CG_Text_Paint(SCREEN_WIDTH - tw, y + 14, 0.3f, halfAlpha, name, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
-	}
+	CG_DrawText((float)(SCREEN_WIDTH - 10 - CG_DrawTextWidth(name, 0.18f, 0, 1)), y + 10, 1, 0.18f, colorWhite, name, 0, 0,
+				ITEM_TEXTSTYLE_NORMAL);
 
 	return y + BIGCHAR_HEIGHT + 2;
 }
@@ -704,9 +672,11 @@ static float CG_DrawSnapshot(float y) {
 
 	s = va("time:%i snap:%i cmd:%i", cg.snap->serverTime,
 		   cg.latestSnapshotNum, cgs.serverCommandSequence);
-	w = CG_Text_Width(s, 0.3f, 0);
+	// [QL] 0x10009b10: right-aligned on 635 in font 0, scale 0.25, shadowed, with its
+	// baseline 16 below the whole-unit y + 2
+	w = CG_DrawTextWidth(s, 0.25f, 0, 0);
 
-	CG_Text_Paint(635 - w, y + 14, 0.3f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+	CG_DrawText((float)(635 - w), (float)(int)(y + 2) + 16, 0, 0.25f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 
 	return y + BIGCHAR_HEIGHT + 4;
 }
@@ -720,6 +690,7 @@ CG_DrawFPS
 static float CG_DrawFPS(float y) {
 	char* s;
 	int w;
+	int h = 0;
 	static int previousTimes[FPS_FRAMES];
 	static int index;
 	int i, total;
@@ -745,14 +716,21 @@ static float CG_DrawFPS(float y) {
 			total = 1;
 		}
 		fps = 1000 * FPS_FRAMES / total;
+		// [QL] 0x10009c97: within 1 of com_maxfps it reads com_maxfps
+		if (fps - cg_comMaxfps.integer <= 1 && cg_comMaxfps.integer - fps <= 1) {
+			fps = cg_comMaxfps.integer;
+		}
 
+		// [QL] 0x10009cc2: right-aligned on 635 in font 2 (DroidSansMono), scale 0.25,
+		// shadowed, its baseline a text height below y
 		s = va("%ifps", fps);
-		w = CG_Text_Width(s, 0.3f, 0);
+		w = CG_DrawTextWidth(s, 0.25f, 0, 2);
+		h = CG_DrawTextHeight(s, 0.25f, 0, 2);
 
-		CG_Text_Paint(635 - w, y + 14, 0.3f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+		CG_DrawText((float)(635 - w), y + h, 2, 0.25f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 	}
 
-	return y + BIGCHAR_HEIGHT + 4;
+	return y + h;
 }
 
 /*
@@ -1131,7 +1109,7 @@ defend, excellent, gauntlet and impressive, stopping on the last (1) or looping 
 it, and for every other medal, the icon stays still.
 ===================
 */
-void CG_DrawRewardIcon(float x, float y, float size, qhandle_t shader) {
+static void CG_DrawRewardIcon(float x, float y, float size, qhandle_t shader) {
 	const qhandle_t animated[6] = {cgs.media.medalAssist, cgs.media.medalCapture, cgs.media.medalDefend,
 								   cgs.media.medalExcellent, cgs.media.medalGauntlet, cgs.media.medalImpressive};
 	int mode = ch_animateRewardIcons.integer;
@@ -1162,10 +1140,19 @@ CG_DrawReward
 
 [QL] cgamex86.dll 0x1000ac30. A medal shows for 2 s and fades over its last
 200 ms. When it runs out the next one is popped and its sound queued before
-cg_drawRewards is tested, so hidden medals still advance and play. The icons
-are laid out by CG_DrawRewardMedals.
+cg_drawRewards is tested, so hidden medals still advance and play. Retail draws
+32x32 icons with their top at y 42, one per medal, 48 apart and centred on 320,
+or past cg_drawRewardsRowSize one icon with its count at (336, 66).
+[ioquakelive] The layout the user chose on 2026-09-13, for a tidy HUD where no
+message runs into another: one medal at 0.51 of retail's size, centred on 325 as
+if 48 * 0.51 units wide, its top at y 137, and no count.
 ===================
 */
+#define REWARD_ICON_SCALE 0.51f
+#define REWARD_ICON_SIZE (32.0f * REWARD_ICON_SCALE)
+#define REWARD_ICON_X (325.0f - 48.0f * REWARD_ICON_SCALE / 2.0f)
+#define REWARD_ICON_Y 137.0f
+
 static void CG_DrawReward(void) {
 	vec4_t color;
 	int i, remaining;
@@ -1199,7 +1186,9 @@ static void CG_DrawReward(void) {
 	} else {
 		color[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
 	}
-	CG_DrawRewardMedals(cg.rewardCount[0], cg.rewardShader[0], color);
+	trap_R_SetColor(color);
+	CG_DrawRewardIcon(REWARD_ICON_X, REWARD_ICON_Y, REWARD_ICON_SIZE, cg.rewardShader[0]);
+	trap_R_SetColor(NULL);
 }
 
 /*
@@ -1282,18 +1271,24 @@ static void CG_DrawDisconnect(void) {
 		return;
 	}
 
-	// also add text in center of screen
+	// [QL] 0x1000aef0: nothing in the first 3 seconds of the level
+	if (cg.time - cgs.levelStartTime < 3000) {
+		return;
+	}
+
+	// also add text in center of screen: font 0, scale 0.25, shadowed, baseline at 116
 	s = "Connection Interrupted";
-	w = CG_Text_Width(s, 0.5f, 0);
-	CG_Text_Paint(320 - w / 2, 116, 0.5f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+	w = CG_DrawTextWidth(s, 0.25f, 0, 0);
+	CG_DrawText((float)(320 - w / 2), 116, 0, 0.25f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 
 	// blink the icon
 	if ((cg.time >> 9) & 1) {
 		return;
 	}
 
+	// [QL] in the bottom-right corner
 	x = SCREEN_WIDTH - 48;
-	y = SCREEN_HEIGHT - 144;
+	y = SCREEN_HEIGHT - 48;
 
 	CG_DrawPic(x, y, 48, 48, trap_R_RegisterShader("gfx/2d/net.jpg"));
 }
@@ -1401,8 +1396,9 @@ static void CG_DrawLagometer(void) {
 
 	trap_R_SetColor(NULL);
 
+	// [QL] 0x1000b53f: font 0, scale 0.25, shadowed, 16 below the graph's top
 	if (cg_nopredict.integer) {
-		CG_Text_Paint(x, y + 14, 0.3f, colorWhite, "snc", 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+		CG_DrawText(x, y + 16, 0, 0.25f, colorWhite, "snc", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 	}
 
 	// [QL] draw ping number when cg_lagometer == 2
@@ -1475,49 +1471,54 @@ height in font 0 with the print's scale and ITEM_TEXTSTYLE_SHADOWEDMORE, and
 the next line starts 6 units below it.
 ===================
 */
+// [ioquakelive] The frag message in the layout the user chose on 2026-09-13: smaller and
+// lower than retail's, clear of every other message, in Handel Gothic Ex where the player
+// has it (cgs.media.fragMessageFont).
+#define FRAG_MESSAGE_Y 165.0f
+#define FRAG_MESSAGE_SCALE 0.135f
+
 static void CG_DrawCenterString(void) {
 	static vec4_t color;
-	centerPrintLayout_t layout;
 	char* start;
-	int l;
-	float x, y, w, h;
-	int elapsed, remaining;
+	int l, font;
+	float x, y, w, h, scale;
+	int duration, remaining;
 
 	if (!cg.centerPrintTime) {
 		return;
 	}
 
-	// [wolfcam] the retail values below come from CG_CenterPrintLayout, open to cvars
-	CG_CenterPrintLayout(&layout);
-	elapsed = cg.time - cg.centerPrintTime;
-	if (elapsed >= layout.time) {
-		return;
-	}
-	Vector4Copy(layout.color, color);
+	color[0] = color[1] = color[2] = 1.0f;
 	if (cg.centerPrintFrag && ch_animateScroll.integer) {
 		// [CPMA] FragMessage and RankMessage in CPMA 1.53's hud.cfg: fadein 150,
 		// fadedelay 1200, time 200
-		color[3] *= CG_CpmaFade(cg.centerPrintTime, 150, MAX(layout.time - 150 - layout.fadeTime, 0), layout.fadeTime);
-	} else {
-		remaining = layout.time - elapsed;
-		if (remaining < layout.fadeTime) {
-			color[3] *= (float)remaining / layout.fadeTime;
+		color[3] = CG_CpmaFade(cg.centerPrintTime, 150, 1200, 200);
+		if (color[3] <= 0.0f) {
+			return;
 		}
+	} else {
+		duration = (int)(cg_centertime.value * 1000.0);
+		remaining = duration - (cg.time - cg.centerPrintTime);
+		if (cg.time - cg.centerPrintTime >= duration) {
+			return;
+		}
+		color[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
 	}
-	if (color[3] <= 0.0f) {
-		return;
-	}
-
-	if (cg.centerPrintFrag && CG_DrawFragMessageTokens(&layout, color)) {
-		return;
-	}
-
 	trap_R_SetColor(color);
-	CG_SetWidescreen(layout.widescreen);
+
+	if (cg.centerPrintFrag) {
+		y = FRAG_MESSAGE_Y;
+		scale = FRAG_MESSAGE_SCALE;
+		font = cgs.media.fragMessageFont;
+	} else {
+		y = (float)cg.centerPrintY;
+		scale = cg.centerPrintScale;
+		font = 0;
+	}
 
 	start = cg.centerPrint;
 
-	y = (float)(int)((float)layout.y - layout.scale * 16.0 * cg.centerPrintLines);
+	y = (float)(int)(y - scale * 16.0 * cg.centerPrintLines);
 
 	while (1) {
 		char linebuffer[1024];
@@ -1530,15 +1531,10 @@ static void CG_DrawCenterString(void) {
 		}
 		linebuffer[l] = 0;
 
-		CG_MeasureTextInFont(linebuffer, layout.font, layout.scale, &w, &h);
-		x = layout.x;
-		if (layout.align == 1) {
-			x = (float)(((int)(layout.x * 2.0f) - (int)w) / 2);  // whole units, as retail's (640 - w) / 2
-		} else if (layout.align == 2) {
-			x -= w;
-		}
-		CG_DrawTextInFont(x, y + h, layout.font, layout.scale, color, linebuffer, layout.style);
-		y += h + layout.lineSpacing;
+		CG_MeasureTextInFont(linebuffer, font, scale, &w, &h);
+		x = (float)((SCREEN_WIDTH - (int)w) / 2);
+		CG_DrawTextInFont(x, y + h, font, scale, color, linebuffer, ITEM_TEXTSTYLE_SHADOWEDMORE);
+		y += h + 6;
 
 		while (*start && (*start != '\n')) {
 			start++;
@@ -1550,7 +1546,6 @@ static void CG_DrawCenterString(void) {
 	}
 
 	trap_R_SetColor(NULL);
-	CG_SetWidescreen(WIDESCREEN_CENTER);
 }
 
 /*
@@ -1828,12 +1823,16 @@ CG_DrawCrosshairNames
 static void CG_DrawCrosshairNames(void) {
 	float* color;
 	char* name;
-	float w;
+	float opacity;
+	qboolean teammate;
 
+	// [QL] cgamex86.dll 0x1000c670: the name under the crosshair fades over a second,
+	// centred at y 190 in font 0, scale 0.26, shadowed. Enemies need cg_enemyCrosshairNames
+	// and take cg_enemyCrosshairNamesOpacity; teammates need cg_teammateCrosshairNames
+	// without cg_teammateNames (which names them overhead) and take
+	// cg_teammateCrosshairNamesOpacity. NOT PORTED: the teammate's health and armour that
+	// cg_drawCrosshairTeamHealth adds.
 	if (!cg_drawCrosshair.integer) {
-		return;
-	}
-	if (!cg_drawCrosshairNames.integer) {
 		return;
 	}
 	if (cg.renderingThirdPerson) {
@@ -1850,10 +1849,23 @@ static void CG_DrawCrosshairNames(void) {
 		return;
 	}
 
+	teammate = cgs.gametype >= GT_TEAM &&
+			   cg.snap->ps.persistant[PERS_TEAM] == cgs.clientinfo[cg.crosshairClientNum].team;
+	if (teammate) {
+		if (cg_teammateNames.integer || !cg_teammateCrosshairNames.integer) {
+			return;
+		}
+		opacity = cg_teammateCrosshairNamesOpacity.value;
+	} else {
+		if (!cg_enemyCrosshairNames.integer) {
+			return;
+		}
+		opacity = cg_enemyCrosshairNamesOpacity.value;
+	}
+
 	name = cgs.clientinfo[cg.crosshairClientNum].name;
-	color[3] *= 0.5f;
-	w = CG_Text_Width(name, 0.3f, 0);
-	CG_Text_Paint(320 - w / 2, 190, 0.3f, color, name, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+	color[3] *= opacity;
+	CG_DrawText(320 - CG_DrawTextWidth(name, 0.26f, 0, 0) * 0.5f, 190, 0, 0.26f, color, name, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 	trap_R_SetColor(NULL);
 }
 
@@ -1883,7 +1895,7 @@ void CG_DrawSpectator(void) {
 		s = "Round In Progress";
 		CG_SetWidescreen(WIDESCREEN_CENTER);
 		w = CG_Text_Width(s, scale, 0);
-		CG_Text_Paint(320 - w / 2, 60, scale, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+		CG_Text_Paint(320 - w / 2, 60, scale, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);  // [QL] 0x10034e9c
 		return;
 	}
 
@@ -1909,12 +1921,13 @@ void CG_DrawSpectator(void) {
 	// conditions were indistinguishable; they are not any more.
 	if (!(menuSpecFollowHud && (cg.snap->ps.pm_flags & PMF_FOLLOW))) {
 		CG_SetWidescreen(WIDESCREEN_LEFT);
+		// [QL] 0x1003505d / 0x1003509c: shadowed
 		if (cgs.gametype == GT_DUEL) {
-			CG_Text_Paint(20, 461, 0.28f, colorWhite, "waiting to play", 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+			CG_Text_Paint(20, 461, 0.28f, colorWhite, "waiting to play", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 		} else if (cgs.gametype >= GT_TEAM) {
 			s = va("press %s and use the JOIN buttons", menuKey);
-			CG_Text_Paint(20, 453, 0.28f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
-			CG_Text_Paint(20, 470, 0.28f, colorWhite, "to enter the game", 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+			CG_Text_Paint(20, 453, 0.28f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+			CG_Text_Paint(20, 470, 0.28f, colorWhite, "to enter the game", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 		}
 	}
 }
@@ -2160,6 +2173,7 @@ CG_DrawAmmoWarning
 */
 static void CG_DrawAmmoWarning(void) {
 	const char* s;
+	float scale, y;
 
 	if (cg_drawAmmoWarning.integer == 0) {
 		return;
@@ -2174,10 +2188,12 @@ static void CG_DrawAmmoWarning(void) {
 	} else {
 		s = "LOW AMMO WARNING";
 	}
-	{
-		float tw = CG_Text_Width(s, 0.4f, 0);
-		CG_Text_Paint(320 - tw / 2, 78, 0.4f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
-	}
+	// [QL] 0x1000e390: cg_drawAmmoWarning 1 is scale 0.35 at y 55, 2 (the default) scale
+	// 0.24 at y 52; font 0, centred, shadowed more
+	scale = (cg_drawAmmoWarning.integer == 1) ? 0.35f : 0.24f;
+	y = (cg_drawAmmoWarning.integer == 1) ? 55.0f : 52.0f;
+	CG_DrawText((float)(320 - CG_DrawTextWidth(s, scale, 0, 0) / 2), y, 0, scale, colorWhite, s, 0, 0,
+				ITEM_TEXTSTYLE_SHADOWEDMORE);
 }
 
 /*
@@ -2207,221 +2223,263 @@ static void CG_DrawProxWarning(void) {
 		Com_sprintf(s, sizeof(s), "YOU HAVE BEEN MINED");
 	}
 
-	{
-		float tw = CG_Text_Width(s, 0.4f, 0);
-		CG_Text_Paint(320 - tw / 2, 96, 0.4f, g_color_table[ColorIndex(COLOR_RED)], s, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+	// [QL] 0x1000e480: red, centred at y 112 in font 0, scale 0.25, shadowed
+	CG_DrawText((float)(320 - CG_DrawTextWidth(s, 0.25f, 0, 0) / 2), 112, 0, 0.25f, colorRed, s, 0, 0,
+				ITEM_TEXTSTYLE_SHADOWED);
+}
+
+// [QL] a warmup line, centred on 320 in whole units as retail's 320 - width / 2
+static void CG_DrawWarmupLine(float y, int font, float scale, vec4_t color, const char* text, int style) {
+	int w = CG_DrawTextWidth(text, scale, 0, font);
+
+	CG_DrawText((float)(320 - w / 2), y, font, scale, color, text, 0, 0, style);
+}
+
+// [QL] the key bound to readyup, as the warmup messages name it ("<KEY NOT FOUND>" unbound)
+static void CG_ReadyUpKeyName(char* buf, int size) {
+	trap_Key_KeynumToStringBuf(trap_Key_GetKey("readyup"), buf, size);
+}
+
+/*
+=================
+CG_DrawWarmupTutorial
+
+[QL] cgamex86.dll 0x1000e600: a training match before the player readies up. Without
+g_skipTrainingEnable only the g_training 1 match shows it: "This match will determine" and
+"your skill placement" at y 35 and 55 (scale 0.35) over "Press <key> to start the match"
+at y 85. With it, only "Press <key> to skip the tutorial" at y 30. The key line is red at
+scale 0.25; every line is font 0, centred, with ITEM_TEXTSTYLE_SHADOWEDMORE.
+=================
+*/
+static void CG_DrawWarmupTutorial(void) {
+	char key[32];
+	const char* s;
+	float y;
+
+	if (!g_skipTrainingEnable.integer) {
+		if (g_training.integer != 1) {
+			return;
+		}
+		CG_DrawWarmupLine(35, 0, 0.35f, colorWhite, "This match will determine", ITEM_TEXTSTYLE_SHADOWEDMORE);
+		CG_DrawWarmupLine(55, 0, 0.35f, colorWhite, "your skill placement", ITEM_TEXTSTYLE_SHADOWEDMORE);
+		CG_ReadyUpKeyName(key, sizeof(key));
+		s = va("Press %s to start the match", key);
+		y = 85;
+	} else {
+		CG_ReadyUpKeyName(key, sizeof(key));
+		s = va("Press %s to skip the tutorial", key);
+		y = 30;
 	}
+	CG_DrawWarmupLine(y, 0, 0.25f, colorRed, s, ITEM_TEXTSTYLE_SHADOWEDMORE);
 }
 
 /*
 =================
 CG_DrawWarmupCountdown
 
-[QL] Draw the countdown display during COUNT_DOWN phase.
-Binary: FUN_1000ec00 in cgamex86.dll
+[QL] cgamex86.dll 0x1000ec00: the count before a match or a round. A header at y 90
+(scale 0.6) over the count at y 125 (scale 0.45), font 0, centred, with
+ITEM_TEXTSTYLE_SHADOWEDMORE, and 10 units lower in Race. The header is:
+- duel: "<first> vs <last>" of the free-team players listed;
+- "Quad Hog" in FFA with custom setting 0x40000, "Infected" in Red Rover with 0x4000000
+  before the first round;
+- Attack & Defend with round state 1: ATTACK or DEFEND THE FLAG for the player's team by
+  whose turn it is, "Red/Blue is on offense" for anyone else;
+- "Freeze Tag" in Freeze Tag without g_freezeRoundDelay;
+- in the rounds of CA, Freeze Tag, A&D and Red Rover, once one has been played: "Round
+  Begins in", or "Sudden Death" once the time limit has run out into overtime;
+- the gametype's name otherwise.
+Those rounds count bare; everything else says "Starts in: %i".
+NOT PORTED: the A&D round results retail draws with the round state 1 (0x10011a90).
 =================
 */
 static void CG_DrawWarmupCountdown(int gt) {
-	int w;
-	const char* s;
+	float y = (cgs.gametype == GT_RACE) ? 10.0f : 0.0f;
+	qboolean rounds = (gt == GT_CA || gt == GT_FREEZE || gt == GT_AD || gt == GT_RR) && cg.warmupRound > 0;
 	const char* header = "";
-	clientInfo_t* ci1;
-	clientInfo_t* ci2;
-	int i;
+	int i, first = -1, last = -1, team;
 
-	// Gametype header line
 	if (gt == GT_DUEL) {
-		// Duel: show "X vs Y"
-		ci1 = NULL;
-		ci2 = NULL;
 		for (i = 0; i < cgs.maxclients; i++) {
 			if (cgs.clientinfo[i].infoValid && cgs.clientinfo[i].team == TEAM_FREE) {
-				if (!ci1) {
-					ci1 = &cgs.clientinfo[i];
+				if (first < 0) {
+					first = i;
 				} else {
-					ci2 = &cgs.clientinfo[i];
+					last = i;
 				}
 			}
 		}
-		if (ci1 && ci2) {
-			header = va("%s vs %s", ci1->name, ci2->name);
+		if (first >= 0 && last >= 0) {
+			header = va("%s vs %s", cgs.clientinfo[first].name, cgs.clientinfo[last].name);
 		}
-	} else if (gt >= 0 && gt <= GT_RR) {
-		// Round-based gametypes with active rounds: "Round Begins in"
-		switch (gt) {
-		case GT_CA:
-		case GT_FREEZE:
-		case GT_AD:
-		case GT_RR:
-			header = "Round Begins in";
-			break;
-		default:
-			header = gametypeDisplayNames[gt];
-			break;
+	} else if (gt == GT_FFA && (cgs.customSettings & 0x40000)) {
+		header = "Quad Hog";
+	} else if (gt == GT_RR && (cgs.customSettings & 0x4000000) && cg.warmupRound == 0) {
+		header = "Infected";
+	} else if (gt == GT_AD && cg.warmupState == 1) {
+		team = cgs.clientinfo[cg.clientNum].team;
+		if (team == TEAM_RED) {
+			header = cg.warmupTurn ? "DEFEND THE FLAG" : "ATTACK THE FLAG";
+		} else if (team == TEAM_BLUE) {
+			header = cg.warmupTurn ? "ATTACK THE FLAG" : "DEFEND THE FLAG";
+		} else {
+			header = cg.warmupTurn ? "Blue is on offense" : "Red is on offense";
 		}
-	} else {
+	} else if (gt == GT_FREEZE && !cgs.freezeRoundDelay) {
+		header = gametypeDisplayNames[GT_FREEZE];
+	} else if (rounds) {
+		header = (cgs.timelimit && (cg.timelimitWarnings & 4) && cg.time - cgs.levelStartTime > cgs.timelimit * 60000)
+					 ? "Sudden Death"
+					 : "Round Begins in";
+	} else if (gt < 0 || gt > GT_RR) {
 		header = "Unknown Gametype";
+	} else {
+		header = gametypeDisplayNames[gt];
 	}
 
-	w = CG_Text_Width(header, 0.6f, 0);
-	CG_Text_Paint(320 - w / 2, 90, 0.6f, colorWhite, header, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
-
-	// Countdown number
-	switch (gt) {
-	case GT_CA:
-	case GT_FREEZE:
-	case GT_AD:
-	case GT_RR:
-		// Round-based: bare number
-		s = va("%i", cg.warmupCount);
-		break;
-	default:
-		s = va("Starts in: %i", cg.warmupCount);
-		break;
-	}
-
-	w = CG_Text_Width(s, 0.45f, 0);
-	CG_Text_Paint(320 - w / 2, 125, 0.45f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+	CG_DrawWarmupLine(y + 90, 0, 0.6f, colorWhite, header, ITEM_TEXTSTYLE_SHADOWEDMORE);
+	CG_DrawWarmupLine(y + 125, 0, 0.45f, colorWhite, va(rounds ? "%i" : "Starts in: %i", cg.warmupCount),
+					  ITEM_TEXTSTYLE_SHADOWEDMORE);
 }
 
 /*
 =================
-CG_DrawWarmupMessages
+CG_DrawWarmup
 
-[QL] Full warmup display: countdown tick sounds, PRE_GAME waiting messages,
-and countdown display. Replaces the old CG_DrawWarmup.
-Binary: CG_DrawWarmupMessages in cgamex86.dll
+[QL] cgamex86.dll 0x1000f090. Nothing in practice mode.
+- The count ticks while a warmup time is set, and once more after it clears; the counting
+  sounds play for 1 to 3, in the rounds of CA, Freeze Tag, A&D and Red Rover only once a
+  round has been played (always in Freeze Tag without g_freezeRoundDelay).
+- Nothing more over the join menu or the scoreboard. A training match the player hasn't readied for shows
+  CG_DrawWarmupTutorial; a running count, CG_DrawWarmupCountdown.
+- Before the match (warmup -1), with cg_drawPregameMessages, two lines at y 88 and 108
+  (font 1, scale 0.35, white, ITEM_TEXTSTYLE_SHADOWED) say what it is waiting for, from
+  the players on each team: more players, fewer (duel), balanced teams, the ready
+  countdown ("Players must ready / within N seconds."), or more players ready.
+- A player in the match, once there are enough players, is told at y 124 (font 0, scale
+  0.25, ITEM_TEXTSTYLE_SHADOWEDMORE) to press the readyup key: red "Press <key> to ready
+  yourself", or green "Press <key> to unready yourself" once ready.
+Everything sits 10 units lower in Race.
+NOT PORTED: the sounds retail plays at 0 and 5 in the rounds (0x1000eb30 cases 0 and 5).
 =================
 */
 static void CG_DrawWarmup(void) {
-	int sec;
-	int i;
-	int w;
-	int gt;
-	int teamCounts[4];
+	float y = (cgs.gametype == GT_RACE) ? 10.0f : 0.0f;
+	int teamCounts[TEAM_NUM_TEAMS];
 	const char* line1;
 	const char* line2;
+	char key[32];
+	qboolean rounds, sound;
+	int sec, i, gt;
 
-	// Handle countdown tick and sounds
-	if (cg.warmup == 0) {
-		if (cg.warmupCount == -1) {
-			return;  // no warmup active
-		}
-		// warmup just ended, fall through to clear
-	} else if (cg.warmup == -1) {
-		cg.warmupCount = -1;
-	} else if (cg.warmup > 0) {
-		// Countdown active - calculate seconds remaining
-		sec = (cg.warmup - cg.time + 1000) / 1000;
-		if (sec < 0) {
-			sec = 0;
-		}
-
-		if (sec != cg.warmupCount) {
-			cg.warmupCount = sec;
-			// Play countdown sounds
-			switch (sec) {
-			case 1:
-				trap_S_StartLocalSound(cgs.media.count1Sound, CHAN_ANNOUNCER);
-				break;
-			case 2:
-				trap_S_StartLocalSound(cgs.media.count2Sound, CHAN_ANNOUNCER);
-				break;
-			case 3:
-				trap_S_StartLocalSound(cgs.media.count3Sound, CHAN_ANNOUNCER);
-				break;
-			}
-		}
-	}
-
-	if (cg.showScores) {
+	if (cgs.practice) {
 		return;
 	}
 
-	// Determine effective gametype for display
-	gt = (cg.warmupGametype >= 0) ? cg.warmupGametype : cgs.gametype;
+	if (cg.warmup == -1) {
+		cg.warmupCount = -1;
+	} else if (cg.warmup != 0 || cg.warmupCount != -1) {
+		sec = cg.warmup - cg.time + 1000;
+		sec = (sec < 0) ? 0 : sec / 1000;
+		if (sec != cg.warmupCount) {
+			rounds = (cgs.gametype == GT_CA || cgs.gametype == GT_FREEZE || cgs.gametype == GT_AD ||
+					  cgs.gametype == GT_RR);
+			sound = rounds ? (cg.warmupRound > 0 || (cgs.gametype == GT_FREEZE && !cgs.freezeRoundDelay)) : qtrue;
+			cg.warmupCount = sec;
+			if (sound) {
+				if (sec == 1) {
+					trap_S_StartLocalSound(cgs.media.count1Sound, CHAN_ANNOUNCER);
+				} else if (sec == 2) {
+					trap_S_StartLocalSound(cgs.media.count2Sound, CHAN_ANNOUNCER);
+				} else if (sec == 3) {
+					trap_S_StartLocalSound(cgs.media.count3Sound, CHAN_ANNOUNCER);
+				}
+			}
+		}
+	} else {
+		return;
+	}
 
-	// Countdown display
+	// [QL] 0x1000f1b0: not over the join menu (0x10a9c9ac) or last frame's scoreboard
+	if (cg.showJoinMenu || cg.scoreBoardShowing) {
+		return;
+	}
+	if (g_training.integer && !cgs.clientinfo[cg.clientNum].ready) {
+		CG_DrawWarmupTutorial();
+		return;
+	}
+
+	gt = (cg.warmupGametype == -1) ? cgs.gametype : cg.warmupGametype;
 	if (cg.warmupCount > 0) {
 		CG_DrawWarmupCountdown(gt);
 		return;
 	}
-
-	// PRE_GAME display (warmup == -1)
 	if (cg.warmup >= 0) {
 		return;
 	}
 
-	// Count players per team
 	memset(teamCounts, 0, sizeof(teamCounts));
 	for (i = 0; i < cgs.maxclients; i++) {
-		if (cgs.clientinfo[i].infoValid) {
+		if (cgs.clientinfo[i].infoValid && cgs.clientinfo[i].team >= 0 && cgs.clientinfo[i].team < TEAM_NUM_TEAMS) {
 			teamCounts[cgs.clientinfo[i].team]++;
 		}
 	}
 
-	line1 = NULL;
-	line2 = NULL;
-
-	if (gt == GT_RR) {
-		// Red Rover
-		if (cgs.teamSizeMin > 0 &&
-			(teamCounts[TEAM_RED] < cgs.teamSizeMin || teamCounts[TEAM_BLUE] < cgs.teamSizeMin)) {
-			line1 = "The match will begin";
-			line2 = "when more players join.";
-		} else {
-			line1 = "The match will begin";
-			line2 = "when more players are ready.";
-		}
-	} else if (gt < GT_TEAM) {
-		// FFA / Duel / Race
-		if (gt == GT_DUEL && teamCounts[TEAM_FREE] > 2) {
-			line1 = "The match will begin when";
-			line2 = "fewer players are in the match.";
-		} else if (teamCounts[TEAM_FREE] < 2) {
-			line1 = "The match will begin";
-			line2 = "when more players join.";
-		} else {
-			line1 = "The match will begin";
-			line2 = "when more players are ready.";
-		}
-	} else {
-		// Team games (TDM, CA, CTF, 1FCTF, Overload, Harvester, FT, Dom, AD)
-		if (teamCounts[TEAM_RED] < cgs.teamSizeMin) {
-			if (teamCounts[TEAM_BLUE] < cgs.teamSizeMin) {
-				// Both teams need players
-				line1 = "Waiting for more players.";
-				line2 = va("The match requires %i player%s per team.",
-					cgs.teamSizeMin, cgs.teamSizeMin != 1 ? "s" : "");
-			} else {
-				// Only red needs players
-				int need = cgs.teamSizeMin - teamCounts[TEAM_RED];
-				line1 = va("Waiting for %i more player%s", need, need != 1 ? "s" : "");
-				line2 = va("to join the %s.", "Red Team");
+	if (cg_drawPregameMessages.integer) {
+		line1 = "The match will begin";
+		line2 = "when more players are ready.";
+		if (gt == GT_RR) {
+			if ((cgs.customSettings & 0x4000000)
+					? teamCounts[TEAM_RED] + teamCounts[TEAM_BLUE] < cgs.teamSizeMin
+					: teamCounts[TEAM_RED] < cgs.teamSizeMin || teamCounts[TEAM_BLUE] < cgs.teamSizeMin) {
+				line2 = "when more players join.";
 			}
-		} else if (teamCounts[TEAM_BLUE] < cgs.teamSizeMin) {
-			// Only blue needs players
-			int need = cgs.teamSizeMin - teamCounts[TEAM_BLUE];
-			line1 = va("Waiting for %i more player%s", need, need != 1 ? "s" : "");
-			line2 = va("to join the %s.", "Blue Team");
-		} else if (cgs.teamForceBalance &&
-				   (teamCounts[TEAM_RED] > teamCounts[TEAM_BLUE] + 1 ||
-				    teamCounts[TEAM_BLUE] > teamCounts[TEAM_RED] + 1)) {
+		} else if (gt < GT_TEAM) {
+			if (gt == GT_DUEL && teamCounts[TEAM_FREE] > 2) {
+				line1 = "The match will begin when";
+				line2 = "fewer players are in the match.";
+			} else if (teamCounts[TEAM_FREE] < 2) {
+				line2 = "when more players join.";
+			} else if (cgs.allReadyTime) {
+				sec = (cgs.allReadyTime - cg.time) / 1000 + 1;
+				if (sec < 0) {
+					sec = 0;
+				}
+				line1 = "Players must ready";
+				line2 = va("within %i second%s.", sec, sec != 1 ? "s" : "");
+			}
+		} else if (teamCounts[TEAM_RED] < cgs.teamSizeMin && teamCounts[TEAM_BLUE] < cgs.teamSizeMin) {
+			line1 = "Waiting for more players.";
+			line2 = va("The match requires %i player%s per team.", cgs.teamSizeMin, cgs.teamSizeMin != 1 ? "s" : "");
+		} else if (teamCounts[TEAM_RED] < cgs.teamSizeMin || teamCounts[TEAM_BLUE] < cgs.teamSizeMin) {
+			i = (teamCounts[TEAM_RED] < cgs.teamSizeMin) ? TEAM_RED : TEAM_BLUE;
+			sec = cgs.teamSizeMin - teamCounts[i];
+			line1 = va("Waiting for %i more player%s", sec, sec != 1 ? "s" : "");
+			line2 = va("to join the %s.", (i == TEAM_RED) ? "Red Team" : "Blue Team");
+		} else if (cgs.teamForceBalance && (teamCounts[TEAM_RED] > teamCounts[TEAM_BLUE] + 1 ||
+											 teamCounts[TEAM_BLUE] > teamCounts[TEAM_RED] + 1)) {
 			line1 = "The teams must be balanced";
 			line2 = "before the match can begin.";
-		} else {
-			line1 = "The match will begin";
-			line2 = "when more players are ready.";
 		}
+		CG_DrawWarmupLine(y + 88, 1, 0.35f, colorWhite, line1, ITEM_TEXTSTYLE_SHADOWED);
+		CG_DrawWarmupLine(y + 108, 1, 0.35f, colorWhite, line2, ITEM_TEXTSTYLE_SHADOWED);
 	}
 
-	if (line1) {
-		w = CG_Text_Width(line1, 0.35f, 0);
-		CG_Text_Paint(320 - w / 2, 88, 0.35f, colorWhite, line1, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+	if (cgs.clientinfo[cg.clientNum].team == TEAM_SPECTATOR) {
+		return;
 	}
-	if (line2) {
-		w = CG_Text_Width(line2, 0.35f, 0);
-		CG_Text_Paint(320 - w / 2, 108, 0.35f, colorWhite, line2, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+	if (cgs.gametype < GT_TEAM ? teamCounts[TEAM_FREE] < 2
+							   : teamCounts[TEAM_RED] < cgs.teamSizeMin || teamCounts[TEAM_BLUE] < cgs.teamSizeMin) {
+		if (cgs.gametype != GT_RR || !(cgs.customSettings & 0x4000000) ||
+			teamCounts[TEAM_RED] + teamCounts[TEAM_BLUE] < cgs.teamSizeMin) {
+			return;
+		}
+	}
+	CG_ReadyUpKeyName(key, sizeof(key));
+	if (!cgs.clientinfo[cg.clientNum].ready) {
+		CG_DrawWarmupLine(y + 124, 0, 0.25f, colorRed, va("Press %s to ready yourself", key), ITEM_TEXTSTYLE_SHADOWEDMORE);
+	} else {
+		CG_DrawWarmupLine(y + 124, 0, 0.25f, colorGreen, va("Press %s to unready yourself", key), ITEM_TEXTSTYLE_SHADOWEDMORE);
 	}
 }
 
@@ -2497,7 +2555,7 @@ static void CG_DrawTimeout(void) {
 	}
 
 	w = CG_Text_Width(s, 0.5f, 0);
-	CG_Text_Paint(320 - w / 2, 128, 0.5f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+	CG_Text_Paint(320 - w / 2, 128, 0.5f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);  // [QL] 0x1000f04e
 }
 
 /*

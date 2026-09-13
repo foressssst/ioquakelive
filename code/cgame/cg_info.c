@@ -168,16 +168,20 @@ void CG_DrawInformation(void) {
     // [QL] bottom bar: black semi-transparent covering y=400..480
     CG_FillRect(-400, 400, 1440, 80, colorBarEmpty);
 
-    // [QL] map display name (lower-left, bigFont via scale 0.8)
+    // [QL] cgamex86.dll 0x1001d22d: the map's name at x 10 with its top on y 400, in font 0
+    // at scale 0.8, and under it, when the map has one, its authors in font 1 at scale 0.25
+    // with their tops on y 447 and 462. None of them is shadowed.
     s = CG_ConfigString(CS_MESSAGE);
-    CG_Text_Paint(8, 435, 0.8f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+    CG_DrawText(10, (float)(400 + CG_DrawTextHeight(s, 0.8f, 0, 0)), 0, 0.8f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_NORMAL);
 
-    // [QL] author/author2 below map name (textFont = NotoSans via fontIndex 0)
     sAuthor = CG_ConfigString(CS_AUTHOR);
-    CG_DrawText_DC(8, 455, 0.25f, colorWhite, sAuthor, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE, 0);
-
-    sAuthor2 = CG_ConfigString(CS_AUTHOR2);
-    CG_DrawText_DC(8, 470, 0.25f, colorWhite, sAuthor2, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE, 0);
+    if (sAuthor[0]) {
+        sAuthor2 = CG_ConfigString(CS_AUTHOR2);
+        CG_DrawText(10, (float)(447 + CG_DrawTextHeight(sAuthor, 0.25f, 0, 1)), 1, 0.25f, colorWhite, sAuthor, 0, 0,
+                    ITEM_TEXTSTYLE_NORMAL);
+        CG_DrawText(10, (float)(462 + CG_DrawTextHeight(sAuthor2, 0.25f, 0, 1)), 1, 0.25f, colorWhite, sAuthor2, 0, 0,
+                    ITEM_TEXTSTYLE_NORMAL);
+    }
 
     // [QL] right-anchored elements: gametype background and name
     CG_SetWidescreen(WIDESCREEN_RIGHT);
@@ -193,8 +197,11 @@ void CG_DrawInformation(void) {
     } else {
         gametypeName = "Unknown Gametype";
     }
-    w = CG_Text_Width(gametypeName, 0.8f, 0);
-    CG_Text_Paint(620 - w, 45, 0.8f, colorWhite, gametypeName, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+    // [QL] 0x1001d48d: right-aligned on 620 with its top 10 units down, font 0, scale 0.8,
+    // not shadowed
+    w = CG_DrawTextWidth(gametypeName, 0.8f, 0, 0);
+    CG_DrawText((float)(620 - w), (float)(10 + CG_DrawTextHeight(gametypeName, 0.8f, 0, 0)), 0, 0.8f, colorWhite,
+                gametypeName, 0, 0, ITEM_TEXTSTYLE_NORMAL);
 
     // [QL] center-anchored elements: loading text and progress boxes
     CG_SetWidescreen(WIDESCREEN_CENTER);
@@ -205,8 +212,9 @@ void CG_DrawInformation(void) {
     } else {
         s = "Awaiting Snapshot";
     }
-    w = CG_Text_Width(s, 0.3f, 0);
-    CG_Text_Paint(320 - w / 2, 368, 0.3f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
+    // [QL] 0x1001d524: centred at y 370 in font 1, scale 0.3, shadowed
+    w = CG_DrawTextWidth(s, 0.3f, 0, 1);
+    CG_DrawText((float)(320 - w / 2), 370, 1, 0.3f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 
     // [QL] progress boxes: 4 boxes, 8x8 each, 16px stride, y=380
     for (i = 0; i < NUM_LOADING_STAGES; i++) {
