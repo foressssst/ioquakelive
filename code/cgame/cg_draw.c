@@ -1061,53 +1061,35 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame) {
 ===================
 CG_DrawRewardIcon
 
-[CPMA] ch_animateRewardIcons: CPMA 1.53 builds assist, capture, defend, excellent,
-gauntlet and impressive over 24 frames of 40 ms, played once (1) or looped (2).
-Quake Live has one image per medal, so the build is drawn on it: the icon grows in
-over the first half, then a copy swells and fades like CPMA's closing ring. The
-other medals stay still, as in CPMA.
+[CPMA] ch_animateRewardIcons: CPMA 1.53 plays 24 frames of 40 ms for assist, capture,
+defend, excellent, gauntlet and impressive, stopping on the last (1) or looping (2)
+(cgame.qvm func 165605). The frames come from the player's own CPMA package; without
+it, and for every other medal, the icon stays still.
 ===================
 */
-static void CG_DrawRewardIcon(float x, float y, qhandle_t shader, const vec4_t color) {
+static void CG_DrawRewardIcon(float x, float y, qhandle_t shader) {
+	const qhandle_t animated[6] = {cgs.media.medalAssist, cgs.media.medalCapture, cgs.media.medalDefend,
+								   cgs.media.medalExcellent, cgs.media.medalGauntlet, cgs.media.medalImpressive};
 	int mode = ch_animateRewardIcons.integer;
-	float frame, u, s;
-	vec4_t echo;
+	int medal, frame;
 
-	if ((mode != 1 && mode != 2) ||
-		(shader != cgs.media.medalAssist && shader != cgs.media.medalCapture &&
-		 shader != cgs.media.medalDefend && shader != cgs.media.medalExcellent &&
-		 shader != cgs.media.medalGauntlet && shader != cgs.media.medalImpressive)) {
-		CG_DrawPic(x, y, 32, 32, shader);
-		return;
-	}
-
-	frame = (cg.time - cg.rewardTime) / 40.0f;
-	if (frame < 0.0f) {
-		frame = 0.0f;
-	}
-	if (mode == 1) {
-		if (frame > 23.0f) {
-			frame = 23.0f;
+	for (medal = 0; mode >= 1 && mode <= 2 && medal < 6; medal++) {
+		if (shader != animated[medal] || !cgs.media.medalFrames[medal][0]) {
+			continue;
 		}
-	} else {
-		frame = (float)fmod(frame, 24.0f);
+		frame = (cg.time - cg.rewardTime) / 40;
+		if (frame < 0) {
+			frame = 0;
+		}
+		if (mode == 1) {
+			frame = (frame > 23) ? 23 : frame;
+		} else {
+			frame %= 24;
+		}
+		shader = cgs.media.medalFrames[medal][frame];
+		break;
 	}
-
-	if (frame < 12.0f) {
-		u = 1.0f - frame / 12.0f;
-		s = 0.25f + 0.75f * (1.0f - u * u * u);
-		CG_DrawPic(x + 16.0f * (1.0f - s), y + 16.0f * (1.0f - s), 32.0f * s, 32.0f * s, shader);
-		return;
-	}
-
 	CG_DrawPic(x, y, 32, 32, shader);
-	u = (frame - 12.0f) / 11.0f;
-	s = 1.0f + 0.35f * u;
-	Vector4Copy(color, echo);
-	echo[3] *= 1.0f - u;
-	trap_R_SetColor(echo);
-	CG_DrawPic(x + 16.0f * (1.0f - s), y + 16.0f * (1.0f - s), 32.0f * s, 32.0f * s, shader);
-	trap_R_SetColor(color);
 }
 
 /*
@@ -1149,17 +1131,22 @@ static void CG_DrawReward(void) {
 	}
 
 	color[0] = color[1] = color[2] = 1.0f;
-	color[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
+	if (ch_animateRewardIcons.integer) {
+		// [CPMA] RewardIcons in CPMA 1.53's hud.cfg: fadedelay 1800, time 200
+		color[3] = CG_CpmaFade(cg.rewardTime, 0, REWARD_TIME - 200, 200);
+	} else {
+		color[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
+	}
 	trap_R_SetColor(color);
 
 	count = cg.rewardCount[0];
 	if (count > cg_drawRewardsRowSize.integer) {
-		CG_DrawRewardIcon(296, 42, cg.rewardShader[0], color);
+		CG_DrawRewardIcon(296, 42, cg.rewardShader[0]);
 		CG_DrawText(336, 66, 0, 0.2f, colorWhite, va("%d", count), 0, 0, 0);
 	} else {
 		x = (float)(320 - (count * 48) / 2);
 		for (i = 0; i < count; i++) {
-			CG_DrawRewardIcon(x, 42, cg.rewardShader[0], color);
+			CG_DrawRewardIcon(x, 42, cg.rewardShader[0]);
 			x += 48;
 		}
 	}
@@ -1414,6 +1401,7 @@ void CG_CenterPrint(const char* str, int y, float scale) {
 	Q_strncpyz(cg.centerPrint, str, sizeof(cg.centerPrint));
 
 	cg.centerPrintTime = cg.time;
+	cg.centerPrintFrag = qfalse;
 	cg.centerPrintY = y + (cgs.gametype == GT_RACE ? 10 : 0);
 	cg.centerPrintScale = scale;
 
@@ -1449,14 +1437,22 @@ static void CG_DrawCenterString(void) {
 		return;
 	}
 
-	duration = (int)(cg_centertime.value * 1000.0);
-	remaining = duration - (cg.time - cg.centerPrintTime);
-	if (cg.time - cg.centerPrintTime >= duration) {
-		return;
-	}
-
 	color[0] = color[1] = color[2] = 1.0f;
-	color[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
+	if (cg.centerPrintFrag && ch_animateScroll.integer) {
+		// [CPMA] FragMessage and RankMessage in CPMA 1.53's hud.cfg: fadein 150,
+		// fadedelay 1200, time 200
+		color[3] = CG_CpmaFade(cg.centerPrintTime, 150, 1200, 200);
+		if (color[3] <= 0.0f) {
+			return;
+		}
+	} else {
+		duration = (int)(cg_centertime.value * 1000.0);
+		remaining = duration - (cg.time - cg.centerPrintTime);
+		if (cg.time - cg.centerPrintTime >= duration) {
+			return;
+		}
+		color[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
+	}
 	trap_R_SetColor(color);
 
 	start = cg.centerPrint;

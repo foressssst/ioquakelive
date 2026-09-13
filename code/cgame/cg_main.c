@@ -283,6 +283,7 @@ vmCvar_t cg_animateChatBalloon;
 vmCvar_t ch_animateScroll;
 vmCvar_t ch_crosshairPulse;
 vmCvar_t cg_zoomAnimationTime;
+vmCvar_t ch_chatLines;
 vmCvar_t cg_rocketStyle;
 vmCvar_t cg_raceBeep;
 vmCvar_t cg_screenDamage_Self;
@@ -707,6 +708,7 @@ static cvarTable_t cvarTable[] = {
     {&ch_animateScroll, "ch_animateScroll", "1", CVAR_ARCHIVE},
     {&ch_crosshairPulse, "ch_crosshairPulse", "0", CVAR_ARCHIVE},
     {&cg_zoomAnimationTime, "cg_zoomAnimationTime", "150", CVAR_ARCHIVE},
+    {&ch_chatLines, "ch_chatLines", "3", CVAR_ARCHIVE},
     {&cg_rocketStyle, "cg_rocketStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_raceBeep, "cg_raceBeep", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_screenDamage_Self, "cg_screenDamage_Self", "0x00000000", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
@@ -1940,7 +1942,6 @@ static void CG_RegisterGraphics(void) {
     cgs.media.smoke2 = trap_R_RegisterModel("models/weapons2/shells/s_shell.md3");
 
     cgs.media.balloonShader = trap_R_RegisterShader("sprites/balloon3");
-    cgs.media.chatDotShader = trap_R_RegisterShader("sprites/ioql_chatdot");
 
     cgs.media.bloodExplosionShader = cgs.media.bloodSprayShaders[0];
 
@@ -1974,6 +1975,29 @@ static void CG_RegisterGraphics(void) {
     cgs.media.medalGauntlet = trap_R_RegisterShaderNoMip("medal_gauntlet");
     cgs.media.medalHeadshot = trap_R_RegisterShaderNoMip("medal_headshot");
     cgs.media.medalImpressive = trap_R_RegisterShaderNoMip("medal_impressive");
+
+    // [CPMA] animation frames, only when the player's own CPMA package provides them
+    // (the launcher extracts them into zz-cpma-anim.pk3; ioquakelive never ships them)
+    {
+        static const char* const medalNames[6] = {"assist", "capture", "defend", "excellent", "gauntlet", "impressive"};
+        fileHandle_t f;
+        int m, n;
+
+        if (trap_FS_FOpenFile("menu/medals/impressive/1.tga", &f, FS_READ) > 0) {
+            trap_FS_FCloseFile(f);
+            for (m = 0; m < 6; m++) {
+                for (n = 0; n < 24; n++) {
+                    cgs.media.medalFrames[m][n] = trap_R_RegisterShaderNoMip(va("menu/medals/%s/%d", medalNames[m], n + 1));
+                }
+            }
+        }
+        if (trap_FS_FOpenFile("sprites/chat01.tga", &f, FS_READ) > 0) {
+            trap_FS_FCloseFile(f);
+            for (n = 0; n < 16; n++) {
+                cgs.media.chatBalloonFrames[n] = trap_R_RegisterShader(va("sprites/ioql_chat%02d", n + 1));
+            }
+        }
+    }
     cgs.media.medalMidair = trap_R_RegisterShaderNoMip("medal_midair");
     cgs.media.medalPerfect = trap_R_RegisterShaderNoMip("medal_perfect");
     cgs.media.medalPerforated = trap_R_RegisterShaderNoMip("medal_perforated");

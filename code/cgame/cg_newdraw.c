@@ -3057,29 +3057,28 @@ static const float *CG_ObitTeamColor(int team) {
     }
 }
 
-// [CPMA] ch_animateScroll: a new line fades in over CPMA's 150 ms (hud.cfg
-// GameEvents fadein) and the list glides up when the oldest line goes
-#define OBIT_FADEIN_TIME 150
-
+// [CPMA] with ch_animateScroll a line lives as CPMA's GameEvents item (eases in, holds,
+// eases out) and the list glides up a row when one goes
 static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
     static vec4_t obitColor;
     int i;
-    int y, textH, attackerW, remaining, age;
+    int y, textH, attackerW, remaining;
     float x, iconY, iconW, iconH;
     const float *team;
+    int lifetime = ch_animateScroll.integer ? OBIT_FADEIN + OBIT_FADEDELAY + OBIT_FADEOUT : 2000;
 
     // 0x1002e9d7: an expired slot shifts the whole array up from slot 0 and
     // the same index is looked at again
     for (i = 0; i < MAX_OBITUARIES; i++) {
-        if (cg.obituaries[i].time > 0 && cg.time >= cg.obituaries[i].time + 2000) {
+        if (cg.obituaries[i].time > 0 && cg.time >= cg.obituaries[i].time + lifetime) {
             memmove(&cg.obituaries[0], &cg.obituaries[1], (MAX_OBITUARIES - 1) * sizeof(cg.obituaries[0]));
             memset(&cg.obituaries[MAX_OBITUARIES - 1], 0, sizeof(cg.obituaries[0]));
-            CG_AddScrollRow(&cg.obitScrollRows, &cg.obitScrollTime);
+            CG_AddScrollRow(&cg.obitScrollRows, &cg.obitScrollTime, OBIT_FADEOUT / 10.0f);
             i--;
         }
     }
 
-    y = (int)(rect->y + CG_ScrollRows(cg.obitScrollRows, cg.obitScrollTime) *
+    y = (int)(rect->y + CG_ScrollRows(cg.obitScrollRows, cg.obitScrollTime, OBIT_FADEOUT / 10.0f) *
                             (CG_DrawTextHeight("A", scale, 0, 0) + 2));
 
     for (i = 0; i < MAX_OBITUARIES; i++) {
@@ -3087,16 +3086,16 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
             continue;
         }
 
-        remaining = 2000 - (cg.time - cg.obituaries[i].time);
+        remaining = lifetime - (cg.time - cg.obituaries[i].time);
         if (!cg.obituaries[i].time || remaining <= 0) {
             // retail would draw through a NULL colour here; the pass above
             // makes it unreachable
             continue;
         }
-        obitColor[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
-        age = cg.time - cg.obituaries[i].time;
-        if (ch_animateScroll.integer && age < OBIT_FADEIN_TIME) {
-            obitColor[3] *= (float)age / OBIT_FADEIN_TIME;
+        if (ch_animateScroll.integer) {
+            obitColor[3] = CG_CpmaFade(cg.obituaries[i].time, OBIT_FADEIN, OBIT_FADEDELAY, OBIT_FADEOUT);
+        } else {
+            obitColor[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
         }
 
         textH = CG_DrawTextHeight(cg.obituaries[i].victimName, scale, 0, 0);

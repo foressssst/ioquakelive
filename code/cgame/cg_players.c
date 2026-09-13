@@ -1959,43 +1959,18 @@ static void CG_PlayerPowerups(centity_t* cent, refEntity_t* torso) {
 
 /*
 ===============
-CG_ChatBalloonDot
+CG_ChatBalloonShader
 
 [CPMA] cg_animateChatBalloon: CPMA 1.53 loops 16 frames of 40 ms (640 ms) on one clock
-for every balloon, three dots rising and falling in turn. Quake Live's balloon has its
-"..." drawn in, so each of those dots gets a glow that swells and rises in turn. Returns
-the glow's strength, 0 when off, and its centre in the balloon image (0-1).
+for every balloon (cgame.qvm func 64762). The frames come from the player's own CPMA
+package; without it, Quake Live's balloon.
 ===============
 */
-float CG_ChatBalloonDot(int dot, float* u, float* v) {
-    static const float dotX[3] = {38.6f, 46.5f, 53.6f};
-    float t = (float)(cg.time % 640 - dot * 80) / 240.0f;
-    float pulse = (t > 0.0f && t < 1.0f) ? (float)sin(t * M_PI) : 0.0f;
-
-    *u = dotX[dot] / 64.0f;
-    *v = (31.6f - 3.0f * pulse) / 64.0f;
-    return pulse;
-}
-
-// the balloon sprite's image runs to the view's right and down
-static void CG_AddChatBalloonDots(const refEntity_t* balloon) {
-    refEntity_t glow;
-    float u, v, pulse;
-    int i;
-
-    for (i = 0; i < 3; i++) {
-        pulse = CG_ChatBalloonDot(i, &u, &v);
-        if (pulse <= 0.0f) {
-            continue;
-        }
-        glow = *balloon;
-        VectorMA(glow.origin, (1.0f - 2.0f * u) * balloon->radius, cg.refdef.viewaxis[1], glow.origin);
-        VectorMA(glow.origin, (1.0f - 2.0f * v) * balloon->radius, cg.refdef.viewaxis[2], glow.origin);
-        glow.customShader = cgs.media.chatDotShader;
-        glow.radius = balloon->radius * 0.16f;
-        glow.shaderRGBA[0] = glow.shaderRGBA[1] = glow.shaderRGBA[2] = (byte)(255.0f * pulse);
-        trap_R_AddRefEntityToScene(&glow);
+qhandle_t CG_ChatBalloonShader(void) {
+    if (cg_animateChatBalloon.integer && cgs.media.chatBalloonFrames[0]) {
+        return cgs.media.chatBalloonFrames[(cg.time / 40) % 16];
     }
+    return cgs.media.balloonShader;
 }
 
 /*
@@ -2026,9 +2001,6 @@ static void CG_PlayerFloatSprite(centity_t* cent, qhandle_t shader, qboolean sam
         ent.renderfx = ownHead ? RF_THIRD_PERSON : 0;
         ent.shaderRGBA[0] = ent.shaderRGBA[1] = ent.shaderRGBA[2] = ent.shaderRGBA[3] = 255;
         trap_R_AddRefEntityToScene(&ent);
-        if (shader == cgs.media.balloonShader && cg_animateChatBalloon.integer) {
-            CG_AddChatBalloonDots(&ent);
-        }
         return;
     }
 
@@ -2081,7 +2053,7 @@ static void CG_PlayerSprites(centity_t* cent) {
     if (flags & EF_CONNECTION) {
         CG_PlayerFloatSprite(cent, cgs.media.connectionShader, sameTeam);
     } else if ((flags & EF_TALK) && !(flags & EF_DEAD)) {
-        CG_PlayerFloatSprite(cent, cgs.media.balloonShader, sameTeam);
+        CG_PlayerFloatSprite(cent, CG_ChatBalloonShader(), sameTeam);
     } else if (flags & EF_AWARD_IMPRESSIVE) {
         CG_PlayerFloatSprite(cent, cgs.media.medalImpressive, sameTeam);
     } else if (flags & EF_AWARD_EXCELLENT) {

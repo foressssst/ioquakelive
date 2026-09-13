@@ -150,7 +150,7 @@ static void CG_AddObituary(const char *victimName, const char *attackerName,
     if (idx == MAX_OBITUARIES) {
         memmove(&cg.obituaries[0], &cg.obituaries[1], (MAX_OBITUARIES - 1) * sizeof(cg.obituaries[0]));
         memset(&cg.obituaries[MAX_OBITUARIES - 1], 0, sizeof(cg.obituaries[0]));
-        CG_AddScrollRow(&cg.obitScrollRows, &cg.obitScrollTime);
+        CG_AddScrollRow(&cg.obitScrollRows, &cg.obitScrollTime, OBIT_FADEOUT / 10.0f);
         // retail keeps idx at 16 here and writes one slot past the array
         idx = MAX_OBITUARIES - 1;
     }
@@ -180,7 +180,7 @@ static void CG_AddObituary(const char *victimName, const char *attackerName,
     if (idx >= cg_obituaryRowSize.integer) {
         memmove(&cg.obituaries[0], &cg.obituaries[1], rowSize * sizeof(cg.obituaries[0]));
         memset(&cg.obituaries[rowSize], 0, (MAX_OBITUARIES - rowSize) * sizeof(cg.obituaries[0]));
-        CG_AddScrollRow(&cg.obitScrollRows, &cg.obitScrollTime);
+        CG_AddScrollRow(&cg.obitScrollRows, &cg.obitScrollTime, OBIT_FADEOUT / 10.0f);
     }
 }
 
@@ -399,6 +399,7 @@ static void CG_Obituary(entityState_t* ent) {
 
         if (!cg_cameraOrbit.integer) {
             CG_CenterPrint(s, cg.warmup ? 144 : 90, 0.3f);
+            cg.centerPrintFrag = qtrue;
         }
     }
 
