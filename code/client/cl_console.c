@@ -914,7 +914,7 @@ void Con_Init(void) {
     con_timestamps = Cvar_Get("con_timestamps", "0", CVAR_ARCHIVE);
 
     // [CNQ3] console style, all defaults keep Quake Live's console
-    con_style = Cvar_Get("con_style", "0", CVAR_ARCHIVE);
+    con_style = Cvar_Get("con_style", "1", CVAR_ARCHIVE);
     Cvar_CheckRange(con_style, 0, 1, qtrue);
 
     con_drawHelp = Cvar_Get("con_drawHelp", "1", CVAR_ARCHIVE);
