@@ -820,9 +820,6 @@ typedef struct {
     float damageX, damageY, damageValue;
     int damageType;  // [QL] hit-effect colour selector for CG_DrawDamageBlend (2=green,3=orange,4=blue,else light-blue)
 
-    // [CPMA] crosshair hit marker
-    int crosshairHitTime;
-
     // status bar head
     float headYaw;
     float headEndPitch;
@@ -1664,9 +1661,6 @@ extern vmCvar_t cg_crosshairX;
 extern vmCvar_t cg_crosshairY;
 extern vmCvar_t cg_crosshairSize;
 extern vmCvar_t cg_crosshairHealth;
-extern vmCvar_t cg_crosshairHitColor;
-extern vmCvar_t cg_crosshairHitStyle;
-extern vmCvar_t cg_crosshairHitTime;
 extern vmCvar_t cg_drawStatus;
 extern vmCvar_t cg_draw2D;
 extern vmCvar_t cg_animSpeed;

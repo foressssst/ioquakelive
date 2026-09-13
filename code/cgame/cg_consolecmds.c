@@ -670,15 +670,8 @@ void CG_DrawChat(float x, float y, float w, float h, float scale) {
             memcpy(&cg.chatLines[cg.chatIndex], &cg.currentChatLine, sizeof(cg.currentChatLine));
             memset(&cg.currentChatLine, 0, sizeof(cg.currentChatLine));
         } else {
-            // [CPMA] slide in from left over 150 ms
-            float chatSlide = 0;
-            float elapsed = (float)(cg.time - cg.currentChatLine.startTime);
-            if (elapsed < 150.0f) {
-                float t = elapsed / 150.0f;
-                chatSlide = -150.0f * (1.0f - t * t);
-            }
             CG_SetWidescreen(WIDESCREEN_LEFT);
-            CG_DrawText(x + chatSlide, bottom, 1, scale, colorWhite, cg.currentChatLine.text, 0, 256, 3);
+            CG_DrawText(x, bottom, 1, scale, colorWhite, cg.currentChatLine.text, 0, 256, 3);
             CG_SetWidescreen(WIDESCREEN_STRETCH);
         }
     }
