@@ -913,7 +913,7 @@ void Con_Init(void) {
 
     con_timestamps = Cvar_Get("con_timestamps", "0", CVAR_ARCHIVE);
 
-    // [CNQ3] console style, all defaults keep Quake Live's console
+    // [CNQ3] console style; 1 by default at the user's request, 0 keeps Quake Live's console
     con_style = Cvar_Get("con_style", "1", CVAR_ARCHIVE);
     Cvar_CheckRange(con_style, 0, 1, qtrue);
 
@@ -923,12 +923,10 @@ void Con_Init(void) {
     con_history = Cvar_Get("con_history", "1", CVAR_ARCHIVE);
     Cvar_CheckRange(con_history, 0, 1, qtrue);
 
-    // [CPMA] extended colour codes, off by default like Quake Live
-    cl_extendedColors = Cvar_Get("cl_extendedColors", "1", CVAR_ARCHIVE);
-    Cvar_CheckRange(cl_extendedColors, 0, 1, qtrue);
-    Cvar_SetHelp("cl_extendedColors", "colour codes in text\n"
-                 S_COLOR_VAL "    0 " S_COLOR_HELP "= Quake Live: the codes 0 to 7\n"
-                 S_COLOR_VAL "    1 " S_COLOR_HELP "= CPMA: also 8, 9 and a to z\n"
+    // [CPMA] extended colour codes, always on at the user's request; CVAR_ROM also
+    // overrides an archived "0" left by an older build
+    cl_extendedColors = Cvar_Get("cl_extendedColors", "1", CVAR_ROM);
+    Cvar_SetHelp("cl_extendedColors", "colour codes in text: Quake Live's 0 to 7 plus CPMA's 8, 9 and a to z, always on\n"
                  "The list in their colours: " S_COLOR_CMD "colorlist");
 
     for (i = 0; i < CC_COUNT; i++) {

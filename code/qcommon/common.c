@@ -2311,6 +2311,30 @@ For controlling environment variables
 ==================
 */
 
+#define COM_CONFIG_VERSION 1
+
+/*
+==================
+Com_MigrateConfig
+
+Cvar_Get keeps an archived value over a new default, so a default changed in a
+later build never reaches a config written by an earlier one. Each step runs once.
+==================
+*/
+static void Com_MigrateConfig(void) {
+    cvar_t* version = Cvar_Get("com_configVersion", "0", CVAR_ARCHIVE);
+
+    if (version->integer < 1) {
+        if (Cvar_Flags("con_style") != CVAR_NONEXISTENT)
+            Cvar_Set("con_style", "1");
+        if (Cvar_Flags("r_autoExposure") != CVAR_NONEXISTENT)
+            Cvar_Set("r_autoExposure", "0");
+    }
+
+    if (version->integer != COM_CONFIG_VERSION)
+        Cvar_Set("com_configVersion", va("%i", COM_CONFIG_VERSION));
+}
+
 void Com_ExecuteCfg(void) {
     Cbuf_ExecuteText(EXEC_NOW, "exec default.cfg\n");
     Cbuf_Execute();  // Always execute after exec to prevent text buffer overflowing
@@ -2325,6 +2349,8 @@ void Com_ExecuteCfg(void) {
 #endif
         Cbuf_ExecuteText(EXEC_NOW, "exec autoexec.cfg\n");
         Cbuf_Execute();
+
+        Com_MigrateConfig();
     }
 }
 
