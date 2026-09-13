@@ -40,7 +40,7 @@ function Write-Log([string]$Message, [string]$Color = 'Gray') {
 
 function New-Client($Config) {
     $wc = New-Object System.Net.WebClient
-    $wc.Headers['Authorization'] = 'Basic ' + $Config.auth
+    if ($Config.auth) { $wc.Headers['Authorization'] = 'Basic ' + $Config.auth }
     $wc.Headers['User-Agent'] = 'ioquakelive-launcher/1'
     return $wc
 }
@@ -96,7 +96,104 @@ function Get-VerifiedManifest($Config) {
     throw 'La firma del manifiesto NO es valida. No se instala nada.'
 }
 
+# ---------------------------------------------------------------------------
+# Quake Live data from the player's Steam install (what FS_CopyFromSteam does
+# in the engine, done here first so it can show progress and a clear message).
+
+$Pak00Size = 962052238
+
+function Find-SteamQuakeLive {
+    $libs = @()
+    foreach ($key in @('HKCU:\Software\Valve\Steam', 'HKLM:\SOFTWARE\WOW6432Node\Valve\Steam', 'HKLM:\SOFTWARE\Valve\Steam')) {
+        try {
+            $p = Get-ItemProperty -Path $key -ErrorAction Stop
+            foreach ($v in @($p.SteamPath, $p.InstallPath)) { if ($v) { $libs += ($v -replace '/', '\') } }
+        } catch { }
+    }
+    foreach ($steam in @($libs)) {
+        $vdf = Join-Path $steam 'steamapps\libraryfolders.vdf'
+        if (Test-Path -LiteralPath $vdf) {
+            foreach ($m in [regex]::Matches((Get-Content -LiteralPath $vdf -Raw), '"(?:path|\d+)"\s+"([^"]+)"')) {
+                $libs += ($m.Groups[1].Value -replace '\\', '\')
+            }
+        }
+    }
+    foreach ($lib in ($libs | Select-Object -Unique)) {
+        $dir = Join-Path $lib 'steamapps\common\Quake Live'
+        $pak = Join-Path $dir 'baseq3\pak00.pk3'
+        if ((Test-Path -LiteralPath $pak) -and (Get-Item -LiteralPath $pak).Length -eq $Pak00Size) { return $dir }
+    }
+    return $null
+}
+
+function Copy-WithProgress([string]$Source, [string]$Destination) {
+    $ProgressPreference = 'Continue'
+    $tmp = $Destination + '.part'
+    $in = [IO.File]::OpenRead($Source)
+    try {
+        $out = [IO.File]::Create($tmp)
+        try {
+            $buf = New-Object byte[] (4MB)
+            $done = 0L; $last = -1
+            while (($n = $in.Read($buf, 0, $buf.Length)) -gt 0) {
+                $out.Write($buf, 0, $n); $done += $n
+                $pct = [int](100 * $done / $in.Length)
+                if ($pct -ne $last) { Write-Progress -Activity 'Copiando archivos de Quake Live' -Status "$pct %" -PercentComplete $pct; $last = $pct }
+            }
+        } finally { $out.Dispose() }
+    } finally { $in.Dispose() }
+    Write-Progress -Activity 'Copiando archivos de Quake Live' -Completed
+    Move-Item -LiteralPath $tmp -Destination $Destination -Force
+}
+
+function Initialize-QuakeLiveData {
+    $target = Join-Path $Root 'baseq3\pak00.pk3'
+    if ((Test-Path -LiteralPath $target) -and (Get-Item -LiteralPath $target).Length -eq $Pak00Size) { return $true }
+
+    $ql = Find-SteamQuakeLive
+    if (-not $ql) {
+        Write-Log 'No encontre Quake Live en Steam.' 'Red'
+        Write-Log 'ioquakelive necesita Quake Live comprado e instalado desde Steam. Abriendo Steam...' 'Yellow'
+        try { Start-Process 'steam://install/282440' } catch { }
+        return $false
+    }
+    Write-Log ("Quake Live encontrado en Steam: {0}" -f $ql) 'Green'
+
+    $source = Join-Path $ql 'baseq3\pak00.pk3'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+    if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Force }
+    try {
+        New-Item -ItemType HardLink -Path $target -Value $source -ErrorAction Stop | Out-Null
+        Write-Log 'Archivos de Quake Live listos (vinculados, sin copiar).'
+    } catch {
+        Write-Log 'Copiando archivos de Quake Live (917 MB, solo la primera vez)...' 'Cyan'
+        Copy-WithProgress $source $target
+    }
+
+    # The player's Quake Live settings, only where none exist yet
+    $cfgHome = Join-Path $env:APPDATA 'quakelive\baseq3'
+    $userDir = Get-ChildItem -LiteralPath $ql -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^\d{10,}$' -and (Test-Path -LiteralPath (Join-Path $_.FullName 'baseq3')) } |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($userDir) {
+        foreach ($cfg in @('qzconfig.cfg', 'repconfig.cfg', 'autoexec.cfg')) {
+            $src = Join-Path $userDir.FullName ('baseq3\' + $cfg)
+            $dst = Join-Path $cfgHome $cfg
+            if ((Test-Path -LiteralPath $src) -and -not (Test-Path -LiteralPath $dst)) {
+                New-Item -ItemType Directory -Force -Path $cfgHome | Out-Null
+                Copy-Item -LiteralPath $src -Destination $dst
+                Write-Log ("  tu configuracion de Quake Live: {0}" -f $cfg)
+            }
+        }
+    }
+    return $true
+}
+
 function Start-Game([string]$Version, $ManifestArgs) {
+    if (-not (Initialize-QuakeLiveData)) {
+        Read-Host 'Presiona Enter para salir'
+        exit 1
+    }
     if ($NoLaunch) { Write-Log 'Modo -NoLaunch: no se abre el juego.'; return }
     if (-not (Test-Path -LiteralPath $GameExe)) {
         Write-Log 'El juego no esta instalado todavia y no hay conexion con el servidor.' 'Red'
