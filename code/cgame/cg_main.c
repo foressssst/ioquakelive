@@ -278,6 +278,11 @@ vmCvar_t cg_obituaryRowSize;
 vmCvar_t cg_playerLean;
 vmCvar_t cg_plasmaStyle;
 vmCvar_t cg_railStyle;
+vmCvar_t ch_animateRewardIcons;
+vmCvar_t cg_animateChatBalloon;
+vmCvar_t ch_animateScroll;
+vmCvar_t ch_crosshairPulse;
+vmCvar_t cg_zoomAnimationTime;
 vmCvar_t cg_rocketStyle;
 vmCvar_t cg_raceBeep;
 vmCvar_t cg_screenDamage_Self;
@@ -696,6 +701,12 @@ static cvarTable_t cvarTable[] = {
     {&cg_playerLean, "cg_playerLean", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_ARCHIVE},
     {&cg_plasmaStyle, "cg_plasmaStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_railStyle, "cg_railStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    // [CPMA] 1.53 animations with CPMA's defaults, except ch_animateScroll, on at the user's request
+    {&ch_animateRewardIcons, "ch_animateRewardIcons", "1", CVAR_ARCHIVE},
+    {&cg_animateChatBalloon, "cg_animateChatBalloon", "1", CVAR_ARCHIVE},
+    {&ch_animateScroll, "ch_animateScroll", "1", CVAR_ARCHIVE},
+    {&ch_crosshairPulse, "ch_crosshairPulse", "0", CVAR_ARCHIVE},
+    {&cg_zoomAnimationTime, "cg_zoomAnimationTime", "150", CVAR_ARCHIVE},
     {&cg_rocketStyle, "cg_rocketStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_raceBeep, "cg_raceBeep", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_screenDamage_Self, "cg_screenDamage_Self", "0x00000000", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
@@ -1929,6 +1940,7 @@ static void CG_RegisterGraphics(void) {
     cgs.media.smoke2 = trap_R_RegisterModel("models/weapons2/shells/s_shell.md3");
 
     cgs.media.balloonShader = trap_R_RegisterShader("sprites/balloon3");
+    cgs.media.chatDotShader = trap_R_RegisterShader("sprites/ioql_chatdot");
 
     cgs.media.bloodExplosionShader = cgs.media.bloodSprayShaders[0];
 

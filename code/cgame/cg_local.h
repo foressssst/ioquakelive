@@ -45,7 +45,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define PAIN_TWITCH_TIME 200
 #define WEAPON_SELECT_TIME 1400
 #define ITEM_SCALEUP_TIME 1000
-#define ZOOM_TIME 150
 #define ITEM_BLOB_TIME 200
 #define MUZZLE_FLASH_TIME 20
 #define SINK_TIME 1000  // time for fragments to sink into ground before going away
@@ -812,6 +811,13 @@ typedef struct {
     int itemPickupBlendTime;  // the pulse around the crosshair is timed separately
     int crosshairHitTime;     // [QL] 0x10ab8fb0, set on a hit (0x10043c2e)
     int crosshairHitType;     // [QL] 0x10ab8fb4, (generic1 >> 6) + 1
+    int crosshairFragTime;    // [CPMA] ch_crosshairPulse 3: last enemy frag
+
+    // [CPMA] ch_animateScroll: rows still to scroll and when that was set
+    float obitScrollRows;
+    int obitScrollTime;
+    float chatScrollRows;
+    int chatScrollTime;
 
     int weaponSelectTime;
     int weaponAnimation;
@@ -1080,6 +1086,7 @@ typedef struct {
     qhandle_t grapplingChainShader;
 
     qhandle_t balloonShader;
+    qhandle_t chatDotShader;  // [CPMA] glow for the balloon's dots
     qhandle_t connectionShader;
 
     qhandle_t selectShader;
@@ -1848,6 +1855,11 @@ extern vmCvar_t cg_impactSparksVelocity;
 extern vmCvar_t cg_muzzleFlash;
 extern vmCvar_t cg_plasmaStyle;
 extern vmCvar_t cg_railStyle;
+extern vmCvar_t ch_animateRewardIcons;
+extern vmCvar_t cg_animateChatBalloon;
+extern vmCvar_t ch_animateScroll;
+extern vmCvar_t ch_crosshairPulse;
+extern vmCvar_t cg_zoomAnimationTime;
 extern vmCvar_t cg_rocketStyle;
 extern vmCvar_t cg_smoke_SG;
 extern vmCvar_t cg_specFov;
@@ -2267,6 +2279,17 @@ void CG_VoiceChatListForClient(int clientNum);
 void CG_Respawn(void);
 void CG_TransitionPlayerState(playerState_t* ps, playerState_t* ops);
 void CG_PushReward(sfxHandle_t sfx, qhandle_t shader, int rewardCount);
+
+//
+// cg_drawtools.c, [CPMA] ch_animateScroll
+//
+float CG_ScrollRows(float rows, int time);
+void CG_AddScrollRow(float* rows, int* time);
+
+//
+// cg_players.c, [CPMA] cg_animateChatBalloon
+//
+float CG_ChatBalloonDot(int dot, float* u, float* v);
 void CG_CheckChangedPredictableEvents(playerState_t* ps);
 
 //===============================================

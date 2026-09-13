@@ -23,6 +23,27 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // cg_drawtools.c -- helper functions called by cg_draw, cg_scoreboard, cg_info, etc
 #include "cg_local.h"
 
+// [CPMA] ch_animateScroll moves a list into place with an exponential approach, as
+// CPMA 1.53 does. CPMA's exact rate is not identified; this half-life approximates it.
+#define SCROLL_HALF_LIFE 30.0f
+
+float CG_ScrollRows(float rows, int time) {
+    float elapsed = (float)(cg.time - time);
+
+    if (!ch_animateScroll.integer) {
+        return 0.0f;
+    }
+    if (elapsed > 0.0f) {
+        rows *= (float)pow(2.0, -elapsed / SCROLL_HALF_LIFE);
+    }
+    return (fabs(rows) < 0.01f) ? 0.0f : rows;
+}
+
+void CG_AddScrollRow(float* rows, int* time) {
+    *rows = CG_ScrollRows(*rows, *time) + 1.0f;
+    *time = cg.time;
+}
+
 // [QL] widescreen rendering mode - set by DC->setWidescreen() before each item paints
 // 0=stretch, 1=left, 2=center, 3=right
 int cg_currentWidescreen = 0;

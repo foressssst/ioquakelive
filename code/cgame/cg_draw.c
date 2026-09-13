@@ -1059,6 +1059,59 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame) {
 
 /*
 ===================
+CG_DrawRewardIcon
+
+[CPMA] ch_animateRewardIcons: CPMA 1.53 builds assist, capture, defend, excellent,
+gauntlet and impressive over 24 frames of 40 ms, played once (1) or looped (2).
+Quake Live has one image per medal, so the build is drawn on it: the icon grows in
+over the first half, then a copy swells and fades like CPMA's closing ring. The
+other medals stay still, as in CPMA.
+===================
+*/
+static void CG_DrawRewardIcon(float x, float y, qhandle_t shader, const vec4_t color) {
+	int mode = ch_animateRewardIcons.integer;
+	float frame, u, s;
+	vec4_t echo;
+
+	if ((mode != 1 && mode != 2) ||
+		(shader != cgs.media.medalAssist && shader != cgs.media.medalCapture &&
+		 shader != cgs.media.medalDefend && shader != cgs.media.medalExcellent &&
+		 shader != cgs.media.medalGauntlet && shader != cgs.media.medalImpressive)) {
+		CG_DrawPic(x, y, 32, 32, shader);
+		return;
+	}
+
+	frame = (cg.time - cg.rewardTime) / 40.0f;
+	if (frame < 0.0f) {
+		frame = 0.0f;
+	}
+	if (mode == 1) {
+		if (frame > 23.0f) {
+			frame = 23.0f;
+		}
+	} else {
+		frame = (float)fmod(frame, 24.0f);
+	}
+
+	if (frame < 12.0f) {
+		u = 1.0f - frame / 12.0f;
+		s = 0.25f + 0.75f * (1.0f - u * u * u);
+		CG_DrawPic(x + 16.0f * (1.0f - s), y + 16.0f * (1.0f - s), 32.0f * s, 32.0f * s, shader);
+		return;
+	}
+
+	CG_DrawPic(x, y, 32, 32, shader);
+	u = (frame - 12.0f) / 11.0f;
+	s = 1.0f + 0.35f * u;
+	Vector4Copy(color, echo);
+	echo[3] *= 1.0f - u;
+	trap_R_SetColor(echo);
+	CG_DrawPic(x + 16.0f * (1.0f - s), y + 16.0f * (1.0f - s), 32.0f * s, 32.0f * s, shader);
+	trap_R_SetColor(color);
+}
+
+/*
+===================
 CG_DrawReward
 
 [QL] cgamex86.dll 0x1000ac30. A medal shows for 2 s and fades over its last
@@ -1101,12 +1154,12 @@ static void CG_DrawReward(void) {
 
 	count = cg.rewardCount[0];
 	if (count > cg_drawRewardsRowSize.integer) {
-		CG_DrawPic(296, 42, 32, 32, cg.rewardShader[0]);
+		CG_DrawRewardIcon(296, 42, cg.rewardShader[0], color);
 		CG_DrawText(336, 66, 0, 0.2f, colorWhite, va("%d", count), 0, 0, 0);
 	} else {
 		x = (float)(320 - (count * 48) / 2);
 		for (i = 0; i < count; i++) {
-			CG_DrawPic(x, 42, 32, 32, cg.rewardShader[0]);
+			CG_DrawRewardIcon(x, 42, cg.rewardShader[0], color);
 			x += 48;
 		}
 	}
@@ -1518,6 +1571,30 @@ static void CG_CrosshairHitEffect(float* w, float* h) {
 
 /*
 =================
+CG_CrosshairCPMAPulse
+
+[CPMA] ch_crosshairPulse 1-3: after an item pickup (200 ms), enemy damage or an
+enemy frag (225 ms) the crosshair jumps to twice its size and eases back to it
+with a cubic ease-out.
+=================
+*/
+static void CG_CrosshairCPMAPulse(float* w, float* h) {
+	static const float durations[3] = {200.0f, 225.0f, 225.0f};
+	int mode = ch_crosshairPulse.integer;
+	int eventTime = (mode == 1) ? cg.itemPickupBlendTime : (mode == 2) ? cg.crosshairHitTime : cg.crosshairFragTime;
+	float elapsed = (float)(cg.time - eventTime);
+	float t;
+
+	if (!eventTime || elapsed <= 0.0f || elapsed >= durations[mode - 1]) {
+		return;
+	}
+	t = 1.0f - elapsed / durations[mode - 1];
+	*w *= 1.0f + t * t * t;
+	*h *= 1.0f + t * t * t;
+}
+
+/*
+=================
 CG_DrawCrosshair
 
 [QL] cgamex86.dll 0x1000c2a0. Nothing for cg_drawCrosshair <= 0 or a multiple of 30, or
@@ -1547,7 +1624,12 @@ static void CG_DrawCrosshair(void) {
 
 	w = h = cg_crosshairSize.value;
 
-	if (cg.itemPickupBlendTime > cg.crosshairHitTime) {
+	if (ch_crosshairPulse.integer >= 1 && ch_crosshairPulse.integer <= 3) {
+		CG_CrosshairCPMAPulse(&w, &h);
+		if (cg.itemPickupBlendTime <= cg.crosshairHitTime) {
+			CG_CrosshairHitEffect(&w, &h);
+		}
+	} else if (cg.itemPickupBlendTime > cg.crosshairHitTime) {
 		f = (float)(cg.time - cg.itemPickupBlendTime);
 		if (cg_crosshairPulse.integer && f > 0.0f && f < ITEM_BLOB_TIME) {
 			w = h = cg_crosshairSize.value * (1.0f + f / ITEM_BLOB_TIME);

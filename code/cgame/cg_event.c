@@ -150,6 +150,7 @@ static void CG_AddObituary(const char *victimName, const char *attackerName,
     if (idx == MAX_OBITUARIES) {
         memmove(&cg.obituaries[0], &cg.obituaries[1], (MAX_OBITUARIES - 1) * sizeof(cg.obituaries[0]));
         memset(&cg.obituaries[MAX_OBITUARIES - 1], 0, sizeof(cg.obituaries[0]));
+        CG_AddScrollRow(&cg.obitScrollRows, &cg.obitScrollTime);
         // retail keeps idx at 16 here and writes one slot past the array
         idx = MAX_OBITUARIES - 1;
     }
@@ -179,6 +180,7 @@ static void CG_AddObituary(const char *victimName, const char *attackerName,
     if (idx >= cg_obituaryRowSize.integer) {
         memmove(&cg.obituaries[0], &cg.obituaries[1], rowSize * sizeof(cg.obituaries[0]));
         memset(&cg.obituaries[rowSize], 0, (MAX_OBITUARIES - rowSize) * sizeof(cg.obituaries[0]));
+        CG_AddScrollRow(&cg.obitScrollRows, &cg.obitScrollTime);
     }
 }
 
@@ -207,6 +209,12 @@ static void CG_Obituary(entityState_t* ent) {
 
     if (target < 0 || target >= MAX_CLIENTS) {
         CG_Error("CG_Obituary: target out of range");
+    }
+
+    // [CPMA] ch_crosshairPulse 3 pulses on an enemy frag
+    if (attacker == cg.snap->ps.clientNum && attacker != target &&
+        (cgs.gametype < GT_TEAM || cgs.clientinfo[target].team != cg.snap->ps.persistant[PERS_TEAM])) {
+        cg.crosshairFragTime = cg.time;
     }
 
     // [QL] Resolve weapon icon and add to obituary display buffer
