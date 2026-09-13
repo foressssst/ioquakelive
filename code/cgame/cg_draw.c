@@ -1144,11 +1144,12 @@ cg_drawRewards is tested, so hidden medals still advance and play. Retail draws
 32x32 icons with their top at y 42, one per medal, 48 apart and centred on 320,
 or past cg_drawRewardsRowSize one icon with its count at (336, 66).
 [ioquakelive] The layout the user chose on 2026-09-13, for a tidy HUD where no
-message runs into another: one medal at 0.51 of retail's size, centred on 325 as
-if 48 * 0.51 units wide, its top at y 137, and no count.
+message runs into another: one medal at 0.76 of retail's size (first 0.51, raised
+the same night), centred on 325 as if 48 * 0.76 units wide, its top at y 137, and
+no count.
 ===================
 */
-#define REWARD_ICON_SCALE 0.51f
+#define REWARD_ICON_SCALE 0.76f
 #define REWARD_ICON_SIZE (32.0f * REWARD_ICON_SCALE)
 #define REWARD_ICON_X (325.0f - 48.0f * REWARD_ICON_SCALE / 2.0f)
 #define REWARD_ICON_Y 137.0f
@@ -1471,11 +1472,12 @@ height in font 0 with the print's scale and ITEM_TEXTSTYLE_SHADOWEDMORE, and
 the next line starts 6 units below it.
 ===================
 */
-// [ioquakelive] The frag message in the layout the user chose on 2026-09-13: smaller and
-// lower than retail's, clear of every other message, in Handel Gothic Ex where the player
-// has it (cgs.media.fragMessageFont).
+// [ioquakelive] The frag message in the layout the user chose on 2026-09-13: a little
+// smaller than retail's and lower, just under the medal, in Handel Gothic Ex where the
+// player has it (cgs.media.fragMessageFont). The scale was 0.135 before it was raised the
+// same night.
 #define FRAG_MESSAGE_Y 165.0f
-#define FRAG_MESSAGE_SCALE 0.135f
+#define FRAG_MESSAGE_SCALE 0.285f
 
 static void CG_DrawCenterString(void) {
 	static vec4_t color;
