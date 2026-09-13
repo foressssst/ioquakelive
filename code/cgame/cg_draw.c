@@ -213,6 +213,10 @@ static void CG_TextToScreen(float* x, float* y) {
 
 // Core painter: virtual coords + scale -> screen pixels, engine glyph atlas.
 // A shadow style draws the whole string offset in solid black first.
+// [QL] cgamex86.dll 0x100084b3: the offset is 1 virtual unit for shadowed and 2 for
+// shadowed more, added before the scaling to screen pixels, so the shadow grows with
+// the resolution (4.5 pixels at 1080p for shadowed more). Black at the text's alpha,
+// with colour codes ignored (flag 1 in retail, TEXT_NORECOLOR here).
 static void CG_PaintTextEngine(float x, float y, int efont, float scale, const vec4_t color,
                                const char* text, int limit, int style) {
 	float sx = x, sy = y;
@@ -226,11 +230,13 @@ static void CG_PaintTextEngine(float x, float y, int efont, float scale, const v
 
 	if (style == ITEM_TEXTSTYLE_SHADOWED || style == ITEM_TEXTSTYLE_SHADOWEDMORE) {
 		float ofs = (style == ITEM_TEXTSTYLE_SHADOWED) ? 1.0f : 2.0f;
+		float shx = x + ofs, shy = y + ofs;
 		vec4_t shadow;
 		shadow[0] = shadow[1] = shadow[2] = 0.0f;
 		shadow[3] = color ? color[3] : 1.0f;
+		CG_TextToScreen(&shx, &shy);
 		trap_R_SetColor(shadow);
-		trap_R_Font_DrawString((int)(sx + ofs), (int)(sy + ofs), text, efont, size, lim, NULL, TEXT_NORECOLOR);
+		trap_R_Font_DrawString((int)shx, (int)shy, text, efont, size, lim, NULL, TEXT_NORECOLOR);
 	}
 
 	trap_R_SetColor(color);
