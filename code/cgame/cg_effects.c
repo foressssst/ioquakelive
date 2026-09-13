@@ -796,27 +796,6 @@ void CG_DrawFloatingEffects(void) {
 
         if (fx->shader) {
             CG_DrawPic(sx - size * 0.5f + mx, sy - size + my, size, size, fx->shader);
-
-            // [CPMA] cg_animateChatBalloon on a teammate's balloon
-            if (fx->shader == cgs.media.balloonShader && cg_animateChatBalloon.integer) {
-                float u, v, pulse, glowSize = size * 0.16f;
-                vec4_t glowColor;
-                int dot;
-
-                for (dot = 0; dot < 3; dot++) {
-                    pulse = CG_ChatBalloonDot(dot, &u, &v);
-                    if (pulse <= 0.0f) {
-                        continue;
-                    }
-                    glowColor[0] = glowColor[1] = glowColor[2] = pulse;
-                    glowColor[3] = 1.0f;
-                    trap_R_SetColor(glowColor);
-                    CG_DrawPic(sx - size * 0.5f + mx + size * u - glowSize * 0.5f,
-                               sy - size + my + size * v - glowSize * 0.5f, glowSize, glowSize,
-                               cgs.media.chatDotShader);
-                }
-                trap_R_SetColor(fx->color);
-            }
         }
 
         trap_R_SetColor(NULL);

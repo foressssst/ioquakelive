@@ -23,24 +23,55 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // cg_drawtools.c -- helper functions called by cg_draw, cg_scoreboard, cg_info, etc
 #include "cg_local.h"
 
-// [CPMA] ch_animateScroll moves a list into place with an exponential approach, as
-// CPMA 1.53 does. CPMA's exact rate is not identified; this half-life approximates it.
-#define SCROLL_HALF_LIFE 30.0f
+// [CPMA] the curve of every SuperHUD fade, 1 - (1 - x)^3 (CPMA 1.53 cgame.qvm func 42193)
+float CG_CpmaEaseOut(float x) {
+    float u = 1.0f - x;
 
-float CG_ScrollRows(float rows, int time) {
+    return 1.0f - u * u * u;
+}
+
+/*
+[CPMA] Alpha of a SuperHUD item updated at start (cgame.qvm func 156314): it eases in over
+fadein ms, holds for fadedelay ms, then eases out to transparent over time ms. 0 once the
+item is gone, as funcs 151587 and 151707 decide.
+*/
+float CG_CpmaFade(int start, int fadein, int fadedelay, int time) {
+    int elapsed = cg.time - start;
+    int out;
+
+    if (time <= 0) {
+        return 1.0f;
+    }
+    if (fadein > 0 && elapsed < fadein) {
+        return (elapsed > 0) ? CG_CpmaEaseOut((float)elapsed / fadein) : 0.0f;
+    }
+    out = elapsed - fadein - fadedelay;
+    if (out <= 0) {
+        return 1.0f;
+    }
+    if (out >= time) {
+        return 0.0f;
+    }
+    return 1.0f - CG_CpmaEaseOut((float)out / time);
+}
+
+// [CPMA] ch_animateScroll moves a list into place with an exponential approach, as CPMA
+// 1.53 does. Its rate divides by the element's fade time, so callers pass time / 10 as
+// the half-life (inferred from the QVM, not verified on screen against CPMA).
+float CG_ScrollRows(float rows, int time, float halfLife) {
     float elapsed = (float)(cg.time - time);
 
     if (!ch_animateScroll.integer) {
         return 0.0f;
     }
     if (elapsed > 0.0f) {
-        rows *= (float)pow(2.0, -elapsed / SCROLL_HALF_LIFE);
+        rows *= (float)pow(2.0, -elapsed / halfLife);
     }
     return (fabs(rows) < 0.01f) ? 0.0f : rows;
 }
 
-void CG_AddScrollRow(float* rows, int* time) {
-    *rows = CG_ScrollRows(*rows, *time) + 1.0f;
+void CG_AddScrollRow(float* rows, int* time, float halfLife) {
+    *rows = CG_ScrollRows(*rows, *time, halfLife) + 1.0f;
     *time = cg.time;
 }
 

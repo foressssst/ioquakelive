@@ -755,6 +755,7 @@ typedef struct {
     int centerPrintY;
     char centerPrint[1024];
     int centerPrintLines;
+    qboolean centerPrintFrag;  // [CPMA] a frag message, faded as CPMA's FragMessage
 
     // low ammo warning state
     int lowAmmoWarning;  // 1 = low, 2 = empty
@@ -917,6 +918,10 @@ typedef struct {
 
     // [QL] obituary / kill feed ring buffer (binary: 16 entries at 10ab8fec)
     #define MAX_OBITUARIES 16
+    // [CPMA] GameEvents timing in CPMA 1.53's hud.cfg, used with ch_animateScroll
+    #define OBIT_FADEIN 150
+    #define OBIT_FADEDELAY 3000
+    #define OBIT_FADEOUT 200
     struct {
         int         active;
         int         time;           // cg.time when it happened
@@ -943,6 +948,10 @@ typedef struct {
 
     // [QL] chat ring buffer (binary: 24 entries at DAT_10079950)
     #define MAX_CHAT_LINES  24
+    // [CPMA] Chat timing in CPMA 1.53's hud.cfg, used with ch_animateScroll
+    #define CHAT_FADEIN 150
+    #define CHAT_FADEDELAY 3000
+    #define CHAT_FADEOUT 100
     #define CHAT_LINE_TEXT  256
     struct {
         int     startTime;
@@ -1086,7 +1095,10 @@ typedef struct {
     qhandle_t grapplingChainShader;
 
     qhandle_t balloonShader;
-    qhandle_t chatDotShader;  // [CPMA] glow for the balloon's dots
+    // [CPMA] animation frames from the player's own CPMA package (zz-cpma-anim.pk3);
+    // 0 when it is not installed
+    qhandle_t medalFrames[6][24];
+    qhandle_t chatBalloonFrames[16];
     qhandle_t connectionShader;
 
     qhandle_t selectShader;
@@ -1860,6 +1872,7 @@ extern vmCvar_t cg_animateChatBalloon;
 extern vmCvar_t ch_animateScroll;
 extern vmCvar_t ch_crosshairPulse;
 extern vmCvar_t cg_zoomAnimationTime;
+extern vmCvar_t ch_chatLines;
 extern vmCvar_t cg_rocketStyle;
 extern vmCvar_t cg_smoke_SG;
 extern vmCvar_t cg_specFov;
@@ -2281,15 +2294,17 @@ void CG_TransitionPlayerState(playerState_t* ps, playerState_t* ops);
 void CG_PushReward(sfxHandle_t sfx, qhandle_t shader, int rewardCount);
 
 //
-// cg_drawtools.c, [CPMA] ch_animateScroll
+// cg_drawtools.c, [CPMA] SuperHUD animations
 //
-float CG_ScrollRows(float rows, int time);
-void CG_AddScrollRow(float* rows, int* time);
+float CG_CpmaEaseOut(float x);
+float CG_CpmaFade(int start, int fadein, int fadedelay, int time);
+float CG_ScrollRows(float rows, int time, float halfLife);
+void CG_AddScrollRow(float* rows, int* time, float halfLife);
 
 //
 // cg_players.c, [CPMA] cg_animateChatBalloon
 //
-float CG_ChatBalloonDot(int dot, float* u, float* v);
+qhandle_t CG_ChatBalloonShader(void);
 void CG_CheckChangedPredictableEvents(playerState_t* ps);
 
 //===============================================
