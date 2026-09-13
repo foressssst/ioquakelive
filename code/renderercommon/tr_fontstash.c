@@ -110,17 +110,34 @@ struct FONScontext {
     void *errorUptr;
 };
 
-// Quake3 colour table (RGBA packed r|g<<8|b<<16|a<<24), indexed by '0'..'7'.
-static const unsigned int fons__q3ColorTable[8] = {
-    0xff000000u, // 0 black
-    0xff0000ffu, // 1 red
-    0xff00ff00u, // 2 green
-    0xff00ffffu, // 3 yellow
-    0xffff0000u, // 4 blue
-    0xffffff00u, // 5 cyan
-    0xffff00ffu, // 6 magenta
-    0xffffffffu  // 7 white
+// QL: quakelive_steam.exe's colour table at 0x568af0, which its text drawer
+// indexes; ^4 is (0.2, 0.4, 1), not pure blue.
+// [CPMA] 8-35: ^8, ^9 and ^a-^z for cl_extendedColors 1 (q_math.c has the same
+// values as floats).
+static const unsigned char fons__codeColors[36][3] = {
+    {0, 0, 0},       {255, 0, 0},     {0, 255, 0},     {255, 255, 0},   // 0-3
+    {51, 102, 255},  {0, 255, 255},   {255, 0, 255},   {255, 255, 255}, // 4-7
+    {255, 128, 0},   {153, 153, 255},                                   // 8-9
+    {255, 0, 0},     {255, 68, 0},    {255, 128, 0},   {255, 187, 0},   // a-d
+    {255, 255, 0},   {187, 255, 0},   {128, 255, 0},   {68, 255, 0},    // e-h
+    {0, 255, 0},     {0, 255, 68},    {0, 255, 128},   {0, 255, 187},   // i-l
+    {0, 255, 255},   {0, 187, 255},   {0, 128, 255},   {0, 68, 255},    // m-p
+    {0, 0, 255},     {68, 0, 255},    {128, 0, 255},   {187, 0, 255},   // q-t
+    {255, 0, 255},   {255, 0, 187},   {255, 0, 128},   {255, 0, 68},    // u-x
+    {255, 255, 255}, {255, 255, 255}                                    // y-z
 };
+
+static int fons__extendedColors = 0;
+
+void fonsSetExtendedColors(int extended) {
+    fons__extendedColors = extended ? 1 : 0;
+}
+
+// rgb of a colour code in fontstash's 0xAABBGGRR packing, alpha left out
+static unsigned int fons__codeColor(int code) {
+    const unsigned char *const c = fons__codeColors[code];
+    return ((unsigned int)c[2] << 16) | ((unsigned int)c[1] << 8) | (unsigned int)c[0];
+}
 
 // -------------------------------------------------------------------------
 //  UTF-8 decode (Bjoern Hoehrmann's DFA, as used by fontstash)
@@ -976,15 +993,28 @@ int fonsTextIterNext(FONScontext *stash, FONStextIter *iter, FONSquad *quad) {
 //  drawing and measuring
 // -------------------------------------------------------------------------
 
-// Is p[0]=='^' and p[1] a valid non-'^' colour selector?
-static int fons__isColorString(const char *p, const char *end) {
+// QL: quakelive_steam.exe 0x44458c (drawing) and 0x443da2 (measuring) take '^'
+// plus '0'-'7' as a colour code and draw anything else after '^' as text.
+// [CPMA] fonsSetExtendedColors adds ^8, ^9 and ^a-^z. Returns the code or -1.
+static int fons__colorCode(const char *p, const char *end) {
+    int c;
+
     if (p[0] != '^')
-        return 0;
+        return -1;
     if (p + 1 >= end)
-        return 0;
-    if (p[1] == '^')
-        return 0;
-    return 1;
+        return -1;
+    c = (unsigned char)p[1];
+    if (c >= '0' && c <= '7')
+        return c - '0';
+    if (!fons__extendedColors)
+        return -1;
+    if (c == '8' || c == '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'z')
+        return 10 + c - 'a';
+    if (c >= 'A' && c <= 'Z')
+        return 10 + c - 'A';
+    return -1;
 }
 
 float fonsDrawText(FONScontext *stash, float x, float y, const char *str, const char *end, int flags, float *maxX) {
@@ -1035,12 +1065,12 @@ float fonsDrawText(FONScontext *stash, float x, float y, const char *str, const 
 
     for (; str != end; ++str) {
         // QL: interpret Quake3 '^' colour codes unless literal mode is set.
-        if (!literal && fons__isColorString(str, end)) {
-            // Replace rgb from the Q3 colour table, keeping the state alpha.  With
+        if (!literal && fons__colorCode(str, end) >= 0) {
+            // Replace rgb from the colour table, keeping the state alpha.  With
             // NORECOLOR set, the code is consumed but the colour is left unchanged
             // (the solid drop-shadow pass).
             if (recolor)
-                color = (fons__q3ColorTable[(str[1] - '0') & 7] & 0x00ffffffu) | baseAlpha;
+                color = fons__codeColor(fons__colorCode(str, end)) | baseAlpha;
             ++str; // skip the colour selector; loop ++ skips '^'
             utf8state = 0;
             continue;
@@ -1118,7 +1148,7 @@ float fonsTextBounds(FONScontext *stash, float x, float y, const char *str, cons
 
     for (; str != end; ++str) {
         // Skip colour codes when measuring (they contribute no width).
-        if (fons__isColorString(str, end)) {
+        if (fons__colorCode(str, end) >= 0) {
             ++str;
             utf8state = 0;
             continue;

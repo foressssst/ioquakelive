@@ -354,6 +354,16 @@ static int R_Font_ResolveId(int fontIndex) {
     return fontIndexToId[fontIndex];
 }
 
+// [CPMA] cl_extendedColors, registered by the client: the colour codes the text
+// calls recognise
+static void R_Font_SetColorCodes(void) {
+    static cvar_t *extendedColors;
+
+    if (extendedColors == NULL)
+        extendedColors = ri.Cvar_Get("cl_extendedColors", "0", CVAR_ARCHIVE);
+    fonsSetExtendedColors(extendedColors->integer);
+}
+
 void RE_Font_DrawString(int x, int y, const char *text, int fontIndex, float scale, int limit, float *maxX, int flags) {
     const char *end = NULL;
 
@@ -374,6 +384,7 @@ void RE_Font_DrawString(int x, int y, const char *text, int fontIndex, float sca
     if (limit > 0 && (int)strlen(text) > limit)
         end = text + limit;
 
+    R_Font_SetColorCodes();
     fonsDrawText(fontContext, (float)x, (float)y, text, end, flags, maxX);
 }
 
@@ -402,6 +413,7 @@ void RE_TextBounds(const char *text, int start, int fontIndex, float scale, int 
     str = text + (start > 0 ? start : 0);
     end = (limit > 0) ? str + limit : NULL;
 
+    R_Font_SetColorCodes();
     fonsTextBounds(fontContext, 0.0f, 0.0f, str, end, extents);
     fonsVertMetrics(fontContext, &extents[4], NULL, NULL);
 }
