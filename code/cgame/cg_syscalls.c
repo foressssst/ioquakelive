@@ -246,6 +246,10 @@ void trap_IME_SetCompositionFont(int fontIndex, float scale) {
     syscall(CG_IME_SETCOMPOSITIONFONT, fontIndex, PASSFLOAT(scale));
 }
 
+int trap_R_Font_Register(const char* name) {
+    return syscall(CG_R_FONT_REGISTER, name);
+}
+
 void trap_R_ClearScene(void) {
     syscall(CG_R_CLEARSCENE);
 }

@@ -213,11 +213,10 @@ static void CG_TextToScreen(float* x, float* y) {
 
 // Core painter: virtual coords + scale -> screen pixels, engine glyph atlas.
 // A shadow style draws the whole string offset in solid black first.
-static void CG_PaintText(float x, float y, int fontIndex, float scale, const vec4_t color,
-                         const char* text, int limit, int style) {
+static void CG_PaintTextEngine(float x, float y, int efont, float scale, const vec4_t color,
+                               const char* text, int limit, int style) {
 	float sx = x, sy = y;
 	float size = CG_FontPixelSize(scale);
-	int efont = CG_EngineFont(fontIndex);
 	int lim = (limit > 0) ? limit : -1;
 
 	if (!text || !*text)
@@ -237,6 +236,65 @@ static void CG_PaintText(float x, float y, int fontIndex, float scale, const vec
 	trap_R_SetColor(color);
 	trap_R_Font_DrawString((int)sx, (int)sy, text, efont, size, lim, NULL, 0);
 	trap_R_SetColor(NULL);
+}
+
+static void CG_PaintText(float x, float y, int fontIndex, float scale, const vec4_t color,
+                         const char* text, int limit, int style) {
+	CG_PaintTextEngine(x, y, CG_EngineFont(fontIndex), scale, color, text, limit, style);
+}
+
+// Text in an engine font, as trap_R_Font_Register returns, rather than a menu font index.
+void CG_DrawTextInFont(float x, float y, int engineFont, float scale, const vec4_t color, const char* text, int style) {
+	CG_PaintTextEngine(x, y, engineFont, scale, color, text, 0, style);
+}
+
+// 640-space width and ascender of text in an engine font, truncated as CG_MeasureText does.
+void CG_MeasureTextInFont(const char* text, int engineFont, float scale, float* w, float* h) {
+	float extents[5];
+	float xscale = CG_TextXScale();
+	float yscale = cgs.screenYScale;
+
+	trap_R_Font_TextExtents(text, 0, engineFont, CG_FontPixelSize(scale), -1, extents);
+	if (xscale <= 0.0f)
+		xscale = 1.0f;
+	if (yscale <= 0.0f)
+		yscale = 1.0f;
+	if (w)
+		*w = (float)(int)((extents[2] - extents[0]) / xscale);
+	if (h)
+		*h = (float)(int)(extents[4] / yscale);
+}
+
+// How far text moves the pen, in 640 units. The engine's box runs from the origin to the
+// last glyph, so trailing spaces are added one space advance each.
+float CG_TextAdvanceInFont(const char* text, int engineFont, float scale) {
+	float extents[5];
+	float xscale = CG_TextXScale();
+	float size = CG_FontPixelSize(scale);
+	float advance, packed;
+	int n = (int)strlen(text);
+	int spaces = 0;
+
+	if (xscale <= 0.0f)
+		xscale = 1.0f;
+	while (spaces < n && text[n - 1 - spaces] == ' ')
+		spaces++;
+
+	trap_R_Font_TextExtents(text, 0, engineFont, size, -1, extents);
+	advance = extents[2];
+	if (spaces) {
+		trap_R_Font_TextExtents("i i", 0, engineFont, size, -1, extents);
+		packed = extents[2];
+		trap_R_Font_TextExtents("ii", 0, engineFont, size, -1, extents);
+		advance += spaces * (packed - extents[2]);
+	}
+	return advance / xscale;
+}
+
+float CG_DrawTextHeightInFont(int engineFont, float scale) {
+	float h = 0.0f;
+	CG_MeasureTextInFont("A", engineFont, scale, NULL, &h);
+	return h;
 }
 
 // Core measure: 640-space width/height for the given text.
@@ -1067,7 +1125,7 @@ defend, excellent, gauntlet and impressive, stopping on the last (1) or looping 
 it, and for every other medal, the icon stays still.
 ===================
 */
-static void CG_DrawRewardIcon(float x, float y, qhandle_t shader) {
+void CG_DrawRewardIcon(float x, float y, float size, qhandle_t shader) {
 	const qhandle_t animated[6] = {cgs.media.medalAssist, cgs.media.medalCapture, cgs.media.medalDefend,
 								   cgs.media.medalExcellent, cgs.media.medalGauntlet, cgs.media.medalImpressive};
 	int mode = ch_animateRewardIcons.integer;
@@ -1089,7 +1147,7 @@ static void CG_DrawRewardIcon(float x, float y, qhandle_t shader) {
 		shader = cgs.media.medalFrames[medal][frame];
 		break;
 	}
-	CG_DrawPic(x, y, 32, 32, shader);
+	CG_DrawPic(x, y, size, size, shader);
 }
 
 /*
@@ -1098,15 +1156,13 @@ CG_DrawReward
 
 [QL] cgamex86.dll 0x1000ac30. A medal shows for 2 s and fades over its last
 200 ms. When it runs out the next one is popped and its sound queued before
-cg_drawRewards is tested, so hidden medals still advance and play. The icon is
-32x32 at y 42: above cg_drawRewardsRowSize one icon with the count to its right
-in plain white, otherwise one icon per medal, 48 apart.
+cg_drawRewards is tested, so hidden medals still advance and play. The icons
+are laid out by CG_DrawRewardMedals.
 ===================
 */
 static void CG_DrawReward(void) {
 	vec4_t color;
-	int i, count, remaining;
-	float x;
+	int i, remaining;
 
 	remaining = REWARD_TIME - (cg.time - cg.rewardTime);
 	if (!cg.rewardTime || remaining <= 0) {
@@ -1137,20 +1193,7 @@ static void CG_DrawReward(void) {
 	} else {
 		color[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
 	}
-	trap_R_SetColor(color);
-
-	count = cg.rewardCount[0];
-	if (count > cg_drawRewardsRowSize.integer) {
-		CG_DrawRewardIcon(296, 42, cg.rewardShader[0]);
-		CG_DrawText(336, 66, 0, 0.2f, colorWhite, va("%d", count), 0, 0, 0);
-	} else {
-		x = (float)(320 - (count * 48) / 2);
-		for (i = 0; i < count; i++) {
-			CG_DrawRewardIcon(x, 42, cg.rewardShader[0]);
-			x += 48;
-		}
-	}
-	trap_R_SetColor(NULL);
+	CG_DrawRewardMedals(cg.rewardCount[0], cg.rewardShader[0], color);
 }
 
 /*
@@ -1428,36 +1471,47 @@ the next line starts 6 units below it.
 */
 static void CG_DrawCenterString(void) {
 	static vec4_t color;
+	centerPrintLayout_t layout;
 	char* start;
 	int l;
-	int x, y, w, h;
-	int duration, remaining;
+	float x, y, w, h;
+	int elapsed, remaining;
 
 	if (!cg.centerPrintTime) {
 		return;
 	}
 
-	color[0] = color[1] = color[2] = 1.0f;
+	// [wolfcam] the retail values below come from CG_CenterPrintLayout, open to cvars
+	CG_CenterPrintLayout(&layout);
+	elapsed = cg.time - cg.centerPrintTime;
+	if (elapsed >= layout.time) {
+		return;
+	}
+	Vector4Copy(layout.color, color);
 	if (cg.centerPrintFrag && ch_animateScroll.integer) {
 		// [CPMA] FragMessage and RankMessage in CPMA 1.53's hud.cfg: fadein 150,
 		// fadedelay 1200, time 200
-		color[3] = CG_CpmaFade(cg.centerPrintTime, 150, 1200, 200);
-		if (color[3] <= 0.0f) {
-			return;
-		}
+		color[3] *= CG_CpmaFade(cg.centerPrintTime, 150, MAX(layout.time - 150 - layout.fadeTime, 0), layout.fadeTime);
 	} else {
-		duration = (int)(cg_centertime.value * 1000.0);
-		remaining = duration - (cg.time - cg.centerPrintTime);
-		if (cg.time - cg.centerPrintTime >= duration) {
-			return;
+		remaining = layout.time - elapsed;
+		if (remaining < layout.fadeTime) {
+			color[3] *= (float)remaining / layout.fadeTime;
 		}
-		color[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
 	}
+	if (color[3] <= 0.0f) {
+		return;
+	}
+
+	if (cg.centerPrintFrag && CG_DrawFragMessageTokens(&layout, color)) {
+		return;
+	}
+
 	trap_R_SetColor(color);
+	CG_SetWidescreen(layout.widescreen);
 
 	start = cg.centerPrint;
 
-	y = (int)((float)cg.centerPrintY - cg.centerPrintScale * 16.0 * cg.centerPrintLines);
+	y = (float)(int)((float)layout.y - layout.scale * 16.0 * cg.centerPrintLines);
 
 	while (1) {
 		char linebuffer[1024];
@@ -1470,12 +1524,15 @@ static void CG_DrawCenterString(void) {
 		}
 		linebuffer[l] = 0;
 
-		w = CG_DrawTextWidth(linebuffer, cg.centerPrintScale, 0, 0);
-		h = CG_DrawTextHeight(linebuffer, cg.centerPrintScale, 0, 0);
-		x = (SCREEN_WIDTH - w) / 2;
-		CG_DrawText((float)x, (float)(y + h), 0, cg.centerPrintScale, color, linebuffer, 0, 0,
-		            ITEM_TEXTSTYLE_SHADOWEDMORE);
-		y += h + 6;
+		CG_MeasureTextInFont(linebuffer, layout.font, layout.scale, &w, &h);
+		x = layout.x;
+		if (layout.align == 1) {
+			x = (float)(((int)(layout.x * 2.0f) - (int)w) / 2);  // whole units, as retail's (640 - w) / 2
+		} else if (layout.align == 2) {
+			x -= w;
+		}
+		CG_DrawTextInFont(x, y + h, layout.font, layout.scale, color, linebuffer, layout.style);
+		y += h + layout.lineSpacing;
 
 		while (*start && (*start != '\n')) {
 			start++;
@@ -1487,6 +1544,7 @@ static void CG_DrawCenterString(void) {
 	}
 
 	trap_R_SetColor(NULL);
+	CG_SetWidescreen(WIDESCREEN_CENTER);
 }
 
 /*

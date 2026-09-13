@@ -541,6 +541,8 @@ intptr_t CL_CgameSystemCalls(intptr_t* args) {
         case CG_IME_SETCOMPOSITIONFONT:
             re.SetCompositionFont(args[1], VMF(2));
             return 0;
+        case CG_R_FONT_REGISTER:
+            return re.Font_Register(VMA(1));
         case CG_R_CLEARSCENE:
             re.ClearScene();
             return 0;

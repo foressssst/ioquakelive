@@ -42,9 +42,13 @@ static qhandle_t fontShader = 0;
 static int fontAtlasWidth = 0;
 static int fontAtlasHeight = 0;
 
-// index (FONT_DEFAULT=0, FONT_SANS=1, FONT_MONO=2) -> fontstash font id
-static int fontIndexToId[8];
+// index (FONT_DEFAULT=0, FONT_SANS=1, FONT_MONO=2, then fonts loaded by RE_Font_Register)
+// -> fontstash font id, and the file each index was loaded from
+#define MAX_FONT_INDICES 32
+static int fontIndexToId[MAX_FONT_INDICES];
+static char fontIndexPath[MAX_FONT_INDICES][MAX_QPATH];
 static int numFontIndices = 0;
+static int fallbackFontId = FONS_INVALID;
 
 // IME composition font state (recorded for the IME candidate window).
 static int imeCompositionFont = 0;
@@ -320,7 +324,11 @@ void R_InitFonts(void) {
     fontIndexToId[0] = (normal != FONS_INVALID) ? normal : 0;
     fontIndexToId[1] = (sans != FONS_INVALID) ? sans : fontIndexToId[0];
     fontIndexToId[2] = (mono != FONS_INVALID) ? mono : fontIndexToId[0];
+    Q_strncpyz(fontIndexPath[0], DEFAULT_FONT, sizeof(fontIndexPath[0]));
+    Q_strncpyz(fontIndexPath[1], DEFAULT_SANS_FONT, sizeof(fontIndexPath[1]));
+    Q_strncpyz(fontIndexPath[2], DEFAULT_MONO_FONT, sizeof(fontIndexPath[2]));
     numFontIndices = 3;
+    fallbackFontId = fallback;
 
     // Fall back to the broad-coverage font for glyphs the primaries lack.
     if (fallback != FONS_INVALID) {
@@ -342,6 +350,59 @@ void R_FontShutdown(void) {
     fonsDeleteInternal(fontContext);
     fontContext = NULL;
     numFontIndices = 0;
+    fallbackFontId = FONS_INVALID;
+}
+
+/*
+Loads a TrueType or OpenType font from the game filesystem for RE_Font_DrawString and
+RE_TextBounds, and returns its font index, or -1. "rajdhani", "fonts/rajdhani" and
+"fonts/rajdhani.ttf" name the same file (a bare name also tries .otf). A font already loaded
+gives back its index, Quake Live's three included. Glyphs a font lacks come from
+droidsansfallbackfull, as with Quake Live's fonts.
+*/
+int RE_Font_Register(const char *name) {
+    char paths[2][MAX_QPATH];
+    const char *dir;
+    int numPaths, i, p, id;
+
+    if (fontContext == NULL || name == NULL || name[0] == '\0')
+        return -1;
+
+    dir = (strchr(name, '/') || strchr(name, '\\')) ? "" : "fonts/";
+    if (COM_GetExtension(name)[0] != '\0') {
+        Com_sprintf(paths[0], sizeof(paths[0]), "%s%s", dir, name);
+        numPaths = 1;
+    } else {
+        Com_sprintf(paths[0], sizeof(paths[0]), "%s%s.ttf", dir, name);
+        Com_sprintf(paths[1], sizeof(paths[1]), "%s%s.otf", dir, name);
+        numPaths = 2;
+    }
+
+    for (p = 0; p < numPaths; p++) {
+        for (i = 0; i < numFontIndices; i++) {
+            if (!Q_stricmp(fontIndexPath[i], paths[p]))
+                return i;
+        }
+    }
+
+    if (numFontIndices >= MAX_FONT_INDICES) {
+        ri.Printf(PRINT_WARNING, "RE_Font_Register: no room for '%s', %i fonts are loaded\n", name, numFontIndices);
+        return -1;
+    }
+
+    for (p = 0; p < numPaths; p++) {
+        id = R_Font_LoadTTF(paths[p], paths[p]);
+        if (id == FONS_INVALID)
+            continue;
+        if (fallbackFontId != FONS_INVALID)
+            fonsAddFallbackFont(fontContext, id, fallbackFontId);
+        fontIndexToId[numFontIndices] = id;
+        Q_strncpyz(fontIndexPath[numFontIndices], paths[p], sizeof(fontIndexPath[numFontIndices]));
+        return numFontIndices++;
+    }
+
+    ri.Printf(PRINT_WARNING, "RE_Font_Register: couldn't load font '%s'\n", name);
+    return -1;
 }
 
 // -------------------------------------------------------------------------

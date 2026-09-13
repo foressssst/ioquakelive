@@ -1647,6 +1647,7 @@ refexport_t* GetRefAPI(int apiVersion, refimport_t* rimp) {
     re.TextBounds = RE_TextBounds;
     re.GetGlyphInfo = RE_GetGlyphInfo;
     re.SetCompositionFont = RE_SetCompositionFont;
+    re.Font_Register = RE_Font_Register;
     re.RemapShader = R_RemapShader;
     re.GetEntityToken = R_GetEntityToken;
     re.inPVS = R_inPVS;

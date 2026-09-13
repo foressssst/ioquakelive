@@ -187,7 +187,9 @@ typedef enum {
     CG_R_FONT_DRAWSTRING,         // [QL] fontstash/stb_truetype text rendering
     CG_R_FONT_TEXTEXTENTS,
     CG_R_GETGLYPHINFO,
-    CG_IME_SETCOMPOSITIONFONT
+    CG_IME_SETCOMPOSITIONFONT,
+
+    CG_R_FONT_REGISTER            // loads a TrueType font by name, returns its font index or -1
 } cgameImport_t;
 
 /*
