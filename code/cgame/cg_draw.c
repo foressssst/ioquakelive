@@ -1060,54 +1060,54 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame) {
 /*
 ===================
 CG_DrawReward
+
+[QL] cgamex86.dll 0x1000ac30. A medal shows for 2 s and fades over its last
+200 ms. When it runs out the next one is popped and its sound queued before
+cg_drawRewards is tested, so hidden medals still advance and play. The icon is
+32x32 at y 42: above cg_drawRewardsRowSize one icon with the count to its right
+in plain white, otherwise one icon per medal, 48 apart.
 ===================
 */
 static void CG_DrawReward(void) {
-	float* color;
-	int i, count;
-	float x, y;
-	char buf[32];
+	vec4_t color;
+	int i, count, remaining;
+	float x;
+
+	remaining = REWARD_TIME - (cg.time - cg.rewardTime);
+	if (!cg.rewardTime || remaining <= 0) {
+		if (cg.rewardStack <= 0) {
+			return;
+		}
+		for (i = 0; i < cg.rewardStack; i++) {
+			cg.rewardSound[i] = cg.rewardSound[i + 1];
+			cg.rewardShader[i] = cg.rewardShader[i + 1];
+			cg.rewardCount[i] = cg.rewardCount[i + 1];
+		}
+		cg.rewardStack--;
+		cg.rewardTime = cg.time;
+		remaining = REWARD_TIME;
+		if (cg_announcerRewardsVO.integer) {
+			CG_QueueAnnouncement(cg.rewardSound[0]);
+		}
+	}
 
 	if (!cg_drawRewards.integer) {
 		return;
 	}
 
-	color = CG_FadeColor(cg.rewardTime, REWARD_TIME);
-	if (!color) {
-		if (cg.rewardStack > 0) {
-			for (i = 0; i < cg.rewardStack; i++) {
-				cg.rewardSound[i] = cg.rewardSound[i + 1];
-				cg.rewardShader[i] = cg.rewardShader[i + 1];
-				cg.rewardCount[i] = cg.rewardCount[i + 1];
-			}
-			cg.rewardTime = cg.time;
-			cg.rewardStack--;
-			color = CG_FadeColor(cg.rewardTime, REWARD_TIME);
-			trap_S_StartLocalSound(cg.rewardSound[0], CHAN_ANNOUNCER);
-		} else {
-			return;
-		}
-	}
-
+	color[0] = color[1] = color[2] = 1.0f;
+	color[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
 	trap_R_SetColor(color);
 
-	if (cg.rewardCount[0] >= 10) {
-		y = 56;
-		x = 320 - ICON_SIZE / 2;
-		CG_DrawPic(x, y, ICON_SIZE - 4, ICON_SIZE - 4, cg.rewardShader[0]);
-		Com_sprintf(buf, sizeof(buf), "%d", cg.rewardCount[0]);
-		{
-			float tw = CG_Text_Width(buf, 0.22f, 0);
-			CG_Text_Paint((SCREEN_WIDTH - tw) / 2, y + ICON_SIZE + 12, 0.22f, color, buf, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
-		}
+	count = cg.rewardCount[0];
+	if (count > cg_drawRewardsRowSize.integer) {
+		CG_DrawPic(296, 42, 32, 32, cg.rewardShader[0]);
+		CG_DrawText(336, 66, 0, 0.2f, colorWhite, va("%d", count), 0, 0, 0);
 	} else {
-		count = cg.rewardCount[0];
-
-		y = 56;
-		x = 320 - count * ICON_SIZE / 2;
+		x = (float)(320 - (count * 48) / 2);
 		for (i = 0; i < count; i++) {
-			CG_DrawPic(x, y, ICON_SIZE - 4, ICON_SIZE - 4, cg.rewardShader[0]);
-			x += ICON_SIZE;
+			CG_DrawPic(x, 42, 32, 32, cg.rewardShader[0]);
+			x += 48;
 		}
 	}
 	trap_R_SetColor(NULL);
@@ -2431,10 +2431,13 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 			CG_DrawCrosshairNames();
 			CG_SetWidescreen(WIDESCREEN_STRETCH);
 			CG_DrawWeaponBar();
-			// NOT PORTED: retail calls 0x1000ac30 here (WIDESCREEN_CENTER), a timed
-			// 2-second element with a 200 ms fade that the playing branch also draws,
-			// and 0x1000f700 after this block for every spectator (it tests EF_VOTED).
-			// Neither is identified yet; see bitacora/PENDIENTES.md.
+			// [QL] 0x100110aa: the medals, as in the playing branch. The widescreen mode
+			// retail sets around the call is not verified; this keeps the playing one.
+			CG_SetWidescreen(WIDESCREEN_CENTER);
+			CG_DrawReward();
+			CG_SetWidescreen(WIDESCREEN_STRETCH);
+			// NOT PORTED: retail calls 0x1000f700 after this block for every spectator
+			// (it tests EF_VOTED). Not identified yet; see bitacora/PENDIENTES.md.
 		}
 	} else {
 		// don't draw any status if dead or the scoreboard is being explicitly shown

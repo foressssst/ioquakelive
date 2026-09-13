@@ -1763,12 +1763,10 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                 case 8: shader = cgs.media.medalFirstFrag; count = 1; break;
                 case 9: shader = cgs.media.medalPerfect; break;
                 }
-                if (shader && cg.rewardStack < (MAX_REWARDSTACK - 1)) {
-                    cg.rewardSound[cg.rewardStack] = cgs.media.impressiveSound;
-                    cg.rewardShader[cg.rewardStack] = shader;
-                    cg.rewardCount[cg.rewardStack] = count;
-                    cg.rewardStack++;
-                    cg.rewardTime = cg.time;
+                // [QL] 0x10043570, the same push as the persistant medals. Which sound each
+                // award plays is not identified yet, so they keep impressiveSound.
+                if (shader) {
+                    CG_PushReward(cgs.media.impressiveSound, shader, count);
                 }
             }
             break;
