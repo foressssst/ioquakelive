@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_types.h"
 
-#define REF_API_VERSION 9
+#define REF_API_VERSION 10
 
 //
 // these are the functions exported by the refresh module
@@ -98,6 +98,8 @@ typedef struct {
     void (*TextBounds)(const char* text, int start, int fontIndex, float scale, int limit, float* extents);  // extents[5]
     void (*GetGlyphInfo)(int fontIndex, int charValue, glyphInfo_t* glyph);
     void (*SetCompositionFont)(int fontIndex, float scale);
+    // loads a TrueType font by name for the calls above and returns its font index, or -1
+    int (*Font_Register)(const char* name);
 
     void (*RemapShader)(const char* oldShader, const char* newShader, const char* offsetTime);
     qboolean (*GetEntityToken)(char* buffer, int size);

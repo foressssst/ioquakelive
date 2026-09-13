@@ -612,6 +612,7 @@ void CG_ClearChat(void) {
     memset(cg.chatLines, 0, sizeof(cg.chatLines));
     memset(&cg.currentChatLine, 0, sizeof(cg.currentChatLine));
     cg.chatIndex = MAX_CHAT_LINES - 1;
+    cg.chatSlideStart = 0;
 }
 
 // [QL] cgamex86.dll 0x10006910. A line ending in '\n' is copied without it;
@@ -632,7 +633,11 @@ void CG_AddChat(const char *text, int teamOnly, int extraTime) {
     cg.currentChatLine.startTime = cg.time;
     cg.currentChatLine.endTime = cg.time + 2000 + extraTime;
     cg.currentChatLine.teamOnly = teamOnly;
-    CG_AddScrollRow(&cg.chatScrollRows, &cg.chatScrollTime, CHAT_FADEOUT / 10.0f);
+    cg.currentChatLine.fadeTime = cg.time;
+    // [CPMA] the lines above rise into place (CG_DrawCpmaChat)
+    cg.chatSlideStart = cg.time;
+    cg.chatSlideKey = cg.time;
+    cg.chatSlideIn = qtrue;
 
     if (len > 0 && text[len - 1] == '\n' && len <= size) {
         size = len;
@@ -644,46 +649,105 @@ void CG_AddChat(const char *text, int teamOnly, int extraTime) {
     CG_Printf("%s", text);
 }
 
+// the n-th newest stored chat line (0 is the newest), or NULL past them
+static chatLine_t* CG_ChatLine(int n) {
+    chatLine_t* line;
+
+    if (cg.currentChatLine.startTime) {
+        if (n == 0) {
+            return &cg.currentChatLine;
+        }
+        n--;
+    }
+    if (n < 0 || n >= MAX_CHAT_LINES) {
+        return NULL;
+    }
+    line = &cg.chatLines[(cg.chatIndex - n + MAX_CHAT_LINES) % MAX_CHAT_LINES];
+    return line->startTime ? line : NULL;
+}
+
+// [CPMA] how long a line holds before easing out: Quake Live's extra time lengthens it
+static int CG_ChatLineHold(const chatLine_t* line) {
+    int extra = line->endTime - line->startTime - 2000;
+
+    return CHAT_FADEDELAY + (extra > 0 ? extra : 0);
+}
+
+static qboolean CG_ChatLineShowing(const chatLine_t* line) {
+    return (cg.time < line->fadeTime + CHAT_FADEIN + CG_ChatLineHold(line) + CHAT_FADEOUT) ? qtrue : qfalse;
+}
+
 /*
-[CPMA] CPMA 1.53's Chat element, used with ch_animateScroll: up to ch_chatLines recent lines
-stacked upwards from the newest, each easing in, holding and easing out (hud.cfg: fadein
-150, fadedelay 3000, time 100; Quake Live's extra time lengthens the hold), rising a row
-when a new line comes.
+[CPMA] CPMA 1.53's Chat element (hud.cfg: fadein 150, fadedelay 3000, time 100) on Quake
+Live's chat window, used with ch_animateScroll. The ch_chatLines newest lines show, each
+easing in, holding and easing out. CPMA anchors its list at the oldest line and slides it a
+row as that line leaves (CG_CpmaSlide); Quake Live's window is anchored at the newest line,
+on its bottom edge, so here the lines above rise a row when a line comes in, and the bottom
+line sinks a row as it leaves. As in CPMA (cgame.qvm func 158881), a line pushed out of the
+window goes at once and the window skips its fade-in.
 */
 static void CG_DrawCpmaChat(float x, float bottom, float scale) {
     vec4_t color = {1.0f, 1.0f, 1.0f, 1.0f};
-    qboolean current = (cg.currentChatLine.startTime != 0);
-    int count = ch_chatLines.integer;
-    int ring = cg.chatIndex;
-    int n, start, extra;
-    const char* text;
-    float rowY = bottom + CG_ScrollRows(cg.chatScrollRows, cg.chatScrollTime, CHAT_FADEOUT / 10.0f) * 13.0f;
+    int lines = ch_chatLines.integer;
+    chatLine_t* line;
+    chatLine_t* anchor = NULL;
+    qboolean overflow = qfalse;
+    float slide = 0.0f;
+    int n, row;
 
-    if (count > MAX_CHAT_LINES) {
-        count = MAX_CHAT_LINES;
+    if (lines <= 0) {
+        return;
+    }
+    if (lines > MAX_CHAT_LINES) {
+        lines = MAX_CHAT_LINES;
+    }
+
+    for (n = lines; (line = CG_ChatLine(n)) != NULL; n++) {
+        if (CG_ChatLineShowing(line)) {
+            line->fadeTime = cg.time - CHAT_FADEIN - CG_ChatLineHold(line) - CHAT_FADEOUT;
+            overflow = qtrue;
+        }
+    }
+    if (overflow) {
+        cg.chatSlideStart = 0;
+        for (n = 0; n < lines && (line = CG_ChatLine(n)) != NULL; n++) {
+            if (CG_ChatLineShowing(line)) {
+                line->fadeTime -= CHAT_FADEIN;
+            }
+        }
+    }
+
+    for (n = 0; n < lines && (line = CG_ChatLine(n)) != NULL; n++) {
+        if (CG_ChatLineShowing(line)) {
+            anchor = line;
+            break;
+        }
+    }
+    if (cg.chatSlideStart &&
+        (cg.time >= cg.chatSlideStart + CHAT_FADEOUT || !anchor || anchor->startTime != cg.chatSlideKey)) {
+        cg.chatSlideStart = 0;
+    }
+    if (!cg.chatSlideStart && anchor &&
+        CG_CpmaFadingOut(anchor->fadeTime, CHAT_FADEIN, CG_ChatLineHold(anchor), CHAT_FADEOUT)) {
+        cg.chatSlideStart = cg.time;
+        cg.chatSlideKey = anchor->startTime;
+        cg.chatSlideIn = qfalse;
+    }
+    if (cg.chatSlideStart) {
+        slide = CG_CpmaSlide(cg.chatSlideStart, CHAT_FADEOUT);
+        if (cg.chatSlideIn) {
+            slide = 1.0f - slide;
+        }
     }
 
     CG_SetWidescreen(WIDESCREEN_LEFT);
-    for (n = 0; n < count; n++) {
-        if (current) {
-            start = cg.currentChatLine.startTime;
-            extra = cg.currentChatLine.endTime - start - 2000;
-            text = cg.currentChatLine.text;
-            current = qfalse;
-        } else {
-            start = cg.chatLines[ring].startTime;
-            extra = cg.chatLines[ring].endTime - start - 2000;
-            text = cg.chatLines[ring].text;
-            ring = (ring + MAX_CHAT_LINES - 1) % MAX_CHAT_LINES;
+    for (n = 0, row = 0; n < lines && (line = CG_ChatLine(n)) != NULL; n++) {
+        if (!CG_ChatLineShowing(line)) {
+            continue;
         }
-        if (!start) {
-            break;
-        }
-        color[3] = CG_CpmaFade(start, CHAT_FADEIN, CHAT_FADEDELAY + (extra > 0 ? extra : 0), CHAT_FADEOUT);
-        if (color[3] <= 0.0f) {
-            break;
-        }
-        CG_DrawText(x, rowY - 13.0f * n, 1, scale, color, text, 0, 256, 3);
+        color[3] = CG_CpmaFade(line->fadeTime, CHAT_FADEIN, CG_ChatLineHold(line), CHAT_FADEOUT);
+        CG_DrawText(x, bottom + 13.0f * (slide - row), 1, scale, color, line->text, 0, 256, 3);
+        row++;
     }
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
@@ -890,6 +954,8 @@ static consoleCommand_t commands[] = {
     {"readyup", CG_Readyup_f},
     {"team", CG_Team_f},
     {"togglechathistory", CG_ToggleChatHistory_f},
+    {"testfragmessage", CG_TestFragMessage_f},  // [wolfcam] tuning aids, cg_hudtune.c
+    {"testrewards", CG_TestRewards_f},
     {"forfeit", CG_Forfeit_f},
     {"ragequit", CG_Ragequit_f},
     {"setteamcolor", CG_SetTeamColor_f},

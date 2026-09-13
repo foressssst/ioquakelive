@@ -55,24 +55,28 @@ float CG_CpmaFade(int start, int fadein, int fadedelay, int time) {
     return 1.0f - CG_CpmaEaseOut((float)out / time);
 }
 
-// [CPMA] ch_animateScroll moves a list into place with an exponential approach, as CPMA
-// 1.53 does. Its rate divides by the element's fade time, so callers pass time / 10 as
-// the half-life (inferred from the QVM, not verified on screen against CPMA).
-float CG_ScrollRows(float rows, int time, float halfLife) {
-    float elapsed = (float)(cg.time - time);
+// [CPMA] whether an item updated at start is easing out (cgame.qvm func 151587)
+qboolean CG_CpmaFadingOut(int start, int fadein, int fadedelay, int time) {
+    int out = cg.time - start - fadein - fadedelay;
 
-    if (!ch_animateScroll.integer) {
-        return 0.0f;
-    }
-    if (elapsed > 0.0f) {
-        rows *= (float)pow(2.0, -elapsed / halfLife);
-    }
-    return (fabs(rows) < 0.01f) ? 0.0f : rows;
+    return (time > 0 && out > 0 && out < time) ? qtrue : qfalse;
 }
 
-void CG_AddScrollRow(float* rows, int* time, float halfLife) {
-    *rows = CG_ScrollRows(*rows, *time, halfLife) + 1.0f;
-    *time = cg.time;
+/*
+[CPMA] How far a list has slid, 0 to 1. CPMA 1.53 lays its lists out from an anchor
+(cgame.qvm func 158881): when the item at the anchor starts easing out, the whole list
+slides one row towards the anchor over the element's time, on the fade curve, and the
+slide ends when that item is gone. Nothing moves when an item comes in, and an item pushed
+out of a full list goes at once while the rest skip their fade-in.
+*/
+float CG_CpmaSlide(int start, int time) {
+    float t;
+
+    if (time <= 0) {
+        return 1.0f;
+    }
+    t = (float)(cg.time - start) / time;
+    return CG_CpmaEaseOut(t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t));
 }
 
 // [QL] widescreen rendering mode - set by DC->setWidescreen() before each item paints

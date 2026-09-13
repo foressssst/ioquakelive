@@ -3057,15 +3057,17 @@ static const float *CG_ObitTeamColor(int team) {
     }
 }
 
-// [CPMA] with ch_animateScroll a line lives as CPMA's GameEvents item (eases in, holds,
-// eases out) and the list glides up a row when one goes
+// [CPMA] with ch_animateScroll a line lives as CPMA 1.53's GameEvents item (eases in,
+// holds, eases out), and the list slides up a row while its top line eases out
+// (CG_CpmaSlide)
 static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
     static vec4_t obitColor;
     int i;
-    int y, textH, attackerW, remaining;
-    float x, iconY, iconW, iconH;
+    int textH, attackerW, remaining;
+    float x, y, iconY, iconW, iconH;
     const float *team;
     int lifetime = ch_animateScroll.integer ? OBIT_FADEIN + OBIT_FADEDELAY + OBIT_FADEOUT : 2000;
+    float slide = 0.0f;
 
     // 0x1002e9d7: an expired slot shifts the whole array up from slot 0 and
     // the same index is looked at again
@@ -3073,13 +3075,26 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
         if (cg.obituaries[i].time > 0 && cg.time >= cg.obituaries[i].time + lifetime) {
             memmove(&cg.obituaries[0], &cg.obituaries[1], (MAX_OBITUARIES - 1) * sizeof(cg.obituaries[0]));
             memset(&cg.obituaries[MAX_OBITUARIES - 1], 0, sizeof(cg.obituaries[0]));
-            CG_AddScrollRow(&cg.obitScrollRows, &cg.obitScrollTime, OBIT_FADEOUT / 10.0f);
             i--;
         }
     }
 
-    y = (int)(rect->y + CG_ScrollRows(cg.obitScrollRows, cg.obitScrollTime, OBIT_FADEOUT / 10.0f) *
-                            (CG_DrawTextHeight("A", scale, 0, 0) + 2));
+    if (ch_animateScroll.integer) {
+        if (cg.obitSlideStart && (cg.time >= cg.obitSlideStart + OBIT_FADEOUT || !cg.obituaries[0].active ||
+                                  cg.obituaries[0].time != cg.obitSlideKey)) {
+            cg.obitSlideStart = 0;
+        }
+        if (!cg.obitSlideStart && cg.obituaries[0].active &&
+            CG_CpmaFadingOut(cg.obituaries[0].time, OBIT_FADEIN, OBIT_FADEDELAY, OBIT_FADEOUT)) {
+            cg.obitSlideStart = cg.time;
+            cg.obitSlideKey = cg.obituaries[0].time;
+        }
+        if (cg.obitSlideStart) {
+            slide = CG_CpmaSlide(cg.obitSlideStart, OBIT_FADEOUT) * (float)(CG_DrawTextHeight("A", scale, 0, 0) + 2);
+        }
+    }
+
+    y = (float)(int)rect->y - slide;
 
     for (i = 0; i < MAX_OBITUARIES; i++) {
         if (!cg.obituaries[i].active) {

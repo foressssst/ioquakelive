@@ -134,6 +134,8 @@ CG_AddObituary
 the entry takes the first inactive slot (when all 16 are taken the array
 shifts up one first). Past cg_obituaryRowSize the oldest entry is dropped and
 everything from that row on is cleared, so only the newest rows remain.
+[CPMA] With ch_animateScroll a dropped entry goes at once and the ones left
+skip their fade-in, as in CPMA 1.53 (cgame.qvm func 158881).
 =============
 */
 static void CG_AddObituary(const char *victimName, const char *attackerName,
@@ -141,6 +143,7 @@ static void CG_AddObituary(const char *victimName, const char *attackerName,
                             int hasAttacker, qhandle_t weaponIcon) {
     int idx;
     int rowSize;
+    qboolean dropped = qfalse;
 
     for (idx = 0; idx < MAX_OBITUARIES; idx++) {
         if (!cg.obituaries[idx].active) {
@@ -150,7 +153,7 @@ static void CG_AddObituary(const char *victimName, const char *attackerName,
     if (idx == MAX_OBITUARIES) {
         memmove(&cg.obituaries[0], &cg.obituaries[1], (MAX_OBITUARIES - 1) * sizeof(cg.obituaries[0]));
         memset(&cg.obituaries[MAX_OBITUARIES - 1], 0, sizeof(cg.obituaries[0]));
-        CG_AddScrollRow(&cg.obitScrollRows, &cg.obitScrollTime, OBIT_FADEOUT / 10.0f);
+        dropped = qtrue;
         // retail keeps idx at 16 here and writes one slot past the array
         idx = MAX_OBITUARIES - 1;
     }
@@ -180,7 +183,69 @@ static void CG_AddObituary(const char *victimName, const char *attackerName,
     if (idx >= cg_obituaryRowSize.integer) {
         memmove(&cg.obituaries[0], &cg.obituaries[1], rowSize * sizeof(cg.obituaries[0]));
         memset(&cg.obituaries[rowSize], 0, (MAX_OBITUARIES - rowSize) * sizeof(cg.obituaries[0]));
-        CG_AddScrollRow(&cg.obitScrollRows, &cg.obitScrollTime, OBIT_FADEOUT / 10.0f);
+        dropped = qtrue;
+    }
+
+    if (dropped && ch_animateScroll.integer) {
+        cg.obitSlideStart = 0;
+        for (idx = 0; idx < MAX_OBITUARIES; idx++) {
+            if (cg.obituaries[idx].active) {
+                cg.obituaries[idx].time -= OBIT_FADEIN;
+            }
+        }
+    }
+}
+
+/*
+=============
+CG_ShowFragMessage
+
+[QL] cgamex86.dll 0x100195d8: the frag message, only with cg_drawFragMessages.
+Race and Red Rover: plain. FFA/duel: place and score, or "Good Job!" in a
+training warmup. Freeze Tag: thawed/froze. Team games: telefragging a teammate
+is just noted; any other teamkill adds "Watch your fire!". "Teammate" means the
+victim is on the local player's team. Centred at y 90 (144 during a warmup),
+scale 0.3, unless cg_cameraOrbit is on. A target of -1 is no one's.
+[wolfcam] cg_drawFragMessageTokens can rewrite it (CG_BuildFragMessage).
+=============
+*/
+void CG_ShowFragMessage(int target, int mod, const char* targetName) {
+    const char* s;
+    qboolean sameTeam = target >= 0 && cgs.gametype >= GT_TEAM &&
+                        cg.snap->ps.persistant[PERS_TEAM] == cgs.clientinfo[target].team;
+
+    if (cgs.gametype == GT_RACE) {
+        s = va("You fragged %s.", targetName);
+    } else if (cgs.gametype < GT_TEAM) {
+        if (g_training.integer && cg.warmup) {
+            s = va("You fragged %s!\n\n\n\n\n^4Good Job!", targetName);
+        } else {
+            s = va("You fragged %s\n%s place with %i.", targetName,
+                   CG_PlaceString(cg.snap->ps.persistant[PERS_RANK] + 1),
+                   cg.snap->ps.persistant[PERS_SCORE]);
+        }
+    } else if (cgs.gametype == GT_FREEZE) {
+        if (mod == MOD_THAW) {
+            s = va("You thawed %s.", targetName);
+        } else if (mod == MOD_TELEFRAG) {
+            s = sameTeam ? va("You froze %s, your teammate.", targetName) : va("You froze %s.", targetName);
+        } else {
+            s = sameTeam ? va("You froze %s, your teammate.\n\n^1Watch your fire!^7", targetName)
+                         : va("You froze %s.", targetName);
+        }
+    } else if (cgs.gametype == GT_RR) {
+        s = va("You fragged %s.", targetName);
+    } else if (mod == MOD_TELEFRAG) {
+        s = sameTeam ? va("You fragged %s, your teammate.", targetName) : va("You fragged %s.", targetName);
+    } else {
+        s = sameTeam ? va("You fragged %s, your teammate.\n\n^1Watch your fire!^7", targetName)
+                     : va("You fragged %s.", targetName);
+    }
+
+    if (!cg_cameraOrbit.integer) {
+        CG_CenterPrint(s, cg.warmup ? 144 : 90, 0.3f);
+        cg.centerPrintFrag = qtrue;
+        CG_BuildFragMessage(target, mod, targetName, sameTeam);
     }
 }
 
@@ -357,50 +422,8 @@ static void CG_Obituary(entityState_t* ent) {
         return;
     }
 
-    // [QL] cgamex86.dll 0x100195d8: the frag message, only with
-    // cg_drawFragMessages. Race and Red Rover: plain. FFA/duel: place and
-    // score, or "Good Job!" in a training warmup. Freeze Tag: thawed/froze.
-    // Team games: telefragging a teammate is just noted; any other teamkill
-    // adds "Watch your fire!". "Teammate" means the victim is on the local
-    // player's team. Centred at y 90 (144 during a warmup), scale 0.3, unless
-    // cg_cameraOrbit is on.
     if (cg_drawFragMessages.integer && attacker == cg.snap->ps.clientNum) {
-        const char* s;
-        qboolean sameTeam = cgs.gametype >= GT_TEAM &&
-                            cg.snap->ps.persistant[PERS_TEAM] == cgs.clientinfo[target].team;
-
-        if (cgs.gametype == GT_RACE) {
-            s = va("You fragged %s.", targetName);
-        } else if (cgs.gametype < GT_TEAM) {
-            if (g_training.integer && cg.warmup) {
-                s = va("You fragged %s!\n\n\n\n\n^4Good Job!", targetName);
-            } else {
-                s = va("You fragged %s\n%s place with %i.", targetName,
-                       CG_PlaceString(cg.snap->ps.persistant[PERS_RANK] + 1),
-                       cg.snap->ps.persistant[PERS_SCORE]);
-            }
-        } else if (cgs.gametype == GT_FREEZE) {
-            if (mod == MOD_THAW) {
-                s = va("You thawed %s.", targetName);
-            } else if (mod == MOD_TELEFRAG) {
-                s = sameTeam ? va("You froze %s, your teammate.", targetName) : va("You froze %s.", targetName);
-            } else {
-                s = sameTeam ? va("You froze %s, your teammate.\n\n^1Watch your fire!^7", targetName)
-                             : va("You froze %s.", targetName);
-            }
-        } else if (cgs.gametype == GT_RR) {
-            s = va("You fragged %s.", targetName);
-        } else if (mod == MOD_TELEFRAG) {
-            s = sameTeam ? va("You fragged %s, your teammate.", targetName) : va("You fragged %s.", targetName);
-        } else {
-            s = sameTeam ? va("You fragged %s, your teammate.\n\n^1Watch your fire!^7", targetName)
-                         : va("You fragged %s.", targetName);
-        }
-
-        if (!cg_cameraOrbit.integer) {
-            CG_CenterPrint(s, cg.warmup ? 144 : 90, 0.3f);
-            cg.centerPrintFrag = qtrue;
-        }
+        CG_ShowFragMessage(target, mod, targetName);
     }
 
     // check for double client messages

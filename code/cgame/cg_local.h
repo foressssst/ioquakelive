@@ -588,6 +588,16 @@ typedef struct {
 #define MAX_REWARDSTACK 16  // [QL] 0x10043570 pushes while rewardStack < 15
 #define MAX_SOUNDBUFFER 40
 
+// [QL] a chat line; the newest one and the ring of older ones share this layout
+#define CHAT_LINE_TEXT 256
+typedef struct {
+    int startTime;
+    int endTime;
+    int teamOnly;
+    int fadeTime;  // [CPMA] start of its fade envelope: startTime, less a skipped fade-in
+    char text[CHAT_LINE_TEXT];
+} chatLine_t;
+
 // [QL] announcer sound ring buffer (replaces Q3's single cg.rewardSound[])
 #define MAX_ANNOUNCER_QUEUE 32
 
@@ -814,11 +824,13 @@ typedef struct {
     int crosshairHitType;     // [QL] 0x10ab8fb4, (generic1 >> 6) + 1
     int crosshairFragTime;    // [CPMA] ch_crosshairPulse 3: last enemy frag
 
-    // [CPMA] ch_animateScroll: rows still to scroll and when that was set
-    float obitScrollRows;
-    int obitScrollTime;
-    float chatScrollRows;
-    int chatScrollTime;
+    // [CPMA] ch_animateScroll: when a list started sliding a row (0 while still) and the
+    // start time of the item that set it off (see CG_CpmaSlide)
+    int obitSlideStart;
+    int obitSlideKey;
+    int chatSlideStart;
+    int chatSlideKey;
+    qboolean chatSlideIn;  // the rows rise into place (a line came in) rather than sink
 
     int weaponSelectTime;
     int weaponAnimation;
@@ -952,19 +964,8 @@ typedef struct {
     #define CHAT_FADEIN 150
     #define CHAT_FADEDELAY 3000
     #define CHAT_FADEOUT 100
-    #define CHAT_LINE_TEXT  256
-    struct {
-        int     startTime;
-        int     endTime;
-        int     teamOnly;
-        char    text[CHAT_LINE_TEXT];
-    } chatLines[MAX_CHAT_LINES];
-    struct {
-        int     startTime;
-        int     endTime;
-        int     teamOnly;
-        char    text[CHAT_LINE_TEXT];
-    } currentChatLine;
+    chatLine_t chatLines[MAX_CHAT_LINES];
+    chatLine_t currentChatLine;
     int chatIndex;
 
     // [QL] announcer sound ring buffer (replaces Q3's single cg.rewardSound[]).
@@ -2022,6 +2023,11 @@ void CG_DrawText_DC(float x, float y, float scale, vec4_t color, const char* tex
 void CG_DrawText(float x, float y, int fontIndex, float scale, vec4_t color, const char *text, float adjust, int maxChars, int textStyle);
 int CG_DrawTextWidth(const char *text, float scale, int limit, int fontIndex);
 int CG_DrawTextHeight(const char *text, float scale, int limit, int fontIndex);
+void CG_DrawTextInFont(float x, float y, int engineFont, float scale, const vec4_t color, const char* text, int style);
+void CG_MeasureTextInFont(const char* text, int engineFont, float scale, float* w, float* h);
+float CG_DrawTextHeightInFont(int engineFont, float scale);
+float CG_TextAdvanceInFont(const char* text, int engineFont, float scale);
+void CG_DrawRewardIcon(float x, float y, float size, qhandle_t shader);
 void CG_DrawTextClipped(float *maxX, float x, float y, float scale, const vec4_t color, const char *text);
 extern vmCvar_t cg_redTeamName;
 extern vmCvar_t cg_blueTeamName;
@@ -2092,6 +2098,7 @@ void CG_ForceModelChange(void);
 //
 void CG_CheckEvents(centity_t* cent);
 const char* CG_PlaceString(int rank);
+void CG_ShowFragMessage(int target, int mod, const char* targetName);
 void CG_EntityEvent(centity_t* cent, vec3_t position);
 void CG_PainEvent(centity_t* cent, int health);
 // [QL] event-driven helpers
@@ -2298,8 +2305,34 @@ void CG_PushReward(sfxHandle_t sfx, qhandle_t shader, int rewardCount);
 //
 float CG_CpmaEaseOut(float x);
 float CG_CpmaFade(int start, int fadein, int fadedelay, int time);
-float CG_ScrollRows(float rows, int time, float halfLife);
-void CG_AddScrollRow(float* rows, int* time, float halfLife);
+qboolean CG_CpmaFadingOut(int start, int fadein, int fadedelay, int time);
+float CG_CpmaSlide(int start, int time);
+
+//
+// cg_hudtune.c, [wolfcam] tuning the medals, the frag message and the centre print
+//
+typedef struct {
+    float x;           // where the lines line up
+    int align;         // 0 left, 1 centred, 2 right
+    int y;             // the print's y; the block starts above it
+    float scale;
+    int font;          // engine font
+    int style;
+    float lineSpacing;
+    vec4_t color;      // before the fade
+    int time;          // how long it shows
+    int fadeTime;      // how long it fades
+    int widescreen;
+} centerPrintLayout_t;
+
+void CG_RegisterTuneCvars(void);
+void CG_UpdateTuneCvars(void);
+void CG_DrawRewardMedals(int count, qhandle_t shader, const vec4_t fade);
+void CG_CenterPrintLayout(centerPrintLayout_t* layout);
+void CG_BuildFragMessage(int target, int mod, const char* victimName, qboolean sameTeam);
+qboolean CG_DrawFragMessageTokens(const centerPrintLayout_t* layout, const vec4_t fade);
+void CG_TestFragMessage_f(void);
+void CG_TestRewards_f(void);
 
 //
 // cg_players.c, [CPMA] cg_animateChatBalloon
@@ -2476,6 +2509,7 @@ void trap_R_Font_DrawString(int x, int y, const char* text, int fontIndex, float
 void trap_R_Font_TextExtents(const char* text, int start, int fontIndex, float scale, int limit, float* extents);  // extents[5]
 void trap_R_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t* glyph);
 void trap_IME_SetCompositionFont(int fontIndex, float scale);
+int trap_R_Font_Register(const char* name);
 qboolean trap_Key_IsDown(int keynum);
 int trap_Key_GetCatcher(void);
 void trap_Key_SetCatcher(int catcher);
