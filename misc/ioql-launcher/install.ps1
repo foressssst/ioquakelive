@@ -7,8 +7,8 @@
 # It writes launcher.json, fetches the signed manifest, verifies it with the
 # release public key, installs launcher.ps1 and ioquakelive.cmd (checking their
 # SHA-256), creates a desktop shortcut and runs the launcher, which downloads the
-# game. Quake Live must be installed from Steam: the game copies pak00.pk3 from
-# there on its first run.
+# game. Quake Live must be installed from Steam: the launcher takes pak00.pk3
+# from there on its first run.
 #
 # Plain ASCII on purpose (it is run through Invoke-Expression).
 

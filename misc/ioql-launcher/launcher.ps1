@@ -6,8 +6,9 @@
 # manifest does not verify, it starts the version already installed.
 #
 # It never downloads or touches id Software files: baseq3/pak00.pk3 comes from
-# each player's own Steam install of Quake Live (the engine copies it on the
-# first run, see FS_CopyFromSteam in code/qcommon/files.c).
+# each player's own Steam install of Quake Live: the launcher links or copies it
+# on the first run, as FS_CopyFromSteam (code/qcommon/files.c) does when the
+# game is started directly.
 #
 # Plain ASCII on purpose: Windows PowerShell 5.1 reads BOM-less scripts as ANSI.
 
@@ -114,7 +115,7 @@ function Find-SteamQuakeLive {
         $vdf = Join-Path $steam 'steamapps\libraryfolders.vdf'
         if (Test-Path -LiteralPath $vdf) {
             foreach ($m in [regex]::Matches((Get-Content -LiteralPath $vdf -Raw), '"(?:path|\d+)"\s+"([^"]+)"')) {
-                $libs += ($m.Groups[1].Value -replace '\\', '\')
+                $libs += ($m.Groups[1].Value -replace '\\\\', '\')
             }
         }
     }
