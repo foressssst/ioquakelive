@@ -50,7 +50,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define MUZZLE_FLASH_TIME 20
 #define SINK_TIME 1000  // time for fragments to sink into ground before going away
 #define ATTACKER_HEAD_TIME 10000
-#define REWARD_TIME 3000
+#define REWARD_TIME 2000  // [QL] 0x1000ac48
 
 #define PULSE_SCALE 1.5  // amount to scale up the icons when activating
 
@@ -586,7 +586,7 @@ typedef struct {
     int numpositions;
 } skulltrail_t;
 
-#define MAX_REWARDSTACK 10
+#define MAX_REWARDSTACK 16  // [QL] 0x10043570 pushes while rewardStack < 15
 #define MAX_SOUNDBUFFER 40
 
 // [QL] announcer sound ring buffer (replaces Q3's single cg.rewardSound[])
@@ -1654,6 +1654,8 @@ extern vmCvar_t cg_drawAmmoWarning;
 extern vmCvar_t cg_drawCrosshair;
 extern vmCvar_t cg_drawCrosshairNames;
 extern vmCvar_t cg_drawRewards;
+extern vmCvar_t cg_drawRewardsRowSize;
+extern vmCvar_t cg_announcerRewardsVO;
 extern vmCvar_t cg_flagStyle;
 extern vmCvar_t cg_drawTeamOverlay;
 extern vmCvar_t cg_teamOverlayUserinfo;
@@ -2257,6 +2259,7 @@ void CG_VoiceChatListForClient(int clientNum);
 //
 void CG_Respawn(void);
 void CG_TransitionPlayerState(playerState_t* ps, playerState_t* ops);
+void CG_PushReward(sfxHandle_t sfx, qhandle_t shader, int rewardCount);
 void CG_CheckChangedPredictableEvents(playerState_t* ps);
 
 //===============================================
