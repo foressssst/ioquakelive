@@ -648,7 +648,7 @@ static void ClientCleanName(const char* in, char* out, int outSize) {
             if (Q_IsColorString(&out[outpos - 1])) {
                 colorlessLen--;
 
-                if (ColorIndex(*in) == 0) {
+                if (Q_ColorCodeIndex(*in, qtrue) == 0) {
                     // Disallow color black in names to prevent players
                     // from getting advantage playing in front of black backgrounds
                     outpos--;
