@@ -2039,6 +2039,8 @@ extern vmCvar_t g_skipTrainingEnable;
 extern vmCvar_t cg_drawPregameMessages;
 extern vmCvar_t cg_drawFragMessageScale;   // [ioquakelive] temporary, for the user to tune
 extern vmCvar_t cg_drawRewardsImageScale;  // [ioquakelive] temporary, for the user to tune
+extern vmCvar_t cg_drawRewardsX;           // [ioquakelive] temporary, for the user to tune
+extern vmCvar_t cg_drawRewardsY;           // [ioquakelive] temporary, for the user to tune
 extern int cg_currentWidescreen;
 float CG_TextWidth_DC(const char* text, float scale, int limit, int fontIndex);
 float CG_TextHeight_DC(const char* text, float scale, int limit, int fontIndex);

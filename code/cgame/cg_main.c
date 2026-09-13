@@ -250,6 +250,8 @@ vmCvar_t cg_drawSpecMessages;
 vmCvar_t cg_drawPregameMessages;
 vmCvar_t cg_drawFragMessageScale;
 vmCvar_t cg_drawRewardsImageScale;
+vmCvar_t cg_drawRewardsX;
+vmCvar_t cg_drawRewardsY;
 vmCvar_t cg_drawTieredArmorAvailability;
 vmCvar_t cg_enemyHeadColor;
 vmCvar_t cg_enemyLowerColor;
@@ -672,10 +674,13 @@ static cvarTable_t cvarTable[] = {
     {&cg_drawCheckpointRemaining, "cg_drawCheckpointRemaining", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_drawSpecMessages, "cg_drawSpecMessages", "1", CVAR_USERSAVE | CVAR_VM_CREATED},
     {&cg_drawPregameMessages, "cg_drawPregameMessages", "1", CVAR_USERSAVE | CVAR_VM_CREATED},
-    // [ioquakelive] Back on cvars on 2026-09-13 so the user can tune the two sizes live; the
-    // values they choose get baked and these go again. Not archived, as in the first round.
+    // [ioquakelive] Back on cvars on 2026-09-13 so the user can tune the two sizes and the
+    // medal's place live; the values they choose get baked and these go again. Not archived,
+    // as in the first round.
     {&cg_drawFragMessageScale, "cg_drawFragMessageScale", "0.2", 0},
     {&cg_drawRewardsImageScale, "cg_drawRewardsImageScale", "0.51", 0},
+    {&cg_drawRewardsX, "cg_drawRewardsX", "325", 0},
+    {&cg_drawRewardsY, "cg_drawRewardsY", "137", 0},
     {&cg_drawTieredArmorAvailability, "cg_drawTieredArmorAvailability", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_enemyHeadColor, "cg_enemyHeadColor", "0x2a8000FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_enemyLowerColor, "cg_enemyLowerColor", "0x2a8000FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
