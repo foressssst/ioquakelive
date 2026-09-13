@@ -1765,7 +1765,6 @@ extern vmCvar_t cg_noTaunt;
 
 extern vmCvar_t cg_noProjectileTrail;
 extern vmCvar_t cg_bubbleTrail;
-extern vmCvar_t cg_oldRail;
 extern vmCvar_t cg_oldRocket;
 extern vmCvar_t cg_oldPlasma;
 extern vmCvar_t cg_trueLightning;

@@ -208,7 +208,6 @@ vmCvar_t cg_bigFont;
 vmCvar_t cg_noTaunt;
 
 vmCvar_t cg_noProjectileTrail;
-vmCvar_t cg_oldRail;
 vmCvar_t cg_oldRocket;
 vmCvar_t cg_oldPlasma;
 vmCvar_t cg_trueLightning;
@@ -635,7 +634,6 @@ static cvarTable_t cvarTable[] = {
     {&cg_noTaunt, "cg_noTaunt", "0", CVAR_ARCHIVE},
 
     {&cg_noProjectileTrail, "cg_noProjectileTrail", "0", CVAR_ARCHIVE},
-    {&cg_oldRail, "cg_oldRail", "1", CVAR_ARCHIVE},
     {&cg_oldRocket, "cg_oldRocket", "1", CVAR_ARCHIVE},
     {&cg_oldPlasma, "cg_oldPlasma", "1", CVAR_ARCHIVE},
     {&cg_trueLightning, "cg_trueLightning", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},  // [QL] default 1 (was Q3 "0.0")

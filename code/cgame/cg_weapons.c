@@ -325,9 +325,9 @@ static qboolean CG_GetRailColorByte(clientInfo_t* ci, byte* color) {
 ==========================
 CG_RailTrailCore
 Address: 0x1004f670
-[QL] Old-rail rings-only disc beam (cg_oldRail == 2). One local entity, reType
-RT_RAIL_RINGS with railRingsShader; despite the "core" symbol name the binary
-sets reType = 5 (RT_RAIL_RINGS), not RT_RAIL_CORE.
+[QL] The rings-only disc beam drawn for any cg_railStyle other than 2 (the default
+is 1). One local entity, reType RT_RAIL_RINGS with railRingsShader; despite the
+"core" symbol name the binary sets reType = 5 (RT_RAIL_RINGS), not RT_RAIL_CORE.
 ==========================
 */
 static void CG_RailTrailCore(clientInfo_t* ci, vec3_t start, vec3_t end) {
@@ -433,10 +433,9 @@ void CG_RailTrail(clientInfo_t* ci, vec3_t start, vec3_t end) {
         }
     }
 
-    // [QL] cg_oldRail == 2 draws the spiral ring trail; anything else draws the
-    // rings-only disc beam (CG_RailTrailCore) and stops.
-    // (binary: if (cg_oldRail == 2) { spiral } else { CG_RailTrailCore })
-    if (cg_oldRail.integer != 2) {
+    // [QL] 0x1004fcb7: cg_railStyle 2 draws the spiral ring trail; any other value
+    // draws the rings-only disc beam (CG_RailTrailCore, called at 0x1005015d) and stops.
+    if (cg_railStyle.integer != 2) {
         CG_RailTrailCore(ci, start, end);
         return;
     }
