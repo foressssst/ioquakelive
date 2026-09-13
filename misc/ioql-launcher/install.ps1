@@ -1,8 +1,8 @@
 # ioquakelive installer (bootstrap)
 #
-# Run from PowerShell with the one-line command given by the developer, which
-# sets $IoqlAuth before downloading this file. Optional: set $IoqlDir first to
-# choose the install folder (default %LOCALAPPDATA%\ioquakelive).
+# Started by ioquakelive-setup.cmd, which sets $IoqlBase (the private release
+# URL) before downloading this file. Optional: set $IoqlDir first to choose the
+# install folder (default %LOCALAPPDATA%\ioquakelive).
 #
 # It writes launcher.json, fetches the signed manifest, verifies it with the
 # release public key, installs launcher.ps1 and ioquakelive.cmd (checking their
@@ -17,14 +17,13 @@
     $ProgressPreference = 'SilentlyContinue'
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-    $baseUrl = 'https://quakeclub.com/ioql'
     $channel = 'beta'
     $publicKeyXml = '<RSAKeyValue><Modulus>uZiJn3GMJhWjL7QiH/6JD714+hsviKyCXTGKl3QFbt4hjyds/BcN/+yToU7qRruuCgGnZiTkjxRr42Z9uIZlxynOosulmVtZapC+DhhLgs24xaH1IkkOhkaCYHZovBkgt5xTmiJHe36TOsKtOY2zsnJhBSPSbTSf2JXWYal691n4JrtR536j2JKtFLVR87yQ4bEszkkX1mkEK5N44xxrD6t3YxxSaES1pThHM5RPaoq75E8tJOfgp3HYXzbS40NP0/HagSRhRsGlnnzcU5g5yMkEbcmNxJa/VADzX+hxvGjyXHMdFFVc0QE/1YekU8srMG6SifNom2IACmWGgHXgfpj3VywKyWB0IlRmswvYNUqMG3lwsraKR2c0aoxxwXm/a8CjK9t94J8PwgnXj2gS94hrRRYT33IJfvZBwiQhAE3qEuXZ1FZf3UV7jnLoRM2H47WSG5wSQuaCnAiZtpKoc3fMVKlarYcKKENsTPtBo3ow4K+Qtxnj7/GsbMTy5kXN</Modulus><Exponent>AQAB</Exponent></RSAKeyValue>'
 
-    if (-not (Get-Variable -Name IoqlAuth -Scope Global -ErrorAction SilentlyContinue)) {
-        throw 'Falta $IoqlAuth. Usa el comando de instalacion completo.'
+    if (-not (Get-Variable -Name IoqlBase -Scope Global -ErrorAction SilentlyContinue)) {
+        throw 'Abre ioquakelive-setup.cmd para instalar.'
     }
-    $auth = $global:IoqlAuth
+    $baseUrl = $global:IoqlBase.TrimEnd('/')
     $dir = if (Get-Variable -Name IoqlDir -Scope Global -ErrorAction SilentlyContinue) { $global:IoqlDir } else { Join-Path $env:LOCALAPPDATA 'ioquakelive' }
 
     Write-Host ''
@@ -35,14 +34,15 @@
     $steam = $null
     try { $steam = (Get-ItemProperty -Path 'HKCU:\Software\Valve\Steam' -ErrorAction Stop).SteamPath } catch { }
     if (-not $steam) {
-        Write-Host 'Aviso: no encontre Steam. ioquakelive necesita Quake Live instalado desde Steam.' -ForegroundColor Yellow
+        Write-Host 'No encontre Steam. ioquakelive necesita Quake Live comprado e instalado desde Steam.' -ForegroundColor Red
+        try { Start-Process 'steam://install/282440' } catch { }
+        throw 'Instala Quake Live desde Steam y vuelve a abrir el instalador.'
     }
 
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
 
     function Get-Bytes([string]$rel) {
         $wc = New-Object System.Net.WebClient
-        $wc.Headers['Authorization'] = 'Basic ' + $auth
         $wc.Headers['User-Agent'] = 'ioquakelive-installer/1'
         try { return $wc.DownloadData(('{0}/{1}?t={2}' -f $baseUrl, $rel, [DateTime]::UtcNow.Ticks)) } finally { $wc.Dispose() }
     }
@@ -65,7 +65,7 @@
         [IO.File]::WriteAllBytes((Join-Path $dir $name), $bytes)
     }
 
-    $config = [ordered]@{ baseUrl = $baseUrl; channel = $channel; auth = $auth }
+    $config = [ordered]@{ baseUrl = $baseUrl; channel = $channel; auth = '' }
     ($config | ConvertTo-Json) | Set-Content -LiteralPath (Join-Path $dir 'launcher.json') -Encoding ASCII
 
     try {
