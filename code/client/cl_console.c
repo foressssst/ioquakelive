@@ -924,7 +924,7 @@ void Con_Init(void) {
     Cvar_CheckRange(con_history, 0, 1, qtrue);
 
     // [CPMA] extended colour codes, off by default like Quake Live
-    cl_extendedColors = Cvar_Get("cl_extendedColors", "0", CVAR_ARCHIVE);
+    cl_extendedColors = Cvar_Get("cl_extendedColors", "1", CVAR_ARCHIVE);
     Cvar_CheckRange(cl_extendedColors, 0, 1, qtrue);
     Cvar_SetHelp("cl_extendedColors", "colour codes in text\n"
                  S_COLOR_VAL "    0 " S_COLOR_HELP "= Quake Live: the codes 0 to 7\n"
