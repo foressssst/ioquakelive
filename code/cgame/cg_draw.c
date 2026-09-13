@@ -1448,63 +1448,123 @@ CROSSHAIR
 ================================================================================
 */
 
+// [QL] cgamex86.dll 0x10075fe0: the crosshair colours for cg_crosshairColor and
+// cg_crosshairHitColor 1-26; any other value takes the first
+static const vec4_t cg_crosshairPalette[26] = {
+	{1.0f, 0.0f, 0.0f, 1.0f},       {1.0f, 0.2734375f, 0.0f, 1.0f}, {1.0f, 0.5f, 0.0f, 1.0f},
+	{1.0f, 0.734375f, 0.0f, 1.0f},  {1.0f, 1.0f, 0.0f, 1.0f},       {0.734375f, 1.0f, 0.0f, 1.0f},
+	{0.5f, 1.0f, 0.0f, 1.0f},       {0.2734375f, 1.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f},
+	{0.0f, 1.0f, 0.2734375f, 1.0f}, {0.0f, 1.0f, 0.5f, 1.0f},       {0.0f, 1.0f, 0.734375f, 1.0f},
+	{0.0f, 1.0f, 1.0f, 1.0f},       {0.0f, 0.734375f, 1.0f, 1.0f},  {0.0f, 0.5f, 1.0f, 1.0f},
+	{0.0f, 0.2734375f, 1.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f},       {0.2734375f, 0.0f, 1.0f, 1.0f},
+	{0.5f, 0.0f, 1.0f, 1.0f},       {0.734375f, 0.0f, 1.0f, 1.0f},  {1.0f, 0.0f, 1.0f, 1.0f},
+	{1.0f, 0.0f, 0.734375f, 1.0f},  {1.0f, 0.0f, 0.5f, 1.0f},       {1.0f, 0.0f, 0.2734375f, 1.0f},
+	{1.0f, 1.0f, 1.0f, 1.0f},       {0.5f, 0.5f, 0.5f, 1.0f},
+};
+
+static const float* CG_CrosshairPaletteColor(int value) {
+	if (value < 1 || value > 26) {
+		return cg_crosshairPalette[0];
+	}
+	return cg_crosshairPalette[value - 1];
+}
+
+/*
+=================
+CG_CrosshairHitEffect
+
+[QL] cgamex86.dll 0x1000c0a0. For cg_crosshairHitTime ms after a hit: styles 1, 4 and 7
+colour the crosshair by hit type, 2, 5 and 8 with cg_crosshairHitColor; 3-5 grow it by
+the hit type and 6-8 by one. The growth follows the elapsed fraction and snaps back at
+the end. The colour replaces the base one, brightness not applied.
+=================
+*/
+static void CG_CrosshairHitEffect(float* w, float* h) {
+	static const vec4_t typeColors[4] = {
+		{0.25f, 0.5f, 1.0f, 1.0f}, {1.0f, 1.0f, 0.0f, 1.0f}, {1.0f, 0.5f, 0.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f},
+	};
+	int style = cg_crosshairHitStyle.integer;
+	int type = cg.crosshairHitType;
+	float elapsed = (float)(cg.time - cg.crosshairHitTime);
+	float t, grow = 0.0f;
+	int colorBy = 0;  // 1 = hit type, 2 = cg_crosshairHitColor
+
+	if (style < 1 || style > 8 || elapsed <= 0.0f || elapsed >= cg_crosshairHitTime.value) {
+		return;
+	}
+	t = elapsed / cg_crosshairHitTime.value;
+
+	switch (style) {
+	case 1: colorBy = 1; break;
+	case 2: colorBy = 2; break;
+	case 3: grow = (float)type; break;
+	case 4: grow = (float)type; colorBy = 1; break;
+	case 5: grow = (float)type; colorBy = 2; break;
+	case 6: grow = 1.0f; break;
+	case 7: grow = 1.0f; colorBy = 1; break;
+	case 8: grow = 1.0f; colorBy = 2; break;
+	}
+
+	if (grow != 0.0f) {
+		*w *= 1.0f + grow * t;
+		*h *= 1.0f + grow * t;
+	}
+	if (colorBy == 1) {
+		trap_R_SetColor(typeColors[(type >= 2 && type <= 4) ? type - 1 : 0]);
+	} else if (colorBy == 2) {
+		trap_R_SetColor(CG_CrosshairPaletteColor(cg_crosshairHitColor.integer));
+	}
+}
+
 /*
 =================
 CG_DrawCrosshair
+
+[QL] cgamex86.dll 0x1000c2a0. Nothing for cg_drawCrosshair <= 0 or a multiple of 30, or
+in third person. The base colour is cg_crosshairColor from the palette, or the health
+colour, times cg_crosshairBrightness. After an item pickup the cg_crosshairPulse growth
+runs, otherwise the hit effect. Size and offset scale uniformly by vidWidth / 640, so
+the crosshair stays square.
 =================
 */
 static void CG_DrawCrosshair(void) {
-	float w, h;
-	qhandle_t hShader;
-	float f;
-	float x, y;
-	int ca;
+	vec4_t color;
+	float w, h, x, y, scale, f;
+	int n = cg_drawCrosshair.integer;
 
-	if (!cg_drawCrosshair.integer) {
+	if (n <= 0 || n % NUM_CROSSHAIRS == 0 || cg.renderingThirdPerson) {
 		return;
 	}
 
-	if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR) {
-		return;
-	}
-
-	if (cg.renderingThirdPerson) {
-		return;
-	}
-
-	// set color based on health
 	if (cg_crosshairHealth.integer) {
-		vec4_t hcolor;
-
-		CG_ColorForHealth(hcolor);
-		trap_R_SetColor(hcolor);
+		CG_ColorForHealth(color);
 	} else {
-		trap_R_SetColor(NULL);
+		Vector4Copy(CG_CrosshairPaletteColor(cg_crosshairColor.integer), color);
 	}
+	VectorScale(color, cg_crosshairBrightness.value, color);
+	color[3] = 1.0f;
+	trap_R_SetColor(color);
 
 	w = h = cg_crosshairSize.value;
 
-	// pulse the size of the crosshair when picking up items
-	f = cg.time - cg.itemPickupBlendTime;
-	if (f > 0 && f < ITEM_BLOB_TIME) {
-		f /= ITEM_BLOB_TIME;
-		w *= (1 + f);
-		h *= (1 + f);
+	if (cg.itemPickupBlendTime > cg.crosshairHitTime) {
+		f = (float)(cg.time - cg.itemPickupBlendTime);
+		if (cg_crosshairPulse.integer && f > 0.0f && f < ITEM_BLOB_TIME) {
+			w = h = cg_crosshairSize.value * (1.0f + f / ITEM_BLOB_TIME);
+		}
+	} else {
+		CG_CrosshairHitEffect(&w, &h);
 	}
 
-	x = cg_crosshairX.integer;
-	y = cg_crosshairY.integer;
-	CG_AdjustFrom640(&x, &y, &w, &h);
+	scale = cgs.glconfig.vidWidth / 640.0f;
+	x = cg_crosshairX.integer * scale;
+	y = cg_crosshairY.integer * scale;
+	w *= scale;
+	h *= scale;
 
-	ca = cg_drawCrosshair.integer;
-	if (ca < 0) {
-		ca = 0;
-	}
-	hShader = cgs.media.crosshairShader[ca % NUM_CROSSHAIRS];
-
-	trap_R_DrawStretchPic(x + cg.refdef.x + 0.5 * (cg.refdef.width - w),
-						  y + cg.refdef.y + 0.5 * (cg.refdef.height - h),
-						  w, h, 0, 0, 1, 1, hShader);
+	trap_R_DrawStretchPic(cg.refdef.x + x + 0.5f * (cg.refdef.width - w),
+						  cg.refdef.y + y + 0.5f * (cg.refdef.height - h),
+						  w, h, 0, 0, 1, 1, cgs.media.crosshairShader[n % NUM_CROSSHAIRS]);
 
 	trap_R_SetColor(NULL);
 }
