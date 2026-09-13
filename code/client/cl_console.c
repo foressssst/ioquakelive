@@ -44,11 +44,12 @@ int g_console_field_width = 119;
 // [CNQ3] con_style 1 line width cap, keeps the per-line scratch buffers small
 #define CON_MAXLINEWIDTH 1000
 
-// [CNQ3] text buffer codes of the console-only colours, after Quake Live's 0-7
-#define CON_COLOR_CVAR 8
-#define CON_COLOR_CMD 9
-#define CON_COLOR_VAL 10
-#define CON_COLOR_HELP 11
+// [CNQ3] text buffer codes of the console-only colours, after the 36 colour
+// codes (Quake Live's 0-7 and CPMA's 8-35)
+#define CON_COLOR_CVAR 40
+#define CON_COLOR_CMD 41
+#define CON_COLOR_VAL 42
+#define CON_COLOR_HELP 43
 
 // [CNQ3] con_drawHelp bits
 #define DRAWHELP_ENABLE_BIT 1
@@ -122,6 +123,8 @@ cvar_t* con_timestamps;
 cvar_t* con_style;
 cvar_t* con_drawHelp;
 cvar_t* con_history;
+
+cvar_t* cl_extendedColors;  // [CPMA] ^8, ^9 and ^a-^z colour codes
 
 typedef enum {
     CC_BG,
@@ -267,11 +270,29 @@ static const float* Con_ColorFromCode(int code) {
             break;
     }
 
-    code = ColorIndexForNumber(code);
     if (code == ColorIndex(COLOR_WHITE)) {
         return con_colors[CC_TEXT].color;
     }
-    return g_color_table[code];
+    return Q_ColorFromCodeIndex(code);
+}
+
+/*
+================
+Con_ExtendedColors / Con_ColorCode
+
+[CPMA] cl_extendedColors 1 adds CPMA's ^8, ^9 and ^a-^z to Quake Live's
+^0-^7. Con_ColorCode returns the colour code index of "^x" at p, or -1.
+================
+*/
+static qboolean Con_ExtendedColors(void) {
+    return (cl_extendedColors && cl_extendedColors->integer) ? qtrue : qfalse;
+}
+
+static int Con_ColorCode(const char* p) {
+    if (p[0] != Q_COLOR_ESCAPE || p[1] == '\0') {
+        return -1;
+    }
+    return Q_ColorCodeIndex((unsigned char)p[1], Con_ExtendedColors());
 }
 
 /*
@@ -283,10 +304,10 @@ console-only colours, so they are white there.
 ================
 */
 static int Con_RetailColor(int code) {
-    if (code >= CON_COLOR_CVAR) {
+    if (code >= Q_NUM_COLOR_CODES || (code >= 8 && !Con_ExtendedColors())) {
         return ColorIndex(COLOR_WHITE);
     }
-    return ColorIndexForNumber(code);
+    return code;
 }
 
 /*
@@ -838,6 +859,33 @@ void Con_ContinueSearch(qboolean forward) {
 
 /*
 ================
+Con_ColorList_f
+
+[CPMA] colorlist: every colour code, drawn in its colour.
+================
+*/
+static void Con_ColorList_f(void) {
+    const int count = Con_ExtendedColors() ? Q_NUM_COLOR_CODES : 8;
+    char line[128];
+    int i;
+
+    line[0] = '\0';
+    for (i = 0; i < count; i++) {
+        const int c = Q_ColorCodeChar(i);
+        Q_strcat(line, sizeof(line), va("%c%c%c ", Q_COLOR_ESCAPE, c, c));
+        if (i % 12 == 11 || i == count - 1) {
+            Com_Printf("%s\n", line);
+            line[0] = '\0';
+        }
+    }
+
+    if (count == 8) {
+        Com_Printf(S_COLOR_WHITE "Set " S_COLOR_CVAR "cl_extendedColors " S_COLOR_VAL "1" S_COLOR_WHITE " for 8, 9 and a to z.\n");
+    }
+}
+
+/*
+================
 Con_Init
 ================
 */
@@ -874,6 +922,14 @@ void Con_Init(void) {
 
     con_history = Cvar_Get("con_history", "1", CVAR_ARCHIVE);
     Cvar_CheckRange(con_history, 0, 1, qtrue);
+
+    // [CPMA] extended colour codes, off by default like Quake Live
+    cl_extendedColors = Cvar_Get("cl_extendedColors", "0", CVAR_ARCHIVE);
+    Cvar_CheckRange(cl_extendedColors, 0, 1, qtrue);
+    Cvar_SetHelp("cl_extendedColors", "colour codes in text\n"
+                 S_COLOR_VAL "    0 " S_COLOR_HELP "= Quake Live: the codes 0 to 7\n"
+                 S_COLOR_VAL "    1 " S_COLOR_HELP "= CPMA: also 8, 9 and a to z\n"
+                 "The list in their colours: " S_COLOR_CMD "colorlist");
 
     for (i = 0; i < CC_COUNT; i++) {
         conColor_t* const c = &con_colors[i];
@@ -929,6 +985,11 @@ void Con_Init(void) {
     // [CNQ3] console search with scrolling, ctrl-F and (shift-)F3
     Cmd_AddCommand("searchconsole", Con_BeginSearch_f);
 
+    // [CPMA]
+    Cmd_AddCommand("colorlist", Con_ColorList_f);
+    Cmd_SetHelp("colorlist", "prints every colour code in its colour\n"
+                "See " S_COLOR_CVAR "cl_extendedColors" S_COLOR_HELP ".");
+
     Cmd_SetHelp("toggleconsole", "toggles console display");
     Cmd_SetHelp("messagemode", "chat with everyone");
     Cmd_SetHelp("messagemode2", "chat with teammates");
@@ -962,6 +1023,7 @@ void Con_Shutdown(void) {
     Cmd_RemoveCommand("condump");
     Cmd_RemoveCommand("find");
     Cmd_RemoveCommand("searchconsole");
+    Cmd_RemoveCommand("colorlist");
 }
 
 /*
@@ -1060,8 +1122,10 @@ void CL_ConsolePrint(char* txt) {
             continue;
         }
 
-        if (Q_IsColorString(txt)) {
-            color = ColorIndex(*(txt + 1));
+        // [QL] only ^0-^7 are colour codes (quakelive_steam.exe 0x4b3e90), '^'
+        // before anything else is printed; [CPMA] cl_extendedColors adds more
+        if (Con_ColorCode(txt) >= 0) {
+            color = Con_ColorCode(txt);
             txt += 2;
             continue;
         }
@@ -1399,15 +1463,15 @@ static void Con_DrawInputCNQ3(const conMetrics_t* m) {
 
     code = ColorIndex(COLOR_WHITE);
     for (i = prestep - 1; i >= 0; i--) {
-        if (Q_IsColorString(edit->buffer + i)) {
-            code = ColorIndex(edit->buffer[i + 1]);
+        if (Con_ColorCode(edit->buffer + i) >= 0) {
+            code = Con_ColorCode(edit->buffer + i);
             break;
         }
     }
     for (i = 0; i < drawLen; i++) {
         const char* const s = edit->buffer + prestep + i;
-        if (Q_IsColorString(s)) {
-            code = ColorIndex(s[1]);
+        if (Con_ColorCode(s) >= 0) {
+            code = Con_ColorCode(s);
         }
         chars[i] = *s;
         ids[i] = (short)code;
@@ -1472,8 +1536,8 @@ static void QDECL Con_HelpPrintf(const char* fmt, ...) {
             c += 2;
             continue;
         }
-        if (Q_IsColorString(c)) {
-            color = Con_ColorFromCode(ColorIndex(c[1]));
+        if (Con_ColorCode(c) >= 0) {
+            color = Con_ColorFromCode(Con_ColorCode(c));
             c += 2;
             continue;
         }
@@ -1818,7 +1882,7 @@ void Con_DrawSolidConsole(float frac) {
             if (code != currentColor) {
                 currentColor = code;
                 line[n++] = Q_COLOR_ESCAPE;
-                line[n++] = '0' + currentColor;
+                line[n++] = (char)Q_ColorCodeChar(currentColor);
             }
             if (n < CON_LINEBUFFER - 1) {
                 line[n++] = ch;

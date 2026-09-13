@@ -51,6 +51,86 @@ vec4_t g_color_table[8] =
         {1.0, 1.0, 1.0, 1.0},
 };
 
+// [CPMA] The extended colour codes: ^8 orange, ^9 light violet and CPMA's
+// alphabet rainbow from red (^a) round to pink (^x); ^y and ^z are white.
+// Values as in CNQ3 (GPLv2, code/qcommon/q_math.c).
+static const vec4_t q_extendedColors[Q_NUM_COLOR_CODES - 8] = {
+    {1.00000f, 0.50000f, 0.00000f, 1.0f},  // 8
+    {0.60000f, 0.60000f, 1.00000f, 1.0f},  // 9
+    {1.00000f, 0.00000f, 0.00000f, 1.0f},  // a
+    {1.00000f, 0.26795f, 0.00000f, 1.0f},  // b
+    {1.00000f, 0.50000f, 0.00000f, 1.0f},  // c
+    {1.00000f, 0.73205f, 0.00000f, 1.0f},  // d
+    {1.00000f, 1.00000f, 0.00000f, 1.0f},  // e
+    {0.73205f, 1.00000f, 0.00000f, 1.0f},  // f
+    {0.50000f, 1.00000f, 0.00000f, 1.0f},  // g
+    {0.26795f, 1.00000f, 0.00000f, 1.0f},  // h
+    {0.00000f, 1.00000f, 0.00000f, 1.0f},  // i
+    {0.00000f, 1.00000f, 0.26795f, 1.0f},  // j
+    {0.00000f, 1.00000f, 0.50000f, 1.0f},  // k
+    {0.00000f, 1.00000f, 0.73205f, 1.0f},  // l
+    {0.00000f, 1.00000f, 1.00000f, 1.0f},  // m
+    {0.00000f, 0.73205f, 1.00000f, 1.0f},  // n
+    {0.00000f, 0.50000f, 1.00000f, 1.0f},  // o
+    {0.00000f, 0.26795f, 1.00000f, 1.0f},  // p
+    {0.00000f, 0.00000f, 1.00000f, 1.0f},  // q
+    {0.26795f, 0.00000f, 1.00000f, 1.0f},  // r
+    {0.50000f, 0.00000f, 1.00000f, 1.0f},  // s
+    {0.73205f, 0.00000f, 1.00000f, 1.0f},  // t
+    {1.00000f, 0.00000f, 1.00000f, 1.0f},  // u
+    {1.00000f, 0.00000f, 0.73205f, 1.0f},  // v
+    {1.00000f, 0.00000f, 0.50000f, 1.0f},  // w
+    {1.00000f, 0.00000f, 0.26795f, 1.0f},  // x
+    {1.00000f, 1.00000f, 1.00000f, 1.0f},  // y
+    {1.00000f, 1.00000f, 1.00000f, 1.0f},  // z
+};
+
+/*
+=================
+Q_ColorCodeIndex / Q_ColorCodeChar / Q_ColorFromCodeIndex
+
+See q_shared.h.
+=================
+*/
+int Q_ColorCodeIndex(int c, qboolean extended) {
+    if (c >= '0' && c <= '7') {
+        return c - '0';
+    }
+    if (!extended) {
+        return -1;
+    }
+    if (c == '8' || c == '9') {
+        return c - '0';
+    }
+    if (c >= 'a' && c <= 'z') {
+        return 10 + c - 'a';
+    }
+    if (c >= 'A' && c <= 'Z') {
+        return 10 + c - 'A';
+    }
+    return -1;
+}
+
+int Q_ColorCodeChar(int index) {
+    if (index >= 0 && index <= 9) {
+        return '0' + index;
+    }
+    if (index >= 10 && index < Q_NUM_COLOR_CODES) {
+        return 'a' + index - 10;
+    }
+    return COLOR_WHITE;
+}
+
+const float* Q_ColorFromCodeIndex(int index) {
+    if (index >= 0 && index < 8) {
+        return g_color_table[index];
+    }
+    if (index >= 8 && index < Q_NUM_COLOR_CODES) {
+        return q_extendedColors[index - 8];
+    }
+    return g_color_table[7];
+}
+
 vec3_t bytedirs[NUMVERTEXNORMALS] =
     {
         {-0.525731f, 0.000000f, 0.850651f},
