@@ -1962,17 +1962,34 @@ static void CG_PlayerPowerups(centity_t* cent, refEntity_t* torso) {
 CG_PlayerFloatSprite
 
 // Address: 0x10040cd0
-[QL] Float a sprite over the player's head via the shared floating-effect pool
-(FE_FLOAT_SPRITE billboard), replacing the Q3 RT_SPRITE ref-entity. Sizing comes from the
-teammate-POI width cvars (binary DAT_10a610e8 / DAT_10abb408). Skip the viewer's own head
-in first person (the binary gates this in CG_PlayerSprites / CG_PlayerFloatSprite).
+[QL] Two kinds of head sprite. A teammate's floats in the shared floating-effect pool
+(FE_FLOAT_SPRITE), sized by the teammate POI width cvars (DAT_10a610e8 / DAT_10abb408).
+Everyone else gets Quake 3's RT_SPRITE, radius 10 and 48 units above the origin
+(0x10040f98), kept out of your own first-person view with RF_THIRD_PERSON.
+Not ported: the teammate tint (0x10040d1e-0x10040db5) and Red Rover's distance-faded
+sprite (0x10040e29).
 ===============
 */
-static void CG_PlayerFloatSprite(centity_t* cent, qhandle_t shader) {
+static void CG_PlayerFloatSprite(centity_t* cent, qhandle_t shader, qboolean sameTeam) {
     floatingEffect_t* fx;
+    refEntity_t ent;
+    qboolean ownHead = (cent->currentState.number == cg.snap->ps.clientNum && !cg.renderingThirdPerson);
 
-    if (cent->currentState.number == cg.snap->ps.clientNum && !cg.renderingThirdPerson) {
-        return;  // do not draw your own head sprite in first person
+    if (!sameTeam) {
+        memset(&ent, 0, sizeof(ent));
+        VectorCopy(cent->lerpOrigin, ent.origin);
+        ent.origin[2] += 48;
+        ent.reType = RT_SPRITE;
+        ent.customShader = shader;
+        ent.radius = 10;
+        ent.renderfx = ownHead ? RF_THIRD_PERSON : 0;
+        ent.shaderRGBA[0] = ent.shaderRGBA[1] = ent.shaderRGBA[2] = ent.shaderRGBA[3] = 255;
+        trap_R_AddRefEntityToScene(&ent);
+        return;
+    }
+
+    if (ownHead) {
+        return;
     }
 
     fx = CG_AllocFloatingEffect();
@@ -1995,50 +2012,45 @@ static void CG_PlayerFloatSprite(centity_t* cent, qhandle_t shader) {
 ===============
 CG_PlayerSprites
 
-Float sprites over the player's head
+[QL] 0x100411a0. Retail calls it only with cg_drawSprites (0x10041cd1), and never for
+your own player unless cg_drawSpriteSelf. The first match wins: connection, the talk
+balloon (skipped on the dead), then the medals. sameTeam picks the sprite kind.
+Not ported, pending their media handles: the one-flag carrier (0x1004122b), flag
+carriers and teammate POIs (0x10041257, 0x10041440), frozen teammates (0x100412b8),
+Red Rover's infected marker (0x1004140a) and its filter on balloons and medals.
 ===============
 */
 static void CG_PlayerSprites(centity_t* cent) {
-    if (cent->currentState.eFlags & EF_CONNECTION) {
-        CG_PlayerFloatSprite(cent, cgs.media.connectionShader);
+    int flags = cent->currentState.eFlags;
+    qboolean sameTeam = qfalse;
+
+    if (!cg_drawSprites.integer) {
         return;
     }
-
-    if (cent->currentState.eFlags & EF_TALK) {
-        CG_PlayerFloatSprite(cent, cgs.media.balloonShader);
+    if (!cg_drawSpriteSelf.integer && cent->currentState.clientNum == cg.clientNum) {
         return;
     }
-
-    if (cent->currentState.eFlags & EF_AWARD_IMPRESSIVE) {
-        CG_PlayerFloatSprite(cent, cgs.media.medalImpressive);
-        return;
+    if (cgs.gametype >= GT_TEAM) {
+        sameTeam = cg.snap->ps.persistant[PERS_TEAM] == cgs.clientinfo[cent->currentState.clientNum].team;
     }
 
-    if (cent->currentState.eFlags & EF_AWARD_EXCELLENT) {
-        CG_PlayerFloatSprite(cent, cgs.media.medalExcellent);
-        return;
+    if (flags & EF_CONNECTION) {
+        CG_PlayerFloatSprite(cent, cgs.media.connectionShader, sameTeam);
+    } else if ((flags & EF_TALK) && !(flags & EF_DEAD)) {
+        CG_PlayerFloatSprite(cent, cgs.media.balloonShader, sameTeam);
+    } else if (flags & EF_AWARD_IMPRESSIVE) {
+        CG_PlayerFloatSprite(cent, cgs.media.medalImpressive, sameTeam);
+    } else if (flags & EF_AWARD_EXCELLENT) {
+        CG_PlayerFloatSprite(cent, cgs.media.medalExcellent, sameTeam);
+    } else if (flags & EF_AWARD_GAUNTLET) {
+        CG_PlayerFloatSprite(cent, cgs.media.medalGauntlet, sameTeam);
+    } else if (flags & EF_AWARD_DEFEND) {
+        CG_PlayerFloatSprite(cent, cgs.media.medalDefend, sameTeam);
+    } else if (flags & EF_AWARD_ASSIST) {
+        CG_PlayerFloatSprite(cent, cgs.media.medalAssist, sameTeam);
+    } else if (flags & EF_AWARD_CAP) {
+        CG_PlayerFloatSprite(cent, cgs.media.medalCapture, sameTeam);
     }
-
-    if (cent->currentState.eFlags & EF_AWARD_GAUNTLET) {
-        CG_PlayerFloatSprite(cent, cgs.media.medalGauntlet);
-        return;
-    }
-
-    if (cent->currentState.eFlags & EF_AWARD_DEFEND) {
-        CG_PlayerFloatSprite(cent, cgs.media.medalDefend);
-        return;
-    }
-
-    if (cent->currentState.eFlags & EF_AWARD_ASSIST) {
-        CG_PlayerFloatSprite(cent, cgs.media.medalAssist);
-        return;
-    }
-
-    if (cent->currentState.eFlags & EF_AWARD_CAP) {
-        CG_PlayerFloatSprite(cent, cgs.media.medalCapture);
-        return;
-    }
-
 }
 
 /*
