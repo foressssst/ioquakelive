@@ -434,23 +434,36 @@ static void CG_OffsetFirstPersonView(void) {
 
 //======================================================================
 
+// [CPMA] cg_zoomAnimationTime, 0-500 ms; Quake 3's ZOOM_TIME was a fixed 150
+static int CG_ZoomAnimationTime(void) {
+    int t = cg_zoomAnimationTime.integer;
+
+    return (t < 0) ? 0 : (t > 500) ? 500 : t;
+}
+
+// [CPMA] reversing a zoom halfway goes on from the current FOV instead of jumping
+static void CG_ZoomRestart(void) {
+    int duration = CG_ZoomAnimationTime();
+    int elapsed = cg.time - cg.zoomTime;
+
+    if (elapsed > duration) {
+        elapsed = duration;
+    }
+    cg.zoomTime = cg.time + elapsed - duration;
+}
+
 void CG_ZoomDown_f(void) {
     // QL binary: cg_zoomToggle.integer makes zoom a toggle (vmCvar 0x10A61E60)
     if (cg_zoomToggle.integer) {
-        if (cg.zoomed) {
-            cg.zoomed = qfalse;
-            cg.zoomTime = cg.time;
-        } else {
-            cg.zoomed = qtrue;
-            cg.zoomTime = cg.time;
-        }
+        cg.zoomed = !cg.zoomed;
+        CG_ZoomRestart();
         return;
     }
     if (cg.zoomed) {
         return;
     }
     cg.zoomed = qtrue;
-    cg.zoomTime = cg.time;
+    CG_ZoomRestart();
 }
 
 void CG_ZoomUp_f(void) {
@@ -462,7 +475,7 @@ void CG_ZoomUp_f(void) {
         return;
     }
     cg.zoomed = qfalse;
-    cg.zoomTime = cg.time;
+    CG_ZoomRestart();
 }
 
 /*
@@ -483,6 +496,7 @@ static int CG_CalcFov(void) {
     float fov_x, fov_y;
     float zoomFov;
     float f;
+    int zoomDuration;
     int inwater;
 
     if (cg.predictedPlayerState.pm_type == PM_INTERMISSION) {
@@ -511,8 +525,9 @@ static int CG_CalcFov(void) {
             zoomFov = 130;
         }
 
+        zoomDuration = CG_ZoomAnimationTime();
         if (cg.zoomed) {
-            f = (cg.time - cg.zoomTime) / (float)ZOOM_TIME;
+            f = zoomDuration ? (cg.time - cg.zoomTime) / (float)zoomDuration : 1.0f;
             if (f > 1.0) {
                 fov_x = zoomFov;
             } else {
@@ -524,7 +539,7 @@ static int CG_CalcFov(void) {
                 }
             }
         } else {
-            f = (cg.time - cg.zoomTime) / (float)ZOOM_TIME;
+            f = zoomDuration ? (cg.time - cg.zoomTime) / (float)zoomDuration : 1.0f;
             if (f <= 1.0) {
                 // QL binary: cg_zoomScaling.integer gates interpolation
                 if (cg_zoomScaling.integer) {
