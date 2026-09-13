@@ -2295,7 +2295,7 @@ RENDERER BACK END COMMAND QUEUE
 =============================================================
 */
 
-#define MAX_RENDER_COMMANDS 0x40000
+#define MAX_RENDER_COMMANDS 0x100000  // [CNQ3] room for the con_style 1 console, one quad per character plus its shadow
 
 typedef struct {
     byte cmds[MAX_RENDER_COMMANDS];

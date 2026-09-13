@@ -396,6 +396,23 @@ qboolean Q_IsColorString(const char* p);  // ^[0-9a-zA-Z]
 #define S_COLOR_MAGENTA "^6"
 #define S_COLOR_WHITE "^7"
 
+// [CNQ3] Console-only colour codes, ported from CNQ3 (code/qcommon/q_shared.h):
+// cvar names, command names, cvar values and help text get their own colours in
+// the console (con_style 1). They are control characters, never alphanumeric,
+// so Q_IsColorString and the renderers ignore them; only the client console
+// reads them, and Com_Printf strips them from the log file and the system
+// console. Always concatenate them as separate literals: "^\x01" "abc", never
+// "^\x01abc", which would parse as one hex escape.
+#define COLOR_CON_CVAR '\x01'
+#define COLOR_CON_CMD '\x02'
+#define COLOR_CON_VAL '\x03'
+#define COLOR_CON_HELP '\x04'
+#define S_COLOR_CVAR "^\x01"
+#define S_COLOR_CMD "^\x02"
+#define S_COLOR_VAL "^\x03"
+#define S_COLOR_HELP "^\x04"
+#define Q_IsConsoleColorString(p) ((p) && (p)[0] == Q_COLOR_ESCAPE && (p)[1] >= COLOR_CON_CVAR && (p)[1] <= COLOR_CON_HELP)
+
 extern vec4_t g_color_table[8];
 
 #define MAKERGB(v, r, g, b) \

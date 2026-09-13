@@ -476,6 +476,15 @@ void Con_PageDown(void);
 void Con_Top(void);
 void Con_Bottom(void);
 void Con_Close(void);
+// [CNQ3] console features ported from CNQ3 (cl_console.c)
+int Con_GetStyle(void);
+qboolean Con_HandleMarkMode(qboolean ctrlDown, qboolean shiftDown, int key);
+qboolean Con_IsInMarkMode(void);
+qboolean Con_SwallowCharEvent(int ch);
+void Con_ContinueSearch(qboolean forward);
+void Con_ScrollLines(int lines);
+void Con_ScrollPages(int pages);
+extern cvar_t* con_history;
 
 void CL_LoadConsoleHistory(void);
 void CL_SaveConsoleHistory(void);

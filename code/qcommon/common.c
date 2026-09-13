@@ -144,21 +144,61 @@ to the appropriate place.
 A raw string should NEVER be passed as fmt, because of "%f" type crashers.
 =============
 */
+static cvar_t* con_completionStyle;  // [CNQ3] tab completion: 0 = list the matches, 1 = list once then cycle
+
+/*
+=============
+Com_StripConsoleColors
+
+[CNQ3] Removes the console-only colour codes (S_COLOR_CVAR and friends) so
+redirected output, the system console and the log file never see them.
+Returns in itself when there are none.
+=============
+*/
+static const char* Com_StripConsoleColors(const char* in, char* out, int outSize) {
+    const char* s;
+    int n = 0;
+
+    for (s = in; *s; s++) {
+        if (Q_IsConsoleColorString(s)) {
+            break;
+        }
+    }
+    if (!*s) {
+        return in;
+    }
+
+    for (s = in; *s && n < outSize - 1; s++) {
+        if (Q_IsConsoleColorString(s)) {
+            s++;
+            continue;
+        }
+        out[n++] = *s;
+    }
+    out[n] = '\0';
+
+    return out;
+}
+
 void QDECL Com_Printf(const char* fmt, ...) {
     va_list argptr;
     char msg[MAXPRINTMSG];
+    char plainBuffer[MAXPRINTMSG];
+    const char* plain;
     static qboolean opening_qconsole = qfalse;
 
     va_start(argptr, fmt);
     Q_vsnprintf(msg, sizeof(msg), fmt, argptr);
     va_end(argptr);
 
+    plain = Com_StripConsoleColors(msg, plainBuffer, sizeof(plainBuffer));
+
     if (rd_buffer) {
-        if ((strlen(msg) + strlen(rd_buffer)) > (rd_buffersize - 1)) {
+        if ((strlen(plain) + strlen(rd_buffer)) > (rd_buffersize - 1)) {
             rd_flush(rd_buffer);
             *rd_buffer = 0;
         }
-        Q_strcat(rd_buffer, rd_buffersize, msg);
+        Q_strcat(rd_buffer, rd_buffersize, plain);
         // TTimo nooo .. that would defeat the purpose
         // rd_flush(rd_buffer);
         //*rd_buffer = 0;
@@ -170,7 +210,7 @@ void QDECL Com_Printf(const char* fmt, ...) {
 #endif
 
     // echo to dedicated console and early console
-    Sys_Print(msg);
+    Sys_Print((char*)plain);
 
     // logfile
     if (com_logfile && com_logfile->integer) {
@@ -203,7 +243,7 @@ void QDECL Com_Printf(const char* fmt, ...) {
             opening_qconsole = qfalse;
         }
         if (logfile && FS_Initialized()) {
-            FS_Write(msg, strlen(msg), logfile);
+            FS_Write(plain, strlen(plain), logfile);
         }
     }
 }
@@ -2485,6 +2525,13 @@ void Com_Init(char* commandLine) {
     con_autochat = Cvar_Get("con_autochat", "1", CVAR_ARCHIVE);
 #endif
 
+    // [CNQ3] tab completion cycling
+    con_completionStyle = Cvar_Get("con_completionStyle", "0", CVAR_ARCHIVE);
+    Cvar_CheckRange(con_completionStyle, 0, 1, qtrue);
+    Cvar_SetHelp("con_completionStyle", "auto-completion style\n"
+                 S_COLOR_VAL "    0 " S_COLOR_HELP "= Legacy, always print all the matches\n"
+                 S_COLOR_VAL "    1 " S_COLOR_HELP "= ET-style, print them once, then tab cycles through them");
+
     Sys_Init();
 
     Sys_InitPIDFile(FS_GetCurrentGameDir());
@@ -3019,6 +3066,8 @@ void Field_Clear(field_t* edit) {
     memset(edit->buffer, 0, MAX_EDIT_LINE);
     edit->cursor = 0;
     edit->scroll = 0;
+    edit->acOffset = 0;
+    edit->acLength = 0;
 }
 
 static const char* completionString;
@@ -3026,6 +3075,38 @@ static char shortestMatch[MAX_TOKEN_CHARS];
 static int matchCount;
 // field we are working on, passed to Field_AutoComplete(&g_consoleCommand for instance)
 static field_t* completionField;
+
+// [CNQ3] the matches of the last completion, kept for sorted lists and cycling
+#define MAX_CYCLE_MATCHES 1024
+#define CYCLE_POOL_SIZE 32768
+static qboolean cycleCollect;  // FindMatches records into the pool
+static char cyclePool[CYCLE_POOL_SIZE];
+static int cyclePoolUsed;
+static const char* cycleMatches[MAX_CYCLE_MATCHES];
+static int cycleCount;
+static field_t* cycleField;  // NULL when not cycling
+static int cycleIndex;
+static int cycleOffset;                  // where the cycled argument starts in the buffer
+static char cycleBuffer[MAX_EDIT_LINE];  // the field as the last tab left it
+
+static void Field_BeginMatches(void) {
+    matchCount = 0;
+    shortestMatch[0] = 0;
+    cycleCount = 0;
+    cyclePoolUsed = 0;
+}
+
+static void Field_AddCycleMatch(const char* s) {
+    const int len = (int)strlen(s) + 1;
+
+    if (cycleCount >= MAX_CYCLE_MATCHES || cyclePoolUsed + len > CYCLE_POOL_SIZE) {
+        return;
+    }
+
+    Com_Memcpy(cyclePool + cyclePoolUsed, s, len);
+    cycleMatches[cycleCount++] = cyclePool + cyclePoolUsed;
+    cyclePoolUsed += len;
+}
 
 /*
 ===============
@@ -3040,6 +3121,9 @@ static void FindMatches(const char* s) {
         return;
     }
     matchCount++;
+    if (cycleCollect) {
+        Field_AddCycleMatch(s);  // [CNQ3]
+    }
     if (matchCount == 1) {
         Q_strncpyz(shortestMatch, s, sizeof(shortestMatch));
         return;
@@ -3087,6 +3171,155 @@ static void PrintCvarMatches(const char* s) {
 
 /*
 ===============
+[CNQ3] Completion lists and cycling
+
+With con_style 1 the matches are listed sorted, commands first, with their
+values and the first line of their help. With con_completionStyle 1 the tabs
+after a list cycle through the matches, highlighted by the console.
+===============
+*/
+static int Field_ListStyle(void) {
+    return Cvar_VariableIntegerValue("con_style");
+}
+
+static int Field_ListWidth(void) {
+#ifndef DEDICATED
+    const int width = Con_GetLineWidth();
+    if (width > 16) {
+        return width;
+    }
+#endif
+    return 78;
+}
+
+static int QDECL Field_CompareMatches(const void* a, const void* b) {
+    return Q_stricmp(*(const char* const*)a, *(const char* const*)b);
+}
+
+// shortens a line to maxLength printable characters, ending it with "..."
+static void Field_TruncatePrintString(char* buffer, int maxLength) {
+    int i, printed;
+
+    for (i = 0, printed = 0; buffer[i]; i++) {
+        if (Q_IsColorString(&buffer[i]) || Q_IsConsoleColorString(&buffer[i])) {
+            i++;
+        } else if (buffer[i] != '\n') {
+            printed++;
+        }
+    }
+    if (printed <= maxLength || maxLength < 4) {
+        return;
+    }
+
+    for (i = 0, printed = 0; buffer[i]; i++) {
+        if (Q_IsColorString(&buffer[i]) || Q_IsConsoleColorString(&buffer[i])) {
+            i++;
+        } else if (printed++ == maxLength - 3) {
+            break;
+        }
+    }
+    strcpy(&buffer[i], "...\n");
+}
+
+static void Field_FirstHelpLine(const char* help, char* out, int outSize) {
+    int len = 0;
+
+    if (help) {
+        len = (int)strcspn(help, "\n");
+        if (len >= outSize) {
+            len = outSize - 1;
+        }
+        Com_Memcpy(out, help, len);
+    }
+    out[len] = '\0';
+}
+
+static void Field_PrintCmdMatch(const char* s) {
+    char msg[MAX_STRING_CHARS];
+    char desc[MAX_STRING_CHARS];
+    const char* name;
+    const char* help;
+    qboolean fromModule;
+    char marker;
+
+    Cmd_GetHelp(s, &name, &help, &fromModule);
+    Field_FirstHelpLine(help, desc, sizeof(desc));
+    marker = (help && strchr(help, '\n')) ? 'h' : ' ';
+
+    if (desc[0]) {
+        Com_sprintf(msg, sizeof(msg), " %c  " S_COLOR_CMD "%s" S_COLOR_WHITE " - " S_COLOR_HELP "%s\n", marker, s, desc);
+    } else {
+        Com_sprintf(msg, sizeof(msg), " %c  " S_COLOR_CMD "%s\n", marker, s);
+    }
+    Field_TruncatePrintString(msg, Field_ListWidth());
+    Com_Printf("%s", msg);
+}
+
+static void Field_PrintCvarMatch(const cvar_t* var) {
+    char msg[MAX_STRING_CHARS];
+    char desc[MAX_STRING_CHARS];
+    char value[TRUNCATE_LENGTH];
+    char marker;
+
+    Field_FirstHelpLine(var->description, desc, sizeof(desc));
+    Com_TruncateLongString(value, var->string);
+    if (var->flags & CVAR_USER_CREATED) {
+        marker = '?';
+    } else {
+        marker = (var->description && strchr(var->description, '\n')) ? 'h' : ' ';
+    }
+
+    if (desc[0]) {
+        Com_sprintf(msg, sizeof(msg), " %c  " S_COLOR_CVAR "%s" S_COLOR_WHITE " = \"" S_COLOR_VAL "%s" S_COLOR_WHITE "\" - " S_COLOR_HELP "%s\n",
+                    marker, var->name, value, desc);
+    } else {
+        Com_sprintf(msg, sizeof(msg), " %c  " S_COLOR_CVAR "%s" S_COLOR_WHITE " = \"" S_COLOR_VAL "%s" S_COLOR_WHITE "\"\n",
+                    marker, var->name, value);
+    }
+    Field_TruncatePrintString(msg, Field_ListWidth());
+    Com_Printf("%s", msg);
+}
+
+static void Field_PrintSortedMatches(void) {
+    int i;
+
+    for (i = 0; i < cycleCount; i++) {
+        if (!Cvar_Find(cycleMatches[i])) {
+            Field_PrintCmdMatch(cycleMatches[i]);
+        }
+    }
+    for (i = 0; i < cycleCount; i++) {
+        const cvar_t* var = Cvar_Find(cycleMatches[i]);
+        if (var) {
+            Field_PrintCvarMatch(var);
+        }
+    }
+}
+
+// 2+ matches were found: sort them and, with con_completionStyle 1, get ready
+// for the next tab to cycle through them
+static void Field_StartCycle(int offset) {
+    cycleField = NULL;
+    if (cycleCount < 2 || cycleCount != matchCount) {
+        return;
+    }
+
+    qsort((void*)cycleMatches, cycleCount, sizeof(cycleMatches[0]), Field_CompareMatches);
+
+    if (!con_completionStyle || !con_completionStyle->integer) {
+        return;
+    }
+
+    cycleField = completionField;
+    cycleOffset = offset;
+    cycleIndex = -1;
+    Q_strncpyz(cycleBuffer, completionField->buffer, sizeof(cycleBuffer));
+    completionField->acOffset = offset;
+    completionField->acLength = 0;
+}
+
+/*
+===============
 Field_FindFirstSeparator
 ===============
 */
@@ -3125,6 +3358,8 @@ static qboolean Field_Complete(void) {
         return qtrue;
     }
 
+    Field_StartCycle(completionOffset);  // [CNQ3]
+
     Com_Printf("]%s\n", completionField->buffer);
 
     return qfalse;
@@ -3137,8 +3372,7 @@ Field_CompleteKeyname
 ===============
 */
 void Field_CompleteKeyname(void) {
-    matchCount = 0;
-    shortestMatch[0] = 0;
+    Field_BeginMatches();
 
     Key_KeynameCompletion(FindMatches);
 
@@ -3156,8 +3390,7 @@ void Field_CompleteFilename(const char* dir,
                             const char* ext,
                             qboolean stripExt,
                             qboolean allowNonPureFilesOnDisk) {
-    matchCount = 0;
-    shortestMatch[0] = 0;
+    Field_BeginMatches();
 
     FS_FilenameCompletion(dir, ext, stripExt, FindMatches, allowNonPureFilesOnDisk);
 
@@ -3226,8 +3459,7 @@ void Field_CompleteCommand(char* cmd,
         if (completionString[0] == '\\' || completionString[0] == '/')
             completionString++;
 
-        matchCount = 0;
-        shortestMatch[0] = 0;
+        Field_BeginMatches();
 
         if (strlen(completionString) == 0)
             return;
@@ -3240,11 +3472,16 @@ void Field_CompleteCommand(char* cmd,
 
         if (!Field_Complete()) {
             // run through again, printing matches
-            if (doCommands)
-                Cmd_CommandCompletion(PrintMatches);
+            if (Field_ListStyle() == 1 && cycleCount == matchCount) {
+                // [CNQ3] sorted, with values and descriptions
+                Field_PrintSortedMatches();
+            } else {
+                if (doCommands)
+                    Cmd_CommandCompletion(PrintMatches);
 
-            if (doCvars)
-                Cvar_CommandCompletion(PrintCvarMatches);
+                if (doCvars)
+                    Cvar_CommandCompletion(PrintCvarMatches);
+            }
         }
     }
 }
@@ -3257,9 +3494,184 @@ Perform Tab expansion
 ===============
 */
 void Field_AutoComplete(field_t* field) {
+    // [CNQ3] another tab right after a list of matches cycles through them
+    if (cycleField == field && !strcmp(field->buffer, cycleBuffer)) {
+        cycleIndex = (cycleIndex + 1) % cycleCount;
+        Q_strncpyz(field->buffer + cycleOffset, cycleMatches[cycleIndex], sizeof(field->buffer) - cycleOffset);
+        field->cursor = strlen(field->buffer);
+        field->acOffset = cycleOffset;
+        field->acLength = field->cursor - cycleOffset;
+        Q_strncpyz(cycleBuffer, field->buffer, sizeof(cycleBuffer));
+        return;
+    }
+    Field_ResetCompletionCycle();
+
     completionField = field;
+    cycleCollect = ((con_completionStyle && con_completionStyle->integer) || Field_ListStyle() == 1) ? qtrue : qfalse;
 
     Field_CompleteCommand(completionField->buffer, qtrue, qtrue);
+
+    cycleCollect = qfalse;
+}
+
+/*
+===============
+Field_ResetCompletionCycle
+
+[CNQ3] The console calls this for every key but tab.
+===============
+*/
+void Field_ResetCompletionCycle(void) {
+    if (cycleField) {
+        cycleField->acOffset = 0;
+        cycleField->acLength = 0;
+        cycleField = NULL;
+    }
+}
+
+/*
+===============
+Field_InsertCVarValue / Field_InsertBindCommand
+
+[CNQ3] ctrl-i and ctrl-d in the console rewrite the line as "\name value",
+with the cursor at the start of the value.
+===============
+*/
+void Field_InsertCVarValue(field_t* edit, const cvar_t* cvar, qboolean defaultValue) {
+    const char* const value = defaultValue ? cvar->resetString : cvar->string;
+    const char* const quote = (value[0] == '\0' || strchr(value, ' ')) ? "\"" : "";
+
+    Com_sprintf(edit->buffer, sizeof(edit->buffer), "\\%s %s", cvar->name, quote);
+    edit->cursor = strlen(edit->buffer);
+    Q_strcat(edit->buffer, sizeof(edit->buffer), va("%s%s", value, quote));
+}
+
+void Field_InsertBindCommand(field_t* edit, const char* key, const char* command) {
+    const char* quote;
+
+    if (!command) {
+        command = "";
+    }
+    quote = (command[0] == '\0' || strchr(command, ' ')) ? "\"" : "";
+
+    Com_sprintf(edit->buffer, sizeof(edit->buffer), "\\bind %s %s", key, quote);
+    edit->cursor = strlen(edit->buffer);
+    Q_strcat(edit->buffer, sizeof(edit->buffer), va("%s%s", command, quote));
+}
+
+/*
+===============
+Com_PrintHelp
+
+[CNQ3] Prints what is known about a cvar or command: the type line and value
+of a cvar, its attributes when asked, then its help text.
+===============
+*/
+printHelpResult_t Com_PrintHelp(const char* name, printf_t print, qboolean printNotFound, qboolean printModules, qboolean printFlags) {
+    const cvar_t* var = Cvar_Find(name);
+    const char* registeredName = name;
+    const char* help = NULL;
+    const char* newLine;
+    qboolean fromModule = qfalse;
+    char first[MAX_STRING_CHARS];
+    int firstLen;
+
+    if (var) {
+        registeredName = var->name;
+        help = var->description;
+        Cvar_PrintFirstHelpLine(var, print);
+        if (var->latchedString) {
+            print("Current: \"" S_COLOR_VAL "%s" S_COLOR_WHITE "\" (Latched: \"" S_COLOR_VAL "%s" S_COLOR_WHITE "\")\n",
+                  var->string, var->latchedString);
+        } else {
+            print("Current: \"" S_COLOR_VAL "%s" S_COLOR_WHITE "\"\n", var->string);
+        }
+        if (printModules) {
+            // cgame, game and ui can't be told apart: they all register through the VM traps
+            if (var->flags & CVAR_USER_CREATED) {
+                print("Module: Unknown\n");
+            } else {
+                print("Module: %s\n", (var->flags & CVAR_VM_CREATED) ? "Game module" : "Engine");
+            }
+        }
+        if (printFlags) {
+            Cvar_PrintFlags(var, print);
+        }
+    } else if (Cmd_GetHelp(name, &registeredName, &help, &fromModule)) {
+        print(S_COLOR_CMD "%s\n", registeredName);
+        if (printModules) {
+            print("Module: %s\n", fromModule ? "Game module" : "Engine");
+        }
+    } else {
+        if (printNotFound) {
+            print("found no cvar/command with the name '%s'\n", name);
+        }
+        return PHR_NOTFOUND;
+    }
+
+    if (!help || !help[0]) {
+        if (printNotFound) {
+            print("no help text found for %s %s%s\n", var ? "cvar" : "command", var ? S_COLOR_CVAR : S_COLOR_CMD, registeredName);
+        }
+        return PHR_NOHELP;
+    }
+
+    // the first line reads as a sentence
+    newLine = strchr(help, '\n');
+    firstLen = newLine ? (int)(newLine - help) : (int)strlen(help);
+    if (firstLen >= (int)sizeof(first)) {
+        firstLen = sizeof(first) - 1;
+    }
+    Com_Memcpy(first, help, firstLen);
+    first[firstLen] = '\0';
+    first[0] = toupper((unsigned char)first[0]);
+    print(S_COLOR_HELP "%s%s\n", first, (firstLen > 0 && first[firstLen - 1] != '.') ? "." : "");
+
+    if (newLine && newLine[1]) {
+        print(S_COLOR_HELP "%s\n", newLine + 1);
+    }
+
+    return PHR_HADHELP;
+}
+
+/*
+===============
+Com_IsValidHexColor / Com_ParseHexColor
+
+[CNQ3] "RRGGBB" / "RRGGBBAA" colours of the con_col* cvars.
+===============
+*/
+qboolean Com_IsValidHexColor(const char* s, qboolean hasAlpha) {
+    const int chars = hasAlpha ? 8 : 6;
+    int i;
+
+    for (i = 0; i < chars; i++) {
+        const char c = s[i];
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
+            return qfalse;
+        }
+    }
+
+    return s[chars] == '\0' ? qtrue : qfalse;
+}
+
+void Com_ParseHexColor(float* c, const char* text, qboolean hasAlpha) {
+    unsigned int uc[4];
+
+    c[0] = c[1] = c[2] = c[3] = 1.0f;
+
+    if (hasAlpha) {
+        if (sscanf(text, "%02X%02X%02X%02X", &uc[0], &uc[1], &uc[2], &uc[3]) != 4) {
+            return;
+        }
+        c[3] = uc[3] / 255.0f;
+    } else if (sscanf(text, "%02X%02X%02X", &uc[0], &uc[1], &uc[2]) != 3) {
+        return;
+    }
+
+    c[0] = uc[0] / 255.0f;
+    c[1] = uc[1] / 255.0f;
+    c[2] = uc[2] / 255.0f;
 }
 
 /*
@@ -3416,8 +3828,7 @@ qboolean Com_PlayerNameToFieldString(char* str, int length, const char* name) {
 void Field_CompletePlayerName(const char** names, int nameCount) {
     qboolean whitespace;
 
-    matchCount = 0;
-    shortestMatch[0] = 0;
+    Field_BeginMatches();
 
     if (nameCount <= 0)
         return;

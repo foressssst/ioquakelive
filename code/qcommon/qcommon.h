@@ -419,6 +419,20 @@ void Cmd_Args_Sanitize(void);
 
 void Cmd_TokenizeString(const char* text);
 void Cmd_TokenizeStringIgnoreQuotes(const char* text_in);
+// [CNQ3] where each argument of the last tokenized string starts in the input
+// and whether it was quoted (a quoted argument starts after its opening quote)
+int Cmd_ArgOffset(int arg);
+int Cmd_ArgIndexFromOffset(int offset);
+qboolean Cmd_ArgQuoted(int arg);
+
+// [CNQ3] help texts for commands and cvars: the first line is the short
+// description shown in completion lists, the following lines are the details
+// printed by /help and by the console help panel
+typedef void (QDECL* printf_t)(const char* fmt, ...);
+typedef void (*helpSearchCallback_t)(const char* name, const char* help, const char* pattern, qboolean isCvar);
+void Cmd_SetHelp(const char* cmd_name, const char* help);
+qboolean Cmd_GetHelp(const char* cmd_name, const char** name, const char** help, qboolean* fromModule);
+void Cmd_EnumHelp(helpSearchCallback_t callback, const char* pattern);
 // Takes a null terminated string.  Does not need to be /n terminated.
 // breaks the string up into arg tokens.
 
@@ -521,6 +535,13 @@ char* Cvar_InfoString_Big(int bit);
 void Cvar_InfoStringBuffer(int bit, char* buff, int buffsize);
 void Cvar_CheckRange(cvar_t* cv, float minVal, float maxVal, qboolean shouldBeIntegral);
 void Cvar_SetDescription(cvar_t* var, const char* var_description);
+// [CNQ3] a cvar's help text is its description, see Cmd_SetHelp
+const cvar_t* Cvar_Find(const char* var_name);
+void Cvar_SetHelp(const char* var_name, const char* help);
+qboolean Cvar_GetHelp(const char* var_name, const char** help);
+void Cvar_EnumHelp(helpSearchCallback_t callback, const char* pattern);
+void Cvar_PrintFirstHelpLine(const cvar_t* var, printf_t print);
+void Cvar_PrintFlags(const cvar_t* var, printf_t print);
 
 void Cvar_Restart(qboolean unsetVM);
 void Cvar_Restart_f(void);
@@ -710,6 +731,8 @@ typedef struct {
     int scroll;
     int widthInChars;
     char buffer[MAX_EDIT_LINE];
+    int acOffset;  // [CNQ3] con_completionStyle 1: where the cycled match starts
+    int acLength;  // [CNQ3] length of the cycled match to highlight, 0 = none
 } field_t;
 
 void Field_Clear(field_t* edit);
@@ -723,6 +746,10 @@ void Field_CompleteCommand(char* cmd,
                            qboolean doCommands,
                            qboolean doCvars);
 void Field_CompletePlayerName(const char** names, int count);
+// [CNQ3] console editing helpers
+void Field_ResetCompletionCycle(void);
+void Field_InsertCVarValue(field_t* edit, const cvar_t* cvar, qboolean defaultValue);
+void Field_InsertBindCommand(field_t* edit, const char* key, const char* command);
 
 /*
 ==============================================================
@@ -786,6 +813,16 @@ char* Com_MD5File(const char* filename, int length, const char* prefix, int pref
 
 int Com_Filter(char* filter, char* name, int casesensitive);
 int Com_FilterPath(char* filter, char* name, int casesensitive);
+
+// [CNQ3] console help and colours
+typedef enum {
+    PHR_NOTFOUND,
+    PHR_NOHELP,
+    PHR_HADHELP
+} printHelpResult_t;
+printHelpResult_t Com_PrintHelp(const char* name, printf_t print, qboolean printNotFound, qboolean printModules, qboolean printFlags);
+qboolean Com_IsValidHexColor(const char* s, qboolean hasAlpha);         // "RRGGBB" or "RRGGBBAA"
+void Com_ParseHexColor(float* c, const char* text, qboolean hasAlpha);  // RGBA, left white when invalid
 int Com_RealTime(qtime_t* qtime);
 qboolean Com_SafeMode(void);
 void Com_RunAndTimeServerPacket(netadr_t* evFrom, msg_t* buf);
@@ -945,6 +982,7 @@ void CL_JoystickEvent(int axis, int value, int time);
 void CL_PacketEvent(netadr_t from, msg_t* msg);
 
 void CL_ConsolePrint(char* text);
+int Con_GetLineWidth(void);  // [CNQ3] characters per console line, for completion lists
 
 void CL_MapLoading(void);
 // do a screen update before starting to load a map
@@ -1032,6 +1070,7 @@ char* Sys_GetCurrentUser(void);
 void QDECL Sys_Error(const char* error, ...) __attribute__((noreturn, format(printf, 1, 2)));
 void Sys_Quit(void) __attribute__((noreturn));
 char* Sys_GetClipboardData(void);  // note that this isn't journaled...
+void Sys_SetClipboardData(const char* text);  // [CNQ3] console mark mode copy
 
 void Sys_Print(const char* msg);
 
