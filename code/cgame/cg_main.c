@@ -120,7 +120,6 @@ vmCvar_t cg_draw3dIcons;
 vmCvar_t cg_drawIcons;
 vmCvar_t cg_drawAmmoWarning;
 vmCvar_t cg_drawCrosshair;
-vmCvar_t cg_drawCrosshairNames;
 vmCvar_t cg_drawRewards;
 vmCvar_t cg_crosshairSize;
 vmCvar_t cg_crosshairX;
@@ -372,7 +371,6 @@ vmCvar_t cg_drawCrosshairTeamHealthSize;
 vmCvar_t cg_drawInputCmdsSize;
 vmCvar_t cg_drawInputCmdsX;
 vmCvar_t cg_drawInputCmdsY;
-vmCvar_t cg_drawRewardsRowSize;
 vmCvar_t cg_drawSprites;
 vmCvar_t cg_drawSpriteSelf;
 vmCvar_t cg_enemyCrosshairNames;
@@ -569,7 +567,6 @@ static cvarTable_t cvarTable[] = {
     {&cg_drawAmmoWarning, "cg_drawAmmoWarning", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},  // [QL] default 2 (was Q3 "1")
     {&cg_drawAttacker, "cg_drawAttacker", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_drawCrosshair, "cg_drawCrosshair", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawCrosshairNames, "cg_drawCrosshairNames", "1", CVAR_ARCHIVE},
     {&cg_drawRewards, "cg_drawRewards", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_crosshairSize, "cg_crosshairSize", "32", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_crosshairHealth, "cg_crosshairHealth", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},  // [QL] default 0 (was Q3 "1")
@@ -797,7 +794,6 @@ static cvarTable_t cvarTable[] = {
     {&cg_drawInputCmdsSize, "cg_drawInputCmdsSize", "24", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_drawInputCmdsX, "cg_drawInputCmdsX", "320", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_drawInputCmdsY, "cg_drawInputCmdsY", "240", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawRewardsRowSize, "cg_drawRewardsRowSize", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_drawSprites, "cg_drawSprites", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_drawSpriteSelf, "cg_drawSpriteSelf", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_enemyCrosshairNames, "cg_enemyCrosshairNames", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
@@ -967,7 +963,6 @@ void CG_RegisterCvars(void) {
         trap_Cvar_Register(cv->vmCvar, cv->cvarName,
                            cv->defaultString, cv->cvarFlags & ~CVAR_CG_RANGE);
     }
-    CG_RegisterTuneCvars();
 
     // [QL] ROM build-version cvar reported by cgamex86.dll build 1069.
     trap_Cvar_Register(NULL, "cg_version", "1069 win-x86 May 25 2016 15:18:10", CVAR_ROM);
@@ -1052,7 +1047,6 @@ void CG_UpdateCvars(void) {
     for (i = 0, cv = cvarTable; i < cvarTableSize; i++, cv++) {
         trap_Cvar_Update(cv->vmCvar);
     }
-    CG_UpdateTuneCvars();
 
     // check for modications here
 
@@ -1997,6 +1991,18 @@ static void CG_RegisterGraphics(void) {
             trap_FS_FCloseFile(f);
             for (n = 0; n < 16; n++) {
                 cgs.media.chatBalloonFrames[n] = trap_R_RegisterShader(va("sprites/ioql_chat%02d", n + 1));
+            }
+        }
+
+        // [ioquakelive] Handel Gothic Ex for the frag message (CG_DrawCenterString), only where
+        // the player has it: it isn't ours to ship, so the launcher copies the one installed in
+        // Windows into baseq3/fonts. Everyone else gets Quake Live's Handel Gothic.
+        cgs.media.fragMessageFont = 0;
+        if (trap_FS_FOpenFile("fonts/handelgothicex.ttf", &f, FS_READ) > 0) {
+            trap_FS_FCloseFile(f);
+            cgs.media.fragMessageFont = trap_R_Font_Register("fonts/handelgothicex.ttf");
+            if (cgs.media.fragMessageFont < 0) {
+                cgs.media.fragMessageFont = 0;
             }
         }
     }

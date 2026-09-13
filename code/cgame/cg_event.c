@@ -205,26 +205,18 @@ Race and Red Rover: plain. FFA/duel: place and score, or "Good Job!" in a
 training warmup. Freeze Tag: thawed/froze. Team games: telefragging a teammate
 is just noted; any other teamkill adds "Watch your fire!". "Teammate" means the
 victim is on the local player's team. Centred at y 90 (144 during a warmup),
-scale 0.3, unless cg_cameraOrbit is on. A target of -1 is no one's.
-[wolfcam] cg_drawFragMessageTokens can rewrite it (CG_BuildFragMessage).
+scale 0.3, unless cg_cameraOrbit is on.
+[ioquakelive] The user's format (2026-09-13): every frag but a teamkill or a
+Freeze Tag one reads just "You fragged <name>", on one line with no place or
+score. CG_DrawCenterString lays it out.
 =============
 */
-void CG_ShowFragMessage(int target, int mod, const char* targetName) {
+static void CG_ShowFragMessage(int target, int mod, const char* targetName) {
     const char* s;
-    qboolean sameTeam = target >= 0 && cgs.gametype >= GT_TEAM &&
+    qboolean sameTeam = cgs.gametype >= GT_TEAM &&
                         cg.snap->ps.persistant[PERS_TEAM] == cgs.clientinfo[target].team;
 
-    if (cgs.gametype == GT_RACE) {
-        s = va("You fragged %s.", targetName);
-    } else if (cgs.gametype < GT_TEAM) {
-        if (g_training.integer && cg.warmup) {
-            s = va("You fragged %s!\n\n\n\n\n^4Good Job!", targetName);
-        } else {
-            s = va("You fragged %s\n%s place with %i.", targetName,
-                   CG_PlaceString(cg.snap->ps.persistant[PERS_RANK] + 1),
-                   cg.snap->ps.persistant[PERS_SCORE]);
-        }
-    } else if (cgs.gametype == GT_FREEZE) {
+    if (cgs.gametype == GT_FREEZE) {
         if (mod == MOD_THAW) {
             s = va("You thawed %s.", targetName);
         } else if (mod == MOD_TELEFRAG) {
@@ -233,19 +225,16 @@ void CG_ShowFragMessage(int target, int mod, const char* targetName) {
             s = sameTeam ? va("You froze %s, your teammate.\n\n^1Watch your fire!^7", targetName)
                          : va("You froze %s.", targetName);
         }
-    } else if (cgs.gametype == GT_RR) {
-        s = va("You fragged %s.", targetName);
-    } else if (mod == MOD_TELEFRAG) {
-        s = sameTeam ? va("You fragged %s, your teammate.", targetName) : va("You fragged %s.", targetName);
+    } else if (sameTeam && cgs.gametype != GT_RR) {
+        s = (mod == MOD_TELEFRAG) ? va("You fragged %s, your teammate.", targetName)
+                                  : va("You fragged %s, your teammate.\n\n^1Watch your fire!^7", targetName);
     } else {
-        s = sameTeam ? va("You fragged %s, your teammate.\n\n^1Watch your fire!^7", targetName)
-                     : va("You fragged %s.", targetName);
+        s = va("You fragged %s", targetName);
     }
 
     if (!cg_cameraOrbit.integer) {
         CG_CenterPrint(s, cg.warmup ? 144 : 90, 0.3f);
         cg.centerPrintFrag = qtrue;
-        CG_BuildFragMessage(target, mod, targetName, sameTeam);
     }
 }
 
