@@ -967,6 +967,7 @@ void CG_RegisterCvars(void) {
         trap_Cvar_Register(cv->vmCvar, cv->cvarName,
                            cv->defaultString, cv->cvarFlags & ~CVAR_CG_RANGE);
     }
+    CG_RegisterTuneCvars();
 
     // [QL] ROM build-version cvar reported by cgamex86.dll build 1069.
     trap_Cvar_Register(NULL, "cg_version", "1069 win-x86 May 25 2016 15:18:10", CVAR_ROM);
@@ -1051,6 +1052,7 @@ void CG_UpdateCvars(void) {
     for (i = 0, cv = cvarTable; i < cvarTableSize; i++, cv++) {
         trap_Cvar_Update(cv->vmCvar);
     }
+    CG_UpdateTuneCvars();
 
     // check for modications here
 

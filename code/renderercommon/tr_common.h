@@ -134,6 +134,7 @@ void RE_Font_DrawString(int x, int y, const char* text, int fontIndex, float sca
 void RE_TextBounds(const char* text, int start, int fontIndex, float scale, int limit, float* extents);
 void RE_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t* glyph);
 void RE_SetCompositionFont(int fontIndex, float scale);
+int RE_Font_Register(const char* name);
 // dead stub kept for the legacy re.RegisterFont slot
 void RE_RegisterFont(const char* fontName, int pointSize, fontInfo_t* font);
 
