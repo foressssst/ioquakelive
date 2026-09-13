@@ -29,6 +29,18 @@ int g_console_field_width = 119;
 
 #define CON_TEXTSIZE 524288
 
+// [QL] Quake Live draws the console with DroidSansMono, font index 2 of the
+// TrueType renderer, in 12x24 cells scaled by con_scale: Con_CheckResize
+// (quakelive_steam.exe 0x4b3a50) writes the cell size, the text calls
+// (0x4bdd40, 0x4bdd90, 0x4b46e8) ask for a font size of cell width * 2.1597
+// (float at 0x56732c), which gives the font's advance.
+#define CON_FONT_MONO 2
+#define CON_CELL_WIDTH 12
+#define CON_CELL_HEIGHT 24
+#define CON_FONT_SCALE 2.1597f
+#define CON_TEXT_LITERAL 0x40000000  // renderer FONS_TEXT_LITERAL: '^' drawn as a glyph
+#define CON_LINEBUFFER 0x800         // retail's row buffer size
+
 // [CNQ3] con_style 1 line width cap, keeps the per-line scratch buffers small
 #define CON_MAXLINEWIDTH 1000
 
@@ -68,7 +80,6 @@ typedef struct {
     vec4_t color;
 
     // [CNQ3] con_style 1
-    float cw, ch;     // character size in pixels
     int rowsVisible;  // full text rows drawn by the last frame
 
     char helpText[MAXPRINTMSG];
@@ -104,11 +115,11 @@ cvar_t* con_scale;
 cvar_t* con_speed;
 cvar_t* con_timestamps;
 
-// [CNQ3] Console ported from CNQ3 (code/client/cl_console.cpp). con_style 0 is
-// Quake Live's console, untouched; con_style 1 is CNQ3's look with its colours,
-// scalable font and help panel. Mark mode and console search work in both.
+// [CNQ3] Console features ported from CNQ3 (code/client/cl_console.cpp).
+// con_style 0 is Quake Live's console; con_style 1 adds CNQ3's panel look,
+// shadows, colours and help panel, drawn with Quake Live's own font and a
+// Quake Live palette. Mark mode and console search work in both.
 cvar_t* con_style;
-cvar_t* con_scaleMode;
 cvar_t* con_drawHelp;
 cvar_t* con_history;
 
@@ -140,82 +151,67 @@ typedef struct {
     vec4_t color;
 } conColor_t;
 
-// CNQ3's defaults
+// a Quake Live palette: black, reds and ambers
 static conColor_t con_colors[CC_COUNT] = {
-    {"con_colBG", "101013F6", qtrue, "RGBA color of the background"},
-    {"con_colBorder", "4778B2FF", qtrue, "RGBA color of the border"},
-    {"con_colArrow", "4778B2FF", qtrue, "RGBA color of backscroll arrows"},
+    {"con_colBG", "0B0B0DEB", qtrue, "RGBA color of the background"},
+    {"con_colBorder", "C01A1AFF", qtrue, "RGBA color of the border"},
+    {"con_colArrow", "E03C3CFF", qtrue, "RGBA color of backscroll arrows"},
     {"con_colShadow", "000000FF", qtrue, "RGBA color of text shadows"},
-    {"con_colMkBG", "BFBFBFFF", qtrue, "RGBA color of the mark background"},
+    {"con_colMkBG", "D8D8D8FF", qtrue, "RGBA color of the mark background"},
     {"con_colMkShadow", "FFFFFF00", qtrue, "RGBA color of the mark text shadows"},
-    {"con_colText", "E2E2E2", qfalse, "RGB color of text"},
+    {"con_colText", "EAEAEA", qfalse, "RGB color of text"},
     {"con_colMkText", "000000", qfalse, "RGB color of mark text"},
-    {"con_colCVar", "4778B2", qfalse, "RGB color of variable names"},
-    {"con_colCmd", "4FA7BD", qfalse, "RGB color of command names"},
-    {"con_colValue", "E5BC39", qfalse, "RGB color of variable values"},
-    {"con_colHelp", "ABC1C6", qfalse, "RGB color of help text"},
-    {"con_colSearch", "FFFF00", qfalse, "RGB color of search result marker"},
-    {"con_colHL", "303033FF", qtrue, "RGBA color of auto-completion highlights\n"
+    {"con_colCVar", "FF9F1C", qfalse, "RGB color of variable names"},
+    {"con_colCmd", "F25C54", qfalse, "RGB color of command names"},
+    {"con_colValue", "FFE66D", qfalse, "RGB color of variable values"},
+    {"con_colHelp", "A7A7A7", qfalse, "RGB color of help text"},
+    {"con_colSearch", "FF9F1C", qfalse, "RGB color of search result marker"},
+    {"con_colHL", "5A1A1AFF", qtrue, "RGBA color of auto-completion highlights\n"
                                      "This requires " S_COLOR_CVAR "con_completionStyle " S_COLOR_VAL "1" S_COLOR_HELP "."},
 };
 
 /*
 ================
-Con_CharW / Con_CharH
+Con_Scale
 
-Returns scaled console character dimensions based on con_scale
+[QL] Quake Live reads con_scale->value straight in every console call.
 ================
 */
-static int Con_CharW(void) {
-    if (con_scale) {
-        int w = (int)(SMALLCHAR_WIDTH * con_scale->value);
-        return w > 0 ? w : 1;
-    }
-    return SMALLCHAR_WIDTH;
-}
-
-static int Con_CharH(void) {
-    if (con_scale) {
-        int h = (int)(SMALLCHAR_HEIGHT * con_scale->value);
-        return h > 0 ? h : 1;
-    }
-    return SMALLCHAR_HEIGHT;
+static float Con_Scale(void) {
+    return con_scale ? con_scale->value : 1.0f;
 }
 
 /*
 ================
-Con_DrawCharScaled
+Con_DrawStringTTF
 
-Draws a character at native screen resolution with specified dimensions.
-Like SCR_DrawSmallChar but with variable width/height.
+[QL] quakelive_steam.exe 0x4bdd90: the colour when given, then DroidSansMono
+at a size of cellWidth * 2.1597, the baseline yOffset pixels below y.
 ================
 */
-static void Con_DrawCharScaled(int x, int y, int w, int h, int ch) {
-    int row, col;
-    float frow, fcol;
-    float size;
-
-    ch &= 255;
-
-    if (ch == ' ') {
+static void Con_DrawStringTTF(int x, int y, const char* text, const float* color, int cellWidth, int yOffset, int flags) {
+    if (!text[0]) {
         return;
     }
-
-    if (y < -h) {
-        return;
+    if (color) {
+        re.SetColor(color);
     }
+    re.Font_DrawString(x, y + yOffset, text, CON_FONT_MONO, cellWidth * CON_FONT_SCALE, -1, NULL, flags);
+}
 
-    row = ch >> 4;
-    col = ch & 15;
+/*
+================
+Con_DrawCharTTF
 
-    frow = row * 0.0625;
-    fcol = col * 0.0625;
-    size = 0.0625;
+[QL] quakelive_steam.exe 0x4bdd40: one character in the current colour.
+================
+*/
+static void Con_DrawCharTTF(int x, int y, int cellWidth, int yOffset, int ch) {
+    char str[2];
 
-    re.DrawStretchPic(x, y, w, h,
-                      fcol, frow,
-                      fcol + size, frow + size,
-                      cls.charSetShader);
+    str[0] = (char)ch;
+    str[1] = '\0';
+    re.Font_DrawString(x, y + yOffset, str, CON_FONT_MONO, cellWidth * CON_FONT_SCALE, -1, NULL, 1);
 }
 
 /*
@@ -295,25 +291,11 @@ static int Con_RetailColor(int code) {
 
 /*
 ================
-Con_DrawCharF / Con_FillRectPx
+Con_FillRectPx
 
 [CNQ3] Native pixel coordinates.
 ================
 */
-static void Con_DrawCharF(float x, float y, float w, float h, int ch) {
-    const float size = 0.0625f;
-    float frow, fcol;
-
-    ch &= 255;
-    if (ch == ' ') {
-        return;
-    }
-
-    frow = (ch >> 4) * size;
-    fcol = (ch & 15) * size;
-    re.DrawStretchPic(x, y, w, h, fcol, frow, fcol + size, frow + size, cls.charSetShader);
-}
-
 static void Con_FillRectPx(float x, float y, float w, float h, const float* color) {
     re.SetColor(color);
     re.DrawStretchPic(x, y, w, h, 0, 0, 0, 0, cls.whiteShader);
@@ -321,35 +303,36 @@ static void Con_FillRectPx(float x, float y, float w, float h, const float* colo
 
 /*
 ================
-Con_ResizeFont
+Con_GetMetrics
 
-[CNQ3] con_style 1 character size: 8x12 scaled by con_scale, and by the
-resolution with con_scaleMode 1. Whole pixels, so the line width computed
-from it matches what gets drawn.
+[CNQ3] Pixel metrics of the console font for the mark, the search marker,
+the completion highlight and the help panel, which need column positions:
+Quake Live's cells, plus the font's real advance and ascender measured by the
+renderer.
 ================
 */
-static void Con_ResizeFont(void) {
-    con.cw = 8.0f;
-    con.ch = 12.0f;
+typedef struct {
+    float cellW, cellH;  // Quake Live's cell
+    float fontSize;      // cellW * 2.1597
+    float adv;           // pixels per column
+    float asc;           // baseline to the top of the row
+} conMetrics_t;
 
-    if (cls.glconfig.vidWidth <= 0 || cls.glconfig.vidHeight <= 0 || !con_scale || !con_scaleMode) {
-        return;
+static void Con_GetMetrics(conMetrics_t* m) {
+    float one[5], two[5];
+    const float s = Con_Scale();
+
+    m->cellW = CON_CELL_WIDTH * s;
+    m->cellH = CON_CELL_HEIGHT * s;
+    m->fontSize = m->cellW * CON_FONT_SCALE;
+
+    re.TextBounds("00", 0, CON_FONT_MONO, m->fontSize, 2, two);
+    re.TextBounds("0", 0, CON_FONT_MONO, m->fontSize, 1, one);
+    m->adv = two[2] - one[2];
+    if (m->adv < 1.0f) {
+        m->adv = m->cellW;
     }
-
-    if (con_scaleMode->integer != 2) {
-        if (con_scaleMode->integer == 1) {
-            SCR_AdjustFrom640(&con.cw, &con.ch, NULL, NULL);
-        }
-        con.cw *= con_scale->value;
-        con.ch *= con_scale->value;
-        if (cls.glconfig.vidWidth * SCREEN_HEIGHT > cls.glconfig.vidHeight * SCREEN_WIDTH) {
-            // the console distorts horribly on widescreens
-            con.cw = con.ch * SCREEN_HEIGHT / SCREEN_WIDTH;
-        }
-    }
-
-    con.cw = (float)ceil(con.cw);
-    con.ch = (float)ceil(con.ch);
+    m->asc = one[4] > 0.0f ? one[4] : m->cellH * 0.8f;
 }
 
 /*
@@ -626,19 +609,16 @@ void Con_CheckResize(void) {
     int i, j, width, oldwidth, oldtotallines, numlines, numchars;
     short tbuf[CON_TEXTSIZE];
 
-    // [QL] calculate linewidth from vidWidth and con_scale
+    // [QL] quakelive_steam.exe 0x4b3a50: 12 pixel cells scaled by con_scale,
+    // one cell of margin on each side
     con.xadjust = 0;
-    if (Con_GetStyle() == 1) {
-        // [CNQ3] con_style 1 font, one character of margin on each side
-        Con_ResizeFont();
-        width = cls.glconfig.vidWidth > 0 ? (int)(cls.glconfig.vidWidth / con.cw) - 2 : 0;
-        if (width > CON_MAXLINEWIDTH) {
-            width = CON_MAXLINEWIDTH;
-        }
-    } else if (con_scale && cls.glconfig.vidWidth > 0) {
-        width = (int)(cls.glconfig.vidWidth / (con_scale->value * SMALLCHAR_WIDTH)) - 2;
+    if (con_scale) {
+        width = (int)(cls.glconfig.vidWidth / con_scale->value / (double)CON_CELL_WIDTH - 2.0);
     } else {
-        width = cls.glconfig.vidWidth / SMALLCHAR_WIDTH - 2;
+        width = cls.glconfig.vidWidth / CON_CELL_WIDTH - 2;
+    }
+    if (width > CON_MAXLINEWIDTH) {
+        width = CON_MAXLINEWIDTH;  // [CNQ3] scratch buffers
     }
     if (width < 1) {
         width = 78;  // fallback before video init
@@ -809,7 +789,7 @@ pattern matches the start of the line and '*' matches anything.
 ================
 */
 void Con_ContinueSearch(qboolean forward) {
-    char rawText[CON_MAXLINEWIDTH * 2 + 1];
+    char rawText[CON_MAXLINEWIDTH + 1];
     int first, count, k;
 
     if (!con.searchStarted || !con.initialized) {
@@ -889,9 +869,6 @@ void Con_Init(void) {
     con_style = Cvar_Get("con_style", "0", CVAR_ARCHIVE);
     Cvar_CheckRange(con_style, 0, 1, qtrue);
 
-    con_scaleMode = Cvar_Get("con_scaleMode", "1", CVAR_ARCHIVE);
-    Cvar_CheckRange(con_scaleMode, 0, 2, qtrue);
-
     con_drawHelp = Cvar_Get("con_drawHelp", "1", CVAR_ARCHIVE);
     Cvar_CheckRange(con_drawHelp, 0, DRAWHELP_MAX, qtrue);
 
@@ -910,12 +887,7 @@ void Con_Init(void) {
 
     Cvar_SetHelp("con_style", "console style\n"
                  S_COLOR_VAL "    0 " S_COLOR_HELP "= Quake Live\n"
-                 S_COLOR_VAL "    1 " S_COLOR_HELP "= CNQ3: colors, scalable font, help panel and CNQ3 scrolling");
-    Cvar_SetHelp("con_scaleMode", "console text scaling mode\n"
-                 S_COLOR_VAL "    0 " S_COLOR_HELP "= Text size scales with con_scale but not the resolution\n"
-                 S_COLOR_VAL "    1 " S_COLOR_HELP "= Text size scales with con_scale and the resolution\n"
-                 S_COLOR_VAL "    2 " S_COLOR_HELP "= Text size is always 8x12\n"
-                 "Only used by " S_COLOR_CVAR "con_style " S_COLOR_VAL "1" S_COLOR_HELP ".");
+                 S_COLOR_VAL "    1 " S_COLOR_HELP "= Panel with shadows, the con_col* colors, help panel and faster scrolling");
     Cvar_SetHelp("con_drawHelp", "draws help text below the console\n"
                  S_COLOR_VAL "    1 " S_COLOR_HELP "= Enables the help panel below the console\n"
                  S_COLOR_VAL "    2 " S_COLOR_HELP "= Draws the help panel even if the cvar/cmd has no help text\n"
@@ -1168,47 +1140,201 @@ static qboolean Con_MarkBounds(int* startX, int* startY, int* endX, int* endY) {
 
 /*
 ================
-Con_DrawShadowedChar
+Con_DrawFieldTTF
 
-[CNQ3]
+[QL] quakelive_steam.exe 0x4b6630. The visible part is found walking back from
+the end of the line one UTF-8 character at a time, dropping characters from the
+end while the cursor is left of the window. The cursor is measured on the drawn
+text: '|' half a cell left of the next character, '_' in overstrike mode.
 ================
 */
-static void Con_DrawShadowedChar(float x, float y, int c, const float* color) {
-    if (con_colors[CC_SHADOW].color[3] > 0.0f) {
-        re.SetColor(con_colors[CC_SHADOW].color);
-        Con_DrawCharF(x + 1, y + 1, con.cw, con.ch, c);
+static void Con_DrawFieldTTF(field_t* edit, int x, int y, int cellWidth, int cellHeight, qboolean showCursor, const float* color) {
+    const char* const buf = edit->buffer;
+    char str[MAX_EDIT_LINE];
+    int end = strlen(buf);
+    int start = end;
+    int count = 0;
+    int len;
+
+    while (start > 0 && count < edit->widthInChars) {
+        if (--start <= 0) {
+            break;
+        }
+        while (start > 0 && (buf[start] & 0xc0) == 0x80) {
+            start--;
+        }
+        count++;
+        if (count == edit->widthInChars && edit->cursor < start) {
+            unsigned char removed;
+            do {
+                removed = (unsigned char)buf[--end];
+            } while (end > 0 && (removed & 0xc0) == 0x80);
+            count--;
+        }
     }
-    re.SetColor(color);
-    Con_DrawCharF(x, y, con.cw, con.ch, c);
+
+    len = end - start;
+    Com_Memcpy(str, buf + start, len);
+    str[len] = '\0';
+    Con_DrawStringTTF(x, y, str, color, cellWidth, cellHeight, 0);
+
+    if (showCursor && !(cls.realtime & 0x100)) {
+        const int off = edit->cursor - start;
+        float extents[5] = {0, 0, 0, 0, 0};
+        float cursorX;
+
+        if (off > 0 && off <= len) {
+            re.TextBounds(str, 0, CON_FONT_MONO, cellWidth * CON_FONT_SCALE, off, extents);
+        }
+        cursorX = x + extents[2] - extents[0];
+        if (!key_overstrikeMode) {
+            cursorX -= cellWidth / 2;
+        }
+        if (off >= 1 && off <= len && str[off - 1] == ' ') {
+            cursorX += cellWidth;
+        }
+        Con_DrawCharTTF((int)cursorX, y, cellWidth, cellHeight, key_overstrikeMode ? '_' : '|');
+    }
 }
 
 /*
 ================
 Con_DrawInput
 
-Draw the editline after a ] prompt
+[QL] quakelive_steam.exe 0x4b3ff0: the ']' prompt and the edit line in
+con_scale'd cells, two cells above the bottom of the console.
 ================
 */
 void Con_DrawInput(void) {
+    static const vec4_t white = {1.0f, 1.0f, 1.0f, 1.0f};
+    const float s = Con_Scale();
     int y;
 
     if (clc.state != CA_DISCONNECTED && !(Key_GetCatcher() & KEYCATCH_CONSOLE)) {
         return;
     }
 
-    int charW = Con_CharW();
-    int charH = Con_CharH();
-
-    y = con.vislines - (charH * 2);
+    y = (int)(con.vislines - CON_CELL_HEIGHT * s * 2);
 
     g_consoleField.widthInChars = g_console_field_width;  // [CNQ3] con_style 1 changes it
 
     re.SetColor(con.color);
+    Con_DrawCharTTF((int)((CON_CELL_WIDTH + con.xadjust) * s), y, (int)(CON_CELL_WIDTH * s), (int)(CON_CELL_HEIGHT * s), ']');
 
-    Con_DrawCharScaled(con.xadjust + 1 * charW, y, charW, charH, ']');
+    Con_DrawFieldTTF(&g_consoleField, (int)((2 * CON_CELL_WIDTH + con.xadjust) * s), y,
+                     (int)(CON_CELL_WIDTH * s), (int)(CON_CELL_HEIGHT * s), !con.markMode, white);
+}
 
-    Field_Draw(&g_consoleField, con.xadjust + 2 * charW, y,
-               SCREEN_WIDTH - 3 * charW, !con.markMode, qtrue);
+/*
+================
+Con_DrawNotify
+
+[QL] Only the chat input field. Quake Live's engine (quakelive_steam.exe
+0x4b4100) draws the "say:" / "say team:" / "reply:" field here and nothing else:
+there is no loop over recent console lines, so console output never shows over
+the game. Chat and obituaries are drawn by cgame's HUD ownerdraws instead.
+The field sits on a translucent bar near the bottom of the screen, in amber
+DroidSansMono at the console's unscaled 12x24 cells. Retail can take the
+position and width from an interface at 0x146cc38 (offsets 0x44/0x48/0x4c)
+that isn't identified yet; these are its defaults.
+================
+*/
+void Con_DrawNotify(void) {
+    static const vec4_t textColor = {1.0f, 0.8f, 0.0f, 1.0f};
+    static const vec4_t barColor = {0.0f, 0.0f, 0.0f, 0.6f};
+    float x = 8.0f;
+    float y = 413.0f;
+    const float barY = 413.0f;
+    const float width = SCREEN_WIDTH;
+    const char* label;
+    int skip;
+
+    if (Key_GetCatcher() & KEYCATCH_UI) {
+        return;
+    }
+    if (!(Key_GetCatcher() & KEYCATCH_MESSAGE)) {
+        return;
+    }
+
+    SCR_AdjustFrom640(&x, &y, NULL, NULL);
+    SCR_FillRect(6.0f, barY - 3.0f, width - 12.0f, 22.0f, barColor);
+
+    if (chat_playerNum != -1) {
+        label = "reply:";
+        skip = 7;
+    } else if (chat_team) {
+        label = "say team:";
+        skip = 11;
+    } else {
+        label = "say:";
+        skip = 6;
+    }
+
+    Con_DrawStringTTF((int)x, (int)y, label, textColor, CON_CELL_WIDTH, CON_CELL_HEIGHT, 1);
+    Con_DrawFieldTTF(&chatField, (int)(CON_CELL_WIDTH * skip + con.xadjust), (int)y,
+                     CON_CELL_WIDTH, CON_CELL_HEIGHT, qtrue, textColor);
+}
+
+/*
+================
+[CNQ3] con_style 1 text runs
+
+A row is drawn as runs of one colour, shadow first. Columns are fixed, column
+c starting at x + c * the font's advance, so the mark, the search marker and
+the completion highlight line up with the text.
+================
+*/
+#define CON_RUN_SHADOW 100
+#define CON_RUN_MKSHADOW 101
+#define CON_RUN_MKTEXT 102
+
+static const conMetrics_t* con_helpMetrics;  // metrics for Con_HelpPrintf
+
+static const float* Con_RunColor(int id) {
+    switch (id) {
+        case CON_RUN_SHADOW:
+            return con_colors[CC_SHADOW].color;
+        case CON_RUN_MKSHADOW:
+            return con_colors[CC_MKSHADOW].color;
+        case CON_RUN_MKTEXT:
+            return con_colors[CC_MKTEXT].color;
+        default:
+            return Con_ColorFromCode(id);
+    }
+}
+
+static void Con_DrawRuns(const conMetrics_t* m, float x, float baseline, const char* chars, const short* ids, int count, qboolean shadow) {
+    char run[CON_MAXLINEWIDTH + 1];
+    const int offset = shadow ? 1 : 0;
+    int i = 0;
+
+    while (i < count) {
+        const float* color;
+        int start, len, id;
+
+        if (chars[i] == ' ') {
+            i++;
+            continue;
+        }
+
+        id = ids[i];
+        start = i;
+        len = 0;
+        while (i < count && len < CON_MAXLINEWIDTH && (chars[i] == ' ' || ids[i] == id)) {
+            run[len++] = chars[i++];
+        }
+        while (len > 0 && run[len - 1] == ' ') {
+            len--;
+        }
+        run[len] = '\0';
+
+        color = Con_RunColor(id);
+        if (color[3] <= 0.0f) {
+            continue;
+        }
+        re.SetColor(color);
+        re.Font_DrawString((int)(x + start * m->adv) + offset, (int)baseline + offset, run, CON_FONT_MONO, m->fontSize, -1, NULL, CON_TEXT_LITERAL);
+    }
 }
 
 /*
@@ -1216,17 +1342,19 @@ void Con_DrawInput(void) {
 Con_DrawInputCNQ3
 
 [CNQ3] con_style 1 edit line: shadowed, colour codes shown in their colour,
-and the match cycled through by the completion highlighted.
+the match cycled through by the completion highlighted, and Quake Live's
+cursor.
 ================
 */
-static void Con_DrawInputCNQ3(void) {
+static void Con_DrawInputCNQ3(const conMetrics_t* m) {
     field_t* const edit = &g_consoleField;
-    const float cw = con.cw;
-    const float ch = con.ch;
-    const float y = con.vislines - ch * 1.5f;
-    const float textX = con.xadjust + cw;
-    const float* color;
-    int len, drawLen, prestep, i;
+    const float baseline = con.vislines - m->cellH;
+    const float promptX = m->cellW;
+    const float textX = promptX + m->adv;
+    char chars[MAX_EDIT_LINE];
+    short ids[MAX_EDIT_LINE];
+    short shadows[MAX_EDIT_LINE];
+    int len, drawLen, prestep, code, i;
 
     if (clc.state != CA_DISCONNECTED && !(Key_GetCatcher() & KEYCATCH_CONSOLE)) {
         return;
@@ -1251,71 +1379,50 @@ static void Con_DrawInputCNQ3(void) {
     if (prestep + drawLen > len) {
         drawLen = len - prestep;
     }
+    if (drawLen > MAX_EDIT_LINE) {
+        drawLen = MAX_EDIT_LINE;
+    }
 
     if (edit->acLength > 0) {
         const int start = MAX(edit->acOffset, prestep);
         const int end = MIN(edit->acOffset + edit->acLength, prestep + drawLen);
         if (end > start) {
-            Con_FillRectPx(textX + (start - prestep) * cw, y, (end - start) * cw, ch, con_colors[CC_HL].color);
+            Con_FillRectPx(textX + (start - prestep) * m->adv, baseline - m->asc, (end - start) * m->adv, m->cellH, con_colors[CC_HL].color);
         }
     }
 
-    Con_DrawShadowedChar(con.xadjust, y, ']', con_colors[CC_TEXT].color);
+    chars[0] = ']';
+    ids[0] = ColorIndex(COLOR_WHITE);
+    shadows[0] = CON_RUN_SHADOW;
+    Con_DrawRuns(m, promptX, baseline, chars, shadows, 1, qtrue);
+    Con_DrawRuns(m, promptX, baseline, chars, ids, 1, qfalse);
 
-    color = con_colors[CC_TEXT].color;
+    code = ColorIndex(COLOR_WHITE);
     for (i = prestep - 1; i >= 0; i--) {
         if (Q_IsColorString(edit->buffer + i)) {
-            color = Con_ColorFromCode(ColorIndex(edit->buffer[i + 1]));
+            code = ColorIndex(edit->buffer[i + 1]);
             break;
         }
     }
-
     for (i = 0; i < drawLen; i++) {
         const char* const s = edit->buffer + prestep + i;
         if (Q_IsColorString(s)) {
-            color = Con_ColorFromCode(ColorIndex(s[1]));
+            code = ColorIndex(s[1]);
         }
-        Con_DrawShadowedChar(textX + i * cw, y, *s, color);
+        chars[i] = *s;
+        ids[i] = (short)code;
+        shadows[i] = CON_RUN_SHADOW;
     }
+    Con_DrawRuns(m, textX, baseline, chars, shadows, drawLen, qtrue);
+    Con_DrawRuns(m, textX, baseline, chars, ids, drawLen, qfalse);
 
-    if (!con.markMode && Sys_Milliseconds() % 500 >= 250) {
+    if (!con.markMode && !(cls.realtime & 0x100)) {
+        float cursorX = textX + (edit->cursor - prestep) * m->adv;
+        if (!key_overstrikeMode) {
+            cursorX -= m->adv / 2;
+        }
         re.SetColor(con_colors[CC_TEXT].color);
-        Con_DrawCharF(textX + (edit->cursor - prestep) * cw, y, cw, ch, key_overstrikeMode ? 11 : 10);
-    }
-}
-
-/*
-================
-Con_DrawNotify
-
-[QL] Only the chat input field. Quake Live's engine (quakelive_steam.exe
-0x4b4100) draws the "say:" / "say team:" / "reply:" field here and nothing else:
-there is no loop over recent console lines, so console output never shows over
-the game. Chat and obituaries are drawn by cgame's HUD ownerdraws instead.
-================
-*/
-void Con_DrawNotify(void) {
-    int v;
-    int skip;
-
-    v = 0;
-
-    if (Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CGAME)) {
-        return;
-    }
-
-    // draw the chat line
-    if (Key_GetCatcher() & KEYCATCH_MESSAGE) {
-        if (chat_team) {
-            SCR_DrawBigString(8, v, "say_team:", 1.0f, qfalse);
-            skip = 10;
-        } else {
-            SCR_DrawBigString(8, v, "say:", 1.0f, qfalse);
-            skip = 5;
-        }
-
-        Field_BigDraw(&chatField, skip * BIGCHAR_WIDTH, v,
-                      SCREEN_WIDTH - (skip + 1) * BIGCHAR_WIDTH, qtrue, qtrue);
+        re.Font_DrawString((int)cursorX, (int)baseline, key_overstrikeMode ? "_" : "|", CON_FONT_MONO, m->fontSize, -1, NULL, CON_TEXT_LITERAL);
     }
 }
 
@@ -1328,6 +1435,7 @@ draws it, wrapping the words.
 ================
 */
 static void QDECL Con_HelpPrintf(const char* fmt, ...) {
+    const conMetrics_t* const m = con_helpMetrics;
     const int wrap = MIN(MAX(con.linewidth - 4, 20), 100);
     const float* color = con_colors[CC_TEXT].color;
     va_list argptr;
@@ -1354,7 +1462,7 @@ static void QDECL Con_HelpPrintf(const char* fmt, ...) {
             }
             con.helpWidth = MAX(con.helpWidth, con.helpX);
             con.helpX = 0;
-            con.helpY += con.ch;
+            con.helpY += m->cellH;
             con.helpLines++;
             continue;
         }
@@ -1371,7 +1479,18 @@ static void QDECL Con_HelpPrintf(const char* fmt, ...) {
         }
 
         if (con.helpDraw && *c != ' ') {
-            Con_DrawShadowedChar(con.helpXAdjust + con.helpX * con.cw, con.helpY, *c, color);
+            const int x = (int)(con.helpXAdjust + con.helpX * m->adv);
+            const int y = (int)(con.helpY + m->asc);
+            char str[2];
+
+            str[0] = *c;
+            str[1] = '\0';
+            if (con_colors[CC_SHADOW].color[3] > 0.0f) {
+                re.SetColor(con_colors[CC_SHADOW].color);
+                re.Font_DrawString(x + 1, y + 1, str, CON_FONT_MONO, m->fontSize, -1, NULL, CON_TEXT_LITERAL);
+            }
+            re.SetColor(color);
+            re.Font_DrawString(x, y, str, CON_FONT_MONO, m->fontSize, -1, NULL, CON_TEXT_LITERAL);
         }
         c++;
         con.helpX++;
@@ -1385,7 +1504,7 @@ Con_DrawHelp
 [CNQ3] Help panel below the console for the cvar or command being typed.
 ================
 */
-static void Con_DrawHelp(void) {
+static void Con_DrawHelp(const conMetrics_t* m) {
     const float* const bg = con_colors[CC_BG].color;
     const float* const border = con_colors[CC_BORDER].color;
     char name[MAX_TOKEN_CHARS];
@@ -1423,27 +1542,29 @@ static void Con_DrawHelp(void) {
     printAttribs = (con_drawHelp->integer & DRAWHELP_ATTRIBS_BIT) ? qtrue : qfalse;
 
     // measure
+    con_helpMetrics = m;
     con.helpDraw = qfalse;
     con.helpX = 0;
+    con.helpY = 0;
     con.helpWidth = 0;
     con.helpLines = 0;
-    con.helpXAdjust = con.xadjust + 2 * con.cw;
+    con.helpXAdjust = m->cellW + 2 * m->adv;
     result = Com_PrintHelp(name, Con_HelpPrintf, qfalse, printModules, printAttribs);
     if (result == PHR_NOTFOUND || (result == PHR_NOHELP && !printAlways)) {
         return;
     }
 
-    x = (int)(con.helpXAdjust - con.cw);
+    x = (int)(con.helpXAdjust - m->adv);
     y = (int)(cls.glconfig.vidHeight * con.displayFrac);
-    w = (int)((con.helpWidth + 2) * con.cw);
-    h = (int)((con.helpLines + 1) * con.ch);
+    w = (int)((con.helpWidth + 2) * m->adv);
+    h = (int)((con.helpLines + 1) * m->cellH);
     con.helpDraw = qtrue;
     con.helpX = 0;
-    con.helpY = y + 1.5f * con.ch;
-    yh = (int)(con.helpY - con.ch / 2.0f);
+    con.helpY = y + 1.5f * m->cellH;
+    yh = (int)(con.helpY - m->cellH / 2.0f);
 
     // CNQ3's triangle joining the panel to the console, one strip per pixel row
-    for (i = 0; i < (int)con.ch; i++) {
+    for (i = 0; i < (int)m->cellH; i++) {
         Con_FillRectPx(x, y + i, i + 1, 1, bg);
     }
     Con_FillRectPx(x, yh, w, h, bg);
@@ -1460,51 +1581,51 @@ static void Con_DrawHelp(void) {
 ================
 Con_DrawSolidConsoleCNQ3
 
-[CNQ3] con_style 1: con_col* colours, shadowed text, scalable font.
+[CNQ3] con_style 1: the con_col* panel with shadowed text, in Quake Live's
+font and cells, rows on the same baselines as Quake Live's console.
 ================
 */
 static void Con_DrawSolidConsoleCNQ3(float frac) {
-    const float cw = con.cw;
-    const float ch = con.ch;
-    int i, x, row, rows, scanlines, len;
+    char chars[CON_MAXLINEWIDTH];
+    short ids[CON_MAXLINEWIDTH];
+    short shadows[CON_MAXLINEWIDTH];
+    conMetrics_t m;
+    int i, x, row, rows, lines, count, len;
     int markStartX, markStartY, markEndX, markEndY;
     qboolean drawMark;
-    float y;
+    float y, x0;
 
-    scanlines = (int)(cls.glconfig.vidHeight * frac);
-    if (scanlines <= 0) {
+    lines = (int)(cls.glconfig.vidHeight * frac);
+    if (lines <= 0) {
         return;
     }
-    if (scanlines > cls.glconfig.vidHeight) {
-        scanlines = cls.glconfig.vidHeight;
+    if (lines > cls.glconfig.vidHeight) {
+        lines = cls.glconfig.vidHeight;
     }
 
-    con.xadjust = cw;  // one character of margin
+    Con_GetMetrics(&m);
+    con.xadjust = 0;
+    x0 = m.cellW;  // one cell of margin
 
-    // background and border
-    Con_FillRectPx(0, 0, cls.glconfig.vidWidth, scanlines - 2, con_colors[CC_BG].color);
-    Con_FillRectPx(0, scanlines - 2, cls.glconfig.vidWidth, 2, con_colors[CC_BORDER].color);
+    Con_FillRectPx(0, 0, cls.glconfig.vidWidth, lines - 2, con_colors[CC_BG].color);
+    Con_FillRectPx(0, lines - 2, cls.glconfig.vidWidth, 2, con_colors[CC_BORDER].color);
 
-    // version
-    re.SetColor(con_colors[CC_TEXT].color);
+    // version, where Quake Live puts it
     len = strlen(FULL_PRODUCT_VERSION);
-    for (x = 0; x < len; x++) {
-        Con_DrawCharF(cls.glconfig.vidWidth - (len - x + 1) * SMALLCHAR_WIDTH, scanlines - SMALLCHAR_HEIGHT * 1.5f,
-                      SMALLCHAR_WIDTH, SMALLCHAR_HEIGHT, FULL_PRODUCT_VERSION[x]);
-    }
+    Con_DrawStringTTF(cls.glconfig.vidWidth - CON_CELL_WIDTH * len, lines - CON_CELL_HEIGHT / 2 - CON_CELL_HEIGHT,
+                      FULL_PRODUCT_VERSION, con_colors[CC_ARROW].color, CON_CELL_WIDTH, CON_CELL_HEIGHT, CON_TEXT_LITERAL);
 
-    con.vislines = scanlines;
-    rows = (int)((scanlines - ch) / ch);
-    y = scanlines - ch * 3;
+    con.vislines = lines;
+    rows = (int)((lines - m.cellH) / m.cellH);
+    y = lines - m.cellH * 3;  // baseline of the bottom row
 
-    // draw arrows to show the buffer is backscrolled
+    // backscroll arrows, on the empty row above the edit line
     if (con.display != con.current) {
-        const int xEnd = (int)((cls.glconfig.vidWidth - con.xadjust) / cw);
         re.SetColor(con_colors[CC_ARROW].color);
-        for (x = 0; x < xEnd; x += 4) {
-            Con_DrawCharF(con.xadjust + x * cw, y, cw, ch, '^');
+        for (x = 0; x < con.linewidth; x += 4) {
+            re.Font_DrawString((int)(x0 + x * m.adv), (int)(y + m.cellH), "^", CON_FONT_MONO, m.fontSize, -1, NULL, CON_TEXT_LITERAL);
         }
-        y -= ch;
+        y -= m.cellH;
         rows--;
     }
 
@@ -1514,12 +1635,12 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
     }
 
     drawMark = Con_MarkBounds(&markStartX, &markStartY, &markEndX, &markEndY);
+    count = MIN(con.linewidth, CON_MAXLINEWIDTH);
 
     con.rowsVisible = 0;
-    for (i = 0; i < rows; i++, y -= ch, row--) {
+    for (i = 0; i < rows; i++, y -= m.cellH, row--) {
         const short* text;
         qboolean markRow;
-        int color;
 
         if (row < 0) {
             break;
@@ -1528,7 +1649,7 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
             // past scrollback wrap point
             continue;
         }
-        if (y >= 0) {
+        if (y - m.asc >= 0) {
             con.rowsVisible++;
         }
 
@@ -1536,45 +1657,28 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
         markRow = (drawMark && row >= markStartY && row <= markEndY) ? qtrue : qfalse;
 
         if (markRow) {
-            Con_FillRectPx(con.xadjust + markStartX * cw, y, (markEndX - markStartX + 1) * cw, ch, con_colors[CC_MKBG].color);
+            Con_FillRectPx(x0 + markStartX * m.adv, y - m.asc, (markEndX - markStartX + 1) * m.adv, m.cellH, con_colors[CC_MKBG].color);
         }
 
-        // shadows
-        color = -1;
-        for (x = 0; x < con.linewidth; x++) {
-            const int newColor = (markRow && x >= markStartX && x <= markEndX) ? CC_MKSHADOW : CC_SHADOW;
-            if ((text[x] & 0xff) == ' ' || con_colors[newColor].color[3] <= 0.0f) {
-                continue;
-            }
-            if (newColor != color) {
-                color = newColor;
-                re.SetColor(con_colors[color].color);
-            }
-            Con_DrawCharF(con.xadjust + x * cw + 1, y + 1, cw, ch, text[x] & 0xff);
+        for (x = 0; x < count; x++) {
+            const qboolean marked = (markRow && x >= markStartX && x <= markEndX) ? qtrue : qfalse;
+            chars[x] = (char)(text[x] & 0xff);
+            ids[x] = marked ? CON_RUN_MKTEXT : (short)(text[x] >> 8);
+            shadows[x] = marked ? CON_RUN_MKSHADOW : CON_RUN_SHADOW;
         }
+
+        Con_DrawRuns(&m, x0, y, chars, shadows, count, qtrue);
 
         if (con.searchStarted && row == con.searchLine) {
             re.SetColor(con_colors[CC_SEARCH].color);
-            Con_DrawCharF(con.xadjust - cw, y, cw, ch, 141);
+            re.Font_DrawString((int)(x0 - m.cellW), (int)y, ">", CON_FONT_MONO, m.fontSize, -1, NULL, CON_TEXT_LITERAL);
         }
 
-        // text
-        color = -1;
-        for (x = 0; x < con.linewidth; x++) {
-            const int newColor = (markRow && x >= markStartX && x <= markEndX) ? -2 : (text[x] >> 8);
-            if ((text[x] & 0xff) == ' ') {
-                continue;
-            }
-            if (newColor != color) {
-                color = newColor;
-                re.SetColor(color == -2 ? con_colors[CC_MKTEXT].color : Con_ColorFromCode(color));
-            }
-            Con_DrawCharF(con.xadjust + x * cw, y, cw, ch, text[x] & 0xff);
-        }
+        Con_DrawRuns(&m, x0, y, chars, ids, count, qfalse);
     }
 
-    Con_DrawInputCNQ3();
-    Con_DrawHelp();
+    Con_DrawInputCNQ3(&m);
+    Con_DrawHelp(&m);
 
     re.SetColor(NULL);
 }
@@ -1583,153 +1687,148 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
 ================
 Con_DrawSolidConsole
 
-Draws the console with the solid background
+[QL] quakelive_steam.exe 0x4b4300. The background and its red border line
+are in 640x480 coordinates, both with the con_opacity alpha; the text is
+DroidSansMono in con_scale'd 12x24 cells, one string per row with the colours
+as '^' codes. As in retail, the row count divides by the cell width, and the
+colour of the previous row carries into the next one's codes.
 ================
 */
 void Con_DrawSolidConsole(float frac) {
-    int i, x, y;
-    int rows;
-    short* text;
-    int row;
-    int lines;
-    int currentColor;
-    vec4_t backgroundColor;
+    const float s = Con_Scale();
+    char line[CON_LINEBUFFER];
+    conMetrics_t m = {0};
     vec4_t color;
-    int charW = Con_CharW();
-    int charH = Con_CharH();
+    int i, x, y, lines, rows, row, n, last, currentColor, len;
     int markStartX, markStartY, markEndX, markEndY;
-    qboolean drawMark;
+    qboolean drawMark, haveMetrics = qfalse;
 
     if (Con_GetStyle() == 1) {
         Con_DrawSolidConsoleCNQ3(frac);  // [CNQ3]
         return;
     }
 
-    lines = cls.glconfig.vidHeight * frac;
-    if (lines <= 0)
+    lines = (int)(cls.glconfig.vidHeight * frac);
+    if (lines <= 0) {
         return;
-
-    if (lines > cls.glconfig.vidHeight)
+    }
+    if (lines > cls.glconfig.vidHeight) {
         lines = cls.glconfig.vidHeight;
+    }
 
-    // on wide screens, we will center the text
-    con.xadjust = 0;
-    SCR_AdjustFrom640(&con.xadjust, NULL, NULL, NULL);
-
-    // console background
-    y = frac * SCREEN_HEIGHT;
+    // background
+    y = (int)(frac * SCREEN_HEIGHT - 2.0);
     if (y < 1) {
         y = 0;
+    } else if (con_background->value != 0) {
+        SCR_DrawPic(0, 0, SCREEN_WIDTH, y, cls.consoleShader);
     } else {
-        if (con_background->integer) {
-            // draw the background shader
-            SCR_DrawPic(0, 0, SCREEN_WIDTH, y, cls.consoleShader);
-        } else {
-            // draw the background color
-            backgroundColor[0] = 0;                   // red
-            backgroundColor[1] = 0;                   // green
-            backgroundColor[2] = 0;                   // blue
-            backgroundColor[3] = con_opacity->value;   // alpha
-            SCR_FillRect(0, 0, SCREEN_WIDTH, y, backgroundColor);
-        }
+        color[0] = color[1] = color[2] = 0;
+        color[3] = con_opacity->value;
+        SCR_FillRect(0, 0, SCREEN_WIDTH, y, color);
     }
 
-    // draw the border line
+    // border line
     color[0] = 1;
-#ifdef _DEBUG
-    color[1] = 1;
-#else
-    color[1] = 0;
-#endif
-    color[2] = 0;
-    color[3] = 1;
-
+    color[1] = color[2] = 0;
+    color[3] = con_opacity->value;
     SCR_FillRect(0, y, SCREEN_WIDTH, 2, color);
 
-    // draw the version number
-#ifdef _DEBUG
-    re.SetColor(g_color_table[ColorIndex(COLOR_YELLOW)]);
-#else
+    // version, in unscaled cells
     re.SetColor(g_color_table[ColorIndex(COLOR_RED)]);
-#endif
+    len = strlen(FULL_PRODUCT_VERSION);
+    Con_DrawStringTTF(cls.glconfig.vidWidth - CON_CELL_WIDTH * len, lines - CON_CELL_HEIGHT / 2 - CON_CELL_HEIGHT,
+                      FULL_PRODUCT_VERSION, NULL, CON_CELL_WIDTH, CON_CELL_HEIGHT, 0);
 
-    i = strlen(FULL_PRODUCT_VERSION);
-
-    for (x = 0; x < i; x++) {
-        Con_DrawCharScaled(cls.glconfig.vidWidth - (i - x + 1) * charW,
-                           lines - charH, charW, charH, FULL_PRODUCT_VERSION[x]);
-    }
-
-    // draw the text
     con.vislines = lines;
-    rows = (lines - charH) / charH;  // rows of text to draw
+    rows = (int)((lines - CON_CELL_WIDTH * s) / (CON_CELL_WIDTH * s));
+    y = (int)(lines - CON_CELL_HEIGHT * s * 3);
 
-    y = lines - (charH * 3);
-
-    // draw from the bottom up
+    // draw arrows to show the buffer is backscrolled
     if (con.display != con.current) {
-        // draw arrows to show the buffer is backscrolled
         re.SetColor(g_color_table[ColorIndex(COLOR_RED)]);
-        for (x = 0; x < con.linewidth; x += 4)
-            Con_DrawCharScaled(con.xadjust + (x + 1) * charW, y, charW, charH, '^');
-        y -= charH;
+        for (x = 0; x < con.linewidth / s; x += 4) {
+            Con_DrawCharTTF((int)(((x + 1) * CON_CELL_WIDTH + con.xadjust) * s), y,
+                            (int)(CON_CELL_WIDTH * s), (int)(CON_CELL_HEIGHT * s), '^');
+        }
+        y = (int)(y - CON_CELL_HEIGHT * s);
         rows--;
     }
 
     row = con.display;
-
     if (con.x == 0) {
         row--;
     }
 
-    currentColor = 7;
-    re.SetColor(g_color_table[currentColor]);
+    re.SetColor(g_color_table[ColorIndex(COLOR_WHITE)]);
+    currentColor = ColorIndex(COLOR_WHITE);
 
-    // [CNQ3] mark mode and search marker, only drawn once used
+    // [CNQ3] mark mode and the search marker, only drawn once used
     drawMark = Con_MarkBounds(&markStartX, &markStartY, &markEndX, &markEndY);
+    if (drawMark || con.searchStarted) {
+        Con_GetMetrics(&m);
+        haveMetrics = qtrue;
+    }
     con.rowsVisible = 0;
 
-    for (i = 0; i < rows; i++, y -= charH, row--) {
+    for (i = 0; i < rows; i++, y = (int)(y - CON_CELL_HEIGHT * s), row--) {
+        const short* text;
         qboolean markRow;
 
-        if (row < 0)
+        if (row < 0) {
             break;
+        }
         if (con.current - row >= con.totallines) {
             // past scrollback wrap point
             continue;
         }
-        if (y >= 0) {
+        if (y - CON_CELL_HEIGHT * s >= 0) {
             con.rowsVisible++;
         }
 
         text = con.text + (row % con.totallines) * con.linewidth;
         markRow = (drawMark && row >= markStartY && row <= markEndY) ? qtrue : qfalse;
 
-        if (markRow) {
-            Con_FillRectPx(con.xadjust + (markStartX + 1) * charW, y, (markEndX - markStartX + 1) * charW, charH,
-                           con_colors[CC_MKBG].color);
-            currentColor = -1;
+        if (haveMetrics && markRow) {
+            Con_FillRectPx(CON_CELL_WIDTH * s + con.xadjust + markStartX * m.adv, y - m.asc,
+                           (markEndX - markStartX + 1) * m.adv, m.cellH, con_colors[CC_MKBG].color);
+            re.SetColor(g_color_table[ColorIndex(COLOR_WHITE)]);
         }
-
-        if (con.searchStarted && row == con.searchLine) {
+        if (haveMetrics && con.searchStarted && row == con.searchLine) {
             re.SetColor(con_colors[CC_SEARCH].color);
-            Con_DrawCharScaled(con.xadjust, y, charW, charH, 141);
-            currentColor = -1;
+            re.Font_DrawString((int)con.xadjust, y, ">", CON_FONT_MONO, m.fontSize, -1, NULL, CON_TEXT_LITERAL);
+            re.SetColor(g_color_table[ColorIndex(COLOR_WHITE)]);
         }
 
-        for (x = 0; x < con.linewidth; x++) {
-            const int newColor = (markRow && x >= markStartX && x <= markEndX) ? -2 : Con_RetailColor(text[x] >> 8);
+        n = 0;
+        last = 0;
+        for (x = 0; x < con.linewidth && n < CON_LINEBUFFER - 2; x++) {
+            const int ch = text[x] & 0xff;
+            int code;
 
-            if ((text[x] & 0xff) == ' ') {
+            if (ch == ' ') {
+                line[n++] = ' ';
                 continue;
             }
 
-            if (newColor != currentColor) {
-                currentColor = newColor;
-                re.SetColor(currentColor == -2 ? con_colors[CC_MKTEXT].color : g_color_table[currentColor]);
+            code = Con_RetailColor(text[x] >> 8);
+            if (markRow && x >= markStartX && x <= markEndX) {
+                code = 0;  // [CNQ3] black on the mark
             }
-            Con_DrawCharScaled(con.xadjust + (x + 1) * charW, y, charW, charH, text[x] & 0xff);
+            if (code != currentColor) {
+                currentColor = code;
+                line[n++] = Q_COLOR_ESCAPE;
+                line[n++] = '0' + currentColor;
+            }
+            if (n < CON_LINEBUFFER - 1) {
+                line[n++] = ch;
+            }
+            last = n;
         }
+        line[last] = '\0';
+
+        re.Font_DrawString((int)(CON_CELL_WIDTH * s + con.xadjust), y, line, CON_FONT_MONO,
+                           CON_CELL_WIDTH * s * CON_FONT_SCALE, -1, NULL, 0);
     }
 
     // draw the input prompt, user text, and cursor if desired
