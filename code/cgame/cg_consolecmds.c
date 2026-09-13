@@ -601,8 +601,7 @@ static void CG_ChatUp_f(void) {
 
 static void CG_ToggleChatHistory_f(void) {
     cg.chatHistoryShowing = !cg.chatHistoryShowing;
-}
-// =====================================================================
+}// =====================================================================
 // [QL] Print, kill, clientmute
 // =====================================================================
 
