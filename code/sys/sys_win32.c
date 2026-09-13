@@ -90,6 +90,40 @@ void Sys_SetFloatEnv(void) {
 
 /*
 ================
+Sys_MoveUpstreamHomePath
+
+[ioquakelive] The player's data lives in %APPDATA%\ioquakelive. It used to share upstream's
+%APPDATA%\quakelive: the first start that finds that folder and not the new one renames it,
+so configs, screenshots, demos and fonts all come along. The launcher does the same before
+it writes anything there.
+================
+*/
+#define HOMEPATH_UPSTREAM_NAME_WIN "quakelive"
+
+static void Sys_MoveUpstreamHomePath(const char* appData) {
+    char oldPath[MAX_OSPATH];
+    char newPath[MAX_OSPATH];
+    DWORD attributes;
+
+    Com_sprintf(oldPath, sizeof(oldPath), "%s%c%s", appData, PATH_SEP, HOMEPATH_UPSTREAM_NAME_WIN);
+    Com_sprintf(newPath, sizeof(newPath), "%s%c%s", appData, PATH_SEP, HOMEPATH_NAME_WIN);
+
+    if (GetFileAttributesA(newPath) != INVALID_FILE_ATTRIBUTES) {
+        return;
+    }
+    attributes = GetFileAttributesA(oldPath);
+    if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        return;
+    }
+    if (MoveFileA(oldPath, newPath)) {
+        Com_Printf("Moved your data from %s to %s\n", oldPath, newPath);
+    } else {
+        Com_Printf("WARNING: couldn't move %s to %s (error %lu)\n", oldPath, newPath, GetLastError());
+    }
+}
+
+/*
+================
 Sys_DefaultHomePath
 ================
 */
@@ -120,10 +154,12 @@ char* Sys_DefaultHomePath(void) {
 
         Com_sprintf(homePath, sizeof(homePath), "%s%c", szPath, PATH_SEP);
 
-        if (com_homepath->string[0])
+        if (com_homepath->string[0]) {
             Q_strcat(homePath, sizeof(homePath), com_homepath->string);
-        else
+        } else {
+            Sys_MoveUpstreamHomePath(szPath);
             Q_strcat(homePath, sizeof(homePath), HOMEPATH_NAME_WIN);
+        }
     }
 
     FreeLibrary(shfolder);
