@@ -401,8 +401,39 @@ int RE_Font_Register(const char *name) {
         return numFontIndices++;
     }
 
-    ri.Printf(PRINT_WARNING, "RE_Font_Register: couldn't load font '%s'\n", name);
+    if (numPaths > 1)
+        ri.Printf(PRINT_WARNING, "RE_Font_Register: couldn't load font '%s' (looked for %s and %s; /fontlist shows what there is)\n",
+                  name, paths[0], paths[1]);
+    else
+        ri.Printf(PRINT_WARNING, "RE_Font_Register: couldn't load font '%s' (looked for %s; /fontlist shows what there is)\n",
+                  name, paths[0]);
     return -1;
+}
+
+static void R_FontListFiles(const char *extension) {
+    char **files;
+    int numFiles, i;
+
+    files = ri.FS_ListFiles("fonts", extension, &numFiles);
+    for (i = 0; i < numFiles; i++)
+        ri.Printf(PRINT_ALL, "  %s\n", files[i]);
+    ri.FS_FreeFileList(files);
+}
+
+// fontlist: the fonts loaded, then the ones cvars can name, and where a player's own go
+void R_FontList_f(void) {
+    int i;
+
+    ri.Printf(PRINT_ALL, "Loaded fonts:\n");
+    for (i = 0; i < numFontIndices; i++)
+        ri.Printf(PRINT_ALL, "  %2i: %s\n", i, fontIndexPath[i]);
+
+    ri.Printf(PRINT_ALL, "Fonts to choose from, by name without the extension:\n");
+    R_FontListFiles(".ttf");
+    R_FontListFiles(".otf");
+
+    ri.Printf(PRINT_ALL, "Put your own .ttf or .otf fonts in %s%cbaseq3%cfonts\n",
+              ri.Cvar_Get("fs_homepath", "", CVAR_INIT | CVAR_PROTECTED)->string, PATH_SEP, PATH_SEP);
 }
 
 // -------------------------------------------------------------------------
