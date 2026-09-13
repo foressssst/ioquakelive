@@ -3253,8 +3253,8 @@ FS_CopyFromSteam
 
 On Windows, if pak00.pk3 is missing from fs_basepath/baseq3/, attempt to
 locate the Steam installation of Quake Live (app ID 282440) and copy
-pak00.pk3 from it. Also copies user configs (qzconfig.cfg, repconfig.cfg)
-from the Steam user's profile folder to fs_homepath.
+pak00.pk3 from it. [ioquakelive] Settings are never copied from Steam: the game
+keeps its own in fs_homepath.
 ===================
 */
 #ifdef _WIN32
@@ -3445,58 +3445,6 @@ static qboolean FS_CopyFileWithProgress(const char *src, const char *dst,
 }
 
 /*
-FS_FindSteamUserFolder - Find a Steam64 ID folder under the QL install dir.
-Steam stores per-user data in folders named with the user's Steam64 ID.
-Returns qtrue and fills steamIdPath if exactly one numeric folder is found,
-or picks the most recently modified one if multiple exist.
-*/
-static qboolean FS_FindSteamUserFolder(const char *qlPath, char *steamIdPath,
-                                        int pathSize) {
-	WIN32_FIND_DATAA fd;
-	HANDLE hFind;
-	char searchPath[MAX_OSPATH];
-	char bestPath[MAX_OSPATH];
-	FILETIME bestTime;
-	int count = 0;
-
-	Com_sprintf(searchPath, sizeof(searchPath), "%s\\*", qlPath);
-	hFind = FindFirstFileA(searchPath, &fd);
-	if (hFind == INVALID_HANDLE_VALUE)
-		return qfalse;
-
-	bestPath[0] = '\0';
-	memset(&bestTime, 0, sizeof(bestTime));
-
-	do {
-		// Steam64 IDs are long numeric strings (17 digits)
-		if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
-		    fd.cFileName[0] >= '0' && fd.cFileName[0] <= '9' &&
-		    strlen(fd.cFileName) >= 10) {
-			char cfgPath[MAX_OSPATH];
-			// Check this folder has baseq3 with config files
-			Com_sprintf(cfgPath, sizeof(cfgPath), "%s\\%s\\baseq3",
-			            qlPath, fd.cFileName);
-			if (FS_DirExistsOS(cfgPath)) {
-				count++;
-				if (CompareFileTime(&fd.ftLastWriteTime, &bestTime) > 0) {
-					bestTime = fd.ftLastWriteTime;
-					Com_sprintf(bestPath, sizeof(bestPath), "%s\\%s",
-					            qlPath, fd.cFileName);
-				}
-			}
-		}
-	} while (FindNextFileA(hFind, &fd));
-
-	FindClose(hFind);
-
-	if (count > 0) {
-		Q_strncpyz(steamIdPath, bestPath, pathSize);
-		return qtrue;
-	}
-	return qfalse;
-}
-
-/*
 ===================
 FS_AddWorkshopPaks
 
@@ -3635,10 +3583,6 @@ static void FS_CopyFromSteam(void) {
 	char pak00Src[MAX_OSPATH];
 	qboolean needPak;
 	char message[2048];
-	char steamIdPath[MAX_OSPATH];
-	qboolean hasConfigs = qfalse;
-	char configFiles[4][MAX_OSPATH];
-	int numConfigs = 0;
 
 	// Only run on Windows, only if pak00.pk3 is missing
 	Com_sprintf(pak00Dest, sizeof(pak00Dest), "%s\\%s\\pak00.pk3",
@@ -3659,31 +3603,6 @@ static void FS_CopyFromSteam(void) {
 	Com_sprintf(pak00Src, sizeof(pak00Src), "%s\\baseq3\\pak00.pk3", qlPath);
 	Com_Printf("Found Quake Live at: %s\n", qlPath);
 
-	// Check for user config files
-	if (FS_FindSteamUserFolder(qlPath, steamIdPath, sizeof(steamIdPath))) {
-		static const char *cfgNames[] = {
-			"qzconfig.cfg", "repconfig.cfg", "autoexec.cfg"
-		};
-		int i;
-		char homeDest[MAX_OSPATH];
-
-		for (i = 0; i < 3; i++) {
-			char cfgSrc[MAX_OSPATH];
-			Com_sprintf(cfgSrc, sizeof(cfgSrc), "%s\\baseq3\\%s",
-			            steamIdPath, cfgNames[i]);
-			if (FS_FileExistsOS(cfgSrc)) {
-				// Check if it already exists in homepath
-				Com_sprintf(homeDest, sizeof(homeDest), "%s\\%s\\%s",
-				            fs_homepath->string, BASEGAME_DIR, cfgNames[i]);
-				if (!FS_FileExistsOS(homeDest)) {
-					Q_strncpyz(configFiles[numConfigs], cfgSrc, MAX_OSPATH);
-					numConfigs++;
-					hasConfigs = qtrue;
-				}
-			}
-		}
-	}
-
 	// Build the prompt message
 	Com_sprintf(message, sizeof(message),
 		"Quake Live is installed at:\n  %s\n\n"
@@ -3692,19 +3611,6 @@ static void FS_CopyFromSteam(void) {
 		"    From: %s\\baseq3\\\n"
 		"    To:   %s\\%s\\\n",
 		qlPath, qlPath, fs_basepath->string, BASEGAME_DIR);
-
-	if (hasConfigs) {
-		int i;
-		Q_strcat(message, sizeof(message), "\n  User configs:\n");
-		for (i = 0; i < numConfigs; i++) {
-			const char *filename = strrchr(configFiles[i], '\\');
-			filename = filename ? filename + 1 : configFiles[i];
-			Q_strcat(message, sizeof(message),
-			         va("    %s\n", filename));
-		}
-		Q_strcat(message, sizeof(message),
-		         va("    to: %s\\%s\\\n", fs_homepath->string, BASEGAME_DIR));
-	}
 
 	Q_strcat(message, sizeof(message), "\nProceed with copy?");
 
@@ -3732,28 +3638,6 @@ static void FS_CopyFromSteam(void) {
 	}
 
 	Com_Printf("pak00.pk3 copied successfully.\n");
-
-	// Copy config files
-	if (hasConfigs) {
-		char homeDir[MAX_OSPATH];
-		int i;
-		Com_sprintf(homeDir, sizeof(homeDir), "%s\\%s",
-		            fs_homepath->string, BASEGAME_DIR);
-		Sys_Mkdir(fs_homepath->string);
-		Sys_Mkdir(homeDir);
-
-		for (i = 0; i < numConfigs; i++) {
-			char dest[MAX_OSPATH];
-			const char *filename = strrchr(configFiles[i], '\\');
-			filename = filename ? filename + 1 : configFiles[i];
-			Com_sprintf(dest, sizeof(dest), "%s\\%s", homeDir, filename);
-			if (FS_CopyFileWithProgress(configFiles[i], dest, filename)) {
-				Com_Printf("  Copied %s\n", filename);
-			} else {
-				Com_Printf("  WARNING: Failed to copy %s\n", filename);
-			}
-		}
-	}
 
 	Com_Printf("\nQuake Live data setup complete.\n\n");
 }

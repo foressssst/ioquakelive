@@ -10,6 +10,8 @@
 # on the first run, as FS_CopyFromSteam (code/qcommon/files.c) does when the
 # game is started directly. CPMA's animation frames get the same treatment: they
 # are extracted on each machine from the official CPMA package, never shipped.
+# Settings are never taken from Steam: ioquakelive keeps its own, with the
+# player's screenshots, demos and fonts, in %APPDATA%\ioquakelive.
 #
 # Plain ASCII on purpose: Windows PowerShell 5.1 reads BOM-less scripts as ANSI.
 
@@ -29,6 +31,7 @@ $StatePath = Join-Path $Root 'installed.json'
 $LogPath = Join-Path $Root 'launcher.log'
 $WorkDir = Join-Path $Root 'updates'
 $GameExe = Join-Path $Root 'quakelive.x86.exe'
+$UserDataDir = Join-Path $env:APPDATA 'ioquakelive'   # the game's fs_homepath
 
 # Release signing key (public half). The private half never leaves the
 # developer's machine.
@@ -171,24 +174,21 @@ function Initialize-QuakeLiveData {
         Write-Log 'Copiando archivos de Quake Live (917 MB, solo la primera vez)...' 'Cyan'
         Copy-WithProgress $source $target
     }
-
-    # The player's Quake Live settings, only where none exist yet
-    $cfgHome = Join-Path $env:APPDATA 'quakelive\baseq3'
-    $userDir = Get-ChildItem -LiteralPath $ql -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match '^\d{10,}$' -and (Test-Path -LiteralPath (Join-Path $_.FullName 'baseq3')) } |
-        Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    if ($userDir) {
-        foreach ($cfg in @('qzconfig.cfg', 'repconfig.cfg', 'autoexec.cfg')) {
-            $src = Join-Path $userDir.FullName ('baseq3\' + $cfg)
-            $dst = Join-Path $cfgHome $cfg
-            if ((Test-Path -LiteralPath $src) -and -not (Test-Path -LiteralPath $dst)) {
-                New-Item -ItemType Directory -Force -Path $cfgHome | Out-Null
-                Copy-Item -LiteralPath $src -Destination $dst
-                Write-Log ("  tu configuracion de Quake Live: {0}" -f $cfg)
-            }
-        }
-    }
     return $true
+}
+
+# The player's data used to share upstream's %APPDATA%\quakelive. The first run that finds
+# that folder and not %APPDATA%\ioquakelive renames it, as the game does (Sys_DefaultHomePath),
+# before anything else writes to the new one.
+function Move-UpstreamUserData {
+    $old = Join-Path $env:APPDATA 'quakelive'
+    if ((Test-Path -LiteralPath $UserDataDir) -or -not (Test-Path -LiteralPath $old -PathType Container)) { return }
+    try {
+        Move-Item -LiteralPath $old -Destination $UserDataDir
+        Write-Log ("Tus configs, screenshots y demos ahora estan en {0}" -f $UserDataDir) 'Green'
+    } catch {
+        Write-Log ("No se pudo mover {0}: {1}. El juego lo vuelve a intentar al abrir." -f $old, $_.Exception.Message) 'Yellow'
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -274,7 +274,7 @@ function Get-FontFamilyName([string]$Path) {
 }
 
 function Initialize-FragMessageFont {
-    $dir = Join-Path $env:APPDATA 'quakelive\baseq3\fonts'
+    $dir = Join-Path $UserDataDir 'baseq3\fonts'
     $target = Join-Path $dir $FragFontFile
     if (Test-Path -LiteralPath $target) { return }
 
@@ -312,6 +312,7 @@ function Start-Game([string]$Version, $ManifestArgs) {
         Read-Host 'Presiona Enter para salir'
         exit 1
     }
+    Move-UpstreamUserData
     Initialize-CpmaAnimations
     Initialize-FragMessageFont
     if ($NoLaunch) { Write-Log 'Modo -NoLaunch: no se abre el juego.'; return }
