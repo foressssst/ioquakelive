@@ -632,6 +632,7 @@ void CG_AddChat(const char *text, int teamOnly, int extraTime) {
     cg.currentChatLine.startTime = cg.time;
     cg.currentChatLine.endTime = cg.time + 2000 + extraTime;
     cg.currentChatLine.teamOnly = teamOnly;
+    CG_AddScrollRow(&cg.chatScrollRows, &cg.chatScrollTime);
 
     if (len > 0 && text[len - 1] == '\n' && len <= size) {
         size = len;
@@ -651,7 +652,9 @@ void CG_AddChat(const char *text, int teamOnly, int extraTime) {
 // the intermission, 2 behind the scoreboard, unstyled when more than 10. The
 // text scale is held between 0.1 and 0.22 (0 counts as 0.1).
 void CG_DrawChat(float x, float y, float w, float h, float scale) {
-    float bottom = y + h;
+    // [CPMA] ch_animateScroll: a new line rises one row into place and fades in over
+    // CPMA's 150 ms (hud.cfg Chat fadein)
+    float bottom = y + h + CG_ScrollRows(cg.chatScrollRows, cg.chatScrollTime) * 13.0f;
     int lines = cg_chatHistoryLength.integer;
     int style;
     int i;
@@ -670,8 +673,14 @@ void CG_DrawChat(float x, float y, float w, float h, float scale) {
             memcpy(&cg.chatLines[cg.chatIndex], &cg.currentChatLine, sizeof(cg.currentChatLine));
             memset(&cg.currentChatLine, 0, sizeof(cg.currentChatLine));
         } else {
+            vec4_t chatColor = {1.0f, 1.0f, 1.0f, 1.0f};
+            int age = cg.time - cg.currentChatLine.startTime;
+
+            if (ch_animateScroll.integer && age < 150) {
+                chatColor[3] = age / 150.0f;
+            }
             CG_SetWidescreen(WIDESCREEN_LEFT);
-            CG_DrawText(x, bottom, 1, scale, colorWhite, cg.currentChatLine.text, 0, 256, 3);
+            CG_DrawText(x, bottom, 1, scale, chatColor, cg.currentChatLine.text, 0, 256, 3);
             CG_SetWidescreen(WIDESCREEN_STRETCH);
         }
     }
