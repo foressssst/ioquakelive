@@ -280,6 +280,9 @@ static void UI_TextToScreen(float* x, float* y) {
 }
 
 // Core painter: virtual coords + scale -> screen pixels, engine glyph atlas.
+// [QL] uix86.dll 0x10003f24: a shadow style first draws the string 1 (shadowed) or 2
+// (shadowed more) virtual units down and right, offset before the scaling to screen
+// pixels, in opaque black whatever the text's alpha (0x1002bdb4 is 0 0 0 1).
 static void UI_PaintText(float x, float y, int fontIndex, float scale, const vec4_t color,
                          const char* text, int limit, int style) {
     float sx = x, sy = y;
@@ -294,11 +297,10 @@ static void UI_PaintText(float x, float y, int fontIndex, float scale, const vec
 
     if (style == ITEM_TEXTSTYLE_SHADOWED || style == ITEM_TEXTSTYLE_SHADOWEDMORE) {
         float ofs = (style == ITEM_TEXTSTYLE_SHADOWED) ? 1.0f : 2.0f;
-        vec4_t shadow;
-        shadow[0] = shadow[1] = shadow[2] = 0.0f;
-        shadow[3] = color ? color[3] : 1.0f;
-        trap_R_SetColor(shadow);
-        trap_R_Font_DrawString((int)(sx + ofs), (int)(sy + ofs), text, efont, size, lim, NULL, TEXT_NORECOLOR);
+        float shx = x + ofs, shy = y + ofs;
+        UI_TextToScreen(&shx, &shy);
+        trap_R_SetColor(colorBlack);
+        trap_R_Font_DrawString((int)shx, (int)shy, text, efont, size, lim, NULL, TEXT_NORECOLOR);
     }
 
     trap_R_SetColor(color);
