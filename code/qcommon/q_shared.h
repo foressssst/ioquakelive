@@ -413,6 +413,16 @@ qboolean Q_IsColorString(const char* p);  // ^[0-9a-zA-Z]
 #define S_COLOR_HELP "^\x04"
 #define Q_IsConsoleColorString(p) ((p) && (p)[0] == Q_COLOR_ESCAPE && (p)[1] >= COLOR_CON_CVAR && (p)[1] <= COLOR_CON_HELP)
 
+// [QL] Colour codes when drawing text. Quake Live's engine only knows ^0-^7:
+// quakelive_steam.exe CL_ConsolePrint (0x4b3e90), the text drawer (0x44458c)
+// and the text measurer (0x443da2) draw '^' followed by anything else as text.
+// [CPMA] With cl_extendedColors 1, CPMA's ^8, ^9 and ^a-^z (either case) are
+// colour codes too. Q_IsColorString keeps stripping any ^ + alphanumeric.
+#define Q_NUM_COLOR_CODES 36
+int Q_ColorCodeIndex(int c, qboolean extended);  // 0-35, or -1 when c isn't a colour code
+int Q_ColorCodeChar(int index);                   // '0'-'9', 'a'-'z'
+const float* Q_ColorFromCodeIndex(int index);     // Quake Live's 0-7, CPMA's 8-35
+
 extern vec4_t g_color_table[8];
 
 #define MAKERGB(v, r, g, b) \
