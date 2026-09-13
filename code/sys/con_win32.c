@@ -63,7 +63,7 @@ static WORD CON_ColorCharToAttrib(char color) {
         // use console's foreground and background colors
         attrib = qconsole_attrib;
     } else {
-        float* rgba = g_color_table[ColorIndex(color)];
+        const float* rgba = Q_ColorFromCodeIndex(Q_ColorCodeIndex(color, qtrue));
 
         // set foreground color
         attrib = (rgba[0] >= 0.5 ? FOREGROUND_RED : 0) |

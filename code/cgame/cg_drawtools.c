@@ -234,7 +234,7 @@ void CG_DrawStringExt(int x, int y, const char* string, const float* setColor, q
     while (*s && cnt < maxChars) {
         if (Q_IsColorString(s)) {
             if (!forceColor) {
-                memcpy(color, g_color_table[ColorIndex(*(s + 1))], sizeof(color));
+                memcpy(color, Q_ColorFromCodeIndex(Q_ColorCodeIndex(*(s + 1), qtrue)), sizeof(color));
                 color[3] = setColor[3];
                 trap_R_SetColor(color);
             }

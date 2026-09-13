@@ -390,9 +390,19 @@ void Sys_AnsiColorPrint(const char* msg) {
                 fputs("\033[0m\n", stderr);
                 msg++;
             } else {
-                // Print the color code
-                Com_sprintf(buffer, sizeof(buffer), "\033[%dm",
-                            q3ToAnsi[ColorIndex(*(msg + 1))]);
+                // Print the color code; CPMA's extra codes take the nearest ANSI colour
+                int code = Q_ColorCodeIndex(*(msg + 1), qtrue);
+                int ansi;
+
+                if (code >= 0 && code < 8) {
+                    ansi = q3ToAnsi[code];
+                } else {
+                    const float* rgb = Q_ColorFromCodeIndex(code);
+                    int bits = (rgb[0] >= 0.5f) + 2 * (rgb[1] >= 0.5f) + 4 * (rgb[2] >= 0.5f);
+
+                    ansi = (bits == 7) ? 0 : 30 + bits;
+                }
+                Com_sprintf(buffer, sizeof(buffer), "\033[%dm", ansi);
                 fputs(buffer, stderr);
                 msg += 2;
             }
