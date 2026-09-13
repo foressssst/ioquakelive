@@ -81,5 +81,10 @@
     }
 
     Write-Host ''
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $dir 'launcher.ps1')
+    if (Get-Variable -Name IoqlNoLaunch -Scope Global -ErrorAction SilentlyContinue) {
+        # testing: install and update, but do not start the game
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $dir 'launcher.ps1') -NoLaunch
+    } else {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $dir 'launcher.ps1')
+    }
 }
