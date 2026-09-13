@@ -360,7 +360,7 @@ static void R_Font_SetColorCodes(void) {
     static cvar_t *extendedColors;
 
     if (extendedColors == NULL)
-        extendedColors = ri.Cvar_Get("cl_extendedColors", "0", CVAR_ARCHIVE);
+        extendedColors = ri.Cvar_Get("cl_extendedColors", "1", CVAR_ARCHIVE);
     fonsSetExtendedColors(extendedColors->integer);
 }
 
