@@ -843,61 +843,57 @@ void Cmd_Follow_f(gentity_t* ent) {
 
 /*
 =================
-Cmd_FollowCycle_f
+FollowCycle
+
+[QL] 0x10041130: moves the view on to the next player there is to follow, without touching the
+session team. A player on a team in a team mode only follows their own team; spectators and
+players who are following someone are skipped. The round modes use it for their dead players,
+who stay on their team. Quake 3's version, which put them on the spectator team first, now
+lives only in the commands (Cmd_FollowCycle_f).
 =================
 */
-void Cmd_FollowCycle_f(gentity_t* ent, int dir) {
+void FollowCycle(gentity_t* ent, int dir) {
     int clientnum;
     int original;
-
-    // if they are playing a tournement game, count as a loss
-    // [QL] Binary (0x100414c0) also gates this on level.warmupTime == 0.
-    if ((level.warmupTime == 0) && (g_gametype.integer == GT_DUEL) && ent->client->sess.sessionTeam == TEAM_FREE) {
-        ent->client->sess.losses++;
-    }
-    // first set them to spectator
-    // [QL] Binary tests sessionTeam != TEAM_SPECTATOR (not spectatorState).
-    if (ent->client->sess.sessionTeam != TEAM_SPECTATOR) {
-        SetTeam(ent, "spectator");
-    }
+    gclient_t* cl;
 
     if (dir != 1 && dir != -1) {
         G_Error("FollowCycle: bad dir %i", dir);
     }
 
-    // if dedicated follow client, just switch between the two auto clients
-    if (ent->client->sess.spectatorClient < 0) {
-        if (ent->client->sess.spectatorClient == -1) {
-            ent->client->sess.spectatorClient = -2;
-        } else if (ent->client->sess.spectatorClient == -2) {
-            ent->client->sess.spectatorClient = -1;
-        }
-        return;
-    }
-
     clientnum = ent->client->sess.spectatorClient;
     original = clientnum;
+    if (clientnum < 0 || clientnum >= level.maxclients) {
+        G_Printf("FollowCycle: bad input clientnum value: %d, maxclients: %d\n", clientnum, level.maxclients);
+        original = 0;
+    }
+
     do {
         clientnum += dir;
         if (clientnum >= level.maxclients) {
             clientnum = 0;
-        }
-        if (clientnum < 0) {
+        } else if (clientnum < 0) {
             clientnum = level.maxclients - 1;
         }
 
-        // can only follow connected clients
-        if (level.clients[clientnum].pers.connected != CON_CONNECTED) {
+        // can only follow connected players who are neither spectating nor following
+        cl = &level.clients[clientnum];
+        if (cl->pers.connected != CON_CONNECTED || cl->ps.pm_type == PM_SPECTATOR ||
+            (cl->ps.pm_flags & PMF_FOLLOW)) {
             continue;
         }
 
-        // can't follow another spectator
-        if (level.clients[clientnum].sess.sessionTeam == TEAM_SPECTATOR) {
+        // a player on a team keeps to their own team
+        if (ent->client->sess.sessionTeam != TEAM_SPECTATOR && g_gametype.integer >= GT_TEAM &&
+            cl->sess.sessionTeam != ent->client->sess.sessionTeam) {
             continue;
         }
 
         // this is good, we can use it
         ent->client->sess.spectatorClient = clientnum;
+        if (ent->client->sess.spectatorState != SPECTATOR_FOLLOW) {
+            Cmd_Score_f(ent);
+        }
         ent->client->sess.spectatorState = SPECTATOR_FOLLOW;
 
         // [QL] Race: send the followed player's race timing to the spectator.
@@ -917,6 +913,26 @@ void Cmd_FollowCycle_f(gentity_t* ent, int dir) {
     } while (clientnum != original);
 
     // leave it where it was
+}
+
+/*
+=================
+Cmd_FollowCycle_f
+
+[QL] 0x100412e0, the follownext and followprev commands: a duel player gives up the game and a
+player on a team becomes a spectator before FollowCycle.
+=================
+*/
+void Cmd_FollowCycle_f(gentity_t* ent, int dir) {
+    // if they are playing a tournement game, count as a loss
+    if (level.warmupTime == 0 && g_gametype.integer == GT_DUEL && ent->client->sess.sessionTeam == TEAM_FREE) {
+        ent->client->sess.losses++;
+    }
+    // first set them to spectator
+    if (ent->client->sess.sessionTeam != TEAM_SPECTATOR) {
+        SetTeam(ent, "spectator");
+    }
+    FollowCycle(ent, dir);
 }
 
 /*

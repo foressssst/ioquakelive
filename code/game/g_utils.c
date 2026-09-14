@@ -409,10 +409,8 @@ Marks the entity as free
 =================
 */
 void G_FreeEntity(gentity_t* ed) {
-    // [QL] qagamex86.dll G_FreeEntity (0x10047100) calls G_StartKamikaze(ed)
-    // first (it self-guards and only detonates for kamikaze-carrying entities).
-    G_StartKamikaze(ed);
-
+    // [QL] 0x1005a660. It does not start a kamikaze: that is Kamikaze_DeathActivate
+    // (0x10046f20), the kamikaze timer's think, which frees the timer afterwards.
     trap_UnlinkEntity(ed);  // unlink from world
 
     if (ed->neverFree) {

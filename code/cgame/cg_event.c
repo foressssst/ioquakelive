@@ -1656,10 +1656,10 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                                       cgs.media.electroGibSound[(rand() & 4) ? 3 : 0]);
                 }
             }
-            // The direction the spray leaves along. See CG_GibPlayer: this
-            // fork's server sends the killer's entity number as eventParm
-            // where Quake Live sends a packed direction, so there is nothing
-            // here worth decoding yet and up is the stable choice.
+            // The direction the spray leaves along. See CG_GibPlayer: the
+            // server packs the last hit's direction into eventParm like
+            // Quake Live, but retail's case does not seem to decode it, so up
+            // stays until that reading is confirmed.
             VectorSet(dir, 0, 0, 1);
             CG_GibPlayer(cent->lerpOrigin, dir);
             break;

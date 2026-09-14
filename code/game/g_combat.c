@@ -168,6 +168,14 @@ void TossClientItems(gentity_t* self) {
                     continue;
                 }
                 drop = Drop_Item(self, item, angle);
+                // [QL] 0x1004680d: a dropped flag bounces with g_flagBounce and remembers who
+                // dropped it (Team_TouchEnemyFlag's g_droppedFlagBonus). The rest of retail's
+                // TossClientItems (0x10046760) is not ported yet.
+                if (item->giType == IT_TEAM && item->giTag >= PW_REDFLAG && item->giTag <= PW_NEUTRALFLAG) {
+                    drop->physicsObject = qtrue;
+                    drop->physicsBounce = g_flagBounce.value;
+                    drop->activator = self;
+                }
                 // decide how many seconds it has left
                 drop->count = (self->client->ps.powerups[i] - level.time) / 1000;
                 if (drop->count < 1) {
@@ -279,16 +287,23 @@ void LookAtKiller(gentity_t* self, gentity_t* inflictor, gentity_t* attacker) {
 /*
 ==================
 GibEntity
+
+[QL] 0x10046d80. The event carries the direction of the last hit packed with
+DirToByte (Q3 sent the killer's number); an entity without a client sends
+straight down. A frozen Freeze Tag body is not left gibbed: it thaws and
+respawns on the spot, which is how Freeze_InstaKill and the thaw timer bring a
+player back.
 ==================
 */
-void GibEntity(gentity_t* self, int killer) {
+void GibEntity(gentity_t* self) {
+    static vec3_t down = {0, 0, -1};  // [QL] 0x1008b208
     gentity_t* ent;
     int i;
 
     // if this entity still has kamikaze
     if (self->s.eFlags & EF_KAMIKAZE) {
         // check if there is a kamikaze timer around for this owner
-        for (i = 0; i < level.num_entities; i++) {
+        for (i = 0; i < MAX_GENTITIES; i++) {
             ent = &g_entities[i];
             if (!ent->inuse)
                 continue;
@@ -300,10 +315,21 @@ void GibEntity(gentity_t* self, int killer) {
             break;
         }
     }
-    G_AddEvent(self, EV_GIB_PLAYER, killer);
+    if (self->client) {
+        G_AddEvent(self, EV_GIB_PLAYER, DirToByte(self->client->damage_from));
+    } else {
+        G_AddEvent(self, EV_GIB_PLAYER, DirToByte(down));
+    }
     self->takedamage = qfalse;
     self->s.eType = ET_INVISIBLE;
     self->r.contents = 0;
+
+    // [QL] 0x10046ec5
+    if (self->client && self->client->ps.powerups[PW_FREEZE]) {
+        G_TempEntity(self->r.currentOrigin, EV_THAW_PLAYER);
+        self->client->ps.pm_type = PM_NORMAL;
+        ClientSpawn(self);
+    }
 }
 
 /*
@@ -317,7 +343,7 @@ void body_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int da
     }
     // [QL] Binary always gibs when health drops below threshold; client decides
     // which gib set to draw, by whether the gore content is installed.
-    GibEntity(self, 0);
+    GibEntity(self);
 }
 
 // these are just for logging, the client prints its own messages
@@ -478,10 +504,6 @@ void CheckAlmostScored(gentity_t* self, gentity_t* attacker) {
     }
 }
 
-// [QL] forward decl - binary sets the EF_TICKING activator's think to SP_info_null
-// (frees on next think), not G_FreeEntity. Defined in g_misc.c.
-void SP_info_null(gentity_t* self);
-
 /*
 ==================
 PlayerAwardEV
@@ -576,7 +598,7 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
     // 6. EF_TICKING (prox/kamikaze bomb) cleanup
     if ((self->client->ps.eFlags & EF_TICKING) && self->activator) {
         self->client->ps.eFlags &= ~EF_TICKING;
-        self->activator->think = SP_info_null;  // [QL] binary: SP_info_null, not G_FreeEntity
+        self->activator->think = G_FreeEntity;  // [QL] 0x10047333
         self->activator->nextthink = level.time;
     }
 
@@ -743,15 +765,15 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
             }
             attacker->client->revengeCounter[self->s.number] = 0;
 
-            // ---- COMBOKILL (two rail hits on the victim within 1.5s, 2nd by attacker) ----
+            // ---- COMBOKILL: a rail kill 1.5 s after the same attacker hit with another weapon ----
             {
-                // [QL] VERIFY: the binary reads the VICTIM's (self->client) lasthurt tracking,
-                // not the attacker's - the second rail hit on the victim was by the attacker.
-                int wpn = BG_GetWeaponFromMeansOfDeath(meansOfDeath);
+                // [QL] 0x1004799e: the weapon comes from the victim's previous hit (lasthurt_mod[1]),
+                // not from the killing blow, and it must not be the railgun
+                int wpn = BG_GetWeaponFromMeansOfDeath(self->client->lasthurt_mod[1]);
                 if ((meansOfDeath == MOD_RAILGUN || meansOfDeath == MOD_RAILGUN_HEADSHOT) &&
-                    wpn != 0 && wpn != WP_ROCKET_LAUNCHER &&
+                    wpn != WP_NONE && wpn != WP_RAILGUN &&
                     self->client->lasthurt_client[1] == attacker->s.number &&
-                    self->client->lasthurt_time[0] < self->client->lasthurt_time[1] + 1500) {
+                    self->client->lasthurt_time[1] + 1500 > self->client->lasthurt_time[0]) {
                     PlayerAwardEV(attacker, AWARD_COMBOKILL);
                     STAT_AddPlayerMedalStat(attacker, "COMBOKILL");
                 }
@@ -819,13 +841,8 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
         }
     }
 
-    // 15. full frag-bonus scoring (defence/assist/carrier).  The reimpl's Team_FragBonuses
-    //     unifies the binary's Team_FragBonuses (carrier-kill broadcast) + Team_FragBonuses_Full
-    //     (defence/assist scoring); a single call covers both split calls (11 + 15).
+    // 15. frag bonuses (carrier kills and defence); Domination's come from inside (0x10068970)
     Team_FragBonuses(self, inflictor, attacker);
-    if (g_gametype.integer == GT_DOMINATION && attacker && attacker->client) {
-        DOM_FragBonuses(attacker, self);
-    }
 
     // 16. flag return on suicide (if g_returnFlagOnSuicide) / always on team-switch
     if ((meansOfDeath == MOD_SUICIDE && g_returnFlagOnSuicide.integer) ||
@@ -947,7 +964,7 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
             // SUICIDE_ACTIVATE: unless live-freeze, gib-finalize and SKIP the gib/death block
             if (!(!level.intermissionTime && !level.intermissionQueued &&
                   g_gametype.integer == GT_FREEZE)) {
-                GibEntity(self, killer);  // [QL] binary Kamikaze_DeathActivate (gib finalizer)
+                GibEntity(self);
                 doDeathBranch = qfalse;
             }
         }
@@ -957,7 +974,7 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
                 (level.intermissionTime || level.intermissionQueued ||
                  g_gametype.integer != GT_FREEZE)) {
                 // ---- GIB + RAMPAGE ----
-                GibEntity(self, killer);
+                GibEntity(self);
                 if (attacker && attacker->client) {
                     if (attacker != self && !OnSameTeam(attacker, self)) {
                         int r = attacker->client->rampageCounter;
@@ -1017,7 +1034,7 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
                     e->classname = "kamikaze timer";
                     VectorCopy(self->s.pos.trBase, e->s.pos.trBase);
                     e->r.svFlags |= SVF_NOCLIENT;
-                    e->think = G_FreeEntity;  // [QL] binary: G_FreeEntity, nextthink +3000
+                    e->think = Kamikaze_DeathActivate;  // [QL] 0x10048580
                     e->nextthink = level.time + 3000;
                     e->activator = self;
                 }
@@ -1042,12 +1059,13 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
     }
 
     // 26. gametype death hooks + link
+    // [QL] 0x10048679: CA and AD get the victim's team, for the last standing warning
     if (g_gametype.integer == GT_CA) {
-        CA_Think();  // [QL] TODO: binary CA_PlayerKilled (.so 0x60720); reimpl exposes CA_Think
+        CA_PlayerKilled(self->client->sess.sessionTeam);
     } else if (g_gametype.integer == GT_AD) {
-        AD_Think();
+        AD_PlayerKilled(self->client->sess.sessionTeam);
     } else if (g_gametype.integer == GT_RR) {
-        RR_OnPlayerDeath(self);  // [QL] TODO: binary RR_PlayerKilled (.so 0x905a0)
+        RR_OnPlayerDeath(self);
     }
 
     trap_LinkEntity(self);

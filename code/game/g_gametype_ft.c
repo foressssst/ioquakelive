@@ -326,6 +326,8 @@ void Freeze_RoundStateTransition(void) {
         }
 
         // Award medals
+        // [QL] 0x1004c8c1: through PlayerAwardEV like every other medal, so the client finds the
+        // player in clientNum, the medal in generic1 and the count in modelindex2
         for (i = 0; i < level.maxclients; i++) {
             gclient_t *cl = &level.clients[i];
             gentity_t *ent2 = &g_entities[i];
@@ -335,23 +337,15 @@ void Freeze_RoundStateTransition(void) {
             if (cl->round_shots != 0) {
                 int acc = (cl->round_hits * 100) / cl->round_shots;
                 if ((double)acc > 50.0) {
-                    gentity_t *te = G_TempEntity(ent2->r.currentOrigin, EV_AWARD);
-                    te->r.svFlags |= SVF_BROADCAST;
-                    te->s.otherEntityNum = ent2->s.number;
-                    te->s.eventParm = AWARD_ACCURACY;
-                    te->s.otherEntityNum2 = 1;
-                    cl->rewardTime = level.time + REWARD_SPRITE_TIME;
+                    PlayerAwardEV(ent2, AWARD_ACCURACY);
+                    STAT_AddPlayerMedalStat(ent2, "ACCURACY");
                 }
             }
 
             // Perfect award: on winning team with 0 damage taken
             if (cl->sess.sessionTeam == winTeam && cl->round_damage == 0) {
-                gentity_t *te = G_TempEntity(ent2->r.currentOrigin, EV_AWARD);
-                te->r.svFlags |= SVF_BROADCAST;
-                te->s.otherEntityNum = ent2->s.number;
-                te->s.eventParm = AWARD_PERFECT;
-                te->s.otherEntityNum2 = 1;
-                cl->rewardTime = level.time + REWARD_SPRITE_TIME;
+                PlayerAwardEV(ent2, AWARD_PERFECT);
+                STAT_AddPlayerMedalStat(ent2, "PERFECT");
             }
         }
 
@@ -444,15 +438,15 @@ void Freeze_Think(void) {
 }
 
 // ============================================================================
-// Freeze_InstaKill (binary: 0x1004be40, .so Freeze_InstaKill 0x76fa0)
+// Freeze_InstaKill (binary: 0x1004bc80, .so Freeze_InstaKill 0x76fa0)
 //
 // Destroy (mode 1) or auto-thaw-respawn (mode 0) a frozen body.
 //   mode 1 = real destruction of a frozen body (called from player_die and
 //            G_Damage): clears PW_FREEZE, sets GIB health, arms respawnTime.
-//            With PW_FREEZE cleared, the tail Kamikaze_DeathActivate skips the
-//            thaw-respawn and plays the gib/kamikaze effect.
+//            With PW_FREEZE cleared, the tail GibEntity skips the
+//            thaw-respawn and only gibs the body.
 //   mode 0 = auto-thaw timeout respawn (called from Freeze_ClientThawCheck):
-//            leaves PW_FREEZE set so the tail Kamikaze_DeathActivate fires
+//            leaves PW_FREEZE set so the tail GibEntity fires
 //            EV_THAW_PLAYER + ClientSpawn (respawn).
 // [QL] byte-faithful to the disassembly. Field offsets mapped to named reimpl
 // fields; DAT_105aac6c (InstaKill respawn delay) resolves to g_respawn_delay_min
@@ -495,22 +489,21 @@ void Freeze_InstaKill(gentity_t *self, int mode) {
     tent->r.svFlags |= SVF_BROADCAST;
     tent->s.eventParm = (team != TEAM_BLUE) + 2;            // RED->3, BLUE->2
 
-    // [QL] gib/death-finalizer; respawns iff still frozen (PW_FREEZE != 0).
-    // NOTE: the reimpl Kamikaze_DeathActivate body is the stale Q3 stand-in
-    // (g_combat.c: G_StartKamikaze + G_FreeEntity); it must be rewritten to the
-    // binary 0x10046f60 death-finalizer for thaw-respawn to work (VERIFY #1,
-    // combat scope).
-    Kamikaze_DeathActivate(self);
+    // [QL] 0x1004bda9: GibEntity (0x10046d80), which respawns the player when
+    // still frozen (PW_FREEZE != 0). It used to call Kamikaze_DeathActivate,
+    // the kamikaze timer's think, which frees the entity it is given: the
+    // player's gentity lost its client and the bot frame crashed on it.
+    GibEntity(self);
     client->ps.freezetime = 0;                              // client+0x1f0
 }
 
 // ============================================================================
-// Freeze_AutoThaw (binary: 0x1004cca0, .so Freeze_AutoThaw 0x762f0)
+// Freeze_AutoThaw (binary: 0x1004cc20)
 //
 // Called from G_Damage when a player is frozen. Advances any pending round-state
 // timer, then, while the round is live, announces "last man standing" if the
 // victim's team is now down to a single survivor. Byte-identical twin of the
-// CA_PlayerKilled body (0x10038be0). The gate global DAT_1059686c is
+// CA_PlayerKilled body (0x100389f0). The gate global DAT_1059686c is
 // g_lastManStandingWarning; the binary's eCurrent==3 is RS_PLAYING (the round-state
 // enum has RS_SHUFFLE at 2). team is the victim's sess.sessionTeam.
 // ============================================================================
@@ -712,9 +705,8 @@ void Freeze_ClientThawCheck(gentity_t *ent, int msec) {
     }
 
 do_thaw:                                                       // 0x1004d19d
-    // still frozen (PW_FREEZE != 0) -> Kamikaze_DeathActivate fires EV_THAW_PLAYER +
-    // ClientSpawn. See the reimpl-body caveat in Freeze_InstaKill (VERIFY #1).
-    Kamikaze_DeathActivate(ent);
+    // still frozen (PW_FREEZE != 0) -> GibEntity fires EV_THAW_PLAYER + ClientSpawn.
+    GibEntity(ent);
 }
 
 // ============================================================================
@@ -796,7 +788,7 @@ void Freeze_ClientBegin(gentity_t* ent) {
         if (!g_teamSpecFreeCam.integer
             && client->sess.sessionTeam != TEAM_SPECTATOR
             && alive[TEAM_RED] > 0 && alive[TEAM_BLUE] > 0) {
-            Cmd_FollowCycle_f(ent, 1);
+            FollowCycle(ent, 1);  // [QL] 0x1004be64: the cycle alone, which keeps the team
         }
     }
 }

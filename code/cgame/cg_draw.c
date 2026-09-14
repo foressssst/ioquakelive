@@ -2615,23 +2615,38 @@ void CG_DrawTimedMenus(void) {
 =================
 CG_PlayFightSound
 
-[QL] cgamex86.dll 0x1000ea40. The start of play: "go" in Race; in A&D whether the player's team
-attacks or defends this turn; in Red Rover the respawn chime after the first round and "bite"
-for the infected. The centre print and the announcer queue start over.
+[QL] cgamex86.dll 0x1000ea40. The start of play, with its voice and centre print: "GO!" in Race;
+in A&D "ATTACK THE FLAG!" or "DEFEND THE FLAG!" by the player's team and the turn; in Red Rover
+the respawn chime after the first round and "BITE!" for the infected; "FIGHT!" otherwise. The
+announcer queue starts over.
 =================
 */
 void CG_PlayFightSound(void) {
 	sfxHandle_t sfx = cgs.media.goSound;
+	const char* text = "GO!";
 	int team;
 
 	if (cgs.gametype != GT_RACE) {
 		sfx = cgs.media.countFightSound;
+		text = "FIGHT!";
 		if (cgs.gametype == GT_AD) {
 			team = cg.snap->ps.persistant[PERS_TEAM];
 			if (team == TEAM_RED) {
-				sfx = cg.warmupTurn ? cgs.media.defendTheFlagSound : cgs.media.attackTheFlagSound;
+				if (cg.warmupTurn) {
+					sfx = cgs.media.defendTheFlagSound;
+					text = "DEFEND THE FLAG!";
+				} else {
+					sfx = cgs.media.attackTheFlagSound;
+					text = "ATTACK THE FLAG!";
+				}
 			} else if (team == TEAM_BLUE) {
-				sfx = cg.warmupTurn ? cgs.media.attackTheFlagSound : cgs.media.defendTheFlagSound;
+				if (cg.warmupTurn) {
+					sfx = cgs.media.attackTheFlagSound;
+					text = "ATTACK THE FLAG!";
+				} else {
+					sfx = cgs.media.defendTheFlagSound;
+					text = "DEFEND THE FLAG!";
+				}
 			}
 		} else if (cgs.gametype == GT_RR) {
 			if (cg.warmupRound > 0) {
@@ -2639,11 +2654,12 @@ void CG_PlayFightSound(void) {
 			}
 			if (cg.snap->ps.pm_flags & PMF_LOADOUT_FORCED) {
 				sfx = cgs.media.biteSound;
+				text = "BITE!";
 			}
 		}
 	}
 
-	CG_CenterPrint("FIGHT!", 120, 0.5f);
+	CG_CenterPrint(text, 120, 0.5f);
 	CG_ResetAnnouncements();
 	trap_S_StartLocalSoundVolume(sfx, CHAN_ANNOUNCER, s_announcerVolume.value);
 	cg.warmupCount = -1;
