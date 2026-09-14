@@ -66,6 +66,15 @@ void trap_Cvar_VariableStringBuffer(const char* var_name, char* buffer, int bufs
     syscall(CG_CVAR_VARIABLESTRINGBUFFER, var_name, buffer, bufsize);
 }
 
+// [QL] retail's cgame imports Cvar_VariableValue from the engine (import table +0x28); the
+// fork's syscall list has only the string form, which gives the same value.
+float trap_Cvar_VariableValue(const char* var_name) {
+    char buffer[MAX_CVAR_VALUE_STRING];
+
+    trap_Cvar_VariableStringBuffer(var_name, buffer, sizeof(buffer));
+    return atof(buffer);
+}
+
 int trap_Argc(void) {
     return syscall(CG_ARGC);
 }
