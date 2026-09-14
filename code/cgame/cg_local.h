@@ -1157,6 +1157,7 @@ typedef struct {
     qhandle_t quadShader;
     qhandle_t redQuadShader;
     qhandle_t quadWeaponShader;
+    qhandle_t brightWeaponShader;  // [CPMA] cg_drawBrightWeapons
     qhandle_t invisShader;
     qhandle_t regenShader;
     qhandle_t battleSuitShader;
@@ -1914,6 +1915,7 @@ extern vmCvar_t cg_animateChatBalloon;
 extern vmCvar_t ch_animateScroll;
 extern vmCvar_t ch_crosshairPulse;
 extern vmCvar_t cg_zoomAnimationTime;
+extern vmCvar_t cg_drawBrightWeapons;  // [CPMA] bitmask of the weapons drawn as flat silhouettes
 extern vmCvar_t ch_chatLines;
 extern vmCvar_t cg_rocketStyle;
 extern vmCvar_t cg_smoke_SG;
@@ -2177,6 +2179,10 @@ void CG_ShotgunFire(entityState_t* es);
 void CG_Bullet(vec3_t origin, int sourceEntityNum, vec3_t normal, qboolean flesh, int fleshEntityNum);
 
 void CG_RailTrail(clientInfo_t* ci, vec3_t start, vec3_t end);
+// [CPMA] the weapon model cg_drawBrightWeapons is asked about: one lying on the map, the one in your
+// own first-person view, or one a player carries
+typedef enum { BRIGHTWEAPON_ON_MAP, BRIGHTWEAPON_OWN_VIEW, BRIGHTWEAPON_CARRIED } brightWeapon_t;
+void CG_BrightWeapon(refEntity_t* ent, int weaponNum, int owner, brightWeapon_t kind);
 void CG_GrappleTrail(centity_t* ent, const weaponInfo_t* wi);
 // [QL] persistent rail-trail spawn (start = pe.railgunTrailStart, end = es->origin2).
 // CG_RailTrailCore, CG_GetRailColorFloat, CG_GetRailColorByte are file-static in cg_weapons.c.

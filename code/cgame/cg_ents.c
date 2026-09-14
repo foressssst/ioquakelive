@@ -409,6 +409,11 @@ static void CG_Item(centity_t* cent) {
         ent.nonNormalizedAxes = qtrue;
     }
 
+    // [CPMA] cg_drawBrightWeapons can draw the weapons lying on the map as flat silhouettes
+    if (item->giType == IT_WEAPON) {
+        CG_BrightWeapon(&ent, item->giTag, -1, BRIGHTWEAPON_ON_MAP);
+    }
+
     // add to refresh list
     trap_R_AddRefEntityToScene(&ent);
 
@@ -433,6 +438,7 @@ static void CG_Item(centity_t* cent) {
 
         barrel.nonNormalizedAxes = ent.nonNormalizedAxes;
 
+        CG_BrightWeapon(&barrel, item->giTag, -1, BRIGHTWEAPON_ON_MAP);
         trap_R_AddRefEntityToScene(&barrel);
     }
 

@@ -279,6 +279,7 @@ vmCvar_t cg_animateChatBalloon;
 vmCvar_t ch_animateScroll;
 vmCvar_t ch_crosshairPulse;
 vmCvar_t cg_zoomAnimationTime;
+vmCvar_t cg_drawBrightWeapons;
 vmCvar_t ch_chatLines;
 vmCvar_t cg_rocketStyle;
 vmCvar_t cg_raceBeep;
@@ -691,6 +692,9 @@ static cvarTable_t cvarTable[] = {
     {&ch_animateScroll, "ch_animateScroll", "1", CVAR_ARCHIVE},
     {&ch_crosshairPulse, "ch_crosshairPulse", "0", CVAR_ARCHIVE},
     {&cg_zoomAnimationTime, "cg_zoomAnimationTime", "150", CVAR_ARCHIVE},
+    // [CPMA] weapons drawn as flat silhouettes: 1 your own gun, 2 teammates', 4 enemies', 8 the ones
+    // lying on the map, 16 anybody's while you spectate with the free camera
+    {&cg_drawBrightWeapons, "cg_drawBrightWeapons", "0", CVAR_ARCHIVE},
     {&ch_chatLines, "ch_chatLines", "3", CVAR_ARCHIVE},
     {&cg_rocketStyle, "cg_rocketStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_raceBeep, "cg_raceBeep", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
@@ -1812,6 +1816,7 @@ static void CG_RegisterGraphics(void) {
     // powerup shaders
     cgs.media.quadShader = trap_R_RegisterShader("powerups/quad");
     cgs.media.quadWeaponShader = trap_R_RegisterShader("powerups/quadWeapon");
+    cgs.media.brightWeaponShader = trap_R_RegisterShader("ioqlBrightWeapon");
     cgs.media.battleSuitShader = trap_R_RegisterShader("powerups/battleSuit");
     cgs.media.battleWeaponShader = trap_R_RegisterShader("powerups/battleWeapon");
     cgs.media.invisShader = trap_R_RegisterShader("powerups/invisibility");
