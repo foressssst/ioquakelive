@@ -145,6 +145,24 @@ int AD_GetRoundState(void) {
 }
 
 // ============================================================================
+// AD_AttackingTeam / AD_DefendingTeam (binary: 0x100363e0 / 0x10036440)
+//
+// While a round is being played, red attacks on turn 0 and blue on turn 1; any other
+// time neither team attacks nor defends (TEAM_FREE).
+// ============================================================================
+int AD_AttackingTeam(void) {
+    if (AD_GetRoundState() != RS_PLAYING)
+        return TEAM_FREE;
+    return level.roundState.turn ? TEAM_BLUE : TEAM_RED;
+}
+
+int AD_DefendingTeam(void) {
+    if (AD_GetRoundState() != RS_PLAYING)
+        return TEAM_FREE;
+    return level.roundState.turn ? TEAM_RED : TEAM_BLUE;
+}
+
+// ============================================================================
 // AD_AdjustDamage (.so AD_AdjustDamage, binary: 0x10035880)
 //
 // GT_AD damage adjust, called from G_Damage section 20 as
@@ -352,6 +370,8 @@ void AD_RoundStateTransition(void) {
         }
 
         // Award medals
+        // [QL] 0x10035f84: through PlayerAwardEV like every other medal, so the client finds the
+        // player in clientNum, the medal in generic1 and the count in modelindex2
         for (i = 0; i < level.maxclients; i++) {
             gclient_t *cl = &level.clients[i];
             gentity_t *ent = &g_entities[i];
@@ -361,23 +381,15 @@ void AD_RoundStateTransition(void) {
             if (cl->round_shots != 0) {
                 int acc = (cl->round_hits * 100) / cl->round_shots;
                 if ((double)acc > 50.0) {
-                    gentity_t *te = G_TempEntity(ent->r.currentOrigin, EV_AWARD);
-                    te->r.svFlags |= SVF_BROADCAST;
-                    te->s.otherEntityNum = ent->s.number;
-                    te->s.eventParm = AWARD_ACCURACY;
-                    te->s.otherEntityNum2 = 1;
-                    cl->rewardTime = level.time + REWARD_SPRITE_TIME;
+                    PlayerAwardEV(ent, AWARD_ACCURACY);
+                    STAT_AddPlayerMedalStat(ent, "ACCURACY");
                 }
             }
 
-            // Perfect award: on winning team with 0 damage taken
+            // Perfect award: 0 damage taken this round, on either team (retail checks no team here)
             if (cl->round_damage == 0) {
-                gentity_t *te = G_TempEntity(ent->r.currentOrigin, EV_AWARD);
-                te->r.svFlags |= SVF_BROADCAST;
-                te->s.otherEntityNum = ent->s.number;
-                te->s.eventParm = AWARD_PERFECT;
-                te->s.otherEntityNum2 = 1;
-                cl->rewardTime = level.time + REWARD_SPRITE_TIME;
+                PlayerAwardEV(ent, AWARD_PERFECT);
+                STAT_AddPlayerMedalStat(ent, "PERFECT");
             }
         }
 
@@ -451,17 +463,16 @@ void AD_RoundStateTransition(void) {
 }
 
 // ============================================================================
-// AD_Think - called from player_die. Advances the round timer and fires the
-// last-man-standing warning for the attacking team only.
+// AD_PlayerKilled (binary: 0x10036300)
 //
-// [QL] The binary (AD_Think @ 0x10036400) does NOT end the round here. Round
-// end (team wiped / flag capped / round timeout) is driven per-frame by
-// G_RunFrame via AD_GetRoundState + AD_CheckRoundEnd, not by this function.
-// Address: 0x10036400
+// Called from player_die with the victim's team. Runs a pending round-state
+// timer and, while the round is live and both teams still have someone alive,
+// warns the victim's team when it is down to its last player. The round is
+// ended by G_RunFrame through AD_CheckRoundEnd, not here. Twin of
+// CA_PlayerKilled and Freeze_AutoThaw.
 // ============================================================================
-void AD_Think(void) {
+void AD_PlayerKilled(int team) {
     int redAlive, blueAlive;
-    int lastManTeam;
 
     if (level.roundState.tNext != 0) {
         if (level.time < level.roundState.tNext)
@@ -477,19 +488,18 @@ void AD_Think(void) {
     if (level.intermissionQueued || level.intermissionTime || level.warmupTime)
         return;
 
-    // [QL] attacking team this turn (binary reads it via ESI = AD_GetAttackingTeam):
-    // turn 0 -> RED attacks, turn 1 -> BLUE attacks.
-    lastManTeam = (level.roundState.turn != 0) ? TEAM_BLUE : TEAM_RED;
-
     Team_LivingTeamCounts(&redAlive, &blueAlive);
+    if (redAlive == 0 || blueAlive == 0)
+        return;
+    if (!g_lastManStandingWarning.integer)
+        return;
 
-    // Last man standing warning, only for the attacking team's final player.
-    if (redAlive != 0 && blueAlive != 0 && g_lastManStandingWarning.integer != 0) {
-        if (redAlive == 1 && lastManTeam == TEAM_RED) {
-            LastManStanding(TEAM_RED);
-        } else if (blueAlive == 1 && lastManTeam == TEAM_BLUE) {
-            LastManStanding(TEAM_BLUE);
-        }
+    if (redAlive == 1 && team == TEAM_RED) {
+        LastManStanding(TEAM_RED);
+        return;
+    }
+    if (blueAlive == 1 && team == TEAM_BLUE) {
+        LastManStanding(TEAM_BLUE);
     }
 }
 

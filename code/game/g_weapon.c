@@ -1358,25 +1358,18 @@ void G_StartKamikaze(gentity_t* ent) {
     gentity_t* te;
     vec3_t snapped;
 
-    // [QL] G_FreeEntity (0x10047100) calls this on EVERY freed entity (temp
-    // entities, missiles, info_null, ...), so it must early-out for anything that
-    // isn't detonating a kamikaze. A client kamikaze carries EF_KAMIKAZE;
-    // a non-client kamikaze corpse carries a valid activator. A plain freed entity
-    // has neither, so return before spawning the explosion (and before the
-    // activator deref below that was crashing on info_null spawn).
-    if (ent->client) {
-        if (!(ent->s.eFlags & EF_KAMIKAZE)) {
-            return;
-        }
-    } else if (!ent->activator) {
-        return;
-    }
-
     // start up the explosion logic
     explosion = G_Spawn();
 
     explosion->s.eType = ET_EVENTS + EV_KAMIKAZE;
     explosion->eventTime = level.time;
+
+    // [QL] 0x1006ff43: a kamikaze whose owner has gone to spectate does not go off,
+    // and the entity spawned above is left behind, as retail leaves it
+    if (ent->activator && ent->activator->client &&
+        ent->activator->client->sess.sessionTeam == TEAM_SPECTATOR) {
+        return;
+    }
 
     if (ent->client) {
         VectorCopy(ent->s.pos.trBase, snapped);

@@ -37,10 +37,11 @@ void ClientBegin_RoundBased(gentity_t* ent) {
         ClientSpawn(ent);
         Team_LivingTeamCounts(&redAlive, &blueAlive);
         // auto-follow when freecam is off, not on the spectator team, and both teams are alive
+        // [QL] 0x1003c903: the cycle alone, so the player stays on their team
         if (!g_teamSpecFreeCam.integer
             && client->sess.sessionTeam != TEAM_SPECTATOR
             && redAlive > 0 && blueAlive > 0) {
-            Cmd_FollowCycle_f(ent, 1);
+            FollowCycle(ent, 1);
         }
     }
 }
@@ -62,10 +63,13 @@ void ClientBegin_RoundBased_impl(gentity_t* ent) {
     client->ps.pm_type = PM_SPECTATOR;
     ClientSpawn(ent);
     Team_LivingTeamCounts(&redAlive, &blueAlive);
+    // [QL] 0x100381cb (CA) and 0x100359c0 (A&D): the cycle alone, so the dead player stays on
+    // their team. Through Cmd_FollowCycle_f they were put on the spectator team, killed and the
+    // team forfeited.
     if (!g_teamSpecFreeCam.integer
         && client->sess.sessionTeam != TEAM_SPECTATOR
         && redAlive > 0 && blueAlive > 0) {
-        Cmd_FollowCycle_f(ent, 1);
+        FollowCycle(ent, 1);
     }
 }
 
@@ -248,10 +252,10 @@ void STAT_AddDamageStat(gentity_t *targ, gentity_t *attacker, int mod, int damag
 ==================
 LastManStanding
 
-[QL] Binary: 0x1006b200
+[QL] Binary: 0x1006b210
 Plays GTS_LAST_STANDING sound event and sends g_lastManStandingMessage
 as a centerprint to the sole survivor on the given team.
-Used by CA and RR gametypes.
+Used by CA, AD, Freeze Tag and RR.
 ==================
 */
 void LastManStanding(int team) {

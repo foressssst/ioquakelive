@@ -421,6 +421,8 @@ void RR_RoundStateTransition(void) {
 
         // Round-over medals: accuracy for a >50% round, perfect for surviving
         // the round untouched.
+        // [QL] 0x10064f37: through PlayerAwardEV like every other medal, so the client finds the
+        // player in clientNum, the medal in generic1 and the count in modelindex2
         for (i = 0; i < level.maxclients; i++) {
             gclient_t *cl = &level.clients[i];
             gentity_t *ent = &g_entities[i];
@@ -429,23 +431,13 @@ void RR_RoundStateTransition(void) {
             if (cl->round_shots != 0) {
                 int acc = (cl->round_hits * 100) / cl->round_shots;
                 if ((double)acc > 50.0) {
-                    gentity_t *te = G_TempEntity(ent->r.currentOrigin, EV_AWARD);
-                    te->r.svFlags |= SVF_BROADCAST;
-                    te->s.otherEntityNum = ent->s.number;
-                    te->s.eventParm = AWARD_ACCURACY;
-                    te->s.otherEntityNum2 = 1;
-                    cl->rewardTime = level.time + REWARD_SPRITE_TIME;
+                    PlayerAwardEV(ent, AWARD_ACCURACY);
                     STAT_AddPlayerMedalStat(ent, "ACCURACY");
                 }
             }
 
             if (survivor[i] == 1 && cl->round_damage == 0) {
-                gentity_t *te = G_TempEntity(ent->r.currentOrigin, EV_AWARD);
-                te->r.svFlags |= SVF_BROADCAST;
-                te->s.otherEntityNum = ent->s.number;
-                te->s.eventParm = AWARD_PERFECT;
-                te->s.otherEntityNum2 = 1;
-                cl->rewardTime = level.time + REWARD_SPRITE_TIME;
+                PlayerAwardEV(ent, AWARD_PERFECT);
                 STAT_AddPlayerMedalStat(ent, "PERFECT");
             }
         }
@@ -680,11 +672,12 @@ void RR_OnPlayerDeath(gentity_t *victim) {
         ClientUserinfoChanged(victim->client->ps.clientNum);
 
         // In infected mode, fire EV_INFECTED event (binary: SVF_SINGLECLIENT to victim)
+        // [QL] 0x100657c1: at the player's ps.origin, with the client number in r.ownerNum
         if (g_rrInfected.integer != 0) {
-            gentity_t *te = G_TempEntity(victim->r.currentOrigin, EV_INFECTED);
+            gentity_t *te = G_TempEntity(victim->client->ps.origin, EV_INFECTED);
             te->r.svFlags |= SVF_SINGLECLIENT;
             te->r.singleClient = victim->client->ps.clientNum;
-            te->s.otherEntityNum2 = victim->client->ps.clientNum;
+            te->r.ownerNum = victim->client->ps.clientNum;
         }
     }
 

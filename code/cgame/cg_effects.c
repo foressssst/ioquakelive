@@ -1345,13 +1345,13 @@ The same handle steers the other three places gore and electrogibs differ:
 0x1001bf80 picks the death sound, 0x1001ec16 picks the bounce sound, and
 0x1001ab39 picks the juiced-player effect.
 
-On the direction: a Quake Live server packs the direction of the killing blow
-into EV_GIB_PLAYER's eventParm. This fork's does not - GibEntity in
-g_combat.c sends the killer's entity number instead - so decoding it would
-only turn one arbitrary number into an arbitrary unit vector, and the spray
-would point somewhere different for every killer, including into the floor.
-Until the server is brought in line the callers pass a direction explicitly,
-and a null or zero one means straight up.
+On the direction: a Quake Live server packs the direction of the last hit
+into EV_GIB_PLAYER's eventParm, and since GibEntity (0x10046d80) was ported
+this fork's does too. Retail's CG_EntityEvent does not seem to decode it: its
+EV_GIB_PLAYER case hands 0x10014c80 a local vector the function sets to
+(0, 0, -1) on entry (0x10019eea) and a flag of 1. That reading is not
+confirmed yet, so for now the callers pass a direction explicitly, and a null
+or zero one means straight up.
 ===================
 */
 void CG_GibPlayer(vec3_t playerOrigin, vec3_t dir) {
