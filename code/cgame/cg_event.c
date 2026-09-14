@@ -599,19 +599,25 @@ static void CG_UseItem(centity_t* cent) {
 CG_ItemPickup
 
 A new item was picked up this frame
+[QL] cgamex86.dll 0x10019c40. The same item as the one the pickup display drew last counts
+up, shown as "x%i"; any other starts at 1. cg_autoswitch selects every weapon picked up,
+the machinegun included, where Quake 3 skipped the machinegun.
 ================
 */
 static void CG_ItemPickup(int itemNum) {
     cg.itemPickup = itemNum;
     cg.itemPickupTime = cg.time;
     cg.itemPickupBlendTime = cg.time;
+    if (itemNum == cg.itemPickupLast) {
+        cg.itemPickupCount++;
+    } else {
+        cg.itemPickupCount = 1;
+    }
     // see if it should be the grabbed weapon
-    if (bg_itemlist[itemNum].giType == IT_WEAPON) {
+    if (bg_itemlist[itemNum].giType == IT_WEAPON && cg_autoswitch.integer) {
         // select it immediately
-        if (cg_autoswitch.integer && bg_itemlist[itemNum].giTag != WP_MACHINEGUN) {
-            cg.weaponSelectTime = cg.time;
-            cg.weaponSelect = bg_itemlist[itemNum].giTag;
-        }
+        cg.weaponSelectTime = cg.time;
+        cg.weaponSelect = bg_itemlist[itemNum].giTag;
     }
 }
 
