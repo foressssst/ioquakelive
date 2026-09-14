@@ -593,6 +593,10 @@ qboolean trap_VerifySteamAuth(int clientNum) {
     return imports->trap_VerifySteamAuth(clientNum);
 }
 
+qboolean trap_FactoryExists(const char* id) {
+    return imports->trap_FactoryExists(id);
+}
+
 // ============================================================
 // Stubs for Q3 traps not in QL's import table
 // ============================================================

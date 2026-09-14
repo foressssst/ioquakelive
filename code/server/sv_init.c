@@ -474,6 +474,7 @@ void SV_SpawnServer(char* server, qboolean killBots) {
     SV_InitGameProgs();
 
     // don't allow a map_restart if game is modified
+    sv_ammoPack->modified = qfalse;
     sv_gametype->modified = qfalse;
 
     // run a few frames to allow everything to settle
@@ -580,6 +581,11 @@ void SV_SpawnServer(char* server, qboolean killBots) {
     }
 #endif
 
+    // [QL] the next map from the pool, and the maps the end of the match offers
+    // (quakelive_steam.exe SV_SpawnServer 0x4e3a82)
+    SV_SetNextMap();
+    SV_SetNextMaps();
+
     Com_Printf("-----------------------------------\n");
 }
 
@@ -595,9 +601,21 @@ void SV_Init(void) {
 
     // serverinfo vars
     Cvar_Get("dmflags", "0", CVAR_SERVERINFO);
+
+    // [QL] the arenas, the factories and the map pool load here, before the
+    // rest of the server cvars (quakelive_steam.exe SV_Init 0x4e3ad0)
+    SV_LoadArenas();
+    SV_LoadFactories();
+    sv_mapPoolFile = Cvar_Get("sv_mapPoolFile", "mappool.txt", CVAR_ARCHIVE);
+    sv_includeCurrentMapInVote = Cvar_Get("sv_includeCurrentMapInVote", "0", CVAR_TEMP);
+    SV_LoadMapPool(sv_mapPoolFile->string);
+
     Cvar_Get("fraglimit", "20", CVAR_SERVERINFO);
     Cvar_Get("timelimit", "0", CVAR_SERVERINFO);
-    sv_gametype = Cvar_Get("g_gametype", "0", CVAR_SERVERINFO | CVAR_LATCH);
+    // [QL] read only: the gametype comes from the factory the map command applies
+    sv_gametype = Cvar_Get("g_gametype", "0", CVAR_SERVERINFO | CVAR_ROM);
+    // [QL] registered by the engine with "1", latched, before the game adds its "0"
+    sv_ammoPack = Cvar_Get("g_ammoPack", "1", CVAR_LATCH);
     Cvar_Get("sv_keywords", "", CVAR_SERVERINFO);
     sv_mapname = Cvar_Get("mapname", "nomap", CVAR_SERVERINFO | CVAR_ROM);
     sv_privateClients = Cvar_Get("sv_privateClients", "0", CVAR_SERVERINFO);
@@ -716,9 +734,16 @@ void SV_Shutdown(char* finalmsg) {
 
         Z_Free(svs.clients);
     }
+
+    // [QL] put back what the factory in play changed; svs forgets the factory
+    // below (quakelive_steam.exe SV_Shutdown 0x4e3fc1)
+    if (svs.factory) {
+        SV_RestoreFactoryCvars(svs.factory);
+    }
     Com_Memset(&svs, 0, sizeof(svs));
 
     Cvar_Set("sv_running", "0");
+    Cvar_Set("ui_singlePlayerActive", "0");
 
     Com_Printf("---------------------------\n");
 

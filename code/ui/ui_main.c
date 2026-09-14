@@ -2934,6 +2934,25 @@ static qboolean UI_SetNextMap(int actual, int index) {
     return qfalse;
 }
 
+/*
+===============
+UI_DefaultFactory
+
+[QL] The engine starts a match from a factory, "map <map> <factory>", and
+g_gametype is read only. These menus take the factory retail's Start Match page
+picks for each gametype (web.pak, the gametypes module); Overload has none.
+===============
+*/
+static const char* UI_DefaultFactory(int gametype) {
+    static const char* factories[GT_MAX_GAME_TYPE] = {
+        "ffa", "duel", "race", "tdm", "ca", "ctf", "oneflag", "", "har", "ft", "dom", "ad", "rr"};
+
+    if (gametype < 0 || gametype >= GT_MAX_GAME_TYPE) {
+        return "";
+    }
+    return factories[gametype];
+}
+
 static void UI_StartSkirmish(qboolean next) {
     int i, k, g, delay, temp;
     float skill;
@@ -2953,8 +2972,7 @@ static void UI_StartSkirmish(qboolean next) {
     }
 
     g = uiInfo.gameTypes[ui_gameType.integer].gtEnum;
-    trap_Cvar_SetValue("g_gametype", g);
-    trap_Cmd_ExecuteText(EXEC_APPEND, va("wait ; wait ; map %s\n", uiInfo.mapList[ui_currentMap.integer].mapLoadName));
+    trap_Cmd_ExecuteText(EXEC_APPEND, va("wait ; wait ; map %s %s\n", uiInfo.mapList[ui_currentMap.integer].mapLoadName, UI_DefaultFactory(g)));
     skill = trap_Cvar_VariableValue("g_spSkill");
     trap_Cvar_Set("ui_scoreMap", uiInfo.mapList[ui_currentMap.integer].mapName);
 
@@ -3110,10 +3128,10 @@ static void UI_RunMenuScript(char** args) {
             // displayed list is non-contiguous (it skips the 1FCTF/Obelisk/Harvester gtEnums), then
             // clamps to [0, GT_MAX_GAME_TYPE]. Matches UI_RunScript StartServer (uix86.dll
             // 0x1000b0e0) and mirrors the ui_actualNetGametype lookup above.
-            trap_Cvar_SetValue("g_gametype", Com_Clamp(0, GT_MAX_GAME_TYPE, uiInfo.gameTypes[ui_netGameType.integer].gtEnum));
+            g = (int)Com_Clamp(0, GT_MAX_GAME_TYPE, uiInfo.gameTypes[ui_netGameType.integer].gtEnum);
             trap_Cvar_Set("g_redTeam", UI_Cvar_VariableString("ui_teamName"));
             trap_Cvar_Set("g_blueTeam", UI_Cvar_VariableString("ui_opponentName"));
-            trap_Cmd_ExecuteText(EXEC_APPEND, va("wait ; wait ; map %s\n", uiInfo.mapList[ui_currentNetMap.integer].mapLoadName));
+            trap_Cmd_ExecuteText(EXEC_APPEND, va("wait ; wait ; map %s %s\n", uiInfo.mapList[ui_currentNetMap.integer].mapLoadName, UI_DefaultFactory(g)));
             skill = trap_Cvar_VariableValue("g_spSkill");
             // [QL] raise sv_maxclients to fit the occupied bot slots, then addbot each one.
             // Matches uix86.dll StartServer @0x1000b0e0: count non-empty ui_blueteam%i /
@@ -3137,7 +3155,7 @@ static void UI_RunMenuScript(char** args) {
             trap_Cvar_Set("sv_maxclients", va("%d", count));
             // [QL] non-team gametypes take the bot from the bot-info list (Sarge fallback) with no
             // team argument; team gametypes take characterList[slot].base with a Blue/Red team.
-            g = (int)trap_Cvar_VariableValue("g_gametype");
+            // g is the gametype chosen above: the map command that sets it is still queued.
             for (i = 1; i <= 5; i++) {
                 v = (int)trap_Cvar_VariableValue(va("ui_blueteam%i", i));
                 if (v > 1) {
