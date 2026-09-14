@@ -109,13 +109,6 @@ void CG_SetInitialSnapshot(snapshot_t* snap) {
         // check for events
         CG_CheckEvents(cent);
     }
-
-    // [QL] first snapshot makes cg.snap (and the viewer's team) valid. Re-apply model/skin
-    // forcing to the other clients now: any registered during the gamestate parse (while
-    // cg.snap was NULL) had forcing skipped, so a forced enemy model set before the local
-    // player connects would never take effect.
-    CG_ForceModelChange();
-    CG_LoadDeferredPlayers();
 }
 
 /*
@@ -183,6 +176,14 @@ static void CG_TransitionSnapshot(void) {
         if (cg.demoPlayback || (cg.snap->ps.pm_flags & PMF_FOLLOW) || cg_nopredict.integer) {
             CG_TransitionPlayerState(ps, ops);
         }
+    }
+
+    // [QL] the prediction asked for the other players to be reloaded because the viewer changed
+    // team or started following someone else (0x1004c2ba)
+    if (cg.reloadOtherClients == qtrue) {
+        cg.reloadOtherClients = qfalse;
+        CG_ReloadOtherClients();
+        CG_LoadDeferredPlayers();
     }
 }
 

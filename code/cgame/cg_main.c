@@ -27,11 +27,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // display context for new ui stuff
 displayContextDef_t cgDC;
 
-// [QL] per-cvar modificationCount cache for the six model/skin-forcing cvars watched by
-// CG_UpdateCvars (binary 0x10020CA0 stores six counts individually). QL has no single
-// cg_forceModel; forcing is the granular set.
+// [QL] the modificationCount of the six model and skin forcing cvars as CG_UpdateCvars last saw
+// them (0x100769fc, 0x100785a8..0x100785b8, all -1 at start)
 static int cg_forceModelModCounts[6] = { -1, -1, -1, -1, -1, -1 };
-static qboolean CG_ForceModelCvarsChanged(void);
 
 void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum);
 void CG_RegisterCvars(void);
@@ -252,7 +250,6 @@ vmCvar_t cg_drawTieredArmorAvailability;
 vmCvar_t cg_enemyHeadColor;
 vmCvar_t cg_enemyLowerColor;
 vmCvar_t cg_enemyUpperColor;
-vmCvar_t r_colorCorrectActive;  // [QL] renderer cvar, mirrored so CG_PlayerTeamSkins can scale the tint
 vmCvar_t cg_flagStyle;
 vmCvar_t cg_forceEnemyModel;
 vmCvar_t cg_forceTeamModel;
@@ -493,16 +490,6 @@ vmCvar_t g_training;
 vmCvar_t cg_loadout;
 vmCvar_t cg_spectating;
 
-// [QL] Internal rail-forcing globals. These are NOT registered cvars in QL - the binary
-// populates them (cg_forceTeamRailColor1 DAT_10a658ec, cg_forceTeamRailColor2 DAT_10a6288c,
-// cg_teamRailColor1/2 packed colours) from server enforcement / the cvar-update path.
-// Zero-initialised here, so rail forcing is inactive on a fresh client. Model/skin forcing
-// is now driven by the real cg_force* cvars (see CG_ResolveModelForClient).
-vmCvar_t cg_forceTeamRailColor1;
-vmCvar_t cg_forceTeamRailColor2;
-int cg_teamRailColor1[1];
-int cg_teamRailColor2[1];
-
 // [QL] Last-standing announcer gate (DAT_10b716ec). Registered below so the announcer
 // defaults on; distinct from the cg_announcerLastStandingVO voice-set cvar.
 vmCvar_t cg_announcerLastStanding;
@@ -674,7 +661,6 @@ static cvarTable_t cvarTable[] = {
     {&cg_enemyHeadColor, "cg_enemyHeadColor", "0x2a8000FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_enemyLowerColor, "cg_enemyLowerColor", "0x2a8000FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_enemyUpperColor, "cg_enemyUpperColor", "0x2a8000FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&r_colorCorrectActive, "r_colorCorrectActive", "0", 0},  // [QL] mirror of the renderer cvar (tint scale)
     {&cg_flagStyle, "cg_flagStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_forceEnemyModel, "cg_forceEnemyModel", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_forceTeamModel, "cg_forceTeamModel", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
@@ -949,65 +935,8 @@ void CG_RegisterCvars(void) {
     trap_Cvar_VariableStringBuffer("sv_running", var, sizeof(var));
     cgs.localServer = atoi(var);
 
-    (void)CG_ForceModelCvarsChanged();  // seed the force-model modcount cache
-
     trap_Cvar_Register(NULL, "model", DEFAULT_MODEL, CVAR_USERINFO | CVAR_ARCHIVE);
     trap_Cvar_Register(NULL, "headmodel", DEFAULT_MODEL, CVAR_USERINFO | CVAR_ARCHIVE);
-}
-
-/*
-===================
-CG_ForceModelCvarsChanged
-
-[QL] Have any of the six model/skin-forcing cvars changed since last checked? Mirrors the six
-modificationCount comparisons in binary CG_UpdateCvars (0x10020CA0): all six are compared, and if
-any differ the whole cache is refreshed. QL has no single cg_forceModel; forcing is the granular set.
-===================
-*/
-static qboolean CG_ForceModelCvarsChanged(void) {
-    vmCvar_t* const cvars[6] = {
-        &cg_forceEnemyModel, &cg_forceEnemySkin,
-        &cg_forceTeamModel, &cg_forceTeamSkin,
-        &cg_forceRedTeamModel, &cg_forceBlueTeamModel,
-    };
-    qboolean changed = qfalse;
-    int i;
-
-    for (i = 0; i < 6; i++) {
-        if (cg_forceModelModCounts[i] != cvars[i]->modificationCount) {
-            changed = qtrue;
-        }
-    }
-    if (changed) {
-        for (i = 0; i < 6; i++) {
-            cg_forceModelModCounts[i] = cvars[i]->modificationCount;
-        }
-    }
-    return changed;
-}
-
-/*
-===================
-CG_ForceModelChange
-===================
-*/
-void CG_ForceModelChange(void) {
-    int i;
-
-    for (i = 0; i < cgs.maxclients; i++) {
-        // never force the local client's own model (binary CG_ForceModelChange 0x1003e440 skips
-        // cg.clientNum; this also keeps it safe to call from CG_NewClientInfo without recursing).
-        if (i == cg.clientNum) {
-            continue;
-        }
-        // CG_NewClientInfo handles an empty configstring itself (memset + return), so the binary
-        // calls it unconditionally - no empty-skip here.
-        CG_NewClientInfo(i);
-    }
-
-    // binary CG_ForceModelChange re-derives each re-registered client's model scale inline; that
-    // is the same per-client step as CG_UpdateAllModelScales (0x1003e4b0), so run it once here.
-    CG_UpdateAllModelScales();
 }
 
 /*
@@ -1037,12 +966,23 @@ void CG_UpdateCvars(void) {
         }
     }
 
-    // [QL] if any of the six model/skin-forcing cvars changed, re-register the LOCAL client.
-    // Binary CG_UpdateCvars (0x10020CA0), when !cg.demoPlayback, calls CG_NewClientInfo(cg.clientNum);
-    // its tail then cascades into CG_ForceModelChange + CG_LoadDeferredPlayers for every other
-    // client (CG_NewClientInfo 0x1003e640). Not run during demo playback.
-    if (!cg.demoPlayback && CG_ForceModelCvarsChanged()) {
-        CG_NewClientInfo(cg.clientNum);
+    // [QL] once loading is over, a change to any of the six forcing cvars reloads the local
+    // client, whose CG_NewClientInfo then reloads everybody else (0x10020cc7)
+    if (!cg.loading) {
+        if (cg_forceModelModCounts[0] != cg_forceTeamModel.modificationCount ||
+            cg_forceModelModCounts[1] != cg_forceTeamSkin.modificationCount ||
+            cg_forceModelModCounts[2] != cg_forceEnemyModel.modificationCount ||
+            cg_forceModelModCounts[3] != cg_forceEnemySkin.modificationCount ||
+            cg_forceModelModCounts[4] != cg_forceRedTeamModel.modificationCount ||
+            cg_forceModelModCounts[5] != cg_forceBlueTeamModel.modificationCount) {
+            cg_forceModelModCounts[0] = cg_forceTeamModel.modificationCount;
+            cg_forceModelModCounts[1] = cg_forceTeamSkin.modificationCount;
+            cg_forceModelModCounts[2] = cg_forceEnemyModel.modificationCount;
+            cg_forceModelModCounts[3] = cg_forceEnemySkin.modificationCount;
+            cg_forceModelModCounts[4] = cg_forceRedTeamModel.modificationCount;
+            cg_forceModelModCounts[5] = cg_forceBlueTeamModel.modificationCount;
+            CG_NewClientInfo(cg.clientNum);
+        }
     }
 }
 

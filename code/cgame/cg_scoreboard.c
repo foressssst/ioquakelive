@@ -142,9 +142,9 @@ static void CG_DrawClientScore(int y, score_t* score, float* color, float fade, 
     headAngles[YAW] = 180;
     if (largeFormat) {
         CG_DrawHead(headx, y - (ICON_SIZE - BIGCHAR_HEIGHT) / 2, ICON_SIZE, ICON_SIZE,
-                    score->client, headAngles);
+                    score->client, headAngles, NULL);
     } else {
-        CG_DrawHead(headx, y, 16, 16, score->client, headAngles);
+        CG_DrawHead(headx, y, 16, 16, score->client, headAngles, NULL);
     }
 
     // draw the team task

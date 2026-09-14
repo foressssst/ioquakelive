@@ -422,9 +422,12 @@ void CG_Text_Paint(float x, float y, float scale, vec4_t color, const char* text
 ================
 CG_Draw3DModel
 
+[QL] 0x100089f0: a colour, when there is one, goes to the model's shaderRGBA; that is how the
+attacker's head wears the team or enemy head colour.
 ================
 */
-void CG_Draw3DModel(float x, float y, float w, float h, qhandle_t model, qhandle_t skin, vec3_t origin, vec3_t angles) {
+void CG_Draw3DModel(float x, float y, float w, float h, qhandle_t model, qhandle_t skin, vec3_t origin, vec3_t angles,
+					const byte* color) {
 	refdef_t refdef;
 	refEntity_t ent;
 
@@ -442,6 +445,9 @@ void CG_Draw3DModel(float x, float y, float w, float h, qhandle_t model, qhandle
 	ent.hModel = model;
 	ent.customSkin = skin;
 	ent.renderfx = RF_NOSHADOW;  // no stencil shadows
+	if (color) {
+		memcpy(ent.shaderRGBA, color, sizeof(ent.shaderRGBA));
+	}
 
 	refdef.rdflags = RDF_NOWORLDMODEL;
 
@@ -467,9 +473,13 @@ void CG_Draw3DModel(float x, float y, float w, float h, qhandle_t model, qhandle
 CG_DrawHead
 
 Used for both the status bar and the scoreboard
+
+[QL] 0x10009490: the head takes an optional colour (CG_Draw3DModel). Before the head, retail
+shows the player's Steam profile picture when cg_drawProfileImages is on and there is one; the
+fork has no Steam, so there never is.
 ================
 */
-void CG_DrawHead(float x, float y, float w, float h, int clientNum, vec3_t headAngles) {
+void CG_DrawHead(float x, float y, float w, float h, int clientNum, vec3_t headAngles, const byte* color) {
 	clipHandle_t cm;
 	clientInfo_t* ci;
 	float len;
@@ -498,7 +508,7 @@ void CG_DrawHead(float x, float y, float w, float h, int clientNum, vec3_t headA
 		// allow per-model tweaking
 		VectorAdd(origin, ci->headOffset, origin);
 
-		CG_Draw3DModel(x, y, w, h, ci->headModel, ci->headSkin, origin, headAngles);
+		CG_Draw3DModel(x, y, w, h, ci->headModel, ci->headSkin, origin, headAngles, color);
 	} else if (cg_drawIcons.integer) {
 		CG_DrawPic(x, y, w, h, ci->modelIcon);
 	}
@@ -551,7 +561,7 @@ void CG_DrawFlagModel(float x, float y, float w, float h, int team, qboolean for
 		} else {
 			return;
 		}
-		CG_Draw3DModel(x, y, w, h, handle, 0, origin, angles);
+		CG_Draw3DModel(x, y, w, h, handle, 0, origin, angles, NULL);
 	} else if (cg_drawIcons.integer) {
 		gitem_t* item;
 
@@ -617,12 +627,21 @@ static float CG_DrawAttacker(float y) {
 	const char* info;
 	const char* name;
 	int clientNum;
+	int packed;
+	byte color[4];
 
 	if (cg.predictedPlayerState.stats[STAT_HEALTH] <= 0) {
 		return y;
 	}
 
+	// [QL] 0x10009943: retail keeps attackerTime once the head has gone; only a map restart
+	// clears it
 	if (!cg.attackerTime) {
+		return y;
+	}
+
+	t = cg.time - cg.attackerTime;
+	if (t > ATTACKER_HEAD_TIME) {
 		return y;
 	}
 
@@ -631,26 +650,26 @@ static float CG_DrawAttacker(float y) {
 		return y;
 	}
 
-	if (!cgs.clientinfo[clientNum].infoValid) {
-		cg.attackerTime = 0;
-		return y;
+	// [QL] 0x10009998: a 36-unit head in the top-right corner, tinted with the team head colour
+	// for a teammate and the enemy one otherwise, and under it the name, right-aligned 10 units
+	// in, in font 1 at scale 0.18 with no shadow.
+	if (cgs.gametype >= GT_TEAM &&
+		cgs.clientinfo[cg.predictedPlayerState.clientNum].team == cgs.clientinfo[clientNum].team) {
+		packed = cg_teamHeadColor.integer;
+	} else {
+		packed = cg_enemyHeadColor.integer;
 	}
+	color[0] = (packed >> 24) & 0xff;
+	color[1] = (packed >> 16) & 0xff;
+	color[2] = (packed >> 8) & 0xff;
+	color[3] = packed & 0xff;
 
-	t = cg.time - cg.attackerTime;
-	if (t > ATTACKER_HEAD_TIME) {
-		cg.attackerTime = 0;
-		return y;
-	}
-
-	// [QL] 0x10009998: a 36-unit head in the top-right corner, and under it the name,
-	// right-aligned 10 units in, in font 1 at scale 0.18 with no shadow. NOT PORTED: the
-	// team or enemy colour retail tints the head with.
 	size = 36;
 
 	angles[PITCH] = 0;
 	angles[YAW] = 180;
 	angles[ROLL] = 0;
-	CG_DrawHead(SCREEN_WIDTH - size, y, size, size, clientNum, angles);
+	CG_DrawHead(SCREEN_WIDTH - size, y, size, size, clientNum, angles, color);
 
 	info = CG_ConfigString(CS_PLAYERS + clientNum);
 	name = Info_ValueForKey(info, "n");

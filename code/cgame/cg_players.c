@@ -437,106 +437,113 @@ static qboolean CG_RegisterClientModelname(clientInfo_t* ci, const char* modelNa
 /*
 ====================
 CG_ColorFromString
+
+[QL] 0x1003e82f: "c1" and "c2" pick one of Quake Live's 26 player colours (the table at
+0x10075fe0), numbered from 1; anything else is the first. Quake 3 read them as 3 colour bits.
 ====================
 */
+static const vec3_t cg_playerColors[26] = {
+    {1.0f, 0.0f, 0.0f},       {1.0f, 0.2734375f, 0.0f}, {1.0f, 0.5f, 0.0f},       {1.0f, 0.734375f, 0.0f},
+    {1.0f, 1.0f, 0.0f},       {0.734375f, 1.0f, 0.0f},  {0.5f, 1.0f, 0.0f},       {0.2734375f, 1.0f, 0.0f},
+    {0.0f, 1.0f, 0.0f},       {0.0f, 1.0f, 0.2734375f}, {0.0f, 1.0f, 0.5f},       {0.0f, 1.0f, 0.734375f},
+    {0.0f, 1.0f, 1.0f},       {0.0f, 0.734375f, 1.0f},  {0.0f, 0.5f, 1.0f},       {0.0f, 0.2734375f, 1.0f},
+    {0.0f, 0.0f, 1.0f},       {0.2734375f, 0.0f, 1.0f}, {0.5f, 0.0f, 1.0f},       {0.734375f, 0.0f, 1.0f},
+    {1.0f, 0.0f, 1.0f},       {1.0f, 0.0f, 0.734375f},  {1.0f, 0.0f, 0.5f},       {1.0f, 0.0f, 0.2734375f},
+    {1.0f, 1.0f, 1.0f},       {0.5f, 0.5f, 0.5f}};
+
 static void CG_ColorFromString(const char* v, vec3_t color) {
-    int val;
+    int index = atoi(v) - 1;
 
-    VectorClear(color);
-
-    val = atoi(v);
-
-    if (val < 1 || val > 7) {
-        VectorSet(color, 1, 1, 1);
-        return;
+    if (index < 0 || index > 25) {
+        index = 0;
     }
-
-    if (val & 1) {
-        color[2] = 1.0f;
-    }
-    if (val & 2) {
-        color[1] = 1.0f;
-    }
-    if (val & 4) {
-        color[0] = 1.0f;
-    }
+    VectorCopy(cg_playerColors[index], color);
 }
+
+static void CG_ResolveModelForClient(clientInfo_t* ci, int clientNum);
 
 /*
 ===================
 CG_LoadClientInfo
 
-[QL] Rewritten to match binary (CG_RegisterClientModel at 0x1003d830).
-Team-aware fallback: red->"sarge/red", blue->"sarge/blue", ffa->"sarge/default".
+[QL] 0x1003d830. The body comes from modelName/skinName and the head from forcedHeadModel /
+forcedHeadSkin (0x254/0x294); headModelName/headSkinName (0x1d4/0x214) only name the icon.
+When the model does not load, the forcing is resolved again and the team's skin is tried,
+then sarge with it; a builder (com_build) gets an error instead. The local player who ends
+up as sarge gets the "model" cvar set to sarge.
 ===================
 */
 static void CG_LoadClientInfo(int clientNum, clientInfo_t* ci) {
-    const char *dir, *fallback;
+    const char* teamSkin;
     int i, modelloaded;
     const char* s;
+    orientation_t tag;
 
-    // [QL] the head model+skin come from the effective head pair (forcedHeadModel /
-    // forcedHeadSkin, 0x254/0x294), which CG_ResolveModelForClient maintains - NOT the raw
-    // headModelName/headSkinName (those stay the icon source). A forced enemy (keel/bright)
-    // therefore loads models/players/keel/head_bright.skin, not the bot's original head dir.
     modelloaded = qtrue;
     if (!CG_RegisterClientModelname(ci, ci->modelName, ci->skinName, ci->forcedHeadModel, ci->forcedHeadSkin)) {
-        // [QL] team-aware fallback
+        CG_ResolveModelForClient(ci, clientNum);
+        if (trap_Cvar_VariableValue("com_build") != 0) {
+            CG_Error("CG_RegisterClientModel( %s, %s, %s, %s ) failed", ci->modelName, ci->skinName,
+                     ci->forcedHeadModel, ci->forcedHeadSkin);
+        }
+
         if (ci->team == TEAM_RED) {
-            if (!CG_RegisterClientModelname(ci, ci->modelName, "red", ci->forcedHeadModel, "red")) {
-                // ultimate fallback: sarge/red
-                Q_strncpyz(ci->headModelName, "sarge", sizeof(ci->headModelName));
-                Q_strncpyz(ci->headSkinName, "red", sizeof(ci->headSkinName));
-                if (!CG_RegisterClientModelname(ci, "sarge", "red", "sarge", "red")) {
-                    modelloaded = qfalse;
-                }
-            }
+            teamSkin = "red";
         } else if (ci->team == TEAM_BLUE) {
-            if (!CG_RegisterClientModelname(ci, ci->modelName, "blue", ci->forcedHeadModel, "blue")) {
-                // ultimate fallback: sarge/blue
-                Q_strncpyz(ci->headModelName, "sarge", sizeof(ci->headModelName));
-                Q_strncpyz(ci->headSkinName, "blue", sizeof(ci->headSkinName));
-                if (!CG_RegisterClientModelname(ci, "sarge", "blue", "sarge", "blue")) {
-                    modelloaded = qfalse;
+            teamSkin = "blue";
+        } else {
+            teamSkin = "default";
+        }
+
+        if (!CG_RegisterClientModelname(ci, ci->modelName, teamSkin, ci->forcedHeadModel, teamSkin)) {
+            if (trap_Cvar_VariableValue("com_build") != 0) {
+                if (ci->team == TEAM_RED) {
+                    CG_Error("CG_RegisterClientModel( %s, red, %s, red ) failed to register", ci->modelName,
+                             ci->forcedHeadModel);
+                } else if (ci->team == TEAM_BLUE) {
+                    CG_Error("CG_RegisterClientModel( %s, blue, %s, blue ) failed to register", ci->modelName,
+                             ci->forcedHeadModel);
+                } else {
+                    CG_Error("CG_RegisterClientModel (%s/%s) failed to register", ci->modelName, "default");
                 }
             }
-        } else {
-            // FFA: try "default" skin, then sarge/default
-            if (!CG_RegisterClientModelname(ci, ci->modelName, "default", ci->forcedHeadModel, "default")) {
-                Q_strncpyz(ci->headModelName, "sarge", sizeof(ci->headModelName));
-                Q_strncpyz(ci->headSkinName, "default", sizeof(ci->headSkinName));
-                if (!CG_RegisterClientModelname(ci, "sarge", "default", "sarge", "default")) {
-                    modelloaded = qfalse;
+            Q_strncpyz(ci->headModelName, "sarge", sizeof(ci->headModelName));
+            Q_strncpyz(ci->headSkinName, teamSkin, sizeof(ci->headSkinName));
+            if (!CG_RegisterClientModelname(ci, "sarge", teamSkin, "sarge", teamSkin)) {
+                if (trap_Cvar_VariableValue("com_build") != 0) {
+                    if (ci->team == TEAM_RED) {
+                        CG_Error("CG_RegisterClientModel (%s/red) failed to register", "sarge");
+                    } else if (ci->team == TEAM_BLUE) {
+                        CG_Error("CG_RegisterClientModel (%s/blue) failed to register", "sarge");
+                    } else {
+                        CG_Error("CG_RegisterClientModel (%s/%s) failed to register", "sarge", "default");
+                    }
                 }
+                modelloaded = qfalse;
+            } else if (clientNum == cg.clientNum) {
+                trap_Cvar_Set("model", "sarge");
             }
         }
     }
 
     ci->newAnims = qfalse;
-    if (ci->torsoModel) {
-        orientation_t tag;
-        // if the torso model has the "tag_flag"
-        if (trap_R_LerpTag(&tag, ci->torsoModel, 0, 0, 1, "tag_flag")) {
-            ci->newAnims = qtrue;
-        }
+    // if the torso model has the "tag_flag"
+    if (ci->torsoModel && trap_R_LerpTag(&tag, ci->torsoModel, 0, 0, 1, "tag_flag")) {
+        ci->newAnims = qtrue;
     }
 
-    // sounds
-    dir = ci->modelName;
-    fallback = DEFAULT_MODEL;
-
+    // sounds: a model that did not load uses sarge's
     for (i = 0; i < MAX_CUSTOM_SOUNDS; i++) {
         s = cg_customSoundNames[i];
         if (!s) {
             break;
         }
         ci->sounds[i] = 0;
-        // if the model didn't load use the sounds of the default model
         if (modelloaded) {
-            ci->sounds[i] = trap_S_RegisterSound(va("sound/player/%s/%s", dir, s + 1), qfalse);
+            ci->sounds[i] = trap_S_RegisterSound(va("sound/player/%s/%s", ci->modelName, s + 1), qfalse);
         }
         if (!ci->sounds[i]) {
-            ci->sounds[i] = trap_S_RegisterSound(va("sound/player/%s/%s", fallback, s + 1), qfalse);
+            ci->sounds[i] = trap_S_RegisterSound(va("sound/player/%s/%s", "sarge", s + 1), qfalse);
         }
     }
 
@@ -589,29 +596,37 @@ static void CG_CopyClientInfoModel(clientInfo_t* from, clientInfo_t* to) {
 /*
 ======================
 CG_ScanForExistingClientInfo
+
+[QL] 0x1003de70: another loaded player with the same body model and skin and the same head
+model and skin that is actually loaded (forcedHeadModel/forcedHeadSkin), and in team games the
+same team, lends its models. The icon is registered again from this player's own choice.
 ======================
 */
 static qboolean CG_ScanForExistingClientInfo(clientInfo_t* ci) {
     int i;
     clientInfo_t* match;
+    char filename[MAX_QPATH];
 
     for (i = 0; i < cgs.maxclients; i++) {
         match = &cgs.clientinfo[i];
-        if (!match->infoValid) {
+        if (!match->infoValid || match->deferred) {
             continue;
         }
-        if (match->deferred) {
+        if (Q_stricmp(ci->modelName, match->modelName) || Q_stricmp(ci->skinName, match->skinName) ||
+            Q_stricmp(ci->forcedHeadModel, match->forcedHeadModel) ||
+            Q_stricmp(ci->forcedHeadSkin, match->forcedHeadSkin)) {
             continue;
         }
-        if (!Q_stricmp(ci->modelName, match->modelName) && !Q_stricmp(ci->skinName, match->skinName) && !Q_stricmp(ci->headModelName, match->headModelName) && !Q_stricmp(ci->headSkinName, match->headSkinName) && (cgs.gametype < GT_TEAM || ci->team == match->team)) {
-            // this clientinfo is identical, so use its handles
-
-            ci->deferred = qfalse;
-
-            CG_CopyClientInfoModel(match, ci);
-
-            return qtrue;
+        if (cgs.gametype >= GT_TEAM && ci->team != match->team) {
+            continue;
         }
+
+        // this clientinfo is identical, so use its handles
+        ci->deferred = qfalse;
+        CG_CopyClientInfoModel(match, ci);
+        Com_sprintf(filename, sizeof(filename), "models/players/%s/icon_%s.tga", ci->headModelName, ci->headSkinName);
+        ci->modelIcon = trap_R_RegisterShaderNoMip(filename);
+        return qtrue;
     }
 
     // nothing matches, so defer the load
@@ -624,50 +639,29 @@ CG_SetDeferredClientInfo
 
 We aren't going to load it now, so grab some other
 client's info to use until we have some spare time.
+
+[QL] 0x1003dff0: in team games only a player with the same skin and team lends its models, and
+the model is loaded when there is none; otherwise the first valid player lends them.
 ======================
 */
 static void CG_SetDeferredClientInfo(int clientNum, clientInfo_t* ci) {
     int i;
     clientInfo_t* match;
 
-    // if someone else is already the same models and skins we
-    // can just load the client info
-    for (i = 0; i < cgs.maxclients; i++) {
-        match = &cgs.clientinfo[i];
-        if (!match->infoValid || match->deferred) {
-            continue;
-        }
-        if (Q_stricmp(ci->skinName, match->skinName) ||
-            Q_stricmp(ci->modelName, match->modelName) ||
-            //			 Q_stricmp( ci->headModelName, match->headModelName ) ||
-            //			 Q_stricmp( ci->headSkinName, match->headSkinName ) ||
-            (cgs.gametype >= GT_TEAM && ci->team != match->team)) {
-            continue;
-        }
-        // just load the real info cause it uses the same models and skins
-        CG_LoadClientInfo(clientNum, ci);
-        return;
-    }
-
-    // if we are in teamplay, only grab a model if the skin is correct
     if (cgs.gametype >= GT_TEAM) {
         for (i = 0; i < cgs.maxclients; i++) {
             match = &cgs.clientinfo[i];
             if (!match->infoValid || match->deferred) {
                 continue;
             }
-            if (Q_stricmp(ci->skinName, match->skinName) ||
-                (cgs.gametype >= GT_TEAM && ci->team != match->team)) {
+            if (Q_stricmp(ci->skinName, match->skinName) || ci->team != match->team) {
                 continue;
             }
             ci->deferred = qtrue;
             CG_CopyClientInfoModel(match, ci);
             return;
         }
-        // load the full model, because we don't ever want to show
-        // an improper team skin.  This will cause a hitch for the first
-        // player, when the second enters.  Combat shouldn't be going on
-        // yet, so it shouldn't matter
+        // load the full model, because we don't ever want to show an improper team skin
         CG_LoadClientInfo(clientNum, ci);
         return;
     }
@@ -678,94 +672,83 @@ static void CG_SetDeferredClientInfo(int clientNum, clientInfo_t* ci) {
         if (!match->infoValid) {
             continue;
         }
-
         ci->deferred = qtrue;
         CG_CopyClientInfoModel(match, ci);
         return;
     }
-
-    // we should never get here...
-    CG_Printf("CG_SetDeferredClientInfo: no valid clients!\n");
-
-    CG_LoadClientInfo(clientNum, ci);
 }
 
 /*
 ==============
 CG_ShouldForceTeamSkin
 
-// Address: 0x1003cad0
-[QL] Returns qtrue if the modelled client should be drawn with a forced team skin
-(rather than an enemy/neutral skin). Called by CG_EntityTeamColor and the
-rail-colour helpers in cg_weapons.c. playerTeam is the modelled client's team, viewerTeam
-is the local/followed viewer's team.
+[QL] 0x1003cad0: whether a player counts as a teammate for the forced weapon colours
+(CG_RailColor*, CG_GrenadeColor). Like CG_PlayerTeamSkins, a spectator following nobody sees
+blue as the enemy, and a forced red or blue team model decides that team's side.
 ==============
 */
-qboolean CG_ShouldForceTeamSkin(int playerTeam, int viewerTeam) {
-    qboolean force = qtrue;
+qboolean CG_ShouldForceTeamSkin(int viewerTeam, int playerTeam) {
+    qboolean teammate = qtrue;
 
-    // [QL] pm_type & 2 (DAT_10a9c214) = spectator/dead; pm_flags & PMF_FOLLOW (DAT_10a9c21c) =
-    // following. Previously read from the swapped fields.
-    if (cgs.gametype < GT_TEAM || !(cg.snap->ps.pm_type & 2) ||
-        !(cg.snap->ps.pm_flags & PMF_FOLLOW) ||
-        playerTeam == TEAM_RED || playerTeam == TEAM_BLUE) {
-        if (playerTeam != viewerTeam || playerTeam == TEAM_FREE) {
-            force = qfalse;
+    if (cgs.gametype >= GT_TEAM && (cg.predictedPlayerState.pm_type & 2) &&
+        (cg.predictedPlayerState.pm_flags & PMF_FOLLOW) && viewerTeam != TEAM_RED && viewerTeam != TEAM_BLUE) {
+        if (playerTeam == TEAM_BLUE) {
+            teammate = qfalse;
         }
-    } else if (viewerTeam == TEAM_BLUE) {
-        force = qfalse;
-        goto checkBlue;
+    } else if (viewerTeam != playerTeam || viewerTeam == TEAM_FREE) {
+        teammate = qfalse;
     }
 
-    if (viewerTeam == TEAM_RED) {
-        if (cg_forceRedTeamModel.string[0] == '\0') {
-            return force;
+    if (playerTeam == TEAM_RED) {
+        if (cg_forceRedTeamModel.string[0]) {
+            return qtrue;
         }
-        return qtrue;
+    } else if (playerTeam == TEAM_BLUE) {
+        if (cg_forceBlueTeamModel.string[0]) {
+            return qfalse;
+        }
     }
-    if (viewerTeam != TEAM_BLUE) {
-        return force;
-    }
-checkBlue:
-    if (cg_forceBlueTeamModel.string[0] != '\0') {
-        force = qfalse;
-    }
-    return force;
+    return teammate;
 }
 
 /*
 ==============
 CG_ResolveBodySkinName
 
-// Address: 0x1003d600
-[QL] Resolves ci->skinName, applying the "sport" team variants and the red/blue team
-defaults. NOTE: the binary takes a second internal flag (whether a body model was forced)
-that is distinct from forceTeamSkin; under the frozen 2-arg prototype the two collapse.
-They differ only in the rare spectator case where an enemy model was forced without a
-skin.
+[QL] 0x1003d600. Without a forced skin, the skin is the part after '/' in modelName. A player
+whose model was not forced, or was forced without a skin, wears the team's colour in team games
+(and keeps their own skin in FFA). A forced "model/skin" keeps its skin, which is how
+cg_forceEnemyModel "keel/bright" shows the bright skin in team games. A forced skin of exactly
+"sport" becomes sport_red or sport_blue in team games.
 ==============
 */
-void CG_ResolveBodySkinName(clientInfo_t* ci, int forceTeamSkin) {
-    char* skin = NULL;
+void CG_ResolveBodySkinName(clientInfo_t* ci, qboolean modelForced, qboolean skinForced) {
+    char* skin;
 
-    if (forceTeamSkin == 0) {
-        // split "model/skin" out of the (possibly forced) model name
+    if (!skinForced) {
         skin = strchr(ci->modelName, '/');
         if (skin) {
             *skin = '\0';
             skin++;
+        } else if (cgs.gametype < GT_TEAM) {
+            skin = "default";
         }
     } else {
         skin = ci->skinName;
     }
 
-    if (!skin && cgs.gametype < GT_TEAM) {
-        skin = "default";
-    }
-
-    // "sport*" skins pick up a team-coloured variant in team games
-    if (forceTeamSkin == 1 && skin) {
-        if (!Q_stricmpn(skin, "sport", 5) && cgs.gametype >= GT_TEAM) {
+    if ((!modelForced || !skin) && !skinForced) {
+        if (cgs.gametype >= GT_TEAM) {
+            if (ci->team == TEAM_RED) {
+                skin = "red";
+            } else if (ci->team == TEAM_BLUE) {
+                skin = "blue";
+            } else {
+                skin = "default";
+            }
+        }
+    } else if (skinForced) {
+        if (skin && !Q_stricmp(skin, "sport") && cgs.gametype >= GT_TEAM) {
             if (ci->team == TEAM_RED) {
                 skin = "sport_red";
             } else if (ci->team == TEAM_BLUE) {
@@ -773,50 +756,30 @@ void CG_ResolveBodySkinName(clientInfo_t* ci, int forceTeamSkin) {
             } else {
                 skin = "sport";
             }
-            goto done;
         }
     }
 
-    // non-forced: fall back to the team colour in team games
-    if (forceTeamSkin == 0) {
-        if (cgs.gametype < GT_TEAM) {
-            goto defaultSkin;
-        }
-        if (ci->team == TEAM_RED) {
-            skin = "red";
-        } else if (ci->team == TEAM_BLUE) {
-            skin = "blue";
-        } else {
-            goto defaultSkin;
-        }
-        goto done;
+    if (!skin) {
+        skin = "default";
     }
-
-    if (skin) {
-        goto done;
+    if (skin != ci->skinName) {
+        Q_strncpyz(ci->skinName, skin, sizeof(ci->skinName));
     }
-
-defaultSkin:
-    skin = "default";
-
-done:
-    Q_strncpyz(ci->skinName, skin, sizeof(ci->skinName));
 }
 
 /*
 ==============
 CG_ResolveHeadSkinName
 
-// Address: 0x1003d710
-[QL] As CG_ResolveBodySkinName but for the forced head/secondary pair (binary offsets
-0x254 / 0x294 == ci->forcedHeadModel / ci->forcedHeadSkin), which CG_ResolveModelForClient
-seeds. In FFA games the non-forced case keeps the existing skin untouched.
+[QL] 0x1003d710: as CG_ResolveBodySkinName for the head that is loaded (forcedHeadModel /
+forcedHeadSkin), except that in FFA a head that was neither forced nor given a forced skin is
+left as CG_NewClientInfo set it.
 ==============
 */
-void CG_ResolveHeadSkinName(clientInfo_t* ci, int forceTeamSkin) {
-    char* skin = NULL;
+void CG_ResolveHeadSkinName(clientInfo_t* ci, qboolean modelForced, qboolean skinForced) {
+    char* skin;
 
-    if (forceTeamSkin == 0) {
+    if (!skinForced) {
         skin = strchr(ci->forcedHeadModel, '/');
         if (skin) {
             *skin = '\0';
@@ -826,95 +789,77 @@ void CG_ResolveHeadSkinName(clientInfo_t* ci, int forceTeamSkin) {
         skin = ci->forcedHeadSkin;
     }
 
-    // FFA, non-forced: leave the resolved head skin as-is
-    if (forceTeamSkin == 0 && cgs.gametype < GT_TEAM) {
+    if (!modelForced && !skinForced && cgs.gametype < GT_TEAM) {
         return;
     }
-
     if (!skin && cgs.gametype < GT_TEAM) {
         skin = "default";
     }
 
-    if (forceTeamSkin == 0) {
+    if ((!modelForced || !skin) && !skinForced) {
         if (ci->team == TEAM_RED) {
             skin = "red";
-            goto done;
-        }
-        if (ci->team == TEAM_BLUE) {
-            skin = "blue";
-            goto done;
-        }
-        goto defaultSkin;
-    }
-
-    // forced: "sport*" team variants, else keep the forced skin
-    if (skin && !Q_stricmpn(skin, "sport", 5) && cgs.gametype >= GT_TEAM) {
-        if (ci->team == TEAM_RED) {
-            skin = "sport_red";
         } else if (ci->team == TEAM_BLUE) {
-            skin = "sport_blue";
+            skin = "blue";
         } else {
-            skin = "sport";
+            skin = "default";
         }
-        goto done;
-    }
-    if (skin) {
-        goto done;
+    } else if (skinForced) {
+        if (skin && !Q_stricmp(skin, "sport") && cgs.gametype >= GT_TEAM) {
+            if (ci->team == TEAM_RED) {
+                skin = "sport_red";
+            } else if (ci->team == TEAM_BLUE) {
+                skin = "sport_blue";
+            } else {
+                skin = "sport";
+            }
+        }
     }
 
-defaultSkin:
-    skin = "default";
-
-done:
-    Q_strncpyz(ci->forcedHeadSkin, skin, sizeof(ci->forcedHeadSkin));
+    if (!skin) {
+        skin = "default";
+    }
+    if (skin != ci->forcedHeadSkin) {
+        Q_strncpyz(ci->forcedHeadSkin, skin, sizeof(ci->forcedHeadSkin));
+    }
 }
 
 /*
 ==============
 CG_ResolveModelForClient
 
-// Address: 0x1003e0c0
-[QL] Skin-forcing routine (called from CG_NewClientInfo). Overrides a client's
-model/skin according to gametype and the enemy/team model cvars, then resolves the body
-and (unless suppressed) head skins:
-  - Duel: forces the opponent to cg_forceEnemyModel / cg_forceEnemySkin.
-  - Team games with forcing active: cg_forceEnemyModel/Skin vs cg_forceTeamModel/Skin,
-    plus the cg_forceRedTeamModel / cg_forceBlueTeamModel per-team overrides.
-  - Red Rover infected (customSettings bit 0x4000000 = g_rrInfected): forces red to "bones".
-Gated off entirely in training (g_training) and skipped per-part when the server pins a
-model via g_playermodelOverride / g_playerheadmodelOverride (CS_PLAYERINFO).
-Body result -> ci->modelName / ci->skinName; forced head/secondary -> ci->forcedHeadModel
-/ ci->forcedHeadSkin (0x254 / 0x294).
+[QL] 0x1003e0c0, for every player but the local one (and the local player infected in Red
+Rover). The viewer is the local player, or the followed one; the viewer's team decides between
+cg_forceEnemyModel/Skin and cg_forceTeamModel/Skin (in Duel the opponent is the enemy), and
+cg_forceRedTeamModel and cg_forceBlueTeamModel override the model per team. A spectator who
+follows nobody forces nothing but the per-team models. Red Rover's infected are bones. Nothing
+is forced in training or while the server pins the model (g_playermodelOverride), and the head
+is left alone while it pins the head model. It reads cg.predictedPlayerState, which is valid
+before the first snapshot.
 ==============
 */
 static void CG_ResolveModelForClient(clientInfo_t* ci, int clientNum) {
-    const char* forcedModel = "";  // pcVar5
-    const char* forcedSkin = "";   // local_90
-    int viewerTeam;
+    const char* forcedModel = "";
+    const char* forcedSkin = "";
+    qboolean modelForced = qfalse;
+    qboolean skinForced;
     int viewerClient;
+    int viewerTeam;
     char tmp[128];
-    char* slash;
+    char* p;
 
-    // viewer is the local client, or the followed client while spectating
-    viewerClient = cg.clientNum;  // DAT_10a6f8a4
+    viewerClient = cg.clientNum;
     viewerTeam = cgs.clientinfo[cg.clientNum].team;
-    // [QL] follow check is pm_flags & PMF_FOLLOW (0x1000), NOT pm_type (which is a small enum
-    // and never has 0x1000). While following a player, the viewer's team becomes that player's
-    // team so enemies are forced relative to whom you're watching (binary DAT_10a9c21c).
-    if (cg.snap->ps.pm_flags & PMF_FOLLOW) {
-        viewerClient = cg.snap->ps.clientNum;  // DAT_10a9c298
-        viewerTeam = cgs.clientinfo[cg.snap->ps.clientNum].team;
-    }
 
-    // forcing is off entirely in training (g_training), and the model/skin selection
-    // is skipped when the server pins a model via g_playermodelOverride.
-    if (g_training.integer == 0) {
-        if (cgs.playermodelOverride[0] == '\0') {
-            // [QL] pm_type & 2 (DAT_10a9c214) is the spectator/dead test; pm_flags & PMF_FOLLOW
-            // (DAT_10a9c21c) is the follow test - previously read from the swapped fields.
-            if (cgs.gametype < GT_TEAM || !(cg.snap->ps.pm_type & 2) ||
-                (cg.snap->ps.pm_flags & PMF_FOLLOW) ||
-                viewerTeam == TEAM_RED || viewerTeam == TEAM_BLUE) {
+    if (!g_training.integer) {
+        if (cg.predictedPlayerState.pm_flags & PMF_FOLLOW) {
+            viewerClient = cg.predictedPlayerState.clientNum;
+            viewerTeam = cgs.clientinfo[viewerClient].team;
+        }
+
+        if (!cgs.playermodelOverride[0]) {
+            if (cgs.gametype < GT_TEAM || !(cg.predictedPlayerState.pm_type & 2) ||
+                (cg.predictedPlayerState.pm_flags & PMF_FOLLOW) || viewerTeam == TEAM_RED || viewerTeam == TEAM_BLUE) {
                 if (cgs.gametype == GT_DUEL) {
                     if (viewerClient != clientNum) {
                         forcedModel = cg_forceEnemyModel.string;
@@ -928,7 +873,7 @@ static void CG_ResolveModelForClient(clientInfo_t* ci, int clientNum) {
                     forcedSkin = cg_forceTeamSkin.string;
                 }
             }
-            // per-team model override (model string only)
+
             if (ci->team == TEAM_RED) {
                 if (cg_forceRedTeamModel.string[0]) {
                     forcedModel = cg_forceRedTeamModel.string;
@@ -938,58 +883,49 @@ static void CG_ResolveModelForClient(clientInfo_t* ci, int clientNum) {
             }
         }
 
-        // Red Rover infected: the red (infected) team is forced to the "bones" model.
-        // The trigger is the g_rrInfected bit (0x4000000) of the custom-settings bitmask
-        // (CS_CUSTOM_SETTINGS / DAT_10a3ff28), not dmflags.
+        // Red Rover's infected (g_rrInfected, bit 0x4000000 of the custom settings) are bones
         if (cgs.gametype == GT_RR && (cgs.customSettings & 0x4000000) && ci->team == TEAM_RED) {
             forcedModel = "bones";
             forcedSkin = "bones";
-        } else if (forcedModel[0] == '\0') {
-            goto splitOnly;
         }
+    }
 
+    if (forcedModel[0]) {
         Q_strncpyz(ci->modelName, forcedModel, sizeof(ci->modelName));
-    } else {
-    splitOnly:
-        // forcing disabled: strip any "model/skin" suffix in team games
-        if (cgs.gametype >= GT_TEAM) {
-            slash = strchr(ci->modelName, '/');
-            if (slash) {
-                *slash = '\0';
-            }
+        modelForced = qtrue;
+    } else if (cgs.gametype >= GT_TEAM) {
+        // not forced: team games drop the skin the player picked
+        p = strchr(ci->modelName, '/');
+        if (p) {
+            *p = '\0';
         }
     }
 
-    // if a forced skin was chosen, split "model/skin" and store both parts
-    if (forcedSkin[0] != '\0') {
-        const char* src = forcedModel[0] ? forcedModel : ci->modelName;
-        Q_strncpyz(tmp, src, sizeof(tmp));
-        slash = strchr(tmp, '/');  // binary: strtok(tmp, "/") -> the model part
-        if (slash) {
-            *slash = '\0';
-        }
-        Q_strncpyz(ci->modelName, tmp, sizeof(ci->modelName));
+    // a forced skin goes on the forced model, or on the player's own
+    skinForced = qfalse;
+    if (forcedSkin[0]) {
+        Q_strncpyz(tmp, forcedModel[0] ? forcedModel : ci->modelName, sizeof(tmp));
+        p = strtok(tmp, "/");
+        Q_strncpyz(ci->modelName, p, sizeof(ci->modelName));
         Q_strncpyz(ci->skinName, forcedSkin, sizeof(ci->skinName));
+        skinForced = qtrue;
     }
 
-    CG_ResolveBodySkinName(ci, (forcedSkin[0] != '\0'));
+    CG_ResolveBodySkinName(ci, modelForced, skinForced);
 
-    if (cgs.playerheadmodelOverride[0] == '\0') {
-        if (forcedModel[0] != '\0') {
+    if (!cgs.playerheadmodelOverride[0]) {
+        if (forcedModel[0]) {
             Q_strncpyz(ci->forcedHeadModel, forcedModel, sizeof(ci->forcedHeadModel));
         }
-        if (forcedSkin[0] != '\0') {
-            if (forcedModel[0] != '\0') {
+        if (forcedSkin[0]) {
+            if (forcedModel[0]) {
                 Q_strncpyz(tmp, forcedModel, sizeof(tmp));
-                slash = strchr(tmp, '/');
-                if (slash) {
-                    *slash = '\0';
-                }
-                Q_strncpyz(ci->forcedHeadModel, tmp, sizeof(ci->forcedHeadModel));
+                p = strtok(tmp, "/");
+                Q_strncpyz(ci->forcedHeadModel, p, sizeof(ci->forcedHeadModel));
             }
             Q_strncpyz(ci->forcedHeadSkin, forcedSkin, sizeof(ci->forcedHeadSkin));
         }
-        CG_ResolveHeadSkinName(ci, (forcedSkin[0] != '\0'));
+        CG_ResolveHeadSkinName(ci, modelForced, skinForced);
     }
 }
 
@@ -1022,6 +958,14 @@ void CG_UpdateAllModelScales(void) {
 /*
 ======================
 CG_NewClientInfo
+
+[QL] 0x1003e640. The name carries the clan tag ("cn"); "c1" and "c2" are among the 26 colours.
+modelName keeps the "model/skin" the player picked: CG_ResolveModelForClient splits it for every
+other player, forcing their models, and the local player splits it here and wears the team's
+colour in team games. headModelName/headSkinName name the icon (the team's colour in team
+games); forcedHeadModel/forcedHeadSkin are the head that is loaded, from "hmodel" when the
+server allows custom heads (g_allowCustomHeadmodels). When the local player changes, every other
+player is read again against the new team.
 ======================
 */
 void CG_NewClientInfo(int clientNum) {
@@ -1029,7 +973,8 @@ void CG_NewClientInfo(int clientNum) {
     clientInfo_t newInfo;
     const char* configstring;
     const char* v;
-    char* slash;
+    char* p;
+    qboolean lowMemory;
 
     ci = &cgs.clientinfo[clientNum];
 
@@ -1043,131 +988,128 @@ void CG_NewClientInfo(int clientNum) {
     // the old value
     memset(&newInfo, 0, sizeof(newInfo));
 
-    // isolate the player's name
-    v = Info_ValueForKey(configstring, "n");
-    Q_strncpyz(newInfo.name, v, sizeof(newInfo.name));
+    // the clan tag, alone and in front of the name
+    v = Info_ValueForKey(configstring, "cn");
+    Q_strncpyz(newInfo.clanTag, "^7", sizeof(newInfo.clanTag));
+    Q_strcat(newInfo.clanTag, sizeof(newInfo.clanTag), v);
+    Q_strcat(newInfo.clanTag, sizeof(newInfo.clanTag), "^7");
+    if (v[0]) {
+        Q_strncpyz(newInfo.name, v, sizeof(newInfo.name));
+        Q_strcat(newInfo.name, sizeof(newInfo.name), "^7 ");
+    }
+    Q_strcat(newInfo.name, sizeof(newInfo.name), Info_ValueForKey(configstring, "n"));
+
+    Q_strncpyz(newInfo.clanName, Info_ValueForKey(configstring, "xcn"), sizeof(newInfo.clanName));
+    Q_strncpyz(newInfo.country, Info_ValueForKey(configstring, "c"), sizeof(newInfo.country));
 
     // colors
-    v = Info_ValueForKey(configstring, "c1");
-    CG_ColorFromString(v, newInfo.color1);
+    CG_ColorFromString(Info_ValueForKey(configstring, "c1"), newInfo.color1);
+    CG_ColorFromString(Info_ValueForKey(configstring, "c2"), newInfo.color2);
 
+    // the fork's byte copies of the colours, for the rail item and the gun
     newInfo.c1RGBA[0] = 255 * newInfo.color1[0];
     newInfo.c1RGBA[1] = 255 * newInfo.color1[1];
     newInfo.c1RGBA[2] = 255 * newInfo.color1[2];
     newInfo.c1RGBA[3] = 255;
-
-    v = Info_ValueForKey(configstring, "c2");
-    CG_ColorFromString(v, newInfo.color2);
-
     newInfo.c2RGBA[0] = 255 * newInfo.color2[0];
     newInfo.c2RGBA[1] = 255 * newInfo.color2[1];
     newInfo.c2RGBA[2] = 255 * newInfo.color2[2];
     newInfo.c2RGBA[3] = 255;
 
-    // bot skill
     v = Info_ValueForKey(configstring, "skill");
     newInfo.botSkill = atoi(v);
-
-    // handicap
-    v = Info_ValueForKey(configstring, "hc");
-    newInfo.handicap = atoi(v);
-
-    // wins
-    v = Info_ValueForKey(configstring, "w");
-    newInfo.wins = atoi(v);
-
-    // losses
-    v = Info_ValueForKey(configstring, "l");
-    newInfo.losses = atoi(v);
-
-    // team
-    v = Info_ValueForKey(configstring, "t");
-    newInfo.team = atoi(v);
-
-    // team task
-    v = Info_ValueForKey(configstring, "tt");
-    newInfo.teamTask = atoi(v);
-
-    // team leader
-    v = Info_ValueForKey(configstring, "tl");
-    newInfo.teamLeader = atoi(v);
-
+    newInfo.botSkillValue = atof(v);
+    newInfo.handicap = atoi(Info_ValueForKey(configstring, "hc"));
+    newInfo.wins = atoi(Info_ValueForKey(configstring, "w"));
+    newInfo.losses = atoi(Info_ValueForKey(configstring, "l"));
+    newInfo.team = atoi(Info_ValueForKey(configstring, "t"));
+    newInfo.teamTask = atoi(Info_ValueForKey(configstring, "tt"));
+    newInfo.teamLeader = atoi(Info_ValueForKey(configstring, "tl"));
     // [QL] 0x1003e9c0: ready unless "rp" starts with '0', so a missing key counts as ready
-    v = Info_ValueForKey(configstring, "rp");
-    newInfo.ready = (v[0] != '0') ? qtrue : qfalse;
+    newInfo.ready = (Info_ValueForKey(configstring, "rp")[0] != '0') ? qtrue : qfalse;
+    newInfo.privileges = atoi(Info_ValueForKey(configstring, "p"));
+    newInfo.specOnly = atoi(Info_ValueForKey(configstring, "so"));
+    newInfo.playQueue = atoi(Info_ValueForKey(configstring, "pq"));
 
-    // model
-    v = Info_ValueForKey(configstring, "model");
-    Q_strncpyz(newInfo.modelName, v, sizeof(newInfo.modelName));
+    // the model, whole
+    Q_strncpyz(newInfo.modelName, Info_ValueForKey(configstring, "model"), sizeof(newInfo.modelName));
 
-    slash = strchr(newInfo.modelName, '/');
-    if (!slash) {
-        Q_strncpyz(newInfo.skinName, "default", sizeof(newInfo.skinName));
-    } else {
-        Q_strncpyz(newInfo.skinName, slash + 1, sizeof(newInfo.skinName));
-        *slash = 0;
-    }
-
-    // [QL] in team games, force skin to team color
-    if (cgs.gametype >= GT_TEAM) {
-        Q_strncpyz(newInfo.skinName, (newInfo.team == TEAM_RED) ? "red" : "blue", sizeof(newInfo.skinName));
-    }
-
-    // [QL] raw head model/skin (0x1d4/0x214) are the player-icon source. CG_NewClientInfo
-    // (0x1003e640) copies them from the body "model" value (never from hmodel), so the
-    // icon path stays models/players/<model>/icon_<skin>.tga. skinName already carries the team
-    // colour override in team games.
+    // the icon: the model without its skin, and the skin, or the team's colour in team games
     Q_strncpyz(newInfo.headModelName, newInfo.modelName, sizeof(newInfo.headModelName));
-    Q_strncpyz(newInfo.headSkinName, newInfo.skinName, sizeof(newInfo.headSkinName));
+    p = strchr(newInfo.headModelName, '/');
 
-    // [QL] forced/effective head model+skin (0x254/0x294) are the loader source, parsed
-    // independently of the raw pair. They come from the client's own "hmodel" key, or fall back
-    // to the body model+skin when the server disallows custom head models (g_allowCustomHeadmodels
-    // 0). Team games then force the head skin to the team colour (the binary re-applies this for
-    // the local player; non-local players are overwritten by CG_ResolveModelForClient below).
-    if (cgs.allowCustomHeadmodels == 0) {
-        Q_strncpyz(newInfo.forcedHeadModel, newInfo.modelName, sizeof(newInfo.forcedHeadModel));
-        Q_strncpyz(newInfo.forcedHeadSkin, newInfo.skinName, sizeof(newInfo.forcedHeadSkin));
-    } else {
-        v = Info_ValueForKey(configstring, "hmodel");
-        Q_strncpyz(newInfo.forcedHeadModel, v, sizeof(newInfo.forcedHeadModel));
-
-        slash = strchr(newInfo.forcedHeadModel, '/');
-        if (!slash) {
-            Q_strncpyz(newInfo.forcedHeadSkin, "default", sizeof(newInfo.forcedHeadSkin));
-        } else {
-            Q_strncpyz(newInfo.forcedHeadSkin, slash + 1, sizeof(newInfo.forcedHeadSkin));
-            *slash = 0;
-        }
+    // "st", which retail reads with %llu
+    for (v = Info_ValueForKey(configstring, "st"); *v >= '0' && *v <= '9'; v++) {
+        newInfo.steamId = newInfo.steamId * 10 + (uint64_t)(*v - '0');
     }
 
     if (cgs.gametype >= GT_TEAM) {
+        if (p) {
+            *p = '\0';
+        }
+        v = (newInfo.team == TEAM_RED) ? "red" : "blue";
+    } else if (p) {
+        *p = '\0';
+        v = p + 1;
+    } else {
+        v = "default";
+    }
+    Q_strncpyz(newInfo.headSkinName, v, sizeof(newInfo.headSkinName));
+
+    // the head that is loaded: "hmodel", or the body's own model when custom heads are not allowed
+    if (cgs.allowCustomHeadmodels) {
+        Q_strncpyz(newInfo.forcedHeadModel, Info_ValueForKey(configstring, "hmodel"), sizeof(newInfo.forcedHeadModel));
+    } else {
+        Q_strncpyz(newInfo.forcedHeadModel, newInfo.modelName, sizeof(newInfo.forcedHeadModel));
+    }
+    p = strchr(newInfo.forcedHeadModel, '/');
+    if (p) {
+        *p = '\0';
+        Q_strncpyz(newInfo.forcedHeadSkin, p + 1, sizeof(newInfo.forcedHeadSkin));
+    } else if (cgs.gametype >= GT_TEAM) {
         Q_strncpyz(newInfo.forcedHeadSkin, (newInfo.team == TEAM_RED) ? "red" : "blue", sizeof(newInfo.forcedHeadSkin));
+    } else {
+        Q_strncpyz(newInfo.forcedHeadSkin, "default", sizeof(newInfo.forcedHeadSkin));
     }
 
-    // [QL] apply gametype/enemy/team model forcing (CG_ResolveModelForClient, 0x1003e0c0).
-    // Non-local players get the forced enemy/team model+skin; the RR red team is forced to
-    // "bones" even for the local player. Guarded on cg.snap since this reads the player state.
-    if (cg.snap &&
-        (clientNum != cg.clientNum ||
-         (cgs.gametype == GT_RR && (cgs.customSettings & 0x4000000) && newInfo.team == TEAM_RED))) {
+    if (clientNum != cg.clientNum ||
+        (cgs.gametype == GT_RR && (cgs.customSettings & 0x4000000) && newInfo.team == TEAM_RED)) {
         CG_ResolveModelForClient(&newInfo, clientNum);
+    } else {
+        // the local player: the skin after '/', the team's colour in team games
+        p = strchr(newInfo.modelName, '/');
+        if (p) {
+            *p = '\0';
+            v = p + 1;
+        } else {
+            v = "default";
+        }
+        if (cgs.gametype >= GT_TEAM) {
+            if (newInfo.team == TEAM_RED) {
+                v = "red";
+            } else if (newInfo.team == TEAM_BLUE) {
+                v = "blue";
+            } else {
+                v = "default";
+            }
+            Q_strncpyz(newInfo.forcedHeadSkin, v, sizeof(newInfo.forcedHeadSkin));
+        }
+        Q_strncpyz(newInfo.skinName, v, sizeof(newInfo.skinName));
+
+        CG_SetEndScoreboardMenu();
     }
 
     // scan for an existing clientinfo that matches this modelname
     // so we can avoid loading checks if possible
     if (!CG_ScanForExistingClientInfo(&newInfo)) {
-        qboolean forceDefer;
-
-        forceDefer = trap_MemoryRemaining() < 4000000;
+        lowMemory = trap_MemoryRemaining() < 4000000;
 
         // if we are defering loads, just have it pick the first valid
-        if (forceDefer || (cg_deferPlayers.integer && !cg.loading)) {
-            // keep whatever they had if it won't violate team skins
+        if (lowMemory || (cg_deferPlayers.integer && !cg.loading)) {
             CG_SetDeferredClientInfo(clientNum, &newInfo);
             // if we are low on memory, leave them with this model
-            if (forceDefer) {
-                CG_Printf("Memory is low. Using deferred model.\n");
+            if (lowMemory) {
+                CG_Printf("Memory is low.  Using deferred model.\n");
                 newInfo.deferred = qfalse;
             }
         } else {
@@ -1179,14 +1121,38 @@ void CG_NewClientInfo(int clientNum) {
     newInfo.infoValid = qtrue;
     *ci = newInfo;
 
-    // [QL] when the LOCAL player's own info changes (join a team, leave spectator, change follow
-    // target - all rewrite our CS_PLAYERS configstring), re-resolve every other client's forced
-    // model/skin against the new viewer team. Without this a forced enemy model/skin is not
-    // re-applied on a team change and reverts to the team-colour skin (binary CG_NewClientInfo
-    // 0x1003e640 tail). CG_ForceModelChange skips cg.clientNum, so this does not recurse.
     if (clientNum == cg.clientNum) {
-        CG_ForceModelChange();
+        CG_ReloadOtherClients();
         CG_LoadDeferredPlayers();
+    }
+}
+
+/*
+======================
+CG_ReloadOtherClients
+
+[QL] 0x1003e440: every other player's info is read again, which resolves their forced models
+against the local player's team, and their model scale is measured again.
+======================
+*/
+void CG_ReloadOtherClients(void) {
+    int i;
+    clientInfo_t* ci;
+
+    for (i = 0; i < cgs.maxclients; i++) {
+        if (i == cg.clientNum) {
+            continue;
+        }
+        CG_NewClientInfo(i);
+        ci = &cgs.clientinfo[i];
+        if (!ci->infoValid) {
+            continue;
+        }
+        if (!Q_stricmpn(ci->modelName, "orbb", 4)) {
+            ci->modelScale = 1.0f;
+        } else {
+            CG_CalcModelScale(ci);
+        }
     }
 }
 
@@ -1197,6 +1163,9 @@ CG_LoadDeferredPlayers
 Called each frame when a player is dead
 and the scoreboard is up
 so deferred players can be loaded
+
+[QL] 0x1003edd0. Retail also registers each player's Steam avatar here (import +0x1fc); the fork
+has no Steam.
 ======================
 */
 void CG_LoadDeferredPlayers(void) {
@@ -1208,12 +1177,11 @@ void CG_LoadDeferredPlayers(void) {
         if (ci->infoValid && ci->deferred) {
             // if we are low on memory, leave it deferred
             if (trap_MemoryRemaining() < 4000000) {
-                CG_Printf("Memory is low. Using deferred model.\n");
+                CG_Printf("Memory is low.  Using deferred model.\n");
                 ci->deferred = qfalse;
                 continue;
             }
             CG_LoadClientInfo(i, ci);
-            //			break;
         }
     }
 }
@@ -2319,8 +2287,7 @@ Color_UnpackScale
 
 [QL] Unpacks a packed 0xRRGGBBAA colour (as held in the cg_*Color cvars' .integer) into
 a refEntity's byte shaderRGBA. Each RGB byte is multiplied by scale and clamped to 255;
-the alpha byte is copied straight through. scale is 2 when r_colorCorrectActive is set,
-otherwise 1 (a brighten-only step), matching Color_UnpackScale at 0x10057740.
+the alpha byte is copied straight through, matching Color_UnpackScale at 0x10057740.
 ==============
 */
 static void Color_UnpackScale(refEntity_t* ent, int packed, int scale) {
@@ -2339,30 +2306,29 @@ static void Color_UnpackScale(refEntity_t* ent, int packed, int scale) {
 ==============
 CG_PlayerTeamSkins
 
-// Address: 0x100419f0
-[QL] Tints the legs/torso/head refEntities with the enemy or team skin colour before they
-are added to the scene. The friend/enemy decision follows the spectator/follow rules used
-throughout QL; the per-part colours come from the cg_enemy*Color / cg_team*Color cvars
-(packed 0xRRGGBBAA). Dead bodies are darkened instead of team-tinted.
+[QL] 0x100419f0. Tints the legs, torso and head with the team or enemy colours
+(cg_team*Color / cg_enemy*Color, packed 0xRRGGBBAA), which the bright skins pick up through
+rgbGen entity. The viewer is cg.predictedPlayerState's client; a spectator who follows nobody
+sees blue as the enemy, and a forced red or blue team model decides that team's side. Dead
+bodies take cg_deadBodyColor. The colours are doubled unless Quake Live's colour correction pass
+is running (r_colorCorrectActive), which brightens the whole screen by the same factor; the
+fork's renderer has no such pass, so they are doubled.
 ==============
 */
 static void CG_PlayerTeamSkins(centity_t* cent, refEntity_t* legs, refEntity_t* torso, refEntity_t* head) {
-    int specTeam;
+    int viewerTeam;
     int playerTeam;
     qboolean useEnemy;
     int scale;
     vmCvar_t *legsColor, *torsoColor, *headColor;
 
-    specTeam = cgs.clientinfo[cg.snap->ps.clientNum].team;
+    viewerTeam = cgs.clientinfo[cg.predictedPlayerState.clientNum].team;
     playerTeam = cgs.clientinfo[cent->currentState.clientNum].team;
 
-    // [QL] pm_type & 2 (DAT_10a9c214) = spectator/dead; pm_flags & PMF_FOLLOW (DAT_10a9c21c) =
-    // following. Previously read from the swapped fields.
-    if (cgs.gametype < GT_TEAM || !(cg.snap->ps.pm_type & 2) ||
-        (cg.snap->ps.pm_flags & PMF_FOLLOW) ||
-        specTeam == TEAM_RED || specTeam == TEAM_BLUE) {
-        if (specTeam == playerTeam) {
-            useEnemy = (specTeam == TEAM_FREE);
+    if (cgs.gametype < GT_TEAM || !(cg.predictedPlayerState.pm_type & 2) ||
+        (cg.predictedPlayerState.pm_flags & PMF_FOLLOW) || viewerTeam == TEAM_RED || viewerTeam == TEAM_BLUE) {
+        if (viewerTeam == playerTeam) {
+            useEnemy = (viewerTeam == TEAM_FREE);
         } else {
             useEnemy = qtrue;
         }
@@ -2370,8 +2336,6 @@ static void CG_PlayerTeamSkins(centity_t* cent, refEntity_t* legs, refEntity_t* 
         useEnemy = (playerTeam == TEAM_BLUE);
     }
 
-    // forcing a per-team model pins that team's colour side: a forced red team
-    // always draws with the team colour, a forced blue team with the enemy colour.
     if (playerTeam == TEAM_RED) {
         if (cg_forceRedTeamModel.string[0]) {
             useEnemy = qfalse;
@@ -2380,9 +2344,10 @@ static void CG_PlayerTeamSkins(centity_t* cent, refEntity_t* legs, refEntity_t* 
         useEnemy = qtrue;
     }
 
-    // r_colorCorrectActive doubles the tint (brighten-only) to compensate the
-    // colour-correction pass; it is 1 otherwise.
-    scale = r_colorCorrectActive.integer ? 2 : 1;
+    scale = 1;
+    if (trap_Cvar_VariableValue("r_colorCorrectActive") == 0) {
+        scale = 2;
+    }
 
     // dead bodies are darkened with cg_deadBodyColor rather than team-tinted.
     if (cg_deadBodyDarken.integer && (cent->currentState.eFlags & EF_DEAD)) {

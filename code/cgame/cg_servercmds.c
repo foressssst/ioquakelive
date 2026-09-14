@@ -1098,6 +1098,11 @@ static void CG_ConfigStringModified(void) {
             cgs.gameSounds[num - CS_SOUNDS] = trap_S_RegisterSound(str, qfalse);
         }
     } else if (num >= CS_PLAYERS && num < CS_PLAYERS + MAX_CLIENTS) {
+        // [QL] a change to the local player's info also reloads everybody else at the end of the
+        // snapshot transition (0x10049d4c)
+        if (num - CS_PLAYERS == cg.clientNum) {
+            cg.reloadOtherClients = qtrue;
+        }
         CG_NewClientInfo(num - CS_PLAYERS);
         CG_BuildSpectatorString();
     } else if (num == CS_FLAGSTATUS) {

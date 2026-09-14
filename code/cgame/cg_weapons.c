@@ -206,118 +206,94 @@ static void CG_NailgunEjectBrass(centity_t* cent) {
 
 /*
 ==========================
-CG_GetRailColorFloat
-Address: 0x1004f280
-[QL] Team rail-colour override (float form, core colour scaled by 0.75).
-Returns qtrue and fills coreColor/ringColor from cg_teamRailColor1/2 when the
-force-team-rail-colour cvars are on for this rail's owner; qfalse falls back to
-the client's own colour1/colour2. ci is the rail owner.
-Binary tests cg_forceTeamRailColor1/2.integer == 1 exactly, not any nonzero value.
-Ring colour always uses cg_teamRailColor1 (QL quirk).
-Static in the binary; ci passed implicitly (EAX), an explicit parameter here.
+CG_WeaponColorForced
+
+[QL] The choice shared by the forced weapon colours (0x1004f280, 0x1004f420): nothing is forced
+unless cg_forceTeamWeaponColor or cg_forceEnemyWeaponColor is exactly 1, and never for the
+viewer's own rail. In FFA everybody else is an enemy. Returns the packed upper colour of the
+owner's side, or qfalse when that side is not forced.
 ==========================
 */
-static qboolean CG_GetRailColorFloat(clientInfo_t* ci, float* coreColor, byte* ringColor) {
+static qboolean CG_WeaponColorForced(clientInfo_t* ci, int* packedColor) {
     int viewer, owner;
-    qboolean forceTeamSkin;
+    qboolean teammate;
 
-    if (cg_forceTeamRailColor1.integer != 1 && cg_forceTeamRailColor2.integer != 1) {
+    if (cg_forceTeamWeaponColor.integer != 1 && cg_forceEnemyWeaponColor.integer != 1) {
         return qfalse;
     }
 
-    viewer = cg.snap->ps.clientNum;              // DAT_10a9c298 = cg.snap->ps.clientNum
-    owner = ci - cgs.clientinfo;                 // rail owner's client index
+    viewer = cg.predictedPlayerState.clientNum;
+    owner = ci - cgs.clientinfo;
 
-    forceTeamSkin = CG_ShouldForceTeamSkin(cgs.clientinfo[viewer].team, ci->team);
-
-    // Non-team gametypes: only the viewed player's own rail is "forced"
+    teammate = CG_ShouldForceTeamSkin(cgs.clientinfo[viewer].team, ci->team);
     if (cgs.gametype < GT_TEAM) {
-        forceTeamSkin = (viewer == owner);
+        teammate = (viewer == owner);
     }
-
-    // don't force the viewer's own rail
     if (viewer == owner) {
         return qfalse;
     }
 
-    if (forceTeamSkin) {
-        if (cg_forceTeamRailColor1.integer != 1) {
+    if (teammate) {
+        if (cg_forceTeamWeaponColor.integer != 1) {
             return qfalse;
         }
-        if (coreColor) {
-            coreColor[0] = (((cg_teamRailColor1[0] >> 24) & 0xff) / 255.0f) * 0.75f;
-            coreColor[1] = (((cg_teamRailColor1[0] >> 16) & 0xff) / 255.0f) * 0.75f;
-            coreColor[2] = (((cg_teamRailColor1[0] >> 8) & 0xff) / 255.0f) * 0.75f;
-        }
+        *packedColor = cg_teamUpperColor.integer;
     } else {
-        if (cg_forceTeamRailColor2.integer != 1) {
+        if (cg_forceEnemyWeaponColor.integer != 1) {
             return qfalse;
         }
-        if (coreColor) {
-            coreColor[0] = (((cg_teamRailColor2[0] >> 24) & 0xff) / 255.0f) * 0.75f;
-            coreColor[1] = (((cg_teamRailColor2[0] >> 16) & 0xff) / 255.0f) * 0.75f;
-            coreColor[2] = (((cg_teamRailColor2[0] >> 8) & 0xff) / 255.0f) * 0.75f;
-        }
+        *packedColor = cg_enemyUpperColor.integer;
+    }
+    return qtrue;
+}
+
+/*
+==========================
+CG_GetRailColorFloat
+
+[QL] 0x1004f280: the forced rail colour as three quarters of the side's upper colour. The ring
+colour is the team's upper colour even for enemies (0x1004f3e7).
+==========================
+*/
+static qboolean CG_GetRailColorFloat(clientInfo_t* ci, float* coreColor, byte* ringColor) {
+    int color;
+
+    if (!CG_WeaponColorForced(ci, &color)) {
+        return qfalse;
     }
 
+    if (coreColor) {
+        coreColor[0] = ((color >> 24) & 0xff) / 255.0 * 0.75;
+        coreColor[1] = ((color >> 16) & 0xff) / 255.0 * 0.75;
+        coreColor[2] = ((color >> 8) & 0xff) / 255.0 * 0.75;
+    }
     if (ringColor) {
-        ringColor[0] = (cg_teamRailColor1[0] >> 24) & 0xff;
-        ringColor[1] = (cg_teamRailColor1[0] >> 16) & 0xff;
-        ringColor[2] = (cg_teamRailColor1[0] >> 8) & 0xff;
+        ringColor[0] = (cg_teamUpperColor.integer >> 24) & 0xff;
+        ringColor[1] = (cg_teamUpperColor.integer >> 16) & 0xff;
+        ringColor[2] = (cg_teamUpperColor.integer >> 8) & 0xff;
     }
-
     return qtrue;
 }
 
 /*
 ==========================
 CG_GetRailColorByte
-Address: 0x1004f420
-[QL] Team rail-colour override (byte form, scaled by 0.75 and rounded). Same
-selection logic as CG_GetRailColorFloat; used for the ring sprite shaderRGBA.
+
+[QL] 0x1004f420: the same colour for the ring sprites, three quarters of each byte truncated.
 ==========================
 */
-static qboolean CG_GetRailColorByte(clientInfo_t* ci, byte* color) {
-    int viewer, owner;
-    qboolean forceTeamSkin;
+static qboolean CG_GetRailColorByte(clientInfo_t* ci, byte* rgb) {
+    int color;
 
-    if (cg_forceTeamRailColor1.integer != 1 && cg_forceTeamRailColor2.integer != 1) {
+    if (!CG_WeaponColorForced(ci, &color)) {
         return qfalse;
     }
 
-    viewer = cg.snap->ps.clientNum;
-    owner = ci - cgs.clientinfo;
-
-    forceTeamSkin = CG_ShouldForceTeamSkin(cgs.clientinfo[viewer].team, ci->team);
-
-    if (cgs.gametype < GT_TEAM) {
-        forceTeamSkin = (viewer == owner);
+    if (rgb) {
+        rgb[0] = (int)(((color >> 24) & 0xff) * 0.75);
+        rgb[1] = (int)(((color >> 16) & 0xff) * 0.75);
+        rgb[2] = (int)(((color >> 8) & 0xff) * 0.75);
     }
-
-    if (viewer == owner) {
-        return qfalse;
-    }
-
-    if (forceTeamSkin) {
-        if (cg_forceTeamRailColor1.integer != 1) {
-            return qfalse;
-        }
-        if (color) {
-            color[0] = (byte)(((cg_teamRailColor1[0] >> 24) & 0xff) * 0.75f + 0.5f);
-            color[1] = (byte)(((cg_teamRailColor1[0] >> 16) & 0xff) * 0.75f + 0.5f);
-            color[2] = (byte)(((cg_teamRailColor1[0] >> 8) & 0xff) * 0.75f + 0.5f);
-        }
-    } else {
-        if (cg_forceTeamRailColor2.integer != 1) {
-            return qfalse;
-        }
-        if (color) {
-            color[0] = (byte)(((cg_teamRailColor2[0] >> 24) & 0xff) * 0.75f + 0.5f);
-            color[1] = (byte)(((cg_teamRailColor2[0] >> 16) & 0xff) * 0.75f + 0.5f);
-            color[2] = (byte)(((cg_teamRailColor2[0] >> 8) & 0xff) * 0.75f + 0.5f);
-        }
-    }
-
     return qtrue;
 }
 
@@ -328,6 +304,7 @@ Address: 0x1004f670
 [QL] The rings-only disc beam drawn for any cg_railStyle other than 2 (the default
 is 1). One local entity, reType RT_RAIL_RINGS with railRingsShader; despite the
 "core" symbol name the binary sets reType = 5 (RT_RAIL_RINGS), not RT_RAIL_CORE.
+Unforced, it takes the owner's second colour (0x1004f725).
 ==========================
 */
 static void CG_RailTrailCore(clientInfo_t* ci, vec3_t start, vec3_t end) {
@@ -350,9 +327,9 @@ static void CG_RailTrailCore(clientInfo_t* ci, vec3_t start, vec3_t end) {
     VectorCopy(end, re->oldorigin);
 
     if (!CG_GetRailColorFloat(ci, le->color, NULL)) {
-        le->color[0] = ci->color1[0] * 0.75;
-        le->color[1] = ci->color1[1] * 0.75;
-        le->color[2] = ci->color1[2] * 0.75;
+        le->color[0] = ci->color2[0] * 0.75;
+        le->color[1] = ci->color2[1] * 0.75;
+        le->color[2] = ci->color2[2] * 0.75;
     }
     le->color[3] = 1.0f;
 
@@ -408,7 +385,7 @@ void CG_RailTrail(clientInfo_t* ci, vec3_t start, vec3_t end) {
     // [QL] view-relative origin adjustment (binary CG_RailTrail @0x1004f7b0).
     // Nudges the beam start (and therefore the spiral start) toward the drawn muzzle.
     {
-        int viewer = cg.snap->ps.clientNum;
+        int viewer = cg.predictedPlayerState.clientNum;
         int owner = ci - cgs.clientinfo;
 
         if (viewer != owner) {
@@ -423,24 +400,41 @@ void CG_RailTrail(clientInfo_t* ci, vec3_t start, vec3_t end) {
             VectorMA(re->origin, cg_gun_y.value * 0.75f, cg.refdef.viewaxis[1], re->origin);
             VectorMA(re->origin, fovOffset + cg_gun_z.value - 4.0f, cg.refdef.viewaxis[2], re->origin);
         } else {
-            // own rail, third person: per-view-model vertical offset
-            float zOffset = 1.0f;
-            // TODO [QL] the binary selects zOffset via a Q_stricmpn ladder over the
-            //   rail view-model path (-3.5 / -4.0 / -8.0); the compared strings were
-            //   not resolved from the binary, so the default (1.0) is used here.
+            // own rail, third person: the muzzle height depends on the player model (0x1004facf)
+            static const char* const shortModels[] = {
+                "bitterman", "major", "orbb", "razor", "sarge", "slash", "visor", "xaero",
+            };
+            float zOffset = -3.5f;
+
+            for (i = 0; i < (int)ARRAY_LEN(shortModels); i++) {
+                if (!Q_stricmp(ci->modelName, shortModels[i])) {
+                    zOffset = 1.0f;
+                    break;
+                }
+            }
+            if (i == (int)ARRAY_LEN(shortModels)) {
+                if (!Q_stricmp(ci->modelName, "ranger")) {
+                    zOffset = -4.0f;
+                } else if (!Q_stricmp(ci->modelName, "uriel")) {
+                    zOffset = -8.0f;
+                }
+            }
             VectorMA(re->origin, -5.5f, cg.refdef.viewaxis[1], re->origin);
             VectorMA(re->origin, zOffset, cg.refdef.viewaxis[2], re->origin);
         }
     }
 
-    // [QL] 0x1004fcb7: cg_railStyle 2 draws the spiral ring trail; any other value
-    // draws the rings-only disc beam (CG_RailTrailCore, called at 0x1005015d) and stops.
+    // [QL] 0x1004fcb7: cg_railStyle 2 draws the spiral ring trail; any other value draws the
+    // rings-only disc beam from the adjusted origin (CG_RailTrailCore, called at 0x1005015d) and
+    // stops.
     if (cg_railStyle.integer != 2) {
-        CG_RailTrailCore(ci, start, end);
+        CG_RailTrailCore(ci, re->origin, re->oldorigin);
         return;
     }
 
+    // [QL] the spiral starts 4 units below the beam (0x1004fcd4)
     VectorCopy(re->origin, move);
+    move[2] -= 4;
     VectorSubtract(end, move, vec);
     len = VectorNormalize(vec);
     PerpendicularVector(temp, vec);
@@ -1575,14 +1569,16 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
     angles[ROLL] = crandom() * 10;
     AnglesToAxis(angles, flash.axis);
 
-    // colorize the railgun blast
+    // colorize the railgun blast, with the forced ring colour when there is one (0x10052a90)
     if (weaponNum == WP_RAILGUN) {
         clientInfo_t* ci;
 
         ci = &cgs.clientinfo[cent->currentState.clientNum];
-        flash.shaderRGBA[0] = 255 * ci->color1[0];
-        flash.shaderRGBA[1] = 255 * ci->color1[1];
-        flash.shaderRGBA[2] = 255 * ci->color1[2];
+        if (!CG_GetRailColorFloat(ci, NULL, flash.shaderRGBA)) {
+            flash.shaderRGBA[0] = 255 * ci->color1[0];
+            flash.shaderRGBA[1] = 255 * ci->color1[1];
+            flash.shaderRGBA[2] = 255 * ci->color1[2];
+        }
     }
 
     CG_PositionRotatedEntityOnTag(&flash, &gun, weapon->weaponModel, "tag_flash");

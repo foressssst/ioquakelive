@@ -455,11 +455,19 @@ typedef struct {
 typedef struct {
     qboolean infoValid;
 
-    char name[MAX_QPATH];
+    // [QL] CG_NewClientInfo (0x1003e640) fills these from the player's configstring
+    char name[MAX_QPATH];      // the clan tag "cn", "^7 " and the name "n"
+    char clanTag[MAX_QPATH];   // "^7", the clan tag "cn" and "^7"
+    char clanName[MAX_QPATH];  // "xcn", the clan's full name
+    char country[MAX_QPATH];   // "c"
     team_t team;
-    uint64_t steamId;  // steam id for this client
+    uint64_t steamId;  // steam id for this client ("st")
 
-    int botSkill;  // 0 = not bot, 1-5 = bot
+    int botSkill;         // 0 = not bot, 1-5 = bot
+    float botSkillValue;  // [QL] the same "skill" key read as a float
+    int privileges;       // [QL] "p"
+    int specOnly;         // [QL] "so"
+    int playQueue;        // [QL] "pq"
 
     vec3_t color1;
     vec3_t color2;
@@ -779,6 +787,13 @@ typedef struct {
     // attacking player
     int attackerTime;
     int voiceTime;
+
+    // [QL] CG_PredictPlayerState (0x10044748) flags a reload of the other players' forced
+    // models when following starts or stops, the followed player changes or the team changes;
+    // CG_TransitionSnapshot (0x1004c2ba) carries it out
+    qboolean reloadOtherClients;
+    int reloadFollowing;
+    int reloadFollowedClient;
 
     // reward medals
     int rewardStack;
@@ -1668,11 +1683,6 @@ extern weaponInfo_t cg_weapons[MAX_WEAPONS];
 extern itemInfo_t cg_items[MAX_ITEMS];
 extern markPoly_t cg_markPolys[MAX_MARK_POLYS];
 
-// [QL] packed 0xRRGGBBAA team rail colours (DAT_10a377cc / DAT_10a6efac), parsed from the
-// team-rail-colour cvar strings. Bytes: >>24, >>16&0xff, >>8&0xff; core scaled by 0.75.
-extern int cg_teamRailColor1[1];
-extern int cg_teamRailColor2[1];
-
 // [QL] cgame-only cvar flag selecting the range-registration path in CG_RegisterCvars.
 #define CVAR_CG_RANGE 0x1000
 
@@ -1843,7 +1853,6 @@ extern vmCvar_t cg_forceTeamModel;
 extern vmCvar_t cg_forceTeamSkin;
 extern vmCvar_t cg_forceBlueTeamModel;
 extern vmCvar_t cg_forceRedTeamModel;
-extern vmCvar_t r_colorCorrectActive;  // [QL] renderer cvar mirror, tint scale in CG_PlayerTeamSkins
 extern vmCvar_t cg_hitBeep;
 extern vmCvar_t cg_killBeep;
 extern vmCvar_t cg_lightningImpactCap;
@@ -1914,15 +1923,16 @@ extern vmCvar_t cg_switchToEmpty;
 extern vmCvar_t cg_teamHeadColor;
 extern vmCvar_t cg_teamLowerColor;
 extern vmCvar_t cg_teamUpperColor;
+extern vmCvar_t cg_forceTeamWeaponColor;
+extern vmCvar_t cg_forceEnemyWeaponColor;
+extern vmCvar_t cg_weaponColor_grenade;
+extern vmCvar_t cg_playerTeam;  // [QL] ROM; its .integer keeps the viewer's last team (CG_PredictPlayerState)
 extern vmCvar_t cg_trueShotgun;
 extern vmCvar_t cg_vignette;
 extern vmCvar_t cg_zoomOutOnDeath;
 extern vmCvar_t cg_zoomScaling;
 extern vmCvar_t cg_zoomToggle;
 
-// [QL] team rail-colour gates (DAT_10a658ec / DAT_10a6288c; tested == 1 exactly).
-extern vmCvar_t cg_forceTeamRailColor1;
-extern vmCvar_t cg_forceTeamRailColor2;
 // [QL] positive-sense taunt gate (DAT_10a68eec). EV_TAUNT plays only when non-zero.
 extern vmCvar_t cg_allowTaunt;
 // [QL] GTS_LAST_STANDING announcer gate (DAT_10b716ec).
@@ -2044,7 +2054,7 @@ extern char teamChat2[256];
 void CG_AddLagometerFrameInfo(void);
 void CG_AddLagometerSnapshotInfo(snapshot_t* snap);
 void CG_CenterPrint(const char* str, int y, float scale);
-void CG_DrawHead(float x, float y, float w, float h, int clientNum, vec3_t headAngles);
+void CG_DrawHead(float x, float y, float w, float h, int clientNum, vec3_t headAngles, const byte* color);
 void CG_DrawActive(stereoFrame_t stereoView);
 void CG_DrawFlagModel(float x, float y, float w, float h, int team, qboolean force2D);
 void CG_DrawTeamBackground(int x, int y, int w, int h, float alpha, int team);
@@ -2084,7 +2094,7 @@ void CG_GetTeamColor(vec4_t* color);
 const char* CG_GetGameStatusText(void);
 const char* CG_GetMatchStatusText(void);
 const char* CG_GetKillerText(void);
-void CG_Draw3DModel(float x, float y, float w, float h, qhandle_t model, qhandle_t skin, vec3_t origin, vec3_t angles);
+void CG_Draw3DModel(float x, float y, float w, float h, qhandle_t model, qhandle_t skin, vec3_t origin, vec3_t angles, const byte* color);
 void CG_Text_PaintChar(float x, float y, float width, float height, float scale, float s, float t, float s2, float t2, qhandle_t hShader);
 void CG_CheckOrderPending(void);
 const char* CG_GameTypeString(void);
@@ -2104,15 +2114,15 @@ sfxHandle_t CG_CustomSound(int clientNum, const char* soundName);
 // [QL] model/skin forcing + scaling. CG_ResolveModelForClient, CG_CalcModelScale,
 // CG_PlayerTeamSkins and CG_PlayerFreezeEffect are file-static in cg_players.c;
 // CG_PlayerOutline and CG_Draw3DPlayerModel are cross-file (see below).
-qboolean CG_ShouldForceTeamSkin(int playerTeam, int viewerTeam);
+qboolean CG_ShouldForceTeamSkin(int viewerTeam, int playerTeam);
 // [QL] AD-objective outline decal - the binary calls this from the entity dispatch in
 // cg_ents.c (not from CG_Player), so it's declared here.
 void CG_PlayerOutline(centity_t* cent);
 // [QL] full legs+torso+head player model for the spectator/duel model owner-draws in
 // cg_newdraw.c (replaces the head-only CG_DrawHead stand-in).
 void CG_Draw3DPlayerModel(float x, float y, float w, float h, int clientNum, int weapon);
-void CG_ResolveBodySkinName(clientInfo_t* ci, int forceTeamSkin);
-void CG_ResolveHeadSkinName(clientInfo_t* ci, int forceTeamSkin);
+void CG_ResolveBodySkinName(clientInfo_t* ci, qboolean modelForced, qboolean skinForced);
+void CG_ResolveHeadSkinName(clientInfo_t* ci, qboolean modelForced, qboolean skinForced);
 void CG_UpdateAllModelScales(void);  // cross-file: called when the model-scale cvar changes
 
 //
@@ -2124,7 +2134,8 @@ void CG_Trace(trace_t* result, const vec3_t start, const vec3_t mins, const vec3
 void CG_CapsuleTrace(trace_t* result, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int skipNumber, int mask);
 void CG_PredictPlayerState(void);
 void CG_LoadDeferredPlayers(void);
-void CG_ForceModelChange(void);
+void CG_ReloadOtherClients(void);
+void CG_SetEndScoreboardMenu(void);  // [QL] 0x10028f30, cg_draw.c
 
 //
 // cg_events.c
@@ -2366,6 +2377,7 @@ void trap_Cvar_Register_Extended(vmCvar_t* vmCvar, const char* varName, const ch
 void trap_Cvar_Update(vmCvar_t* vmCvar);
 void trap_Cvar_Set(const char* var_name, const char* value);
 void trap_Cvar_VariableStringBuffer(const char* var_name, char* buffer, int bufsize);
+float trap_Cvar_VariableValue(const char* var_name);
 
 // ServerCommand and ConsoleCommand parameter access
 int trap_Argc(void);
