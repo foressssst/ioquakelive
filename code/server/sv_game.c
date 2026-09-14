@@ -892,6 +892,10 @@ static void SV_GI_IncrementSteamStat(int clientNum, int statID) { (void)clientNu
 static int SV_GI_GetSteamStat(int clientNum, int statID) { (void)clientNum; (void)statID; return 0; }
 static qboolean SV_GI_VerifySteamAuth(int clientNum) { (void)clientNum; return qtrue; }
 
+// [QL] import slot 206: whether a factory with this id is loaded, for callvote
+// map (quakelive_steam.exe 0x4e2a20)
+static qboolean SV_GI_FactoryExists(const char* id) { return SV_FindFactory(id) != NULL; }
+
 /*
 ===============
 SV_PopulateGameImports
@@ -1108,6 +1112,7 @@ static void SV_PopulateGameImports(void) {
     sv_gameImports.trap_IncrementSteamStat     = SV_GI_IncrementSteamStat;
     sv_gameImports.trap_GetSteamStat           = SV_GI_GetSteamStat;
     sv_gameImports.trap_VerifySteamAuth        = SV_GI_VerifySteamAuth;
+    sv_gameImports.trap_FactoryExists          = SV_GI_FactoryExists;
 }
 
 //==============================================

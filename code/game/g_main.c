@@ -624,7 +624,8 @@ static cvarTable_t gameCvarTable[] = {
     {&g_restarted, "g_restarted", "0", CVAR_ROM, 0, NULL},
 
     // latched vars
-    {&g_gametype, "g_gametype", "0", /* CVAR_ROM | */ CVAR_LATCH | CVAR_SERVERINFO, 0, NULL},
+    // [QL] read only, as in qagamex86.dll (0x64): the factory sets it
+    {&g_gametype, "g_gametype", "0", CVAR_ROM | CVAR_LATCH | CVAR_SERVERINFO, 0, NULL},
 
     {&g_maxclients, "sv_maxclients", "8", CVAR_LATCH | CVAR_SERVERINFO | CVAR_ARCHIVE, 0, NULL},
     {&g_maxGameClients, "g_maxGameClients", "0", CVAR_LATCH | CVAR_SERVERINFO | CVAR_ARCHIVE, 0, NULL},

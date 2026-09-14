@@ -1446,6 +1446,7 @@ void Cmd_CallVote_f(gentity_t *ent) {
     int clientNum = ent - g_entities;
     char arg1[MAX_STRING_TOKENS];
     char arg2[MAX_STRING_TOKENS];
+    char arg3[MAX_STRING_TOKENS];  // [QL] the factory of callvote map
     int vf = g_voteFlags.integer;
 
     // --- precondition checks ---
@@ -1499,8 +1500,9 @@ void Cmd_CallVote_f(gentity_t *ent) {
 
     trap_Argv(1, arg1, sizeof(arg1));
     trap_Argv(2, arg2, sizeof(arg2));
+    trap_Argv(3, arg3, sizeof(arg3));
 
-    if (!IsValidCallvoteArg(arg1) || !IsValidCallvoteArg(arg2)) {
+    if (!IsValidCallvoteArg(arg1) || !IsValidCallvoteArg(arg2) || !IsValidCallvoteArg(arg3)) {
         trap_SendServerCommand(clientNum, "print \"Invalid vote string.\n\"");
         return;
     }
@@ -1529,13 +1531,20 @@ void Cmd_CallVote_f(gentity_t *ent) {
         }
     }
     else if (!Q_stricmp(arg1, "map")) {
-        if (vf & VF_MAP) {
+        // [QL] callvote map <map> [factory] (qagamex86.dll 0x10042520..0x100425b0):
+        // naming a factory is a gametype vote, which VF_GAMETYPE disables
+        if ((vf & VF_MAP) && ent->client->sess.privileges < 1) {
             trap_SendServerCommand(clientNum,
-                "print \"Voting to change the map being played is disabled.\n\"");
+                "print \"Voting to change the map being played is disabled on this server.\n\"");
             return;
         }
         if (!arg2[0]) {
             trap_SendServerCommand(clientNum, "print \"Missing map name.\n\"");
+            return;
+        }
+        if ((vf & VF_GAMETYPE) && arg3[0] && ent->client->sess.privileges < 1) {
+            trap_SendServerCommand(clientNum,
+                "print \"Voting to change the gametype being played is disabled on this server.\n\"");
             return;
         }
         {
@@ -1545,9 +1554,14 @@ void Cmd_CallVote_f(gentity_t *ent) {
             if (trap_FS_FOpenFile(bspPath, &f, FS_READ) < 0) {
                 trap_SendServerCommand(clientNum,
                     "print \"Map does not exist.\n\"");
+                trap_FS_FCloseFile(f);
                 return;
             }
             trap_FS_FCloseFile(f);
+        }
+        if (arg3[0] && !trap_FactoryExists(arg3)) {
+            trap_SendServerCommand(clientNum, "print \"Factory does not exist.\n\"");
+            return;
         }
     }
     else if (!Q_stricmp(arg1, "kick") || !Q_stricmp(arg1, "clientkick")) {
@@ -1794,8 +1808,14 @@ void Cmd_CallVote_f(gentity_t *ent) {
     // --- build vote string (for commands not handled above) ---
 
     if (!Q_stricmp(arg1, "map")) {
-        Com_sprintf(level.voteString, sizeof(level.voteString),
-            "%s %s", arg1, arg2);
+        // [QL] with the factory when one was named (qagamex86.dll 0x10042c8d)
+        if (arg3[0]) {
+            Com_sprintf(level.voteString, sizeof(level.voteString),
+                "%s %s %s", arg1, arg2, arg3);
+        } else {
+            Com_sprintf(level.voteString, sizeof(level.voteString),
+                "%s %s", arg1, arg2);
+        }
         Com_sprintf(level.voteDisplayString, sizeof(level.voteDisplayString),
             "%s", level.voteString);
     } else if (!Q_stricmp(arg1, "nextmap")) {
