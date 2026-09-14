@@ -30,6 +30,31 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 /*
 ===================
+CG_IsTeamGametype
+
+[QL] cgamex86.dll 0x10001060: everything but FFA, duel, race and Red Rover
+===================
+*/
+static qboolean CG_IsTeamGametype(int gametype) {
+    return gametype < GT_FFA || (gametype > GT_RACE && gametype != GT_RR);
+}
+
+/*
+===================
+CG_RaceBeep
+
+[QL] cgamex86.dll 0x1001ac32: race start and checkpoints beep with cg_killBeep's sounds,
+picked by cg_raceBeep 1-8
+===================
+*/
+static void CG_RaceBeep(void) {
+    if (cg_raceBeep.integer >= 1 && cg_raceBeep.integer <= 8) {
+        trap_S_StartLocalSound(cgs.media.killBeepSounds[cg_raceBeep.integer - 1], CHAN_LOCAL_SOUND);
+    }
+}
+
+/*
+===================
 CG_PlaceString
 
 Also called by scoreboard drawing
@@ -538,10 +563,13 @@ static void CG_Obituary(entityState_t* ent) {
 /*
 ===============
 CG_UseItem
+
+[QL] cgamex86.dll 0x10019af0. An item number past the holdables is an error, not an empty
+use. cg_useItemWarning sizes the "No item to use" print and cg_useItemMessage the "Use %s"
+one: 1 is scale 0.5, 2 is 0.25, anything else prints nothing.
 ===============
 */
 static void CG_UseItem(centity_t* cent) {
-    clientInfo_t* ci;
     int itemNum, clientNum;
     gitem_t* item;
     entityState_t* es;
@@ -549,43 +577,39 @@ static void CG_UseItem(centity_t* cent) {
     es = &cent->currentState;
 
     itemNum = (es->event & ~EV_EVENT_BITS) - EV_USE_ITEM0;
-    if (itemNum < 0 || itemNum > HI_NUM_HOLDABLE) {
-        itemNum = 0;
+    if (itemNum < 0 || itemNum >= HI_NUM_HOLDABLE) {
+        CG_Error("CG_UseItem: invalid item %d", itemNum);
     }
 
     // print a message if the local player
     if (es->number == cg.snap->ps.clientNum) {
         if (!itemNum) {
-            // [QL] 0x10019b53: y 144, scale 0.5 (0.25 when retail's gating cvar is 2)
-            CG_CenterPrint("No item to use", 144, 0.5f);
+            if (cg_useItemWarning.integer == 1) {
+                CG_CenterPrint("No item to use", 144, 0.5f);
+            } else if (cg_useItemWarning.integer == 2) {
+                CG_CenterPrint("No item to use", 144, 0.25f);
+            }
         } else {
             item = BG_FindItemForHoldable(itemNum);
-            CG_CenterPrint(va("Use %s", item->pickup_name), 144, 0.5f);
+            if (cg_useItemMessage.integer == 1) {
+                CG_CenterPrint(va("Use %s", item->pickup_name), 144, 0.5f);
+            } else if (cg_useItemMessage.integer == 2) {
+                CG_CenterPrint(va("Use %s", item->pickup_name), 144, 0.25f);
+            }
         }
     }
 
     switch (itemNum) {
-        default:
         case HI_NONE:
             trap_S_StartSound(NULL, es->number, CHAN_BODY, cgs.media.useNothingSound);
             break;
 
-        case HI_TELEPORTER:
-            break;
-
         case HI_MEDKIT:
-            clientNum = cent->currentState.clientNum;
-            if (clientNum >= 0 && clientNum < MAX_CLIENTS) {
-                ci = &cgs.clientinfo[clientNum];
-                ci->medkitUsageTime = cg.time;
+            clientNum = es->clientNum;
+            if ((unsigned)clientNum < MAX_CLIENTS) {
+                cgs.clientinfo[clientNum].medkitUsageTime = cg.time;
             }
             trap_S_StartSound(NULL, es->number, CHAN_BODY, cgs.media.medkitSound);
-            break;
-
-        case HI_KAMIKAZE:
-            break;
-
-        case HI_PORTAL:
             break;
 
         case HI_INVULNERABILITY:
@@ -676,7 +700,7 @@ int CG_WaterLevel(centity_t* cent) {
 ================
 CG_PainEvent
 
-Also called by playerstate transition
+[QL] cgamex86.dll 0x10019ca0. Retail has no underwater gurp: the pain sound plays either way.
 ================
 */
 void CG_PainEvent(centity_t* cent, int health) {
@@ -696,19 +720,11 @@ void CG_PainEvent(centity_t* cent, int health) {
     } else {
         snd = "*pain100_1.wav";
     }
-    // play a gurp sound instead of a normal pain sound
-    if (CG_WaterLevel(cent) == 3) {
-        if (rand() & 1) {
-            trap_S_StartSound(NULL, cent->currentState.number, CHAN_VOICE, CG_CustomSound(cent->currentState.number, "sound/player/gurp1.ogg"));
-        } else {
-            trap_S_StartSound(NULL, cent->currentState.number, CHAN_VOICE, CG_CustomSound(cent->currentState.number, "sound/player/gurp2.ogg"));
-        }
-    } else {
-        trap_S_StartSound(NULL, cent->currentState.number, CHAN_VOICE, CG_CustomSound(cent->currentState.number, snd));
-    }
+    trap_S_StartSound(NULL, cent->currentState.number, CHAN_VOICE, CG_CustomSound(cent->currentState.number, snd));
+
     // save pain time for programitic twitch animation
-    cent->pe.painTime = cg.time;
     cent->pe.painDirection ^= 1;
+    cent->pe.painTime = cg.time;
 }
 
 /*
@@ -838,7 +854,8 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             }
 
             // boing sound at origin, jump sound on player
-            trap_S_StartSound(cent->lerpOrigin, -1, CHAN_VOICE, cgs.media.jumpPadSound);
+            // [QL] 0x1001a1f0: the pad sound belongs to the world
+            trap_S_StartSound(cent->lerpOrigin, ENTITYNUM_WORLD, CHAN_AUTO, cgs.media.jumpPadSound);
             trap_S_StartSound(NULL, es->number, CHAN_VOICE, CG_CustomSound(es->number, "*jump1.wav"));
             break;
 
@@ -913,7 +930,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                 index = es->eventParm;  // player predicted
 
                 if (index < 1 || index >= bg_numItems) {
-                    break;
+                    CG_Error("CG_EntityEvent: invalid item index %d\n", index);
                 }
                 item = &bg_itemlist[index];
 
@@ -921,23 +938,26 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                 // will be played at prediction time
                 if (item->giType == IT_POWERUP || item->giType == IT_TEAM) {
                     trap_S_StartSound(NULL, es->number, CHAN_AUTO, cgs.media.n_healthSound);
-                } else if (item->giType == IT_PERSISTANT_POWERUP) {
-                    switch (item->giTag) {
-                        case PW_SCOUT:
-                            trap_S_StartSound(NULL, es->number, CHAN_AUTO, cgs.media.scoutSound);
-                            break;
-                        case PW_GUARD:
-                            trap_S_StartSound(NULL, es->number, CHAN_AUTO, cgs.media.guardSound);
-                            break;
-                        case PW_DOUBLER:
-                            trap_S_StartSound(NULL, es->number, CHAN_AUTO, cgs.media.doublerSound);
-                            break;
-                        case PW_AMMOREGEN:
-                            trap_S_StartSound(NULL, es->number, CHAN_AUTO, cgs.media.ammoregenSound);
-                            break;
-                    }
                 } else {
                     trap_S_StartSound(NULL, es->number, CHAN_AUTO, trap_S_RegisterSound(item->pickup_sound, qfalse));
+                }
+
+                // [QL] 0x1001a553: a rune's name is announced
+                if (item->giType == IT_PERSISTANT_POWERUP) {
+                    switch (item->giTag) {
+                        case PW_SCOUT:
+                            CG_AddBufferedSound(cgs.media.scoutVoSound);
+                            break;
+                        case PW_GUARD:
+                            CG_AddBufferedSound(cgs.media.guardVoSound);
+                            break;
+                        case PW_DOUBLER:
+                            CG_AddBufferedSound(cgs.media.damageVoSound);
+                            break;
+                        case PW_AMMOREGEN:
+                            CG_AddBufferedSound(cgs.media.armorRegenVoSound);
+                            break;
+                    }
                 }
 
                 // show icon and name on status bar
@@ -956,12 +976,39 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                 index = es->eventParm;  // player predicted
 
                 if (index < 1 || index >= bg_numItems) {
-                    break;
+                    CG_Error("CG_EntityEvent: invalid item index %d\n", index);
                 }
                 item = &bg_itemlist[index];
                 // powerup pickups are global
                 if (item->pickup_sound) {
                     trap_S_StartSound(NULL, cg.snap->ps.clientNum, CHAN_AUTO, trap_S_RegisterSound(item->pickup_sound, qfalse));
+                }
+
+                // [QL] 0x1001a61d: the powerup's name is announced unless the server's custom
+                // settings turn that off, and a spectator set to follow powerups follows the
+                // player who took it
+                if (cgs.customSettings & 0x40000) {
+                    break;
+                }
+                switch (item->giTag) {
+                    case PW_QUAD:
+                        CG_AddBufferedSound(cgs.media.quadDamageVoSound);
+                        break;
+                    case PW_BATTLESUIT:
+                        CG_AddBufferedSound(cgs.media.battleSuitVoSound);
+                        break;
+                    case PW_HASTE:
+                        CG_AddBufferedSound(cgs.media.hasteVoSound);
+                        break;
+                    case PW_INVIS:
+                        CG_AddBufferedSound(cgs.media.invisibilityVoSound);
+                        break;
+                    case PW_REGEN:
+                        CG_AddBufferedSound(cgs.media.regenerationVoSound);
+                        break;
+                }
+                if (item->giType == IT_POWERUP) {
+                    CG_SpecAutoFollow(es->otherEntityNum, 0);
                 }
 
                 // show icon and name on status bar
@@ -991,9 +1038,9 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_DROP_WEAPON:
             DEBUGNAME("EV_DROP_WEAPON");
-            // [QL] auto-switch to next available weapon when local player drops
-            if (es->number == cg.snap->ps.clientNum) {
-                CG_NextWeapon_f();
+            // [QL] 0x1001a723: eventParm is the weapon that was dropped
+            if (es->clientNum == cg.clientNum) {
+                CG_DropWeaponChange(es->eventParm);
             }
             break;
         case EV_FIRE_WEAPON:
@@ -1061,10 +1108,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             DEBUGNAME("EV_USE_ITEM14");
             CG_UseItem(cent);
             break;
-        case EV_USE_ITEM15:
-            DEBUGNAME("EV_USE_ITEM15");
-            CG_UseItem(cent);
-            break;
+        // [QL] retail has no EV_USE_ITEM15 case: it lands on "Unknown event"
 
         //=================================================================
 
@@ -1135,11 +1179,11 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_JUICED:
             DEBUGNAME("EV_JUICED");
-            // [QL] repurposed (binary 0x47): in freeze tag this is the "player
-            // frozen" ice effect; in every other gametype it gibs the player.
-            // Binary gates on DAT_10a5f430 (freeze media / freeze-tag active).
-            if (cgs.gametype == GT_FREEZE) {
-                CG_FreezeEffect(cent->lerpOrigin);
+            // [QL] 0x1001ab39: the gore pack's skull handle picks the effect, as in
+            // CG_GibPlayer. With the pack the player swells in the juicer model
+            // (0x10013920) and bursts after five seconds; without it they gib now.
+            if (cgs.media.gibSkull) {
+                CG_InvulnerabilityJuiced(cent->lerpOrigin);
             } else {
                 CG_GibPlayer(cent->lerpOrigin, NULL);
             }
@@ -1183,11 +1227,12 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             DEBUGNAME("EV_RAILTRAIL");
             cent->currentState.weapon = WP_RAILGUN;
 
-            if (es->clientNum == cg.snap->ps.clientNum && !cg.renderingThirdPerson) {
-                if (cg_drawGun.integer == 2)
-                    VectorMA(es->origin2, 8, cg.refdef.viewaxis[1], es->origin2);
-                else if (cg_drawGun.integer == 3)
-                    VectorMA(es->origin2, 4, cg.refdef.viewaxis[1], es->origin2);
+            // [QL] 0x1001b0bd: CG_CheckAutoFire already drew the local player's own shot,
+            // trail and impact, when it was predicted
+            if (!cg_nopredict.integer && !cg.renderingThirdPerson && cg_predictLocalRailshots.integer &&
+                !(cg.snap && cg.snap->ps.pm_type == PM_SPECTATOR) &&
+                cg.predictedPlayerEntity.currentState.clientNum == es->clientNum) {
+                break;
             }
 
             CG_RailTrail(ci, es->origin2, es->pos.trBase);
@@ -1195,7 +1240,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             // if the end was on a nomark surface, don't make an explosion
             if (es->eventParm != 255) {
                 ByteToDir(es->eventParm, dir);
-                CG_MissileHitWall(es->weapon, es->clientNum, position, dir, IMPACTSOUND_DEFAULT);
+                CG_MissileHitWall(es->weapon, es->clientNum, es->pos.trBase, dir, IMPACTSOUND_DEFAULT);
             }
             break;
 
@@ -1237,181 +1282,294 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
 
         case EV_GLOBAL_TEAM_SOUND:  // play from the player's head so it never diminishes
         {
+            // [QL] 0x1001b33a. "team" is the local client's team as the scoreboard knows it.
+            int team = cgs.clientinfo[cg.clientNum].team;
+
             DEBUGNAME("EV_GLOBAL_TEAM_SOUND");
             switch (es->eventParm) {
                 case GTS_RED_CAPTURE:  // CTF: red team captured the blue flag, 1FCTF: red team captured the neutral flag
-                    if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_RED)
-                        CG_AddBufferedSound(cgs.media.captureYourTeamSound);
-                    else
-                        CG_AddBufferedSound(cgs.media.captureOpponentSound);
+                    trap_S_StartLocalSound(team == TEAM_RED ? cgs.media.captureYourTeamSound : cgs.media.captureOpponentSound,
+                                           CHAN_LOCAL_SOUND);
                     break;
                 case GTS_BLUE_CAPTURE:  // CTF: blue team captured the red flag, 1FCTF: blue team captured the neutral flag
-                    if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_BLUE)
-                        CG_AddBufferedSound(cgs.media.captureYourTeamSound);
-                    else
-                        CG_AddBufferedSound(cgs.media.captureOpponentSound);
+                    trap_S_StartLocalSound(team == TEAM_BLUE ? cgs.media.captureYourTeamSound : cgs.media.captureOpponentSound,
+                                           CHAN_LOCAL_SOUND);
                     break;
                 case GTS_RED_RETURN:  // CTF: blue flag returned, 1FCTF: never used
-                    if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_RED)
-                        CG_AddBufferedSound(cgs.media.returnYourTeamSound);
-                    else
-                        CG_AddBufferedSound(cgs.media.returnOpponentSound);
-                    //
-                    CG_AddBufferedSound(cgs.media.blueFlagReturnedSound);
+                    if (team == TEAM_BLUE) {
+                        trap_S_StartLocalSound(cgs.media.returnOpponentSound, CHAN_LOCAL_SOUND);
+                        CG_AddBufferedSound(cgs.media.yourFlagReturnedSound);
+                    } else if (team == TEAM_RED) {
+                        trap_S_StartLocalSound(cgs.media.returnYourTeamSound, CHAN_LOCAL_SOUND);
+                        CG_AddBufferedSound(cgs.media.enemyFlagReturnedSound);
+                    } else {
+                        CG_AddBufferedSound(cgs.media.blueFlagReturnedSound);
+                    }
                     break;
                 case GTS_BLUE_RETURN:  // CTF red flag returned, 1FCTF: neutral flag returned
-                    if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_BLUE)
-                        CG_AddBufferedSound(cgs.media.returnYourTeamSound);
-                    else
-                        CG_AddBufferedSound(cgs.media.returnOpponentSound);
-                    //
-                    CG_AddBufferedSound(cgs.media.redFlagReturnedSound);
+                    if (team == TEAM_RED) {
+                        trap_S_StartLocalSound(cgs.media.returnOpponentSound, CHAN_LOCAL_SOUND);
+                        CG_AddBufferedSound(cgs.media.yourFlagReturnedSound);
+                    } else if (team == TEAM_BLUE) {
+                        trap_S_StartLocalSound(cgs.media.returnYourTeamSound, CHAN_LOCAL_SOUND);
+                        CG_AddBufferedSound(cgs.media.enemyFlagReturnedSound);
+                    } else {
+                        CG_AddBufferedSound(cgs.media.redFlagReturnedSound);
+                    }
                     break;
 
                 case GTS_RED_TAKEN:  // CTF: red team took blue flag, 1FCTF: blue team took the neutral flag
+                    CG_SpecAutoFollow(es->otherEntityNum, 1);
                     // if this player picked up the flag then a sound is played in CG_CheckLocalSounds
                     if (cg.snap->ps.powerups[PW_BLUEFLAG] || cg.snap->ps.powerups[PW_NEUTRALFLAG]) {
-                    } else {
-                        if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_BLUE) {
-                            if (cgs.gametype == GT_1FCTF)
-                                CG_AddBufferedSound(cgs.media.yourTeamTookTheFlagSound);
-                            else
-                                CG_AddBufferedSound(cgs.media.enemyTookYourFlagSound);
-                        } else if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_RED) {
-                            if (cgs.gametype == GT_1FCTF)
-                                CG_AddBufferedSound(cgs.media.enemyTookTheFlagSound);
-                            else
-                                CG_AddBufferedSound(cgs.media.yourTeamTookEnemyFlagSound);
+                        break;
+                    }
+                    if (team == TEAM_BLUE) {
+                        if (cgs.gametype == GT_1FCTF) {
+                            trap_S_StartLocalSound(cgs.media.returnYourTeamSound, CHAN_LOCAL_SOUND);
+                        } else {
+                            CG_AddBufferedSound(cgs.media.enemyTookYourFlagSound);
                         }
+                    } else if (team == TEAM_RED) {
+                        if (cgs.gametype == GT_1FCTF) {
+                            trap_S_StartLocalSound(cgs.media.returnOpponentSound, CHAN_LOCAL_SOUND);
+                        } else {
+                            CG_AddBufferedSound(cgs.media.yourTeamTookEnemyFlagSound);
+                        }
+                    } else {
+                        CG_AddBufferedSound(cgs.media.blueFlagTakenSound);
                     }
                     break;
                 case GTS_BLUE_TAKEN:  // CTF: blue team took the red flag, 1FCTF red team took the neutral flag
+                    CG_SpecAutoFollow(es->otherEntityNum, 1);
                     // if this player picked up the flag then a sound is played in CG_CheckLocalSounds
                     if (cg.snap->ps.powerups[PW_REDFLAG] || cg.snap->ps.powerups[PW_NEUTRALFLAG]) {
-                    } else {
-                        if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_RED) {
-                            if (cgs.gametype == GT_1FCTF)
-                                CG_AddBufferedSound(cgs.media.yourTeamTookTheFlagSound);
-                            else
-                                CG_AddBufferedSound(cgs.media.enemyTookYourFlagSound);
-                        } else if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_BLUE) {
-                            if (cgs.gametype == GT_1FCTF)
-                                CG_AddBufferedSound(cgs.media.enemyTookTheFlagSound);
-                            else
-                                CG_AddBufferedSound(cgs.media.yourTeamTookEnemyFlagSound);
+                        break;
+                    }
+                    if (team == TEAM_RED) {
+                        if (cgs.gametype == GT_1FCTF) {
+                            trap_S_StartLocalSound(cgs.media.returnYourTeamSound, CHAN_LOCAL_SOUND);
+                        } else {
+                            CG_AddBufferedSound(cgs.media.enemyTookYourFlagSound);
                         }
+                    } else if (team == TEAM_BLUE) {
+                        if (cgs.gametype == GT_1FCTF) {
+                            trap_S_StartLocalSound(cgs.media.returnOpponentSound, CHAN_LOCAL_SOUND);
+                        } else {
+                            CG_AddBufferedSound(cgs.media.yourTeamTookEnemyFlagSound);
+                        }
+                    } else {
+                        CG_AddBufferedSound(cgs.media.redFlagTakenSound);
                     }
                     break;
+
                 case GTS_REDOBELISK_ATTACKED:  // Overload: red obelisk is being attacked
-                    if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_RED) {
+                    if (team == TEAM_RED) {
                         CG_AddBufferedSound(cgs.media.yourBaseIsUnderAttackSound);
                     }
                     break;
                 case GTS_BLUEOBELISK_ATTACKED:  // Overload: blue obelisk is being attacked
-                    if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_BLUE) {
+                    if (team == TEAM_BLUE) {
                         CG_AddBufferedSound(cgs.media.yourBaseIsUnderAttackSound);
                     }
                     break;
+
                 case GTS_REDTEAM_SCORED:
-                    CG_AddBufferedSound(cgs.media.redScoredSound);
+                    if (cgs.gametype == GT_FREEZE) {
+                        CG_CenterPrint("Red Scores", 90, 0.5f);
+                    }
+                    if (cgs.gametype == GT_AD) {
+                        break;
+                    }
+                    if (team == TEAM_RED) {
+                        CG_AddBufferedSound(cgs.media.yourTeamScoredSound);
+                    } else if (team == TEAM_BLUE) {
+                        CG_AddBufferedSound(cgs.media.enemyScoredSound);
+                    } else {
+                        CG_AddBufferedSound(cgs.media.redScoredSound);
+                    }
                     break;
                 case GTS_BLUETEAM_SCORED:
-                    CG_AddBufferedSound(cgs.media.blueScoredSound);
+                    if (cgs.gametype == GT_FREEZE) {
+                        CG_CenterPrint("Blue Scores", 90, 0.5f);
+                    }
+                    if (cgs.gametype == GT_AD) {
+                        break;
+                    }
+                    if (team == TEAM_BLUE) {
+                        CG_AddBufferedSound(cgs.media.yourTeamScoredSound);
+                    } else if (team == TEAM_RED) {
+                        CG_AddBufferedSound(cgs.media.enemyScoredSound);
+                    } else {
+                        CG_AddBufferedSound(cgs.media.blueScoredSound);
+                    }
                     break;
                 case GTS_REDTEAM_TOOK_LEAD:
-                    CG_AddBufferedSound(cgs.media.redLeadsSound);
+                    if (cgs.gametype == GT_AD || !cg_announcerLeadsVO.integer) {
+                        break;
+                    }
+                    if (team == TEAM_RED) {
+                        CG_AddBufferedSound(cgs.media.takenLeadSound);
+                    } else if (team == TEAM_BLUE) {
+                        CG_AddBufferedSound(cgs.media.lostLeadSound);
+                    } else {
+                        CG_AddBufferedSound(cgs.media.redLeadsSound);
+                    }
                     break;
                 case GTS_BLUETEAM_TOOK_LEAD:
-                    CG_AddBufferedSound(cgs.media.blueLeadsSound);
+                    if (cgs.gametype == GT_AD || !cg_announcerLeadsVO.integer) {
+                        break;
+                    }
+                    if (team == TEAM_BLUE) {
+                        CG_AddBufferedSound(cgs.media.takenLeadSound);
+                    } else if (team == TEAM_RED) {
+                        CG_AddBufferedSound(cgs.media.lostLeadSound);
+                    } else {
+                        CG_AddBufferedSound(cgs.media.blueLeadsSound);
+                    }
                     break;
                 case GTS_TEAMS_ARE_TIED:
-                    CG_AddBufferedSound(cgs.media.teamsTiedSound);
+                    if (cgs.gametype != GT_AD && cg_announcerTiesVO.integer) {
+                        CG_AddBufferedSound(cgs.media.teamsTiedSound);
+                    }
                     break;
                 case GTS_KAMIKAZE:
-                    trap_S_StartLocalSound(cgs.media.kamikazeFarSound, CHAN_ANNOUNCER);
+                    trap_S_StartLocalSound(cgs.media.kamikazeFarSound, CHAN_LOCAL_SOUND);
                     break;
 
-                // ============================================================
-                // [QL] GTS 14-24 (binary CG_EntityEvent inner switch on eventParm).
-                // Binary-verified transport (see global_team_sound_t):
-                //   es->eventParm   = GTS_* index (this switch)
-                //   es->modelindex2 = affected/surviving/capturing team
-                //   es->powerups    = DOM point id (GTS_DOMINATION_POINT_CAPTURE)
-                // ============================================================
-                case GTS_REDTEAM_WON:  // 14 (binary case 0xe)
-                {
-                    int myTeam = cgs.clientinfo[cg.clientNum].team;
+                // [QL] the match and round results. Once a match result is announced the
+                // announcer queue takes nothing more until the map restarts.
+                case GTS_REDTEAM_WON:  // 14
                     CG_ResetAnnouncements();
-                    // TODO: match-win buzzer gated on cg_teamEventSounds in
-                    // the binary; that cvar is not yet in ioquakelive, so play the
-                    // fanfare unconditionally for now.
-                    trap_S_StartLocalSound(cgs.media.countFightSound, CHAN_ANNOUNCER);
-                    if (myTeam == TEAM_RED)
-                        trap_S_StartBackgroundTrack("music/win", "");
-                    else if (myTeam == TEAM_BLUE)
-                        trap_S_StartBackgroundTrack("music/loss", "");
-                    CG_QueueAnnouncement(cgs.media.redWinsSound);
-                    cg.intermissionStarted = qtrue;
-                    break;
-                }
-                case GTS_BLUETEAM_WON:  // 15 (binary case 0xf)
-                {
-                    int myTeam = cgs.clientinfo[cg.clientNum].team;
-                    CG_ResetAnnouncements();
-                    trap_S_StartLocalSound(cgs.media.countFightSound, CHAN_ANNOUNCER);
-                    if (myTeam == TEAM_BLUE)
-                        trap_S_StartBackgroundTrack("music/win", "");
-                    else if (myTeam == TEAM_RED)
-                        trap_S_StartBackgroundTrack("music/loss", "");
-                    CG_QueueAnnouncement(cgs.media.blueWinsSound);
-                    cg.intermissionStarted = qtrue;
-                    break;
-                }
-                case GTS_RED_WINS_ROUND:  // 16 (binary case 0x10)
-                    CG_CenterPrint("Red Team Wins Round!", 90, 0.5f);
-                    CG_QueueAnnouncement(cgs.media.redWinsRoundSound);
-                    break;
-                case GTS_BLUE_WINS_ROUND:  // 17 (binary case 0x11)
-                    CG_CenterPrint("Blue Team Wins Round!", 90, 0.5f);
-                    CG_QueueAnnouncement(cgs.media.blueWinsRoundSound);
-                    break;
-                case GTS_DRAW_ROUND:  // 18 (binary case 0x12)
-                    CG_ResetAnnouncements();
-                    CG_CenterPrint("Round Draw", 90, 0.5f);
-                    CG_QueueAnnouncement(cgs.media.roundDrawSound);
-                    // [QL] Red Rover elimination also lists the surviving
-                    // players parsed from a server id string (cgs.nextmaps in the
-                    // binary); that source is not yet mirrored into cgs, so only the
-                    // common path is ported.
-                    break;
-                case GTS_LAST_STANDING:  // 19 (binary case 0x13)
-                    // gate: cg_announcerLastStanding, and only for the surviving
-                    // team (es->modelindex2 == local player's team).
-                    if (cg_announcerLastStanding.integer &&
-                        cgs.clientinfo[cg.clientNum].team == es->modelindex2) {
-                        CG_QueueAnnouncement(cgs.media.lastStandingSound);
+                    if (cg_buzzerSound.integer) {
+                        trap_S_StartLocalSound(cgs.media.buzzerSound, CHAN_LOCAL_SOUND);
                     }
+                    if (team == TEAM_RED) {
+                        trap_S_StartBackgroundTrack("music/win", NULL);
+                    } else if (team == TEAM_BLUE) {
+                        trap_S_StartBackgroundTrack("music/loss", NULL);
+                    }
+                    CG_AddBufferedSound(cgs.media.redWinsSound);
+                    cg.soundBufferLocked = qtrue;
                     break;
-                case GTS_ROUND_OVER:  // 20 (binary case 0x14)
-                    CG_CenterPrint("Round Over", 90, 0.5f);
-                    // [QL] Red Rover elimination shows "<name> Wins!" / survivor list;
-                    // requires the parsed id source not yet in cgs.
-                    // TODO: round-over announcer sfx not yet in cgs.media
+                case GTS_BLUETEAM_WON:  // 15
+                    CG_ResetAnnouncements();
+                    if (cg_buzzerSound.integer) {
+                        trap_S_StartLocalSound(cgs.media.buzzerSound, CHAN_LOCAL_SOUND);
+                    }
+                    if (team == TEAM_BLUE) {
+                        trap_S_StartBackgroundTrack("music/win", NULL);
+                    } else if (team == TEAM_RED) {
+                        trap_S_StartBackgroundTrack("music/loss", NULL);
+                    }
+                    CG_AddBufferedSound(cgs.media.blueWinsSound);
+                    cg.soundBufferLocked = qtrue;
                     break;
-                case GTS_DOMINATION_POINT_CAPTURE:  // 23 (binary case 0x17)
-                    if (es->modelindex2 == 0) {
-                        // round-start "fight" sound
-                        trap_S_StartLocalSound(cgs.media.countFightSound, CHAN_ANNOUNCER);
+                case GTS_RED_WINS_ROUND:  // 16
+                    CG_CenterPrint("Red wins the round", 90, 0.5f);
+                    CG_AddBufferedSound(cgs.media.redWinsRoundSound);
+                    break;
+                case GTS_BLUE_WINS_ROUND:  // 17
+                    CG_CenterPrint("Blue wins the round", 90, 0.5f);
+                    CG_AddBufferedSound(cgs.media.blueWinsRoundSound);
+                    break;
+                case GTS_DRAW_ROUND:  // 18
+                    CG_ResetAnnouncements();
+                    if (cgs.gametype == GT_RR && (cgs.customSettings & 0x4000000)) {
+                        // [QL] 0x1001b999: infected Red Rover names the survivors from
+                        // CS_ROUND_WINNER
+                        const char* p = CG_ConfigString(CS_ROUND_WINNER);
+                        const char* token;
+                        char names[1024];
+                        int i, count = 0, local = 0, client;
+
+                        names[0] = '\0';
+                        for (i = 0; i < cgs.maxclients; i++) {
+                            token = COM_ParseExt((char**)&p, qtrue);
+                            if (!token[0]) {
+                                if (i == 0) {
+                                    CG_CenterPrint("Round Draw", 90, 0.5f);
+                                }
+                                break;
+                            }
+                            count++;
+                            client = atoi(token);
+                            if (client == cg.clientNum) {
+                                local = 1;
+                            }
+                            if (client >= 0 && client < MAX_CLIENTS && cgs.clientinfo[client].infoValid) {
+                                Q_strcat(names, sizeof(names), va("%s\n", cgs.clientinfo[client].name));
+                            }
+                        }
+                        CG_CenterPrint(va("^1Last Survivor%s:^7\n%s", count == 1 ? "" : "s", names), 90, 0.5f);
+                        CG_AddBufferedSound(local ? cgs.media.winnerSound : cgs.media.roundOverSound);
                     } else {
-                        // es->modelindex2 = capturing team; es->powerups = DOM point id.
-                        // TODO: "captured point <name>" CenterPrint needs
-                        // BG_GetDomPointFromIdentifier, and the DOM-capture announcer
-                        // sfx is not yet in cgs.media; port when DOM is wired up.
+                        CG_CenterPrint("Round Draw", 90, 0.5f);
+                        CG_AddBufferedSound(cgs.media.roundDrawSound);
                     }
                     break;
-                case GTS_SURVIVOR:  // 24 (binary case 0x18)
-                    if (cgs.clientinfo[cg.clientNum].team == es->modelindex2) {
-                        trap_S_StartLocalSound(cgs.media.survivorSound, CHAN_ANNOUNCER);
+                case GTS_LAST_STANDING:  // 19
+                    if (cg_announcerLastStandingVO.integer && team == es->modelindex2) {
+                        CG_AddBufferedSound(cgs.media.lastStandingSound);
+                    }
+                    break;
+                case GTS_ROUND_OVER:  // 20
+                    if (cgs.gametype == GT_RR) {
+                        // [QL] 0x1001bb7d: Red Rover names the round's winners from CS_ROUND_WINNER
+                        const char* p = CG_ConfigString(CS_ROUND_WINNER);
+                        const char* token;
+                        char names[1024];
+                        int i, count = 0, client = -1;
+
+                        names[0] = '\0';
+                        for (i = 0; i < cgs.maxclients; i++) {
+                            token = COM_ParseExt((char**)&p, qtrue);
+                            if (!token[0]) {
+                                break;
+                            }
+                            count++;
+                            client = atoi(token);
+                            if (client >= 0 && client < MAX_CLIENTS && cgs.clientinfo[client].infoValid) {
+                                Q_strcat(names, sizeof(names), va("%s\n", cgs.clientinfo[client].name));
+                            }
+                        }
+                        if (cgs.customSettings & 0x4000000) {
+                            if (cg.clientNum == client) {
+                                CG_CenterPrint(va("^7%s Wins!^7\n", names), 90, 0.5f);
+                                CG_AddBufferedSound(cgs.media.winnerSound);
+                                break;
+                            }
+                            CG_CenterPrint(va("^1Last Survivor%s:^7\n%s", count == 1 ? "" : "s", names), 90, 0.5f);
+                        } else {
+                            CG_CenterPrint(va("Round Winner%s:\n%s", count == 1 ? "" : "s", names), 90, 0.5f);
+                        }
+                    } else {
+                        CG_CenterPrint("Round Over", 90, 0.5f);
+                    }
+                    CG_AddBufferedSound(cgs.media.roundOverSound);
+                    break;
+                case GTS_DOMINATION_POINT_CAPTURE:  // 23
+                    if (es->modelindex2 == 0) {
+                        trap_S_StartLocalSound(cgs.media.pointNeutralizedSound, CHAN_LOCAL_SOUND);
+                        break;
+                    }
+                    if (es->powerups) {
+                        static const char* pointNames[] = {"A", "B", "C", "D", "E"};
+                        const char* point = (es->powerups >= 1 && es->powerups <= 5) ? pointNames[es->powerups - 1] : "?";
+
+                        CG_CenterPrint(va("%s captured point %s!", es->modelindex2 == TEAM_RED ? "Red" : "Blue", point), 90, 0.5f);
+                    }
+                    if (cg_announcerLeadsVO.integer && es->powerups >= 0 && es->powerups <= 5) {
+                        if (team == es->modelindex2) {
+                            CG_AddBufferedSound(cgs.media.pointCapturedSounds[es->powerups]);
+                        } else if (team != TEAM_SPECTATOR) {
+                            CG_AddBufferedSound(cgs.media.pointLostSounds[es->powerups]);
+                        }
+                    }
+                    break;
+                case GTS_SURVIVOR:  // 24
+                    if (team == es->modelindex2) {
+                        trap_S_StartLocalSound(cgs.media.survivorSound, CHAN_LOCAL_SOUND);
                     }
                     break;
 
@@ -1422,25 +1580,16 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
         }
 
         case EV_PAIN:
-            // local player sounds are triggered in CG_CheckLocalSounds,
-            // so ignore events on the player
+            // [QL] 0x1001bdb9: the local player's pain sounds come from here too
             DEBUGNAME("EV_PAIN");
-            if (cent->currentState.number != cg.snap->ps.clientNum) {
-                CG_PainEvent(cent, es->eventParm);
-            }
+            CG_PainEvent(cent, es->eventParm);
             break;
 
         case EV_DEATH1:
         case EV_DEATH2:
         case EV_DEATH3:
             DEBUGNAME("EV_DEATHx");
-
-            if (CG_WaterLevel(cent) == 3) {
-                trap_S_StartSound(NULL, es->number, CHAN_VOICE, CG_CustomSound(es->number, "*drown.wav"));
-            } else {
-                trap_S_StartSound(NULL, es->number, CHAN_VOICE, CG_CustomSound(es->number, va("*death%i.wav", event - EV_DEATH1 + 1)));
-            }
-
+            trap_S_StartSound(NULL, es->number, CHAN_VOICE, CG_CustomSound(es->number, va("*death%i.wav", event - EV_DEATH1 + 1)));
             break;
 
         case EV_DROWN:
@@ -1486,7 +1635,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                 cg.powerupActive = PW_AMMOREGEN;
                 cg.powerupTime = cg.time;
             }
-            trap_S_StartSound(NULL, es->number, CHAN_ITEM, cgs.media.armorRegenSound);
+            trap_S_StartSound(NULL, es->number, CHAN_ITEM, cgs.media.armorPickupSound);
             break;
 
         case EV_GIB_PLAYER:
@@ -1497,14 +1646,14 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             if (!(es->eFlags & EF_KAMIKAZE)) {
                 // [QL] 0x1001bf80 picks the death sound off the same gore-pack
                 // handle CG_GibPlayer branches on: the pack's single splat when
-                // it is installed, otherwise an even roll over the four
-                // electrogib samples.
+                // it is installed, otherwise the first or the fourth electrogib
+                // sample, since retail masks rand() with 4 where it meant 3
                 if (cgs.media.gibSkull) {
                     trap_S_StartSound(NULL, es->number, CHAN_BODY,
                                       cgs.media.gibSound);
                 } else {
                     trap_S_StartSound(NULL, es->number, CHAN_BODY,
-                                      cgs.media.electroGibSound[rand() % 4]);
+                                      cgs.media.electroGibSound[(rand() & 4) ? 3 : 0]);
                 }
             }
             // The direction the spray leaves along. See CG_GibPlayer: this
@@ -1569,29 +1718,36 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_OVERTIME:
             DEBUGNAME("EV_OVERTIME");
-            // [QL] overtime announcement
-            trap_S_StartSound(NULL, cg.snap->ps.clientNum, CHAN_AUTO, cgs.media.overtimeSound);
+            // [QL] 0x1001b2bb: the klaxon, how much time was added, and the "overtime" voice
+            // for the first period only
+            trap_S_StartSound(NULL, cg.snap->ps.clientNum, CHAN_AUTO, cgs.media.klaxon2Sound);
             CG_CenterPrint(va("Overtime! %d seconds added", cgs.timelimit_overtime), 90, 0.5f);
+            if (!CG_GetOvertimeCount()) {
+                CG_AddBufferedSound(cgs.media.overtimeVoSound);
+            }
             break;
         case EV_GAMEOVER:
             DEBUGNAME("EV_GAMEOVER");
-            // [QL] game over - play win/loss music based on outcome
-            if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR) {
-                trap_S_StartBackgroundTrack("music/win", "");
-            } else if (cgs.gametype >= GT_TEAM) {
-                if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_RED) {
-                    trap_S_StartBackgroundTrack(
-                        cgs.scores1 >= cgs.scores2 ? "music/win" : "music/loss", "");
-                } else {
-                    trap_S_StartBackgroundTrack(
-                        cgs.scores2 >= cgs.scores1 ? "music/win" : "music/loss", "");
-                }
-            } else {
-                // FFA/duel - compare local player score against top score
-                trap_S_StartBackgroundTrack(
-                    cg.snap->ps.persistant[PERS_SCORE] >= cgs.scores1 ? "music/win" : "music/loss",
-                    "");
+            // [QL] 0x1001c0cd: the buzzer, then the win or loss voice (individual modes
+            // only) and music; the announcer queue stays locked until the map restarts
+            CG_ResetAnnouncements();
+            if (cg_buzzerSound.integer) {
+                trap_S_StartLocalSound(cgs.media.buzzerSound, CHAN_LOCAL_SOUND);
             }
+            if (CG_LocalPlayerLeads()) {
+                if (!CG_IsTeamGametype(cgs.gametype)) {
+                    CG_AddBufferedSound(cgs.media.winnerSound);
+                }
+                trap_S_StartBackgroundTrack("music/win", NULL);
+            } else if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR) {
+                trap_S_StartBackgroundTrack("music/win", NULL);
+            } else {
+                if (!CG_IsTeamGametype(cgs.gametype)) {
+                    CG_AddBufferedSound(cgs.media.loserSound);
+                }
+                trap_S_StartBackgroundTrack("music/loss", NULL);
+            }
+            cg.soundBufferLocked = qtrue;
             break;
         case EV_MISSILE_MISS_DMGTHROUGH:
             DEBUGNAME("EV_MISSILE_MISS_DMGTHROUGH");
@@ -1608,7 +1764,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_THAW_TICK:
             DEBUGNAME("EV_THAW_TICK");
-            trap_S_StartSound(NULL, es->number, CHAN_BODY, cgs.media.thawTickSound);
+            trap_S_StartSound(NULL, es->number, CHAN_BODY, cgs.media.timPumpSound);
             break;
         case EV_SHOTGUN_KILL:
             DEBUGNAME("EV_SHOTGUN_KILL");
@@ -1655,7 +1811,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                 cg.race.nextCheckpointEnt = es->otherEntityNum2;  // entity number of first checkpoint
                 cg.race.nextNextCheckpointEnt = -1;
                 cg.race.currentCheckpointEnt = -1;
-                trap_S_StartLocalSound(cgs.media.countFightSound, CHAN_ANNOUNCER);
+                CG_RaceBeep();
             }
             break;
         case EV_RACE_CHECKPOINT:
@@ -1681,8 +1837,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                     cg.race.checkpointDiff = 0;
                     cg.race.hasDiff = qfalse;
                 }
-                // play checkpoint sound (QL uses countdown sounds based on cg_raceCountdownSounds)
-                trap_S_StartLocalSound(cgs.media.count1Sound, CHAN_ANNOUNCER);
+                CG_RaceBeep();
                 // show split time
                 {
                     int remaining = cg.race.totalCheckpoints - cg.race.checkpointCount;
@@ -1756,7 +1911,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                         cg.race.bestTime = cg.race.finishTime;
                     }
                 }
-                trap_S_StartLocalSound(cgs.media.raceFinishSound, CHAN_ANNOUNCER);
+                trap_S_StartLocalSound(cgs.media.klaxon1Sound, CHAN_LOCAL_SOUND);  // [QL] 0x1001af7f
             }
             break;
         case EV_DAMAGEPLUM:
@@ -1775,34 +1930,27 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             // Binary (CG_EntityEvent 0x61) guards on es->clientNum (0xb0), selects
             // the medal from es->generic1 (0xe0) and takes the count from
             // es->modelindex2 (0xac) - NOT otherEntityNum/weapon/generic1.
+            // [QL] 0x1001c437: combo kill, rampage, midair and revenge pick one of three voices
             if (cg.snap->ps.clientNum == es->clientNum) {
-                qhandle_t shader = 0;
                 int count = es->modelindex2;
                 switch (es->generic1) {
-                case 0: shader = cgs.media.medalComboKill; break;
-                case 1: shader = cgs.media.medalRampage; break;
-                case 2: shader = cgs.media.medalMidair; break;
-                case 3: shader = cgs.media.medalRevenge; break;
-                case 4: shader = cgs.media.medalPerforated; break;
-                case 5: shader = cgs.media.medalHeadshot; break;
-                case 6: shader = cgs.media.medalAccuracy; break;
-                case 7: shader = cgs.media.medalQuadGod; break;
-                case 8: shader = cgs.media.medalFirstFrag; count = 1; break;
-                case 9: shader = cgs.media.medalPerfect; break;
-                }
-                // [QL] 0x10043570, the same push as the persistant medals. Which sound each
-                // award plays is not identified yet, so they keep impressiveSound.
-                if (shader) {
-                    CG_PushReward(cgs.media.impressiveSound, shader, count);
+                case 0: CG_PushReward(cgs.media.comboKillSounds[rand() % 3], cgs.media.medalComboKill, count); break;
+                case 1: CG_PushReward(cgs.media.rampageSounds[rand() % 3], cgs.media.medalRampage, count); break;
+                case 2: CG_PushReward(cgs.media.midAirSounds[rand() % 3], cgs.media.medalMidair, count); break;
+                case 3: CG_PushReward(cgs.media.revengeSounds[rand() % 3], cgs.media.medalRevenge, count); break;
+                case 4: CG_PushReward(cgs.media.perforatedSound, cgs.media.medalPerforated, count); break;
+                case 5: CG_PushReward(cgs.media.headshotSound, cgs.media.medalHeadshot, count); break;
+                case 6: CG_PushReward(cgs.media.accuracySound, cgs.media.medalAccuracy, count); break;
+                case 7: CG_PushReward(cgs.media.quadGodSound, cgs.media.medalQuadGod, count); break;
+                case 8: CG_PushReward(cgs.media.firstFragSound, cgs.media.medalFirstFrag, 1); break;
+                case 9: CG_PushReward(cgs.media.perfectSound, cgs.media.medalPerfect, count); break;
                 }
             }
             break;
         case EV_INFECTED:
             DEBUGNAME("EV_INFECTED");
-            // [QL] infection mode - centerprint + announcement sound
-            // Server sends with SVF_SINGLECLIENT so only infected player receives this
-            CG_CenterPrint("You have been infected!", 120, 0.5f);  // not a retail string; scale as BITE! (0x1000eaf6)
-            trap_S_StartLocalSound(cgs.media.infectedSound, CHAN_ANNOUNCER);
+            // [QL] 0x1001c5b7: only the announcer
+            CG_AddBufferedSound(cgs.media.infectedSound);
             break;
         case EV_NEW_HIGH_SCORE:
             DEBUGNAME("EV_NEW_HIGH_SCORE");

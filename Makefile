@@ -149,14 +149,6 @@ ifndef GENERATE_DEPENDENCIES
 GENERATE_DEPENDENCIES=1
 endif
 
-ifndef USE_OPENAL
-USE_OPENAL=1
-endif
-
-ifndef USE_OPENAL_DLOPEN
-USE_OPENAL_DLOPEN=1
-endif
-
 ifndef USE_CURL
 USE_CURL=0
 endif
@@ -277,14 +269,11 @@ endif
 ifneq ($(call bin_path, $(PKG_CONFIG)),)
   CURL_CFLAGS ?= $(shell $(PKG_CONFIG) --silence-errors --cflags libcurl)
   CURL_LIBS ?= $(shell $(PKG_CONFIG) --silence-errors --libs libcurl)
-  OPENAL_CFLAGS ?= $(shell $(PKG_CONFIG) --silence-errors --cflags openal)
-  OPENAL_LIBS ?= $(shell $(PKG_CONFIG) --silence-errors --libs openal)
   SDL_CFLAGS ?= $(shell $(PKG_CONFIG) --silence-errors --cflags sdl2|sed 's/-Dmain=SDL_main//')
   SDL_LIBS ?= $(shell $(PKG_CONFIG) --silence-errors --libs sdl2)
 else
   # assume they're in the system default paths (no -I or -L needed)
   CURL_LIBS ?= -lcurl
-  OPENAL_LIBS ?= -lopenal
 endif
 
 # Use sdl2-config if all else fails
@@ -373,12 +362,6 @@ ifneq (,$(findstring "$(PLATFORM)", "linux" "gnu_kfreebsd" "kfreebsd-gnu" "gnu")
   LIBS=-ldl -lm
   CLIENT_LIBS=$(SDL_LIBS)
   RENDERER_LIBS = $(SDL_LIBS)
-
-  ifeq ($(USE_OPENAL),1)
-    ifneq ($(USE_OPENAL_DLOPEN),1)
-      CLIENT_LIBS += $(THREAD_LIBS) $(OPENAL_LIBS)
-    endif
-  endif
 
   ifeq ($(USE_CURL),1)
     CLIENT_CFLAGS += $(CURL_CFLAGS)
@@ -530,15 +513,6 @@ ifeq ($(PLATFORM),darwin)
 
   BASE_CFLAGS += -fno-strict-aliasing -fno-common -pipe
 
-  ifeq ($(USE_OPENAL),1)
-    ifneq ($(USE_LOCAL_HEADERS),1)
-      CLIENT_CFLAGS += -I/System/Library/Frameworks/OpenAL.framework/Headers
-    endif
-    ifneq ($(USE_OPENAL_DLOPEN),1)
-      CLIENT_LIBS += -framework OpenAL
-    endif
-  endif
-
   ifeq ($(USE_CURL),1)
     CLIENT_CFLAGS += $(CURL_CFLAGS)
     ifneq ($(USE_CURL_DLOPEN),1)
@@ -622,13 +596,6 @@ ifdef MINGW
   # In the absence of wspiapi.h, require Windows XP or later
   ifeq ($(shell test -e $(CMDIR)/wspiapi.h; echo $$?),1)
     BASE_CFLAGS += -DWINVER=0x501
-  endif
-
-  ifeq ($(USE_OPENAL),1)
-    CLIENT_CFLAGS += $(OPENAL_CFLAGS)
-    ifneq ($(USE_OPENAL_DLOPEN),1)
-      CLIENT_LDFLAGS += $(OPENAL_LDFLAGS)
-    endif
   endif
 
   ifeq ($(ARCH),x86_64)
@@ -763,12 +730,6 @@ ifeq ($(PLATFORM),freebsd)
   RENDERER_LIBS = $(SDL_LIBS)
 
   # optional features/libraries
-  ifeq ($(USE_OPENAL),1)
-    ifeq ($(USE_OPENAL_DLOPEN),1)
-      CLIENT_LIBS += $(THREAD_LIBS) $(OPENAL_LIBS)
-    endif
-  endif
-
   ifeq ($(USE_CURL),1)
     CLIENT_CFLAGS += $(CURL_CFLAGS)
     ifeq ($(USE_CURL_DLOPEN),1)
@@ -852,12 +813,6 @@ ifeq ($(PLATFORM),openbsd)
 
   CLIENT_LIBS += $(SDL_LIBS)
   RENDERER_LIBS = $(SDL_LIBS)
-
-  ifeq ($(USE_OPENAL),1)
-    ifneq ($(USE_OPENAL_DLOPEN),1)
-      CLIENT_LIBS += $(THREAD_LIBS) $(OPENAL_LIBS)
-    endif
-  endif
 
   ifeq ($(USE_CURL),1)
     ifneq ($(USE_CURL_DLOPEN),1)
@@ -985,7 +940,6 @@ ifeq ($(PLATFORM),emscripten)
 
   # dlopen(), opengl1, and networking are not functional
   USE_RENDERER_DLOPEN=0
-  USE_OPENAL_DLOPEN=0
   BUILD_GAME_SO=0
   BUILD_SERVER=0
 
@@ -1129,13 +1083,6 @@ ifeq ($(PLATFORM),emscripten)
         endif
       endif
     endif
-  endif
-endif
-
-ifeq ($(USE_OPENAL),1)
-  CLIENT_CFLAGS += -DUSE_OPENAL
-  ifeq ($(USE_OPENAL_DLOPEN),1)
-    CLIENT_CFLAGS += -DUSE_OPENAL_DLOPEN
   endif
 endif
 
@@ -1544,19 +1491,14 @@ Q3OBJ = \
   $(B)/client/net_ip.o \
   $(B)/client/huffman.o \
   \
-  $(B)/client/snd_adpcm.o \
   $(B)/client/snd_dma.o \
   $(B)/client/snd_mem.o \
   $(B)/client/snd_mix.o \
-  $(B)/client/snd_wavelet.o \
   \
   $(B)/client/snd_main.o \
   $(B)/client/snd_codec.o \
   $(B)/client/snd_codec_wav.o \
   $(B)/client/snd_codec_ogg.o \
-  \
-  $(B)/client/qal.o \
-  $(B)/client/snd_openal.o \
   \
   $(B)/client/cl_curl.o \
   \

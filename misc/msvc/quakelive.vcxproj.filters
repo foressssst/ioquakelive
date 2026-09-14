@@ -13,8 +13,6 @@
     <ClCompile Include="..\..\code\client\cl_parse.c" />
     <ClCompile Include="..\..\code\client\cl_scrn.c" />
     <ClCompile Include="..\..\code\client\cl_ui.c" />
-    <ClCompile Include="..\..\code\client\qal.c" />
-    <ClCompile Include="..\..\code\client\snd_adpcm.c" />
     <ClCompile Include="..\..\code\client\snd_codec.c" />
     <ClCompile Include="..\..\code\client\snd_codec_ogg.c" />
     <ClCompile Include="..\..\code\client\snd_codec_wav.c" />
@@ -22,8 +20,6 @@
     <ClCompile Include="..\..\code\client\snd_main.c" />
     <ClCompile Include="..\..\code\client\snd_mem.c" />
     <ClCompile Include="..\..\code\client\snd_mix.c" />
-    <ClCompile Include="..\..\code\client\snd_openal.c" />
-    <ClCompile Include="..\..\code\client\snd_wavelet.c" />
     <ClCompile Include="..\..\code\qcommon\cmd.c" />
     <ClCompile Include="..\..\code\qcommon\cm_load.c" />
     <ClCompile Include="..\..\code\qcommon\cm_patch.c" />
@@ -171,7 +167,6 @@
     <ClInclude Include="..\..\code\client\cl_curl.h" />
     <ClInclude Include="..\..\code\client\keycodes.h" />
     <ClInclude Include="..\..\code\client\keys.h" />
-    <ClInclude Include="..\..\code\client\qal.h" />
     <ClInclude Include="..\..\code\client\snd_local.h" />
     <ClInclude Include="..\..\code\client\snd_public.h" />
     <ClInclude Include="..\..\code\game\bg_public.h" />

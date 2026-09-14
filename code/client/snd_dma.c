@@ -43,10 +43,9 @@ static char s_backgroundLoop[MAX_QPATH];
 // Internal sound data & structures
 // =======================================================================
 
-// only begin attenuating sound volumes when outside the FULLVOLUME range
-#define SOUND_FULLVOLUME 80
-
+// [QL] attenuation starts at the listener, and a sound is silent from this distance on
 #define SOUND_ATTENUATE 0.0008f
+#define SOUND_MAX_DISTANCE 1250.0f
 
 channel_t s_channels[MAX_CHANNELS];
 channel_t loop_channels[MAX_CHANNELS];
@@ -77,6 +76,7 @@ cvar_t* s_testsound;
 cvar_t* s_show;
 cvar_t* s_mixahead;
 cvar_t* s_mixPreStep;
+cvar_t* s_pvs;
 
 static loopSound_t loopSounds[MAX_GENTITIES];
 static channel_t* freelist = NULL;
@@ -88,22 +88,33 @@ portable_samplepair_t s_rawsamples[MAX_RAW_STREAMS][MAX_RAW_SAMPLES];
 // User-setable variables
 // ====================================================================
 
+/*
+=================
+S_Base_SoundInfo
+
+[QL] quakelive_steam.exe 0x4d9b60
+=================
+*/
 void S_Base_SoundInfo(void) {
     Com_Printf("----- Sound Info -----\n");
     if (!s_soundStarted) {
         Com_Printf("sound system not started\n");
+        Com_Printf("----------------------\n");
+        return;
+    }
+    if (s_soundMuted) {
+        Com_Printf("sound system is muted\n");
+    }
+    Com_Printf("%5d stereo\n", dma.channels - 1);
+    Com_Printf("%5d samples\n", dma.samples);
+    Com_Printf("%5d samplebits\n", dma.samplebits);
+    Com_Printf("%5d submission_chunk\n", dma.submission_chunk);
+    Com_Printf("%5d speed\n", dma.speed);
+    Com_Printf("0x%x dma buffer\n", (unsigned int)(intptr_t)dma.buffer);
+    if (s_backgroundStream) {
+        Com_Printf("Background file: %s\n", s_backgroundLoop);
     } else {
-        Com_Printf("%5d channels\n", dma.channels);
-        Com_Printf("%5d samples\n", dma.samples);
-        Com_Printf("%5d samplebits (%s)\n", dma.samplebits, dma.isfloat ? "float" : "int");
-        Com_Printf("%5d submission_chunk\n", dma.submission_chunk);
-        Com_Printf("%5d speed\n", dma.speed);
-        Com_Printf("%p dma buffer\n", dma.buffer);
-        if (s_backgroundStream) {
-            Com_Printf("Background file: %s\n", s_backgroundLoop);
-        } else {
-            Com_Printf("No background file.\n");
-        }
+        Com_Printf("No background file.\n");
     }
     Com_Printf("----------------------\n");
 }
@@ -111,29 +122,18 @@ void S_Base_SoundInfo(void) {
 /*
 =================
 S_Base_SoundList
+
+[QL] quakelive_steam.exe 0x4dafd0
 =================
 */
 void S_Base_SoundList(void) {
     int i;
     sfx_t* sfx;
-    int size, total;
-    char type[4][16];
-    char mem[2][16];
 
-    strcpy(type[0], "16bit");
-    strcpy(type[1], "adpcm");
-    strcpy(type[2], "daub4");
-    strcpy(type[3], "mulaw");
-    strcpy(mem[0], "paged out");
-    strcpy(mem[1], "resident ");
-    total = 0;
     for (sfx = s_knownSfx, i = 0; i < s_numSfx; i++, sfx++) {
-        size = sfx->soundLength;
-        total += size;
-        Com_Printf("%6i[%s] : %s[%s]\n", size, type[sfx->soundCompressionMethod],
-                   sfx->soundName, mem[sfx->inMemory]);
+        Com_Printf("%6i [%s] : %s\n", sfx->soundLength, sfx->inMemory ? "MEM" : "PGD", sfx->soundName);
     }
-    Com_Printf("Total resident: %i\n", total);
+    Com_Printf("%i sounds loaded\n", s_numSfx);
     S_DisplayFreeMemory();
 }
 
@@ -169,7 +169,7 @@ void S_ChannelSetup(void) {
 
     *(channel_t**)q = NULL;
     freelist = p + MAX_CHANNELS - 1;
-    Com_DPrintf("S_ChannelSetup(): Channel memory manager started\n");
+    Com_DPrintf("Channel memory manager started\n");
 }
 
 // =======================================================================
@@ -269,23 +269,6 @@ static sfx_t* S_FindName(const char* name) {
 }
 
 /*
-=================
-S_DefaultSound
-=================
-*/
-void S_DefaultSound(sfx_t* sfx) {
-    int i;
-
-    sfx->soundLength = 512;
-    sfx->soundData = SND_malloc();
-    sfx->soundData->next = NULL;
-
-    for (i = 0; i < sfx->soundLength; i++) {
-        sfx->soundData->sndChunk[i] = i;
-    }
-}
-
-/*
 ===================
 S_DisableSounds
 
@@ -303,14 +286,20 @@ void S_Base_DisableSounds(void) {
 ==================
 S_RegisterSound
 
-Creates a default buzz sound if the file can't be loaded
+[QL] quakelive_steam.exe 0x4d9e50. There is no compressed flag: every sound is kept as
+16-bit samples. A sound that failed to load returns handle 0, and only the first
+registration reports it.
 ==================
 */
 sfxHandle_t S_Base_RegisterSound(const char* name, qboolean compressed) {
     sfx_t* sfx;
 
-    compressed = qfalse;
     if (!s_soundStarted) {
+        return 0;
+    }
+
+    if (strlen(name) >= MAX_QPATH) {
+        Com_Printf("Sound name exceeds MAX_QPATH\n");
         return 0;
     }
 
@@ -319,21 +308,14 @@ sfxHandle_t S_Base_RegisterSound(const char* name, qboolean compressed) {
         return 0;
     }
 
-    if (sfx->soundData) {
+    if (!sfx->soundData) {
+        sfx->inMemory = qfalse;
+        S_memoryLoad(sfx);
         if (sfx->defaultSound) {
             Com_Printf(S_COLOR_YELLOW "WARNING: could not find %s - using default\n", sfx->soundName);
             return 0;
         }
-        return sfx - s_knownSfx;
-    }
-
-    sfx->inMemory = qfalse;
-    sfx->soundCompressed = compressed;
-
-    S_memoryLoad(sfx);
-
-    if (sfx->defaultSound) {
-        Com_Printf(S_COLOR_YELLOW "WARNING: could not find %s - using default\n", sfx->soundName);
+    } else if (sfx->defaultSound) {
         return 0;
     }
 
@@ -359,10 +341,11 @@ void S_Base_BeginRegistration(void) {
     }
 }
 
+// [QL] quakelive_steam.exe 0x4d9e10
 void S_memoryLoad(sfx_t* sfx) {
     // load the sound file
     if (!S_LoadSound(sfx)) {
-        //		Com_Printf( S_COLOR_YELLOW "WARNING: couldn't load sound: %s\n", sfx->soundName );
+        Com_Printf(S_COLOR_YELLOW "WARNING: couldn't load sound: %s\n", sfx->soundName);
         sfx->defaultSound = qtrue;
     }
     sfx->inMemory = qtrue;
@@ -375,6 +358,9 @@ void S_memoryLoad(sfx_t* sfx) {
 S_SpatializeOrigin
 
 Used for spatializing s_channels
+
+[QL] quakelive_steam.exe 0x4d9ef0. The volume falls from the listener's own position, with
+no full-volume radius, and nothing is heard from SOUND_MAX_DISTANCE on.
 =================
 */
 void S_SpatializeOrigin(vec3_t origin, int master_vol, int* left_vol, int* right_vol) {
@@ -384,16 +370,16 @@ void S_SpatializeOrigin(vec3_t origin, int master_vol, int* left_vol, int* right
     vec3_t source_vec;
     vec3_t vec;
 
-    const float dist_mult = SOUND_ATTENUATE;
-
     // calculate stereo separation and distance attenuation
     VectorSubtract(origin, listener_origin, source_vec);
 
     dist = VectorNormalize(source_vec);
-    dist -= SOUND_FULLVOLUME;
-    if (dist < 0)
-        dist = 0;       // close enough to be at full volume
-    dist *= dist_mult;  // different attenuation levels
+    if (dist >= SOUND_MAX_DISTANCE) {
+        *left_vol = 0;
+        *right_vol = 0;
+        return;
+    }
+    dist *= SOUND_ATTENUATE;
 
     VectorRotate(source_vec, listener_axis, vec);
 
@@ -430,55 +416,24 @@ void S_SpatializeOrigin(vec3_t origin, int master_vol, int* left_vol, int* right
 // =======================================================================
 
 /*
-=================
-S_Base_HearingThroughEntity
-
-Also see S_AL_HearingThroughEntity
-=================
-*/
-static qboolean S_Base_HearingThroughEntity(int entityNum, vec3_t origin) {
-    float distanceSq;
-    vec3_t sorigin;
-
-    if (origin)
-        VectorCopy(origin, sorigin);
-    else
-        VectorCopy(loopSounds[entityNum].origin, sorigin);
-
-    if (listener_number == entityNum) {
-        // This is an outrageous hack to detect
-        // whether or not the player is rendering in third person or not. We can't
-        // ask the renderer because the renderer has no notion of entities and we
-        // can't ask cgame since that would involve changing the API and hence mod
-        // compatibility. I don't think there is any way around this, but I'll leave
-        // the FIXME just in case anyone has a bright idea.
-        distanceSq = DistanceSquared(
-            sorigin,
-            listener_origin);
-
-        if (distanceSq > THIRD_PERSON_THRESHOLD_SQ)
-            return qfalse;  // we're the player, but third person
-        else
-            return qtrue;  // we're the player
-    } else
-        return qfalse;  // not the player
-}
-
-/*
 ====================
 S_Base_StartSoundEx
 
 Validates the parms and ques the sound up
 if origin is NULL, the sound will be dynamically sourced from the entity
-Entchannel 0 will never override a playing sound
+
+[QL] quakelive_steam.exe 0x4da050. A sound is only refused when the same entity already
+started the same sfx within the same millisecond; there is no limit on how many copies
+play at once. With no free channel it takes the oldest one of the same entity that is not
+an announcer channel, else the oldest world sound, else the sound is not played. The start
+volume goes straight into both sides and holds until the next respatialize, which the
+listener's own sounds never get.
 ====================
 */
-static void S_Base_StartSoundEx(vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxHandle, qboolean localSound, float volume) {
+static void S_Base_StartSoundEx(vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxHandle, float volume) {
     channel_t* ch;
     sfx_t* sfx;
-    int i, oldest, chosen, time;
-    int inplay, allowed;
-    qboolean fullVolume;
+    int i, time;
 
     if (!s_soundStarted || s_soundMuted) {
         return;
@@ -504,78 +459,36 @@ static void S_Base_StartSoundEx(vec3_t origin, int entityNum, int entchannel, sf
     }
 
     time = Com_Milliseconds();
-
-    //	Com_Printf("playing %s\n", sfx->soundName);
-    // pick a channel to play on
-
-    allowed = 4;
-    if (entityNum == listener_number) {
-        allowed = 8;
-    }
-
-    fullVolume = qfalse;
-    if (localSound || S_Base_HearingThroughEntity(entityNum, origin)) {
-        fullVolume = qtrue;
-    }
-
-    ch = s_channels;
-    inplay = 0;
-    for (i = 0; i < MAX_CHANNELS; i++, ch++) {
-        if (ch->entnum == entityNum && ch->thesfx == sfx) {
-            if (time - ch->allocTime < 50) {
-                //				if (Cvar_VariableValue( "cg_showmiss" )) {
-                //					Com_Printf("double sound start\n");
-                //				}
-                return;
-            }
-            inplay++;
-        }
-    }
-
-    if (inplay > allowed) {
-        return;
-    }
-
     sfx->lastTimeUsed = time;
 
-    ch = S_ChannelMalloc();  // entityNum, entchannel);
-    if (!ch) {
-        ch = s_channels;
+    if (entityNum != ENTITYNUM_WORLD) {
+        for (i = 0, ch = s_channels; i < MAX_CHANNELS; i++, ch++) {
+            if (ch->entnum == entityNum && ch->allocTime == time && ch->thesfx == sfx) {
+                Com_DPrintf("double sound start: %d %s\n", entityNum, sfx->soundName);
+                return;
+            }
+        }
+    }
 
-        oldest = sfx->lastTimeUsed;
-        chosen = -1;
-        for (i = 0; i < MAX_CHANNELS; i++, ch++) {
-            if (ch->entnum != listener_number && ch->entnum == entityNum && ch->allocTime < oldest && ch->entchannel != CHAN_ANNOUNCER) {
-                oldest = ch->allocTime;
-                chosen = i;
+    ch = S_ChannelMalloc();
+    if (!ch) {
+        for (i = 0; i < MAX_CHANNELS; i++) {
+            if (s_channels[i].entnum == entityNum && s_channels[i].entchannel != CHAN_ANNOUNCER &&
+                (!ch || s_channels[i].allocTime < ch->allocTime)) {
+                ch = &s_channels[i];
             }
         }
-        if (chosen == -1) {
-            ch = s_channels;
-            for (i = 0; i < MAX_CHANNELS; i++, ch++) {
-                if (ch->entnum != listener_number && ch->allocTime < oldest && ch->entchannel != CHAN_ANNOUNCER) {
-                    oldest = ch->allocTime;
-                    chosen = i;
+        if (!ch) {
+            for (i = 0; i < MAX_CHANNELS; i++) {
+                if (s_channels[i].entnum == ENTITYNUM_WORLD && (!ch || s_channels[i].allocTime < ch->allocTime)) {
+                    ch = &s_channels[i];
                 }
             }
-            if (chosen == -1) {
-                ch = s_channels;
-                if (ch->entnum == listener_number) {
-                    for (i = 0; i < MAX_CHANNELS; i++, ch++) {
-                        if (ch->allocTime < oldest) {
-                            oldest = ch->allocTime;
-                            chosen = i;
-                        }
-                    }
-                }
-                if (chosen == -1) {
-                    Com_Printf("dropping sound\n");
-                    return;
-                }
+            if (!ch) {
+                return;
             }
         }
-        ch = &s_channels[chosen];
-        ch->allocTime = sfx->lastTimeUsed;
+        ch->allocTime = time;
     }
 
     if (origin) {
@@ -585,16 +498,12 @@ static void S_Base_StartSoundEx(vec3_t origin, int entityNum, int entchannel, sf
         ch->fixed_origin = qfalse;
     }
 
-    // [QL] quakelive_steam.exe 0x4da2fa: the start volume scales the full 127, truncated
-    ch->master_vol = (int)(volume * 127.0f);
+    ch->leftvol = ch->rightvol = (int)(volume * 127.0f);
     ch->entnum = entityNum;
     ch->thesfx = sfx;
     ch->startSample = START_SAMPLE_IMMEDIATE;
     ch->entchannel = entchannel;
-    ch->leftvol = ch->master_vol;   // these will get calced at next spatialize
-    ch->rightvol = ch->master_vol;  // unless the game isn't running
     ch->doppler = qfalse;
-    ch->fullVolume = fullVolume;
 }
 
 /*
@@ -605,12 +514,14 @@ if origin is NULL, the sound will be dynamically sourced from the entity
 ====================
 */
 void S_Base_StartSound(vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxHandle) {
-    S_Base_StartSoundEx(origin, entityNum, entchannel, sfxHandle, qfalse, 1.0f);
+    S_Base_StartSoundEx(origin, entityNum, entchannel, sfxHandle, 1.0f);
 }
 
 /*
 ==================
 S_StartLocalSoundVolume
+
+[QL] quakelive_steam.exe 0x4da380. A local sound is a sound of the listener's entity.
 ==================
 */
 static void S_Base_StartLocalSoundVolume(sfxHandle_t sfxHandle, int channelNum, float volume) {
@@ -623,7 +534,7 @@ static void S_Base_StartLocalSoundVolume(sfxHandle_t sfxHandle, int channelNum, 
         return;
     }
 
-    S_Base_StartSoundEx(NULL, listener_number, channelNum, sfxHandle, qtrue, volume);
+    S_Base_StartSoundEx(NULL, listener_number, channelNum, sfxHandle, volume);
 }
 
 /*
@@ -695,22 +606,21 @@ continuous looping sounds are added each frame
 
 void S_Base_StopLoopingSound(int entityNum) {
     loopSounds[entityNum].active = qfalse;
-    //	loopSounds[entityNum].sfx = 0;
-    loopSounds[entityNum].kill = qfalse;
 }
 
 /*
 ==================
 S_ClearLoopingSounds
 
+[QL] quakelive_steam.exe 0x4da490. Every looping sound goes, whatever the argument: the
+cgame adds the ones it still wants each frame.
 ==================
 */
 void S_Base_ClearLoopingSounds(qboolean killall) {
     int i;
+
     for (i = 0; i < MAX_GENTITIES; i++) {
-        if (killall || loopSounds[i].kill == qtrue || (loopSounds[i].sfx && loopSounds[i].sfx->soundLength == 0)) {
-            S_Base_StopLoopingSound(i);
-        }
+        loopSounds[i].active = qfalse;
     }
     numLoopChannels = 0;
 }
@@ -721,10 +631,14 @@ S_AddLoopingSound
 
 Called during entity generation for a frame
 Include velocity in case I get around to doing doppler...
+
+[QL] quakelive_steam.exe 0x4da4c0. The doppler scale is not clamped and starts from 1 every
+frame.
 ==================
 */
 void S_Base_AddLoopingSound(int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfxHandle) {
     sfx_t* sfx;
+    loopSound_t* loop;
 
     if (!s_soundStarted || s_soundMuted) {
         return;
@@ -745,74 +659,42 @@ void S_Base_AddLoopingSound(int entityNum, const vec3_t origin, const vec3_t vel
         Com_Error(ERR_DROP, "%s has length 0", sfx->soundName);
     }
 
-    VectorCopy(origin, loopSounds[entityNum].origin);
-    VectorCopy(velocity, loopSounds[entityNum].velocity);
-    loopSounds[entityNum].active = qtrue;
-    loopSounds[entityNum].kill = qtrue;
-    loopSounds[entityNum].doppler = qfalse;
-    loopSounds[entityNum].oldDopplerScale = 1.0;
-    loopSounds[entityNum].dopplerScale = 1.0;
-    loopSounds[entityNum].sfx = sfx;
+    loop = &loopSounds[entityNum];
+    VectorCopy(origin, loop->origin);
+    VectorCopy(velocity, loop->velocity);
+    loop->active = qtrue;
+    loop->doppler = qfalse;
+    loop->sfx = sfx;
+    loop->oldDopplerScale = 1.0f;
+    loop->dopplerScale = 1.0f;
 
-    if (s_doppler->integer && VectorLengthSquared(velocity) > 0.0) {
+    if (s_doppler->integer && VectorLengthSquared(velocity) > 0.0f) {
         vec3_t out;
         float lena, lenb;
 
-        loopSounds[entityNum].doppler = qtrue;
-        lena = DistanceSquared(loopSounds[listener_number].origin, loopSounds[entityNum].origin);
-        VectorAdd(loopSounds[entityNum].origin, loopSounds[entityNum].velocity, out);
+        loop->doppler = qtrue;
+        lena = DistanceSquared(loopSounds[listener_number].origin, loop->origin);
+        VectorAdd(loop->origin, loop->velocity, out);
         lenb = DistanceSquared(loopSounds[listener_number].origin, out);
-        if ((loopSounds[entityNum].framenum + 1) != cls.framecount) {
-            loopSounds[entityNum].oldDopplerScale = 1.0;
-        } else {
-            loopSounds[entityNum].oldDopplerScale = loopSounds[entityNum].dopplerScale;
-        }
-        loopSounds[entityNum].dopplerScale = lenb / (lena * 100);
-        if (loopSounds[entityNum].dopplerScale <= 1.0) {
-            loopSounds[entityNum].doppler = qfalse;  // don't bother doing the math
-        } else if (loopSounds[entityNum].dopplerScale > MAX_DOPPLER_SCALE) {
-            loopSounds[entityNum].dopplerScale = MAX_DOPPLER_SCALE;
+        loop->oldDopplerScale = 1.0f;
+        loop->dopplerScale = lenb / (lena * 100);
+        if (loop->dopplerScale <= 1.0f) {
+            loop->doppler = qfalse;  // don't bother doing the math
         }
     }
 
-    loopSounds[entityNum].framenum = cls.framecount;
+    loop->framenum = cls.framecount;
 }
 
 /*
 ==================
-S_AddLoopingSound
+S_AddRealLoopingSound
 
-Called during entity generation for a frame
-Include velocity in case I get around to doing doppler...
+[QL] Retail has one kind of looping sound: this is the same call.
 ==================
 */
 void S_Base_AddRealLoopingSound(int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfxHandle) {
-    sfx_t* sfx;
-
-    if (!s_soundStarted || s_soundMuted) {
-        return;
-    }
-
-    if (sfxHandle < 0 || sfxHandle >= s_numSfx) {
-        Com_Printf(S_COLOR_YELLOW "S_AddRealLoopingSound: handle %i out of range\n", sfxHandle);
-        return;
-    }
-
-    sfx = &s_knownSfx[sfxHandle];
-
-    if (sfx->inMemory == qfalse) {
-        S_memoryLoad(sfx);
-    }
-
-    if (!sfx->soundLength) {
-        Com_Error(ERR_DROP, "%s has length 0", sfx->soundName);
-    }
-    VectorCopy(origin, loopSounds[entityNum].origin);
-    VectorCopy(velocity, loopSounds[entityNum].velocity);
-    loopSounds[entityNum].sfx = sfx;
-    loopSounds[entityNum].active = qtrue;
-    loopSounds[entityNum].kill = qfalse;
-    loopSounds[entityNum].doppler = qfalse;
+    S_Base_AddLoopingSound(entityNum, origin, velocity, sfxHandle);
 }
 
 /*
@@ -822,6 +704,8 @@ S_AddLoopSounds
 Spatialize all of the looping sounds.
 All sounds are on the same cycle, so any duplicates can just
 sum up the channel multipliers.
+
+[QL] quakelive_steam.exe 0x4da6f0
 ==================
 */
 void S_AddLoopSounds(void) {
@@ -842,12 +726,7 @@ void S_AddLoopSounds(void) {
             continue;  // already merged into an earlier sound
         }
 
-        if (loop->kill) {
-            S_SpatializeOrigin(loop->origin, 127, &left_total, &right_total);  // 3d
-        } else {
-            S_SpatializeOrigin(loop->origin, 90, &left_total, &right_total);  // sphere
-        }
-
+        S_SpatializeOrigin(loop->origin, 127, &left_total, &right_total);
         loop->sfx->lastTimeUsed = time;
 
         for (j = (i + 1); j < MAX_GENTITIES; j++) {
@@ -857,12 +736,7 @@ void S_AddLoopSounds(void) {
             }
             loop2->mergeFrame = loopFrame;
 
-            if (loop2->kill) {
-                S_SpatializeOrigin(loop2->origin, 127, &left, &right);  // 3d
-            } else {
-                S_SpatializeOrigin(loop2->origin, 90, &left, &right);  // sphere
-            }
-
+            S_SpatializeOrigin(loop2->origin, 127, &left, &right);
             loop2->sfx->lastTimeUsed = time;
             left_total += left;
             right_total += right;
@@ -881,14 +755,12 @@ void S_AddLoopSounds(void) {
             right_total = 255;
         }
 
-        ch->master_vol = 127;
         ch->leftvol = left_total;
         ch->rightvol = right_total;
         ch->thesfx = loop->sfx;
         ch->doppler = loop->doppler;
         ch->dopplerScale = loop->dopplerScale;
         ch->oldDopplerScale = loop->oldDopplerScale;
-        ch->fullVolume = qfalse;
         numLoopChannels++;
         if (numLoopChannels == MAX_CHANNELS) {
             return;
@@ -897,32 +769,6 @@ void S_AddLoopSounds(void) {
 }
 
 //=============================================================================
-
-/*
-=================
-S_ByteSwapRawSamples
-
-If raw data has been loaded in little endien binary form, this must be done.
-If raw data was calculated, as with ADPCM, this should not be called.
-=================
-*/
-void S_ByteSwapRawSamples(int samples, int width, int s_channels, const byte* data) {
-    int i;
-
-    if (width != 2) {
-        return;
-    }
-    if (LittleShort(256) == 256) {
-        return;
-    }
-
-    if (s_channels == 2) {
-        samples <<= 1;
-    }
-    for (i = 0; i < samples; i++) {
-        ((short*)data)[i] = LittleShort(((short*)data)[i]);
-    }
-}
 
 /*
 ============
@@ -1055,6 +901,10 @@ void S_Base_UpdateEntityPosition(int entityNum, const vec3_t origin) {
 S_Respatialize
 
 Change the volumes of all the playing sounds for changes in their positions
+
+[QL] quakelive_steam.exe 0x4dacd0. The listener's own sounds keep the volume they started
+with unless the listener is under water. Everything else is placed again at full volume,
+and with s_pvs a sound outside the listener's PVS is silenced.
 ============
 */
 void S_Base_Respatialize(int entityNum, const vec3_t head, vec3_t axis[3], int inwater) {
@@ -1078,19 +928,23 @@ void S_Base_Respatialize(int entityNum, const vec3_t head, vec3_t axis[3], int i
         if (!ch->thesfx) {
             continue;
         }
-        // local and first person sounds will always be full volume
-        if (ch->fullVolume) {
-            ch->leftvol = ch->master_vol;
-            ch->rightvol = ch->master_vol;
-        } else {
-            if (ch->fixed_origin) {
-                VectorCopy(ch->origin, origin);
-            } else {
-                VectorCopy(loopSounds[ch->entnum].origin, origin);
-            }
-
-            S_SpatializeOrigin(origin, ch->master_vol, &ch->leftvol, &ch->rightvol);
+        if (ch->entnum == listener_number && !inwater) {
+            continue;
         }
+
+        if (ch->fixed_origin) {
+            VectorCopy(ch->origin, origin);
+        } else {
+            VectorCopy(loopSounds[ch->entnum].origin, origin);
+        }
+
+        if (s_pvs->integer && !re.inPVS(listener_origin, origin)) {
+            ch->leftvol = 0;
+            ch->rightvol = 0;
+            continue;
+        }
+
+        S_SpatializeOrigin(origin, 127, &ch->leftvol, &ch->rightvol);
     }
 
     // add loopsounds
@@ -1159,7 +1013,7 @@ void S_Base_Update(void) {
         ch = s_channels;
         for (i = 0; i < MAX_CHANNELS; i++, ch++) {
             if (ch->thesfx && (ch->leftvol || ch->rightvol)) {
-                Com_Printf("%d %d %s\n", ch->leftvol, ch->rightvol, ch->thesfx->soundName);
+                Com_Printf("%3i %3i %s\n", ch->leftvol, ch->rightvol, ch->thesfx->soundName);
                 total++;
             }
         }
@@ -1222,21 +1076,26 @@ void S_GetSoundtime(void) {
     }
 }
 
+/*
+============
+S_Update_
+
+[QL] quakelive_steam.exe 0x4db570. Always mixes s_mixahead seconds past the play cursor.
+============
+*/
 void S_Update_(void) {
     unsigned endtime;
-    static float lastTime = 0.0f;
-    float ma, op;
-    float thisTime, sane;
     static int ot = -1;
 
     if (!s_soundStarted || s_soundMuted) {
         return;
     }
 
-    thisTime = Com_Milliseconds();
-
     // Updates s_soundtime
     S_GetSoundtime();
+
+    // mix ahead of current position
+    endtime = (int)floor(s_mixahead->value * (double)dma.speed + (double)s_soundtime + 0.5);
 
     if (s_soundtime == ot) {
         return;
@@ -1246,21 +1105,6 @@ void S_Update_(void) {
     // clear any sound effects that end before the current time,
     // and start any new sounds
     S_ScanChannelStarts();
-
-    sane = thisTime - lastTime;
-    if (sane < 11) {
-        sane = 11;  // 85hz
-    }
-
-    ma = s_mixahead->value * dma.speed;
-    op = s_mixPreStep->value + sane * dma.speed * 0.01;
-
-    if (op < ma) {
-        ma = op;
-    }
-
-    // mix ahead of current position
-    endtime = s_soundtime + ma;
 
     // mix to an even submission block size
     endtime = (endtime + dma.submission_chunk - 1) & ~(dma.submission_chunk - 1);
@@ -1274,8 +1118,6 @@ void S_Update_(void) {
     S_PaintChannels(endtime);
 
     SNDDMA_Submit();
-
-    lastTime = thisTime;
 }
 
 /*
@@ -1346,10 +1188,25 @@ void S_Base_StartBackgroundTrack(const char* intro, const char* loop) {
 
 /*
 ======================
+S_Base_ClearBackgroundLoop
+
+The current track plays to its end and stops.
+======================
+*/
+void S_Base_ClearBackgroundLoop(void) {
+    s_backgroundLoop[0] = '\0';
+}
+
+/*
+======================
 S_UpdateBackgroundTrack
+
+[QL] quakelive_steam.exe 0x4db1c0. The music volume eases towards two thirds of
+s_musicvolume, a quarter of the way each update.
 ======================
 */
 void S_UpdateBackgroundTrack(void) {
+    static float musicVolume;
     int bufferSamples;
     int fileSamples;
     byte raw[30000];  // just enough to fit in a mac stack frame
@@ -1360,8 +1217,10 @@ void S_UpdateBackgroundTrack(void) {
         return;
     }
 
+    musicVolume = (s_musicVolume->value + s_musicVolume->value + musicVolume) * 0.25f;
+
     // don't bother playing anything if musicvolume is 0
-    if (s_musicVolume->value <= 0) {
+    if (musicVolume <= 0) {
         return;
     }
 
@@ -1395,7 +1254,7 @@ void S_UpdateBackgroundTrack(void) {
         if (r > 0) {
             // add to raw buffer
             S_Base_RawSamples(0, fileSamples, s_backgroundStream->info.rate,
-                              s_backgroundStream->info.width, s_backgroundStream->info.channels, raw, s_musicVolume->value, -1);
+                              s_backgroundStream->info.width, s_backgroundStream->info.channels, raw, musicVolume, -1);
         } else {
             // loop
             if (s_backgroundLoop[0]) {
@@ -1475,11 +1334,6 @@ qboolean S_Base_Init(soundInterface_t* si) {
     if (!si) {
         return qfalse;
     }
-
-    s_mixahead = Cvar_Get("s_mixahead", "0.2", CVAR_ARCHIVE);
-    s_mixPreStep = Cvar_Get("s_mixPreStep", "0.05", CVAR_ARCHIVE);
-    s_show = Cvar_Get("s_show", "0", CVAR_CHEAT);
-    s_testsound = Cvar_Get("s_testsound", "0", CVAR_CHEAT);
 
     r = SNDDMA_Init();
 

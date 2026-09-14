@@ -1291,7 +1291,7 @@ static void CG_DrawReward(void) {
 		cg.rewardTime = cg.time;
 		remaining = REWARD_TIME;
 		if (cg_announcerRewardsVO.integer) {
-			CG_QueueAnnouncement(cg.rewardSound[0]);
+			CG_AddBufferedSound(cg.rewardSound[0]);
 		}
 	}
 
@@ -2480,7 +2480,6 @@ CG_DrawWarmup
   0.25, ITEM_TEXTSTYLE_SHADOWEDMORE) to press the readyup key: red "Press <key> to ready
   yourself", or green "Press <key> to unready yourself" once ready.
 Everything sits 10 units lower in Race.
-NOT PORTED: the sounds retail plays at 0 and 5 in the rounds (0x1000eb30 cases 0 and 5).
 =================
 */
 static void CG_DrawWarmup(void) {
@@ -2489,7 +2488,7 @@ static void CG_DrawWarmup(void) {
 	const char* line1;
 	const char* line2;
 	char key[32];
-	qboolean rounds, sound;
+	qboolean sound;
 	int sec, i, gt;
 
 	if (cgs.practice) {
@@ -2502,18 +2501,10 @@ static void CG_DrawWarmup(void) {
 		sec = cg.warmup - cg.time + 1000;
 		sec = (sec < 0) ? 0 : sec / 1000;
 		if (sec != cg.warmupCount) {
-			rounds = (cgs.gametype == GT_CA || cgs.gametype == GT_FREEZE || cgs.gametype == GT_AD ||
-					  cgs.gametype == GT_RR);
-			sound = rounds ? (cg.warmupRound > 0 || (cgs.gametype == GT_FREEZE && !cgs.freezeRoundDelay)) : qtrue;
+			sound = !BG_IsRoundBasedGameType(cgs.gametype) || (cgs.gametype == GT_FREEZE && !cgs.freezeRoundDelay);
 			cg.warmupCount = sec;
-			if (sound) {
-				if (sec == 1) {
-					trap_S_StartLocalSound(cgs.media.count1Sound, CHAN_ANNOUNCER);
-				} else if (sec == 2) {
-					trap_S_StartLocalSound(cgs.media.count2Sound, CHAN_ANNOUNCER);
-				} else if (sec == 3) {
-					trap_S_StartLocalSound(cgs.media.count3Sound, CHAN_ANNOUNCER);
-				}
+			if (sound || (BG_IsRoundBasedGameType(cgs.gametype) && cg.warmupRound > 0)) {
+				CG_PlayCountdownSound(sec);
 			}
 		}
 	} else {
@@ -2622,60 +2613,136 @@ void CG_DrawTimedMenus(void) {
 
 /*
 =================
+CG_PlayFightSound
+
+[QL] cgamex86.dll 0x1000ea40. The start of play: "go" in Race; in A&D whether the player's team
+attacks or defends this turn; in Red Rover the respawn chime after the first round and "bite"
+for the infected. The centre print and the announcer queue start over.
+=================
+*/
+void CG_PlayFightSound(void) {
+	sfxHandle_t sfx = cgs.media.goSound;
+	int team;
+
+	if (cgs.gametype != GT_RACE) {
+		sfx = cgs.media.countFightSound;
+		if (cgs.gametype == GT_AD) {
+			team = cg.snap->ps.persistant[PERS_TEAM];
+			if (team == TEAM_RED) {
+				sfx = cg.warmupTurn ? cgs.media.defendTheFlagSound : cgs.media.attackTheFlagSound;
+			} else if (team == TEAM_BLUE) {
+				sfx = cg.warmupTurn ? cgs.media.attackTheFlagSound : cgs.media.defendTheFlagSound;
+			}
+		} else if (cgs.gametype == GT_RR) {
+			if (cg.warmupRound > 0) {
+				trap_S_StartLocalSound(cgs.media.kamikazeRespawnSound, CHAN_LOCAL_SOUND);
+			}
+			if (cg.snap->ps.pm_flags & PMF_LOADOUT_FORCED) {
+				sfx = cgs.media.biteSound;
+			}
+		}
+	}
+
+	CG_CenterPrint("FIGHT!", 120, 0.5f);
+	CG_ResetAnnouncements();
+	trap_S_StartLocalSoundVolume(sfx, CHAN_ANNOUNCER, s_announcerVolume.value);
+	cg.warmupCount = -1;
+}
+
+/*
+=================
+CG_PlayCountdownSound
+
+[QL] cgamex86.dll 0x1000eb30. The voice for a countdown second: 3, 2 and 1, "fight" at 0 in the
+round modes, and at 5 "prepare to fight" while the match is paused or "round begins in" in
+the round modes (in Freeze Tag only with a round delay of at least 5 s).
+=================
+*/
+void CG_PlayCountdownSound(int count) {
+	sfxHandle_t sfx;
+
+	switch (count) {
+		case 0:
+			if (BG_IsRoundBasedGameType(cgs.gametype)) {
+				CG_PlayFightSound();
+			}
+			return;
+		case 1:
+			sfx = cgs.media.count1Sound;
+			break;
+		case 2:
+			sfx = cgs.media.count2Sound;
+			break;
+		case 3:
+			sfx = cgs.media.count3Sound;
+			break;
+		case 5:
+			if (cgs.freezeEnd) {
+				sfx = cgs.media.countPrepareSound;
+			} else {
+				if (!BG_IsRoundBasedGameType(cgs.gametype)) {
+					return;
+				}
+				if (cgs.gametype == GT_FREEZE && cgs.freezeRoundDelay < 5000) {
+					return;
+				}
+				sfx = cgs.media.roundBeginsInSound;
+			}
+			break;
+		default:
+			return;
+	}
+	trap_S_StartLocalSoundVolume(sfx, CHAN_ANNOUNCER, s_announcerVolume.value);
+}
+
+/*
+=================
 CG_DrawTimeout
 
-// Address: 0x1000ef30
-[QL] Pause/timeout overlay. Shows "Match Paused" during an indefinite pause, or
-"Match resuming in ^5N^7 seconds" once a timein countdown is running. Plays the pause
-klaxon once when a pause begins. Called every frame from CG_Draw2D; self-gates on
-cgs.freezeEnd (CS_PAUSE_START_TIME).
+[QL] cgamex86.dll 0x1000ef30, drawn while a pause is on or its resume time is still set. The
+round clock stands still, a new pause sounds the klaxon, and once a second the countdown
+voice for the seconds left plays. Shows "Match Paused", or "Match resuming in ^5N^7
+seconds" while the resume countdown runs.
 =================
 */
 static void CG_DrawTimeout(void) {
-	static int lastPause;     // cgs.freezeEnd of the pause we last announced
-	static int lastCountSec;  // last resume-countdown second we voiced
 	const char* s;
 	float w;
 	int sec;
 
 	if (!cgs.freezeEnd) {
-		lastPause = 0;
-		return;
+		if (cgs.pauseEnd) {
+			cgs.roundStartTime += (cgs.pauseEnd - cg.time - 1000) / 1000;
+			cgs.pauseEnd = 0;
+			return;
+		}
+		cgs.roundStartTime += cg.frametime;
+	} else if (!cgs.pauseEnd) {
+		cgs.roundStartTime += cg.frametime;
 	}
 
-	// announce a newly-started pause once (klaxon)
-	if (lastPause != cgs.freezeEnd) {
-		lastPause = cgs.freezeEnd;
-		lastCountSec = -1;
-		trap_S_StartLocalSound(cgs.media.pauseSound, CHAN_ANNOUNCER);
+	if (cgs.pauseSoundTime < cgs.freezeEnd) {
+		cgs.pauseSoundTime = cgs.freezeEnd;
+		trap_S_StartLocalSound(cgs.media.klaxon1Sound, CHAN_LOCAL_SOUND);
 	}
 
 	if (cgs.pauseEnd == 0) {
+		sec = -1;
 		s = "Match Paused";
 	} else {
 		sec = (cgs.pauseEnd - cg.time) / 1000;
-
-		// [QL] resume-countdown announcer, once per second as the timein countdown ticks.
-		// The binary calls CG_PlayMatchStateSound(secondsRemaining): 5 = prepare_to_fight,
-		// 3 = "two", 2 = "one", 1 = "fight".
-		if (sec != lastCountSec) {
-			lastCountSec = sec;
-			switch (sec) {
-			case 5: trap_S_StartLocalSound(cgs.media.countPrepareSound, CHAN_ANNOUNCER); break;
-			case 3: trap_S_StartLocalSound(cgs.media.count2Sound, CHAN_ANNOUNCER); break;
-			case 2: trap_S_StartLocalSound(cgs.media.count1Sound, CHAN_ANNOUNCER); break;
-			case 1: trap_S_StartLocalSound(cgs.media.countFightSound, CHAN_ANNOUNCER); break;
-			}
-		}
-
-		if (sec <= 0) {
-			return;  // countdown finished; server is about to resume
-		}
 		s = va("Match resuming in ^5%d^7 seconds", sec);
 	}
 
-	w = CG_Text_Width(s, 0.5f, 0);
-	CG_Text_Paint(320 - w / 2, 128, 0.5f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);  // [QL] 0x1000f04e
+	if (sec != 0) {
+		w = CG_Text_Width(s, 0.5f, 0);
+		CG_Text_Paint(320 - w / 2, 128, 0.5f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);  // [QL] 0x1000f04e
+	}
+
+	if (cg.time - cgs.pauseSoundTime >= 1000) {
+		cgs.pauseSoundTime = cg.time;
+		CG_PlayCountdownSound(sec);
+	}
 }
 
 /*
@@ -2880,7 +2947,9 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	// CG_DrawFollow itself: retail has no "following" string at all, and the followed
 	// player's name is drawn by the spectator HUD through CG_FOLLOW_PLAYER_NAME_EX.
 	CG_DrawWarmup();
-	CG_DrawTimeout();  // [QL] pause/timeout overlay
+	if (cgs.freezeEnd || cgs.pauseEnd) {
+		CG_DrawTimeout();  // [QL] 0x10011165
+	}
 	CG_SetWidescreen(WIDESCREEN_STRETCH);
 
 	// [QL] race timer is drawn by menu system via CG_DrawRaceTimes ownerdraw

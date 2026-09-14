@@ -30,7 +30,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "snd_local.h"
 #include "snd_codec.h"
 
-#define DEF_COMSOUNDMEGS "8"
+// [QL] quakelive_steam.exe 0x4dbb30 registers com_soundMegs with "16"
+#define DEF_COMSOUNDMEGS "16"
 
 /*
 ===============================================================================
@@ -44,10 +45,6 @@ static sndBuffer* buffer = NULL;
 static sndBuffer* freelist = NULL;
 static int inUse = 0;
 static int totalInUse = 0;
-
-short* sfxScratchBuffer = NULL;
-sfx_t* sfxScratchPointer = NULL;
-int sfxScratchIndex = 0;
 
 void SND_free(sndBuffer* v) {
     *(sndBuffer**)v = freelist;
@@ -82,9 +79,6 @@ void SND_setup(void) {
     scs = (cv->integer * 1536);
 
     buffer = malloc(scs * sizeof(sndBuffer));
-    // allocate the stack based hunk allocator
-    sfxScratchBuffer = malloc(SND_CHUNK_SIZE * sizeof(short) * 4);  // Hunk_Alloc(SND_CHUNK_SIZE * sizeof(short) * 4);
-    sfxScratchPointer = NULL;
 
     inUse = scs * sizeof(sndBuffer);
     p = buffer;
@@ -100,7 +94,6 @@ void SND_setup(void) {
 }
 
 void SND_shutdown(void) {
-    free(sfxScratchBuffer);
     free(buffer);
 }
 
@@ -109,9 +102,11 @@ void SND_shutdown(void) {
 ResampleSfx
 
 resample / decimate to the current source rate
+
+[QL] quakelive_steam.exe 0x4dbc00: nearest sample, no filtering
 ================
 */
-static int ResampleSfx(sfx_t* sfx, int channels, int inrate, int inwidth, int samples, byte* data, qboolean compressed) {
+static int ResampleSfx(sfx_t* sfx, int channels, int inrate, int inwidth, int samples, byte* data) {
     int outcount;
     int srcsample;
     float stepscale;
@@ -158,44 +153,6 @@ static int ResampleSfx(sfx_t* sfx, int channels, int inrate, int inwidth, int sa
     return outcount;
 }
 
-/*
-================
-ResampleSfx
-
-resample / decimate to the current source rate
-================
-*/
-static int ResampleSfxRaw(short* sfx, int channels, int inrate, int inwidth, int samples, byte* data) {
-    int outcount;
-    int srcsample;
-    float stepscale;
-    int i, j;
-    int sample, samplefrac, fracstep;
-
-    stepscale = (float)inrate / dma.speed;  // this is usually 0.5, 1, or 2
-
-    outcount = samples / stepscale;
-
-    srcsample = 0;
-    samplefrac = 0;
-    fracstep = stepscale * 256 * channels;
-
-    for (i = 0; i < outcount; i++) {
-        srcsample += samplefrac >> 8;
-        samplefrac &= 255;
-        samplefrac += fracstep;
-        for (j = 0; j < channels; j++) {
-            if (inwidth == 2) {
-                sample = LittleShort(((short*)data)[srcsample + j]);
-            } else {
-                sample = (int)((unsigned char)(data[srcsample + j]) - 128) << 8;
-            }
-            sfx[i * channels + j] = sample;
-        }
-    }
-    return outcount;
-}
-
 //=============================================================================
 
 /*
@@ -208,9 +165,7 @@ of a forced fallback of a player specific sound
 */
 qboolean S_LoadSound(sfx_t* sfx) {
     byte* data;
-    short* samples;
     snd_info_t info;
-    //	int		size;
 
     // load it in
     data = S_CodecLoad(sfx->soundName, &info);
@@ -225,35 +180,18 @@ qboolean S_LoadSound(sfx_t* sfx) {
         Com_DPrintf(S_COLOR_YELLOW "WARNING: %s is not a 22kHz audio file\n", sfx->soundName);
     }
 
-    samples = Hunk_AllocateTempMemory(info.channels * info.samples * sizeof(short) * 2);
-
-    sfx->lastTimeUsed = Com_Milliseconds() + 1;
-
-    // each of these compression schemes works just fine
-    // but the 16bit quality is much nicer and with a local
-    // install assured we can rely upon the sound memory
-    // manager to do the right thing for us and page
-    // sound in as needed
-
-    if (info.channels == 1 && sfx->soundCompressed == qtrue) {
-        sfx->soundCompressionMethod = 1;
-        sfx->soundData = NULL;
-        sfx->soundLength = ResampleSfxRaw(samples, info.channels, info.rate, info.width, info.samples, data + info.dataofs);
-        S_AdpcmEncodeSound(sfx, samples);
-    } else {
-        sfx->soundCompressionMethod = 0;
-        sfx->soundData = NULL;
-        sfx->soundLength = ResampleSfx(sfx, info.channels, info.rate, info.width, info.samples, data + info.dataofs, qfalse);
-    }
-
+    sfx->soundData = NULL;
+    sfx->soundLength = ResampleSfx(sfx, info.channels, info.rate, info.width, info.samples, data + info.dataofs);
     sfx->soundChannels = info.channels;
 
-    Hunk_FreeTempMemory(samples);
     Hunk_FreeTempMemory(data);
+
+    sfx->lastTimeUsed = Com_Milliseconds();
 
     return qtrue;
 }
 
+// [QL] quakelive_steam.exe 0x4dbbe0
 void S_DisplayFreeMemory(void) {
-    Com_Printf("%d bytes free sound buffer memory, %d total used\n", inUse, totalInUse);
+    Com_Printf("%d bytes sound buffer memory in use, %d free \n", totalInUse, inUse);
 }

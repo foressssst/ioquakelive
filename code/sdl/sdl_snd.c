@@ -216,7 +216,10 @@ qboolean SNDDMA_Init(void) {
     desired.channels = (int)s_sdlChannels->value;
     desired.callback = SNDDMA_AudioCallback;
 
-    sdlPlaybackDevice = SDL_OpenAudioDevice(NULL, SDL_FALSE, &desired, &obtained, SDL_AUDIO_ALLOW_ANY_CHANGE);
+    // [QL] quakelive_steam.exe 0x4efd70 mixes into a 22050 Hz, 16-bit stereo DirectSound buffer
+    // and leaves any conversion to the system: SDL converts to the device instead of handing
+    // the mixer another format
+    sdlPlaybackDevice = SDL_OpenAudioDevice(NULL, SDL_FALSE, &desired, &obtained, 0);
     if (sdlPlaybackDevice == 0) {
         Com_Printf("SDL_OpenAudioDevice() failed: %s\n", SDL_GetError());
         SDL_QuitSubSystem(SDL_INIT_AUDIO);
@@ -225,16 +228,10 @@ qboolean SNDDMA_Init(void) {
 
     SNDDMA_PrintAudiospec("SDL_AudioSpec", &obtained);
 
-    // dma.samples needs to be big, or id's mixer will just refuse to
-    //  work at all; we need to keep it significantly bigger than the
-    //  amount of SDL callback samples, and just copy a little each time
-    //  the callback runs.
-    // 32768 is what the OSS driver filled in here on my system. I don't
-    //  know if it's a good value overall, but at least we know it's
-    //  reasonable...this is why I let the user override.
+    // [QL] the DirectSound buffer is 0x10000 bytes, 32768 16-bit samples
     tmp = s_sdlMixSamps->value;
     if (!tmp)
-        tmp = (obtained.samples * obtained.channels) * 10;
+        tmp = 0x10000 / (SDL_AUDIO_BITSIZE(obtained.format) / 8);
 
     // samples must be divisible by number of channels
     tmp -= tmp % obtained.channels;

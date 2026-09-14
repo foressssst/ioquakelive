@@ -24,9 +24,14 @@ so the Quake 3 gore became the default and the electrogibs never ran - the
 opposite of retail. They live here instead so that the default matches retail and
 installing the pack is a real choice.
 
-The four files that stayed in `pak01/dlc_gibs/` - `juicer.md3`, `juicer_1.md3`,
-`juicer.png`, `invul_juiced.ogg` - are the invulnerability juiced effect, which
-the base game registers separately and is not part of the gib branch.
+The juiced effect files - `juicer.md3`, `juicer_1.md3`, `juicer.png`,
+`invul_juiced.ogg` - belong to the pack too, although they once stayed in pak01.
+Retail treats the whole `dlc_gibs/` folder as one switch: `CG_RegisterSounds`
+(0x10020e70) loads every `dlc_gibs` sound, `invul_juiced.ogg` included, only when
+`trap_FS_GetFileList("dlc_gibs", "")` finds something, and `EV_JUICED`
+(0x1001ab39) plays the juiced effect only when the skull handle resolved. With
+the four files in pak01 that listing was never empty, so a default build went
+looking for gore sounds that are not there.
 
 ## Installing it
 

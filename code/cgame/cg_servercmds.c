@@ -707,18 +707,16 @@ static void CG_ParseWarmup(void) {
         cg.warmupGametype = -1;
     }
 
-    cg.warmupCount = -1;
+    // [QL] 0x10048d10: when a countdown starts, "prepare to fight" for the individual modes
+    // and Red Rover, "prepare your team" for the rest
+    if (warmup > 0 && cg.warmup < 1) {
+        sfxHandle_t sfx = cgs.media.countPrepareTeamSound;
 
-    if (warmup == 0 && cg.warmup) {
-        // match started - no sound
-    } else if (warmup > 0 && cg.warmup <= 0) {
-        // countdown started
-        int gt = (cg.warmupGametype >= 0) ? cg.warmupGametype : cgs.gametype;
-        if (gt < GT_TEAM || gt == GT_DUEL || gt == GT_RR) {
-            trap_S_StartLocalSound(cgs.media.countPrepareSound, CHAN_ANNOUNCER);
-        } else {
-            trap_S_StartLocalSound(cgs.media.countPrepareTeamSound, CHAN_ANNOUNCER);
+        if (cg.warmupGametype < GT_TEAM &&
+            (cgs.gametype < GT_TEAM || cg.warmupGametype == GT_DUEL || cgs.gametype == GT_RR)) {
+            sfx = cgs.media.countPrepareSound;
         }
+        trap_S_StartLocalSoundVolume(sfx, CHAN_ANNOUNCER, s_announcerVolume.value);
     }
 
     cg.warmup = warmup;
@@ -1085,7 +1083,7 @@ static void CG_ConfigStringModified(void) {
         Q_strncpyz(cgs.voteString, str, sizeof(cgs.voteString));
         trap_Cvar_Set("ui_votestring", cgs.voteString);
         if (cgs.voteString[0]) {
-            trap_S_StartLocalSound(cgs.media.voteNow, CHAN_ANNOUNCER);
+            CG_AddBufferedSound(cgs.media.voteNow);  // [QL] 0x10049c66
         }
     } else if (num == CS_INTERMISSION) {
         cg.intermissionStarted = atoi(str);
@@ -1666,38 +1664,38 @@ static void CG_MapRestart(void) {
     CG_InitMarkPolys();
     CG_ClearParticles();
 
+    // [QL] 0x1004a2e0
+    cg.damageTime = 0;
+    cg.intermissionStarted = qfalse;
     // make sure the "3 frags left" warnings play again
     cg.fraglimitWarnings = 0;
-
     cg.timelimitWarnings = 0;
-    cg.rewardTime = 0;
-    cg.rewardStack = 0;
-    // [QL] 0x1004a334: the pickup display starts over
+    cg.mapRestart = qtrue;
+    cg.soundBufferLocked = qfalse;
+    // [QL] the pickup display starts over
     cg.itemPickup = 0;
     cg.itemPickupTime = 0;
     cg.itemPickupLast = 0;
     cg.itemPickupBlendTime = 0;
     cg.itemPickupCount = 1;
-    cg.intermissionStarted = qfalse;
     cg.levelShot = qfalse;
+    cgs.voteTime = 0;
+    cg.complaintClient = -1;
+    cg.complaintEndTime = 0;
+    cgs.allReadyTime = 0;
+
+    CG_ResetAnnouncements();
+    CG_StartMusic();
+    trap_S_ClearLoopingSounds(qtrue);
     memset(cg.obituaries, 0, sizeof(cg.obituaries));  // [QL] 0x1004a396
 
-    cgs.voteTime = 0;
-
-    cg.mapRestart = qtrue;
-
-    CG_StartMusic();
-
-    trap_S_ClearLoopingSounds(qtrue);
-
-    // we really should clear more parts of cg here and stop sounds
-
-    // play the "fight" sound if this is a restart without warmup
-    if (cg.warmup == 0 /* && cgs.gametype == GT_DUEL */) {
-        trap_S_StartLocalSound(cgs.media.countFightSound, CHAN_ANNOUNCER);
-        CG_CenterPrint("FIGHT!", 120, 0.5f);  // [QL] 0x1000eaea: y 120, scale 0.5
+    // play the "fight" sound if this is a restart without warmup; the round modes play
+    // theirs when each round starts
+    if (!cg.warmup && !BG_IsRoundBasedGameType(cgs.gametype)) {
+        CG_PlayFightSound();
     }
     trap_Cvar_Set("cg_thirdPerson", "0");
+    trap_Cvar_Set("ui_voteactive", "0");
 }
 
 /*
@@ -1972,10 +1970,11 @@ static void CG_ServerCommand(void) {
     if (!strcmp(cmd, "print")) {
         CG_Printf("%s", CG_Argv(1));
         cmd = CG_Argv(1);
+        // [QL] 0x1004b0f1: the vote result voices go through the announcer queue
         if (!Q_stricmpn(cmd, "vote failed", 11) || !Q_stricmpn(cmd, "team vote failed", 16)) {
-            trap_S_StartLocalSound(cgs.media.voteFailed, CHAN_ANNOUNCER);
+            CG_AddBufferedSound(cgs.media.voteFailed);
         } else if (!Q_stricmpn(cmd, "vote passed", 11) || !Q_stricmpn(cmd, "team vote passed", 16)) {
-            trap_S_StartLocalSound(cgs.media.votePassed, CHAN_ANNOUNCER);
+            CG_AddBufferedSound(cgs.media.votePassed);
         }
         // [QL] binary CG_ServerCommand (0x1004b065): "print" also feeds the text
         // to CG_AddChat so server prints land in the chat/notify area.
@@ -2024,11 +2023,11 @@ static void CG_ServerCommand(void) {
         return;
     }
 
-    // [QL] playSound - server-triggered sound effect
+    // [QL] 0x1004b369: playSound, a server-triggered local sound
     if (!strcmp(cmd, "playSound")) {
-        if (trap_Argc() > 1) {
-            sfxHandle_t sfx = trap_S_RegisterSound(CG_Argv(1), qfalse);
-            trap_S_StartLocalSound(sfx, CHAN_AUTO);
+        sfxHandle_t sfx = trap_S_RegisterSound(CG_Argv(1), qfalse);
+        if (sfx) {
+            trap_S_StartLocalSound(sfx, CHAN_LOCAL_SOUND);
         }
         return;
     }
@@ -2039,19 +2038,19 @@ static void CG_ServerCommand(void) {
         return;
     }
     if (!strcmp(cmd, "stopMusic")) {
-        trap_S_StartBackgroundTrack("", "");
+        trap_S_StopBackgroundTrack();
         return;
     }
 
-    // [QL] clearSounds - stop all looping sounds
+    // [QL] 0x1004b49f: clearSounds stops every sound that is playing
     if (!strcmp(cmd, "clearSounds")) {
-        trap_S_ClearLoopingSounds(qtrue);
+        trap_S_ClearSoundBuffer();
         return;
     }
 
     if (!strcmp(cmd, "tchat")) {
-        // QL binary: cg_chatbeep.integer gates the chat sound
-        if (cg_chatbeep.integer) {
+        // [QL] 0x1004b548: team chat beeps with cg_teamChatBeep
+        if (cg_teamChatBeep.integer) {
             trap_S_StartLocalSound(cgs.media.talkSound, CHAN_LOCAL_SOUND);
         }
         // [QL] skip the leading "%02d " sender-clientNum prefix added by the relay.
