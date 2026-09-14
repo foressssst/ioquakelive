@@ -148,14 +148,28 @@ Restart the server on a different map
 ==================
 */
 static void SV_Map_f(void) {
-    char* cmd;
+    char cmd[1024];
     char* map;
-    qboolean killBots, cheat;
+    const char* factoryName;
+    factory_t* factory;
+    const arenaInfo_t* arena;
+    qboolean isMap, hidden;
     char expanded[MAX_QPATH];
     char mapname[MAX_QPATH];
 
+    // [QL] "map <map> <factory>" (quakelive_steam.exe 0x4ddce0). The factory can
+    // be left out once one is in play.
     map = Cmd_Argv(1);
+    factoryName = Cmd_Argv(2);
+    Q_strncpyz(cmd, Cmd_Argv(0), sizeof(cmd));
+    Q_strncpyz(mapname, map, sizeof(mapname));
     if (!map) {
+        return;
+    }
+
+    if (Cmd_Argc() < 3 - (svs.factory != NULL)) {
+        Com_Printf("%s (map) (factory)\n", Cmd_Argv(0));
+        SV_PrintValidFactories();
         return;
     }
 
@@ -167,33 +181,202 @@ static void SV_Map_f(void) {
         return;
     }
 
-    // force latched values to get set
-    Cvar_Get("g_gametype", "0", CVAR_SERVERINFO | CVAR_USERINFO | CVAR_LATCH);
+    isMap = Q_stricmp(cmd, "devmap") != 0;
 
-    cmd = Cmd_Argv(0);
-    if (!Q_stricmp(cmd, "devmap")) {
-        cheat = qtrue;
-        killBots = qtrue;
+    if (!svs.factory || factoryName[0]) {
+        factory = SV_FindFactory(factoryName);
     } else {
-        cheat = qfalse;
-        killBots = qfalse;
+        factory = svs.factory;
     }
 
-    // save the map name here cause on a map restart we reload the q3config.cfg
-    // and thus nuke the arguments of the map command
-    Q_strncpyz(mapname, map, sizeof(mapname));
+    // the hidden factories ("_training", "_rj", "_sj") are for offline servers
+    if (svs.factory && svs.factory->id[0] == '_' && !factoryName[0]) {
+        hidden = qtrue;
+    } else {
+        hidden = factoryName[0] == '_';
+    }
+    if (hidden && sv_serverType->integer > 0) {
+        Com_Printf("%s (map) (factory)\n", Cmd_Argv(0));
+        SV_PrintValidFactories();
+        return;
+    }
+
+    if (!factory) {
+        Com_Printf("Invalid factory specified.\n");
+        return;
+    }
+
+    // devmap and the hidden factories skip the arena's gametypes
+    arena = SV_FindArena(mapname);
+    if (arena && isMap && !arena->gametypes[factory->basegt] && factoryName[0] != '_') {
+        Com_Printf("Map not supported for this gametype.\n");
+        return;
+    }
+
+    SV_ApplyFactory(factory);
+
+    // force latched values to get set
+    Cvar_Get("g_gametype", "0", CVAR_SERVERINFO | CVAR_LATCH);
+    Cvar_Get("g_ammoPack", "0", CVAR_LATCH);
 
     // start up the map
-    SV_SpawnServer(mapname, killBots);
+    SV_SpawnServer(mapname, !isMap);
 
     // set the cheat value
     // if the level was started with "map <levelname>", then
     // cheats will not be allowed.  If started with "devmap <levelname>"
     // then cheats will be allowed
-    if (cheat) {
-        Cvar_Set("sv_cheats", "1");
-    } else {
-        Cvar_Set("sv_cheats", "0");
+    Cvar_Set("sv_cheats", isMap ? "0" : "1");
+
+    if (!com_dedicated->integer) {
+        Cvar_Set("ui_singlePlayerActive", "1");
+        Cvar_Set("ui_priv", "3");
+    }
+}
+
+/*
+==================
+SV_Arena_f
+
+[QL] "arena <name>": a single player match from scripts/<name>.sp_arena, with
+its map, fraglimit, timelimit, bot_skill and bots, as Free For All with cheats
+off. quakelive_steam.exe 0x4de050.
+==================
+*/
+static void SV_Arena_f(void) {
+    const char* arenaName;
+    char filename[MAX_QPATH];
+    char expanded[MAX_QPATH];
+    char map[MAX_QPATH];
+    char bots[1024];
+    char buf[1024];
+    char* text;
+    char* token;
+    fileHandle_t f;
+    int len;
+    int fraglimit = 20;
+    int timelimit = 0;
+    int skill;
+    qboolean done = qfalse;
+
+    arenaName = Cmd_Argv(1);
+    skill = Cvar_VariableIntegerValue("g_spSkill");
+    // the engine tested the pointer, so an empty name reaches the file lookup
+    if (!arenaName) {
+        Com_Printf("No arena name passed\n");
+        return;
+    }
+
+    Com_sprintf(filename, sizeof(filename), "scripts/%s.sp_arena", arenaName);
+    len = FS_FOpenFileRead(filename, &f, qtrue);
+    if (!f) {
+        Com_Printf("%s", va("^1file not found: %s\n", filename));
+        return;
+    }
+    if (len > 0x3ff) {
+        Com_Printf("%s", va("^1file too large: %s is %i, max allowed is %i", filename, len, 0x400));
+        FS_FCloseFile(f);
+        return;
+    }
+    FS_Read(buf, len, f);
+    buf[len] = '\0';
+    FS_FCloseFile(f);
+
+    text = buf;
+    map[0] = '\0';
+    bots[0] = '\0';
+    token = COM_Parse(&text);
+    while (1) {
+        if (done) {
+            Cvar_SetValue("g_gametype", 0);
+            Cvar_SetValue("g_spSkill", (float)skill);
+            Cvar_SetValue("fraglimit", (float)fraglimit);
+            Cvar_SetValue("timelimit", (float)timelimit);
+            if (bots[0]) {
+                Cvar_Set("g_botSpawnList", bots);
+            }
+            SV_SpawnServer(map, qtrue);
+            Cvar_SetValue("sv_cheats", 0);
+            return;
+        }
+        if (!token[0]) {
+            Com_Printf("%s is empty!\n", filename);
+            return;
+        }
+        if (strcmp(token, "{")) {
+            Com_Printf("Missing initial \"{\" in %s!\n", filename);
+            return;
+        }
+
+        token = COM_ParseExt(&text, qtrue);
+        while (token[0]) {
+            if (!strcmp(token, "}")) {
+                done = qtrue;
+                break;
+            }
+            if (!strcmp(token, "fraglimit")) {
+                token = COM_ParseExt(&text, qfalse);
+                if (!token[0]) {
+                    Com_Printf("No matching value given for fraglimit!\n");
+                    return;
+                }
+                fraglimit = atoi(token);
+                if (fraglimit < 1) {
+                    Com_Printf("Fraglimit was an invalid value! Valid values are 1 or greater. Setting to 20.\n");
+                    fraglimit = 20;
+                }
+            } else if (!strcmp(token, "timelimit")) {
+                token = COM_ParseExt(&text, qfalse);
+                if (!token[0]) {
+                    Com_Printf("No matching value given for timelimit!\n");
+                    return;
+                }
+                timelimit = atoi(token);
+                if (timelimit < 0) {
+                    Com_Printf("timelimit was an invalid value! Valid values are 0 or greater. Setting to 0.\n");
+                    timelimit = 0;
+                }
+            } else if (!strcmp(token, "bot_skill")) {
+                token = COM_ParseExt(&text, qfalse);
+                if (!token[0]) {
+                    Com_Printf("No matching value given for botSkill!\n");
+                    return;
+                }
+                skill = atoi(token);
+                if (skill < 1 || skill > 5) {
+                    Com_Printf("bot_skill was an invalid value! Valid values are 1 - 5. Setting to 4.\n");
+                    skill = 4;
+                }
+            } else if (!strcmp(token, "map")) {
+                token = COM_ParseExt(&text, qfalse);
+                if (!token[0]) {
+                    Com_Printf("No map name given!\n");
+                    return;
+                }
+                Com_sprintf(expanded, sizeof(expanded), "maps/%s.bsp", token);
+                if (FS_ReadFile(expanded, NULL) == -1) {
+                    Com_Printf("Can't find map %s!\n", expanded);
+                    return;
+                }
+                Q_strncpyz(map, token, sizeof(map));
+            } else if (!strcmp(token, "bots")) {
+                token = COM_ParseExt(&text, qfalse);
+                if (!token[0]) {
+                    Com_Printf("No bot names given for bots!\n");
+                    return;
+                }
+                Q_strncpyz(bots, token, sizeof(bots));
+            } else {
+                Com_Printf("Unknown value in %s\n", filename);
+                return;
+            }
+            token = COM_ParseExt(&text, qtrue);
+        }
+        if (!done) {
+            Com_Printf("Unexpected end of info file!\n");
+            return;
+        }
+        token = COM_Parse(&text);
     }
 }
 
@@ -238,9 +421,14 @@ static void SV_MapRestart_f(void) {
 
         sv.restartTime = sv.time + delay * 1000;
 
-        // [QL] Build info string with time and gametype keys
+        // [QL] Build info string with time and gametype keys; the gametype is the
+        // latched one when there is one (quakelive_steam.exe 0x4de730)
         Info_SetValueForKey(warmupInfo, "time", va("%i", sv.restartTime));
-        gametype = (int)Cvar_VariableValue("g_gametype");
+        if (sv_gametype->latchedString) {
+            gametype = atoi(sv_gametype->latchedString);
+        } else {
+            gametype = sv_gametype->integer;
+        }
         Info_SetValueForKey(warmupInfo, "g_gametype", va("%d", gametype));
         SV_SetConfigstring(CS_WARMUP, warmupInfo);
         return;
@@ -249,7 +437,9 @@ static void SV_MapRestart_f(void) {
     // [QL] Skip variable-change checks when game triggered the restart (g_restarted)
     if (!Cvar_VariableValue("g_restarted")) {
         // check for changes in variables that can't just be restarted
-        if (sv_maxclients->modified || sv_gametype->modified) {
+        // [QL] g_ammoPack and g_gametype respawn the map; sv_maxclients only
+        // resizes the client table (quakelive_steam.exe 0x4de800)
+        if (sv_ammoPack->modified || sv_gametype->modified) {
             char mapname[MAX_QPATH];
 
             Com_Printf("variable change -- restarting.\n");
@@ -258,6 +448,9 @@ static void SV_MapRestart_f(void) {
 
             SV_SpawnServer(mapname, qfalse);
             return;
+        }
+        if (sv_maxclients->modified) {
+            SV_ChangeMaxClients();
         }
     }
 
@@ -341,6 +534,10 @@ static void SV_MapRestart_f(void) {
     SV_GameRunFrame(sv.time);
     sv.time += 100;
     svs.time += 100;
+
+    // [QL] quakelive_steam.exe 0x4dea1a
+    SV_SetNextMap();
+    SV_SetNextMaps();
 }
 
 //===============================================================
@@ -735,34 +932,6 @@ static void SV_CompletePlayerName(char* args, int argNum) {
 
 /*
 ==================
-[QL] Factory/Arena/MapPool stubs
-
-These commands interact with the factory and arena system.
-Currently stubbed - the full implementation requires the factory system.
-==================
-*/
-static void SV_AutoMap_f(void) {
-    Com_Printf("arena: factory/arena system not yet implemented.\n");
-}
-
-static void SV_StartRandomMap_f(void) {
-    Com_Printf("startRandomMap: factory/arena system not yet implemented.\n");
-}
-
-static void SV_ReloadMapPool_f(void) {
-    Com_Printf("reload_mappool: factory/arena system not yet implemented.\n");
-}
-
-static void SV_ReloadArenas_f(void) {
-    Com_Printf("reload_arenas: factory/arena system not yet implemented.\n");
-}
-
-static void SV_ReloadFactories_f(void) {
-    Com_Printf("reload_factories: factory/arena system not yet implemented.\n");
-}
-
-/*
-==================
 SV_AddOperatorCommands
 ==================
 */
@@ -790,8 +959,8 @@ void SV_AddOperatorCommands(void) {
         Cmd_AddCommand("say", SV_ConSay_f);
     }
 
-    // [QL] factory/arena/mappool commands (stubs)
-    Cmd_AddCommand("arena", SV_AutoMap_f);
+    // [QL] arenas, factories and the map pool (sv_factories.c)
+    Cmd_AddCommand("arena", SV_Arena_f);
     Cmd_AddCommand("startRandomMap", SV_StartRandomMap_f);
     Cmd_AddCommand("reload_mappool", SV_ReloadMapPool_f);
     Cmd_AddCommand("reload_arenas", SV_ReloadArenas_f);

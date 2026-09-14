@@ -50,6 +50,7 @@ cvar_t* sv_minPing;
 cvar_t* sv_maxPing;
 cvar_t* sv_serverType;  // [QL] 1 = LAN-only server
 cvar_t* sv_gametype;
+cvar_t* sv_ammoPack;  // [QL] g_ammoPack
 cvar_t* sv_pure;
 cvar_t* sv_floodProtect;
 cvar_t* sv_lanForceRate;  // dedicated 1 (LAN) server forces local client rates to 99999 (bug #491)

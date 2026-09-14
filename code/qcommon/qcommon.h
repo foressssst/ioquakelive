@@ -512,6 +512,10 @@ void Cvar_CommandCompletion(void (*callback)(const char* s));
 void Cvar_Reset(const char* var_name);
 void Cvar_ForceReset(const char* var_name);
 
+qboolean Cvar_SaveFactoryValue(const char* var_name);
+qboolean Cvar_RestoreFactoryValue(const char* var_name);
+// [QL] a factory keeps a cvar's value before setting it and puts it back when replaced
+
 void Cvar_SetCheatState(void);
 // reset all testing vars to a safe value
 

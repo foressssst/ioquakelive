@@ -676,6 +676,49 @@ void Cvar_ForceReset(const char* var_name) {
 
 /*
 ============
+Cvar_SaveFactoryValue
+
+[QL] Keeps the current value of a cvar a factory is about to set, replacing
+whatever an earlier factory kept. quakelive_steam.exe 0x4cd370.
+============
+*/
+qboolean Cvar_SaveFactoryValue(const char* var_name) {
+    cvar_t* var = Cvar_FindVar(var_name);
+
+    if (!var) {
+        return qfalse;
+    }
+    if (var->factoryString) {
+        Z_Free(var->factoryString);
+    }
+    var->factoryString = CopyString(var->string);
+    return qtrue;
+}
+
+/*
+============
+Cvar_RestoreFactoryValue
+
+[QL] Sets a cvar back to the value kept before a factory set it.
+quakelive_steam.exe 0x4cd3b0.
+============
+*/
+qboolean Cvar_RestoreFactoryValue(const char* var_name) {
+    cvar_t* var = Cvar_FindVar(var_name);
+    char* value;
+
+    if (!var || !var->factoryString) {
+        return qfalse;
+    }
+    value = var->factoryString;
+    var->factoryString = NULL;
+    Cvar_Set2(var_name, value, qtrue);
+    Z_Free(value);
+    return qtrue;
+}
+
+/*
+============
 Cvar_SetCheatState
 
 Any testing variables will be reset to the safe values
@@ -1092,6 +1135,8 @@ cvar_t* Cvar_Unset(cvar_t* cv) {
         Z_Free(cv->string);
     if (cv->latchedString)
         Z_Free(cv->latchedString);
+    if (cv->factoryString)
+        Z_Free(cv->factoryString);
     if (cv->resetString)
         Z_Free(cv->resetString);
     if (cv->description)

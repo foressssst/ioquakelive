@@ -195,6 +195,40 @@ typedef struct {
     char wasRefused[132];           // [QL] refusal reason string
 } challenge_t;
 
+// [QL] sv_factories.c: arenas, factories and the map pool
+#define NUM_FACTORY_GAMETYPES 13  // ffa duel race tdm ca ctf oneflag overload har ft dom ad rr
+#define MAX_ARENA_INFOS 1024
+#define MAX_FACTORIES 1024
+#define MAX_FACTORY_TAGS 8
+#define MAX_FACTORY_CVARS 256
+#define MAX_MAPPOOL 1024
+
+typedef struct {
+    char map[1024];
+    char longname[1024];
+    int gametypes[NUM_FACTORY_GAMETYPES];  // named in the arena's "type"
+} arenaInfo_t;
+
+typedef struct factory_s {
+    char* id;
+    char* title;
+    char* author;
+    char* description;
+    int basegt;  // g_gametype
+    char* tags[MAX_FACTORY_TAGS];
+    struct {
+        char* name;
+        char* value;
+    } cvars[MAX_FACTORY_CVARS];
+} factory_t;
+
+typedef struct {
+    char map[1024];
+    char longname[1024];
+    char factory[1024];
+    char factoryTitle[1024];
+} mapPoolEntry_t;
+
 // serverStatic_t - cleared only when the game dll changes.
 typedef struct {
     qboolean initialized;                   // sv_init has completed
@@ -207,6 +241,7 @@ typedef struct {
     challenge_t challenges[MAX_CHALLENGES]; // to prevent invalid IPs from connecting
     netadr_t redirectAddress;               // for rcon return messages
     netadr_t authorizeAddress;              // authorize server address
+    factory_t* factory;                     // [QL] the factory in play, cleared with the rest on shutdown
 } serverStatic_t;
 
 #define SERVER_MAXBANS 1024
@@ -247,8 +282,11 @@ extern cvar_t* sv_maxRate;
 extern cvar_t* sv_dlRate;
 extern cvar_t* sv_minPing;
 extern cvar_t* sv_maxPing;
-extern cvar_t* sv_serverType;  // [QL] 1 = LAN-only server
+extern cvar_t* sv_serverType;  // [QL] 0 offline, 1 LAN-only, 2 internet
 extern cvar_t* sv_gametype;
+extern cvar_t* sv_ammoPack;    // [QL] g_ammoPack
+extern cvar_t* sv_mapPoolFile;
+extern cvar_t* sv_includeCurrentMapInVote;
 extern cvar_t* sv_pure;
 extern cvar_t* sv_floodProtect;
 extern cvar_t* sv_lanForceRate;
@@ -304,6 +342,30 @@ void SV_GetUserinfo(int index, char* buffer, int bufferSize);
 
 void SV_ChangeMaxClients(void);
 void SV_SpawnServer(char* server, qboolean killBots);
+
+//
+// sv_factories.c
+//
+void SV_LoadArenas(void);
+const arenaInfo_t* SV_FindArena(const char* map);
+int SV_NumArenas(void);
+const arenaInfo_t* SV_ArenaByNum(int num);
+void SV_ReloadArenas_f(void);
+
+void SV_LoadFactories(void);
+factory_t* SV_FindFactory(const char* id);
+int SV_NumFactories(void);
+const factory_t* SV_FactoryByNum(int num);
+void SV_PrintValidFactories(void);
+void SV_ReloadFactories_f(void);
+void SV_ApplyFactory(factory_t* factory);
+void SV_RestoreFactoryCvars(const factory_t* factory);
+
+void SV_LoadMapPool(const char* filename);
+void SV_ReloadMapPool_f(void);
+void SV_StartRandomMap_f(void);
+void SV_SetNextMap(void);
+void SV_SetNextMaps(void);
 
 //
 // sv_client.c
