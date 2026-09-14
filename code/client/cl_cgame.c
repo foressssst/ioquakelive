@@ -543,6 +543,9 @@ intptr_t CL_CgameSystemCalls(intptr_t* args) {
             return 0;
         case CG_R_FONT_REGISTER:
             return re.Font_Register(VMA(1));
+        case CG_S_STARTLOCALSOUNDVOLUME:
+            S_StartLocalSoundVolume(args[1], args[2], VMF(3));
+            return 0;
         case CG_R_CLEARSCENE:
             re.ClearScene();
             return 0;
@@ -607,8 +610,9 @@ intptr_t CL_CgameSystemCalls(intptr_t* args) {
         case CG_KEY_GETCATCHER:
             return Key_GetCatcher();
         case CG_KEY_SETCATCHER:
-            // Don't allow the cgame module to close the console
-            Key_SetCatcher(args[1] | (Key_GetCatcher() & KEYCATCH_CONSOLE));
+            // [QL] quakelive_steam.exe 0x4beeb0 (cgame import +0x180): replaced as given, console
+            // bit included, as for the UI module
+            Key_SetCatcher(args[1]);
             return 0;
         case CG_KEY_GETKEY:
             return Key_GetKey(VMA(1));

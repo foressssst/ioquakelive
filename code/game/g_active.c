@@ -282,7 +282,8 @@ void G_TouchTriggers(gentity_t* ent) {
         // use separate code for determining if an item is picked up
         // so you don't have to actually contact its bounding box
         if (hit->s.eType == ET_ITEM) {
-            if (!BG_PlayerTouchesItem(&ent->client->ps, &hit->s, level.time)) {
+            // [QL] qagamex86.dll 0x10033d79: the reach goes up to g_itemHeight
+            if (!BG_PlayerTouchesItem(&ent->client->ps, &hit->s, level.time, g_itemHeight.integer)) {
                 continue;
             }
         } else {

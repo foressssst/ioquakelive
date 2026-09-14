@@ -250,6 +250,10 @@ int trap_R_Font_Register(const char* name) {
     return syscall(CG_R_FONT_REGISTER, name);
 }
 
+void trap_S_StartLocalSoundVolume(sfxHandle_t sfx, int channelNum, float volume) {
+    syscall(CG_S_STARTLOCALSOUNDVOLUME, sfx, channelNum, PASSFLOAT(volume));
+}
+
 void trap_R_ClearScene(void) {
     syscall(CG_R_CLEARSCENE);
 }

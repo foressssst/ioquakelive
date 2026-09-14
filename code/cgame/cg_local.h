@@ -1283,9 +1283,8 @@ typedef struct {
     sfxHandle_t twoFragSound;
     sfxHandle_t oneFragSound;
 
-    sfxHandle_t hitSound;
-    sfxHandle_t hitSoundHighArmor;
-    sfxHandle_t hitSoundLowArmor;
+    sfxHandle_t hitSounds[4];      // [QL] sound/feedback/hit0-3, by damage tier
+    sfxHandle_t killBeepSounds[8];  // [QL] cg_killBeep 1-8: impact1-6, bell_01, chaching
     sfxHandle_t hitTeamSound;
     sfxHandle_t impressiveSound;
     sfxHandle_t excellentSound;
@@ -2484,6 +2483,7 @@ void trap_R_Font_TextExtents(const char* text, int start, int fontIndex, float s
 void trap_R_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t* glyph);
 void trap_IME_SetCompositionFont(int fontIndex, float scale);
 int trap_R_Font_Register(const char* name);
+void trap_S_StartLocalSoundVolume(sfxHandle_t sfx, int channelNum, float volume);
 qboolean trap_Key_IsDown(int keynum);
 int trap_Key_GetCatcher(void);
 void trap_Key_SetCatcher(int catcher);
