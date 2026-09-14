@@ -8,8 +8,8 @@
 # It never downloads or touches id Software files: baseq3/pak00.pk3 comes from
 # each player's own Steam install of Quake Live: the launcher links or copies it
 # on the first run, as FS_CopyFromSteam (code/qcommon/files.c) does when the
-# game is started directly. CPMA's animation frames get the same treatment: they
-# are extracted on each machine from the official CPMA package, never shipped.
+# game is started directly. Everything ioquakelive adds, CPMA's animation frames
+# and the frag message's font included, travels in baseq3/pak01.pk3.
 # Settings are never taken from Steam: ioquakelive keeps its own, with the
 # player's screenshots, demos and fonts, in %APPDATA%\ioquakelive.
 #
@@ -192,118 +192,48 @@ function Move-UpstreamUserData {
 }
 
 # ---------------------------------------------------------------------------
-# CPMA 1.53 animation frames (medals, chat balloon). Like pak00.pk3 they are never
-# part of a release: they come from the official CPMA package, downloaded from its
-# own site and checked against its SHA-256, and only the 160 frames are kept.
+# Until 2026-09-13 the launcher made two extras on each PC: zz-cpma-anim.pk3 with CPMA's
+# animation frames, and a copy of the player's Handel Gothic Ex in baseq3/fonts. Both now
+# ship in pak01.pk3, so the extra pak goes, and so does the font copy when it is the same
+# file pak01 carries (any other font in that folder is the player's and stays).
 
-$CpmaZipUrl = 'https://cdn.playmorepromode.com/files/cpma/cpma-1.53-nomaps.zip'
-$CpmaZipSha256 = 'edfffa0c1a0375ba46a5b42257a168fb15086712245733526ab2d9ccdd821ca0'
-$CpmaFrames = '^(menu/medals/(assist|capture|defend|excellent|gauntlet|impressive)/\d+\.tga|sprites/chat\d\d\.tga)$'
+function Remove-OldExtras {
+    foreach ($leftover in @('baseq3\zz-cpma-anim.pk3', 'baseq3\zz-cpma-anim.pk3.part', 'cpma-1.53-nomaps.zip')) {
+        $path = Join-Path $Root $leftover
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        try {
+            Remove-Item -LiteralPath $path -Force
+            Write-Log ("  quitando {0} (ahora viene en pak01.pk3)" -f $leftover)
+        } catch {
+            Write-Log ("No se pudo borrar {0}: {1}" -f $path, $_.Exception.Message) 'Yellow'
+        }
+    }
 
-function Initialize-CpmaAnimations {
-    $target = Join-Path $Root 'baseq3\zz-cpma-anim.pk3'
-    if (Test-Path -LiteralPath $target) { return }
-
-    $zipPath = Join-Path $Root 'cpma-1.53-nomaps.zip'
-    $part = $target + '.part'
+    $font = Join-Path $UserDataDir 'baseq3\fonts\handelgothicex.ttf'
+    $pak01 = Join-Path $Root 'baseq3\pak01.pk3'
+    if (-not (Test-Path -LiteralPath $font) -or -not (Test-Path -LiteralPath $pak01)) { return }
     try {
         Add-Type -AssemblyName System.IO.Compression
-        Write-Log 'Bajando CPMA 1.53 de su sitio oficial para las animaciones (17 MB, solo la primera vez)...' 'Cyan'
-        $wc = New-Object System.Net.WebClient
-        $wc.Headers['User-Agent'] = 'ioquakelive-launcher/1'
-        try { $wc.DownloadFile($CpmaZipUrl, $zipPath) } finally { $wc.Dispose() }
-        if ((Get-Sha256 $zipPath) -ne $CpmaZipSha256) { throw 'el paquete de CPMA no es la version esperada' }
-
-        $count = 0
-        $zipStream = [IO.File]::OpenRead($zipPath)
+        $shipped = $null
+        $stream = [IO.File]::OpenRead($pak01)
         try {
-            $zip = New-Object IO.Compression.ZipArchive($zipStream, [IO.Compression.ZipArchiveMode]::Read)
-            $pk3Bytes = New-Object IO.MemoryStream
-            $in = $zip.GetEntry('cpma/z-cpma-pak153.pk3').Open()
-            try { $in.CopyTo($pk3Bytes) } finally { $in.Dispose() }
-            $pk3Bytes.Position = 0
-            $pk3 = New-Object IO.Compression.ZipArchive($pk3Bytes, [IO.Compression.ZipArchiveMode]::Read)
-
-            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
-            $outStream = [IO.File]::Create($part)
-            try {
-                $out = New-Object IO.Compression.ZipArchive($outStream, [IO.Compression.ZipArchiveMode]::Create)
-                foreach ($entry in $pk3.Entries) {
-                    if ($entry.FullName -notmatch $CpmaFrames) { continue }
-                    $src = $entry.Open()
-                    $dst = $out.CreateEntry($entry.FullName, [IO.Compression.CompressionLevel]::Optimal).Open()
-                    try { $src.CopyTo($dst) } finally { $dst.Dispose(); $src.Dispose() }
-                    $count++
-                }
-                $out.Dispose()
-            } finally { $outStream.Dispose() }
-            $pk3.Dispose()
+            $zip = New-Object IO.Compression.ZipArchive($stream, [IO.Compression.ZipArchiveMode]::Read)
+            $entry = $zip.GetEntry('fonts/handelgothicex.ttf')
+            if ($entry) {
+                $bytes = New-Object IO.MemoryStream
+                $in = $entry.Open()
+                try { $in.CopyTo($bytes) } finally { $in.Dispose() }
+                $sha = [Security.Cryptography.SHA256]::Create()
+                try { $shipped = -join ($sha.ComputeHash($bytes.ToArray()) | ForEach-Object { $_.ToString('x2') }) } finally { $sha.Dispose() }
+            }
             $zip.Dispose()
-        } finally { $zipStream.Dispose() }
-
-        if ($count -ne 160) { throw ("se esperaban 160 cuadros y hay {0}" -f $count) }
-        Move-Item -LiteralPath $part -Destination $target -Force
-        Write-Log 'Animaciones de CPMA listas.' 'Green'
-    } catch {
-        Write-Log ("No se pudieron preparar las animaciones de CPMA: {0}. El juego abre igual, sin ellas." -f $_.Exception.Message) 'Yellow'
-        if (Test-Path -LiteralPath $part) { Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue }
-    } finally {
-        if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue }
-    }
-}
-
-# ---------------------------------------------------------------------------
-# Handel Gothic Ex letters the frag message. It is not ours to ship, so like the files above
-# it comes from the player's own PC: the copy installed in Windows, or one already dropped in
-# the game's fonts folder under any name. It is copied once to baseq3/fonts/handelgothicex.ttf;
-# without it the game uses Quake Live's Handel Gothic.
-
-$FragFontFamily = 'Handel Gothic Ex'
-$FragFontFile = 'handelgothicex.ttf'
-
-function Get-FontFamilyName([string]$Path) {
-    try {
-        Add-Type -AssemblyName System.Drawing
-        $fonts = New-Object System.Drawing.Text.PrivateFontCollection
-        try {
-            $fonts.AddFontFile($Path)
-            if ($fonts.Families.Count -gt 0) { return $fonts.Families[0].Name }
-        } finally { $fonts.Dispose() }
-    } catch { }
-    return $null
-}
-
-function Initialize-FragMessageFont {
-    $dir = Join-Path $UserDataDir 'baseq3\fonts'
-    $target = Join-Path $dir $FragFontFile
-    if (Test-Path -LiteralPath $target) { return }
-
-    $found = $null
-    foreach ($key in @('HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts', 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Fonts')) {
-        $props = Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
-        if (-not $props) { continue }
-        foreach ($p in $props.PSObject.Properties) {
-            if ($p.Name -notlike "$FragFontFamily*") { continue }
-            $file = [string]$p.Value
-            if (-not [IO.Path]::IsPathRooted($file)) { $file = Join-Path (Join-Path $env:WINDIR 'Fonts') $file }
-            if ((Test-Path -LiteralPath $file) -and (Get-FontFamilyName $file) -eq $FragFontFamily) { $found = $file; break }
+        } finally { $stream.Dispose() }
+        if ($shipped -and (Get-Sha256 $font) -eq $shipped) {
+            Remove-Item -LiteralPath $font -Force
+            Write-Log '  quitando la copia de Handel Gothic Ex (ahora viene en pak01.pk3)'
         }
-        if ($found) { break }
-    }
-    if (-not $found -and (Test-Path -LiteralPath $dir)) {
-        foreach ($f in @(Get-ChildItem -LiteralPath $dir -File -ErrorAction SilentlyContinue)) {
-            if ($f.Extension -notin @('.ttf', '.otf')) { continue }
-            if ((Get-FontFamilyName $f.FullName) -eq $FragFontFamily) { $found = $f.FullName; break }
-        }
-    }
-    if (-not $found) { return }
-
-    try {
-        New-Item -ItemType Directory -Force -Path $dir | Out-Null
-        Copy-Item -LiteralPath $found -Destination $target -Force
-        Write-Log 'Fuente del frag message lista: Handel Gothic Ex de este PC.' 'Green'
     } catch {
-        Write-Log ("No se pudo preparar Handel Gothic Ex: {0}. El frag message usa la Handel Gothic de Quake Live." -f $_.Exception.Message) 'Yellow'
+        Write-Log ("No se pudo revisar la copia de Handel Gothic Ex: {0}" -f $_.Exception.Message) 'Yellow'
     }
 }
 
@@ -313,8 +243,7 @@ function Start-Game([string]$Version, $ManifestArgs) {
         exit 1
     }
     Move-UpstreamUserData
-    Initialize-CpmaAnimations
-    Initialize-FragMessageFont
+    Remove-OldExtras
     if ($NoLaunch) { Write-Log 'Modo -NoLaunch: no se abre el juego.'; return }
     if (-not (Test-Path -LiteralPath $GameExe)) {
         Write-Log 'El juego no esta instalado todavia y no hay conexion con el servidor.' 'Red'
