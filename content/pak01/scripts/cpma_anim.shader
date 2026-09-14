@@ -1,6 +1,6 @@
 // [CPMA] cg_animateChatBalloon: CPMA 1.53's 16 chat balloon frames, blended as its own
-// chatNPM_1-16 shaders. The images come from the player's own CPMA package
-// (zz-cpma-anim.pk3, extracted by the launcher); ioquakelive never ships them.
+// chatNPM_1-16 shaders. The images ship in pak01 with the medal frames (since 2026-09-13,
+// at the user's decision), added from outside the repo by code/tools/Make-Pak01Pk3.ps1.
 sprites/ioql_chat01
 {
 	nopicmip
