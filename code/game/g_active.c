@@ -1006,14 +1006,19 @@ void ClientThink_real(gentity_t* ent) {
     client->ps.gravity = g_gravity.value;
 
     // set speed
+    // [QL] haste goes first, the scout rune (STAT_RUNE 1) runs only 1.25 times as
+    // fast, and the gauntlet in hand scales by g_gauntletSpeedFactor
+    // (qagamex86.dll ClientThink_real 0x10034ecd..0x10034f38)
     client->ps.speed = g_speed.value;
 
-    if (bg_itemlist[client->ps.stats[STAT_PERSISTANT_POWERUP]].giTag == PW_SCOUT) {
-        client->ps.speed *= 1.5;
-    } else {
-        if (client->ps.powerups[PW_HASTE]) {
-            client->ps.speed *= 1.3;
-        }
+    if (client->ps.powerups[PW_HASTE]) {
+        client->ps.speed = (int)(client->ps.speed * 1.3);
+    } else if (client->ps.stats[STAT_RUNE] == 1) {
+        client->ps.speed = (int)(client->ps.speed * 1.25);
+    }
+
+    if (client->ps.weapon == WP_GAUNTLET) {
+        client->ps.speed = (int)((float)client->ps.speed * g_gauntletSpeedFactor.value);
     }
 
     // [QL] RR Infection: zombie speed multiplier (binary 0x10034f88)
