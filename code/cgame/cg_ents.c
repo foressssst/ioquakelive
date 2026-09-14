@@ -467,6 +467,41 @@ static void CG_Item(centity_t* cent) {
 
 /*
 ===============
+CG_GrenadeColor
+
+[QL] 0x10015190: a grenade wears the upper colour of its owner's side when that side's weapon
+colour is forced, and cg_weaponColor_grenade otherwise. The viewer's own grenades are never
+forced; in FFA the owner's side comes from CG_ShouldForceTeamSkin.
+===============
+*/
+static void CG_GrenadeColor(const entityState_t* es, byte* color) {
+    int viewer, owner, packed;
+    qboolean teammate;
+
+    viewer = cg.predictedPlayerState.clientNum;
+    owner = es->clientNum;
+    teammate = CG_ShouldForceTeamSkin(cgs.clientinfo[viewer].team, cgs.clientinfo[owner].team);
+
+    if ((cgs.gametype < GT_TEAM && viewer == owner) || teammate) {
+        if (cg_forceTeamWeaponColor.integer == 1 && viewer != owner) {
+            packed = cg_teamUpperColor.integer;
+        } else {
+            packed = cg_weaponColor_grenade.integer;
+        }
+    } else if (cg_forceEnemyWeaponColor.integer == 1) {
+        packed = cg_enemyUpperColor.integer;
+    } else {
+        packed = cg_weaponColor_grenade.integer;
+    }
+
+    color[0] = (packed >> 24) & 0xff;
+    color[1] = (packed >> 16) & 0xff;
+    color[2] = (packed >> 8) & 0xff;
+    color[3] = packed & 0xff;
+}
+
+/*
+===============
 CG_Missile
 ===============
 */
@@ -543,6 +578,19 @@ static void CG_Missile(centity_t* cent) {
     if (cent->currentState.weapon == WP_PROX_LAUNCHER) {
         if (s1->generic1 == TEAM_BLUE) {
             ent.hModel = cgs.media.blueProxMine;
+        }
+    }
+
+    // [QL] grenades are tinted: by side when a weapon colour is forced, else by
+    // cg_weaponColor_grenade (0x1001779a)
+    if (s1->weapon == WP_GRENADE_LAUNCHER) {
+        if (cg_forceTeamWeaponColor.integer == 1 || cg_forceEnemyWeaponColor.integer == 1) {
+            CG_GrenadeColor(s1, ent.shaderRGBA);
+        } else {
+            ent.shaderRGBA[0] = (cg_weaponColor_grenade.integer >> 24) & 0xff;
+            ent.shaderRGBA[1] = (cg_weaponColor_grenade.integer >> 16) & 0xff;
+            ent.shaderRGBA[2] = (cg_weaponColor_grenade.integer >> 8) & 0xff;
+            ent.shaderRGBA[3] = cg_weaponColor_grenade.integer & 0xff;
         }
     }
 

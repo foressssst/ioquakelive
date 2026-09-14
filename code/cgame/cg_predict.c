@@ -575,6 +575,7 @@ void CG_PredictPlayerState(void) {
     qboolean moved;
     usercmd_t oldestCmd;
     usercmd_t latestCmd;
+    int following;
 
     cg.hyperspace = qfalse;  // will be set if touching a trigger_teleport
 
@@ -585,6 +586,22 @@ void CG_PredictPlayerState(void) {
         cg.validPPS = qtrue;
         cg.predictedPlayerState = cg.snap->ps;
     }
+
+    // [QL] the other players' models depend on whose eyes we see through and on that player's
+    // team, so starting or stopping to follow, following someone else or changing team asks
+    // CG_TransitionSnapshot to reload them (0x10044748). cg_playerTeam only keeps the last team
+    // seen.
+    following = (cg.predictedPlayerState.pm_flags & PMF_FOLLOW) != 0;
+    if (cg.reloadFollowing != following ||
+        cg_playerTeam.integer != cg.predictedPlayerState.persistant[PERS_TEAM]) {
+        cg.reloadOtherClients = qtrue;
+    }
+    cg.reloadFollowing = following;
+    if (following && cg.reloadFollowedClient != cg.predictedPlayerState.clientNum) {
+        cg.reloadFollowedClient = cg.predictedPlayerState.clientNum;
+        cg.reloadOtherClients = qtrue;
+    }
+    cg_playerTeam.integer = cg.predictedPlayerState.persistant[PERS_TEAM];
 
     // demo playback just copies the moves
     if (cg.demoPlayback || (cg.snap->ps.pm_flags & PMF_FOLLOW)) {
