@@ -208,6 +208,13 @@ void CG_Respawn(void) {
     // select the weapon the server says we are using
     cg.weaponSelect = cg.snap->ps.weapon;
 
+    // [QL] 0x1004340f: the pickup display starts over
+    cg.itemPickup = 0;
+    cg.itemPickupTime = 0;
+    cg.itemPickupLast = 0;
+    cg.itemPickupBlendTime = 0;
+    cg.itemPickupCount = 1;
+
     // [QL] mirror loadout primary into ROM cvar so HUD/UI elements can read
     // the actual server-side selection. Matches qagame cgamex86.dll CG_Respawn.
     trap_Cvar_Set("cg_weaponPrimary", va("%i", cg.snap->ps.weaponPrimary));

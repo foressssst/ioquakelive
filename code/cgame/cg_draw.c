@@ -1094,6 +1094,126 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame) {
 /*
 ===========================================================================================
 
+  LOWER LEFT CORNER
+
+===========================================================================================
+*/
+
+/*
+===================
+CG_DrawPickupItem
+
+[QL] cgamex86.dll 0x1000a800. With cg_drawItemPickups set, no scoreboard up and the player
+alive, the last item picked up shows for 3 s (CG_FadeColor, fading over the last 200 ms),
+48 units above y, in a row from x 5 that each bit adds to:
+- 4, the game clock when it was picked up ("m:ss", as the level timer counts; 0:00 in a
+  warmup);
+- 1, its 16x16 icon;
+- 2, its name;
+- and, from the second of the same item in a row, "x%i" (not for powerups or flags).
+The texts are font 1 at 0.28, dropped by their own height. When the display runs out, the
+count starts over.
+[CPMA] With ch_animateScroll the item also fades in over 150 ms, the fadein CPMA 1.53's
+hud.cfg gives its fading texts, and fades out on CPMA's curve; the 3 s stay as in retail.
+===================
+*/
+#define PICKUP_ITEM_TIME 3000
+#define PICKUP_ITEM_FADEIN 150
+#define PICKUP_ITEM_FADEOUT 200
+#define PICKUP_ITEM_SCALE 0.28f
+
+static int CG_DrawPickupItem(int y) {
+	float* fadeColor;
+	vec4_t color;
+	const char* s;
+	int value, x, now, msec, mins, secs;
+
+	if (!cg_drawItemPickups.integer || cg.scoreBoardShowing || cg.snap->ps.stats[STAT_HEALTH] <= 0) {
+		return y;
+	}
+	y -= 48;
+	value = cg.itemPickup;
+	if (!value) {
+		return y;
+	}
+	fadeColor = CG_FadeColor(cg.itemPickupTime, PICKUP_ITEM_TIME);
+	if (!fadeColor) {
+		cg.itemPickupLast = 0;
+		cg.itemPickupCount = 1;
+		return y;
+	}
+	Vector4Copy(fadeColor, color);
+	if (ch_animateScroll.integer) {
+		color[3] = CG_CpmaFade(cg.itemPickupTime, PICKUP_ITEM_FADEIN,
+		                       PICKUP_ITEM_TIME - PICKUP_ITEM_FADEIN - PICKUP_ITEM_FADEOUT, PICKUP_ITEM_FADEOUT);
+	}
+
+	CG_RegisterItemVisuals(value);
+	trap_R_SetColor(color);
+
+	x = 5;
+	if (cg_drawItemPickups.integer & 4) {
+		if (cg.warmup == 0) {
+			now = cgs.freezeEnd ? cgs.freezeEnd : cg.time;
+			if (!cgs.timelimit) {
+				msec = cg.itemPickupTime - cgs.levelStartTime;
+			} else if (cgs.timelimit * 60000 - now + cgs.levelStartTime < 0) {
+				msec = cg.itemPickupTime - cgs.timelimit * 60000 - cgs.levelStartTime;
+			} else if (cg_levelTimerDirection.integer == 1) {
+				msec = cgs.levelStartTime + cgs.timelimit * 60000 - cg.itemPickupTime;
+			} else {
+				msec = cg.itemPickupTime - cgs.levelStartTime;
+			}
+		} else {
+			msec = 0;
+		}
+		secs = msec / 1000;
+		mins = secs / 60;
+		secs -= mins * 60;
+		s = va("%i:%i%i", mins, secs / 10, secs % 10);
+		CG_DrawText(5.0f, (float)(y + CG_DrawTextHeight(s, PICKUP_ITEM_SCALE, 0, 1)), 1, PICKUP_ITEM_SCALE,
+		            color, s, 0, 0, 0);
+		x = CG_DrawTextWidth(s, PICKUP_ITEM_SCALE, 0, 1) + 13;
+	}
+	if (cg_drawItemPickups.integer & 1) {
+		CG_DrawPic((float)x, (float)y, 16, 16, cg_items[value].icon);
+		x += 24;
+	}
+	if (cg_drawItemPickups.integer & 2) {
+		s = bg_itemlist[value].pickup_name;
+		CG_DrawText((float)x, (float)(y + CG_DrawTextHeight(s, PICKUP_ITEM_SCALE, 0, 1)), 1, PICKUP_ITEM_SCALE,
+		            color, s, 0, 0, 0);
+		x += CG_DrawTextWidth(s, PICKUP_ITEM_SCALE, 0, 1) + 8;
+	}
+	if (cg.itemPickupCount > 1 && bg_itemlist[value].giType != IT_POWERUP && bg_itemlist[value].giType != IT_TEAM) {
+		s = va("x%i", cg.itemPickupCount);
+		CG_DrawText((float)x, (float)(y + CG_DrawTextHeight(s, PICKUP_ITEM_SCALE, 0, 1)), 1, PICKUP_ITEM_SCALE,
+		            color, s, 0, 0, 0);
+	}
+
+	cg.itemPickupLast = cg.itemPickup;
+	trap_R_SetColor(NULL);
+	return y;
+}
+
+/*
+=====================
+CG_DrawLowerLeft
+
+[QL] cgamex86.dll 0x1000abf0. From y 408: the team overlay when cg_drawTeamOverlay is 3 in a
+team mode, then the pickup display, which retail starts from 408 whatever the overlay took.
+=====================
+*/
+static void CG_DrawLowerLeft(void) {
+	if (cgs.gametype >= GT_TEAM && cg_drawTeamOverlay.integer == 3) {
+		CG_DrawTeamOverlay(408, qfalse, qfalse);
+	}
+	CG_DrawPickupItem(408);
+}
+
+/*
+===========================================================================================
+
   LOWER RIGHT CORNER
 
 ===========================================================================================
@@ -2744,6 +2864,13 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	if (!cg_paused.integer) {
 		CG_SetWidescreen(WIDESCREEN_RIGHT);
 		CG_DrawUpperRight(stereoFrame);
+		// [QL] CG_Draw2D (0x10010d90): the team overlay in the lower right corner, then the
+		// lower left corner with the pickup display
+		if (cgs.gametype >= GT_TEAM && cg_drawTeamOverlay.integer == 2) {
+			CG_DrawTeamOverlay(408, qtrue, qfalse);
+		}
+		CG_SetWidescreen(WIDESCREEN_LEFT);
+		CG_DrawLowerLeft();
 		CG_SetWidescreen(WIDESCREEN_STRETCH);
 	}
 

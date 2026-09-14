@@ -1672,6 +1672,12 @@ static void CG_MapRestart(void) {
     cg.timelimitWarnings = 0;
     cg.rewardTime = 0;
     cg.rewardStack = 0;
+    // [QL] 0x1004a334: the pickup display starts over
+    cg.itemPickup = 0;
+    cg.itemPickupTime = 0;
+    cg.itemPickupLast = 0;
+    cg.itemPickupBlendTime = 0;
+    cg.itemPickupCount = 1;
     cg.intermissionStarted = qfalse;
     cg.levelShot = qfalse;
     memset(cg.obituaries, 0, sizeof(cg.obituaries));  // [QL] 0x1004a396
