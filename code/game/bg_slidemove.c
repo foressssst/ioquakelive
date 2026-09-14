@@ -362,7 +362,10 @@ void PM_StepSlideMove(qboolean gravity) {
         // [QL] step-jump: auto-jump off stairs when holding jump
         if (pm_stepJump && pm->ps->pm_type == PM_NORMAL
             && delta > 0 && pm->waterlevel < 2) {
-            if (PM_WouldJump() || (pm_doubleJump && PM_WouldCrouchStepJump())) {
+            // [QL] the crouch step jump is gated by pmove_CrouchStepJump (qagamex86.dll
+            // 0x1008feb4, read here and below in PM_StepSlideMove 0x1002efe0), not by
+            // pmove_DoubleJump
+            if (PM_WouldJump() || (pm_crouchStepJump && PM_WouldCrouchStepJump())) {
                 // verify walkable ground at predicted position
                 vec3_t sjUp, sjDown;
                 trace_t sjTrace;
@@ -380,7 +383,7 @@ void PM_StepSlideMove(qboolean gravity) {
                         pml.stepJumpFlag = 1;
                         PM_DoJump();
                         pml.stepJumpFlag = 0;
-                    } else if (pm_doubleJump && PM_WouldCrouchStepJump()) {
+                    } else if (pm_crouchStepJump && PM_WouldCrouchStepJump()) {
                         // crouch step jump: verify clearance with shrunk bounding box
                         vec3_t sjMins, sjMaxs, crouchDown;
                         trace_t crouchTrace;

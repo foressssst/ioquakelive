@@ -274,7 +274,9 @@ typedef enum {
 #define PMF_LOADOUT_FORCED  0x80000  // [QL] RR infection: zombie forced loadout (gauntlet only)
 #define PMF_CROUCH_SLIDE    0x100000 // [QL] crouch slide active
 
-#define PMF_ALL_TIMES (PMF_TIME_WATERJUMP | PMF_TIME_LAND | PMF_TIME_KNOCKBACK | PMF_TIME_GRAPPLE)
+// [QL] PM_DropTimers and PM_WaterJumpMove clear 0xe0 (qagamex86.dll 0x10031e30,
+// 0x1002f840); PMF_TIME_GRAPPLE is left to PM_Weapon
+#define PMF_ALL_TIMES (PMF_TIME_WATERJUMP | PMF_TIME_LAND | PMF_TIME_KNOCKBACK)
 
 #define MAXTOUCH 32
 typedef struct {
