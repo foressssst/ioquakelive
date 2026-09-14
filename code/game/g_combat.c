@@ -1202,14 +1202,37 @@ dflags		these flags are used to control how T_Damage works
 /*
 ================
 DamageTier - [QL] maps an incoming damage amount to a 2-bit severity tier for the
-crosshair hit-marker. DLL-only helper (Win 0x10048de0, inlined in the Linux build).
-Thresholds (signed): 0-24 -> 0, 25-49 -> 1, 50-74 -> 2, 75+ -> 3.
+crosshair hit-marker. DLL-only helper (Win 0x10048c00, called at 0x100494d3; inlined in the
+Linux build). Thresholds (signed): 0-24 -> 0, 25-49 -> 1, 50-74 -> 2, 75+ -> 3.
 ================
 */
 static int DamageTier(int damage) {
     if (damage > 74) return 3;
     if (damage > 49) return 2;
     return (damage > 24);
+}
+
+/*
+================
+G_DistanceToBBox
+
+[QL] qagamex86.dll 0x10046370. How far a point is from an entity's absolute box; zero inside it.
+================
+*/
+static float G_DistanceToBBox(gentity_t* ent, const vec3_t point) {
+    vec3_t v;
+    int i;
+
+    for (i = 0; i < 3; i++) {
+        if (point[i] < ent->r.absmin[i]) {
+            v[i] = ent->r.absmin[i] - point[i];
+        } else if (point[i] > ent->r.absmax[i]) {
+            v[i] = point[i] - ent->r.absmax[i];
+        } else {
+            v[i] = 0;
+        }
+    }
+    return VectorLength(v);
 }
 
 /*
@@ -1426,10 +1449,8 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
         attacker = &g_entities[ENTITYNUM_WORLD];
     }
 
-    // 4. no player-vs-player damage in race mode
-    // [QL] binary reads an unresolved cvar (DAT_105a0b8c) that blocks ALL client-vs-client
-    // damage; its semantics == race/ghost mode. reimpl keys this off GT_RACE (as missile code does).
-    if (g_gametype.integer == GT_RACE && attacker->client && targ->client && targ != attacker) {
+    // 4. [QL] 0x10048d22: pmove_noPlayerClip turns off damage between two different clients
+    if (pmove_NoPlayerClip.integer && attacker->client && client && targ != attacker) {
         return;
     }
 
@@ -1478,15 +1499,14 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
         knockback = 0;
     }
 
-    // 10. [QL] MOD_ROCKET_SPLASH damage recalc (binary 0x10049081). The binary re-derives:
-    //       damage = ftol((1.0 - G_DistanceToBBox(targ, inflictor->r.currentOrigin)
-    //                / inflictor->splashRadius) * (int)g_global_0x105a9a6c) * inflictor->damageFactor
-    //     Fields verified: +0x334 = splashRadius, +0x32c = damageFactor (NOT splashDamage @ +0x330).
-    //     Omitted deliberately: inflictor->damageFactor is 0 for every rocket (neither fire_rocket
-    //     nor CreateMissile writes +0x32c), and the global at 0x105a9a6c reads 0 with no identifiable
-    //     cvar, so the literal recalc would zero rocket splash then clamp to 1. The real falloff
-    //     (splashDamage * (1 - dist/radius)) is applied in G_RadiusDamage, which matches the binary
-    //     G_RadiusDamage Path B; reproducing this branch verbatim would regress that.
+    // 10. [QL] 0x10048ea1: rocket splash arrives with splashDamage's falloff, which already set the
+    // knockback above. The health it takes is recomputed from g_splashdamage_rl against the target's
+    // box, times the quad the rocket was fired with (Weapon_RocketLauncher_Fire sets damageFactor).
+    if (mod == MOD_ROCKET_SPLASH) {
+        damage = (int)((1.0 - (double)G_DistanceToBBox(targ, inflictor->r.currentOrigin) / inflictor->splashRadius) *
+                       g_splashdamage_rl.integer) *
+                 inflictor->damageFactor;
+    }
 
     // 11. reduce damage by the attacker's handicap (AFTER knockback)
     if (attacker->client && attacker != targ) {
@@ -1561,13 +1581,15 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
                 return;
             }
         }
-        // training bot-vs-bot
-        if (g_training.integer && (attacker->r.svFlags & SVF_BOT) && (targ->r.svFlags & SVF_BOT)) {
+        // [QL] 0x1004918b: bot_gauntletOnly keeps bots from hurting each other
+        if (bot_gauntletOnly.integer && (attacker->r.svFlags & SVF_BOT) && (targ->r.svFlags & SVF_BOT)) {
             return;
         }
         // godmode
         if (targ->flags & FL_GODMODE) {
-            // [QL] TODO: binary emits a bot-help taunt here (rand + SendServerCommand) before return; omitted.
+            // [QL] 0x100491b8 first lets a bot with flag 0x20000 say "Stop wasting your ammo! I'm here
+            // to help you out!" to its attacker (client+0x894 in the past, 7 s apart, 25 %). Not
+            // ported yet: the flag and that client field are still unidentified.
             return;
         }
     }
@@ -1668,18 +1690,23 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
     }
     if ((client && client->ps.powerups[PW_FREEZE]) || (targ->s.powerups & 0x8000)) {
         if (client) {
-            // [QL] TODO: binary QG_SpecialQuad(mod) -> Freeze_InstaKill branch not in reimpl.
-            switch (mod) {
-                case MOD_SLIME:
-                case MOD_LAVA:
-                case MOD_SUICIDE:
-                case MOD_TRIGGER_HURT:
-                    if (level.time > client->ps.freezetime + g_freezeEnvironmentalRespawnDelay.integer) {
-                        Freeze_InstaKill(targ, 1);
-                    }
-                    break;
-                default:
-                    break;
+            // [QL] 0x10049662: crushed, telefragged or shocked, a frozen body breaks at once; the
+            // world's hazards break it after g_freezeEnvironmentalRespawnDelay
+            if (mod == MOD_CRUSH || mod == MOD_TELEFRAG || mod == MOD_LIGHTNING_DISCHARGE) {
+                Freeze_InstaKill(targ, 1);
+            } else {
+                switch (mod) {
+                    case MOD_SLIME:
+                    case MOD_LAVA:
+                    case MOD_SUICIDE:
+                    case MOD_TRIGGER_HURT:
+                        if (level.time > client->ps.freezetime + g_freezeEnvironmentalRespawnDelay.integer) {
+                            Freeze_InstaKill(targ, 1);
+                        }
+                        break;
+                    default:
+                        break;
+                }
             }
         }
     }
@@ -1772,11 +1799,9 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
         return;
     }
 
-    // 28. [QL] g_dropFlag gauntlet flag toss (binary 0x100499cb, inside G_Damage): on a
-    // gauntlet kill the victim tosses any flag it carries. Binary gate is g_dropFlag != 0
-    // (any bit; the manual /dropflag command separately tests bit 0), mod == MOD_GAUNTLET,
-    // targ has a client. Drop point is the victim ps.origin raised 64 units.
-    if (g_dropFlag.integer && mod == MOD_GAUNTLET && targ->client) {
+    // 28. [QL] 0x1004983a: with g_tackleFlag a gauntlet hit makes the victim toss any flag it
+    // carries, from its ps.origin raised 64 units
+    if (g_tackleFlag.integer && mod == MOD_GAUNTLET && targ->client) {
         vec3_t flagPoint;
         flagPoint[0] = targ->client->ps.origin[0];
         flagPoint[1] = targ->client->ps.origin[1];
@@ -1868,8 +1893,10 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
         targ->enemy = attacker;
         targ->die(targ, inflictor, attacker, take, mod);
         if (g_gametype.integer == GT_FREEZE && targ->client) {
-            if (g_freezeAutoThawTime.integer &&
-                level.time < targ->client->respawnTime + g_freezeAutoThawTime.integer) {
+            // [QL] 0x10049c3e: killed within g_freezeProtectedSpawnTime of respawning, the player is
+            // not frozen
+            if (g_freezeProtectedSpawnTime.integer &&
+                level.time < targ->client->respawnTime + g_freezeProtectedSpawnTime.integer) {
                 Freeze_InstaKill(targ, 1);
                 return;
             }
@@ -1895,9 +1922,9 @@ qboolean CanDamage(gentity_t* targ, vec3_t origin) {
     vec3_t dest;
     trace_t tr;
     vec3_t midpoint;
-    vec3_t offsetmins = {-15, -15, -15};
-    vec3_t offsetmaxs = {15, 15, 15};
 
+    // [QL] 0x10049d80: the middle of the box, then four points 15 units out from it in x and y,
+    // all at its height
     // use the midpoint of the bounds instead of the origin, because
     // bmodels may have their origin is 0,0,0
     VectorAdd(targ->r.absmin, targ->r.absmax, midpoint);
@@ -1909,75 +1936,33 @@ qboolean CanDamage(gentity_t* targ, vec3_t origin) {
     if (tr.fraction == 1.0 || tr.entityNum == targ->s.number)
         return qtrue;
 
-    // this should probably check in the plane of projection,
-    // rather than in world coordinate
     VectorCopy(midpoint, dest);
-    dest[0] += offsetmaxs[0];
-    dest[1] += offsetmaxs[1];
-    dest[2] += offsetmaxs[2];
+    dest[0] += 15;
+    dest[1] += 15;
     trap_Trace(&tr, origin, vec3_origin, vec3_origin, dest, ENTITYNUM_NONE, MASK_SOLID);
 
     if (tr.fraction == 1.0)
         return qtrue;
 
     VectorCopy(midpoint, dest);
-    dest[0] += offsetmaxs[0];
-    dest[1] += offsetmins[1];
-    dest[2] += offsetmaxs[2];
+    dest[0] += 15;
+    dest[1] -= 15;
     trap_Trace(&tr, origin, vec3_origin, vec3_origin, dest, ENTITYNUM_NONE, MASK_SOLID);
 
     if (tr.fraction == 1.0)
         return qtrue;
 
     VectorCopy(midpoint, dest);
-    dest[0] += offsetmins[0];
-    dest[1] += offsetmaxs[1];
-    dest[2] += offsetmaxs[2];
+    dest[0] -= 15;
+    dest[1] += 15;
     trap_Trace(&tr, origin, vec3_origin, vec3_origin, dest, ENTITYNUM_NONE, MASK_SOLID);
 
     if (tr.fraction == 1.0)
         return qtrue;
 
     VectorCopy(midpoint, dest);
-    dest[0] += offsetmins[0];
-    dest[1] += offsetmins[1];
-    dest[2] += offsetmaxs[2];
-    trap_Trace(&tr, origin, vec3_origin, vec3_origin, dest, ENTITYNUM_NONE, MASK_SOLID);
-
-    if (tr.fraction == 1.0)
-        return qtrue;
-
-    VectorCopy(midpoint, dest);
-    dest[0] += offsetmaxs[0];
-    dest[1] += offsetmaxs[1];
-    dest[2] += offsetmins[2];
-    trap_Trace(&tr, origin, vec3_origin, vec3_origin, dest, ENTITYNUM_NONE, MASK_SOLID);
-
-    if (tr.fraction == 1.0)
-        return qtrue;
-
-    VectorCopy(midpoint, dest);
-    dest[0] += offsetmaxs[0];
-    dest[1] += offsetmins[1];
-    dest[2] += offsetmins[2];
-    trap_Trace(&tr, origin, vec3_origin, vec3_origin, dest, ENTITYNUM_NONE, MASK_SOLID);
-
-    if (tr.fraction == 1.0)
-        return qtrue;
-
-    VectorCopy(midpoint, dest);
-    dest[0] += offsetmins[0];
-    dest[1] += offsetmaxs[1];
-    dest[2] += offsetmins[2];
-    trap_Trace(&tr, origin, vec3_origin, vec3_origin, dest, ENTITYNUM_NONE, MASK_SOLID);
-
-    if (tr.fraction == 1.0)
-        return qtrue;
-
-    VectorCopy(midpoint, dest);
-    dest[0] += offsetmins[0];
-    dest[1] += offsetmins[1];
-    dest[2] += offsetmins[2];
+    dest[0] -= 15;
+    dest[1] -= 15;
     trap_Trace(&tr, origin, vec3_origin, vec3_origin, dest, ENTITYNUM_NONE, MASK_SOLID);
 
     if (tr.fraction == 1.0)
@@ -1989,96 +1974,77 @@ qboolean CanDamage(gentity_t* targ, vec3_t origin) {
 /*
 ============
 G_RadiusDamage
-[QL] added inflictor param for splash offset, dflags param, per-target z-offset cvars
+
+[QL] qagamex86.dll 0x1004a090. The explosion takes everything from the missile: splash damage,
+radius and means of death, the missile as inflictor and its owner as attacker. The centre moves
+g_splashdamageOffset along the impact's surface normal, and a rocket also needs a clear line from
+g_rocketsplashOffset back along its flight; distance and push direction are measured from the
+impact point itself. With g_playerCylinders, an impact trace that started inside something is a
+direct hit on everyone but the owner. trace and dir are NULL when the missile timed out.
 ============
 */
-qboolean G_RadiusDamage(vec3_t origin, gentity_t* inflictor, gentity_t* attacker, float damage, float radius, gentity_t* ignore, int dflags, int mod) {
-    float points, dist;
+qboolean G_RadiusDamage(vec3_t origin, const vec3_t dir, const trace_t* trace, gentity_t* missile, gentity_t* ignore) {
+    float dist, radius;
     gentity_t* ent;
+    gentity_t* attacker;
     int entityList[MAX_GENTITIES];
     int numListedEntities;
     vec3_t mins, maxs;
-    vec3_t v;
-    vec3_t dir;
-    vec3_t effectiveOrigin;
-    vec3_t rocketOffsetOrigin;
+    vec3_t push;
+    vec3_t splashOrigin, rocketOrigin;
     int i, e;
     qboolean hitClient = qfalse;
-    qboolean isRocket;
-    int weapon;
 
-    if (radius < 1) {
-        radius = 1;
-    }
-
-    // [QL] determine weapon from inflictor for rocket-specific behavior
-    weapon = inflictor ? inflictor->s.weapon : 0;
-    isRocket = (weapon == WP_ROCKET_LAUNCHER);
-
-    // [QL] shift effective explosion center along inflictor velocity (binary-verified)
-    VectorCopy(origin, effectiveOrigin);
-    if (inflictor && g_splashdamageOffset.value != 0.0f) {
-        VectorMA(effectiveOrigin, g_splashdamageOffset.value, inflictor->s.pos.trDelta, effectiveOrigin);
-    }
-
-    // [QL] rocket-specific splash offset: shifts explosion center along direction (binary-verified)
-    // g_rocketsplashOffset default -10.0 moves center backward along missile path,
-    // which for downward rocket jumps shifts center UP toward player, increasing self-knockback
-    VectorCopy(effectiveOrigin, rocketOffsetOrigin);
-    if (isRocket && g_rocketsplashOffset.value != 0.0f) {
-        vec3_t rocketDir;
-        VectorCopy(inflictor->s.pos.trDelta, rocketDir);
-        VectorNormalize(rocketDir);
-        VectorMA(effectiveOrigin, g_rocketsplashOffset.value, rocketDir, rocketOffsetOrigin);
-    }
-
+    radius = missile->splashRadius;
     for (i = 0; i < 3; i++) {
-        mins[i] = effectiveOrigin[i] - radius;
-        maxs[i] = effectiveOrigin[i] + radius;
+        mins[i] = origin[i] - radius;
+        maxs[i] = origin[i] + radius;
     }
 
     numListedEntities = trap_EntitiesInBox(mins, maxs, entityList, MAX_GENTITIES);
 
+    VectorCopy(origin, splashOrigin);
+    VectorCopy(origin, rocketOrigin);
+    if (trace) {
+        VectorMA(origin, g_splashdamageOffset.value, trace->plane.normal, splashOrigin);
+        if (missile->s.weapon == WP_ROCKET_LAUNCHER) {
+            VectorMA(splashOrigin, g_rocketsplashOffset.value, dir, rocketOrigin);
+        }
+    }
+
     for (e = 0; e < numListedEntities; e++) {
         ent = &g_entities[entityList[e]];
 
-        if (ent == ignore)
-            continue;
-        if (!ent->takedamage)
-            continue;
-
-        // find the distance from the edge of the bounding box
-        for (i = 0; i < 3; i++) {
-            if (effectiveOrigin[i] < ent->r.absmin[i]) {
-                v[i] = ent->r.absmin[i] - effectiveOrigin[i];
-            } else if (effectiveOrigin[i] > ent->r.absmax[i]) {
-                v[i] = effectiveOrigin[i] - ent->r.absmax[i];
-            } else {
-                v[i] = 0;
-            }
-        }
-
-        dist = VectorLength(v);
-        if (dist >= radius) {
+        if (ent == ignore || !ent->takedamage) {
             continue;
         }
 
-        points = damage * (1.0 - dist / radius);
+        dist = G_DistanceToBBox(ent, origin);
+        if (dist > radius) {
+            continue;
+        }
+        if (!CanDamage(ent, splashOrigin)) {
+            continue;
+        }
+        if (missile->s.weapon == WP_ROCKET_LAUNCHER && !CanDamage(ent, rocketOrigin)) {
+            continue;
+        }
 
-        // [QL] binary-verified: rockets require double CanDamage check -
-        // one from effectiveOrigin and one from rocketOffsetOrigin
-        if (CanDamage(ent, effectiveOrigin) && (!isRocket || CanDamage(ent, rocketOffsetOrigin))) {
-            if (LogAccuracyHit(ent, attacker)) {
-                hitClient = qtrue;
-            }
-            VectorSubtract(ent->r.currentOrigin, effectiveOrigin, dir);
-            // [QL] configurable z-offset: different for self-damage vs hitting others
-            if (ent == attacker) {
-                dir[2] += g_knockback_z_self.value;
-            } else {
-                dir[2] += g_knockback_z.value;
-            }
-            G_Damage(ent, inflictor, attacker, dir, effectiveOrigin, (int)points, dflags | DAMAGE_RADIUS, mod);
+        attacker = missile->parent;
+        if (ent != attacker && ent->client && attacker->client && !OnSameTeam(ent, attacker) &&
+            (!FreezeTagInGame() || !ent->client->ps.powerups[PW_FREEZE])) {
+            hitClient = qtrue;
+        }
+
+        VectorSubtract(ent->r.currentOrigin, origin, push);
+        push[2] += (ent == attacker) ? g_knockback_z_self.integer : g_knockback_z.integer;
+
+        if (g_playerCylinders.integer && trace && trace->fraction == 0.0f && ent != attacker) {
+            G_Damage(ent, missile, attacker, push, origin, missile->damage, 0, missile->methodOfDeath);
+        } else {
+            G_Damage(ent, missile, attacker, push, origin,
+                     (int)((1.0 - (double)dist / missile->splashRadius) * missile->splashDamage), DAMAGE_RADIUS,
+                     missile->splashMethodOfDeath);
         }
     }
 
@@ -2088,32 +2054,28 @@ qboolean G_RadiusDamage(vec3_t origin, gentity_t* inflictor, gentity_t* attacker
 /*
 ============
 G_RadiusDamageThrough
-[QL] Like G_RadiusDamage but also damages through walls at reduced range.
-If CanDamage fails from effectiveOrigin, tries rocketOffsetOrigin.
-If both fail (rockets only), checks reduced radius and applies through-wall damage.
+
+[QL] qagamex86.dll 0x1004a3e0, for a rocket that exploded against a thin surface
+(EV_MISSILE_MISS_DMGTHROUGH). Everything G_RadiusDamage would reach is hit the same way. What it
+cannot reach is still hit, within g_dmgThroughSurfaceDampening of the radius, when it has a clear
+line to throughOrigin on the far side of the surface; it is pushed away from there and the
+falloff uses the smaller radius.
 ============
 */
-qboolean G_RadiusDamageThrough(vec3_t origin, gentity_t* inflictor, gentity_t* attacker, float damage, float radius, gentity_t* ignore, int dflags, int mod) {
-    float points, dist;
+qboolean G_RadiusDamageThrough(vec3_t origin, const vec3_t dir, const trace_t* trace, vec3_t throughOrigin,
+                               gentity_t* missile, gentity_t* ignore) {
+    float dist, radius, reach;
     gentity_t* ent;
+    gentity_t* attacker;
     int entityList[MAX_GENTITIES];
     int numListedEntities;
     vec3_t mins, maxs;
-    vec3_t v;
-    vec3_t dir;
-    vec3_t effectiveOrigin;
-    vec3_t rocketOffsetOrigin;
+    vec3_t push;
+    vec3_t splashOrigin, rocketOrigin;
     int i, e;
     qboolean hitClient = qfalse;
-    qboolean isRocket;
-    float throughRadius;
 
-    if (radius < 1) {
-        radius = 1;
-    }
-
-    isRocket = (inflictor && inflictor->s.weapon == WP_ROCKET_LAUNCHER);
-
+    radius = missile->splashRadius;
     for (i = 0; i < 3; i++) {
         mins[i] = origin[i] - radius;
         maxs[i] = origin[i] + radius;
@@ -2121,84 +2083,60 @@ qboolean G_RadiusDamageThrough(vec3_t origin, gentity_t* inflictor, gentity_t* a
 
     numListedEntities = trap_EntitiesInBox(mins, maxs, entityList, MAX_GENTITIES);
 
-    VectorCopy(origin, effectiveOrigin);
-    VectorCopy(origin, rocketOffsetOrigin);
-    if (inflictor) {
-        VectorMA(effectiveOrigin, g_splashdamageOffset.value, inflictor->s.pos.trDelta, effectiveOrigin);
-        VectorCopy(effectiveOrigin, rocketOffsetOrigin);
-        if (isRocket && g_rocketsplashOffset.value != 0.0f) {
-            vec3_t rocketDir;
-            VectorNormalize2(inflictor->s.pos.trDelta, rocketDir);
-            VectorMA(effectiveOrigin, g_rocketsplashOffset.value, rocketDir, rocketOffsetOrigin);
+    VectorCopy(origin, splashOrigin);
+    VectorCopy(origin, rocketOrigin);
+    if (trace) {
+        VectorMA(origin, g_splashdamageOffset.value, trace->plane.normal, splashOrigin);
+        if (missile->s.weapon == WP_ROCKET_LAUNCHER) {
+            VectorMA(splashOrigin, g_rocketsplashOffset.value, dir, rocketOrigin);
         }
     }
-
-    throughRadius = radius * g_dmgThroughSurfaceDampening.value;
 
     for (e = 0; e < numListedEntities; e++) {
         ent = &g_entities[entityList[e]];
 
-        if (ent == ignore)
-            continue;
-        if (!ent->takedamage)
-            continue;
-
-        // find distance from edge of bounding box
-        for (i = 0; i < 3; i++) {
-            if (origin[i] < ent->r.absmin[i]) {
-                v[i] = ent->r.absmin[i] - origin[i];
-            } else if (origin[i] > ent->r.absmax[i]) {
-                v[i] = origin[i] - ent->r.absmax[i];
-            } else {
-                v[i] = 0;
-            }
-        }
-        dist = VectorLength(v);
-        if (dist > radius) {
+        if (ent == ignore || !ent->takedamage) {
             continue;
         }
 
-        // Try normal CanDamage from effectiveOrigin
-        if (CanDamage(ent, effectiveOrigin)) {
-            VectorSubtract(ent->r.currentOrigin, origin, dir);
-            goto applydamage;
+        reach = missile->splashRadius;
+        dist = G_DistanceToBBox(ent, origin);
+        if (dist > reach) {
+            continue;
         }
 
-        // For rockets, try rocketOffsetOrigin
-        if (isRocket) {
-            if (CanDamage(ent, rocketOffsetOrigin)) {
-                VectorSubtract(ent->r.currentOrigin, origin, dir);
-                goto applydamage;
+        if (CanDamage(ent, splashOrigin) ||
+            (missile->s.weapon == WP_ROCKET_LAUNCHER && CanDamage(ent, rocketOrigin))) {
+            VectorSubtract(ent->r.currentOrigin, origin, push);
+        } else {
+            if (missile->s.weapon != WP_ROCKET_LAUNCHER) {
+                continue;
             }
-
-            // Through-wall: reduced radius check
-            if (dist <= throughRadius) {
-                if (CanDamage(ent, origin)) {
-                    VectorSubtract(ent->r.currentOrigin, ignore ? ignore->r.currentOrigin : origin, dir);
-                    goto applydamage;
-                }
+            reach = missile->splashRadius * g_dmgThroughSurfaceDampening.value;
+            dist = G_DistanceToBBox(ent, origin);
+            if (dist > reach) {
+                continue;
             }
+            if (!CanDamage(ent, throughOrigin)) {
+                continue;
+            }
+            VectorSubtract(ent->r.currentOrigin, throughOrigin, push);
         }
-        continue;
 
-    applydamage:
-        // Hit tracking
-        if (ent->client && attacker->client && ent != attacker && !OnSameTeam(ent, attacker)) {
+        attacker = missile->parent;
+        if (ent != attacker && ent->client && attacker->client && !OnSameTeam(ent, attacker) &&
+            (!FreezeTagInGame() || !ent->client->ps.powerups[PW_FREEZE])) {
             hitClient = qtrue;
         }
 
-        if (ent == attacker) {
-            dir[2] += g_knockback_z_self.value;
-        } else {
-            dir[2] += g_knockback_z.value;
-        }
+        push[2] += (ent == attacker) ? g_knockback_z_self.integer : g_knockback_z.integer;
 
-        // g_playerCylinders skip logic
-        if (!g_playerCylinders.integer || !inflictor ||
-            inflictor->s.pos.trDelta[2] != 0.0f || ent == attacker) {
-            points = damage * (1.0 - dist / radius);
-            G_Damage(ent, inflictor, attacker, dir, effectiveOrigin, (int)points,
-                     dflags | DAMAGE_RADIUS, mod);
+        if (g_playerCylinders.integer && trace && trace->fraction == 0.0f && ent != attacker) {
+            G_Damage(ent, missile, attacker, push, origin, missile->damage, 0, missile->methodOfDeath);
+        } else {
+            G_Damage(ent, missile, attacker, push, origin,
+                     (int)((1.0 - (double)dist / reach) * missile->splashDamage), DAMAGE_RADIUS,
+                     missile->splashMethodOfDeath);
         }
     }
 
@@ -2208,27 +2146,28 @@ qboolean G_RadiusDamageThrough(vec3_t origin, gentity_t* inflictor, gentity_t* a
 /*
 ============
 G_WaterRadiusDamage
-[QL] Water-specific radius damage for LG discharge (MOD_LIGHTNING_DISCHARGE).
-Only applies when g_infiniteAmmo is set and origin is in water.
+
+[QL] qagamex86.dll 0x1004a7a0, the lightning gun's discharge. It needs g_lightningDischarge and an
+origin in water, slime or lava, and it only reaches entities that are in the water themselves.
 ============
 */
-qboolean G_WaterRadiusDamage(vec3_t origin, gentity_t *attacker, float damage, float radius) {
+qboolean G_WaterRadiusDamage(vec3_t origin, gentity_t* attacker, float damage, float radius) {
     float points, dist;
-    gentity_t *ent;
+    gentity_t* ent;
     int entityList[MAX_GENTITIES];
     int numListedEntities;
     vec3_t mins, maxs;
-    vec3_t v, dir;
+    vec3_t dir;
     int i, e;
     qboolean hitClient = qfalse;
 
-    if (!g_infiniteAmmo.integer)
+    if (!g_lightningDischarge.integer || !(trap_PointContents(origin, -1) & MASK_WATER)) {
         return qfalse;
+    }
 
-    if (!(trap_PointContents(origin, -1) & (CONTENTS_WATER | CONTENTS_SLIME | CONTENTS_LAVA)))
-        return qfalse;
-
-    if (radius < 1) radius = 1;
+    if (radius < 1) {
+        radius = 1;
+    }
 
     for (i = 0; i < 3; i++) {
         mins[i] = origin[i] - radius;
@@ -2239,37 +2178,27 @@ qboolean G_WaterRadiusDamage(vec3_t origin, gentity_t *attacker, float damage, f
 
     for (e = 0; e < numListedEntities; e++) {
         ent = &g_entities[entityList[e]];
-        if (!ent->takedamage)
+        if (!ent->takedamage) {
             continue;
-
-        for (i = 0; i < 3; i++) {
-            if (origin[i] < ent->r.absmin[i])
-                v[i] = ent->r.absmin[i] - origin[i];
-            else if (origin[i] > ent->r.absmax[i])
-                v[i] = origin[i] - ent->r.absmax[i];
-            else
-                v[i] = 0;
         }
-        dist = VectorLength(v);
-        if (dist >= radius)
+
+        dist = G_DistanceToBBox(ent, origin);
+        if (dist >= radius) {
             continue;
+        }
 
         points = damage * (1.0f - dist / radius);
 
-        if (CanDamage(ent, origin)) {
-            if (ent->client && attacker->client && ent != attacker &&
-                !OnSameTeam(ent, attacker)) {
+        if (CanDamage(ent, origin) && ent->waterlevel) {
+            if (ent != attacker && ent->client && attacker->client && !OnSameTeam(ent, attacker) &&
+                (!FreezeTagInGame() || !ent->client->ps.powerups[PW_FREEZE])) {
                 hitClient = qtrue;
             }
 
             VectorSubtract(ent->r.currentOrigin, origin, dir);
-            if (ent == attacker)
-                dir[2] += g_knockback_z_self.value;
-            else
-                dir[2] += g_knockback_z.value;
+            dir[2] += (ent == attacker) ? g_knockback_z_self.integer : g_knockback_z.integer;
 
-            G_Damage(ent, NULL, attacker, dir, origin, (int)points,
-                     DAMAGE_RADIUS, MOD_LIGHTNING_DISCHARGE);
+            G_Damage(ent, NULL, attacker, dir, origin, (int)points, DAMAGE_RADIUS, MOD_LIGHTNING_DISCHARGE);
         }
     }
 

@@ -30,14 +30,17 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // caps nail bounces at g_nailbounce. Not yet named in bg_public.h (see report).
 #define EF_QL_NAILBOUNCE 0x100000
 
+// [QL] surface flag G_MissileImpact tests (qagamex86.dll 0x1005c3ab) before letting a rocket
+// explode through the surface
+#define SURF_QL_DMGTHROUGH 0x200000
+
 /*
 ================
 G_BounceMissile
-// Address: 0x1005b3c0
-// [QL] Ghidra mislabels this "G_BounceItem"; the .so symbol at the g_missile.c
-// cluster (0x86140) is G_BounceMissile. The physicsBounce variant Ghidra labels
-// "G_BounceMissile" (0x10050c70) is G_BounceProjectile (.so 0x98680),
-// used only by G_RunItem.
+
+[QL] qagamex86.dll 0x1005b350. The velocity is taken at the end of the frame minus the trace
+fraction of the frame, and a grenade that comes to rest is set down one unit higher, so it
+lies on the floor instead of in it.
 ================
 */
 void G_BounceMissile(gentity_t* ent, trace_t* trace) {
@@ -46,7 +49,7 @@ void G_BounceMissile(gentity_t* ent, trace_t* trace) {
     int hitTime;
 
     // reflect the velocity on the trace plane
-    hitTime = ( level.time - level.frametime ) + (level.time - ( level.time - level.frametime )) * trace->fraction;
+    hitTime = (int)((double)level.time - trace->fraction * (double)level.frametime);
     BG_EvaluateTrajectoryDelta(&ent->s.pos, hitTime, velocity);
     dot = DotProduct(velocity, trace->plane.normal);
     VectorMA(velocity, -2 * dot, trace->plane.normal, ent->s.pos.trDelta);
@@ -55,8 +58,9 @@ void G_BounceMissile(gentity_t* ent, trace_t* trace) {
         VectorScale(ent->s.pos.trDelta, 0.65, ent->s.pos.trDelta);
         // check for stop
         if (trace->plane.normal[2] > 0.2 && VectorLength(ent->s.pos.trDelta) < 40) {
-            // [QL] binary snaps endpos, then G_SetOrigin; it does NOT set ent->s.time
-            SnapVector(trace->endpos);
+            trace->endpos[0] = (int)trace->endpos[0];
+            trace->endpos[1] = (int)trace->endpos[1];
+            trace->endpos[2] = (int)(trace->endpos[2] + 1.0);
             G_SetOrigin(ent, trace->endpos);
             return;
         }
@@ -92,9 +96,9 @@ void G_ExplodeMissile(gentity_t* ent) {
     ent->freeAfterEvent = qtrue;
 
     // splash damage
-    // [QL] binary-verified: time-expired missiles pass NULL inflictor (no splash offset)
+    // [QL] 0x1005b624: the missile is its own inflictor; with no impact there is no trace or direction
     if (ent->splashDamage) {
-        if (G_RadiusDamage(ent->r.currentOrigin, NULL, ent->parent, ent->splashDamage, ent->splashRadius, ent, 0, ent->splashMethodOfDeath)) {
+        if (G_RadiusDamage(ent->r.currentOrigin, NULL, NULL, ent, ent)) {
             g_entities[ent->r.ownerNum].client->accuracy_hits++;
             g_entities[ent->r.ownerNum].client->expandedStats.shotsHit[ent->s.weapon]++;
             // [QL] binary inlines STAT_AddScore (engine syscall table +0x324); it
@@ -281,19 +285,26 @@ static void ProximityMine_Player(gentity_t* mine, gentity_t* player) {
 /*
 ================
 G_MissileImpact
+
+[QL] qagamex86.dll 0x1005bbe0. A prox mine sticks and a hook latches before any damage, and
+neither deals direct damage here. Other missiles send their impact event first. A rocket on a
+surface marked for it, or with g_forceDmgThroughSurface, checks whether it can explode through:
+facing down onto the surface at least g_dmgThroughSurfaceAngularThreshold, with solid again
+within g_dmgThroughSurfaceDistance behind it. Then come the direct damage and the splash.
 ================
 */
 void G_MissileImpact(gentity_t* ent, trace_t* trace) {
     gentity_t* other;
     qboolean hitClient = qfalse;
-    vec3_t forward, impactpoint, bouncedir;
+    qboolean damageThrough = qfalse;
+    vec3_t forward, impactpoint, bouncedir, throughOrigin;
     int eFlags;
+
     other = &g_entities[trace->entityNum];
 
     // check for bounce
-    // [QL] binary mask is 0x100030 (EF_BOUNCE|EF_BOUNCE_HALF|EF_QL_NAILBOUNCE).
-    //      Only EF_QL_NAILBOUNCE missiles are capped (g_nailbounce); every bounce
-    //      increments bouncecount.
+    // [QL] the bounce mask is 0x100030 (EF_BOUNCE|EF_BOUNCE_HALF|EF_QL_NAILBOUNCE). Only
+    //      EF_QL_NAILBOUNCE missiles are capped (g_nailbounce); every bounce counts.
     if (!other->takedamage &&
         (ent->s.eFlags & (EF_BOUNCE | EF_BOUNCE_HALF | EF_QL_NAILBOUNCE)) &&
         (!(ent->s.eFlags & EF_QL_NAILBOUNCE) || ent->bouncecount < g_nailbounce.integer)) {
@@ -303,49 +314,20 @@ void G_MissileImpact(gentity_t* ent, trace_t* trace) {
         return;
     }
 
-    if (other->takedamage) {
-        if (ent->s.weapon != WP_PROX_LAUNCHER) {
-            if (other->client && other->client->invulnerabilityTime > level.time) {
-                //
-                VectorCopy(ent->s.pos.trDelta, forward);
-                VectorNormalize(forward);
-                if (G_InvulnerabilityEffect(other, forward, ent->s.pos.trBase, impactpoint, bouncedir)) {
-                    VectorCopy(bouncedir, trace->plane.normal);
-                    eFlags = ent->s.eFlags & EF_BOUNCE_HALF;
-                    ent->s.eFlags &= ~EF_BOUNCE_HALF;
-                    G_BounceMissile(ent, trace);
-                    ent->s.eFlags |= eFlags;
-                }
-                ent->target_ent = other;
-                return;
+    if (other->takedamage && ent->s.weapon != WP_PROX_LAUNCHER) {
+        if (other->client && other->client->invulnerabilityTime > level.time) {
+            //
+            VectorCopy(ent->s.pos.trDelta, forward);
+            VectorNormalize(forward);
+            if (G_InvulnerabilityEffect(other, forward, ent->s.pos.trBase, impactpoint, bouncedir)) {
+                VectorCopy(bouncedir, trace->plane.normal);
+                eFlags = ent->s.eFlags & EF_BOUNCE_HALF;
+                ent->s.eFlags &= ~EF_BOUNCE_HALF;
+                G_BounceMissile(ent, trace);
+                ent->s.eFlags |= eFlags;
             }
-        }
-    }
-
-    // impact damage
-    if (other->takedamage) {
-        // FIXME: wrong damage direction?
-        if (ent->damage) {
-            vec3_t velocity;
-
-            if (LogAccuracyHit(other, &g_entities[ent->r.ownerNum])) {
-                g_entities[ent->r.ownerNum].client->accuracy_hits++;
-                g_entities[ent->r.ownerNum].client->expandedStats.shotsHit[ent->s.weapon]++;
-                if (g_gametype.integer != GT_RACE) {
-                    STAT_AddScore(&g_entities[ent->r.ownerNum], ent->s.weapon, 1);
-                }
-                hitClient = qtrue;
-                if (BG_IsRoundBasedGameType(g_gametype.integer)) {
-                    g_entities[ent->r.ownerNum].client->round_hits++;
-                }
-            }
-            BG_EvaluateTrajectoryDelta(&ent->s.pos, level.time, velocity);
-            if (VectorLength(velocity) == 0) {
-                velocity[2] = 1;  // stepped on a grenade
-            }
-            G_Damage(other, ent, &g_entities[ent->r.ownerNum], velocity,
-                     ent->s.origin, ent->damage,
-                     0, ent->methodOfDeath);
+            ent->target_ent = other;
+            return;
         }
     }
 
@@ -377,8 +359,11 @@ void G_MissileImpact(gentity_t* ent, trace_t* trace) {
         ent->enemy = other;
         ent->die = ProximityMine_Die;
         VectorCopy(trace->plane.normal, ent->movedir);
+        // [QL] 0x1005bea6: the box is pushed out along the surface normal
         VectorSet(ent->r.mins, -4, -4, -4);
         VectorSet(ent->r.maxs, 4, 4, 4);
+        VectorMA(ent->r.mins, 4, trace->plane.normal, ent->r.mins);
+        VectorMA(ent->r.maxs, 4, trace->plane.normal, ent->r.maxs);
         trap_LinkEntity(ent);
 
         return;
@@ -386,24 +371,41 @@ void G_MissileImpact(gentity_t* ent, trace_t* trace) {
 
     if (!strcmp(ent->classname, "hook")) {
         gentity_t* nent;
-        vec3_t v;
+        vec3_t v, into;
 
         nent = G_Spawn();
         if (other->takedamage && other->client) {
-            G_AddEvent(nent, EV_MISSILE_HIT, DirToByte(trace->plane.normal));
+            // [QL] 0x1005bf5e: the hit event rides on the hook itself, and the player it holds is
+            //      slowed (PMF_HOOKED)
+            G_AddEvent(ent, EV_MISSILE_HIT, DirToByte(trace->plane.normal));
             nent->s.otherEntityNum = other->s.number;
 
             ent->enemy = other;
+            ent->eventTime = level.time + weapon_reload_hook.integer;
 
             v[0] = other->r.currentOrigin[0] + (other->r.mins[0] + other->r.maxs[0]) * 0.5;
             v[1] = other->r.currentOrigin[1] + (other->r.mins[1] + other->r.maxs[1]) * 0.5;
             v[2] = other->r.currentOrigin[2] + (other->r.mins[2] + other->r.maxs[2]) * 0.5;
 
+            other->client->ps.pm_flags |= PMF_HOOKED;
             SnapVectorTowards(v, ent->s.pos.trBase);  // save net bandwidth
+            // [QL] 0x1005c012 then runs Pmove (0x100323a0) for the owner with an otherwise empty
+            //      pmove_t: its serverTime 0 is behind commandTime, so it returns without doing anything
         } else {
             VectorCopy(trace->endpos, v);
-            G_AddEvent(nent, EV_MISSILE_MISS, DirToByte(trace->plane.normal));
-            ent->enemy = NULL;
+            G_AddEvent(ent, EV_MISSILE_MISS, DirToByte(trace->plane.normal));
+            // [QL] 0x1005c097: it holds on to a train, and lets go of a door on its next frame
+            if (other->s.eType == ET_MOVER) {
+                if (!strcmp(other->classname, "func_train")) {
+                    ent->enemy = other;
+                    ent->count = 0;
+                } else if (!strcmp(other->classname, "func_door") || !strcmp(other->classname, "func_rotating")) {
+                    ent->enemy = other;
+                    ent->count = 1;
+                }
+            } else {
+                ent->enemy = NULL;
+            }
         }
 
         SnapVectorTowards(v, ent->s.pos.trBase);  // save net bandwidth
@@ -413,11 +415,17 @@ void G_MissileImpact(gentity_t* ent, trace_t* trace) {
         nent->s.eType = ET_GENERAL;
         ent->s.eType = ET_GRAPPLE;
 
+        // [QL] 0x1005c194: the hook faces into the surface and carries its normal
+        VectorNegate(trace->plane.normal, into);
+        vectoangles(into, ent->s.angles);
+        ent->s.generic1 = DirToByte(trace->plane.normal);
+
         G_SetOrigin(ent, v);
         G_SetOrigin(nent, v);
 
+        // [QL] 0x1005c2ab: a frame in the past, so it thinks straight away
         ent->think = Weapon_HookThink;
-        ent->nextthink = level.time - MISSILE_PRESTEP_TIME;  // [QL] think immediately
+        ent->nextthink = level.time - (int)(1000.0 / sv_fps.integer);
 
         ent->parent->client->ps.pm_flags |= PMF_GRAPPLE_PULL;
         VectorCopy(ent->r.currentOrigin, ent->parent->client->ps.grapplePoint);
@@ -428,16 +436,59 @@ void G_MissileImpact(gentity_t* ent, trace_t* trace) {
         return;
     }
 
-    // is it cheaper in bandwidth to just remove this ent and create a new
-    // one, rather than changing the missile into the explosion?
+    // [QL] 0x1005c32a: the impact event comes before any damage
+    VectorCopy(ent->s.pos.trDelta, forward);
+    VectorNormalize(forward);
 
     if (other->takedamage && other->client) {
         G_AddEvent(ent, EV_MISSILE_HIT, DirToByte(trace->plane.normal));
         ent->s.otherEntityNum = other->s.number;
+    } else if (ent->s.weapon == WP_ROCKET_LAUNCHER &&
+               (g_forceDmgThroughSurface.integer || (trace->surfaceFlags & SURF_QL_DMGTHROUGH))) {
+        if (-trace->plane.normal[2] >= g_dmgThroughSurfaceAngularThreshold.value) {
+            vec3_t start;
+            trace_t tr;
+
+            VectorMA(trace->endpos, g_dmgThroughSurfaceDistance.value, trace->plane.normal, start);
+            trap_Trace(&tr, start, vec3_origin, vec3_origin, trace->endpos, ENTITYNUM_NONE, CONTENTS_SOLID);
+            if (tr.fraction < 1.0f && !tr.startsolid && !tr.allsolid) {
+                G_AddEvent(ent, EV_MISSILE_MISS_DMGTHROUGH, DirToByte(trace->plane.normal));
+                VectorCopy(tr.endpos, throughOrigin);
+                damageThrough = qtrue;
+            } else {
+                G_AddEvent(ent, EV_MISSILE_MISS, DirToByte(trace->plane.normal));
+            }
+        } else {
+            G_AddEvent(ent, EV_MISSILE_MISS, DirToByte(trace->plane.normal));
+        }
     } else if (trace->surfaceFlags & SURF_METALSTEPS) {
         G_AddEvent(ent, EV_MISSILE_MISS_METAL, DirToByte(trace->plane.normal));
     } else {
         G_AddEvent(ent, EV_MISSILE_MISS, DirToByte(trace->plane.normal));
+    }
+
+    // impact damage
+    if (ent->damage && other->takedamage) {
+        vec3_t velocity;
+
+        if (LogAccuracyHit(other, &g_entities[ent->r.ownerNum])) {
+            g_entities[ent->r.ownerNum].client->accuracy_hits++;
+            g_entities[ent->r.ownerNum].client->expandedStats.shotsHit[ent->s.weapon]++;
+            if (g_gametype.integer != GT_RACE) {
+                STAT_AddScore(&g_entities[ent->r.ownerNum], ent->s.weapon, 1);
+            }
+            hitClient = qtrue;
+            if (BG_IsRoundBasedGameType(g_gametype.integer)) {
+                g_entities[ent->r.ownerNum].client->round_hits++;
+            }
+        }
+        BG_EvaluateTrajectoryDelta(&ent->s.pos, level.time, velocity);
+        if (VectorLength(velocity) == 0) {
+            velocity[2] = 1;  // stepped on a grenade
+        }
+        G_Damage(other, ent, &g_entities[ent->r.ownerNum], velocity,
+                 ent->s.origin, ent->damage,
+                 0, ent->methodOfDeath);
     }
 
     ent->freeAfterEvent = qtrue;
@@ -449,43 +500,23 @@ void G_MissileImpact(gentity_t* ent, trace_t* trace) {
 
     G_SetOrigin(ent, trace->endpos);
 
-    // [QL] Rocket splash-through-walls check
-    {
-        int isRocketSplashThrough = 0;
-        if (ent->s.weapon == WP_ROCKET_LAUNCHER &&
-            (g_forceDmgThroughSurface.integer || (trace->surfaceFlags & SURF_NOMARKS))) {
-            // check angular threshold: dot product of surface normal against downward
-            float dot = -trace->plane.normal[2];
-            if (dot <= g_dmgThroughSurfaceAngularThreshold.value) {
-                vec3_t testStart;
-                trace_t tr2;
-                VectorMA(trace->endpos, g_dmgThroughSurfaceDistance.value, trace->plane.normal, testStart);
-                trap_Trace(&tr2, testStart, NULL, NULL, trace->endpos, ENTITYNUM_NONE, MASK_SHOT);
-                if (tr2.fraction < 1.0f && !tr2.startsolid && !tr2.allsolid) {
-                    isRocketSplashThrough = 1;
-                }
-            }
-        }
+    // splash damage (doesn't apply to person directly hit)
+    if (ent->splashDamage) {
+        qboolean hit;
 
-        // splash damage (doesn't apply to person directly hit)
-        if (ent->splashDamage) {
-            int hit;
-            if (isRocketSplashThrough) {
-                hit = G_RadiusDamageThrough(trace->endpos, ent, ent->parent, ent->splashDamage, ent->splashRadius,
-                                            other, 0, ent->splashMethodOfDeath);
-            } else {
-                hit = G_RadiusDamage(trace->endpos, ent, ent->parent, ent->splashDamage, ent->splashRadius,
-                                     other, 0, ent->splashMethodOfDeath);
+        if (damageThrough) {
+            hit = G_RadiusDamageThrough(trace->endpos, forward, trace, throughOrigin, ent, other);
+        } else {
+            hit = G_RadiusDamage(trace->endpos, forward, trace, ent, other);
+        }
+        if (hit && !hitClient) {
+            g_entities[ent->r.ownerNum].client->accuracy_hits++;
+            g_entities[ent->r.ownerNum].client->expandedStats.shotsHit[ent->s.weapon]++;
+            if (g_gametype.integer != GT_RACE) {
+                STAT_AddScore(&g_entities[ent->r.ownerNum], ent->s.weapon, 1);
             }
-            if (hit && !hitClient) {
-                g_entities[ent->r.ownerNum].client->accuracy_hits++;
-                g_entities[ent->r.ownerNum].client->expandedStats.shotsHit[ent->s.weapon]++;
-                if (g_gametype.integer != GT_RACE) {
-                    STAT_AddScore(&g_entities[ent->r.ownerNum], ent->s.weapon, 1);
-                }
-                if (BG_IsRoundBasedGameType(g_gametype.integer)) {
-                    g_entities[ent->r.ownerNum].client->round_hits++;
-                }
+            if (BG_IsRoundBasedGameType(g_gametype.integer)) {
+                g_entities[ent->r.ownerNum].client->round_hits++;
             }
         }
     }
@@ -521,11 +552,20 @@ void G_RunMissile(gentity_t* ent) {
         passent = ent->r.ownerNum;
     }
     // trace a line from the previous position to the current position
-    trap_Trace(&tr, ent->r.currentOrigin, ent->r.mins, ent->r.maxs, origin, passent, ent->clipmask);
+    // [QL] 0x1005c95a: with g_playerCylinders the missile is traced as a capsule
+    if (g_playerCylinders.integer) {
+        trap_TraceCapsule(&tr, ent->r.currentOrigin, ent->r.mins, ent->r.maxs, origin, passent, ent->clipmask);
+    } else {
+        trap_Trace(&tr, ent->r.currentOrigin, ent->r.mins, ent->r.maxs, origin, passent, ent->clipmask);
+    }
 
     if (tr.startsolid || tr.allsolid) {
         // make sure the tr.entityNum is set to the entity we're stuck in
-        trap_Trace(&tr, ent->r.currentOrigin, ent->r.mins, ent->r.maxs, ent->r.currentOrigin, passent, ent->clipmask);
+        if (g_playerCylinders.integer) {
+            trap_TraceCapsule(&tr, ent->r.currentOrigin, ent->r.mins, ent->r.maxs, ent->r.currentOrigin, passent, ent->clipmask);
+        } else {
+            trap_Trace(&tr, ent->r.currentOrigin, ent->r.mins, ent->r.maxs, ent->r.currentOrigin, passent, ent->clipmask);
+        }
         tr.fraction = 0;
     } else {
         VectorCopy(tr.endpos, ent->r.currentOrigin);
@@ -536,9 +576,9 @@ void G_RunMissile(gentity_t* ent) {
     if (tr.fraction != 1) {
         // never explode or bounce on sky
         if (tr.surfaceFlags & SURF_NOIMPACT) {
-            // If grapple, reset owner
+            // [QL] 0x1005ca64: a grappling hook is let go properly first
             if (ent->parent && ent->parent->client && ent->parent->client->hook == ent) {
-                ent->parent->client->hook = NULL;
+                Weapon_HookFree(ent);
             }
             G_FreeEntity(ent);
             return;
@@ -621,8 +661,21 @@ static gentity_t* CreateMissile(vec3_t start, vec3_t dir, int speed, gentity_t* 
 
 /*
 =================
+G_PlasmaAccelThink
+
+[QL] qagamex86.dll 0x1005d020. Every g_accelRate_pg ms the bolt's velocity is multiplied by
+g_accelFactor_pg; the trajectory is not rebased, and the bolt no longer times out.
+=================
+*/
+static void G_PlasmaAccelThink(gentity_t* ent) {
+    VectorScale(ent->s.pos.trDelta, g_accelFactor_pg.value, ent->s.pos.trDelta);
+    ent->nextthink = (int)((double)level.time + g_accelRate_pg.value);
+}
+
+/*
+=================
 fire_plasma
-// Address: 0x1005d0e0
+// Address: 0x1005d070
 =================
 */
 gentity_t* fire_plasma(gentity_t* self, vec3_t start, vec3_t dir) {
@@ -641,10 +694,11 @@ gentity_t* fire_plasma(gentity_t* self, vec3_t start, vec3_t dir) {
     bolt->splashMethodOfDeath = MOD_PLASMA_SPLASH;
     bolt->s.pos.trType = weapon_gravity_pg.integer ? TR_GRAVITY : TR_LINEAR;  // [QL]
 
-    // [QL] TODO: binary fire_plasma has a projectile speed-SCALE cvar
-    //      (DAT_105aa008, default 1.0 - NOT g_velocity_pg which is 2000) that, when != 1.0,
-    //      rescales nextthink via ftol() and sets an alternate think (LAB_1005d090). Real cvar
-    //      name + exact ftol formula unresolved; dead at default 1.0. Resolve in #74 groundwork.
+    // [QL] 0x1005d10d
+    if (g_accelFactor_pg.value != 1.0f) {
+        bolt->nextthink = (int)((double)level.time + g_accelRate_pg.value);
+        bolt->think = G_PlasmaAccelThink;
+    }
 
     return bolt;
 }
@@ -682,8 +736,21 @@ gentity_t* fire_grenade(gentity_t* self, vec3_t start, vec3_t dir) {
 
 /*
 =================
+G_BFGAccelThink
+
+[QL] qagamex86.dll 0x1005d150, the same as G_PlasmaAccelThink with g_accelFactor_bfg and
+g_accelRate_bfg.
+=================
+*/
+static void G_BFGAccelThink(gentity_t* ent) {
+    VectorScale(ent->s.pos.trDelta, g_accelFactor_bfg.value, ent->s.pos.trDelta);
+    ent->nextthink = (int)((double)level.time + g_accelRate_bfg.value);
+}
+
+/*
+=================
 fire_bfg
-// Address: 0x1005d210
+// Address: 0x1005d1a0
 =================
 */
 gentity_t* fire_bfg(gentity_t* self, vec3_t start, vec3_t dir) {
@@ -703,9 +770,11 @@ gentity_t* fire_bfg(gentity_t* self, vec3_t start, vec3_t dir) {
     // [QL] binary does NOT override trType here; BFG keeps CreateMissile's
     //      weapon_gravity_rl-based trajectory (weapon_gravity_bfg is unused).
 
-    // [QL] TODO: binary fire_bfg has a projectile speed-SCALE cvar
-    //      (DAT_1059db28, default 1.0) that rescales nextthink via ftol() when != 1.0.
-    //      Real cvar name + formula unresolved; dead at default. Resolve in #74 groundwork.
+    // [QL] 0x1005d234
+    if (g_accelFactor_bfg.value != 1.0f) {
+        bolt->nextthink = (int)((double)level.time + g_accelRate_bfg.value);
+        bolt->think = G_BFGAccelThink;
+    }
 
     return bolt;
 }
@@ -735,8 +804,21 @@ static void G_GuidedRocketThink(gentity_t *ent) {
 
 /*
 =================
+G_RocketAccelThink
+
+[QL] qagamex86.dll 0x1005cd70, the same as G_PlasmaAccelThink with g_accelFactor_rl and
+g_accelRate_rl.
+=================
+*/
+static void G_RocketAccelThink(gentity_t* ent) {
+    VectorScale(ent->s.pos.trDelta, g_accelFactor_rl.value, ent->s.pos.trDelta);
+    ent->nextthink = (int)((double)level.time + g_accelRate_rl.value);
+}
+
+/*
+=================
 fire_rocket
-// Address: 0x1005cf90
+// Address: 0x1005cf20
 =================
 */
 gentity_t* fire_rocket(gentity_t* self, vec3_t start, vec3_t dir) {
@@ -754,15 +836,17 @@ gentity_t* fire_rocket(gentity_t* self, vec3_t start, vec3_t dir) {
     bolt->methodOfDeath = MOD_ROCKET;
     bolt->splashMethodOfDeath = MOD_ROCKET_SPLASH;
 
-    // [QL] guided rocket mode
+    // [QL] guided rocket mode: steers from the first frame, nextthink a frame in the past (0x1005cfca)
     if (g_guidedRocket.integer) {
-        bolt->nextthink = level.time - MISSILE_PRESTEP_TIME;  // [QL] think next frame
+        bolt->nextthink = level.time - (int)(1000.0 / sv_fps.integer);
         bolt->think = G_GuidedRocketThink;
     }
 
-    // [QL] TODO: binary fire_rocket has a projectile speed-SCALE cvar
-    //      (DAT_105a5808, default 1.0) that rescales nextthink via ftol() when != 1.0.
-    //      Real cvar name + formula unresolved; dead at default. Resolve in #74 groundwork.
+    // [QL] 0x1005cfdc: acceleration replaces the guided steering
+    if (g_accelFactor_rl.value != 1.0f) {
+        bolt->nextthink = (int)((double)level.time + g_accelRate_rl.value);
+        bolt->think = G_RocketAccelThink;
+    }
 
     return bolt;
 }

@@ -693,8 +693,8 @@ const char* BuildShaderStateConfig(void);
 //
 qboolean CanDamage(gentity_t* targ, vec3_t origin);
 void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t dir, vec3_t point, int damage, int dflags, int mod);
-qboolean G_RadiusDamage(vec3_t origin, gentity_t* inflictor, gentity_t* attacker, float damage, float radius, gentity_t* ignore, int dflags, int mod);
-qboolean G_RadiusDamageThrough(vec3_t origin, gentity_t* inflictor, gentity_t* attacker, float damage, float radius, gentity_t* ignore, int dflags, int mod);
+qboolean G_RadiusDamage(vec3_t origin, const vec3_t dir, const trace_t* trace, gentity_t* missile, gentity_t* ignore);
+qboolean G_RadiusDamageThrough(vec3_t origin, const vec3_t dir, const trace_t* trace, vec3_t throughOrigin, gentity_t* missile, gentity_t* ignore);
 qboolean G_WaterRadiusDamage(vec3_t origin, gentity_t *attacker, float damage, float radius);
 int G_InvulnerabilityEffect(gentity_t* targ, vec3_t dir, vec3_t point, vec3_t impactpoint, vec3_t bouncedir);
 void body_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int damage, int meansOfDeath);
