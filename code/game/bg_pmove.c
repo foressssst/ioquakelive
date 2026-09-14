@@ -338,8 +338,8 @@ static void PM_Friction(void) {
         drop += speed * pm_spectatorfriction * pml.frametime;
     }
 
-    // [QL] reduce friction when frozen or in scoreboard
-    if (pm->ps->pm_type == PM_FREEZE || (pm->ps->pm_flags & PMF_SCOREBOARD)) {
+    // [QL] a quarter of the friction when frozen or held by a hook (qagamex86.dll 0x1002de65)
+    if (pm->ps->pm_type == PM_FREEZE || (pm->ps->pm_flags & PMF_HOOKED)) {
         drop *= 0.25f;
     }
 

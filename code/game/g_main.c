@@ -3851,6 +3851,12 @@ void G_RunFrame(int levelTime) {
             continue;
         }
 
+        // [QL] 0x100597de: a hook that has latched on runs every frame
+        if (ent->s.eType == ET_GRAPPLE) {
+            Weapon_HookThink(ent);
+            continue;
+        }
+
         if (ent->s.eType == ET_ITEM || ent->physicsObject) {
             G_RunItem(ent);
             continue;
