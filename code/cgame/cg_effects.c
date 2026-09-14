@@ -257,52 +257,6 @@ void CG_SpawnEffect(vec3_t org) {
 
 /*
 ==================
-CG_FreezeEffect
-
-[QL] Ice-crystal overlay on a frozen freeze-tag player.
-leType LE_FREEZE (rendered by CG_AddScaleFade), RT_MODEL freeze model, colour
-all 1.0, 10-second lifetime. Plays the freeze sound on CHAN_BODY at origin.
-
-Axis: the binary calls AngleVectors on a zeroed angle vector (so forward =
-(1,0,0)) and writes only axis[1] = cg.refdef.vieworg - forward; axis[0]/axis[2]
-stay zeroed from the CG_AllocLocalEntity memset.
-// Address: 0x10013920
-==================
-*/
-void CG_FreezeEffect(vec3_t origin) {
-    localEntity_t* le;
-    refEntity_t* re;
-    vec3_t zeroAngles, forward, right, up;
-
-    le = CG_AllocLocalEntity();
-    le->leType = LE_FREEZE;  // 0xc in binary
-    le->leFlags = 0;
-    le->startTime = cg.time;
-    le->endTime = cg.time + 10000;
-    le->color[0] = le->color[1] = le->color[2] = le->color[3] = 1.0;
-    le->lifeRate = 1.0 / (le->endTime - le->startTime);
-
-    re = &le->refEntity;
-
-    re->reType = RT_MODEL;
-    re->shaderTime = cg.time / 1000.0f;
-    re->hModel = cgs.media.freezeModel;
-
-    VectorCopy(origin, re->origin);
-
-    // binary: AngleVectors of a zero angle vector -> forward = (1,0,0),
-    // then axis[1] = cg.refdef.vieworg - forward
-    VectorClear(zeroAngles);
-    AngleVectors(zeroAngles, forward, right, up);
-    re->axis[1][0] = cg.refdef.vieworg[0] - forward[0];
-    re->axis[1][1] = cg.refdef.vieworg[1] - forward[1];
-    re->axis[1][2] = cg.refdef.vieworg[2] - forward[2];
-
-    trap_S_StartSound(origin, ENTITYNUM_NONE, CHAN_BODY, cgs.media.freezeSound);
-}
-
-/*
-==================
 CG_SpawnIceShard
 
 [QL] Launches a single ice-shard fragment (same shape as CG_LaunchGib):
@@ -557,6 +511,9 @@ void CG_InvulnerabilityImpact(vec3_t org, vec3_t angles) {
 /*
 ==================
 CG_InvulnerabilityJuiced
+
+[QL] cgamex86.dll 0x10013920, unchanged from Team Arena; the model and the sound are the
+gore pack's dlc_gibs/juicer.md3 and invul_juiced.ogg. EV_JUICED calls it when the pack is loaded.
 ==================
 */
 void CG_InvulnerabilityJuiced(vec3_t org) {

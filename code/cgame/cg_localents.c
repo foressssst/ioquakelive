@@ -981,10 +981,6 @@ void CG_AddLocalEntities(void) {
             case LE_SHOWREFENTITY:
                 CG_AddRefEntity(le);
                 break;
-
-            case LE_FREEZE:  // [QL] freeze-tag ice overlay, binary switch case 0xc -> CG_AddScaleFade
-                CG_AddScaleFade(le);
-                break;
         }
     }
 }

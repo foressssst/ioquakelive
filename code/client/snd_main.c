@@ -30,9 +30,15 @@ cvar_t* s_volume;
 cvar_t* s_muted;
 cvar_t* s_musicVolume;
 cvar_t* s_doppler;
-cvar_t* s_backend;
-cvar_t* s_muteWhenMinimized;
-cvar_t* s_muteWhenUnfocused;
+cvar_t* s_announcerVolume;
+cvar_t* s_voiceVolume;
+cvar_t* s_voiceStep;
+cvar_t* s_muteBackground;
+
+extern cvar_t* s_mixahead;
+extern cvar_t* s_mixPreStep;
+extern cvar_t* s_pvs;
+extern cvar_t* s_show;
 
 static soundInterface_t si;
 
@@ -234,21 +240,17 @@ void S_UpdateEntityPosition(int entityNum, const vec3_t origin) {
 /*
 =================
 S_Update
+
+[QL] quakelive_steam.exe creates its DirectSound buffer without global focus unless
+s_muteBackground is 0, so the game goes silent while its window is not the active one.
 =================
 */
 void S_Update(void) {
-    if (s_muted->integer) {
-        if (!(s_muteWhenMinimized->integer && com_minimized->integer) &&
-            !(s_muteWhenUnfocused->integer && com_unfocused->integer)) {
-            s_muted->integer = qfalse;
-            s_muted->modified = qtrue;
-        }
-    } else {
-        if ((s_muteWhenMinimized->integer && com_minimized->integer) ||
-            (s_muteWhenUnfocused->integer && com_unfocused->integer)) {
-            s_muted->integer = qtrue;
-            s_muted->modified = qtrue;
-        }
+    qboolean background = s_muteBackground->integer && (com_unfocused->integer || com_minimized->integer);
+
+    if (s_muted->integer != background) {
+        s_muted->integer = background;
+        s_muted->modified = qtrue;
     }
 
     if (si.Update) {
@@ -327,27 +329,27 @@ void S_SoundList(void) {
 /*
 =================
 S_Play_f
+
+[QL] quakelive_steam.exe 0x4db710. A name without an extension gets ".wav" added, built from
+the first argument whatever its position, as Quake III did.
 =================
 */
 void S_Play_f(void) {
     int i;
-    int c;
     sfxHandle_t h;
+    char name[256];
 
     if (!si.RegisterSound || !si.StartLocalSound) {
         return;
     }
 
-    c = Cmd_Argc();
-
-    if (c < 2) {
-        Com_Printf("Usage: play <sound filename> [sound filename] [sound filename] ...\n");
-        return;
-    }
-
-    for (i = 1; i < c; i++) {
-        h = si.RegisterSound(Cmd_Argv(i), qfalse);
-
+    for (i = 1; i < Cmd_Argc(); i++) {
+        if (!strrchr(Cmd_Argv(i), '.')) {
+            Com_sprintf(name, sizeof(name), "%s.wav", Cmd_Argv(1));
+        } else {
+            Q_strncpyz(name, Cmd_Argv(i), sizeof(name));
+        }
+        h = si.RegisterSound(name, qfalse);
         if (h) {
             si.StartLocalSound(h, CHAN_LOCAL_SOUND);
         }
@@ -357,6 +359,8 @@ void S_Play_f(void) {
 /*
 =================
 S_Music_f
+
+[QL] quakelive_steam.exe 0x4db810. With one argument the track plays once.
 =================
 */
 void S_Music_f(void) {
@@ -369,25 +373,13 @@ void S_Music_f(void) {
     c = Cmd_Argc();
 
     if (c == 2) {
-        si.StartBackgroundTrack(Cmd_Argv(1), NULL);
+        si.StartBackgroundTrack(Cmd_Argv(1), Cmd_Argv(1));
+        S_Base_ClearBackgroundLoop();
     } else if (c == 3) {
         si.StartBackgroundTrack(Cmd_Argv(1), Cmd_Argv(2));
     } else {
-        Com_Printf("Usage: music <musicfile> [loopfile]\n");
-        return;
+        Com_Printf("music <musicfile> [loopfile]\n");
     }
-}
-
-/*
-=================
-S_Music_f
-=================
-*/
-void S_StopMusic_f(void) {
-    if (!si.StopBackgroundTrack)
-        return;
-
-    si.StopBackgroundTrack();
 }
 
 //=============================================================================
@@ -399,56 +391,56 @@ S_Init
 */
 void S_Init(void) {
     cvar_t* cv;
-    qboolean started = qfalse;
 
-    Com_Printf("------ Initializing Sound ------\n");
+    // [QL] quakelive_steam.exe 0x4db870: every sound cvar exists even with sound disabled,
+    // and the software mixer is the only one
+    Com_Printf("\n------- sound initialization -------\n");
 
-    s_volume = Cvar_Get("s_volume", "0.8", CVAR_ARCHIVE);
-    s_musicVolume = Cvar_Get("s_musicvolume", "0.25", CVAR_ARCHIVE);
-    s_muted = Cvar_Get("s_muted", "0", CVAR_ROM);
-    s_doppler = Cvar_Get("s_doppler", "1", CVAR_ARCHIVE);
-    s_backend = Cvar_Get("s_backend", "", CVAR_ROM);
-    s_muteWhenMinimized = Cvar_Get("s_muteWhenMinimized", "0", CVAR_ARCHIVE);
-    s_muteWhenUnfocused = Cvar_Get("s_muteWhenUnfocused", "0", CVAR_ARCHIVE);
-
+    s_announcerVolume = Cvar_Get("s_announcerVolume", "1.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    Cvar_CheckRange(s_announcerVolume, 0.0f, 2.0f, qfalse);
+    s_doppler = Cvar_Get("s_doppler", "0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     cv = Cvar_Get("s_initsound", "1", 0);
+    s_mixahead = Cvar_Get("s_mixahead", "0.140", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    s_mixPreStep = Cvar_Get("s_mixPreStep", "0.05", CVAR_ARCHIVE | CVAR_REPLICATE);
+    s_musicVolume = Cvar_Get("s_musicvolume", "0.5", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    Cvar_CheckRange(s_musicVolume, 0.0f, 2.0f, qfalse);
+    s_pvs = Cvar_Get("s_pvs", "0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    Cvar_CheckRange(s_pvs, 0, 1, qtrue);
+    s_voiceVolume = Cvar_Get("s_voiceVolume", "1.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    Cvar_CheckRange(s_voiceVolume, 0.0f, 2.0f, qfalse);
+    s_voiceStep = Cvar_Get("s_voiceStep", "0.02", CVAR_ARCHIVE | CVAR_REPLICATE);
+    s_show = Cvar_Get("s_show", "0", CVAR_CHEAT);
+    s_testsound = Cvar_Get("s_testsound", "0", CVAR_CHEAT);
+    s_volume = Cvar_Get("s_volume", "0.8", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    Cvar_CheckRange(s_volume, 0.0f, 2.0f, qfalse);
+    s_muteBackground = Cvar_Get("s_muteBackground", "1", CVAR_ARCHIVE | CVAR_LATCH);
+    s_muted = Cvar_Get("s_muted", "0", CVAR_ROM);
+
     if (!cv->integer) {
-        Com_Printf("Sound disabled.\n");
-    } else {
-        S_CodecInit();
-
-        Cmd_AddCommand("play", S_Play_f);
-        Cmd_AddCommand("music", S_Music_f);
-        Cmd_AddCommand("stopmusic", S_StopMusic_f);
-        Cmd_AddCommand("s_list", S_SoundList);
-        Cmd_AddCommand("s_stop", S_StopAllSounds);
-        Cmd_AddCommand("s_info", S_SoundInfo);
-
-        cv = Cvar_Get("s_useOpenAL", "1", CVAR_ARCHIVE | CVAR_LATCH);
-        if (cv->integer) {
-            // OpenAL
-            started = S_AL_Init(&si);
-            Cvar_Set("s_backend", "OpenAL");
-        }
-
-        if (!started) {
-            started = S_Base_Init(&si);
-            Cvar_Set("s_backend", "base");
-        }
-
-        if (started) {
-            if (!S_ValidSoundInterface(&si)) {
-                Com_Error(ERR_FATAL, "Sound interface invalid");
-            }
-
-            S_SoundInfo();
-            Com_Printf("Sound initialization successful.\n");
-        } else {
-            Com_Printf("Sound initialization failed.\n");
-        }
+        Com_Printf("not initializing.\n");
+        Com_Printf("------------------------------------\n");
+        return;
     }
 
-    Com_Printf("--------------------------------\n");
+    S_CodecInit();
+
+    Cmd_AddCommand("play", S_Play_f);
+    Cmd_AddCommand("music", S_Music_f);
+    Cmd_AddCommand("s_list", S_SoundList);
+    Cmd_AddCommand("s_info", S_SoundInfo);
+    Cmd_AddCommand("s_stop", S_StopAllSounds);
+
+    if (!S_Base_Init(&si)) {
+        Com_Printf("------------------------------------\n");
+        return;
+    }
+    Com_Printf("------------------------------------\n");
+
+    if (!S_ValidSoundInterface(&si)) {
+        Com_Error(ERR_FATAL, "Sound interface invalid");
+    }
+
+    S_SoundInfo();
 }
 
 /*
@@ -465,7 +457,6 @@ void S_Shutdown(void) {
 
     Cmd_RemoveCommand("play");
     Cmd_RemoveCommand("music");
-    Cmd_RemoveCommand("stopmusic");
     Cmd_RemoveCommand("s_list");
     Cmd_RemoveCommand("s_stop");
     Cmd_RemoveCommand("s_info");

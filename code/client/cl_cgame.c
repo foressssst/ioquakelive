@@ -546,6 +546,11 @@ intptr_t CL_CgameSystemCalls(intptr_t* args) {
         case CG_S_STARTLOCALSOUNDVOLUME:
             S_StartLocalSoundVolume(args[1], args[2], VMF(3));
             return 0;
+        case CG_FS_GETFILELIST:
+            return FS_GetFileList(VMA(1), VMA(2), VMA(3), args[4]);
+        case CG_S_CLEARSOUNDBUFFER:
+            S_ClearSoundBuffer();
+            return 0;
         case CG_R_CLEARSCENE:
             re.ClearScene();
             return 0;

@@ -27,33 +27,25 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define PAINTBUFFER_SIZE 8192  // this is in samples
 
-#define SND_CHUNK_SIZE 2048                        // samples
-#define SND_CHUNK_SIZE_FLOAT (SND_CHUNK_SIZE / 2)  // floats
-#define SND_CHUNK_SIZE_BYTE (SND_CHUNK_SIZE * 2)   // floats
+#define SND_CHUNK_SIZE 2048  // samples
 
 typedef struct {
     int left;  // the final values will be clamped to +/- 0x00ffff00 and shifted down
     int right;
 } portable_samplepair_t;
 
-typedef struct adpcm_state {
-    short sample; /* Previous output value */
-    char index;   /* Index into stepsize table */
-} adpcm_state_t;
-
+// [QL] quakelive_steam.exe keeps every sound as plain 16-bit samples: its sfx_t has no
+// compression fields and nothing in the mixer decodes ADPCM, wavelet or mu-law
 typedef struct sndBuffer_s {
     short sndChunk[SND_CHUNK_SIZE];
     struct sndBuffer_s* next;
     int size;
-    adpcm_state_t adpcm;
 } sndBuffer;
 
 typedef struct sfx_s {
     sndBuffer* soundData;
-    qboolean defaultSound;     // couldn't be loaded, so use buzz
-    qboolean inMemory;         // not in Memory
-    qboolean soundCompressed;  // not in Memory
-    int soundCompressionMethod;
+    qboolean defaultSound;  // couldn't be loaded, so use buzz
+    qboolean inMemory;      // not in Memory
     int soundLength;
     int soundChannels;
     char soundName[MAX_QPATH];
@@ -74,39 +66,36 @@ typedef struct {
 
 #define START_SAMPLE_IMMEDIATE 0x7fffffff
 
-#define MAX_DOPPLER_SCALE 50.0f  // arbitrary
-
-#define THIRD_PERSON_THRESHOLD_SQ (48.0f * 48.0f)
-
+// [QL] one looping sound per entity, re-added every frame; there is no "kill" flag and no
+// separate real (sphere) looping sound in retail
 typedef struct loopSound_s {
     vec3_t origin;
-    vec3_t velocity;
     sfx_t* sfx;
     int mergeFrame;
     qboolean active;
-    qboolean kill;
+    int framenum;
+    vec3_t velocity;
     qboolean doppler;
     float dopplerScale;
     float oldDopplerScale;
-    int framenum;
 } loopSound_t;
 
+// [QL] retail's channel carries no master volume: the start volume goes straight into
+// leftvol/rightvol and every respatialize works from 127
 typedef struct
 {
     int allocTime;
-    int startSample;  // START_SAMPLE_IMMEDIATE = set immediately on next mix
-    int entnum;       // to allow overriding a specific sound
-    int entchannel;   // to allow overriding a specific sound
-    int leftvol;      // 0-255 volume after spatialization
-    int rightvol;     // 0-255 volume after spatialization
-    int master_vol;   // 0-255 volume before spatialization
-    float dopplerScale;
-    float oldDopplerScale;
+    int startSample;        // START_SAMPLE_IMMEDIATE = set immediately on next mix
+    int entnum;             // to allow overriding a specific sound
+    int entchannel;         // to allow overriding a specific sound
+    int leftvol;            // 0-255 volume after spatialization
+    int rightvol;           // 0-255 volume after spatialization
     vec3_t origin;          // only use if fixed_origin is set
     qboolean fixed_origin;  // use origin instead of fetching entnum's origin
     sfx_t* thesfx;          // sfx structure
     qboolean doppler;
-    qboolean fullVolume;
+    float dopplerScale;
+    float oldDopplerScale;
 } channel_t;
 
 #define WAV_FORMAT_PCM 1
@@ -204,44 +193,7 @@ void S_PaintChannels(int endtime);
 
 void S_memoryLoad(sfx_t* sfx);
 
-// spatializes a channel
-void S_Spatialize(channel_t* ch);
-
-// adpcm functions
-int S_AdpcmMemoryNeeded(const wavinfo_t* info);
-void S_AdpcmEncodeSound(sfx_t* sfx, short* samples);
-void S_AdpcmGetSamples(sndBuffer* chunk, short* to);
-
-// wavelet function
-
-#define SENTINEL_MULAW_ZERO_RUN 127
-#define SENTINEL_MULAW_FOUR_BIT_RUN 126
-
 void S_FreeOldestSound(void);
 
-#define NXStream byte
-
-void encodeWavelet(sfx_t* sfx, short* packets);
-void decodeWavelet(sndBuffer* stream, short* packets);
-
-void encodeMuLaw(sfx_t* sfx, short* packets);
-extern short mulawToShort[256];
-
-extern short* sfxScratchBuffer;
-extern sfx_t* sfxScratchPointer;
-extern int sfxScratchIndex;
-
 qboolean S_Base_Init(soundInterface_t* si);
-
-// OpenAL stuff
-typedef enum {
-    SRCPRI_AMBIENT = 0,  // Ambient sound effects
-    SRCPRI_ENTITY,       // Entity sound effects
-    SRCPRI_ONESHOT,      // One-shot sounds
-    SRCPRI_LOCAL,        // Local sounds
-    SRCPRI_STREAM        // Streams (music, cutscenes)
-} alSrcPriority_t;
-
-typedef int srcHandle_t;
-
-qboolean S_AL_Init(soundInterface_t* si);
+void S_Base_ClearBackgroundLoop(void);

@@ -209,8 +209,7 @@ typedef enum {
     LE_KAMIKAZE,
     LE_INVULIMPACT,
     LE_INVULJUICED,
-    LE_SHOWREFENTITY,
-    LE_FREEZE  // [QL] freeze-tag ice effect (set by CG_FreezeEffect). leType is cgame-internal (never serialised) so value is free.
+    LE_SHOWREFENTITY
 } leType_t;
 
 typedef enum {
@@ -587,7 +586,8 @@ typedef struct {
 } skulltrail_t;
 
 #define MAX_REWARDSTACK 16  // [QL] 0x10043570 pushes while rewardStack < 15
-#define MAX_SOUNDBUFFER 40
+#define MAX_SOUNDBUFFER 32  // [QL] 0x1004e110 wraps the announcer queue at 32
+#define SOUNDBUFFER_DELAY 1500  // [QL] 0x1004e130: what each announcement holds back the next one
 
 // [QL] a chat line; the newest one and the ring of older ones share this layout
 #define CHAT_LINE_TEXT 256
@@ -598,9 +598,6 @@ typedef struct {
     int fadeTime;  // [CPMA] start of its fade envelope: startTime, less a skipped fade-in
     char text[CHAT_LINE_TEXT];
 } chatLine_t;
-
-// [QL] announcer sound ring buffer (replaces Q3's single cg.rewardSound[])
-#define MAX_ANNOUNCER_QUEUE 32
 
 // [QL] voice chat
 #define MAX_VOICEFILES 8         // parsed voice-file slots searched by CG_ParseVoiceChats
@@ -790,11 +787,15 @@ typedef struct {
     qhandle_t rewardShader[MAX_REWARDSTACK];
     qhandle_t rewardSound[MAX_REWARDSTACK];
 
-    // sound buffer mainly for announcer sounds
+    // [QL] announcer queue, 0x10ab8db4-0x10ab8f3c. An entry plays at soundBufferTime and sets
+    // the time of the entry after it to its own delay from then.
     int soundBufferIn;
     int soundBufferOut;
-    int soundTime;
-    qhandle_t soundBuffer[MAX_SOUNDBUFFER];
+    int soundBufferTime[MAX_SOUNDBUFFER];
+    sfxHandle_t soundBuffer[MAX_SOUNDBUFFER];
+    int soundBufferDelay[MAX_SOUNDBUFFER];
+    qboolean soundBufferLocked;  // [QL] 0x10ab8f3c: the match result was announced, nothing more queues
+    int joinMenuCloseTime;       // [QL] 0x10a9c9b0: when CG_CloseMenus last ran
 
     // for voice chat buffer
     int voiceChatTime;
@@ -970,16 +971,6 @@ typedef struct {
     chatLine_t chatLines[MAX_CHAT_LINES];
     chatLine_t currentChatLine;
     int chatIndex;
-
-    // [QL] announcer sound ring buffer (replaces Q3's single cg.rewardSound[]).
-    // CG_QueueAnnouncement enqueues (delay 0x5dc=1500ms); CG_PlayBufferedVoiceChats/reward path drains.
-    // Globals: queue 0x10ab8e3c, delay 0x10ab8ebc, startTime 0x10ab8dbc, in 0x10ab8db4, out 0x10ab8db8, suppress 0x10ab8f3c.
-    sfxHandle_t announcerQueue[MAX_ANNOUNCER_QUEUE];
-    int         announcerDelay[MAX_ANNOUNCER_QUEUE];
-    int         announcerStartTime[MAX_ANNOUNCER_QUEUE];
-    int         announcerQueueIn;
-    int         announcerQueueOut;
-    int         announcerSuppress;
 
     // [QL] scrolling-notify (spectator list) queue for CG_DrawScrollingNotify.
     // Binary: 0x40-byte string stride (DAT_10aa69b4), count (DAT_10ab69b4),
@@ -1218,23 +1209,167 @@ typedef struct {
     qhandle_t medalRampage;
     qhandle_t medalRevenge;
 
-    // sounds
-    sfxHandle_t quadSound;
+    // [QL] sounds, in the order cgamex86.dll's CG_RegisterSounds (0x10020e70) loads them.
+    // "vo" marks the announcer voices under sound/vo, vo_evil or vo_female.
+    sfxHandle_t voDefaultSound;  // the three announcer samples
+    sfxHandle_t voEvilSound;
+    sfxHandle_t voFemaleSound;
+    sfxHandle_t oneMinuteSound;  // vo
+    sfxHandle_t fiveMinuteSound;
+    sfxHandle_t suddenDeathSound;
+    sfxHandle_t overtimeVoSound;
+    sfxHandle_t oneFragSound;
+    sfxHandle_t twoFragSound;
+    sfxHandle_t threeFragSound;
+    sfxHandle_t count3Sound;
+    sfxHandle_t count2Sound;
+    sfxHandle_t count1Sound;
+    sfxHandle_t countFightSound;
+    sfxHandle_t countPrepareSound;
+    sfxHandle_t klaxon1Sound;
+    sfxHandle_t klaxon2Sound;
+    sfxHandle_t buzzerSound;
+    sfxHandle_t doorGoldSound;
+    sfxHandle_t doorSilverSound;
+
+    sfxHandle_t goSound;  // race: vo
+    sfxHandle_t newHighScoreSound;
+
+    sfxHandle_t hitTeamSound;  // team modes
+    sfxHandle_t returnYourTeamSound;
+    sfxHandle_t returnOpponentSound;
+    sfxHandle_t countPrepareTeamSound;  // vo
+    sfxHandle_t redLeadsSound;
+    sfxHandle_t blueLeadsSound;
+    sfxHandle_t teamsTiedSound;
+    sfxHandle_t redScoredSound;
+    sfxHandle_t blueScoredSound;
+    sfxHandle_t yourTeamScoredSound;
+    sfxHandle_t enemyScoredSound;
+    sfxHandle_t blueWinsSound;
+    sfxHandle_t redWinsSound;
+
+    sfxHandle_t thirtySecondWarningSound;  // round modes: vo
+    sfxHandle_t roundBeginsInSound;
+    sfxHandle_t redWinsRoundSound;
+    sfxHandle_t blueWinsRoundSound;
+    sfxHandle_t roundDrawSound;
+    sfxHandle_t roundOverSound;
+    sfxHandle_t survivorSound;
+    sfxHandle_t lastStandingSound;  // vo
+
+    sfxHandle_t captureAwardSound;  // flag and point modes
+    sfxHandle_t captureYourTeamSound;
+    sfxHandle_t captureOpponentSound;
+    sfxHandle_t takenYourTeamSound;
+    sfxHandle_t takenOpponentSound;
+    sfxHandle_t pointNeutralizedSound;  // domination
+    sfxHandle_t pointHumSound;
+    sfxHandle_t pointCapturedSounds[6];  // by point, 1-5 are vo a-e
+    sfxHandle_t pointLostSounds[6];
+    sfxHandle_t blueFlagTakenSound;  // CTF and A&D: vo
+    sfxHandle_t blueFlagReturnedSound;
+    sfxHandle_t redFlagTakenSound;
+    sfxHandle_t redFlagReturnedSound;
+    sfxHandle_t yourFlagReturnedSound;
+    sfxHandle_t enemyFlagReturnedSound;
+    sfxHandle_t enemyTookYourFlagSound;
+    sfxHandle_t yourTeamTookEnemyFlagSound;
+    sfxHandle_t enemyTookTheFlagSound;
+    sfxHandle_t yourTeamTookTheFlagSound;
+    sfxHandle_t youHaveFlagSound;  // one flag, CTF and A&D: vo
+    sfxHandle_t holyShitSound;
+    sfxHandle_t obeliskHitSound1;  // overload
+    sfxHandle_t obeliskHitSound2;
+    sfxHandle_t obeliskHitSound3;
+    sfxHandle_t obeliskRespawnSound;
+    sfxHandle_t yourBaseIsUnderAttackSound;  // vo
+    sfxHandle_t attackTheFlagSound;  // A&D: vo
+    sfxHandle_t defendTheFlagSound;
+
+    sfxHandle_t biteSound;  // red rover: vo
+    sfxHandle_t infectedSound;
+    sfxHandle_t nightmareSound;
+    sfxHandle_t kamikazeRespawnSound;
+
     sfxHandle_t tracerSound;
     sfxHandle_t selectSound;
-    sfxHandle_t useNothingSound;
     sfxHandle_t wearOffSound;
+    sfxHandle_t useNothingSound;
+    // [QL] The no-gore gib set, and the gore pack's flesh sounds, which load only when the
+    // pack's dlc_gibs folder exists
+    sfxHandle_t electroGibSound[4];
+    sfxHandle_t electroGibBounceSound[5];
+    sfxHandle_t gibSound;
+    sfxHandle_t gibBounce1Sound;
+    sfxHandle_t gibBounce2Sound;
+    sfxHandle_t gibBounce3Sound;
+    sfxHandle_t invulnerabilityJuicedSound;
+    sfxHandle_t useInvulnerabilitySound;
+    sfxHandle_t invulnerabilityImpactSound1;
+    sfxHandle_t invulnerabilityImpactSound2;
+    sfxHandle_t invulnerabilityImpactSound3;
+    sfxHandle_t teleInSound;
+    sfxHandle_t teleOutSound;
+    sfxHandle_t respawnSound;
+    sfxHandle_t lowAmmoSound;
+    sfxHandle_t noAmmoSound;
+    sfxHandle_t talkSound;
+    sfxHandle_t landSound;
+    sfxHandle_t hitSounds[4];       // [QL] sound/feedback/hit0-3, by damage tier
+    sfxHandle_t killBeepSounds[8];  // [QL] cg_killBeep 1-8: impact1-6, bell_01, chaching
+    sfxHandle_t watrInSound;
+    sfxHandle_t watrOutSound;
+    sfxHandle_t watrUnSound;
+    sfxHandle_t jumpPadSound;
+
+    sfxHandle_t impressiveSounds[3];  // vo
+    sfxHandle_t excellentSounds[3];
+    sfxHandle_t deniedSound;
+    sfxHandle_t perfectSound;
+    sfxHandle_t humiliationSounds[3];
+    sfxHandle_t assistSound;
+    sfxHandle_t defendSound;
+    sfxHandle_t comboKillSounds[3];
+    sfxHandle_t rampageSounds[3];
+    sfxHandle_t midAirSounds[3];
+    sfxHandle_t revengeSounds[3];
+    sfxHandle_t firstFragSound;
+    sfxHandle_t perforatedSound;
+    sfxHandle_t firstImpressiveSound;
+    sfxHandle_t firstExcellentSound;
+    sfxHandle_t firstHumiliationSound;
+    sfxHandle_t headshotSound;
+    sfxHandle_t accuracySound;
+    sfxHandle_t quadGodSound;
+    sfxHandle_t takenLeadSound;
+    sfxHandle_t tiedLeadSound;
+    sfxHandle_t lostLeadSound;
+    sfxHandle_t voteNow;
+    sfxHandle_t votePassed;
+    sfxHandle_t voteFailed;
+    sfxHandle_t winnerSound;
+    sfxHandle_t loserSound;
+
     sfxHandle_t footsteps[FOOTSTEP_TOTAL][4];
-    sfxHandle_t sfx_lghit1;
-    sfxHandle_t sfx_lghit2;
-    sfxHandle_t sfx_lghit3;
+
+    sfxHandle_t battleSuitVoSound;  // powerup voices: vo
+    sfxHandle_t hasteVoSound;
+    sfxHandle_t invisibilityVoSound;
+    sfxHandle_t quadDamageVoSound;
+    sfxHandle_t regenerationVoSound;
+    sfxHandle_t armorRegenVoSound;
+    sfxHandle_t damageVoSound;
+    sfxHandle_t guardVoSound;
+    sfxHandle_t scoutVoSound;
+    sfxHandle_t flightSound;
+    sfxHandle_t medkitSound;
+    sfxHandle_t quadSound;
     sfxHandle_t sfx_ric1;
     sfxHandle_t sfx_ric2;
     sfxHandle_t sfx_ric3;
-    // sfxHandle_t	sfx_railg;
     sfxHandle_t sfx_rockexp;
     sfxHandle_t sfx_plasmaexp;
-
     sfxHandle_t sfx_proxexp;
     sfxHandle_t sfx_nghit;
     sfxHandle_t sfx_nghitflesh;
@@ -1242,122 +1377,29 @@ typedef struct {
     sfxHandle_t sfx_chghit;
     sfxHandle_t sfx_chghitflesh;
     sfxHandle_t sfx_chghitmetal;
+    sfxHandle_t chaingunWindSound;
+    sfxHandle_t weaponHoverSound;
+    sfxHandle_t grappleHitSound;
     sfxHandle_t kamikazeExplodeSound;
     sfxHandle_t kamikazeImplodeSound;
     sfxHandle_t kamikazeFarSound;
-    sfxHandle_t useInvulnerabilitySound;
-    sfxHandle_t invulnerabilityImpactSound1;
-    sfxHandle_t invulnerabilityImpactSound2;
-    sfxHandle_t invulnerabilityImpactSound3;
-    sfxHandle_t invulnerabilityJuicedSound;
-    sfxHandle_t obeliskHitSound1;
-    sfxHandle_t obeliskHitSound2;
-    sfxHandle_t obeliskHitSound3;
-    sfxHandle_t obeliskRespawnSound;
-    sfxHandle_t winnerSound;
-    sfxHandle_t loserSound;
-    sfxHandle_t newHighScoreSound;   // [QL] "new_high_score.ogg" (EV_NEW_HIGH_SCORE announce)
+    sfxHandle_t youSuckSound;
+    sfxHandle_t wstbimplSound;
+    sfxHandle_t wstbimpmSound;
+    sfxHandle_t wstbimpdSound;
+    sfxHandle_t wstbactvSound;
+    sfxHandle_t regenSound;
+    sfxHandle_t armorPickupSound;
+    sfxHandle_t protectSound;
+    sfxHandle_t n_healthSound;
+    sfxHandle_t hgrenb1aSound;
+    sfxHandle_t hgrenb2aSound;
+    sfxHandle_t timPumpSound;
 
-    sfxHandle_t gibSound;
-    sfxHandle_t gibBounce1Sound;
-    // [QL] The no-gore gib set. cgamex86.dll registers these from
-    // sound/misc/ at 0x1002198b and picks between them and the flesh
-    // sounds with the same `are the DLC models loaded` test the gib
-    // launcher uses (0x1001bf80).
-    sfxHandle_t electroGibSound[4];
-    sfxHandle_t electroGibBounceSound[5];
-    sfxHandle_t gibBounce2Sound;
-    sfxHandle_t gibBounce3Sound;
-    sfxHandle_t teleInSound;
-    sfxHandle_t teleOutSound;
-    sfxHandle_t noAmmoSound;
-    sfxHandle_t respawnSound;
-    sfxHandle_t talkSound;
-    sfxHandle_t landSound;
-    sfxHandle_t fallSound;
-    sfxHandle_t jumpPadSound;
-
-    sfxHandle_t oneMinuteSound;
-    sfxHandle_t fiveMinuteSound;
-    sfxHandle_t suddenDeathSound;
-
-    sfxHandle_t threeFragSound;
-    sfxHandle_t twoFragSound;
-    sfxHandle_t oneFragSound;
-
-    sfxHandle_t hitSounds[4];      // [QL] sound/feedback/hit0-3, by damage tier
-    sfxHandle_t killBeepSounds[8];  // [QL] cg_killBeep 1-8: impact1-6, bell_01, chaching
-    sfxHandle_t hitTeamSound;
-    sfxHandle_t impressiveSound;
-    sfxHandle_t excellentSound;
-    sfxHandle_t deniedSound;
-    sfxHandle_t humiliationSound;
-    sfxHandle_t assistSound;
-    sfxHandle_t defendSound;
-    sfxHandle_t firstImpressiveSound;
-    sfxHandle_t firstExcellentSound;
-    sfxHandle_t firstHumiliationSound;
-
-    sfxHandle_t takenLeadSound;
-    sfxHandle_t tiedLeadSound;
-    sfxHandle_t lostLeadSound;
-
-    sfxHandle_t voteNow;
-    sfxHandle_t votePassed;
-    sfxHandle_t voteFailed;
-
-    sfxHandle_t watrInSound;
-    sfxHandle_t watrOutSound;
-    sfxHandle_t watrUnSound;
-
-    sfxHandle_t flightSound;
-    sfxHandle_t medkitSound;
-
-    sfxHandle_t weaponHoverSound;
-
-    // teamplay sounds
-    sfxHandle_t captureAwardSound;
-    sfxHandle_t redScoredSound;
-    sfxHandle_t blueScoredSound;
-    sfxHandle_t redLeadsSound;
-    sfxHandle_t blueLeadsSound;
-    sfxHandle_t teamsTiedSound;
-
-    // [QL] match/round-win announcer VOs (GTS 14-18)
-    sfxHandle_t redWinsSound;
-    sfxHandle_t blueWinsSound;
-    sfxHandle_t redWinsRoundSound;
-    sfxHandle_t blueWinsRoundSound;
-    sfxHandle_t roundDrawSound;
-
-    sfxHandle_t captureYourTeamSound;
-    sfxHandle_t captureOpponentSound;
-    sfxHandle_t returnYourTeamSound;
-    sfxHandle_t returnOpponentSound;
-    sfxHandle_t takenYourTeamSound;
-    sfxHandle_t takenOpponentSound;
-
-    sfxHandle_t redFlagReturnedSound;
-    sfxHandle_t blueFlagReturnedSound;
-
-    sfxHandle_t neutralFlagReturnedSound;
-
-    sfxHandle_t enemyTookYourFlagSound;
-    sfxHandle_t yourTeamTookEnemyFlagSound;
-    sfxHandle_t youHaveFlagSound;
-
-    sfxHandle_t enemyTookTheFlagSound;
-    sfxHandle_t yourTeamTookTheFlagSound;
-    sfxHandle_t yourBaseIsUnderAttackSound;
-
-    sfxHandle_t holyShitSound;
-
-    // tournament sounds
-    sfxHandle_t count3Sound;
-    sfxHandle_t count2Sound;
-    sfxHandle_t count1Sound;
-    sfxHandle_t countFightSound;
-    sfxHandle_t countPrepareSound;
+    // [QL] registered by CG_RegisterWeapon for the lightning gun (0x10050fb1)
+    sfxHandle_t sfx_lghit1;
+    sfxHandle_t sfx_lghit2;
+    sfxHandle_t sfx_lghit3;
 
     // new stuff
     qhandle_t patrolShader;
@@ -1369,34 +1411,10 @@ typedef struct {
     qhandle_t retrieveShader;
     qhandle_t escortShader;
     qhandle_t flagShaders[3];
-    sfxHandle_t countPrepareTeamSound;
-
-    sfxHandle_t ammoregenSound;
-    sfxHandle_t doublerSound;
-    sfxHandle_t guardSound;
-    sfxHandle_t scoutSound;
 
     qhandle_t cursor;
     qhandle_t selectCursor;
     qhandle_t sizeCursor;
-
-    sfxHandle_t regenSound;
-    sfxHandle_t protectSound;
-    sfxHandle_t n_healthSound;
-    sfxHandle_t hgrenb1aSound;
-    sfxHandle_t hgrenb2aSound;
-    sfxHandle_t wstbimplSound;
-    sfxHandle_t wstbimpmSound;
-    sfxHandle_t wstbimpdSound;
-    sfxHandle_t wstbactvSound;
-
-    // [QL] additional sounds
-    sfxHandle_t armorRegenSound;
-    sfxHandle_t overtimeSound;
-    sfxHandle_t pauseSound;  // [QL] klaxon on pause start (CG_DrawTimeout)
-    sfxHandle_t thawTickSound;
-    sfxHandle_t raceFinishSound;
-    sfxHandle_t infectedSound;
 
     // [QL] Race checkpoint models and shaders (binary-verified)
     qhandle_t raceFlagB;          // models/flag3/b_flag3.md3 (blue)
@@ -1435,13 +1453,11 @@ typedef struct {
     qhandle_t friendlyPowerupOutlineShader[5];
     qhandle_t enemyPowerupOutlineShader[5];
 
-    // [QL] freeze-tag effect media (CG_PlayerFreezeEffect / CG_FreezeEffect / CG_ThawPlayer).
+    // [QL] freeze-tag effect media (CG_PlayerFreezeEffect / CG_ThawPlayer).
     // (frozenShader already declared above.)
     qhandle_t freezeShader;        // freeze overlay shader
-    qhandle_t freezeModel;         // freeze-tag ice model (RT_MODEL), global 0x10a5f740
     qhandle_t frozenFlagShader;    // frozen flag overlay
-    sfxHandle_t freezeSound;       // played on CHAN_BODY by CG_FreezeEffect, global 0x10a5f944
-    qhandle_t iceWhiteModel;       // ice shard model A, global 0x10a5f428 (first/odd shards)
+    qhandle_t iceWhiteModel;      // ice shard model A, global 0x10a5f428 (first/odd shards)
     qhandle_t iceBlueModel;        // ice shard model B, global 0x10a5f42c (alternate shards)
 
     // [QL] friend marker (CG_PlayerFloatSprite)
@@ -1451,10 +1467,6 @@ typedef struct {
     // [QL] wallbang / shotgun-kill debris
     qhandle_t debrisPuffShader;    // CG_MissileHitWall_DmgThrough debris
     qhandle_t bloodPuffShader;     // CG_ShotgunKillEffect / CG_ShotgunPellet blood puff
-
-    // [QL] global team-sound extras
-    sfxHandle_t survivorSound;     // sound/feedback/survivor_01.ogg, GTS_SURVIVOR (case 0x18)
-    sfxHandle_t lastStandingSound; // last_standing.ogg (DAT_10a5fab0), GTS_LAST_STANDING (case 0x13)
 
     // [QL] CTF flag-status HUD media (CG_DrawFlagStatus / CG_DrawFlagStatusBar).
     // flagStatusHandles indexed as [iconIndex + team*4] (icon 0=atbase,1=taken,2=dropped,3=neutral;
@@ -1628,6 +1640,9 @@ typedef struct {
     // [QL] pause auto-unpause / timein-countdown target (DAT_10a403e4, CS_PAUSE_END_TIME).
     // 0 = indefinite pause; non-zero = level.time the match resumes. Used by CG_DrawTimeout.
     int pauseEnd;
+    // [QL] DAT_10a403e8: the pause start the klaxon played for, then when the countdown
+    // voice last played
+    int pauseSoundTime;
 
     // [QL] practice-mode flag (CS_PRACTICE 667, DAT_10a3ff30); warmup / weapon-select HUD.
     int practice;
@@ -1678,6 +1693,10 @@ extern vmCvar_t cg_drawAmmoWarning;
 extern vmCvar_t cg_drawCrosshair;
 extern vmCvar_t cg_drawRewards;
 extern vmCvar_t cg_announcerRewardsVO;
+extern vmCvar_t cg_announcerLeadsVO;
+extern vmCvar_t cg_announcerTiesVO;
+extern vmCvar_t cg_announcerLastStandingVO;
+extern vmCvar_t cg_buzzerSound;
 extern vmCvar_t cg_flagStyle;
 extern vmCvar_t cg_drawTeamOverlay;
 extern vmCvar_t cg_drawItemPickups;       // [QL] 0x10a65a00: 1 icon, 2 name, 4 game clock
@@ -1853,12 +1872,18 @@ extern vmCvar_t cg_weaponBar;
 extern vmCvar_t cg_weaponPrimary;
 extern vmCvar_t cg_drawFullWeaponBar;
 extern vmCvar_t cg_lowAmmoWeaponBarWarning;
+extern vmCvar_t cg_lowAmmoWarningPercentile;
+extern vmCvar_t cg_lowAmmoWarningSound;
+extern vmCvar_t cg_raceBeep;
+extern vmCvar_t cg_useItemMessage;
+extern vmCvar_t cg_useItemWarning;
 extern vmCvar_t cg_obituaryRowSize;
 extern vmCvar_t s_announcerVolume;
 extern vmCvar_t s_killBeepVolume;
 
 // QL cvars (binary-verified from cgamex86.dll)
 extern vmCvar_t cg_chatbeep;
+extern vmCvar_t cg_teamChatBeep;
 extern vmCvar_t cg_deadBodyColor;
 extern vmCvar_t cg_deadBodyDarken;
 extern vmCvar_t g_training;  // [QL] server training flag; gates model forcing (CG_ResolveModelForClient)
@@ -1955,6 +1980,9 @@ void CG_TestModelPrevSkin_f(void);
 void CG_ZoomDown_f(void);
 void CG_ZoomUp_f(void);
 void CG_AddBufferedSound(sfxHandle_t sfx);
+void CG_ResetAnnouncements(void);
+void CG_PlayFightSound(void);
+void CG_PlayCountdownSound(int count);
 
 void CG_DrawAdvertisements(void);
 void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoPlayback);
@@ -2150,6 +2178,7 @@ void CG_DrawWeaponSelect(void);
 void CG_DrawWeaponBar(void);    // [QL] weapon bar (Left/Right/Centered/Classic modes)
 
 void CG_OutOfAmmoChange(void);  // should this be in pmove?
+void CG_DropWeaponChange(int dropped);
 
 //
 // cg_marks.c
@@ -2220,16 +2249,11 @@ void CG_UpdateFloatingEffects(void);             // [QL] binary "CG_UpdateConfig
 void CG_DrawFloatingEffects(void);               // [QL] binary "CG_DrawDamagePlums" @ 0x10011680
 
 // [QL] freeze-tag / discharge / blood client-side effects (triggered from CG_EntityEvent).
-void CG_FreezeEffect(vec3_t origin);
 void CG_ThawPlayer(const vec3_t origin);
 void CG_SpawnIceShard(const vec3_t origin, const vec3_t velocity, qhandle_t hModel);
 void CG_LightningDischargeEffect(int intensity);
 void CG_BloodSplat(vec3_t origin);      // EV_INVUL_IMPACT (0x46) handler
 void CG_PlayBloodSound(vec3_t origin);  // EV_OBELISKPAIN (0x45) handler
-
-// [QL] announcer sound ring buffer.
-void CG_QueueAnnouncement(sfxHandle_t sfx);
-void CG_ResetAnnouncements(void);
 
 void CG_GibPlayer(vec3_t playerOrigin, vec3_t dir);
 qhandle_t CG_ElectroGibSparkShader(vec4_t color);
@@ -2351,6 +2375,7 @@ void trap_Args(char* buffer, int bufferLength);
 // filesystem access
 // returns length of file
 int trap_FS_FOpenFile(const char* qpath, fileHandle_t* f, fsMode_t mode);
+int trap_FS_GetFileList(const char* path, const char* extension, char* listbuf, int bufsize);
 void trap_FS_Read(void* buffer, int len, fileHandle_t f);
 void trap_FS_Write(const void* buffer, int len, fileHandle_t f);
 void trap_FS_FCloseFile(fileHandle_t f);
@@ -2407,6 +2432,7 @@ void trap_S_Respatialize(int entityNum, const vec3_t origin, vec3_t axis[3], int
 sfxHandle_t trap_S_RegisterSound(const char* sample, qboolean compressed);  // returns buzz if not found
 void trap_S_StartBackgroundTrack(const char* intro, const char* loop);      // empty name stops music
 void trap_S_StopBackgroundTrack(void);
+void trap_S_ClearSoundBuffer(void);
 
 void trap_R_LoadWorldMap(const char* mapname);
 

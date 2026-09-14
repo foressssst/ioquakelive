@@ -2113,10 +2113,32 @@ The current weapon has just run out of ammo
 void CG_OutOfAmmoChange(void) {
     int i;
 
+    // [QL] 0x10053d50: starts at the last real weapon
     cg.weaponSelectTime = cg.time;
 
-    for (i = MAX_WEAPONS - 1; i > 0; i--) {
+    for (i = WP_NUM_WEAPONS - 1; i > 0; i--) {
         if (CG_WeaponSelectable(i)) {
+            cg.weaponSelect = i;
+            break;
+        }
+    }
+}
+
+/*
+===================
+CG_DropWeaponChange
+
+[QL] cgamex86.dll 0x10053d90. The same walk as CG_OutOfAmmoChange, skipping the weapon
+that was just dropped.
+===================
+*/
+void CG_DropWeaponChange(int dropped) {
+    int i;
+
+    cg.weaponSelectTime = cg.time;
+
+    for (i = WP_NUM_WEAPONS - 1; i > 0; i--) {
+        if (i != dropped && CG_WeaponSelectable(i)) {
             cg.weaponSelect = i;
             break;
         }
