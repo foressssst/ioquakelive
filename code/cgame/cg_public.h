@@ -55,7 +55,9 @@ enum {
     CGAME_EVENT_NONE,
     CGAME_EVENT_TEAMMENU,
     CGAME_EVENT_SCOREBOARD,
-    CGAME_EVENT_EDITHUD
+    CGAME_EVENT_EDITHUD,
+    CGAME_EVENT_4,       // [QL] cgamex86.dll 0x1003c643 recomputes the screen scale; not ported
+    CGAME_EVENT_ESCAPE   // [QL] 5, sent by the engine's Escape handler: hides the join menu
 };
 
 /*

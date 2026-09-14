@@ -1826,58 +1826,6 @@ PLAYER COUNTING / SCORE SORTING
 */
 
 /*
-=============
-AddTournamentPlayer
-
-If there are less than two tournament players, put a
-spectator in the game and restart
-=============
-*/
-void AddTournamentPlayer(void) {
-    int i;
-    gclient_t* client;
-    gclient_t* nextInLine;
-
-    if (level.numPlayingClients >= 2) {
-        return;
-    }
-
-    // never change during intermission
-    if (level.intermissionTime) {
-        return;
-    }
-
-    nextInLine = NULL;
-
-    for (i = 0; i < level.maxclients; i++) {
-        client = &level.clients[i];
-        if (client->pers.connected != CON_CONNECTED) {
-            continue;
-        }
-        if (client->sess.sessionTeam != TEAM_SPECTATOR) {
-            continue;
-        }
-        // never select the dedicated follow or scoreboard clients
-        if (client->sess.spectatorState == SPECTATOR_SCOREBOARD ||
-            client->sess.spectatorClient < 0) {
-            continue;
-        }
-
-        if (!nextInLine || client->sess.spectatorTime < nextInLine->sess.spectatorTime)
-            nextInLine = client;
-    }
-
-    if (!nextInLine) {
-        return;
-    }
-
-    level.warmupTime = -1;
-
-    // set them to free-for-all team
-    SetTeam(&g_entities[nextInLine - level.clients], "f");
-}
-
-/*
 =======================
 AddTournamentQueue
 

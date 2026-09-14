@@ -44,8 +44,8 @@ void G_WriteClientSessionData(gclient_t* client) {
     const char* var;
 
     // [QL] 13 fields. QL field order: weaponPrimary comes before
-    // wins/losses/teamLeader, and prevScore is appended. updatePlayQueue and
-    // joinTime are not serialised.
+    // wins/losses/teamLeader, and prevScore is appended. updatePlayQueue is not
+    // serialised.
     s = va("%i %ld %i %i %i %i %i %i %i %i %i %i %i",
            client->sess.sessionTeam,
            client->sess.spectatorTime,

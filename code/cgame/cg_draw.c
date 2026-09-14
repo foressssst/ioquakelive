@@ -2585,6 +2585,16 @@ void CG_UpdateJoinMenu(void) {
 		return;
 	}
 
+	// [QL] 0x1000e9d0: once Escape has hidden the menu (event 5) it stays down while the
+	// in-game menu keeps the game paused, and comes back when the pause ends
+	if (!cg_paused.integer) {
+		if (cgs.eventHandling == CGAME_EVENT_ESCAPE) {
+			cgs.eventHandling = CGAME_EVENT_NONE;
+		}
+	} else if (cgs.eventHandling == CGAME_EVENT_ESCAPE) {
+		return;
+	}
+
 	// [QL] 0x1000e9f2: open it on the first frame it is asked for, and take the
 	// key catcher so clicks reach CG_KeyEvent/CG_MouseEvent instead of the game.
 	if (!(menu->window.flags & WINDOW_VISIBLE)) {

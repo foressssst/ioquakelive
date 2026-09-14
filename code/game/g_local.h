@@ -255,7 +255,6 @@ typedef struct {
     qboolean updatePlayQueue; // [QL]
     int muted;             // [QL] chat mute flag
     int prevScore;         // [QL] previous score (for round tracking)
-    int joinTime;          // [QL] time() when bot joined (duel)
 } clientSession_t;
 
 //
@@ -854,7 +853,7 @@ qboolean G_ObfuscateEnemyInfoInSnapshotCheck(int clientNum1, int clientNum2);
 void CheckTournament(void);   // [QL] duel ready-start countdown (0x10058600)
 void AddDuelPlayer(void);     // [QL] .so symbol: AddDuelPlayer - queue fill (0x100557f0)
 void AddDuelScore(void);
-void AddTournamentPlayer(void);
+gclient_t *G_NextDuelPlayer(void);  // [QL] next in the duel play queue (0x10055710)
 
 // g_gametype_ctf.c - Capture The Flag
 void CTF_CheckTeamItems(void);

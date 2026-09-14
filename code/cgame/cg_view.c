@@ -1048,15 +1048,14 @@ void CG_AddPOIMarkers(void) {
 
 /*
 ==============
-CG_CloseMenus
+CG_HideJoinMenu
 
-[QL] Binary: cgamex86.dll 0x1000e880
-Closes the join menu and clears the CGAME keycatch flag. Reached from
-CG_Team_f once the player has picked a side, and from CG_UpdateJoinMenu as
-soon as the player stops being a spectator.
+[QL] cgamex86.dll 0x1000e930, event 5 of CG_EventHandling (the engine's Escape). The join
+menu comes down and cgame gives up the keys, but cg.showJoinMenu stays set, so
+CG_UpdateJoinMenu brings the menu back once the in-game menu Escape opened is closed.
 ==============
 */
-void CG_CloseMenus(void) {
+void CG_HideJoinMenu(void) {
     extern void Item_RunScript(itemDef_t *item, const char *s);
     menuDef_t *menu;
 
@@ -1078,8 +1077,22 @@ void CG_CloseMenus(void) {
     }
 
     trap_Key_SetCatcher(trap_Key_GetCatcher() & ~KEYCATCH_CGAME);
+}
+
+/*
+==============
+CG_CloseMenus
+
+[QL] Binary: cgamex86.dll 0x1000e880
+Closes the join menu for good: the same as CG_HideJoinMenu, and cg.showJoinMenu goes
+down too. Reached from CG_Team_f (0x100078d9) once the player has picked a side, and
+from CG_UpdateJoinMenu (0x1000ea29) as soon as the player stops being a spectator. Retail
+leaves cg.showScores alone.
+==============
+*/
+void CG_CloseMenus(void) {
+    CG_HideJoinMenu();
     cg.showJoinMenu = qfalse;
-    cg.showScores = qfalse;
 }
 
 //=========================================================================
