@@ -917,14 +917,20 @@ static int CG_CalcViewValues(void) {
 /*
 =====================
 CG_PowerupTimerSounds
+
+[QL] cgamex86.dll 0x1004e050: silent while the match is paused, and never for PW_NONE
 =====================
 */
 static void CG_PowerupTimerSounds(void) {
     int i;
     int t;
 
+    if (cgs.freezeEnd) {
+        return;
+    }
+
     // powerup timers going away
-    for (i = 0; i < MAX_POWERUPS; i++) {
+    for (i = 1; i < MAX_POWERUPS; i++) {
         t = cg.snap->ps.powerups[i];
         if (t <= cg.time) {
             continue;
@@ -941,12 +947,20 @@ static void CG_PowerupTimerSounds(void) {
 /*
 =====================
 CG_AddBufferedSound
+
+[QL] cgamex86.dll 0x1004e110. Once the match result has been announced nothing else
+queues. A new entry plays right away unless the one before it set a later time.
 =====================
 */
 void CG_AddBufferedSound(sfxHandle_t sfx) {
-    if (!sfx)
+    if (!sfx || cg.soundBufferLocked) {
         return;
+    }
     cg.soundBuffer[cg.soundBufferIn] = sfx;
+    cg.soundBufferDelay[cg.soundBufferIn] = SOUNDBUFFER_DELAY;
+    if (!cg.soundBufferTime[cg.soundBufferIn]) {
+        cg.soundBufferTime[cg.soundBufferIn] = cg.time;
+    }
     cg.soundBufferIn = (cg.soundBufferIn + 1) % MAX_SOUNDBUFFER;
     if (cg.soundBufferIn == cg.soundBufferOut) {
         cg.soundBufferOut++;
@@ -955,18 +969,55 @@ void CG_AddBufferedSound(sfxHandle_t sfx) {
 
 /*
 =====================
+CG_ResetAnnouncements
+
+[QL] cgamex86.dll 0x1004e180. Drops the pending medals and every queued announcement, but
+an announcement that just played still holds back the next one.
+=====================
+*/
+void CG_ResetAnnouncements(void) {
+    int pending = 0;
+
+    cg.rewardStack = 0;
+    cg.rewardTime = 0;
+    memset(cg.rewardCount, 0, sizeof(cg.rewardCount));
+    memset(cg.rewardShader, 0, sizeof(cg.rewardShader));
+    memset(cg.rewardSound, 0, sizeof(cg.rewardSound));
+
+    if (cg.soundBufferTime[cg.soundBufferOut] > cg.time) {
+        pending = cg.soundBufferTime[cg.soundBufferOut];
+    }
+    memset(cg.soundBuffer, 0, sizeof(cg.soundBuffer));
+    memset(cg.soundBufferDelay, 0, sizeof(cg.soundBufferDelay));
+    memset(cg.soundBufferTime, 0, sizeof(cg.soundBufferTime));
+    cg.soundBufferIn = 0;
+    cg.soundBufferOut = 0;
+    cg.soundBufferTime[0] = pending;
+}
+
+/*
+=====================
 CG_PlayBufferedSounds
+
+[QL] cgamex86.dll 0x1004e220. One announcement per frame at most, at s_announcerVolume; the
+next one waits for this one's delay.
 =====================
 */
 static void CG_PlayBufferedSounds(void) {
-    if (cg.soundTime < cg.time) {
-        if (cg.soundBufferOut != cg.soundBufferIn && cg.soundBuffer[cg.soundBufferOut]) {
-            trap_S_StartLocalSound(cg.soundBuffer[cg.soundBufferOut], CHAN_ANNOUNCER);
-            cg.soundBuffer[cg.soundBufferOut] = 0;
-            cg.soundBufferOut = (cg.soundBufferOut + 1) % MAX_SOUNDBUFFER;
-            cg.soundTime = cg.time + 750;
-        }
+    int out = cg.soundBufferOut;
+    int next;
+
+    if (cg.soundBufferTime[out] > cg.time || !cg.soundBuffer[out] || out == cg.soundBufferIn) {
+        return;
     }
+
+    next = (out + 1) % MAX_SOUNDBUFFER;
+    trap_S_StartLocalSoundVolume(cg.soundBuffer[out], CHAN_ANNOUNCER, s_announcerVolume.value);
+    cg.soundBufferTime[next] = cg.soundBufferDelay[out] + cg.time;
+    cg.soundBufferTime[out] = 0;
+    cg.soundBuffer[out] = 0;
+    cg.soundBufferDelay[out] = 0;
+    cg.soundBufferOut = next;
 }
 
 /*
@@ -1093,6 +1144,7 @@ leaves cg.showScores alone.
 void CG_CloseMenus(void) {
     CG_HideJoinMenu();
     cg.showJoinMenu = qfalse;
+    cg.joinMenuCloseTime = cg.time;
 }
 
 //=========================================================================
@@ -1218,8 +1270,6 @@ Generates and draws a game scene and status information at the given time.
 =================
 */
 void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoPlayback) {
-    int inwater;
-
     cg.time = serverTime;
     cg.demoPlayback = demoPlayback;
 
@@ -1292,7 +1342,7 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
     cg.renderingThirdPerson = cg.snap->ps.persistant[PERS_TEAM] != TEAM_SPECTATOR && (cg_thirdPerson.integer || (cg.snap->ps.stats[STAT_HEALTH] <= 0));
 
     // build cg.refdef
-    inwater = CG_CalcViewValues();
+    CG_CalcViewValues();
 
     // first person blend blobs, done after AnglesToAxis
     if (!cg.renderingThirdPerson) {
@@ -1328,7 +1378,9 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
     CG_CheckAutoFollow();
 
     // update audio positions
-    trap_S_Respatialize(cg.snap->ps.clientNum, cg.refdef.vieworg, cg.refdef.viewaxis, inwater);
+    // [QL] 0x1004e7c2 never reports the view as under water, so the local player's own sounds
+    // always keep their start volume
+    trap_S_Respatialize(cg.snap->ps.clientNum, cg.refdef.vieworg, cg.refdef.viewaxis, 0);
 
     // make sure the lagometerSample and frame timing isn't done twice when in stereo
     if (stereoView != STEREO_RIGHT) {
