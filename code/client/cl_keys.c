@@ -1376,11 +1376,10 @@ void CL_KeyDownEvent(int key, unsigned time) {
             return;
         }
 
-        // escape always gets out of CGAME stuff
+        // [QL] quakelive_steam.exe 0x4b7c0f: cgame gets event 5 and drops its own catcher
+        // (hiding the join menu), and Escape carries on to bring up the in-game menu
         if (Key_GetCatcher() & KEYCATCH_CGAME) {
-            Key_SetCatcher(Key_GetCatcher() & ~KEYCATCH_CGAME);
-            VM_Call(cgvm, CG_EVENT_HANDLING, CGAME_EVENT_NONE);
-            return;
+            VM_Call(cgvm, CG_EVENT_HANDLING, CGAME_EVENT_ESCAPE);
         }
 
         if (!(Key_GetCatcher() & KEYCATCH_UI)) {

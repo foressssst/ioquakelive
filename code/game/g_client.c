@@ -1034,11 +1034,13 @@ void ClientBegin(int clientNum) {
         break;
     }
 
-    // [QL] Duel bots: clear losses, set join time
+    // [QL] 0x1003b16e: a duel bot asks to play at once. It leaves spectate-only (gclient_t
+    // +0x36c) and takes a place in the play queue (+0x34c, spectatorTime) if it has none, so
+    // AddDuelPlayer pulls it in; human players do that through SetTeam
     if (g_gametype.integer == GT_DUEL && (ent->r.svFlags & SVF_BOT)) {
-        client->sess.losses = 0;
-        if (client->sess.joinTime == 0) {
-            client->sess.joinTime = (int)time(NULL);
+        client->sess.specOnly = 0;
+        if (client->sess.spectatorTime == 0) {
+            client->sess.spectatorTime = (int)time(NULL);
         }
         ClientUserinfoChanged(clientNum);
     }
