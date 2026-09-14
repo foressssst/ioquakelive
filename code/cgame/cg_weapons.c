@@ -1413,6 +1413,72 @@ static void CG_AddWeaponWithPowerups(refEntity_t* gun, int powerups) {
 
 /*
 =============
+CG_BrightWeapon
+
+[CPMA] cg_drawBrightWeapons draws a weapon as a flat silhouette of one colour, as CPMA 1.53 does by
+giving it the fullBright shader and a colour per weapon. The bits choose which weapons:
+   1  your own gun in first person
+   2  a teammate's (on red or blue, seen in first person)
+   4  anybody else's
+   8  the weapons lying on the map
+  16  anybody's while you spectate with the free camera
+The colours are those of Quake Live's weapon icons (icons/iconw_*, weap_hmg, nailgun128, proxmine and
+chaingun128 in pak00), which are flat glyphs of a single colour each.
+=============
+*/
+static const byte cg_brightWeaponColors[WP_NUM_WEAPONS][3] = {
+    { 255, 255, 255 },  // WP_NONE
+    { 0, 215, 255 },    // WP_GAUNTLET
+    { 255, 255, 0 },    // WP_MACHINEGUN
+    { 255, 125, 0 },    // WP_SHOTGUN
+    { 1, 143, 17 },     // WP_GRENADE_LAUNCHER
+    { 255, 0, 0 },      // WP_ROCKET_LAUNCHER
+    { 255, 255, 176 },  // WP_LIGHTNING
+    { 2, 232, 1 },      // WP_RAILGUN
+    { 196, 0, 255 },    // WP_PLASMAGUN
+    { 0, 90, 255 },     // WP_BFG
+    { 81, 170, 220 },   // WP_GRAPPLING_HOOK
+    { 3, 252, 178 },    // WP_NAILGUN
+    { 255, 0, 124 },    // WP_PROX_LAUNCHER
+    { 182, 182, 182 },  // WP_CHAINGUN
+    { 206, 165, 0 },    // WP_HMG
+};
+
+void CG_BrightWeapon(refEntity_t* ent, int weaponNum, int owner, brightWeapon_t kind) {
+    int bit, viewerTeam, ownerTeam;
+
+    if (!cg_drawBrightWeapons.integer || weaponNum <= WP_NONE || weaponNum >= WP_NUM_WEAPONS) {
+        return;
+    }
+
+    if (kind == BRIGHTWEAPON_ON_MAP) {
+        bit = 8;
+    } else if (kind == BRIGHTWEAPON_OWN_VIEW) {
+        bit = 1;
+    } else {
+        viewerTeam = cgs.clientinfo[cg.predictedPlayerState.clientNum].team;
+        ownerTeam = (owner >= 0 && owner < MAX_CLIENTS) ? cgs.clientinfo[owner].team : TEAM_FREE;
+        if (viewerTeam == TEAM_SPECTATOR) {
+            bit = 16;
+        } else if (ownerTeam == viewerTeam && (ownerTeam == TEAM_RED || ownerTeam == TEAM_BLUE)) {
+            bit = 2;
+        } else {
+            bit = 4;
+        }
+    }
+    if (!(cg_drawBrightWeapons.integer & bit)) {
+        return;
+    }
+
+    ent->customShader = cgs.media.brightWeaponShader;
+    ent->shaderRGBA[0] = cg_brightWeaponColors[weaponNum][0];
+    ent->shaderRGBA[1] = cg_brightWeaponColors[weaponNum][1];
+    ent->shaderRGBA[2] = cg_brightWeaponColors[weaponNum][2];
+    ent->shaderRGBA[3] = 255;
+}
+
+/*
+=============
 CG_AddPlayerWeapon
 
 Used for both the view weapon (ps is valid) and the world modelother character models (ps is NULL)
@@ -1500,6 +1566,7 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
     MatrixMultiply(lerped.axis, ((refEntity_t*)parent)->axis, gun.axis);
     gun.backlerp = parent->backlerp;
 
+    CG_BrightWeapon(&gun, weaponNum, cent->currentState.clientNum, ps ? BRIGHTWEAPON_OWN_VIEW : BRIGHTWEAPON_CARRIED);
     CG_AddWeaponWithPowerups(&gun, cent->currentState.powerups);
 
     // add the spinning barrel
@@ -1517,6 +1584,7 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
 
         CG_PositionRotatedEntityOnTag(&barrel, &gun, weapon->weaponModel, "tag_barrel");
 
+        CG_BrightWeapon(&barrel, weaponNum, cent->currentState.clientNum, ps ? BRIGHTWEAPON_OWN_VIEW : BRIGHTWEAPON_CARRIED);
         CG_AddWeaponWithPowerups(&barrel, cent->currentState.powerups);
     }
 
@@ -1532,6 +1600,7 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
         barrel.hModel = weapon->ammoModel;
         AnglesToAxis(angles, barrel.axis);
         CG_PositionRotatedEntityOnTag(&barrel, &gun, weapon->weaponModel, "tag_ammo");
+        CG_BrightWeapon(&barrel, weaponNum, cent->currentState.clientNum, ps ? BRIGHTWEAPON_OWN_VIEW : BRIGHTWEAPON_CARRIED);
         CG_AddWeaponWithPowerups(&barrel, cent->currentState.powerups);
     }
 
