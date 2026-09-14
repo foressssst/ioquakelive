@@ -265,7 +265,7 @@ typedef enum {
 #define PMF_USE_ITEM_HELD   0x0400   // [QL] use item button held
 #define PMF_GRAPPLE_PULL    0x0800   // pull towards grapple location
 #define PMF_FOLLOW          0x1000   // spectate following another player
-#define PMF_SCOREBOARD      0x2000   // spectate as a scoreboard
+#define PMF_HOOKED          0x2000   // [QL] held by a grappling hook: set at qagamex86.dll 0x1005bfff, cleared at 0x1006e3ec
 #define PMF_INVULEXPAND     0x4000   // invulnerability sphere set to full size
 #define PMF_TIME_GRAPPLE    0x8000   // [QL] one-frame weapon reset after grapple release
 #define PMF_PROMODE         0x10000  // [QL] CPM/PQL air control mode active

@@ -2995,8 +2995,10 @@ void CG_DrawActive(stereoFrame_t stereoView) {
 	}
 
 	// optionally draw the tournement scoreboard instead
+	// Quake 3's scoreboard spectator test. In Quake Live bit 0x2000 is PMF_HOOKED, which a
+	// spectator never has, so this does not run; not checked against retail's CG_DrawActive.
 	if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR &&
-		(cg.snap->ps.pm_flags & PMF_SCOREBOARD)) {
+		(cg.snap->ps.pm_flags & PMF_HOOKED)) {
 		CG_DrawTourneyScoreboard();
 		return;
 	}

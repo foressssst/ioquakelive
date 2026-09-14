@@ -481,8 +481,10 @@ void Weapon_RocketLauncher_Fire(gentity_t* ent) {
     gentity_t* m;
 
     m = fire_rocket(ent, muzzle, forward);
+    // [QL] 0x1006d9f0: G_Damage recomputes rocket splash and multiplies it by damageFactor
     m->damage *= s_quadFactor;
     m->splashDamage *= s_quadFactor;
+    m->damageFactor = (int)s_quadFactor;
 
     //	VectorAdd( m->s.pos.trDelta, ent->client->ps.velocity, m->s.pos.trDelta );	// "real" physics
 }
@@ -685,62 +687,112 @@ void Weapon_GrapplingHook_Fire(gentity_t* ent) {
     ent->client->fireHeld = qtrue;
 }
 
+/*
+================
+Weapon_HookFree
+
+[QL] qagamex86.dll 0x1006e330. A hook with no player behind it is left alone; the player it held
+gets its movement back.
+================
+*/
 void Weapon_HookFree(gentity_t* ent) {
-    if (ent->parent && ent->parent->client) {
-        ent->parent->client->hook = NULL;
-        VectorClear(ent->parent->client->ps.grapplePoint);
-        ent->parent->client->ps.pm_flags &= ~PMF_GRAPPLE_PULL;
-        ent->parent->client->ps.pm_flags |= PMF_TIME_GRAPPLE;
-        ent->parent->client->ps.eFlags &= ~EF_FIRING;
+    if (!ent->parent || !ent->parent->client) {
+        return;
+    }
+    ent->parent->client->hook = NULL;
+    VectorClear(ent->parent->client->ps.grapplePoint);
+    ent->parent->client->ps.pm_flags &= ~PMF_GRAPPLE_PULL;
+    ent->parent->client->ps.pm_flags |= PMF_TIME_GRAPPLE;
+    ent->parent->client->ps.eFlags &= ~EF_FIRING;
+    if (ent->enemy && ent->enemy->client) {
+        ent->enemy->client->ps.pm_flags &= ~PMF_HOOKED;
     }
     G_FreeEntity(ent);
 }
 
+/*
+================
+Weapon_HookThink
+
+[QL] qagamex86.dll 0x1006e400, run every frame by G_RunFrame once the hook has latched on. Unless
+it holds a mover, the line from the owner's eyes to just short of the hook has to stay clear:
+three blocked frames and it lets go with the reset sound. It also lets go when the owner lowers
+or changes weapon, when the player it holds dies (a frozen body excepted) or is a teammate, and
+when it holds a door. On a player or a train it follows the target's middle, makes a held player
+drop their own hook, and hurts the target every weapon_reload_hook ms.
+================
+*/
 void Weapon_HookThink(gentity_t* ent) {
-    if (!ent->parent || !ent->parent->client) {
+    gentity_t* owner = ent->parent;
+    gentity_t* enemy;
+
+    if (!owner || !owner->client) {
+        return;
+    }
+
+    if (!ent->enemy || ent->enemy->s.eType != ET_MOVER) {
+        vec3_t start, dir, end;
+        trace_t tr;
+
+        VectorCopy(owner->client->ps.origin, start);
+        start[2] += (owner->client->ps.pm_flags & PMF_DUCKED) ? 12 : 26;
+        VectorSubtract(ent->r.currentOrigin, start, dir);
+        VectorNormalize(dir);
+        VectorMA(ent->r.currentOrigin, g_latchedHookOffset.value, dir, end);
+        trap_Trace(&tr, start, vec3_origin, vec3_origin, end, owner->s.number, CONTENTS_SOLID);
+        if (tr.fraction != 1.0f) {
+            ent->bouncecount++;
+        }
+        if (ent->bouncecount >= 3) {
+            gentity_t* tent = G_TempEntity(tr.endpos, EV_GENERAL_SOUND);
+            tent->r.svFlags |= SVF_BROADCAST;
+            tent->s.eventParm = G_SoundIndex("sound/weapons/grapple/grreset.wav");
+            Weapon_HookFree(ent);
+            return;
+        }
+    }
+
+    if (owner->client->ps.weaponstate == WEAPON_DROPPING || owner->client->ps.weapon != WP_GRAPPLING_HOOK) {
         Weapon_HookFree(ent);
         return;
     }
 
-    // [QL] check if owner switched away from grapple or is raising a new weapon
-    if (ent->parent->client->ps.weapon != WP_GRAPPLING_HOOK ||
-        ent->parent->client->ps.weaponstate == WEAPON_RAISING) {
-        Weapon_HookFree(ent);
-        return;
-    }
-
-    if (ent->enemy) {
+    enemy = ent->enemy;
+    if (enemy) {
         vec3_t v, oldorigin;
 
-        // [QL] check if enemy is still valid (alive and not spectator)
-        if (!ent->enemy->client ||
-            ent->enemy->client->ps.stats[STAT_HEALTH] <= 0 ||
-            ent->enemy->client->sess.sessionTeam == TEAM_SPECTATOR) {
+        if (enemy->s.eType == ET_PLAYER && enemy->health <= 0 && enemy->client->ps.pm_type != PM_FREEZE) {
+            Weapon_HookFree(ent);
+            return;
+        }
+        if (enemy->s.eType == ET_PLAYER && OnSameTeam(enemy, owner) && enemy->health > 0) {
+            Weapon_HookFree(ent);
+            return;
+        }
+        if (enemy->s.eType == ET_MOVER && ent->count) {
             Weapon_HookFree(ent);
             return;
         }
 
-        // track enemy center position
         VectorCopy(ent->r.currentOrigin, oldorigin);
-        v[0] = ent->enemy->r.currentOrigin[0] + (ent->enemy->r.mins[0] + ent->enemy->r.maxs[0]) * 0.5;
-        v[1] = ent->enemy->r.currentOrigin[1] + (ent->enemy->r.mins[1] + ent->enemy->r.maxs[1]) * 0.5;
-        v[2] = ent->enemy->r.currentOrigin[2] + (ent->enemy->r.mins[2] + ent->enemy->r.maxs[2]) * 0.5;
+        v[0] = enemy->r.currentOrigin[0] + (enemy->r.mins[0] + enemy->r.maxs[0]) * 0.5;
+        v[1] = enemy->r.currentOrigin[1] + (enemy->r.mins[1] + enemy->r.maxs[1]) * 0.5;
+        v[2] = enemy->r.currentOrigin[2] + (enemy->r.mins[2] + enemy->r.maxs[2]) * 0.5;
         SnapVectorTowards(v, oldorigin);
-
         G_SetOrigin(ent, v);
 
-        // [QL] periodic damage to hooked enemy
-        if (ent->count < level.time) {
-            vec3_t dir;
-            VectorSubtract(ent->parent->r.currentOrigin, ent->enemy->r.currentOrigin, dir);
-            VectorNormalize(dir);
-            G_Damage(ent->enemy, ent, ent->parent, dir, NULL, g_damage_gh.integer, 0, MOD_GRAPPLE);
-            ent->count = level.time + weapon_reload_gh.integer;
+        if (enemy->client && enemy->client->hook) {
+            Weapon_HookFree(enemy->client->hook);
+        }
+
+        // the push direction is the last shot's forward, and there is no damage point
+        if (level.time > ent->wait) {
+            ent->wait = level.time + weapon_reload_hook.integer;
+            G_Damage(enemy, ent, owner, forward, NULL, (int)(g_damage_gh.integer * s_quadFactor), 0, MOD_GRAPPLE);
         }
     }
 
-    VectorCopy(ent->r.currentOrigin, ent->parent->client->ps.grapplePoint);
-    ent->nextthink = level.time + FRAMETIME;
+    VectorCopy(ent->r.currentOrigin, owner->client->ps.grapplePoint);
 }
 
 /*
@@ -762,26 +814,36 @@ void Weapon_LightningFire(gentity_t* ent) {
 
     passent = ent->s.number;
     for (i = 0; i < 2; i++) {  // [QL] binary uses 2 iterations, not 10
-        // [QL] water discharge: if firing in water with g_infiniteAmmo, discharge all ammo
-        if (g_infiniteAmmo.integer) {
-            int contents = trap_PointContents(muzzle, -1);
-            if (contents & (CONTENTS_WATER | CONTENTS_SLIME | CONTENTS_LAVA)) {
-                int cells = ent->client->ps.ammo[WP_LIGHTNING];
-                if (cells != 0) {
-                    int dischargeRadius = (cells != -1 && !g_loadout.integer) ? cells + 1 : 60;
-                    int extraRadius = dischargeRadius * g_damage_lg.integer;
+        // [QL] 0x1006e807: firing from inside water, slime or lava with g_lightningDischarge spends
+        // every cell in one discharge instead of the beam
+        if (g_lightningDischarge.integer && (trap_PointContents(muzzle, -1) & MASK_WATER)) {
+            int cells = ent->client->ps.ammo[WP_LIGHTNING];
+            if (cells != 0) {
+                int points;
 
-                    SnapVector(muzzle);
-                    tent = G_TempEntity(muzzle, EV_LIGHTNING_DISCHARGE);
-                    tent->s.eventParm = dischargeRadius;
-                    ent->client->ps.ammo[WP_LIGHTNING] = 0;
+                if (!g_infiniteAmmo.integer && cells != -1) {
+                    cells++;
+                } else {
+                    cells = 150;
+                }
+                SnapVectorTowards(muzzle, ent->s.origin);
+                tent = G_TempEntity(muzzle, EV_LIGHTNING_DISCHARGE);
+                tent->s.eventParm = cells;
+                ent->client->ps.ammo[WP_LIGHTNING] = 0;
 
-                    if (G_WaterRadiusDamage(muzzle, ent, (float)extraRadius, (float)(extraRadius + 16))) {
-                        ent->client->accuracy_hits++;
+                points = cells * g_damage_lg.integer;
+                if (G_WaterRadiusDamage(muzzle, ent, (float)points, (float)(points + 16))) {
+                    ent->client->accuracy_hits++;
+                    ent->client->expandedStats.shotsHit[ent->s.weapon]++;
+                    if (g_gametype.integer != GT_RACE) {
+                        STAT_AddScore(ent, ent->s.weapon, 1);
+                    }
+                    if (BG_IsRoundBasedGameType(g_gametype.integer)) {
+                        ent->client->round_hits++;
                     }
                 }
-                break;
             }
+            break;
         }
 
         VectorMA(muzzle, LIGHTNING_RANGE, forward, end);
@@ -909,6 +971,7 @@ LogAccuracyHit
 ===============
 */
 qboolean LogAccuracyHit(gentity_t* target, gentity_t* attacker) {
+    // [QL] 0x1006f240: no health test, and a frozen freeze tag body does not count
     if (!target->takedamage) {
         return qfalse;
     }
@@ -925,11 +988,11 @@ qboolean LogAccuracyHit(gentity_t* target, gentity_t* attacker) {
         return qfalse;
     }
 
-    if (target->client->ps.stats[STAT_HEALTH] <= 0) {
+    if (OnSameTeam(target, attacker)) {
         return qfalse;
     }
 
-    if (OnSameTeam(target, attacker)) {
+    if (FreezeTagInGame() && target->client->ps.powerups[PW_FREEZE]) {
         return qfalse;
     }
 
