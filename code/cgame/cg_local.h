@@ -819,6 +819,8 @@ typedef struct {
     //==========================
 
     int itemPickup;
+    int itemPickupLast;       // [QL] 0x10ab8f74, the item the pickup display drew last frame
+    int itemPickupCount;      // [QL] 0x10ab8f78, the same item picked up in a row ("x%i")
     int itemPickupTime;
     int itemPickupBlendTime;  // the pulse around the crosshair is timed separately
     int crosshairHitTime;     // [QL] 0x10ab8fb0, set on a hit (0x10043c2e)
@@ -1678,6 +1680,8 @@ extern vmCvar_t cg_drawRewards;
 extern vmCvar_t cg_announcerRewardsVO;
 extern vmCvar_t cg_flagStyle;
 extern vmCvar_t cg_drawTeamOverlay;
+extern vmCvar_t cg_drawItemPickups;       // [QL] 0x10a65a00: 1 icon, 2 name, 4 game clock
+extern vmCvar_t cg_levelTimerDirection;   // [QL] 0x10a6e6a0
 extern vmCvar_t cg_teamOverlayUserinfo;
 extern vmCvar_t cg_crosshairX;
 extern vmCvar_t cg_crosshairY;
