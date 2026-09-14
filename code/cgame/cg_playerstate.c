@@ -318,33 +318,40 @@ void CG_PushReward(sfxHandle_t sfx, qhandle_t shader, int rewardCount) {
 /*
 ==================
 CG_CheckLocalSounds
+
+[QL] cgamex86.dll 0x100435b0. Nothing plays on the snapshot the spawn count changes, which a
+team change also does. A hit that frags (PERS_ATTACKEE_ARMOR, the server's lethal-hit count,
+went up) plays cg_killBeep's sound, 1-6 impact1-6, 7 bell_01, 8 chaching, anything else
+impact1, at s_killBeepVolume. Any other hit plays cg_hitBeep's: 1 always hit1, 2 hit0-3 by
+the damage tier the server keeps in generic1's top bits, 3 the same tiers reversed, 0 none.
+A teammate hit plays hit_teammate unless cg_hitBeep is 0.
 ==================
 */
 void CG_CheckLocalSounds(playerState_t* ps, playerState_t* ops) {
-    int highScore, reward;
-    int health, armor;
+    int highScore, reward, tier;
     sfxHandle_t sfx;
 
-    // don't play the sounds if the player just changed teams
-    if (ps->persistant[PERS_TEAM] != ops->persistant[PERS_TEAM]) {
+    // don't play the sounds if the player just respawned or changed teams
+    if (ps->persistant[PERS_SPAWN_COUNT] != ops->persistant[PERS_SPAWN_COUNT]) {
         return;
     }
 
     // hit changes
     if (ps->persistant[PERS_HITS] > ops->persistant[PERS_HITS]) {
-        // [QL] 0x10043c2e: start of the crosshair hit effect and its type
-        cg.crosshairHitType = (ps->generic1 >> 6) + 1;
-        cg.crosshairHitTime = cg.time;
-        armor = ps->persistant[PERS_ATTACKEE_ARMOR] & 0xff;
-        health = ps->persistant[PERS_ATTACKEE_ARMOR] >> 8;
-        if (armor > 50) {
-            trap_S_StartLocalSound(cgs.media.hitSoundHighArmor, CHAN_LOCAL_SOUND);
-        } else if (armor || health > 100) {
-            trap_S_StartLocalSound(cgs.media.hitSoundLowArmor, CHAN_LOCAL_SOUND);
-        } else {
-            trap_S_StartLocalSound(cgs.media.hitSound, CHAN_LOCAL_SOUND);
+        if (cg_killBeep.integer >= 1 && ps->persistant[PERS_ATTACKEE_ARMOR] > ops->persistant[PERS_ATTACKEE_ARMOR]) {
+            sfx = cgs.media.killBeepSounds[(cg_killBeep.integer <= 8) ? cg_killBeep.integer - 1 : 0];
+            trap_S_StartLocalSoundVolume(sfx, CHAN_LOCAL_SOUND, s_killBeepVolume.value);
+        } else if (cg_hitBeep.integer == 1) {
+            trap_S_StartLocalSound(cgs.media.hitSounds[1], CHAN_LOCAL_SOUND);
+        } else if (cg_hitBeep.integer >= 2) {
+            tier = ps->generic1 >> 6;
+            if (cg_hitBeep.integer == 3) {
+                tier = 3 - tier;
+            }
+            sfx = (tier >= 1 && tier <= 3) ? cgs.media.hitSounds[tier] : cgs.media.hitSounds[0];
+            trap_S_StartLocalSound(sfx, CHAN_LOCAL_SOUND);
         }
-    } else if (ps->persistant[PERS_HITS] < ops->persistant[PERS_HITS]) {
+    } else if (ps->persistant[PERS_HITS] < ops->persistant[PERS_HITS] && cg_hitBeep.integer) {
         trap_S_StartLocalSound(cgs.media.hitTeamSound, CHAN_LOCAL_SOUND);
     }
 
@@ -519,6 +526,12 @@ void CG_TransitionPlayerState(playerState_t* ps, playerState_t* ops) {
 
     if (cg.snap->ps.pm_type != PM_INTERMISSION && ps->persistant[PERS_TEAM] != TEAM_SPECTATOR) {
         CG_CheckLocalSounds(ps, ops);
+        // [QL] 0x10043c1d, right after the call: the crosshair hit effect starts on any hit,
+        // even on the snapshot the local sounds skip
+        if (ps->persistant[PERS_HITS] > ops->persistant[PERS_HITS]) {
+            cg.crosshairHitType = (ps->generic1 >> 6) + 1;
+            cg.crosshairHitTime = cg.time;
+        }
     }
 
     // check for going low on ammo

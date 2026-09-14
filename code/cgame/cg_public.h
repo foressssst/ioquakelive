@@ -189,7 +189,8 @@ typedef enum {
     CG_R_GETGLYPHINFO,
     CG_IME_SETCOMPOSITIONFONT,
 
-    CG_R_FONT_REGISTER            // loads a TrueType font by name, returns its font index or -1
+    CG_R_FONT_REGISTER,           // loads a TrueType font by name, returns its font index or -1
+    CG_S_STARTLOCALSOUNDVOLUME    // [QL] S_StartLocalSound at a given volume (cgame import +0xa0)
 } cgameImport_t;
 
 /*

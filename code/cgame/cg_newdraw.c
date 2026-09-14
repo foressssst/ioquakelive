@@ -1243,7 +1243,10 @@ qboolean CG_OwnerDrawVisible(int flags, int flags2) {
     }
 
     if (flags & CG_SHOW_IF_CHAT_VISIBLE) {
-        return qtrue;  // chat area always available on scoreboard
+        // [QL] 0x10031963: only while the chat history is up (+chat, togglechathistory) or
+        // behind the scoreboard. Always true, it left comp_hud's chat backdrop (hud3) as a
+        // dark band across the view.
+        return (cg.chatHistoryShowing || cg.scoreBoardShowing) ? qtrue : qfalse;
     }
 
     // [QL] Message presence indicator (for chat balloon HUD icon)
@@ -1780,26 +1783,42 @@ static void CG_DrawLevelTimer(rectDef_t *rect, float scale, vec4_t color, int te
     CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-static void CG_DrawPlayerCounts(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
+/*
+[QL] cgamex86.dll 0x10032f30, CG_PLAYER_COUNTS. "%d/%d Players": every connected client,
+spectators included, out of sv_maxclients; with a teamsize (and not in duel) out of the
+teamsize, or twice it in the team modes, capped at sv_maxclients. In the item's font, and
+aligned by the item: left by default, which is how the join menu keeps it clear of the
+game type icon (it used to be centred on the item's x, on top of the icon).
+*/
+static void CG_DrawPlayerCounts(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
     const char *s;
     int count = 0, maxPlayers;
     int i;
-    const char *info = CG_ConfigString(CS_SERVERINFO);
 
-    // [QL] count all valid clients (including spectators, matching binary behavior)
-    for (i = 0; i < MAX_CLIENTS; i++) {
+    for (i = 0; i < cgs.maxclients && i < MAX_CLIENTS; i++) {
         if (cgs.clientinfo[i].infoValid) {
             count++;
         }
     }
 
-    maxPlayers = atoi(Info_ValueForKey(info, "sv_maxclients"));
-    if (maxPlayers <= 0) {
-        maxPlayers = MAX_CLIENTS;
+    maxPlayers = cgs.maxclients;
+    if (cgs.gametype != GT_DUEL && cgs.teamsize != 0) {
+        maxPlayers = cgs.teamsize;
+        if (cgs.gametype > GT_RACE) {
+            maxPlayers = cgs.teamsize * 2;
+            if (cgs.maxclients < maxPlayers) {
+                maxPlayers = cgs.maxclients;
+            }
+        }
     }
 
-    s = va("%d/%d players", count, maxPlayers);
-    CG_OwnerDrawText(rect->x - (CG_OwnerDrawTextWidth(s, scale, 0) / 2), rect->y, scale, color, s, 0, 0, textStyle);
+    s = va("%d/%d Players", count, maxPlayers);
+    if (align == ITEM_ALIGN_CENTER) {
+        rect->x -= CG_OwnerDrawTextWidth(s, scale, 0) * 0.5f;
+    } else if (align == ITEM_ALIGN_RIGHT) {
+        rect->x -= CG_OwnerDrawTextWidth(s, scale, 0);
+    }
+    CG_OwnerDrawText(rect->x, rect->y, scale, color, s, 0, 0, textStyle);
 }
 
 static void CG_DrawSelectedPlayerTeamColor(rectDef_t *rect) {
@@ -1860,18 +1879,29 @@ static void CG_DrawGameLimit(rectDef_t *rect, float scale, vec4_t color, int tex
     CG_OwnerDrawText(rect->x, rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] Match details: "Game State - Gametype - Map"
+/*
+[QL] cgamex86.dll 0x10034420, CG_MATCH_DETAILS: "MATCH WARMUP - DUEL - Aerowalk". The state
+is MATCH SUMMARY at the intermission, MATCH WARMUP while cg.warmup is set and MATCH IN
+PROGRESS otherwise; then the short game type and the map's title (CS_MESSAGE), never its
+file. Font 0 at the rect's corner.
+*/
 static void CG_DrawMatchDetails(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
+    static const char *const shortNames[GT_MAX_GAME_TYPE] = {
+        "FFA", "DUEL", "RACE", "TDM", "CA", "CTF", "1F", "OB", "HAR", "FT", "DOM", "AD", "RR"};
     const char *state;
-    if (cg.warmup) {
-        state = "Warmup";
-    } else if (cg.snap && cg.snap->ps.pm_type == PM_INTERMISSION) {
-        state = "Match Complete";
+
+    if (cg.predictedPlayerState.pm_type == PM_INTERMISSION) {
+        state = "MATCH SUMMARY";
+    } else if (cg.warmup) {
+        state = "MATCH WARMUP";
     } else {
-        state = "In Progress";
+        state = "MATCH IN PROGRESS";
     }
-    CG_OwnerDrawText(rect->x, rect->y, scale, color,
-        va("%s - %s - %s", state, CG_GameTypeString(), cgs.mapname), 0, 0, textStyle);
+    CG_DrawText(rect->x, rect->y, 0, scale, color,
+                va("%s - %s - %s", state,
+                   (cgs.gametype >= 0 && cgs.gametype < GT_MAX_GAME_TYPE) ? shortNames[cgs.gametype] : "ERR",
+                   CG_ConfigString(CS_MESSAGE)),
+                0, 0, textStyle);
 }
 
 // [QL] Match status: "MATCH WARMUP/IN PROGRESS/SUMMARY" + score details (binary-verified)
@@ -3224,10 +3254,11 @@ static const char *CG_GameTypeFullName(void) {
     return "Unknown Gametype";
 }
 
-// [QL] CG_DrawGameTypeMap - "Gametype Fullname - Map"
+// [QL] CG_DrawGameTypeMap - "Free For All - Thunderstruck": the map's title from CS_MESSAGE
+// (stringOffsets[3] at 0x10a3842c), not the "maps/*.bsp" path
 // Address: 0x100344b0
 static void CG_DrawGameTypeMap(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
-    const char *s = va("%s - %s", CG_GameTypeFullName(), cgs.mapname);
+    const char *s = va("%s - %s", CG_GameTypeFullName(), CG_ConfigString(CS_MESSAGE));
     float x = rect->x;
     if (align == ITEM_ALIGN_CENTER) {
         x -= CG_DrawTextWidth(s, scale, 0, 0) * 0.5f;
@@ -3844,7 +3875,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             CG_DrawLocalTime(&rect, scale, color, textStyle);
             break;
         case CG_PLAYER_COUNTS:              // 0x11  CG_DrawPlayerCount
-            CG_DrawPlayerCounts(&rect, scale, color, textStyle);
+            CG_DrawPlayerCounts(&rect, scale, color, textStyle, align);
             break;
         case CG_MAP_NAME:                   // 0x12
             CG_DrawMapName(&rect, scale, color, textStyle);

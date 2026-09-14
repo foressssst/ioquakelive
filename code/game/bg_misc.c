@@ -1188,16 +1188,26 @@ int BG_ParseWeaponStringtoFlag(char* string) {
 BG_PlayerTouchesItem
 
 Items can be picked up without actually touching their physical bounds to make
-grabbing them easier
+grabbing them easier.
+[QL] qagamex86.dll 0x1002cd30, cgamex86.dll 0x100013c0. Quake 3's box (x -50..44, y and
+z +-36) became +-36 on both horizontal axes, and from 50 under the item up to itemHeight
++ 29 over it. itemHeight is g_itemHeight (35 by default), except for the three flags,
+which always use 35.
 ============
 */
-qboolean BG_PlayerTouchesItem(playerState_t* ps, entityState_t* item, int atTime) {
+qboolean BG_PlayerTouchesItem(playerState_t* ps, entityState_t* item, int atTime, int itemHeight) {
+    const gitem_t* it;
     vec3_t origin;
 
     BG_EvaluateTrajectory(&item->pos, atTime, origin);
 
+    it = &bg_itemlist[item->modelindex];
+    if (it->giType == IT_TEAM && it->giTag >= PW_REDFLAG && it->giTag <= PW_NEUTRALFLAG) {
+        itemHeight = 35;
+    }
+
     // we are ignoring ducked differences here
-    if (ps->origin[0] - origin[0] > 44 || ps->origin[0] - origin[0] < -50 || ps->origin[1] - origin[1] > 36 || ps->origin[1] - origin[1] < -36 || ps->origin[2] - origin[2] > 36 || ps->origin[2] - origin[2] < -36) {
+    if (ps->origin[0] - origin[0] > 36 || ps->origin[0] - origin[0] < -36 || ps->origin[1] - origin[1] > 36 || ps->origin[1] - origin[1] < -36 || ps->origin[2] - origin[2] > itemHeight + 29 || ps->origin[2] - origin[2] < -50) {
         return qfalse;
     }
 

@@ -109,6 +109,21 @@ void S_StartLocalSound(sfxHandle_t sfx, int channelNum) {
 
 /*
 =================
+S_StartLocalSoundVolume
+
+[QL] quakelive_steam.exe 0x4da380, the cgame import at +0xa0 (0x4afe50): the local sound
+path with the volume the channel starts at instead of the fixed 1. cgame's kill beep plays
+through it with s_killBeepVolume.
+=================
+*/
+void S_StartLocalSoundVolume(sfxHandle_t sfx, int channelNum, float volume) {
+    if (si.StartLocalSoundVolume) {
+        si.StartLocalSoundVolume(sfx, channelNum, volume);
+    }
+}
+
+/*
+=================
 S_StartBackgroundTrack
 =================
 */

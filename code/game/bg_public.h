@@ -363,7 +363,7 @@ typedef enum {
     PERS_ASSIST_COUNT,         // 11 assist awards
     PERS_GAUNTLET_FRAG_COUNT,  // 12 kills with the guantlet
     PERS_CAPTURES,             // 13 captures
-    PERS_ATTACKEE_ARMOR        // 14 health/armor of last person we attacked [QL moved from 7]
+    PERS_ATTACKEE_ARMOR        // 14 [QL moved from 7] lethal hits dealt; cgame plays cg_killBeep when it goes up
 } persEnum_t;
 
 // entityState_t->eFlags
@@ -953,7 +953,7 @@ void BG_TouchJumpPad(playerState_t* ps, entityState_t* jumppad);
 void BG_PlayerStateToEntityState(playerState_t* ps, entityState_t* s, qboolean snap);
 void BG_PlayerStateToEntityStateExtraPolate(playerState_t* ps, entityState_t* s, int time, qboolean snap);
 
-qboolean BG_PlayerTouchesItem(playerState_t* ps, entityState_t* item, int atTime);
+qboolean BG_PlayerTouchesItem(playerState_t* ps, entityState_t* item, int atTime, int itemHeight);
 
 #define MAX_ARENAS 1024
 #define MAX_ARENAS_TEXT 16384

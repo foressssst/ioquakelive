@@ -300,15 +300,21 @@ static void CG_InterpolatePlayerState(qboolean grabAngles) {
 /*
 ===================
 CG_TouchItem
+
+[QL] cgamex86.dll 0x100443c0. Nothing is predicted during a warmup countdown (cg.warmup
+over 0), nor the three flags, nor any item with an item timer: armours, mega health,
+medkit and powerups. The server leaves those in the snapshot while they respawn, hidden
+with EF_NODRAW, so predicting them repeated the pickup, and its sound, every frame the
+player stood on the spot.
 ===================
 */
 static void CG_TouchItem(centity_t* cent) {
     gitem_t* item;
 
-    if (!cg_predictItems.integer) {
+    if (!cg_predictItems.integer || cg.warmup > 0) {
         return;
     }
-    if (!BG_PlayerTouchesItem(&cg.predictedPlayerState, &cent->currentState, cg.time)) {
+    if (!BG_PlayerTouchesItem(&cg.predictedPlayerState, &cent->currentState, cg.time, cgs.itemHeight)) {
         return;
     }
 
@@ -324,21 +330,11 @@ static void CG_TouchItem(centity_t* cent) {
 
     item = &bg_itemlist[cent->currentState.modelindex];
 
-    // Special case for flags.
-    // We don't predict touching our own flag
-    if (cgs.gametype == GT_1FCTF) {
-        if (item->giType == IT_TEAM && item->giTag != PW_NEUTRALFLAG) {
-            return;
-        }
+    if (item->giType == IT_TEAM && item->giTag >= PW_REDFLAG && item->giTag <= PW_NEUTRALFLAG) {
+        return;
     }
-
-    if (cgs.gametype == GT_CTF) {
-        if (cg.predictedPlayerState.persistant[PERS_TEAM] == TEAM_RED &&
-            item->giType == IT_TEAM && item->giTag == PW_REDFLAG)
-            return;
-        if (cg.predictedPlayerState.persistant[PERS_TEAM] == TEAM_BLUE &&
-            item->giType == IT_TEAM && item->giTag == PW_BLUEFLAG)
-            return;
+    if (item->itemTimer) {
+        return;
     }
 
     // grab it
@@ -351,10 +347,11 @@ static void CG_TouchItem(centity_t* cent) {
     cent->miscTime = cg.time;
 
     // if it's a weapon, give them some predicted ammo so the autoswitch will work
+    // [QL] the item's own quantity, where Quake 3 gave 1
     if (item->giType == IT_WEAPON) {
         cg.predictedPlayerState.stats[STAT_WEAPONS] |= 1 << item->giTag;
         if (!cg.predictedPlayerState.ammo[item->giTag]) {
-            cg.predictedPlayerState.ammo[item->giTag] = 1;
+            cg.predictedPlayerState.ammo[item->giTag] = item->quantity;
         }
     }
 }
