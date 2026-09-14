@@ -1601,11 +1601,19 @@ static void CG_RegisterSounds(void) {
     cgs.media.talkSound = trap_S_RegisterSound("sound/player/talk.ogg", qfalse);
     cgs.media.landSound = trap_S_RegisterSound("sound/player/land1.ogg", qfalse);
 
-    cgs.media.hitSound = trap_S_RegisterSound("sound/feedback/hit0.ogg", qfalse);
-
-    // [QL] hit tier sounds use hit0-hit3 instead of hithi/hitlo
-    cgs.media.hitSoundHighArmor = trap_S_RegisterSound("sound/feedback/hit0.ogg", qfalse);
-    cgs.media.hitSoundLowArmor = trap_S_RegisterSound("sound/feedback/hit3.ogg", qfalse);
+    // [QL] 0x10021be5: the four hit tiers, then cg_killBeep's eight sounds
+    cgs.media.hitSounds[0] = trap_S_RegisterSound("sound/feedback/hit0.ogg", qfalse);
+    cgs.media.hitSounds[1] = trap_S_RegisterSound("sound/feedback/hit1.ogg", qfalse);
+    cgs.media.hitSounds[2] = trap_S_RegisterSound("sound/feedback/hit2.ogg", qfalse);
+    cgs.media.hitSounds[3] = trap_S_RegisterSound("sound/feedback/hit3.ogg", qfalse);
+    cgs.media.killBeepSounds[0] = trap_S_RegisterSound("sound/feedback/impact1.ogg", qfalse);
+    cgs.media.killBeepSounds[1] = trap_S_RegisterSound("sound/feedback/impact2.ogg", qfalse);
+    cgs.media.killBeepSounds[2] = trap_S_RegisterSound("sound/feedback/impact3.ogg", qfalse);
+    cgs.media.killBeepSounds[3] = trap_S_RegisterSound("sound/feedback/impact4.ogg", qfalse);
+    cgs.media.killBeepSounds[4] = trap_S_RegisterSound("sound/feedback/impact5.ogg", qfalse);
+    cgs.media.killBeepSounds[5] = trap_S_RegisterSound("sound/feedback/impact6.ogg", qfalse);
+    cgs.media.killBeepSounds[6] = trap_S_RegisterSound("sound/world/bell_01.ogg", qfalse);
+    cgs.media.killBeepSounds[7] = trap_S_RegisterSound("sound/misc/chaching.ogg", qfalse);
 
     // [QL] announcements moved from sound/feedback/ to sound/vo/
     cgs.media.impressiveSound = trap_S_RegisterSound("sound/vo/impressive1.ogg", qtrue);

@@ -1082,7 +1082,7 @@ S_AL_StartLocalSound
 Play a local (non-spatialized) sound effect
 =================
 */
-static void S_AL_StartLocalSound(sfxHandle_t sfx, int channel) {
+static void S_AL_StartLocalSoundVolume(sfxHandle_t sfx, int channel, float volume) {
     srcHandle_t src;
 
     if (S_AL_CheckInput(0, sfx))
@@ -1097,9 +1097,20 @@ static void S_AL_StartLocalSound(sfxHandle_t sfx, int channel) {
     // Set up the effect
     S_AL_SrcSetup(src, sfx, SRCPRI_LOCAL, -1, channel, qtrue);
 
+    // [QL] the start volume scales the source's gain (the base mixer scales master_vol)
+    if (volume != 1.0f) {
+        srcList[src].curGain *= volume;
+        srcList[src].scaleGain = srcList[src].curGain;
+        S_AL_Gain(srcList[src].alSource, srcList[src].curGain);
+    }
+
     // Start it playing
     srcList[src].isPlaying = qtrue;
     qalSourcePlay(srcList[src].alSource);
+}
+
+static void S_AL_StartLocalSound(sfxHandle_t sfx, int channel) {
+    S_AL_StartLocalSoundVolume(sfx, channel, 1.0f);
 }
 
 /*
@@ -2303,6 +2314,7 @@ qboolean S_AL_Init(soundInterface_t* si) {
     si->Shutdown = S_AL_Shutdown;
     si->StartSound = S_AL_StartSound;
     si->StartLocalSound = S_AL_StartLocalSound;
+    si->StartLocalSoundVolume = S_AL_StartLocalSoundVolume;
     si->StartBackgroundTrack = S_AL_StartBackgroundTrack;
     si->StopBackgroundTrack = S_AL_StopBackgroundTrack;
     si->RawSamples = S_AL_RawSamples;

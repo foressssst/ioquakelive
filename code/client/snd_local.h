@@ -126,6 +126,7 @@ typedef struct
     void (*Shutdown)(void);
     void (*StartSound)(vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx);
     void (*StartLocalSound)(sfxHandle_t sfx, int channelNum);
+    void (*StartLocalSoundVolume)(sfxHandle_t sfx, int channelNum, float volume);  // [QL]
     void (*StartBackgroundTrack)(const char* intro, const char* loop);
     void (*StopBackgroundTrack)(void);
     void (*RawSamples)(int stream, int samples, int rate, int width, int channels, const byte* data, float volume, int entityNum);

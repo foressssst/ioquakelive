@@ -473,7 +473,7 @@ if origin is NULL, the sound will be dynamically sourced from the entity
 Entchannel 0 will never override a playing sound
 ====================
 */
-static void S_Base_StartSoundEx(vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxHandle, qboolean localSound) {
+static void S_Base_StartSoundEx(vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxHandle, qboolean localSound, float volume) {
     channel_t* ch;
     sfx_t* sfx;
     int i, oldest, chosen, time;
@@ -585,7 +585,8 @@ static void S_Base_StartSoundEx(vec3_t origin, int entityNum, int entchannel, sf
         ch->fixed_origin = qfalse;
     }
 
-    ch->master_vol = 127;
+    // [QL] quakelive_steam.exe 0x4da2fa: the start volume scales the full 127, truncated
+    ch->master_vol = (int)(volume * 127.0f);
     ch->entnum = entityNum;
     ch->thesfx = sfx;
     ch->startSample = START_SAMPLE_IMMEDIATE;
@@ -604,15 +605,15 @@ if origin is NULL, the sound will be dynamically sourced from the entity
 ====================
 */
 void S_Base_StartSound(vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxHandle) {
-    S_Base_StartSoundEx(origin, entityNum, entchannel, sfxHandle, qfalse);
+    S_Base_StartSoundEx(origin, entityNum, entchannel, sfxHandle, qfalse, 1.0f);
 }
 
 /*
 ==================
-S_StartLocalSound
+S_StartLocalSoundVolume
 ==================
 */
-void S_Base_StartLocalSound(sfxHandle_t sfxHandle, int channelNum) {
+static void S_Base_StartLocalSoundVolume(sfxHandle_t sfxHandle, int channelNum, float volume) {
     if (!s_soundStarted || s_soundMuted) {
         return;
     }
@@ -622,7 +623,16 @@ void S_Base_StartLocalSound(sfxHandle_t sfxHandle, int channelNum) {
         return;
     }
 
-    S_Base_StartSoundEx(NULL, listener_number, channelNum, sfxHandle, qtrue);
+    S_Base_StartSoundEx(NULL, listener_number, channelNum, sfxHandle, qtrue, volume);
+}
+
+/*
+==================
+S_StartLocalSound
+==================
+*/
+void S_Base_StartLocalSound(sfxHandle_t sfxHandle, int channelNum) {
+    S_Base_StartLocalSoundVolume(sfxHandle, channelNum, 1.0f);
 }
 
 /*
@@ -1491,6 +1501,7 @@ qboolean S_Base_Init(soundInterface_t* si) {
     si->Shutdown = S_Base_Shutdown;
     si->StartSound = S_Base_StartSound;
     si->StartLocalSound = S_Base_StartLocalSound;
+    si->StartLocalSoundVolume = S_Base_StartLocalSoundVolume;
     si->StartBackgroundTrack = S_Base_StartBackgroundTrack;
     si->StopBackgroundTrack = S_Base_StopBackgroundTrack;
     si->RawSamples = S_Base_RawSamples;

@@ -791,8 +791,10 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             return Key_GetCatcher();
 
         case UI_KEY_SETCATCHER:
-            // Don't allow the ui module to close the console
-            Key_SetCatcher(args[1] | (Key_GetCatcher() & KEYCATCH_CONSOLE));
+            // [QL] quakelive_steam.exe 0x4beeb0: the catchers are replaced as given, console bit
+            // included. ioquake3 kept the console open here; in Quake Live a menu the UI brings up
+            // (Escape's in-game menu among them) closes it.
+            Key_SetCatcher(args[1]);
             return 0;
 
         case UI_GETCLIPBOARDDATA:
