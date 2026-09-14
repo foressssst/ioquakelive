@@ -215,7 +215,7 @@ typedef enum {
     TEAM_ACTIVE  // Now actively playing
 } playerTeamStateState_t;
 
-// [QL] 52 bytes (binary 0x2F8-0x32B within gclient_t)
+// [QL] 52 bytes; captures is gclient_t+0x2FC in the binary (Team_TouchOurFlag 0x10069b10)
 typedef struct {
     playerTeamStateState_t state;
 
@@ -228,10 +228,11 @@ typedef struct {
     int fragcarrier;
     int assists;
 
-    float lasthurtcarrier;
-    float lastreturnedflag;
-    float flagsince;
-    float lastfraggedcarrier;
+    int flagsince;          // [QL] +0x314: ms carrying the flag; ClientTimerActions adds every frame, a pickup clears it
+    int flagDroppedPickups; // [QL] +0x318: 0 if the flag came from its base, +1 for every pickup off the ground
+    int lasthurtcarrier;    // [QL] +0x31c
+    int lastreturnedflag;   // [QL] +0x320
+    int lastfraggedcarrier; // [QL] +0x324
 
     int dmgAccumulator;     // [QL] CA/AD: damage accumulator for score-per-100-damage
 } playerTeamState_t;
@@ -415,6 +416,8 @@ struct gclient_s {
 
     // timers
     int respawnTime;             // can respawn when time > this
+    int spawnRetryTime;          // [QL] +0x8a0: a spawn that found no spawn point is retried after this
+    int failedSpawns;            // [QL] +0x8a4: spawns in a row that found no spawn point
     int rewardTime;              // clear the EF_AWARD_IMPRESSIVE, etc when time > this
     int airOutTime;
 
@@ -627,6 +630,7 @@ void StopFollowing(gentity_t* ent);
 void BroadcastTeamChange(gclient_t* client, int oldTeam);
 void SetTeam(gentity_t* ent, const char* s);
 void Cmd_FollowCycle_f(gentity_t* ent, int dir);
+void FollowCycle(gentity_t* ent, int dir);  // [QL] 0x10041130: the cycle alone, which keeps the session team
 void ClearVote(void);
 
 //
@@ -698,7 +702,8 @@ qboolean G_RadiusDamageThrough(vec3_t origin, const vec3_t dir, const trace_t* t
 qboolean G_WaterRadiusDamage(vec3_t origin, gentity_t *attacker, float damage, float radius);
 int G_InvulnerabilityEffect(gentity_t* targ, vec3_t dir, vec3_t point, vec3_t impactpoint, vec3_t bouncedir);
 void body_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int damage, int meansOfDeath);
-void Kamikaze_DeathActivate(gentity_t* self);  // [QL] .so Kamikaze_DeathActivate (0x6f7d0); unified gib/death-finalizer + freeze thaw-respawn
+void Kamikaze_DeathActivate(gentity_t* self);  // [QL] 0x10046f20: the kamikaze timer's think, frees the entity it runs on
+void GibEntity(gentity_t* self);               // [QL] 0x10046d80: gibs, and thaw-respawns a frozen Freeze Tag body
 void TossClientItems(gentity_t* self);
 void TossClientPersistantPowerups(gentity_t* self);
 void TossClientCubes(gentity_t* self);
@@ -882,7 +887,7 @@ void DOM_FragBonuses(gentity_t *attacker, gentity_t *victim);
 // g_gametype_ad.c - Attack & Defend round state machine
 void AD_RoundStateTransition(void);
 qboolean AD_CheckExitRules(int doExit);
-void AD_Think(void);
+void AD_PlayerKilled(int team);
 int AD_IsInPlayState(void);
 int AD_CanScore(void);
 
@@ -923,6 +928,8 @@ void ClientBegin_RoundBased_impl(gentity_t *ent);
 void Team_InitGame(void);
 void DOM_CheckPlayers(void);
 int AD_GetRoundState(void);
+int AD_AttackingTeam(void);   // [QL] 0x100363e0
+int AD_DefendingTeam(void);   // [QL] 0x10036440
 qboolean AD_CheckRoundEnd(int redAlive, int blueAlive);
 
 // g_gametype_ft.c - Freeze Tag round state machine
@@ -932,7 +939,7 @@ void Freeze_InstaKill(gentity_t *self, int mode);  // [QL] .so Freeze_InstaKill 
 void Freeze_Think(void);
 void Freeze_ClientThawCheck(gentity_t *ent, int msec);  // [QL] msec = clamped pmove frame delta from ClientThink_real (binary 0x1004cdc0)
 void Freeze_PlayerFrozen(gentity_t *self);
-void Freeze_AutoThaw(int team);   // [QL] 0x1004cca0 (twin of CA_PlayerKilled; last-man-standing announce)
+void Freeze_AutoThaw(int team);   // [QL] 0x1004cc20 (twin of CA_PlayerKilled; last-man-standing announce)
 void G_ThrowFlag(gentity_t *self, vec3_t point);        // [QL] 0x10051420 (gauntlet flag toss, g_dropFlag)
 void Drop_DamagedHealth(gentity_t *attacker, gentity_t *targ, int amount);  // [QL] 0x1004f930 (bleeding health, g_dropDamagedHealth)
 qboolean Freeze_TeamFrozen(int team);
@@ -945,7 +952,7 @@ qboolean CA_CheckExitRules(int doExit);
 qboolean CA_AdjustDamage(gentity_t *target, gentity_t *attacker, int *take, int *asave);  // [QL] 0x100380d0 (Win Ghidra mislabel "AccuracyMessage")
 qboolean AD_AdjustDamage(gentity_t *target, gentity_t *attacker, int *take, int *asave);  // [QL] 0x10035880 (Win Ghidra mislabel "AccuracyMessage")
 qboolean RR_AdjustDamage(gentity_t *target, gentity_t *attacker, int *take, int *asave);  // [QL] 0x10064440 (Win Ghidra mislabel "ModifyDamage")
-void CA_Think(void);
+void CA_PlayerKilled(int team);
 void G_RegisterCvars(void);
 void G_UpdateCustomSettings(void);
 

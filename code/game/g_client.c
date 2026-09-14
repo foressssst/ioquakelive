@@ -1045,6 +1045,9 @@ void ClientBegin(int clientNum) {
         ClientUserinfoChanged(clientNum);
     }
 
+    // [QL] 0x1003c864: the team overlay goes out a second after a client begins
+    level.nextTeamInfoTime = level.time + 1000;
+
     G_LogPrintf("ClientBegin: %i\n", clientNum);
 
     // count current clients and rank for scoreboard
@@ -1074,6 +1077,7 @@ void ClientSpawn(gentity_t* ent) {
     //	char	*savedAreaBits;
     int accuracy_hits, accuracy_shots;
     int eventSequence;
+    int savedPmType;
     char userinfo[MAX_INFO_STRING];
 
     index = ent - g_entities;
@@ -1081,8 +1085,10 @@ void ClientSpawn(gentity_t* ent) {
 
     VectorClear(spawn_origin);
 
-    // [QL] find a spawn point - unified SelectSpawnPoint for all gametypes
-    if (client->sess.sessionTeam == TEAM_SPECTATOR) {
+    // [QL] find a spawn point - unified SelectSpawnPoint for all gametypes. Retail (0x1003bc63)
+    // asks pm_type, not the team: a player sitting a round out as a spectator on their team
+    // spawns at the intermission point like any spectator.
+    if (client->ps.pm_type == PM_SPECTATOR) {
         spawnPoint = SelectSpectatorSpawnPoint(
             spawn_origin, spawn_angles);
     } else if (g_gametype.integer == GT_RACE) {
@@ -1093,13 +1099,15 @@ void ClientSpawn(gentity_t* ent) {
         spawnPoint = SelectSpawnPoint(
             client->ps.origin,
             spawn_origin, spawn_angles, !!(ent->r.svFlags & SVF_BOT));
-        // [QL] if no spawn point found, put player in spectator mode
+        // [QL] 0x1003bcfa: no spawn point - wait as a spectator and try again 600 ms later
+        // (ClientThink_real, 0x10034d79)
         if (!spawnPoint) {
-            client->respawnTime = level.time + 600;
+            client->spawnRetryTime = level.time + 600;
             client->ps.pm_type = PM_SPECTATOR;
-            client->pers.teamState.state = TEAM_ACTIVE;
+            client->failedSpawns++;
             return;
         }
+        client->failedSpawns = 0;  // [QL] 0x1003bd4d
     }
 
     // [QL] respawn teleport effect.
@@ -1119,7 +1127,7 @@ void ClientSpawn(gentity_t* ent) {
     // jumps straight to 0x1003bd5f, so spectators get no effect. The return
     // value of G_TempEntity is discarded: unlike Q3, QL does not set
     // tent->s.clientNum, which is why CG_EntityEvent reads es->number.
-    if (client->sess.sessionTeam != TEAM_SPECTATOR) {
+    if (client->ps.pm_type != PM_SPECTATOR) {
         G_TempEntity(spawn_origin, EV_PLAYER_TELEPORT_IN);
     }
 
@@ -1158,6 +1166,7 @@ void ClientSpawn(gentity_t* ent) {
         persistant[i] = client->ps.persistant[i];
     }
     eventSequence = client->ps.eventSequence;
+    savedPmType = client->ps.pm_type;
 
     Com_Memset(client, 0, sizeof(*client));
 
@@ -1173,6 +1182,13 @@ void ClientSpawn(gentity_t* ent) {
         client->ps.persistant[i] = persistant[i];
     }
     client->ps.eventSequence = eventSequence;
+
+    // [QL] 0x1003c051: retail keeps pm_type through the clear. Only the spectator type is kept
+    // here, because the fork's respawn paths still count on the clear to bring a dead player
+    // back to PM_NORMAL (retail's respawn sets it before spawning).
+    if (savedPmType == PM_SPECTATOR) {
+        client->ps.pm_type = PM_SPECTATOR;
+    }
 
     // increment the spawncount so the client will detect the respawn
     client->ps.persistant[PERS_SPAWN_COUNT]++;
@@ -1204,7 +1220,7 @@ void ClientSpawn(gentity_t* ent) {
     ent->takedamage = qtrue;
     ent->inuse = qtrue;
     ent->classname = "player";
-    if (client->sess.sessionTeam == TEAM_SPECTATOR) {
+    if (client->ps.pm_type == PM_SPECTATOR) {  // [QL] 0x1003c213
         ent->r.contents = 0;
         ent->clipmask = 0;
     } else {
@@ -1476,7 +1492,7 @@ void ClientSpawn(gentity_t* ent) {
     }
 
     if (!level.intermissionTime) {
-        if (ent->client->sess.sessionTeam != TEAM_SPECTATOR) {
+        if (ent->client->ps.pm_type != PM_SPECTATOR) {
             // fire the targets of the spawn point
             G_UseTargets(spawnPoint, ent);
 
@@ -1506,8 +1522,14 @@ void ClientSpawn(gentity_t* ent) {
         ClientEndFrame(ent);
     }
 
-    // [QL] g_spawnItems processing: give items listed in semicolon-delimited string
-    if (ent->client->sess.sessionTeam != TEAM_SPECTATOR) {
+    // [QL] 0x1003c713: in team gametypes the team overlay goes out a second after a spawn
+    if (g_gametype.integer >= GT_TEAM) {
+        level.nextTeamInfoTime = level.time + 1000;
+    }
+
+    // [QL] g_spawnItems processing: give items listed in semicolon-delimited string. A spectator,
+    // on a team or not, is never linked (retail unlinks it at the end of ClientSpawn, 0x1003c77a).
+    if (ent->client->ps.pm_type != PM_SPECTATOR) {
         if (g_spawnItems.string[0]) {
             char spawnItemsBuf[1024];
             char *tok;

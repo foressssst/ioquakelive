@@ -1741,8 +1741,31 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
 
     trap_SetConfigstring(CS_INTERMISSION, "");
 
-    // [QL] Round-based gametype initialization
+    // [QL] Round-based gametype initialization (0x1005545d). SP_worldspawn has already set the
+    // warmup state: after the restart that starts the match the first round counts down straight
+    // away, otherwise it waits in RS_WARMUP. The fork only did this for Red Rover, so the rounds of
+    // CA, Freeze Tag and A&D never started.
     switch (g_gametype.integer) {
+    case GT_CA:
+        level.roundState.tNext = 0;
+        level.roundState.eCurrent = (level.warmupTime == 0) ? RS_COUNTDOWN : RS_WARMUP;
+        CA_RoundStateTransition();
+        break;
+    case GT_FREEZE:
+        level.roundState.tNext = 0;
+        level.roundState.eCurrent = (level.warmupTime == 0) ? RS_COUNTDOWN : RS_WARMUP;
+        Freeze_RoundStateTransition();
+        break;
+    case GT_AD:
+        level.roundState.tNext = 0;
+        level.roundState.eCurrent = (level.warmupTime == 0) ? RS_COUNTDOWN : RS_WARMUP;
+        AD_RoundStateTransition();
+        level.roundState.turn = 0;
+        level.roundState.round = 0;
+        level.roundState.capture = qfalse;
+        level.roundState.touch = qfalse;
+        ADScoreboardMessage(NULL);
+        break;
     case GT_RR:
         RR_InitRoundState();
         break;
@@ -3889,16 +3912,24 @@ void G_RunFrame(int levelTime) {
     // [QL] warmup / forfeit driver (all gametypes)
     CheckWarmupAndForfeit();
 
-    // [QL] per-gametype frame logic
+    // [QL] per-gametype frame logic (0x100599f0)
     if (g_gametype.integer == GT_RR) {
         // infection, survival bonus, round end
         RR_Think();
+    } else if (g_gametype.integer == GT_CTF) {
+        // [QL] 0x10059a1c: return a flag nobody holds any more
+        Team_CheckLostFlag(TEAM_RED);
+        Team_CheckLostFlag(TEAM_BLUE);
     } else if (g_gametype.integer == GT_DOMINATION) {
         // owned-point count -> team-count configstrings
         DOM_CheckPlayers();
     } else if (g_gametype.integer == GT_AD) {
         // advance the round countdown, then end the round on timeout / objective
         if (!level.intermissionQueued && !level.intermissionTime && !level.warmupTime) {
+            // [QL] 0x10059b30: the round clock stands still while the game is paused
+            if (level.timePauseBegin != 0) {
+                level.roundState.startTime += level.frametime;
+            }
             if (AD_GetRoundState() == RS_PLAYING) {
                 int redAlive, blueAlive;
                 Team_LivingTeamCounts(&redAlive, &blueAlive);
@@ -3910,8 +3941,23 @@ void G_RunFrame(int levelTime) {
             }
         }
     } else if (g_gametype.integer == GT_CA) {
-        // drive the round countdown even when nobody dies
-        CA_GetRoundState();
+        // [QL] 0x10059a35: the round ends when a team is wiped out or roundtimelimit runs out
+        if (!level.intermissionQueued && !level.intermissionTime && !level.warmupTime) {
+            if (level.timePauseBegin != 0) {
+                level.roundState.startTime += level.frametime;
+            }
+            if (CA_GetRoundState() == RS_PLAYING) {
+                int redAlive, blueAlive;
+                Team_LivingTeamCounts(&redAlive, &blueAlive);
+                if (redAlive == 0 || blueAlive == 0 ||
+                    (roundtimelimit.integer &&
+                     level.time - level.roundState.startTime >= roundtimelimit.integer * 1000)) {
+                    level.roundState.tNext = 0;
+                    level.roundState.eCurrent = RS_ROUND_OVER;
+                    CA_RoundStateTransition();
+                }
+            }
+        }
     } else if (g_gametype.integer == GT_FREEZE) {
         // advance the round state and end the round when a team is all frozen
         Freeze_Think();
@@ -3921,7 +3967,10 @@ void G_RunFrame(int levelTime) {
     CheckExitRules();
 
     // update to team status?
-    CheckTeamStatus();
+    // [QL] 0x1005990d: team gametypes only
+    if (g_gametype.integer >= GT_TEAM) {
+        CheckTeamStatus();
+    }
 
     // cancel vote if timed out
     CheckVote();

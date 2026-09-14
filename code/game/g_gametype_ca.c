@@ -491,16 +491,16 @@ checkRound:
 }
 
 // ============================================================================
-// CA_Think (binary: 0x10038be0)
+// CA_PlayerKilled (binary: 0x100389f0)
 //
-// Called both per-frame from G_RunFrame AND from player_die for GT_CA.
-// Checks alive counts and triggers LastManStanding warnings.
-// Round-over is NOT triggered here - it happens via the death call path.
+// Called from player_die with the victim's team. Runs a pending round-state
+// timer and, while the round is live and both teams still have someone alive,
+// warns the victim's team when it is down to its last player. The round is
+// ended by G_RunFrame, not here. Twin of AD_PlayerKilled and Freeze_AutoThaw.
 // ============================================================================
-void CA_Think(void) {
+void CA_PlayerKilled(int team) {
     int redAlive, blueAlive;
 
-    // Advance pending timer
     if (level.roundState.tNext != 0) {
         if (level.time < level.roundState.tNext)
             return;
@@ -516,22 +516,17 @@ void CA_Think(void) {
         return;
 
     Team_LivingTeamCounts(&redAlive, &blueAlive);
+    if (redAlive == 0 || blueAlive == 0)
+        return;
+    if (!g_lastManStandingWarning.integer)
+        return;
 
-    // Check if round is over (one team eliminated)
-    if (redAlive == 0 || blueAlive == 0) {
-        level.roundState.eCurrent = RS_ROUND_OVER;
-        CA_RoundStateTransition();
+    if (redAlive == 1 && team == TEAM_RED) {
+        LastManStanding(TEAM_RED);
         return;
     }
-
-    // Last man standing warning
-    if (g_lastManStandingWarning.integer != 0) {
-        if (redAlive == 1) {
-            LastManStanding(TEAM_RED);
-        }
-        if (blueAlive == 1) {
-            LastManStanding(TEAM_BLUE);
-        }
+    if (blueAlive == 1 && team == TEAM_BLUE) {
+        LastManStanding(TEAM_BLUE);
     }
 }
 

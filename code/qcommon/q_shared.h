@@ -1366,12 +1366,14 @@ typedef enum {
     FMV_ID_WAIT
 } e_status;
 
+// [QL] retail order: qagamex86.dll sets 2 for every dropped flag (0x1006893a) and 3/4 for the
+// neutral flag taken by red/blue (0x10069eb1); CS_FLAGSTATUS carries these digits
 typedef enum _flag_status {
     FLAG_ATBASE = 0,
     FLAG_TAKEN,       // CTF
+    FLAG_DROPPED,
     FLAG_TAKEN_RED,   // One Flag CTF
-    FLAG_TAKEN_BLUE,  // One Flag CTF
-    FLAG_DROPPED
+    FLAG_TAKEN_BLUE   // One Flag CTF
 } flagStatus_t;
 
 #define MAX_GLOBAL_SERVERS 4096

@@ -359,7 +359,7 @@ void SpectatorThink(gentity_t* ent, usercmd_t* ucmd) {
 
     // attack button cycles through spectators
     if ((client->buttons & BUTTON_ATTACK) && !(client->oldbuttons & BUTTON_ATTACK)) {
-        Cmd_FollowCycle_f(ent, 1);
+        FollowCycle(ent, 1);
         return;  // [QL] 0x10033f62 returns straight after the cycle
     }
 
@@ -428,7 +428,7 @@ qboolean ClientInactivityTimer(gclient_t* client, int msec) {
                         return qfalse;
                     }
                     SetTeam(&g_entities[clientNum], "spectator");
-                    Cmd_FollowCycle_f(&g_entities[clientNum], 1);
+                    FollowCycle(&g_entities[clientNum], 1);
                     return qfalse;
                 }
 
@@ -475,6 +475,8 @@ void ClientTimerActions(gentity_t* ent, int msec) {
 
     client = ent->client;
     client->timeResidual += msec;
+    // [QL] 0x100343f3: the time the flag has been carried, cleared when it is picked up
+    client->pers.teamState.flagsince += msec;
 
     while (client->timeResidual >= 1000) {
         client->timeResidual -= 1000;
@@ -957,8 +959,32 @@ void ClientThink_real(gentity_t* ent) {
         return;
     }
 
+    // [QL] 0x10034d79: a spawn that found no spawn point is tried again through the gametype's
+    // own begin once its 600 ms are up (the rounds decide whether the player plays or watches)
+    if (client->spawnRetryTime && client->spawnRetryTime < level.time) {
+        client->spawnRetryTime = 0;
+        client->ps.pm_type = PM_NORMAL;
+        switch (g_gametype.integer) {
+        case GT_CA:
+        case GT_AD:
+            ClientBegin_RoundBased(ent);
+            break;
+        case GT_FREEZE:
+            Freeze_ClientBegin(ent);
+            break;
+        case GT_RR:
+            RR_ClientBegin(ent);
+            break;
+        default:
+            ClientSpawn(ent);
+            break;
+        }
+        return;
+    }
+
     // spectators don't do much
-    if (client->sess.sessionTeam == TEAM_SPECTATOR) {
+    // [QL] 0x10034e32: by pm_type, which also covers a player sitting a round out on their team
+    if (client->ps.pm_type == PM_SPECTATOR) {
         if (client->sess.spectatorState == SPECTATOR_SCOREBOARD) {
             return;
         }
@@ -1278,7 +1304,7 @@ void SpectatorClientEndFrame(gentity_t* ent) {
 
         // [QL] 0x1003558d: the follow target is gone. A player on a team, with team
         // spectating not in free-cam, and both teams still alive, moves on to the next
-        // player (Cmd_FollowCycle_f, 0x10041130). Anyone else stops following
+        // player (FollowCycle, 0x10041130). Anyone else stops following
         // (StopFollowing, 0x10040d10).
         if (client->sess.spectatorClient >= 0) {
             int redAlive, blueAlive;
@@ -1286,7 +1312,7 @@ void SpectatorClientEndFrame(gentity_t* ent) {
             Team_LivingTeamCounts(&redAlive, &blueAlive);
             if (client->sess.sessionTeam != TEAM_SPECTATOR && !g_teamSpecFreeCam.integer &&
                 redAlive > 0 && blueAlive > 0) {
-                Cmd_FollowCycle_f(ent, 1);
+                FollowCycle(ent, 1);
                 return;
             }
             StopFollowing(ent);
@@ -1306,7 +1332,8 @@ while a slow client may have multiple ClientEndFrame between ClientThink.
 void ClientEndFrame(gentity_t* ent) {
     int i;
 
-    if (ent->client->sess.sessionTeam == TEAM_SPECTATOR) {
+    // [QL] 0x10035606: by pm_type, so a player sitting a round out follows like a spectator
+    if (ent->client->ps.pm_type == PM_SPECTATOR) {
         SpectatorClientEndFrame(ent);
         return;
     }
@@ -1368,6 +1395,15 @@ void ClientEndFrame(gentity_t* ent) {
     //
     if (level.intermissionTime) {
         return;
+    }
+
+    // [QL] 0x100356e4: in team gametypes the player's location (the nearest target_location's
+    // health) goes out in the entity and player states, where the team overlay reads it
+    if (g_gametype.integer >= GT_TEAM) {
+        gentity_t* loc = Team_GetLocation(ent);
+
+        ent->s.location = loc ? loc->health : 0;
+        ent->client->ps.location = ent->s.location;
     }
 
     // burn from lava, etc

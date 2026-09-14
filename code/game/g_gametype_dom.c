@@ -43,10 +43,11 @@ static void DOM_FrameThink(gentity_t *ent);
                          EF_AWARD_DEFEND | EF_AWARD_CAP)
 
 // ============================================================================
-// DOM_CheckFlagScore (binary: 0x1004ac40)
+// DOM_CheckFlagScore (binary: 0x1004aa80)
 //
 // Award medals when a point is captured. The capturer gets CAPTURE (+25), the
-// other players present get ASSIST (+15). ent->domCapturer picks the capturer.
+// other players present get ASSIST (+15), and the score plums rise from the
+// point. ent->domCapturer picks the capturer.
 // ============================================================================
 static void DOM_CheckFlagScore(gentity_t *ent, gentity_t **players, int count) {
     int i;
@@ -62,16 +63,16 @@ static void DOM_CheckFlagScore(gentity_t *ent, gentity_t **players, int count) {
             cl->ps.eFlags &= ~DOM_AWARD_MASK;
             cl->ps.eFlags |= EF_AWARD_CAP;
             cl->rewardTime = level.time + REWARD_SPRITE_TIME;
-            AddScore(player, player->r.currentOrigin, 25);
+            AddScore(player, ent->r.currentOrigin, 25);
             STAT_AddPlayerMedalStat(player, "CAPTURE");
         } else {
             cl->pers.teamState.assists++;
             cl->expandedStats.numAssists++;
+            AddScore(player, ent->r.currentOrigin, 15);
             cl->ps.persistant[PERS_ASSIST_COUNT]++;
             cl->ps.eFlags &= ~DOM_AWARD_MASK;
             cl->ps.eFlags |= EF_AWARD_ASSIST;
             cl->rewardTime = level.time + REWARD_SPRITE_TIME;
-            AddScore(player, player->r.currentOrigin, 15);
             STAT_AddPlayerMedalStat(player, "ASSIST");
         }
     }
@@ -323,15 +324,12 @@ static void DOM_Think(gentity_t *ent) {
     if (domScoreTick < numDomPoints)
         return;
 
-    // NOTE: after the tick, QL runs a "your team is being dominated" voice cue
-    // (binary 0x1004b804-0x1004b8cc). It counts control points that are either
-    // unowned or owned by domPoints[0]'s team; if that count >= 3 it walks every
-    // client on that team and, via game syscalls syscall_ptr+0x330 / +0x32c
-    // (unmapped traps ~#203/#204, arg 41) gated on a per-client cooldown
-    // accumulator at gclient offset 0x88c (incremented by g_domScoreRate each
-    // tick), fires a directed voice line. Neither the traps, the constant 41,
-    // nor the 0x88c field are present in the reimpl headers, and the cue has no
-    // effect on scores/ownership, so it is not reproduced here.
+    // NOTE: after the tick, retail (DOM_Think 0x1004b5d0, from 0x1004b644) counts
+    // the points that are unused or held by domPoints[0]'s owner. With 3 or more,
+    // every client on that team adds g_domScoreRate to a counter (gclient +0x88c)
+    // and gets achievement 41 through trap_HasAchievement / trap_SetAchievement
+    // once the counter reaches 30. It is an achievement, not an announcement, and
+    // the counter is not in this gclient_t, so it is not reproduced here.
 
     red = level.teamScores[TEAM_RED];
     blue = level.teamScores[TEAM_BLUE];
@@ -434,10 +432,11 @@ void DOM_CheckPlayers(void) {
 }
 
 // ============================================================================
-// DOM_FragBonuses (binary: 0x1004bb40)
+// DOM_FragBonuses (binary: 0x1004b980)
 //
 // DEFEND (+10) for killing an enemy near a control point your team holds.
-// Needs distance < 500 and a PVS line of sight to the point.
+// Needs distance < 500 and a PVS line of sight to the point. The score plum
+// rises from the victim.
 // ============================================================================
 void DOM_FragBonuses(gentity_t *attacker, gentity_t *victim) {
     int i;
@@ -459,12 +458,12 @@ void DOM_FragBonuses(gentity_t *attacker, gentity_t *victim) {
 
         attacker->client->pers.teamState.basedefense++;
         attacker->client->expandedStats.numDefends++;
-        AddScore(attacker, attacker->r.currentOrigin, 10);
+        AddScore(attacker, victim->r.currentOrigin, 10);
         attacker->client->ps.persistant[PERS_DEFEND_COUNT]++;
         attacker->client->ps.eFlags &= ~DOM_AWARD_MASK;
         attacker->client->ps.eFlags |= EF_AWARD_DEFEND;
         attacker->client->rewardTime = level.time + REWARD_SPRITE_TIME;
-        STAT_AddPlayerMedalStat(attacker, "DEFEND");
+        STAT_AddPlayerMedalStat(attacker, "DEFENSE");
         return;   // one bonus per kill
     }
 }
