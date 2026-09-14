@@ -1097,8 +1097,7 @@ typedef struct {
     qhandle_t grapplingChainShader;
 
     qhandle_t balloonShader;
-    // [CPMA] animation frames from the player's own CPMA package (zz-cpma-anim.pk3);
-    // 0 when it is not installed
+    // [CPMA] animation frames from CPMA 1.53's package, shipped in pak01; 0 without them
     qhandle_t medalFrames[6][24];
     int fragMessageFont;  // [ioquakelive] engine font of the frag message: Handel Gothic Ex, or 0
     qhandle_t chatBalloonFrames[16];
@@ -2037,10 +2036,6 @@ extern vmCvar_t cg_cameraOrbit;
 extern vmCvar_t g_training;
 extern vmCvar_t g_skipTrainingEnable;
 extern vmCvar_t cg_drawPregameMessages;
-extern vmCvar_t cg_drawFragMessageScale;   // [ioquakelive] temporary, for the user to tune
-extern vmCvar_t cg_drawRewardsImageScale;  // [ioquakelive] temporary, for the user to tune
-extern vmCvar_t cg_drawRewardsX;           // [ioquakelive] temporary, for the user to tune
-extern vmCvar_t cg_drawRewardsY;           // [ioquakelive] temporary, for the user to tune
 extern int cg_currentWidescreen;
 float CG_TextWidth_DC(const char* text, float scale, int limit, int fontIndex);
 float CG_TextHeight_DC(const char* text, float scale, int limit, int fontIndex);

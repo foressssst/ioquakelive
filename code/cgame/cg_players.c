@@ -1966,8 +1966,8 @@ static void CG_PlayerPowerups(centity_t* cent, refEntity_t* torso) {
 CG_ChatBalloonShader
 
 [CPMA] cg_animateChatBalloon: CPMA 1.53 loops 16 frames of 40 ms (640 ms) on one clock
-for every balloon (cgame.qvm func 64762). The frames come from the player's own CPMA
-package; without it, Quake Live's balloon.
+for every balloon (cgame.qvm func 64762). The frames are CPMA's, shipped in pak01;
+without them, Quake Live's balloon.
 ===============
 */
 qhandle_t CG_ChatBalloonShader(void) {

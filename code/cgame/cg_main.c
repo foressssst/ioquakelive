@@ -248,10 +248,6 @@ vmCvar_t cg_drawItemPickups;
 vmCvar_t cg_drawCheckpointRemaining;
 vmCvar_t cg_drawSpecMessages;
 vmCvar_t cg_drawPregameMessages;
-vmCvar_t cg_drawFragMessageScale;
-vmCvar_t cg_drawRewardsImageScale;
-vmCvar_t cg_drawRewardsX;
-vmCvar_t cg_drawRewardsY;
 vmCvar_t cg_drawTieredArmorAvailability;
 vmCvar_t cg_enemyHeadColor;
 vmCvar_t cg_enemyLowerColor;
@@ -674,13 +670,6 @@ static cvarTable_t cvarTable[] = {
     {&cg_drawCheckpointRemaining, "cg_drawCheckpointRemaining", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_drawSpecMessages, "cg_drawSpecMessages", "1", CVAR_USERSAVE | CVAR_VM_CREATED},
     {&cg_drawPregameMessages, "cg_drawPregameMessages", "1", CVAR_USERSAVE | CVAR_VM_CREATED},
-    // [ioquakelive] Back on cvars on 2026-09-13 so the user can tune the two sizes and the
-    // medal's place live; the values they choose get baked and these go again. Not archived,
-    // as in the first round.
-    {&cg_drawFragMessageScale, "cg_drawFragMessageScale", "0.2", 0},
-    {&cg_drawRewardsImageScale, "cg_drawRewardsImageScale", "0.51", 0},
-    {&cg_drawRewardsX, "cg_drawRewardsX", "325", 0},
-    {&cg_drawRewardsY, "cg_drawRewardsY", "137", 0},
     {&cg_drawTieredArmorAvailability, "cg_drawTieredArmorAvailability", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_enemyHeadColor, "cg_enemyHeadColor", "0x2a8000FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_enemyLowerColor, "cg_enemyLowerColor", "0x2a8000FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
@@ -1983,8 +1972,8 @@ static void CG_RegisterGraphics(void) {
     cgs.media.medalHeadshot = trap_R_RegisterShaderNoMip("medal_headshot");
     cgs.media.medalImpressive = trap_R_RegisterShaderNoMip("medal_impressive");
 
-    // [CPMA] animation frames, only when the player's own CPMA package provides them
-    // (the launcher extracts them into zz-cpma-anim.pk3; ioquakelive never ships them)
+    // [CPMA] animation frames, CPMA 1.53's own, shipped in pak01 since 2026-09-13 at the
+    // user's decision; the checks keep a pak01 built without them working
     {
         static const char* const medalNames[6] = {"assist", "capture", "defend", "excellent", "gauntlet", "impressive"};
         fileHandle_t f;
@@ -2005,9 +1994,9 @@ static void CG_RegisterGraphics(void) {
             }
         }
 
-        // [ioquakelive] Handel Gothic Ex for the frag message (CG_DrawCenterString), only where
-        // the player has it: it isn't ours to ship, so the launcher copies the one installed in
-        // Windows into baseq3/fonts. Everyone else gets Quake Live's Handel Gothic.
+        // [ioquakelive] Handel Gothic Ex for the frag message (CG_DrawCenterString), shipped in
+        // pak01 since 2026-09-13 at the user's decision. Without it the frag message falls back
+        // to Quake Live's Handel Gothic.
         cgs.media.fragMessageFont = 0;
         if (trap_FS_FOpenFile("fonts/handelgothicex.ttf", &f, FS_READ) > 0) {
             trap_FS_FCloseFile(f);

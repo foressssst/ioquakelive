@@ -1105,8 +1105,8 @@ CG_DrawRewardIcon
 
 [CPMA] ch_animateRewardIcons: CPMA 1.53 plays 24 frames of 40 ms for assist, capture,
 defend, excellent, gauntlet and impressive, stopping on the last (1) or looping (2)
-(cgame.qvm func 165605). The frames come from the player's own CPMA package; without
-it, and for every other medal, the icon stays still.
+(cgame.qvm func 165605). The frames are CPMA's, shipped in pak01; without them, and for
+every other medal, the icon stays still.
 ===================
 */
 static void CG_DrawRewardIcon(float x, float y, float size, qhandle_t shader) {
@@ -1143,19 +1143,19 @@ CG_DrawReward
 cg_drawRewards is tested, so hidden medals still advance and play. Retail draws
 32x32 icons with their top at y 42, one per medal, 48 apart and centred on 320,
 or past cg_drawRewardsRowSize one icon with its count at (336, 66).
-[ioquakelive] The layout the user chose on 2026-09-13, for a tidy HUD where no
-message runs into another: one medal and no count. Its size and place are on
-cvars again while the user tunes them, with the first round's names; the values
-they choose get baked and the cvars removed. cg_drawRewardsImageScale is the size
-(1 is retail's 32 units, default 0.51), cg_drawRewardsX centres the medal as if
-48 * that scale units wide (default 325), and cg_drawRewardsY is its top
-(default 137).
+[ioquakelive] The layout the user tuned live and chose on 2026-09-13, for a tidy HUD
+where no message runs into another: one medal at 0.74 of retail's size, centred on
+325 as if 48 * 0.74 units wide, its top at y 128, and no count.
 ===================
 */
+#define REWARD_ICON_SCALE 0.74f
+#define REWARD_ICON_SIZE (32.0f * REWARD_ICON_SCALE)
+#define REWARD_ICON_X (325.0f - 48.0f * REWARD_ICON_SCALE / 2.0f)
+#define REWARD_ICON_Y 128.0f
+
 static void CG_DrawReward(void) {
 	vec4_t color;
 	int i, remaining;
-	float scale;
 
 	remaining = REWARD_TIME - (cg.time - cg.rewardTime);
 	if (!cg.rewardTime || remaining <= 0) {
@@ -1186,10 +1186,8 @@ static void CG_DrawReward(void) {
 	} else {
 		color[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
 	}
-	scale = cg_drawRewardsImageScale.value;
 	trap_R_SetColor(color);
-	CG_DrawRewardIcon(cg_drawRewardsX.value - 48.0f * scale / 2.0f, cg_drawRewardsY.value, 32.0f * scale,
-					  cg.rewardShader[0]);
+	CG_DrawRewardIcon(REWARD_ICON_X, REWARD_ICON_Y, REWARD_ICON_SIZE, cg.rewardShader[0]);
 	trap_R_SetColor(NULL);
 }
 
@@ -1473,11 +1471,11 @@ height in font 0 with the print's scale and ITEM_TEXTSTYLE_SHADOWEDMORE, and
 the next line starts 6 units below it.
 ===================
 */
-// [ioquakelive] The frag message in the layout the user chose on 2026-09-13: lower than
-// retail's, under the medal and clear of it, in Handel Gothic Ex where the player has it
-// (cgs.media.fragMessageFont). Its scale is on cg_drawFragMessageScale again while the user
-// tunes it (default 0.2); the value they choose gets baked and the cvar removed.
+// [ioquakelive] The frag message in the layout the user tuned live and chose on 2026-09-13:
+// smaller than retail's and lower, under the medal, in Handel Gothic Ex from pak01
+// (cgs.media.fragMessageFont).
 #define FRAG_MESSAGE_Y 165.0f
+#define FRAG_MESSAGE_SCALE 0.15f
 
 static void CG_DrawCenterString(void) {
 	static vec4_t color;
@@ -1510,7 +1508,7 @@ static void CG_DrawCenterString(void) {
 
 	if (cg.centerPrintFrag) {
 		y = FRAG_MESSAGE_Y;
-		scale = cg_drawFragMessageScale.value;
+		scale = FRAG_MESSAGE_SCALE;
 		font = cgs.media.fragMessageFont;
 	} else {
 		y = (float)cg.centerPrintY;
