@@ -1956,6 +1956,7 @@ void CG_DrawAdvertisements(void);
 void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoPlayback);
 void CG_AddPOIMarkers(void);
 void CG_CloseMenus(void);
+void CG_HideJoinMenu(void);
 void CG_UpdateJoinMenu(void);
 // [QL] menu pointer cache (binary caches these in one run at 0x10006eb8) and the
 // competitive spectator overlay (0x1000dad0).

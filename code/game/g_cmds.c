@@ -612,6 +612,11 @@ void SetTeam(gentity_t* ent, const char* s) {
     } else {
         // force them to spectators if there aren't any spots free
         team = TEAM_FREE;
+        // [QL] 0x10040bd7: asking to play a duel puts the client in the play queue
+        if (g_gametype.integer == GT_DUEL) {
+            client->sess.specOnly = 0;
+            trap_SendServerCommand(clientNum, va("cp \"%s\n\"", "You are in the queue to play"));
+        }
     }
 
     // [QL] Team lock check
@@ -639,8 +644,16 @@ void SetTeam(gentity_t* ent, const char* s) {
     }
 
     // override decision if limiting the players
-    if ((g_gametype.integer == GT_DUEL) && level.numNonSpectatorClients >= 2) {
-        team = TEAM_SPECTATOR;
+    // [QL] 0x10040c7c: a duel only takes the next in line (G_NextDuelPlayer), and only
+    // while a spot is free; everyone else waits in the queue as a spectator, and a player
+    // already in the match asking for the same team changes nothing
+    if (g_gametype.integer == GT_DUEL) {
+        if (level.numNonSpectatorClients > 1 || G_NextDuelPlayer() != client) {
+            if (team == client->sess.sessionTeam && team != TEAM_SPECTATOR) {
+                return;
+            }
+            team = TEAM_SPECTATOR;
+        }
     } else if (g_maxGameClients.integer > 0 &&
                level.numNonSpectatorClients >= g_maxGameClients.integer) {
         team = TEAM_SPECTATOR;

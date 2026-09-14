@@ -4412,32 +4412,19 @@ void CG_ShowTeamMenu(void) {
 /*
 ==================
 CG_EventHandling
-==================
- type 0 - no event handling
-      1 - team menu
-      2 - hud editor
 
+[QL] cgamex86.dll 0x1003c620. The event is kept in cgs.eventHandling. 0 closes Quake 3's
+team menu (0x1003c570), 5 hides the join menu (0x1000e930): the retail engine sends 5 from
+its Escape handler (quakelive_steam.exe 0x4b7c1c) and then goes on to open the in-game
+menu. 4 recomputes the screen scale and is not ported.
+==================
 */
 void CG_EventHandling(int type) {
     cgs.eventHandling = type;
     if (type == CGAME_EVENT_NONE) {
-        // [QL] cgamex86.dll CG_EventHandling @0x1003c620 dispatches on 0, 4 and 5:
-        //   type 0 -> 0x1003c570, closes "teamMenu"   (Q3 vestige, never loaded)
-        //   type 5 -> 0x1000e930, closes "joingame_menu"
-        // So in the retail binary it is event 5, not 0, that dismisses the join
-        // menu. QL's engine is the one that decides which to send on Escape, and
-        // we do not have it - ioquake3's engine only ever sends CGAME_EVENT_NONE
-        // from its Escape handler (cl_keys.c, right after it drops KEYCATCH_CGAME).
-        //
-        // ADAPTATION, not a replica: NONE is mapped onto the binary's event-5
-        // behaviour, because it is the only event this engine sends and the join
-        // menu has to come down when Escape is pressed. Without it the menu keeps
-        // painting underneath whatever Escape opens next.
-        CG_CloseMenus();
         CG_HideTeamMenu();
-    } else if (type == CGAME_EVENT_TEAMMENU) {
-        // CG_ShowTeamMenu();
-    } else if (type == CGAME_EVENT_SCOREBOARD) {
+    } else if (type == CGAME_EVENT_ESCAPE) {
+        CG_HideJoinMenu();
     }
 }
 
@@ -4478,14 +4465,14 @@ void CG_KeyEvent(int key, qboolean down) {
         // Dropping it mid-frame makes the join menu snap from the centred layout to
         // spanning the whole window - which is exactly what it did the first time this
         // was written the UI module's way. The catcher belongs to CG_UpdateJoinMenu,
-        // which takes it, and CG_CloseMenus, which gives it back.
+        // which takes it, and CG_HideJoinMenu, which gives it back.
         return;
     }
 
-    // Escape is handled by the engine before it ever reaches us: cl_keys.c drops
-    // KEYCATCH_CGAME and calls CG_EVENT_HANDLING(CGAME_EVENT_NONE) on the key-down,
-    // so only the release arrives here. Passing it through is harmless and matches
-    // what the UI module does with the keys it does not special-case.
+    // Escape is handled by the engine before it ever reaches us: cl_keys.c sends
+    // CG_EVENT_HANDLING(CGAME_EVENT_ESCAPE) on the key-down, which hides the join menu
+    // and drops KEYCATCH_CGAME, so only the release arrives here. Passing it through is
+    // harmless and matches what the UI module does with the keys it does not special-case.
     Menu_HandleKey(menu, key, down);
 }
 

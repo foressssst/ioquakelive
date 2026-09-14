@@ -333,13 +333,46 @@ void DuelScoreboardMessage(gentity_t *ent) {
 
 /*
 =============
+G_NextDuelPlayer
+
+[QL] qagamex86.dll 0x10055710. The spectator next in line to play: connected (or holding a
+queue time), not following a place (spectatorClient < 0) and not spectate-only, the one
+waiting longest. Every client starts a duel spectate-only (G_InitSessionData, 0x10065ad0)
+and leaves that state only by asking to play (SetTeam), so nobody, the local player of
+/map among them, is put into the match without asking. Quake 3's AddTournamentPlayer took
+any spectator, and dropped that player straight onto a spawn point.
+=============
+*/
+gclient_t *G_NextDuelPlayer(void) {
+    gclient_t *cl;
+    gclient_t *nextInLine = NULL;
+    int i;
+
+    for (i = 0; i < level.maxclients; i++) {
+        cl = level.clients + i;
+        if (cl->pers.connected != CON_CONNECTED && !cl->sess.spectatorTime) {
+            continue;
+        }
+        if (cl->sess.sessionTeam != TEAM_SPECTATOR || cl->sess.spectatorClient < 0 || cl->sess.specOnly) {
+            continue;
+        }
+        if (!nextInLine || cl->sess.spectatorTime < nextInLine->sess.spectatorTime) {
+            nextInLine = cl;
+        }
+    }
+    return nextInLine;
+}
+
+/*
+=============
 AddDuelPlayer
 
 [QL] Duel-only: pull in spectators from the queue when a slot opens. Called every
 frame from G_RunFrame. Only runs for GT_DUEL and never while an intermission is
 queued/active or the match is paused/timed-out.
-.so symbol: AddDuelPlayer   Binary: 0x100557f0 (Ghidra had mislabelled this
-"CheckTournament"; the real CheckTournament is the ready countdown below).
+.so symbol: AddDuelPlayer   Binary: 0x10055780. With fewer than two players, the next in
+line (G_NextDuelPlayer) comes in through SetTeam "f", after the game drops back to the
+pre-game warmup; then every connected client's ready flag is cleared.
 
 Note: the binary also calls G_AutoRecordAndScreenshot(-1) when a player is
 pulled in; ioquakelive has no equivalent yet, so that step is skipped.
@@ -348,8 +381,8 @@ pulled in; ioquakelive has no equivalent yet, so that step is skipped.
 void AddDuelPlayer(void) {
     int i;
     int numNonSpec;
-    int prevPlaying;
     gclient_t *cl;
+    gclient_t *next;
 
     if (g_gametype.integer != GT_DUEL) {
         return;
@@ -375,21 +408,19 @@ void AddDuelPlayer(void) {
         return;
     }
 
-    // Pull the next queued spectator in. AddTournamentPlayer sets warmupTime=-1
-    // and moves them to TEAM_FREE, but only if the queue had someone.
-    prevPlaying = level.numPlayingClients;
-    AddTournamentPlayer();
-    if (level.numPlayingClients == prevPlaying) {
-        // queue empty, nobody came in
+    next = G_NextDuelPlayer();
+    if (!next) {
+        // nobody asked to play
         return;
     }
 
-    // A player was added: drop back to PRE_GAME warmup and kill any ready countdown
+    // A player comes in: drop back to PRE_GAME warmup and kill any ready countdown
     SetWarmupState(-1);
     if (level.allReadyTime != 0) {
         level.allReadyTime = 0;
         trap_SetConfigstring(CS_ALLREADY_TIME, va("%i", 0));
     }
+    SetTeam(&g_entities[next - level.clients], "f");
 
     // Clear the ready flag on every connected client and refresh their userinfo.
     // Binary operates on pers.ready (0x2E8), not sess.specOnly.
