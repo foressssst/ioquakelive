@@ -1059,11 +1059,13 @@ static void Menu_RunCloseScript(menuDef_t* menu) {
     }
 }
 
+// [QL] cgamex86 0x10059430, uix86 0x100161b0: closing also clears WINDOW_FORCED, which
+// Menu_Paint(menu, qtrue) leaves set on the scoreboards
 void Menus_CloseByName(const char* p) {
     menuDef_t* menu = Menus_FindByName(p);
     if (menu != NULL) {
         Menu_RunCloseScript(menu);
-        menu->window.flags &= ~(WINDOW_VISIBLE | WINDOW_HASFOCUS);
+        menu->window.flags &= ~(WINDOW_FORCED | WINDOW_VISIBLE | WINDOW_HASFOCUS);
     }
 }
 
