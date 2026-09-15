@@ -28,6 +28,7 @@
     <ClCompile Include="..\..\code\qcommon\cm_trace.c" />
     <ClCompile Include="..\..\code\qcommon\common.c" />
     <ClCompile Include="..\..\code\qcommon\cvar.c" />
+    <ClCompile Include="..\..\code\qcommon\cvar_help.c" />
     <ClCompile Include="..\..\code\qcommon\files.c" />
     <ClCompile Include="..\..\code\qcommon\huffman.c" />
     <ClCompile Include="..\..\code\qcommon\ioapi.c" />
