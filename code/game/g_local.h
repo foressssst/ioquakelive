@@ -609,6 +609,9 @@ typedef struct {
     int             rrInfectedCounters[4];  /* [QL] Red Rover infection tracking */
     int             rrInfectedSpreadStart;  /* [QL] */
     int             rrSurvivorScoreTimer;   /* [QL] */
+    int             itemTimerCounts[MAX_ITEMS];  /* [QL] 0x105df32c: CTF, items of each kind with a timer */
+    vec3_t          itemTimerRedBase;       /* [QL] 0x105df2f0: CTF, where the red flag stands */
+    vec3_t          itemTimerBlueBase;      /* [QL] 0x105df2fc */
 } level_locals_t;
 
 //
@@ -641,6 +644,8 @@ void G_RunItem(gentity_t* ent);
 void RespawnItem(gentity_t* ent);
 void Item_NotifySpectator(gentity_t *ent, int clientNum, qboolean isRespawn);
 void Item_NotifySpectators(gentity_t *ent, qboolean isRespawn);
+void G_SendItemTimersToSpectator(int clientNum);
+void G_InitItemTimerBases(void);
 void G_RespawnKey(int keyTag);
 
 void UseHoldableItem(gentity_t* ent);

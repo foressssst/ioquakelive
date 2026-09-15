@@ -132,7 +132,7 @@ gitem_t bg_itemlist[] =
             /* pickup */ "Armor Shard",
             5,
             IT_ARMOR,
-            0,
+            4,  // [QL] the armor and health tags are qagamex86.dll's (0x100809b0)
             /* precache */ "",
             /* sounds */ ""},
 
@@ -147,7 +147,7 @@ gitem_t bg_itemlist[] =
             /* pickup */ "Armor",
             50,
             IT_ARMOR,
-            0,
+            2,
             /* precache */ "",
             /* sounds */ "",
             /* itemTimer */ 1},
@@ -163,7 +163,7 @@ gitem_t bg_itemlist[] =
             /* pickup */ "Heavy Armor",
             100,
             IT_ARMOR,
-            0,
+            1,
             /* precache */ "",
             /* sounds */ "",
             /* itemTimer */ 1},
@@ -200,7 +200,7 @@ gitem_t bg_itemlist[] =
             /* pickup */ "5 Health",
             5,
             IT_HEALTH,
-            0,
+            4,
             /* precache */ "",
             /* sounds */ ""},
 
@@ -216,7 +216,7 @@ gitem_t bg_itemlist[] =
             /* pickup */ "25 Health",
             25,
             IT_HEALTH,
-            0,
+            3,
             /* precache */ "",
             /* sounds */ ""},
 
@@ -232,7 +232,7 @@ gitem_t bg_itemlist[] =
             /* pickup */ "50 Health",
             50,
             IT_HEALTH,
-            0,
+            2,
             /* precache */ "",
             /* sounds */ ""},
 
@@ -248,7 +248,7 @@ gitem_t bg_itemlist[] =
             /* pickup */ "Mega Health",
             100,
             IT_HEALTH,
-            0,
+            1,
             /* precache */ "",
             /* sounds */ "",
             /* itemTimer */ 1},
@@ -562,7 +562,8 @@ gitem_t bg_itemlist[] =
             IT_HOLDABLE,
             HI_MEDKIT,
             /* precache */ "",
-            /* sounds */ "sound/items/use_medkit.wav"},
+            /* sounds */ "sound/items/use_medkit.wav",
+            /* itemTimer */ 1},  // [QL] the medkit and the five powerups have timers (0x100809b0)
 
         //
         // POWERUP ITEMS
@@ -581,7 +582,8 @@ gitem_t bg_itemlist[] =
             IT_POWERUP,
             PW_QUAD,
             /* precache */ "",
-            /* sounds */ "sound/items/damage3.ogg"},  // [QL] damage2.wav removed
+            /* sounds */ "sound/items/damage3.ogg",  // [QL] damage2.wav removed
+            /* itemTimer */ 1},
 
         /*QUAKED item_enviro (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
          */
@@ -597,7 +599,8 @@ gitem_t bg_itemlist[] =
             IT_POWERUP,
             PW_BATTLESUIT,
             /* precache */ "",
-            /* sounds */ "sound/items/protect3.ogg"},  // [QL] airout.wav removed
+            /* sounds */ "sound/items/protect3.ogg",  // [QL] airout.wav removed
+            /* itemTimer */ 1},
 
         /*QUAKED item_haste (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
          */
@@ -613,7 +616,8 @@ gitem_t bg_itemlist[] =
             IT_POWERUP,
             PW_HASTE,
             /* precache */ "",
-            /* sounds */ ""},
+            /* sounds */ "",
+            /* itemTimer */ 1},
 
         /*QUAKED item_invis (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
          */
@@ -629,7 +633,8 @@ gitem_t bg_itemlist[] =
             IT_POWERUP,
             PW_INVIS,
             /* precache */ "",
-            /* sounds */ ""},
+            /* sounds */ "",
+            /* itemTimer */ 1},
 
         /*QUAKED item_regen (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
          */
@@ -645,7 +650,8 @@ gitem_t bg_itemlist[] =
             IT_POWERUP,
             PW_REGEN,
             /* precache */ "",
-            /* sounds */ "sound/items/regen.wav"},
+            /* sounds */ "sound/items/regen.wav",
+            /* itemTimer */ 1},
 
         /*QUAKED item_flight (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
          */
