@@ -1347,8 +1347,11 @@ void CL_KeyDownEvent(int key, unsigned time) {
             return;
         }
 
+        // [QL] r_fullscreen is latched, and a window has a mode of its own: the change takes a
+        // vid_restart
         Cvar_SetValue("r_fullscreen",
                       !Cvar_VariableIntegerValue("r_fullscreen"));
+        Cbuf_ExecuteText(EXEC_APPEND, "vid_restart\n");
         return;
     }
 

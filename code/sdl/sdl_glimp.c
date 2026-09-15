@@ -394,6 +394,7 @@ static int GLimp_SetMode(int mode, qboolean fullscreen, qboolean noborder, qbool
     SDL_DisplayMode desktopMode;
     int display = 0;
     int x = SDL_WINDOWPOS_UNDEFINED, y = SDL_WINDOWPOS_UNDEFINED;
+    int aspectRatio;
 
     ri.Printf(PRINT_ALL, "Initializing OpenGL display\n");
 
@@ -450,11 +451,15 @@ static int GLimp_SetMode(int mode, qboolean fullscreen, qboolean noborder, qbool
         }
 
         glConfig.windowAspect = (float)glConfig.vidWidth / (float)glConfig.vidHeight;
-    } else if (!R_GetModeInfo(&glConfig.vidWidth, &glConfig.vidHeight, &glConfig.windowAspect, mode)) {
+        aspectRatio = R_AspectRatioOf(glConfig.vidWidth, glConfig.vidHeight);
+    } else if (!R_GetModeInfo(&glConfig.vidWidth, &glConfig.vidHeight, &glConfig.windowAspect, &aspectRatio, mode, fullscreen)) {
         ri.Printf(PRINT_ALL, " invalid mode\n");
         return RSERR_INVALID_MODE;
     }
     ri.Printf(PRINT_ALL, " %d %d\n", glConfig.vidWidth, glConfig.vidHeight);
+
+    // [QL] quakelive_steam.exe 0x46ab80: the UI reads the shape of the screen here
+    ri.Cvar_Set("r_aspectRatio", va("%d", aspectRatio));
 
     // Center window
     if (r_centerWindow->integer && !fullscreen) {
@@ -964,6 +969,8 @@ of OpenGL
 ===============
 */
 void GLimp_Init(qboolean fixedFunction) {
+    int mode;
+
     ri.Printf(PRINT_DEVELOPER, "Glimp_Init( )\n");
 
     r_allowSoftwareGL = ri.Cvar_Get("r_allowSoftwareGL", "0", CVAR_LATCH);
@@ -981,20 +988,23 @@ void GLimp_Init(qboolean fixedFunction) {
 
     ri.Sys_GLimpInit();
 
+    // [QL] quakelive_steam.exe 0x448110: full screen takes r_mode, a window r_windowedMode
+    mode = r_fullscreen->integer ? r_mode->integer : r_windowedMode->integer;
+
     // Create the window and set up the context
-    if (GLimp_StartDriverAndSetMode(r_mode->integer, r_fullscreen->integer, r_noborder->integer, fixedFunction))
+    if (GLimp_StartDriverAndSetMode(mode, r_fullscreen->integer, r_noborder->integer, fixedFunction))
         goto success;
 
     // Try again, this time in a platform specific "safe mode"
     ri.Sys_GLimpSafeInit();
 
-    if (GLimp_StartDriverAndSetMode(r_mode->integer, r_fullscreen->integer, qfalse, fixedFunction))
+    if (GLimp_StartDriverAndSetMode(mode, r_fullscreen->integer, qfalse, fixedFunction))
         goto success;
 
     // Finally, try the default screen resolution
-    if (r_mode->integer != R_MODE_FALLBACK) {
+    if (mode != R_MODE_FALLBACK) {
         ri.Printf(PRINT_ALL, "Setting r_mode %d failed, falling back on r_mode %d\n",
-                  r_mode->integer, R_MODE_FALLBACK);
+                  mode, R_MODE_FALLBACK);
 
         if (GLimp_StartDriverAndSetMode(R_MODE_FALLBACK, qfalse, qfalse, fixedFunction))
             goto success;
@@ -1027,6 +1037,10 @@ success:
     if (*glConfig.renderer_string && glConfig.renderer_string[strlen(glConfig.renderer_string) - 1] == '\n')
         glConfig.renderer_string[strlen(glConfig.renderer_string) - 1] = 0;
     Q_strncpyz(glConfig.version_string, (char*)qglGetString(GL_VERSION), sizeof(glConfig.version_string));
+
+    // [QL] quakelive_steam.exe 0x46c2e0 keeps the card's names in read only cvars
+    ri.Cvar_Set("r_gl_vendor", glConfig.vendor_string);
+    ri.Cvar_Set("r_gl_renderer", glConfig.renderer_string);
 
     // manually create extension list if using OpenGL 3
     if (qglGetStringi) {
@@ -1075,6 +1089,15 @@ void GLimp_EndFrame(void) {
     // don't flip if drawing to front buffer
     if (Q_stricmp(r_drawBuffer->string, "GL_FRONT") != 0) {
         SDL_GL_SwapWindow(SDL_window);
+    }
+
+    // [QL] r_swapInterval isn't latched in retail: it changes on the next frame
+    if (r_swapInterval->modified) {
+        r_swapInterval->modified = qfalse;
+
+        if (SDL_GL_SetSwapInterval(r_swapInterval->integer) == -1) {
+            ri.Printf(PRINT_DEVELOPER, "SDL_GL_SetSwapInterval failed: %s\n", SDL_GetError());
+        }
     }
 
     if (r_fullscreen->modified) {

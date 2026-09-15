@@ -2311,7 +2311,7 @@ For controlling environment variables
 ==================
 */
 
-#define COM_CONFIG_VERSION 1
+#define COM_CONFIG_VERSION 2
 
 /*
 ==================
@@ -2329,6 +2329,38 @@ static void Com_MigrateConfig(void) {
             Cvar_Set("con_style", "1");
         if (Cvar_Flags("r_autoExposure") != CVAR_NONEXISTENT)
             Cvar_Set("r_autoExposure", "0");
+    }
+
+    // [QL] 2: the renderer takes retail's defaults, and turns off its own effects retail doesn't
+    // have. A value still at the old default goes to the new one; one the player chose stays.
+    // The screen mode and size are left alone.
+    if (version->integer < 2) {
+        static const struct {
+            const char* name;
+            const char* oldValue;
+            const char* newValue;
+        } defaults[] = {
+            {"r_picmip", "1", "0"},
+            {"r_lodbias", "0", "-2"},
+            {"r_texturebits", "0", "32"},
+            {"r_colorbits", "0", "32"},
+            {"r_stencilbits", "8", "0"},
+            {"r_hdr", "1", "0"},
+            {"r_toneMap", "1", "0"},
+            {"r_depthPrepass", "1", "0"},
+            {"r_normalMapping", "1", "0"},
+            {"r_specularMapping", "1", "0"},
+            {"r_deluxeMapping", "1", "0"},
+            {"r_sunlightMode", "1", "0"},
+            {"r_sunShadows", "1", "0"},
+        };
+        int i;
+
+        for (i = 0; i < ARRAY_LEN(defaults); i++) {
+            if (Cvar_Flags(defaults[i].name) != CVAR_NONEXISTENT &&
+                !strcmp(Cvar_VariableString(defaults[i].name), defaults[i].oldValue))
+                Cvar_Set(defaults[i].name, defaults[i].newValue);
+        }
     }
 
     if (version->integer != COM_CONFIG_VERSION)

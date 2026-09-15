@@ -1183,9 +1183,10 @@ static void IN_ProcessEvents(void) {
                             break;
                         }
 
-                        Cvar_SetValue("r_customwidth", width);
-                        Cvar_SetValue("r_customheight", height);
-                        Cvar_Set("r_mode", "-1");
+                        // [QL] a window keeps its size in r_windowedWidth and r_windowedHeight
+                        Cvar_SetValue("r_windowedWidth", width);
+                        Cvar_SetValue("r_windowedHeight", height);
+                        Cvar_Set("r_windowedMode", "-1");
 
                         // Wait until user stops dragging for 1 second, so
                         // we aren't constantly recreating the GL context while

@@ -252,7 +252,8 @@ static void RB_Hyperspace(void) {
         // do initialization shit
     }
 
-    c = (backEnd.refdef.time & 255) / 255.0f;
+    // [QL] quakelive_steam.exe 0x435cb0: black with r_teleporterFlash 0
+    c = r_teleporterFlash->integer ? (backEnd.refdef.time & 255) / 255.0f : 0.0f;
     qglClearColor(c, c, c, 1);
     qglClear(GL_COLOR_BUFFER_BIT);
     qglClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -323,14 +324,20 @@ void RB_BeginDrawingView(void) {
     }
     if (r_fastsky->integer && !(backEnd.refdef.rdflags & RDF_NOWORLDMODEL)) {
         clearBits |= GL_COLOR_BUFFER_BIT;  // FIXME: only if sky shaders have been used
+
+        // [QL] quakelive_steam.exe 0x435d90: in r_fastSkyColor, 0xRRGGBB
+        qglClearColor(((r_fastSkyColor->integer >> 16) & 0xff) / 255.0f, ((r_fastSkyColor->integer >> 8) & 0xff) / 255.0f,
+                      (r_fastSkyColor->integer & 0xff) / 255.0f, 1.0f);
     }
 
     // clear to black for cube maps
     if (tr.renderCubeFbo && backEnd.viewParms.targetFbo == tr.renderCubeFbo) {
         clearBits |= GL_COLOR_BUFFER_BIT;
+        qglClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     }
 
     qglClear(clearBits);
+    qglClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
     if ((backEnd.refdef.rdflags & RDF_HYPERSPACE)) {
         RB_Hyperspace();
