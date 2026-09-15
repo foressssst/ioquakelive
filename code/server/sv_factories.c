@@ -906,6 +906,46 @@ const arenaInfo_t* SV_ArenaByNum(int num) {
 
 /*
 ===============
+SV_ArenaValue
+
+An arena's "sysname" (its map), "name" (its long name) or "gametypes" (a bit
+per base gametype it supports), for the UI's Start Match. Retail's web UI got
+the same members from GetMapList (quakelive_steam.exe 0x432c2c).
+===============
+*/
+qboolean SV_ArenaValue(int num, const char* key, char* buf, int size) {
+    const arenaInfo_t* arena = SV_ArenaByNum(num);
+    int gt, bits;
+
+    if (size > 0) {
+        buf[0] = '\0';
+    }
+    if (!arena) {
+        return qfalse;
+    }
+    if (!Q_stricmp(key, "sysname")) {
+        Q_strncpyz(buf, arena->map, size);
+        return qtrue;
+    }
+    if (!Q_stricmp(key, "name")) {
+        Q_strncpyz(buf, arena->longname, size);
+        return qtrue;
+    }
+    if (!Q_stricmp(key, "gametypes")) {
+        bits = 0;
+        for (gt = 0; gt < NUM_FACTORY_GAMETYPES; gt++) {
+            if (arena->gametypes[gt]) {
+                bits |= 1 << gt;
+            }
+        }
+        Com_sprintf(buf, size, "%i", bits);
+        return qtrue;
+    }
+    return qfalse;
+}
+
+/*
+===============
 SV_ReloadArenas_f
 
 quakelive_steam.exe 0x45ed90.
@@ -953,6 +993,73 @@ const factory_t* SV_FactoryByNum(int num) {
         return NULL;
     }
     return &sv_factories[num];
+}
+
+/*
+===============
+SV_FactoryValue
+
+A factory's "id", "title", "author", "description" or "basegt", for the UI's
+Start Match; qfalse for an empty slot or a member it lacks. Retail's web UI got
+the same members from GetFactoryList (quakelive_steam.exe 0x432edc).
+===============
+*/
+qboolean SV_FactoryValue(int num, const char* key, char* buf, int size) {
+    const factory_t* factory = SV_FactoryByNum(num);
+    const char* value = NULL;
+
+    if (size > 0) {
+        buf[0] = '\0';
+    }
+    if (!factory) {
+        return qfalse;
+    }
+    if (!Q_stricmp(key, "id")) {
+        value = factory->id;
+    } else if (!Q_stricmp(key, "title")) {
+        value = factory->title;
+    } else if (!Q_stricmp(key, "author")) {
+        value = factory->author;
+    } else if (!Q_stricmp(key, "description")) {
+        value = factory->description;
+    } else if (!Q_stricmp(key, "basegt")) {
+        value = va("%i", factory->basegt);
+    }
+    if (!value) {
+        return qfalse;
+    }
+    Q_strncpyz(buf, value, size);
+    return qtrue;
+}
+
+/*
+===============
+SV_FactoryCvar
+
+The index-th cvar a factory sets, its name in lower case as GetFactoryList
+gave them in "settings" (0x4331a0). Its loop ends at the first missing name;
+this also stops at a cvar left without a value, where applying it stops.
+===============
+*/
+qboolean SV_FactoryCvar(int num, int index, char* name, int nameSize, char* value, int valueSize) {
+    const factory_t* factory = SV_FactoryByNum(num);
+
+    if (nameSize > 0) {
+        name[0] = '\0';
+    }
+    if (valueSize > 0) {
+        value[0] = '\0';
+    }
+    if (!factory || index < 0 || index >= MAX_FACTORY_CVARS) {
+        return qfalse;
+    }
+    if (!factory->cvars[index].name || !factory->cvars[index].value) {
+        return qfalse;
+    }
+    Q_strncpyz(name, factory->cvars[index].name, nameSize);
+    Q_strlwr(name);
+    Q_strncpyz(value, factory->cvars[index].value, valueSize);
+    return qtrue;
 }
 
 /*
