@@ -1641,22 +1641,19 @@ static void CG_DrawLagometer(void) {
 		CG_DrawText(x, y + 16, 0, 0.25f, colorWhite, "snc", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 	}
 
-	// [QL] draw ping number when cg_lagometer == 2
+	// [QL] 0x1000b547: with cg_lagometer 2, the last ping a snapshot brought (a 0 keeps the one
+	// before) at x 592 and y 337 plus its height measured at 0.175, in font 0 at 0.15, white and
+	// shadowed
 	if (cg_lagometer.integer == 2 && cg.snap) {
 		static int lastPing;
-		const char* text;
-		int textX, textY;
-		float tw;
+		char text[16];
 
 		if (cg.snap->ping) {
 			lastPing = cg.snap->ping;
 		}
-		text = va("%d", lastPing);
-		tw = CG_Text_Width(text, 0.175f, 0);
-		textX = x + 2;
-		textY = y + 8;
-		CG_Text_Paint((float)textX, (float)textY,
-					  0.15f, colorWhite, text, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+		Com_sprintf(text, sizeof(text), "%d", lastPing);
+		CG_DrawText(592, CG_DrawTextHeight(text, 0.175f, 0, 0) + 337, 0, 0.15f, colorWhite, text, 0, 0,
+					ITEM_TEXTSTYLE_SHADOWED);
 	}
 
 	CG_DrawDisconnect();
