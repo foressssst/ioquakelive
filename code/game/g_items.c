@@ -578,6 +578,8 @@ int Pickup_Armor(gentity_t* ent, gentity_t* other) {
         if (other->client->ps.stats[STAT_ARMOR] > max) {
             other->client->ps.stats[STAT_ARMOR] = max;
         }
+        // [QL] 0x1004e6f4 and 0x1004e803: the armor also goes out in the entity, for teammates
+        other->s.armor = other->client->ps.stats[STAT_ARMOR];
         return RESPAWN_ARMOR;
     }
 
@@ -608,6 +610,7 @@ int Pickup_Armor(gentity_t* ent, gentity_t* other) {
     if (other->client->ps.stats[STAT_ARMOR] > max) {
         other->client->ps.stats[STAT_ARMOR] = max;
     }
+    other->s.armor = other->client->ps.stats[STAT_ARMOR];
 
     return RESPAWN_ARMOR;
 }

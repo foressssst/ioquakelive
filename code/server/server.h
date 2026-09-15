@@ -423,6 +423,7 @@ void SV_GameClientThink(int clientNum);
 void SV_GameClientDisconnect(int clientNum);
 void SV_GameClientCommand(int clientNum);
 qboolean SV_GameSnapshotVisibility(int viewerClientNum, int entityNum);
+qboolean SV_GameSnapshotAlwaysSend(int viewerNum, int clientNum);
 
 //
 // sv_bot.c

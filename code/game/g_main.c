@@ -1131,6 +1131,7 @@ Q_EXPORT void dllEntry(void **vmMainOut, gameImport_t *syscallTable, int *apiVer
     vmMainOut[GAME_CLIENT_CONNECT]          = (void *)ClientConnect;
     vmMainOut[GAME_CLIENT_COMMAND]          = (void *)ClientCommand;
     vmMainOut[GAME_SNAPSHOT_VISIBILITY]     = (void *)G_ObfuscateEnemyInfoInSnapshotCheck;
+    vmMainOut[GAME_SNAPSHOT_ALWAYS_SEND]    = (void *)G_ClientAlwaysInSnapshot;
 
     *apiVersion = GAME_API_VERSION;
 }

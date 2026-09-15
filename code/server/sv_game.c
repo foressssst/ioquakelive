@@ -272,7 +272,7 @@ void SV_GetUsercmd(int clientNum, usercmd_t* cmd) {
 
 // Game module state
 static void *sv_gameLibHandle;
-static void *sv_vmMainTable[11];
+static void *sv_vmMainTable[12];
 static gameImport_t sv_gameImports;
 static int sv_apiVersion;
 
@@ -1172,11 +1172,19 @@ void SV_GameClientCommand(int clientNum) {
         ((void (*)(int))sv_vmMainTable[GAME_CLIENT_COMMAND])(clientNum);
 }
 
-// [QL] Snapshot visibility check for position data obfuscation (RR infection, 1FCTF)
+// [QL] retail export +0x44: whether this viewer's copy of a client entity loses its health, armor
+// and location (its enemies' do)
 qboolean SV_GameSnapshotVisibility(int viewerClientNum, int entityNum) {
     if (sv_vmMainTable[GAME_SNAPSHOT_VISIBILITY])
         return ((qboolean (*)(int, int))sv_vmMainTable[GAME_SNAPSHOT_VISIBILITY])(viewerClientNum, entityNum);
-    return qtrue;  // default: allow visibility (do not strip positions)
+    return qfalse;
+}
+
+// [QL] retail export +0x30: whether a client entity goes to this viewer from anywhere on the map
+qboolean SV_GameSnapshotAlwaysSend(int viewerNum, int clientNum) {
+    if (sv_vmMainTable[GAME_SNAPSHOT_ALWAYS_SEND])
+        return ((qboolean (*)(int, int))sv_vmMainTable[GAME_SNAPSHOT_ALWAYS_SEND])(viewerNum, clientNum);
+    return qfalse;
 }
 
 //==============================================

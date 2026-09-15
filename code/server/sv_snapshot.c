@@ -281,9 +281,12 @@ static void SV_AddEntToSnapshot(svEntity_t* svEnt, sharedEntity_t* gEnt, snapsho
 /*
 ===============
 SV_AddEntitiesVisibleFromPoint
+
+[QL] quakelive_steam.exe 0x4e5330 also takes the viewer's own entity number, for the game's
+always-sent clients
 ===============
 */
-static void SV_AddEntitiesVisibleFromPoint(vec3_t origin, clientSnapshot_t* frame, snapshotEntityNumbers_t* eNums, qboolean portal) {
+static void SV_AddEntitiesVisibleFromPoint(vec3_t origin, clientSnapshot_t* frame, snapshotEntityNumbers_t* eNums, qboolean portal, int viewerNum) {
     int e, i;
     sharedEntity_t* ent;
     svEntity_t* svEnt;
@@ -360,6 +363,13 @@ static void SV_AddEntitiesVisibleFromPoint(vec3_t origin, clientSnapshot_t* fram
             continue;
         }
 
+        // [QL] 0x4e54b2: the game can send a client from anywhere on the map, like a viewer's
+        // teammates, whom the team overlay and the teammate markers follow (export +0x30)
+        if (e < MAX_CLIENTS && SV_GameSnapshotAlwaysSend(viewerNum, ent->s.number)) {
+            SV_AddEntToSnapshot(svEnt, ent, eNums);
+            continue;
+        }
+
         // ignore if not touching a PV leaf
         // check area
         if (!CM_AreasConnected(clientarea, svEnt->areanum)) {
@@ -413,7 +423,7 @@ static void SV_AddEntitiesVisibleFromPoint(vec3_t origin, clientSnapshot_t* fram
                     continue;
                 }
             }
-            SV_AddEntitiesVisibleFromPoint(ent->s.origin2, frame, eNums, qtrue);
+            SV_AddEntitiesVisibleFromPoint(ent->s.origin2, frame, eNums, qtrue, viewerNum);
         }
     }
 }
@@ -481,7 +491,7 @@ static void SV_BuildClientSnapshot(client_t* client) {
 
     // add all the entities directly visible to the eye, which
     // may include portal entities that merge other viewpoints
-    SV_AddEntitiesVisibleFromPoint(org, frame, &entityNumbers, qfalse);
+    SV_AddEntitiesVisibleFromPoint(org, frame, &entityNumbers, qfalse, clent->s.number);
 
     // if there were portals visible, there may be out of order entities
     // in the list which will need to be resorted for the delta compression
@@ -504,14 +514,11 @@ static void SV_BuildClientSnapshot(client_t* client) {
         state = &svs.snapshotEntities[svs.nextSnapshotEntities % svs.numSnapshotEntities];
         *state = ent->s;
 
-        // [QL] obfuscate the per-entity HUD copy in team gametypes. SV_BuildClientSnapshot
-        // (0x004e5680) clears entityState health (+0xc8), armor (+0xcc) and location (+0xd4) - it
-        // does NOT touch position - for every client entity where the game module's snapshot
-        // callback returns non-zero. G_ObfuscateEnemyInfoInSnapshotCheck (0x10052e30) returns
-        // non-zero for same-team / spectator / 1FCTF flag-carrier / RR-infected, and zero for an
-        // enemy, so QL strips this copy for teammates and spectated players (their real values are
-        // delivered over the separate tinfo team-overlay command) and leaves the enemy copy alone
-        // (the client never reads these fields). Guard is the hardcoded MAX_CLIENTS, no self-check.
+        // [QL] SV_BuildClientSnapshot (0x004e5680) clears entityState health (+0xc8), armor
+        // (+0xcc) and location (+0xd4) - never the position - of every client entity for which
+        // the game's export +0x44, G_ObfuscateEnemyInfoInSnapshotCheck (qagamex86.dll 0x10052e40),
+        // answers non-zero: the enemies of a viewer in the game. Teammates keep them, and the team
+        // overlay reads them there. The guard is the hardcoded MAX_CLIENTS, with no self-check.
         if (state->number < MAX_CLIENTS && SV_GameSnapshotVisibility(clientNum, state->number)) {
             state->health = 0;
             state->armor = 0;
