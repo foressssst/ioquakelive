@@ -870,6 +870,8 @@ struct cvar_s {
     float min;
     float max;
     char* description;
+    char* minString;  // [QL] range given as two strings to Cvar_GetRange, NULL without one
+    char* maxString;
 
     cvar_t* next;
     cvar_t* prev;

@@ -54,6 +54,12 @@ void trap_Cvar_Register(vmCvar_t* vmCvar, const char* varName, const char* defau
     syscall(CG_CVAR_REGISTER, vmCvar, varName, defaultValue, flags);
 }
 
+// [QL] cgame import +0x14: the engine keeps the value between the two strings
+void trap_Cvar_RegisterRange(vmCvar_t* vmCvar, const char* varName, const char* defaultValue,
+                             const char* minValue, const char* maxValue, int flags) {
+    syscall(CG_CVAR_REGISTER_RANGE, vmCvar, varName, defaultValue, minValue, maxValue, flags);
+}
+
 void trap_Cvar_Update(vmCvar_t* vmCvar) {
     syscall(CG_CVAR_UPDATE, vmCvar);
 }
