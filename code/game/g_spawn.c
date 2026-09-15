@@ -324,7 +324,7 @@ qboolean G_CallSpawn(gentity_t* ent) {
     // check item spawn functions
     for (item = bg_itemlist + 1; item->classname; item++) {
         if (!strcmp(item->classname, ent->classname)) {
-            G_SpawnItem(ent, item);
+            G_SpawnItem(ent, item, qfalse);
             return qtrue;
         }
     }
@@ -478,7 +478,7 @@ separated token in list. The binary parses the list into a bitmask (bit
 reduces to an exact tokenised match on gametypeShortNames[g_gametype].
 ====================
 */
-static qboolean G_GametypeInList(const char* list) {
+qboolean G_GametypeInList(const char* list) {
     const char* name;
     const char* p;
     int len;
