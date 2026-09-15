@@ -3391,7 +3391,8 @@ CG_DrawSpecTeamVitals
 player from cg_specTeamVitalsY, cg_specTeamVitalsWidth wide, the red team down the left and the
 blue team down the right. Each row has:
 - the client number in faint white, and a frame on the followed player;
-- the first powerup, or else the weapon (a skull once dead);
+- the first powerup, or else the model's portrait where retail draws the weapon in use (a skull
+  once dead);
 - the name in font 0 at 0.18, cut with "..." to fit, and at 2 the health as a number before it;
 - a health bar and an armor bar against the player's maximum health.
 Without cg_specTeamVitalsHealthColor the health bar fills the row behind white text, red or blue
@@ -3472,9 +3473,13 @@ static void CG_DrawSpecTeamVitals(void) {
 					break;
 				}
 			}
+		} else if (dead) {
+			CG_DrawPic(x, y - 16.0f, 16, 16, cgs.media.friendDeadShader);
 		} else {
+			// the model's portrait where retail draws the weapon in use; the weapon stays for a player
+			// whose portrait has not loaded
 			CG_DrawPic(x, y - 16.0f, 16, 16,
-					   dead ? cgs.media.friendDeadShader : cg_weapons[cent->currentState.weapon].weaponIcon);
+					   ci->modelIcon ? ci->modelIcon : cg_weapons[cent->currentState.weapon].weaponIcon);
 		}
 		if (gradient) {
 			*yp = y - step;
