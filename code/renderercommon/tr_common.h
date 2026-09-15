@@ -96,6 +96,9 @@ extern cvar_t* r_ext_multisample;
 extern cvar_t* r_mode;  // video mode
 extern cvar_t* r_noborder;
 extern cvar_t* r_fullscreen;
+extern cvar_t* r_windowedMode;  // [QL] video mode in a window
+extern cvar_t* r_windowedWidth;
+extern cvar_t* r_windowedHeight;
 extern cvar_t* r_ignorehwgamma;  // overrides hardware gamma capabilities
 extern cvar_t* r_drawBuffer;
 extern cvar_t* r_swapInterval;
@@ -113,7 +116,8 @@ extern cvar_t* r_stereoEnabled;
 
 extern cvar_t* r_saveFontData;
 
-qboolean R_GetModeInfo(int* width, int* height, float* windowAspect, int mode);
+qboolean R_GetModeInfo(int* width, int* height, float* windowAspect, int* aspectRatio, int mode, qboolean fullscreen);
+int R_AspectRatioOf(int width, int height);
 
 float R_NoiseGet4f(float x, float y, float z, double t);
 void R_NoiseInit(void);
