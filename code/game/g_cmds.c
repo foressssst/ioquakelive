@@ -1108,199 +1108,73 @@ static void Cmd_Tell_f(gentity_t* ent) {
     }
 }
 
-static void G_VoiceTo(gentity_t* ent, gentity_t* other, int mode, const char* id, qboolean voiceonly) {
-    int color;
-    char* cmd;
-
-    if (!other) {
-        return;
-    }
-    if (!other->inuse) {
-        return;
-    }
-    if (!other->client) {
-        return;
-    }
-    if (mode == SAY_TEAM && !OnSameTeam(ent, other)) {
-        return;
-    }
-    // no chatting to players in tournements
-    if (g_gametype.integer == GT_DUEL) {
-        return;
-    }
-
-    if (mode == SAY_TEAM) {
-        color = COLOR_CYAN;
-        cmd = "vtchat";
-    } else if (mode == SAY_TELL) {
-        color = COLOR_MAGENTA;
-        cmd = "vtell";
-    } else {
-        color = COLOR_GREEN;
-        cmd = "vchat";
-    }
-
-    trap_SendServerCommand(other - g_entities, va("%s %d %d %d %s", cmd, voiceonly, ent->s.number, color, id));
-}
-
-void G_Voice(gentity_t* ent, gentity_t* target, int mode, const char* id, qboolean voiceonly) {
-    int j;
-    gentity_t* other;
-
-    if (g_gametype.integer < GT_TEAM && mode == SAY_TEAM) {
-        mode = SAY_ALL;
-    }
-
-    if (target) {
-        G_VoiceTo(ent, target, mode, id, voiceonly);
-        return;
-    }
-
-    // echo the text to the console
-    if (g_dedicated.integer) {
-        G_Printf("voice: %s %s\n", ent->client->pers.netname, id);
-    }
-
-    // send it to all the appropriate clients
-    for (j = 0; j < level.maxclients; j++) {
-        other = &g_entities[j];
-        G_VoiceTo(ent, other, mode, id, voiceonly);
-    }
-}
-
 /*
 ==================
 Cmd_Voice_f
+qagamex86.dll 0x10041e40
+
+[QL] vsay, vsay_team, vosay and vosay_team are still commands but say nothing: retail joins the
+arguments and drops them. No voice chat reaches a client, and its cgame has no vchat handler.
 ==================
 */
-static void Cmd_Voice_f(gentity_t* ent, int mode, qboolean arg0, qboolean voiceonly) {
-    char* p;
-
-    if (trap_Argc() < 2 && !arg0) {
-        return;
+static void Cmd_Voice_f(void) {
+    if (trap_Argc() > 1) {
+        ConcatArgs(1);
     }
-
-    if (arg0) {
-        p = ConcatArgs(0);
-    } else {
-        p = ConcatArgs(1);
-    }
-
-    SanitizeChatText(p);
-
-    G_Voice(ent, NULL, mode, p, voiceonly);
 }
 
 /*
 ==================
 Cmd_VoiceTell_f
+qagamex86.dll 0x10041e60
+
+[QL] vtell and votell only log the tell, when the target is a client in use.
 ==================
 */
-static void Cmd_VoiceTell_f(gentity_t* ent, qboolean voiceonly) {
-    int targetNum;
-    gentity_t* target;
-    char* id;
+static void Cmd_VoiceTell_f(gentity_t* ent) {
     char arg[MAX_TOKEN_CHARS];
+    gentity_t* target;
+    int targetNum;
 
-    if (trap_Argc() < 3) {
-        trap_SendServerCommand(ent - g_entities, va("print \"Usage: %s <player id> <voice id>\n\"", voiceonly ? "votell" : "vtell"));
+    if (trap_Argc() < 2) {
         return;
     }
-
     trap_Argv(1, arg, sizeof(arg));
-    targetNum = ClientNumberFromString(ent, arg, qtrue, qtrue);
-    if (targetNum == -1) {
+    targetNum = atoi(arg);
+    if (targetNum < 0 || targetNum >= level.maxclients) {
         return;
     }
-
     target = &g_entities[targetNum];
     if (!target->inuse || !target->client) {
         return;
     }
-
-    id = ConcatArgs(2);
-
-    SanitizeChatText(id);
-
-    G_LogPrintf("vtell: %s to %s: %s\n", ent->client->pers.netname, target->client->pers.netname, id);
-    G_Voice(ent, target, SAY_TELL, id, voiceonly);
-    // don't tell to the player self if it was already directed to this player
-    // also don't send the chat back to a bot
-    if (ent != target && !(ent->r.svFlags & SVF_BOT)) {
-        G_Voice(ent, ent, SAY_TELL, id, voiceonly);
-    }
+    G_LogPrintf("vtell: %s to %s: %s\n", ent->client->pers.netname, target->client->pers.netname, ConcatArgs(2));
 }
 
 /*
 ==================
 Cmd_VoiceTaunt_f
+qagamex86.dll 0x10041f50
+
+[QL] vtaunt still picks whom Q3 would taunt but sends nothing: it only forgets the killer or the
+last kill. The teammate-praise scan that follows in retail changes nothing and is left out.
 ==================
 */
 static void Cmd_VoiceTaunt_f(gentity_t* ent) {
-    gentity_t* who;
-    int i;
-
     if (!ent->client) {
         return;
     }
 
-    // insult someone who just killed you
+    // the one who just killed you
     if (ent->enemy && ent->enemy->client && ent->enemy->client->lastkilled_client == ent->s.number) {
-        // i am a dead corpse
-        if (!(ent->enemy->r.svFlags & SVF_BOT)) {
-            G_Voice(ent, ent->enemy, SAY_TELL, VOICECHAT_DEATHINSULT, qfalse);
-        }
-        if (!(ent->r.svFlags & SVF_BOT)) {
-            G_Voice(ent, ent, SAY_TELL, VOICECHAT_DEATHINSULT, qfalse);
-        }
         ent->enemy = NULL;
         return;
     }
-    // insult someone you just killed
-    if (ent->client->lastkilled_client >= 0 && ent->client->lastkilled_client != ent->s.number) {
-        who = g_entities + ent->client->lastkilled_client;
-        if (who->client) {
-            // who is the person I just killed
-            if (who->client->lasthurt_mod[0] == MOD_GAUNTLET) {
-                if (!(who->r.svFlags & SVF_BOT)) {
-                    G_Voice(ent, who, SAY_TELL, VOICECHAT_KILLGAUNTLET, qfalse);  // and I killed them with a gauntlet
-                }
-                if (!(ent->r.svFlags & SVF_BOT)) {
-                    G_Voice(ent, ent, SAY_TELL, VOICECHAT_KILLGAUNTLET, qfalse);
-                }
-            } else {
-                if (!(who->r.svFlags & SVF_BOT)) {
-                    G_Voice(ent, who, SAY_TELL, VOICECHAT_KILLINSULT, qfalse);  // and I killed them with something else
-                }
-                if (!(ent->r.svFlags & SVF_BOT)) {
-                    G_Voice(ent, ent, SAY_TELL, VOICECHAT_KILLINSULT, qfalse);
-                }
-            }
-            ent->client->lastkilled_client = -1;
-            return;
-        }
+    // the one you just killed
+    if (ent->client->lastkilled_client >= 0 && ent->client->lastkilled_client != ent->s.number &&
+        g_entities[ent->client->lastkilled_client].client) {
+        ent->client->lastkilled_client = -1;
     }
-
-    if (g_gametype.integer >= GT_TEAM) {
-        // praise a team mate who just got a reward
-        for (i = 0; i < MAX_CLIENTS; i++) {
-            who = g_entities + i;
-            if (who->client && who != ent && who->client->sess.sessionTeam == ent->client->sess.sessionTeam) {
-                if (who->client->rewardTime > level.time) {
-                    if (!(who->r.svFlags & SVF_BOT)) {
-                        G_Voice(ent, who, SAY_TELL, VOICECHAT_PRAISE, qfalse);
-                    }
-                    if (!(ent->r.svFlags & SVF_BOT)) {
-                        G_Voice(ent, ent, SAY_TELL, VOICECHAT_PRAISE, qfalse);
-                    }
-                    return;
-                }
-            }
-        }
-    }
-
-    // just say something
-    G_Voice(ent, NULL, SAY_ALL, VOICECHAT_TAUNT, qfalse);
 }
 
 static char* gc_orders[] = {
@@ -3404,28 +3278,29 @@ void ClientCommand(int clientNum) {
         Cmd_BotSay_f(ent);
         return;
     }
+    // [QL] the voice commands, dispatched as in qagamex86.dll 0x10045ed2-0x10045f54
     if (Q_stricmp(cmd, "vsay") == 0) {
-        Cmd_Voice_f(ent, SAY_ALL, qfalse, qfalse);
+        Cmd_Voice_f();
         return;
     }
     if (Q_stricmp(cmd, "vsay_team") == 0) {
-        Cmd_Voice_f(ent, SAY_TEAM, qfalse, qfalse);
+        Cmd_Voice_f();
         return;
     }
     if (Q_stricmp(cmd, "vtell") == 0) {
-        Cmd_VoiceTell_f(ent, qfalse);
+        Cmd_VoiceTell_f(ent);
         return;
     }
     if (Q_stricmp(cmd, "vosay") == 0) {
-        Cmd_Voice_f(ent, SAY_ALL, qfalse, qtrue);
+        Cmd_Voice_f();
         return;
     }
     if (Q_stricmp(cmd, "vosay_team") == 0) {
-        Cmd_Voice_f(ent, SAY_TEAM, qfalse, qtrue);
+        Cmd_Voice_f();
         return;
     }
     if (Q_stricmp(cmd, "votell") == 0) {
-        Cmd_VoiceTell_f(ent, qtrue);
+        Cmd_VoiceTell_f(ent);
         return;
     }
     if (Q_stricmp(cmd, "vtaunt") == 0) {
