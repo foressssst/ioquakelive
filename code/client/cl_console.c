@@ -1296,18 +1296,21 @@ Con_DrawNotify
 there is no loop over recent console lines, so console output never shows over
 the game. Chat and obituaries are drawn by cgame's HUD ownerdraws instead.
 The field sits on a translucent bar near the bottom of the screen, in amber
-DroidSansMono at the console's unscaled 12x24 cells. Retail can take the
-position and width from an interface at 0x146cc38 (offsets 0x44/0x48/0x4c)
-that isn't identified yet; these are its defaults.
+DroidSansMono at the console's unscaled 12x24 cells. With cgame loaded, the
+bar's y and width and the field's width in characters come from cgame's exports
+17 to 19 (0x4b416b, through its export table at 0x146cc38): 413, 640 and 73, or
+455, 300 and 30 during the intermission, and team chat takes 5 characters fewer.
+Without cgame the bar stays at y 413 across the screen.
 ================
 */
 void Con_DrawNotify(void) {
     static const vec4_t textColor = {1.0f, 0.8f, 0.0f, 1.0f};
     static const vec4_t barColor = {0.0f, 0.0f, 0.0f, 0.6f};
     float x = 8.0f;
-    float y = 413.0f;
-    const float barY = 413.0f;
-    const float width = SCREEN_WIDTH;
+    float y;
+    float barY = 413.0f;
+    float barWidth = SCREEN_WIDTH;
+    floatint_t fi;
     const char* label;
     int skip;
 
@@ -1318,8 +1321,20 @@ void Con_DrawNotify(void) {
         return;
     }
 
+    if (cgvm) {
+        fi.i = (int)VM_Call(cgvm, CG_CHAT_BAR_Y);
+        barY = fi.f;
+        fi.i = (int)VM_Call(cgvm, CG_CHAT_BAR_WIDTH);
+        barWidth = fi.f;
+        chatField.widthInChars = (int)VM_Call(cgvm, CG_CHAT_FIELD_CHARS);
+        if (chat_team) {
+            chatField.widthInChars -= 5;
+        }
+    }
+
+    y = barY;
     SCR_AdjustFrom640(&x, &y, NULL, NULL);
-    SCR_FillRect(6.0f, barY - 3.0f, width - 12.0f, 22.0f, barColor);
+    SCR_FillRect(6.0f, barY - 3.0f, barWidth - 12.0f, 22.0f, barColor);
 
     if (chat_playerNum != -1) {
         label = "reply:";
