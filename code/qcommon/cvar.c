@@ -436,7 +436,13 @@ cvar_t* Cvar_Get(const char* var_name, const char* var_value, int flags) {
     Cvar_ComputeNumeric(var);
     var->resetString = CopyString(var_value);
     var->validate = qfalse;
-    var->description = NULL;
+    // [ioquakelive] a Quake Live cvar gets its help text as it is created, the modules'
+    // cvars included (cvar_help.c)
+    {
+        const char* help = Cvar_BuiltInHelp(var_name);
+
+        var->description = help ? CopyString(help) : NULL;
+    }
     var->minString = NULL;
     var->maxString = NULL;
 
