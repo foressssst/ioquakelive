@@ -336,9 +336,11 @@ Address: 0x10067f80
 ==================
 STAT_GetBestWeapon
 
-[QL] Returns the weapon index with the highest damage dealt for a player.
-Falls back to the highest weapon in their loadout if no damage dealt.
-Address: 0x1007b820
+[QL] qagamex86.dll 0x100789d0. The weapon the player dealt the most damage with; with no
+damage at all, the highest weapon of g_startingWeapons (bit w - 1 for weapon w, the gauntlet
+when there is none). The fork took that fallback from the player's own STAT_WEAPONS, whose bits
+are the weapon numbers themselves, so the one-bit shift turned a plasma gun into the "BFG" the
+FFA board showed for anyone who had not fired yet.
 ==================
 */
 int STAT_GetBestWeapon(gclient_t *cl) {
@@ -347,9 +349,9 @@ int STAT_GetBestWeapon(gclient_t *cl) {
     int weapon;
     int fallbackWeapon = 1;
 
-    // Find highest weapon in loadout
+    // highest starting weapon
     for (weapon = 2; weapon < WP_NUM_WEAPONS; weapon++) {
-        if (cl->ps.stats[STAT_WEAPONS] & (1 << (weapon - 1))) {
+        if (g_startingWeapons.integer & (1 << (weapon - 1))) {
             fallbackWeapon = weapon;
         }
     }
