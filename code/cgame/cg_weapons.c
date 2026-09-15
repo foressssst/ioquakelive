@@ -501,20 +501,27 @@ void CG_RailTrail(clientInfo_t* ci, vec3_t start, vec3_t end) {
 ==========================
 CG_SpawnRailTrail
 Address: 0x10052200
-[QL] Persistent rail-trail spawn. Unlike Q3 (which spawns the rail LE directly
-from the EV_RAILTRAIL server origin), QL records the fire on the player centity
-and re-spawns the trail from the rendered weapon flash tag (cg_players.c), so
-the beam originates at the drawn muzzle. START = pe.railgunTrailStart (captured
-at fire), END = currentState.origin2 (server-reported endpoint). railFireTime is
-reused as the spawn gate and set to 1 once consumed.
+
+Origin will be the exact tag point, which is slightly
+different than the muzzle point used for determining hits.
+
+[QL] Kept from Q3 unchanged: the trail runs from the flash tag to pe.railgunImpact while
+pe.railgunFlash is set, and the only write to that flag is the qtrue below (0x10052230), so
+it never draws. Rail trails come from EV_RAILTRAIL and the predicted local shot.
 ==========================
 */
-void CG_SpawnRailTrail(centity_t* cent) {
-    if (cent->currentState.weapon == WP_RAILGUN && cent->pe.railFireTime != 0) {
-        cent->pe.railFireTime = 1;  // mark as consumed
-        CG_RailTrail(&cgs.clientinfo[cent->currentState.clientNum],
-                     cent->pe.railgunTrailStart, cent->currentState.origin2);
+static void CG_SpawnRailTrail(centity_t* cent, vec3_t origin) {
+    clientInfo_t* ci;
+
+    if (cent->currentState.weapon != WP_RAILGUN) {
+        return;
     }
+    if (!cent->pe.railgunFlash) {
+        return;
+    }
+    cent->pe.railgunFlash = qtrue;
+    ci = &cgs.clientinfo[cent->currentState.clientNum];
+    CG_RailTrail(ci, origin, cent->pe.railgunImpact);
 }
 
 // [QL] forward decl: CG_RocketTrail compares wi->missileTrailFunc against
@@ -1619,7 +1626,7 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
         // continuous flash
     } else {
         // impulse flash
-        if (cg.time - cent->muzzleFlashTime > MUZZLE_FLASH_TIME) {
+        if (cg.time - cent->muzzleFlashTime > MUZZLE_FLASH_TIME && !cent->pe.railgunFlash) {  // [QL] 0x10052949
             return;
         }
     }
@@ -1669,8 +1676,8 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
         // add lightning bolt
         CG_LightningBolt(nonPredictedCent, flash.origin);
 
-        // [QL] re-spawn the persistent rail trail from the drawn muzzle flash
-        CG_SpawnRailTrail(nonPredictedCent);
+        // add rail trail
+        CG_SpawnRailTrail(nonPredictedCent, flash.origin);  // [QL] 0x10052c2a
 
         // QL binary: cg_muzzleFlash.integer also gates the dlight
         if ((!ps || cg_muzzleFlash.integer) &&

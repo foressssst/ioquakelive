@@ -3361,6 +3361,11 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
     s = CG_ConfigString(CS_LEVEL_START_TIME);
     cgs.levelStartTime = atoi(s);
 
+    // [QL] set before the first loading repaint (0x10029bc5, ahead of "collision map" at
+    // 0x10029c4e): the repaint runs CG_DrawActiveFrame, whose CG_UpdateCvars would otherwise
+    // build the local clientinfo with nothing loaded to copy from
+    cg.loading = qtrue;  // force players to load instead of defer
+
     CG_ParseServerinfo();
     // [QL] parse player model/head overrides before clients are registered so the
     // g_allowCustomHeadmodels / model-override rules apply on the initial load.
@@ -3376,7 +3381,6 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
 
     String_Init();
 
-    cg.loading = qtrue;  // force players to load instead of defer
     cg.loadingStage++;
 
     CG_LoadingString("sounds");
