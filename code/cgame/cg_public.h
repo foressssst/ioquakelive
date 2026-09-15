@@ -241,12 +241,19 @@ typedef enum {
     //	void (*CG_EventHandling)(int type);
     // [QL] index 9 - handles sub-commands 0 (unknown), 4 (screen resize), 5 (unknown)
 
-    // [QL] slots 10-14: extra exports present in the 15-entry table at 0x100769a8.
+    // [QL] slots 10-14 of the 21-entry table at 0x100769a8.
     CG_LAST_CHAT_COMMAND,   // 10  void CG_LastChatCommand( void )
     CG_LAST_CHAT_COMMAND2,  // 11  void CG_LastChatCommand2( void )
     CG_SET_KEY_CATCHER,     // 12  void CG_SetKeyCatcher( void )
     CG_CLEAR_KEY_CATCHER,   // 13  void CG_ClearKeyCatcher( void )
-    CG_GET_ACTIVE_FRAME     // 14  int CG_GetActiveFrame( void )
+    CG_GET_ACTIVE_FRAME,    // 14  int CG_GetActiveFrame( void )
+
+    // [QL] slots 17-19: the chat bar Con_DrawNotify asks for (quakelive_steam.exe 0x4b416b).
+    // Slot 15 fills in a client's details for the engine (0x10020910) and slot 20 stamps a time
+    // on a client (0x10020a40); this engine uses neither. Slot 16 is NULL.
+    CG_CHAT_BAR_Y = 17,     // 17  float CG_ChatBarY( void )
+    CG_CHAT_BAR_WIDTH,      // 18  float CG_ChatBarWidth( void )
+    CG_CHAT_FIELD_CHARS     // 19  int CG_ChatFieldChars( void )
 } cgameExport_t;
 
 //----------------------------------------------

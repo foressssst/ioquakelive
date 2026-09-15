@@ -34,6 +34,9 @@ static int cg_forceModelModCounts[6] = { -1, -1, -1, -1, -1, -1 };
 void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum);
 void CG_RegisterCvars(void);
 void CG_Shutdown(void);
+static float CG_ChatBarY(void);
+static float CG_ChatBarWidth(void);
+static int CG_ChatFieldChars(void);
 
 /*
 ================
@@ -44,6 +47,8 @@ This must be the very first function compiled into the .q3vm file
 ================
 */
 Q_EXPORT intptr_t vmMain(int command, intptr_t arg0, intptr_t arg1, intptr_t arg2, intptr_t arg3, intptr_t arg4, intptr_t arg5, intptr_t arg6, intptr_t arg7, intptr_t arg8, intptr_t arg9, intptr_t arg10, intptr_t arg11) {
+    floatint_t fi;
+
     switch (command) {
         case CG_INIT:
             CG_Init(arg0, arg1, arg2);
@@ -74,7 +79,7 @@ Q_EXPORT intptr_t vmMain(int command, intptr_t arg0, intptr_t arg1, intptr_t arg
         case CG_EVENT_HANDLING:
             CG_EventHandling(arg0);
             return 0;
-        // [QL] cgamex86.dll exports 15 entries (table at 0x100769a8); slots 10-14 below.
+        // [QL] cgamex86.dll exports 21 entries (table at 0x100769a8); slots 10-14 and 17-19 below.
         case CG_LAST_CHAT_COMMAND:
             CG_LastChatCommand();
             return 0;
@@ -89,11 +94,47 @@ Q_EXPORT intptr_t vmMain(int command, intptr_t arg0, intptr_t arg1, intptr_t arg
             return 0;
         case CG_GET_ACTIVE_FRAME:
             return CG_GetActiveFrame();
+        // the chat bar's two floats travel in the return value's bits
+        case CG_CHAT_BAR_Y:
+            fi.f = CG_ChatBarY();
+            return fi.i;
+        case CG_CHAT_BAR_WIDTH:
+            fi.f = CG_ChatBarWidth();
+            return fi.i;
+        case CG_CHAT_FIELD_CHARS:
+            return CG_ChatFieldChars();
         default:
             CG_Error("vmMain: unknown command %i", command);
             break;
     }
     return -1;
+}
+
+/*
+================
+CG_ChatBarY, CG_ChatBarWidth, CG_ChatFieldChars
+
+[QL] cgamex86.dll 0x100209e0, 0x10020a00 and 0x10020a20, exports 17-19: where the engine's
+Con_DrawNotify puts the chat bar (quakelive_steam.exe 0x4b416b). It sits at y 413 across the 640
+width with a 73-character field, and during the intermission at y 455, 300 wide, with 30.
+================
+*/
+static float CG_ChatBarY(void) {
+    qboolean intermission = (cg.predictedPlayerState.pm_type == PM_INTERMISSION);
+
+    return intermission ? 455.0f : 413.0f;
+}
+
+static float CG_ChatBarWidth(void) {
+    qboolean intermission = (cg.predictedPlayerState.pm_type == PM_INTERMISSION);
+
+    return intermission ? 300.0f : 640.0f;
+}
+
+static int CG_ChatFieldChars(void) {
+    qboolean intermission = (cg.predictedPlayerState.pm_type == PM_INTERMISSION);
+
+    return intermission ? 30 : 73;
 }
 
 cg_t cg;
