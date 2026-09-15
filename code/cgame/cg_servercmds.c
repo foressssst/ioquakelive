@@ -1819,10 +1819,10 @@ void CG_ParseDuelScores(void) {
 
     memset(cg.scores, 0, sizeof(cg.scores));
 
-    // [QL] the binary keeps cg.duelScores across parses in live play so the first
-    // duelist stays cached for the intermission merge below; only demo playback
-    // (DAT_10ab8f4c) clears the cache each parse.
-    if (cg.demoPlayback) {
+    // [QL] the binary keeps cg.duelScores across parses once the match is on, so the first
+    // duelist stays cached for the intermission merge below; during warmup it clears the cache
+    // on every parse (DAT_10ab8f4c is cg.warmup, not demo playback).
+    if (cg.warmup) {
         memset(cg.duelScores, 0, sizeof(cg.duelScores));
         cg.duelScores[0].clientNum = -1;
         cg.duelScores[1].clientNum = -1;

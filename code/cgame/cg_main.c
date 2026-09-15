@@ -1781,6 +1781,18 @@ static void CG_RegisterGraphics(void) {
     cgs.media.scoreboardScore = trap_R_RegisterShaderNoMip("menu/tab/score.tga");
     cgs.media.scoreboardTime = trap_R_RegisterShaderNoMip("menu/tab/time.tga");
 
+    // [QL] the duel board's status plates, in the binary's order (0x10023804..0x100238e3)
+    cgs.media.duelPlateReady[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_ready.tga");
+    cgs.media.duelPlateNotReady[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_notready.tga");
+    cgs.media.duelPlateReady[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_ready.tga");
+    cgs.media.duelPlateNotReady[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_notready.tga");
+    cgs.media.duelPlateLeads[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_leads.tga");
+    cgs.media.duelPlateTied[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_tied.tga");
+    cgs.media.duelPlateTrails[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_trails.tga");
+    cgs.media.duelPlateLeads[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_leads.tga");
+    cgs.media.duelPlateTied[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_tied.tga");
+    cgs.media.duelPlateTrails[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_trails.tga");
+
     cgs.media.smokePuffShader = trap_R_RegisterShader("smokePuff");
     cgs.media.smokePuffRageProShader = trap_R_RegisterShader("smokePuffRagePro");
     cgs.media.shotgunSmokePuffShader = trap_R_RegisterShader("shotgunSmokePuff");

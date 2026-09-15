@@ -1494,8 +1494,8 @@ typedef struct {
 
     // [QL] duel player-status plate shaders (CG_DrawPlayerStatusLeft/Right).
     // Globals DAT_10a5f360..0x10a5f384.
-    qhandle_t duelStatusDefault, duelStatusLeads, duelStatusTrails, duelStatusTied, duelStatusReady;
-    qhandle_t duelStatusDefault_right, duelStatusLeads_right, duelStatusTrails_right, duelStatusTied_right, duelStatusReady_right;
+    // [QL] the duel board's status plates, [0] for the first player (left), [1] the second
+    qhandle_t duelPlateReady[2], duelPlateNotReady[2], duelPlateLeads[2], duelPlateTied[2], duelPlateTrails[2];
 
 } cgMedia_t;
 
