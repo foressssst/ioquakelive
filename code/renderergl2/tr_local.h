@@ -1672,6 +1672,9 @@ extern cvar_t* r_lodscale;
 
 extern cvar_t* r_inGameVideo;   // controls whether in game video should be draw
 extern cvar_t* r_fastsky;       // controls whether sky should be cleared or drawn
+extern cvar_t* r_fastSkyColor;  // [QL] the colour r_fastsky clears to, as 0xRRGGBB
+extern cvar_t* r_drawSkyFloor;  // [QL] the cloud layer also under the sky box
+extern cvar_t* r_teleporterFlash;  // [QL] the flash while teleporting; 0 is black
 extern cvar_t* r_drawSun;       // controls drawing of sun quad
 extern cvar_t* r_dynamiclight;  // dynamic lights enabled/disabled
 extern cvar_t* r_dlightBacks;   // dlight non-facing surfaces for continuity

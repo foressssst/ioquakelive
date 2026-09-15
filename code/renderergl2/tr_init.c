@@ -207,6 +207,15 @@ cvar_t* r_customwidth;
 cvar_t* r_customheight;
 cvar_t* r_customPixelAspect;
 
+// [QL] the mode and the size in a window
+cvar_t* r_windowedMode;
+cvar_t* r_windowedWidth;
+cvar_t* r_windowedHeight;
+
+cvar_t* r_fastSkyColor;
+cvar_t* r_drawSkyFloor;
+cvar_t* r_teleporterFlash;
+
 cvar_t* r_overBrightBits;
 cvar_t* r_mapOverBrightBits;
 cvar_t* r_mapOverBrightCap;
@@ -349,42 +358,65 @@ typedef struct vidmode_s {
     const char* description;
     int width, height;
     float pixelAspect;  // pixel width / height
+    int aspectRatio;    // [QL] for r_aspectRatio: 0 is 4:3, 1 is 16:9, 2 is 16:10 and 3 is 5:4
 } vidmode_t;
 
 vidmode_t r_vidModes[] =
     {
-        // [QL] mode table from quakelive_steam.exe binary
-        {"Mode  0: 320x240", 320, 240, 1},
-        {"Mode  1: 400x300", 400, 300, 1},
-        {"Mode  2: 512x384", 512, 384, 1},
-        {"Mode  3: 640x360", 640, 360, 1},
-        {"Mode  4: 640x400", 640, 400, 1},
-        {"Mode  5: 640x480", 640, 480, 1},
-        {"Mode  6: 800x450", 800, 450, 1},
-        {"Mode  7: 852x480", 852, 480, 1},
-        {"Mode  8: 800x500", 800, 500, 1},
-        {"Mode  9: 800x600", 800, 600, 1},
-        {"Mode 10: 1024x640", 1024, 640, 1},
-        {"Mode 11: 1024x576", 1024, 576, 1},
-        {"Mode 12: 1024x768", 1024, 768, 1},
-        {"Mode 13: 1152x864", 1152, 864, 1},
-        {"Mode 14: 1280x720", 1280, 720, 1},
-        {"Mode 15: 1280x768", 1280, 768, 1},
-        {"Mode 16: 1280x800", 1280, 800, 1},
-        {"Mode 17: 1280x1024", 1280, 1024, 1},
-        {"Mode 18: 1440x900", 1440, 900, 1},
-        {"Mode 19: 1600x900", 1600, 900, 1},
-        {"Mode 20: 1600x1000", 1600, 1000, 1},
-        {"Mode 21: 1680x1050", 1680, 1050, 1},
-        {"Mode 22: 1600x1200", 1600, 1200, 1},
-        {"Mode 23: 1920x1080", 1920, 1080, 1},
-        {"Mode 24: 1920x1200", 1920, 1200, 1},
-        {"Mode 25: 1920x1440", 1920, 1440, 1},
-        {"Mode 26: 2048x1536", 2048, 1536, 1},
-        {"Mode 27: 2560x1600", 2560, 1600, 1}};
+        // [QL] mode table from quakelive_steam.exe binary (0x55c3f8)
+        {"Mode  0: 320x240", 320, 240, 1, 0},
+        {"Mode  1: 400x300", 400, 300, 1, 0},
+        {"Mode  2: 512x384", 512, 384, 1, 0},
+        {"Mode  3: 640x360", 640, 360, 1, 1},
+        {"Mode  4: 640x400", 640, 400, 1, 2},
+        {"Mode  5: 640x480", 640, 480, 1, 0},
+        {"Mode  6: 800x450", 800, 450, 1, 1},
+        {"Mode  7: 852x480", 852, 480, 1, 1},
+        {"Mode  8: 800x500", 800, 500, 1, 2},
+        {"Mode  9: 800x600", 800, 600, 1, 0},
+        {"Mode 10: 1024x640", 1024, 640, 1, 2},
+        {"Mode 11: 1024x576", 1024, 576, 1, 1},
+        {"Mode 12: 1024x768", 1024, 768, 1, 0},
+        {"Mode 13: 1152x864", 1152, 864, 1, 0},
+        {"Mode 14: 1280x720", 1280, 720, 1, 1},
+        {"Mode 15: 1280x768", 1280, 768, 1, 2},
+        {"Mode 16: 1280x800", 1280, 800, 1, 2},
+        {"Mode 17: 1280x1024", 1280, 1024, 1, 3},
+        {"Mode 18: 1440x900", 1440, 900, 1, 2},
+        {"Mode 19: 1600x900", 1600, 900, 1, 1},
+        {"Mode 20: 1600x1000", 1600, 1000, 1, 2},
+        {"Mode 21: 1680x1050", 1680, 1050, 1, 2},
+        {"Mode 22: 1600x1200", 1600, 1200, 1, 0},
+        {"Mode 23: 1920x1080", 1920, 1080, 1, 1},
+        {"Mode 24: 1920x1200", 1920, 1200, 1, 2},
+        {"Mode 25: 1920x1440", 1920, 1440, 1, 0},
+        {"Mode 26: 2048x1536", 2048, 1536, 1, 0},
+        {"Mode 27: 2560x1600", 2560, 1600, 1, 2}};
 static int s_numVidModes = ARRAY_LEN(r_vidModes);
 
-qboolean R_GetModeInfo(int* width, int* height, float* windowAspect, int mode) {
+/*
+** R_AspectRatioOf
+**
+** [QL] quakelive_steam.exe 0x448010: the shape of a size that isn't in the table, for r_aspectRatio
+*/
+int R_AspectRatioOf(int width, int height) {
+    float aspect = (float)width / height;
+
+    if (aspect >= 1.77778f) {
+        return 1;
+    }
+    if (aspect >= 1.6f) {
+        return 2;
+    }
+    if (aspect >= 1.33333f) {
+        return 0;
+    }
+    return 3;
+}
+
+// [QL] 0x448010: mode -1 takes r_customWidth and r_customHeight in full screen and r_windowedWidth
+// and r_windowedHeight in a window
+qboolean R_GetModeInfo(int* width, int* height, float* windowAspect, int* aspectRatio, int mode, qboolean fullscreen) {
     vidmode_t* vm;
     float pixelAspect;
 
@@ -396,15 +428,22 @@ qboolean R_GetModeInfo(int* width, int* height, float* windowAspect, int mode) {
     }
 
     if (mode == -1) {
-        *width = r_customwidth->integer;
-        *height = r_customheight->integer;
+        if (fullscreen) {
+            *width = r_customwidth->integer;
+            *height = r_customheight->integer;
+        } else {
+            *width = r_windowedWidth->integer;
+            *height = r_windowedHeight->integer;
+        }
         pixelAspect = r_customPixelAspect->value;
+        *aspectRatio = R_AspectRatioOf(*width, *height);
     } else {
         vm = &r_vidModes[mode];
 
         *width = vm->width;
         *height = vm->height;
         pixelAspect = vm->pixelAspect;
+        *aspectRatio = vm->aspectRatio;
     }
 
     *windowAspect = (float)*width / (*height * pixelAspect);
@@ -1211,11 +1250,15 @@ void R_Register(void) {
     //
     // latched and archived variables
     //
+    // [QL] quakelive_steam.exe 0x449000 (R_Register) gives the defaults and flags of retail's cvars,
+    // and 0x80000 (CVAR_USERSAVE) and 0x800 (CVAR_REPLICATE) on most of them
     r_allowExtensions = ri.Cvar_Get("r_allowExtensions", "1", CVAR_ARCHIVE | CVAR_LATCH);
-    r_ext_compressed_textures = ri.Cvar_Get("r_ext_compressed_textures", "0", CVAR_ARCHIVE | CVAR_LATCH);
-    r_ext_multitexture = ri.Cvar_Get("r_ext_multitexture", "1", CVAR_ARCHIVE | CVAR_LATCH);
-    r_ext_compiled_vertex_array = ri.Cvar_Get("r_ext_compiled_vertex_array", "1", CVAR_ARCHIVE | CVAR_LATCH);
-    r_ext_texture_env_add = ri.Cvar_Get("r_ext_texture_env_add", "1", CVAR_ARCHIVE | CVAR_LATCH);
+    r_ext_compressed_textures = ri.Cvar_Get("r_ext_compressed_textures", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
+    // [QL] only turns off the 3DFX gamma ramp in retail's own GL setup, so it is only registered
+    ri.Cvar_Get("r_ext_gamma_control", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
+    r_ext_multitexture = ri.Cvar_Get("r_ext_multitexture", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
+    r_ext_compiled_vertex_array = ri.Cvar_Get("r_ext_compiled_vertex_array", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
+    r_ext_texture_env_add = ri.Cvar_Get("r_ext_texture_env_add", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
 
     r_ext_framebuffer_object = ri.Cvar_Get("r_ext_framebuffer_object", "1", CVAR_ARCHIVE | CVAR_LATCH);
     r_ext_texture_float = ri.Cvar_Get("r_ext_texture_float", "1", CVAR_ARCHIVE | CVAR_LATCH);
@@ -1228,42 +1271,54 @@ void R_Register(void) {
                                                    "0", CVAR_ARCHIVE | CVAR_LATCH);
     r_ext_max_anisotropy = ri.Cvar_Get("r_ext_max_anisotropy", "2", CVAR_ARCHIVE | CVAR_LATCH);
 
-    r_picmip = ri.Cvar_Get("r_picmip", "1", CVAR_ARCHIVE | CVAR_LATCH);
+    // [QL] full texture detail by default
+    r_picmip = ri.Cvar_Get("r_picmip", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_REPLICATE | CVAR_USERSAVE);
     r_roundImagesDown = ri.Cvar_Get("r_roundImagesDown", "1", CVAR_ARCHIVE | CVAR_LATCH);
     r_colorMipLevels = ri.Cvar_Get("r_colorMipLevels", "0", CVAR_LATCH);
     ri.Cvar_CheckRange(r_picmip, 0, 16, qtrue);
-    r_detailTextures = ri.Cvar_Get("r_detailtextures", "1", CVAR_ARCHIVE | CVAR_LATCH);
-    r_texturebits = ri.Cvar_Get("r_texturebits", "0", CVAR_ARCHIVE | CVAR_LATCH);
-    r_colorbits = ri.Cvar_Get("r_colorbits", "0", CVAR_ARCHIVE | CVAR_LATCH);
-    r_stencilbits = ri.Cvar_Get("r_stencilbits", "8", CVAR_ARCHIVE | CVAR_LATCH);
-    r_depthbits = ri.Cvar_Get("r_depthbits", "0", CVAR_ARCHIVE | CVAR_LATCH);
+    r_detailTextures = ri.Cvar_Get("r_detailtextures", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
+    r_texturebits = ri.Cvar_Get("r_texturebits", "32", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
+    r_colorbits = ri.Cvar_Get("r_colorbits", "32", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
+    r_stencilbits = ri.Cvar_Get("r_stencilbits", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
+    r_depthbits = ri.Cvar_Get("r_depthbits", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
     r_ext_multisample = ri.Cvar_Get("r_ext_multisample", "0", CVAR_ARCHIVE | CVAR_LATCH);
     ri.Cvar_CheckRange(r_ext_multisample, 0, 4, qtrue);
-    r_overBrightBits = ri.Cvar_Get("r_overBrightBits", "1", CVAR_ARCHIVE | CVAR_LATCH);
+    r_overBrightBits = ri.Cvar_Get("r_overBrightBits", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
     r_ignorehwgamma = ri.Cvar_Get("r_ignorehwgamma", "0", CVAR_ARCHIVE | CVAR_LATCH);
-    r_mode = ri.Cvar_Get("r_mode", "-2", CVAR_ARCHIVE | CVAR_LATCH);
-    r_fullscreen = ri.Cvar_Get("r_fullscreen", "0", CVAR_ARCHIVE);
+    r_mode = ri.Cvar_Get("r_mode", "-2", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
+    // [QL] latched: a window and full screen each have their own mode (see R_GetModeInfo), so a
+    // change goes through vid_restart
+    r_fullscreen = ri.Cvar_Get("r_fullscreen", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
     r_noborder = ri.Cvar_Get("r_noborder", "0", CVAR_ARCHIVE | CVAR_LATCH);
-    r_customwidth = ri.Cvar_Get("r_customwidth", "1920", CVAR_ARCHIVE | CVAR_LATCH);
-    r_customheight = ri.Cvar_Get("r_customheight", "1080", CVAR_ARCHIVE | CVAR_LATCH);
+    r_customwidth = ri.Cvar_Get("r_customWidth", "1600", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
+    r_customheight = ri.Cvar_Get("r_customHeight", "1024", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
     r_customPixelAspect = ri.Cvar_Get("r_customPixelAspect", "1", CVAR_ARCHIVE | CVAR_LATCH);
-    r_simpleMipMaps = ri.Cvar_Get("r_simpleMipMaps", "1", CVAR_ARCHIVE | CVAR_LATCH);
-    r_vertexLight = ri.Cvar_Get("r_vertexLight", "0", CVAR_ARCHIVE | CVAR_LATCH);
+    r_windowedMode = ri.Cvar_Get("r_windowedMode", "12", CVAR_ARCHIVE | CVAR_LATCH | CVAR_REPLICATE | CVAR_USERSAVE);
+    r_windowedWidth = ri.Cvar_Get("r_windowedWidth", "1600", CVAR_ARCHIVE | CVAR_LATCH);
+    r_windowedHeight = ri.Cvar_Get("r_windowedHeight", "1024", CVAR_ARCHIVE | CVAR_LATCH);
+    // [QL] the shape of the screen the mode gives, set by GLimp_SetMode for the UI (0x46ab80)
+    ri.Cvar_Get("r_aspectRatio", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
+    r_simpleMipMaps = ri.Cvar_Get("r_simpleMipMaps", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
+    r_vertexLight = ri.Cvar_Get("r_vertexLight", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_REPLICATE | CVAR_USERSAVE);
     r_uiFullScreen = ri.Cvar_Get("r_uifullscreen", "0", 0);
-    r_subdivisions = ri.Cvar_Get("r_subdivisions", "4", CVAR_ARCHIVE | CVAR_LATCH);
+    // [QL] read only in retail
+    r_subdivisions = ri.Cvar_Get("r_subdivisions", "4", CVAR_ROM);
     r_stereoEnabled = ri.Cvar_Get("r_stereoEnabled", "0", CVAR_ARCHIVE | CVAR_LATCH);
     r_greyscale = ri.Cvar_Get("r_greyscale", "0", CVAR_ARCHIVE | CVAR_LATCH);
     ri.Cvar_CheckRange(r_greyscale, 0, 1, qfalse);
 
     r_externalGLSL = ri.Cvar_Get("r_externalGLSL", "0", CVAR_LATCH);
 
-    r_hdr = ri.Cvar_Get("r_hdr", "1", CVAR_ARCHIVE | CVAR_LATCH);
+    // [QL] this renderer's own effects, which retail doesn't have, start off so the picture is
+    // retail's: HDR and tone mapping, the depth pre-pass, normal, specular and deluxe maps, and the
+    // sun's light and shadows
+    r_hdr = ri.Cvar_Get("r_hdr", "0", CVAR_ARCHIVE | CVAR_LATCH);
     r_floatLightmap = ri.Cvar_Get("r_floatLightmap", "0", CVAR_ARCHIVE | CVAR_LATCH);
     r_postProcess = ri.Cvar_Get("r_postProcess", "1", CVAR_ARCHIVE);
 
     R_QLPostRegister();
 
-    r_toneMap = ri.Cvar_Get("r_toneMap", "1", CVAR_ARCHIVE);
+    r_toneMap = ri.Cvar_Get("r_toneMap", "0", CVAR_ARCHIVE);
     r_forceToneMap = ri.Cvar_Get("r_forceToneMap", "0", CVAR_CHEAT);
     r_forceToneMapMin = ri.Cvar_Get("r_forceToneMapMin", "-8.0", CVAR_CHEAT);
     r_forceToneMapAvg = ri.Cvar_Get("r_forceToneMapAvg", "-2.0", CVAR_CHEAT);
@@ -1278,12 +1333,12 @@ void R_Register(void) {
 
     r_cameraExposure = ri.Cvar_Get("r_cameraExposure", "1", CVAR_CHEAT);
 
-    r_depthPrepass = ri.Cvar_Get("r_depthPrepass", "1", CVAR_ARCHIVE);
+    r_depthPrepass = ri.Cvar_Get("r_depthPrepass", "0", CVAR_ARCHIVE);
     r_ssao = ri.Cvar_Get("r_ssao", "0", CVAR_LATCH | CVAR_ARCHIVE);
 
-    r_normalMapping = ri.Cvar_Get("r_normalMapping", "1", CVAR_ARCHIVE | CVAR_LATCH);
-    r_specularMapping = ri.Cvar_Get("r_specularMapping", "1", CVAR_ARCHIVE | CVAR_LATCH);
-    r_deluxeMapping = ri.Cvar_Get("r_deluxeMapping", "1", CVAR_ARCHIVE | CVAR_LATCH);
+    r_normalMapping = ri.Cvar_Get("r_normalMapping", "0", CVAR_ARCHIVE | CVAR_LATCH);
+    r_specularMapping = ri.Cvar_Get("r_specularMapping", "0", CVAR_ARCHIVE | CVAR_LATCH);
+    r_deluxeMapping = ri.Cvar_Get("r_deluxeMapping", "0", CVAR_ARCHIVE | CVAR_LATCH);
     r_parallaxMapping = ri.Cvar_Get("r_parallaxMapping", "0", CVAR_ARCHIVE | CVAR_LATCH);
     r_parallaxMapOffset = ri.Cvar_Get("r_parallaxMapOffset", "0", CVAR_ARCHIVE | CVAR_LATCH);
     r_parallaxMapShadows = ri.Cvar_Get("r_parallaxMapShadows", "0", CVAR_ARCHIVE | CVAR_LATCH);
@@ -1309,9 +1364,9 @@ void R_Register(void) {
     r_forceSunLightScale = ri.Cvar_Get("r_forceSunLightScale", "1.0", CVAR_CHEAT);
     r_forceSunAmbientScale = ri.Cvar_Get("r_forceSunAmbientScale", "0.5", CVAR_CHEAT);
     r_drawSunRays = ri.Cvar_Get("r_drawSunRays", "0", CVAR_ARCHIVE | CVAR_LATCH);
-    r_sunlightMode = ri.Cvar_Get("r_sunlightMode", "1", CVAR_ARCHIVE | CVAR_LATCH);
+    r_sunlightMode = ri.Cvar_Get("r_sunlightMode", "0", CVAR_ARCHIVE | CVAR_LATCH);
 
-    r_sunShadows = ri.Cvar_Get("r_sunShadows", "1", CVAR_ARCHIVE | CVAR_LATCH);
+    r_sunShadows = ri.Cvar_Get("r_sunShadows", "0", CVAR_ARCHIVE | CVAR_LATCH);
     r_shadowFilter = ri.Cvar_Get("r_shadowFilter", "1", CVAR_ARCHIVE | CVAR_LATCH);
     r_shadowBlur = ri.Cvar_Get("r_shadowBlur", "0", CVAR_ARCHIVE | CVAR_LATCH);
     r_shadowMapSize = ri.Cvar_Get("r_shadowMapSize", "1024", CVAR_ARCHIVE | CVAR_LATCH);
@@ -1323,53 +1378,60 @@ void R_Register(void) {
     //
     // temporary latched variables that can only change over a restart
     //
-    r_displayRefresh = ri.Cvar_Get("r_displayRefresh", "0", CVAR_LATCH);
+    r_displayRefresh = ri.Cvar_Get("r_displayRefresh", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
     ri.Cvar_CheckRange(r_displayRefresh, 0, 200, qtrue);
-    r_fullbright = ri.Cvar_Get("r_fullbright", "0", CVAR_LATCH | CVAR_CHEAT);
+    // [QL] archived and not cheat protected in retail
+    r_fullbright = ri.Cvar_Get("r_fullbright", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_REPLICATE | CVAR_USERSAVE);
     // [QL] quakelive_steam.exe 0x449800-0x449824: both archived, and the lightmap cap 255 in 0-255
-    r_mapOverBrightBits = ri.Cvar_Get("r_mapOverBrightBits", "2", CVAR_ARCHIVE | CVAR_LATCH);
-    r_mapOverBrightCap = ri.Cvar_Get("r_mapOverBrightCap", "255", CVAR_ARCHIVE | CVAR_LATCH);
-    ri.Cvar_CheckRange(r_mapOverBrightCap, 0, 255, qtrue);
+    r_mapOverBrightBits = ri.Cvar_Get("r_mapOverBrightBits", "2", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
+    r_mapOverBrightCap = ri.Cvar_GetRange("r_mapOverBrightCap", "255", "0", "255", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
     r_intensity = ri.Cvar_Get("r_intensity", "1", CVAR_ARCHIVE | CVAR_LATCH);
     r_singleShader = ri.Cvar_Get("r_singleShader", "0", CVAR_CHEAT | CVAR_LATCH);
 
     //
     // archived variables that can change at any time
     //
-    r_lodCurveError = ri.Cvar_Get("r_lodCurveError", "250", CVAR_ARCHIVE | CVAR_CHEAT);
-    r_lodbias = ri.Cvar_Get("r_lodbias", "0", CVAR_ARCHIVE);
+    r_lodCurveError = ri.Cvar_Get("r_lodCurveError", "250", CVAR_CHEAT);
+    r_lodbias = ri.Cvar_GetRange("r_lodBias", "-2", "-2", "2", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     r_flares = ri.Cvar_Get("r_flares", "0", CVAR_ARCHIVE);
-    r_znear = ri.Cvar_Get("r_znear", "4", CVAR_CHEAT);
+    r_znear = ri.Cvar_Get("r_znear", "1", CVAR_CHEAT);
     ri.Cvar_CheckRange(r_znear, 0.001f, 200, qfalse);
     r_zproj = ri.Cvar_Get("r_zproj", "64", CVAR_ARCHIVE);
     r_stereoSeparation = ri.Cvar_Get("r_stereoSeparation", "64", CVAR_ARCHIVE);
     r_ignoreGLErrors = ri.Cvar_Get("r_ignoreGLErrors", "1", CVAR_ARCHIVE);
-    r_fastsky = ri.Cvar_Get("r_fastsky", "0", CVAR_ARCHIVE);
+    r_fastsky = ri.Cvar_Get("r_fastSky", "0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    // [QL] the colour r_fastSky clears to, as 0xRRGGBB (0x435d90)
+    r_fastSkyColor = ri.Cvar_Get("r_fastSkyColor", "0x000000", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     r_inGameVideo = ri.Cvar_Get("r_inGameVideo", "1", CVAR_ARCHIVE);
     r_drawSun = ri.Cvar_Get("r_drawSun", "0", CVAR_ARCHIVE);
-    r_dynamiclight = ri.Cvar_Get("r_dynamiclight", "1", CVAR_ARCHIVE);
+    // [QL] the cloud layer also under the sky box (0x45a9d0)
+    r_drawSkyFloor = ri.Cvar_Get("r_drawSkyFloor", "1", CVAR_ARCHIVE | CVAR_USERSAVE);
+    r_dynamiclight = ri.Cvar_Get("r_dynamicLight", "1", CVAR_ARCHIVE | CVAR_USERSAVE);
     r_dlightBacks = ri.Cvar_Get("r_dlightBacks", "1", CVAR_ARCHIVE);
     r_finish = ri.Cvar_Get("r_finish", "0", CVAR_ARCHIVE);
-    r_textureMode = ri.Cvar_Get("r_textureMode", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE);
+    r_textureMode = ri.Cvar_Get("r_textureMode", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE | CVAR_USERSAVE);
 #ifdef __EMSCRIPTEN__
     // Under Emscripten we don't throttle framerate with com_maxfps by default, so enable
     // vsync by default instead.
     r_swapInterval = ri.Cvar_Get("r_swapInterval", "1",
                                  CVAR_ARCHIVE | CVAR_LATCH);
 #else
+    // [QL] not latched: GLimp_EndFrame applies it
     r_swapInterval = ri.Cvar_Get("r_swapInterval", "0",
-                                 CVAR_ARCHIVE | CVAR_LATCH);
+                                 CVAR_ARCHIVE | CVAR_USERSAVE);
 #endif
-    r_gamma = ri.Cvar_Get("r_gamma", "1", CVAR_ARCHIVE);
+    r_gamma = ri.Cvar_Get("r_gamma", "1", CVAR_ARCHIVE | CVAR_USERSAVE);
     r_facePlaneCull = ri.Cvar_Get("r_facePlaneCull", "1", CVAR_ARCHIVE);
 
-    r_railWidth = ri.Cvar_Get("r_railWidth", "16", CVAR_ARCHIVE);
-    r_railCoreWidth = ri.Cvar_Get("r_railCoreWidth", "6", CVAR_ARCHIVE);
-    r_railSegmentLength = ri.Cvar_Get("r_railSegmentLength", "32", CVAR_ARCHIVE);
+    r_railWidth = ri.Cvar_Get("r_railWidth", "16", CVAR_ARCHIVE | CVAR_USERSAVE);
+    r_railCoreWidth = ri.Cvar_Get("r_railCoreWidth", "6", CVAR_ARCHIVE | CVAR_USERSAVE);
+    r_railSegmentLength = ri.Cvar_Get("r_railSegmentLength", "32", CVAR_ARCHIVE | CVAR_USERSAVE);
+
+    // [QL] the teleporter's flash; 0 leaves the screen black (0x435cb0)
+    r_teleporterFlash = ri.Cvar_Get("r_teleporterFlash", "1", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
 
     // [QL] quakelive_steam.exe 0x449031: 10 in 1-100, neither archived nor cheat protected
-    r_ambientScale = ri.Cvar_Get("r_ambientScale", "10", 0);
-    ri.Cvar_CheckRange(r_ambientScale, 1, 100, qfalse);
+    r_ambientScale = ri.Cvar_GetRange("r_ambientScale", "10", "1", "100", CVAR_REPLICATE | CVAR_USERSAVE);
     r_directedScale = ri.Cvar_Get("r_directedScale", "1", CVAR_CHEAT);
 
     r_anaglyphMode = ri.Cvar_Get("r_anaglyphMode", "0", CVAR_ARCHIVE);
@@ -1396,7 +1458,8 @@ void R_Register(void) {
     r_skipBackEnd = ri.Cvar_Get("r_skipBackEnd", "0", CVAR_CHEAT);
 
     r_measureOverdraw = ri.Cvar_Get("r_measureOverdraw", "0", CVAR_CHEAT);
-    r_lodscale = ri.Cvar_Get("r_lodscale", "5", CVAR_CHEAT);
+    // [QL] 10 in 1-50, not cheat protected in retail
+    r_lodscale = ri.Cvar_GetRange("r_lodScale", "10", "1", "50", CVAR_USERSAVE);
     r_norefresh = ri.Cvar_Get("r_norefresh", "0", CVAR_CHEAT);
     r_drawentities = ri.Cvar_Get("r_drawentities", "1", CVAR_CHEAT);
     r_ignore = ri.Cvar_Get("r_ignore", "1", CVAR_CHEAT);
@@ -1426,6 +1489,28 @@ void R_Register(void) {
 
     r_maxpolys = ri.Cvar_Get("r_maxpolys", va("%d", MAX_POLYS), 0);
     r_maxpolyverts = ri.Cvar_Get("r_maxpolyverts", va("%d", MAX_POLYVERTS), 0);
+
+    // [QL] GLimp_Init puts the card's names here (0x46c2e0)
+    ri.Cvar_Get("r_gl_vendor", "None", CVAR_ROM | CVAR_REPLICATE);
+    ri.Cvar_Get("r_gl_renderer", "None", CVAR_ROM | CVAR_REPLICATE);
+    ri.Cvar_Get("r_gl_reserved", "0", CVAR_ROM | CVAR_REPLICATE);
+
+    // [QL] retail registers these for its own debugging, SMP, draw paths and driver loading, which
+    // this renderer doesn't have; nothing reads them
+    ri.Cvar_Get("r_debugAds", "0", CVAR_TEMP);
+    ri.Cvar_Get("r_debugFontAtlas", "0", CVAR_TEMP);
+    ri.Cvar_Get("r_debugShaderIndex", "0", CVAR_CHEAT);
+    ri.Cvar_Get("r_debugSortExcept", "0", CVAR_CHEAT);
+    ri.Cvar_Get("r_forceMergeEntities", "0", CVAR_CHEAT);
+    ri.Cvar_Get("r_glDriver", "opengl32", CVAR_ARCHIVE | CVAR_LATCH);
+    ri.Cvar_Get("r_ignoreFastPath", "1", CVAR_ARCHIVE | CVAR_LATCH);
+    ri.Cvar_Get("r_noFastRestart", "0", CVAR_ARCHIVE);
+    ri.Cvar_Get("r_primitives", "0", CVAR_ARCHIVE);
+    ri.Cvar_Get("r_showSmp", "0", CVAR_CHEAT);
+    ri.Cvar_Get("r_skipLargeBatches", "0", CVAR_CHEAT);
+    ri.Cvar_Get("r_skipSmallBatches", "0", CVAR_CHEAT);
+    ri.Cvar_Get("r_smp", "0", CVAR_ROM);
+    ri.Cvar_Get("r_stereo", "0", CVAR_ARCHIVE | CVAR_LATCH);
 
     // make sure all the commands added here are also
     // removed in R_Shutdown
