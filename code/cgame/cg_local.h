@@ -737,6 +737,7 @@ typedef struct {
     qboolean zoomed;
     int zoomTime;
     float zoomSensitivity;
+    int fovTarget;  // [QL] the fov sent to the server: the one being zoomed to, not the interpolated one
 
     // information screen text during loading
     char infoScreenText[MAX_STRING_CHARS];
@@ -1976,6 +1977,7 @@ extern vmCvar_t cg_trueShotgun;
 extern vmCvar_t cg_vignette;
 extern vmCvar_t cg_zoomOutOnDeath;
 extern vmCvar_t cg_zoomScaling;
+extern vmCvar_t cg_zoomSensitivity;
 extern vmCvar_t cg_zoomToggle;
 
 // [QL] positive-sense taunt gate (DAT_10a68eec). EV_TAUNT plays only when non-zero.

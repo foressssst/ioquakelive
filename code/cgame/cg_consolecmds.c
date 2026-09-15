@@ -904,6 +904,9 @@ static consoleCommand_t commands[] = {
     {"-acc", CG_AccUp_f},
     {"+pstats", CG_PStatsDown_f},
     {"-pstats", CG_PStatsUp_f},
+    // [QL] cgamex86.dll 0x10078df8: the zoom, which the fork had written but never registered
+    {"+zoom", CG_ZoomDown_f},
+    {"-zoom", CG_ZoomUp_f},
     {"nextframe", CG_TestModelNextFrame_f},
     {"prevframe", CG_TestModelPrevFrame_f},
     {"sizeup", CG_SizeUp_f},

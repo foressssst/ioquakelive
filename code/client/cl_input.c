@@ -441,16 +441,24 @@ void CL_KeyMove(usercmd_t* cmd) {
 /*
 =================
 CL_MouseEvent
+
+[QL] quakelive_steam.exe 0x4b54e0: nothing while cg_ignoreMouseInput is set, and the view only takes
+the motion when no catcher is up (the console included), besides retail's bit 0x10. The motion adds
+up until CL_MouseMove takes it.
 =================
 */
 void CL_MouseEvent(int dx, int dy, int time) {
+    if (cg_ignoreMouseInput->integer) {
+        return;
+    }
+
     if (Key_GetCatcher() & KEYCATCH_UI) {
         VM_Call(uivm, UI_MOUSE_EVENT, dx, dy);
     } else if (Key_GetCatcher() & KEYCATCH_CGAME) {
         VM_Call(cgvm, CG_MOUSE_EVENT, dx, dy);
-    } else {
-        cl.mouseDx[cl.mouseIndex] += dx;
-        cl.mouseDy[cl.mouseIndex] += dy;
+    } else if (!(Key_GetCatcher() & ~0x10)) {
+        cl.mouseDx[0] += dx;
+        cl.mouseDy[0] += dy;
     }
 }
 
@@ -513,81 +521,215 @@ void CL_JoystickMove(usercmd_t* cmd) {
 
 /*
 =================
-CL_MouseMove
+CL_MouseFilterBegin
+
+[QL] quakelive_steam.exe 0x4b5640: m_filter is the number of frames whose view angles are averaged,
+0 to 31. The view starts each frame from the angles it aimed at, not from the averaged ones it showed,
+and a change of m_filter starts the average over.
 =================
 */
+#define MOUSE_FILTER_SIZE 32
 
-void CL_MouseMove(usercmd_t* cmd) {
-    float mx, my;
+static float mouseFilterYaw[MOUSE_FILTER_SIZE];
+static float mouseFilterPitch[MOUSE_FILTER_SIZE];
+static int mouseFilterCount;
+static int mouseFilterIndex;
+static float mouseFilterAimYaw;
+static float mouseFilterAimPitch;
 
-    // allow mouse smoothing
-    if (m_filter->integer) {
-        mx = (cl.mouseDx[0] + cl.mouseDx[1]) * 0.5f;
-        my = (cl.mouseDy[0] + cl.mouseDy[1]) * 0.5f;
-    } else {
-        mx = cl.mouseDx[cl.mouseIndex];
-        my = cl.mouseDy[cl.mouseIndex];
+static void CL_MouseFilterBegin(void) {
+    if (!m_filter->integer) {
+        return;
     }
 
-    cl.mouseIndex ^= 1;
-    cl.mouseDx[cl.mouseIndex] = 0;
-    cl.mouseDy[cl.mouseIndex] = 0;
-
-    if (mx == 0.0f && my == 0.0f)
+    if (m_filter->integer < 0) {
+        Cvar_Set("m_filter", "0");
         return;
+    }
+
+    if (m_filter->integer >= MOUSE_FILTER_SIZE) {
+        Cvar_Set("m_filter", va("%d", MOUSE_FILTER_SIZE - 1));
+    }
+
+    if (m_filter->modified) {
+        mouseFilterAimYaw = cl.viewangles[YAW];
+        mouseFilterAimPitch = cl.viewangles[PITCH];
+        Com_Memset(mouseFilterYaw, 0, sizeof(mouseFilterYaw));
+        Com_Memset(mouseFilterPitch, 0, sizeof(mouseFilterPitch));
+        mouseFilterCount = 0;
+        mouseFilterIndex = 0;
+        m_filter->modified = qfalse;
+    }
+
+    cl.viewangles[YAW] = mouseFilterAimYaw;
+    cl.viewangles[PITCH] = mouseFilterAimPitch;
+}
+
+/*
+=================
+CL_MouseFilterEnd
+
+[QL] quakelive_steam.exe 0x4b5710: the angles aimed at this frame join the history, and the view shows
+the average of the last m_filter of them
+=================
+*/
+static void CL_MouseFilterEnd(void) {
+    float yaw, pitch;
+    int i, j;
+
+    if (!m_filter->integer) {
+        return;
+    }
+
+    mouseFilterYaw[mouseFilterIndex] = cl.viewangles[YAW];
+    mouseFilterPitch[mouseFilterIndex] = cl.viewangles[PITCH];
+
+    mouseFilterCount++;
+    if (mouseFilterCount > m_filter->integer) {
+        mouseFilterCount = m_filter->integer;
+    }
+
+    yaw = 0.0f;
+    pitch = 0.0f;
+    for (i = 0, j = mouseFilterIndex; i < mouseFilterCount; i++, j--) {
+        int k = j < 0 ? j + MOUSE_FILTER_SIZE : j;
+
+        yaw += mouseFilterYaw[k];
+        pitch += mouseFilterPitch[k];
+    }
+
+    mouseFilterAimYaw = cl.viewangles[YAW];
+    mouseFilterAimPitch = cl.viewangles[PITCH];
+    cl.viewangles[YAW] = yaw / mouseFilterCount;
+    cl.viewangles[PITCH] = pitch / mouseFilterCount;
+
+    mouseFilterIndex = (mouseFilterIndex + 1) % MOUSE_FILTER_SIZE;
+}
+
+/*
+=================
+CL_MouseMove
+
+[QL] quakelive_steam.exe 0x4b5800. The motion since the last frame, in centimetres when m_cpi gives the
+mouse's counts per inch, takes the sensitivity and retail's acceleration: past cl_mouseAccelOffset,
+(|cl_mouseAccel| * rate) ^ (cl_mouseAccelPower - 1) is added to the sensitivity, or taken off with a
+negative cl_mouseAccel, and cl_mouseSensCap caps the result. The rate is the motion per millisecond,
+or cm/s with m_cpi, where m_yaw and m_pitch also become degrees per cm (times 1 / 0.022).
+cl_mouseAccelDebug writes each frame's motion, time, rate and power to mouse.log in fs_homepath.
+=================
+*/
+static FILE* mouseAccelLog;
+
+void CL_MouseMove(usercmd_t* cmd) {
+    qboolean debug = cl_mouseAccelDebug->integer != 0;
+    float mx, my;
+    float sensitivity;
+    float rate, power;
+    float angle;
+
+    if (debug) {
+        if (!mouseAccelLog) {
+            mouseAccelLog = Sys_FOpen(FS_BuildOSPath(Cvar_VariableString("fs_homepath"), "", "mouse.log"), "w");
+            if (mouseAccelLog) {
+                fprintf(mouseAccelLog, "mx my frame_msec rate power\n");
+            }
+        }
+    } else if (mouseAccelLog) {
+        fclose(mouseAccelLog);
+        mouseAccelLog = NULL;
+    }
+    if (!mouseAccelLog) {
+        debug = qfalse;
+    }
+
+    mx = cl.mouseDx[0];
+    my = cl.mouseDy[0];
+    cl.mouseDx[0] = 0;
+    cl.mouseDy[0] = 0;
+
+    if (m_cpi->value != 0.0f) {
+        float countsPerCm = m_cpi->value / 2.54f;
+
+        mx /= countsPerCm;
+        my /= countsPerCm;
+    }
+
+    sensitivity = cl_sensitivity->value;
+
+    if (debug) {
+        fprintf(mouseAccelLog, "%g %g %d ", mx, my, frame_msec);
+    }
 
     if (cl_mouseAccel->value != 0.0f) {
-        if (cl_mouseAccelStyle->integer == 0) {
-            float accelSensitivity;
-            float rate;
-
-            rate = sqrt(mx * mx + my * my) / (float)frame_msec;
-
-            accelSensitivity = cl_sensitivity->value + rate * cl_mouseAccel->value;
-            mx *= accelSensitivity;
-            my *= accelSensitivity;
-
-            if (cl_showMouseRate->integer)
-                Com_Printf("rate: %f, accelSensitivity: %f\n", rate, accelSensitivity);
-        } else {
-            float rate[2];
-            float power[2];
-
-            // sensitivity remains pretty much unchanged at low speeds
-            // cl_mouseAccel is a power value to how the acceleration is shaped
-            // cl_mouseAccelOffset is the rate for which the acceleration will have doubled the non accelerated amplification
-            // NOTE: decouple the config cvars for independent acceleration setup along X and Y?
-
-            rate[0] = fabs(mx) / (float)frame_msec;
-            rate[1] = fabs(my) / (float)frame_msec;
-            power[0] = powf(rate[0] / cl_mouseAccelOffset->value, cl_mouseAccel->value);
-            power[1] = powf(rate[1] / cl_mouseAccelOffset->value, cl_mouseAccel->value);
-
-            mx = cl_sensitivity->value * (mx + ((mx < 0) ? -power[0] : power[0]) * cl_mouseAccelOffset->value);
-            my = cl_sensitivity->value * (my + ((my < 0) ? -power[1] : power[1]) * cl_mouseAccelOffset->value);
-
-            if (cl_showMouseRate->integer)
-                Com_Printf("ratex: %f, ratey: %f, powx: %f, powy: %f\n", rate[0], rate[1], power[0], power[1]);
+        rate = sqrt(mx * mx + my * my) / (float)frame_msec;
+        if (m_cpi->value != 0.0f) {
+            rate *= 1000.0f;
         }
-    } else {
-        mx *= cl_sensitivity->value;
-        my *= cl_sensitivity->value;
+        rate -= cl_mouseAccelOffset->value;
+
+        power = 0.0f;
+        if (rate > 0.0f) {
+            rate *= fabs(cl_mouseAccel->value);
+
+            power = cl_mouseAccelPower->value - 1.0f;
+            if (power < 0.0f) {
+                power = 0.0f;
+            }
+
+            if (cl_mouseAccel->value > 0.0f) {
+                sensitivity += pow(rate, power);
+            } else {
+                sensitivity -= pow(rate, power);
+            }
+        }
+
+        if (cl_mouseSensCap->value > 0.0f && sensitivity > cl_mouseSensCap->value) {
+            sensitivity = cl_mouseSensCap->value;
+        }
+
+        if (debug) {
+            fprintf(mouseAccelLog, "%g %g ", rate, power);
+        }
     }
 
     // ingame FOV
-    mx *= cl.cgameSensitivity;
-    my *= cl.cgameSensitivity;
+    sensitivity *= cl.cgameSensitivity;
+
+    if (debug) {
+        fprintf(mouseAccelLog, "\n");
+    }
+
+    mx *= sensitivity;
+    my *= sensitivity;
+
+    if (mx == 0.0f && my == 0.0f && !m_filter->integer) {
+        return;
+    }
+
+    CL_MouseFilterBegin();
 
     // add mouse X/Y movement to cmd
-    if (in_strafe.active)
+    if (in_strafe.active) {
         cmd->rightmove = ClampChar(cmd->rightmove + m_side->value * mx);
-    else
-        cl.viewangles[YAW] -= m_yaw->value * mx;
+    } else {
+        angle = m_yaw->value;
+        if (m_cpi->value != 0.0f) {
+            angle *= 1.0f / 0.022f;
+        }
+        cl.viewangles[YAW] -= angle * mx;
+    }
 
-    if ((in_mlooking || cl_freelook->integer) && !in_strafe.active)
-        cl.viewangles[PITCH] += m_pitch->value * my;
-    else
+    if ((in_mlooking || cl_freelook->integer) && !in_strafe.active) {
+        angle = m_pitch->value;
+        if (m_cpi->value != 0.0f) {
+            angle *= 1.0f / 0.022f;
+        }
+        cl.viewangles[PITCH] += angle * my;
+    } else {
         cmd->forwardmove = ClampChar(cmd->forwardmove - m_forward->value * my);
+    }
+
+    CL_MouseFilterEnd();
 }
 
 /*
@@ -1019,6 +1161,8 @@ void CL_InitInput(void) {
     Cmd_AddCommand("-button14", IN_Button14Up);
     Cmd_AddCommand("+mlook", IN_MLookDown);
     Cmd_AddCommand("-mlook", IN_MLookUp);
+    // [QL] quakelive_steam.exe 0x4b652b
+    Cmd_AddCommand("ListInputDevices", IN_ListInputDevices);
 
     cl_nodelta = Cvar_Get("cl_nodelta", "0", 0);
     cl_debugMove = Cvar_Get("cl_debugMove", "0", 0);
@@ -1090,4 +1234,5 @@ void CL_ShutdownInput(void) {
     Cmd_RemoveCommand("-button14");
     Cmd_RemoveCommand("+mlook");
     Cmd_RemoveCommand("-mlook");
+    Cmd_RemoveCommand("ListInputDevices");
 }

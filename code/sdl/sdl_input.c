@@ -46,6 +46,7 @@ static qboolean mouseAvailable = qfalse;
 static qboolean mouseActive = qfalse;
 
 static cvar_t* in_mouse = NULL;
+static cvar_t* in_mouseMode = NULL;
 static cvar_t* in_nograb;
 
 static cvar_t* in_joystick = NULL;
@@ -1294,8 +1295,27 @@ void IN_Init(void* windowData) {
     in_keyboardDebug = Cvar_Get("in_keyboardDebug", "0", CVAR_ARCHIVE);
 
     // mouse variables
-    in_mouse = Cvar_Get("in_mouse", "1", CVAR_ARCHIVE);
-    in_nograb = Cvar_Get("in_nograb", "0", CVAR_ARCHIVE);
+    // [QL] quakelive_steam.exe 0x4ec160-0x4ec316: in_mouse 2 is raw input, 1 DirectInput, -1 the
+    // Windows cursor and 0 no mouse; in_mouseMode says which one runs. Here 1 and 2 are SDL's relative
+    // mode, which reads raw input, and -1 warps the cursor to the centre like the cursor mode did.
+    in_mouse = Cvar_Get("in_mouse", "2", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
+    in_mouseMode = Cvar_Get("in_mouseMode", "undefined", CVAR_ROM | CVAR_TEMP | CVAR_USERSAVE);
+    in_nograb = Cvar_Get("in_nograb", "0", CVAR_TEMP);
+    // [QL] which window raw input is registered to; SDL registers it itself
+    Cvar_Get("in_raw_useWindowHandle", "0", CVAR_ARCHIVE);
+
+    if (in_mouse->integer == 0) {
+        Com_Printf("Mouse control not active.\n");
+    } else if (in_mouse->integer == 2) {
+        // SDL's relative mode reads raw input on Windows
+        SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "0");
+        Cvar_Set("in_mouseMode", "win32(Raw)");
+    } else {
+        // 1 and -1 both fall back on the system's mouse; -1 warps it to the centre, as retail's
+        // cursor mode did
+        SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, in_mouse->integer == -1 ? "1" : "0");
+        Cvar_Set("in_mouseMode", "win32");
+    }
 
     in_joystick = Cvar_Get("in_joystick", "0", CVAR_ARCHIVE | CVAR_LATCH);
     in_joystickThreshold = Cvar_Get("joy_threshold", "0.15", CVAR_ARCHIVE);
@@ -1318,6 +1338,25 @@ void IN_Init(void* windowData) {
     }
 
     Com_DPrintf("------------------------------------\n");
+}
+
+/*
+===============
+IN_ListInputDevices
+
+[QL] quakelive_steam.exe 0x4eab90: retail lists the raw input mice with their button count and sample
+rate. SDL hides the devices behind its own mouse, so this prints what it knows about it.
+===============
+*/
+void IN_ListInputDevices(void) {
+    if (in_mouse->integer != 2) {
+        Com_Printf("ListInputDevices is only supported for Raw Input (in_mouse 2).\n");
+        return;
+    }
+
+    Com_Printf("Raw Input Mouse Devices: \n");
+    Com_Printf("  Mouse Id: 0, Mode: %s, Relative: %s\n", in_mouseMode->string,
+               SDL_GetRelativeMouseMode() ? "yes" : "no");
 }
 
 /*

@@ -64,14 +64,17 @@ cvar_t* cl_sensitivity;
 
 cvar_t* cl_mouseAccel;
 cvar_t* cl_mouseAccelOffset;
-cvar_t* cl_mouseAccelStyle;
-cvar_t* cl_showMouseRate;
+cvar_t* cl_mouseAccelPower;
+cvar_t* cl_mouseAccelDebug;
+cvar_t* cl_mouseSensCap;
+cvar_t* cg_ignoreMouseInput;
 
 cvar_t* m_pitch;
 cvar_t* m_yaw;
 cvar_t* m_forward;
 cvar_t* m_side;
 cvar_t* m_filter;
+cvar_t* m_cpi;
 
 cvar_t* j_pitch;
 cvar_t* j_yaw;
@@ -2822,27 +2825,30 @@ void CL_Init(void) {
 
     rconAddress = Cvar_Get("rconAddress", "", 0);
 
-    cl_yawspeed = Cvar_Get("cl_yawspeed", "140", CVAR_ARCHIVE);
-    cl_pitchspeed = Cvar_Get("cl_pitchspeed", "140", CVAR_ARCHIVE);
-    cl_anglespeedkey = Cvar_Get("cl_anglespeedkey", "1.5", 0);
+    // [QL] quakelive_steam.exe 0x4bc70e, 0x4bc942, 0x4bca85: turning with keys is cheat protected
+    cl_yawspeed = Cvar_Get("cl_yawspeed", "140", CVAR_CHEAT);
+    cl_pitchspeed = Cvar_Get("cl_pitchspeed", "140", CVAR_CHEAT);
+    cl_anglespeedkey = Cvar_Get("cl_anglespeedkey", "1.5", CVAR_CHEAT);
 
     cl_maxpackets = Cvar_Get("cl_maxpackets", "30", CVAR_ARCHIVE);
-    cl_packetdup = Cvar_Get("cl_packetdup", "1", CVAR_ARCHIVE);
+    cl_packetdup = Cvar_Get("cl_packetdup", "1", CVAR_ARCHIVE | CVAR_USERSAVE);
 
     cl_run = Cvar_Get("cl_run", "1", CVAR_ARCHIVE);
-    cl_sensitivity = Cvar_Get("sensitivity", "5", CVAR_ARCHIVE);
-    cl_mouseAccel = Cvar_Get("cl_mouseAccel", "0", CVAR_ARCHIVE);
-    cl_freelook = Cvar_Get("cl_freelook", "1", CVAR_ARCHIVE);
 
-    // 0: legacy mouse acceleration
-    // 1: new implementation
-    cl_mouseAccelStyle = Cvar_Get("cl_mouseAccelStyle", "0", CVAR_ARCHIVE);
-    // offset for the power function (for style 1, ignored otherwise)
-    // this should be set to the max rate value
-    cl_mouseAccelOffset = Cvar_Get("cl_mouseAccelOffset", "5", CVAR_ARCHIVE);
-    Cvar_CheckRange(cl_mouseAccelOffset, 0.001f, 50000.0f, qfalse);
-
-    cl_showMouseRate = Cvar_Get("cl_showmouserate", "0", 0);
+    // [QL] the mouse (0x4bc7be-0x4bcb1e): sensitivity 4, and retail's acceleration, which adds
+    // (cl_mouseAccel * (rate - cl_mouseAccelOffset)) ^ (cl_mouseAccelPower - 1) to the sensitivity, up
+    // to cl_mouseSensCap. With m_cpi (the mouse's counts per inch) the rate is in cm/s and the
+    // sensitivity is in degrees per cm. cl_mouseAccelDebug writes mouse.log. See CL_MouseMove.
+    cl_sensitivity = Cvar_Get("sensitivity", "4", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    cl_mouseAccel = Cvar_Get("cl_mouseAccel", "0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    cl_mouseAccelOffset = Cvar_Get("cl_mouseAccelOffset", "0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    cl_mouseAccelPower = Cvar_Get("cl_mouseAccelPower", "2", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    cl_mouseAccelDebug = Cvar_Get("cl_mouseAccelDebug", "0", 0);
+    cl_mouseSensCap = Cvar_Get("cl_mouseSensCap", "0", CVAR_ARCHIVE | CVAR_USERSAVE);
+    cl_freelook = Cvar_Get("cl_freelook", "1", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    cg_ignoreMouseInput = Cvar_Get("cg_ignoreMouseInput", "0", CVAR_ROM);
+    // [QL] view acceleration of retail's joystick code, which this engine's SDL joystick doesn't use
+    Cvar_Get("cl_viewAccel", "1.7", CVAR_ARCHIVE | CVAR_USERSAVE);
 
     cl_allowDownload = Cvar_Get("cl_allowDownload", "0", CVAR_ARCHIVE);
 #ifdef USE_CURL_DLOPEN
@@ -2863,16 +2869,13 @@ void CL_Init(void) {
     // if the cgame hasn't been started
     Cvar_Get("cg_autoswitch", "1", CVAR_ARCHIVE);
 
-    m_pitch = Cvar_Get("m_pitch", "0.022", CVAR_ARCHIVE);
-    m_yaw = Cvar_Get("m_yaw", "0.022", CVAR_ARCHIVE);
-    m_forward = Cvar_Get("m_forward", "0.25", CVAR_ARCHIVE);
-    m_side = Cvar_Get("m_side", "0.25", CVAR_ARCHIVE);
-#ifdef __APPLE__
-    // Input is jittery on OS X w/o this
-    m_filter = Cvar_Get("m_filter", "1", CVAR_ARCHIVE);
-#else
-    m_filter = Cvar_Get("m_filter", "0", CVAR_ARCHIVE);
-#endif
+    m_pitch = Cvar_Get("m_pitch", "0.022", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    m_yaw = Cvar_Get("m_yaw", "0.022", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    m_forward = Cvar_Get("m_forward", "0.25", CVAR_ARCHIVE | CVAR_USERSAVE);
+    m_side = Cvar_Get("m_side", "0.25", CVAR_ARCHIVE | CVAR_USERSAVE);
+    // [QL] the number of frames whose view angles are averaged, up to 31 (0x4b5640)
+    m_filter = Cvar_Get("m_filter", "0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    m_cpi = Cvar_Get("m_cpi", "0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
 
     j_pitch = Cvar_Get("j_pitch", "0.022", CVAR_ARCHIVE);
     j_yaw = Cvar_Get("j_yaw", "-0.022", CVAR_ARCHIVE);
