@@ -1932,23 +1932,47 @@ static void CG_DrawSelectedPlayerTeamColor(rectDef_t *rect) {
     }
 }
 
+/*
+=================
+CG_DrawSelectedPlayerAccuracy
+
+[QL] cgamex86.dll 0x10034590, CG_SELECTED_PLYR_ACCURACY (0x5d): "%d%%" of the selected
+score's accuracy in the item's font. The fork sent this ownerdraw to CG_DrawFollowPlayerName,
+so the FFA board printed a player name after "Accuracy:" and ran it into "Best Weapon:".
+=================
+*/
 static void CG_DrawSelectedPlayerAccuracy(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
-    const char *s;
-    if (cg.selectedScore >= 0 && cg.selectedScore < cg.numScores) {
-        s = va("%d%%", cg.scores[cg.selectedScore].accuracy);
-        CG_OwnerDrawText(rect->x, rect->y, scale, color, s, 0, 0, textStyle);
+    // retail reads cg.scores[-1] while a spectator selects nothing; nothing is drawn then
+    if (cg.selectedScore < 0 || cg.selectedScore >= MAX_CLIENTS) {
+        return;
     }
+    CG_OwnerDrawText(rect->x, rect->y, scale, color, va("%d%%", cg.scores[cg.selectedScore].accuracy), 0, 0,
+                     textStyle);
 }
 
+/*
+=================
+CG_DrawBestWeaponName
+
+[QL] cgamex86.dll 0x100345f0, CG_PLYR_BEST_WEAPON_NAME (0x5b): the selected score's best
+weapon under retail's own names ("Grenade", "Rail Gun", "Chain Gun", ...), and nothing for the
+grappling hook or an unset weapon. The fork printed the item pickup names.
+=================
+*/
 static void CG_DrawBestWeaponName(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
-    if (cg.selectedScore >= 0 && cg.selectedScore < cg.numScores) {
-        int bw = cg.scores[cg.selectedScore].bestWeapon;
-        if (bw > 0 && bw < WP_NUM_WEAPONS) {
-            gitem_t *item = BG_FindItemForWeapon(bw);
-            if (item) {
-                CG_OwnerDrawText(rect->x, rect->y, scale, color, item->pickup_name, 0, 0, textStyle);
-            }
-        }
+    static const char* names[WP_NUM_WEAPONS] = {
+        NULL, "Gauntlet", "Machine Gun", "Shotgun", "Grenade", "Rocket Launcher", "Lightning Gun",
+        "Rail Gun", "Plasma Gun", "BFG", NULL, "Nail Gun", "Proximity Mines", "Chain Gun",
+        "Heavy Machinegun"
+    };
+    int bw;
+
+    if (cg.selectedScore < 0 || cg.selectedScore >= MAX_CLIENTS) {
+        return;
+    }
+    bw = cg.scores[cg.selectedScore].bestWeapon;
+    if (bw > 0 && bw < WP_NUM_WEAPONS && names[bw]) {
+        CG_OwnerDrawText(rect->x, rect->y, scale, color, names[bw], 0, 0, textStyle);
     }
 }
 
@@ -2946,60 +2970,71 @@ static void CG_DrawDuelHealthArmorBar(rectDef_t *rect, int ownerDraw) {
     trap_R_SetColor(NULL);
 }
 
-// 0x75-0x81/0xcf-0xdb CG_DrawDuelWeaponFrags.
-static void CG_DrawDuelWeaponFrags(rectDef_t *rect, float scale, vec4_t color, int textStyle, int ownerDraw) {
-    int idx = CG_DuelPlayerIndex(ownerDraw);
+// [QL] the duel board's per-weapon numbers. Retail indexes its per-weapon arrays with the
+// weapon number less one, the order scores_duel sends them in (gauntlet first); the fork used
+// the weapon number itself, one weapon off, so the machinegun cells showed the shotgun and the
+// heavy machinegun row nothing.
+static duelWeaponStats_t *CG_DuelWeaponStats(int player, int ownerDraw) {
     int w = CG_OwnerDrawWeaponIndex(ownerDraw);
-    const char *s;
-    if (w <= 0 || w >= MAX_WEAPONS) return;
-    s = va("%i", cg.duelScores[idx].weaponStats[w].kills);
-    CG_OwnerDrawText(rect->x, rect->y, scale, color, s, 0, 0, textStyle);
+
+    if (w <= 0 || w > 14) {
+        return NULL;
+    }
+    return &cg.duelScores[player].weaponStats[w - 1];
 }
 
-// 0x82-0x8d/0xdc-0xe7 CG_DrawDuelWeaponHits.
-static void CG_DrawDuelWeaponHits(rectDef_t *rect, float scale, vec4_t color, int textStyle, int ownerDraw) {
-    int idx = CG_DuelPlayerIndex(ownerDraw);
-    int w = CG_OwnerDrawWeaponIndex(ownerDraw);
+// 0x75-0x81/0xcf-0xdb CG_DrawDuelWeaponFrags (0x100368a0). Like the hits, shots and damage
+// cells: "%d" in the item's font, placed by the item's align.
+static void CG_DrawDuelWeaponFrags(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
+    duelWeaponStats_t *ws = CG_DuelWeaponStats(CG_DuelPlayerIndex(ownerDraw), ownerDraw);
     const char *s;
-    if (w <= 0 || w >= MAX_WEAPONS) return;
-    s = va("%i", cg.duelScores[idx].weaponStats[w].hits);
-    CG_OwnerDrawText(rect->x, rect->y, scale, color, s, 0, 0, textStyle);
+    if (!ws) return;
+    s = va("%d", ws->kills);
+    CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// 0x8e-0x99/0xe8-0xf3 CG_DrawDuelWeaponShots.
-static void CG_DrawDuelWeaponShots(rectDef_t *rect, float scale, vec4_t color, int textStyle, int ownerDraw) {
-    int idx = CG_DuelPlayerIndex(ownerDraw);
-    int w = CG_OwnerDrawWeaponIndex(ownerDraw);
+// 0x82-0x8d/0xdc-0xe7 CG_DrawDuelWeaponHits (0x100369d0).
+static void CG_DrawDuelWeaponHits(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
+    duelWeaponStats_t *ws = CG_DuelWeaponStats(CG_DuelPlayerIndex(ownerDraw), ownerDraw);
     const char *s;
-    if (w <= 0 || w >= MAX_WEAPONS) return;
-    s = va("%i", cg.duelScores[idx].weaponStats[w].atts);
-    CG_OwnerDrawText(rect->x, rect->y, scale, color, s, 0, 0, textStyle);
+    if (!ws) return;
+    s = va("%d", ws->hits);
+    CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// 0x9a-0xa6/0xf4-0x100 CG_DrawDuelWeaponDmg.
-static void CG_DrawDuelWeaponDmg(rectDef_t *rect, float scale, vec4_t color, int textStyle, int ownerDraw) {
-    int idx = CG_DuelPlayerIndex(ownerDraw);
-    int w = CG_OwnerDrawWeaponIndex(ownerDraw);
+// 0x8e-0x99/0xe8-0xf3 CG_DrawDuelWeaponShots (0x10036b00).
+static void CG_DrawDuelWeaponShots(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
+    duelWeaponStats_t *ws = CG_DuelWeaponStats(CG_DuelPlayerIndex(ownerDraw), ownerDraw);
     const char *s;
-    if (w <= 0 || w >= MAX_WEAPONS) return;
-    s = va("%i", cg.duelScores[idx].weaponStats[w].damage);
-    CG_OwnerDrawText(rect->x, rect->y, scale, color, s, 0, 0, textStyle);
+    if (!ws) return;
+    s = va("%d", ws->atts);
+    CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// 0xa7-0xb2/0x101-0x10c CG_DrawDuelWeaponAcc. Higher accuracy of the two players
-// is highlighted (white).
-static void CG_DrawDuelWeaponAcc(rectDef_t *rect, float scale, vec4_t color, int textStyle, int ownerDraw) {
-    int idx = CG_DuelPlayerIndex(ownerDraw);
-    int w = CG_OwnerDrawWeaponIndex(ownerDraw);
+// 0x9a-0xa6/0xf4-0x100 CG_DrawDuelWeaponDmg (0x10036c30).
+static void CG_DrawDuelWeaponDmg(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
+    duelWeaponStats_t *ws = CG_DuelWeaponStats(CG_DuelPlayerIndex(ownerDraw), ownerDraw);
+    const char *s;
+    if (!ws) return;
+    s = va("%d", ws->damage);
+    CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, color, s, 0, 0, textStyle);
+}
+
+// 0xa7-0xb2/0x101-0x10c CG_DrawDuelWeaponAcc (0x10036d60): "%d%%", and the better accuracy of
+// the two duelists in white at 0.8 alpha.
+static void CG_DrawDuelWeaponAcc(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
+    int player = CG_DuelPlayerIndex(ownerDraw);
+    duelWeaponStats_t *mine = CG_DuelWeaponStats(player, ownerDraw);
+    duelWeaponStats_t *theirs = CG_DuelWeaponStats(player ^ 1, ownerDraw);
     const char *s;
     vec4_t c;
-    if (w <= 0 || w >= MAX_WEAPONS) return;
+    if (!mine || !theirs) return;
     Vector4Copy(color, c);
-    if (cg.duelScores[idx ^ 1].weaponStats[w].accuracy < cg.duelScores[idx].weaponStats[w].accuracy) {
+    if (theirs->accuracy < mine->accuracy) {
         c[0] = c[1] = c[2] = 1.0f; c[3] = 0.8f;
     }
-    s = va("%i%%", cg.duelScores[idx].weaponStats[w].accuracy);
-    CG_OwnerDrawText(rect->x, rect->y, scale, c, s, 0, 0, textStyle);
+    s = va("%d%%", mine->accuracy);
+    CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, c, s, 0, 0, textStyle);
 }
 
 // pickup slot data for CG_DrawDuelPlayerPickups / accuracy: count + avg time.
@@ -3059,21 +3094,35 @@ static void CG_DrawDuelAccuracy(rectDef_t *rect, float scale, vec4_t color, int 
     CG_OwnerDrawText(rect->x, rect->y, scale, color, va("%3.2f", avgTime), 0, 0, textStyle);
 }
 
-// 0xbc-0xbe/0x116-0x118 CG_DrawDuelKDR. Excellent / Impressive / Humiliation counts.
-static void CG_DrawDuelKDR(rectDef_t *rect, float scale, vec4_t color, int textStyle, int ownerDraw) {
-    int idx = CG_DuelPlayerIndex(ownerDraw);
-    duelScore_t *ds = &cg.duelScores[idx];
-    int base = (idx == 0) ? CG_1ST_PLYR_EXCELLENT : CG_2ND_PLYR_EXCELLENT;
-    int off = ownerDraw - base;
-    int val;
-    if (!CG_DuelStatShown(ds)) return;
-    switch (off) {
-    case 0: val = ds->awardExcellent; break;    // EXCELLENT
-    case 1: val = ds->awardImpressive; break;   // IMPRESSIVE
-    case 2: val = ds->awardHumiliation; break;  // HUMILIATION
+// 0xbc-0xbe/0x116-0x118 CG_DrawDuelAwards (0x10037990): the duelist's excellent, impressive
+// and humiliation counts, "%d" in font 0, placed by the item's align (0x1002e050). Like the
+// status plates it needs a valid duelist, or the intermission to have started. The fork
+// ignored the align, so the second player's right-aligned counts sat on their medal icons.
+static void CG_DrawDuelAwards(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
+    int player = CG_DuelPlayerIndex(ownerDraw);
+    duelScore_t *ds = &cg.duelScores[player];
+    int base = player ? CG_2ND_PLYR_EXCELLENT : CG_1ST_PLYR_EXCELLENT;
+    const char *s;
+    float x;
+
+    if ((ds->clientNum < 0 || ds->clientNum >= MAX_CLIENTS || !cgs.clientinfo[ds->clientNum].infoValid) &&
+        cg.intermissionStarted != 1) {
+        return;
+    }
+    switch (ownerDraw - base) {
+    case 0: s = va("%d", ds->awardExcellent); break;
+    case 1: s = va("%d", ds->awardImpressive); break;
+    case 2: s = va("%d", ds->awardHumiliation); break;
     default: return;
     }
-    CG_OwnerDrawText(rect->x, rect->y, scale, color, va("%i", val), 0, 0, textStyle);
+
+    x = rect->x;
+    if (align == ITEM_ALIGN_CENTER) {
+        x -= CG_DrawTextWidth(s, scale, 0, 0) * 0.5f;
+    } else if (align == ITEM_ALIGN_RIGHT) {
+        x -= CG_DrawTextWidth(s, scale, 0, 0);
+    }
+    CG_DrawText(x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
 // [QL] Team pickup stat columns (binary CG_OwnerDraw_StatColumn1 / StatColumn2).
@@ -3659,45 +3708,70 @@ static void CG_DrawSelectedPlayerModel(rectDef_t *rect) {
     CG_Draw3DPlayerModel(rect->x, rect->y, rect->w, rect->h, clientNum, 0);
 }
 
-// [QL] CG_DrawPlayerStatusLeft / CG_DrawPlayerStatusRight - duel LEADS/TRAILS/TIED plate
-// Addresses: 0x10037ba0 / 0x10037d60.
-// Draws a status plate shader (cgs.media.duelStatus*) plus the status word. The plate
-// shaders are registered in cg_main.c; until then only the text renders.
-static void CG_DrawDuelStatusPlate(rectDef_t *rect, int selfIdx, qboolean rightSide) {
-    duelScore_t *self, *other;
+/*
+=================
+CG_DrawPlayerStatusLeft / CG_DrawPlayerStatusRight
+
+[QL] cgamex86.dll 0x10037ba0 / 0x10037d60, CG_1ST_PLYR_READY (0x68) / CG_2ND_PLYR_READY (0xc2):
+the duelist's plate from ui/assets/score, left handed for the first player and right handed
+for the second, with its word on it.
+
+  - No valid duelist: nothing, except once the intermission has started, when the empty
+    not-ready plate shows.
+  - Warmup or intermission: READY on the ready plate while the duelist's STAT_CLIENTS_READY bit
+    is up, NOT READY on the not-ready plate otherwise.
+  - In play: LEADS, TRAILS or TIED from CS_SCORE1STPLAYER against CS_SCORE2NDPLAYER.
+
+The fork drew plate handles nobody registered (the grey placeholder box), wrote READY on
+every warmup plate and compared the scoreboard scores. The word is white at 0.16, 16 below the
+plate's top: 16 in on the first plate, right-aligned to x + 164 on the second (0x10037efb).
+=================
+*/
+static void CG_DrawDuelStatusPlate(rectDef_t *rect, int player) {
+    int clientNum = cg.duelScores[player].clientNum;
+    int mine, theirs;
     const char *text;
     qhandle_t plate;
+    float x;
 
-    if (!cg.duelScoresValid) {
-        return;
-    }
-    self  = &cg.duelScores[selfIdx];
-    other = &cg.duelScores[selfIdx ^ 1];
-
-    if (cg.warmup) {
-        text  = "READY";
-        plate = rightSide ? cgs.media.duelStatusReady_right : cgs.media.duelStatusReady;
-    } else if (other->score < self->score) {
-        text  = "LEADS";
-        plate = rightSide ? cgs.media.duelStatusLeads_right : cgs.media.duelStatusLeads;
-    } else if (self->score < other->score) {
-        text  = "TRAILS";
-        plate = rightSide ? cgs.media.duelStatusTrails_right : cgs.media.duelStatusTrails;
+    if (clientNum < 0 || clientNum >= MAX_CLIENTS || !cgs.clientinfo[clientNum].infoValid) {
+        if (cg.intermissionStarted != 1) {
+            return;
+        }
+        plate = cgs.media.duelPlateNotReady[player];
+        text = "";
+    } else if (!cg.warmup && cg.snap->ps.pm_type != PM_INTERMISSION) {
+        mine = player ? cgs.score2ndPlayer : cgs.score1stPlayer;
+        theirs = player ? cgs.score1stPlayer : cgs.score2ndPlayer;
+        if (mine > theirs) {
+            plate = cgs.media.duelPlateLeads[player];
+            text = "LEADS";
+        } else if (mine < theirs) {
+            plate = cgs.media.duelPlateTrails[player];
+            text = "TRAILS";
+        } else {
+            plate = cgs.media.duelPlateTied[player];
+            text = "TIED";
+        }
+    } else if (cg.snap->ps.stats[STAT_CLIENTS_READY] & (1 << clientNum)) {
+        plate = cgs.media.duelPlateReady[player];
+        text = "READY";
     } else {
-        text  = "TIED";
-        plate = rightSide ? cgs.media.duelStatusTied_right : cgs.media.duelStatusTied;
+        plate = cgs.media.duelPlateNotReady[player];
+        text = "NOT READY";
     }
 
     CG_DrawPic(rect->x, rect->y, rect->w, rect->h, plate);
-    CG_DrawText(rect->x + 16.0f, rect->y + 16.0f, 0, 0.16f, colorWhite, text, 0, 0, 3);
+    x = player ? rect->x - CG_DrawTextWidth(text, 0.16f, 0, 0) + 164.0f : rect->x + 16.0f;
+    CG_DrawText(x, rect->y + 16.0f, 0, 0.16f, colorWhite, text, 0, 0, 3);
 }
 
 static void CG_DrawPlayerStatusLeft(rectDef_t *rect) {
-    CG_DrawDuelStatusPlate(rect, 0, qfalse);
+    CG_DrawDuelStatusPlate(rect, 0);
 }
 
 static void CG_DrawPlayerStatusRight(rectDef_t *rect) {
-    CG_DrawDuelStatusPlate(rect, 1, qtrue);
+    CG_DrawDuelStatusPlate(rect, 1);
 }
 
 // [QL] CG_DrawModifiers (id 1). Binary lists active server modifiers, one per
@@ -4191,7 +4265,9 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_SELECTED_PLYR_TEAM_COLOR:   // 0x5c
             CG_DrawSelectedPlayerTeamColor(&rect);
             break;
-        case CG_SELECTED_PLYR_ACCURACY:     // 0x5d  CG_DrawFollowPlayerName (binary offset)
+        case CG_SELECTED_PLYR_ACCURACY:     // 0x5d  CG_DrawSelectedPlayerAccuracy
+            CG_DrawSelectedPlayerAccuracy(&rect, scale, color, textStyle);
+            break;
         case CG_FOLLOW_PLAYER_NAME:         // 0x5e/0x5f  CG_DrawFollow
         case CG_FOLLOW_PLAYER_NAME_EX:
             CG_DrawFollowPlayerName(&rect, ownerDraw, align, scale, color, textStyle);
@@ -4273,7 +4349,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_2ND_PLYR_FRAGS_RG: case CG_2ND_PLYR_FRAGS_PG: case CG_2ND_PLYR_FRAGS_BFG:
         case CG_2ND_PLYR_FRAGS_CG: case CG_2ND_PLYR_FRAGS_NG: case CG_2ND_PLYR_FRAGS_PL:
         case CG_2ND_PLYR_FRAGS_HMG:                               // 0x75-0x81/0xcf-0xdb
-            CG_DrawDuelWeaponFrags(&rect, scale, color, textStyle, ownerDraw);
+            CG_DrawDuelWeaponFrags(&rect, scale, color, textStyle, align, ownerDraw);
             break;
         case CG_1ST_PLYR_HITS_MG: case CG_1ST_PLYR_HITS_SG: case CG_1ST_PLYR_HITS_GL:
         case CG_1ST_PLYR_HITS_RL: case CG_1ST_PLYR_HITS_LG: case CG_1ST_PLYR_HITS_RG:
@@ -4284,7 +4360,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_2ND_PLYR_HITS_PG: case CG_2ND_PLYR_HITS_BFG: case CG_2ND_PLYR_HITS_CG:
         case CG_2ND_PLYR_HITS_NG: case CG_2ND_PLYR_HITS_PL: case CG_2ND_PLYR_HITS_HMG:
                                                                  // 0x82-0x8d/0xdc-0xe7
-            CG_DrawDuelWeaponHits(&rect, scale, color, textStyle, ownerDraw);
+            CG_DrawDuelWeaponHits(&rect, scale, color, textStyle, align, ownerDraw);
             break;
         case CG_1ST_PLYR_SHOTS_MG: case CG_1ST_PLYR_SHOTS_SG: case CG_1ST_PLYR_SHOTS_GL:
         case CG_1ST_PLYR_SHOTS_RL: case CG_1ST_PLYR_SHOTS_LG: case CG_1ST_PLYR_SHOTS_RG:
@@ -4295,7 +4371,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_2ND_PLYR_SHOTS_PG: case CG_2ND_PLYR_SHOTS_BFG: case CG_2ND_PLYR_SHOTS_CG:
         case CG_2ND_PLYR_SHOTS_NG: case CG_2ND_PLYR_SHOTS_PL: case CG_2ND_PLYR_SHOTS_HMG:
                                                                  // 0x8e-0x99/0xe8-0xf3
-            CG_DrawDuelWeaponShots(&rect, scale, color, textStyle, ownerDraw);
+            CG_DrawDuelWeaponShots(&rect, scale, color, textStyle, align, ownerDraw);
             break;
         case CG_1ST_PLYR_DMG_G: case CG_1ST_PLYR_DMG_MG: case CG_1ST_PLYR_DMG_SG:
         case CG_1ST_PLYR_DMG_GL: case CG_1ST_PLYR_DMG_RL: case CG_1ST_PLYR_DMG_LG:
@@ -4307,7 +4383,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_2ND_PLYR_DMG_RG: case CG_2ND_PLYR_DMG_PG: case CG_2ND_PLYR_DMG_BFG:
         case CG_2ND_PLYR_DMG_CG: case CG_2ND_PLYR_DMG_NG: case CG_2ND_PLYR_DMG_PL:
         case CG_2ND_PLYR_DMG_HMG:                                 // 0x9a-0xa6/0xf4-0x100
-            CG_DrawDuelWeaponDmg(&rect, scale, color, textStyle, ownerDraw);
+            CG_DrawDuelWeaponDmg(&rect, scale, color, textStyle, align, ownerDraw);
             break;
         case CG_1ST_PLYR_ACC_MG: case CG_1ST_PLYR_ACC_SG: case CG_1ST_PLYR_ACC_GL:
         case CG_1ST_PLYR_ACC_RL: case CG_1ST_PLYR_ACC_LG: case CG_1ST_PLYR_ACC_RG:
@@ -4318,7 +4394,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_2ND_PLYR_ACC_PG: case CG_2ND_PLYR_ACC_BFG: case CG_2ND_PLYR_ACC_CG:
         case CG_2ND_PLYR_ACC_NG: case CG_2ND_PLYR_ACC_PL: case CG_2ND_PLYR_ACC_HMG:
                                                                  // 0xa7-0xb2/0x101-0x10c
-            CG_DrawDuelWeaponAcc(&rect, scale, color, textStyle, ownerDraw);
+            CG_DrawDuelWeaponAcc(&rect, scale, color, textStyle, align, ownerDraw);
             break;
         case CG_1ST_PLYR_PICKUPS: case CG_1ST_PLYR_PICKUPS_RA: case CG_1ST_PLYR_PICKUPS_YA:
         case CG_1ST_PLYR_PICKUPS_GA: case CG_1ST_PLYR_PICKUPS_MH:
@@ -4336,7 +4412,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_1ST_PLYR_EXCELLENT: case CG_1ST_PLYR_IMPRESSIVE: case CG_1ST_PLYR_HUMILIATION:
         case CG_2ND_PLYR_EXCELLENT: case CG_2ND_PLYR_IMPRESSIVE: case CG_2ND_PLYR_HUMILIATION:
                                                                  // 0xbc-0xbe/0x116-0x118
-            CG_DrawDuelKDR(&rect, scale, color, textStyle, ownerDraw);
+            CG_DrawDuelAwards(&rect, scale, color, textStyle, align, ownerDraw);
             break;
 
         // ---- team header / scoreboard ----
