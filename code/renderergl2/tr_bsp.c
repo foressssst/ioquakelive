@@ -110,15 +110,16 @@ static void R_ColorShiftLightingBytes(byte in[4], byte out[4]) {
     g = in[1] << shift;
     b = in[2] << shift;
 
-    // normalize by color instead of saturating to white
+    // normalize by color instead of saturating to white; [QL] quakelive_steam.exe 0x4388f0 brings the
+    // brightest channel down to r_mapOverBrightCap, not 255
     if ((r | g | b) > 255) {
         int max;
 
         max = r > g ? r : g;
         max = max > b ? max : b;
-        r = r * 255 / max;
-        g = g * 255 / max;
-        b = b * 255 / max;
+        r = r * r_mapOverBrightCap->integer / max;
+        g = g * r_mapOverBrightCap->integer / max;
+        b = b * r_mapOverBrightCap->integer / max;
     }
 
     out[0] = r;
@@ -141,15 +142,17 @@ static void R_ColorShiftLightingFloats(float in[4], float out[4]) {
     g = in[1] * scale;
     b = in[2] * scale;
 
-    // normalize by color instead of saturating to white
+    // normalize by color instead of saturating to white; [QL] like the byte version, the brightest
+    // channel ends at r_mapOverBrightCap
     if (r > 1 || g > 1 || b > 1) {
         float max;
 
         max = r > g ? r : g;
         max = max > b ? max : b;
-        r = r / max;
-        g = g / max;
-        b = b / max;
+        max = r_mapOverBrightCap->integer / 255.0f / max;
+        r = r * max;
+        g = g * max;
+        b = b * max;
     }
 
     out[0] = r;
