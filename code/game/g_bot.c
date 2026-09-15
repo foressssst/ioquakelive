@@ -300,20 +300,79 @@ int G_SelectRandomBotInfo(int team) {
 /*
 ===============
 G_AddRandomBot
+Address: 0x10036a20
+
+[QL] Q3's pick, which retail keeps: a random one of the bots.txt bots not already playing
+(on that team, when there is one), added by name with no team string for TEAM_FREE.
 ===============
 */
 void G_AddRandomBot(int team) {
-    char* teamstr;
+    int i, n, num;
     float skill;
+    char* value;
+    char netname[36];
+    char* teamstr;
+    gclient_t* cl;
 
-    skill = trap_Cvar_VariableValue("g_spSkill");
-    if (team == TEAM_RED)
-        teamstr = "red";
-    else if (team == TEAM_BLUE)
-        teamstr = "blue";
-    else
-        teamstr = "free";
-    trap_SendConsoleCommand(EXEC_INSERT, va("addbot random %f %s %i\n", skill, teamstr, 0));
+    num = 0;
+    for (n = 0; n < g_numBots; n++) {
+        value = Info_ValueForKey(g_botInfos[n], "name");
+        //
+        for (i = 0; i < g_maxclients.integer; i++) {
+            cl = level.clients + i;
+            if (cl->pers.connected != CON_CONNECTED) {
+                continue;
+            }
+            if (!(g_entities[cl->ps.clientNum].r.svFlags & SVF_BOT)) {
+                continue;
+            }
+            if (team >= 0 && cl->sess.sessionTeam != team) {
+                continue;
+            }
+            if (!Q_stricmp(value, cl->pers.netname)) {
+                break;
+            }
+        }
+        if (i >= g_maxclients.integer) {
+            num++;
+        }
+    }
+    num = random() * num;
+    for (n = 0; n < g_numBots; n++) {
+        value = Info_ValueForKey(g_botInfos[n], "name");
+        //
+        for (i = 0; i < g_maxclients.integer; i++) {
+            cl = level.clients + i;
+            if (cl->pers.connected != CON_CONNECTED) {
+                continue;
+            }
+            if (!(g_entities[cl->ps.clientNum].r.svFlags & SVF_BOT)) {
+                continue;
+            }
+            if (team >= 0 && cl->sess.sessionTeam != team) {
+                continue;
+            }
+            if (!Q_stricmp(value, cl->pers.netname)) {
+                break;
+            }
+        }
+        if (i >= g_maxclients.integer) {
+            num--;
+            if (num <= 0) {
+                skill = trap_Cvar_VariableValue("g_spSkill");
+                if (team == TEAM_RED)
+                    teamstr = "red";
+                else if (team == TEAM_BLUE)
+                    teamstr = "blue";
+                else
+                    teamstr = "";
+                Q_strncpyz(netname, value, sizeof(netname));
+                Q_CleanStr(netname);
+                trap_SendConsoleCommand(EXEC_INSERT, va("addbot %s %f %s %i\n", netname, skill, teamstr, 0));
+                return;
+            }
+        }
+    }
 }
 
 /*
@@ -401,7 +460,7 @@ int G_CountBotPlayers(int team) {
 G_CountBotPlayersWithQueued
 
 [QL] Like G_CountBotPlayers but also counts bots queued to spawn whose spawn
-time is already due. (binary G_CountBotPlayersWithQueued 0x10036ee0)
+time is already due. (binary G_CountBotPlayersWithQueued 0x10036de0)
 ===============
 */
 static int G_CountBotPlayersWithQueued(int team) {
@@ -434,52 +493,92 @@ static int G_CountBotPlayersWithQueued(int team) {
 
 /*
 ===============
+G_CountConnectedByTeam
+
+[QL] Connected clients on each team, bots and spectators included (0x1006b1c0).
+===============
+*/
+static void G_CountConnectedByTeam(int counts[TEAM_NUM_TEAMS]) {
+    int i;
+
+    memset(counts, 0, TEAM_NUM_TEAMS * sizeof(counts[0]));
+    for (i = 0; i < level.maxclients; i++) {
+        if (level.clients[i].pers.connected == CON_CONNECTED) {
+            counts[level.clients[i].sess.sessionTeam]++;
+        }
+    }
+}
+
+/*
+===============
 G_CheckMinimumPlayers
+Address: 0x10036e80
+
+[QL] Once a second, outside intermission. The bots of an arena (g_botSpawnList) go in first,
+one per check while a human is connected. After that bot_minplayers, capped one below
+sv_maxclients, is compared with every player: in team games both teams together, a bot
+joining the team with fewer connected clients and leaving the bigger one; FFA and duel as in
+Q3. Race gets no bots.
 ===============
 */
 void G_CheckMinimumPlayers(void) {
     int minplayers;
     int humanplayers, botplayers;
+    int counts[TEAM_NUM_TEAMS];
+    char* list;
+    char* bot;
+    float skill;
     static int checkminimumplayers_time;
 
-    if (level.intermissionTime || level.intermissionQueued)
+    // [QL] the value the last update read, so once it reads 0 the checks stop until the next map
+    if (!bot_minplayers.integer || level.intermissionQueued || level.intermissionTime) {
         return;
-    // [QL] only check once each second (binary throttle: 1000ms)
+    }
+    // only check once each second
     if (checkminimumplayers_time > level.time - 1000) {
         return;
     }
     checkminimumplayers_time = level.time;
+
+    // [QL] 0x10036ed4
+    if (g_botSpawnList.string[0] && G_CountHumanPlayers(-1) > 0) {
+        skill = trap_Cvar_VariableValue("g_spSkill");
+        list = g_botSpawnList.string;
+        bot = COM_ParseExt(&list, qfalse);
+        if (!bot[0]) {
+            trap_Cvar_Set("g_botSpawnList", "");
+            return;
+        }
+        trap_SendConsoleCommand(EXEC_INSERT, va("addbot %s %f %s %i\n", bot, skill, "", 0));
+        trap_Cvar_Set("g_botSpawnList", list);
+        return;
+    }
+
     trap_Cvar_Update(&bot_minplayers);
     minplayers = bot_minplayers.integer;
-    if (minplayers <= 0)
+    if (minplayers <= 0) {
         return;
+    }
+    if (minplayers >= g_maxclients.integer) {
+        minplayers = g_maxclients.integer - 1;
+    }
 
     if (g_gametype.integer >= GT_TEAM) {
-        if (minplayers >= g_maxclients.integer / 2) {
-            minplayers = (g_maxclients.integer / 2) - 1;
-        }
-
-        humanplayers = G_CountHumanPlayers(TEAM_RED);
-        botplayers = G_CountBotPlayersWithQueued(TEAM_RED);
+        // [QL] 0x10036fea
+        G_CountConnectedByTeam(counts);
+        humanplayers = G_CountHumanPlayers(TEAM_BLUE) + G_CountHumanPlayers(TEAM_RED);
+        botplayers = G_CountBotPlayersWithQueued(TEAM_BLUE) + G_CountBotPlayersWithQueued(TEAM_RED);
         //
         if (humanplayers + botplayers < minplayers) {
-            G_AddRandomBot(TEAM_RED);
+            G_AddRandomBot(counts[TEAM_BLUE] < counts[TEAM_RED] ? TEAM_BLUE : TEAM_RED);
         } else if (humanplayers + botplayers > minplayers && botplayers) {
-            G_RemoveRandomBot(TEAM_RED);
-        }
-        //
-        humanplayers = G_CountHumanPlayers(TEAM_BLUE);
-        botplayers = G_CountBotPlayersWithQueued(TEAM_BLUE);
-        //
-        if (humanplayers + botplayers < minplayers) {
-            G_AddRandomBot(TEAM_BLUE);
-        } else if (humanplayers + botplayers > minplayers && botplayers) {
-            G_RemoveRandomBot(TEAM_BLUE);
+            if (counts[TEAM_BLUE] < counts[TEAM_RED]) {
+                G_RemoveRandomBot(TEAM_RED);
+            } else if (counts[TEAM_BLUE] > counts[TEAM_RED]) {
+                G_RemoveRandomBot(TEAM_BLUE);
+            }
         }
     } else if (g_gametype.integer == GT_DUEL) {
-        if (minplayers >= g_maxclients.integer) {
-            minplayers = g_maxclients.integer - 1;
-        }
         humanplayers = G_CountHumanPlayers(-1);
         botplayers = G_CountBotPlayersWithQueued(-1);
         //
@@ -493,9 +592,6 @@ void G_CheckMinimumPlayers(void) {
             }
         }
     } else if (g_gametype.integer == GT_FFA) {
-        if (minplayers >= g_maxclients.integer) {
-            minplayers = g_maxclients.integer - 1;
-        }
         humanplayers = G_CountHumanPlayers(TEAM_FREE);
         botplayers = G_CountBotPlayersWithQueued(TEAM_FREE);
         //
