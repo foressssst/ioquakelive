@@ -100,8 +100,7 @@ typedef struct {
 
     int parseEntitiesNum;  // index (not anded off) into cl_parse_entities[]
 
-    int mouseDx[2], mouseDy[2];  // added to by mouse events
-    int mouseIndex;
+    int mouseDx[2], mouseDy[2];  // added to by mouse events; [QL] only [0] is used
     int joystickAxis[MAX_JOYSTICK_AXIS];  // set by joystick events
 
     // cgame communicates a few values to the client system
@@ -344,8 +343,11 @@ extern cvar_t* cl_freelook;
 
 extern cvar_t* cl_mouseAccel;
 extern cvar_t* cl_mouseAccelOffset;
-extern cvar_t* cl_mouseAccelStyle;
-extern cvar_t* cl_showMouseRate;
+extern cvar_t* cl_mouseAccelPower;
+extern cvar_t* cl_mouseAccelDebug;
+extern cvar_t* cl_mouseSensCap;
+extern cvar_t* cg_ignoreMouseInput;
+extern cvar_t* m_cpi;
 
 extern cvar_t* m_pitch;
 extern cvar_t* m_yaw;

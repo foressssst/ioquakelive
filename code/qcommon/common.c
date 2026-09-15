@@ -2311,7 +2311,7 @@ For controlling environment variables
 ==================
 */
 
-#define COM_CONFIG_VERSION 2
+#define COM_CONFIG_VERSION 3
 
 /*
 ==================
@@ -2353,6 +2353,26 @@ static void Com_MigrateConfig(void) {
             {"r_deluxeMapping", "1", "0"},
             {"r_sunlightMode", "1", "0"},
             {"r_sunShadows", "1", "0"},
+        };
+        int i;
+
+        for (i = 0; i < ARRAY_LEN(defaults); i++) {
+            if (Cvar_Flags(defaults[i].name) != CVAR_NONEXISTENT &&
+                !strcmp(Cvar_VariableString(defaults[i].name), defaults[i].oldValue))
+                Cvar_Set(defaults[i].name, defaults[i].newValue);
+        }
+    }
+
+    // [QL] 3: the mouse takes retail's defaults, again only where the old one is untouched
+    if (version->integer < 3) {
+        static const struct {
+            const char* name;
+            const char* oldValue;
+            const char* newValue;
+        } defaults[] = {
+            {"sensitivity", "5", "4"},
+            {"cl_mouseAccelOffset", "5", "0"},
+            {"in_mouse", "1", "2"},
         };
         int i;
 

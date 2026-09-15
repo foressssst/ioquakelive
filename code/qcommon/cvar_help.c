@@ -762,16 +762,24 @@ static const cvarHelp_t cvarHelp[] = {
     {"cl_timeout", "seconds without server packets before disconnecting"},
     {"cl_maxPing", "the server browser leaves out servers with a higher ping"},
     {"sensitivity", "mouse sensitivity"},
-    {"cl_mouseAccel", "mouse acceleration"},
-    {"cl_mouseAccelStyle", "mouse acceleration curve\n"
-                           HV("0") "Quake 3's\n"
-                           HV("1") "A power curve starting after " HC("cl_mouseAccelOffset")},
-    {"cl_mouseAccelOffset", "offset of the style 1 mouse acceleration"},
+    {"cl_mouseAccel", "mouse acceleration: how much the sensitivity grows with speed; negative lowers it"},
+    {"cl_mouseAccelOffset", "speed at which the acceleration starts"},
+    {"cl_mouseAccelPower", "shape of the acceleration: 2 grows with the speed, more grows faster"},
+    {"cl_mouseSensCap", "most sensitivity the acceleration can reach; 0 for no cap"},
+    {"cl_mouseAccelDebug", "writes each frame's mouse motion to mouse.log"},
     {"m_pitch", "vertical mouse speed factor; negative inverts the mouse"},
     {"m_yaw", "horizontal mouse speed factor"},
     {"m_forward", "speed of forward movement with the mouse"},
     {"m_side", "speed of sideways movement with the mouse"},
-    {"m_filter", "smooths the mouse by averaging two readings"},
+    {"m_filter", "frames of view angles averaged to smooth the mouse; 0 is off, up to 31"},
+    {"m_cpi", "counts per inch of the mouse; with it the speed is in cm/s and " HC("m_yaw")
+              " and " HC("m_pitch") " are degrees per cm"},
+    {"in_mouse", "how the mouse is read\n"
+                 HV("2") "Raw input\n"
+                 HV("1") "The system's mouse\n"
+                 HV("-1") "The cursor, warped to the centre\n"
+                 HV("0") "No mouse"},
+    {"in_mouseMode", "how the mouse ended up being read"},
     {"cl_freelook", "the mouse also looks up and down"},
     {"cl_run", "runs by default; +speed walks"},
     {"cl_yawspeed", "turning speed with the keys, in degrees per second"},

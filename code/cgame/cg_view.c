@@ -499,9 +499,12 @@ static int CG_CalcFov(void) {
     int zoomDuration;
     int inwater;
 
+    // [QL] cgamex86.dll 0x1004d640: the fov the server is told about is the one being zoomed to, with
+    // no interpolation and before the underwater warp
     if (cg.predictedPlayerState.pm_type == PM_INTERMISSION) {
         // if in intermission, use a fixed value
         fov_x = 90;
+        cg.fovTarget = 90;
     } else if (cg.snap->ps.fov && cg_specFov.integer &&
                ((cg.snap->ps.pm_flags & PMF_FOLLOW) || cg.demoPlayback)) {
         // [QL] binary 0x1004d731: with cg_specFov, a followed player (or a demo)
@@ -509,6 +512,7 @@ static int CG_CalcFov(void) {
         // This used to read stats[STAT_HEALTH], so the view took the followed
         // player's health as its FOV (161 health -> 161 degrees).
         fov_x = (float)cg.snap->ps.fov;
+        cg.fovTarget = cg.snap->ps.fov;
     } else {
         fov_x = cg_fov.value;
         if (fov_x < 1) {
@@ -526,8 +530,10 @@ static int CG_CalcFov(void) {
         }
 
         zoomDuration = CG_ZoomAnimationTime();
+        f = zoomDuration ? (cg.time - cg.zoomTime) / (float)zoomDuration : 1.0f;
+        cg.fovTarget = (int)zoomFov;
+
         if (cg.zoomed) {
-            f = zoomDuration ? (cg.time - cg.zoomTime) / (float)zoomDuration : 1.0f;
             if (f > 1.0) {
                 fov_x = zoomFov;
             } else {
@@ -539,12 +545,11 @@ static int CG_CalcFov(void) {
                 }
             }
         } else {
-            f = zoomDuration ? (cg.time - cg.zoomTime) / (float)zoomDuration : 1.0f;
-            if (f <= 1.0) {
-                // QL binary: cg_zoomScaling.integer gates interpolation
-                if (cg_zoomScaling.integer) {
-                    fov_x = zoomFov + f * (fov_x - zoomFov);
-                }
+            // [QL] while the zoom animates out the server is still told the zoomed fov
+            if (f <= 1.0 && cg_zoomScaling.integer) {
+                fov_x = zoomFov + f * (fov_x - zoomFov);
+            } else {
+                cg.fovTarget = (int)fov_x;
             }
         }
     }
@@ -569,8 +574,17 @@ static int CG_CalcFov(void) {
     cg.refdef.fov_x = fov_x;
     cg.refdef.fov_y = fov_y;
 
+    // [QL] cgamex86.dll 0x1004d88a: zoomed, the sensitivity falls with the view's height, in the same
+    // proportion the zoom narrows it, and cg_zoomSensitivity scales that. Without it (0 or less) it is
+    // Quake 3's fov_y over 75. The fork ignored cg_zoomSensitivity, so the zoom always turned as fast
+    // as Quake 3's.
     if (!cg.zoomed) {
         cg.zoomSensitivity = 1;
+    } else if (cg_zoomSensitivity.value > 0) {
+        float unzoomedX = cg.refdef.width / tan(cg_fov.value / 360 * M_PI);
+        float unzoomedY = atan2(cg.refdef.height, unzoomedX) * 360 / M_PI;
+
+        cg.zoomSensitivity = (cg.refdef.fov_y / unzoomedY) * cg_zoomSensitivity.value;
     } else {
         cg.zoomSensitivity = cg.refdef.fov_y / 75.0;
     }
@@ -1316,7 +1330,7 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
     //      queued loadout primary weapon (-> cmd.weaponPrimary) and effective
     //      fov (-> cmd.fov), so the engine can stamp them each frame.
     trap_SetUserCmdValue(cg.weaponSelect, CG_WeaponPrimaryFromCvar(),
-                         cg.zoomSensitivity, (int)cg.refdef.fov_x);
+                         cg.zoomSensitivity, cg.fovTarget);
 
     // this counter will be bumped for every valid scene we generate
     cg.clientFrame++;
