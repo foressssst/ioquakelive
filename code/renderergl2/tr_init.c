@@ -556,7 +556,7 @@ void RB_TakeScreenshot(int x, int y, int width, int height, char* fileName) {
     memcount = linelen * height;
 
     // gamma correct
-    if (glConfig.deviceSupportsGamma)
+    if (R_CaptureGammaCorrect())
         R_GammaCorrect(allbuf + offset, memcount);
 
     ri.FS_WriteFile(fileName, buffer, memcount + 18);
@@ -579,7 +579,7 @@ void RB_TakeScreenshotJPEG(int x, int y, int width, int height, char* fileName) 
     memcount = (width * 3 + padlen) * height;
 
     // gamma correct
-    if (glConfig.deviceSupportsGamma)
+    if (R_CaptureGammaCorrect())
         R_GammaCorrect(buffer + offset, memcount);
 
     RE_SaveJPG(fileName, r_screenshotJpegQuality->integer, width, height, buffer + offset, padlen);
@@ -593,6 +593,8 @@ RB_TakeScreenshotCmd
 */
 const void* RB_TakeScreenshotCmd(const void* data) {
     const screenshotCommand_t* cmd;
+    FBO_t* oldFbo;
+    qboolean bound;
 
     cmd = (const screenshotCommand_t*)data;
 
@@ -600,12 +602,18 @@ const void* RB_TakeScreenshotCmd(const void* data) {
     if (tess.numIndexes)
         RB_EndSurface();
 
+    // [QL] with the colour correction, read the corrected frame
+    oldFbo = RB_BindCaptureFbo(&bound);
+
     // pick the format. Without this every screenshot, .jpg included, went out
     // as raw TGA through RB_TakeScreenshot.
     if (cmd->jpeg)
         RB_TakeScreenshotJPEG(cmd->x, cmd->y, cmd->width, cmd->height, cmd->fileName);
     else
         RB_TakeScreenshot(cmd->x, cmd->y, cmd->width, cmd->height, cmd->fileName);
+
+    if (bound)
+        FBO_Bind(oldFbo);
 
     return (const void*)(cmd + 1);
 }
@@ -699,7 +707,16 @@ void R_LevelShot(void) {
 
     Com_sprintf(checkname, sizeof(checkname), "levelshots/preview/%s.jpg", tr.world->baseName);
 
-    allsource = RB_ReadPixels(0, 0, glConfig.vidWidth, glConfig.vidHeight, &offset, &padlen);
+    // [QL] with the colour correction, read the corrected frame
+    {
+        FBO_t* oldFbo;
+        qboolean bound;
+
+        oldFbo = RB_BindCaptureFbo(&bound);
+        allsource = RB_ReadPixels(0, 0, glConfig.vidWidth, glConfig.vidHeight, &offset, &padlen);
+        if (bound)
+            FBO_Bind(oldFbo);
+    }
     source = allsource + offset;
 
     buffer = ri.Hunk_AllocateTempMemory(128 * 128 * 3 + 18);
@@ -732,7 +749,7 @@ void R_LevelShot(void) {
     }
 
     // gamma correct
-    if (glConfig.deviceSupportsGamma) {
+    if (R_CaptureGammaCorrect()) {
         R_GammaCorrect(buffer + 18, 128 * 128 * 3);
     }
 
@@ -932,13 +949,22 @@ const void* RB_TakeVideoFrameCmd(const void* data) {
 
     cBuf = PADP(cmd->captureBuffer, packAlign);
 
-    qglReadPixels(0, 0, cmd->width, cmd->height, format,
-                  GL_UNSIGNED_BYTE, cBuf);
+    // [QL] with the colour correction, read the corrected frame
+    {
+        FBO_t* oldFbo;
+        qboolean bound;
+
+        oldFbo = RB_BindCaptureFbo(&bound);
+        qglReadPixels(0, 0, cmd->width, cmd->height, format,
+                      GL_UNSIGNED_BYTE, cBuf);
+        if (bound)
+            FBO_Bind(oldFbo);
+    }
 
     memcount = padwidth * cmd->height;
 
     // gamma correct
-    if (glConfig.deviceSupportsGamma)
+    if (R_CaptureGammaCorrect())
         R_GammaCorrect(cBuf, memcount);
 
     if (cmd->motionJpeg) {
@@ -1235,6 +1261,8 @@ void R_Register(void) {
     r_floatLightmap = ri.Cvar_Get("r_floatLightmap", "0", CVAR_ARCHIVE | CVAR_LATCH);
     r_postProcess = ri.Cvar_Get("r_postProcess", "1", CVAR_ARCHIVE);
 
+    R_QLPostRegister();
+
     r_toneMap = ri.Cvar_Get("r_toneMap", "1", CVAR_ARCHIVE);
     r_forceToneMap = ri.Cvar_Get("r_forceToneMap", "0", CVAR_CHEAT);
     r_forceToneMapMin = ri.Cvar_Get("r_forceToneMapMin", "-8.0", CVAR_CHEAT);
@@ -1500,6 +1528,9 @@ void R_Init(void) {
 
     InitOpenGL();
 
+    // [QL] the post effects decide the overbright, so they go before the colour mappings
+    R_QLPostInit();
+
     R_InitImages();
 
     if (glRefConfig.framebufferObject)
@@ -1661,6 +1692,9 @@ refexport_t* GetRefAPI(int apiVersion, refimport_t* rimp) {
     re.inPVS = R_inPVS;
 
     re.TakeVideoFrame = RE_TakeVideoFrame;
+
+    re.BeginBloomScene = RE_BeginBloomScene;
+    re.ApplyBloom = RE_ApplyBloom;
 
     return &re;
 }

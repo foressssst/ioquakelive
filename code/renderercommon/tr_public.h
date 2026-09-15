@@ -107,6 +107,11 @@ typedef struct {
 
     void (*TakeVideoFrame)(int h, int w, byte* captureBuffer, byte* encodeBuffer, qboolean motionJpeg);
 
+    // [QL] quakelive_steam.exe's refexport 30 and 31, which the cgame calls around its 3D view: the
+    // bloom's frame buffer takes the view, and the bloom goes over it
+    void (*BeginBloomScene)(void);
+    void (*ApplyBloom)(void);
+
     void (*Get_Advertisements)(int* num, float* verts, char shaders[][MAX_QPATH]);
 } refexport_t;
 
@@ -142,6 +147,8 @@ typedef struct {
     void (*Cvar_Set)(const char* name, const char* value);
     void (*Cvar_SetValue)(const char* name, float value);
     void (*Cvar_CheckRange)(cvar_t* cv, float minVal, float maxVal, qboolean shouldBeIntegral);
+    // [QL] quakelive_steam.exe's renderer registers its ranged cvars through this one (0x4cdd30)
+    cvar_t* (*Cvar_GetRange)(const char* name, const char* value, const char* minValue, const char* maxValue, int flags);
     void (*Cvar_SetDescription)(cvar_t* cv, const char* description);
 
     int (*Cvar_VariableIntegerValue)(const char* var_name);

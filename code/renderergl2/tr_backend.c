@@ -655,7 +655,14 @@ void RE_StretchRaw(int x, int y, int w, int h, int cols, int rows, const byte* d
     GLSL_BindProgram(&tr.textureColorShader);
 
     GLSL_SetUniformMat4(&tr.textureColorShader, UNIFORM_MODELVIEWPROJECTIONMATRIX, glState.modelviewProjection);
-    GLSL_SetUniformVec4(&tr.textureColorShader, UNIFORM_COLOR, colorWhite);
+
+    // [QL] quakelive_steam.exe 0x436350: the video at identityLight, as the overbright comes later
+    {
+        vec4_t color;
+
+        VectorSet4(color, tr.identityLight, tr.identityLight, tr.identityLight, 1.0f);
+        GLSL_SetUniformVec4(&tr.textureColorShader, UNIFORM_COLOR, color);
+    }
 
     RB_InstantQuad2(quadVerts, texCoords);
 }
@@ -1300,7 +1307,9 @@ const void* RB_SwapBuffers(const void* data) {
     }
 
     if (glRefConfig.framebufferObject) {
-        if (tr.msaaResolveFbo && r_hdr->integer) {
+        if (RB_ColorCorrect(NULL)) {
+            // [QL] the frame went to the screen through Quake Live's colour correction
+        } else if (tr.msaaResolveFbo && r_hdr->integer) {
             // Resolving an RGB16F MSAA FBO to the screen messes with the brightness, so resolve to an RGB16F FBO first
             FBO_FastBlit(tr.renderFbo, NULL, tr.msaaResolveFbo, NULL, GL_COLOR_BUFFER_BIT, GL_NEAREST);
             FBO_FastBlit(tr.msaaResolveFbo, NULL, NULL, NULL, GL_COLOR_BUFFER_BIT, GL_NEAREST);
@@ -1413,7 +1422,9 @@ const void* RB_PostProcess(const void* data) {
             // and can't read from an MSAA dstFbo later.
             RB_ToneMap(srcFbo, srcBox, tr.screenScratchFbo, srcBox, autoExposure);
             FBO_FastBlit(tr.screenScratchFbo, srcBox, srcFbo, srcBox, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-        } else if (r_cameraExposure->value != 0.0f) {
+        } else if (r_hdr->integer && r_cameraExposure->value != 0.0f) {
+            // [QL] only for HDR: in an 8 or 16 bit frame the scaled colour is clamped to what it was,
+            // and the pass would only cost a full screen quad
             vec4_t color;
 
             color[0] =
@@ -1665,6 +1676,12 @@ void RB_ExecuteRenderCommands(const void* data) {
                 break;
             case RC_EXPORT_CUBEMAPS:
                 data = RB_ExportCubemaps(data);
+                break;
+            case RC_BLOOM_SCENE:
+                data = RB_BloomScene(data);
+                break;
+            case RC_BLOOM:
+                data = RB_Bloom(data);
                 break;
             case RC_END_OF_LIST:
             default:

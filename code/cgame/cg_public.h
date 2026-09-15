@@ -196,7 +196,9 @@ typedef enum {
     CG_FS_GETFILELIST,            // [QL] FS_GetFileList (cgame import +0x4c)
     CG_S_CLEARSOUNDBUFFER,        // [QL] S_ClearSoundBuffer (cgame import +0xa8)
     CG_KEY_GETBINDINGBUF,         // [QL] the command bound to a key (cgame import +0x18c)
-    CG_CVAR_REGISTER_RANGE        // [QL] Cvar_Register with a range given as two strings (cgame import +0x14)
+    CG_CVAR_REGISTER_RANGE,       // [QL] Cvar_Register with a range given as two strings (cgame import +0x14)
+    CG_R_BEGINBLOOMSCENE,         // [QL] the bloom's frame buffer takes the view that follows (cgame import +0x1c8)
+    CG_R_APPLYBLOOM               // [QL] the bloom over the view just drawn (cgame import +0x1cc)
 } cgameImport_t;
 
 /*

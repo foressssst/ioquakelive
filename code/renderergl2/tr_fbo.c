@@ -272,11 +272,14 @@ void FBO_Init(void) {
         FBO_AttachImage(tr.msaaResolveFbo, tr.renderImage, GL_COLOR_ATTACHMENT0, 0);
         FBO_AttachImage(tr.msaaResolveFbo, tr.renderDepthImage, GL_DEPTH_ATTACHMENT, 0);
         R_CheckFBO(tr.msaaResolveFbo);
-    } else if (r_hdr->integer) {
+    } else if (r_hdr->integer || r_postProcessActive->integer) {
+        // [QL] Quake Live's post effects need the frame in a frame buffer too (tr_qlpost.c)
         tr.renderFbo = FBO_Create("_render", tr.renderDepthImage->width, tr.renderDepthImage->height);
         FBO_AttachImage(tr.renderFbo, tr.renderImage, GL_COLOR_ATTACHMENT0, 0);
         FBO_AttachImage(tr.renderFbo, tr.renderDepthImage, GL_DEPTH_ATTACHMENT, 0);
-        R_CheckFBO(tr.renderFbo);
+        if (!R_CheckFBO(tr.renderFbo) && !r_hdr->integer) {
+            tr.renderFbo = NULL;
+        }
     }
 
     // clear render buffer
@@ -373,6 +376,8 @@ void FBO_Init(void) {
         FBO_CreateBuffer(tr.renderCubeFbo, GL_DEPTH_COMPONENT24_ARB, 0, 0);
         R_CheckFBO(tr.renderCubeFbo);
     }
+
+    R_QLPostCreateFBOs();
 
     GL_CheckErrors();
 

@@ -582,6 +582,12 @@ intptr_t CL_CgameSystemCalls(intptr_t* args) {
         case CG_R_RENDERSCENE:
             re.RenderScene(VMA(1));
             return 0;
+        case CG_R_BEGINBLOOMSCENE:
+            re.BeginBloomScene();
+            return 0;
+        case CG_R_APPLYBLOOM:
+            re.ApplyBloom();
+            return 0;
         case CG_GET_ADVERTISEMENTS:
             re.Get_Advertisements(VMA(1), VMA(2), VMA(3));
             return 0;

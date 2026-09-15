@@ -52,6 +52,11 @@ extern const char* fallbackShader_texturecolor_vp;
 extern const char* fallbackShader_texturecolor_fp;
 extern const char* fallbackShader_tonemap_vp;
 extern const char* fallbackShader_tonemap_fp;
+extern const char* fallbackShader_qlpost_vp;
+extern const char* fallbackShader_qlcolorcorrect_fp;
+extern const char* fallbackShader_qlbrightpass_fp;
+extern const char* fallbackShader_qlblur_fp;
+extern const char* fallbackShader_qlcombine_fp;
 
 typedef struct uniformInfo_s {
     char* name;
@@ -1233,6 +1238,82 @@ void GLSL_InitGPUShaders(void) {
 
     numEtcShaders++;
 
+    // [QL] Quake Live's post effects (tr_qlpost.c), built only when they run, like retail's
+    // scripts/*.fs (0x43cfe0, 0x4380f0)
+    if (r_colorCorrectActive->integer) {
+        attribs = ATTR_POSITION | ATTR_TEXCOORD;
+
+        for (i = 0; i < 4; i++) {
+            extradefines[0] = '\0';
+
+            if (i & 1)
+                Q_strcat(extradefines, 1024, "#define USE_GAMMA\n");
+
+            if (i & 2)
+                Q_strcat(extradefines, 1024, "#define USE_CONTRAST\n");
+
+            if (!GLSL_InitGPUShader(&tr.qlColorCorrectShader[i], "qlcolorcorrect", attribs, qtrue, extradefines, qtrue, fallbackShader_qlpost_vp, fallbackShader_qlcolorcorrect_fp)) {
+                ri.Error(ERR_FATAL, "Could not load qlcolorcorrect shader!");
+            }
+
+            GLSL_InitUniforms(&tr.qlColorCorrectShader[i]);
+            GLSL_SetUniformInt(&tr.qlColorCorrectShader[i], UNIFORM_TEXTUREMAP, TB_COLORMAP);
+            GLSL_FinishGPUShader(&tr.qlColorCorrectShader[i]);
+
+            numEtcShaders++;
+        }
+    }
+
+    if (r_bloomActive->integer) {
+        attribs = ATTR_POSITION | ATTR_TEXCOORD;
+        extradefines[0] = '\0';
+
+        if (!GLSL_InitGPUShader(&tr.qlBrightPassShader, "qlbrightpass", attribs, qtrue, extradefines, qtrue, fallbackShader_qlpost_vp, fallbackShader_qlbrightpass_fp)) {
+            ri.Error(ERR_FATAL, "Could not load qlbrightpass shader!");
+        }
+
+        GLSL_InitUniforms(&tr.qlBrightPassShader);
+        GLSL_SetUniformInt(&tr.qlBrightPassShader, UNIFORM_TEXTUREMAP, TB_COLORMAP);
+        GLSL_FinishGPUShader(&tr.qlBrightPassShader);
+
+        numEtcShaders++;
+
+        for (i = 0; i < 2; i++) {
+            extradefines[0] = '\0';
+
+            if (i == 1)
+                Q_strcat(extradefines, 1024, "#define BLUR_VERTICAL\n");
+
+            if (!GLSL_InitGPUShader(&tr.qlBlurShader[i], "qlblur", attribs, qtrue, extradefines, qtrue, fallbackShader_qlpost_vp, fallbackShader_qlblur_fp)) {
+                ri.Error(ERR_FATAL, "Could not load qlblur shader!");
+            }
+
+            GLSL_InitUniforms(&tr.qlBlurShader[i]);
+            GLSL_SetUniformInt(&tr.qlBlurShader[i], UNIFORM_TEXTUREMAP, TB_COLORMAP);
+            GLSL_FinishGPUShader(&tr.qlBlurShader[i]);
+
+            numEtcShaders++;
+        }
+
+        for (i = 0; i < 2; i++) {
+            extradefines[0] = '\0';
+
+            if (i == 1)
+                Q_strcat(extradefines, 1024, "#define BLOOM_ONLY\n");
+
+            if (!GLSL_InitGPUShader(&tr.qlCombineShader[i], "qlcombine", attribs, qtrue, extradefines, qtrue, fallbackShader_qlpost_vp, fallbackShader_qlcombine_fp)) {
+                ri.Error(ERR_FATAL, "Could not load qlcombine shader!");
+            }
+
+            GLSL_InitUniforms(&tr.qlCombineShader[i]);
+            GLSL_SetUniformInt(&tr.qlCombineShader[i], UNIFORM_TEXTUREMAP, TB_COLORMAP);
+            GLSL_SetUniformInt(&tr.qlCombineShader[i], UNIFORM_LEVELSMAP, TB_LEVELSMAP);
+            GLSL_FinishGPUShader(&tr.qlCombineShader[i]);
+
+            numEtcShaders++;
+        }
+    }
+
     for (i = 0; i < 2; i++) {
         attribs = ATTR_POSITION | ATTR_TEXCOORD;
         extradefines[0] = '\0';
@@ -1399,6 +1480,15 @@ void GLSL_ShutdownGPUShaders(void) {
     GLSL_DeleteGPUShader(&tr.down4xShader);
     GLSL_DeleteGPUShader(&tr.bokehShader);
     GLSL_DeleteGPUShader(&tr.tonemapShader);
+    for (i = 0; i < 4; i++)
+        GLSL_DeleteGPUShader(&tr.qlColorCorrectShader[i]);
+
+    GLSL_DeleteGPUShader(&tr.qlBrightPassShader);
+
+    for (i = 0; i < 2; i++) {
+        GLSL_DeleteGPUShader(&tr.qlBlurShader[i]);
+        GLSL_DeleteGPUShader(&tr.qlCombineShader[i]);
+    }
 
     for (i = 0; i < 2; i++)
         GLSL_DeleteGPUShader(&tr.calclevels4xShader[i]);
