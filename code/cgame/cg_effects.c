@@ -607,13 +607,16 @@ CG_AllocFloatingEffect
 [QL] Ghidra "CG_AllocMark" - a reused/mislabelled name; this is NOT the Q3 wall-mark
 allocator (that lives in cg_marks.c). Returns the first free pool record cleared to sane
 defaults (white, full alpha, spawnTime = cg.time, lifeRate 1ms), or NULL if all 32 slots
-are busy. (The binary also has a niche gametype-2 alloc gate on two ps flags that is not
-reproduced here.)
+are busy. In race a spectator who isn't following anybody gets none.
 ==================
 */
 floatingEffect_t* CG_AllocFloatingEffect(void) {
     int i;
     floatingEffect_t* fx;
+
+    if (cgs.gametype == GT_RACE && (cg.snap->ps.eFlags & EF_VOTED) && !(cg.snap->ps.pm_flags & PMF_FOLLOW)) {
+        return NULL;
+    }
 
     for (i = 0; i < MAX_FLOATING_EFFECTS; i++) {
         fx = &cg_floatingEffects[i];
@@ -638,7 +641,7 @@ for the engine projection pair the binary calls through its import table
 Returns qfalse when the point is behind the view (binary's forward-distance > 0 gate).
 ==================
 */
-static qboolean CG_ProjectFloatingEffect(const vec3_t point, float* x, float* y) {
+qboolean CG_ProjectFloatingEffect(const vec3_t point, float* x, float* y) {
     vec3_t trans;
     float xc, yc, px, py, z;
 
@@ -700,42 +703,50 @@ void CG_UpdateFloatingEffects(void) {
 ==================
 CG_DrawFloatingEffects
 // Address: 0x10011680
-[QL] Ghidra "CG_DrawDamagePlums" - renders the WHOLE pool, not only plums. Projects each
-active record to screen, sizes its billboard (max of the min-pixel floor and the projected
-height of a worldSize-tall object) and draws its damage-number text and/or billboard pic,
-tinting through trap_R_SetColor with the (faded) record colour and applying the linear +
-quadratic screen drift.
+[QL] Ghidra "CG_DrawDamagePlums" - renders the WHOLE pool, not only plums. Every active record
+in front of the view, except a world sprite (FE_SPRITE) of the viewer's own team (team modes)
+or, with custom setting 0x40000, of the viewer himself. Its size is the larger of minPixels and
+twice the projected height of half worldSize, in 480-line units, and it drifts linearly plus
+quadratically with the life fraction. The text goes through CG_DrawText in the 640x480 space;
+the picture is drawn in real pixels, square, scaled by the vertical screen scale.
 ==================
 */
 void CG_DrawFloatingEffects(void) {
     int i;
     floatingEffect_t* fx;
-    vec3_t base, top;
+    vec3_t base, top, delta;
     float sx, sy, tx, ty;
-    float size, projected, life, arc, mx, my;
+    float size, life, arc, mx, my, scale;
 
     for (i = 0; i < MAX_FLOATING_EFFECTS; i++) {
         fx = &cg_floatingEffects[i];
         if (!fx->active) {
             continue;
         }
+        if (fx->type == FE_SPRITE &&
+            ((cgs.gametype >= GT_TEAM && fx->followNum == cg.snap->ps.persistant[PERS_TEAM]) ||
+             ((cgs.customSettings & 0x40000) && fx->clientNum == cg.snap->ps.clientNum))) {
+            continue;
+        }
 
-        // billboard base point: world origin lifted by zOffset
+        // billboard base point: world origin lifted by zOffset, in front of the view
         VectorCopy(fx->origin, base);
         base[2] += fx->zOffset;
+        VectorSubtract(base, cg.refdef.vieworg, delta);
+        if (DotProduct(delta, cg.refdef.viewaxis[0]) <= 0) {
+            continue;
+        }
         if (!CG_ProjectFloatingEffect(base, &sx, &sy)) {
             continue;
         }
 
-        // on-screen size = max(minPixels, 2 * projected height of a worldSize-tall object)
+        trap_R_SetColor(fx->color);
+
+        // on-screen size = max(minPixels, 2 * projected height of half worldSize)
         size = fx->minPixels;
-        VectorCopy(base, top);
-        VectorMA(top, fx->worldSize * 0.5f, cg.refdef.viewaxis[2], top);
-        if (CG_ProjectFloatingEffect(top, &tx, &ty)) {
-            projected = fabs(ty - sy) * 2.0f;
-            if (projected > size) {
-                size = projected;
-            }
+        VectorMA(base, fx->worldSize * 0.5f, cg.refdef.viewaxis[2], top);
+        if (CG_ProjectFloatingEffect(top, &tx, &ty) && size <= fabs(ty - sy) * 2.0f) {
+            size = fabs(ty - sy) * 2.0f;
         }
 
         // life fraction and quadratic drift (binary uses pow(life, 2))
@@ -744,15 +755,16 @@ void CG_DrawFloatingEffects(void) {
         mx = fx->velX * life + fx->accX * arc;
         my = fx->velY * life + fx->accY * arc;
 
-        trap_R_SetColor(fx->color);
-
         if (fx->text[0]) {
             CG_DrawText(sx - size * 0.5f + mx, sy - size + my, 0, 0.15f,
                         fx->color, fx->text, 0, 0, 0);
         }
 
         if (fx->shader) {
-            CG_DrawPic(sx - size * 0.5f + mx, sy - size + my, size, size, fx->shader);
+            scale = cgs.screenYScale;
+            trap_R_DrawStretchPic(cgs.glconfig.vidWidth * sx / 640.0f - size * 0.5f * scale + mx * scale,
+                                  cgs.glconfig.vidHeight * sy / 480.0f - size * scale + my * scale,
+                                  size * scale, size * scale, 0, 0, 1, 1, fx->shader);
         }
 
         trap_R_SetColor(NULL);

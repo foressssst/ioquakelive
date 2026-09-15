@@ -1896,6 +1896,14 @@ static void CG_RegisterGraphics(void) {
         cgs.media.harvesterNeutralModel = trap_R_RegisterModel("models/powerups/obelisk/obelisk.md3");
     }
 
+    // [QL] 0x1002303c: the segments of the health bars over teammates
+    cgs.media.healthSegmentShader = trap_R_RegisterShader("gfx/2d/health_segment.tga");
+
+    // [QL] 0x100240d9: the bite over Red Rover's survivors
+    if (cgs.gametype == GT_RR) {
+        cgs.media.infectedShader = trap_R_RegisterShaderNoMip("gfx/2d/infected/bite");
+    }
+
     cgs.media.redKamikazeShader = trap_R_RegisterShader("models/weaphits/kamikred");
     cgs.media.dustPuffShader = trap_R_RegisterShader("hasteSmokePuff");
 
@@ -1904,6 +1912,15 @@ static void CG_RegisterGraphics(void) {
         cgs.media.teamStatusBar = trap_R_RegisterShader("gfx/2d/colorbar.tga");
         cgs.media.blueKamikazeShader = trap_R_RegisterShader("models/weaphits/kamikblu");
         cgs.media.poiShader = trap_R_RegisterShader("sprites/neutralflagcarrier");
+        // [QL] 0x1002415d: the teammate markers
+        cgs.media.friendShader = trap_R_RegisterShader("sprites/friend");
+        cgs.media.friendHitShader = trap_R_RegisterShader("sprites/friend_hit");
+        cgs.media.friendDeadShader = trap_R_RegisterShader("sprites/friend_dead");
+    }
+    // [QL] 0x100241e7: the flag carriers' markers, in the modes with flags
+    if (cgs.gametype == GT_CTF || cgs.gametype == GT_1FCTF || cgs.gametype == GT_AD) {
+        cgs.media.flagCarrierShader = trap_R_RegisterShader("sprites/flagcarrier");
+        cgs.media.flagCarrierHitShader = trap_R_RegisterShader("sprites/flagcarrier_hit");
     }
 
     cgs.media.armorModel = trap_R_RegisterModel("models/powerups/armor/armor_yel.md3");

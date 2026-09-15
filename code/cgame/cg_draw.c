@@ -2048,6 +2048,273 @@ static void CG_DrawCrosshairNames(void) {
 	trap_R_SetColor(NULL);
 }
 
+/*
+=====================
+CG_OverheadTeamColor
+
+[QL] cgamex86.dll 0x10012b50: the name colour of each team
+=====================
+*/
+static const float* CG_OverheadTeamColor(int team) {
+	static const vec4_t freeColor = {1.0f, 1.0f, 1.0f, 1.0f};
+	static const vec4_t redColor = {1.0f, 0.5f, 0.5f, 1.0f};
+	static const vec4_t blueColor = {0.5f, 0.75f, 1.0f, 1.0f};
+	static const vec4_t spectatorColor = {0.85f, 0.85f, 0.85f, 1.0f};
+	static const vec4_t otherColor = {1.0f, 0.8f, 0.2f, 1.0f};
+
+	switch (team) {
+	case TEAM_FREE:
+		return freeColor;
+	case TEAM_RED:
+		return redColor;
+	case TEAM_BLUE:
+		return blueColor;
+	case TEAM_SPECTATOR:
+		return spectatorColor;
+	default:
+		return otherColor;
+	}
+}
+
+/*
+=====================
+CG_OverheadTextWidth
+
+[QL] 0x100082b0 as retail measures: in 640 units, with the 4:3 scale whenever the screen is
+wider than 4:3, whatever the widescreen mode
+=====================
+*/
+static int CG_OverheadTextWidth(const char* text, int fontIndex, float scale, int limit) {
+	float extents[5];
+	float xscale;
+
+	trap_R_Font_TextExtents(text, 0, fontIndex, CG_FontPixelSize(scale), limit > 0 ? limit : -1, extents);
+	if (cgs.widescreenBias > 0.0f) {
+		xscale = cgs.glconfig.vidHeight / 3.0f * 4.0f / 640.0f;
+	} else {
+		xscale = cgs.screenXScale;
+	}
+	return (int)((extents[2] - extents[0]) / xscale);
+}
+
+/*
+=====================
+CG_DrawTeammateNames
+
+[QL] cgamex86.dll 0x1000cb60, drawn by CG_Draw2D right after the floating effects (0x10010ea3).
+A box over each living player in front of the view, 40 units above its origin and seen through
+walls, for teammates with cg_teammateNames and for everybody with cg_specNames while spectating
+(a free-floating spectator gets nothing without it):
+- the name, at 1 only while the player is near the middle of the screen (0.4-0.6 across,
+  0.3-0.6 down) and at 2 always, in font 1 at 0.12 without colours, cut with "..." to
+  cg_overheadNamesWidth as measured in font 0. It takes the colour of the viewer's team, or of
+  the player's team for a spectator, over a half-transparent black box;
+- under the name, unless the player is frozen: four health segments tinted like the HUD health
+  (0x1000ca90) and lit past 25, 50 and 75 % of the viewer's maximum health, and a blue armor
+  line up to that maximum;
+- below the box, the player's powerups but flight and the freeze, or else a teammate's marker,
+  red for cg_drawHitFriendTime after a pain event.
+Sizes are pixels scaled by the screen height. Retail also traces from the view to the player
+and never reads the result; retail's colour codes are ^0-^7, this tree's extended ones are
+stripped too.
+=====================
+*/
+static void CG_DrawTeammateNames(void) {
+	static const vec4_t boxColor = {0.0f, 0.0f, 0.0f, 0.5f};
+	static const vec4_t armorColor = {0.0f, 0.625f, 1.0f, 1.0f};
+	int i, j, len, count, boxWidth, nameWidth, nameHeight, xoff, armorWidth;
+	int health, armor, maxHealth, localTeam;
+	qboolean sameTeam, spectator, frozen, showName, showBars;
+	float scale, fontSize, sx, sy, nx, ny, x, y, extra, barX, barY, iconX, iconY;
+	const float* textColor;
+	vec3_t point, delta;
+	vec4_t tint;
+	qhandle_t shader;
+	centity_t* cent;
+	clientInfo_t* ci;
+	gitem_t* item;
+	char name[40], cut[40];
+	char* in;
+	char* out;
+
+	if (cg.predictedPlayerState.pm_type == PM_SPECTATOR && !(cg.predictedPlayerState.pm_flags & PMF_FOLLOW) &&
+		!cg_specNames.integer) {
+		return;
+	}
+
+	scale = cgs.screenYScale;
+	fontSize = CG_FontPixelSize(0.12f);
+	localTeam = cg.snap->ps.persistant[PERS_TEAM];
+
+	for (i = 0; i < cgs.maxclients; i++) {
+		cent = &cg_entities[i];
+		if (!cent->currentValid || cent->currentState.clientNum == cg.snap->ps.clientNum ||
+			cent->currentState.eType != ET_PLAYER || (cent->currentState.eFlags & EF_DEAD)) {
+			continue;
+		}
+
+		VectorCopy(cent->lerpOrigin, point);
+		point[2] += 40;
+		VectorSubtract(point, cg.refdef.vieworg, delta);
+		if (DotProduct(delta, cg.refdef.viewaxis[0]) <= 0) {
+			continue;
+		}
+		ci = &cgs.clientinfo[cent->currentState.clientNum];
+		if (!ci->infoValid) {
+			continue;
+		}
+
+		// the name without colours or control characters, cut to cg_overheadNamesWidth
+		Q_strncpyz(name, ci->name, sizeof(name));
+		for (in = out = name; *in; in++) {
+			if (Q_IsColorString(in)) {
+				in++;
+			} else if ((unsigned char)*in >= ' ') {
+				*out++ = *in;
+			}
+		}
+		*out = 0;
+		len = strlen(name);
+		if (CG_OverheadTextWidth(name, 0, 0.12f, len) > cg_overheadNamesWidth.integer) {
+			do {
+				len--;
+			} while (len > 1 && CG_OverheadTextWidth(name, 0, 0.12f, len) > cg_overheadNamesWidth.integer);
+			Q_strncpyz(cut, name, len);
+			Q_strncpyz(name, va("%s%s", cut, "..."), sizeof(name));
+			len += 3;
+		}
+		nameWidth = CG_OverheadTextWidth(name, 1, 0.12f, 0);
+		nameHeight = CG_DrawTextHeight(name, 0.12f, 0, 1);
+		boxWidth = nameWidth > 11 ? nameWidth : 11;
+
+		frozen = qfalse;
+		count = 0;
+		for (j = 1; j <= PW_NUM_POWERUPS; j++) {
+			if ((cent->currentState.powerups & (1 << j)) && j != PW_FLIGHT) {
+				if (j == PW_FREEZE) {
+					frozen = qtrue;
+				} else {
+					count++;
+				}
+			}
+		}
+
+		sameTeam = cgs.gametype >= GT_TEAM && localTeam == ci->team;
+		spectator = localTeam == TEAM_SPECTATOR;
+		textColor = CG_OverheadTeamColor(localTeam);
+		if (spectator && cgs.gametype >= GT_TEAM) {
+			textColor = CG_OverheadTeamColor(ci->team);
+		}
+
+		// window position, 0-1 from the left and from the bottom
+		CG_ProjectFloatingEffect(point, &sx, &sy);
+		nx = sx / 640.0f;
+		ny = 1.0f - sy / 480.0f;
+
+		if (spectator && cg_specNames.integer == 2) {
+			showName = qtrue;
+		} else if (sameTeam && cg_teammateNames.integer == 2) {
+			showName = qtrue;
+		} else if ((spectator && cg_specNames.integer) || (sameTeam && cg_teammateNames.integer)) {
+			showName = nx > 0.4f && nx < 0.6f && ny > 0.4f && ny < 0.7f;
+		} else {
+			showName = qfalse;
+		}
+
+		if (frozen) {
+			showBars = qfalse;
+		} else {
+			showBars = (sameTeam && cg_teammateNames.integer) || (spectator && cg_specNames.integer);
+		}
+
+		if (showName) {
+			xoff = boxWidth > nameWidth ? (boxWidth - nameWidth) / 2 : 0;
+			x = nx * cgs.glconfig.vidWidth - boxWidth * 0.5f * scale;
+			y = cgs.glconfig.vidHeight - ny * cgs.glconfig.vidHeight - nameHeight * scale - 8 * scale;
+			extra = showBars ? 6 * scale : 0;
+
+			trap_R_SetColor(boxColor);
+			trap_R_DrawStretchPic(x - scale, y - scale - nameHeight * scale, boxWidth * scale + 2 * scale,
+								  nameHeight * scale + 2 * scale + extra, 0, 0, 0, 0, cgs.media.whiteShader);
+			trap_R_SetColor(colorBlack);
+			trap_R_Font_DrawString((int)(x + scale + xoff * scale), (int)(y + scale), name, 1, fontSize, len, NULL, 0);
+			trap_R_SetColor(textColor);
+			trap_R_Font_DrawString((int)(x + xoff * scale), (int)y, name, 1, fontSize, len, NULL, 0);
+			trap_R_SetColor(NULL);
+		}
+
+		if (!showBars) {
+			continue;
+		}
+
+		health = cent->currentState.health;
+		armor = cent->currentState.armor;
+		maxHealth = cg.snap->ps.stats[STAT_MAX_HEALTH];
+		barX = nx * cgs.glconfig.vidWidth - 5.5f * scale;
+		barY = cgs.glconfig.vidHeight - ny * cgs.glconfig.vidHeight - nameHeight * scale - 6 * scale;
+		CG_HealthGradientColor(i, health, tint);
+		tint[3] = 1.0f;
+
+		trap_R_SetColor(tint);
+		trap_R_DrawStretchPic(barX, barY, 2 * scale, 2 * scale, 0, 0, 1, 1, cgs.media.healthSegmentShader);
+		trap_R_SetColor(NULL);
+		if (health > maxHealth * 0.25) {
+			trap_R_SetColor(tint);
+			trap_R_DrawStretchPic(barX + 3 * scale, barY, 2 * scale, 2 * scale, 0, 0, 1, 1, cgs.media.healthSegmentShader);
+			trap_R_SetColor(NULL);
+		}
+		if (health > maxHealth * 0.5) {
+			trap_R_SetColor(tint);
+			trap_R_DrawStretchPic(barX + 6 * scale, barY, 2 * scale, 2 * scale, 0, 0, 1, 1, cgs.media.healthSegmentShader);
+			trap_R_SetColor(NULL);
+		}
+		if (health > maxHealth * 0.75) {
+			trap_R_SetColor(tint);
+			trap_R_DrawStretchPic(barX + 9 * scale, barY, 2 * scale, 2 * scale, 0, 0, 1, 1, cgs.media.healthSegmentShader);
+			trap_R_SetColor(NULL);
+		}
+
+		armorWidth = 11;
+		if (armor < maxHealth) {
+			armorWidth = (int)((double)armor / maxHealth * 11.0);
+		}
+		if (armor) {
+			trap_R_SetColor(armorColor);
+			trap_R_DrawStretchPic(barX, barY + 3 * scale, armorWidth * scale, scale, 0, 0, 0, 0, cgs.media.whiteShader);
+			trap_R_SetColor(NULL);
+		}
+
+		iconY = cgs.glconfig.vidHeight - ny * cgs.glconfig.vidHeight - nameHeight * scale - scale;
+		if (count) {
+			iconX = nx * cgs.glconfig.vidWidth - count * 8 * 0.5f * scale - (count * 2 - 2) * 0.5f * scale;
+			for (j = 1; j <= PW_NUM_POWERUPS; j++) {
+				if (!(cent->currentState.powerups & (1 << j)) || j == PW_FLIGHT || j == PW_FREEZE) {
+					continue;
+				}
+				item = BG_FindItemForPowerup(j);
+				if (!item) {
+					continue;
+				}
+				trap_R_SetColor(colorWhite);
+				trap_R_DrawStretchPic(iconX, iconY, 8 * scale, 8 * scale, 0, 0, 1, 1, trap_R_RegisterShader(item->icon));
+				trap_R_SetColor(NULL);
+				iconX += 10 * scale;
+			}
+		} else if (sameTeam) {
+			iconX = nx * cgs.glconfig.vidWidth - 4 * scale;
+			if (cg.time - cent->pe.lastPainTime < cg_drawHitFriendTime.integer) {
+				trap_R_SetColor(colorRed);
+				shader = cgs.media.friendHitShader;
+			} else {
+				trap_R_SetColor(tint);
+				shader = cgs.media.friendShader;
+			}
+			trap_R_DrawStretchPic(iconX, iconY, 8 * scale, 8 * scale, 0, 0, 1, 1, shader);
+			trap_R_SetColor(NULL);
+		}
+	}
+}
+
 //==============================================================================
 
 /*
@@ -2972,9 +3239,13 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 
 	// [QL] shared floating-effect pool: damage numbers, player outlines, freeze/flag
 	// glows and head float-sprites, all projected to screen (binary CG_DrawDamagePlums
-	// called from CG_Draw2D @ 0x10010e9e).
+	// called from CG_Draw2D @ 0x10010e9e), unless a demo is frozen (cl_freezeDemo); then
+	// the boxes over teammates (0x10010ea3)
 	CG_SetWidescreen(WIDESCREEN_STRETCH);
-	CG_DrawFloatingEffects();
+	if (!cg.demoPlayback || !(int)trap_Cvar_VariableValue("cl_freezeDemo")) {
+		CG_DrawFloatingEffects();
+	}
+	CG_DrawTeammateNames();
 
 	/*
 		if (cg.cameraMode) {

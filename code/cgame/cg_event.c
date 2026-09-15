@@ -301,6 +301,29 @@ static void CG_Obituary(entityState_t* ent) {
         cg.killerName[0] = 0;
     }
 
+    // [QL] 0x1001924c: a red marker where a teammate died, 16 units under the event, for
+    // cg_drawDeadFriendTime; not in Red Rover or Freeze Tag
+    if (cg_drawDeadFriendTime.value != 0.0f && cgs.gametype >= GT_TEAM &&
+        cg.snap->ps.persistant[PERS_TEAM] == cgs.clientinfo[target].team && target != cg.clientNum &&
+        cgs.gametype != GT_RR && cgs.gametype != GT_FREEZE) {
+        floatingEffect_t* fx = CG_AllocFloatingEffect();
+
+        if (fx) {
+            fx->type = FE_DAMAGE_NUMBER;  // retail's type 0; the record draws its shader
+            VectorCopy(ent->pos.trBase, fx->origin);
+            fx->origin[2] -= 16;
+            fx->color[0] = 1.0f;
+            fx->color[1] = 0.0f;
+            fx->color[2] = 0.0f;
+            fx->color[3] = 1.0f;
+            fx->zOffset = 64.0f;
+            fx->worldSize = cg_teammatePOIsMaxWidth.value;
+            fx->minPixels = cg_teammatePOIsMinWidth.value;
+            fx->shader = cgs.media.friendDeadShader;
+            fx->lifeRate = cg_drawDeadFriendTime.value;
+        }
+    }
+
     // [CPMA] ch_crosshairPulse 3 pulses on an enemy frag
     if (attacker == cg.snap->ps.clientNum && attacker != target &&
         (cgs.gametype < GT_TEAM || cgs.clientinfo[target].team != cg.snap->ps.persistant[PERS_TEAM])) {
@@ -717,6 +740,9 @@ CG_PainEvent
 */
 void CG_PainEvent(centity_t* cent, int health) {
     char* snd;
+
+    // [QL] 0x10019ca6: every pain event, before the throttle, for the teammate markers
+    cent->pe.lastPainTime = cg.time;
 
     // don't do more than two pain sounds a second
     if (cg.time - cent->pe.painTime < 500) {
