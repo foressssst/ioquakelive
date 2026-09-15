@@ -2862,6 +2862,15 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 		CG_CheckOrderPending();
 	}
 
+	// [QL] 0x10010dd8: the lastmsg recall timers run out here, which ends the
+	// CG_SHOW_IF_MSG_PRESENT / CG_SHOW_IF_NOTICE_PRESENT blink
+	if (cg.time > cg.lastChatTime) {
+		cg.lastChatTime = 0;
+	}
+	if (cg.time > cg.lastChatTime2) {
+		cg.lastChatTime2 = 0;
+	}
+
 	// if we are taking a levelshot for the menu, don't draw anything
 	if (cg.levelShot) {
 		return;

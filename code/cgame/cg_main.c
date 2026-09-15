@@ -2578,19 +2578,33 @@ static int CG_FeederCount(float feederID) {
     return count;
 }
 
+/*
+=================
+CG_SetScoreSelection
+
+[QL] cgamex86.dll 0x10025f60 (the menu arrives in edi). A spectator selects no score (-1);
+anyone else selects the score whose client is the snapshot's player, and keeps the previous
+selection while that client is missing from the scores.
+
+Team gametypes hand that score's index to the list of the player's team and -1 to the other
+list. The Team Arena code this replaces handed the team list its player count and never
+touched the other list, which stayed on its first row. Other gametypes select on
+FEEDER_SCOREBOARD.
+=================
+*/
 void CG_SetScoreSelection(void* p) {
     menuDef_t* menu = (menuDef_t*)p;
     playerState_t* ps = &cg.snap->ps;
-    int i, red, blue;
-    red = blue = 0;
-    for (i = 0; i < cg.numScores; i++) {
-        if (cg.scores[i].team == TEAM_RED) {
-            red++;
-        } else if (cg.scores[i].team == TEAM_BLUE) {
-            blue++;
-        }
-        if (ps->clientNum == cg.scores[i].client) {
-            cg.selectedScore = i;
+    int i;
+
+    if (ps->persistant[PERS_TEAM] == TEAM_SPECTATOR) {
+        cg.selectedScore = -1;
+    } else {
+        for (i = 0; i < cg.numScores; i++) {
+            if (ps->clientNum == cg.scores[i].client) {
+                cg.selectedScore = i;
+                break;
+            }
         }
     }
 
@@ -2601,15 +2615,37 @@ void CG_SetScoreSelection(void* p) {
 
     if (cgs.gametype >= GT_TEAM) {
         int feeder = FEEDER_REDTEAM_LIST;
-        i = red;
-        if (cg.scores[cg.selectedScore].team == TEAM_BLUE) {
+        int other = FEEDER_BLUETEAM_LIST;
+
+        // retail reads cg.scores[-1] for a spectator; here no score is blue then
+        if (cg.selectedScore >= 0 && cg.scores[cg.selectedScore].team == TEAM_BLUE) {
             feeder = FEEDER_BLUETEAM_LIST;
-            i = blue;
+            other = FEEDER_REDTEAM_LIST;
         }
-        Menu_SetFeederSelection(menu, feeder, i, NULL);
+        Menu_SetFeederSelection(menu, feeder, cg.selectedScore, NULL);
+        Menu_SetFeederSelection(menu, other, -1, NULL);
     } else {
         Menu_SetFeederSelection(menu, FEEDER_SCOREBOARD, cg.selectedScore, NULL);
     }
+}
+
+extern menuDef_t* menuScoreboard;
+extern menuDef_t* menuEndScoreboard;
+
+/*
+=================
+CG_SetScoreboardSelection
+
+[QL] What every score parser in the binary ends with (0x1004541d, 0x10045d7a, ...): the
+selection goes to the end-of-match board at intermission and to the in-game board otherwise.
+The fork passed NULL there, so a scores message never moved the board's lists.
+=================
+*/
+void CG_SetScoreboardSelection(void) {
+    if (!cg.snap) {
+        return;
+    }
+    CG_SetScoreSelection(cg.snap->ps.pm_type == PM_INTERMISSION ? menuEndScoreboard : menuScoreboard);
 }
 
 // FIXME: might need to cache this info
@@ -2911,26 +2947,61 @@ static qhandle_t CG_FeederItemImage(float feederID, int index) {
     return 0;
 }
 
+/*
+=================
+CG_FeederSelection
+
+[QL] cgamex86.dll 0x10028b10. -1 is ignored, and outside the team gametypes the index is the
+score.
+
+In a team gametype FEEDER_REDTEAM_LIST means red and every other feeder blue. At intermission
+the index is a row of that team's list and selects its score. Otherwise it arrives as an index
+into cg.scores, the way CG_SetScoreSelection hands it out, and becomes the player's row on the
+team's list, written straight into the in-game board's playerlistRED / playerlistBLUE (the item
+names the menus insist on), while the end board's list of the other team is cleared. That row
+is the one the list box highlights.
+=================
+*/
 static void CG_FeederSelection(float feederID, int index) {
-    if (cgs.gametype >= GT_TEAM) {
-        int i, count;
-        int team;
-        if (feederID == FEEDER_REDTEAM_LIST || feederID == FEEDER_REDTEAM_STATS) {
-            team = TEAM_RED;
-        } else {
-            team = TEAM_BLUE;
-        }
-        count = 0;
-        for (i = 0; i < cg.numScores; i++) {
-            if (cg.scores[i].team == team) {
-                if (index == count) {
-                    cg.selectedScore = i;
-                }
-                count++;
-            }
-        }
-    } else {
+    itemDef_t* list;
+    itemDef_t* other;
+    qboolean intermission;
+    int team, i, count;
+
+    if (index == -1) {
+        return;
+    }
+
+    if (cgs.gametype < GT_TEAM) {
         cg.selectedScore = index;
+        return;
+    }
+
+    team = (feederID == FEEDER_REDTEAM_LIST) ? TEAM_RED : TEAM_BLUE;
+    intermission = (cg.snap && cg.snap->ps.pm_type == PM_INTERMISSION) ? qtrue : qfalse;
+
+    count = 0;
+    for (i = 0; i < cg.numScores; i++) {
+        if (cg.scores[i].team != team) {
+            continue;
+        }
+        if (intermission) {
+            if (index == count) {
+                cg.selectedScore = i;
+            }
+        } else if (index >= 0 && index < MAX_CLIENTS && cg.scores[i].client == cg.scores[index].client) {
+            index = count;
+        }
+        count++;
+    }
+
+    list = Menu_FindItemByName(menuScoreboard, (team == TEAM_BLUE) ? "playerlistBLUE" : "playerlistRED");
+    other = Menu_FindItemByName(menuEndScoreboard, (team == TEAM_BLUE) ? "playerlistRED" : "playerlistBLUE");
+    if (list && !intermission) {
+        list->cursorPos = index;
+    }
+    if (other) {
+        other->cursorPos = -1;
     }
 }
 

@@ -1545,8 +1545,6 @@ typedef struct {
     int adElimScoreBonus;     // [QL] g_adElimScoreBonus
     int adtouchScoreBonus;    // [QL] g_adtouchScoreBonus
     char mapname[MAX_QPATH];
-    char redTeam[MAX_QPATH];
-    char blueTeam[MAX_QPATH];
 
     // [QL] parsed from CS_PLAYERINFO (CG_ParseConfigParams, 0x10048e40). A non-empty
     // override string disables client model/head forcing for that part.
@@ -1962,6 +1960,7 @@ void CG_MouseEvent(int x, int y);
 void CG_EventHandling(int type);
 void CG_RankRunFrame(void);
 void CG_SetScoreSelection(void* menu);
+void CG_SetScoreboardSelection(void);
 score_t* CG_GetSelectedScore(void);
 void CG_BuildSpectatorString(void);
 
