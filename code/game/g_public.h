@@ -342,5 +342,6 @@ typedef enum {
     GAME_CLIENT_DISCONNECT      = 7,    // ClientDisconnect()
     GAME_CLIENT_CONNECT         = 8,    // ClientConnect()
     GAME_CLIENT_COMMAND         = 9,    // ClientCommand()
-    GAME_SNAPSHOT_VISIBILITY    = 10,   // [QL] G_ObfuscateEnemyInfoInSnapshotCheck()
+    GAME_SNAPSHOT_VISIBILITY    = 10,   // [QL] G_ObfuscateEnemyInfoInSnapshotCheck() (retail export +0x44)
+    GAME_SNAPSHOT_ALWAYS_SEND   = 11,   // [QL] G_ClientAlwaysInSnapshot() (retail export +0x30)
 } gameExport_t;

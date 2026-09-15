@@ -1709,8 +1709,8 @@ void ClientSpawn(gentity_t* ent) {
         client->ps.weapon = WP_GAUNTLET;
     }
 
-    // [QL] starting armor from cvar
-    client->ps.stats[STAT_ARMOR] = g_startingArmor.integer;
+    // [QL] starting armor from cvar, in the entity too (0x1003b9ae)
+    ent->s.armor = client->ps.stats[STAT_ARMOR] = g_startingArmor.integer;
 
     G_SetOrigin(ent, spawn_origin);
     VectorCopy(spawn_origin, client->ps.origin);
