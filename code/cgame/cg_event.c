@@ -766,6 +766,135 @@ void CG_PainEvent(centity_t* cent, int health) {
 }
 
 /*
+===============
+CG_SpecItemTimerEvent
+
+[QL] cgamex86.dll 0x10019d90, EV_ITEM_PICKUP_SPEC: the server's word on an item's timer, for a
+spectator. A known item (otherEntityNum) takes the new values, its team mark doubled when it has
+just respawned; a new one takes the first free record, up to ten.
+===============
+*/
+void CG_SpecItemTimerEvent(entityState_t* es) {
+    specItemTimer_t* timer;
+    int i, freeSlot = -1;
+
+    for (i = 0; i < MAX_SPEC_ITEM_TIMERS; i++) {
+        timer = &cg.specItemTimers[i];
+        if (freeSlot == -1 && !timer->entityNum) {
+            freeSlot = i;
+        }
+        if (timer->entityNum == es->otherEntityNum) {
+            timer->side = es->otherEntityNum2;
+            timer->time = es->time - cg.time;
+            timer->itemIndex = es->modelindex;
+            timer->team = (es->groundEntityNum > 0) ? es->modelindex2 * 2 : es->modelindex2;
+            timer->distance = es->time2;
+            VectorCopy(es->pos.trBase, timer->origin);
+            return;
+        }
+    }
+
+    if (cg.numSpecItemTimers >= MAX_SPEC_ITEM_TIMERS) {
+        cg.numSpecItemTimers = MAX_SPEC_ITEM_TIMERS;
+        return;
+    }
+    if (freeSlot == -1) {
+        return;
+    }
+    timer = &cg.specItemTimers[freeSlot];
+    timer->entityNum = es->otherEntityNum;
+    timer->side = es->otherEntityNum2;
+    timer->itemIndex = es->modelindex;
+    timer->team = es->modelindex2;
+    timer->time = es->time - cg.time;
+    timer->distance = es->time2;
+    VectorCopy(es->pos.trBase, timer->origin);
+    cg.numSpecItemTimers++;
+}
+
+/*
+===============
+CG_CompareSpecItemTimers
+
+[QL] cgamex86.dll 0x1001ca10. In CTF by side (items with no duplicate first, then blue, then
+red), nearer the base first, then by team mark or else higher first, then by entity number;
+elsewhere higher first, then by y and by x.
+===============
+*/
+static int QDECL CG_CompareSpecItemTimers(const void* a, const void* b) {
+    const specItemTimer_t* ta = (const specItemTimer_t*)a;
+    const specItemTimer_t* tb = (const specItemTimer_t*)b;
+    int d;
+
+    if (cgs.gametype == GT_CTF) {
+        d = tb->side - ta->side;
+        if (d) {
+            return d;
+        }
+        d = ta->distance - tb->distance;
+        if (d) {
+            return d;
+        }
+        if (ta->team && tb->team) {
+            d = ta->team - tb->team;
+        } else {
+            d = (int)tb->origin[2] - (int)ta->origin[2];
+        }
+        if (d) {
+            return d;
+        }
+        return tb->entityNum - ta->entityNum;
+    }
+    d = (int)tb->origin[2] - (int)ta->origin[2];
+    if (d) {
+        return d;
+    }
+    d = (int)tb->origin[1] - (int)ta->origin[1];
+    if (d) {
+        return d;
+    }
+    return (int)tb->origin[0] - (int)ta->origin[0];
+}
+
+/*
+===============
+CG_UpdateSpecItemTimers
+
+[QL] cgamex86.dll 0x1001ca90, once a frame while spectating: every timer counts down by the
+frame time, held during a timeout, and the list is sorted
+===============
+*/
+void CG_UpdateSpecItemTimers(void) {
+    int i;
+
+    if (!(cg.predictedPlayerState.eFlags & EF_VOTED)) {
+        return;
+    }
+    for (i = 0; i < MAX_SPEC_ITEM_TIMERS; i++) {
+        if (cg.specItemTimers[i].entityNum && !cgs.freezeEnd) {
+            if (cg.specItemTimers[i].time > 0) {
+                cg.specItemTimers[i].time -= cg.frametime;
+            } else {
+                cg.specItemTimers[i].time = 0;
+            }
+        }
+    }
+    qsort(cg.specItemTimers, cg.numSpecItemTimers, sizeof(cg.specItemTimers[0]), CG_CompareSpecItemTimers);
+}
+
+/*
+===============
+CG_ResetSpecItemTimers
+
+[QL] cgamex86.dll 0x1001c8d0, at the end of map_restart
+===============
+*/
+void CG_ResetSpecItemTimers(void) {
+    memset(cg.specItemTimers, 0, sizeof(cg.specItemTimers));
+    cg.numSpecItemTimers = 0;
+}
+
+/*
 ==============
 CG_EntityEvent
 
@@ -1726,33 +1855,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_ITEM_PICKUP_SPEC:
             DEBUGNAME("EV_ITEM_PICKUP_SPEC");
-            // [QL] spectator item pickup notification - updates tracking table.
-            // Binary CG_ItemPickupSpec (0x53) keys the table on the picking-up
-            // client in es->otherEntityNum (0x94), stores the item index from
-            // es->modelindex (0xa8), the amount from es->modelindex2 (0xac) and
-            // the origin from es->pos.trBase (0x18) - NOT eventParm/generic1.
-            {
-                int slot, freeSlot = -1;
-                // search for existing entry or free slot
-                for (slot = 0; slot < MAX_SPEC_PICKUPS; slot++) {
-                    if (cg.specPickups[slot].active &&
-                        cg.specPickups[slot].clientNum == es->otherEntityNum) {
-                        freeSlot = slot;
-                        break;
-                    }
-                    if (!cg.specPickups[slot].active && freeSlot == -1) {
-                        freeSlot = slot;
-                    }
-                }
-                if (freeSlot >= 0) {
-                    cg.specPickups[freeSlot].active = qtrue;
-                    cg.specPickups[freeSlot].clientNum = es->otherEntityNum;
-                    cg.specPickups[freeSlot].itemIndex = es->modelindex;
-                    cg.specPickups[freeSlot].amount = es->modelindex2;
-                    cg.specPickups[freeSlot].time = cg.time;
-                    VectorCopy(es->pos.trBase, cg.specPickups[freeSlot].origin);
-                }
-            }
+            CG_SpecItemTimerEvent(es);  // [QL] 0x1001c0b2
             break;
         case EV_OVERTIME:
             DEBUGNAME("EV_OVERTIME");

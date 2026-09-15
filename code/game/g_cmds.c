@@ -694,6 +694,11 @@ void SetTeam(gentity_t* ent, const char* s) {
     client->sess.spectatorState = specState;
     client->sess.spectatorClient = specClient;
 
+    // [QL] 0x10040567: a new spectator gets the item timers
+    if (team == TEAM_SPECTATOR) {
+        G_SendItemTimersToSpectator(clientNum);
+    }
+
     client->sess.teamLeader = qfalse;
     if (team == TEAM_RED || team == TEAM_BLUE) {
         teamLeader = TeamLeader(team);
@@ -2153,37 +2158,12 @@ static void Cmd_Spec_f(gentity_t* ent) {
 
 /*
 =================
-[QL] Spectator item timer refresh - sends current item respawn state
-to the requesting spectator. Called by cgame on respawn when EF_VOTED is set.
-Binary: qagamex86.dll 0x1004edf0
+[QL] Spectator item timer refresh: "specresp", which cgame sends on respawn while EF_VOTED is set,
+gets this spectator every item timer again (qagamex86.dll 0x100462e5)
 =================
 */
 static void Cmd_SpecResp_f(gentity_t *ent) {
-    int i;
-    gentity_t *other;
-
-    // [QL] gate is g_specItemTimers, NOT g_itemTimers - verified from QLDS qagamex86.dll
-    // Cmd_SpecResp_f (0x1004edf0) reads g_specItemTimers.integer (0x10598d8c)
-    if (!g_specItemTimers.integer)
-        return;
-    if (!(ent->client->ps.eFlags & EF_VOTED))
-        return;
-    if (level.maxclients >= MAX_GENTITIES)
-        return;
-
-    for (i = level.maxclients; i < level.num_entities; i++) {
-        other = &g_entities[i];
-        if (!other->inuse)
-            continue;
-        if (!other->item)
-            continue;
-        if (other->item->giType == IT_ARMOR && other->item->giTag == 3)
-            continue;
-        if (other->item->giType == IT_HOLDABLE)
-            continue;
-
-        Item_NotifySpectator(other, ent - g_entities, qfalse);
-    }
+    G_SendItemTimersToSpectator(ent - g_entities);
 }
 
 /*

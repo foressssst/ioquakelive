@@ -1898,6 +1898,11 @@ static void CG_RegisterGraphics(void) {
 
     // [QL] 0x1002303c: the segments of the health bars over teammates
     cgs.media.healthSegmentShader = trap_R_RegisterShader("gfx/2d/health_segment.tga");
+    // [QL] 0x100233f4: the arrows of cg_drawInputCmds
+    cgs.media.cmdUpShader = trap_R_RegisterShaderNoMip("gfx/2d/race/cmd_up");
+    cgs.media.cmdDownShader = trap_R_RegisterShaderNoMip("gfx/2d/race/cmd_down");
+    cgs.media.cmdRightShader = trap_R_RegisterShaderNoMip("gfx/2d/race/cmd_right");
+    cgs.media.cmdLeftShader = trap_R_RegisterShaderNoMip("gfx/2d/race/cmd_left");
 
     // [QL] 0x100240d9: the bite over Red Rover's survivors
     if (cgs.gametype == GT_RR) {
@@ -1932,6 +1937,8 @@ static void CG_RegisterGraphics(void) {
     cgs.media.smoke2 = trap_R_RegisterModel("models/weapons2/shells/s_shell.md3");
 
     cgs.media.balloonShader = trap_R_RegisterShader("sprites/balloon3");
+    // [QL] 0x100244f5: the followed player's frame in the team vitals
+    cgs.media.voiceWindowShader = trap_R_RegisterShader("ui/assets/voiceWindow");
 
     cgs.media.bloodExplosionShader = cgs.media.bloodSprayShaders[0];
 

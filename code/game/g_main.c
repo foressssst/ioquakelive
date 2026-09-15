@@ -1752,6 +1752,10 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
         level.roundState.eCurrent = (level.warmupTime == 0) ? RS_COUNTDOWN : RS_WARMUP;
         CA_RoundStateTransition();
         break;
+    case GT_CTF:
+        // [QL] 0x10055475: the bases and item counts of the spectator item timers
+        G_InitItemTimerBases();
+        break;
     case GT_FREEZE:
         level.roundState.tNext = 0;
         level.roundState.eCurrent = (level.warmupTime == 0) ? RS_COUNTDOWN : RS_WARMUP;

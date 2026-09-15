@@ -1698,6 +1698,8 @@ static void CG_MapRestart(void) {
     }
     trap_Cvar_Set("cg_thirdPerson", "0");
     trap_Cvar_Set("ui_voteactive", "0");
+    // [QL] 0x1004a442: the spectator item timers start over
+    CG_ResetSpecItemTimers();
 }
 
 /*

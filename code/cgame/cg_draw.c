@@ -1472,6 +1472,67 @@ static void CG_DrawDisconnect(void) {
 	CG_DrawPic(x, y, 48, 48, trap_R_RegisterShader("gfx/2d/net.jpg"));
 }
 
+/*
+==============
+CG_DrawInputCmds
+
+[QL] cgamex86.dll 0x1000b610. Arrows for the movement being pressed around cg_drawInputCmdsX
+and cg_drawInputCmdsY, cg_drawInputCmdsSize apart: forward and back above and below, strafe to
+the sides, jump and crouch up and down to the right, each 16 units square. A free-floating
+spectator gets nothing, and at 2 only a spectator following somebody. The movement is this
+client's last command, or the followed player's (and a demo's) from the playerState.
+==============
+*/
+static void CG_DrawInputCmds(void) {
+	float size, x, y;
+	signed char forward, right, up;
+	usercmd_t cmd;
+
+	if (!cg_drawInputCmds.integer) {
+		return;
+	}
+	if (cg.predictedPlayerState.pm_type == PM_SPECTATOR && !(cg.predictedPlayerState.pm_flags & PMF_FOLLOW)) {
+		return;
+	}
+	if (cg_drawInputCmds.integer == 2 && !(cg.predictedPlayerState.pm_flags & PMF_FOLLOW)) {
+		return;
+	}
+
+	if (!(cg.snap->ps.pm_flags & PMF_FOLLOW) && !cg.demoPlayback) {
+		trap_GetUserCmd(trap_GetCurrentCmdNumber(), &cmd);
+		forward = cmd.forwardmove;
+		right = cmd.rightmove;
+		up = cmd.upmove;
+	} else {
+		forward = cg.snap->ps.forwardmove;
+		right = cg.snap->ps.rightmove;
+		up = cg.snap->ps.upmove;
+	}
+
+	size = cg_drawInputCmdsSize.value;
+	x = cg_drawInputCmdsX.integer;
+	y = cg_drawInputCmdsY.integer;
+
+	if (forward > 0) {
+		CG_DrawPic(x - 8, y - size - 16, 16, 16, cgs.media.cmdUpShader);
+	}
+	if (forward < 0) {
+		CG_DrawPic(x - 8, y + size, 16, 16, cgs.media.cmdDownShader);
+	}
+	if (right > 0) {
+		CG_DrawPic(x + size, y - 8, 16, 16, cgs.media.cmdRightShader);
+	}
+	if (right < 0) {
+		CG_DrawPic(x - size - 16, y - 8, 16, 16, cgs.media.cmdLeftShader);
+	}
+	if (up > 0) {
+		CG_DrawPic(x + size + 16, y - size - 16, 16, 16, cgs.media.cmdUpShader);
+	}
+	if (up < 0) {
+		CG_DrawPic(x + size + 16, y + size, 16, 16, cgs.media.cmdDownShader);
+	}
+}
+
 #define MAX_LAGOMETER_PING 900
 #define MAX_LAGOMETER_RANGE 300
 
@@ -3209,6 +3270,293 @@ void CG_UpdateJoinMenu(void) {
 	CG_DrawMenuCursor();
 }
 
+/*
+=====================
+CG_SpecTeamColor
+
+[QL] cgamex86.dll 0x10012b10: the strong colour of each team, for the spectator item timers and
+team vitals
+=====================
+*/
+static const float* CG_SpecTeamColor(int team) {
+	static const vec4_t freeColor = {1.0f, 0.8f, 0.2f, 1.0f};
+	static const vec4_t redColor = {1.0f, 0.2f, 0.1f, 1.0f};
+	static const vec4_t blueColor = {0.2f, 0.4f, 1.0f, 1.0f};
+	static const vec4_t spectatorColor = {0.75f, 0.75f, 0.75f, 1.0f};
+
+	switch (team) {
+	case TEAM_FREE:
+		return freeColor;
+	case TEAM_RED:
+		return redColor;
+	case TEAM_BLUE:
+		return blueColor;
+	case TEAM_SPECTATOR:
+		return spectatorColor;
+	default:
+		return colorWhite;
+	}
+}
+
+/*
+=====================
+CG_DrawSpecItemTimers
+
+[QL] cgamex86.dll 0x1000f700, for a spectator (EF_VOTED) with cg_specItemTimers, a bit mask of
+what to show: 1 powerups, 2 mega health, 4 red armor, 8 yellow armor. Down from
+cg_specItemTimersX and Y, each item's icon, cg_specItemTimersSize * 100 square, with the seconds
+until it is back beside it in font 0 at that size. In CTF a band at a quarter opacity marks the
+base an item belongs to, and the items of a random-respawn team go half size, stepped a quarter
+icon each. Retail counts those against the items of every side but red, so a team can end its
+row early or late.
+=====================
+*/
+static void CG_DrawSpecItemTimers(void) {
+	specItemTimer_t* timer;
+	gitem_t* item;
+	vec4_t band;
+	float size, x, y, step;
+	int mask, i, teamed, red, blue, last, seconds;
+
+	mask = cg_specItemTimers.integer;
+	if (!mask || cg.showJoinMenu || !cg.numSpecItemTimers || !(cg.predictedPlayerState.eFlags & EF_VOTED)) {
+		return;
+	}
+
+	size = cg_specItemTimersSize.value * 100.0f;
+	x = cg_specItemTimersX.integer;
+	y = cg_specItemTimersY.integer;
+
+	teamed = 0;
+	for (i = 0; i < MAX_SPEC_ITEM_TIMERS; i++) {
+		timer = &cg.specItemTimers[i];
+		if (timer->entityNum && timer->side != TEAM_RED && timer->team) {
+			teamed++;
+		}
+	}
+
+	red = blue = last = 0;
+	for (i = 0; i < MAX_SPEC_ITEM_TIMERS; i++) {
+		timer = &cg.specItemTimers[i];
+		if (!timer->entityNum) {
+			continue;
+		}
+		item = &bg_itemlist[timer->itemIndex];
+		if (!(mask & 1) && item->giType == IT_POWERUP) {
+			continue;
+		}
+		if (!(mask & 2) && item->giType == IT_HEALTH && item->giTag == 1) {
+			continue;
+		}
+		if (!(mask & 4) && item->giType == IT_ARMOR && item->giTag == 1) {
+			continue;
+		}
+		if (!(mask & 8) && item->giType == IT_ARMOR && item->giTag == 2) {
+			continue;
+		}
+
+		seconds = (int)ceil(timer->time / 1000.0);
+		if (timer->side == TEAM_RED || timer->side == TEAM_BLUE) {
+			Vector4Copy(CG_SpecTeamColor(timer->side), band);
+			band[3] = 0.25f;
+			CG_FillRect(x, y, size * 2.25f, size, band);
+		}
+		if (timer->team) {
+			if (timer->side == TEAM_RED) {
+				last = ++red;
+			} else {
+				last = ++blue;
+			}
+			step = size * 0.25f;
+			CG_DrawPic(x + last * step - 1.0f - step, y + last * step - 1.0f - step, size * 0.5f, size * 0.5f,
+					   trap_R_RegisterShader(item->icon));
+		} else {
+			CG_DrawPic(x, y, size, size, trap_R_RegisterShader(item->icon));
+		}
+		if (seconds > 0) {
+			CG_DrawText(x + size + 3.0f, y + size - 5.0f, 0, cg_specItemTimersSize.value, colorWhite, va("%d", seconds), 0,
+						0, ITEM_TEXTSTYLE_SHADOWED);
+		}
+		if (!timer->team || last >= teamed) {
+			y += size + 2.0f;
+		}
+	}
+}
+
+/*
+=====================
+CG_DrawSpecTeamVitals
+
+[QL] cgamex86.dll 0x1000fab0, for a spectator in the team modes with cg_specTeamVitals: a row per
+player from cg_specTeamVitalsY, cg_specTeamVitalsWidth wide, the red team down the left and the
+blue team down the right. Each row has:
+- the client number in faint white, and a frame on the followed player;
+- the first powerup, or else the weapon (a skull once dead);
+- the name in font 0 at 0.18, cut with "..." to fit, and at 2 the health as a number before it;
+- a health bar and an armor bar against the player's maximum health.
+Without cg_specTeamVitalsHealthColor the health bar fills the row behind white text, red or blue
+and stronger past the maximum, with the armor bar under it. With it the bars go thin under the
+name, the health one tinted by health and the armor one cyan, and the text takes the team colour.
+=====================
+*/
+static void CG_DrawSpecTeamVitals(void) {
+	static const vec4_t numberColor = {1.0f, 1.0f, 1.0f, 0.25f};
+	static const vec4_t gradientBack = {0.0f, 0.0f, 0.0f, 0.25f};
+	static const vec4_t armorCyan = {0.0f, 1.0f, 1.0f, 1.0f};
+	float yTeam[TEAM_NUM_TEAMS];
+	float* yp;
+	float y, step, numberWidth, barHeight, armorY, armorHeight;
+	int i, j, clientNum, team, health, armor, maxHealth, width, x, len, nameHeight, barY;
+	qboolean self, dead, gradient;
+	vec4_t color, armorColor;
+	const float* textColor;
+	centity_t* cent;
+	clientInfo_t* ci;
+	gitem_t* item;
+	char name[40], cut[40];
+
+	if (!cg_specTeamVitals.integer || cg.showJoinMenu || cgs.gametype < GT_TEAM) {
+		return;
+	}
+	for (i = 0; i < TEAM_NUM_TEAMS; i++) {
+		yTeam[i] = cg_specTeamVitalsY.integer;
+	}
+
+	for (i = 0; i < cgs.maxclients; i++) {
+		cent = &cg_entities[i];
+		clientNum = cent->currentState.clientNum;
+		ci = &cgs.clientinfo[clientNum];
+		if (!(cent->currentState.eType & 0xb) || !ci->infoValid) {
+			continue;
+		}
+
+		width = cg_specTeamVitalsWidth.integer;
+		self = (clientNum == cg.snap->ps.clientNum);
+		if (self) {
+			health = cg.snap->ps.stats[STAT_HEALTH];
+			armor = cg.snap->ps.stats[STAT_ARMOR];
+		} else {
+			health = cent->currentState.health;
+			armor = cent->currentState.armor;
+		}
+		gradient = (cg_specTeamVitalsHealthColor.integer != 0);
+		step = gradient ? 5.0f : 1.0f;
+		team = ci->team;
+		x = (team == TEAM_RED) ? 5 : (int)(640.0f - width - 5.0f - 16.0f - 2.0f);
+		numberWidth = (cg_specTeamVitals.integer == 2) ? 21.0f : 0.0f;
+		if (team == TEAM_SPECTATOR) {
+			continue;
+		}
+		if (team == TEAM_RED) {
+			CG_SetWidescreen(WIDESCREEN_LEFT);
+		} else if (team == TEAM_BLUE) {
+			CG_SetWidescreen(WIDESCREEN_RIGHT);
+		}
+		dead = (cent->currentState.eFlags & EF_DEAD) != 0;
+		maxHealth = (int)(ci->handicap / 100.0 * cgs.startingHealth);
+		if (maxHealth < 1 || maxHealth > cgs.startingHealth) {
+			maxHealth = cgs.startingHealth;
+		}
+
+		yp = &yTeam[team];
+		y = *yp;
+		CG_DrawText(x - 5.0f, y, 1, 0.12f, (float*)numberColor, va("%d", clientNum), 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+		if (self) {
+			CG_DrawPic(x - 1.0f, y - 16.0f - 1.0f, 18, 18, cgs.media.voiceWindowShader);
+		}
+		if (cent->currentState.powerups) {
+			for (j = 1; j <= PW_NUM_POWERUPS; j++) {
+				if ((cent->currentState.powerups & (1 << j)) && j != PW_FLIGHT && j != PW_FREEZE &&
+					(item = BG_FindItemForPowerup(j)) != NULL) {
+					CG_DrawPic(x, y - 16.0f, 16, 16, trap_R_RegisterShader(item->icon));
+					break;
+				}
+			}
+		} else {
+			CG_DrawPic(x, y - 16.0f, 16, 16,
+					   dead ? cgs.media.friendDeadShader : cg_weapons[cent->currentState.weapon].weaponIcon);
+		}
+		if (gradient) {
+			*yp = y - step;
+		}
+
+		// the name without colours, cut with "..." to what is left of the width
+		Q_strncpyz(name, ci->name, sizeof(name));
+		Q_CleanStr(name);
+		len = strlen(name);
+		if (CG_OverheadTextWidth(name, 0, 0.18f, len) > width - numberWidth) {
+			do {
+				len--;
+			} while (len > 1 && CG_OverheadTextWidth(name, 0, 0.18f, len) > width - numberWidth);
+			Q_strncpyz(cut, name, len);
+			len += 3;
+			Q_strncpyz(name, va("%s%s", cut, "..."), sizeof(name));
+		}
+		nameHeight = CG_DrawTextHeight(name, 0.18f, len, 0);
+
+		barY = 0;
+		if (!gradient) {
+			barY = (int)(*yp - 16.0f);
+			color[0] = (team == TEAM_RED) ? 1.0f : 0.0f;
+			color[1] = 0.0f;
+			color[2] = (team == TEAM_RED) ? 0.0f : 1.0f;
+			color[3] = 0.25f;
+			CG_FillRect(x + 18.0f, barY, width, nameHeight + 2, color);
+		}
+		if (dead) {
+			health = 0;
+		}
+		if (gradient) {
+			CG_HealthGradientColor(clientNum, health, color);
+			color[3] = 1.0f;
+			CG_FillRect(x + 18.0f, *yp, width, 4, gradientBack);
+			barY = (int)*yp;
+			barHeight = 4.0f;
+		} else {
+			if (health > maxHealth) {
+				Vector4Copy(CG_SpecTeamColor(team), color);
+				color[3] = 0.5f;
+			} else {
+				color[0] = (team == TEAM_RED) ? 1.0f : 0.0f;
+				color[1] = 0.0f;
+				color[2] = (team == TEAM_RED) ? 0.0f : 1.0f;
+				color[3] = 0.75f;
+			}
+			barHeight = nameHeight + 2;
+		}
+		CG_FillRect(x + 18.0f, barY, health > maxHealth ? width : (float)health / maxHealth * width, barHeight, color);
+
+		if (gradient) {
+			*yp += step;
+			textColor = CG_OverheadTeamColor(team);
+		} else {
+			*yp -= step;
+			textColor = colorWhite;
+		}
+		if (numberWidth != 0.0f) {
+			CG_DrawText(x + 18.0f + 1.0f, *yp - nameHeight + 1.0f, 1, 0.18f, (float*)textColor, va("%d", health), 0, 0,
+						ITEM_TEXTSTYLE_SHADOWED);
+		}
+		CG_DrawText(x + 18.0f + numberWidth + 1.0f, *yp - nameHeight + 1.0f, 0, 0.18f, (float*)textColor, name, 0, len,
+					ITEM_TEXTSTYLE_SHADOWED);
+
+		if (gradient) {
+			Vector4Copy(armorCyan, armorColor);
+			armorY = *yp - 1.0f;
+			armorHeight = 1.0f;
+		} else {
+			Vector4Copy(CG_SpecTeamColor(team), armorColor);
+			armorColor[3] = 1.0f;
+			armorY = *yp - 5.0f;
+			armorHeight = 6.0f;
+		}
+		CG_FillRect(x + 18.0f, armorY, armor > maxHealth ? width : (float)armor / maxHealth * width, armorHeight,
+					armorColor);
+		CG_SetWidescreen(WIDESCREEN_STRETCH);
+		*yp += 22.0f;
+	}
+}
+
 static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	if (cgs.orderPending && cg.time > cgs.orderTime) {
 		CG_CheckOrderPending();
@@ -3294,9 +3642,12 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 			CG_SetWidescreen(WIDESCREEN_CENTER);
 			CG_DrawReward();
 			CG_SetWidescreen(WIDESCREEN_STRETCH);
-			// NOT PORTED: retail calls 0x1000f700 after this block for every spectator
-			// (it tests EF_VOTED). Not identified yet; see bitacora/PENDIENTES.md.
 		}
+		// [QL] 0x1001111a: the item timers down the left, then the team vitals
+		CG_SetWidescreen(WIDESCREEN_LEFT);
+		CG_DrawSpecItemTimers();
+		CG_SetWidescreen(WIDESCREEN_STRETCH);
+		CG_DrawSpecTeamVitals();
 	} else {
 		// don't draw any status if dead or the scoreboard is being explicitly shown
 		if (!cg.showScores && cg.snap->ps.stats[STAT_HEALTH] > 0) {
@@ -3327,6 +3678,9 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	CG_DrawTeamVote();
 	CG_SetWidescreen(WIDESCREEN_RIGHT);
 	CG_DrawLagometer();
+	// [QL] 0x100110f7: the movement arrows, centred
+	CG_SetWidescreen(WIDESCREEN_CENTER);
+	CG_DrawInputCmds();
 	CG_SetWidescreen(WIDESCREEN_STRETCH);
 
 	if (!cg_paused.integer) {

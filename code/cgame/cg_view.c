@@ -1390,6 +1390,8 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
         }
         cg.oldTime = cg.time;
         CG_AddLagometerFrameInfo();
+        // [QL] 0x1004e80b: the spectator item timers count down
+        CG_UpdateSpecItemTimers();
     }
     if (cg_timescale.value != cg_timescaleFadeEnd.value) {
         if (cg_timescale.value < cg_timescaleFadeEnd.value) {

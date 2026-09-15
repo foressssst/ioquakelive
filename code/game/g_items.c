@@ -692,67 +692,55 @@ void G_QG_Think(void) {
 ===============
 Item_NotifySpectator
 
-[QL] Send EV_ITEM_PICKUP_SPEC event for a single item entity to a single spectator client.
-Called from Item_NotifySpectators (per-item broadcast) and Cmd_SpecResp_f (bulk refresh).
-Binary: called from 0x1004ed90 (Item_NotifySpectators) and 0x1004edf0 (Cmd_SpecResp_f)
+[QL] qagamex86.dll 0x1004eac0. Tells one spectator (EF_VOTED) about an item with a timer, in an
+EV_ITEM_PICKUP_SPEC event only that client gets:
+- otherEntityNum: the item entity;
+- modelindex: its kind;
+- time: when it comes back (the item's nextthink);
+- modelindex2: whether it belongs to a random-respawn team;
+- groundEntityNum: whether it has just respawned.
+Dropped items, green armor, holdables and items with spawnflag 0x100 are left out. In CTF an
+item with duplicates on the map carries the base it is nearer to in otherEntityNum2 (1 red,
+2 blue), with the squared distance in time2; an item with no duplicate carries 3.
 ===============
 */
 void Item_NotifySpectator(gentity_t *ent, int clientNum, qboolean isRespawn) {
-    gclient_t *cl;
+    gclient_t *cl = &level.clients[clientNum];
     gentity_t *te;
+    vec3_t delta;
+    float distRed, distBlue;
 
-    if (clientNum < 0 || clientNum >= level.maxclients)
+    if (cl->pers.connected != CON_CONNECTED || !(cl->ps.eFlags & EF_VOTED))
         return;
-
-    cl = &level.clients[clientNum];
-
-    // Must be spectator with EF_VOTED (item timer flag)
-    if (cl->ps.pm_type != PM_SPECTATOR)
-        return;
-    if (!(cl->ps.eFlags & EF_VOTED))
-        return;
-
-    // Skip entities that already have SVF_SINGLECLIENT set
-    if (ent->r.svFlags & SVF_SINGLECLIENT)
-        return;
-
-    // Item must exist and have respawn time data
-    if (!ent->item)
+    if (ent->flags & FL_DROPPED_ITEM)
         return;
     if (ent->item->giType == IT_ARMOR && ent->item->giTag == 3)
         return;
     if (ent->item->giType == IT_HOLDABLE)
         return;
+    if ((ent->spawnflags & 0x100) || !ent->item->itemTimer)
+        return;
 
-    te = G_TempEntity(ent->r.currentOrigin, EV_ITEM_PICKUP_SPEC);
-    te->s.eventParm = ent->s.number;
+    te = G_TempEntity(ent->s.pos.trBase, EV_ITEM_PICKUP_SPEC);
+    te->s.time = ent->nextthink;
+    te->s.otherEntityNum = ent->s.number;
     te->s.modelindex = ent->s.modelindex;
-    te->s.clientNum = ent->s.modelindex2;
-    te->s.frame = (ent->count != 0) ? 1 : 0;
+    te->s.modelindex2 = (ent->team != NULL);
     te->r.svFlags |= SVF_BROADCAST | SVF_SINGLECLIENT;
     te->r.singleClient = g_entities[clientNum].s.number;
-    te->s.generic1 = isRespawn ? 1 : 0;
+    te->s.groundEntityNum = (isRespawn != qfalse);
 
-    // CTF: calculate nearest flag base for spectator UI grouping
     if (g_gametype.integer == GT_CTF) {
-        gentity_t *redFlag, *blueFlag;
-        vec3_t diff;
-        float distRed, distBlue;
-
-        redFlag = G_Find(NULL, FOFS(classname), "team_CTF_redflag");
-        blueFlag = G_Find(NULL, FOFS(classname), "team_CTF_blueflag");
-
-        if (!redFlag || !blueFlag) {
-            te->s.otherEntityNum = 3;
-        } else {
-            VectorSubtract(redFlag->r.currentOrigin, ent->r.currentOrigin, diff);
-            distRed = DotProduct(diff, diff);
-            VectorSubtract(blueFlag->r.currentOrigin, ent->r.currentOrigin, diff);
-            distBlue = DotProduct(diff, diff);
-
-            te->s.otherEntityNum = (distBlue <= distRed) ? 2 : 1;
-            te->s.time = (int)(te->s.otherEntityNum == 1 ? distRed : distBlue);
+        if (level.itemTimerCounts[ent->item - bg_itemlist] < 2) {
+            te->s.otherEntityNum2 = 3;
+            return;
         }
+        VectorSubtract(level.itemTimerRedBase, ent->s.origin, delta);
+        distRed = DotProduct(delta, delta);
+        VectorSubtract(level.itemTimerBlueBase, ent->s.origin, delta);
+        distBlue = DotProduct(delta, delta);
+        te->s.otherEntityNum2 = (distBlue <= distRed) ? TEAM_BLUE : TEAM_RED;
+        te->s.time2 = (int)(te->s.otherEntityNum2 == TEAM_RED ? distRed : distBlue);
     }
 }
 
@@ -760,9 +748,9 @@ void Item_NotifySpectator(gentity_t *ent, int clientNum, qboolean isRespawn) {
 ===============
 Item_NotifySpectators
 
-[QL] Notify all spectator clients about an item's respawn state.
-Called from RespawnItem (0x1004f4a7) and G_SpawnItem (0x10050ba1).
-Binary: 0x1004ed10
+[QL] qagamex86.dll 0x1004ed10: an item's timer to every spectator. Touch_Item sends it with a
+new respawn time (0x1004f4a3), RespawnItem as the item comes back (0x1004f000) and G_SpawnItem
+as the item appears (0x10050b9f).
 ===============
 */
 void Item_NotifySpectators(gentity_t *ent, qboolean isRespawn) {
@@ -784,6 +772,104 @@ void Item_NotifySpectators(gentity_t *ent, qboolean isRespawn) {
 
     for (i = 0; i < level.maxclients; i++) {
         Item_NotifySpectator(ent, i, isRespawn);
+    }
+}
+
+/*
+===============
+G_SendItemTimersToSpectator
+
+[QL] qagamex86.dll 0x1004ed70: every item timer to one spectator, from "specresp" (0x100462e5)
+and from SetTeam when the client becomes a spectator (0x1004056f)
+===============
+*/
+void G_SendItemTimersToSpectator(int clientNum) {
+    gentity_t *ent;
+    int i;
+
+    if (!g_specItemTimers.integer || !(level.clients[clientNum].ps.eFlags & EF_VOTED) ||
+        level.maxclients >= MAX_GENTITIES) {
+        return;
+    }
+    for (i = level.maxclients; i < MAX_GENTITIES; i++) {
+        ent = &g_entities[i];
+        if (!ent->inuse || !ent->item || !ent->item->itemTimer) {
+            continue;
+        }
+        if ((ent->item->giType == IT_ARMOR && ent->item->giTag == 3) || ent->item->giType == IT_HOLDABLE) {
+            continue;
+        }
+        Item_NotifySpectator(ent, clientNum, qfalse);
+    }
+}
+
+/*
+===============
+G_FindTeamFlag
+
+[QL] qagamex86.dll 0x100690f0: a team's flag on the map, the last one that wasn't dropped
+===============
+*/
+static gentity_t *G_FindTeamFlag(int team) {
+    const char *classname;
+    gentity_t *ent, *found = NULL;
+    int i;
+
+    switch (team) {
+    case TEAM_FREE:
+        classname = "team_CTF_neutralflag";
+        break;
+    case TEAM_RED:
+        classname = "team_CTF_redflag";
+        break;
+    case TEAM_BLUE:
+        classname = "team_CTF_blueflag";
+        break;
+    default:
+        return NULL;
+    }
+    for (i = 0; i < level.num_entities; i++) {
+        ent = &g_entities[i];
+        if (ent->inuse && ent->classname && !Q_stricmp(classname, ent->classname) && !(ent->flags & FL_DROPPED_ITEM)) {
+            found = ent;
+        }
+    }
+    return found;
+}
+
+/*
+===============
+G_InitItemTimerBases
+
+[QL] qagamex86.dll 0x10069190, from G_InitGame in CTF: where the two flags stand and how many
+items of each kind with a timer the map has, which decide the side of each spectator timer
+===============
+*/
+void G_InitItemTimerBases(void) {
+    gentity_t *red = G_FindTeamFlag(TEAM_RED);
+    gentity_t *blue = G_FindTeamFlag(TEAM_BLUE);
+    gentity_t *ent;
+    int i;
+
+    if (red) {
+        VectorCopy(red->s.origin, level.itemTimerRedBase);
+    }
+    if (blue) {
+        VectorCopy(blue->s.origin, level.itemTimerBlueBase);
+    }
+    memset(level.itemTimerCounts, 0, sizeof(level.itemTimerCounts));
+    for (i = 0; i < level.num_entities; i++) {
+        ent = &g_entities[i];
+        if (!ent->inuse || !ent->item) {
+            continue;
+        }
+        if ((ent->item->giType == IT_ARMOR && ent->item->giTag == 3) || ent->item->giType == IT_HOLDABLE) {
+            continue;
+        }
+        if (!ent->item->itemTimer) {
+            continue;
+        }
+        level.itemTimerCounts[ent->item - bg_itemlist]++;
     }
 }
 
@@ -1059,6 +1145,8 @@ void Touch_Item(gentity_t* ent, gentity_t* other, trace_t* trace) {
         ent->nextthink = level.time + respawn * 1000;
         ent->think = RespawnItem;
     }
+    // [QL] 0x1004f4a3: spectators get the item's new timer
+    Item_NotifySpectators(ent, qfalse);
     trap_LinkEntity(ent);
 }
 
