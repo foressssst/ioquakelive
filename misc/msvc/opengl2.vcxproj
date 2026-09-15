@@ -124,6 +124,11 @@ cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\texturecolor_fp.glsl 
 cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\texturecolor_vp.glsl ..\..\build\dynamic\renderergl2\texturecolor_vp.c
 cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\tonemap_fp.glsl ..\..\build\dynamic\renderergl2\tonemap_fp.c
 cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\tonemap_vp.glsl ..\..\build\dynamic\renderergl2\tonemap_vp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlpost_vp.glsl ..\..\build\dynamic\renderergl2\qlpost_vp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlcolorcorrect_fp.glsl ..\..\build\dynamic\renderergl2\qlcolorcorrect_fp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlbrightpass_fp.glsl ..\..\build\dynamic\renderergl2\qlbrightpass_fp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlblur_fp.glsl ..\..\build\dynamic\renderergl2\qlblur_fp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlcombine_fp.glsl ..\..\build\dynamic\renderergl2\qlcombine_fp.c
 </Command>
     </PreBuildEvent>
     <Midl>
@@ -205,6 +210,11 @@ cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\texturecolor_fp.glsl 
 cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\texturecolor_vp.glsl ..\..\build\dynamic\renderergl2\texturecolor_vp.c
 cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\tonemap_fp.glsl ..\..\build\dynamic\renderergl2\tonemap_fp.c
 cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\tonemap_vp.glsl ..\..\build\dynamic\renderergl2\tonemap_vp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlpost_vp.glsl ..\..\build\dynamic\renderergl2\qlpost_vp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlcolorcorrect_fp.glsl ..\..\build\dynamic\renderergl2\qlcolorcorrect_fp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlbrightpass_fp.glsl ..\..\build\dynamic\renderergl2\qlbrightpass_fp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlblur_fp.glsl ..\..\build\dynamic\renderergl2\qlblur_fp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlcombine_fp.glsl ..\..\build\dynamic\renderergl2\qlcombine_fp.c
 </Command>
     </PreBuildEvent>
     <Midl>
@@ -291,6 +301,11 @@ cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\texturecolor_fp.glsl 
 cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\texturecolor_vp.glsl ..\..\build\dynamic\renderergl2\texturecolor_vp.c
 cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\tonemap_fp.glsl ..\..\build\dynamic\renderergl2\tonemap_fp.c
 cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\tonemap_vp.glsl ..\..\build\dynamic\renderergl2\tonemap_vp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlpost_vp.glsl ..\..\build\dynamic\renderergl2\qlpost_vp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlcolorcorrect_fp.glsl ..\..\build\dynamic\renderergl2\qlcolorcorrect_fp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlbrightpass_fp.glsl ..\..\build\dynamic\renderergl2\qlbrightpass_fp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlblur_fp.glsl ..\..\build\dynamic\renderergl2\qlblur_fp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlcombine_fp.glsl ..\..\build\dynamic\renderergl2\qlcombine_fp.c
 </Command>
     </PreBuildEvent>
     <ClCompile>
@@ -359,6 +374,11 @@ cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\texturecolor_fp.glsl 
 cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\texturecolor_vp.glsl ..\..\build\dynamic\renderergl2\texturecolor_vp.c
 cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\tonemap_fp.glsl ..\..\build\dynamic\renderergl2\tonemap_fp.c
 cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\tonemap_vp.glsl ..\..\build\dynamic\renderergl2\tonemap_vp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlpost_vp.glsl ..\..\build\dynamic\renderergl2\qlpost_vp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlcolorcorrect_fp.glsl ..\..\build\dynamic\renderergl2\qlcolorcorrect_fp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlbrightpass_fp.glsl ..\..\build\dynamic\renderergl2\qlbrightpass_fp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlblur_fp.glsl ..\..\build\dynamic\renderergl2\qlblur_fp.c
+cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\qlcombine_fp.glsl ..\..\build\dynamic\renderergl2\qlcombine_fp.c
 </Command>
     </PreBuildEvent>
     <ClCompile>
@@ -423,6 +443,11 @@ cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\tonemap_vp.glsl ..\..
     <ClCompile Include="..\..\build\dynamic\renderergl2\texturecolor_vp.c" />
     <ClCompile Include="..\..\build\dynamic\renderergl2\tonemap_fp.c" />
     <ClCompile Include="..\..\build\dynamic\renderergl2\tonemap_vp.c" />
+    <ClCompile Include="..\..\build\dynamic\renderergl2\qlpost_vp.c" />
+    <ClCompile Include="..\..\build\dynamic\renderergl2\qlcolorcorrect_fp.c" />
+    <ClCompile Include="..\..\build\dynamic\renderergl2\qlbrightpass_fp.c" />
+    <ClCompile Include="..\..\build\dynamic\renderergl2\qlblur_fp.c" />
+    <ClCompile Include="..\..\build\dynamic\renderergl2\qlcombine_fp.c" />
     <ClCompile Include="..\..\code\jpeg-8c\jaricom.c" />
     <ClCompile Include="..\..\code\jpeg-8c\jcapimin.c" />
     <ClCompile Include="..\..\code\jpeg-8c\jcapistd.c" />
@@ -502,6 +527,7 @@ cscript.exe glsl_stringify.vbs ..\..\code\renderergl2\glsl\tonemap_vp.glsl ..\..
     <ClCompile Include="..\..\code\renderergl2\tr_model.c" />
     <ClCompile Include="..\..\code\renderergl2\tr_model_iqm.c" />
     <ClCompile Include="..\..\code\renderergl2\tr_postprocess.c" />
+    <ClCompile Include="..\..\code\renderergl2\tr_qlpost.c" />
     <ClCompile Include="..\..\code\renderergl2\tr_scene.c" />
     <ClCompile Include="..\..\code\renderergl2\tr_shade.c" />
     <ClCompile Include="..\..\code\renderergl2\tr_shader.c" />

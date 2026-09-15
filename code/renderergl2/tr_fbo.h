@@ -51,6 +51,8 @@ typedef struct FBO_s {
     int height;
 } FBO_t;
 
+FBO_t* FBO_Create(const char* name, int width, int height);
+qboolean R_CheckFBO(const FBO_t* fbo);
 void FBO_AttachImage(FBO_t* fbo, image_t* image, GLenum attachment, GLuint cubemapside);
 void FBO_Bind(FBO_t* fbo);
 void FBO_Init(void);

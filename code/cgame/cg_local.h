@@ -2522,6 +2522,8 @@ void trap_R_AddLightToScene(const vec3_t org, float intensity, float r, float g,
 void trap_R_AddAdditiveLightToScene(const vec3_t org, float intensity, float r, float g, float b);
 int trap_R_LightForPoint(vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir);
 void trap_R_RenderScene(const refdef_t* fd);
+void trap_R_BeginBloomScene(void);
+void trap_R_ApplyBloom(void);
 void trap_R_SetColor(const float* rgba);  // NULL = 1,1,1,1
 void trap_R_DrawStretchPic(float x, float y, float w, float h, float s1, float t1, float s2, float t2, qhandle_t hShader);
 void trap_R_ModelBounds(clipHandle_t model, vec3_t mins, vec3_t maxs);

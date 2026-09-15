@@ -1567,6 +1567,16 @@ typedef struct {
     shaderProgram_t depthBlurShader[4];
     shaderProgram_t testcubeShader;
 
+    // [QL] Quake Live's post effects (tr_qlpost.c): the colour correction, and the bloom's bright
+    // pass, horizontal and vertical blurs and combine, with their targets: the scene at full size,
+    // four at half and three at a quarter
+    shaderProgram_t qlColorCorrectShader[4];  // with the gamma (1) and the contrast (2)
+    shaderProgram_t qlBrightPassShader;
+    shaderProgram_t qlBlurShader[2];          // horizontal, vertical
+    shaderProgram_t qlCombineShader[2];       // the whole pass, the bloom alone to blend
+    image_t* qlBloomImage[8];
+    FBO_t* qlBloomFbo[8];
+
     // -----------------------------------------
 
     viewParms_t viewParms;
@@ -2405,8 +2415,47 @@ typedef enum {
     RC_CLEARDEPTH,
     RC_CAPSHADOWMAP,
     RC_POSTPROCESS,
-    RC_EXPORT_CUBEMAPS
+    RC_EXPORT_CUBEMAPS,
+    RC_BLOOM_SCENE,  // [QL] retail's render command 11
+    RC_BLOOM         // [QL] retail's render command 10
 } renderCommand_t;
+
+//
+// [QL] tr_qlpost.c: Quake Live's colour correction and bloom
+//
+typedef struct {
+    int commandId;
+} bloomCommand_t;
+
+extern cvar_t* r_bloomActive;
+extern cvar_t* r_bloomBlurFalloff;
+extern cvar_t* r_bloomBlurRadius;
+extern cvar_t* r_bloomBlurScale;
+extern cvar_t* r_bloomBrightThreshold;
+extern cvar_t* r_bloomIntensity;
+extern cvar_t* r_bloomPasses;
+extern cvar_t* r_bloomSaturation;
+extern cvar_t* r_bloomSceneIntensity;
+extern cvar_t* r_bloomSceneSaturation;
+extern cvar_t* r_colorCorrectActive;
+extern cvar_t* r_contrast;
+extern cvar_t* r_enableBloom;
+extern cvar_t* r_enableColorCorrect;
+extern cvar_t* r_enablePostProcess;
+extern cvar_t* r_floatingPointFBOs;
+extern cvar_t* r_postProcessActive;
+
+void R_QLPostRegister(void);
+void R_QLPostInit(void);
+void R_QLPostCreateImages(int width, int height, int format);
+void R_QLPostCreateFBOs(void);
+void RE_BeginBloomScene(void);
+void RE_ApplyBloom(void);
+const void* RB_BloomScene(const void* data);
+const void* RB_Bloom(const void* data);
+qboolean RB_ColorCorrect(FBO_t* dst);
+FBO_t* RB_BindCaptureFbo(qboolean* bound);
+qboolean R_CaptureGammaCorrect(void);
 
 // these are sort of arbitrary limits.
 // the limits apply to the sum of all scenes in a frame --

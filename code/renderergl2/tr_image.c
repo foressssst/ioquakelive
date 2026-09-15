@@ -1210,6 +1210,12 @@ lighting range
 ================
 */
 void R_LightScaleTexture(byte* in, int inwidth, int inheight, qboolean only_gamma) {
+    // [QL] quakelive_steam.exe 0x444d00: with the colour correction the textures are left as they
+    // are, neither gamma nor r_intensity
+    if (r_colorCorrectActive->integer) {
+        return;
+    }
+
     if (only_gamma) {
         if (!glConfig.deviceSupportsGamma) {
             int i, c;
@@ -2683,13 +2689,20 @@ void R_CreateBuiltinImages(void) {
         hdrFormat = GL_RGBA8;
         if (r_hdr->integer && glRefConfig.textureFloat)
             hdrFormat = GL_RGBA16F_ARB;
+        // [QL] quakelive_steam.exe 0x4500b0: r_floatingPointFBOs gives Quake Live's frame buffers
+        // 16 bits a channel
+        else if (r_postProcessActive->integer && r_floatingPointFBOs->integer)
+            hdrFormat = GL_RGBA16;
 
         rgbFormat = GL_RGBA8;
 
         tr.renderImage = R_CreateImage("_render", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
 
-        if (r_shadowBlur->integer || r_hdr->integer)
+        // [QL] also the post effects' scratch: the bloom's last pass and the corrected captures
+        if (r_shadowBlur->integer || r_hdr->integer || r_postProcessActive->integer)
             tr.screenScratchImage = R_CreateImage("screenScratch", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, rgbFormat);
+
+        R_QLPostCreateImages(width, height, r_hdr->integer ? GL_RGBA8 : hdrFormat);
 
         if (r_shadowBlur->integer || r_ssao->integer)
             tr.hdrDepthImage = R_CreateImage("*hdrDepth", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_R32F);
@@ -2758,18 +2771,28 @@ void R_SetColorMappings(void) {
     int inf;
 
     // setup the overbright lighting
+    // [QL] quakelive_steam.exe 0x4475d0: the colour correction gives the overbright in any window;
+    // without it the overbright needs the gamma ramp and full screen, as in Quake 3. The colour bits
+    // cap it, r_mapOverBrightBits doesn't
     tr.overbrightBits = r_overBrightBits->integer;
 
-    // allow 2 overbright bits
-    if (tr.overbrightBits > 2) {
-        tr.overbrightBits = 2;
-    } else if (tr.overbrightBits < 0) {
+    if (!r_colorCorrectActive->integer && (!glConfig.deviceSupportsGamma || !glConfig.isFullscreen)) {
         tr.overbrightBits = 0;
     }
 
-    // don't allow more overbright bits than map overbright bits
-    if (tr.overbrightBits > r_mapOverBrightBits->integer) {
-        tr.overbrightBits = r_mapOverBrightBits->integer;
+    // allow 2 overbright bits in 24 bit, but only 1 in 16 bit
+    if (glConfig.colorBits > 16) {
+        if (tr.overbrightBits > 2) {
+            tr.overbrightBits = 2;
+        }
+    } else {
+        if (tr.overbrightBits > 1) {
+            tr.overbrightBits = 1;
+        }
+    }
+
+    if (tr.overbrightBits < 0) {
+        tr.overbrightBits = 0;
     }
 
     tr.identityLight = 1.0f / (1 << tr.overbrightBits);
@@ -2794,6 +2817,9 @@ void R_SetColorMappings(void) {
             inf = 255 * pow(i / 255.0f, 1.0f / g) + 0.5f;
         }
 
+        // [QL] the ramp gives the overbright when the colour correction doesn't, as in Quake 3
+        inf <<= tr.overbrightBits;
+
         if (inf < 0) {
             inf = 0;
         }
@@ -2811,7 +2837,8 @@ void R_SetColorMappings(void) {
         s_intensitytable[i] = j;
     }
 
-    if (glConfig.deviceSupportsGamma) {
+    // [QL] the colour correction does the gamma itself and leaves the screen's ramp alone
+    if (!r_colorCorrectActive->integer && glConfig.deviceSupportsGamma) {
         GLimp_SetGamma(s_gammatable, s_gammatable, s_gammatable);
     }
 }
