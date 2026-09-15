@@ -2487,7 +2487,7 @@ the handicap from how it is used (x / 100 * g_startingHealth) - the fork's clien
 does not share the binary's layout, so the offset cannot be matched field for field.
 =================
 */
-static void CG_HealthGradientColor(int clientNum, int health, vec3_t out) {
+void CG_HealthGradientColor(int clientNum, int health, vec3_t out) {
     int handicap = 100;
     int maxHealth;
     float f;
