@@ -1603,6 +1603,7 @@ Q3R2OBJ = \
   $(B)/renderergl2/tr_model_iqm.o \
   $(B)/renderergl2/tr_noise.o \
   $(B)/renderergl2/tr_postprocess.o \
+  $(B)/renderergl2/tr_qlpost.o \
   $(B)/renderergl2/tr_scene.o \
   $(B)/renderergl2/tr_shade.o \
   $(B)/renderergl2/tr_shade_calc.o \
@@ -1644,7 +1645,12 @@ Q3R2STRINGOBJ = \
   $(B)/renderergl2/glsl/texturecolor_fp.o \
   $(B)/renderergl2/glsl/texturecolor_vp.o \
   $(B)/renderergl2/glsl/tonemap_fp.o \
-  $(B)/renderergl2/glsl/tonemap_vp.o
+  $(B)/renderergl2/glsl/tonemap_vp.o \
+  $(B)/renderergl2/glsl/qlpost_vp.o \
+  $(B)/renderergl2/glsl/qlcolorcorrect_fp.o \
+  $(B)/renderergl2/glsl/qlbrightpass_fp.o \
+  $(B)/renderergl2/glsl/qlblur_fp.o \
+  $(B)/renderergl2/glsl/qlcombine_fp.o
 
 ifneq ($(USE_RENDERER_DLOPEN), 0)
   Q3R2OBJ += \

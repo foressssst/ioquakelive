@@ -305,6 +305,16 @@ void trap_R_RenderScene(const refdef_t* fd) {
     syscall(CG_R_RENDERSCENE, fd);
 }
 
+// [QL] cgame import +0x1c8
+void trap_R_BeginBloomScene(void) {
+    syscall(CG_R_BEGINBLOOMSCENE);
+}
+
+// [QL] cgame import +0x1cc
+void trap_R_ApplyBloom(void) {
+    syscall(CG_R_APPLYBLOOM);
+}
+
 void trap_R_SetColor(const float* rgba) {
     syscall(CG_R_SETCOLOR, rgba);
 }

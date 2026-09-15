@@ -3920,7 +3920,10 @@ void CG_DrawActive(stereoFrame_t stereoView) {
 		CG_DrawCrosshair3D();
 
 	// draw 3D view
+	// [QL] 0x10011490: between the bloom's two calls, so only the view gets the bloom
+	trap_R_BeginBloomScene();
 	trap_R_RenderScene(&cg.refdef);
+	trap_R_ApplyBloom();
 
 	// draw status bar and other floating elements
 	CG_Draw2D(stereoView);

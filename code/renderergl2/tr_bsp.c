@@ -105,6 +105,12 @@ static void R_ColorShiftLightingBytes(byte in[4], byte out[4]) {
     // shift the color data based on overbright range
     shift = r_mapOverBrightBits->integer - tr.overbrightBits;
 
+    // [QL] retail no longer caps the overbright at r_mapOverBrightBits (0x4475d0), so the shift can
+    // come out negative; its x86 shift then keeps only the low 5 bits of the count, and here it stays 0
+    if (shift < 0) {
+        shift = 0;
+    }
+
     // shift the data based on overbright range
     r = in[0] << shift;
     g = in[1] << shift;
@@ -136,7 +142,8 @@ R_ColorShiftLightingFloats
 */
 static void R_ColorShiftLightingFloats(float in[4], float out[4]) {
     float r, g, b;
-    float scale = (1 << (r_mapOverBrightBits->integer - tr.overbrightBits)) / 255.0f;
+    // [QL] the same floor at 0 as R_ColorShiftLightingBytes
+    float scale = (1 << MAX(r_mapOverBrightBits->integer - tr.overbrightBits, 0)) / 255.0f;
 
     r = in[0] * scale;
     g = in[1] * scale;

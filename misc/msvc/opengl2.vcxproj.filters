@@ -32,6 +32,7 @@
     <ClCompile Include="..\..\code\renderergl2\tr_model.c" />
     <ClCompile Include="..\..\code\renderergl2\tr_model_iqm.c" />
     <ClCompile Include="..\..\code\renderergl2\tr_postprocess.c" />
+    <ClCompile Include="..\..\code\renderergl2\tr_qlpost.c" />
     <ClCompile Include="..\..\code\renderergl2\tr_scene.c" />
     <ClCompile Include="..\..\code\renderergl2\tr_shade.c" />
     <ClCompile Include="..\..\code\renderergl2\tr_shader.c" />
@@ -264,6 +265,21 @@
       <Filter>dynamic</Filter>
     </ClCompile>
     <ClCompile Include="..\..\build\dynamic\renderergl2\tonemap_vp.c">
+      <Filter>dynamic</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\build\dynamic\renderergl2\qlpost_vp.c">
+      <Filter>dynamic</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\build\dynamic\renderergl2\qlcolorcorrect_fp.c">
+      <Filter>dynamic</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\build\dynamic\renderergl2\qlbrightpass_fp.c">
+      <Filter>dynamic</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\build\dynamic\renderergl2\qlblur_fp.c">
+      <Filter>dynamic</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\build\dynamic\renderergl2\qlcombine_fp.c">
       <Filter>dynamic</Filter>
     </ClCompile>
     <ClCompile Include="..\..\code\zlib\adler32.c">

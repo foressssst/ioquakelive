@@ -432,13 +432,12 @@ static void ProjectDlightTexture(void) {
     }
 }
 
+// [QL] quakelive_steam.exe 0x4521f0 (ComputeColors): Quake 3's colours. No stage gets an overbright of
+// its own; the overbright goes on the whole frame at the end, through the colour correction or the
+// gamma ramp, and tr.identityLight brings down what comes from vertices, waves (RB_CalcWaveColorSingle)
+// and identityLighting to match. Additive effects so pile up in the darker frame and come out twice as
+// bright, as in retail.
 static void ComputeShaderColors(shaderStage_t* pStage, vec4_t baseColor, vec4_t vertColor, int blend) {
-    qboolean isBlend = ((blend & GLS_SRCBLEND_BITS) == GLS_SRCBLEND_DST_COLOR) || ((blend & GLS_SRCBLEND_BITS) == GLS_SRCBLEND_ONE_MINUS_DST_COLOR) || ((blend & GLS_DSTBLEND_BITS) == GLS_DSTBLEND_SRC_COLOR) || ((blend & GLS_DSTBLEND_BITS) == GLS_DSTBLEND_ONE_MINUS_SRC_COLOR);
-
-    qboolean is2DDraw = backEnd.currentEntity == &backEnd.entity2D;
-
-    float overbright = (isBlend || is2DDraw) ? 1.0f : (float)(1 << tr.overbrightBits);
-
     fog_t* fog;
 
     baseColor[0] =
@@ -464,8 +463,8 @@ static void ComputeShaderColors(shaderStage_t* pStage, vec4_t baseColor, vec4_t 
 
             vertColor[0] =
                 vertColor[1] =
-                    vertColor[2] = overbright;
-            vertColor[3] = 1.0f;
+                    vertColor[2] =
+                        vertColor[3] = 1.0f;
             break;
         case CGEN_CONST:
             baseColor[0] = pStage->constantColor[0] / 255.0f;
@@ -482,17 +481,17 @@ static void ComputeShaderColors(shaderStage_t* pStage, vec4_t baseColor, vec4_t 
 
             vertColor[0] =
                 vertColor[1] =
-                    vertColor[2] =
-                        vertColor[3] = 1.0f;
+                    vertColor[2] = tr.identityLight;
+            vertColor[3] = 1.0f;
             break;
         case CGEN_ONE_MINUS_VERTEX:
             baseColor[0] =
                 baseColor[1] =
-                    baseColor[2] = 1.0f;
+                    baseColor[2] = tr.identityLight;
 
             vertColor[0] =
                 vertColor[1] =
-                    vertColor[2] = -1.0f;
+                    vertColor[2] = -tr.identityLight;
             break;
         case CGEN_FOG:
             fog = tr.world->fogs + tess.fogNum;
@@ -525,12 +524,12 @@ static void ComputeShaderColors(shaderStage_t* pStage, vec4_t baseColor, vec4_t 
             break;
         case CGEN_IDENTITY:
         case CGEN_LIGHTING_DIFFUSE:
-            baseColor[0] =
-                baseColor[1] =
-                    baseColor[2] = overbright;
             break;
         case CGEN_IDENTITY_LIGHTING:
         case CGEN_BAD:
+            baseColor[0] =
+                baseColor[1] =
+                    baseColor[2] = tr.identityLight;
             break;
     }
 
