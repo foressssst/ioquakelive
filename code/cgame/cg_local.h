@@ -326,6 +326,20 @@ typedef struct {
     int       active;      // 0x7c  slot in use flag
 } floatingEffect_t;
 
+// [QL] a spectator item timer (cgamex86.dll 0x10ab97e4, records of 0x24 bytes), filled by
+// EV_ITEM_PICKUP_SPEC (0x10019d90)
+#define MAX_SPEC_ITEM_TIMERS 10
+
+typedef struct {
+    int    entityNum;  // the item entity; 0 is a free record
+    int    side;       // CTF: 1 or 2 for the base it is nearer to, 3 for an item with no duplicate
+    int    itemIndex;
+    int    time;       // ms until it is back, counted down each frame
+    int    distance;   // CTF: squared distance to that base
+    int    team;       // in a random-respawn team: 1, or 2 once it has respawned
+    vec3_t origin;
+} specItemTimer_t;
+
 //======================================================================
 
 typedef struct {
@@ -916,16 +930,9 @@ typedef struct {
     } poiPics[MAX_POI_PICS];
     int numPoiPics;
 
-    // [QL] spectator item pickup tracking
-    #define MAX_SPEC_PICKUPS 10
-    struct {
-        int      clientNum;
-        int      itemIndex;
-        int      amount;
-        int      time;              // relative time of pickup
-        vec3_t   origin;
-        qboolean active;
-    } specPickups[MAX_SPEC_PICKUPS];
+    // [QL] the spectator item timers (count at 0x10ab994c)
+    specItemTimer_t specItemTimers[MAX_SPEC_ITEM_TIMERS];
+    int numSpecItemTimers;
 
     // [QL] duel scoreboard data
     duelScore_t duelScores[2];
@@ -1458,6 +1465,11 @@ typedef struct {
     qhandle_t flagCarrierHitShader; // [QL] sprites/flagcarrier_hit
     qhandle_t infectedShader;       // [QL] gfx/2d/infected/bite, over Red Rover's survivors
     qhandle_t healthSegmentShader;  // [QL] gfx/2d/health_segment.tga, the bars over teammates
+    qhandle_t cmdUpShader;          // [QL] gfx/2d/race/cmd_up, the arrows of cg_drawInputCmds
+    qhandle_t cmdDownShader;        // [QL] gfx/2d/race/cmd_down
+    qhandle_t cmdRightShader;       // [QL] gfx/2d/race/cmd_right
+    qhandle_t cmdLeftShader;        // [QL] gfx/2d/race/cmd_left
+    qhandle_t voiceWindowShader;    // [QL] ui/assets/voiceWindow, the followed player's frame in the team vitals
 
     // [QL] freeze tag
     qhandle_t iceShardModel;     // models/gibs/sphere.md3
@@ -1881,6 +1893,13 @@ extern vmCvar_t cg_screenDamageAlpha;
 extern vmCvar_t cg_screenDamageAlpha_Team;
 extern vmCvar_t cg_spectating;
 extern vmCvar_t cg_specItemTimers;
+extern vmCvar_t cg_specItemTimersSize;
+extern vmCvar_t cg_specItemTimersX;
+extern vmCvar_t cg_specItemTimersY;
+extern vmCvar_t cg_specTeamVitals;
+extern vmCvar_t cg_specTeamVitalsHealthColor;
+extern vmCvar_t cg_specTeamVitalsWidth;
+extern vmCvar_t cg_specTeamVitalsY;
 extern vmCvar_t cg_specDuelHealthArmor;  // [QL] gates the spectator HUD health/armor bars
 extern vmCvar_t cg_specDuelHealthColor;  // [QL] health-gradient tint for those bars
 extern vmCvar_t cg_speedometer;
@@ -1895,6 +1914,10 @@ extern vmCvar_t cg_drawDeadFriendTime;
 extern vmCvar_t cg_drawHitFriendTime;
 extern vmCvar_t cg_specNames;
 extern vmCvar_t cg_overheadNamesWidth;
+extern vmCvar_t cg_drawInputCmds;
+extern vmCvar_t cg_drawInputCmdsSize;
+extern vmCvar_t cg_drawInputCmdsX;
+extern vmCvar_t cg_drawInputCmdsY;
 extern vmCvar_t cg_weaponBar;
 extern vmCvar_t cg_weaponPrimary;
 extern vmCvar_t cg_drawFullWeaponBar;
@@ -2165,7 +2188,9 @@ const char* CG_PlaceString(int rank);
 void CG_EntityEvent(centity_t* cent, vec3_t position);
 void CG_PainEvent(centity_t* cent, int health);
 // [QL] event-driven helpers
-void CG_ItemPickupSpec(entityState_t* es);   // spectator item-pickup notify
+void CG_SpecItemTimerEvent(entityState_t* es);  // [QL] 0x10019d90, EV_ITEM_PICKUP_SPEC
+void CG_UpdateSpecItemTimers(void);             // [QL] 0x1001ca90, once a frame
+void CG_ResetSpecItemTimers(void);              // [QL] 0x1001c8d0, on map_restart
 void CG_PlayIntermissionSound(void);
 void CG_PlayMatchStateSound(int state);
 
