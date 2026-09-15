@@ -2899,6 +2899,101 @@ static void CG_DrawWarmupTutorial(void) {
 
 /*
 =================
+CG_DrawADRoundResults
+
+[QL] cgamex86.dll 0x10011a90, over the count before an Attack & Defend round (round state 1):
+a dark panel at (200, 150), 240 by 48, with a row per team and a column per round.
+- The attacking team's row, red on turn 0 and blue on turn 1, is tinted, and its cell for the
+  current round stronger. Past the tenth round the columns scroll to keep that one last.
+- "Round", "Red" and "Blue" down the left, the round numbers across the top, each score of a
+  round (red then blue per column, -1 left empty) and each team's total under "Score".
+- With a scorelimit, once a team is a turn's worth of points from it (the larger of the capture
+  and elimination bonuses, plus the touch bonus), a line at y 214: "Match Point" for red on its
+  turn; on blue's, "Red Wins! Good Game" when red has the limit and a lead blue can't close,
+  "Last Chance" when red has it and blue can still draw level, or else "Match Point" for blue.
+=================
+*/
+static void CG_DrawADRoundResults(void) {
+	static const vec4_t panelColor = {0.1f, 0.1f, 0.1f, 0.8f};
+	static const vec4_t redRowColor = {0.5f, 0.0f, 0.0f, 0.5f};
+	static const vec4_t redCellColor = {1.0f, 0.0f, 0.0f, 0.5f};
+	static const vec4_t blueRowColor = {0.0f, 0.25f, 0.5f, 0.5f};
+	static const vec4_t blueCellColor = {0.0f, 0.5f, 1.0f, 0.5f};
+	static const vec4_t labelColor = {1.0f, 1.0f, 0.5f, 1.0f};
+	static const vec4_t blueTextColor = {0.0f, 0.5f, 1.0f, 1.0f};
+	const char* s = NULL;
+	const float* color = colorRed;
+	int round, cell, turnPoints, threshold, red, blue, i, col, w;
+	char text[16];
+
+	round = cg.warmupRound - 1;
+	cell = (round < 9) ? round : 9;
+	turnPoints = (cgs.adCaptureScoreBonus > cgs.adElimScoreBonus ? cgs.adCaptureScoreBonus : cgs.adElimScoreBonus) +
+				 cgs.adtouchScoreBonus;
+	CG_FillRect(200, 150, 240, 48, panelColor);
+	if (cg.warmupTurn == 0) {
+		CG_FillRect(200, 166, 204, 16, redRowColor);
+		CG_FillRect((cell + 15) * 16, 166, 16, 16, redCellColor);
+	} else if (cg.warmupTurn == 1) {
+		CG_FillRect(200, 182, 204, 16, blueRowColor);
+		CG_FillRect((cell + 15) * 16, 182, 16, 16, blueCellColor);
+	}
+
+	red = cg.teamScores[0];
+	blue = cg.teamScores[1];
+	threshold = cgs.scorelimit - turnPoints;
+	if (cgs.scorelimit && (red > blue ? red : blue) >= threshold) {
+		if (cg.warmupTurn == 0) {
+			if (red >= threshold) {
+				s = "Match Point";
+			}
+		} else if (red >= cgs.scorelimit && red - blue > turnPoints) {
+			s = "Red Wins! Good Game";
+		} else if (red >= cgs.scorelimit && red != blue) {
+			s = "Last Chance";
+			color = blueTextColor;
+		} else if (blue >= threshold) {
+			s = "Match Point";
+			color = blueTextColor;
+		}
+		if (s) {
+			w = CG_DrawTextWidth(s, 0.3f, 0, 0);
+			CG_DrawText(320 - w * 0.5f, 214, 0, 0.3f, (float*)color, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+		}
+	}
+
+	CG_DrawText(204, 162, 0, 0.2f, (float*)labelColor, "Round", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+	CG_DrawText(204, 178, 0, 0.25f, colorRed, "Red", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+	CG_DrawText(204, 194, 0, 0.25f, (float*)blueTextColor, "Blue", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+	for (i = 0; i < 20; i++) {
+		col = i / 2;
+		if (i % 2 == 0) {
+			Com_sprintf(text, sizeof(text), "%d", (round > 9) ? col + round - 8 : col + 1);
+			w = CG_DrawTextWidth(text, 0.2f, 0, 0);
+			CG_DrawText((col + 15) * 16 + (16 - w) * 0.5f, 162, 0, 0.2f, (float*)labelColor, text, 0, 0,
+						ITEM_TEXTSTYLE_SHADOWED);
+		}
+		if (cg.adScores[i] > -1) {
+			Com_sprintf(text, sizeof(text), "%d", cg.adScores[i]);
+		} else {
+			text[0] = '\0';
+		}
+		w = CG_DrawTextWidth(text, 0.25f, 0, 0);
+		CG_DrawText(col * 16 + 240 + (16 - w) * 0.5f, i % 2 * 16 + 178, 0, 0.25f, colorWhite, text, 0, 0,
+					ITEM_TEXTSTYLE_SHADOWED);
+	}
+
+	CG_DrawText(407, 162, 0, 0.2f, (float*)labelColor, "Score", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+	Com_sprintf(text, sizeof(text), "%d", red);
+	w = CG_DrawTextWidth(text, 0.25f, 0, 0);
+	CG_DrawText(415 + (16 - w) * 0.5f, 178, 0, 0.25f, colorRed, text, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+	Com_sprintf(text, sizeof(text), "%d", blue);
+	w = CG_DrawTextWidth(text, 0.25f, 0, 0);
+	CG_DrawText(415 + (16 - w) * 0.5f, 194, 0, 0.25f, (float*)blueTextColor, text, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+}
+
+/*
+=================
 CG_DrawWarmupCountdown
 
 [QL] cgamex86.dll 0x1000ec00: the count before a match or a round. A header at y 90
@@ -2914,7 +3009,7 @@ ITEM_TEXTSTYLE_SHADOWEDMORE, and 10 units lower in Race. The header is:
   Begins in", or "Sudden Death" once the time limit has run out into overtime;
 - the gametype's name otherwise.
 Those rounds count bare; everything else says "Starts in: %i".
-NOT PORTED: the A&D round results retail draws with the round state 1 (0x10011a90).
+With round state 1, Attack & Defend puts the round results over it first (CG_DrawADRoundResults).
 =================
 */
 static void CG_DrawWarmupCountdown(int gt) {
@@ -2941,6 +3036,7 @@ static void CG_DrawWarmupCountdown(int gt) {
 	} else if (gt == GT_RR && (cgs.customSettings & 0x4000000) && cg.warmupRound == 0) {
 		header = "Infected";
 	} else if (gt == GT_AD && cg.warmupState == 1) {
+		CG_DrawADRoundResults();
 		team = cgs.clientinfo[cg.clientNum].team;
 		if (team == TEAM_RED) {
 			header = cg.warmupTurn ? "DEFEND THE FLAG" : "ATTACK THE FLAG";
