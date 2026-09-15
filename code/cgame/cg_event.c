@@ -100,7 +100,10 @@ const char* CG_PlaceString(int rank) {
 /*
 =============
 CG_ModToWeaponIcon
-[QL] Map means of death to weapon icon shader for obituary display
+
+[QL] cgamex86.dll 0x10019130: the icon CG_Obituary hands the obituary list and keeps as the
+killer's icon. Weapons map to their weapon icons, the grappling hook included, a thaw to
+icons/thaw (registered from Freeze Tag on), and everything else to icons/icon_frag.
 =============
 */
 static qhandle_t CG_ModToWeaponIcon(int mod) {
@@ -124,6 +127,8 @@ static qhandle_t CG_ModToWeaponIcon(int mod) {
         case MOD_CHAINGUN:                                      return cg_weapons[WP_CHAINGUN].weaponIcon;
         case MOD_PROXIMITY_MINE:                                return cg_weapons[WP_PROX_LAUNCHER].weaponIcon;
         case MOD_HMG:                                           return cg_weapons[WP_HMG].weaponIcon;
+        case MOD_GRAPPLE:                                       return cg_weapons[WP_GRAPPLING_HOOK].weaponIcon;
+        case MOD_THAW:                                          return cgs.media.thawIconShader;
         default:                                                return cgs.media.fragIconShader;
     }
 }
@@ -290,6 +295,12 @@ static void CG_Obituary(entityState_t* ent) {
         CG_Error("CG_Obituary: target out of range");
     }
 
+    // [QL] 0x1001917e: the local player's death clears the scoreboard's "Fragged by" line,
+    // which a killer then sets again below. Retail clears it nowhere else.
+    if (target == cg.clientNum) {
+        cg.killerName[0] = 0;
+    }
+
     // [CPMA] ch_crosshairPulse 3 pulses on an enemy frag
     if (attacker == cg.snap->ps.clientNum && attacker != target &&
         (cgs.gametype < GT_TEAM || cgs.clientinfo[target].team != cg.snap->ps.persistant[PERS_TEAM])) {
@@ -450,6 +461,7 @@ static void CG_Obituary(entityState_t* ent) {
         // check for kill messages about the current clientNum
         if (target == cg.snap->ps.clientNum) {
             Q_strncpyz(cg.killerName, attackerName, sizeof(cg.killerName));
+            cg.killerIcon = weaponIcon;  // [QL] 0x10019824
         }
     }
 

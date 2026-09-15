@@ -1407,12 +1407,14 @@ void CL_KeyDownEvent(int key, unsigned time) {
         if (uivm) {
             VM_Call(uivm, UI_KEY_EVENT, key, qtrue);
         }
+    } else if (Key_GetCatcher() & KEYCATCH_MESSAGE) {
+        // [QL] quakelive_steam.exe 0x4b7eaa: the chat line is served before cgame, so a
+        // message opened over a cgame menu (join menu, end-of-match board) gets its keys
+        Message_Key(key);
     } else if (Key_GetCatcher() & KEYCATCH_CGAME) {
         if (cgvm) {
             VM_Call(cgvm, CG_KEY_EVENT, key, qtrue);
         }
-    } else if (Key_GetCatcher() & KEYCATCH_MESSAGE) {
-        Message_Key(key);
     } else if (clc.state == CA_DISCONNECTED) {
         Console_Key(key);
     }

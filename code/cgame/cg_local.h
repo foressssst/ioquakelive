@@ -753,6 +753,7 @@ typedef struct {
     int      pstatsRequestTime;// [QL] throttle for pstats server requests
     int scoreFadeTime;
     char killerName[MAX_NAME_LENGTH];
+    qhandle_t killerIcon;  // [QL] the killing weapon's icon, drawn after "Fragged by" (0x10aa69b0)
     char spectatorList[MAX_STRING_CHARS];  // list of names
     int spectatorLen;                      // length of list
     float spectatorWidth;                  // width in device units
@@ -1138,6 +1139,7 @@ typedef struct {
 
     // [QL] obituary icons
     qhandle_t fragIconShader;   // "icons/icon_frag" - skull for world/suicide deaths
+    qhandle_t thawIconShader;   // [QL] "icons/thaw", registered from Freeze Tag on (0x100238e8)
 
     qhandle_t numberShaders[11];
 
@@ -2121,7 +2123,8 @@ qboolean CG_ShouldForceTeamSkin(int viewerTeam, int playerTeam);
 void CG_PlayerOutline(centity_t* cent);
 // [QL] full legs+torso+head player model for the spectator/duel model owner-draws in
 // cg_newdraw.c (replaces the head-only CG_DrawHead stand-in).
-void CG_Draw3DPlayerModel(float x, float y, float w, float h, int clientNum, int weapon);
+void CG_Draw3DPlayerModel(int clientNum, int torsoAnim, float x, float y, float w, float h, int weapon,
+                          float animFraction, const vec3_t angles);
 void CG_ResolveBodySkinName(clientInfo_t* ci, qboolean modelForced, qboolean skinForced);
 void CG_ResolveHeadSkinName(clientInfo_t* ci, qboolean modelForced, qboolean skinForced);
 void CG_UpdateAllModelScales(void);  // cross-file: called when the model-scale cvar changes
@@ -2306,6 +2309,7 @@ void CG_DrawTourneyScoreboard(void);
 //
 qboolean CG_ConsoleCommand(void);
 void CG_InitConsoleCommands(void);
+void CG_ScoresDown_f(void);
 void CG_ClearChat(void);
 void CG_AddChat(const char *text, int teamOnly, int extraTime);
 void CG_DrawChat(float x, float y, float w, float h, float scale);
@@ -2537,6 +2541,7 @@ int trap_Key_GetCatcher(void);
 void trap_Key_SetCatcher(int catcher);
 int trap_Key_GetKey(const char* binding);
 void trap_Key_KeynumToStringBuf(int keynum, char* buf, int buflen);
+void trap_Key_GetBindingBuf(int keynum, char* buf, int buflen);
 void trap_S_MuteClient(int clientNum, qboolean mute);
 
 void CG_KeyNameForCommand(const char* command, char* buf, int buflen);

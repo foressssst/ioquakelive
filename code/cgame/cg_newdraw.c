@@ -1481,12 +1481,29 @@ const char* CG_GetKillerText(void) {
     return s;
 }
 
-static void CG_DrawKiller(rectDef_t* rect, float scale, vec4_t color, qhandle_t shader, int textStyle) {
-    // fragged by ... line
-    if (cg.killerName[0]) {
-        int x = rect->x + rect->w / 2;
-        CG_OwnerDrawText(x - (CG_OwnerDrawTextWidth(CG_GetKillerText(), scale, 0) / 2), rect->y, scale, color, CG_GetKillerText(), 0, 0, textStyle);
+/*
+=================
+CG_DrawKiller
+
+[QL] cgamex86.dll 0x10032110, CG_KILLER (0x3f), reached only while cg.killerName is set
+(0x1003b44d). "Fragged by <name>" in font 0, placed by the item's align, with its baseline on
+the rect's bottom edge; then the killing weapon's icon, 16 square, 8 past the end of the text
+and 4 above the rect's top (0x100321e2). The fork centred the text on the rect's top edge with
+no icon, which laid it over the scoreboard's "Teams are tied" line.
+=================
+*/
+static void CG_DrawKiller(rectDef_t* rect, float scale, vec4_t color, int textStyle, int align) {
+    const char* s = CG_GetKillerText();
+    int w = CG_DrawTextWidth(s, scale, 0, 0);
+    float x = rect->x;
+
+    if (align == ITEM_ALIGN_CENTER) {
+        x -= w * 0.5f;
+    } else if (align == ITEM_ALIGN_RIGHT) {
+        x -= w;
     }
+    CG_DrawText(x, rect->y + rect->h, 0, scale, color, s, 0, 0, textStyle);
+    CG_DrawPic(x + w + 8, rect->y - 4, 16, 16, cg.killerIcon);
 }
 
 static void CG_DrawCapFragLimit(rectDef_t* rect, float scale, vec4_t color, qhandle_t shader, int textStyle) {
@@ -3683,29 +3700,39 @@ static void CG_DrawFlagStatusBar(rectDef_t *rect) {
                cgs.media.flagStatusBarRight);
 }
 
-// [QL] CG_DrawPlayerModel / CG_DrawSelectedPlayerModel
-// Addresses: 0x10034980 / 0x10034900.
-// These point at CG_Draw3DPlayerModel (cg_players.c, 0x10008c40) which renders a full
-// legs+torso+head player model auto-framed inside the box, matching the binary.
-static void CG_DrawPlayerModel(rectDef_t *rect) {
-    int clientNum = cg.snap ? cg.snap->ps.clientNum : cg.clientNum;
+/*
+=================
+CG_DrawPlayerModel
 
-    if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
-        return;
-    }
-    CG_Draw3DPlayerModel(rect->x, rect->y, rect->w, rect->h, clientNum, 0);
+[QL] cgamex86.dll 0x10034980, CG_PLAYERMODEL (0x25): the first score's client (as the binary
+reads it) turned to 5 / 210, torso in TORSO_ATTACK, holding the current weapon when loadouts
+are on and the selected one otherwise. No retail menu uses it.
+=================
+*/
+static void CG_DrawPlayerModel(rectDef_t *rect) {
+    static const vec3_t angles = {5.0f, 210.0f, 0.0f};
+    int weapon = cg_loadout.integer ? cg.snap->ps.weapon : cg.weaponSelect;
+
+    CG_Draw3DPlayerModel(cg.scores[0].client, TORSO_ATTACK, rect->x, rect->y, rect->w, rect->h, weapon, 0.0f,
+                         angles);
 }
 
-static void CG_DrawSelectedPlayerModel(rectDef_t *rect) {
-    int clientNum = cg.duelPlayer1;
+/*
+=================
+CG_Draw1stPlacePlayerModel
 
-    if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
-        clientNum = cg.snap ? cg.snap->ps.clientNum : cg.clientNum;
-    }
-    if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
-        return;
-    }
-    CG_Draw3DPlayerModel(rect->x, rect->y, rect->w, rect->h, clientNum, 0);
+[QL] cgamex86.dll 0x10034900, CG_1STPLACE_PLYR_MODEL (0x55), the winner on the end-of-match
+boards: the first score's client, turned to 5 / 160, holding their best weapon in TORSO_ATTACK,
+or in TORSO_ATTACK2 when that is the gauntlet or nothing. The fork drew the first duellist or
+the local player, empty-handed and facing the camera.
+=================
+*/
+static void CG_Draw1stPlacePlayerModel(rectDef_t *rect) {
+    static const vec3_t angles = {5.0f, 160.0f, 0.0f};
+    int weapon = cg.scores[0].bestWeapon;
+
+    CG_Draw3DPlayerModel(cg.scores[0].client, (weapon == WP_NONE || weapon == WP_GAUNTLET) ? TORSO_ATTACK2 : TORSO_ATTACK,
+                         rect->x, rect->y, rect->w, rect->h, weapon, 0.0f, angles);
 }
 
 /*
@@ -4211,7 +4238,9 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             CG_DrawTeamColor(&rect, color);
             break;
         case CG_KILLER:                     // 0x3f
-            CG_DrawKiller(&rect, scale, color, shader, textStyle);
+            if (cg.killerName[0]) {
+                CG_DrawKiller(&rect, scale, color, textStyle, align);
+            }
             break;
         case CG_ACCURACY:                   // 0x40-0x42,0x44-0x47,0x4a  medals
         case CG_ASSISTS:
@@ -4244,8 +4273,8 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_1ST_PLACE_SCORE:            // 0x54  0x10032520
             CG_DrawFirstPlaceScore(&rect, scale, color, textStyle);
             break;
-        case CG_1STPLACE_PLYR_MODEL:        // 0x55  CG_DrawSelectedPlayerModel
-            CG_DrawSelectedPlayerModel(&rect);
+        case CG_1STPLACE_PLYR_MODEL:        // 0x55  CG_Draw1stPlacePlayerModel
+            CG_Draw1stPlacePlayerModel(&rect);
             break;
         case CG_2ND_PLACE_SCORE:            // 0x57  0x100329a0
             CG_DrawSecondPlaceScore(&rect, scale, color, textStyle);
@@ -4583,8 +4612,7 @@ void CG_MouseEvent(int x, int y) {
     // ABSOLUTE pointer position, un-biases it and assigns cursorX/cursorY, so a
     // copy-before-dispatch is always current there. ioquake3's engine sends deltas
     // (cl_input.c CL_MouseEvent), so the fork has to publish the accumulated value
-    // itself. Retail's CG_KeyEvent (0x1003c6f0) does no menu handling at all - in Quake
-    // Live the engine resolves menu clicks, and that engine is not in bin.pk3.
+    // itself.
     cgDC.cursorx = cgs.cursorX;
     cgDC.cursory = cgs.cursorY;
 
@@ -4641,18 +4669,39 @@ void CG_EventHandling(int type) {
 void CG_KeyEvent(int key, qboolean down) {
     menuDef_t* menu;
 
-    // [QL] Deliberate replica of the UI module's _UI_KeyEvent (ui_main.c).
+    // [QL] cgamex86.dll 0x1003c6f0. While a cgame menu holds the keys (the join menu, the
+    // end-of-match scoreboard) the engine runs no key-down binds, so retail forwards the
+    // presses bound to chat, screenshots, voice and the scoreboard itself: "messagemode*"
+    // and "screenshot*" go to the console as bound, "+voice*" as "+voice", and "+scores"
+    // raises the board through CG_ScoresDown_f (0x10006cf0). Without this, nobody could
+    // chat over the end-of-match board. Every other press goes to the focused menu.
+    if (down) {
+        char binding[32];
+
+        trap_Key_GetBindingBuf(key, binding, sizeof(binding));
+        if (!Q_strncmp(binding, "messagemode", 11) || !Q_strncmp(binding, "screenshot", 10)) {
+            trap_SendConsoleCommand(va("%s\n", binding));
+            return;
+        }
+        if (!Q_strncmp(binding, "+voice", 6)) {
+            trap_SendConsoleCommand("+voice\n");
+            return;
+        }
+        if (!Q_strncmp(binding, "+scores", 7)) {
+            cg.showScores = qtrue;
+            CG_ScoresDown_f();
+            return;
+        }
+    }
+
+    // The menu half is a deliberate replica of the UI module's _UI_KeyEvent (ui_main.c),
+    // releases included: ui_shared's Item_HandleKey needs the release to close its capture,
+    // where retail's menu code hands Menu_HandleKey (0x1005cc70) only the presses.
     //
-    // Retail's CG_KeyEvent (cgamex86.dll 0x1003c6f0) is NOT a template for this: it
-    // does no menu handling at all. It looks up the command bound to the key and
-    // forwards it - "messagemode", "screenshot", "screenshotJPEG", "+voice" get sent
-    // to the console, "+scores" sets cg.showScores, everything else is forwarded too.
-    // In Quake Live the ENGINE resolves menu input, and that engine is not in bin.pk3.
-    //
-    // So the reference here is the UI module: a working implementation of menu input
-    // against this same engine, proven by the fact that the Escape menu accepts clicks
-    // while the cgame join menu did not. What cgame had was Quake 3's version with two
-    // additions of ours, and both were wrong:
+    // The reference is the UI module: a working implementation of menu input against this
+    // same engine, proven by the fact that the Escape menu accepts clicks while the cgame
+    // join menu did not. What cgame had was Quake 3's version with two additions of ours,
+    // and both were wrong:
     //
     //   - `if (!down) return;` threw away every key-release event. Item_HandleKey
     //     needs the release to close its capture (Item_StopCapture), so every click
