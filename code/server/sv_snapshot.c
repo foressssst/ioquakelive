@@ -519,7 +519,9 @@ static void SV_BuildClientSnapshot(client_t* client) {
         // the game's export +0x44, G_ObfuscateEnemyInfoInSnapshotCheck (qagamex86.dll 0x10052e40),
         // answers non-zero: the enemies of a viewer in the game. Teammates keep them, and the team
         // overlay reads them there. The guard is the hardcoded MAX_CLIENTS, with no self-check.
-        if (state->number < MAX_CLIENTS && SV_GameSnapshotVisibility(clientNum, state->number)) {
+        // The viewer is the client's own entity's clientNum (+0xb0), not the playerState's, so a
+        // spectator following a player keeps both teams' values.
+        if (state->number < MAX_CLIENTS && SV_GameSnapshotVisibility(clent->s.clientNum, state->number)) {
             state->health = 0;
             state->armor = 0;
             state->location = 0;
