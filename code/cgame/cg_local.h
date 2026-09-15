@@ -136,7 +136,8 @@ typedef struct {
     int lightningFiring;
 
     int railFireTime;
-    vec3_t railgunTrailStart;  // [QL] cent+0x29c: flash-tag muzzle origin captured at rail fire, used as trail start
+    vec3_t railgunImpact;   // [QL] cent+0x29c
+    qboolean railgunFlash;  // [QL] cent+0x2a8; nothing sets it, as in Q3 (see CG_SpawnRailTrail)
 
     // machinegun spinning
     float barrelAngle;
@@ -2186,9 +2187,7 @@ void CG_RailTrail(clientInfo_t* ci, vec3_t start, vec3_t end);
 typedef enum { BRIGHTWEAPON_ON_MAP, BRIGHTWEAPON_OWN_VIEW, BRIGHTWEAPON_CARRIED } brightWeapon_t;
 void CG_BrightWeapon(refEntity_t* ent, int weaponNum, int owner, brightWeapon_t kind);
 void CG_GrappleTrail(centity_t* ent, const weaponInfo_t* wi);
-// [QL] persistent rail-trail spawn (start = pe.railgunTrailStart, end = es->origin2).
-// CG_RailTrailCore, CG_GetRailColorFloat, CG_GetRailColorByte are file-static in cg_weapons.c.
-void CG_SpawnRailTrail(centity_t* cent);
+// CG_RailTrailCore, CG_SpawnRailTrail, CG_GetRailColorFloat, CG_GetRailColorByte are file-static in cg_weapons.c.
 void CG_MissileHitWall_DmgThrough(vec3_t origin, vec3_t dir, int weapon);  // wallbang (EV_MISSILE_MISS_DMGTHROUGH)
 void CG_ShotgunKillEffect(centity_t* cent);  // EV_SHOTGUN_KILL blood-puff burst
 void CG_AddViewWeapon(playerState_t* ps);

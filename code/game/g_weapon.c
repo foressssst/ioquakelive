@@ -328,10 +328,8 @@ int ShotgunPellet(vec3_t start, vec3_t end, gentity_t* ent, int ring) {
             continue;
         }
 
-        // [QL] accumulate damage for plum display
-        if (traceEnt->client && ent->client) {
-            ent->client->damagePlum[traceEnt->s.number] += damage;
-        }
+        // [QL] G_Damage adds the pellet to the damage plum (0x100498ef); the pellet itself does not
+        // (0x1006d140), or a point-blank blast shows twice what it did
         G_Damage(traceEnt, ent, ent, forward, tr.endpos, damage, 0, MOD_SHOTGUN);
         if (LogAccuracyHit(traceEnt, ent)) {
             return damage;

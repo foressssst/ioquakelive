@@ -671,7 +671,7 @@ gitem_t bg_itemlist[] =
             NULL,
             {"models/flags/r_flag.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconf_red1",
+            /* icon */ "gfx/2d/flag_status/red_flag_at_base",  // [QL] cgamex86.dll 0x10067c60
             /* pickup */ "Red Flag",
             0,
             IT_TEAM,
@@ -689,7 +689,7 @@ gitem_t bg_itemlist[] =
             NULL,
             {"models/flags/b_flag.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconf_blu1",
+            /* icon */ "gfx/2d/flag_status/blue_flag_at_base",  // [QL] cgamex86.dll 0x10067ca8
             /* pickup */ "Blue Flag",
             0,
             IT_TEAM,
@@ -860,7 +860,7 @@ gitem_t bg_itemlist[] =
             NULL,
             {"models/flags/n_flag.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconf_neutral1",
+            /* icon */ "gfx/2d/flag_status/flag_at_base",  // [QL] cgamex86.dll 0x10067fc0
             /* pickup */ "Neutral Flag",
             0,
             IT_TEAM,
