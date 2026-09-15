@@ -137,6 +137,9 @@ void CG_DrawInformation(void) {
 
     info = CG_ConfigString(CS_SERVERINFO);
 
+    // [QL] retail reads the custom settings again here, on every call
+    cgs.customSettings = atoi(CG_ConfigString(CS_CUSTOM_SETTINGS));
+
     // register levelshot
     s = Info_ValueForKey(info, "mapname");
     levelshot = trap_R_RegisterShaderNoMip(va("levelshots/%s.tga", s));
@@ -144,6 +147,20 @@ void CG_DrawInformation(void) {
         levelshot = trap_R_RegisterShaderNoMip("menu/art/unknownmap");
     }
     trap_R_SetColor(NULL);
+
+    // [QL] cgamex86.dll 0x1001ce10 (0x1001cf80): with a snapshot and nothing left to load, only
+    // the smoke backdrop over the whole screen and "Awaiting gamestate..." centred at y 178, in
+    // font 0 at 0.3, shadowed
+    if (!cg.infoScreenText[0] && cg.snap) {
+        CG_SetWidescreen(WIDESCREEN_CENTER);
+        trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight,
+                              s1, 0, s2, 1.0f, cgs.media.backscreenSmokeShader);
+        s = "Awaiting gamestate...";
+        w = CG_DrawTextWidth(s, 0.3f, 0, 0);
+        CG_DrawText(320 - w * 0.5f, 178, 0, 0.3f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+        CG_SetWidescreen(WIDESCREEN_STRETCH);
+        return;
+    }
 
     // [QL] draw the levelshot fullscreen with aspect-correct texture coords
     trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight,
