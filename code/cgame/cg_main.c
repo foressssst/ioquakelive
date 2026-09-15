@@ -186,7 +186,6 @@ vmCvar_t cg_gibFloatingOriginOffsetZ;
 vmCvar_t cg_predictItems;
 vmCvar_t cg_deferPlayers;
 vmCvar_t cg_drawTeamOverlay;
-vmCvar_t cg_teamOverlayUserinfo;
 vmCvar_t cg_teamChatsOnly;
 
 vmCvar_t cg_hudFiles;
@@ -500,20 +499,20 @@ typedef struct {
     char* cvarName;
     char* defaultString;
     int cvarFlags;
-    // [QL] cgamex86.dll cvarTable_t is 6 fields (24 bytes): entries whose cvarFlags
-    // carries CVAR_CG_RANGE (0x1000) are registered through the 5-arg range syscall.
-    float minValue;
-    float maxValue;
+    // [QL] cgamex86.dll's entries (0x10076a00, 24 bytes) end with the range as two strings; the
+    // ones whose flags carry CVAR_CG_RANGE are registered with it (0x10020bb0)
+    char* minString;
+    char* maxString;
 } cvarTable_t;
 
 static cvarTable_t cvarTable[] = {
     {&cg_ignore, "cg_ignore", "0", 0},  // used for debugging
-    {&cg_autoswitch, "cg_autoswitch", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},  // [QL] default 0 (was Q3 "1")
-    {&cg_drawGun, "cg_drawGun", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_zoomFov, "cg_zoomfov", "30", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_fov, "cg_fov", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_viewsize, "cg_viewsize", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_shadows, "cg_shadows", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_autoswitch, "cg_autoswitch", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},  // [QL] default 0 (was Q3 "1")
+    {&cg_drawGun, "cg_drawGun", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "3"},
+    {&cg_zoomFov, "cg_zoomfov", "30", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "10", "130"},
+    {&cg_fov, "cg_fov", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "10", "130"},
+    {&cg_viewsize, "cg_viewsize", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "30", "100"},
+    {&cg_shadows, "cg_shadows", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     // [wolfcam] The electrogib tuning set, with wolfcamql's defaults. None of
     // these names appear anywhere in cgamex86.dll - retail hardcodes every one
     // of them - so the whole set is an addition, and leaving it untouched
@@ -545,29 +544,29 @@ static cvarTable_t cvarTable[] = {
     {&cg_gibFloatingRandomness, "cg_gibFloatingRandomness", "75", CVAR_ARCHIVE},
     {&cg_gibFloatingOriginOffset, "cg_gibFloatingOriginOffset", "30", CVAR_ARCHIVE},
     {&cg_gibFloatingOriginOffsetZ, "cg_gibFloatingOriginOffsetZ", "0", CVAR_ARCHIVE},
-    {&cg_draw2D, "cg_draw2D", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawStatus, "cg_drawStatus", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_draw2D, "cg_draw2D", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_drawStatus, "cg_drawStatus", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_drawTimer, "cg_drawTimer", "0", CVAR_ARCHIVE},
-    {&cg_drawFPS, "cg_drawFPS", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawSnapshot, "cg_drawSnapshot", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_draw3dIcons, "cg_draw3dIcons", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawIcons, "cg_drawIcons", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawAmmoWarning, "cg_drawAmmoWarning", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},  // [QL] default 2 (was Q3 "1")
-    {&cg_drawAttacker, "cg_drawAttacker", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawCrosshair, "cg_drawCrosshair", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawRewards, "cg_drawRewards", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_crosshairSize, "cg_crosshairSize", "32", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_crosshairHealth, "cg_crosshairHealth", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},  // [QL] default 0 (was Q3 "1")
-    {&cg_crosshairX, "cg_crosshairX", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_crosshairY, "cg_crosshairY", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_brassTime, "cg_brassTime", "2500", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_simpleItems, "cg_simpleItems", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_addMarks, "cg_marks", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_lagometer, "cg_lagometer", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},  // [QL] default 0 (was Q3 "1")
-    {&cg_railTrailTime, "cg_railTrailTime", "400", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_gun_x, "cg_gunX", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},  // [QL] binary: CVAR_ARCHIVE (player viewmodel offset, not a cheat)
-    {&cg_gun_y, "cg_gunY", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_gun_z, "cg_gunZ", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_drawFPS, "cg_drawFPS", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_drawSnapshot, "cg_drawSnapshot", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
+    {&cg_draw3dIcons, "cg_draw3dIcons", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_drawIcons, "cg_drawIcons", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_drawAmmoWarning, "cg_drawAmmoWarning", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},  // [QL] default 2 (was Q3 "1")
+    {&cg_drawAttacker, "cg_drawAttacker", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_drawCrosshair, "cg_drawCrosshair", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "29"},
+    {&cg_drawRewards, "cg_drawRewards", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_crosshairSize, "cg_crosshairSize", "32", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "320"},
+    {&cg_crosshairHealth, "cg_crosshairHealth", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},  // [QL] default 0 (was Q3 "1")
+    {&cg_crosshairX, "cg_crosshairX", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-320", "320"},
+    {&cg_crosshairY, "cg_crosshairY", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-240", "240"},
+    {&cg_brassTime, "cg_brassTime", "2500", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "10000"},
+    {&cg_simpleItems, "cg_simpleItems", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_addMarks, "cg_marks", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_lagometer, "cg_lagometer", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},  // [QL] default 0 (was Q3 "1")
+    {&cg_railTrailTime, "cg_railTrailTime", "400", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2000"},
+    {&cg_gun_x, "cg_gunX", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-10", "10"},  // [QL] binary: CVAR_ARCHIVE (player viewmodel offset, not a cheat)
+    {&cg_gun_y, "cg_gunY", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-10", "20"},
+    {&cg_gun_z, "cg_gunZ", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-8", "0"},
     {&cg_centertime, "cg_centertime", "3", CVAR_CHEAT},
     {&cg_runpitch, "cg_runpitch", "0.002", CVAR_ARCHIVE},
     {&cg_runroll, "cg_runroll", "0.005", CVAR_ARCHIVE},
@@ -578,8 +577,8 @@ static cvarTable_t cvarTable[] = {
     {&cg_animSpeed, "cg_animspeed", "1", CVAR_CHEAT},
     {&cg_debugAnim, "cg_debuganim", "0", CVAR_CHEAT},
     {&cg_debugEvents, "cg_debugevents", "0", CVAR_CHEAT},
-    {&cg_errorDecay, "cg_errordecay", "100", CVAR_USERSAVE | CVAR_VM_CREATED},
-    {&cg_nopredict, "cg_nopredict", "0", CVAR_VM_CREATED | CVAR_REPLICATE},
+    {&cg_errorDecay, "cg_errordecay", "100", CVAR_USERSAVE | CVAR_VM_CREATED, "0", "100"},
+    {&cg_nopredict, "cg_nopredict", "0", CVAR_VM_CREATED | CVAR_REPLICATE, "0", "1"},
     {&cg_noPlayerAnims, "cg_noplayeranims", "0", CVAR_CHEAT},
     {&cg_showmiss, "cg_showmiss", "0", 0},
     {&cg_footsteps, "cg_footsteps", "1", CVAR_CHEAT},
@@ -589,14 +588,13 @@ static cvarTable_t cvarTable[] = {
     {&cg_thirdPersonRange, "cg_thirdPersonRange", "80", CVAR_CHEAT},  // [QL] default 80 (was Q3 "40")
     {&cg_thirdPersonAngle, "cg_thirdPersonAngle", "0", CVAR_CHEAT},
     {&cg_thirdPerson, "cg_thirdPerson", "0", CVAR_CHEAT},  // [QL] cheat-protected (binary: CVAR_CHEAT)
-    {&cg_teamChatTime, "cg_teamChatTime", "3000", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_teamChatHeight, "cg_teamChatHeight", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_teamChatTime, "cg_teamChatTime", "3000", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "5000"},
+    {&cg_teamChatHeight, "cg_teamChatHeight", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "8"},
     {&cg_predictItems, "cg_predictItems", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_USERINFO | CVAR_ARCHIVE},  // [QL] binary: CVAR_ARCHIVE | CVAR_USERINFO
     {&cg_deferPlayers, "cg_deferPlayers", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},  // [QL] default 1 (was Q3 "0")
-    {&cg_drawTeamOverlay, "cg_drawTeamOverlay", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},  // [QL] default 1 (was Q3 "0")
-    {&cg_teamOverlayUserinfo, "teamoverlay", "0", CVAR_ROM | CVAR_USERINFO},
+    {&cg_drawTeamOverlay, "cg_drawTeamOverlay", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},  // [QL] default 1 (was Q3 "0")
     {&cg_stats, "cg_stats", "0", CVAR_CHEAT},  // [QL] binary: CVAR_CHEAT
-    {&cg_teamChatsOnly, "cg_teamChatsOnly", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_teamChatsOnly, "cg_teamChatsOnly", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     // the following variables are created in other parts of the system,
     // but we also reference them here
     {&cg_paused, "cl_paused", "0", CVAR_ROM},
@@ -615,8 +613,8 @@ static cvarTable_t cvarTable[] = {
     {&cg_cameraOrbitDelay, "cg_cameraOrbitDelay", "50", CVAR_CHEAT},  // [QL] binary: CVAR_CHEAT
     {&cg_timescaleFadeEnd, "cg_timescaleFadeEnd", "1", 0},
     {&cg_timescaleFadeSpeed, "cg_timescaleFadeSpeed", "0", 0},
-    {&cg_timescale, "timescale", "1", CVAR_VM_CREATED},
-    {&cg_scorePlum, "cg_scorePlums", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},  // [QL] default 0 (was Q3 "1")
+    {&cg_timescale, "timescale", "1", CVAR_VM_CREATED, "0.1", "10"},
+    {&cg_scorePlum, "cg_scorePlums", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},  // [QL] default 0 (was Q3 "1")
     {&cg_smoothClients, "cg_smoothClients", "0", CVAR_USERINFO | CVAR_ARCHIVE},
     {&cg_cameraMode, "com_cameraMode", "0", CVAR_CHEAT},
 
@@ -627,65 +625,65 @@ static cvarTable_t cvarTable[] = {
     {&cg_noProjectileTrail, "cg_noProjectileTrail", "0", CVAR_ARCHIVE},
     {&cg_oldRocket, "cg_oldRocket", "1", CVAR_ARCHIVE},
     {&cg_oldPlasma, "cg_oldPlasma", "1", CVAR_ARCHIVE},
-    {&cg_trueLightning, "cg_trueLightning", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},  // [QL] default 1 (was Q3 "0.0")
-    {&cg_lightningStyle, "cg_lightningStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_trueLightning, "cg_trueLightning", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},  // [QL] default 1 (was Q3 "0.0")
+    {&cg_lightningStyle, "cg_lightningStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "5"},
     {&cg_screenDamage, "cg_screenDamage", "0x700000C8", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_kickScale, "cg_kickScale", "0.25", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_kickScale, "cg_kickScale", "0.25", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
 
     // [QL] additional cvars from cgamex86.dll binary (build 1069)
     {&cg_armorTiered, "cg_armorTiered", "0", CVAR_ROM},
-    {&cg_allowTaunt, "cg_allowTaunt", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_announcer, "cg_announcer", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_allowTaunt, "cg_allowTaunt", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_announcer, "cg_announcer", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "3"},
     {&cg_autoHop, "cg_autoHop", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_USERINFO | CVAR_ARCHIVE},  // [QL] binary: CVAR_ARCHIVE | CVAR_USERINFO (server reads via userinfo)
-    {&cg_predictLocalRailshots, "cg_predictLocalRailshots", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},  // [QL] predicted railgun autofire trail
-    {&cg_bob, "cg_bob", "0.25", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_bubbleTrail, "cg_bubbleTrail", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_buzzerSound, "cg_buzzerSound", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_crosshairBrightness, "cg_crosshairBrightness", "1.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_crosshairColor, "cg_crosshairColor", "25", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_crosshairHitColor, "cg_crosshairHitColor", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_crosshairHitStyle, "cg_crosshairHitStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_crosshairHitTime, "cg_crosshairHitTime", "200.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_crosshairPulse, "cg_crosshairPulse", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_predictLocalRailshots, "cg_predictLocalRailshots", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},  // [QL] predicted railgun autofire trail
+    {&cg_bob, "cg_bob", "0.25", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0.0", "1.0"},
+    {&cg_bubbleTrail, "cg_bubbleTrail", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_buzzerSound, "cg_buzzerSound", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_crosshairBrightness, "cg_crosshairBrightness", "1.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0.0", "1.0"},
+    {&cg_crosshairColor, "cg_crosshairColor", "25", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "26"},
+    {&cg_crosshairHitColor, "cg_crosshairHitColor", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "26"},
+    {&cg_crosshairHitStyle, "cg_crosshairHitStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "8"},
+    {&cg_crosshairHitTime, "cg_crosshairHitTime", "200.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0.0", "1000.0"},
+    {&cg_crosshairPulse, "cg_crosshairPulse", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_damagePlum, "cg_damagePlum", "g mg sg gl rl lg rg pg bfg gh cg ng pl hmg", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_damagePlumColorStyle, "cg_damagePlumColorStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_damagePlumColorStyle, "cg_damagePlumColorStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "3"},
     {&cg_deadBodyColor, "cg_deadBodyColor", "0x101010FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_deadBodyDarken, "cg_deadBodyDarken", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawCrosshairTeamHealth, "cg_drawCrosshairTeamHealth", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawFragMessages, "cg_drawFragMessages", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawFullWeaponBar, "cg_drawFullWeaponBar", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawItemPickups, "cg_drawItemPickups", "3", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawCheckpointRemaining, "cg_drawCheckpointRemaining", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawSpecMessages, "cg_drawSpecMessages", "1", CVAR_USERSAVE | CVAR_VM_CREATED},
-    {&cg_drawPregameMessages, "cg_drawPregameMessages", "1", CVAR_USERSAVE | CVAR_VM_CREATED},
-    {&cg_drawTieredArmorAvailability, "cg_drawTieredArmorAvailability", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_deadBodyDarken, "cg_deadBodyDarken", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_drawCrosshairTeamHealth, "cg_drawCrosshairTeamHealth", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
+    {&cg_drawFragMessages, "cg_drawFragMessages", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_drawFullWeaponBar, "cg_drawFullWeaponBar", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_drawItemPickups, "cg_drawItemPickups", "3", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "7"},
+    {&cg_drawCheckpointRemaining, "cg_drawCheckpointRemaining", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_drawSpecMessages, "cg_drawSpecMessages", "1", CVAR_USERSAVE | CVAR_VM_CREATED, "0", "1"},
+    {&cg_drawPregameMessages, "cg_drawPregameMessages", "1", CVAR_USERSAVE | CVAR_VM_CREATED, "0", "1"},
+    {&cg_drawTieredArmorAvailability, "cg_drawTieredArmorAvailability", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_enemyHeadColor, "cg_enemyHeadColor", "0x2a8000FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_enemyLowerColor, "cg_enemyLowerColor", "0x2a8000FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_enemyUpperColor, "cg_enemyUpperColor", "0x2a8000FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_flagStyle, "cg_flagStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_flagStyle, "cg_flagStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "2"},
     {&cg_forceEnemyModel, "cg_forceEnemyModel", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_forceTeamModel, "cg_forceTeamModel", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_hitBeep, "cg_hitBeep", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_impactSparks, "cg_impactSparks", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_impactSparksLifetime, "cg_impactSparksLifetime", "250", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_impactSparksSize, "cg_impactSparksSize", "8", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_impactSparksVelocity, "cg_impactSparksVelocity", "128", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_itemFx, "cg_itemFx", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_itemTimers, "cg_itemTimers", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_killBeep, "cg_killBeep", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_levelTimerDirection, "cg_levelTimerDirection", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_lightningImpact, "cg_lightningImpact", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_rocketTrailRadius, "cg_rocketTrailRadius", "64", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_grenadeTrailRadius, "cg_grenadeTrailRadius", "32", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_nailTrailRadius, "cg_nailTrailRadius", "16", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_railReloadTime, "cg_railReloadTime", "1500", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_lowAmmoWarningPercentile, "cg_lowAmmoWarningPercentile", "0.20", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_lowAmmoWarningSound, "cg_lowAmmoWarningSound", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_muzzleFlash, "cg_muzzleFlash", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_obituaryRowSize, "cg_obituaryRowSize", "5", CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_playerLean, "cg_playerLean", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_ARCHIVE},
-    {&cg_plasmaStyle, "cg_plasmaStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_railStyle, "cg_railStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_hitBeep, "cg_hitBeep", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "3"},
+    {&cg_impactSparks, "cg_impactSparks", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_impactSparksLifetime, "cg_impactSparksLifetime", "250", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1000"},
+    {&cg_impactSparksSize, "cg_impactSparksSize", "8", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "2", "16"},
+    {&cg_impactSparksVelocity, "cg_impactSparksVelocity", "128", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-128", "128"},
+    {&cg_itemFx, "cg_itemFx", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "7"},
+    {&cg_itemTimers, "cg_itemTimers", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_killBeep, "cg_killBeep", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "8"},
+    {&cg_levelTimerDirection, "cg_levelTimerDirection", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_lightningImpact, "cg_lightningImpact", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_rocketTrailRadius, "cg_rocketTrailRadius", "64", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_grenadeTrailRadius, "cg_grenadeTrailRadius", "32", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_nailTrailRadius, "cg_nailTrailRadius", "16", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_railReloadTime, "cg_railReloadTime", "1500", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_lowAmmoWarningPercentile, "cg_lowAmmoWarningPercentile", "0.20", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0.01", "1.00"},
+    {&cg_lowAmmoWarningSound, "cg_lowAmmoWarningSound", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
+    {&cg_muzzleFlash, "cg_muzzleFlash", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_obituaryRowSize, "cg_obituaryRowSize", "5", CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "5"},
+    {&cg_playerLean, "cg_playerLean", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_ARCHIVE, "0", "1"},
+    {&cg_plasmaStyle, "cg_plasmaStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "2"},
+    {&cg_railStyle, "cg_railStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "2"},
     // [CPMA] 1.53 animations with CPMA's defaults, except ch_animateScroll, on at the user's request
     {&ch_animateRewardIcons, "ch_animateRewardIcons", "1", CVAR_ARCHIVE},
     {&cg_animateChatBalloon, "cg_animateChatBalloon", "1", CVAR_ARCHIVE},
@@ -696,50 +694,50 @@ static cvarTable_t cvarTable[] = {
     // lying on the map, 16 anybody's while you spectate with the free camera
     {&cg_drawBrightWeapons, "cg_drawBrightWeapons", "0", CVAR_ARCHIVE},
     {&ch_chatLines, "ch_chatLines", "3", CVAR_ARCHIVE},
-    {&cg_rocketStyle, "cg_rocketStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_raceBeep, "cg_raceBeep", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_rocketStyle, "cg_rocketStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "2"},
+    {&cg_raceBeep, "cg_raceBeep", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "8"},
     {&cg_screenDamage_Self, "cg_screenDamage_Self", "0x00000000", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_screenDamage_Team, "cg_screenDamage_Team", "0x700000C8", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_simpleItemsBob, "cg_simpleItemsBob", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_simpleItemsHeightOffset, "cg_simpleItemsHeightOffset", "8", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_simpleItemsRadius, "cg_simpleItemsRadius", "15", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_speedometer, "cg_speedometer", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_switchOnEmpty, "cg_switchOnEmpty", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_switchToEmpty, "cg_switchToEmpty", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_simpleItemsBob, "cg_simpleItemsBob", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
+    {&cg_simpleItemsHeightOffset, "cg_simpleItemsHeightOffset", "8", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "18"},
+    {&cg_simpleItemsRadius, "cg_simpleItemsRadius", "15", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "8", "24"},
+    {&cg_speedometer, "cg_speedometer", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "4"},
+    {&cg_switchOnEmpty, "cg_switchOnEmpty", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_switchToEmpty, "cg_switchToEmpty", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_teamHeadColor, "cg_teamHeadColor", "0x808080FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_teamLowerColor, "cg_teamLowerColor", "0x808080FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_teamUpperColor, "cg_teamUpperColor", "0x808080FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_thirdPersonPitch, "cg_thirdPersonPitch", "-1", CVAR_CHEAT},
-    {&cg_trueShotgun, "cg_trueShotgun", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_vignette, "cg_vignette", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_waterWarp, "cg_waterWarp", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_weaponBar, "cg_weaponBar", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_zoomOutOnDeath, "cg_zoomOutOnDeath", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_zoomScaling, "cg_zoomScaling", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_zoomSensitivity, "cg_zoomSensitivity", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_zoomToggle, "cg_zoomToggle", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawInputCmds, "cg_drawInputCmds", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawTeamOverlayOpacity, "cg_drawTeamOverlayOpacity", "0.75", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawTeamOverlaySize, "cg_drawTeamOverlaySize", "0.16", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawTeamOverlayX, "cg_drawTeamOverlayX", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawTeamOverlayY, "cg_drawTeamOverlayY", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_impactMarkTime, "cg_impactMarkTime", "10000", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_chatbeep, "cg_chatbeep", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_teamChatBeep, "cg_teamChatBeep", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_trueShotgun, "cg_trueShotgun", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_vignette, "cg_vignette", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_waterWarp, "cg_waterWarp", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_weaponBar, "cg_weaponBar", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "4"},
+    {&cg_zoomOutOnDeath, "cg_zoomOutOnDeath", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_zoomScaling, "cg_zoomScaling", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_zoomSensitivity, "cg_zoomSensitivity", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "10"},
+    {&cg_zoomToggle, "cg_zoomToggle", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_drawInputCmds, "cg_drawInputCmds", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
+    {&cg_drawTeamOverlayOpacity, "cg_drawTeamOverlayOpacity", "0.75", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_drawTeamOverlaySize, "cg_drawTeamOverlaySize", "0.16", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0.12", "0.22"},
+    {&cg_drawTeamOverlayX, "cg_drawTeamOverlayX", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-640", "640"},
+    {&cg_drawTeamOverlayY, "cg_drawTeamOverlayY", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-480", "480"},
+    {&cg_impactMarkTime, "cg_impactMarkTime", "10000", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "10000"},
+    {&cg_chatbeep, "cg_chatbeep", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_teamChatBeep, "cg_teamChatBeep", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_gametype, "cg_gametype", "0", CVAR_ROM},
     {&cg_svFps, "sv_fps", "40", CVAR_ROM},
-    {&cg_comMaxfps, "com_maxfps", "125", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_comMaxfps, "com_maxfps", "125", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "30", "250"},
 
     // [QL] announcer cvars
-    {&cg_announcerLastStandingVO, "cg_announcerLastStandingVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_announcerLeadsVO, "cg_announcerLeadsVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_announcerRewardsVO, "cg_announcerRewardsVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_announcerTiesVO, "cg_announcerTiesVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_announcerLastStandingVO, "cg_announcerLastStandingVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_announcerLeadsVO, "cg_announcerLeadsVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_announcerRewardsVO, "cg_announcerRewardsVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_announcerTiesVO, "cg_announcerTiesVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
 
     // [QL] sound cvars
     {&s_ambient, "s_ambient", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_LATCH | CVAR_ARCHIVE},
-    {&s_announcerVolume, "s_announcerVolume", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&s_killBeepVolume, "s_killBeepVolume", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&s_announcerVolume, "s_announcerVolume", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
+    {&s_killBeepVolume, "s_killBeepVolume", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "4"},
 
     // [QL] weapon config cvars
     {&cg_weaponConfig, "cg_weaponConfig", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
@@ -761,81 +759,81 @@ static cvarTable_t cvarTable[] = {
     {&cg_weaponPrimary, "cg_weaponPrimary", "", CVAR_ROM},
 
     // [QL] spectator/demo cvars
-    {&cg_drawDemoHUD, "cg_drawDemoHUD", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_followKiller, "cg_followKiller", "0", CVAR_VM_CREATED},
-    {&cg_followPowerup, "cg_followPowerup", "0", CVAR_VM_CREATED},
-    {&cg_specDuelHealthArmor, "cg_specDuelHealthArmor", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_specDuelHealthColor, "cg_specDuelHealthColor", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_specFov, "cg_specFov", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_specItemTimers, "cg_specItemTimers", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_specItemTimersSize, "cg_specItemTimersSize", "0.24", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_specItemTimersX, "cg_specItemTimersX", "10", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_specItemTimersY, "cg_specItemTimersY", "200", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_specNames, "cg_specNames", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_specTeamVitals, "cg_specTeamVitals", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_specTeamVitalsHealthColor, "cg_specTeamVitalsHealthColor", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_specTeamVitalsWidth, "cg_specTeamVitalsWidth", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_specTeamVitalsY, "cg_specTeamVitalsY", "85", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_drawDemoHUD, "cg_drawDemoHUD", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_followKiller, "cg_followKiller", "0", CVAR_VM_CREATED, "0", "1"},
+    {&cg_followPowerup, "cg_followPowerup", "0", CVAR_VM_CREATED, "0", "2"},
+    {&cg_specDuelHealthArmor, "cg_specDuelHealthArmor", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_specDuelHealthColor, "cg_specDuelHealthColor", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_specFov, "cg_specFov", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_specItemTimers, "cg_specItemTimers", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "15"},
+    {&cg_specItemTimersSize, "cg_specItemTimersSize", "0.24", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0.12", "0.35"},
+    {&cg_specItemTimersX, "cg_specItemTimersX", "10", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "640"},
+    {&cg_specItemTimersY, "cg_specItemTimersY", "200", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "480"},
+    {&cg_specNames, "cg_specNames", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
+    {&cg_specTeamVitals, "cg_specTeamVitals", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
+    {&cg_specTeamVitalsHealthColor, "cg_specTeamVitalsHealthColor", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_specTeamVitalsWidth, "cg_specTeamVitalsWidth", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "60", "120"},
+    {&cg_specTeamVitalsY, "cg_specTeamVitalsY", "85", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "480"},
 
     // [QL] HUD/UI cvars
-    {&cg_chatHistoryLength, "cg_chatHistoryLength", "6", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_complaintWarning, "cg_complaintWarning", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawCrosshairTeamHealthSize, "cg_drawCrosshairTeamHealthSize", "0.12", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawInputCmdsSize, "cg_drawInputCmdsSize", "24", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawInputCmdsX, "cg_drawInputCmdsX", "320", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawInputCmdsY, "cg_drawInputCmdsY", "240", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawSprites, "cg_drawSprites", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawSpriteSelf, "cg_drawSpriteSelf", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_enemyCrosshairNames, "cg_enemyCrosshairNames", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_enemyCrosshairNamesOpacity, "cg_enemyCrosshairNamesOpacity", "0.75", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_lowAmmoWeaponBarWarning, "cg_lowAmmoWeaponBarWarning", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_selfOnTeamOverlay, "cg_selfOnTeamOverlay", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_teammateCrosshairNames, "cg_teammateCrosshairNames", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_teammateCrosshairNamesOpacity, "cg_teammateCrosshairNamesOpacity", "0.75", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_teammateNames, "cg_teammateNames", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_useItemMessage, "cg_useItemMessage", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_useItemWarning, "cg_useItemWarning", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_voiceChatIndicator, "cg_voiceChatIndicator", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_chatHistoryLength, "cg_chatHistoryLength", "6", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "24"},
+    {&cg_complaintWarning, "cg_complaintWarning", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_drawCrosshairTeamHealthSize, "cg_drawCrosshairTeamHealthSize", "0.12", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0.10", "0.26"},
+    {&cg_drawInputCmdsSize, "cg_drawInputCmdsSize", "24", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "16", "200"},
+    {&cg_drawInputCmdsX, "cg_drawInputCmdsX", "320", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "640"},
+    {&cg_drawInputCmdsY, "cg_drawInputCmdsY", "240", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "480"},
+    {&cg_drawSprites, "cg_drawSprites", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_drawSpriteSelf, "cg_drawSpriteSelf", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_enemyCrosshairNames, "cg_enemyCrosshairNames", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_enemyCrosshairNamesOpacity, "cg_enemyCrosshairNamesOpacity", "0.75", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_lowAmmoWeaponBarWarning, "cg_lowAmmoWeaponBarWarning", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
+    {&cg_selfOnTeamOverlay, "cg_selfOnTeamOverlay", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_teammateCrosshairNames, "cg_teammateCrosshairNames", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_teammateCrosshairNamesOpacity, "cg_teammateCrosshairNamesOpacity", "0.75", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_teammateNames, "cg_teammateNames", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
+    {&cg_useItemMessage, "cg_useItemMessage", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
+    {&cg_useItemWarning, "cg_useItemWarning", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
+    {&cg_voiceChatIndicator, "cg_voiceChatIndicator", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
 
     // [QL] POI cvars
-    {&cg_flagPOIs, "cg_flagPOIs", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_poiMaxWidth, "cg_poiMaxWidth", "32.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_poiMinWidth, "cg_poiMinWidth", "16.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_powerupPOIs, "cg_powerupPOIs", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_teammatePOIs, "cg_teammatePOIs", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_teammatePOIsMaxWidth, "cg_teammatePOIsMaxWidth", "24.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_teammatePOIsMinWidth, "cg_teammatePOIsMinWidth", "4.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_flagPOIs, "cg_flagPOIs", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_poiMaxWidth, "cg_poiMaxWidth", "32.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "16.0", "32.0"},
+    {&cg_poiMinWidth, "cg_poiMinWidth", "16.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "2.0", "16.0"},
+    {&cg_powerupPOIs, "cg_powerupPOIs", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
+    {&cg_teammatePOIs, "cg_teammatePOIs", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_teammatePOIsMaxWidth, "cg_teammatePOIsMaxWidth", "24.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "16.0", "32.0"},
+    {&cg_teammatePOIsMinWidth, "cg_teammatePOIsMinWidth", "4.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "2.0", "16.0"},
 
     // [QL] smoke/particle cvars
-    {&cg_smoke_SG, "cg_smoke_SG", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_smokeRadius_dust, "cg_smokeRadius_dust", "24", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_smokeRadius_flight, "cg_smokeRadius_flight", "8", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_smokeRadius_GL, "cg_smokeRadius_GL", "64", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_smokeRadius_haste, "cg_smokeRadius_haste", "8", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_smokeRadius_NG, "cg_smokeRadius_NG", "16", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_smokeRadius_RL, "cg_smokeRadius_RL", "32", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_smoke_SG, "cg_smoke_SG", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_smokeRadius_dust, "cg_smokeRadius_dust", "24", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "32"},
+    {&cg_smokeRadius_flight, "cg_smokeRadius_flight", "8", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "16"},
+    {&cg_smokeRadius_GL, "cg_smokeRadius_GL", "64", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "64"},
+    {&cg_smokeRadius_haste, "cg_smokeRadius_haste", "8", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "16"},
+    {&cg_smokeRadius_NG, "cg_smokeRadius_NG", "16", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "16"},
+    {&cg_smokeRadius_RL, "cg_smokeRadius_RL", "32", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "32"},
 
     // [QL] visual/rendering cvars
-    {&cg_blood, "cg_blood", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawDeadFriendTime, "cg_drawDeadFriendTime", "3000.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_drawHitFriendTime, "cg_drawHitFriendTime", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_blood, "cg_blood", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_drawDeadFriendTime, "cg_drawDeadFriendTime", "3000.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0.0", "5000.0"},
+    {&cg_drawHitFriendTime, "cg_drawHitFriendTime", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "5000"},
     {&cg_forceBlueTeamModel, "cg_forceBlueTeamModel", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_forceDrawCrosshair, "cg_forceDrawCrosshair", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_forceDrawCrosshair, "cg_forceDrawCrosshair", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_forceEnemySkin, "cg_forceEnemySkin", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_forceEnemyWeaponColor, "cg_forceEnemyWeaponColor", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_forceEnemyWeaponColor, "cg_forceEnemyWeaponColor", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_forceRedTeamModel, "cg_forceRedTeamModel", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_forceTeamSkin, "cg_forceTeamSkin", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_forceTeamWeaponColor, "cg_forceTeamWeaponColor", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_lightningImpactCap, "cg_lightningImpactCap", "192", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_forceTeamWeaponColor, "cg_forceTeamWeaponColor", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_lightningImpactCap, "cg_lightningImpactCap", "192", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "768"},
     {&cg_screenDamageAlpha, "cg_screenDamageAlpha", "200", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_screenDamageAlpha_Team, "cg_screenDamageAlpha_Team", "200", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_scalePlayerModelsToBB, "cg_scalePlayerModelsToBB", "1", CVAR_CHEAT},  // [QL] binary: CVAR_CHEAT
 
     // [QL] gameplay cvars
-    {&cg_autoAction, "cg_autoAction", "3", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_USERINFO | CVAR_ARCHIVE},  // [QL] binary: CVAR_ARCHIVE | CVAR_USERINFO
-    {&cg_autoProjectileNudge, "cg_autoProjectileNudge", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_autoAction, "cg_autoAction", "3", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_USERINFO | CVAR_ARCHIVE, "0", "3"},  // [QL] binary: CVAR_ARCHIVE | CVAR_USERINFO
+    {&cg_autoProjectileNudge, "cg_autoProjectileNudge", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_latchedHookOffset, "cg_latchedHookOffset", "1.0", CVAR_ROM},
-    {&cg_overheadNamesWidth, "cg_overheadNamesWidth", "75", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_overheadNamesWidth, "cg_overheadNamesWidth", "75", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "50", "100"},
     {&cg_preferredStartingWeapons, "cg_preferredStartingWeapons", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_predictLocalRailshots, "cg_predictLocalRailshots", "1", 0},
     {&cg_projectileNudge, "cg_projectileNudge", "0", CVAR_CHEAT},  // [QL] binary: CVAR_CHEAT
@@ -881,7 +879,7 @@ static cvarTable_t cvarTable[] = {
 
     // [QL] misc cvars
     {&cg_debugFlags, "cg_debugFlags", "0", CVAR_CHEAT},  // [QL] binary: CVAR_CHEAT
-    {&cg_drawProfileImages, "cg_drawProfileImages", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_drawProfileImages, "cg_drawProfileImages", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_ignoreMouseInput, "cg_ignoreMouseInput", "0", CVAR_ROM},
     {&cg_lastmsg, "cg_lastmsg", "", 0},
     {&cg_trackPlayer, "cg_trackPlayer", "-1", CVAR_CHEAT},  // [QL] binary: CVAR_CHEAT
@@ -922,11 +920,14 @@ void CG_RegisterCvars(void) {
     char var[MAX_TOKEN_CHARS];
 
     for (i = 0, cv = cvarTable; i < cvarTableSize; i++, cv++) {
-        // [QL] QL registers CVAR_CG_RANGE cvars through a 5-arg range-register syscall
-        // that the ioquake3 engine does not provide; fall back to standard
-        // registration (no cvarTable entry currently sets CVAR_CG_RANGE).
-        trap_Cvar_Register(cv->vmCvar, cv->cvarName,
-                           cv->defaultString, cv->cvarFlags & ~CVAR_CG_RANGE);
+        // [QL] 0x10020bb0: an entry flagged CVAR_CG_RANGE goes through the range import (+0x14),
+        // which keeps the value between the entry's two strings
+        if (cv->cvarFlags & CVAR_CG_RANGE) {
+            trap_Cvar_RegisterRange(cv->vmCvar, cv->cvarName, cv->defaultString,
+                                    cv->minString, cv->maxString, cv->cvarFlags);
+        } else {
+            trap_Cvar_Register(cv->vmCvar, cv->cvarName, cv->defaultString, cv->cvarFlags);
+        }
     }
 
     // [QL] ROM build-version cvar reported by cgamex86.dll build 1069.
@@ -957,18 +958,8 @@ void CG_UpdateCvars(void) {
     }
 
     // check for modications here
-
-    // If team overlay is on, ask for updates from the server.  If it's off,
-    // let the server know so we don't receive it
-    if (drawTeamOverlayModificationCount != cg_drawTeamOverlay.modificationCount) {
-        drawTeamOverlayModificationCount = cg_drawTeamOverlay.modificationCount;
-
-        if (cg_drawTeamOverlay.integer > 0) {
-            trap_Cvar_Set("teamoverlay", "1");
-        } else {
-            trap_Cvar_Set("teamoverlay", "0");
-        }
-    }
+    // [QL] no "teamoverlay" userinfo: the name is in none of retail's modules, and its server
+    // sends the team list (tinfo) whatever the client draws
 
     // [QL] once loading is over, a change to any of the six forcing cvars reloads the local
     // client, whose CG_NewClientInfo then reloads everybody else (0x10020cc7)

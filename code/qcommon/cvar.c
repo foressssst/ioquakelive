@@ -437,6 +437,8 @@ cvar_t* Cvar_Get(const char* var_name, const char* var_value, int flags) {
     var->resetString = CopyString(var_value);
     var->validate = qfalse;
     var->description = NULL;
+    var->minString = NULL;
+    var->maxString = NULL;
 
     // link the variable in
     var->next = cvar_vars;
@@ -460,6 +462,92 @@ cvar_t* Cvar_Get(const char* var_name, const char* var_value, int flags) {
     var->hashPrev = NULL;
     hashTable[hash] = var;
 
+    return var;
+}
+
+/*
+============
+Cvar_RangeValue
+
+[QL] quakelive_steam.exe 0x4cd0a4: with a range, a value above it gives the maximum's string and
+one below it the minimum's; any other value, or a cvar without a range, is kept as it is
+============
+*/
+static const char* Cvar_RangeValue(const cvar_t* var, const char* value) {
+    float f;
+
+    if (!var->minString) {
+        return value;
+    }
+    f = atof(value);
+    if (f > var->max) {
+        return var->maxString;
+    }
+    if (f < var->min) {
+        return var->minString;
+    }
+    return value;
+}
+
+/*
+============
+Cvar_ClampToRange
+
+[QL] quakelive_steam.exe 0x4cdf0d and 0x4cd1e9: a current value outside the range is replaced by
+the bound's string, with no warning and no modification of its own
+============
+*/
+static void Cvar_ClampToRange(cvar_t* var) {
+    const char* bound;
+
+    if (!var->minString) {
+        return;
+    }
+    if (var->value > var->max) {
+        bound = var->maxString;
+    } else if (var->value < var->min) {
+        bound = var->minString;
+    } else {
+        return;
+    }
+    Z_Free(var->string);
+    var->string = CopyString(bound);
+    Cvar_ComputeNumeric(var);
+}
+
+/*
+============
+Cvar_GetRange
+
+[QL] quakelive_steam.exe 0x4cdd30: Cvar_Get with a range given as two strings. The range replaces
+any earlier one and the value is brought inside it right away; Cvar_Set2 does the same with every
+later value. Nothing is printed for a value out of range.
+============
+*/
+cvar_t* Cvar_GetRange(const char* var_name, const char* var_value, const char* min_value, const char* max_value, int flags) {
+    cvar_t* var;
+
+    if (!min_value || !max_value) {
+        Com_Error(ERR_FATAL, "Cvar_GetRange: NULL parameter");
+    }
+
+    var = Cvar_Get(var_name, var_value, flags);
+    if (!var) {
+        return NULL;
+    }
+
+    if (var->minString) {
+        Z_Free(var->minString);
+    }
+    if (var->maxString) {
+        Z_Free(var->maxString);
+    }
+    var->minString = CopyString(min_value);
+    var->maxString = CopyString(max_value);
+    var->min = atof(min_value);
+    var->max = atof(max_value);
+
+    Cvar_ClampToRange(var);
     return var;
 }
 
@@ -577,7 +665,8 @@ cvar_t* Cvar_Set2(const char* var_name, const char* value, qboolean force) {
             }
 
             Com_Printf("%s will be changed upon restarting.\n", var_name);
-            var->latchedString = CopyString(value);
+            // [QL] 0x4cd0a4: a value outside the range is latched as the bound's string
+            var->latchedString = CopyString(Cvar_RangeValue(var, value));
             var->modified = qtrue;
             var->modificationCount++;
             return var;
@@ -599,6 +688,8 @@ cvar_t* Cvar_Set2(const char* var_name, const char* value, qboolean force) {
 
     var->string = CopyString(value);
     Cvar_ComputeNumeric(var);
+    // [QL] 0x4cd1e9: a value outside the range becomes the bound's string
+    Cvar_ClampToRange(var);
 
     return var;
 }
@@ -1161,6 +1252,10 @@ cvar_t* Cvar_Unset(cvar_t* cv) {
         Z_Free(cv->resetString);
     if (cv->description)
         Z_Free(cv->description);
+    if (cv->minString)
+        Z_Free(cv->minString);
+    if (cv->maxString)
+        Z_Free(cv->maxString);
 
     if (cv->prev)
         cv->prev->next = cv->next;
@@ -1381,15 +1476,19 @@ void Cvar_EnumHelp(helpSearchCallback_t callback, const char* pattern) {
 Cvar_PrintFirstHelpLine
 
 [CNQ3] "name <range> (default: value)". Cvars in this tree have no types, so
-the range is the one set with Cvar_CheckRange, if any.
+the range is the one set with Cvar_CheckRange or given to Cvar_GetRange, if any;
+a range given as two strings counts as integral when neither has a point.
 =====================
 */
 void Cvar_PrintFirstHelpLine(const cvar_t* var, printf_t print) {
+    const qboolean integral = var->minString ? (!strchr(var->minString, '.') && !strchr(var->maxString, '.'))
+                                             : var->integral;
+
     print(S_COLOR_CVAR "%s" S_COLOR_WHITE " <", var->name);
 
-    if (!var->validate) {
+    if (!var->validate && !var->minString) {
         print("value");
-    } else if (var->integral) {
+    } else if (integral) {
         const int minV = (int)var->min;
         const int maxV = (int)var->max;
         const int diff = maxV - minV;
@@ -1472,12 +1571,14 @@ void Cvar_PrintFlags(const cvar_t* var, printf_t print) {
 
 /*
 =====================
-Cvar_Register
+Cvar_RegisterVM
 
-basically a slightly modified Cvar_Get for the interpreted modules
+basically a slightly modified Cvar_Get for the interpreted modules, with Cvar_GetRange when a
+range is given
 =====================
 */
-void Cvar_Register(vmCvar_t* vmCvar, const char* varName, const char* defaultValue, int flags) {
+static void Cvar_RegisterVM(vmCvar_t* vmCvar, const char* varName, const char* defaultValue,
+                            const char* minValue, const char* maxValue, int flags) {
     cvar_t* cv;
 
     // There is code in Cvar_Get to prevent CVAR_ROM cvars being changed by the
@@ -1516,6 +1617,8 @@ void Cvar_Register(vmCvar_t* vmCvar, const char* varName, const char* defaultVal
     if (cv && (cv->flags & CVAR_PROTECTED)) {
         Com_DPrintf(S_COLOR_YELLOW "WARNING: VM tried to register protected cvar '%s' with value '%s'%s\n",
                     varName, defaultValue, (flags & ~cv->flags) != 0 ? " and new flags" : "");
+    } else if (minValue) {
+        cv = Cvar_GetRange(varName, defaultValue, minValue, maxValue, flags | CVAR_VM_CREATED);
     } else {
         cv = Cvar_Get(varName, defaultValue, flags | CVAR_VM_CREATED);
     }
@@ -1526,6 +1629,28 @@ void Cvar_Register(vmCvar_t* vmCvar, const char* varName, const char* defaultVal
     vmCvar->handle = cv - cvar_indexes;
     vmCvar->modificationCount = -1;
     Cvar_Update(vmCvar);
+}
+
+/*
+=====================
+Cvar_Register
+=====================
+*/
+void Cvar_Register(vmCvar_t* vmCvar, const char* varName, const char* defaultValue, int flags) {
+    Cvar_RegisterVM(vmCvar, varName, defaultValue, NULL, NULL, flags);
+}
+
+/*
+=====================
+Cvar_RegisterRange
+
+[QL] quakelive_steam.exe 0x4ce460, cgame import +0x14: Cvar_Register with a range given as two
+strings
+=====================
+*/
+void Cvar_RegisterRange(vmCvar_t* vmCvar, const char* varName, const char* defaultValue,
+                        const char* minValue, const char* maxValue, int flags) {
+    Cvar_RegisterVM(vmCvar, varName, defaultValue, minValue, maxValue, flags);
 }
 
 /*

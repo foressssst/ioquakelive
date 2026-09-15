@@ -1685,7 +1685,8 @@ extern weaponInfo_t cg_weapons[MAX_WEAPONS];
 extern itemInfo_t cg_items[MAX_ITEMS];
 extern markPoly_t cg_markPolys[MAX_MARK_POLYS];
 
-// [QL] cgame-only cvar flag selecting the range-registration path in CG_RegisterCvars.
+// [QL] the cvar table's mark for an entry registered with its range (0x10020bb0). It is the bit
+// the engine calls CVAR_VM_CREATED, which the engine adds to every cvar a module registers.
 #define CVAR_CG_RANGE 0x1000
 
 extern vmCvar_t cg_centertime;
@@ -1711,9 +1712,13 @@ extern vmCvar_t cg_announcerLastStandingVO;
 extern vmCvar_t cg_buzzerSound;
 extern vmCvar_t cg_flagStyle;
 extern vmCvar_t cg_drawTeamOverlay;
+extern vmCvar_t cg_drawTeamOverlayOpacity;
+extern vmCvar_t cg_drawTeamOverlaySize;
+extern vmCvar_t cg_drawTeamOverlayX;
+extern vmCvar_t cg_drawTeamOverlayY;
+extern vmCvar_t cg_selfOnTeamOverlay;
 extern vmCvar_t cg_drawItemPickups;       // [QL] 0x10a65a00: 1 icon, 2 name, 4 game clock
 extern vmCvar_t cg_levelTimerDirection;   // [QL] 0x10a6e6a0
-extern vmCvar_t cg_teamOverlayUserinfo;
 extern vmCvar_t cg_crosshairX;
 extern vmCvar_t cg_crosshairY;
 extern vmCvar_t cg_crosshairSize;
@@ -2050,7 +2055,6 @@ void CG_DrawTopBottom(float x, float y, float w, float h, float size);
 //
 extern int sortedTeamPlayers[TEAM_MAXOVERLAY];
 extern int numSortedTeamPlayers;
-extern int drawTeamOverlayModificationCount;
 extern char systemChat[256];
 extern char teamChat1[256];
 extern char teamChat2[256];
@@ -2380,8 +2384,9 @@ int trap_Milliseconds(void);
 
 // console variable interaction
 void trap_Cvar_Register(vmCvar_t* vmCvar, const char* varName, const char* defaultValue, int flags);
-// [QL] 5-arg range cvar register, used by CG_RegisterCvars when CVAR_CG_RANGE is set.
-void trap_Cvar_Register_Extended(vmCvar_t* vmCvar, const char* varName, const char* defaultValue, float minValue, float maxValue);
+// [QL] cgame import +0x14, used by CG_RegisterCvars for the CVAR_CG_RANGE entries
+void trap_Cvar_RegisterRange(vmCvar_t* vmCvar, const char* varName, const char* defaultValue,
+                             const char* minValue, const char* maxValue, int flags);
 void trap_Cvar_Update(vmCvar_t* vmCvar);
 void trap_Cvar_Set(const char* var_name, const char* value);
 void trap_Cvar_VariableStringBuffer(const char* var_name, char* buffer, int bufsize);

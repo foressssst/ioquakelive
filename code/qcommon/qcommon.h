@@ -468,12 +468,17 @@ modules of the program.
 */
 
 cvar_t* Cvar_Get(const char* var_name, const char* value, int flags);
+// [QL] Cvar_Get with a range given as two strings: a value outside it becomes the bound's string
+cvar_t* Cvar_GetRange(const char* var_name, const char* value, const char* minValue, const char* maxValue, int flags);
 // creates the variable if it doesn't exist, or returns the existing one
 // if it exists, the value will not be changed, but flags will be ORed in
 // that allows variables to be unarchived without needing bitflags
 // if value is "", the value will not override a previously set value.
 
 void Cvar_Register(vmCvar_t* vmCvar, const char* varName, const char* defaultValue, int flags);
+// [QL] Cvar_Register with a range given as two strings (cgame import +0x14)
+void Cvar_RegisterRange(vmCvar_t* vmCvar, const char* varName, const char* defaultValue,
+                        const char* minValue, const char* maxValue, int flags);
 // basically a slightly modified Cvar_Get for the interpreted modules
 
 void Cvar_Update(vmCvar_t* vmCvar);
