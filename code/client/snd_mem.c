@@ -166,9 +166,18 @@ of a forced fallback of a player specific sound
 qboolean S_LoadSound(sfx_t* sfx) {
     byte* data;
     snd_info_t info;
+    char name[MAX_QPATH];
+
+    // [QL] quakelive_steam.exe 0x4dbd10: when the file is missing its name loses the extension and
+    // defaults to .ogg, so "x.wav" loads "x.ogg" and a map's "x.ogg.wav" loads "x.ogg"
+    Q_strncpyz(name, sfx->soundName, sizeof(name));
+    if (FS_ReadFile(name, NULL) < 0) {
+        COM_StripExtension(sfx->soundName, name, sizeof(name));
+        COM_DefaultExtension(name, sizeof(name), ".ogg");
+    }
 
     // load it in
-    data = S_CodecLoad(sfx->soundName, &info);
+    data = S_CodecLoad(name, &info);
     if (!data)
         return qfalse;
 
