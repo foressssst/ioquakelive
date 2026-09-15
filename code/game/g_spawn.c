@@ -713,12 +713,9 @@ void SP_worldspawn(void) {
     if (atoi(s) == 1) {
         trap_Cvar_Set("g_training", "2");
     }
-    // [QL] The binary (0x1006672d) also stores a separate flag from this same
-    // "trainingMap" value: level.isTraining = (strcmp(value, "0") != 0), i.e.
-    // set for ANY non-"0" value (not only "1"; g_training is only forced
-    // when the value is exactly "1"). That global (Ghidra 0x105dea44) has no
-    // field in this tree's level_locals_t; other code approximates it with
-    // g_training.integer. REPORTED: add level.isTraining and set it here.
+    // [QL] any value but "0" marks a training map (0x100666cd, global 0x105dea44), which the
+    // spawn chooser reads; g_training is only forced for exactly "1"
+    level.mapIsTrainingMap = strcmp(s, "0") != 0;
 
     // [QL] "atmosphere" key: the binary (0x1006671e) publishes it to CS 0x2b3
     // (691) - the map's value if present, "" if absent. CS_ATMOSEFFECT now sits
