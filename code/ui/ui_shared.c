@@ -3962,22 +3962,32 @@ void Item_ListBox_Paint(itemDef_t* item) {
         }
     } else {
         // draw scrollbar to right side of the window
+        // [QL] cgamex86 0x1005f1b0 / uix86 0x1001bfb0: a notselectable list (the scoreboards'
+        // player lists) keeps its layout but draws no scrollbar
         x = item->window.rect.x + item->window.rect.w - SCROLLBAR_SIZE - 1;
         y = item->window.rect.y + 1;
-        DC->drawHandlePic(x, y, SCROLLBAR_SIZE, SCROLLBAR_SIZE, DC->Assets.scrollBarArrowUp);
+        if (!listPtr->notselectable) {
+            DC->drawHandlePic(x, y, SCROLLBAR_SIZE, SCROLLBAR_SIZE, DC->Assets.scrollBarArrowUp);
+        }
         y += SCROLLBAR_SIZE - 1;
 
         listPtr->endPos = listPtr->startPos;
         size = item->window.rect.h - (SCROLLBAR_SIZE * 2);
-        DC->drawHandlePic(x, y, SCROLLBAR_SIZE, size + 1, DC->Assets.scrollBar);
+        if (!listPtr->notselectable) {
+            DC->drawHandlePic(x, y, SCROLLBAR_SIZE, size + 1, DC->Assets.scrollBar);
+        }
         y += size - 1;
-        DC->drawHandlePic(x, y, SCROLLBAR_SIZE, SCROLLBAR_SIZE, DC->Assets.scrollBarArrowDown);
+        if (!listPtr->notselectable) {
+            DC->drawHandlePic(x, y, SCROLLBAR_SIZE, SCROLLBAR_SIZE, DC->Assets.scrollBarArrowDown);
+        }
         // thumb
         thumb = Item_ListBox_ThumbDrawPosition(item);  // Item_ListBox_ThumbPosition(item);
         if (thumb > y - SCROLLBAR_SIZE - 1) {
             thumb = y - SCROLLBAR_SIZE - 1;
         }
-        DC->drawHandlePic(x, thumb, SCROLLBAR_SIZE, SCROLLBAR_SIZE, DC->Assets.scrollBarThumb);
+        if (!listPtr->notselectable) {
+            DC->drawHandlePic(x, thumb, SCROLLBAR_SIZE, SCROLLBAR_SIZE, DC->Assets.scrollBarThumb);
+        }
 
         // adjust size for item painting
         size = item->window.rect.h - 2;
@@ -4014,16 +4024,32 @@ void Item_ListBox_Paint(itemDef_t* item) {
                 // always draw at least one
                 // which may overdraw the box if it is too small for the element
 
+                // [QL] the row's band goes down before its text, 6 below the row top and as wide
+                // as the list short of the scrollbar and those 6: the selected row in outlineColor
+                // (or the outline image when the item has one), odd rows in altRowColor
+                if (i == item->cursorPos) {
+                    if (item->window.outlineImage) {
+                        DC->drawHandlePic(x + 2, y + 6, item->window.rect.w - SCROLLBAR_SIZE - 6, listPtr->elementHeight, item->window.outlineImage);
+                    } else {
+                        DC->fillRect(x + 2, y + 6, item->window.rect.w - SCROLLBAR_SIZE - 6, listPtr->elementHeight, item->window.outlineColor);
+                    }
+                } else if (i % 2) {
+                    DC->fillRect(x + 2, y + 6, item->window.rect.w - SCROLLBAR_SIZE - 6, listPtr->elementHeight, item->window.altRowColor);
+                }
+
                 if (listPtr->numColumns > 0) {
                     int j;
                     for (j = 0; j < listPtr->numColumns; j++) {
                         text = DC->feederItemText(item->special, i, j, &optionalImage);
                         if (optionalImage >= 0) {
-                            // [QL] icon vertically centered with slight downward nudge
-                            DC->drawHandlePic(x + listPtr->columnInfo[j].pos, y + 2, listPtr->columnInfo[j].width, listPtr->columnInfo[j].width, optionalImage);
+                            // [QL] 4 in from the column, top 2 above the middle of the row
+                            DC->drawHandlePic(x + 4 + listPtr->columnInfo[j].pos, y - 2 + listPtr->elementHeight * 0.5f, listPtr->columnInfo[j].width, listPtr->columnInfo[j].width, optionalImage);
                         } else if (text) {
-                            // [QL] text baseline: ~80% of row height for vertical centering
-                            DC->drawText(x + listPtr->columnInfo[j].pos, y + listPtr->elementHeight * 4 / 5, item->textscale, item->window.foreColor, text, 0, listPtr->columnInfo[j].maxChars, item->textStyle, item->fontIndex);
+                            // [QL] baseline on the row's bottom, in selectedColor on the selected row and
+                            // elementColor elsewhere (the fork drew every row in foreColor)
+                            DC->drawText(x + 4 + listPtr->columnInfo[j].pos, y + listPtr->elementHeight, item->textscale,
+                                         (i == item->cursorPos) ? item->window.selectedColor : item->window.elementColor,
+                                         text, 0, listPtr->columnInfo[j].maxChars, item->textStyle, item->fontIndex);
                         }
                     }
                 } else {
@@ -4033,10 +4059,6 @@ void Item_ListBox_Paint(itemDef_t* item) {
                     } else if (text) {
                         DC->drawText(x + 4, y + listPtr->elementHeight, item->textscale, item->window.foreColor, text, 0, 0, item->textStyle, item->fontIndex);
                     }
-                }
-
-                if (i == item->cursorPos) {
-                    DC->fillRect(x + 2, y + 2, item->window.rect.w - SCROLLBAR_SIZE - 4, listPtr->elementHeight, item->window.outlineColor);
                 }
 
                 size -= listPtr->elementHeight;
@@ -6573,6 +6595,34 @@ qboolean Menu_Parse(int handle, menuDef_t* menu) {
 
 /*
 ===============
+Menu_SetupAdverts
+
+[QL] cgamex86.dll 0x10058740 (uix86.dll does the same, 0x10015512), run on each menu right after
+Menu_PostParse. An UI_ADVERT item takes as its background whatever the advertisement system gives
+for its cellId, with defaultContent as the fallback (display context slot +0xc8). Advertisements
+are long gone, so the fallback is what retail shows (the scoreboards' QUAKE LIVE plate,
+textures/ad_content/ad2x1.jpg); here it is registered directly. Every other item loses its cellId
+and defaultContent. Retail also refreshes the advert background while painting (0x10058800, slot
++0xcc), which without advertisements gives the same shader.
+===============
+*/
+static void Menu_SetupAdverts(menuDef_t* menu) {
+    int i;
+    itemDef_t* item;
+
+    for (i = 0; i < menu->itemCount; i++) {
+        item = menu->items[i];
+        if (item->window.ownerDraw == UI_ADVERT) {
+            item->window.background = item->defaultContent ? DC->registerShaderNoMip(item->defaultContent) : 0;
+        } else {
+            item->cellId = 0;
+            item->defaultContent = NULL;
+        }
+    }
+}
+
+/*
+===============
 Menu_New
 ===============
 */
@@ -6583,6 +6633,7 @@ void Menu_New(int handle) {
         Menu_Init(menu);
         if (Menu_Parse(handle, menu)) {
             Menu_PostParse(menu);
+            Menu_SetupAdverts(menu);
             menuCount++;
         }
     }

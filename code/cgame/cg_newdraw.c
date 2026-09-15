@@ -1112,8 +1112,9 @@ float CG_GetValue(int ownerDraw) {
     return -1;
 }
 
+// [QL] 0x100316b0: Attack & Defend is tested along with CTF and 1-Flag CTF
 qboolean CG_OtherTeamHasFlag(void) {
-    if (cgs.gametype == GT_CTF || cgs.gametype == GT_1FCTF) {
+    if (cgs.gametype == GT_CTF || cgs.gametype == GT_1FCTF || cgs.gametype == GT_AD) {
         int team = cg.snap->ps.persistant[PERS_TEAM];
         if (cgs.gametype == GT_1FCTF) {
             if (team == TEAM_RED && cgs.flagStatus == FLAG_TAKEN_BLUE) {
@@ -1136,8 +1137,9 @@ qboolean CG_OtherTeamHasFlag(void) {
     return qfalse;
 }
 
+// [QL] 0x10031720: the same three gametypes
 qboolean CG_YourTeamHasFlag(void) {
-    if (cgs.gametype == GT_CTF || cgs.gametype == GT_1FCTF) {
+    if (cgs.gametype == GT_CTF || cgs.gametype == GT_1FCTF || cgs.gametype == GT_AD) {
         int team = cg.snap->ps.persistant[PERS_TEAM];
         if (cgs.gametype == GT_1FCTF) {
             if (team == TEAM_RED && cgs.flagStatus == FLAG_TAKEN_RED) {
@@ -1160,9 +1162,82 @@ qboolean CG_YourTeamHasFlag(void) {
     return qfalse;
 }
 
-// THINKABOUTME: should these be exclusive or inclusive..
-//
+/*
+=================
+CG_PlayerIsFirstPlace
+
+[QL] cgamex86.dll 0x1002a500, behind CG_SHOW_IF_PLYR_IS_FIRST_PLACE and _NOT_FIRST_PLACE.
+A spectator is never first. FFA, Duel, Race and Red Rover want the untied first rank
+(a PERS_RANK carrying RANK_TIED_FLAG is not first); the team gametypes ask whether the
+viewed player's team leads, red keeping the lead on a tie.
+=================
+*/
+static qboolean CG_PlayerIsFirstPlace(void) {
+    const playerState_t* ps;
+
+    if (!cg.snap) {
+        return qfalse;
+    }
+    ps = &cg.snap->ps;
+
+    if (ps->persistant[PERS_TEAM] == TEAM_SPECTATOR) {
+        return qfalse;
+    }
+
+    if (cgs.gametype < GT_TEAM || cgs.gametype == GT_RR) {
+        return (ps->persistant[PERS_RANK] == 0) ? qtrue : qfalse;
+    }
+
+    switch (cgs.clientinfo[ps->clientNum].team) {
+        case TEAM_RED:
+            return (cgs.scores1 >= cgs.scores2) ? qtrue : qfalse;
+        case TEAM_BLUE:
+            return (cgs.scores2 > cgs.scores1) ? qtrue : qfalse;
+        default:
+            return qfalse;
+    }
+}
+
+// [QL] the duel board's per-weapon rows (ownerdrawflag2) and the weaponStats slot each one
+// tests, in scores_duel order (slot 0 is the gauntlet). A row shows when either duelist
+// fired the weapon (0x10031b6b..0x10031cba).
+static const struct {
+    int flag;
+    int slot;
+} cg_duelFiredFlags[] = {
+    {CG_SHOW_IF_MG_FIRED, 1},  {CG_SHOW_IF_SG_FIRED, 2},  {CG_SHOW_IF_GL_FIRED, 3},
+    {CG_SHOW_IF_RL_FIRED, 4},  {CG_SHOW_IF_LG_FIRED, 5},  {CG_SHOW_IF_RG_FIRED, 6},
+    {CG_SHOW_IF_PG_FIRED, 7},  {CG_SHOW_IF_BFG_FIRED, 8}, {CG_SHOW_IF_CG_FIRED, 12},
+    {CG_SHOW_IF_NG_FIRED, 10}, {CG_SHOW_IF_PL_FIRED, 11}, {CG_SHOW_IF_HMG_FIRED, 13},
+};
+
+/*
+=================
+CG_OwnerDrawVisible
+
+[QL] cgamex86.dll 0x10031790, rewritten from the binary. The ownerdrawflag tests run first
+and in this order, and several of them settle the answer on their own, false included,
+instead of falling through. The ownerdrawflag2 tests come last and only ever answer true.
+
+Against the Team Arena version the fork carried:
+  - the flags2 team tests (CG_SHOW_IF_PLYR_IS_ON_RED/BLUE_OR_SPEC and _NO_SPEC) were
+    missing, so the TDM board never showed its PLAYER STATS and pickup panels; so were
+    CG_SHOW_IF_PLYR1/2, the duel "followed" tests and the per-weapon "fired" tests;
+  - CG_SHOW_IF_WARMUP is the warmup before the countdown (cg.warmup < 0) and
+    CG_SHOW_IF_NOT_WARMUP everything else, the countdown included;
+  - CG_SHOW_IF_MSG_PRESENT and CG_SHOW_IF_NOTICE_PRESENT blink on cg.time & 0x200 while
+    the lastmsg recall timers run (CG_Draw2D ends them);
+  - CG_SHOW_PLAYERS_REMAINING covers every round gametype, A&D and Red Rover included;
+  - the first-place tests go through CG_PlayerIsFirstPlace, and
+    CG_SHOW_IF_RED_IS_FIRST_PLACE also holds before any score has arrived;
+  - the 1-Flag CTF flag-carrier tests fall through when they fail.
+=================
+*/
 qboolean CG_OwnerDrawVisible(int flags, int flags2) {
+    const playerState_t* ps;
+    int pmType;
+    int i;
+
     if (flags & CG_SHOW_TEAMINFO) {
         return (cg_currentSelectedPlayer.integer == numSortedTeamPlayers);
     }
@@ -1180,66 +1255,92 @@ qboolean CG_OwnerDrawVisible(int flags, int flags2) {
     }
 
     if (flags & (CG_SHOW_BLUE_TEAM_HAS_REDFLAG | CG_SHOW_RED_TEAM_HAS_BLUEFLAG)) {
-        if (flags & CG_SHOW_BLUE_TEAM_HAS_REDFLAG && (cgs.redflag == FLAG_TAKEN || cgs.flagStatus == FLAG_TAKEN_RED)) {
-            return qtrue;
-        } else if (flags & CG_SHOW_RED_TEAM_HAS_BLUEFLAG && (cgs.blueflag == FLAG_TAKEN || cgs.flagStatus == FLAG_TAKEN_BLUE)) {
-            return qtrue;
-        }
-        return qfalse;
-    }
-
-    if (flags & CG_SHOW_ANYTEAMGAME) {
-        if (cgs.gametype >= GT_TEAM) {
-            return qtrue;
-        }
-    }
-
-    if (flags & CG_SHOW_ANYNONTEAMGAME) {
-        if (cgs.gametype < GT_TEAM) {
-            return qtrue;
-        }
-    }
-
-    if (flags & CG_SHOW_HARVESTER) {
-        if (cgs.gametype == GT_HARVESTER) {
-            return qtrue;
+        if (cgs.gametype == GT_1FCTF) {
+            if ((flags & CG_SHOW_BLUE_TEAM_HAS_REDFLAG) && cgs.flagStatus == FLAG_TAKEN_BLUE) {
+                return qtrue;
+            }
+            if ((flags & CG_SHOW_RED_TEAM_HAS_BLUEFLAG) && cgs.flagStatus == FLAG_TAKEN_RED) {
+                return qtrue;
+            }
         } else {
+            if ((flags & CG_SHOW_BLUE_TEAM_HAS_REDFLAG) &&
+                (cgs.redflag == FLAG_TAKEN || cgs.flagStatus == FLAG_TAKEN_RED)) {
+                return qtrue;
+            }
+            if ((flags & CG_SHOW_RED_TEAM_HAS_BLUEFLAG) &&
+                (cgs.blueflag == FLAG_TAKEN || cgs.flagStatus == FLAG_TAKEN_BLUE)) {
+                return qtrue;
+            }
             return qfalse;
         }
+    }
+
+    if (flags & CG_SHOW_PLAYERS_REMAINING) {
+        if (cgs.gametype == GT_CA || cgs.gametype == GT_FREEZE || cgs.gametype == GT_AD ||
+            cgs.gametype == GT_RR) {
+            return qtrue;
+        }
+    }
+
+    if ((flags & CG_SHOW_DUEL) && cgs.gametype == GT_DUEL) {
+        return qtrue;
+    }
+
+    if (flags & CG_SHOW_CLAN_ARENA) {
+        return (cgs.gametype == GT_CA) ? qtrue : qfalse;
+    }
+
+    if ((flags & CG_SHOW_CTF) && cgs.gametype == GT_CTF) {
+        return qtrue;
     }
 
     if (flags & CG_SHOW_ONEFLAG) {
-        if (cgs.gametype == GT_1FCTF) {
-            return qtrue;
-        } else {
-            return qfalse;
-        }
+        return (cgs.gametype == GT_1FCTF) ? qtrue : qfalse;
     }
 
-    if (flags & CG_SHOW_CTF) {
-        if (cgs.gametype == GT_CTF) {
-            return qtrue;
-        }
+    if (flags & CG_SHOW_HARVESTER) {
+        return (cgs.gametype == GT_HARVESTER) ? qtrue : qfalse;
     }
 
-    if (flags & CG_SHOW_OBELISK) {
-        if (cgs.gametype == GT_OBELISK) {
-            return qtrue;
-        } else {
-            return qfalse;
-        }
+    if (flags & CG_SHOW_DOMINATION) {
+        return (cgs.gametype == GT_DOMINATION) ? qtrue : qfalse;
     }
 
-    if (flags & CG_SHOW_HEALTHCRITICAL) {
-        if (cg.snap->ps.stats[STAT_HEALTH] < 25) {
-            return qtrue;
-        }
+    if ((flags & CG_SHOW_ANYNONTEAMGAME) && cgs.gametype < GT_TEAM) {
+        return qtrue;
     }
 
-    if (flags & CG_SHOW_IF_PLAYER_HAS_FLAG) {
-        if (cg.snap->ps.powerups[PW_REDFLAG] || cg.snap->ps.powerups[PW_BLUEFLAG] || cg.snap->ps.powerups[PW_NEUTRALFLAG]) {
-            return qtrue;
-        }
+    if ((flags & CG_SHOW_ANYTEAMGAME) && cgs.gametype >= GT_TEAM) {
+        return qtrue;
+    }
+
+    ps = cg.snap ? &cg.snap->ps : NULL;
+
+    if ((flags & CG_SHOW_HEALTHCRITICAL) && ps && ps->stats[STAT_HEALTH] < 25) {
+        return qtrue;
+    }
+
+    if ((flags & CG_SHOW_IF_PLAYER_HAS_FLAG) && ps &&
+        (ps->powerups[PW_REDFLAG] || ps->powerups[PW_BLUEFLAG] || ps->powerups[PW_NEUTRALFLAG])) {
+        return qtrue;
+    }
+
+    pmType = cg.predictedPlayerState.pm_type;
+
+    if ((flags & CG_SHOW_INTERMISSION) && pmType == PM_INTERMISSION) {
+        return qtrue;
+    }
+
+    if ((flags & CG_SHOW_NOTINTERMISSION) && pmType != PM_INTERMISSION) {
+        return qtrue;
+    }
+
+    if (flags & CG_SHOW_IF_MSG_PRESENT) {
+        return (cg.lastChatTime && (cg.time & 0x200)) ? qtrue : qfalse;
+    }
+
+    if (flags & CG_SHOW_IF_NOTICE_PRESENT) {
+        return (cg.lastChatTime2 && (cg.time & 0x200)) ? qtrue : qfalse;
     }
 
     if (flags & CG_SHOW_IF_CHAT_VISIBLE) {
@@ -1249,112 +1350,103 @@ qboolean CG_OwnerDrawVisible(int flags, int flags2) {
         return (cg.chatHistoryShowing || cg.scoreBoardShowing) ? qtrue : qfalse;
     }
 
-    // [QL] Message presence indicator (for chat balloon HUD icon)
-    if (flags & CG_SHOW_IF_MSG_PRESENT) {
-        if (cgs.teamChatMsgTimes[0] > 0 && cg.time - cgs.teamChatMsgTimes[0] < 8000) {
-            return qtrue;
-        }
-        return qfalse;
-    }
-
-    if (flags & CG_SHOW_INTERMISSION) {
-        if (cg.snap->ps.pm_type == PM_INTERMISSION) {
-            return qtrue;
-        }
-    }
-
-    if (flags & CG_SHOW_NOTINTERMISSION) {
-        if (cg.snap->ps.pm_type != PM_INTERMISSION) {
-            return qtrue;
-        }
-    }
-
-    if (flags & CG_SHOW_IF_NOT_WARMUP) {
-        if (!cg.warmup) {
-            return qtrue;
-        }
-    }
-
-    if (flags & CG_SHOW_IF_WARMUP) {
-        if (cg.warmup) {
-            return qtrue;
-        }
-    }
-
-    if (flags & CG_SHOW_DUEL) {
-        if (cgs.gametype == GT_DUEL) {
-            return qtrue;
-        }
-    }
-
-    if (flags & CG_SHOW_CLAN_ARENA) {
-        if (cgs.gametype == GT_CA) {
-            return qtrue;
-        }
-    }
-
-    if (flags & CG_SHOW_DOMINATION) {
-        if (cgs.gametype == GT_DOMINATION) {
-            return qtrue;
-        }
-    }
-
-    if (flags & CG_SHOW_IF_BLUE_IS_FIRST_PLACE) {
-        if (cgs.scores2 > cgs.scores1) {
-            return qtrue;
-        }
-    }
-
-    if (flags & CG_SHOW_IF_RED_IS_FIRST_PLACE) {
-        if (cgs.scores1 > cgs.scores2) {
-            return qtrue;
-        }
-    }
-
     if (flags & CG_SHOW_IF_PLYR_IS_FIRST_PLACE) {
-        if (cg.snap && cg.snap->ps.persistant[PERS_RANK] == 0) {
-            return qtrue;
-        }
+        return CG_PlayerIsFirstPlace();
     }
 
     if (flags & CG_SHOW_IF_PLYR_IS_NOT_FIRST_PLACE) {
-        if (cg.snap && cg.snap->ps.persistant[PERS_RANK] != 0) {
+        return CG_PlayerIsFirstPlace() ? qfalse : qtrue;
+    }
+
+    if (flags & CG_SHOW_IF_RED_IS_FIRST_PLACE) {
+        return (cgs.scores1 == SCORE_NOT_PRESENT || cgs.scores1 >= cgs.scores2) ? qtrue : qfalse;
+    }
+
+    if (flags & CG_SHOW_IF_BLUE_IS_FIRST_PLACE) {
+        return (cgs.scores2 != SCORE_NOT_PRESENT && cgs.scores2 > cgs.scores1) ? qtrue : qfalse;
+    }
+
+    if ((flags & CG_SHOW_IF_PLYR_IS_ON_RED) && ps && ps->persistant[PERS_TEAM] == TEAM_RED) {
+        return qtrue;
+    }
+
+    if ((flags & CG_SHOW_IF_PLYR_IS_ON_BLUE) && ps && ps->persistant[PERS_TEAM] == TEAM_BLUE) {
+        return qtrue;
+    }
+
+    if ((flags & CG_SHOW_IF_WARMUP) && cg.warmup < 0) {
+        return qtrue;
+    }
+
+    if ((flags & CG_SHOW_IF_NOT_WARMUP) && cg.warmup >= 0) {
+        return qtrue;
+    }
+
+    // ownerdrawflag2; a spectator sees both duelists and both teams
+    if (ps) {
+        if ((flags2 & CG_SHOW_IF_PLYR1) &&
+            (ps->clientNum == cg.duelScores[0].clientNum || pmType == PM_SPECTATOR)) {
+            return qtrue;
+        }
+
+        if ((flags2 & CG_SHOW_IF_PLYR2) &&
+            (ps->clientNum == cg.duelScores[1].clientNum || pmType == PM_SPECTATOR)) {
+            return qtrue;
+        }
+
+        if ((flags2 & CG_SHOW_IF_PLYR_IS_ON_RED_OR_SPEC) &&
+            (ps->persistant[PERS_TEAM] == TEAM_RED || pmType == PM_SPECTATOR)) {
+            return qtrue;
+        }
+
+        if ((flags2 & CG_SHOW_IF_PLYR_IS_ON_BLUE_OR_SPEC) &&
+            (ps->persistant[PERS_TEAM] == TEAM_BLUE || pmType == PM_SPECTATOR)) {
+            return qtrue;
+        }
+
+        if ((flags2 & CG_SHOW_IF_PLYR_IS_ON_RED_NO_SPEC) &&
+            ps->persistant[PERS_TEAM] == TEAM_RED && pmType != PM_SPECTATOR) {
+            return qtrue;
+        }
+
+        if ((flags2 & CG_SHOW_IF_PLYR_IS_ON_BLUE_NO_SPEC) &&
+            ps->persistant[PERS_TEAM] == TEAM_BLUE && pmType != PM_SPECTATOR) {
             return qtrue;
         }
     }
 
-    if (flags & CG_SHOW_IF_PLYR_IS_ON_RED) {
-        if (cg.snap && cg.snap->ps.persistant[PERS_TEAM] == TEAM_RED) {
+    if ((flags2 & CG_SHOW_IF_LOADOUT_ENABLED) && cg_loadout.integer) {
+        return qtrue;
+    }
+
+    if ((flags2 & CG_SHOW_IF_LOADOUT_DISABLED) && !cg_loadout.integer) {
+        return qtrue;
+    }
+
+    // "followed": the duelist's entity carries the watched client. Retail indexes cg_entities
+    // with the raw clientNum, which is -1 until a duel score arrives; that case is skipped.
+    for (i = 0; i < 2; i++) {
+        int duelist = cg.duelScores[i].clientNum;
+
+        if ((flags2 & (i == 0 ? CG_SHOW_IF_1ST_PLYR_FOLLOWED : CG_SHOW_IF_2ND_PLYR_FOLLOWED)) && ps &&
+            duelist >= 0 && duelist < MAX_CLIENTS &&
+            cg_entities[duelist].currentState.clientNum == ps->clientNum) {
             return qtrue;
         }
     }
 
-    if (flags & CG_SHOW_IF_PLYR_IS_ON_BLUE) {
-        if (cg.snap && cg.snap->ps.persistant[PERS_TEAM] == TEAM_BLUE) {
-            return qtrue;
-        }
+    // the gauntlet has no attempts and is tested on damage instead
+    if ((flags2 & CG_SHOW_IF_G_FIRED) &&
+        (cg.duelScores[0].weaponStats[0].damage || cg.duelScores[1].weaponStats[0].damage)) {
+        return qtrue;
     }
 
-    if (flags & CG_SHOW_PLAYERS_REMAINING) {
-        // For CA/FT - show if players remain (always true during gameplay)
-        if (cgs.gametype == GT_CA || cgs.gametype == GT_FREEZE) {
-            return qtrue;
-        }
-    }
+    for (i = 0; i < (int)ARRAY_LEN(cg_duelFiredFlags); i++) {
+        int slot = cg_duelFiredFlags[i].slot;
 
-    // [QL] ownerDrawFlags2 - used by intro.menu for loadout visibility
-    if (flags2) {
-        if (flags2 & CG_SHOW_IF_LOADOUT_ENABLED) {
-            if (cg_loadout.integer != 0) {
-                return qtrue;
-            }
-            return qfalse;
-        }
-        if (flags2 & CG_SHOW_IF_LOADOUT_DISABLED) {
-            if (cg_loadout.integer == 0) {
-                return qtrue;
-            }
-            return qfalse;
+        if ((flags2 & cg_duelFiredFlags[i].flag) &&
+            (cg.duelScores[0].weaponStats[slot].atts || cg.duelScores[1].weaponStats[slot].atts)) {
+            return qtrue;
         }
     }
 
@@ -1981,21 +2073,36 @@ static void CG_DrawOvertime(rectDef_t *rect, float scale, vec4_t color, int text
     CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] Local time display (12-hour, right-aligned)
-static void CG_DrawLocalTime(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
+/*
+=================
+CG_DrawLocalTime
+
+[QL] cgamex86.dll 0x10033d80, CG_LOCALTIME (0x10). The clock under the scoreboards reads
+"22:22 (Sep 13, 2026)": 24-hour time and the date, day zero-padded, from
+"%02d:%02d (%s %02d, %d)" (0x100708a0) and a table of three-letter month names; the fork
+drew a 12-hour "9:04 pm". It is measured and drawn in the item's font and placed by the
+item's align (0x10033e54), where the fork always right-aligned it.
+=================
+*/
+static void CG_DrawLocalTime(rectDef_t *rect, int fontIndex, float scale, vec4_t color, int textStyle, int align) {
+    static const char* months[12] = {
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    };
     qtime_t ct;
-    int hour12;
     const char *s;
-    int tw;
+    float x;
 
     trap_RealTime(&ct);
-    hour12 = ct.tm_hour % 12;
-    if (hour12 == 0) hour12 = 12;
-    s = va("%d:%02d %s", hour12, ct.tm_min, ct.tm_hour >= 12 ? "pm" : "am");
+    s = va("%02d:%02d (%s %02d, %d)", ct.tm_hour, ct.tm_min, months[ct.tm_mon], ct.tm_mday,
+           ct.tm_year + 1900);
 
-    // Right-align: rect->x is the right edge reference
-    tw = CG_OwnerDrawTextWidth(s, scale, 0);
-    CG_OwnerDrawText(rect->x - tw, rect->y, scale, color, s, 0, 0, textStyle);
+    x = rect->x;
+    if (align == ITEM_ALIGN_CENTER) {
+        x -= CG_DrawTextWidth(s, scale, 0, fontIndex) * 0.5f;
+    } else if (align == ITEM_ALIGN_RIGHT) {
+        x -= CG_DrawTextWidth(s, scale, 0, fontIndex);
+    }
+    CG_DrawText(x, rect->y, fontIndex, scale, color, s, 0, 0, textStyle);
 }
 
 // [QL] Match state: WARMUP / IN PROGRESS / SUMMARY
@@ -2085,15 +2192,44 @@ static void CG_DrawFollowPlayerName(rectDef_t *rect, int ownerDraw, int align, f
     CG_OwnerDrawText(x, rect->y, scale, nameColor, text, 0, 0, textStyle);
 }
 
-// [QL] Team name display
-static void CG_DrawRedName(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
-    CG_OwnerDrawText(rect->x, rect->y, scale, color,
-        cgs.redTeam[0] ? cgs.redTeam : "RED", 0, 0, textStyle);
-}
+/*
+=================
+CG_DrawTeamName
 
-static void CG_DrawBlueName(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
-    CG_OwnerDrawText(rect->x, rect->y, scale, color,
-        cgs.blueTeam[0] ? cgs.blueTeam : "BLUE", 0, 0, textStyle);
+[QL] cgamex86.dll 0x10030090, CG_RED_NAME (0x11d) and CG_BLUE_NAME (0x137).
+
+  - The name is cg_redTeamName / cg_blueTeamName cut to 39 characters, or "Red Team" /
+    "Blue Team" while the cvar is empty. The fork printed cgs.redTeam, read from a
+    g_redTeam serverinfo key retail never looks at, and fell back to "RED" / "BLUE".
+  - The item's align places it: ITEM_ALIGN_CENTER moves x back by half the width and
+    ITEM_ALIGN_RIGHT by all of it. The TDM board right-aligns the red name against its
+    score box (align 2); ignoring that ran "RED" into the box.
+  - Measured and drawn in font 0 whatever the item asks for (0x100301ac, 0x1003020d).
+=================
+*/
+static void CG_DrawTeamName(int ownerDraw, rectDef_t* rect, float scale, vec4_t color, int textStyle, int align) {
+    char name[40];
+    float x;
+
+    if (ownerDraw == CG_RED_NAME) {
+        Q_strncpyz(name, cg_redTeamName.string, sizeof(name));
+        if (!name[0]) {
+            Q_strncpyz(name, "Red Team", sizeof(name));
+        }
+    } else {
+        Q_strncpyz(name, cg_blueTeamName.string, sizeof(name));
+        if (!name[0]) {
+            Q_strncpyz(name, "Blue Team", sizeof(name));
+        }
+    }
+
+    x = rect->x;
+    if (align == ITEM_ALIGN_CENTER) {
+        x -= CG_DrawTextWidth(name, scale, 0, 0) * 0.5f;
+    } else if (align == ITEM_ALIGN_RIGHT) {
+        x -= CG_DrawTextWidth(name, scale, 0, 0);
+    }
+    CG_DrawText(x, rect->y, 0, scale, color, name, 0, 0, textStyle);
 }
 
 // [QL] Team average ping
@@ -3329,7 +3465,7 @@ static void CG_DrawPlayerCount2(rectDef_t *rect, int team, float scale, vec4_t c
         cgs.gametype == GT_1FCTF || cgs.gametype == GT_HARVESTER ||
         cgs.gametype == GT_DOMINATION || cgs.gametype == GT_AD) {
         if (cgs.teamsize < 1) {
-            s = va("%d", count);
+            s = va("(%d)", count);  // [QL] 0x10033479; the bare "%d" here read "PLAYER3"
         } else {
             s = va("(%d/%d)", count, cgs.teamsize);
         }
@@ -3872,7 +4008,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             }
             break;
         case CG_LOCALTIME:                  // 0x10
-            CG_DrawLocalTime(&rect, scale, color, textStyle);
+            CG_DrawLocalTime(&rect, fontIndex, scale, color, textStyle, align);
             break;
         case CG_PLAYER_COUNTS:              // 0x11  CG_DrawPlayerCount
             CG_DrawPlayerCounts(&rect, scale, color, textStyle, align);
@@ -4215,10 +4351,8 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             CG_DrawTeamScore(ownerDraw, &rect, scale, color, textStyle, align);
             break;
         case CG_RED_NAME:                   // 0x11d/0x137  CG_DrawTeamName
-            CG_DrawRedName(&rect, scale, color, textStyle);
-            break;
         case CG_BLUE_NAME:
-            CG_DrawBlueName(&rect, scale, color, textStyle);
+            CG_DrawTeamName(ownerDraw, &rect, scale, color, textStyle, align);
             break;
         case CG_RED_OWNED_FLAGS:            // 0x11e  CG_DrawTeamAliveCount (DOM/AD)
             if (cgs.gametype == GT_DOMINATION || cgs.gametype == GT_AD) {
