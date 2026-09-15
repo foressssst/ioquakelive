@@ -890,6 +890,20 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             re.SetCompositionFont(args[1], VMF(2));
             return 0;
 
+        case UI_FACTORY_COUNT:
+            return SV_NumFactories();
+        case UI_FACTORY_VALUE:
+            return SV_FactoryValue(args[1], VMA(2), VMA(3), args[4]);
+        case UI_FACTORY_CVAR:
+            return SV_FactoryCvar(args[1], args[2], VMA(3), args[4], VMA(5), args[6]);
+        case UI_ARENA_COUNT:
+            return SV_NumArenas();
+        case UI_ARENA_VALUE:
+            return SV_ArenaValue(args[1], VMA(2), VMA(3), args[4]);
+        case UI_CVAR_LATCHEDSTRINGBUFFER:
+            Cvar_LatchedVariableStringBuffer(VMA(1), VMA(2), args[3]);
+            return 0;
+
         case UI_MEMSET:
             Com_Memset(VMA(1), args[2], args[3]);
             return 0;

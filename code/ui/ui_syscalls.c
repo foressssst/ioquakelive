@@ -150,6 +150,30 @@ void trap_IME_SetCompositionFont(int fontIndex, float scale) {
     syscall(UI_IME_SETCOMPOSITIONFONT, fontIndex, PASSFLOAT(scale));
 }
 
+int trap_Factory_Count(void) {
+    return syscall(UI_FACTORY_COUNT);
+}
+
+qboolean trap_Factory_Value(int num, const char* key, char* buf, int size) {
+    return syscall(UI_FACTORY_VALUE, num, key, buf, size);
+}
+
+qboolean trap_Factory_Cvar(int num, int index, char* name, int nameSize, char* value, int valueSize) {
+    return syscall(UI_FACTORY_CVAR, num, index, name, nameSize, value, valueSize);
+}
+
+int trap_Arena_Count(void) {
+    return syscall(UI_ARENA_COUNT);
+}
+
+qboolean trap_Arena_Value(int num, const char* key, char* buf, int size) {
+    return syscall(UI_ARENA_VALUE, num, key, buf, size);
+}
+
+void trap_Cvar_LatchedVariableStringBuffer(const char* var_name, char* buffer, int bufsize) {
+    syscall(UI_CVAR_LATCHEDSTRINGBUFFER, var_name, buffer, bufsize);
+}
+
 qhandle_t trap_R_RegisterShaderNoMip(const char* name) {
     return syscall(UI_R_REGISTERSHADERNOMIP, name);
 }

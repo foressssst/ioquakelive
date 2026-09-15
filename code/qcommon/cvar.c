@@ -180,6 +180,26 @@ void Cvar_VariableStringBuffer(const char* var_name, char* buffer, int bufsize) 
 
 /*
 ============
+Cvar_LatchedVariableStringBuffer
+
+[QL] The value a cvar is going to have: its latched string while a change
+waits for a restart, else its string. Retail's GetConfig gave the web UI its
+cvars this way (quakelive_steam.exe 0x433e10).
+============
+*/
+void Cvar_LatchedVariableStringBuffer(const char* var_name, char* buffer, int bufsize) {
+    cvar_t* var;
+
+    var = Cvar_FindVar(var_name);
+    if (!var) {
+        *buffer = 0;
+    } else {
+        Q_strncpyz(buffer, var->latchedString ? var->latchedString : var->string, bufsize);
+    }
+}
+
+/*
+============
 Cvar_Flags
 ============
 */

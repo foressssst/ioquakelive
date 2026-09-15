@@ -503,6 +503,9 @@ char* Cvar_VariableString(const char* var_name);
 void Cvar_VariableStringBuffer(const char* var_name, char* buffer, int bufsize);
 // returns an empty string if not defined
 
+void Cvar_LatchedVariableStringBuffer(const char* var_name, char* buffer, int bufsize);
+// [QL] the latched string while a change waits for a restart, else the string
+
 int Cvar_Flags(const char* var_name);
 // returns CVAR_NONEXISTENT if cvar doesn't exist or the flags of that particular CVAR.
 
@@ -1038,6 +1041,12 @@ void SV_PacketEvent(netadr_t from, msg_t* msg);
 int SV_FrameMsec(void);
 qboolean SV_GameCommand(void);
 int SV_SendQueuedPackets(void);
+// [QL] the factories and arenas as the UI's Start Match reads them (sv_factories.c)
+int SV_NumFactories(void);
+qboolean SV_FactoryValue(int num, const char* key, char* buf, int size);
+qboolean SV_FactoryCvar(int num, int index, char* name, int nameSize, char* value, int valueSize);
+int SV_NumArenas(void);
+qboolean SV_ArenaValue(int num, const char* key, char* buf, int size);
 
 //
 // UI interface

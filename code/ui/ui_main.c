@@ -2168,6 +2168,9 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
         case UI_ADVERT:
             // [QL] Advertisement display - no-op in standalone build
             break;
+        case UI_STARTMATCH:
+            UI_StartMatch_Paint();
+            break;
         default:
             break;
     }
@@ -2736,6 +2739,8 @@ static qboolean UI_ServerFilter_HandleKey(int flags, float *special, int key) {
 
 static qboolean UI_OwnerDrawHandleKey(int ownerDraw, int flags, float* special, int key) {
     switch (ownerDraw) {
+        case UI_STARTMATCH:
+            return UI_StartMatch_HandleKey(key);
         case UI_HANDICAP:
             return UI_Handicap_HandleKey(flags, special, key);
             break;
@@ -3183,6 +3188,8 @@ static void UI_RunMenuScript(char** args) {
             // [QL] uix86.dll resetDefaults @0x1000b0e0 keeps the intro suppressed
             trap_Cvar_Set("com_introPlayed", "1");
             trap_Cmd_ExecuteText(EXEC_APPEND, "vid_restart\n");
+        } else if (Q_stricmp(name, "startMatchOpen") == 0) {
+            UI_StartMatch_Open();
         } else if (Q_stricmp(name, "loadArenas") == 0) {
             UI_LoadArenasIntoMapList();
             UI_MapCountByGameType(qfalse);

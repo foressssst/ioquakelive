@@ -965,6 +965,21 @@ void trap_R_Font_DrawString(int x, int y, const char* text, int fontIndex, float
 void trap_R_Font_TextExtents(const char* text, int start, int fontIndex, float scale, int limit, float* extents);  // extents[5]
 void trap_R_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t* glyph);
 void trap_IME_SetCompositionFont(int fontIndex, float scale);
+// [QL] the engine's factories and arenas, and latched cvar values, for Start Match
+int trap_Factory_Count(void);
+qboolean trap_Factory_Value(int num, const char* key, char* buf, int size);
+qboolean trap_Factory_Cvar(int num, int index, char* name, int nameSize, char* value, int valueSize);
+int trap_Arena_Count(void);
+qboolean trap_Arena_Value(int num, const char* key, char* buf, int size);
+void trap_Cvar_LatchedVariableStringBuffer(const char* var_name, char* buffer, int bufsize);
+
+// ui_startmatch.c: retail's web Start Match page, drawn by one ownerdraw of the
+// "startmatch" menu (the number is ours: retail's menudef.h has none for it)
+#define UI_STARTMATCH 600
+void UI_StartMatch_Open(void);
+void UI_StartMatch_Paint(void);
+qboolean UI_StartMatch_HandleKey(int key);
+
 void trap_S_StopBackgroundTrack(void);
 void trap_S_StartBackgroundTrack(const char* intro, const char* loop);
 int trap_CIN_PlayCinematic(const char* arg0, int xpos, int ypos, int width, int height, int bits);
