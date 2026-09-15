@@ -2432,61 +2432,56 @@ static void CG_DrawTeammateNames(void) {
 =================
 CG_DrawSpectator
 
-[QL] Rewritten to match binary (cgamex86.dll 0x10034d70).
-- CA/AD eliminated players: "Round In Progress" centered at y=60
-- Pure spectators: "SPECTATOR MODE" + "Press mouse button 1..." header,
-  then left-aligned "waiting to play" (duel) or "press ESC..." (team)
+[QL] cgamex86.dll 0x10034d70, reached only through the CG_SPEC_MESSAGES ownerdraw, which passes
+its item's corner. Nothing without cg_drawSpecMessages.
+- In CA and A&D a player out of the round (on a team, in PM_SPECTATOR) gets "Round In Progress",
+  centred at y 60 in font 0 at 0.35, shadowed.
+- Otherwise, while the playerState carries any eFlags and the scoreboard is down: "SPECTATOR MODE"
+  at the corner in font 0 at 0.22, and 12 lower "Press mouse button 1 to cycle through players"
+  at 0.18 in grey, neither shadowed; the texts are fixed, with no key names.
+- Unless the competitive follow HUD covers them while following (0x10034fbd), shadowed from the
+  left edge at 0.28: "waiting to play" in duel, left out when client 0 is spec-only, or "press
+  ESC and use the JOIN buttons" and "to enter the game" in the team modes.
+While following with a free camera retail also looks up the +moveup key, and never uses it.
 =================
 */
-void CG_DrawSpectator(void) {
-	float scale, w, y;
-	const char* s;
-	vec4_t grayColor = {0.73f, 0.73f, 0.73f, 0.7f};
-	char attackKey[32], menuKey[32];
+void CG_DrawSpectator(float x, float y) {
+	static const vec4_t grayColor = {0.73f, 0.73f, 0.73f, 0.7f};
+	int saved = cg_currentWidescreen;
+	int w;
 
-	// [QL] CA/AD: show "Round In Progress" for eliminated players (on a team but spectating)
-	if ((cgs.gametype == GT_CA || cgs.gametype == GT_AD) &&
-		cg.snap->ps.pm_type == PM_SPECTATOR &&
+	if (!cg_drawSpecMessages.integer) {
+		return;
+	}
+	if ((cgs.gametype == GT_CA || cgs.gametype == GT_AD) && cg.snap->ps.pm_type == PM_SPECTATOR &&
 		cg.snap->ps.persistant[PERS_TEAM] != TEAM_SPECTATOR) {
-		scale = 0.35f;
-		s = "Round In Progress";
 		CG_SetWidescreen(WIDESCREEN_CENTER);
-		w = CG_Text_Width(s, scale, 0);
-		CG_Text_Paint(320 - w / 2, 60, scale, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);  // [QL] 0x10034e9c
+		w = CG_DrawTextWidth("Round In Progress", 0.35f, 0, 0);
+		CG_DrawText(320 - w / 2, 60, 0, 0.35f, colorWhite, "Round In Progress", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+		CG_SetWidescreen(saved);
+		return;
+	}
+	if (!cg.snap->ps.eFlags || cg.scoreBoardShowing) {
 		return;
 	}
 
-	CG_KeyNameForCommand("+attack", attackKey, sizeof(attackKey));
-	CG_KeyNameForCommand("togglemenu", menuKey, sizeof(menuKey));
+	CG_DrawText(x, y, 0, 0.22f, colorWhite, "SPECTATOR MODE", 0, 0, ITEM_TEXTSTYLE_NORMAL);
+	CG_DrawText(x, y + 12, 0, 0.18f, (float*)grayColor, "Press mouse button 1 to cycle through players", 0, 0,
+				ITEM_TEXTSTYLE_NORMAL);
 
-	// "SPECTATOR MODE" header
-	scale = 0.22f;
-	s = "SPECTATOR MODE";
-	w = CG_Text_Width(s, scale, 0);
-	CG_Text_Paint(320 - w / 2, 440, scale, colorWhite, s, 0, 0, 0);
-
-	// "Press <key> to cycle through players"
-	y = 452;
-	s = va("Press %s to cycle through players", attackKey);
-	w = CG_Text_Width(s, 0.18f, 0);
-	CG_Text_Paint(320 - w / 2, y, 0.18f, grayColor, s, 0, 0, 0);
-
-	// Bottom hints - left-aligned, skipped when the competitive follow HUD is covering
-	// this. [QL] 0x10034fbd tests BOTH halves: the cached comp_specfollowhud_menu being
-	// non-NULL *and* PMF_FOLLOW, and only then jumps to the epilogue (0x100350aa). Until
-	// the spectator menus were cached the first half was always false, so the two
-	// conditions were indistinguishable; they are not any more.
-	if (!(menuSpecFollowHud && (cg.snap->ps.pm_flags & PMF_FOLLOW))) {
-		CG_SetWidescreen(WIDESCREEN_LEFT);
-		// [QL] 0x1003505d / 0x1003509c: shadowed
-		if (cgs.gametype == GT_DUEL) {
-			CG_Text_Paint(20, 461, 0.28f, colorWhite, "waiting to play", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
-		} else if (cgs.gametype >= GT_TEAM) {
-			s = va("press %s and use the JOIN buttons", menuKey);
-			CG_Text_Paint(20, 453, 0.28f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
-			CG_Text_Paint(20, 470, 0.28f, colorWhite, "to enter the game", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
-		}
+	if (menuSpecFollowHud && (cg.snap->ps.pm_flags & PMF_FOLLOW)) {
+		return;
 	}
+	CG_SetWidescreen(WIDESCREEN_LEFT);
+	if (cgs.gametype == GT_DUEL) {
+		if (!cgs.clientinfo[0].specOnly) {
+			CG_DrawText(20, 461, 0, 0.28f, colorWhite, "waiting to play", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+		}
+	} else if (cgs.gametype >= GT_TEAM) {
+		CG_DrawText(20, 453, 0, 0.28f, colorWhite, "press ESC and use the JOIN buttons", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+		CG_DrawText(20, 470, 0, 0.28f, colorWhite, "to enter the game", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+	}
+	CG_SetWidescreen(saved);
 }
 
 /*
@@ -3897,6 +3892,7 @@ Perform all drawing needed to completely fill the screen
 void CG_DrawActive(stereoFrame_t stereoView) {
 	// optionally draw the info screen instead
 	if (!cg.snap) {
+		CG_SetWidescreen(WIDESCREEN_STRETCH);  // [QL] 0x100114ab
 		CG_DrawInformation();
 		return;
 	}
