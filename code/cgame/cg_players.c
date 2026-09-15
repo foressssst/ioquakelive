@@ -1950,20 +1950,25 @@ qhandle_t CG_ChatBalloonShader(void) {
 CG_PlayerFloatSprite
 
 // Address: 0x10040cd0
-[QL] Two kinds of head sprite. A teammate's floats in the shared floating-effect pool
-(FE_FLOAT_SPRITE), sized by the teammate POI width cvars (DAT_10a610e8 / DAT_10abb408).
-Everyone else gets Quake 3's RT_SPRITE, radius 10 and 48 units above the origin
-(0x10040f98), kept out of your own first-person view with RF_THIRD_PERSON.
-Not ported: the teammate tint (0x10040d1e-0x10040db5) and Red Rover's distance-faded
-sprite (0x10040e29).
+[QL] A teammate's sprite goes to the shared floating-effect pool (FE_FLOAT_SPRITE), 48 units
+over the player and sized by the teammate marker cvars, so it shows through walls. Its tint
+follows the teammate's health against this client's maximum: red to yellow while hurt, then
+yellow to white up to twice the maximum, and plain yellow while this client is a spectator or
+dead (pm_type & 2). An enemy gets Quake 3's RT_SPRITE, radius 10 and 48 units above the origin
+(0x10040f98). In Red Rover with infection only the infected see a survivor's sprite, in the
+pool, fading out as the survivor's speed reaches CS_INFECTED_SURVIVOR_MINSPEED (0x10040e29).
+Nobody sees their own sprite in first person.
 ===============
 */
 static void CG_PlayerFloatSprite(centity_t* cent, qhandle_t shader, qboolean sameTeam) {
     floatingEffect_t* fx;
     refEntity_t ent;
     qboolean ownHead = (cent->currentState.number == cg.snap->ps.clientNum && !cg.renderingThirdPerson);
+    float alpha = 1.0f;
+    float minSpeed, speed;
+    int health, maxHealth;
 
-    if (!sameTeam) {
+    if (!sameTeam && !(cgs.gametype == GT_RR && (cgs.customSettings & 0x4000000))) {
         memset(&ent, 0, sizeof(ent));
         VectorCopy(cent->lerpOrigin, ent.origin);
         ent.origin[2] += 48;
@@ -1976,7 +1981,19 @@ static void CG_PlayerFloatSprite(centity_t* cent, qhandle_t shader, qboolean sam
         return;
     }
 
-    if (ownHead) {
+    if (!sameTeam) {
+        minSpeed = atof(CG_ConfigString(CS_INFECTED_SURVIVOR_MINSPEED));
+        if (cgs.clientinfo[cg.clientNum].team != TEAM_RED || ownHead) {
+            return;
+        }
+        speed = VectorLength(cent->currentState.pos.trDelta);
+        if (minSpeed > 0.0f) {
+            alpha = (minSpeed - speed) / minSpeed;
+            if (alpha <= 0.0f) {
+                alpha = 0.0f;
+            }
+        }
+    } else if (ownHead) {
         return;
     }
 
@@ -1985,59 +2002,135 @@ static void CG_PlayerFloatSprite(centity_t* cent, qhandle_t shader, qboolean sam
         return;
     }
 
+    fx->color[0] = fx->color[1] = fx->color[2] = 1.0f;
+    fx->color[3] = alpha;
+    if (sameTeam) {
+        if (cg.predictedPlayerState.pm_type & 2) {
+            fx->color[2] = 0.0f;
+        } else {
+            health = cent->currentState.health;
+            maxHealth = cg.snap->ps.stats[STAT_MAX_HEALTH];
+            if (health < maxHealth) {
+                fx->color[1] = (float)health / maxHealth;
+                if (fx->color[1] <= 0.0f) {
+                    fx->color[1] = 0.0f;
+                }
+                fx->color[2] = 0.0f;
+            } else {
+                fx->color[2] = (float)health / (maxHealth + maxHealth);
+                if (fx->color[2] > 1.0f) {
+                    fx->color[2] = 1.0f;
+                }
+            }
+        }
+    }
+
     fx->type = FE_FLOAT_SPRITE;
     fx->owner = cent;
-    fx->clientNum = cent->currentState.clientNum;
-    VectorCopy(cent->lerpOrigin, fx->origin);
-    fx->color[0] = fx->color[1] = fx->color[2] = fx->color[3] = 1.0f;
     fx->shader = shader;
     fx->zOffset = 48.0f;                            // 0x42400000
     fx->worldSize = cg_teammatePOIsMaxWidth.value;  // 0xf  (DAT_10a610e8)
     fx->minPixels = cg_teammatePOIsMinWidth.value;  // 0x11 (DAT_10abb408)
+    VectorCopy(cent->lerpOrigin, fx->origin);
 }
 
 /*
 ===============
 CG_PlayerSprites
 
-[QL] 0x100411a0. Retail calls it only with cg_drawSprites (0x10041cd1), and never for
-your own player unless cg_drawSpriteSelf. The first match wins: connection, the talk
-balloon (skipped on the dead), then the medals. sameTeam picks the sprite kind.
-Not ported, pending their media handles: the one-flag carrier (0x1004122b), flag
-carriers and teammate POIs (0x10041257, 0x10041440), frozen teammates (0x100412b8),
-Red Rover's infected marker (0x1004140a) and its filter on balloons and medals.
+[QL] 0x100411a0. Retail calls it only with cg_drawSprites (0x10041cd1), and never for your own
+player unless cg_drawSpriteSelf. The first match wins:
+- the connection icon;
+- in 1-Flag CTF, a teammate carrying the flag;
+- in the team modes, with cg_teammatePOIs and no cg_teammateNames, a teammate carrying a flag,
+  in its "hit" version for 1.5 s after a pain event;
+- in Freeze Tag, a frozen teammate;
+- the talk balloon, but not on the dead;
+- the medals;
+- in Red Rover with infection, the bite over a survivor, for the infected;
+- in the team modes, with cg_teammatePOIs and no cg_teammateNames, a living teammate's marker,
+  in its "hit" version for cg_drawHitFriendTime after a pain event.
+With infection the infected don't see a survivor's balloon, nor the impressive, excellent and
+gauntlet medals. sameTeam picks the sprite kind.
 ===============
 */
 static void CG_PlayerSprites(centity_t* cent) {
+    int team = cgs.clientinfo[cent->currentState.clientNum].team;
     int flags = cent->currentState.eFlags;
     qboolean sameTeam = qfalse;
+    qboolean hiddenSurvivor;
 
     if (!cg_drawSprites.integer) {
         return;
     }
+    if (cgs.gametype >= GT_TEAM) {
+        sameTeam = cg.snap->ps.persistant[PERS_TEAM] == team;
+    }
     if (!cg_drawSpriteSelf.integer && cent->currentState.clientNum == cg.clientNum) {
         return;
-    }
-    if (cgs.gametype >= GT_TEAM) {
-        sameTeam = cg.snap->ps.persistant[PERS_TEAM] == cgs.clientinfo[cent->currentState.clientNum].team;
     }
 
     if (flags & EF_CONNECTION) {
         CG_PlayerFloatSprite(cent, cgs.media.connectionShader, sameTeam);
-    } else if ((flags & EF_TALK) && !(flags & EF_DEAD)) {
+        return;
+    }
+
+    if (cgs.gametype == GT_1FCTF && (cent->currentState.powerups & (1 << PW_NEUTRALFLAG)) && sameTeam) {
+        CG_PlayerFloatSprite(cent, cgs.media.poiShader, sameTeam);
+        return;
+    }
+    if (cgs.gametype >= GT_TEAM && cg_teammatePOIs.integer && !cg_teammateNames.integer && sameTeam &&
+        (cent->currentState.powerups & ((1 << PW_REDFLAG) | (1 << PW_BLUEFLAG) | (1 << PW_NEUTRALFLAG)))) {
+        CG_PlayerFloatSprite(cent, cg.time - cent->pe.lastPainTime < 1500 ? cgs.media.flagCarrierHitShader
+                                                                        : cgs.media.flagCarrierShader, sameTeam);
+        return;
+    }
+    if (cgs.gametype == GT_FREEZE && sameTeam && (cent->currentState.powerups & (1 << PW_FREEZE))) {
+        CG_PlayerFloatSprite(cent, cgs.media.frozenShader, sameTeam);
+        return;
+    }
+
+    hiddenSurvivor = cgs.gametype == GT_RR && (cgs.customSettings & 0x4000000) && team == TEAM_BLUE && !sameTeam;
+    if ((flags & EF_TALK) && !hiddenSurvivor && !(flags & EF_DEAD)) {
         CG_PlayerFloatSprite(cent, CG_ChatBalloonShader(), sameTeam);
-    } else if (flags & EF_AWARD_IMPRESSIVE) {
+        return;
+    }
+    if ((flags & EF_AWARD_IMPRESSIVE) && !hiddenSurvivor) {
         CG_PlayerFloatSprite(cent, cgs.media.medalImpressive, sameTeam);
-    } else if (flags & EF_AWARD_EXCELLENT) {
+        return;
+    }
+    if ((flags & EF_AWARD_EXCELLENT) && !hiddenSurvivor) {
         CG_PlayerFloatSprite(cent, cgs.media.medalExcellent, sameTeam);
-    } else if (flags & EF_AWARD_GAUNTLET) {
+        return;
+    }
+    if ((flags & EF_AWARD_GAUNTLET) && !hiddenSurvivor) {
         CG_PlayerFloatSprite(cent, cgs.media.medalGauntlet, sameTeam);
-    } else if (flags & EF_AWARD_DEFEND) {
+        return;
+    }
+    if (flags & EF_AWARD_DEFEND) {
         CG_PlayerFloatSprite(cent, cgs.media.medalDefend, sameTeam);
-    } else if (flags & EF_AWARD_ASSIST) {
+        return;
+    }
+    if (flags & EF_AWARD_ASSIST) {
         CG_PlayerFloatSprite(cent, cgs.media.medalAssist, sameTeam);
-    } else if (flags & EF_AWARD_CAP) {
+        return;
+    }
+    if (flags & EF_AWARD_CAP) {
         CG_PlayerFloatSprite(cent, cgs.media.medalCapture, sameTeam);
+        return;
+    }
+
+    if (cgs.gametype == GT_RR && (cgs.customSettings & 0x4000000) && team == TEAM_BLUE &&
+        cgs.clientinfo[cg.clientNum].team == TEAM_RED) {
+        CG_PlayerFloatSprite(cent, cgs.media.infectedShader, sameTeam);
+        return;
+    }
+    if (cgs.gametype < GT_TEAM) {
+        return;
+    }
+    if (cg_teammatePOIs.integer && !cg_teammateNames.integer && sameTeam && !(flags & EF_DEAD)) {
+        CG_PlayerFloatSprite(cent, cg.time - cent->pe.lastPainTime < cg_drawHitFriendTime.integer
+                                       ? cgs.media.friendHitShader : cgs.media.friendShader, sameTeam);
     }
 }
 

@@ -131,6 +131,7 @@ typedef struct {
 
 typedef struct {
     lerpFrame_t legs, torso, flag;
+    int lastPainTime;  // [QL] cent+0x288: every pain event, unthrottled (0x10019ca6)
     int painTime;
     int painDirection;  // flip from 0 to 1
     int lightningFiring;
@@ -305,7 +306,7 @@ typedef struct {
     vec4_t    color;       // 0x14  RGBA; alpha aged by CG_UpdateFloatingEffects
     qhandle_t shader;      // 0x24  billboard pic (0 = none; damage numbers draw text)
     int       clientNum;   // 0x28  FE_SPRITE viewer-cull key
-    int       followNum;   // 0x2c  FE_SPRITE viewer-cull key (followed client)
+    int       followNum;   // 0x2c  FE_SPRITE: the team it belongs to (0x100116c7 hides it from that team)
     int       spawnTime;   // 0x30  cg.time at allocation
     float     lifeRate;    // 0x34  lifetime in ms (default 1.0; damage number 1000.0)
     int       pad_38;      // 0x38  unused
@@ -1450,6 +1451,13 @@ typedef struct {
 
     // [QL] POI markers
     qhandle_t poiShader;        // sprites/neutralflagcarrier
+    qhandle_t friendShader;         // [QL] sprites/friend, a teammate's marker
+    qhandle_t friendHitShader;      // [QL] sprites/friend_hit, one hurt within cg_drawHitFriendTime
+    qhandle_t friendDeadShader;     // [QL] sprites/friend_dead, where a teammate died
+    qhandle_t flagCarrierShader;    // [QL] sprites/flagcarrier
+    qhandle_t flagCarrierHitShader; // [QL] sprites/flagcarrier_hit
+    qhandle_t infectedShader;       // [QL] gfx/2d/infected/bite, over Red Rover's survivors
+    qhandle_t healthSegmentShader;  // [QL] gfx/2d/health_segment.tga, the bars over teammates
 
     // [QL] freeze tag
     qhandle_t iceShardModel;     // models/gibs/sphere.md3
@@ -1479,8 +1487,7 @@ typedef struct {
     qhandle_t iceWhiteModel;      // ice shard model A, global 0x10a5f428 (first/odd shards)
     qhandle_t iceBlueModel;        // ice shard model B, global 0x10a5f42c (alternate shards)
 
-    // [QL] friend marker (CG_PlayerFloatSprite)
-    qhandle_t friendShader;
+    // [QL] friend marker
     qhandle_t friendMarkModel;
 
     // [QL] wallbang / shotgun-kill debris
@@ -1884,6 +1891,10 @@ extern vmCvar_t cg_powerupPOIs;
 extern vmCvar_t cg_teammatePOIs;
 extern vmCvar_t cg_teammatePOIsMaxWidth;
 extern vmCvar_t cg_teammatePOIsMinWidth;
+extern vmCvar_t cg_drawDeadFriendTime;
+extern vmCvar_t cg_drawHitFriendTime;
+extern vmCvar_t cg_specNames;
+extern vmCvar_t cg_overheadNamesWidth;
 extern vmCvar_t cg_weaponBar;
 extern vmCvar_t cg_weaponPrimary;
 extern vmCvar_t cg_drawFullWeaponBar;
@@ -2267,6 +2278,8 @@ void CG_DamagePlum(int damage, int weapon, vec3_t org);  // [QL]
 
 // [QL] shared floating-effect pool (cg_effects.c)
 floatingEffect_t* CG_AllocFloatingEffect(void);  // [QL] binary "CG_AllocMark" @ 0x1002a0d0
+qboolean CG_ProjectFloatingEffect(const vec3_t point, float* x, float* y);  // 640x480, top-left origin
+void CG_HealthGradientColor(int clientNum, int health, vec3_t out);         // [QL] 0x1000ca90
 void CG_UpdateFloatingEffects(void);             // [QL] binary "CG_UpdateConfigStrings" @ 0x1002a190
 void CG_DrawFloatingEffects(void);               // [QL] binary "CG_DrawDamagePlums" @ 0x10011680
 
