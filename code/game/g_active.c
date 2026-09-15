@@ -513,6 +513,8 @@ void ClientTimerActions(gentity_t* ent, int msec) {
         // count down armor when over max
         if (client->ps.stats[STAT_ARMOR] > client->ps.stats[STAT_MAX_HEALTH]) {
             client->ps.stats[STAT_ARMOR]--;
+            // [QL] 0x100346ed: in the entity too, for teammates
+            ent->s.armor = client->ps.stats[STAT_ARMOR];
         }
     }
 
@@ -1414,6 +1416,8 @@ void ClientEndFrame(gentity_t* ent) {
 
     // (EF_CONNECTION is now set earlier, before the pause gate)
 
+    // [QL] 0x1003572f: the health also goes out in the entity, where teammates' overlays read it
+    ent->s.health = ent->health;
     ent->client->ps.stats[STAT_HEALTH] = ent->health;  // FIXME: get rid of ent->health...
 
     G_SetClientSound(ent);

@@ -283,43 +283,57 @@ void LastManStanding(int team) {
 ==================
 G_ObfuscateEnemyInfoInSnapshotCheck
 
-[QL] Binary: 0x10052e80
-Returns qtrue if clientNum2's info should be VISIBLE to clientNum1.
-The engine strips position data when this returns qfalse.
-Return qtrue = allow visibility (don't strip), qfalse = obfuscate (strip position).
-
-Matches binary exactly. Only meaningful for team gametypes (gametype >= 3).
-FFA/duel always return qtrue (no obfuscation).
+[QL] qagamex86.dll 0x10052e40, the export (+0x44) the engine calls as it copies each client
+entity into a client's snapshot (quakelive_steam.exe 0x4e5680). qtrue clears that copy's
+health, armor and location. They stay for the viewer's own entity and its teammates (0x10067f00:
+outside the team modes only spectators share a team), and whenever either one is a spectator
+(0x10067f70); a player in the game loses them for everybody else. The team overlay reads its
+teammates' values there.
 ==================
 */
 qboolean G_ObfuscateEnemyInfoInSnapshotCheck(int clientNum1, int clientNum2) {
-    if (clientNum1 >= MAX_CLIENTS || clientNum2 >= MAX_CLIENTS)
-        return qtrue;  // out of range - don't strip
-
-    // FFA and duel: no obfuscation
-    if (g_gametype.integer < GT_TEAM)
-        return qtrue;
-
-    // 1FCTF: flag carrier is always visible to everyone
-    if (g_gametype.integer == GT_1FCTF) {
-        if (g_entities[clientNum2].s.powerups & (1 << PW_NEUTRALFLAG))
-            return qtrue;
+    if ((unsigned)clientNum1 >= MAX_CLIENTS || (unsigned)clientNum2 >= MAX_CLIENTS) {
+        return qfalse;
     }
+    if (clientNum1 == clientNum2) {
+        return qfalse;
+    }
+    if (OnSameTeam(&g_entities[clientNum1], &g_entities[clientNum2])) {
+        return qfalse;
+    }
+    if (level.clients[clientNum1].sess.sessionTeam == TEAM_SPECTATOR) {
+        return qfalse;
+    }
+    return level.clients[clientNum2].sess.sessionTeam != TEAM_SPECTATOR;
+}
 
-    // Team games: same team always visible
-    if (level.clients[clientNum1].sess.sessionTeam ==
-        level.clients[clientNum2].sess.sessionTeam)
+/*
+==================
+G_ClientAlwaysInSnapshot
+
+[QL] qagamex86.dll 0x10052dc0, the export (+0x30) the engine asks about every client entity
+before the PVS test (quakelive_steam.exe 0x4e54c3): qtrue sends it to that viewer from anywhere
+on the map. That is the viewer's teammates, the flag carrier in 1-Flag CTF, everybody for a
+spectator and, in Red Rover with infection, the other team too.
+==================
+*/
+qboolean G_ClientAlwaysInSnapshot(int viewerNum, int clientNum) {
+    if ((unsigned)viewerNum >= MAX_CLIENTS || (unsigned)clientNum >= MAX_CLIENTS) {
+        return qfalse;
+    }
+    if (g_gametype.integer == GT_1FCTF && (g_entities[clientNum].s.powerups & (1 << PW_NEUTRALFLAG))) {
         return qtrue;
-
-    // Spectators always see everyone
-    if (level.clients[clientNum1].sess.sessionTeam == TEAM_SPECTATOR)
+    }
+    if (g_gametype.integer >= GT_TEAM && OnSameTeam(&g_entities[viewerNum], &g_entities[clientNum])) {
         return qtrue;
-
-    // RR Infected: enemies are also visible (infection needs position tracking)
-    if (g_gametype.integer == GT_RR && g_rrInfected.integer != 0)
+    }
+    if (level.clients[viewerNum].sess.sessionTeam == TEAM_SPECTATOR) {
         return qtrue;
-
-    // Default for team games: obfuscate enemy positions
+    }
+    if (g_gametype.integer == GT_RR && g_rrInfected.integer &&
+        !OnSameTeam(&g_entities[viewerNum], &g_entities[clientNum])) {
+        return qtrue;
+    }
     return qfalse;
 }
 
