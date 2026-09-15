@@ -137,7 +137,7 @@ static void CG_ParseScores_Ffa(void) {
         cgs.clientinfo[sp->client].powerups = sp->powerUps;
         sp->team = cgs.clientinfo[sp->client].team;
     }
-    CG_SetScoreSelection(NULL);
+    CG_SetScoreboardSelection();
 }
 
 /*
@@ -204,7 +204,7 @@ static void CG_ParseScores_Tdm(void) {
         cgs.clientinfo[sp->client].team = sp->team;
     }
     cg.numScores = n;
-    CG_SetScoreSelection(NULL);
+    CG_SetScoreboardSelection();
 }
 
 /*
@@ -253,7 +253,7 @@ static void CG_ParseScores_Ca(void) {
         cgs.clientinfo[sp->client].team = sp->team;
     }
     cg.numScores = n;
-    CG_SetScoreSelection(NULL);
+    CG_SetScoreboardSelection();
 }
 
 /*
@@ -324,7 +324,7 @@ static void CG_ParseScores_Ctf(void) {
         cgs.clientinfo[sp->client].team = sp->team;
     }
     cg.numScores = n;
-    CG_SetScoreSelection(NULL);
+    CG_SetScoreboardSelection();
 }
 
 /*
@@ -393,7 +393,7 @@ static void CG_ParseScores_Ft(void) {
         cgs.clientinfo[sp->client].team = sp->team;
     }
     cg.numScores = n;
-    CG_SetScoreSelection(NULL);
+    CG_SetScoreboardSelection();
 }
 
 /*
@@ -448,7 +448,7 @@ static void CG_ParseScores_Rr(void) {
         sp->team = cgs.clientinfo[sp->client].team;
     }
     cg.numScores = n;
-    CG_SetScoreSelection(NULL);
+    CG_SetScoreboardSelection();
 }
 
 /*
@@ -482,7 +482,7 @@ static void CG_ParseScores_Race(void) {
         sp->team = cgs.clientinfo[sp->client].team;
     }
     cg.numScores = n;
-    CG_SetScoreSelection(NULL);
+    CG_SetScoreboardSelection();
 }
 
 /*
@@ -523,7 +523,7 @@ static void CG_ParseSmScores(void) {
         sp->team = cgs.clientinfo[sp->client].team;
     }
     cg.numScores = n;
-    CG_SetScoreSelection(NULL);
+    CG_SetScoreboardSelection();
 }
 
 /*
@@ -577,7 +577,7 @@ static void CG_ParseScores(void) {
         cgs.clientinfo[sp->client].score = sp->score;
         sp->team = cgs.clientinfo[sp->client].team;
     }
-    CG_SetScoreSelection(NULL);
+    CG_SetScoreboardSelection();
 }
 
 /*
@@ -679,9 +679,6 @@ void CG_ParseServerinfo(void) {
     } else {
         trap_Cvar_Set("ui_gameTypeVotingDisabled", "0");
     }
-
-    Q_strncpyz(cgs.redTeam, Info_ValueForKey(info, "g_redTeam"), sizeof(cgs.redTeam));
-    Q_strncpyz(cgs.blueTeam, Info_ValueForKey(info, "g_blueTeam"), sizeof(cgs.blueTeam));
 }
 
 /*
@@ -1890,7 +1887,7 @@ void CG_ParseDuelScores(void) {
     }
 
     cg.duelScoresValid = qtrue;
-    CG_SetScoreSelection(NULL);
+    CG_SetScoreboardSelection();
 }
 
 /*
