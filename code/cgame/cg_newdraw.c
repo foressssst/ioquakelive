@@ -4158,8 +4158,9 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             break;
         case CG_SPEC_MESSAGES:              // 0x23
             // [QL] cgamex86.dll 0x1003c05b: this ownerdraw is the ONLY way retail
-            // reaches CG_DrawSpectator (0x10034d70). CG_Draw2D does not call it.
-            CG_DrawSpectator();
+            // reaches CG_DrawSpectator (0x10034d70), which draws from the item's
+            // corner. CG_Draw2D does not call it.
+            CG_DrawSpectator(rect.x, rect.y);
             break;
         case CG_PLAYER_HEAD:                // 0x24
             CG_DrawPlayerHead(&rect, ownerDrawFlags & CG_SHOW_2DONLY);

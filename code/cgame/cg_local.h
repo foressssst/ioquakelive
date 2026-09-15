@@ -1867,6 +1867,7 @@ extern vmCvar_t cg_blood;
 extern vmCvar_t cg_drawCheckpointRemaining;
 extern vmCvar_t cg_drawSprites;
 extern vmCvar_t cg_drawSpriteSelf;
+extern vmCvar_t cg_drawSpecMessages;
 extern vmCvar_t cg_drawCrosshairTeamHealth;
 extern vmCvar_t cg_drawCrosshairTeamHealthSize;
 extern vmCvar_t cg_enemyCrosshairNames;
@@ -2049,7 +2050,7 @@ void CG_UpdateJoinMenu(void);
 // competitive spectator overlay (0x1000dad0).
 void CG_CacheMenus(void);
 void CG_DrawSpectatorHud(void);
-void CG_DrawSpectator(void);  // [QL] reached only via the CG_SPEC_MESSAGES ownerdraw
+void CG_DrawSpectator(float x, float y);  // [QL] reached only via the CG_SPEC_MESSAGES ownerdraw
 // [QL] CG_CheckAutoFollow, CG_FilterAngles, CG_DrawDuelWeaponStats are file-static in cg_view.c.
 qboolean CG_GetLevelTimerMsec(int* msec);
 
