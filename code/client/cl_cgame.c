@@ -551,6 +551,11 @@ intptr_t CL_CgameSystemCalls(intptr_t* args) {
         case CG_S_CLEARSOUNDBUFFER:
             S_ClearSoundBuffer();
             return 0;
+        case CG_KEY_GETBINDINGBUF: {
+            const char* binding = Key_GetBinding(args[1]);
+            Q_strncpyz(VMA(2), binding ? binding : "", args[3]);
+            return 0;
+        }
         case CG_R_CLEARSCENE:
             re.ClearScene();
             return 0;

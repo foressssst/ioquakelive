@@ -75,6 +75,10 @@ activating and painting whatever menu had landed in that slot.
 =================
 */
 void CG_CacheMenus(void) {
+    // [QL] the scoreboards first (0x10006eb3, 0x1002917b), then the rest; CG_NewClientInfo
+    // resolves them again for the local player. The fork only did that, and a player who
+    // stayed a spectator never had a scoreboard to raise.
+    CG_SetEndScoreboardMenu();
     menuJoinGame = Menus_FindByName("joingame_menu");
     menuSpecHud = Menus_FindByName("comp_spechud_menu");
     menuSpecFollowHud = Menus_FindByName("comp_specfollowhud_menu");
@@ -2195,47 +2199,83 @@ void CG_SetEndScoreboardMenu(void) {
 
 /*
 =================
+CG_StartMenuCursor
+
+For a cgame menu about to take the keys (the join menu, the end-of-match scoreboard).
+CG_Init memsets cgs, so the cursor sits at (0,0) - the top left corner, well outside the menu -
+until the player happens to move the mouse, and every click before that first movement
+hit-tests there as an out-of-bounds click. Retail never has this problem because its engine
+hands cgame an absolute pointer position (0x1003c4f0); ioquake3's sends deltas, so the starting
+point is chosen here: the centre of the 640x480 virtual screen.
+=================
+*/
+static void CG_StartMenuCursor(void) {
+	if (cgs.cursorX == 0 && cgs.cursorY == 0) {
+		cgs.cursorX = SCREEN_WIDTH / 2;
+		cgs.cursorY = SCREEN_HEIGHT / 2;
+		cgDC.cursorx = cgs.cursorX;
+		cgDC.cursory = cgs.cursorY;
+	}
+}
+
+/*
+=================
+CG_DrawMenuCursor
+
+The pointer over a cgame menu that holds the keys. Retail's engine draws it; this one does not,
+and nothing in cgame read cgs.activeCursor, so the pointer was invisible on every cgame-owned
+menu. Drawn with the same 16-pixel centring the UI module uses (ui_main.c:524) so the two look
+alike. CG_DrawPic runs the coordinates through CG_AdjustFrom640, the mapping the menu itself
+just used, so the arrow lands where the cursor actually is.
+=================
+*/
+static void CG_DrawMenuCursor(void) {
+	CG_DrawPic(cgs.cursorX - 16, cgs.cursorY - 16, 32, 32,
+	           cgs.activeCursor ? cgs.activeCursor : cgs.media.selectCursor);
+}
+
+// [QL] the scoreboard menus CG_DrawScoreboard closes by name (0x10068fd8..0x100691f4)
+static const char *cg_inGameScoreboards[] = {
+	"score_menu", "teamscore_menu", "score_menu_ffa", "score_menu_duel", "score_menu_race",
+	"score_menu_rr", "teamscore_menu_tdm", "teamscore_menu_ca", "teamscore_menu_ctf",
+	"teamscore_menu_1fctf", "teamscore_menu_har", "teamscore_menu_ft", "teamscore_menu_dom",
+	"teamscore_menu_ad"
+};
+static const char *cg_endScoreboards[] = {
+	"endscore_menu", "endteamscore_menu", "endscore_menu_ffa", "endscore_menu_duel",
+	"endscore_menu_race", "endscore_menu_rr", "endteamscore_menu_tdm", "endteamscore_menu_ca",
+	"endteamscore_menu_ctf", "endteamscore_menu_1fctf", "endteamscore_menu_har",
+	"endteamscore_menu_ft", "endteamscore_menu_dom", "endteamscore_menu_ad"
+};
+
+/*
+=================
 CG_DrawScoreboard
 
-[QL] cgamex86.dll 0x1000dfd0. Three differences from the Quake 3 version this
-fork inherited, all of them in the decision of whether to draw at all:
+[QL] cgamex86.dll 0x1000dfd0, rewritten from the binary.
 
-1. Quake 3 refuses to draw during warmup unless the player is holding the
-   scoreboard key - `if (cg.warmup && !cg.showScores) return qfalse;`. Quake
-   Live splits that test in two (0x1000dfe8) and keeps the death case in the
-   warmup branch:
+The board is up unless the game is paused. During warmup it takes +scores or a dead player
+(0x1000dff6); otherwise +scores, a dead player or the intermission (0x1000e00b). There is no
+Quake 3 fade: it goes the frame the condition stops holding, and with no menu to paint the
+answer is false (0x1000e0c8).
 
-     0x1000dff6  warmup:     showScores || pm_type == PM_DEAD
-     0x1000e00b  not warmup: showScores || pm_type == PM_DEAD ||
-                             pm_type == PM_INTERMISSION
+At the intermission it is the end-of-match board (0x1000e02e): every in-game board is closed
+by name and the end board is activated the way the join menu is, closing the join menu, with
+the cgame key catcher unless the UI holds the keys. That is what lets the mouse reach its
+Scoreboard / Statistics tabs and the end-of-match vote; the fork only painted it. The in-game
+board is only painted.
 
-   So in retail the scoreboard comes up when you die during warmup, and in
-   this fork it did not - which is most of the time on a freshly started
-   server, where warmup runs until enough players join. PM_INTERMISSION is
-   only tested outside warmup because the two cannot coexist.
-
-2. Quake 3 keeps the board up for FADE_TIME after the key is released, on
-   cg.scoreFadeTime. The binary has no such branch: 0x1000e004 and
-   0x1000e01e clear the return value and jump straight to the tail, so the
-   board disappears the frame the condition stops holding.
-
-3. With no menu to paint the binary returns false (0x1000e0c8), where this
-   fork returned true and drew nothing - which suppressed the centre-print
-   string for a scoreboard that was not on screen.
-
-The deferred-player counter is also advanced on the hidden path before being
-reset, which is why it is stepped before the early-out rather than after.
+When the board goes down after being up (0x1000e180), every board is closed by name and the
+keys are handed back unless the join menu holds them; catcher bit 0x10 always drops. The
+killer's name stays: retail clears it when the player dies again (CG_Obituary), not here.
 =================
 */
 static qboolean CG_DrawScoreboard(void) {
 	static qboolean firstTime = qtrue;
-	menuDef_t *activeMenu;
+	menuDef_t *menu;
 	qboolean showing;
 	int pmType;
-
-	if (menuScoreboard) {
-		menuScoreboard->window.flags &= ~WINDOW_FORCED;
-	}
+	int i;
 
 	pmType = cg.predictedPlayerState.pm_type;
 	showing = qtrue;
@@ -2255,27 +2295,40 @@ static qboolean CG_DrawScoreboard(void) {
 	}
 
 	if (showing) {
-		if (menuScoreboard == NULL) {
-			CG_SetEndScoreboardMenu();
-		}
-
-		// [QL] Use end scoreboard during intermission, in-game scoreboard otherwise
-		if (pmType == PM_INTERMISSION && menuEndScoreboard) {
-			activeMenu = menuEndScoreboard;
+		if (pmType == PM_INTERMISSION) {
+			menu = menuEndScoreboard;
+			for (i = 0; i < (int)ARRAY_LEN(cg_inGameScoreboards); i++) {
+				Menus_CloseByName(cg_inGameScoreboards[i]);
+			}
 		} else {
-			activeMenu = menuScoreboard;
+			menu = menuScoreboard;
 		}
 
-		// [QL] 0x1000e0c8: nothing to paint means nothing is showing
-		if (activeMenu == NULL) {
+		if (menu == NULL) {
 			return qfalse;
 		}
 
+		if (menu == menuEndScoreboard) {
+			if (!(menu->window.flags & WINDOW_VISIBLE)) {
+				Menus_CloseByName("joingame_menu");
+				cg.showJoinMenu = qfalse;
+				CG_StartMenuCursor();
+				Menus_Activate(menu);
+			}
+			if (!(trap_Key_GetCatcher() & KEYCATCH_UI)) {
+				trap_Key_SetCatcher(trap_Key_GetCatcher() | KEYCATCH_CGAME);
+			}
+		}
+
 		if (firstTime) {
-			CG_SetScoreSelection(activeMenu);
+			CG_SetScoreSelection(menu);
 			firstTime = qfalse;
 		}
-		Menu_Paint(activeMenu, qtrue);
+		Menu_Paint(menu, qtrue);
+
+		if (menu == menuEndScoreboard && (trap_Key_GetCatcher() & KEYCATCH_CGAME)) {
+			CG_DrawMenuCursor();
+		}
 	}
 
 	// load any models that have been deferred
@@ -2283,16 +2336,31 @@ static qboolean CG_DrawScoreboard(void) {
 		CG_LoadDeferredPlayers();
 	}
 
-	if (!showing) {
-		// [QL] 0x1000e170
-		cg.deferredPlayerLoading = 0;
-		firstTime = qtrue;
-		// next time scoreboard comes up, don't print killer
-		cg.killerName[0] = 0;
-		return qfalse;
+	if (showing) {
+		return qtrue;
 	}
 
-	return qtrue;
+	// [QL] 0x1000e170
+	cg.deferredPlayerLoading = 0;
+	firstTime = qtrue;
+	if (cg.scoreBoardShowing) {
+		// the two generic pairs first, then the in-game boards, then the end boards
+		for (i = 0; i < 2; i++) {
+			Menus_CloseByName(cg_inGameScoreboards[i]);
+			Menus_CloseByName(cg_endScoreboards[i]);
+		}
+		for (i = 2; i < (int)ARRAY_LEN(cg_inGameScoreboards); i++) {
+			Menus_CloseByName(cg_inGameScoreboards[i]);
+		}
+		for (i = 2; i < (int)ARRAY_LEN(cg_endScoreboards); i++) {
+			Menus_CloseByName(cg_endScoreboards[i]);
+		}
+		if (!cg.showJoinMenu) {
+			trap_Key_SetCatcher(trap_Key_GetCatcher() & ~KEYCATCH_CGAME);
+		}
+	}
+	trap_Key_SetCatcher(trap_Key_GetCatcher() & ~0x10);
+	return qfalse;
 }
 
 /*
@@ -2820,18 +2888,7 @@ void CG_UpdateJoinMenu(void) {
 	// [QL] 0x1000e9f2: open it on the first frame it is asked for, and take the
 	// key catcher so clicks reach CG_KeyEvent/CG_MouseEvent instead of the game.
 	if (!(menu->window.flags & WINDOW_VISIBLE)) {
-		// CG_Init memsets cgs, so the cursor sits at (0,0) - the top left corner, well
-		// outside the menu - until the player happens to move the mouse. Every click
-		// before that first movement hit-tests there and lands as an out-of-bounds
-		// click. Retail never has this problem because its engine hands cgame an
-		// absolute pointer position (0x1003c4f0); ioquake3's sends deltas, so the
-		// starting point has to be chosen here. Centre of the 640x480 virtual screen.
-		if (cgs.cursorX == 0 && cgs.cursorY == 0) {
-			cgs.cursorX = SCREEN_WIDTH / 2;
-			cgs.cursorY = SCREEN_HEIGHT / 2;
-			cgDC.cursorx = cgs.cursorX;
-			cgDC.cursory = cgs.cursorY;
-		}
+		CG_StartMenuCursor();
 		trap_Key_SetCatcher(KEYCATCH_CGAME);
 		Menus_Activate(menu);
 	}
@@ -2846,15 +2903,7 @@ void CG_UpdateJoinMenu(void) {
 	// [QL] 0x1000ea30: Menu_Paint(menuJoinGame, qtrue). Forced, because the
 	// normal Menu_PaintAll pass is skipped on this path.
 	Menu_Paint(menu, qtrue);
-
-	// Nothing in cgame ever drew cgs.activeCursor - it is assigned in
-	// CG_MouseEvent and then never read, so the pointer was invisible on every
-	// cgame-owned menu. Drawn here with the same 16-pixel centring the UI
-	// module uses (ui_main.c:524) so the two look alike. CG_DrawPic runs the
-	// coordinates through CG_AdjustFrom640, the same mapping the menu itself
-	// just used, so the arrow lands where the cursor actually is.
-	CG_DrawPic(cgs.cursorX - 16, cgs.cursorY - 16, 32, 32,
-	           cgs.activeCursor ? cgs.activeCursor : cgs.media.selectCursor);
+	CG_DrawMenuCursor();
 }
 
 static void CG_Draw2D(stereoFrame_t stereoFrame) {
@@ -2891,18 +2940,19 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	CG_SetWidescreen(WIDESCREEN_STRETCH);
 	CG_DrawFloatingEffects();
 
-	// [QL] 0x10010fdd, right after the floating effects: while the join menu owns
-	// the frame the HUD is skipped entirely. The scoreboard wins if it is up.
-	if (cg.showJoinMenu && !cg.scoreBoardShowing) {
-		CG_UpdateJoinMenu();
-		return;
-	}
-
 	/*
 		if (cg.cameraMode) {
 			return;
 		}
 	*/
+	// [QL] 0x10010fdd, right after the floating effects: while the join menu owns the
+	// frame it stands in for the HUD, unless last frame's scoreboard is up. The frame
+	// goes on (0x10010ff2 jumps to 0x100110c5), so the vote, the corners, the warmup
+	// text and the scoreboard still draw and +scores raises the board over the menu.
+	// The fork returned here and the board could never come up over the join menu.
+	if (cg.showJoinMenu && !cg.scoreBoardShowing) {
+		CG_UpdateJoinMenu();
+	}
 	// [QL] cgamex86.dll 0x10010ff7..0x100110b5. Which branch runs is decided by the
 	// predicted playerState, and the test is not Quake 3's:
 	//   0x10010ff7  test [cg.predictedPlayerState.eFlags], EF_VOTED
@@ -2911,7 +2961,7 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	// follower - pm_type forced back to PM_SPECTATOR, EF_VOTED on a real spectator -
 	// so a spectator following somebody gets this branch too. The old test on
 	// persistant[PERS_TEAM] saw the FOLLOWED player's team and missed them.
-	if ((cg.predictedPlayerState.eFlags & EF_VOTED) ||
+	else if ((cg.predictedPlayerState.eFlags & EF_VOTED) ||
 		cg.predictedPlayerState.pm_type == PM_SPECTATOR) {
 		// [QL] 0x10011081: the competitive spectator overlay.
 		CG_DrawSpectatorHud();
@@ -3003,8 +3053,9 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	// ownerdraw in the HUD menus and from the spectator overlay (0x1000db98).
 
 	// don't draw center string if scoreboard is up
+	// [QL] 0x10011190: nor over the join menu or while paused
 	cg.scoreBoardShowing = CG_DrawScoreboard();
-	if (!cg.scoreBoardShowing) {
+	if (!cg.scoreBoardShowing && !cg_paused.integer && !cg.showJoinMenu) {
 		CG_SetWidescreen(WIDESCREEN_CENTER);
 		CG_DrawCenterString();
 		CG_SetWidescreen(WIDESCREEN_STRETCH);

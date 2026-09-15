@@ -2556,38 +2556,45 @@ static void CG_PlayerFreezeEffect(centity_t* cent) {
 ===============
 CG_Draw3DPlayerModel
 
-// Address: 0x10008c40
-[QL] Renders a full legs+torso+head (and optional weapon) player model into a 2D box for
-the spectator/duel player-model owner-draws. It auto-frames the model to the box: the
-camera sits at the scene origin looking down +X, the model is pushed back along +X far
-enough to fit, and two fill lights (white + red) light it. Q3's CG_Draw3DModel only draws
-a single model; this is the QL player-specific variant that the owner-draws point at.
+[QL] cgamex86.dll 0x10008c40, rewritten from the binary. A client's legs, torso and head, and
+the weapon when one is given, rendered into a box of the 640x480 screen: the model of the
+end-of-match boards (CG_1STPLACE_PLYR_MODEL) and of CG_PLAYERMODEL.
 
-Signature note: the shipped binary takes (clientNum in ECX, x, y, w, h, weapon) and
-auto-computes the framing, so there is no skin/angles parameter (the prior prototype guess
-was wrong). Skins come from the client clientInfo. The C signature below reorders the box
-coords first to match ioquakelive owner-draw conventions.
+  - The binary takes the client in ecx and the torso animation in edx, then the box, the
+    weapon, a fraction into the animations and the model's angles.
+  - The horizontal fov follows the box's pixel width, (int)(width / 640 * 90); the vertical
+    one keeps the box's aspect. The model stands (size + 24) * 1.1 / tan(fov_x / 2) in front of
+    the camera, (size - 24) / 2 down, where size is 32 scaled back by the bounding-box factor.
+  - Legs play LEGS_IDLE and the torso the given animation, both at the fraction; the parts are
+    RF_NOSHADOW | RF_LIGHTING_ORIGIN and carry shaderRGBA 0 128 0 255.
+  - The weapon hangs from tag_weapon; the gauntlet, machinegun and BFG add their barrel.
+    Retail also hangs the grappling hook's _ammo.md3 on tag_ammo, a model this fork does not
+    register; that piece is left out.
+  - A white light 100 back, up and to the side, and a red one 200 back, both of 500.
+
+The version this replaces framed with a fixed 30-degree fov, faced the model straight at the
+camera and always idled the torso.
 ===============
 */
-void CG_Draw3DPlayerModel(float x, float y, float w, float h, int clientNum, int weapon) {
+void CG_Draw3DPlayerModel(int clientNum, int torsoAnim, float x, float y, float w, float h, int weapon,
+                          float animFraction, const vec3_t angles) {
     refdef_t refdef;
     refEntity_t legs;
     refEntity_t torso;
     refEntity_t head;
     clientInfo_t* ci;
-    vec3_t origin, angles, lightOrigin;
-    float size, dist;
+    vec3_t origin;
+    float size, reach;
+    double viewDist;
 
     if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
         return;
     }
     ci = &cgs.clientinfo[clientNum];
-
     if (!ci->infoValid || !ci->legsModel || !ci->torsoModel || !ci->headModel) {
         return;
     }
 
-    // [QL] framing metric, normalised so a bounding-box-scaled model still fills the box
     size = 32.0f;
     if (ci->modelScale != 0.0f) {
         size = 32.0f / (ci->modelScale * 0.85f);
@@ -2600,91 +2607,90 @@ void CG_Draw3DPlayerModel(float x, float y, float w, float h, int clientNum, int
     memset(&torso, 0, sizeof(torso));
     memset(&head, 0, sizeof(head));
 
+    legs.shaderRGBA[1] = 0x80;
+    legs.shaderRGBA[3] = 0xff;
+    Byte4Copy(legs.shaderRGBA, torso.shaderRGBA);
+    Byte4Copy(legs.shaderRGBA, head.shaderRGBA);
+
+    refdef.x = (int)x;
+    refdef.y = (int)y;
+    refdef.width = (int)w;
+    refdef.height = (int)h;
     refdef.rdflags = RDF_NOWORLDMODEL;
     AxisClear(refdef.viewaxis);
 
-    refdef.x = x;
-    refdef.y = y;
-    refdef.width = w;
-    refdef.height = h;
+    refdef.fov_x = (float)(int)(refdef.width / 640.0 * 90.0);
+    viewDist = refdef.width / tan(refdef.fov_x / 360.0 * M_PI);
+    refdef.fov_y = atan2((double)refdef.height, (float)viewDist) * (360.0 / M_PI);
 
-    // fixed horizontal fov; vertical fov from the box aspect (binary constant 360/PI)
-    refdef.fov_x = 30;
-    dist = w / tan(refdef.fov_x / 360.0 * M_PI);
-    refdef.fov_y = atan2(h, dist) * (360.0 / M_PI);
-
-    refdef.time = cg.time;
-
-    // camera at the origin looking down +X; push the model back so it fits the box
-    origin[0] = (size + 24.0f) * 1.1f / tan(refdef.fov_x / 360.0 * M_PI);
+    reach = (size + 24.0f) * 1.1f;
+    origin[0] = reach / tan(refdef.fov_x * M_PI / 180.0 * 0.5);
     origin[1] = 0.0f;
     origin[2] = (size - 24.0f) * -0.5f;
 
-    // face the camera
-    VectorClear(angles);
-    angles[YAW] = 180;
+    refdef.time = cg.time;
 
     trap_R_ClearScene();
 
-    // legs (standing idle pose)
     legs.hModel = ci->legsModel;
     legs.customSkin = ci->legsSkin;
-    legs.renderfx = RF_NOSHADOW;
-    legs.frame = legs.oldframe = ci->animations[LEGS_IDLE].firstFrame;
+    legs.renderfx = RF_NOSHADOW | RF_LIGHTING_ORIGIN;
+    legs.frame = (int)(ci->animations[LEGS_IDLE].numFrames * animFraction + ci->animations[LEGS_IDLE].firstFrame);
     AnglesToAxis(angles, legs.axis);
     VectorCopy(origin, legs.origin);
-    VectorCopy(origin, legs.oldorigin);
     VectorCopy(origin, legs.lightingOrigin);
     trap_R_AddRefEntityToScene(&legs);
 
-    // torso on the legs' tag_torso
     torso.hModel = ci->torsoModel;
     torso.customSkin = ci->torsoSkin;
-    torso.renderfx = RF_NOSHADOW;
-    torso.frame = torso.oldframe = ci->animations[TORSO_STAND].firstFrame;
+    torso.renderfx = RF_NOSHADOW | RF_LIGHTING_ORIGIN;
+    torso.frame = (int)(ci->animations[torsoAnim].numFrames * animFraction + ci->animations[torsoAnim].firstFrame);
+    AnglesToAxis(vec3_origin, torso.axis);
     VectorCopy(origin, torso.lightingOrigin);
     CG_PositionRotatedEntityOnTag(&torso, &legs, ci->legsModel, "tag_torso");
     trap_R_AddRefEntityToScene(&torso);
 
-    // head on the torso's tag_head
     head.hModel = ci->headModel;
     head.customSkin = ci->headSkin;
-    head.renderfx = RF_NOSHADOW;
+    head.renderfx = RF_NOSHADOW | RF_LIGHTING_ORIGIN;
+    AnglesToAxis(vec3_origin, head.axis);
     VectorCopy(origin, head.lightingOrigin);
     CG_PositionRotatedEntityOnTag(&head, &torso, ci->torsoModel, "tag_head");
     trap_R_AddRefEntityToScene(&head);
 
-    // optional weapon on the torso's tag_weapon (owner-draws pass weapon 0 = body only)
-    if (weapon > 0 && weapon < MAX_WEAPONS && cg_weapons[weapon].weaponModel) {
+    if (weapon > WP_NONE && weapon < MAX_WEAPONS) {
         refEntity_t gun;
+
         memset(&gun, 0, sizeof(gun));
         gun.hModel = cg_weapons[weapon].weaponModel;
-        gun.renderfx = RF_NOSHADOW;
+        gun.renderfx = RF_NOSHADOW | RF_LIGHTING_ORIGIN;
+        AnglesToAxis(vec3_origin, gun.axis);
         VectorCopy(origin, gun.lightingOrigin);
         CG_PositionRotatedEntityOnTag(&gun, &torso, ci->torsoModel, "tag_weapon");
         trap_R_AddRefEntityToScene(&gun);
 
-        if (cg_weapons[weapon].barrelModel) {
+        if (weapon == WP_MACHINEGUN || weapon == WP_GAUNTLET || weapon == WP_BFG) {
             refEntity_t barrel;
+
             memset(&barrel, 0, sizeof(barrel));
             barrel.hModel = cg_weapons[weapon].barrelModel;
-            barrel.renderfx = RF_NOSHADOW;
+            barrel.renderfx = RF_NOSHADOW | RF_LIGHTING_ORIGIN;
+            AnglesToAxis(vec3_origin, barrel.axis);
             VectorCopy(origin, barrel.lightingOrigin);
             CG_PositionRotatedEntityOnTag(&barrel, &gun, cg_weapons[weapon].weaponModel, "tag_barrel");
             trap_R_AddRefEntityToScene(&barrel);
         }
     }
 
-    // two fill lights, matching the binary's offsets and colours
-    lightOrigin[0] = origin[0] - 100.0f;
-    lightOrigin[1] = origin[1] + 100.0f;
-    lightOrigin[2] = origin[2] + 100.0f;
-    trap_R_AddLightToScene(lightOrigin, 500, 1.0f, 1.0f, 1.0f);
+    origin[0] -= 100.0f;
+    origin[1] += 100.0f;
+    origin[2] += 100.0f;
+    trap_R_AddLightToScene(origin, 500, 1.0f, 1.0f, 1.0f);
 
-    lightOrigin[0] = origin[0] - 200.0f;
-    lightOrigin[1] = origin[1];
-    lightOrigin[2] = origin[2];
-    trap_R_AddLightToScene(lightOrigin, 500, 1.0f, 0.0f, 0.0f);
+    origin[0] -= 100.0f;
+    origin[1] -= 100.0f;
+    origin[2] -= 100.0f;
+    trap_R_AddLightToScene(origin, 500, 1.0f, 0.0f, 0.0f);
 
     trap_R_RenderScene(&refdef);
 }

@@ -1792,6 +1792,9 @@ static void CG_RegisterGraphics(void) {
     cgs.media.duelPlateLeads[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_leads.tga");
     cgs.media.duelPlateTied[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_tied.tga");
     cgs.media.duelPlateTrails[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_trails.tga");
+    if (cgs.gametype >= GT_FREEZE) {
+        cgs.media.thawIconShader = trap_R_RegisterShader("icons/thaw");
+    }
 
     cgs.media.smokePuffShader = trap_R_RegisterShader("smokePuff");
     cgs.media.smokePuffRageProShader = trap_R_RegisterShader("smokePuffRagePro");
@@ -3028,16 +3031,17 @@ void CG_Text_PaintWithCursor(float x, float y, float scale, vec4_t color, const 
     CG_Text_Paint(x, y, scale, color, text, 0, limit, style);
 }
 
+// [QL] cgamex86.dll 0x10028d80: the texts are measured in font 0, the font their drawers use
 static int CG_OwnerDrawWidth(int ownerDraw, float scale) {
     switch (ownerDraw) {
         case CG_GAME_TYPE:
-            return CG_Text_Width(CG_GameTypeString(), scale, 0);
+            return CG_DrawTextWidth(CG_GameTypeString(), scale, 0, 0);
         case CG_GAME_STATUS:
-            return CG_Text_Width(CG_GetGameStatusText(), scale, 0);
+            return CG_DrawTextWidth(CG_GetGameStatusText(), scale, 0, 0);
         case CG_MATCH_STATUS:
-            return CG_Text_Width(CG_GetMatchStatusText(), scale, 0);
+            return CG_DrawTextWidth(CG_GetMatchStatusText(), scale, 0, 0);
         case CG_KILLER:
-            return CG_Text_Width(CG_GetKillerText(), scale, 0);
+            return CG_DrawTextWidth(CG_GetKillerText(), scale, 0, 0);
     }
     return 0;
 }

@@ -76,8 +76,8 @@ static void CG_Viewpos_f(void) {
               (int)cg.refdefViewAngles[YAW]);
 }
 
-// [QL] Binary-matched: simplified from Q3 version
-static void CG_ScoresDown_f(void) {
+// [QL] Binary-matched: simplified from Q3 version (0x10006cf0). CG_KeyEvent calls it too.
+void CG_ScoresDown_f(void) {
     CG_BuildSpectatorString();
     if (cg.scoresRequestTime + 2000 < cg.time) {
         cg.scoresRequestTime = cg.time;
@@ -150,15 +150,11 @@ static void CG_LoadHud_f(void) {
     CG_ParseMenu("ui/end_scoreboard_1fctf.menu");
     CG_ParseMenu("ui/end_scoreboard_race.menu");
 
-    menuScoreboard = NULL;
-    menuEndScoreboard = NULL;
-
     // [QL] Menus_Reset only resets menuCount, so re-parsing refills the same Menus[]
-    // slots with different menus and every cached pointer now names the wrong one. The
-    // two scoreboards above are cleared so CG_SetEndScoreboardMenu re-resolves them by
-    // gametype; the rest are re-resolved here. Without this, `loadhud` while spectating
-    // left menuJoinGame pointing at whatever had landed in its slot, and CG_UpdateJoinMenu
-    // happily activated and painted that.
+    // slots with different menus and every cached pointer now names the wrong one; they are
+    // all re-resolved here, the scoreboards by gametype. Without this, `loadhud` while
+    // spectating left menuJoinGame pointing at whatever had landed in its slot, and
+    // CG_UpdateJoinMenu happily activated and painted that.
     CG_CacheMenus();
 }
 
