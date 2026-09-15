@@ -136,7 +136,16 @@ typedef enum {
     UI_R_FONT_DRAWSTRING,  // [QL] fontstash/stb_truetype text rendering
     UI_R_FONT_TEXTEXTENTS,
     UI_R_GETGLYPHINFO,
-    UI_IME_SETCOMPOSITIONFONT
+    UI_IME_SETCOMPOSITIONFONT,
+
+    // [QL] what retail's web UI read through GetFactoryList, GetMapList and
+    // GetConfig, for Start Match
+    UI_FACTORY_COUNT,
+    UI_FACTORY_VALUE,
+    UI_FACTORY_CVAR,
+    UI_ARENA_COUNT,
+    UI_ARENA_VALUE,
+    UI_CVAR_LATCHEDSTRINGBUFFER
 } uiImport_t;
 
 typedef enum {
