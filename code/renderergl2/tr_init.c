@@ -209,6 +209,7 @@ cvar_t* r_customPixelAspect;
 
 cvar_t* r_overBrightBits;
 cvar_t* r_mapOverBrightBits;
+cvar_t* r_mapOverBrightCap;
 
 cvar_t* r_debugSurface;
 cvar_t* r_simpleMipMaps;
@@ -1297,8 +1298,11 @@ void R_Register(void) {
     r_displayRefresh = ri.Cvar_Get("r_displayRefresh", "0", CVAR_LATCH);
     ri.Cvar_CheckRange(r_displayRefresh, 0, 200, qtrue);
     r_fullbright = ri.Cvar_Get("r_fullbright", "0", CVAR_LATCH | CVAR_CHEAT);
-    r_mapOverBrightBits = ri.Cvar_Get("r_mapOverBrightBits", "2", CVAR_LATCH);
-    r_intensity = ri.Cvar_Get("r_intensity", "1", CVAR_LATCH);
+    // [QL] quakelive_steam.exe 0x449800-0x449824: both archived, and the lightmap cap 255 in 0-255
+    r_mapOverBrightBits = ri.Cvar_Get("r_mapOverBrightBits", "2", CVAR_ARCHIVE | CVAR_LATCH);
+    r_mapOverBrightCap = ri.Cvar_Get("r_mapOverBrightCap", "255", CVAR_ARCHIVE | CVAR_LATCH);
+    ri.Cvar_CheckRange(r_mapOverBrightCap, 0, 255, qtrue);
+    r_intensity = ri.Cvar_Get("r_intensity", "1", CVAR_ARCHIVE | CVAR_LATCH);
     r_singleShader = ri.Cvar_Get("r_singleShader", "0", CVAR_CHEAT | CVAR_LATCH);
 
     //
@@ -1335,7 +1339,9 @@ void R_Register(void) {
     r_railCoreWidth = ri.Cvar_Get("r_railCoreWidth", "6", CVAR_ARCHIVE);
     r_railSegmentLength = ri.Cvar_Get("r_railSegmentLength", "32", CVAR_ARCHIVE);
 
-    r_ambientScale = ri.Cvar_Get("r_ambientScale", "0.6", CVAR_CHEAT);
+    // [QL] quakelive_steam.exe 0x449031: 10 in 1-100, neither archived nor cheat protected
+    r_ambientScale = ri.Cvar_Get("r_ambientScale", "10", 0);
+    ri.Cvar_CheckRange(r_ambientScale, 1, 100, qfalse);
     r_directedScale = ri.Cvar_Get("r_directedScale", "1", CVAR_CHEAT);
 
     r_anaglyphMode = ri.Cvar_Get("r_anaglyphMode", "0", CVAR_ARCHIVE);

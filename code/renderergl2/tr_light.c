@@ -376,36 +376,11 @@ void R_SetupEntityLighting(const trRefdef_t* refdef, trRefEntity_t* ent) {
         VectorMA(lightDir, d, dir, lightDir);
     }
 
-    // clamp lights
-    // FIXME: old renderer clamps (ambient + NL * directed) per vertex
-    //        check if that's worth implementing
-    {
-        float r, g, b, max;
-
-        r = ent->ambientLight[0];
-        g = ent->ambientLight[1];
-        b = ent->ambientLight[2];
-
-        max = MAX(MAX(r, g), b);
-
-        if (max > 255.0f) {
-            max = 255.0f / max;
-            ent->ambientLight[0] *= max;
-            ent->ambientLight[1] *= max;
-            ent->ambientLight[2] *= max;
-        }
-
-        r = ent->directedLight[0];
-        g = ent->directedLight[1];
-        b = ent->directedLight[2];
-
-        max = MAX(MAX(r, g), b);
-
-        if (max > 255.0f) {
-            max = 255.0f / max;
-            ent->directedLight[0] *= max;
-            ent->directedLight[1] *= max;
-            ent->directedLight[2] *= max;
+    // [QL] quakelive_steam.exe 0x44acb0: each ambient channel is clamped to identityLightByte on its
+    // own, and the directed light is left as it is
+    for (i = 0; i < 3; i++) {
+        if (ent->ambientLight[i] > tr.identityLightByte) {
+            ent->ambientLight[i] = tr.identityLightByte;
         }
     }
 
