@@ -195,7 +195,8 @@ typedef enum {
     CG_S_STARTLOCALSOUNDVOLUME,   // [QL] S_StartLocalSound at a given volume (cgame import +0xa0)
     CG_FS_GETFILELIST,            // [QL] FS_GetFileList (cgame import +0x4c)
     CG_S_CLEARSOUNDBUFFER,        // [QL] S_ClearSoundBuffer (cgame import +0xa8)
-    CG_KEY_GETBINDINGBUF          // [QL] the command bound to a key (cgame import +0x18c)
+    CG_KEY_GETBINDINGBUF,         // [QL] the command bound to a key (cgame import +0x18c)
+    CG_CVAR_REGISTER_RANGE        // [QL] Cvar_Register with a range given as two strings (cgame import +0x14)
 } cgameImport_t;
 
 /*

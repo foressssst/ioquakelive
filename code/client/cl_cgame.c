@@ -412,6 +412,9 @@ intptr_t CL_CgameSystemCalls(intptr_t* args) {
         case CG_CVAR_REGISTER:
             Cvar_Register(VMA(1), VMA(2), VMA(3), args[4]);
             return 0;
+        case CG_CVAR_REGISTER_RANGE:
+            Cvar_RegisterRange(VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6]);
+            return 0;
         case CG_CVAR_UPDATE:
             Cvar_Update(VMA(1));
             return 0;
