@@ -2057,6 +2057,39 @@ static void CG_ScanForCrosshairEntity(void) {
 
 /*
 =====================
+CG_CrosshairTeamVitalColor
+
+[QL] cgamex86.dll 0x1000c7e9 and 0x1000c979: at cg_drawCrosshairTeamHealth 2, the tint of a
+teammate's health or armor under the crosshair against the viewer's maximum health, red to yellow
+below it and yellow to white up to twice it. At 1 the colour is left as it is.
+=====================
+*/
+static void CG_CrosshairTeamVitalColor(int value, float* color) {
+	int maxHealth = cg.snap->ps.stats[STAT_MAX_HEALTH];
+	float green, blue;
+
+	if (value >= maxHealth) {
+		green = 1.0f;
+		blue = value / (maxHealth * 2.0f);
+		if (blue > 1.0f) {
+			blue = 1.0f;
+		}
+	} else {
+		green = (float)value / maxHealth;
+		if (green < 0.0f) {
+			green = 0.0f;
+		}
+		blue = 0.0f;
+	}
+	if (cg_drawCrosshairTeamHealth.value == 2.0f) {
+		color[0] = 1.0f;
+		color[1] = green;
+		color[2] = blue;
+	}
+}
+
+/*
+=====================
 CG_DrawCrosshairNames
 =====================
 */
@@ -2065,13 +2098,16 @@ static void CG_DrawCrosshairNames(void) {
 	char* name;
 	float opacity;
 	qboolean teammate;
+	centity_t* cent;
+	float size, y;
+	char text[16];
 
 	// [QL] cgamex86.dll 0x1000c670: the name under the crosshair fades over a second,
 	// centred at y 190 in font 0, scale 0.26, shadowed. Enemies need cg_enemyCrosshairNames
 	// and take cg_enemyCrosshairNamesOpacity; teammates need cg_teammateCrosshairNames
 	// without cg_teammateNames (which names them overhead) and take
-	// cg_teammateCrosshairNamesOpacity. NOT PORTED: the teammate's health and armour that
-	// cg_drawCrosshairTeamHealth adds.
+	// cg_teammateCrosshairNamesOpacity. Under a teammate's name cg_drawCrosshairTeamHealth
+	// adds the health and armor.
 	if (!cg_drawCrosshair.integer) {
 		return;
 	}
@@ -2106,6 +2142,23 @@ static void CG_DrawCrosshairNames(void) {
 	name = cgs.clientinfo[cg.crosshairClientNum].name;
 	color[3] *= opacity;
 	CG_DrawText(320 - CG_DrawTextWidth(name, 0.26f, 0, 0) * 0.5f, 190, 0, 0.26f, color, name, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+
+	// [QL] 0x1000c7c4: "health / armor" under a teammate's name in the name's alpha, at
+	// cg_drawCrosshairTeamHealthSize, the health ending and the armor starting at the middle
+	if (cg_drawCrosshairTeamHealth.value != 0.0f && teammate) {
+		cent = &cg_entities[cg.crosshairClientNum];
+		size = cg_drawCrosshairTeamHealthSize.value;
+		y = size * 16.0f + 198.0f;
+
+		CG_CrosshairTeamVitalColor(cent->currentState.health, color);
+		Com_sprintf(text, sizeof(text), "%i ", cent->currentState.health);
+		CG_DrawText(320 - CG_DrawTextWidth(text, size, 0, 0), y, 0, size, color, text, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+		color[0] = color[1] = color[2] = 1.0f;
+		CG_DrawText(320, y, 0, size, color, "/", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+		CG_CrosshairTeamVitalColor(cent->currentState.armor, color);
+		Com_sprintf(text, sizeof(text), " %i", cent->currentState.armor);
+		CG_DrawText(325, y, 0, size, color, text, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+	}
 	trap_R_SetColor(NULL);
 }
 

@@ -1867,6 +1867,8 @@ extern vmCvar_t cg_blood;
 extern vmCvar_t cg_drawCheckpointRemaining;
 extern vmCvar_t cg_drawSprites;
 extern vmCvar_t cg_drawSpriteSelf;
+extern vmCvar_t cg_drawCrosshairTeamHealth;
+extern vmCvar_t cg_drawCrosshairTeamHealthSize;
 extern vmCvar_t cg_enemyCrosshairNames;
 extern vmCvar_t cg_enemyCrosshairNamesOpacity;
 extern vmCvar_t cg_teammateCrosshairNames;
