@@ -758,18 +758,21 @@ void Item_NotifySpectator(gentity_t *ent, int clientNum, qboolean isRespawn) {
 Item_NotifySpectators
 
 [QL] Notify all spectator clients about an item's respawn state.
-Called from RespawnItem when an item respawns.
-Binary: 0x1004ed90
+Called from RespawnItem (0x1004f4a7) and G_SpawnItem (0x10050ba1).
+Binary: 0x1004ed10
 ===============
 */
 void Item_NotifySpectators(gentity_t *ent, qboolean isRespawn) {
     int i;
 
     // [QL] gate is g_specItemTimers, NOT g_itemTimers - verified from QLDS qagamex86.dll
-    // RespawnItem (0x1004f038) and Item_NotifySpectators (0x1004ed90) both read g_specItemTimers.integer (0x10598d8c)
+    // (g_specItemTimers.integer, 0x10598d8c)
     if (!g_specItemTimers.integer)
         return;
     if (!ent || !ent->item)
+        return;
+    // [QL] only items that have a timer (item+0x3c)
+    if (!ent->item->itemTimer)
         return;
     if (ent->item->giType == IT_ARMOR && ent->item->giTag == 3)
         return;
@@ -1292,52 +1295,160 @@ int G_ItemDisabled(gitem_t* item) {
     char name[128];
 
     Com_sprintf(name, sizeof(name), "disable_%s", item->classname);
-    return trap_Cvar_VariableIntegerValue(name);
+    // [QL] any non-zero value, fractions included (0x100508e3)
+    return trap_Cvar_VariableValue(name) != 0;
+}
+
+/*
+============
+G_FindAmmoPack
+
+[QL] The ammo pack is the ammo item tagged WP_NUM_WEAPONS (qagamex86.dll 0x1002cb10).
+============
+*/
+static gitem_t* G_FindAmmoPack(void) {
+    gitem_t* it;
+
+    for (it = bg_itemlist + 1; it->classname; it++) {
+        if (it->giType == IT_AMMO && it->giTag == WP_NUM_WEAPONS) {
+            return it;
+        }
+    }
+    Com_Error(ERR_DROP, "Couldn't find item for type %i tag %i", IT_AMMO, WP_NUM_WEAPONS);
+    return NULL;
+}
+
+/*
+============
+G_ItemFiltered
+
+[QL] Whether a map item stays out of the game (qagamex86.dll 0x10050843). Instagib keeps only
+the flags. Flags spawn in CTF, 1-Flag CTF, Overload and Attack & Defend, which keeps nothing
+but its red and blue flags; race, CA, Domination and Red Rover spawn no items at all. Then
+g_spawnItem* by type, g_infiniteAmmo and the ammo pack cvars, g_quadHog for FFA powerups, and
+disable_<classname>; persistant powerups never spawn from the map. A flag that was not dropped
+publishes where its base is.
+============
+*/
+static qboolean G_ItemFiltered(gentity_t* ent, gitem_t* item) {
+    int gt = g_gametype.integer;
+    qboolean flag = item->giType == IT_TEAM && item->giTag >= PW_REDFLAG && item->giTag <= PW_NEUTRALFLAG;
+
+    if (g_instaGib.integer && !flag) {
+        return qtrue;
+    }
+    if (flag && (gt == GT_FFA || gt == GT_DUEL || gt == GT_TEAM || gt == GT_CA || gt == GT_HARVESTER ||
+                 gt == GT_FREEZE || gt == GT_RR)) {
+        return qtrue;
+    }
+    if (gt == GT_AD && !(item->giType == IT_TEAM && (item->giTag == PW_REDFLAG || item->giTag == PW_BLUEFLAG))) {
+        return qtrue;
+    }
+    if (gt == GT_RACE || gt == GT_CA || gt == GT_DOMINATION || gt == GT_RR) {
+        return qtrue;
+    }
+
+    switch (item->giType) {
+        case IT_WEAPON:
+            if (!g_spawnItemWeapons.integer) {
+                return qtrue;
+            }
+            break;
+        case IT_AMMO:
+            if (!g_spawnItemAmmo.integer || g_infiniteAmmo.integer) {
+                return qtrue;
+            }
+            // with g_ammoPackHack every ammo item gets through and G_SpawnItem swaps it for the pack
+            if (!g_ammoPackHack.integer &&
+                (g_ammoPack.integer ? item->giTag != WP_NUM_WEAPONS : item->giTag == WP_NUM_WEAPONS)) {
+                return qtrue;
+            }
+            break;
+        case IT_ARMOR:
+            if (!g_spawnItemArmor.integer) {
+                return qtrue;
+            }
+            break;
+        case IT_HEALTH:
+            if (!g_spawnItemHealth.integer) {
+                return qtrue;
+            }
+            break;
+        case IT_POWERUP:
+            if (!g_spawnItemPowerup.integer || (gt == GT_FFA && g_quadHog.integer)) {
+                return qtrue;
+            }
+            break;
+        case IT_HOLDABLE:
+            if (!g_spawnItemHoldable.integer) {
+                return qtrue;
+            }
+            break;
+        case IT_PERSISTANT_POWERUP:
+            return qtrue;
+        case IT_TEAM:
+            if (flag && !ent->s.modelindex2) {
+                if (item->giTag == PW_REDFLAG) {
+                    trap_SetConfigstring(CS_REDTEAMBASE, va("\\x\\%f\\y\\%f\\z\\%f", ent->s.pos.trBase[0],
+                                                            ent->s.pos.trBase[1], ent->s.pos.trBase[2]));
+                } else if (item->giTag == PW_BLUEFLAG) {
+                    trap_SetConfigstring(CS_BLUETEAMBASE, va("\\x\\%f\\y\\%f\\z\\%f", ent->s.pos.trBase[0],
+                                                             ent->s.pos.trBase[1], ent->s.pos.trBase[2]));
+                }
+            }
+            break;
+        default:
+            break;
+    }
+
+    return G_ItemDisabled(item);
 }
 
 /*
 ============
 G_SpawnItem
+Address: 0x100507e0
 
 Sets the clipping size and plants the object on the floor.
 
 Items can't be immediately dropped to floor, because they might
 be on an entity that hasn't spawned yet.
+
+[QL] give and g_spawnItems force the item past G_ItemFiltered, and so does, in race, a
+"gametype" key that names race.
 ============
 */
-void G_SpawnItem(gentity_t* ent, gitem_t* item) {
-    G_SpawnFloat("random", "0", &ent->random);
-    G_SpawnFloat("wait", "0", &ent->wait);
+void G_SpawnItem(gentity_t* ent, gitem_t* item, qboolean forced) {
+    char* value;
 
-    // [QL] Ammo spawn filtering (binary-matched from qagamex86.dll)
-    if (item->giType == IT_AMMO) {
-        if (!g_spawnItemAmmo.integer) {
-            return;  // ammo spawning disabled
-        }
-        if (g_loadout.integer) {
-            return;  // loadout mode: no ammo pickups
-        }
-        if (g_ammoPack.integer) {
-            // g_ammoPack=1: only ammo_pack entities spawn, individual ammo suppressed
-            if (item->giTag != WP_NUM_WEAPONS) {
-                return;
-            }
-        } else {
-            // g_ammoPack=0: individual ammo spawns, ammo_pack entities suppressed
-            if (item->giTag == WP_NUM_WEAPONS) {
-                return;
-            }
+    if (!forced && !(g_gametype.integer == GT_RACE && G_SpawnString("gametype", "", &value) &&
+                     G_GametypeInList(value))) {
+        if (G_ItemFiltered(ent, item)) {
+            return;
         }
     }
 
-    RegisterItem(item);
-    if (G_ItemDisabled(item))
-        return;
+    G_SpawnFloat("random", "0", &ent->random);
+    G_SpawnFloat("wait", "0", &ent->wait);
 
-    ent->item = item;
+    // [QL] g_ammoPackHack puts an ammo pack where every ammo item was, and drops the map's own
+    // packs (0x10050a95)
+    if (g_ammoPackHack.integer && item->giType == IT_AMMO) {
+        gitem_t* pack = G_FindAmmoPack();
+
+        if (item->giTag == WP_NUM_WEAPONS) {
+            return;
+        }
+        RegisterItem(pack);
+        ent->item = pack;
+    } else {
+        RegisterItem(item);
+        ent->item = item;
+    }
+
     // some movers spawn on the second frame, so delay item
     // spawns until the third frame so they can ride trains
-    ent->nextthink = level.time + FRAMETIME * 2;
+    ent->nextthink = level.time + 2 * (int)(1000.0 / sv_fps.integer);  // [QL] two server frames
     ent->think = FinishSpawningItem;
 
     ent->physicsBounce = 0.50;  // items are bouncy
@@ -1350,6 +1461,9 @@ void G_SpawnItem(gentity_t* ent, gitem_t* item) {
     if (item->giType == IT_PERSISTANT_POWERUP) {
         ent->s.generic1 = ent->spawnflags;
     }
+
+    // [QL] spectators get the item's timer (0x10050ba1)
+    Item_NotifySpectators(ent, qfalse);
 }
 
 /*
