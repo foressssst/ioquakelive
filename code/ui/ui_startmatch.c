@@ -933,6 +933,9 @@ static void SM_DrawPage(void) {
     float y = cols, h;
     int i, nth = 1;
 
+    // the page sits under the same bar as the rest of the front end
+    UI_Home_Backdrop();
+    UI_Home_Nav(0);  // HM_NAV_PLAY
     SM_Fill(page, SM_PAGE_TOP, SM_PAGE_W, SM_PAGE_H, smDim, NULL);
     SM_SpacedText(page + 11.39f, SM_Baseline(FONT_DEFAULT, 32, SM_PAGE_TOP + 8, 38.4f), FONT_DEFAULT, 32, smText,
                   "Start Match", -1, qfalse);
@@ -1275,6 +1278,10 @@ static float* SM_DialogScroll(void) {
 static void SM_Click(void) {
     const smHit_t* hit = SM_HitAt(smMX, smMY);
 
+    // the bar above the page takes its own clicks
+    if (sm.dialog == SM_DIALOG_NONE && sm.select < 0 && UI_Home_NavClick()) {
+        return;
+    }
     // a click redraws the page, which lets go of a slider's leftover value
     sm.held = -1;
     // the text input loses the focus to a click elsewhere
