@@ -270,5 +270,6 @@ qboolean UI_Home_NavClick(void);
 void UI_Home_Go(int nav);
 float UI_Home_Header(float y, const char* eyebrow, const char* title);
 float UI_Home_BlockTop(float blockHeight);
+float UI_Home_FrameBottom(void);
 
 #endif  // __UI_WEB_H
