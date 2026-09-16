@@ -20,18 +20,25 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 //
-// ui_home.c -- [QL] the main menu, and the frame every page of the front end sits in
+// ui_home.c -- [QL] the main menu, and the frame the other pages sit in
 //
-// Retail's front end is its browser: a nav bar with Home, Play, Statistics and
-// Community on the left and the settings gear and power button on the right, a
-// random map as the page's background under a dark radial gradient (App's
-// componentDidUpdate), and, over a match, a green bar at the bottom that takes you
-// back to it. None of the lobby, friends or stats apply here, so the bar carries
-// what this build has: home, play, training, replays, settings and quit.
+// Retail's front end is its browser, and it is two different things. The main
+// menu (web.pak src/home.js, "#main-menu") is a screen of its own, outside the
+// app frame: a black column down the left with the QUAKE LIVE logo over a
+// vertical menu, and a character standing at the bottom of the screen beside it
+// (/img/characters/ranger.png). Its menu opens into itself -- Play gives Match
+// Browser, Start Match, Training Center and Back -- and the pages it leads to
+// (src/appframe.js, "#app-frame") are the ones with the nav bar across the top.
 //
-// It looks like quakeclub.com: the bar is its centred one, labels in upper case
-// with a gold rule under the page you are on, and the page is panels on the dark
-// warm background, with the map behind them.
+// So the menu is retail's, down to the column at 4% of the screen, 20% wide, the
+// logo at 90% of it and the character at 24%; the character is pak00's ranger
+// drawn as a model rather than a picture of one, since retail's picture lives in
+// web.pak. What it is made of is quakeclub.com's: its surfaces, its type and its
+// gold, and nothing moves.
+//
+// The bar the other pages carry is here too, since they share it, along with the
+// background (a random map under the page's colour, the way retail's App picked
+// one) and the green banner a match puts at the bottom of every page.
 //
 
 #include "ui_web.h"
@@ -41,43 +48,60 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define HM_NAV_ITEM_GAP 26.0f
 #define HM_NAV_INSET 39.0f
 
-#define HM_HERO_H 300.0f
-#define HM_CARD_H 176.0f
+// the main menu, in the fractions of the screen retail's CSS gives it
+#define HM_COL_LEFT 0.04f
+#define HM_COL_W 0.20f
+#define HM_CHAR_LEFT 0.24f
+#define HM_LOGO_W 0.90f    // of the column
+#define HM_LOGO_TOP 0.15f  // of the column, as its margin
+#define HM_ITEM_SIZE 27.0f
+#define HM_ITEM_H 58.0f
+#define HM_ITEM_PAD 26.0f  // from the column's right edge
 
 typedef enum {
     HM_HIT_NONE = SM_HIT_SHARED,
     HM_HIT_NAV,
-    HM_HIT_CARD,
     HM_HIT_BANNER,
-    HM_HIT_HERO
+    HM_HIT_ITEM
 } hmHitType_t;
 
 static const char* const hmNavNames[HM_NUM_NAV] = {"Home", "Play", "Training", "Replays", "Settings", "Quit"};
 
+/*
+The menu, as src/home.js lists it. Its "main" has Play, Statistics, Steam
+Workshop, Steam Community, Settings and Quit, and Play and Statistics open into
+their own lists. What this build has of those is Start Match, the Training
+Center, Replays and Settings; the rest of retail's are its lobby and its stats
+service, so Statistics, which would hold Replays alone, is not worth a list of
+its own and Replays comes up to the main one.
+*/
 typedef struct {
-    const char* eyebrow;
     const char* title;
-    const char* note;
-    int nav;
-} hmCard_t;
+    int nav;       // the page it opens, or -1
+    int submenu;   // the list it opens instead, or -1
+} hmItem_t;
 
-static const hmCard_t hmCards[] = {
-    {"Learn", "Training Center", "Crash Course and the training matches, with a coach who talks you through them.",
-     HM_NAV_TRAINING},
-    {"Watch", "Replays", "Every demo you have recorded, one click away.", HM_NAV_REPLAYS},
-    {"Configure", "Settings", "Input, video, sound, HUD, teams and weapons -- everything retail offers.",
-     HM_NAV_SETTINGS},
+#define HM_MENU_MAIN 0
+#define HM_MENU_PLAY 1
+#define HM_NUM_MENUS 2
+#define HM_MAX_ITEMS 5
+
+static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
+    {
+        {"Play", -1, HM_MENU_PLAY},
+        {"Replays", HM_NAV_REPLAYS, -1},
+        {"Settings", HM_NAV_SETTINGS, -1},
+        {"Quit", HM_NAV_QUIT, -1},
+        {NULL, -1, -1},
+    },
+    {
+        {"Start Match", HM_NAV_PLAY, -1},
+        {"Training Center", HM_NAV_TRAINING, -1},
+        {"Back", -1, HM_MENU_MAIN},
+        {NULL, -1, -1},
+        {NULL, -1, -1},
+    },
 };
-
-#define HM_NUM_CARDS ((int)ARRAY_LEN(hmCards))
-
-// the hero's buttons
-typedef enum {
-    HM_HERO_START,
-    HM_HERO_TRAINING,
-    HM_HERO_RETURN,
-    HM_HERO_LEAVE
-} hmHero_t;
 
 // iconic arenas whose shots pak00 carries, one of which is the page's background
 static const char* const hmBackdrops[] = {
@@ -334,105 +358,162 @@ void UI_Home_Banner(void) {
 /*
 ===============================================================================
 
-THE HOME PAGE
+THE MAIN MENU
+
+Retail's #main-menu: the column, the logo, the menu that opens into itself, and
+the character standing beside it.
 
 ===============================================================================
 */
 
-static const char* UI_Home_GametypeName(int gametype) {
-    static const char* const names[] = {
-        "Free For All", "Duel", "Race", "Team Deathmatch", "Clan Arena", "Capture the Flag", "One Flag CTF",
-        "Overload", "Harvester", "Freeze Tag", "Domination", "Attack and Defend", "Red Rover"};
+static struct {
+    qboolean loadedMenu;
+    qhandle_t logo;
+    int menu;  // which of hmMenus is showing
+    playerInfo_t character;
+    qboolean hasCharacter;
+} hm2;
 
-    return ((unsigned int)gametype <= 12u) ? names[gametype] : "Unknown Gametype";
-}
+// the character retail's menu stands there: ranger, and pak00 has the model
+static const char* const hmCharacters[] = {"ranger/default", "sarge/default"};
 
-static void UI_Home_HeroButton(float* x, float y, const char* text, int style, int which) {
-    float w = SM_ButtonWidth(text, SM_BUTTON_H);
+static void UI_Home_LoadMenu(void) {
+    int k;
 
-    SM_Button(*x, y, w, SM_BUTTON_H, text, style, SM_Over(HM_HIT_HERO, which));
-    SM_Hit(*x, y, w, SM_BUTTON_H, HM_HIT_HERO, which, NULL);
-    *x += w + 10;
-}
-
-static void UI_Home_DrawHero(float y) {
-    float left = UI_Home_Left();
-    float x = left + 40;
-    int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
-    const char* eyebrow;
-    const char* title;
-    char note[256];
-    int lines, k;
-
-    SM_Round(left, y, HM_CONTAINER_W, HM_HERO_H, SM_RADIUS_LG, smPanel, NULL);
-
-    if (UI_Home_InMatch()) {
-        char info[MAX_INFO_STRING];
-        char map[MAX_QPATH];
-
-        trap_GetConfigString(CS_SERVERINFO, info, sizeof(info));
-        Q_strncpyz(map, Info_ValueForKey(info, "mapname"), sizeof(map));
-        eyebrow = "Match in progress";
-        title = "Back to the fight";
-        Com_sprintf(note, sizeof(note), "%s on %s. The match goes on while you are here.",
-                    UI_Home_GametypeName(atoi(Info_ValueForKey(info, "g_gametype"))), map);
-    } else {
-        eyebrow = "Quake Live";
-        title = "Start a match";
-        Q_strncpyz(note, "Pick a game type and an arena, fill it with bots, and play it right here.",
-                   sizeof(note));
+    if (hm2.loadedMenu) {
+        return;
     }
+    hm2.loadedMenu = qtrue;
+    hm2.menu = HM_MENU_MAIN;
+    hm2.logo = trap_R_RegisterShaderNoMip("ui/assets/main_menu/ql_logo");
 
-    SM_Label(x, SM_Baseline(FONT_SANS, 12, y + 56, 18), 12, smGold, eyebrow, 2.0f);
-    SM_Label(x, SM_Baseline(FONT_SANS, 44, y + 80, 56), 44, smText, title, 0.4f);
-    lines = SM_Wrap(FONT_SANS, 17, note, 560, starts, lens);
-    for (k = 0; k < lines; k++) {
-        SM_Text(x, SM_Baseline(FONT_SANS, 17, y + 150 + k * 26, 26), FONT_SANS, 17, smMuted, note + starts[k], lens[k],
-                qfalse);
-    }
+    for (k = 0; k < (int)ARRAY_LEN(hmCharacters); k++) {
+        char model[MAX_QPATH];
+        fileHandle_t f;
+        const char* slash;
+        int len;
 
-    y += HM_HERO_H - 40 - SM_BUTTON_H;
-    if (UI_Home_InMatch()) {
-        UI_Home_HeroButton(&x, y, "Return to match", SM_BUTTON_PRIMARY, HM_HERO_RETURN);
-        UI_Home_HeroButton(&x, y, "Leave match", SM_BUTTON_DANGER, HM_HERO_LEAVE);
-    } else {
-        UI_Home_HeroButton(&x, y, "Start match", SM_BUTTON_PRIMARY, HM_HERO_START);
-        UI_Home_HeroButton(&x, y, "Training center", SM_BUTTON_SECONDARY, HM_HERO_TRAINING);
-    }
-
-    // the arena behind the page, named at the hero's corner
-    if (hm.backdropMap[0]) {
-        const char* label = va("Arena  %s", hm.backdropMap);
-        float w = SM_LabelWidth(11, label, 1.4f);
-
-        SM_Label(left + HM_CONTAINER_W - 40 - w, SM_Baseline(FONT_SANS, 11, y + 10, 16), 11, smSubtle, label, 1.4f);
+        slash = strchr(hmCharacters[k], '/');
+        Q_strncpyz(model, hmCharacters[k], slash ? (int)(slash - hmCharacters[k]) + 1 : sizeof(model));
+        len = trap_FS_FOpenFile(va("models/players/%s/lower.md3", model), &f, FS_READ);
+        if (len <= 0) {
+            continue;
+        }
+        trap_FS_FCloseFile(f);
+        // he holds the rocket launcher, the way the menu's picture has him armed
+        SM_BuildPlayer(&hm2.character, hmCharacters[k], 165, WP_ROCKET_LAUNCHER);
+        SM_TurnPlayer(&hm2.character, 165);
+        hm2.hasCharacter = qtrue;
+        return;
     }
 }
 
-static void UI_Home_DrawCard(int i, float x, float y, float w) {
-    const hmCard_t* card = &hmCards[i];
-    qboolean over = SM_Over(HM_HIT_CARD, i);
-    int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
-    float bw = SM_ButtonWidth("Open", SM_PILL_H);
-    int lines, k;
+/*
+===============
+UI_Home_DrawCharacter
 
-    SM_Round(x, y, w, HM_CARD_H, SM_RADIUS_MD, over ? smRaised : smPanel, NULL);
-    SM_Label(x + 25, SM_Baseline(FONT_SANS, 11, y + 22, 16), 11, smGold, card->eyebrow, 1.6f);
-    SM_Label(x + 25, SM_Baseline(FONT_SANS, 20, y + 44, 28), 20, smText, card->title, 0.2f);
-    lines = SM_Wrap(FONT_SANS, 14, card->note, w - 50, starts, lens);
-    for (k = 0; k < lines && k < 3; k++) {
-        SM_Text(x + 25, SM_Baseline(FONT_SANS, 14, y + 82 + k * 21, 21), FONT_SANS, 14, smMuted, card->note + starts[k],
-                lens[k], qfalse);
+The character stands on the bottom edge of the screen, its left at 24% of the
+width, as .character does (fixed, bottom 0, left 24%). It is a model held at one
+moment rather than an animation: retail's is a picture.
+===============
+*/
+static void UI_Home_DrawCharacter(void) {
+    float top = -smTop / smScale;
+    float full = smBottom - top;
+    float h = full * 0.74f;
+    float w = h * 0.62f;
+    float x = smVW * HM_CHAR_LEFT;
+
+    if (!hm2.hasCharacter) {
+        return;
     }
-    SM_Button(x + w - 25 - bw, y + HM_CARD_H - 22 - SM_PILL_H, bw, SM_PILL_H, "Open",
-              over ? SM_BUTTON_PRIMARY : SM_BUTTON_SECONDARY, qfalse);
-    SM_Hit(x, y, w, HM_CARD_H, HM_HIT_CARD, i, NULL);
+    // over a match the banner takes the bottom of the screen, so he stands on it
+    SM_DrawPlayerStill(&hm2.character, x, smBottom - h - (UI_Home_InMatch() ? 38.0f : 0.0f), w, h);
+}
+
+/*
+===============
+UI_Home_DrawColumn
+
+.nav-column: the full height of the screen from 4% to 24%, its text against the
+right edge. Retail fills it with rgba(0,0,0,0.8); here it is the site's panel,
+and the item under the cursor takes its gold and a rule down the column's edge,
+the way .nav-column a:hover does.
+===============
+*/
+static void UI_Home_DrawColumn(void) {
+    float top = -smTop / smScale;
+    float full = smBottom - top;
+    float x = smVW * HM_COL_LEFT;
+    float w = smVW * HM_COL_W;
+    float right = x + w;
+    float logoW = w * HM_LOGO_W;
+    float y;
+    int i;
+
+    SM_Fill(x, top, w, full, smPanel, NULL);
+
+    // the logo, as wide as the column allows, with retail's margin over it
+    if (hm2.logo) {
+        SM_Pic(x + (w - logoW) * 0.5f, top + w * HM_LOGO_TOP, logoW, logoW * 0.25f, hm2.logo, NULL);
+    }
+
+    y = top + w * HM_LOGO_TOP + logoW * 0.25f + w * HM_LOGO_TOP;
+    for (i = 0; i < HM_MAX_ITEMS; i++) {
+        const hmItem_t* item = &hmMenus[hm2.menu][i];
+        qboolean over;
+        float tw;
+
+        if (!item->title) {
+            break;
+        }
+        // "Back" sits a line below what it goes back from (a.back, margin-top 1em)
+        if (item->submenu == HM_MENU_MAIN && hm2.menu != HM_MENU_MAIN) {
+            y += HM_ITEM_SIZE;
+        }
+        over = SM_Over(HM_HIT_ITEM, i);
+        if (over) {
+            vec4_t shade = {smPage[0], smPage[1], smPage[2], 0.30f};
+
+            SM_Fill(x, y, w, HM_ITEM_H, shade, NULL);
+            SM_Fill(right - 3, y, 3, HM_ITEM_H, smGold, NULL);
+        }
+        tw = SM_LabelWidth(HM_ITEM_SIZE, item->title, 1.0f);
+        SM_Label(right - HM_ITEM_PAD - tw, SM_Baseline(FONT_SANS, HM_ITEM_SIZE, y, HM_ITEM_H), HM_ITEM_SIZE,
+                 over ? smGold : smText, item->title, 1.0f);
+        SM_Hit(x, y, w, HM_ITEM_H, HM_HIT_ITEM, i, NULL);
+        y += HM_ITEM_H;
+    }
+}
+
+/*
+===============
+UI_Home_DrawLegal
+
+.legal-links sits at the bottom right over black, and the notice retail's splash
+shows is its own line. There is no legal-notices page in this build, so the line
+is the notice itself.
+===============
+*/
+static void UI_Home_DrawLegal(void) {
+    static const char* const notice =
+        "QUAKE LIVE (c) 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
+    char version[MAX_CVAR_VALUE_STRING];
+    float h = 26.0f;
+    float y = smBottom - h - (UI_Home_InMatch() ? 38.0f : 0.0f);
+    float w = SM_Advance(FONT_SANS, 12, notice, -1);
+
+    SM_Text(smVW - 24 - w, SM_Baseline(FONT_SANS, 12, y, h), FONT_SANS, 12, smSubtle, notice, -1, qfalse);
+    trap_Cvar_VariableStringBuffer("version", version, sizeof(version));
+    SM_Text(smVW * HM_COL_LEFT, SM_Baseline(FONT_SANS, 12, y, h), FONT_SANS, 12, smSubtle, version, -1, qfalse);
 }
 
 void UI_Home_Open(void) {
     menuDef_t* menu = Menus_FindByName("main");
     itemDef_t* item = menu ? Menu_FindItemByName(menu, "home") : NULL;
 
+    UI_Home_LoadMenu();
+    hm2.menu = HM_MENU_MAIN;
     // the page takes keys before the mouse moves over it
     if (item) {
         item->window.flags |= WINDOW_HASFOCUS;
@@ -440,27 +521,13 @@ void UI_Home_Open(void) {
 }
 
 void UI_Home_Paint(void) {
-    float left, y, w;
-    char version[MAX_CVAR_VALUE_STRING];
-    int i;
-
     SM_BeginFrame();
-    left = UI_Home_Left();
+    UI_Home_LoadMenu();
 
     UI_Home_Backdrop();
-    UI_Home_Nav(HM_NAV_HOME);
-
-    y = HM_NAV_H;
-    UI_Home_DrawHero(y);
-    y += HM_HERO_H + HM_PANEL_GAP;
-
-    w = (HM_CONTAINER_W - (HM_NUM_CARDS - 1) * HM_PANEL_GAP) / HM_NUM_CARDS;
-    for (i = 0; i < HM_NUM_CARDS; i++) {
-        UI_Home_DrawCard(i, left + i * (w + HM_PANEL_GAP), y, w);
-    }
-
-    trap_Cvar_VariableStringBuffer("version", version, sizeof(version));
-    SM_Text(left, SM_Baseline(FONT_SANS, 12, y + HM_CARD_H + 24, 18), FONT_SANS, 12, smSubtle, version, -1, qfalse);
+    UI_Home_DrawCharacter();
+    UI_Home_DrawColumn();
+    UI_Home_DrawLegal();
 
     UI_Home_Banner();
     SM_EndFrame();
@@ -472,6 +539,10 @@ qboolean UI_Home_HandleKey(int key) {
     if (key & K_CHAR_FLAG) {
         return qtrue;
     }
+    if (key == K_ESCAPE && hm2.menu != HM_MENU_MAIN) {
+        hm2.menu = HM_MENU_MAIN;  // Back, the way the list's own Back does
+        return qtrue;
+    }
     if (key != K_MOUSE1) {
         return qfalse;  // Escape and the rest fall through to the menu
     }
@@ -479,28 +550,16 @@ qboolean UI_Home_HandleKey(int key) {
         return qtrue;
     }
     hit = SM_HitAt(smMX, smMY);
-    if (!hit) {
+    if (!hit || hit->type != HM_HIT_ITEM) {
         return qtrue;
     }
-    if (hit->type == HM_HIT_CARD) {
-        UI_Home_Go(hmCards[hit->index].nav);
-    } else if (hit->type == HM_HIT_HERO) {
-        switch (hit->index) {
-            case HM_HERO_START:
-                UI_Home_Go(HM_NAV_PLAY);
-                break;
-            case HM_HERO_TRAINING:
-                UI_Home_Go(HM_NAV_TRAINING);
-                break;
-            case HM_HERO_RETURN:
-                trap_Cmd_ExecuteText(EXEC_APPEND, "web_hideBrowser\n");
-                break;
-            case HM_HERO_LEAVE:
-                // ingame.menu's Leave Match
-                trap_Cmd_ExecuteText(EXEC_APPEND, "disconnect\n");
-                break;
-            default:
-                break;
+    {
+        const hmItem_t* item = &hmMenus[hm2.menu][hit->index];
+
+        if (item->submenu >= 0) {
+            hm2.menu = item->submenu;
+        } else if (item->nav >= 0) {
+            UI_Home_Go(item->nav);
         }
     }
     return qtrue;
