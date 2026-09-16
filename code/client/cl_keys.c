@@ -663,8 +663,11 @@ void Console_Key(int key) {
 
     // enter finishes the line
     if (key == K_ENTER || key == K_KP_ENTER) {
-        // if not in the game explicitly prepend a slash if needed
-        if (clc.state != CA_ACTIVE && con_autochat->integer &&
+        // [QL] quakelive_steam.exe 0x4b7885: with cl_allowConsoleChat off the console only takes
+        // commands, so a line without a leading slash gets one; with it on, a bare line is said
+        // in chat. Retail makes no distinction between being in a match and not (ioquake3 gated
+        // this on clc.state and tested the cvar the other way round).
+        if (!cl_allowConsoleChat->integer &&
             g_consoleField.buffer[0] &&
             g_consoleField.buffer[0] != '\\' &&
             g_consoleField.buffer[0] != '/') {
@@ -686,10 +689,9 @@ void Console_Key(int key) {
             if (!g_consoleField.buffer[0]) {
                 return;  // empty lines just scroll the console without adding to history
             } else {
-                if (con_autochat->integer) {
-                    Cbuf_AddText("cmd say ");
-                }
-
+                // [QL] 0x4b78f7 says it with no further test: with the chat off the line
+                // already picked up a slash above and never reaches here
+                Cbuf_AddText("cmd say ");
                 Cbuf_AddText(g_consoleField.buffer);
                 Cbuf_AddText("\n");
             }
@@ -1356,8 +1358,17 @@ void CL_KeyDownEvent(int key, unsigned time) {
     }
 
     // console key is hardcoded, so the user can never unbind it
-    if (key == K_CONSOLE || (keys[K_SHIFT].down && key == K_ESCAPE)) {
+    if (key == K_CONSOLE) {
         Con_ToggleConsole_f();
+        Key_ClearStates();
+        return;
+    }
+
+    // [ioquakelive] Shift+Escape ignores com_allowConsole, the way retail lets a held
+    // modifier through (0x4b7b7f): the console is never unreachable after being turned
+    // off in the options.
+    if (keys[K_SHIFT].down && key == K_ESCAPE) {
+        Con_ToggleConsole_Forced();
         Key_ClearStates();
         return;
     }

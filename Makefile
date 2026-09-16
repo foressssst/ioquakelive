@@ -2173,6 +2173,8 @@ Q3UIOBJ_ = \
   $(B)/$(BASEGAME)/ui/ui_main.o \
   $(B)/$(BASEGAME)/ui/ui_atoms.o \
   $(B)/$(BASEGAME)/ui/ui_gameinfo.o \
+  $(B)/$(BASEGAME)/ui/ui_web.o \
+  $(B)/$(BASEGAME)/ui/ui_settings.o \
   $(B)/$(BASEGAME)/ui/ui_startmatch.o \
   $(B)/$(BASEGAME)/ui/ui_players.o \
   $(B)/$(BASEGAME)/ui/ui_shared.o \
