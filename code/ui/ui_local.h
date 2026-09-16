@@ -985,6 +985,7 @@ qboolean UI_StartMatch_HandleKey(int key);
 // [QL] the Settings page, drawn the same way; see ui_settings.c
 #define UI_SETTINGS 601
 void UI_Settings_Open(void);
+void UI_Settings_SetTab(const char* name);
 void UI_Settings_Paint(void);
 qboolean UI_Settings_HandleKey(int key);
 void UI_Settings_Close(void);
