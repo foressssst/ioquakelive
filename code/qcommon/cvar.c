@@ -568,13 +568,16 @@ void Cvar_Print(cvar_t* v) {
     Com_Printf("\"%s\" is:\"%s" S_COLOR_WHITE "\"",
                v->name, v->string);
 
+    // [QL] one line, and always the default and the range when it has one:
+    //   "cg_fov" is:"100" default:"100" min:"10" max:"130"
     if (!(v->flags & CVAR_ROM)) {
-        if (!Q_stricmp(v->string, v->resetString)) {
-            Com_Printf(", the default");
-        } else {
-            Com_Printf(" default:\"%s" S_COLOR_WHITE "\"",
-                       v->resetString);
-        }
+        Com_Printf(" default:\"%s" S_COLOR_WHITE "\"", v->resetString);
+    }
+    if (v->minString) {
+        Com_Printf(" min:\"%s\"", v->minString);
+    }
+    if (v->maxString) {
+        Com_Printf(" max:\"%s\"", v->maxString);
     }
 
     Com_Printf("\n");
@@ -583,9 +586,9 @@ void Cvar_Print(cvar_t* v) {
         Com_Printf("latched: \"%s\"\n", v->latchedString);
     }
 
-    if (v->description) {
-        Com_Printf("%s\n", v->description);
-    }
+    // [QL] no description line: retail prints the one line and nothing else, and the
+    // second line made the console read badly. The descriptions are still there for
+    // cvarlist and the Settings page.
 }
 
 /*

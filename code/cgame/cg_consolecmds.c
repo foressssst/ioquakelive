@@ -638,9 +638,13 @@ void CG_AddChat(const char *text, int teamOnly, int extraTime) {
     }
     Q_strncpyz(cg.currentChatLine.text, text, size);
 
-    // Also print to console. Retail's adder does not print; kept until the
-    // callers are checked against retail, so chat still reaches the console.
-    CG_Printf("%s", text);
+    // Also print to console, one line of its own: without the newline whatever was
+    // printed next ran on after it, which is not how retail's console reads.
+    if (len > 0 && text[len - 1] == '\n') {
+        CG_Printf("%s", text);
+    } else {
+        CG_Printf("%s\n", text);
+    }
 }
 
 // the n-th newest stored chat line (0 is the newest), or NULL past them
