@@ -1969,6 +1969,9 @@ extern vmCvar_t cg_zoomAnimationTime;
 extern vmCvar_t cg_drawBrightWeapons;  // [CPMA] bitmask of the weapons drawn as flat silhouettes
 extern vmCvar_t ch_chatLines;
 extern vmCvar_t cg_rocketStyle;
+extern vmCvar_t cg_projectileLead;  // [ioquakelive] units a projectile is drawn ahead of itself
+
+void CG_ProjectileLeadOffset(const centity_t* cent, vec3_t offset);
 extern vmCvar_t cg_smoke_SG;
 extern vmCvar_t cg_specFov;
 extern vmCvar_t cg_switchOnEmpty;

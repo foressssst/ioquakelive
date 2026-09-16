@@ -590,7 +590,12 @@ static void CG_RocketTrail(centity_t* ent, const weaponInfo_t* wi) {
     }
 
     for (; t <= ent->trailTime; t += step) {
+        vec3_t leadOffset;
+
         BG_EvaluateTrajectory(&es->pos, t, lastPos);
+        // [ioquakelive] the smoke travels with the projectile when cg_projectileLead moves it
+        CG_ProjectileLeadOffset(ent, leadOffset);
+        VectorAdd(lastPos, leadOffset, lastPos);
 
         smoke = CG_SmokePuff(lastPos, up,
                              trailRadius,
@@ -660,7 +665,11 @@ static void CG_NailTrail(centity_t* ent, const weaponInfo_t* wi) {
     }
 
     for (; t <= ent->trailTime; t += step) {
+        vec3_t leadOffset;
+
         BG_EvaluateTrajectory(&es->pos, t, lastPos);
+        CG_ProjectileLeadOffset(ent, leadOffset);
+        VectorAdd(lastPos, leadOffset, lastPos);
 
         smoke = CG_SmokePuff(lastPos, up,
                              trailRadius,
