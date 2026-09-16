@@ -155,6 +155,7 @@ vmCvar_t cg_drawIcons;
 vmCvar_t cg_drawAmmoWarning;
 vmCvar_t cg_drawCrosshair;
 vmCvar_t cg_drawRewards;
+vmCvar_t cg_drawRewardsRowSize;
 vmCvar_t cg_crosshairSize;
 vmCvar_t cg_crosshairX;
 vmCvar_t cg_crosshairY;
@@ -588,6 +589,7 @@ static cvarTable_t cvarTable[] = {
     {&cg_drawAttacker, "cg_drawAttacker", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_drawCrosshair, "cg_drawCrosshair", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "29"},
     {&cg_drawRewards, "cg_drawRewards", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_drawRewardsRowSize, "cg_drawRewardsRowSize", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "9"},
     {&cg_crosshairSize, "cg_crosshairSize", "32", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "320"},
     {&cg_crosshairHealth, "cg_crosshairHealth", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},  // [QL] default 0 (was Q3 "1")
     {&cg_crosshairX, "cg_crosshairX", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-320", "320"},

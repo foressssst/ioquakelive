@@ -1725,6 +1725,7 @@ extern vmCvar_t cg_drawIcons;
 extern vmCvar_t cg_drawAmmoWarning;
 extern vmCvar_t cg_drawCrosshair;
 extern vmCvar_t cg_drawRewards;
+extern vmCvar_t cg_drawRewardsRowSize;  // [QL] medals at once before it becomes icon + count
 extern vmCvar_t cg_announcerRewardsVO;
 extern vmCvar_t cg_announcerLeadsVO;
 extern vmCvar_t cg_announcerTiesVO;
