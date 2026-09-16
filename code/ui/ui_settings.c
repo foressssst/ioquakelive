@@ -191,7 +191,6 @@ static struct {
 // in a match the browser tinted the game rather than hiding it
 static const vec4_t stIngameTint = {19 / 255.0f, 68 / 255.0f, 92 / 255.0f, 0.7f};
 static const vec4_t stBlack = {0.0f, 0.0f, 0.0f, 1.0f};
-static const vec4_t stNavBg = {0.0f, 0.0f, 0.0f, 0.8f};
 static const vec4_t stOff = {0.6f, 0.6f, 0.6f, 1.0f};  // #999, an option that is off
 
 extern const vec4_t* UI_CrosshairPalette(void);
@@ -1078,8 +1077,14 @@ static void ST_DrawPage(void) {
     st.tip = NULL;
     st.tipCvar = NULL;
 
-    SM_FillScreen(st.fromIngame ? stIngameTint : stBlack);
-    SM_Fill(0, 0, smVW, ST_PAGE_TOP - 20, stNavBg, NULL);
+    // out of a match the page sits under the front end's bar; in one there is nothing
+    // to navigate to, so the browser's tint over the game is all there is
+    if (st.fromIngame) {
+        SM_FillScreen(stIngameTint);
+    } else {
+        UI_Home_Backdrop();
+        UI_Home_Nav(2);  // HM_NAV_SETTINGS
+    }
 
     SM_SpacedText(st.page, SM_Baseline(FONT_DEFAULT, 30, ST_PAGE_TOP - 8, 38), FONT_DEFAULT, 30, smText,
                   "Game Settings", -1, qfalse);
@@ -1246,6 +1251,9 @@ static void ST_Click(void) {
     }
     if (st.edit >= 0 && type != ST_HIT_INPUT) {
         st.edit = -1;
+    }
+    if (!st.fromIngame && st.select < 0 && UI_Home_NavClick()) {
+        return;
     }
 
     switch (type) {

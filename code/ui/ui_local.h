@@ -995,6 +995,14 @@ qboolean UI_Home_HandleKey(int key);
 void UI_Home_Backdrop(void);
 void UI_Home_Nav(int active);
 qboolean UI_Home_NavClick(void);
+void UI_LoadDemos(void);
+
+// [QL] the Replays page; see ui_replays.c
+#define UI_REPLAYS 603
+void UI_Replays_Open(void);
+void UI_Replays_Paint(void);
+qboolean UI_Replays_HandleKey(int key);
+void UI_Replays_MouseUp(void);
 
 void trap_S_StopBackgroundTrack(void);
 void trap_S_StartBackgroundTrack(const char* intro, const char* loop);
