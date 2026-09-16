@@ -319,9 +319,12 @@ static const cvarHelp_t cvarHelp[] = {
     // cgame: players
     //
     {"cg_forceEnemyModel", "model every enemy is drawn with; empty for their own"},
-    {"cg_forceEnemySkin", "skin of " HC("cg_forceEnemyModel")},
+    {"cg_forceEnemySkin", "skin every enemy is drawn with, over " HC("cg_forceEnemyModel") " or their own model\n"
+                          HV("bright") "A flat skin in your enemy colours\n"
+                          HV("sport") "The sport skin\n"
+                          "Empty leaves each of them their own."},
     {"cg_forceTeamModel", "model every teammate is drawn with; empty for their own"},
-    {"cg_forceTeamSkin", "skin of " HC("cg_forceTeamModel")},
+    {"cg_forceTeamSkin", "skin every teammate is drawn with, like " HC("cg_forceEnemySkin")},
     {"cg_forceRedTeamModel", "model the red team is drawn with, for spectators"},
     {"cg_forceBlueTeamModel", "model the blue team is drawn with, for spectators"},
     {"cg_enemyHeadColor", "colour of the forced enemy model's head, as 0xRRGGBBAA"},
