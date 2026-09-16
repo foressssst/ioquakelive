@@ -186,8 +186,9 @@ void UI_Training_Paint(void) {
     }
 
     UI_Home_Backdrop();
-    UI_Home_Nav(HM_NAV_TRAINING);
-    y = UI_Home_Header(HM_NAV_H, NULL, "Training Center") + HM_PANEL_GAP;
+    UI_Home_PageTop(HM_NAV_TRAINING);
+    y = UI_Home_Header(UI_Home_BlockTop(72.0f + HM_PANEL_GAP + TR_CARD_H), NULL, "Training Center") +
+        HM_PANEL_GAP;
 
     for (i = 0; i < TR_NUM_CARDS; i++) {
         TR_DrawCard(i, left + i * (w + HM_PANEL_GAP), y, w);

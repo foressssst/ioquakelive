@@ -778,8 +778,8 @@ static void SM_DrawGametypeCard(float x, float y, float h) {
 
     SM_DrawCardFrame(x, y, h, "Game Type", over);
     SM_Pic(middle - 32, top, 64, 64, SM_GametypeIcon(gt), NULL);
-    SM_Label(middle - SM_LabelWidth(22, gt->title, 0.2f) * 0.5f, SM_Baseline(FONT_SANS, 22, top + 76, 30), 22, smText,
-             gt->title, 0.2f);
+    SM_Label(middle - SM_LabelWidth(22, gt->title, 0.0f) * 0.5f, SM_Baseline(FONT_SANS, 22, top + 76, 30), 22, smText,
+             gt->title, 0.0f);
     // the factory's title, or "Default" when it is the gametype's
     if (factory) {
         line = strcmp(gt->title, factory->title) ? factory->title : "Default";
@@ -941,23 +941,24 @@ static void SM_DrawPage(void) {
     float top, optX, rowsTop, y, panelH, cardH;
     int i;
 
-    // the page sits in the front end's frame, under its bar
+    // the page sits in the front end's frame, under its top row
     UI_Home_Backdrop();
-    UI_Home_Nav(HM_NAV_PLAY);
-    top = UI_Home_Header(HM_NAV_H, NULL, "Start Match") + HM_PANEL_GAP;
+    UI_Home_PageTop(HM_NAV_PLAY);
 
-    // the options first, to know how tall the page is
-    optX = page + SM_OPT_X;
-    rowsTop = top + SM_PAD - 6;
-    y = rowsTop;
+    // how tall the options make the page, so the whole block can be centred
+    y = 0;
     for (i = 0; i < SM_NUM_CVARS; i++) {
         y += 50.0f;
         if (i == SM_SERVERTYPE && SM_Equals(SM_Value(i), 2)) {
             y += 36;
         }
     }
-    panelH = (y - top) + 20 + SM_LAUNCH_H + SM_PAD - 6;
+    panelH = y + (SM_PAD - 6) + 20 + SM_LAUNCH_H + SM_PAD - 6;
     cardH = (panelH - HM_PANEL_GAP) * 0.5f;
+    top = UI_Home_BlockTop(72.0f + HM_PANEL_GAP + panelH);
+    top = UI_Home_Header(top, NULL, "Start Match") + HM_PANEL_GAP;
+    optX = page + SM_OPT_X;
+    rowsTop = top + SM_PAD - 6;
 
     SM_Round(optX, top, SM_OPT_W, panelH, SM_RADIUS_MD, smPanel, NULL);
     y = rowsTop;

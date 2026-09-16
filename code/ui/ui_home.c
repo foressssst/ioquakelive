@@ -53,17 +53,21 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // the main menu
 #define HM_COL_LEFT 0.065f   // of the screen's width
 #define HM_COL_MIN_X 80.0f
-#define HM_COL_W 430.0f      // what an entry's plate spans past its text
-#define HM_PLATE_PAD 22.0f
-#define HM_LOGO_Y 236.0f
-#define HM_LOGO_W 340.0f
-#define HM_LIST_Y 376.0f
-#define HM_ITEM_H 76.0f
-#define HM_ITEM_SIZE 30.0f
+#define HM_COL_W 470.0f      // what an entry takes, rule to chevron
+#define HM_RULE_GAP 26.0f    // the hover rule stands this far left of the text
+#define HM_LOGO_Y 132.0f
+#define HM_LOGO_W 520.0f
+#define HM_LIST_Y 340.0f
+#define HM_ITEM_H 78.0f
+#define HM_ITEM_SIZE 31.0f
 #define HM_ITEM_SPACING 0.7f
 #define HM_NOTE_SIZE 14.0f
 #define HM_BACK_SIZE 17.0f
 #define HM_BACK_H 46.0f
+
+// the player and their friends, down the right
+#define HM_SIDE_W 306.0f     // retail's column is 370; a little under it reads calmer
+#define HM_SIDE_RIGHT 64.0f
 
 // the painting's shape
 #define HM_PAINTING_ASPECT (3122.0f / 1344.0f)
@@ -77,43 +81,6 @@ typedef enum {
 
 static const char* const hmNavNames[HM_NUM_NAV] = {"Home", "Play", "Training", "Replays", "Settings", "Quit"};
 
-/*
-The menu, as src/home.js lists it. Its "main" has Play, Statistics, Steam
-Workshop, Steam Community, Settings and Quit, and Play and Statistics open into
-their own lists. What this build has of those is Start Match, the Training
-Center, Replays and Settings; the rest of retail's are its lobby and its stats
-service, so Statistics, which would hold Replays alone, is not worth a list of
-its own and Replays comes up to the main one.
-*/
-typedef struct {
-    const char* title;
-    const char* note;  // the line under it
-    int nav;           // the page it opens, or -1
-    int submenu;       // the list it opens instead, or -1
-} hmItem_t;
-
-#define HM_MENU_MAIN 0
-#define HM_MENU_PLAY 1
-#define HM_NUM_MENUS 2
-#define HM_MAX_ITEMS 5
-
-static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
-    {
-        {"Play", "Start a match, or train with Crash", -1, HM_MENU_PLAY},
-        {"Replays", "Watch the matches you recorded", HM_NAV_REPLAYS, -1},
-        {"Settings", "Controls, video, sound and your player", HM_NAV_SETTINGS, -1},
-        {"Quit", "Leave QUAKE LIVE", HM_NAV_QUIT, -1},
-        {NULL, NULL, -1, -1},
-    },
-    {
-        {"Start Match", "Pick an arena, a game type and bots", HM_NAV_PLAY, -1},
-        {"Training Center", "Crash Course, strafe and rocket jump practice", HM_NAV_TRAINING, -1},
-        {"Back", NULL, -1, HM_MENU_MAIN},
-        {NULL, NULL, -1, -1},
-        {NULL, NULL, -1, -1},
-    },
-};
-
 // arenas whose shots pak00 carries, one of which is the background when the painting is not there
 static const char* const hmBackdrops[] = {
     "bloodrun", "campgrounds", "toxicity", "aerowalk", "furiousheights", "sinister", "lostworld",
@@ -125,6 +92,31 @@ static struct {
     qhandle_t backdrop;
     qboolean painting;  // the backdrop is the menu's painting, not a levelshot
 } hm;
+
+// which of the lists is showing
+#define HM_MENU_MAIN 0
+#define HM_MENU_PLAY 1
+#define HM_MENU_STATS 2
+#define HM_MENU_COMMUNITY 3
+#define HM_NUM_MENUS 4
+#define HM_MAX_ITEMS 6
+
+static struct {
+    qboolean loadedMenu;
+    qhandle_t logo;
+    int menu;  // which of hmMenus is showing
+    qhandle_t face;
+    char faceModel[MAX_QPATH];
+} hm2;
+
+static void UI_Home_LoadMenu(void) {
+    if (hm2.loadedMenu) {
+        return;
+    }
+    hm2.loadedMenu = qtrue;
+    hm2.menu = HM_MENU_MAIN;
+    hm2.logo = trap_R_RegisterShaderNoMip("ui/assets/main_menu/ql_logo");
+}
 
 float UI_Home_Left(void) {
     return (smVW - HM_CONTAINER_W) * 0.5f;
@@ -254,6 +246,8 @@ static void UI_Home_DrawBackground(void) {
     } else {
         w = h * aspect;
     }
+    // the painting covers the screen whole: pulled off the right edge it left a band of
+    // page showing, so it stays anchored there and the panels over it are seen through
     SM_Pic(hm.painting ? smVW - w : (smVW - w) * 0.5f, top + (full - h) * 0.5f, w, h, hm.backdrop, NULL);
 }
 
@@ -277,35 +271,28 @@ void UI_Home_Backdrop(void) {
 
 /*
 ===============
-UI_Home_Nav
+UI_Home_PageTop
 
-quakeclub.com's bar: the container's width, labels 15px bold upper case, and a
-2px gold rule under the page you are on. Quit sits alone at the right, where the
-site has Sign In and retail had its power button.
+What a page carries instead of the bar of links the front end used to have: this
+is a game's front end and not a web site (the player's words), so there is the
+QUAKE LIVE logo at the left and, at the right, the one way back to the menu.
+Escape does the same.
 ===============
 */
-void UI_Home_Nav(int active) {
+void UI_Home_PageTop(int active) {
     float left = UI_Home_Left();
-    float x = left + HM_NAV_INSET;
-    float base = SM_Baseline(FONT_SANS, HM_NAV_ITEM_SIZE, 47, 22);
-    int i;
+    float w = SM_LabelWidth(HM_NAV_ITEM_SIZE, "Back", HM_NAV_ITEM_SPACING);
+    float bx = left + HM_CONTAINER_W - w;
+    qboolean over = SM_Over(HM_HIT_NAV, HM_NAV_HOME);
 
-    for (i = 0; i < HM_NUM_NAV; i++) {
-        float w = SM_LabelWidth(HM_NAV_ITEM_SIZE, hmNavNames[i], HM_NAV_ITEM_SPACING);
-        float ix = i == HM_NAV_QUIT ? left + HM_CONTAINER_W - HM_NAV_INSET - w : x;
-        qboolean on = i == active;
-        qboolean over = SM_Over(HM_HIT_NAV, i);
-
-        SM_Label(ix, base, HM_NAV_ITEM_SIZE, (on || over) ? smText : smTextSoft, hmNavNames[i],
-                 HM_NAV_ITEM_SPACING);
-        if (on) {
-            SM_Pill(ix, base + 8, w, 2, smGold, NULL);
-        }
-        SM_Hit(ix - HM_NAV_ITEM_GAP * 0.5f, 30, w + HM_NAV_ITEM_GAP, 46, HM_HIT_NAV, i, NULL);
-        if (i != HM_NAV_QUIT) {
-            x += w + HM_NAV_ITEM_GAP;
-        }
+    (void)active;
+    UI_Home_LoadMenu();
+    if (hm2.logo) {
+        SM_Pic(left, 26.0f, 196.0f, 49.0f, hm2.logo, NULL);
     }
+    SM_Label(bx, SM_Baseline(FONT_SANS, HM_NAV_ITEM_SIZE, 47, 22), HM_NAV_ITEM_SIZE,
+             over ? smGold : smTextSoft, "Back", HM_NAV_ITEM_SPACING);
+    SM_Hit(bx - 20.0f, 30.0f, w + 40.0f, 46.0f, HM_HIT_NAV, HM_NAV_HOME, NULL);
 }
 
 /*
@@ -329,6 +316,23 @@ float UI_Home_Header(float y, const char* eyebrow, const char* title) {
         SM_Label(left + 25, SM_Baseline(FONT_SANS, 22, y, h), 22, smText, title, 0.2f);
     }
     return y + h;
+}
+
+/*
+===============
+UI_Home_BlockTop
+
+Where a page of that height starts so that it sits in the middle of the screen
+rather than hanging from the top, which is what the player asked for. It never
+goes over the top row, and a page taller than the screen starts right under it.
+===============
+*/
+float UI_Home_BlockTop(float blockHeight) {
+    float first = HM_NAV_H;
+    float bottom = smBottom - 44.0f - (UI_Home_InMatch() ? 38.0f : 0.0f);
+    float y = first + (bottom - first - blockHeight) * 0.5f;
+
+    return y < first ? first : y;
 }
 
 void UI_Home_Go(int nav) {
@@ -419,25 +423,65 @@ void UI_Home_Banner(void) {
 
 THE MAIN MENU
 
-The logo, and under it the list that opens into itself, over the painting.
+Retail's #main-menu: the QUAKE LIVE logo over a list that opens into itself, and
+beside it the player and their friends, which its app frame keeps in a column of
+its own (web.pak src/home.js: ProfileCard, Lobby and FriendList). Retail has that
+column on the left of the pages; here it sits on the right of the menu, where the
+painting leaves room.
+
+The list is retail's, whole: Play, Statistics, Community, Settings and Quit, with
+the three that open into their own lists doing so. What this build cannot do yet
+is listed all the same, marked "soon" and inert, so nothing of retail's is
+missing from the menu.
 
 ===============================================================================
 */
 
-static struct {
-    qboolean loadedMenu;
-    qhandle_t logo;
-    int menu;  // which of hmMenus is showing
-} hm2;
+typedef struct {
+    const char* title;
+    const char* note;  // the line under it
+    int nav;           // the page it opens, or -1
+    int submenu;       // the list it opens instead, or -1
+    qboolean soon;     // listed, but this build has not got it
+} hmItem_t;
 
-static void UI_Home_LoadMenu(void) {
-    if (hm2.loadedMenu) {
-        return;
-    }
-    hm2.loadedMenu = qtrue;
-    hm2.menu = HM_MENU_MAIN;
-    hm2.logo = trap_R_RegisterShaderNoMip("ui/assets/main_menu/ql_logo");
-}
+
+static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
+    {
+        {"Play", "Start a match, or train with Crash", -1, HM_MENU_PLAY, qfalse},
+        {"Statistics", "Your career, your matches, your replays", -1, HM_MENU_STATS, qfalse},
+        {"Community", "The Workshop and the Steam community", -1, HM_MENU_COMMUNITY, qfalse},
+        {"Settings", "Controls, video, sound and your player", HM_NAV_SETTINGS, -1, qfalse},
+        {"Quit", "Leave QUAKE LIVE", HM_NAV_QUIT, -1, qfalse},
+        {NULL, NULL, -1, -1, qfalse},
+    },
+    {
+        {"Match Browser", "Find a server to play on", -1, -1, qtrue},
+        {"Start Match", "Pick an arena, a game type and bots", HM_NAV_PLAY, -1, qfalse},
+        {"Training Center", "Crash Course, strafe and rocket jump practice", HM_NAV_TRAINING, -1, qfalse},
+        {"Back", NULL, -1, HM_MENU_MAIN, qfalse},
+        {NULL, NULL, -1, -1, qfalse},
+        {NULL, NULL, -1, -1, qfalse},
+    },
+    {
+        {"Career Stats", "Everything you have played", -1, -1, qtrue},
+        {"Recent Matches", "How the last ones went", -1, -1, qtrue},
+        {"Replays", "Watch the matches you recorded", HM_NAV_REPLAYS, -1, qfalse},
+        {"Back", NULL, -1, HM_MENU_MAIN, qfalse},
+        {NULL, NULL, -1, -1, qfalse},
+        {NULL, NULL, -1, -1, qfalse},
+    },
+    {
+        {"Steam Workshop", "Maps and models other players made", -1, -1, qtrue},
+        {"Steam Community", "The game's hub", -1, -1, qtrue},
+        {"Back", NULL, -1, HM_MENU_MAIN, qfalse},
+        {NULL, NULL, -1, -1, qfalse},
+        {NULL, NULL, -1, -1, qfalse},
+        {NULL, NULL, -1, -1, qfalse},
+    },
+};
+
+
 
 static float UI_Home_ColumnX(void) {
     float x = smVW * HM_COL_LEFT;
@@ -460,11 +504,11 @@ static void UI_Home_DrawShade(void) {
     vec4_t shade;
 
     VectorCopy(smPage, shade);
-    shade[3] = 0.90f;
+    shade[3] = 0.92f;
     SM_Fill(-1, top, solid + 1, full, shade, NULL);
-    UI_Home_WashAcross(solid, 560.0f, smPage, 0.90f, 0.0f);
-    UI_Home_Wash(top, 160.0f, smPage, 0.60f, 0.0f);
-    UI_Home_Wash(smBottom - 200.0f, 200.0f, smPage, 0.0f, 0.88f);
+    UI_Home_WashAcross(solid, 520.0f, smPage, 0.92f, 0.0f);
+    UI_Home_Wash(top, 150.0f, smPage, 0.55f, 0.0f);
+    UI_Home_Wash(smBottom - 190.0f, 190.0f, smPage, 0.0f, 0.85f);
 }
 
 // a small chevron pointing right, what an entry that leads somewhere shows under the cursor
@@ -482,76 +526,157 @@ static void UI_Home_Chevron(float x, float y, const float* color) {
 UI_Home_DrawColumn
 
 The logo, then the list with its heading: the name you play under on the main
-list, "Play" on Play's. An entry is its title in the site's bold upper case and a
-line of what it does; under the cursor the title turns gold on a raised plate
-with a chevron at its end. Back sits a little apart and smaller, as retail's
-a.back does.
+list, the list's own name on the others. An entry is its title in bold upper case
+and a line of what it does; under the cursor the title turns Quake Live yellow
+and a 3px rule stands at the left, which is what .nav-column a:hover does with
+its border. What this build has not got is dimmed and says so. Back sits a little
+apart and smaller, as retail's a.back does.
 ===============
 */
 static void UI_Home_DrawColumn(void) {
     float x = UI_Home_ColumnX();
-    float plateX = x - HM_PLATE_PAD;
-    float plateW = HM_COL_W + 2 * HM_PLATE_PAD;
     float y = HM_LIST_Y;
     char heading[MAX_CVAR_VALUE_STRING];
-    vec4_t plate;
     int i;
 
-    VectorCopy(smRaised, plate);
-    plate[3] = 0.78f;
-
     if (hm2.logo) {
-        SM_Pic(x - 8, HM_LOGO_Y, HM_LOGO_W, HM_LOGO_W * 0.25f, hm2.logo, NULL);
+        SM_Pic(x - 6, HM_LOGO_Y, HM_LOGO_W, HM_LOGO_W * 0.25f, hm2.logo, NULL);
     }
 
-    if (hm2.menu == HM_MENU_PLAY) {
-        Q_strncpyz(heading, "Play", sizeof(heading));
-    } else {
-        char name[MAX_CVAR_VALUE_STRING];
-
-        trap_Cvar_VariableStringBuffer("name", name, sizeof(name));
-        Q_CleanStr(name);
-        Com_sprintf(heading, sizeof(heading), "Playing as %s", name);
+    // the list of a submenu says which one it is; the main one needs no heading, since
+    // the card at the right already says who is playing
+    if (hm2.menu != HM_MENU_MAIN) {
+        Q_strncpyz(heading,
+                   hmMenus[HM_MENU_MAIN][hm2.menu == HM_MENU_PLAY ? 0 : hm2.menu == HM_MENU_STATS ? 1 : 2].title,
+                   sizeof(heading));
+        SM_Label(x, SM_Baseline(FONT_SANS, 12, y, 18), 12, smMuted, heading, 1.8f);
     }
-    SM_Label(x, SM_Baseline(FONT_SANS, 12, y, 18), 12, smGold, heading, 1.8f);
     y += 36;
 
     for (i = 0; i < HM_MAX_ITEMS; i++) {
         const hmItem_t* item = &hmMenus[hm2.menu][i];
         qboolean over;
+        float h;
 
         if (!item->title) {
             break;
         }
-        over = SM_Over(HM_HIT_ITEM, i);
+        over = SM_Over(HM_HIT_ITEM, i) && !item->soon;
 
         if (item->submenu == HM_MENU_MAIN && hm2.menu != HM_MENU_MAIN) {
-            // Back
-            y += 14;
-            if (over) {
-                SM_Round(plateX, y, plateW, HM_BACK_H, SM_RADIUS_MD, plate, NULL);
-            }
+            y += 14;  // Back
             SM_Label(x, SM_Baseline(FONT_SANS, HM_BACK_SIZE, y, HM_BACK_H), HM_BACK_SIZE,
-                     over ? smGold : smTextSoft, item->title, 1.2f);
-            SM_Hit(plateX, y, plateW, HM_BACK_H, HM_HIT_ITEM, i, NULL);
+                     over ? smGold : smMuted, item->title, 1.2f);
+            SM_Hit(x - HM_RULE_GAP, y, HM_COL_W, HM_BACK_H, HM_HIT_ITEM, i, NULL);
             y += HM_BACK_H;
             continue;
         }
 
+        h = item->note ? HM_ITEM_H : HM_ITEM_H - 22.0f;
         if (over) {
-            SM_Round(plateX, y, plateW, HM_ITEM_H - 8, SM_RADIUS_MD, plate, NULL);
-            UI_Home_Chevron(plateX + plateW - 34, y + (HM_ITEM_H - 8) * 0.5f - 6, smGold);
+            UI_Home_Chevron(x + HM_COL_W - 40, y + 14, smGold);
         }
-        SM_Label(x, SM_Baseline(FONT_SANS, HM_ITEM_SIZE, y + 7, 36), HM_ITEM_SIZE, over ? smGold : smText,
-                 item->title, HM_ITEM_SPACING);
+        SM_Label(x, SM_Baseline(FONT_SANS, HM_ITEM_SIZE, y + 7, 36), HM_ITEM_SIZE,
+                 item->soon ? smSubtle : over ? smGold : smText, item->title, HM_ITEM_SPACING);
+        if (item->soon) {
+            float tw = SM_LabelWidth(HM_ITEM_SIZE, item->title, HM_ITEM_SPACING);
+
+            SM_Label(x + tw + 16, SM_Baseline(FONT_SANS, 11, y + 16, 20), 11, smSubtle, "soon", 1.6f);
+        }
         if (item->note) {
             SM_Text(x, SM_Baseline(FONT_SANS, HM_NOTE_SIZE, y + 42, 20), FONT_SANS, HM_NOTE_SIZE,
-                    over ? smTextSoft : smMuted, item->note, SM_Fit(FONT_SANS, HM_NOTE_SIZE, item->note, HM_COL_W),
-                    qfalse);
+                    item->soon ? smSubtle : over ? smTextSoft : smMuted, item->note,
+                    SM_Fit(FONT_SANS, HM_NOTE_SIZE, item->note, HM_COL_W), qfalse);
         }
-        SM_Hit(plateX, y, plateW, HM_ITEM_H - 8, HM_HIT_ITEM, i, NULL);
-        y += HM_ITEM_H;
+        if (!item->soon) {
+            SM_Hit(x - HM_RULE_GAP, y, HM_COL_W, h, HM_HIT_ITEM, i, NULL);
+        }
+        y += h;
     }
+}
+
+// the panels at the right sit over the painting, so they are the page colour with a
+// little of it left showing rather than a flat block
+static const float* UI_Home_SidePanel(void) {
+    static vec4_t panel;
+
+    VectorCopy(smPanel, panel);
+    panel[3] = 0.88f;
+    return panel;
+}
+
+/*
+===============
+UI_Home_DrawProfile
+
+Retail's ProfileCard: the Steam avatar, the name you play under and a line of
+career numbers. There is no Steam session here yet, so the avatar is the icon of
+the model you wear and the numbers say where they will come from. Under it, the
+friends, as its FriendList has them: an avatar, a name and what they are doing.
+===============
+*/
+static void UI_Home_DrawProfile(float x, float y, float w) {
+    char name[MAX_CVAR_VALUE_STRING];
+    char model[MAX_QPATH];
+    char* slash;
+    float pic = 52.0f;
+    float h = 88.0f;
+
+    trap_Cvar_VariableStringBuffer("name", name, sizeof(name));
+    Q_CleanStr(name);
+    trap_Cvar_VariableStringBuffer("model", model, sizeof(model));
+    slash = strchr(model, '/');
+    if (slash) {
+        *slash = '\0';
+    }
+    if (!model[0]) {
+        Q_strncpyz(model, "sarge", sizeof(model));
+    }
+    if (Q_stricmp(model, hm2.faceModel)) {
+        Q_strncpyz(hm2.faceModel, model, sizeof(hm2.faceModel));
+        hm2.face = trap_R_RegisterShaderNoMip(va("models/players/%s/icon_default", model));
+    }
+
+    SM_Fill(x, y, w, h, UI_Home_SidePanel(), NULL);
+    if (hm2.face) {
+        SM_Pic(x + 16, y + (h - pic) * 0.5f, pic, pic, hm2.face, NULL);
+    }
+    SM_Label(x + 16 + pic + 14, SM_Baseline(FONT_SANS, 16, y + 18, 22), 16, smText,
+             name[0] ? name : "Player", 0.4f);
+    SM_Text(x + 16 + pic + 14, SM_Baseline(FONT_SANS, 12, y + 44, 18), FONT_SANS, 12, smSubtle,
+            "Steam and quakeclub.com soon", -1, qfalse);
+}
+
+static float UI_Home_DrawFriends(float x, float y, float w) {
+    static const char* const rows[3] = {"Your Steam friends", "Who is in a match", "Who is in a lobby"};
+    float ry = y + 40.0f;
+    float h = 40.0f + 3 * 44.0f + 34.0f;
+    int i;
+
+    SM_Fill(x, y, w, h, UI_Home_SidePanel(), NULL);
+    SM_Label(x + 16, SM_Baseline(FONT_SANS, 11, y + 12, 16), 11, smMuted, "Friends", 1.8f);
+    SM_Fill(x + 16, y + 33, w - 32, 1, smBorder, NULL);
+
+    for (i = 0; i < 3; i++) {
+        SM_Fill(x + 16, ry + 8, 28, 28, smRaised, NULL);
+        SM_Text(x + 54, SM_Baseline(FONT_SANS, 13, ry + 12, 20), FONT_SANS, 13, smMuted, rows[i], -1, qfalse);
+        ry += 44.0f;
+    }
+    SM_Text(x + 16, SM_Baseline(FONT_SANS, 11, y + h - 28, 18), FONT_SANS, 11, smSubtle,
+            "Once Steam is wired up", -1, qfalse);
+    return h;
+}
+
+static void UI_Home_DrawSide(void) {
+    float w = HM_SIDE_W;
+    float x = smVW - w - HM_SIDE_RIGHT;
+    float y = HM_LIST_Y;
+
+    if (x < UI_Home_ColumnX() + HM_COL_W + 60.0f) {
+        return;  // a narrow screen keeps the menu alone
+    }
+    UI_Home_DrawProfile(x, y, w);
+    UI_Home_DrawFriends(x, y + 88.0f + 14.0f, w);
 }
 
 /*
@@ -596,6 +721,7 @@ void UI_Home_Paint(void) {
     UI_Home_DrawBackground();
     UI_Home_DrawShade();
     UI_Home_DrawColumn();
+    UI_Home_DrawSide();
     UI_Home_DrawLegal();
 
     UI_Home_Banner();

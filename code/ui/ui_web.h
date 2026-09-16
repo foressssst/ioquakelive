@@ -145,13 +145,14 @@ void SM_TurnPlayer(playerInfo_t* pi, float yaw);
 void SM_BuildPlayer(playerInfo_t* pi, const char* composed, float yaw, int weapon);
 
 /*
-Type. Quake Club sets everything in DIN Next, which is licensed for the web and
-cannot ship in a game; Barlow (SIL OFL, in pak01) is drawn after the same
-DIN-style grotesque and stands in for it. FONT_SANS and FONT_DEFAULT both come
-out in it once it is loaded, so the pages written against pak00's fonts follow.
+Type. The web UI sets its headings in Handel Gothic and its body in Noto Sans
+(web.pak css/main.css @font-face), and pak00 carries both. SM_FONT_TITLE is the
+first, which every label and heading takes; SM_FONT_TEXT is the second, for
+everything that is read rather than looked at.
 */
-#define SM_FONT_TEXT FONT_SANS     // regular
-#define SM_FONT_STRONG FONT_DEFAULT  // bold, what headings and labels use
+#define SM_FONT_TEXT FONT_SANS    // Noto Sans, the body
+#define SM_FONT_TITLE FONT_DEFAULT  // Handel Gothic, the headings and labels
+#define SM_FONT_STRONG FONT_DEFAULT
 
 void SM_LoadFonts(void);
 float SM_Em(int font);
@@ -263,10 +264,11 @@ typedef enum {
 float UI_Home_Left(void);
 qboolean UI_Home_InMatch(void);
 void UI_Home_Backdrop(void);
-void UI_Home_Nav(int active);
+void UI_Home_PageTop(int active);
 void UI_Home_Banner(void);
 qboolean UI_Home_NavClick(void);
 void UI_Home_Go(int nav);
 float UI_Home_Header(float y, const char* eyebrow, const char* title);
+float UI_Home_BlockTop(float blockHeight);
 
 #endif  // __UI_WEB_H
