@@ -295,6 +295,16 @@ static void CG_Obituary(entityState_t* ent) {
         CG_Error("CG_Obituary: target out of range");
     }
 
+    // [ioquakelive] Not retail's: the kill beep follows WolfcamQL (cg_event.c, CG_Obituary), by the
+    // user's choice. It plays when the viewed player frags an enemy, on top of that hit's sound;
+    // retail plays it instead of the hit sound, from the lethal-hit count (0x100435b0).
+    if (attacker == cg.snap->ps.clientNum && attacker != target && cg_killBeep.integer > 0 &&
+        cg_killBeep.integer <= 8 &&
+        (cgs.gametype < GT_TEAM || cgs.clientinfo[target].team != cgs.clientinfo[attacker].team)) {
+        trap_S_StartLocalSoundVolume(cgs.media.killBeepSounds[cg_killBeep.integer - 1], CHAN_LOCAL_SOUND,
+                                     s_killBeepVolume.value);
+    }
+
     // [QL] 0x1001917e: the local player's death clears the scoreboard's "Fragged by" line,
     // which a killer then sets again below. Retail clears it nowhere else.
     if (target == cg.clientNum) {
