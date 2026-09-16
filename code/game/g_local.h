@@ -61,6 +61,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define FL_NO_HUMANS 0x00004000      // spawn point just for bots
 #define FL_FORCE_GESTURE 0x00008000  // force gesture on client
 #define FL_NOPICKUP 0x00010000            // [QL] player can't pick items up
+#define FL_TRAINER 0x00020000             // [QL] the training bot while it leads (AIEnter_Training 0x1000f880)
 #define FL_NOPOWERUP 0x00040000           // [QL] player can't pick up IT_POWERUP
 #define FL_DROPPED_ITEM_TIMED 0x00080000  // [QL] dropped powerup: ground age reduces duration
 #define FL_ITEM_TIMER 0x00100000          // [QL] item has an armed respawn timer
@@ -129,6 +130,14 @@ struct gentity_s {
     char* tourPointTarget;   // [QL]
     char* tourPointTargetName; // [QL]
     char* noise;             // [QL]
+
+    // [QL] info_tour_point (g_training.c): what SP_info_tour_point parses and
+    // its think resolves (qagamex86.dll gentity_t 0x2e0..0x374)
+    gentity_t* tourNext;     // 0x2e0 the stop after this one
+    float tourRadius;        // 0x2e4 "radius"
+    float tourChatTime;      // 0x2cc "printChatTextTime"
+    float tourCvarValue;     // 0x374 "cvarValue"
+    int tourIgnorePlayer;    // 0x340 "ignorePlayerLocation"
 
     int timestamp;  // body queue sinking, etc
     float angle;    // [QL]
@@ -1035,6 +1044,21 @@ void G_CheckBotSpawn(void);
 void G_RemoveQueuedBotBegin(int clientNum);
 qboolean G_BotConnect(int clientNum, qboolean restart);
 void Svcmd_AddBot_f(void);
+void G_AddBot(const char* name, float skill, const char* team, int delay, char* altname);
+
+//
+// g_training.c
+//
+void SP_info_tour_point(gentity_t* ent);
+int G_TrainingHumanClient(void);
+int G_TrainingBotClient(void);
+void Cmd_SkipTraining(int clientNum);
+void G_TrainingFrame(void);
+
+// ai_main.c: what the training reads and writes of a bot's state
+int BotNumBots(void);
+float BotGetSkill(int client);
+void BotSetSkill(int client, float skill);
 void Svcmd_BotList_f(void);
 void BotInterbreedEndMatch(void);
 

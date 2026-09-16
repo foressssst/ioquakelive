@@ -2900,11 +2900,894 @@ void BotSetFreezeState(bot_state_t* bs, int freeze) {
         ent->flags |= FL_GODMODE | FL_NOPICKUP;      // 0x10010
         client->ps.ammo[5] = 9999;                    // client+0x194
         client->ps.stats[STAT_WEAPONS] |= 0x20;       // client+0xcc, grant weapon bit 5
-        ent->flags |= FL_NOTARGET | FL_NO_KNOCKBACK;  // 0x20800
+        ent->flags |= FL_TRAINER | FL_NO_KNOCKBACK;   // 0x20800 (not FL_NOTARGET, which is 0x20)
         client->ps.stats[STAT_WEAPONS] |= 0x8000;     // client+0xcc, grant weapon bit 15
     } else {
         ent->flags &= ~(FL_GODMODE | FL_NOPICKUP);
         client->ps.ammo[3] = 10;                       // client+0x18c
-        ent->flags &= ~(FL_NOTARGET | FL_NO_KNOCKBACK);
+        ent->flags &= ~(FL_TRAINER | FL_NO_KNOCKBACK);
     }
+}
+
+/*
+===============================================================================
+
+THE TRAINING BOT
+
+Crash, leading the Crash Course's tour and then staying by the player until they
+are ready to fight her, from qagamex86.dll. The tour itself is the map's
+info_tour_point chain (g_training.c); these nodes walk it. The addresses in the
+comments are retail's, to follow the port back to the binary.
+
+===============================================================================
+*/
+
+// what the nodes clear off the bot whenever it stops leading (the inverse of
+// BotSetFreezeState, inlined at every exit of the retail nodes)
+static void BotTrainerRelease(bot_state_t* bs) {
+    gentity_t* ent = &g_entities[bs->client];
+
+    ent->flags &= ~(FL_GODMODE | FL_NOPICKUP);
+    ent->client->ps.ammo[WP_SHOTGUN] = 10;
+    ent->flags &= ~(FL_TRAINER | FL_NO_KNOCKBACK);
+}
+
+// 0x10024530: turn to a point, the roll halved as every node does
+static void BotTourLookAt(bot_state_t* bs, vec3_t point) {
+    vec3_t dir;
+
+    VectorSubtract(point, bs->origin, dir);
+    vectoangles(dir, bs->ideal_viewangles);
+    bs->ideal_viewangles[2] *= 0.5f;
+}
+
+// 0x100243d0: whether two clients' boxes overlap, with 4 units to spare sideways
+// and below (a is the bot, b the other client)
+static qboolean BotTourTouching(int client, int other) {
+    aas_entityinfo_t a, b;
+
+    trap_AAS_EntityInfo(client, &a);
+    trap_AAS_EntityInfo(other, &b);
+    return b.origin[2] + b.mins[2] < a.origin[2] + a.maxs[2] &&
+           b.origin[0] + b.mins[0] - 4 < a.origin[0] + a.maxs[0] &&
+           a.origin[0] + a.mins[0] < b.origin[0] + b.maxs[0] + 4 &&
+           b.origin[1] + b.mins[1] - 4 < a.origin[1] + a.maxs[1] &&
+           a.origin[1] + a.mins[1] < b.origin[1] + b.maxs[1] + 4 &&
+           b.origin[2] + b.mins[2] - 4 < a.origin[2] + a.maxs[2] &&
+           a.origin[2] + a.mins[2] < b.origin[2] + b.maxs[2] + 4;
+}
+
+// 0x1000f7f0: where the bot stands, kept as a goal to come back to
+static void BotTourSaveGoal(bot_state_t* bs) {
+    VectorCopy(bs->origin, bs->tourSavedGoal.origin);
+    bs->tourSavedGoal.areanum = bs->areanum;
+    VectorSet(bs->tourSavedGoal.mins, -16, -16, -24);
+    VectorSet(bs->tourSavedGoal.maxs, 16, 16, 32);
+}
+
+/*
+===============
+BotTourGoal
+
+0x1001fec0. The tour point after `point`, a gentity number; one that is not an
+entity of the level means the start, the point with spawnflag 1. The floor
+16 units under it goes to `floor`, and to `look` the origin of the info_notnull
+it targets, or vec3_origin. Returns its number, or -1 when there is none.
+===============
+*/
+static int BotTourGoal(int point, vec3_t look, vec3_t floor) {
+    gentity_t* ent = NULL;
+    gentity_t* target;
+    trace_t tr;
+    vec3_t end;
+
+    VectorCopy(vec3_origin, look);
+    if ((unsigned)(point - MAX_CLIENTS) < (unsigned)(MAX_GENTITIES - MAX_CLIENTS)) {
+        gentity_t* from = &g_entities[point];
+
+        if (!from->inuse) {
+            return -1;
+        }
+        do {
+            ent = G_Find(ent, FOFS(tourPointTargetName), from->tourPointTarget);
+            if (!ent) {
+                return -1;
+            }
+        } while (Q_stricmp(ent->classname, "info_tour_point"));
+        if (ent == from) {
+            return -1;
+        }
+    } else {
+        do {
+            ent = G_Find(ent, FOFS(classname), "info_tour_point");
+            if (!ent) {
+                return -1;
+            }
+        } while (!(ent->spawnflags & 1));
+    }
+
+    VectorCopy(ent->r.currentOrigin, end);
+    end[2] -= 8192;
+    trap_Trace(&tr, ent->r.currentOrigin, NULL, NULL, end, 0, CONTENTS_SOLID);
+    VectorCopy(tr.endpos, floor);
+    floor[2] = tr.endpos[2] + 16;
+
+    target = NULL;
+    while ((target = G_Find(target, FOFS(targetname), ent->target)) != NULL) {
+        if (!Q_stricmp(target->classname, "info_notnull")) {
+            VectorCopy(target->s.origin, look);
+            break;
+        }
+    }
+    return ent->s.number;
+}
+
+/*
+===============
+AIEnter_Training
+
+0x1000f880, from BotDeathmatchAI while bot_training is 1 or 2. The bot becomes the
+tour's guide -- invulnerable, unable to pick anything up, rockets to spare -- and
+its goal the stop after the one it last left.
+===============
+*/
+void AIEnter_Training(bot_state_t* bs) {
+    gentity_t* ent = &g_entities[bs->client];
+
+    bs->ltg_time = FloatTime() + 99999;
+    bs->tourFollowDist = 150;
+    bs->ltgtype = LTG_TRAINING;
+    bs->nodeEnterTime = 0;
+    bs->tourStopReached = 0;
+    bs->tourNextTime = 0;
+    bs->tourLookUntil = 0;
+    bs->tourSavedLookSet = 0;
+    bs->tourGoBack = 0;
+    bs->tourLostPlayer = 0;
+    bs->tourReturning = 0;
+    bs->tourPlayerNear = 0;
+    bs->tourSaidCareful = 0;
+    bs->ainode = AINode_Training;
+
+    ent->flags |= FL_GODMODE | FL_NOPICKUP;
+    ent->client->ps.ammo[WP_ROCKET_LAUNCHER] = 9999;
+    ent->client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+    ent->flags |= FL_TRAINER | FL_NO_KNOCKBACK;
+    ent->client->ps.stats[STAT_WEAPONS] |= 1 << 15;
+
+    bs->tourAnnounced = 0;
+    bs->tourWait = 0;
+    bs->tourWaitForPlayer = 0;
+    bs->tourPoint = BotTourGoal(bs->tourPrevPoint, bs->tourLookTarget, bs->tourGoal);
+    memset(&bs->tourSavedGoal, 0, sizeof(bs->tourSavedGoal));
+    VectorCopy(bs->tourGoal, bs->tourPrevGoal);
+    BotRecordNodeSwitch(bs, "lead teammate", "", "");
+}
+
+// the goal the nodes push when they go to the player
+static void BotTourGoalOnEntity(bot_goal_t* goal, aas_entityinfo_t* info, int entitynum) {
+    VectorCopy(info->origin, goal->origin);
+    goal->areanum = BotPointAreaNum(info->origin);
+    VectorCopy(info->mins, goal->mins);
+    VectorCopy(info->maxs, goal->maxs);
+    goal->entitynum = entitynum;
+    goal->number = info->number;
+    goal->flags = 0;
+    goal->iteminfo = 0;
+}
+
+// what both nodes do with a movement result: where to look, and the weapon it asks for
+static void BotTourMoveView(bot_state_t* bs, bot_moveresult_t* moveresult, bot_goal_t* goal, float lookahead) {
+    vec3_t target;
+
+    BotAIBlocked(bs, moveresult, qtrue);
+    BotClearPath(bs, moveresult);
+    if (moveresult->flags & (MOVERESULT_MOVEMENTVIEWSET | MOVERESULT_MOVEMENTVIEW | MOVERESULT_SWIMVIEW)) {
+        VectorCopy(moveresult->ideal_viewangles, bs->ideal_viewangles);
+    } else if (moveresult->flags & MOVERESULT_WAITING) {
+        if (random() < bs->thinktime * 0.8) {
+            BotRoamGoal(bs, target);
+            BotTourLookAt(bs, target);
+        }
+    } else if (!(bs->flags & BFL_IDEALVIEWSET)) {
+        if (trap_BotMovementViewTarget(bs->ms, goal, bs->tfl, lookahead, target)) {
+            BotTourLookAt(bs, target);
+        } else if (VectorLengthSquared(moveresult->movedir) != 0) {
+            vectoangles(moveresult->movedir, bs->ideal_viewangles);
+        } else if (random() < bs->thinktime * 0.8) {
+            BotRoamGoal(bs, target);
+            BotTourLookAt(bs, target);
+        }
+    }
+    if (moveresult->flags & MOVERESULT_MOVEMENTWEAPON) {
+        bs->weaponnum = moveresult->weapon;
+    }
+}
+
+/*
+===============
+AINode_Training
+
+0x1000fa00. Each frame the guide leaves the tour if it died, went to spectate or
+the tour was switched off, and ends it -- readying the player up for the match --
+when there is no stop left. Otherwise it looks at the player while the tour holds,
+takes as its goal the player (out of sight or not caught up) or the stop, and then
+either arrives (reveals what the stop hides, fires its targets, says its line),
+waits out the stop, moves on to the next, waits for the player, or walks.
+===============
+*/
+int AINode_Training(bot_state_t* bs) {
+    int human = G_TrainingHumanClient();
+    int keepGoing, announced = 0, botFarther, canSee, ignore, flag2, flag4;
+    gentity_t* point;
+    entityState_t hstate;
+    aas_entityinfo_t hinfo, binfo;
+    bot_goal_t goal;
+    bot_moveresult_t moveresult;
+    bsp_trace_t tr;
+    vec3_t pointOrigin, d, end;
+    float radius, wait, cvarValue, chatTime, distBotHuman, distBotGoal, distHumanGoal;
+    char* message;
+    char* cvar;
+
+    if (BotIsObserver(bs)) {
+        BotTrainerRelease(bs);
+        bs->ltgtype = 0;
+        bs->tourPoint = -1;
+        BotRecordNodeSwitch(bs, "observer", "", "lead teammate: observer");
+        BotResetState(bs);
+        bs->ainode = AINode_Observer;
+        bs->ltgtype = 0;
+        return qfalse;
+    }
+    if (bs->cur_ps.pm_type == PM_INTERMISSION) {
+        BotTrainerRelease(bs);
+        bs->ltgtype = 0;
+        bs->tourPoint = -1;
+        AIEnter_Intermission(bs, "lead teammate: intermission");
+        return qfalse;
+    }
+    if (bs->cur_ps.pm_type == PM_DEAD) {
+        BotTrainerRelease(bs);
+        bs->ltgtype = 0;
+        AIEnter_Respawn(bs, "lead teammate: bot dead");
+        return qfalse;
+    }
+    if (bot_training.integer != 1 && bot_training.integer != 2) {
+        BotTrainerRelease(bs);
+        bs->ltgtype = 0;
+        bs->tourPoint = -1;
+        AIEnter_Seek_LTG(bs, "lead teammate: no ai node");
+        return qfalse;
+    }
+    if (human == -1) {
+        BotTrainerRelease(bs);
+        bs->ltgtype = 0;
+        trap_Cvar_Set("bot_training", "0");
+        AIEnter_Seek_LTG(bs, "lead teammate: no client");
+        return qfalse;
+    }
+    // no stop left: the tour is over, and the player is ready for the match
+    if (bs->tourPoint == -1) {
+        trap_Cvar_Set("bot_training", "0");
+        trap_Cvar_Set("bot_dynamicSkill", "1");
+        trap_Cvar_Set("bot_followMe", "0");
+        g_entities[human].client->pers.ready = qtrue;
+        BotTrainerRelease(bs);
+        g_entities[human].flags &= ~FL_GODMODE;
+        return qtrue;
+    }
+    point = &g_entities[bs->tourPoint];
+    if (!point->inuse) {
+        // 0x10011871
+        BotTrainerRelease(bs);
+        bs->ltgtype = 0;
+        trap_Cvar_Set("bot_training", "0");
+        trap_Cvar_Set("bot_followMe", "1");
+        AIEnter_FollowMe(bs);
+        return qfalse;
+    }
+
+    flag4 = (point->spawnflags >> 2) & 1;
+    flag2 = (point->spawnflags >> 1) & 1;
+    radius = point->tourRadius;
+    wait = point->wait;
+    cvarValue = point->tourCvarValue;
+    ignore = point->tourIgnorePlayer == 1;
+    VectorCopy(point->r.currentOrigin, pointOrigin);
+    message = point->message;
+    cvar = point->cvar;
+    chatTime = point->tourChatTime;
+
+    bs->tfl = TFL_DEFAULT;
+    bs->weaponnum = bot_gauntlet.integer ? 15 : WP_ROCKET_LAUNCHER;
+    g_entities[human].flags |= FL_GODMODE;
+    BotAI_GetEntityState(human, &hstate);
+    trap_AAS_EntityInfo(human, &hinfo);
+    trap_AAS_EntityInfo(bs->client, &binfo);
+
+    // the player died: a word once the body lands, and eyes on them
+    if (hstate.eFlags & EF_DEAD) {
+        if (!bs->tourSaidCareful && hstate.groundEntityNum != ENTITYNUM_NONE) {
+            trap_EA_Command(bs->client, "botSay You've got to be careful in the Arena!");
+            bs->tourSaidCareful = 1;
+        }
+        BotTourLookAt(bs, hinfo.origin);
+        return qtrue;
+    }
+    bs->tourSaidCareful = 0;
+
+    // the tour holds: look at the player
+    if (FloatTime() < (float)bs->tourNextTime) {
+        BotTourLookAt(bs, hinfo.origin);
+        return qtrue;
+    }
+    // showing a spot: aim just under it, and fire at it at the end if nothing is in the way
+    if (FloatTime() < bs->tourLookUntil) {
+        VectorCopy(bs->tourPrevGoal, d);
+        d[2] -= 32;
+        BotTourLookAt(bs, d);
+        if (FloatTime() + 0.3 > bs->tourLookUntil) {
+            VectorCopy(bs->tourPrevGoal, end);
+            end[2] += 32;
+            BotAI_Trace(&tr, bs->eye, NULL, NULL, end, bs->client, 0x6000001);
+            if (tr.fraction == 1.0f) {
+                trap_EA_Attack(bs->client);
+            }
+        }
+        return qtrue;
+    }
+
+    // 0x1001002e
+    VectorSubtract(hinfo.origin, bs->origin, d);
+    distBotHuman = VectorLength(d);
+    VectorSubtract(bs->tourGoal, bs->origin, d);
+    if (!(point->spawnflags & 16)) {
+        d[2] = 0;
+    }
+    distBotGoal = VectorLength(d);
+    VectorSubtract(bs->tourGoal, hinfo.origin, d);
+    if (!(point->spawnflags & 16)) {
+        d[2] = 0;
+    }
+    distHumanGoal = VectorLength(d);
+    keepGoing = 1;
+    if (radius > distBotGoal && bs->tourPoint != 0) {
+        keepGoing = 0;
+    }
+    // 0x100101c2: the bot is the one still on its way -- it is farther from the stop than the
+    // player, who is not at it either. The fork had this the other way round, so the very first
+    // stop (the player frozen 146 units from it) was announced instead of reached and Crash stood
+    // there saying "This way!" for ever.
+    botFarther = distBotGoal > distHumanGoal && distHumanGoal > radius;
+
+    canSee = (int)BotEntityVisible(bs->entitynum, bs->eye, bs->viewangles, 360, human);
+    BotAI_Trace(&tr, bs->eye, NULL, NULL, pointOrigin, bs->client, CONTENTS_SOLID);
+    if (tr.fraction != 1.0f) {
+        botFarther = 1;
+    }
+    if (!bs->tourGoBack) {
+        canSee = 1;
+    }
+
+    trap_BotEmptyGoalStack(bs->gs);
+    if (bs->tourReturning) {
+        VectorSubtract(bs->tourSavedGoal.origin, bs->origin, d);
+        d[2] = 0;
+        if (VectorLength(d) > 16) {
+            goal = bs->tourSavedGoal;
+            goto pushgoal;
+        }
+        bs->tourReturning = 0;
+    }
+    if (!ignore && (!canSee || !bs->tourPlayerNear || bs->tourLostPlayer ||
+                    (bs->tourPoint == 0 && distBotHuman > 128))) {
+        // 0x10010359: the player first
+        keepGoing = 1;
+        BotTourGoalOnEntity(&goal, &hinfo, human);
+    } else {
+        // 0x10010457: the stop
+        if ((distBotGoal > radius || botFarther) && bs->tourPoint != 0) {
+            announced = 1;
+        }
+        if (ignore && distBotGoal > radius) {
+            announced = 1;
+            botFarther = 1;
+        }
+        keepGoing = 0;
+        goal.areanum = BotPointAreaNum(bs->tourGoal);
+        if (!goal.areanum) {
+            goal.areanum = BotPointAreaNum(pointOrigin);
+        }
+        VectorCopy(bs->tourGoal, goal.origin);
+        VectorCopy(point->r.mins, goal.mins);
+        VectorCopy(point->r.maxs, goal.maxs);
+        goal.entitynum = bs->tourPoint;
+        goal.number = bs->tourPoint;
+        goal.flags = 0;
+        goal.iteminfo = 0;
+    }
+
+pushgoal:
+    // 0x100105a7
+    trap_BotPushGoal(bs->gs, &goal);
+    if (BotInLavaOrSlime(bs)) {
+        bs->tfl |= TFL_LAVA | TFL_SLIME;
+    }
+    if (BotCanAndWantsToRocketJump(bs)) {
+        bs->tfl |= TFL_ROCKETJUMP;
+    }
+    bs->enemy = -1;
+    if (BotAIPredictObstacles(bs, &goal)) {
+        bs->ltgtype = 0;
+        return qfalse;
+    }
+    if (bs->tourReturning) {
+        goto movetogoal;
+    }
+
+    if (keepGoing) {
+        // 0x10010f25: the player is near, or something ahead needs them first
+        if (bs->tourFollowDist > distBotHuman || (float)bs->tourWaitForPlayer > FloatTime()) {
+            bs->tourPlayerNear = 1;
+            BotTourLookAt(bs, hinfo.origin);
+            if ((float)bs->tourWaitForPlayer > FloatTime() && FloatTime() > bs->tourNextSay) {
+                if (FloatTime() > bs->tourLastNudge + 10 && random() < bs->thinktime * 1.9) {
+                    trap_EA_Jump(bs->client);
+                    bs->tourLastNudge = FloatTime();
+                    trap_EA_Command(bs->client, "say This way! No time to waste!");
+                    trap_SendServerCommand(human, "playSound sound/vo/crash/41a.wav");
+                }
+                return qtrue;
+            }
+            // 0x10011032: step out of the way of a player walking into the bot
+            if (BotTourTouching(bs->client, human)) {
+                vec3_t forward, dir;
+
+                AngleVectors(hinfo.angles, forward, NULL, NULL);
+                forward[2] = 0;
+                VectorNormalize(forward);
+                VectorSubtract(bs->origin, hinfo.origin, dir);
+                VectorNormalize(dir);
+                if (DotProduct(forward, dir) > 0.7) {
+                    BotSetupForMovement(bs);
+                    trap_BotMoveInDirection(bs->ms, dir, 400, MOVE_WALK);
+                }
+            }
+            return qtrue;
+        }
+        if (!announced) {
+            goto movetogoal;
+        }
+    } else if (!announced) {
+        goto atstop;
+    }
+
+    // 0x10011147: on the way to a stop
+    if (bs->tourPoint != bs->tourAnnounced) {
+        if (bs->tourAnnounced && bs->tourWait && (g_entities[bs->tourAnnounced].spawnflags & 32)) {
+            trap_EA_Gesture(bs->client);
+            trap_EA_Command(bs->client, "say Let's continue on to the next stop in the tour! Follow me!");
+            bs->tourNextTime = (int)(FloatTime() + 3.0);
+            bs->tourNextSay = FloatTime() + 7.0;
+        }
+        bs->tourAnnounced = bs->tourPoint;
+        return qtrue;
+    }
+    if (distBotHuman > 320 && !botFarther && !ignore) {
+        BotTourLookAt(bs, hinfo.origin);
+        if (FloatTime() > bs->tourNextSay && FloatTime() > bs->tourLastNudge + 10 &&
+            random() < bs->thinktime * 1.9) {
+            bs->tourLastNudge = FloatTime();
+            trap_EA_Command(bs->client, "botSay This way! No time to waste!");
+            trap_SendServerCommand(human, "playSound sound/vo/crash/41a.wav");
+            if (bs->tourGoBack) {
+                bs->tourLostPlayer = 1;
+                BotTourSaveGoal(bs);
+            } else {
+                trap_EA_Jump(bs->client);
+            }
+        }
+        return qtrue;
+    }
+    if (FloatTime() > bs->tourNextSay && distBotHuman > 320 && distHumanGoal > distBotGoal && !ignore &&
+        FloatTime() > bs->tourLastNudge + 10) {
+        BotTourLookAt(bs, hinfo.origin);
+        bs->tourLastNudge = FloatTime();
+        trap_EA_Command(bs->client, "say This way! No time to waste!");
+        trap_SendServerCommand(human, "playSound sound/vo/crash/41a.wav");
+        if (bs->tourGoBack) {
+            bs->tourLostPlayer = 1;
+            BotTourSaveGoal(bs);
+        }
+        return qtrue;
+    }
+    if (FloatTime() > bs->tourNextSay && !ignore) {
+        // 0x100113c9: can the player follow the way ahead? a ledge, a pad or a teleport
+        // out of their sight holds the tour for ten seconds
+        int i;
+
+        for (i = 0; i < 20; i++) {
+            aas_predictroute_t route;
+
+            trap_AAS_PredictRoute(&route, bs->areanum, bs->origin, goal.areanum, bs->tfl, 1,
+                                  (int)(1000.0 / sv_fps.integer), 0, 0, 0, 0);
+            if (BotEntityVisible(bs->entitynum, route.endpos, bs->viewangles, 360, human) != 0) {
+                continue;
+            }
+            if ((route.endtravelflags & TFL_WALKOFFLEDGE) ||
+                (route.endtravelflags & (TFL_FUNCBOB | TFL_JUMPPAD | TFL_TELEPORT))) {
+                bs->tourWaitForPlayer = (int)(FloatTime() + 10);
+                continue;
+            }
+            BotTourLookAt(bs, hinfo.origin);
+            if (FloatTime() > bs->tourNextSay && FloatTime() > bs->tourLastNudge + 10 &&
+                random() < bs->thinktime * 1.9) {
+                trap_EA_Jump(bs->client);
+                bs->tourLastNudge = FloatTime();
+                trap_EA_Command(bs->client, "say This way! No time to waste!");
+            }
+            return qtrue;
+        }
+    }
+    goto movetogoal;
+
+atstop:
+    if (!bs->tourStopReached) {
+        // 0x1001066d: the first frame at the stop
+        vec3_t mins, maxs;
+        int touch[1024];
+        int num, i;
+        gentity_t* ent;
+
+        VectorAdd(goal.origin, goal.mins, mins);
+        VectorAdd(goal.origin, goal.maxs, maxs);
+        num = trap_EntitiesInBox(mins, maxs, touch, 1024);
+        for (i = 0; i < num; i++) {
+            ent = &g_entities[touch[i]];
+            if (ent->s.eType == ET_ITEM && (ent->s.eFlags & EF_NODRAW) && ent->item &&
+                ent->item->giType != IT_TEAM && ent->item->giType != IT_PERSISTANT_POWERUP) {
+                ent->use(ent, NULL, NULL);
+            }
+        }
+        ent = NULL;
+        while ((ent = G_Find(ent, FOFS(targetname), point->target)) != NULL) {
+            if (ent->item && (ent->s.eFlags & EF_NODRAW)) {
+                ent->use(ent, NULL, NULL);
+            }
+        }
+        bs->tourStopReached = 1;
+        bs->tourReachTime = FloatTime();
+        ent = NULL;
+        while ((ent = G_Find(ent, FOFS(targetname), point->target)) != NULL) {
+            if (!Q_stricmp(ent->classname, "info_tour_point") || !Q_stricmp(ent->classname, "info_notnull")) {
+                continue;
+            }
+            if (ent->item && !(ent->s.eFlags & EF_NODRAW)) {
+                continue;
+            }
+            if (ent->use) {
+                ent->use(ent, point, &g_entities[bs->client]);
+            }
+        }
+        if (message && message[0]) {
+            trap_EA_Command(bs->client, va("botSay %i %f %s", human, (double)chatTime, message));
+            trap_SendServerCommand(human, va("playSound %s", point->noise));
+            bs->tourNextSay = FloatTime() + 7.0;
+        }
+    }
+
+    // 0x1001093e: at the stop
+    if (FloatTime() > bs->tourNextSay && distBotHuman > 320 && !ignore && FloatTime() > bs->tourLastNudge + 10 &&
+        random() < bs->thinktime * 1.9) {
+        BotTourLookAt(bs, hinfo.origin);
+        trap_EA_Jump(bs->client);
+        bs->tourLastNudge = FloatTime();
+        trap_EA_Command(bs->client, "say This way! No time to waste!");
+        trap_SendServerCommand(human, "playSound sound/vo/crash/41a.wav");
+        if (bs->tourGoBack) {
+            bs->tourLostPlayer = 1;
+            BotTourSaveGoal(bs);
+        }
+    }
+    if (!VectorCompare(bs->tourLookTarget, vec3_origin)) {
+        BotTourLookAt(bs, bs->tourLookTarget);
+    } else if (flag2) {
+        BotTourLookAt(bs, flag4 ? bs->tourGoal : pointOrigin);
+    } else {
+        BotTourLookAt(bs, hinfo.origin);
+    }
+
+    if (FloatTime() <= bs->tourReachTime + wait) {
+        return qtrue;
+    }
+    // spawnflag 64: the stop waits for the player to carry a flag
+    if ((point->spawnflags & 64) &&
+        !(hinfo.powerups & ((1 << PW_REDFLAG) | (1 << PW_BLUEFLAG) | (1 << PW_NEUTRALFLAG)))) {
+        if (FloatTime() > bs->tourLastNudge + 10 && random() < bs->thinktime * 1.9) {
+            trap_EA_Jump(bs->client);
+            bs->tourLastNudge = FloatTime();
+            trap_EA_Command(bs->client, "say Grab the flag! No time to waste!");
+        }
+        return qtrue;
+    }
+    if (point->spawnflags & 256) {
+        // spawnflag 256: the stop waits for the player to take what it showed
+        gentity_t* item = NULL;
+
+        while ((item = G_Find(item, FOFS(targetname), point->target)) != NULL) {
+            if (item->item && !(item->s.eFlags & EF_NODRAW)) {
+                break;
+            }
+        }
+        if (item) {
+            VectorSubtract(hinfo.origin, bs->origin, d);
+            vectoangles(d, bs->ideal_viewangles);
+            bs->ideal_viewangles[2] *= 0.5f;
+            VectorCopy(item->s.origin, bs->tourPrevGoal);
+            if (FloatTime() > bs->tourLastNudge + 10 && random() < bs->thinktime * 1.1) {
+                const char* line;
+
+                bs->tourLastNudge = FloatTime();
+                if (random() < bs->thinktime) {
+                    trap_EA_Jump(bs->client);
+                }
+                switch (item->item->giType) {
+                    case IT_WEAPON:
+                        line = "say Grab this weapon! No time to waste!";
+                        break;
+                    case IT_AMMO:
+                        line = "say Grab this ammo! No time to waste!";
+                        break;
+                    case IT_ARMOR:
+                        line = "say Grab this armor! No time to waste!";
+                        break;
+                    case IT_HEALTH:
+                        line = "say Grab this health! No time to waste!";
+                        break;
+                    case IT_POWERUP:
+                        line = "say Grab this powerup! No time to waste!";
+                        break;
+                    case IT_HOLDABLE:
+                        line = "say Grab this holdable! No time to waste!";
+                        break;
+                    default:
+                        line = "say Grab this item! No time to waste!";
+                        break;
+                }
+                trap_EA_Command(bs->client, (char*)line);
+                trap_SendServerCommand(human, "playSound sound/vo/crash/42b.wav");
+                return qtrue;
+            }
+            if (FloatTime() > bs->tourLookUntil + 10 && random() < bs->thinktime * 1.1 &&
+                FloatTime() > bs->tourNextSay) {
+                bs->tourLookUntil = FloatTime() + 1.0;
+            }
+            return qtrue;
+        }
+    } else {
+        bs->tourLookUntil = FloatTime();
+        bs->tourLastNudge = FloatTime();
+    }
+
+    // 0x10010dd9: on to the next stop. Just after a teleport the guide will go back
+    // for a player who falls behind.
+    if (FloatTime() < bs->teleport_time + 30 && !bs->tourSavedLookSet &&
+        !VectorCompare(bs->tourLookTarget, vec3_origin)) {
+        VectorCopy(bs->tourLookTarget, bs->tourSavedLook);
+        bs->tourSavedLookSet = 1;
+        bs->tourGoBack = 1;
+    }
+    bs->tourPrevPoint = bs->tourPoint;
+    bs->tourPoint = BotTourGoal(bs->tourPoint, bs->tourLookTarget, bs->tourGoal);
+    VectorCopy(bs->tourGoal, bs->tourPrevGoal);
+    bs->tourStopReached = 0;
+    bs->tourWait = (int)wait;
+    if (cvar && cvar[0] && cvarValue != -1.0f) {
+        trap_Cvar_Set(cvar, va("%f", cvarValue));
+    }
+    return qtrue;
+
+movetogoal:
+    // 0x10011554
+    bs->tourLastNudge = FloatTime();
+    bs->tourLookUntil = FloatTime();
+    bs->nodeEnterTime = (int)FloatTime();
+    if (600 > distBotHuman && canSee) {
+        trap_EA_Action(bs->client, ACTION_WALK);  // retail's EA_Walk (botlib ea 0x10) sets just this
+    }
+    if (bs->tourLostPlayer && 170 > distBotHuman) {
+        trap_EA_Command(bs->client, "say Follow me to continue the tour! Lets go!");
+        trap_SendServerCommand(human, "playSound sound/vo/crash/39a.wav");
+        bs->tourLostPlayer = 0;
+        bs->tourNextTime = (int)(FloatTime() + 2);
+        bs->tourReturning = 1;
+    }
+    BotSetupForMovement(bs);
+    trap_BotMoveToGoal(&moveresult, bs->ms, &goal, bs->tfl);
+    if (moveresult.failure) {
+        trap_BotResetAvoidReach(bs->ms);
+        if (hinfo.groundent == ENTITYNUM_NONE) {
+            BotTourLookAt(bs, hinfo.origin);
+            return qtrue;
+        }
+        if (!VectorCompare(bs->tourSavedLook, vec3_origin)) {
+            BotTourLookAt(bs, bs->tourSavedLook);
+            return qtrue;
+        }
+    }
+    BotTourMoveView(bs, &moveresult, &goal, 300);
+    return qtrue;
+}
+
+/*
+===============
+AIEnter_FollowMe
+
+0x1000ecc0, from BotDeathmatchAI while bot_followMe is set, and when the tour has
+no point left. In a training match the bot keeps the guide's protections and asks
+the player to exit the tutorial.
+===============
+*/
+void AIEnter_FollowMe(bot_state_t* bs) {
+    bs->ltg_time = FloatTime() + 99999;
+    bs->ltgtype = LTG_FOLLOWME;
+    bs->ainode = AINode_FollowMe;
+    bs->nodeEnterTime = 0;
+    trap_EA_Gesture(bs->client);
+    if (g_training.integer) {
+        gentity_t* ent = &g_entities[bs->client];
+
+        trap_EA_Command(bs->client, "say Exit the tutorial whenever you're ready to fight me!");
+        ent->flags |= FL_GODMODE | FL_NOPICKUP;
+        ent->client->ps.ammo[WP_ROCKET_LAUNCHER] = 9999;
+        ent->client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+        ent->flags |= FL_TRAINER | FL_NO_KNOCKBACK;
+        ent->client->ps.stats[STAT_WEAPONS] |= 1 << 15;
+        bs->weaponnum = WP_ROCKET_LAUNCHER;
+    }
+    BotRecordNodeSwitch(bs, "seek teammate", "", "");
+}
+
+/*
+===============
+AINode_FollowMe
+
+0x1000eda0. Stays by the player: walks to them past bot_followDist, and near them
+copies their crouch, steps aside when pushed from the front, looks around, waves
+now and then, and in training reminds them to exit the tutorial.
+===============
+*/
+int AINode_FollowMe(bot_state_t* bs) {
+    int human = G_TrainingHumanClient();
+    aas_entityinfo_t hinfo, binfo;
+    bot_goal_t goal;
+    bot_moveresult_t moveresult;
+    vec3_t target, dir;
+    float dist;
+
+    if (BotIsObserver(bs)) {
+        BotTrainerRelease(bs);
+        bs->ltgtype = 0;
+        BotRecordNodeSwitch(bs, "observer", "", "seek teammate: observer");
+        BotResetState(bs);
+        bs->ainode = AINode_Observer;
+        bs->ltgtype = 0;
+        return qfalse;
+    }
+    if (bs->cur_ps.pm_type == PM_INTERMISSION) {
+        BotTrainerRelease(bs);
+        bs->ltgtype = 0;
+        AIEnter_Intermission(bs, "seek teammate: intermission");
+        return qfalse;
+    }
+    if (bs->cur_ps.pm_type == PM_DEAD) {
+        BotTrainerRelease(bs);
+        bs->ltgtype = 0;
+        AIEnter_Respawn(bs, "seek teammate: bot dead");
+        return qfalse;
+    }
+    if (!bot_followMe.integer) {
+        BotTrainerRelease(bs);
+        bs->ltgtype = 0;
+        AIEnter_Seek_LTG(bs, "seek teammate: no ai node");
+        return qfalse;
+    }
+    if (human == -1) {
+        BotTrainerRelease(bs);
+        bs->ltgtype = 0;
+        trap_Cvar_Set("bot_followMe", "0");
+        AIEnter_Seek_LTG(bs, "seek teammate: no client");
+        return qfalse;
+    }
+    if (g_training.integer) {
+        BotSetFreezeState(bs, 1);
+        bs->weaponnum = bot_gauntlet.integer ? 15 : WP_ROCKET_LAUNCHER;
+    }
+
+    bs->tfl = TFL_DEFAULT;
+    trap_AAS_EntityInfo(human, &hinfo);
+    trap_AAS_EntityInfo(bs->client, &binfo);
+    trap_BotEmptyGoalStack(bs->gs);
+    BotTourGoalOnEntity(&goal, &hinfo, human);
+    VectorCopy(hinfo.origin, target);
+    trap_BotPushGoal(bs->gs, &goal);
+    if (BotInLavaOrSlime(bs)) {
+        bs->tfl |= TFL_LAVA | TFL_SLIME;
+    }
+    if (BotCanAndWantsToRocketJump(bs)) {
+        bs->tfl |= TFL_ROCKETJUMP;
+    }
+    bs->enemy = -1;
+    if (BotAIPredictObstacles(bs, &goal)) {
+        bs->ltgtype = 0;
+        return qfalse;
+    }
+
+    VectorSubtract(hinfo.origin, bs->origin, dir);
+    dist = VectorLength(dir);
+    if (bot_followDist.value > dist && binfo.groundent == ENTITYNUM_WORLD) {
+        // 0x1000f2b4: by the player
+        playerState_t ps;
+        int ducked;
+
+        BotAI_GetClientState(human, &ps);
+        ducked = ps.pm_flags & PMF_DUCKED;
+        if ((ducked && random() * 100 < 3.0) || ((bs->cur_ps.pm_flags & PMF_DUCKED) && ducked)) {
+            trap_EA_Crouch(bs->client);
+        }
+        if (BotTourTouching(bs->client, human)) {
+            vec3_t forward;
+
+            AngleVectors(hinfo.angles, forward, NULL, NULL);
+            forward[2] = 0;
+            VectorNormalize(forward);
+            VectorSubtract(bs->origin, hinfo.origin, dir);
+            VectorNormalize(dir);
+            if (DotProduct(forward, dir) > 0.7) {
+                BotSetupForMovement(bs);
+                trap_BotMoveInDirection(bs->ms, dir, 400, MOVE_WALK);
+                return qtrue;
+            }
+        }
+        if (FloatTime() < (float)(bs->nodeEnterTime + 5)) {
+            BotTourLookAt(bs, hinfo.origin);
+        } else if (random() < bs->thinktime * 0.5) {
+            BotRoamGoal(bs, target);
+            BotTourLookAt(bs, target);
+        }
+        if (random() * 100 < 0.5) {
+            trap_EA_Gesture(bs->client);
+        }
+        if (g_training.integer && random() * 100 < 1.5) {
+            trap_EA_Command(bs->client, "say Exit the tutorial whenever you're ready to fight me!");
+            bs->tourNextSay = FloatTime() + 3.0;
+        }
+        return qtrue;
+    }
+
+    // 0x1000f532: walking to the player
+    bs->nodeEnterTime = (int)FloatTime();
+    BotSetupForMovement(bs);
+    trap_BotMoveToGoal(&moveresult, bs->ms, &goal, bs->tfl);
+    if (moveresult.failure) {
+        trap_BotResetAvoidReach(bs->ms);
+        if (hinfo.groundent == ENTITYNUM_NONE) {
+            BotTourLookAt(bs, hinfo.origin);
+            return qtrue;
+        }
+    }
+    {
+        // in the air it looks much further along the path, unless the player is in view
+        float lookahead = bs->cur_ps.groundEntityNum == ENTITYNUM_NONE ? 2048 : 300;
+
+        if (!(moveresult.flags & (MOVERESULT_MOVEMENTVIEWSET | MOVERESULT_MOVEMENTVIEW | MOVERESULT_SWIMVIEW |
+                                   MOVERESULT_WAITING)) &&
+            !(bs->flags & BFL_IDEALVIEWSET) &&
+            BotEntityVisible(bs->entitynum, bs->eye, bs->viewangles, 90, human) == 0) {
+            lookahead = 300;
+        }
+        BotTourMoveView(bs, &moveresult, &goal, lookahead);
+    }
+    return qtrue;
 }

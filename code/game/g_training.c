@@ -1,0 +1,401 @@
+/*
+===========================================================================
+Copyright (C) 1999-2005 Id Software, Inc.
+
+This file is part of Quake III Arena source code.
+
+Quake III Arena source code is free software; you can redistribute it
+and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 2 of the License,
+or (at your option) any later version.
+
+Quake III Arena source code is distributed in the hope that it will be
+useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Quake III Arena source code; if not, write to the Free Software
+Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+===========================================================================
+*/
+//
+// g_training.c -- [QL] the Crash Course: the map's tour, and the match around it
+//
+// The Crash Course is qztraining with the "_training" factory (g_training 1). The
+// tour is the map's: 47 info_tour_point entities chained by tourPointTargetName and
+// tourPointTarget, each holding one line of Crash's script -- the sound she says it
+// with, the text, how long it lasts, how near you have to be, a cvar to set on the
+// way. Crash is the bot "Trainer" of scripts/bots.txt, and walking her from stop to
+// stop is the bot's (AINode_Training, ai_dmnet.c).
+//
+// This file is what the game itself does around that, from qagamex86.dll:
+//   SP_info_tour_point      0x1005a1f0
+//   its think               0x10059fd0
+//   G_TrainingHumanClient   0x10024ea0
+//   G_TrainingBotClient     0x10024ee0
+//   G_TrainingForceCvar     0x10024f20
+//   G_TrainingAddTrainer    0x100378e0
+//   G_TrainingFrame         0x10024fa0, from BotAIStartFrame
+//   Cmd_SkipTraining        0x10045a80, from readyup
+//
+// The cinematic the tour opens with is the player held in PM_TUTORIAL while
+// bot_training is 1 (client->freezePlayer, set here), which cgame answers with
+// letterbox bars and nothing but the chat, the centre print and the skip prompt.
+//
+
+#include "g_local.h"
+
+// the tick's latches (0x100907dc, 0x100907d8, 0x100907d0, 0x100907c4): retail keeps
+// them for the life of the module, which is one map
+static qboolean trainingMusicStopped;
+static qboolean trainingTrainerAdded;
+static qboolean trainingLoopStarted;
+static qboolean trainingEndMusicPlayed;
+
+/*
+===============
+G_TrainingHumanClient
+
+0x10024ea0: the first client in use, connected, and local -- the player the
+training is for. Returns its client number or -1.
+===============
+*/
+int G_TrainingHumanClient(void) {
+    int i;
+
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        gentity_t* ent = &g_entities[i];
+
+        if (!ent->inuse || !ent->client) {
+            continue;
+        }
+        if (ent->client->pers.connected != CON_CONNECTED || !ent->client->pers.localClient) {
+            continue;
+        }
+        return ent->s.clientNum;
+    }
+    return -1;
+}
+
+/*
+===============
+G_TrainingBotClient
+
+0x10024ee0: the first client in use, connected, and a bot -- Crash.
+===============
+*/
+int G_TrainingBotClient(void) {
+    int i;
+
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        gentity_t* ent = &g_entities[i];
+
+        if (!ent->inuse || !ent->client) {
+            continue;
+        }
+        if (ent->client->pers.connected != CON_CONNECTED || !(ent->r.svFlags & SVF_BOT)) {
+            continue;
+        }
+        return ent->s.clientNum;
+    }
+    return -1;
+}
+
+// 0x10024f20: sets a cvar only when it holds something else
+static void G_TrainingForceCvar(const char* name, const char* value) {
+    char current[1024];
+
+    trap_Cvar_VariableStringBuffer(name, current, sizeof(current));
+    if (strcmp(current, value)) {
+        trap_Cvar_Set(name, value);
+    }
+}
+
+// 0x100378e0: Crash comes in five seconds later, and the client loads her at once
+static void G_TrainingAddTrainer(float skill) {
+    G_AddBot("Trainer", skill, "", 5000, "");
+    trap_SendServerCommand(-1, "loaddeferred\n");
+}
+
+/*
+===============================================================================
+
+THE TOUR POINTS
+
+===============================================================================
+*/
+
+/*
+===============
+TourPoint_Think
+
+0x10059fd0, a few frames after the level loads. A point with spawnflag 128 hides
+what its box holds -- items, but not flags or persistant powerups -- and every item
+it targets, until the tour gets there and uses them. Then the next point of the
+chain is found once, so the bot does not have to look for it.
+===============
+*/
+static void TourPoint_Think(gentity_t* self) {
+    if (self->spawnflags & 128) {
+        vec3_t mins, maxs;
+        int touch[MAX_GENTITIES];
+        gentity_t* ent;
+        int num, i;
+
+        VectorAdd(self->r.currentOrigin, self->r.mins, mins);
+        VectorAdd(self->r.currentOrigin, self->r.maxs, maxs);
+        num = trap_EntitiesInBox(mins, maxs, touch, MAX_GENTITIES);
+        for (i = 0; i < num; i++) {
+            ent = &g_entities[touch[i]];
+            if (ent->s.eType != ET_ITEM || !ent->item) {
+                continue;
+            }
+            if (ent->item->giType == IT_TEAM || ent->item->giType == IT_PERSISTANT_POWERUP) {
+                continue;
+            }
+            ent->r.svFlags |= SVF_NOCLIENT;
+            ent->s.eFlags |= EF_NODRAW;
+            ent->r.contents = 0;
+            trap_LinkEntity(ent);
+        }
+
+        ent = NULL;
+        while ((ent = G_Find(ent, FOFS(targetname), self->target)) != NULL) {
+            if (!ent->item) {
+                continue;
+            }
+            ent->r.svFlags |= SVF_NOCLIENT;
+            ent->s.eFlags |= EF_NODRAW;
+            ent->r.contents = 0;
+            trap_LinkEntity(ent);
+        }
+    }
+
+    if (self->tourPointTarget) {
+        self->tourNext = G_Find(NULL, FOFS(tourPointTargetName), self->tourPointTarget);
+        if (!self->tourNext) {
+            G_Printf("info_tour_point with no tourPointTarget at %s!\n", vtos(self->s.origin));
+        }
+    }
+}
+
+/*QUAKED info_tour_point (1 0.5 0) (-16 -16 -24) (16 16 32) START
+[QL] One stop of a training map's tour. Only a training map keeps them.
+"tourPointTargetName"  this stop's name; only the first stop (START) may lack it
+"tourPointTarget"      the stop after it
+"noise"                what the trainer says here
+"message"              the line the player reads
+"printChatTextTime"    how long the line stays up (2)
+"wait"                 how long the stop lasts
+"radius"               how near the player has to be (300)
+"ignorePlayerLocation" the stop does not wait for the player
+"cvar" "cvarValue"     a cvar set on the way (-1 sets nothing)
+*/
+void SP_info_tour_point(gentity_t* ent) {
+    char* s;
+
+    if (!level.mapIsTrainingMap) {
+        G_FreeEntity(ent);
+        return;
+    }
+    if (!ent->tourPointTargetName && !(ent->spawnflags & 1)) {
+        G_Printf("info_tour_point with no tourPointTargetName at %s\n", vtos(ent->s.origin));
+        G_FreeEntity(ent);
+        return;
+    }
+
+    G_SpawnString("radius", "300", &s);
+    ent->tourRadius = atof(s);
+    G_SpawnString("cvarValue", "-1.0f", &s);
+    ent->tourCvarValue = atof(s);
+    G_SpawnString("printChatTextTime", "2.0f", &s);
+    ent->tourChatTime = atof(s);
+    G_SpawnString("ignorePlayerLocation", "0", &s);
+    ent->tourIgnorePlayer = atoi(s);
+    G_SpawnString("noise", "", &s);
+    if (s[0]) {
+        G_SoundIndex(s);
+    }
+
+    VectorCopy(ent->s.origin, ent->s.pos.trBase);
+    VectorClear(ent->s.pos.trDelta);
+    ent->s.pos.trType = TR_STATIONARY;
+    ent->s.pos.trTime = 0;
+    ent->s.pos.trDuration = 0;
+    VectorCopy(ent->s.origin, ent->r.currentOrigin);
+    VectorSet(ent->r.mins, -16, -16, -24);
+    VectorSet(ent->r.maxs, 16, 16, 32);
+
+    // the think runs four server frames in, when every point has spawned
+    ent->nextthink = level.time - 4 * (int)(-1000.0 / sv_fps.integer);
+    ent->think = TourPoint_Think;
+    trap_LinkEntity(ent);
+}
+
+/*
+===============================================================================
+
+THE TRAINING MATCH
+
+===============================================================================
+*/
+
+/*
+===============
+Cmd_SkipTraining
+
+0x10045a80, from readyup while g_skipTrainingEnable: the tour ends where it is and
+the match starts over. Crash can pick things up again with a machinegun and 100
+bullets, nobody is invulnerable any more, everyone respawns, and the player's chat
+and sounds are cleared.
+===============
+*/
+void Cmd_SkipTraining(int clientNum) {
+    int i;
+
+    trap_Cvar_Set("g_training", "1");
+    trap_Cvar_Set("bot_training", "0");
+    trap_Cvar_Set("bot_dynamicSkill", "1");
+    trap_Cvar_Set("bot_followMe", "0");
+    trap_Cvar_Set("bot_gauntlet", "0");
+    trap_Cvar_Set("g_skipTrainingEnable", "0");
+
+    for (i = 0; i < level.maxclients; i++) {
+        gentity_t* ent = &g_entities[i];
+
+        if (level.clients[i].pers.connected != CON_CONNECTED) {
+            continue;
+        }
+        if (ent->r.svFlags & SVF_BOT) {
+            ent->flags &= ~FL_NOPICKUP;
+            ent->client->ps.ammo[WP_MACHINEGUN] = 100;
+            ent->client->ps.stats[STAT_WEAPONS] |= 1 << WP_MACHINEGUN;
+        }
+        ent->flags &= ~(FL_TRAINER | FL_GODMODE);
+        ClientSpawn(ent);
+    }
+
+    trap_SendServerCommand(clientNum, "clearChat");
+    trap_SendServerCommand(clientNum, "clearSounds");
+}
+
+/*
+===============
+G_TrainingFrame
+
+0x10024fa0, at the end of every BotAIStartFrame while g_training is set.
+
+Away from a training map it switches the training off. With nobody to train it
+holds the match at retail's settings. Otherwise: the music stops for the warmup;
+Crash is added once the player is on a team and no other bot is in (at the skill
+the factory asked for); bot_training 3 starts the arena's loop; the intro's
+g_training 2 becomes 1 when the warmup is over. While the player has not readied
+up, bot_training 1 holds them in the cinematic (freezePlayer) and anything else
+lets them go and keeps Crash at least as good as g_spSkill; once they ready up
+the tour is over. When the match ends the player hears whether they won.
+===============
+*/
+void G_TrainingFrame(void) {
+    int human, bot;
+    gclient_t* client;
+
+    if (!g_training.integer) {
+        return;
+    }
+    if (!level.mapIsTrainingMap) {
+        G_TrainingForceCvar("g_training", "0");
+        G_TrainingForceCvar("bot_gauntlet", "0");
+        G_TrainingForceCvar("bot_training", "0");
+        G_TrainingForceCvar("bot_dynamicSkill", "1");
+        return;
+    }
+
+    human = G_TrainingHumanClient();
+    if (human == -1) {
+        G_TrainingForceCvar("bot_training", "1");
+        G_TrainingForceCvar("bot_followDist", "125");
+        G_TrainingForceCvar("g_doWarmup", "1");
+        G_TrainingForceCvar("g_warmup", "10");
+        G_TrainingForceCvar("timelimit", "10");
+        G_TrainingForceCvar("fraglimit", "10");
+        G_TrainingForceCvar("bot_gauntlet", "1");
+        G_TrainingForceCvar("bot_dynamicSkill", "1");
+        return;
+    }
+    client = g_entities[human].client;
+
+    if (!trainingMusicStopped && level.warmupTime) {
+        trap_SendServerCommand(human, "stopMusic");
+        trainingMusicStopped = qtrue;
+    }
+
+    if (!BotNumBots() && !trainingTrainerAdded && client->pers.connected == CON_CONNECTED &&
+        client->sess.sessionTeam != TEAM_SPECTATOR) {
+        float skill;
+
+        if (bot_startingSkill.integer < 2) {
+            skill = 1.0f;
+        } else if (bot_startingSkill.integer == 2) {
+            skill = 3.0f;
+        } else {
+            skill = 4.0f;
+        }
+        trap_Cvar_Set("g_spSkill", va("%f", skill));
+        G_TrainingAddTrainer(skill);
+        trainingTrainerAdded = qtrue;
+    }
+
+    if (bot_training.integer == 3 && !trainingLoopStarted) {
+        trap_SendServerCommand(human, "playMusic music/fla22k_01_loop");
+        trainingLoopStarted = qtrue;
+    }
+
+    if (g_training.integer != 2 || !level.warmupTime) {
+        if (g_training.integer == 2) {
+            trap_Cvar_Set("g_training", "1");
+        }
+        // a Crash below skill 3 leaves the powerups alone
+        if (!level.warmupTime) {
+            bot = G_TrainingBotClient();
+            if (bot != -1 && BotGetSkill(bot) < 3.0f) {
+                g_entities[bot].flags |= FL_NOPOWERUP;
+            }
+        }
+    }
+
+    if (client->pers.ready) {
+        bot = G_TrainingBotClient();
+        if (bot != -1) {
+            g_entities[bot].flags &= ~FL_NOPICKUP;
+            g_entities[bot].flags |= FL_NOPOWERUP;
+        }
+        trap_Cvar_Set("bot_training", "0");
+        trap_Cvar_Set("bot_dynamicSkill", "1");
+        trap_Cvar_Set("bot_followMe", "0");
+        client->freezePlayer = qfalse;
+    } else if (bot_training.integer == 1) {
+        client->freezePlayer = qtrue;
+    } else {
+        bot = G_TrainingBotClient();
+        if (bot != -1) {
+            float skill = trap_Cvar_VariableValue("g_spSkill");
+
+            if (skill < 1.0f) {
+                skill = 1.0f;
+            } else if (skill > 5.0f) {
+                skill = 5.0f;
+            }
+            if (skill > BotGetSkill(bot)) {
+                BotSetSkill(bot, skill);
+                trap_Cvar_Set("bot_startingSkill", va("%f", skill));
+            }
+        }
+        client->freezePlayer = qfalse;
+    }
+
+    if (level.intermissionTime && !trainingEndMusicPlayed) {
+        trainingEndMusicPlayed = qtrue;
+        trap_SendServerCommand(human, human == level.sortedClients[0] ? "playMusic music/win" : "playMusic music/loss");
+    }
+}

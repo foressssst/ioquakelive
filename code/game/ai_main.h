@@ -58,6 +58,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define LTG_ATTACKENEMYBASE 13  // attack the enemy base
 #define LTG_MAKELOVE_UNDER 14
 #define LTG_MAKELOVE_ONTOP 15
+// [QL] qagamex86.dll BotDeathmatchAI (0x1001f29e) keys its extra nodes by these
+#define LTG_FOLLOWME 16      // AIEnter_FollowMe 0x1000ecc0 (bot_followMe)
+#define LTG_TRAINING 18      // AIEnter_Training 0x1000f880 (bot_training 1 or 2)
 // some goal dedication times
 #define TEAM_HELP_TIME 60              // 1 minute teamplay help time
 #define TEAM_ACCOMPANY_TIME 600        // 10 minutes teamplay accompany time
@@ -268,6 +271,33 @@ typedef struct bot_state_s {
     bot_waypoint_t* patrolpoints;    // patrol points
     bot_waypoint_t* curpatrolpoint;  // current patrol point the bot is going for
     int patrolflags;                 // patrol flags
+
+    // [QL] the training bot leading the tour (AINode_Training, ai_dmnet.c). Retail keeps
+    // these in its own bot_state_t from 0x241c; the offsets are noted to follow the port.
+    float tourFollowDist;       // 0x241c 150: how near the player keeps the tour waiting
+    int tourPoint;              // 0x2430 the info_tour_point the tour is at, -1 when over
+    int tourPrevPoint;          // 0x2480 the one before, where the next search starts
+    int tourAnnounced;          // 0x242c the point "Let's continue" was last said for
+    int tourStopReached;        // 0x2428 the current stop has fired
+    int tourNextTime;           // 0x2434 the tour waits until then, looking at the player
+    vec3_t tourGoal;            // 0x2438 the floor under the current point
+    vec3_t tourPrevGoal;        // 0x249c the goal before, or the item being shown
+    vec3_t tourLookTarget;      // 0x2474 the info_notnull the current point looks at
+    float tourLookUntil;        // 0x2444 aiming at tourPrevGoal until then
+    float tourLastNudge;        // 0x2448 the last "This way!"
+    float tourReachTime;        // 0x2450 when the current stop fired
+    float tourNextSay;          // 0x2484 no nudge before then
+    int tourSaidCareful;        // 0x244c "You've got to be careful in the Arena!" said
+    int tourPlayerNear;         // 0x2454 the player has caught up
+    int tourWait;               // 0x246c the last stop's wait, whole seconds
+    int tourWaitForPlayer;      // 0x2470 hold on until then: a ledge, pad or teleport ahead
+    int tourLostPlayer;         // 0x24a8 went back for the player
+    int tourReturning;          // 0x24ac walking back to tourSavedGoal
+    bot_goal_t tourSavedGoal;   // 0x24b0 where the bot was when it went back
+    vec3_t tourSavedLook;       // 0x24f0 the look target kept for a failed move
+    int tourSavedLookSet;       // 0x24fc
+    int tourGoBack;             // 0x2500 the tour may go back for the player
+    int nodeEnterTime;          // 0x23c8 (int)floattime of the last move, follow-me's idle clock
 } bot_state_t;
 
 // resets the whole bot state

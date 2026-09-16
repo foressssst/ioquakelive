@@ -5321,8 +5321,16 @@ void BotDeathmatchAI(bot_state_t* bs, float thinktime) {
     // the InstaGib hunting node. (binary BotDeathmatchAI dispatch 0x1001f359)
     // NOTE: the binary also gates this on a "busy" field (bs+0x1bd4) shared by the
     // unported team-AI nodes; that gate is omitted here.
+    // [QL] 0x1001f29e: the training guide and the follow-me node come first, one node
+    // per frame: bot_training 1 or 2 leads the tour, bot_followMe stays by the player.
+    // (Retail also has a bot_gauntletOnly node at ltgtype 19 and a bot_training 3 node
+    // at 20, which no training map reaches and which are not ported.)
     if (!BotIntermission(bs) && !BotIsObserver(bs) && !BotIsDead(bs)) {
-        if (g_instaGib.integer && bs->ltgtype != 21 && bs->enemy == -1) {
+        if ((bot_training.integer == 1 || bot_training.integer == 2) && bs->ltgtype != LTG_TRAINING) {
+            AIEnter_Training(bs);
+        } else if (bot_followMe.integer && bs->ltgtype != LTG_FOLLOWME) {
+            AIEnter_FollowMe(bs);
+        } else if (g_instaGib.integer && bs->ltgtype != 21 && bs->enemy == -1) {
             AIEnter_InstaGib(bs, "insta gib");
         }
     }
