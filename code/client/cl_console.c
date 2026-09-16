@@ -419,10 +419,13 @@ static void Con_FixPosition(void) {
 
 /*
 ================
-Con_ToggleConsole_f
+Con_ToggleConsole_Forced
+
+Opens or closes the console whatever com_allowConsole says. Shift+Escape comes through
+here so that turning the console off in the options can never lock a player out of it.
 ================
 */
-void Con_ToggleConsole_f(void) {
+void Con_ToggleConsole_Forced(void) {
     // Can't toggle the console when it's the only thing available
     if (clc.state == CA_DISCONNECTED && Key_GetCatcher() == KEYCATCH_CONSOLE) {
         return;
@@ -436,6 +439,23 @@ void Con_ToggleConsole_f(void) {
     Con_ClearNotify();
     Key_SetCatcher(Key_GetCatcher() ^ KEYCATCH_CONSOLE);
     con.markMode = qfalse;  // [CNQ3]
+}
+
+/*
+================
+Con_ToggleConsole_f
+
+[QL] quakelive_steam.exe 0x4b49d0: the command only goes through with com_allowConsole
+at 1; anything else prints this line and stops.
+================
+*/
+void Con_ToggleConsole_f(void) {
+    if (com_allowConsole && com_allowConsole->integer != 1) {
+        Com_Printf("com_allowConsole won't allow toggleconsole command\n");
+        return;
+    }
+
+    Con_ToggleConsole_Forced();
 }
 
 /*

@@ -212,4 +212,28 @@
             visible 1
         }
     }
+
+    // =============================================
+    // SETTINGS
+    // retail hands this to the web browser; code/ui/ui_settings.c draws and runs it
+    // =============================================
+    menuDef {
+        name "settings"
+        fullScreen MENU_TRUE
+        rect 0 0 640 480
+        visible MENU_FALSE
+        focusColor 1 .75 0 1
+        popup // clicks beside the 4:3 area reach the page too
+
+        onOpen { uiScript settingsOpen }
+        onESC { uiScript settingsClose }
+
+        itemDef {
+            name settings
+            type ITEM_TYPE_OWNERDRAW
+            ownerdraw 601 // UI_SETTINGS
+            rect -2000 -1000 4640 2480
+            visible 1
+        }
+    }
 }

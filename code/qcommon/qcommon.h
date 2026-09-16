@@ -878,7 +878,11 @@ extern cvar_t* sv_packetdelay;
 extern cvar_t* com_gamename;
 extern cvar_t* com_protocol;
 #ifndef DEDICATED
-extern cvar_t* con_autochat;
+// [QL] quakelive_steam.exe 0x4bc6eb. ioquake3 called this con_autochat and defaulted it on;
+// retail's name and default are these, and the sense of the test is the other way round.
+extern cvar_t* cl_allowConsoleChat;
+// [QL] quakelive_steam.exe 0x4cc4c2: 1 lets the console open, anything else keeps it shut.
+extern cvar_t* com_allowConsole;
 #endif
 
 // com_speeds times

@@ -85,7 +85,8 @@ cvar_t* com_basegame;
 cvar_t* com_homepath;
 cvar_t* com_busyWait;
 #ifndef DEDICATED
-cvar_t* con_autochat;
+cvar_t* cl_allowConsoleChat;
+cvar_t* com_allowConsole;
 #endif
 
 
@@ -2624,7 +2625,10 @@ void Com_Init(char* commandLine) {
     Cvar_Get("protocol", com_protocol->string, CVAR_ROM);
 
 #ifndef DEDICATED
-    con_autochat = Cvar_Get("con_autochat", "1", CVAR_ARCHIVE);
+    // [QL] quakelive_steam.exe 0x4bc6eb and 0x4cc4c2, both CVAR_ARCHIVE | CVAR_REPLICATE |
+    // CVAR_USERSAVE (0x80801). ioquake3 shipped the first as con_autochat, defaulted on.
+    cl_allowConsoleChat = Cvar_Get("cl_allowConsoleChat", "0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    com_allowConsole = Cvar_Get("com_allowConsole", "1", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
 #endif
 
     // [CNQ3] tab completion cycling
@@ -3525,7 +3529,7 @@ void Field_CompleteCommand(char* cmd,
 
 #ifndef DEDICATED
     // add a '\' to the start of the buffer if it might be sent as chat otherwise
-    if (con_autochat->integer && completionField->buffer[0] &&
+    if (cl_allowConsoleChat->integer && completionField->buffer[0] &&
         completionField->buffer[0] != '\\') {
         if (completionField->buffer[0] != '/') {
             // Buffer is full, refuse to complete

@@ -2775,6 +2775,8 @@ void CL_InitAliases(void) {
 
 // =====================================================================
 
+static void CL_DebugUIMenu_f(void) { VM_Call(uivm, UI_SET_ACTIVE_MENU, atoi(Cmd_Argv(1))); }  // IOQL_DEBUG_TEMP
+
 /*
 ====================
 CL_Init
@@ -2953,6 +2955,7 @@ void CL_Init(void) {
     Cmd_AddCommand("fs_referencedList", CL_ReferencedPK3List_f);
     Cmd_AddCommand("model", CL_SetModel_f);
     Cmd_AddCommand("web_changeHash", CL_Web_ChangeHash_f);
+    Cmd_AddCommand("ioql_uimenu", CL_DebugUIMenu_f);  // IOQL_DEBUG_TEMP
     // [QL] additional client commands
     Cmd_AddCommand("postprocess_restart", CL_PostProcessRestart_f);
     Cmd_AddCommand("userinfo", CL_Userinfo_f);
