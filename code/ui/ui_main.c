@@ -2224,9 +2224,6 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
         case UI_REPLAYS:
             UI_Replays_Paint();
             break;
-        case UI_PAUSE:
-            UI_Pause_Paint();
-            break;
         default:
             break;
     }
@@ -2803,8 +2800,6 @@ static qboolean UI_OwnerDrawHandleKey(int ownerDraw, int flags, float* special, 
             return UI_Home_HandleKey(key);
         case UI_REPLAYS:
             return UI_Replays_HandleKey(key);
-        case UI_PAUSE:
-            return UI_Pause_HandleKey(key);
         case UI_HANDICAP:
             return UI_Handicap_HandleKey(flags, special, key);
             break;
@@ -3256,8 +3251,6 @@ static void UI_RunMenuScript(char** args) {
             UI_StartMatch_Open();
         } else if (Q_stricmp(name, "replaysOpen") == 0) {
             UI_Replays_Open();
-        } else if (Q_stricmp(name, "pauseOpen") == 0) {
-            UI_Pause_Open();
         } else if (Q_stricmp(name, "homeOpen") == 0) {
             // the page takes keys before the mouse moves over it
             menuDef_t* home = Menus_FindByName("main");
@@ -3266,6 +3259,7 @@ static void UI_RunMenuScript(char** args) {
             if (item) {
                 item->window.flags |= WINDOW_HASFOCUS;
             }
+            UI_Home_Open();
         } else if (Q_stricmp(name, "settingsOpen") == 0) {
             UI_Settings_Open();
         } else if (Q_stricmp(name, "settingsClose") == 0) {
@@ -5400,16 +5394,9 @@ void _UI_SetActiveMenu(uiMenuCommand_t menu) {
                 uiInfo.effectsColor = gamecodetoui[(int)trap_Cvar_VariableValue("color1") - 1];
                 uiInfo.currentCrosshair = (int)trap_Cvar_VariableValue("cg_drawCrosshair");
 
-                if (inMatch) {
-                    // the panel below the nav bar is swapped, like the other buttons do
-                    Menus_CloseByName("ingame_about");
-                    Menus_CloseByName("ingame_callvote");
-                    Menus_CloseByName("ingame_admin");
-                    Menus_CloseByName("ingame_addbot");
-                } else {
-                    Menus_CloseAll();
-                }
-                Menus_ActivateByName("settings");
+                Menus_CloseAll();
+                // in a match the page is drawn over it and must not be fullscreen
+                Menus_ActivateByName(inMatch ? "settings_ingame" : "settings");
                 return;
             }
             case UIMENU_TEAM:
@@ -5436,9 +5423,8 @@ void _UI_SetActiveMenu(uiMenuCommand_t menu) {
                 trap_Key_SetCatcher(KEYCATCH_UI);
                 UI_BuildPlayerList();
                 Menus_CloseAll();
-                // [ioquakelive] the panel that used to open with it is drawn by the
-                // menu itself now; see ui_pause.c
                 Menus_ActivateByName("ingame");
+                Menus_ActivateByName("ingame_about");
                 return;
         }
     }

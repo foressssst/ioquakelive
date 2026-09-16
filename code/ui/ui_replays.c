@@ -98,7 +98,9 @@ static void RP_DrawPage(void) {
     UI_Home_Nav(1);  // HM_NAV_REPLAYS
 
     SM_SpacedText(rp.page, SM_Baseline(FONT_DEFAULT, 30, RP_TOP, 38), FONT_DEFAULT, 30, smText, "Replays", -1, qfalse);
-    SM_Fill(rp.page, RP_TOP + 42, 60, 3, smYellow, NULL);
+    SM_Round(rp.page, RP_TOP + 42, 56, 3, 1.5f, smYellow, NULL);
+    SM_Round(rp.page - 6, rp.listTop - 10, rp.pageW + 12, rp.content + 20 < rp.view ? rp.content + 20 : rp.view,
+             SM_RADIUS_LG, smRowEven, NULL);
 
     if (!uiInfo.demoCount) {
         SM_Text(rp.page, SM_Baseline(FONT_SANS, 16, rp.listTop + 8, 24), FONT_SANS, 16, smSelectText,
@@ -117,15 +119,16 @@ static void RP_DrawPage(void) {
             continue;
         }
         row = SM_R(rp.page, y, rp.pageW, RP_ROW_H);
-        SM_Fill(row.x, row.y, row.w, row.h, over ? smCardHover : (i & 1) ? smRowOdd : smRowEven, &clip);
         if (over) {
-            SM_Fill(row.x, row.y, 3, row.h, smYellow, &clip);
+            row.y -= SM_LIFT;  // the row lifts under the cursor
+            SM_Round(row.x, row.y, row.w, row.h, SM_RADIUS_MD, smCardHover, &clip);
+            SM_Round(row.x, row.y + 6, 2, row.h - 12, 1, smYellow, &clip);
         }
-        SM_Text(row.x + 16, SM_Baseline(FONT_SANS, 15, y + 10, 22), FONT_SANS, 15, over ? smText : smSelectText,
+        SM_Text(row.x + 16, SM_Baseline(FONT_SANS, 15, row.y + 10, 22), FONT_SANS, 15, over ? smText : smSelectText,
                 uiInfo.demoList[i], SM_Fit(FONT_SANS, 15, uiInfo.demoList[i], rp.pageW - 120), qfalse);
         if (over) {
-            SM_Text(row.x + row.w - 66, SM_Baseline(FONT_SANS, 14, y + 11, 22), FONT_SANS, 14, smYellow, "PLAY", -1,
-                    qtrue);
+            SM_Text(row.x + row.w - 66, SM_Baseline(FONT_SANS, 14, row.y + 11, 22), FONT_SANS, 14, smYellow, "PLAY",
+                    -1, qtrue);
         }
         SM_Hit(row.x, row.y, row.w, row.h, RP_HIT_ROW, i, &clip);
     }
