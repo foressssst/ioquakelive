@@ -2088,7 +2088,6 @@ static void Cmd_BotSay_f(gentity_t* ent) {
 
     Com_sprintf(name, sizeof(name), "%s\x19: ",
         ent->client->pers.netname);
-    G_Printf("botSay: %s for %i seconds to client %i\n", p, duration, targetNum);
 
     trap_SendServerCommand(targetNum,
         va("bchat \"%s%c%c%s\" %i", name, Q_COLOR_ESCAPE, COLOR_GREEN, p, duration));
