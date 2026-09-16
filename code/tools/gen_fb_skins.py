@@ -47,8 +47,13 @@ def main():
     out = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_OUT
 
     z = zipfile.ZipFile(pak)
+    # a model name comes from the pak's own paths, so it is only taken when it is a plain name: no
+    # separator, no drive and no ".." that would write the skin outside content/pak01
     models = sorted(set(n.split("/")[2] for n in z.namelist()
-                        if n.startswith("models/players/") and n.endswith(".skin") and n.count("/") >= 3))
+                        if n.startswith("models/players/") and n.endswith(".skin") and n.count("/") >= 3
+                        and n.split("/")[2] == os.path.basename(n.split("/")[2])
+                        and n.split("/")[2] not in ("", ".", "..")
+                        and "\\" not in n.split("/")[2] and ":" not in n.split("/")[2]))
 
     written = 0
     for model in models:
