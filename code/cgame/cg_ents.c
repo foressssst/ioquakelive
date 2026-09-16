@@ -314,11 +314,36 @@ static void CG_Item(centity_t* cent) {
     }
 
     item = &bg_itemlist[es->modelindex];
+    // [QL] cgamex86.dll 0x10016cab: a simple item is its icon as a sprite, and the three cvars
+    // beside cg_simpleItems shape it. It is lifted by cg_simpleItemsHeightOffset, except a rune,
+    // which is always lifted 10. cg_simpleItemsBob floats it instead: 1 floats every item, 2 (the
+    // default) only the ones with an item timer -- the armours from green up, the mega and the
+    // powerups -- around 10 units up, six of travel, a full cycle every 1024 ms. Bigger icons are
+    // raised by whatever cg_simpleItemsRadius is over its own default, so they keep their footing.
+    // Only the height moves: the bob is on the entity's own origin, so the icon, its light and its
+    // sound go together. Quake 3 drew a fixed radius 14 sprite at the origin and read none of this.
     if (cg_simpleItems.integer && item->giType != IT_TEAM) {
+        float z = cent->lerpOrigin[2];
+
+        if (item->giType == IT_PERSISTANT_POWERUP) {
+            z += 10.0f;
+        } else {
+            z += cg_simpleItemsHeightOffset.integer;
+        }
+
+        if (cg_simpleItemsBob.integer == 1 ||
+            (cg_simpleItemsBob.integer == 2 && item->itemTimer)) {
+            float phase = (cg.time & 1023) * (float)(M_PI * 2.0) / 1024.0f;
+
+            cent->lerpOrigin[2] = cent->lerpOrigin[2] + 10.0f + sin(phase) * 6.0f;
+            z = cent->lerpOrigin[2];
+        }
+
         memset(&ent, 0, sizeof(ent));
         ent.reType = RT_SPRITE;
         VectorCopy(cent->lerpOrigin, ent.origin);
-        ent.radius = 14;
+        ent.origin[2] = z + (cg_simpleItemsRadius.value - 15.0f);
+        ent.radius = cg_simpleItemsRadius.integer;
         ent.customShader = cg_items[es->modelindex].icon;
         ent.shaderRGBA[0] = 255;
         ent.shaderRGBA[1] = 255;
