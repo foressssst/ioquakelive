@@ -1135,6 +1135,7 @@ Q_EXPORT void dllEntry(void **vmMainOut, gameImport_t *syscallTable, int *apiVer
     vmMainOut[GAME_CLIENT_COMMAND]          = (void *)ClientCommand;
     vmMainOut[GAME_SNAPSHOT_VISIBILITY]     = (void *)G_ObfuscateEnemyInfoInSnapshotCheck;
     vmMainOut[GAME_SNAPSHOT_ALWAYS_SEND]    = (void *)G_ClientAlwaysInSnapshot;
+    vmMainOut[GAME_BOT_AI_START_FRAME]      = (void *)BotAIStartFrame;
 
     *apiVersion = GAME_API_VERSION;
 }
@@ -3994,9 +3995,8 @@ void G_RunFrame(int levelTime) {
     // for tracking changes
     CheckCvars();
 
-    // [QL] run bot AI - QL removed BOTAI_START_FRAME from vmMain,
-    // so the game module drives bot AI from G_RunFrame instead.
-    if (trap_Cvar_VariableIntegerValue("bot_enable")) {
-        BotAIStartFrame(level.time);
-    }
+    // [QL] the bots do not think here: BotAIStartFrame is its own export (+0x2c), which the engine
+    // calls apart (SV_BotFrame). Running it from here also ran it in map_restart's settling frames,
+    // before the clients are back, where the training tick found no player and put the Crash
+    // Course's cinematic back on (bot_training 1) just as the match began.
 }

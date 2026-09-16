@@ -272,7 +272,7 @@ void SV_GetUsercmd(int clientNum, usercmd_t* cmd) {
 
 // Game module state
 static void *sv_gameLibHandle;
-static void *sv_vmMainTable[12];
+static void *sv_vmMainTable[GAME_EXPORT_COUNT];
 static gameImport_t sv_gameImports;
 static int sv_apiVersion;
 
@@ -1185,6 +1185,12 @@ qboolean SV_GameSnapshotAlwaysSend(int viewerNum, int clientNum) {
     if (sv_vmMainTable[GAME_SNAPSHOT_ALWAYS_SEND])
         return ((qboolean (*)(int, int))sv_vmMainTable[GAME_SNAPSHOT_ALWAYS_SEND])(viewerNum, clientNum);
     return qfalse;
+}
+
+// [QL] retail export +0x2c: the bots' frame, which SV_BotFrame calls apart from GAME_RUN_FRAME
+void SV_GameBotAIStartFrame(int time) {
+    if (sv_vmMainTable[GAME_BOT_AI_START_FRAME])
+        ((int (*)(int))sv_vmMainTable[GAME_BOT_AI_START_FRAME])(time);
 }
 
 //==============================================

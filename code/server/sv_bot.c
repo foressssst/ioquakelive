@@ -448,7 +448,10 @@ void SV_BotFrame(int time) {
     // NOTE: maybe the game is already shutdown
     if (!sv.state)
         return;
-    // BOTAI_START_FRAME doesn't exist in QL
+    // [QL] quakelive_steam.exe 0x4dd670: the bots think through the game's export +0x2c, apart
+    // from GAME_RUN_FRAME. SV_Frame and SV_SpawnServer call this; map_restart's settling frames
+    // do not, so the game runs them without bots while the clients are not back yet.
+    SV_GameBotAIStartFrame(time);
 }
 
 /*
