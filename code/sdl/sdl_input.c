@@ -1118,13 +1118,13 @@ static void IN_ProcessEvents(void) {
                 break;
 
             case SDL_MOUSEMOTION:
-                // [ioquakelive] a menu moves its cursor with the system's, so the motion
-                // still counts while the mouse is let go
-                if (mouseActive || (Key_GetCatcher() & KEYCATCH_UI)) {
+                if (mouseActive) {
                     if (!e.motion.xrel && !e.motion.yrel)
                         break;
                     Com_QueueEvent(in_eventTime, SE_MOUSE, e.motion.xrel, e.motion.yrel, 0, NULL);
                 }
+                // [ioquakelive] while the mouse is let go the pointer is not followed by its
+                // moves but read where it is, once a frame, in IN_Frame
                 break;
 
             case SDL_MOUSEBUTTONDOWN:
@@ -1267,6 +1267,17 @@ void IN_Frame(void) {
         // lets go of the mouse and you move the one the system draws, fullscreen included,
         // so the pointer is passed as qfalse rather than the real mode.
         IN_DeactivateMouse(qfalse);
+
+        // The menu is told where the pointer is, every frame. Walking its cursor by relative
+        // moves left it a little away from the arrow the system draws -- clicks landed where
+        // the arrow was not -- and reading the position instead cannot drift: whatever the
+        // menu thought, the next frame puts it back under the arrow.
+        if (SDL_GetMouseFocus() == SDL_window) {
+            int mx, my;
+
+            SDL_GetMouseState(&mx, &my);
+            Com_QueueEvent(in_eventTime, SE_MOUSE_ABS, mx, my, 0, NULL);
+        }
     } else if (!cls.glconfig.isFullscreen && loading) {
         // Loading in windowed mode
         IN_DeactivateMouse(cls.glconfig.isFullscreen);

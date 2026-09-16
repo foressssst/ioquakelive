@@ -221,6 +221,10 @@ typedef enum {
     UI_DRAW_ADVERTISEMENT,
     //	void	UI_DrawAdvertisement( void );
 
+    UI_MOUSE_POSITION,
+    //	void	UI_MousePosition( int x, int y );
+    // [ioquakelive] the system pointer's window pixels, while the mouse is let go
+
 } uiExport_t;
 
 #endif

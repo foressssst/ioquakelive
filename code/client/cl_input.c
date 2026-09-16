@@ -447,6 +447,25 @@ the motion when no catcher is up (the console included), besides retail's bit 0x
 up until CL_MouseMove takes it.
 =================
 */
+/*
+=================
+CL_MouseAbsEvent
+
+[ioquakelive] Where the system pointer is, in window pixels. While a menu is up the
+mouse is not grabbed and the system draws the pointer itself, so the menu is told the
+position instead of a relative move: adding up moves left its cursor a little away
+from the arrow you can see, and clicks landed where the arrow was not.
+=================
+*/
+void CL_MouseAbsEvent(int x, int y) {
+    if (cg_ignoreMouseInput->integer) {
+        return;
+    }
+    if (Key_GetCatcher() & KEYCATCH_UI) {
+        VM_Call(uivm, UI_MOUSE_POSITION, x, y);
+    }
+}
+
 void CL_MouseEvent(int dx, int dy, int time) {
     if (cg_ignoreMouseInput->integer) {
         return;
