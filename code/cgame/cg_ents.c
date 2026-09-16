@@ -511,10 +511,48 @@ static void CG_GrenadeColor(const entityState_t* es, byte* color) {
 CG_Missile
 ===============
 */
+/*
+=================
+CG_ProjectileLeadOffset
+
+[ioquakelive] Not retail's, and off by default. Quake Live's projectiles leave the muzzle 5 units
+ahead (3 ducked) and are stepped forward 25 ms on the server, against Quake 3's 14 units and 50 ms,
+so a rocket's first frame is drawn at about 27 units instead of 59: it comes out of your chest and
+its smoke sits on the camera. cg_projectileLead draws the projectile and its smoke that many units
+further along, and only that: the missile, its damage and where it explodes are the server's and do
+not move. The offset fades out over the first 150 ms, so by the time anything reaches a wall it is
+drawn exactly where it is.
+=================
+*/
+void CG_ProjectileLeadOffset(const centity_t* cent, vec3_t offset) {
+    float age, lead;
+    vec3_t velocity;
+
+    VectorClear(offset);
+
+    if (cg_projectileLead.value <= 0.0f) {
+        return;
+    }
+
+    age = (float)(cg.time - cent->currentState.pos.trTime);
+    if (age < 0.0f || age >= 150.0f) {
+        return;
+    }
+
+    BG_EvaluateTrajectoryDelta(&cent->currentState.pos, cg.time, velocity);
+    if (VectorNormalize(velocity) == 0.0f) {
+        return;
+    }
+
+    lead = cg_projectileLead.value * (1.0f - age / 150.0f);
+    VectorScale(velocity, lead, offset);
+}
+
 static void CG_Missile(centity_t* cent) {
     refEntity_t ent;
     entityState_t* s1;
     const weaponInfo_t* weapon;
+    vec3_t leadOffset;
     //	int	col;
 
     s1 = &cent->currentState;
@@ -564,8 +602,9 @@ static void CG_Missile(centity_t* cent) {
 
     // create the render entity
     memset(&ent, 0, sizeof(ent));
-    VectorCopy(cent->lerpOrigin, ent.origin);
-    VectorCopy(cent->lerpOrigin, ent.oldorigin);
+    CG_ProjectileLeadOffset(cent, leadOffset);
+    VectorAdd(cent->lerpOrigin, leadOffset, ent.origin);
+    VectorCopy(ent.origin, ent.oldorigin);
 
     if (cent->currentState.weapon == WP_PLASMAGUN) {
         ent.reType = RT_SPRITE;
