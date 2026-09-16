@@ -262,6 +262,62 @@ void SM_To640(float x, float y, float w, float h, float* out) {
 /*
 ===============================================================================
 
+PLAYER MODELS
+
+===============================================================================
+*/
+
+/*
+===============
+SM_DrawPlayerIn
+
+Draws a player model so it fits the box. UI_DrawPlayer takes its field of view
+from the box's width alone, so a model drawn in a wide, low box comes out taller
+than the box and loses its head: the view is sized from the box's height instead
+(the whole model takes about 0.54 of the view's width) and centred on the box.
+The view can be wider than the box -- only the model's pixels are drawn, and it
+is narrow.
+===============
+*/
+void SM_DrawPlayerIn(playerInfo_t* pi, float x, float y, float w, float h) {
+    float viewW = h * 0.86f / 0.54f;
+    float r[4];
+
+    SM_To640(x + (w - viewW) * 0.5f, y, viewW, h, r);
+    UI_DrawPlayer(r[0], r[1], r[2], r[3], pi, uiInfo.uiDC.realTime / 2);
+}
+
+// the same, held at one moment so the model stands still
+void SM_DrawPlayerStill(playerInfo_t* pi, float x, float y, float w, float h) {
+    float viewW = h * 0.86f / 0.54f;
+    float r[4];
+
+    SM_To640(x + (w - viewW) * 0.5f, y, viewW, h, r);
+    UI_DrawPlayer(r[0], r[1], r[2], r[3], pi, SM_STILL_TIME);
+}
+
+void SM_TurnPlayer(playerInfo_t* pi, float yaw) {
+    pi->viewAngles[YAW] = yaw;
+    pi->legs.yawAngle = yaw;
+    pi->torso.yawAngle = yaw;
+    pi->legs.yawing = qfalse;
+    pi->torso.yawing = qfalse;
+}
+
+void SM_BuildPlayer(playerInfo_t* pi, const char* composed, float yaw, int weapon) {
+    vec3_t viewangles;
+
+    memset(pi, 0, sizeof(*pi));
+    viewangles[YAW] = yaw;
+    viewangles[PITCH] = 0;
+    viewangles[ROLL] = 0;
+    UI_PlayerInfo_SetModel(pi, (char*)composed, (char*)composed, "");
+    UI_PlayerInfo_SetInfo(pi, LEGS_IDLE, TORSO_STAND, viewangles, vec3_origin, weapon, qfalse);
+}
+
+/*
+===============================================================================
+
 TYPE
 
 ===============================================================================

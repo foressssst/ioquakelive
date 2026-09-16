@@ -890,45 +890,6 @@ static void ST_ModelBase(const char* name, char* out, int size) {
 
 /*
 ===============
-ST_DrawPlayerIn
-
-Draws a player model so it fits the box. UI_DrawPlayer takes its field of view
-from the box's width alone, so a model drawn in a wide, low box comes out taller
-than the box and loses its head: the view is sized from the box's height instead
-(the whole model takes about 0.54 of the view's width) and centred on the box.
-The view can be wider than the box -- only the model's pixels are drawn, and it
-is narrow.
-===============
-*/
-static void ST_DrawPlayerIn(playerInfo_t* pi, float x, float y, float w, float h) {
-    float viewW = h * 0.86f / 0.54f;
-    float r[4];
-
-    SM_To640(x + (w - viewW) * 0.5f, y, viewW, h, r);
-    UI_DrawPlayer(r[0], r[1], r[2], r[3], pi, uiInfo.uiDC.realTime / 2);
-}
-
-static void ST_TurnPlayer(playerInfo_t* pi, float yaw) {
-    pi->viewAngles[YAW] = yaw;
-    pi->legs.yawAngle = yaw;
-    pi->torso.yawAngle = yaw;
-    pi->legs.yawing = qfalse;
-    pi->torso.yawing = qfalse;
-}
-
-static void ST_BuildPlayer(playerInfo_t* pi, const char* composed, float yaw) {
-    vec3_t viewangles;
-
-    memset(pi, 0, sizeof(*pi));
-    viewangles[YAW] = yaw;
-    viewangles[PITCH] = 0;
-    viewangles[ROLL] = 0;
-    UI_PlayerInfo_SetModel(pi, (char*)composed, (char*)composed, "");
-    UI_PlayerInfo_SetInfo(pi, LEGS_IDLE, TORSO_STAND, viewangles, vec3_origin, WP_MACHINEGUN, qfalse);
-}
-
-/*
-===============
 ST_DrawTeamPreview
 
 The model teammates or enemies are forced to, in the colours the rows set. Retail
@@ -970,15 +931,15 @@ static void ST_DrawTeamPreview(int slot, float x, float y, float w, float h) {
 
     if (Q_stricmp(composed, st.previewShown[slot])) {
         Q_strncpyz(st.previewShown[slot], composed, sizeof(st.previewShown[slot]));
-        ST_BuildPlayer(pi, composed, st.previewYaw[slot]);
+        SM_BuildPlayer(pi, composed, st.previewYaw[slot], WP_MACHINEGUN);
     }
-    ST_TurnPlayer(pi, st.previewYaw[slot]);
+    SM_TurnPlayer(pi, st.previewYaw[slot]);
     pi->customColor = qtrue;
     pi->headColor = ST_ModelTint(head[slot]);
     pi->torsoColor = ST_ModelTint(upper[slot]);
     pi->legsColor = ST_ModelTint(lower[slot]);
 
-    ST_DrawPlayerIn(pi, x, y + 14, w, h - 44);
+    SM_DrawPlayerIn(pi, x, y + 14, w, h - 44);
 
     hint = "Drag to turn";
     hw = SM_LabelWidth(10, hint, 1.4f);
@@ -1059,7 +1020,7 @@ static void ST_DrawChooserPreview(float x, float y, float w, float h) {
     }
     if (Q_stricmp(composed, st.modelShown)) {
         Q_strncpyz(st.modelShown, composed, sizeof(st.modelShown));
-        ST_BuildPlayer(&st.modelInfo, composed, 150);
+        SM_BuildPlayer(&st.modelInfo, composed, 150, WP_MACHINEGUN);
     }
     st.modelInfo.customColor = qfalse;
     if (!Q_stricmp(cvar, "cg_forceTeamModel")) {
@@ -1073,7 +1034,7 @@ static void ST_DrawChooserPreview(float x, float y, float w, float h) {
         st.modelInfo.torsoColor = ST_ModelTint("cg_enemyUpperColor");
         st.modelInfo.legsColor = ST_ModelTint("cg_enemyLowerColor");
     }
-    ST_DrawPlayerIn(&st.modelInfo, x, y, w, h);
+    SM_DrawPlayerIn(&st.modelInfo, x, y, w, h);
 }
 
 static void ST_DrawModelChooser(void) {
