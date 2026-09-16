@@ -520,7 +520,13 @@ are stepped forward 25 ms on the server, against Quake 3's 14 units and 50 ms, s
 frame is drawn at about 27 units instead of 59: it comes out of your chest and its smoke sits on the
 camera. This draws the projectile and its smoke further along, and only that: the missile, its
 damage and where it explodes are the server's and do not move. The offset fades out over the first
-150 ms, so by the time anything reaches a wall it is drawn exactly where it is.
+150 ms.
+
+Only the flight the projectile was fired with is drawn ahead. A grenade that bounces gets a new
+trTime (G_BounceMissile, qagamex86.dll 0x1005b4f0), and measuring the fade from it drew the grenade
+28 units ahead again after every bounce, so its flight looked cut in the middle. The offset is also
+never longer than the way to the wall in front: the drawn projectile meets the wall when the real
+one does, and a bounce inside the first 150 ms does not jump either.
 
 The distance is fixed in code on purpose. It was a cvar while it was being tuned; the value the
 player settled on is baked in so no config can change it and everyone sees the same shot.
@@ -531,9 +537,14 @@ player settled on is baked in so no config can change it and everyone sees the s
 
 void CG_ProjectileLeadOffset(const centity_t* cent, vec3_t offset) {
     float age, lead;
-    vec3_t velocity;
+    vec3_t velocity, origin, end;
+    trace_t tr;
 
     VectorClear(offset);
+
+    if (cent->currentState.pos.trTime != cent->leadTrTime) {
+        return;
+    }
 
     age = (float)(cg.time - cent->currentState.pos.trTime);
     if (age < 0.0f || age >= CG_PROJECTILE_LEAD_TIME) {
@@ -546,7 +557,10 @@ void CG_ProjectileLeadOffset(const centity_t* cent, vec3_t offset) {
     }
 
     lead = CG_PROJECTILE_LEAD * (1.0f - age / CG_PROJECTILE_LEAD_TIME);
-    VectorScale(velocity, lead, offset);
+    BG_EvaluateTrajectory(&cent->currentState.pos, cg.time, origin);
+    VectorMA(origin, lead, velocity, end);
+    CG_Trace(&tr, origin, NULL, NULL, end, cent->currentState.number, MASK_SOLID);
+    VectorScale(velocity, lead * tr.fraction, offset);
 }
 
 static void CG_Missile(centity_t* cent) {

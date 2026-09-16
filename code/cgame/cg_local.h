@@ -161,6 +161,7 @@ typedef struct centity_s {
     int teleportFlag;
 
     int trailTime;  // so missile trails can handle dropped initial packets
+    int leadTrTime;  // [ioquakelive] pos.trTime when the entity appeared (CG_ProjectileLeadOffset)
     int dustTrailTime;
     int miscTime;
 
