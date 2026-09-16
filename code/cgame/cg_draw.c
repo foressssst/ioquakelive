@@ -1323,14 +1323,23 @@ cg_drawRewards is tested, so hidden medals still advance and play. Retail draws
 32x32 icons with their top at y 42, one per medal, 48 apart and centred on 320,
 or past cg_drawRewardsRowSize one icon with its count at (336, 66).
 [ioquakelive] The layout the user tuned live and chose on 2026-09-13, for a tidy HUD
-where no message runs into another: one medal at 0.74 of retail's size, centred on
-325 as if 48 * 0.74 units wide, its top at y 128, and no count.
+where no message runs into another: medals at 0.74 of retail's size, centred on 325
+and with their top at y 128, instead of retail's full size centred on 320 at y 42.
+Both of retail's branches are here over that geometry, so one medal lands exactly
+where it did before the count was added.
 ===================
 */
 #define REWARD_ICON_SCALE 0.74f
 #define REWARD_ICON_SIZE (32.0f * REWARD_ICON_SCALE)
-#define REWARD_ICON_X (325.0f - 48.0f * REWARD_ICON_SCALE / 2.0f)
+#define REWARD_ICON_STEP (48.0f * REWARD_ICON_SCALE)
+#define REWARD_ROW_CENTER 325.0f
+#define REWARD_ICON_X (REWARD_ROW_CENTER - REWARD_ICON_STEP / 2.0f)
 #define REWARD_ICON_Y 128.0f
+// the count sits where retail puts it, at the same fraction of the icon: retail's icon is at
+// (296, 42) and its count at (336, 66) in scale 0.2
+#define REWARD_COUNT_X (REWARD_ICON_X + 40.0f * REWARD_ICON_SCALE)
+#define REWARD_COUNT_Y (REWARD_ICON_Y + 24.0f * REWARD_ICON_SCALE)
+#define REWARD_COUNT_SCALE (0.2f * REWARD_ICON_SCALE)
 
 static void CG_DrawReward(void) {
 	vec4_t color;
@@ -1367,6 +1376,15 @@ static void CG_DrawReward(void) {
 	}
 	trap_R_SetColor(color);
 	CG_DrawRewardIcon(REWARD_ICON_X, REWARD_ICON_Y, REWARD_ICON_SIZE, cg.rewardShader[0]);
+	// [QL] 0x1000ac96, with the user's choice of 2026-09-16: past cg_drawRewardsRowSize medals at
+	// once, retail drops to one icon and writes how many there were beside it, and under that it
+	// lays them side by side. Only the first half is here -- "no pongas mas de 1 medalla, si no que
+	// el numero, es mas sostenible" -- so the cvar is just where the count starts showing: 1 by
+	// default, which is from the second medal on, and 9 never writes it.
+	if (cg.rewardCount[0] > cg_drawRewardsRowSize.integer) {
+		CG_DrawText(REWARD_COUNT_X, REWARD_COUNT_Y, 0, REWARD_COUNT_SCALE, color,
+					va("%d", cg.rewardCount[0]), 0, 0, 0);
+	}
 	trap_R_SetColor(NULL);
 }
 
