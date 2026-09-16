@@ -980,6 +980,14 @@ void UI_StartMatch_Open(void);
 void UI_StartMatch_Paint(void);
 qboolean UI_StartMatch_HandleKey(int key);
 
+// [QL] the Settings page, drawn the same way; see ui_settings.c
+#define UI_SETTINGS 601
+void UI_Settings_Open(void);
+void UI_Settings_Paint(void);
+qboolean UI_Settings_HandleKey(int key);
+void UI_Settings_MouseUp(void);
+void UI_Settings_Close(void);
+
 void trap_S_StopBackgroundTrack(void);
 void trap_S_StartBackgroundTrack(const char* intro, const char* loop);
 int trap_CIN_PlayCinematic(const char* arg0, int xpos, int ypos, int width, int height, int bits);

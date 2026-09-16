@@ -1264,12 +1264,56 @@ static void UI_DrawRedBlue(rectDef_t* rect, float scale, vec4_t color, int textS
     Text_Paint(rect->x, rect->y, scale, color, (uiInfo.redBlue == 0) ? "Red" : "Blue", 0, 0, textStyle);
 }
 
+// [QL] uix86.dll 0x1002bbf0: the crosshair colours for cg_crosshairColor 1-26. Retail keeps
+// its own copy in the UI module next to cgame's (0x10075fe0); they are the same 26 entries.
+static const vec4_t ui_crosshairPalette[26] = {
+    {1.0f, 0.0f, 0.0f, 1.0f},       {1.0f, 0.2734375f, 0.0f, 1.0f}, {1.0f, 0.5f, 0.0f, 1.0f},
+    {1.0f, 0.734375f, 0.0f, 1.0f},  {1.0f, 1.0f, 0.0f, 1.0f},       {0.734375f, 1.0f, 0.0f, 1.0f},
+    {0.5f, 1.0f, 0.0f, 1.0f},       {0.2734375f, 1.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f},
+    {0.0f, 1.0f, 0.2734375f, 1.0f}, {0.0f, 1.0f, 0.5f, 1.0f},       {0.0f, 1.0f, 0.734375f, 1.0f},
+    {0.0f, 1.0f, 1.0f, 1.0f},       {0.0f, 0.734375f, 1.0f, 1.0f},  {0.0f, 0.5f, 1.0f, 1.0f},
+    {0.0f, 0.2734375f, 1.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f},       {0.2734375f, 0.0f, 1.0f, 1.0f},
+    {0.5f, 0.0f, 1.0f, 1.0f},       {0.734375f, 0.0f, 1.0f, 1.0f},  {1.0f, 0.0f, 1.0f, 1.0f},
+    {1.0f, 0.0f, 0.734375f, 1.0f},  {1.0f, 0.0f, 0.5f, 1.0f},       {1.0f, 0.0f, 0.2734375f, 1.0f},
+    {1.0f, 1.0f, 1.0f, 1.0f},       {0.5f, 0.5f, 0.5f, 1.0f},
+};
+
+// the Settings page draws the same 26 swatches
+const vec4_t* UI_CrosshairPalette(void) {
+    return ui_crosshairPalette;
+}
+
+// [QL] uix86.dll UI_DrawCrosshair @0x10006cf0. The preview is drawn the way the crosshair
+// itself is: the palette colour for cg_crosshairColor - 1 (out of range takes the first)
+// scaled by cg_crosshairBrightness with alpha 1, in a square of cg_crosshairSize clamped
+// to 24..40, at (rect->x - 2, rect->y - rect->h + 2). The item's own width and height only
+// place it, and the owner-draw's scale and colour are unused. Drawing it at the item's
+// 100x15 instead (what this was doing) squashed it into an invisible sliver.
 static void UI_DrawCrosshair(rectDef_t* rect, float scale, vec4_t color) {
+    vec4_t crosshairColor;
+    float size;
+    int index;
+
     if (!uiInfo.currentCrosshair) {
         return;
     }
-    trap_R_SetColor(color);
-    UI_DrawHandlePic(rect->x, rect->y - rect->h, rect->w, rect->h, uiInfo.uiDC.Assets.crosshairShader[uiInfo.currentCrosshair]);
+
+    index = (int)trap_Cvar_VariableValue("cg_crosshairColor") - 1;
+    if (index < 0 || index > 25) {
+        index = 0;
+    }
+    VectorScale(ui_crosshairPalette[index], trap_Cvar_VariableValue("cg_crosshairBrightness"), crosshairColor);
+    crosshairColor[3] = 1.0f;
+
+    size = trap_Cvar_VariableValue("cg_crosshairSize");
+    if (size > 40.0f) {
+        size = 40.0f;
+    } else if (size < 24.0f) {
+        size = 24.0f;
+    }
+
+    trap_R_SetColor(crosshairColor);
+    UI_DrawHandlePic(rect->x - 2, rect->y - rect->h + 2, size, size, uiInfo.uiDC.Assets.crosshairShader[uiInfo.currentCrosshair]);
     trap_R_SetColor(NULL);
 }
 
@@ -2171,6 +2215,9 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
         case UI_STARTMATCH:
             UI_StartMatch_Paint();
             break;
+        case UI_SETTINGS:
+            UI_Settings_Paint();
+            break;
         default:
             break;
     }
@@ -2741,6 +2788,8 @@ static qboolean UI_OwnerDrawHandleKey(int ownerDraw, int flags, float* special, 
     switch (ownerDraw) {
         case UI_STARTMATCH:
             return UI_StartMatch_HandleKey(key);
+        case UI_SETTINGS:
+            return UI_Settings_HandleKey(key);
         case UI_HANDICAP:
             return UI_Handicap_HandleKey(flags, special, key);
             break;
@@ -3190,6 +3239,10 @@ static void UI_RunMenuScript(char** args) {
             trap_Cmd_ExecuteText(EXEC_APPEND, "vid_restart\n");
         } else if (Q_stricmp(name, "startMatchOpen") == 0) {
             UI_StartMatch_Open();
+        } else if (Q_stricmp(name, "settingsOpen") == 0) {
+            UI_Settings_Open();
+        } else if (Q_stricmp(name, "settingsClose") == 0) {
+            UI_Settings_Close();
         } else if (Q_stricmp(name, "loadArenas") == 0) {
             UI_LoadArenasIntoMapList();
             UI_MapCountByGameType(qfalse);
@@ -5301,13 +5354,37 @@ void _UI_SetActiveMenu(uiMenuCommand_t menu) {
                     Menus_ActivateByName("error_popmenu");
                 }
                 return;
-            case UIMENU_MAIN_OPTIONS:
+            case UIMENU_MAIN_OPTIONS: {
+                // [ioquakelive] retail's Settings button runs `web_changeHash /settings`, which
+                // handed the settings over to the embedded browser; the engine reaches this case
+                // instead (CL_Web_ChangeHash_f). Two shapes, because the pages are the same but
+                // the frame around them is not:
+                //  - in a match, the nav bar is already on screen, so only the panel below it is
+                //    swapped, exactly like Current Match / Call Vote / Admin / Add Bot do;
+                //  - out of a match, the main-menu frame is opened with a page inside it, which is
+                //    what retail's own main.menu does (`open main_options ; open ingame_controls`).
+                // An empty frame with nothing in it is what this used to open.
+                menuDef_t* ingame = Menus_FindByName("ingame");
+                qboolean inMatch = ingame && (ingame->window.flags & WINDOW_VISIBLE);
+
                 trap_Cvar_Set("cl_paused", "1");
                 trap_Key_SetCatcher(KEYCATCH_UI);
                 UI_BuildPlayerList();
-                Menus_CloseAll();
-                Menus_ActivateByName("main_options");
+                uiInfo.effectsColor = gamecodetoui[(int)trap_Cvar_VariableValue("color1") - 1];
+                uiInfo.currentCrosshair = (int)trap_Cvar_VariableValue("cg_drawCrosshair");
+
+                if (inMatch) {
+                    // the panel below the nav bar is swapped, like the other buttons do
+                    Menus_CloseByName("ingame_about");
+                    Menus_CloseByName("ingame_callvote");
+                    Menus_CloseByName("ingame_admin");
+                    Menus_CloseByName("ingame_addbot");
+                } else {
+                    Menus_CloseAll();
+                }
+                Menus_ActivateByName("settings");
                 return;
+            }
             case UIMENU_TEAM:
                 trap_Key_SetCatcher(KEYCATCH_UI);
                 // [QL] uix86.dll _UI_SetActiveMenu opens "joingame_menu", not "team"
