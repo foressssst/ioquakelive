@@ -1833,6 +1833,8 @@ static void CG_RegisterGraphics(void) {
     cgs.media.waterBubbleShader = trap_R_RegisterShader("waterBubble");
 
     cgs.media.tracerShader = trap_R_RegisterShader("gfx/misc/tracer");
+    // [QL] 0x1002321e: the impact sparks carry their own handle on the same shader
+    cgs.media.sparkParticleShader = trap_R_RegisterShader("gfx/misc/tracer");
     cgs.media.selectShader = trap_R_RegisterShader("gfx/2d/select");
     cgs.media.weaponBarHighlightShader = trap_R_RegisterShader("ui/assets/hud/weaplit2.tga");
     cgs.media.infiniteAmmoShader = trap_R_RegisterShader("icons/infinite.tga");

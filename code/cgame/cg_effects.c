@@ -981,12 +981,54 @@ void CG_BloodSplatEffect(vec3_t origin, int entityNum) {
 ==================
 CG_SpawnParticleEffect
 
-QL binary: spawns impact spark particles.
+[QL] cgamex86.dll 0x10012f30: one impact spark. A sprite that flies off along vel and fades as it
+goes, which is what the four hit paths spawn while cg_impactSparks is on (0x10054ced, 0x10055577,
+0x10055b67, 0x1005635f), each with size, lifetime and upward speed from their cvars.
+
+The picture is all in the sprite: the shader is gfx/misc/tracer, it starts at a random rotation,
+and the local entity is a LE_MOVE_SCALE_FADE, which CG_AddMoveScaleFade shrinks and fades over the
+life. Retail keeps the origin in a register instead of an argument, so it is one here.
+
+The RagePro branch (a 1998 card, glconfig.hardwareType 3) swaps the shader for smokePuffRagePro
+and draws it white; this engine has no such hardware type, so only the sprite path is here.
 ==================
 */
-void CG_SpawnParticleEffect(vec3_t vel, float size, float r, float g, float b, float a, float lifetime, int startTime, int type, qhandle_t shader) {
-    // TODO: implement QL particle effect system
-    // Binary creates a particle emitter with the given parameters
+void CG_SpawnParticleEffect(vec3_t origin, vec3_t vel, float size, float r, float g, float b, float a,
+                            float lifetime, int startTime, int flags, qhandle_t shader) {
+    localEntity_t* le;
+    refEntity_t* re;
+
+    le = CG_AllocLocalEntity();
+    re = &le->refEntity;
+
+    le->leFlags = flags;
+    le->leType = LE_MOVE_SCALE_FADE;
+    le->startTime = startTime;
+    le->endTime = (int)(startTime + lifetime);
+    le->fadeInTime = 0;
+    le->lifeRate = 1.0f / (le->endTime - le->startTime);
+
+    le->color[0] = r;
+    le->color[1] = g;
+    le->color[2] = b;
+    le->color[3] = a;
+    le->radius = size;
+
+    le->pos.trType = TR_LINEAR;
+    le->pos.trTime = startTime;
+    VectorCopy(origin, le->pos.trBase);
+    VectorCopy(vel, le->pos.trDelta);
+
+    re->reType = RT_SPRITE;
+    re->radius = size;
+    re->rotation = (rand() & 0xffff) / 65536.0f * 360.0f;
+    re->customShader = shader;
+    re->shaderTime = startTime / 1000.0f;
+    VectorCopy(origin, re->origin);
+    re->shaderRGBA[0] = (byte)(r * 255);
+    re->shaderRGBA[1] = (byte)(g * 255);
+    re->shaderRGBA[2] = (byte)(b * 255);
+    re->shaderRGBA[3] = 255;
 }
 
 /*
