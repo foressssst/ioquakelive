@@ -287,15 +287,6 @@ void SM_DrawPlayerIn(playerInfo_t* pi, float x, float y, float w, float h) {
     UI_DrawPlayer(r[0], r[1], r[2], r[3], pi, uiInfo.uiDC.realTime / 2);
 }
 
-// the same, held at one moment so the model stands still
-void SM_DrawPlayerStill(playerInfo_t* pi, float x, float y, float w, float h) {
-    float viewW = h * 0.86f / 0.54f;
-    float r[4];
-
-    SM_To640(x + (w - viewW) * 0.5f, y, viewW, h, r);
-    UI_DrawPlayer(r[0], r[1], r[2], r[3], pi, SM_STILL_TIME);
-}
-
 void SM_TurnPlayer(playerInfo_t* pi, float yaw) {
     pi->viewAngles[YAW] = yaw;
     pi->legs.yawAngle = yaw;
