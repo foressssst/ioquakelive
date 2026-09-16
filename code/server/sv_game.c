@@ -1212,6 +1212,39 @@ void SV_ShutdownGameProgs(void) {
     memset(sv_vmMainTable, 0, sizeof(sv_vmMainTable));
 }
 
+static void SV_LoadGameProgs(void);
+
+/*
+===============
+SV_RegisterGameCvars
+
+[QL] quakelive_steam.exe 0x4cc216: before the config files are read, the engine loads the game
+module just to run its cvar registration (export +0x08) and puts it away again, and then does the
+same with the cgame. That is what gives every gamerule cvar its real default before anything can
+set it.
+
+Without this, a cvar a factory sets was created by that Cvar_Set (with the factory's value as its
+default, and nothing kept to go back to), so leaving the factory left the value behind: Clan Arena
+into Duel kept g_startingHealth 200 and g_startingArmor 100 instead of Duel's 100 and 0.
+
+Retail also runs the shutdown export here. This does not: nothing was started, and our
+G_ShutdownGame would take the bot library down with it.
+===============
+*/
+void SV_RegisterGameCvars(void) {
+    qboolean loadedHere = (sv_gameLibHandle == NULL);
+
+    if (loadedHere) {
+        SV_LoadGameProgs();
+    }
+    SV_GameRegisterCvars();
+    if (loadedHere && sv_gameLibHandle) {
+        Sys_UnloadLibrary(sv_gameLibHandle);
+        sv_gameLibHandle = NULL;
+        memset(sv_vmMainTable, 0, sizeof(sv_vmMainTable));
+    }
+}
+
 /*
 ==================
 SV_InitGameVM
@@ -1219,7 +1252,6 @@ SV_InitGameVM
 Called for both a full init and a restart
 ==================
 */
-static void SV_LoadGameProgs(void);
 
 static void SV_InitGameVM(qboolean restart) {
     int i;
