@@ -294,46 +294,91 @@ void CG_PushReward(sfxHandle_t sfx, qhandle_t shader, int rewardCount) {
 
 /*
 ==================
+CG_CheckHitSounds
+
+[ioquakelive] Not retail's: the hit sounds follow WolfcamQL, by the user's choice. Retail
+(cgamex86.dll 0x100435b0) plays them from CG_CheckLocalSounds, which live play reaches through
+the prediction; the predicted state takes each new snapshot the moment its packet lands, so the
+sounds come at the pace the packets arrive and a lightning gun's hits bunch up and spread out.
+WolfcamQL plays them as the snapshots are transitioned, on the game's own clock, and that is how
+they are played here, from CG_TransitionSnapshot.
+
+What plays is WolfcamQL's too (cg_playerstate.c, CG_CheckLocalSounds): nothing on the snapshot
+the team changes; a hit plays cg_hitBeep's sound, 1 hit.wav, 2 hit0-3 by the damage tier the
+server keeps in generic1 (generic1 / 64), 3 the same tiers reversed; a teammate hit plays
+hit_teammate unless cg_hitBeep is 0. The kill beep is not here: WolfcamQL plays it from the
+obituary, on top of the hit (CG_Obituary).
+==================
+*/
+void CG_CheckHitSounds(const playerState_t* ps, const playerState_t* ops) {
+    sfxHandle_t sfx;
+
+    // don't play the sounds if the player just changed teams
+    if (ps->persistant[PERS_TEAM] != ops->persistant[PERS_TEAM]) {
+        return;
+    }
+
+    if (ps->persistant[PERS_HITS] > ops->persistant[PERS_HITS]) {
+        if (cg_hitBeep.integer == 1) {
+            trap_S_StartLocalSound(cgs.media.hitSound, CHAN_LOCAL_SOUND);
+        } else if (cg_hitBeep.integer == 2) {
+            switch (ps->generic1 / 64) {
+            case 1:
+                sfx = cgs.media.hitSounds[1];
+                break;
+            case 2:
+                sfx = cgs.media.hitSounds[2];
+                break;
+            case 3:
+                sfx = cgs.media.hitSounds[3];
+                break;
+            default:
+                sfx = cgs.media.hitSounds[0];
+                break;
+            }
+            trap_S_StartLocalSound(sfx, CHAN_LOCAL_SOUND);
+        } else if (cg_hitBeep.integer == 3) {
+            switch (ps->generic1 / 64) {
+            case 0:
+                sfx = cgs.media.hitSounds[3];
+                break;
+            case 1:
+                sfx = cgs.media.hitSounds[2];
+                break;
+            case 2:
+                sfx = cgs.media.hitSounds[1];
+                break;
+            default:
+                sfx = cgs.media.hitSounds[0];
+                break;
+            }
+            trap_S_StartLocalSound(sfx, CHAN_LOCAL_SOUND);
+        }
+    } else if (ps->persistant[PERS_HITS] < ops->persistant[PERS_HITS] && cg_hitBeep.integer) {
+        trap_S_StartLocalSound(cgs.media.hitTeamSound, CHAN_LOCAL_SOUND);
+    }
+}
+
+/*
+==================
 CG_CheckLocalSounds
 
 [QL] cgamex86.dll 0x100435b0. Nothing plays on the snapshot the spawn count changes, which a
-team change also does. A hit that frags (PERS_ATTACKEE_ARMOR, the server's lethal-hit count,
-went up) plays cg_killBeep's sound, 1-6 impact1-6, 7 bell_01, 8 chaching, anything else
-impact1, at s_killBeepVolume. Any other hit plays cg_hitBeep's: 1 always hit1, 2 hit0-3 by
-the damage tier the server keeps in generic1's top bits, 3 the same tiers reversed, 0 none.
-A teammate hit plays hit_teammate unless cg_hitBeep is 0.
+team change also does. The hit sounds that open retail's version are played apart, as WolfcamQL
+plays them (CG_CheckHitSounds).
 
-After the hit sounds come the medals, the player event voices and the flag pickup, which
-stop once the intermission has started, then the lead changes and the time and frag limit
-warnings, which stop during warmup. The player's own pain sound comes from EV_PAIN.
+Then come the medals, the player event voices and the flag pickup, which stop once the
+intermission has started, then the lead changes and the time and frag limit warnings, which
+stop during warmup. The player's own pain sound comes from EV_PAIN.
 ==================
 */
 void CG_CheckLocalSounds(playerState_t* ps, playerState_t* ops) {
-    int tier, count, bits;
+    int count, bits;
     sfxHandle_t sfx;
 
     // don't play the sounds if the player just respawned or changed teams
     if (ps->persistant[PERS_SPAWN_COUNT] != ops->persistant[PERS_SPAWN_COUNT]) {
         return;
-    }
-
-    // hit changes
-    if (ps->persistant[PERS_HITS] > ops->persistant[PERS_HITS]) {
-        if (cg_killBeep.integer >= 1 && ps->persistant[PERS_ATTACKEE_ARMOR] > ops->persistant[PERS_ATTACKEE_ARMOR]) {
-            sfx = cgs.media.killBeepSounds[(cg_killBeep.integer <= 8) ? cg_killBeep.integer - 1 : 0];
-            trap_S_StartLocalSoundVolume(sfx, CHAN_LOCAL_SOUND, s_killBeepVolume.value);
-        } else if (cg_hitBeep.integer == 1) {
-            trap_S_StartLocalSound(cgs.media.hitSounds[1], CHAN_LOCAL_SOUND);
-        } else if (cg_hitBeep.integer >= 2) {
-            tier = ps->generic1 >> 6;
-            if (cg_hitBeep.integer == 3) {
-                tier = 3 - tier;
-            }
-            sfx = (tier >= 1 && tier <= 3) ? cgs.media.hitSounds[tier] : cgs.media.hitSounds[0];
-            trap_S_StartLocalSound(sfx, CHAN_LOCAL_SOUND);
-        }
-    } else if (ps->persistant[PERS_HITS] < ops->persistant[PERS_HITS] && cg_hitBeep.integer) {
-        trap_S_StartLocalSound(cgs.media.hitTeamSound, CHAN_LOCAL_SOUND);
     }
 
     // if we are going into the intermission, don't start any voices
