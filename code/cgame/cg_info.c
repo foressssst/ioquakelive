@@ -125,10 +125,13 @@ void CG_DrawInformation(void) {
     int w;
     float s1, s2;
 
-    // [QL] colors from binary
-    static vec4_t colorBarFilled   = { 0.375f, 0.125f, 0.125f, 1.0f  };  // dark red, full alpha
-    static vec4_t colorBarEmpty    = { 0.0f,   0.0f,   0.0f,   0.75f };  // black semi-transparent
-    static vec4_t colorBarBg       = { 0.375f, 0.125f, 0.125f, 0.75f };  // dark red, semi-transparent
+    // the front end's palette (ui_web.c): the page's black, its gold, its muted grey
+    static vec4_t colorLoadFloor = {0.031f, 0.031f, 0.031f, 0.86f};
+    static vec4_t colorLoadGold  = {0.969f, 0.820f, 0.0f,   1.0f};
+    static vec4_t colorLoadMuted = {0.600f, 0.600f, 0.600f, 1.0f};
+    static vec4_t colorLoadTrack = {1.0f,   1.0f,   1.0f,   0.12f};
+    char eyebrow[64];
+    float full;
 
     // [QL] compute aspect-correct texture coords for levelshot (1920x1080 source)
     s1 = ((1920.0f - (1080.0f / (float)cgs.glconfig.vidHeight) * (float)cgs.glconfig.vidWidth)
@@ -162,86 +165,80 @@ void CG_DrawInformation(void) {
         return;
     }
 
-    // [QL] draw the levelshot fullscreen with aspect-correct texture coords
+    // the levelshot fills the screen, with retail's aspect-correct texture coords
     trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight,
                           s1, 0, s2, 1.0f, levelshot);
 
-    // [QL] left-anchored elements: top bar, logos, bottom bar, map name, author
+    // [ioquakelive] Asked for on 2026-09-16: "ver la posibilidad de un nuevo diseno para LA
+    // PANTALLA DE CARGA DEL MAPA". It carries exactly what retail's carried -- the levelshot, the
+    // logo, the gametype, the map and its authors, what is loading and how far it has got -- in
+    // the front end's own language instead of retail's red bars: a scrim that darkens towards the
+    // bottom so the picture keeps its top, the gametype as a gold eyebrow over the map's name, and
+    // the progress as a thread along the bottom edge. Retail's version is in the history, at the
+    // commit this replaced.
+    // Everything is laid out from the left edge in 480-line units, so it reaches both edges of any
+    // screen: in WIDESCREEN_LEFT a unit is a 480th of the height and x 0 is the screen's left.
     CG_SetWidescreen(WIDESCREEN_LEFT);
+    full = (float)cgs.glconfig.vidWidth * 480.0f / (float)cgs.glconfig.vidHeight;
 
-    // top bar: dark red semi-transparent background across full width
-    CG_FillRect(-400, 0, 1440, 64, colorBarBg);
+    // the scrim: a light one under the logo, a deeper one towards the floor the text sits on
+    for (i = 0; i < 4; i++) {
+        vec4_t band = {0.031f, 0.031f, 0.031f, 0.36f - 0.09f * i};
 
-    // logo background (512x128 source, drawn at 256x64 = 4:1 ratio preserved)
-    if (cgs.media.logoBackgroundShader) {
-        CG_DrawPic(0, 0, 256, 64, cgs.media.logoBackgroundShader);
+        CG_FillRect(0, i * 22, full, 22, band);
     }
+    for (i = 0; i < 8; i++) {
+        vec4_t band = {0.031f, 0.031f, 0.031f, 0.10f * (i + 1)};
 
-    // QL logo (512x128 source, drawn at 256x64)
+        CG_FillRect(0, 228 + i * 20, full, 20, band);
+    }
+    CG_FillRect(0, 388, full, 92, colorLoadFloor);
+
+    // the logo, small, with nothing behind it
     if (cgs.media.qlLogoShader) {
-        CG_DrawPic(0, 0, 256, 64, cgs.media.qlLogoShader);
+        CG_DrawPic(22, 22, 180, 45, cgs.media.qlLogoShader);
     }
 
-    // [QL] bottom bar: black semi-transparent covering y=400..480
-    CG_FillRect(-400, 400, 1440, 80, colorBarEmpty);
-
-    // [QL] cgamex86.dll 0x1001d22d: the map's name at x 10 with its top on y 400, in font 0
-    // at scale 0.8, and under it, when the map has one, its authors in font 1 at scale 0.25
-    // with their tops on y 447 and 462. None of them is shadowed.
-    s = CG_ConfigString(CS_MESSAGE);
-    CG_DrawText(10, (float)(400 + CG_DrawTextHeight(s, 0.8f, 0, 0)), 0, 0.8f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_NORMAL);
-
-    sAuthor = CG_ConfigString(CS_AUTHOR);
-    if (sAuthor[0]) {
-        sAuthor2 = CG_ConfigString(CS_AUTHOR2);
-        CG_DrawText(10, (float)(447 + CG_DrawTextHeight(sAuthor, 0.25f, 0, 1)), 1, 0.25f, colorWhite, sAuthor, 0, 0,
-                    ITEM_TEXTSTYLE_NORMAL);
-        CG_DrawText(10, (float)(462 + CG_DrawTextHeight(sAuthor2, 0.25f, 0, 1)), 1, 0.25f, colorWhite, sAuthor2, 0, 0,
-                    ITEM_TEXTSTYLE_NORMAL);
-    }
-
-    // [QL] right-anchored elements: gametype background and name
-    CG_SetWidescreen(WIDESCREEN_RIGHT);
-
-    // gametype background (right side of top bar, 512x128 source at 256x64)
-    if (cgs.media.gtBackgroundShader) {
-        CG_DrawPic(384, 0, 256, 64, cgs.media.gtBackgroundShader);
-    }
-
-    // [QL] gametype name (right-aligned in top bar, bigFont via scale 0.8)
+    // the gametype over the map's name, gold, the way a page's eyebrow reads
     if (cgs.gametype >= 0 && cgs.gametype < GT_MAX_GAME_TYPE) {
         gametypeName = gametypeDisplayNames[cgs.gametype];
     } else {
         gametypeName = "Unknown Gametype";
     }
-    // [QL] 0x1001d48d: right-aligned on 620 with its top 10 units down, font 0, scale 0.8,
-    // not shadowed
-    w = CG_DrawTextWidth(gametypeName, 0.8f, 0, 0);
-    CG_DrawText((float)(620 - w), (float)(10 + CG_DrawTextHeight(gametypeName, 0.8f, 0, 0)), 0, 0.8f, colorWhite,
-                gametypeName, 0, 0, ITEM_TEXTSTYLE_NORMAL);
+    Q_strncpyz(eyebrow, gametypeName, sizeof(eyebrow));
+    Q_strupr(eyebrow);
+    CG_DrawText(26, (float)(404 + CG_DrawTextHeight(eyebrow, 0.16f, 0, 1)), 1, 0.16f, colorLoadGold, eyebrow, 0, 0,
+                ITEM_TEXTSTYLE_NORMAL);
 
-    // [QL] center-anchored elements: loading text and progress boxes
-    CG_SetWidescreen(WIDESCREEN_CENTER);
+    // the map's name, big
+    s = CG_ConfigString(CS_MESSAGE);
+    CG_DrawText(24, (float)(416 + CG_DrawTextHeight(s, 0.5f, 0, 0)), 0, 0.5f, colorWhite, s, 0, 0,
+                ITEM_TEXTSTYLE_NORMAL);
 
-    // [QL] loading text (centered, textFont via scale 0.3)
+    // along the bottom line: the authors at the left, what is loading at the right
+    sAuthor = CG_ConfigString(CS_AUTHOR);
+    if (sAuthor[0]) {
+        sAuthor2 = CG_ConfigString(CS_AUTHOR2);
+        if (sAuthor2[0]) {
+            sAuthor = va("%s  %s", sAuthor, sAuthor2);
+        }
+        CG_DrawText(26, 466, 1, 0.17f, colorLoadMuted, sAuthor, 0, 0, ITEM_TEXTSTYLE_NORMAL);
+    }
     if (cg.infoScreenText[0]) {
         s = va("Loading %s", cg.infoScreenText);
     } else {
         s = "Awaiting Snapshot";
     }
-    // [QL] 0x1001d524: centred at y 370 in font 1, scale 0.3, shadowed
-    w = CG_DrawTextWidth(s, 0.3f, 0, 1);
-    CG_DrawText((float)(320 - w / 2), 370, 1, 0.3f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+    w = CG_DrawTextWidth(s, 0.17f, 0, 1);
+    CG_DrawText(full - 24 - w, 466, 1, 0.17f, colorLoadMuted, s, 0, 0, ITEM_TEXTSTYLE_NORMAL);
 
-    // [QL] progress boxes: 4 boxes, 8x8 each, 16px stride, y=380
-    for (i = 0; i < NUM_LOADING_STAGES; i++) {
-        if (cg.loadingStage > i) {
-            CG_FillRect(292 + i * 16, 380, 8, 8, colorBarFilled);
-        } else {
-            CG_FillRect(292 + i * 16, 380, 8, 8, colorBarEmpty);
-        }
+    // the progress along the very bottom, a thread rather than four boxes
+    CG_FillRect(0, 477, full, 3, colorLoadTrack);
+    if (cg.loadingStage > 0) {
+        float done = (float)cg.loadingStage / (float)NUM_LOADING_STAGES;
+
+        CG_FillRect(0, 477, full * (done > 1.0f ? 1.0f : done), 3, colorLoadGold);
     }
 
-    // [QL] reset widescreen mode
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
