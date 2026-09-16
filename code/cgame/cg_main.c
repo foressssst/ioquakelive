@@ -319,6 +319,7 @@ vmCvar_t cg_zoomAnimationTime;
 vmCvar_t cg_drawBrightWeapons;
 vmCvar_t ch_chatLines;
 vmCvar_t cg_rocketStyle;
+vmCvar_t cg_projectileLead;
 vmCvar_t cg_raceBeep;
 vmCvar_t cg_screenDamage_Self;
 vmCvar_t cg_screenDamage_Team;
@@ -730,6 +731,8 @@ static cvarTable_t cvarTable[] = {
     {&cg_drawBrightWeapons, "cg_drawBrightWeapons", "0", CVAR_ARCHIVE},
     {&ch_chatLines, "ch_chatLines", "3", CVAR_ARCHIVE},
     {&cg_rocketStyle, "cg_rocketStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "2"},
+    // [ioquakelive] not retail's; 0 is retail. See CG_ProjectileLeadOffset.
+    {&cg_projectileLead, "cg_projectileLead", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_ARCHIVE, "0", "32"},
     {&cg_raceBeep, "cg_raceBeep", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "8"},
     {&cg_screenDamage_Self, "cg_screenDamage_Self", "0x00000000", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_screenDamage_Team, "cg_screenDamage_Team", "0x700000C8", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
