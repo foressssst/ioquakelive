@@ -708,6 +708,13 @@ static void CG_PlasmaTrail(centity_t* cent, const weaponInfo_t* wi) {
     es = &cent->currentState;
 
     BG_EvaluateTrajectory(&es->pos, cg.time, origin);
+    // [ioquakelive] the plasma's trail travels with it (cg_projectileLead)
+    {
+        vec3_t leadOffset;
+
+        CG_ProjectileLeadOffset(cent, leadOffset);
+        VectorAdd(origin, leadOffset, origin);
+    }
 
     le = CG_AllocLocalEntity();
     re = &le->refEntity;
