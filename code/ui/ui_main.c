@@ -2218,6 +2218,9 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
         case UI_SETTINGS:
             UI_Settings_Paint();
             break;
+        case UI_HOME:
+            UI_Home_Paint();
+            break;
         default:
             break;
     }
@@ -2790,6 +2793,8 @@ static qboolean UI_OwnerDrawHandleKey(int ownerDraw, int flags, float* special, 
             return UI_StartMatch_HandleKey(key);
         case UI_SETTINGS:
             return UI_Settings_HandleKey(key);
+        case UI_HOME:
+            return UI_Home_HandleKey(key);
         case UI_HANDICAP:
             return UI_Handicap_HandleKey(flags, special, key);
             break;
@@ -3239,6 +3244,14 @@ static void UI_RunMenuScript(char** args) {
             trap_Cmd_ExecuteText(EXEC_APPEND, "vid_restart\n");
         } else if (Q_stricmp(name, "startMatchOpen") == 0) {
             UI_StartMatch_Open();
+        } else if (Q_stricmp(name, "homeOpen") == 0) {
+            // the page takes keys before the mouse moves over it
+            menuDef_t* home = Menus_FindByName("main");
+            itemDef_t* item = home ? Menu_FindItemByName(home, "home") : NULL;
+
+            if (item) {
+                item->window.flags |= WINDOW_HASFOCUS;
+            }
         } else if (Q_stricmp(name, "settingsOpen") == 0) {
             UI_Settings_Open();
         } else if (Q_stricmp(name, "settingsClose") == 0) {

@@ -136,6 +136,29 @@ void SM_Pic(float x, float y, float w, float h, qhandle_t shader, const smRect_t
                           (r.y - y) / h, (r.x + r.w - x) / w, (r.y + r.h - y) / h, shader);
 }
 
+/*
+===============
+SM_To640
+
+Turns a rectangle of the page into the 640x480 one the rest of the UI works in,
+for the few things drawn by code that expects those coordinates -- the player
+model, which UI_DrawPlayer puts through UI_AdjustFrom640 itself.
+===============
+*/
+void SM_To640(float x, float y, float w, float h, float* out) {
+    float xscale = uiInfo.uiDC.xscale;
+    float yscale = uiInfo.uiDC.yscale;
+
+    if (xscale <= 0 || yscale <= 0) {
+        out[0] = out[1] = out[2] = out[3] = 0;
+        return;
+    }
+    out[0] = (x * smScale - uiInfo.uiDC.bias) / xscale;
+    out[1] = (smTop + y * smScale) / yscale;
+    out[2] = w * smScale / xscale;
+    out[3] = h * smScale / yscale;
+}
+
 float SM_Em(int font) {
     return font == FONT_DEFAULT ? SM_HANDEL_EM : SM_SANS_EM;
 }

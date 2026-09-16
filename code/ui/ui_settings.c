@@ -134,8 +134,19 @@ typedef enum {
     ST_HIT_CLOSE,
     ST_HIT_RESET,
     ST_HIT_RGBSLIDER,
-    ST_HIT_RGBCLOSE
+    ST_HIT_RGBCLOSE,
+    ST_HIT_MODEL,
+    ST_HIT_MODELITEM,
+    ST_HIT_MODELPANE,
+    ST_HIT_MODELDONE
 } stHitType_t;
+
+#define ST_MAX_MODELS MAX_PLAYERMODELS
+#define ST_MODEL_COLS 5
+#define ST_MODEL_CELL 104.0f
+// UI_DrawPlayer sets its field of view from the box's width alone, so how big the
+// model comes out is the pane's width and nothing else
+#define ST_MODEL_PANE 380.0f
 
 /*
 ===============================================================================
@@ -160,6 +171,13 @@ static struct {
     int binding;
     int rgb;              // the row whose colour picker is open
     int rgbDrag;          // 0..2 while a channel is being dragged, else -1
+
+    int model;            // the row whose model chooser is open, else -1
+    int modelCount;
+    int modelNames[ST_MAX_MODELS];  // into uiInfo.q3HeadNames, -1 for "None"
+    float modelScroll;
+    playerInfo_t modelInfo;
+    char modelShown[MAX_QPATH];     // what modelInfo was built from
     qboolean scrollDrag;
     float scrollGrab;
 
@@ -535,6 +553,222 @@ static void ST_DrawRGB(int i, float x, float y, const smRect_t* clip) {
     SM_Hit(x, y, st.valW, 34, ST_HIT_RGB, i, clip);
 }
 
+/*
+===============================================================================
+
+THE MODEL CHOOSER
+
+Retail's is a modal of the model pictures web.pak ships, which we cannot. We have
+something better to hand: the player model itself. So the chooser lists pak00's
+own model icons and, beside them, draws the one picked as a model, turning, in
+the colours the row it came from will give it.
+
+===============================================================================
+*/
+
+// the model part of "model" or "model/skin"
+static void ST_ModelBase(const char* name, char* out, int size) {
+    const char* slash = strchr(name, '/');
+
+    if (slash) {
+        int len = (int)(slash - name);
+
+        if (len > size - 1) {
+            len = size - 1;
+        }
+        memcpy(out, name, len);
+        out[len] = '\0';
+        return;
+    }
+    Q_strncpyz(out, name, size);
+}
+
+/*
+===============
+ST_BuildModelList
+
+A row that forces a model takes the model alone and may take none at all; the
+player's own model takes a skin with it, so it lists every model and skin.
+===============
+*/
+static void ST_BuildModelList(int i) {
+    qboolean skins = stCvars[i].widget == ST_MODELSKIN;
+    int k, n;
+
+    st.modelCount = 0;
+    if (!skins) {
+        st.modelNames[st.modelCount++] = -1;  // None
+    }
+    for (k = 0; k < uiInfo.q3HeadCount && st.modelCount < ST_MAX_MODELS; k++) {
+        if (!skins) {
+            char base[MAX_QPATH], other[MAX_QPATH];
+            qboolean seen = qfalse;
+
+            ST_ModelBase(uiInfo.q3HeadNames[k], base, sizeof(base));
+            for (n = 0; n < st.modelCount; n++) {
+                if (st.modelNames[n] < 0) {
+                    continue;
+                }
+                ST_ModelBase(uiInfo.q3HeadNames[st.modelNames[n]], other, sizeof(other));
+                if (!Q_stricmp(base, other)) {
+                    seen = qtrue;
+                    break;
+                }
+            }
+            if (seen) {
+                continue;
+            }
+        }
+        st.modelNames[st.modelCount++] = k;
+    }
+}
+
+static const char* ST_ModelEntry(int slot, char* out, int size) {
+    int k = st.modelNames[slot];
+
+    if (k < 0) {
+        Q_strncpyz(out, "None", size);
+        return out;
+    }
+    if (stCvars[st.model].widget == ST_MODELSKIN) {
+        Q_strncpyz(out, uiInfo.q3HeadNames[k], size);
+    } else {
+        ST_ModelBase(uiInfo.q3HeadNames[k], out, size);
+    }
+    return out;
+}
+
+// 0xRRGGBBAA into the packed int the model tint takes, the way ui_main.c reads them
+static int UI_SettingsModelColor(const char* cvarName) {
+    char buf[64];
+    int rgb[3];
+
+    trap_Cvar_VariableStringBuffer(cvarName, buf, sizeof(buf));
+    ST_ParseRGB(buf, rgb);
+    return (rgb[0] << 24) | (rgb[1] << 16) | (rgb[2] << 8) | 0xff;
+}
+
+// the colours the row's model is shown in: a team or enemy row tints its own
+static void ST_ModelColors(int i, playerInfo_t* pi) {
+    const char* cvar = stCvars[i].cvar;
+    const char* head = NULL;
+    const char* upper = NULL;
+    const char* lower = NULL;
+
+    if (!Q_stricmp(cvar, "cg_forceTeamModel")) {
+        head = "cg_teamHeadColor";
+        upper = "cg_teamUpperColor";
+        lower = "cg_teamLowerColor";
+    } else if (!Q_stricmp(cvar, "cg_forceEnemyModel")) {
+        head = "cg_enemyHeadColor";
+        upper = "cg_enemyUpperColor";
+        lower = "cg_enemyLowerColor";
+    }
+    if (!head) {
+        pi->customColor = qfalse;
+        return;
+    }
+    // the colour cvars hold 0xRRGGBBAA, which is not a number trap_Cvar_VariableValue reads
+    pi->customColor = qtrue;
+    pi->headColor = UI_SettingsModelColor(head);
+    pi->torsoColor = UI_SettingsModelColor(upper);
+    pi->legsColor = UI_SettingsModelColor(lower);
+}
+
+static void ST_DrawModelPreview(float x, float y, float w, float h) {
+    const char* value = st.values[st.model];
+    char composed[MAX_QPATH];
+    float r[4];
+
+    if (!value[0] || !Q_stricmp(value, "None")) {
+        SM_Text(x + w * 0.5f - SM_Advance(FONT_SANS, 15, "No model forced", -1) * 0.5f,
+                SM_Baseline(FONT_SANS, 15, y + h * 0.5f, 22), FONT_SANS, 15, smSelectText, "No model forced", -1,
+                qfalse);
+        return;
+    }
+    // a forced model takes the default skin, the way retail's chooser does
+    if (stCvars[st.model].widget == ST_MODELSKIN || strchr(value, '/')) {
+        Q_strncpyz(composed, value, sizeof(composed));
+    } else {
+        Com_sprintf(composed, sizeof(composed), "%s/default", value);
+    }
+    if (Q_stricmp(composed, st.modelShown)) {
+        vec3_t viewangles;
+
+        Q_strncpyz(st.modelShown, composed, sizeof(st.modelShown));
+        memset(&st.modelInfo, 0, sizeof(st.modelInfo));
+        viewangles[YAW] = 180 - 30;
+        viewangles[PITCH] = 0;
+        viewangles[ROLL] = 0;
+        UI_PlayerInfo_SetModel(&st.modelInfo, composed, composed, "");
+        UI_PlayerInfo_SetInfo(&st.modelInfo, LEGS_IDLE, TORSO_STAND, viewangles, vec3_origin, WP_MACHINEGUN, qfalse);
+    }
+    ST_ModelColors(st.model, &st.modelInfo);
+    SM_To640(x, y, w, h, r);
+    UI_DrawPlayer(r[0], r[1], r[2], r[3], &st.modelInfo, uiInfo.uiDC.realTime / 2);
+}
+
+static void ST_DrawModelChooser(void) {
+    float w = 22 + ST_MODEL_COLS * ST_MODEL_CELL + 16 + ST_MODEL_PANE + 22;
+    float h = 600;
+    float x = (smVW - w) * 0.5f;
+    float y = ((float)SM_VIEW_H - h) * 0.5f;
+    float listW = ST_MODEL_COLS * ST_MODEL_CELL;
+    float rows = (float)((st.modelCount + ST_MODEL_COLS - 1) / ST_MODEL_COLS);
+    float listH = h - 96;
+    smRect_t box;
+    char name[MAX_QPATH];
+    int k;
+
+    SM_FillScreen(smDim);
+    SM_Fill(x, y, w, h, smDialog, NULL);
+    SM_Hit(x, y, w, h, ST_HIT_MODELPANE, 0, NULL);
+    SM_SpacedText(x + 22, SM_Baseline(FONT_DEFAULT, 20, y + 14, 28), FONT_DEFAULT, 20, smText,
+                  stCvars[st.model].title, -1, qfalse);
+    SM_Fill(x + 22, y + 52, w - 44, 1, smGrey, NULL);
+
+    box = SM_R(x + 22, y + 66, listW, listH);
+    if (rows * ST_MODEL_CELL < listH) {
+        st.modelScroll = 0;
+    } else if (st.modelScroll > rows * ST_MODEL_CELL - listH) {
+        st.modelScroll = rows * ST_MODEL_CELL - listH;
+    }
+    if (st.modelScroll < 0) {
+        st.modelScroll = 0;
+    }
+
+    for (k = 0; k < st.modelCount; k++) {
+        float cx = box.x + (k % ST_MODEL_COLS) * ST_MODEL_CELL;
+        float cy = box.y + (k / ST_MODEL_COLS) * ST_MODEL_CELL - st.modelScroll;
+        qboolean chosen;
+        int slot = st.modelNames[k];
+
+        if (cy + ST_MODEL_CELL < box.y || cy > box.y + box.h) {
+            continue;
+        }
+        ST_ModelEntry(k, name, sizeof(name));
+        chosen = !Q_stricmp(name, st.values[st.model]) ||
+                 (slot < 0 && !st.values[st.model][0]);
+        SM_Fill(cx, cy, ST_MODEL_CELL - 8, ST_MODEL_CELL - 8,
+                chosen ? smYellow : SM_Over(ST_HIT_MODELITEM, k) ? smCardHover : smCard, &box);
+        if (slot >= 0) {
+            SM_Pic(cx + 10, cy + 6, ST_MODEL_CELL - 28, ST_MODEL_CELL - 44, uiInfo.q3HeadIcons[slot], &box);
+        }
+        SM_Text(cx + (ST_MODEL_CELL - 8) * 0.5f - SM_Advance(FONT_SANS, 13, name, -1) * 0.5f,
+                SM_Baseline(FONT_SANS, 13, cy + ST_MODEL_CELL - 34, 18), FONT_SANS, 13,
+                chosen ? stBlack : smText, name, SM_Fit(FONT_SANS, 13, name, ST_MODEL_CELL - 14), qfalse);
+        SM_Hit(cx, cy, ST_MODEL_CELL - 8, ST_MODEL_CELL - 8, ST_HIT_MODELITEM, k, &box);
+    }
+
+    // the one in use, as a model, turning
+    SM_Fill(x + w - 22 - ST_MODEL_PANE, y + 66, ST_MODEL_PANE, listH, smInput, NULL);
+    ST_DrawModelPreview(x + w - 22 - ST_MODEL_PANE + 6, y + 72, ST_MODEL_PANE - 12, listH - 12);
+
+    SM_Fill(x + w - 130, y + h - 60, 108, 36, SM_Over(ST_HIT_MODELDONE, 0) ? smButtonHover : smButton, NULL);
+    SM_Centered(x + w - 76, SM_Baseline(FONT_SANS, 15, y + h - 53, 22), 15, smText, "Done", qtrue);
+    SM_Hit(x + w - 130, y + h - 60, 108, 36, ST_HIT_MODELDONE, 0, NULL);
+}
+
 // a value stepped through with arrows: the model, its skin, the crosshair
 static void ST_DrawStepper(int i, float x, float y, const char* shown, const smRect_t* clip) {
     SM_Fill(x, y, st.valW, 34, smGrey, clip);
@@ -547,6 +781,38 @@ static void ST_DrawStepper(int i, float x, float y, const char* shown, const smR
             SM_Over(ST_HIT_NEXT, i) ? smYellow : smArrow, ">", -1, qtrue);
     SM_Hit(x + st.valW - 50, y, 25, 34, ST_HIT_PREV, i, clip);
     SM_Hit(x + st.valW - 25, y, 25, 34, ST_HIT_NEXT, i, clip);
+}
+
+// the model in use with its icon, which opens the chooser
+static void ST_DrawModelButton(int i, float x, float y, const smRect_t* clip) {
+    const char* value = st.values[i][0] ? st.values[i] : "None";
+    qboolean over = SM_Over(ST_HIT_MODEL, i);
+    char base[MAX_QPATH];
+    qhandle_t icon = 0;
+    int k;
+
+    ST_ModelBase(value, base, sizeof(base));
+    for (k = 0; k < uiInfo.q3HeadCount; k++) {
+        char other[MAX_QPATH];
+
+        if (!Q_stricmp(uiInfo.q3HeadNames[k], value)) {
+            icon = uiInfo.q3HeadIcons[k];
+            break;
+        }
+        ST_ModelBase(uiInfo.q3HeadNames[k], other, sizeof(other));
+        if (!icon && !Q_stricmp(other, base)) {
+            icon = uiInfo.q3HeadIcons[k];
+        }
+    }
+
+    SM_Fill(x, y, st.valW, 34, over ? smLighter : smGrey, clip);
+    SM_Fill(x + 1, y + 1, st.valW - 2, 32, smInput, clip);
+    if (icon) {
+        SM_Pic(x + 4, y + 3, 28, 28, icon, clip);
+    }
+    SM_Text(x + 38, SM_Baseline(FONT_SANS, 15, y + 7, 22), FONT_SANS, 15, smSelectText, value,
+            SM_Fit(FONT_SANS, 15, value, st.valW - 48), qfalse);
+    SM_Hit(x, y, st.valW, 34, ST_HIT_MODEL, i, clip);
 }
 
 static void ST_DrawCrosshair(int i, float x, float y, const smRect_t* clip) {
@@ -631,7 +897,7 @@ static void ST_DrawRow(int i, float y, const smRect_t* clip) {
             break;
         case ST_MODEL:
         case ST_MODELSKIN:
-            ST_DrawStepper(i, valX, y + 8, st.values[i][0] ? st.values[i] : "Default", clip);
+            ST_DrawModelButton(i, valX, y + 8, clip);
             break;
         case ST_CROSSHAIR:
             ST_DrawCrosshair(i, valX, y + 8, clip);
@@ -951,6 +1217,19 @@ static void ST_Click(void) {
     int type = hit ? hit->type : ST_HIT_NONE;
     int index = hit ? hit->index : 0;
 
+    // the model chooser takes the whole screen while it is up
+    if (st.model >= 0) {
+        if (type == ST_HIT_MODELITEM) {
+            char name[MAX_QPATH];
+
+            ST_ModelEntry(index, name, sizeof(name));
+            ST_Set(st.model, st.modelNames[index] < 0 ? "" : name);
+        } else if (type == ST_HIT_MODELDONE || type == ST_HIT_NONE) {
+            st.model = -1;
+        }
+        return;
+    }
+
     if (st.rgb >= 0 && type != ST_HIT_RGBSLIDER && type != ST_HIT_RGBCLOSE) {
         st.rgb = -1;
         if (type == ST_HIT_RGB) {
@@ -1014,6 +1293,11 @@ static void ST_Click(void) {
         case ST_HIT_RGB:
             st.rgb = index;
             break;
+        case ST_HIT_MODEL:
+            st.model = index;
+            st.modelScroll = 0;
+            ST_BuildModelList(index);
+            break;
         case ST_HIT_RGBSLIDER:
             st.rgbDrag = index;
             ST_DragRGB(index);
@@ -1040,6 +1324,10 @@ static void ST_Click(void) {
 }
 
 static void ST_Wheel(float amount) {
+    if (st.model >= 0) {
+        st.modelScroll += amount;
+        return;
+    }
     if (st.select >= 0) {
         const stCvar_t* cv = &stCvars[st.select];
         float h = cv->numOptions * 32.0f;
@@ -1193,6 +1481,7 @@ void UI_Settings_Open(void) {
     st.binding = -1;
     st.rgb = -1;
     st.rgbDrag = -1;
+    st.model = -1;
     st.scrollDrag = qfalse;
     ST_ReadAll();
 
@@ -1245,6 +1534,9 @@ void UI_Settings_Paint(void) {
     if (st.rgb >= 0) {
         ST_DrawRGBPicker();
     }
+    if (st.model >= 0) {
+        ST_DrawModelChooser();
+    }
 
     memcpy(smLastHits, smHits, smNumHits * sizeof(smHits[0]));
     smNumLastHits = smNumHits;
@@ -1280,6 +1572,10 @@ qboolean UI_Settings_HandleKey(int key) {
             ST_Wheel(90);
             return qtrue;
         case K_ESCAPE:
+            if (st.model >= 0) {
+                st.model = -1;
+                return qtrue;
+            }
             if (st.rgb >= 0) {
                 st.rgb = -1;
                 return qtrue;

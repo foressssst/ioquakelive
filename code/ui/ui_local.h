@@ -988,6 +988,14 @@ qboolean UI_Settings_HandleKey(int key);
 void UI_Settings_MouseUp(void);
 void UI_Settings_Close(void);
 
+// [QL] the main menu and the bar the pages sit under; see ui_home.c
+#define UI_HOME 602
+void UI_Home_Paint(void);
+qboolean UI_Home_HandleKey(int key);
+void UI_Home_Backdrop(void);
+void UI_Home_Nav(int active);
+qboolean UI_Home_NavClick(void);
+
 void trap_S_StopBackgroundTrack(void);
 void trap_S_StartBackgroundTrack(const char* intro, const char* loop);
 int trap_CIN_PlayCinematic(const char* arg0, int xpos, int ypos, int width, int height, int bits);

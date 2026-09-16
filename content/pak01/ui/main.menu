@@ -17,174 +17,36 @@
     // =============================================
     // MAIN TITLE SCREEN
     // =============================================
+    // The front end: one owner-draw, drawn by code/ui/ui_home.c the way retail's
+    // browser draws it. The items that follow are what the old menu had; they stay
+    // out of the way at negative coordinates so the bindings that name them still
+    // resolve, and nothing of them shows.
     menuDef {
         name "main"
-        background "ui/assets/backscreen_smoke"
-        backgroundSize 0 0 1920 1080
         fullScreen MENU_TRUE
         rect 0 0 640 480
         visible MENU_TRUE
         focusColor 1 .75 0 1
+        popup
 
         onOpen {
-            setitemcolor fadebox backcolor 0 0 0 1 ;
-            fadeout fadebox ;
             uiScript stopRefresh ;
-            uiScript loadGameInfo
+            uiScript loadGameInfo ;
+            uiScript homeOpen
         }
 
         onESC {
             open quit_popmenu
         }
 
-        // NEW GAME
         itemDef {
-            name browserbar
-            group mainnav
-            style WINDOW_STYLE_GRADIENT
-            rect -155 280 310 30
-            backcolor 0.5 0.1 0 .25
-            border 4
-            bordercolor 0.5 0.5 0.5 1
-            bordersize 1
+            name home
+            type ITEM_TYPE_OWNERDRAW
+            ownerdraw 602 // UI_HOME
+            rect -2000 -1000 4640 2480
             visible 1
-            decoration
-        }
-        itemDef {
-            name browser
-            group mainnav
-            text "NEW GAME"
-            type 1
-            textstyle 6
-            rect 0 280 310 30
-            textalignx 10
-            textaligny 24
-            textscale .416
-            textalign ITEM_ALIGN_LEFT
-            forecolor 1 1 1 1
-            visible 1
-            action { close main ; open startmatch }
-            mouseEnter { setitemcolor browserbar backcolor .75 0 0 .25 }
-            mouseExit { setitemcolor browserbar backcolor 0.5 0.1 0 .25 }
         }
 
-        // DEMOS
-        itemDef {
-            name demobar
-            group mainnav
-            style WINDOW_STYLE_GRADIENT
-            rect -155 320 310 30
-            backcolor 0.5 0.1 0 .25
-            border 4
-            bordercolor 0.5 0.5 0.5 1
-            bordersize 1
-            visible 1
-            decoration
-        }
-        itemDef {
-            name demos
-            group mainnav
-            text "DEMOS"
-            type 1
-            textstyle 6
-            rect 0 320 310 30
-            textalignx 10
-            textaligny 24
-            textscale .416
-            textalign ITEM_ALIGN_LEFT
-            forecolor 1 1 1 1
-            visible 1
-            action { hide mainnav ; open demo }
-            mouseEnter { setitemcolor demobar backcolor .75 0 0 .25 }
-            mouseExit { setitemcolor demobar backcolor 0.5 0.1 0 .25 }
-        }
-
-        // OPTIONS
-        itemDef {
-            name optionsbar
-            group mainnav
-            style WINDOW_STYLE_GRADIENT
-            rect -155 360 310 30
-            backcolor 0.5 0.1 0 .25
-            border 4
-            bordercolor 0.5 0.5 0.5 1
-            bordersize 1
-            visible 1
-            decoration
-        }
-        itemDef {
-            name options
-            group mainnav
-            text "OPTIONS"
-            type 1
-            textstyle 6
-            rect 0 360 320 30
-            textalignx 10
-            textaligny 24
-            textscale .416
-            textalign ITEM_ALIGN_LEFT
-            forecolor 1 1 1 1
-            visible 1
-            action { hide mainnav ; open main_options ; open ingame_controls }
-            mouseEnter { setitemcolor optionsbar backcolor .75 0 0 .25 }
-            mouseExit { setitemcolor optionsbar backcolor 0.5 0.1 0 .25 }
-        }
-
-        // QUIT
-        itemDef {
-            name quitbar
-            group mainnav
-            style WINDOW_STYLE_GRADIENT
-            rect 485 400 310 30
-            backcolor 0.5 0.1 0 .25
-            border 4
-            bordercolor 0.5 0.5 0.5 1
-            bordersize 1
-            visible 1
-            decoration
-        }
-        itemDef {
-            name quit
-            group mainnav
-            text "QUIT"
-            type 1
-            textstyle 6
-            rect 485 400 320 30
-            textalignx 95
-            textaligny 24
-            textscale .416
-            textalign ITEM_ALIGN_LEFT
-            forecolor 1 1 1 1
-            visible 1
-            action { open quit_popmenu }
-            mouseEnter { setitemcolor quitbar backcolor .75 0 0 .25 }
-            mouseExit { setitemcolor quitbar backcolor 0.5 0.1 0 .25 }
-        }
-
-        // CREDITS
-        itemDef {
-            name copyright
-            text "Quake Live (tm) Copyright 2015 Id Software LLC, a ZeniMax Media company. All Rights Reserved."
-            textscale .25
-            rect 0 440 640 40
-            textalign ITEM_ALIGN_CENTER
-            textaligny 32
-            textalignx 320
-            forecolor .75 0 0 .75
-            visible 1
-            decoration
-        }
-
-        itemDef {
-            name fadebox
-            style WINDOW_STYLE_FILLED
-            background "ui/assets/fadebox.tga"
-            forecolor 0 0 0 1
-            backcolor 0 0 0 1
-            rect 0 0 640 480
-            visible 1
-            decoration
-        }
     }
 
     // =============================================
