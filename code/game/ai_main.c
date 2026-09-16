@@ -56,6 +56,24 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 bot_state_t* botstates[MAX_CLIENTS];
 // number of bots
 int numbots;
+
+// [QL] what the training (g_training.c) reads and writes of a bot
+int BotNumBots(void) {
+    return numbots;
+}
+
+float BotGetSkill(int client) {
+    if (client < 0 || client >= MAX_CLIENTS || !botstates[client]) {
+        return 0;
+    }
+    return botstates[client]->settings.skill;
+}
+
+void BotSetSkill(int client, float skill) {
+    if (client >= 0 && client < MAX_CLIENTS && botstates[client]) {
+        botstates[client]->settings.skill = skill;
+    }
+}
 // floating point time
 float floattime;
 // time to do a regular update
@@ -1574,6 +1592,9 @@ int BotAIStartFrame(int time) {
         BotUpdateInput(botstates[i], time, elapsed_time);
         trap_BotUserCommand(botstates[i]->client, &botstates[i]->lastucmd);
     }
+
+    // [QL] qagamex86.dll BotAIStartFrame ends with the training tick (0x10023bdf)
+    G_TrainingFrame();
 
     return qtrue;
 }

@@ -1998,8 +1998,15 @@ static void Cmd_ReadyUp_f(gentity_t* ent) {
     if (level.warmupTime >= 0 && level.intermissionTime == 0)
         return;
 
-    // [QL] Binary also runs a bot-only training pre-step here (g_isBotOnly +
-    // Cmd_SkipTraining_f); ioquakelive has no Cmd_SkipTraining_f, so it is skipped.
+    // [QL] qagamex86.dll 0x10045bd0: in a training match with the skip offered
+    // (g_skipTrainingEnable, which the tour turns on), readyup first ends the tour
+    // (Cmd_SkipTraining 0x10045a80) and then readies up as usual. Without the skip,
+    // nobody can ready up during the tour's intro (g_training 2).
+    if (g_training.integer && g_skipTrainingEnable.integer) {
+        Cmd_SkipTraining(ent->s.clientNum);
+    } else if (g_training.integer == 2) {
+        return;
+    }
     cl = ent->client;
     if (!cl) return;
     if (cl->ps.pm_type == PM_SPECTATOR) return;

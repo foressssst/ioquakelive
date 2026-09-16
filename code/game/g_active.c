@@ -1016,8 +1016,11 @@ void ClientThink_real(gentity_t* ent) {
         }
     } else if (client->freezePlayer) {
         // [QL] alive but frozen: full movement lock. The binary writes pm_type 6
-        // (PM_TUTORIAL) here, not PM_FREEZE, and drops this frame's input.
+        // (PM_TUTORIAL) here, not PM_FREEZE, and drops this frame's buttons, the
+        // copy kept in pers.cmd too (0x10034e97, client+0x264). The training's
+        // intro holds the player here (G_TrainingFrame).
         client->ps.pm_type = PM_TUTORIAL;
+        client->pers.cmd.buttons = 0;
         ucmd->buttons = 0;
     } else if (g_gametype.integer == GT_AD && level.roundState.eCurrent == RS_COUNTDOWN) {
         // [QL] attack & defend locks players in place during the round countdown

@@ -296,11 +296,11 @@ spawn_t spawns[] = {
     {"team_dom_point", SP_team_dom_point},
     {"race_point", SP_race_point},
 
-    // [QL] The binary spawns[] table (0x10080560, 58 entries) also lists:
-    //   {"trigger_capturezone", SP_trigger_capturezone}   (func 0x1006be60)
-    //   {"info_tour_point",      SP_info_tour_point}        (func 0x1005a260)
-    // Neither spawn function exists in this tree yet, so the entries are omitted.
-    // Wire them up once SP_trigger_capturezone / SP_info_tour_point exist.
+    // [QL] qagamex86.dll spawns[] (0x10080560) lists info_tour_point right after
+    // advertisement (0x10080710 -> SP_info_tour_point 0x1005a1f0; the 0x1005a260 an
+    // older note gave falls inside it). It also lists trigger_capturezone
+    // (0x1006be60), which this tree does not have yet.
+    {"info_tour_point", SP_info_tour_point},
 
     {NULL, 0}};
 
