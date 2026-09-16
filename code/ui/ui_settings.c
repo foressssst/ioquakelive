@@ -178,6 +178,11 @@ static struct {
     float modelScroll;
     playerInfo_t modelInfo;
     char modelShown[MAX_QPATH];     // what modelInfo was built from
+
+    playerInfo_t preview[2];        // the Team page's two, teammates then enemies
+    char previewShown[2][MAX_QPATH];
+
+    int entered;                    // realTime the open tab began arriving
     qboolean scrollDrag;
     float scrollGrab;
 
@@ -188,8 +193,10 @@ static struct {
     qboolean fromIngame;
 } st;
 
-// in a match the browser tinted the game rather than hiding it
-static const vec4_t stIngameTint = {19 / 255.0f, 68 / 255.0f, 92 / 255.0f, 0.7f};
+// Over a match the page keeps Quake Club's own background rather than retail's blue
+// tint: at 0.7 over a lit scene the text loses its contrast, and the site's pages are
+// opaque. A little transparency is left so you can still tell there is a match behind.
+static const vec4_t stIngameTint = {23 / 255.0f, 22 / 255.0f, 21 / 255.0f, 0.94f};
 static const vec4_t stBlack = {0.0f, 0.0f, 0.0f, 1.0f};
 static const vec4_t stOff = {0.6f, 0.6f, 0.6f, 1.0f};  // #999, an option that is off
 
@@ -447,8 +454,8 @@ static void ST_DrawSelect(int i, float x, float y, const smRect_t* clip) {
     qboolean open = st.select == i;
     const char* label = ST_Shown(i);
 
-    SM_Fill(x, y, st.valW, 34, (!open && SM_Over(ST_HIT_SELECT, i)) ? smLighter : smGrey, clip);
-    SM_Fill(x + 1, y + 1, st.valW - 2, 32, open ? smDark : smInput, clip);
+    SM_Round(x, y, st.valW, 34, SM_RADIUS_SM, (!open && SM_Over(ST_HIT_SELECT, i)) ? smLighter : smGrey, clip);
+    SM_Round(x + 1, y + 1, st.valW - 2, 32, SM_RADIUS_SM, open ? smDark : smInput, clip);
     SM_Text(x + 10, SM_Baseline(FONT_SANS, 15, y + 7, 22), FONT_SANS, 15, smSelectText, label,
             SM_Fit(FONT_SANS, 15, label, st.valW - 40), qfalse);
     SM_Arrow(x + st.valW - 24, y + 16, open);
@@ -463,8 +470,8 @@ static void ST_DrawBool(int i, float x, float y, const smRect_t* clip) {
     qboolean on = atoi(st.values[i]) != 0;
     qboolean over = SM_Over(ST_HIT_BOOL, i);
 
-    SM_Fill(x, y, 54, 34, over ? smLighter : smGrey, clip);
-    SM_Fill(x + 1, y + 1, 52, 32, smInput, clip);
+    SM_Round(x, y, 54, 34, SM_RADIUS_SM, over ? smLighter : smGrey, clip);
+    SM_Round(x + 1, y + 1, 52, 32, SM_RADIUS_SM, smInput, clip);
     SM_Text(x + 12, SM_Baseline(FONT_SANS, 15, y + 7, 22), FONT_SANS, 15, on ? smText : stOff, on ? "On" : "Off", -1,
             on);
     SM_Hit(x, y, 54, 34, ST_HIT_BOOL, i, clip);
@@ -492,8 +499,8 @@ static void ST_DrawInput(int i, float x, float y, const smRect_t* clip) {
     int start = 0;
     qboolean editing = st.edit == i;
 
-    SM_Fill(x, y, st.valW, 34, editing ? smFocus : smGrey, clip);
-    SM_Fill(x + 1, y + 1, st.valW - 2, 32, smInput, clip);
+    SM_Round(x, y, st.valW, 34, SM_RADIUS_SM, editing ? smFocus : smGrey, clip);
+    SM_Round(x + 1, y + 1, st.valW - 2, 32, SM_RADIUS_SM, smInput, clip);
     if (editing) {
         if (st.editCursor > len) {
             st.editCursor = len;
@@ -544,8 +551,8 @@ static void ST_DrawRGB(int i, float x, float y, const smRect_t* clip) {
     color[2] = rgb[2] / 255.0f;
     color[3] = 1.0f;
 
-    SM_Fill(x, y, st.valW, 34, SM_Over(ST_HIT_RGB, i) ? smLighter : smGrey, clip);
-    SM_Fill(x + 1, y + 1, st.valW - 2, 32, smInput, clip);
+    SM_Round(x, y, st.valW, 34, SM_RADIUS_SM, SM_Over(ST_HIT_RGB, i) ? smLighter : smGrey, clip);
+    SM_Round(x + 1, y + 1, st.valW - 2, 32, SM_RADIUS_SM, smInput, clip);
     SM_Fill(x + 5, y + 5, 46, 24, color, clip);
     Com_sprintf(text, sizeof(text), "%i, %i, %i", rgb[0], rgb[1], rgb[2]);
     SM_Text(x + 60, SM_Baseline(FONT_SANS, 15, y + 7, 22), FONT_SANS, 15, smSelectText, text, -1, qfalse);
@@ -707,6 +714,76 @@ static void ST_DrawModelPreview(float x, float y, float w, float h) {
     UI_DrawPlayer(r[0], r[1], r[2], r[3], &st.modelInfo, uiInfo.uiDC.realTime / 2);
 }
 
+/*
+===============
+ST_DrawTeamModels
+
+The Team page's own preview, which is what the old .menu pages had and the web UI
+never did: the model your teammates will wear and the one your enemies will, under
+their column, in the colours the rows above set. Retail composes "model/skin" the
+same way -- the model alone takes its default skin, a skin alone falls back to
+sarge (uix86.dll UI_DrawTeamModel @0x10005850).
+===============
+*/
+static void ST_DrawTeamPreview(int slot, const char* modelCvar, const char* skinCvar, const char* headCvar,
+                               const char* upperCvar, const char* lowerCvar, float x, float y, float w, float h) {
+    char model[MAX_QPATH], skin[MAX_QPATH], composed[MAX_QPATH];
+    playerInfo_t* pi = &st.preview[slot];
+    float r[4];
+    char* slash;
+
+    trap_Cvar_VariableStringBuffer(modelCvar, model, sizeof(model));
+    trap_Cvar_VariableStringBuffer(skinCvar, skin, sizeof(skin));
+    if (!model[0] && !skin[0]) {
+        SM_Text(x + w * 0.5f - SM_Advance(FONT_SANS, 14, "Not forced", -1) * 0.5f,
+                SM_Baseline(FONT_SANS, 14, y + h * 0.5f, 22), FONT_SANS, 14, smSubtle, "Not forced", -1, qfalse);
+        return;
+    }
+    if (!model[0]) {
+        Q_strncpyz(model, "sarge", sizeof(model));
+    }
+    slash = strchr(model, '/');
+    if (slash) {
+        *slash = '\0';
+    }
+    Com_sprintf(composed, sizeof(composed), "%s/%s", model, skin[0] ? skin : "default");
+
+    if (Q_stricmp(composed, st.previewShown[slot])) {
+        vec3_t viewangles;
+
+        Q_strncpyz(st.previewShown[slot], composed, sizeof(st.previewShown[slot]));
+        memset(pi, 0, sizeof(*pi));
+        viewangles[YAW] = 150;
+        viewangles[PITCH] = 0;
+        viewangles[ROLL] = 0;
+        UI_PlayerInfo_SetModel(pi, composed, composed, "");
+        UI_PlayerInfo_SetInfo(pi, LEGS_IDLE, TORSO_STAND, viewangles, vec3_origin, WP_MACHINEGUN, qfalse);
+    }
+    pi->customColor = qtrue;
+    pi->headColor = UI_SettingsModelColor(headCvar);
+    pi->torsoColor = UI_SettingsModelColor(upperCvar);
+    pi->legsColor = UI_SettingsModelColor(lowerCvar);
+
+    SM_To640(x, y, w, h, r);
+    UI_DrawPlayer(r[0], r[1], r[2], r[3], pi, uiInfo.uiDC.realTime / 2);
+}
+
+static void ST_DrawTeamModels(void) {
+    float top = st.listTop + 2 * 12.0f + ST_HEAD_H + 8 * ST_ROW_H;
+    float h = st.listTop + st.view - top - 10;
+    float w = st.colW;
+
+    if (h < 150) {
+        return;  // no room under the rows
+    }
+    SM_Round(st.page, top, w, h, SM_RADIUS_LG, smRowEven, NULL);
+    SM_Round(st.page + w + ST_COL_GAP, top, w, h, SM_RADIUS_LG, smRowEven, NULL);
+    ST_DrawTeamPreview(0, "cg_forceTeamModel", "cg_forceTeamSkin", "cg_teamHeadColor", "cg_teamUpperColor",
+                       "cg_teamLowerColor", st.page + 10, top + 10, w - 20, h - 20);
+    ST_DrawTeamPreview(1, "cg_forceEnemyModel", "cg_forceEnemySkin", "cg_enemyHeadColor", "cg_enemyUpperColor",
+                       "cg_enemyLowerColor", st.page + w + ST_COL_GAP + 10, top + 10, w - 20, h - 20);
+}
+
 static void ST_DrawModelChooser(void) {
     float w = 22 + ST_MODEL_COLS * ST_MODEL_CELL + 16 + ST_MODEL_PANE + 22;
     float h = 600;
@@ -748,30 +825,30 @@ static void ST_DrawModelChooser(void) {
         ST_ModelEntry(k, name, sizeof(name));
         chosen = !Q_stricmp(name, st.values[st.model]) ||
                  (slot < 0 && !st.values[st.model][0]);
-        SM_Fill(cx, cy, ST_MODEL_CELL - 8, ST_MODEL_CELL - 8,
-                chosen ? smYellow : SM_Over(ST_HIT_MODELITEM, k) ? smCardHover : smCard, &box);
+        SM_Round(cx, cy, ST_MODEL_CELL - 8, ST_MODEL_CELL - 8, SM_RADIUS_MD,
+                 chosen ? smYellow : SM_Over(ST_HIT_MODELITEM, k) ? smCardHover : smCard, &box);
         if (slot >= 0) {
             SM_Pic(cx + 10, cy + 6, ST_MODEL_CELL - 28, ST_MODEL_CELL - 44, uiInfo.q3HeadIcons[slot], &box);
         }
         SM_Text(cx + (ST_MODEL_CELL - 8) * 0.5f - SM_Advance(FONT_SANS, 13, name, -1) * 0.5f,
                 SM_Baseline(FONT_SANS, 13, cy + ST_MODEL_CELL - 34, 18), FONT_SANS, 13,
-                chosen ? stBlack : smText, name, SM_Fit(FONT_SANS, 13, name, ST_MODEL_CELL - 14), qfalse);
+                chosen ? smOnAccent : smText, name, SM_Fit(FONT_SANS, 13, name, ST_MODEL_CELL - 14), qfalse);
         SM_Hit(cx, cy, ST_MODEL_CELL - 8, ST_MODEL_CELL - 8, ST_HIT_MODELITEM, k, &box);
     }
 
     // the one in use, as a model, turning
-    SM_Fill(x + w - 22 - ST_MODEL_PANE, y + 66, ST_MODEL_PANE, listH, smInput, NULL);
+    SM_Round(x + w - 22 - ST_MODEL_PANE, y + 66, ST_MODEL_PANE, listH, SM_RADIUS_MD, smDark, NULL);
     ST_DrawModelPreview(x + w - 22 - ST_MODEL_PANE + 6, y + 72, ST_MODEL_PANE - 12, listH - 12);
 
-    SM_Fill(x + w - 130, y + h - 60, 108, 36, SM_Over(ST_HIT_MODELDONE, 0) ? smButtonHover : smButton, NULL);
+    SM_Round(x + w - 130, y + h - 60, 108, 36, SM_RADIUS_SM, SM_Over(ST_HIT_MODELDONE, 0) ? smButtonHover : smButton, NULL);
     SM_Centered(x + w - 76, SM_Baseline(FONT_SANS, 15, y + h - 53, 22), 15, smText, "Done", qtrue);
     SM_Hit(x + w - 130, y + h - 60, 108, 36, ST_HIT_MODELDONE, 0, NULL);
 }
 
 // a value stepped through with arrows: the model, its skin, the crosshair
 static void ST_DrawStepper(int i, float x, float y, const char* shown, const smRect_t* clip) {
-    SM_Fill(x, y, st.valW, 34, smGrey, clip);
-    SM_Fill(x + 1, y + 1, st.valW - 2, 32, smInput, clip);
+    SM_Round(x, y, st.valW, 34, SM_RADIUS_SM, smGrey, clip);
+    SM_Round(x + 1, y + 1, st.valW - 2, 32, SM_RADIUS_SM, smInput, clip);
     SM_Text(x + 10, SM_Baseline(FONT_SANS, 15, y + 7, 22), FONT_SANS, 15, smSelectText, shown,
             SM_Fit(FONT_SANS, 15, shown, st.valW - 70), qfalse);
     SM_Text(x + st.valW - 44, SM_Baseline(FONT_SANS, 17, y + 6, 22), FONT_SANS, 17,
@@ -804,8 +881,8 @@ static void ST_DrawModelButton(int i, float x, float y, const smRect_t* clip) {
         }
     }
 
-    SM_Fill(x, y, st.valW, 34, over ? smLighter : smGrey, clip);
-    SM_Fill(x + 1, y + 1, st.valW - 2, 32, smInput, clip);
+    SM_Round(x, y, st.valW, 34, SM_RADIUS_SM, over ? smLighter : smGrey, clip);
+    SM_Round(x + 1, y + 1, st.valW - 2, 32, SM_RADIUS_SM, smInput, clip);
     if (icon) {
         SM_Pic(x + 4, y + 3, 28, 28, icon, clip);
     }
@@ -842,8 +919,8 @@ static void ST_DrawBind(int i, float x, float y, const smRect_t* clip) {
     const char* text = waiting ? "Press a key" : st.values[i];
     qboolean none = !waiting && !Q_stricmp(text, "None");
 
-    SM_Fill(x, y, st.valW, 26, waiting ? smYellow : SM_Over(ST_HIT_BIND, i) ? smLighter : smGrey, clip);
-    SM_Fill(x + 1, y + 1, st.valW - 2, 24, waiting ? smYellow : smInput, clip);
+    SM_Round(x, y, st.valW, 26, SM_RADIUS_SM, waiting ? smYellow : SM_Over(ST_HIT_BIND, i) ? smLighter : smGrey, clip);
+    SM_Round(x + 1, y + 1, st.valW - 2, 24, SM_RADIUS_SM, waiting ? smYellow : smInput, clip);
     SM_Text(x + 9, SM_Baseline(FONT_SANS, 14, y + 3, 20), FONT_SANS, 14,
             waiting ? smDark : none ? stOff : smText, text, SM_Fit(FONT_SANS, 14, text, st.valW - 18), qfalse);
     SM_Hit(x, y, st.valW, 26, ST_HIT_BIND, i, clip);
@@ -857,18 +934,24 @@ static void ST_DrawRow(int i, float y, const smRect_t* clip) {
     smRect_t row = SM_R(x, y, stLayout[i].w, h);
     qboolean hovered;
 
+    // Quake Club heads a section with the title alone: no rule under it, and no
+    // divider between the rows either -- what tells them apart is the background
+    // under the cursor (app/qc-design-system.css, "sin subrayado" and "se
+    // distinguen por el fondo al pasar el cursor")
     if (cv->widget == ST_HEADING) {
-        float tw = SM_SpacedWidth(FONT_DEFAULT, 17, cv->title, 1);
-
-        SM_Text(x, SM_Baseline(FONT_DEFAULT, 17, y + 14, 22), FONT_DEFAULT, 17, smYellow, cv->title, -1, qfalse);
-        SM_Fill(x + tw + 14, y + 25, stLayout[i].w - tw - 14, 1, smGrey, clip);
+        SM_SpacedText(x + 2, SM_Baseline(FONT_DEFAULT, 16, y + 16, 22), FONT_DEFAULT, 16, smYellow, cv->title, 1.5f,
+                      qfalse);
         return;
     }
 
     hovered = SM_In(&row, smMX, smMY) && st.select < 0 && st.rgb < 0;
-    SM_Fill(x, y, stLayout[i].w, h, hovered ? smCardHover : (stLayout[i].nth & 1) ? smRowOdd : smRowEven, clip);
-    SM_Text(x + 10, SM_Baseline(FONT_SANS, 15, y + (h - 22) * 0.5f, 22), FONT_SANS, 15,
-            hovered ? smText : smSelectText, cv->title, SM_Fit(FONT_SANS, 15, cv->title, st.valX - 20), qfalse);
+    if (hovered) {
+        y -= SM_LIFT;  // the row lifts under the cursor, as its rows do
+        SM_Round(x, y, stLayout[i].w, h, SM_RADIUS_MD, smCardHover, clip);
+        SM_Round(x, y + 6, 2, h - 12, 1, smYellow, clip);
+    }
+    SM_Text(x + 14, SM_Baseline(FONT_SANS, 15, y + (h - 22) * 0.5f, 22), FONT_SANS, 15,
+            hovered ? smText : smSelectText, cv->title, SM_Fit(FONT_SANS, 15, cv->title, st.valX - 24), qfalse);
     SM_Hit(x, y, stLayout[i].w, h, ST_HIT_ROW, i, clip);
     if (hovered) {
         st.tip = cv->tip;
@@ -940,11 +1023,8 @@ static void ST_DrawNav(float y) {
         qboolean on = i == st.tab;
         qboolean over = SM_Over(ST_HIT_TAB, i);
 
-        SM_Fill(x, y, w, ST_NAV_H, on ? smYellow : over ? smButtonHover : smButton, NULL);
-        if (!on) {
-            SM_Fill(x + 1, y + 1, w - 2, ST_NAV_H - 2, over ? smButtonHover : smButton, NULL);
-        }
-        SM_SpacedText(x + 15, SM_Baseline(FONT_DEFAULT, 14, y + 8, 22), FONT_DEFAULT, 14, on ? stBlack : smText,
+        SM_Round(x, y, w, ST_NAV_H, SM_RADIUS_MD, on ? smYellow : over ? smButtonHover : smButton, NULL);
+        SM_SpacedText(x + 15, SM_Baseline(FONT_DEFAULT, 14, y + 8, 22), FONT_DEFAULT, 14, on ? smOnAccent : smText,
                       stTabNames[i], 1, on);
         SM_Hit(x, y, w, ST_NAV_H, ST_HIT_TAB, i, NULL);
         x += w + ST_NAV_GAP;
@@ -972,8 +1052,8 @@ static void ST_DrawDropdown(void) {
         }
     }
     box = SM_R(x, y, st.valW, h);
-    SM_Fill(x - 2, y - 2, st.valW + 4, h + 4, smShadow, NULL);
-    SM_Fill(x, y, st.valW, h, smInput, NULL);
+    SM_Shadow(x, y, st.valW, h, SM_RADIUS_MD);
+    SM_Round(x, y, st.valW, h, SM_RADIUS_MD, smDark, NULL);
     SM_Hit(x, y, st.valW, h, ST_HIT_MENU, st.select, NULL);
     st.selectMenu = box;
     for (k = 0; k < cv->numOptions; k++) {
@@ -1013,8 +1093,8 @@ static void ST_DrawRGBPicker(void) {
     }
     ST_ParseRGB(st.values[st.rgb], rgb);
 
-    SM_Fill(x - 2, y - 2, w + 4, h + 4, smShadow, NULL);
-    SM_Fill(x, y, w, h, smDialog, NULL);
+    SM_Shadow(x, y, w, h, SM_RADIUS_LG);
+    SM_Round(x, y, w, h, SM_RADIUS_LG, smDialog, NULL);
     SM_Hit(x, y, w, h, ST_HIT_RGBCLOSE, -1, NULL);  // clicks inside do not close it
 
     color[0] = rgb[0] / 255.0f;
@@ -1069,7 +1149,7 @@ static void ST_Frame(void) {
 
 static void ST_DrawPage(void) {
     smRect_t clip;
-    int i;
+    int i, nth;
 
     ST_Frame();
     ST_Layout();
@@ -1088,27 +1168,69 @@ static void ST_DrawPage(void) {
 
     SM_SpacedText(st.page, SM_Baseline(FONT_DEFAULT, 30, ST_PAGE_TOP - 8, 38), FONT_DEFAULT, 30, smText,
                   "Game Settings", -1, qfalse);
-    SM_Fill(st.page, ST_PAGE_TOP + 34, 60, 3, smYellow, NULL);
+    SM_Round(st.page, ST_PAGE_TOP + 34, 56, 3, 1.5f, smYellow, NULL);
     ST_DrawClose();
     ST_DrawNav(ST_PAGE_TOP + ST_TITLE_H);
 
+    // Each run of rows under a heading is a piece of its own: its own surface,
+    // rounded, with space around it instead of a line. That is how the site
+    // separates blocks (app/qc-design-system.css, "para que se lea como una pieza
+    // suelta sobre el fondo de la pagina").
     clip = SM_R(st.page - 4, st.listTop, st.pageW + 8, st.view);
-    for (i = 0; i < ST_NUM_CVARS; i++) {
-        float y;
+    {
+        float top[2] = {-1.0f, -1.0f};
+        float bottom[2] = {0.0f, 0.0f};
+        int c;
+
+        for (i = 0; i <= ST_NUM_CVARS; i++) {
+            qboolean flush = i == ST_NUM_CVARS;
+
+            if (!flush && (!ST_InTab(i) )) {
+                continue;
+            }
+            if (flush || stCvars[i].widget == ST_HEADING) {
+                for (c = 0; c < 2; c++) {
+                    if (top[c] >= 0) {
+                        float py = st.listTop + top[c] - st.scroll[st.tab] - 8;
+
+                        SM_Round(st.page + c * (st.colW + ST_COL_GAP) - 6, py, st.colW + 12,
+                                 bottom[c] - top[c] + 16, SM_RADIUS_LG, smRowEven, &clip);
+                    }
+                    top[c] = -1.0f;
+                }
+                continue;
+            }
+            c = stCvars[i].column ? 1 : 0;
+            if (top[c] < 0) {
+                top[c] = stLayout[i].y;
+            }
+            bottom[c] = stLayout[i].y + stLayout[i].h;
+        }
+    }
+
+    for (i = 0, nth = 0; i < ST_NUM_CVARS; i++) {
+        float y, alpha, dy;
 
         if (!ST_InTab(i)) {
             continue;
         }
         y = st.listTop + stLayout[i].y - st.scroll[st.tab];
-        if (y + stLayout[i].h > st.listTop && y < st.listTop + st.view) {
-            ST_DrawRow(i, y, &clip);
+        if (y + stLayout[i].h <= st.listTop || y >= st.listTop + st.view) {
+            continue;
         }
+        SM_EnterRise(st.entered, nth++, &alpha, &dy);
+        if (alpha <= 0.01f) {
+            continue;
+        }
+        ST_DrawRow(i, y + dy, &clip);
+    }
+    if (st.tab == ST_TAB_TEAM) {
+        ST_DrawTeamModels();
     }
     if (st.content > st.view) {
         ST_DrawScrollbar();
     }
 
-    SM_Fill(st.page, (float)SM_VIEW_H - ST_PAGE_BOTTOM - ST_TIP_H, st.pageW, 1, smGrey, NULL);
     if (st.tip) {
         SM_Text(st.page, SM_Baseline(FONT_SANS, 14, (float)SM_VIEW_H - ST_PAGE_BOTTOM - ST_TIP_H + 6, 22), FONT_SANS,
                 14, smSelectText, st.tip, -1, qfalse);
@@ -1259,6 +1381,7 @@ static void ST_Click(void) {
     switch (type) {
         case ST_HIT_TAB:
             st.tab = index;
+            st.entered = uiInfo.uiDC.realTime;
             st.select = -1;
             st.edit = -1;
             st.binding = -1;
@@ -1478,11 +1601,8 @@ void UI_Settings_Open(void) {
         st.tab = ST_TAB_BASIC;
         st.loaded = qtrue;
     }
-    menu = Menus_FindByName("ingame");
-    if (menu && (menu->window.flags & WINDOW_VISIBLE)) {
-        st.fromIngame = qtrue;
-        Menus_CloseByName("ingame");
-    }
+    menu = Menus_FindByName("settings_ingame");
+    st.fromIngame = menu && (menu->window.flags & WINDOW_VISIBLE);
     st.select = -1;
     st.edit = -1;
     st.drag = -1;
@@ -1494,7 +1614,9 @@ void UI_Settings_Open(void) {
     ST_ReadAll();
 
     // the page takes keys before the mouse moves over it
-    menu = Menus_FindByName("settings");
+    if (!menu) {
+        menu = Menus_FindByName("settings");
+    }
     item = menu ? Menu_FindItemByName(menu, "settings") : NULL;
     if (item) {
         item->window.flags |= WINDOW_HASFOCUS;
@@ -1608,9 +1730,11 @@ void UI_Settings_MouseUp(void) {
 // Escape, or the page's close button: back to the in-game menu or the main menu
 void UI_Settings_Close(void) {
     Menus_CloseByName("settings");
+    Menus_CloseByName("settings_ingame");
     if (st.fromIngame) {
         st.fromIngame = qfalse;
         Menus_ActivateByName("ingame");
+        Menus_ActivateByName("ingame_about");
     } else {
         Menus_CloseAll();
         Menus_ActivateByName("main");
