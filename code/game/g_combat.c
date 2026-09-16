@@ -133,29 +133,35 @@ void TossClientItems(gentity_t* self) {
     int i;
     gentity_t* drop;
 
-    // drop the weapon if not a gauntlet or machinegun
-    weapon = self->s.weapon;
+    // [QL] qagamex86.dll 0x10046760: the round based modes and the ones that hand out the weapons keep
+    // them, and so does instagib
+    if (!g_instaGib.integer &&
+        g_gametype.integer != GT_RACE && g_gametype.integer != GT_CA &&
+        g_gametype.integer != GT_AD && g_gametype.integer != GT_RR) {
+        // drop the weapon if not a gauntlet or machinegun
+        weapon = self->s.weapon;
 
-    // make a special check to see if they are changing to a new
-    // weapon that isn't the mg or gauntlet.  Without this, a client
-    // can pick up a weapon, be killed, and not drop the weapon because
-    // their weapon change hasn't completed yet and they are still holding the MG.
-    if (weapon == WP_MACHINEGUN || weapon == WP_GRAPPLING_HOOK) {
-        if (self->client->ps.weaponstate == WEAPON_DROPPING) {
-            weapon = self->client->pers.cmd.weapon;
+        // make a special check to see if they are changing to a new
+        // weapon that isn't the mg or gauntlet.  Without this, a client
+        // can pick up a weapon, be killed, and not drop the weapon because
+        // their weapon change hasn't completed yet and they are still holding the MG.
+        if (weapon == WP_MACHINEGUN || weapon == WP_GRAPPLING_HOOK) {
+            if (self->client->ps.weaponstate == WEAPON_DROPPING) {
+                weapon = self->client->pers.cmd.weapon;
+            }
+            if (!(self->client->ps.stats[STAT_WEAPONS] & (1 << weapon))) {
+                weapon = WP_NONE;
+            }
         }
-        if (!(self->client->ps.stats[STAT_WEAPONS] & (1 << weapon))) {
-            weapon = WP_NONE;
+
+        if (weapon > WP_MACHINEGUN && weapon < WP_NUM_WEAPONS && weapon != WP_GRAPPLING_HOOK &&
+            self->client->ps.ammo[weapon]) {
+            // find the item type for this weapon
+            item = BG_FindItemForWeapon(weapon);
+
+            // spawn the item
+            Drop_Item(self, item, 0);
         }
-    }
-
-    if (weapon > WP_MACHINEGUN && weapon != WP_GRAPPLING_HOOK &&
-        self->client->ps.ammo[weapon]) {
-        // find the item type for this weapon
-        item = BG_FindItemForWeapon(weapon);
-
-        // spawn the item
-        Drop_Item(self, item, 0);
     }
 
     // drop all the powerups if not in teamplay
