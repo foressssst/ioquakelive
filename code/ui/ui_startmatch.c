@@ -758,14 +758,17 @@ THE PAGE
 ===============================================================================
 */
 
-// a card's frame: its panel, the gold label over it, and the Change pill at its foot
+// what each of the two choices carries: its name over it and the word that changes it,
+// on the page itself rather than on a card of its own
 static void SM_DrawCardFrame(float x, float y, float h, const char* label, qboolean over) {
     float bw = SM_ButtonWidth("Change", SM_PILL_H);
 
-    SM_Round(x, y, SM_COL_W, h, SM_RADIUS_MD, over ? smRaised : smPanel, NULL);
-    SM_Label(x + SM_PAD, SM_Baseline(FONT_SANS, 11, y + 22, 16), 11, smGold, label, 1.6f);
-    SM_Button(x + SM_COL_W - SM_PAD - bw, y + h - 20 - SM_PILL_H, bw, SM_PILL_H, "Change",
-              over ? SM_BUTTON_PRIMARY : SM_BUTTON_SECONDARY, qfalse);
+    if (over) {
+        SM_Fill(x, y, SM_COL_W, h, smRaised, NULL);
+    }
+    SM_Label(x + SM_PAD, SM_Baseline(FONT_SANS, 11, y + 20, 16), 11, smMuted, label, 1.6f);
+    SM_Button(x + SM_COL_W - SM_PAD - bw, y + h - 18 - SM_PILL_H, bw, SM_PILL_H, "Change",
+              SM_BUTTON_SECONDARY, over);
 }
 
 static void SM_DrawGametypeCard(float x, float y, float h) {
@@ -954,13 +957,15 @@ static void SM_DrawPage(void) {
         }
     }
     panelH = y + (SM_PAD - 6) + 20 + SM_LAUNCH_H + SM_PAD - 6;
-    cardH = (panelH - HM_PANEL_GAP) * 0.5f;
+    cardH = panelH * 0.5f;
     top = UI_Home_BlockTop(72.0f + HM_PANEL_GAP + panelH);
     top = UI_Home_Header(top, NULL, "Start Match") + HM_PANEL_GAP;
     optX = page + SM_OPT_X;
     rowsTop = top + SM_PAD - 6;
 
-    SM_Round(optX, top, SM_OPT_W, panelH, SM_RADIUS_MD, smPanel, NULL);
+    // one panel holds the whole page: the choices at the left, the options at the right
+    SM_Round(page, top, SM_OPT_X + SM_OPT_W, panelH, SM_RADIUS_MD, smPanel, NULL);
+    SM_Fill(page + SM_COL_W + 8, top + 18, 1, panelH - 36, smBorder, NULL);
     y = rowsTop;
     for (i = 0; i < SM_NUM_CVARS; i++) {
         y += SM_DrawRow(i, optX + SM_PAD, y);
@@ -979,7 +984,8 @@ static void SM_DrawPage(void) {
     SM_DrawLaunch(optX + SM_PAD, top + panelH - SM_PAD - SM_LAUNCH_H + 6, SM_ROW_W);
 
     SM_DrawGametypeCard(page, top, cardH);
-    SM_DrawArenaCard(page, top + cardH + HM_PANEL_GAP, cardH);
+    SM_Fill(page + SM_PAD, top + cardH, SM_COL_W - 2 * SM_PAD, 1, smBorder, NULL);
+    SM_DrawArenaCard(page, top + cardH, cardH);
 }
 
 // .Select-menu-outer, under the control: the site's popover, options 34 high
