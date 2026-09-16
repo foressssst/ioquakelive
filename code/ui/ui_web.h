@@ -138,6 +138,13 @@ void SM_Chevron(float x, float y, qboolean up, const float* color);
 void SM_Cross(float x, float y, float size, const float* color);
 void SM_To640(float x, float y, float w, float h, float* out);
 
+// player models drawn into a box of the page
+#define SM_STILL_TIME 9000  // the moment a still model is held at
+void SM_DrawPlayerIn(playerInfo_t* pi, float x, float y, float w, float h);
+void SM_DrawPlayerStill(playerInfo_t* pi, float x, float y, float w, float h);
+void SM_TurnPlayer(playerInfo_t* pi, float yaw);
+void SM_BuildPlayer(playerInfo_t* pi, const char* composed, float yaw, int weapon);
+
 /*
 Type. Quake Club sets everything in DIN Next, which is licensed for the web and
 cannot ship in a game; Barlow (SIL OFL, in pak01) is drawn after the same

@@ -241,6 +241,7 @@ qboolean UI_ConsoleCommand(int realTime) {
     // ui_test / remapShader / ui_teamOrders are not present in the QL binary.
 
 
+
     if (Q_stricmp(cmd, "listPlayerModels") == 0) {
         UI_ListPlayerModels();
         return qtrue;
