@@ -24,21 +24,23 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 // Retail's front end is its browser, and it is two different things. The main
 // menu (web.pak src/home.js, "#main-menu") is a screen of its own, outside the
-// app frame: a black column down the left with the QUAKE LIVE logo over a
-// vertical menu, and a character standing at the bottom of the screen beside it
-// (/img/characters/ranger.png). Its menu opens into itself -- Play gives Match
-// Browser, Start Match, Training Center and Back -- and the pages it leads to
-// (src/appframe.js, "#app-frame") are the ones with the nav bar across the top.
+// app frame: the QUAKE LIVE logo over a vertical menu down the left, with art
+// beside it. Its menu opens into itself -- Play gives Match Browser, Start
+// Match, Training Center and Back -- and the pages it leads to (src/appframe.js,
+// "#app-frame") are the ones with the nav bar across the top.
 //
-// So the menu is retail's, down to the column at 4% of the screen, 20% wide, the
-// logo at 90% of it and the character at 24%; the character is pak00's ranger
-// drawn as a model rather than a picture of one, since retail's picture lives in
-// web.pak. What it is made of is quakeclub.com's: its surfaces, its type and its
-// gold, and nothing moves.
+// The menu keeps that shape: the logo, the list down the left, Play opening into
+// its own list with Back under it. Its look is this build's own, in Quake Club's
+// surfaces, type and gold: a painting covers the screen, its figure standing on
+// the right, and the page's colour comes in from the left under the list. Each
+// entry says in a line what it leads to, and the one under the cursor turns gold
+// on a raised plate. Nothing moves. The painting is ui/ioql/menu_background,
+// which pak01 carries from assets\pak01 (it is not in git); a build without it
+// falls back to a map's levelshot.
 //
 // The bar the other pages carry is here too, since they share it, along with the
-// background (a random map under the page's colour, the way retail's App picked
-// one) and the green banner a match puts at the bottom of every page.
+// background, which lies under their panels thickly enough for them to read, and
+// the green banner a match puts at the bottom of every page.
 //
 
 #include "ui_web.h"
@@ -48,15 +50,23 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define HM_NAV_ITEM_GAP 26.0f
 #define HM_NAV_INSET 39.0f
 
-// the main menu, in the fractions of the screen retail's CSS gives it
-#define HM_COL_LEFT 0.04f
-#define HM_COL_W 0.20f
-#define HM_CHAR_LEFT 0.24f
-#define HM_LOGO_W 0.90f    // of the column
-#define HM_LOGO_TOP 0.15f  // of the column, as its margin
-#define HM_ITEM_SIZE 27.0f
-#define HM_ITEM_H 58.0f
-#define HM_ITEM_PAD 26.0f  // from the column's right edge
+// the main menu
+#define HM_COL_LEFT 0.065f   // of the screen's width
+#define HM_COL_MIN_X 80.0f
+#define HM_COL_W 430.0f      // what an entry's plate spans past its text
+#define HM_PLATE_PAD 22.0f
+#define HM_LOGO_Y 236.0f
+#define HM_LOGO_W 340.0f
+#define HM_LIST_Y 376.0f
+#define HM_ITEM_H 76.0f
+#define HM_ITEM_SIZE 30.0f
+#define HM_ITEM_SPACING 0.7f
+#define HM_NOTE_SIZE 14.0f
+#define HM_BACK_SIZE 17.0f
+#define HM_BACK_H 46.0f
+
+// the painting's shape
+#define HM_PAINTING_ASPECT (3122.0f / 1344.0f)
 
 typedef enum {
     HM_HIT_NONE = SM_HIT_SHARED,
@@ -77,8 +87,9 @@ its own and Replays comes up to the main one.
 */
 typedef struct {
     const char* title;
-    int nav;       // the page it opens, or -1
-    int submenu;   // the list it opens instead, or -1
+    const char* note;  // the line under it
+    int nav;           // the page it opens, or -1
+    int submenu;       // the list it opens instead, or -1
 } hmItem_t;
 
 #define HM_MENU_MAIN 0
@@ -88,22 +99,22 @@ typedef struct {
 
 static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
     {
-        {"Play", -1, HM_MENU_PLAY},
-        {"Replays", HM_NAV_REPLAYS, -1},
-        {"Settings", HM_NAV_SETTINGS, -1},
-        {"Quit", HM_NAV_QUIT, -1},
-        {NULL, -1, -1},
+        {"Play", "Start a match, or train with Crash", -1, HM_MENU_PLAY},
+        {"Replays", "Watch the matches you recorded", HM_NAV_REPLAYS, -1},
+        {"Settings", "Controls, video, sound and your player", HM_NAV_SETTINGS, -1},
+        {"Quit", "Leave QUAKE LIVE", HM_NAV_QUIT, -1},
+        {NULL, NULL, -1, -1},
     },
     {
-        {"Start Match", HM_NAV_PLAY, -1},
-        {"Training Center", HM_NAV_TRAINING, -1},
-        {"Back", -1, HM_MENU_MAIN},
-        {NULL, -1, -1},
-        {NULL, -1, -1},
+        {"Start Match", "Pick an arena, a game type and bots", HM_NAV_PLAY, -1},
+        {"Training Center", "Crash Course, strafe and rocket jump practice", HM_NAV_TRAINING, -1},
+        {"Back", NULL, -1, HM_MENU_MAIN},
+        {NULL, NULL, -1, -1},
+        {NULL, NULL, -1, -1},
     },
 };
 
-// iconic arenas whose shots pak00 carries, one of which is the page's background
+// arenas whose shots pak00 carries, one of which is the background when the painting is not there
 static const char* const hmBackdrops[] = {
     "bloodrun", "campgrounds", "toxicity", "aerowalk", "furiousheights", "sinister", "lostworld",
     "hektik", "silence", "cure", "almostlost", "asylum", "battleforged", "trinity", "elder", "overkill",
@@ -112,7 +123,7 @@ static const char* const hmBackdrops[] = {
 static struct {
     qboolean loaded;
     qhandle_t backdrop;
-    char backdropMap[MAX_QPATH];
+    qboolean painting;  // the backdrop is the menu's painting, not a levelshot
 } hm;
 
 float UI_Home_Left(void) {
@@ -123,8 +134,9 @@ float UI_Home_Left(void) {
 ===============
 UI_Home_Load
 
-Picks the background once per session, the way retail's App picked a random map
-for its page: one of the arenas above whose levelshot pak00 has.
+The background: the menu's painting, or, when pak01 has not got it, one of the
+arenas above whose levelshot pak00 has, picked once per session the way retail's
+App picked a random map for its page.
 ===============
 */
 static void UI_Home_Load(void) {
@@ -135,6 +147,11 @@ static void UI_Home_Load(void) {
         return;
     }
     hm.loaded = qtrue;
+    hm.backdrop = trap_R_RegisterShaderNoMip("ui/ioql/menu_background");
+    if (hm.backdrop) {
+        hm.painting = qtrue;
+        return;
+    }
     start = (int)((unsigned int)trap_Milliseconds() % (unsigned int)count);
     for (k = 0; k < count; k++) {
         const char* map = hmBackdrops[(start + k) % count];
@@ -144,7 +161,6 @@ static void UI_Home_Load(void) {
         if (len > 0) {
             trap_FS_FCloseFile(f);
             hm.backdrop = trap_R_RegisterShaderNoMip(va("levelshots/%s", map));
-            Q_strncpyz(hm.backdropMap, map, sizeof(hm.backdropMap));
             if (hm.backdrop) {
                 return;
             }
@@ -160,6 +176,8 @@ A vertical wash: a colour whose alpha runs from a0 at the top to a1 at the botto
 It is drawn in bands a few screen pixels high whose edges are whole pixels, so
 two bands meet without a row between them drawn twice -- with bands in page
 units, a row where they overlapped came out as a dark line across the screen.
+UI_Home_WashAcross is the same from left to right, eased so it thins out
+without an edge.
 ===============
 */
 #define HM_WASH_STEP 4
@@ -186,32 +204,73 @@ static void UI_Home_Wash(float y, float h, const float* color, float a0, float a
     trap_R_SetColor(NULL);
 }
 
+static void UI_Home_WashAcross(float x, float w, const float* color, float a0, float a1) {
+    float left = x * smScale;
+    float right = (x + w) * smScale;
+    int last = (int)(right + 0.5f);
+    int px;
+    vec4_t c;
+
+    if (right <= left) {
+        return;
+    }
+    VectorCopy(color, c);
+    for (px = (int)(left + 0.5f); px < last; px += HM_WASH_STEP) {
+        int end = px + HM_WASH_STEP < last ? px + HM_WASH_STEP : last;
+        float t = ((px + end) * 0.5f - left) / (right - left);
+
+        t = t * t * (3.0f - 2.0f * t);
+        c[3] = a0 + (a1 - a0) * t;
+        trap_R_SetColor(c);
+        trap_R_DrawStretchPic((float)px, 0, (float)(end - px), (float)uiInfo.uiDC.glconfig.vidHeight, 0, 0, 0, 0,
+                              uiInfo.uiDC.whiteShader);
+    }
+    trap_R_SetColor(NULL);
+}
+
 /*
 ===============
-UI_Home_Backdrop
+UI_Home_DrawBackground
 
-The map covers the screen whatever its shape, and the page's colour lies over it
-thick enough for the panels to read: heavier at the top where the bar is and at
-the bottom, lighter in the middle, which is what retail's radial gradient did.
+The background covers the screen whatever its shape. The painting keeps its right
+edge on the screen's, where its figure stands, and gives up its left, which is
+haze; a levelshot is centred.
 ===============
 */
-void UI_Home_Backdrop(void) {
-    float aspect = 1920.0f / 1080.0f;
+static void UI_Home_DrawBackground(void) {
     float top = -smTop / smScale;
     float full = smBottom - top;
+    float aspect = hm.painting ? HM_PAINTING_ASPECT : 1920.0f / 1080.0f;
     float w = smVW;
     float h = full;
 
     UI_Home_Load();
     SM_FillScreen(smPage);
-    if (hm.backdrop) {
-        if (w / h > aspect) {
-            h = w / aspect;  // cover: overflow the height rather than letterbox
-        } else {
-            w = h * aspect;
-        }
-        SM_Pic((smVW - w) * 0.5f, top + (full - h) * 0.5f, w, h, hm.backdrop, NULL);
+    if (!hm.backdrop) {
+        return;
     }
+    if (w / h > aspect) {
+        h = w / aspect;  // cover: overflow the height rather than letterbox
+    } else {
+        w = h * aspect;
+    }
+    SM_Pic(hm.painting ? smVW - w : (smVW - w) * 0.5f, top + (full - h) * 0.5f, w, h, hm.backdrop, NULL);
+}
+
+/*
+===============
+UI_Home_Backdrop
+
+What the other pages sit on: the background, and the page's colour over it thick
+enough for the panels to read -- heavier at the top where the bar is and at the
+bottom, lighter in the middle, which is what retail's radial gradient did.
+===============
+*/
+void UI_Home_Backdrop(void) {
+    float top = -smTop / smScale;
+    float full = smBottom - top;
+
+    UI_Home_DrawBackground();
     UI_Home_Wash(top, full * 0.5f, smPage, 0.96f, 0.80f);
     UI_Home_Wash(top + full * 0.5f, full * 0.5f, smPage, 0.80f, 0.97f);
 }
@@ -360,8 +419,7 @@ void UI_Home_Banner(void) {
 
 THE MAIN MENU
 
-Retail's #main-menu: the column, the logo, the menu that opens into itself, and
-the character standing beside it.
+The logo, and under it the list that opens into itself, over the painting.
 
 ===============================================================================
 */
@@ -370,118 +428,128 @@ static struct {
     qboolean loadedMenu;
     qhandle_t logo;
     int menu;  // which of hmMenus is showing
-    playerInfo_t character;
-    qboolean hasCharacter;
 } hm2;
 
-// the character retail's menu stands there: ranger, and pak00 has the model
-static const char* const hmCharacters[] = {"ranger/default", "sarge/default"};
-
 static void UI_Home_LoadMenu(void) {
-    int k;
-
     if (hm2.loadedMenu) {
         return;
     }
     hm2.loadedMenu = qtrue;
     hm2.menu = HM_MENU_MAIN;
     hm2.logo = trap_R_RegisterShaderNoMip("ui/assets/main_menu/ql_logo");
+}
 
-    for (k = 0; k < (int)ARRAY_LEN(hmCharacters); k++) {
-        char model[MAX_QPATH];
-        fileHandle_t f;
-        const char* slash;
-        int len;
+static float UI_Home_ColumnX(void) {
+    float x = smVW * HM_COL_LEFT;
 
-        slash = strchr(hmCharacters[k], '/');
-        Q_strncpyz(model, hmCharacters[k], slash ? (int)(slash - hmCharacters[k]) + 1 : sizeof(model));
-        len = trap_FS_FOpenFile(va("models/players/%s/lower.md3", model), &f, FS_READ);
-        if (len <= 0) {
-            continue;
-        }
-        trap_FS_FCloseFile(f);
-        // he holds the rocket launcher, the way the menu's picture has him armed
-        SM_BuildPlayer(&hm2.character, hmCharacters[k], 165, WP_ROCKET_LAUNCHER);
-        SM_TurnPlayer(&hm2.character, 165);
-        hm2.hasCharacter = qtrue;
-        return;
-    }
+    return x < HM_COL_MIN_X ? HM_COL_MIN_X : x;
 }
 
 /*
 ===============
-UI_Home_DrawCharacter
+UI_Home_DrawShade
 
-The character stands on the bottom edge of the screen, its left at 24% of the
-width, as .character does (fixed, bottom 0, left 24%). It is a model held at one
-moment rather than an animation: retail's is a picture.
+The page's colour under the list, thinning out towards the figure, and a little
+of it along the top and, for the notice, along the bottom.
 ===============
 */
-static void UI_Home_DrawCharacter(void) {
+static void UI_Home_DrawShade(void) {
     float top = -smTop / smScale;
     float full = smBottom - top;
-    float h = full * 0.74f;
-    float w = h * 0.62f;
-    float x = smVW * HM_CHAR_LEFT;
+    float solid = UI_Home_ColumnX() + HM_COL_W - 40.0f;
+    vec4_t shade;
 
-    if (!hm2.hasCharacter) {
-        return;
+    VectorCopy(smPage, shade);
+    shade[3] = 0.90f;
+    SM_Fill(-1, top, solid + 1, full, shade, NULL);
+    UI_Home_WashAcross(solid, 560.0f, smPage, 0.90f, 0.0f);
+    UI_Home_Wash(top, 160.0f, smPage, 0.60f, 0.0f);
+    UI_Home_Wash(smBottom - 200.0f, 200.0f, smPage, 0.0f, 0.88f);
+}
+
+// a small chevron pointing right, what an entry that leads somewhere shows under the cursor
+static void UI_Home_Chevron(float x, float y, const float* color) {
+    int k;
+
+    for (k = 0; k < 6; k++) {
+        SM_Fill(x + k, y + k, 2.2f, 2.2f, color, NULL);
+        SM_Fill(x + k, y + 10.0f - k, 2.2f, 2.2f, color, NULL);
     }
-    // over a match the banner takes the bottom of the screen, so he stands on it
-    SM_DrawPlayerStill(&hm2.character, x, smBottom - h - (UI_Home_InMatch() ? 38.0f : 0.0f), w, h);
 }
 
 /*
 ===============
 UI_Home_DrawColumn
 
-.nav-column: the full height of the screen from 4% to 24%, its text against the
-right edge. Retail fills it with rgba(0,0,0,0.8); here it is the site's panel,
-and the item under the cursor takes its gold and a rule down the column's edge,
-the way .nav-column a:hover does.
+The logo, then the list with its heading: the name you play under on the main
+list, "Play" on Play's. An entry is its title in the site's bold upper case and a
+line of what it does; under the cursor the title turns gold on a raised plate
+with a chevron at its end. Back sits a little apart and smaller, as retail's
+a.back does.
 ===============
 */
 static void UI_Home_DrawColumn(void) {
-    float top = -smTop / smScale;
-    float full = smBottom - top;
-    float x = smVW * HM_COL_LEFT;
-    float w = smVW * HM_COL_W;
-    float right = x + w;
-    float logoW = w * HM_LOGO_W;
-    float y;
+    float x = UI_Home_ColumnX();
+    float plateX = x - HM_PLATE_PAD;
+    float plateW = HM_COL_W + 2 * HM_PLATE_PAD;
+    float y = HM_LIST_Y;
+    char heading[MAX_CVAR_VALUE_STRING];
+    vec4_t plate;
     int i;
 
-    SM_Fill(x, top, w, full, smPanel, NULL);
+    VectorCopy(smRaised, plate);
+    plate[3] = 0.78f;
 
-    // the logo, as wide as the column allows, with retail's margin over it
     if (hm2.logo) {
-        SM_Pic(x + (w - logoW) * 0.5f, top + w * HM_LOGO_TOP, logoW, logoW * 0.25f, hm2.logo, NULL);
+        SM_Pic(x - 8, HM_LOGO_Y, HM_LOGO_W, HM_LOGO_W * 0.25f, hm2.logo, NULL);
     }
 
-    y = top + w * HM_LOGO_TOP + logoW * 0.25f + w * HM_LOGO_TOP;
+    if (hm2.menu == HM_MENU_PLAY) {
+        Q_strncpyz(heading, "Play", sizeof(heading));
+    } else {
+        char name[MAX_CVAR_VALUE_STRING];
+
+        trap_Cvar_VariableStringBuffer("name", name, sizeof(name));
+        Q_CleanStr(name);
+        Com_sprintf(heading, sizeof(heading), "Playing as %s", name);
+    }
+    SM_Label(x, SM_Baseline(FONT_SANS, 12, y, 18), 12, smGold, heading, 1.8f);
+    y += 36;
+
     for (i = 0; i < HM_MAX_ITEMS; i++) {
         const hmItem_t* item = &hmMenus[hm2.menu][i];
         qboolean over;
-        float tw;
 
         if (!item->title) {
             break;
         }
-        // "Back" sits a line below what it goes back from (a.back, margin-top 1em)
-        if (item->submenu == HM_MENU_MAIN && hm2.menu != HM_MENU_MAIN) {
-            y += HM_ITEM_SIZE;
-        }
         over = SM_Over(HM_HIT_ITEM, i);
-        if (over) {
-            vec4_t shade = {smPage[0], smPage[1], smPage[2], 0.30f};
 
-            SM_Fill(x, y, w, HM_ITEM_H, shade, NULL);
-            SM_Fill(right - 3, y, 3, HM_ITEM_H, smGold, NULL);
+        if (item->submenu == HM_MENU_MAIN && hm2.menu != HM_MENU_MAIN) {
+            // Back
+            y += 14;
+            if (over) {
+                SM_Round(plateX, y, plateW, HM_BACK_H, SM_RADIUS_MD, plate, NULL);
+            }
+            SM_Label(x, SM_Baseline(FONT_SANS, HM_BACK_SIZE, y, HM_BACK_H), HM_BACK_SIZE,
+                     over ? smGold : smTextSoft, item->title, 1.2f);
+            SM_Hit(plateX, y, plateW, HM_BACK_H, HM_HIT_ITEM, i, NULL);
+            y += HM_BACK_H;
+            continue;
         }
-        tw = SM_LabelWidth(HM_ITEM_SIZE, item->title, 1.0f);
-        SM_Label(right - HM_ITEM_PAD - tw, SM_Baseline(FONT_SANS, HM_ITEM_SIZE, y, HM_ITEM_H), HM_ITEM_SIZE,
-                 over ? smGold : smText, item->title, 1.0f);
-        SM_Hit(x, y, w, HM_ITEM_H, HM_HIT_ITEM, i, NULL);
+
+        if (over) {
+            SM_Round(plateX, y, plateW, HM_ITEM_H - 8, SM_RADIUS_MD, plate, NULL);
+            UI_Home_Chevron(plateX + plateW - 34, y + (HM_ITEM_H - 8) * 0.5f - 6, smGold);
+        }
+        SM_Label(x, SM_Baseline(FONT_SANS, HM_ITEM_SIZE, y + 7, 36), HM_ITEM_SIZE, over ? smGold : smText,
+                 item->title, HM_ITEM_SPACING);
+        if (item->note) {
+            SM_Text(x, SM_Baseline(FONT_SANS, HM_NOTE_SIZE, y + 42, 20), FONT_SANS, HM_NOTE_SIZE,
+                    over ? smTextSoft : smMuted, item->note, SM_Fit(FONT_SANS, HM_NOTE_SIZE, item->note, HM_COL_W),
+                    qfalse);
+        }
+        SM_Hit(plateX, y, plateW, HM_ITEM_H - 8, HM_HIT_ITEM, i, NULL);
         y += HM_ITEM_H;
     }
 }
@@ -490,9 +558,9 @@ static void UI_Home_DrawColumn(void) {
 ===============
 UI_Home_DrawLegal
 
-.legal-links sits at the bottom right over black, and the notice retail's splash
-shows is its own line. There is no legal-notices page in this build, so the line
-is the notice itself.
+The version under the list and, at the bottom right, the notice retail's splash
+shows. There is no legal-notices page in this build, so the line is the notice
+itself.
 ===============
 */
 static void UI_Home_DrawLegal(void) {
@@ -500,12 +568,13 @@ static void UI_Home_DrawLegal(void) {
         "QUAKE LIVE (c) 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
     char version[MAX_CVAR_VALUE_STRING];
     float h = 26.0f;
-    float y = smBottom - h - (UI_Home_InMatch() ? 38.0f : 0.0f);
+    float y = smBottom - 30 - h - (UI_Home_InMatch() ? 38.0f : 0.0f);
     float w = SM_Advance(FONT_SANS, 12, notice, -1);
 
-    SM_Text(smVW - 24 - w, SM_Baseline(FONT_SANS, 12, y, h), FONT_SANS, 12, smSubtle, notice, -1, qfalse);
+    SM_Text(smVW - UI_Home_ColumnX() * 0.5f - w, SM_Baseline(FONT_SANS, 12, y, h), FONT_SANS, 12, smSubtle, notice,
+            -1, qfalse);
     trap_Cvar_VariableStringBuffer("version", version, sizeof(version));
-    SM_Text(smVW * HM_COL_LEFT, SM_Baseline(FONT_SANS, 12, y, h), FONT_SANS, 12, smSubtle, version, -1, qfalse);
+    SM_Text(UI_Home_ColumnX(), SM_Baseline(FONT_SANS, 12, y, h), FONT_SANS, 12, smSubtle, version, -1, qfalse);
 }
 
 void UI_Home_Open(void) {
@@ -524,8 +593,8 @@ void UI_Home_Paint(void) {
     SM_BeginFrame();
     UI_Home_LoadMenu();
 
-    UI_Home_Backdrop();
-    UI_Home_DrawCharacter();
+    UI_Home_DrawBackground();
+    UI_Home_DrawShade();
     UI_Home_DrawColumn();
     UI_Home_DrawLegal();
 
