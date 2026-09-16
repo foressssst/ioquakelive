@@ -1054,6 +1054,9 @@ int G_TrainingHumanClient(void);
 int G_TrainingBotClient(void);
 void Cmd_SkipTraining(int clientNum);
 void G_TrainingFrame(void);
+const char* G_TrainingText(const char* key);
+const char* G_TrainingMessage(const gentity_t* point);
+const char* G_TrainingSay(const char* command);
 
 // ai_main.c: what the training reads and writes of a bot's state
 int BotNumBots(void);
@@ -1483,6 +1486,7 @@ extern vmCvar_t g_shuffle_automatic_minplayers;
 extern vmCvar_t g_shuffle_minplayers;
 extern vmCvar_t g_shuffle_timedelay;
 extern vmCvar_t g_skipTrainingEnable;
+extern vmCvar_t g_trainingSpanish;
 extern vmCvar_t g_spawnArmorDmgScale;
 extern vmCvar_t g_spawnDelayRandom_key;
 extern vmCvar_t g_spawnDelayRandom_powerup;

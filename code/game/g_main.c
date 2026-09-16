@@ -195,6 +195,7 @@ vmCvar_t g_shuffle_automatic_minplayers;
 vmCvar_t g_shuffle_minplayers;
 vmCvar_t g_shuffle_timedelay;
 vmCvar_t g_skipTrainingEnable;
+vmCvar_t g_trainingSpanish;
 vmCvar_t g_spawnArmorDmgScale;
 vmCvar_t g_spawnDelayRandom_key;
 vmCvar_t g_spawnDelayRandom_powerup;
@@ -1066,6 +1067,8 @@ static cvarTable_t gameCvarTable[] = {
     {&g_shuffle_minplayers, "g_shuffle_minplayers", "3", 0, 0, NULL},
     {&g_shuffle_timedelay, "g_shuffle_timedelay", "5000", 0, 0, NULL},
     {&g_skipTrainingEnable, "g_skipTrainingEnable", "0", CVAR_ROM | CVAR_SYSTEMINFO, 0, NULL},
+    // [ioquakelive] testing switch: Crash speaks Spanish (her voice stays the original)
+    {&g_trainingSpanish, "g_trainingSpanish", "0", CVAR_ARCHIVE, 0, NULL},
     {&g_spawnArmorDmgScale, "g_spawnArmorDmgScale", "0.5", CVAR_GAMERULE, 0, NULL},
     {&g_spawnDelayRandom_key, "g_spawnDelayRandom_key", "15", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_spawnDelayRandom_powerup, "g_spawnDelayRandom_powerup", "15", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
