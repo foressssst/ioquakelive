@@ -398,17 +398,22 @@ static int s_numVidModes = ARRAY_LEN(r_vidModes);
 ** R_AspectRatioOf
 **
 ** [QL] quakelive_steam.exe 0x448010: the shape of a size that isn't in the table, for r_aspectRatio
+**
+** The thresholds are 16/9 and 16/10 worked out as floats (0x52e9b8 and 0x52e9b0 hold them widened
+** to double) and 4/3 (0x52e9ac), so an exact 16:9 size lands on 16:9. Written out as 1.77778f the
+** first sat a hair above 16/9, and every 16:9 size outside the table -- 1600x900 in a window, the
+** desktop mode -- was taken for 16:10, which the cgame then widens the fov for.
 */
 int R_AspectRatioOf(int width, int height) {
     float aspect = (float)width / height;
 
-    if (aspect >= 1.77778f) {
+    if (aspect >= 16.0f / 9.0f) {
         return 1;
     }
-    if (aspect >= 1.6f) {
+    if (aspect >= 16.0f / 10.0f) {
         return 2;
     }
-    if (aspect >= 1.33333f) {
+    if (aspect >= 4.0f / 3.0f) {
         return 0;
     }
     return 3;

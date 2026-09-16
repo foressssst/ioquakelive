@@ -486,6 +486,44 @@ void CG_ZoomUp_f(void) {
 
 /*
 ====================
+CG_AspectFovX
+
+[QL] cgamex86.dll 0x1004c5f0: widens the horizontal fov to the shape of the screen. The vertical
+fov stays the 4:3 one, and the horizontal is worked back out of it in the proportions
+r_aspectRatio names: 1 is 16:9, 2 is 16:10, anything else 5:4. On 0 (4:3) fov_x comes back as
+it went in. The engine sets r_aspectRatio from the video mode, so a wide screen sees more at the
+sides instead of getting the 4:3 picture stretched across it.
+====================
+*/
+static float CG_AspectFovX(float fov_x, float fov_y) {
+    char buf[1024];
+    float width, height;
+    float x;
+
+    trap_Cvar_VariableStringBuffer("r_aspectRatio", buf, sizeof(buf));
+    switch (atoi(buf)) {
+    case 0:
+        return fov_x;
+    case 1:
+        width = 16;
+        height = 9;
+        break;
+    case 2:
+        width = 16;
+        height = 10;
+        break;
+    default:
+        width = 5;
+        height = 4;
+        break;
+    }
+
+    x = height / tan(fov_y / 360 * M_PI);
+    return atan2(width, x) * 360 / M_PI;
+}
+
+/*
+====================
 CG_CalcFov
 
 Fixed fov at intermissions, otherwise account for fov variable and zooms.
@@ -561,11 +599,11 @@ static int CG_CalcFov(void) {
     }
 
     // [QL] cgamex86.dll 0x1004d676: the vertical fov is worked out from a fixed 640 by 480
-    // (the constants at 0x10073d50 and 0x10073e30), not from the view's own size. So
-    // whatever the screen, you see the vertical of 4:3 -- cg_fov is the horizontal and the
-    // vertical never shrinks with a wider monitor. Quake 3 divides by the real width and
-    // height, which on 16:9 gave 68 degrees vertical where retail gives 84: the ceiling and
-    // a good part of the floor were missing.
+    // (the constants at 0x10073d50 and 0x10073e30), not from the view's own size. So cg_fov
+    // is the horizontal of a 4:3 screen and the vertical never shrinks with a wider monitor;
+    // the horizontal is widened to the real shape when it is set, below. Quake 3 divides by
+    // the real width and height, which on 16:9 gave 68 degrees vertical where retail gives
+    // 84: the ceiling and a good part of the floor were missing.
     //
     // The real size is still what the zoom sensitivity below is measured against
     // (0x1004d8bb reads the view's width and height there).
@@ -586,7 +624,9 @@ static int CG_CalcFov(void) {
     }
 
     // set it
-    cg.refdef.fov_x = fov_x;
+    // [QL] 0x1004d84c: the horizontal goes out widened to the screen's shape. Without this a 16:9
+    // screen got 100 by 84, the 4:3 picture stretched a third wider; retail gives 115 by 84.
+    cg.refdef.fov_x = CG_AspectFovX(fov_x, fov_y);
     cg.refdef.fov_y = fov_y;
 
     // [QL] cgamex86.dll 0x1004d88a: zoomed, the sensitivity falls with the view's height, in the same
