@@ -2335,7 +2335,7 @@ void CG_BigExplode(vec3_t playerOrigin);
 
 void CG_Bleed(vec3_t origin, int entityNum);
 void CG_BloodSplatEffect(vec3_t origin, int entityNum);  // QL: blood splat (replaces CG_Bleed for hit effects)
-void CG_SpawnParticleEffect(vec3_t vel, float size, float r, float g, float b, float a, float lifetime, int startTime, int type, qhandle_t shader);  // QL: particle effects
+void CG_SpawnParticleEffect(vec3_t origin, vec3_t vel, float size, float r, float g, float b, float a, float lifetime, int startTime, int flags, qhandle_t shader);  // [QL] 0x10012f30: one impact spark
 void CG_SpecAutoFollow(int clientNum, int mode);  // QL: auto-follow spectator
 
 localEntity_t* CG_MakeExplosion(vec3_t origin, vec3_t dir, qhandle_t hModel, qhandle_t shader, int msec, qboolean isSprite);

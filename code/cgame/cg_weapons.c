@@ -2544,7 +2544,7 @@ void CG_MissileHitPlayer(int weapon, vec3_t origin, vec3_t dir, int entityNum) {
         // QL binary: impact sparks (vmCvar 0x10B6FBE0, 0x10A63CC0, 0x10A67AA0, 0x10A66D20)
         if (cg_impactSparks.integer) {
             vec3_t vel = { 0, 0, cg_impactSparksVelocity.value };
-            CG_SpawnParticleEffect(vel, (float)cg_impactSparksSize.integer,
+            CG_SpawnParticleEffect(origin, vel, (float)cg_impactSparksSize.integer,
                 1.0f, 1.0f, 1.0f, 1.0f,
                 (float)cg_impactSparksLifetime.integer,
                 cg.time, 1, cgs.media.sparkParticleShader);
@@ -2608,7 +2608,7 @@ void CG_MissileHitWall_DmgThrough(vec3_t origin, vec3_t dir, int weapon) {
             vel[1] = speed * dir[1] + (50.0f - 50.0f * crandom());
             vel[2] = speed * dir[2] + (50.0f - 50.0f * crandom());
 
-            CG_SpawnParticleEffect(vel, 24.0f,
+            CG_SpawnParticleEffect(origin, vel, 24.0f,
                                    0.8f, 0.8f, 0.7f, 1.0f,
                                    400.0f - (speed / 500.0f) * 200.0f,
                                    cg.time, 0, cgs.media.debrisPuffShader);
@@ -2796,7 +2796,7 @@ void CG_ShotgunKillEffect(centity_t* cent) {
 
         if (cg_impactSparks.integer) {
             vec3_t vel = { 0, 0, cg_impactSparksVelocity.value };
-            CG_SpawnParticleEffect(vel, (float)cg_impactSparksSize.integer,
+            CG_SpawnParticleEffect(origin, vel, (float)cg_impactSparksSize.integer,
                                    1.0f, 1.0f, 1.0f, 1.0f,
                                    (float)cg_impactSparksLifetime.integer,
                                    cg.time, 1, cgs.media.sparkParticleShader);
@@ -2985,7 +2985,7 @@ void CG_Bullet(vec3_t end, int sourceEntityNum, vec3_t normal, qboolean flesh, i
             // QL binary: impact sparks (vmCvar 0x10B6FBE0)
             if (cg_impactSparks.integer) {
                 vec3_t vel = { 0, 0, cg_impactSparksVelocity.value };
-                CG_SpawnParticleEffect(vel, (float)cg_impactSparksSize.integer,
+                CG_SpawnParticleEffect(end, vel, (float)cg_impactSparksSize.integer,
                     1.0f, 1.0f, 1.0f, 1.0f,
                     (float)cg_impactSparksLifetime.integer,
                     cg.time, 1, cgs.media.sparkParticleShader);
