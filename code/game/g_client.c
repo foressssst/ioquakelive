@@ -1377,6 +1377,12 @@ void ClientSpawn(gentity_t* ent) {
     int accuracy_hits, accuracy_shots;
     int eventSequence;
     int savedPmType;
+    expandedStatObj_t savedStats;
+    int savedRevenge[64];
+    int localPersistant[MAX_PERSISTANT];
+    int savedLastClientKilled, savedLastKilled;
+    int savedRoundShots, savedRoundHits, savedRoundDamage;
+    int savedBestRace[64];
     char userinfo[MAX_INFO_STRING];
 
     index = ent - g_entities;
@@ -1455,8 +1461,23 @@ void ClientSpawn(gentity_t* ent) {
     accuracy_hits = client->accuracy_hits;
     accuracy_shots = client->accuracy_shots;
 
+    // [QL] qagamex86.dll 0x1003bdba..0x1003c103: retail also keeps the match's statistics through
+    // the clear -- the expanded stats (+0x568, 203 ints), the revenge counters (+0x3e4), the medal
+    // counts (ps.localPersistant, +0x204), the round's shots, hits and damage (+0xbc4..+0xbcc) and
+    // who was last killed each way (+0x3b8, +0x3bc) -- and a race's best times (+0x8b4), which go
+    // back below. Without them every death wiped the scoreboard's and the end of match's stats.
+    savedStats = client->expandedStats;
+    memcpy(savedRevenge, client->revengeCounter, sizeof(savedRevenge));
+    savedLastClientKilled = client->lastClientKilled;
+    savedLastKilled = client->lastkilled_client;
+    savedRoundShots = client->round_shots;
+    savedRoundHits = client->round_hits;
+    savedRoundDamage = client->round_damage;
+    memcpy(savedBestRace, client->race.best_race, sizeof(savedBestRace));
+
     for (i = 0; i < MAX_PERSISTANT; i++) {
         persistant[i] = client->ps.persistant[i];
+        localPersistant[i] = client->ps.localPersistant[i];
     }
     eventSequence = client->ps.eventSequence;
     savedPmType = client->ps.pm_type;
@@ -1469,10 +1490,20 @@ void ClientSpawn(gentity_t* ent) {
     //	client->areabits = savedAreaBits;
     client->accuracy_hits = accuracy_hits;
     client->accuracy_shots = accuracy_shots;
-    client->lastkilled_client = -1;
+    client->expandedStats = savedStats;
+    memcpy(client->revengeCounter, savedRevenge, sizeof(savedRevenge));
+    client->lastClientKilled = savedLastClientKilled;
+    client->lastkilled_client = savedLastKilled;
+    client->round_shots = savedRoundShots;
+    client->round_hits = savedRoundHits;
+    client->round_damage = savedRoundDamage;
+    // [QL] 0x1003c0a8: who last hurt this player starts over, as nobody (-1, not client 0)
+    client->lasthurt_client[0] = -1;
+    client->lasthurt_client[1] = -1;
 
     for (i = 0; i < MAX_PERSISTANT; i++) {
         client->ps.persistant[i] = persistant[i];
+        client->ps.localPersistant[i] = localPersistant[i];
     }
     client->ps.eventSequence = eventSequence;
 
@@ -1761,7 +1792,8 @@ void ClientSpawn(gentity_t* ent) {
     // [QL] gametype-specific spawn logic (freeze during warmup/countdown)
     switch (g_gametype.integer) {
     case GT_RACE:
-        // restore race info from saved data (preserved across respawn)
+        // [QL] 0x1003c3f8: a race's best checkpoint times outlive the respawn
+        memcpy(client->race.best_race, savedBestRace, sizeof(savedBestRace));
         break;
     case GT_CA:
     case GT_AD:
