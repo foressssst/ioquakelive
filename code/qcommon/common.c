@@ -1943,6 +1943,18 @@ void Com_QueueEvent(int time, sysEventType_t type, int value, int value2, int pt
         }
     }
 
+    // [ioquakelive] an absolute position is not added up: the last one is where the
+    // pointer is, so it replaces the one waiting
+    if (type == SE_MOUSE_ABS && eventHead != eventTail) {
+        ev = &eventQueue[(eventHead + MAX_QUEUED_EVENTS - 1) & MASK_QUEUED_EVENTS];
+
+        if (ev->evType == SE_MOUSE_ABS) {
+            ev->evValue = value;
+            ev->evValue2 = value2;
+            return;
+        }
+    }
+
     ev = &eventQueue[eventHead & MASK_QUEUED_EVENTS];
 
     if (eventHead - eventTail >= MAX_QUEUED_EVENTS) {
@@ -2179,6 +2191,9 @@ int Com_EventLoop(void) {
                 break;
             case SE_MOUSE:
                 CL_MouseEvent(ev.evValue, ev.evValue2, ev.evTime);
+                break;
+            case SE_MOUSE_ABS:
+                CL_MouseAbsEvent(ev.evValue, ev.evValue2);
                 break;
             case SE_JOYSTICK_AXIS:
                 CL_JoystickEvent(ev.evValue, ev.evValue2, ev.evTime);

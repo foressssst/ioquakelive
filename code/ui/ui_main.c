@@ -122,6 +122,7 @@ void _UI_Init(qboolean);
 void _UI_Shutdown(void);
 void _UI_KeyEvent(int key, qboolean down);
 void _UI_MouseEvent(int dx, int dy);
+void _UI_MousePosition(int x, int y);
 void _UI_Refresh(int realtime);
 qboolean _UI_IsFullscreen(void);
 qboolean UI_CheckActiveMenu(void);
@@ -150,6 +151,10 @@ Q_EXPORT intptr_t vmMain(int command, intptr_t arg0, intptr_t arg1, intptr_t arg
 
         case UI_MOUSE_EVENT:
             _UI_MouseEvent(arg0, arg1);
+            return 0;
+
+        case UI_MOUSE_POSITION:
+            _UI_MousePosition(arg0, arg1);
             return 0;
 
         case UI_REFRESH:
@@ -5339,6 +5344,42 @@ void _UI_MouseEvent(int dx, int dy) {
         uiInfo.uiDC.cursorx = SCREEN_WIDTH + bias;
 
     uiInfo.uiDC.cursory += dy;
+    if (uiInfo.uiDC.cursory < 0)
+        uiInfo.uiDC.cursory = 0;
+    else if (uiInfo.uiDC.cursory > SCREEN_HEIGHT)
+        uiInfo.uiDC.cursory = SCREEN_HEIGHT;
+
+    if (Menu_Count() > 0) {
+        Display_MouseMove(NULL, uiInfo.uiDC.cursorx, uiInfo.uiDC.cursory);
+    }
+}
+
+/*
+=================
+UI_MousePosition
+
+[ioquakelive] Where the system pointer is, in window pixels. A menu lets the mouse go
+and the system draws the pointer, so the cursor is put where the arrow is instead of
+being walked by relative moves, which drifted away from it and left the clicks landing
+somewhere else. The window pixels come back to the 640 space the pages are laid out in
+through the same scale and bias the drawing uses.
+=================
+*/
+void _UI_MousePosition(int x, int y) {
+    int bias;
+
+    if (uiInfo.uiDC.xscale <= 0 || uiInfo.uiDC.yscale <= 0) {
+        return;
+    }
+    bias = uiInfo.uiDC.bias / uiInfo.uiDC.xscale;
+
+    uiInfo.uiDC.cursorx = ((float)x - uiInfo.uiDC.bias) / uiInfo.uiDC.xscale;
+    if (uiInfo.uiDC.cursorx < -bias)
+        uiInfo.uiDC.cursorx = -bias;
+    else if (uiInfo.uiDC.cursorx > SCREEN_WIDTH + bias)
+        uiInfo.uiDC.cursorx = SCREEN_WIDTH + bias;
+
+    uiInfo.uiDC.cursory = (float)y / uiInfo.uiDC.yscale;
     if (uiInfo.uiDC.cursory < 0)
         uiInfo.uiDC.cursory = 0;
     else if (uiInfo.uiDC.cursory > SCREEN_HEIGHT)
