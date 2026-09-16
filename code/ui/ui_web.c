@@ -591,9 +591,15 @@ the border colour, which takes the yellow with the text under the cursor.
 ===============
 */
 void SM_Button(float x, float y, float w, float h, const char* text, int style, qboolean over) {
-    float size = SM_ButtonText(h);
+    // the label is the page's own: upper case, spaced, and drawn once. The pass a pixel over that
+    // stands in for a bold weight reads as a smudge at this size, which is what made a button's
+    // word grey and hard to pick out against its own block.
+    float size = SM_ButtonText(h) + 3.0f;
+    char upper[256];
     const float* fg;
     vec4_t hover;
+
+    SM_Upper(text, upper, sizeof(upper));
 
     switch (style) {
         case SM_BUTTON_PRIMARY:
@@ -602,17 +608,18 @@ void SM_Button(float x, float y, float w, float h, const char* text, int style, 
             hover[2] = smPrimary[2] * 0.88f;
             hover[3] = 1.0f;
             SM_Fill(x, y, w, h, over ? hover : smPrimary, NULL);
-            SM_Centered(x + w * 0.5f, SM_Baseline(FONT_SANS, size, y, h), size, smOnPrimary, text, qtrue);
-            return;
+            fg = smOnPrimary;
+            break;
         case SM_BUTTON_DANGER:
-            fg = over ? smDanger : smMuted;
+            fg = over ? smDanger : smText;
             break;
         case SM_BUTTON_SECONDARY:
         default:
-            fg = over ? smGold : smTextSoft;
+            fg = over ? smGold : smText;
             break;
     }
-    SM_Centered(x + w * 0.5f, SM_Baseline(FONT_SANS, size, y, h), size, fg, text, qtrue);
+    SM_SpacedText(x + w * 0.5f - SM_SpacedWidth(SM_FONT_TITLE, size, upper, 1.4f) * 0.5f,
+                  SM_Baseline(SM_FONT_TITLE, size, y, h), SM_FONT_TITLE, size, fg, upper, 1.4f, qfalse);
 }
 
 /*

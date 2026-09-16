@@ -760,15 +760,14 @@ THE PAGE
 
 // what each of the two choices carries: its name over it and the word that changes it,
 // on the page itself rather than on a card of its own
+// [ioquakelive] The user, 2026-09-16: "el boton change es redundante, ya con hacer click en
+// cualquier lado de esa seccion vas a la sub seccion". The card lights up under the pointer and
+// its whole area is the hit, so the button said nothing the card did not.
 static void SM_DrawCardFrame(float x, float y, float h, const char* label, qboolean over) {
-    float bw = SM_ButtonWidth("Change", SM_PILL_H);
-
     if (over) {
         SM_Fill(x, y, SM_COL_W, h, smRaised, NULL);
     }
-    SM_Label(x + SM_PAD, SM_Baseline(FONT_SANS, 11, y + 20, 16), 11, smMuted, label, 1.6f);
-    SM_Button(x + SM_COL_W - SM_PAD - bw, y + h - 18 - SM_PILL_H, bw, SM_PILL_H, "Change",
-              SM_BUTTON_SECONDARY, over);
+    SM_Label(x + SM_PAD, SM_Baseline(FONT_SANS, 11, y + 20, 16), 11, over ? smGold : smMuted, label, 1.6f);
 }
 
 static void SM_DrawGametypeCard(float x, float y, float h) {
@@ -798,8 +797,7 @@ static void SM_DrawArenaCard(float x, float y, float h) {
     float picW = 224, picH = 126;
     float top = y + (h - (picH + 44)) * 0.5f - 4;
 
-    SM_DrawCardFrame(x, y, h, "Arena", over);
-    SM_Round(middle - picW * 0.5f - 3, top - 3, picW + 6, picH + 6, SM_RADIUS_SM, smPage, NULL);
+    SM_DrawCardFrame(x, y, h, "Map", over);
     SM_Pic(middle - picW * 0.5f, top, picW, picH, SM_Preview(arena, sm.selectedMap), NULL);
     if (arena) {
         SM_Label(middle - SM_LabelWidth(20, arena->name, 0.2f) * 0.5f, SM_Baseline(FONT_SANS, 20, top + picH + 12, 28),
@@ -958,8 +956,10 @@ static void SM_DrawPage(void) {
     }
     panelH = y + (SM_PAD - 6) + 20 + SM_LAUNCH_H + SM_PAD - 6;
     cardH = panelH * 0.5f;
-    top = UI_Home_BlockTop(72.0f + HM_PANEL_GAP + panelH);
-    top = UI_Home_Header(top, NULL, "Start Match") + HM_PANEL_GAP;
+    // [ioquakelive] the page's frame is the one Settings uses -- header under the top row, panel
+    // down to the same line -- and the choices sit in the middle of it
+    top = UI_Home_Header(HM_NAV_H, NULL, "Start Match") + HM_PANEL_GAP;
+    top += (UI_Home_FrameBottom() - top - panelH) * 0.5f;
     optX = page + SM_OPT_X;
     rowsTop = top + SM_PAD - 6;
 
@@ -984,7 +984,6 @@ static void SM_DrawPage(void) {
     SM_DrawLaunch(optX + SM_PAD, top + panelH - SM_PAD - SM_LAUNCH_H + 6, SM_ROW_W);
 
     SM_DrawGametypeCard(page, top, cardH);
-    SM_Fill(page + SM_PAD, top + cardH, SM_COL_W - 2 * SM_PAD, 1, smBorder, NULL);
     SM_DrawArenaCard(page, top + cardH, cardH);
 }
 

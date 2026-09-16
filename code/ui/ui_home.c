@@ -327,6 +327,18 @@ rather than hanging from the top, which is what the player asked for. It never
 goes over the top row, and a page taller than the screen starts right under it.
 ===============
 */
+/*
+===============
+UI_Home_FrameBottom
+
+[ioquakelive] Where a page's frame ends, the same line Settings stops its panel at, so every
+page fills the same box.
+===============
+*/
+float UI_Home_FrameBottom(void) {
+    return smBottom - 40.0f - (UI_Home_InMatch() ? 38.0f : 0.0f);
+}
+
 float UI_Home_BlockTop(float blockHeight) {
     float first = HM_NAV_H;
     float bottom = smBottom - 44.0f - (UI_Home_InMatch() ? 38.0f : 0.0f);

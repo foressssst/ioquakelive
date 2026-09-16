@@ -187,8 +187,12 @@ void UI_Training_Paint(void) {
 
     UI_Home_Backdrop();
     UI_Home_PageTop(HM_NAV_TRAINING);
-    y = UI_Home_Header(UI_Home_BlockTop(72.0f + HM_PANEL_GAP + TR_CARD_H), NULL, "Training Center") +
-        HM_PANEL_GAP;
+    // [ioquakelive] The page keeps the frame every other one has: the header right under the top
+    // row, as Settings does, and the cards centred in what is left. Hanging the block off the
+    // middle of the screen made the header jump from page to page, which is what the user saw as
+    // "los 3 centers no estan CENTRADOS como contenedor".
+    y = UI_Home_Header(HM_NAV_H, NULL, "Training Center") + HM_PANEL_GAP;
+    y += (UI_Home_FrameBottom() - y - TR_CARD_H) * 0.5f;
 
     for (i = 0; i < TR_NUM_CARDS; i++) {
         TR_DrawCard(i, left + i * (w + HM_PANEL_GAP), y, w);
