@@ -146,14 +146,14 @@ typedef enum {
     ST_HIT_MODEL,
     ST_HIT_MODELITEM,
     ST_HIT_MODELPANE,
-    ST_HIT_MODELDONE,
+    ST_HIT_SKINITEM,
+    ST_HIT_MODELOK,
+    ST_HIT_MODELCANCEL,
+    ST_HIT_MODELCLEAR,
     ST_HIT_PREVIEW
 } stHitType_t;
 
-#define ST_MAX_MODELS MAX_PLAYERMODELS
-#define ST_MODEL_COLS 5
-#define ST_MODEL_CELL 104.0f
-#define ST_MODEL_PANE 360.0f
+#define ST_MAX_SKINS 10  // the most a model of retail's table offers (biker)
 
 /*
 ===============================================================================
@@ -181,9 +181,9 @@ static struct {
     smRect_t rgbPanel;
 
     int model;                 // the row whose model chooser is open
-    int modelCount;
-    int modelNames[ST_MAX_MODELS];  // into uiInfo.q3HeadNames, -1 for "None"
-    float modelScroll;
+    int pickModel;             // what it shows: one of stModels
+    int pickSkin;              // and one of its skins, or of the forced skin row's options
+    int pickSkinRow;           // that forced skin row, or -1
     playerInfo_t modelInfo;
     char modelShown[MAX_QPATH];     // what modelInfo was built from
 
@@ -740,40 +740,6 @@ static void ST_DrawRGB(int i, float x, float y, const smRect_t* clip) {
     SM_Hit(x, y, ST_CONTROL_W, ST_FIELD_H, ST_HIT_RGB, i, clip);
 }
 
-// the model in use with its icon; a click opens the chooser
-static void ST_DrawModelButton(int i, float x, float y, const smRect_t* clip) {
-    const char* value = st.values[i][0] ? st.values[i] : "None";
-    char base[MAX_QPATH];
-    qhandle_t icon = 0;
-    int k;
-
-    for (k = 0; k < uiInfo.q3HeadCount; k++) {
-        char other[MAX_QPATH];
-        const char* slash;
-
-        if (!Q_stricmp(uiInfo.q3HeadNames[k], value)) {
-            icon = uiInfo.q3HeadIcons[k];
-            break;
-        }
-        slash = strchr(uiInfo.q3HeadNames[k], '/');
-        Q_strncpyz(other, uiInfo.q3HeadNames[k], slash ? (int)(slash - uiInfo.q3HeadNames[k]) + 1 : sizeof(other));
-        slash = strchr(value, '/');
-        Q_strncpyz(base, value, slash ? (int)(slash - value) + 1 : sizeof(base));
-        if (!icon && !Q_stricmp(other, base)) {
-            icon = uiInfo.q3HeadIcons[k];
-        }
-    }
-
-    SM_FieldBox(x, y, ST_CONTROL_W, ST_FIELD_H, st.model == i, SM_Over(ST_HIT_MODEL, i), clip);
-    if (icon) {
-        SM_Pic(x + 5, y + 4, ST_FIELD_H - 8, ST_FIELD_H - 8, icon, clip);
-    }
-    SM_Text(x + ST_FIELD_H + 6, SM_Baseline(FONT_SANS, 15, y, ST_FIELD_H), FONT_SANS, 15, smText, value,
-            SM_Fit(FONT_SANS, 15, value, ST_CONTROL_W - ST_FIELD_H - 36), qfalse);
-    SM_Chevron(x + ST_CONTROL_W - 22, y + ST_FIELD_H * 0.5f - 2, qfalse, smMuted);
-    SM_Hit(x, y, ST_CONTROL_W, ST_FIELD_H, ST_HIT_MODEL, i, clip);
-}
-
 // a small round button with a chevron pointing left or right
 static void ST_DrawStep(float x, float y, qboolean right, qboolean over) {
     float s = 26.0f;
@@ -864,31 +830,6 @@ static void ST_DrawBind(int i, float right, float y, const smRect_t* clip) {
 }
 
 /*
-===============================================================================
-
-THE MODELS
-
-===============================================================================
-*/
-
-// the model part of "model" or "model/skin"
-static void ST_ModelBase(const char* name, char* out, int size) {
-    const char* slash = strchr(name, '/');
-
-    if (slash) {
-        int len = (int)(slash - name);
-
-        if (len > size - 1) {
-            len = size - 1;
-        }
-        memcpy(out, name, len);
-        out[len] = '\0';
-        return;
-    }
-    Q_strncpyz(out, name, size);
-}
-
-/*
 ===============
 ST_DrawTeamPreview
 
@@ -948,87 +889,274 @@ static void ST_DrawTeamPreview(int slot, float x, float y, float w, float h) {
 }
 
 /*
-===============
-ST_BuildModelList
+===============================================================================
 
-A row that forces a model takes the model alone and may take none at all; the
-player's own model takes a skin with it, so it lists every model and skin.
+PLAYER MODELS
+
+Retail's chooser (web.pak src/modelchooser.js) lists its own table of models,
+src/models.js, not what is on disk: 26 models, the skins each one offers in that
+order, and the names it shows. A skin is shown by its icon,
+models/players/<model>/icon_<skin>, which pak00 has for every pair but two
+(ranger's sport and uriel's zael); those show their name instead.
+
+The chooser holds what it shows until OK, the way retail's does, and Enter and
+Escape are its OK and Cancel. The player's own model takes a skin with it
+(modelskin). A forced model is the model alone in retail, whose skin is the row
+under it; here the chooser offers that row's skins as well, Bright among them,
+so a forced model and its skin are picked and seen together.
+
+===============================================================================
+*/
+
+typedef struct {
+    const char* model;
+    const char* name;
+    const char* skins[ST_MAX_SKINS + 1];
+} stModel_t;
+
+static const stModel_t stModels[] = {
+    {"anarki", "Anarki", {"default", "red", "blue", "bright", "sport", "sport_blue", "sport_red"}},
+    {"biker", "Biker",
+     {"default", "red", "blue", "bright", "hossman", "slammer", "sport", "sport_blue", "sport_red", "stroggo"}},
+    {"bitterman", "Bitterman", {"default", "red", "blue", "bright", "sport", "sport_blue", "sport_red"}},
+    {"bones", "Bones", {"default", "red", "blue", "bright", "bones", "sport", "sport_blue", "sport_red"}},
+    {"crash", "Crash", {"default", "red", "blue", "bright", "sport", "sport_blue", "sport_red"}},
+    {"doom", "Doom", {"default", "red", "blue", "bright", "phobos", "sport", "sport_blue", "sport_red"}},
+    {"grunt", "Grunt", {"default", "red", "blue", "bright", "sport", "sport_blue", "sport_red", "stripe"}},
+    {"hunter", "Hunter", {"default", "red", "blue", "bright", "harpy", "sport", "sport_blue", "sport_red"}},
+    {"james", "James", {"default", "red", "blue", "bright", "sport", "sport_blue", "sport_red"}},
+    {"janet", "Janet", {"default", "red", "blue", "bright", "sport", "sport_blue", "sport_red"}},
+    {"keel", "Keel", {"default", "red", "blue", "bright", "sport", "sport_blue", "sport_red"}},
+    {"klesk", "Klesk", {"default", "red", "blue", "bright", "flisk", "sport", "sport_blue", "sport_red"}},
+    {"lucy", "Lucy", {"default", "red", "blue", "bright", "angel", "sport", "sport_blue", "sport_red"}},
+    {"major", "Major", {"default", "red", "blue", "bright", "daemia", "sport", "sport_blue", "sport_red"}},
+    {"mynx", "Mynx", {"default", "red", "blue", "bright", "sport", "sport_blue", "sport_red"}},
+    {"orbb", "Orbb", {"default", "red", "blue", "bright", "sport", "sport_blue", "sport_red"}},
+    {"ranger", "Ranger", {"default", "red", "blue", "bright", "sport", "sport_blue", "sport_red", "wrack"}},
+    {"razor", "Razor", {"default", "red", "blue", "bright", "id", "patriot", "sport", "sport_blue", "sport_red"}},
+    {"santa", "Santa", {"default", "red", "blue", "bright", "sport", "sport_blue", "sport_red"}},
+    {"sarge", "Sarge",
+     {"default", "red", "blue", "bright", "krusade", "roderic", "sport", "sport_blue", "sport_red"}},
+    {"slash", "Slash", {"default", "red", "blue", "bright", "sport", "sport_blue", "sport_red", "yuriko"}},
+    {"sorlag", "Sorlag", {"default", "red", "blue", "bright", "sport", "sport_blue", "sport_red"}},
+    {"tankjr", "Tank Jr.", {"default", "red", "blue", "bright", "sport", "sport_blue", "sport_red"}},
+    {"uriel", "Uriel", {"default", "red", "blue", "bright", "sport", "sport_blue", "sport_red", "zael"}},
+    {"visor", "Visor", {"default", "red", "blue", "bright", "gorre", "sport", "sport_blue", "sport_red"}},
+    {"xaero", "Xaero", {"default", "red", "blue", "bright", "sport", "sport_blue", "sport_red"}},
+};
+
+#define ST_NUM_MODELS ((int)ARRAY_LEN(stModels))
+#define ST_DEFAULT_MODEL 19  // sarge, what retail's sanitizeModel falls back to
+
+// the chooser's grid and its skin row
+#define ST_CHOOSER_W 1120.0f
+#define ST_CHOOSER_H 690.0f
+#define ST_GRID_COLS 5
+#define ST_GRID_CELL 86.0f
+#define ST_SKIN_CELL 58.0f
+
+static qhandle_t stIcons[ST_NUM_MODELS][ST_MAX_SKINS];  // 0 not asked for yet, -1 not there
+
+static qhandle_t ST_IconFor(int model, const char* skin) {
+    int k;
+
+    for (k = 0; k < ST_MAX_SKINS && stModels[model].skins[k]; k++) {
+        if (!Q_stricmp(stModels[model].skins[k], skin)) {
+            qhandle_t* h = &stIcons[model][k];
+
+            if (!*h) {
+                // a missing image registers as 0, and asking again costs nothing
+                *h = trap_R_RegisterShaderNoMip(va("models/players/%s/icon_%s", stModels[model].model, skin));
+                if (!*h) {
+                    *h = -1;
+                }
+            }
+            return *h > 0 ? *h : 0;
+        }
+    }
+    return 0;
+}
+
+// what a skin is called: the forced skin rows' names, else the skin with a capital
+static const char* ST_SkinName(const char* skin) {
+    static char name[MAX_QPATH];
+    const stCvar_t* cv = NULL;
+    int k;
+
+    if (!skin[0]) {
+        return "None";
+    }
+    if (!Q_stricmp(skin, "default")) {
+        return "Default";
+    }
+    if (!Q_stricmp(skin, "id")) {
+        return "id";
+    }
+    for (k = 0; k < ST_NUM_CVARS; k++) {
+        if (stCvars[k].cvar && !Q_stricmp(stCvars[k].cvar, "cg_forceteamskin")) {
+            cv = &stCvars[k];
+            break;
+        }
+    }
+    for (k = 0; cv && k < cv->numOptions; k++) {
+        if (!Q_stricmp(cv->options[k].value, skin)) {
+            return cv->options[k].label;
+        }
+    }
+    Q_strncpyz(name, skin, sizeof(name));
+    name[0] = (char)toupper((unsigned char)name[0]);
+    return name;
+}
+
+/*
+===============
+ST_ParseModel
+
+Retail's sanitizeModel: "model/skin" into the table, a model it does not list
+becoming sarge and a skin its model does not offer becoming default. The skin
+comes back as the text after the slash, or "" when there is none.
 ===============
 */
-static void ST_BuildModelList(int i) {
-    qboolean skins = stCvars[i].widget == ST_MODELSKIN;
-    int k, n;
+static int ST_ParseModel(const char* value, char* skin, int size) {
+    char base[MAX_QPATH];
+    const char* slash = strchr(value, '/');
+    int len = slash ? (int)(slash - value) + 1 : (int)sizeof(base);
+    int model = ST_DEFAULT_MODEL;
+    int k;
 
-    st.modelCount = 0;
-    if (!skins) {
-        st.modelNames[st.modelCount++] = -1;  // None
+    Q_strncpyz(base, value, len < (int)sizeof(base) ? len : (int)sizeof(base));
+    for (k = 0; k < ST_NUM_MODELS; k++) {
+        if (!Q_stricmp(stModels[k].model, base)) {
+            model = k;
+            break;
+        }
     }
-    for (k = 0; k < uiInfo.q3HeadCount && st.modelCount < ST_MAX_MODELS; k++) {
-        if (!skins) {
-            char base[MAX_QPATH], other[MAX_QPATH];
-            qboolean seen = qfalse;
-
-            ST_ModelBase(uiInfo.q3HeadNames[k], base, sizeof(base));
-            for (n = 0; n < st.modelCount; n++) {
-                if (st.modelNames[n] < 0) {
-                    continue;
-                }
-                ST_ModelBase(uiInfo.q3HeadNames[st.modelNames[n]], other, sizeof(other));
-                if (!Q_stricmp(base, other)) {
-                    seen = qtrue;
-                    break;
-                }
-            }
-            if (seen) {
-                continue;
+    skin[0] = '\0';
+    if (slash) {
+        for (k = 0; k < ST_MAX_SKINS && stModels[model].skins[k]; k++) {
+            if (!Q_stricmp(stModels[model].skins[k], slash + 1)) {
+                Q_strncpyz(skin, stModels[model].skins[k], size);
+                break;
             }
         }
-        st.modelNames[st.modelCount++] = k;
     }
+    return model;
 }
 
-static const char* ST_ModelEntry(int slot, char* out, int size) {
-    int k = st.modelNames[slot];
+// the skin row that goes with a forced model row, or -1
+static int ST_SkinRowFor(int i) {
+    const char* want = NULL;
+    int k;
 
-    if (k < 0) {
-        Q_strncpyz(out, "None", size);
-        return out;
+    if (!Q_stricmp(stCvars[i].cvar, "cg_forceteammodel")) {
+        want = "cg_forceteamskin";
+    } else if (!Q_stricmp(stCvars[i].cvar, "cg_forceenemymodel")) {
+        want = "cg_forceenemyskin";
     }
+    for (k = 0; want && k < ST_NUM_CVARS; k++) {
+        if (stCvars[k].cvar && !Q_stricmp(stCvars[k].cvar, want)) {
+            return k;
+        }
+    }
+    return -1;
+}
+
+// how many skins the chooser offers, and the value of each
+static int ST_PickSkinCount(void) {
+    int k;
+
+    if (st.pickSkinRow >= 0) {
+        return stCvars[st.pickSkinRow].numOptions;
+    }
+    for (k = 0; k < ST_MAX_SKINS && stModels[st.pickModel].skins[k]; k++) {
+    }
+    return k;
+}
+
+static const char* ST_PickSkinValue(int k) {
+    if (st.pickSkinRow >= 0) {
+        return stCvars[st.pickSkinRow].options[k].value;
+    }
+    return stModels[st.pickModel].skins[k];
+}
+
+static void ST_OpenChooser(int i) {
+    char skin[MAX_QPATH];
+    int k;
+
+    st.model = i;
+    st.pickModel = ST_ParseModel(st.values[i], skin, sizeof(skin));
+    st.pickSkinRow = stCvars[i].widget == ST_MODEL ? ST_SkinRowFor(i) : -1;
+    st.pickSkin = 0;
+    // a forced skin is its row's; a skin written into the model ("keel/bright") counts when that row is empty
+    if (st.pickSkinRow >= 0 && st.values[st.pickSkinRow][0]) {
+        Q_strncpyz(skin, st.values[st.pickSkinRow], sizeof(skin));
+    }
+    for (k = 0; k < ST_PickSkinCount(); k++) {
+        if (skin[0] && !Q_stricmp(ST_PickSkinValue(k), skin)) {
+            st.pickSkin = k;
+            break;
+        }
+    }
+    st.modelShown[0] = '\0';
+}
+
+static void ST_ConfirmChooser(void) {
+    const char* model = stModels[st.pickModel].model;
+
     if (stCvars[st.model].widget == ST_MODELSKIN) {
-        Q_strncpyz(out, uiInfo.q3HeadNames[k], size);
+        ST_Set(st.model, va("%s/%s", model, ST_PickSkinValue(st.pickSkin)));
     } else {
-        ST_ModelBase(uiInfo.q3HeadNames[k], out, size);
+        ST_Set(st.model, model);
+        if (st.pickSkinRow >= 0) {
+            ST_Set(st.pickSkinRow, ST_PickSkinValue(st.pickSkin));
+        }
     }
-    return out;
+    st.model = -1;
 }
 
-// the chooser's preview, in the colours of the row it came from
+// the model in use with its icon; a click opens the chooser
+static void ST_DrawModelButton(int i, float x, float y, const smRect_t* clip) {
+    const char* value = st.values[i][0] ? st.values[i] : "None";
+    qhandle_t icon = 0;
+    float tx = x + 12;
+
+    if (st.values[i][0]) {
+        char skin[MAX_QPATH];
+        int model = ST_ParseModel(st.values[i], skin, sizeof(skin));
+
+        icon = ST_IconFor(model, skin[0] ? skin : "default");
+    }
+
+    SM_FieldBox(x, y, ST_CONTROL_W, ST_FIELD_H, st.model == i, SM_Over(ST_HIT_MODEL, i), clip);
+    if (icon) {
+        SM_Pic(x + 5, y + 4, ST_FIELD_H - 8, ST_FIELD_H - 8, icon, clip);
+        tx = x + ST_FIELD_H + 6;
+    }
+    SM_Text(tx, SM_Baseline(FONT_SANS, 15, y, ST_FIELD_H), FONT_SANS, 15, st.values[i][0] ? smText : smTextSoft,
+            value, SM_Fit(FONT_SANS, 15, value, x + ST_CONTROL_W - 30 - tx), qfalse);
+    SM_Chevron(x + ST_CONTROL_W - 22, y + ST_FIELD_H * 0.5f - 2, qfalse, smMuted);
+    SM_Hit(x, y, ST_CONTROL_W, ST_FIELD_H, ST_HIT_MODEL, i, clip);
+}
+
+// the chooser's model, in the skin it has picked and in the colours of the row it came from
 static void ST_DrawChooserPreview(float x, float y, float w, float h) {
-    const char* value = st.values[st.model];
     const char* cvar = stCvars[st.model].cvar;
+    const char* skin = ST_PickSkinValue(st.pickSkin);
     char composed[MAX_QPATH];
 
-    if (!value[0] || !Q_stricmp(value, "None")) {
-        SM_Centered(x + w * 0.5f, SM_Baseline(FONT_SANS, 14, y, h), 14, smSubtle, "No model forced", qfalse);
-        return;
-    }
-    // a forced model takes the default skin, the way retail's chooser does
-    if (stCvars[st.model].widget == ST_MODELSKIN || strchr(value, '/')) {
-        Q_strncpyz(composed, value, sizeof(composed));
-    } else {
-        Com_sprintf(composed, sizeof(composed), "%s/default", value);
-    }
+    Com_sprintf(composed, sizeof(composed), "%s/%s", stModels[st.pickModel].model, skin[0] ? skin : "default");
     if (Q_stricmp(composed, st.modelShown)) {
         Q_strncpyz(st.modelShown, composed, sizeof(st.modelShown));
         SM_BuildPlayer(&st.modelInfo, composed, 150, WP_MACHINEGUN);
     }
     st.modelInfo.customColor = qfalse;
-    if (!Q_stricmp(cvar, "cg_forceTeamModel")) {
+    if (!Q_stricmp(cvar, "cg_forceteammodel")) {
         st.modelInfo.customColor = qtrue;
         st.modelInfo.headColor = ST_ModelTint("cg_teamHeadColor");
         st.modelInfo.torsoColor = ST_ModelTint("cg_teamUpperColor");
         st.modelInfo.legsColor = ST_ModelTint("cg_teamLowerColor");
-    } else if (!Q_stricmp(cvar, "cg_forceEnemyModel")) {
+    } else if (!Q_stricmp(cvar, "cg_forceenemymodel")) {
         st.modelInfo.customColor = qtrue;
         st.modelInfo.headColor = ST_ModelTint("cg_enemyHeadColor");
         st.modelInfo.torsoColor = ST_ModelTint("cg_enemyUpperColor");
@@ -1037,78 +1165,129 @@ static void ST_DrawChooserPreview(float x, float y, float w, float h) {
     SM_DrawPlayerIn(&st.modelInfo, x, y, w, h);
 }
 
+/*
+===============
+ST_DrawModelChooser
+
+Retail's is a wide dialog: every model down the left, and on the right the name
+of the one picked, its skins and a picture of it. Here the picture is the model
+itself. A tile is the model's default icon; the one picked has the cream ring the
+site gives a chosen pill.
+===============
+*/
 static void ST_DrawModelChooser(void) {
-    float gridW = ST_MODEL_COLS * ST_MODEL_CELL;
-    float w = ST_PAD + gridW + 16 + ST_MODEL_PANE + ST_PAD;
-    float h = 620;
+    float w = ST_CHOOSER_W, h = ST_CHOOSER_H;
     float x = (smVW - w) * 0.5f;
     float y = (SM_VIEW_H - h) * 0.5f;
-    float rows = (float)((st.modelCount + ST_MODEL_COLS - 1) / ST_MODEL_COLS);
-    float listTop = y + 92;
-    float listH = h - 92 - ST_PAD - SM_BUTTON_H - 16;
-    float bw = SM_ButtonWidth("Done", SM_BUTTON_H);
-    vec4_t scrim = {0.0f, 0.0f, 0.0f, 0.6f};
-    smRect_t box;
-    char name[MAX_QPATH];
+    float bodyTop = y + 104;
+    float footY = y + h - ST_PAD - SM_BUTTON_H;
+    float gridX = x + ST_PAD;
+    float paneX = gridX + ST_GRID_COLS * ST_GRID_CELL + 22;
+    float paneW = x + w - ST_PAD - paneX;
+    float skinY = bodyTop + 50;
+    float previewY = skinY + ST_SKIN_CELL + 18;
+    qboolean forced = st.pickSkinRow >= 0;
+    vec4_t scrim = {0.0f, 0.0f, 0.0f, 0.62f};
+    const char* skinValue = ST_PickSkinValue(st.pickSkin);
+    const char* title = stModels[st.pickModel].name;
+    float bx;
+    int count = ST_PickSkinCount();
     int k;
 
     SM_FillScreen(scrim);
     SM_Shadow(x, y, w, h, SM_RADIUS_LG);
     SM_Round(x, y, w, h, SM_RADIUS_LG, smPanel, NULL);
     SM_Hit(x, y, w, h, ST_HIT_MODELPANE, 0, NULL);
-    SM_Label(x + ST_PAD, SM_Baseline(FONT_SANS, 11, y + 22, 16), 11, smGold, "Choose a model", 1.6f);
-    SM_Label(x + ST_PAD, SM_Baseline(FONT_SANS, 22, y + 42, 30), 22, smText, stCvars[st.model].title, 0.2f);
+    SM_Label(x + ST_PAD, SM_Baseline(FONT_SANS, 11, y + 24, 16), 11, smGold, "Choose a model", 1.6f);
+    SM_Label(x + ST_PAD, SM_Baseline(FONT_SANS, 24, y + 44, 32), 24, smText, stCvars[st.model].title, 0.2f);
+    SM_Fill(x + ST_PAD, y + 88, w - 2 * ST_PAD, 1, smBorder, NULL);
 
-    box = SM_R(x + ST_PAD, listTop, gridW, listH);
-    if (rows * ST_MODEL_CELL <= listH) {
-        st.modelScroll = 0;
-    } else if (st.modelScroll > rows * ST_MODEL_CELL - listH) {
-        st.modelScroll = rows * ST_MODEL_CELL - listH;
-    }
-    if (st.modelScroll < 0) {
-        st.modelScroll = 0;
-    }
+    // every model, in its default skin
+    for (k = 0; k < ST_NUM_MODELS; k++) {
+        float cx = gridX + (k % ST_GRID_COLS) * ST_GRID_CELL;
+        float cy = bodyTop + (k / ST_GRID_COLS) * ST_GRID_CELL;
+        float cs = ST_GRID_CELL - 8;
+        qboolean chosen = k == st.pickModel;
+        qboolean over = SM_Over(ST_HIT_MODELITEM, k);
+        qhandle_t icon = ST_IconFor(k, "default");
+        const char* name = stModels[k].name;
+        float tw;
 
-    for (k = 0; k < st.modelCount; k++) {
-        float cx = box.x + (k % ST_MODEL_COLS) * ST_MODEL_CELL;
-        float cy = box.y + (k / ST_MODEL_COLS) * ST_MODEL_CELL - st.modelScroll;
-        float cs = ST_MODEL_CELL - 8;
-        int slot = st.modelNames[k];
-        qboolean chosen;
-        qboolean over;
-
-        if (cy + ST_MODEL_CELL < box.y || cy > box.y + box.h) {
-            continue;
-        }
-        ST_ModelEntry(k, name, sizeof(name));
-        chosen = !Q_stricmp(name, st.values[st.model]) || (slot < 0 && !st.values[st.model][0]);
-        over = SM_Over(ST_HIT_MODELITEM, k);
         if (chosen) {
-            SM_Round(cx - 2, cy - 2, cs + 4, cs + 4, SM_RADIUS_MD + 2, smPrimary, &box);
+            SM_Round(cx - 2, cy - 2, cs + 4, cs + 4, SM_RADIUS_MD + 2, smPrimary, NULL);
         }
-        SM_Round(cx, cy, cs, cs, SM_RADIUS_MD, over ? smRaisedHover : smRaised, &box);
-        if (slot >= 0) {
-            SM_Pic(cx + 16, cy + 8, cs - 32, cs - 32, uiInfo.q3HeadIcons[slot], &box);
+        SM_Round(cx, cy, cs, cs, SM_RADIUS_MD, chosen ? smRaisedHover : over ? smRaisedHover : smRaised, NULL);
+        if (icon) {
+            SM_Pic(cx + (cs - 46) * 0.5f, cy + 6, 46, 46, icon, NULL);
         }
-        if (SM_TextInside(SM_Baseline(FONT_SANS, 12, cy + cs - 24, 18), 12, &box)) {
-            float tw = SM_Advance(FONT_SANS, 12, name, -1);
-
-            if (tw > cs - 10) {
-                tw = cs - 10;
-            }
-            SM_Text(cx + (cs - tw) * 0.5f, SM_Baseline(FONT_SANS, 12, cy + cs - 24, 18), FONT_SANS, 12,
-                    chosen || over ? smText : smMuted, name, SM_Fit(FONT_SANS, 12, name, cs - 10), qfalse);
+        tw = SM_Advance(FONT_SANS, 11, name, -1);
+        if (tw > cs - 8) {
+            tw = cs - 8;
         }
-        SM_Hit(cx, cy, cs, cs, ST_HIT_MODELITEM, k, &box);
+        SM_Text(cx + (cs - tw) * 0.5f, SM_Baseline(FONT_SANS, 11, cy + cs - 22, 16), FONT_SANS, 11,
+                chosen || over ? smText : smMuted, name, SM_Fit(FONT_SANS, 11, name, cs - 8), qfalse);
+        SM_Hit(cx, cy, cs, cs, ST_HIT_MODELITEM, k, NULL);
     }
 
-    // the one in use, as a model
-    SM_Round(x + w - ST_PAD - ST_MODEL_PANE, listTop, ST_MODEL_PANE, listH, SM_RADIUS_MD, smPage, NULL);
-    ST_DrawChooserPreview(x + w - ST_PAD - ST_MODEL_PANE, listTop + 10, ST_MODEL_PANE, listH - 20);
+    // the one picked: its name and skin, its skins, and the model
+    {
+        float nw = SM_LabelWidth(26, title, 0.2f);
+        const char* skinName = ST_SkinName(skinValue);
 
-    SM_Button(x + w - ST_PAD - bw, y + h - ST_PAD - SM_BUTTON_H, bw, SM_BUTTON_H, "Done", SM_BUTTON_PRIMARY,
-              SM_Over(ST_HIT_MODELDONE, 0));
-    SM_Hit(x + w - ST_PAD - bw, y + h - ST_PAD - SM_BUTTON_H, bw, SM_BUTTON_H, ST_HIT_MODELDONE, 0, NULL);
+        SM_Label(paneX, SM_Baseline(FONT_SANS, 26, bodyTop, 34), 26, smText, title, 0.2f);
+        SM_Text(paneX + nw + 14, SM_Baseline(FONT_SANS, 15, bodyTop + 4, 34), FONT_SANS, 15, smGold, skinName, -1,
+                qfalse);
+    }
+    for (k = 0; k < count; k++) {
+        const char* value = ST_PickSkinValue(k);
+        float cx = paneX + k * ST_SKIN_CELL;
+        float cs = ST_SKIN_CELL - 6;
+        qboolean chosen = k == st.pickSkin;
+        qboolean over = SM_Over(ST_HIT_SKINITEM, k);
+        qhandle_t icon = ST_IconFor(st.pickModel, value[0] ? value : "default");
+
+        if (chosen) {
+            SM_Round(cx - 2, skinY - 2, cs + 4, cs + 4, SM_RADIUS_MD + 2, smPrimary, NULL);
+        }
+        SM_Round(cx, skinY, cs, cs, SM_RADIUS_MD, chosen || over ? smRaisedHover : smRaised, NULL);
+        if (icon && value[0]) {
+            SM_Pic(cx + 5, skinY + 5, cs - 10, cs - 10, icon, NULL);
+        } else {
+            // None (the players' own skin), or a skin pak00 has no icon for
+            const char* name = ST_SkinName(value);
+
+            SM_Text(cx + (cs - SM_Advance(FONT_SANS, 10, name, -1)) * 0.5f, SM_Baseline(FONT_SANS, 10, skinY, cs),
+                    FONT_SANS, 10, chosen || over ? smText : smMuted, name, SM_Fit(FONT_SANS, 10, name, cs - 6),
+                    qfalse);
+        }
+        SM_Hit(cx, skinY, cs, cs, ST_HIT_SKINITEM, k, NULL);
+    }
+
+    SM_Round(paneX, previewY, paneW, footY - 18 - previewY, SM_RADIUS_MD, smPage, NULL);
+    ST_DrawChooserPreview(paneX, previewY + 10, paneW, footY - 18 - previewY - 20);
+    if (forced) {
+        const char* note = va("The skin is %s's too", stCvars[st.pickSkinRow].title);
+
+        SM_Text(paneX + 14, SM_Baseline(FONT_SANS, 12, footY - 18 - 28, 20), FONT_SANS, 12, smSubtle, note, -1,
+                qfalse);
+    }
+
+    // Clear (a forced model may be none), Cancel and OK, the way retail's ends
+    bx = x + w - ST_PAD;
+    {
+        static const char* const labels[3] = {"OK", "Cancel", "Clear"};
+        static const int hits[3] = {ST_HIT_MODELOK, ST_HIT_MODELCANCEL, ST_HIT_MODELCLEAR};
+
+        for (k = 0; k < (forced ? 3 : 2); k++) {
+            float bw = SM_ButtonWidth(labels[k], SM_BUTTON_H);
+
+            bx -= bw;
+            SM_Button(bx, footY, bw, SM_BUTTON_H, labels[k], k ? SM_BUTTON_SECONDARY : SM_BUTTON_PRIMARY,
+                      SM_Over(hits[k], 0));
+            SM_Hit(bx, footY, bw, SM_BUTTON_H, hits[k], 0, NULL);
+            bx -= 10;
+        }
+    }
 }
 
 /*
@@ -1509,15 +1688,32 @@ static void ST_Click(void) {
     int type = hit ? hit->type : ST_HIT_NONE;
     int index = hit ? hit->index : 0;
 
-    // the model chooser takes the whole screen while it is up
+    // the model chooser takes the whole screen while it is up; a click off it is Cancel
     if (st.model >= 0) {
-        if (type == ST_HIT_MODELITEM) {
-            char name[MAX_QPATH];
-
-            ST_ModelEntry(index, name, sizeof(name));
-            ST_Set(st.model, st.modelNames[index] < 0 ? "" : name);
-        } else if (type == ST_HIT_MODELDONE || type != ST_HIT_MODELPANE) {
-            st.model = -1;
+        switch (type) {
+            case ST_HIT_MODELITEM:
+                // a model starts on its default skin, as retail's changeModel has it; a forced
+                // skin is the row's and stays
+                if (st.pickSkinRow < 0) {
+                    st.pickSkin = 0;
+                }
+                st.pickModel = index;
+                break;
+            case ST_HIT_SKINITEM:
+                st.pickSkin = index;
+                break;
+            case ST_HIT_MODELOK:
+                ST_ConfirmChooser();
+                break;
+            case ST_HIT_MODELCLEAR:
+                ST_Set(st.model, "");
+                st.model = -1;
+                break;
+            case ST_HIT_MODELPANE:
+                break;
+            default:
+                st.model = -1;
+                break;
         }
         return;
     }
@@ -1614,9 +1810,7 @@ static void ST_Click(void) {
             st.rgb = index;
             break;
         case ST_HIT_MODEL:
-            st.model = index;
-            st.modelScroll = 0;
-            ST_BuildModelList(index);
+            ST_OpenChooser(index);
             break;
         case ST_HIT_PREV:
             ST_Step(index, -1);
@@ -1642,7 +1836,6 @@ static void ST_Click(void) {
 
 static void ST_Wheel(float amount) {
     if (st.model >= 0) {
-        st.modelScroll += amount;
         return;
     }
     if (st.select >= 0) {
@@ -1893,6 +2086,13 @@ qboolean UI_Settings_HandleKey(int key) {
         case K_MWHEELDOWN:
             ST_Wheel(120);
             return qtrue;
+        case K_ENTER:
+        case K_KP_ENTER:
+            if (st.model >= 0) {
+                ST_ConfirmChooser();
+                return qtrue;
+            }
+            return qfalse;
         case K_ESCAPE:
             if (st.model >= 0) {
                 st.model = -1;
