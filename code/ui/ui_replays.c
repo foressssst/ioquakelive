@@ -80,7 +80,7 @@ static void RP_DrawPage(void) {
     int i;
 
     UI_Home_Backdrop();
-    UI_Home_Nav(HM_NAV_REPLAYS);
+    UI_Home_PageTop(HM_NAV_REPLAYS);
 
     // the header, with the count and a refresh pill at its right
     y = UI_Home_Header(y, NULL, "Replays");
