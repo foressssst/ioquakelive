@@ -1571,6 +1571,7 @@ static void CG_RegisterSounds(void) {
     cgs.media.talkSound = trap_S_RegisterSound("sound/player/talk.ogg", qfalse);
     cgs.media.landSound = trap_S_RegisterSound("sound/player/land1.ogg", qfalse);
 
+    cgs.media.hitSound = trap_S_RegisterSound("sound/feedback/hit.wav", qfalse);
     cgs.media.hitSounds[0] = trap_S_RegisterSound("sound/feedback/hit0.ogg", qfalse);
     cgs.media.hitSounds[1] = trap_S_RegisterSound("sound/feedback/hit1.ogg", qfalse);
     cgs.media.hitSounds[2] = trap_S_RegisterSound("sound/feedback/hit2.ogg", qfalse);
