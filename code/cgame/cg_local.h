@@ -1887,9 +1887,13 @@ extern vmCvar_t cg_hitBeep;
 extern vmCvar_t cg_killBeep;
 extern vmCvar_t cg_lightningImpactCap;
 extern vmCvar_t cg_lightningImpact;         // [QL] gate the LG impact flare
-extern vmCvar_t cg_rocketTrailRadius;       // [QL] rocket smoke-trail radius (0 disables)
-extern vmCvar_t cg_grenadeTrailRadius;      // [QL] grenade smoke-trail radius (0 disables)
-extern vmCvar_t cg_nailTrailRadius;         // [QL] nail smoke-trail radius (0 disables)
+// [QL] every smoke has its radius in a cvar, and 0 turns it off
+extern vmCvar_t cg_smokeRadius_RL;
+extern vmCvar_t cg_smokeRadius_GL;
+extern vmCvar_t cg_smokeRadius_NG;
+extern vmCvar_t cg_smokeRadius_dust;
+extern vmCvar_t cg_smokeRadius_haste;
+extern vmCvar_t cg_smokeRadius_flight;
 extern vmCvar_t cg_railReloadTime;          // [QL] railgun refire interval (ms) for view-model tint
 extern vmCvar_t cg_loadout;
 extern vmCvar_t cg_scalePlayerModelsToBB;

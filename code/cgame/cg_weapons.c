@@ -577,13 +577,13 @@ static void CG_RocketTrail(centity_t* ent, const weaponInfo_t* wi) {
         return;
     }
 
-    // [QL] trail radius comes from cvars, disabled radius returns early. The binary
-    // replaced Q3's cg_noProjectileTrail early-return with this.
+    // [QL] cgamex86.dll 0x10050170: the radius comes from the smoke cvars, and 0 leaves no trail.
+    // The binary replaced Q3's cg_noProjectileTrail early-return with this.
     if (wi->missileTrailFunc == CG_RocketTrail) {
-        trailRadius = cg_rocketTrailRadius.value;
+        trailRadius = cg_smokeRadius_RL.value;
     }
     if (wi->missileTrailFunc == CG_GrenadeTrail) {
-        trailRadius = cg_grenadeTrailRadius.value;
+        trailRadius = cg_smokeRadius_GL.value;
     }
     if (trailRadius == 0.0f) {
         return;
@@ -621,9 +621,9 @@ static void CG_NailTrail(centity_t* ent, const weaponInfo_t* wi) {
     localEntity_t* smoke;
     float trailRadius;
 
-    // [QL] nail trail radius comes from cg_nailTrailRadius; 0 disables the trail
+    // [QL] the nail's radius is cg_smokeRadius_NG; 0 leaves no trail
     // (binary replaced the cg_noProjectileTrail early-return with this).
-    trailRadius = cg_nailTrailRadius.value;
+    trailRadius = cg_smokeRadius_NG.value;
     if (trailRadius == 0.0f) {
         return;
     }

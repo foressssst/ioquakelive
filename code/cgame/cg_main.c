@@ -303,9 +303,6 @@ vmCvar_t cg_itemTimers;
 vmCvar_t cg_killBeep;
 vmCvar_t cg_levelTimerDirection;
 vmCvar_t cg_lightningImpact;
-vmCvar_t cg_rocketTrailRadius;
-vmCvar_t cg_grenadeTrailRadius;
-vmCvar_t cg_nailTrailRadius;
 vmCvar_t cg_railReloadTime;
 vmCvar_t cg_lowAmmoWarningPercentile;
 vmCvar_t cg_lowAmmoWarningSound;
@@ -714,9 +711,6 @@ static cvarTable_t cvarTable[] = {
     {&cg_killBeep, "cg_killBeep", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "8"},
     {&cg_levelTimerDirection, "cg_levelTimerDirection", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_lightningImpact, "cg_lightningImpact", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
-    {&cg_rocketTrailRadius, "cg_rocketTrailRadius", "64", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_grenadeTrailRadius, "cg_grenadeTrailRadius", "32", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_nailTrailRadius, "cg_nailTrailRadius", "16", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_railReloadTime, "cg_railReloadTime", "1500", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_lowAmmoWarningPercentile, "cg_lowAmmoWarningPercentile", "0.20", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0.01", "1.00"},
     {&cg_lowAmmoWarningSound, "cg_lowAmmoWarningSound", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
