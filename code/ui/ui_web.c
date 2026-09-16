@@ -37,8 +37,8 @@ const vec4_t smText = SM_RGB(221, 221, 221);
 const vec4_t smTextSoft = SM_RGB(190, 190, 190);
 const vec4_t smMuted = SM_RGB(153, 153, 153);
 const vec4_t smSubtle = SM_RGB(106, 106, 106);
-const vec4_t smPrimary = SM_RGB(247, 209, 0);
-const vec4_t smOnPrimary = SM_RGB(10, 10, 10);
+const vec4_t smPrimary = SM_RGB(226, 222, 214);
+const vec4_t smOnPrimary = SM_RGB(12, 12, 12);
 const vec4_t smGold = SM_RGB(247, 209, 0);
 const vec4_t smRing = SM_RGB(247, 209, 0);
 const vec4_t smDanger = SM_RGB(239, 68, 68);
@@ -165,23 +165,17 @@ void SM_Pill(float x, float y, float w, float h, const float* color, const smRec
 ===============
 SM_Shadow
 
-What floats over the page carries a soft shadow. Drawn as a few rounded plates,
-each a little larger and fainter than the one above it, which is as close as
-stretch pics get to a blur.
+Nothing. What floats over a page used to carry a soft shadow, drawn as a few
+rounded plates; the player asked for the shadows to go, and this is the one place
+that decides it rather than picking the calls out of every page.
 ===============
 */
 void SM_Shadow(float x, float y, float w, float h, float r) {
-    static const float spread[4] = {3.0f, 8.0f, 16.0f, 26.0f};
-    static const float alpha[4] = {0.20f, 0.13f, 0.08f, 0.04f};
-    int k;
-
-    for (k = 3; k >= 0; k--) {
-        vec4_t c = {0.0f, 0.0f, 0.0f, 0.0f};
-        float s = spread[k];
-
-        c[3] = alpha[k];
-        SM_Round(x - s, y - s * 0.4f + 6.0f, w + 2 * s, h + 2 * s * 0.7f, r + s, c, NULL);
-    }
+    (void)x;
+    (void)y;
+    (void)w;
+    (void)h;
+    (void)r;
 }
 
 void SM_FillScreen(const float* color) {
@@ -320,16 +314,11 @@ static struct {
 } smFonts = {qfalse, -1, -1};
 
 void SM_LoadFonts(void) {
-    if (smFonts.tried) {
-        return;
-    }
+    // [ioquakelive] nothing to load any more: the pages are set in the two faces
+    // Quake Live's own web UI uses, which pak00 already carries.
     smFonts.tried = qtrue;
-    smFonts.regular = trap_R_Font_Register("fonts/Barlow-Regular.ttf");
-    smFonts.strong = trap_R_Font_Register("fonts/Barlow-Bold.ttf");
-    if (smFonts.regular < 0 || smFonts.strong < 0) {
-        Com_Printf("^3front end: Barlow not found in pak01, falling back to pak00's fonts\n");
-        smFonts.regular = smFonts.strong = -1;
-    }
+    smFonts.regular = -1;
+    smFonts.strong = -1;
 }
 
 // the face a page's font and weight come out in
@@ -505,7 +494,7 @@ float SM_LabelWidth(float size, const char* text, float spacing) {
     c[1] = '\0';
     for (p = upper; *p; p++) {
         c[0] = *p;
-        w += SM_AdvanceBold(FONT_SANS, size, c, 1, qtrue) + spacing;
+        w += SM_AdvanceBold(SM_FONT_TITLE, size, c, 1, qtrue) + spacing;
     }
     return w - spacing;
 }
@@ -515,10 +504,10 @@ void SM_Label(float x, float baseline, float size, const float* color, const cha
 
     SM_Upper(text, upper, sizeof(upper));
     if (spacing <= 0) {
-        SM_Text(x, baseline, FONT_SANS, size, color, upper, -1, qtrue);
+        SM_Text(x, baseline, SM_FONT_TITLE, size, color, upper, -1, qtrue);
         return;
     }
-    SM_SpacedText(x, baseline, FONT_SANS, size, color, upper, spacing, qtrue);
+    SM_SpacedText(x, baseline, SM_FONT_TITLE, size, color, upper, spacing, qtrue);
 }
 
 /*
@@ -580,54 +569,50 @@ COMPONENTS
 ===============================================================================
 */
 
-#define SM_BUTTON_SPACING 1.4f
+#define SM_BUTTON_SPACING 0.6f
 
 static float SM_ButtonText(float h) {
     return h >= SM_BUTTON_H ? 12.0f : 11.0f;
 }
 
 float SM_ButtonWidth(const char* text, float height) {
-    return SM_LabelWidth(SM_ButtonText(height), text, SM_BUTTON_SPACING) + (height >= SM_BUTTON_H ? 44.0f : 32.0f);
+    return SM_AdvanceBold(FONT_SANS, SM_ButtonText(height), text, -1, qtrue) +
+           (height >= SM_BUTTON_H ? 44.0f : 32.0f);
 }
 
 /*
 ===============
 SM_Button
 
-A pill, like every button of the site. The primary one is the cream of --primary
-with dark text; the rest sit on --card with muted text that comes up to the
-foreground under the cursor.
+Square corners and no pill: this is a game's front end, not a web page (the
+player's words). The one thing the page wants you to do is a solid block of the
+Quake Live yellow with dark text on it; the rest are the label over a 1px rule of
+the border colour, which takes the yellow with the text under the cursor.
 ===============
 */
 void SM_Button(float x, float y, float w, float h, const char* text, int style, qboolean over) {
     float size = SM_ButtonText(h);
-    float tw = SM_LabelWidth(size, text, SM_BUTTON_SPACING);
-    const float* bg;
     const float* fg;
     vec4_t hover;
 
     switch (style) {
         case SM_BUTTON_PRIMARY:
-            // bg-primary/90 under the cursor
-            hover[0] = smPrimary[0] * 0.9f + smPanel[0] * 0.1f;
-            hover[1] = smPrimary[1] * 0.9f + smPanel[1] * 0.1f;
-            hover[2] = smPrimary[2] * 0.9f + smPanel[2] * 0.1f;
+            hover[0] = smPrimary[0] * 0.88f;
+            hover[1] = smPrimary[1] * 0.88f;
+            hover[2] = smPrimary[2] * 0.88f;
             hover[3] = 1.0f;
-            bg = over ? hover : smPrimary;
-            fg = smOnPrimary;
-            break;
+            SM_Fill(x, y, w, h, over ? hover : smPrimary, NULL);
+            SM_Centered(x + w * 0.5f, SM_Baseline(FONT_SANS, size, y, h), size, smOnPrimary, text, qtrue);
+            return;
         case SM_BUTTON_DANGER:
-            bg = over ? smDanger : smRaised;
-            fg = over ? smText : smDanger;
+            fg = over ? smDanger : smMuted;
             break;
         case SM_BUTTON_SECONDARY:
         default:
-            bg = over ? smRaisedHover : smRaised;
-            fg = over ? smText : smMuted;
+            fg = over ? smGold : smTextSoft;
             break;
     }
-    SM_Pill(x, y, w, h, bg, NULL);
-    SM_Label(x + (w - tw) * 0.5f, SM_Baseline(FONT_SANS, size, y, h), size, fg, text, SM_BUTTON_SPACING);
+    SM_Centered(x + w * 0.5f, SM_Baseline(FONT_SANS, size, y, h), size, fg, text, qtrue);
 }
 
 /*
@@ -644,7 +629,7 @@ void SM_Switch(float x, float y, qboolean on, qboolean over) {
     vec4_t track;
 
     if (on) {
-        Vector4Copy(smPrimary, track);
+        Vector4Copy(smText, track);
     } else {
         Vector4Copy(over ? smBorder : smField, track);
     }
@@ -674,14 +659,14 @@ void SM_SliderTrack(float x, float y, float w, float frac, qboolean over) {
     tx = x + frac * (w - SM_SLIDER_H);
     SM_Pill(x, ty, w, track, smField, NULL);
     if (frac > 0) {
-        SM_Pill(x, ty, tx - x + SM_SLIDER_H * 0.5f, track, smPrimary, NULL);
+        SM_Pill(x, ty, tx - x + SM_SLIDER_H * 0.5f, track, smTextSoft, NULL);
     }
     if (over) {
         vec4_t ring = {smRing[0], smRing[1], smRing[2], 0.25f};
 
         SM_Pill(tx - 4, y - 4, SM_SLIDER_H + 8, SM_SLIDER_H + 8, ring, NULL);
     }
-    SM_Pill(tx, y, SM_SLIDER_H, SM_SLIDER_H, smPrimary, NULL);
+    SM_Pill(tx, y, SM_SLIDER_H, SM_SLIDER_H, over ? smGold : smText, NULL);
     SM_Pill(tx + 1.5f, y + 1.5f, SM_SLIDER_H - 3, SM_SLIDER_H - 3, smText, NULL);
 }
 

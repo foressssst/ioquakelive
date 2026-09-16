@@ -1553,7 +1553,7 @@ static void ST_DrawPage(void) {
         headerY = 40;
     } else {
         UI_Home_Backdrop();
-        UI_Home_Nav(HM_NAV_SETTINGS);
+        UI_Home_PageTop(HM_NAV_SETTINGS);
         headerY = HM_NAV_H;
     }
     if (!ST_TabShown(st.tab)) {
