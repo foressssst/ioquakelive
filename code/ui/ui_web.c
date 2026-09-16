@@ -27,20 +27,20 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "ui_web.h"
 
-const vec4_t smPage = SM_RGB(23, 22, 21);
-const vec4_t smPanel = SM_RGB(35, 33, 32);
-const vec4_t smRaised = SM_RGB(44, 43, 42);
-const vec4_t smRaisedHover = SM_RGB(54, 53, 52);
-const vec4_t smBorder = SM_RGB(67, 65, 64);
-const vec4_t smField = SM_RGB(58, 57, 56);
-const vec4_t smText = SM_RGB(236, 230, 219);
-const vec4_t smTextSoft = SM_RGB(211, 202, 189);
-const vec4_t smMuted = SM_RGB(165, 156, 141);
-const vec4_t smSubtle = SM_RGB(123, 115, 102);
-const vec4_t smPrimary = SM_RGB(236, 230, 219);
-const vec4_t smOnPrimary = SM_RGB(20, 19, 16);
-const vec4_t smGold = SM_RGB(201, 169, 97);
-const vec4_t smRing = SM_RGB(215, 201, 177);
+const vec4_t smPage = SM_RGB(8, 8, 8);
+const vec4_t smPanel = SM_RGB(15, 15, 15);
+const vec4_t smRaised = SM_RGB(26, 26, 26);
+const vec4_t smRaisedHover = SM_RGB(38, 38, 38);
+const vec4_t smBorder = SM_RGB(51, 51, 51);
+const vec4_t smField = SM_RGB(15, 15, 15);
+const vec4_t smText = SM_RGB(221, 221, 221);
+const vec4_t smTextSoft = SM_RGB(190, 190, 190);
+const vec4_t smMuted = SM_RGB(153, 153, 153);
+const vec4_t smSubtle = SM_RGB(106, 106, 106);
+const vec4_t smPrimary = SM_RGB(247, 209, 0);
+const vec4_t smOnPrimary = SM_RGB(10, 10, 10);
+const vec4_t smGold = SM_RGB(247, 209, 0);
+const vec4_t smRing = SM_RGB(247, 209, 0);
 const vec4_t smDanger = SM_RGB(239, 68, 68);
 const vec4_t smSuccess = SM_RGB(22, 163, 74);
 const vec4_t smSuccessHover = SM_RGB(21, 128, 61);
