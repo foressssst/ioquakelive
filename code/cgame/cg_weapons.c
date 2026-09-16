@@ -593,7 +593,7 @@ static void CG_RocketTrail(centity_t* ent, const weaponInfo_t* wi) {
         vec3_t leadOffset;
 
         BG_EvaluateTrajectory(&es->pos, t, lastPos);
-        // [ioquakelive] the smoke travels with the projectile when cg_projectileLead moves it
+        // [ioquakelive] the smoke travels with the projectile (CG_ProjectileLeadOffset)
         CG_ProjectileLeadOffset(ent, leadOffset);
         VectorAdd(lastPos, leadOffset, lastPos);
 
@@ -708,7 +708,7 @@ static void CG_PlasmaTrail(centity_t* cent, const weaponInfo_t* wi) {
     es = &cent->currentState;
 
     BG_EvaluateTrajectory(&es->pos, cg.time, origin);
-    // [ioquakelive] the plasma's trail travels with it (cg_projectileLead)
+    // [ioquakelive] the plasma's trail travels with it (CG_ProjectileLeadOffset)
     {
         vec3_t leadOffset;
 

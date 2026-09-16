@@ -515,27 +515,28 @@ CG_Missile
 =================
 CG_ProjectileLeadOffset
 
-[ioquakelive] Not retail's, and off by default. Quake Live's projectiles leave the muzzle 5 units
-ahead (3 ducked) and are stepped forward 25 ms on the server, against Quake 3's 14 units and 50 ms,
-so a rocket's first frame is drawn at about 27 units instead of 59: it comes out of your chest and
-its smoke sits on the camera. cg_projectileLead draws the projectile and its smoke that many units
-further along, and only that: the missile, its damage and where it explodes are the server's and do
-not move. The offset fades out over the first 150 ms, so by the time anything reaches a wall it is
-drawn exactly where it is.
+[ioquakelive] Not retail's. Quake Live's projectiles leave the muzzle 5 units ahead (3 ducked) and
+are stepped forward 25 ms on the server, against Quake 3's 14 units and 50 ms, so a rocket's first
+frame is drawn at about 27 units instead of 59: it comes out of your chest and its smoke sits on the
+camera. This draws the projectile and its smoke further along, and only that: the missile, its
+damage and where it explodes are the server's and do not move. The offset fades out over the first
+150 ms, so by the time anything reaches a wall it is drawn exactly where it is.
+
+The distance is fixed in code on purpose. It was a cvar while it was being tuned; the value the
+player settled on is baked in so no config can change it and everyone sees the same shot.
 =================
 */
+#define CG_PROJECTILE_LEAD 28.0f
+#define CG_PROJECTILE_LEAD_TIME 150.0f
+
 void CG_ProjectileLeadOffset(const centity_t* cent, vec3_t offset) {
     float age, lead;
     vec3_t velocity;
 
     VectorClear(offset);
 
-    if (cg_projectileLead.value <= 0.0f) {
-        return;
-    }
-
     age = (float)(cg.time - cent->currentState.pos.trTime);
-    if (age < 0.0f || age >= 150.0f) {
+    if (age < 0.0f || age >= CG_PROJECTILE_LEAD_TIME) {
         return;
     }
 
@@ -544,7 +545,7 @@ void CG_ProjectileLeadOffset(const centity_t* cent, vec3_t offset) {
         return;
     }
 
-    lead = cg_projectileLead.value * (1.0f - age / 150.0f);
+    lead = CG_PROJECTILE_LEAD * (1.0f - age / CG_PROJECTILE_LEAD_TIME);
     VectorScale(velocity, lead, offset);
 }
 
