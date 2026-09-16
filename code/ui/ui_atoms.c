@@ -239,7 +239,6 @@ qboolean UI_ConsoleCommand(int realTime) {
     // [QL] uix86.dll UI_ConsoleCommand @0x10002ac0 dispatches exactly these 7
     // commands in order, else returns qfalse so the engine handles it. Q3's
     // ui_test / remapShader / ui_teamOrders are not present in the QL binary.
-    if (Q_stricmp(cmd, "ioql_uiclick") == 0) { extern void _UI_KeyEvent(int key, qboolean down); uiInfo.uiDC.cursorx = atof(UI_Argv(1)); uiInfo.uiDC.cursory = atof(UI_Argv(2)); Display_MouseMove(NULL, uiInfo.uiDC.cursorx, uiInfo.uiDC.cursory); if (atoi(UI_Argv(3))) { _UI_KeyEvent(K_MOUSE1, qtrue); _UI_KeyEvent(K_MOUSE1, qfalse); } return qtrue; }  // IOQL_DEBUG_TEMP
 
     if (Q_stricmp(cmd, "listPlayerModels") == 0) {
         UI_ListPlayerModels();
