@@ -399,3 +399,178 @@ void G_TrainingFrame(void) {
         trap_SendServerCommand(human, human == level.sortedClients[0] ? "playMusic music/win" : "playMusic music/loss");
     }
 }
+
+/*
+===============================================================================
+
+CRASH IN SPANISH (g_trainingSpanish)
+
+[ioquakelive] Not retail's: a switch for testing the tour in Spanish. Set
+g_trainingSpanish 1 before starting the Crash Course and every line Crash says
+comes out in Spanish -- the tour's, which live in the map, and the ones the bot
+says on its own. Her voice stays the original: there is no Spanish audio.
+
+The map's lines are keyed by the sound file that goes with them, not by their
+text: the text in qztraining.bsp carries Windows-1252 curly quotes, and matching
+those from source would be a matter of luck. The wav names are plain ASCII and
+one per line.
+
+===============================================================================
+*/
+
+typedef struct {
+    const char* key;  // the line's sound file, or the English text for the bot's own lines
+    const char* es;
+} trainingLine_t;
+
+static const trainingLine_t trainingSpanish[] = {
+    // the tour, in order (info_tour_point message + noise)
+    {"crash_new/01_02.wav", "Hola, bienvenido al juego."},
+    {"crash_new/02_02.wav", "Me llamo Crash."},
+    {"crash_new/03_03.wav",
+     "Estoy aqui para darte algunas indicaciones y de paso ver cuanta experiencia tienes."},
+    {"crash_new/04_04.wav", "En QUAKE LIVE hay jugadores de todos los niveles."},
+    {"crash_new/07a_02.wav", "Esto toma unos 10 minutos nada mas."},
+    {"crash_new/06_05.wav", "Sigueme y empecemos."},
+    {"crash_new/08_08.wav", "Este pasillo es una serie de desafios cortos."},
+    {"crash_new/09_01.wav", "La idea es llegar lo mas lejos que puedas."},
+    {"crash_new/10_06.wav", "En cuanto no puedas seguir, cruza el portal mas cercano."},
+    {"crash_new/11_06.wav", "Nos vemos en la arena."},
+    {"crash_new/12_01.wav", "Excelente, lo lograste."},
+    {"crash_new/13_03.wav", "Esta es una de tantas arenas de combate; resulta que es mi favorita."},
+    {"crash_new/14_02.wav",
+     "Venimos a jugar una partida corta, pero primero quiero mostrarte esto y darte un par de consejos."},
+    {"crash_new/15_03.wav",
+     "Si ya sabes lo que haces, aprieta F3 cuando quieras y saltamos directo a nuestra partida."},
+    {"crash_new/16_07.wav", "Tu objetivo en QUAKE LIVE es simple: matar, fraguear a los enemigos."},
+    {"crash_new/17_01.wav",
+     "Cuando apareces en la arena se le dice spawnear, y partes solo con la ametralladora."},
+    {"crash_new/18_02.wav",
+     "Pero hay armas mas potentes, armadura y salud repartidas por toda la arena."},
+    {"crash_new/19_03.wav",
+     "Tienes que juntar ese equipo para tener mas opciones de fraguear y de seguir vivo."},
+    {"crash_new/20_06.wav",
+     "Cuando te fraguean pierdes tu equipo, pero vuelves a spawnear al tiro con la salud llena."},
+    {"crash_new/21_05.wav", "Acuerdate siempre: spawnear, equiparse, pelear y reponer."},
+    {"crash_new/22_03.wav", "Sigueme y te muestro la arena antes de que peleemos."},
+    {"crash_new/23_01.wav", "Los objetos se recogen con solo pasar por encima."},
+    {"crash_new/24_02.wav",
+     "Cuando recoges un objeto desaparece unos segundos antes de volver a estar disponible."},
+    {"crash_new/25_02.wav", "Este es el lanzacohetes: una de las armas mas populares de QUAKE LIVE."},
+    {"crash_new/26_01.wav", "Casi todas las armas te obligan a pegarle directo al rival."},
+    {"crash_new/27_03.wav",
+     "Pero los cohetes explotan al chocar con cualquier cosa y danan a todos los que esten cerca, tu incluido."},
+    {"crash_new/28_01.wav", "Esta es la armadura roja."},
+    {"crash_new/29_01.wav", "La armadura reduce la salud que pierdes cuando te pegan."},
+    {"crash_new/30_01.wav", "Repon la municion de tus armas juntando las cajas de municion."},
+    {"crash_new/31_03.wav", "Si tu salud baja de 100, junta globos de salud para recuperarte."},
+    {"crash_new/32_01.wav", "Las plataformas de salto te impulsan rapido a las zonas altas."},
+    {"crash_new/33_01.wav", "Esta es la escopeta: muy efectiva en combate cercano."},
+    {"crash_new/34_01.wav", "Por lo general puedes caer o saltar desde mas alto de lo que crees sin hacerte dano."},
+    {"crash_new/35_02.wav",
+     "Los power-ups como esta megasalud dan ventajas temporales que se van con el tiempo."},
+    {"crash_new/36_04.wav", "Listo, creo que estas preparado para una partida."},
+    {"crash_new/37_02.wav",
+     "Vamos a jugar un uno contra uno, asi que solo tienes que sobrevivir e intentar fraguearme."},
+    {"crash_new/37b_07_alt.wav", "Quiero que lo pases bien."},
+    {"crash_new/37c_05.wav", "Asi que capaz juegue mas facil o mas dificil para que este parejo."},
+    {"crash_new/38_01.wav", "Y acuerdate: spawnear, equiparse, pelear y reponer."},
+    {"crash_new/39_01.wav", "Suerte y pasalo bien."},
+
+    // what the bot says on its own, by its English text
+    {"This way! No time to waste!", "Por aca! No hay tiempo que perder!"},
+    {"Let's continue on to the next stop in the tour! Follow me!",
+     "Sigamos a la proxima parada del recorrido! Sigueme!"},
+    {"Follow me to continue the tour! Lets go!", "Sigueme para continuar el recorrido! Vamos!"},
+    {"You've got to be careful in the Arena!", "Tienes que tener cuidado en la Arena!"},
+    {"Well done! Let's get back to the tutorial. Follow me.",
+     "Bien hecho! Volvamos al tutorial. Sigueme."},
+    {"Grab the flag! No time to waste!", "Agarra la bandera! No hay tiempo que perder!"},
+    {"Exit the tutorial whenever you're ready to fight me!",
+     "Sal del tutorial cuando quieras pelear conmigo!"},
+    {"Grab this weapon! No time to waste!", "Agarra esta arma! No hay tiempo que perder!"},
+    {"Grab this ammo! No time to waste!", "Agarra esta municion! No hay tiempo que perder!"},
+    {"Grab this armor! No time to waste!", "Agarra esta armadura! No hay tiempo que perder!"},
+    {"Grab this health! No time to waste!", "Agarra esta salud! No hay tiempo que perder!"},
+    {"Grab this powerup! No time to waste!", "Agarra este power-up! No hay tiempo que perder!"},
+    {"Grab this holdable! No time to waste!", "Agarra este objeto! No hay tiempo que perder!"},
+    {"Grab this item! No time to waste!", "Agarra este objeto! No hay tiempo que perder!"},
+};
+
+/*
+===============
+G_TrainingText
+
+The Spanish line for a key, or the key itself when the switch is off or the line
+is not in the table.
+===============
+*/
+const char* G_TrainingText(const char* key) {
+    int i;
+
+    if (!key || !key[0] || !g_trainingSpanish.integer) {
+        return key;
+    }
+    for (i = 0; i < (int)ARRAY_LEN(trainingSpanish); i++) {
+        if (!Q_stricmp(trainingSpanish[i].key, key)) {
+            return trainingSpanish[i].es;
+        }
+    }
+    return key;
+}
+
+/*
+===============
+G_TrainingSay
+
+A whole chat command ("say <line>" or "botSay <line>") with its line translated,
+or the command untouched when the switch is off or the line is not in the table.
+===============
+*/
+const char* G_TrainingSay(const char* command) {
+    const char* space;
+    const char* text;
+    char verb[16];
+    int len;
+
+    if (!g_trainingSpanish.integer || !command) {
+        return command;
+    }
+    space = strchr(command, ' ');
+    if (!space) {
+        return command;
+    }
+    len = (int)(space - command);
+    if (len >= (int)sizeof(verb)) {
+        return command;
+    }
+    memcpy(verb, command, len);
+    verb[len] = '\0';
+    text = G_TrainingText(space + 1);
+    if (text == space + 1) {
+        return command;
+    }
+    return va("%s %s", verb, text);
+}
+
+/*
+===============
+G_TrainingMessage
+
+A tour stop's line: the map's text, or its Spanish translation, which is found by
+the stop's sound rather than by its text.
+===============
+*/
+const char* G_TrainingMessage(const gentity_t* point) {
+    const char* sound;
+
+    if (!g_trainingSpanish.integer || !point->noise || !point->noise[0]) {
+        return point->message;
+    }
+    // the table's keys drop the "sound/vo/" the map writes in front
+    sound = point->noise;
+    if (!Q_stricmpn(sound, "sound/vo/", 9)) {
+        sound += 9;
+    }
+    return G_TrainingText(sound);
+}

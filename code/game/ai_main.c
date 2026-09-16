@@ -930,6 +930,23 @@ void BotInputToUserCommand(bot_input_t* bi, usercmd_t* ucmd, int delta_angles[3]
         ucmd->rightmove = -127;
     if (bi->actionflags & ACTION_MOVERIGHT)
         ucmd->rightmove = 127;
+
+    // [QL] a bot that means to walk (EA_Walk, which is how the training bot leads the tour)
+    // has to hold its axes at the walking threshold. PM_Pmove drops BUTTON_WALKING as soon as
+    // one of them passes 64 - the guard against no-footstep proxies - and the bot's own speed
+    // of 400 becomes 127 above, so Crash ran the whole Crash Course instead of walking it.
+    if (bi->actionflags & ACTION_WALK) {
+        if (ucmd->forwardmove > 64) {
+            ucmd->forwardmove = 64;
+        } else if (ucmd->forwardmove < -64) {
+            ucmd->forwardmove = -64;
+        }
+        if (ucmd->rightmove > 64) {
+            ucmd->rightmove = 64;
+        } else if (ucmd->rightmove < -64) {
+            ucmd->rightmove = -64;
+        }
+    }
     // jump/moveup
     if (bi->actionflags & ACTION_JUMP)
         ucmd->upmove = 127;

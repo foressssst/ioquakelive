@@ -58,10 +58,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define SM_RGB(r, g, b) {(r) / 255.0f, (g) / 255.0f, (b) / 255.0f, 1.0f}
 
 /*
-Quake Club's dark theme (app/globals.css, ".dark"), checked against the pixels of
-the live site: the page is #171615, a panel #232120, a pill #2c2b2a, the chosen
-pill #ece6db with #141310 on it, muted text #a59c8d, and its gold #c9a961 marks the
-page you are on.
+The colours are Quake Live's own, off the web UI's stylesheet (web.pak
+css/main.css): its page is black, a panel rgba(15,15,15) with a #333 border, its
+text #DDD over #999 and #666, and #f7d100 -- the yellow of the QUAKE LIVE logo --
+is the accent, used for whatever is chosen or under the cursor. The shapes stay
+Quake Club's, which is what these names came from.
 */
 extern const vec4_t smPage;        // --background
 extern const vec4_t smPanel;       // --qc-bg-dark, every card and panel

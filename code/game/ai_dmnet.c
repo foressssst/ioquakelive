@@ -3209,7 +3209,7 @@ int AINode_Training(bot_state_t* bs) {
     // the player died: a word once the body lands, and eyes on them
     if (hstate.eFlags & EF_DEAD) {
         if (!bs->tourSaidCareful && hstate.groundEntityNum != ENTITYNUM_NONE) {
-            trap_EA_Command(bs->client, "botSay You've got to be careful in the Arena!");
+            trap_EA_Command(bs->client, G_TrainingSay("botSay You've got to be careful in the Arena!"));
             bs->tourSaidCareful = 1;
         }
         BotTourLookAt(bs, hinfo.origin);
@@ -3335,7 +3335,7 @@ pushgoal:
                 if (FloatTime() > bs->tourLastNudge + 10 && random() < bs->thinktime * 1.9) {
                     trap_EA_Jump(bs->client);
                     bs->tourLastNudge = FloatTime();
-                    trap_EA_Command(bs->client, "say This way! No time to waste!");
+                    trap_EA_Command(bs->client, G_TrainingSay("say This way! No time to waste!"));
                     trap_SendServerCommand(human, "playSound sound/vo/crash/41a.wav");
                 }
                 return qtrue;
@@ -3367,7 +3367,7 @@ pushgoal:
     if (bs->tourPoint != bs->tourAnnounced) {
         if (bs->tourAnnounced && bs->tourWait && (g_entities[bs->tourAnnounced].spawnflags & 32)) {
             trap_EA_Gesture(bs->client);
-            trap_EA_Command(bs->client, "say Let's continue on to the next stop in the tour! Follow me!");
+            trap_EA_Command(bs->client, G_TrainingSay("say Let's continue on to the next stop in the tour! Follow me!"));
             bs->tourNextTime = (int)(FloatTime() + 3.0);
             bs->tourNextSay = FloatTime() + 7.0;
         }
@@ -3379,7 +3379,7 @@ pushgoal:
         if (FloatTime() > bs->tourNextSay && FloatTime() > bs->tourLastNudge + 10 &&
             random() < bs->thinktime * 1.9) {
             bs->tourLastNudge = FloatTime();
-            trap_EA_Command(bs->client, "botSay This way! No time to waste!");
+            trap_EA_Command(bs->client, G_TrainingSay("botSay This way! No time to waste!"));
             trap_SendServerCommand(human, "playSound sound/vo/crash/41a.wav");
             if (bs->tourGoBack) {
                 bs->tourLostPlayer = 1;
@@ -3394,7 +3394,7 @@ pushgoal:
         FloatTime() > bs->tourLastNudge + 10) {
         BotTourLookAt(bs, hinfo.origin);
         bs->tourLastNudge = FloatTime();
-        trap_EA_Command(bs->client, "say This way! No time to waste!");
+        trap_EA_Command(bs->client, G_TrainingSay("say This way! No time to waste!"));
         trap_SendServerCommand(human, "playSound sound/vo/crash/41a.wav");
         if (bs->tourGoBack) {
             bs->tourLostPlayer = 1;
@@ -3425,7 +3425,7 @@ pushgoal:
                 random() < bs->thinktime * 1.9) {
                 trap_EA_Jump(bs->client);
                 bs->tourLastNudge = FloatTime();
-                trap_EA_Command(bs->client, "say This way! No time to waste!");
+                trap_EA_Command(bs->client, G_TrainingSay("say This way! No time to waste!"));
             }
             return qtrue;
         }
@@ -3471,7 +3471,7 @@ atstop:
             }
         }
         if (message && message[0]) {
-            trap_EA_Command(bs->client, va("botSay %i %f %s", human, (double)chatTime, message));
+            trap_EA_Command(bs->client, va("botSay %i %f %s", human, (double)chatTime, G_TrainingMessage(point)));
             trap_SendServerCommand(human, va("playSound %s", point->noise));
             bs->tourNextSay = FloatTime() + 7.0;
         }
@@ -3483,7 +3483,7 @@ atstop:
         BotTourLookAt(bs, hinfo.origin);
         trap_EA_Jump(bs->client);
         bs->tourLastNudge = FloatTime();
-        trap_EA_Command(bs->client, "say This way! No time to waste!");
+        trap_EA_Command(bs->client, G_TrainingSay("say This way! No time to waste!"));
         trap_SendServerCommand(human, "playSound sound/vo/crash/41a.wav");
         if (bs->tourGoBack) {
             bs->tourLostPlayer = 1;
@@ -3507,7 +3507,7 @@ atstop:
         if (FloatTime() > bs->tourLastNudge + 10 && random() < bs->thinktime * 1.9) {
             trap_EA_Jump(bs->client);
             bs->tourLastNudge = FloatTime();
-            trap_EA_Command(bs->client, "say Grab the flag! No time to waste!");
+            trap_EA_Command(bs->client, G_TrainingSay("say Grab the flag! No time to waste!"));
         }
         return qtrue;
     }
@@ -3597,7 +3597,7 @@ movetogoal:
         trap_EA_Action(bs->client, ACTION_WALK);  // retail's EA_Walk (botlib ea 0x10) sets just this
     }
     if (bs->tourLostPlayer && 170 > distBotHuman) {
-        trap_EA_Command(bs->client, "say Follow me to continue the tour! Lets go!");
+        trap_EA_Command(bs->client, G_TrainingSay("say Follow me to continue the tour! Lets go!"));
         trap_SendServerCommand(human, "playSound sound/vo/crash/39a.wav");
         bs->tourLostPlayer = 0;
         bs->tourNextTime = (int)(FloatTime() + 2);
@@ -3638,7 +3638,7 @@ void AIEnter_FollowMe(bot_state_t* bs) {
     if (g_training.integer) {
         gentity_t* ent = &g_entities[bs->client];
 
-        trap_EA_Command(bs->client, "say Exit the tutorial whenever you're ready to fight me!");
+        trap_EA_Command(bs->client, G_TrainingSay("say Exit the tutorial whenever you're ready to fight me!"));
         ent->flags |= FL_GODMODE | FL_NOPICKUP;
         ent->client->ps.ammo[WP_ROCKET_LAUNCHER] = 9999;
         ent->client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
@@ -3760,7 +3760,7 @@ int AINode_FollowMe(bot_state_t* bs) {
             trap_EA_Gesture(bs->client);
         }
         if (g_training.integer && random() * 100 < 1.5) {
-            trap_EA_Command(bs->client, "say Exit the tutorial whenever you're ready to fight me!");
+            trap_EA_Command(bs->client, G_TrainingSay("say Exit the tutorial whenever you're ready to fight me!"));
             bs->tourNextSay = FloatTime() + 3.0;
         }
         return qtrue;
