@@ -1118,7 +1118,9 @@ static void IN_ProcessEvents(void) {
                 break;
 
             case SDL_MOUSEMOTION:
-                if (mouseActive) {
+                // [ioquakelive] a menu moves its cursor with the system's, so the motion
+                // still counts while the mouse is let go
+                if (mouseActive || (Key_GetCatcher() & KEYCATCH_UI)) {
                     if (!e.motion.xrel && !e.motion.yrel)
                         break;
                     Com_QueueEvent(in_eventTime, SE_MOUSE, e.motion.xrel, e.motion.yrel, 0, NULL);
@@ -1260,6 +1262,11 @@ void IN_Frame(void) {
     if (!cls.glconfig.isFullscreen && (Key_GetCatcher() & KEYCATCH_CONSOLE)) {
         // Console is down in windowed mode
         IN_DeactivateMouse(cls.glconfig.isFullscreen);
+    } else if (Key_GetCatcher() & KEYCATCH_UI) {
+        // [ioquakelive] A menu is up. Quake Live has no cursor of its own out there: it
+        // lets go of the mouse and you move the one the system draws, fullscreen included,
+        // so the pointer is passed as qfalse rather than the real mode.
+        IN_DeactivateMouse(qfalse);
     } else if (!cls.glconfig.isFullscreen && loading) {
         // Loading in windowed mode
         IN_DeactivateMouse(cls.glconfig.isFullscreen);

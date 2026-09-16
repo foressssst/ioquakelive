@@ -522,11 +522,10 @@ void _UI_Refresh(int realtime) {
         UI_BuildFindPlayerList(qfalse);
     }
 
-    // draw cursor
+    // [ioquakelive] no cursor of our own: Quake Live lets the system draw the pointer
+    // in its menus (the engine lets the mouse go while a menu is up, sdl_input.c), and
+    // drawing a second one on top only made two.
     UI_SetColor(NULL);
-    if (Menu_Count() > 0 && (trap_Key_GetCatcher() & KEYCATCH_UI)) {
-        UI_DrawHandlePic(uiInfo.uiDC.cursorx - 16, uiInfo.uiDC.cursory - 16, 32, 32, uiInfo.uiDC.Assets.cursor);
-    }
 }
 
 /*
