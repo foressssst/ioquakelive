@@ -1963,6 +1963,31 @@ the page is the "settings_ingame" menu, which is not fullscreen so the match is
 still drawn under it, and closing it goes back to the match's menu.
 ===============
 */
+/*
+===============
+UI_Settings_SetTab
+
+[ioquakelive] The main menu's Settings tile links straight to a tab (Controls, Video, Sound, Your
+Player); this picks it before the page opens. The name is the tab's own, as stTabNames has it.
+===============
+*/
+void UI_Settings_SetTab(const char* name) {
+    int i;
+
+    if (!st.loaded) {
+        st.tab = ST_TAB_BASIC;
+        st.previewYaw[0] = 150;
+        st.previewYaw[1] = 210;
+        st.loaded = qtrue;
+    }
+    for (i = 0; i < ST_NUM_TABS; i++) {
+        if (!Q_stricmp(stTabNames[i], name)) {
+            st.tab = i;
+            return;
+        }
+    }
+}
+
 void UI_Settings_Open(void) {
     menuDef_t* menu;
     itemDef_t* item;
