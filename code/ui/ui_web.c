@@ -569,15 +569,22 @@ COMPONENTS
 ===============================================================================
 */
 
-#define SM_BUTTON_SPACING 0.6f
+#define SM_BUTTON_SPACING 1.0f
 
+// a button's label: the page's title face, upper case and spaced; a size step up only on the
+// tall buttons, so a pill's word stays the size of the pills around it
 static float SM_ButtonText(float h) {
-    return h >= SM_BUTTON_H ? 12.0f : 11.0f;
+    return h >= SM_BUTTON_H + 4.0f ? 13.0f : 12.0f;
 }
 
+static void SM_Upper(const char* text, char* out, int size);
+
 float SM_ButtonWidth(const char* text, float height) {
-    return SM_AdvanceBold(FONT_SANS, SM_ButtonText(height), text, -1, qtrue) +
-           (height >= SM_BUTTON_H ? 44.0f : 32.0f);
+    char upper[256];
+
+    SM_Upper(text, upper, sizeof(upper));
+    return SM_SpacedWidth(SM_FONT_TITLE, SM_ButtonText(height), upper, SM_BUTTON_SPACING) +
+           (height >= SM_BUTTON_H ? 44.0f : 28.0f);
 }
 
 /*
@@ -594,7 +601,7 @@ void SM_Button(float x, float y, float w, float h, const char* text, int style, 
     // the label is the page's own: upper case, spaced, and drawn once. The pass a pixel over that
     // stands in for a bold weight reads as a smudge at this size, which is what made a button's
     // word grey and hard to pick out against its own block.
-    float size = SM_ButtonText(h) + 3.0f;
+    float size = SM_ButtonText(h);
     char upper[256];
     const float* fg;
     vec4_t hover;
@@ -618,8 +625,8 @@ void SM_Button(float x, float y, float w, float h, const char* text, int style, 
             fg = over ? smGold : smText;
             break;
     }
-    SM_SpacedText(x + w * 0.5f - SM_SpacedWidth(SM_FONT_TITLE, size, upper, 1.4f) * 0.5f,
-                  SM_Baseline(SM_FONT_TITLE, size, y, h), SM_FONT_TITLE, size, fg, upper, 1.4f, qfalse);
+    SM_SpacedText(x + w * 0.5f - SM_SpacedWidth(SM_FONT_TITLE, size, upper, SM_BUTTON_SPACING) * 0.5f,
+                  SM_Baseline(SM_FONT_TITLE, size, y, h), SM_FONT_TITLE, size, fg, upper, SM_BUTTON_SPACING, qfalse);
 }
 
 /*
