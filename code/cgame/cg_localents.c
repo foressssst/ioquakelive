@@ -460,14 +460,44 @@ void CG_AddFadeRGB(localEntity_t* le) {
 
 /*
 ==================
+CG_SmokeNearView
+
+[ioquakelive] Keeps a smoke puff (and a blood mist) out of the view's way. Quake 3 and retail
+(cgamex86.dll 0x1001f4e0) free a puff once the view is within the radius it started with and
+draw it until then; a puff grows 8 units past that radius (16 a mist), so near the end of its
+life the view could sit inside one that was still drawn, and the screen went grey. wolfcamql
+keeps the same test but, by default (cg_allowSpritePassThrough 1), does not free the puff: it
+only goes undrawn while the view is inside it.
+
+Here a puff fades out over the radius it is drawn at before the view reaches it, is not drawn
+while the view is inside it, and is not freed, so it is still there once the view has gone
+through. Scales the puff's alpha; returns qfalse when it is not to be drawn.
+==================
+*/
+static qboolean CG_SmokeNearView(refEntity_t* re) {
+    vec3_t delta;
+    float len, near;
+
+    VectorSubtract(re->origin, cg.refdef.vieworg, delta);
+    len = VectorLength(delta);
+    if (len <= re->radius) {
+        return qfalse;
+    }
+    if (len < 2.0f * re->radius) {
+        near = (len - re->radius) / re->radius;
+        re->shaderRGBA[3] = (byte)(re->shaderRGBA[3] * near);
+    }
+    return qtrue;
+}
+
+/*
+==================
 CG_AddMoveScaleFade
 ==================
 */
 static void CG_AddMoveScaleFade(localEntity_t* le) {
     refEntity_t* re;
     float c;
-    vec3_t delta;
-    float len;
 
     re = &le->refEntity;
 
@@ -487,12 +517,8 @@ static void CG_AddMoveScaleFade(localEntity_t* le) {
 
     BG_EvaluateTrajectory(&le->pos, cg.time, re->origin);
 
-    // if the view would be "inside" the sprite, kill the sprite
-    // so it doesn't add too much overdraw
-    VectorSubtract(re->origin, cg.refdef.vieworg, delta);
-    len = VectorLength(delta);
-    if (len < le->radius) {
-        CG_FreeLocalEntity(le);
+    // [ioquakelive] out of the view's way, and kept (CG_SmokeNearView)
+    if (!CG_SmokeNearView(re)) {
         return;
     }
 
@@ -511,8 +537,6 @@ There are often many of these, so it needs to be simple.
 static void CG_AddScaleFade(localEntity_t* le) {
     refEntity_t* re;
     float c;
-    vec3_t delta;
-    float len;
 
     re = &le->refEntity;
 
@@ -522,12 +546,8 @@ static void CG_AddScaleFade(localEntity_t* le) {
     re->shaderRGBA[3] = 0xff * c * le->color[3];
     re->radius = le->radius * (1.0 - c) + 8;
 
-    // if the view would be "inside" the sprite, kill the sprite
-    // so it doesn't add too much overdraw
-    VectorSubtract(re->origin, cg.refdef.vieworg, delta);
-    len = VectorLength(delta);
-    if (len < le->radius) {
-        CG_FreeLocalEntity(le);
+    // [ioquakelive] out of the view's way, and kept (CG_SmokeNearView)
+    if (!CG_SmokeNearView(re)) {
         return;
     }
 
@@ -547,8 +567,6 @@ There are often 100+ of these, so it needs to be simple.
 static void CG_AddFallScaleFade(localEntity_t* le) {
     refEntity_t* re;
     float c;
-    vec3_t delta;
-    float len;
 
     re = &le->refEntity;
 
@@ -569,12 +587,8 @@ static void CG_AddFallScaleFade(localEntity_t* le) {
         re->radius = le->radius * (1.0 - c) + 16;
     }
 
-    // if the view would be "inside" the sprite, kill the sprite
-    // so it doesn't add too much overdraw
-    VectorSubtract(re->origin, cg.refdef.vieworg, delta);
-    len = VectorLength(delta);
-    if (len < le->radius) {
-        CG_FreeLocalEntity(le);
+    // [ioquakelive] out of the view's way, and kept (CG_SmokeNearView)
+    if (!CG_SmokeNearView(re)) {
         return;
     }
 
