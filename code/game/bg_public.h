@@ -389,6 +389,9 @@ typedef enum {
 #define EF_AWARD_DEFEND 0x00010000      // draw a defend sprite
 #define EF_AWARD_ASSIST 0x00020000      // draw a assist sprite
 #define EF_AWARD_DENIED 0x00040000      // denied
+// [QL] a nail that bounces. qagamex86.dll's G_MissileImpact tests the bounce mask as 0x100030 and
+// counts only these against g_nailbounce, so a nail with the plain EF_BOUNCE never stops bouncing
+#define EF_NAILBOUNCE 0x00100000
 
 // NOTE: may not have more than 16
 // [QL] Reordered from Q3 - flags come first, then powerups.

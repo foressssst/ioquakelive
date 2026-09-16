@@ -587,6 +587,9 @@ typedef struct weaponInfo_s {
 
     sfxHandle_t readySound;
     sfxHandle_t firingSound;
+    // [QL] cgamex86.dll 0x100510fd: the chaingun's firingSound is a background whine that plays
+    // alongside each shot, not instead of it like the lightning gun's
+    qboolean loopFireSound;
 } weaponInfo_t;
 
 // each IT_* item has an associated itemInfo_t

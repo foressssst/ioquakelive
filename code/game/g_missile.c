@@ -25,11 +25,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // Binary uses 1000/sv_fps.integer instead of hardcoded 50ms
 #define MISSILE_PRESTEP_TIME (1000 / sv_fps.integer)
 
-// [QL] s.eFlags bit set by weapon_nailgun_fire on a bouncing nail. G_MissileImpact
-// tests the bounce mask as 0x100030 (EF_BOUNCE|EF_BOUNCE_HALF|EF_QL_NAILBOUNCE) and
-// caps nail bounces at g_nailbounce. Not yet named in bg_public.h (see report).
-#define EF_QL_NAILBOUNCE 0x100000
-
 // [QL] surface flag G_MissileImpact tests (qagamex86.dll 0x1005c3ab) before letting a rocket
 // explode through the surface
 #define SURF_QL_DMGTHROUGH 0x200000
@@ -303,11 +298,11 @@ void G_MissileImpact(gentity_t* ent, trace_t* trace) {
     other = &g_entities[trace->entityNum];
 
     // check for bounce
-    // [QL] the bounce mask is 0x100030 (EF_BOUNCE|EF_BOUNCE_HALF|EF_QL_NAILBOUNCE). Only
-    //      EF_QL_NAILBOUNCE missiles are capped (g_nailbounce); every bounce counts.
+    // [QL] the bounce mask is 0x100030 (EF_BOUNCE|EF_BOUNCE_HALF|EF_NAILBOUNCE). Only
+    //      EF_NAILBOUNCE missiles are capped (g_nailbounce); every bounce counts.
     if (!other->takedamage &&
-        (ent->s.eFlags & (EF_BOUNCE | EF_BOUNCE_HALF | EF_QL_NAILBOUNCE)) &&
-        (!(ent->s.eFlags & EF_QL_NAILBOUNCE) || ent->bouncecount < g_nailbounce.integer)) {
+        (ent->s.eFlags & (EF_BOUNCE | EF_BOUNCE_HALF | EF_NAILBOUNCE)) &&
+        (!(ent->s.eFlags & EF_NAILBOUNCE) || ent->bouncecount < g_nailbounce.integer)) {
         G_BounceMissile(ent, trace);
         G_AddEvent(ent, EV_GRENADE_BOUNCE, 0);
         ent->bouncecount++;
@@ -900,7 +895,7 @@ fire_nail
 [QL] NOTE: qagamex86.dll has NO standalone fire_nail; the nail spawn is inlined
 into weapon_nailgun_fire (0x1006da90, g_weapon.c). This Q3-style helper is kept
 only because g_weapon.c still calls it. The binary sets the bouncing-nail flag
-as EF_QL_NAILBOUNCE (0x100000), not EF_BOUNCE. See report.
+as EF_NAILBOUNCE (0x100000), not EF_BOUNCE. See report.
 =================
 */
 gentity_t* fire_nail(gentity_t* self, vec3_t start, vec3_t forward, vec3_t right, vec3_t up) {
@@ -928,10 +923,12 @@ gentity_t* fire_nail(gentity_t* self, vec3_t start, vec3_t forward, vec3_t right
     bolt->s.pos.trTime = level.time;
     VectorCopy(start, bolt->s.pos.trBase);
 
-    // [QL] nail bounce
+    // [QL] nail bounce. It has to be EF_NAILBOUNCE: G_MissileImpact only counts those against
+    // g_nailbounce, so a nail marked with the plain EF_BOUNCE bounced around until its 4.5 seconds
+    // ran out.
     if (g_nailbounce.integer) {
         if ((rand() % 100) >= (100 - g_nailbouncepercentage.integer)) {
-            bolt->s.eFlags = EF_BOUNCE;
+            bolt->s.eFlags = EF_NAILBOUNCE;
         }
     }
 
