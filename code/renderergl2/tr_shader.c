@@ -31,6 +31,9 @@ static shaderStage_t stages[MAX_SHADER_STAGES];
 static shader_t shader;
 static texModInfo_t texMods[MAX_SHADER_STAGES][TR_MAX_TEXMODS];
 static int shader_realLightmapIndex;
+// [QL] quakelive_steam.exe 0x58b524: "novlcollapse" in the shader, which keeps its stages when
+// r_vertexLight collapses everything else
+static qboolean shader_noVLCollapse;
 
 #define FILE_HASH_SIZE 1024
 static shader_t* hashTable[FILE_HASH_SIZE];
@@ -1705,8 +1708,12 @@ static qboolean ParseShader(char** text) {
         } else if (!Q_stricmp(token, "sort")) {  // sort
             ParseSort(text);
             continue;
-        } else if (!Q_stricmp(token, "novlcollapse")) {  // novicollapse
-            shader.lightmapIndex = LIGHTMAP_NONE;        // FIXME not actually sure if this works
+        } else if (!Q_stricmp(token, "novlcollapse")) {
+            // [QL] quakelive_steam.exe 0x457572: this shader keeps its stages with r_vertexLight, it
+            // does not lose its lightmap. Quake Live's bright skins carry it, because the colour a
+            // player is forced to comes from a second stage with rgbGen entity that the collapse threw
+            // away, leaving the skin white.
+            shader_noVLCollapse = qtrue;
             continue;
         } else {
             ri.Printf(PRINT_WARNING, "WARNING: unknown general shader parameter '%s' in '%s'\n", token, shader.name);
@@ -2631,6 +2638,7 @@ static void InitShaderEx(const char* name, int lightmapIndex, int realLightmapIn
     Q_strncpyz(shader.name, name, sizeof(shader.name));
     shader.lightmapIndex = lightmapIndex;
     shader_realLightmapIndex = realLightmapIndex;
+    shader_noVLCollapse = qfalse;
 
     for (i = 0; i < MAX_SHADER_STAGES; i++) {
         stages[i].bundle[0].texMods = texMods[i];
@@ -2796,7 +2804,9 @@ static shader_t* FinishShader(void) {
     //
     // if we are in r_vertexLight mode, never use a lightmap texture
     //
-    if (stage > 1 && ((r_vertexLight->integer && !r_uiFullScreen->integer) || glConfig.hardwareType == GLHW_PERMEDIA2)) {
+    // [QL] 0x4581bd: not when the shader says novlcollapse
+    if (stage > 1 && !shader_noVLCollapse &&
+        ((r_vertexLight->integer && !r_uiFullScreen->integer) || glConfig.hardwareType == GLHW_PERMEDIA2)) {
         VertexLightingCollapse();
         hasLightmapStage = qfalse;
     }
