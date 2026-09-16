@@ -2384,14 +2384,13 @@ static void Com_MigrateConfig(void) {
         }
     }
 
-    // [QL] 4: the projectile lead and the background frame limits, none of which existed before
+    // [QL] 4: the frame limits for a window in the background, neither of which existed before
     if (version->integer < 4) {
         static const struct {
             const char* name;
             const char* oldValue;
             const char* newValue;
         } defaults[] = {
-            {"cg_projectileLead", "0", "24"},
             {"com_maxfpsUnfocused", "0", "60"},
             {"com_maxfpsMinimized", "0", "10"},
         };
