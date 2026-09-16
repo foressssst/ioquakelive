@@ -2622,12 +2622,66 @@ void CL_Web_ChangeHash_f(void) {
 		web_path++;
 	}
     
+    // [ioquakelive] the browser's two destinations this build has a page for: the
+    // settings, and anything else, which in retail is its home page. Retail's in-game
+    // "Main Menu" button sends "/" and used to close the menu here.
     if (Q_stristr(web_path, "settings")) {
-        Com_Printf("Opening in-game controls menu.\n");
         VM_Call(uivm, UI_SET_ACTIVE_MENU, UIMENU_MAIN_OPTIONS);
     } else {
-        VM_Call(uivm, UI_SET_ACTIVE_MENU, UIMENU_NONE);
+        VM_Call(uivm, UI_SET_ACTIVE_MENU, UIMENU_HOME);
     }
+}
+
+/*
+====================
+CL_Web_HideBrowser_f
+
+[QL] quakelive_steam.exe 0x4f24d0: hides the browser and gives the screen back to
+the game (web_browserActive 0, the browser's key catcher cleared). Its App sends it
+from the "return to your match" banner. Here the front end is the UI module, so the
+same thing is closing it -- and only over a match, since without one there is
+nothing to go back to.
+====================
+*/
+static void CL_Web_HideBrowser_f(void) {
+    if (!uivm || clc.state != CA_ACTIVE) {
+        return;
+    }
+    VM_Call(uivm, UI_SET_ACTIVE_MENU, UIMENU_NONE);
+}
+
+/*
+====================
+CL_OpenURL
+
+[ioquakelive] Opens a link outside the game. Retail's web UI handed its links to
+the Steam overlay (qz_instance.OpenSteamOverlayURL), which opens the system
+browser when the overlay is off; without Steam that is all this build can do.
+
+Only the UI module asks for it (UI_SYS_OPENURL). Nothing but a plain https link
+is opened: the address goes to the shell, and a server that could reach this
+would be handing the shell whatever it liked.
+====================
+*/
+void CL_OpenURL(const char* url) {
+    const char* p;
+
+    if (!url || Q_strncmp(url, "https://", 8)) {
+        Com_Printf("openURL: refused, not an https link\n");
+        return;
+    }
+    for (p = url; *p; p++) {
+        if (*p <= ' ' || *p >= 127 || *p == '"' || *p == '\'' || *p == '\\') {
+            Com_Printf("openURL: refused, bad character in the link\n");
+            return;
+        }
+    }
+    if (p - url > 512) {
+        Com_Printf("openURL: refused, link too long\n");
+        return;
+    }
+    Com_Printf("opening %s\n", url);
+    Sys_OpenURL(url);
 }
 
 
@@ -2776,7 +2830,6 @@ void CL_InitAliases(void) {
 // =====================================================================
 
 
-static void CL_DebugUIMenu_f(void) { VM_Call(uivm, UI_SET_ACTIVE_MENU, atoi(Cmd_Argv(1))); }  // IOQL_DEBUG_TEMP
 
 /*
 ====================
@@ -2956,7 +3009,7 @@ void CL_Init(void) {
     Cmd_AddCommand("fs_referencedList", CL_ReferencedPK3List_f);
     Cmd_AddCommand("model", CL_SetModel_f);
     Cmd_AddCommand("web_changeHash", CL_Web_ChangeHash_f);
-    Cmd_AddCommand("ioql_uimenu", CL_DebugUIMenu_f);  // IOQL_DEBUG_TEMP
+    Cmd_AddCommand("web_hideBrowser", CL_Web_HideBrowser_f);
     // [QL] additional client commands
     Cmd_AddCommand("postprocess_restart", CL_PostProcessRestart_f);
     Cmd_AddCommand("userinfo", CL_Userinfo_f);

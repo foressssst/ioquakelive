@@ -20,50 +20,36 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 //
-// ui_web.c -- [QL] what every page of retail's web UI drawn here has in common
+// ui_web.c -- [QL] what every page of the front end has in common
 //
-// See ui_web.h. The web UI's own art is in web.pak, which is not shipped: pak00's
-// fonts stand in for it, and a second pass one pixel to the right stands in for
-// Noto Sans Bold.
+// See ui_web.h.
 //
 
 #include "ui_web.h"
 
-/*
-The Quake Club palette, its dark theme (app/globals.css, ".dark"). Retail's web UI
-and Quake Club are built out of nearly the same greys -- #242121 against #232120,
-#1C1919 against #1c1b1a -- but Quake Club's are warm and its text is #ece6db rather
-than #DDD, which is the whole difference in feel. The accent is its gold, #c9a961,
-where retail used #f7d100.
-*/
-const vec4_t smText = SM_RGB(236, 230, 219);        // --qc-text-primary
-const vec4_t smYellow = SM_RGB(201, 169, 97);       // --qc-chip-border, the accent
-const vec4_t smDim = {23 / 255.0f, 22 / 255.0f, 21 / 255.0f, 0.94f};  // --qc-bg-page
-const vec4_t smCard = SM_RGB(44, 43, 42);           // --qc-bg-medium
-const vec4_t smCardHover = SM_RGB(54, 53, 52);      // --qc-bg-elevated
-const vec4_t smRowOdd = SM_RGB(35, 33, 32);         // --qc-bg-dark
-const vec4_t smRowEven = SM_RGB(28, 27, 26);        // --qc-bg-pure
-const vec4_t smInput = SM_RGB(58, 57, 56);          // --input
-const vec4_t smGrey = SM_RGB(67, 65, 64);           // --border
-const vec4_t smFocus = SM_RGB(215, 201, 177);       // --ring
-const vec4_t smLighter = SM_RGB(67, 65, 64);
-const vec4_t smSelectText = SM_RGB(211, 202, 189);  // --qc-text-secondary
-const vec4_t smOptionText = SM_RGB(165, 156, 141);  // --qc-text-muted
-const vec4_t smDark = SM_RGB(15, 15, 14);           // --qc-bg-darkest
-const vec4_t smArrow = SM_RGB(165, 156, 141);
-const vec4_t smLink = SM_RGB(201, 169, 97);
-const vec4_t smLinkHover = SM_RGB(225, 216, 202);   // --qc-gold
-const vec4_t smButton = SM_RGB(54, 53, 52);
-const vec4_t smButtonHover = SM_RGB(67, 65, 64);
-const vec4_t smButtonBorder = SM_RGB(67, 65, 64);
-const vec4_t smDialog = SM_RGB(44, 43, 42);
-const vec4_t smShadow = {0.0f, 0.0f, 0.0f, 0.48f};  // --shadow-opacity
-const vec4_t smOnAccent = SM_RGB(23, 18, 10);       // --qc-chip-text, over the gold
-const vec4_t smSubtle = SM_RGB(123, 115, 102);      // --qc-text-subtle
+const vec4_t smPage = SM_RGB(23, 22, 21);
+const vec4_t smPanel = SM_RGB(35, 33, 32);
+const vec4_t smRaised = SM_RGB(44, 43, 42);
+const vec4_t smRaisedHover = SM_RGB(54, 53, 52);
+const vec4_t smBorder = SM_RGB(67, 65, 64);
+const vec4_t smField = SM_RGB(58, 57, 56);
+const vec4_t smText = SM_RGB(236, 230, 219);
+const vec4_t smTextSoft = SM_RGB(211, 202, 189);
+const vec4_t smMuted = SM_RGB(165, 156, 141);
+const vec4_t smSubtle = SM_RGB(123, 115, 102);
+const vec4_t smPrimary = SM_RGB(236, 230, 219);
+const vec4_t smOnPrimary = SM_RGB(20, 19, 16);
+const vec4_t smGold = SM_RGB(201, 169, 97);
+const vec4_t smRing = SM_RGB(215, 201, 177);
+const vec4_t smDanger = SM_RGB(239, 68, 68);
+const vec4_t smSuccess = SM_RGB(22, 163, 74);
+const vec4_t smSuccessHover = SM_RGB(21, 128, 61);
+const vec4_t smShadow = {0.0f, 0.0f, 0.0f, 0.48f};
 
 float smScale;
 float smTop;
 float smVW;
+float smBottom;
 float smMX, smMY;
 
 void SM_Frame(void) {
@@ -76,8 +62,10 @@ void SM_Frame(void) {
     }
     smVW = w / smScale;
     smTop = (h - SM_VIEW_H * smScale) * 0.5f;
+    smBottom = (h - smTop) / smScale;
     smMX = (uiInfo.uiDC.cursorx * uiInfo.uiDC.xscale + uiInfo.uiDC.bias) / smScale;
     smMY = (uiInfo.uiDC.cursory * uiInfo.uiDC.yscale - smTop) / smScale;
+    SM_LoadFonts();
 }
 
 smRect_t SM_R(float x, float y, float w, float h) {
@@ -130,16 +118,13 @@ void SM_Fill(float x, float y, float w, float h, const float* color, const smRec
 ===============
 SM_Round
 
-A filled rectangle with Quake Club's rounded corners (--qc-radius-md is 10px and
---qc-radius-lg 14). There is no rounded-corner texture to hand, so each corner is
-drawn as a few horizontal slices along the arc; the slice is two pixels so a 10px
-corner costs five of them and not ten, which on a laptop is the difference between
-free and not. Only the surfaces that read as pieces are rounded -- cards, panels,
-buttons, the row under the cursor -- never the whole striped list.
+A filled rectangle with rounded corners. There is no rounded-corner texture to
+hand, so each corner is drawn as horizontal slices along the arc, as thin as one
+screen pixel so the edge stays smooth at any resolution.
 ===============
 */
 void SM_Round(float x, float y, float w, float h, float r, const float* color, const smRect_t* clip) {
-    float step = 2.0f;
+    float step;
     int slices, k;
 
     if (r > w * 0.5f) {
@@ -148,19 +133,22 @@ void SM_Round(float x, float y, float w, float h, float r, const float* color, c
     if (r > h * 0.5f) {
         r = h * 0.5f;
     }
-    if (r < 1.0f) {
+    if (r * smScale < 1.0f) {
         SM_Fill(x, y, w, h, color, clip);
         return;
     }
     SM_Fill(x, y + r, w, h - 2 * r, color, clip);
 
-    slices = (int)(r / step + 0.5f);
+    slices = (int)(r * smScale + 0.5f);
+    if (slices > 24) {
+        slices = 24;
+    }
     if (slices < 1) {
         slices = 1;
     }
     step = r / slices;
     for (k = 0; k < slices; k++) {
-        float mid = r - (k + 0.5f) * step;          // distance from the straight edge
+        float mid = r - (k + 0.5f) * step;  // distance from the straight edge
         float inset = r - (float)sqrt(r * r - mid * mid);
         float sy = k * step;
 
@@ -169,18 +157,22 @@ void SM_Round(float x, float y, float w, float h, float r, const float* color, c
     }
 }
 
+void SM_Pill(float x, float y, float w, float h, const float* color, const smRect_t* clip) {
+    SM_Round(x, y, w, h, h * 0.5f, color, clip);
+}
+
 /*
 ===============
 SM_Shadow
 
-What floats over the page carries one (0 20px 50px rgba(0,0,0,0.25) plus a tighter
-0 4px 12px). Drawn as a few rounded plates, each a little larger and fainter than
-the one above it, which is as close as stretch pics get to a blur.
+What floats over the page carries a soft shadow. Drawn as a few rounded plates,
+each a little larger and fainter than the one above it, which is as close as
+stretch pics get to a blur.
 ===============
 */
 void SM_Shadow(float x, float y, float w, float h, float r) {
     static const float spread[4] = {3.0f, 8.0f, 16.0f, 26.0f};
-    static const float alpha[4] = {0.22f, 0.15f, 0.09f, 0.05f};
+    static const float alpha[4] = {0.20f, 0.13f, 0.08f, 0.04f};
     int k;
 
     for (k = 3; k >= 0; k--) {
@@ -206,9 +198,42 @@ void SM_Pic(float x, float y, float w, float h, qhandle_t shader, const smRect_t
         return;
     }
     // what the clip leaves, in texture coordinates too
-    trap_R_SetColor(NULL);
     trap_R_DrawStretchPic(r.x * smScale, smTop + r.y * smScale, r.w * smScale, r.h * smScale, (r.x - x) / w,
                           (r.y - y) / h, (r.x + r.w - x) / w, (r.y + r.h - y) / h, shader);
+}
+
+// a CSS border triangle, 10 wide and 5 high (Start Match's react-select arrow)
+void SM_Arrow(float x, float y, qboolean up) {
+    int k;
+
+    for (k = 0; k < 5; k++) {
+        float w = up ? 2.0f * (k + 1) : 10.0f - 2.0f * k;
+
+        SM_Fill(x + (10.0f - w) * 0.5f, y + k, w, 1, smMuted, NULL);
+    }
+}
+
+// the thin chevron of a Quake Club select, 10 wide
+void SM_Chevron(float x, float y, qboolean up, const float* color) {
+    int k;
+
+    for (k = 0; k < 5; k++) {
+        float yy = up ? y + 4 - k : y + k;
+
+        SM_Fill(x + k, yy, 1.6f, 1.6f, color, NULL);
+        SM_Fill(x + 8.4f - k, yy, 1.6f, 1.6f, color, NULL);
+    }
+}
+
+// an X, for what closes
+void SM_Cross(float x, float y, float size, const float* color) {
+    int n = (int)size;
+    int k;
+
+    for (k = 0; k < n; k++) {
+        SM_Fill(x + k, y + k, 1.8f, 1.8f, color, NULL);
+        SM_Fill(x + size - 1 - k, y + k, 1.8f, 1.8f, color, NULL);
+    }
 }
 
 /*
@@ -234,12 +259,65 @@ void SM_To640(float x, float y, float w, float h, float* out) {
     out[3] = h * smScale / yscale;
 }
 
+/*
+===============================================================================
+
+TYPE
+
+===============================================================================
+*/
+
+static struct {
+    qboolean tried;
+    int regular, strong;  // font indices, -1 when Barlow is not there
+} smFonts = {qfalse, -1, -1};
+
+void SM_LoadFonts(void) {
+    if (smFonts.tried) {
+        return;
+    }
+    smFonts.tried = qtrue;
+    smFonts.regular = trap_R_Font_Register("fonts/Barlow-Regular.ttf");
+    smFonts.strong = trap_R_Font_Register("fonts/Barlow-Bold.ttf");
+    if (smFonts.regular < 0 || smFonts.strong < 0) {
+        Com_Printf("^3front end: Barlow not found in pak01, falling back to pak00's fonts\n");
+        smFonts.regular = smFonts.strong = -1;
+    }
+}
+
+// the face a page's font and weight come out in
+static int SM_Face(int font, qboolean bold) {
+    if (smFonts.regular >= 0 && (font == FONT_SANS || font == FONT_DEFAULT)) {
+        return (bold || font == FONT_DEFAULT) ? smFonts.strong : smFonts.regular;
+    }
+    return font;
+}
+
+static qboolean SM_IsBarlow(int face) {
+    return face >= 0 && (face == smFonts.regular || face == smFonts.strong);
+}
+
+static float SM_FaceEm(int face) {
+    if (SM_IsBarlow(face)) {
+        return SM_BARLOW_EM;
+    }
+    return face == FONT_DEFAULT ? SM_HANDEL_EM : SM_SANS_EM;
+}
+
 float SM_Em(int font) {
-    return font == FONT_DEFAULT ? SM_HANDEL_EM : SM_SANS_EM;
+    return SM_FaceEm(SM_Face(font, qfalse));
 }
 
 float SM_Baseline(int font, float size, float lineTop, float lineHeight) {
-    return lineTop + lineHeight * 0.5f + size * (font == FONT_DEFAULT ? SM_HANDEL_BASE : SM_SANS_BASE);
+    int face = SM_Face(font, qfalse);
+    float base;
+
+    if (SM_IsBarlow(face)) {
+        base = SM_BARLOW_BASE;
+    } else {
+        base = face == FONT_DEFAULT ? SM_HANDEL_BASE : SM_SANS_BASE;
+    }
+    return lineTop + lineHeight * 0.5f + size * base;
 }
 
 // whether a line of text at this baseline shows whole inside the clip
@@ -249,17 +327,17 @@ qboolean SM_TextInside(float baseline, float size, const smRect_t* clip) {
 
 /*
 ===============
-SM_Advance
+SM_AdvanceFace
 
 A string's advance in CSS pixels. fontstash's box ends at the last glyph's ink,
 so a bar is measured after the text and taken off again: that keeps trailing
 spaces and the side bearings.
 ===============
 */
-float SM_Advance(int font, float size, const char* text, int len) {
+static float SM_AdvanceFace(int face, float size, const char* text, int len) {
     char buf[MAX_STRING_CHARS];
     float withBar[5], bar[5];
-    float px = size * SM_Em(font) * smScale;
+    float px = size * SM_FaceEm(face) * smScale;
 
     if (len < 0) {
         len = (int)strlen(text);
@@ -273,9 +351,17 @@ float SM_Advance(int font, float size, const char* text, int len) {
     memcpy(buf, text, len);
     buf[len] = '|';
     buf[len + 1] = '\0';
-    trap_R_Font_TextExtents(buf, 0, font, px, -1, withBar);
-    trap_R_Font_TextExtents("|", 0, font, px, -1, bar);
+    trap_R_Font_TextExtents(buf, 0, face, px, -1, withBar);
+    trap_R_Font_TextExtents("|", 0, face, px, -1, bar);
     return (withBar[2] - bar[2]) / smScale;
+}
+
+float SM_Advance(int font, float size, const char* text, int len) {
+    return SM_AdvanceFace(SM_Face(font, font == FONT_DEFAULT), size, text, len);
+}
+
+float SM_AdvanceBold(int font, float size, const char* text, int len, qboolean bold) {
+    return SM_AdvanceFace(SM_Face(font, bold), size, text, len);
 }
 
 // the characters of text that fit in width
@@ -294,16 +380,10 @@ int SM_Fit(int font, float size, const char* text, float width) {
     return len;
 }
 
-// pak00 has no Noto Sans Bold: a second pass a pixel to the right stands in for it
-int SM_BoldShift(void) {
-    int shift = (int)(smScale + 0.5f);
-
-    return shift < 1 ? 1 : shift;
-}
-
 void SM_Text(float x, float baseline, int font, float size, const float* color, const char* text, int limit,
              qboolean bold) {
-    float px = size * SM_Em(font) * smScale;
+    int face = SM_Face(font, bold);
+    float px = size * SM_FaceEm(face) * smScale;
     int sx = (int)(x * smScale + 0.5f);
     int sy = (int)(smTop + baseline * smScale + 0.5f);
 
@@ -311,15 +391,19 @@ void SM_Text(float x, float baseline, int font, float size, const float* color, 
         return;
     }
     trap_R_SetColor(color);
-    trap_R_Font_DrawString(sx, sy, text, font, px, limit, NULL, 0);
-    if (bold) {
-        trap_R_Font_DrawString(sx + SM_BoldShift(), sy, text, font, px, limit, NULL, 0);
+    trap_R_Font_DrawString(sx, sy, text, face, px, limit, NULL, 0);
+    // pak00 has no bold weight: a second pass a pixel to the right stands in for it
+    if (bold && !SM_IsBarlow(face)) {
+        int shift = (int)(smScale + 0.5f);
+
+        trap_R_Font_DrawString(sx + (shift < 1 ? 1 : shift), sy, text, face, px, limit, NULL, 0);
     }
     trap_R_SetColor(NULL);
 }
 
 void SM_Centered(float middle, float baseline, float size, const float* color, const char* text, qboolean bold) {
-    SM_Text(middle - SM_Advance(FONT_SANS, size, text, -1) * 0.5f, baseline, FONT_SANS, size, color, text, -1, bold);
+    SM_Text(middle - SM_AdvanceBold(FONT_SANS, size, text, -1, bold) * 0.5f, baseline, FONT_SANS, size, color, text, -1,
+            bold);
 }
 
 // letter-spacing comes after every character, the last one too
@@ -340,8 +424,54 @@ void SM_SpacedText(float x, float baseline, int font, float size, const float* c
     for (; *text; text++) {
         c[0] = *text;
         SM_Text(x, baseline, font, size, color, c, -1, bold);
-        x += SM_Advance(font, size, c, 1) + spacing;
+        x += SM_AdvanceBold(font, size, c, 1, bold) + spacing;
     }
+}
+
+/*
+===============
+SM_Label
+
+Quake Club's label: bold, upper case, and letter-spaced -- nav items, pills, table
+heads and the small gold line over a title. The text is upper-cased here so the
+callers can keep retail's own capitalisation.
+===============
+*/
+static void SM_Upper(const char* text, char* out, int size) {
+    int i;
+
+    for (i = 0; text[i] && i < size - 1; i++) {
+        char c = text[i];
+
+        out[i] = (c >= 'a' && c <= 'z') ? (char)(c - 'a' + 'A') : c;
+    }
+    out[i] = '\0';
+}
+
+float SM_LabelWidth(float size, const char* text, float spacing) {
+    char upper[256];
+    char c[2];
+    const char* p;
+    float w = 0;
+
+    SM_Upper(text, upper, sizeof(upper));
+    c[1] = '\0';
+    for (p = upper; *p; p++) {
+        c[0] = *p;
+        w += SM_AdvanceBold(FONT_SANS, size, c, 1, qtrue) + spacing;
+    }
+    return w - spacing;
+}
+
+void SM_Label(float x, float baseline, float size, const float* color, const char* text, float spacing) {
+    char upper[256];
+
+    SM_Upper(text, upper, sizeof(upper));
+    if (spacing <= 0) {
+        SM_Text(x, baseline, FONT_SANS, size, color, upper, -1, qtrue);
+        return;
+    }
+    SM_SpacedText(x, baseline, FONT_SANS, size, color, upper, spacing, qtrue);
 }
 
 /*
@@ -395,144 +525,152 @@ int SM_Wrap(int font, float size, const char* text, float width, int* starts, in
     return lines;
 }
 
-// a CSS border triangle, 10 wide and 5 high
-void SM_Arrow(float x, float y, qboolean up) {
-    int k;
-
-    for (k = 0; k < 5; k++) {
-        float w = up ? 2.0f * (k + 1) : 10.0f - 2.0f * k;
-
-        SM_Fill(x + (10.0f - w) * 0.5f, y + k, w, 1, smArrow, NULL);
-    }
-}
-
 /*
 ===============================================================================
 
-MOVEMENT
-
-Quake Club's vocabulary, from app/qc-motion.css, and the reasoning is its own:
-four curves because a curve says what KIND of thing is moving, and more than four
-stop meaning anything; three durations because 140ms was already what the site
-used most, so the scale was built on the habit it had rather than a new one.
-
-  suave    what arrives and stays. The default: when in doubt, this one.
-  firme    a whole journey, where the travel is the thing being shown.
-  corte    what leaves. Going out is not the curve of coming in: something that
-           appears is settling into place, something that goes has decided.
-  resorte  the accent, overshoots and comes back. Sparingly.
+COMPONENTS
 
 ===============================================================================
 */
 
-// the one-dimensional cubic Bezier the CSS curves describe, solved for y at x
-static float SM_Bezier(float x, float x1, float y1, float x2, float y2) {
-    float t = x;
-    int k;
+#define SM_BUTTON_SPACING 1.4f
 
-    // Newton on x(t) - x. Four passes is plenty for curves this tame, and the
-    // ones here are all monotone in x so it cannot wander off.
-    for (k = 0; k < 4; k++) {
-        float mt = 1.0f - t;
-        float xt = 3.0f * mt * mt * t * x1 + 3.0f * mt * t * t * x2 + t * t * t;
-        float dx = 3.0f * mt * mt * x1 + 6.0f * mt * t * (x2 - x1) + 3.0f * t * t * (1.0f - x2);
+static float SM_ButtonText(float h) {
+    return h >= SM_BUTTON_H ? 12.0f : 11.0f;
+}
 
-        if (dx < 0.0001f && dx > -0.0001f) {
+float SM_ButtonWidth(const char* text, float height) {
+    return SM_LabelWidth(SM_ButtonText(height), text, SM_BUTTON_SPACING) + (height >= SM_BUTTON_H ? 44.0f : 32.0f);
+}
+
+/*
+===============
+SM_Button
+
+A pill, like every button of the site. The primary one is the cream of --primary
+with dark text; the rest sit on --card with muted text that comes up to the
+foreground under the cursor.
+===============
+*/
+void SM_Button(float x, float y, float w, float h, const char* text, int style, qboolean over) {
+    float size = SM_ButtonText(h);
+    float tw = SM_LabelWidth(size, text, SM_BUTTON_SPACING);
+    const float* bg;
+    const float* fg;
+    vec4_t hover;
+
+    switch (style) {
+        case SM_BUTTON_PRIMARY:
+            // bg-primary/90 under the cursor
+            hover[0] = smPrimary[0] * 0.9f + smPanel[0] * 0.1f;
+            hover[1] = smPrimary[1] * 0.9f + smPanel[1] * 0.1f;
+            hover[2] = smPrimary[2] * 0.9f + smPanel[2] * 0.1f;
+            hover[3] = 1.0f;
+            bg = over ? hover : smPrimary;
+            fg = smOnPrimary;
             break;
-        }
-        t -= (xt - x) / dx;
-        if (t < 0.0f) {
-            t = 0.0f;
-        } else if (t > 1.0f) {
-            t = 1.0f;
-        }
-    }
-    {
-        float mt = 1.0f - t;
-
-        return 3.0f * mt * mt * t * y1 + 3.0f * mt * t * t * y2 + t * t * t;
-    }
-}
-
-float SM_Curve(int ease, float t) {
-    if (t <= 0.0f) {
-        return 0.0f;
-    }
-    if (t >= 1.0f) {
-        return 1.0f;
-    }
-    switch (ease) {
-        case SM_EASE_FIRME:
-            return SM_Bezier(t, 0.65f, 0.0f, 0.35f, 1.0f);
-        case SM_EASE_CORTE:
-            return SM_Bezier(t, 0.4f, 0.0f, 1.0f, 1.0f);
-        case SM_EASE_RESORTE:
-            return SM_Bezier(t, 0.34f, 1.4f, 0.64f, 1.0f);
-        case SM_EASE_SUAVE:
+        case SM_BUTTON_DANGER:
+            bg = over ? smDanger : smRaised;
+            fg = over ? smText : smDanger;
+            break;
+        case SM_BUTTON_SECONDARY:
         default:
-            return SM_Bezier(t, 0.16f, 1.0f, 0.3f, 1.0f);
+            bg = over ? smRaisedHover : smRaised;
+            fg = over ? smText : smMuted;
+            break;
     }
+    SM_Pill(x, y, w, h, bg, NULL);
+    SM_Label(x + (w - tw) * 0.5f, SM_Baseline(FONT_SANS, size, y, h), size, fg, text, SM_BUTTON_SPACING);
 }
 
 /*
 ===============
-SM_Progress
+SM_Switch
 
-How far into an animation that started at startTime we are, after its share of the
-stagger. The delay is 32ms per item and stops at the seventh: past that the wait
-shows and the last one to arrive looks broken.
+shadcn's switch as Quake Club dresses it: a pill track, cream when on with a dark
+thumb, --input when off with a cream one.
 ===============
 */
-float SM_Progress(int startTime, int duration, int index) {
-    int delay = index * SM_STAGGER;
-    float t;
+void SM_Switch(float x, float y, qboolean on, qboolean over) {
+    float pad = 2.0f;
+    float thumb = SM_SWITCH_H - 2 * pad;
+    vec4_t track;
 
-    if (index > SM_STAGGER_LAST) {
-        delay = SM_STAGGER_LAST * SM_STAGGER;
+    if (on) {
+        Vector4Copy(smPrimary, track);
+    } else {
+        Vector4Copy(over ? smBorder : smField, track);
     }
-    if (index < 0) {
-        delay = 0;
-    }
-    if (duration <= 0) {
-        return 1.0f;
-    }
-    t = (float)(uiInfo.uiDC.realTime - startTime - delay) / (float)duration;
-    return t < 0.0f ? 0.0f : t > 1.0f ? 1.0f : t;
+    SM_Pill(x, y, SM_SWITCH_W, SM_SWITCH_H, track, NULL);
+    SM_Pill(on ? x + SM_SWITCH_W - pad - thumb : x + pad, y + pad, thumb, thumb, on ? smOnPrimary : smText, NULL);
 }
 
 /*
 ===============
-SM_EnterRise
+SM_SliderTrack
 
-The gesture everything on a page arrives with: it fades in and rises the last few
-pixels. The travel is short on purpose -- what says something arrived is the
-movement, not the distance.
+shadcn's slider: a 6px pill track, the part up to the value in the foreground
+cream, and a 16px round thumb. The track takes the field colour so it reads on a
+panel.
 ===============
 */
-void SM_EnterRise(int startTime, int index, float* alpha, float* dy) {
-    float t = SM_Curve(SM_EASE_SUAVE, SM_Progress(startTime, SM_DUR_2, index));
+void SM_SliderTrack(float x, float y, float w, float frac, qboolean over) {
+    float track = 6.0f;
+    float ty = y + (SM_SLIDER_H - track) * 0.5f;
+    float tx;
 
-    *alpha = t;
-    *dy = (1.0f - t) * 8.0f;
+    if (frac < 0) {
+        frac = 0;
+    } else if (frac > 1) {
+        frac = 1;
+    }
+    tx = x + frac * (w - SM_SLIDER_H);
+    SM_Pill(x, ty, w, track, smField, NULL);
+    if (frac > 0) {
+        SM_Pill(x, ty, tx - x + SM_SLIDER_H * 0.5f, track, smPrimary, NULL);
+    }
+    if (over) {
+        vec4_t ring = {smRing[0], smRing[1], smRing[2], 0.25f};
+
+        SM_Pill(tx - 4, y - 4, SM_SLIDER_H + 8, SM_SLIDER_H + 8, ring, NULL);
+    }
+    SM_Pill(tx, y, SM_SLIDER_H, SM_SLIDER_H, smPrimary, NULL);
+    SM_Pill(tx + 1.5f, y + 1.5f, SM_SLIDER_H - 3, SM_SLIDER_H - 3, smText, NULL);
 }
 
-// what appears in the middle of the screen grows from 96%, not from nothing: a
-// thing born out of nowhere reads as a trick, one that grows a little reads as
-// having been there and come closer
-void SM_EnterZoom(int startTime, float* alpha, float* scale) {
-    float t = SM_Curve(SM_EASE_SUAVE, SM_Progress(startTime, SM_DUR_2, 0));
-
-    *alpha = t;
-    *scale = 0.96f + 0.04f * t;
+// a field: a rounded box on --input, its border lit when it has the focus
+void SM_FieldBox(float x, float y, float w, float h, qboolean focused, qboolean over, const smRect_t* clip) {
+    SM_Round(x, y, w, h, SM_RADIUS_SM, focused ? smRing : over ? smBorder : smField, clip);
+    SM_Round(x + 1, y + 1, w - 2, h - 2, SM_RADIUS_SM - 1, smRaised, clip);
 }
 
-// a colour faded by an animation's alpha
-void SM_Fade(const float* color, float alpha, vec4_t out) {
-    out[0] = color[0];
-    out[1] = color[1];
-    out[2] = color[2];
-    out[3] = color[3] * alpha;
+// a key cap, as the site's kbd: returns its width
+float SM_Kbd(float x, float y, const char* text, qboolean waiting, const smRect_t* clip) {
+    float size = 12.0f;
+    float w = SM_LabelWidth(size, text, 0.6f) + 16;
+    float h = 24.0f;
+    smRect_t whole;
+
+    if (w < h) {
+        w = h;
+    }
+    whole = SM_R(x, y, w, h);
+
+    SM_Round(x, y, w, h, SM_RADIUS_SM, waiting ? smGold : smBorder, clip);
+    SM_Round(x, y, w, h - 2, SM_RADIUS_SM, waiting ? smGold : smRaisedHover, clip);
+    if (SM_TextInside(SM_Baseline(FONT_SANS, size, y, h - 2), size, clip ? clip : &whole)) {
+        SM_Label(x + 8, SM_Baseline(FONT_SANS, size, y, h - 2), size, waiting ? smOnPrimary : smText, text, 0.6f);
+    }
+    return w;
 }
+
+/*
+===============================================================================
+
+WHAT THE CURSOR IS OVER
+
+===============================================================================
+*/
 
 smHit_t smHits[SM_MAX_HITS], smLastHits[SM_MAX_HITS];
 int smNumHits, smNumLastHits;
@@ -564,4 +702,22 @@ const smHit_t* SM_HitAt(float x, float y) {
 
 qboolean SM_Over(int type, int index) {
     return smHasUnder && smUnder.type == type && smUnder.index == index;
+}
+
+// what every page does before and after drawing: the frame, and the hit list swap
+void SM_BeginFrame(void) {
+    const smHit_t* under;
+
+    SM_Frame();
+    under = SM_HitAt(smMX, smMY);
+    smHasUnder = under != NULL;
+    if (under) {
+        smUnder = *under;
+    }
+    smNumHits = 0;
+}
+
+void SM_EndFrame(void) {
+    memcpy(smLastHits, smHits, smNumHits * sizeof(smHits[0]));
+    smNumLastHits = smNumHits;
 }
