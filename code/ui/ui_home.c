@@ -74,13 +74,14 @@ static struct {
     qboolean loaded;
     qhandle_t backdrop;
     qhandle_t logo;
+    int entered;  // realTime the page began arriving
 } hm;
 
 // #f7d100 over black, the two colours the front end is built out of
 static const vec4_t hmNavBg = {0.0f, 0.0f, 0.0f, 0.8f};
 static const vec4_t hmWash = {0.0f, 0.0f, 0.0f, 0.72f};
-static const vec4_t hmCardBg = {36 / 255.0f, 33 / 255.0f, 33 / 255.0f, 0.92f};
-static const vec4_t hmCardOver = {60 / 255.0f, 57 / 255.0f, 57 / 255.0f, 0.96f};
+static const vec4_t hmCardBg = {35 / 255.0f, 33 / 255.0f, 32 / 255.0f, 0.94f};   // --qc-bg-dark
+static const vec4_t hmCardOver = {54 / 255.0f, 53 / 255.0f, 52 / 255.0f, 0.98f};  // --qc-bg-elevated
 
 /*
 ===============
@@ -146,7 +147,6 @@ void UI_Home_Nav(int active) {
 
     UI_Home_Load();
     SM_Fill(0, 0, smVW, HM_NAV_H, hmNavBg, NULL);
-    SM_Fill(0, HM_NAV_H, smVW, 1, smGrey, NULL);
     SM_Pic(x, 14, 47 * 2.6f, 47, hm.logo, NULL);
     x += 47 * 2.6f + 44;
 
@@ -168,12 +168,12 @@ void UI_Home_Nav(int active) {
         if (on || over) {
             vec4_t tint = {0.0f, 0.0f, 0.0f, 0.3f};
 
-            SM_Fill(ix, 0, w[i], HM_NAV_H, tint, NULL);
+            SM_Round(ix + 6, 10, w[i] - 12, HM_NAV_H - 20, SM_RADIUS_MD, tint, NULL);
         }
         SM_SpacedText(ix + 22, SM_Baseline(FONT_DEFAULT, 18, 0, HM_NAV_H), FONT_DEFAULT, 18,
                       (on || over) ? smYellow : smText, names[i], 2, qfalse);
         if (on) {
-            SM_Fill(ix, HM_NAV_H - 3, w[i], 3, smYellow, NULL);
+            SM_Round(ix + 6, HM_NAV_H - 12, w[i] - 12, 3, 1.5f, smYellow, NULL);
         }
         SM_Hit(ix, 0, w[i], HM_NAV_H, HM_HIT_NAV, i, NULL);
     }
@@ -218,21 +218,35 @@ static void UI_Home_DrawCard(int i, float x, float y) {
     int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
     int lines, k;
 
-    SM_Fill(x, y, HM_CARD_W, HM_CARD_H, over ? hmCardOver : hmCardBg, NULL);
-    SM_Fill(x, y, HM_CARD_W, 3, over ? smYellow : smGrey, NULL);
-    SM_SpacedText(x + 26, SM_Baseline(FONT_DEFAULT, 26, y + 40, 34), FONT_DEFAULT, 26, over ? smYellow : smText,
+    // the card lifts and takes the accent under the cursor, the way the site's do
+    if (over) {
+        y -= SM_LIFT;
+        SM_Shadow(x, y, HM_CARD_W, HM_CARD_H, SM_RADIUS_LG);
+    }
+    SM_Round(x, y, HM_CARD_W, HM_CARD_H, SM_RADIUS_LG, over ? hmCardOver : hmCardBg, NULL);
+    SM_Round(x + 22, y + 22, 3, 26, 1.5f, over ? smYellow : smGrey, NULL);
+    SM_SpacedText(x + 38, SM_Baseline(FONT_DEFAULT, 26, y + 20, 34), FONT_DEFAULT, 26, over ? smYellow : smText,
                   card->title, 1, qfalse);
 
-    lines = SM_Wrap(FONT_SANS, 15, card->note, HM_CARD_W - 52, starts, lens);
+    lines = SM_Wrap(FONT_SANS, 15, card->note, HM_CARD_W - 64, starts, lens);
     for (k = 0; k < lines; k++) {
-        SM_Text(x + 26, SM_Baseline(FONT_SANS, 15, y + 104 + k * 24, 24), FONT_SANS, 15, smSelectText,
-                card->note + starts[k], lens[k], qfalse);
+        SM_Text(x + 38, SM_Baseline(FONT_SANS, 15, y + 86 + k * 24, 24), FONT_SANS, 15,
+                over ? smSelectText : smOptionText, card->note + starts[k], lens[k], qfalse);
     }
     SM_Hit(x, y, HM_CARD_W, HM_CARD_H, HM_HIT_CARD, i, NULL);
 }
 
+// the page begins arriving when the menu opens it
+void UI_Home_Open(void) {
+    hm.entered = uiInfo.uiDC.realTime;
+}
+
 void UI_Home_Paint(void) {
     const smHit_t* under;
+
+    if (!hm.entered) {
+        hm.entered = uiInfo.uiDC.realTime;
+    }
     float total = HM_NUM_CARDS * HM_CARD_W + (HM_NUM_CARDS - 1) * HM_CARD_GAP;
     float x = (smVW - total) * 0.5f;
     float y = ((float)SM_VIEW_H - HM_CARD_H) * 0.5f + 20;
@@ -251,7 +265,13 @@ void UI_Home_Paint(void) {
     UI_Home_Nav(-1);
 
     for (i = 0; i < HM_NUM_CARDS; i++) {
-        UI_Home_DrawCard(i, x + i * (HM_CARD_W + HM_CARD_GAP), y);
+        float alpha, dy;
+
+        SM_EnterRise(hm.entered, i, &alpha, &dy);
+        if (alpha <= 0.01f) {
+            continue;
+        }
+        UI_Home_DrawCard(i, x + i * (HM_CARD_W + HM_CARD_GAP), y + dy);
     }
 
     trap_Cvar_VariableStringBuffer("version", version, sizeof(version));

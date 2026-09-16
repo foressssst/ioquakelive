@@ -75,6 +75,8 @@ extern const vec4_t smButtonHover;
 extern const vec4_t smButtonBorder;
 extern const vec4_t smDialog;      // the modal
 extern const vec4_t smShadow;      // .Select-menu's box-shadow
+extern const vec4_t smOnAccent;    // text over a gold fill
+extern const vec4_t smSubtle;      // --qc-text-subtle
 
 typedef struct {
     float x, y, w, h;
@@ -92,7 +94,42 @@ smRect_t SM_R(float x, float y, float w, float h);
 qboolean SM_In(const smRect_t* r, float x, float y);
 qboolean SM_Clip(smRect_t* r, const smRect_t* clip);
 
+/*
+Quake Club's motion vocabulary (app/qc-motion.css). Four curves, because a curve
+says what kind of thing is moving and more than four stop meaning anything; three
+durations, scaled off the 140ms the site already used most.
+*/
+typedef enum {
+    SM_EASE_SUAVE,   // arrives and stays -- the default
+    SM_EASE_FIRME,   // a whole journey
+    SM_EASE_CORTE,   // leaves, and does not come back
+    SM_EASE_RESORTE  // the accent: overshoots a little
+} smEase_t;
+
+#define SM_DUR_1 140  // colour, opacity, hover: must not be noticed
+#define SM_DUR_2 260  // something moves, resizes, or arrives in place
+#define SM_DUR_3 420  // panels and bars that enter the scene
+
+#define SM_STAGGER 32      // between the items of a list
+#define SM_STAGGER_LAST 6  // past the seventh the wait shows
+
+// Quake Club's corner radii (--qc-radius-md and -lg)
+#define SM_RADIUS_SM 6.0f
+#define SM_RADIUS_MD 10.0f
+#define SM_RADIUS_LG 14.0f
+
+float SM_Curve(int ease, float t);
+float SM_Progress(int startTime, int duration, int index);
+void SM_EnterRise(int startTime, int index, float* alpha, float* dy);
+void SM_EnterZoom(int startTime, float* alpha, float* scale);
+void SM_Fade(const float* color, float alpha, vec4_t out);
+
 void SM_Fill(float x, float y, float w, float h, const float* color, const smRect_t* clip);
+void SM_Round(float x, float y, float w, float h, float r, const float* color, const smRect_t* clip);
+void SM_Shadow(float x, float y, float w, float h, float r);
+
+// what the cursor is on lifts a pixel or two, the way the site's rows and cards do
+#define SM_LIFT 2.0f
 void SM_FillScreen(const float* color);
 void SM_Pic(float x, float y, float w, float h, qhandle_t shader, const smRect_t* clip);
 void SM_Arrow(float x, float y, qboolean up);

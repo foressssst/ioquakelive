@@ -990,6 +990,7 @@ void UI_Settings_Close(void);
 
 // [QL] the main menu and the bar the pages sit under; see ui_home.c
 #define UI_HOME 602
+void UI_Home_Open(void);
 void UI_Home_Paint(void);
 qboolean UI_Home_HandleKey(int key);
 void UI_Home_Backdrop(void);
@@ -998,12 +999,6 @@ qboolean UI_Home_NavClick(void);
 void UI_LoadDemos(void);
 void UI_BuildPlayerList(void);
 
-// [QL] the in-game menu; see ui_pause.c
-#define UI_PAUSE 604
-void UI_Pause_Open(void);
-void UI_Pause_Paint(void);
-qboolean UI_Pause_HandleKey(int key);
-void UI_Pause_MouseUp(void);
 
 // [QL] the Replays page; see ui_replays.c
 #define UI_REPLAYS 603
