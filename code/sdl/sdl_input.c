@@ -572,6 +572,11 @@ static void IN_InitJoystick(void) {
     gamepad = NULL;
     memset(&stick_state, '\0', sizeof(stick_state));
 
+    // [QL] quakelive_steam.exe 0x4eacd0 clears ui_joyavail before looking for a
+    // device and sets it once one is open (0x4eae66); the settings page shows its
+    // Gamepad section only while it is above 0
+    Cvar_Set("ui_joyavail", "0");
+
     // SDL 2.0.4 requires SDL_INIT_JOYSTICK to be initialized separately from
     // SDL_INIT_GAMECONTROLLER for SDL_JoystickOpen() to work correctly,
     // despite https://wiki.libsdl.org/SDL_Init (retrieved 2016-08-16)
@@ -630,6 +635,7 @@ static void IN_InitJoystick(void) {
     if (SDL_IsGameController(in_joystickNo->integer))
         gamepad = SDL_GameControllerOpen(in_joystickNo->integer);
 
+    Cvar_Set("ui_joyavail", "1");
     Com_DPrintf("Joystick %d opened\n", in_joystickNo->integer);
     Com_DPrintf("Name:       %s\n", SDL_JoystickNameForIndex(in_joystickNo->integer));
     Com_DPrintf("Axes:       %d\n", SDL_JoystickNumAxes(stick));

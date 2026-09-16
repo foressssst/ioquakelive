@@ -1096,6 +1096,7 @@ void QDECL Sys_Error(const char* error, ...) __attribute__((noreturn, format(pri
 void Sys_Quit(void) __attribute__((noreturn));
 char* Sys_GetClipboardData(void);  // note that this isn't journaled...
 void Sys_SetClipboardData(const char* text);  // [CNQ3] console mark mode copy
+void Sys_OpenURL(const char* url);            // [ioquakelive] a link in the player's browser
 
 void Sys_Print(const char* msg);
 

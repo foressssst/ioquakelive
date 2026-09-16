@@ -360,30 +360,44 @@ static void CG_OffsetFirstPersonView(void) {
 	angles[PITCH] += ratio * cg.fall_value;
 #endif
 
-    // add angles based on velocity
+    /*
+    [QL] cgamex86.dll CG_OffsetFirstPersonView @0x1004d2d9. Where Quake 3 has five
+    cvars -- cg_runpitch, cg_runroll, cg_bobpitch, cg_bobroll and the cheat-locked
+    cg_bobup -- Quake Live has one, cg_bob (0.25, and not a cheat), and bakes their
+    factors in: 0.002 for the angles, 0.005 for the height. So cg_bob scales all of
+    it at once, and at 0 the view neither bobs nor leans with the run, since retail
+    puts the velocity lean inside the same test.
+
+    Two more things differ from Quake 3: crouching doubles the bob (Q3 trebles it)
+    and it doubles the height with it, and the height is held to 0..5 (Q3 caps it
+    at 6 and lets it go negative).
+    */
     VectorCopy(cg.predictedPlayerState.velocity, predictedVelocity);
 
-    delta = DotProduct(predictedVelocity, cg.refdef.viewaxis[0]);
-    angles[PITCH] += delta * cg_runpitch.value;
+    if (cg_bob.value != 0.0f) {
+        // make sure the bob is visible even at low speeds
+        speed = cg.xyspeed < 200 ? 200 : cg.xyspeed;
 
-    delta = DotProduct(predictedVelocity, cg.refdef.viewaxis[1]);
-    angles[ROLL] -= delta * cg_runroll.value;
+        delta = cg.bobfracsin * cg_bob.value * speed;
+        if (cg.predictedPlayerState.pm_flags & PMF_DUCKED) {
+            delta += delta;  // crouching
+        }
+        bob = delta * 0.005f;  // the height takes the same delta, before the angle factor
+        delta *= 0.002f;
 
-    // add angles based on bob
+        angles[PITCH] += delta + DotProduct(predictedVelocity, cg.refdef.viewaxis[0]) * 0.002f;
+        if (cg.bobcycle & 1) {
+            delta = -delta;
+        }
+        angles[ROLL] += delta - DotProduct(predictedVelocity, cg.refdef.viewaxis[1]) * 0.005f;
 
-    // make sure the bob is visible even at low speeds
-    speed = cg.xyspeed > 200 ? cg.xyspeed : 200;
-
-    delta = cg.bobfracsin * cg_bobpitch.value * speed;
-    if (cg.predictedPlayerState.pm_flags & PMF_DUCKED)
-        delta *= 3;  // crouching
-    angles[PITCH] += delta;
-    delta = cg.bobfracsin * cg_bobroll.value * speed;
-    if (cg.predictedPlayerState.pm_flags & PMF_DUCKED)
-        delta *= 3;  // crouching accentuates roll
-    if (cg.bobcycle & 1)
-        delta = -delta;
-    angles[ROLL] += delta;
+        if (bob < 0) {
+            bob = 0;
+        } else if (bob > 5) {
+            bob = 5;
+        }
+        origin[2] += bob;
+    }
 
     //===================================
 
@@ -395,14 +409,6 @@ static void CG_OffsetFirstPersonView(void) {
     if (timeDelta < DUCK_TIME) {
         cg.refdef.vieworg[2] -= cg.duckChange * (DUCK_TIME - timeDelta) / DUCK_TIME;
     }
-
-    // add bob height
-    bob = cg.bobfracsin * cg.xyspeed * cg_bobup.value;
-    if (bob > 6) {
-        bob = 6;
-    }
-
-    origin[2] += bob;
 
     // add fall height
     delta = cg.time - cg.landTime;

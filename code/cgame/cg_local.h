@@ -1713,11 +1713,6 @@ extern markPoly_t cg_markPolys[MAX_MARK_POLYS];
 #define CVAR_CG_RANGE 0x1000
 
 extern vmCvar_t cg_centertime;
-extern vmCvar_t cg_runpitch;
-extern vmCvar_t cg_runroll;
-extern vmCvar_t cg_bobup;
-extern vmCvar_t cg_bobpitch;
-extern vmCvar_t cg_bobroll;
 extern vmCvar_t cg_swingSpeed;
 extern vmCvar_t cg_shadows;
 extern vmCvar_t cg_drawTimer;
@@ -1765,6 +1760,7 @@ extern vmCvar_t cg_showmiss;
 extern vmCvar_t cg_footsteps;
 extern vmCvar_t cg_addMarks;
 extern vmCvar_t cg_brassTime;
+extern vmCvar_t cg_bob;  // [QL] how much the view bobs and leans; retail's only bob cvar
 extern vmCvar_t cg_gun_frame;
 extern vmCvar_t cg_gun_x;
 extern vmCvar_t cg_gun_y;

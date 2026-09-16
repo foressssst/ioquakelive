@@ -145,7 +145,14 @@ typedef enum {
     UI_FACTORY_CVAR,
     UI_ARENA_COUNT,
     UI_ARENA_VALUE,
-    UI_CVAR_LATCHEDSTRINGBUFFER
+    UI_CVAR_LATCHEDSTRINGBUFFER,
+    // [ioquakelive] what cgame already has as CG_R_FONT_REGISTER: loads a TrueType
+    // font by name for the front end's own typeface, returns its index or -1
+    UI_R_FONT_REGISTER,
+    // [ioquakelive] opens a link in the player's browser, which is what retail's
+    // web UI did through the Steam overlay (OpenSteamOverlayURL). Only the UI can
+    // ask for it: a console command would let a server send one by stufftext.
+    UI_SYS_OPENURL
 } uiImport_t;
 
 typedef enum {
@@ -155,7 +162,10 @@ typedef enum {
     UIMENU_MAIN_OPTIONS,
     UIMENU_BAD_CD_KEY,  // [Q3 remnant] unused - do not remove (would shift enum values)
     UIMENU_TEAM,
-    UIMENU_POSTGAME
+    UIMENU_POSTGAME,
+    // [ioquakelive] the front end over a match: what retail's "Main Menu" button did by
+    // showing the browser at its home page. Last, so nothing above moves.
+    UIMENU_HOME
 } uiMenuCommand_t;
 
 #define SORT_HOST 0

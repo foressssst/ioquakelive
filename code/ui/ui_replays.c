@@ -27,31 +27,27 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // carries the match it came from when the browser has it in localStorage, which
 // is a thing only its stats service fills in, so here a row is the demo.
 //
-// Same list, same click, drawn with ui_web.c under the same bar as the rest.
+// Same list, same click, in a panel the way quakeclub.com lays out its tables.
 //
 
 #include "ui_web.h"
 
-#define RP_ROW_H 42.0f
-#define RP_PAGE_MAX_W 1100.0f
-#define RP_PAGE_MARGIN 60.0f
-#define RP_TOP 118.0f
-#define RP_BOTTOM 46.0f
+#define RP_ROW_H 44.0f
+#define RP_PAD 25.0f
 
 typedef enum {
     RP_HIT_NONE,
     RP_HIT_ROW,
     RP_HIT_TRACK,
-    RP_HIT_THUMB
+    RP_HIT_THUMB,
+    RP_HIT_REFRESH
 } rpHitType_t;
 
 static struct {
-    float page, pageW;
     float listTop, view, content;
     float scroll;
     qboolean scrollDrag;
     float scrollGrab;
-    int chosen;
 } rp;
 
 static float RP_ClampScroll(float scroll) {
@@ -61,79 +57,89 @@ static float RP_ClampScroll(float scroll) {
     return scroll < 0 ? 0 : scroll;
 }
 
-static void RP_Frame(void) {
-    rp.pageW = smVW - 2 * RP_PAGE_MARGIN;
-    if (rp.pageW > RP_PAGE_MAX_W) {
-        rp.pageW = RP_PAGE_MAX_W;
-    }
-    rp.page = (smVW - rp.pageW) * 0.5f;
-    rp.listTop = RP_TOP + 62;
-    rp.view = (float)SM_VIEW_H - RP_BOTTOM - rp.listTop;
-    rp.content = uiInfo.demoCount * RP_ROW_H;
-}
-
-static void RP_DrawScrollbar(void) {
-    float x = rp.page + rp.pageW + 12;
+static void RP_DrawScrollbar(float x) {
     float thumbH = rp.view * rp.view / rp.content;
     float thumbY;
 
-    if (thumbH < 24) {
-        thumbH = 24;
+    if (thumbH < 28) {
+        thumbH = 28;
     }
     thumbY = rp.listTop + (rp.view - thumbH) * rp.scroll / (rp.content - rp.view);
-    SM_Fill(x, rp.listTop, 6, rp.view, smRowEven, NULL);
-    SM_Hit(x, rp.listTop, 6, rp.view, RP_HIT_TRACK, 0, NULL);
-    SM_Fill(x, thumbY, 6, thumbH, (SM_Over(RP_HIT_THUMB, 0) || rp.scrollDrag) ? smArrow : smGrey, NULL);
-    SM_Hit(x, thumbY, 6, thumbH, RP_HIT_THUMB, 0, NULL);
+    SM_Hit(x - 4, rp.listTop, 14, rp.view, RP_HIT_TRACK, 0, NULL);
+    SM_Pill(x, thumbY, 6, thumbH, (SM_Over(RP_HIT_THUMB, 0) || rp.scrollDrag) ? smMuted : smBorder, NULL);
+    SM_Hit(x - 4, thumbY, 14, thumbH, RP_HIT_THUMB, 0, NULL);
 }
 
 static void RP_DrawPage(void) {
+    float left = UI_Home_Left();
+    float y = HM_NAV_H;
+    float panelTop, panelH;
+    char count[64];
+    float cw;
     smRect_t clip;
     int i;
 
-    RP_Frame();
+    UI_Home_Backdrop();
+    UI_Home_Nav(HM_NAV_REPLAYS);
+
+    // the header, with the count and a refresh pill at its right
+    y = UI_Home_Header(y, NULL, "Replays");
+    Com_sprintf(count, sizeof(count), uiInfo.demoCount == 1 ? "%i demo" : "%i demos", uiInfo.demoCount);
+    cw = SM_ButtonWidth("Refresh", SM_PILL_H);
+    SM_Button(left + HM_CONTAINER_W - RP_PAD - cw, y - 72 + (72 - SM_PILL_H) * 0.5f, cw, SM_PILL_H, "Refresh",
+              SM_BUTTON_SECONDARY, SM_Over(RP_HIT_REFRESH, 0));
+    SM_Hit(left + HM_CONTAINER_W - RP_PAD - cw, y - 72 + (72 - SM_PILL_H) * 0.5f, cw, SM_PILL_H, RP_HIT_REFRESH, 0,
+           NULL);
+    SM_Label(left + HM_CONTAINER_W - RP_PAD - cw - 20 - SM_LabelWidth(11, count, 1.4f),
+             SM_Baseline(FONT_SANS, 11, y - 72, 72), 11, smMuted, count, 1.4f);
+
+    panelTop = y + HM_PANEL_GAP;
+    panelH = smBottom - 40 - panelTop;
+    SM_Round(left, panelTop, HM_CONTAINER_W, panelH, SM_RADIUS_MD, smPanel, NULL);
+
+    // the table's head, as the site's: small muted labels
+    SM_Label(left + RP_PAD + 12, SM_Baseline(FONT_SANS, 11, panelTop + 22, 16), 11, smMuted, "Demo", 1.4f);
+
+    rp.listTop = panelTop + 50;
+    rp.view = panelTop + panelH - RP_PAD - rp.listTop;
+    rp.content = uiInfo.demoCount * RP_ROW_H;
     rp.scroll = RP_ClampScroll(rp.scroll);
 
-    UI_Home_Backdrop();
-    UI_Home_Nav(1);  // HM_NAV_REPLAYS
-
-    SM_SpacedText(rp.page, SM_Baseline(FONT_DEFAULT, 30, RP_TOP, 38), FONT_DEFAULT, 30, smText, "Replays", -1, qfalse);
-    SM_Round(rp.page, RP_TOP + 42, 56, 3, 1.5f, smYellow, NULL);
-    SM_Round(rp.page - 6, rp.listTop - 10, rp.pageW + 12, rp.content + 20 < rp.view ? rp.content + 20 : rp.view,
-             SM_RADIUS_LG, smRowEven, NULL);
-
     if (!uiInfo.demoCount) {
-        SM_Text(rp.page, SM_Baseline(FONT_SANS, 16, rp.listTop + 8, 24), FONT_SANS, 16, smSelectText,
-                "Nothing recorded yet. Bind a key to record, or turn on Auto Record Actions in Settings > Game.", -1,
+        SM_Text(left + RP_PAD + 12, SM_Baseline(FONT_SANS, 15, rp.listTop + 4, 24), FONT_SANS, 15, smMuted,
+                "Nothing recorded yet. Record with \\record, or turn on Auto Record Actions in Settings > Game.", -1,
                 qfalse);
         return;
     }
 
-    clip = SM_R(rp.page - 4, rp.listTop, rp.pageW + 8, rp.view);
+    clip = SM_R(left, rp.listTop, HM_CONTAINER_W, rp.view);
     for (i = 0; i < uiInfo.demoCount; i++) {
-        float y = rp.listTop + i * RP_ROW_H - rp.scroll;
+        float ry = rp.listTop + i * RP_ROW_H - rp.scroll;
+        float rx = left + RP_PAD;
+        float rw = HM_CONTAINER_W - 2 * RP_PAD;
         qboolean over = SM_Over(RP_HIT_ROW, i);
-        smRect_t row;
 
-        if (y + RP_ROW_H < rp.listTop || y > rp.listTop + rp.view) {
+        if (ry + RP_ROW_H < rp.listTop || ry > rp.listTop + rp.view) {
             continue;
         }
-        row = SM_R(rp.page, y, rp.pageW, RP_ROW_H);
+        // rows are told apart by the background under the cursor, never by lines
         if (over) {
-            row.y -= SM_LIFT;  // the row lifts under the cursor
-            SM_Round(row.x, row.y, row.w, row.h, SM_RADIUS_MD, smCardHover, &clip);
-            SM_Round(row.x, row.y + 6, 2, row.h - 12, 1, smYellow, &clip);
+            SM_Round(rx, ry, rw, RP_ROW_H, SM_RADIUS_SM, smRaised, &clip);
         }
-        SM_Text(row.x + 16, SM_Baseline(FONT_SANS, 15, row.y + 10, 22), FONT_SANS, 15, over ? smText : smSelectText,
-                uiInfo.demoList[i], SM_Fit(FONT_SANS, 15, uiInfo.demoList[i], rp.pageW - 120), qfalse);
+        if (SM_TextInside(SM_Baseline(FONT_SANS, 15, ry, RP_ROW_H), 15, &clip)) {
+            SM_Text(rx + 12, SM_Baseline(FONT_SANS, 15, ry, RP_ROW_H), FONT_SANS, 15, over ? smText : smTextSoft,
+                    uiInfo.demoList[i], SM_Fit(FONT_SANS, 15, uiInfo.demoList[i], rw - 140), qfalse);
+        }
         if (over) {
-            SM_Text(row.x + row.w - 66, SM_Baseline(FONT_SANS, 14, row.y + 11, 22), FONT_SANS, 14, smYellow, "PLAY",
-                    -1, qtrue);
+            float bw = SM_ButtonWidth("Play", SM_PILL_H);
+
+            SM_Button(rx + rw - 8 - bw, ry + (RP_ROW_H - SM_PILL_H) * 0.5f, bw, SM_PILL_H, "Play",
+                      SM_BUTTON_PRIMARY, qfalse);
         }
-        SM_Hit(row.x, row.y, row.w, row.h, RP_HIT_ROW, i, &clip);
+        SM_Hit(rx, ry, rw, RP_ROW_H, RP_HIT_ROW, i, &clip);
     }
     if (rp.content > rp.view) {
-        RP_DrawScrollbar();
+        RP_DrawScrollbar(left + HM_CONTAINER_W - 14);
     }
 }
 
@@ -143,7 +149,6 @@ void UI_Replays_Open(void) {
 
     rp.scroll = 0;
     rp.scrollDrag = qfalse;
-    rp.chosen = -1;
     UI_LoadDemos();
 
     menu = Menus_FindByName("demo");
@@ -154,30 +159,27 @@ void UI_Replays_Open(void) {
 }
 
 void UI_Replays_Paint(void) {
-    const smHit_t* under;
+    SM_BeginFrame();
 
-    SM_Frame();
-    under = SM_HitAt(smMX, smMY);
-    smHasUnder = under != NULL;
-    if (under) {
-        smUnder = *under;
-    }
-    smNumHits = 0;
+    // the thumb follows the mouse while the button is held, and lets go with it
+    if (rp.scrollDrag) {
+        if (!trap_Key_IsDown(K_MOUSE1)) {
+            rp.scrollDrag = qfalse;
+        } else if (rp.content > rp.view) {
+            float thumbH = rp.view * rp.view / rp.content;
 
-    if (rp.scrollDrag && rp.content > rp.view) {
-        float thumbH = rp.view * rp.view / rp.content;
-
-        if (thumbH < 24) {
-            thumbH = 24;
+            if (thumbH < 28) {
+                thumbH = 28;
+            }
+            rp.scroll =
+                RP_ClampScroll(rp.scroll + (smMY - rp.scrollGrab) * (rp.content - rp.view) / (rp.view - thumbH));
+            rp.scrollGrab = smMY;
         }
-        rp.scroll = RP_ClampScroll(rp.scroll + (smMY - rp.scrollGrab) * (rp.content - rp.view) / (rp.view - thumbH));
-        rp.scrollGrab = smMY;
     }
 
     RP_DrawPage();
-
-    memcpy(smLastHits, smHits, smNumHits * sizeof(smHits[0]));
-    smNumLastHits = smNumHits;
+    UI_Home_Banner();
+    SM_EndFrame();
 }
 
 qboolean UI_Replays_HandleKey(int key) {
@@ -188,10 +190,10 @@ qboolean UI_Replays_HandleKey(int key) {
     }
     switch (key) {
         case K_MWHEELUP:
-            rp.scroll = RP_ClampScroll(rp.scroll - 90);
+            rp.scroll = RP_ClampScroll(rp.scroll - 3 * RP_ROW_H);
             return qtrue;
         case K_MWHEELDOWN:
-            rp.scroll = RP_ClampScroll(rp.scroll + 90);
+            rp.scroll = RP_ClampScroll(rp.scroll + 3 * RP_ROW_H);
             return qtrue;
         case K_MOUSE1:
             break;
@@ -206,16 +208,22 @@ qboolean UI_Replays_HandleKey(int key) {
     if (!hit) {
         return qtrue;
     }
-    if (hit->type == RP_HIT_ROW && hit->index >= 0 && hit->index < uiInfo.demoCount) {
-        // retail sends exactly this
-        trap_Cmd_ExecuteText(EXEC_APPEND, va("demo \"%s\"\n", uiInfo.demoList[hit->index]));
-    } else if (hit->type == RP_HIT_THUMB) {
-        rp.scrollDrag = qtrue;
-        rp.scrollGrab = smMY;
+    switch (hit->type) {
+        case RP_HIT_ROW:
+            if (hit->index >= 0 && hit->index < uiInfo.demoCount) {
+                // retail sends exactly this
+                trap_Cmd_ExecuteText(EXEC_APPEND, va("demo \"%s\"\n", uiInfo.demoList[hit->index]));
+            }
+            break;
+        case RP_HIT_THUMB:
+            rp.scrollDrag = qtrue;
+            rp.scrollGrab = smMY;
+            break;
+        case RP_HIT_REFRESH:
+            UI_LoadDemos();
+            break;
+        default:
+            break;
     }
     return qtrue;
-}
-
-void UI_Replays_MouseUp(void) {
-    rp.scrollDrag = qfalse;
 }

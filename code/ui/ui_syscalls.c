@@ -174,6 +174,14 @@ void trap_Cvar_LatchedVariableStringBuffer(const char* var_name, char* buffer, i
     syscall(UI_CVAR_LATCHEDSTRINGBUFFER, var_name, buffer, bufsize);
 }
 
+void trap_Sys_OpenURL(const char* url) {
+    syscall(UI_SYS_OPENURL, url);
+}
+
+int trap_R_Font_Register(const char* name) {
+    return syscall(UI_R_FONT_REGISTER, name);
+}
+
 qhandle_t trap_R_RegisterShaderNoMip(const char* name) {
     return syscall(UI_R_REGISTERSHADERNOMIP, name);
 }

@@ -36,7 +36,7 @@
         }
 
         onESC {
-            open quit_popmenu
+            uiScript homeEscape
         }
 
         itemDef {
@@ -70,6 +70,30 @@
             name startmatch
             type ITEM_TYPE_OWNERDRAW
             ownerdraw 600 // UI_STARTMATCH
+            rect -2000 -1000 4640 2480
+            visible 1
+        }
+    }
+
+    // =============================================
+    // TRAINING CENTER
+    // retail's #play/training page; code/ui/ui_training.c draws and runs it
+    // =============================================
+    menuDef {
+        name "training"
+        fullScreen MENU_TRUE
+        rect 0 0 640 480
+        visible MENU_FALSE
+        focusColor 1 .75 0 1
+        popup // clicks beside the 4:3 area reach the page too
+
+        onOpen { uiScript trainingOpen }
+        onESC { close training ; open main }
+
+        itemDef {
+            name training
+            type ITEM_TYPE_OWNERDRAW
+            ownerdraw 604 // UI_TRAINING
             rect -2000 -1000 4640 2480
             visible 1
         }

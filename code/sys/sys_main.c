@@ -151,6 +151,25 @@ void Sys_SetClipboardData(const char* text) {
 
 /*
 ==================
+Sys_OpenURL
+
+[ioquakelive] Hands a link to whatever the system opens links with. Retail gave
+its web UI's links to the Steam overlay, which does the same when the overlay is
+not up. The caller checks the address (CL_OpenURL); nothing else may call this.
+==================
+*/
+void Sys_OpenURL(const char* url) {
+#ifndef DEDICATED
+    if (SDL_OpenURL(url) < 0) {
+        Com_Printf("^3could not open %s: %s\n", url, SDL_GetError());
+    }
+#else
+    (void)url;
+#endif
+}
+
+/*
+==================
 Sys_GetClipboardData
 ==================
 */

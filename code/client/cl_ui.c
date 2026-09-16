@@ -903,6 +903,11 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
         case UI_CVAR_LATCHEDSTRINGBUFFER:
             Cvar_LatchedVariableStringBuffer(VMA(1), VMA(2), args[3]);
             return 0;
+        case UI_R_FONT_REGISTER:
+            return re.Font_Register(VMA(1));
+        case UI_SYS_OPENURL:
+            CL_OpenURL(VMA(1));
+            return 0;
 
         case UI_MEMSET:
             Com_Memset(VMA(1), args[2], args[3]);
