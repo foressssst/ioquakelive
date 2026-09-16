@@ -946,10 +946,9 @@ void CG_RegisterWeapon(int weaponNum) {
         case WP_CHAINGUN:
             weaponInfo->firingSound = trap_S_RegisterSound("sound/weapons/vulcan/wvulfire.ogg", qfalse);
             MAKERGB(weaponInfo->flashDlightColor, 1, 1, 0);
-            // TODO [QL] binary sets weaponInfo->loopFireSound = 1 (offset 0x1c4) for the
-            //   chaingun (and 0 for all others). ioquakelive's weaponInfo_t has no such
-            //   field, so it can't be reproduced without a struct change.
-            weaponInfo->flashSound[0] = trap_S_RegisterSound("sound/weapons/vulcan/vulcanf1b.ogg", qfalse);
+            // [QL] 0x100510fd: its whine does not replace the shots
+            weaponInfo->loopFireSound = qtrue;
+            weaponInfo->flashSound[0] =trap_S_RegisterSound("sound/weapons/vulcan/vulcanf1b.ogg", qfalse);
             weaponInfo->flashSound[1] = trap_S_RegisterSound("sound/weapons/vulcan/vulcanf2b.ogg", qfalse);
             weaponInfo->flashSound[2] = trap_S_RegisterSound("sound/weapons/vulcan/vulcanf3b.ogg", qfalse);
             weaponInfo->flashSound[3] = trap_S_RegisterSound("sound/weapons/vulcan/vulcanf4b.ogg", qfalse);
@@ -2258,13 +2257,14 @@ void CG_FireWeapon(centity_t* cent) {
     }
 
     // [QL] resolve the non-predicted centity (EF_NODRAW players are drawn from
-    // cg_entities[number]); the firing sound / brass / quad sound are skipped for
-    // ANY weapon while this entity is holding a lightning-style continuous fire.
+    // cg_entities[number]). A weapon whose looping sound replaces its shots, the lightning gun and the
+    // gauntlet, plays nothing else while it fires; the chaingun's whine sounds under its shots
+    // (loopFireSound, 0x100510fd), so it keeps them, and its brass and quad sound with them.
     nonPredictedCent = cent;
     if (ent->eFlags & EF_NODRAW) {
         nonPredictedCent = &cg_entities[ent->number];
     }
-    if (nonPredictedCent->pe.lightningFiring) {
+    if (nonPredictedCent->pe.lightningFiring && !weap->loopFireSound) {
         return;
     }
 
