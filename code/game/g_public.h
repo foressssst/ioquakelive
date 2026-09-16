@@ -330,7 +330,8 @@ typedef struct {
 
 // [QL] vmMain export table - completely reordered vs Q3.
 // QL uses a function pointer table instead of Q3's vmMain dispatcher.
-// QL drops GAME_CLIENT_BEGIN and BOTAI_START_FRAME entirely.
+// QL drops GAME_CLIENT_BEGIN. The bots' frame is still its own export (+0x2c), which the engine
+// calls apart from GAME_RUN_FRAME (SV_BotFrame, quakelive_steam.exe 0x4dd670).
 typedef enum {
     GAME_SHUTDOWN               = 0,    // G_ShutdownGame()
     GAME_RUN_FRAME              = 1,    // G_RunFrame()
@@ -344,4 +345,7 @@ typedef enum {
     GAME_CLIENT_COMMAND         = 9,    // ClientCommand()
     GAME_SNAPSHOT_VISIBILITY    = 10,   // [QL] G_ObfuscateEnemyInfoInSnapshotCheck() (retail export +0x44)
     GAME_SNAPSHOT_ALWAYS_SEND   = 11,   // [QL] G_ClientAlwaysInSnapshot() (retail export +0x30)
+    GAME_BOT_AI_START_FRAME     = 12,   // [QL] BotAIStartFrame() (retail export +0x2c)
+
+    GAME_EXPORT_COUNT
 } gameExport_t;
