@@ -3703,7 +3703,70 @@ static void CG_DrawSpecTeamVitals(void) {
 	}
 }
 
+/*
+=================
+CG_DrawLetterbox
+
+[QL] cgamex86.dll 0x1000d940, drawn by CG_Draw2D in a training match (0x10010ed3). The
+tutorial's cinema bars: two black bands 640 wide, at the top and the bottom of the screen.
+The first frame the player is held for the tour (PM_TUTORIAL) opens them (0x10010f65): they
+grow from 1 to 84 units over 1000 ms and stay at 84. Once pm_type leaves PM_TUTORIAL they
+close from 84 to nothing over another 1000 ms, and then rest until opened again. Nothing over
+the join menu or last frame's scoreboard. cg_letterboxDrawn says whether they were drawn this
+frame: CG_AddViewWeapon (0x10052d33) leaves the gun out while they are.
+=================
+*/
+qboolean cg_letterboxDrawn;
+static int letterboxTime;
+static int letterboxDuration;
+static qboolean letterboxOpening;
+
+static void CG_DrawLetterbox(void) {
+	int height;
+
+	cg_letterboxDrawn = qfalse;
+	if (cg.showJoinMenu || cg.scoreBoardShowing || !letterboxDuration) {
+		return;
+	}
+
+	if (cg.snap->ps.pm_type != PM_TUTORIAL && letterboxOpening == qtrue) {
+		letterboxOpening = qfalse;
+		letterboxDuration = 1000;
+		letterboxTime = cg.time;
+	} else if (!letterboxTime) {
+		letterboxTime = cg.time;
+	}
+
+	if (letterboxOpening == qtrue) {
+		if (cg.time > letterboxTime + letterboxDuration) {
+			height = 84;
+		} else {
+			height = (int)((double)(cg.time - letterboxTime) / letterboxDuration * 84.0);
+			if (!height) {
+				height = 1;
+			}
+		}
+	} else if (cg.time > letterboxTime + letterboxDuration) {
+		height = 0;
+	} else {
+		height = (int)(84.0 - (double)(cg.time - letterboxTime) / letterboxDuration * 84.0);
+	}
+
+	if (height <= 0) {
+		letterboxOpening = qtrue;
+		letterboxTime = 0;
+		letterboxDuration = 0;
+		return;
+	}
+
+	CG_FillRect(0, 0, 640, height, colorBlack);
+	CG_FillRect(0, 480 - height, 640, height, colorBlack);
+	cg_letterboxDrawn = qtrue;
+}
+
 static void CG_Draw2D(stereoFrame_t stereoFrame) {
+	static qboolean tutorialStarted;
+
 	if (cgs.orderPending && cg.time > cgs.orderTime) {
 		CG_CheckOrderPending();
 	}
@@ -3740,6 +3803,38 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 		CG_DrawFloatingEffects();
 	}
 	CG_DrawTeammateNames();
+
+	// [QL] 0x10010ec7: a training match draws the cinema bars. While the player is held for
+	// the tour (PM_TUTORIAL) the frame is only the HUD's "chat area" menu, where Crash's lines
+	// come in, the centre print and the skip line; nothing else. The mouse is ignored then
+	// unless some menu is visible, and the first frame held opens the bars. Out of the hold
+	// the mouse comes back.
+	if (g_training.integer) {
+		CG_DrawLetterbox();
+		if (cg.snap->ps.pm_type == PM_TUTORIAL) {
+			Menu_Paint(Menus_FindByName("chat area"), qfalse);
+			CG_SetWidescreen(WIDESCREEN_CENTER);
+			CG_DrawCenterString();
+			CG_DrawWarmupTutorial();
+			CG_SetWidescreen(WIDESCREEN_STRETCH);
+			if (cg_ignoreMouseInput.integer != 1) {
+				trap_Cvar_Set("cg_ignoreMouseInput", Menus_AnyVisible() ? "0" : "1");
+			}
+			if (tutorialStarted != qtrue) {
+				tutorialStarted = qtrue;
+				letterboxTime = 0;
+				letterboxOpening = qtrue;
+				letterboxDuration = 1000;
+			}
+			return;
+		}
+		if (cg_ignoreMouseInput.integer) {
+			trap_Cvar_Set("cg_ignoreMouseInput", "0");
+		}
+		if (tutorialStarted) {
+			tutorialStarted = qfalse;
+		}
+	}
 
 	/*
 		if (cg.cameraMode) {

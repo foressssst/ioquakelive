@@ -60,6 +60,13 @@ void AIEnter_InstaGib(bot_state_t* bs, char* s);
 int AINode_InstaGib(bot_state_t* bs);
 // [QL] freeze-tag / team-training bot freeze helper (binary BotSetFreezeState 0x100245c0)
 void BotSetFreezeState(bot_state_t* bs, int freeze);
+// [QL] the training bot: leading the tour, then staying by the player
+// (binary AIEnter_Training 0x1000f880, AINode_Training 0x1000fa00,
+// AIEnter_FollowMe 0x1000ecc0, AINode_FollowMe 0x1000eda0)
+void AIEnter_Training(bot_state_t* bs);
+int AINode_Training(bot_state_t* bs);
+void AIEnter_FollowMe(bot_state_t* bs);
+int AINode_FollowMe(bot_state_t* bs);
 
 void BotResetNodeSwitches(void);
 void BotDumpNodeSwitches(bot_state_t* bs);

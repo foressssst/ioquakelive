@@ -1724,6 +1724,14 @@ void CG_AddViewWeapon(playerState_t* ps) {
         return;
     }
 
+    // [QL] 0x10052d28: nor while held for the training tour, or under its cinema bars
+    if (ps->pm_type == PM_TUTORIAL) {
+        return;
+    }
+    if (cg_letterboxDrawn) {
+        return;
+    }
+
     // no gun if in third person view or a camera is active
     // if ( cg.renderingThirdPerson || cg.cameraMode) {
     if (cg.renderingThirdPerson) {

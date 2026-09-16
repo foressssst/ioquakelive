@@ -3809,8 +3809,16 @@ void G_RunFrame(int levelTime) {
     // ClientBegin.  Q3 had GAME_CLIENT_BEGIN in vmMain which the engine called
     // from SV_ClientEnterWorld - QL removed it.  For listen servers we need to
     // auto-begin clients so they get a valid player state and receive snapshots.
+    //
+    // [ioquakelive] Not bots: a bot added with a delay (G_AddBot's fourth argument,
+    // 5000 ms for the Crash Course's Trainer) is meant to sit as a connecting client
+    // until G_CheckBotSpawn begins it. Begun here as well, it spawned twice - once at
+    // the training map's own spawn beside the player, and again when the queue came
+    // due, which on a training map skips those two spawns (qagamex86.dll 0x10039226)
+    // and drops the bot anywhere on the map. Crash appeared, said her first lines and
+    // vanished across the arena.
     for (i = 0; i < level.maxclients; i++) {
-        if (level.clients[i].pers.connected == CON_CONNECTING) {
+        if (level.clients[i].pers.connected == CON_CONNECTING && !(g_entities[i].r.svFlags & SVF_BOT)) {
             ClientBegin(i);
         }
     }
