@@ -96,6 +96,7 @@ void SM_Fill(float x, float y, float w, float h, const float* color, const smRec
 void SM_FillScreen(const float* color);
 void SM_Pic(float x, float y, float w, float h, qhandle_t shader, const smRect_t* clip);
 void SM_Arrow(float x, float y, qboolean up);
+void SM_To640(float x, float y, float w, float h, float* out);
 
 int SM_BoldShift(void);
 float SM_Em(int font);
