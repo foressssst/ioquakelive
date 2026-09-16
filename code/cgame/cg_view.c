@@ -560,8 +560,17 @@ static int CG_CalcFov(void) {
         }
     }
 
-    x = cg.refdef.width / tan(fov_x / 360 * M_PI);
-    fov_y = atan2(cg.refdef.height, x);
+    // [QL] cgamex86.dll 0x1004d676: the vertical fov is worked out from a fixed 640 by 480
+    // (the constants at 0x10073d50 and 0x10073e30), not from the view's own size. So
+    // whatever the screen, you see the vertical of 4:3 -- cg_fov is the horizontal and the
+    // vertical never shrinks with a wider monitor. Quake 3 divides by the real width and
+    // height, which on 16:9 gave 68 degrees vertical where retail gives 84: the ceiling and
+    // a good part of the floor were missing.
+    //
+    // The real size is still what the zoom sensitivity below is measured against
+    // (0x1004d8bb reads the view's width and height there).
+    x = 640.0f / tan(fov_x / 360 * M_PI);
+    fov_y = atan2(480.0f, x);
     fov_y = fov_y * 360 / M_PI;
 
     // warp if underwater
