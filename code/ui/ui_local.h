@@ -996,6 +996,14 @@ void UI_Home_Backdrop(void);
 void UI_Home_Nav(int active);
 qboolean UI_Home_NavClick(void);
 void UI_LoadDemos(void);
+void UI_BuildPlayerList(void);
+
+// [QL] the in-game menu; see ui_pause.c
+#define UI_PAUSE 604
+void UI_Pause_Open(void);
+void UI_Pause_Paint(void);
+qboolean UI_Pause_HandleKey(int key);
+void UI_Pause_MouseUp(void);
 
 // [QL] the Replays page; see ui_replays.c
 #define UI_REPLAYS 603

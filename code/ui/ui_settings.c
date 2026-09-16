@@ -1611,7 +1611,6 @@ void UI_Settings_Close(void) {
     if (st.fromIngame) {
         st.fromIngame = qfalse;
         Menus_ActivateByName("ingame");
-        Menus_ActivateByName("ingame_about");
     } else {
         Menus_CloseAll();
         Menus_ActivateByName("main");
