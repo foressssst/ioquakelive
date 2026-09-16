@@ -1775,6 +1775,9 @@ extern vmCvar_t cg_tracerLength;
 extern vmCvar_t cg_autoswitch;
 extern vmCvar_t cg_ignore;
 extern vmCvar_t cg_simpleItems;
+extern vmCvar_t cg_simpleItemsBob;           // [QL] 0 none, 1 every item, 2 only the timed ones
+extern vmCvar_t cg_simpleItemsHeightOffset;  // [QL] how far the icon sits over the item
+extern vmCvar_t cg_simpleItemsRadius;        // [QL] the icon's size
 extern vmCvar_t cg_fov;
 extern vmCvar_t cg_zoomFov;
 extern vmCvar_t cg_thirdPersonRange;
