@@ -52,6 +52,7 @@ profile
 !/code/tools/make_deterministic_pk3.py
 !/code/tools/build_release_zips.py
 !/code/tools/make_git_version_header.py
+!/code/tools/gen_fb_skins.py
 /code/qcommon/git_version.h
 *.lib
 *.pdb
