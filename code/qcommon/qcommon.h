@@ -1051,6 +1051,8 @@ void SCR_DebugGraph(float value);  // FIXME: move logging to common?
 // server interface
 //
 void SV_Init(void);
+// [QL] 0x4cc216: registers the game module's cvars at boot, before the configs are read
+void SV_RegisterGameCvars(void);
 void SV_Shutdown(char* finalmsg);
 void SV_Frame(int msec);
 void SV_PacketEvent(netadr_t from, msg_t* msg);

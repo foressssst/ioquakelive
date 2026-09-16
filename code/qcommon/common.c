@@ -2570,6 +2570,10 @@ void Com_Init(char* commandLine) {
     Cmd_SetCommandCompletionFunc("writeconfig", Cmd_CompleteCfgName);
     Cmd_AddCommand("writeClientConfig", Com_WriteClientConfig_f);
 
+    // [QL] quakelive_steam.exe 0x4cc216: the game's cvars are registered before the configs are
+    // read, so they all exist with their own defaults before anything sets them
+    SV_RegisterGameCvars();
+
     Com_ExecuteCfg();
 
     // override anything from the config files with command line args
