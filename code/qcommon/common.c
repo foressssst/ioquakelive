@@ -2311,7 +2311,7 @@ For controlling environment variables
 ==================
 */
 
-#define COM_CONFIG_VERSION 3
+#define COM_CONFIG_VERSION 4
 
 /*
 ==================
@@ -2373,6 +2373,26 @@ static void Com_MigrateConfig(void) {
             {"sensitivity", "5", "4"},
             {"cl_mouseAccelOffset", "5", "0"},
             {"in_mouse", "1", "2"},
+        };
+        int i;
+
+        for (i = 0; i < ARRAY_LEN(defaults); i++) {
+            if (Cvar_Flags(defaults[i].name) != CVAR_NONEXISTENT &&
+                !strcmp(Cvar_VariableString(defaults[i].name), defaults[i].oldValue))
+                Cvar_Set(defaults[i].name, defaults[i].newValue);
+        }
+    }
+
+    // [QL] 4: the projectile lead and the background frame limits, none of which existed before
+    if (version->integer < 4) {
+        static const struct {
+            const char* name;
+            const char* oldValue;
+            const char* newValue;
+        } defaults[] = {
+            {"cg_projectileLead", "0", "24"},
+            {"com_maxfpsUnfocused", "0", "60"},
+            {"com_maxfpsMinimized", "0", "10"},
         };
         int i;
 
@@ -2564,7 +2584,8 @@ void Com_Init(char* commandLine) {
     // browser-driven event loop. So default throttling to off.
     com_maxfps = Cvar_Get("com_maxfps", "0", CVAR_ARCHIVE);
 #else
-    com_maxfps = Cvar_Get("com_maxfps", "125", CVAR_ARCHIVE);
+    // [QL] quakelive_steam.exe 0x4cc2e9: 125 in 30-250
+    com_maxfps = Cvar_GetRange("com_maxfps", "125", "30", "250", CVAR_ARCHIVE | CVAR_USERSAVE);
 #endif
     com_blood = Cvar_Get("com_blood", "1", CVAR_ARCHIVE);
 
@@ -2586,9 +2607,12 @@ void Com_Init(char* commandLine) {
     com_ansiColor = Cvar_Get("com_ansiColor", "0", CVAR_ARCHIVE);
 
     com_unfocused = Cvar_Get("com_unfocused", "0", CVAR_ROM);
-    com_maxfpsUnfocused = Cvar_Get("com_maxfpsUnfocused", "0", CVAR_ARCHIVE);
+    // [ioquakelive] a window in the background or minimized used to render as fast as it could, which
+    // on a laptop is heat and battery for a picture nobody is looking at. Neither cvar exists in
+    // retail, and neither changes anything while you are playing.
+    com_maxfpsUnfocused = Cvar_Get("com_maxfpsUnfocused", "60", CVAR_ARCHIVE);
     com_minimized = Cvar_Get("com_minimized", "0", CVAR_ROM);
-    com_maxfpsMinimized = Cvar_Get("com_maxfpsMinimized", "0", CVAR_ARCHIVE);
+    com_maxfpsMinimized = Cvar_Get("com_maxfpsMinimized", "10", CVAR_ARCHIVE);
     com_abnormalExit = Cvar_Get("com_abnormalExit", "0", CVAR_ROM);
     com_busyWait = Cvar_Get("com_busyWait", "0", CVAR_ARCHIVE);
     Cvar_Get("com_errorMessage", "", CVAR_ROM | CVAR_NORESTART);
