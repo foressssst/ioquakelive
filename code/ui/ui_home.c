@@ -20,170 +20,247 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 //
-// ui_home.c -- [QL] the main menu, and the bar every page of the web UI sits under
+// ui_home.c -- [QL] the main menu, and the frame every page of the front end sits in
 //
-// Retail's front end is the browser: a nav bar 75 CSS pixels tall over rgba(0,0,0,0.8)
-// with the items in Handel Gothic uppercase, white, yellow when hovered, and a 3px
-// yellow rule under the one you are on (web.pak's css/main.css, .nav and .navItem).
-// Under it a 370px column of lobby and friends, and the page in what is left.
+// Retail's front end is its browser: a nav bar with Home, Play, Statistics and
+// Community on the left and the settings gear and power button on the right, a
+// random map as the page's background under a dark radial gradient (App's
+// componentDidUpdate), and, over a match, a green bar at the bottom that takes you
+// back to it. None of the lobby, friends or stats apply here, so the bar carries
+// what this build has: home, play, training, replays, settings and quit.
 //
-// None of the lobby applies here -- there is no master server, no friends list and no
-// Steam profile to draw -- so the bar keeps the shape and the page takes the whole
-// width. What retail reaches through Play and Statistics comes down to the three things
-// this build has: start a match, watch a replay, change the settings.
+// It looks like quakeclub.com: the bar is its centred one, labels in upper case
+// with a gold rule under the page you are on, and the page is panels on the dark
+// warm background, with the map behind them.
 //
 
 #include "ui_web.h"
 
-#define HM_NAV_H 75.0f
-#define HM_NAV_PAD 28.0f
+#define HM_NAV_ITEM_SIZE 15.0f
+#define HM_NAV_ITEM_SPACING 0.6f
+#define HM_NAV_ITEM_GAP 26.0f
+#define HM_NAV_INSET 39.0f
 
-#define HM_CARD_W 380.0f
-#define HM_CARD_H 190.0f
-#define HM_CARD_GAP 28.0f
+#define HM_HERO_H 300.0f
+#define HM_CARD_H 176.0f
 
 typedef enum {
-    HM_HIT_NONE,
+    HM_HIT_NONE = SM_HIT_SHARED,
     HM_HIT_NAV,
-    HM_HIT_CARD
+    HM_HIT_CARD,
+    HM_HIT_BANNER,
+    HM_HIT_HERO
 } hmHitType_t;
 
-typedef enum {
-    HM_NAV_PLAY,
-    HM_NAV_REPLAYS,
-    HM_NAV_SETTINGS,
-    HM_NAV_QUIT,
-    HM_NUM_NAV
-} hmNav_t;
+static const char* const hmNavNames[HM_NUM_NAV] = {"Home", "Play", "Training", "Replays", "Settings", "Quit"};
 
 typedef struct {
+    const char* eyebrow;
     const char* title;
     const char* note;
-    int nav;  // what the card does, as one of the nav items
+    int nav;
 } hmCard_t;
 
 static const hmCard_t hmCards[] = {
-    {"Start Match", "Pick a game type, an arena and the rules, then play it here", HM_NAV_PLAY},
-    {"Replays", "Watch a demo you recorded", HM_NAV_REPLAYS},
-    {"Settings", "Everything: input, video, sound, HUD, teams and weapons", HM_NAV_SETTINGS},
+    {"Learn", "Training Center", "Crash Course and the training matches, with a coach who talks you through them.",
+     HM_NAV_TRAINING},
+    {"Watch", "Replays", "Every demo you have recorded, one click away.", HM_NAV_REPLAYS},
+    {"Configure", "Settings", "Input, video, sound, HUD, teams and weapons -- everything retail offers.",
+     HM_NAV_SETTINGS},
 };
 
 #define HM_NUM_CARDS ((int)ARRAY_LEN(hmCards))
 
+// the hero's buttons
+typedef enum {
+    HM_HERO_START,
+    HM_HERO_TRAINING,
+    HM_HERO_RETURN,
+    HM_HERO_LEAVE
+} hmHero_t;
+
+// iconic arenas whose shots pak00 carries, one of which is the page's background
+static const char* const hmBackdrops[] = {
+    "bloodrun", "campgrounds", "toxicity", "aerowalk", "furiousheights", "sinister", "lostworld",
+    "hektik", "silence", "cure", "almostlost", "asylum", "battleforged", "trinity", "elder", "overkill",
+};
+
 static struct {
     qboolean loaded;
     qhandle_t backdrop;
-    qhandle_t logo;
-    int entered;  // realTime the page began arriving
+    char backdropMap[MAX_QPATH];
 } hm;
 
-// #f7d100 over black, the two colours the front end is built out of
-static const vec4_t hmNavBg = {0.0f, 0.0f, 0.0f, 0.8f};
-static const vec4_t hmWash = {0.0f, 0.0f, 0.0f, 0.72f};
-static const vec4_t hmCardBg = {35 / 255.0f, 33 / 255.0f, 32 / 255.0f, 0.94f};   // --qc-bg-dark
-static const vec4_t hmCardOver = {54 / 255.0f, 53 / 255.0f, 52 / 255.0f, 0.98f};  // --qc-bg-elevated
+float UI_Home_Left(void) {
+    return (smVW - HM_CONTAINER_W) * 0.5f;
+}
 
 /*
 ===============
 UI_Home_Load
 
-pak00's own art: the smoke plate the menu has always used and the Quake Live mark.
+Picks the background once per session, the way retail's App picked a random map
+for its page: one of the arenas above whose levelshot pak00 has.
 ===============
 */
 static void UI_Home_Load(void) {
+    int count = (int)ARRAY_LEN(hmBackdrops);
+    int start, k;
+
     if (hm.loaded) {
         return;
     }
-    hm.backdrop = trap_R_RegisterShaderNoMip("ui/assets/backscreen_smoke");
-    hm.logo = trap_R_RegisterShaderNoMip("ui/assets/main_menu/ql_logo");
     hm.loaded = qtrue;
+    start = (int)((unsigned int)trap_Milliseconds() % (unsigned int)count);
+    for (k = 0; k < count; k++) {
+        const char* map = hmBackdrops[(start + k) % count];
+        fileHandle_t f;
+        int len = trap_FS_FOpenFile(va("levelshots/%s.jpg", map), &f, FS_READ);
+
+        if (len > 0) {
+            trap_FS_FCloseFile(f);
+            hm.backdrop = trap_R_RegisterShaderNoMip(va("levelshots/%s", map));
+            Q_strncpyz(hm.backdropMap, map, sizeof(hm.backdropMap));
+            if (hm.backdrop) {
+                return;
+            }
+        }
+    }
+}
+
+/*
+===============
+UI_Home_Wash
+
+A vertical wash: a colour whose alpha runs from a0 at the top to a1 at the bottom.
+It is drawn in bands a few screen pixels high whose edges are whole pixels, so
+two bands meet without a row between them drawn twice -- with bands in page
+units, a row where they overlapped came out as a dark line across the screen.
+===============
+*/
+#define HM_WASH_STEP 4
+
+static void UI_Home_Wash(float y, float h, const float* color, float a0, float a1) {
+    float top = smTop + y * smScale;
+    float bottom = smTop + (y + h) * smScale;
+    int last = (int)(bottom + 0.5f);
+    int py;
+    vec4_t c;
+
+    if (bottom <= top) {
+        return;
+    }
+    VectorCopy(color, c);
+    for (py = (int)(top + 0.5f); py < last; py += HM_WASH_STEP) {
+        int end = py + HM_WASH_STEP < last ? py + HM_WASH_STEP : last;
+
+        c[3] = a0 + (a1 - a0) * ((py + end) * 0.5f - top) / (bottom - top);
+        trap_R_SetColor(c);
+        trap_R_DrawStretchPic(0, (float)py, (float)uiInfo.uiDC.glconfig.vidWidth, (float)(end - py), 0, 0, 0, 0,
+                              uiInfo.uiDC.whiteShader);
+    }
+    trap_R_SetColor(NULL);
 }
 
 /*
 ===============
 UI_Home_Backdrop
 
-The smoke plate covering the screen whatever its shape, washed down so text over it
-stays readable, with the bottom fading to black the way the pages do.
+The map covers the screen whatever its shape, and the page's colour lies over it
+thick enough for the panels to read: heavier at the top where the bar is and at
+the bottom, lighter in the middle, which is what retail's radial gradient did.
 ===============
 */
 void UI_Home_Backdrop(void) {
     float aspect = 1920.0f / 1080.0f;
+    float top = -smTop / smScale;
+    float full = smBottom - top;
     float w = smVW;
-    float h = SM_VIEW_H;
-    float k;
+    float h = full;
 
     UI_Home_Load();
-    if (w / h > aspect) {
-        h = w / aspect;  // cover: overflow the height rather than letterbox
-    } else {
-        w = h * aspect;
+    SM_FillScreen(smPage);
+    if (hm.backdrop) {
+        if (w / h > aspect) {
+            h = w / aspect;  // cover: overflow the height rather than letterbox
+        } else {
+            w = h * aspect;
+        }
+        SM_Pic((smVW - w) * 0.5f, top + (full - h) * 0.5f, w, h, hm.backdrop, NULL);
     }
-    SM_Pic((smVW - w) * 0.5f, ((float)SM_VIEW_H - h) * 0.5f, w, h, hm.backdrop, NULL);
-    SM_Fill(0, 0, smVW, (float)SM_VIEW_H, hmWash, NULL);
-    for (k = 0; k < 16; k++) {
-        vec4_t fade = {0.0f, 0.0f, 0.0f, 0.04f};
-
-        SM_Fill(0, (float)SM_VIEW_H - (k + 1) * 14.0f, smVW, 14.0f, fade, NULL);
-    }
+    UI_Home_Wash(top, full * 0.5f, smPage, 0.96f, 0.80f);
+    UI_Home_Wash(top + full * 0.5f, full * 0.5f, smPage, 0.80f, 0.97f);
 }
 
 /*
 ===============
 UI_Home_Nav
 
-.nav from web.pak: 75 tall over rgba(0,0,0,0.8), Handel Gothic uppercase, white,
-yellow under the cursor, and a 3px yellow rule under the page you are on. The mark
-takes the place retail gives the profile card.
+quakeclub.com's bar: the container's width, labels 15px bold upper case, and a
+2px gold rule under the page you are on. Quit sits alone at the right, where the
+site has Sign In and retail had its power button.
 ===============
 */
 void UI_Home_Nav(int active) {
-    static const char* const names[HM_NUM_NAV] = {"Play", "Replays", "Settings", "Quit"};
-    float w[HM_NUM_NAV];
-    float at[HM_NUM_NAV];
-    float x = HM_NAV_PAD;
-    float right = smVW - HM_NAV_PAD;
+    float left = UI_Home_Left();
+    float x = left + HM_NAV_INSET;
+    float base = SM_Baseline(FONT_SANS, HM_NAV_ITEM_SIZE, 47, 22);
     int i;
 
-    UI_Home_Load();
-    SM_Fill(0, 0, smVW, HM_NAV_H, hmNavBg, NULL);
-    SM_Pic(x, 14, 47 * 2.6f, 47, hm.logo, NULL);
-    x += 47 * 2.6f + 44;
-
     for (i = 0; i < HM_NUM_NAV; i++) {
-        w[i] = SM_SpacedWidth(FONT_DEFAULT, 18, names[i], 2) + 44;
-    }
-    // Play and Replays run from the left; Settings and Quit are floated right, and
-    // like retail's gear and power the last one declared ends up furthest out
-    at[HM_NAV_PLAY] = x;
-    at[HM_NAV_REPLAYS] = x + w[HM_NAV_PLAY];
-    at[HM_NAV_QUIT] = right - w[HM_NAV_QUIT];
-    at[HM_NAV_SETTINGS] = at[HM_NAV_QUIT] - w[HM_NAV_SETTINGS];
-
-    for (i = 0; i < HM_NUM_NAV; i++) {
+        float w = SM_LabelWidth(HM_NAV_ITEM_SIZE, hmNavNames[i], HM_NAV_ITEM_SPACING);
+        float ix = i == HM_NAV_QUIT ? left + HM_CONTAINER_W - HM_NAV_INSET - w : x;
         qboolean on = i == active;
         qboolean over = SM_Over(HM_HIT_NAV, i);
-        float ix = at[i];
 
-        if (on || over) {
-            vec4_t tint = {0.0f, 0.0f, 0.0f, 0.3f};
-
-            SM_Round(ix + 6, 10, w[i] - 12, HM_NAV_H - 20, SM_RADIUS_MD, tint, NULL);
-        }
-        SM_SpacedText(ix + 22, SM_Baseline(FONT_DEFAULT, 18, 0, HM_NAV_H), FONT_DEFAULT, 18,
-                      (on || over) ? smYellow : smText, names[i], 2, qfalse);
+        SM_Label(ix, base, HM_NAV_ITEM_SIZE, (on || over) ? smText : smTextSoft, hmNavNames[i],
+                 HM_NAV_ITEM_SPACING);
         if (on) {
-            SM_Round(ix + 6, HM_NAV_H - 12, w[i] - 12, 3, 1.5f, smYellow, NULL);
+            SM_Pill(ix, base + 8, w, 2, smGold, NULL);
         }
-        SM_Hit(ix, 0, w[i], HM_NAV_H, HM_HIT_NAV, i, NULL);
+        SM_Hit(ix - HM_NAV_ITEM_GAP * 0.5f, 30, w + HM_NAV_ITEM_GAP, 46, HM_HIT_NAV, i, NULL);
+        if (i != HM_NAV_QUIT) {
+            x += w + HM_NAV_ITEM_GAP;
+        }
     }
 }
 
-static void UI_Home_Go(int nav) {
+/*
+===============
+UI_Home_Header
+
+A page's title panel, as the site heads its pages: a panel the container's width
+with the title in bold upper case, and, over it, the small gold line some pages
+carry. Returns where the panel ends.
+===============
+*/
+float UI_Home_Header(float y, const char* eyebrow, const char* title) {
+    float left = UI_Home_Left();
+    float h = eyebrow ? 92.0f : 72.0f;
+
+    SM_Round(left, y, HM_CONTAINER_W, h, SM_RADIUS_MD, smPanel, NULL);
+    if (eyebrow) {
+        SM_Label(left + 25, SM_Baseline(FONT_SANS, 11, y + 18, 16), 11, smGold, eyebrow, 1.6f);
+        SM_Label(left + 25, SM_Baseline(FONT_SANS, 24, y + 38, 32), 24, smText, title, 0.2f);
+    } else {
+        SM_Label(left + 25, SM_Baseline(FONT_SANS, 22, y, h), 22, smText, title, 0.2f);
+    }
+    return y + h;
+}
+
+void UI_Home_Go(int nav) {
     switch (nav) {
+        case HM_NAV_HOME:
+            Menus_CloseAll();
+            Menus_ActivateByName("main");
+            break;
         case HM_NAV_PLAY:
             Menus_CloseAll();
             Menus_ActivateByName("startmatch");
+            break;
+        case HM_NAV_TRAINING:
+            Menus_CloseAll();
+            Menus_ActivateByName("training");
             break;
         case HM_NAV_REPLAYS:
             Menus_CloseAll();
@@ -194,92 +271,199 @@ static void UI_Home_Go(int nav) {
             Menus_ActivateByName("settings");
             break;
         case HM_NAV_QUIT:
-            Menus_ActivateByName("quit_popmenu");
+            // retail's power button (App's quitGame) asks nothing: it sends quit
+            trap_Cmd_ExecuteText(EXEC_APPEND, "quit\n");
             break;
         default:
             break;
     }
 }
 
-// what the nav bar does, shared by every page that draws it
+// whether the front end is up over a match, which is when retail's showed its banner
+qboolean UI_Home_InMatch(void) {
+    uiClientState_t cs;
+
+    trap_GetClientState(&cs);
+    return cs.connState == CA_ACTIVE;
+}
+
+// what the bar and the banner do, shared by every page that draws them
 qboolean UI_Home_NavClick(void) {
     const smHit_t* hit = SM_HitAt(smMX, smMY);
 
-    if (hit && hit->type == HM_HIT_NAV) {
+    if (!hit) {
+        return qfalse;
+    }
+    if (hit->type == HM_HIT_NAV) {
         UI_Home_Go(hit->index);
+        return qtrue;
+    }
+    if (hit->type == HM_HIT_BANNER) {
+        // retail's App.returnToGame sends exactly this
+        trap_Cmd_ExecuteText(EXEC_APPEND, "web_hideBrowser\n");
         return qtrue;
     }
     return qfalse;
 }
 
-static void UI_Home_DrawCard(int i, float x, float y) {
+/*
+===============
+UI_Home_Banner
+
+Retail's App draws an AlertBanner while you are in a match, on every page: a bar
+across the bottom of the screen (.banner: fixed, bottom 0, full width, text
+centred) in green that says "You are currently in-game. Click here to return to
+your match." and sends web_hideBrowser when clicked.
+===============
+*/
+void UI_Home_Banner(void) {
+    static const char* const text = "You are currently in-game. Click here to return to your match.";
+    float h = 38.0f;
+    float y = smBottom - h;
+    qboolean over;
+
+    if (!UI_Home_InMatch()) {
+        return;
+    }
+    over = SM_Over(HM_HIT_BANNER, 0);
+    SM_Fill(-1, y, smVW + 2, h, over ? smSuccessHover : smSuccess, NULL);
+    SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y, h), 15, smText, text, qtrue);
+    SM_Hit(0, y, smVW, h, HM_HIT_BANNER, 0, NULL);
+}
+
+/*
+===============================================================================
+
+THE HOME PAGE
+
+===============================================================================
+*/
+
+static const char* UI_Home_GametypeName(int gametype) {
+    static const char* const names[] = {
+        "Free For All", "Duel", "Race", "Team Deathmatch", "Clan Arena", "Capture the Flag", "One Flag CTF",
+        "Overload", "Harvester", "Freeze Tag", "Domination", "Attack and Defend", "Red Rover"};
+
+    return ((unsigned int)gametype <= 12u) ? names[gametype] : "Unknown Gametype";
+}
+
+static void UI_Home_HeroButton(float* x, float y, const char* text, int style, int which) {
+    float w = SM_ButtonWidth(text, SM_BUTTON_H);
+
+    SM_Button(*x, y, w, SM_BUTTON_H, text, style, SM_Over(HM_HIT_HERO, which));
+    SM_Hit(*x, y, w, SM_BUTTON_H, HM_HIT_HERO, which, NULL);
+    *x += w + 10;
+}
+
+static void UI_Home_DrawHero(float y) {
+    float left = UI_Home_Left();
+    float x = left + 40;
+    int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
+    const char* eyebrow;
+    const char* title;
+    char note[256];
+    int lines, k;
+
+    SM_Round(left, y, HM_CONTAINER_W, HM_HERO_H, SM_RADIUS_LG, smPanel, NULL);
+
+    if (UI_Home_InMatch()) {
+        char info[MAX_INFO_STRING];
+        char map[MAX_QPATH];
+
+        trap_GetConfigString(CS_SERVERINFO, info, sizeof(info));
+        Q_strncpyz(map, Info_ValueForKey(info, "mapname"), sizeof(map));
+        eyebrow = "Match in progress";
+        title = "Back to the fight";
+        Com_sprintf(note, sizeof(note), "%s on %s. The match goes on while you are here.",
+                    UI_Home_GametypeName(atoi(Info_ValueForKey(info, "g_gametype"))), map);
+    } else {
+        eyebrow = "Quake Live";
+        title = "Start a match";
+        Q_strncpyz(note, "Pick a game type and an arena, fill it with bots, and play it right here.",
+                   sizeof(note));
+    }
+
+    SM_Label(x, SM_Baseline(FONT_SANS, 12, y + 56, 18), 12, smGold, eyebrow, 2.0f);
+    SM_Label(x, SM_Baseline(FONT_SANS, 44, y + 80, 56), 44, smText, title, 0.4f);
+    lines = SM_Wrap(FONT_SANS, 17, note, 560, starts, lens);
+    for (k = 0; k < lines; k++) {
+        SM_Text(x, SM_Baseline(FONT_SANS, 17, y + 150 + k * 26, 26), FONT_SANS, 17, smMuted, note + starts[k], lens[k],
+                qfalse);
+    }
+
+    y += HM_HERO_H - 40 - SM_BUTTON_H;
+    if (UI_Home_InMatch()) {
+        UI_Home_HeroButton(&x, y, "Return to match", SM_BUTTON_PRIMARY, HM_HERO_RETURN);
+        UI_Home_HeroButton(&x, y, "Leave match", SM_BUTTON_DANGER, HM_HERO_LEAVE);
+    } else {
+        UI_Home_HeroButton(&x, y, "Start match", SM_BUTTON_PRIMARY, HM_HERO_START);
+        UI_Home_HeroButton(&x, y, "Training center", SM_BUTTON_SECONDARY, HM_HERO_TRAINING);
+    }
+
+    // the arena behind the page, named at the hero's corner
+    if (hm.backdropMap[0]) {
+        const char* label = va("Arena  %s", hm.backdropMap);
+        float w = SM_LabelWidth(11, label, 1.4f);
+
+        SM_Label(left + HM_CONTAINER_W - 40 - w, SM_Baseline(FONT_SANS, 11, y + 10, 16), 11, smSubtle, label, 1.4f);
+    }
+}
+
+static void UI_Home_DrawCard(int i, float x, float y, float w) {
     const hmCard_t* card = &hmCards[i];
     qboolean over = SM_Over(HM_HIT_CARD, i);
     int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
+    float bw = SM_ButtonWidth("Open", SM_PILL_H);
     int lines, k;
 
-    // the card lifts and takes the accent under the cursor, the way the site's do
-    if (over) {
-        y -= SM_LIFT;
-        SM_Shadow(x, y, HM_CARD_W, HM_CARD_H, SM_RADIUS_LG);
+    SM_Round(x, y, w, HM_CARD_H, SM_RADIUS_MD, over ? smRaised : smPanel, NULL);
+    SM_Label(x + 25, SM_Baseline(FONT_SANS, 11, y + 22, 16), 11, smGold, card->eyebrow, 1.6f);
+    SM_Label(x + 25, SM_Baseline(FONT_SANS, 20, y + 44, 28), 20, smText, card->title, 0.2f);
+    lines = SM_Wrap(FONT_SANS, 14, card->note, w - 50, starts, lens);
+    for (k = 0; k < lines && k < 3; k++) {
+        SM_Text(x + 25, SM_Baseline(FONT_SANS, 14, y + 82 + k * 21, 21), FONT_SANS, 14, smMuted, card->note + starts[k],
+                lens[k], qfalse);
     }
-    SM_Round(x, y, HM_CARD_W, HM_CARD_H, SM_RADIUS_LG, over ? hmCardOver : hmCardBg, NULL);
-    SM_Round(x + 22, y + 22, 3, 26, 1.5f, over ? smYellow : smGrey, NULL);
-    SM_SpacedText(x + 38, SM_Baseline(FONT_DEFAULT, 26, y + 20, 34), FONT_DEFAULT, 26, over ? smYellow : smText,
-                  card->title, 1, qfalse);
-
-    lines = SM_Wrap(FONT_SANS, 15, card->note, HM_CARD_W - 64, starts, lens);
-    for (k = 0; k < lines; k++) {
-        SM_Text(x + 38, SM_Baseline(FONT_SANS, 15, y + 86 + k * 24, 24), FONT_SANS, 15,
-                over ? smSelectText : smOptionText, card->note + starts[k], lens[k], qfalse);
-    }
-    SM_Hit(x, y, HM_CARD_W, HM_CARD_H, HM_HIT_CARD, i, NULL);
+    SM_Button(x + w - 25 - bw, y + HM_CARD_H - 22 - SM_PILL_H, bw, SM_PILL_H, "Open",
+              over ? SM_BUTTON_PRIMARY : SM_BUTTON_SECONDARY, qfalse);
+    SM_Hit(x, y, w, HM_CARD_H, HM_HIT_CARD, i, NULL);
 }
 
-// the page begins arriving when the menu opens it
 void UI_Home_Open(void) {
-    hm.entered = uiInfo.uiDC.realTime;
+    menuDef_t* menu = Menus_FindByName("main");
+    itemDef_t* item = menu ? Menu_FindItemByName(menu, "home") : NULL;
+
+    // the page takes keys before the mouse moves over it
+    if (item) {
+        item->window.flags |= WINDOW_HASFOCUS;
+    }
 }
 
 void UI_Home_Paint(void) {
-    const smHit_t* under;
-
-    if (!hm.entered) {
-        hm.entered = uiInfo.uiDC.realTime;
-    }
-    float total = HM_NUM_CARDS * HM_CARD_W + (HM_NUM_CARDS - 1) * HM_CARD_GAP;
-    float x = (smVW - total) * 0.5f;
-    float y = ((float)SM_VIEW_H - HM_CARD_H) * 0.5f + 20;
+    float left, y, w;
     char version[MAX_CVAR_VALUE_STRING];
     int i;
 
-    SM_Frame();
-    under = SM_HitAt(smMX, smMY);
-    smHasUnder = under != NULL;
-    if (under) {
-        smUnder = *under;
-    }
-    smNumHits = 0;
+    SM_BeginFrame();
+    left = UI_Home_Left();
 
     UI_Home_Backdrop();
-    UI_Home_Nav(-1);
+    UI_Home_Nav(HM_NAV_HOME);
 
+    y = HM_NAV_H;
+    UI_Home_DrawHero(y);
+    y += HM_HERO_H + HM_PANEL_GAP;
+
+    w = (HM_CONTAINER_W - (HM_NUM_CARDS - 1) * HM_PANEL_GAP) / HM_NUM_CARDS;
     for (i = 0; i < HM_NUM_CARDS; i++) {
-        float alpha, dy;
-
-        SM_EnterRise(hm.entered, i, &alpha, &dy);
-        if (alpha <= 0.01f) {
-            continue;
-        }
-        UI_Home_DrawCard(i, x + i * (HM_CARD_W + HM_CARD_GAP), y + dy);
+        UI_Home_DrawCard(i, left + i * (w + HM_PANEL_GAP), y, w);
     }
 
     trap_Cvar_VariableStringBuffer("version", version, sizeof(version));
-    SM_Text(HM_NAV_PAD, SM_Baseline(FONT_SANS, 13, (float)SM_VIEW_H - 40, 24), FONT_SANS, 13, smSelectText, version, -1,
-            qfalse);
+    SM_Text(left, SM_Baseline(FONT_SANS, 12, y + HM_CARD_H + 24, 18), FONT_SANS, 12, smSubtle, version, -1, qfalse);
 
-    memcpy(smLastHits, smHits, smNumHits * sizeof(smHits[0]));
-    smNumLastHits = smNumHits;
+    UI_Home_Banner();
+    SM_EndFrame();
 }
 
 qboolean UI_Home_HandleKey(int key) {
@@ -295,8 +479,29 @@ qboolean UI_Home_HandleKey(int key) {
         return qtrue;
     }
     hit = SM_HitAt(smMX, smMY);
-    if (hit && hit->type == HM_HIT_CARD) {
+    if (!hit) {
+        return qtrue;
+    }
+    if (hit->type == HM_HIT_CARD) {
         UI_Home_Go(hmCards[hit->index].nav);
+    } else if (hit->type == HM_HIT_HERO) {
+        switch (hit->index) {
+            case HM_HERO_START:
+                UI_Home_Go(HM_NAV_PLAY);
+                break;
+            case HM_HERO_TRAINING:
+                UI_Home_Go(HM_NAV_TRAINING);
+                break;
+            case HM_HERO_RETURN:
+                trap_Cmd_ExecuteText(EXEC_APPEND, "web_hideBrowser\n");
+                break;
+            case HM_HERO_LEAVE:
+                // ingame.menu's Leave Match
+                trap_Cmd_ExecuteText(EXEC_APPEND, "disconnect\n");
+                break;
+            default:
+                break;
+        }
     }
     return qtrue;
 }

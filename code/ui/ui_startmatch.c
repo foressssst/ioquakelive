@@ -45,17 +45,16 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 // The page, centred. Retail draws it in the right column of its 1920x1080 frame,
 // 1460 wide from y 110 to 1050, the lobby and friends list on its left.
-#define SM_PAGE_W 1460.0f
-#define SM_PAGE_TOP 110.0f
-#define SM_PAGE_H 940.0f
-#define SM_COL_W 692.16f     // .one-half.column: 48% of the 1442 inside the page
-#define SM_COLS_Y 54.39f     // under the h1 and its margins
-#define SM_ROWS_X 754.83f    // the second column: 5 + 692.16 + 4% of 1442
-#define SM_VAL_X 418.3f      // .val in a row: 7.5 + 56.67% + 4% of 677.16
-#define SM_VAL_W 266.34f     // 39.33% of 677.16
-#define SM_CARD_H 200.0f
-#define SM_CARD_STEP 221.33f // a card and its 1em margin
-#define SM_LEFT_H 442.66f    // both cards with their margins
+#define SM_PAGE_W HM_CONTAINER_W  // Quake Club's container
+#define SM_COL_W 420.0f      // the cards' column
+#define SM_OPT_X 437.0f      // the options' panel, after the cards and the gap
+#define SM_OPT_W 673.0f
+#define SM_PAD 25.0f
+#define SM_ROW_W (SM_OPT_W - 2 * SM_PAD)
+#define SM_VAL_W 224.0f      // a row's control, at its right
+#define SM_VAL_X (SM_ROW_W - 12.0f - SM_VAL_W)
+#define SM_FIELD_H 36.0f
+#define SM_LAUNCH_H 44.0f
 
 /*
 ===============================================================================
@@ -430,7 +429,7 @@ static qhandle_t SM_Levelshot(const char* map) {
 
 static float SM_NameWidth(smArena_t* arena) {
     if (arena->nameScale != smScale) {
-        arena->nameWidth = SM_Advance(FONT_SANS, 24, arena->name, -1) + SM_BoldShift() / smScale;
+        arena->nameWidth = SM_AdvanceBold(FONT_SANS, 24, arena->name, -1, qtrue);
         arena->nameScale = smScale;
     }
     return arena->nameWidth;
@@ -759,49 +758,62 @@ THE PAGE
 ===============================================================================
 */
 
-static void SM_DrawGametypeCard(float x, float y) {
+// a card's frame: its panel, the gold label over it, and the Change pill at its foot
+static void SM_DrawCardFrame(float x, float y, float h, const char* label, qboolean over) {
+    float bw = SM_ButtonWidth("Change", SM_PILL_H);
+
+    SM_Round(x, y, SM_COL_W, h, SM_RADIUS_MD, over ? smRaised : smPanel, NULL);
+    SM_Label(x + SM_PAD, SM_Baseline(FONT_SANS, 11, y + 22, 16), 11, smGold, label, 1.6f);
+    SM_Button(x + SM_COL_W - SM_PAD - bw, y + h - 20 - SM_PILL_H, bw, SM_PILL_H, "Change",
+              over ? SM_BUTTON_PRIMARY : SM_BUTTON_SECONDARY, qfalse);
+}
+
+static void SM_DrawGametypeCard(float x, float y, float h) {
     const smFactory_t* factory = SM_Factory(sm.selectedFactory);
     const smGametype_t* gt = SM_Gametype(factory ? factory->basegt : -1);
-    // a button centres what it holds: here 161 pixels in the 178.67 inside its padding
-    float top = y + 10.67f + (178.67f - 161.0f) * 0.5f;
+    qboolean over = SM_Over(SM_HIT_GAMETYPE_CARD, 0);
     float middle = x + SM_COL_W * 0.5f;
+    float top = y + (h - 150.0f) * 0.5f - 6;
     const char* line = "";
 
-    SM_Fill(x, y, SM_COL_W, SM_CARD_H, SM_Over(SM_HIT_GAMETYPE_CARD, 0) ? smCardHover : smCard, NULL);
-    SM_SpacedText(x + 10.67f, SM_Baseline(FONT_SANS, 24, top, 30), FONT_SANS, 24, smYellow, "Game Type", -1, qfalse);
-    SM_Pic(middle - 30, top + 42, 60, 60, SM_GametypeIcon(gt), NULL);
-    SM_Centered(middle, SM_Baseline(FONT_SANS, 21.33f, top + 107.67f, 26.67f), 21.33f, smText, gt->title, qfalse);
+    SM_DrawCardFrame(x, y, h, "Game Type", over);
+    SM_Pic(middle - 32, top, 64, 64, SM_GametypeIcon(gt), NULL);
+    SM_Label(middle - SM_LabelWidth(22, gt->title, 0.2f) * 0.5f, SM_Baseline(FONT_SANS, 22, top + 76, 30), 22, smText,
+             gt->title, 0.2f);
     // the factory's title, or "Default" when it is the gametype's
     if (factory) {
         line = strcmp(gt->title, factory->title) ? factory->title : "Default";
     }
-    SM_Centered(middle, SM_Baseline(FONT_SANS, 21.33f, top + 134.34f, 26.67f), 21.33f, smText, line, qfalse);
-    SM_Hit(x, y, SM_COL_W, SM_CARD_H, SM_HIT_GAMETYPE_CARD, 0, NULL);
+    SM_Centered(middle, SM_Baseline(FONT_SANS, 15, top + 110, 22), 15, smMuted, line, qfalse);
+    SM_Hit(x, y, SM_COL_W, h, SM_HIT_GAMETYPE_CARD, 0, NULL);
 }
 
-static void SM_DrawArenaCard(float x, float y) {
+static void SM_DrawArenaCard(float x, float y, float h) {
     smArena_t* arena = SM_Arena(sm.selectedMap);
-    float top = y + 10.67f + (178.67f - 174.34f) * 0.5f;
+    qboolean over = SM_Over(SM_HIT_ARENA_CARD, 0);
     float middle = x + SM_COL_W * 0.5f;
+    float picW = 224, picH = 126;
+    float top = y + (h - (picH + 44)) * 0.5f - 4;
 
-    SM_Fill(x, y, SM_COL_W, SM_CARD_H, SM_Over(SM_HIT_ARENA_CARD, 0) ? smCardHover : smCard, NULL);
-    SM_SpacedText(x + 10.67f, SM_Baseline(FONT_SANS, 24, top, 30), FONT_SANS, 24, smYellow, "Current Arena", -1, qfalse);
-    SM_Pic(middle - 89.5f, top + 42, 179, 100, SM_Preview(arena, sm.selectedMap), NULL);
-    SM_Centered(middle, SM_Baseline(FONT_SANS, 21.33f, top + 147.67f, 26.67f), 21.33f, smText, arena ? arena->name : "",
-                qfalse);
-    SM_Hit(x, y, SM_COL_W, SM_CARD_H, SM_HIT_ARENA_CARD, 0, NULL);
+    SM_DrawCardFrame(x, y, h, "Arena", over);
+    SM_Round(middle - picW * 0.5f - 3, top - 3, picW + 6, picH + 6, SM_RADIUS_SM, smPage, NULL);
+    SM_Pic(middle - picW * 0.5f, top, picW, picH, SM_Preview(arena, sm.selectedMap), NULL);
+    if (arena) {
+        SM_Label(middle - SM_LabelWidth(20, arena->name, 0.2f) * 0.5f, SM_Baseline(FONT_SANS, 20, top + picH + 12, 28),
+                 20, smText, arena->name, 0.2f);
+    }
+    SM_Hit(x, y, SM_COL_W, h, SM_HIT_ARENA_CARD, 0, NULL);
 }
 
-// a text input: its 1-pixel border, the text from 8 in, and the caret while typing
+// a text input: a field, the text from 12 in, and a steady caret while typing
 static void SM_DrawInput(int i, float x, float y) {
     const char* value = sm.values[i];
-    float width = SM_VAL_W - 10;
+    float width = SM_VAL_W - 24;
     int len = (int)strlen(value);
     int start = 0;
     qboolean editing = sm.edit == i;
 
-    SM_Fill(x, y, SM_VAL_W, 38, editing ? smFocus : smGrey, NULL);
-    SM_Fill(x + 1, y + 1, SM_VAL_W - 2, 36, smInput, NULL);
+    SM_FieldBox(x, y, SM_VAL_W, SM_FIELD_H, editing, SM_Over(SM_HIT_INPUT, i), NULL);
     if (editing) {
         if (sm.editCursor > len) {
             sm.editCursor = len;
@@ -815,11 +827,13 @@ static void SM_DrawInput(int i, float x, float y) {
         }
         start = sm.editStart;
     }
-    SM_Text(x + 9, y + 24.82f, FONT_SANS, 15, smText, value + start, SM_Fit(FONT_SANS, 15, value + start, width), qfalse);
-    if (editing && ((uiInfo.uiDC.realTime - sm.editTime) / 500) % 2 == 0) {
-        SM_Fill(x + 9 + SM_Advance(FONT_SANS, 15, value + start, sm.editCursor - start), y + 9, 1, 20, smText, NULL);
+    SM_Text(x + 12, SM_Baseline(FONT_SANS, 15, y, SM_FIELD_H), FONT_SANS, 15, smText, value + start,
+            SM_Fit(FONT_SANS, 15, value + start, width), qfalse);
+    if (editing) {
+        SM_Fill(x + 12 + SM_Advance(FONT_SANS, 15, value + start, sm.editCursor - start), y + 9, 1.5f,
+                SM_FIELD_H - 18, smText, NULL);
     }
-    SM_Hit(x, y, SM_VAL_W, 38, SM_HIT_INPUT, i, NULL);
+    SM_Hit(x, y, SM_VAL_W, SM_FIELD_H, SM_HIT_INPUT, i, NULL);
 }
 
 // react-select: the label of the value's option, or its "Default" placeholder
@@ -827,6 +841,7 @@ static void SM_DrawSelect(int i, float x, float y) {
     const smCvar_t* cv = &smCvars[i];
     const char* label = "Default";
     qboolean open = sm.select == i;
+    qboolean over = SM_Over(SM_HIT_SELECT, i);
     int k;
 
     for (k = 0; k < cv->numOptions; k++) {
@@ -834,20 +849,20 @@ static void SM_DrawSelect(int i, float x, float y) {
             label = cv->options[k].label;
         }
     }
-    SM_Fill(x, y, SM_VAL_W, 36, (!open && SM_Over(SM_HIT_SELECT, i)) ? smLighter : smGrey, NULL);
-    SM_Text(x + 10, SM_Baseline(FONT_SANS, 15, y + 8, 24), FONT_SANS, 15, smSelectText, label,
-            SM_Fit(FONT_SANS, 15, label, SM_VAL_W - 62), qfalse);
-    SM_Arrow(x + 246.34f, y + 18, open);
-    SM_Hit(x, y, SM_VAL_W, 36, SM_HIT_SELECT, i, NULL);
+    SM_FieldBox(x, y, SM_VAL_W, SM_FIELD_H, open, over, NULL);
+    SM_Text(x + 12, SM_Baseline(FONT_SANS, 15, y, SM_FIELD_H), FONT_SANS, 15, smText, label,
+            SM_Fit(FONT_SANS, 15, label, SM_VAL_W - 44), qfalse);
+    SM_Chevron(x + SM_VAL_W - 22, y + SM_FIELD_H * 0.5f - 2, open, over || open ? smText : smMuted);
+    SM_Hit(x, y, SM_VAL_W, SM_FIELD_H, SM_HIT_SELECT, i, NULL);
     if (open) {
-        sm.selectControl = SM_R(x, y, SM_VAL_W, 36);
+        sm.selectControl = SM_R(x, y, SM_VAL_W, SM_FIELD_H);
     }
 }
 
-// the value with the step's decimals, then the slider: its border, track and thumb
+// the value with the step's decimals, then the slider
 static void SM_DrawRange(int i, float x, float y) {
     const smCvar_t* cv = &smCvars[i];
-    float bx = x + 53.27f, by = y + 9, bw = 213.07f;
+    float bx = x + 58, bw = SM_VAL_W - 58;
     float value, frac;
     char text[32];
 
@@ -859,22 +874,16 @@ static void SM_DrawRange(int i, float x, float y) {
         value = (float)atof(sm.values[i]);
     }
     SM_FormatRange(i, value, text, sizeof(text));
-    SM_Text(x + 8, SM_Baseline(FONT_SANS, 15, y + 10, 16), FONT_SANS, 15, smText, text, -1, qfalse);
-    SM_Fill(bx, by, bw, 18, smGrey, NULL);
-    SM_Fill(bx + 1, by + 1, bw - 2, 16, SM_Over(SM_HIT_RANGE, i) ? smLighter : smDark, NULL);
+    SM_Text(x, SM_Baseline(FONT_SANS, 15, y, SM_FIELD_H), FONT_SANS, 15, smText, text, -1, qfalse);
     frac = (value - cv->min) / (cv->max - cv->min);
-    if (frac < 0) {
-        frac = 0;
-    } else if (frac > 1) {
-        frac = 1;
-    }
-    SM_Fill(bx + 1 + frac * (bw - 2 - 16), by + 1, 16, 16, smYellow, NULL);
-    SM_Hit(bx, by, bw, 18, SM_HIT_RANGE, i, NULL);
+    SM_SliderTrack(bx, y + (SM_FIELD_H - SM_SLIDER_H) * 0.5f, bw, frac, SM_Over(SM_HIT_RANGE, i) || sm.drag == i);
+    // the hit is the track itself: SM_RangeAt reads the value off it
+    SM_Hit(bx - 1, y, bw + 2, SM_FIELD_H, SM_HIT_RANGE, i, NULL);
 }
 
 // the row itself and the dropdown it opened count as hovering it
 static qboolean SM_RowHovered(int i, float x, float y, float h) {
-    smRect_t row = SM_R(x, y, SM_COL_W, h);
+    smRect_t row = SM_R(x, y, SM_ROW_W, h);
 
     if (sm.dialog != SM_DIALOG_NONE) {
         return qfalse;
@@ -885,64 +894,75 @@ static qboolean SM_RowHovered(int i, float x, float y, float h) {
     return SM_In(&row, smMX, smMY);
 }
 
-static float SM_DrawRow(int i, float x, float y, int nth) {
+static float SM_DrawRow(int i, float x, float y) {
     const smCvar_t* cv = &smCvars[i];
-    float h = sm.locked[i] ? 50.0f : cv->widget == SM_INPUT ? 53.0f : cv->widget == SM_SELECT ? 51.0f : 50.0f;
-    float base = SM_Baseline(FONT_SANS, 15, y + 13.5f, 24);
-    float after = x + 7.5f + SM_Advance(FONT_SANS, 15, cv->title, -1) + SM_Advance(FONT_SANS, 15, " ", 1);
+    float h = 50.0f;
+    float base = SM_Baseline(FONT_SANS, 15, y, h);
+    float after = x + 12 + SM_Advance(FONT_SANS, 15, cv->title, -1) + 10;
+    qboolean hovered = SM_RowHovered(i, x, y, h);
 
-    SM_Fill(x, y, SM_COL_W, h, (nth & 1) ? smRowOdd : smRowEven, NULL);
-    SM_Text(x + 7.5f, base, FONT_SANS, 15, smText, cv->title, -1, qfalse);
+    if (hovered) {
+        SM_Round(x, y, SM_ROW_W, h, SM_RADIUS_SM, smRaised, NULL);
+    }
+    SM_Text(x + 12, base, FONT_SANS, 15, smText, cv->title, -1, qfalse);
     if (sm.locked[i]) {
-        // disabled: "(Locked)" and no value, as getWidget reads it from a
-        // variable declared further down, still undefined there
-        SM_Text(after, base, FONT_SANS, 15, smText, "(Locked)", -1, qfalse);
+        // disabled: "Locked" and no value, as getWidget reads it from a variable
+        // declared further down, still undefined there
+        SM_Label(after, SM_Baseline(FONT_SANS, 11, y, h), 11, smSubtle, "Locked", 1.2f);
         return h;
     }
     // a.resetLink shows while the row is hovered
-    if (SM_RowHovered(i, x, y, h)) {
-        SM_Text(after, base, FONT_SANS, 15, SM_Over(SM_HIT_RESET, i) ? smLinkHover : smLink, "(Reset)", -1, qfalse);
-        SM_Hit(after, y + 13.5f, SM_Advance(FONT_SANS, 15, "(Reset)", -1), 24, SM_HIT_RESET, i, NULL);
+    if (hovered) {
+        float rw = SM_LabelWidth(11, "Reset", 1.2f);
+
+        SM_Label(after, SM_Baseline(FONT_SANS, 11, y, h), 11, SM_Over(SM_HIT_RESET, i) ? smText : smGold, "Reset",
+                 1.2f);
+        SM_Hit(after - 4, y + 12, rw + 8, h - 24, SM_HIT_RESET, i, NULL);
     }
     if (cv->widget == SM_INPUT) {
-        SM_DrawInput(i, x + SM_VAL_X, y + 7.5f);
+        SM_DrawInput(i, x + SM_VAL_X, y + (h - SM_FIELD_H) * 0.5f);
     } else if (cv->widget == SM_SELECT) {
-        SM_DrawSelect(i, x + SM_VAL_X, y + 7.5f);
+        SM_DrawSelect(i, x + SM_VAL_X, y + (h - SM_FIELD_H) * 0.5f);
     } else {
-        SM_DrawRange(i, x + SM_VAL_X, y + 7.5f);
+        SM_DrawRange(i, x + SM_VAL_X, y + (h - SM_FIELD_H) * 0.5f);
     }
     return h;
 }
 
-static void SM_DrawLaunch(float x, float y) {
-    // .launch: a button half the page wide, centred
-    float bx = x + 360.5f, bw = 721, bh = 51.31f;
-    float tw = SM_SpacedWidth(FONT_SANS, 21.33f, "Launch Match", 1);
+static void SM_DrawLaunch(float x, float y, float w) {
     qboolean over = SM_Over(SM_HIT_LAUNCH, 0);
 
-    SM_Fill(bx, y, bw, bh, over ? smButtonHover : smButton, NULL);
-    SM_SpacedText(bx + (bw - tw) * 0.5f, SM_Baseline(FONT_SANS, 21.33f, y + 10.67f, 30), FONT_SANS, 21.33f,
-                  over ? smYellow : smText, "Launch Match", 1, qtrue);
-    SM_Hit(bx, y, bw, bh, SM_HIT_LAUNCH, 0, NULL);
+    SM_Button(x, y, w, SM_LAUNCH_H, "Launch Match", SM_BUTTON_PRIMARY, over);
+    SM_Hit(x, y, w, SM_LAUNCH_H, SM_HIT_LAUNCH, 0, NULL);
 }
 
 static void SM_DrawPage(void) {
-    float page = (smVW - SM_PAGE_W) * 0.5f;
-    float cols = SM_PAGE_TOP + SM_COLS_Y;
-    float rowsX = page + SM_ROWS_X;
-    float y = cols, h;
-    int i, nth = 1;
+    float page = UI_Home_Left();
+    float top, optX, rowsTop, y, panelH, cardH;
+    int i;
 
-    // the page sits under the same bar as the rest of the front end
+    // the page sits in the front end's frame, under its bar
     UI_Home_Backdrop();
-    UI_Home_Nav(0);  // HM_NAV_PLAY
-    SM_Fill(page, SM_PAGE_TOP, SM_PAGE_W, SM_PAGE_H, smDim, NULL);
-    SM_SpacedText(page + 11.39f, SM_Baseline(FONT_DEFAULT, 32, SM_PAGE_TOP + 8, 38.4f), FONT_DEFAULT, 32, smText,
-                  "Start Match", -1, qfalse);
-    SM_DrawGametypeCard(page + 5, cols);
-    SM_DrawArenaCard(page + 5, cols + SM_CARD_STEP);
+    UI_Home_Nav(HM_NAV_PLAY);
+    top = UI_Home_Header(HM_NAV_H, NULL, "Start Match") + HM_PANEL_GAP;
+
+    // the options first, to know how tall the page is
+    optX = page + SM_OPT_X;
+    rowsTop = top + SM_PAD - 6;
+    y = rowsTop;
     for (i = 0; i < SM_NUM_CVARS; i++) {
-        y += SM_DrawRow(i, rowsX, y, nth++);
+        y += 50.0f;
+        if (i == SM_SERVERTYPE && SM_Equals(SM_Value(i), 2)) {
+            y += 36;
+        }
+    }
+    panelH = (y - top) + 20 + SM_LAUNCH_H + SM_PAD - 6;
+    cardH = (panelH - HM_PANEL_GAP) * 0.5f;
+
+    SM_Round(optX, top, SM_OPT_W, panelH, SM_RADIUS_MD, smPanel, NULL);
+    y = rowsTop;
+    for (i = 0; i < SM_NUM_CVARS; i++) {
+        y += SM_DrawRow(i, optX + SM_PAD, y);
         // p.lan follows the match type when it is Internet, one more of the rows' siblings
         if (i == SM_SERVERTYPE && SM_Equals(SM_Value(i), 2)) {
             char note[128];
@@ -950,51 +970,58 @@ static void SM_DrawPage(void) {
             Com_sprintf(note, sizeof(note),
                         "To host public Internet servers, you will need to forward UDP port %s to your machine.",
                         sm.netPort);
-            SM_Text(rowsX + 11.25f, SM_Baseline(FONT_SANS, 15, y + 7.5f, 24), FONT_SANS, 15, smText, note, -1, qfalse);
-            y += 39;
-            nth++;
+            SM_Text(optX + SM_PAD + 12, SM_Baseline(FONT_SANS, 13, y, 30), FONT_SANS, 13, smMuted, note,
+                    SM_Fit(FONT_SANS, 13, note, SM_ROW_W - 24), qfalse);
+            y += 36;
         }
     }
-    h = y - cols;
-    SM_DrawLaunch(page + 5, cols + (h > SM_LEFT_H ? h : SM_LEFT_H) + 15 + 5.33f);
+    SM_DrawLaunch(optX + SM_PAD, top + panelH - SM_PAD - SM_LAUNCH_H + 6, SM_ROW_W);
+
+    SM_DrawGametypeCard(page, top, cardH);
+    SM_DrawArenaCard(page, top + cardH + HM_PANEL_GAP, cardH);
 }
 
-// .Select-menu-outer, under the control: options 40 high, at most 198 of them shown
+// .Select-menu-outer, under the control: the site's popover, options 34 high
 static void SM_DrawDropdown(void) {
     const smCvar_t* cv = &smCvars[sm.select];
-    float x = sm.selectControl.x, y = sm.selectControl.y + 35;
-    float full = cv->numOptions * 40.0f;
-    float h = full < 198 ? full : 198;
-    smRect_t box = SM_R(x, y, SM_VAL_W, h);
+    float pad = 6.0f;
+    float x = sm.selectControl.x, y = sm.selectControl.y + SM_FIELD_H + 6;
+    float full = cv->numOptions * 34.0f;
+    float view = full < 7 * 34.0f ? full : 7 * 34.0f;
+    smRect_t box = SM_R(x, y + pad, SM_VAL_W, view);
     int k;
 
-    if (sm.optionScroll > full - h) {
-        sm.optionScroll = full - h;
+    if (sm.optionScroll > full - view) {
+        sm.optionScroll = full - view;
     }
     if (sm.optionScroll < 0) {
         sm.optionScroll = 0;
     }
-    SM_Fill(x + 3, y + 3, SM_VAL_W, h, smShadow, NULL);
-    SM_Fill(x, y, SM_VAL_W, h, smGrey, NULL);
-    SM_Hit(x, y, SM_VAL_W, h, SM_HIT_MENU, sm.select, NULL);
+    SM_Shadow(x, y, SM_VAL_W, view + 2 * pad, SM_RADIUS_MD);
+    SM_Round(x, y, SM_VAL_W, view + 2 * pad, SM_RADIUS_MD, smRaised, NULL);
+    SM_Hit(x, y, SM_VAL_W, view + 2 * pad, SM_HIT_MENU, sm.select, NULL);
     for (k = 0; k < cv->numOptions; k++) {
-        float oy = y + k * 40.0f - sm.optionScroll;
-        float base = SM_Baseline(FONT_SANS, 15, oy + 8, 24);
+        float oy = box.y + k * 34.0f - sm.optionScroll;
+        float base = SM_Baseline(FONT_SANS, 14, oy, 34);
+        qboolean chosen = !strcmp(cv->options[k].value, sm.values[sm.select]);
 
         // the option under the mouse takes the focus
         if (SM_Over(SM_HIT_OPTION, k)) {
             sm.selectFocus = k;
         }
         if (k == sm.selectFocus) {
-            SM_Fill(x, oy, SM_VAL_W, 40, smDark, &box);
+            SM_Round(x + pad, oy, SM_VAL_W - 2 * pad, 34, SM_RADIUS_SM, smRaisedHover, &box);
         }
-        if (SM_TextInside(base, 15, &box)) {
-            SM_Text(x + 10, base, FONT_SANS, 15, k == sm.selectFocus ? smSelectText : smOptionText,
-                    cv->options[k].label, -1, qfalse);
+        if (SM_TextInside(base, 14, &box)) {
+            SM_Text(x + 16, base, FONT_SANS, 14, (k == sm.selectFocus || chosen) ? smText : smTextSoft,
+                    cv->options[k].label, -1, chosen);
+            if (chosen) {
+                SM_Pill(x + SM_VAL_W - 22, oy + 14, 6, 6, smGold, &box);
+            }
         }
-        SM_Hit(x, oy, SM_VAL_W, 40, SM_HIT_OPTION, k, &box);
+        SM_Hit(x + pad, oy, SM_VAL_W - 2 * pad, 34, SM_HIT_OPTION, k, &box);
     }
-    sm.selectMenu = box;
+    sm.selectMenu = SM_R(x, y, SM_VAL_W, view + 2 * pad);
 }
 
 /*
@@ -1005,59 +1032,49 @@ THE DIALOGS
 ===============================================================================
 */
 
-// the overlay and the modal, 100% wide with the content in its 15% side padding
+// the scrim and the modal: the page's 70% in the middle, a panel with a shadow
 static smRect_t SM_DrawDialog(float height, qhandle_t background) {
     float top = (SM_VIEW_H - height) * 0.5f;
     float cx = smVW * 0.15f, cw = smVW * 0.7f;
-    smRect_t box = SM_R(0, top, smVW, height);
+    vec4_t scrim = {0.0f, 0.0f, 0.0f, 0.6f};
 
-    // the overlay takes the mouse off the page
-    SM_FillScreen(smDim);
+    (void)background;
+    // the scrim takes the mouse off the page
+    SM_FillScreen(scrim);
     SM_Hit(-smVW, -SM_VIEW_H, 3 * smVW, 3 * SM_VIEW_H, SM_HIT_BLOCK, 0, NULL);
-    SM_Fill(0, top, smVW, height, smDialog, NULL);
-    if (background) {
-        // background-size 100%, centred: the levelshots are 16:9
-        float imgH = smVW * 9.0f / 16.0f;
-
-        SM_Pic(0, top + (height - imgH) * 0.5f, smVW, imgH, background, &box);
-    }
-    SM_Fill(cx, top, cw, height, smDim, NULL);
-    return SM_R(cx + 15, top + 15, cw - 30, height - 30);
+    SM_Shadow(cx, top, cw, height, SM_RADIUS_LG);
+    SM_Round(cx, top, cw, height, SM_RADIUS_LG, smPanel, NULL);
+    return SM_R(cx + SM_PAD, top + SM_PAD, cw - 2 * SM_PAD, height - 2 * SM_PAD);
 }
 
 static void SM_DrawButton(float x, float y, float w, const char* text, smHitType_t type) {
-    qboolean over = SM_Over(type, 0);
-
-    // Skeleton's button: a 1-pixel border, 11-pixel capitals spaced by 1
-    SM_Fill(x, y, w, 30, over ? smArrow : smButtonBorder, NULL);
-    SM_Fill(x + 1, y + 1, w - 2, 28, over ? smButtonHover : smButton, NULL);
-    SM_SpacedText(x + (w - SM_SpacedWidth(FONT_SANS, 11, text, 1)) * 0.5f, SM_Baseline(FONT_SANS, 11, y, 30), FONT_SANS,
-                  11, over ? smYellow : smText, text, 1, qtrue);
-    SM_Hit(x, y, w, 30, type, 0, NULL);
+    SM_Button(x, y, w, SM_BUTTON_H, text, type == SM_HIT_OK ? SM_BUTTON_PRIMARY : SM_BUTTON_SECONDARY,
+              SM_Over(type, 0));
+    SM_Hit(x, y, w, SM_BUTTON_H, type, 0, NULL);
 }
 
-// Cancel and OK at the right, a space apart
+// Cancel and OK at the right
 static void SM_DrawButtons(float right, float y) {
-    float okW = SM_SpacedWidth(FONT_SANS, 11, "OK", 1) + 42;
-    float cancelW = SM_SpacedWidth(FONT_SANS, 11, "CANCEL", 1) + 42;
+    float okW = SM_ButtonWidth("OK", SM_BUTTON_H) + 16;
+    float cancelW = SM_ButtonWidth("Cancel", SM_BUTTON_H);
     float okX = right - okW;
 
-    SM_DrawButton(okX - SM_Advance(FONT_SANS, 15, " ", 1) - cancelW, y, cancelW, "CANCEL", SM_HIT_CANCEL);
+    SM_DrawButton(okX - 10 - cancelW, y, cancelW, "Cancel", SM_HIT_CANCEL);
     SM_DrawButton(okX, y, okW, "OK", SM_HIT_OK);
 }
 
-// an 8-pixel scrollbar with only its thumb drawn
+// a thin scrollbar with only its thumb drawn
 static void SM_DrawScrollbar(float x, float y, float h, float content, float scroll) {
     float thumbH = h * h / content;
     float thumbY;
 
-    if (thumbH < 16) {
-        thumbH = 16;
+    if (thumbH < 28) {
+        thumbH = 28;
     }
     thumbY = y + (h - thumbH) * scroll / (content - h);
-    SM_Hit(x, y, 8, h, SM_HIT_TRACK, 0, NULL);
-    SM_Fill(x, thumbY, 8, thumbH, (SM_Over(SM_HIT_THUMB, 0) || sm.scrollDrag) ? smArrow : smGrey, NULL);
-    SM_Hit(x, thumbY, 8, thumbH, SM_HIT_THUMB, 0, NULL);
+    SM_Hit(x - 2, y, 10, h, SM_HIT_TRACK, 0, NULL);
+    SM_Pill(x + 1, thumbY, 6, thumbH, (SM_Over(SM_HIT_THUMB, 0) || sm.scrollDrag) ? smMuted : smBorder, NULL);
+    SM_Hit(x - 2, thumbY, 10, thumbH, SM_HIT_THUMB, 0, NULL);
 }
 
 static float SM_ClampScroll(float scroll, float content, float view) {
@@ -1117,7 +1134,9 @@ static void SM_DrawFactories(void) {
         float ry = in.y + k * 36.0f;
 
         if (smGametypes[k].gametype == sm.selectedGametype) {
-            SM_Fill(in.x, ry, itemW, 36, smGrey, NULL);
+            SM_Round(in.x, ry, itemW, 36, SM_RADIUS_SM, smRaisedHover, NULL);
+        } else if (SM_Over(SM_HIT_GAMETYPE, k)) {
+            SM_Round(in.x, ry, itemW, 36, SM_RADIUS_SM, smRaised, NULL);
         }
         SM_Pic(in.x + 3, ry + 5, 28, 28, SM_GametypeIcon(&smGametypes[k]), NULL);
         SM_Text(in.x + 36 + space, SM_Baseline(FONT_SANS, 18.67f, ry + 3, 29.87f), FONT_SANS, 18.67f, smText,
@@ -1150,11 +1169,13 @@ static void SM_DrawFactories(void) {
 
         if (y < clip.y + clip.h && y + eh > clip.y) {
             qboolean selected = !strcmp(f->id, sm.tempFactory);
-            const float* color = selected ? smYellow : smText;
+            const float* color = selected ? smText : smTextSoft;
             float ty = y + 3.75f;
 
             if (selected) {
-                SM_Fill(ax, y, ew, eh, smGrey, &clip);
+                SM_Round(ax, y, ew, eh, SM_RADIUS_MD, smRaisedHover, &clip);
+            } else if (SM_Over(SM_HIT_FACTORY, list[k])) {
+                SM_Round(ax, y, ew, eh, SM_RADIUS_MD, smRaised, &clip);
             }
             ty = SM_DrawLines(ax + 15, ty, 24, 38.39f, color, f->title, ew - 15, qtrue, &clip);
             ty = SM_DrawLines(ax + 15, ty, 15, 24, color, f->author[0] ? f->author : "No author provided", ew - 15,
@@ -1194,11 +1215,13 @@ static float SM_MapTiles(float x, float y, float width, const smRect_t* clip) {
             qboolean selected = !strcmp(a->sysname, sm.tempMap);
 
             if (selected) {
-                SM_Fill(tx, ty, tw, 190.39f, smGrey, clip);
+                SM_Round(tx, ty, tw, 190.39f, SM_RADIUS_MD, smRaisedHover, clip);
+            } else if (SM_Over(SM_HIT_MAP, smMapList[k])) {
+                SM_Round(tx, ty, tw, 190.39f, SM_RADIUS_MD, smRaised, clip);
             }
             SM_Pic(tx + 6, ty + 6, 250, 140, SM_Preview(a, a->sysname), clip);
             if (SM_TextInside(base, 24, clip)) {
-                SM_Centered(tx + tw * 0.5f, base, 24, selected ? smYellow : smText, a->name, qtrue);
+                SM_Centered(tx + tw * 0.5f, base, 20, selected ? smText : smTextSoft, a->name, qtrue);
             }
             SM_Hit(tx, ty, tw, 190.39f, SM_HIT_MAP, smMapList[k], clip);
         }
@@ -1221,7 +1244,7 @@ static void SM_DrawMaps(void) {
         float ry = in.y + k * 33.59f;
 
         if (SM_FilterChar(k) == sm.filter) {
-            SM_Fill(in.x, ry, itemW, 33.59f, smGrey, NULL);
+            SM_Round(in.x, ry, itemW, 33.59f, SM_RADIUS_SM, smRaisedHover, NULL);
         }
         SM_Text(in.x + (itemW - SM_Advance(FONT_SANS, 18.67f, label, -1)) * 0.5f,
                 SM_Baseline(FONT_SANS, 18.67f, ry + 1.87f, 29.87f), FONT_SANS, 18.67f, smText, label, -1, qfalse);
@@ -1563,6 +1586,7 @@ void UI_StartMatch_Paint(void) {
     } else if (sm.dialog == SM_DIALOG_MAPS) {
         SM_DrawMaps();
     }
+    UI_Home_Banner();
 
     memcpy(smLastHits, smHits, smNumHits * sizeof(smHits[0]));
     smNumLastHits = smNumHits;

@@ -972,6 +972,8 @@ qboolean trap_Factory_Cvar(int num, int index, char* name, int nameSize, char* v
 int trap_Arena_Count(void);
 qboolean trap_Arena_Value(int num, const char* key, char* buf, int size);
 void trap_Cvar_LatchedVariableStringBuffer(const char* var_name, char* buffer, int bufsize);
+int trap_R_Font_Register(const char* name);
+void trap_Sys_OpenURL(const char* url);
 
 // ui_startmatch.c: retail's web Start Match page, drawn by one ownerdraw of the
 // "startmatch" menu (the number is ours: retail's menudef.h has none for it)
@@ -985,7 +987,6 @@ qboolean UI_StartMatch_HandleKey(int key);
 void UI_Settings_Open(void);
 void UI_Settings_Paint(void);
 qboolean UI_Settings_HandleKey(int key);
-void UI_Settings_MouseUp(void);
 void UI_Settings_Close(void);
 
 // [QL] the main menu and the bar the pages sit under; see ui_home.c
@@ -996,6 +997,8 @@ qboolean UI_Home_HandleKey(int key);
 void UI_Home_Backdrop(void);
 void UI_Home_Nav(int active);
 qboolean UI_Home_NavClick(void);
+qboolean UI_Home_InMatch(void);
+void _UI_SetActiveMenu(uiMenuCommand_t menu);
 void UI_LoadDemos(void);
 void UI_BuildPlayerList(void);
 
@@ -1005,7 +1008,12 @@ void UI_BuildPlayerList(void);
 void UI_Replays_Open(void);
 void UI_Replays_Paint(void);
 qboolean UI_Replays_HandleKey(int key);
-void UI_Replays_MouseUp(void);
+
+// [QL] the Training Center page; see ui_training.c
+#define UI_TRAINING 604
+void UI_Training_Open(void);
+void UI_Training_Paint(void);
+qboolean UI_Training_HandleKey(int key);
 
 void trap_S_StopBackgroundTrack(void);
 void trap_S_StartBackgroundTrack(const char* intro, const char* loop);

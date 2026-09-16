@@ -2224,6 +2224,9 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
         case UI_REPLAYS:
             UI_Replays_Paint();
             break;
+        case UI_TRAINING:
+            UI_Training_Paint();
+            break;
         default:
             break;
     }
@@ -2800,6 +2803,8 @@ static qboolean UI_OwnerDrawHandleKey(int ownerDraw, int flags, float* special, 
             return UI_Home_HandleKey(key);
         case UI_REPLAYS:
             return UI_Replays_HandleKey(key);
+        case UI_TRAINING:
+            return UI_Training_HandleKey(key);
         case UI_HANDICAP:
             return UI_Handicap_HandleKey(flags, special, key);
             break;
@@ -3251,6 +3256,17 @@ static void UI_RunMenuScript(char** args) {
             UI_StartMatch_Open();
         } else if (Q_stricmp(name, "replaysOpen") == 0) {
             UI_Replays_Open();
+        } else if (Q_stricmp(name, "trainingOpen") == 0) {
+            UI_Training_Open();
+        } else if (Q_stricmp(name, "homeEscape") == 0) {
+            // [ioquakelive] Escape on the front end: over a match it goes back to the
+            // match's menu, which is where "Main Menu" was pressed; otherwise it asks
+            // to quit, as retail's main.menu does.
+            if (UI_Home_InMatch()) {
+                _UI_SetActiveMenu(UIMENU_INGAME);
+            } else {
+                Menus_ActivateByName("quit_popmenu");
+            }
         } else if (Q_stricmp(name, "homeOpen") == 0) {
             // the page takes keys before the mouse moves over it
             menuDef_t* home = Menus_FindByName("main");
@@ -5399,6 +5415,13 @@ void _UI_SetActiveMenu(uiMenuCommand_t menu) {
                 Menus_ActivateByName(inMatch ? "settings_ingame" : "settings");
                 return;
             }
+            case UIMENU_HOME:
+                // [ioquakelive] the front end over a match. Unlike UIMENU_MAIN it keeps
+                // the connection's menus loaded and does not start the menu music.
+                trap_Key_SetCatcher(KEYCATCH_UI);
+                Menus_CloseAll();
+                Menus_ActivateByName("main");
+                return;
             case UIMENU_TEAM:
                 trap_Key_SetCatcher(KEYCATCH_UI);
                 // [QL] uix86.dll _UI_SetActiveMenu opens "joingame_menu", not "team"
