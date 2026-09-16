@@ -114,6 +114,14 @@ void SV_SetConfigstring(int index, const char* val) {
         val = "";
     }
 
+    // [QL] quakelive_steam.exe 0x4e2f69: a configstring that is not there yet is checked for before
+    // it is read. Before the first map there is no sv, so every one of them is a null pointer, and
+    // the game module does set one while its cvars are registered at boot (G_RegisterCvars).
+    if (!sv.configstrings[index]) {
+        sv.configstrings[index] = CopyString(val);
+        return;
+    }
+
     // don't bother broadcasting an update if no change
     if (!strcmp(val, sv.configstrings[index])) {
         return;

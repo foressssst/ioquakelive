@@ -425,6 +425,7 @@ void SV_GameClientCommand(int clientNum);
 qboolean SV_GameSnapshotVisibility(int viewerClientNum, int entityNum);
 qboolean SV_GameSnapshotAlwaysSend(int viewerNum, int clientNum);
 void SV_GameBotAIStartFrame(int time);
+void SV_RegisterGameCvars(void);
 
 //
 // sv_bot.c
