@@ -1878,11 +1878,36 @@ static void PM_Footsteps(void) {
     }
 
     // check for footstep / splash sounds
-    old = pm->ps->bobCycle;
-    pm->ps->bobCycle = (int)(old + bobmove * pml.msec) & 255;
+    //
+    // [QL] EXCEPCION a retail, pedida por el usuario junto con destapar com_maxfps.
+    //
+    // Retail hace `bobCycle = (int)(old + bobmove * pml.msec) & 255`, y esa truncacion tira la
+    // parte decimal en cada frame. Con msec de 8 (125 fps) se pierde poco y no se nota, pero
+    // cuanto mas alto el fps mas chico el msec: pasando de ~330 fps el producto queda por debajo
+    // de 1, se trunca a 0 y el ciclo se congela. Ahi dejan de sonar los pasos y se frena el bob
+    // del arma, que es justo el sintoma que aparece al destapar el limite de fps.
+    //
+    // El arreglo es guardar lo que sobra en vez de tirarlo. El ciclo visible sigue siendo de 8
+    // bits, que es lo unico que viaja por red (msg.c: PSF(bobCycle) con 8 bits); la fraccion vive
+    // en los bits 8 a 15 en 1/256 de unidad, o sea del lado local nada mas. La prediccion del
+    // cliente arranca de cada snapshot con esos bits en cero y rehace los mismos comandos, asi
+    // que da lo mismo en las dos puntas.
+    //
+    // Efecto secundario que hay que saber: ahora el ciclo avanza al ritmo real en vez del
+    // truncado. Corriendo (bobmove 0.4) a 125 fps retail avanzaba 3 por frame en vez de 3.2, o
+    // sea que los pasos salen ~7% mas seguidos que en retail sin parchar. No hay forma de tener
+    // las dos cosas: el ritmo de retail depende del fps, que es el bug.
+    old = pm->ps->bobCycle & 255;
+    {
+        int carry = (pm->ps->bobCycle >> 8) & 255;              // lo que sobro del frame anterior
+        int units = (int)(bobmove * pml.msec * 256.0f) + carry;  // avance en 1/256 de unidad
+        int cycle = (old + (units >> 8)) & 255;
+
+        pm->ps->bobCycle = cycle | ((units & 255) << 8);
+    }
 
     // if we just crossed a cycle boundary, play an appropriate footstep event
-    if (((old + 64) ^ (pm->ps->bobCycle + 64)) & 128) {
+    if (((old + 64) ^ ((pm->ps->bobCycle & 255) + 64)) & 128) {
         if (pm->waterlevel == 0) {
             // on ground will only play sounds if running
             if (footstep) {
