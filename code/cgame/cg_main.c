@@ -1966,6 +1966,10 @@ static void CG_RegisterGraphics(void) {
         cgs.media.teamStatusBar = trap_R_RegisterShader("gfx/2d/colorbar.tga");
         cgs.media.blueKamikazeShader = trap_R_RegisterShader("models/weaphits/kamikblu");
         cgs.media.poiShader = trap_R_RegisterShader("sprites/neutralflagcarrier");
+        // [QL] 0x100237e7 and 0x100240f4: the same marker wears a different face when
+        // the match is running Quad Hog or Red Rover
+        cgs.media.quadHogPoiShader = trap_R_RegisterShader("gfx/2d/quad_hog/quadhog");
+        cgs.media.infectedPoiShader = trap_R_RegisterShader("gfx/2d/infected/bite");
         // [QL] 0x1002415d: the teammate markers
         cgs.media.friendShader = trap_R_RegisterShader("sprites/friend");
         cgs.media.friendHitShader = trap_R_RegisterShader("sprites/friend_hit");

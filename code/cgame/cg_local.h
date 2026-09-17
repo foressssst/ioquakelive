@@ -925,16 +925,6 @@ typedef struct {
         int      currentCheckpointEnt; // entity number of current/last checkpoint (-1 = none)
     } race;
 
-    // [QL] point of interest markers (flag carriers, powerup holders, etc.)
-    #define MAX_POI_PICS 128
-    struct {
-        vec3_t   origin;
-        int      startTime;
-        int      length;     // duration in ms (from es->powerups)
-        int      team;       // team association (from es->generic1)
-    } poiPics[MAX_POI_PICS];
-    int numPoiPics;
-
     // [QL] the spectator item timers (count at 0x10ab994c)
     specItemTimer_t specItemTimers[MAX_SPEC_ITEM_TIMERS];
     int numSpecItemTimers;
@@ -1480,7 +1470,9 @@ typedef struct {
     qhandle_t domSkinNeutral;     // models/powerups/domination/domntrl.skin
 
     // [QL] POI markers
-    qhandle_t poiShader;        // sprites/neutralflagcarrier
+    qhandle_t poiShader;            // sprites/neutralflagcarrier, the EV_POI marker
+    qhandle_t quadHogPoiShader;     // gfx/2d/quad_hog/quadhog, the same marker in Quad Hog
+    qhandle_t infectedPoiShader;    // gfx/2d/infected/bite, the same marker in Red Rover
     qhandle_t friendShader;         // [QL] sprites/friend, a teammate's marker
     qhandle_t friendHitShader;      // [QL] sprites/friend_hit, one hurt within cg_drawHitFriendTime
     qhandle_t friendDeadShader;     // [QL] sprites/friend_dead, where a teammate died
@@ -2073,7 +2065,6 @@ void CG_PlayCountdownSound(int count);
 
 void CG_DrawAdvertisements(void);
 void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoPlayback);
-void CG_AddPOIMarkers(void);
 void CG_CloseMenus(void);
 void CG_HideJoinMenu(void);
 void CG_UpdateJoinMenu(void);
