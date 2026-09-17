@@ -402,11 +402,6 @@ extern void UI_RegisterCvars(void);
 extern void UI_UpdateCvars(void);
 
 //
-// ui_credits.c
-//
-extern void UI_CreditMenu(void);
-
-//
 // ui_ingame.c
 //
 extern void InGame_Cache(void);
@@ -1008,12 +1003,6 @@ void UI_BuildPlayerList(void);
 
 void UI_Replays_Open(void);
 void UI_Replays_Paint(void);
-// [ioquakelive] los creditos: una capa sobre el menu principal, no una pagina
-void UI_Credits_Open(void);
-void UI_Credits_Close(void);
-qboolean UI_Credits_IsOpen(void);
-void UI_Credits_Overlay(void);
-qboolean UI_Credits_HandleKey(int key);
 void UI_PatchNotes_Open(void);
 void UI_PatchNotes_Paint(void);
 qboolean UI_PatchNotes_HandleKey(int key);
