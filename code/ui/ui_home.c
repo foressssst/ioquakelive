@@ -76,8 +76,7 @@ typedef enum {
     HM_HIT_NONE = SM_HIT_SHARED,
     HM_HIT_NAV,
     HM_HIT_BANNER,
-    HM_HIT_ITEM,
-    HM_HIT_CREDITS  // [ioquakelive] la linea del pie
+    HM_HIT_ITEM
 } hmHitType_t;
 
 // arenas whose shots pak00 carries, one of which is the background when the painting is not there
@@ -533,13 +532,13 @@ static void UI_Home_DrawShade(void) {
     // [ioquakelive] El pie es una banda desde que lleva la franja de marcas: el degradado
     // de antes se apagaba justo donde estan, y sobre la figura del cuadro quedaban a media
     // luz. Ahora el degradado termina arriba de ellas y lo que queda abajo es parejo.
-    UI_Home_Wash(smBottom - 250.0f, 160.0f, smPage, 0.0f, 0.88f);
+    UI_Home_Wash(smBottom - 300.0f, 190.0f, smPage, 0.0f, 0.9f);
     {
         vec4_t band;
 
         VectorCopy(smPage, band);
-        band[3] = 0.88f;
-        SM_Fill(-1, smBottom - 90.0f, smVW + 2, 91.0f, band, NULL);
+        band[3] = 0.9f;
+        SM_Fill(-1, smBottom - 110.0f, smVW + 2, 111.0f, band, NULL);
     }
 }
 
@@ -710,10 +709,13 @@ QUAKE III ARENA, que es el codigo que id libero; ioquake3, el motor que lo manti
 QUAKE LIVE, el juego que esto reimplementa; y Quake Club, la comunidad desde la que se
 empuja este trabajo.
 
-El de Quake Live sale de pak00 -- del archivo del jugador, nunca de aqui. Los otros tres
-estan en pak01, compuestos para este pie. Las medidas no salen de la imagen: cada una se
-dibuja al alto que la hace pesar lo mismo que las demas, que es lo que hace que una
-apilada y una palabra sola convivan en la misma linea.
+Los cuatro son los logos que dibujo el jugador, pasados a blanco con alfa por
+code/tools/make_menu_marks.py y guardados en pak01. Van todos tenidos al mismo gris, asi
+la fila se lee como una sola cosa y no como cuatro logos pegados.
+
+Las medidas no salen de la imagen: cada una se dibuja al alto que la hace pesar lo mismo
+que las demas, que es lo que hace que una apilada y una palabra sola convivan en la misma
+linea. Salen de la vista previa que deja ese mismo script.
 ===============
 */
 typedef struct {
@@ -722,17 +724,17 @@ typedef struct {
 } hmMark_t;
 
 static const hmMark_t hmMarks[] = {
-    {"ui/ioql/mark_quake3", 130.0f, 34.0f},
-    {"ui/ioql/mark_ioquake3", 86.0f, 20.0f},
-    {"ui/assets/main_menu/ql_logo", 160.0f, 40.0f},  // pak00, con su propio aire alrededor
-    {"ui/ioql/mark_quakeclub", 60.0f, 44.0f},
+    {"ui/ioql/mark_quake3", 112.0f, 80.0f},
+    {"ui/ioql/mark_ioquake3", 97.0f, 40.0f},
+    {"ui/ioql/mark_quakelive", 149.0f, 38.0f},
+    {"ui/ioql/mark_quakeclub", 96.0f, 75.0f},
 };
 
-#define HM_MARK_GAP 46.0f
-#define HM_MARK_H 44.0f  // el mas alto: la franja se centra sobre esa banda
+#define HM_MARK_GAP 54.0f
+#define HM_MARK_H 80.0f  // el mas alto: la franja se centra sobre esa banda
 
 static float UI_Home_DrawMarks(float bottom) {
-    static const vec4_t tint = {1.0f, 1.0f, 1.0f, 0.62f};
+    static const vec4_t tint = {1.0f, 1.0f, 1.0f, 0.72f};
     static qhandle_t shaders[ARRAY_LEN(hmMarks)];
     static qboolean loaded;
     float total = 0;
@@ -769,34 +771,23 @@ The version under the list and, at the bottom right, the notice retail's splash
 shows. There is no legal-notices page in this build, so the line is the notice
 itself.
 
-[ioquakelive] Credits sits here too, after the version and in the same grey: it is
-the same kind of line -- who this is and who made what it stands on -- and the
-player asked for it here rather than as a page of its own. It opens over the menu.
+[ioquakelive] Over it va la franja de marcas, que es lo que hace de creditos: el
+jugador pidio que fueran los logos y nada mas, sin pagina ni lista.
 ===============
 */
 static void UI_Home_DrawLegal(void) {
     static const char* const notice =
         "QUAKE LIVE (c) 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
-    static const char* const credits = "Credits";
     char version[MAX_CVAR_VALUE_STRING];
     float h = 26.0f;
     float y = smBottom - 30 - h - (UI_Home_InMatch() ? 38.0f : 0.0f);
     float baseline = SM_Baseline(FONT_SANS, 12, y, h);
     float w = SM_Advance(FONT_SANS, 12, notice, -1);
-    float x = UI_Home_ColumnX();
-    qboolean over = SM_Over(HM_HIT_CREDITS, 0);
 
     UI_Home_DrawMarks(y - 8.0f);
     SM_Text(smVW - UI_Home_ColumnX() * 0.5f - w, baseline, FONT_SANS, 12, smSubtle, notice, -1, qfalse);
-
     trap_Cvar_VariableStringBuffer("version", version, sizeof(version));
-    SM_Text(x, baseline, FONT_SANS, 12, smSubtle, version, -1, qfalse);
-    x += SM_Advance(FONT_SANS, 12, version, -1);
-
-    SM_Text(x + 10, baseline, FONT_SANS, 12, smBorder, "|", -1, qfalse);
-    x += 22;
-    SM_Text(x, baseline, FONT_SANS, 12, over ? smText : smSubtle, credits, -1, qfalse);
-    SM_Hit(x - 6, y, SM_Advance(FONT_SANS, 12, credits, -1) + 12, h, HM_HIT_CREDITS, 0, NULL);
+    SM_Text(UI_Home_ColumnX(), baseline, FONT_SANS, 12, smSubtle, version, -1, qfalse);
 }
 
 void UI_Home_Open(void) {
@@ -822,16 +813,12 @@ void UI_Home_Paint(void) {
     UI_Home_DrawLegal();
 
     UI_Home_Banner();
-    UI_Credits_Overlay();  // [ioquakelive] al final, para quedar encima de todo
     SM_EndFrame();
 }
 
 qboolean UI_Home_HandleKey(int key) {
     const smHit_t* hit;
 
-    if (UI_Credits_HandleKey(key)) {
-        return qtrue;  // [ioquakelive] con los creditos abiertos no pasa nada al menu
-    }
     if (key & K_CHAR_FLAG) {
         return qtrue;
     }
@@ -846,10 +833,6 @@ qboolean UI_Home_HandleKey(int key) {
         return qtrue;
     }
     hit = SM_HitAt(smMX, smMY);
-    if (hit && hit->type == HM_HIT_CREDITS) {
-        UI_Credits_Open();
-        return qtrue;
-    }
     if (!hit || hit->type != HM_HIT_ITEM) {
         return qtrue;
     }
