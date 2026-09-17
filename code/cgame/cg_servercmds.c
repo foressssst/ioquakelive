@@ -116,7 +116,7 @@ static int CG_ValidOrder(const char* p) {
 CG_ParseScores_Ffa
 
 [QL] scores_ffa: 18 fields per player
-Format: numPlayers teamScore0 teamScore1 [client score ping time accuracy impressive excellent gauntlet defend assist perfect captures alive frags deaths bestWeapon powerups damageDone] ...
+Format: numPlayers teamScore0 teamScore1 [client score ping time accuracy impressive excellent gauntlet defend assist perfect captures alive frags deaths bestWeapon bestWeaponAccuracy damageDone] ...
 =================
 */
 static void CG_ParseScores_Ffa(void) {
@@ -149,7 +149,10 @@ static void CG_ParseScores_Ffa(void) {
         sp->frags = atoi(CG_Argv(idx++));
         sp->deaths = atoi(CG_Argv(idx++));
         sp->bestWeapon = atoi(CG_Argv(idx++));
-        sp->powerUps = atoi(CG_Argv(idx++));
+        // [ioquakelive] el campo 17 es la precision del arma preferida, no los powerups. El
+        // servidor manda eso (qagamex86.dll 0x1003d285, decimoseptimo %i) y nadie leia powerUps,
+        // asi que el dato se tiraba y la columna WEAP del marcador quedaba sin su porcentaje.
+        sp->bestWeaponAccuracy = atoi(CG_Argv(idx++));
         sp->damageDone = atoi(CG_Argv(idx++));
         sp->net = sp->frags - sp->deaths;
 
