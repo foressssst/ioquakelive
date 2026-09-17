@@ -196,6 +196,15 @@ void SM_Pic(float x, float y, float w, float h, qhandle_t shader, const smRect_t
                           (r.y - y) / h, (r.x + r.w - x) / w, (r.y + r.h - y) / h, shader);
 }
 
+// [ioquakelive] the same picture through a colour, which is what the marks in the menu's
+// footer need: they are drawn at one quiet grey so the row reads as one thing
+void SM_PicColor(float x, float y, float w, float h, qhandle_t shader, const float* color,
+                 const smRect_t* clip) {
+    trap_R_SetColor(color);
+    SM_Pic(x, y, w, h, shader, clip);
+    trap_R_SetColor(NULL);
+}
+
 // a CSS border triangle, 10 wide and 5 high (Start Match's react-select arrow)
 void SM_Arrow(float x, float y, qboolean up) {
     int k;

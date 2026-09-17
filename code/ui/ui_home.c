@@ -530,7 +530,17 @@ static void UI_Home_DrawShade(void) {
     SM_Fill(-1, top, solid + 1, full, shade, NULL);
     UI_Home_WashAcross(solid, 520.0f, smPage, 0.92f, 0.0f);
     UI_Home_Wash(top, 150.0f, smPage, 0.55f, 0.0f);
-    UI_Home_Wash(smBottom - 190.0f, 190.0f, smPage, 0.0f, 0.85f);
+    // [ioquakelive] El pie es una banda desde que lleva la franja de marcas: el degradado
+    // de antes se apagaba justo donde estan, y sobre la figura del cuadro quedaban a media
+    // luz. Ahora el degradado termina arriba de ellas y lo que queda abajo es parejo.
+    UI_Home_Wash(smBottom - 250.0f, 160.0f, smPage, 0.0f, 0.88f);
+    {
+        vec4_t band;
+
+        VectorCopy(smPage, band);
+        band[3] = 0.88f;
+        SM_Fill(-1, smBottom - 90.0f, smVW + 2, 91.0f, band, NULL);
+    }
 }
 
 /*
@@ -692,6 +702,67 @@ static void UI_Home_DrawSide(void) {
 
 /*
 ===============
+UI_Home_DrawMarks
+
+[ioquakelive] La franja del pie: los cuatro nombres sobre los que esto esta parado, uno
+al lado del otro como en un pie de patrocinadores, porque tambien son creditos. En orden:
+QUAKE III ARENA, que es el codigo que id libero; ioquake3, el motor que lo mantiene vivo;
+QUAKE LIVE, el juego que esto reimplementa; y Quake Club, la comunidad desde la que se
+empuja este trabajo.
+
+El de Quake Live sale de pak00 -- del archivo del jugador, nunca de aqui. Los otros tres
+estan en pak01, compuestos para este pie. Las medidas no salen de la imagen: cada una se
+dibuja al alto que la hace pesar lo mismo que las demas, que es lo que hace que una
+apilada y una palabra sola convivan en la misma linea.
+===============
+*/
+typedef struct {
+    const char* shader;
+    float w, h;
+} hmMark_t;
+
+static const hmMark_t hmMarks[] = {
+    {"ui/ioql/mark_quake3", 130.0f, 34.0f},
+    {"ui/ioql/mark_ioquake3", 86.0f, 20.0f},
+    {"ui/assets/main_menu/ql_logo", 160.0f, 40.0f},  // pak00, con su propio aire alrededor
+    {"ui/ioql/mark_quakeclub", 60.0f, 44.0f},
+};
+
+#define HM_MARK_GAP 46.0f
+#define HM_MARK_H 44.0f  // el mas alto: la franja se centra sobre esa banda
+
+static float UI_Home_DrawMarks(float bottom) {
+    static const vec4_t tint = {1.0f, 1.0f, 1.0f, 0.62f};
+    static qhandle_t shaders[ARRAY_LEN(hmMarks)];
+    static qboolean loaded;
+    float total = 0;
+    float y = bottom - HM_MARK_H;
+    float x;
+    int i;
+
+    if (!loaded) {
+        loaded = qtrue;
+        for (i = 0; i < (int)ARRAY_LEN(hmMarks); i++) {
+            shaders[i] = trap_R_RegisterShaderNoMip(hmMarks[i].shader);
+        }
+    }
+    for (i = 0; i < (int)ARRAY_LEN(hmMarks); i++) {
+        total += hmMarks[i].w + (i ? HM_MARK_GAP : 0);
+    }
+    x = (smVW - total) * 0.5f;
+
+    for (i = 0; i < (int)ARRAY_LEN(hmMarks); i++) {
+        if (shaders[i]) {
+            SM_PicColor(x, y + (HM_MARK_H - hmMarks[i].h) * 0.5f, hmMarks[i].w, hmMarks[i].h, shaders[i], tint,
+                        NULL);
+        }
+        x += hmMarks[i].w + HM_MARK_GAP;
+    }
+    return y;
+}
+
+/*
+===============
 UI_Home_DrawLegal
 
 The version under the list and, at the bottom right, the notice retail's splash
@@ -715,6 +786,7 @@ static void UI_Home_DrawLegal(void) {
     float x = UI_Home_ColumnX();
     qboolean over = SM_Over(HM_HIT_CREDITS, 0);
 
+    UI_Home_DrawMarks(y - 8.0f);
     SM_Text(smVW - UI_Home_ColumnX() * 0.5f - w, baseline, FONT_SANS, 12, smSubtle, notice, -1, qfalse);
 
     trap_Cvar_VariableStringBuffer("version", version, sizeof(version));

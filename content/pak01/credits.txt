@@ -1,30 +1,20 @@
-// ioquakelive - creditos y agradecimientos
+// ioquakelive - creditos
 //
-// Texto corrido, sin secciones. Lo lee la pantalla de Creditos, a la que se llega por el
-// pie del menu principal. Una marca por linea:
+// Corto a proposito: una linea por credito. Lo lee la pantalla de Creditos, a la que se
+// llega por el pie del menu principal. Una marca por linea:
 //
-//   -  un parrafo. Va entero en una linea: la pantalla lo reparte al ancho que tenga.
-//   >  un link, "texto | url". Se abre en el navegador al hacer clic.
+//   -  un credito, "a quien | por que | url". La url es opcional y hace clicleable el nombre.
+//   =  una nota al pie, chica y gris. Se reparte sola si no cabe.
 //   .  una linea en blanco
 
-- **QUAKE LIVE** y **QUAKE III Arena** son de **id Software**, hoy parte de **ZeniMax Media**. El juego, sus mapas, sus modelos, sus sonidos y su arte son de ellos, y este proyecto no redistribuye nada de eso: para jugar hace falta una copia comprada en Steam, de la que el juego lee sus archivos.
-- QUAKE LIVE (c) 2007-2015 id Software LLC, a ZeniMax Media company. All Rights Reserved.
-> Quake Live en Steam | https://store.steampowered.com/app/282440
+- Quake III Arena | por el codigo fuente, liberado bajo GPL v2 en 2005
+- ioquake3 | por veinte años de mejoras al motor | https://ioquake3.org
+- id Software | por QUAKE LIVE | https://store.steampowered.com/app/282440
+- Thomas Jones | por empezar el proyecto y llegar primero | https://github.com/tjone270
+- Quake Club | por impulsar esta version | https://www.quakeclub.com
+- CPMA | por las ideas de presentacion | https://playmorepromode.com
+- CNQ3 | por la consola y los codigos de color | https://playmorepromode.com/cnq3
+- WolfcamQL | por servir de referencia contra retail | https://github.com/brianmt/wolfcamql
 .
-- Todo esto existe porque id Software libero el codigo de Quake III Arena bajo la **GPL v2** en 2005. El motor es **ioquake3**, el Quake 3 que la comunidad mantiene desde entonces: SDL2, OpenAL, 64 bits, cURL y centenares de arreglos. Lo mantienen James Canete, Ludwig Nussel, Thilo Schulz, Tim Angus, Tony J. White, Jack Slater y Zack Middleton.
-> ioquake3 | https://ioquake3.org
-.
-- Este proyecto es una rama del fork de **Thomas Jones**, que hizo la parte que no se puede saltar: el protocolo 91 de Quake Live, las tablas de campos, las exportaciones de los modulos, los archivos por modo de juego y el netchan. Sin ese trabajo no habria nada sobre lo que construir.
-> tjone270 en GitHub | https://github.com/tjone270
-.
-- De **CPMA** salieron ideas de presentacion que este proyecto usa: la aparicion gradual del aviso de objeto recogido, los cuadros de las medallas, las armas brillantes y el pulso de la mira. Estan portadas con la tipografia y la paleta de Quake Live, no calcadas.
-> CPMA | https://playmorepromode.com
-.
-- La consola opcional y los codigos de color extendidos vienen de **CNQ3**, y **WolfcamQL** sirvio muchas veces de referencia para comparar contra retail lo que el binario hacia.
-> CNQ3 | https://playmorepromode.com/cnq3
-> WolfcamQL | https://github.com/brianmt/wolfcamql
-.
-- El diseño del front end sigue el lenguaje visual de **quakeclub.com**, la comunidad chilena de Quake Live.
-> Quake Club | https://www.quakeclub.com
-.
-- **ioquakelive** es una reimplementacion open source de Quake Live sobre ioquake3, bajo GPL v2. No esta afiliado a id Software ni a ZeniMax Media, y no los representa. Nunca se copia codigo decompilado: se documenta el comportamiento y se reimplementa.
+= QUAKE LIVE (c) 2007-2015 id Software LLC, a ZeniMax Media company. All Rights Reserved.
+= ioquakelive es open source bajo GPL v2 y no esta afiliado a id Software ni a ZeniMax Media. Se juega con una copia comprada en Steam: ni el juego ni sus assets se redistribuyen.
