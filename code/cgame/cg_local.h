@@ -40,7 +40,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define DAMAGE_TIME 500
 #define LAND_DEFLECT_TIME 150
 #define LAND_RETURN_TIME 300
-#define STEP_TIME 200
+#define STEP_TIME 100  // [QL] 0x10073bd0, la mitad que en Quake 3
 #define DUCK_TIME 100
 #define PAIN_TWITCH_TIME 200
 #define WEAPON_SELECT_TIME 1400

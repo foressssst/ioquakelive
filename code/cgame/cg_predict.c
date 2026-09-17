@@ -363,6 +363,54 @@ CG_TouchTriggerPrediction
 Predict push triggers and items
 =========================
 */
+/*
+=================
+CG_UpdateStepChange
+
+[QL] cgamex86.dll 0x10044620, llamada por CG_PredictPlayerState inmediatamente despues de cada
+Pmove (0x10044bee). Es la que suaviza la camara al subir un escalon.
+
+Tres cosas que no son como en Quake 3, y se ven las tres al subir una escalera:
+
+- La puerta es `cg.stepTime < pm.stepTime`, o sea "este escalon es mas nuevo que el ultimo que
+  suavice". No sirve comparar contra `cmd.serverTime`: Pmove parte el comando en trozos de hasta
+  66 ms y le pisa el `serverTime` a cada uno, asi que un escalon que cae en un trozo que no es el
+  ultimo no coincidiria nunca y se perderia.
+- El cambio anterior **no se descarta**: se le saca lo que le queda de vida, decayendo lineal en
+  100 ms, y el escalon nuevo se suma encima. Sin esto cada peldano corta el suavizado del anterior
+  de golpe, que es justo el temblor.
+- El total se limita a MAX_STEP_CHANGE (0x10067224 = 32) y la marca de tiempo que queda es
+  `cg.time`, no la del comando, porque CG_StepOffset mide contra el reloj del cliente.
+
+Retail ademas se saltea el suavizado en dos estados mas que todavia no tengo identificados
+(0x10a6f8a8 y 0x10a6d26c); el que si esta confirmado es PMF_FOLLOW.
+=================
+*/
+void CG_UpdateStepChange(void) {
+    int timeDelta;
+    float oldChange;
+
+    if (cg_pmove.stepHeight == 0.0f || cg.stepTime >= cg_pmove.stepTime) {
+        return;
+    }
+    if (cg.snap->ps.pm_flags & PMF_FOLLOW) {
+        return;
+    }
+
+    timeDelta = cg.time - cg.stepTime;
+    if (timeDelta < STEP_TIME) {
+        oldChange = cg.stepChange * (float)(STEP_TIME - timeDelta) / (float)STEP_TIME;
+    } else {
+        oldChange = 0.0f;
+    }
+
+    cg.stepChange = cg_pmove.stepHeight + oldChange;
+    if (cg.stepChange > MAX_STEP_CHANGE) {
+        cg.stepChange = MAX_STEP_CHANGE;
+    }
+    cg.stepTime = cg.time;
+}
+
 static void CG_TouchTriggerPrediction(void) {
     int i;
     trace_t trace;
@@ -628,7 +676,6 @@ void CG_PredictPlayerState(void) {
         cg_pmove.tracemask &= ~CONTENTS_BODY;  // spectators can fly through bodies
     }
     cg_pmove.noFootsteps = (cgs.dmflags & DF_NO_FOOTSTEPS) > 0;
-    cg_pmove.stepHeight = 0.0f;  // [QL] clear before prediction loop
 
     // [QL] set PMF_NO_AUTOHOP from client cvar for prediction
     if (cg_autoHop.integer == 0) {
@@ -752,13 +799,7 @@ void CG_PredictPlayerState(void) {
 
         moved = qtrue;
 
-        // [QL] step smoothing - read stepHeight/stepTime set by PM_StepSlideMove
-        if (cg_pmove.stepHeight != 0.0f &&
-            cg_pmove.stepTime == cg_pmove.cmd.serverTime) {
-            cg.stepChange = cg_pmove.stepHeight;
-            cg.stepTime = cg_pmove.cmd.serverTime;
-            cg_pmove.stepHeight = 0.0f;
-        }
+        CG_UpdateStepChange();
 
         // add push trigger movement effects
         CG_TouchTriggerPrediction();
