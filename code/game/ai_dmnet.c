@@ -3209,7 +3209,7 @@ int AINode_Training(bot_state_t* bs) {
     // the player died: a word once the body lands, and eyes on them
     if (hstate.eFlags & EF_DEAD) {
         if (!bs->tourSaidCareful && hstate.groundEntityNum != ENTITYNUM_NONE) {
-            trap_EA_Command(bs->client, G_TrainingSay("botSay You've got to be careful in the Arena!"));
+            trap_EA_Command(bs->client, va("botSay %i %i %s", human, 5, G_TrainingText("You've got to be careful in the Arena!")));
             bs->tourSaidCareful = 1;
         }
         BotTourLookAt(bs, hinfo.origin);
@@ -3379,7 +3379,7 @@ pushgoal:
         if (FloatTime() > bs->tourNextSay && FloatTime() > bs->tourLastNudge + 10 &&
             random() < bs->thinktime * 1.9) {
             bs->tourLastNudge = FloatTime();
-            trap_EA_Command(bs->client, G_TrainingSay("botSay This way! No time to waste!"));
+            trap_EA_Command(bs->client, va("botSay %i %i %s", human, 5, G_TrainingText("This way! No time to waste!")));
             trap_SendServerCommand(human, "playSound sound/vo/crash/41a.wav");
             if (bs->tourGoBack) {
                 bs->tourLostPlayer = 1;
