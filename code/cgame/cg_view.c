@@ -222,6 +222,8 @@ CG_OffsetThirdPersonView
 ===============
 */
 #define FOCUS_DISTANCE 512
+static void CG_StepOffset(void);
+
 static void CG_OffsetThirdPersonView(void) {
     vec3_t forward, right, up;
     vec3_t view;
@@ -232,6 +234,11 @@ static void CG_OffsetThirdPersonView(void) {
     vec3_t focusPoint;
     float focusDist;
     float forwardScale, sideScale;
+
+    // [QL] 0x1004cad3: en tercera persona el escalon tambien se suaviza. Retail tiene
+    // CG_StepOffset inlineada en las dos vistas, y las dos escriben el mismo
+    // cg.refdef.vieworg[2] con la misma formula; Quake 3 solo la tiene en primera.
+    CG_StepOffset();
 
     cg.refdef.vieworg[2] += cg.predictedPlayerState.viewheight;
 
