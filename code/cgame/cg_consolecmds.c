@@ -611,6 +611,10 @@ void CG_ClearChat(void) {
 
 // [QL] cgamex86.dll 0x10006910. A line ending in '\n' is copied without it;
 // the copy is capped at 72 characters during the intermission, 254 otherwise.
+//
+// [ioquakelive] No imprime a consola, y eso importa: antes lo hacia, y como el manejador
+// de "print" ya imprimia lo suyo, cada aviso del servidor salia dos veces. En el binario
+// imprime cada llamador con su formato, no esta funcion.
 void CG_AddChat(const char *text, int teamOnly, int extraTime) {
     int len;
     int size;
@@ -637,14 +641,6 @@ void CG_AddChat(const char *text, int teamOnly, int extraTime) {
         size = len;
     }
     Q_strncpyz(cg.currentChatLine.text, text, size);
-
-    // Also print to console, one line of its own: without the newline whatever was
-    // printed next ran on after it, which is not how retail's console reads.
-    if (len > 0 && text[len - 1] == '\n') {
-        CG_Printf("%s", text);
-    } else {
-        CG_Printf("%s\n", text);
-    }
 }
 
 // the n-th newest stored chat line (0 is the newest), or NULL past them
