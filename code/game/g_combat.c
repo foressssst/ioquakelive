@@ -88,9 +88,10 @@ void AddScore( gentity_t *ent, vec3_t origin, int score ) {
 	if ( level.intermissionQueued || level.intermissionTime ) {
 		return;
 	}
-	if ( g_training.integer && !(ent->r.svFlags & SVF_BOT) ) {
-		return;  // only bots score in training mode
-	}
+	// [ioquakelive] Aca habia una guarda que le negaba el puntaje al jugador humano en modo
+	// entrenamiento: "only bots score in training mode". No es de retail. g_training se lee en
+	// catorce sitios del binario y ninguno es AddScore, asi que en el Crash Course se podia ir
+	// 7 a 0 y el marcador seguia en cero. El unico modo sin puntaje es Race, que esta abajo.
 	if ( g_gametype.integer == GT_RACE ) {
 		return;  // no scoring in race mode
 	}
