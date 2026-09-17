@@ -79,7 +79,9 @@ typedef enum {
     HM_HIT_ITEM
 } hmHitType_t;
 
-static const char* const hmNavNames[HM_NUM_NAV] = {"Home", "Play", "Training", "Replays", "Settings", "Quit"};
+static const char* const hmNavNames[HM_NUM_NAV] = {"Home",     "Play",      "Training",
+                                                  "Replays",  "Settings",  "Patch Notes",
+                                                  "Quit"};
 
 // arenas whose shots pak00 carries, one of which is the background when the painting is not there
 static const char* const hmBackdrops[] = {
@@ -376,6 +378,10 @@ void UI_Home_Go(int nav) {
             Menus_CloseAll();
             Menus_ActivateByName("settings");
             break;
+        case HM_NAV_PATCHNOTES:
+            Menus_CloseAll();
+            Menus_ActivateByName("patchnotes");
+            break;
         case HM_NAV_QUIT:
             // retail's power button (App's quitGame) asks nothing: it sends quit
             trap_Cmd_ExecuteText(EXEC_APPEND, "quit\n");
@@ -471,8 +477,8 @@ static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
         {"Statistics", "Your career, your matches, your replays", -1, HM_MENU_STATS, qfalse},
         {"Community", "The Workshop and the Steam community", -1, HM_MENU_COMMUNITY, qfalse},
         {"Settings", "Controls, video, sound and your player", HM_NAV_SETTINGS, -1, qfalse},
+        {"Patch Notes", "What changed in this build", HM_NAV_PATCHNOTES, -1, qfalse},
         {"Quit", "Leave QUAKE LIVE", HM_NAV_QUIT, -1, qfalse},
-        {NULL, NULL, -1, -1, qfalse},
     },
     {
         {"Match Browser", "Find a server to play on", -1, -1, qtrue},

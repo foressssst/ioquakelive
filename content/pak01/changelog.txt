@@ -1,0 +1,100 @@
+// ioquakelive - registro de cambios
+//
+// Lo lee la pantalla de Patch Notes del menu. Una marca por linea:
+//
+//   #  titulo de la version
+//   @  fecha, en YYYY-MM-DD
+//   ## titulo de seccion
+//   -  una vinieta
+//
+// Las versiones van de la mas nueva a la mas vieja; la pantalla muestra la primera
+// al abrirse. Escrito para quien juega: sin direcciones de memoria, sin nombres
+// internos y sin rutas.
+
+# Fisicas de Quake Live, fps sin candado y los bots que se caian
+@ 2026-09-17
+
+## Lo que rompia una partida
+- **Los bots ya no se quedan colgados al empezar.** Aparecian como "connect" en el
+  marcador, no contaban como jugadores y la partida se iba a forfeit. Al rato volvian
+  solos, que era el servidor reponiendolos.
+- **Volvio el dano.** Un descuido nuestro dejaba al jugador invulnerable en cualquier
+  partida.
+- **El chat del Crash Course se ve en pantalla.** Antes habia que abrir la consola para
+  leer a Crash, y durante la presentacion inicial no se veia nada.
+
+## Movimiento
+El sistema de movimiento se reviso completo contra Quake Live, funcion por funcion.
+Tres cosas estaban mal:
+
+- **Ya se puede saltar a las cajas y a los bordes altos.** El salto de escalon estaba
+  apagado sin que se notara: ninguna opcion llegaba a su valor.
+- **Subir escaleras es suave.** Antes se subia de a un peldano y la camara temblaba,
+  porque se descartaban escalones en vez de encadenarlos.
+- **La camara tambien se suaviza en tercera persona.**
+- Nadar y caminar por el agua van a la velocidad de Quake Live, no un 12% mas rapido.
+
+## Fps
+- **El limite sube a 1000, y en 0 queda sin limite.** Estaba con candado doble y volvia
+  a bajar a 250 al entrar a un mapa.
+- **Con fps altos los pasos vuelven a sonar** y el arma sigue balanceandose. Pasando los
+  330 fps el contador que los dispara se congelaba. Ese era el motivo del tope.
+
+## Informacion en pantalla
+- **Temporizadores en los objetos importantes.** La cara del objeto queda flotando donde
+  estaba, del color que le toca, con un anillo que va contando lo que falta.
+- **Marcas que se ven a traves de las paredes** para el Quad Hog y para quien lleva la
+  bandera neutral.
+
+## Ajustes
+- Cada grupo de opciones vive en su propia tarjeta, con el titulo en amarillo. Se nota
+  sobre todo en la pestana de controles.
+
+# El front end de Quake Live, el Crash Course y el campo de vision
+@ 2026-09-16
+
+## Jugabilidad
+- **El campo de vision se ve como en Quake Live.** Estaba estirado a lo ancho en
+  pantallas panoramicas y cambiaba con la resolucion, que no corresponde.
+- **Las estadisticas ya no se borran al morir:** se acumulan toda la partida.
+- **Cambiar de modo ya no arrastra las reglas del anterior.** Se podia pasar de Clan
+  Arena a Duelo y aparecer con 300 de vida y 200 de armadura.
+- Los bots ya no dejan la pantalla en negro al arrancar.
+- En los modos por equipos las armas y la municion vuelven a aparecer.
+- Las granadas ya no se cortan al rebotar, y el humo ya no se mete en la camara.
+- En los modos por rondas ya no se suelta el arma al morir.
+- El ajuste automatico de tiempo de red no se podia encender.
+
+## Lo que se ve
+- **Chispas al impactar**, como en Quake Live. La opcion estaba y no hacia nada.
+- **Los objetos simples flotan**, y sus tres opciones de verdad funcionan.
+- **La medalla lleva el numero** de las que llevas acumuladas.
+- Las armas del menu de ingreso se apagan cuando la partida no da equipamiento extra.
+- El color, el bloom y las opciones del renderizador de Quake Live.
+- La piel brillante, con la chaingun y la nailgun.
+- El proyectil se dibuja adelantado, con su opcion propia.
+
+## Menus
+- **El menu principal es el de Quake Live**, con el cuadro del jugador al lado y el
+  selector de modelos con vista previa en 3D.
+- **Ajustes tiene su propia pagina, con las 201 opciones reales de Quake Live.**
+- Inicio, Entrenamiento, Crear Partida, Repeticiones y el menu de pausa: todo bajo la
+  misma barra, con la paleta y la tipografia de Quake Live.
+- El cursor es el del sistema y va donde esta el puntero.
+- La consola y el chat se leen y se ubican como en Quake Live.
+
+## Crash Course
+- **Portado de Quake Live:** Crash camina el recorrido y lo explica.
+- Se puede ver en espanol.
+
+## Controles y sonido
+- La curva del mouse de Quake Live, con su propia sensibilidad para el zoom.
+- Las opciones de humo de Quake Live.
+- Textos de ayuda para las opciones.
+- Los hitsounds siguen el comportamiento de WolfcamQL.
+
+# La piel brillante
+@ 2026-09-15
+
+## Instalacion
+- La piel brillante (fullbright) se instala sola, sin pasos extra.
