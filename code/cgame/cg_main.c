@@ -1877,6 +1877,7 @@ static void CG_RegisterGraphics(void) {
     cgs.media.battleSuitShader = trap_R_RegisterShader("powerups/battleSuit");
     cgs.media.battleWeaponShader = trap_R_RegisterShader("powerups/battleWeapon");
     cgs.media.invisShader = trap_R_RegisterShader("powerups/invisibility");
+    cgs.media.transparentWeaponShader = trap_R_RegisterShader("ioqlTransparentWeapon");
     cgs.media.regenShader = trap_R_RegisterShader("powerups/regen");
     cgs.media.hastePuffShader = trap_R_RegisterShader("hasteSmokePuff");
 

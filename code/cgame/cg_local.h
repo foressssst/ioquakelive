@@ -1182,6 +1182,7 @@ typedef struct {
     qhandle_t quadWeaponShader;
     qhandle_t brightWeaponShader;  // [CPMA] cg_drawBrightWeapons
     qhandle_t invisShader;
+    qhandle_t transparentWeaponShader;  // [ioquakelive] cg_drawGun 3
     qhandle_t regenShader;
     qhandle_t battleSuitShader;
     qhandle_t battleWeaponShader;
