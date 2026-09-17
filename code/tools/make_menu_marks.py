@@ -1,96 +1,91 @@
 """Arma los logotipos de la franja del pie del menu principal.
 
-Salen a ql\\assets\\pak01\\ui\\ioql\\, que es donde vive lo que viaja en pak01 pero no
-entra a git. Cada uno queda recortado a su tinta, con alfa, para dibujarlo tenido.
+Las fuentes son los logos que dibujo el usuario: tinta blanca sobre fondo negro, en JPEG,
+en ql\\assets\\logos_src. De ahi sale un PNG por logo, blanco con alfa, en
+ql\\assets\\pak01\\ui\\ioql (que es donde vive lo que viaja en pak01 pero no entra a git).
 
-  mark_quakeclub  el logo del club, tal cual, recortado
-  mark_quake3     "QUAKE III" sobre "ARENA", compuesto en Handel Gothic Ex
-  mark_ioquake3   "ioquake3" compuesto en Barlow SemiBold
+Como quitar el fondo: en blanco sobre negro la luminancia YA ES el alfa. Un pixel del
+fondo es negro, o sea alfa 0; uno de la tinta es blanco, alfa 255; y un borde suavizado
+al 40% de gris sale al 40% de alfa, que es exactamente lo que hay que dibujar. Por eso no
+se recorta por umbral -- eso dejaria los bordes dentados -- sino que se pasa la
+luminancia a alfa y se pinta todo de blanco.
 
-Quake Live no esta aca: su logo sale de pak00, del archivo del jugador.
+Lo unico que hay que corregir es el JPEG: el negro no queda en 0 sino en 3 o 6, con
+anillos alrededor de la tinta, y el blanco no llega a 255. Se estira el rango con NEGRO y
+BLANCO, asi el fondo cae a cero de verdad y la tinta llega a opaca.
 
-Al final deja una vista previa de la franja en run\\scratch\\marks\\row.png con las
-medidas que usa el UI, para poder mirarla sin entrar al juego.
+Se dibujan tenidos (SM_PicColor), asi que el color del PNG no importa: importa el alfa.
+
+La vista previa queda en run\\scratch\\marks\\row.png, con las medidas que usa el UI.
 """
 
-import io
 import os
-import zipfile
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
+SRC = r"C:\Users\attaraxia\ql\assets\logos_src"
 OUT = r"C:\Users\attaraxia\ql\assets\pak01\ui\ioql"
 PREVIEW = r"C:\Users\attaraxia\ql\run\scratch\marks\row.png"
-QC = r"C:\Users\attaraxia\ql\run\scratch\marks\qc-logo.png"
-PAK00 = r"C:\Users\attaraxia\ql\ioquakelive\build\Release\x86\baseq3\pak00.pk3"
-HANDEL = r"C:\Users\attaraxia\ql\assets\pak01\fonts\handelgothicex.ttf"
-BARLOW = r"C:\Users\attaraxia\ql\ioquakelive\content\pak01\fonts\Barlow-SemiBold.ttf"
 
-# lo que el UI dibuja: alto de cada marca en pixeles de pagina, elegido a ojo para que
-# las cuatro pesen lo mismo aunque una sea apilada y otra una palabra sola
-SIZES = {"mark_quakeclub": 44, "mark_quake3": 34, "mark_ioquake3": 20}
-QL_HEIGHT = 40  # el logo de pak00 se dibuja entero, con el aire que trae
+NEGRO = 16   # hasta aqui es fondo del JPEG, no tinta
+BLANCO = 236  # de aqui para arriba es tinta opaca
+ALTO = 192   # el alto al que se guarda cada PNG; el UI lo achica desde ahi
+
+# El orden de la franja, y el alto al que el UI dibuja cada uno. No son proporcionales a
+# la imagen: cada logo pesa distinto -- uno es un simbolo apilado sobre su nombre, otro es
+# una palabra sola -- asi que el alto se elige para que los cuatro pesen parecido.
+MARCAS = [
+    ("QUAKE_3.jpeg", "mark_quake3", 80),
+    ("IOQUAKE_3.jpeg", "mark_ioquake3", 40),
+    ("QUAKE_LIVE.jpeg", "mark_quakelive", 38),
+    ("QUAKE_CLUB.jpeg", "mark_quakeclub", 75),
+]
+
+ZOOM = 2  # la vista previa se dibuja al doble, que a tamaño real no se juzga nada
 
 
-def render(lines, font_path, px, spacing, gap):
-    """Compone las lineas en blanco sobre transparente, centradas, y recorta a la tinta."""
-    font = ImageFont.truetype(font_path, px)
-    pad = px
-    canvas = Image.new("RGBA", (px * max(len(s) for s in lines) * 2 + pad * 2,
-                                (px * 2 + gap) * len(lines) + pad * 2), (255, 255, 255, 0))
-    draw = ImageDraw.Draw(canvas)
+def key(path):
+    """La luminancia del JPEG pasa a alfa, y lo que queda es tinta blanca recortada."""
+    gris = Image.open(path).convert("L")
 
-    widths = []
-    for text in lines:
-        widths.append(sum(draw.textlength(c, font=font) + spacing for c in text) - spacing)
+    # el rango util del JPEG estirado a 0..255: el fondo a cero, la tinta a opaca
+    escala = 255.0 / (BLANCO - NEGRO)
+    alfa = gris.point(lambda v: 0 if v <= NEGRO else (255 if v >= BLANCO else
+                                                     int((v - NEGRO) * escala)))
 
-    y = float(pad)
-    for text, width in zip(lines, widths):
-        x = (canvas.width - width) * 0.5
-        for ch in text:
-            draw.text((x, y), ch, font=font, fill=(255, 255, 255, 255))
-            x += draw.textlength(ch, font=font) + spacing
-        y += px * 1.15 + gap
-
-    return canvas.crop(canvas.split()[3].getbbox())
+    blanco = Image.new("RGBA", gris.size, (255, 255, 255, 0))
+    blanco.putalpha(alfa)
+    return blanco.crop(alfa.getbbox())
 
 
 def main():
     if not os.path.isdir(OUT):
         os.makedirs(OUT)
+    if not os.path.isdir(os.path.dirname(PREVIEW)):
+        os.makedirs(os.path.dirname(PREVIEW))
 
-    qc = Image.open(QC).convert("RGBA")
-    qc = qc.crop(qc.split()[3].getbbox())
-    h = 256  # el filtro bueno al achicar, para que no se ensucie el orbe
-    qc = qc.resize((int(round(qc.width * h / qc.height)), h), Image.LANCZOS)
-    qc.save(os.path.join(OUT, "mark_quakeclub.png"))
+    hechas = []
+    for archivo, nombre, alto_ui in MARCAS:
+        im = key(os.path.join(SRC, archivo))
+        guardado = im.resize((max(1, int(round(im.width * ALTO / im.height))), ALTO), Image.LANCZOS)
+        guardado.save(os.path.join(OUT, nombre + ".png"))
 
-    q3 = render(["QUAKE III", "ARENA"], HANDEL, 96, 6, 14)
-    q3.save(os.path.join(OUT, "mark_quake3.png"))
+        ancho_ui = int(round(guardado.width * alto_ui / guardado.height))
+        hechas.append((nombre, guardado, ancho_ui, alto_ui))
+        print("%-16s recorte %-11s png %-9s UI %dx%d" %
+              (nombre, "%dx%d" % im.size, "%dx%d" % guardado.size, ancho_ui, alto_ui))
 
-    io3 = render(["ioquake3"], BARLOW, 128, 0, 0)
-    io3.save(os.path.join(OUT, "mark_ioquake3.png"))
-
-    # la vista previa, con el logo de Quake Live que sale de pak00
-    z = zipfile.ZipFile(PAK00)
-    ql = Image.open(io.BytesIO(z.read("ui/assets/main_menu/ql_logo.png"))).convert("RGBA")
-
-    marks = [("mark_quakeclub", qc), ("mark_quake3", q3), ("ql_logo", ql), ("mark_ioquake3", io3)]
-    gap = 46
-    scaled = []
-    for name, im in marks:
-        height = QL_HEIGHT if name == "ql_logo" else SIZES[name]
-        width = int(round(im.width * height / im.height))
-        scaled.append((name, im.resize((width, height), Image.LANCZOS), width, height))
-        print("%-16s origen %-11s dibujado %dx%d" % (name, "%dx%d" % im.size, width, height))
-
-    total = sum(s[2] for s in scaled) + gap * (len(scaled) - 1)
-    row = Image.new("RGBA", (total + 80, 120), (10, 10, 10, 255))
-    x = 40
-    for _, im, width, height in scaled:
-        row.alpha_composite(im, (x, (120 - height) // 2))
-        x += width + gap
-    row.convert("RGB").save(PREVIEW)
+    # la vista previa, con las medidas que dibuja el UI
+    hueco = 46
+    total = sum(m[2] for m in hechas) + hueco * (len(hechas) - 1)
+    banda = 120
+    fila = Image.new("RGBA", ((total + 80) * ZOOM, banda * ZOOM), (10, 10, 10, 255))
+    x = 40 * ZOOM
+    for _, im, ancho, alto in hechas:
+        puesto = im.resize((ancho * ZOOM, alto * ZOOM), Image.LANCZOS)
+        fila.alpha_composite(puesto, (x, (banda * ZOOM - alto * ZOOM) // 2))
+        x += (ancho + hueco) * ZOOM
+    fila.convert("RGB").save(PREVIEW)
     print("franja completa: %d de ancho" % total)
 
 

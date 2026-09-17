@@ -39,7 +39,6 @@
 		A137C94B258DC988009AC639 /* ui_splevel.c in Sources */ = {isa = PBXBuildFile; fileRef = A137C906258DC8D1009AC639 /* ui_splevel.c */; };
 		A137C94C258DC988009AC639 /* ui_mods.c in Sources */ = {isa = PBXBuildFile; fileRef = A137C8FE258DC8D1009AC639 /* ui_mods.c */; };
 		A137C94D258DC988009AC639 /* ui_setup.c in Sources */ = {isa = PBXBuildFile; fileRef = A137C8EE258DC8D1009AC639 /* ui_setup.c */; };
-		A137C94E258DC988009AC639 /* ui_credits.c in Sources */ = {isa = PBXBuildFile; fileRef = A137C909258DC8D1009AC639 /* ui_credits.c */; };
 		A137C94F258DC988009AC639 /* ui_sparena.c in Sources */ = {isa = PBXBuildFile; fileRef = A137C90C258DC8D1009AC639 /* ui_sparena.c */; };
 		A137C950258DC988009AC639 /* ui_cdkey.c in Sources */ = {isa = PBXBuildFile; fileRef = A137C901258DC8D1009AC639 /* ui_cdkey.c */; };
 		A137C951258DC988009AC639 /* ui_options.c in Sources */ = {isa = PBXBuildFile; fileRef = A137C8EF258DC8D1009AC639 /* ui_options.c */; };
@@ -112,7 +111,6 @@
 		A137C906258DC8D1009AC639 /* ui_splevel.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ui_splevel.c; sourceTree = "<group>"; };
 		A137C907258DC8D1009AC639 /* ui_removebots.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ui_removebots.c; sourceTree = "<group>"; };
 		A137C908258DC8D1009AC639 /* ui_addbots.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ui_addbots.c; sourceTree = "<group>"; };
-		A137C909258DC8D1009AC639 /* ui_credits.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ui_credits.c; sourceTree = "<group>"; };
 		A137C90A258DC8D1009AC639 /* ui_gameinfo.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ui_gameinfo.c; sourceTree = "<group>"; };
 		A137C90B258DC8D1009AC639 /* ui_loadconfig.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ui_loadconfig.c; sourceTree = "<group>"; };
 		A137C90C258DC8D1009AC639 /* ui_sparena.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ui_sparena.c; sourceTree = "<group>"; };
@@ -245,7 +243,6 @@
 				A137C8ED258DC8D1009AC639 /* ui_confirm.c */,
 				A137C8F5258DC8D1009AC639 /* ui_connect.c */,
 				A137C917258DC8D1009AC639 /* ui_controls2.c */,
-				A137C909258DC8D1009AC639 /* ui_credits.c */,
 				A137C910258DC8D1009AC639 /* ui_demo2.c */,
 				A137C913258DC8D1009AC639 /* ui_display.c */,
 				A137C90A258DC8D1009AC639 /* ui_gameinfo.c */,
@@ -379,7 +376,6 @@
 				A137C93A258DC988009AC639 /* ui_ingame.c in Sources */,
 				A137C949258DC988009AC639 /* ui_preferences.c in Sources */,
 				A137C94B258DC988009AC639 /* ui_splevel.c in Sources */,
-				A137C94E258DC988009AC639 /* ui_credits.c in Sources */,
 				A137C953258DC988009AC639 /* ui_specifyserver.c in Sources */,
 				A137C950258DC988009AC639 /* ui_cdkey.c in Sources */,
 				A137C95E258DC988009AC639 /* ui_serverinfo.c in Sources */,
