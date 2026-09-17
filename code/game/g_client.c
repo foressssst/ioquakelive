@@ -1226,7 +1226,10 @@ char* ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
     ClientUserinfoChanged(clientNum);
 
     // [QL] firstTime, non-bot: send privilege level, connected message, init stats
-    if (firstTime && !g_isBotOnly.integer) {
+    // [ioquakelive] El binario condiciona todo este bloque a que no se este entrenando
+    // (0x1003ba4b): en el Crash Course no se manda ni el nivel de privilegio ni el aviso
+    // de conectado, que es de un servidor con gente.
+    if (firstTime && !g_isBotOnly.integer && !g_training.integer) {
         // send privilege level to client
         trap_SendServerCommand(clientNum, va("priv %i", client->sess.privileges));
 
