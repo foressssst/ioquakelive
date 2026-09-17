@@ -1008,6 +1008,9 @@ void UI_BuildPlayerList(void);
 
 void UI_Replays_Open(void);
 void UI_Replays_Paint(void);
+void UI_Credits_Open(void);
+void UI_Credits_Paint(void);
+qboolean UI_Credits_HandleKey(int key);
 void UI_PatchNotes_Open(void);
 void UI_PatchNotes_Paint(void);
 qboolean UI_PatchNotes_HandleKey(int key);
@@ -1016,6 +1019,7 @@ qboolean UI_Replays_HandleKey(int key);
 // [QL] the Training Center page; see ui_training.c
 #define UI_TRAINING 604
 #define UI_PATCHNOTES 605  // [ioquakelive] la pagina de Patch Notes
+#define UI_CREDITS 606     // [ioquakelive] la pagina de Creditos
 void UI_Training_Open(void);
 void UI_Training_Paint(void);
 qboolean UI_Training_HandleKey(int key);
