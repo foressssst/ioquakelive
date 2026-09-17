@@ -753,7 +753,9 @@ static cvarTable_t cvarTable[] = {
     {&cg_teamChatBeep, "cg_teamChatBeep", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_gametype, "cg_gametype", "0", CVAR_ROM},
     {&cg_svFps, "sv_fps", "40", CVAR_ROM},
-    {&cg_comMaxfps, "com_maxfps", "125", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "30", "250"},
+    // [QL] el cgame vuelve a registrar com_maxfps con su propio rango, asi que el techo esta
+    // candado por partida doble: subirlo solo en el motor lo deja en 250 al entrar a un mapa
+    {&cg_comMaxfps, "com_maxfps", "125", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1000"},
 
     // [QL] announcer cvars
     {&cg_announcerLastStandingVO, "cg_announcerLastStandingVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
