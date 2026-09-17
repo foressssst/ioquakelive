@@ -438,7 +438,8 @@ struct gclient_s {
     // timeResidual is used to handle events that happen every second
     int timeResidual;
     int timeResidualScout;      // [QL]
-    int timeResidualArmor;      // [QL]
+    int timeResidualArmor;
+    int timeResidualPOI;  // [QL] gclient_t + 0x50c: ms since the last point-of-interest ping      // [QL]
     int timeResidualHealth;     // [QL]
     int timeResidualPingPOI;    // [QL]
     int timeResidualSpecInfo;   // [QL]
@@ -1464,6 +1465,7 @@ extern vmCvar_t g_maxDeferredSpawns;
 extern vmCvar_t g_maxFlightFuel;
 extern vmCvar_t g_midAirMinHeight;
 extern vmCvar_t g_neutralFlagPingRate;
+void G_PointOfInterest(gentity_t* ent, int duration, int payload);
 extern vmCvar_t g_playerModelScale;
 extern vmCvar_t g_playerheadScale;
 extern vmCvar_t g_playerheadScaleOffset;
