@@ -314,11 +314,22 @@ static struct {
 } smFonts = {qfalse, -1, -1};
 
 void SM_LoadFonts(void) {
-    // [ioquakelive] nothing to load any more: the pages are set in the two faces
-    // Quake Live's own web UI uses, which pak00 already carries.
+    // [ioquakelive] Barlow, from pak01. Handel Gothic is not the front end's face: retail's menu
+    // is a web page and does not use it either - it is the HUD's font, and pak00 carries it with
+    // one weight only, which is why a heading had to be drawn twice to look bold and came out
+    // with the HUD's black edge around every letter. Barlow has a real bold, so a label is one
+    // pass and reads clean. Handel Gothic stays where it belongs, in the game's own HUD.
+    if (smFonts.tried) {
+        return;
+    }
     smFonts.tried = qtrue;
-    smFonts.regular = -1;
-    smFonts.strong = -1;
+    smFonts.regular = trap_R_Font_Register("fonts/Barlow-Regular.ttf");
+    smFonts.strong = trap_R_Font_Register("fonts/Barlow-SemiBold.ttf");
+    if (smFonts.regular < 0 || smFonts.strong < 0) {
+        Com_Printf("^3front end: Barlow not found in pak01, falling back to pak00's fonts\n");
+        smFonts.regular = -1;
+        smFonts.strong = -1;
+    }
 }
 
 // the face a page's font and weight come out in
@@ -494,7 +505,7 @@ float SM_LabelWidth(float size, const char* text, float spacing) {
     c[1] = '\0';
     for (p = upper; *p; p++) {
         c[0] = *p;
-        w += SM_AdvanceBold(SM_FONT_TITLE, size, c, 1, qtrue) + spacing;
+        w += SM_AdvanceBold(SM_FONT_TITLE, size, c, 1, qfalse) + spacing;  // medido como se dibuja
     }
     return w - spacing;
 }
@@ -503,11 +514,16 @@ void SM_Label(float x, float baseline, float size, const float* color, const cha
     char upper[256];
 
     SM_Upper(text, upper, sizeof(upper));
+    // Drawn once, like SM_Button's word. The second pass a pixel over, which stands in for a bold
+    // weight the font does not carry, reads as the black edge Quake Live's HUD puts behind its
+    // text - and the front end is not the HUD. On a light block, a gold pill say, that edge is all
+    // you see. The player asked for it gone and it came back here; it is gone from every label now,
+    // which is every heading, every eyebrow and every badge on the front end.
     if (spacing <= 0) {
-        SM_Text(x, baseline, SM_FONT_TITLE, size, color, upper, -1, qtrue);
+        SM_Text(x, baseline, SM_FONT_TITLE, size, color, upper, -1, qfalse);
         return;
     }
-    SM_SpacedText(x, baseline, SM_FONT_TITLE, size, color, upper, spacing, qtrue);
+    SM_SpacedText(x, baseline, SM_FONT_TITLE, size, color, upper, spacing, qfalse);
 }
 
 /*
