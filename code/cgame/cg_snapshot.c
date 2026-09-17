@@ -172,13 +172,6 @@ static void CG_TransitionSnapshot(void) {
             cg.thisFrameTeleport = qtrue;  // will be cleared by prediction code
         }
 
-        // [ioquakelive] the hit sounds go by the snapshots, predicted or not, as WolfcamQL plays
-        // them (CG_CheckHitSounds); not on the snapshot the viewed player changes
-        if (ps->clientNum == ops->clientNum && ps->pm_type != PM_INTERMISSION &&
-            ps->persistant[PERS_TEAM] != TEAM_SPECTATOR) {
-            CG_CheckHitSounds(ps, ops);
-        }
-
         // if we are not doing client side movement prediction for any
         // reason, then the client events and view changes will be issued now
         if (cg.demoPlayback || (cg.snap->ps.pm_flags & PMF_FOLLOW) || cg_nopredict.integer) {
