@@ -481,7 +481,7 @@ void G_PointOfInterest(gentity_t* ent, int duration, int payload) {
     te->r.svFlags |= SVF_BROADCAST;
     te->s.powerups = duration;
     te->s.generic1 = payload;
-    ent->client->timeResidualPOI = 0;
+    ent->client->timeResidualPingPOI = 0;
 }
 
 /*
@@ -678,16 +678,16 @@ void ClientTimerActions(gentity_t* ent, int msec) {
     }
     // [QL] 0x1003473b: the Quad Hog gives themselves away every g_quadHogPingRate ms
     if (g_gametype.integer == GT_FFA && g_quadHog.integer && client->ps.powerups[PW_QUAD]) {
-        client->timeResidualPOI += msec;
-        if (client->timeResidualPOI >= g_quadHogPingRate.integer) {
+        client->timeResidualPingPOI += msec;
+        if (client->timeResidualPingPOI >= g_quadHogPingRate.integer) {
             G_PointOfInterest(ent, g_quadHogPingRate.integer, client->ps.clientNum);
         }
     }
 
     // [QL] 0x10034791: so does whoever runs with the neutral flag, but by team
     if (client->ps.powerups[PW_NEUTRALFLAG]) {
-        client->timeResidualPOI += msec;
-        if (client->timeResidualPOI >= g_neutralFlagPingRate.integer) {
+        client->timeResidualPingPOI += msec;
+        if (client->timeResidualPingPOI >= g_neutralFlagPingRate.integer) {
             G_PointOfInterest(ent, g_neutralFlagPingRate.integer,
                               client->ps.persistant[PERS_TEAM]);
         }
