@@ -1507,7 +1507,10 @@ void G_UpdateCvars(void) {
             if (cv->modCount != cv->vmCvar->modificationCount) {
                 cv->modCount = cv->vmCvar->modificationCount;
 
-                if (cv->onChanged) {
+                // [ioquakelive] El binario no corre el callback durante el entrenamiento
+                // (0x10054e14): el tour cambia cvars por su cuenta -- g_spSkill entre
+                // otras -- y no quiere que eso dispare las reglas del modo.
+                if (cv->onChanged && !g_training.integer) {
                     cv->onChanged();
                 }
 
@@ -2459,6 +2462,12 @@ void ExitLevel(void) {
     char nextmaps[MAX_STRING_CHARS];
     int bestMap = 0;
 
+    // [ioquakelive] El Crash Course no encadena mapas: al terminar, el binario mata el
+    // servidor (0x10057069), antes incluso de mirar sv_quitOnExitLevel.
+    if ( g_training.integer ) {
+        trap_SendConsoleCommand( EXEC_APPEND, "killserver\n" );
+        return;
+    }
     // [QL] Bot-only server: kill on exit
     if ( g_isBotOnly.integer ) {
         trap_SendConsoleCommand( EXEC_APPEND, "killserver\n" );
