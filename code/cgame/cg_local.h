@@ -1041,6 +1041,20 @@ typedef struct {
 // loaded at gamestate time are stored in cgMedia_t
 // Other media that can be tied to clients, weapons, or items are
 // stored in the clientInfo_t, itemInfo_t, weaponInfo_t, and powerupInfo_t
+// [QL] the faces a respawn timer can wear, in the order the binary registers them
+typedef enum {
+    TIMER_ICON_ARMOR,
+    TIMER_ICON_BS,
+    TIMER_ICON_HASTE,
+    TIMER_ICON_HEALTH,
+    TIMER_ICON_INVIS,
+    TIMER_ICON_MEDKIT,
+    TIMER_ICON_QUAD,
+    TIMER_ICON_REGEN,
+    TIMER_ICON_UNKNOWN,
+    TIMER_NUM_ICONS
+} timerIcon_t;
+
 typedef struct {
     qhandle_t charsetShader;
     qhandle_t charsetProp;
@@ -1146,6 +1160,9 @@ typedef struct {
     qhandle_t bloodSprayShaders[4];  // [QL] bloodSpray1-4
 
     qhandle_t sparkParticleShader;  // QL: impact spark particles
+    // [QL] the item respawn timer (gfx/2d/timer): the item's face and the ring of wedges
+    qhandle_t timerIcons[TIMER_NUM_ICONS];
+    qhandle_t timerSlices[4][2];  // 5, 7, 12 and 24 wedges, plain and current
     qhandle_t vignetteShader;      // QL: fullscreen vignette overlay
 
     qhandle_t nailPuffShader;
@@ -1775,6 +1792,7 @@ extern vmCvar_t cg_tracerWidth;
 extern vmCvar_t cg_tracerLength;
 extern vmCvar_t cg_autoswitch;
 extern vmCvar_t cg_ignore;
+extern vmCvar_t cg_itemFx;  // [QL] 0 hides the respawn timer that floats where an item was
 extern vmCvar_t cg_simpleItems;
 extern vmCvar_t cg_simpleItemsBob;           // [QL] 0 none, 1 every item, 2 only the timed ones
 extern vmCvar_t cg_simpleItemsHeightOffset;  // [QL] how far the icon sits over the item
