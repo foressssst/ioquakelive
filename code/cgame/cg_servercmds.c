@@ -2029,6 +2029,7 @@ static void CG_ServerCommand(void) {
             Q_strncpyz(text, p, MAX_SAY_TEXT);
         }
         CG_RemoveChatEscapeChar(text);
+        CG_Printf("%s\n", text);  // [QL] 0x1004b1ff, antes de guardar la linea
         CG_AddChat(text, 0, 0);
         return;
     }
@@ -2041,6 +2042,7 @@ static void CG_ServerCommand(void) {
         trap_S_StartLocalSound(cgs.media.talkSound, CHAN_LOCAL_SOUND);
         Q_strncpyz(text, CG_Argv(1), MAX_SAY_TEXT);
         CG_RemoveChatEscapeChar(text);
+        CG_Printf("%s\n", text);  // [QL] 0x1004b2bf
         CG_AddChat(text, 0, atoi(CG_Argv(2)) * 1000);
         return;
     }
@@ -2091,6 +2093,7 @@ static void CG_ServerCommand(void) {
             Q_strncpyz(text, p, MAX_SAY_TEXT);
         }
         CG_RemoveChatEscapeChar(text);
+        CG_Printf("%s\n", text);  // [QL] 0x1004b59d
         CG_AddToTeamChat(text);
         CG_AddChat(text, 1, 0);
         return;
