@@ -1834,6 +1834,25 @@ static void CG_RegisterGraphics(void) {
 
     cgs.media.waterBubbleShader = trap_R_RegisterShader("waterBubble");
 
+    // [QL] 0x10024d9d: the item respawn timer's faces and wedges
+    cgs.media.timerIcons[TIMER_ICON_ARMOR] = trap_R_RegisterShader("gfx/2d/timer/armor");
+    cgs.media.timerIcons[TIMER_ICON_BS] = trap_R_RegisterShader("gfx/2d/timer/bs");
+    cgs.media.timerIcons[TIMER_ICON_HASTE] = trap_R_RegisterShader("gfx/2d/timer/haste");
+    cgs.media.timerIcons[TIMER_ICON_HEALTH] = trap_R_RegisterShader("gfx/2d/timer/health");
+    cgs.media.timerIcons[TIMER_ICON_INVIS] = trap_R_RegisterShader("gfx/2d/timer/invis");
+    cgs.media.timerIcons[TIMER_ICON_MEDKIT] = trap_R_RegisterShader("gfx/2d/timer/medkit");
+    cgs.media.timerIcons[TIMER_ICON_QUAD] = trap_R_RegisterShader("gfx/2d/timer/quad");
+    cgs.media.timerIcons[TIMER_ICON_REGEN] = trap_R_RegisterShader("gfx/2d/timer/regen");
+    cgs.media.timerIcons[TIMER_ICON_UNKNOWN] = trap_R_RegisterShader("gfx/2d/timer/unknown");
+    cgs.media.timerSlices[0][0] = trap_R_RegisterShader("gfx/2d/timer/slice5");
+    cgs.media.timerSlices[0][1] = trap_R_RegisterShader("gfx/2d/timer/slice5_current");
+    cgs.media.timerSlices[1][0] = trap_R_RegisterShader("gfx/2d/timer/slice7");
+    cgs.media.timerSlices[1][1] = trap_R_RegisterShader("gfx/2d/timer/slice7_current");
+    cgs.media.timerSlices[2][0] = trap_R_RegisterShader("gfx/2d/timer/slice12");
+    cgs.media.timerSlices[2][1] = trap_R_RegisterShader("gfx/2d/timer/slice12_current");
+    cgs.media.timerSlices[3][0] = trap_R_RegisterShader("gfx/2d/timer/slice24");
+    cgs.media.timerSlices[3][1] = trap_R_RegisterShader("gfx/2d/timer/slice24_current");
+
     cgs.media.tracerShader = trap_R_RegisterShader("gfx/misc/tracer");
     // [QL] 0x1002321e: the impact sparks carry their own handle on the same shader
     cgs.media.sparkParticleShader = trap_R_RegisterShader("gfx/misc/tracer");

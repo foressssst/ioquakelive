@@ -289,6 +289,193 @@ static void CG_Speaker(centity_t* cent) {
     cent->miscTime = cg.time + cent->currentState.frame * 100 + cent->currentState.clientNum * 100 * crandom();
 }
 
+#define ITEM_TIMER_RADIUS 16.0f
+
+/*
+[QL] The binary does not turn its sprite: it hands the angle to the view's roll (0x1002b1a4) and
+lays the quad out with the texture's t upside down (0x1002d5b0), and the two together mirror the
+art about the line at -roll/2 rather than rotating it. RT_SPRITE turns an upright texture instead,
+and comes out at the same place for 180 - angle -- which is why the binary's 180 for the item's
+face means "the right way up". Both the faces and the wedges are symmetric across that mirror, so
+the only thing the mirror would have cost us is lost anyway.
+*/
+#define ITEM_TIMER_ROTATION(angle) (180.0f - (float)(angle))
+
+/*
+=================
+CG_ItemTimerSprite
+
+One piece of a respawn timer: a camera-facing sprite of radius 16 at the item, turned by its
+angle. Every gfx/2d/timer shader takes its alpha from the vertices and the faces also take their
+colour, so both the distance fade and the item's tint ride on shaderRGBA.
+=================
+*/
+static void CG_ItemTimerSprite(const vec3_t origin, qhandle_t shader, float rotation,
+                               const vec3_t color, float alpha) {
+    refEntity_t re;
+
+    if (!shader) {
+        return;
+    }
+    memset(&re, 0, sizeof(re));
+    re.reType = RT_SPRITE;
+    VectorCopy(origin, re.origin);
+    re.radius = ITEM_TIMER_RADIUS;
+    re.rotation = rotation;
+    re.customShader = shader;
+    re.shaderRGBA[0] = (byte)(color[0] * 255.0f);
+    re.shaderRGBA[1] = (byte)(color[1] * 255.0f);
+    re.shaderRGBA[2] = (byte)(color[2] * 255.0f);
+    re.shaderRGBA[3] = (byte)(alpha * 255.0f);
+    trap_R_AddRefEntityToScene(&re);
+}
+
+/*
+=================
+CG_ItemTimerFace
+
+[QL] 0x1002db22..0x1002dc5d. The face a timer wears and the colour it is tinted with, chosen by
+the item's giType and giTag. Only items with itemTimer set ever get here, so the armours are the
+red, the yellow and the green one, and the only health is the mega.
+=================
+*/
+static void CG_ItemTimerFace(const gitem_t* item, qboolean teamItem, qhandle_t* shader,
+                             vec3_t color) {
+    // a team's item hides which one it is behind a blank white face
+    if (teamItem) {
+        *shader = cgs.media.timerIcons[TIMER_ICON_UNKNOWN];
+        VectorSet(color, 1.0f, 1.0f, 1.0f);
+        return;
+    }
+
+    if (item->giType == IT_HEALTH && item->giTag == 1) {
+        *shader = cgs.media.timerIcons[TIMER_ICON_HEALTH];
+        VectorSet(color, 0.375f, 0.75f, 1.0f);
+        return;
+    }
+
+    if (item->giType == IT_POWERUP) {
+        switch (item->giTag) {
+        case PW_QUAD:
+            *shader = cgs.media.timerIcons[TIMER_ICON_QUAD];
+            VectorSet(color, 0.0f, 0.886f, 0.94f);
+            return;
+        case PW_BATTLESUIT:
+            *shader = cgs.media.timerIcons[TIMER_ICON_BS];
+            VectorSet(color, 1.0f, 0.65f, 0.0f);
+            return;
+        case PW_HASTE:
+            *shader = cgs.media.timerIcons[TIMER_ICON_HASTE];
+            VectorSet(color, 0.714f, 0.88f, 0.0f);
+            return;
+        case PW_INVIS:
+            *shader = cgs.media.timerIcons[TIMER_ICON_INVIS];
+            VectorSet(color, 0.0f, 0.0f, 1.0f);
+            return;
+        case PW_REGEN:
+            *shader = cgs.media.timerIcons[TIMER_ICON_REGEN];
+            VectorSet(color, 1.0f, 0.0f, 0.0f);
+            return;
+        default:
+            break;
+        }
+    }
+
+    if (item->giType == IT_HOLDABLE && item->giTag == HI_MEDKIT) {
+        *shader = cgs.media.timerIcons[TIMER_ICON_MEDKIT];
+        VectorSet(color, 1.0f, 0.0f, 0.0f);
+        return;
+    }
+
+    // the armours share one face and are told apart by the tint
+    *shader = cgs.media.timerIcons[TIMER_ICON_ARMOR];
+    switch (item->giTag) {
+    case 1:  // body: red
+        VectorSet(color, 1.0f, 0.0f, 0.0f);
+        break;
+    case 2:  // combat: yellow
+        VectorSet(color, 1.0f, 1.0f, 0.0f);
+        break;
+    case 3:  // jacket: green
+        VectorSet(color, 0.4f, 0.6875f, 0.285f);
+        break;
+    default:
+        VectorSet(color, 1.0f, 1.0f, 1.0f);
+        break;
+    }
+}
+
+/*
+=================
+CG_DrawItemTimer
+
+[QL] cgamex86.dll 0x1002db00, called from CG_Item (0x1001600b) before the item is skipped for
+being invisible. While an item is away its face floats where it was, with a ring of wedges around
+it counting the wait down. The server keeps sending the entity for this: on pickup g_items.c
+clears SVF_NOCLIENT and fills s.time (when it comes back), s.time2 (how long the wait is) and
+s.generic1 (set for a team's item, which shows the "unknown" face).
+
+A wedge is five seconds. There are s.time2 / 5000 of them and (s.time2 - remaining) / 5000 + 1 are
+lit, the last of those with the *_current shader, which pulses. The first sits at 180/total degrees
+and each next one 360/total further round. The art follows how many there are: up to 5 wedges
+slice5, 6 or 7 slice7, 8 to 12 slice12, more slice24.
+
+Everything is 16 units across at the item's origin lifted 8, and fades with distance: whole up to
+256 units away, gone at 768, straight line between the two.
+=================
+*/
+static void CG_DrawItemTimer(centity_t* cent, const gitem_t* item) {
+    entityState_t* es = &cent->currentState;
+    qhandle_t icon, slice, current;
+    vec3_t origin, delta, color;
+    float alpha, dist;
+    int total, lit, art, angle, i;
+
+    // [QL] 0x1002db32 reads cg_itemFx, not cg_itemTimers: the client's cg_itemTimers is
+    // registered and never looked at, because it is the server's g_itemTimers that decides
+    // whether the entity carries a timer at all
+    if (!cg_itemFx.integer || !item->itemTimer || cg.time >= es->time || es->time2 <= 0) {
+        return;
+    }
+
+    total = es->time2 / 5000;
+    if (total < 1) {
+        // retail divides by this without looking; a wait under five seconds would fault there
+        return;
+    }
+
+    CG_ItemTimerFace(item, (qboolean)(es->generic1 != 0), &icon, color);
+
+    // whole up to 256 units, gone at 768
+    VectorCopy(es->pos.trBase, origin);
+    origin[2] += 8.0f;
+    VectorSubtract(origin, cg.refdef.vieworg, delta);
+    dist = VectorLength(delta);
+    if (dist <= 256.0f) {
+        alpha = 1.0f;
+    } else if (dist < 768.0f) {
+        alpha = (768.0f - dist) / 512.0f;
+    } else {
+        return;
+    }
+
+    CG_ItemTimerSprite(origin, icon, ITEM_TIMER_ROTATION(180), color, alpha);
+
+    lit = (es->time2 - (es->time - cg.time)) / 5000 + 1;
+
+    art = (total <= 5) ? 0 : (total <= 7) ? 1 : (total <= 12) ? 2 : 3;
+    slice = cgs.media.timerSlices[art][0];
+    current = cgs.media.timerSlices[art][1];
+
+    // the wedges keep their own colour, so they go out white
+    angle = -(180 / total);
+    for (i = 1; i <= lit; i++) {
+        angle += 360 / total;
+        CG_ItemTimerSprite(origin, (i == lit) ? current : slice, ITEM_TIMER_ROTATION(angle),
+                           colorWhite, alpha);
+    }
+}
+
 /*
 ==================
 CG_Item
@@ -308,12 +495,18 @@ static void CG_Item(centity_t* cent) {
         CG_Error("Bad item index %i on entity", es->modelindex);
     }
 
-    // if set to invisible, skip
-    if (!es->modelindex || (es->eFlags & EF_NODRAW)) {
+    if (!es->modelindex) {
         return;
     }
-
     item = &bg_itemlist[es->modelindex];
+
+    // [QL] the respawn timer stands where the item was, so it is drawn before the item itself is
+    // skipped for being invisible
+    CG_DrawItemTimer(cent, item);
+
+    if (es->eFlags & EF_NODRAW) {
+        return;
+    }
     // [QL] cgamex86.dll 0x10016cab: a simple item is its icon as a sprite, and the three cvars
     // beside cg_simpleItems shape it. It is lifted by cg_simpleItemsHeightOffset, except a rune,
     // which is always lifted 10. cg_simpleItemsBob floats it instead: 1 floats every item, 2 (the
