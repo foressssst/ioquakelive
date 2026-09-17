@@ -174,12 +174,8 @@ static void PN_Load(void) {
                 pn.versions[pn.numVersions - 1].numLines++;
                 pn.numLines++;
             }
-        } else if (line[0] && pn.numLines > 0 && pn.numVersions > 0 &&
-                   pn.lines[pn.numLines - 1].type == PN_LINE_BULLET) {
-            // a bullet continued on the next line: the file wraps its own text, and
-            // the parser does not care where. Joining here would need a buffer, so
-            // instead the line becomes a bullet of its own with no mark, which the
-            // drawing indents to look like the one above.
+        } else if (line[0] && pn.numVersions > 0 && pn.numLines < PN_MAX_LINES) {
+            // un parrafo suelto: la bajada de una seccion, que va como viñeta
             pn.lines[pn.numLines].type = PN_LINE_BULLET;
             pn.lines[pn.numLines].text = line;
             pn.versions[pn.numVersions - 1].numLines++;
@@ -196,13 +192,27 @@ A bullet's text, with the words between ** bright and the rest soft. Returns
 where it ended, so a wrapped line knows its width.
 ===============
 */
-static void PN_DrawRich(float x, float baseline, const char* text, float maxW, const smRect_t* clip) {
+static void PN_DrawRichRange(float x, float baseline, const char* text, int from, int count,
+                             const smRect_t* clip) {
     char chunk[256];
     qboolean bold = qfalse;
-    const char* s = text;
+    const char* s = text + from;
+    const char* stop = s + count;
     float cx = x;
 
-    while (*s && cx < x + maxW) {
+    // la negrita no se reinicia por linea: se cuenta desde el principio de la viñeta
+    {
+        const char* q;
+
+        for (q = text; q < text + from; q++) {
+            if (q[0] == '*' && q[1] == '*') {
+                bold = !bold;
+                q++;
+            }
+        }
+    }
+
+    while (s < stop) {
         const char* star = strstr(s, "**");
         int len;
 
@@ -211,7 +221,7 @@ static void PN_DrawRich(float x, float baseline, const char* text, float maxW, c
             s += 2;
             continue;
         }
-        len = star ? (int)(star - s) : (int)strlen(s);
+        len = star && star < stop ? (int)(star - s) : (int)(stop - s);
         if (len > (int)sizeof(chunk) - 1) {
             len = (int)sizeof(chunk) - 1;
         }
@@ -219,11 +229,53 @@ static void PN_DrawRich(float x, float baseline, const char* text, float maxW, c
         chunk[len] = '\0';
 
         if (SM_TextInside(baseline, 14, clip)) {
-            SM_Text(cx, baseline, FONT_SANS, 14, bold ? smText : smTextSoft, chunk,
-                    SM_Fit(FONT_SANS, 14, chunk, x + maxW - cx), qfalse);
+            SM_Text(cx, baseline, FONT_SANS, 14, bold ? smText : smTextSoft, chunk, -1, qfalse);
         }
         cx += SM_Advance(FONT_SANS, 14, chunk, -1);
         s += len;
+    }
+}
+
+/*
+===============
+PN_BulletLines
+
+Cuantas lineas ocupa una viñeta al ancho de la columna, y donde empieza cada una. El ** de la
+negrita no se cuenta al medir, asi que una linea con negrita no queda corta.
+===============
+*/
+static int PN_BulletLines(const char* text, float width, int* starts, int* lens) {
+    char plain[512];
+    const char* s = text;
+    int n = 0;
+    int i;
+
+    // el texto sin los ** para medir, guardando a que letra del original corresponde cada una
+    static int map[512];
+
+    while (*s && n < (int)sizeof(plain) - 1) {
+        if (s[0] == '*' && s[1] == '*') {
+            s += 2;
+            continue;
+        }
+        map[n] = (int)(s - text);
+        plain[n++] = *s++;
+    }
+    plain[n] = '\0';
+    map[n] = (int)(s - text);
+
+    {
+        int count = SM_Wrap(FONT_SANS, 14, plain, width, starts, lens);
+
+        // de vuelta a posiciones del texto original, que es el que se dibuja
+        for (i = 0; i < count; i++) {
+            int from = starts[i];
+            int to = starts[i] + lens[i];
+
+            starts[i] = map[from];
+            lens[i] = map[to] - map[from];
+        }
+        return count;
     }
 }
 
@@ -375,7 +427,10 @@ static void PN_DrawPage(void) {
             if (ln->type == PN_LINE_HEAD) {
                 ly += (n ? PN_GAP : 0) + PN_HEAD_H;
             } else {
-                ly += PN_LINE_H + PN_BULLET_GAP;
+                int st[SM_MAX_LINES], ln2[SM_MAX_LINES];
+                int rows = PN_BulletLines(ln->text, noteW - 2 * PN_PAD - 34, st, ln2);
+
+                ly += rows * PN_LINE_H + PN_BULLET_GAP;
             }
         }
         pn.content = ly;
@@ -399,20 +454,25 @@ static void PN_DrawPage(void) {
                 ly += PN_HEAD_H;
                 continue;
             }
-            if (ly + PN_LINE_H > pn.listTop && ly < pn.listTop + pn.view) {
-                // a line that starts with a mark is a new bullet; one that does not is
-                // the one above carrying on, so it lines up past the dot
-                qboolean cont = (n > 0 && pn.lines[pn.versions[pn.open].firstLine + n - 1].type == PN_LINE_BULLET &&
-                                 ln->text[0] >= 'a' && ln->text[0] <= 'z');
-                float tx = noteX + PN_PAD + (cont ? 16 : 0);
+            {
+                int st[SM_MAX_LINES], ln2[SM_MAX_LINES];
+                int rows = PN_BulletLines(ln->text, noteW - 2 * PN_PAD - 34, st, ln2);
+                int r;
 
-                if (!cont && SM_TextInside(SM_Baseline(FONT_SANS, 14, ly, PN_LINE_H), 14, &clip)) {
-                    SM_Pill(noteX + PN_PAD + 2, ly + PN_LINE_H * 0.5f - 2, 4, 4, smMuted, &clip);
+                for (r = 0; r < rows; r++) {
+                    float ry = ly + r * PN_LINE_H;
+
+                    if (ry + PN_LINE_H <= pn.listTop || ry >= pn.listTop + pn.view) {
+                        continue;
+                    }
+                    if (r == 0) {
+                        SM_Pill(noteX + PN_PAD + 2, ry + PN_LINE_H * 0.5f - 2, 4, 4, smMuted, &clip);
+                    }
+                    PN_DrawRichRange(noteX + PN_PAD + 16, SM_Baseline(FONT_SANS, 14, ry, PN_LINE_H), ln->text,
+                                     st[r], ln2[r], &clip);
                 }
-                PN_DrawRich(tx + (cont ? 0 : 14), SM_Baseline(FONT_SANS, 14, ly, PN_LINE_H), ln->text,
-                            noteW - 2 * PN_PAD - 20, &clip);
+                ly += rows * PN_LINE_H + PN_BULLET_GAP;
             }
-            ly += PN_LINE_H + PN_BULLET_GAP;
         }
     }
 
