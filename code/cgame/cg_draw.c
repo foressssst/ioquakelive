@@ -3830,7 +3830,11 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	if (g_training.integer) {
 		CG_DrawLetterbox();
 		if (cg.snap->ps.pm_type == PM_TUTORIAL) {
-			Menu_Paint(Menus_FindByName("chat area"), qfalse);
+			// [ioquakelive] forzado: durante el tour el HUD no se dibuja, asi que su menu
+			// "chat area" nunca queda WINDOW_VISIBLE y Menu_Paint sin forzar lo saltea.
+			// Las lineas de Crash entraban al historial y no se veian: habia que abrir la
+			// consola para leerlas. El overlay de espectador ya fuerza los suyos igual.
+			Menu_Paint(Menus_FindByName("chat area"), qtrue);
 			CG_SetWidescreen(WIDESCREEN_CENTER);
 			CG_DrawCenterString();
 			CG_DrawWarmupTutorial();
