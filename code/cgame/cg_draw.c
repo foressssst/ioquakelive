@@ -3834,7 +3834,13 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 			// "chat area" nunca queda WINDOW_VISIBLE y Menu_Paint sin forzar lo saltea.
 			// Las lineas de Crash entraban al historial y no se veian: habia que abrir la
 			// consola para leerlas. El overlay de espectador ya fuerza los suyos igual.
-			Menu_Paint(Menus_FindByName("chat area"), qtrue);
+			// [ioquakelive] el chat se dibuja directo, no por su menu. Menus_FindByName
+			// devuelve NULL para "chat area" en el cgame -medido con una sonda: menu=0
+			// mientras la linea de chat estaba viva-, asi que Menu_Paint no pintaba nada,
+			// forzado o no, y las lineas de Crash durante el cinematico solo quedaban en la
+			// consola. El rect es el absoluto del chatWindow de ui/hud.menu (el menu en x 5,
+			// el item en y 287, 634x120), el mismo que ya usa el overlay de espectador.
+			CG_DrawChat(5, 287, 634, 120, 1.0f);
 			CG_SetWidescreen(WIDESCREEN_CENTER);
 			CG_DrawCenterString();
 			CG_DrawWarmupTutorial();
