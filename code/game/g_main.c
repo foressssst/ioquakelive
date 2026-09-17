@@ -3827,17 +3827,30 @@ void G_RunFrame(int levelTime) {
     // from SV_ClientEnterWorld - QL removed it.  For listen servers we need to
     // auto-begin clients so they get a valid player state and receive snapshots.
     //
-    // [ioquakelive] Not bots: a bot added with a delay (G_AddBot's fourth argument,
-    // 5000 ms for the Crash Course's Trainer) is meant to sit as a connecting client
-    // until G_CheckBotSpawn begins it. Begun here as well, it spawned twice - once at
-    // the training map's own spawn beside the player, and again when the queue came
-    // due, which on a training map skips those two spawns (qagamex86.dll 0x10039226)
-    // and drops the bot anywhere on the map. Crash appeared, said her first lines and
-    // vanished across the arena.
+    // [ioquakelive] Un bot agregado con retraso (el cuarto argumento de G_AddBot, 5000 ms
+    // para la Trainer del Crash Course) tiene que quedarse como cliente a medio conectar
+    // hasta que G_CheckBotSpawn lo empiece. Empezado tambien aca spawneaba dos veces: una
+    // en el spawn del mapa de entrenamiento al lado del jugador, y otra cuando le tocaba el
+    // turno, que en un mapa de entrenamiento se saltea esos dos spawns (qagamex86.dll
+    // 0x10039226) y lo deja en cualquier lado. Crash aparecia, decia sus primeras lineas y
+    // se esfumaba al otro lado de la arena.
+    //
+    // Por eso antes se excluia a todos los bots, y ahi estaba el bug: un map_restart deja a
+    // TODOS en CON_CONNECTING -a los bots tambien, porque SV_MapRestart_f les vuelve a
+    // llamar ClientConnect-, y al bot no lo empezaba nadie. Sus otros dos llamadores son el
+    // alta del bot y la cola, y ninguno corre en un restart. El bot quedaba conectando para
+    // siempre: el scoreboard lo mostraba en "connect", no contaba como jugando y la partida
+    // se iba a forfeit. Como el match empieza justo con un map_restart, se rompia cada vez.
+    // Ahora se excluye solo al que de verdad espera en la cola.
     for (i = 0; i < level.maxclients; i++) {
-        if (level.clients[i].pers.connected == CON_CONNECTING && !(g_entities[i].r.svFlags & SVF_BOT)) {
-            ClientBegin(i);
+        if (level.clients[i].pers.connected != CON_CONNECTING) {
+            continue;
         }
+        // el bot que espera su turno en la cola se deja en paz; lo empieza G_CheckBotSpawn
+        if ((g_entities[i].r.svFlags & SVF_BOT) && G_BotWaitingToSpawn(i)) {
+            continue;
+        }
+        ClientBegin(i);
     }
 
     // [QL] Intermission map-vote UI: re-enable a client's vote UI ~2.25s after
