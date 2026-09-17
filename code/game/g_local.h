@@ -439,9 +439,8 @@ struct gclient_s {
     int timeResidual;
     int timeResidualScout;      // [QL]
     int timeResidualArmor;
-    int timeResidualPOI;  // [QL] gclient_t + 0x50c: ms since the last point-of-interest ping      // [QL]
     int timeResidualHealth;     // [QL]
-    int timeResidualPingPOI;    // [QL]
+    int timeResidualPingPOI;    // [QL] gclient_t + 0x50c: ms desde el ultimo ping de POI
     int timeResidualSpecInfo;   // [QL]
     qboolean healthRegenActive; // [QL]
     qboolean armorRegenActive;  // [QL]
