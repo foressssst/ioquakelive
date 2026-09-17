@@ -1437,6 +1437,9 @@ void G_UpdateCustomSettings(void) {
     }
 }
 
+int PM_DbgStepJump(void); float PM_DbgSwim(void); float PM_DbgWade(void);
+int PM_DbgAutoHop(void); int PM_DbgChainJump(void); int PM_DbgAirSteps(void);
+
 /*
 =================
 G_RegisterCvars
@@ -1457,6 +1460,16 @@ void G_RegisterCvars(void) {
                            cv->defaultString, cv->cvarFlags);
         if (cv->vmCvar)
             cv->modCount = cv->vmCvar->modificationCount;
+
+        // [QL] volcar el valor al espejo en C de una vez. G_UpdateCvars solo llama a
+        // onChanged cuando el modificationCount cambia, y arriba se acaba de guardar el
+        // actual, asi que sin esto el callback no corre nunca y los pm_* se quedan con el
+        // valor con el que estan inicializados en bg_pmove.c. Asi arranca el binario
+        // tambien: pm_stepJump vive en .bss (0x104b139c, o sea 0) y aun asi lo escriben
+        // dos sitios, uno de ellos el pase de registro.
+        if (cv->onChanged) {
+            cv->onChanged();
+        }
 
         // [QL] accumulate custom-settings bits (noClear so a default-valued cvar
         // cannot clear a bit an earlier cvar in the same category has set)
