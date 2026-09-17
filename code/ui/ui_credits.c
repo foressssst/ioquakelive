@@ -20,78 +20,74 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 //
-// ui_credits.c -- [ioquakelive] the Credits page
+// ui_credits.c -- [ioquakelive] los creditos
 //
-// Who made what this is built on: id Software for the game itself, ioquake3 for the
-// engine, Thomas Jones for the fork this branched from, and the community projects whose
-// ideas and material this uses. The player asked for it so the debt is stated plainly
-// rather than assumed.
+// Quien hizo aquello sobre lo que esto esta construido: id Software por el juego,
+// ioquake3 por el motor, Thomas Jones por el fork del que salio esta rama, y los
+// proyectos de la comunidad cuyo material o cuyas ideas se usan.
 //
-// Same shape as Patch Notes - an index on the left, the section beside it - because the
-// front end reads as one design. What this page adds is the link: a line that starts with
-// > is drawn in gold and opens in the player's browser when clicked.
+// No es una pagina del front end, a proposito. Vive abajo en el menu principal, al
+// lado del aviso legal, y se abre como una capa sobre el menu: texto corrido en una
+// sola columna, sin indice y sin clasificar por seccion. Se cierra con Escape, con
+// la cruz, o pinchando fuera.
 //
-// The content is content/pak01/credits.txt, so it can be corrected without a build. One
-// mark per line:
+// El contenido es content/pak01/credits.txt, asi que se corrige sin compilar. Una
+// marca por linea:
 //
-//     #  a section's title
-//     @  the line under it
-//     ## a sub-heading
-//     -  a bullet
-//     >  a link, "text | url"
+//     -  un parrafo, con **negrita** si hace falta
+//     >  un link, "texto | url"
+//     .  una linea en blanco
 //
 #include "ui_web.h"
 
-#define CR_PAD 25.0f
-#define CR_INDEX_W 260.0f
-#define CR_ROW_H 46.0f
-#define CR_LINE_H 21.0f
-#define CR_HEAD_H 34.0f
-#define CR_LINK_H 26.0f
-#define CR_GAP 10.0f
-#define CR_BULLET_GAP 6.0f
+// La columna es angosta para que el texto se lea de un tiron, y el cuerpo va en 15 con la
+// linea en 26: el usuario pidio que se leyera comodo, no que entrara todo de una.
+#define CR_W 780.0f
+#define CR_PAD 38.0f
+#define CR_SIZE 15.0f
+#define CR_LINE_H 26.0f
+#define CR_PARA_GAP 20.0f
+#define CR_LINK_H 30.0f
+#define CR_BLANK_H 14.0f
+#define CR_HEAD_H 60.0f
+#define CR_MARGIN 70.0f  // lo que la columna deja arriba y abajo
 
-#define CR_MAX_SECTIONS 32
-#define CR_MAX_LINES 512
+#define CR_MAX_LINES 128
 #define CR_MAX_TEXT 16384
-#define CR_MAX_LINKS 32
+#define CR_MAX_LINKS 24
 
 typedef enum {
     CR_HIT_NONE,
-    CR_HIT_SECTION,
+    CR_HIT_VEIL,   // el fondo: pinchar ahi cierra
+    CR_HIT_PANEL,  // la columna: pinchar ahi no hace nada, pero tampoco cierra
+    CR_HIT_CLOSE,
     CR_HIT_LINK,
     CR_HIT_TRACK,
     CR_HIT_THUMB
 } crHitType_t;
 
 typedef enum {
-    CR_LINE_HEAD,
-    CR_LINE_BULLET,
-    CR_LINE_LINK
+    CR_LINE_TEXT,
+    CR_LINE_LINK,
+    CR_LINE_BLANK
 } crLineType_t;
 
 typedef struct {
     int type;
-    const char* text;  // on a link, the label; the url is in links[]
-    int link;          // index into cr.links, -1 otherwise
+    const char* text;  // en un link, la etiqueta; la url esta en links[]
+    int link;          // indice en cr.links, o -1
 } crLine_t;
 
-typedef struct {
-    const char* title;
-    const char* lead;
-    int firstLine;
-    int numLines;
-} crSection_t;
+static const vec4_t crVeil = {0.0f, 0.0f, 0.0f, 0.74f};
 
 static struct {
     char text[CR_MAX_TEXT];
-    crSection_t sections[CR_MAX_SECTIONS];
     crLine_t lines[CR_MAX_LINES];
     const char* links[CR_MAX_LINKS];
-    int numSections, numLines, numLinks;
+    int numLines, numLinks;
     qboolean loaded;
 
-    int open;
+    qboolean showing;
     float listTop, view, content;
     float scroll;
     qboolean scrollDrag;
@@ -100,20 +96,18 @@ static struct {
 
 /*
 ===============
-CR_BulletLines
+CR_Wrap
 
-Cuantas lineas ocupa una vi�eta al ancho de la columna, y donde empieza cada una. El ** de la
-negrita no se cuenta al medir, asi que una linea con negrita no queda corta.
+Cuantas lineas ocupa un parrafo al ancho de la columna, y donde empieza cada una. El **
+de la negrita no se cuenta al medir, asi que una linea con negrita no queda corta.
 ===============
 */
-static int CR_BulletLines(const char* text, float width, int* starts, int* lens) {
-    char plain[512];
+static int CR_Wrap(const char* text, float width, int* starts, int* lens) {
+    char plain[1024];
+    static int map[1024];
     const char* s = text;
     int n = 0;
     int i;
-
-    // el texto sin los ** para medir, guardando a que letra del original corresponde cada una
-    static int map[512];
 
     while (*s && n < (int)sizeof(plain) - 1) {
         if (s[0] == '*' && s[1] == '*') {
@@ -127,7 +121,7 @@ static int CR_BulletLines(const char* text, float width, int* starts, int* lens)
     map[n] = (int)(s - text);
 
     {
-        int count = SM_Wrap(FONT_SANS, 14, plain, width, starts, lens);
+        int count = SM_Wrap(FONT_SANS, CR_SIZE, plain, width, starts, lens);
 
         // de vuelta a posiciones del texto original, que es el que se dibuja
         for (i = 0; i < count; i++) {
@@ -145,8 +139,8 @@ static int CR_BulletLines(const char* text, float width, int* starts, int* lens)
 ===============
 CR_Load
 
-Reads the file once and cuts it into sections and lines, in place. A link's line is
-"text | url": the bar is terminated so the label ends there, and the url goes to links[].
+Lee el archivo una vez y lo corta en lineas, en el mismo buffer. La linea de un link es
+"texto | url": la barra se termina para que la etiqueta acabe ahi, y la url va a links[].
 ===============
 */
 static void CR_Load(void) {
@@ -155,7 +149,6 @@ static void CR_Load(void) {
     char* p;
 
     cr.loaded = qtrue;
-    cr.numSections = 0;
     cr.numLines = 0;
     cr.numLinks = 0;
 
@@ -171,7 +164,7 @@ static void CR_Load(void) {
     cr.text[len] = '\0';
 
     p = cr.text;
-    while (*p) {
+    while (*p && cr.numLines < CR_MAX_LINES) {
         char* line = p;
         char* end;
 
@@ -191,62 +184,43 @@ static void CR_Load(void) {
             continue;
         }
 
-        if (line[0] == '#' && line[1] == '#' && line[2] == ' ') {
-            if (cr.numSections > 0 && cr.numLines < CR_MAX_LINES) {
-                cr.lines[cr.numLines].type = CR_LINE_HEAD;
-                cr.lines[cr.numLines].text = line + 3;
+        if (line[0] == '.' && line[1] == '\0') {
+            // una linea en blanco entre bloques; dos seguidas no separan mas que una
+            if (cr.numLines > 0 && cr.lines[cr.numLines - 1].type != CR_LINE_BLANK) {
+                cr.lines[cr.numLines].type = CR_LINE_BLANK;
+                cr.lines[cr.numLines].text = "";
                 cr.lines[cr.numLines].link = -1;
-                cr.sections[cr.numSections - 1].numLines++;
                 cr.numLines++;
-            }
-        } else if (line[0] == '#' && line[1] == ' ') {
-            if (cr.numSections < CR_MAX_SECTIONS) {
-                cr.sections[cr.numSections].title = line + 2;
-                cr.sections[cr.numSections].lead = "";
-                cr.sections[cr.numSections].firstLine = cr.numLines;
-                cr.sections[cr.numSections].numLines = 0;
-                cr.numSections++;
-            }
-        } else if (line[0] == '@' && line[1] == ' ') {
-            if (cr.numSections > 0) {
-                cr.sections[cr.numSections - 1].lead = line + 2;
             }
         } else if (line[0] == '>' && line[1] == ' ') {
-            if (cr.numSections > 0 && cr.numLines < CR_MAX_LINES && cr.numLinks < CR_MAX_LINKS) {
-                char* bar = strchr(line, '|');
+            char* bar = strchr(line, '|');
 
-                cr.lines[cr.numLines].type = CR_LINE_LINK;
-                cr.lines[cr.numLines].text = line + 2;
-                cr.lines[cr.numLines].link = -1;
-                if (bar) {
-                    char* url = bar + 1;
+            cr.lines[cr.numLines].type = CR_LINE_LINK;
+            cr.lines[cr.numLines].text = line + 2;
+            cr.lines[cr.numLines].link = -1;
+            if (bar && cr.numLinks < CR_MAX_LINKS) {
+                char* url = bar + 1;
 
-                    while (bar > line && (bar[-1] == ' ' || bar[-1] == '\t')) {
-                        bar--;
-                    }
-                    *bar = '\0';
-                    while (*url == ' ' || *url == '\t') {
-                        url++;
-                    }
-                    cr.links[cr.numLinks] = url;
-                    cr.lines[cr.numLines].link = cr.numLinks;
-                    cr.numLinks++;
+                while (bar > line && (bar[-1] == ' ' || bar[-1] == '\t')) {
+                    bar--;
                 }
-                cr.sections[cr.numSections - 1].numLines++;
-                cr.numLines++;
+                *bar = '\0';
+                while (*url == ' ' || *url == '\t') {
+                    url++;
+                }
+                cr.links[cr.numLinks] = url;
+                cr.lines[cr.numLines].link = cr.numLinks;
+                cr.numLinks++;
             }
+            cr.numLines++;
         } else if (line[0] == '-' && line[1] == ' ') {
-            if (cr.numSections > 0 && cr.numLines < CR_MAX_LINES) {
-                cr.lines[cr.numLines].type = CR_LINE_BULLET;
-                cr.lines[cr.numLines].text = line + 2;
-                cr.lines[cr.numLines].link = -1;
-                cr.sections[cr.numSections - 1].numLines++;
-                cr.numLines++;
-            }
-        } else if (line[0] && cr.numLines > 0 && cr.numSections > 0 &&
-                   cr.lines[cr.numLines - 1].type == CR_LINE_BULLET) {
-            // la vi�eta sigue en esta linea del archivo: se empalma sobre el terminador que se
-            // acaba de escribir, asi la vi�eta queda en una sola cadena y se reparte al dibujar
+            cr.lines[cr.numLines].type = CR_LINE_TEXT;
+            cr.lines[cr.numLines].text = line + 2;
+            cr.lines[cr.numLines].link = -1;
+            cr.numLines++;
+        } else if (line[0] && cr.numLines > 0 && cr.lines[cr.numLines - 1].type == CR_LINE_TEXT) {
+            // el parrafo sigue en esta linea del archivo: se empalma sobre el terminador que se
+            // acaba de escribir, asi queda en una sola cadena y se reparte al dibujar
             char* prev = (char*)cr.lines[cr.numLines - 1].text;
             int used = (int)strlen(prev);
 
@@ -255,9 +229,14 @@ static void CR_Load(void) {
             }
         }
     }
+
+    // ni la primera ni la ultima linea son un hueco
+    while (cr.numLines > 0 && cr.lines[cr.numLines - 1].type == CR_LINE_BLANK) {
+        cr.numLines--;
+    }
 }
 
-// a bullet's text, with what sits between ** bright
+// un trozo de parrafo, con lo que va entre ** mas claro que el resto
 static void CR_DrawRichRange(float x, float baseline, const char* text, int from, int count,
                              const smRect_t* clip) {
     char chunk[256];
@@ -266,7 +245,7 @@ static void CR_DrawRichRange(float x, float baseline, const char* text, int from
     const char* stop = s + count;
     float cx = x;
 
-    // la negrita de una vi�eta larga no se reinicia por linea: se cuenta desde el principio
+    // la negrita de un parrafo largo no se reinicia por linea: se cuenta desde el principio
     {
         const char* q;
 
@@ -294,12 +273,31 @@ static void CR_DrawRichRange(float x, float baseline, const char* text, int from
         memcpy(chunk, s, n);
         chunk[n] = '\0';
 
-        if (SM_TextInside(baseline, 14, clip)) {
-            SM_Text(cx, baseline, FONT_SANS, 14, bold ? smText : smTextSoft, chunk, -1, qfalse);
+        if (SM_TextInside(baseline, CR_SIZE, clip)) {
+            SM_Text(cx, baseline, FONT_SANS, CR_SIZE, bold ? smText : smTextSoft, chunk, -1, qfalse);
         }
-        cx += SM_Advance(FONT_SANS, 14, chunk, -1);
+        cx += SM_Advance(FONT_SANS, CR_SIZE, chunk, -1);
         s += n;
     }
+}
+
+// lo que ocupa todo el texto a ese ancho
+static float CR_ContentHeight(float width) {
+    float total = 0;
+    int i;
+
+    for (i = 0; i < cr.numLines; i++) {
+        if (cr.lines[i].type == CR_LINE_BLANK) {
+            total += CR_BLANK_H;
+        } else if (cr.lines[i].type == CR_LINE_LINK) {
+            total += CR_LINK_H;
+        } else {
+            int st[SM_MAX_LINES], ln[SM_MAX_LINES];
+
+            total += CR_Wrap(cr.lines[i].text, width, st, ln) * CR_LINE_H + CR_PARA_GAP;
+        }
+    }
+    return total;
 }
 
 static float CR_ClampScroll(float scroll) {
@@ -318,125 +316,94 @@ static void CR_DrawScrollbar(float x) {
     }
     thumbY = cr.listTop + (cr.view - thumbH) * cr.scroll / (cr.content - cr.view);
     SM_Hit(x - 4, cr.listTop, 14, cr.view, CR_HIT_TRACK, 0, NULL);
-    SM_Pill(x, thumbY, 6, thumbH, (SM_Over(CR_HIT_THUMB, 0) || cr.scrollDrag) ? smMuted : smBorder, NULL);
-    SM_Hit(x - 4, thumbY, 14, thumbH, CR_HIT_THUMB, 0, NULL);
+    SM_Pill(x, thumbY, 4, thumbH, (SM_Over(CR_HIT_THUMB, 0) || cr.scrollDrag) ? smMuted : smBorder, NULL);
+    SM_Hit(x - 5, thumbY, 14, thumbH, CR_HIT_THUMB, 0, NULL);
 }
 
-static void CR_DrawPage(void) {
-    float left = UI_Home_Left();
-    float y = HM_NAV_H;
-    float panelTop, panelH, noteX, noteW;
+/*
+===============
+UI_Credits_Overlay
+
+La capa, dibujada al final del menu principal para que quede encima de todo y se
+quede con el cursor. El menu sigue detras, apagado.
+===============
+*/
+void UI_Credits_Overlay(void) {
+    float screenTop, bottom, maxH;
+    float x, top, h, textW;
     smRect_t clip;
-    int i;
 
-    UI_Home_Backdrop();
-    UI_Home_PageTop(-1);
-
-    y = UI_Home_Header(y, NULL, "Credits");
-
-    panelTop = y + HM_PANEL_GAP;
-    panelH = smBottom - 40 - panelTop;
-
-    if (cr.numSections == 0) {
-        SM_Round(left, panelTop, HM_CONTAINER_W, panelH, SM_RADIUS_MD, smPanel, NULL);
-        SM_Text(left + CR_PAD + 12, SM_Baseline(FONT_SANS, 15, panelTop + 30, 24), FONT_SANS, 15, smMuted,
-                "No se pudo leer credits.txt.", -1, qfalse);
+    if (!cr.showing) {
         return;
     }
-    if (cr.open < 0 || cr.open >= cr.numSections) {
-        cr.open = 0;
+    if (!cr.loaded) {
+        CR_Load();
     }
 
-    // ── the index ──
-    SM_Round(left, panelTop, CR_INDEX_W, panelH, SM_RADIUS_MD, smPanel, NULL);
-    SM_Label(left + 16, SM_Baseline(FONT_SANS, 11, panelTop + 22, 16), 11, smMuted, "Secciones", 1.4f);
+    screenTop = -smTop / smScale;
+    bottom = smBottom - (UI_Home_InMatch() ? 38.0f : 0.0f);
+    // Se centra a mano y no con UI_Home_BlockTop, que nunca sube mas arriba de la barra de
+    // las paginas: la capa no la tiene, y con ella la columna se iba por abajo de la pantalla.
+    // El margen deja ver el pie de donde se abrio.
+    maxH = bottom - screenTop - 2 * CR_MARGIN;
+    textW = CR_W - 2 * CR_PAD;
 
-    for (i = 0; i < cr.numSections; i++) {
-        float ry = panelTop + 50 + i * CR_ROW_H;
-        qboolean over = SM_Over(CR_HIT_SECTION, i);
-        qboolean open = (i == cr.open);
-
-        if (ry + CR_ROW_H > panelTop + panelH - 12) {
-            break;
-        }
-        if (open || over) {
-            SM_Round(left + 10, ry, CR_INDEX_W - 20, CR_ROW_H - 4, SM_RADIUS_SM, open ? smRaised : smPanel, NULL);
-        }
-        SM_Text(left + 22, SM_Baseline(FONT_SANS, 13, ry, 26), FONT_SANS, 13, open ? smText : smTextSoft,
-                cr.sections[i].title, SM_Fit(FONT_SANS, 13, cr.sections[i].title, CR_INDEX_W - 48), qfalse);
-        SM_Text(left + 22, SM_Baseline(FONT_SANS, 11, ry + 22, 16), FONT_SANS, 11, smMuted, cr.sections[i].lead,
-                SM_Fit(FONT_SANS, 11, cr.sections[i].lead, CR_INDEX_W - 48), qfalse);
-        SM_Hit(left + 10, ry, CR_INDEX_W - 20, CR_ROW_H - 4, CR_HIT_SECTION, i, NULL);
+    cr.content = CR_ContentHeight(textW);
+    h = cr.content + CR_HEAD_H + CR_PAD;
+    if (h > maxH) {
+        h = maxH;
     }
+    x = (smVW - CR_W) * 0.5f;
+    top = screenTop + (bottom - screenTop - h) * 0.5f;
 
-    // ── the open section ──
-    noteX = left + CR_INDEX_W + HM_PANEL_GAP;
-    noteW = HM_CONTAINER_W - CR_INDEX_W - HM_PANEL_GAP;
-    SM_Round(noteX, panelTop, noteW, panelH, SM_RADIUS_MD, smPanel, NULL);
+    // el fondo se apaga y se queda con el cursor: nada de abajo se ilumina ni recibe el clic
+    SM_Hit(-20, screenTop - 20, smVW + 40, bottom - screenTop + 40, CR_HIT_VEIL, 0, NULL);
+    SM_FillScreen(crVeil);
 
-    SM_Text(noteX + CR_PAD, SM_Baseline(FONT_SANS, 17, panelTop + 20, 26), FONT_SANS, 17, smText,
-            cr.sections[cr.open].title, -1, qfalse);
-    SM_Label(noteX + CR_PAD, SM_Baseline(FONT_SANS, 11, panelTop + 48, 16), 11, smMuted, cr.sections[cr.open].lead,
-             1.4f);
+    SM_Shadow(x, top, CR_W, h, SM_RADIUS_MD);
+    SM_Round(x, top, CR_W, h, SM_RADIUS_MD, smPanel, NULL);
+    SM_Hit(x, top, CR_W, h, CR_HIT_PANEL, 0, NULL);
 
-    cr.listTop = panelTop + 78;
-    cr.view = panelTop + panelH - CR_PAD - cr.listTop;
-
+    SM_Label(x + CR_PAD, SM_Baseline(FONT_SANS, 12, top + 24, 18), 12, smMuted, "Credits", 1.8f);
+    SM_Fill(x + CR_PAD, top + CR_HEAD_H - 14, CR_W - 2 * CR_PAD, 1, smBorder, NULL);
     {
-        float ly = 0;
-        int n;
+        qboolean over = SM_Over(CR_HIT_CLOSE, 0);
 
-        for (n = 0; n < cr.sections[cr.open].numLines; n++) {
-            const crLine_t* ln = &cr.lines[cr.sections[cr.open].firstLine + n];
-
-            if (ln->type == CR_LINE_HEAD) {
-                ly += (n ? CR_GAP : 0) + CR_HEAD_H;
-            } else if (ln->type == CR_LINE_LINK) {
-                ly += CR_LINK_H;
-            } else {
-                int st[SM_MAX_LINES], ln2[SM_MAX_LINES];
-                int rows = CR_BulletLines(ln->text, noteW - 2 * CR_PAD - 34, st, ln2);
-
-                ly += rows * CR_LINE_H + CR_BULLET_GAP;
-            }
-        }
-        cr.content = ly;
+        SM_Cross(x + CR_W - CR_PAD - 11, top + 26, 11, over ? smText : smMuted);
+        SM_Hit(x + CR_W - CR_PAD - 22, top + 14, 36, 36, CR_HIT_CLOSE, 0, NULL);
     }
+
+    cr.listTop = top + CR_HEAD_H;
+    cr.view = top + h - CR_PAD * 0.5f - cr.listTop;
     cr.scroll = CR_ClampScroll(cr.scroll);
 
-    clip = SM_R(noteX, cr.listTop, noteW, cr.view);
+    clip = SM_R(x, cr.listTop, CR_W, cr.view);
     {
         float ly = cr.listTop - cr.scroll;
-        int n;
+        int i;
 
-        for (n = 0; n < cr.sections[cr.open].numLines; n++) {
-            const crLine_t* ln = &cr.lines[cr.sections[cr.open].firstLine + n];
-            qboolean shown = (ly + CR_LINE_H > cr.listTop && ly < cr.listTop + cr.view);
+        for (i = 0; i < cr.numLines; i++) {
+            const crLine_t* ln = &cr.lines[i];
 
-            if (ln->type == CR_LINE_HEAD) {
-                ly += (n ? CR_GAP : 0);
-                if (ly + CR_HEAD_H > cr.listTop && ly < cr.listTop + cr.view &&
-                    SM_TextInside(SM_Baseline(FONT_SANS, 12, ly + 8, 18), 12, &clip)) {
-                    SM_Label(noteX + CR_PAD, SM_Baseline(FONT_SANS, 12, ly + 8, 18), 12, smGold, ln->text, 1.4f);
-                }
-                ly += CR_HEAD_H;
+            if (ln->type == CR_LINE_BLANK) {
+                ly += CR_BLANK_H;
                 continue;
             }
             if (ln->type == CR_LINE_LINK) {
-                if (shown) {
+                if (ly + CR_LINK_H > cr.listTop && ly < cr.listTop + cr.view) {
                     qboolean over = SM_Over(CR_HIT_LINK, ln->link);
-                    float tb = SM_Baseline(FONT_SANS, 14, ly, CR_LINK_H);
-                    float tw = SM_Advance(FONT_SANS, 14, ln->text, -1);
+                    float tb = SM_Baseline(FONT_SANS, CR_SIZE, ly, CR_LINK_H);
+                    float tw = SM_Advance(FONT_SANS, CR_SIZE, ln->text, -1);
 
-                    if (SM_TextInside(tb, 14, &clip)) {
-                        SM_Text(noteX + CR_PAD + 14, tb, FONT_SANS, 14, over ? smText : smGold, ln->text, -1, qfalse);
-                        // underlined while the cursor is on it, the way a link behaves
+                    if (SM_TextInside(tb, CR_SIZE, &clip)) {
+                        SM_Text(x + CR_PAD, tb, FONT_SANS, CR_SIZE, over ? smText : smGold, ln->text, -1, qfalse);
+                        // subrayado mientras el cursor esta encima, como se porta un link
                         if (over) {
-                            SM_Fill(noteX + CR_PAD + 14, ly + CR_LINK_H - 6, tw, 1, smText, &clip);
+                            SM_Fill(x + CR_PAD, ly + CR_LINK_H - 5, tw, 1, smText, &clip);
                         }
                     }
                     if (ln->link >= 0) {
-                        SM_Hit(noteX + CR_PAD, ly, tw + 28, CR_LINK_H, CR_HIT_LINK, ln->link, &clip);
+                        SM_Hit(x + CR_PAD, ly, tw + 12, CR_LINK_H, CR_HIT_LINK, ln->link, &clip);
                     }
                 }
                 ly += CR_LINK_H;
@@ -444,7 +411,7 @@ static void CR_DrawPage(void) {
             }
             {
                 int st[SM_MAX_LINES], ln2[SM_MAX_LINES];
-                int rows = CR_BulletLines(ln->text, noteW - 2 * CR_PAD - 34, st, ln2);
+                int rows = CR_Wrap(ln->text, textW, st, ln2);
                 int r;
 
                 for (r = 0; r < rows; r++) {
@@ -453,33 +420,17 @@ static void CR_DrawPage(void) {
                     if (ry + CR_LINE_H <= cr.listTop || ry >= cr.listTop + cr.view) {
                         continue;
                     }
-                    if (r == 0) {
-                        SM_Pill(noteX + CR_PAD + 2, ry + CR_LINE_H * 0.5f - 2, 4, 4, smMuted, &clip);
-                    }
-                    CR_DrawRichRange(noteX + CR_PAD + 16, SM_Baseline(FONT_SANS, 14, ry, CR_LINE_H), ln->text,
-                                     st[r], ln2[r], &clip);
+                    CR_DrawRichRange(x + CR_PAD, SM_Baseline(FONT_SANS, CR_SIZE, ry, CR_LINE_H), ln->text, st[r],
+                                     ln2[r], &clip);
                 }
-                ly += rows * CR_LINE_H + CR_BULLET_GAP;
+                ly += rows * CR_LINE_H + CR_PARA_GAP;
             }
         }
     }
 
     if (cr.content > cr.view) {
-        CR_DrawScrollbar(noteX + noteW - 14);
+        CR_DrawScrollbar(x + CR_W - 16);
     }
-}
-
-void UI_Credits_Open(void) {
-    if (!cr.loaded) {
-        CR_Load();
-    }
-    cr.open = 0;
-    cr.scroll = 0;
-    cr.scrollDrag = qfalse;
-}
-
-void UI_Credits_Paint(void) {
-    SM_BeginFrame();
 
     if (cr.scrollDrag) {
         if (!trap_Key_IsDown(K_MOUSE1)) {
@@ -495,19 +446,47 @@ void UI_Credits_Paint(void) {
             cr.scrollGrab = smMY;
         }
     }
-
-    CR_DrawPage();
-    UI_Home_Banner();
-    SM_EndFrame();
 }
 
+void UI_Credits_Open(void) {
+    if (!cr.loaded) {
+        CR_Load();
+    }
+    cr.showing = qtrue;
+    cr.scroll = 0;
+    cr.scrollDrag = qfalse;
+}
+
+void UI_Credits_Close(void) {
+    cr.showing = qfalse;
+    cr.scrollDrag = qfalse;
+}
+
+qboolean UI_Credits_IsOpen(void) {
+    return cr.showing;
+}
+
+/*
+===============
+UI_Credits_HandleKey
+
+Mientras la capa esta abierta se queda con todo, para que no llegue nada al menu de
+atras. Devuelve qfalse solo cuando esta cerrada.
+===============
+*/
 qboolean UI_Credits_HandleKey(int key) {
     const smHit_t* hit;
 
+    if (!cr.showing) {
+        return qfalse;
+    }
     if (key & K_CHAR_FLAG) {
         return qtrue;
     }
     switch (key) {
+        case K_ESCAPE:
+            UI_Credits_Close();
+            return qtrue;
         case K_MWHEELUP:
             cr.scroll = CR_ClampScroll(cr.scroll - 3 * CR_LINE_H);
             return qtrue;
@@ -517,22 +496,17 @@ qboolean UI_Credits_HandleKey(int key) {
         case K_MOUSE1:
             break;
         default:
-            return qfalse;
+            return qtrue;
     }
 
-    if (UI_Home_NavClick()) {
-        return qtrue;
-    }
     hit = SM_HitAt(smMX, smMY);
     if (!hit) {
         return qtrue;
     }
     switch (hit->type) {
-        case CR_HIT_SECTION:
-            if (hit->index >= 0 && hit->index < cr.numSections) {
-                cr.open = hit->index;
-                cr.scroll = 0;
-            }
+        case CR_HIT_VEIL:
+        case CR_HIT_CLOSE:
+            UI_Credits_Close();
             break;
         case CR_HIT_LINK:
             if (hit->index >= 0 && hit->index < cr.numLinks) {

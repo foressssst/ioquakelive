@@ -76,12 +76,9 @@ typedef enum {
     HM_HIT_NONE = SM_HIT_SHARED,
     HM_HIT_NAV,
     HM_HIT_BANNER,
-    HM_HIT_ITEM
+    HM_HIT_ITEM,
+    HM_HIT_CREDITS  // [ioquakelive] la linea del pie
 } hmHitType_t;
-
-static const char* const hmNavNames[HM_NUM_NAV] = {"Home",     "Play",      "Training",
-                                                  "Replays",  "Settings",  "Patch Notes",
-                                                  "Credits",  "Quit"};
 
 // arenas whose shots pak00 carries, one of which is the background when the painting is not there
 static const char* const hmBackdrops[] = {
@@ -382,10 +379,6 @@ void UI_Home_Go(int nav) {
             Menus_CloseAll();
             Menus_ActivateByName("patchnotes");
             break;
-        case HM_NAV_CREDITS:
-            Menus_CloseAll();
-            Menus_ActivateByName("credits");
-            break;
         case HM_NAV_QUIT:
             // retail's power button (App's quitGame) asks nothing: it sends quit
             trap_Cmd_ExecuteText(EXEC_APPEND, "quit\n");
@@ -503,7 +496,6 @@ static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
     {
         {"Steam Workshop", "Maps and models other players made", -1, -1, qtrue},
         {"Steam Community", "The game's hub", -1, -1, qtrue},
-        {"Credits", "Who made what this is built on", HM_NAV_CREDITS, -1, qfalse},
         {"Back", NULL, -1, HM_MENU_MAIN, qfalse},
         {NULL, NULL, -1, -1, qfalse},
         {NULL, NULL, -1, -1, qfalse},
@@ -705,20 +697,34 @@ UI_Home_DrawLegal
 The version under the list and, at the bottom right, the notice retail's splash
 shows. There is no legal-notices page in this build, so the line is the notice
 itself.
+
+[ioquakelive] Credits sits here too, after the version and in the same grey: it is
+the same kind of line -- who this is and who made what it stands on -- and the
+player asked for it here rather than as a page of its own. It opens over the menu.
 ===============
 */
 static void UI_Home_DrawLegal(void) {
     static const char* const notice =
         "QUAKE LIVE (c) 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
+    static const char* const credits = "Credits";
     char version[MAX_CVAR_VALUE_STRING];
     float h = 26.0f;
     float y = smBottom - 30 - h - (UI_Home_InMatch() ? 38.0f : 0.0f);
+    float baseline = SM_Baseline(FONT_SANS, 12, y, h);
     float w = SM_Advance(FONT_SANS, 12, notice, -1);
+    float x = UI_Home_ColumnX();
+    qboolean over = SM_Over(HM_HIT_CREDITS, 0);
 
-    SM_Text(smVW - UI_Home_ColumnX() * 0.5f - w, SM_Baseline(FONT_SANS, 12, y, h), FONT_SANS, 12, smSubtle, notice,
-            -1, qfalse);
+    SM_Text(smVW - UI_Home_ColumnX() * 0.5f - w, baseline, FONT_SANS, 12, smSubtle, notice, -1, qfalse);
+
     trap_Cvar_VariableStringBuffer("version", version, sizeof(version));
-    SM_Text(UI_Home_ColumnX(), SM_Baseline(FONT_SANS, 12, y, h), FONT_SANS, 12, smSubtle, version, -1, qfalse);
+    SM_Text(x, baseline, FONT_SANS, 12, smSubtle, version, -1, qfalse);
+    x += SM_Advance(FONT_SANS, 12, version, -1);
+
+    SM_Text(x + 10, baseline, FONT_SANS, 12, smBorder, "|", -1, qfalse);
+    x += 22;
+    SM_Text(x, baseline, FONT_SANS, 12, over ? smText : smSubtle, credits, -1, qfalse);
+    SM_Hit(x - 6, y, SM_Advance(FONT_SANS, 12, credits, -1) + 12, h, HM_HIT_CREDITS, 0, NULL);
 }
 
 void UI_Home_Open(void) {
@@ -744,12 +750,16 @@ void UI_Home_Paint(void) {
     UI_Home_DrawLegal();
 
     UI_Home_Banner();
+    UI_Credits_Overlay();  // [ioquakelive] al final, para quedar encima de todo
     SM_EndFrame();
 }
 
 qboolean UI_Home_HandleKey(int key) {
     const smHit_t* hit;
 
+    if (UI_Credits_HandleKey(key)) {
+        return qtrue;  // [ioquakelive] con los creditos abiertos no pasa nada al menu
+    }
     if (key & K_CHAR_FLAG) {
         return qtrue;
     }
@@ -764,6 +774,10 @@ qboolean UI_Home_HandleKey(int key) {
         return qtrue;
     }
     hit = SM_HitAt(smMX, smMY);
+    if (hit && hit->type == HM_HIT_CREDITS) {
+        UI_Credits_Open();
+        return qtrue;
+    }
     if (!hit || hit->type != HM_HIT_ITEM) {
         return qtrue;
     }
