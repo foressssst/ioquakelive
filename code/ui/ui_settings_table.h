@@ -31,8 +31,10 @@ static const stOption_t stOpts_cg_drawcrosshairnames[] = {{"None", "0"}, {"All",
 static const stOption_t stOpts_cg_crosshairhitstyle[] = {{"None", "0"}, {"Damage Color", "1"}, {"Color Flash", "2"}, {"Pulse", "6"}, {"Damage Pulse", "7"}, {"Color Pulse", "8"}};
 static const stOption_t stOpts_cg_crosshairhittime[] = {{"Short", "100"}, {"Normal", "200.0"}, {"Long", "500"}};
 static const stOption_t stOpts_cg_poweruppois[] = {{"Off", "0"}, {"Through Walls", "1"}, {"Always On", "2"}};
-static const stOption_t stOpts_cg_forceteamskin[] = {{"None", ""}, {"Red", "red"}, {"Blue", "blue"}, {"Bright", "bright"}, {"Sport", "sport"}, {"Sport (Red)", "sport_red"}, {"Sport (Blue)", "sport_blue"}};
-static const stOption_t stOpts_cg_forceenemyskin[] = {{"None", ""}, {"Red", "red"}, {"Blue", "blue"}, {"Bright", "bright"}, {"Sport", "sport"}, {"Sport (Red)", "sport_red"}, {"Sport (Blue)", "sport_blue"}};
+// [ioquakelive] fb va al final: es la piel que arma gen_fb_skins y viaja en pak01, y por consola
+// ya funcionaba; faltaba nada mas en el desplegable.
+static const stOption_t stOpts_cg_forceteamskin[] = {{"None", ""}, {"Red", "red"}, {"Blue", "blue"}, {"Bright", "bright"}, {"Sport", "sport"}, {"Sport (Red)", "sport_red"}, {"Sport (Blue)", "sport_blue"}, {"Fullbright", "fb"}};
+static const stOption_t stOpts_cg_forceenemyskin[] = {{"None", ""}, {"Red", "red"}, {"Blue", "blue"}, {"Bright", "bright"}, {"Sport", "sport"}, {"Sport (Red)", "sport_red"}, {"Sport (Blue)", "sport_blue"}, {"Fullbright", "fb"}};
 static const stOption_t stOpts_cg_drawgun[] = {{"Hidden", "0"}, {"Normal", "1"}, {"Still", "2"}, {"Transparent", "3"}};
 static const stOption_t stOpts_cg_guny[] = {{"Default", "0"}, {"Left", "18"}, {"Center", "3"}, {"Right", "-10"}};
 static const stOption_t stOpts_cg_brasstime[] = {{"None", "0"}, {"Short", "1000"}, {"Normal", "2500"}, {"Long", "5000"}};
@@ -194,7 +196,7 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_TEAM, "Teammates", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
     {ST_TAB_TEAM, "Enemies", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
     {ST_TAB_TEAM, "Force Team Model", "cg_forceteammodel", ST_MODEL, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
-    {ST_TAB_TEAM, "Force Team Skin", "cg_forceteamskin", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_cg_forceteamskin, 7, NULL, 0},
+    {ST_TAB_TEAM, "Force Team Skin", "cg_forceteamskin", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_cg_forceteamskin, 8, NULL, 0},
     {ST_TAB_TEAM, "Team Head Color", "cg_teamheadcolor", ST_RGB, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
     {ST_TAB_TEAM, "Team Upper Color", "cg_teamuppercolor", ST_RGB, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
     {ST_TAB_TEAM, "Team Lower Color", "cg_teamlowercolor", ST_RGB, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
@@ -202,7 +204,7 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_TEAM, "Team Damage Indicator", "cg_screendamage_team", ST_RGB, 0.0f, 0.0f, 0.0f, NULL, 0, "Choose the color in which teammate hits are indicated on your screen.", 0},
     {ST_TAB_TEAM, "Team Damage Alpha", "cg_screendamagealpha_team", ST_RANGE, 0.0f, 255.0f, 5.0f, NULL, 0, NULL, 0},
     {ST_TAB_TEAM, "Force Enemy Model", "cg_forceenemymodel", ST_MODEL, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
-    {ST_TAB_TEAM, "Force Enemy Skin", "cg_forceenemyskin", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_cg_forceenemyskin, 7, NULL, 1},
+    {ST_TAB_TEAM, "Force Enemy Skin", "cg_forceenemyskin", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_cg_forceenemyskin, 8, NULL, 1},
     {ST_TAB_TEAM, "Enemy Head Color", "cg_enemyheadcolor", ST_RGB, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
     {ST_TAB_TEAM, "Enemy Upper Color", "cg_enemyuppercolor", ST_RGB, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
     {ST_TAB_TEAM, "Enemy Lower Color", "cg_enemylowercolor", ST_RGB, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
