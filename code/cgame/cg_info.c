@@ -137,8 +137,6 @@ static vec4_t loadPage = {0.031f, 0.031f, 0.031f, 1.0f};
 static vec4_t loadText = {0.867f, 0.867f, 0.867f, 1.0f};
 static vec4_t loadMuted = {0.600f, 0.600f, 0.600f, 1.0f};
 static vec4_t loadSubtle = {0.416f, 0.416f, 0.416f, 1.0f};
-static vec4_t loadGold = {0.969f, 0.820f, 0.0f, 1.0f};
-static vec4_t loadTrack = {1.0f, 1.0f, 1.0f, 0.12f};
 
 // a 480-line unit in screen pixels
 static float CG_LoadUnit(void) {
@@ -288,8 +286,9 @@ Nothing sits in a panel: the picture is darkened behind each side instead, so it
 #define LOAD_ROW_H 34.0f
 #define LOAD_PIC 28.0f
 
-static vec4_t loadRed = {0.80f, 0.24f, 0.24f, 1.0f};
-static vec4_t loadBlue = {0.32f, 0.48f, 0.90f, 1.0f};
+static vec4_t loadRed = {0.74f, 0.24f, 0.24f, 0.90f};
+static vec4_t loadBlue = {0.30f, 0.45f, 0.84f, 0.90f};
+static vec4_t loadRule = {1.0f, 1.0f, 1.0f, 0.22f};
 
 // one player: their icon and their name, from the edge inwards
 static void CG_LoadDrawPlayer(float x, float y, float w, int client, qboolean rightward) {
@@ -318,8 +317,7 @@ static void CG_LoadDrawPlayer(float x, float y, float w, int client, qboolean ri
         const char* tag = you ? "You" : "Bot";
         float tw = CG_LoadLabelWidth(0.11f, tag, 1.2f);
 
-        CG_LoadLabel(rightward ? x + w - LOAD_PIC - 14.0f - tw : nameX, y + 19, 0.11f,
-                     you ? loadGold : loadSubtle, tag, 1.2f);
+        CG_LoadLabel(rightward ? x + w - LOAD_PIC - 14.0f - tw : nameX, y + 19, 0.11f, loadSubtle, tag, 1.2f);
     }
 }
 
@@ -332,7 +330,7 @@ static void CG_LoadDrawSide(float x, float y, float w, float maxH, const char* t
     int i;
 
     CG_LoadLabel(rightward ? x + w - tw + 1.8f : x, y, 0.17f, loadText, title, 1.8f);
-    CG_LoadFill(x, y + 22.0f, w, 2.0f, color);
+    CG_LoadFill(x, y + 22.0f, w, 1.5f, color);
 
     if (maxRows < 1) {
         maxRows = 1;
@@ -390,7 +388,7 @@ static void CG_LoadDrawSteps(float middle, float y) {
         if (done) {
             CG_LoadCheck(x, y + 2.0f, loadMuted);
         }
-        CG_LoadLabel(x + 14.0f, y, 0.14f, current ? loadGold : done ? loadMuted : loadSubtle, steps[i], 1.4f);
+        CG_LoadLabel(x + 14.0f, y, 0.14f, current ? loadText : done ? loadMuted : loadSubtle, steps[i], 1.4f);
         x += w[i] + gap;
     }
 
@@ -463,12 +461,13 @@ void CG_DrawInformation(void) {
     }
     sideX = full - 26.0f - side;
 
-    // the levelshot is the screen; it only darkens where something is read: under the logo, down
-    // each side for the rosters, and at the foot for the map and the load
-    CG_LoadWash(0, 0, full, 90, loadPage, 0.58f, 0.0f, qfalse);
-    CG_LoadWash(0, 0, side + 60.0f, 480, loadPage, 0.72f, 0.0f, qtrue);
-    CG_LoadWash(sideX - 60.0f, 0, side + 60.0f, 480, loadPage, 0.0f, 0.72f, qtrue);
-    CG_LoadWash(0, 330, full, 150, loadPage, 0.0f, 0.90f, qfalse);
+    // The levelshot is the screen; it only darkens where something is read. Every wash runs to the
+    // edge it belongs to: the right one used to stop at the roster's own right edge and left a lit
+    // strip down the last 26 units, which is the shade the user saw cut.
+    CG_LoadWash(0, 0, full, 110, loadPage, 0.58f, 0.0f, qfalse);
+    CG_LoadWash(0, 0, side + 80.0f, 480, loadPage, 0.74f, 0.0f, qtrue);
+    CG_LoadWash(sideX - 80.0f, 0, full - sideX + 80.0f, 480, loadPage, 0.0f, 0.74f, qtrue);
+    CG_LoadWash(0, 300, full, 180, loadPage, 0.0f, 0.90f, qfalse);
 
     if (cgs.media.qlLogoShader) {
         CG_LoadPic(22, 20, 160, 40, cgs.media.qlLogoShader);
@@ -490,8 +489,8 @@ void CG_DrawInformation(void) {
         CG_LoadDrawSide(26.0f, 96.0f, side, 190.0f, "Red Team", loadRed, TEAM_RED, 0, qfalse);
         CG_LoadDrawSide(sideX, 96.0f, side, 190.0f, "Blue Team", loadBlue, TEAM_BLUE, 0, qtrue);
     } else {
-        CG_LoadDrawSide(26.0f, 96.0f, side, 190.0f, "Players", loadGold, -1, 0, qfalse);
-        CG_LoadDrawSide(sideX, 96.0f, side, 190.0f, "", loadGold, -1, 1, qtrue);
+        CG_LoadDrawSide(26.0f, 96.0f, side, 190.0f, "Players", loadRule, -1, 0, qfalse);
+        CG_LoadDrawSide(sideX, 96.0f, side, 190.0f, "", loadRule, -1, 1, qtrue);
     }
 
     // the map in the middle: the gametype over its name, and its authors under it
@@ -501,7 +500,7 @@ void CG_DrawInformation(void) {
         gametypeName = "Unknown Gametype";
     }
     w = (int)CG_LoadLabelWidth(0.16f, gametypeName, 2.4f);
-    CG_LoadLabel(full * 0.5f - w * 0.5f, 370.0f, 0.16f, loadGold, gametypeName, 2.4f);
+    CG_LoadLabel(full * 0.5f - w * 0.5f, 370.0f, 0.16f, loadMuted, gametypeName, 2.4f);
 
     s = CG_ConfigString(CS_MESSAGE);
     w = CG_DrawTextWidth(s, 0.62f, 0, 0);
@@ -521,13 +520,8 @@ void CG_DrawInformation(void) {
     // the load along the bottom: the four steps in a row, and what is loading under them
     CG_LoadDrawSteps(full * 0.5f, 452.0f);
 
-    // the overall progress along the very bottom
-    CG_LoadFill(0, 477, full, 3, loadTrack);
-    if (cg.loadingStage > 0) {
-        float done = (float)cg.loadingStage / (float)NUM_LOADING_STAGES;
-
-        CG_LoadFill(0, 477, full * (done > 1.0f ? 1.0f : done), 3, loadGold);
-    }
+    // No bar along the bottom edge: the user read that band as a stripe stuck on the picture, and
+    // the four steps above already say how far the load has got.
 
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
