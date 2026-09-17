@@ -119,7 +119,7 @@ static void TR_DrawCard(int i, float x, float y, float w) {
     vec4_t tint = {1.0f, 1.0f, 1.0f, 1.0f};
     int lines, k;
 
-    SM_Round(x, y, w, TR_CARD_H, SM_RADIUS_MD, over ? smRaised : smPanel, NULL);
+    SM_Round(x, y, w, TR_CARD_H, SM_RADIUS_MD, over ? smRaisedHover : smRaised, NULL);
 
     // retail dims the image to 40% and brings it up under the cursor
     tint[3] = over ? 1.0f : 0.4f;
@@ -176,8 +176,9 @@ void UI_Training_Open(void) {
 
 void UI_Training_Paint(void) {
     float left = UI_Home_Left();
-    float w = (HM_CONTAINER_W - (TR_NUM_CARDS - 1) * HM_PANEL_GAP) / TR_NUM_CARDS;
-    float y;
+    float pad = 24.0f;
+    float w = (HM_CONTAINER_W - 2 * pad - (TR_NUM_CARDS - 1) * HM_PANEL_GAP) / TR_NUM_CARDS;
+    float y, panelTop, panelH;
     int i;
 
     SM_BeginFrame();
@@ -187,15 +188,17 @@ void UI_Training_Paint(void) {
 
     UI_Home_Backdrop();
     UI_Home_PageTop(HM_NAV_TRAINING);
-    // [ioquakelive] The page keeps the frame every other one has: the header right under the top
-    // row, as Settings does, and the cards centred in what is left. Hanging the block off the
-    // middle of the screen made the header jump from page to page, which is what the user saw as
-    // "los 3 centers no estan CENTRADOS como contenedor".
-    y = UI_Home_Header(HM_NAV_H, NULL, "Training Center") + HM_PANEL_GAP;
-    y += (UI_Home_FrameBottom() - y - TR_CARD_H) * 0.5f;
+    // [ioquakelive] The three cards sit in one container, and the header and that container are a
+    // block in the middle of the screen ("los 3 centers no estan CENTRADOS como contenedor", "no es
+    // extenderla, es centrarla").
+    panelH = TR_CARD_H + 2 * pad;
+    panelTop = UI_Home_Header(UI_Home_BlockTop(72.0f + HM_PANEL_GAP + panelH), NULL, "Training Center") +
+               HM_PANEL_GAP;
+    SM_Round(left, panelTop, HM_CONTAINER_W, panelH, SM_RADIUS_MD, smPanel, NULL);
+    y = panelTop + pad;
 
     for (i = 0; i < TR_NUM_CARDS; i++) {
-        TR_DrawCard(i, left + i * (w + HM_PANEL_GAP), y, w);
+        TR_DrawCard(i, left + pad + i * (w + HM_PANEL_GAP), y, w);
     }
 
     UI_Home_Banner();

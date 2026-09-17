@@ -339,11 +339,18 @@ float UI_Home_FrameBottom(void) {
     return smBottom - 40.0f - (UI_Home_InMatch() ? 38.0f : 0.0f);
 }
 
+// [ioquakelive] the block's middle is the screen's middle, as the user asked ("es centrarla"),
+// not the middle of what the top row leaves, which sat it lower; it still never climbs over the
+// top row, nor under the match banner
 float UI_Home_BlockTop(float blockHeight) {
     float first = HM_NAV_H;
-    float bottom = smBottom - 44.0f - (UI_Home_InMatch() ? 38.0f : 0.0f);
-    float y = first + (bottom - first - blockHeight) * 0.5f;
+    float screenTop = -smTop / smScale;
+    float bottom = smBottom - (UI_Home_InMatch() ? 38.0f : 0.0f);
+    float y = screenTop + (bottom - screenTop - blockHeight) * 0.5f;
 
+    if (y + blockHeight > bottom - 20.0f) {
+        y = bottom - 20.0f - blockHeight;
+    }
     return y < first ? first : y;
 }
 
