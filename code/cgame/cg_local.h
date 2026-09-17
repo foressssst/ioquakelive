@@ -2415,7 +2415,6 @@ void CG_VoiceChatListForClient(int clientNum);
 //
 void CG_Respawn(void);
 void CG_TransitionPlayerState(playerState_t* ps, playerState_t* ops);
-void CG_CheckHitSounds(const playerState_t* ps, const playerState_t* ops);
 void CG_PushReward(sfxHandle_t sfx, qhandle_t shader, int rewardCount);
 
 //

@@ -294,65 +294,67 @@ void CG_PushReward(sfxHandle_t sfx, qhandle_t shader, int rewardCount) {
 
 /*
 ==================
-CG_CheckHitSounds
+CG_HitBeepSound
 
-[ioquakelive] Not retail's: the hit sounds follow WolfcamQL, by the user's choice. Retail
-(cgamex86.dll 0x100435b0) plays them from CG_CheckLocalSounds, which live play reaches through
-the prediction; the predicted state takes each new snapshot the moment its packet lands, so the
-sounds come at the pace the packets arrive and a lightning gun's hits bunch up and spread out.
-WolfcamQL plays them as the snapshots are transitioned, on the game's own clock, and that is how
-they are played here, from CG_TransitionSnapshot.
+[QL] cgamex86.dll 0x100435b0, la eleccion del sonido de un golpe. El servidor manda el dano
+del golpe repartido en cuatro escalones en generic1, seis bits mas arriba, y cada escalon
+tiene su sonido: hit0 es el mas flojo, hit3 el mas fuerte.
 
-What plays is WolfcamQL's too (cg_playerstate.c, CG_CheckLocalSounds): nothing on the snapshot
-the team changes; a hit plays cg_hitBeep's sound, 1 hit.wav, 2 hit0-3 by the damage tier the
-server keeps in generic1 (generic1 / 64), 3 the same tiers reversed; a teammate hit plays
-hit_teammate unless cg_hitBeep is 0. The kill beep is not here: WolfcamQL plays it from the
-obituary, on top of the hit (CG_Obituary).
+  cg_hitBeep 1  siempre hit1, sin mirar el dano
+  cg_hitBeep 2  el escalon que toca
+  cg_hitBeep 3  los mismos escalones al reves, o sea el agudo para el golpe flojo
+
+Ojo con el 1: suena hit1.ogg, no hit.wav. hit.wav es de Quake 3 y el binario no lo toca.
 ==================
 */
-void CG_CheckHitSounds(const playerState_t* ps, const playerState_t* ops) {
-    sfxHandle_t sfx;
+static sfxHandle_t CG_HitBeepSound(const playerState_t* ps) {
+    int tier = ps->generic1 >> 6;
 
-    // don't play the sounds if the player just changed teams
-    if (ps->persistant[PERS_TEAM] != ops->persistant[PERS_TEAM]) {
-        return;
+    if (cg_hitBeep.integer == 1) {
+        return cgs.media.hitSounds[1];
     }
+    if (cg_hitBeep.integer == 3) {
+        tier = 3 - tier;
+    }
+    switch (tier) {
+        case 1:
+            return cgs.media.hitSounds[1];
+        case 2:
+            return cgs.media.hitSounds[2];
+        case 3:
+            return cgs.media.hitSounds[3];
+        default:
+            return cgs.media.hitSounds[0];
+    }
+}
 
+/*
+==================
+CG_CheckHitSounds
+
+[QL] cgamex86.dll 0x100435b0, lo primero que hace CG_CheckLocalSounds. Se llama desde ahi y
+no desde otro lado: es lo que el jugador pidio arreglar, porque antes seguia a WolfcamQL y
+sonaba tarde.
+
+Lo que suena depende de si el golpe mato o no, y eso el servidor lo dice con
+PERS_ATTACKEE_ARMOR, que cuenta los golpes letales:
+
+  golpe letal, con cg_killBeep puesto  el kill beep, a su propio volumen, EN VEZ del hit
+  cualquier otro golpe                 el hit beep que elija cg_hitBeep
+  el contador de golpes BAJA           le pegaste a un companero: hit_teammate
+
+Que el kill beep reemplace al hit y no se sume es de retail; WolfcamQL los encima, tocandolo
+desde el obituario.
+==================
+*/
+static void CG_CheckHitSounds(const playerState_t* ps, const playerState_t* ops) {
     if (ps->persistant[PERS_HITS] > ops->persistant[PERS_HITS]) {
-        if (cg_hitBeep.integer == 1) {
-            trap_S_StartLocalSound(cgs.media.hitSound, CHAN_LOCAL_SOUND);
-        } else if (cg_hitBeep.integer == 2) {
-            switch (ps->generic1 / 64) {
-            case 1:
-                sfx = cgs.media.hitSounds[1];
-                break;
-            case 2:
-                sfx = cgs.media.hitSounds[2];
-                break;
-            case 3:
-                sfx = cgs.media.hitSounds[3];
-                break;
-            default:
-                sfx = cgs.media.hitSounds[0];
-                break;
-            }
-            trap_S_StartLocalSound(sfx, CHAN_LOCAL_SOUND);
-        } else if (cg_hitBeep.integer == 3) {
-            switch (ps->generic1 / 64) {
-            case 0:
-                sfx = cgs.media.hitSounds[3];
-                break;
-            case 1:
-                sfx = cgs.media.hitSounds[2];
-                break;
-            case 2:
-                sfx = cgs.media.hitSounds[1];
-                break;
-            default:
-                sfx = cgs.media.hitSounds[0];
-                break;
-            }
-            trap_S_StartLocalSound(sfx, CHAN_LOCAL_SOUND);
+        if (cg_killBeep.integer >= 1 &&
+            ps->persistant[PERS_ATTACKEE_ARMOR] > ops->persistant[PERS_ATTACKEE_ARMOR]) {
+            trap_S_StartLocalSoundVolume(cgs.media.killBeepSounds[cg_killBeep.integer - 1],
+                                         CHAN_LOCAL_SOUND, s_killBeepVolume.value);
+        } else if (cg_hitBeep.integer) {
+            trap_S_StartLocalSound(CG_HitBeepSound(ps), CHAN_LOCAL_SOUND);
         }
     } else if (ps->persistant[PERS_HITS] < ops->persistant[PERS_HITS] && cg_hitBeep.integer) {
         trap_S_StartLocalSound(cgs.media.hitTeamSound, CHAN_LOCAL_SOUND);
@@ -364,8 +366,8 @@ void CG_CheckHitSounds(const playerState_t* ps, const playerState_t* ops) {
 CG_CheckLocalSounds
 
 [QL] cgamex86.dll 0x100435b0. Nothing plays on the snapshot the spawn count changes, which a
-team change also does. The hit sounds that open retail's version are played apart, as WolfcamQL
-plays them (CG_CheckHitSounds).
+team change also does. Lo primero que suena es el golpe (CG_CheckHitSounds), que es donde el
+binario lo tiene.
 
 Then come the medals, the player event voices and the flag pickup, which stop once the
 intermission has started, then the lead changes and the time and frag limit warnings, which
@@ -380,6 +382,8 @@ void CG_CheckLocalSounds(playerState_t* ps, playerState_t* ops) {
     if (ps->persistant[PERS_SPAWN_COUNT] != ops->persistant[PERS_SPAWN_COUNT]) {
         return;
     }
+
+    CG_CheckHitSounds(ps, ops);
 
     // if we are going into the intermission, don't start any voices
     if (cg.intermissionStarted == 1) {
