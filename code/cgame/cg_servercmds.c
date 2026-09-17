@@ -67,13 +67,36 @@ static const char* cg_disableLoadoutCvarNames[WP_NUM_WEAPONS] = {
     "cg_disableLoadout_hmg",  // WP_HMG
 };
 
-static void CG_ParseDisableLoadout(const char* s) {
-    int mask = atoi(s);
+/*
+=================
+CG_UpdateDisableLoadout
+
+[QL] cgamex86.dll 0x100498b0, the end of CG_ParseServerinfo. A weapon's picture on the join screen
+(ui/intro.menu) is off -- only its dimmed copy shows, under "ADDITIONAL UNAVAILABLE" -- when
+loadouts are off altogether (cg_loadout 0, 0x10a249cc), when the map turns it off
+(CS_DISABLE_LOADOUT, bit 1 << weapon), or when it already is a starting weapon
+(CS_STARTING_WEAPONS, bit 1 << (weapon - 1)). Otherwise a cvar that is on goes back to 0.
+
+The fork only looked at the map's mask, so with loadouts off every weapon showed lit. The value of
+g_loadout is read from the serverinfo being parsed rather than from cg_loadout, which is set in the
+same pass and would still hold the old value.
+=================
+*/
+static void CG_UpdateDisableLoadout(int loadout) {
+    int disabled = atoi(CG_ConfigString(CS_DISABLE_LOADOUT));
+    int starting = atoi(CG_ConfigString(CS_STARTING_WEAPONS));
     int i;
+
     for (i = WP_GAUNTLET; i < WP_NUM_WEAPONS; i++) {
-        if (cg_disableLoadoutCvarNames[i]) {
-            trap_Cvar_Set(cg_disableLoadoutCvarNames[i],
-                          (mask & (1 << i)) ? "1" : "0");
+        const char* name = cg_disableLoadoutCvarNames[i];
+
+        if (!name) {
+            continue;
+        }
+        if (!loadout || (disabled & (1 << i)) || (starting & (1 << (i - 1)))) {
+            trap_Cvar_Set(name, "1");
+        } else if (trap_Cvar_VariableValue(name) != 0.0f) {
+            trap_Cvar_Set(name, "0");
         }
     }
 }
@@ -656,8 +679,9 @@ void CG_ParseServerinfo(void) {
     cgs.itemTimers = atoi(Info_ValueForKey(info, "g_itemTimers"));
     cgs.quadDamageFactor = atoi(Info_ValueForKey(info, "g_quadDamageFactor"));
 
-    // [QL] copy g_loadout from serverinfo -> cg_loadout ROM cvar
+    // [QL] copy g_loadout from serverinfo -> cg_loadout ROM cvar, and the join screen's weapons with it
     trap_Cvar_Set("cg_loadout", Info_ValueForKey(info, "g_loadout"));
+    CG_UpdateDisableLoadout(atoi(Info_ValueForKey(info, "g_loadout")));
 
     mapname = Info_ValueForKey(info, "mapname");
     Com_sprintf(cgs.mapname, sizeof(cgs.mapname), "maps/%s.bsp", mapname);
@@ -981,8 +1005,7 @@ void CG_SetConfigValues(void) {
         cgs.flagStatus = s[0] - '0';
     }
     cg.warmup = atoi(Info_ValueForKey(CG_ConfigString(CS_WARMUP), "time"));
-    // [QL] seed cg_disableLoadout_* cvars from CS_DISABLE_LOADOUT bitmask
-    CG_ParseDisableLoadout(CG_ConfigString(CS_DISABLE_LOADOUT));
+    CG_UpdateDisableLoadout(atoi(Info_ValueForKey(CG_ConfigString(CS_SERVERINFO), "g_loadout")));
 }
 
 /*
@@ -1169,8 +1192,8 @@ static void CG_ConfigStringModified(void) {
     } else if (num == CS_ALLREADY_TIME) {
         // [QL] all-ready countdown target time (case 0x2c4 -> DAT_10a403d8)
         cgs.allReadyTime = atoi(str);
-    } else if (num == CS_DISABLE_LOADOUT) {
-        CG_ParseDisableLoadout(str);
+    } else if (num == CS_DISABLE_LOADOUT || num == CS_STARTING_WEAPONS) {
+        CG_UpdateDisableLoadout(atoi(Info_ValueForKey(CG_ConfigString(CS_SERVERINFO), "g_loadout")));
     }
 }
 
