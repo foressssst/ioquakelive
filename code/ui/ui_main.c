@@ -862,7 +862,6 @@ void UI_Load(void) {
 
     UI_LoadMenus(menuSet, qtrue);
     UI_ParseMenu("ui/patchnotes.menu");  // [ioquakelive] ver arriba
-    UI_ParseMenu("ui/credits.menu");
     Menus_CloseAll();
     Menus_ActivateByName(lastName);
 }
@@ -2233,9 +2232,6 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
         case UI_PATCHNOTES:
             UI_PatchNotes_Paint();
             break;
-        case UI_CREDITS:
-            UI_Credits_Paint();
-            break;
         case UI_TRAINING:
             UI_Training_Paint();
             break;
@@ -2817,8 +2813,6 @@ static qboolean UI_OwnerDrawHandleKey(int ownerDraw, int flags, float* special, 
             return UI_Replays_HandleKey(key);
         case UI_PATCHNOTES:
             return UI_PatchNotes_HandleKey(key);
-        case UI_CREDITS:
-            return UI_Credits_HandleKey(key);
         case UI_TRAINING:
             return UI_Training_HandleKey(key);
         case UI_HANDICAP:
@@ -3274,8 +3268,6 @@ static void UI_RunMenuScript(char** args) {
             UI_Replays_Open();
         } else if (Q_stricmp(name, "patchNotesOpen") == 0) {
             UI_PatchNotes_Open();
-        } else if (Q_stricmp(name, "creditsOpen") == 0) {
-            UI_Credits_Open();
         } else if (Q_stricmp(name, "trainingOpen") == 0) {
             UI_Training_Open();
         } else if (Q_stricmp(name, "homeEscape") == 0) {
@@ -5300,7 +5292,6 @@ void _UI_Init(qboolean inGameLoad) {
     // [ioquakelive] nuestra pagina de Patch Notes. No puede ir en ui/menus.txt, que viene de
     // pak00 y no se toca, asi que se carga aparte, como el cgame carga las suyas.
     UI_ParseMenu("ui/patchnotes.menu");
-    UI_ParseMenu("ui/credits.menu");
 
     Menus_CloseAll();
 

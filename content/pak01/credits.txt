@@ -1,64 +1,30 @@
 // ioquakelive - creditos y agradecimientos
 //
-// Mismo formato que changelog.txt, con una marca mas para los links:
+// Texto corrido, sin secciones. Lo lee la pantalla de Creditos, a la que se llega por el
+// pie del menu principal. Una marca por linea:
 //
-//   #  titulo de la seccion
-//   @  una linea de bajada bajo el titulo
-//   ## subtitulo
-//   -  una viñeta. Va entera en una linea: la pantalla la reparte al ancho que tenga.
+//   -  un parrafo. Va entero en una linea: la pantalla lo reparte al ancho que tenga.
 //   >  un link, "texto | url". Se abre en el navegador al hacer clic.
+//   .  una linea en blanco
 
-# El juego
-@ Quake Live y Quake III Arena
-
-## id Software
-- QUAKE LIVE, QUAKE III Arena y todos sus assets son de **id Software**, hoy parte de **ZeniMax Media**. El juego, sus mapas, sus modelos, sus sonidos y su arte son de ellos.
-- Este proyecto no redistribuye nada de eso. Para jugar hace falta una copia comprada de Quake Live en Steam, y el juego lee los archivos de esa copia.
+- **QUAKE LIVE** y **QUAKE III Arena** son de **id Software**, hoy parte de **ZeniMax Media**. El juego, sus mapas, sus modelos, sus sonidos y su arte son de ellos, y este proyecto no redistribuye nada de eso: para jugar hace falta una copia comprada en Steam, de la que el juego lee sus archivos.
 - QUAKE LIVE (c) 2007-2015 id Software LLC, a ZeniMax Media company. All Rights Reserved.
 > Quake Live en Steam | https://store.steampowered.com/app/282440
-
-## El codigo
-- Quake III Arena se libero bajo la **GPL v2** en 2005. Todo lo que sigue, incluido este proyecto, existe gracias a esa decision.
-
-# El motor
-@ De donde viene el codigo
-
-## ioquake3
-- El motor sobre el que corre todo esto es **ioquake3**, el Quake 3 que la comunidad mantiene hace veinte años: SDL2, OpenAL, 64 bits, cURL y centenares de arreglos.
-- Mantenedores: James Canete, Ludwig Nussel, Thilo Schulz, Tim Angus, Tony J. White, Jack Slater y Zack Middleton.
+.
+- Todo esto existe porque id Software libero el codigo de Quake III Arena bajo la **GPL v2** en 2005. El motor es **ioquake3**, el Quake 3 que la comunidad mantiene desde entonces: SDL2, OpenAL, 64 bits, cURL y centenares de arreglos. Lo mantienen James Canete, Ludwig Nussel, Thilo Schulz, Tim Angus, Tony J. White, Jack Slater y Zack Middleton.
 > ioquake3 | https://ioquake3.org
-
-## ioquakelive, de Thomas Jones
-- Este proyecto es una rama del fork de **Thomas Jones**, que hizo la parte que no se puede saltar: el protocolo 91 de Quake Live, las tablas de campos, las exportaciones de los modulos, los archivos por modo de juego y el netchan.
-- Sin ese trabajo no habria nada sobre lo que construir.
+.
+- Este proyecto es una rama del fork de **Thomas Jones**, que hizo la parte que no se puede saltar: el protocolo 91 de Quake Live, las tablas de campos, las exportaciones de los modulos, los archivos por modo de juego y el netchan. Sin ese trabajo no habria nada sobre lo que construir.
 > tjone270 en GitHub | https://github.com/tjone270
-> El fork original | https://github.com/tjone270/ioquakelive
-
-# La comunidad
-@ Ideas, material y herramientas
-
-## CPMA
-- De **Challenge ProMode Arena** salieron ideas de presentacion que este proyecto usa: la aparicion gradual del aviso de objeto recogido, los cuadros de las medallas, las armas brillantes y el pulso de la mira.
-- Estan portadas con la tipografia y la paleta de Quake Live, no calcadas.
+.
+- De **CPMA** salieron ideas de presentacion que este proyecto usa: la aparicion gradual del aviso de objeto recogido, los cuadros de las medallas, las armas brillantes y el pulso de la mira. Estan portadas con la tipografia y la paleta de Quake Live, no calcadas.
 > CPMA | https://playmorepromode.com
-
-## CNQ3
-- La consola opcional y los codigos de color extendidos vienen de **CNQ3**.
+.
+- La consola opcional y los codigos de color extendidos vienen de **CNQ3**, y **WolfcamQL** sirvio muchas veces de referencia para comparar contra retail lo que el binario hacia.
 > CNQ3 | https://playmorepromode.com/cnq3
-
-## WolfcamQL
-- El comportamiento de los hitsounds se tomo de **WolfcamQL** en una primera version.
 > WolfcamQL | https://github.com/brianmt/wolfcamql
-
-## Quake Club
+.
 - El diseño del front end sigue el lenguaje visual de **quakeclub.com**, la comunidad chilena de Quake Live.
 > Quake Club | https://www.quakeclub.com
-
-# Este proyecto
-@ Que es y que no
-
-## ioquakelive
-- Una reimplementacion open source de Quake Live sobre ioquake3, bajo **GPL v2**.
-- No esta afiliado a id Software ni a ZeniMax Media, y no los representa.
-- Nunca se copia codigo decompilado: se documenta el comportamiento y se reimplementa.
-- Los binarios y los assets de id Software no se redistribuyen.
+.
+- **ioquakelive** es una reimplementacion open source de Quake Live sobre ioquake3, bajo GPL v2. No esta afiliado a id Software ni a ZeniMax Media, y no los representa. Nunca se copia codigo decompilado: se documenta el comportamiento y se reimplementa.

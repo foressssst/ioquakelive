@@ -253,7 +253,6 @@ typedef enum {
     HM_NAV_REPLAYS,
     HM_NAV_SETTINGS,
     HM_NAV_PATCHNOTES,
-    HM_NAV_CREDITS,
     HM_NAV_QUIT,
     HM_NUM_NAV
 } hmNav_t;
