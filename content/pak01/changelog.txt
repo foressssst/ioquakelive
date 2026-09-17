@@ -5,96 +5,192 @@
 //   #  titulo de la version
 //   @  fecha, en YYYY-MM-DD
 //   ## titulo de seccion
-//   -  una vinieta
+//   -  una viñeta
 //
-// Las versiones van de la mas nueva a la mas vieja; la pantalla muestra la primera
-// al abrirse. Escrito para quien juega: sin direcciones de memoria, sin nombres
-// internos y sin rutas.
+// Las versiones van de la mas nueva a la mas vieja; la pantalla abre la primera.
+// Escrito para quien juega: nada de direcciones de memoria, nombres internos ni
+// rutas de despliegue.
 
-# Fisicas de Quake Live, fps sin candado y los bots que se caian
+# Fisicas, fps sin tope y arreglos
 @ 2026-09-17
 
-## Lo que rompia una partida
-- **Los bots ya no se quedan colgados al empezar.** Aparecian como "connect" en el
-  marcador, no contaban como jugadores y la partida se iba a forfeit. Al rato volvian
-  solos, que era el servidor reponiendolos.
-- **Volvio el dano.** Un descuido nuestro dejaba al jugador invulnerable en cualquier
-  partida.
-- **El chat del Crash Course se ve en pantalla.** Antes habia que abrir la consola para
-  leer a Crash, y durante la presentacion inicial no se veia nada.
+## Fisicas
+Se porto el sistema de movimiento completo de Quake Live, comparando las 49 funciones una
+por una contra el juego original. La mayoria ya calzaba; habia tres diferencias, y las tres
+se notaban jugando.
 
-## Movimiento
-El sistema de movimiento se reviso completo contra Quake Live, funcion por funcion.
-Tres cosas estaban mal:
-
-- **Ya se puede saltar a las cajas y a los bordes altos.** El salto de escalon estaba
-  apagado sin que se notara: ninguna opcion llegaba a su valor.
-- **Subir escaleras es suave.** Antes se subia de a un peldano y la camara temblaba,
-  porque se descartaban escalones en vez de encadenarlos.
-- **La camara tambien se suaviza en tercera persona.**
-- Nadar y caminar por el agua van a la velocidad de Quake Live, no un 12% mas rapido.
+- Ya se puede saltar arriba de las cajas y de los bordes altos. El salto de escalon estaba
+  desactivado.
+- Subir escaleras ya no tiembla ni se siente de a un peldaño.
+- El suavizado al subir un escalon tambien funciona en tercera persona.
+- Nadar y caminar por el agua van a la velocidad correcta. (antes, un 12% mas rapido)
 
 ## Fps
-- **El limite sube a 1000, y en 0 queda sin limite.** Estaba con candado doble y volvia
-  a bajar a 250 al entrar a un mapa.
-- **Con fps altos los pasos vuelven a sonar** y el arma sigue balanceandose. Pasando los
-  330 fps el contador que los dispara se congelaba. Ese era el motivo del tope.
+- El tope de com_maxfps sube a 1000, y en 0 queda sin limite. (antes, 250)
+- Con fps altos los pasos vuelven a escucharse y el arma sigue balanceandose. Pasando los
+  330 fps dejaban de sonar. Ese era el motivo del tope original.
 
-## Informacion en pantalla
-- **Temporizadores en los objetos importantes.** La cara del objeto queda flotando donde
-  estaba, del color que le toca, con un anillo que va contando lo que falta.
-- **Marcas que se ven a traves de las paredes** para el Quad Hog y para quien lleva la
-  bandera neutral.
+## Arreglos
+- Los bots ya no se quedan colgados al empezar la partida. Aparecian como "connect" en el
+  marcador, no contaban como jugadores y la partida terminaba en forfeit.
+- Volvio el daño. Un cambio nuestro del dia anterior dejaba al jugador invulnerable.
+- El chat del Crash Course se ve en pantalla. Antes habia que abrir la consola.
 
-## Ajustes
-- Cada grupo de opciones vive en su propia tarjeta, con el titulo en amarillo. Se nota
-  sobre todo en la pestana de controles.
+## Agregados
+- Temporizadores en los objetos: la cara del objeto queda flotando donde estaba, con un
+  anillo que cuenta lo que falta para que vuelva.
+- Marcas visibles a traves de las paredes para el Quad Hog y para quien lleva la bandera
+  neutral.
+- Pagina de Patch Notes en el menu principal. Es esta.
+- En Ajustes, cada grupo de opciones va en su propia tarjeta.
 
-# El front end de Quake Live, el Crash Course y el campo de vision
+# El front end y el Crash Course
 @ 2026-09-16
 
-## Jugabilidad
-- **El campo de vision se ve como en Quake Live.** Estaba estirado a lo ancho en
-  pantallas panoramicas y cambiaba con la resolucion, que no corresponde.
-- **Las estadisticas ya no se borran al morir:** se acumulan toda la partida.
-- **Cambiar de modo ya no arrastra las reglas del anterior.** Se podia pasar de Clan
-  Arena a Duelo y aparecer con 300 de vida y 200 de armadura.
-- Los bots ya no dejan la pantalla en negro al arrancar.
-- En los modos por equipos las armas y la municion vuelven a aparecer.
-- Las granadas ya no se cortan al rebotar, y el humo ya no se mete en la camara.
-- En los modos por rondas ya no se suelta el arma al morir.
-- El ajuste automatico de tiempo de red no se podia encender.
-
-## Lo que se ve
-- **Chispas al impactar**, como en Quake Live. La opcion estaba y no hacia nada.
-- **Los objetos simples flotan**, y sus tres opciones de verdad funcionan.
-- **La medalla lleva el numero** de las que llevas acumuladas.
-- Las armas del menu de ingreso se apagan cuando la partida no da equipamiento extra.
-- El color, el bloom y las opciones del renderizador de Quake Live.
-- La piel brillante, con la chaingun y la nailgun.
-- El proyectil se dibuja adelantado, con su opcion propia.
-
 ## Menus
-- **El menu principal es el de Quake Live**, con el cuadro del jugador al lado y el
-  selector de modelos con vista previa en 3D.
-- **Ajustes tiene su propia pagina, con las 201 opciones reales de Quake Live.**
-- Inicio, Entrenamiento, Crear Partida, Repeticiones y el menu de pausa: todo bajo la
-  misma barra, con la paleta y la tipografia de Quake Live.
-- El cursor es el del sistema y va donde esta el puntero.
-- La consola y el chat se leen y se ubican como en Quake Live.
+Se rehizo el front end completo con el diseño de quakeclub.com: inicio, Crear Partida,
+Centro de Entrenamiento, Repeticiones, Ajustes y el menu de pausa, todos bajo la misma
+barra y con la tipografia y la paleta de Quake Live.
+
+- Ajustes tiene su propia pagina, con las 201 opciones del juego original.
+- El menu principal lleva el cuadro del jugador al costado y el selector de modelos con
+  vista previa en 3D.
+- El cursor es el del sistema y va donde esta el puntero, no donde lo dejaron los
+  movimientos anteriores.
 
 ## Crash Course
-- **Portado de Quake Live:** Crash camina el recorrido y lo explica.
-- Se puede ver en espanol.
+- Portado de Quake Live: Crash camina el recorrido y lo explica.
+- Se puede ver en español.
 
-## Controles y sonido
-- La curva del mouse de Quake Live, con su propia sensibilidad para el zoom.
-- Las opciones de humo de Quake Live.
-- Textos de ayuda para las opciones.
-- Los hitsounds siguen el comportamiento de WolfcamQL.
+## Arreglos
+- El campo de vision se ve como en Quake Live. Estaba estirado a lo ancho en pantallas
+  panoramicas y cambiaba con la resolucion.
+- Las estadisticas ya no se borran al morir: se acumulan toda la partida.
+- Cambiar de modo de juego ya no arrastra las reglas del anterior. Se podia pasar de Clan
+  Arena a Duelo y aparecer con 300 de vida y 200 de armadura.
+- Las armas y la municion vuelven a aparecer en los modos por equipos.
+- En los modos por rondas ya no se suelta el arma al morir.
+- Las granadas ya no se cortan al rebotar, y el humo ya no se mete en la camara.
+- Los bots ya no dejan la pantalla en negro al arrancar.
+- El ajuste automatico de tiempo de red no se podia encender.
 
-# La piel brillante
+## Agregados
+- Chispas al impactar. La opcion existia y no hacia nada.
+- Los objetos simples flotan, y sus tres opciones funcionan.
+- La medalla muestra cuantas llevas acumuladas.
+- El color, el bloom y las opciones del renderizador de Quake Live.
+- La piel brillante, con la chaingun y la nailgun.
+- La curva del mouse de Quake Live, con sensibilidad propia para el zoom.
+- El proyectil se dibuja adelantado.
+- Textos de ayuda en las opciones.
+
+# Espectador, marcadores y sonido
 @ 2026-09-15
 
-## Instalacion
-- La piel brillante (fullbright) se instala sola, sin pasos extra.
+## Espectador
+Se porto el espectador de Quake Live completo: temporizadores de objetos, flechas de
+entrada, los datos del equipo y el retrato del modelo.
+
+- La salud y la armadura de los compañeros bajo la mira.
+- Los mensajes del espectador y la pantalla de "Awaiting gamestate".
+- El ping del lagometro.
+
+## Partidas
+- Se porto la pagina de Crear Partida, en lugar de la de Create Server de Quake 3.
+- Los filtros de objetos de cada mapa.
+- La eleccion de punto de aparicion.
+- Los bots por minimo de jugadores y la eleccion al azar.
+- Los resultados de ronda de Attack & Defend.
+
+## Arreglos
+- El modelo despues de cambiar de mapa, un rastro de railgun que quedaba colgado, los
+  iconos de bandera y el numero de daño de la escopeta.
+- La iluminacion de los modelos.
+- Sonidos en .ogg cuando falta el .wav.
+
+## Agregados
+- Marcadores sobre los compañeros, con su nombre.
+- Los rangos de las opciones y la lista del equipo.
+- La piel brillante se instala sola, sin pasos extra.
+
+# Marcadores, misiles y modelos
+@ 2026-09-14
+
+## Movimiento y armas
+Se porto el movimiento del jugador funcion por funcion, y con el los misiles, el daño por
+salpicadura, el garfio y la descarga del lightning gun.
+
+## Marcadores
+- El marcador por equipos: nombres, cuentas, reloj, visibilidad y filas.
+- Las celdas de los marcadores de FFA y Duelo.
+- El marcador de fin de partida, con el modelo del ganador y la linea de quien te mato.
+
+## Presentacion
+- El mezclador de sonido, la cola del locutor y los sonidos de evento.
+- Las condiciones del locutor, las medallas y los inicios de ronda.
+- Los modelos de jugador, los modelos forzados y los colores de arma.
+- Las armas brillantes de CPMA, en los colores de Quake Live.
+- Las factorias, las arenas y la lista de mapas.
+
+# Consola, colores y la primera beta
+@ 2026-09-13
+
+## Consola
+- Se porto la consola de CNQ3 como estilo opcional, con el texto DroidSansMono de Quake
+  Live y su aspecto.
+- Codigos de color extendidos de CPMA.
+- Las fuentes propias del jugador se leen de baseq3/fonts, y /fontlist las lista.
+
+## Presentacion
+- Los estilos de texto de Quake Live, los mensajes previos a la partida y la disposicion
+  de la HUD del jugador.
+- El aviso al recoger un objeto, con la aparicion gradual de CPMA.
+- Las sombras del texto escalan con la resolucion.
+
+## Partidas
+- La cola de juego de Duelo.
+- Escape, los objetos recogidos, los hitsounds y los textos de partida.
+
+## Distribucion
+- ioquakelive tiene su propia carpeta de datos y no copia la configuracion de Steam.
+- Launcher que se actualiza solo e instalador de un comando.
+
+# Espectador y HUD
+@ 2026-09-12
+
+## Espectador
+Se porto el espectador de Quake Live: la HUD, la entrada de menu, el tinte de daño, el
+seguimiento y la camara libre.
+
+- El campo de vision al seguir a alguien sale de su propio valor.
+- Los marcadores, las llaves y los powerups persistentes.
+- Los cronometros de nivel, ronda y tiempo extra.
+
+## Arreglos
+- Los bots vuelven a entrar a la partida.
+- Un jugador congelado no puede disparar.
+- La escala del modelo se copia junto con el modelo.
+- La altura del texto es la de la fuente, como en el motor.
+
+## Agregados
+- El mensaje de frag y el texto central de Quake Live.
+- La lista de muertes y el chat como en el juego original.
+
+# Electrogibs
+@ 2026-09-11
+
+## Agregados
+- Se dibujan los electrogibs de Quake Live, y el paquete de sangre decide si salen.
+- El paquete de sangre ya no viaja con el juego, asi que los electrogibs quedan por
+  defecto.
+
+## Arreglos
+- El marcador sube al morir durante el calentamiento.
+
+# Primeros arreglos
+@ 2026-09-05
+
+## Arreglos
+- Volvio el efecto de teletransporte al reaparecer.
+- El menu de ingreso a la partida aparece al entrar a un mapa.
+- Las opciones con valores negativos ya no pierden el signo.
