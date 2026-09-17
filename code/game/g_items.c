@@ -1064,6 +1064,16 @@ void Touch_Item(gentity_t* ent, gentity_t* other, trace_t* trace) {
         G_AddEvent(other, EV_ITEM_PICKUP, ent->s.modelindex);
     }
 
+    // [QL] 0x1004f1f5: taking the quad makes you the hog, and the marker goes up at once
+    if (g_gametype.integer == GT_FFA && g_quadHog.integer && other->client->ps.powerups[PW_QUAD]) {
+        G_PointOfInterest(other, g_quadHogPingRate.integer, other->client->ps.clientNum);
+    }
+    // [QL] 0x1004f24e: same for picking the neutral flag up
+    if (g_gametype.integer == GT_1FCTF && other->client->ps.powerups[PW_NEUTRALFLAG]) {
+        G_PointOfInterest(other, g_neutralFlagPingRate.integer,
+                          other->client->ps.persistant[PERS_TEAM]);
+    }
+
     // powerup pickups are global broadcasts
     if (ent->item->giType == IT_POWERUP || ent->item->giType == IT_TEAM) {
         // if we want the global sound to play

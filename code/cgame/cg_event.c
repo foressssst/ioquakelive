@@ -906,6 +906,73 @@ void CG_ResetSpecItemTimers(void) {
 
 /*
 ==============
+CG_PointOfInterest
+
+[QL] cgamex86.dll case 0x5a of CG_EntityEvent. The server broadcasts this where a player
+who has to be given away is standing -- the Quad Hog, or whoever carries the neutral flag --
+and it becomes one sprite of the floating-effect pool, which already knows how to keep a
+marker on screen through the walls, shrink it with distance and fade it out.
+
+es->powerups carries how long the marker lives (the server sends the ping rate, so one
+marker lasts exactly until the next), and the fade starts at a quarter of that.
+es->generic1 is the client for the Quad Hog and the team for a flag, which is why the two
+go into different fields: followNum hides the marker from its own team, clientNum from its
+own player.
+
+Which of the three it is does not travel with the event -- it follows the rules the match is
+running under (CS_CUSTOM_SETTINGS), because a match only ever emits one kind.
+==============
+*/
+static void CG_PointOfInterest(centity_t* cent) {
+    entityState_t* es = &cent->currentState;
+    floatingEffect_t* fx = CG_AllocFloatingEffect();
+
+    if (!fx) {
+        return;
+    }
+
+    fx->type = FE_SPRITE;
+    fx->owner = cent;
+    VectorCopy(es->pos.trBase, fx->origin);
+    fx->lifeRate = (float)es->powerups;
+    fx->fadeStart = (float)(es->powerups / 4);
+    fx->doFade = 1;
+    fx->color[3] = 1.0f;
+
+    if (cgs.customSettings & 0x40000) {
+        // the hog is gold, and hidden from the hog
+        fx->color[0] = 1.0f;
+        fx->color[1] = 0.75f;
+        fx->color[2] = 0.0f;
+        fx->shader = cgs.media.quadHogPoiShader;
+        fx->clientNum = es->generic1;
+        fx->zOffset = 48.0f;
+        fx->worldSize = cg_poiMaxWidth.value;
+        fx->minPixels = cg_poiMinWidth.value;
+    } else if (cgs.customSettings & 0x4000000) {
+        fx->color[0] = 1.0f;
+        fx->color[1] = 1.0f;
+        fx->color[2] = 1.0f;
+        fx->shader = cgs.media.infectedPoiShader;
+        fx->followNum = es->generic1;
+        fx->zOffset = 48.0f;
+        fx->worldSize = cg_poiMaxWidth.value;
+        fx->minPixels = cg_poiMinWidth.value;
+    } else {
+        // the neutral flag carrier: higher up and three quarters the size
+        fx->color[0] = 1.0f;
+        fx->color[1] = 1.0f;
+        fx->color[2] = 1.0f;
+        fx->shader = cgs.media.poiShader;
+        fx->followNum = es->generic1;
+        fx->zOffset = 64.0f;
+        fx->worldSize = cg_poiMaxWidth.value * 0.75f;
+        fx->minPixels = cg_poiMinWidth.value * 0.75f;
+    }
+}
+
+/*
+==============
 CG_EntityEvent
 
 An entity has an event value
@@ -1926,16 +1993,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_POI:
             DEBUGNAME("EV_POI");
-            // [QL] point of interest marker - floating 3D indicator for team modes
-            // es->powerups = duration in ms, es->generic1 = team
-            if (cg.numPoiPics < MAX_POI_PICS) {
-                int idx = cg.numPoiPics;
-                VectorCopy(es->pos.trBase, cg.poiPics[idx].origin);
-                cg.poiPics[idx].startTime = cg.time;
-                cg.poiPics[idx].length = es->powerups;
-                cg.poiPics[idx].team = es->generic1;
-                cg.numPoiPics++;
-            }
+            CG_PointOfInterest(cent);
             break;
         case EV_LIGHTNING_DISCHARGE:
             DEBUGNAME("EV_LIGHTNING_DISCHARGE");

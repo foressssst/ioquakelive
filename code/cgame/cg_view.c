@@ -1090,83 +1090,6 @@ static void CG_PlayBufferedSounds(void) {
 }
 
 /*
-=================
-CG_AddPOIMarkers
-
-[QL] Draw point-of-interest markers as distance-scaled sprites.
-POI events mark flag carriers, powerup holders, etc. for team modes.
-=================
-*/
-#define ICON_SCALE_DISTANCE 400.0f
-
-void CG_AddPOIMarkers(void) {
-    int i, j;
-    refEntity_t ent;
-    int team;
-
-    if (!cg_drawSprites.integer) {
-        return;
-    }
-
-    team = cg.snap->ps.persistant[PERS_TEAM];
-
-    for (i = 0; i < cg.numPoiPics; i++) {
-        int endTime = cg.poiPics[i].startTime + cg.poiPics[i].length;
-
-        if (cg.time >= cg.poiPics[i].startTime && cg.time < endTime) {
-            // Only show POIs for the opposing team (enemy markers)
-            if (cg.poiPics[i].team != team) {
-                float dist;
-                float minWidth, maxWidth, radius;
-
-                memset(&ent, 0, sizeof(ent));
-                VectorCopy(cg.poiPics[i].origin, ent.origin);
-                ent.origin[2] += 48;  // float above entity
-                ent.reType = RT_SPRITE;
-                ent.customShader = cgs.media.poiShader;
-                ent.renderfx = RF_DEPTHHACK;
-
-                // Distance-scaled sizing using cg_poiMinWidth / cg_poiMaxWidth
-                maxWidth = cg_poiMaxWidth.value;
-                minWidth = cg_poiMinWidth.value;
-                radius = maxWidth / 2.0f;
-                dist = ICON_SCALE_DISTANCE * (maxWidth / 16.0f);
-
-                if (minWidth > 0.1f) {
-                    dist *= (16.0f / minWidth);
-                }
-
-                ent.radius = radius;
-                if (Distance(ent.origin, cg.refdef.vieworg) > dist && minWidth > 0.1f) {
-                    ent.radius = radius * (Distance(ent.origin, cg.refdef.vieworg) / dist);
-                }
-
-                ent.origin[2] += ent.radius;
-
-                // White color, fade out in last second
-                ent.shaderRGBA[0] = 255;
-                ent.shaderRGBA[1] = 255;
-                ent.shaderRGBA[2] = 255;
-                if (endTime - cg.time <= 1000) {
-                    ent.shaderRGBA[3] = (byte)(255.0f * (endTime - cg.time) / 1000.0f);
-                } else {
-                    ent.shaderRGBA[3] = 255;
-                }
-
-                trap_R_AddRefEntityToScene(&ent);
-            }
-        } else {
-            // Expired - remove by shifting array down
-            for (j = i + 1; j < cg.numPoiPics; j++) {
-                cg.poiPics[j - 1] = cg.poiPics[j];
-            }
-            cg.numPoiPics--;
-            i--;
-        }
-    }
-}
-
-/*
 ==============
 CG_HideJoinMenu
 
@@ -1424,7 +1347,6 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
         CG_AddMarks();
         CG_AddParticles();
         CG_AddLocalEntities();
-        CG_AddPOIMarkers();
     }
     CG_AddViewWeapon(&cg.predictedPlayerState);
 
