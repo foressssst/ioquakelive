@@ -279,128 +279,84 @@ Who is in the match, from the player configstrings, which the gamestate brings b
 loaded. A player's icon shows once their model has been loaded (CG_LoadingClient); until then a
 plain square stands in for it. The local player is marked, and so are the bots.
 
-[ioquakelive] Two shapes, as the user asked for after Valorant's: in a team game the two teams are
-two columns facing each other, each under its own colour; otherwise everyone is one list.
+[ioquakelive] Laid out the way the user asked for after Valorant's (2026-09-16): the levelshot
+whole, a roster big down each side -- the two teams facing each other in a team game, half the
+players on each side in the rest -- the map's name in the middle, and the load at the bottom.
+Nothing sits in a panel: the picture is darkened behind each side instead, so it stays the screen.
 ===============
 */
-#define LOAD_ROW_H 22.0f
-#define LOAD_HEAD_H 40.0f
+#define LOAD_ROW_H 34.0f
+#define LOAD_PIC 28.0f
 
 static vec4_t loadRed = {0.80f, 0.24f, 0.24f, 1.0f};
 static vec4_t loadBlue = {0.32f, 0.48f, 0.90f, 1.0f};
 
-// one player's row: their icon, their name, and what they are (you, a bot)
+// one player: their icon and their name, from the edge inwards
 static void CG_LoadDrawPlayer(float x, float y, float w, int client, qboolean rightward) {
     const char* info = CG_ConfigString(CS_PLAYERS + client);
     qboolean you = (client == cg.clientNum);
-    const char* tag = you ? "You" : Info_ValueForKey(info, "skill")[0] ? "Bot" : NULL;
-    float nameW = w - 26.0f - 12.0f;
-    float iconX = rightward ? x + w - 16.0f : x;
-    float nameX = rightward ? x : x + 26.0f;
+    qboolean bot = Info_ValueForKey(info, "skill")[0] != '\0';
+    float nameW = w - LOAD_PIC - 14.0f;
+    float iconX = rightward ? x + w - LOAD_PIC : x;
+    float nameX;
     char name[MAX_QPATH];
 
     if (loadingClientIcons[client]) {
-        CG_LoadPic(iconX, y + 2, 16, 16, loadingClientIcons[client]);
+        CG_LoadPic(iconX, y, LOAD_PIC, LOAD_PIC, loadingClientIcons[client]);
     } else {
-        CG_LoadRound(iconX, y + 2, 16, 16, 3.0f, loadRaised);
+        CG_LoadRound(iconX, y, LOAD_PIC, LOAD_PIC, 4.0f, loadRaised);
     }
-    if (tag) {
-        float tw = CG_LoadLabelWidth(0.12f, tag, 1.2f);
 
-        nameW -= tw + 10.0f;
-        CG_LoadLabel(rightward ? x + w - 26.0f - tw : x + w - tw, y + 7, 0.12f, you ? loadGold : loadSubtle, tag, 1.2f);
-    }
     Q_strncpyz(name, Info_ValueForKey(info, "n"), sizeof(name));
     Q_CleanStr(name);
-    while (name[0] && CG_DrawTextWidth(name, 0.17f, 0, 1) > nameW) {
+    while (name[0] && CG_DrawTextWidth(name, 0.26f, 0, 0) > nameW) {
         name[strlen(name) - 1] = 0;
     }
-    if (rightward) {
-        nameX = x + w - 26.0f - CG_DrawTextWidth(name, 0.17f, 0, 1);
-        if (tag) {
-            nameX -= CG_LoadLabelWidth(0.12f, tag, 1.2f) + 10.0f;
-        }
+    nameX = rightward ? x + w - LOAD_PIC - 14.0f - CG_DrawTextWidth(name, 0.26f, 0, 0) : x + LOAD_PIC + 14.0f;
+    CG_LoadText(nameX, y + 1, 0, 0.26f, you ? loadText : loadMuted, name);
+    if (you || bot) {
+        const char* tag = you ? "You" : "Bot";
+        float tw = CG_LoadLabelWidth(0.11f, tag, 1.2f);
+
+        CG_LoadLabel(rightward ? x + w - LOAD_PIC - 14.0f - tw : nameX, y + 19, 0.11f,
+                     you ? loadGold : loadSubtle, tag, 1.2f);
     }
-    CG_LoadText(nameX, y + 4, 1, 0.17f, you ? loadText : loadMuted, name);
 }
 
-// a team's column: its name over a rule in the team's colour, then its players
-static void CG_LoadDrawTeam(float x, float y, float w, float maxH, int team, qboolean rightward) {
-    const float* color = (team == TEAM_RED) ? loadRed : loadBlue;
-    const char* title = (team == TEAM_RED) ? "Red Team" : "Blue Team";
-    int maxRows = (int)((maxH - LOAD_HEAD_H - 12.0f) / LOAD_ROW_H);
-    int count = 0, shown = 0;
-    float tw = CG_LoadLabelWidth(0.15f, title, 1.4f);
-    float h;
+// a side of the screen: its heading over a rule, then its players, top down
+static void CG_LoadDrawSide(float x, float y, float w, float maxH, const char* title, const float* color,
+                            int team, int half, qboolean rightward) {
+    int maxRows = (int)(maxH / LOAD_ROW_H);
+    float tw = CG_LoadLabelWidth(0.17f, title, 1.8f);
+    int shown = 0, seen = 0;
     int i;
 
-    for (i = 0; i < MAX_CLIENTS; i++) {
-        const char* info = CG_ConfigString(CS_PLAYERS + i);
+    CG_LoadLabel(rightward ? x + w - tw + 1.8f : x, y, 0.17f, loadText, title, 1.8f);
+    CG_LoadFill(x, y + 22.0f, w, 2.0f, color);
 
-        if (info[0] && atoi(Info_ValueForKey(info, "t")) == team) {
-            count++;
-        }
-    }
     if (maxRows < 1) {
         maxRows = 1;
-    }
-    h = LOAD_HEAD_H + (count < 1 ? 1 : count > maxRows ? maxRows : count) * LOAD_ROW_H + 12.0f;
-    CG_LoadRound(x, y, w, h, 6.0f, loadPanel);
-    CG_LoadFill(x, y, w, 2, color);
-    CG_LoadLabel(rightward ? x + w - 14.0f - tw : x + 14, y + 16, 0.15f, loadText, title, 1.4f);
-
-    if (!count) {
-        float ew = CG_DrawTextWidth("Nobody yet", 0.16f, 0, 1);
-
-        CG_LoadText(rightward ? x + w - 14.0f - ew : x + 14, y + LOAD_HEAD_H + 4, 1, 0.16f, loadSubtle, "Nobody yet");
-        return;
     }
     for (i = 0; i < MAX_CLIENTS && shown < maxRows; i++) {
         const char* info = CG_ConfigString(CS_PLAYERS + i);
 
-        if (!info[0] || atoi(Info_ValueForKey(info, "t")) != team) {
+        if (!info[0]) {
             continue;
         }
-        CG_LoadDrawPlayer(x + 14, y + LOAD_HEAD_H + shown * LOAD_ROW_H, w - 28.0f, i, rightward);
+        if (team >= 0) {
+            if (atoi(Info_ValueForKey(info, "t")) != team) {
+                continue;
+            }
+        } else if ((seen++ & 1) != half) {
+            continue;  // without teams, every other player goes down each side
+        }
+        CG_LoadDrawPlayer(x, y + 40.0f + shown * LOAD_ROW_H, w, i, rightward);
         shown++;
     }
-}
+    if (!shown) {
+        float ew = CG_DrawTextWidth("Nobody yet", 0.18f, 0, 1);
 
-// everyone in one list, for a game without teams
-static void CG_LoadDrawPlayers(float x, float y, float w, float maxH) {
-    int maxRows = (int)((maxH - LOAD_HEAD_H - 12.0f) / LOAD_ROW_H);
-    int count = 0, shown = 0;
-    char line[32];
-    float h, cw;
-    int i;
-
-    for (i = 0; i < MAX_CLIENTS; i++) {
-        if (CG_ConfigString(CS_PLAYERS + i)[0]) {
-            count++;
-        }
-    }
-    if (maxRows < 1) {
-        maxRows = 1;
-    }
-    h = LOAD_HEAD_H + (count < 1 ? 1 : count > maxRows ? maxRows : count) * LOAD_ROW_H + 12.0f;
-    CG_LoadRound(x, y, w, h, 6.0f, loadPanel);
-    CG_LoadFill(x, y, w, 2, loadGold);
-
-    CG_LoadLabel(x + 14, y + 16, 0.15f, loadText, "Players", 1.4f);
-    Com_sprintf(line, sizeof(line), "%d / %d", count, cgs.maxclients);
-    cw = CG_DrawTextWidth(line, 0.15f, 0, 1);
-    CG_LoadText(x + w - 14 - cw, y + 16, 1, 0.15f, loadSubtle, line);
-
-    if (!count) {
-        CG_LoadText(x + 14, y + LOAD_HEAD_H + 4, 1, 0.16f, loadSubtle, "Nobody yet");
-        return;
-    }
-    for (i = 0; i < MAX_CLIENTS && shown < maxRows; i++) {
-        if (!CG_ConfigString(CS_PLAYERS + i)[0]) {
-            continue;
-        }
-        CG_LoadDrawPlayer(x + 14, y + LOAD_HEAD_H + shown * LOAD_ROW_H, w - 28.0f, i, qfalse);
-        shown++;
+        CG_LoadText(rightward ? x + w - ew : x, y + 42.0f, 1, 0.18f, loadSubtle, "Nobody yet");
     }
 }
 
@@ -408,37 +364,44 @@ static void CG_LoadDrawPlayers(float x, float y, float w, float maxH) {
 ===============
 CG_LoadDrawSteps
 
-The four steps of CG_Init's load, each with its state: a check when it is done, "loading" in gold
-while it runs, nothing while it waits. Under them, what is being loaded right now.
+The four steps of CG_Init's load, in a row across the middle: a check when one is done, gold while
+it runs, dim while it waits. Under them, what is being loaded right now.
 ===============
 */
-static void CG_LoadDrawSteps(float x, float y, float w) {
+static void CG_LoadDrawSteps(float middle, float y) {
     static const char* const steps[NUM_LOADING_STAGES] = {"Map", "Sounds", "Graphics", "Players"};
+    const float gap = 26.0f;
+    float w[NUM_LOADING_STAGES];
+    float total = 0.0f;
+    float x;
     int i;
 
     for (i = 0; i < NUM_LOADING_STAGES; i++) {
-        float ry = y + i * 18.0f;
+        w[i] = CG_LoadLabelWidth(0.14f, steps[i], 1.4f) + 14.0f;
+        total += w[i];
+    }
+    total += gap * (NUM_LOADING_STAGES - 1);
+    x = middle - total * 0.5f;
+
+    for (i = 0; i < NUM_LOADING_STAGES; i++) {
         qboolean done = cg.loadingStage > i;
         qboolean current = cg.loadingStage == i;
 
-        CG_LoadLabel(x, ry, 0.14f, done ? loadMuted : current ? loadText : loadSubtle, steps[i], 1.3f);
         if (done) {
-            CG_LoadCheck(x + w - 10, ry + 1, loadMuted);
-        } else if (current) {
-            float lw = CG_LoadLabelWidth(0.12f, "Loading", 1.2f);
-
-            CG_LoadLabel(x + w - lw, ry + 1, 0.12f, loadGold, "Loading", 1.2f);
+            CG_LoadCheck(x, y + 2.0f, loadMuted);
         }
+        CG_LoadLabel(x + 14.0f, y, 0.14f, current ? loadGold : done ? loadMuted : loadSubtle, steps[i], 1.4f);
+        x += w[i] + gap;
     }
+
     if (cg.infoScreenText[0]) {
         char what[64];
+        float tw;
 
         Q_strncpyz(what, cg.infoScreenText, sizeof(what));
         Q_CleanStr(what);
-        while (what[0] && CG_DrawTextWidth(what, 0.15f, 0, 1) > w) {
-            what[strlen(what) - 1] = '\0';
-        }
-        CG_LoadText(x, y + NUM_LOADING_STAGES * 18.0f + 4.0f, 1, 0.15f, loadSubtle, what);
+        tw = (float)CG_DrawTextWidth(what, 0.15f, 0, 1);
+        CG_LoadText(middle - tw * 0.5f, y + 20.0f, 1, 0.15f, loadSubtle, what);
     }
 }
 
@@ -494,17 +457,18 @@ void CG_DrawInformation(void) {
 
     CG_SetWidescreen(WIDESCREEN_LEFT);
     full = (float)cgs.glconfig.vidWidth * 480.0f / (float)cgs.glconfig.vidHeight;
-    side = 196.0f;
-    sideX = full - 24.0f - side;
-
-    // the picture keeps its middle; it darkens under the logo, towards the words at the bottom and
-    // behind the column at the right
-    CG_LoadWash(0, 0, full, 96, loadPage, 0.62f, 0.0f, qfalse);
-    CG_LoadWash(0, 230, full, 250, loadPage, 0.0f, 0.94f, qfalse);
-    CG_LoadWash(full * 0.45f, 0, full * 0.55f, 480, loadPage, 0.0f, 0.72f, qtrue);
-    if (cgs.gametype >= GT_TEAM) {
-        CG_LoadWash(0, 0, full * 0.32f, 480, loadPage, 0.60f, 0.0f, qtrue);
+    side = full * 0.26f;
+    if (side > 260.0f) {
+        side = 260.0f;
     }
+    sideX = full - 26.0f - side;
+
+    // the levelshot is the screen; it only darkens where something is read: under the logo, down
+    // each side for the rosters, and at the foot for the map and the load
+    CG_LoadWash(0, 0, full, 90, loadPage, 0.58f, 0.0f, qfalse);
+    CG_LoadWash(0, 0, side + 60.0f, 480, loadPage, 0.72f, 0.0f, qtrue);
+    CG_LoadWash(sideX - 60.0f, 0, side + 60.0f, 480, loadPage, 0.0f, 0.72f, qtrue);
+    CG_LoadWash(0, 330, full, 150, loadPage, 0.0f, 0.90f, qfalse);
 
     if (cgs.media.qlLogoShader) {
         CG_LoadPic(22, 20, 160, 40, cgs.media.qlLogoShader);
@@ -515,30 +479,34 @@ void CG_DrawInformation(void) {
     Q_CleanStr(host);
     if (host[0] && Q_stricmp(host, "noname")) {
         while (host[0] && CG_DrawTextWidth(host, 0.16f, 0, 1) > side) {
-            host[strlen(host) - 1] = '\0';
+            host[strlen(host) - 1] = 0;
         }
         w = CG_DrawTextWidth(host, 0.16f, 0, 1);
-        CG_LoadText(full - 24 - w, 34, 1, 0.16f, loadMuted, host);
+        CG_LoadText(full - 26 - w, 32, 1, 0.16f, loadMuted, host);
     }
 
-    // a team game faces the two teams; the rest are one list
+    // the rosters: the two teams facing each other, or everybody split down the two sides
     if (cgs.gametype >= GT_TEAM) {
-        CG_LoadDrawTeam(24.0f, 72.0f, side, 290.0f, TEAM_RED, qfalse);
-        CG_LoadDrawTeam(sideX, 72.0f, side, 290.0f, TEAM_BLUE, qtrue);
+        CG_LoadDrawSide(26.0f, 96.0f, side, 190.0f, "Red Team", loadRed, TEAM_RED, 0, qfalse);
+        CG_LoadDrawSide(sideX, 96.0f, side, 190.0f, "Blue Team", loadBlue, TEAM_BLUE, 0, qtrue);
     } else {
-        CG_LoadDrawPlayers(sideX, 72.0f, side, 290.0f);
+        CG_LoadDrawSide(26.0f, 96.0f, side, 190.0f, "Players", loadGold, -1, 0, qfalse);
+        CG_LoadDrawSide(sideX, 96.0f, side, 190.0f, "", loadGold, -1, 1, qtrue);
     }
-    CG_LoadDrawSteps(sideX + 2, 384, side - 4);
 
-    // the gametype over the map's name, and its authors under it
+    // the map in the middle: the gametype over its name, and its authors under it
     if (cgs.gametype >= 0 && cgs.gametype < GT_MAX_GAME_TYPE) {
         gametypeName = gametypeDisplayNames[cgs.gametype];
     } else {
         gametypeName = "Unknown Gametype";
     }
-    CG_LoadLabel(26, 384, 0.16f, loadGold, gametypeName, 1.6f);
+    w = (int)CG_LoadLabelWidth(0.16f, gametypeName, 2.4f);
+    CG_LoadLabel(full * 0.5f - w * 0.5f, 370.0f, 0.16f, loadGold, gametypeName, 2.4f);
+
     s = CG_ConfigString(CS_MESSAGE);
-    CG_LoadText(24, 400, 0, 0.55f, loadText, s);
+    w = CG_DrawTextWidth(s, 0.62f, 0, 0);
+    CG_LoadText(full * 0.5f - w * 0.5f, 388.0f, 0, 0.62f, loadText, s);
+
     sAuthor = CG_ConfigString(CS_AUTHOR);
     if (sAuthor[0]) {
         const char* sAuthor2 = CG_ConfigString(CS_AUTHOR2);
@@ -546,8 +514,12 @@ void CG_DrawInformation(void) {
         if (sAuthor2[0]) {
             sAuthor = va("%s  %s", sAuthor, sAuthor2);
         }
-        CG_LoadText(26, 446, 1, 0.17f, loadMuted, sAuthor);
+        w = CG_DrawTextWidth(sAuthor, 0.16f, 0, 1);
+        CG_LoadText(full * 0.5f - w * 0.5f, 432.0f, 1, 0.16f, loadMuted, sAuthor);
     }
+
+    // the load along the bottom: the four steps in a row, and what is loading under them
+    CG_LoadDrawSteps(full * 0.5f, 452.0f);
 
     // the overall progress along the very bottom
     CG_LoadFill(0, 477, full, 3, loadTrack);
