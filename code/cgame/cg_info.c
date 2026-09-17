@@ -35,8 +35,6 @@ static int loadingPlayerIconCount;
 static int loadingItemIconCount;
 static qhandle_t loadingPlayerIcons[MAX_LOADING_PLAYER_ICONS];
 static qhandle_t loadingItemIcons[MAX_LOADING_ITEM_ICONS];
-// [ioquakelive] each client's icon by slot, for the loading screen's player list
-static qhandle_t loadingClientIcons[MAX_CLIENTS];
 
 // [QL] use shared gametypeDisplayNames[] from bg_misc.c
 
@@ -100,9 +98,6 @@ void CG_LoadingClient(int clientNum) {
             loadingPlayerIcons[loadingPlayerIconCount] = trap_R_RegisterShaderNoMip(iconName);
         }
         if (loadingPlayerIcons[loadingPlayerIconCount]) {
-            if (clientNum >= 0 && clientNum < MAX_CLIENTS) {
-                loadingClientIcons[clientNum] = loadingPlayerIcons[loadingPlayerIconCount];
-            }
             loadingPlayerIconCount++;
         }
     }
@@ -113,314 +108,31 @@ void CG_LoadingClient(int clientNum) {
 }
 
 /*
-===============================================================================
-
-THE LOADING SCREEN
-
-[ioquakelive] Retail's (cgamex86.dll 0x1001ce10) is the levelshot under two red bars with the
-logo, the gametype, the map and its authors, "Loading ..." and four boxes of progress. This one
-carries the same and a little more, in the front end's language, laid out the way the user chose
-on 2026-09-16 ("Jugadores entrando"): the levelshot over the whole screen; the logo at the top
-left; the players who are in the match in a panel at the right, as they come in; the four steps
-of the load under it, each marked as it finishes; and the gametype, the map and its authors at
-the bottom left. A gold thread along the bottom edge keeps the overall progress.
-
-Everything is laid out in 480-line units from the screen's left edge and drawn in screen pixels,
-so it reaches both edges of any screen and no widescreen mode moves it.
-
-===============================================================================
-*/
-
-static vec4_t loadPanel = {0.059f, 0.059f, 0.059f, 0.90f};
-static vec4_t loadRaised = {0.102f, 0.102f, 0.102f, 1.0f};
-static vec4_t loadPage = {0.031f, 0.031f, 0.031f, 1.0f};
-static vec4_t loadText = {0.867f, 0.867f, 0.867f, 1.0f};
-static vec4_t loadMuted = {0.600f, 0.600f, 0.600f, 1.0f};
-static vec4_t loadSubtle = {0.416f, 0.416f, 0.416f, 1.0f};
-
-// a 480-line unit in screen pixels
-static float CG_LoadUnit(void) {
-    return (float)cgs.glconfig.vidHeight / 480.0f;
-}
-
-static void CG_LoadFill(float x, float y, float w, float h, const float* color) {
-    float u = CG_LoadUnit();
-
-    trap_R_SetColor(color);
-    trap_R_DrawStretchPic(x * u, y * u, w * u, h * u, 0, 0, 0, 0, cgs.media.whiteShader);
-    trap_R_SetColor(NULL);
-}
-
-static void CG_LoadPic(float x, float y, float w, float h, qhandle_t shader) {
-    float u = CG_LoadUnit();
-
-    trap_R_DrawStretchPic(x * u, y * u, w * u, h * u, 0, 0, 1, 1, shader);
-}
-
-// a rounded rectangle, the corners drawn in slices a screen pixel thick
-static void CG_LoadRound(float x, float y, float w, float h, float r, const float* color) {
-    float u = CG_LoadUnit();
-    float step;
-    int slices, k;
-
-    if (r * 2.0f > h) {
-        r = h * 0.5f;
-    }
-    if (r * 2.0f > w) {
-        r = w * 0.5f;
-    }
-    CG_LoadFill(x, y + r, w, h - 2.0f * r, color);
-    slices = (int)(r * u + 0.5f);
-    if (slices < 1) {
-        slices = 1;
-    } else if (slices > 24) {
-        slices = 24;
-    }
-    step = r / slices;
-    for (k = 0; k < slices; k++) {
-        float mid = r - (k + 0.5f) * step;
-        float inset = r - (float)sqrt(r * r - mid * mid);
-
-        CG_LoadFill(x + inset, y + k * step, w - 2.0f * inset, step, color);
-        CG_LoadFill(x + inset, y + h - (k + 1) * step, w - 2.0f * inset, step, color);
-    }
-}
-
-// a colour whose alpha runs from a0 to a1 over a rectangle, downwards or rightwards, eased, in bands
-// whose edges are whole pixels so no line shows where two meet
-static void CG_LoadWash(float x, float y, float w, float h, const float* color, float a0, float a1, qboolean across) {
-    float u = CG_LoadUnit();
-    float from = (across ? x : y) * u;
-    float to = (across ? x + w : y + h) * u;
-    int first = (int)(from + 0.5f), last = (int)(to + 0.5f);
-    int p;
-    vec4_t c;
-
-    if (to <= from) {
-        return;
-    }
-    VectorCopy(color, c);
-    for (p = first; p < last; p += 2) {
-        int end = p + 2 < last ? p + 2 : last;
-        float t = ((p + end) * 0.5f - from) / (to - from);
-
-        t = t * t * (3.0f - 2.0f * t);
-        c[3] = a0 + (a1 - a0) * t;
-        trap_R_SetColor(c);
-        if (across) {
-            trap_R_DrawStretchPic((float)p, y * u, (float)(end - p), h * u, 0, 0, 0, 0, cgs.media.whiteShader);
-        } else {
-            trap_R_DrawStretchPic(x * u, (float)p, w * u, (float)(end - p), 0, 0, 0, 0, cgs.media.whiteShader);
-        }
-    }
-    trap_R_SetColor(NULL);
-}
-
-// text with its top at y (CG_DrawText takes the baseline), in the current widescreen mode
-static void CG_LoadText(float x, float y, int font, float scale, vec4_t color, const char* text) {
-    CG_DrawText(x, y + CG_DrawTextHeight(text, scale, 0, font), font, scale, color, (char*)text, 0, 0,
-                ITEM_TEXTSTYLE_NORMAL);
-}
-
-// a label as the front end draws them: upper case and letter-spaced
-static float CG_LoadLabel(float x, float y, float scale, vec4_t color, const char* text, float spacing) {
-    char c[2];
-    const char* p;
-    float h = 0.0f;
-
-    c[1] = '\0';
-    for (p = text; *p; p++) {
-        int ch = *p;
-
-        c[0] = (char)((ch >= 'a' && ch <= 'z') ? ch - 'a' + 'A' : ch);
-        if (!h) {
-            h = (float)CG_DrawTextHeight("H", scale, 0, 0);
-        }
-        CG_DrawText(x, y + h, 0, scale, color, c, 0, 0, ITEM_TEXTSTYLE_NORMAL);
-        x += CG_DrawTextWidth(c, scale, 0, 0) + spacing;
-    }
-    return x;
-}
-
-static float CG_LoadLabelWidth(float scale, const char* text, float spacing) {
-    char c[2];
-    const char* p;
-    float w = 0.0f;
-
-    c[1] = '\0';
-    for (p = text; *p; p++) {
-        int ch = *p;
-
-        c[0] = (char)((ch >= 'a' && ch <= 'z') ? ch - 'a' + 'A' : ch);
-        w += CG_DrawTextWidth(c, scale, 0, 0) + spacing;
-    }
-    return w > 0.0f ? w - spacing : 0.0f;
-}
-
-// a small check mark, 9 by 7 units
-static void CG_LoadCheck(float x, float y, const float* color) {
-    int k;
-
-    for (k = 0; k < 4; k++) {
-        CG_LoadFill(x + k, y + 3.0f + k, 1.5f, 1.5f, color);
-    }
-    for (k = 0; k < 6; k++) {
-        CG_LoadFill(x + 3.0f + k, y + 6.0f - k, 1.5f, 1.5f, color);
-    }
-}
-
-/*
-===============
-CG_LoadDrawPlayers
-
-Who is in the match, from the player configstrings, which the gamestate brings before anything is
-loaded. A player's icon shows once their model has been loaded (CG_LoadingClient); until then a
-plain square stands in for it. The local player is marked, and so are the bots.
-
-[ioquakelive] Laid out the way the user asked for after Valorant's (2026-09-16): the levelshot
-whole, a roster big down each side -- the two teams facing each other in a team game, half the
-players on each side in the rest -- the map's name in the middle, and the load at the bottom.
-Nothing sits in a panel: the picture is darkened behind each side instead, so it stays the screen.
-===============
-*/
-#define LOAD_ROW_H 34.0f
-#define LOAD_PIC 28.0f
-
-static vec4_t loadRed = {0.74f, 0.24f, 0.24f, 0.90f};
-static vec4_t loadBlue = {0.30f, 0.45f, 0.84f, 0.90f};
-static vec4_t loadRule = {1.0f, 1.0f, 1.0f, 0.22f};
-
-// one player: their icon and their name, from the edge inwards
-static void CG_LoadDrawPlayer(float x, float y, float w, int client, qboolean rightward) {
-    const char* info = CG_ConfigString(CS_PLAYERS + client);
-    qboolean you = (client == cg.clientNum);
-    qboolean bot = Info_ValueForKey(info, "skill")[0] != '\0';
-    float nameW = w - LOAD_PIC - 14.0f;
-    float iconX = rightward ? x + w - LOAD_PIC : x;
-    float nameX;
-    char name[MAX_QPATH];
-
-    if (loadingClientIcons[client]) {
-        CG_LoadPic(iconX, y, LOAD_PIC, LOAD_PIC, loadingClientIcons[client]);
-    } else {
-        CG_LoadRound(iconX, y, LOAD_PIC, LOAD_PIC, 4.0f, loadRaised);
-    }
-
-    Q_strncpyz(name, Info_ValueForKey(info, "n"), sizeof(name));
-    Q_CleanStr(name);
-    while (name[0] && CG_DrawTextWidth(name, 0.26f, 0, 0) > nameW) {
-        name[strlen(name) - 1] = 0;
-    }
-    nameX = rightward ? x + w - LOAD_PIC - 14.0f - CG_DrawTextWidth(name, 0.26f, 0, 0) : x + LOAD_PIC + 14.0f;
-    CG_LoadText(nameX, y + 1, 0, 0.26f, you ? loadText : loadMuted, name);
-    if (you || bot) {
-        const char* tag = you ? "You" : "Bot";
-        float tw = CG_LoadLabelWidth(0.11f, tag, 1.2f);
-
-        CG_LoadLabel(rightward ? x + w - LOAD_PIC - 14.0f - tw : nameX, y + 19, 0.11f, loadSubtle, tag, 1.2f);
-    }
-}
-
-// a side of the screen: its heading over a rule, then its players, top down
-static void CG_LoadDrawSide(float x, float y, float w, float maxH, const char* title, const float* color,
-                            int team, int half, qboolean rightward) {
-    int maxRows = (int)(maxH / LOAD_ROW_H);
-    float tw = CG_LoadLabelWidth(0.17f, title, 1.8f);
-    int shown = 0, seen = 0;
-    int i;
-
-    CG_LoadLabel(rightward ? x + w - tw + 1.8f : x, y, 0.17f, loadText, title, 1.8f);
-    CG_LoadFill(x, y + 22.0f, w, 1.5f, color);
-
-    if (maxRows < 1) {
-        maxRows = 1;
-    }
-    for (i = 0; i < MAX_CLIENTS && shown < maxRows; i++) {
-        const char* info = CG_ConfigString(CS_PLAYERS + i);
-
-        if (!info[0]) {
-            continue;
-        }
-        if (team >= 0) {
-            if (atoi(Info_ValueForKey(info, "t")) != team) {
-                continue;
-            }
-        } else if ((seen++ & 1) != half) {
-            continue;  // without teams, every other player goes down each side
-        }
-        CG_LoadDrawPlayer(x, y + 40.0f + shown * LOAD_ROW_H, w, i, rightward);
-        shown++;
-    }
-    if (!shown) {
-        float ew = CG_DrawTextWidth("Nobody yet", 0.18f, 0, 1);
-
-        CG_LoadText(rightward ? x + w - ew : x, y + 42.0f, 1, 0.18f, loadSubtle, "Nobody yet");
-    }
-}
-
-/*
-===============
-CG_LoadDrawSteps
-
-The four steps of CG_Init's load, in a row across the middle: a check when one is done, gold while
-it runs, dim while it waits. Under them, what is being loaded right now.
-===============
-*/
-static void CG_LoadDrawSteps(float middle, float y) {
-    static const char* const steps[NUM_LOADING_STAGES] = {"Map", "Sounds", "Graphics", "Players"};
-    const float gap = 26.0f;
-    float w[NUM_LOADING_STAGES];
-    float total = 0.0f;
-    float x;
-    int i;
-
-    for (i = 0; i < NUM_LOADING_STAGES; i++) {
-        w[i] = CG_LoadLabelWidth(0.14f, steps[i], 1.4f) + 14.0f;
-        total += w[i];
-    }
-    total += gap * (NUM_LOADING_STAGES - 1);
-    x = middle - total * 0.5f;
-
-    for (i = 0; i < NUM_LOADING_STAGES; i++) {
-        qboolean done = cg.loadingStage > i;
-        qboolean current = cg.loadingStage == i;
-
-        if (done) {
-            CG_LoadCheck(x, y + 2.0f, loadMuted);
-        }
-        CG_LoadLabel(x + 14.0f, y, 0.14f, current ? loadText : done ? loadMuted : loadSubtle, steps[i], 1.4f);
-        x += w[i] + gap;
-    }
-
-    if (cg.infoScreenText[0]) {
-        char what[64];
-        float tw;
-
-        Q_strncpyz(what, cg.infoScreenText, sizeof(what));
-        Q_CleanStr(what);
-        tw = (float)CG_DrawTextWidth(what, 0.15f, 0, 1);
-        CG_LoadText(middle - tw * 0.5f, y + 20.0f, 1, 0.15f, loadSubtle, what);
-    }
-}
-
-/*
 ====================
 CG_DrawInformation
+
+[QL] Rewritten to match Quake Live binary loading screen.
+Draws levelshot, QL branding, gametype, loading text, and progress bar.
 ====================
 */
 void CG_DrawInformation(void) {
-    const char* s;
-    const char* info;
-    const char* sAuthor;
-    const char* gametypeName;
+    const char *s;
+    const char *info;
+    const char *sAuthor, *sAuthor2;
+    const char *gametypeName;
     qhandle_t levelshot;
-    float s1, s2;
-    float full, side, sideX;
+    int i;
     int w;
-    char host[64];
+    float s1, s2;
+
+    // [QL] colors from binary
+    static vec4_t colorBarFilled   = { 0.375f, 0.125f, 0.125f, 1.0f  };  // dark red, full alpha
+    static vec4_t colorBarEmpty    = { 0.0f,   0.0f,   0.0f,   0.75f };  // black semi-transparent
+    static vec4_t colorBarBg       = { 0.375f, 0.125f, 0.125f, 0.75f };  // dark red, semi-transparent
 
     // [QL] compute aspect-correct texture coords for levelshot (1920x1080 source)
-    s1 = ((1920.0f - (1080.0f / (float)cgs.glconfig.vidHeight) * (float)cgs.glconfig.vidWidth) / 1920.0f) * 0.5f;
+    s1 = ((1920.0f - (1080.0f / (float)cgs.glconfig.vidHeight) * (float)cgs.glconfig.vidWidth)
+          / 1920.0f) * 0.5f;
     s2 = 1.0f - s1;
 
     info = CG_ConfigString(CS_SERVERINFO);
@@ -441,8 +153,8 @@ void CG_DrawInformation(void) {
     // font 0 at 0.3, shadowed
     if (!cg.infoScreenText[0] && cg.snap) {
         CG_SetWidescreen(WIDESCREEN_CENTER);
-        trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight, s1, 0, s2, 1.0f,
-                              cgs.media.backscreenSmokeShader);
+        trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight,
+                              s1, 0, s2, 1.0f, cgs.media.backscreenSmokeShader);
         s = "Awaiting gamestate...";
         w = CG_DrawTextWidth(s, 0.3f, 0, 0);
         CG_DrawText(320 - w * 0.5f, 178, 0, 0.3f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
@@ -450,78 +162,86 @@ void CG_DrawInformation(void) {
         return;
     }
 
-    trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight, s1, 0, s2, 1.0f,
-                          levelshot);
+    // [QL] draw the levelshot fullscreen with aspect-correct texture coords
+    trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight,
+                          s1, 0, s2, 1.0f, levelshot);
 
+    // [QL] left-anchored elements: top bar, logos, bottom bar, map name, author
     CG_SetWidescreen(WIDESCREEN_LEFT);
-    full = (float)cgs.glconfig.vidWidth * 480.0f / (float)cgs.glconfig.vidHeight;
-    side = full * 0.26f;
-    if (side > 260.0f) {
-        side = 260.0f;
+
+    // top bar: dark red semi-transparent background across full width
+    CG_FillRect(-400, 0, 1440, 64, colorBarBg);
+
+    // logo background (512x128 source, drawn at 256x64 = 4:1 ratio preserved)
+    if (cgs.media.logoBackgroundShader) {
+        CG_DrawPic(0, 0, 256, 64, cgs.media.logoBackgroundShader);
     }
-    sideX = full - 26.0f - side;
 
-    // The levelshot is the screen; it only darkens where something is read. Every wash runs to the
-    // edge it belongs to: the right one used to stop at the roster's own right edge and left a lit
-    // strip down the last 26 units, which is the shade the user saw cut.
-    CG_LoadWash(0, 0, full, 110, loadPage, 0.58f, 0.0f, qfalse);
-    CG_LoadWash(0, 0, side + 80.0f, 480, loadPage, 0.74f, 0.0f, qtrue);
-    CG_LoadWash(sideX - 80.0f, 0, full - sideX + 80.0f, 480, loadPage, 0.0f, 0.74f, qtrue);
-    CG_LoadWash(0, 300, full, 180, loadPage, 0.0f, 0.90f, qfalse);
-
+    // QL logo (512x128 source, drawn at 256x64)
     if (cgs.media.qlLogoShader) {
-        CG_LoadPic(22, 20, 160, 40, cgs.media.qlLogoShader);
+        CG_DrawPic(0, 0, 256, 64, cgs.media.qlLogoShader);
     }
 
-    // the server's name at the top right, when it has one
-    Q_strncpyz(host, Info_ValueForKey(info, "sv_hostname"), sizeof(host));
-    Q_CleanStr(host);
-    if (host[0] && Q_stricmp(host, "noname")) {
-        while (host[0] && CG_DrawTextWidth(host, 0.16f, 0, 1) > side) {
-            host[strlen(host) - 1] = 0;
-        }
-        w = CG_DrawTextWidth(host, 0.16f, 0, 1);
-        CG_LoadText(full - 26 - w, 32, 1, 0.16f, loadMuted, host);
+    // [QL] bottom bar: black semi-transparent covering y=400..480
+    CG_FillRect(-400, 400, 1440, 80, colorBarEmpty);
+
+    // [QL] cgamex86.dll 0x1001d22d: the map's name at x 10 with its top on y 400, in font 0
+    // at scale 0.8, and under it, when the map has one, its authors in font 1 at scale 0.25
+    // with their tops on y 447 and 462. None of them is shadowed.
+    s = CG_ConfigString(CS_MESSAGE);
+    CG_DrawText(10, (float)(400 + CG_DrawTextHeight(s, 0.8f, 0, 0)), 0, 0.8f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_NORMAL);
+
+    sAuthor = CG_ConfigString(CS_AUTHOR);
+    if (sAuthor[0]) {
+        sAuthor2 = CG_ConfigString(CS_AUTHOR2);
+        CG_DrawText(10, (float)(447 + CG_DrawTextHeight(sAuthor, 0.25f, 0, 1)), 1, 0.25f, colorWhite, sAuthor, 0, 0,
+                    ITEM_TEXTSTYLE_NORMAL);
+        CG_DrawText(10, (float)(462 + CG_DrawTextHeight(sAuthor2, 0.25f, 0, 1)), 1, 0.25f, colorWhite, sAuthor2, 0, 0,
+                    ITEM_TEXTSTYLE_NORMAL);
     }
 
-    // the rosters: the two teams facing each other, or everybody split down the two sides
-    if (cgs.gametype >= GT_TEAM) {
-        CG_LoadDrawSide(26.0f, 96.0f, side, 190.0f, "Red Team", loadRed, TEAM_RED, 0, qfalse);
-        CG_LoadDrawSide(sideX, 96.0f, side, 190.0f, "Blue Team", loadBlue, TEAM_BLUE, 0, qtrue);
-    } else {
-        CG_LoadDrawSide(26.0f, 96.0f, side, 190.0f, "Players", loadRule, -1, 0, qfalse);
-        CG_LoadDrawSide(sideX, 96.0f, side, 190.0f, "", loadRule, -1, 1, qtrue);
+    // [QL] right-anchored elements: gametype background and name
+    CG_SetWidescreen(WIDESCREEN_RIGHT);
+
+    // gametype background (right side of top bar, 512x128 source at 256x64)
+    if (cgs.media.gtBackgroundShader) {
+        CG_DrawPic(384, 0, 256, 64, cgs.media.gtBackgroundShader);
     }
 
-    // the map in the middle: the gametype over its name, and its authors under it
+    // [QL] gametype name (right-aligned in top bar, bigFont via scale 0.8)
     if (cgs.gametype >= 0 && cgs.gametype < GT_MAX_GAME_TYPE) {
         gametypeName = gametypeDisplayNames[cgs.gametype];
     } else {
         gametypeName = "Unknown Gametype";
     }
-    w = (int)CG_LoadLabelWidth(0.16f, gametypeName, 2.4f);
-    CG_LoadLabel(full * 0.5f - w * 0.5f, 370.0f, 0.16f, loadMuted, gametypeName, 2.4f);
+    // [QL] 0x1001d48d: right-aligned on 620 with its top 10 units down, font 0, scale 0.8,
+    // not shadowed
+    w = CG_DrawTextWidth(gametypeName, 0.8f, 0, 0);
+    CG_DrawText((float)(620 - w), (float)(10 + CG_DrawTextHeight(gametypeName, 0.8f, 0, 0)), 0, 0.8f, colorWhite,
+                gametypeName, 0, 0, ITEM_TEXTSTYLE_NORMAL);
 
-    s = CG_ConfigString(CS_MESSAGE);
-    w = CG_DrawTextWidth(s, 0.62f, 0, 0);
-    CG_LoadText(full * 0.5f - w * 0.5f, 388.0f, 0, 0.62f, loadText, s);
+    // [QL] center-anchored elements: loading text and progress boxes
+    CG_SetWidescreen(WIDESCREEN_CENTER);
 
-    sAuthor = CG_ConfigString(CS_AUTHOR);
-    if (sAuthor[0]) {
-        const char* sAuthor2 = CG_ConfigString(CS_AUTHOR2);
+    // [QL] loading text (centered, textFont via scale 0.3)
+    if (cg.infoScreenText[0]) {
+        s = va("Loading %s", cg.infoScreenText);
+    } else {
+        s = "Awaiting Snapshot";
+    }
+    // [QL] 0x1001d524: centred at y 370 in font 1, scale 0.3, shadowed
+    w = CG_DrawTextWidth(s, 0.3f, 0, 1);
+    CG_DrawText((float)(320 - w / 2), 370, 1, 0.3f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 
-        if (sAuthor2[0]) {
-            sAuthor = va("%s  %s", sAuthor, sAuthor2);
+    // [QL] progress boxes: 4 boxes, 8x8 each, 16px stride, y=380
+    for (i = 0; i < NUM_LOADING_STAGES; i++) {
+        if (cg.loadingStage > i) {
+            CG_FillRect(292 + i * 16, 380, 8, 8, colorBarFilled);
+        } else {
+            CG_FillRect(292 + i * 16, 380, 8, 8, colorBarEmpty);
         }
-        w = CG_DrawTextWidth(sAuthor, 0.16f, 0, 1);
-        CG_LoadText(full * 0.5f - w * 0.5f, 432.0f, 1, 0.16f, loadMuted, sAuthor);
     }
 
-    // the load along the bottom: the four steps in a row, and what is loading under them
-    CG_LoadDrawSteps(full * 0.5f, 452.0f);
-
-    // No bar along the bottom edge: the user read that band as a stripe stuck on the picture, and
-    // the four steps above already say how far the load has got.
-
+    // [QL] reset widescreen mode
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
