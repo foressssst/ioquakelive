@@ -480,6 +480,12 @@ Let everyone know about a team change
 =================
 */
 void BroadcastTeamChange(gclient_t* client, int oldTeam) {
+    // [ioquakelive] El binario se sale de entrada en dos casos (0x1004027d): durante el
+    // entrenamiento -- en el Crash Course nadie anuncia nada -- y en los primeros cinco
+    // segundos del nivel, que es cuando entran todos de golpe al cargar el mapa.
+    if (g_training.integer || level.time < 5000) {
+        return;
+    }
     if (client->sess.sessionTeam == TEAM_RED) {
         trap_SendServerCommand(-1, va("cp \"%s" S_COLOR_WHITE " joined the red team.\n\"",
                                       client->pers.netname));
@@ -530,6 +536,18 @@ void SetTeam(gentity_t* ent, const char* s) {
     // see what change is requested
     //
     client = ent->client;
+
+    // [ioquakelive] NO ES DE RETAIL: lo pidio el jugador. Del entrenamiento no se sale a
+    // espectador -- la salida es terminar la vuelta o saltarsela con readyup, que es lo
+    // que dice Crash. El binario no trae esta regla: SetTeam (0x100406d0) no mira
+    // g_training en ninguna de sus ramas.
+    if (g_training.integer && !(ent->r.svFlags & SVF_BOT) &&
+        (!Q_stricmp(s, "spectator") || !Q_stricmp(s, "s") || !Q_stricmp(s, "follow1") ||
+         !Q_stricmp(s, "follow2"))) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"You cannot spectate during training. Finish the tour, or press ready to skip it.\n\"");
+        return;
+    }
 
     clientNum = client - level.clients;
     specClient = 0;
@@ -990,6 +1008,17 @@ void G_Say(gentity_t* ent, gentity_t* target, int mode, const char* chatText) {
     char text[MAX_SAY_TEXT];
     char location[64];
 
+    // [ioquakelive] NO ES DE RETAIL: lo pidio el jugador. Mientras Crash da la vuelta
+    // explicando (g_training 2) el chat del jugador no sale; lo que escribe se le
+    // devuelve a el con un aviso. Los bots siguen hablando, que son las explicaciones,
+    // y no se toca ni un comando ni una configuracion: solo el say. Al terminar la
+    // vuelta g_training pasa a 1 y el chat vuelve solo.
+    if (g_training.integer == 2 && ent && ent->client && !(ent->r.svFlags & SVF_BOT)) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"Pay attention to Crash. You can chat once the tour is over.\n\"");
+        return;
+    }
+
     if (g_gametype.integer < GT_TEAM && mode == SAY_TEAM) {
         mode = SAY_ALL;
     }
@@ -1351,6 +1380,15 @@ void Cmd_CallVote_f(gentity_t *ent) {
         trap_SendServerCommand(clientNum,
             va("print \"Voting will be allowed in %.1f seconds.\n\"",
                (float)(g_voteDelay.integer - level.time) / 1000.0f));
+        return;
+    }
+
+    // [ioquakelive] En el Crash Course no se vota. El binario lo corta aqui mismo, entre
+    // el retardo de voto y el "Public voting is not allowed here" (0x100423xx, el string
+    // vive en 0x100836a4).
+    if (g_training.integer) {
+        trap_SendServerCommand(clientNum,
+            "print \"Voting is not allowed in training.\n\"");
         return;
     }
 
