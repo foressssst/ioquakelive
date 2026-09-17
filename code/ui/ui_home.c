@@ -530,16 +530,6 @@ static void UI_Home_DrawShade(void) {
     UI_Home_Wash(smBottom - 190.0f, 190.0f, smPage, 0.0f, 0.85f);
 }
 
-// a small chevron pointing right, what an entry that leads somewhere shows under the cursor
-static void UI_Home_Chevron(float x, float y, const float* color) {
-    int k;
-
-    for (k = 0; k < 6; k++) {
-        SM_Fill(x + k, y + k, 2.2f, 2.2f, color, NULL);
-        SM_Fill(x + k, y + 10.0f - k, 2.2f, 2.2f, color, NULL);
-    }
-}
-
 /*
 ===============
 UI_Home_DrawColumn
@@ -591,10 +581,9 @@ static void UI_Home_DrawColumn(void) {
             continue;
         }
 
+        // [ioquakelive] the user asked for the arrow that used to stand at the right of the entry
+        // under the cursor to go ("quitar el < del ui"): the gold of the title says enough
         h = item->note ? HM_ITEM_H : HM_ITEM_H - 22.0f;
-        if (over) {
-            UI_Home_Chevron(x + HM_COL_W - 40, y + 14, smGold);
-        }
         SM_Label(x, SM_Baseline(FONT_SANS, HM_ITEM_SIZE, y + 7, 36), HM_ITEM_SIZE,
                  item->soon ? smSubtle : over ? smGold : smText, item->title, HM_ITEM_SPACING);
         if (item->soon) {
