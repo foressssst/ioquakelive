@@ -955,11 +955,14 @@ static void SM_DrawPage(void) {
         }
     }
     contentH = y + (SM_PAD - 6) + 20 + SM_LAUNCH_H + SM_PAD - 6;
-    // [ioquakelive] the header and the panel are a block in the middle of the screen, the panel as
-    // tall as what it holds ("no es extenderla, es centrarla")
-    panelH = contentH;
+    // [ioquakelive] La pagina se ancla bajo la barra y su panel baja hasta el borde, que es como
+    // estan Patch Notes y Settings, las dos que mejor quedaron. Antes el bloque flotaba centrado a
+    // media pantalla: eso venia de un pedido anterior -"no es extenderla, es centrarla"- que era
+    // sobre el contenedor a lo ancho, y se aplico tambien a lo alto. El resultado no se veia al
+    // nivel de las otras, asi que toda la UI usa ahora el mismo esqueleto.
     inset = 0.0f;
-    top = UI_Home_Header(UI_Home_BlockTop(72.0f + HM_PANEL_GAP + panelH), NULL, "Start Match") + HM_PANEL_GAP;
+    top = UI_Home_Header(HM_NAV_H, NULL, "Start Match") + HM_PANEL_GAP;
+    panelH = contentH;
     cardH = panelH * 0.5f;
     optX = page + SM_OPT_X;
     rowsTop = top + inset + SM_PAD - 6;
@@ -982,7 +985,7 @@ static void SM_DrawPage(void) {
             y += 36;
         }
     }
-    SM_DrawLaunch(optX + SM_PAD, top + inset + contentH - SM_PAD - SM_LAUNCH_H + 6, SM_ROW_W);
+    SM_DrawLaunch(optX + SM_PAD, top + panelH - SM_PAD - SM_LAUNCH_H + 6, SM_ROW_W);
 
     SM_DrawGametypeCard(page, top, cardH);
     SM_DrawArenaCard(page, top + cardH, cardH);

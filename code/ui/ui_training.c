@@ -108,18 +108,18 @@ static void TR_Launch(int i) {
     trap_Cmd_ExecuteText(EXEC_APPEND, va("%s\n", trCards[i].command));
 }
 
-static void TR_DrawCard(int i, float x, float y, float w) {
+static void TR_DrawCard(int i, float x, float y, float w, float h) {
     const trCard_t* card = &trCards[i];
     float inner = w - 2 * TR_PAD;
     float picH = inner * TR_PIC_ASPECT;
-    smRect_t box = SM_R(x, y, w, TR_CARD_H);
+    smRect_t box = SM_R(x, y, w, h);
     qboolean over = SM_In(&box, smMX, smMY);
     int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
     float by, bw;
     vec4_t tint = {1.0f, 1.0f, 1.0f, 1.0f};
     int lines, k;
 
-    SM_Round(x, y, w, TR_CARD_H, SM_RADIUS_MD, over ? smRaisedHover : smRaised, NULL);
+    SM_Round(x, y, w, h, SM_RADIUS_MD, over ? smRaisedHover : smRaised, NULL);
 
     // retail dims the image to 40% and brings it up under the cursor
     tint[3] = over ? 1.0f : 0.4f;
@@ -139,7 +139,7 @@ static void TR_DrawCard(int i, float x, float y, float w) {
     }
 
     // the buttons the section ends with: Watch Video first, as retail orders them
-    by = y + TR_CARD_H - TR_PAD - SM_BUTTON_H;
+    by = y + h - TR_PAD - SM_BUTTON_H;
     if (card->video) {
         bw = (inner - 10) * 0.5f;
         SM_Button(x + TR_PAD, by, bw, SM_BUTTON_H, "Watch Video", SM_BUTTON_SECONDARY, SM_Over(TR_HIT_VIDEO, i));
@@ -152,7 +152,7 @@ static void TR_DrawCard(int i, float x, float y, float w) {
         SM_Hit(x + TR_PAD, by, inner, SM_BUTTON_H, TR_HIT_START, i, NULL);
     }
     // the whole section launches it too, the way retail's does
-    SM_Hit(x, y, w, TR_CARD_H, TR_HIT_CARD, i, NULL);
+    SM_Hit(x, y, w, h, TR_HIT_CARD, i, NULL);
 }
 
 void UI_Training_Open(void) {
@@ -191,14 +191,18 @@ void UI_Training_Paint(void) {
     // [ioquakelive] The three cards sit in one container, and the header and that container are a
     // block in the middle of the screen ("los 3 centers no estan CENTRADOS como contenedor", "no es
     // extenderla, es centrarla").
+    // [ioquakelive] La pagina se ancla bajo la barra y su panel baja hasta el borde, que es como
+    // estan Patch Notes y Settings, las dos que mejor quedaron. Antes el bloque flotaba centrado a
+    // media pantalla: eso venia de un pedido anterior -"no es extenderla, es centrarla"- que era
+    // sobre el contenedor a lo ancho, y se aplico tambien a lo alto. El resultado no se veia al
+    // nivel de las otras, asi que toda la UI usa ahora el mismo esqueleto.
+    panelTop = UI_Home_Header(HM_NAV_H, NULL, "Training Center") + HM_PANEL_GAP;
     panelH = TR_CARD_H + 2 * pad;
-    panelTop = UI_Home_Header(UI_Home_BlockTop(72.0f + HM_PANEL_GAP + panelH), NULL, "Training Center") +
-               HM_PANEL_GAP;
     SM_Round(left, panelTop, HM_CONTAINER_W, panelH, SM_RADIUS_MD, smPanel, NULL);
     y = panelTop + pad;
 
     for (i = 0; i < TR_NUM_CARDS; i++) {
-        TR_DrawCard(i, left + pad + i * (w + HM_PANEL_GAP), y, w);
+        TR_DrawCard(i, left + pad + i * (w + HM_PANEL_GAP), y, w, panelH - 2 * pad);
     }
 
     UI_Home_Banner();
