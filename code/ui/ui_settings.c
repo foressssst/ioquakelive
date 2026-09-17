@@ -189,6 +189,7 @@ static struct {
     char modelShown[MAX_QPATH];     // what modelInfo was built from
 
     playerInfo_t preview[2];        // the Team section's, teammates then enemies
+    qhandle_t weaponIcon[10];      // [ioquakelive] el icono de cada arma, registrado al pedirlo
     char previewShown[2][MAX_QPATH];
     float previewYaw[2];
     int previewDrag;                // which one is being turned
@@ -776,10 +777,11 @@ static void ST_DrawCrosshair(int i, float x, float y, const smRect_t* clip) {
         SM_Pic(x + fieldW - 36, y + 4, 28, 28, uiInfo.uiDC.Assets.crosshairShader[shape], clip);
         trap_R_SetColor(NULL);
     }
-    ST_DrawStep(x + fieldW + 6, y + 5, qfalse, SM_Over(ST_HIT_PREV, i));
-    ST_DrawStep(x + fieldW + 38, y + 5, qtrue, SM_Over(ST_HIT_NEXT, i));
-    SM_Hit(x + fieldW + 4, y, 30, ST_FIELD_H, ST_HIT_PREV, i, clip);
-    SM_Hit(x + fieldW + 36, y, 30, ST_FIELD_H, ST_HIT_NEXT, i, clip);
+    // el campo entero abre la rejilla; las flechas de antes obligaban a recorrerlos de a uno
+    SM_Hit(x, y, fieldW, ST_FIELD_H, ST_HIT_SELECT, i, clip);
+    if (st.select == i) {
+        st.selectControl = SM_R(x, y, fieldW, ST_FIELD_H);
+    }
 }
 
 // the keys bound to the row's command, as key caps
@@ -1292,6 +1294,70 @@ static void ST_DrawModelChooser(void) {
 }
 
 /*
+===============
+ST_DrawCrosshairGrid
+
+Los treinta crosshairs a la vista, en rejilla, sobre el control. Retail los ofrece todos en un
+desplegable en vez de obligar a recorrerlos de a uno con las flechas, que es lo que habia aca: para
+llegar al 24 habia que pasar por los 23 anteriores. En rejilla se ve el dibujo de cada uno en vez
+de su numero, que es lo unico que importa al elegir.
+===============
+*/
+#define ST_XH_CELL 40.0f
+#define ST_XH_COLS 6
+
+static void ST_DrawCrosshairGrid(void) {
+    const vec4_t* palette = UI_CrosshairPalette();
+    int index = (int)trap_Cvar_VariableValue("cg_crosshairColor") - 1;
+    int rows = (NUM_CROSSHAIRS + ST_XH_COLS - 1) / ST_XH_COLS;
+    float pad = 8.0f;
+    float w = ST_XH_COLS * ST_XH_CELL + 2 * pad;
+    float h = rows * ST_XH_CELL + 2 * pad;
+    float x = st.selectControl.x;
+    float y = st.selectControl.y + st.selectControl.h + 6;
+    int chosen = atoi(st.values[st.select]);
+    vec4_t color;
+    int k;
+
+    if (y + h > smBottom - 20) {
+        y = st.selectControl.y - 6 - h;
+    }
+    if (index < 0 || index > 25) {
+        index = 0;
+    }
+    VectorScale(palette[index], trap_Cvar_VariableValue("cg_crosshairBrightness"), color);
+    color[3] = 1.0f;
+
+    SM_Round(x, y, w, h, SM_RADIUS_MD, smRaised, NULL);
+    SM_Hit(x, y, w, h, ST_HIT_MENU, st.select, NULL);
+
+    for (k = 0; k < NUM_CROSSHAIRS; k++) {
+        float cxx = x + pad + (k % ST_XH_COLS) * ST_XH_CELL;
+        float cyy = y + pad + (k / ST_XH_COLS) * ST_XH_CELL;
+        qboolean over = SM_Over(ST_HIT_OPTION, k);
+
+        if (k == chosen || over) {
+            SM_Round(cxx + 2, cyy + 2, ST_XH_CELL - 4, ST_XH_CELL - 4, SM_RADIUS_SM,
+                     k == chosen ? smRaisedHover : smPanel, NULL);
+        }
+        if (k == 0) {
+            // el cero es "ninguno", y no tiene dibujo que mostrar
+            SM_Label(cxx + 6, SM_Baseline(FONT_SANS, 10, cyy, ST_XH_CELL), 10,
+                     (k == chosen || over) ? smText : smMuted, "OFF", 1.2f);
+            SM_Hit(cxx, cyy, ST_XH_CELL, ST_XH_CELL, ST_HIT_OPTION, k, NULL);
+            continue;
+        }
+        trap_R_SetColor(color);
+        SM_Pic(cxx + 6, cyy + 6, ST_XH_CELL - 12, ST_XH_CELL - 12, uiInfo.uiDC.Assets.crosshairShader[k], NULL);
+        trap_R_SetColor(NULL);
+        if (k == chosen) {
+            SM_Pill(cxx + ST_XH_CELL * 0.5f - 3, cyy + ST_XH_CELL - 7, 6, 3, smGold, NULL);
+        }
+        SM_Hit(cxx, cyy, ST_XH_CELL, ST_XH_CELL, ST_HIT_OPTION, k, NULL);
+    }
+}
+
+/*
 ===============================================================================
 
 POPUPS
@@ -1434,6 +1500,43 @@ static qboolean ST_GroupRect(int head, smRect_t* out) {
 }
 
 /*
+===============
+ST_WeaponIcon
+
+El icono del arma que ata una fila de "weapon N", o 0 cuando la fila no es de un arma. Los
+nombres son los de pak00; el orden es el de las teclas, que es el de la barra de armas.
+===============
+*/
+static qhandle_t ST_WeaponIcon(int i) {
+    static const char* const names[] = {
+        NULL,                    // 0: no hay arma 0
+        "icons/iconw_gauntlet",  // 1
+        "icons/iconw_machinegun",
+        "icons/iconw_shotgun",
+        "icons/iconw_grenade",
+        "icons/iconw_rocket",
+        "icons/iconw_lightning",
+        "icons/iconw_railgun",
+        "icons/iconw_plasma",
+        "icons/iconw_bfg",       // 9
+    };
+    const char* cvar = stCvars[i].cvar;
+    int n;
+
+    if (stCvars[i].widget != ST_BIND || !cvar || Q_strncmp(cvar, "weapon ", 7)) {
+        return 0;
+    }
+    n = atoi(cvar + 7);
+    if (n < 1 || n >= (int)ARRAY_LEN(names) || !names[n]) {
+        return 0;
+    }
+    if (!st.weaponIcon[n]) {
+        st.weaponIcon[n] = trap_R_RegisterShaderNoMip(names[n]);
+    }
+    return st.weaponIcon[n];
+}
+
+/*
 ===============================================================================
 
 THE PAGE
@@ -1448,6 +1551,10 @@ static void ST_DrawRow(int i, float y, const smRect_t* clip) {
     float h = stLayout[i].h;
     float cx = ST_ControlX(i);
     float titleW = ST_TitleWidth(w);
+    // [ioquakelive] las armas se reconocen antes por su icono que por su nombre, asi que una fila
+    // de "weapon N" corre su titulo para dejarle lugar
+    qhandle_t weapIcon = ST_WeaponIcon(i);
+    float titleX = x + (weapIcon ? 10 + 22 + 10 : 12);
     smRect_t row = SM_R(x, y, w, h);
     qboolean hovered;
     float cy;
@@ -1467,6 +1574,9 @@ static void ST_DrawRow(int i, float y, const smRect_t* clip) {
     if (hovered || st.binding == i || st.edit == i) {
         SM_Round(x, y, w, h, SM_RADIUS_SM, smRaised, clip);
     }
+    if (weapIcon) {
+        SM_Pic(x + 10, y + (h - 22.0f) * 0.5f, 22.0f, 22.0f, weapIcon, clip);
+    }
 
     if (ST_HasTip(i)) {
         const stTip_t* tip = ST_Tip(i);
@@ -1474,7 +1584,8 @@ static void ST_DrawRow(int i, float y, const smRect_t* clip) {
         int k;
 
         if (SM_TextInside(tb, 15, clip)) {
-            SM_Text(x + 12, tb, FONT_SANS, 15, smText, cv->title, SM_Fit(FONT_SANS, 15, cv->title, titleW), qfalse);
+            SM_Text(titleX, tb, FONT_SANS, 15, smText, cv->title,
+                    SM_Fit(FONT_SANS, 15, cv->title, titleW - (titleX - x - 12)), qfalse);
         }
         for (k = 0; k < tip->lines; k++) {
             tb = SM_Baseline(FONT_SANS, ST_TIP_SIZE, y + 32 + k * ST_TIP_LINE_H, ST_TIP_LINE_H);
@@ -1486,7 +1597,8 @@ static void ST_DrawRow(int i, float y, const smRect_t* clip) {
         float tb = SM_Baseline(FONT_SANS, 15, y, h);
 
         if (SM_TextInside(tb, 15, clip)) {
-            SM_Text(x + 12, tb, FONT_SANS, 15, smText, cv->title, SM_Fit(FONT_SANS, 15, cv->title, titleW), qfalse);
+            SM_Text(titleX, tb, FONT_SANS, 15, smText, cv->title,
+                    SM_Fit(FONT_SANS, 15, cv->title, titleW - (titleX - x - 12)), qfalse);
         }
     }
     SM_Hit(x, y, w, h, ST_HIT_ROW, i, clip);
@@ -1786,7 +1898,11 @@ static void ST_Click(void) {
     // an open list or picker takes the click, or closes
     if (st.select >= 0) {
         if (type == ST_HIT_OPTION) {
-            ST_Set(st.select, stCvars[st.select].options[index].value);
+            if (stCvars[st.select].widget == ST_CROSSHAIR) {
+                ST_Set(st.select, va("%i", index));  // en la rejilla el indice ES el valor
+            } else {
+                ST_Set(st.select, stCvars[st.select].options[index].value);
+            }
             st.select = -1;
             return;
         }
@@ -2110,7 +2226,11 @@ void UI_Settings_Paint(void) {
 
     ST_DrawPage();
     if (st.select >= 0) {
-        ST_DrawDropdown();
+        if (stCvars[st.select].widget == ST_CROSSHAIR) {
+            ST_DrawCrosshairGrid();
+        } else {
+            ST_DrawDropdown();
+        }
     }
     if (st.rgb >= 0) {
         ST_DrawRGBPicker();
