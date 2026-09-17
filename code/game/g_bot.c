@@ -605,6 +605,26 @@ void G_CheckMinimumPlayers(void) {
 
 /*
 ===============
+G_BotWaitingToSpawn
+
+Si este bot esta esperando su turno en la cola de G_CheckBotSpawn. Se pregunta antes de
+rescatar a un cliente que quedo a medio conectar: al bot en cola hay que dejarlo, porque
+empezarlo dos veces lo spawnea dos veces.
+===============
+*/
+qboolean G_BotWaitingToSpawn(int clientNum) {
+    int n;
+
+    for (n = 0; n < BOT_SPAWN_QUEUE_DEPTH; n++) {
+        if (botSpawnQueue[n].spawnTime && botSpawnQueue[n].clientNum == clientNum) {
+            return qtrue;
+        }
+    }
+    return qfalse;
+}
+
+/*
+===============
 G_CheckBotSpawn
 ===============
 */
