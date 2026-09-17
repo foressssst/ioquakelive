@@ -54,6 +54,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define ST_TIP_LINES 2       // every retail tip fits two lines at this width
 #define ST_BIND_H 42.0f
 #define ST_HEAD_H 44.0f
+#define ST_CARD_PAD 10.0f   // el aire que la tarjeta deja bajo su ultima fila
 
 // Team's two blocks fit the shortest panel whole (773 high on a 16:9 screen), since
 // a model is drawn only while all of it shows
@@ -1388,6 +1389,51 @@ static void ST_DrawRGBPicker(void) {
 }
 
 /*
+===============
+ST_GroupRect
+
+Donde vive una subseccion entera: desde su encabezado hasta el final de la ultima fila que le
+pertenece. Un encabezado de ancho completo (column < 0) se queda con las filas de las dos columnas;
+uno de una sola columna, solo con las suyas, porque los encabezados van de a pares en la misma
+linea y cada uno manda en su lado.
+===============
+*/
+static qboolean ST_GroupRect(int head, smRect_t* out) {
+    int col = stCvars[head].column;
+    float bottom = stLayout[head].y + stLayout[head].h;
+    int i;
+
+    for (i = head + 1; i < ST_NUM_CVARS; i++) {
+        float rowBottom;
+
+        if (!ST_InTab(i)) {
+            continue;
+        }
+        if (stCvars[i].widget == ST_HEADING) {
+            // el encabezado emparejado en la otra columna no corta este grupo
+            if (col >= 0 && stCvars[i].column >= 0 && stLayout[i].y == stLayout[head].y) {
+                continue;
+            }
+            break;
+        }
+        if (col >= 0 && (stCvars[i].column ? 1 : 0) != col) {
+            continue;
+        }
+        rowBottom = stLayout[i].y + stLayout[i].h;
+        if (rowBottom > bottom) {
+            bottom = rowBottom;
+        }
+    }
+
+    if (bottom <= stLayout[head].y + stLayout[head].h) {
+        return qfalse;  // un encabezado sin filas no lleva tarjeta
+    }
+    *out = SM_R(stLayout[head].x, stLayout[head].y, stLayout[head].w,
+                bottom - stLayout[head].y + ST_CARD_PAD);
+    return qtrue;
+}
+
+/*
 ===============================================================================
 
 THE PAGE
@@ -1406,10 +1452,11 @@ static void ST_DrawRow(int i, float y, const smRect_t* clip) {
     qboolean hovered;
     float cy;
 
-    // a heading is its title alone: the site separates with space, not lines
+    // el encabezado es el titulo de su tarjeta; el fondo ya se dibujo antes que las filas
     if (cv->widget == ST_HEADING) {
-        if (SM_TextInside(SM_Baseline(FONT_SANS, 13, y + 14, 20), 13, clip)) {
-            SM_Label(x + 12, SM_Baseline(FONT_SANS, 13, y + 14, 20), 13, smText, cv->title, 0.8f);
+        if (SM_TextInside(SM_Baseline(FONT_SANS, 13, y + 16, 20), 13, clip)) {
+            SM_Label(x + ST_CARD_PAD + 12, SM_Baseline(FONT_SANS, 13, y + 16, 20), 13, smGold,
+                     cv->title, 0.8f);
         }
         return;
     }
@@ -1574,6 +1621,24 @@ static void ST_DrawPage(void) {
     st.scroll[st.tab] = ST_ClampScroll(st.scroll[st.tab]);
 
     clip = SM_R(st.left, st.listTop, HM_CONTAINER_W, st.view);
+
+    // el fondo de cada subseccion va primero, para que las filas queden encima
+    if (st.tab != ST_TAB_TEAM) {
+        for (i = 0; i < ST_NUM_CVARS; i++) {
+            smRect_t card;
+            float y;
+
+            if (!ST_InTab(i) || stCvars[i].widget != ST_HEADING || !ST_GroupRect(i, &card)) {
+                continue;
+            }
+            y = ST_RowY(i);
+            if (y + card.h <= st.listTop || y >= st.listTop + st.view) {
+                continue;
+            }
+            SM_Round(card.x, y, card.w, card.h, SM_RADIUS_MD, smPage, &clip);
+        }
+    }
+
     for (i = 0; i < ST_NUM_CVARS; i++) {
         float y;
 
