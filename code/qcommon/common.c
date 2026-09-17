@@ -2603,8 +2603,15 @@ void Com_Init(char* commandLine) {
     // browser-driven event loop. So default throttling to off.
     com_maxfps = Cvar_Get("com_maxfps", "0", CVAR_ARCHIVE);
 #else
-    // [QL] quakelive_steam.exe 0x4cc2e9: 125 in 30-250
-    com_maxfps = Cvar_GetRange("com_maxfps", "125", "30", "250", CVAR_ARCHIVE | CVAR_USERSAVE);
+    // [QL] quakelive_steam.exe 0x4cc2e9 registra 125 con rango 30-250. Aca el techo sube a 1000
+    // y 0 pasa a significar sin limite, que es lo que el limitador de abajo ya hacia con 0 y el
+    // rango de retail no dejaba pedir. El default sigue siendo 125.
+    //
+    // OJO: el limite de retail no es arbitrario. PM_Footsteps avanza el bobCycle con
+    // (int)(bobmove * pml.msec), asi que con msec de 1 o 2 el producto es menor que 1, se trunca
+    // a 0 y el ciclo se congela: se pierden los pasos y el bob del arma. Por eso esto va junto
+    // con el arrastre de la fraccion en bg_pmove.c; sin eso, subir el techo rompe los pasos.
+    com_maxfps = Cvar_GetRange("com_maxfps", "125", "0", "1000", CVAR_ARCHIVE | CVAR_USERSAVE);
 #endif
     com_blood = Cvar_Get("com_blood", "1", CVAR_ARCHIVE);
 
