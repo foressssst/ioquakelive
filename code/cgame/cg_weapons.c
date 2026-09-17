@@ -1553,16 +1553,21 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
         return;
     }
 
-    if (!ps) {
-        // add weapon ready sound
-        cent->pe.lightningFiring = qfalse;
-        if ((cent->currentState.eFlags & EF_FIRING) && weapon->firingSound) {
-            // lightning gun and guantlet make a different sound when fire is held down
-            trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin, weapon->firingSound);
-            cent->pe.lightningFiring = qtrue;
-        } else if (weapon->readySound) {
-            trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin, weapon->readySound);
+    // [ioquakelive] el flag se limpia siempre, tambien en primera persona. El bucle de sonido es
+    // solo para los demas -uno no se escucha a si mismo desde afuera-, pero el flag lo lee
+    // CG_FireWeapon para callar el disparo de un arma que ya suena sola, y si no se limpia acá se
+    // queda pegado desde la ultima vez que se vio a otro disparando. Ese era el motivo de que el
+    // puñetazo del gauntlet no sonara.
+    cent->pe.lightningFiring = qfalse;
+    if ((cent->currentState.eFlags & EF_FIRING) && weapon->firingSound) {
+        // lightning gun and guantlet make a different sound when fire is held down
+        if (!ps) {
+            trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin,
+                                   weapon->firingSound);
         }
+        cent->pe.lightningFiring = qtrue;
+    } else if (!ps && weapon->readySound) {
+        trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin, weapon->readySound);
     }
 
     // TODO [QL] the binary positions the gun with CG_PositionEntityOnTag(&gun, parent,
@@ -1587,6 +1592,17 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
     gun.backlerp = parent->backlerp;
 
     CG_BrightWeapon(&gun, weaponNum, cent->currentState.clientNum, ps ? BRIGHTWEAPON_OWN_VIEW : BRIGHTWEAPON_CARRIED);
+    // [ioquakelive] cg_drawGun 3 se llama "Transparent" y hasta ahora solo centraba el modelo, que
+    // es la mitad de lo que promete. El arma propia se dibuja translucida: se ve cual es y donde
+    // apunta sin tapar lo que hay detras. Solo la propia (ps); las de los demas no cambian. Va
+    // despues de CG_BrightWeapon a proposito, asi manda esta cuando las dos estan puestas.
+    if (ps && cg_drawGun.integer == 3) {
+        gun.customShader = cgs.media.transparentWeaponShader;
+        gun.shaderRGBA[0] = 150;
+        gun.shaderRGBA[1] = 160;
+        gun.shaderRGBA[2] = 170;  // un gris frio, que no compite con el mapa
+        gun.shaderRGBA[3] = 90;   // 35%: se lee la silueta sin estorbar la mira
+    }
     CG_AddWeaponWithPowerups(&gun, cent->currentState.powerups);
 
     // add the spinning barrel
@@ -2286,7 +2302,9 @@ void CG_FireWeapon(centity_t* cent) {
     if (ent->eFlags & EF_NODRAW) {
         nonPredictedCent = &cg_entities[ent->number];
     }
-    if (nonPredictedCent->pe.lightningFiring && !weap->loopFireSound) {
+    // [QL] 0x10053e2a: retail mira solo este flag. El gauntlet no entra porque su golpe es un
+    // disparo con su propio sonido, no el zumbido del lightning gun.
+    if (nonPredictedCent->pe.lightningFiring && ent->weapon != WP_GAUNTLET) {
         return;
     }
 
