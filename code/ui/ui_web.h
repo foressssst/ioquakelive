@@ -134,6 +134,7 @@ void SM_Pill(float x, float y, float w, float h, const float* color, const smRec
 void SM_Shadow(float x, float y, float w, float h, float r);
 void SM_FillScreen(const float* color);
 void SM_Pic(float x, float y, float w, float h, qhandle_t shader, const smRect_t* clip);
+void SM_PicColor(float x, float y, float w, float h, qhandle_t shader, const float* color, const smRect_t* clip);
 void SM_Arrow(float x, float y, qboolean up);
 void SM_Chevron(float x, float y, qboolean up, const float* color);
 void SM_Cross(float x, float y, float size, const float* color);
