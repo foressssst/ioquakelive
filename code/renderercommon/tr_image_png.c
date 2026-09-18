@@ -23,6 +23,52 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "../qcommon/puff.h"
 
+/*
+ *  [ioquakelive] Que memoria usa el decodificador y si puede hablar. En el hilo principal, la
+ *  del motor y con mensajes; en un trabajador, la del sistema y en silencio, porque ni el
+ *  reparto de memoria del motor ni la consola son seguros entre hilos. Es POR HILO: cada
+ *  trabajador marca la suya y no pisa a los demas.
+ */
+/*
+ *  La pregunta es "estoy en el hilo principal?". R_LoadPNG solo se llama desde ahi y anota su
+ *  identidad la primera vez. Se hace asi y no con una variable por hilo (__declspec(thread))
+ *  porque el renderer es un DLL cargado con LoadLibrary, y los hilos que ya existian antes de
+ *  cargarlo -- el principal y los trabajadores -- no siempre tienen garantizado ese espacio.
+ *  windows.h no se incluye porque choca con los tipos del motor; se declara a mano la unica
+ *  funcion que hace falta.
+ */
+#ifdef _WIN32
+__declspec(dllimport) unsigned long __stdcall GetCurrentThreadId(void);
+typedef unsigned long pngThreadId_t;
+#define PNG_CurrentThread() GetCurrentThreadId()
+#define PNG_SameThread(a, b) ((a) == (b))
+#else
+#include <pthread.h>
+typedef pthread_t pngThreadId_t;
+#define PNG_CurrentThread() pthread_self()
+#define PNG_SameThread(a, b) pthread_equal((a), (b))
+#endif
+
+static pngThreadId_t pngMainThread;
+static qboolean pngMainThreadKnown;
+
+// en un trabajador: memoria del sistema y en silencio
+static qboolean PNG_IsWorker(void) {
+    return (qboolean)(pngMainThreadKnown && !PNG_SameThread(PNG_CurrentThread(), pngMainThread));
+}
+
+static void* PNG_Malloc(int size) {
+    return PNG_IsWorker() ? malloc(size) : ri.Malloc(size);
+}
+
+static void PNG_Free(void* block) {
+    if (PNG_IsWorker()) {
+        free(block);
+    } else {
+        ri.Free(block);
+    }
+}
+
 // we could limit the png size to a lower value here
 #ifndef INT_MAX
 #define INT_MAX 0x1fffffff
@@ -202,6 +248,7 @@ struct BufferedFile {
     int Length;
     byte* Ptr;
     int BytesLeft;
+    qboolean Borrowed;  // [ioquakelive] el buffer es de quien lo presto: no se suelta aqui
 };
 
 /*
@@ -227,7 +274,7 @@ static struct BufferedFile* ReadBufferedFile(const char* name) {
      *  Allocate control struct.
      */
 
-    BF = ri.Malloc(sizeof(struct BufferedFile));
+    BF = PNG_Malloc(sizeof(struct BufferedFile));
     if (!BF) {
         return (NULL);
     }
@@ -240,6 +287,7 @@ static struct BufferedFile* ReadBufferedFile(const char* name) {
     BF->Buffer = NULL;
     BF->Ptr = NULL;
     BF->BytesLeft = 0;
+    BF->Borrowed = qfalse;
 
     /*
      *  Read the file.
@@ -253,7 +301,7 @@ static struct BufferedFile* ReadBufferedFile(const char* name) {
      */
 
     if (!(BF->Buffer && (BF->Length > 0))) {
-        ri.Free(BF);
+        PNG_Free(BF);
 
         return (NULL);
     }
@@ -272,13 +320,32 @@ static struct BufferedFile* ReadBufferedFile(const char* name) {
  *  Close a buffered file.
  */
 
+// [ioquakelive] un archivo que ya esta en memoria, prestado: lo suelta quien lo presto
+static struct BufferedFile* WrapBufferedFile(byte* data, int length) {
+    struct BufferedFile* BF;
+
+    if (!data || length <= 0) {
+        return NULL;
+    }
+    BF = PNG_Malloc(sizeof(struct BufferedFile));
+    if (!BF) {
+        return NULL;
+    }
+    BF->Buffer = data;
+    BF->Length = length;
+    BF->Ptr = data;
+    BF->BytesLeft = length;
+    BF->Borrowed = qtrue;
+    return BF;
+}
+
 static void CloseBufferedFile(struct BufferedFile* BF) {
     if (BF) {
-        if (BF->Buffer) {
+        if (BF->Buffer && !BF->Borrowed) {
             ri.FS_FreeFile(BF->Buffer);
         }
 
-        ri.Free(BF);
+        PNG_Free(BF);
     }
 }
 
@@ -585,7 +652,7 @@ static uint32_t DecompressIDATs(struct BufferedFile* BF, uint8_t** Buffer) {
 
     BufferedFileRewind(BF, BytesToRewind);
 
-    CompressedData = ri.Malloc(CompressedDataLength);
+    CompressedData = PNG_Malloc(CompressedDataLength);
     if (!CompressedData) {
         return (-1);
     }
@@ -603,7 +670,7 @@ static uint32_t DecompressIDATs(struct BufferedFile* BF, uint8_t** Buffer) {
 
         CH = BufferedFileRead(BF, PNG_ChunkHeader_Size);
         if (!CH) {
-            ri.Free(CompressedData);
+            PNG_Free(CompressedData);
 
             return (-1);
         }
@@ -634,13 +701,13 @@ static uint32_t DecompressIDATs(struct BufferedFile* BF, uint8_t** Buffer) {
 
             OrigCompressedData = BufferedFileRead(BF, Length);
             if (!OrigCompressedData) {
-                ri.Free(CompressedData);
+                PNG_Free(CompressedData);
 
                 return (-1);
             }
 
             if (!BufferedFileSkip(BF, PNG_ChunkCRC_Size)) {
-                ri.Free(CompressedData);
+                PNG_Free(CompressedData);
 
                 return (-1);
             }
@@ -670,7 +737,7 @@ static uint32_t DecompressIDATs(struct BufferedFile* BF, uint8_t** Buffer) {
 
     puffResult = puff(puffDest, &puffDestLen, puffSrc, &puffSrcLen);
     if (!((puffResult == 0) && (puffDestLen > 0))) {
-        ri.Free(CompressedData);
+        PNG_Free(CompressedData);
 
         return (-1);
     }
@@ -679,9 +746,9 @@ static uint32_t DecompressIDATs(struct BufferedFile* BF, uint8_t** Buffer) {
      *  Allocate the buffer for the uncompressed data.
      */
 
-    DecompressedData = ri.Malloc(puffDestLen);
+    DecompressedData = PNG_Malloc(puffDestLen);
     if (!DecompressedData) {
-        ri.Free(CompressedData);
+        PNG_Free(CompressedData);
 
         return (-1);
     }
@@ -704,14 +771,14 @@ static uint32_t DecompressIDATs(struct BufferedFile* BF, uint8_t** Buffer) {
      *  The compressed data is not needed anymore.
      */
 
-    ri.Free(CompressedData);
+    PNG_Free(CompressedData);
 
     /*
      *  Check if the last puff() was successful.
      */
 
     if (!((puffResult == 0) && (puffDestLen > 0))) {
-        ri.Free(DecompressedData);
+        PNG_Free(DecompressedData);
 
         return (-1);
     }
@@ -1708,7 +1775,8 @@ static qboolean DecodeImageInterlaced(struct PNG_Chunk_IHDR* IHDR,
  *  The PNG loader
  */
 
-void R_LoadPNG(const char* name, byte** pic, int* width, int* height) {
+static void R_DecodePNGInternal(const char* name, byte* fileData, int fileLen, byte** pic, int* width,
+                                int* height) {
     struct BufferedFile* ThePNG;
     byte* OutBuffer;
     uint8_t* Signature;
@@ -1763,7 +1831,8 @@ void R_LoadPNG(const char* name, byte** pic, int* width, int* height) {
      *  Read the file.
      */
 
-    ThePNG = ReadBufferedFile(name);
+    // [ioquakelive] el archivo viene prestado (un trabajador) o se lee aqui (el hilo principal)
+    ThePNG = fileData ? WrapBufferedFile(fileData, fileLen) : ReadBufferedFile(name);
     if (!ThePNG) {
         return;
     }
@@ -1857,7 +1926,9 @@ void R_LoadPNG(const char* name, byte** pic, int* width, int* height) {
     if (!((IHDR_Width > 0) && (IHDR_Height > 0)) || IHDR_Width > INT_MAX / Q3IMAGE_BYTESPERPIXEL / IHDR_Height) {
         CloseBufferedFile(ThePNG);
 
-        ri.Printf(PRINT_WARNING, "%s: invalid image size\n", name);
+        if (!PNG_IsWorker()) {
+            ri.Printf(PRINT_WARNING, "%s: invalid image size\n", name);
+        }
 
         return;
     }
@@ -2165,9 +2236,9 @@ void R_LoadPNG(const char* name, byte** pic, int* width, int* height) {
      *  Allocate output buffer.
      */
 
-    OutBuffer = ri.Malloc(IHDR_Width * IHDR_Height * Q3IMAGE_BYTESPERPIXEL);
+    OutBuffer = PNG_Malloc(IHDR_Width * IHDR_Height * Q3IMAGE_BYTESPERPIXEL);
     if (!OutBuffer) {
-        ri.Free(DecompressedData);
+        PNG_Free(DecompressedData);
         CloseBufferedFile(ThePNG);
 
         return;
@@ -2180,8 +2251,8 @@ void R_LoadPNG(const char* name, byte** pic, int* width, int* height) {
     switch (IHDR->InterlaceMethod) {
         case PNG_InterlaceMethod_NonInterlaced: {
             if (!DecodeImageNonInterlaced(IHDR, OutBuffer, DecompressedData, DecompressedDataLength, HasTransparentColour, TransparentColour, OutPal)) {
-                ri.Free(OutBuffer);
-                ri.Free(DecompressedData);
+                PNG_Free(OutBuffer);
+                PNG_Free(DecompressedData);
                 CloseBufferedFile(ThePNG);
 
                 return;
@@ -2192,8 +2263,8 @@ void R_LoadPNG(const char* name, byte** pic, int* width, int* height) {
 
         case PNG_InterlaceMethod_Interlaced: {
             if (!DecodeImageInterlaced(IHDR, OutBuffer, DecompressedData, DecompressedDataLength, HasTransparentColour, TransparentColour, OutPal)) {
-                ri.Free(OutBuffer);
-                ri.Free(DecompressedData);
+                PNG_Free(OutBuffer);
+                PNG_Free(DecompressedData);
                 CloseBufferedFile(ThePNG);
 
                 return;
@@ -2203,8 +2274,8 @@ void R_LoadPNG(const char* name, byte** pic, int* width, int* height) {
         }
 
         default: {
-            ri.Free(OutBuffer);
-            ri.Free(DecompressedData);
+            PNG_Free(OutBuffer);
+            PNG_Free(DecompressedData);
             CloseBufferedFile(ThePNG);
 
             return;
@@ -2233,11 +2304,43 @@ void R_LoadPNG(const char* name, byte** pic, int* width, int* height) {
      *  DecompressedData is not needed anymore.
      */
 
-    ri.Free(DecompressedData);
+    PNG_Free(DecompressedData);
 
     /*
      *  We have all data, so close the file.
      */
 
     CloseBufferedFile(ThePNG);
+}
+
+/*
+=============
+R_LoadPNG / R_DecodePNG
+
+[ioquakelive] R_LoadPNG es el camino de siempre: lee el archivo y lo decodifica aqui. R_DecodePNG
+decodifica uno que ya esta en memoria, y es lo que corre en un trabajador; ver el comentario de
+PNG_Malloc.
+=============
+*/
+void R_LoadPNG(const char* name, byte** pic, int* width, int* height) {
+    // R_LoadPNG solo se llama desde el hilo principal: aqui se anota cual es
+    if (!pngMainThreadKnown) {
+        pngMainThread = PNG_CurrentThread();
+        pngMainThreadKnown = qtrue;
+    }
+    R_DecodePNGInternal(name, NULL, 0, pic, width, height);
+    if (pic && *pic) {
+        // para la lista de carga del mapa: el nombre real, con su extension
+        Q_strncpyz(r_lastImageName, name, sizeof(r_lastImageName));
+    }
+}
+
+void R_DecodePNG(byte* fileData, int fileLen, const char* name, byte** pic, int* width, int* height) {
+    // si todavia no se anoto el hilo principal, no se puede saber de quien es la memoria: mejor
+    // no decodificar aqui y dejar que el hilo principal lo cargue por el camino de siempre
+    if (!pngMainThreadKnown) {
+        *pic = NULL;
+        return;
+    }
+    R_DecodePNGInternal(name, fileData, fileLen, pic, width, height);
 }
