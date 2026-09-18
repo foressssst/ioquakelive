@@ -656,6 +656,42 @@ static int CG_CalcFov(void) {
 
 /*
 ===============
+CG_ScreenDamageColor
+
+[QL] 0x10043290. Cual de los tres colores de tinte toca, ya con el alfa metido en el byte bajo.
+
+  cg_screenDamage_Self   cuando el daño es de uno mismo; su default es 0, o sea sin tinte
+  cg_screenDamage_Team   cuando pega un companero
+  cg_screenDamage        el resto
+
+El binario mezcla el color y el alfa asi (0x100432c3): (alfa ^ color) & 0xff ^ color, que es
+quedarse con los 24 bits altos del color y los 8 bajos del alfa.
+===============
+*/
+static int CG_ScreenDamageColor(void) {
+    int attacker = cg.snap->ps.persistant[PERS_ATTACKER];
+    int color, alpha;
+
+    if (attacker == cg.snap->ps.clientNum) {
+        color = cg_screenDamage_Self.integer;
+        alpha = cg_screenDamageAlpha.integer;
+    } else if (attacker >= 0 && attacker < MAX_CLIENTS && cgs.gametype >= GT_TEAM &&
+               cgs.clientinfo[attacker].team == cgs.clientinfo[cg.snap->ps.clientNum].team) {
+        color = cg_screenDamage_Team.integer;
+        alpha = cg_screenDamageAlpha_Team.integer;
+    } else {
+        color = cg_screenDamage.integer;
+        alpha = cg_screenDamageAlpha.integer;
+    }
+
+    if (!color) {
+        return 0;
+    }
+    return (color & ~0xff) | (alpha & 0xff);
+}
+
+/*
+===============
 CG_DamageBlendBlob
 
 ===============
@@ -708,10 +744,22 @@ static void CG_DamageBlendBlob(void) {
     // damage tint is what a stock Quake Live actually draws, and the blood version is the
     // opt-in. This is the same asset-presence switch that decides gibs in CG_GibPlayer.
     ent.customShader = cgs.media.bloodSprayShaders[0] ? cgs.media.viewBloodShader : cgs.media.viewDamageShader;
-    ent.shaderRGBA[0] = 255;
-    ent.shaderRGBA[1] = 255;
-    ent.shaderRGBA[2] = 255;
-    ent.shaderRGBA[3] = 200 * (1.0 - ((float)t / maxTime));
+
+    // [QL] 0x1004da94: el color sale de la cvar, no es blanco. La textura del tinte es gris y
+    // su shader lleva rgbGen entity, asi que pintarla en blanco la dejaba blanca -- que es
+    // justo lo que se veia. El dword es 0xRRGGBBAA y se reparte byte a byte; el alfa ademas
+    // se apaga con el tiempo.
+    {
+        int color = CG_ScreenDamageColor();
+
+        if (!color) {
+            return;  // un color en cero es "sin tinte", como el default de cg_screenDamage_Self
+        }
+        ent.shaderRGBA[0] = (byte)((color >> 24) & 0xff);
+        ent.shaderRGBA[1] = (byte)((color >> 16) & 0xff);
+        ent.shaderRGBA[2] = (byte)((color >> 8) & 0xff);
+        ent.shaderRGBA[3] = (byte)((color & 0xff) * (1.0f - ((float)t / maxTime)));
+    }
     trap_R_AddRefEntityToScene(&ent);
 }
 
