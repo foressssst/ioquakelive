@@ -84,6 +84,10 @@ cvar_t* com_protocol;
 cvar_t* com_basegame;
 cvar_t* com_homepath;
 cvar_t* com_busyWait;
+// [ioquakelive] el ritmo exacto de los frames, en microsegundos; 0 vuelve al de antes
+cvar_t* com_preciseFrameTiming;
+static int64_t com_frameTargetUs;
+static void Com_FrameTimes_f(void);
 #ifndef DEDICATED
 cvar_t* cl_allowConsoleChat;
 cvar_t* com_allowConsole;
@@ -2565,6 +2569,7 @@ void Com_Init(char* commandLine) {
         Cmd_AddCommand("freeze", Com_Freeze_f);
     }
     Cmd_AddCommand("quit", Com_Quit_f);
+    Cmd_AddCommand("frametimes", Com_FrameTimes_f);
     Cmd_AddCommand("changeVectors", MSG_ReportChangeVectors_f);
     Cmd_AddCommand("writeconfig", Com_WriteConfig_f);
     Cmd_SetCommandCompletionFunc("writeconfig", Cmd_CompleteCfgName);
@@ -2641,6 +2646,7 @@ void Com_Init(char* commandLine) {
     com_maxfpsMinimized = Cvar_Get("com_maxfpsMinimized", "10", CVAR_ARCHIVE);
     com_abnormalExit = Cvar_Get("com_abnormalExit", "0", CVAR_ROM);
     com_busyWait = Cvar_Get("com_busyWait", "0", CVAR_ARCHIVE);
+    com_preciseFrameTiming = Cvar_Get("com_preciseFrameTiming", "1", CVAR_ARCHIVE);
     Cvar_Get("com_errorMessage", "", CVAR_ROM | CVAR_NORESTART);
 
     s = va("%s %s %s", FULL_PRODUCT_VERSION, PLATFORM_STRING, PRODUCT_DATE);
@@ -2974,12 +2980,100 @@ int Com_TimeVal(int minMsec) {
 
 /*
 =================
+Com_FrameTimes_f
+
+[ioquakelive] /frametimes [n]: mide n intervalos reales entre frames, en microsegundos, y saca
+el reparto. Es el unico instrumento con el que se puede afirmar que algo mejoro la fluidez:
+com_speeds mide el trabajo de cada frame -- y en milisegundos enteros -- no lo que tarda un
+frame respecto del anterior, que es lo que se siente.
+=================
+*/
+#define COM_FT_MAX 8192
+
+static int64_t com_ftSamples[COM_FT_MAX];
+static int64_t com_ftLast;
+static int com_ftWanted;
+static int com_ftCount;
+
+static int Com_FtCompare(const void* a, const void* b) {
+    int64_t x = *(const int64_t*)a;
+    int64_t y = *(const int64_t*)b;
+
+    return (x > y) - (x < y);
+}
+
+static void Com_FrameTimesReport(void) {
+    static int64_t sorted[COM_FT_MAX];
+    int64_t total = 0, deviation = 0;
+    float average;
+    int i;
+
+    for (i = 0; i < com_ftCount; i++) {
+        total += com_ftSamples[i];
+    }
+    average = (float)total / com_ftCount;
+    for (i = 0; i < com_ftCount; i++) {
+        deviation += com_ftSamples[i] > average ? com_ftSamples[i] - (int64_t)average
+                                                : (int64_t)average - com_ftSamples[i];
+    }
+    Com_Memcpy(sorted, com_ftSamples, com_ftCount * sizeof(sorted[0]));
+    qsort(sorted, com_ftCount, sizeof(sorted[0]), Com_FtCompare);
+
+    Com_Printf("frametimes: %i frames in %.3f s\n", com_ftCount, total / 1000000.0f);
+    Com_Printf("  average %.2f ms (%.1f fps)   min %.2f   max %.2f\n", average / 1000.0f,
+               1000000.0f / average, sorted[0] / 1000.0f, sorted[com_ftCount - 1] / 1000.0f);
+    Com_Printf("  median %.2f   1%% worst %.2f   jitter %.2f ms\n",
+               sorted[com_ftCount / 2] / 1000.0f, sorted[com_ftCount - 1 - com_ftCount / 100] / 1000.0f,
+               (float)deviation / com_ftCount / 1000.0f);
+}
+
+static void Com_FrameTimes_f(void) {
+    int wanted = 600;
+
+    if (Cmd_Argc() > 1) {
+        wanted = atoi(Cmd_Argv(1));
+    }
+    if (wanted < 10) {
+        wanted = 10;
+    }
+    if (wanted > COM_FT_MAX) {
+        wanted = COM_FT_MAX;
+    }
+    com_ftWanted = wanted;
+    com_ftCount = 0;
+    com_ftLast = 0;
+    Com_Printf("frametimes: measuring %i frames...\n", wanted);
+}
+
+// se llama una vez por frame mientras haya medicion pedida
+static void Com_FrameTimeSample(void) {
+    int64_t now;
+
+    if (!com_ftWanted) {
+        return;
+    }
+    now = Sys_Microseconds();
+    if (com_ftLast) {
+        com_ftSamples[com_ftCount++] = now - com_ftLast;
+    }
+    com_ftLast = now;
+    if (com_ftCount >= com_ftWanted) {
+        Com_FrameTimesReport();
+        com_ftWanted = 0;
+        com_ftCount = 0;
+        com_ftLast = 0;
+    }
+}
+
+/*
+=================
 Com_Frame
 =================
 */
 void Com_Frame(void) {
     int msec, minMsec;
     int timeVal, timeValSV;
+    int capUs;
     static int lastTime = 0, bias = 0;
 
     int timeBeforeFirstEvents;
@@ -3009,17 +3103,23 @@ void Com_Frame(void) {
     }
 
     // Figure out how much time we have
+    // [ioquakelive] capUs es el mismo limite en microsegundos, exacto: 125 fps son 8000 us, no
+    // "1000/125 redondeado". Vale 0 cuando no hay limite.
+    capUs = 0;
     if (!com_timedemo->integer) {
         if (com_dedicated->integer)
             minMsec = SV_FrameMsec();
         else {
-            if (com_minimized->integer && com_maxfpsMinimized->integer > 0)
+            if (com_minimized->integer && com_maxfpsMinimized->integer > 0) {
                 minMsec = 1000 / com_maxfpsMinimized->integer;
-            else if (com_unfocused->integer && com_maxfpsUnfocused->integer > 0)
+                capUs = 1000000 / com_maxfpsMinimized->integer;
+            } else if (com_unfocused->integer && com_maxfpsUnfocused->integer > 0) {
                 minMsec = 1000 / com_maxfpsUnfocused->integer;
-            else if (com_maxfps->integer > 0)
+                capUs = 1000000 / com_maxfpsUnfocused->integer;
+            } else if (com_maxfps->integer > 0) {
                 minMsec = 1000 / com_maxfps->integer;
-            else
+                capUs = 1000000 / com_maxfps->integer;
+            } else
                 minMsec = 1;
 
             timeVal = com_frameTime - lastTime;
@@ -3035,22 +3135,63 @@ void Com_Frame(void) {
     } else
         minMsec = 1;
 
-    do {
-        if (com_sv_running->integer) {
-            timeValSV = SV_SendQueuedPackets();
+    // [ioquakelive] El ritmo exacto. El camino de abajo apunta a un instante redondeado a
+    // milisegundos, asi que a 125 fps los frames salen de 8 y de 9 ms mezclados. Aqui el objetivo
+    // se lleva en microsegundos y se acumula, de modo que no arrastra deriva: si un frame se pasa,
+    // el siguiente se acorta solo. Se duerme el grueso -- NET_Sleep ademas atiende la red, por eso
+    // no se usa Sys_Sleep -- y el ultimo milisegundo y medio se gira, que es lo que el motor ya
+    // hacia. com_preciseFrameTiming 0 vuelve al camino anterior.
+    if (com_preciseFrameTiming->integer && capUs > 1000) {
+        int64_t nowUs = Sys_Microseconds();
 
-            timeVal = Com_TimeVal(minMsec);
+        // un salto grande (cargar un mapa, minimizar, cambiar el limite) reinicia el ritmo
+        if (!com_frameTargetUs || nowUs - com_frameTargetUs > 250000 ||
+            com_frameTargetUs - nowUs > 250000) {
+            com_frameTargetUs = nowUs;
+        }
+        com_frameTargetUs += capUs;
 
-            if (timeValSV < timeVal)
-                timeVal = timeValSV;
-        } else
-            timeVal = Com_TimeVal(minMsec);
+        for (;;) {
+            int64_t remainUs;
+            int sleepMs;
 
-        if (com_busyWait->integer || timeVal < 1)
-            NET_Sleep(0);
-        else
-            NET_Sleep(timeVal - 1);
-    } while (Com_TimeVal(minMsec));
+            timeValSV = com_sv_running->integer ? SV_SendQueuedPackets() : 0;
+
+            remainUs = com_frameTargetUs - Sys_Microseconds();
+            if (remainUs <= 0)
+                break;
+
+            sleepMs = (int)((remainUs - 1500) / 1000);
+            if (com_sv_running->integer && timeValSV < sleepMs)
+                sleepMs = timeValSV;
+
+            if (com_busyWait->integer || sleepMs < 1)
+                NET_Sleep(0);
+            else
+                NET_Sleep(sleepMs);
+        }
+    } else {
+        com_frameTargetUs = 0;
+
+        do {
+            if (com_sv_running->integer) {
+                timeValSV = SV_SendQueuedPackets();
+
+                timeVal = Com_TimeVal(minMsec);
+
+                if (timeValSV < timeVal)
+                    timeVal = timeValSV;
+            } else
+                timeVal = Com_TimeVal(minMsec);
+
+            if (com_busyWait->integer || timeVal < 1)
+                NET_Sleep(0);
+            else
+                NET_Sleep(timeVal - 1);
+        } while (Com_TimeVal(minMsec));
+    }
+
+    Com_FrameTimeSample();
 
     IN_Frame();
 
