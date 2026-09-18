@@ -758,52 +758,63 @@ THE PAGE
 ===============================================================================
 */
 
-// what each of the two choices carries: its name over it and the word that changes it,
-// on the page itself rather than on a card of its own
 // [ioquakelive] The user, 2026-09-16: "el boton change es redundante, ya con hacer click en
 // cualquier lado de esa seccion vas a la sub seccion". The card lights up under the pointer and
 // its whole area is the hit, so the button said nothing the card did not.
-static void SM_DrawCardFrame(float x, float y, float h, const char* label, qboolean over) {
-    if (over) {
-        SM_Fill(x, y, SM_COL_W, h, smRaised, NULL);
-    }
-    SM_Label(x + SM_PAD, SM_Baseline(FONT_SANS, 11, y + 20, 16), 11, over ? smGold : smMuted, label, 1.6f);
+//
+// [ioquakelive] 2026-09-18: las dos elecciones son tarjetas de verdad dentro de su panel, como el
+// indice de Patch Notes, con su titulo encima. Antes eran media columna cada una con el contenido
+// centrado en el medio, y quedaba un icono chico rodeado de hueco.
+#define SM_PANEL_IN 20.0f   // lo que los paneles dejan de margen por dentro
+#define SM_CARD_PAD 12.0f
+#define SM_EYEBROW_H 26.0f  // el titulo chico sobre cada tarjeta
+
+// the small title over each choice, gold while the pointer is on its card
+static void SM_DrawChoiceTitle(float x, float y, const char* label, qboolean over) {
+    SM_Label(x + 4, SM_Baseline(FONT_SANS, 11, y, 16), 11, over ? smGold : smMuted, label, 1.6f);
 }
 
-static void SM_DrawGametypeCard(float x, float y, float h) {
+static float SM_DrawGametypeCard(float x, float y, float w) {
     const smFactory_t* factory = SM_Factory(sm.selectedFactory);
     const smGametype_t* gt = SM_Gametype(factory ? factory->basegt : -1);
     qboolean over = SM_Over(SM_HIT_GAMETYPE_CARD, 0);
-    float middle = x + SM_COL_W * 0.5f;
-    float top = y + (h - 150.0f) * 0.5f - 6;
+    float h = 88.0f;
+    float icon = 56.0f;
+    float tx = x + SM_CARD_PAD + 4 + icon + 16;
     const char* line = "";
 
-    SM_DrawCardFrame(x, y, h, "Game Type", over);
-    SM_Pic(middle - 32, top, 64, 64, SM_GametypeIcon(gt), NULL);
-    SM_Label(middle - SM_LabelWidth(22, gt->title, 0.0f) * 0.5f, SM_Baseline(FONT_SANS, 22, top + 76, 30), 22, smText,
-             gt->title, 0.0f);
+    SM_DrawChoiceTitle(x, y, "Game Type", over);
+    y += SM_EYEBROW_H;
+    SM_Round(x, y, w, h, SM_RADIUS_MD, over ? smRaised : smPage, NULL);
+    SM_Pic(x + SM_CARD_PAD + 4, y + (h - icon) * 0.5f, icon, icon, SM_GametypeIcon(gt), NULL);
+    SM_Label(tx, SM_Baseline(FONT_SANS, 20, y + 18, 28), 20, over ? smGold : smText, gt->title, 0.2f);
     // the factory's title, or "Default" when it is the gametype's
     if (factory) {
         line = strcmp(gt->title, factory->title) ? factory->title : "Default";
     }
-    SM_Centered(middle, SM_Baseline(FONT_SANS, 15, top + 110, 22), 15, smMuted, line, qfalse);
-    SM_Hit(x, y, SM_COL_W, h, SM_HIT_GAMETYPE_CARD, 0, NULL);
+    SM_Text(tx, SM_Baseline(FONT_SANS, 14, y + 48, 20), FONT_SANS, 14, smMuted, line,
+            SM_Fit(FONT_SANS, 14, line, x + w - SM_CARD_PAD - tx), qfalse);
+    SM_Hit(x, y, w, h, SM_HIT_GAMETYPE_CARD, 0, NULL);
+    return SM_EYEBROW_H + h;
 }
 
-static void SM_DrawArenaCard(float x, float y, float h) {
+static float SM_DrawArenaCard(float x, float y, float w) {
     smArena_t* arena = SM_Arena(sm.selectedMap);
     qboolean over = SM_Over(SM_HIT_ARENA_CARD, 0);
-    float middle = x + SM_COL_W * 0.5f;
-    float picW = 224, picH = 126;
-    float top = y + (h - (picH + 44)) * 0.5f - 4;
+    float picW = w - 2 * SM_CARD_PAD;
+    float picH = picW * 9.0f / 16.0f;  // the levelshots are 16:9
+    float h = SM_CARD_PAD + picH + 48.0f;
 
-    SM_DrawCardFrame(x, y, h, "Map", over);
-    SM_Pic(middle - picW * 0.5f, top, picW, picH, SM_Preview(arena, sm.selectedMap), NULL);
+    SM_DrawChoiceTitle(x, y, "Map", over);
+    y += SM_EYEBROW_H;
+    SM_Round(x, y, w, h, SM_RADIUS_MD, over ? smRaised : smPage, NULL);
+    SM_Pic(x + SM_CARD_PAD, y + SM_CARD_PAD, picW, picH, SM_Preview(arena, sm.selectedMap), NULL);
     if (arena) {
-        SM_Label(middle - SM_LabelWidth(20, arena->name, 0.2f) * 0.5f, SM_Baseline(FONT_SANS, 20, top + picH + 12, 28),
-                 20, smText, arena->name, 0.2f);
+        SM_Label(x + SM_CARD_PAD + 4, SM_Baseline(FONT_SANS, 18, y + SM_CARD_PAD + picH + 10, 28), 18,
+                 over ? smGold : smText, arena->name, 0.2f);
     }
-    SM_Hit(x, y, SM_COL_W, h, SM_HIT_ARENA_CARD, 0, NULL);
+    SM_Hit(x, y, w, h, SM_HIT_ARENA_CARD, 0, NULL);
+    return SM_EYEBROW_H + h;
 }
 
 // a text input: a field, the text from 12 in, and a steady caret while typing
@@ -930,65 +941,97 @@ static float SM_DrawRow(int i, float x, float y) {
     return h;
 }
 
-static void SM_DrawLaunch(float x, float y, float w) {
+// [ioquakelive] La accion de la pagina va arriba a la derecha, en la cabecera, que es donde
+// Settings pone Apply Video Settings. Antes era una barra crema a todo lo ancho del pie, y pesaba
+// mas que el resto de la pagina junto.
+static void SM_DrawLaunch(float headerY) {
+    float w = SM_ButtonWidth("Launch Match", SM_BUTTON_H) + 16;
+    float x = UI_Home_Left() + HM_CONTAINER_W - 25 - w;
+    float y = headerY + (72.0f - SM_BUTTON_H) * 0.5f;
     qboolean over = SM_Over(SM_HIT_LAUNCH, 0);
 
-    SM_Button(x, y, w, SM_LAUNCH_H, "Launch Match", SM_BUTTON_PRIMARY, over);
-    SM_Hit(x, y, w, SM_LAUNCH_H, SM_HIT_LAUNCH, 0, NULL);
+    SM_Button(x, y, w, SM_BUTTON_H, "Launch Match", SM_BUTTON_PRIMARY, over);
+    SM_Hit(x, y, w, SM_BUTTON_H, SM_HIT_LAUNCH, 0, NULL);
+}
+
+// [ioquakelive] Las opciones van en tarjetas de subseccion con su titulo en dorado, como en
+// Settings. Cada tarjeta junta filas vecinas en la lista de retail, asi que el orden no cambia.
+// Ademas arregla el slider: su carril vacio es smField, igual que el panel, y solo se ve sobre
+// una tarjeta mas oscura, que es como lo tiene Settings.
+static const struct {
+    const char* title;
+    int first, last;
+} smGroups[] = {
+    {"Match", SM_HOSTNAME, SM_SERVERTYPE},
+    {"Players", SM_MAXCLIENTS, SM_TEAMSIZE},
+    {"Server", SM_PASSWORD, SM_MAPPOOL},
+};
+
+#define SM_GROUP_HEAD 40.0f  // el titulo dorado de la tarjeta
+#define SM_GROUP_FOOT 10.0f
+#define SM_GROUP_GAP 16.0f
+#define SM_ROW_H 50.0f
+#define SM_NOTE_H 36.0f      // la nota del puerto bajo Match Type, cuando es Internet
+
+static qboolean SM_ShowPortNote(void) {
+    return SM_Equals(SM_Value(SM_SERVERTYPE), 2);
 }
 
 static void SM_DrawPage(void) {
     float page = UI_Home_Left();
-    float top, optX, rowsTop, y, panelH, cardH, contentH, inset;
-    int i;
+    float top, bottom, optX, rowX, y;
+    int g, i;
 
     // the page sits in the front end's frame, under its top row
     UI_Home_Backdrop();
     UI_Home_PageTop(HM_NAV_PLAY);
 
-    // how tall the options make the page, so the whole block can be centred
-    y = 0;
-    for (i = 0; i < SM_NUM_CVARS; i++) {
-        y += 50.0f;
-        if (i == SM_SERVERTYPE && SM_Equals(SM_Value(i), 2)) {
-            y += 36;
-        }
-    }
-    contentH = y + (SM_PAD - 6) + 20 + SM_LAUNCH_H + SM_PAD - 6;
-    // [ioquakelive] La pagina se ancla bajo la barra y su panel baja hasta el borde, que es como
-    // estan Patch Notes y Settings, las dos que mejor quedaron. Antes el bloque flotaba centrado a
-    // media pantalla: eso venia de un pedido anterior -"no es extenderla, es centrarla"- que era
-    // sobre el contenedor a lo ancho, y se aplico tambien a lo alto. El resultado no se veia al
-    // nivel de las otras, asi que toda la UI usa ahora el mismo esqueleto.
-    inset = 0.0f;
+    // [ioquakelive] 2026-09-18: el esqueleto de Patch Notes. La cabecera con la accion a la
+    // derecha, y debajo dos paneles que bajan hasta el borde del marco. El comentario que habia
+    // aqui ya decia que el panel "baja hasta el borde", pero su alto era el del contenido y
+    // terminaba a media pantalla: por eso quedaba ese hueco abajo.
     top = UI_Home_Header(HM_NAV_H, NULL, "Start Match") + HM_PANEL_GAP;
-    panelH = contentH;
-    cardH = panelH * 0.5f;
+    bottom = UI_Home_FrameBottom();
+    SM_DrawLaunch(HM_NAV_H);
+
+    // the choices, in a panel of their own, like Patch Notes' index
+    SM_Round(page, top, SM_COL_W, bottom - top, SM_RADIUS_MD, smPanel, NULL);
+    y = top + SM_PANEL_IN + 6;
+    y += SM_DrawGametypeCard(page + SM_PANEL_IN, y, SM_COL_W - 2 * SM_PANEL_IN);
+    y += 28;
+    SM_DrawArenaCard(page + SM_PANEL_IN, y, SM_COL_W - 2 * SM_PANEL_IN);
+
+    // the options, in Settings' subsection cards
     optX = page + SM_OPT_X;
-    rowsTop = top + inset + SM_PAD - 6;
+    rowX = optX + SM_PAD;
+    SM_Round(optX, top, SM_OPT_W, bottom - top, SM_RADIUS_MD, smPanel, NULL);
+    y = top + SM_PANEL_IN;
+    for (g = 0; g < (int)ARRAY_LEN(smGroups); g++) {
+        float h = SM_GROUP_HEAD + SM_GROUP_FOOT;
 
-    // one panel holds the whole page: the choices at the left, the options at the right
-    SM_Round(page, top, SM_OPT_X + SM_OPT_W, panelH, SM_RADIUS_MD, smPanel, NULL);
-    SM_Fill(page + SM_COL_W + 8, top + 18, 1, panelH - 36, smBorder, NULL);
-    y = rowsTop;
-    for (i = 0; i < SM_NUM_CVARS; i++) {
-        y += SM_DrawRow(i, optX + SM_PAD, y);
-        // p.lan follows the match type when it is Internet, one more of the rows' siblings
-        if (i == SM_SERVERTYPE && SM_Equals(SM_Value(i), 2)) {
-            char note[128];
-
-            Com_sprintf(note, sizeof(note),
-                        "To host public Internet servers, you will need to forward UDP port %s to your machine.",
-                        sm.netPort);
-            SM_Text(optX + SM_PAD + 12, SM_Baseline(FONT_SANS, 13, y, 30), FONT_SANS, 13, smMuted, note,
-                    SM_Fit(FONT_SANS, 13, note, SM_ROW_W - 24), qfalse);
-            y += 36;
+        for (i = smGroups[g].first; i <= smGroups[g].last; i++) {
+            h += SM_ROW_H + (i == SM_SERVERTYPE && SM_ShowPortNote() ? SM_NOTE_H : 0);
         }
-    }
-    SM_DrawLaunch(optX + SM_PAD, top + panelH - SM_PAD - SM_LAUNCH_H + 6, SM_ROW_W);
+        SM_Round(rowX - 10, y, SM_ROW_W + 20, h, SM_RADIUS_MD, smPage, NULL);
+        SM_Label(rowX + 12, SM_Baseline(FONT_SANS, 11, y + 12, 18), 11, smGold, smGroups[g].title, 1.6f);
+        y += SM_GROUP_HEAD;
 
-    SM_DrawGametypeCard(page, top, cardH);
-    SM_DrawArenaCard(page, top + cardH, cardH);
+        for (i = smGroups[g].first; i <= smGroups[g].last; i++) {
+            y += SM_DrawRow(i, rowX, y);
+            // p.lan follows the match type when it is Internet, one more of the rows' siblings
+            if (i == SM_SERVERTYPE && SM_ShowPortNote()) {
+                char note[128];
+
+                Com_sprintf(note, sizeof(note),
+                            "To host public Internet servers, you will need to forward UDP port %s to your machine.",
+                            sm.netPort);
+                SM_Text(rowX + 12, SM_Baseline(FONT_SANS, 13, y, 30), FONT_SANS, 13, smMuted, note,
+                        SM_Fit(FONT_SANS, 13, note, SM_ROW_W - 24), qfalse);
+                y += SM_NOTE_H;
+            }
+        }
+        y += SM_GROUP_FOOT + SM_GROUP_GAP;
+    }
 }
 
 // .Select-menu-outer, under the control: the site's popover, options 34 high
