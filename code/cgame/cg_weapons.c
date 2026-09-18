@@ -1938,9 +1938,9 @@ void CG_DrawWeaponBar(void) {
     }
 
     // [QL] 0x10053129: "spectating" is the same test CG_Draw2D uses to pick its
-    // spectator branch - EF_VOTED or PM_SPECTATOR on the predicted playerState - and a
+    // spectator branch - EF_SPECTATOR or PM_SPECTATOR on the predicted playerState - and a
     // spectator gets no weapon bar at all while the scoreboard is up (0x10053199).
-    isSpectating = (cg.predictedPlayerState.eFlags & EF_VOTED) ||
+    isSpectating = (cg.predictedPlayerState.eFlags & EF_SPECTATOR) ||
                    cg.predictedPlayerState.pm_type == PM_SPECTATOR;
     if (isSpectating && cg.scoreBoardShowing) {
         return;

@@ -1333,7 +1333,7 @@ void SpectatorClientEndFrame(gentity_t* ent) {
                     // [QL] 0x1003553d: a real spectator keeps the followed player's
                     // persistant block and is marked as having voted - spectators
                     // take no part in votes.
-                    client->ps.eFlags |= EF_VOTED;
+                    client->ps.eFlags |= EF_SPECTATOR;
                 } else {
                     // [QL] 0x10035557: a player who is on a team but spectating (dead
                     // in a round) keeps their OWN persistant stats, taking only the

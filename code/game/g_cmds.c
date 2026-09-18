@@ -1324,11 +1324,9 @@ static void StartVote(void) {
         } else {
             level.clients[i].pers.voteState = VOTE_PENDING;
         }
-        level.clients[i].ps.eFlags &= ~EF_VOTED;
     }
     // caller has voted yes
     level.clients[level.pendingVoteCaller].pers.voteState = VOTE_YES;
-    g_entities[level.pendingVoteCaller].client->ps.eFlags |= EF_VOTED;
 
     trap_SetConfigstring(CS_VOTE_TIME, va("%i", level.voteTime));
     trap_SetConfigstring(CS_VOTE_STRING, level.voteDisplayString);
@@ -1889,8 +1887,6 @@ void Cmd_Vote_f(gentity_t *ent) {
 
     trap_SendServerCommand(ent - g_entities, "print \"Vote cast.\n\"");
 
-    ent->client->ps.eFlags |= EF_VOTED;
-
     trap_Argv(1, msg, sizeof(msg));
 
     if (tolower(msg[0]) == 'y' || msg[0] == '1') {
@@ -2202,7 +2198,7 @@ static void Cmd_Spec_f(gentity_t* ent) {
 
 /*
 =================
-[QL] Spectator item timer refresh: "specresp", which cgame sends on respawn while EF_VOTED is set,
+[QL] Spectator item timer refresh: "specresp", which cgame sends on respawn while EF_SPECTATOR is set,
 gets this spectator every item timer again (qagamex86.dll 0x100462e5)
 =================
 */

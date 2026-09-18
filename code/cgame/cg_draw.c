@@ -824,8 +824,8 @@ static float CG_DrawTeamOverlay(float y, qboolean right, qboolean upper) {
 	if (cg.snap->ps.persistant[PERS_TEAM] != TEAM_RED && cg.snap->ps.persistant[PERS_TEAM] != TEAM_BLUE) {
 		return y;
 	}
-	// a spectator, whom EF_VOTED marks in QL, has no overlay
-	if (cg.snap->ps.eFlags & EF_VOTED) {
+	// a spectator, whom EF_SPECTATOR marks in QL, has no overlay
+	if (cg.snap->ps.eFlags & EF_SPECTATOR) {
 		return y;
 	}
 
@@ -3461,7 +3461,7 @@ static const float* CG_SpecTeamColor(int team) {
 =====================
 CG_DrawSpecItemTimers
 
-[QL] cgamex86.dll 0x1000f700, for a spectator (EF_VOTED) with cg_specItemTimers, a bit mask of
+[QL] cgamex86.dll 0x1000f700, for a spectator (EF_SPECTATOR) with cg_specItemTimers, a bit mask of
 what to show: 1 powerups, 2 mega health, 4 red armor, 8 yellow armor. Down from
 cg_specItemTimersX and Y, each item's icon, cg_specItemTimersSize * 100 square, with the seconds
 until it is back beside it in font 0 at that size. In CTF a band at a quarter opacity marks the
@@ -3478,7 +3478,7 @@ static void CG_DrawSpecItemTimers(void) {
 	int mask, i, teamed, red, blue, last, seconds;
 
 	mask = cg_specItemTimers.integer;
-	if (!mask || cg.showJoinMenu || !cg.numSpecItemTimers || !(cg.predictedPlayerState.eFlags & EF_VOTED)) {
+	if (!mask || cg.showJoinMenu || !cg.numSpecItemTimers || !(cg.predictedPlayerState.eFlags & EF_SPECTATOR)) {
 		return;
 	}
 
@@ -3879,13 +3879,13 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	}
 	// [QL] cgamex86.dll 0x10010ff7..0x100110b5. Which branch runs is decided by the
 	// predicted playerState, and the test is not Quake 3's:
-	//   0x10010ff7  test [cg.predictedPlayerState.eFlags], EF_VOTED
+	//   0x10010ff7  test [cg.predictedPlayerState.eFlags], EF_SPECTATOR
 	//   0x10011003  cmp  [cg.predictedPlayerState.pm_type], PM_SPECTATOR
 	// Both are what SpectatorClientEndFrame (qagamex86.dll 0x10035470) leaves on a
-	// follower - pm_type forced back to PM_SPECTATOR, EF_VOTED on a real spectator -
+	// follower - pm_type forced back to PM_SPECTATOR, EF_SPECTATOR on a real spectator -
 	// so a spectator following somebody gets this branch too. The old test on
 	// persistant[PERS_TEAM] saw the FOLLOWED player's team and missed them.
-	else if ((cg.predictedPlayerState.eFlags & EF_VOTED) ||
+	else if ((cg.predictedPlayerState.eFlags & EF_SPECTATOR) ||
 		cg.predictedPlayerState.pm_type == PM_SPECTATOR) {
 		// [QL] 0x10011081: the competitive spectator overlay.
 		CG_DrawSpectatorHud();

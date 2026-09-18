@@ -689,7 +689,7 @@ void G_QG_Think(void) {
 ===============
 Item_NotifySpectator
 
-[QL] qagamex86.dll 0x1004eac0. Tells one spectator (EF_VOTED) about an item with a timer, in an
+[QL] qagamex86.dll 0x1004eac0. Tells one spectator (EF_SPECTATOR) about an item with a timer, in an
 EV_ITEM_PICKUP_SPEC event only that client gets:
 - otherEntityNum: the item entity;
 - modelindex: its kind;
@@ -707,7 +707,7 @@ void Item_NotifySpectator(gentity_t *ent, int clientNum, qboolean isRespawn) {
     vec3_t delta;
     float distRed, distBlue;
 
-    if (cl->pers.connected != CON_CONNECTED || !(cl->ps.eFlags & EF_VOTED))
+    if (cl->pers.connected != CON_CONNECTED || !(cl->ps.eFlags & EF_SPECTATOR))
         return;
     if (ent->flags & FL_DROPPED_ITEM)
         return;
@@ -784,7 +784,7 @@ void G_SendItemTimersToSpectator(int clientNum) {
     gentity_t *ent;
     int i;
 
-    if (!g_specItemTimers.integer || !(level.clients[clientNum].ps.eFlags & EF_VOTED) ||
+    if (!g_specItemTimers.integer || !(level.clients[clientNum].ps.eFlags & EF_SPECTATOR) ||
         level.maxclients >= MAX_GENTITIES) {
         return;
     }

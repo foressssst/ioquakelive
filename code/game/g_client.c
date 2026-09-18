@@ -1256,9 +1256,9 @@ char* ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
     // count current clients and rank for scoreboard
     CalculateRanks();
 
-    // [QL] Set EF_VOTED for spectators on map change (non-firstTime)
+    // [QL] Set EF_SPECTATOR for spectators on map change (non-firstTime)
     if (!firstTime && client->sess.sessionTeam == TEAM_SPECTATOR) {
-        ent->client->ps.eFlags |= EF_VOTED;
+        ent->client->ps.eFlags |= EF_SPECTATOR;
     }
 
     return NULL;
@@ -1442,18 +1442,18 @@ void ClientSpawn(gentity_t* ent) {
     ent->s.eFlags &= ~EF_TICKING;
     ent->client->ps.eFlags &= ~EF_TICKING;
 
-    // [QL] 0x1003bd8b: EF_VOTED marks a spectator. Retail sets it for a
+    // [QL] 0x1003bd8b: EF_SPECTATOR marks a spectator. Retail sets it for a
     // spectator and clears it for anyone else before the flags are kept, so a
     // spectator who joins the game loses it. The fork only kept it, and cgame
     // went on drawing the spectator HUD for a player in the game.
     if (client->sess.sessionTeam == TEAM_SPECTATOR) {
-        ent->client->ps.eFlags |= EF_VOTED;
+        ent->client->ps.eFlags |= EF_SPECTATOR;
     } else {
-        ent->client->ps.eFlags &= ~EF_VOTED;
+        ent->client->ps.eFlags &= ~EF_SPECTATOR;
     }
 
     // toggle the teleport bit so the client knows to not lerp
-    flags = ent->client->ps.eFlags & (EF_TELEPORT_BIT | EF_VOTED);
+    flags = ent->client->ps.eFlags & (EF_TELEPORT_BIT | EF_SPECTATOR);
     flags ^= EF_TELEPORT_BIT;
 
     // clear everything but the persistant data
