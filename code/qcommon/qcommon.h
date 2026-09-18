@@ -1110,6 +1110,8 @@ void Sys_Print(const char* msg);
 // Sys_Milliseconds should only be used for profiling purposes,
 // any game related timing information should come from event timestamps
 int Sys_Milliseconds(void);
+// [ioquakelive] reloj monotono fino, para el ritmo de los frames y para medirlo
+int64_t Sys_Microseconds(void);
 
 qboolean Sys_RandomBytes(byte* string, int len);
 

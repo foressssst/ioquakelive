@@ -185,6 +185,28 @@ int Sys_Milliseconds(void) {
 }
 
 /*
+================
+Sys_Microseconds
+
+[ioquakelive] Ver el comentario de la version de Windows: reloj monotono fino para el ritmo de
+los frames. CLOCK_MONOTONIC no salta si alguien cambia la hora del sistema.
+================
+*/
+int64_t Sys_Microseconds(void) {
+    static struct timespec base;
+    static qboolean initialized = qfalse;
+    struct timespec now;
+
+    if (!initialized) {
+        clock_gettime(CLOCK_MONOTONIC, &base);
+        initialized = qtrue;
+    }
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (int64_t)(now.tv_sec - base.tv_sec) * 1000000LL + (now.tv_nsec - base.tv_nsec) / 1000LL;
+}
+
+
+/*
 ==================
 Sys_RandomBytes
 ==================
