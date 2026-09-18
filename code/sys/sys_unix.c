@@ -208,6 +208,7 @@ int64_t Sys_Microseconds(void) {
 
 
 #include <pthread.h>
+#include <sched.h>
 
 /*
 ==============================================================================
@@ -304,6 +305,11 @@ void Sys_SemaphoreWait(void* handle) {
     }
     semaphore->count--;
     pthread_mutex_unlock(&semaphore->mutex);
+}
+
+// [ioquakelive] ver el comentario de la version de Windows
+void Sys_ThreadYield(void) {
+    sched_yield();
 }
 
 int Sys_ProcessorCount(void) {

@@ -1121,6 +1121,7 @@ void Sys_MutexUnlock(void* mutex);
 void* Sys_SemaphoreCreate(void);
 void Sys_SemaphorePost(void* semaphore);
 void Sys_SemaphoreWait(void* semaphore);
+void Sys_ThreadYield(void);
 int Sys_ProcessorCount(void);
 
 void Com_JobsInit(void);
