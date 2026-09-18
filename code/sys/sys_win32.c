@@ -243,6 +243,32 @@ int Sys_Milliseconds(void) {
     return sys_curtime;
 }
 
+
+/*
+================
+Sys_Microseconds
+
+[ioquakelive] Reloj monotono de microsegundos, para el ritmo de los frames y para medirlo.
+timeGetTime, que es lo que da Sys_Milliseconds, va de milisegundo en milisegundo: a 125 fps
+un frame dura 8 ms y con ese reloj no hay forma de apuntar a otra cosa que 8 o 9.
+================
+*/
+int64_t Sys_Microseconds(void) {
+    static LARGE_INTEGER frequency;
+    static LARGE_INTEGER base;
+    LARGE_INTEGER now;
+
+    if (!frequency.QuadPart) {
+        QueryPerformanceFrequency(&frequency);
+        QueryPerformanceCounter(&base);
+        if (!frequency.QuadPart) {
+            return (int64_t)Sys_Milliseconds() * 1000;
+        }
+    }
+    QueryPerformanceCounter(&now);
+    return ((now.QuadPart - base.QuadPart) * 1000000LL) / frequency.QuadPart;
+}
+
 /*
 ================
 Sys_RandomBytes
