@@ -274,10 +274,10 @@ falta el snd_restart entero.
 */
 void S_DeviceLost(void) {
     if (S_Base_ReopenDevice()) {
-        Com_Printf("Dispositivo de audio reabierto.\n");
+        Com_Printf("Audio device reopened.\n");
         return;
     }
-    Com_Printf("El dispositivo de audio cambio de formato; recargando el sonido.\n");
+    Com_Printf("The audio device changed format; restarting sound.\n");
     Cbuf_AddText("snd_restart\n");
 }
 
