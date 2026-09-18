@@ -196,4 +196,5 @@ void S_memoryLoad(sfx_t* sfx);
 void S_FreeOldestSound(void);
 
 qboolean S_Base_Init(soundInterface_t* si);
+qboolean S_Base_ReopenDevice(void);  // [ioquakelive] ver snd_dma.c
 void S_Base_ClearBackgroundLoop(void);

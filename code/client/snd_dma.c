@@ -1309,6 +1309,45 @@ void S_FreeOldestSound(void) {
 // Shutdown sound engine
 // =======================================================================
 
+/*
+===============
+S_Base_ReopenDevice
+
+[ioquakelive] Vuelve a abrir la salida de audio sin tirar abajo el sistema de sonido. Sirve
+para cuando Windows le quita el dispositivo al juego, que SDL avisa con SDL_AUDIODEVICEREMOVED.
+
+No sirve S_Base_Shutdown para esto: ese libera los sonidos cargados y deja s_numSfx en cero, asi
+que despues habria que recargar todo -- que es lo que hace snd_restart, y arrastra un vid_restart
+entero. Aca solo se cierra y se abre el dispositivo; la tabla de sonidos queda como estaba.
+
+Devuelve qfalse si el dispositivo nuevo no tiene el mismo formato que el viejo. En ese caso no
+se puede seguir: los sonidos estan remuestreados a la frecuencia anterior, y quien llama tiene
+que recargarlos.
+===============
+*/
+qboolean S_Base_ReopenDevice(void) {
+    int speed = dma.speed;
+    int channels = dma.channels;
+    int samplebits = dma.samplebits;
+
+    if (!s_soundStarted) {
+        return qfalse;
+    }
+
+    SNDDMA_Shutdown();
+    if (!SNDDMA_Init()) {
+        s_soundStarted = 0;
+        return qfalse;
+    }
+    if (dma.speed != speed || dma.channels != channels || dma.samplebits != samplebits) {
+        return qfalse;
+    }
+
+    // el dispositivo arranca de cero, asi que lo que estaba sonando no vale
+    S_Base_StopAllSounds();
+    return qtrue;
+}
+
 void S_Base_Shutdown(void) {
     if (!s_soundStarted) {
         return;
