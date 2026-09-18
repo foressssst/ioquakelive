@@ -1427,12 +1427,15 @@ static void CG_AddWeaponWithPowerups(refEntity_t* gun, int powerups, qboolean ow
         return;
     }
     if (own && cg_drawGun.integer == 3) {
-        // [ioquakelive] Retail pone aqui ghostWeaponShader (0x100523a8), que es aditivo sobre
-        // un gris 18/255: el arma no se ve translucida, se ve casi nada. El jugador pidio la
-        // transparente de WolfcamQL, donde el arma se reconoce y se ve a traves. Asi que se
-        // dibuja el modelo con su propia textura y el alfa forzado desde el renderer.
-        gun->renderfx |= RF_FORCE_ENT_ALPHA;
-        gun->shaderRGBA[3] = (byte)cg_gunAlpha.integer;
+        // [QL] 0x100523a8. WolfcamQL hace exactamente esto mismo (cg_weapons.c, cg_drawGun > 2):
+        // el shader de retail y el color en blanco opaco, que es lo que el jugador reconoce como
+        // "el arma transparente". El shader es aditivo con mapa de entorno, asi que el arma
+        // queda como un cristal: se ve la forma y se ve a traves.
+        gun->customShader = cgs.media.ghostWeaponShader;
+        gun->shaderRGBA[0] = 255;
+        gun->shaderRGBA[1] = 255;
+        gun->shaderRGBA[2] = 255;
+        gun->shaderRGBA[3] = 255;
         trap_R_AddRefEntityToScene(gun);
         return;
     }
