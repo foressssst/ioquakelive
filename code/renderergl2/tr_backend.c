@@ -1325,7 +1325,27 @@ const void* RB_SwapBuffers(const void* data) {
         }
     }
 
-    if (!glState.finishCalled) {
+    // [ioquakelive] Aqui el motor llamaba siempre a qglFinish(), que vacia la tuberia entera:
+    // el procesador espera a que la GPU termine todo antes de cambiar de imagen. Eso acota la
+    // latencia, si, pero tira el solapamiento entre procesador y GPU, que es de donde salen los
+    // fps. Con una barrera se consiguen las dos cosas: la tuberia sigue trabajando y se espera la
+    // barrera de hace r_maxQueuedFrames frames, asi nunca hay mas encolados que eso.
+    if (r_maxQueuedFrames->integer > 0 && qglFenceSync) {
+        int depth = r_maxQueuedFrames->integer;
+        int slot;
+
+        if (depth > MAX_FRAME_FENCES) {
+            depth = MAX_FRAME_FENCES;
+        }
+        slot = backEnd.fenceIndex % depth;
+        if (backEnd.frameFences[slot]) {
+            // un segundo de tope: si la GPU no contesta, algo esta muy mal y es mejor seguir
+            qglClientWaitSync(backEnd.frameFences[slot], GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000);
+            qglDeleteSync(backEnd.frameFences[slot]);
+        }
+        backEnd.frameFences[slot] = qglFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        backEnd.fenceIndex++;
+    } else if (!glState.finishCalled) {
         qglFinish();
     }
 

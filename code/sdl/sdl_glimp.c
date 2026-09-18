@@ -74,6 +74,7 @@ QGL_1_3_PROCS;
 QGL_1_5_PROCS;
 QGL_2_0_PROCS;
 QGL_3_0_PROCS;
+QGL_ARB_sync_PROCS;  // [ioquakelive] ver r_maxQueuedFrames
 QGL_ARB_occlusion_query_PROCS;
 QGL_ARB_framebuffer_object_PROCS;
 QGL_ARB_vertex_array_object_PROCS;
@@ -325,6 +326,12 @@ static qboolean GLimp_GetProcAddresses(qboolean fixedFunction) {
 
     if (QGL_VERSION_ATLEAST(3, 0) || QGLES_VERSION_ATLEAST(3, 0)) {
         QGL_3_0_PROCS;
+    }
+
+    // [ioquakelive] las barreras son de OpenGL 3.2; si no estan, qglFenceSync queda en NULL y el
+    // renderer se queda con el camino de siempre
+    if (QGL_VERSION_ATLEAST(3, 2) || QGLES_VERSION_ATLEAST(3, 0)) {
+        QGL_ARB_sync_PROCS;
     }
 
 #undef GLE

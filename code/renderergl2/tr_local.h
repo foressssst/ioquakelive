@@ -42,6 +42,7 @@ QGL_1_3_PROCS;
 QGL_1_5_PROCS;
 QGL_2_0_PROCS;
 QGL_3_0_PROCS;
+QGL_ARB_sync_PROCS;  // [ioquakelive] ver r_maxQueuedFrames
 QGL_ARB_occlusion_query_PROCS;
 QGL_ARB_framebuffer_object_PROCS;
 QGL_ARB_vertex_array_object_PROCS;
@@ -1428,6 +1429,9 @@ typedef struct {
     int msec;  // total msec for backend run
 } backEndCounters_t;
 
+// [ioquakelive] cuantos frames puede la GPU tener encolados como mucho
+#define MAX_FRAME_FENCES 4
+
 // all state modified by the back end is separated
 // from the front end state
 typedef struct {
@@ -1447,6 +1451,11 @@ typedef struct {
     FBO_t* last2DFBO;
     qboolean colorMask[4];
     qboolean depthFill;
+
+    // [ioquakelive] las barreras de los ultimos frames, para no encolar en la GPU mas de
+    // r_maxQueuedFrames (ver RB_SwapBuffers)
+    GLsync frameFences[MAX_FRAME_FENCES];
+    int fenceIndex;
 } backEndState_t;
 
 /*
@@ -1706,6 +1715,8 @@ extern cvar_t* r_roundImagesDown;
 extern cvar_t* r_colorMipLevels;  // development aid to see texture mip usage
 extern cvar_t* r_picmip;          // controls picmip values
 extern cvar_t* r_finish;
+// [ioquakelive] el tope de frames encolados en la GPU; 0 vuelve a vaciar la tuberia como antes
+extern cvar_t* r_maxQueuedFrames;
 extern cvar_t* r_textureMode;
 extern cvar_t* r_offsetFactor;
 extern cvar_t* r_offsetUnits;
