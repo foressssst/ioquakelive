@@ -1112,20 +1112,25 @@ void ClientUserinfoChanged(int clientNum) {
     Q_strncpyz(c1, Info_ValueForKey(userinfo, "color1"), sizeof(c1));
     Q_strncpyz(c2, Info_ValueForKey(userinfo, "color2"), sizeof(c2));
 
+    // [QL] 0x1003a7e6: el pais, justo despues del aviso de cambio de nombre. Es una clave mas
+    // del userinfo, no un comando, y sale en el configstring como "c".
+    Q_strncpyz(client->pers.country, Info_ValueForKey(userinfo, "country"), sizeof(client->pers.country));
+
     // send over a subset of the userinfo keys so other clients can
     // print scoreboards, display models, and play custom sounds
     // [QL] qagamex86.dll 0x817b8 / 0x81820 add "rp", readied up, which cgame's warmup
-    // messages read. NOT PORTED: the "p", "so", "pq", "st" and "c" keys that follow it.
+    // messages read, y "c", el pais. NOT PORTED: las claves "p", "so", "pq" y "st".
     if (ent->r.svFlags & SVF_BOT) {
-        s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\skill\\%s\\tt\\%d\\tl\\%d\\rp\\%d",
+        s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\skill\\%s\\tt\\%d\\tl\\%d\\rp\\%d\\c\\%s",
                client->pers.netname, client->sess.sessionTeam, model, headModel, c1, c2,
                client->pers.maxHealth, client->sess.wins, client->sess.losses,
-               Info_ValueForKey(userinfo, "skill"), teamTask, teamLeader, client->pers.ready ? 1 : 0);
+               Info_ValueForKey(userinfo, "skill"), teamTask, teamLeader, client->pers.ready ? 1 : 0,
+               client->pers.country);
     } else {
-        s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\tt\\%d\\tl\\%d\\rp\\%d",
+        s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\tt\\%d\\tl\\%d\\rp\\%d\\c\\%s",
                client->pers.netname, client->sess.sessionTeam, model, headModel, c1, c2,
                client->pers.maxHealth, client->sess.wins, client->sess.losses, teamTask, teamLeader,
-               client->pers.ready ? 1 : 0);
+               client->pers.ready ? 1 : 0, client->pers.country);
     }
 
     trap_SetConfigstring(CS_PLAYERS + clientNum, s);
