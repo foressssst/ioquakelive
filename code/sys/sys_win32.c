@@ -868,12 +868,51 @@ Sys_PlatformInit
 Windows specific initialisation
 ==============
 */
+
+/*
+================
+Sys_PrioritiseGameThread
+
+[ioquakelive] El planificador de Windows trata distinto a un hilo registrado como de juego: le
+reserva tiempo y es menos probable que lo saque de la CPU en medio de un frame. Eso es MMCSS, y
+es lo que hacen los juegos actuales. El motor de retail hace la version vieja de lo mismo:
+SetThreadPriority esta en sus importaciones.
+
+avrt.dll se carga a mano para no atar la compilacion a otra libreria; si no esta, o falla, queda
+la subida de prioridad de siempre.
+================
+*/
+typedef HANDLE(WINAPI* AvSetMmThreadCharacteristicsA_t)(LPCSTR taskName, LPDWORD taskIndex);
+
+static void Sys_PrioritiseGameThread(void) {
+    HMODULE avrt = LoadLibraryA("avrt.dll");
+    AvSetMmThreadCharacteristicsA_t setCharacteristics = NULL;
+
+    if (avrt) {
+        setCharacteristics =
+            (AvSetMmThreadCharacteristicsA_t)GetProcAddress(avrt, "AvSetMmThreadCharacteristicsA");
+    }
+    if (setCharacteristics) {
+        DWORD taskIndex = 0;
+
+        if (setCharacteristics("Games", &taskIndex)) {
+            return;
+        }
+    }
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+}
+
 void Sys_PlatformInit(void) {
 #ifndef DEDICATED
     TIMECAPS ptc;
 #endif
 
     Sys_SetFloatEnv();
+
+#ifndef DEDICATED
+    // [ioquakelive] ver el comentario de arriba: el planificador trata mejor a un hilo de juego
+    Sys_PrioritiseGameThread();
+#endif
 
 #ifndef DEDICATED
     if (timeGetDevCaps(&ptc, sizeof(ptc)) == MMSYSERR_NOERROR) {
