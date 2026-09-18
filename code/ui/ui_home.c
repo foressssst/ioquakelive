@@ -59,7 +59,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define HM_LOGO_W 520.0f
 #define HM_LIST_Y 340.0f
 #define HM_ITEM_H 78.0f
-#define HM_ITEM_SIZE 31.0f
+#define HM_ITEM_SIZE 26.0f
+
+// [ioquakelive] el panel de la lista: una fila por entrada, con el aire del resto del front end
+static const float* UI_Home_SidePanel(void);  // definida mas abajo, con los paneles de la derecha
+#define HM_ROW_H 62.0f
+#define HM_PANEL_PAD 22.0f
+#define HM_HEADING_H 40.0f
 #define HM_ITEM_SPACING 0.7f
 #define HM_NOTE_SIZE 14.0f
 #define HM_BACK_SIZE 17.0f
@@ -557,61 +563,76 @@ apart and smaller, as retail's a.back does.
 static void UI_Home_DrawColumn(void) {
     float x = UI_Home_ColumnX();
     float y = HM_LIST_Y;
+    float panelTop, panelH;
     char heading[MAX_CVAR_VALUE_STRING];
-    int i;
+    int i, rows = 0;
 
     if (hm2.logo) {
         SM_Pic(x - 6, HM_LOGO_Y, HM_LOGO_W, HM_LOGO_W * 0.25f, hm2.logo, NULL);
     }
 
-    // the list of a submenu says which one it is; the main one needs no heading, since
-    // the card at the right already says who is playing
+    // [ioquakelive] La lista va dentro de un panel, como en Ajustes y en Patch Notes. Antes era
+    // texto suelto sobre el cuadro, y el jugador noto que desentonaba con el resto del front
+    // end. El panel se mide antes de dibujar nada, contando las filas de la lista que toca.
+    for (i = 0; i < HM_MAX_ITEMS; i++) {
+        const hmItem_t* item = &hmMenus[hm2.menu][i];
+
+        if (!item->title) {
+            break;
+        }
+        rows++;
+    }
+
+    panelTop = y - HM_PANEL_PAD;
+    panelH = HM_PANEL_PAD * 2 + rows * HM_ROW_H + (hm2.menu != HM_MENU_MAIN ? HM_HEADING_H : 0);
+    SM_Round(x - HM_PANEL_PAD, panelTop, HM_COL_W + HM_PANEL_PAD * 2, panelH, SM_RADIUS_MD,
+             UI_Home_SidePanel(), NULL);
+
+    // la lista de un submenu dice cual es; la principal no lo necesita, que ya lo dice el
+    // panel del jugador a la derecha
     if (hm2.menu != HM_MENU_MAIN) {
         Q_strncpyz(heading,
                    hmMenus[HM_MENU_MAIN][hm2.menu == HM_MENU_PLAY ? 0 : hm2.menu == HM_MENU_STATS ? 1 : 2].title,
                    sizeof(heading));
         SM_Label(x, SM_Baseline(FONT_SANS, 12, y, 18), 12, smMuted, heading, 1.8f);
+        SM_Fill(x, y + 24, HM_COL_W, 1, smBorder, NULL);
+        y += HM_HEADING_H;
     }
-    y += 36;
 
     for (i = 0; i < HM_MAX_ITEMS; i++) {
         const hmItem_t* item = &hmMenus[hm2.menu][i];
         qboolean over;
-        float h;
 
         if (!item->title) {
             break;
         }
         over = SM_Over(HM_HIT_ITEM, i) && !item->soon;
 
-        if (item->submenu == HM_MENU_MAIN && hm2.menu != HM_MENU_MAIN) {
-            y += 14;  // Back
-            SM_Label(x, SM_Baseline(FONT_SANS, HM_BACK_SIZE, y, HM_BACK_H), HM_BACK_SIZE,
-                     over ? smGold : smMuted, item->title, 1.2f);
-            SM_Hit(x - HM_RULE_GAP, y, HM_COL_W, HM_BACK_H, HM_HIT_ITEM, i, NULL);
-            y += HM_BACK_H;
-            continue;
+        // la fila bajo el cursor se levanta, y le crece una barra dorada al canto izquierdo:
+        // es como el front end marca lo que esta elegido en todas sus listas
+        if (over) {
+            SM_Round(x - 12, y, HM_COL_W + 24, HM_ROW_H - 6, SM_RADIUS_SM, smRaised, NULL);
+            SM_Fill(x - 12, y + 6, 3, HM_ROW_H - 18, smGold, NULL);
         }
 
         // [ioquakelive] the user asked for the arrow that used to stand at the right of the entry
         // under the cursor to go ("quitar el < del ui"): the gold of the title says enough
-        h = item->note ? HM_ITEM_H : HM_ITEM_H - 22.0f;
-        SM_Label(x, SM_Baseline(FONT_SANS, HM_ITEM_SIZE, y + 7, 36), HM_ITEM_SIZE,
+        SM_Label(x, SM_Baseline(FONT_SANS, HM_ITEM_SIZE, y + 4, 30), HM_ITEM_SIZE,
                  item->soon ? smSubtle : over ? smGold : smText, item->title, HM_ITEM_SPACING);
         if (item->soon) {
             float tw = SM_LabelWidth(HM_ITEM_SIZE, item->title, HM_ITEM_SPACING);
 
-            SM_Label(x + tw + 16, SM_Baseline(FONT_SANS, 11, y + 16, 20), 11, smSubtle, "soon", 1.6f);
+            SM_Label(x + tw + 16, SM_Baseline(FONT_SANS, 11, y + 12, 18), 11, smSubtle, "soon", 1.6f);
         }
         if (item->note) {
-            SM_Text(x, SM_Baseline(FONT_SANS, HM_NOTE_SIZE, y + 42, 20), FONT_SANS, HM_NOTE_SIZE,
+            SM_Text(x, SM_Baseline(FONT_SANS, HM_NOTE_SIZE, y + 32, 18), FONT_SANS, HM_NOTE_SIZE,
                     item->soon ? smSubtle : over ? smTextSoft : smMuted, item->note,
                     SM_Fit(FONT_SANS, HM_NOTE_SIZE, item->note, HM_COL_W), qfalse);
         }
         if (!item->soon) {
-            SM_Hit(x - HM_RULE_GAP, y, HM_COL_W, h, HM_HIT_ITEM, i, NULL);
+            SM_Hit(x - 12, y, HM_COL_W + 24, HM_ROW_H - 6, HM_HIT_ITEM, i, NULL);
         }
-        y += h;
+        y += HM_ROW_H;
     }
 }
 
