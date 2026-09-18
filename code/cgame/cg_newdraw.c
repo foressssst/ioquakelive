@@ -2415,9 +2415,10 @@ static void CG_DrawRaceStatus(rectDef_t *rect, float scale, vec4_t color, int te
     // Draws at rect->x, rect->y directly - menu alignment handles positioning
     const char *s;
 
-    // Respawn hint, shown while no run is in progress. Binary looks up the key
-    // bound to the respawn ('kill') command and prompts to bind it if unbound.
-    if (!cg.race.active) {
+    // [QL] 0x1002f33a: el hint no depende de si hay carrera, sino de quien mira: se muestra
+    // mientras no seas espectador y no estes viendo una demo. Antes salia solo con la carrera
+    // parada, asi que aparecia y desaparecia al arrancar.
+    if (!(cg.snap->ps.eFlags & EF_SPECTATOR) && !cg.demoPlayback) {
         int keynum = trap_Key_GetKey("kill");
         const char *hint;
         if (keynum > 0) {
@@ -2432,13 +2433,9 @@ static void CG_DrawRaceStatus(rectDef_t *rect, float scale, vec4_t color, int te
         CG_DrawText(rect->x + 19.0f, rect->y + 27.0f, 0, 0.18f, hintColor, hint, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
     }
 
-    if (cg.race.active) {
-        s = "CURRENT RUN";
-    } else if (cg.race.finishTime) {
-        s = "LAST TIME";
-    } else {
-        return;
-    }
+    // [QL] 0x1002f408: siempre hay titulo, y solo hay dos. Antes, sin carrera y sin tiempo
+    // anterior, la funcion se iba sin dibujar nada y el recuadro quedaba vacio.
+    s = cg.race.active ? "CURRENT RUN" : "LAST TIME";
     CG_DrawText(rect->x, rect->y, 0, scale, colorYellow, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);  // [QL] 0x1002f5ae
 }
 
@@ -2447,12 +2444,17 @@ static void CG_DrawRaceTimes(rectDef_t *rect, float scale, vec4_t color, int tex
     // Draws at rect->x, rect->y directly - menu alignment handles positioning
     int ms;
     const char *s;
+
+    // [QL] 0x1002f4b8: el reloj se dibuja siempre, corriendo si hay carrera y parado en el
+    // ultimo tiempo si no. Sin carrera y sin tiempo anterior queda en 0:00.000, que es lo que
+    // muestra el binario; antes no se dibujaba nada y parecia que faltaba el reloj.
     if (cg.race.active && cg.race.startTime) {
         ms = cg.time - cg.race.startTime;
-    } else if (cg.race.finishTime) {
-        ms = cg.race.finishTime;
     } else {
-        return;
+        ms = cg.race.finishTime;
+    }
+    if (ms < 0) {
+        ms = 0;
     }
     s = va("%d:%02d.%03d", ms / 60000, (ms / 1000) % 60, ms % 1000);
     CG_DrawText(rect->x, rect->y, 0, scale, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);  // [QL] 0x1002f5ae
