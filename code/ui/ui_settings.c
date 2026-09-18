@@ -854,7 +854,7 @@ static void ST_DrawTeamPreview(int slot, float x, float y, float w, float h) {
     const char* hint;
     float hw;
 
-    SM_Round(x, y, w, h, SM_RADIUS_MD, smPage, NULL);
+    SM_Round(x, y, w, h, SM_RADIUS_MD, smRaised, NULL);
 
     trap_Cvar_VariableStringBuffer(models[slot], model, sizeof(model));
     trap_Cvar_VariableStringBuffer(skins[slot], skin, sizeof(skin));
@@ -1266,7 +1266,7 @@ static void ST_DrawModelChooser(void) {
         SM_Hit(cx, skinY, cs, cs, ST_HIT_SKINITEM, k, NULL);
     }
 
-    SM_Round(paneX, previewY, paneW, footY - 18 - previewY, SM_RADIUS_MD, smPage, NULL);
+    SM_Round(paneX, previewY, paneW, footY - 18 - previewY, SM_RADIUS_MD, smRaised, NULL);
     ST_DrawChooserPreview(paneX, previewY + 10, paneW, footY - 18 - previewY - 20);
     if (forced) {
         const char* note = va("The skin is %s's too", stCvars[st.pickSkinRow].title);
@@ -1734,8 +1734,17 @@ static void ST_DrawPage(void) {
 
     clip = SM_R(st.left, st.listTop, HM_CONTAINER_W, st.view);
 
-    // el fondo de cada subseccion va primero, para que las filas queden encima
+    // [ioquakelive] 2026-09-18: las subsecciones ya no van en una tarjeta negra dentro del
+    // panel, que el jugador no queria. Las separa su titulo dorado y una linea fina encima de
+    // cada una, menos las de arriba del todo, que no tienen nada que separar.
     if (st.tab != ST_TAB_TEAM) {
+        float firstY = -1;
+
+        for (i = 0; i < ST_NUM_CVARS; i++) {
+            if (ST_InTab(i) && stCvars[i].widget == ST_HEADING && (firstY < 0 || stLayout[i].y < firstY)) {
+                firstY = stLayout[i].y;
+            }
+        }
         for (i = 0; i < ST_NUM_CVARS; i++) {
             smRect_t card;
             float y;
@@ -1743,11 +1752,14 @@ static void ST_DrawPage(void) {
             if (!ST_InTab(i) || stCvars[i].widget != ST_HEADING || !ST_GroupRect(i, &card)) {
                 continue;
             }
-            y = ST_RowY(i);
-            if (y + card.h <= st.listTop || y >= st.listTop + st.view) {
+            if (stLayout[i].y <= firstY) {
                 continue;
             }
-            SM_Round(card.x, y, card.w, card.h, SM_RADIUS_MD, smPage, &clip);
+            y = ST_RowY(i);
+            if (y < st.listTop || y >= st.listTop + st.view) {
+                continue;
+            }
+            SM_Fill(card.x + 12, y, card.w - 24, 1, smBorder, &clip);
         }
     }
 
