@@ -23,6 +23,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 void S_Init(void);
 void S_Shutdown(void);
 
+// [ioquakelive] el sistema le quito el dispositivo de audio al juego; volver a abrirlo
+void S_DeviceLost(void);
+
 // if origin is NULL, the sound will be dynamically sourced from the entity
 void S_StartSound(vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx);
 void S_StartLocalSound(sfxHandle_t sfx, int channelNum);
