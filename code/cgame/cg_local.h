@@ -1182,7 +1182,7 @@ typedef struct {
     qhandle_t quadWeaponShader;
     qhandle_t brightWeaponShader;  // [CPMA] cg_drawBrightWeapons
     qhandle_t invisShader;
-    qhandle_t transparentWeaponShader;  // [ioquakelive] cg_drawGun 3
+    qhandle_t ghostWeaponShader;  // [QL] cg_drawGun 3, el arma fantasma
     qhandle_t regenShader;
     qhandle_t battleSuitShader;
     qhandle_t battleWeaponShader;
@@ -1779,6 +1779,7 @@ extern vmCvar_t cg_gun_x;
 extern vmCvar_t cg_gun_y;
 extern vmCvar_t cg_gun_z;
 extern vmCvar_t cg_drawGun;
+extern vmCvar_t cg_gunAlpha;  // [ioquakelive] temporal, ver cg_main.c
 extern vmCvar_t cg_viewsize;
 extern vmCvar_t cg_tracerChance;
 extern vmCvar_t cg_tracerWidth;

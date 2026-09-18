@@ -1403,31 +1403,49 @@ static float CG_MachinegunSpinAngle(centity_t* cent) {
 CG_AddWeaponWithPowerups
 ========================
 */
-static void CG_AddWeaponWithPowerups(refEntity_t* gun, int powerups) {
-    // TODO [QL] the binary (CG_AddWeaponWithPowerups @0x10052350) also, keyed off
-    //   gun->entityNum == cg.snap->ps.clientNum:
-    //     - draws cgs.media.freezeShader when the owner is dead/frozen and is NOT the
-    //       local player (freeze tag),
-    //     - draws an enemy-weapon shader when cg_drawGun == 3 for the local player,
-    //     - restricts the PW_INVIS shader to the local player.
-    //   ioquakelive's refEntity_t has no entityNum and cgs.media has no
-    //   enemyWeaponShader, so it can't be reproduced without struct changes.
-    //   Q3 powerup logic kept below.
-    // add powerup effects
+/*
+==============
+CG_AddWeaponWithPowerups
+
+[QL] cgamex86.dll 0x10052350. El arma se dibuja una sola vez con un shader aparte, o normal
+con las capas de quad y battlesuit encima. Las tres razones para el shader aparte, en el
+orden en que el binario las mira:
+
+  invisibilidad   el portador la lleva puesta
+  cg_drawGun 3    y es el arma del jugador que se esta viendo: ghostWeaponShader, aditivo y
+                  con mapa de entorno (pak00, scripts/gfx.shader), que es como retail hace el
+                  arma transparente
+
+"own" es lo que el binario resuelve comparando el numero de cliente (0x10052357), asi que
+tambien vale en tercera persona, no solo en la vista.
+==============
+*/
+static void CG_AddWeaponWithPowerups(refEntity_t* gun, int powerups, qboolean own) {
     if (powerups & (1 << PW_INVIS)) {
         gun->customShader = cgs.media.invisShader;
         trap_R_AddRefEntityToScene(gun);
-    } else {
+        return;
+    }
+    if (own && cg_drawGun.integer == 3) {
+        // [ioquakelive] Retail pone aqui ghostWeaponShader (0x100523a8), que es aditivo sobre
+        // un gris 18/255: el arma no se ve translucida, se ve casi nada. El jugador pidio la
+        // transparente de WolfcamQL, donde el arma se reconoce y se ve a traves. Asi que se
+        // dibuja el modelo con su propia textura y el alfa forzado desde el renderer.
+        gun->renderfx |= RF_FORCE_ENT_ALPHA;
+        gun->shaderRGBA[3] = (byte)cg_gunAlpha.integer;
         trap_R_AddRefEntityToScene(gun);
+        return;
+    }
 
-        if (powerups & (1 << PW_BATTLESUIT)) {
-            gun->customShader = cgs.media.battleWeaponShader;
-            trap_R_AddRefEntityToScene(gun);
-        }
-        if (powerups & (1 << PW_QUAD)) {
-            gun->customShader = cgs.media.quadWeaponShader;
-            trap_R_AddRefEntityToScene(gun);
-        }
+    trap_R_AddRefEntityToScene(gun);
+
+    if (powerups & (1 << PW_BATTLESUIT)) {
+        gun->customShader = cgs.media.battleWeaponShader;
+        trap_R_AddRefEntityToScene(gun);
+    }
+    if (powerups & (1 << PW_QUAD)) {
+        gun->customShader = cgs.media.quadWeaponShader;
+        trap_R_AddRefEntityToScene(gun);
     }
 }
 
@@ -1515,6 +1533,9 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
     weaponInfo_t* weapon;
     centity_t* nonPredictedCent;
     orientation_t lerped;
+    // [QL] 0x10052357: el binario resuelve "es el arma del que estoy viendo" comparando el
+    // numero de cliente, no si viene playerState, asi que tambien vale en tercera persona
+    qboolean own = (cent->currentState.clientNum == cg.snap->ps.clientNum);
 
     weaponNum = cent->currentState.weapon;
 
@@ -1555,9 +1576,9 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
 
     // [ioquakelive] el flag se limpia siempre, tambien en primera persona. El bucle de sonido es
     // solo para los demas -uno no se escucha a si mismo desde afuera-, pero el flag lo lee
-    // CG_FireWeapon para callar el disparo de un arma que ya suena sola, y si no se limpia acá se
+    // CG_FireWeapon para callar el disparo de un arma que ya suena sola, y si no se limpia acï¿½ se
     // queda pegado desde la ultima vez que se vio a otro disparando. Ese era el motivo de que el
-    // puñetazo del gauntlet no sonara.
+    // puï¿½etazo del gauntlet no sonara.
     cent->pe.lightningFiring = qfalse;
     if ((cent->currentState.eFlags & EF_FIRING) && weapon->firingSound) {
         // lightning gun and guantlet make a different sound when fire is held down
@@ -1570,40 +1591,24 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
         trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin, weapon->readySound);
     }
 
-    // TODO [QL] the binary positions the gun with CG_PositionEntityOnTag(&gun, parent,
-    //   parent->hModel, "tag_weapon") and has no cg_drawGun 2/3 handedness offset. The
-    //   manual LerpTag path below preserves ioquakelive's left-handed / centered gun
-    //   modes. Reconcile if exact parity is required.
+    // [ioquakelive] El arma va donde diga la etiqueta del modelo, y nada mas. Antes cg_drawGun
+    // 2 la espejaba a la zurda y el 3 la centraba, que es de Quake 3: en el binario cg_drawGun
+    // se lee en cuatro sitios y en ninguno mueve nada. La posicion es cosa de cg_gunX/Y/Z, que
+    // CG_AddViewWeapon suma sobre los ejes de la vista (0x10052cf0), y esos se cambian desde
+    // Ajustes.
     trap_R_LerpTag(&lerped, parent->hModel, parent->oldframe, parent->frame,
                    1.0 - parent->backlerp, "tag_weapon");
     VectorCopy(parent->origin, gun.origin);
 
     VectorMA(gun.origin, lerped.origin[0], parent->axis[0], gun.origin);
-
-    // Make weapon appear left-handed for 2 and centered for 3
-    if (ps && cg_drawGun.integer == 2)
-        VectorMA(gun.origin, -lerped.origin[1], parent->axis[1], gun.origin);
-    else if (!ps || cg_drawGun.integer != 3)
-        VectorMA(gun.origin, lerped.origin[1], parent->axis[1], gun.origin);
-
+    VectorMA(gun.origin, lerped.origin[1], parent->axis[1], gun.origin);
     VectorMA(gun.origin, lerped.origin[2], parent->axis[2], gun.origin);
 
     MatrixMultiply(lerped.axis, ((refEntity_t*)parent)->axis, gun.axis);
     gun.backlerp = parent->backlerp;
 
     CG_BrightWeapon(&gun, weaponNum, cent->currentState.clientNum, ps ? BRIGHTWEAPON_OWN_VIEW : BRIGHTWEAPON_CARRIED);
-    // [ioquakelive] cg_drawGun 3 se llama "Transparent" y hasta ahora solo centraba el modelo, que
-    // es la mitad de lo que promete. El arma propia se dibuja translucida: se ve cual es y donde
-    // apunta sin tapar lo que hay detras. Solo la propia (ps); las de los demas no cambian. Va
-    // despues de CG_BrightWeapon a proposito, asi manda esta cuando las dos estan puestas.
-    if (ps && cg_drawGun.integer == 3) {
-        gun.customShader = cgs.media.transparentWeaponShader;
-        gun.shaderRGBA[0] = 150;
-        gun.shaderRGBA[1] = 160;
-        gun.shaderRGBA[2] = 170;  // un gris frio, que no compite con el mapa
-        gun.shaderRGBA[3] = 90;   // 35%: se lee la silueta sin estorbar la mira
-    }
-    CG_AddWeaponWithPowerups(&gun, cent->currentState.powerups);
+    CG_AddWeaponWithPowerups(&gun, cent->currentState.powerups, own);
 
     // add the spinning barrel
     if (weapon->barrelModel) {
@@ -1621,7 +1626,7 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
         CG_PositionRotatedEntityOnTag(&barrel, &gun, weapon->weaponModel, "tag_barrel");
 
         CG_BrightWeapon(&barrel, weaponNum, cent->currentState.clientNum, ps ? BRIGHTWEAPON_OWN_VIEW : BRIGHTWEAPON_CARRIED);
-        CG_AddWeaponWithPowerups(&barrel, cent->currentState.powerups);
+        CG_AddWeaponWithPowerups(&barrel, cent->currentState.powerups, own);
     }
 
     // [QL] draw the grapple hook/ammo on tag_ammo while the hook is stowed (not firing)
@@ -1637,7 +1642,7 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
         AnglesToAxis(angles, barrel.axis);
         CG_PositionRotatedEntityOnTag(&barrel, &gun, weapon->weaponModel, "tag_ammo");
         CG_BrightWeapon(&barrel, weaponNum, cent->currentState.clientNum, ps ? BRIGHTWEAPON_OWN_VIEW : BRIGHTWEAPON_CARRIED);
-        CG_AddWeaponWithPowerups(&barrel, cent->currentState.powerups);
+        CG_AddWeaponWithPowerups(&barrel, cent->currentState.powerups, own);
     }
 
     // make sure we aren't looking at cg.predictedPlayerEntity for LG
