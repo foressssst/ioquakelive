@@ -399,7 +399,87 @@ CL_CgameSystemCalls
 The cgame module is making a system call
 ====================
 */
+/*
+=====================
+El reparto del tiempo de carga
+
+[ioquakelive] Todo lo que un mapa carga lo pide el cgame al motor. Durante la carga, cada
+llamada se cronometra y se suma a su categoria; al terminar, CL_InitCGame lo imprime. Es lo que
+permite decir "las texturas son la mitad del tiempo" en vez de suponerlo.
+=====================
+*/
+typedef enum {
+    CL_LOAD_SHADERS,
+    CL_LOAD_MODELS,
+    CL_LOAD_SOUNDS,
+    CL_LOAD_WORLD,
+    CL_LOAD_FILES,
+    CL_LOAD_OTHER,
+    CL_LOAD_CATEGORIES
+} clLoadCategory_t;
+
+static const char* const cl_loadNames[CL_LOAD_CATEGORIES] = {"textures/shaders", "models/skins",
+                                                             "sounds", "world", "files", "other"};
+static int64_t cl_loadUs[CL_LOAD_CATEGORIES];
+static int cl_loadCalls[CL_LOAD_CATEGORIES];
+static qboolean cl_loadProfiling;
+
+static clLoadCategory_t CL_LoadCategory(intptr_t trap) {
+    switch (trap) {
+        case CG_R_REGISTERSHADER:
+        case CG_R_REGISTERSHADERNOMIP:
+            return CL_LOAD_SHADERS;
+        case CG_R_REGISTERMODEL:
+        case CG_R_REGISTERSKIN:
+            return CL_LOAD_MODELS;
+        case CG_S_REGISTERSOUND:
+            return CL_LOAD_SOUNDS;
+        case CG_R_LOADWORLDMAP:
+            return CL_LOAD_WORLD;
+        case CG_FS_FOPENFILE:
+        case CG_FS_READ:
+        case CG_FS_FCLOSEFILE:
+        case CG_FS_GETFILELIST:
+            return CL_LOAD_FILES;
+        default:
+            return CL_LOAD_OTHER;
+    }
+}
+
+static void CL_LoadProfileReport(float total) {
+    int64_t sum = 0;
+    int i;
+
+    for (i = 0; i < CL_LOAD_CATEGORIES; i++) {
+        sum += cl_loadUs[i];
+    }
+    Com_Printf("load: %.2f s, of which the cgame asked the engine for %.2f s\n", total,
+               sum / 1000000.0f);
+    for (i = 0; i < CL_LOAD_CATEGORIES; i++) {
+        if (cl_loadUs[i] < 1000) {
+            continue;
+        }
+        Com_Printf("  %-17s %6.2f s   %5i calls\n", cl_loadNames[i], cl_loadUs[i] / 1000000.0f,
+                   cl_loadCalls[i]);
+    }
+}
+
+static intptr_t CL_CgameSystemCallsInner(intptr_t* args);
+
 intptr_t CL_CgameSystemCalls(intptr_t* args) {
+    if (cl_loadProfiling) {
+        clLoadCategory_t category = CL_LoadCategory(args[0]);
+        int64_t start = Sys_Microseconds();
+        intptr_t result = CL_CgameSystemCallsInner(args);
+
+        cl_loadUs[category] += Sys_Microseconds() - start;
+        cl_loadCalls[category]++;
+        return result;
+    }
+    return CL_CgameSystemCallsInner(args);
+}
+
+static intptr_t CL_CgameSystemCallsInner(intptr_t* args) {
     switch (args[0]) {
         case CG_PRINT:
             Com_Printf("%s", (const char*)VMA(1));
@@ -749,6 +829,12 @@ void CL_InitCGame(void) {
 
     t1 = Sys_Milliseconds();
 
+    // [ioquakelive] el reparto del tiempo de carga se mide justo aqui: todo lo que el mapa carga
+    // del lado del cliente pasa por las llamadas del cgame
+    Com_Memset(cl_loadUs, 0, sizeof(cl_loadUs));
+    Com_Memset(cl_loadCalls, 0, sizeof(cl_loadCalls));
+    cl_loadProfiling = qtrue;
+
     // put away the console
     Con_Close();
 
@@ -781,7 +867,9 @@ void CL_InitCGame(void) {
 
     t2 = Sys_Milliseconds();
 
+    cl_loadProfiling = qfalse;
     Com_Printf("CL_InitCGame: %5.2f seconds\n", (t2 - t1) / 1000.0);
+    CL_LoadProfileReport((t2 - t1) / 1000.0f);
 
     // have the renderer touch all its images, so they are present
     // on the card even if the driver does deferred loading

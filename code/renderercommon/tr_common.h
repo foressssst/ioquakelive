@@ -123,6 +123,13 @@ float R_NoiseGet4f(float x, float y, float z, double t);
 void R_NoiseInit(void);
 
 image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags);
+// [ioquakelive] el reparto del tiempo de carga de imagenes: decodificar contra subir
+// r_imageReadUs es la parte de la decodificacion que es leer el archivo del pk3, que no
+// se puede sacar del hilo principal sin tocar el sistema de archivos
+extern int64_t r_imageDecodeUs, r_imageUploadUs, r_imageReadUs;
+extern int r_imageCount;
+void R_ImageLoadStatsReset(void);
+void R_ImageLoadStatsReport(void);
 image_t* R_CreateImage(const char* name, byte* pic, int width, int height, imgType_t type, imgFlags_t flags, int internalFormat);
 
 void R_IssuePendingRenderCommands(void);
