@@ -198,7 +198,7 @@ void CG_Respawn(void) {
     }
 
     // [QL] Spectator item timers: request current item respawn state
-    if (cg.snap->ps.eFlags & EF_VOTED) {
+    if (cg.snap->ps.eFlags & EF_SPECTATOR) {
         trap_SendConsoleCommand("specresp\n");
     }
 }
