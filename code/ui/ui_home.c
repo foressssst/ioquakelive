@@ -804,7 +804,6 @@ void UI_Home_Open(void) {
     itemDef_t* item = menu ? Menu_FindItemByName(menu, "home") : NULL;
 
     UI_Home_LoadMenu();
-    { int p = (int)trap_Cvar_VariableValue("ui_debugPage"); if (p > 0) { UI_Home_Go(p); return; } } // IOQL_DEBUG_TEMP
     hm2.menu = HM_MENU_MAIN;
     // the page takes keys before the mouse moves over it
     if (item) {
