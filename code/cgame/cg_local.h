@@ -2611,6 +2611,9 @@ void trap_R_Font_TextExtents(const char* text, int start, int fontIndex, float s
 void trap_R_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t* glyph);
 void trap_IME_SetCompositionFont(int fontIndex, float scale);
 int trap_R_Font_Register(const char* name);
+// [ioquakelive] texto en una fuente del motor (trap_R_Font_Register), fuera de cg_draw.c
+void CG_DrawTextInFont(float x, float y, int engineFont, float scale, const vec4_t color, const char* text, int style);
+void CG_MeasureTextInFont(const char* text, int engineFont, float scale, float* w, float* h);
 void trap_S_StartLocalSoundVolume(sfxHandle_t sfx, int channelNum, float volume);
 qboolean trap_Key_IsDown(int keynum);
 int trap_Key_GetCatcher(void);
