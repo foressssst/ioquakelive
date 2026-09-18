@@ -995,6 +995,10 @@ static void RB_IterateStagesGeneric(shaderCommands_t* input) {
 
     qboolean renderToCubemap = tr.renderCubeFbo && glState.currentFBO == tr.renderCubeFbo;
 
+    // [ioquakelive] el modelo pidio dibujarse translucido (RF_FORCE_ENT_ALPHA); ver abajo
+    qboolean forceAlpha = backEnd.currentEntity && (backEnd.currentEntity->e.renderfx & RF_FORCE_ENT_ALPHA);
+    unsigned int stateBits;
+
     ComputeDeformValues(&deformGen, deformParams);
 
     ComputeFogValues(fogDistanceVector, fogDepthVector, &eyeT);
@@ -1096,7 +1100,17 @@ static void RB_IterateStagesGeneric(shaderCommands_t* input) {
             GLSL_SetUniformFloat(sp, UNIFORM_FOGEYET, eyeT);
         }
 
-        GL_State(pStage->stateBits);
+        // [ioquakelive] RF_FORCE_ENT_ALPHA: el modelo entero se dibuja translucido al alfa de
+        // la entidad, diga lo que diga su shader. Se fuerza la mezcla por alfa, se deja de
+        // escribir profundidad -- si no, el arma se tapa a si misma y se ven los parches -- y
+        // el alfa se pone como si el stage llevara alphaGen entity.
+        stateBits = pStage->stateBits;
+        if (forceAlpha) {
+            stateBits &= ~(GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS | GLS_DEPTHMASK_TRUE);
+            stateBits |= GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+        }
+
+        GL_State(stateBits);
         if ((pStage->stateBits & GLS_ATEST_BITS) == GLS_ATEST_GT_0) {
             GLSL_SetUniformInt(sp, UNIFORM_ALPHATEST, 1);
         } else if ((pStage->stateBits & GLS_ATEST_BITS) == GLS_ATEST_LT_80) {
@@ -1111,7 +1125,11 @@ static void RB_IterateStagesGeneric(shaderCommands_t* input) {
             vec4_t baseColor;
             vec4_t vertColor;
 
-            ComputeShaderColors(pStage, baseColor, vertColor, pStage->stateBits);
+            ComputeShaderColors(pStage, baseColor, vertColor, stateBits);
+            if (forceAlpha) {
+                baseColor[3] = backEnd.currentEntity->e.shaderRGBA[3] / 255.0f;
+                vertColor[3] = 0.0f;
+            }
 
             GLSL_SetUniformVec4(sp, UNIFORM_BASECOLOR, baseColor);
             GLSL_SetUniformVec4(sp, UNIFORM_VERTCOLOR, vertColor);
