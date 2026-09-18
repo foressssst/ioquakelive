@@ -835,6 +835,9 @@ void CL_InitCGame(void) {
     Com_Memset(cl_loadCalls, 0, sizeof(cl_loadCalls));
     cl_loadProfiling = qtrue;
 
+    // [ioquakelive] los sonidos del mapa se decodifican en segundo plano mientras sigue la carga
+    S_AsyncLoadBegin();
+
     // put away the console
     Con_Close();
 
@@ -865,6 +868,11 @@ void CL_InitCGame(void) {
     // will cause the server to send us the first snapshot
     clc.state = CA_PRIMED;
 
+    t2 = Sys_Milliseconds();
+
+    // [ioquakelive] antes de cerrar la carga, los sonidos encargados quedan listos para sonar;
+    // para entonces los trabajadores ya terminaron, asi que esto casi nunca espera
+    S_AsyncLoadFinish();
     t2 = Sys_Milliseconds();
 
     cl_loadProfiling = qfalse;

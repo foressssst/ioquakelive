@@ -431,4 +431,130 @@ void* S_OGG_CodecLoad(const char* filename, snd_info_t* info) {
     return buffer;
 }
 
+
+/*
+=================
+S_OGG_DecodeMemory
+
+[ioquakelive] Decodifica un OGG entero que ya esta en memoria. Es lo que corre en un trabajador
+durante la carga, asi que no toca el sistema de archivos, ni la memoria del motor, ni la
+consola: lee de un buffer propio, pide la memoria al sistema y, si algo falla, devuelve NULL.
+=================
+*/
+typedef struct {
+    const byte* data;
+    size_t size;
+    size_t pos;
+} oggMemory_t;
+
+static size_t S_OGG_MemRead(void* ptr, size_t size, size_t nmemb, void* source) {
+    oggMemory_t* mem = (oggMemory_t*)source;
+    size_t wanted = size * nmemb;
+
+    if (!size || mem->pos >= mem->size) {
+        return 0;
+    }
+    if (wanted > mem->size - mem->pos) {
+        wanted = mem->size - mem->pos;
+    }
+    Com_Memcpy(ptr, mem->data + mem->pos, wanted);
+    mem->pos += wanted;
+    return wanted / size;
+}
+
+static int S_OGG_MemSeek(void* source, ogg_int64_t offset, int whence) {
+    oggMemory_t* mem = (oggMemory_t*)source;
+    ogg_int64_t target;
+
+    switch (whence) {
+        case SEEK_SET:
+            target = offset;
+            break;
+        case SEEK_CUR:
+            target = (ogg_int64_t)mem->pos + offset;
+            break;
+        case SEEK_END:
+            target = (ogg_int64_t)mem->size + offset;
+            break;
+        default:
+            return -1;
+    }
+    if (target < 0 || target > (ogg_int64_t)mem->size) {
+        return -1;
+    }
+    mem->pos = (size_t)target;
+    return 0;
+}
+
+static int S_OGG_MemClose(void* source) {
+    (void)source;
+    return 0;
+}
+
+static long S_OGG_MemTell(void* source) {
+    return (long)((oggMemory_t*)source)->pos;
+}
+
+byte* S_OGG_DecodeMemory(const byte* data, int length, snd_info_t* info) {
+    const ov_callbacks callbacks = {S_OGG_MemRead, S_OGG_MemSeek, S_OGG_MemClose, S_OGG_MemTell};
+    oggMemory_t mem;
+    OggVorbis_File vf;
+    vorbis_info* vi;
+    byte* pcm;
+    int got = 0;
+    int section;
+    int bigEndian = 0;
+
+#ifdef Q3_BIG_ENDIAN
+    bigEndian = 1;
+#endif
+
+    mem.data = data;
+    mem.size = (size_t)length;
+    mem.pos = 0;
+
+    if (ov_open_callbacks(&mem, &vf, NULL, 0, callbacks) != 0) {
+        return NULL;
+    }
+    if (ov_streams(&vf) != 1 || !(vi = ov_info(&vf, 0))) {
+        ov_clear(&vf);
+        return NULL;
+    }
+
+    info->rate = vi->rate;
+    info->width = OGG_SAMPLEWIDTH;
+    info->channels = vi->channels;
+    info->samples = (int)ov_pcm_total(&vf, 0);
+    info->size = info->samples * info->channels * info->width;
+    info->dataofs = 0;
+    if (info->size <= 0) {
+        ov_clear(&vf);
+        return NULL;
+    }
+
+    pcm = (byte*)malloc(info->size);
+    if (!pcm) {
+        ov_clear(&vf);
+        return NULL;
+    }
+    while (got < info->size) {
+        long read = ov_read(&vf, (char*)pcm + got, info->size - got, bigEndian, OGG_SAMPLEWIDTH, 1, &section);
+
+        if (read <= 0) {
+            break;
+        }
+        got += (int)read;
+    }
+    ov_clear(&vf);
+
+    if (got <= 0) {
+        free(pcm);
+        return NULL;
+    }
+    // lo que de verdad salio, por si el archivo decia mas de lo que tenia
+    info->size = got;
+    info->samples = got / (info->channels * info->width);
+    return pcm;
+}
+
 #endif  // USE_CODEC_VORBIS

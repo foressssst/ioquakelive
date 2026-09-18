@@ -89,6 +89,8 @@ extern snd_codec_t ogg_codec;
 void* S_OGG_CodecLoad(const char* filename, snd_info_t* info);
 snd_stream_t* S_OGG_CodecOpenStream(const char* filename);
 void S_OGG_CodecCloseStream(snd_stream_t* stream);
+// [ioquakelive] decodifica un OGG que ya esta en memoria; se puede llamar desde un trabajador
+byte* S_OGG_DecodeMemory(const byte* data, int length, snd_info_t* info);
 int S_OGG_CodecReadStream(snd_stream_t* stream, int bytes, void* buffer);
 #endif  // USE_CODEC_VORBIS
 
