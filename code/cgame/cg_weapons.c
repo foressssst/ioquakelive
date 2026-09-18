@@ -1719,7 +1719,7 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
         // QL binary: cg_muzzleFlash.integer also gates the dlight
         if ((!ps || cg_muzzleFlash.integer) &&
             (weapon->flashDlightColor[0] || weapon->flashDlightColor[1] || weapon->flashDlightColor[2])) {
-            trap_R_AddLightToScene(flash.origin, 300 + (rand() & 31), weapon->flashDlightColor[0],
+            CG_AddEffectLight(flash.origin, 300 + (rand() & 31), weapon->flashDlightColor[0],
                                    weapon->flashDlightColor[1], weapon->flashDlightColor[2]);
         }
     }

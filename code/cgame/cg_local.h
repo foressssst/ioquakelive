@@ -1779,6 +1779,7 @@ extern vmCvar_t cg_gun_x;
 extern vmCvar_t cg_gun_y;
 extern vmCvar_t cg_gun_z;
 extern vmCvar_t cg_drawGun;
+extern vmCvar_t r_dynamicLight;  // [ioquakelive] ver CG_AddEffectLight
 extern vmCvar_t cg_viewsize;
 extern vmCvar_t cg_tracerChance;
 extern vmCvar_t cg_tracerWidth;
@@ -2260,6 +2261,7 @@ void CG_MissileHitWall_DmgThrough(vec3_t origin, vec3_t dir, int weapon);  // wa
 void CG_ShotgunKillEffect(centity_t* cent);  // EV_SHOTGUN_KILL blood-puff burst
 void CG_AddViewWeapon(playerState_t* ps);
 void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent, int team);
+void CG_AddEffectLight(const vec3_t org, float intensity, float r, float g, float b);
 void CG_DrawWeaponSelect(void);
 void CG_DrawWeaponBar(void);    // [QL] weapon bar (Left/Right/Centered/Classic modes)
 
