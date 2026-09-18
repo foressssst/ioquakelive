@@ -269,6 +269,85 @@ int64_t Sys_Microseconds(void) {
     return ((now.QuadPart - base.QuadPart) * 1000000LL) / frequency.QuadPart;
 }
 
+
+// [ioquakelive] el punto de entrada que pide CreateThread, que no tiene la firma del motor
+typedef struct {
+    void (*function)(void*);
+    void* argument;
+} sysThreadStart_t;
+
+static DWORD WINAPI Sys_ThreadEntry(LPVOID parameter) {
+    sysThreadStart_t* start = (sysThreadStart_t*)parameter;
+
+    start->function(start->argument);
+    return 0;
+}
+
+/*
+==============================================================================
+
+HILOS   (Win32)
+
+[ioquakelive] Lo minimo para repartir trabajo entre nucleos: crear un hilo, un cerrojo y un
+semaforo. La cola que se apoya en esto vive en common.c, que es portable.
+
+==============================================================================
+*/
+
+void* Sys_ThreadCreate(void (*function)(void*), void* argument) {
+    static sysThreadStart_t starts[16];
+    static int next;
+    HANDLE handle;
+    DWORD id;
+    sysThreadStart_t* start;
+
+    if (next >= (int)ARRAY_LEN(starts)) {
+        return NULL;
+    }
+    start = &starts[next++];
+    start->function = function;
+    start->argument = argument;
+
+    handle = CreateThread(NULL, 0, Sys_ThreadEntry, start, 0, &id);
+    return (void*)handle;
+}
+
+void* Sys_MutexCreate(void) {
+    CRITICAL_SECTION* section = (CRITICAL_SECTION*)calloc(1, sizeof(CRITICAL_SECTION));
+
+    if (section) {
+        InitializeCriticalSection(section);
+    }
+    return section;
+}
+
+void Sys_MutexLock(void* mutex) {
+    EnterCriticalSection((CRITICAL_SECTION*)mutex);
+}
+
+void Sys_MutexUnlock(void* mutex) {
+    LeaveCriticalSection((CRITICAL_SECTION*)mutex);
+}
+
+void* Sys_SemaphoreCreate(void) {
+    return (void*)CreateSemaphore(NULL, 0, 0x7fffffff, NULL);
+}
+
+void Sys_SemaphorePost(void* semaphore) {
+    ReleaseSemaphore((HANDLE)semaphore, 1, NULL);
+}
+
+void Sys_SemaphoreWait(void* semaphore) {
+    WaitForSingleObject((HANDLE)semaphore, INFINITE);
+}
+
+int Sys_ProcessorCount(void) {
+    SYSTEM_INFO info;
+
+    GetSystemInfo(&info);
+    return (int)info.dwNumberOfProcessors;
+}
+
 /*
 ================
 Sys_RandomBytes

@@ -206,6 +206,112 @@ int64_t Sys_Microseconds(void) {
 }
 
 
+
+#include <pthread.h>
+
+/*
+==============================================================================
+
+HILOS   (POSIX)
+
+[ioquakelive] Ver el comentario de la version de Windows. El semaforo se arma con un cerrojo y
+una variable de condicion en vez de sem_t, porque en macOS los semaforos POSIX no estan
+implementados.
+
+==============================================================================
+*/
+
+typedef struct {
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    int count;
+} sysSemaphore_t;
+
+typedef struct {
+    void (*function)(void*);
+    void* argument;
+} sysThreadStart_t;
+
+static void* Sys_ThreadEntry(void* parameter) {
+    sysThreadStart_t* start = (sysThreadStart_t*)parameter;
+
+    start->function(start->argument);
+    return NULL;
+}
+
+void* Sys_ThreadCreate(void (*function)(void*), void* argument) {
+    static sysThreadStart_t starts[16];
+    static int next;
+    pthread_t thread;
+    sysThreadStart_t* start;
+
+    if (next >= (int)ARRAY_LEN(starts)) {
+        return NULL;
+    }
+    start = &starts[next++];
+    start->function = function;
+    start->argument = argument;
+
+    if (pthread_create(&thread, NULL, Sys_ThreadEntry, start) != 0) {
+        return NULL;
+    }
+    pthread_detach(thread);
+    return (void*)1;
+}
+
+void* Sys_MutexCreate(void) {
+    pthread_mutex_t* mutex = (pthread_mutex_t*)calloc(1, sizeof(pthread_mutex_t));
+
+    if (mutex) {
+        pthread_mutex_init(mutex, NULL);
+    }
+    return mutex;
+}
+
+void Sys_MutexLock(void* mutex) {
+    pthread_mutex_lock((pthread_mutex_t*)mutex);
+}
+
+void Sys_MutexUnlock(void* mutex) {
+    pthread_mutex_unlock((pthread_mutex_t*)mutex);
+}
+
+void* Sys_SemaphoreCreate(void) {
+    sysSemaphore_t* semaphore = (sysSemaphore_t*)calloc(1, sizeof(sysSemaphore_t));
+
+    if (semaphore) {
+        pthread_mutex_init(&semaphore->mutex, NULL);
+        pthread_cond_init(&semaphore->cond, NULL);
+    }
+    return semaphore;
+}
+
+void Sys_SemaphorePost(void* handle) {
+    sysSemaphore_t* semaphore = (sysSemaphore_t*)handle;
+
+    pthread_mutex_lock(&semaphore->mutex);
+    semaphore->count++;
+    pthread_cond_signal(&semaphore->cond);
+    pthread_mutex_unlock(&semaphore->mutex);
+}
+
+void Sys_SemaphoreWait(void* handle) {
+    sysSemaphore_t* semaphore = (sysSemaphore_t*)handle;
+
+    pthread_mutex_lock(&semaphore->mutex);
+    while (semaphore->count <= 0) {
+        pthread_cond_wait(&semaphore->cond, &semaphore->mutex);
+    }
+    semaphore->count--;
+    pthread_mutex_unlock(&semaphore->mutex);
+}
+
+int Sys_ProcessorCount(void) {
+    long count = sysconf(_SC_NPROCESSORS_ONLN);
+
+    return count > 0 ? (int)count : 1;
+}
+
 /*
 ==================
 Sys_RandomBytes

@@ -1113,6 +1113,20 @@ int Sys_Milliseconds(void);
 // [ioquakelive] reloj monotono fino, para el ritmo de los frames y para medirlo
 int64_t Sys_Microseconds(void);
 
+// [ioquakelive] lo minimo para repartir trabajo entre nucleos; la cola esta en common.c
+void* Sys_ThreadCreate(void (*function)(void*), void* argument);
+void* Sys_MutexCreate(void);
+void Sys_MutexLock(void* mutex);
+void Sys_MutexUnlock(void* mutex);
+void* Sys_SemaphoreCreate(void);
+void Sys_SemaphorePost(void* semaphore);
+void Sys_SemaphoreWait(void* semaphore);
+int Sys_ProcessorCount(void);
+
+void Com_JobsInit(void);
+void Com_JobsSubmit(void (*function)(void*), void* data);
+int Com_JobWorkers(void);
+
 qboolean Sys_RandomBytes(byte* string, int len);
 
 cpuFeatures_t Sys_GetProcessorFeatures(void);

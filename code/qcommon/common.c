@@ -84,6 +84,9 @@ cvar_t* com_protocol;
 cvar_t* com_basegame;
 cvar_t* com_homepath;
 cvar_t* com_busyWait;
+// [ioquakelive] cuantos hilos trabajadores: -1 es uno por nucleo menos el principal
+cvar_t* com_workers;
+static void Com_JobTest_f(void);
 // [ioquakelive] el ritmo exacto de los frames, en microsegundos; 0 vuelve al de antes
 cvar_t* com_preciseFrameTiming;
 static int64_t com_frameTargetUs;
@@ -2570,6 +2573,7 @@ void Com_Init(char* commandLine) {
     }
     Cmd_AddCommand("quit", Com_Quit_f);
     Cmd_AddCommand("frametimes", Com_FrameTimes_f);
+    Cmd_AddCommand("jobtest", Com_JobTest_f);
     Cmd_AddCommand("changeVectors", MSG_ReportChangeVectors_f);
     Cmd_AddCommand("writeconfig", Com_WriteConfig_f);
     Cmd_SetCommandCompletionFunc("writeconfig", Cmd_CompleteCfgName);
@@ -2646,7 +2650,12 @@ void Com_Init(char* commandLine) {
     com_maxfpsMinimized = Cvar_Get("com_maxfpsMinimized", "10", CVAR_ARCHIVE);
     com_abnormalExit = Cvar_Get("com_abnormalExit", "0", CVAR_ROM);
     com_busyWait = Cvar_Get("com_busyWait", "0", CVAR_ARCHIVE);
+    com_workers = Cvar_Get("com_workers", "-1", CVAR_ARCHIVE | CVAR_LATCH);
     com_preciseFrameTiming = Cvar_Get("com_preciseFrameTiming", "1", CVAR_ARCHIVE);
+
+    // [ioquakelive] los hilos trabajadores, para repartir lo que es CPU pura (ver la cola de
+    // trabajos, mas abajo)
+    Com_JobsInit();
     Cvar_Get("com_errorMessage", "", CVAR_ROM | CVAR_NORESTART);
 
     s = va("%s %s %s", FULL_PRODUCT_VERSION, PLATFORM_STRING, PRODUCT_DATE);
@@ -3063,6 +3072,195 @@ static void Com_FrameTimeSample(void) {
         com_ftCount = 0;
         com_ftLast = 0;
     }
+}
+
+/*
+==============================================================================
+
+LA COLA DE TRABAJOS
+
+[ioquakelive] Reparte trabajo entre los nucleos. Nacio para decodificar imagenes mientras el
+hilo principal sigue cargando el mapa: decodificar es el 94% del costo de las texturas y es CPU
+pura, asi que es lo unico que vale la pena sacar del hilo principal. Leer los archivos se queda
+donde estaba, porque el sistema de archivos no es seguro entre hilos.
+
+La cola es a proposito lo mas simple posible: se encola una funcion con su dato y los
+trabajadores la ejecutan. Quien encola se entera de que termino mirando su propio dato -- una
+bandera suya --, no preguntandole a la cola.
+
+com_workers 0 apaga los trabajadores: todo vuelve a correr en el hilo principal.
+
+==============================================================================
+*/
+
+#define COM_MAX_JOBS 4096
+#define COM_MAX_WORKERS 8
+
+typedef struct {
+    void (*function)(void*);
+    void* data;
+} comJob_t;
+
+static comJob_t com_jobQueue[COM_MAX_JOBS];
+static int com_jobHead, com_jobTail;
+static void* com_jobMutex;
+static void* com_jobSemaphore;
+static int com_jobWorkers;
+
+static void Com_JobWorker(void* unused) {
+    (void)unused;
+
+    for (;;) {
+        comJob_t job;
+
+        Sys_SemaphoreWait(com_jobSemaphore);
+
+        Sys_MutexLock(com_jobMutex);
+        if (com_jobTail == com_jobHead) {
+            Sys_MutexUnlock(com_jobMutex);
+            continue;
+        }
+        job = com_jobQueue[com_jobTail & (COM_MAX_JOBS - 1)];
+        com_jobTail++;
+        Sys_MutexUnlock(com_jobMutex);
+
+        job.function(job.data);
+    }
+}
+
+/*
+=================
+Com_JobsInit
+
+Arranca los trabajadores: uno por nucleo menos el principal, hasta ocho.
+=================
+*/
+void Com_JobsInit(void) {
+    int wanted = com_workers->integer;
+    int i;
+
+    if (com_jobWorkers || wanted == 0) {
+        return;
+    }
+    if (wanted < 0) {
+        wanted = Sys_ProcessorCount() - 1;
+    }
+    if (wanted > COM_MAX_WORKERS) {
+        wanted = COM_MAX_WORKERS;
+    }
+    if (wanted < 1) {
+        return;
+    }
+
+    com_jobMutex = Sys_MutexCreate();
+    com_jobSemaphore = Sys_SemaphoreCreate();
+    if (!com_jobMutex || !com_jobSemaphore) {
+        return;
+    }
+    for (i = 0; i < wanted; i++) {
+        if (!Sys_ThreadCreate(Com_JobWorker, NULL)) {
+            break;
+        }
+        com_jobWorkers++;
+    }
+    Com_Printf("Workers: %i\n", com_jobWorkers);
+}
+
+int Com_JobWorkers(void) {
+    return com_jobWorkers;
+}
+
+/*
+=================
+Com_JobsSubmit
+
+Encola un trabajo. Si no hay trabajadores -- o la cola esta llena, que no deberia pasar -- lo
+ejecuta aqui mismo, asi quien llama nunca tiene que tener dos caminos.
+=================
+*/
+void Com_JobsSubmit(void (*function)(void*), void* data) {
+    qboolean queued = qfalse;
+
+    if (com_jobWorkers) {
+        Sys_MutexLock(com_jobMutex);
+        if (com_jobHead - com_jobTail < COM_MAX_JOBS) {
+            com_jobQueue[com_jobHead & (COM_MAX_JOBS - 1)].function = function;
+            com_jobQueue[com_jobHead & (COM_MAX_JOBS - 1)].data = data;
+            com_jobHead++;
+            queued = qtrue;
+        }
+        Sys_MutexUnlock(com_jobMutex);
+    }
+    if (queued) {
+        Sys_SemaphorePost(com_jobSemaphore);
+        return;
+    }
+    function(data);
+}
+
+/*
+=================
+Com_JobTest_f
+
+Comprueba que los trabajadores anden: la misma cuenta repartida y hecha de una sola vez tienen
+que dar lo mismo.
+=================
+*/
+typedef struct {
+    int from, to;
+    double total;
+    volatile int done;
+} comJobTest_t;
+
+static void Com_JobTestWork(void* data) {
+    comJobTest_t* test = (comJobTest_t*)data;
+    double total = 0;
+    int i;
+
+    for (i = test->from; i < test->to; i++) {
+        total += sqrt((double)i);
+    }
+    test->total = total;
+    test->done = 1;
+}
+
+static void Com_JobTest_f(void) {
+    static comJobTest_t tests[COM_MAX_WORKERS + 1];
+    const int slice = 2000000;
+    int parts = Com_JobWorkers() + 1;
+    double parallel = 0, single = 0;
+    int64_t startUs;
+    float parallelMs, singleMs;
+    int i;
+
+    for (i = 0; i < parts; i++) {
+        tests[i].from = i * slice;
+        tests[i].to = (i + 1) * slice;
+        tests[i].done = 0;
+    }
+    startUs = Sys_Microseconds();
+    for (i = 0; i < parts; i++) {
+        Com_JobsSubmit(Com_JobTestWork, &tests[i]);
+    }
+    for (i = 0; i < parts; i++) {
+        while (!tests[i].done) {
+            Sys_Sleep(0);
+        }
+        parallel += tests[i].total;
+    }
+    parallelMs = (Sys_Microseconds() - startUs) / 1000.0f;
+
+    startUs = Sys_Microseconds();
+    for (i = 0; i < parts; i++) {
+        Com_JobTestWork(&tests[i]);
+        single += tests[i].total;
+    }
+    singleMs = (Sys_Microseconds() - startUs) / 1000.0f;
+
+    Com_Printf("jobs: %i workers, %i parts\n", Com_JobWorkers(), parts);
+    Com_Printf("  spread out %.1f ms, single thread %.1f ms  (%.2fx)\n", parallelMs, singleMs,
+               singleMs / (parallelMs > 0 ? parallelMs : 1));
+    Com_Printf("  results %s\n", parallel == single ? "match" : "DO NOT MATCH");
 }
 
 /*
