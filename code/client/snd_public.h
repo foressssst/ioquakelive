@@ -60,6 +60,12 @@ void S_Update(void);
 void S_DisableSounds(void);
 
 void S_BeginRegistration(void);
+// [ioquakelive] durante la carga del mapa los OGG se decodifican en segundo plano; Finish espera
+// a todos y los deja listos para sonar
+void S_AsyncLoadBegin(void);
+void S_AsyncLoadFinish(void);
+// si la carga se corto a mitad: tira lo encargado sin convertirlo
+void S_AsyncLoadDiscard(void);
 
 //
 //
