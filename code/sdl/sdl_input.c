@@ -60,6 +60,8 @@ static int in_rateWanted, in_rateFrames, in_rateEvents, in_rateMouse, in_rateMax
 static qboolean mouseActive = qfalse;
 
 static cvar_t* in_mouse = NULL;
+// [ioquakelive] la lectura del mouse en lote; apagada hasta verificarla en una maquina real
+static cvar_t* in_rawBatch = NULL;
 static cvar_t* in_mouseMode = NULL;
 static cvar_t* in_nograb;
 
@@ -625,7 +627,9 @@ relativo de SDL, que es lo que habia.
 */
 static void IN_GrabMouse(void) {
 #ifdef _WIN32
-    if (in_mouse->integer == 2 && IN_RawMouseStart()) {
+    // [ioquakelive] opcional: en la maquina del jugador la vista no se movia con esta via, y la
+    // red de seguridad no lo detecto (ver el comentario de in_rawBatch en IN_Init)
+    if (in_mouse->integer == 2 && in_rawBatch && in_rawBatch->integer && IN_RawMouseStart()) {
         SDL_SetRelativeMouseMode(SDL_FALSE);
         SDL_ShowCursor(SDL_FALSE);
         SDL_SetWindowGrab(SDL_window, SDL_TRUE);
@@ -1613,6 +1617,12 @@ void IN_Init(void* windowData) {
     // Windows cursor and 0 no mouse; in_mouseMode says which one runs. Here 1 and 2 are SDL's relative
     // mode, which reads raw input, and -1 warps the cursor to the centre like the cursor mode did.
     in_mouse = Cvar_Get("in_mouse", "2", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
+    // [ioquakelive] La lectura del mouse en lote (GetRawInputBuffer), pensada para mouses de
+    // 8000 Hz. En la maquina del jugador la vista no se movia con ella, y la red de seguridad no lo
+    // detecto: comparaba contra el movimiento de SDL, que deja de llegar cuando el cursor
+    // recortado toca el borde de la ventana. Queda apagada hasta verificarla en una maquina real;
+    // in_mouse 2 vuelve a ser el modo relativo de SDL, que es lo que andaba.
+    in_rawBatch = Cvar_Get("in_rawBatch", "0", CVAR_ARCHIVE | CVAR_LATCH);
     in_mouseMode = Cvar_Get("in_mouseMode", "undefined", CVAR_ROM | CVAR_TEMP | CVAR_USERSAVE);
     in_nograb = Cvar_Get("in_nograb", "0", CVAR_TEMP);
     // [QL] which window raw input is registered to; SDL registers it itself
@@ -1625,7 +1635,7 @@ void IN_Init(void* windowData) {
         // plataformas sigue siendo el modo relativo de SDL
         SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "0");
 #ifdef _WIN32
-        Cvar_Set("in_mouseMode", "win32(Raw, batched)");
+        Cvar_Set("in_mouseMode", in_rawBatch->integer ? "win32(Raw, batched)" : "win32(Raw)");
 #else
         Cvar_Set("in_mouseMode", "win32(Raw)");
 #endif
