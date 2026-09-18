@@ -1421,9 +1421,10 @@ void R_Register(void) {
     r_dynamiclight = ri.Cvar_Get("r_dynamicLight", "1", CVAR_ARCHIVE | CVAR_USERSAVE);
     r_dlightBacks = ri.Cvar_Get("r_dlightBacks", "1", CVAR_ARCHIVE);
     r_finish = ri.Cvar_Get("r_finish", "0", CVAR_ARCHIVE);
-    // [ioquakelive] cuantos frames puede tener la GPU encolados. 1 es uno en vuelo: acota la
-    // latencia sin tirar el solapamiento entre procesador y GPU. 0 vuelve a vaciar la tuberia.
-    r_maxQueuedFrames = ri.Cvar_Get("r_maxQueuedFrames", "1", CVAR_ARCHIVE);
+    // [ioquakelive] cuantos frames puede tener la GPU encolados. 0, el default, vacia la tuberia
+    // en cada frame como retail: la menor latencia de entrada. 1 deja uno en vuelo: unos fps mas
+    // (+6% medido) a cambio de hasta un frame de latencia, que un jugador competitivo nota.
+    r_maxQueuedFrames = ri.Cvar_Get("r_maxQueuedFrames", "0", CVAR_ARCHIVE);
     r_textureMode = ri.Cvar_Get("r_textureMode", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE | CVAR_USERSAVE);
 #ifdef __EMSCRIPTEN__
     // Under Emscripten we don't throttle framerate with com_maxfps by default, so enable
