@@ -89,6 +89,7 @@ cvar_t* r_nocurves;
 cvar_t* r_allowExtensions;
 
 cvar_t* r_ext_compressed_textures;
+cvar_t* r_prefetchTextures;  // [ioquakelive]
 cvar_t* r_ext_multitexture;
 cvar_t* r_ext_compiled_vertex_array;
 cvar_t* r_ext_texture_env_add;
@@ -1261,6 +1262,9 @@ void R_Register(void) {
     // and 0x80000 (CVAR_USERSAVE) and 0x800 (CVAR_REPLICATE) on most of them
     r_allowExtensions = ri.Cvar_Get("r_allowExtensions", "1", CVAR_ARCHIVE | CVAR_LATCH);
     r_ext_compressed_textures = ri.Cvar_Get("r_ext_compressed_textures", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
+    // [ioquakelive] decodificar las texturas del mapa por adelantado, repartido entre los
+    // hilos trabajadores; 0 vuelve a cargarlas una por una en el hilo principal
+    r_prefetchTextures = ri.Cvar_Get("r_prefetchTextures", "1", CVAR_ARCHIVE);
     // [QL] only turns off the 3DFX gamma ramp in retail's own GL setup, so it is only registered
     ri.Cvar_Get("r_ext_gamma_control", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
     r_ext_multitexture = ri.Cvar_Get("r_ext_multitexture", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
@@ -1709,6 +1713,7 @@ Touch all images to make sure they are resident
 =============
 */
 void RE_EndRegistration(void) {
+    R_PrefetchFinish();        // [ioquakelive] suelta lo que sobro y escribe la lista
     R_ImageLoadStatsReport();  // [ioquakelive] ver RE_BeginRegistration
     R_IssuePendingRenderCommands();
     if (!ri.Sys_LowPhysicalMemory()) {
