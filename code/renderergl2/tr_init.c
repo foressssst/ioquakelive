@@ -1145,10 +1145,12 @@ void GfxInfo_f(void) {
         {
             "disabled",
             "enabled"};
+    // [ioquakelive] 2 es pantalla completa sin bordes, para que el log diga cual de las dos es
     const char* fsstrings[] =
         {
             "windowed",
-            "fullscreen"};
+            "fullscreen",
+            "borderless fullscreen"};
 
     ri.Printf(PRINT_ALL, "\nGL_VENDOR: %s\n", glConfig.vendor_string);
     ri.Printf(PRINT_ALL, "GL_RENDERER: %s\n", glConfig.renderer_string);
@@ -1170,7 +1172,7 @@ void GfxInfo_f(void) {
     ri.Printf(PRINT_ALL, "GL_MAX_TEXTURE_SIZE: %d\n", glConfig.maxTextureSize);
     ri.Printf(PRINT_ALL, "GL_MAX_TEXTURE_IMAGE_UNITS: %d\n", glConfig.numTextureUnits);
     ri.Printf(PRINT_ALL, "\nPIXELFORMAT: color(%d-bits) Z(%d-bit) stencil(%d-bits)\n", glConfig.colorBits, glConfig.depthBits, glConfig.stencilBits);
-    ri.Printf(PRINT_ALL, "MODE: %d, %d x %d %s hz:", r_mode->integer, glConfig.vidWidth, glConfig.vidHeight, fsstrings[r_fullscreen->integer == 1]);
+    ri.Printf(PRINT_ALL, "MODE: %d, %d x %d %s hz:", r_mode->integer, glConfig.vidWidth, glConfig.vidHeight, fsstrings[r_fullscreen->integer == 1 ? 1 : (r_fullscreen->integer == 2 ? 2 : 0)]);
     if (glConfig.displayFrequency) {
         ri.Printf(PRINT_ALL, "%d\n", glConfig.displayFrequency);
     } else {

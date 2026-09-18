@@ -377,7 +377,7 @@ static void GLimp_ClearProcAddresses(void) {
 GLimp_SetMode
 ===============
 */
-static int GLimp_SetMode(int mode, qboolean fullscreen, qboolean noborder, qboolean fixedFunction) {
+static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean fixedFunction) {
     struct GLimp_ContextType {
         int profileMask;
         int majorVersion;
@@ -481,7 +481,15 @@ static int GLimp_SetMode(int mode, qboolean fullscreen, qboolean noborder, qbool
         SDL_window = NULL;
     }
 
-    if (fullscreen) {
+    // [ioquakelive] 2 es pantalla completa SIN BORDES: una ventana del tamano del escritorio,
+    // sin cambio de modo de video. Es lo que hace que el alt-tab sea inmediato, y con el hint de
+    // abajo el juego tampoco se minimiza solo al hacer clic en otro monitor.
+    if (fullscreen == 2) {
+        SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
+        flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+        glConfig.isFullscreen = qtrue;
+    } else if (fullscreen) {
+        SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "1");
         flags |= SDL_WINDOW_FULLSCREEN;
         glConfig.isFullscreen = qtrue;
     } else {
@@ -787,7 +795,7 @@ static int GLimp_SetMode(int mode, qboolean fullscreen, qboolean noborder, qbool
 GLimp_StartDriverAndSetMode
 ===============
 */
-static qboolean GLimp_StartDriverAndSetMode(int mode, qboolean fullscreen, qboolean noborder, qboolean gl3Core) {
+static qboolean GLimp_StartDriverAndSetMode(int mode, int fullscreen, qboolean noborder, qboolean gl3Core) {
     rserr_t err;
 
     if (!SDL_WasInit(SDL_INIT_VIDEO)) {
@@ -989,7 +997,12 @@ void GLimp_Init(qboolean fixedFunction) {
     ri.Sys_GLimpInit();
 
     // [QL] quakelive_steam.exe 0x448110: full screen takes r_mode, a window r_windowedMode
-    mode = r_fullscreen->integer ? r_mode->integer : r_windowedMode->integer;
+    // [ioquakelive] r_fullscreen 2, sin bordes, toma siempre la resolucion del escritorio: es lo
+    // que significa una ventana sin bordes del tamano de la pantalla.
+    if (r_fullscreen->integer == 2)
+        mode = -2;
+    else
+        mode = r_fullscreen->integer ? r_mode->integer : r_windowedMode->integer;
 
     // Create the window and set up the context
     if (GLimp_StartDriverAndSetMode(mode, r_fullscreen->integer, r_noborder->integer, fixedFunction))
