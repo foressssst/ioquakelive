@@ -132,6 +132,9 @@ image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags);
 // se puede sacar del hilo principal sin tocar el sistema de archivos
 extern int64_t r_imageDecodeUs, r_imageUploadUs, r_imageReadUs;
 extern int r_imageCount;
+// [ioquakelive] lo que cuesta registrar shaders, imagenes aparte
+extern int64_t r_shaderFindUs, r_shaderCachedUs;
+extern int r_shaderFindCount, r_shaderCachedCount;
 void R_ImageLoadStatsReset(void);
 void R_ImageLoadStatsReport(void);
 image_t* R_CreateImage(const char* name, byte* pic, int width, int height, imgType_t type, imgFlags_t flags, int internalFormat);
