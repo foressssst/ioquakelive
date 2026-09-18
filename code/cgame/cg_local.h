@@ -1916,6 +1916,8 @@ extern vmCvar_t cg_loadout;
 extern vmCvar_t cg_scalePlayerModelsToBB;
 extern vmCvar_t cg_screenDamageAlpha;
 extern vmCvar_t cg_screenDamageAlpha_Team;
+extern vmCvar_t cg_screenDamage_Self;
+extern vmCvar_t cg_screenDamage_Team;
 extern vmCvar_t cg_spectating;
 extern vmCvar_t cg_specItemTimers;
 extern vmCvar_t cg_specItemTimersSize;
