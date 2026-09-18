@@ -341,6 +341,12 @@ void Sys_SemaphoreWait(void* semaphore) {
     WaitForSingleObject((HANDLE)semaphore, INFINITE);
 }
 
+// [ioquakelive] cede el resto del turno; es lo que hay que hacer mientras se espera a otro
+// hilo, en vez de girar en vacio quitandole el nucleo
+void Sys_ThreadYield(void) {
+    SwitchToThread();
+}
+
 int Sys_ProcessorCount(void) {
     SYSTEM_INFO info;
 
