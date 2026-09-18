@@ -801,8 +801,13 @@ void Cmd_Team_f(gentity_t* ent) {
         return;
     }
 
+    // [QL] 0x10040e55: la espera sale de g_switchTeamDelay, y el mensaje dice cuanto es. El
+    // fork la tenia fija en 5 segundos e ignoraba su propia cvar, que ya existia con el mismo
+    // default que el binario (3).
     if (ent->client->switchTeamTime > level.time) {
-        trap_SendServerCommand(ent - g_entities, "print \"May not switch teams more than once per 5 seconds.\n\"");
+        trap_SendServerCommand(ent - g_entities,
+            va("print \"" S_COLOR_RED "May not switch teams more than once per %i seconds." S_COLOR_WHITE "\n\"",
+               g_switchTeamDelay.integer));
         return;
     }
 
@@ -814,9 +819,16 @@ void Cmd_Team_f(gentity_t* ent) {
 
     trap_Argv(1, s, sizeof(s));
 
+    oldTeam = ent->client->sess.sessionTeam;
     SetTeam(ent, s);
 
-    ent->client->switchTeamTime = level.time + 5000;
+    // [QL] 0x10040e88: la espera solo se arma si el cambio ocurrio y si el equipo al que se
+    // llego NO es espectador. El binario mira el valor que devuelve SetTeam y el equipo
+    // resultante; aca se compara el equipo antes y despues, que dice lo mismo. Irse a
+    // espectador no cuesta espera, y pedir el equipo en el que ya estabas tampoco.
+    if (ent->client->sess.sessionTeam != oldTeam && ent->client->sess.sessionTeam != TEAM_SPECTATOR) {
+        ent->client->switchTeamTime = level.time + g_switchTeamDelay.integer * 1000;
+    }
 }
 
 /*
