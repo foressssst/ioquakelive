@@ -81,7 +81,9 @@ typedef enum {
     HM_HIT_NONE = SM_HIT_SHARED,
     HM_HIT_NAV,
     HM_HIT_BANNER,
-    HM_HIT_ITEM
+    HM_HIT_ITEM,
+    HM_HIT_CARD,  // [ioquakelive] una tarjeta del menu principal
+    HM_HIT_QUIT
 } hmHitType_t;
 
 // arenas whose shots pak00 carries, one of which is the background when the painting is not there
@@ -693,7 +695,9 @@ static float UI_Home_DrawFriends(float x, float y, float w) {
 static void UI_Home_DrawSide(void) {
     float w = HM_SIDE_W;
     float x = smVW - w - HM_SIDE_RIGHT;
-    float y = HM_LIST_Y;
+    // [ioquakelive] arriba a la derecha, a la altura del logo: con las tarjetas abajo, a media
+    // altura pisaba la ultima
+    float y = 104.0f;
 
     if (x < UI_Home_ColumnX() + HM_COL_W + 60.0f) {
         return;  // a narrow screen keeps the menu alone
@@ -793,6 +797,156 @@ static void UI_Home_DrawLegal(void) {
     SM_Text(UI_Home_ColumnX(), baseline, FONT_SANS, 12, smSubtle, version, -1, qfalse);
 }
 
+
+/*
+===============
+UI_Home_DrawCards
+
+[ioquakelive] 2026-09-18, tercer enfoque del menu principal, pedido por el jugador ("esta vez
+intenta con otra cosa"): las secciones que funcionan como tarjetas grandes con imagen, que es lo
+que hacen los juegos de hoy. Un clic cada una, sin submenus. Lo que todavia no existe no ocupa
+lugar. Las imagenes son levelshots de pak00.
+===============
+*/
+typedef struct {
+    const char* title;
+    const char* line;
+    const char* image;
+    int nav;
+    float width;  // Play es la accion principal y es mas ancha
+} hmCard_t;
+
+static const hmCard_t hmCards[] = {
+    {"Play", "Start a match against bots", "levelshots/bloodrun", HM_NAV_PLAY, 520.0f},
+    {"Training", "Crash Course, strafing, rocket jumps", "levelshots/qztraining", HM_NAV_TRAINING, 300.0f},
+    {"Replays", "Watch the matches you recorded", "levelshots/furiousheights", HM_NAV_REPLAYS, 300.0f},
+    {"Settings", "Controls, video, sound and your player", "levelshots/aerowalk", HM_NAV_SETTINGS, 300.0f},
+};
+
+#define HM_CARD_H 250.0f
+#define HM_CARD_GAP 24.0f
+#define HM_CARD_LIFT 6.0f
+#define HM_CARD_PAD 20.0f
+#define HM_CARDS_ABOVE_MARKS 40.0f
+
+// donde arranca la franja de logos; las tarjetas van justo arriba
+static float UI_Home_MarksTop(void) {
+    float legal = smBottom - 30.0f - 26.0f - (UI_Home_InMatch() ? 38.0f : 0.0f);
+
+    return legal - 8.0f - HM_MARK_H;
+}
+
+static void UI_Home_DrawCard(int i, float x, float y) {
+    static qhandle_t images[ARRAY_LEN(hmCards)];
+    static qboolean loaded;
+    const hmCard_t* card = &hmCards[i];
+    qboolean over = SM_Over(HM_HIT_CARD, i);
+    vec4_t tint = {0.55f, 0.55f, 0.55f, 1.0f};
+    int k;
+
+    if (!loaded) {
+        int j;
+
+        for (j = 0; j < (int)ARRAY_LEN(hmCards); j++) {
+            images[j] = trap_R_RegisterShaderNoMip(hmCards[j].image);
+        }
+        loaded = qtrue;
+    }
+
+    // bajo el cursor la tarjeta sube un poco y la imagen se enciende
+    if (over) {
+        y -= HM_CARD_LIFT;
+        tint[0] = tint[1] = tint[2] = 1.0f;
+    }
+
+    SM_Fill(x, y, card->width, HM_CARD_H, smPanel, NULL);
+    if (images[i]) {
+        SM_PicColor(x, y, card->width, HM_CARD_H, images[i], tint, NULL);
+    }
+
+    // abajo, un degradado para que el texto se lea sobre cualquier imagen
+    for (k = 0; k < 12; k++) {
+        vec4_t band;
+        float h = 10.0f;
+
+        VectorCopy(smPage, band);
+        band[3] = 0.08f * k;
+        SM_Fill(x, y + HM_CARD_H - 12 * h + k * h, card->width, h, band, NULL);
+    }
+
+    {
+        float size = i == 0 ? 40.0f : 28.0f;
+
+        SM_Label(x + HM_CARD_PAD, SM_Baseline(FONT_SANS, size, y + HM_CARD_H - 70 - size, size + 6), size,
+                 over ? smGold : smText, card->title, 0.6f);
+    }
+    SM_Text(x + HM_CARD_PAD, SM_Baseline(FONT_SANS, 14, y + HM_CARD_H - 38, 20), FONT_SANS, 14, smTextSoft,
+            card->line, SM_Fit(FONT_SANS, 14, card->line, card->width - 2 * HM_CARD_PAD), qfalse);
+
+    // el borde: fino y apagado, dorado bajo el cursor
+    {
+        const float* edge = over ? smGold : smBorder;
+        float t = over ? 2.0f : 1.0f;
+
+        SM_Fill(x, y, card->width, t, edge, NULL);
+        SM_Fill(x, y + HM_CARD_H - t, card->width, t, edge, NULL);
+        SM_Fill(x, y, t, HM_CARD_H, edge, NULL);
+        SM_Fill(x + card->width - t, y, t, HM_CARD_H, edge, NULL);
+    }
+
+    SM_Hit(x, y, card->width, HM_CARD_H + HM_CARD_LIFT, HM_HIT_CARD, i, NULL);
+}
+
+static void UI_Home_DrawCards(void) {
+    int count = (int)ARRAY_LEN(hmCards);
+    float total = (count - 1) * HM_CARD_GAP;
+    float x;
+    float y = UI_Home_MarksTop() - HM_CARDS_ABOVE_MARKS - HM_CARD_H;
+    int i;
+
+    for (i = 0; i < count; i++) {
+        total += hmCards[i].width;
+    }
+    x = (smVW - total) * 0.5f;
+
+    if (hm2.logo) {
+        SM_Pic(UI_Home_ColumnX() - 6, 96.0f, 400.0f, 100.0f, hm2.logo, NULL);
+    }
+
+    for (i = 0; i < count; i++) {
+        UI_Home_DrawCard(i, x, y);
+        x += hmCards[i].width + HM_CARD_GAP;
+    }
+}
+
+// Quit, chico, arriba a la derecha: no es una seccion, es la salida
+static void UI_Home_DrawQuit(void) {
+    const char* label = "Quit";
+    float size = 15.0f;
+    float w = SM_LabelWidth(size, label, 1.4f);
+    float x = smVW - HM_SIDE_RIGHT - w;
+    float y = 44.0f;
+    qboolean over = SM_Over(HM_HIT_QUIT, 0);
+
+    SM_Label(x, SM_Baseline(FONT_SANS, size, y, 24), size, over ? smGold : smTextSoft, label, 1.4f);
+    SM_Hit(x - 12, y - 6, w + 24, 36, HM_HIT_QUIT, 0, NULL);
+}
+
+// La sombra de la pagina: oscura arriba a la izquierda, donde esta el logo, y abajo, donde van
+// las tarjetas y los logos; en el medio el cuadro se ve.
+static void UI_Home_DrawCardsShade(void) {
+    float top = -smTop / smScale;
+    float cardsTop = UI_Home_MarksTop() - HM_CARDS_ABOVE_MARKS - HM_CARD_H;
+    vec4_t band;
+
+    UI_Home_WashAcross(-1, 760.0f, smPage, 0.85f, 0.0f);
+    UI_Home_Wash(top, 200.0f, smPage, 0.6f, 0.0f);
+    UI_Home_Wash(cardsTop - 220.0f, 200.0f, smPage, 0.0f, 0.8f);
+    VectorCopy(smPage, band);
+    band[3] = 0.8f;
+    SM_Fill(-1, cardsTop - 20.0f, smVW + 2, smBottom - cardsTop + 21.0f, band, NULL);
+}
+
 void UI_Home_Open(void) {
     menuDef_t* menu = Menus_FindByName("main");
     itemDef_t* item = menu ? Menu_FindItemByName(menu, "home") : NULL;
@@ -810,9 +964,10 @@ void UI_Home_Paint(void) {
     UI_Home_LoadMenu();
 
     UI_Home_DrawBackground();
-    UI_Home_DrawShade();
-    UI_Home_DrawColumn();
+    UI_Home_DrawCardsShade();
+    UI_Home_DrawCards();
     UI_Home_DrawSide();
+    UI_Home_DrawQuit();
     UI_Home_DrawLegal();
 
     UI_Home_Banner();
@@ -836,6 +991,15 @@ qboolean UI_Home_HandleKey(int key) {
         return qtrue;
     }
     hit = SM_HitAt(smMX, smMY);
+    // [ioquakelive] las tarjetas y la salida del menu principal
+    if (hit && hit->type == HM_HIT_CARD) {
+        UI_Home_Go(hmCards[hit->index].nav);
+        return qtrue;
+    }
+    if (hit && hit->type == HM_HIT_QUIT) {
+        UI_Home_Go(HM_NAV_QUIT);
+        return qtrue;
+    }
     if (!hit || hit->type != HM_HIT_ITEM) {
         return qtrue;
     }
