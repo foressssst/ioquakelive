@@ -54,6 +54,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define RF_WRAP_FRAMES 0x0200   // mod the model frames by the maxframes to allow continuous
                                 // animation without needing to know the frame count
 
+#define RF_FORCE_ENT_ALPHA 0x0400  // [ioquakelive] draw the model translucent at shaderRGBA[3],
+                                   // whatever its own shaders say. Sin esto no se puede: los
+                                   // shaders de arma de pak00 no llevan alphaGen entity, asi
+                                   // que el alfa de la entidad no los toca. Lo usa cg_drawGun 3.
+
 // refdef flags
 #define RDF_NOWORLDMODEL 0x0001  // used for player configuration screen
 #define RDF_HYPERSPACE 0x0004    // teleportation effect
