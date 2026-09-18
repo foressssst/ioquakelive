@@ -2462,6 +2462,10 @@ void CL_InitRef(void) {
     ri.Error = Com_Error;
     ri.Milliseconds = CL_ScaledMilliseconds;
     ri.Microseconds = Sys_Microseconds;
+    ri.JobsSubmit = Com_JobsSubmit;
+    ri.JobWorkers = Com_JobWorkers;
+    ri.Sleep = Sys_Sleep;
+    ri.ThreadYield = Sys_ThreadYield;
     ri.Malloc = CL_RefMalloc;
     ri.Free = Z_Free;
 #ifdef HUNK_DEBUG

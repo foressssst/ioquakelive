@@ -104,7 +104,11 @@ extern cvar_t* r_drawBuffer;
 extern cvar_t* r_swapInterval;
 
 extern cvar_t* r_allowExtensions;          // global enable/disable of OpenGL extensions
-extern cvar_t* r_ext_compressed_textures;  // these control use of specific extensions
+extern cvar_t* r_ext_compressed_textures;
+// [ioquakelive] las texturas del mapa, decodificadas por adelantado entre los trabajadores
+extern cvar_t* r_prefetchTextures;
+void R_PrefetchStart(const char* listName);
+void R_PrefetchFinish(void);
 extern cvar_t* r_ext_multitexture;
 extern cvar_t* r_ext_compiled_vertex_array;
 extern cvar_t* r_ext_texture_env_add;
@@ -160,6 +164,18 @@ IMAGE LOADERS
 
 void R_LoadBMP(const char* name, byte** pic, int* width, int* height);
 void R_LoadJPG(const char* name, byte** pic, int* width, int* height);
+// [ioquakelive] decodifica un JPEG que ya esta en memoria. Existe para poder repartirlo
+// entre hilos: el buffer de salida se pide con allocator (malloc del sistema en un
+// trabajador, el del motor en el hilo principal) y silent apaga los mensajes, que fuera
+// del hilo principal no son seguros.
+void R_DecodeJPG(byte* fileData, int fileLen, byte** pic, int* width, int* height,
+                 void* (*allocator)(size_t), qboolean silent);
+// [ioquakelive] lo mismo para TGA, que es el formato de la mayoria de las texturas de
+// Quake Live. Lleva ademas el nombre, que usa en los mensajes, y con que soltar la memoria.
+void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int* width,
+                 int* height, void* (*allocator)(size_t), void (*deallocator)(void*),
+                 qboolean silent);
+extern char r_lastImageName[MAX_QPATH];
 void R_LoadPCX(const char* name, byte** pic, int* width, int* height);
 void R_LoadPNG(const char* name, byte** pic, int* width, int* height);
 void R_LoadTGA(const char* name, byte** pic, int* width, int* height);

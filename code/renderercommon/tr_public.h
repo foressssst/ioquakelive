@@ -130,6 +130,12 @@ typedef struct {
     int (*Milliseconds)(void);
     // [ioquakelive] reloj fino, para medir la carga de imagenes sin redondear a ms
     int64_t (*Microseconds)(void);
+    // [ioquakelive] para repartir la decodificacion de imagenes entre los trabajadores
+    void (*JobsSubmit)(void (*function)(void*), void* data);
+    int (*JobWorkers)(void);
+    void (*Sleep)(int milliseconds);
+    // cede el turno mientras se espera a un trabajador
+    void (*ThreadYield)(void);
 
     // stack based memory allocation for per-level things that
     // won't be freed

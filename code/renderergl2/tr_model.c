@@ -1073,10 +1073,16 @@ static qboolean R_LoadMDR(model_t* mod, void* buffer, int filesize, const char* 
 ** RE_BeginRegistration
 */
 void RE_BeginRegistration(glconfig_t* glconfigOut) {
-    R_ImageLoadStatsReset();  // [ioquakelive] el reparto del tiempo de carga de imagenes
     int i;
 
     R_Init();
+
+    // [ioquakelive] despues de R_Init, que es quien registra las cvars del renderer: esta
+    // funcion es la que lo llama, asi que aqui arriba todavia no existen.
+    R_ImageLoadStatsReset();
+    // lo que el cgame registra antes del mundo -- el HUD sobre todo -- es igual en todos los
+    // mapas, asi que tiene su propia lista
+    R_PrefetchStart("common");
 
     *glconfigOut = glConfig;
 
