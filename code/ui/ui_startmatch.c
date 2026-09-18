@@ -785,7 +785,9 @@ static float SM_DrawGametypeCard(float x, float y, float w) {
 
     SM_DrawChoiceTitle(x, y, "Game Type", over);
     y += SM_EYEBROW_H;
-    SM_Round(x, y, w, h, SM_RADIUS_MD, over ? smRaised : smPage, NULL);
+    if (over) {
+        SM_Round(x, y, w, h, SM_RADIUS_MD, smRaised, NULL);
+    }
     SM_Pic(x + SM_CARD_PAD + 4, y + (h - icon) * 0.5f, icon, icon, SM_GametypeIcon(gt), NULL);
     SM_Label(tx, SM_Baseline(FONT_SANS, 20, y + 18, 28), 20, over ? smGold : smText, gt->title, 0.2f);
     // the factory's title, or "Default" when it is the gametype's
@@ -807,7 +809,9 @@ static float SM_DrawArenaCard(float x, float y, float w) {
 
     SM_DrawChoiceTitle(x, y, "Map", over);
     y += SM_EYEBROW_H;
-    SM_Round(x, y, w, h, SM_RADIUS_MD, over ? smRaised : smPage, NULL);
+    if (over) {
+        SM_Round(x, y, w, h, SM_RADIUS_MD, smRaised, NULL);
+    }
     SM_Pic(x + SM_CARD_PAD, y + SM_CARD_PAD, picW, picH, SM_Preview(arena, sm.selectedMap), NULL);
     if (arena) {
         SM_Label(x + SM_CARD_PAD + 4, SM_Baseline(FONT_SANS, 18, y + SM_CARD_PAD + picH + 10, 28), 18,
@@ -1012,7 +1016,10 @@ static void SM_DrawPage(void) {
         for (i = smGroups[g].first; i <= smGroups[g].last; i++) {
             h += SM_ROW_H + (i == SM_SERVERTYPE && SM_ShowPortNote() ? SM_NOTE_H : 0);
         }
-        SM_Round(rowX - 10, y, SM_ROW_W + 20, h, SM_RADIUS_MD, smPage, NULL);
+        // [ioquakelive] sin tarjeta negra: una linea fina separa cada grupo del anterior
+        if (g > 0) {
+            SM_Fill(rowX, y - SM_GROUP_GAP * 0.5f, SM_ROW_W, 1, smBorder, NULL);
+        }
         SM_Label(rowX + 12, SM_Baseline(FONT_SANS, 11, y + 12, 18), 11, smGold, smGroups[g].title, 1.6f);
         y += SM_GROUP_HEAD;
 

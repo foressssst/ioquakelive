@@ -27,12 +27,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "ui_web.h"
 
-const vec4_t smPage = SM_RGB(8, 8, 8);
-const vec4_t smPanel = SM_RGB(15, 15, 15);
-const vec4_t smRaised = SM_RGB(26, 26, 26);
-const vec4_t smRaisedHover = SM_RGB(38, 38, 38);
-const vec4_t smBorder = SM_RGB(51, 51, 51);
-const vec4_t smField = SM_RGB(15, 15, 15);
+// [ioquakelive] 2026-09-18: cada gris sube unos puntos -- el jugador pidio la paleta "un
+// poquitin mas clara, solo un poco". smField sube mas: es el carril del slider y el borde de
+// los campos, y valia lo mismo que el panel, asi que sobre el no se veia.
+const vec4_t smPage = SM_RGB(12, 12, 12);
+const vec4_t smPanel = SM_RGB(21, 21, 21);
+const vec4_t smRaised = SM_RGB(31, 31, 31);
+const vec4_t smRaisedHover = SM_RGB(42, 42, 42);
+const vec4_t smBorder = SM_RGB(56, 56, 56);
+const vec4_t smField = SM_RGB(40, 40, 40);
 const vec4_t smText = SM_RGB(221, 221, 221);
 const vec4_t smTextSoft = SM_RGB(190, 190, 190);
 const vec4_t smMuted = SM_RGB(153, 153, 153);
