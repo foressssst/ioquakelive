@@ -2336,6 +2336,8 @@ int64_t r_imageDecodeUs, r_imageUploadUs, r_imageReadUs;
 int r_imageCount;
 
 void R_ImageLoadStatsReset(void) {
+    r_shaderFindUs = r_shaderCachedUs = 0;
+    r_shaderFindCount = r_shaderCachedCount = 0;
     r_imageDecodeUs = 0;
     r_imageUploadUs = 0;
     r_imageReadUs = 0;
@@ -2346,6 +2348,11 @@ void R_ImageLoadStatsReport(void) {
     if (!r_imageCount) {
         return;
     }
+    ri.Printf(PRINT_ALL, "shaders: %i asked, %.2f s of which %.2f s is their images\n",
+              r_shaderFindCount, r_shaderFindUs / 1000000.0f,
+              (r_imageDecodeUs + r_imageUploadUs) / 1000000.0f);
+    ri.Printf(PRINT_ALL, "  %i were already loaded and cost %.2f s just to look up\n",
+              r_shaderCachedCount, r_shaderCachedUs / 1000000.0f);
     ri.Printf(PRINT_ALL, "images: %i loaded, %.2f s reading, %.2f s decoding, %.2f s uploading\n",
               r_imageCount, r_imageReadUs / 1000000.0f,
               (r_imageDecodeUs - r_imageReadUs) / 1000000.0f, r_imageUploadUs / 1000000.0f);

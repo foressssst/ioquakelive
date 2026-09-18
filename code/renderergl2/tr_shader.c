@@ -2877,27 +2877,14 @@ static char* FindShaderInShaderText(const char* shadername) {
         }
     }
 
-    p = s_shaderText;
-
-    if (!p) {
-        return NULL;
-    }
-
-    // look for label
-    while (1) {
-        token = COM_ParseExt(&p, qtrue);
-        if (token[0] == 0) {
-            break;
-        }
-
-        if (!Q_stricmp(token, shadername)) {
-            return p;
-        } else {
-            // skip the definition
-            SkipBracedSection(&p, 0);
-        }
-    }
-
+    // [ioquakelive] Aqui Quake 3 se recorria entero el texto concatenado de todos los .shader
+    // cuando la tabla fallaba. Con los scripts de Quake Live eso son megabytes tokenizados por
+    // cada textura que no tiene shader propio -- el caso normal -- y era el mayor costo de cargar
+    // un mapa: 1.2 ms por shader, 1.28 s en campgrounds.
+    //
+    // El barrido no podia encontrar nada que la tabla no tenga: ScanAndLoadShaderFiles la
+    // construye recorriendo el mismo texto, con el mismo tokenizador y el mismo salto de
+    // secciones, e indexa todos los nombres. Si no esta en su cubeta, no esta en el texto.
     return NULL;
 }
 
@@ -2971,7 +2958,29 @@ shader_t* R_FindShader(const char* name, int lightmapIndex, qboolean mipRawImage
     return R_FindShaderEx(name, lightmapIndex, mipRawImage, lightmapIndex);
 }
 
+// [ioquakelive] cuanto se va en registrar shaders, sin contar lo que cuestan sus imagenes
+int64_t r_shaderFindUs, r_shaderCachedUs;
+int r_shaderFindCount, r_shaderCachedCount;
+
+static shader_t* R_FindShaderInner(const char* name, int lightmapIndex, qboolean mipRawImage, int realLightmapIndex);
+
 shader_t* R_FindShaderEx(const char* name, int lightmapIndex, qboolean mipRawImage, int realLightmapIndex) {
+    int64_t start = ri.Microseconds();
+    int before = tr.numShaders;
+    shader_t* found = R_FindShaderInner(name, lightmapIndex, mipRawImage, realLightmapIndex);
+    int64_t cost = ri.Microseconds() - start;
+
+    r_shaderFindUs += cost;
+    r_shaderFindCount++;
+    // [ioquakelive] si no nacio ninguno, el shader ya estaba y esto fue solo una busqueda
+    if (tr.numShaders == before) {
+        r_shaderCachedUs += cost;
+        r_shaderCachedCount++;
+    }
+    return found;
+}
+
+static shader_t* R_FindShaderInner(const char* name, int lightmapIndex, qboolean mipRawImage, int realLightmapIndex) {
     char strippedName[MAX_QPATH];
     int hash;
     char* shaderText;
