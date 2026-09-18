@@ -260,6 +260,29 @@ void S_Update(void) {
 
 /*
 =================
+S_DeviceLost
+
+[ioquakelive] Windows le puede quitar el dispositivo de audio al juego: al cambiar de salida,
+al conectar unos audifonos, o cuando otro programa lo toma en exclusiva. SDL cierra el
+dispositivo y avisa, y hasta ahora nadie escuchaba ese aviso, asi que el sonido se iba y no
+volvia hasta reiniciar el juego.
+
+Primero se intenta lo barato, que es reabrir solo el dispositivo. Si el nuevo no tiene el mismo
+formato, los sonidos cargados ya no sirven -- estan remuestreados al anterior -- y ahi si hace
+falta el snd_restart entero.
+=================
+*/
+void S_DeviceLost(void) {
+    if (S_Base_ReopenDevice()) {
+        Com_Printf("Dispositivo de audio reabierto.\n");
+        return;
+    }
+    Com_Printf("El dispositivo de audio cambio de formato; recargando el sonido.\n");
+    Cbuf_AddText("snd_restart\n");
+}
+
+/*
+=================
 S_DisableSounds
 =================
 */

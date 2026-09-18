@@ -1170,6 +1170,17 @@ static void IN_ProcessEvents(void) {
                     IN_InitJoystick();
                 break;
 
+            // [ioquakelive] Windows le puede quitar el dispositivo de audio al juego -- al pasar
+            // a otra ventana, al cambiar de salida, o cuando otro programa lo toma en exclusiva.
+            // SDL lo cierra y avisa con esto; el motor no lo escuchaba, asi que el sonido se iba
+            // y no volvia hasta reiniciar. Se vuelve a abrir. El de captura no cuenta: ese lo
+            // maneja la voz por su cuenta.
+            case SDL_AUDIODEVICEREMOVED:
+                if (!e.adevice.iscapture) {
+                    S_DeviceLost();
+                }
+                break;
+
             case SDL_QUIT:
                 Cbuf_ExecuteText(EXEC_NOW, "quit Closed window\n");
                 break;
