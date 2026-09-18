@@ -1044,6 +1044,53 @@ static void IN_JoyMove(void) {
 IN_ProcessEvents
 ===============
 */
+/*
+===============
+IN_InputRate_f
+
+[ioquakelive] /inputrate [n]: mide n frames de entrada y dice la tasa real del mouse, cuantos
+eventos llegan por frame y cuanto cuesta atenderlos. Sirve para saber si un mouse de alta tasa
+-- 4000 u 8000 Hz -- le esta costando frames al juego en esta maquina, sin adivinar.
+===============
+*/
+static int64_t in_rateUsTotal, in_rateUsMax, in_rateStartUs;
+static int in_rateWanted, in_rateFrames, in_rateEvents, in_rateMouse, in_rateMaxFrame;
+
+static void IN_InputRateReport(void) {
+    float seconds = (Sys_Microseconds() - in_rateStartUs) / 1000000.0f;
+
+    if (seconds <= 0.0f) {
+        seconds = 0.000001f;
+    }
+    Com_Printf("input: %i frames in %.2f s\n", in_rateFrames, seconds);
+    Com_Printf("  mouse moves %i (%.0f per second)   all events %i\n", in_rateMouse,
+               in_rateMouse / seconds, in_rateEvents);
+    Com_Printf("  per frame: %.1f average, %i worst\n", (float)in_rateEvents / in_rateFrames,
+               in_rateMaxFrame);
+    Com_Printf("  cost per frame: %.3f ms average, %.3f ms worst\n",
+               (float)in_rateUsTotal / in_rateFrames / 1000.0f, in_rateUsMax / 1000.0f);
+}
+
+static void IN_InputRate_f(void) {
+    int wanted = 600;
+
+    if (Cmd_Argc() > 1) {
+        wanted = atoi(Cmd_Argv(1));
+    }
+    if (wanted < 10) {
+        wanted = 10;
+    }
+    in_rateWanted = wanted;
+    in_rateFrames = 0;
+    in_rateEvents = 0;
+    in_rateMouse = 0;
+    in_rateMaxFrame = 0;
+    in_rateUsTotal = 0;
+    in_rateUsMax = 0;
+    in_rateStartUs = Sys_Microseconds();
+    Com_Printf("input: measuring %i frames...\n", wanted);
+}
+
 static void IN_ProcessEvents(void) {
     SDL_Event e;
     keyNum_t key = 0;
@@ -1053,6 +1100,13 @@ static void IN_ProcessEvents(void) {
         return;
 
     while (SDL_PollEvent(&e)) {
+        // [ioquakelive] para /inputrate: cuantos eventos entran y cuantos son del mouse
+        if (in_rateWanted) {
+            in_rateEvents++;
+            if (e.type == SDL_MOUSEMOTION) {
+                in_rateMouse++;
+            }
+        }
         switch (e.type) {
             case SDL_KEYDOWN:
                 if (e.key.repeat && Key_GetCatcher() == 0)
@@ -1298,7 +1352,30 @@ void IN_Frame(void) {
     } else
         IN_ActivateMouse(cls.glconfig.isFullscreen);
 
-    IN_ProcessEvents();
+    // [ioquakelive] /inputrate cronometra lo que cuesta atender la entrada de un frame; sin
+    // medicion pedida esto no hace nada
+    if (in_rateWanted) {
+        int64_t startUs = Sys_Microseconds();
+        int before = in_rateEvents;
+        int64_t costUs;
+
+        IN_ProcessEvents();
+
+        costUs = Sys_Microseconds() - startUs;
+        in_rateUsTotal += costUs;
+        if (costUs > in_rateUsMax) {
+            in_rateUsMax = costUs;
+        }
+        if (in_rateEvents - before > in_rateMaxFrame) {
+            in_rateMaxFrame = in_rateEvents - before;
+        }
+        if (++in_rateFrames >= in_rateWanted) {
+            IN_InputRateReport();
+            in_rateWanted = 0;
+        }
+    } else {
+        IN_ProcessEvents();
+    }
 
     // Set event time for next frame to earliest possible time an event could happen
     in_eventTime = Sys_Milliseconds();
@@ -1317,6 +1394,8 @@ IN_Init
 */
 void IN_Init(void* windowData) {
     int appState;
+
+    Cmd_AddCommand("inputrate", IN_InputRate_f);
 
     if (!SDL_WasInit(SDL_INIT_VIDEO)) {
         Com_Error(ERR_FATAL, "IN_Init called before SDL_Init( SDL_INIT_VIDEO )");
