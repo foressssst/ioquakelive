@@ -11,6 +11,7 @@ static const stOption_t stOpts_m_pitch[] = {{"No", "0.022"}, {"Yes", "-0.022"}};
 static const stOption_t stOpts_in_joystick_inverted[] = {{"No", "0"}, {"Yes", "1"}};
 static const stOption_t stOpts_r_mode[] = {{"Desktop", "-2"}, {"Custom", "-1"}, {"1024x768", "12"}, {"1152x864", "13"}, {"1280x720", "14"}, {"1280x768", "15"}, {"1280x800", "16"}, {"1280x1024", "17"}, {"1440x900", "18"}, {"1600x900", "19"}, {"1600x1000", "20"}, {"1680x1050", "21"}, {"1600x1200", "22"}, {"1920x1080", "23"}, {"1920x1200", "24"}, {"1920x1440", "25"}, {"2048x1536", "26"}, {"2560x1600", "27"}};
 static const stOption_t stOpts_r_windowedmode[] = {{"Desktop", "-2"}, {"Custom", "-1"}, {"1024x768", "12"}, {"1152x864", "13"}, {"1280x720", "14"}, {"1280x768", "15"}, {"1280x800", "16"}, {"1280x1024", "17"}, {"1440x900", "18"}, {"1600x900", "19"}, {"1600x1000", "20"}, {"1680x1050", "21"}, {"1600x1200", "22"}, {"1920x1080", "23"}, {"1920x1200", "24"}, {"1920x1440", "25"}, {"2048x1536", "26"}, {"2560x1600", "27"}};
+static const stOption_t stOpts_r_fullscreen[] = {{"Windowed", "0"}, {"Fullscreen", "1"}, {"Borderless", "2"}};
 static const stOption_t stOpts_cg_flagstyle[] = {{"Cloth", "1"}, {"Hologram", "2"}};
 static const stOption_t stOpts_cg_damageplum[] = {{"Off", ""}, {"Variable Damage Weapons", "sg gl rl pg bfg"}, {"All Weapons", "g mg sg gl rl lg rg pg bfg gh cg ng pl hmg"}};
 static const stOption_t stOpts_cg_damageplumcolorstyle[] = {{"One Color Fade", "1"}, {"Damage Colors", "2"}, {"Weapon Colors", "3"}};
@@ -31,8 +32,6 @@ static const stOption_t stOpts_cg_drawcrosshairnames[] = {{"None", "0"}, {"All",
 static const stOption_t stOpts_cg_crosshairhitstyle[] = {{"None", "0"}, {"Damage Color", "1"}, {"Color Flash", "2"}, {"Pulse", "6"}, {"Damage Pulse", "7"}, {"Color Pulse", "8"}};
 static const stOption_t stOpts_cg_crosshairhittime[] = {{"Short", "100"}, {"Normal", "200.0"}, {"Long", "500"}};
 static const stOption_t stOpts_cg_poweruppois[] = {{"Off", "0"}, {"Through Walls", "1"}, {"Always On", "2"}};
-// [ioquakelive] fb va al final: es la piel que arma gen_fb_skins y viaja en pak01, y por consola
-// ya funcionaba; faltaba nada mas en el desplegable.
 static const stOption_t stOpts_cg_forceteamskin[] = {{"None", ""}, {"Red", "red"}, {"Blue", "blue"}, {"Bright", "bright"}, {"Sport", "sport"}, {"Sport (Red)", "sport_red"}, {"Sport (Blue)", "sport_blue"}, {"Fullbright", "fb"}};
 static const stOption_t stOpts_cg_forceenemyskin[] = {{"None", ""}, {"Red", "red"}, {"Blue", "blue"}, {"Bright", "bright"}, {"Sport", "sport"}, {"Sport (Red)", "sport_red"}, {"Sport (Blue)", "sport_blue"}, {"Fullbright", "fb"}};
 static const stOption_t stOpts_cg_drawgun[] = {{"Hidden", "0"}, {"Normal", "1"}, {"Still", "2"}, {"Transparent", "3"}};
@@ -134,7 +133,7 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_BASIC, "Rail Color", "color1", ST_PALETTE, 1.0f, 26.0f, 0.0f, NULL, 0, "Color of your rail beam.", 0},
     {ST_TAB_BASIC, "Full Mode (Resolution)", "r_mode", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_r_mode, 18, "Choose the video resolution.", 1},
     {ST_TAB_BASIC, "Windowed Mode (Resolution)", "r_windowedmode", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_r_windowedmode, 18, NULL, 1},
-    {ST_TAB_BASIC, "Play Fullscreen", "r_fullscreen", ST_BOOL, 0.0f, 0.0f, 0.0f, NULL, 0, "Play QUAKE LIVE in fullscreen or windowed mode.", 1},
+    {ST_TAB_BASIC, "Play Fullscreen", "r_fullscreen", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_r_fullscreen, 3, "Play QUAKE LIVE windowed, fullscreen, or borderless fullscreen, which alt-tabs instantly and never changes the screen mode.", 1},
     {ST_TAB_BASIC, "Brightness", "r_gamma", ST_RANGE, 0.5f, 3.0f, 0.1f, NULL, 0, NULL, 1},
     {ST_TAB_BASIC, "Field of View", "cg_fov", ST_RANGE, 10.0f, 130.0f, 1.0f, NULL, 0, "Field of Vision, how wide of an area you can see.", 1},
     // ---------------------------------------------------------------- GAME
@@ -254,7 +253,7 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_VIDEO, "Full Mode (Resolution)", "r_mode", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_r_mode, 18, "Choose the video resolution.", 0},
     {ST_TAB_VIDEO, "Windowed Mode (Resolution)", "r_windowedmode", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_r_windowedmode, 18, NULL, 0},
     {ST_TAB_VIDEO, "Display Refresh", "r_displayrefresh", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_r_displayrefresh, 4, "Optional display refresh settings.", 0},
-    {ST_TAB_VIDEO, "Play Fullscreen", "r_fullscreen", ST_BOOL, 0.0f, 0.0f, 0.0f, NULL, 0, "Play QUAKE LIVE in fullscreen or windowed mode.", 0},
+    {ST_TAB_VIDEO, "Play Fullscreen", "r_fullscreen", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_r_fullscreen, 3, "Play QUAKE LIVE windowed, fullscreen, or borderless fullscreen, which alt-tabs instantly and never changes the screen mode.", 0},
     {ST_TAB_VIDEO, "Vertical Sync", "r_swapinterval", ST_BOOL, 0.0f, 0.0f, 0.0f, NULL, 0, "Enable VSYNC to eliminate screen tearing. (Restricts the game to 60 FPS)", 0},
     {ST_TAB_VIDEO, "Brightness", "r_gamma", ST_RANGE, 0.5f, 3.0f, 0.1f, NULL, 0, NULL, 0},
     {ST_TAB_VIDEO, "Map Overbright Bits", "r_mapoverbrightbits", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_r_mapoverbrightbits, 3, "Brightness of map textures.", 0},
