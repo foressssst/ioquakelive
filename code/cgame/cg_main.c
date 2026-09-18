@@ -174,7 +174,6 @@ vmCvar_t cg_addMarks;
 vmCvar_t cg_brassTime;
 vmCvar_t cg_viewsize;
 vmCvar_t cg_drawGun;
-vmCvar_t cg_gunAlpha;  // [ioquakelive] temporal: para ajustar en vivo la transparencia de cg_drawGun 3
 vmCvar_t cg_gun_frame;
 vmCvar_t cg_gun_x;
 vmCvar_t cg_gun_y;
@@ -544,9 +543,6 @@ static cvarTable_t cvarTable[] = {
     {&cg_ignore, "cg_ignore", "0", 0},  // used for debugging
     {&cg_autoswitch, "cg_autoswitch", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},  // [QL] default 0 (was Q3 "1")
     {&cg_drawGun, "cg_drawGun", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "3"},
-    // [ioquakelive] TEMPORAL, no es de retail: es para que el jugador ajuste la transparencia de
-    // cg_drawGun 3 en vivo. Cuando el valor este elegido se hornea fijo y esta cvar se quita.
-    {&cg_gunAlpha, "cg_gunAlpha", "110", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_ARCHIVE, "0", "255"},
     {&cg_zoomFov, "cg_zoomfov", "30", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "10", "130"},
     {&cg_fov, "cg_fov", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "10", "130"},
     {&cg_viewsize, "cg_viewsize", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "30", "100"},
