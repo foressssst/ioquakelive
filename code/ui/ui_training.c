@@ -119,7 +119,8 @@ static void TR_DrawCard(int i, float x, float y, float w, float h) {
     vec4_t tint = {1.0f, 1.0f, 1.0f, 1.0f};
     int lines, k;
 
-    SM_Round(x, y, w, h, SM_RADIUS_MD, over ? smRaisedHover : smRaised, NULL);
+    // [ioquakelive] 2026-09-18: la tarjeta es el panel, sin otro alrededor; el cursor la levanta
+    SM_Round(x, y, w, h, SM_RADIUS_MD, over ? smRaised : smPanel, NULL);
 
     // retail dims the image to 40% and brings it up under the cursor
     tint[3] = over ? 1.0f : 0.4f;
@@ -176,9 +177,8 @@ void UI_Training_Open(void) {
 
 void UI_Training_Paint(void) {
     float left = UI_Home_Left();
-    float pad = 24.0f;
-    float w = (HM_CONTAINER_W - 2 * pad - (TR_NUM_CARDS - 1) * HM_PANEL_GAP) / TR_NUM_CARDS;
-    float y, panelTop, panelH;
+    float w = (HM_CONTAINER_W - (TR_NUM_CARDS - 1) * HM_PANEL_GAP) / TR_NUM_CARDS;
+    float top, bottom, y;
     int i;
 
     SM_BeginFrame();
@@ -188,21 +188,20 @@ void UI_Training_Paint(void) {
 
     UI_Home_Backdrop();
     UI_Home_PageTop(HM_NAV_TRAINING);
-    // [ioquakelive] The three cards sit in one container, and the header and that container are a
-    // block in the middle of the screen ("los 3 centers no estan CENTRADOS como contenedor", "no es
-    // extenderla, es centrarla").
-    // [ioquakelive] La pagina se ancla bajo la barra y su panel baja hasta el borde, que es como
-    // estan Patch Notes y Settings, las dos que mejor quedaron. Antes el bloque flotaba centrado a
-    // media pantalla: eso venia de un pedido anterior -"no es extenderla, es centrarla"- que era
-    // sobre el contenedor a lo ancho, y se aplico tambien a lo alto. El resultado no se veia al
-    // nivel de las otras, asi que toda la UI usa ahora el mismo esqueleto.
-    panelTop = UI_Home_Header(HM_NAV_H, NULL, "Training Center") + HM_PANEL_GAP;
-    panelH = TR_CARD_H + 2 * pad;
-    SM_Round(left, panelTop, HM_CONTAINER_W, panelH, SM_RADIUS_MD, smPanel, NULL);
-    y = panelTop + pad;
+
+    // [ioquakelive] 2026-09-18, lo que pidio el jugador: "centrar solamente el contenedor de los
+    // 3 trainings, no el hero de arriba". La cabecera se queda anclada arriba como en todas las
+    // paginas, y las tres tarjetas se centran en vertical en lo que queda hasta el borde. Ya no
+    // hay un panel que las envuelva: las tarjetas son los paneles, sin contenedor dentro de otro.
+    top = UI_Home_Header(HM_NAV_H, NULL, "Training Center") + HM_PANEL_GAP;
+    bottom = UI_Home_FrameBottom();
+    y = top + (bottom - top - TR_CARD_H) * 0.5f;
+    if (y < top) {
+        y = top;
+    }
 
     for (i = 0; i < TR_NUM_CARDS; i++) {
-        TR_DrawCard(i, left + pad + i * (w + HM_PANEL_GAP), y, w, panelH - 2 * pad);
+        TR_DrawCard(i, left + i * (w + HM_PANEL_GAP), y, w, TR_CARD_H);
     }
 
     UI_Home_Banner();
