@@ -179,6 +179,8 @@ void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int*
                  int* height, void* (*allocator)(size_t), void (*deallocator)(void*),
                  qboolean silent);
 extern char r_lastImageName[MAX_QPATH];
+// [ioquakelive] decodifica un PNG que ya esta en memoria; se puede llamar desde un trabajador
+void R_DecodePNG(byte* fileData, int fileLen, const char* name, byte** pic, int* width, int* height);
 void R_LoadPCX(const char* name, byte** pic, int* width, int* height);
 void R_LoadPNG(const char* name, byte** pic, int* width, int* height);
 void R_LoadTGA(const char* name, byte** pic, int* width, int* height);

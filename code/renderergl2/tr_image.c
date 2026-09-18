@@ -2436,7 +2436,9 @@ static void R_PrefetchDecode(void* data) {
     byte* pixels = NULL;
     int width = 0, height = 0;
 
-    if (!Q_stricmp(COM_GetExtension(entry->name), "tga")) {
+    if (!Q_stricmp(COM_GetExtension(entry->name), "png")) {
+        R_DecodePNG((byte*)entry->file, entry->fileLen, entry->name, &pixels, &width, &height);
+    } else if (!Q_stricmp(COM_GetExtension(entry->name), "tga")) {
         R_DecodeTGA((byte*)entry->file, entry->fileLen, entry->name, &pixels, &width, &height, malloc,
                     free, qtrue);
     } else {
