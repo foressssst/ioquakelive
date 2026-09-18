@@ -111,8 +111,19 @@ void CG_LoadingClient(int clientNum) {
 ====================
 CG_DrawInformation
 
-[QL] Rewritten to match Quake Live binary loading screen.
-Draws levelshot, QL branding, gametype, loading text, and progress bar.
+[ioquakelive] La pantalla de carga, con el diseño del front end. Es un rediseño pedido por el
+jugador, no el de retail: lo que dibujaba el binario esta en el historial de git, y sus
+direcciones quedan anotadas aqui abajo por si hay que volver.
+
+  0x1001ce10  la version sin nada que cargar, solo el humo y "Awaiting gamestate..."
+  0x1001d22d  el nombre del mapa en x 10 con el tope en y 400, y los autores en 447 y 462
+  0x1001d48d  el modo de juego alineado a la derecha en 620
+  0x1001d524  el texto de carga centrado en y 370
+
+Se conserva todo lo que informaba: el levelshot, la marca, el modo, el nombre del mapa, sus
+autores, que se esta cargando y cuanto falta. Cambia como se ve: Noto Sans en vez de Handel
+Gothic, un velo sobre el levelshot para que el texto se lea siempre, el modo como etiqueta
+espaciada, y el progreso como una barra fina de lado a lado.
 ====================
 */
 void CG_DrawInformation(void) {
@@ -125,10 +136,18 @@ void CG_DrawInformation(void) {
     int w;
     float s1, s2;
 
-    // [QL] colors from binary
-    static vec4_t colorBarFilled   = { 0.375f, 0.125f, 0.125f, 1.0f  };  // dark red, full alpha
-    static vec4_t colorBarEmpty    = { 0.0f,   0.0f,   0.0f,   0.75f };  // black semi-transparent
-    static vec4_t colorBarBg       = { 0.375f, 0.125f, 0.125f, 0.75f };  // dark red, semi-transparent
+    // [ioquakelive] la paleta del front end: el negro de sus paneles, el gris de su texto
+    // secundario y el amarillo del logo de QUAKE LIVE, que es su acento
+    static vec4_t colorVeil     = { 0.0f,   0.0f,   0.0f,   0.45f };
+    static vec4_t colorPanel    = { 0.035f, 0.035f, 0.035f, 0.94f };
+    static vec4_t colorMuted    = { 0.6f,   0.6f,   0.6f,   1.0f  };
+    static vec4_t colorGold     = { 0.969f, 0.820f, 0.0f,   1.0f  };
+    static vec4_t colorGoldLine = { 0.969f, 0.820f, 0.0f,   0.45f };
+    static vec4_t colorTrack    = { 1.0f,   1.0f,   1.0f,   0.14f };
+
+#define LOADING_PANEL_Y 372
+#define LOADING_BAR_Y 452
+#define LOADING_FADE_BANDS 10
 
     // [QL] compute aspect-correct texture coords for levelshot (1920x1080 source)
     s1 = ((1920.0f - (1080.0f / (float)cgs.glconfig.vidHeight) * (float)cgs.glconfig.vidWidth)
@@ -162,86 +181,68 @@ void CG_DrawInformation(void) {
         return;
     }
 
-    // [QL] draw the levelshot fullscreen with aspect-correct texture coords
+    // el levelshot ocupa la pantalla, con las coordenadas corregidas para que no se deforme
     trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight,
                           s1, 0, s2, 1.0f, levelshot);
 
-    // [QL] left-anchored elements: top bar, logos, bottom bar, map name, author
+    // --- el velo ---
+    // Un levelshot cualquiera puede ser claro, oscuro o tener mucho detalle justo donde va el
+    // texto. El velo lo apaga parejo, y abajo se hace mas denso para que el nombre del mapa y
+    // la barra tengan siempre fondo. Asi el diseño no depende de que foto toco.
     CG_SetWidescreen(WIDESCREEN_LEFT);
+    CG_FillRect(-400, 0, 1440, 480, colorVeil);
+    for (i = 0; i < LOADING_FADE_BANDS; i++) {
+        vec4_t band;
 
-    // top bar: dark red semi-transparent background across full width
-    CG_FillRect(-400, 0, 1440, 64, colorBarBg);
-
-    // logo background (512x128 source, drawn at 256x64 = 4:1 ratio preserved)
-    if (cgs.media.logoBackgroundShader) {
-        CG_DrawPic(0, 0, 256, 64, cgs.media.logoBackgroundShader);
+        Vector4Copy(colorPanel, band);
+        band[3] = colorPanel[3] * ((float)i / LOADING_FADE_BANDS);
+        CG_FillRect(-400, (float)(LOADING_PANEL_Y + i * 4 - LOADING_FADE_BANDS * 4), 1440, 4, band);
     }
+    CG_FillRect(-400, LOADING_PANEL_Y, 1440, 480 - LOADING_PANEL_Y, colorPanel);
 
-    // QL logo (512x128 source, drawn at 256x64)
+    // --- la marca, arriba a la izquierda ---
     if (cgs.media.qlLogoShader) {
-        CG_DrawPic(0, 0, 256, 64, cgs.media.qlLogoShader);
+        CG_DrawPic(28, 26, 176, 44, cgs.media.qlLogoShader);
     }
 
-    // [QL] bottom bar: black semi-transparent covering y=400..480
-    CG_FillRect(-400, 400, 1440, 80, colorBarEmpty);
-
-    // [QL] cgamex86.dll 0x1001d22d: the map's name at x 10 with its top on y 400, in font 0
-    // at scale 0.8, and under it, when the map has one, its authors in font 1 at scale 0.25
-    // with their tops on y 447 and 462. None of them is shadowed.
+    // --- el nombre del mapa y sus autores, abajo a la izquierda ---
     s = CG_ConfigString(CS_MESSAGE);
-    CG_DrawText(10, (float)(400 + CG_DrawTextHeight(s, 0.8f, 0, 0)), 0, 0.8f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_NORMAL);
+    CG_DrawText(28, (float)(LOADING_PANEL_Y + 34 + CG_DrawTextHeight(s, 0.42f, 0, 1)), 1, 0.42f, colorWhite, s, 0, 0,
+                ITEM_TEXTSTYLE_NORMAL);
 
     sAuthor = CG_ConfigString(CS_AUTHOR);
     if (sAuthor[0]) {
         sAuthor2 = CG_ConfigString(CS_AUTHOR2);
-        CG_DrawText(10, (float)(447 + CG_DrawTextHeight(sAuthor, 0.25f, 0, 1)), 1, 0.25f, colorWhite, sAuthor, 0, 0,
-                    ITEM_TEXTSTYLE_NORMAL);
-        CG_DrawText(10, (float)(462 + CG_DrawTextHeight(sAuthor2, 0.25f, 0, 1)), 1, 0.25f, colorWhite, sAuthor2, 0, 0,
-                    ITEM_TEXTSTYLE_NORMAL);
+        s = sAuthor2[0] ? va("%s  %s", sAuthor, sAuthor2) : sAuthor;
+        CG_DrawText(28, (float)(LOADING_PANEL_Y + 56 + CG_DrawTextHeight(s, 0.18f, 0, 1)), 1, 0.18f, colorMuted, s, 0,
+                    0, ITEM_TEXTSTYLE_NORMAL);
     }
 
-    // [QL] right-anchored elements: gametype background and name
+    // --- el modo de juego, arriba a la derecha ---
     CG_SetWidescreen(WIDESCREEN_RIGHT);
-
-    // gametype background (right side of top bar, 512x128 source at 256x64)
-    if (cgs.media.gtBackgroundShader) {
-        CG_DrawPic(384, 0, 256, 64, cgs.media.gtBackgroundShader);
-    }
-
-    // [QL] gametype name (right-aligned in top bar, bigFont via scale 0.8)
     if (cgs.gametype >= 0 && cgs.gametype < GT_MAX_GAME_TYPE) {
         gametypeName = gametypeDisplayNames[cgs.gametype];
     } else {
         gametypeName = "Unknown Gametype";
     }
-    // [QL] 0x1001d48d: right-aligned on 620 with its top 10 units down, font 0, scale 0.8,
-    // not shadowed
-    w = CG_DrawTextWidth(gametypeName, 0.8f, 0, 0);
-    CG_DrawText((float)(620 - w), (float)(10 + CG_DrawTextHeight(gametypeName, 0.8f, 0, 0)), 0, 0.8f, colorWhite,
+    w = CG_DrawTextWidth(gametypeName, 0.26f, 0, 1);
+    CG_DrawText((float)(612 - w), (float)(40 + CG_DrawTextHeight(gametypeName, 0.26f, 0, 1)), 1, 0.26f, colorGold,
                 gametypeName, 0, 0, ITEM_TEXTSTYLE_NORMAL);
+    CG_FillRect(612 - w, 50, (float)w, 1, colorGoldLine);
 
-    // [QL] center-anchored elements: loading text and progress boxes
-    CG_SetWidescreen(WIDESCREEN_CENTER);
-
-    // [QL] loading text (centered, textFont via scale 0.3)
+    // --- que se esta cargando, y cuanto falta ---
+    CG_SetWidescreen(WIDESCREEN_LEFT);
     if (cg.infoScreenText[0]) {
-        s = va("Loading %s", cg.infoScreenText);
+        s = va("Cargando %s", cg.infoScreenText);
     } else {
-        s = "Awaiting Snapshot";
+        s = "Esperando al servidor";
     }
-    // [QL] 0x1001d524: centred at y 370 in font 1, scale 0.3, shadowed
-    w = CG_DrawTextWidth(s, 0.3f, 0, 1);
-    CG_DrawText((float)(320 - w / 2), 370, 1, 0.3f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+    CG_DrawText(28, (float)(LOADING_BAR_Y - 8), 1, 0.16f, colorMuted, s, 0, 0, ITEM_TEXTSTYLE_NORMAL);
 
-    // [QL] progress boxes: 4 boxes, 8x8 each, 16px stride, y=380
-    for (i = 0; i < NUM_LOADING_STAGES; i++) {
-        if (cg.loadingStage > i) {
-            CG_FillRect(292 + i * 16, 380, 8, 8, colorBarFilled);
-        } else {
-            CG_FillRect(292 + i * 16, 380, 8, 8, colorBarEmpty);
-        }
-    }
+    // La barra va de lado a lado y avanza por etapas, que es lo unico que el motor sabe del
+    // progreso. Debajo queda siempre su carril, asi se ve cuanto falta y no solo cuanto va.
+    CG_FillRect(28, LOADING_BAR_Y, 584, 2, colorTrack);
+    CG_FillRect(28, LOADING_BAR_Y, 584.0f * ((float)cg.loadingStage / NUM_LOADING_STAGES), 2, colorGold);
 
-    // [QL] reset widescreen mode
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
