@@ -112,7 +112,14 @@ void R_LoadJPG(const char* filename, unsigned char** pic, int* width, int* heigh
      * requires it in order to read binary files.
      */
 
-    len = ri.FS_ReadFile((char*)filename, &fbuffer.v);
+    // [ioquakelive] leer del pk3 y decodificar se miden aparte: ver el comentario de
+    // r_imageReadUs en tr_common.h
+    {
+        int64_t readStart = ri.Microseconds();
+
+        len = ri.FS_ReadFile((char*)filename, &fbuffer.v);
+        r_imageReadUs += ri.Microseconds() - readStart;
+    }
     if (!fbuffer.b || len < 0) {
         return;
     }

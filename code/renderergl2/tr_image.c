@@ -2201,7 +2201,13 @@ Wrapper for R_CreateImage2(), for the old parameters.
 ================
 */
 image_t* R_CreateImage(const char* name, byte* pic, int width, int height, imgType_t type, imgFlags_t flags, int internalFormat) {
-    return R_CreateImage2(name, pic, width, height, GL_RGBA8, 0, type, flags, internalFormat);
+    // [ioquakelive] la subida a la GPU, cronometrada aparte de la decodificacion: esta va por el
+    // contexto de OpenGL y no se puede repartir entre hilos; decodificar si
+    int64_t uploadStart = ri.Microseconds();
+    image_t* uploaded = R_CreateImage2(name, pic, width, height, GL_RGBA8, 0, type, flags, internalFormat);
+
+    r_imageUploadUs += ri.Microseconds() - uploadStart;
+    return uploaded;
 }
 
 void R_UpdateSubImage(image_t* image, byte* pic, int x, int y, int width, int height, GLenum picFormat) {
@@ -2325,6 +2331,26 @@ void R_LoadImage(const char* name, byte** pic, int* width, int* height, GLenum* 
     }
 }
 
+// [ioquakelive] el reparto del tiempo de carga de imagenes: decodificar contra subir a la GPU
+int64_t r_imageDecodeUs, r_imageUploadUs, r_imageReadUs;
+int r_imageCount;
+
+void R_ImageLoadStatsReset(void) {
+    r_imageDecodeUs = 0;
+    r_imageUploadUs = 0;
+    r_imageReadUs = 0;
+    r_imageCount = 0;
+}
+
+void R_ImageLoadStatsReport(void) {
+    if (!r_imageCount) {
+        return;
+    }
+    ri.Printf(PRINT_ALL, "images: %i loaded, %.2f s reading, %.2f s decoding, %.2f s uploading\n",
+              r_imageCount, r_imageReadUs / 1000000.0f,
+              (r_imageDecodeUs - r_imageReadUs) / 1000000.0f, r_imageUploadUs / 1000000.0f);
+}
+
 /*
 ===============
 R_FindImageFile
@@ -2366,10 +2392,18 @@ image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags) {
     //
     // load the pic from disk
     //
-    R_LoadImage(name, &pic, &width, &height, &picFormat, &picNumMips);
+    // [ioquakelive] leer y decodificar se mide aparte de subir: lo primero es CPU y se puede
+    // repartir entre hilos, lo segundo va por el contexto de GL y no se puede mover
+    {
+        int64_t start = ri.Microseconds();
+
+        R_LoadImage(name, &pic, &width, &height, &picFormat, &picNumMips);
+        r_imageDecodeUs += ri.Microseconds() - start;
+    }
     if (pic == NULL) {
         return NULL;
     }
+    r_imageCount++;
 
     checkFlagsTrue = IMGFLAG_PICMIP | IMGFLAG_MIPMAP | IMGFLAG_GENNORMALMAP;
     checkFlagsFalse = IMGFLAG_CUBEMAP;

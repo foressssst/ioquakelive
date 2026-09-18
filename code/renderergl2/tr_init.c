@@ -1709,6 +1709,7 @@ Touch all images to make sure they are resident
 =============
 */
 void RE_EndRegistration(void) {
+    R_ImageLoadStatsReport();  // [ioquakelive] ver RE_BeginRegistration
     R_IssuePendingRenderCommands();
     if (!ri.Sys_LowPhysicalMemory()) {
         RB_ShowImages();

@@ -1073,6 +1073,7 @@ static qboolean R_LoadMDR(model_t* mod, void* buffer, int filesize, const char* 
 ** RE_BeginRegistration
 */
 void RE_BeginRegistration(glconfig_t* glconfigOut) {
+    R_ImageLoadStatsReset();  // [ioquakelive] el reparto del tiempo de carga de imagenes
     int i;
 
     R_Init();
