@@ -24,6 +24,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "client.h"
 #include "snd_codec.h"
 #include "snd_local.h"
+void S_SoundLoadReport_f(void);  // [ioquakelive] snd_mem.c
+
 #include "snd_public.h"
 
 cvar_t* s_volume;
@@ -451,6 +453,7 @@ void S_Init(void) {
     Cmd_AddCommand("music", S_Music_f);
     Cmd_AddCommand("s_list", S_SoundList);
     Cmd_AddCommand("s_info", S_SoundInfo);
+    Cmd_AddCommand("soundload", S_SoundLoadReport_f);  // [ioquakelive]
     Cmd_AddCommand("s_stop", S_StopAllSounds);
 
     if (!S_Base_Init(&si)) {
@@ -472,6 +475,10 @@ S_Shutdown
 =================
 */
 void S_Shutdown(void) {
+    // [ioquakelive] si una carga de mapa se corto a mitad, lo encargado no puede sobrevivir al
+    // sistema de sonido
+    S_AsyncLoadDiscard();
+
     if (si.Shutdown) {
         si.Shutdown();
     }

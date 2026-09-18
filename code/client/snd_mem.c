@@ -163,23 +163,208 @@ The filename may be different than sfx->name in the case
 of a forced fallback of a player specific sound
 ==============
 */
+/*
+===============================================================================
+
+SONIDOS DECODIFICADOS EN SEGUNDO PLANO
+
+[ioquakelive] Decodificar un OGG es el 90% de lo que cuesta cargar los sonidos de un mapa. Y un
+sonido no hace falta hasta que suena, asi que durante la carga del mapa el hilo principal solo
+lee el archivo y encarga la decodificacion a un trabajador; al terminar la carga se espera a
+todos juntos y se convierten al formato del mezclador aqui, en el hilo principal, porque el
+reparto de memoria del sonido no es seguro entre hilos.
+
+Solo va durante la carga del mapa. Fuera de ella, y con s_asyncLoad 0, se carga como siempre.
+
+===============================================================================
+*/
+
+#define MAX_SOUND_JOBS 1024
+
+typedef struct {
+    sfx_t* sfx;
+    byte* file;  // los bytes del archivo, copiados: la memoria temporal del motor es una pila
+    int fileLen;
+    byte* pcm;  // lo que deja el trabajador
+    snd_info_t info;
+    volatile int state;  // 1 trabajando, 2 listo, 3 fallo
+} soundJob_t;
+
+static soundJob_t s_soundJobs[MAX_SOUND_JOBS];
+static int s_soundJobCount;
+static qboolean s_asyncActive;
+static cvar_t* s_asyncLoad;
+
+#ifdef USE_CODEC_VORBIS
+static void S_DecodeJob(void* data) {
+    soundJob_t* job = (soundJob_t*)data;
+
+    job->pcm = S_OGG_DecodeMemory(job->file, job->fileLen, &job->info);
+    job->state = job->pcm ? 2 : 3;
+}
+#endif
+
+// arranca la ventana de carga en segundo plano, si hay trabajadores
+void S_AsyncLoadBegin(void) {
+    if (!s_asyncLoad) {
+        s_asyncLoad = Cvar_Get("s_asyncLoad", "1", CVAR_ARCHIVE);
+    }
+    S_AsyncLoadFinish();
+    s_asyncActive = (qboolean)(Com_JobWorkers() > 0 && s_asyncLoad->integer);
+}
+
+// espera a todo lo encargado y lo deja listo para sonar
+void S_AsyncLoadFinish(void) {
+    int i;
+
+    for (i = 0; i < s_soundJobCount; i++) {
+        soundJob_t* job = &s_soundJobs[i];
+
+        while (job->state == 1) {
+            Sys_ThreadYield();
+        }
+        if (job->state == 2) {
+            job->sfx->soundData = NULL;
+            job->sfx->soundLength = ResampleSfx(job->sfx, job->info.channels, job->info.rate, job->info.width,
+                                                job->info.samples, job->pcm + job->info.dataofs);
+            job->sfx->soundChannels = job->info.channels;
+        } else {
+            Com_Printf(S_COLOR_YELLOW "WARNING: couldn't load sound: %s\n", job->sfx->soundName);
+            job->sfx->defaultSound = qtrue;
+        }
+        if (job->pcm) {
+            free(job->pcm);
+            job->pcm = NULL;
+        }
+        if (job->file) {
+            free(job->file);
+            job->file = NULL;
+        }
+    }
+    s_soundJobCount = 0;
+    s_asyncActive = qfalse;
+}
+
+// Si la carga se corto a mitad y el sonido se apaga, lo encargado se tira: se espera a los
+// trabajadores, para no soltarles la memoria encima, y no se convierte nada.
+void S_AsyncLoadDiscard(void) {
+    int i;
+
+    for (i = 0; i < s_soundJobCount; i++) {
+        soundJob_t* job = &s_soundJobs[i];
+
+        while (job->state == 1) {
+            Sys_ThreadYield();
+        }
+        if (job->pcm) {
+            free(job->pcm);
+            job->pcm = NULL;
+        }
+        if (job->file) {
+            free(job->file);
+            job->file = NULL;
+        }
+    }
+    s_soundJobCount = 0;
+    s_asyncActive = qfalse;
+}
+
+// si el sonido es un OGG y estamos cargando un mapa, lo encarga y devuelve qtrue
+static qboolean S_LoadSoundAsync(sfx_t* sfx, const char* name) {
+#ifndef USE_CODEC_VORBIS
+    // sin Vorbis no hay decodificador de OGG, asi que todo va por el camino de siempre
+    (void)sfx;
+    (void)name;
+    return qfalse;
+#else
+    soundJob_t* job;
+    void* fileData = NULL;
+    int len;
+
+    if (!s_asyncActive || s_soundJobCount >= MAX_SOUND_JOBS || Q_stricmp(COM_GetExtension(name), "ogg")) {
+        return qfalse;
+    }
+    len = FS_ReadFile(name, &fileData);
+    if (len <= 0 || !fileData) {
+        if (fileData) {
+            FS_FreeFile(fileData);
+        }
+        return qfalse;
+    }
+
+    job = &s_soundJobs[s_soundJobCount];
+    job->file = (byte*)malloc(len);
+    if (!job->file) {
+        FS_FreeFile(fileData);
+        return qfalse;
+    }
+    Com_Memcpy(job->file, fileData, len);
+    FS_FreeFile(fileData);
+
+    job->sfx = sfx;
+    job->fileLen = len;
+    job->pcm = NULL;
+    job->state = 1;
+    s_soundJobCount++;
+
+    // hasta que se complete no hay datos; nadie suena durante la carga del mapa
+    sfx->soundData = NULL;
+    sfx->soundLength = 0;
+    sfx->lastTimeUsed = Com_Milliseconds();
+
+    Com_JobsSubmit(S_DecodeJob, job);
+    return qtrue;
+#endif
+}
+
+// [ioquakelive] el reparto del tiempo de carga de sonidos, para saber que se puede repartir entre
+// hilos; lo imprime /soundload
+static int64_t s_loadLookupUs, s_loadCodecUs, s_loadResampleUs;
+static int s_loadWav, s_loadOgg;
+
+void S_SoundLoadReport_f(void) {
+    Com_Printf("sounds: %i wav, %i ogg | %.2f s finding, %.2f s reading and decoding, %.2f s resampling\n",
+               s_loadWav, s_loadOgg, s_loadLookupUs / 1000000.0f, s_loadCodecUs / 1000000.0f,
+               s_loadResampleUs / 1000000.0f);
+    s_loadLookupUs = s_loadCodecUs = s_loadResampleUs = 0;
+    s_loadWav = s_loadOgg = 0;
+}
+
 qboolean S_LoadSound(sfx_t* sfx) {
     byte* data;
     snd_info_t info;
     char name[MAX_QPATH];
+    int64_t start;
 
     // [QL] quakelive_steam.exe 0x4dbd10: when the file is missing its name loses the extension and
     // defaults to .ogg, so "x.wav" loads "x.ogg" and a map's "x.ogg.wav" loads "x.ogg"
+    start = Sys_Microseconds();
     Q_strncpyz(name, sfx->soundName, sizeof(name));
     if (FS_ReadFile(name, NULL) < 0) {
         COM_StripExtension(sfx->soundName, name, sizeof(name));
         COM_DefaultExtension(name, sizeof(name), ".ogg");
     }
+    s_loadLookupUs += Sys_Microseconds() - start;
+
+    // [ioquakelive] durante la carga del mapa, un OGG se decodifica en segundo plano
+    start = Sys_Microseconds();
+    if (S_LoadSoundAsync(sfx, name)) {
+        s_loadCodecUs += Sys_Microseconds() - start;
+        s_loadOgg++;
+        return qtrue;
+    }
 
     // load it in
+    start = Sys_Microseconds();
     data = S_CodecLoad(name, &info);
+    s_loadCodecUs += Sys_Microseconds() - start;
     if (!data)
         return qfalse;
+    if (!Q_stricmp(COM_GetExtension(name), "ogg")) {
+        s_loadOgg++;
+    } else {
+        s_loadWav++;
+    }
 
     if (info.width == 1) {
         Com_DPrintf(S_COLOR_YELLOW "WARNING: %s is an 8-bit audio file\n", sfx->soundName);
@@ -190,7 +375,9 @@ qboolean S_LoadSound(sfx_t* sfx) {
     }
 
     sfx->soundData = NULL;
+    start = Sys_Microseconds();
     sfx->soundLength = ResampleSfx(sfx, info.channels, info.rate, info.width, info.samples, data + info.dataofs);
+    s_loadResampleUs += Sys_Microseconds() - start;
     sfx->soundChannels = info.channels;
 
     Hunk_FreeTempMemory(data);
