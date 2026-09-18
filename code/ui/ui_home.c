@@ -102,7 +102,7 @@ static struct {
 #define HM_MENU_STATS 2
 #define HM_MENU_COMMUNITY 3
 #define HM_NUM_MENUS 4
-#define HM_MAX_ITEMS 7  // [ioquakelive] Patch Notes y Creditos entraron a las listas
+#define HM_MAX_ITEMS 6
 
 static struct {
     qboolean loadedMenu;
@@ -379,10 +379,6 @@ void UI_Home_Go(int nav) {
             Menus_CloseAll();
             Menus_ActivateByName("settings");
             break;
-        case HM_NAV_PATCHNOTES:
-            Menus_CloseAll();
-            Menus_ActivateByName("patchnotes");
-            break;
         case HM_NAV_QUIT:
             // retail's power button (App's quitGame) asks nothing: it sends quit
             trap_Cmd_ExecuteText(EXEC_APPEND, "quit\n");
@@ -478,7 +474,6 @@ static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
         {"Statistics", "Your career, your matches, your replays", -1, HM_MENU_STATS, qfalse},
         {"Community", "The Workshop and the Steam community", -1, HM_MENU_COMMUNITY, qfalse},
         {"Settings", "Controls, video, sound and your player", HM_NAV_SETTINGS, -1, qfalse},
-        {"Patch Notes", "What changed in this build", HM_NAV_PATCHNOTES, -1, qfalse},
         {"Quit", "Leave QUAKE LIVE", HM_NAV_QUIT, -1, qfalse},
     },
     {
@@ -501,7 +496,6 @@ static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
         {"Steam Workshop", "Maps and models other players made", -1, -1, qtrue},
         {"Steam Community", "The game's hub", -1, -1, qtrue},
         {"Back", NULL, -1, HM_MENU_MAIN, qfalse},
-        {NULL, NULL, -1, -1, qfalse},
         {NULL, NULL, -1, -1, qfalse},
         {NULL, NULL, -1, -1, qfalse},
     },
