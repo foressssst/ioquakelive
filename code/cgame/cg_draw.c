@@ -254,12 +254,12 @@ static void CG_PaintText(float x, float y, int fontIndex, float scale, const vec
 }
 
 // Text in an engine font, as trap_R_Font_Register returns, rather than a menu font index.
-static void CG_DrawTextInFont(float x, float y, int engineFont, float scale, const vec4_t color, const char* text, int style) {
+void CG_DrawTextInFont(float x, float y, int engineFont, float scale, const vec4_t color, const char* text, int style) {
 	CG_PaintTextEngine(x, y, engineFont, scale, color, text, 0, style);
 }
 
 // 640-space width and ascender of text in an engine font, truncated as CG_MeasureText does.
-static void CG_MeasureTextInFont(const char* text, int engineFont, float scale, float* w, float* h) {
+void CG_MeasureTextInFont(const char* text, int engineFont, float scale, float* w, float* h) {
 	float extents[5];
 	float xscale = CG_TextXScale();
 	float yscale = cgs.screenYScale;
