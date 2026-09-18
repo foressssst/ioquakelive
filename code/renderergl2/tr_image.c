@@ -2352,6 +2352,303 @@ void R_ImageLoadStatsReport(void) {
 }
 
 /*
+==============================================================================
+
+TEXTURAS DECODIFICADAS POR ADELANTADO
+
+[ioquakelive] De lo que cuesta cargar las texturas de un mapa, el 94% es decodificar, y eso es
+CPU pura: 0.86 s de 0.92 en campgrounds, contra 0.05 s de leer del pk3 y 0.01 s de subir a la
+GPU. Asi que el hilo principal sigue leyendo los archivos -- el sistema de archivos no es seguro
+entre hilos -- y los trabajadores decodifican mientras el hilo principal sigue registrando
+shaders. Cuando le toca a una imagen, casi siempre ya esta lista.
+
+Para leer por adelantado hay que saber QUE, y eso no se sabe hasta que el mapa se cargo una vez:
+al terminar cada carga se escribe la lista de lo que se pidio, y la proxima vez que se cargue ese
+mapa se usa. La primera carga de un mapa no se acelera; las siguientes si.
+
+Solo entran los JPEG, que son casi todas las texturas de Quake Live: el resto sigue por el
+camino de siempre. La ventana limita cuantas imagenes decodificadas puede haber a la vez, para
+que la memoria no se dispare con mil texturas sueltas.
+
+==============================================================================
+*/
+
+#define R_PREFETCH_MAX 2048
+#define R_PREFETCH_AHEAD 16
+
+typedef enum { PF_EMPTY, PF_WORKING, PF_READY, PF_FAILED } prefetchState_t;
+
+typedef struct {
+    char name[MAX_QPATH];
+    void* file;  // los bytes del archivo, del hilo principal
+    int fileLen;
+    byte* pixels;  // lo que deja el trabajador, con malloc del sistema
+    int width, height;
+    volatile int state;
+} prefetchEntry_t;
+
+static prefetchEntry_t r_prefetch[R_PREFETCH_MAX];
+static int r_prefetchCount;   // cuantas entradas tiene la lista
+static int r_prefetchNext;    // la proxima por leer y encolar
+static int r_prefetchTaken;   // hasta donde consumio el hilo principal
+static qboolean r_prefetchOn;
+void R_PrefetchFinish(void);
+static int r_prefetchHits, r_prefetchMisses;
+static int64_t r_prefetchWaitUs;
+
+// la lista de esta carga, para escribirla al terminar
+static char r_loadedNames[R_PREFETCH_MAX][MAX_QPATH];
+static int r_loadedCount;
+static char r_prefetchList[MAX_QPATH];
+
+// el nombre real del ultimo JPEG que se leyo, con su extension; lo pone R_LoadJPG
+char r_lastImageName[MAX_QPATH];
+
+static void R_PrefetchFile(const char* list, char* out, int size) {
+    char base[MAX_QPATH];
+
+    COM_StripExtension(list, base, sizeof(base));
+    Com_sprintf(out, size, "prefetch/%s.txt", COM_SkipPath(base));
+}
+
+// Dos nombres son el mismo si la ruta coincide, sin mirar la extension: los shaders de Quake
+// Live piden .tga y el motor termina cargando el .jpg cuando el tga no esta. La lista guarda el
+// archivo que se cargo de verdad, asi que la extension pedida no tiene por que coincidir.
+static qboolean R_PrefetchSameName(const char* wanted, const char* entry) {
+    char a[MAX_QPATH], b[MAX_QPATH];
+
+    COM_StripExtension(wanted, a, sizeof(a));
+    COM_StripExtension(entry, b, sizeof(b));
+    return (qboolean)(!Q_stricmp(a, b));
+}
+
+// lo unico que corre en un trabajador: decodificar. Nada de archivos, nada de imprimir, nada de
+// pedirle memoria al motor
+static void R_PrefetchDecode(void* data) {
+    prefetchEntry_t* entry = (prefetchEntry_t*)data;
+    byte* pixels = NULL;
+    int width = 0, height = 0;
+
+    if (!Q_stricmp(COM_GetExtension(entry->name), "tga")) {
+        R_DecodeTGA((byte*)entry->file, entry->fileLen, entry->name, &pixels, &width, &height, malloc,
+                    free, qtrue);
+    } else {
+        R_DecodeJPG((byte*)entry->file, entry->fileLen, &pixels, &width, &height, malloc, qtrue);
+    }
+    entry->pixels = pixels;
+    entry->width = width;
+    entry->height = height;
+    entry->state = pixels ? PF_READY : PF_FAILED;
+}
+
+// lee y encola hasta llenar la ventana. Solo el hilo principal llama a esto
+static void R_PrefetchPump(void) {
+    while (r_prefetchNext < r_prefetchCount && r_prefetchNext - r_prefetchTaken < R_PREFETCH_AHEAD) {
+        prefetchEntry_t* entry = &r_prefetch[r_prefetchNext++];
+        void* buffer = NULL;
+        int len = ri.FS_ReadFile(entry->name, &buffer);
+
+        if (len <= 0 || !buffer) {
+            if (buffer) {
+                ri.FS_FreeFile(buffer);
+            }
+            entry->state = PF_FAILED;
+            continue;
+        }
+        // La memoria temporal del motor es una pila: se libera en orden inverso al que se pidio.
+        // Como aqui hay varios archivos vivos a la vez y se sueltan en cualquier orden, cada uno
+        // se copia a memoria propia y la del motor se devuelve en el acto. Se copian los bytes
+        // comprimidos, que son pocos.
+        entry->file = malloc(len);
+        if (entry->file) {
+            Com_Memcpy(entry->file, buffer, len);
+        }
+        ri.FS_FreeFile(buffer);
+        if (!entry->file) {
+            entry->state = PF_FAILED;
+            continue;
+        }
+        entry->fileLen = len;
+        entry->state = PF_WORKING;
+        ri.JobsSubmit(R_PrefetchDecode, entry);
+    }
+}
+
+static void R_PrefetchRelease(prefetchEntry_t* entry) {
+    if (entry->file) {
+        free(entry->file);
+        entry->file = NULL;
+    }
+    if (entry->pixels) {
+        free(entry->pixels);
+        entry->pixels = NULL;
+    }
+    entry->state = PF_EMPTY;
+    while (r_prefetchTaken < r_prefetchNext && r_prefetch[r_prefetchTaken].state == PF_EMPTY) {
+        r_prefetchTaken++;
+    }
+}
+
+/*
+=================
+R_PrefetchTake
+
+Si la imagen venia en la lista, la devuelve ya decodificada. Si el trabajador todavia no
+termino, espera: igual es menos que decodificarla aqui.
+=================
+*/
+static qboolean R_PrefetchTake(const char* name, byte** pic, int* width, int* height) {
+    int i;
+
+    if (!r_prefetchOn) {
+        return qfalse;
+    }
+    R_PrefetchPump();
+
+    for (i = r_prefetchTaken; i < r_prefetchNext; i++) {
+        prefetchEntry_t* entry = &r_prefetch[i];
+        int bytes;
+
+        if (entry->state == PF_EMPTY || !R_PrefetchSameName(name, entry->name)) {
+            continue;
+        }
+        if (entry->state == PF_WORKING) {
+            int64_t waitStart = ri.Microseconds();
+
+            while (entry->state == PF_WORKING) {
+                ri.ThreadYield();
+            }
+            r_prefetchWaitUs += ri.Microseconds() - waitStart;
+        }
+        if (entry->state != PF_READY) {
+            R_PrefetchRelease(entry);
+            return qfalse;  // que lo cargue el camino de siempre
+        }
+        bytes = entry->width * entry->height * 4;
+        // [ioquakelive] tambien se anota lo que vino por adelantado, o la lista se encoge en cada
+        // carga hasta quedar vacia
+        Q_strncpyz(r_lastImageName, entry->name, sizeof(r_lastImageName));
+        r_prefetchHits++;
+        *pic = (byte*)ri.Malloc(bytes);
+        Com_Memcpy(*pic, entry->pixels, bytes);
+        *width = entry->width;
+        *height = entry->height;
+        R_PrefetchRelease(entry);
+        R_PrefetchPump();
+        return qtrue;
+    }
+    r_prefetchMisses++;
+    return qfalse;
+}
+
+/*
+=================
+R_PrefetchStart
+
+Empieza una lista: la lee, arranca a leer sus archivos por adelantado, y desde aqui se anota en
+ella lo que se vaya cargando. "common" es lo que el cgame registra antes del mundo -- el HUD,
+que es igual en todos los mapas -- y despues va la del mapa.
+=================
+*/
+void R_PrefetchStart(const char* listName) {
+    char fileName[MAX_QPATH];
+    char* text;
+    char* line;
+    int len;
+
+    R_PrefetchFinish();
+
+    r_prefetchCount = r_prefetchNext = r_prefetchTaken = 0;
+    r_prefetchHits = r_prefetchMisses = 0;
+    r_prefetchWaitUs = 0;
+    r_loadedCount = 0;
+    r_prefetchOn = qfalse;
+    Q_strncpyz(r_prefetchList, listName, sizeof(r_prefetchList));
+
+    if (!ri.JobWorkers() || !r_prefetchTextures || !r_prefetchTextures->integer) {
+        return;
+    }
+    R_PrefetchFile(listName, fileName, sizeof(fileName));
+    len = ri.FS_ReadFile(fileName, (void**)&text);
+    if (len <= 0 || !text) {
+        return;
+    }
+    for (line = strtok(text, "\r\n"); line && r_prefetchCount < R_PREFETCH_MAX;
+         line = strtok(NULL, "\r\n")) {
+        if (*line) {
+            Q_strncpyz(r_prefetch[r_prefetchCount].name, line, MAX_QPATH);
+            r_prefetch[r_prefetchCount].state = PF_EMPTY;
+            r_prefetchCount++;
+        }
+    }
+    ri.FS_FreeFile(text);
+
+    if (r_prefetchCount) {
+        r_prefetchOn = qtrue;
+        R_PrefetchPump();
+    }
+}
+
+// se anota lo que se cargo, en orden, para la proxima vez
+static void R_PrefetchRecord(void) {
+    if (r_loadedCount < R_PREFETCH_MAX && r_lastImageName[0]) {
+        Q_strncpyz(r_loadedNames[r_loadedCount++], r_lastImageName, MAX_QPATH);
+    }
+    r_lastImageName[0] = '\0';
+}
+
+/*
+=================
+R_PrefetchFinish
+
+Cierra la lista en curso: espera lo que este a medio decodificar, suelta lo que sobro y escribe
+lo que se cargo, para la proxima vez.
+=================
+*/
+void R_PrefetchFinish(void) {
+    char fileName[MAX_QPATH];
+    char* text;
+    int size = 0;
+    int i;
+
+    if (r_prefetchCount || r_prefetchHits) {
+        ri.Printf(PRINT_ALL, "prefetch: %i ready, %i not listed, %i listed, %.2f s waiting\n",
+                  r_prefetchHits, r_prefetchMisses, r_prefetchCount, r_prefetchWaitUs / 1000000.0f);
+    }
+
+    while (r_prefetchTaken < r_prefetchNext) {
+        prefetchEntry_t* entry = &r_prefetch[r_prefetchTaken];
+
+        while (entry->state == PF_WORKING) {
+            ri.ThreadYield();
+        }
+        R_PrefetchRelease(entry);
+        if (r_prefetch[r_prefetchTaken].state != PF_EMPTY) {
+            r_prefetchTaken++;
+        }
+    }
+    r_prefetchOn = qfalse;
+
+    if (!r_loadedCount || !r_prefetchList[0] || !r_prefetchTextures || !r_prefetchTextures->integer) {
+        return;
+    }
+    for (i = 0; i < r_loadedCount; i++) {
+        size += (int)strlen(r_loadedNames[i]) + 1;
+    }
+    text = (char*)ri.Malloc(size + 1);
+    text[0] = '\0';
+    for (i = 0; i < r_loadedCount; i++) {
+        Q_strcat(text, size + 1, r_loadedNames[i]);
+        Q_strcat(text, size + 1, "\n");
+    }
+    R_PrefetchFile(r_prefetchList, fileName, sizeof(fileName));
+    ri.FS_WriteFile(fileName, text, (int)strlen(text));
+    ri.Free(text);
+    r_loadedCount = 0;
+    r_prefetchList[0] = '\0';
+}
+
+/*
 ===============
 R_FindImageFile
 
@@ -2397,12 +2694,19 @@ image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags) {
     {
         int64_t start = ri.Microseconds();
 
-        R_LoadImage(name, &pic, &width, &height, &picFormat, &picNumMips);
+        // [ioquakelive] si venia por adelantado, ya esta decodificada
+        if (R_PrefetchTake(name, &pic, &width, &height)) {
+            picFormat = GL_RGBA8;
+            picNumMips = 0;
+        } else {
+            R_LoadImage(name, &pic, &width, &height, &picFormat, &picNumMips);
+        }
         r_imageDecodeUs += ri.Microseconds() - start;
     }
     if (pic == NULL) {
         return NULL;
     }
+    R_PrefetchRecord();
     r_imageCount++;
 
     checkFlagsTrue = IMGFLAG_PICMIP | IMGFLAG_MIPMAP | IMGFLAG_GENNORMALMAP;
