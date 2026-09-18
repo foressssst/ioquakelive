@@ -384,7 +384,11 @@ typedef enum {
 #define EF_AWARD_CAP 0x00000800         // draw the capture sprite
 #define EF_TALK 0x00001000              // draw a talk balloon
 #define EF_CONNECTION 0x00002000        // draw a connection trouble sprite
-#define EF_VOTED 0x00004000             // already cast a vote
+#define EF_SPECTATOR 0x00004000  // [QL] el jugador es espectador, y esto NO es el
+                                 // EF_SPECTATOR de Quake 3: el bit se reutilizo. Lo escribe
+                                 // ClientSpawn (qagamex86.dll 0x1003bd8b) y lo lee el
+                                 // cgame para dibujar la HUD de espectador (0x10010ff7).
+                                 // Quien ya voto se sabe por pers.voteState, no por aqui.
 #define EF_AWARD_IMPRESSIVE 0x00008000  // draw an impressive sprite
 #define EF_AWARD_DEFEND 0x00010000      // draw a defend sprite
 #define EF_AWARD_ASSIST 0x00020000      // draw a assist sprite

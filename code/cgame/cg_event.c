@@ -867,7 +867,7 @@ frame time, held during a timeout, and the list is sorted
 void CG_UpdateSpecItemTimers(void) {
     int i;
 
-    if (!(cg.predictedPlayerState.eFlags & EF_VOTED)) {
+    if (!(cg.predictedPlayerState.eFlags & EF_SPECTATOR)) {
         return;
     }
     for (i = 0; i < MAX_SPEC_ITEM_TIMERS; i++) {

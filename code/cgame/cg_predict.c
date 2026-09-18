@@ -488,7 +488,7 @@ static void CG_CheckAutoFire(void) {
     int clientNum;
 
     // already voted (spectator item-timer flag), don't fire
-    if (cg.predictedPlayerState.eFlags & EF_VOTED) {
+    if (cg.predictedPlayerState.eFlags & EF_SPECTATOR) {
         return;
     }
 

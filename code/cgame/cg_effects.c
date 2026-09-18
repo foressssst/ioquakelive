@@ -614,7 +614,7 @@ floatingEffect_t* CG_AllocFloatingEffect(void) {
     int i;
     floatingEffect_t* fx;
 
-    if (cgs.gametype == GT_RACE && (cg.snap->ps.eFlags & EF_VOTED) && !(cg.snap->ps.pm_flags & PMF_FOLLOW)) {
+    if (cgs.gametype == GT_RACE && (cg.snap->ps.eFlags & EF_SPECTATOR) && !(cg.snap->ps.pm_flags & PMF_FOLLOW)) {
         return NULL;
     }
 
