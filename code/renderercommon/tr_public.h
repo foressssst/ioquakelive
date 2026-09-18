@@ -128,6 +128,8 @@ typedef struct {
     // milliseconds should only be used for profiling, never
     // for anything game related.  Get time from the refdef
     int (*Milliseconds)(void);
+    // [ioquakelive] reloj fino, para medir la carga de imagenes sin redondear a ms
+    int64_t (*Microseconds)(void);
 
     // stack based memory allocation for per-level things that
     // won't be freed
