@@ -108,6 +108,27 @@ void CG_SetEntitySoundPosition(centity_t* cent) {
     }
 }
 
+
+/*
+===============
+CG_AddEffectLight
+
+[ioquakelive] Una luz de las que solo decoran: el fogonazo del arma, un cohete, una explosion,
+el brillo de un objeto. Con r_dynamicLight 2 no se dibuja ninguna, y quedan solo las que
+informan algo -- quien lleva bandera, quien lleva quad --, que siguen llamando al trap directo
+desde CG_PlayerPowerups.
+
+Es idea del jugador: con 1 la luz del portador se pierde entre los cohetes y las explosiones;
+con 2 cualquier luz que se vea es, con certeza, un portador.
+===============
+*/
+void CG_AddEffectLight(const vec3_t org, float intensity, float r, float g, float b) {
+    if (r_dynamicLight.integer == 2) {
+        return;
+    }
+    trap_R_AddLightToScene(org, intensity, r, g, b);
+}
+
 /*
 ==================
 CG_EntityEffects
@@ -140,7 +161,7 @@ static void CG_EntityEffects(centity_t* cent) {
         g = (float)((cl >> 8) & 0xFF) / 255.0;
         b = (float)((cl >> 16) & 0xFF) / 255.0;
         i = (float)((cl >> 24) & 0xFF) * 4.0;
-        trap_R_AddLightToScene(cent->lerpOrigin, i, r, g, b);
+        CG_AddEffectLight(cent->lerpOrigin, i, r, g, b);
     }
 }
 
@@ -814,13 +835,13 @@ static void CG_Missile(centity_t* cent) {
 
         // add dynamic light
         if ( weapon->missileDlight ) {
-            trap_R_AddLightToScene(cent->lerpOrigin, weapon->missileDlight,
+            CG_AddEffectLight(cent->lerpOrigin, weapon->missileDlight,
                 weapon->missileDlightColor[col][0], weapon->missileDlightColor[col][1], weapon->missileDlightColor[col][2] );
         }
     */
     // add dynamic light
     if (weapon->missileDlight) {
-        trap_R_AddLightToScene(cent->lerpOrigin, weapon->missileDlight,
+        CG_AddEffectLight(cent->lerpOrigin, weapon->missileDlight,
                                weapon->missileDlightColor[0], weapon->missileDlightColor[1], weapon->missileDlightColor[2]);
     }
 

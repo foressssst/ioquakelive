@@ -174,6 +174,7 @@ vmCvar_t cg_addMarks;
 vmCvar_t cg_brassTime;
 vmCvar_t cg_viewsize;
 vmCvar_t cg_drawGun;
+vmCvar_t r_dynamicLight;  // [ioquakelive] el 2 apaga las luces de efecto
 vmCvar_t cg_gun_frame;
 vmCvar_t cg_gun_x;
 vmCvar_t cg_gun_y;
@@ -543,6 +544,9 @@ static cvarTable_t cvarTable[] = {
     {&cg_ignore, "cg_ignore", "0", 0},  // used for debugging
     {&cg_autoswitch, "cg_autoswitch", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},  // [QL] default 0 (was Q3 "1")
     {&cg_drawGun, "cg_drawGun", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "3"},
+    // [ioquakelive] es del renderer; el cgame la lee para saber que luces dibujar. El 2 es
+    // nuestro: deja solo las que informan algo. Ver CG_AddEffectLight.
+    {&r_dynamicLight, "r_dynamicLight", "1", CVAR_ARCHIVE | CVAR_USERSAVE, "0", "2"},
     {&cg_zoomFov, "cg_zoomfov", "30", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "10", "130"},
     {&cg_fov, "cg_fov", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "10", "130"},
     {&cg_viewsize, "cg_viewsize", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "30", "100"},
