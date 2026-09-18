@@ -26,6 +26,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <SDL.h>
 #endif
 
+#ifdef _WIN32
+// [ioquakelive] para leer el mouse en lote hace falta el HWND de la ventana
+#ifdef USE_LOCAL_HEADERS
+#include "SDL_syswm.h"
+#else
+#include <SDL_syswm.h>
+#endif
+#endif
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,6 +52,11 @@ static SDL_GameController* gamepad = NULL;
 static SDL_Joystick* stick = NULL;
 
 static qboolean mouseAvailable = qfalse;
+
+// [ioquakelive] contadores de /inputrate
+static int64_t in_rateUsTotal, in_rateUsMax, in_rateStartUs;
+static int in_rateWanted, in_rateFrames, in_rateEvents, in_rateMouse, in_rateMaxFrame;
+
 static qboolean mouseActive = qfalse;
 
 static cvar_t* in_mouse = NULL;
@@ -456,6 +470,180 @@ static void IN_GobbleMotionEvents(void) {
         Com_Printf("IN_GobbleMotionEvents failed: %s\n", SDL_GetError());
 }
 
+
+#ifdef _WIN32
+/*
+===============================================================================
+
+EL MOUSE, LEIDO EN LOTE   (in_mouse 2, Windows)
+
+[ioquakelive] SDL2 atiende el raw input de a un evento: por cada movimiento llama a
+GetRawInputData, que toma un lock, y a 8000 Hz son ocho llamadas por milisegundo. La lectura en
+lote -- GetRawInputBuffer -- entro en SDL 3, no en el SDL 2 que usa este motor; y el motor de
+retail tampoco la tiene, importa GetRawInputData.
+
+Aqui el dispositivo se registra contra nuestra ventana, se apaga el modo relativo de SDL -- sin
+el, SDL ni mira los WM_INPUT, es su propia condicion de entrada, asi que ese costo desaparece --
+y una vez por frame se vacia la cola entera sumando el movimiento, que se encola como un solo
+evento. Los botones y la rueda siguen llegando por SDL, que ahi no cuesta nada.
+
+Importa leer ANTES de que SDL bombee los mensajes: cuando un WM_INPUT llega a DefWindowProc el
+sistema libera su dato y ya no aparece en el lote.
+
+===============================================================================
+*/
+
+// NEXTRAWINPUTBLOCK, el macro del sistema, usa QWORD, que no siempre esta declarado y rompe la
+// compilacion en x64. El paso es el mismo: el bloque siguiente, alineado al tamaño de un puntero
+// (4 en 32 bits, 8 en 64).
+#define IOQL_RAWINPUT_ALIGN(x) (((x) + sizeof(void*) - 1) & ~(ULONG_PTR)(sizeof(void*) - 1))
+#define IOQL_NEXT_RAWINPUT(p) ((PRAWINPUT)IOQL_RAWINPUT_ALIGN((ULONG_PTR)((PBYTE)(p) + (p)->header.dwSize)))
+
+static qboolean rawMouseOn;
+static BYTE* rawMouseBuffer;
+static UINT rawMouseBufferSize;
+static int rawMouseLastAbsX, rawMouseLastAbsY;
+static qboolean rawMouseHasAbs;
+static qboolean rawMouseAnnounced;
+// [ioquakelive] la red de seguridad: cuantos eventos entrego el lote y cuantos vio SDL
+static int rawMouseSeen;
+static int rawMouseSdlMotion;
+
+static qboolean IN_RawMouseStart(void) {
+    RAWINPUTDEVICE device;
+    SDL_SysWMinfo info;
+
+    if (rawMouseOn) {
+        return qtrue;
+    }
+    SDL_VERSION(&info.version);
+    if (!SDL_window || !SDL_GetWindowWMInfo(SDL_window, &info) || info.subsystem != SDL_SYSWM_WINDOWS) {
+        return qfalse;
+    }
+    if (!rawMouseBuffer) {
+        // de sobra para lo que entra entre dos frames a 8000 Hz
+        rawMouseBufferSize = sizeof(RAWINPUT) * 512;
+        rawMouseBuffer = (BYTE*)Z_Malloc(rawMouseBufferSize);
+    }
+
+    device.usUsagePage = 0x01;  // generic desktop
+    device.usUsage = 0x02;      // mouse
+    device.dwFlags = 0;         // solo con el foco, y sin quitar los mensajes normales
+    device.hwndTarget = info.info.win.window;
+
+    if (!RegisterRawInputDevices(&device, 1, sizeof(device))) {
+        Com_DPrintf("RegisterRawInputDevices fallo, se usa el mouse de SDL\n");
+        return qfalse;
+    }
+    rawMouseHasAbs = qfalse;
+    rawMouseSeen = 0;
+    rawMouseSdlMotion = 0;
+    rawMouseOn = qtrue;
+    if (!rawMouseAnnounced) {
+        rawMouseAnnounced = qtrue;
+        Com_Printf("Mouse: raw input read in batches (GetRawInputBuffer)\n");
+    }
+    return qtrue;
+}
+
+static void IN_RawMouseStop(void) {
+    RAWINPUTDEVICE device;
+
+    if (!rawMouseOn) {
+        return;
+    }
+    device.usUsagePage = 0x01;
+    device.usUsage = 0x02;
+    device.dwFlags = RIDEV_REMOVE;
+    device.hwndTarget = NULL;
+    RegisterRawInputDevices(&device, 1, sizeof(device));
+    rawMouseOn = qfalse;
+}
+
+// vacia la cola y encola un solo movimiento con la suma de todo lo que llego
+static void IN_RawMouseRead(void) {
+    int dx = 0, dy = 0;
+
+    if (!rawMouseOn) {
+        return;
+    }
+    for (;;) {
+        UINT bytes = rawMouseBufferSize;
+        UINT count = GetRawInputBuffer((PRAWINPUT)rawMouseBuffer, &bytes, sizeof(RAWINPUTHEADER));
+        PRAWINPUT raw = (PRAWINPUT)rawMouseBuffer;
+        UINT i;
+
+        if (count == 0 || count == (UINT)-1) {
+            break;
+        }
+        for (i = 0; i < count; i++) {
+            if (raw->header.dwType == RIM_TYPEMOUSE) {
+                const RAWMOUSE* m = &raw->data.mouse;
+
+                if (m->usFlags & MOUSE_MOVE_ABSOLUTE) {
+                    // escritorio remoto, tabletas y mouses virtuales mandan posicion, no delta
+                    if (rawMouseHasAbs) {
+                        dx += m->lLastX - rawMouseLastAbsX;
+                        dy += m->lLastY - rawMouseLastAbsY;
+                    }
+                    rawMouseLastAbsX = m->lLastX;
+                    rawMouseLastAbsY = m->lLastY;
+                    rawMouseHasAbs = qtrue;
+                } else {
+                    dx += m->lLastX;
+                    dy += m->lLastY;
+                }
+                in_rateMouse += (in_rateWanted != 0);
+                rawMouseSeen++;
+            }
+            raw = IOQL_NEXT_RAWINPUT(raw);
+        }
+    }
+    if (dx || dy) {
+        Com_QueueEvent(in_eventTime, SE_MOUSE, dx, dy, 0, NULL);
+    }
+
+    // SDL sigue viendo el puntero del sistema aunque nosotros lo ignoremos. Si el ve movimiento y
+    // el lote no entrego nada, esta via no sirve en esta maquina: se vuelve a la de SDL y se avisa,
+    // para que nadie se quede sin poder mirar.
+    if (rawMouseSdlMotion > 30 && rawMouseSeen == 0) {
+        Com_Printf("^3Mouse: batched raw input delivered nothing, falling back to SDL\n");
+        IN_RawMouseStop();
+        SDL_SetRelativeMouseMode(SDL_TRUE);
+        SDL_SetWindowGrab(SDL_window, SDL_TRUE);
+    }
+}
+#endif
+
+/*
+===============
+IN_GrabMouse
+
+[ioquakelive] Tomar el mouse para jugar: por la via en lote si se puede, y si no por el modo
+relativo de SDL, que es lo que habia.
+===============
+*/
+static void IN_GrabMouse(void) {
+#ifdef _WIN32
+    if (in_mouse->integer == 2 && IN_RawMouseStart()) {
+        SDL_SetRelativeMouseMode(SDL_FALSE);
+        SDL_ShowCursor(SDL_FALSE);
+        SDL_SetWindowGrab(SDL_window, SDL_TRUE);
+        return;
+    }
+#endif
+    SDL_SetRelativeMouseMode(SDL_TRUE);
+    SDL_SetWindowGrab(SDL_window, SDL_TRUE);
+}
+
+static void IN_ReleaseMouse(void) {
+#ifdef _WIN32
+    IN_RawMouseStop();
+#endif
+    SDL_SetRelativeMouseMode(SDL_FALSE);
+    SDL_SetWindowGrab(SDL_window, SDL_FALSE);
+}
+
 /*
 ===============
 IN_ActivateMouse
@@ -466,8 +654,7 @@ static void IN_ActivateMouse(qboolean isFullscreen) {
         return;
 
     if (!mouseActive) {
-        SDL_SetRelativeMouseMode(SDL_TRUE);
-        SDL_SetWindowGrab(SDL_window, SDL_TRUE);
+        IN_GrabMouse();
 
         IN_GobbleMotionEvents();
     }
@@ -476,11 +663,9 @@ static void IN_ActivateMouse(qboolean isFullscreen) {
     if (!isFullscreen) {
         if (in_nograb->modified || !mouseActive) {
             if (in_nograb->integer) {
-                SDL_SetRelativeMouseMode(SDL_FALSE);
-                SDL_SetWindowGrab(SDL_window, SDL_FALSE);
+                IN_ReleaseMouse();
             } else {
-                SDL_SetRelativeMouseMode(SDL_TRUE);
-                SDL_SetWindowGrab(SDL_window, SDL_TRUE);
+                IN_GrabMouse();
             }
 
             in_nograb->modified = qfalse;
@@ -510,8 +695,7 @@ static void IN_DeactivateMouse(qboolean isFullscreen) {
     if (mouseActive) {
         IN_GobbleMotionEvents();
 
-        SDL_SetWindowGrab(SDL_window, SDL_FALSE);
-        SDL_SetRelativeMouseMode(SDL_FALSE);
+        IN_ReleaseMouse();
 
         // Don't warp the mouse unless the cursor is within the window
         if (SDL_GetWindowFlags(SDL_window) & SDL_WINDOW_MOUSE_FOCUS)
@@ -1053,8 +1237,6 @@ eventos llegan por frame y cuanto cuesta atenderlos. Sirve para saber si un mous
 -- 4000 u 8000 Hz -- le esta costando frames al juego en esta maquina, sin adivinar.
 ===============
 */
-static int64_t in_rateUsTotal, in_rateUsMax, in_rateStartUs;
-static int in_rateWanted, in_rateFrames, in_rateEvents, in_rateMouse, in_rateMaxFrame;
 
 static void IN_InputRateReport(void) {
     float seconds = (Sys_Microseconds() - in_rateStartUs) / 1000000.0f;
@@ -1103,7 +1285,11 @@ static void IN_ProcessEvents(void) {
         // [ioquakelive] para /inputrate: cuantos eventos entran y cuantos son del mouse
         if (in_rateWanted) {
             in_rateEvents++;
+#ifdef _WIN32
+            if (e.type == SDL_MOUSEMOTION && !rawMouseOn) {
+#else
             if (e.type == SDL_MOUSEMOTION) {
+#endif
                 in_rateMouse++;
             }
         }
@@ -1172,6 +1358,14 @@ static void IN_ProcessEvents(void) {
                 break;
 
             case SDL_MOUSEMOTION:
+                // [ioquakelive] con la via en lote el movimiento ya se leyo del raw input; el de
+                // SDL aqui es el del puntero del sistema, y sumarlo seria contar dos veces
+#ifdef _WIN32
+                if (rawMouseOn) {
+                    rawMouseSdlMotion++;
+                    break;
+                }
+#endif
                 if (mouseActive) {
                     if (!e.motion.xrel && !e.motion.yrel)
                         break;
@@ -1359,6 +1553,9 @@ void IN_Frame(void) {
         int before = in_rateEvents;
         int64_t costUs;
 
+#ifdef _WIN32
+        IN_RawMouseRead();
+#endif
         IN_ProcessEvents();
 
         costUs = Sys_Microseconds() - startUs;
@@ -1374,6 +1571,9 @@ void IN_Frame(void) {
             in_rateWanted = 0;
         }
     } else {
+#ifdef _WIN32
+        IN_RawMouseRead();
+#endif
         IN_ProcessEvents();
     }
 
@@ -1421,9 +1621,14 @@ void IN_Init(void* windowData) {
     if (in_mouse->integer == 0) {
         Com_Printf("Mouse control not active.\n");
     } else if (in_mouse->integer == 2) {
-        // SDL's relative mode reads raw input on Windows
+        // [ioquakelive] el raw input se lee en lote aqui mismo en Windows; en las otras
+        // plataformas sigue siendo el modo relativo de SDL
         SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "0");
+#ifdef _WIN32
+        Cvar_Set("in_mouseMode", "win32(Raw, batched)");
+#else
         Cvar_Set("in_mouseMode", "win32(Raw)");
+#endif
     } else {
         // 1 and -1 both fall back on the system's mouse; -1 warps it to the centre, as retail's
         // cursor mode did
