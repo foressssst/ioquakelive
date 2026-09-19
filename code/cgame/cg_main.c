@@ -185,6 +185,7 @@ vmCvar_t cg_tracerLength;
 vmCvar_t cg_autoswitch;
 vmCvar_t cg_ignore;
 vmCvar_t cg_simpleItems;
+vmCvar_t cg_skipItems;  // [QL] 0x10016026: con 1, los items no se dibujan
 vmCvar_t cg_fov;
 vmCvar_t cg_zoomFov;
 vmCvar_t cg_thirdPerson;
@@ -600,6 +601,7 @@ static cvarTable_t cvarTable[] = {
     {&cg_crosshairY, "cg_crosshairY", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-240", "240"},
     {&cg_brassTime, "cg_brassTime", "2500", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "10000"},
     {&cg_simpleItems, "cg_simpleItems", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_skipItems, "cg_skipItems", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_addMarks, "cg_marks", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_lagometer, "cg_lagometer", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},  // [QL] default 0 (was Q3 "1")
     {&cg_railTrailTime, "cg_railTrailTime", "400", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2000"},
