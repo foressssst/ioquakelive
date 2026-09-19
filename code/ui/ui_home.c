@@ -799,30 +799,30 @@ secciones y los logos de los creditos.
 ===============================================================================
 */
 
-#define HV_BAR_W 1440.0f      // el panel de arriba no ocupa todo el ancho: va centrado
-#define HV_BAR_H 88.0f
+#define HV_BAR_W 1760.0f      // el panel de arriba no ocupa todo el ancho: va centrado
+#define HV_BAR_H 104.0f
 #define HV_BAR_R 20.0f        // sus esquinas de abajo
 #define HV_PAD 34.0f          // el aire adentro del panel
 #define HV_EDGE 48.0f
-#define HV_FOOT_H 80.0f       // la franja de abajo: version, creditos y aviso legal en una linea
-#define HV_LOGO_H 64.0f       // la imagen del logo; el dibujo ocupa el 77 % de su alto
-#define HV_TAB_SLOT 156.0f    // cada seccion ocupa un casillero igual: la fila queda simetrica
-#define HV_TAB_SIZE 16.0f
+#define HV_FOOT_H 88.0f       // la franja de abajo: version, creditos y aviso legal en una linea
+#define HV_LOGO_H 76.0f       // la imagen del logo; el dibujo ocupa el 77 % de su alto
+#define HV_TAB_SLOT 196.0f    // cada seccion ocupa un casillero igual: la fila queda simetrica
+#define HV_TAB_SIZE 22.0f
 #define HV_TAB_SPACING 2.2f
-#define HV_PLAY_SLOT 186.0f   // el lugar de Jugar en la fila
-#define HV_PLAY_W 150.0f      // el boton de contorno
-#define HV_PLAY_H 42.0f
-#define HV_PLAY_SIZE 15.0f
+#define HV_PLAY_SLOT 240.0f   // el lugar de Jugar en la fila
+#define HV_PLAY_W 200.0f      // el boton de contorno
+#define HV_PLAY_H 54.0f
+#define HV_PLAY_SIZE 20.0f
 #define HV_PLAY_SPACING 4.0f
 #define HV_SOCIAL_OPEN_W 360.0f
 #define HV_SOCIAL_MS 55.0f    // la constante de tiempo de las transiciones
 #define HV_AVATAR 52.0f
-#define HV_TEXT 13.0f         // la letra chica: version, aviso, textos de la franja
+#define HV_TEXT 15.0f         // la letra chica: version, aviso, textos de la franja
 
 // [ioquakelive] la paleta es la nuestra: negro, gris y blanco. Del CSS de playmorepromode.com
 // queda la forma -- el panel centrado que cuelga del borde con las esquinas de abajo
 // redondeadas --, no sus colores ni su azul.
-static const vec4_t hvPanel = {0.0f, 0.0f, 0.0f, 0.88f};
+static const vec4_t hvPanel = {0.0f, 0.0f, 0.0f, 1.0f};  // negro solido, sin transparencia
 
 typedef struct {
     const char* title;
@@ -884,9 +884,9 @@ static void UI_Home_RoundedBottom(float x, float y, float w, float h, float r, c
 static void UI_Home_DrawTab(const hvTab_t* tab, float slotX, float top) {
     qboolean current = tab->nav < 0;
     qboolean over = !current && SM_Over(HM_HIT_TAB, tab->nav);
-    float w = SM_LabelWidthIn(SM_FONT_NAV, HV_TAB_SIZE, tab->title, HV_TAB_SPACING);
+    float w = SM_LabelWidth(HV_TAB_SIZE, tab->title, HV_TAB_SPACING);
 
-    SM_LabelIn(SM_FONT_NAV, slotX + (HV_TAB_SLOT - w) * 0.5f, UI_Home_BarBaseline(HV_TAB_SIZE, top), HV_TAB_SIZE,
+    SM_Label(slotX + (HV_TAB_SLOT - w) * 0.5f, UI_Home_BarBaseline(HV_TAB_SIZE, top), HV_TAB_SIZE,
                current || over ? smText : smTextSoft, tab->title, HV_TAB_SPACING);
     if (!current) {
         SM_Hit(slotX, top, HV_TAB_SLOT, HV_BAR_H, HM_HIT_TAB, tab->nav, NULL);
@@ -932,18 +932,18 @@ static void UI_Home_DrawPlay(float cx, float top, float dt) {
         label[i] = smText[i] + (smOnPrimary[i] - smText[i]) * t;
     }
     label[3] = 1.0f;
-    SM_LabelIn(SM_FONT_NAV, cx - SM_LabelWidthIn(SM_FONT_NAV, HV_PLAY_SIZE, "Play", HV_PLAY_SPACING) * 0.5f,
-               SM_Baseline(SM_FONT_NAV, HV_PLAY_SIZE, y, h), HV_PLAY_SIZE, label, "Play", HV_PLAY_SPACING);
+    SM_Label(cx - SM_LabelWidth(HV_PLAY_SIZE, "Play", HV_PLAY_SPACING) * 0.5f,
+               SM_Baseline(FONT_SANS, HV_PLAY_SIZE, y, h), HV_PLAY_SIZE, label, "Play", HV_PLAY_SPACING);
     SM_Hit(x, top, w, HV_BAR_H, HM_HIT_TAB, HM_NAV_PLAY, NULL);
 }
 
 // la salida, adentro del panel contra su borde derecho
 static void UI_Home_DrawQuit(float right, float top) {
     qboolean over = SM_Over(HM_HIT_QUIT, 0);
-    float w = SM_LabelWidthIn(SM_FONT_NAV, HV_TEXT, "Quit", 2.0f);
+    float w = SM_LabelWidth(HV_TEXT, "Quit", 2.0f);
     float x = right - HV_PAD - w;
 
-    SM_LabelIn(SM_FONT_NAV, x, UI_Home_BarBaseline(HV_TEXT, top), HV_TEXT, over ? smText : smTextSoft, "Quit", 2.0f);
+    SM_Label(x, UI_Home_BarBaseline(HV_TEXT, top), HV_TEXT, over ? smText : smTextSoft, "Quit", 2.0f);
     SM_Hit(x - 16, top, w + 16 + HV_PAD, HV_BAR_H, HM_HIT_QUIT, 0, NULL);
 }
 
@@ -975,24 +975,106 @@ static void UI_Home_DrawBar(float dt) {
     UI_Home_DrawQuit(x + HV_BAR_W, top);
 }
 
+/*
+===============
+UI_Home_DrawCards
+
+[ioquakelive] La fila de mapas, sobre el pie: la pagina se veia vacia entre la barra y el pie, y
+el jugador eligio llenarla con esto. Cada tarjeta es la imagen del mapa (levelshot de pak00) con
+el nombre del modo sobre una banda negra, y abre Start Match con ese modo ya elegido. Bajo el
+cursor la imagen se enciende y aparece un borde blanco de un punto.
+===============
+*/
+typedef struct {
+    const char* title;
+    const char* factory;
+    const char* shot;
+} hvCard_t;
+
+static const hvCard_t hvCards[] = {
+    {"Free For All", "ffa", "levelshots/campgrounds"},
+    {"Duel", "duel", "levelshots/bloodrun"},
+    {"Clan Arena", "ca", "levelshots/repent"},
+    {"Capture the Flag", "ctf", "levelshots/spidercrossings"},
+};
+
+#define HV_CARD_W 300.0f
+#define HV_CARD_H 170.0f
+#define HV_CARD_GAP 24.0f
+#define HV_CARD_BAND 46.0f  // la banda negra con el nombre, al pie de la tarjeta
+#define HV_CARD_SIZE 15.0f
+
+static void UI_Home_DrawCard(int i, float x, float y) {
+    static qhandle_t shots[ARRAY_LEN(hvCards)];
+    static qboolean loaded;
+    static const vec4_t black = {0.0f, 0.0f, 0.0f, 1.0f};
+    qboolean over = SM_Over(HM_HIT_CARD, i);
+    vec4_t tint = {0.72f, 0.72f, 0.72f, 1.0f};
+    float w;
+
+    if (!loaded) {
+        int k;
+
+        for (k = 0; k < (int)ARRAY_LEN(hvCards); k++) {
+            shots[k] = trap_R_RegisterShaderNoMip(hvCards[k].shot);
+        }
+        loaded = qtrue;
+    }
+    if (over) {
+        tint[0] = tint[1] = tint[2] = 1.0f;
+    }
+
+    SM_Fill(x, y, HV_CARD_W, HV_CARD_H, black, NULL);
+    if (shots[i]) {
+        SM_PicColor(x, y, HV_CARD_W, HV_CARD_H - HV_CARD_BAND, shots[i], tint, NULL);
+    }
+    SM_Fill(x, y + HV_CARD_H - HV_CARD_BAND, HV_CARD_W, HV_CARD_BAND, black, NULL);
+
+    w = SM_LabelWidth(HV_CARD_SIZE, hvCards[i].title, 1.6f);
+    SM_Label(x + (HV_CARD_W - w) * 0.5f,
+             SM_Baseline(FONT_SANS, HV_CARD_SIZE, y + HV_CARD_H - HV_CARD_BAND + 12.0f, 22.0f), HV_CARD_SIZE,
+             over ? smText : smTextSoft, hvCards[i].title, 1.6f);
+
+    if (over) {
+        SM_Fill(x, y, HV_CARD_W, 1.0f, smText, NULL);
+        SM_Fill(x, y + HV_CARD_H - 1.0f, HV_CARD_W, 1.0f, smText, NULL);
+        SM_Fill(x, y, 1.0f, HV_CARD_H, smText, NULL);
+        SM_Fill(x + HV_CARD_W - 1.0f, y, 1.0f, HV_CARD_H, smText, NULL);
+    }
+    SM_Hit(x, y, HV_CARD_W, HV_CARD_H, HM_HIT_CARD, i, NULL);
+}
+
+static void UI_Home_DrawCards(void) {
+    int count = (int)ARRAY_LEN(hvCards);
+    float total = count * HV_CARD_W + (count - 1) * HV_CARD_GAP;
+    float x = (smVW - total) * 0.5f;
+    float y = UI_Home_Bottom() - HV_FOOT_H - 28.0f - HV_CARD_H;
+    int i;
+
+    for (i = 0; i < count; i++) {
+        UI_Home_DrawCard(i, x + i * (HV_CARD_W + HV_CARD_GAP), y);
+    }
+}
+
 // abajo del todo: una franja con la version a la izquierda, los logos de los creditos al centro
 // y el aviso legal a la derecha, los tres en la misma linea. Antes los logos iban en una banda
 // aparte, mas arriba, que era lo que no cerraba.
 static void UI_Home_DrawFooter(void) {
     static const char* const notice =
         "QUAKE LIVE (c) 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
-    static const vec4_t strip = {0.0f, 0.0f, 0.0f, 0.82f};
+    static const vec4_t strip = {0.0f, 0.0f, 0.0f, 1.0f};
     char version[MAX_CVAR_VALUE_STRING];
     float bottom = UI_Home_Bottom();
     float y = bottom - HV_FOOT_H;
-    float baseline = SM_Baseline(SM_FONT_BODY, HV_TEXT, y + (HV_FOOT_H - HV_TEXT * 1.4f) * 0.5f, HV_TEXT * 1.4f);
-    float w = SM_Advance(SM_FONT_BODY, HV_TEXT, notice, -1);
+    float baseline = SM_Baseline(FONT_SANS, HV_TEXT, y + (HV_FOOT_H - HV_TEXT * 1.4f) * 0.5f, HV_TEXT * 1.4f);
+    float w = SM_Advance(FONT_SANS, HV_TEXT, notice, -1);
 
+    UI_Home_DrawCards();
     SM_Fill(-1, y, smVW + 2, HV_FOOT_H + 1, strip, NULL);
     UI_Home_DrawMarks(y, HV_FOOT_H);
     trap_Cvar_VariableStringBuffer("version", version, sizeof(version));
-    SM_Text(HV_EDGE, baseline, SM_FONT_BODY, HV_TEXT, smSubtle, version, -1, qfalse);
-    SM_Text(smVW - HV_EDGE - w, baseline, SM_FONT_BODY, HV_TEXT, smSubtle, notice, -1, qfalse);
+    SM_Text(HV_EDGE, baseline, FONT_SANS, HV_TEXT, smSubtle, version, -1, qfalse);
+    SM_Text(smVW - HV_EDGE - w, baseline, FONT_SANS, HV_TEXT, smSubtle, notice, -1, qfalse);
 }
 
 /*
@@ -1092,7 +1174,7 @@ static void UI_Home_DrawSocial(float dt) {
         SM_Label(textX, SM_Baseline(FONT_SANS, 17, y + 3, 24), 17, c, name[0] ? name : "Player", 0.4f);
         VectorCopy(smTextSoft, c);
         c[3] = open;
-        SM_Text(textX, SM_Baseline(SM_FONT_BODY, HV_TEXT, y + 29, 20), FONT_SANS, HV_TEXT, c, "Online", -1, qfalse);
+        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 29, 20), FONT_SANS, HV_TEXT, c, "Online", -1, qfalse);
     }
 
     // los amigos: todavia no hay de donde sacarlos, asi que son lugares vacios
@@ -1107,12 +1189,12 @@ static void UI_Home_DrawSocial(float dt) {
     if (open > 0.05f) {
         VectorCopy(smMuted, c);
         c[3] = open;
-        SM_Label(textX, SM_Baseline(SM_FONT_BODY, HV_TEXT, y + 2, 20), HV_TEXT, c, "Friends", 2.0f);
+        SM_Label(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 2, 20), HV_TEXT, c, "Friends", 2.0f);
         VectorCopy(smSubtle, c);
         c[3] = open;
-        SM_Text(textX, SM_Baseline(SM_FONT_BODY, HV_TEXT, y + 26, 20), FONT_SANS, HV_TEXT, c,
+        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 26, 20), FONT_SANS, HV_TEXT, c,
                 "They will show up here once", -1, qfalse);
-        SM_Text(textX, SM_Baseline(SM_FONT_BODY, HV_TEXT, y + 46, 20), FONT_SANS, HV_TEXT, c, "Steam is wired up", -1,
+        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 46, 20), FONT_SANS, HV_TEXT, c, "Steam is wired up", -1,
                 qfalse);
     }
 
@@ -1189,7 +1271,12 @@ qboolean UI_Home_HandleKey(int key) {
         return qtrue;
     }
     hit = SM_HitAt(smMX, smMY);
-    // [ioquakelive] la barra y la salida del menu principal
+    // [ioquakelive] la fila de mapas, la barra y la salida del menu principal
+    if (hit && hit->type == HM_HIT_CARD) {
+        UI_StartMatch_Preselect(hvCards[hit->index].factory);
+        UI_Home_Go(HM_NAV_PLAY);
+        return qtrue;
+    }
     if (hit && hit->type == HM_HIT_TAB) {
         UI_Home_Go(hit->index);
         return qtrue;
