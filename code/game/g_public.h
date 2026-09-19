@@ -325,7 +325,11 @@ typedef struct {
     /* 0x668 */ qboolean(*trap_VerifySteamAuth)(int clientNum);
     /* 0x670 */ qboolean(*trap_FactoryExists)(const char *id);  // [QL] slot 206, x86 table 0x56d2b8 -> 0x4e2a20
 
-    /* 0x678 */ /* end - total 207 slots x 8 = 1656 bytes */
+    /* [ioquakelive] los eventos de estadisticas: lo que retail tiene en +0x328 y +0x2e8 */
+    /* 0x678 */ void    (*trap_GenerateMatchGUID)(char *buf, int size);  // [QL] x86 +0x328 -> 0x4e27d0
+    /* 0x680 */ void    (*trap_StatsEvent)(uint64_t steamId, const char *type, const char *document);  // [QL] x86 +0x2e8 -> 0x4e2640
+
+    /* 0x688 */ /* end - total 209 slots x 8 = 1672 bytes */
 } gameImport_t;
 
 // [QL] vmMain export table - completely reordered vs Q3.

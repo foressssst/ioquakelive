@@ -22,6 +22,44 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // sv_game.c -- interface to the game dll
 
 #include "server.h"
+#include "../qcommon/q_zmq.h"
+
+/*
+===============
+SV_GI_GenerateMatchGUID
+
+[QL] 0x004e27d0: a GUID from CoCreateGuid, written as
+"%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX..." and turned to lower case. That is a
+random (version 4) UUID; this makes the same kind of UUID from the engine's own
+random bytes, which works on every platform.
+===============
+*/
+static void SV_GI_GenerateMatchGUID(char* buf, int size) {
+    byte b[16];
+
+    Com_RandomBytes(b, sizeof(b));
+    b[6] = (byte)((b[6] & 0x0f) | 0x40);  // version 4
+    b[8] = (byte)((b[8] & 0x3f) | 0x80);  // the RFC 4122 variant
+    Com_sprintf(buf, size, "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+                b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14],
+                b[15]);
+}
+
+/*
+===============
+SV_GI_StatsEvent
+
+[QL] 0x004e2640: retail sends the event to Steam's stats (0x00468030) and to the
+ZeroMQ stats socket (0x004f4e10). The document already comes written the way
+retail's engine writes it, {"DATA": ..., "TYPE": ...} with StyledWriter, so it
+goes out as it is. The Steam side is not done yet.
+===============
+*/
+static void SV_GI_StatsEvent(uint64_t steamId, const char* type, const char* document) {
+    (void)steamId;
+    (void)type;
+    ZMQ_PublishStats(document);
+}
 
 #include "../botlib/botlib.h"
 
@@ -1113,6 +1151,8 @@ static void SV_PopulateGameImports(void) {
     sv_gameImports.trap_GetSteamStat           = SV_GI_GetSteamStat;
     sv_gameImports.trap_VerifySteamAuth        = SV_GI_VerifySteamAuth;
     sv_gameImports.trap_FactoryExists          = SV_GI_FactoryExists;
+    sv_gameImports.trap_GenerateMatchGUID      = SV_GI_GenerateMatchGUID;
+    sv_gameImports.trap_StatsEvent             = SV_GI_StatsEvent;
 }
 
 //==============================================

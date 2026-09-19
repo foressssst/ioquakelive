@@ -1253,9 +1253,9 @@ char* ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
             BroadcastTeamChange(client, -1);
         }
 
-        if (!isBot) {
-            STAT_SubscribeClient(ent);
-        }
+        // [QL] 0x1003afb5: el evento sale tambien para los bots (adentro, 0x10078450 mira
+        // svFlags & SVF_BOT solo para poner STEAM_ID "0")
+        STAT_SubscribeClient(ent);
     }
 
     // count current clients and rank for scoreboard
@@ -2170,9 +2170,21 @@ void STAT_InitClient(gentity_t* ent) {
     r = rand();
     client->expandedStats.statId = level.time + r + 636 + (int)(intptr_t)client;   // +0x568
 }
-void STAT_PublishClientDisconnect(gclient_t* client, int reason) { }
-void STAT_SubscribeClient(gentity_t* ent) { }
-void STAT_LogDisconnect(int clientNum) { }
+void STAT_PublishClientDisconnect(gclient_t* client, int reason) {
+    // [QL] 0x1003c802: lo primero de ClientDisconnect es 0x10074360, el evento PLAYER_STATS
+    // con razon 1 (dejo el servidor). Ese evento todavia no esta hecho.
+    (void)client;
+    (void)reason;
+}
+void STAT_SubscribeClient(gentity_t* ent) {
+    // [ioquakelive] 0x10078450: evento PLAYER_CONNECT
+    STAT_PlayerConnect(ent);
+}
+void STAT_LogDisconnect(int clientNum) {
+    // [QL] 0x1003cac3: el evento PLAYER_DISCONNECT, despues del log y del forfeit del duelo,
+    // justo antes de desenlazar la entidad
+    STAT_PlayerDisconnect(&g_entities[clientNum]);
+}
 void STAT_MatchEnd(void) { }
 
 /*

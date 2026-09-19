@@ -597,6 +597,14 @@ qboolean trap_FactoryExists(const char* id) {
     return imports->trap_FactoryExists(id);
 }
 
+void trap_GenerateMatchGUID(char* buf, int size) {
+    imports->trap_GenerateMatchGUID(buf, size);
+}
+
+void trap_StatsEvent(uint64_t steamId, const char* type, const char* document) {
+    imports->trap_StatsEvent(steamId, type, document);
+}
+
 // ============================================================
 // Stubs for Q3 traps not in QL's import table
 // ============================================================
