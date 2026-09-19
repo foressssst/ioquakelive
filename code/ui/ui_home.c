@@ -816,9 +816,9 @@ secciones y los logos de los creditos.
 #define HV_LOGO_H (7.0f * HV_U)
 #define HV_TAB_SIZE 17.0f
 #define HV_TAB_SPACING 2.2f
-#define HV_PLAY_TOP_W (21.0f * HV_U)  // el trapecio: el ancho de un casillero arriba
-#define HV_PLAY_BOT_W (17.0f * HV_U)
-#define HV_PLAY_DROP (2.0f * HV_U)
+#define HV_PLAY_TOP_W (23.0f * HV_U)  // el trapecio: casi todo su casillero de 24 U
+#define HV_PLAY_BOT_W (20.0f * HV_U)
+#define HV_PLAY_DROP (1.0f * HV_U)
 #define HV_PLAY_SIZE 17.0f
 #define HV_PLAY_SPACING 4.0f
 #define HV_TEXT 14.0f         // la letra chica: version, aviso, textos de la franja
