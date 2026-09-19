@@ -745,7 +745,7 @@ static const hmMark_t hmMarks[] = {
 
 // [ioquakelive] lo que queda a la izquierda de la columna social
 static float UI_Home_MainW(void) {
-    return smVW;  // [ioquakelive] la franja social esta apagada; cuando vuelva, smVW - HV_SOCIAL_W
+    return smVW - HV_SOCIAL_W;
 }
 
 // los logos de los creditos, centrados en una franja de alto h: entran a la mitad de su tamano,
@@ -768,7 +768,7 @@ static void UI_Home_DrawMarks(float y, float h) {
     for (i = 0; i < (int)ARRAY_LEN(hmMarks); i++) {
         total += (hmMarks[i].w + (i ? HM_MARK_GAP : 0)) * scale;
     }
-    x = (smVW - total) * 0.5f;
+    x = (UI_Home_MainW() - total) * 0.5f;
 
     for (i = 0; i < (int)ARRAY_LEN(hmMarks); i++) {
         float mw = hmMarks[i].w * scale;
@@ -799,30 +799,33 @@ secciones y los logos de los creditos.
 ===============================================================================
 */
 
-#define HV_BAR_W 1760.0f      // el panel de arriba no ocupa todo el ancho: va centrado
-#define HV_BAR_H 104.0f
+#define HV_BAR_W 1680.0f      // el panel de arriba no ocupa todo el ancho: va centrado
+#define HV_BAR_H 92.0f
 #define HV_BAR_R 20.0f        // sus esquinas de abajo
 #define HV_PAD 34.0f          // el aire adentro del panel
 #define HV_EDGE 48.0f
 #define HV_FOOT_H 88.0f       // la franja de abajo: version, creditos y aviso legal en una linea
-#define HV_LOGO_H 76.0f       // la imagen del logo; el dibujo ocupa el 77 % de su alto
-#define HV_TAB_SLOT 196.0f    // cada seccion ocupa un casillero igual: la fila queda simetrica
-#define HV_TAB_SIZE 22.0f
+#define HV_LOGO_H 66.0f       // la imagen del logo; el dibujo ocupa el 77 % de su alto
+#define HV_TAB_SLOT 178.0f    // cada seccion ocupa un casillero igual: la fila queda simetrica
+#define HV_TAB_SIZE 19.0f
 #define HV_TAB_SPACING 2.2f
-#define HV_PLAY_SLOT 240.0f   // el lugar de Jugar en la fila
-#define HV_PLAY_W 200.0f      // el boton de contorno
-#define HV_PLAY_H 54.0f
-#define HV_PLAY_SIZE 20.0f
+#define HV_PLAY_SLOT 230.0f   // el lugar del trapecio en la fila
+#define HV_PLAY_TOP_W 206.0f  // el trapecio: ancho contra el borde de arriba
+#define HV_PLAY_BOT_W 164.0f  // y donde termina
+#define HV_PLAY_DROP 18.0f    // cuanto cuelga por debajo de la barra
+#define HV_PLAY_SIZE 19.0f
 #define HV_PLAY_SPACING 4.0f
+#define HV_SHADOW 22.0f       // el alto de las sombras
+#define HV_SHADOW_A 0.75f     // y lo oscuras que empiezan
 #define HV_SOCIAL_OPEN_W 360.0f
 #define HV_SOCIAL_MS 55.0f    // la constante de tiempo de las transiciones
 #define HV_AVATAR 52.0f
-#define HV_TEXT 15.0f         // la letra chica: version, aviso, textos de la franja
+#define HV_TEXT 14.0f         // la letra chica: version, aviso, textos de la franja
 
-// [ioquakelive] la paleta es la nuestra: negro, gris y blanco. Del CSS de playmorepromode.com
-// queda la forma -- el panel centrado que cuelga del borde con las esquinas de abajo
-// redondeadas --, no sus colores ni su azul.
-static const vec4_t hvPanel = {0.0f, 0.0f, 0.0f, 1.0f};  // negro solido, sin transparencia
+// [ioquakelive] la paleta: gris muy oscuro en vez de negro puro, que es lo que pidio el
+// jugador, y un velo sobre el arte para que el fondo quede mas oscuro y lo de encima se lea.
+static const vec4_t hvPanel = {0.075f, 0.078f, 0.082f, 1.0f};
+static const vec4_t hvVeil = {0.0f, 0.0f, 0.0f, 0.42f};
 
 typedef struct {
     const char* title;
@@ -862,6 +865,20 @@ static float UI_Home_BarBaseline(float size, float y) {
     return SM_Baseline(FONT_SANS, size, y + (HV_BAR_H - size * 1.4f) * 0.5f, size * 1.4f);
 }
 
+// [ioquakelive] una sombra debajo de un borde: filas de negro que se apagan hacia abajo. El
+// sistema de dibujo solo tiene rectangulos, asi que una sombra difusa se hace asi, y el jugador
+// las pidio bien marcadas.
+static void UI_Home_Shadow(float x, float y, float w, float h) {
+    float k;
+
+    for (k = 0; k < h; k += 1.0f) {
+        vec4_t c = {0.0f, 0.0f, 0.0f, 0.0f};
+
+        c[3] = HV_SHADOW_A * (1.0f - k / h) * (1.0f - k / h);
+        SM_Fill(x, y + k, w, 1.05f, c, NULL);
+    }
+}
+
 // un panel con las esquinas de abajo redondeadas, con filas de un punto: es lo que hay para
 // dibujar una figura que no es un rectangulo
 static void UI_Home_RoundedBottom(float x, float y, float w, float h, float r, const float* color) {
@@ -893,48 +910,33 @@ static void UI_Home_DrawTab(const hvTab_t* tab, float slotX, float top) {
     }
 }
 
-// Jugar: un boton de contorno en el medio de la fila. Sin relleno, con un borde de un punto y
-// la palabra adentro; bajo el cursor se invierte, que es lo que hace un boton de contorno. En
-// lugar del trapecio, que el jugador saco.
+// Jugar: el trapecio, mas ancho arriba que abajo, que cuelga de la barra. Bajo el cursor se
+// aclara. Se arma con filas de un punto, que es lo que hay para dibujar una figura que no es un
+// rectangulo.
 static void UI_Home_DrawPlay(float cx, float top, float dt) {
     qboolean over = SM_Over(HM_HIT_TAB, HM_NAV_PLAY);
-    float w = HV_PLAY_W;
-    float h = HV_PLAY_H;
-    float x = cx - w * 0.5f;
-    float y = top + (HV_BAR_H - h) * 0.5f;
-    float t;
-    vec4_t edge;
-    vec4_t label;
-    int i;
+    float h = HV_BAR_H + HV_PLAY_DROP;
+    float k;
+    vec4_t fill;
 
     hv.play = UI_Home_Ease(hv.play, over ? 1.0f : 0.0f, dt);
-    t = UI_Home_Smooth(hv.play);
+    VectorCopy(smPrimary, fill);
+    fill[0] += (1.0f - fill[0]) * hv.play;
+    fill[1] += (1.0f - fill[1]) * hv.play;
+    fill[2] += (1.0f - fill[2]) * hv.play;
+    fill[3] = 1.0f;
 
-    // el borde se aclara y, al mismo tiempo, el relleno blanco entra desde la transparencia
-    VectorCopy(smTextSoft, edge);
-    edge[0] += (smText[0] - edge[0]) * t;
-    edge[1] += (smText[1] - edge[1]) * t;
-    edge[2] += (smText[2] - edge[2]) * t;
-    edge[3] = 1.0f;
-    if (t > 0.01f) {
-        vec4_t fill;
+    // la sombra del trapecio sobre el arte, un par de filas por debajo de su punta
+    UI_Home_Shadow(cx - HV_PLAY_BOT_W * 0.5f, top + h, HV_PLAY_BOT_W, HV_SHADOW);
 
-        VectorCopy(smText, fill);
-        fill[3] = t;
-        SM_Fill(x, y, w, h, fill, NULL);
+    for (k = 0; k < h; k += 1.0f) {
+        float w = HV_PLAY_TOP_W + (HV_PLAY_BOT_W - HV_PLAY_TOP_W) * (k / h);
+
+        SM_Fill(cx - w * 0.5f, top + k, w, 1.05f, fill, NULL);
     }
-    SM_Fill(x, y, w, 1.0f, edge, NULL);
-    SM_Fill(x, y + h - 1.0f, w, 1.0f, edge, NULL);
-    SM_Fill(x, y, 1.0f, h, edge, NULL);
-    SM_Fill(x + w - 1.0f, y, 1.0f, h, edge, NULL);
-
-    for (i = 0; i < 3; i++) {
-        label[i] = smText[i] + (smOnPrimary[i] - smText[i]) * t;
-    }
-    label[3] = 1.0f;
     SM_Label(cx - SM_LabelWidth(HV_PLAY_SIZE, "Play", HV_PLAY_SPACING) * 0.5f,
-               SM_Baseline(FONT_SANS, HV_PLAY_SIZE, y, h), HV_PLAY_SIZE, label, "Play", HV_PLAY_SPACING);
-    SM_Hit(x, top, w, HV_BAR_H, HM_HIT_TAB, HM_NAV_PLAY, NULL);
+             UI_Home_BarBaseline(HV_PLAY_SIZE, top), HV_PLAY_SIZE, smOnPrimary, "Play", HV_PLAY_SPACING);
+    SM_Hit(cx - HV_PLAY_TOP_W * 0.5f, top, HV_PLAY_TOP_W, h, HM_HIT_TAB, HM_NAV_PLAY, NULL);
 }
 
 // la salida, adentro del panel contra su borde derecho
@@ -951,10 +953,11 @@ static void UI_Home_DrawQuit(float right, float top) {
 // atravesandolo y la salida a la derecha
 static void UI_Home_DrawBar(float dt) {
     float top = UI_Home_Top();
-    float x = (smVW - HV_BAR_W) * 0.5f;
-    float cx = smVW * 0.5f;
+    float x = (UI_Home_MainW() - HV_BAR_W) * 0.5f;
+    float cx = UI_Home_MainW() * 0.5f;
     int i;
 
+    UI_Home_Shadow(x, top + HV_BAR_H, HV_BAR_W, HV_SHADOW);
     UI_Home_RoundedBottom(x, top, HV_BAR_W, HV_BAR_H, HV_BAR_R, hvPanel);
 
     // la imagen del logo trae margen (56 de 512 a la izquierda); el dibujo empieza en el padding
@@ -977,63 +980,65 @@ static void UI_Home_DrawBar(float dt) {
 
 /*
 ===============
-UI_Home_DrawCards
+UI_Home_DrawServers
 
-[ioquakelive] La fila de mapas, sobre el pie: la pagina se veia vacia entre la barra y el pie, y
-el jugador eligio llenarla con esto. Cada tarjeta es la imagen del mapa (levelshot de pak00) con
-el nombre del modo sobre una banda negra, y abre Start Match con ese modo ya elegido. Bajo el
-cursor la imagen se enciende y aparece un borde blanco de un punto.
+[ioquakelive] La fila de servidores, sobre el pie. Lee la lista que arma el navegador de
+servidores de la interfaz, con la fuente que el jugador tenga elegida (ui_netSource), asi que no
+hay dos implementaciones: la portada pide el refresco al abrirse y despues solo dibuja.
+
+Cada tarjeta lleva el levelshot del mapa, el nombre del servidor y, debajo, el mapa, cuanta
+gente hay y el ping. El clic conecta. Sin servidores, una sola tarjeta lo dice.
 ===============
 */
-typedef struct {
-    const char* title;
-    const char* factory;
-    const char* shot;
-} hvCard_t;
-
-static const hvCard_t hvCards[] = {
-    {"Free For All", "ffa", "levelshots/campgrounds"},
-    {"Duel", "duel", "levelshots/bloodrun"},
-    {"Clan Arena", "ca", "levelshots/repent"},
-    {"Capture the Flag", "ctf", "levelshots/spidercrossings"},
-};
-
 #define HV_CARD_W 300.0f
 #define HV_CARD_H 170.0f
 #define HV_CARD_GAP 24.0f
-#define HV_CARD_BAND 46.0f  // la banda negra con el nombre, al pie de la tarjeta
-#define HV_CARD_SIZE 15.0f
+#define HV_CARD_BAND 54.0f  // la banda con el nombre y los datos, al pie de la tarjeta
+#define HV_CARD_SIZE 14.0f
+#define HV_CARDS 4
 
-static void UI_Home_DrawCard(int i, float x, float y) {
-    static qhandle_t shots[ARRAY_LEN(hvCards)];
-    static qboolean loaded;
-    static const vec4_t black = {0.0f, 0.0f, 0.0f, 1.0f};
+static void UI_Home_ServerCard(int i, float x, float y) {
+    char info[MAX_INFO_STRING];
+    char name[64];
+    char map[MAX_QPATH];
     qboolean over = SM_Over(HM_HIT_CARD, i);
     vec4_t tint = {0.72f, 0.72f, 0.72f, 1.0f};
+    qhandle_t shot;
+    int clients;
+    int maxClients;
+    int ping;
     float w;
 
-    if (!loaded) {
-        int k;
-
-        for (k = 0; k < (int)ARRAY_LEN(hvCards); k++) {
-            shots[k] = trap_R_RegisterShaderNoMip(hvCards[k].shot);
-        }
-        loaded = qtrue;
-    }
+    trap_LAN_GetServerInfo(ui_netSource.integer, uiInfo.serverStatus.displayServers[i], info, sizeof(info));
+    Q_strncpyz(name, Info_ValueForKey(info, "hostname"), sizeof(name));
+    Q_CleanStr(name);
+    Q_strncpyz(map, Info_ValueForKey(info, "mapname"), sizeof(map));
+    clients = atoi(Info_ValueForKey(info, "clients"));
+    maxClients = atoi(Info_ValueForKey(info, "sv_maxclients"));
+    ping = trap_LAN_GetServerPing(ui_netSource.integer, uiInfo.serverStatus.displayServers[i]);
     if (over) {
         tint[0] = tint[1] = tint[2] = 1.0f;
     }
 
-    SM_Fill(x, y, HV_CARD_W, HV_CARD_H, black, NULL);
-    if (shots[i]) {
-        SM_PicColor(x, y, HV_CARD_W, HV_CARD_H - HV_CARD_BAND, shots[i], tint, NULL);
+    SM_Fill(x, y, HV_CARD_W, HV_CARD_H, hvPanel, NULL);
+    shot = map[0] ? trap_R_RegisterShaderNoMip(va("levelshots/%s", map)) : 0;
+    if (shot) {
+        SM_PicColor(x, y, HV_CARD_W, HV_CARD_H - HV_CARD_BAND, shot, tint, NULL);
     }
-    SM_Fill(x, y + HV_CARD_H - HV_CARD_BAND, HV_CARD_W, HV_CARD_BAND, black, NULL);
+    SM_Fill(x, y + HV_CARD_H - HV_CARD_BAND, HV_CARD_W, HV_CARD_BAND, hvPanel, NULL);
 
-    w = SM_LabelWidth(HV_CARD_SIZE, hvCards[i].title, 1.6f);
+    w = SM_LabelWidth(HV_CARD_SIZE, name[0] ? name : "Server", 1.4f);
     SM_Label(x + (HV_CARD_W - w) * 0.5f,
-             SM_Baseline(FONT_SANS, HV_CARD_SIZE, y + HV_CARD_H - HV_CARD_BAND + 12.0f, 22.0f), HV_CARD_SIZE,
-             over ? smText : smTextSoft, hvCards[i].title, 1.6f);
+             SM_Baseline(FONT_SANS, HV_CARD_SIZE, y + HV_CARD_H - HV_CARD_BAND + 8.0f, 20.0f), HV_CARD_SIZE,
+             over ? smText : smTextSoft, name[0] ? name : "Server", 1.4f);
+    {
+        const char* line = va("%s  %i/%i  %i ms", map[0] ? map : "?", clients, maxClients, ping);
+        float lw = SM_Advance(FONT_SANS, 12.0f, line, -1);
+
+        SM_Text(x + (HV_CARD_W - lw) * 0.5f,
+                SM_Baseline(FONT_SANS, 12.0f, y + HV_CARD_H - HV_CARD_BAND + 30.0f, 18.0f), FONT_SANS, 12.0f,
+                smSubtle, line, -1, qfalse);
+    }
 
     if (over) {
         SM_Fill(x, y, HV_CARD_W, 1.0f, smText, NULL);
@@ -1044,15 +1049,41 @@ static void UI_Home_DrawCard(int i, float x, float y) {
     SM_Hit(x, y, HV_CARD_W, HV_CARD_H, HM_HIT_CARD, i, NULL);
 }
 
-static void UI_Home_DrawCards(void) {
-    int count = (int)ARRAY_LEN(hvCards);
-    float total = count * HV_CARD_W + (count - 1) * HV_CARD_GAP;
-    float x = (smVW - total) * 0.5f;
+// sin servidores en la lista: una tarjeta ancha que lo dice, para que la fila no quede vacia
+static void UI_Home_NoServers(float y) {
+    static const char* const line = "The list updates on its own; ioquakelive servers will show up here";
+    float w = HV_CARD_W * 2.0f + HV_CARD_GAP;
+    float x = (UI_Home_MainW() - w) * 0.5f;
+    float lw = SM_Advance(FONT_SANS, 13.0f, line, -1);
+    float tw = SM_LabelWidth(16.0f, "No servers online", 1.6f);
+
+    SM_Fill(x, y, w, HV_CARD_H, hvPanel, NULL);
+    SM_Label(x + (w - tw) * 0.5f, SM_Baseline(FONT_SANS, 16.0f, y + HV_CARD_H * 0.5f - 26.0f, 24.0f), 16.0f,
+             smTextSoft, "No servers online", 1.6f);
+    SM_Text(x + (w - lw) * 0.5f, SM_Baseline(FONT_SANS, 13.0f, y + HV_CARD_H * 0.5f + 6.0f, 20.0f), FONT_SANS, 13.0f,
+            smSubtle, line, -1, qfalse);
+}
+
+static void UI_Home_DrawServers(void) {
+    int count = uiInfo.serverStatus.numDisplayServers;
     float y = UI_Home_Bottom() - HV_FOOT_H - 28.0f - HV_CARD_H;
+    float total;
+    float x;
     int i;
 
+    UI_Home_ServerList(qfalse);  // el navegador rearma la lista; aca solo se lee
+    if (count <= 0) {
+        UI_Home_NoServers(y);
+        return;
+    }
+    if (count > HV_CARDS) {
+        count = HV_CARDS;
+    }
+    total = count * HV_CARD_W + (count - 1) * HV_CARD_GAP;
+    x = (UI_Home_MainW() - total) * 0.5f;
+
     for (i = 0; i < count; i++) {
-        UI_Home_DrawCard(i, x + i * (HV_CARD_W + HV_CARD_GAP), y);
+        UI_Home_ServerCard(i, x + i * (HV_CARD_W + HV_CARD_GAP), y);
     }
 }
 
@@ -1062,42 +1093,38 @@ static void UI_Home_DrawCards(void) {
 static void UI_Home_DrawFooter(void) {
     static const char* const notice =
         "QUAKE LIVE (c) 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
-    static const vec4_t strip = {0.0f, 0.0f, 0.0f, 1.0f};
+    static const vec4_t strip = {0.075f, 0.078f, 0.082f, 1.0f};
     char version[MAX_CVAR_VALUE_STRING];
     float bottom = UI_Home_Bottom();
     float y = bottom - HV_FOOT_H;
     float baseline = SM_Baseline(FONT_SANS, HV_TEXT, y + (HV_FOOT_H - HV_TEXT * 1.4f) * 0.5f, HV_TEXT * 1.4f);
     float w = SM_Advance(FONT_SANS, HV_TEXT, notice, -1);
 
-    UI_Home_DrawCards();
-    SM_Fill(-1, y, smVW + 2, HV_FOOT_H + 1, strip, NULL);
+    UI_Home_DrawServers();
+    SM_Fill(-1, y, UI_Home_MainW() + 1, HV_FOOT_H + 1, strip, NULL);
     UI_Home_DrawMarks(y, HV_FOOT_H);
     trap_Cvar_VariableStringBuffer("version", version, sizeof(version));
     SM_Text(HV_EDGE, baseline, FONT_SANS, HV_TEXT, smSubtle, version, -1, qfalse);
-    SM_Text(smVW - HV_EDGE - w, baseline, FONT_SANS, HV_TEXT, smSubtle, notice, -1, qfalse);
+    SM_Text(UI_Home_MainW() - HV_EDGE - w, baseline, FONT_SANS, HV_TEXT, smSubtle, notice, -1, qfalse);
 }
 
 /*
 ===============================================================================
 
-LA FRANJA SOCIAL, APAGADA
+LA FRANJA SOCIAL
 
-[ioquakelive] 2026-09-18. El jugador la saco del menu para rehacerla mas adelante ("quita la
-seccion social de la ui pero comentala en algun lado para re-hacerla despues"), asi que queda
-aca entera y sin compilar. Es la de CS2: plegada, una columna fina con tu cara, los lugares de
-los amigos y la salida; con el cursor encima se despliega hacia la izquierda por encima de la
-pagina, que se oscurece, y aparecen los textos.
+[ioquakelive] La lista de amigos, encendida de nuevo el 2026-09-19 a pedido del jugador. Es la
+de CS2: plegada, una columna fina a la derecha con tu cara y los lugares de los amigos; con el
+cursor encima se despliega hacia la izquierda por encima de la pagina, que se oscurece, y
+aparecen los nombres.
 
-Para volver a encenderla: poner este bloque en 1, devolver HV_SOCIAL_W a 84 en UI_Home_MainW,
-llamarla al final de UI_Home_Paint (va al final para quedar por encima) y sacar Quit de la
-barra, porque su lugar esta al pie de la franja.
+Quit sigue en la barra, asi que la franja ya no lo lleva.
 
-Lo que le falta cuando se rehaga: los amigos de verdad (Steam y quakeclub.com), el estado de
-cada uno y poder unirse a su partida.
+Lo que le falta: los amigos de verdad (Steam y quakeclub.com), el estado de cada uno y poder
+unirse a su partida. Hasta entonces las filas son lugares vacios.
 
 ===============================================================================
 */
-#if 0
 /*
 ===============
 UI_Home_DrawSocial
@@ -1198,34 +1225,14 @@ static void UI_Home_DrawSocial(float dt) {
                 qfalse);
     }
 
-    // abajo, en la linea del aviso legal: la salida
-    {
-        float qy = bottom - HV_BAR_H;
-        qboolean over = SM_Over(HM_HIT_QUIT, 0);
-
-        if (over) {
-            VectorCopy(smText, c);
-            c[3] = 0.06f;
-            SM_Fill(x + 1, qy, w - 1, HV_BAR_H, c, NULL);
-        }
-        SM_Label(x + (HV_SOCIAL_W - SM_LabelWidth(HV_TEXT, "Quit", 2.0f)) * 0.5f, UI_Home_BarBaseline(HV_TEXT, qy),
-                 HV_TEXT, over ? smText : smTextSoft, "Quit", 2.0f);
-        if (open > 0.05f) {
-            VectorCopy(smSubtle, c);
-            c[3] = open;
-            SM_Text(textX, UI_Home_BarBaseline(HV_TEXT, qy), FONT_SANS, HV_TEXT, c, "Close ioquakelive", -1, qfalse);
-        }
-        SM_Hit(x, qy, w, HV_BAR_H, HM_HIT_QUIT, 0, NULL);
-    }
 }
-
-#endif
 
 void UI_Home_Open(void) {
     menuDef_t* menu = Menus_FindByName("main");
     itemDef_t* item = menu ? Menu_FindItemByName(menu, "home") : NULL;
 
     UI_Home_LoadMenu();
+    UI_Home_ServerList(qtrue);  // [ioquakelive] la fila de abajo muestra servidores
     hm2.menu = HM_MENU_MAIN;
     // the page takes keys before the mouse moves over it
     if (item) {
@@ -1246,8 +1253,10 @@ void UI_Home_Paint(void) {
         dt = dt < 0 ? 0 : dt > 100.0f ? 100.0f : dt;
 
         UI_Home_DrawBackground();
+        SM_Fill(-1, UI_Home_Top(), smVW + 2, smBottom - UI_Home_Top() + 1, hvVeil, NULL);
         UI_Home_DrawFooter();
         UI_Home_DrawBar(dt);
+        UI_Home_DrawSocial(dt);
     }
 
     UI_Home_Banner();
@@ -1273,8 +1282,11 @@ qboolean UI_Home_HandleKey(int key) {
     hit = SM_HitAt(smMX, smMY);
     // [ioquakelive] la fila de mapas, la barra y la salida del menu principal
     if (hit && hit->type == HM_HIT_CARD) {
-        UI_StartMatch_Preselect(hvCards[hit->index].factory);
-        UI_Home_Go(HM_NAV_PLAY);
+        char address[MAX_ADDRESSLENGTH];
+
+        trap_LAN_GetServerAddressString(ui_netSource.integer, uiInfo.serverStatus.displayServers[hit->index], address,
+                                        sizeof(address));
+        trap_Cmd_ExecuteText(EXEC_APPEND, va("connect %s\n", address));
         return qtrue;
     }
     if (hit && hit->type == HM_HIT_TAB) {
