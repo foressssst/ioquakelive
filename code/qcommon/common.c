@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "q_shared.h"
 #include "qcommon.h"
 #include "q_steam.h"
+#include "q_zmq.h"
 #include <setjmp.h>
 #ifndef _WIN32
 #include <netinet/in.h>
@@ -2695,6 +2696,9 @@ void Com_Init(char* commandLine) {
     Steam_Init();
     Steam_GS_Init();
 
+    // [ioquakelive] ZeroMQ, como retail (idZMQ::Init, 0x004f3f80): las cvars y el socket de rcon
+    ZMQ_Init();
+
     com_dedicated->modified = qfalse;
 #ifndef DEDICATED
     CL_Init();
@@ -3276,6 +3280,7 @@ Com_Frame
 */
 void Com_Frame(void) {
     Steam_Frame();
+    ZMQ_Frame();
     int msec, minMsec;
     int timeVal, timeValSV;
     int capUs;
@@ -3513,6 +3518,7 @@ Com_Shutdown
 */
 void Com_Shutdown(void) {
     Steam_Shutdown();
+    ZMQ_Shutdown();
     if (logfile) {
         FS_FCloseFile(logfile);
         logfile = 0;

@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "server.h"
 #include "../qcommon/q_steam.h"
+#include "../qcommon/q_zmq.h"
 
 /*
 ===============
@@ -578,6 +579,10 @@ void SV_SpawnServer(char* server, qboolean killBots) {
 
     SV_SetConfigstring(CS_SERVERINFO, Cvar_InfoString(CVAR_SERVERINFO));
     cvar_modifiedFlags &= ~CVAR_SERVERINFO;
+
+    // [ioquakelive] el socket de estadisticas (0x004f4210) va en el puerto del servidor, que
+    // recien aca esta decidido; la primera vez lo abre, las siguientes no hace nada
+    ZMQ_StatsInit();
 
     // [ioquakelive] lo que la lista de Steam muestra de este servidor
     Steam_GS_SetServerInfo(Cvar_VariableString("sv_hostname"), server,
