@@ -588,6 +588,9 @@ typedef struct weaponInfo_s {
 
     sfxHandle_t readySound;
     sfxHandle_t firingSound;
+    // [QL] el tercer sonido del arma, +0x1c0 en el weaponInfo_t del binario: el del
+    // gancho es grpull. Donde lo suena retail todavia no esta identificado
+    sfxHandle_t pullSound;
     // [QL] cgamex86.dll 0x100510fd: the chaingun's firingSound is a background whine that plays
     // alongside each shot, not instead of it like the lightning gun's
     qboolean loopFireSound;
@@ -1067,6 +1070,9 @@ typedef struct {
     qhandle_t redFlagModel;
     qhandle_t blueFlagModel;
     qhandle_t neutralFlagModel;
+    qhandle_t droppedFlagModel;   // [QL] "models/flags/d_flag.md3"
+    qhandle_t flagTrackPointerShader;  // [QL] "gfx/2d/flag_status/track_pointer.tga"
+    qhandle_t keyGoldModel;       // [QL] "models/powerups/keys/key_gold.md3"
     qhandle_t redFlagShader[3];
     qhandle_t blueFlagShader[3];
     qhandle_t flagShader[4];
@@ -1110,6 +1116,8 @@ typedef struct {
     qhandle_t gibLeg;
     qhandle_t gibSkull;
     qhandle_t gibBrain;
+    qhandle_t gibBrainBase;       // [QL] "models/gibs/brain.md3", aparte de los de dlc_gibs
+    qhandle_t gibAbdomenBase;     // [QL] "models/gibs/abdomen.md3"
 
     qhandle_t smoke2;
 
@@ -1132,6 +1140,7 @@ typedef struct {
 
     qhandle_t selectShader;
     qhandle_t weaponBarHighlightShader;  // [QL] "ui/assets/hud/weaplit2.tga"
+    qhandle_t weaponBarIdleShader[2];    // [QL] "ui/assets/hud/weapidle1.tga" y weapidle2
     qhandle_t infiniteAmmoShader;        // [QL] "icons/infinite.tga"
     qhandle_t viewBloodShader;
     qhandle_t viewDamageShader;  // [QL] viewDamageBlend, the screen-damage tint of a stock install
@@ -1459,6 +1468,9 @@ typedef struct {
 
     // [QL] Race checkpoint models and shaders (binary-verified)
     qhandle_t raceFlagB;          // models/flag3/b_flag3.md3 (blue)
+    qhandle_t raceFlagR;          // [QL] models/flag3/r_flag3.md3
+    qhandle_t raceFlagN;          // [QL] models/flag3/n_flag3.md3
+    qhandle_t raceNavShader;      // [QL] "gfx/misc/racenav.jpg"
     qhandle_t raceFlagF;          // models/flag3/f_flag3.md3 (finish)
     qhandle_t raceFlagG;          // models/flag3/g_flag3.md3 (green/start)
     qhandle_t raceFlagD;          // models/flag3/d_flag3.md3 (default/checkpoint)

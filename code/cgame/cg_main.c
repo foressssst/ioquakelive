@@ -1757,6 +1757,8 @@ static void CG_RegisterGraphics(void) {
     };
     // [QL] Race checkpoint assets (binary-verified from cgamex86.dll CG_RegisterGraphics)
     cgs.media.raceFlagB = trap_R_RegisterModel("models/flag3/b_flag3.md3");
+    cgs.media.raceFlagR = trap_R_RegisterModel("models/flag3/r_flag3.md3");
+    cgs.media.raceFlagN = trap_R_RegisterModel("models/flag3/n_flag3.md3");
     cgs.media.raceFlagF = trap_R_RegisterModel("models/flag3/f_flag3.md3");
     cgs.media.raceFlagG = trap_R_RegisterModel("models/flag3/g_flag3.md3");
     cgs.media.raceFlagD = trap_R_RegisterModel("models/flag3/d_flag3.md3");
@@ -1819,6 +1821,10 @@ static void CG_RegisterGraphics(void) {
     cgs.media.duelPlateTrails[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_trails.tga");
     if (cgs.gametype >= GT_FREEZE) {
         cgs.media.thawIconShader = trap_R_RegisterShader("icons/thaw");
+        // [QL] los gibs base, que el binario registra aca mismo y son distintos de los del
+        // paquete de gore (dlc_gibs): guarda unos y otros en globales separadas
+        cgs.media.gibBrainBase = trap_R_RegisterModel("models/gibs/brain.md3");
+        cgs.media.gibAbdomenBase = trap_R_RegisterModel("models/gibs/abdomen.md3");
     }
 
     cgs.media.smokePuffShader = trap_R_RegisterShader("smokePuff");
@@ -1864,6 +1870,8 @@ static void CG_RegisterGraphics(void) {
     cgs.media.sparkParticleShader = trap_R_RegisterShader("gfx/misc/tracer");
     cgs.media.selectShader = trap_R_RegisterShader("gfx/2d/select");
     cgs.media.weaponBarHighlightShader = trap_R_RegisterShader("ui/assets/hud/weaplit2.tga");
+    cgs.media.weaponBarIdleShader[0] = trap_R_RegisterShader("ui/assets/hud/weapidle1.tga");
+    cgs.media.weaponBarIdleShader[1] = trap_R_RegisterShader("ui/assets/hud/weapidle2.tga");
     cgs.media.infiniteAmmoShader = trap_R_RegisterShader("icons/infinite.tga");
 
     for (i = 1; i < NUM_CROSSHAIRS; i++) {
@@ -1899,6 +1907,7 @@ static void CG_RegisterGraphics(void) {
     cgs.media.gametypeIcon[GT_DOMINATION] = trap_R_RegisterShaderNoMip("ui/assets/hud/dom");
     cgs.media.gametypeIcon[GT_AD]         = trap_R_RegisterShaderNoMip("ui/assets/hud/ad");
     cgs.media.gametypeIcon[GT_RR]         = trap_R_RegisterShaderNoMip("ui/assets/hud/rr");
+    cgs.media.raceNavShader = trap_R_RegisterShader("gfx/misc/racenav.jpg");
 
     if (cgs.gametype == GT_HARVESTER) {
         cgs.media.redCubeModel = trap_R_RegisterModel("models/powerups/orb/r_orb.md3");
@@ -1928,6 +1937,10 @@ static void CG_RegisterGraphics(void) {
         cgs.media.blueFlagBaseModel = trap_R_RegisterModel("models/mapobjects/flagbase/blue_base.md3");
         cgs.media.neutralFlagBaseModel = trap_R_RegisterModel("models/mapobjects/flagbase/ntrl_base.md3");
     }
+
+    // [QL] el binario registra la llave dorada siempre, fuera de todo condicional
+    cgs.media.keyGoldModel = trap_R_RegisterModel("models/powerups/keys/key_gold.md3");
+    cgs.media.droppedFlagModel = trap_R_RegisterModel("models/flags/d_flag.md3");
 
     if (cgs.gametype == GT_1FCTF) {
         cgs.media.neutralFlagModel = trap_R_RegisterModel("models/flags/n_flag.md3");
@@ -2210,6 +2223,9 @@ static void CG_RegisterGraphics(void) {
             cgs.media.flagStatusHandles[fi] = trap_R_RegisterShaderNoMip(flagStatusShaders[fi]);
         }
     }
+
+    // [QL] el puntero de seguimiento va aparte del juego de doce iconos
+    cgs.media.flagTrackPointerShader = trap_R_RegisterShaderNoMip("gfx/2d/flag_status/track_pointer.tga");
 
     // [QL] head models are in the player directory, not a separate heads/ directory
     trap_R_RegisterModel("models/players/james/lower.md3");
