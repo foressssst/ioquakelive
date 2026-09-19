@@ -1246,6 +1246,9 @@ void ClientThink_real(gentity_t* ent) {
 
     // perform once-a-second actions
     ClientTimerActions(ent, msec);
+
+    // [QL] 0x100353cb: el tiempo jugado y el tiempo con cada arma, que viajan en el PLAYER_STATS
+    STAT_UpdatePlayTime(ent);
 }
 
 /*
