@@ -178,6 +178,9 @@ void Touch_RaceCheckpoint(gentity_t *self, gentity_t *other, trace_t *trace) {
             }
         }
 
+        // [QL] 0x100637be: el evento PLAYER_RACECOMPLETE, con el tiempo de la vuelta
+        STAT_PlayerRaceComplete(other, ri->lastTime, ri->weaponUsed);
+
         ri->nextRacePoint = NULL;
         ri->racingActive = qfalse;
         CalculateRanks();

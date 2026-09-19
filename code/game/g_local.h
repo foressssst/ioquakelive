@@ -995,7 +995,7 @@ void STAT_InitClient(gentity_t* ent);
 void STAT_PublishClientDisconnect(gclient_t* client, int reason);
 void STAT_SubscribeClient(gentity_t* ent);
 void STAT_LogDisconnect(int clientNum);
-void STAT_MatchEnd(void);
+void STAT_MatchEnd(int isShutdown, int restart, const char* exitMsg);
 qboolean G_IsTeamLocked(team_t team);
 
 //
@@ -1740,7 +1740,12 @@ void STAT_PlayerDisconnect(gentity_t* ent);
 void STAT_PlayerSwitchTeam(gentity_t* ent, int oldTeam, int newTeam);
 void STAT_PlayerMedal(gentity_t* ent, const char* medal, int total);
 void STAT_RoundOver(int round, int winningTeam, qboolean draw);
-void STAT_PlayerRaceComplete(gentity_t* ent, int raceTime, int weaponsUsed);
+void STAT_PlayerRaceComplete(gentity_t* ent, int raceTime, qboolean weaponsUsed);
+void STAT_PlayerKill(gentity_t* victim, gentity_t* attacker, int mod, int victimStreak);
+void STAT_PlayerStats(gclient_t* cl, qboolean aborted, qboolean quit);
+void STAT_UpdatePlayTime(gentity_t* ent);
+void STAT_MatchStarted(void);
+void STAT_MatchReport(qboolean aborted, int restarted, const char* exitMsg);
 void G_SetMatchGUID(void);
 void STAT_ResetMedals(void);
 int STAT_MedalTotal(gentity_t* ent, const char* medal);

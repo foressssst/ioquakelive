@@ -708,6 +708,12 @@ void SetTeam(gentity_t* ent, const char* s) {
     if (team == TEAM_SPECTATOR && oldTeam != team)
         AddTournamentQueue(client);
 
+    // [QL] 0x10040535: al dejar el equipo se cierra su planilla; en red rover solo cuando
+    // se va a espectador
+    if (g_gametype.integer != GT_RR || team == TEAM_SPECTATOR) {
+        STAT_PlayerStats(client, qfalse, qtrue);
+    }
+
     client->sess.sessionTeam = team;
     client->sess.spectatorState = specState;
     client->sess.spectatorClient = specClient;
@@ -741,6 +747,9 @@ void SetTeam(gentity_t* ent, const char* s) {
     BroadcastTeamChange(client, oldTeam);
 
     ClientBegin(clientNum);
+
+    // [QL] 0x100406b8: lo ultimo de SetTeam es el evento PLAYER_SWITCHTEAM
+    STAT_PlayerSwitchTeam(ent, oldTeam, client->sess.sessionTeam);
 }
 
 /*

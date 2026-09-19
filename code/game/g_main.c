@@ -2703,10 +2703,11 @@ void LogExit(int isShutdown, int restart, const char* string) {
             cl->sess.prevScore = cl->ps.persistant[PERS_SCORE];
         }
     }
-    level.gameStatsReported = qtrue;
+    // [QL] Publish match-end stats. Va antes de marcar la bandera: retail (0x1005758d)
+    // se fija en ella para no reportar dos veces la misma partida.
+    STAT_MatchEnd(isShutdown, restart, string);
 
-    // [QL] Publish match-end stats
-    STAT_MatchEnd();
+    level.gameStatsReported = qtrue;
 
     // [QL] Log stats line (binary format: "stats: %d")
     G_LogPrintf("stats: %d\n", level.numPlayingClients);
@@ -3428,7 +3429,10 @@ static void CheckWarmupAndForfeit(void) {
 
     // Countdown elapsed: begin the match via map_restart.
     if (level.time >= level.warmupTime) {
-        // [QL] Binary calls STAT_MatchReport() here first (not modelled in ioquakelive).
+        // [QL] 0x10058860: el evento MATCH_STARTED, con las reglas y quienes estan,
+        // antes del map_restart que arranca la partida
+        STAT_MatchStarted();
+
         level.warmupTime += 10000;
         trap_Cvar_Set("g_restarted", "1");
         trap_SendConsoleCommand(EXEC_APPEND, "map_restart 0\n");

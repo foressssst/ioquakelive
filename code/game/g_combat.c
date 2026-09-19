@@ -88,16 +88,26 @@ void AddScore( gentity_t *ent, vec3_t origin, int score ) {
 	if ( level.intermissionQueued || level.intermissionTime ) {
 		return;
 	}
-	// [ioquakelive] Aca habia una guarda que le negaba el puntaje al jugador humano en modo
-	// entrenamiento: "only bots score in training mode". No es de retail. g_training se lee en
-	// catorce sitios del binario y ninguno es AddScore, asi que en el Crash Course se podia ir
-	// 7 a 0 y el marcador seguia en cero. El unico modo sin puntaje es Race, que esta abajo.
+	// [ioquakelive] Aca habia una guarda que le negaba el puntaje al jugador humano "en modo
+	// entrenamiento" y se habia quitado porque g_training no se lee en AddScore. La guarda si
+	// esta en retail (0x1004666e), pero la cvar es otra: bot_gauntletOnly. Con ella puesta el
+	// humano no suma, que es como se juega el Crash Course.
+	if ( bot_gauntletOnly.integer && !( ent->r.svFlags & SVF_BOT ) ) {
+		return;
+	}
 	if ( g_gametype.integer == GT_RACE ) {
 		return;  // no scoring in race mode
 	}
 	if ( level.scoringDisabled ) {
 		return;
 	}
+
+	// [QL] 0x10046691: el primero que anota queda anotado para siempre; el ultimo, cada vez.
+	// Los dos viajan en el MATCH_REPORT.
+	if ( !level.firstScorer[0] ) {
+		Q_strncpyz( level.firstScorer, ent->client->pers.netname, sizeof( level.firstScorer ) );
+	}
+	Q_strncpyz( level.lastScorer, ent->client->pers.netname, sizeof( level.lastScorer ) );
 
 	// [QL] GT_RR: negative score clamping
 	if ( g_gametype.integer == GT_RR && !g_rrAllowNegativeScores.integer ) {

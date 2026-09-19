@@ -24,7 +24,7 @@ retail engine (quakelive_steam.exe has Json::StyledWriter and no FastWriter):
 #define J_MAX_TEXT 65536
 #define J_RIGHT_MARGIN 74
 
-typedef enum { JN_OBJECT, JN_ARRAY, JN_STRING, JN_INT, JN_BOOL, JN_REAL } jtype_t;
+typedef enum { JN_NULL, JN_OBJECT, JN_ARRAY, JN_STRING, JN_INT, JN_BOOL, JN_REAL } jtype_t;
 
 struct jnode_s {
     jtype_t type;
@@ -143,6 +143,14 @@ void J_SetNode(jnode_t* obj, const char* key, jnode_t* child) {
     J_Set(obj, key, child);
 }
 
+void J_SetNull(jnode_t* obj, const char* key) {
+    jnode_t* n = J_Alloc(JN_NULL);
+
+    if (n) {
+        J_Set(obj, key, n);
+    }
+}
+
 void J_Push(jnode_t* array, jnode_t* child) {
     jnode_t** link;
 
@@ -159,6 +167,15 @@ void J_PushInt(jnode_t* array, int value) {
 
     if (n) {
         n->integer = value;
+        J_Push(array, n);
+    }
+}
+
+void J_PushString(jnode_t* array, const char* value) {
+    jnode_t* n = J_Alloc(JN_STRING);
+
+    if (n) {
+        n->text = J_Copy(value ? value : "");
         J_Push(array, n);
     }
 }
@@ -266,6 +283,7 @@ static void J_Real(double v, char* out, int size) {
 // a scalar as text; qfalse for objects and arrays
 static qboolean J_Scalar(const jnode_t* n, char* out, int size) {
     switch (n->type) {
+        case JN_NULL: Q_strncpyz(out, "null", size); return qtrue;
         case JN_STRING: J_Quote(n->text, out, size); return qtrue;
         case JN_INT: Com_sprintf(out, size, "%i", n->integer); return qtrue;
         case JN_BOOL: Q_strncpyz(out, n->integer ? "true" : "false", size); return qtrue;
