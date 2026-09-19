@@ -7,25 +7,34 @@ It's really important to me that the Quake Live community prosper - it's such a 
 
 ## Project Status
 
-**Huge work in progress.** The codebase is being incrementally updated from ioquake3's baseline to match the behaviour/architecture of Quake Live.
+**Work in progress, and much further along than it looks.** The game modules are close to name-complete against retail; what is left is mostly engine-side infrastructure (master server, stats, moderation) and a handful of visual systems.
+
+The tables below were **re-audited against the code and against the retail binaries on 2026-09-19**. Every row says what was checked. Two measurements back them up, both reproducible with the tools in `re/tools/`:
+
+| Module | Retail cvars found in this fork | Retail assets found | Missing |
+|---|---|---|---|
+| `qagame` | 405 / 406 (99.8%) | 108 / 115 | `fs_cdpath`; a few Q3-era assets |
+| `cgame` | 363 / 365 (99.5%) | 374 / 427 | mostly `.tga` names we register as `.png` |
+| `ui` | 201 / 211 (95.3%) | 114 / 120 | Q3 leftovers (`ui_cdkeyvalid`, `r_colorBits`) |
+
+`python re/tools/extract_strings.py` regenerates that comparison; the per-item lists land in `notes/strings_gap.md`.
+
+Symbol-level comparison is **not** possible for the game module: `qagamex64.so` is stripped down to 19 named C symbols (all in the stats/reporting area), so `gap_analysis.py` cannot measure coverage. Behaviour is verified by reading the binaries in Ghidra instead, and verified addresses are quoted in the source next to each port.
 
 ### What works
 
-- Quake Live clients can connect to the ioquakelive server.
-- QL network protocol (custom netchan, entity/player state field tables, usercmd layout)
-- QL game module (`qagame`) - 60%-70% complete, with per-gametype source files and lag compensation
-- QL UI module - new exports, ~78 new cvars, font/widescreen support
-- QL cgame module - updated event system, physics, HUD owner-draws, scoreboard rendering, impact sparks, weapon styles, zoom
-- Font rendering via FreeType (though might move to `stb_truetype` in future as this is what Quake Live uses)
-- Widescreen coordinate system (4:3 content area with left/center/right bias)
-- All base game types: Free for All, Duel, Team Deathmatch, Clan Arena, CTF, 1F CTF, Harvester, Freeze Tag, Domination, A&D, Race, Red Rover (most have basic implementation)
+- Quake Live clients can connect to the ioquakelive server, and this client can connect to Quake Live servers.
+- QL network protocol (custom netchan, entity/player state field tables, usercmd layout).
+- QL game module (`qagame`): all game types, the full cvar table, physics, weapons, items, warmup, voting, unlagged.
+- QL cgame module: HUD, scoreboards, announcer, medals, damage plums, obituaries, effects, prediction.
+- QL UI module: the whole front end rebuilt on the retail web UI's own structure, with 220 settings in retail's order.
+- The Crash Course, ported whole: Crash spawns, the cinematic, his voice lines and the route.
+- Font rendering via FreeType, widescreen coordinate system, `pak01.pk3` asset overrides.
 
 ### What's required to run the game
 You must have an original `pak00.pk3` file acquired from a legitimate purchased copy of [Quake Live](https://steampowered.com/app/282440) from Steam. ioquakelive will not run without a legitimate `pak00.pk3` file. Quake Live and its assets remain the property of *id Software*.
 
 I do not have any rights to use any Quake Live game assets and cannot/**will not** redistribute these from my own legitimate copy.
-
-
 
 ### Key differences from upstream ioquake3
 
@@ -35,14 +44,17 @@ I do not have any rights to use any Quake Live game assets and cannot/**will not
 | Base game dir | `baseq3` | `baseq3` filesystem, `baseqz` protocol name |
 | Game types | FFA, Tourney, TDM, CTF | + CA, FT, Race, DOM, A&D, Harvester, 1FCTF, RR (and all TA modes) |
 | Physics | Q3 air control | + CPM air control, double jump, crouch slide, auto-hop |
-| Font system | Scale-based (textFont/bigFont) | fontIndex-based (extraFonts[3]) |
-| Widescreen | Stretch only | 4:3 constrained with left/center/right modes for anchoring elements (compatible with QL `.menu` files) |
+| Font system | Scale-based (textFont/bigFont) | fontIndex-based (extraFonts[3]), plus TrueType faces from pak01 |
+| Widescreen | Stretch only | 4:3 constrained with left/center/right modes for anchoring elements |
 | Key/door system | N/A | IT_KEY items, key-locked func_door |
 | Stats | Basic scoreboard | Detailed per-weapon accuracy, 'premium' scoreboards from QL |
+| Front end | Q3 menu files | Quake Live's web UI rebuilt natively: home, Start Match, Training, Replays, 220 settings |
 
-### Implementation progress
+## Implementation progress
 
-#### Network protocol
+Status is one of **Done** (ported and verified against the binary), **Partial** (works, with a named gap) or **Pending** (not started or stubbed).
+
+### Network protocol
 
 | Area | Status | Notes |
 |------|--------|-------|
@@ -55,22 +67,25 @@ I do not have any rights to use any Quake Live game assets and cannot/**will not
 | XOR netchan encoding | Done | `challenge ^ serverId ^ messageAcknowledge` key derivation |
 | Huffman on OOB data | Done | `NET_OutOfBandData` compresses connect packets at byte 12 |
 
-#### Client engine
+### Client engine
 
 | Area | Status | Notes |
 |------|--------|-------|
 | CG_REGISTER_CVARS call | Done | `VM_Call` before `CG_INIT` in `cl_cgame.c` |
 | Connection protocol | Done | Steam auth in `getchallenge`, `NET_OutOfBandRaw` for binary payloads, `cl_steamId` cvar |
-| DLL pak system | Done | Architecture-specific `iobin_x86`/`iobin_x86_64` pk3 with `Make-BinPk3.ps1`, pure server compatible |
-| Sound system | Pending | QL sound system changes not yet audited |
-| Demo recording/playback | Pending | Not yet tested with QL protocol |
-| Download system | Pending | HTTP redirect and pk3 downloads not yet audited |
-| VOIP / Steam voice | Pending | QL uses Steam P2P voice, not Q3 VOIP; current code is ioquake3 VOIP |
-| Console auto-complete | Pending | QL-specific commands/cvars not yet registered for tab-complete |
+| DLL pak system | Done | Architecture-specific `iobin` pk3, pure server compatible |
+| Sound system | Done | Registration, channels and the QL sound set ported from the binary |
+| Frame timing | Done | `Sys_Microseconds` deadline, `com_preciseFrameTiming`; jitter 0.34 → 0.01 ms at 125 fps |
+| Threaded loading | Done | Job system, parallel image/sound decode, shader-text index; campgrounds loads in ~1 s |
+| Borderless fullscreen | Done | `r_fullscreen 2`, no video restart on alt-tab |
+| Demo recording/playback | Pending | Records and plays, but never verified against QL protocol demos |
+| Download system | Pending | ioquake3's cURL redirect is in; QL's own download path not audited |
+| VOIP / Steam voice | Pending | QL uses Steam P2P voice; `cl_voip` is still ioquake3's |
+| Console auto-complete | Pending | QL-specific commands/cvars not registered for tab-complete |
 | Screenshot system | Pending | QL screenshot path/naming conventions not audited |
-| Client-side prediction | Pending | Prediction error handling for QL-specific player states (freeze, tutorial) not fully tested |
+| x86_64 client | Pending | Only Win32 is built and tested here |
 
-#### Server engine
+### Server engine
 
 | Area | Status | Notes |
 |------|--------|-------|
@@ -78,117 +93,109 @@ I do not have any rights to use any Quake Live game assets and cannot/**will not
 | Bot management | Done | `sv_bot.c` functional |
 | Steam auth bypass | Done | `com_build 1` skips Steam GS init and auth validation |
 | Game module loading | Done | Native DLL loading with `gameImport_t` function pointer table |
-| Ban system | Pending | `SV_Ban_f` / `SV_BanNum_f` print "Not yet implemented" |
-| ZMQ stats/rcon | Pending | QL uses ZeroMQ for remote console and stats publishing |
-| Server browser protocol | Pending | Valve's Server Query Protocol needed for server list |
-| Master server heartbeat | Pending | QL uses Steam master servers; needs custom implementation |
+| Linux/ARM dedicated server | Done | Built and run on aarch64; a test server ran a multi-mode map pool |
+| Ban system | Pending | `SV_Ban_f` / `SV_BanNum_f` still print "Not yet implemented" (`sv_ccmds.c:670,704`) |
+| ZMQ stats/rcon | Pending | No ZeroMQ anywhere in the tree; QL published stats and took rcon over it |
+| Server browser protocol | Pending | Only ioquake3's `getservers`; QL used Valve's query protocol |
+| Master server heartbeat | Pending | No heartbeat in `sv_main.c`; QL used Steam master servers |
 | Map download redirect | Pending | HTTP redirect for missing maps not implemented |
 | Rate limiting | Pending | QL-specific flood protection tuning not audited |
 
-#### cgame (client-side game module)
+### cgame (client-side game module)
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Event system | Done | 100 `EV_` event handlers including race, infection, awards |
-| Widescreen rendering | Done | `CG_AdjustFrom640` with `STRETCH`/`LEFT`/`CENTER`/`RIGHT` modes |
+| Event system | Done | 100 `EV_` handlers including race, infection, awards |
+| Widescreen rendering | Done | `CG_AdjustFrom640` with `STRETCH`/`LEFT`/`CENTER`/`RIGHT` |
 | Owner-draw text | Done | All ~70 owner-draw functions route through `CG_DrawText` |
 | Serverinfo parsing | Done | 29 fields matching binary `CG_ParseServerinfo` |
-| Scoreboard owner-draws | Done | Team scores, player counts, match state, round/overtime |
-| Duel scoreboard | Done | Per-weapon stats for both players (frags/hits/shots/dmg/acc) |
-| Voting display | Done | `ui_voteactive`, `ui_votestring`, end-of-match map voting |
-| Weapon rendering | Done | All QL weapons including nailgun, chaingun, HMG, prox launcher |
-| Grapple hook chain | Done | `RT_RAIL_CORE` rendering (single tiled quad) |
-| Spectator tracking | Done | `cg_spectating` cvar follows `PM_SPECTATOR` transitions |
-| Prediction/pmove | Done | 9 binary-verified fixes (freeze, dead float, hookEnemy, etc.) |
-| Obituary feed | Done | Attacker/victim name rendering with weapon icons |
-| Team overlay | Done | Scrolling spectator list, team info |
-| Impact sparks | Done | Configurable spark particle system on bullet/rail impacts |
-| Weapon styles | Done | Muzzle flash control, shotgun smoke, weapon render cvars |
-| Vignette overlay | Done | Screen-edge darkening effect |
-| Zoom system | Done | Toggle zoom, zoom scaling, zoomOutOnDeath |
-| Player model scaling | Done | Bounding box scaling for player models |
-| Spectator features | Done | Auto-follow, FOV sync, `cg_followPowerup` |
-| Crosshair | Pending | QL crosshair set not fully verified |
-| Awards/medals display | Pending | Rendering present but QL-specific award set not fully audited |
-| Damage direction indicator | Pending | Not yet verified against binary |
-| Chat beep sounds | Pending | QL-specific chat notification sounds not verified |
-| Warmup countdown display | Pending | Countdown overlay/announcer not fully tested |
-| Player clan tags | Pending | Clan tag rendering in scoreboard/nameplate not audited |
+| Scoreboards | Done | FFA, Duel and TDM boards ported from the binary, plus the end-of-match board with the winner's model |
+| HUD | Done | Retail's layout, including the item timers and the TAB card |
+| Announcer, medals, rounds | Done | `50f920da`; the six animated medals use CPMA's 24-frame sets |
+| Damage plums | Done | `CG_DrawDamagePlums` ported whole: the pool, not just plums |
+| Crosshair | Done | `0x1000c2a0`, including the "no crosshair on multiples of 30" rule |
+| Obituary feed | Done | Attacker/victim names with weapon icons |
+| Prediction/pmove | Done | Whole pmove rewritten from the binary; 9 verified fixes on top |
+| Clan tags | Done | `0x1003e640`, the `cn` key with its 26 colours |
+| Impact sparks, weapon styles, zoom, vignette | Done | Ported with cvars |
+| Advertisements | Done | `CG_DrawAdvertisements` |
+| Freeze/thaw effects | Partial | `CG_ThawPlayer` spawns the shards; the frozen-player shader is not done |
+| Infection visuals | Partial | The Red Rover POI and names are in; the infected look is not |
+| Chat beep sounds | Pending | No `cg_chatBeep` anywhere |
 | Intermission camera | Pending | QL intermission camera behaviour not verified |
 
-#### UI (user interface module)
+### UI (user interface module)
 
 | Area | Status | Notes |
 |------|--------|-------|
 | New exports | Done | `UI_REGISTER_CVARS`, `UI_CHECK_ACTIVE_MENU`, `UI_WALK_MENUS`, `UI_DRAW_ADVERTISEMENT` |
 | fontIndex support | Done | All 26+ DC call sites pass `item->fontIndex` |
 | Cvars | Done | ~78 new cvars registered in `ui_main.c` |
-| Menu file loading | Done | `pak01.pk3` override system for custom menus/other assets |
-| Non-team scoreboards | Done | Implemented and fixed up visuals to ensure associated `.menu` files process accurately |
-| Server browser | Pending | Not yet adapted for QL master server protocol |
-| Team scoreboards | Pending | Still a lot of stuff not correctly drawing here |
-| UI script actions | Pending | 13 QL-specific UI scripts stubbed (clientViewProfile, modPlayer, putspec, banPlayer, etc.) |
+| Menu file loading | Done | `pak01.pk3` override system |
+| Front page | Done | Rebuilt natively: column menu, background art, credits, friends strip |
+| Start Match | Done | Retail's own page: factories, map picker, bots |
+| Settings | Done | 220 options in retail's order, taken from `web.pak`'s CSS and scripts |
+| Training Center | Done | Crash Course, Accelerate, Elevate, with retail's commands |
+| Replays | Done | Demo list and playback from the front end |
+| Scoreboards (menu files) | Done | Non-team and team boards draw correctly |
+| Server browser | Pending | The list plumbing is exposed (`UI_Home_ServerList`) but there is no browser page and no master server to ask |
+| UI script actions | Pending | 13 QL-specific scripts stubbed (clientViewProfile, modPlayer, putspec, banPlayer, ...) |
 | Player profile display | Pending | Steam profile/avatar integration removed; needs replacement |
-| Friend/social features | Pending | Friend invite, mute player, lobby system all stubbed |
-| Settings menus | Pending | Some QL-specific settings panels may need menu file updates |
-| Map voting UI | Pending | End-of-match map voting display driven by server but UI not fully tested |
+| Friend/social features | Pending | The strip is drawn but there is no friend list behind it |
+| Map voting UI | Pending | Driven by the server; the UI side is not built |
 
-#### Game module (server-side game logic)
+### Game module (server-side game logic)
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Game types | Done | FFA, Duel, TDM, CA, CTF, 1FCTF, Harvester, FT, DOM, A&D, Race, RR - per-gametype `g_gametype_*.c` source files |
-| Physics (bg_pmove) | Done | CPM air control, double jump, crouch slide, auto-hop, ladder move |
+| Game types | Done | FFA, Duel, TDM, CA, CTF, 1FCTF, Harvester, FT, DOM, A&D, Race, RR |
+| Physics (bg_pmove) | Done | Rewritten from the binary: air control, double jump, crouch slide, auto-hop, ladders |
 | Grapple hook | Done | Wall/enemy pull, close-range slowdown, water damping |
 | Weapon definitions | Done | All QL weapons with correct reload times |
-| Key/door system | Done | `IT_KEY` type, silver/gold/master keys, `func_door` spawnflags |
-| Warmup state machine | Done | `g_gameState` cvar, ready percentage, forfeit logic |
-| Starting health/armor | Done | `g_startingHealth`, `g_startingHealthBonus`, `g_startingArmor` |
+| Damage and splash | Done | Ported from the binary (`8e39202a`) |
+| Key/door system | Done | `IT_KEY`, silver/gold/master keys, `func_door` spawnflags |
+| Warmup state machine | Done | `g_gameState`, ready percentage, forfeit logic |
 | Voting system | Done | `VF_ENDMAP_VOTING`, `IntermissionVote`, `nextmaps` parsing |
-| Serverinfo cvars | Done | 8 new `CVAR_SERVERINFO` cvars |
-| Bot loading | Done | `G_LoadBots`, `G_LoadBotsFromFile`, `G_ParseInfos` |
-| CVAR table | Done | ~390 cvars with 56 `OnChanged` callbacks |
-| Race checkpoints | Done | Race gametype module with init, checkpoint, and timing logic |
-| Unlagged (`lagHax`) | Done | Position history recording/rewinding for hitscan accuracy (`g_unlagged.c`) |
-| Weapon systems | Done | Shotgun ring pellets, distance falloff, damage-through-surface, player cylinder traces |
-| Tiered armor | Done | `CheckArmor` rewrite, `Pickup_Armor` with armor tiers |
-| JSON stats reporting | Partial | Original uses C++ jsoncpp; JSON functions stubbed, non-JSON helpers preserved |
-| Loadout system | Pending | `g_loadout` cvar propagated but full loadout logic not audited |
-| Factories | Pending | Factory file parsing present but C++ JSON config application not implemented |
-| Premium/subscription | Pending | QL had premium/pro account checks; needs removal or stubbing |
-| Access control lists | Pending | `g_accessFile` parsing present but Steam ID-based ACL not fully tested |
-| Admin commands | Pending | Privilege system (`priv`) present but admin actions (OP/deOP, put team) need testing |
-| Training mode | Pending | `g_training` cvar checked in multiple places; training mode logic not audited |
-| Map entities override | Pending | `sv_altEntDir` entity file loading present but not tested |
+| CVAR table | Done | ~390 cvars with 56 `OnChanged` callbacks; 405 of retail's 406 present |
+| Factories | Done | The engine parses and applies them; `map` without a factory prints the usage, as retail does |
+| Race | Done | Checkpoints, timing and the race HUD |
+| Unlagged (`lagHax`) | Done | Position history recording/rewinding |
+| Tiered armor, shotgun rings, falloff | Done | `CheckArmor` rewrite and the weapon systems |
+| Training mode | Done | `g_training.c`: `info_tour_point`, `G_TrainingFrame`, the AI nodes, `Cmd_SkipTraining` |
+| Loadout system | Partial | Starting weapons and `weaponPrimary` honour it; the loadout menu is not built |
+| JSON stats reporting | Partial | Original uses C++ jsoncpp; JSON emitters stubbed, non-JSON helpers preserved |
+| Premium/subscription | Pending | QL's premium/pro checks need removing or stubbing deliberately |
+| Access control lists | Pending | `g_accessFile` parsing present, Steam ID ACL untested |
+| Admin commands | Pending | Privilege system present, admin actions untested |
+| Map entities override | Pending | `sv_altEntDir` is not in the tree |
 
-#### Renderer
+### Renderer
 
 | Area | Status | Notes |
 |------|--------|-------|
-| RT_RAIL_CORE | Done | Rendering case for grapple hook chain |
+| RT_RAIL_CORE | Done | Grapple hook chain |
+| Threaded texture decode | Done | JPEG/TGA/PNG decoded on worker threads |
+| GPU frame fence | Done | `r_maxQueuedFrames`, default 0 to match retail's latency |
 | QL-specific shaders | Pending | Shader keywords not fully audited |
-| Freeze/thaw effects | Pending | Freeze Tag visual effects (ice shader, thaw progress) not implemented |
-| Infection visuals | Pending | Red Rover infection visual effects not implemented |
-| Post-processing (bloom) | Pending | Bloom is partially implemented in opengl2 but not QL-tuned |
-| Advertisement rendering | Pending | `UI_DRAW_ADVERTISEMENT` export exists but ad billboard rendering not implemented |
-| Damage plum rendering | Pending | Floating damage numbers partially implemented, needs verification |
+| Freeze shader | Pending | The frozen-player look |
+| Post-processing (bloom) | Pending | Partially implemented in opengl2, not QL-tuned |
 
 ## Building
 
 ### Windows (Visual Studio)
 
 ```
-cd misc\msvc142
-MSBuild ioquakelive.sln -p:Configuration=Debug -p:Platform=Win32
+cd misc\msvc
+MSBuild ioquakelive.sln -p:Configuration=Release -p:Platform=Win32
 ```
 
 Individual projects: `cgame.vcxproj`, `ui.vcxproj`, `qagame.vcxproj`, `quakelive.vcxproj`, `opengl2.vcxproj`
 
-**Toolset:** v145 (VS 2022+), **Platform:** Win32/x64
+**Toolset:** v145 (VS 2022+), **Platform:** Win32/x64. After changing a struct in a header, build with `-t:Rebuild`: the incremental build leaves stale objects.
 
 ### Linux / macOS
 
-Standard ioquake3 Makefile build - not yet tested with QL-specific changes.
+Standard ioquake3 Makefile build. The dedicated server has been built and run on Linux aarch64.
 
 ## Directory Layout
 
@@ -200,11 +207,11 @@ code/
   client/         Engine client code
   server/         Engine server code
   qcommon/        Shared engine code (networking, filesystem, commands)
-  renderercommon/  Shared renderer code
-  renderer_opengl2/ OpenGL 2 renderer
+  renderercommon/ Shared renderer code
+  renderergl2/    OpenGL 2 renderer
 misc/
-  msvc142/        Visual Studio solution and project files
-pak01_content/    Asset overrides (menus, shaders, models) → pak01.pk3
+  msvc/           Visual Studio solution and project files
+content/pak01/    Asset overrides (menus, fonts, shaders) → pak01.pk3
 ```
 
 ## Ancestry
