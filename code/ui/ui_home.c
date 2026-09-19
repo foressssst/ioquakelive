@@ -799,21 +799,21 @@ secciones y los logos de los creditos.
 ===============================================================================
 */
 
-#define HV_BAR_W 1680.0f      // el panel de arriba no ocupa todo el ancho: va centrado
-#define HV_BAR_H 92.0f
+#define HV_BAR_W 1560.0f      // el panel de arriba no ocupa todo el ancho: va centrado
+#define HV_BAR_H 80.0f
 #define HV_BAR_R 20.0f        // sus esquinas de abajo
 #define HV_PAD 34.0f          // el aire adentro del panel
 #define HV_EDGE 48.0f
 #define HV_FOOT_H 88.0f       // la franja de abajo: version, creditos y aviso legal en una linea
-#define HV_LOGO_H 66.0f       // la imagen del logo; el dibujo ocupa el 77 % de su alto
-#define HV_TAB_SLOT 178.0f    // cada seccion ocupa un casillero igual: la fila queda simetrica
-#define HV_TAB_SIZE 19.0f
+#define HV_LOGO_H 58.0f       // la imagen del logo; el dibujo ocupa el 77 % de su alto
+#define HV_TAB_SLOT 164.0f    // cada seccion ocupa un casillero igual: la fila queda simetrica
+#define HV_TAB_SIZE 17.0f
 #define HV_TAB_SPACING 2.2f
-#define HV_PLAY_SLOT 230.0f   // el lugar del trapecio en la fila
-#define HV_PLAY_TOP_W 206.0f  // el trapecio: ancho contra el borde de arriba
-#define HV_PLAY_BOT_W 164.0f  // y donde termina
-#define HV_PLAY_DROP 18.0f    // cuanto cuelga por debajo de la barra
-#define HV_PLAY_SIZE 19.0f
+#define HV_PLAY_SLOT 190.0f   // el lugar del trapecio en la fila
+#define HV_PLAY_TOP_W 168.0f  // el trapecio: ancho contra el borde de arriba
+#define HV_PLAY_BOT_W 136.0f  // y donde termina
+#define HV_PLAY_DROP 14.0f    // cuanto cuelga por debajo de la barra
+#define HV_PLAY_SIZE 17.0f
 #define HV_PLAY_SPACING 4.0f
 #define HV_SHADOW 22.0f       // el alto de las sombras
 #define HV_SHADOW_A 0.75f     // y lo oscuras que empiezan
@@ -824,7 +824,7 @@ secciones y los logos de los creditos.
 
 // [ioquakelive] la paleta: gris muy oscuro en vez de negro puro, que es lo que pidio el
 // jugador, y un velo sobre el arte para que el fondo quede mas oscuro y lo de encima se lea.
-static const vec4_t hvPanel = {0.075f, 0.078f, 0.082f, 1.0f};
+static const vec4_t hvPanel = {0.117f, 0.121f, 0.129f, 1.0f};  // gris muy oscuro, solido
 static const vec4_t hvVeil = {0.0f, 0.0f, 0.0f, 0.42f};
 
 typedef struct {
@@ -868,14 +868,19 @@ static float UI_Home_BarBaseline(float size, float y) {
 // [ioquakelive] una sombra debajo de un borde: filas de negro que se apagan hacia abajo. El
 // sistema de dibujo solo tiene rectangulos, asi que una sombra difusa se hace asi, y el jugador
 // las pidio bien marcadas.
-static void UI_Home_Shadow(float x, float y, float w, float h) {
+static void UI_Home_Shadow(float x, float y, float w, float h, float inset) {
     float k;
 
     for (k = 0; k < h; k += 1.0f) {
         vec4_t c = {0.0f, 0.0f, 0.0f, 0.0f};
+        float in = inset + k;  // se angosta a medida que baja: no asoma por las esquinas
+        float rw = w - in * 2.0f;
 
+        if (rw <= 0) {
+            return;
+        }
         c[3] = HV_SHADOW_A * (1.0f - k / h) * (1.0f - k / h);
-        SM_Fill(x, y + k, w, 1.05f, c, NULL);
+        SM_Fill(x + in, y + k, rw, 1.05f, c, NULL);
     }
 }
 
@@ -927,7 +932,7 @@ static void UI_Home_DrawPlay(float cx, float top, float dt) {
     fill[3] = 1.0f;
 
     // la sombra del trapecio sobre el arte, un par de filas por debajo de su punta
-    UI_Home_Shadow(cx - HV_PLAY_BOT_W * 0.5f, top + h, HV_PLAY_BOT_W, HV_SHADOW);
+    UI_Home_Shadow(cx - HV_PLAY_BOT_W * 0.5f, top + h, HV_PLAY_BOT_W, HV_SHADOW, 2.0f);
 
     for (k = 0; k < h; k += 1.0f) {
         float w = HV_PLAY_TOP_W + (HV_PLAY_BOT_W - HV_PLAY_TOP_W) * (k / h);
@@ -957,7 +962,7 @@ static void UI_Home_DrawBar(float dt) {
     float cx = UI_Home_MainW() * 0.5f;
     int i;
 
-    UI_Home_Shadow(x, top + HV_BAR_H, HV_BAR_W, HV_SHADOW);
+    UI_Home_Shadow(x, top + HV_BAR_H, HV_BAR_W, HV_SHADOW, HV_BAR_R);
     UI_Home_RoundedBottom(x, top, HV_BAR_W, HV_BAR_H, HV_BAR_R, hvPanel);
 
     // la imagen del logo trae margen (56 de 512 a la izquierda); el dibujo empieza en el padding
@@ -1093,7 +1098,7 @@ static void UI_Home_DrawServers(void) {
 static void UI_Home_DrawFooter(void) {
     static const char* const notice =
         "QUAKE LIVE (c) 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
-    static const vec4_t strip = {0.075f, 0.078f, 0.082f, 1.0f};
+    static const vec4_t strip = {0.117f, 0.121f, 0.129f, 1.0f};
     char version[MAX_CVAR_VALUE_STRING];
     float bottom = UI_Home_Bottom();
     float y = bottom - HV_FOOT_H;
@@ -1168,9 +1173,7 @@ static void UI_Home_DrawSocial(float dt) {
         SM_Fill(-1, top, x + 1, bottom - top + 1, c, NULL);
     }
 
-    c[0] = c[1] = c[2] = 0.0f;
-    c[3] = 0.88f;
-    SM_Fill(x, top, w + 1, bottom - top + 1, c, NULL);
+    SM_Fill(x, top, w + 1, bottom - top + 1, hvPanel, NULL);
     SM_Fill(x, top, 1, bottom - top, smBorder, NULL);
     SM_Hit(x, top, w + 1, bottom - top + 1, HM_HIT_SOCIAL, 0, NULL);
 
