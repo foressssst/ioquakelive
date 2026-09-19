@@ -889,130 +889,18 @@ static void UI_Home_DrawColumnBand(void) {
     SM_Fill(-1, UI_Home_Top(), HM_COL_BAND, UI_Home_Bottom() - UI_Home_Top() + 1, band, NULL);
 }
 
-/*
-===============
-UI_Home_DrawServers
-
-[ioquakelive] La fila de servidores, sobre el pie. Lee la lista que arma el navegador de
-servidores de la interfaz, con la fuente que el jugador tenga elegida (ui_netSource), asi que no
-hay dos implementaciones: la portada pide el refresco al abrirse y despues solo dibuja.
-
-Cada tarjeta lleva el levelshot del mapa, el nombre del servidor y, debajo, el mapa, cuanta
-gente hay y el ping. El clic conecta. Sin servidores, una sola tarjeta lo dice.
-===============
-*/
-#define HV_CARD_GAP (4.0f * HV_U)
-#define HV_CARD_W ((HV_TABS_W - 3.0f * HV_CARD_GAP) / 4.0f)  // la fila de tarjetas mide lo
-#define HV_CARD_H (18.0f * HV_U)                             // mismo que la de secciones
-#define HV_CARD_BAND (5.0f * HV_U)  // la banda con el nombre y los datos, al pie de la tarjeta
-#define HV_CARD_SIZE 14.0f
-#define HV_CARDS 4
-
-static void UI_Home_ServerCard(int i, float x, float y) {
-    char info[MAX_INFO_STRING];
-    char name[64];
-    char map[MAX_QPATH];
-    qboolean over = SM_Over(HM_HIT_CARD, i);
-    vec4_t tint = {0.72f, 0.72f, 0.72f, 1.0f};
-    qhandle_t shot;
-    int clients;
-    int maxClients;
-    int ping;
-    float w;
-
-    trap_LAN_GetServerInfo(ui_netSource.integer, uiInfo.serverStatus.displayServers[i], info, sizeof(info));
-    Q_strncpyz(name, Info_ValueForKey(info, "hostname"), sizeof(name));
-    Q_CleanStr(name);
-    Q_strncpyz(map, Info_ValueForKey(info, "mapname"), sizeof(map));
-    clients = atoi(Info_ValueForKey(info, "clients"));
-    maxClients = atoi(Info_ValueForKey(info, "sv_maxclients"));
-    ping = trap_LAN_GetServerPing(ui_netSource.integer, uiInfo.serverStatus.displayServers[i]);
-    if (over) {
-        tint[0] = tint[1] = tint[2] = 1.0f;
-    }
-
-    SM_Fill(x, y, HV_CARD_W, HV_CARD_H, hvPanel, NULL);
-    shot = map[0] ? trap_R_RegisterShaderNoMip(va("levelshots/%s", map)) : 0;
-    if (shot) {
-        SM_PicColor(x, y, HV_CARD_W, HV_CARD_H - HV_CARD_BAND, shot, tint, NULL);
-    }
-    SM_Fill(x, y + HV_CARD_H - HV_CARD_BAND, HV_CARD_W, HV_CARD_BAND, hvPanel, NULL);
-
-    w = SM_LabelWidth(HV_CARD_SIZE, name[0] ? name : "Server", 1.4f);
-    SM_Label(x + (HV_CARD_W - w) * 0.5f,
-             SM_Baseline(FONT_SANS, HV_CARD_SIZE, y + HV_CARD_H - HV_CARD_BAND + 8.0f, 20.0f), HV_CARD_SIZE,
-             over ? smText : smTextSoft, name[0] ? name : "Server", 1.4f);
-    {
-        const char* line = va("%s  %i/%i  %i ms", map[0] ? map : "?", clients, maxClients, ping);
-        float lw = SM_Advance(FONT_SANS, 12.0f, line, -1);
-
-        SM_Text(x + (HV_CARD_W - lw) * 0.5f,
-                SM_Baseline(FONT_SANS, 12.0f, y + HV_CARD_H - HV_CARD_BAND + 30.0f, 18.0f), FONT_SANS, 12.0f,
-                smSubtle, line, -1, qfalse);
-    }
-
-    if (over) {
-        SM_Fill(x, y, HV_CARD_W, 1.0f, smText, NULL);
-        SM_Fill(x, y + HV_CARD_H - 1.0f, HV_CARD_W, 1.0f, smText, NULL);
-        SM_Fill(x, y, 1.0f, HV_CARD_H, smText, NULL);
-        SM_Fill(x + HV_CARD_W - 1.0f, y, 1.0f, HV_CARD_H, smText, NULL);
-    }
-    SM_Hit(x, y, HV_CARD_W, HV_CARD_H, HM_HIT_CARD, i, NULL);
-}
-
-// sin servidores en la lista: una tarjeta ancha que lo dice, para que la fila no quede vacia
-static void UI_Home_NoServers(float y) {
-    static const char* const line = "The list updates on its own; ioquakelive servers will show up here";
-    float w = HV_TABS_W;
-    float x = UI_Home_ContentCx() - w * 0.5f;
-    float lw = SM_Advance(FONT_SANS, 13.0f, line, -1);
-    float tw = SM_LabelWidth(16.0f, "No servers online", 1.6f);
-
-    SM_Fill(x, y, w, HV_CARD_H, hvPanel, NULL);
-    SM_Label(x + (w - tw) * 0.5f, SM_Baseline(FONT_SANS, 16.0f, y + HV_CARD_H * 0.5f - 26.0f, 24.0f), 16.0f,
-             smTextSoft, "No servers online", 1.6f);
-    SM_Text(x + (w - lw) * 0.5f, SM_Baseline(FONT_SANS, 13.0f, y + HV_CARD_H * 0.5f + 6.0f, 20.0f), FONT_SANS, 13.0f,
-            smSubtle, line, -1, qfalse);
-}
-
-static void UI_Home_DrawServers(void) {
-    int count = uiInfo.serverStatus.numDisplayServers;
-    float y = UI_Home_Bottom() - HV_FOOT_H - 4.0f * HV_U - HV_CARD_H;
-    float total;
-    float x;
-    int i;
-
-    UI_Home_ServerList(qfalse);  // el navegador rearma la lista; aca solo se lee
-    if (count <= 0) {
-        UI_Home_NoServers(y);
-        return;
-    }
-    if (count > HV_CARDS) {
-        count = HV_CARDS;
-    }
-    total = count * HV_CARD_W + (count - 1) * HV_CARD_GAP;
-    x = UI_Home_ContentCx() - total * 0.5f;
-
-    for (i = 0; i < count; i++) {
-        UI_Home_ServerCard(i, x + i * (HV_CARD_W + HV_CARD_GAP), y);
-    }
-}
-
-// abajo del todo: una franja con la version a la izquierda, los logos de los creditos al centro
+// abajo del todo, sobre el cuadro y sin contenedor: la version a la izquierda, los logos al centro
 // y el aviso legal a la derecha, los tres en la misma linea. Antes los logos iban en una banda
 // aparte, mas arriba, que era lo que no cerraba.
 static void UI_Home_DrawFooter(void) {
     static const char* const notice =
         "QUAKE LIVE (c) 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
-    static const vec4_t strip = {0.117f, 0.121f, 0.129f, 1.0f};
     char version[MAX_CVAR_VALUE_STRING];
     float bottom = UI_Home_Bottom();
     float y = bottom - HV_FOOT_H;
     float baseline = SM_Baseline(FONT_SANS, HV_TEXT, y + (HV_FOOT_H - HV_TEXT * 1.4f) * 0.5f, HV_TEXT * 1.4f);
     float w = SM_Advance(FONT_SANS, HV_TEXT, notice, -1);
 
-    UI_Home_DrawServers();
-    SM_Fill(-1, y, UI_Home_MainW() + 1, HV_FOOT_H + 1, strip, NULL);
     UI_Home_DrawMarks(y, HV_FOOT_H);
     trap_Cvar_VariableStringBuffer("version", version, sizeof(version));
     SM_Text(HM_COL_X, baseline, FONT_SANS, HV_TEXT, smSubtle, version, -1, qfalse);
@@ -1141,7 +1029,6 @@ void UI_Home_Open(void) {
     itemDef_t* item = menu ? Menu_FindItemByName(menu, "home") : NULL;
 
     UI_Home_LoadMenu();
-    UI_Home_ServerList(qtrue);  // [ioquakelive] la fila de abajo muestra servidores
     hm2.menu = HM_MENU_MAIN;
     // the page takes keys before the mouse moves over it
     if (item) {
@@ -1191,14 +1078,6 @@ qboolean UI_Home_HandleKey(int key) {
     }
     hit = SM_HitAt(smMX, smMY);
     // [ioquakelive] la fila de mapas, la barra y la salida del menu principal
-    if (hit && hit->type == HM_HIT_CARD) {
-        char address[MAX_ADDRESSLENGTH];
-
-        trap_LAN_GetServerAddressString(ui_netSource.integer, uiInfo.serverStatus.displayServers[hit->index], address,
-                                        sizeof(address));
-        trap_Cmd_ExecuteText(EXEC_APPEND, va("connect %s\n", address));
-        return qtrue;
-    }
     if (hit && hit->type == HM_HIT_QUIT) {
         UI_Home_Go(HM_NAV_QUIT);
         return qtrue;
