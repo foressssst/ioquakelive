@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "q_shared.h"
 #include "qcommon.h"
+#include "q_steam.h"
 #include <setjmp.h>
 #ifndef _WIN32
 #include <netinet/in.h>
@@ -2689,6 +2690,11 @@ void Com_Init(char* commandLine) {
     VM_Init();
     SV_Init();
 
+    // [ioquakelive] Steam, como retail: el cliente en 0x00461500 y el servidor en 0x00466ed0, los
+    // dos llamados desde su Com_Init y los dos saltados cuando com_build esta puesto
+    Steam_Init();
+    Steam_GS_Init();
+
     com_dedicated->modified = qfalse;
 #ifndef DEDICATED
     CL_Init();
@@ -3269,6 +3275,7 @@ Com_Frame
 =================
 */
 void Com_Frame(void) {
+    Steam_Frame();
     int msec, minMsec;
     int timeVal, timeValSV;
     int capUs;
@@ -3505,6 +3512,7 @@ Com_Shutdown
 =================
 */
 void Com_Shutdown(void) {
+    Steam_Shutdown();
     if (logfile) {
         FS_FCloseFile(logfile);
         logfile = 0;

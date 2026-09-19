@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "server.h"
+#include "../qcommon/q_steam.h"
 
 /*
 ===============
@@ -358,6 +359,10 @@ void SV_ChangeMaxClients(void) {
         // we don't need nearly as many when playing locally
         svs.numSnapshotEntities = sv_maxclients->integer * 4 * MAX_SNAPSHOT_ENTITIES;
     }
+
+    // [ioquakelive] retail se lo dice a Steam justo aca (0x004e339e), despues de acotar
+    // sv_maxclients a 64
+    Steam_GS_SetMaxPlayers(sv_maxclients->integer);
 }
 
 /*
@@ -573,6 +578,10 @@ void SV_SpawnServer(char* server, qboolean killBots) {
 
     SV_SetConfigstring(CS_SERVERINFO, Cvar_InfoString(CVAR_SERVERINFO));
     cvar_modifiedFlags &= ~CVAR_SERVERINFO;
+
+    // [ioquakelive] lo que la lista de Steam muestra de este servidor
+    Steam_GS_SetServerInfo(Cvar_VariableString("sv_hostname"), server,
+                           Cvar_VariableString("g_password")[0] != '\0', 0);
 
     // any media configstring setting now should issue a warning
     // and any configstring changes should be reliably transmitted
