@@ -748,12 +748,14 @@ static float UI_Home_MainW(void) {
     return smVW;  // [ioquakelive] la franja social esta apagada; cuando vuelva, smVW - HV_SOCIAL_W
 }
 
-static float UI_Home_DrawMarks(float bottom) {
-    static const vec4_t tint = {1.0f, 1.0f, 1.0f, 0.6f};
+// los logos de los creditos, centrados en una franja de alto h: entran a la mitad de su tamano,
+// que es lo que deja el pie
+static void UI_Home_DrawMarks(float y, float h) {
+    static const vec4_t tint = {1.0f, 1.0f, 1.0f, 0.55f};
     static qhandle_t shaders[ARRAY_LEN(hmMarks)];
     static qboolean loaded;
+    float scale = (h - 18.0f) / HM_MARK_H;
     float total = 0;
-    float y = bottom - HM_MARK_H;
     float x;
     int i;
 
@@ -764,18 +766,19 @@ static float UI_Home_DrawMarks(float bottom) {
         }
     }
     for (i = 0; i < (int)ARRAY_LEN(hmMarks); i++) {
-        total += hmMarks[i].w + (i ? HM_MARK_GAP : 0);
+        total += (hmMarks[i].w + (i ? HM_MARK_GAP : 0)) * scale;
     }
     x = (smVW - total) * 0.5f;
 
     for (i = 0; i < (int)ARRAY_LEN(hmMarks); i++) {
+        float mw = hmMarks[i].w * scale;
+        float mh = hmMarks[i].h * scale;
+
         if (shaders[i]) {
-            SM_PicColor(x, y + (HM_MARK_H - hmMarks[i].h) * 0.5f, hmMarks[i].w, hmMarks[i].h, shaders[i], tint,
-                        NULL);
+            SM_PicColor(x, y + (h - mh) * 0.5f, mw, mh, shaders[i], tint, NULL);
         }
-        x += hmMarks[i].w + HM_MARK_GAP;
+        x += mw + HM_MARK_GAP * scale;
     }
-    return y;
 }
 
 /*
@@ -796,21 +799,24 @@ secciones y los logos de los creditos.
 ===============================================================================
 */
 
-#define HV_BAR_H 96.0f
+#define HV_BAR_W 1440.0f      // el panel de arriba no ocupa todo el ancho: va centrado
+#define HV_BAR_H 88.0f
+#define HV_BAR_R 20.0f        // sus esquinas de abajo
+#define HV_PAD 34.0f          // el aire adentro del panel
 #define HV_EDGE 48.0f
-#define HV_LOGO_H 96.0f       // la imagen del logo; el dibujo ocupa el 77 % de su alto
+#define HV_FOOT_H 80.0f       // la franja de abajo: version, creditos y aviso legal en una linea
+#define HV_LOGO_H 64.0f       // la imagen del logo; el dibujo ocupa el 77 % de su alto
 #define HV_TAB_SLOT 156.0f    // cada seccion ocupa un casillero igual: la fila queda simetrica
 #define HV_TAB_SIZE 16.0f
 #define HV_TAB_SPACING 2.2f
 #define HV_PLAY_SLOT 212.0f   // el lugar del trapecio en la fila
 #define HV_PLAY_TOP_W 188.0f  // el trapecio: ancho contra el borde de arriba
 #define HV_PLAY_BOT_W 150.0f  // y donde termina
-#define HV_PLAY_H HV_BAR_H    // termina justo en el borde de la franja de arriba
+#define HV_PLAY_DROP 30.0f    // cuanto cuelga por debajo del panel
 #define HV_PLAY_SIZE 18.0f
 #define HV_SOCIAL_OPEN_W 360.0f
 #define HV_SOCIAL_MS 55.0f    // la constante de tiempo de las transiciones
 #define HV_AVATAR 52.0f
-#define HV_FOOT_H (HV_BAR_H + HM_MARK_H + 16.0f)  // la franja de abajo incluye los logos
 #define HV_TEXT 13.0f         // la letra chica: version, aviso, textos de la franja
 
 typedef struct {
@@ -851,8 +857,25 @@ static float UI_Home_BarBaseline(float size, float y) {
     return SM_Baseline(FONT_SANS, size, y + (HV_BAR_H - size * 1.4f) * 0.5f, size * 1.4f);
 }
 
-// una seccion de la barra, centrada en su casillero: la pagina actual en blanco con una marca
-// dorada, las demas en gris que se encienden bajo el cursor
+// un panel con las esquinas de abajo redondeadas, con filas de un punto: es lo que hay para
+// dibujar una figura que no es un rectangulo
+static void UI_Home_RoundedBottom(float x, float y, float w, float h, float r, const float* color) {
+    float k;
+
+    for (k = 0; k < h; k += 1.0f) {
+        float inset = 0;
+
+        if (k > h - r) {
+            float dy = k - (h - r);
+
+            inset = r - (float)sqrt(r * r - dy * dy);
+        }
+        SM_Fill(x + inset, y + k, w - inset * 2.0f, 1.05f, color, NULL);
+    }
+}
+
+// una seccion del panel, centrada en su casillero: la de la pagina actual en blanco, las demas
+// en gris que se encienden en blanco bajo el cursor
 static void UI_Home_DrawTab(const hvTab_t* tab, float slotX, float top) {
     qboolean current = tab->nav < 0;
     qboolean over = !current && SM_Over(HM_HIT_TAB, tab->nav);
@@ -865,12 +888,11 @@ static void UI_Home_DrawTab(const hvTab_t* tab, float slotX, float top) {
     }
 }
 
-// Jugar: el trapecio claro que cuelga de la barra, mas ancho arriba que abajo, con PLAY en
-// letras oscuras. Bajo el cursor se aclara del todo, la misma regla que las secciones: nada de
-// dorados. Se arma con filas de un punto, que es lo que hay para dibujar una figura que no es un
-// rectangulo.
+// Jugar: el trapecio claro, mas ancho arriba que abajo, que atraviesa el panel y cuelga por
+// debajo. Bajo el cursor se aclara del todo, la misma regla que las secciones.
 static void UI_Home_DrawPlay(float cx, float top, float dt) {
     qboolean over = SM_Over(HM_HIT_TAB, HM_NAV_PLAY);
+    float h = HV_BAR_H + HV_PLAY_DROP;
     float k;
     vec4_t fill;
 
@@ -881,40 +903,42 @@ static void UI_Home_DrawPlay(float cx, float top, float dt) {
     fill[2] += (1.0f - fill[2]) * hv.play;
     fill[3] = 1.0f;
 
-    for (k = 0; k < HV_PLAY_H; k += 1.0f) {
-        float w = HV_PLAY_TOP_W + (HV_PLAY_BOT_W - HV_PLAY_TOP_W) * (k / HV_PLAY_H);
+    for (k = 0; k < h; k += 1.0f) {
+        float w = HV_PLAY_TOP_W + (HV_PLAY_BOT_W - HV_PLAY_TOP_W) * (k / h);
 
         SM_Fill(cx - w * 0.5f, top + k, w, 1.05f, fill, NULL);
     }
-    SM_Label(cx - SM_LabelWidth(HV_PLAY_SIZE, "Play", 5.0f) * 0.5f,
-             SM_Baseline(FONT_SANS, HV_PLAY_SIZE, top + (HV_PLAY_H - HV_PLAY_SIZE * 1.4f) * 0.5f,
-                         HV_PLAY_SIZE * 1.4f),
+    SM_Label(cx - SM_LabelWidth(HV_PLAY_SIZE, "Play", 5.0f) * 0.5f, UI_Home_BarBaseline(HV_PLAY_SIZE, top),
              HV_PLAY_SIZE, smOnPrimary, "Play", 5.0f);
-    SM_Hit(cx - HV_PLAY_TOP_W * 0.5f, top, HV_PLAY_TOP_W, HV_PLAY_H, HM_HIT_TAB, HM_NAV_PLAY, NULL);
+    SM_Hit(cx - HV_PLAY_TOP_W * 0.5f, top, HV_PLAY_TOP_W, h, HM_HIT_TAB, HM_NAV_PLAY, NULL);
 }
 
-// la salida, arriba a la derecha contra el margen: el lugar que tenia al pie de la franja
-// social, que por ahora no esta
-static void UI_Home_DrawQuit(float top) {
+// la salida, adentro del panel contra su borde derecho
+static void UI_Home_DrawQuit(float right, float top) {
     qboolean over = SM_Over(HM_HIT_QUIT, 0);
     float w = SM_LabelWidth(HV_TEXT, "Quit", 2.0f);
-    float x = smVW - HV_EDGE - w;
+    float x = right - HV_PAD - w;
 
     SM_Label(x, UI_Home_BarBaseline(HV_TEXT, top), HV_TEXT, over ? smText : smTextSoft, "Quit", 2.0f);
-    SM_Hit(x - 20, top, w + 40, HV_BAR_H, HM_HIT_QUIT, 0, NULL);
+    SM_Hit(x - 16, top, w + 16 + HV_PAD, HV_BAR_H, HM_HIT_QUIT, 0, NULL);
 }
 
-// arriba: el logo contra el margen y la fila de secciones centrada en la pantalla
+// arriba: el panel centrado, con el logo a la izquierda, las secciones al centro, el trapecio
+// atravesandolo y la salida a la derecha
 static void UI_Home_DrawBar(float dt) {
+    static const vec4_t panel = {0.0f, 0.0f, 0.0f, 0.90f};
     float top = UI_Home_Top();
+    float x = (smVW - HV_BAR_W) * 0.5f;
     float cx = smVW * 0.5f;
     int i;
 
-    // la imagen del logo trae margen (56 de 512 a la izquierda); el dibujo empieza en el margen
+    UI_Home_RoundedBottom(x, top, HV_BAR_W, HV_BAR_H, HV_BAR_R, panel);
+
+    // la imagen del logo trae margen (56 de 512 a la izquierda); el dibujo empieza en el padding
     if (hm2.logo) {
         float w = HV_LOGO_H * 4.0f;
 
-        SM_Pic(HV_EDGE - 56.0f * (w / 512.0f), top + (HV_BAR_H - HV_LOGO_H) * 0.5f, w, HV_LOGO_H, hm2.logo, NULL);
+        SM_Pic(x + HV_PAD - 56.0f * (w / 512.0f), top + (HV_BAR_H - HV_LOGO_H) * 0.5f, w, HV_LOGO_H, hm2.logo, NULL);
     }
 
     for (i = 0; i < (int)ARRAY_LEN(hvTabsLeft); i++) {
@@ -925,23 +949,27 @@ static void UI_Home_DrawBar(float dt) {
     }
 
     UI_Home_DrawPlay(cx, top, dt);
-    UI_Home_DrawQuit(top);
+    UI_Home_DrawQuit(x + HV_BAR_W, top);
 }
 
-// abajo: los logos de los creditos sobre el eje y, en la franja, la version y el aviso legal
-// contra los margenes, en la misma linea que Quit
+// abajo del todo: una franja con la version a la izquierda, los logos de los creditos al centro
+// y el aviso legal a la derecha, los tres en la misma linea. Antes los logos iban en una banda
+// aparte, mas arriba, que era lo que no cerraba.
 static void UI_Home_DrawFooter(void) {
     static const char* const notice =
         "QUAKE LIVE (c) 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
+    static const vec4_t strip = {0.0f, 0.0f, 0.0f, 0.82f};
     char version[MAX_CVAR_VALUE_STRING];
-    float y = UI_Home_Bottom() - HV_BAR_H;
-    float baseline = UI_Home_BarBaseline(HV_TEXT, y);
+    float bottom = UI_Home_Bottom();
+    float y = bottom - HV_FOOT_H;
+    float baseline = SM_Baseline(FONT_SANS, HV_TEXT, y + (HV_FOOT_H - HV_TEXT * 1.4f) * 0.5f, HV_TEXT * 1.4f);
     float w = SM_Advance(FONT_SANS, HV_TEXT, notice, -1);
 
-    UI_Home_DrawMarks(y - 8.0f);
+    SM_Fill(-1, y, smVW + 2, HV_FOOT_H + 1, strip, NULL);
+    UI_Home_DrawMarks(y, HV_FOOT_H);
     trap_Cvar_VariableStringBuffer("version", version, sizeof(version));
     SM_Text(HV_EDGE, baseline, FONT_SANS, HV_TEXT, smSubtle, version, -1, qfalse);
-    SM_Text(UI_Home_MainW() - HV_EDGE - w, baseline, FONT_SANS, HV_TEXT, smSubtle, notice, -1, qfalse);
+    SM_Text(smVW - HV_EDGE - w, baseline, FONT_SANS, HV_TEXT, smSubtle, notice, -1, qfalse);
 }
 
 /*
@@ -1088,18 +1116,6 @@ static void UI_Home_DrawSocial(float dt) {
 
 #endif
 
-// las sombras del menu: dos franjas negras planas, arriba y abajo, donde va lo que hay que leer.
-// Sin degradados ni brillos, que es lo que pidio el jugador: el fondo es la imagen y lo demas es
-// negro liso.
-static void UI_Home_DrawHomeShade(void) {
-    static const vec4_t shadow = {0.0f, 0.0f, 0.0f, 0.75f};
-    float top = UI_Home_Top();
-    float bottom = UI_Home_Bottom();
-
-    SM_Fill(-1, top, smVW + 2, HV_BAR_H, shadow, NULL);
-    SM_Fill(-1, bottom - HV_FOOT_H, smVW + 2, HV_FOOT_H + 1, shadow, NULL);
-}
-
 void UI_Home_Open(void) {
     menuDef_t* menu = Menus_FindByName("main");
     itemDef_t* item = menu ? Menu_FindItemByName(menu, "home") : NULL;
@@ -1125,7 +1141,6 @@ void UI_Home_Paint(void) {
         dt = dt < 0 ? 0 : dt > 100.0f ? 100.0f : dt;
 
         UI_Home_DrawBackground();
-        UI_Home_DrawHomeShade();
         UI_Home_DrawFooter();
         UI_Home_DrawBar(dt);
     }
