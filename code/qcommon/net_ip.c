@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "../qcommon/q_shared.h"
 #include "../qcommon/qcommon.h"
+#include "../qcommon/q_steam.h"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -1538,6 +1539,11 @@ void NET_Event(fd_set* fdr) {
                 if (rand() < (int)(((double)RAND_MAX) / 100.0 * (double)net_dropsim->value))
                     continue;  // drop this packet
             }
+
+            // [ioquakelive] el servidor comparte su socket con Steam (puerto de consulta 0xffff,
+            // como retail), asi que las consultas del master llegan por aca
+            if (Steam_GS_HandlePacket(from, netmsg.data, netmsg.cursize))
+                continue;
 
             if (com_sv_running->integer)
                 Com_RunAndTimeServerPacket(&from, &netmsg);
