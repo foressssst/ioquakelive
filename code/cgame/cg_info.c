@@ -121,10 +121,15 @@ direcciones quedan anotadas aqui por si hay que volver.
   0x1001d524  el texto de carga centrado en y 370
 
 Se conserva todo lo que informaba: el mapa, el modo, los autores, que se esta cargando y
-cuanto falta. La composicion es centrada: la imagen del mapa grande al medio, el modo en dorado
-encima, el nombre y los autores debajo, y una barra fina del ancho de la imagen. El levelshot
-tambien va de fondo, pero muy oscurecido, como ambiente. El logo va donde lo pone la fila de
-arriba del front end, y la letra es la del front end, Barlow.
+cuanto falta. La composicion sigue al menu: una banda gris a la izquierda con toda la
+informacion y el levelshot a pantalla completa detras, con los mismos grises y la misma letra
+que el front end. Sin dorados. Se agregan las caras de quienes van entrando, que se recolectan
+en CG_LoadingClient y hasta ahora no se dibujaban.
+
+La banda se calcula con el aspecto real (LD_ViewW), no con un numero fijo: en WIDESCREEN_LEFT
+640 es el ancho en 4:3, y en una pantalla mas ancha la banda tiene que seguir siendo la misma
+fraccion.
+
 ====================
 */
 
@@ -137,6 +142,20 @@ static int LD_Font(qboolean strong) {
         ldFonts[1] = trap_R_Font_Register("fonts/Barlow-SemiBold.ttf");
     }
     return ldFonts[strong ? 1 : 0];
+}
+
+// text with its left edge on x and its baseline on y
+static void LD_Left(float x, float y, float scale, const vec4_t color, const char* text, qboolean strong) {
+    int font = LD_Font(strong);
+
+    if (!text || !text[0]) {
+        return;
+    }
+    if (font >= 0) {
+        CG_DrawTextInFont(x, y, font, scale, color, text, ITEM_TEXTSTYLE_NORMAL);
+    } else {
+        CG_DrawText(x, y, 1, scale, (float*)color, text, 0, 0, ITEM_TEXTSTYLE_NORMAL);
+    }
 }
 
 // text centred on cx with its baseline on y
@@ -156,16 +175,43 @@ static void LD_Centered(float cx, float y, float scale, const vec4_t color, cons
     }
 }
 
-#define LD_PIC_W 384.0f  // la imagen del mapa, en 16:9
-#define LD_PIC_H 216.0f
-#define LD_PIC_Y 118.0f
+#define LD_BAND 0.35f    // de la pantalla, como la banda de la columna en el menu
+#define LD_PAD 26.0f     // el margen de adentro de la banda
+#define LD_FACE 26.0f    // la cara de un jugador
+#define LD_FACE_GAP 6.0f
+
+// el ancho visible en WIDESCREEN_LEFT: 640 es el ancho en 4:3, y la pantalla puede ser mas ancha
+static float LD_ViewW(void) {
+    float aspect = (float)cgs.glconfig.vidWidth / (float)cgs.glconfig.vidHeight;
+
+    return 640.0f * aspect * 0.75f;
+}
+
+// las caras de los que van entrando, en filas dentro de la banda
+static float LD_DrawPlayers(float x, float y, float w) {
+    int perRow = (int)((w + LD_FACE_GAP) / (LD_FACE + LD_FACE_GAP));
+    int i;
+
+    if (perRow < 1) {
+        perRow = 1;
+    }
+    for (i = 0; i < loadingPlayerIconCount; i++) {
+        float px = x + (i % perRow) * (LD_FACE + LD_FACE_GAP);
+        float py = y + (i / perRow) * (LD_FACE + LD_FACE_GAP);
+
+        CG_DrawPic(px, py, LD_FACE, LD_FACE, loadingPlayerIcons[i]);
+    }
+    if (!loadingPlayerIconCount) {
+        return y;
+    }
+    return y + ((loadingPlayerIconCount - 1) / perRow + 1) * (LD_FACE + LD_FACE_GAP);
+}
 
 void CG_DrawInformation(void) {
-    // la paleta del front end: su texto, su gris secundario y el amarillo del logo, que es el acento
-    static vec4_t colorVeil = {0.0f, 0.0f, 0.0f, 0.80f};
+    // la paleta del menu: el gris de los paneles, su texto y su gris apagado
+    static vec4_t colorPanel = {0.118f, 0.122f, 0.129f, 0.96f};
     static vec4_t colorText = {0.87f, 0.87f, 0.87f, 1.0f};
     static vec4_t colorMuted = {0.6f, 0.6f, 0.6f, 1.0f};
-    static vec4_t colorGold = {0.969f, 0.820f, 0.0f, 1.0f};
     static vec4_t colorTrack = {1.0f, 1.0f, 1.0f, 0.14f};
     const char* s;
     const char* info;
@@ -173,7 +219,8 @@ void CG_DrawInformation(void) {
     const char* sAuthor2;
     char gametype[64];
     qhandle_t levelshot;
-    float s1, s2, picX;
+    float s1, s2;
+    float band, x, y, w;
 
     // [QL] compute aspect-correct texture coords for levelshot (1920x1080 source)
     s1 = ((1920.0f - (1080.0f / (float)cgs.glconfig.vidHeight) * (float)cgs.glconfig.vidWidth) / 1920.0f) * 0.5f;
@@ -201,48 +248,54 @@ void CG_DrawInformation(void) {
         return;
     }
 
-    // the map, darkened right down, as the room the screen sits in
+    // el mapa, a pantalla completa: es el fondo, como el cuadro en el menu
     trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight, s1, 0, s2, 1.0f,
                           levelshot);
+
     CG_SetWidescreen(WIDESCREEN_LEFT);
-    CG_FillRect(-400, 0, 1440, 480, colorVeil);
+    band = LD_ViewW() * LD_BAND;
+    x = LD_PAD;
+    w = band - LD_PAD * 2.0f;
+    CG_FillRect(0, 0, band, 480, colorPanel);
 
-    CG_SetWidescreen(WIDESCREEN_CENTER);
-
-    // the logo where the front end's top row has it (x 405, y 26, 196 by 49 on a 1080 page)
+    // el logo arriba, contra el mismo margen que todo lo demas
     if (cgs.media.qlLogoShader) {
-        CG_DrawPic(73, 11.6f, 87, 21.8f, cgs.media.qlLogoShader);
+        CG_DrawPic(x, 28.0f, 116.0f, 29.0f, cgs.media.qlLogoShader);
     }
 
-    // the game type over the picture, in gold
+    // el modo, el mapa y sus autores
     if (cgs.gametype >= 0 && cgs.gametype < GT_MAX_GAME_TYPE) {
         Q_strncpyz(gametype, gametypeDisplayNames[cgs.gametype], sizeof(gametype));
     } else {
         Q_strncpyz(gametype, "Unknown Gametype", sizeof(gametype));
     }
     Q_strupr(gametype);
-    LD_Centered(320, LD_PIC_Y - 12, 0.15f, colorGold, gametype, qtrue);
-
-    // the picture itself, in the middle
-    picX = 320 - LD_PIC_W * 0.5f;
-    CG_DrawPic(picX, LD_PIC_Y, LD_PIC_W, LD_PIC_H, levelshot);
-
-    // the map's name and its authors under it
-    LD_Centered(320, LD_PIC_Y + LD_PIC_H + 30, 0.30f, colorText, CG_ConfigString(CS_MESSAGE), qtrue);
+    y = 168.0f;
+    LD_Left(x, y, 0.13f, colorMuted, gametype, qtrue);
+    y += 30.0f;
+    LD_Left(x, y, 0.30f, colorText, CG_ConfigString(CS_MESSAGE), qtrue);
     sAuthor = CG_ConfigString(CS_AUTHOR);
     if (sAuthor[0]) {
         sAuthor2 = CG_ConfigString(CS_AUTHOR2);
         s = sAuthor2[0] ? va("%s  /  %s", sAuthor, sAuthor2) : sAuthor;
-        LD_Centered(320, LD_PIC_Y + LD_PIC_H + 48, 0.13f, colorMuted, s, qfalse);
+        y += 20.0f;
+        LD_Left(x, y, 0.12f, colorMuted, s, qfalse);
     }
 
-    // how far the load has come: a fine bar the picture's width, with its track always there so
-    // what is left shows as well as what is done, and under it what is loading
-    CG_FillRect(picX, LD_PIC_Y + LD_PIC_H + 68, LD_PIC_W, 1.2f, colorTrack);
-    CG_FillRect(picX, LD_PIC_Y + LD_PIC_H + 68, LD_PIC_W * ((float)cg.loadingStage / NUM_LOADING_STAGES), 1.2f,
-                colorGold);
+    // las caras de quienes van entrando: se recolectan en CG_LoadingClient y hasta ahora no se
+    // dibujaban en ningun lado
+    if (loadingPlayerIconCount) {
+        y += 34.0f;
+        LD_Left(x, y, 0.11f, colorMuted, "CONNECTING", qtrue);
+        y += 12.0f;
+        LD_DrawPlayers(x, y, w);
+    }
+
+    // cuanto falta: una barra fina del ancho de la banda y, debajo, que se esta cargando
+    CG_FillRect(x, 404.0f, w, 2.0f, colorTrack);
+    CG_FillRect(x, 404.0f, w * ((float)cg.loadingStage / NUM_LOADING_STAGES), 2.0f, colorText);
     s = cg.infoScreenText[0] ? va("Loading %s", cg.infoScreenText) : "Awaiting snapshot";
-    LD_Centered(320, LD_PIC_Y + LD_PIC_H + 88, 0.13f, colorMuted, s, qfalse);
+    LD_Left(x, 428.0f, 0.12f, colorMuted, s, qfalse);
 
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
