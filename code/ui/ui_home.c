@@ -762,7 +762,8 @@ static float UI_Home_ContentCx(void) {
     return UI_Home_ContentX() + (UI_Home_MainW() - UI_Home_ContentX()) * 0.5f;
 }
 
-static void UI_Home_DrawMarks(float y, float h) {
+// [ioquakelive] centradas en cx, no siempre en la zona principal: ahora van sobre el aviso
+static void UI_Home_DrawMarks(float cx, float y, float h) {
     static const vec4_t tint = {1.0f, 1.0f, 1.0f, 0.55f};
     static qhandle_t shaders[ARRAY_LEN(hmMarks)];
     static qboolean loaded;
@@ -780,9 +781,7 @@ static void UI_Home_DrawMarks(float y, float h) {
     for (i = 0; i < (int)ARRAY_LEN(hmMarks); i++) {
         total += (hmMarks[i].w + (i ? HM_MARK_GAP : 0)) * scale;
     }
-    // los logos van al centro del pie, que es mas ancho que el eje del contenido: centrados en
-    // ese eje se pisaban con el aviso legal
-    x = (UI_Home_MainW() - total) * 0.5f;
+    x = cx - total * 0.5f;
 
     for (i = 0; i < (int)ARRAY_LEN(hmMarks); i++) {
         float mw = hmMarks[i].w * scale;
@@ -835,11 +834,11 @@ secciones y los logos de los creditos.
 #define HV_PLAY_DROP (1.0f * HV_U)
 #define HV_PLAY_SIZE 17.0f
 #define HV_PLAY_SPACING 4.0f
-#define HV_TEXT 14.0f         // la letra chica: version, aviso, textos de la franja
+#define HV_MARKS_H (9.0f * HV_U)  // la franja de los logos, encima del aviso
+#define HV_TEXT 14.0f         // la letra chica: aviso legal y textos de la franja
 
-// [ioquakelive] la paleta: gris muy oscuro en vez de negro puro, que es lo que pidio el
-// jugador, y un velo sobre el arte para que el fondo quede mas oscuro y lo de encima se lea.
-static const vec4_t hvPanel = {0.117f, 0.121f, 0.129f, 1.0f};  // gris muy oscuro, solido
+// [ioquakelive] el gris de las piezas es smPanel, el de la paleta: la portada no tiene uno
+// propio. Sobre el arte va un velo, para que el fondo quede oscuro y lo de encima se lea.
 static const vec4_t hvVeil = {0.0f, 0.0f, 0.0f, 0.42f};
 
 typedef struct {
@@ -884,7 +883,7 @@ static float UI_Home_BarBaseline(float size, float y) {
 static void UI_Home_DrawColumnBand(void) {
     vec4_t band;
 
-    VectorCopy(hvPanel, band);
+    VectorCopy(smPanel, band);
     band[3] = 0.88f;
     SM_Fill(-1, UI_Home_Top(), HM_COL_BAND, UI_Home_Bottom() - UI_Home_Top() + 1, band, NULL);
 }
@@ -895,16 +894,15 @@ static void UI_Home_DrawColumnBand(void) {
 static void UI_Home_DrawFooter(void) {
     static const char* const notice =
         "QUAKE LIVE (c) 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
-    char version[MAX_CVAR_VALUE_STRING];
     float bottom = UI_Home_Bottom();
     float y = bottom - HV_FOOT_H;
     float baseline = SM_Baseline(FONT_SANS, HV_TEXT, y + (HV_FOOT_H - HV_TEXT * 1.4f) * 0.5f, HV_TEXT * 1.4f);
     float w = SM_Advance(FONT_SANS, HV_TEXT, notice, -1);
 
-    UI_Home_DrawMarks(y, HV_FOOT_H);
-    trap_Cvar_VariableStringBuffer("version", version, sizeof(version));
-    SM_Text(HM_COL_X, baseline, FONT_SANS, HV_TEXT, smSubtle, version, -1, qfalse);
+    // los logos van justo encima del aviso y centrados sobre el: asi el pie es un solo bloque a
+    // la derecha en vez de tres cosas sueltas, que es lo que pidio el jugador
     SM_Text(UI_Home_MainW() - HV_EDGE - w, baseline, FONT_SANS, HV_TEXT, smSubtle, notice, -1, qfalse);
+    UI_Home_DrawMarks(UI_Home_MainW() - HV_EDGE - w * 0.5f, y - HV_MARKS_H, HV_MARKS_H);
 }
 
 /*
@@ -967,7 +965,7 @@ static void UI_Home_DrawSocial(float dt) {
         SM_Fill(-1, top, x + 1, bottom - top + 1, c, NULL);
     }
 
-    SM_Fill(x, top, w + 1, bottom - top + 1, hvPanel, NULL);
+    SM_Fill(x, top, w + 1, bottom - top + 1, smPanel, NULL);
     SM_Fill(x, top, 1, bottom - top, smBorder, NULL);
     SM_Hit(x, top, w + 1, bottom - top + 1, HM_HIT_SOCIAL, 0, NULL);
 
