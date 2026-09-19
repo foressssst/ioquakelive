@@ -976,6 +976,8 @@ void trap_Sys_OpenURL(const char* url);
 void UI_StartMatch_Open(void);
 // [ioquakelive] abre Start Match con un modo ya elegido (los modos destacados del menu principal)
 void UI_StartMatch_Preselect(const char* factory);
+// [ioquakelive] la lista de servidores del navegador, que la portada tambien muestra
+void UI_Home_ServerList(qboolean refresh);
 void UI_StartMatch_Paint(void);
 qboolean UI_StartMatch_HandleKey(int key);
 
