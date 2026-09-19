@@ -974,8 +974,6 @@ void trap_Sys_OpenURL(const char* url);
 // "startmatch" menu (the number is ours: retail's menudef.h has none for it)
 #define UI_STARTMATCH 600
 void UI_StartMatch_Open(void);
-// [ioquakelive] abre Start Match con un modo ya elegido (los modos destacados del menu principal)
-void UI_StartMatch_Preselect(const char* factory);
 void UI_StartMatch_Paint(void);
 qboolean UI_StartMatch_HandleKey(int key);
 
