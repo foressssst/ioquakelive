@@ -4274,6 +4274,22 @@ static void UI_DoServerRefresh(void) {
 
 // [QL] AS_GLOBAL uses master index 0, AS_MPLAYER master index 1 (same as missionpack).
 // The !full path inlines missionpack's UI_UpdatePendingPings.
+/*
+===============
+UI_Home_ServerList
+
+[ioquakelive] La portada muestra los servidores en su fila de abajo, y para eso necesita lo
+mismo que la pagina del navegador: pedir la lista al abrirse y rearmarla mientras llegan las
+respuestas. Se expone aca para no escribir una segunda implementacion del mismo barrido.
+===============
+*/
+void UI_Home_ServerList(qboolean refresh) {
+    if (refresh) {
+        UI_StartServerRefresh(qtrue);
+    }
+    UI_BuildServerDisplayList(refresh ? 1 : 0);
+}
+
 static void UI_StartServerRefresh(qboolean full) {
     int i;
     char *ptr;
