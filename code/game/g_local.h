@@ -1731,4 +1731,17 @@ void trap_SnapVector(float* v);
 void trap_IncrementSteamStat(int clientNum, int statID);
 int trap_GetSteamStat(int clientNum, int statID);
 qboolean trap_FactoryExists(const char* id);  // [QL] callvote map <map> <factory>
+void trap_GenerateMatchGUID(char* buf, int size);  // [QL] 0x004e27d0
+void trap_StatsEvent(uint64_t steamId, const char* type, const char* document);  // [QL] 0x004e2640
+
+// g_stats.c -- the match statistics events, published by the engine on the ZeroMQ stats socket
+void STAT_PlayerConnect(gentity_t* ent);
+void STAT_PlayerDisconnect(gentity_t* ent);
+void STAT_PlayerSwitchTeam(gentity_t* ent, int oldTeam, int newTeam);
+void STAT_PlayerMedal(gentity_t* ent, const char* medal, int total);
+void STAT_RoundOver(int round, int winningTeam, qboolean draw);
+void STAT_PlayerRaceComplete(gentity_t* ent, int raceTime, int weaponsUsed);
+void G_SetMatchGUID(void);
+void STAT_ResetMedals(void);
+int STAT_MedalTotal(gentity_t* ent, const char* medal);
 uint64_t trap_GetSteamID(int clientNum);
