@@ -339,7 +339,8 @@ void SM_LoadFonts(void) {
     }
     smFonts.tried = qtrue;
     smFonts.regular = trap_R_Font_Register("fonts/Barlow-Regular.ttf");
-    smFonts.strong = trap_R_Font_Register("fonts/Barlow-SemiBold.ttf");
+    // [ioquakelive] Bold, no SemiBold: el jugador pidio la letra mas bold (2026-09-19)
+    smFonts.strong = trap_R_Font_Register("fonts/Barlow-Bold.ttf");
     if (smFonts.regular < 0 || smFonts.strong < 0) {
         Com_Printf("^3front end: Barlow not found in pak01, falling back to pak00's fonts\n");
         smFonts.regular = -1;
