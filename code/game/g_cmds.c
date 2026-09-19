@@ -2691,22 +2691,53 @@ static void Cmd_Ban_f(gentity_t* ent) {
         return;
     }
 
-    // Cannot ban admins
+    // [QL] "Can not kick admins."
     if (g_clients[pid].sess.privileges >= ent->client->sess.privileges) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Cannot ban a player with equal or higher privileges.\n\"");
+        trap_SendServerCommand(ent - g_entities, "print \"Can not kick admins.\n\"");
         return;
     }
 
+    // [QL] la diferencia entre los dos comandos esta en la lista de acceso, no en el corte: ban
+    // deja la cuenta marcada y eso se guarda al cambiar de mapa (G_SaveAccessList, 0x10032a10);
+    // tempban la marca como temporal, asi que se olvida con el mapa
+    trap_Argv(0, cmd, sizeof(cmd));
+    G_SetAccess(g_clients[pid].pers.steamId, -1, (qboolean)(Q_stricmp(cmd, "tempban") == 0));
+
     trap_SendServerCommand(-1, va("print \"%s ^7has been banned by %s.\n\"",
         g_clients[pid].pers.netname, ent->client->pers.netname));
-    trap_DropClient(pid, "Banned from server");
+    trap_DropClient(pid, "You are banned from this server.");
 }
 
-// "unban" - Remove a ban (referee+)
+/*
+===============
+Cmd_Unban_f
+
+[QL] " <account>^3 removes a player from the banlist": toma el numero de cuenta, no un id de
+jugador, porque el baneado justamente no esta conectado. El aviso es el del binario,
+"%llu has been unbanned".
+===============
+*/
 static void Cmd_Unban_f(gentity_t* ent) {
-    trap_SendServerCommand(ent - g_entities,
-        "print \"Unban not implemented - use removeip from rcon.\n\"");
+    char arg[MAX_TOKEN_CHARS];
+    uint64_t steamId;
+
+    if (trap_Argc() < 2) {
+        trap_SendServerCommand(ent - g_entities, "print \"Usage: unban <account>\n\"");
+        return;
+    }
+    trap_Argv(1, arg, sizeof(arg));
+    steamId = (uint64_t)_atoi64(arg);
+    if (!steamId) {
+        trap_SendServerCommand(ent - g_entities, "print \"Usage: unban <account>\n\"");
+        return;
+    }
+    if (G_GetAccessBySteamId(steamId) != -1) {
+        trap_SendServerCommand(ent - g_entities, va("print \"%llu is not banned\n\"",
+            (unsigned long long)steamId));
+        return;
+    }
+    G_SetAccess(steamId, 0, qfalse);
+    trap_SendServerCommand(-1, va("print \"%llu has been unbanned\n\"", (unsigned long long)steamId));
 }
 
 // "listaccess" - List access control entries (referee+)
@@ -2764,7 +2795,9 @@ static void Cmd_AddAdmin_f(gentity_t* ent) {
     }
 
     g_clients[pid].sess.privileges = 2;
-    trap_SendServerCommand(-1, va("print \"%s ^7has been given admin privileges.\n\"",
+    // [QL] la cuenta queda en la lista de acceso, que se guarda al cambiar de mapa
+    G_SetAccess(g_clients[pid].pers.steamId, 2, qfalse);
+    trap_SendServerCommand(-1, va("print \"%s has become an administrator\n\"",
         g_clients[pid].pers.netname));
 }
 
@@ -2788,7 +2821,8 @@ static void Cmd_AddMod_f(gentity_t* ent) {
     }
 
     g_clients[pid].sess.privileges = 1;
-    trap_SendServerCommand(-1, va("print \"%s ^7has been given referee privileges.\n\"",
+    G_SetAccess(g_clients[pid].pers.steamId, 1, qfalse);
+    trap_SendServerCommand(-1, va("print \"%s has become a moderator\n\"",
         g_clients[pid].pers.netname));
 }
 
@@ -2811,8 +2845,16 @@ static void Cmd_Demote_f(gentity_t* ent) {
         return;
     }
 
+    // [QL] "Can not demote someone at or above your level."
+    if (g_clients[pid].sess.privileges >= ent->client->sess.privileges) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"Can not demote someone at or above your level.\n\"");
+        return;
+    }
+
     g_clients[pid].sess.privileges = 0;
-    trap_SendServerCommand(-1, va("print \"%s ^7has been demoted.\n\"",
+    G_SetAccess(g_clients[pid].pers.steamId, 0, qfalse);
+    trap_SendServerCommand(-1, va("print \"%s has had their privileges removed\n\"",
         g_clients[pid].pers.netname));
 }
 

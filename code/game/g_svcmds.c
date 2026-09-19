@@ -530,6 +530,85 @@ G_InitAccessList
 // Address: 0x100325f0
 =================
 */
+/*
+===============
+G_SaveAccessList
+
+[QL] qagamex86.dll 0x10032a10. Reescribe g_accessFile entero: la cabecera de 228 bytes que
+explica el formato y despues una linea por entrada. Solo las permanentes -- las temporales
+(flag != 0, el tempban de la partida) y las de nivel 0 no se guardan --, que es por lo que un
+tempban se olvida al cambiar de mapa y un ban no.
+===============
+*/
+void G_SaveAccessList(void) {
+    static const char* const header =
+        "# Be sure to run /reload_access if editing this file while server is running.\r\n"
+        "# The server will overwrite your changes on map exit and shutdown\r\n"
+        "# 1 entry per line, format: steamid|(mod|admin|ban)\r\n"
+        "# ex: 76561198072786081|ban\r\n";
+    fileHandle_t f;
+    int i;
+
+    trap_FS_FOpenFile(g_accessFile.string, &f, FS_WRITE);
+    if (!f) {
+        G_Printf("^1file not found: %s\n", g_accessFile.string);
+        return;
+    }
+    trap_FS_Write(header, strlen(header), f);
+
+    for (i = 0; i < g_numAccessEntries; i++) {
+        const accessEntry_t* e = &g_accessList[i];
+        const char* word;
+        char line[64];
+
+        if (e->flag != 0) {
+            continue;  // temporal: no se guarda
+        }
+        if (e->level == -1) {
+            word = "ban";
+        } else if (e->level == 1) {
+            word = "mod";
+        } else if (e->level == 2) {
+            word = "admin";
+        } else {
+            continue;
+        }
+        Com_sprintf(line, sizeof(line), "%llu|%s\r\n", (unsigned long long)e->steamId, word);
+        trap_FS_Write(line, strlen(line), f);
+    }
+    trap_FS_FCloseFile(f);
+}
+
+/*
+===============
+G_SetAccess
+
+[ioquakelive] Lo que los comandos de moderacion mueven: el nivel de una cuenta en la lista.
+temporary marca las entradas que no sobreviven al cambio de mapa, que es como el binario separa
+tempban de ban.
+===============
+*/
+void G_SetAccess(uint64_t steamId, int level, qboolean temporary) {
+    accessEntry_t* e = AccessList_Get(steamId);
+
+    if (!e) {
+        return;
+    }
+    e->level = level;
+    e->flag = temporary ? 1 : 0;
+}
+
+int G_GetAccessBySteamId(uint64_t steamId) {
+    int i;
+
+    for (i = 0; i < g_numAccessEntries; i++) {
+        if (g_accessList[i].steamId == steamId) {
+            return g_accessList[i].level;
+        }
+    }
+    return 0;
+}
+
 void G_InitAccessList(void) {
     fileHandle_t f;
     int len;
