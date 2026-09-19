@@ -525,6 +525,18 @@ static void CG_Item(centity_t* cent) {
     // skipped for being invisible
     CG_DrawItemTimer(cent, item);
 
+    // [QL] cgamex86.dll 0x10016026: retail reads cg_skipItems here, as a string, once per item
+    // and per frame, and draws nothing when it is "1". The timer above still stands, which is
+    // what makes the cvar useful: the pickups go and the clocks stay.
+    {
+        char skip[32];
+
+        trap_Cvar_VariableStringBuffer("cg_skipItems", skip, sizeof(skip));
+        if (skip[0] == '1') {
+            return;
+        }
+    }
+
     if (es->eFlags & EF_NODRAW) {
         return;
     }
