@@ -1690,25 +1690,3 @@ qboolean UI_StartMatch_HandleKey(int key) {
             return qfalse;
     }
 }
-
-/*
-===============
-UI_StartMatch_Preselect
-
-[ioquakelive] El menu principal abre Start Match con un modo ya elegido: son sus "modos
-destacados". Se elige igual que desde el dialogo de modos -- la factory y, si el mapa elegido no
-soporta su modo, el mapa por defecto de ese modo --, asi la pagina queda como si el jugador lo
-hubiera elegido ahi.
-===============
-*/
-void UI_StartMatch_Preselect(const char* factory) {
-    const smFactory_t* f;
-
-    SM_Load();
-    Q_strncpyz(sm.tempFactory, factory, sizeof(sm.tempFactory));
-    SM_ConfirmFactories();
-    f = SM_Factory(sm.selectedFactory);
-    if (f) {
-        sm.selectedGametype = f->basegt;
-    }
-}

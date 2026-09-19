@@ -73,7 +73,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // the player and their friends, down the right
 #define HM_SIDE_W 306.0f     // retail's column is 370; a little under it reads calmer
 #define HM_SIDE_RIGHT 64.0f
-#define HV_SOCIAL_W 330.0f  // [ioquakelive] la columna social del menu principal
+#define HV_SOCIAL_W 76.0f  // [ioquakelive] la franja social del menu principal, plegada
 
 // the painting's shape
 #define HM_PAINTING_ASPECT (3122.0f / 1344.0f)
@@ -86,7 +86,7 @@ typedef enum {
     HM_HIT_CARD,  // [ioquakelive] una tarjeta del menu principal
     HM_HIT_QUIT,
     HM_HIT_TAB,   // [ioquakelive] una seccion de la barra de arriba
-    HM_HIT_MODE   // [ioquakelive] un modo destacado
+    HM_HIT_SOCIAL // [ioquakelive] el fondo de la franja social: los clics no pasan a traves
 } hmHitType_t;
 
 // arenas whose shots pak00 carries, one of which is the background when the painting is not there
@@ -811,27 +811,27 @@ static void UI_Home_DrawLegal(void) {
 
 EL MENU PRINCIPAL
 
-[ioquakelive] 2026-09-18, cuarto enfoque: una adaptacion del menu principal de Valorant, que el
-jugador mostro como referencia ("no taan literal"). De ahi se toma la estructura: la barra de
-navegacion arriba con PLAY al centro y destacado, la columna social a la derecha a todo lo
-alto, un panel de modos destacados a la izquierda, y el logo grande al centro con una banda de
-color. La paleta, la letra y el cuadro de fondo son los de Quake Live.
+[ioquakelive] 2026-09-18. Parte de una adaptacion del menu principal de Valorant, que el jugador
+mostro como referencia, y se le saco lo que lo hacia "muy valorant": quedan la barra de arriba
+con PLAY al centro y una franja social a la derecha, que se comporta como la de CS2 (fina, con
+las caras, y se despliega animada cuando entra el cursor). El resto de la pantalla es el cuadro.
 
 ===============================================================================
 */
 
-#define HV_BAR_H 58.0f
-#define HV_PLAY_TOP_W 250.0f  // el trapecio de PLAY: ancho arriba, contra el borde
-#define HV_PLAY_BOT_W 196.0f  // y abajo, donde se angosta
-#define HV_PLAY_H 66.0f
+#define HV_BAR_H 72.0f
+#define HV_TAB_SLOT 150.0f   // cada seccion ocupa un casillero igual: la fila queda simetrica
 #define HV_TAB_SIZE 15.0f
 #define HV_TAB_SPACING 1.6f
-#define HV_TAB_GAP 48.0f
-#define HV_PANEL_X 110.0f
-#define HV_PANEL_Y 190.0f
-#define HV_PANEL_W 380.0f
-#define HV_PANEL_HEAD 64.0f
-#define HV_ROW_H 60.0f
+#define HV_PLAY_TOP_W 230.0f  // la insignia de PLAY: ancho contra el borde de arriba
+#define HV_PLAY_BOT_W 164.0f  // y donde empieza la punta
+#define HV_PLAY_BODY_H 118.0f
+#define HV_PLAY_TIP_H 20.0f
+#define HV_PLAY_EDGE 2.0f
+#define HV_PLAY_MARK 54.0f    // el simbolo de Quake dentro de la insignia
+#define HV_SOCIAL_OPEN_W 340.0f
+#define HV_SOCIAL_MS 55.0f    // la constante de tiempo del despliegue
+#define HV_AVATAR 44.0f
 
 typedef struct {
     const char* title;
@@ -842,119 +842,239 @@ typedef struct {
 static const hvTab_t hvTabsLeft[] = {{"Home", -1}, {"Training", HM_NAV_TRAINING}};
 static const hvTab_t hvTabsRight[] = {{"Replays", HM_NAV_REPLAYS}, {"Settings", HM_NAV_SETTINGS}};
 
-typedef struct {
-    const char* title;
-    const char* factory;
-    const char* icon;
-    const char* map;
-} hvMode_t;
-
-// los modos destacados: los cuatro que mas se juegan, con el mapa con el que abre cada uno
-static const hvMode_t hvModes[] = {
-    {"Free For All", "ffa", "ui/assets/hud/ffa.png", "Campgrounds"},
-    {"Duel", "duel", "ui/assets/hud/duel.png", "Bloodrun"},
-    {"Clan Arena", "ca", "ui/assets/hud/ca.png", "Repent"},
-    {"Capture The Flag", "ctf", "ui/assets/hud/ctf.png", "Spider Crossings"},
-};
+static struct {
+    float social;    // 0 plegada, 1 desplegada
+    float play;      // 0 quieta, 1 bajo el cursor
+    int lastTime;
+} hv;
 
 static float UI_Home_Top(void) {
     return -smTop / smScale;
 }
 
-// la barra de arriba: el logo a la izquierda, y las secciones con PLAY al centro
+// acerca un valor a su destino con una curva exponencial, igual a cualquier cantidad de cuadros
+static float UI_Home_Ease(float value, float target, float dt) {
+    return value + (target - value) * (1.0f - (float)exp(-dt / HV_SOCIAL_MS));
+}
 
-// una seccion de la barra: la pagina actual en blanco con una marca dorada, las demas en gris que
-// se encienden bajo el cursor
-static void UI_Home_DrawTab(const hvTab_t* tab, float x, float top, float w) {
+static float UI_Home_Smooth(float t) {
+    return t * t * (3.0f - 2.0f * t);
+}
+
+// una seccion de la barra, centrada en su casillero: la pagina actual en blanco con una marca
+// dorada, las demas en gris que se encienden bajo el cursor
+static void UI_Home_DrawTab(const hvTab_t* tab, float slotX, float top) {
     qboolean current = tab->nav < 0;
     qboolean over = !current && SM_Over(HM_HIT_TAB, tab->nav);
+    float w = SM_LabelWidth(HV_TAB_SIZE, tab->title, HV_TAB_SPACING);
+    float x = slotX + (HV_TAB_SLOT - w) * 0.5f;
     float baseline = SM_Baseline(FONT_SANS, HV_TAB_SIZE, top + (HV_BAR_H - 22) * 0.5f, 22);
 
     SM_Label(x, baseline, HV_TAB_SIZE, current || over ? smText : smTextSoft, tab->title, HV_TAB_SPACING);
     if (current || over) {
-        SM_Fill(x + (w - 22.0f) * 0.5f, top + HV_BAR_H - 12, 22.0f, 2.0f, smGold, NULL);
+        SM_Fill(slotX + (HV_TAB_SLOT - 22.0f) * 0.5f, top + HV_BAR_H - 16, 22.0f, 2.0f, smGold, NULL);
     }
     if (!current) {
-        SM_Hit(x - 14, top, w + 28, HV_BAR_H, HM_HIT_TAB, tab->nav, NULL);
+        SM_Hit(slotX, top, HV_TAB_SLOT, HV_BAR_H, HM_HIT_TAB, tab->nav, NULL);
     }
 }
 
-static void UI_Home_DrawBar(void) {
+// un tramo [a, b] de una fila del simbolo, sin la abertura de arriba (|x| < gap)
+static void UI_Home_MarkSpan(float cx, float y, float a, float b, float gap, const float* color) {
+    if (gap > 0 && b > -gap && a < gap) {
+        if (a < -gap) {
+            SM_Fill(cx + a, y, -gap - a, 1.05f, color, NULL);
+        }
+        if (b > gap) {
+            SM_Fill(cx + gap, y, b - gap, 1.05f, color, NULL);
+        }
+        return;
+    }
+    SM_Fill(cx + a, y, b - a, 1.05f, color, NULL);
+}
+
+// una fila de un aro de radios ro y ri, abierto arriba con media abertura gap
+static void UI_Home_MarkRing(float cx, float y, float dy, float ro, float ri, float gap, const float* color) {
+    float xo;
+    float xi;
+
+    if (dy <= -ro || dy >= ro) {
+        return;
+    }
+    xo = (float)sqrt(ro * ro - dy * dy);
+    if (dy < 0 && gap >= xo) {
+        return;
+    }
+    if (dy > -ri && dy < ri) {
+        xi = (float)sqrt(ri * ri - dy * dy);
+        UI_Home_MarkSpan(cx, y, -xo, -xi, dy < 0 ? gap : 0, color);
+        UI_Home_MarkSpan(cx, y, xi, xo, dy < 0 ? gap : 0, color);
+    } else {
+        UI_Home_MarkSpan(cx, y, -xo, xo, dy < 0 ? gap : 0, color);
+    }
+}
+
+// El simbolo de Quake dibujado a mano, de radio r y centrado en (cx, cy): dos aros abiertos
+// arriba y el clavo al medio, con la punta hacia arriba. El de pak00 viene dentro de un calco
+// con aro y sin transparencia, y el PNG del marcador es un recorte; dibujado asi queda nitido a
+// cualquier tamano y se puede tenir. Filas de un punto, como la insignia.
+static void UI_Home_DrawQuakeMark(float cx, float cy, float r, const float* color) {
+    float k;
+
+    for (k = -r * 1.28f; k < r; k += 1.0f) {
+        float y = cy + k;
+        float dy = k + 0.5f;
+
+        UI_Home_MarkRing(cx, y, dy, r, r * 0.79f, r * 0.30f, color);
+        UI_Home_MarkRing(cx, y, dy, r * 0.62f, r * 0.45f, r * 0.21f, color);
+
+        // el clavo: una punta que se abre desde arriba y un tallo que baja hasta el aro de afuera
+        if (dy > -r * 1.28f && dy < r * 0.90f) {
+            float half;
+
+            if (dy < -r * 0.62f) {
+                half = r * 0.13f * (dy + r * 1.28f) / (r * 0.66f);
+            } else {
+                half = r * 0.09f;
+            }
+            SM_Fill(cx - half, y, half * 2.0f, 1.05f, color, NULL);
+        }
+    }
+}
+
+// el ancho de la insignia en la fila k, contando desde el borde de arriba
+static float UI_Home_PlayRowW(float k) {
+    if (k < HV_PLAY_BODY_H) {
+        return HV_PLAY_TOP_W + (HV_PLAY_BOT_W - HV_PLAY_TOP_W) * (k / HV_PLAY_BODY_H);
+    }
+    return HV_PLAY_BOT_W * (1.0f - (k - HV_PLAY_BODY_H) / HV_PLAY_TIP_H);
+}
+
+// PLAY: una insignia roja que cuelga de la barra, trapecio que termina en punta, con el nombre en
+// la linea de las demas secciones y el simbolo de Quake debajo. Bajo el cursor se enciende y el
+// simbolo crece un poco. Se arma con filas de un punto, que es lo que hay para dibujar una figura
+// que no es un rectangulo: cada fila va dos veces, el borde y, adentro, el relleno.
+static void UI_Home_DrawPlay(float cx, float top, float dt) {
+    static const vec4_t edgeColor = {0.93f, 0.26f, 0.20f, 1.0f};
+    static const vec4_t white = {1.0f, 1.0f, 1.0f, 1.0f};
+    float h = HV_PLAY_BODY_H + HV_PLAY_TIP_H;
+    float glow;
+    float k;
+
+    hv.play = UI_Home_Ease(hv.play, SM_Over(HM_HIT_TAB, HM_NAV_PLAY) ? 1.0f : 0.0f, dt);
+    glow = UI_Home_Smooth(hv.play);
+
+    for (k = 0; k < h; k += 1.0f) {
+        float w = UI_Home_PlayRowW(k);
+        float t = k / h;
+        vec4_t fill;
+
+        // de arriba hacia abajo el rojo se oscurece; bajo el cursor sube
+        fill[0] = 0.62f - 0.20f * t + 0.16f * glow;
+        fill[1] = 0.05f + 0.03f * glow;
+        fill[2] = 0.05f + 0.02f * glow;
+        fill[3] = 0.97f;
+        SM_Fill(cx - w * 0.5f, top + k, w, 1.05f, edgeColor, NULL);
+        if (k < h - HV_PLAY_EDGE * 1.5f) {
+            float inner = UI_Home_PlayRowW(k + HV_PLAY_EDGE * (k >= HV_PLAY_BODY_H ? 1.5f : 0.0f)) - 2 * HV_PLAY_EDGE;
+
+            if (inner > 0) {
+                SM_Fill(cx - inner * 0.5f, top + k, inner, 1.05f, fill, NULL);
+            }
+        }
+    }
+
+    SM_Label(cx - SM_LabelWidth(20, "Play", 5.0f) * 0.5f,
+             SM_Baseline(FONT_SANS, 20, top + (HV_BAR_H - 26) * 0.5f, 26), 20, white, "Play", 5.0f);
+
+    {
+        float r = HV_PLAY_MARK * 0.5f * (1.0f + 0.10f * glow);
+        vec4_t tint = {1.0f, 1.0f, 1.0f, 0.80f + 0.20f * glow};
+
+        UI_Home_DrawQuakeMark(cx, top + HV_BAR_H + HV_PLAY_MARK * 0.5f, r, tint);
+    }
+    SM_Hit(cx - HV_PLAY_TOP_W * 0.5f, top, HV_PLAY_TOP_W, h - 6.0f, HM_HIT_TAB, HM_NAV_PLAY, NULL);
+}
+
+// la barra de arriba: el logo a la izquierda y las secciones centradas, con PLAY en el medio
+static void UI_Home_DrawBar(float dt) {
     float top = UI_Home_Top();
     float mainW = UI_Home_MainW();
     float cx = mainW * 0.5f;
-    float x;
     vec4_t bar;
     int i;
 
     VectorCopy(smPage, bar);
-    bar[3] = 0.78f;
+    bar[3] = 0.82f;
     SM_Fill(-1, top, mainW + 1, HV_BAR_H, bar, NULL);
     SM_Fill(-1, top + HV_BAR_H - 1, mainW + 1, 1, smBorder, NULL);
 
+    // el logo a toda la altura de la barra: la imagen trae un margen de 56 de 512 a la izquierda,
+    // asi que el dibujo empieza en 32
     if (hm2.logo) {
-        SM_Pic(28.0f, top + (HV_BAR_H - 34.0f) * 0.5f, 136.0f, 34.0f, hm2.logo, NULL);
+        SM_Pic(32.0f - 56.0f * (HV_BAR_H * 4.0f / 512.0f), top, HV_BAR_H * 4.0f, HV_BAR_H, hm2.logo, NULL);
     }
 
-    // PLAY: un trapecio claro contra el borde de arriba, mas ancho arriba que abajo. Se arma
-    // con filas de un punto, que es lo que hay para dibujar una figura que no es un rectangulo.
-    {
-        qboolean over = SM_Over(HM_HIT_TAB, HM_NAV_PLAY);
-        const float* fill = over ? smGold : smPrimary;
-        float k;
+    for (i = 0; i < (int)ARRAY_LEN(hvTabsLeft); i++) {
+        float slotX = cx - HV_PLAY_TOP_W * 0.5f - (ARRAY_LEN(hvTabsLeft) - i) * HV_TAB_SLOT;
 
-        for (k = 0; k < HV_PLAY_H; k += 1.0f) {
-            float w = HV_PLAY_TOP_W + (HV_PLAY_BOT_W - HV_PLAY_TOP_W) * (k / HV_PLAY_H);
-
-            SM_Fill(cx - w * 0.5f, top + k, w, 1.05f, fill, NULL);
-        }
-        SM_Label(cx - SM_LabelWidth(24, "Play", 4.0f) * 0.5f, SM_Baseline(FONT_SANS, 24, top + 12, 34), 24,
-                 smOnPrimary, "Play", 4.0f);
-        SM_Hit(cx - HV_PLAY_TOP_W * 0.5f, top, HV_PLAY_TOP_W, HV_PLAY_H, HM_HIT_TAB, HM_NAV_PLAY, NULL);
+        UI_Home_DrawTab(&hvTabsLeft[i], slotX, top);
     }
-
-    // las demas, a los lados: la de la pagina actual en blanco con una marca dorada debajo
-    x = cx - HV_PLAY_TOP_W * 0.5f - HV_TAB_GAP;
-    for (i = (int)ARRAY_LEN(hvTabsLeft) - 1; i >= 0; i--) {
-        float w = SM_LabelWidth(HV_TAB_SIZE, hvTabsLeft[i].title, HV_TAB_SPACING);
-
-        x -= w;
-        UI_Home_DrawTab(&hvTabsLeft[i], x, top, w);
-        x -= HV_TAB_GAP;
-    }
-    x = cx + HV_PLAY_TOP_W * 0.5f + HV_TAB_GAP;
     for (i = 0; i < (int)ARRAY_LEN(hvTabsRight); i++) {
-        float w = SM_LabelWidth(HV_TAB_SIZE, hvTabsRight[i].title, HV_TAB_SPACING);
-
-        UI_Home_DrawTab(&hvTabsRight[i], x, top, w);
-        x += w + HV_TAB_GAP;
+        UI_Home_DrawTab(&hvTabsRight[i], cx + HV_PLAY_TOP_W * 0.5f + i * HV_TAB_SLOT, top);
     }
+
+    UI_Home_DrawPlay(cx, top, dt);
 }
 
-// la columna social: el perfil, los amigos y, abajo, la salida
-static void UI_Home_DrawSocial(void) {
-    static const char* const rows[3] = {"Your Steam friends", "Who is in a match", "Who is in a lobby"};
+/*
+===============
+UI_Home_DrawSocial
+
+[ioquakelive] La franja social, como la de CS2: plegada es una columna fina con tu cara arriba,
+los lugares de los amigos y la salida abajo; cuando el cursor entra se despliega hacia la
+izquierda por encima de la pagina, que se oscurece, y aparecen los nombres. Las caras viajan
+con el borde, los textos aparecen detras.
+===============
+*/
+static void UI_Home_DrawSocial(float dt) {
     char name[MAX_CVAR_VALUE_STRING];
     char model[MAX_QPATH];
     char* slash;
     float top = UI_Home_Top();
-    float x = UI_Home_MainW();
-    float w = smVW - x;
-    float y = top;
-    vec4_t panel;
+    float bottom = smBottom;
+    float open;
+    float w;
+    float x;
+    float y;
+    float icon;
+    float textX;
+    qboolean inside;
+    vec4_t c;
     int i;
 
-    VectorCopy(smPanel, panel);
-    panel[3] = 0.95f;
-    SM_Fill(x, top, w + 1, smBottom - top + 1, panel, NULL);
-    SM_Fill(x, top, 1, smBottom - top, smBorder, NULL);
+    // se abre mientras el cursor este sobre la franja, con el ancho que tenga en ese momento
+    w = HV_SOCIAL_W + (HV_SOCIAL_OPEN_W - HV_SOCIAL_W) * UI_Home_Smooth(hv.social);
+    inside = smMX >= smVW - w && smMY >= top && smMY <= bottom;
+    hv.social = UI_Home_Ease(hv.social, inside ? 1.0f : 0.0f, dt);
+    open = UI_Home_Smooth(hv.social);
+    w = HV_SOCIAL_W + (HV_SOCIAL_OPEN_W - HV_SOCIAL_W) * open;
+    x = smVW - w;
+    icon = x + (HV_SOCIAL_W - HV_AVATAR) * 0.5f;
+    textX = x + HV_SOCIAL_W + 2.0f;
 
-    // la cabecera, a la altura de la barra
-    SM_Label(x + 26, SM_Baseline(FONT_SANS, 14, y + (HV_BAR_H - 20) * 0.5f, 20), 14, smText, "Social", 1.8f);
-    SM_Fill(x, y + HV_BAR_H - 1, w, 1, smBorder, NULL);
-    y += HV_BAR_H;
+    // la pagina se oscurece mientras la franja esta abierta
+    if (open > 0.01f) {
+        VectorCopy(smPage, c);
+        c[3] = 0.45f * open;
+        SM_Fill(-1, top, x + 1, bottom - top + 1, c, NULL);
+    }
 
-    // el perfil: la cara del modelo que llevas, tu nombre y de donde saldra lo demas
+    SM_Fill(x, top, w + 1, bottom - top + 1, smPanel, NULL);
+    SM_Fill(x, top, 1, bottom - top, smBorder, NULL);
+    SM_Hit(x, top, w + 1, bottom - top + 1, HM_HIT_SOCIAL, 0, NULL);
+
+    // arriba, a la altura de la barra: tu cara y, al abrir, tu nombre
     trap_Cvar_VariableStringBuffer("name", name, sizeof(name));
     Q_CleanStr(name);
     trap_Cvar_VariableStringBuffer("model", model, sizeof(model));
@@ -969,115 +1089,68 @@ static void UI_Home_DrawSocial(void) {
         Q_strncpyz(hm2.faceModel, model, sizeof(hm2.faceModel));
         hm2.face = trap_R_RegisterShaderNoMip(va("models/players/%s/icon_default", model));
     }
+    y = top + (HV_BAR_H - HV_AVATAR) * 0.5f;
     if (hm2.face) {
-        SM_Pic(x + 22, y + 16, 48, 48, hm2.face, NULL);
+        SM_Pic(icon, y, HV_AVATAR, HV_AVATAR, hm2.face, NULL);
     }
-    SM_Label(x + 84, SM_Baseline(FONT_SANS, 16, y + 18, 22), 16, smText, name[0] ? name : "Player", 0.4f);
-    SM_Text(x + 84, SM_Baseline(FONT_SANS, 12, y + 42, 18), FONT_SANS, 12, smSubtle,
-            "Steam and quakeclub.com soon", SM_Fit(FONT_SANS, 12, "Steam and quakeclub.com soon", w - 100), qfalse);
-    y += 80.0f;
-    SM_Fill(x, y, w, 1, smBorder, NULL);
+    SM_Fill(icon + HV_AVATAR - 10, y + HV_AVATAR - 10, 10, 10, smPanel, NULL);
+    SM_Fill(icon + HV_AVATAR - 8, y + HV_AVATAR - 8, 8, 8, smGold, NULL);  // en linea
+    if (open > 0.05f) {
+        VectorCopy(smText, c);
+        c[3] = open;
+        SM_Label(textX, SM_Baseline(FONT_SANS, 16, y + 2, 22), 16, c, name[0] ? name : "Player", 0.4f);
+        VectorCopy(smGold, c);
+        c[3] = open;
+        SM_Text(textX, SM_Baseline(FONT_SANS, 12, y + 24, 18), FONT_SANS, 12, c, "Online", -1, qfalse);
+    }
+    y = top + HV_BAR_H;
+    SM_Fill(x, y - 1, w, 1, smBorder, NULL);
 
-    // los amigos
-    SM_Label(x + 26, SM_Baseline(FONT_SANS, 12, y + 14, 18), 12, smMuted, "Friends", 1.8f);
-    y += 46.0f;
+    // los amigos: todavia no hay de donde sacarlos, asi que son lugares vacios
+    y += 18.0f;
+    if (open > 0.05f) {
+        VectorCopy(smMuted, c);
+        c[3] = open;
+        SM_Label(textX, SM_Baseline(FONT_SANS, 12, y, 18), 12, c, "Friends", 1.8f);
+        VectorCopy(smSubtle, c);
+        c[3] = open;
+        SM_Text(textX, SM_Baseline(FONT_SANS, 12, y + 22, 18), FONT_SANS, 12, c, "They will show up here once",
+                -1, qfalse);
+        SM_Text(textX, SM_Baseline(FONT_SANS, 12, y + 40, 18), FONT_SANS, 12, c, "Steam is wired up", -1, qfalse);
+    }
     for (i = 0; i < 3; i++) {
-        SM_Fill(x + 22, y + 6, 32, 32, smBorder, NULL);
-        SM_Text(x + 68, SM_Baseline(FONT_SANS, 13, y + 12, 20), FONT_SANS, 13, smMuted, rows[i], -1, qfalse);
-        y += 46.0f;
+        SM_Fill(icon, y + i * (HV_AVATAR + 12), HV_AVATAR, HV_AVATAR, smBorder, NULL);
     }
-    SM_Text(x + 26, SM_Baseline(FONT_SANS, 11, y + 4, 18), FONT_SANS, 11, smSubtle, "Once Steam is wired up", -1,
-            qfalse);
 
-    // la salida, al pie de la columna
+    // abajo, la salida
     {
-        float qy = smBottom - 64.0f;
+        float qy = bottom - HV_BAR_H;
         qboolean over = SM_Over(HM_HIT_QUIT, 0);
+        const float* color = over ? smGold : smTextSoft;
 
         SM_Fill(x, qy, w, 1, smBorder, NULL);
         if (over) {
-            SM_Fill(x + 1, qy + 1, w - 1, 63, smRaised, NULL);
+            SM_Fill(x + 1, qy + 1, w - 1, HV_BAR_H - 1, smRaised, NULL);
         }
-        SM_Label(x + 26, SM_Baseline(FONT_SANS, 14, qy + 20, 22), 14, over ? smGold : smTextSoft, "Quit", 1.8f);
-        SM_Hit(x, qy, w, 64, HM_HIT_QUIT, 0, NULL);
+        SM_Label(x + (HV_SOCIAL_W - SM_LabelWidth(12, "Quit", 1.6f)) * 0.5f,
+                 SM_Baseline(FONT_SANS, 12, qy + (HV_BAR_H - 18) * 0.5f, 18), 12, color, "Quit", 1.6f);
+        if (open > 0.05f) {
+            VectorCopy(smSubtle, c);
+            c[3] = open;
+            SM_Text(textX, SM_Baseline(FONT_SANS, 12, qy + (HV_BAR_H - 18) * 0.5f, 18), FONT_SANS, 12, c,
+                    "Close ioquakelive", -1, qfalse);
+        }
+        SM_Hit(x, qy, w, HV_BAR_H, HM_HIT_QUIT, 0, NULL);
     }
 }
 
-// el panel de modos destacados, a la izquierda: cada uno abre Start Match con ese modo elegido
-static void UI_Home_DrawModes(void) {
-    static qhandle_t icons[ARRAY_LEN(hvModes)];
-    static qboolean loaded;
-    float x = HV_PANEL_X;
-    float y = UI_Home_Top() + HV_PANEL_Y;
-    float h = HV_PANEL_HEAD + ARRAY_LEN(hvModes) * HV_ROW_H;
-    vec4_t panel;
-    int i;
-
-    if (!loaded) {
-        for (i = 0; i < (int)ARRAY_LEN(hvModes); i++) {
-            icons[i] = trap_R_RegisterShaderNoMip(hvModes[i].icon);
-        }
-        loaded = qtrue;
-    }
-
-    VectorCopy(smPanel, panel);
-    panel[3] = 0.88f;
-    SM_Fill(x, y, HV_PANEL_W, h, panel, NULL);
-
-    // la cabecera: el titulo centrado y, debajo, contra quien se juega
-    SM_Label(x + (HV_PANEL_W - SM_LabelWidth(15, "Featured Modes", 1.8f)) * 0.5f,
-             SM_Baseline(FONT_SANS, 15, y + 14, 20), 15, smText, "Featured Modes", 1.8f);
-    SM_Label(x + (HV_PANEL_W - SM_LabelWidth(11, "Against bots", 1.8f)) * 0.5f,
-             SM_Baseline(FONT_SANS, 11, y + 38, 16), 11, smGold, "Against bots", 1.8f);
-    y += HV_PANEL_HEAD;
-
-    for (i = 0; i < (int)ARRAY_LEN(hvModes); i++) {
-        qboolean over = SM_Over(HM_HIT_MODE, i);
-        float mw = SM_Advance(FONT_SANS, 12, hvModes[i].map, -1);
-
-        SM_Fill(x, y, HV_PANEL_W, 1, smBorder, NULL);
-        if (over) {
-            SM_Fill(x, y + 1, HV_PANEL_W, HV_ROW_H - 1, smRaised, NULL);
-            SM_Fill(x, y + 1, 3, HV_ROW_H - 1, smGold, NULL);
-        }
-        if (icons[i]) {
-            SM_Pic(x + 18, y + (HV_ROW_H - 32) * 0.5f, 32, 32, icons[i], NULL);
-        }
-        SM_Label(x + 64, SM_Baseline(FONT_SANS, 16, y + (HV_ROW_H - 22) * 0.5f, 22), 16, over ? smGold : smText,
-                 hvModes[i].title, 0.6f);
-        SM_Text(x + HV_PANEL_W - 18 - mw, SM_Baseline(FONT_SANS, 12, y + (HV_ROW_H - 18) * 0.5f, 18), FONT_SANS, 12,
-                smMuted, hvModes[i].map, -1, qfalse);
-        SM_Hit(x, y, HV_PANEL_W, HV_ROW_H, HM_HIT_MODE, i, NULL);
-        y += HV_ROW_H;
-    }
-}
-
-// al centro, el logo grande sobre el cuadro y una banda roja con la version
-static void UI_Home_DrawCenter(void) {
-    static const vec4_t red = {0.70f, 0.07f, 0.07f, 0.94f};
-    static const vec4_t white = {1.0f, 1.0f, 1.0f, 1.0f};
-    const char* band = "ioquakelive : beta";
-    float bandW = 400.0f;  // la imagen del logo trae margen; la banda sigue al dibujo, no a la imagen
-    float left = HV_PANEL_X + HV_PANEL_W;
-    float cx = left + (UI_Home_MainW() - left) * 0.5f;
-    float w = 520.0f;
-    float y = UI_Home_Top() + (smBottom - UI_Home_Top()) * 0.36f;
-
-    if (hm2.logo) {
-        SM_Pic(cx - w * 0.5f, y, w, w * 0.25f, hm2.logo, NULL);
-    }
-    y += w * 0.25f + 6.0f;
-    SM_Fill(cx - bandW * 0.5f, y, bandW, 44.0f, red, NULL);
-    SM_Label(cx - SM_LabelWidth(19, band, 6.0f) * 0.5f, SM_Baseline(FONT_SANS, 19, y + 10, 24), 19, white, band, 6.0f);
-}
-
-// la sombra: bajo la barra, detras del panel de la izquierda y abajo, donde van los creditos
-static void UI_Home_DrawValoShade(void) {
+// la sombra: bajo la barra y abajo, donde van los creditos
+static void UI_Home_DrawHomeShade(void) {
     float top = UI_Home_Top();
     vec4_t band;
 
-    UI_Home_Wash(top, 200.0f, smPage, 0.6f, 0.0f);
-    UI_Home_WashAcross(-1, 720.0f, smPage, 0.7f, 0.0f);
+    UI_Home_Wash(top, 220.0f, smPage, 0.6f, 0.0f);
+    UI_Home_WashAcross(-1, 520.0f, smPage, 0.45f, 0.0f);
     UI_Home_Wash(smBottom - 290.0f, 180.0f, smPage, 0.0f, 0.85f);
     VectorCopy(smPage, band);
     band[3] = 0.85f;
@@ -1100,13 +1173,20 @@ void UI_Home_Paint(void) {
     SM_BeginFrame();
     UI_Home_LoadMenu();
 
-    UI_Home_DrawBackground();
-    UI_Home_DrawValoShade();
-    UI_Home_DrawCenter();
-    UI_Home_DrawModes();
-    UI_Home_DrawLegal();
-    UI_Home_DrawSocial();
-    UI_Home_DrawBar();
+    // el tiempo del cuadro, para las animaciones; acotado para que una pausa no las haga saltar
+    {
+        int now = uiInfo.uiDC.realTime;
+        float dt = hv.lastTime ? (float)(now - hv.lastTime) : 0.0f;
+
+        hv.lastTime = now;
+        dt = dt < 0 ? 0 : dt > 100.0f ? 100.0f : dt;
+
+        UI_Home_DrawBackground();
+        UI_Home_DrawHomeShade();
+        UI_Home_DrawLegal();
+        UI_Home_DrawBar(dt);
+        UI_Home_DrawSocial(dt);
+    }
 
     UI_Home_Banner();
     SM_EndFrame();
@@ -1129,14 +1209,9 @@ qboolean UI_Home_HandleKey(int key) {
         return qtrue;
     }
     hit = SM_HitAt(smMX, smMY);
-    // [ioquakelive] la barra, los modos destacados y la salida del menu principal
+    // [ioquakelive] la barra y la salida del menu principal
     if (hit && hit->type == HM_HIT_TAB) {
         UI_Home_Go(hit->index);
-        return qtrue;
-    }
-    if (hit && hit->type == HM_HIT_MODE) {
-        UI_StartMatch_Preselect(hvModes[hit->index].factory);
-        UI_Home_Go(HM_NAV_PLAY);
         return qtrue;
     }
     if (hit && hit->type == HM_HIT_QUIT) {
