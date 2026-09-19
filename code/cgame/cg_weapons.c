@@ -952,6 +952,8 @@ void CG_RegisterWeapon(int weaponNum) {
             cgs.media.grapplingChainShader = trap_R_RegisterShader("grapplingChain");
             weaponInfo->readySound = trap_S_RegisterSound("sound/weapons/grapple/grhang.ogg", qfalse);
             weaponInfo->firingSound = trap_S_RegisterSound("sound/weapons/grapple/grfire.ogg", qfalse);
+            // [QL] +0x1c0 del weaponInfo_t: el tiron del gancho
+            weaponInfo->pullSound = trap_S_RegisterSound("sound/weapons/grapple/grpull.ogg", qfalse);
             weaponInfo->missileTrailFunc = NULL;
             weaponInfo->missileSound = trap_S_RegisterSound("sound/weapons/grapple/grfire.ogg", qfalse);
             trap_S_RegisterSound("sound/weapons/grapple/grreset.ogg", qfalse);
