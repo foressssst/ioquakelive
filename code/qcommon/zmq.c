@@ -437,6 +437,11 @@ static void ZMQ_Process(zsock_t* zs, zconn_t* c) {
             const byte* data = body + 1 + nameLen;
             int dataLen = (int)size - 1 - nameLen;
 
+            if (dataLen < 0) {
+                ZMQ_Drop(zs, c);  // un nombre mas largo que la trama que lo trae
+                return;
+            }
+
             if (c->state == ZS_HELLO && nameLen == 5 && !memcmp(body + 1, "HELLO", 5)) {
                 if (!ZMQ_CheckPlain(zs, data, dataLen)) {
                     static const char text[] = "invalid user/password";
@@ -498,6 +503,13 @@ static void ZMQ_Poll(zsock_t* zs) {
             }
         }
         if (!c) {
+            zclose(s);
+            continue;
+        }
+        // [ioquakelive] Divergencia deliberada: retail deja el rcon sin contrasena abierto a
+        // cualquiera que llegue al puerto, que es ejecucion remota sin autenticar. Aca, sin
+        // contrasena, solo se aceptan conexiones de la propia maquina.
+        if (zs == &zRcon && !ZMQ_Plain(zs) && ntohl(from.sin_addr.s_addr) != INADDR_LOOPBACK) {
             zclose(s);
             continue;
         }
@@ -583,6 +595,10 @@ void ZMQ_Init(void) {
     Com_sprintf(endpoint, sizeof(endpoint), "tcp://%s:%i", zmq_rcon_ip->string, zmq_rcon_port->integer);
     if (ZMQ_Bind(&zRcon, zmq_rcon_ip->string, zmq_rcon_port->integer)) {
         Com_Printf("zmq RCON socket: %s\n", endpoint);
+        if (!zmq_rcon_password->string[0]) {
+            Com_Printf(S_COLOR_YELLOW "zmq RCON has no password: only connections from this machine are "
+                       "accepted. Set zmq_rcon_password to use it remotely.\n");
+        }
     } else {
         Com_Printf("zmq RCON socket error, bind failed: %s\n", endpoint);
     }
