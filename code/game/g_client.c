@@ -2171,10 +2171,8 @@ void STAT_InitClient(gentity_t* ent) {
     client->expandedStats.statId = level.time + r + 636 + (int)(intptr_t)client;   // +0x568
 }
 void STAT_PublishClientDisconnect(gclient_t* client, int reason) {
-    // [QL] 0x1003c802: lo primero de ClientDisconnect es 0x10074360, el evento PLAYER_STATS
-    // con razon 1 (dejo el servidor). Ese evento todavia no esta hecho.
-    (void)client;
-    (void)reason;
+    // [QL] 0x1003c812: lo primero de ClientDisconnect es el evento PLAYER_STATS del que se va
+    STAT_PlayerStats(client, qfalse, (qboolean)(reason != 0));
 }
 void STAT_SubscribeClient(gentity_t* ent) {
     // [ioquakelive] 0x10078450: evento PLAYER_CONNECT
@@ -2185,7 +2183,24 @@ void STAT_LogDisconnect(int clientNum) {
     // justo antes de desenlazar la entidad
     STAT_PlayerDisconnect(&g_entities[clientNum]);
 }
-void STAT_MatchEnd(void) { }
+void STAT_MatchEnd(int isShutdown, int restart, const char* exitMsg) {
+    // [QL] 0x100575a7 y 0x100576eb: al cerrar la partida sale la planilla de cada jugador y el
+    // reporte de la partida, una sola vez y nunca en un map_restart
+    int i;
+
+    if (level.gameStatsReported || trap_Cvar_VariableIntegerValue("g_restarted")) {
+        return;
+    }
+    for (i = 0; i < level.numConnectedClients; i++) {
+        gclient_t* cl = &level.clients[level.sortedClients[i]];
+
+        if (cl->pers.connected == CON_CONNECTING || cl->sess.sessionTeam == TEAM_SPECTATOR) {
+            continue;
+        }
+        STAT_PlayerStats(cl, (qboolean)(isShutdown == 1), qfalse);
+    }
+    STAT_MatchReport((qboolean)(isShutdown == 1), restart, exitMsg);
+}
 
 /*
 ============

@@ -181,10 +181,17 @@ Called from player_die (replaces its old inline numKills/numDeaths double-counts
 */
 void STAT_AddPlayerDeathStat(gentity_t *self, gentity_t *attacker, int mod) {
     int weapon;
+    int victimStreak;
 
-    if (level.scoringDisabled) {
+    // [QL] 0x10072716: retail corta por level.teamShuffleActive (0x105df558), la bandera que
+    // levanta el shuffle y el balance mientras mueve gente de equipo. El fork miraba
+    // level.scoringDisabled, que es otra cosa (las rondas de red rover).
+    if (level.teamShuffleActive) {
         return;
     }
+
+    // [QL] 0x100726e0 lo publica con la racha que traia el muerto, antes de cortarla
+    victimStreak = self->client->expandedStats.killStreak;
 
     // killer side
     weapon = BG_GetWeaponFromMeansOfDeath(mod);
@@ -208,6 +215,9 @@ void STAT_AddPlayerDeathStat(gentity_t *self, gentity_t *attacker, int mod) {
         self->client->expandedStats.maxKillStreak = self->client->expandedStats.killStreak;
     }
     self->client->expandedStats.killStreak = 0;
+
+    // [QL] 0x100726e0: el evento PLAYER_KILL / PLAYER_DEATH por el canal de estadisticas
+    STAT_PlayerKill(self, attacker, mod, victimStreak);
 }
 
 /*
