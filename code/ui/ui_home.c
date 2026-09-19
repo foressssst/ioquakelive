@@ -823,12 +823,9 @@ las caras, y se despliega animada cuando entra el cursor). El resto de la pantal
 #define HV_TAB_SLOT 150.0f   // cada seccion ocupa un casillero igual: la fila queda simetrica
 #define HV_TAB_SIZE 15.0f
 #define HV_TAB_SPACING 1.6f
-#define HV_PLAY_TOP_W 230.0f  // la insignia de PLAY: ancho contra el borde de arriba
-#define HV_PLAY_BOT_W 164.0f  // y donde empieza la punta
-#define HV_PLAY_BODY_H 118.0f
-#define HV_PLAY_TIP_H 20.0f
-#define HV_PLAY_EDGE 2.0f
-#define HV_PLAY_MARK 54.0f    // el simbolo de Quake dentro de la insignia
+#define HV_PLAY_SLOT 190.0f  // el lugar de PLAY en la fila, entre las secciones
+#define HV_PLAY_R 52.0f      // el radio del emblema de Quake Live que hace de PLAY
+#define HV_PLAY_DROP 16.0f   // cuanto baja su centro respecto del de la barra: cuelga de ella
 #define HV_SOCIAL_OPEN_W 340.0f
 #define HV_SOCIAL_MS 55.0f    // la constante de tiempo del despliegue
 #define HV_AVATAR 44.0f
@@ -879,8 +876,11 @@ static void UI_Home_DrawTab(const hvTab_t* tab, float slotX, float top) {
     }
 }
 
-// un tramo [a, b] de una fila del simbolo, sin la abertura de arriba (|x| < gap)
+// un tramo [a, b] de una fila del emblema, sin la abertura de arriba (|x| < gap)
 static void UI_Home_MarkSpan(float cx, float y, float a, float b, float gap, const float* color) {
+    if (b <= a) {
+        return;
+    }
     if (gap > 0 && b > -gap && a < gap) {
         if (a < -gap) {
             SM_Fill(cx + a, y, -gap - a, 1.05f, color, NULL);
@@ -893,114 +893,113 @@ static void UI_Home_MarkSpan(float cx, float y, float a, float b, float gap, con
     SM_Fill(cx + a, y, b - a, 1.05f, color, NULL);
 }
 
-// una fila de un aro de radios ro y ri, abierto arriba con media abertura gap
-static void UI_Home_MarkRing(float cx, float y, float dy, float ro, float ri, float gap, const float* color) {
-    float xo;
-    float xi;
+// la media cuerda de un circulo de radio r centrado en oy, a la altura dy; -1 si no lo toca
+static float UI_Home_Chord(float dy, float oy, float r) {
+    float d = dy - oy;
 
-    if (dy <= -ro || dy >= ro) {
-        return;
-    }
-    xo = (float)sqrt(ro * ro - dy * dy);
-    if (dy < 0 && gap >= xo) {
-        return;
-    }
-    if (dy > -ri && dy < ri) {
-        xi = (float)sqrt(ri * ri - dy * dy);
-        UI_Home_MarkSpan(cx, y, -xo, -xi, dy < 0 ? gap : 0, color);
-        UI_Home_MarkSpan(cx, y, xi, xo, dy < 0 ? gap : 0, color);
-    } else {
-        UI_Home_MarkSpan(cx, y, -xo, xo, dy < 0 ? gap : 0, color);
-    }
+    return d > -r && d < r ? (float)sqrt(r * r - d * d) : -1.0f;
 }
 
-// El simbolo de Quake dibujado a mano, de radio r y centrado en (cx, cy): dos aros abiertos
-// arriba y el clavo al medio, con la punta hacia arriba. El de pak00 viene dentro de un calco
-// con aro y sin transparencia, y el PNG del marcador es un recorte; dibujado asi queda nitido a
-// cualquier tamano y se puede tenir. Filas de un punto, como la insignia.
-static void UI_Home_DrawQuakeMark(float cx, float cy, float r, const float* color) {
+// una fila de la resta de dos circulos (el de adentro puede estar corrido): un aro o una luna
+static void UI_Home_MarkCut(float cx, float y, float dy, float oa, float ra, float ob, float rb, float gap,
+                            const float* color) {
+    float xa = UI_Home_Chord(dy, oa, ra);
+    float xb = UI_Home_Chord(dy, ob, rb);
+
+    if (xa < 0) {
+        return;
+    }
+    if (xb < 0) {
+        UI_Home_MarkSpan(cx, y, -xa, xa, gap, color);
+        return;
+    }
+    UI_Home_MarkSpan(cx, y, -xa, -xb, gap, color);
+    UI_Home_MarkSpan(cx, y, xb, xa, gap, color);
+}
+
+/*
+===============
+UI_Home_DrawEmblem
+
+[ioquakelive] El emblema de Quake Live, dibujado a mano con filas de un punto, de radio r y
+centrado en (cx, cy): el aro de afuera, la luna -- gruesa abajo, fina en las puntas y abierta
+arriba -- y el clavo, con la punta hacia arriba y el tallo bajando hasta el aro. Las
+proporciones se tomaron midiendo una imagen del emblema que paso el jugador; la imagen no entra
+al juego. Si disc no es NULL, va primero un disco de fondo de ese color.
+===============
+*/
+static void UI_Home_DrawEmblem(float cx, float cy, float r, const float* color, const float* disc) {
     float k;
 
-    for (k = -r * 1.28f; k < r; k += 1.0f) {
+    for (k = -r; k < r; k += 1.0f) {
         float y = cy + k;
-        float dy = k + 0.5f;
+        float dy = (k + 0.5f) / r;  // en radios
+        float half = 0;
 
-        UI_Home_MarkRing(cx, y, dy, r, r * 0.79f, r * 0.30f, color);
-        UI_Home_MarkRing(cx, y, dy, r * 0.62f, r * 0.45f, r * 0.21f, color);
+        if (disc) {
+            float xd = UI_Home_Chord(dy, 0, 1.0f);
 
-        // el clavo: una punta que se abre desde arriba y un tallo que baja hasta el aro de afuera
-        if (dy > -r * 1.28f && dy < r * 0.90f) {
-            float half;
-
-            if (dy < -r * 0.62f) {
-                half = r * 0.13f * (dy + r * 1.28f) / (r * 0.66f);
-            } else {
-                half = r * 0.09f;
+            if (xd > 0) {
+                SM_Fill(cx - xd * r, y, xd * r * 2.0f, 1.05f, disc, NULL);
             }
-            SM_Fill(cx - half, y, half * 2.0f, 1.05f, color, NULL);
+        }
+
+        // el aro de afuera
+        UI_Home_MarkCut(cx, y, dy * r, 0, r, 0, r * 0.925f, 0, color);
+
+        // la luna: un circulo menos otro corrido hacia arriba; arriba del centro se abre
+        UI_Home_MarkCut(cx, y, dy * r, -0.065f * r, 0.83f * r, -0.16f * r, 0.72f * r, dy < -0.2f ? 0.30f * r : 0,
+                        color);
+
+        // el clavo: la punta se abre hasta la cabeza, se angosta y el tallo baja hasta el aro
+        if (dy > 0.12f && dy < 0.93f) {
+            if (dy < 0.36f) {
+                half = 0.10f * (dy - 0.12f) / 0.24f;
+            } else if (dy < 0.47f) {
+                half = 0.10f;
+            } else if (dy < 0.53f) {
+                half = 0.10f - 0.035f * (dy - 0.47f) / 0.06f;
+            } else {
+                half = 0.065f;
+            }
+            SM_Fill(cx - half * r, y, half * r * 2.0f, 1.05f, color, NULL);
         }
     }
 }
 
-// el ancho de la insignia en la fila k, contando desde el borde de arriba
-static float UI_Home_PlayRowW(float k) {
-    if (k < HV_PLAY_BODY_H) {
-        return HV_PLAY_TOP_W + (HV_PLAY_BOT_W - HV_PLAY_TOP_W) * (k / HV_PLAY_BODY_H);
-    }
-    return HV_PLAY_BOT_W * (1.0f - (k - HV_PLAY_BODY_H) / HV_PLAY_TIP_H);
-}
-
-// PLAY: una insignia roja que cuelga de la barra, trapecio que termina en punta, con el nombre en
-// la linea de las demas secciones y el simbolo de Quake debajo. Bajo el cursor se enciende y el
-// simbolo crece un poco. Se arma con filas de un punto, que es lo que hay para dibujar una figura
-// que no es un rectangulo: cada fila va dos veces, el borde y, adentro, el relleno.
+// PLAY: el emblema de Quake Live en blanco, sobre un disco oscuro que cuelga de la barra, con el
+// nombre debajo. Bajo el cursor el disco se pone del rojo de Quake Live y el emblema crece un
+// poco, con transicion.
 static void UI_Home_DrawPlay(float cx, float top, float dt) {
-    static const vec4_t edgeColor = {0.93f, 0.26f, 0.20f, 1.0f};
     static const vec4_t white = {1.0f, 1.0f, 1.0f, 1.0f};
-    float h = HV_PLAY_BODY_H + HV_PLAY_TIP_H;
+    float cy = top + HV_BAR_H * 0.5f + HV_PLAY_DROP;
     float glow;
-    float k;
+    float r;
+    vec4_t disc;
+    vec4_t label;
 
     hv.play = UI_Home_Ease(hv.play, SM_Over(HM_HIT_TAB, HM_NAV_PLAY) ? 1.0f : 0.0f, dt);
     glow = UI_Home_Smooth(hv.play);
+    r = HV_PLAY_R * (1.0f + 0.06f * glow);
 
-    for (k = 0; k < h; k += 1.0f) {
-        float w = UI_Home_PlayRowW(k);
-        float t = k / h;
-        vec4_t fill;
+    disc[0] = smPage[0] + (0.62f - smPage[0]) * glow;
+    disc[1] = smPage[1] + (0.06f - smPage[1]) * glow;
+    disc[2] = smPage[2] + (0.06f - smPage[2]) * glow;
+    disc[3] = 0.92f;
+    UI_Home_DrawEmblem(cx, cy, r, white, disc);
 
-        // de arriba hacia abajo el rojo se oscurece; bajo el cursor sube
-        fill[0] = 0.62f - 0.20f * t + 0.16f * glow;
-        fill[1] = 0.05f + 0.03f * glow;
-        fill[2] = 0.05f + 0.02f * glow;
-        fill[3] = 0.97f;
-        SM_Fill(cx - w * 0.5f, top + k, w, 1.05f, edgeColor, NULL);
-        if (k < h - HV_PLAY_EDGE * 1.5f) {
-            float inner = UI_Home_PlayRowW(k + HV_PLAY_EDGE * (k >= HV_PLAY_BODY_H ? 1.5f : 0.0f)) - 2 * HV_PLAY_EDGE;
-
-            if (inner > 0) {
-                SM_Fill(cx - inner * 0.5f, top + k, inner, 1.05f, fill, NULL);
-            }
-        }
-    }
-
-    SM_Label(cx - SM_LabelWidth(20, "Play", 5.0f) * 0.5f,
-             SM_Baseline(FONT_SANS, 20, top + (HV_BAR_H - 26) * 0.5f, 26), 20, white, "Play", 5.0f);
-
-    {
-        float r = HV_PLAY_MARK * 0.5f * (1.0f + 0.10f * glow);
-        vec4_t tint = {1.0f, 1.0f, 1.0f, 0.80f + 0.20f * glow};
-
-        UI_Home_DrawQuakeMark(cx, top + HV_BAR_H + HV_PLAY_MARK * 0.5f, r, tint);
-    }
-    SM_Hit(cx - HV_PLAY_TOP_W * 0.5f, top, HV_PLAY_TOP_W, h - 6.0f, HM_HIT_TAB, HM_NAV_PLAY, NULL);
+    VectorCopy(glow > 0.5f ? smGold : smText, label);
+    label[3] = 1.0f;
+    SM_Label(cx - SM_LabelWidth(14, "Play", 5.0f) * 0.5f, SM_Baseline(FONT_SANS, 14, cy + HV_PLAY_R + 10, 20), 14,
+             label, "Play", 5.0f);
+    SM_Hit(cx - HV_PLAY_SLOT * 0.5f, top, HV_PLAY_SLOT, cy + HV_PLAY_R + 34 - top, HM_HIT_TAB, HM_NAV_PLAY, NULL);
 }
 
 // la barra de arriba: el logo a la izquierda y las secciones centradas, con PLAY en el medio
 static void UI_Home_DrawBar(float dt) {
     float top = UI_Home_Top();
     float mainW = UI_Home_MainW();
-    float cx = mainW * 0.5f;
+    float cx = smVW * 0.5f;
     vec4_t bar;
     int i;
 
@@ -1016,12 +1015,12 @@ static void UI_Home_DrawBar(float dt) {
     }
 
     for (i = 0; i < (int)ARRAY_LEN(hvTabsLeft); i++) {
-        float slotX = cx - HV_PLAY_TOP_W * 0.5f - (ARRAY_LEN(hvTabsLeft) - i) * HV_TAB_SLOT;
+        float slotX = cx - HV_PLAY_SLOT * 0.5f - (ARRAY_LEN(hvTabsLeft) - i) * HV_TAB_SLOT;
 
         UI_Home_DrawTab(&hvTabsLeft[i], slotX, top);
     }
     for (i = 0; i < (int)ARRAY_LEN(hvTabsRight); i++) {
-        UI_Home_DrawTab(&hvTabsRight[i], cx + HV_PLAY_TOP_W * 0.5f + i * HV_TAB_SLOT, top);
+        UI_Home_DrawTab(&hvTabsRight[i], cx + HV_PLAY_SLOT * 0.5f + i * HV_TAB_SLOT, top);
     }
 
     UI_Home_DrawPlay(cx, top, dt);
