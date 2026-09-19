@@ -675,6 +675,9 @@ void SV_Init(void) {
     sv_mapChecksum = Cvar_Get("sv_mapChecksum", "", CVAR_ROM);
     sv_lanForceRate = Cvar_Get("sv_lanForceRate", "1", CVAR_ARCHIVE);
     sv_banFile = Cvar_Get("sv_banFile", "serverbans.dat", CVAR_ARCHIVE);
+    // [QL] SV_Init las registra juntas, con "" y "0"
+    sv_altEntDir = Cvar_Get("sv_altEntDir", "", 0);
+    sv_dumpEntities = Cvar_Get("sv_dumpEntities", "0", 0);
 
     // initialize bot cvars so they are listed and can be set before loading the botlib
     SV_BotInitCvars();

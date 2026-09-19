@@ -1255,9 +1255,27 @@ Called for both a full init and a restart
 
 static void SV_InitGameVM(qboolean restart) {
     int i;
+    const char* mapName = Cvar_VariableString("mapname");
+    char* altEntities = NULL;
+    int altLen = -1;
+
+    // [QL] 0x004e2a80: con sv_altEntDir, las entidades del nivel salen de "<dir>/<mapa>.ent" en
+    // lugar del BSP; con sv_dumpEntities, las del mapa se escriben en "ents/<mapa>.ent". Si la
+    // lectura falla se sigue con las del BSP, que es lo de siempre.
+    if (sv_altEntDir->string[0]) {
+        altLen = FS_ReadFile(va("%s/%s.ent", sv_altEntDir->string, mapName), (void**)&altEntities);
+        if (altLen > 0) {
+            Com_Printf("entities from %s/%s.ent\n", sv_altEntDir->string, mapName);
+        }
+    }
+    if (sv_dumpEntities->value != 0.0f) {
+        const char* entities = CM_EntityString();
+
+        FS_WriteFile(va("ents/%s.ent", mapName), entities, (int)strlen(entities));
+    }
 
     // start the entity parsing at the beginning
-    sv.entityParsePoint = CM_EntityString();
+    sv.entityParsePoint = (altLen > 0 && altEntities) ? altEntities : CM_EntityString();
 
     // clear all gentity pointers that might still be set from a previous level
     for (i = 0; i < sv_maxclients->integer; i++) {
