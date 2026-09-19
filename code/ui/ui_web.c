@@ -323,7 +323,8 @@ TYPE
 static struct {
     qboolean tried;
     int regular, strong;  // font indices, -1 when Barlow is not there
-} smFonts = {qfalse, -1, -1};
+    int nav;              // [ioquakelive] Open Sans Condensed Bold, the front page's nav
+} smFonts = {qfalse, -1, -1, -1};
 
 void SM_LoadFonts(void) {
     // [ioquakelive] Barlow, from pak01. Handel Gothic is not the front end's face: retail's menu
@@ -335,6 +336,8 @@ void SM_LoadFonts(void) {
         return;
     }
     smFonts.tried = qtrue;
+    // [ioquakelive] la cara del nav de la portada: Open Sans Condensed Bold, de pak01
+    smFonts.nav = trap_R_Font_Register("fonts/OpenSansCondensed-Bold.ttf");
     smFonts.regular = trap_R_Font_Register("fonts/Barlow-Regular.ttf");
     smFonts.strong = trap_R_Font_Register("fonts/Barlow-SemiBold.ttf");
     if (smFonts.regular < 0 || smFonts.strong < 0) {
@@ -346,6 +349,9 @@ void SM_LoadFonts(void) {
 
 // the face a page's font and weight come out in
 static int SM_Face(int font, qboolean bold) {
+    if (font == SM_FONT_NAV) {
+        return smFonts.nav >= 0 ? smFonts.nav : SM_Face(FONT_DEFAULT, bold);
+    }
     if (smFonts.regular >= 0 && (font == FONT_SANS || font == FONT_DEFAULT)) {
         return (bold || font == FONT_DEFAULT) ? smFonts.strong : smFonts.regular;
     }
@@ -357,6 +363,9 @@ static qboolean SM_IsBarlow(int face) {
 }
 
 static float SM_FaceEm(int face) {
+    if (face >= 0 && face == smFonts.nav) {
+        return SM_OPENSANS_EM;
+    }
     if (SM_IsBarlow(face)) {
         return SM_BARLOW_EM;
     }
@@ -371,7 +380,9 @@ float SM_Baseline(int font, float size, float lineTop, float lineHeight) {
     int face = SM_Face(font, qfalse);
     float base;
 
-    if (SM_IsBarlow(face)) {
+    if (face >= 0 && face == smFonts.nav) {
+        base = SM_OPENSANS_BASE;
+    } else if (SM_IsBarlow(face)) {
         base = SM_BARLOW_BASE;
     } else {
         base = face == FONT_DEFAULT ? SM_HANDEL_BASE : SM_SANS_BASE;
@@ -520,6 +531,25 @@ float SM_LabelWidth(float size, const char* text, float spacing) {
         w += SM_AdvanceBold(SM_FONT_TITLE, size, c, 1, qfalse) + spacing;  // medido como se dibuja
     }
     return w - spacing;
+}
+
+void SM_LabelIn(int font, float x, float baseline, float size, const float* color, const char* text,
+                float spacing) {
+    char upper[256];
+
+    SM_Upper(text, upper, sizeof(upper));
+    if (spacing <= 0) {
+        SM_Text(x, baseline, font, size, color, upper, -1, qfalse);
+        return;
+    }
+    SM_SpacedText(x, baseline, font, size, color, upper, spacing, qfalse);
+}
+
+float SM_LabelWidthIn(int font, float size, const char* text, float spacing) {
+    char upper[256];
+
+    SM_Upper(text, upper, sizeof(upper));
+    return SM_SpacedWidth(font, size, upper, spacing);
 }
 
 void SM_Label(float x, float baseline, float size, const float* color, const char* text, float spacing) {
