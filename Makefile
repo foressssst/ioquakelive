@@ -1490,6 +1490,7 @@ Q3OBJ = \
   $(B)/client/msg.o \
   $(B)/client/net_chan.o \
   $(B)/client/net_ip.o \
+  $(B)/client/steam.o \
   $(B)/client/huffman.o \
   \
   $(B)/client/snd_dma.o \
@@ -1984,6 +1985,7 @@ Q3DOBJ = \
   $(B)/ded/msg.o \
   $(B)/ded/net_chan.o \
   $(B)/ded/net_ip.o \
+  $(B)/ded/steam.o \
   $(B)/ded/huffman.o \
   \
   $(B)/ded/q_math.o \
