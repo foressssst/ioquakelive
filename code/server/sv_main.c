@@ -55,6 +55,10 @@ cvar_t* sv_pure;
 cvar_t* sv_floodProtect;
 cvar_t* sv_lanForceRate;  // dedicated 1 (LAN) server forces local client rates to 99999 (bug #491)
 cvar_t* sv_banFile;
+// [QL] 0x004e3e7a y 0x004e3e90: las entidades del nivel salen de un archivo aparte, o se
+// vuelcan a uno
+cvar_t* sv_altEntDir;
+cvar_t* sv_dumpEntities;
 
 serverBan_t serverBans[SERVER_MAXBANS];
 int serverBansCount = 0;
