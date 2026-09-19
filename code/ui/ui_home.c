@@ -73,7 +73,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // the player and their friends, down the right
 #define HM_SIDE_W 306.0f     // retail's column is 370; a little under it reads calmer
 #define HM_SIDE_RIGHT 64.0f
-#define HV_SOCIAL_W 84.0f  // [ioquakelive] la franja social del menu principal, plegada
+#define HV_SOCIAL_W 80.0f  // [ioquakelive] la franja social del menu principal, plegada (10 U)
 
 // the painting's shape
 #define HM_PAINTING_ASPECT (3122.0f / 1344.0f)
@@ -799,27 +799,28 @@ secciones y los logos de los creditos.
 ===============================================================================
 */
 
-#define HV_BAR_W 1560.0f      // el panel de arriba no ocupa todo el ancho: va centrado
-#define HV_BAR_H 80.0f
-#define HV_BAR_R 20.0f        // sus esquinas de abajo
-#define HV_PAD 34.0f          // el aire adentro del panel
-#define HV_EDGE 48.0f
-#define HV_FOOT_H 88.0f       // la franja de abajo: version, creditos y aviso legal en una linea
-#define HV_LOGO_H 58.0f       // la imagen del logo; el dibujo ocupa el 77 % de su alto
-#define HV_TAB_SLOT 164.0f    // cada seccion ocupa un casillero igual: la fila queda simetrica
-#define HV_TAB_SIZE 17.0f
-#define HV_TAB_SPACING 2.2f
-#define HV_PLAY_SLOT 190.0f   // el lugar del trapecio en la fila
-#define HV_PLAY_TOP_W 168.0f  // el trapecio: ancho contra el borde de arriba
-#define HV_PLAY_BOT_W 136.0f  // y donde termina
-#define HV_PLAY_DROP 14.0f    // cuanto cuelga por debajo de la barra
-#define HV_PLAY_SIZE 17.0f
-#define HV_PLAY_SPACING 4.0f
-#define HV_SHADOW 22.0f       // el alto de las sombras
-#define HV_SHADOW_A 0.75f     // y lo oscuras que empiezan
+#define HV_U 8.0f             // la unidad de la grilla: todo es multiplo de esto
 #define HV_SOCIAL_OPEN_W 360.0f
 #define HV_SOCIAL_MS 55.0f    // la constante de tiempo de las transiciones
 #define HV_AVATAR 52.0f
+#define HV_BAR_H (10.0f * HV_U)   // la barra y el pie miden lo mismo
+#define HV_FOOT_H (10.0f * HV_U)
+#define HV_GUTTER (40.0f * HV_U)  // el aire a cada lado de la barra: logo y Quit
+#define HV_TAB_SLOT (21.0f * HV_U)
+#define HV_PLAY_SLOT (24.0f * HV_U)
+#define HV_TABS_W (4.0f * HV_TAB_SLOT + HV_PLAY_SLOT)
+#define HV_BAR_W (HV_TABS_W + 2.0f * HV_GUTTER)
+#define HV_BAR_R (3.0f * HV_U)    // las esquinas de abajo de la barra
+#define HV_PAD (5.0f * HV_U)      // el aire adentro de la barra, y los margenes del pie
+#define HV_EDGE (5.0f * HV_U)
+#define HV_LOGO_H (7.0f * HV_U)
+#define HV_TAB_SIZE 17.0f
+#define HV_TAB_SPACING 2.2f
+#define HV_PLAY_TOP_W (21.0f * HV_U)  // el trapecio: el ancho de un casillero arriba
+#define HV_PLAY_BOT_W (17.0f * HV_U)
+#define HV_PLAY_DROP (2.0f * HV_U)
+#define HV_PLAY_SIZE 17.0f
+#define HV_PLAY_SPACING 4.0f
 #define HV_TEXT 14.0f         // la letra chica: version, aviso, textos de la franja
 
 // [ioquakelive] la paleta: gris muy oscuro en vez de negro puro, que es lo que pidio el
@@ -863,25 +864,6 @@ static float UI_Home_Smooth(float t) {
 // la linea de base de un texto centrado en una franja de alto HV_BAR_H que empieza en y
 static float UI_Home_BarBaseline(float size, float y) {
     return SM_Baseline(FONT_SANS, size, y + (HV_BAR_H - size * 1.4f) * 0.5f, size * 1.4f);
-}
-
-// [ioquakelive] una sombra debajo de un borde: filas de negro que se apagan hacia abajo. El
-// sistema de dibujo solo tiene rectangulos, asi que una sombra difusa se hace asi, y el jugador
-// las pidio bien marcadas.
-static void UI_Home_Shadow(float x, float y, float w, float h, float inset) {
-    float k;
-
-    for (k = 0; k < h; k += 1.0f) {
-        vec4_t c = {0.0f, 0.0f, 0.0f, 0.0f};
-        float in = inset + k;  // se angosta a medida que baja: no asoma por las esquinas
-        float rw = w - in * 2.0f;
-
-        if (rw <= 0) {
-            return;
-        }
-        c[3] = HV_SHADOW_A * (1.0f - k / h) * (1.0f - k / h);
-        SM_Fill(x + in, y + k, rw, 1.05f, c, NULL);
-    }
 }
 
 // un panel con las esquinas de abajo redondeadas, con filas de un punto: es lo que hay para
@@ -931,9 +913,6 @@ static void UI_Home_DrawPlay(float cx, float top, float dt) {
     fill[2] += (1.0f - fill[2]) * hv.play;
     fill[3] = 1.0f;
 
-    // la sombra del trapecio sobre el arte, un par de filas por debajo de su punta
-    UI_Home_Shadow(cx - HV_PLAY_BOT_W * 0.5f, top + h, HV_PLAY_BOT_W, HV_SHADOW, 2.0f);
-
     for (k = 0; k < h; k += 1.0f) {
         float w = HV_PLAY_TOP_W + (HV_PLAY_BOT_W - HV_PLAY_TOP_W) * (k / h);
 
@@ -962,14 +941,14 @@ static void UI_Home_DrawBar(float dt) {
     float cx = UI_Home_MainW() * 0.5f;
     int i;
 
-    UI_Home_Shadow(x, top + HV_BAR_H, HV_BAR_W, HV_SHADOW, HV_BAR_R);
     UI_Home_RoundedBottom(x, top, HV_BAR_W, HV_BAR_H, HV_BAR_R, hvPanel);
 
     // la imagen del logo trae margen (56 de 512 a la izquierda); el dibujo empieza en el padding
     if (hm2.logo) {
         float w = HV_LOGO_H * 4.0f;
 
-        SM_Pic(x + HV_PAD - 56.0f * (w / 512.0f), top + (HV_BAR_H - HV_LOGO_H) * 0.5f, w, HV_LOGO_H, hm2.logo, NULL);
+        SM_Pic(x + HV_PAD - 56.0f * (w / 512.0f), top + (HV_BAR_H - HV_LOGO_H) * 0.5f, w, HV_LOGO_H, hm2.logo,
+               NULL);
     }
 
     for (i = 0; i < (int)ARRAY_LEN(hvTabsLeft); i++) {
@@ -995,10 +974,10 @@ Cada tarjeta lleva el levelshot del mapa, el nombre del servidor y, debajo, el m
 gente hay y el ping. El clic conecta. Sin servidores, una sola tarjeta lo dice.
 ===============
 */
-#define HV_CARD_W 300.0f
-#define HV_CARD_H 170.0f
-#define HV_CARD_GAP 24.0f
-#define HV_CARD_BAND 54.0f  // la banda con el nombre y los datos, al pie de la tarjeta
+#define HV_CARD_W (24.0f * HV_U)   // la fila de tarjetas mide lo mismo
+#define HV_CARD_H (18.0f * HV_U)   // que la fila de secciones: 864
+#define HV_CARD_GAP (4.0f * HV_U)
+#define HV_CARD_BAND (5.0f * HV_U)  // la banda con el nombre y los datos, al pie de la tarjeta
 #define HV_CARD_SIZE 14.0f
 #define HV_CARDS 4
 
@@ -1057,7 +1036,7 @@ static void UI_Home_ServerCard(int i, float x, float y) {
 // sin servidores en la lista: una tarjeta ancha que lo dice, para que la fila no quede vacia
 static void UI_Home_NoServers(float y) {
     static const char* const line = "The list updates on its own; ioquakelive servers will show up here";
-    float w = HV_CARD_W * 2.0f + HV_CARD_GAP;
+    float w = HV_TABS_W;
     float x = (UI_Home_MainW() - w) * 0.5f;
     float lw = SM_Advance(FONT_SANS, 13.0f, line, -1);
     float tw = SM_LabelWidth(16.0f, "No servers online", 1.6f);
@@ -1071,7 +1050,7 @@ static void UI_Home_NoServers(float y) {
 
 static void UI_Home_DrawServers(void) {
     int count = uiInfo.serverStatus.numDisplayServers;
-    float y = UI_Home_Bottom() - HV_FOOT_H - 28.0f - HV_CARD_H;
+    float y = UI_Home_Bottom() - HV_FOOT_H - 4.0f * HV_U - HV_CARD_H;
     float total;
     float x;
     int i;
