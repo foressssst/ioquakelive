@@ -332,7 +332,8 @@ void SM_LoadFonts(void) {
     //
     // Retail's own web front end does use Handel Gothic, though -- checked in web.pak, whose CSS
     // declares @font-face HandelGothic (medium and bold) with sixteen font-family rules on it, and
-    // NotoSans for running text. The front page reaches both through SM_FONT_NAV and SM_FONT_BODY.
+    // NotoSans for running text. The front page was drawn in those two faces for a while and the
+    // player did not like them, so every page is Barlow again.
     if (smFonts.tried) {
         return;
     }
@@ -348,13 +349,6 @@ void SM_LoadFonts(void) {
 
 // the face a page's font and weight come out in
 static int SM_Face(int font, qboolean bold) {
-    // [ioquakelive] las caras de la interfaz web de retail, sin pasar por Barlow
-    if (font == SM_FONT_NAV) {
-        return FONT_DEFAULT;
-    }
-    if (font == SM_FONT_BODY) {
-        return FONT_SANS;
-    }
     if (smFonts.regular >= 0 && (font == FONT_SANS || font == FONT_DEFAULT)) {
         return (bold || font == FONT_DEFAULT) ? smFonts.strong : smFonts.regular;
     }
@@ -529,25 +523,6 @@ float SM_LabelWidth(float size, const char* text, float spacing) {
         w += SM_AdvanceBold(SM_FONT_TITLE, size, c, 1, qfalse) + spacing;  // medido como se dibuja
     }
     return w - spacing;
-}
-
-void SM_LabelIn(int font, float x, float baseline, float size, const float* color, const char* text,
-                float spacing) {
-    char upper[256];
-
-    SM_Upper(text, upper, sizeof(upper));
-    if (spacing <= 0) {
-        SM_Text(x, baseline, font, size, color, upper, -1, qfalse);
-        return;
-    }
-    SM_SpacedText(x, baseline, font, size, color, upper, spacing, qfalse);
-}
-
-float SM_LabelWidthIn(int font, float size, const char* text, float spacing) {
-    char upper[256];
-
-    SM_Upper(text, upper, sizeof(upper));
-    return SM_SpacedWidth(font, size, upper, spacing);
 }
 
 void SM_Label(float x, float baseline, float size, const float* color, const char* text, float spacing) {
