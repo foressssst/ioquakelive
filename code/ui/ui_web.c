@@ -323,21 +323,20 @@ TYPE
 static struct {
     qboolean tried;
     int regular, strong;  // font indices, -1 when Barlow is not there
-    int nav;              // [ioquakelive] Open Sans Condensed Bold, the front page's nav
-} smFonts = {qfalse, -1, -1, -1};
+} smFonts = {qfalse, -1, -1};
 
 void SM_LoadFonts(void) {
-    // [ioquakelive] Barlow, from pak01. Handel Gothic is not the front end's face: retail's menu
-    // is a web page and does not use it either - it is the HUD's font, and pak00 carries it with
-    // one weight only, which is why a heading had to be drawn twice to look bold and came out
-    // with the HUD's black edge around every letter. Barlow has a real bold, so a label is one
-    // pass and reads clean. Handel Gothic stays where it belongs, in the game's own HUD.
+    // [ioquakelive] Barlow, from pak01, is what every page but the front page takes: pak00 carries
+    // Handel Gothic in one weight only, so a heading had to be drawn twice to look bold and came
+    // out with the HUD's black edge around every letter, and Barlow has a real bold.
+    //
+    // Retail's own web front end does use Handel Gothic, though -- checked in web.pak, whose CSS
+    // declares @font-face HandelGothic (medium and bold) with sixteen font-family rules on it, and
+    // NotoSans for running text. The front page reaches both through SM_FONT_NAV and SM_FONT_BODY.
     if (smFonts.tried) {
         return;
     }
     smFonts.tried = qtrue;
-    // [ioquakelive] la cara del nav de la portada: Open Sans Condensed Bold, de pak01
-    smFonts.nav = trap_R_Font_Register("fonts/OpenSansCondensed-Bold.ttf");
     smFonts.regular = trap_R_Font_Register("fonts/Barlow-Regular.ttf");
     smFonts.strong = trap_R_Font_Register("fonts/Barlow-SemiBold.ttf");
     if (smFonts.regular < 0 || smFonts.strong < 0) {
@@ -349,8 +348,12 @@ void SM_LoadFonts(void) {
 
 // the face a page's font and weight come out in
 static int SM_Face(int font, qboolean bold) {
+    // [ioquakelive] las caras de la interfaz web de retail, sin pasar por Barlow
     if (font == SM_FONT_NAV) {
-        return smFonts.nav >= 0 ? smFonts.nav : SM_Face(FONT_DEFAULT, bold);
+        return FONT_DEFAULT;
+    }
+    if (font == SM_FONT_BODY) {
+        return FONT_SANS;
     }
     if (smFonts.regular >= 0 && (font == FONT_SANS || font == FONT_DEFAULT)) {
         return (bold || font == FONT_DEFAULT) ? smFonts.strong : smFonts.regular;
@@ -363,9 +366,6 @@ static qboolean SM_IsBarlow(int face) {
 }
 
 static float SM_FaceEm(int face) {
-    if (face >= 0 && face == smFonts.nav) {
-        return SM_OPENSANS_EM;
-    }
     if (SM_IsBarlow(face)) {
         return SM_BARLOW_EM;
     }
@@ -380,9 +380,7 @@ float SM_Baseline(int font, float size, float lineTop, float lineHeight) {
     int face = SM_Face(font, qfalse);
     float base;
 
-    if (face >= 0 && face == smFonts.nav) {
-        base = SM_OPENSANS_BASE;
-    } else if (SM_IsBarlow(face)) {
+    if (SM_IsBarlow(face)) {
         base = SM_BARLOW_BASE;
     } else {
         base = face == FONT_DEFAULT ? SM_HANDEL_BASE : SM_SANS_BASE;

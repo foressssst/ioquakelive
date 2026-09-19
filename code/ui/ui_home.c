@@ -76,7 +76,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define HV_SOCIAL_W 84.0f  // [ioquakelive] la franja social del menu principal, plegada
 
 // the painting's shape
-#define HM_PAINTING_ASPECT (1920.0f / 1080.0f)  // [ioquakelive] el arte nuevo, sobre lienzo 16:9
+#define HM_PAINTING_ASPECT (3122.0f / 1344.0f)
 
 typedef enum {
     HM_HIT_NONE = SM_HIT_SHARED,
@@ -809,28 +809,20 @@ secciones y los logos de los creditos.
 #define HV_TAB_SLOT 156.0f    // cada seccion ocupa un casillero igual: la fila queda simetrica
 #define HV_TAB_SIZE 16.0f
 #define HV_TAB_SPACING 2.2f
-#define HV_PLAY_SLOT 178.0f   // el lugar del trapecio en la fila
-#define HV_PLAY_TOP_W 154.0f  // el trapecio: ancho contra el borde de arriba
-#define HV_PLAY_BOT_W 124.0f  // y donde termina
-#define HV_PLAY_DROP 20.0f    // cuanto cuelga por debajo del panel
-#define HV_PLAY_SIZE 16.0f
-#define HV_ACCENT_H 4.0f      // el borde con que su nav marca lo activo
+#define HV_PLAY_SLOT 186.0f   // el lugar de Jugar en la fila
+#define HV_PLAY_W 150.0f      // el boton de contorno
+#define HV_PLAY_H 42.0f
+#define HV_PLAY_SIZE 15.0f
+#define HV_PLAY_SPACING 4.0f
 #define HV_SOCIAL_OPEN_W 360.0f
 #define HV_SOCIAL_MS 55.0f    // la constante de tiempo de las transiciones
 #define HV_AVATAR 52.0f
 #define HV_TEXT 13.0f         // la letra chica: version, aviso, textos de la franja
 
-/*
-[ioquakelive] La paleta y la forma salen del CSS de playmorepromode.com, que el jugador paso
-para mirarle el diseno: el panel #313131, la pieza clara #424242, el borde #475464 de 2px y el
-azul #44b0ff con el que su nav marca la seccion activa (border-bottom: 4px). La letra tambien es
-la suya: Open Sans Condensed 700 en mayusculas.
-*/
-static const vec4_t hvPanel = {0.192f, 0.192f, 0.192f, 0.96f};   // #313131
-static const vec4_t hvRaised = {0.259f, 0.259f, 0.259f, 1.0f};   // #424242
-static const vec4_t hvEdge = {0.278f, 0.329f, 0.392f, 1.0f};     // #475464
-static const vec4_t hvAccent = {0.267f, 0.690f, 1.0f, 1.0f};     // #44b0ff
-static const vec4_t hvAccentSoft = {0.541f, 0.890f, 1.0f, 1.0f}; // #8ae3ff, su hover
+// [ioquakelive] la paleta es la nuestra: negro, gris y blanco. Del CSS de playmorepromode.com
+// queda la forma -- el panel centrado que cuelga del borde con las esquinas de abajo
+// redondeadas --, no sus colores ni su azul.
+static const vec4_t hvPanel = {0.0f, 0.0f, 0.0f, 0.88f};
 
 typedef struct {
     const char* title;
@@ -896,42 +888,53 @@ static void UI_Home_DrawTab(const hvTab_t* tab, float slotX, float top) {
 
     SM_LabelIn(SM_FONT_NAV, slotX + (HV_TAB_SLOT - w) * 0.5f, UI_Home_BarBaseline(HV_TAB_SIZE, top), HV_TAB_SIZE,
                current || over ? smText : smTextSoft, tab->title, HV_TAB_SPACING);
-    if (current) {
-        SM_Fill(slotX + (HV_TAB_SLOT - w) * 0.5f - 6, top + HV_BAR_H - HV_ACCENT_H, w + 12, HV_ACCENT_H, hvAccent,
-                NULL);
-    }
     if (!current) {
         SM_Hit(slotX, top, HV_TAB_SLOT, HV_BAR_H, HM_HIT_TAB, tab->nav, NULL);
     }
 }
 
-// Jugar: el trapecio claro, mas ancho arriba que abajo, que atraviesa el panel y cuelga por
-// debajo. Bajo el cursor se aclara del todo, la misma regla que las secciones.
+// Jugar: un boton de contorno en el medio de la fila. Sin relleno, con un borde de un punto y
+// la palabra adentro; bajo el cursor se invierte, que es lo que hace un boton de contorno. En
+// lugar del trapecio, que el jugador saco.
 static void UI_Home_DrawPlay(float cx, float top, float dt) {
     qboolean over = SM_Over(HM_HIT_TAB, HM_NAV_PLAY);
-    float h = HV_BAR_H + HV_PLAY_DROP;
-    float k;
-    vec4_t fill;
+    float w = HV_PLAY_W;
+    float h = HV_PLAY_H;
+    float x = cx - w * 0.5f;
+    float y = top + (HV_BAR_H - h) * 0.5f;
+    float t;
+    vec4_t edge;
+    vec4_t label;
+    int i;
 
     hv.play = UI_Home_Ease(hv.play, over ? 1.0f : 0.0f, dt);
-    // la pieza clara de su paleta; bajo el cursor sube hacia el blanco
-    VectorCopy(hvRaised, fill);
-    fill[0] += (0.85f - fill[0]) * hv.play;
-    fill[1] += (0.85f - fill[1]) * hv.play;
-    fill[2] += (0.85f - fill[2]) * hv.play;
-    fill[3] = 1.0f;
+    t = UI_Home_Smooth(hv.play);
 
-    for (k = 0; k < h; k += 1.0f) {
-        float w = HV_PLAY_TOP_W + (HV_PLAY_BOT_W - HV_PLAY_TOP_W) * (k / h);
+    // el borde se aclara y, al mismo tiempo, el relleno blanco entra desde la transparencia
+    VectorCopy(smTextSoft, edge);
+    edge[0] += (smText[0] - edge[0]) * t;
+    edge[1] += (smText[1] - edge[1]) * t;
+    edge[2] += (smText[2] - edge[2]) * t;
+    edge[3] = 1.0f;
+    if (t > 0.01f) {
+        vec4_t fill;
 
-        SM_Fill(cx - w * 0.5f, top + k, w, 1.05f, fill, NULL);
+        VectorCopy(smText, fill);
+        fill[3] = t;
+        SM_Fill(x, y, w, h, fill, NULL);
     }
-    SM_Fill(cx - HV_PLAY_BOT_W * 0.5f, top + h - HV_ACCENT_H, HV_PLAY_BOT_W, HV_ACCENT_H,
-            hv.play > 0.5f ? hvAccentSoft : hvAccent, NULL);
-    SM_LabelIn(SM_FONT_NAV, cx - SM_LabelWidthIn(SM_FONT_NAV, HV_PLAY_SIZE, "Play", 5.0f) * 0.5f,
-               UI_Home_BarBaseline(HV_PLAY_SIZE, top), HV_PLAY_SIZE, hv.play > 0.5f ? smOnPrimary : smText, "Play",
-               5.0f);
-    SM_Hit(cx - HV_PLAY_TOP_W * 0.5f, top, HV_PLAY_TOP_W, h, HM_HIT_TAB, HM_NAV_PLAY, NULL);
+    SM_Fill(x, y, w, 1.0f, edge, NULL);
+    SM_Fill(x, y + h - 1.0f, w, 1.0f, edge, NULL);
+    SM_Fill(x, y, 1.0f, h, edge, NULL);
+    SM_Fill(x + w - 1.0f, y, 1.0f, h, edge, NULL);
+
+    for (i = 0; i < 3; i++) {
+        label[i] = smText[i] + (smOnPrimary[i] - smText[i]) * t;
+    }
+    label[3] = 1.0f;
+    SM_LabelIn(SM_FONT_NAV, cx - SM_LabelWidthIn(SM_FONT_NAV, HV_PLAY_SIZE, "Play", HV_PLAY_SPACING) * 0.5f,
+               SM_Baseline(SM_FONT_NAV, HV_PLAY_SIZE, y, h), HV_PLAY_SIZE, label, "Play", HV_PLAY_SPACING);
+    SM_Hit(x, top, w, HV_BAR_H, HM_HIT_TAB, HM_NAV_PLAY, NULL);
 }
 
 // la salida, adentro del panel contra su borde derecho
@@ -953,7 +956,6 @@ static void UI_Home_DrawBar(float dt) {
     int i;
 
     UI_Home_RoundedBottom(x, top, HV_BAR_W, HV_BAR_H, HV_BAR_R, hvPanel);
-    SM_Fill(x + HV_BAR_R, top, HV_BAR_W - HV_BAR_R * 2.0f, 2.0f, hvEdge, NULL);  // su borde de 2px
 
     // la imagen del logo trae margen (56 de 512 a la izquierda); el dibujo empieza en el padding
     if (hm2.logo) {
@@ -979,18 +981,18 @@ static void UI_Home_DrawBar(float dt) {
 static void UI_Home_DrawFooter(void) {
     static const char* const notice =
         "QUAKE LIVE (c) 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
-    static const vec4_t strip = {0.192f, 0.192f, 0.192f, 0.94f};  // el gris del panel
+    static const vec4_t strip = {0.0f, 0.0f, 0.0f, 0.82f};
     char version[MAX_CVAR_VALUE_STRING];
     float bottom = UI_Home_Bottom();
     float y = bottom - HV_FOOT_H;
-    float baseline = SM_Baseline(FONT_SANS, HV_TEXT, y + (HV_FOOT_H - HV_TEXT * 1.4f) * 0.5f, HV_TEXT * 1.4f);
-    float w = SM_Advance(FONT_SANS, HV_TEXT, notice, -1);
+    float baseline = SM_Baseline(SM_FONT_BODY, HV_TEXT, y + (HV_FOOT_H - HV_TEXT * 1.4f) * 0.5f, HV_TEXT * 1.4f);
+    float w = SM_Advance(SM_FONT_BODY, HV_TEXT, notice, -1);
 
     SM_Fill(-1, y, smVW + 2, HV_FOOT_H + 1, strip, NULL);
     UI_Home_DrawMarks(y, HV_FOOT_H);
     trap_Cvar_VariableStringBuffer("version", version, sizeof(version));
-    SM_Text(HV_EDGE, baseline, FONT_SANS, HV_TEXT, smSubtle, version, -1, qfalse);
-    SM_Text(smVW - HV_EDGE - w, baseline, FONT_SANS, HV_TEXT, smSubtle, notice, -1, qfalse);
+    SM_Text(HV_EDGE, baseline, SM_FONT_BODY, HV_TEXT, smSubtle, version, -1, qfalse);
+    SM_Text(smVW - HV_EDGE - w, baseline, SM_FONT_BODY, HV_TEXT, smSubtle, notice, -1, qfalse);
 }
 
 /*
@@ -1090,7 +1092,7 @@ static void UI_Home_DrawSocial(float dt) {
         SM_Label(textX, SM_Baseline(FONT_SANS, 17, y + 3, 24), 17, c, name[0] ? name : "Player", 0.4f);
         VectorCopy(smTextSoft, c);
         c[3] = open;
-        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 29, 20), FONT_SANS, HV_TEXT, c, "Online", -1, qfalse);
+        SM_Text(textX, SM_Baseline(SM_FONT_BODY, HV_TEXT, y + 29, 20), FONT_SANS, HV_TEXT, c, "Online", -1, qfalse);
     }
 
     // los amigos: todavia no hay de donde sacarlos, asi que son lugares vacios
@@ -1105,12 +1107,12 @@ static void UI_Home_DrawSocial(float dt) {
     if (open > 0.05f) {
         VectorCopy(smMuted, c);
         c[3] = open;
-        SM_Label(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 2, 20), HV_TEXT, c, "Friends", 2.0f);
+        SM_Label(textX, SM_Baseline(SM_FONT_BODY, HV_TEXT, y + 2, 20), HV_TEXT, c, "Friends", 2.0f);
         VectorCopy(smSubtle, c);
         c[3] = open;
-        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 26, 20), FONT_SANS, HV_TEXT, c,
+        SM_Text(textX, SM_Baseline(SM_FONT_BODY, HV_TEXT, y + 26, 20), FONT_SANS, HV_TEXT, c,
                 "They will show up here once", -1, qfalse);
-        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 46, 20), FONT_SANS, HV_TEXT, c, "Steam is wired up", -1,
+        SM_Text(textX, SM_Baseline(SM_FONT_BODY, HV_TEXT, y + 46, 20), FONT_SANS, HV_TEXT, c, "Steam is wired up", -1,
                 qfalse);
     }
 
