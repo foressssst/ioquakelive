@@ -809,15 +809,28 @@ secciones y los logos de los creditos.
 #define HV_TAB_SLOT 156.0f    // cada seccion ocupa un casillero igual: la fila queda simetrica
 #define HV_TAB_SIZE 16.0f
 #define HV_TAB_SPACING 2.2f
-#define HV_PLAY_SLOT 212.0f   // el lugar del trapecio en la fila
-#define HV_PLAY_TOP_W 188.0f  // el trapecio: ancho contra el borde de arriba
-#define HV_PLAY_BOT_W 150.0f  // y donde termina
-#define HV_PLAY_DROP 30.0f    // cuanto cuelga por debajo del panel
-#define HV_PLAY_SIZE 18.0f
+#define HV_PLAY_SLOT 178.0f   // el lugar del trapecio en la fila
+#define HV_PLAY_TOP_W 154.0f  // el trapecio: ancho contra el borde de arriba
+#define HV_PLAY_BOT_W 124.0f  // y donde termina
+#define HV_PLAY_DROP 20.0f    // cuanto cuelga por debajo del panel
+#define HV_PLAY_SIZE 16.0f
+#define HV_ACCENT_H 4.0f      // el borde con que su nav marca lo activo
 #define HV_SOCIAL_OPEN_W 360.0f
 #define HV_SOCIAL_MS 55.0f    // la constante de tiempo de las transiciones
 #define HV_AVATAR 52.0f
 #define HV_TEXT 13.0f         // la letra chica: version, aviso, textos de la franja
+
+/*
+[ioquakelive] La paleta y la forma salen del CSS de playmorepromode.com, que el jugador paso
+para mirarle el diseno: el panel #313131, la pieza clara #424242, el borde #475464 de 2px y el
+azul #44b0ff con el que su nav marca la seccion activa (border-bottom: 4px). La letra tambien es
+la suya: Open Sans Condensed 700 en mayusculas.
+*/
+static const vec4_t hvPanel = {0.192f, 0.192f, 0.192f, 0.96f};   // #313131
+static const vec4_t hvRaised = {0.259f, 0.259f, 0.259f, 1.0f};   // #424242
+static const vec4_t hvEdge = {0.278f, 0.329f, 0.392f, 1.0f};     // #475464
+static const vec4_t hvAccent = {0.267f, 0.690f, 1.0f, 1.0f};     // #44b0ff
+static const vec4_t hvAccentSoft = {0.541f, 0.890f, 1.0f, 1.0f}; // #8ae3ff, su hover
 
 typedef struct {
     const char* title;
@@ -879,10 +892,14 @@ static void UI_Home_RoundedBottom(float x, float y, float w, float h, float r, c
 static void UI_Home_DrawTab(const hvTab_t* tab, float slotX, float top) {
     qboolean current = tab->nav < 0;
     qboolean over = !current && SM_Over(HM_HIT_TAB, tab->nav);
-    float w = SM_LabelWidth(HV_TAB_SIZE, tab->title, HV_TAB_SPACING);
+    float w = SM_LabelWidthIn(SM_FONT_NAV, HV_TAB_SIZE, tab->title, HV_TAB_SPACING);
 
-    SM_Label(slotX + (HV_TAB_SLOT - w) * 0.5f, UI_Home_BarBaseline(HV_TAB_SIZE, top), HV_TAB_SIZE,
-             current || over ? smText : smTextSoft, tab->title, HV_TAB_SPACING);
+    SM_LabelIn(SM_FONT_NAV, slotX + (HV_TAB_SLOT - w) * 0.5f, UI_Home_BarBaseline(HV_TAB_SIZE, top), HV_TAB_SIZE,
+               current || over ? smText : smTextSoft, tab->title, HV_TAB_SPACING);
+    if (current) {
+        SM_Fill(slotX + (HV_TAB_SLOT - w) * 0.5f - 6, top + HV_BAR_H - HV_ACCENT_H, w + 12, HV_ACCENT_H, hvAccent,
+                NULL);
+    }
     if (!current) {
         SM_Hit(slotX, top, HV_TAB_SLOT, HV_BAR_H, HM_HIT_TAB, tab->nav, NULL);
     }
@@ -897,10 +914,11 @@ static void UI_Home_DrawPlay(float cx, float top, float dt) {
     vec4_t fill;
 
     hv.play = UI_Home_Ease(hv.play, over ? 1.0f : 0.0f, dt);
-    VectorCopy(smPrimary, fill);
-    fill[0] += (1.0f - fill[0]) * hv.play;
-    fill[1] += (1.0f - fill[1]) * hv.play;
-    fill[2] += (1.0f - fill[2]) * hv.play;
+    // la pieza clara de su paleta; bajo el cursor sube hacia el blanco
+    VectorCopy(hvRaised, fill);
+    fill[0] += (0.85f - fill[0]) * hv.play;
+    fill[1] += (0.85f - fill[1]) * hv.play;
+    fill[2] += (0.85f - fill[2]) * hv.play;
     fill[3] = 1.0f;
 
     for (k = 0; k < h; k += 1.0f) {
@@ -908,31 +926,34 @@ static void UI_Home_DrawPlay(float cx, float top, float dt) {
 
         SM_Fill(cx - w * 0.5f, top + k, w, 1.05f, fill, NULL);
     }
-    SM_Label(cx - SM_LabelWidth(HV_PLAY_SIZE, "Play", 5.0f) * 0.5f, UI_Home_BarBaseline(HV_PLAY_SIZE, top),
-             HV_PLAY_SIZE, smOnPrimary, "Play", 5.0f);
+    SM_Fill(cx - HV_PLAY_BOT_W * 0.5f, top + h - HV_ACCENT_H, HV_PLAY_BOT_W, HV_ACCENT_H,
+            hv.play > 0.5f ? hvAccentSoft : hvAccent, NULL);
+    SM_LabelIn(SM_FONT_NAV, cx - SM_LabelWidthIn(SM_FONT_NAV, HV_PLAY_SIZE, "Play", 5.0f) * 0.5f,
+               UI_Home_BarBaseline(HV_PLAY_SIZE, top), HV_PLAY_SIZE, hv.play > 0.5f ? smOnPrimary : smText, "Play",
+               5.0f);
     SM_Hit(cx - HV_PLAY_TOP_W * 0.5f, top, HV_PLAY_TOP_W, h, HM_HIT_TAB, HM_NAV_PLAY, NULL);
 }
 
 // la salida, adentro del panel contra su borde derecho
 static void UI_Home_DrawQuit(float right, float top) {
     qboolean over = SM_Over(HM_HIT_QUIT, 0);
-    float w = SM_LabelWidth(HV_TEXT, "Quit", 2.0f);
+    float w = SM_LabelWidthIn(SM_FONT_NAV, HV_TEXT, "Quit", 2.0f);
     float x = right - HV_PAD - w;
 
-    SM_Label(x, UI_Home_BarBaseline(HV_TEXT, top), HV_TEXT, over ? smText : smTextSoft, "Quit", 2.0f);
+    SM_LabelIn(SM_FONT_NAV, x, UI_Home_BarBaseline(HV_TEXT, top), HV_TEXT, over ? smText : smTextSoft, "Quit", 2.0f);
     SM_Hit(x - 16, top, w + 16 + HV_PAD, HV_BAR_H, HM_HIT_QUIT, 0, NULL);
 }
 
 // arriba: el panel centrado, con el logo a la izquierda, las secciones al centro, el trapecio
 // atravesandolo y la salida a la derecha
 static void UI_Home_DrawBar(float dt) {
-    static const vec4_t panel = {0.0f, 0.0f, 0.0f, 0.90f};
     float top = UI_Home_Top();
     float x = (smVW - HV_BAR_W) * 0.5f;
     float cx = smVW * 0.5f;
     int i;
 
-    UI_Home_RoundedBottom(x, top, HV_BAR_W, HV_BAR_H, HV_BAR_R, panel);
+    UI_Home_RoundedBottom(x, top, HV_BAR_W, HV_BAR_H, HV_BAR_R, hvPanel);
+    SM_Fill(x + HV_BAR_R, top, HV_BAR_W - HV_BAR_R * 2.0f, 2.0f, hvEdge, NULL);  // su borde de 2px
 
     // la imagen del logo trae margen (56 de 512 a la izquierda); el dibujo empieza en el padding
     if (hm2.logo) {
@@ -958,7 +979,7 @@ static void UI_Home_DrawBar(float dt) {
 static void UI_Home_DrawFooter(void) {
     static const char* const notice =
         "QUAKE LIVE (c) 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
-    static const vec4_t strip = {0.0f, 0.0f, 0.0f, 0.82f};
+    static const vec4_t strip = {0.192f, 0.192f, 0.192f, 0.94f};  // el gris del panel
     char version[MAX_CVAR_VALUE_STRING];
     float bottom = UI_Home_Bottom();
     float y = bottom - HV_FOOT_H;
