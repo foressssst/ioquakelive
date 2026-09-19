@@ -290,6 +290,8 @@ extern cvar_t* sv_includeCurrentMapInVote;
 extern cvar_t* sv_pure;
 extern cvar_t* sv_floodProtect;
 extern cvar_t* sv_lanForceRate;
+extern cvar_t* sv_altEntDir;
+extern cvar_t* sv_dumpEntities;
 extern cvar_t* sv_banFile;
 
 extern serverBan_t serverBans[SERVER_MAXBANS];
