@@ -1825,6 +1825,8 @@ G_ShutdownGame
 =================
 */
 void G_ShutdownGame(int restart) {
+    // [QL] 0x10032a10: "The server will overwrite your changes on map exit and shutdown"
+    G_SaveAccessList();
     G_Printf("==== ShutdownGame ====\n");
 
     if (level.logFile) {
