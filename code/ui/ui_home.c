@@ -86,7 +86,8 @@ typedef enum {
     HM_HIT_CARD,  // [ioquakelive] una tarjeta del menu principal
     HM_HIT_QUIT,
     HM_HIT_TAB,   // [ioquakelive] una seccion de la barra de arriba
-    HM_HIT_SOCIAL // [ioquakelive] el fondo de la franja social: los clics no pasan a traves
+    HM_HIT_SOCIAL, // [ioquakelive] el fondo de la franja social: los clics no pasan a traves
+    HM_HIT_MENU    // [ioquakelive] una fila del desplegable de PLAY
 } hmHitType_t;
 
 // arenas whose shots pak00 carries, one of which is the background when the painting is not there
@@ -806,7 +807,7 @@ secciones y los logos de los creditos.
 #define HV_BAR_H (10.0f * HV_U)   // la barra y el pie miden lo mismo
 #define HV_FOOT_H (10.0f * HV_U)
 #define HV_GUTTER (40.0f * HV_U)  // el aire a cada lado de la barra: logo y Quit
-#define HV_TAB_SLOT (21.0f * HV_U)
+#define HV_TAB_SLOT (17.0f * HV_U)
 #define HV_PLAY_SLOT (24.0f * HV_U)
 #define HV_TABS_W (4.0f * HV_TAB_SLOT + HV_PLAY_SLOT)
 #define HV_BAR_W (HV_TABS_W + 2.0f * HV_GUTTER)
@@ -838,6 +839,8 @@ static const hvTab_t hvTabsLeft[] = {{"Home", -1}, {"Training", HM_NAV_TRAINING}
 static const hvTab_t hvTabsRight[] = {{"Replays", HM_NAV_REPLAYS}, {"Settings", HM_NAV_SETTINGS}};
 
 static struct {
+    qboolean menuOpen;  // el desplegable de PLAY
+    float menu;         // 0 cerrado, 1 abierto
     float social;  // 0 plegada, 1 desplegada
     float play;    // 0 quieto, 1 bajo el cursor
     int lastTime;
@@ -933,6 +936,80 @@ static void UI_Home_DrawQuit(float right, float top) {
     SM_Hit(x - 16, top, w + 16 + HV_PAD, HV_BAR_H, HM_HIT_QUIT, 0, NULL);
 }
 
+/*
+===============
+UI_Home_DrawPlayMenu
+
+[ioquakelive] El desplegable de PLAY, que cuelga del trapecio: Start Match y Server Browser. El
+jugador lo pidio asi en vez de que PLAY llevara derecho a Start Match. Se abre y se cierra con
+una transicion, y cualquier clic afuera lo cierra.
+
+Server Browser espera su pagina: el front end no tiene una todavia, asi que la opcion se dibuja
+apagada y con su marca.
+===============
+*/
+typedef struct {
+    const char* title;
+    int nav;  // -1: todavia no tiene pagina
+} hvPlayItem_t;
+
+static const hvPlayItem_t hvPlayItems[] = {
+    {"Start Match", HM_NAV_PLAY},
+    {"Server Browser", -1},
+};
+
+#define HV_MENU_W (34.0f * HV_U)
+#define HV_MENU_ROW (7.0f * HV_U)
+#define HV_MENU_SIZE 14.0f
+
+static void UI_Home_DrawPlayMenu(float cx, float top, float dt) {
+    float full = ARRAY_LEN(hvPlayItems) * HV_MENU_ROW;
+    float y = top + HV_BAR_H + HV_PLAY_DROP;
+    float t;
+    float h;
+    float x;
+    int i;
+
+    hv.menu = UI_Home_Ease(hv.menu, hv.menuOpen ? 1.0f : 0.0f, dt);
+    t = UI_Home_Smooth(hv.menu);
+    if (t < 0.01f) {
+        return;
+    }
+    h = full * t;
+    x = cx - HV_MENU_W * 0.5f;
+    UI_Home_RoundedBottom(x, y, HV_MENU_W, h, 2.0f * HV_U, hvPanel);
+
+    for (i = 0; i < (int)ARRAY_LEN(hvPlayItems); i++) {
+        float ry = y + i * HV_MENU_ROW;
+        qboolean soon = hvPlayItems[i].nav < 0;
+        qboolean over = !soon && SM_Over(HM_HIT_MENU, i);
+        vec4_t color;
+
+        if (ry + HV_MENU_ROW > y + h) {
+            break;  // todavia no se desplego hasta esta fila
+        }
+        VectorCopy(soon ? smSubtle : over ? smText : smTextSoft, color);
+        color[3] = t;
+        SM_Label(x + 3.0f * HV_U, SM_Baseline(FONT_SANS, HV_MENU_SIZE, ry + HV_MENU_ROW * 0.5f - 11.0f, 22.0f),
+                 HV_MENU_SIZE, color, hvPlayItems[i].title, 1.6f);
+        if (soon) {
+            vec4_t tag;
+
+            VectorCopy(smSubtle, tag);
+            tag[3] = t;
+            SM_Text(x + HV_MENU_W - 3.0f * HV_U - SM_Advance(FONT_SANS, 11.0f, "soon", -1),
+                    SM_Baseline(FONT_SANS, 11.0f, ry + HV_MENU_ROW * 0.5f - 9.0f, 18.0f), FONT_SANS, 11.0f, tag,
+                    "soon", -1, qfalse);
+        }
+        if (over) {
+            SM_Fill(x, ry + 6.0f, 2.0f, HV_MENU_ROW - 12.0f, smText, NULL);
+        }
+        if (t > 0.6f && !soon) {
+            SM_Hit(x, ry, HV_MENU_W, HV_MENU_ROW, HM_HIT_MENU, i, NULL);
+        }
+    }
+}
+
 // arriba: el panel centrado, con el logo a la izquierda, las secciones al centro, el trapecio
 // atravesandolo y la salida a la derecha
 static void UI_Home_DrawBar(float dt) {
@@ -960,6 +1037,7 @@ static void UI_Home_DrawBar(float dt) {
 
     UI_Home_DrawPlay(cx, top, dt);
     UI_Home_DrawQuit(x + HV_BAR_W, top);
+    UI_Home_DrawPlayMenu(cx, top, dt);
 }
 
 /*
@@ -974,9 +1052,9 @@ Cada tarjeta lleva el levelshot del mapa, el nombre del servidor y, debajo, el m
 gente hay y el ping. El clic conecta. Sin servidores, una sola tarjeta lo dice.
 ===============
 */
-#define HV_CARD_W (24.0f * HV_U)   // la fila de tarjetas mide lo mismo
-#define HV_CARD_H (18.0f * HV_U)   // que la fila de secciones: 864
 #define HV_CARD_GAP (4.0f * HV_U)
+#define HV_CARD_W ((HV_TABS_W - 3.0f * HV_CARD_GAP) / 4.0f)  // la fila de tarjetas mide lo
+#define HV_CARD_H (18.0f * HV_U)                             // mismo que la de secciones
 #define HV_CARD_BAND (5.0f * HV_U)  // la banda con el nombre y los datos, al pie de la tarjeta
 #define HV_CARD_SIZE 14.0f
 #define HV_CARDS 4
@@ -1251,6 +1329,10 @@ qboolean UI_Home_HandleKey(int key) {
     if (key & K_CHAR_FLAG) {
         return qtrue;
     }
+    if (key == K_ESCAPE && hv.menuOpen) {
+        hv.menuOpen = qfalse;
+        return qtrue;
+    }
     if (key == K_ESCAPE && hm2.menu != HM_MENU_MAIN) {
         hm2.menu = HM_MENU_MAIN;  // Back, the way the list's own Back does
         return qtrue;
@@ -1272,9 +1354,20 @@ qboolean UI_Home_HandleKey(int key) {
         return qtrue;
     }
     if (hit && hit->type == HM_HIT_TAB) {
+        if (hit->index == HM_NAV_PLAY) {
+            hv.menuOpen = !hv.menuOpen;  // PLAY despliega sus opciones
+            return qtrue;
+        }
+        hv.menuOpen = qfalse;
         UI_Home_Go(hit->index);
         return qtrue;
     }
+    if (hit && hit->type == HM_HIT_MENU) {
+        hv.menuOpen = qfalse;
+        UI_Home_Go(hvPlayItems[hit->index].nav);
+        return qtrue;
+    }
+    hv.menuOpen = qfalse;  // cualquier otro clic lo cierra
     if (hit && hit->type == HM_HIT_QUIT) {
         UI_Home_Go(HM_NAV_QUIT);
         return qtrue;
