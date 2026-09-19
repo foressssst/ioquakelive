@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "client.h"
 #include <limits.h>
 
+#include "../qcommon/q_steam.h"
 #include "../sys/sys_local.h"
 #include "../sys/sys_loadlib.h"
 
@@ -138,6 +139,10 @@ void hA3Dg_ExportRenderGeom(refexport_t* incoming_re);
 #endif
 
 static int noGameRestart = qfalse;
+
+// cuantos servidores de la lista de Steam ya se pasaron a la lista de la interfaz
+static int cl_steamServersTaken;
+static qboolean cl_steamServersPending;
 
 extern void SV_BotFrame(int time);
 void CL_CheckForResend(void);
@@ -2279,6 +2284,9 @@ void CL_Frame(int msec) {
     // resend a connection request if necessary
     CL_CheckForResend();
 
+    // [QL] lo que Steam va contestando de la lista de servidores
+    CL_SteamServersFrame();
+
     // decide on the serverTime to render
     CL_SetCGameTime();
 
@@ -3013,6 +3021,8 @@ void CL_Init(void) {
     Cmd_AddCommand("reconnect", CL_Reconnect_f);
     Cmd_AddCommand("rcon", CL_Rcon_f);
     Cmd_SetCommandCompletionFunc("rcon", CL_CompleteRcon);
+    Cmd_AddCommand("localservers", CL_LocalServers_f);
+    Cmd_AddCommand("globalservers", CL_GlobalServers_f);
     Cmd_AddCommand("showip", CL_ShowIP_f);
     Cmd_AddCommand("fs_openedList", CL_OpenedPK3List_f);
     Cmd_AddCommand("fs_referencedList", CL_ReferencedPK3List_f);
@@ -3420,6 +3430,111 @@ void CL_ServerStatusResponse(netadr_t from, msg_t* msg) {
     serverStatus->pending = qfalse;
     if (serverStatus->print) {
         serverStatus->retrieved = qtrue;
+    }
+}
+
+/*
+==================
+CL_GlobalServers_f
+
+[QL] 0x00462eb0. Quake Live no tiene master propio ni manda "getservers" a
+ninguna parte: la lista se la pide a Steam, con un solo filtro ("gamedir" =
+"baseq3"). El primer argumento es de donde quiere la lista, igual que en retail:
+0 internet, 1 LAN, 2 amigos, 3 favoritos, 4 historial. El resto de los
+argumentos (protocolo y palabras clave) los acepta para no romper a quien los
+manda, pero Steam no los usa.
+==================
+*/
+void CL_GlobalServers_f(void) {
+    int source;
+    int i;
+
+    if (Cmd_Argc() < 2) {
+        Com_Printf("usage: globalservers <0-4> [protocol] [keywords]\n");
+        return;
+    }
+
+    source = atoi(Cmd_Argv(1));
+    if (source < 0 || source > 4) {
+        source = 0;
+    }
+
+    // la lista se arma de nuevo: la bandera de visible es de la interfaz y se respeta
+    for (i = 0; i < MAX_GLOBAL_SERVERS; i++) {
+        qboolean visible = cls.globalServers[i].visible;
+
+        Com_Memset(&cls.globalServers[i], 0, sizeof(cls.globalServers[i]));
+        cls.globalServers[i].visible = visible;
+    }
+    cls.numglobalservers = 0;
+    cls.numGlobalServerAddresses = 0;
+    cls.pingUpdateSource = AS_GLOBAL;
+    cl_steamServersTaken = 0;
+    cl_steamServersPending = qtrue;
+
+    if (!Steam_RequestServerList(source)) {
+        Com_Printf("No hay lista de servidores: Steam no esta disponible.\n");
+        return;
+    }
+    Com_Printf("Pidiendo la lista de servidores a Steam...\n");
+}
+
+/*
+==================
+CL_SteamServersFrame
+
+Steam contesta servidor por servidor mientras la busqueda avanza. Lo que va
+llegando se pasa a la lista que mira la interfaz, con el ping que midio Steam,
+asi que no hace falta preguntarle nada a cada servidor: el "getinfo" de ioquake3
+no existe en Quake Live.
+==================
+*/
+void CL_SteamServersFrame(void) {
+    int count;
+    int i;
+    int j;
+
+    count = Steam_ServerListCount();
+    while (cl_steamServersTaken < count && cls.numglobalservers < MAX_GLOBAL_SERVERS) {
+        unsigned int ip = 0;
+        unsigned short port = 0;
+        int ping = 0;
+        char info[MAX_INFO_STRING];
+        netadr_t adr;
+        serverInfo_t* server;
+
+        i = cl_steamServersTaken++;
+        if (!Steam_ServerListGet(i, &ip, &port, &ping, info, sizeof(info))) {
+            continue;
+        }
+
+        Com_Memset(&adr, 0, sizeof(adr));
+        adr.type = NA_IP;
+        adr.ip[0] = (byte)(ip >> 24);
+        adr.ip[1] = (byte)(ip >> 16);
+        adr.ip[2] = (byte)(ip >> 8);
+        adr.ip[3] = (byte)ip;
+        adr.port = BigShort(port);
+
+        // el mismo servidor puede venir dos veces si la busqueda se reintenta
+        for (j = 0; j < cls.numglobalservers; j++) {
+            if (NET_CompareAdr(cls.globalServers[j].adr, adr)) {
+                break;
+            }
+        }
+        if (j < cls.numglobalservers) {
+            continue;
+        }
+
+        server = &cls.globalServers[cls.numglobalservers++];
+        CL_InitServerInfo(server, &adr);
+        CL_SetServerInfo(server, info, ping);
+    }
+
+    // el aviso del final, una sola vez, como el que daba el master de ioquake3
+    if (cl_steamServersPending && !Steam_ServerListRefreshing()) {
+        cl_steamServersPending = qfalse;
+        Com_Printf("%d servers parsed\n", cls.numglobalservers);
     }
 }
 

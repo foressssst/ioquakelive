@@ -53,6 +53,77 @@ everything here turns into a no-op and the game runs exactly as before.
 
 typedef unsigned char steamBool_t;
 
+// Los callbacks de la lista de servidores son metodos virtuales de C++: en Windows la
+// convencion es __thiscall (el objeto en ecx), que se imita con __fastcall y un parametro de
+// relleno para edx; en el ABI de Linux el objeto es el primer argumento normal.
+#ifdef _WIN32
+#define STEAM_CB __fastcall
+#define STEAM_CB_SELF void* self, void* unusedEdx
+#else
+#define STEAM_CB
+#define STEAM_CB_SELF void* self
+#endif
+
+// MatchMakingKeyValuePair_t
+typedef struct {
+    char key[256];
+    char value[256];
+} steamKeyValue_t;
+
+// gameserveritem_t, con los offsets que usa el binario de retail (0x00462a50)
+#pragma pack(push, 1)
+typedef struct {
+    unsigned short connectionPort;   //   0
+    unsigned short queryPort;        //   2
+    unsigned int ip;                 //   4
+    int ping;                        //   8
+    unsigned char hadResponse;       //  12
+    unsigned char doNotRefresh;      //  13
+    char gameDir[32];                //  14
+    char map[32];                    //  46
+    char gameDescription[64];        //  78
+    unsigned char pad0[2];           // 142
+    unsigned int appId;              // 144
+    int players;                     // 148
+    int maxPlayers;                  // 152
+    int botPlayers;                  // 156
+    unsigned char password;          // 160
+    unsigned char secure;            // 161
+    unsigned char pad1[2];           // 162
+    unsigned int lastPlayed;         // 164
+    int serverVersion;               // 168
+    char serverName[64];             // 172
+    char gameTags[128];              // 236
+    unsigned long long steamId;      // 364
+} steamServerItem_t;                 // 372
+#pragma pack(pop)
+
+#define STEAM_MAX_SERVERS 2048
+
+// lo que guardamos de cada servidor que contesta
+typedef struct {
+    unsigned int ip;
+    unsigned short port;
+    int ping;
+    int players;
+    int maxPlayers;
+    int bots;
+    qboolean password;
+    qboolean secure;
+    char name[64];
+    char map[32];
+    char gameDir[32];
+    char description[64];
+    char tags[128];
+} steamServer_t;
+
+// el objeto que Steam ve como ISteamMatchmakingServerListResponse
+typedef struct {
+    void** vtable;
+} steamListResponse_t;
+
+static void Steam_GS_SetGameInfo(void);
+
 typedef struct {
     void* lib;
     void* gameServer;  // ISteamGameServer *
@@ -86,6 +157,31 @@ typedef struct {
     int(QDECL* HandleIncomingPacket)(void* self, const void* data, int len, unsigned int srcIP,
                                      unsigned short srcPort);
     int(QDECL* GetNextOutgoingPacket)(void* self, void* out, int maxOut, unsigned int* ip, unsigned short* port);
+    void(QDECL* SetGameTags)(void* self, const char* tags);
+
+    // la lista de servidores
+    void*(QDECL* Matchmaking)(void);
+    void*(QDECL* RequestInternetServerList)(void* self, unsigned int appId, steamKeyValue_t** filters,
+                                            unsigned int numFilters, void* response);
+    void*(QDECL* RequestLANServerList)(void* self, unsigned int appId, void* response);
+    void*(QDECL* RequestFriendsServerList)(void* self, unsigned int appId, steamKeyValue_t** filters,
+                                           unsigned int numFilters, void* response);
+    void*(QDECL* RequestFavoritesServerList)(void* self, unsigned int appId, steamKeyValue_t** filters,
+                                             unsigned int numFilters, void* response);
+    void*(QDECL* RequestHistoryServerList)(void* self, unsigned int appId, steamKeyValue_t** filters,
+                                           unsigned int numFilters, void* response);
+    void*(QDECL* GetServerDetails)(void* self, void* request, int server);
+    int(QDECL* GetServerCount)(void* self, void* request);
+    void(QDECL* ReleaseRequest)(void* self, void* request);
+    steamBool_t(QDECL* IsRefreshing)(void* self, void* request);
+    void(QDECL* CancelQuery)(void* self, void* request);
+
+    void* matchmaking;   // ISteamMatchmakingServers *
+    void* listRequest;   // HServerListRequest
+    qboolean listRefreshing;
+    steamListResponse_t listResponse;
+    int numServers;
+    steamServer_t servers[STEAM_MAX_SERVERS];
 } steamState_t;
 
 static steamState_t st;
@@ -109,6 +205,8 @@ static void* Steam_Symbol(const char* name) {
     return dlsym(st.lib, name);
 #endif
 }
+
+#define STEAM_BIND_OPT(field, name)                            do {                                                           *(void**)&st.field = Steam_Symbol(name);               } while (0)
 
 #define STEAM_BIND(field, name)                            \
     do {                                                   \
@@ -144,6 +242,21 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND(GetPublicIP, "SteamAPI_ISteamGameServer_GetPublicIP");
     STEAM_BIND(HandleIncomingPacket, "SteamAPI_ISteamGameServer_HandleIncomingPacket");
     STEAM_BIND(GetNextOutgoingPacket, "SteamAPI_ISteamGameServer_GetNextOutgoingPacket");
+
+    // Lo del navegador de servidores es opcional a proposito: si esta biblioteca no lo trae,
+    // el resto (el master, las estadisticas, la voz) sigue funcionando igual.
+    STEAM_BIND_OPT(SetGameTags, "SteamAPI_ISteamGameServer_SetGameTags");
+    STEAM_BIND_OPT(Matchmaking, "SteamMatchmakingServers");
+    STEAM_BIND_OPT(RequestInternetServerList, "SteamAPI_ISteamMatchmakingServers_RequestInternetServerList");
+    STEAM_BIND_OPT(RequestLANServerList, "SteamAPI_ISteamMatchmakingServers_RequestLANServerList");
+    STEAM_BIND_OPT(RequestFriendsServerList, "SteamAPI_ISteamMatchmakingServers_RequestFriendsServerList");
+    STEAM_BIND_OPT(RequestFavoritesServerList, "SteamAPI_ISteamMatchmakingServers_RequestFavoritesServerList");
+    STEAM_BIND_OPT(RequestHistoryServerList, "SteamAPI_ISteamMatchmakingServers_RequestHistoryServerList");
+    STEAM_BIND_OPT(GetServerDetails, "SteamAPI_ISteamMatchmakingServers_GetServerDetails");
+    STEAM_BIND_OPT(GetServerCount, "SteamAPI_ISteamMatchmakingServers_GetServerCount");
+    STEAM_BIND_OPT(ReleaseRequest, "SteamAPI_ISteamMatchmakingServers_ReleaseRequest");
+    STEAM_BIND_OPT(IsRefreshing, "SteamAPI_ISteamMatchmakingServers_IsRefreshing");
+    STEAM_BIND_OPT(CancelQuery, "SteamAPI_ISteamMatchmakingServers_CancelQuery");
     return qtrue;
 }
 
@@ -246,6 +359,10 @@ void Steam_Init(void) {
         return;
     }
     st.clientUp = qtrue;
+    if (st.Matchmaking) {
+        st.matchmaking = st.Matchmaking();  // la interfaz de la lista de servidores
+    }
+    Cmd_AddCommand("steamservers", Steam_ServerList_f);
     Cmd_AddCommand("steamstatus", Steam_Status_f);
     Com_Printf("Steam API initialized.\n");
 }
@@ -343,6 +460,7 @@ void Steam_GS_SetServerInfo(const char* hostname, const char* mapName, qboolean 
     }
     st.SetPasswordProtected(st.gameServer, (steamBool_t)(needPassword != qfalse));
     st.SetBotPlayerCount(st.gameServer, botCount);
+    Steam_GS_SetGameInfo();
 }
 
 /*
@@ -415,4 +533,301 @@ void Steam_Shutdown(void) {
         st.API_Shutdown();
         st.clientUp = qfalse;
     }
+}
+
+/*
+===============================================================================
+
+LA LISTA DE SERVIDORES
+
+Quake Live no tiene master propio ni protocolo de navegador: el cliente le pide
+la lista a Steam. En el binario de retail estan las dos mitades.
+
+El servidor publica lo suyo (0x00466260): la descripcion del juego es el nombre
+largo del tipo de juego ("Free For All", "Clan Arena", ...) y las etiquetas son
+el nombre corto mas una palabra por cada regla que no es la de siempre:
+
+    <corto>,[cheats,][instagib,][lowgrav,|highgrav,][vampiric,][infected,]
+    [quadhog,][sv_tags]
+
+El cliente pide la lista (0x00462eb0) con un solo filtro, "gamedir" = "baseq3",
+segun de donde la quiera: internet, LAN, amigos, favoritos o historial. Cada
+servidor que contesta se arma (0x00462a50) con lo que Steam devuelve en
+gameserveritem_t: nombre, mapa, jugadores, bots, ping, contraseña, VAC, las
+etiquetas y la descripcion.
+
+===============================================================================
+*/
+
+// [QL] 0x00560e50: el nombre largo va en la descripcion del juego
+static const char* steamGametypeNames[] = {
+    "Free For All", "Duel", "Race", "Team Deathmatch", "Clan Arena", "Capture the Flag",
+    "One Flag CTF", "Overload", "Harvester", "Freeze Tag", "Domination", "Attack and Defend",
+    "Red Rover"
+};
+
+// [QL] 0x00560e84: el nombre corto abre las etiquetas
+static const char* steamGametypeTags[] = {
+    "ffa", "duel", "race", "tdm", "clanarena", "ctf", "oneflag", "overload", "harvester",
+    "freezetag", "domination", "a&d", "redrover"
+};
+
+#define STEAM_NUM_GAMETYPES ((int)ARRAY_LEN(steamGametypeNames))
+
+/*
+===============
+Steam_GS_SetGameInfo
+
+[QL] 0x00466260. Lo que el navegador muestra de este servidor, aparte del nombre
+y el mapa: de que se juega y con que reglas.
+===============
+*/
+static void Steam_GS_SetGameInfo(void) {
+    int gametype;
+    float gravity;
+    char tags[256];
+    const char* extra;
+
+    if (!st.serverUp || !st.SetGameTags) {
+        return;
+    }
+
+    gametype = Cvar_VariableIntegerValue("g_gametype");
+    if (gametype < 0 || gametype >= STEAM_NUM_GAMETYPES) {
+        st.SetGameDescription(st.gameServer, "Unknown Gametype");
+        Q_strncpyz(tags, "", sizeof(tags));
+    } else {
+        st.SetGameDescription(st.gameServer, steamGametypeNames[gametype]);
+        Com_sprintf(tags, sizeof(tags), "%s,", steamGametypeTags[gametype]);
+    }
+
+    if (Cvar_VariableIntegerValue("sv_cheats")) {
+        Q_strcat(tags, sizeof(tags), "cheats,");
+    }
+    if (Cvar_VariableIntegerValue("g_instagib")) {
+        Q_strcat(tags, sizeof(tags), "instagib,");
+    }
+    gravity = Cvar_VariableValue("g_gravity");
+    if (gravity < 800.0f) {
+        Q_strcat(tags, sizeof(tags), "lowgrav,");
+    } else if (gravity > 800.0f) {
+        Q_strcat(tags, sizeof(tags), "highgrav,");
+    }
+    if (Cvar_VariableValue("g_vampiricDamage") > 0.0f) {
+        Q_strcat(tags, sizeof(tags), "vampiric,");
+    }
+    // infectados solo cuenta en red rover, y el quad hog solo en free for all
+    if (Cvar_VariableIntegerValue("g_rrInfected") && gametype == 12) {
+        Q_strcat(tags, sizeof(tags), "infected,");
+    }
+    if (Cvar_VariableIntegerValue("g_quadHog") && gametype == 0) {
+        Q_strcat(tags, sizeof(tags), "quadhog,");
+    }
+    extra = Cvar_VariableString("sv_tags");
+    if (extra[0]) {
+        Q_strcat(tags, sizeof(tags), extra);
+        if (tags[strlen(tags) - 1] != ',') {
+            Q_strcat(tags, sizeof(tags), ",");
+        }
+    }
+
+    // la coma del final sobra
+    if (tags[0] && tags[strlen(tags) - 1] == ',') {
+        tags[strlen(tags) - 1] = '\0';
+    }
+    st.SetGameTags(st.gameServer, tags);
+}
+
+/*
+===============
+Steam_ServerListReset
+===============
+*/
+static void Steam_ServerListReset(void) {
+    if (st.listRequest && st.ReleaseRequest) {
+        st.ReleaseRequest(st.matchmaking, st.listRequest);
+    }
+    st.listRequest = NULL;
+    st.numServers = 0;
+    st.listRefreshing = qfalse;
+}
+
+// lo que Steam contesta de un servidor, pasado a lo que el navegador necesita
+static void Steam_ServerListAdd(void* request, int index) {
+    steamServerItem_t* item;
+    steamServer_t* out;
+
+    if (st.numServers >= STEAM_MAX_SERVERS) {
+        return;
+    }
+    item = (steamServerItem_t*)st.GetServerDetails(st.matchmaking, request, index);
+    if (!item || !item->hadResponse) {
+        return;
+    }
+
+    out = &st.servers[st.numServers++];
+    out->ip = item->ip;
+    out->port = item->connectionPort;
+    out->ping = item->ping;
+    out->players = item->players;
+    out->maxPlayers = item->maxPlayers;
+    out->bots = item->botPlayers;
+    out->password = (qboolean)(item->password != 0);
+    out->secure = (qboolean)(item->secure != 0);
+    Q_strncpyz(out->name, item->serverName, sizeof(out->name));
+    Q_strncpyz(out->map, item->map, sizeof(out->map));
+    Q_strncpyz(out->gameDir, item->gameDir, sizeof(out->gameDir));
+    Q_strncpyz(out->description, item->gameDescription, sizeof(out->description));
+    Q_strncpyz(out->tags, item->gameTags, sizeof(out->tags));
+}
+
+static void STEAM_CB Steam_CB_ServerResponded(STEAM_CB_SELF, void* request, int index) {
+    Steam_ServerListAdd(request, index);
+}
+
+static void STEAM_CB Steam_CB_ServerFailedToRespond(STEAM_CB_SELF, void* request, int index) {
+    // retail tampoco muestra al que no contesta
+    (void)request;
+    (void)index;
+}
+
+static void STEAM_CB Steam_CB_RefreshComplete(STEAM_CB_SELF, void* request, int response) {
+    (void)request;
+    st.listRefreshing = qfalse;
+    Com_DPrintf("Steam: la lista termino con %i servidores (respuesta %i)\n", st.numServers, response);
+}
+
+static void* steamListVTable[3];
+
+/*
+===============
+Steam_RequestServerList
+
+[QL] 0x00462eb0. source: 0 internet, 1 LAN, 2 amigos, 3 favoritos, 4 historial.
+===============
+*/
+qboolean Steam_RequestServerList(int source) {
+    steamKeyValue_t filter;
+    steamKeyValue_t* filters[1];
+    unsigned int appId = (unsigned int)atoi(STEAM_APP_ID);
+
+    if (!st.clientUp || !st.matchmaking || !st.RequestInternetServerList) {
+        return qfalse;
+    }
+
+    Steam_ServerListReset();
+
+    steamListVTable[0] = (void*)Steam_CB_ServerResponded;
+    steamListVTable[1] = (void*)Steam_CB_ServerFailedToRespond;
+    steamListVTable[2] = (void*)Steam_CB_RefreshComplete;
+    st.listResponse.vtable = steamListVTable;
+
+    // el unico filtro de retail: que sea Quake Live y no otro juego del mismo App ID
+    Com_Memset(&filter, 0, sizeof(filter));
+    Q_strncpyz(filter.key, "gamedir", sizeof(filter.key));
+    Q_strncpyz(filter.value, STEAM_MOD_DIR, sizeof(filter.value));
+    filters[0] = &filter;
+
+    st.listRefreshing = qtrue;
+    switch (source) {
+        case 1:
+            st.listRequest = st.RequestLANServerList(st.matchmaking, appId, &st.listResponse);
+            break;
+        case 2:
+            st.listRequest = st.RequestFriendsServerList(st.matchmaking, appId, filters, 1, &st.listResponse);
+            break;
+        case 3:
+            st.listRequest = st.RequestFavoritesServerList(st.matchmaking, appId, filters, 1, &st.listResponse);
+            break;
+        case 4:
+            st.listRequest = st.RequestHistoryServerList(st.matchmaking, appId, filters, 1, &st.listResponse);
+            break;
+        default:
+            st.listRequest = st.RequestInternetServerList(st.matchmaking, appId, filters, 1, &st.listResponse);
+            break;
+    }
+    if (!st.listRequest) {
+        st.listRefreshing = qfalse;
+        return qfalse;
+    }
+    return qtrue;
+}
+
+void Steam_ServerList_f(void) {
+    int cuenta = -1;
+    int refrescando = -1;
+
+    if (st.matchmaking && st.listRequest) {
+        if (st.GetServerCount) {
+            cuenta = st.GetServerCount(st.matchmaking, st.listRequest);
+        }
+        if (st.IsRefreshing) {
+            refrescando = st.IsRefreshing(st.matchmaking, st.listRequest) ? 1 : 0;
+        }
+    }
+    Com_Printf("Steam: pedido %p, nuestros %i, de Steam %i, refrescando %i (bandera %i)\n",
+               st.listRequest, st.numServers, cuenta, refrescando, st.listRefreshing);
+    for (cuenta = 0; cuenta < st.numServers && cuenta < 5; cuenta++) {
+        const steamServer_t* sv = &st.servers[cuenta];
+
+        Com_Printf("  %-28s %-12s %2i/%-2i bots %i ping %3i  %s | %s | %i.%i.%i.%i:%i\n",
+                   sv->name, sv->map, sv->players, sv->maxPlayers, sv->bots, sv->ping,
+                   sv->description, sv->tags, (sv->ip >> 24) & 0xff, (sv->ip >> 16) & 0xff,
+                   (sv->ip >> 8) & 0xff, sv->ip & 0xff, sv->port);
+    }
+}
+
+qboolean Steam_ServerListRefreshing(void) {
+    return st.listRefreshing;
+}
+
+int Steam_ServerListCount(void) {
+    return st.numServers;
+}
+
+/*
+===============
+Steam_ServerListGet
+
+Devuelve un servidor de la lista como lo espera el navegador: la direccion, el
+ping que midio Steam y una cadena de info igual a la que contestaria el propio
+servidor. El tipo de juego sale de la primera etiqueta, que es como lo publica
+(0x00466260); si no se reconoce, queda en cero.
+===============
+*/
+qboolean Steam_ServerListGet(int index, unsigned int* ip, unsigned short* port, int* ping, char* info,
+                             int infoSize) {
+    const steamServer_t* s;
+    char firstTag[32];
+    const char* comma;
+    int gametype;
+    int i;
+
+    if (index < 0 || index >= st.numServers) {
+        return qfalse;
+    }
+    s = &st.servers[index];
+    *ip = s->ip;
+    *port = s->port;
+    *ping = s->ping;
+
+    Q_strncpyz(firstTag, s->tags, sizeof(firstTag));
+    comma = strchr(firstTag, ',');
+    if (comma) {
+        firstTag[comma - firstTag] = '\0';
+    }
+    gametype = 0;
+    for (i = 0; i < STEAM_NUM_GAMETYPES; i++) {
+        if (!Q_stricmp(firstTag, steamGametypeTags[i])) {
+            gametype = i;
+            break;
+        }
+    }
+
+    Com_sprintf(info, infoSize,
+                "\\hostname\\%s\\mapname\\%s\\clients\\%i\\g_humanplayers\\%i\\sv_maxclients\\%i"
+                "\\game\\%s\\gametype\\%i\\g_needpass\\%i\\nettype\\1\\sv_vac\\%i\\tags\\%s",
+                s->name, s->map, s->players, s->players - s->bots, s->maxPlayers, s->gameDir,
+                gametype, s->password ? 1 : 0, s->secure ? 1 : 0, s->tags);
+    return qtrue;
 }
