@@ -32,6 +32,14 @@ void Steam_GS_SetMaxPlayers(int maxPlayers);
 // from SV_SpawnServer: the name and the map the list shows
 void Steam_GS_SetServerInfo(const char* hostname, const char* mapName, qboolean needPassword, int botCount);
 
+// la lista de servidores, que en Quake Live la da Steam y no un master propio
+qboolean Steam_RequestServerList(int source);  // 0 internet, 1 LAN, 2 amigos, 3 favoritos, 4 historial
+void Steam_ServerList_f(void);
+qboolean Steam_ServerListRefreshing(void);
+int Steam_ServerListCount(void);
+qboolean Steam_ServerListGet(int index, unsigned int* ip, unsigned short* port, int* ping, char* info,
+                             int infoSize);
+
 // the server shares its game socket with Steam, so the query packets Steam sends arrive here
 qboolean Steam_GS_HandlePacket(netadr_t from, const void* data, int len);
 
