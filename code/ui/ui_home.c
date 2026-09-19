@@ -745,7 +745,7 @@ static const hmMark_t hmMarks[] = {
 
 // [ioquakelive] lo que queda a la izquierda de la columna social
 static float UI_Home_MainW(void) {
-    return smVW - HV_SOCIAL_W;
+    return smVW;  // [ioquakelive] la franja social esta apagada; cuando vuelva, smVW - HV_SOCIAL_W
 }
 
 static float UI_Home_DrawMarks(float bottom) {
@@ -799,14 +799,14 @@ secciones y los logos de los creditos.
 #define HV_BAR_H 96.0f
 #define HV_EDGE 48.0f
 #define HV_LOGO_H 96.0f       // la imagen del logo; el dibujo ocupa el 77 % de su alto
-#define HV_TAB_SLOT 176.0f    // cada seccion ocupa un casillero igual: la fila queda simetrica
-#define HV_TAB_SIZE 17.0f
+#define HV_TAB_SLOT 156.0f    // cada seccion ocupa un casillero igual: la fila queda simetrica
+#define HV_TAB_SIZE 16.0f
 #define HV_TAB_SPACING 2.2f
-#define HV_PLAY_SLOT 288.0f   // el lugar del trapecio en la fila
-#define HV_PLAY_TOP_W 264.0f  // el trapecio: ancho contra el borde de arriba
-#define HV_PLAY_BOT_W 204.0f  // y donde termina
-#define HV_PLAY_H 108.0f      // cuelga un poco por debajo de la barra
-#define HV_PLAY_SIZE 22.0f
+#define HV_PLAY_SLOT 212.0f   // el lugar del trapecio en la fila
+#define HV_PLAY_TOP_W 188.0f  // el trapecio: ancho contra el borde de arriba
+#define HV_PLAY_BOT_W 150.0f  // y donde termina
+#define HV_PLAY_H HV_BAR_H    // termina justo en el borde de la franja de arriba
+#define HV_PLAY_SIZE 18.0f
 #define HV_SOCIAL_OPEN_W 360.0f
 #define HV_SOCIAL_MS 55.0f    // la constante de tiempo de las transiciones
 #define HV_AVATAR 52.0f
@@ -886,9 +886,22 @@ static void UI_Home_DrawPlay(float cx, float top, float dt) {
 
         SM_Fill(cx - w * 0.5f, top + k, w, 1.05f, fill, NULL);
     }
-    SM_Label(cx - SM_LabelWidth(HV_PLAY_SIZE, "Play", 5.0f) * 0.5f, UI_Home_BarBaseline(HV_PLAY_SIZE, top),
+    SM_Label(cx - SM_LabelWidth(HV_PLAY_SIZE, "Play", 5.0f) * 0.5f,
+             SM_Baseline(FONT_SANS, HV_PLAY_SIZE, top + (HV_PLAY_H - HV_PLAY_SIZE * 1.4f) * 0.5f,
+                         HV_PLAY_SIZE * 1.4f),
              HV_PLAY_SIZE, smOnPrimary, "Play", 5.0f);
     SM_Hit(cx - HV_PLAY_TOP_W * 0.5f, top, HV_PLAY_TOP_W, HV_PLAY_H, HM_HIT_TAB, HM_NAV_PLAY, NULL);
+}
+
+// la salida, arriba a la derecha contra el margen: el lugar que tenia al pie de la franja
+// social, que por ahora no esta
+static void UI_Home_DrawQuit(float top) {
+    qboolean over = SM_Over(HM_HIT_QUIT, 0);
+    float w = SM_LabelWidth(HV_TEXT, "Quit", 2.0f);
+    float x = smVW - HV_EDGE - w;
+
+    SM_Label(x, UI_Home_BarBaseline(HV_TEXT, top), HV_TEXT, over ? smText : smTextSoft, "Quit", 2.0f);
+    SM_Hit(x - 20, top, w + 40, HV_BAR_H, HM_HIT_QUIT, 0, NULL);
 }
 
 // arriba: el logo contra el margen y la fila de secciones centrada en la pantalla
@@ -912,6 +925,7 @@ static void UI_Home_DrawBar(float dt) {
     }
 
     UI_Home_DrawPlay(cx, top, dt);
+    UI_Home_DrawQuit(top);
 }
 
 // abajo: los logos de los creditos sobre el eje y, en la franja, la version y el aviso legal
@@ -930,6 +944,27 @@ static void UI_Home_DrawFooter(void) {
     SM_Text(UI_Home_MainW() - HV_EDGE - w, baseline, FONT_SANS, HV_TEXT, smSubtle, notice, -1, qfalse);
 }
 
+/*
+===============================================================================
+
+LA FRANJA SOCIAL, APAGADA
+
+[ioquakelive] 2026-09-18. El jugador la saco del menu para rehacerla mas adelante ("quita la
+seccion social de la ui pero comentala en algun lado para re-hacerla despues"), asi que queda
+aca entera y sin compilar. Es la de CS2: plegada, una columna fina con tu cara, los lugares de
+los amigos y la salida; con el cursor encima se despliega hacia la izquierda por encima de la
+pagina, que se oscurece, y aparecen los textos.
+
+Para volver a encenderla: poner este bloque en 1, devolver HV_SOCIAL_W a 84 en UI_Home_MainW,
+llamarla al final de UI_Home_Paint (va al final para quedar por encima) y sacar Quit de la
+barra, porque su lugar esta al pie de la franja.
+
+Lo que le falta cuando se rehaga: los amigos de verdad (Steam y quakeclub.com), el estado de
+cada uno y poder unirse a su partida.
+
+===============================================================================
+*/
+#if 0
 /*
 ===============
 UI_Home_DrawSocial
@@ -1051,6 +1086,8 @@ static void UI_Home_DrawSocial(float dt) {
     }
 }
 
+#endif
+
 // las sombras del menu: dos franjas negras planas, arriba y abajo, donde va lo que hay que leer.
 // Sin degradados ni brillos, que es lo que pidio el jugador: el fondo es la imagen y lo demas es
 // negro liso.
@@ -1091,7 +1128,6 @@ void UI_Home_Paint(void) {
         UI_Home_DrawHomeShade();
         UI_Home_DrawFooter();
         UI_Home_DrawBar(dt);
-        UI_Home_DrawSocial(dt);
     }
 
     UI_Home_Banner();
