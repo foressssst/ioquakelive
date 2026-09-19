@@ -30,12 +30,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // [ioquakelive] 2026-09-18: cada gris sube unos puntos -- el jugador pidio la paleta "un
 // poquitin mas clara, solo un poco". smField sube mas: es el carril del slider y el borde de
 // los campos, y valia lo mismo que el panel, asi que sobre el no se veia.
-const vec4_t smPage = SM_RGB(12, 12, 12);
-const vec4_t smPanel = SM_RGB(21, 21, 21);
-const vec4_t smRaised = SM_RGB(31, 31, 31);
-const vec4_t smRaisedHover = SM_RGB(42, 42, 42);
-const vec4_t smBorder = SM_RGB(56, 56, 56);
-const vec4_t smField = SM_RGB(40, 40, 40);
+// [ioquakelive] 2026-09-19: el gris que el jugador eligio para la portada es el de la paleta,
+// no uno aparte, asi la pagina de ajustes y las demas usan los mismos tonos por construccion.
+const vec4_t smPage = SM_RGB(18, 18, 20);
+const vec4_t smPanel = SM_RGB(30, 31, 33);
+const vec4_t smRaised = SM_RGB(42, 43, 46);
+const vec4_t smRaisedHover = SM_RGB(54, 55, 59);
+const vec4_t smBorder = SM_RGB(72, 74, 78);
+const vec4_t smField = SM_RGB(52, 53, 57);
 const vec4_t smText = SM_RGB(221, 221, 221);
 const vec4_t smTextSoft = SM_RGB(190, 190, 190);
 const vec4_t smMuted = SM_RGB(153, 153, 153);
