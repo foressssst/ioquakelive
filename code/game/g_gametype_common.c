@@ -138,11 +138,15 @@ Shared by CA, RR, DOM gametypes.
 ==================
 */
 void STAT_AddPlayerMedalStat(gentity_t *ent, const char *medal) {
-    (void)ent; (void)medal;
+    // [ioquakelive] 0x100716a0: sale como evento PLAYER_MEDAL por el canal de estadisticas
+    if (ent && ent->client && medal) {
+        STAT_PlayerMedal(ent, medal, STAT_MedalTotal(ent, medal));
+    }
 }
 
 void STAT_AddRoundOverStat(int round, int winTeam, int isDraw) {
-    (void)round; (void)winTeam; (void)isDraw;
+    // [ioquakelive] 0x100720e0: evento ROUND_OVER
+    STAT_RoundOver(round, winTeam, (qboolean)(isDraw != 0));
 }
 
 /*

@@ -2114,6 +2114,8 @@ $(B)/$(BASEGAME)/cgame$(SHLIBNAME): $(Q3CGOBJ)
 
 Q3GOBJ_ = \
   $(B)/$(BASEGAME)/game/g_main.o \
+  $(B)/$(BASEGAME)/game/g_json.o \
+  $(B)/$(BASEGAME)/game/g_stats.o \
   $(B)/$(BASEGAME)/game/ai_chat.o \
   $(B)/$(BASEGAME)/game/ai_cmd.o \
   $(B)/$(BASEGAME)/game/ai_dmnet.o \

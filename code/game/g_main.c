@@ -1752,6 +1752,11 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
 
     SaveRegisteredItems();
 
+    // [QL] 0x10055386: el motor genera un GUID y va a CS_MATCH_GUID; lo llevan todos los
+    // eventos de estadisticas
+    G_SetMatchGUID();
+    STAT_ResetMedals();
+
     G_Printf("-----------------------------------\n");
 
     if (trap_Cvar_VariableIntegerValue("bot_enable")) {
