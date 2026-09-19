@@ -49,6 +49,7 @@ everything here turns into a no-op and the game runs exactly as before.
 #define STEAM_PRODUCT "Quake Live"
 #define STEAM_MOD_DIR "baseq3"
 #define STEAM_QUERY_PORT_SHARED 0xffff  // MASTERSERVERUPDATERPORT_USEGAMESOCKETSHARE
+#define STEAM_APP_ID "282440"  // el App ID de Quake Live en Steam
 
 typedef unsigned char steamBool_t;
 
@@ -80,6 +81,8 @@ typedef struct {
     void(QDECL* SetMapName)(void* self, const char* name);
     void(QDECL* SetPasswordProtected)(void* self, steamBool_t needsPassword);
     steamBool_t(QDECL* BLoggedOn)(void* self);
+    steamBool_t(QDECL* BSecure)(void* self);
+    unsigned int(QDECL* GetPublicIP)(void* self);
     int(QDECL* HandleIncomingPacket)(void* self, const void* data, int len, unsigned int srcIP,
                                      unsigned short srcPort);
     int(QDECL* GetNextOutgoingPacket)(void* self, void* out, int maxOut, unsigned int* ip, unsigned short* port);
@@ -137,6 +140,8 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND(SetMapName, "SteamAPI_ISteamGameServer_SetMapName");
     STEAM_BIND(SetPasswordProtected, "SteamAPI_ISteamGameServer_SetPasswordProtected");
     STEAM_BIND(BLoggedOn, "SteamAPI_ISteamGameServer_BLoggedOn");
+    STEAM_BIND(BSecure, "SteamAPI_ISteamGameServer_BSecure");
+    STEAM_BIND(GetPublicIP, "SteamAPI_ISteamGameServer_GetPublicIP");
     STEAM_BIND(HandleIncomingPacket, "SteamAPI_ISteamGameServer_HandleIncomingPacket");
     STEAM_BIND(GetNextOutgoingPacket, "SteamAPI_ISteamGameServer_GetNextOutgoingPacket");
     return qtrue;
@@ -158,6 +163,17 @@ static qboolean Steam_Load(void) {
     if (st.lib) {
         return qtrue;
     }
+
+    // Retail lo lanza Steam, que le pasa el App ID por el entorno; a nosotros nos lanza el
+    // launcher, asi que se lo decimos nosotros. Sin esto la API no sabe de que juego se trata y
+    // tanto SteamAPI_Init como SteamGameServer_Init fallan.
+#ifdef _WIN32
+    SetEnvironmentVariableA("SteamAppId", STEAM_APP_ID);
+    SetEnvironmentVariableA("SteamGameId", STEAM_APP_ID);
+#else
+    setenv("SteamAppId", STEAM_APP_ID, 1);
+    setenv("SteamGameId", STEAM_APP_ID, 1);
+#endif
 #ifdef _WIN32
     st.lib = (void*)LoadLibraryA(STEAM_LIB);
 #else
@@ -193,6 +209,31 @@ Steam_Init
 when com_build is set, which is how a build with no Steam behind it runs.
 ===============
 */
+/*
+===============
+Steam_Status_f
+
+[ioquakelive] Diagnostico propio, no de retail: dice si la biblioteca cargo, si el cliente y el
+servidor arrancaron, si la sesion con Steam esta iniciada, si VAC esta activo y con que IP
+publica quedo registrado el servidor.
+===============
+*/
+static void Steam_Status_f(void) {
+    unsigned int ip;
+
+    Com_Printf("biblioteca:  %s\n", st.lib ? "cargada" : "no");
+    Com_Printf("cliente:     %s\n", st.clientUp ? "iniciado" : "no");
+    Com_Printf("servidor:    %s\n", st.serverUp ? "iniciado" : "no");
+    if (!st.serverUp) {
+        return;
+    }
+    Com_Printf("sesion:      %s\n", st.BLoggedOn(st.gameServer) ? "iniciada en Steam" : "sin iniciar");
+    Com_Printf("VAC:         %s\n", st.BSecure(st.gameServer) ? "si" : "no");
+    ip = st.GetPublicIP(st.gameServer);
+    Com_Printf("IP publica:  %u.%u.%u.%u\n", (ip >> 24) & 0xff, (ip >> 16) & 0xff, (ip >> 8) & 0xff,
+               ip & 0xff);
+}
+
 void Steam_Init(void) {
     if (Cvar_VariableIntegerValue("com_build")) {
         return;
@@ -205,6 +246,7 @@ void Steam_Init(void) {
         return;
     }
     st.clientUp = qtrue;
+    Cmd_AddCommand("steamstatus", Steam_Status_f);
     Com_Printf("Steam API initialized.\n");
 }
 
@@ -255,6 +297,9 @@ void Steam_GS_Init(void) {
         return;
     }
     st.serverUp = qtrue;
+    if (!st.clientUp) {
+        Cmd_AddCommand("steamstatus", Steam_Status_f);  // el cliente ya lo agrego si arranco
+    }
 
     st.SetDedicatedServer(st.gameServer, (steamBool_t)(Cvar_VariableIntegerValue("dedicated") > 0));
 
