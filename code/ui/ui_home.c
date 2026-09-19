@@ -51,13 +51,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define HM_NAV_INSET 39.0f
 
 // the main menu
-#define HM_COL_LEFT 0.065f   // of the screen's width
-#define HM_COL_MIN_X 80.0f
-#define HM_COL_W 470.0f      // what an entry takes, rule to chevron
+// [ioquakelive] la columna en numeros fijos de la grilla (U = 8), no en porcentaje de la
+// pantalla: asi cae siempre en el mismo lugar y el resto se alinea contra ella
+#define HM_COL_X 96.0f       // 12 U
+#define HM_COL_BAND 672.0f   // 84 U: hasta donde llega su banda
+#define HM_COL_W 480.0f      // what an entry takes, rule to chevron (60 U)
 #define HM_RULE_GAP 26.0f    // the hover rule stands this far left of the text
-#define HM_LOGO_Y 132.0f
-#define HM_LOGO_W 520.0f
-#define HM_LIST_Y 340.0f
+#define HM_LOGO_Y 128.0f     // 16 U
+#define HM_LOGO_W 400.0f     // 50 U
+#define HM_LIST_Y 320.0f     // 40 U
 #define HM_ITEM_H 78.0f
 #define HM_ITEM_SIZE 27.0f
 
@@ -510,9 +512,7 @@ static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
 
 
 static float UI_Home_ColumnX(void) {
-    float x = smVW * HM_COL_LEFT;
-
-    return x < HM_COL_MIN_X ? HM_COL_MIN_X : x;
+    return HM_COL_X;
 }
 
 /*
@@ -567,7 +567,7 @@ static void UI_Home_DrawColumn(void) {
     int i, rows = 0;
 
     if (hm2.logo) {
-        SM_Pic(x - 6, HM_LOGO_Y, HM_LOGO_W, HM_LOGO_W * 0.25f, hm2.logo, NULL);
+        SM_Pic(x - 56.0f * (HM_LOGO_W / 512.0f), HM_LOGO_Y, HM_LOGO_W, HM_LOGO_W * 0.25f, hm2.logo, NULL);
     }
 
     (void)rows;
@@ -597,13 +597,13 @@ static void UI_Home_DrawColumn(void) {
         // titulo en dorado. Sin plato y sin caja: el jugador pidio algo mas minimalista, y un
         // menu de seis entradas sobre un cuadro no necesita mas.
         if (over) {
-            SM_Fill(x - HM_RULE_GAP, y + 4, 3, HM_ITEM_SIZE + 4, smGold, NULL);
+            SM_Fill(x - HM_RULE_GAP, y + 4, 3, HM_ITEM_SIZE + 4, smText, NULL);
         }
 
         // [ioquakelive] the user asked for the arrow that used to stand at the right of the entry
         // under the cursor to go ("quitar el < del ui"): the gold of the title says enough
         SM_Label(x, SM_Baseline(FONT_SANS, HM_ITEM_SIZE, y, HM_ITEM_SIZE + 12), HM_ITEM_SIZE,
-                 item->soon ? smSubtle : over ? smGold : smText, item->title, HM_ITEM_SPACING);
+                 item->soon ? smSubtle : over ? smText : smTextSoft, item->title, HM_ITEM_SPACING);
         if (item->soon) {
             float tw = SM_LabelWidth(HM_ITEM_SIZE, item->title, HM_ITEM_SPACING);
 
@@ -751,6 +751,17 @@ static float UI_Home_MainW(void) {
 
 // los logos de los creditos, centrados en una franja de alto h: entran a la mitad de su tamano,
 // que es lo que deja el pie
+// [ioquakelive] el eje del contenido: lo que queda entre la columna del menu y la franja de
+// amigos. La fila de servidores y los logos de los creditos se centran ahi, no en la pantalla,
+// porque la columna ocupa la izquierda.
+static float UI_Home_ContentX(void) {
+    return HM_COL_BAND;
+}
+
+static float UI_Home_ContentCx(void) {
+    return UI_Home_ContentX() + (UI_Home_MainW() - UI_Home_ContentX()) * 0.5f;
+}
+
 static void UI_Home_DrawMarks(float y, float h) {
     static const vec4_t tint = {1.0f, 1.0f, 1.0f, 0.55f};
     static qhandle_t shaders[ARRAY_LEN(hmMarks)];
@@ -769,6 +780,8 @@ static void UI_Home_DrawMarks(float y, float h) {
     for (i = 0; i < (int)ARRAY_LEN(hmMarks); i++) {
         total += (hmMarks[i].w + (i ? HM_MARK_GAP : 0)) * scale;
     }
+    // los logos van al centro del pie, que es mas ancho que el eje del contenido: centrados en
+    // ese eje se pisaban con el aviso legal
     x = (UI_Home_MainW() - total) * 0.5f;
 
     for (i = 0; i < (int)ARRAY_LEN(hmMarks); i++) {
@@ -839,8 +852,6 @@ static const hvTab_t hvTabsLeft[] = {{"Home", -1}, {"Training", HM_NAV_TRAINING}
 static const hvTab_t hvTabsRight[] = {{"Replays", HM_NAV_REPLAYS}, {"Settings", HM_NAV_SETTINGS}};
 
 static struct {
-    qboolean menuOpen;  // el desplegable de PLAY
-    float menu;         // 0 cerrado, 1 abierto
     float social;  // 0 plegada, 1 desplegada
     float play;    // 0 quieto, 1 bajo el cursor
     int lastTime;
@@ -869,175 +880,13 @@ static float UI_Home_BarBaseline(float size, float y) {
     return SM_Baseline(FONT_SANS, size, y + (HV_BAR_H - size * 1.4f) * 0.5f, size * 1.4f);
 }
 
-// un panel con las esquinas de abajo redondeadas, con filas de un punto: es lo que hay para
-// dibujar una figura que no es un rectangulo
-static void UI_Home_RoundedBottom(float x, float y, float w, float h, float r, const float* color) {
-    float k;
+// la banda plana que va detras de la columna, para que su texto se lea sobre el cuadro
+static void UI_Home_DrawColumnBand(void) {
+    vec4_t band;
 
-    for (k = 0; k < h; k += 1.0f) {
-        float inset = 0;
-
-        if (k > h - r) {
-            float dy = k - (h - r);
-
-            inset = r - (float)sqrt(r * r - dy * dy);
-        }
-        SM_Fill(x + inset, y + k, w - inset * 2.0f, 1.05f, color, NULL);
-    }
-}
-
-// una seccion del panel, centrada en su casillero: la de la pagina actual en blanco, las demas
-// en gris que se encienden en blanco bajo el cursor
-static void UI_Home_DrawTab(const hvTab_t* tab, float slotX, float top) {
-    qboolean current = tab->nav < 0;
-    qboolean over = !current && SM_Over(HM_HIT_TAB, tab->nav);
-    float w = SM_LabelWidth(HV_TAB_SIZE, tab->title, HV_TAB_SPACING);
-
-    SM_Label(slotX + (HV_TAB_SLOT - w) * 0.5f, UI_Home_BarBaseline(HV_TAB_SIZE, top), HV_TAB_SIZE,
-               current || over ? smText : smTextSoft, tab->title, HV_TAB_SPACING);
-    if (!current) {
-        SM_Hit(slotX, top, HV_TAB_SLOT, HV_BAR_H, HM_HIT_TAB, tab->nav, NULL);
-    }
-}
-
-// Jugar: el trapecio, mas ancho arriba que abajo, que cuelga de la barra. Bajo el cursor se
-// aclara. Se arma con filas de un punto, que es lo que hay para dibujar una figura que no es un
-// rectangulo.
-static void UI_Home_DrawPlay(float cx, float top, float dt) {
-    qboolean over = SM_Over(HM_HIT_TAB, HM_NAV_PLAY);
-    float h = HV_BAR_H + HV_PLAY_DROP;
-    float k;
-    vec4_t fill;
-
-    hv.play = UI_Home_Ease(hv.play, over ? 1.0f : 0.0f, dt);
-    VectorCopy(smPrimary, fill);
-    fill[0] += (1.0f - fill[0]) * hv.play;
-    fill[1] += (1.0f - fill[1]) * hv.play;
-    fill[2] += (1.0f - fill[2]) * hv.play;
-    fill[3] = 1.0f;
-
-    for (k = 0; k < h; k += 1.0f) {
-        float w = HV_PLAY_TOP_W + (HV_PLAY_BOT_W - HV_PLAY_TOP_W) * (k / h);
-
-        SM_Fill(cx - w * 0.5f, top + k, w, 1.05f, fill, NULL);
-    }
-    SM_Label(cx - SM_LabelWidth(HV_PLAY_SIZE, "Play", HV_PLAY_SPACING) * 0.5f,
-             UI_Home_BarBaseline(HV_PLAY_SIZE, top), HV_PLAY_SIZE, smOnPrimary, "Play", HV_PLAY_SPACING);
-    SM_Hit(cx - HV_PLAY_TOP_W * 0.5f, top, HV_PLAY_TOP_W, h, HM_HIT_TAB, HM_NAV_PLAY, NULL);
-}
-
-// la salida, adentro del panel contra su borde derecho
-static void UI_Home_DrawQuit(float right, float top) {
-    qboolean over = SM_Over(HM_HIT_QUIT, 0);
-    float w = SM_LabelWidth(HV_TEXT, "Quit", 2.0f);
-    float x = right - HV_PAD - w;
-
-    SM_Label(x, UI_Home_BarBaseline(HV_TEXT, top), HV_TEXT, over ? smText : smTextSoft, "Quit", 2.0f);
-    SM_Hit(x - 16, top, w + 16 + HV_PAD, HV_BAR_H, HM_HIT_QUIT, 0, NULL);
-}
-
-/*
-===============
-UI_Home_DrawPlayMenu
-
-[ioquakelive] El desplegable de PLAY, que cuelga del trapecio: Start Match y Server Browser. El
-jugador lo pidio asi en vez de que PLAY llevara derecho a Start Match. Se abre y se cierra con
-una transicion, y cualquier clic afuera lo cierra.
-
-Server Browser espera su pagina: el front end no tiene una todavia, asi que la opcion se dibuja
-apagada y con su marca.
-===============
-*/
-typedef struct {
-    const char* title;
-    int nav;  // -1: todavia no tiene pagina
-} hvPlayItem_t;
-
-static const hvPlayItem_t hvPlayItems[] = {
-    {"Start Match", HM_NAV_PLAY},
-    {"Server Browser", -1},
-};
-
-#define HV_MENU_W (34.0f * HV_U)
-#define HV_MENU_ROW (7.0f * HV_U)
-#define HV_MENU_SIZE 14.0f
-
-static void UI_Home_DrawPlayMenu(float cx, float top, float dt) {
-    float full = ARRAY_LEN(hvPlayItems) * HV_MENU_ROW;
-    float y = top + HV_BAR_H + HV_PLAY_DROP;
-    float t;
-    float h;
-    float x;
-    int i;
-
-    hv.menu = UI_Home_Ease(hv.menu, hv.menuOpen ? 1.0f : 0.0f, dt);
-    t = UI_Home_Smooth(hv.menu);
-    if (t < 0.01f) {
-        return;
-    }
-    h = full * t;
-    x = cx - HV_MENU_W * 0.5f;
-    UI_Home_RoundedBottom(x, y, HV_MENU_W, h, 2.0f * HV_U, hvPanel);
-
-    for (i = 0; i < (int)ARRAY_LEN(hvPlayItems); i++) {
-        float ry = y + i * HV_MENU_ROW;
-        qboolean soon = hvPlayItems[i].nav < 0;
-        qboolean over = !soon && SM_Over(HM_HIT_MENU, i);
-        vec4_t color;
-
-        if (ry + HV_MENU_ROW > y + h) {
-            break;  // todavia no se desplego hasta esta fila
-        }
-        VectorCopy(soon ? smSubtle : over ? smText : smTextSoft, color);
-        color[3] = t;
-        SM_Label(x + 3.0f * HV_U, SM_Baseline(FONT_SANS, HV_MENU_SIZE, ry + HV_MENU_ROW * 0.5f - 11.0f, 22.0f),
-                 HV_MENU_SIZE, color, hvPlayItems[i].title, 1.6f);
-        if (soon) {
-            vec4_t tag;
-
-            VectorCopy(smSubtle, tag);
-            tag[3] = t;
-            SM_Text(x + HV_MENU_W - 3.0f * HV_U - SM_Advance(FONT_SANS, 11.0f, "soon", -1),
-                    SM_Baseline(FONT_SANS, 11.0f, ry + HV_MENU_ROW * 0.5f - 9.0f, 18.0f), FONT_SANS, 11.0f, tag,
-                    "soon", -1, qfalse);
-        }
-        if (over) {
-            SM_Fill(x, ry + 6.0f, 2.0f, HV_MENU_ROW - 12.0f, smText, NULL);
-        }
-        if (t > 0.6f && !soon) {
-            SM_Hit(x, ry, HV_MENU_W, HV_MENU_ROW, HM_HIT_MENU, i, NULL);
-        }
-    }
-}
-
-// arriba: el panel centrado, con el logo a la izquierda, las secciones al centro, el trapecio
-// atravesandolo y la salida a la derecha
-static void UI_Home_DrawBar(float dt) {
-    float top = UI_Home_Top();
-    float x = (UI_Home_MainW() - HV_BAR_W) * 0.5f;
-    float cx = UI_Home_MainW() * 0.5f;
-    int i;
-
-    UI_Home_RoundedBottom(x, top, HV_BAR_W, HV_BAR_H, HV_BAR_R, hvPanel);
-
-    // la imagen del logo trae margen (56 de 512 a la izquierda); el dibujo empieza en el padding
-    if (hm2.logo) {
-        float w = HV_LOGO_H * 4.0f;
-
-        SM_Pic(x + HV_PAD - 56.0f * (w / 512.0f), top + (HV_BAR_H - HV_LOGO_H) * 0.5f, w, HV_LOGO_H, hm2.logo,
-               NULL);
-    }
-
-    for (i = 0; i < (int)ARRAY_LEN(hvTabsLeft); i++) {
-        UI_Home_DrawTab(&hvTabsLeft[i], cx - HV_PLAY_SLOT * 0.5f - (ARRAY_LEN(hvTabsLeft) - i) * HV_TAB_SLOT, top);
-    }
-    for (i = 0; i < (int)ARRAY_LEN(hvTabsRight); i++) {
-        UI_Home_DrawTab(&hvTabsRight[i], cx + HV_PLAY_SLOT * 0.5f + i * HV_TAB_SLOT, top);
-    }
-
-    UI_Home_DrawPlay(cx, top, dt);
-    UI_Home_DrawQuit(x + HV_BAR_W, top);
-    UI_Home_DrawPlayMenu(cx, top, dt);
+    VectorCopy(hvPanel, band);
+    band[3] = 0.88f;
+    SM_Fill(-1, UI_Home_Top(), HM_COL_BAND, UI_Home_Bottom() - UI_Home_Top() + 1, band, NULL);
 }
 
 /*
@@ -1115,7 +964,7 @@ static void UI_Home_ServerCard(int i, float x, float y) {
 static void UI_Home_NoServers(float y) {
     static const char* const line = "The list updates on its own; ioquakelive servers will show up here";
     float w = HV_TABS_W;
-    float x = (UI_Home_MainW() - w) * 0.5f;
+    float x = UI_Home_ContentCx() - w * 0.5f;
     float lw = SM_Advance(FONT_SANS, 13.0f, line, -1);
     float tw = SM_LabelWidth(16.0f, "No servers online", 1.6f);
 
@@ -1142,7 +991,7 @@ static void UI_Home_DrawServers(void) {
         count = HV_CARDS;
     }
     total = count * HV_CARD_W + (count - 1) * HV_CARD_GAP;
-    x = (UI_Home_MainW() - total) * 0.5f;
+    x = UI_Home_ContentCx() - total * 0.5f;
 
     for (i = 0; i < count; i++) {
         UI_Home_ServerCard(i, x + i * (HV_CARD_W + HV_CARD_GAP), y);
@@ -1166,7 +1015,7 @@ static void UI_Home_DrawFooter(void) {
     SM_Fill(-1, y, UI_Home_MainW() + 1, HV_FOOT_H + 1, strip, NULL);
     UI_Home_DrawMarks(y, HV_FOOT_H);
     trap_Cvar_VariableStringBuffer("version", version, sizeof(version));
-    SM_Text(HV_EDGE, baseline, FONT_SANS, HV_TEXT, smSubtle, version, -1, qfalse);
+    SM_Text(HM_COL_X, baseline, FONT_SANS, HV_TEXT, smSubtle, version, -1, qfalse);
     SM_Text(UI_Home_MainW() - HV_EDGE - w, baseline, FONT_SANS, HV_TEXT, smSubtle, notice, -1, qfalse);
 }
 
@@ -1314,8 +1163,9 @@ void UI_Home_Paint(void) {
 
         UI_Home_DrawBackground();
         SM_Fill(-1, UI_Home_Top(), smVW + 2, smBottom - UI_Home_Top() + 1, hvVeil, NULL);
+        UI_Home_DrawColumnBand();
+        UI_Home_DrawColumn();
         UI_Home_DrawFooter();
-        UI_Home_DrawBar(dt);
         UI_Home_DrawSocial(dt);
     }
 
@@ -1327,10 +1177,6 @@ qboolean UI_Home_HandleKey(int key) {
     const smHit_t* hit;
 
     if (key & K_CHAR_FLAG) {
-        return qtrue;
-    }
-    if (key == K_ESCAPE && hv.menuOpen) {
-        hv.menuOpen = qfalse;
         return qtrue;
     }
     if (key == K_ESCAPE && hm2.menu != HM_MENU_MAIN) {
@@ -1353,21 +1199,6 @@ qboolean UI_Home_HandleKey(int key) {
         trap_Cmd_ExecuteText(EXEC_APPEND, va("connect %s\n", address));
         return qtrue;
     }
-    if (hit && hit->type == HM_HIT_TAB) {
-        if (hit->index == HM_NAV_PLAY) {
-            hv.menuOpen = !hv.menuOpen;  // PLAY despliega sus opciones
-            return qtrue;
-        }
-        hv.menuOpen = qfalse;
-        UI_Home_Go(hit->index);
-        return qtrue;
-    }
-    if (hit && hit->type == HM_HIT_MENU) {
-        hv.menuOpen = qfalse;
-        UI_Home_Go(hvPlayItems[hit->index].nav);
-        return qtrue;
-    }
-    hv.menuOpen = qfalse;  // cualquier otro clic lo cierra
     if (hit && hit->type == HM_HIT_QUIT) {
         UI_Home_Go(HM_NAV_QUIT);
         return qtrue;
