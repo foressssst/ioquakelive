@@ -52,13 +52,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define SM_SANS_BASE (794.5f / 2048.0f)
 #define SM_HANDEL_EM (2289.0f / 2048.0f)   // pak00's Handel Gothic
 #define SM_HANDEL_BASE (694.5f / 2048.0f)
-// [ioquakelive] The faces retail's own web front end uses, both of them out of pak00: its
-// web.pak declares @font-face HandelGothic (medium and bold, and sixteen font-family rules) for
-// headings and nav, and NotoSans for running text. These two ids reach them directly, without
-// the substitution for Barlow that every other page takes.
-#define SM_FONT_NAV 77   // HandelGothic, retail's nav
-#define SM_FONT_BODY 78  // NotoSans, retail's text
-
 #define SM_BARLOW_EM (1200.0f / 1000.0f)   // pak01's Barlow
 #define SM_BARLOW_BASE (400.0f / 1000.0f)
 
@@ -180,9 +173,6 @@ int SM_Wrap(int font, float size, const char* text, float width, int* starts, in
 // Quake Club's label: bold, upper case, letter-spaced. Returns its width.
 float SM_LabelWidth(float size, const char* text, float spacing);
 void SM_Label(float x, float baseline, float size, const float* color, const char* text, float spacing);
-// [ioquakelive] the same label in a chosen face: the front page draws its nav in SM_FONT_NAV
-void SM_LabelIn(int font, float x, float baseline, float size, const float* color, const char* text, float spacing);
-float SM_LabelWidthIn(int font, float size, const char* text, float spacing);
 
 /*
 ===============================================================================
