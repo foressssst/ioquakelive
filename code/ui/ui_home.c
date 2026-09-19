@@ -73,6 +73,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // the player and their friends, down the right
 #define HM_SIDE_W 306.0f     // retail's column is 370; a little under it reads calmer
 #define HM_SIDE_RIGHT 64.0f
+#define HV_SOCIAL_W 330.0f  // [ioquakelive] la columna social del menu principal
 
 // the painting's shape
 #define HM_PAINTING_ASPECT (3122.0f / 1344.0f)
@@ -83,7 +84,9 @@ typedef enum {
     HM_HIT_BANNER,
     HM_HIT_ITEM,
     HM_HIT_CARD,  // [ioquakelive] una tarjeta del menu principal
-    HM_HIT_QUIT
+    HM_HIT_QUIT,
+    HM_HIT_TAB,   // [ioquakelive] una seccion de la barra de arriba
+    HM_HIT_MODE   // [ioquakelive] un modo destacado
 } hmHitType_t;
 
 // arenas whose shots pak00 carries, one of which is the background when the painting is not there
@@ -740,6 +743,11 @@ static const hmMark_t hmMarks[] = {
 #define HM_MARK_GAP 54.0f
 #define HM_MARK_H 80.0f  // el mas alto: la franja se centra sobre esa banda
 
+// [ioquakelive] lo que queda a la izquierda de la columna social
+static float UI_Home_MainW(void) {
+    return smVW - HV_SOCIAL_W;
+}
+
 static float UI_Home_DrawMarks(float bottom) {
     static const vec4_t tint = {1.0f, 1.0f, 1.0f, 0.72f};
     static qhandle_t shaders[ARRAY_LEN(hmMarks)];
@@ -758,7 +766,7 @@ static float UI_Home_DrawMarks(float bottom) {
     for (i = 0; i < (int)ARRAY_LEN(hmMarks); i++) {
         total += hmMarks[i].w + (i ? HM_MARK_GAP : 0);
     }
-    x = (smVW - total) * 0.5f;
+    x = (UI_Home_MainW() - total) * 0.5f;
 
     for (i = 0; i < (int)ARRAY_LEN(hmMarks); i++) {
         if (shaders[i]) {
@@ -792,159 +800,288 @@ static void UI_Home_DrawLegal(void) {
     float w = SM_Advance(FONT_SANS, 12, notice, -1);
 
     UI_Home_DrawMarks(y - 8.0f);
-    SM_Text(smVW - UI_Home_ColumnX() * 0.5f - w, baseline, FONT_SANS, 12, smSubtle, notice, -1, qfalse);
+    SM_Text(UI_Home_MainW() - 40.0f - w, baseline, FONT_SANS, 12, smSubtle, notice, -1, qfalse);
     trap_Cvar_VariableStringBuffer("version", version, sizeof(version));
-    SM_Text(UI_Home_ColumnX(), baseline, FONT_SANS, 12, smSubtle, version, -1, qfalse);
+    SM_Text(40.0f, baseline, FONT_SANS, 12, smSubtle, version, -1, qfalse);
 }
 
 
 /*
-===============
-UI_Home_DrawCards
+===============================================================================
 
-[ioquakelive] 2026-09-18, tercer enfoque del menu principal, pedido por el jugador ("esta vez
-intenta con otra cosa"): las secciones que funcionan como tarjetas grandes con imagen, que es lo
-que hacen los juegos de hoy. Un clic cada una, sin submenus. Lo que todavia no existe no ocupa
-lugar. Las imagenes son levelshots de pak00.
-===============
+EL MENU PRINCIPAL
+
+[ioquakelive] 2026-09-18, cuarto enfoque: una adaptacion del menu principal de Valorant, que el
+jugador mostro como referencia ("no taan literal"). De ahi se toma la estructura: la barra de
+navegacion arriba con PLAY al centro y destacado, la columna social a la derecha a todo lo
+alto, un panel de modos destacados a la izquierda, y el logo grande al centro con una banda de
+color. La paleta, la letra y el cuadro de fondo son los de Quake Live.
+
+===============================================================================
 */
+
+#define HV_BAR_H 58.0f
+#define HV_PLAY_TOP_W 250.0f  // el trapecio de PLAY: ancho arriba, contra el borde
+#define HV_PLAY_BOT_W 196.0f  // y abajo, donde se angosta
+#define HV_PLAY_H 66.0f
+#define HV_TAB_SIZE 15.0f
+#define HV_TAB_SPACING 1.6f
+#define HV_TAB_GAP 48.0f
+#define HV_PANEL_X 110.0f
+#define HV_PANEL_Y 190.0f
+#define HV_PANEL_W 380.0f
+#define HV_PANEL_HEAD 64.0f
+#define HV_ROW_H 60.0f
+
 typedef struct {
     const char* title;
-    const char* line;
-    const char* image;
-    int nav;
-    float width;  // Play es la accion principal y es mas ancha
-} hmCard_t;
+    int nav;  // -1: la pagina en la que ya estas
+} hvTab_t;
 
-static const hmCard_t hmCards[] = {
-    {"Play", "Start a match against bots", "levelshots/bloodrun", HM_NAV_PLAY, 520.0f},
-    {"Training", "Crash Course, strafing, rocket jumps", "levelshots/qztraining", HM_NAV_TRAINING, 300.0f},
-    {"Replays", "Watch the matches you recorded", "levelshots/furiousheights", HM_NAV_REPLAYS, 300.0f},
-    {"Settings", "Controls, video, sound and your player", "levelshots/aerowalk", HM_NAV_SETTINGS, 300.0f},
+// a los lados de PLAY, dos y dos
+static const hvTab_t hvTabsLeft[] = {{"Home", -1}, {"Training", HM_NAV_TRAINING}};
+static const hvTab_t hvTabsRight[] = {{"Replays", HM_NAV_REPLAYS}, {"Settings", HM_NAV_SETTINGS}};
+
+typedef struct {
+    const char* title;
+    const char* factory;
+    const char* icon;
+    const char* map;
+} hvMode_t;
+
+// los modos destacados: los cuatro que mas se juegan, con el mapa con el que abre cada uno
+static const hvMode_t hvModes[] = {
+    {"Free For All", "ffa", "ui/assets/hud/ffa.png", "Campgrounds"},
+    {"Duel", "duel", "ui/assets/hud/duel.png", "Bloodrun"},
+    {"Clan Arena", "ca", "ui/assets/hud/ca.png", "Repent"},
+    {"Capture The Flag", "ctf", "ui/assets/hud/ctf.png", "Spider Crossings"},
 };
 
-#define HM_CARD_H 250.0f
-#define HM_CARD_GAP 24.0f
-#define HM_CARD_LIFT 6.0f
-#define HM_CARD_PAD 20.0f
-#define HM_CARDS_ABOVE_MARKS 40.0f
-
-// donde arranca la franja de logos; las tarjetas van justo arriba
-static float UI_Home_MarksTop(void) {
-    float legal = smBottom - 30.0f - 26.0f - (UI_Home_InMatch() ? 38.0f : 0.0f);
-
-    return legal - 8.0f - HM_MARK_H;
+static float UI_Home_Top(void) {
+    return -smTop / smScale;
 }
 
-static void UI_Home_DrawCard(int i, float x, float y) {
-    static qhandle_t images[ARRAY_LEN(hmCards)];
+// la barra de arriba: el logo a la izquierda, y las secciones con PLAY al centro
+
+// una seccion de la barra: la pagina actual en blanco con una marca dorada, las demas en gris que
+// se encienden bajo el cursor
+static void UI_Home_DrawTab(const hvTab_t* tab, float x, float top, float w) {
+    qboolean current = tab->nav < 0;
+    qboolean over = !current && SM_Over(HM_HIT_TAB, tab->nav);
+    float baseline = SM_Baseline(FONT_SANS, HV_TAB_SIZE, top + (HV_BAR_H - 22) * 0.5f, 22);
+
+    SM_Label(x, baseline, HV_TAB_SIZE, current || over ? smText : smTextSoft, tab->title, HV_TAB_SPACING);
+    if (current || over) {
+        SM_Fill(x + (w - 22.0f) * 0.5f, top + HV_BAR_H - 12, 22.0f, 2.0f, smGold, NULL);
+    }
+    if (!current) {
+        SM_Hit(x - 14, top, w + 28, HV_BAR_H, HM_HIT_TAB, tab->nav, NULL);
+    }
+}
+
+static void UI_Home_DrawBar(void) {
+    float top = UI_Home_Top();
+    float mainW = UI_Home_MainW();
+    float cx = mainW * 0.5f;
+    float x;
+    vec4_t bar;
+    int i;
+
+    VectorCopy(smPage, bar);
+    bar[3] = 0.78f;
+    SM_Fill(-1, top, mainW + 1, HV_BAR_H, bar, NULL);
+    SM_Fill(-1, top + HV_BAR_H - 1, mainW + 1, 1, smBorder, NULL);
+
+    if (hm2.logo) {
+        SM_Pic(28.0f, top + (HV_BAR_H - 34.0f) * 0.5f, 136.0f, 34.0f, hm2.logo, NULL);
+    }
+
+    // PLAY: un trapecio claro contra el borde de arriba, mas ancho arriba que abajo. Se arma
+    // con filas de un punto, que es lo que hay para dibujar una figura que no es un rectangulo.
+    {
+        qboolean over = SM_Over(HM_HIT_TAB, HM_NAV_PLAY);
+        const float* fill = over ? smGold : smPrimary;
+        float k;
+
+        for (k = 0; k < HV_PLAY_H; k += 1.0f) {
+            float w = HV_PLAY_TOP_W + (HV_PLAY_BOT_W - HV_PLAY_TOP_W) * (k / HV_PLAY_H);
+
+            SM_Fill(cx - w * 0.5f, top + k, w, 1.05f, fill, NULL);
+        }
+        SM_Label(cx - SM_LabelWidth(24, "Play", 4.0f) * 0.5f, SM_Baseline(FONT_SANS, 24, top + 12, 34), 24,
+                 smOnPrimary, "Play", 4.0f);
+        SM_Hit(cx - HV_PLAY_TOP_W * 0.5f, top, HV_PLAY_TOP_W, HV_PLAY_H, HM_HIT_TAB, HM_NAV_PLAY, NULL);
+    }
+
+    // las demas, a los lados: la de la pagina actual en blanco con una marca dorada debajo
+    x = cx - HV_PLAY_TOP_W * 0.5f - HV_TAB_GAP;
+    for (i = (int)ARRAY_LEN(hvTabsLeft) - 1; i >= 0; i--) {
+        float w = SM_LabelWidth(HV_TAB_SIZE, hvTabsLeft[i].title, HV_TAB_SPACING);
+
+        x -= w;
+        UI_Home_DrawTab(&hvTabsLeft[i], x, top, w);
+        x -= HV_TAB_GAP;
+    }
+    x = cx + HV_PLAY_TOP_W * 0.5f + HV_TAB_GAP;
+    for (i = 0; i < (int)ARRAY_LEN(hvTabsRight); i++) {
+        float w = SM_LabelWidth(HV_TAB_SIZE, hvTabsRight[i].title, HV_TAB_SPACING);
+
+        UI_Home_DrawTab(&hvTabsRight[i], x, top, w);
+        x += w + HV_TAB_GAP;
+    }
+}
+
+// la columna social: el perfil, los amigos y, abajo, la salida
+static void UI_Home_DrawSocial(void) {
+    static const char* const rows[3] = {"Your Steam friends", "Who is in a match", "Who is in a lobby"};
+    char name[MAX_CVAR_VALUE_STRING];
+    char model[MAX_QPATH];
+    char* slash;
+    float top = UI_Home_Top();
+    float x = UI_Home_MainW();
+    float w = smVW - x;
+    float y = top;
+    vec4_t panel;
+    int i;
+
+    VectorCopy(smPanel, panel);
+    panel[3] = 0.95f;
+    SM_Fill(x, top, w + 1, smBottom - top + 1, panel, NULL);
+    SM_Fill(x, top, 1, smBottom - top, smBorder, NULL);
+
+    // la cabecera, a la altura de la barra
+    SM_Label(x + 26, SM_Baseline(FONT_SANS, 14, y + (HV_BAR_H - 20) * 0.5f, 20), 14, smText, "Social", 1.8f);
+    SM_Fill(x, y + HV_BAR_H - 1, w, 1, smBorder, NULL);
+    y += HV_BAR_H;
+
+    // el perfil: la cara del modelo que llevas, tu nombre y de donde saldra lo demas
+    trap_Cvar_VariableStringBuffer("name", name, sizeof(name));
+    Q_CleanStr(name);
+    trap_Cvar_VariableStringBuffer("model", model, sizeof(model));
+    slash = strchr(model, '/');
+    if (slash) {
+        *slash = '\0';
+    }
+    if (!model[0]) {
+        Q_strncpyz(model, "sarge", sizeof(model));
+    }
+    if (Q_stricmp(model, hm2.faceModel)) {
+        Q_strncpyz(hm2.faceModel, model, sizeof(hm2.faceModel));
+        hm2.face = trap_R_RegisterShaderNoMip(va("models/players/%s/icon_default", model));
+    }
+    if (hm2.face) {
+        SM_Pic(x + 22, y + 16, 48, 48, hm2.face, NULL);
+    }
+    SM_Label(x + 84, SM_Baseline(FONT_SANS, 16, y + 18, 22), 16, smText, name[0] ? name : "Player", 0.4f);
+    SM_Text(x + 84, SM_Baseline(FONT_SANS, 12, y + 42, 18), FONT_SANS, 12, smSubtle,
+            "Steam and quakeclub.com soon", SM_Fit(FONT_SANS, 12, "Steam and quakeclub.com soon", w - 100), qfalse);
+    y += 80.0f;
+    SM_Fill(x, y, w, 1, smBorder, NULL);
+
+    // los amigos
+    SM_Label(x + 26, SM_Baseline(FONT_SANS, 12, y + 14, 18), 12, smMuted, "Friends", 1.8f);
+    y += 46.0f;
+    for (i = 0; i < 3; i++) {
+        SM_Fill(x + 22, y + 6, 32, 32, smBorder, NULL);
+        SM_Text(x + 68, SM_Baseline(FONT_SANS, 13, y + 12, 20), FONT_SANS, 13, smMuted, rows[i], -1, qfalse);
+        y += 46.0f;
+    }
+    SM_Text(x + 26, SM_Baseline(FONT_SANS, 11, y + 4, 18), FONT_SANS, 11, smSubtle, "Once Steam is wired up", -1,
+            qfalse);
+
+    // la salida, al pie de la columna
+    {
+        float qy = smBottom - 64.0f;
+        qboolean over = SM_Over(HM_HIT_QUIT, 0);
+
+        SM_Fill(x, qy, w, 1, smBorder, NULL);
+        if (over) {
+            SM_Fill(x + 1, qy + 1, w - 1, 63, smRaised, NULL);
+        }
+        SM_Label(x + 26, SM_Baseline(FONT_SANS, 14, qy + 20, 22), 14, over ? smGold : smTextSoft, "Quit", 1.8f);
+        SM_Hit(x, qy, w, 64, HM_HIT_QUIT, 0, NULL);
+    }
+}
+
+// el panel de modos destacados, a la izquierda: cada uno abre Start Match con ese modo elegido
+static void UI_Home_DrawModes(void) {
+    static qhandle_t icons[ARRAY_LEN(hvModes)];
     static qboolean loaded;
-    const hmCard_t* card = &hmCards[i];
-    qboolean over = SM_Over(HM_HIT_CARD, i);
-    vec4_t tint = {0.55f, 0.55f, 0.55f, 1.0f};
-    int k;
+    float x = HV_PANEL_X;
+    float y = UI_Home_Top() + HV_PANEL_Y;
+    float h = HV_PANEL_HEAD + ARRAY_LEN(hvModes) * HV_ROW_H;
+    vec4_t panel;
+    int i;
 
     if (!loaded) {
-        int j;
-
-        for (j = 0; j < (int)ARRAY_LEN(hmCards); j++) {
-            images[j] = trap_R_RegisterShaderNoMip(hmCards[j].image);
+        for (i = 0; i < (int)ARRAY_LEN(hvModes); i++) {
+            icons[i] = trap_R_RegisterShaderNoMip(hvModes[i].icon);
         }
         loaded = qtrue;
     }
 
-    // bajo el cursor la tarjeta sube un poco y la imagen se enciende
-    if (over) {
-        y -= HM_CARD_LIFT;
-        tint[0] = tint[1] = tint[2] = 1.0f;
+    VectorCopy(smPanel, panel);
+    panel[3] = 0.88f;
+    SM_Fill(x, y, HV_PANEL_W, h, panel, NULL);
+
+    // la cabecera: el titulo centrado y, debajo, contra quien se juega
+    SM_Label(x + (HV_PANEL_W - SM_LabelWidth(15, "Featured Modes", 1.8f)) * 0.5f,
+             SM_Baseline(FONT_SANS, 15, y + 14, 20), 15, smText, "Featured Modes", 1.8f);
+    SM_Label(x + (HV_PANEL_W - SM_LabelWidth(11, "Against bots", 1.8f)) * 0.5f,
+             SM_Baseline(FONT_SANS, 11, y + 38, 16), 11, smGold, "Against bots", 1.8f);
+    y += HV_PANEL_HEAD;
+
+    for (i = 0; i < (int)ARRAY_LEN(hvModes); i++) {
+        qboolean over = SM_Over(HM_HIT_MODE, i);
+        float mw = SM_Advance(FONT_SANS, 12, hvModes[i].map, -1);
+
+        SM_Fill(x, y, HV_PANEL_W, 1, smBorder, NULL);
+        if (over) {
+            SM_Fill(x, y + 1, HV_PANEL_W, HV_ROW_H - 1, smRaised, NULL);
+            SM_Fill(x, y + 1, 3, HV_ROW_H - 1, smGold, NULL);
+        }
+        if (icons[i]) {
+            SM_Pic(x + 18, y + (HV_ROW_H - 32) * 0.5f, 32, 32, icons[i], NULL);
+        }
+        SM_Label(x + 64, SM_Baseline(FONT_SANS, 16, y + (HV_ROW_H - 22) * 0.5f, 22), 16, over ? smGold : smText,
+                 hvModes[i].title, 0.6f);
+        SM_Text(x + HV_PANEL_W - 18 - mw, SM_Baseline(FONT_SANS, 12, y + (HV_ROW_H - 18) * 0.5f, 18), FONT_SANS, 12,
+                smMuted, hvModes[i].map, -1, qfalse);
+        SM_Hit(x, y, HV_PANEL_W, HV_ROW_H, HM_HIT_MODE, i, NULL);
+        y += HV_ROW_H;
     }
-
-    SM_Fill(x, y, card->width, HM_CARD_H, smPanel, NULL);
-    if (images[i]) {
-        SM_PicColor(x, y, card->width, HM_CARD_H, images[i], tint, NULL);
-    }
-
-    // abajo, un degradado para que el texto se lea sobre cualquier imagen
-    for (k = 0; k < 12; k++) {
-        vec4_t band;
-        float h = 10.0f;
-
-        VectorCopy(smPage, band);
-        band[3] = 0.08f * k;
-        SM_Fill(x, y + HM_CARD_H - 12 * h + k * h, card->width, h, band, NULL);
-    }
-
-    {
-        float size = i == 0 ? 40.0f : 28.0f;
-
-        SM_Label(x + HM_CARD_PAD, SM_Baseline(FONT_SANS, size, y + HM_CARD_H - 70 - size, size + 6), size,
-                 over ? smGold : smText, card->title, 0.6f);
-    }
-    SM_Text(x + HM_CARD_PAD, SM_Baseline(FONT_SANS, 14, y + HM_CARD_H - 38, 20), FONT_SANS, 14, smTextSoft,
-            card->line, SM_Fit(FONT_SANS, 14, card->line, card->width - 2 * HM_CARD_PAD), qfalse);
-
-    // el borde: fino y apagado, dorado bajo el cursor
-    {
-        const float* edge = over ? smGold : smBorder;
-        float t = over ? 2.0f : 1.0f;
-
-        SM_Fill(x, y, card->width, t, edge, NULL);
-        SM_Fill(x, y + HM_CARD_H - t, card->width, t, edge, NULL);
-        SM_Fill(x, y, t, HM_CARD_H, edge, NULL);
-        SM_Fill(x + card->width - t, y, t, HM_CARD_H, edge, NULL);
-    }
-
-    SM_Hit(x, y, card->width, HM_CARD_H + HM_CARD_LIFT, HM_HIT_CARD, i, NULL);
 }
 
-static void UI_Home_DrawCards(void) {
-    int count = (int)ARRAY_LEN(hmCards);
-    float total = (count - 1) * HM_CARD_GAP;
-    float x;
-    float y = UI_Home_MarksTop() - HM_CARDS_ABOVE_MARKS - HM_CARD_H;
-    int i;
-
-    for (i = 0; i < count; i++) {
-        total += hmCards[i].width;
-    }
-    x = (smVW - total) * 0.5f;
+// al centro, el logo grande sobre el cuadro y una banda roja con la version
+static void UI_Home_DrawCenter(void) {
+    static const vec4_t red = {0.70f, 0.07f, 0.07f, 0.94f};
+    static const vec4_t white = {1.0f, 1.0f, 1.0f, 1.0f};
+    const char* band = "ioquakelive : beta";
+    float bandW = 400.0f;  // la imagen del logo trae margen; la banda sigue al dibujo, no a la imagen
+    float left = HV_PANEL_X + HV_PANEL_W;
+    float cx = left + (UI_Home_MainW() - left) * 0.5f;
+    float w = 520.0f;
+    float y = UI_Home_Top() + (smBottom - UI_Home_Top()) * 0.36f;
 
     if (hm2.logo) {
-        SM_Pic(UI_Home_ColumnX() - 6, 96.0f, 400.0f, 100.0f, hm2.logo, NULL);
+        SM_Pic(cx - w * 0.5f, y, w, w * 0.25f, hm2.logo, NULL);
     }
-
-    for (i = 0; i < count; i++) {
-        UI_Home_DrawCard(i, x, y);
-        x += hmCards[i].width + HM_CARD_GAP;
-    }
+    y += w * 0.25f + 6.0f;
+    SM_Fill(cx - bandW * 0.5f, y, bandW, 44.0f, red, NULL);
+    SM_Label(cx - SM_LabelWidth(19, band, 6.0f) * 0.5f, SM_Baseline(FONT_SANS, 19, y + 10, 24), 19, white, band, 6.0f);
 }
 
-// Quit, chico, arriba a la derecha: no es una seccion, es la salida
-static void UI_Home_DrawQuit(void) {
-    const char* label = "Quit";
-    float size = 15.0f;
-    float w = SM_LabelWidth(size, label, 1.4f);
-    float x = smVW - HM_SIDE_RIGHT - w;
-    float y = 44.0f;
-    qboolean over = SM_Over(HM_HIT_QUIT, 0);
-
-    SM_Label(x, SM_Baseline(FONT_SANS, size, y, 24), size, over ? smGold : smTextSoft, label, 1.4f);
-    SM_Hit(x - 12, y - 6, w + 24, 36, HM_HIT_QUIT, 0, NULL);
-}
-
-// La sombra de la pagina: oscura arriba a la izquierda, donde esta el logo, y abajo, donde van
-// las tarjetas y los logos; en el medio el cuadro se ve.
-static void UI_Home_DrawCardsShade(void) {
-    float top = -smTop / smScale;
-    float cardsTop = UI_Home_MarksTop() - HM_CARDS_ABOVE_MARKS - HM_CARD_H;
+// la sombra: bajo la barra, detras del panel de la izquierda y abajo, donde van los creditos
+static void UI_Home_DrawValoShade(void) {
+    float top = UI_Home_Top();
     vec4_t band;
 
-    UI_Home_WashAcross(-1, 760.0f, smPage, 0.85f, 0.0f);
     UI_Home_Wash(top, 200.0f, smPage, 0.6f, 0.0f);
-    UI_Home_Wash(cardsTop - 220.0f, 200.0f, smPage, 0.0f, 0.8f);
+    UI_Home_WashAcross(-1, 720.0f, smPage, 0.7f, 0.0f);
+    UI_Home_Wash(smBottom - 290.0f, 180.0f, smPage, 0.0f, 0.85f);
     VectorCopy(smPage, band);
-    band[3] = 0.8f;
-    SM_Fill(-1, cardsTop - 20.0f, smVW + 2, smBottom - cardsTop + 21.0f, band, NULL);
+    band[3] = 0.85f;
+    SM_Fill(-1, smBottom - 110.0f, smVW + 2, 111.0f, band, NULL);
 }
 
 void UI_Home_Open(void) {
@@ -964,11 +1101,12 @@ void UI_Home_Paint(void) {
     UI_Home_LoadMenu();
 
     UI_Home_DrawBackground();
-    UI_Home_DrawCardsShade();
-    UI_Home_DrawCards();
-    UI_Home_DrawSide();
-    UI_Home_DrawQuit();
+    UI_Home_DrawValoShade();
+    UI_Home_DrawCenter();
+    UI_Home_DrawModes();
     UI_Home_DrawLegal();
+    UI_Home_DrawSocial();
+    UI_Home_DrawBar();
 
     UI_Home_Banner();
     SM_EndFrame();
@@ -991,9 +1129,14 @@ qboolean UI_Home_HandleKey(int key) {
         return qtrue;
     }
     hit = SM_HitAt(smMX, smMY);
-    // [ioquakelive] las tarjetas y la salida del menu principal
-    if (hit && hit->type == HM_HIT_CARD) {
-        UI_Home_Go(hmCards[hit->index].nav);
+    // [ioquakelive] la barra, los modos destacados y la salida del menu principal
+    if (hit && hit->type == HM_HIT_TAB) {
+        UI_Home_Go(hit->index);
+        return qtrue;
+    }
+    if (hit && hit->type == HM_HIT_MODE) {
+        UI_StartMatch_Preselect(hvModes[hit->index].factory);
+        UI_Home_Go(HM_NAV_PLAY);
         return qtrue;
     }
     if (hit && hit->type == HM_HIT_QUIT) {
