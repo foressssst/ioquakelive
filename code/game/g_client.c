@@ -998,6 +998,13 @@ void ClientUserinfoChanged(int clientNum) {
     ent = g_entities + clientNum;
     client = ent->client;
 
+    // [QL] el contador de avalancha sube con cada cambio de userinfo; G_FloodCheck lo
+    // baja solo y echa al que se pase. Es lo que documenta el server.cfg de retail:
+    // "Kick the player when their userinfo flood counter reaches this level".
+    if (client) {
+        client->pers.userInfoFloodInfractions++;
+    }
+
     trap_GetUserinfo(clientNum, userinfo, sizeof(userinfo));
 
     // check for malformed or illegal info strings
@@ -1169,18 +1176,13 @@ char* ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
 
     trap_GetUserinfo(clientNum, userinfo, sizeof(userinfo));
 
-    // [QL] Access level check (replaces IP banning and password)
+    // [QL] 0x1003ac76: el baneo se comprueba por Steam ID contra la lista de acceso,
+    // por numero de cliente y no por IP. Antes esto llamaba a G_GetAccessLevel(ip), un
+    // stub que devolvia 0 siempre: la lista de access.txt se cargaba, se guardaba y se
+    // listaba, pero un baneado se conectaba igual.
     value = Info_ValueForKey(userinfo, "ip");
-    if (!isBot) {
-        int accessLevel = G_GetAccessLevel(value);
-        if (accessLevel == -1) {
-            return "You are banned from this server.";
-        }
-        // check for localhost
-        if (strcmp(value, "localhost") != 0) {
-            // store privilege level
-            // (will be set after client struct is zeroed)
-        }
+    if (!isBot && G_GetAccess(clientNum) == -1) {
+        return "You are banned from this server.";
     }
 
     // if a player reconnects quickly after a disconnect, the client disconnect may never be called
@@ -2118,19 +2120,6 @@ void Team_LivingTeamCounts(int *outRed, int *outBlue) {
 
     if (outRed) *outRed = aliveRed;
     if (outBlue) *outBlue = aliveBlue;
-}
-
-/*
-============
-G_GetAccessLevel
-
-[QL] Stub - Steam-based access level check.
-Returns 0 (regular), 1 (mod), 2 (admin), -1 (banned).
-Without Steam auth, always returns 0.
-============
-*/
-int G_GetAccessLevel(const char* ip) {
-    return 0;
 }
 
 /*

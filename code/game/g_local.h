@@ -998,7 +998,8 @@ void Freeze_ClientBegin(gentity_t* ent);
 void RR_ClientBegin(gentity_t* ent);
 void SelectSpawnWeapon(gentity_t* ent);
 void Team_LivingTeamCounts(int *outRed, int *outBlue);
-int G_GetAccessLevel(const char* ip);
+int G_GetAccess(int clientNum);  // [QL] 0x10032460, el nivel de acceso de un cliente
+qboolean G_FloodCheck(gclient_t* client);  // [QL] 0x100341e0
 void G_ReleaseGrapple(gentity_t* ent);
 void STAT_InitClient(gentity_t* ent);
 void STAT_PublishClientDisconnect(gclient_t* client, int reason);
