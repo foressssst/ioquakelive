@@ -3523,6 +3523,8 @@ void CL_SteamServersFrame(void) {
             }
         }
         if (j < cls.numglobalservers) {
+            // ya estaba: se le pone lo ultimo que dijo Steam y sigue en su lugar
+            CL_SetServerInfo(&cls.globalServers[j], info, ping);
             continue;
         }
 
