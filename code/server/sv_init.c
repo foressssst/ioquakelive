@@ -662,6 +662,13 @@ void SV_Init(void) {
     sv_serverType = Cvar_Get("sv_serverType", "0", CVAR_ARCHIVE);  // [QL] 1 = LAN-only
     sv_floodProtect = Cvar_Get("sv_floodProtect", "10", CVAR_ARCHIVE);  // [QL] 0x004e3c3a
 
+    // [QL] las cvars de servidor del motor que faltaban. El motor no tiene tabla de cvars
+    // -- las registra una por una --, asi que estas nunca aparecieron en ninguna medicion.
+    sv_master = Cvar_Get("sv_master", "1", CVAR_ARCHIVE);              // [QL] 0x004e3b80
+    sv_idleExit = Cvar_Get("sv_idleExit", "120", CVAR_ARCHIVE);        // [QL] 0x004e3e09
+    sv_errorExit = Cvar_Get("sv_errorExit", "1", 0);                   // [QL] 0x004e3e1f
+    sv_workshopFile = Cvar_Get("sv_workshopFile", "workshop.txt", CVAR_ARCHIVE);
+
     // [QL] las dos que publica el servidor sobre si mismo: los items del Workshop que usa la
     // partida y el identificador que le da el servicio. Retail las registra de solo lectura.
     Cvar_Get("sv_referencedSteamworks", "", CVAR_ROM);
