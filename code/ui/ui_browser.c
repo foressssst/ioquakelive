@@ -39,9 +39,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define BR_ROW_H 46.0f
 #define BR_PAD 25.0f
 #define BR_HEAD_H 34.0f
-#define BR_SHOT 34.0f  // el cuadrito del mapa, que es cuadrado: los preview son 256x256
+#define BR_SHOT 34.0f  // the little map shot, square: the previews are 256x256
 
-// las columnas, medidas desde el borde izquierdo del panel
+// the columns, measured from the panel's left edge
 #define BR_X_NAME 56.0f
 #define BR_X_MODE 452.0f
 #define BR_X_MAP 612.0f
@@ -60,14 +60,14 @@ typedef enum {
     BR_HIT_EMPTY
 } brHitType_t;
 
-// [QL] 0x00560e50: los modos, en el orden del juego
+// [QL] 0x00560e50: the gametypes, in the game's own order
 static const char* brGametypes[] = {"Free For All", "Duel",      "Race",       "Team Deathmatch",
                                     "Clan Arena",   "CTF",       "One Flag",   "Overload",
                                     "Harvester",    "Freeze Tag", "Domination", "Attack & Defend",
                                     "Red Rover"};
 #define BR_NUM_GAMETYPES ((int)ARRAY_LEN(brGametypes))
 
-// los filtros de arriba: el primero es todo
+// the filters along the top: the first one is everything
 static const struct {
     const char* label;
     int gametype;
@@ -82,10 +82,10 @@ static struct {
     float scrollGrab;
     int filter;        // indice en brFilters
     qboolean hideEmpty;
-    int rows;          // cuantos pasaron el filtro en el ultimo cuadro
+    int rows;          // how many passed the filter on the last frame
     int players;       // y cuanta gente habia en ellos
-    int lastBuild;     // cuando se rearmo la lista por ultima vez
-    int shown[MAX_DISPLAY_SERVERS];  // el indice de servidor de cada fila
+    int lastBuild;     // when the list was last rebuilt
+    int shown[MAX_DISPLAY_SERVERS];  // each row's server index
 } br;
 
 static float BR_ClampScroll(float scroll) {
@@ -112,9 +112,9 @@ static void BR_DrawScrollbar(float x) {
 ===============
 BR_Levelshot
 
-El cuadrito del mapa de cada fila. Registrar un shader por fila y por cuadro es
-caro aunque el motor lo tenga cacheado, asi que los que ya se pidieron quedan
-guardados aca. El que no tiene imagen propia usa la de siempre.
+The little map shot on each row. Registering a shader per row per frame is expensive
+even when the engine has it cached, so the ones already asked for are kept here. A map
+with no shot of its own uses the fallback.
 ===============
 */
 #define BR_MAX_SHOTS 96
@@ -141,7 +141,7 @@ static qhandle_t BR_Levelshot(const char* map) {
         }
     }
     if (brNumShots >= BR_MAX_SHOTS) {
-        brNumShots = 0;  // la tanda que se esta mirando entra de sobra; se empieza de nuevo
+        brNumShots = 0;  // the batch on screen fits with room to spare; start over
     }
     Q_strncpyz(brShots[brNumShots].map, map, sizeof(brShots[brNumShots].map));
     brShots[brNumShots].shot = trap_R_RegisterShaderNoMip(va("levelshots/preview/%s.jpg", map));
@@ -149,7 +149,7 @@ static qhandle_t BR_Levelshot(const char* map) {
     return brShots[brNumShots - 1].shot ? brShots[brNumShots - 1].shot : brDefaultShot;
 }
 
-// el modo, con el nombre con que lo publica el servidor
+// the gametype, under the name the server publishes it by
 static const char* BR_GametypeName(int gametype) {
     if (gametype < 0 || gametype >= BR_NUM_GAMETYPES) {
         return "Unknown";
@@ -161,8 +161,8 @@ static const char* BR_GametypeName(int gametype) {
 ===============
 BR_Collect
 
-Recorre la lista que arma el motor y se queda con las filas que pasan el filtro
-de arriba. El orden ya viene dado: lo decide la columna por la que se ordena.
+Walks the list the engine builds and keeps the rows that pass the filter along the
+top. The order comes in already set: the sort column decides it.
 ===============
 */
 static void BR_Collect(void) {
@@ -190,7 +190,7 @@ static void BR_Collect(void) {
     }
 }
 
-// una celda de texto, recortada a lo que entra en su columna
+// a text cell, clipped to what fits in its column
 static void BR_Cell(float x, float baseline, float width, const char* text, const vec4_t color,
                     const smRect_t* clip) {
     SM_Text(x, baseline, FONT_SANS, 14, color, text, SM_Fit(FONT_SANS, 14, text, width), qfalse);
@@ -223,7 +223,7 @@ static void BR_DrawPage(void) {
     UI_Home_Backdrop();
     UI_Home_PageTop(HM_NAV_BROWSER);
 
-    // el encabezado, con la cuenta y el boton de recargar a la derecha
+    // the header, with the count and the refresh button on the right
     y = UI_Home_Header(y, NULL, "Match Browser");
     Com_sprintf(count, sizeof(count), br.rows == 1 ? "%i server, %i playing" : "%i servers, %i playing",
                 br.rows, br.players);
@@ -239,7 +239,7 @@ static void BR_DrawPage(void) {
     panelH = smBottom - 40 - panelTop;
     SM_Round(left, panelTop, HM_CONTAINER_W, panelH, SM_RADIUS_MD, smPanel, NULL);
 
-    // la fila de filtros, del lado de adentro del panel
+    // the filter row, inside the panel's edge
     filterY = panelTop + 16;
     fx = left + BR_PAD;
     for (i = 0; i < BR_NUM_FILTERS; i++) {
@@ -259,7 +259,7 @@ static void BR_DrawPage(void) {
         SM_Hit(left + HM_CONTAINER_W - BR_PAD - w, filterY, w, SM_PILL_H, BR_HIT_EMPTY, 0, NULL);
     }
 
-    // los titulos de las columnas, que ordenan al tocarlos
+    // the column headers, which sort when clicked
     headY = filterY + SM_PILL_H + 14;
     BR_DrawHeader(left + BR_PAD, headY, "Server", BR_X_NAME, SORT_HOST);
     BR_DrawHeader(left + BR_PAD, headY, "Mode", BR_X_MODE, SORT_GAME);
@@ -309,14 +309,14 @@ static void BR_DrawPage(void) {
         trap_LAN_GetServerInfo(ui_netSource.integer, br.shown[i], info, sizeof(info));
         color = over ? &smText : &smTextSoft;
 
-        // el mapa, a la izquierda del nombre del servidor
+        // the map, to the left of the server name
         SM_Pic(rx + 10, ry + (BR_ROW_H - BR_SHOT) * 0.5f, BR_SHOT, BR_SHOT,
                BR_Levelshot(Info_ValueForKey(info, "mapname")), &clip);
         Com_sprintf(players, sizeof(players), "%s/%s", Info_ValueForKey(info, "clients"),
                     Info_ValueForKey(info, "sv_maxclients"));
         Com_sprintf(ping, sizeof(ping), "%s", Info_ValueForKey(info, "ping"));
 
-        // el que no publica nombre se muestra por su direccion, que es lo unico que se sabe
+        // a server that publishes no name is shown by its address, which is all that is known
         name = Info_ValueForKey(info, "hostname");
         if (!name[0]) {
             trap_LAN_GetServerAddressString(ui_netSource.integer, br.shown[i], address, sizeof(address));
@@ -349,8 +349,8 @@ void UI_Browser_Open(void) {
     br.rows = 0;
     br.players = 0;
     br.lastBuild = 0;
-    // la lista es la global, que es la que da Steam. El valor cacheado se actualiza a mano:
-    // UI_UpdateCvars recien corre en el proximo cuadro y el refresco sale ahora.
+    // the list is the global one, which is what Steam gives. The cached value is updated by
+    // hand: UI_UpdateCvars does not run until the next frame and the refresh goes out now.
     trap_Cvar_Set("ui_netSource", "2");  // AS_GLOBAL
     trap_Cvar_Update(&ui_netSource);
     UI_Home_ServerList(qtrue);
@@ -359,7 +359,7 @@ void UI_Browser_Open(void) {
 void UI_Browser_Paint(void) {
     SM_BeginFrame();
 
-    // la lista crece mientras Steam contesta, asi que se rearma cada tanto
+    // the list grows while Steam answers, so it is rebuilt every so often
     if (uiInfo.uiDC.realTime - br.lastBuild > 500) {
         br.lastBuild = uiInfo.uiDC.realTime;
         UI_Home_ServerList(qfalse);
@@ -402,7 +402,7 @@ qboolean UI_Browser_HandleKey(int key) {
         case K_MOUSE1:
             break;
         default:
-            return qfalse;  // Escape vuelve por el onESC del menu
+            return qfalse;  // Escape goes back through the menu's onESC
     }
 
     if (UI_Home_NavClick()) {

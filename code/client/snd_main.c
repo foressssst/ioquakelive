@@ -264,14 +264,14 @@ void S_Update(void) {
 =================
 S_DeviceLost
 
-[ioquakelive] Windows le puede quitar el dispositivo de audio al juego: al cambiar de salida,
-al conectar unos audifonos, o cuando otro programa lo toma en exclusiva. SDL cierra el
-dispositivo y avisa, y hasta ahora nadie escuchaba ese aviso, asi que el sonido se iba y no
-volvia hasta reiniciar el juego.
+[ioquakelive] Windows can take the audio device away from the game: on an output change, on
+plugging headphones in, or when another program grabs it exclusively. SDL closes the device and
+reports it, and nothing listened for that report, so the sound went away and did not come back
+until the game was restarted.
 
-Primero se intenta lo barato, que es reabrir solo el dispositivo. Si el nuevo no tiene el mismo
-formato, los sonidos cargados ya no sirven -- estan remuestreados al anterior -- y ahi si hace
-falta el snd_restart entero.
+The cheap thing is tried first, which is reopening the device alone. If the new one does not
+have the same format the loaded sounds are no longer usable -- they are resampled to the
+previous rate -- and only then is a full snd_restart needed.
 =================
 */
 void S_DeviceLost(void) {
@@ -475,7 +475,7 @@ S_Shutdown
 =================
 */
 void S_Shutdown(void) {
-    // [ioquakelive] si una carga de mapa se corto a mitad, lo encargado no puede sobrevivir al
+    // [ioquakelive] when a map load was cut short, what was handed out cannot survive the
     // sistema de sonido
     S_AsyncLoadDiscard();
 

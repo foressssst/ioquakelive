@@ -886,9 +886,9 @@ void Touch_DoorTrigger(gentity_t* ent, gentity_t* other, trace_t* trace) {
     } else if (door->moverState != MOVER_1TO2 &&
                (((door->spawnflags & 0x10) && (client->ps.stats[STAT_KEY] & (KEY_SILVER | KEY_MASTER))) ||
                 ((door->spawnflags & 0x20) && (client->ps.stats[STAT_KEY] & (KEY_GOLD | KEY_MASTER))))) {
-        // [ioquakelive] el jugador lleva la llave: se abre, pero nunca mientras ya se esta
-        // abriendo. Volver a llamar en MOVER_1TO2 invierte la marcha, que es el bug que
-        // tenia la puerta normal en Touch_PlatCenterTrigger; esta rama lo tenia igual.
+        // [ioquakelive] the player has the key: it opens, but never while it is already
+        // opening. Calling again in MOVER_1TO2 reverses the travel, which is the bug the
+        // plain door had in Touch_PlatCenterTrigger; this branch had it too.
         Use_BinaryMover(door, ent, other);
     }
     // else: no key - silently blocked (no message in the binary)
@@ -1125,20 +1125,20 @@ If the plat is at the bottom position, start it going up
 ===============
 */
 void Touch_PlatCenterTrigger(gentity_t* ent, gentity_t* other, trace_t* trace) {
-    // [QL] qagamex86.dll 0x1005f390. Lo que no puede activarse es un mover que YA VA
-    // subiendo (MOVER_1TO2), y esa es toda la condicion.
+    // [QL] qagamex86.dll 0x1005f390. What cannot be used is a mover that is ALREADY on its
+    // way up (MOVER_1TO2), and that is the whole condition.
     //
-    // [ioquakelive] Aqui decia != MOVER_POS2, y esa sola diferencia era el bug de las
-    // puertas que reporto el jugador, entero. Mientras la puerta se abre, el que la
-    // activo sigue dentro del trigger; con != MOVER_POS2 el toque de cada frame volvia a
-    // llamar a Use_BinaryMover, que estando en MOVER_1TO2 **invierte la marcha**. La
-    // puerta se ponia a ir y venir a toda velocidad, y al oscilar pegada al jugador lo
-    // aplastaba una vez por golpe hasta matarlo. De paso el espectador no la cruzaba
-    // nunca: su teleport pide que la puerta no se este moviendo, y asi no paraba.
+    // [ioquakelive] This said != MOVER_POS2, and that single difference was the whole door
+    // bug. While the door opens, whoever used it is still inside the trigger; with
+    // != MOVER_POS2 every frame's touch called Use_BinaryMover again, which in MOVER_1TO2
+    // reverses the travel. The door went back and forth at full speed, and oscillating
+    // against the player it crushed them once per swing until they died. It also meant a
+    // spectator never got through: their teleport asks for the door to be still, and it
+    // never was.
     //
-    // Para un plat la condicion tambien sirve: abajo sube, subiendo no se toca, arriba
-    // solo retrasa el cierre -- que es lo que debe pasar si te quedas encima -- y
-    // bajando vuelve a subir.
+    // The condition works for a plat too: down it rises, rising it is left alone, up it only
+    // delays the close -- which is what should happen if you stay on it -- and descending it
+    // rises again.
     if (!other->client || other->client->sess.sessionTeam != TEAM_SPECTATOR) {
         if (ent->parent->moverState != MOVER_1TO2) {
             Use_BinaryMover(ent->parent, ent, other);

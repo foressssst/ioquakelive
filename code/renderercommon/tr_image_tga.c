@@ -38,9 +38,8 @@ typedef struct _TargaHeader {
     unsigned char pixel_size, attributes;
 } TargaHeader;
 
-// [ioquakelive] Cuando el archivo esta mal: en el hilo principal se corta como siempre, y en un
-// trabajador se devuelve vacio, porque el salto largo de ri.Error no es seguro fuera del hilo
-// principal.
+// [ioquakelive] When the file is bad: on the main thread it errors out as always, and on a
+// worker it returns empty, because ri.Error's long jump is not safe off the main thread.
 #define TGA_FAIL(...)                       \
     do {                                    \
         if (targa_rgba) {                   \
@@ -57,9 +56,9 @@ typedef struct _TargaHeader {
 =============
 R_DecodeTGA
 
-[ioquakelive] Decodifica un TGA que ya esta en memoria; ver el comentario de R_DecodeJPG. El
-buffer de salida se pide con allocator y se suelta con deallocator, para que un trabajador use
-los del sistema y el hilo principal los del motor.
+[ioquakelive] Decodes a TGA that is already in memory; see the comment on R_DecodeJPG. The
+output buffer is asked for through allocator and released through deallocator, so that a worker
+uses the system's and the main thread the engine's.
 =============
 */
 void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int* width, int* height,
@@ -312,7 +311,7 @@ void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int*
 
     *pic = targa_rgba;
 }
-// [ioquakelive] el camino de siempre: leer el archivo y decodificarlo aqui mismo
+// [ioquakelive] the usual path: read the file and decode it right here
 static void* R_TGAAllocEngine(size_t bytes) {
     return ri.Malloc((int)bytes);
 }
@@ -336,7 +335,7 @@ void R_LoadTGA(const char* name, byte** pic, int* width, int* height) {
     }
     R_DecodeTGA(buffer.b, length, name, pic, width, height, R_TGAAllocEngine, R_TGAFreeEngine, qfalse);
     if (*pic) {
-        // [ioquakelive] para la lista de carga del mapa: el nombre real, con su extension
+        // [ioquakelive] for the map's load list: the real name, extension included
         Q_strncpyz(r_lastImageName, name, sizeof(r_lastImageName));
     }
     ri.FS_FreeFile(buffer.v);

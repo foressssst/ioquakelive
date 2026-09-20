@@ -181,9 +181,9 @@ static void CON_Show(void) {
     CHAR_INFO line[MAX_EDIT_LINE];
     WORD attrib;
 
-    // [ioquakelive] sin esta comprobacion, una salida redirigida deja binfo con
-    // basura de la pila y lo que sigue calcula con ella. Era la caida del servidor
-    // dedicado en Release.
+    // [ioquakelive] without this check a redirected output leaves binfo full of stack
+    // garbage and what follows computes with it. This was the dedicated server's crash in
+    // Release.
     if (!GetConsoleScreenBufferInfo(qconsole_hout, &binfo)) {
         return;
     }
@@ -213,9 +213,9 @@ static void CON_Show(void) {
         line[i].Attributes = attrib;
     }
 
-    // [ioquakelive] cuando la linea no entra, se muestra su final; el arreglo que se
-    // le pasa a WriteConsoleOutput tiene que seguir teniendo writeSize.X caracteres
-    // por delante, asi que el desplazamiento se acota al arreglo.
+    // [ioquakelive] when the line does not fit, its tail is shown; the array handed to
+    // WriteConsoleOutput still has to have writeSize.X characters ahead of it, so the offset
+    // is clamped to the array.
     if (qconsole_linelen > binfo.srWindow.Right) {
         int desde = qconsole_linelen - binfo.srWindow.Right;
 

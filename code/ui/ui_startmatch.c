@@ -758,16 +758,15 @@ THE PAGE
 ===============================================================================
 */
 
-// [ioquakelive] The user, 2026-09-16: "el boton change es redundante, ya con hacer click en
-// cualquier lado de esa seccion vas a la sub seccion". The card lights up under the pointer and
-// its whole area is the hit, so the button said nothing the card did not.
+// [ioquakelive] There is no change button: the card lights up under the pointer and its whole
+// area is the hit, so the button said nothing the card did not.
 //
-// [ioquakelive] 2026-09-18: las dos elecciones son tarjetas de verdad dentro de su panel, como el
-// indice de Patch Notes, con su titulo encima. Antes eran media columna cada una con el contenido
-// centrado en el medio, y quedaba un icono chico rodeado de hueco.
-#define SM_PANEL_IN 20.0f   // lo que los paneles dejan de margen por dentro
+// The two choices are real cards inside their panel, like the Patch Notes index, with their
+// title above. They used to be half a column each with the content centred in the middle,
+// which left a small icon surrounded by empty space.
+#define SM_PANEL_IN 20.0f   // the margin the panels leave on the inside
 #define SM_CARD_PAD 12.0f
-#define SM_EYEBROW_H 26.0f  // el titulo chico sobre cada tarjeta
+#define SM_EYEBROW_H 26.0f  // the small title above each card
 
 // the small title over each choice, gold while the pointer is on its card
 static void SM_DrawChoiceTitle(float x, float y, const char* label, qboolean over) {
@@ -945,9 +944,9 @@ static float SM_DrawRow(int i, float x, float y) {
     return h;
 }
 
-// [ioquakelive] La accion de la pagina va arriba a la derecha, en la cabecera, que es donde
-// Settings pone Apply Video Settings. Antes era una barra crema a todo lo ancho del pie, y pesaba
-// mas que el resto de la pagina junto.
+// [ioquakelive] The page's action goes top right, in the header, which is where Settings puts
+// Apply Video Settings. It used to be a cream bar across the whole footer, and it weighed more
+// than the rest of the page put together.
 static void SM_DrawLaunch(float headerY) {
     float w = SM_ButtonWidth("Launch Match", SM_BUTTON_H) + 16;
     float x = UI_Home_Left() + HM_CONTAINER_W - 25 - w;
@@ -958,10 +957,10 @@ static void SM_DrawLaunch(float headerY) {
     SM_Hit(x, y, w, SM_BUTTON_H, SM_HIT_LAUNCH, 0, NULL);
 }
 
-// [ioquakelive] Las opciones van en tarjetas de subseccion con su titulo en dorado, como en
-// Settings. Cada tarjeta junta filas vecinas en la lista de retail, asi que el orden no cambia.
-// Ademas arregla el slider: su carril vacio es smField, igual que el panel, y solo se ve sobre
-// una tarjeta mas oscura, que es como lo tiene Settings.
+// [ioquakelive] The options go in subsection cards with their title in gold, as in Settings.
+// Each card groups rows that are already neighbours in retail's list, so the order does not
+// change. It also fixes the slider: its empty track is smField, the same as the panel, and only
+// shows over a darker card, which is how Settings has it.
 static const struct {
     const char* title;
     int first, last;
@@ -971,11 +970,11 @@ static const struct {
     {"Server", SM_PASSWORD, SM_MAPPOOL},
 };
 
-#define SM_GROUP_HEAD 40.0f  // el titulo dorado de la tarjeta
+#define SM_GROUP_HEAD 40.0f  // the card's gold title
 #define SM_GROUP_FOOT 10.0f
 #define SM_GROUP_GAP 16.0f
 #define SM_ROW_H 50.0f
-#define SM_NOTE_H 36.0f      // la nota del puerto bajo Match Type, cuando es Internet
+#define SM_NOTE_H 36.0f      // the port note under Match Type, when it is Internet
 
 static qboolean SM_ShowPortNote(void) {
     return SM_Equals(SM_Value(SM_SERVERTYPE), 2);
@@ -990,10 +989,10 @@ static void SM_DrawPage(void) {
     UI_Home_Backdrop();
     UI_Home_PageTop(HM_NAV_PLAY);
 
-    // [ioquakelive] 2026-09-18: el esqueleto de Patch Notes. La cabecera con la accion a la
-    // derecha, y debajo dos paneles que bajan hasta el borde del marco. El comentario que habia
-    // aqui ya decia que el panel "baja hasta el borde", pero su alto era el del contenido y
-    // terminaba a media pantalla: por eso quedaba ese hueco abajo.
+    // [ioquakelive] The Patch Notes skeleton: the header with the action on the right, and
+    // below it two panels that run down to the frame's edge. The panel's height used to be the
+    // content's, ending halfway down the screen, which is where the gap at the bottom came
+    // from.
     top = UI_Home_Header(HM_NAV_H, NULL, "Start Match") + HM_PANEL_GAP;
     bottom = UI_Home_FrameBottom();
     SM_DrawLaunch(HM_NAV_H);
@@ -1016,7 +1015,7 @@ static void SM_DrawPage(void) {
         for (i = smGroups[g].first; i <= smGroups[g].last; i++) {
             h += SM_ROW_H + (i == SM_SERVERTYPE && SM_ShowPortNote() ? SM_NOTE_H : 0);
         }
-        // [ioquakelive] sin tarjeta negra: una linea fina separa cada grupo del anterior
+        // [ioquakelive] no black card: a thin line separates each group from the one above
         if (g > 0) {
             SM_Fill(rowX, y - SM_GROUP_GAP * 0.5f, SM_ROW_W, 1, smBorder, NULL);
         }
@@ -1695,10 +1694,10 @@ qboolean UI_StartMatch_HandleKey(int key) {
 ===============
 UI_StartMatch_Preselect
 
-[ioquakelive] El menu principal abre Start Match con un modo ya elegido: son sus "modos
-destacados". Se elige igual que desde el dialogo de modos -- la factory y, si el mapa elegido no
-soporta su modo, el mapa por defecto de ese modo --, asi la pagina queda como si el jugador lo
-hubiera elegido ahi.
+[ioquakelive] The main menu opens Start Match with a gametype already chosen: its "featured
+modes". The choice is made the same way as from the gametype dialog -- the factory and, if the
+chosen map does not support that mode, the mode's default map -- so the page ends up as if the
+player had picked it there.
 ===============
 */
 void UI_StartMatch_Preselect(const char* factory) {

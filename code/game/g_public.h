@@ -325,7 +325,7 @@ typedef struct {
     /* 0x668 */ qboolean(*trap_VerifySteamAuth)(int clientNum);
     /* 0x670 */ qboolean(*trap_FactoryExists)(const char *id);  // [QL] slot 206, x86 table 0x56d2b8 -> 0x4e2a20
 
-    /* [ioquakelive] los eventos de estadisticas: lo que retail tiene en +0x328 y +0x2e8 */
+    /* [ioquakelive] the stats events: what retail has at +0x328 and +0x2e8 */
     /* 0x678 */ void    (*trap_GenerateMatchGUID)(char *buf, int size);  // [QL] x86 +0x328 -> 0x4e27d0
     /* 0x680 */ void    (*trap_StatsEvent)(uint64_t steamId, const char *type, const char *document);  // [QL] x86 +0x2e8 -> 0x4e2640
 
@@ -336,18 +336,17 @@ typedef struct {
 // QL uses a function pointer table instead of Q3's vmMain dispatcher.
 // QL drops GAME_CLIENT_BEGIN. The bots' frame is still its own export (+0x2c), which the engine
 // calls apart from GAME_RUN_FRAME (SV_BotFrame, quakelive_steam.exe 0x4dd670).
-// Los numeros son los de retail. [QL] CORREGIDO el 2026-09-20: la tabla arranca en 0x1008fd00,
-// no en 0x1008fd08, y termina con un -1 en +0x54, o sea que son 21 y no 19. Contando desde el
-// lugar equivocado, todos nuestros numeros quedaban dos por debajo de los de retail; ahora
-// coinciden. El slot 0 esta en cero en el binario y el 1 es 0x100529b0, que anuncia cada cvar
-// que cambia cuando hay trampas -- ese comportamiento esta portado, pero adentro de
-// G_UpdateCvars, que es donde ya se detecta el cambio, y no como export.
-// Los slots sin contraparte quedan nombrados y vacios, para que el que se porte despues caiga
-// en el mismo lugar que en retail.
+// The numbers are retail's. The table starts at 0x1008fd00, not at 0x1008fd08, and ends with
+// a -1 at +0x54, so there are 21 slots and not 19; counting from the wrong place left every
+// number here two below retail's. Slot 0 is zero in the binary and slot 1 is 0x100529b0, which
+// announces every cvar that changes while cheats are on -- that behaviour is ported, but inside
+// G_UpdateCvars, where the change is already detected, rather than as an export.
+// Slots with no counterpart are named and left empty, so that whatever is ported later lands in
+// the same place as in retail.
 typedef enum {
-    GAME_UNUSED_0                = 0,   // [QL] en cero en la tabla del binario
+    GAME_UNUSED_0                = 0,   // [QL] zero in the binary's table
     GAME_CVAR_CHANGED            = 1,   // [QL] 0x100529b0, el anuncio de "Server: %s changed to %s";
-                                        //      portado dentro de G_UpdateCvars, no como export
+                                        //      ported inside G_UpdateCvars, not as an export
     GAME_SHUTDOWN                = 2,   // G_ShutdownGame()
     GAME_RUN_FRAME               = 3,   // G_RunFrame()
     GAME_REGISTER_CVARS          = 4,   // [QL] G_RegisterCvars()
@@ -361,8 +360,8 @@ typedef enum {
     GAME_UNUSED_12               = 12,  // [QL] 0x1003b030, sin portar
     GAME_BOT_AI_START_FRAME      = 13,  // [QL] BotAIStartFrame() (retail 0x10023400)
     GAME_SNAPSHOT_ALWAYS_SEND    = 14,  // [QL] G_ClientAlwaysInSnapshot() (retail 0x10052dc0)
-    GAME_UNUSED_15               = 15,  // [QL] 0x10053020, solo en el tipo de juego 9, sin portar
-    GAME_UNUSED_16               = 16,  // [QL] 0x10052f40, solo en los tipos 5, 6 y 11, sin portar
+    GAME_UNUSED_15               = 15,  // [QL] 0x10053020, gametype 9 only, not ported
+    GAME_UNUSED_16               = 16,  // [QL] 0x10052f40, gametypes 5, 6 and 11 only, not ported
     GAME_VOICE_FILTER            = 17,  // [QL] G_VoiceFilter() (retail 0x10052e90)
     GAME_UNUSED_18               = 18,  // [QL] 0x100530c0, sin portar
     GAME_SNAPSHOT_VISIBILITY     = 19,  // [QL] G_ObfuscateEnemyInfoInSnapshotCheck() (retail 0x10052e40)

@@ -54,7 +54,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define ST_TIP_LINES 2       // every retail tip fits two lines at this width
 #define ST_BIND_H 42.0f
 #define ST_HEAD_H 44.0f
-#define ST_CARD_PAD 10.0f   // el aire que la tarjeta deja bajo su ultima fila
+#define ST_CARD_PAD 10.0f   // the room the card leaves below its last row
 
 // Team's two blocks fit the shortest panel whole (773 high on a 16:9 screen), since
 // a model is drawn only while all of it shows
@@ -189,7 +189,7 @@ static struct {
     char modelShown[MAX_QPATH];     // what modelInfo was built from
 
     playerInfo_t preview[2];        // the Team section's, teammates then enemies
-    qhandle_t weaponIcon[10];      // [ioquakelive] el icono de cada arma, registrado al pedirlo
+    qhandle_t weaponIcon[10];      // [ioquakelive] each weapon's icon, registered on first use
     char previewShown[2][MAX_QPATH];
     float previewYaw[2];
     int previewDrag;                // which one is being turned
@@ -777,7 +777,7 @@ static void ST_DrawCrosshair(int i, float x, float y, const smRect_t* clip) {
         SM_Pic(x + fieldW - 36, y + 4, 28, 28, uiInfo.uiDC.Assets.crosshairShader[shape], clip);
         trap_R_SetColor(NULL);
     }
-    // el campo entero abre la rejilla; las flechas de antes obligaban a recorrerlos de a uno
+    // the whole field opens the grid; the arrows it had before meant stepping through one by one
     SM_Hit(x, y, fieldW, ST_FIELD_H, ST_HIT_SELECT, i, clip);
     if (st.select == i) {
         st.selectControl = SM_R(x, y, fieldW, ST_FIELD_H);
@@ -1297,10 +1297,10 @@ static void ST_DrawModelChooser(void) {
 ===============
 ST_DrawCrosshairGrid
 
-Los treinta crosshairs a la vista, en rejilla, sobre el control. Retail los ofrece todos en un
-desplegable en vez de obligar a recorrerlos de a uno con las flechas, que es lo que habia aca: para
-llegar al 24 habia que pasar por los 23 anteriores. En rejilla se ve el dibujo de cada uno en vez
-de su numero, que es lo unico que importa al elegir.
+All thirty crosshairs on show, in a grid, over the control. Retail offers them in a dropdown
+rather than making you step through them one arrow at a time, which is what was here: reaching
+number 24 meant passing the 23 before it. In a grid you see each one's shape instead of its
+number, which is the only thing that matters when choosing.
 ===============
 */
 #define ST_XH_CELL 40.0f
@@ -1341,7 +1341,7 @@ static void ST_DrawCrosshairGrid(void) {
                      k == chosen ? smRaisedHover : smPanel, NULL);
         }
         if (k == 0) {
-            // el cero es "ninguno", y no tiene dibujo que mostrar
+            // zero is "none", and has no shape to show
             SM_Label(cxx + 6, SM_Baseline(FONT_SANS, 10, cyy, ST_XH_CELL), 10,
                      (k == chosen || over) ? smText : smMuted, "OFF", 1.2f);
             SM_Hit(cxx, cyy, ST_XH_CELL, ST_XH_CELL, ST_HIT_OPTION, k, NULL);
@@ -1458,10 +1458,9 @@ static void ST_DrawRGBPicker(void) {
 ===============
 ST_GroupRect
 
-Donde vive una subseccion entera: desde su encabezado hasta el final de la ultima fila que le
-pertenece. Un encabezado de ancho completo (column < 0) se queda con las filas de las dos columnas;
-uno de una sola columna, solo con las suyas, porque los encabezados van de a pares en la misma
-linea y cada uno manda en su lado.
+Where a whole subsection lives: from its header down to the end of the last row belonging to it.
+A full width header (column < 0) takes the rows of both columns; a single column one takes only
+its own, because headers come in pairs on the same line and each rules its own side.
 ===============
 */
 static qboolean ST_GroupRect(int head, smRect_t* out) {
@@ -1476,7 +1475,7 @@ static qboolean ST_GroupRect(int head, smRect_t* out) {
             continue;
         }
         if (stCvars[i].widget == ST_HEADING) {
-            // el encabezado emparejado en la otra columna no corta este grupo
+            // the paired header in the other column does not end this group
             if (col >= 0 && stCvars[i].column >= 0 && stLayout[i].y == stLayout[head].y) {
                 continue;
             }
@@ -1492,7 +1491,7 @@ static qboolean ST_GroupRect(int head, smRect_t* out) {
     }
 
     if (bottom <= stLayout[head].y + stLayout[head].h) {
-        return qfalse;  // un encabezado sin filas no lleva tarjeta
+        return qfalse;  // a header with no rows gets no card
     }
     *out = SM_R(stLayout[head].x, stLayout[head].y, stLayout[head].w,
                 bottom - stLayout[head].y + ST_CARD_PAD);
@@ -1503,13 +1502,13 @@ static qboolean ST_GroupRect(int head, smRect_t* out) {
 ===============
 ST_WeaponIcon
 
-El icono del arma que ata una fila de "weapon N", o 0 cuando la fila no es de un arma. Los
-nombres son los de pak00; el orden es el de las teclas, que es el de la barra de armas.
+The icon of the weapon a "weapon N" row binds, or 0 when the row is not a weapon's. The names
+are pak00's; the order is the keys' order, which is the weapon bar's.
 ===============
 */
 static qhandle_t ST_WeaponIcon(int i) {
     static const char* const names[] = {
-        NULL,                    // 0: no hay arma 0
+        NULL,                    // 0: there is no weapon 0
         "icons/iconw_gauntlet",  // 1
         "icons/iconw_machinegun",
         "icons/iconw_shotgun",
@@ -1551,15 +1550,15 @@ static void ST_DrawRow(int i, float y, const smRect_t* clip) {
     float h = stLayout[i].h;
     float cx = ST_ControlX(i);
     float titleW = ST_TitleWidth(w);
-    // [ioquakelive] las armas se reconocen antes por su icono que por su nombre, asi que una fila
-    // de "weapon N" corre su titulo para dejarle lugar
+    // [ioquakelive] a weapon is recognised faster by its icon than by its name, so a "weapon N"
+    // row shifts its title along to make room for one
     qhandle_t weapIcon = ST_WeaponIcon(i);
     float titleX = x + (weapIcon ? 10 + 22 + 10 : 12);
     smRect_t row = SM_R(x, y, w, h);
     qboolean hovered;
     float cy;
 
-    // el encabezado es el titulo de su tarjeta; el fondo ya se dibujo antes que las filas
+    // the header is its card's title; the background was drawn before the rows
     if (cv->widget == ST_HEADING) {
         if (SM_TextInside(SM_Baseline(FONT_SANS, 13, y + 16, 20), 13, clip)) {
             SM_Label(x + ST_CARD_PAD + 12, SM_Baseline(FONT_SANS, 13, y + 16, 20), 13, smGold,
@@ -1734,9 +1733,9 @@ static void ST_DrawPage(void) {
 
     clip = SM_R(st.left, st.listTop, HM_CONTAINER_W, st.view);
 
-    // [ioquakelive] 2026-09-18: las subsecciones ya no van en una tarjeta negra dentro del
-    // panel, que el jugador no queria. Las separa su titulo dorado y una linea fina encima de
-    // cada una, menos las de arriba del todo, que no tienen nada que separar.
+    // [ioquakelive] the subsections no longer sit in a black card inside the panel. What
+    // separates them is their gold title and a thin line above each one, except for the ones
+    // at the very top, which have nothing to separate them from.
     if (st.tab != ST_TAB_TEAM) {
         float firstY = -1;
 
@@ -1911,7 +1910,7 @@ static void ST_Click(void) {
     if (st.select >= 0) {
         if (type == ST_HIT_OPTION) {
             if (stCvars[st.select].widget == ST_CROSSHAIR) {
-                ST_Set(st.select, va("%i", index));  // en la rejilla el indice ES el valor
+                ST_Set(st.select, va("%i", index));  // in the grid the index IS the value
             } else {
                 ST_Set(st.select, stCvars[st.select].options[index].value);
             }

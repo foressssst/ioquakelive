@@ -119,7 +119,7 @@ static void TR_DrawCard(int i, float x, float y, float w, float h) {
     vec4_t tint = {1.0f, 1.0f, 1.0f, 1.0f};
     int lines, k;
 
-    // [ioquakelive] 2026-09-18: la tarjeta es el panel, sin otro alrededor; el cursor la levanta
+    // [ioquakelive] the card is the panel, with nothing wrapped around it; the cursor lifts it
     SM_Round(x, y, w, h, SM_RADIUS_MD, over ? smRaised : smPanel, NULL);
 
     // retail dims the image to 40% and brings it up under the cursor
@@ -189,10 +189,10 @@ void UI_Training_Paint(void) {
     UI_Home_Backdrop();
     UI_Home_PageTop(HM_NAV_TRAINING);
 
-    // [ioquakelive] 2026-09-18, lo que pidio el jugador: "centrar solamente el contenedor de los
-    // 3 trainings, no el hero de arriba". La cabecera se queda anclada arriba como en todas las
-    // paginas, y las tres tarjetas se centran en vertical en lo que queda hasta el borde. Ya no
-    // hay un panel que las envuelva: las tarjetas son los paneles, sin contenedor dentro de otro.
+    // [ioquakelive] Only the three training cards are centred, not the hero above them. The
+    // header stays anchored at the top as on every page, and the three cards centre vertically
+    // in what is left down to the edge. No panel wraps them any more: the cards are the panels,
+    // with no container inside another.
     top = UI_Home_Header(HM_NAV_H, NULL, "Training Center") + HM_PANEL_GAP;
     bottom = UI_Home_FrameBottom();
     y = top + (bottom - top - TR_CARD_H) * 0.5f;

@@ -141,15 +141,14 @@ typedef enum {
 // duel players' names to 689/690, 0x1006671e writes "atmosphere" to 691, and
 // 0x10050a33 writes the "\x\%f\y\%f\z\%f" team bases to 694/695; cgamex86.dll
 // 0x10049544-0x10049841 reads 689/690 as names, 692/693/696-699 as one block of
-// six ints y 694/695 desde el ownerdraw del estado de las banderas.
+// six ints, and 694/695 from the flag status ownerdraw.
 //
-// [QL] los seis premios quedaron VERIFICADOS el 2026-09-20 leyendo la funcion que
-// los calcula (0x100559e0) y sus escrituras: 693 sale de aciertos*100/tiros, o sea
-// precision; 692 del contador de dano; 696 de una suma pesada de objetos recogidos,
-// con la mega y la armadura amarilla pesando 480; 697 de asistencias mas capturas
-// por diez; 698 de defensas mas asistencias; y 699 de todo lo anterior mas las
-// capturas por veinticinco, que es por que es el jugador mas valioso. Los seis
-// coinciden uno por uno con los nombres de aca abajo.
+// [QL] the six awards are VERIFIED: read from the function that computes them
+// (0x100559e0) and from its writes. 693 is hits*100/shots, that is accuracy; 692 is
+// the damage counter; 696 is a weighted sum of items picked up, with the mega and the
+// yellow armor weighing 480; 697 is assists plus captures times ten; 698 is defends
+// plus assists; and 699 is all of the above plus captures times twenty-five, which is
+// why it is the most valuable player. All six match the names below one by one.
 #define CS_NAME1STPLAYER 689       // Name of the duel player on the left
 #define CS_NAME2NDPLAYER 690       // Name of the duel player on the right
 #define CS_ATMOSEFFECT 691         // map "atmosphere" key
@@ -391,11 +390,11 @@ typedef enum {
 #define EF_AWARD_CAP 0x00000800         // draw the capture sprite
 #define EF_TALK 0x00001000              // draw a talk balloon
 #define EF_CONNECTION 0x00002000        // draw a connection trouble sprite
-#define EF_SPECTATOR 0x00004000  // [QL] el jugador es espectador, y esto NO es el
-                                 // EF_SPECTATOR de Quake 3: el bit se reutilizo. Lo escribe
-                                 // ClientSpawn (qagamex86.dll 0x1003bd8b) y lo lee el
-                                 // cgame para dibujar la HUD de espectador (0x10010ff7).
-                                 // Quien ya voto se sabe por pers.voteState, no por aqui.
+#define EF_SPECTATOR 0x00004000  // [QL] the player is a spectator; this is NOT the
+                                 // Quake 3's EF_SPECTATOR: the bit was reused. ClientSpawn
+                                 // writes it (qagamex86.dll 0x1003bd8b) and the cgame reads
+                                 // it to draw the spectator HUD (0x10010ff7). Who already
+                                 // voted is known from pers.voteState, not from here.
 #define EF_AWARD_IMPRESSIVE 0x00008000  // draw an impressive sprite
 #define EF_AWARD_DEFEND 0x00010000      // draw a defend sprite
 #define EF_AWARD_ASSIST 0x00020000      // draw a assist sprite

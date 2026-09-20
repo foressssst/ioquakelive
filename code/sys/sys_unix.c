@@ -188,8 +188,8 @@ int Sys_Milliseconds(void) {
 ================
 Sys_Microseconds
 
-[ioquakelive] Ver el comentario de la version de Windows: reloj monotono fino para el ritmo de
-los frames. CLOCK_MONOTONIC no salta si alguien cambia la hora del sistema.
+[ioquakelive] See the comment on the Windows version: fine grained monotonic clock for pacing
+frames. CLOCK_MONOTONIC does not jump if somebody changes the system time.
 ================
 */
 int64_t Sys_Microseconds(void) {
@@ -213,11 +213,11 @@ int64_t Sys_Microseconds(void) {
 /*
 ==============================================================================
 
-HILOS   (POSIX)
+THREADS   (POSIX)
 
-[ioquakelive] Ver el comentario de la version de Windows. El semaforo se arma con un cerrojo y
-una variable de condicion en vez de sem_t, porque en macOS los semaforos POSIX no estan
-implementados.
+[ioquakelive] See the comment on the Windows version. The semaphore is built from a mutex and a
+condition variable instead of sem_t, because on macOS the POSIX semaphores are not
+implemented.
 
 ==============================================================================
 */
@@ -307,7 +307,7 @@ void Sys_SemaphoreWait(void* handle) {
     pthread_mutex_unlock(&semaphore->mutex);
 }
 
-// [ioquakelive] ver el comentario de la version de Windows
+// [ioquakelive] see the comment on the Windows version
 void Sys_ThreadYield(void) {
     sched_yield();
 }

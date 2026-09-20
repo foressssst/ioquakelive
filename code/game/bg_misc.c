@@ -804,7 +804,7 @@ gitem_t bg_itemlist[] =
          */
         {
             "item_scout",
-            "sound/items/scout.ogg",  // [QL] el .wav no existe en pak00
+            "sound/items/scout.ogg",  // [QL] the .wav does not exist in pak00
             {"models/powerups/scout.md3",
              NULL, NULL, NULL},
             /* icon */ "icons/scout",

@@ -24,18 +24,18 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "../qcommon/puff.h"
 
 /*
- *  [ioquakelive] Que memoria usa el decodificador y si puede hablar. En el hilo principal, la
- *  del motor y con mensajes; en un trabajador, la del sistema y en silencio, porque ni el
- *  reparto de memoria del motor ni la consola son seguros entre hilos. Es POR HILO: cada
- *  trabajador marca la suya y no pisa a los demas.
+ *  [ioquakelive] Which memory the decoder uses and whether it may speak. On the main thread,
+ *  the engine's and with messages; on a worker, the system's and in silence, because neither
+ *  the engine's allocator nor the console is thread safe. It is PER THREAD: each worker sets
+ *  its own and does not tread on the others.
  */
 /*
- *  La pregunta es "estoy en el hilo principal?". R_LoadPNG solo se llama desde ahi y anota su
- *  identidad la primera vez. Se hace asi y no con una variable por hilo (__declspec(thread))
- *  porque el renderer es un DLL cargado con LoadLibrary, y los hilos que ya existian antes de
- *  cargarlo -- el principal y los trabajadores -- no siempre tienen garantizado ese espacio.
- *  windows.h no se incluye porque choca con los tipos del motor; se declara a mano la unica
- *  funcion que hace falta.
+ *  The question is "am I on the main thread?". R_LoadPNG is only called from there and records
+ *  its identity the first time. It is done this way rather than with a thread local
+ *  (__declspec(thread)) because the renderer is a DLL loaded with LoadLibrary, and threads that
+ *  already existed before it was loaded -- the main one and the workers -- are not always
+ *  guaranteed that storage. windows.h is not included because it clashes with the engine's
+ *  types; the one function needed is declared by hand.
  */
 #ifdef _WIN32
 __declspec(dllimport) unsigned long __stdcall GetCurrentThreadId(void);
@@ -52,7 +52,7 @@ typedef pthread_t pngThreadId_t;
 static pngThreadId_t pngMainThread;
 static qboolean pngMainThreadKnown;
 
-// en un trabajador: memoria del sistema y en silencio
+// on a worker: the system's memory, and silent
 static qboolean PNG_IsWorker(void) {
     return (qboolean)(pngMainThreadKnown && !PNG_SameThread(PNG_CurrentThread(), pngMainThread));
 }
@@ -248,7 +248,7 @@ struct BufferedFile {
     int Length;
     byte* Ptr;
     int BytesLeft;
-    qboolean Borrowed;  // [ioquakelive] el buffer es de quien lo presto: no se suelta aqui
+    qboolean Borrowed;  // [ioquakelive] the buffer belongs to whoever lent it: not freed here
 };
 
 /*
@@ -320,7 +320,7 @@ static struct BufferedFile* ReadBufferedFile(const char* name) {
  *  Close a buffered file.
  */
 
-// [ioquakelive] un archivo que ya esta en memoria, prestado: lo suelta quien lo presto
+// [ioquakelive] a file already in memory, on loan: whoever lent it frees it
 static struct BufferedFile* WrapBufferedFile(byte* data, int length) {
     struct BufferedFile* BF;
 
@@ -1831,7 +1831,7 @@ static void R_DecodePNGInternal(const char* name, byte* fileData, int fileLen, b
      *  Read the file.
      */
 
-    // [ioquakelive] el archivo viene prestado (un trabajador) o se lee aqui (el hilo principal)
+    // [ioquakelive] the file is either on loan (a worker) or read here (the main thread)
     ThePNG = fileData ? WrapBufferedFile(fileData, fileLen) : ReadBufferedFile(name);
     if (!ThePNG) {
         return;
@@ -2317,27 +2317,27 @@ static void R_DecodePNGInternal(const char* name, byte* fileData, int fileLen, b
 =============
 R_LoadPNG / R_DecodePNG
 
-[ioquakelive] R_LoadPNG es el camino de siempre: lee el archivo y lo decodifica aqui. R_DecodePNG
-decodifica uno que ya esta en memoria, y es lo que corre en un trabajador; ver el comentario de
+[ioquakelive] R_LoadPNG is the usual path: it reads the file and decodes it here. R_DecodePNG
+decodes one that is already in memory, and is what runs on a worker; see the comment on
 PNG_Malloc.
 =============
 */
 void R_LoadPNG(const char* name, byte** pic, int* width, int* height) {
-    // R_LoadPNG solo se llama desde el hilo principal: aqui se anota cual es
+    // R_LoadPNG is only called from the main thread: this is where it records which one that is
     if (!pngMainThreadKnown) {
         pngMainThread = PNG_CurrentThread();
         pngMainThreadKnown = qtrue;
     }
     R_DecodePNGInternal(name, NULL, 0, pic, width, height);
     if (pic && *pic) {
-        // para la lista de carga del mapa: el nombre real, con su extension
+        // for the map's load list: the real name, extension included
         Q_strncpyz(r_lastImageName, name, sizeof(r_lastImageName));
     }
 }
 
 void R_DecodePNG(byte* fileData, int fileLen, const char* name, byte** pic, int* width, int* height) {
-    // si todavia no se anoto el hilo principal, no se puede saber de quien es la memoria: mejor
-    // no decodificar aqui y dejar que el hilo principal lo cargue por el camino de siempre
+    // with the main thread not recorded yet there is no telling whose memory this is, so do not
+    // decode here and let the main thread load it the usual way
     if (!pngMainThreadKnown) {
         *pic = NULL;
         return;

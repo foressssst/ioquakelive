@@ -436,9 +436,10 @@ void* S_OGG_CodecLoad(const char* filename, snd_info_t* info) {
 =================
 S_OGG_DecodeMemory
 
-[ioquakelive] Decodifica un OGG entero que ya esta en memoria. Es lo que corre en un trabajador
-durante la carga, asi que no toca el sistema de archivos, ni la memoria del motor, ni la
-consola: lee de un buffer propio, pide la memoria al sistema y, si algo falla, devuelve NULL.
+[ioquakelive] Decodes a whole OGG that is already in memory. This is what runs on a worker
+during a load, so it touches neither the filesystem, nor the engine's memory, nor the console:
+it reads from a buffer of its own, asks the system for memory and, on any failure, returns
+NULL.
 =================
 */
 typedef struct {
@@ -551,7 +552,7 @@ byte* S_OGG_DecodeMemory(const byte* data, int length, snd_info_t* info) {
         free(pcm);
         return NULL;
     }
-    // lo que de verdad salio, por si el archivo decia mas de lo que tenia
+    // what actually came out, in case the file claimed more than it had
     info->size = got;
     info->samples = got / (info->channels * info->width);
     return pcm;

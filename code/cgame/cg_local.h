@@ -40,7 +40,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define DAMAGE_TIME 500
 #define LAND_DEFLECT_TIME 150
 #define LAND_RETURN_TIME 300
-#define STEP_TIME 100  // [QL] 0x10073bd0, la mitad que en Quake 3
+#define STEP_TIME 100  // [QL] 0x10073bd0, half of Quake 3's
 #define DUCK_TIME 100
 #define PAIN_TWITCH_TIME 200
 #define WEAPON_SELECT_TIME 1400
@@ -237,8 +237,8 @@ typedef enum {
     // CG_AddFragment also keys the spark trail off this value, so clearing
     // the mark on impact ends the trail too.
     LEMT_ELECTROGIB,
-    // [QL] 0x1001efd6: los pedazos de un jugador descongelado. Van dejando una
-    // estela de hielo mientras vuelan.
+    // [QL] 0x1001efd6: the shards of a thawed player. They leave an ice trail as
+    // they fly.
     LEMT_ICE
 } leMarkType_t;  // fragment local entities can leave marks on walls
 
@@ -483,7 +483,7 @@ typedef struct {
     team_t team;
     uint64_t steamId;  // steam id for this client ("st")
 
-    // [QL] 0x10020a40: el motor las marca cuando llega la voz de este jugador
+    // [QL] 0x10020a40: the engine sets these when voice arrives from this player
     qboolean talking;
     int talkingTime;
 
@@ -595,8 +595,8 @@ typedef struct weaponInfo_s {
 
     sfxHandle_t readySound;
     sfxHandle_t firingSound;
-    // [QL] el tercer sonido del arma, +0x1c0 en el weaponInfo_t del binario: el del
-    // gancho es grpull. Donde lo suena retail todavia no esta identificado
+    // [QL] the weapon's third sound, +0x1c0 in the binary's weaponInfo_t: the grapple's
+    // is grpull. Where retail plays it is not identified yet
     sfxHandle_t pullSound;
     // [QL] cgamex86.dll 0x100510fd: the chaingun's firingSound is a background whine that plays
     // alongside each shot, not instead of it like the lightning gun's
@@ -1188,7 +1188,7 @@ typedef struct {
     qhandle_t wakeMarkShader;
     qhandle_t bloodMarkShader;
     qhandle_t bulletMarkShader;
-    qhandle_t crackedMarkShader;  // [QL] gfx/damage/cracked_mrk, la marca del gancho
+    qhandle_t crackedMarkShader;  // [QL] gfx/damage/cracked_mrk, the grapple's mark
     qhandle_t burnMarkShader;
     qhandle_t holeMarkShader;
     qhandle_t energyMarkShader;
@@ -1196,9 +1196,9 @@ typedef struct {
     // powerup shaders
     qhandle_t quadShader;
     qhandle_t redQuadShader;
-    qhandle_t spawnArmorShader;     // [QL] powerups/spawnArmor, la proteccion al reaparecer
+    qhandle_t spawnArmorShader;     // [QL] powerups/spawnArmor, spawn protection
     qhandle_t spawnArmor2Shader;    // [QL] powerups/spawnArmor2, mientras esta recibiendo dano
-    qhandle_t noPlayerClipShader;   // [QL] noPlayerClipShader, los demas cuando no se chocan
+    qhandle_t noPlayerClipShader;   // [QL] noPlayerClipShader, others when they do not collide
     qhandle_t gooShader;            // [QL] powerups/goo, el infectado de Red Rover
     qhandle_t quadWeaponShader;
     qhandle_t brightWeaponShader;  // [CPMA] cg_drawBrightWeapons
@@ -1511,8 +1511,8 @@ typedef struct {
     qhandle_t cmdRightShader;       // [QL] gfx/2d/race/cmd_right
     qhandle_t cmdLeftShader;        // [QL] gfx/2d/race/cmd_left
     qhandle_t voiceWindowShader;    // [QL] ui/assets/voiceWindow, the followed player's frame in the team vitals
-    qhandle_t scoreMutedShader;     // [QL] ui/assets/score/muted, en la tabla, al que uno silencio
-    qhandle_t scoreSpeakingShader;  // [QL] ui/assets/score/speaking, al que esta hablando
+    qhandle_t scoreMutedShader;     // [QL] ui/assets/score/muted, on the scoreboard, for a muted player
+    qhandle_t scoreSpeakingShader;  // [QL] ui/assets/score/speaking, for whoever is talking
 
     // [QL] freeze tag
     qhandle_t iceShardModel;     // models/gibs/sphere.md3
@@ -1524,7 +1524,7 @@ typedef struct {
     qhandle_t iceShardShader3;   // powerups/ice3
     qhandle_t frozenShader;      // sprites/frozen
     qhandle_t iceMarkShader;     // iceMark
-    qhandle_t iceTrailShader;    // [QL] iceTrail, la estela de los pedazos
+    qhandle_t iceTrailShader;    // [QL] iceTrail, the shards' trail
 
     // [QL] gametype icons for scoreboard/HUD
     qhandle_t gametypeIcon[GT_MAX_GAME_TYPE];
@@ -1815,7 +1815,7 @@ extern vmCvar_t cg_tracerLength;
 extern vmCvar_t cg_autoswitch;
 extern vmCvar_t cg_ignore;
 extern vmCvar_t cg_itemFx;
-extern vmCvar_t cg_itemTimers;  // [QL] 0 apaga el reloj que queda donde estaba el item
+extern vmCvar_t cg_itemTimers;  // [QL] 0 turns off the timer left where the item was
 extern vmCvar_t cg_simpleItems;
 extern vmCvar_t cg_skipItems;
 extern vmCvar_t cg_simpleItemsBob;           // [QL] 0 none, 1 every item, 2 only the timed ones
@@ -2643,7 +2643,7 @@ void trap_R_Font_TextExtents(const char* text, int start, int fontIndex, float s
 void trap_R_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t* glyph);
 void trap_IME_SetCompositionFont(int fontIndex, float scale);
 int trap_R_Font_Register(const char* name);
-// [ioquakelive] texto en una fuente del motor (trap_R_Font_Register), fuera de cg_draw.c
+// [ioquakelive] text in an engine font (trap_R_Font_Register), outside cg_draw.c
 void CG_DrawTextInFont(float x, float y, int engineFont, float scale, const vec4_t color, const char* text, int style);
 void CG_MeasureTextInFont(const char* text, int engineFont, float scale, float* w, float* h);
 void trap_S_StartLocalSoundVolume(sfxHandle_t sfx, int channelNum, float volume);

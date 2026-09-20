@@ -166,15 +166,15 @@ of a forced fallback of a player specific sound
 /*
 ===============================================================================
 
-SONIDOS DECODIFICADOS EN SEGUNDO PLANO
+SOUNDS DECODED IN THE BACKGROUND
 
-[ioquakelive] Decodificar un OGG es el 90% de lo que cuesta cargar los sonidos de un mapa. Y un
-sonido no hace falta hasta que suena, asi que durante la carga del mapa el hilo principal solo
-lee el archivo y encarga la decodificacion a un trabajador; al terminar la carga se espera a
-todos juntos y se convierten al formato del mezclador aqui, en el hilo principal, porque el
-reparto de memoria del sonido no es seguro entre hilos.
+[ioquakelive] Decoding an OGG is 90% of what loading a map's sounds costs. And a sound is not
+needed until it plays, so while a map loads the main thread only reads the file and hands the
+decoding to a worker; when the load ends they are all waited on together and converted to the
+mixer's format here, on the main thread, because the sound allocator is not thread safe.
 
-Solo va durante la carga del mapa. Fuera de ella, y con s_asyncLoad 0, se carga como siempre.
+This only happens while a map loads. Outside that, and with s_asyncLoad 0, loading works as it
+always did.
 
 ===============================================================================
 */
@@ -183,9 +183,9 @@ Solo va durante la carga del mapa. Fuera de ella, y con s_asyncLoad 0, se carga 
 
 typedef struct {
     sfx_t* sfx;
-    byte* file;  // los bytes del archivo, copiados: la memoria temporal del motor es una pila
+    byte* file;  // the file's bytes, copied: the engine's temporary memory is a stack
     int fileLen;
-    byte* pcm;  // lo que deja el trabajador
+    byte* pcm;  // what the worker leaves behind
     snd_info_t info;
     volatile int state;  // 1 trabajando, 2 listo, 3 fallo
 } soundJob_t;
@@ -204,7 +204,7 @@ static void S_DecodeJob(void* data) {
 }
 #endif
 
-// arranca la ventana de carga en segundo plano, si hay trabajadores
+// opens the background loading window, when there are workers
 void S_AsyncLoadBegin(void) {
     if (!s_asyncLoad) {
         s_asyncLoad = Cvar_Get("s_asyncLoad", "1", CVAR_ARCHIVE);
@@ -213,7 +213,7 @@ void S_AsyncLoadBegin(void) {
     s_asyncActive = (qboolean)(Com_JobWorkers() > 0 && s_asyncLoad->integer);
 }
 
-// espera a todo lo encargado y lo deja listo para sonar
+// waits on everything handed out and leaves it ready to play
 void S_AsyncLoadFinish(void) {
     int i;
 
@@ -245,8 +245,8 @@ void S_AsyncLoadFinish(void) {
     s_asyncActive = qfalse;
 }
 
-// Si la carga se corto a mitad y el sonido se apaga, lo encargado se tira: se espera a los
-// trabajadores, para no soltarles la memoria encima, y no se convierte nada.
+// If the load was cut short and sound is shut down, what was handed out is thrown away: the
+// workers are waited on, so their memory is not freed under them, and nothing is converted.
 void S_AsyncLoadDiscard(void) {
     int i;
 
@@ -269,10 +269,10 @@ void S_AsyncLoadDiscard(void) {
     s_asyncActive = qfalse;
 }
 
-// si el sonido es un OGG y estamos cargando un mapa, lo encarga y devuelve qtrue
+// when the sound is an OGG and a map is loading, hands it out and returns qtrue
 static qboolean S_LoadSoundAsync(sfx_t* sfx, const char* name) {
 #ifndef USE_CODEC_VORBIS
-    // sin Vorbis no hay decodificador de OGG, asi que todo va por el camino de siempre
+    // with no Vorbis there is no OGG decoder, so everything takes the usual path
     (void)sfx;
     (void)name;
     return qfalse;
@@ -307,7 +307,7 @@ static qboolean S_LoadSoundAsync(sfx_t* sfx, const char* name) {
     job->state = 1;
     s_soundJobCount++;
 
-    // hasta que se complete no hay datos; nadie suena durante la carga del mapa
+    // there is no data until it completes; nothing plays while the map loads
     sfx->soundData = NULL;
     sfx->soundLength = 0;
     sfx->lastTimeUsed = Com_Milliseconds();
@@ -317,8 +317,8 @@ static qboolean S_LoadSoundAsync(sfx_t* sfx, const char* name) {
 #endif
 }
 
-// [ioquakelive] el reparto del tiempo de carga de sonidos, para saber que se puede repartir entre
-// hilos; lo imprime /soundload
+// [ioquakelive] where the sound loading time goes, to know what can be spread across threads;
+// /soundload prints it
 static int64_t s_loadLookupUs, s_loadCodecUs, s_loadResampleUs;
 static int s_loadWav, s_loadOgg;
 
@@ -346,7 +346,7 @@ qboolean S_LoadSound(sfx_t* sfx) {
     }
     s_loadLookupUs += Sys_Microseconds() - start;
 
-    // [ioquakelive] durante la carga del mapa, un OGG se decodifica en segundo plano
+    // [ioquakelive] while a map loads, an OGG is decoded in the background
     start = Sys_Microseconds();
     if (S_LoadSoundAsync(sfx, name)) {
         s_loadCodecUs += Sys_Microseconds() - start;

@@ -248,9 +248,9 @@ int Sys_Milliseconds(void) {
 ================
 Sys_Microseconds
 
-[ioquakelive] Reloj monotono de microsegundos, para el ritmo de los frames y para medirlo.
-timeGetTime, que es lo que da Sys_Milliseconds, va de milisegundo en milisegundo: a 125 fps
-un frame dura 8 ms y con ese reloj no hay forma de apuntar a otra cosa que 8 o 9.
+[ioquakelive] Monotonic microsecond clock, for pacing frames and for measuring the pacing.
+timeGetTime, which is what Sys_Milliseconds gives, moves a millisecond at a time: at 125 fps a
+frame lasts 8 ms and with that clock there is no way to aim at anything but 8 or 9.
 ================
 */
 int64_t Sys_Microseconds(void) {
@@ -270,7 +270,7 @@ int64_t Sys_Microseconds(void) {
 }
 
 
-// [ioquakelive] el punto de entrada que pide CreateThread, que no tiene la firma del motor
+// [ioquakelive] the entry point CreateThread wants, which does not have the engine's signature
 typedef struct {
     void (*function)(void*);
     void* argument;
@@ -286,10 +286,10 @@ static DWORD WINAPI Sys_ThreadEntry(LPVOID parameter) {
 /*
 ==============================================================================
 
-HILOS   (Win32)
+THREADS   (Win32)
 
-[ioquakelive] Lo minimo para repartir trabajo entre nucleos: crear un hilo, un cerrojo y un
-semaforo. La cola que se apoya en esto vive en common.c, que es portable.
+[ioquakelive] The minimum needed to spread work across cores: create a thread, a mutex and a
+semaphore. The queue built on this lives in common.c, which is portable.
 
 ==============================================================================
 */
@@ -341,8 +341,8 @@ void Sys_SemaphoreWait(void* semaphore) {
     WaitForSingleObject((HANDLE)semaphore, INFINITE);
 }
 
-// [ioquakelive] cede el resto del turno; es lo que hay que hacer mientras se espera a otro
-// hilo, en vez de girar en vacio quitandole el nucleo
+// [ioquakelive] gives up the rest of the slice; that is what to do while waiting on another
+// thread, rather than spinning and taking the core from it
 void Sys_ThreadYield(void) {
     SwitchToThread();
 }

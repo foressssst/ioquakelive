@@ -57,12 +57,12 @@ cvar_t* sv_floodProtect;
 cvar_t* sv_master;       // [QL] contestar consultas y aparecer en la lista
 cvar_t* sv_idleExit;     // [QL] apagarse tras tantos segundos sin mapa
 cvar_t* sv_errorExit;    // [QL] apagarse ante un error
-cvar_t* sv_workshopFile; // [QL] el archivo con los items del Workshop
-cvar_t* sv_quitOnEmpty;  // [QL] apagarse cuando el servidor se queda sin nadie
+cvar_t* sv_workshopFile; // [QL] the file listing the Workshop items
+cvar_t* sv_quitOnEmpty;  // [QL] shut down once the server is left with nobody
 cvar_t* sv_lanForceRate;  // dedicated 1 (LAN) server forces local client rates to 99999 (bug #491)
 cvar_t* sv_banFile;
-// [QL] 0x004e3e7a y 0x004e3e90: las entidades del nivel salen de un archivo aparte, o se
-// vuelcan a uno
+// [QL] 0x004e3e7a and 0x004e3e90: the level's entities come from a separate file, or are
+// dumped to one
 cvar_t* sv_altEntDir;
 cvar_t* sv_dumpEntities;
 
@@ -843,21 +843,20 @@ static qboolean SV_CheckPaused(void) {
 ==================
 SV_VoiceFrame
 
-El servidor hace de puente para la voz: cada jugador se la manda a el por la red
-entre pares de Steam, y el se la reparte a los demas poniendole delante el numero
-de cliente del que habla.
+The server bridges the voice: each player sends theirs to it over Steam's peer to peer
+network, and it hands them out to the others with the speaker's client number in front.
 
-[QL] 0x00466850, el mismo cuadro que atiende al Steam del servidor. Dos partes:
+[QL] 0x00466850, the same frame that services the server's Steam. Two parts:
 
-  - cada diez segundos le manda un saludo a cada jugador, que es lo unico que
-    mantiene viva la sesion entre pares;
-  - mientras haya paquetes en el canal de la voz, busca de quien es por su Steam
-    ID, le pone el numero de cliente adelante y se lo pasa a todos aquellos a los
-    que el modulo de juego deja oirlo.
+  - every ten seconds it sends each player a greeting, which is the only thing
+    keeping the peer session alive;
+  - while there are packets on the voice channel, it finds whose they are by Steam
+    ID, puts the client number in front and passes them to everyone the game module
+    lets hear that player.
 
-Una diferencia a proposito contra retail: si el que manda no es ninguno de los
-jugadores, retail reparte igual el paquete -- con el primer byte sin escribir y
-haciendolo pasar por el cliente 0. Aca se descarta.
+One deliberate difference from retail: when the sender is none of the players, retail
+hands the packet out anyway -- with the first byte never written, passing it off as
+client 0. Here it is dropped.
 ==================
 */
 void SV_VoiceFrame(void) {
@@ -945,8 +944,8 @@ void SV_Frame(int msec) {
         return;
     }
 
-    // [QL] 0x004e3e3a: con sv_quitOnEmpty, un servidor que se queda sin nadie se apaga,
-    // para que lo que lo supervisa decida si lo vuelve a levantar
+    // [QL] 0x004e3e3a: with sv_quitOnEmpty, a server left with nobody on it shuts down, so
+    // that whatever supervises it decides whether to bring it back up
     if (sv_quitOnEmpty && sv_quitOnEmpty->integer && com_sv_running->integer) {
         int i, humanos = 0;
 

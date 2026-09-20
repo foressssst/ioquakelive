@@ -118,7 +118,7 @@ void P_WorldEffects(gentity_t* ent) {
 
     envirosuit = ent->client->ps.powerups[PW_BATTLESUIT] > level.time;
 
-    // [QL] 0x1003396a: en noclip no se ahoga nadie, y el aire se repone entero
+    // [QL] 0x1003396a: nobody drowns in noclip, and the air comes back in full
     if (ent->client->noclip) {
         ent->client->airOutTime = level.time + 12000;
         return;
@@ -143,9 +143,9 @@ void P_WorldEffects(gentity_t* ent) {
                 if (ent->damage > 15)
                     ent->damage = 15;
 
-                // [QL] 0x100339f8: el gorgoteo suena solo cuando la tanda de dano no lo
-                // mata. Cuando lo mata no suena nada: la rama del "*drown.wav" de Quake 3
-                // no existe en el binario de Quake Live, el string no esta.
+                // [QL] 0x100339f8: the gurp only plays when the damage tick does not kill.
+                // When it kills, nothing plays: Quake 3's "*drown.wav" branch does not exist
+                // in the Quake Live binary, the string is not there.
                 if (ent->damage < ent->health) {
                     G_Sound(ent, CHAN_VOICE,
                             G_SoundIndex((rand() & 1) ? "sound/player/gurp1.wav"
@@ -162,7 +162,7 @@ void P_WorldEffects(gentity_t* ent) {
     } else {
         ent->client->airOutTime = level.time + 12000;
         ent->damage = 2;
-        // [QL] 0x10033a27: fuera del agua no hay nada mas que mirar
+        // [QL] 0x10033a27: out of the water there is nothing else to check
         if (waterlevel == 0) {
             return;
         }
@@ -422,12 +422,12 @@ Returns qfalse if the client is dropped or moved to spectator.
 =================
 G_FloodCheck
 
-[QL] 0x100341e0. El contador de avalancha de cada jugador: sube cada vez que
-manda un cambio de userinfo y baja de a uno cada g_floodprot_decay milisegundos.
-Si pasa de g_floodprot_maxcount, se lo echa.
+[QL] 0x100341e0. Each player's flood counter: it goes up every time they send a
+userinfo change and decays by one every g_floodprot_decay milliseconds. Past
+g_floodprot_maxcount they are kicked.
 
-Con g_floodprot_maxcount en 0 no se echa a nadie, que es lo que dice el
-server.cfg de retail: "Set g_floodprot_maxcount to 0 to disable completely".
+With g_floodprot_maxcount at 0 nobody is kicked, which is what retail's server.cfg
+says: "Set g_floodprot_maxcount to 0 to disable completely".
 =================
 */
 qboolean G_FloodCheck(gclient_t* client) {
@@ -1080,7 +1080,7 @@ void ClientThink_real(gentity_t* ent) {
     }
 
     // check for inactivity timer, but never drop the local client of a non-dedicated server
-    // [QL] 0x10034e13: la compuerta de avalancha va pegada a la de inactividad
+    // [QL] 0x10034e13: the flood gate sits right next to the inactivity one
     if (!G_FloodCheck(client)) {
         return;
     }
@@ -1299,7 +1299,7 @@ void ClientThink_real(gentity_t* ent) {
     // perform once-a-second actions
     ClientTimerActions(ent, msec);
 
-    // [QL] 0x100353cb: el tiempo jugado y el tiempo con cada arma, que viajan en el PLAYER_STATS
+    // [QL] 0x100353cb: time played and time per weapon, both carried in PLAYER_STATS
     STAT_UpdatePlayTime(ent);
 }
 

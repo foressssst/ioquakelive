@@ -901,10 +901,10 @@ int SV_NumArenas(void) {
 ===============
 SV_ArenaNameList / SV_FactoryNameList
 
-Las dos listas que completa el tabulador, armadas de una sola vez para que el
-cliente y la consola del servidor saquen lo mismo. De las factories quedan
-afuera las que empiezan con "_", que son plantillas internas -- el mismo filtro
-que usa la lista que imprime "map" sin argumentos.
+The two lists tab completion completes against, built once so that the client and the
+server console give the same answer. The factories leave out the ones starting with
+"_", which are internal templates -- the same filter the list "map" prints with no
+arguments uses.
 ===============
 */
 int SV_ArenaNameList(const char** out, int max) {

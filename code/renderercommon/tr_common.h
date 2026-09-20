@@ -105,7 +105,7 @@ extern cvar_t* r_swapInterval;
 
 extern cvar_t* r_allowExtensions;          // global enable/disable of OpenGL extensions
 extern cvar_t* r_ext_compressed_textures;
-// [ioquakelive] las texturas del mapa, decodificadas por adelantado entre los trabajadores
+// [ioquakelive] the map's textures, decoded ahead of time across the workers
 extern cvar_t* r_prefetchTextures;
 void R_PrefetchStart(const char* listName);
 void R_PrefetchFinish(void);
@@ -127,12 +127,12 @@ float R_NoiseGet4f(float x, float y, float z, double t);
 void R_NoiseInit(void);
 
 image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags);
-// [ioquakelive] el reparto del tiempo de carga de imagenes: decodificar contra subir
-// r_imageReadUs es la parte de la decodificacion que es leer el archivo del pk3, que no
-// se puede sacar del hilo principal sin tocar el sistema de archivos
+// [ioquakelive] where image loading time goes: decoding against uploading. r_imageReadUs is
+// the part of the decoding that is reading the file out of the pk3, which cannot leave the
+// main thread without touching the filesystem
 extern int64_t r_imageDecodeUs, r_imageUploadUs, r_imageReadUs;
 extern int r_imageCount;
-// [ioquakelive] lo que cuesta registrar shaders, imagenes aparte
+// [ioquakelive] what registering shaders costs, images aside
 extern int64_t r_shaderFindUs, r_shaderCachedUs;
 extern int r_shaderFindCount, r_shaderCachedCount;
 void R_ImageLoadStatsReset(void);
@@ -167,19 +167,19 @@ IMAGE LOADERS
 
 void R_LoadBMP(const char* name, byte** pic, int* width, int* height);
 void R_LoadJPG(const char* name, byte** pic, int* width, int* height);
-// [ioquakelive] decodifica un JPEG que ya esta en memoria. Existe para poder repartirlo
-// entre hilos: el buffer de salida se pide con allocator (malloc del sistema en un
-// trabajador, el del motor en el hilo principal) y silent apaga los mensajes, que fuera
-// del hilo principal no son seguros.
+// [ioquakelive] decodes a JPEG that is already in memory. It exists so that the work can be
+// spread across threads: the output buffer is asked for through allocator (the system's malloc
+// on a worker, the engine's on the main thread) and silent turns off the messages, which are
+// not safe off the main thread.
 void R_DecodeJPG(byte* fileData, int fileLen, byte** pic, int* width, int* height,
                  void* (*allocator)(size_t), qboolean silent);
-// [ioquakelive] lo mismo para TGA, que es el formato de la mayoria de las texturas de
-// Quake Live. Lleva ademas el nombre, que usa en los mensajes, y con que soltar la memoria.
+// [ioquakelive] the same for TGA, which is the format of most Quake Live textures. It also
+// takes the name, used in its messages, and how to free the memory.
 void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int* width,
                  int* height, void* (*allocator)(size_t), void (*deallocator)(void*),
                  qboolean silent);
 extern char r_lastImageName[MAX_QPATH];
-// [ioquakelive] decodifica un PNG que ya esta en memoria; se puede llamar desde un trabajador
+// [ioquakelive] decodes a PNG that is already in memory; safe to call from a worker
 void R_DecodePNG(byte* fileData, int fileLen, const char* name, byte** pic, int* width, int* height);
 void R_LoadPCX(const char* name, byte** pic, int* width, int* height);
 void R_LoadPNG(const char* name, byte** pic, int* width, int* height);

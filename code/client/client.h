@@ -464,7 +464,7 @@ void CL_VoiceFrame(void);
 void CL_SetCgameCommandCompletion(const char* cmdName);
 qboolean CL_VoiceIsIgnored(uint64_t steamId);
 qboolean CL_VoiceToggleIgnore(uint64_t steamId);
-void CL_FriendDo(const steamFriend_t* amigo, int accion);
+void CL_FriendDo(const steamFriend_t* fr, int action);
 extern cvar_t* s_voiceVolume;
 void CL_FavoriteServers_f(void);
 qboolean CL_UpdateVisiblePings_f(int source);

@@ -23,7 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 void S_Init(void);
 void S_Shutdown(void);
 
-// [ioquakelive] el sistema le quito el dispositivo de audio al juego; volver a abrirlo
+// [ioquakelive] the system took the audio device away from the game; reopen it
 void S_DeviceLost(void);
 
 // if origin is NULL, the sound will be dynamically sourced from the entity
@@ -60,11 +60,11 @@ void S_Update(void);
 void S_DisableSounds(void);
 
 void S_BeginRegistration(void);
-// [ioquakelive] durante la carga del mapa los OGG se decodifican en segundo plano; Finish espera
-// a todos y los deja listos para sonar
+// [ioquakelive] while a map loads the OGGs are decoded in the background; Finish waits on them
+// all and leaves them ready to play
 void S_AsyncLoadBegin(void);
 void S_AsyncLoadFinish(void);
-// si la carga se corto a mitad: tira lo encargado sin convertirlo
+// when the load was cut short: throws away what was handed out without converting it
 void S_AsyncLoadDiscard(void);
 
 //

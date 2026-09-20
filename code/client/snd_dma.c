@@ -1313,16 +1313,16 @@ void S_FreeOldestSound(void) {
 ===============
 S_Base_ReopenDevice
 
-[ioquakelive] Vuelve a abrir la salida de audio sin tirar abajo el sistema de sonido. Sirve
-para cuando Windows le quita el dispositivo al juego, que SDL avisa con SDL_AUDIODEVICEREMOVED.
+[ioquakelive] Reopens the audio output without tearing the sound system down. It is for when
+Windows takes the device away from the game, which SDL reports as SDL_AUDIODEVICEREMOVED.
 
-No sirve S_Base_Shutdown para esto: ese libera los sonidos cargados y deja s_numSfx en cero, asi
-que despues habria que recargar todo -- que es lo que hace snd_restart, y arrastra un vid_restart
-entero. Aca solo se cierra y se abre el dispositivo; la tabla de sonidos queda como estaba.
+S_Base_Shutdown is no good for this: it frees the loaded sounds and leaves s_numSfx at zero, so
+everything would then have to be loaded again -- which is what snd_restart does, and it drags a
+whole vid_restart along. Here only the device is closed and opened; the sound table stays as it
+was.
 
-Devuelve qfalse si el dispositivo nuevo no tiene el mismo formato que el viejo. En ese caso no
-se puede seguir: los sonidos estan remuestreados a la frecuencia anterior, y quien llama tiene
-que recargarlos.
+Returns qfalse when the new device does not have the old one's format. There is no carrying on
+from there: the sounds are resampled to the previous rate, and the caller has to reload them.
 ===============
 */
 qboolean S_Base_ReopenDevice(void) {
@@ -1343,7 +1343,7 @@ qboolean S_Base_ReopenDevice(void) {
         return qfalse;
     }
 
-    // el dispositivo arranca de cero, asi que lo que estaba sonando no vale
+    // the device starts from scratch, so whatever was playing is no longer valid
     S_Base_StopAllSounds();
     return qtrue;
 }

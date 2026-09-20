@@ -404,21 +404,21 @@ void Svcmd_ForceTeam_f(void) {
 ===================
 G_ShuffleTeams
 
-[QL] 0x1006a2d0. Baraja los equipos: junta a todos los que estan jugando, los
-revuelve y los reparte uno de cada lado, empezando por un equipo al azar. Con
-cantidad impar, el ultimo se invierte, que es como el binario evita que siempre
-sea el mismo lado el que queda con uno de mas.
+[QL] 0x1006a2d0. Shuffles the teams: gathers everyone in play, stirs them and deals
+them out one per side, starting from a random team. On an odd count the last one is
+flipped, which is how the binary keeps the same side from always being the one with
+the extra player.
 
-El orden sale de un comparador que devuelve -1, 0 o 1 al azar (0x1006a2b0). No es
-un comparador valido -- no es consistente consigo mismo -- y eso hace que el
-resultado dependa del qsort de cada biblioteca, pero es exactamente lo que hace
-retail y el efecto buscado, revolver, se cumple igual.
+The order comes from a comparator that returns -1, 0 or 1 at random (0x1006a2b0). It
+is not a valid comparator -- it is not consistent with itself -- and that makes the
+result depend on each library's qsort, but it is exactly what retail does and the
+intended effect, stirring, happens all the same.
 
-En Red Rover, al que ya estaba en el equipo que le toca no se lo mueve: se lo
-reaparece en el lugar, y si la ronda esta en su cuenta atras se lo deja congelado.
+In Red Rover, a player already on the team they are dealt is not moved: they are
+respawned in place, and if the round is counting down they are left frozen.
 
-Lo llaman el comando de consola "forceshuffle", el voto "shuffle", el auto-shuffle
-y el estado RS_SHUFFLE de Red Rover.
+Its callers are the "forceshuffle" console command, the "shuffle" vote, the auto
+shuffle and Red Rover's RS_SHUFFLE state.
 ===================
 */
 static int QDECL G_ShuffleCompare(const void* a, const void* b) {
@@ -434,7 +434,7 @@ void G_ShuffleTeams(void) {
     int i;
 
     level.teamShuffleActive = qtrue;
-    level.autoShuffleArmed = qfalse;  // [QL] 0x105dce84: el barajado desarma la cuenta
+    level.autoShuffleArmed = qfalse;  // [QL] 0x105dce84: shuffling disarms the countdown
     level.autoShuffleStart = 0;       // [QL] 0x105dce88
 
     if (level.numPlayingClients < g_shuffle_minplayers.integer && g_gametype.integer != GT_RR) {
@@ -463,7 +463,7 @@ void G_ShuffleTeams(void) {
     for (i = 0; i < count; i++) {
         gentity_t* target = &g_entities[players[i]];
 
-        // [QL] 0x1006a3ee: el ultimo de una cantidad impar cambia de lado
+        // [QL] 0x1006a3ee: on an odd count the last one changes sides
         if (i == count - 1 && (count & 1)) {
             team = (team == TEAM_RED) ? TEAM_BLUE : TEAM_RED;
         }
@@ -544,7 +544,7 @@ static accessEntry_t g_accessList[MAX_ACCESS_ENTRIES];
 static int           g_numAccessEntries;
 
 // find-or-create the entry for a steamId (mirrors std::map::operator[])
-// [QL] 0x100327d0: la orden listaccess recorre la lista tal cual esta
+// [QL] 0x100327d0: the listaccess command walks the list as it stands
 int G_AccessCount(void) {
     return g_numAccessEntries;
 }
@@ -585,10 +585,10 @@ G_InitAccessList
 ===============
 G_SaveAccessList
 
-[QL] qagamex86.dll 0x10032a10. Reescribe g_accessFile entero: la cabecera de 228 bytes que
-explica el formato y despues una linea por entrada. Solo las permanentes -- las temporales
-(flag != 0, el tempban de la partida) y las de nivel 0 no se guardan --, que es por lo que un
-tempban se olvida al cambiar de mapa y un ban no.
+[QL] qagamex86.dll 0x10032a10. Rewrites g_accessFile whole: the 228 byte header explaining
+the format and then one line per entry. Permanent entries only -- temporary ones (flag != 0,
+the match's tempban) and level 0 ones are not written -- which is why a tempban is forgotten
+on a map change and a ban is not.
 ===============
 */
 void G_SaveAccessList(void) {
@@ -613,7 +613,7 @@ void G_SaveAccessList(void) {
         char line[64];
 
         if (e->flag != 0) {
-            continue;  // temporal: no se guarda
+            continue;  // temporary: not written out
         }
         if (e->level == -1) {
             word = "ban";
@@ -634,9 +634,9 @@ void G_SaveAccessList(void) {
 ===============
 G_SetAccess
 
-[ioquakelive] Lo que los comandos de moderacion mueven: el nivel de una cuenta en la lista.
-temporary marca las entradas que no sobreviven al cambio de mapa, que es como el binario separa
-tempban de ban.
+[ioquakelive] What the moderation commands move: an account's level in the list. temporary
+marks the entries that do not survive a map change, which is how the binary tells tempban
+from ban.
 ===============
 */
 void G_SetAccess(uint64_t steamId, int level, qboolean temporary) {

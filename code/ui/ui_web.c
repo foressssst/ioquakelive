@@ -27,11 +27,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "ui_web.h"
 
-// [ioquakelive] 2026-09-18: cada gris sube unos puntos -- el jugador pidio la paleta "un
-// poquitin mas clara, solo un poco". smField sube mas: es el carril del slider y el borde de
-// los campos, y valia lo mismo que el panel, asi que sobre el no se veia.
-// [ioquakelive] 2026-09-19: el gris que el jugador eligio para la portada es el de la paleta,
-// no uno aparte, asi la pagina de ajustes y las demas usan los mismos tonos por construccion.
+// [ioquakelive] Every grey sits a few points up from where it started. smField is up further:
+// it is the slider's track and the fields' border, and it was worth the same as the panel, so
+// it could not be seen over one. The front page takes its grey from this palette rather than
+// one of its own, so the settings page and the rest share tones by construction.
 const vec4_t smPage = SM_RGB(18, 18, 20);
 const vec4_t smPanel = SM_RGB(30, 31, 33);
 const vec4_t smRaised = SM_RGB(42, 43, 46);
@@ -341,7 +340,7 @@ void SM_LoadFonts(void) {
     }
     smFonts.tried = qtrue;
     smFonts.regular = trap_R_Font_Register("fonts/Barlow-Regular.ttf");
-    // [ioquakelive] Bold, no SemiBold: el jugador pidio la letra mas bold (2026-09-19)
+    // [ioquakelive] Bold, not SemiBold: the heavier weight is the one wanted here
     smFonts.strong = trap_R_Font_Register("fonts/Barlow-Bold.ttf");
     if (smFonts.regular < 0 || smFonts.strong < 0) {
         Com_Printf("^3front end: Barlow not found in pak01, falling back to pak00's fonts\n");
@@ -523,7 +522,7 @@ float SM_LabelWidth(float size, const char* text, float spacing) {
     c[1] = '\0';
     for (p = upper; *p; p++) {
         c[0] = *p;
-        w += SM_AdvanceBold(SM_FONT_TITLE, size, c, 1, qfalse) + spacing;  // medido como se dibuja
+        w += SM_AdvanceBold(SM_FONT_TITLE, size, c, 1, qfalse) + spacing;  // measured as it is drawn
     }
     return w - spacing;
 }
@@ -535,8 +534,8 @@ void SM_Label(float x, float baseline, float size, const float* color, const cha
     // Drawn once, like SM_Button's word. The second pass a pixel over, which stands in for a bold
     // weight the font does not carry, reads as the black edge Quake Live's HUD puts behind its
     // text - and the front end is not the HUD. On a light block, a gold pill say, that edge is all
-    // you see. The player asked for it gone and it came back here; it is gone from every label now,
-    // which is every heading, every eyebrow and every badge on the front end.
+    // you see. It is gone from every label, which is every heading, every eyebrow and every
+    // badge on the front end.
     if (spacing <= 0) {
         SM_Text(x, baseline, SM_FONT_TITLE, size, color, upper, -1, qfalse);
         return;

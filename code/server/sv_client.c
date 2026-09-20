@@ -52,12 +52,12 @@ to hi-jack client connections.
 ==================
 SV_ValidateSteamAuth
 
-[QL] El ticket que el cliente mando en el getchallenge, puesto en manos de Steam.
-BeginAuthSession solo dice si el ticket tiene forma de ticket; si vale de verdad
-lo contesta Steam despues, por SV_SteamAuthResponse.
+[QL] The ticket the client sent in its getchallenge, put in Steam's hands.
+BeginAuthSession only says whether the ticket has the shape of a ticket; whether it is
+actually good is answered by Steam later, through SV_SteamAuthResponse.
 
-Sin Steam del lado del servidor no hay a quien preguntarle y se entra igual, que
-es lo que pasaba hasta ahora y lo unico que deja jugar en una red local.
+With no Steam on the server side there is nobody to ask and the client gets in anyway,
+which is what happened before and is the only thing that lets a local network play.
 
 [QL] 0x531b38 "Called BeginAuthSession on steam id %llu, got response %i",
 0x531b74 "Refusing to re-auth a client that is already being tracked".
@@ -71,7 +71,7 @@ static qboolean SV_ValidateSteamAuth(challenge_t* challenge) {
         return qtrue;
     }
 
-    // a alguien que ya estamos siguiendo no se lo vuelve a autenticar
+    // somebody already being tracked is not authenticated again
     if (challenge->steamKey) {
         for (i = 0; i < sv_maxclients->integer; i++) {
             if (svs.clients[i].state >= CS_CONNECTED && svs.clients[i].steam_id == challenge->steamKey) {
@@ -81,8 +81,8 @@ static qboolean SV_ValidateSteamAuth(challenge_t* challenge) {
         }
     }
 
-    // el ticket empieza en 0x19 del paquete; authTokenLen se cuenta desde 0x11, o sea
-    // que abarca ademas los ocho bytes del Steam ID
+    // the ticket starts at 0x19 of the packet; authTokenLen counts from 0x11, so it also
+    // covers the Steam ID's eight bytes
     result = Steam_GS_BeginAuth(challenge->steamKey, challenge->authToken, challenge->authTokenLen - 8);
     return (qboolean)(result == STEAM_AUTH_BEGIN_OK);
 }
@@ -91,12 +91,12 @@ static qboolean SV_ValidateSteamAuth(challenge_t* challenge) {
 ==================
 SV_SteamAuthResponse
 
-[QL] 0x531a80. Lo que Steam contesta, un rato despues de BeginAuthSession, sobre
-el ticket de un jugador: si no vale, se lo echa con el motivo que da retail.
+[QL] 0x531a80. What Steam answers, a while after BeginAuthSession, about a player's
+ticket: if it is no good, they are dropped with the reason retail gives.
 ==================
 */
 void SV_SteamAuthResponse(uint64_t steamId, int response) {
-    const char* motivo;
+    const char* reason;
     int i;
 
     if (!com_sv_running->integer || !svs.clients || !sv_maxclients) {
@@ -111,9 +111,9 @@ void SV_SteamAuthResponse(uint64_t steamId, int response) {
         if (response == 0) {
             return;  // vale; retail tampoco dice nada
         }
-        motivo = Steam_AuthResponseName(response);
-        if (motivo) {
-            SV_DropClient(cl, va("Failed to authenticate with Steam: %s", motivo));
+        reason = Steam_AuthResponseName(response);
+        if (reason) {
+            SV_DropClient(cl, va("Failed to authenticate with Steam: %s", reason));
         } else {
             SV_DropClient(cl, va("Failed to authenticate with Steam: (Err:%i)", response));
         }
@@ -538,7 +538,7 @@ void SV_DropClient(client_t* drop, const char* reason) {
     }
 
     if (!isBot) {
-        // [QL] 0x543a44: la sesion que se abrio con BeginAuthSession se cierra aca
+        // [QL] 0x543a44: the session opened with BeginAuthSession is closed here
         if (drop->steam_id) {
             Com_DPrintf("Ending auth session for steam id %llu\n", (unsigned long long)drop->steam_id);
             Steam_GS_EndAuth(drop->steam_id);
@@ -1400,11 +1400,11 @@ static qboolean SV_ClientCommand(client_t* cl, msg_t* msg) {
         return qfalse;
     }
 
-    // [QL] 0x004e0180: el limite de ordenes de Quake Live no es el de ioquake3. En vez de
-    // ignorar lo que llegue antes del segundo, lleva un puntaje que sube uno por orden y baja
-    // uno por segundo; si pasa de sv_floodProtect (que es un numero con coma, no un si/no), al
-    // cliente se lo echa con "Flooding the server". Asi se puede mandar una rafaga corta -- lo
-    // normal al entrar -- pero no sostenerla.
+    // [QL] 0x004e0180: Quake Live's command rate limit is not ioquake3's. Instead of ignoring
+    // whatever arrives inside a second it keeps a score that goes up by one per command and
+    // down by one per second; past sv_floodProtect (which is a float, not a yes/no) the client
+    // is dropped with "Flooding the server". A short burst -- which is normal on joining --
+    // goes through, but it cannot be sustained.
     if (!com_cl_running->integer && cl->state >= CS_ACTIVE && sv_floodProtect->value > 0.0f) {
         float score = cl->floodScore + 1.0f - (svs.time - cl->floodTime) / 1000.0f;
 

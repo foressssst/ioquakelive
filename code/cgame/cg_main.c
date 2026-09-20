@@ -149,10 +149,10 @@ static int CG_ChatFieldChars(void) {
 ================
 CG_ClientSteamID
 
-El Steam ID del que esta hablando, que es lo unico que el motor le pide al cgame
-de todo lo que retail copia aca. Con el decide si esa voz esta silenciada.
+The Steam ID of whoever is speaking, the only thing the engine asks the cgame for out
+of everything retail copies here. It decides with it whether that voice is muted.
 
-[QL] 0x10020910, entrada 15 de la tabla.
+[QL] 0x10020910, entry 15 of the table.
 ================
 */
 static void CG_ClientSteamID(int clientNum, uint64_t* out) {
@@ -170,10 +170,10 @@ static void CG_ClientSteamID(int clientNum, uint64_t* out) {
 ================
 CG_SetClientTalking
 
-El motor avisa cada vez que llega voz de alguien, y de ahi sale el indicador de
-quien esta hablando.
+The engine calls in every time voice arrives from somebody, and the talking indicator
+comes from that.
 
-[QL] 0x10020a40, entrada 20 de la tabla.
+[QL] 0x10020a40, entry 20 of the table.
 ================
 */
 static void CG_SetClientTalking(int clientNum, int talking) {
@@ -221,7 +221,7 @@ vmCvar_t cg_addMarks;
 vmCvar_t cg_brassTime;
 vmCvar_t cg_viewsize;
 vmCvar_t cg_drawGun;
-vmCvar_t r_dynamicLight;  // [ioquakelive] el 2 apaga las luces de efecto
+vmCvar_t r_dynamicLight;  // [ioquakelive] 2 turns the effect lights off
 vmCvar_t cg_gun_frame;
 vmCvar_t cg_gun_x;
 vmCvar_t cg_gun_y;
@@ -232,7 +232,7 @@ vmCvar_t cg_tracerLength;
 vmCvar_t cg_autoswitch;
 vmCvar_t cg_ignore;
 vmCvar_t cg_simpleItems;
-vmCvar_t cg_skipItems;  // [QL] 0x10016026: con 1, los items no se dibujan
+vmCvar_t cg_skipItems;  // [QL] 0x10016026: at 1, the items are not drawn
 vmCvar_t cg_fov;
 vmCvar_t cg_zoomFov;
 vmCvar_t cg_thirdPerson;
@@ -592,8 +592,8 @@ static cvarTable_t cvarTable[] = {
     {&cg_ignore, "cg_ignore", "0", 0},  // used for debugging
     {&cg_autoswitch, "cg_autoswitch", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},  // [QL] default 0 (was Q3 "1")
     {&cg_drawGun, "cg_drawGun", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "3"},
-    // [ioquakelive] es del renderer; el cgame la lee para saber que luces dibujar. El 2 es
-    // nuestro: deja solo las que informan algo. Ver CG_AddEffectLight.
+    // [ioquakelive] a renderer cvar; the cgame reads it to know which lights to draw. The
+    // 2 is ours: it leaves only the ones that tell you something. See CG_AddEffectLight.
     {&r_dynamicLight, "r_dynamicLight", "1", CVAR_ARCHIVE | CVAR_USERSAVE, "0", "2"},
     {&cg_zoomFov, "cg_zoomfov", "30", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "10", "130"},
     {&cg_fov, "cg_fov", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "10", "130"},
@@ -764,7 +764,7 @@ static cvarTable_t cvarTable[] = {
     {&cg_playerLean, "cg_playerLean", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_ARCHIVE, "0", "1"},
     {&cg_plasmaStyle, "cg_plasmaStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "2"},
     {&cg_railStyle, "cg_railStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "2"},
-    // [CPMA] 1.53 animations with CPMA's defaults, except ch_animateScroll, on at the user's request
+    // [CPMA] 1.53 animations with CPMA's defaults, except ch_animateScroll, on by default here
     {&ch_animateRewardIcons, "ch_animateRewardIcons", "1", CVAR_ARCHIVE},
     {&cg_animateChatBalloon, "cg_animateChatBalloon", "1", CVAR_ARCHIVE},
     {&ch_animateScroll, "ch_animateScroll", "1", CVAR_ARCHIVE},
@@ -806,8 +806,8 @@ static cvarTable_t cvarTable[] = {
     {&cg_teamChatBeep, "cg_teamChatBeep", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_gametype, "cg_gametype", "0", CVAR_ROM},
     {&cg_svFps, "sv_fps", "40", CVAR_ROM},
-    // [QL] el cgame vuelve a registrar com_maxfps con su propio rango, asi que el techo esta
-    // candado por partida doble: subirlo solo en el motor lo deja en 250 al entrar a un mapa
+    // [QL] the cgame registers com_maxfps again with a range of its own, so the ceiling is
+    // locked in two places: raising it in the engine alone drops it back to 250 on map load
     {&cg_comMaxfps, "com_maxfps", "125", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1000"},
 
     // [QL] announcer cvars
@@ -1869,8 +1869,8 @@ static void CG_RegisterGraphics(void) {
     cgs.media.duelPlateTrails[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_trails.tga");
     if (cgs.gametype >= GT_FREEZE) {
         cgs.media.thawIconShader = trap_R_RegisterShader("icons/thaw");
-        // [QL] los gibs base, que el binario registra aca mismo y son distintos de los del
-        // paquete de gore (dlc_gibs): guarda unos y otros en globales separadas
+        // [QL] the base gibs, registered right here by the binary and distinct from the gore
+        // pack's (dlc_gibs): it keeps the two sets in separate globals
         cgs.media.gibBrainBase = trap_R_RegisterModel("models/gibs/brain.md3");
         cgs.media.gibAbdomenBase = trap_R_RegisterModel("models/gibs/abdomen.md3");
     }
@@ -1943,7 +1943,7 @@ static void CG_RegisterGraphics(void) {
     cgs.media.spawnArmor2Shader = trap_R_RegisterShader("powerups/spawnArmor2");
     cgs.media.noPlayerClipShader = trap_R_RegisterShader("noPlayerClipShader");
     cgs.media.gooShader = trap_R_RegisterShader("powerups/goo");
-    // [QL] 0x100236e4: las marcas que se ven sobre los powerups
+    // [QL] 0x100236e4: the markers drawn over the powerups
     cgs.media.powerupPoi[0] = trap_R_RegisterShader("gfx/2d/powerup/quad");
     cgs.media.powerupPoi[1] = trap_R_RegisterShader("gfx/2d/powerup/bs");
     cgs.media.powerupPoi[2] = trap_R_RegisterShader("gfx/2d/powerup/haste");
@@ -1997,7 +1997,7 @@ static void CG_RegisterGraphics(void) {
         cgs.media.neutralFlagBaseModel = trap_R_RegisterModel("models/mapobjects/flagbase/ntrl_base.md3");
     }
 
-    // [QL] el binario registra la llave dorada siempre, fuera de todo condicional
+    // [QL] the binary always registers the gold key, outside any conditional
     cgs.media.keyGoldModel = trap_R_RegisterModel("models/powerups/keys/key_gold.md3");
     cgs.media.droppedFlagModel = trap_R_RegisterModel("models/flags/d_flag.md3");
 
@@ -2071,7 +2071,7 @@ static void CG_RegisterGraphics(void) {
     cgs.media.balloonShader = trap_R_RegisterShader("sprites/balloon3");
     // [QL] 0x100244f5: the followed player's frame in the team vitals
     cgs.media.voiceWindowShader = trap_R_RegisterShader("ui/assets/voiceWindow");
-    // [QL] 0x10023696: los dos iconos de la primera columna de la tabla
+    // [QL] 0x10023696: the two icons in the scoreboard's first column
     cgs.media.scoreMutedShader = trap_R_RegisterShader("ui/assets/score/muted");
     cgs.media.scoreSpeakingShader = trap_R_RegisterShader("ui/assets/score/speaking");
 
@@ -2108,8 +2108,8 @@ static void CG_RegisterGraphics(void) {
     cgs.media.medalHeadshot = trap_R_RegisterShaderNoMip("medal_headshot");
     cgs.media.medalImpressive = trap_R_RegisterShaderNoMip("medal_impressive");
 
-    // [CPMA] animation frames, CPMA 1.53's own, shipped in pak01 since 2026-09-13 at the
-    // user's decision; the checks keep a pak01 built without them working
+    // [CPMA] animation frames, CPMA 1.53's own, shipped in pak01; the checks keep a pak01
+    // built without them working
     {
         static const char* const medalNames[6] = {"assist", "capture", "defend", "excellent", "gauntlet", "impressive"};
         fileHandle_t f;
@@ -2131,8 +2131,7 @@ static void CG_RegisterGraphics(void) {
         }
 
         // [ioquakelive] Handel Gothic Ex for the frag message (CG_DrawCenterString), shipped in
-        // pak01 since 2026-09-13 at the user's decision. Without it the frag message falls back
-        // to Quake Live's Handel Gothic.
+        // pak01. Without it the frag message falls back to Quake Live's Handel Gothic.
         cgs.media.fragMessageFont = 0;
         if (trap_FS_FOpenFile("fonts/handelgothicex.ttf", &f, FS_READ) > 0) {
             trap_FS_FCloseFile(f);
@@ -2188,7 +2187,7 @@ static void CG_RegisterGraphics(void) {
     cgs.media.deathEffectShader = trap_R_RegisterShader("deathEffect");
     // [QL] 0x1002321e. The spark sprite that rises out of a gib.
     cgs.media.gibSparkShader = trap_R_RegisterShader("gfx/misc/tracer");
-    // [QL] 0x100231a5: la estela que dejan los pedazos de hielo
+    // [QL] 0x100231a5: the trail left by the ice shards
     cgs.media.iceTrailShader = trap_R_RegisterShader("iceTrail");
     cgs.media.iceShardShader1 = trap_R_RegisterShader("powerups/ice1");
     cgs.media.iceShardShader2 = trap_R_RegisterShader("powerups/ice2");
@@ -2211,7 +2210,7 @@ static void CG_RegisterGraphics(void) {
 
     // wall marks
     cgs.media.bulletMarkShader = trap_R_RegisterShader("gfx/damage/bullet_mrk");
-    // [QL] 0x10024a99: la marca que deja el gancho
+    // [QL] 0x10024a99: the mark the grapple leaves
     cgs.media.crackedMarkShader = trap_R_RegisterShader("gfx/damage/cracked_mrk");
     cgs.media.burnMarkShader = trap_R_RegisterShader("gfx/damage/burn_med_mrk");
     cgs.media.holeMarkShader = trap_R_RegisterShader("gfx/damage/hole_lg_mrk");
@@ -2290,7 +2289,7 @@ static void CG_RegisterGraphics(void) {
         }
     }
 
-    // [QL] el puntero de seguimiento va aparte del juego de doce iconos
+    // [QL] the follow pointer is kept apart from the set of twelve icons
     cgs.media.flagTrackPointerShader = trap_R_RegisterShaderNoMip("gfx/2d/flag_status/track_pointer.tga");
 
     // [QL] head models are in the player directory, not a separate heads/ directory
@@ -3068,7 +3067,7 @@ static const char* CG_FeederItemText(float feederID, int index, int column, qhan
         case 0:
             *handle = info->modelIcon;
             return "";
-        // [QL] 0x100262b7: primero el silenciado, y si no esta silenciado, el que habla
+        // [QL] 0x100262b7: muted first, and if not muted, talking
         case 1:
             if (info->steamId && trap_VoiceIsIgnored(info->steamId)) {
                 *handle = cgs.media.scoreMutedShader;
@@ -3561,8 +3560,8 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
     CG_RegisterClients();  // if low on memory, some clients will be deferred
     cg.loadingStage++;
 
-    // [QL] 0x10029da7: con com_build el cliente deja de diferir nada -- registra las catorce
-    // armas y las tres frases de Crash del tutorial, que si no se cargan recien al sonar
+    // [QL] 0x10029da7: with com_build the client stops deferring anything -- it registers all
+    // fourteen weapons and Crash's three tutorial lines, which otherwise load only when played
     if (trap_Cvar_VariableValue("com_build") != 0) {
         int weapon;
 

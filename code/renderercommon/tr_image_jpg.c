@@ -50,7 +50,7 @@ typedef struct q_jpeg_error_mgr_s {
 
     jmp_buf setjmp_buffer; /* for return to caller */
 
-    // [ioquakelive] un trabajador no puede imprimir: la consola no es segura entre hilos
+    // [ioquakelive] a worker cannot print: the console is not thread safe
     qboolean silent;
 } q_jpeg_error_mgr_t;
 
@@ -85,23 +85,23 @@ static void R_JPGOutputMessage(j_common_ptr cinfo) {
     ri.Printf(PRINT_ALL, "%s\n", buffer);
 }
 
-// [ioquakelive] el buffer de salida se pide por aqui: el hilo principal usa el del motor, y un
-// trabajador usa el del sistema, que si es seguro entre hilos
+// [ioquakelive] the output buffer is asked for through here: the main thread uses the engine's
+// and a worker uses the system's, which is thread safe
 static void* R_JPGAllocEngine(size_t bytes) {
     return ri.Malloc((int)bytes);
 }
 
-// [ioquakelive] el nombre del ultimo JPEG leido, con su extension, para la lista de carga
+// [ioquakelive] the name of the last JPEG read, extension included, for the load list
 char r_lastImageName[MAX_QPATH];
 
 /*
 =============
 R_DecodeJPG
 
-[ioquakelive] Decodifica un JPEG que ya esta en memoria. Existe porque decodificar es lo unico
-del camino de carga que se puede repartir entre hilos: leer no, el sistema de archivos no es
-seguro entre hilos. Un formato invalido no corta el juego -- devuelve vacio y decide quien
-llamo -- porque cortar desde un trabajador no seria seguro.
+[ioquakelive] Decodes a JPEG that is already in memory. It exists because decoding is the only
+part of the load path that can be spread across threads: reading cannot, the filesystem is not
+thread safe. An invalid format does not take the game down -- it returns empty and the caller
+decides -- because erroring out from a worker would not be safe.
 =============
 */
 void R_DecodeJPG(byte* fileData, int fileLen, byte** pic, int* width, int* height,
@@ -193,7 +193,8 @@ void R_LoadJPG(const char* filename, unsigned char** pic, int* width, int* heigh
     } fbuffer;
     int len;
 
-    // [ioquakelive] leer del pk3 y decodificar se miden aparte: ver r_imageReadUs en tr_common.h
+    // [ioquakelive] reading from the pk3 and decoding are measured apart: see r_imageReadUs in
+    // tr_common.h
     {
         int64_t readStart = ri.Microseconds();
 
@@ -206,7 +207,7 @@ void R_LoadJPG(const char* filename, unsigned char** pic, int* width, int* heigh
 
     R_DecodeJPG(fbuffer.b, len, pic, width, height, R_JPGAllocEngine, qfalse);
     if (*pic) {
-        // [ioquakelive] para la lista de carga del mapa: el nombre real, con su extension
+        // [ioquakelive] for the map's load list: the real name, extension included
         Q_strncpyz(r_lastImageName, filename, sizeof(r_lastImageName));
     } else {
         ri.Printf(PRINT_ALL, ", loading file %s\n", filename);

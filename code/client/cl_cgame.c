@@ -404,9 +404,9 @@ The cgame module is making a system call
 =====================
 El reparto del tiempo de carga
 
-[ioquakelive] Todo lo que un mapa carga lo pide el cgame al motor. Durante la carga, cada
-llamada se cronometra y se suma a su categoria; al terminar, CL_InitCGame lo imprime. Es lo que
-permite decir "las texturas son la mitad del tiempo" en vez de suponerlo.
+[ioquakelive] Everything a map loads is asked of the engine by the cgame. During the load each
+call is timed and added to its category; at the end, CL_InitCGame prints the breakdown. It is
+what lets you say "textures are half the time" instead of assuming it.
 =====================
 */
 typedef enum {
@@ -721,8 +721,8 @@ static intptr_t CL_CgameSystemCallsInner(intptr_t* args) {
             Q_strncpyz(VMA(2), Key_KeynumToString(args[1]), args[3]);
             return 0;
 
-        // [QL] la lista de silenciados de la voz, que va por Steam ID: el id viaja partido en
-        // dos mitades de 32 bits, igual que en retail
+        // [QL] the voice mute list, which goes by Steam ID: the id travels split into two
+        // 32 bit halves, as in retail
         case CG_VOICE_IS_IGNORED:
             return CL_VoiceIsIgnored(((uint64_t)(unsigned int)args[2] << 32) | (unsigned int)args[1]);
         case CG_VOICE_TOGGLE_IGNORE:
@@ -831,13 +831,13 @@ void CL_InitCGame(void) {
 
     t1 = Sys_Milliseconds();
 
-    // [ioquakelive] el reparto del tiempo de carga se mide justo aqui: todo lo que el mapa carga
-    // del lado del cliente pasa por las llamadas del cgame
+    // [ioquakelive] the load time breakdown is measured right here: everything the map loads on
+    // the client side goes through the cgame's calls
     Com_Memset(cl_loadUs, 0, sizeof(cl_loadUs));
     Com_Memset(cl_loadCalls, 0, sizeof(cl_loadCalls));
     cl_loadProfiling = qtrue;
 
-    // [ioquakelive] los sonidos del mapa se decodifican en segundo plano mientras sigue la carga
+    // [ioquakelive] the map's sounds are decoded in the background while the load carries on
     S_AsyncLoadBegin();
 
     // put away the console
@@ -872,8 +872,8 @@ void CL_InitCGame(void) {
 
     t2 = Sys_Milliseconds();
 
-    // [ioquakelive] antes de cerrar la carga, los sonidos encargados quedan listos para sonar;
-    // para entonces los trabajadores ya terminaron, asi que esto casi nunca espera
+    // [ioquakelive] before closing the load, the sounds handed out are made ready to play; by
+    // then the workers have finished, so this almost never waits
     S_AsyncLoadFinish();
     t2 = Sys_Milliseconds();
 

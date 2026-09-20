@@ -35,8 +35,8 @@ void CL_Init(void) {
 void CL_MouseEvent(int dx, int dy, int time) {
 }
 
-// [ioquakelive] Com_EventLoop lo llama para el cursor absoluto del menu; sin este stub el
-// servidor dedicado no linkeaba
+// [ioquakelive] Com_EventLoop calls this for the menu's absolute cursor; without the stub the
+// dedicated server did not link
 void CL_MouseAbsEvent(int x, int y) {
 }
 

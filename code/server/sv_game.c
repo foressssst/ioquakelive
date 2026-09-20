@@ -1307,9 +1307,9 @@ static void SV_InitGameVM(qboolean restart) {
     char* altEntities = NULL;
     int altLen = -1;
 
-    // [QL] 0x004e2a80: con sv_altEntDir, las entidades del nivel salen de "<dir>/<mapa>.ent" en
-    // lugar del BSP; con sv_dumpEntities, las del mapa se escriben en "ents/<mapa>.ent". Si la
-    // lectura falla se sigue con las del BSP, que es lo de siempre.
+    // [QL] 0x004e2a80: with sv_altEntDir, the level's entities come from "<dir>/<map>.ent"
+    // instead of the BSP; with sv_dumpEntities, the map's own are written to "ents/<map>.ent".
+    // If the read fails it carries on with the BSP's, which is the usual path.
     if (sv_altEntDir->string[0]) {
         altLen = FS_ReadFile(va("%s/%s.ent", sv_altEntDir->string, mapName), (void**)&altEntities);
         if (altLen > 0) {

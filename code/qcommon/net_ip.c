@@ -1324,8 +1324,8 @@ void NET_OpenIP(void) {
 
         if (ip_socket == INVALID_SOCKET) {
             Com_Printf("WARNING: Couldn't bind to a v4 ip address.\n");
-            // [QL] net_strict: un servidor que no pudo tomar su puerto no sirve de nada
-            // callado. El server.cfg de retail lo explica: "Quit out immediately if we
+            // [QL] net_strict: a server that could not take its port is of no use sitting
+            // there quietly. Retail's server.cfg spells it out: "Quit out immediately if we
             // can't bind the IP and port."
             if (Cvar_VariableIntegerValue("net_strict")) {
                 Com_Error(ERR_FATAL, "net_strict: couldn't bind to %s:%i",
@@ -1352,7 +1352,7 @@ static qboolean NET_GetCvars(void) {
     /* End users have it enabled so they can connect to ipv6-only hosts, but ipv4 will be
      * used if available due to ping */
     net_enabled = Cvar_Get("net_enabled", "3", CVAR_LATCH | CVAR_ARCHIVE);
-    // [QL] 0x004e3c6a: salir en vez de seguir si no se puede tomar la IP y el puerto
+    // [QL] 0x004e3c6a: quit rather than carry on when the IP and port cannot be taken
     Cvar_Get("net_strict", "0", CVAR_LATCH | CVAR_ARCHIVE);
     Cvar_Get("net_noudp", "0", CVAR_LATCH);
 #endif
@@ -1551,8 +1551,8 @@ void NET_Event(fd_set* fdr) {
                     continue;  // drop this packet
             }
 
-            // [ioquakelive] el servidor comparte su socket con Steam (puerto de consulta 0xffff,
-            // como retail), asi que las consultas del master llegan por aca
+            // [ioquakelive] the server shares its socket with Steam (query port 0xffff, as in
+            // retail), so the master's queries arrive through here
             if (Steam_GS_HandlePacket(from, netmsg.data, netmsg.cursize))
                 continue;
 

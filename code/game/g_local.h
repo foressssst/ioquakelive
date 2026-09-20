@@ -440,7 +440,7 @@ struct gclient_s {
     int timeResidualScout;      // [QL]
     int timeResidualArmor;
     int timeResidualHealth;     // [QL]
-    int timeResidualPingPOI;    // [QL] gclient_t + 0x50c: ms desde el ultimo ping de POI
+    int timeResidualPingPOI;    // [QL] gclient_t + 0x50c: ms since the last POI ping
     int timeResidualSpecInfo;   // [QL]
     qboolean healthRegenActive; // [QL]
     qboolean armorRegenActive;  // [QL]
@@ -504,7 +504,7 @@ typedef struct {
     qboolean        shufflePending;         /* [QL] */
     int             shuffleReadyTime;       /* [QL] */
     qboolean        autoShuffleArmed;       /* [QL] 0x105dce84: hubo pocos jugadores y se armo */
-    int             autoShuffleStart;       /* [QL] 0x105dce88: cuando empezo la cuenta */
+    int             autoShuffleStart;       /* [QL] 0x105dce88: when the countdown started */
     int             numConnectedClients;
     int             numNonSpectatorClients;
     int             numPlayingClients;
@@ -968,7 +968,7 @@ void Freeze_ClientThawCheck(gentity_t *ent, int msec);  // [QL] msec = clamped p
 void Freeze_PlayerFrozen(gentity_t *self);
 void Freeze_AutoThaw(int team);   // [QL] 0x1004cc20 (twin of CA_PlayerKilled; last-man-standing announce)
 void G_ThrowFlag(gentity_t *self, vec3_t point);        // [QL] 0x10051420 (gauntlet flag toss, g_dropCmds)
-const char* G_GametypeDisplayName(void);                // [QL] el nombre largo del tipo de juego
+const char* G_GametypeDisplayName(void);                // [QL] the gametype's long name
 void Drop_DamagedHealth(gentity_t *attacker, gentity_t *targ, int amount);  // [QL] 0x1004f930 (bleeding health, g_dropDamagedHealth)
 qboolean Freeze_TeamFrozen(int team);
 qboolean Freeze_GameIsOver(int *aliveCounts, int *healthTotals);
@@ -998,7 +998,7 @@ void Freeze_ClientBegin(gentity_t* ent);
 void RR_ClientBegin(gentity_t* ent);
 void SelectSpawnWeapon(gentity_t* ent);
 void Team_LivingTeamCounts(int *outRed, int *outBlue);
-int G_GetAccess(int clientNum);  // [QL] 0x10032460, el nivel de acceso de un cliente
+int G_GetAccess(int clientNum);  // [QL] 0x10032460, a client's access level
 qboolean G_FloodCheck(gclient_t* client);  // [QL] 0x100341e0
 void G_ReleaseGrapple(gentity_t* ent);
 void STAT_InitClient(gentity_t* ent);

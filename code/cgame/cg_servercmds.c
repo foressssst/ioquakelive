@@ -149,9 +149,10 @@ static void CG_ParseScores_Ffa(void) {
         sp->frags = atoi(CG_Argv(idx++));
         sp->deaths = atoi(CG_Argv(idx++));
         sp->bestWeapon = atoi(CG_Argv(idx++));
-        // [ioquakelive] el campo 17 es la precision del arma preferida, no los powerups. El
-        // servidor manda eso (qagamex86.dll 0x1003d285, decimoseptimo %i) y nadie leia powerUps,
-        // asi que el dato se tiraba y la columna WEAP del marcador quedaba sin su porcentaje.
+        // [ioquakelive] field 17 is the favourite weapon's accuracy, not the powerups. That is
+        // what the server sends (qagamex86.dll 0x1003d285, seventeenth %i) and nobody read
+        // powerUps, so the value was thrown away and the scoreboard's WEAP column had no
+        // percentage.
         sp->bestWeaponAccuracy = atoi(CG_Argv(idx++));
         sp->damageDone = atoi(CG_Argv(idx++));
         sp->net = sp->frags - sp->deaths;
@@ -1009,10 +1010,10 @@ void CG_SetConfigValues(void) {
     }
     cg.warmup = atoi(Info_ValueForKey(CG_ConfigString(CS_WARMUP), "time"));
 
-    // [ioquakelive] al entrar a una partida ya empezada -- o al abrir una demo -- el
-    // configstring del calentamiento ya esta puesto y CG_ParseWarmup no se llama, asi que el
-    // tipo de juego de la cuenta regresiva quedaba en cero y la pantalla decia "Free For All"
-    // en cualquier modo. Sin la clave no hay cambio de modo: es -1.
+    // [ioquakelive] joining a match already under way -- or opening a demo -- the warmup
+    // configstring is already set and CG_ParseWarmup is never called, so the countdown's
+    // gametype stayed at zero and the screen read "Free For All" in every mode. With the key
+    // absent there is no gametype change: it is -1.
     {
         const char* gt = Info_ValueForKey(CG_ConfigString(CS_WARMUP), "g_gametype");
 

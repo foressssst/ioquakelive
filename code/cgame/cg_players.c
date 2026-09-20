@@ -2346,21 +2346,20 @@ Also called by CG_Missile for quad rockets, but nobody can tell...
 =================
 CG_AddRefEntityWithPowerups
 
-El modelo y encima una pasada por cada cosa que lo cubre. El orden y las
-condiciones son las del binario.
+The model and then one pass per thing covering it. The order and the conditions are
+the binary's.
 
 [QL] 0x10041860:
-  - con el bit 0x2000000 de CS_CUSTOM_SETTINGS -- los jugadores se atraviesan --
-    a los demas se los dibuja con noPlayerClipShader y nada mas;
-  - invisible tapa todo lo demas;
-  - la proteccion al reaparecer vive en powerups[0] y cambia de shader mientras
-    el jugador esta recibiendo dano;
-  - el regen parpadea: solo en una decima de cada segundo;
-  - congelado son tres shaders de hielo, y cual va lo dice generic1: se va
-    derritiendo de ice1 a ice3 mientras lo descongelan.
+  - with bit 0x2000000 of CS_CUSTOM_SETTINGS -- players pass through each other --
+    everyone else is drawn with noPlayerClipShader and nothing more;
+  - invisibility hides everything else;
+  - spawn protection lives in powerups[0] and switches shader while the player is
+    taking damage;
+  - regeneration blinks: one tenth of every second only;
+  - frozen is three ice shaders, and generic1 says which: it melts from ice1 to
+    ice3 as the player is thawed.
 
-Retail no tiene una version roja del quad: es el mismo shader para los dos
-equipos.
+Retail has no red version of the quad: it is the same shader for both teams.
 =================
 */
 void CG_AddRefEntityWithPowerups(refEntity_t* ent, entityState_t* state, int team) {
@@ -3230,8 +3229,8 @@ void CG_Player(centity_t* cent) {
     //
     // add the gun / barrel / flash
     //
-    // [QL] 0x10042b63: el infectado de Red Rover no muestra arma -- se registra el gauntlet y
-    // nada mas -- porque lo que lleva son las manos
+    // [QL] 0x10042b63: a Red Rover infected shows no weapon -- the gauntlet is registered and
+    // nothing else -- because what they carry is their hands
     if (cgs.gametype == GT_RR && (cgs.customSettings & 0x4000000) && ci->team == TEAM_RED &&
         cent->currentState.weapon == WP_GAUNTLET) {
         CG_RegisterWeapon(WP_GAUNTLET);
@@ -3245,8 +3244,8 @@ void CG_Player(centity_t* cent) {
     // [QL] frozen / flag-carrier ground glow for the followed player (binary calls this last)
     CG_PlayerFreezeEffect(cent);
 
-    // [QL] 0x10042bc8: y por encima de todo, el infectado va cubierto de baba y arrastra un
-    // zumbido. Va ultimo, despues de los powerups y del brillo del congelado.
+    // [QL] 0x10042bc8: and over everything else, the infected is covered in slime and drags a
+    // hum along. It goes last, after the powerups and the frozen glow.
     if (cgs.gametype == GT_RR && (cgs.customSettings & 0x4000000) && ci->team == TEAM_RED) {
         legs.customShader = cgs.media.gooShader;
         torso.customShader = cgs.media.gooShader;

@@ -699,7 +699,7 @@ const char* FS_LoadedPakPureChecksums(void);
 // Servers with sv_pure set will get this string and pass it to clients.
 
 const char* FS_ReferencedPakNames(void);
-const char* FS_ReferencedSteamworksItems(void);  // [QL] los items del Workshop de esta partida
+const char* FS_ReferencedSteamworksItems(void);  // [QL] this match's Workshop items
 const char* FS_ReferencedPakChecksums(void);
 const char* FS_ReferencedPakPureChecksums(void);
 // Returns a space separated string containing the checksums of all loaded
@@ -1057,10 +1057,10 @@ void SV_Init(void);
 void SV_RegisterGameCvars(void);
 void SV_Shutdown(char* finalmsg);
 void SV_Frame(int msec);
-void SV_VoiceFrame(void);  // [QL] el puente de la voz entre pares
+void SV_VoiceFrame(void);  // [QL] the peer to peer voice bridge
 void SV_SteamAuthResponse(uint64_t steamId, int response);  // [QL] 0x531a80
 
-// [QL] los mapas y las factories que conoce el servidor, que es lo que completa el tabulador
+// [QL] the maps and factories the server knows, which is what tab completion completes against
 #define MAX_COMPLETION_NAMES 1024
 int SV_ArenaNameList(const char** out, int max);
 int SV_FactoryNameList(const char** out, int max);
@@ -1119,10 +1119,10 @@ void Sys_Print(const char* msg);
 // Sys_Milliseconds should only be used for profiling purposes,
 // any game related timing information should come from event timestamps
 int Sys_Milliseconds(void);
-// [ioquakelive] reloj monotono fino, para el ritmo de los frames y para medirlo
+// [ioquakelive] fine grained monotonic clock, for pacing frames and for measuring the pacing
 int64_t Sys_Microseconds(void);
 
-// [ioquakelive] lo minimo para repartir trabajo entre nucleos; la cola esta en common.c
+// [ioquakelive] the minimum needed to spread work across cores; the queue is in common.c
 void* Sys_ThreadCreate(void (*function)(void*), void* argument);
 void* Sys_MutexCreate(void);
 void Sys_MutexLock(void* mutex);

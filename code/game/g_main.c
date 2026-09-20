@@ -1460,12 +1460,12 @@ void G_RegisterCvars(void) {
         if (cv->vmCvar)
             cv->modCount = cv->vmCvar->modificationCount;
 
-        // [QL] volcar el valor al espejo en C de una vez. G_UpdateCvars solo llama a
-        // onChanged cuando el modificationCount cambia, y arriba se acaba de guardar el
-        // actual, asi que sin esto el callback no corre nunca y los pm_* se quedan con el
-        // valor con el que estan inicializados en bg_pmove.c. Asi arranca el binario
-        // tambien: pm_stepJump vive en .bss (0x104b139c, o sea 0) y aun asi lo escriben
-        // dos sitios, uno de ellos el pase de registro.
+        // [QL] push the value into the C mirror right away. G_UpdateCvars only calls
+        // onChanged when modificationCount changes, and the current one was just stored
+        // above, so without this the callback never runs and the pm_* keep whatever
+        // bg_pmove.c initialised them to. The binary starts the same way: pm_stepJump
+        // lives in .bss (0x104b139c, that is 0) and two places write it anyway, one of
+        // them the registration pass.
         if (cv->onChanged) {
             cv->onChanged();
         }
@@ -1506,18 +1506,18 @@ void G_UpdateCvars(void) {
             if (cv->modCount != cv->vmCvar->modificationCount) {
                 cv->modCount = cv->vmCvar->modificationCount;
 
-                // [ioquakelive] El binario no corre el callback durante el entrenamiento
-                // (0x10054e14): el tour cambia cvars por su cuenta -- g_spSkill entre
-                // otras -- y no quiere que eso dispare las reglas del modo.
+                // [ioquakelive] The binary skips the callback during training
+                // (0x10054e14): the tour changes cvars of its own -- g_spSkill among
+                // them -- and does not want that to fire the gametype rules.
                 if (cv->onChanged && !g_training.integer) {
                     cv->onChanged();
                 }
 
-                // [QL] 0x100529b0: con las trampas encendidas, el servidor anuncia cada
-                // cvar que cambia. En el binario esto vive en su propio export de la
-                // tabla del juego -- el que estaba antes del que creiamos primero --, y
-                // el motor lo llama cuando una cvar se mueve; aca va donde ya se detecta
-                // el cambio, que da el mismo anuncio.
+                // [QL] 0x100529b0: with cheats on, the server announces every cvar that
+                // changes. In the binary this lives in its own export of the game table
+                // -- the one sitting before what we first took for the first slot -- and
+                // the engine calls it when a cvar moves; here it goes where the change is
+                // already detected, which gives the same announcement.
                 if (g_cheats.integer) {
                     trap_SendServerCommand(-1, va("print \"Server: %s changed to %s\n\"",
                                                   cv->cvarName, cv->vmCvar->string));
@@ -1688,7 +1688,7 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
     level.warmupTime = -1;  // PRE_GAME until warmup state machine transitions
 
     level.snd_fry = G_SoundIndex("sound/player/fry.wav");  // FIXME standing in lava / slime
-    // [QL] 0x100551f1: los dos gorgoteos del ahogo se precargan aca, como en retail
+    // [QL] 0x100551f1: the two drowning gurps are precached here, as in retail
     G_SoundIndex("sound/player/gurp1.wav");
     G_SoundIndex("sound/player/gurp2.wav");
 
@@ -1764,7 +1764,7 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
 
     SaveRegisteredItems();
 
-    // [QL] 0x10055386: el motor genera un GUID y va a CS_MATCH_GUID; lo llevan todos los
+    // [QL] 0x10055386: the engine generates a GUID and it goes to CS_MATCH_GUID; it is carried by
     // eventos de estadisticas
     G_SetMatchGUID();
     STAT_ResetMedals();
@@ -2483,7 +2483,7 @@ void ExitLevel(void) {
     char nextmaps[MAX_STRING_CHARS];
     int bestMap = 0;
 
-    // [ioquakelive] El Crash Course no encadena mapas: al terminar, el binario mata el
+    // [ioquakelive] The Crash Course does not chain maps: at the end, the binary kills the
     // servidor (0x10057069), antes incluso de mirar sv_quitOnExitLevel.
     if ( g_training.integer ) {
         trap_SendConsoleCommand( EXEC_APPEND, "killserver\n" );
@@ -2717,8 +2717,8 @@ void LogExit(int isShutdown, int restart, const char* string) {
             cl->sess.prevScore = cl->ps.persistant[PERS_SCORE];
         }
     }
-    // [QL] Publish match-end stats. Va antes de marcar la bandera: retail (0x1005758d)
-    // se fija en ella para no reportar dos veces la misma partida.
+    // [QL] Publish match-end stats. It goes before raising the flag: retail (0x1005758d) looks
+    // at it so as not to report the same match twice.
     STAT_MatchEnd(isShutdown, restart, string);
 
     level.gameStatsReported = qtrue;
@@ -3443,8 +3443,8 @@ static void CheckWarmupAndForfeit(void) {
 
     // Countdown elapsed: begin the match via map_restart.
     if (level.time >= level.warmupTime) {
-        // [QL] 0x10058860: el evento MATCH_STARTED, con las reglas y quienes estan,
-        // antes del map_restart que arranca la partida
+        // [QL] 0x10058860: the MATCH_STARTED event, with the rules and who is present,
+        // before the map_restart that starts the match
         STAT_MatchStarted();
 
         level.warmupTime += 10000;
@@ -3510,11 +3510,11 @@ static qboolean ExecuteVoteCommand(const char *voteCmd) {
         }
         return qtrue;
     }
-    // [QL] 0x10058d0c y siguientes: cada uno de estos tres reconoce dos palabras y
-    // rechaza cualquier otra diciendolo. El fork trataba todo lo que no fuera la
-    // primera como si fuera la segunda, asi que un voto con una palabra sin sentido
-    // apagaba la opcion en silencio. Y el reinicio de mapa es solo del de municion:
-    // los otros dos son del calentamiento, donde se reaparece igual.
+    // [QL] 0x10058d0c onwards: each of these three knows two words and says so when
+    // rejecting anything else. Treating everything that was not the first word as the
+    // second meant a vote with a nonsense word turned the option off silently. And the
+    // map restart belongs to the ammo vote alone: the other two are warmup votes, where
+    // everyone respawns anyway.
     if (!Q_stricmp(arg0, "loadouts")) {
         if (!Q_stricmp(arg1, "ON")) {
             trap_Cvar_Set("g_loadout", "1");
@@ -3532,7 +3532,7 @@ static qboolean ExecuteVoteCommand(const char *voteCmd) {
         } else if (!Q_stricmp(arg1, "WEAP")) {
             trap_Cvar_Set("g_ammoPack", "0");
         } else {
-            // [QL] 0x10058ee7: el binario dice "loadout" aca, no "ammo"
+            // [QL] 0x10058ee7: the binary says "loadout" here, not "ammo"
             trap_SendServerCommand(-1,
                 "print \"^3Valid loadout options are:    ^5GLOBAL    ^5WEAP^7\n\"");
             return qtrue;
@@ -3552,8 +3552,9 @@ static qboolean ExecuteVoteCommand(const char *voteCmd) {
         return qtrue;
     }
     if (!Q_stricmp(arg0, "shuffle")) {
-        // [QL] 0x10058e4e: el voto baraja ahi mismo. Antes dejaba level.shufflePending
-        // en alto y no lo miraba nadie, asi que el voto pasaba y no pasaba nada.
+        // [QL] 0x10058e4e: the vote shuffles right here. It used to raise
+        // level.shufflePending, which nobody read, so the vote passed and nothing
+        // happened.
         G_ShuffleTeams();
         return qtrue;
     }
@@ -3574,15 +3575,15 @@ static qboolean ExecuteVoteCommand(const char *voteCmd) {
 =================
 G_CheckAutoShuffle
 
-[QL] 0x10059936. Con g_shuffle_automatic encendido, el servidor baraja los equipos
-solo cuando la partida se queda corta de jugadores y despues vuelve a llenarse:
-mientras hay menos de g_shuffle_automatic_minplayers queda armado, y en cuanto
-vuelven a alcanzar arranca una cuenta de g_shuffle_timedelay milisegundos que se
-anuncia una vez por segundo y termina barajando.
+[QL] 0x10059936. With g_shuffle_automatic on, the server shuffles the teams by itself
+when the match runs short of players and then fills up again: while there are fewer
+than g_shuffle_automatic_minplayers it stays armed, and as soon as there are enough
+again it starts a g_shuffle_timedelay millisecond countdown, announced once a second,
+that ends in a shuffle.
 
-Solo corre mientras se espera para empezar (warmupTime negativo), que es donde
-mover a alguien no rompe nada. Las tres cvars estaban registradas en el fork desde
-siempre y no las leia nadie.
+It only runs while waiting to start (negative warmupTime), which is where moving
+somebody breaks nothing. All three cvars had been registered here from the start and
+nobody read them.
 =================
 */
 static void G_CheckAutoShuffle(void) {
@@ -3609,8 +3610,8 @@ static void G_CheckAutoShuffle(void) {
 
     fin = level.autoShuffleStart + g_shuffle_timedelay.integer;
     if (level.time < fin) {
-        // [QL] 0x100599a4: un aviso por segundo, y solo cuando el segundo que queda
-        // cambia de un cuadro al siguiente
+        // [QL] 0x100599a4: one announcement per second, and only when the remaining
+        // second changes from one frame to the next
         int quedan = (fin - level.time) / 1000;
 
         if (quedan != (fin - (level.time - level.frametime)) / 1000) {
@@ -3928,26 +3929,25 @@ void G_RunFrame(int levelTime) {
     // from SV_ClientEnterWorld - QL removed it.  For listen servers we need to
     // auto-begin clients so they get a valid player state and receive snapshots.
     //
-    // [ioquakelive] Un bot agregado con retraso (el cuarto argumento de G_AddBot, 5000 ms
-    // para la Trainer del Crash Course) tiene que quedarse como cliente a medio conectar
-    // hasta que G_CheckBotSpawn lo empiece. Empezado tambien aca spawneaba dos veces: una
-    // en el spawn del mapa de entrenamiento al lado del jugador, y otra cuando le tocaba el
-    // turno, que en un mapa de entrenamiento se saltea esos dos spawns (qagamex86.dll
-    // 0x10039226) y lo deja en cualquier lado. Crash aparecia, decia sus primeras lineas y
-    // se esfumaba al otro lado de la arena.
+    // [ioquakelive] A bot added with a delay (G_AddBot's fourth argument, 5000 ms for the
+    // Crash Course trainer) has to stay a half-connected client until G_CheckBotSpawn
+    // begins it. Begun here as well it spawned twice: once at the training map's spawn
+    // next to the player, and again when its turn came, which on a training map skips
+    // those two spawns (qagamex86.dll 0x10039226) and drops it anywhere. Crash would
+    // appear, say its first lines and vanish to the other side of the arena.
     //
-    // Por eso antes se excluia a todos los bots, y ahi estaba el bug: un map_restart deja a
-    // TODOS en CON_CONNECTING -a los bots tambien, porque SV_MapRestart_f les vuelve a
-    // llamar ClientConnect-, y al bot no lo empezaba nadie. Sus otros dos llamadores son el
-    // alta del bot y la cola, y ninguno corre en un restart. El bot quedaba conectando para
-    // siempre: el scoreboard lo mostraba en "connect", no contaba como jugando y la partida
-    // se iba a forfeit. Como el match empieza justo con un map_restart, se rompia cada vez.
-    // Ahora se excluye solo al que de verdad espera en la cola.
+    // Excluding every bot was the obvious fix and it was the bug: a map_restart leaves
+    // EVERYONE in CON_CONNECTING -- bots included, since SV_MapRestart_f calls
+    // ClientConnect for them again -- and then nobody began the bot. Its other two callers
+    // are the bot's own registration and the queue, and neither runs on a restart. The bot
+    // stayed connecting forever: the scoreboard showed it as "connect", it did not count
+    // as playing and the match went to forfeit. Since a match starts with a map_restart,
+    // this broke every time. Only a bot genuinely waiting in the queue is excluded now.
     for (i = 0; i < level.maxclients; i++) {
         if (level.clients[i].pers.connected != CON_CONNECTING) {
             continue;
         }
-        // el bot que espera su turno en la cola se deja en paz; lo empieza G_CheckBotSpawn
+        // a bot waiting its turn in the queue is left alone; G_CheckBotSpawn begins it
         if ((g_entities[i].r.svFlags & SVF_BOT) && G_BotWaitingToSpawn(i)) {
             continue;
         }

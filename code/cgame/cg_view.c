@@ -235,9 +235,9 @@ static void CG_OffsetThirdPersonView(void) {
     float focusDist;
     float forwardScale, sideScale;
 
-    // [QL] 0x1004cad3: en tercera persona el escalon tambien se suaviza. Retail tiene
-    // CG_StepOffset inlineada en las dos vistas, y las dos escriben el mismo
-    // cg.refdef.vieworg[2] con la misma formula; Quake 3 solo la tiene en primera.
+    // [QL] 0x1004cad3: the step is smoothed in third person too. Retail has CG_StepOffset
+    // inlined in both views, and both write the same cg.refdef.vieworg[2] with the same
+    // formula; Quake 3 has it in first person only.
     CG_StepOffset();
 
     cg.refdef.vieworg[2] += cg.predictedPlayerState.viewheight;
@@ -658,14 +658,15 @@ static int CG_CalcFov(void) {
 ===============
 CG_ScreenDamageColor
 
-[QL] 0x10043290. Cual de los tres colores de tinte toca, ya con el alfa metido en el byte bajo.
+[QL] 0x10043290. Which of the three tint colours applies, with the alpha already packed into
+the low byte.
 
-  cg_screenDamage_Self   cuando el daño es de uno mismo; su default es 0, o sea sin tinte
-  cg_screenDamage_Team   cuando pega un companero
-  cg_screenDamage        el resto
+  cg_screenDamage_Self   damage you did to yourself; its default is 0, that is no tint
+  cg_screenDamage_Team   a teammate hit you
+  cg_screenDamage        everything else
 
-El binario mezcla el color y el alfa asi (0x100432c3): (alfa ^ color) & 0xff ^ color, que es
-quedarse con los 24 bits altos del color y los 8 bajos del alfa.
+The binary mixes colour and alpha like this (0x100432c3): (alpha ^ colour) & 0xff ^ colour,
+which keeps the colour's high 24 bits and the alpha's low 8.
 ===============
 */
 static int CG_ScreenDamageColor(void) {
@@ -745,15 +746,15 @@ static void CG_DamageBlendBlob(void) {
     // opt-in. This is the same asset-presence switch that decides gibs in CG_GibPlayer.
     ent.customShader = cgs.media.bloodSprayShaders[0] ? cgs.media.viewBloodShader : cgs.media.viewDamageShader;
 
-    // [QL] 0x1004da94: el color sale de la cvar, no es blanco. La textura del tinte es gris y
-    // su shader lleva rgbGen entity, asi que pintarla en blanco la dejaba blanca -- que es
-    // justo lo que se veia. El dword es 0xRRGGBBAA y se reparte byte a byte; el alfa ademas
-    // se apaga con el tiempo.
+    // [QL] 0x1004da94: the colour comes from the cvar, it is not white. The tint texture is
+    // grey and its shader carries rgbGen entity, so drawing it white left it white -- which is
+    // exactly what was on screen. The dword is 0xRRGGBBAA, unpacked byte by byte, and the
+    // alpha also fades with time.
     {
         int color = CG_ScreenDamageColor();
 
         if (!color) {
-            return;  // un color en cero es "sin tinte", como el default de cg_screenDamage_Self
+            return;  // a colour of zero means no tint, as cg_screenDamage_Self defaults to
         }
         ent.shaderRGBA[0] = (byte)((color >> 24) & 0xff);
         ent.shaderRGBA[1] = (byte)((color >> 16) & 0xff);

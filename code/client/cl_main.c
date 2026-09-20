@@ -140,14 +140,14 @@ void hA3Dg_ExportRenderGeom(refexport_t* incoming_re);
 
 static int noGameRestart = qfalse;
 
-// [QL] los items del Workshop que la partida pide y todavia no estan
+// [QL] the Workshop items the match asks for and does not have yet
 #define CL_MAX_WORKSHOP 32
 static uint64_t cl_workshopItems[CL_MAX_WORKSHOP];
 static int cl_workshopCount;
 static int cl_workshopIndex;
 static void CL_WorkshopNext(void);
 
-// cuantos servidores de la lista de Steam ya se pasaron a la lista de la interfaz
+// how many servers from Steam's list have been copied into the interface's
 static int cl_steamServersTaken;
 static qboolean cl_steamServersPending;
 
@@ -443,8 +443,8 @@ CL_DemoCompleted
 void CL_DemoCompleted(void) {
     char buffer[MAX_STRING_CHARS];
 
-    // [QL] cl_quitOnDemoCompleted: salir cuando la demo termina, para poder reproducir
-    // una demo sin nadie delante y que el proceso se cierre solo
+    // [QL] cl_quitOnDemoCompleted: quit when the demo ends, so a demo can be played back
+    // unattended and the process closes itself
     if (Cvar_VariableIntegerValue("cl_quitOnDemoCompleted")) {
         Com_Quit_f();
         return;
@@ -610,26 +610,26 @@ static void CL_CompleteDemoName(char* args, int argNum) {
 ==================
 CL_CompleteCallvote
 
-"callvote <que> [...]". Los nombres son los que acepta Cmd_CallVote_f del modulo
-de juego (0x10061e40); cuando el voto es "map", el mapa y la factory se completan
-igual que en la orden "map".
+"callvote <what> [...]". The names are the ones Cmd_CallVote_f of the game module
+accepts (0x10061e40); when the vote is "map", the map and the factory complete the
+same way as in the "map" command.
 
-Retail no completa nada de esto: le pasa al tabulador la lista entera de mapas y
-listo (0x004b6a60, que se la pide a la interfaz). Aca va por argumento, que es
-como completa todo lo demas en este motor.
+Retail completes none of this: it hands tab completion the whole map list and leaves it
+there (0x004b6a60, which asks the interface for it). Here it goes argument by argument,
+which is how everything else in this engine completes.
 ==================
 */
 static void CL_CompleteCallvote(char* args, int argNum) {
-    static const char* votos[] = {
+    static const char* voteNames[] = {
         "ammo", "clientkick", "cointoss", "fraglimit", "g_gametype", "kick", "loadouts",
         "map", "map_restart", "nextmap", "random", "shuffle", "teamsize", "timelimit",
         "timers", "weaprespawn"
     };
-    static const char* nombres[MAX_COMPLETION_NAMES];
+    static const char* names[MAX_COMPLETION_NAMES];
     int count;
 
     if (argNum == 2) {
-        Field_CompleteList(votos, ARRAY_LEN(votos));
+        Field_CompleteList(voteNames, ARRAY_LEN(voteNames));
         return;
     }
 
@@ -638,14 +638,14 @@ static void CL_CompleteCallvote(char* args, int argNum) {
     }
 
     if (argNum == 3) {
-        count = SV_ArenaNameList(nombres, ARRAY_LEN(nombres));
+        count = SV_ArenaNameList(names, ARRAY_LEN(names));
     } else if (argNum == 4) {
-        count = SV_FactoryNameList(nombres, ARRAY_LEN(nombres));
+        count = SV_FactoryNameList(names, ARRAY_LEN(names));
     } else {
         return;
     }
 
-    Field_CompleteList(nombres, count);
+    Field_CompleteList(names, count);
 }
 
 static void CL_CompletePlayerName(char* args, int argNum);
@@ -654,13 +654,13 @@ static void CL_CompletePlayerName(char* args, int argNum);
 ==================
 CL_SetCgameCommandCompletion
 
-El cgame registra sus ordenes cuando arranca (trap_AddCommand), asi que es ahi
-donde hay que colgarles el tabulador. Las que toman el nombre de un jugador lo
-sacan de los configstrings, que es lo unico que el cliente tiene.
+The cgame registers its commands when it starts (trap_AddCommand), so that is where tab
+completion has to be hung on them. The ones that take a player's name take it from the
+configstrings, which is all the client has.
 ==================
 */
 void CL_SetCgameCommandCompletion(const char* cmdName) {
-    static const char* porJugador[] = {
+    static const char* byPlayer[] = {
         "addadmin", "addmod", "addscore", "ban", "demote", "follow", "mute", "put", "tell", "unmute"
     };
     int i;
@@ -669,8 +669,8 @@ void CL_SetCgameCommandCompletion(const char* cmdName) {
         Cmd_SetCommandCompletionFunc(cmdName, CL_CompleteCallvote);
         return;
     }
-    for (i = 0; i < ARRAY_LEN(porJugador); i++) {
-        if (!Q_stricmp(cmdName, porJugador[i])) {
+    for (i = 0; i < ARRAY_LEN(byPlayer); i++) {
+        if (!Q_stricmp(cmdName, byPlayer[i])) {
             Cmd_SetCommandCompletionFunc(cmdName, CL_CompletePlayerName);
             return;
         }
@@ -1735,13 +1735,13 @@ void CL_NextDownload(void) {
 ==================
 CL_WorkshopDownloads
 
-[QL] 0x004bba30. Antes de entrar, el cliente mira el configstring
-CS_STEAM_WORKSHOP_IDS: ahi el servidor dejo los items del Workshop que usa la
-partida. Los que no estan se bajan por Steam, de a uno, mostrando el avance en
-cl_downloadName, cl_downloadItem y cl_downloadTime, que es lo que dibuja la
-pantalla de conexion.
+[QL] 0x004bba30. Before entering, the client looks at the CS_STEAM_WORKSHOP_IDS
+configstring: that is where the server left the Workshop items the match uses. The ones
+that are missing are downloaded through Steam, one at a time, with progress in
+cl_downloadName, cl_downloadItem and cl_downloadTime, which is what the connection
+screen draws.
 
-Devuelve qtrue si hay que esperar una descarga.
+Returns qtrue when there is a download to wait for.
 ==================
 */
 static qboolean CL_WorkshopDownloads(void) {
@@ -1779,8 +1779,8 @@ static qboolean CL_WorkshopDownloads(void) {
         return qfalse;
     }
 
-    // lo que sigue es como una descarga cualquiera: el juego espera conectado y al final
-    // reinicia el sistema de archivos para ver los pk3 nuevos
+    // from here it is like any other download: the game waits connected and restarts the
+    // filesystem at the end to see the new pk3s
     clc.state = CA_CONNECTED;
     clc.downloadRestart = qtrue;
     *clc.downloadTempName = *clc.downloadName = 0;
@@ -1807,7 +1807,7 @@ void CL_WorkshopNext(void) {
         Cvar_SetValue("cl_downloadSize", 0);
         Cvar_SetValue("cl_downloadCount", 0);
         if (Steam_WorkshopDownload(item)) {
-            return;  // hay que esperar a que Steam lo traiga
+            return;  // wait for Steam to bring it down
         }
     }
 
@@ -1822,8 +1822,8 @@ void CL_WorkshopNext(void) {
 ==================
 CL_WorkshopFrame
 
-Mientras Steam trae un item, el avance va a las mismas cvars que mira la
-pantalla de conexion. Cuando termina, sigue con el que falte.
+While Steam fetches an item, progress goes into the same cvars the connection screen
+watches. When it finishes, it moves on to whichever is still missing.
 ==================
 */
 void CL_WorkshopFrame(void) {
@@ -1854,7 +1854,7 @@ and determine if we need to download them
 void CL_InitDownloads(void) {
     char missingfiles[1024];
 
-    // [QL] 0x004bba30: los mapas de Quake Live vienen del Workshop, no por HTTP
+    // [QL] 0x004bba30: Quake Live's maps come from the Workshop, not over HTTP
     if (CL_WorkshopDownloads()) {
         return;
     }
@@ -1924,10 +1924,10 @@ void CL_CheckForResend(void) {
             // QL getchallenge payload: "getchallenge " (13) + steam key (8) + auth token (11-512).
             // Can't use NET_OutOfBandPrint (stops at nulls) or NET_OutOfBandData (adds Huffman).
             //
-            // [QL] el ticket lo firma Steam para esta sesion y el servidor se lo da a Steam
-            // para saber si el Steam ID es de quien dice ser. Sin Steam se manda el relleno
-            // de siempre y el identificador de respaldo del fork: asi se sigue pudiendo
-            // jugar en una red local, donde tampoco hay nadie que valide nada.
+            // [QL] Steam signs the ticket for this session and the server hands it to Steam
+            // to learn whether the Steam ID belongs to who it claims. With no Steam the usual
+            // filler and the fallback identifier go out instead, so a local network still
+            // plays, where there is nobody to validate anything either.
             byte payload[13 + 8 + 504];
             unsigned long long steamId = Steam_ClientSteamID();
             int ticketLen;
@@ -1944,7 +1944,7 @@ void CL_CheckForResend(void) {
 
             ticketLen = Steam_AuthTicket(payload + 21, sizeof(payload) - 21);
             if (ticketLen <= 0) {
-                Com_Memset(payload + 21, 0, 16);  // el servidor exige once bytes como minimo
+                Com_Memset(payload + 21, 0, 16);  // the server demands eleven bytes at least
                 ticketLen = 16;
             }
             NET_OutOfBandRaw(NS_CLIENT, clc.serverAddress, payload, 21 + ticketLen);
@@ -2499,13 +2499,13 @@ void CL_Frame(int msec) {
     // resend a connection request if necessary
     CL_CheckForResend();
 
-    // [QL] lo que Steam va contestando de la lista de servidores
+    // [QL] whatever Steam keeps answering about the server list
     CL_SteamServersFrame();
 
-    // [QL] y lo que va trayendo del Workshop mientras se entra a un servidor
+    // [QL] and whatever is coming down from the Workshop while joining a server
     CL_WorkshopFrame();
 
-    // [QL] la voz, que va y viene por la red entre pares de Steam
+    // [QL] voice, which comes and goes over Steam's peer to peer network
     CL_VoiceFrame();
 
     // decide on the serverTime to render
@@ -3205,7 +3205,7 @@ void CL_Init(void) {
     cl_consoleKeys = Cvar_Get("cl_consoleKeys", "~ ` 0x7e 0x60", CVAR_ARCHIVE);
 
     cl_steamId = Cvar_Get("cl_steamId", "0", CVAR_ARCHIVE);
-    // [QL] 0x004e3f1a: salir cuando termina de reproducirse una demo
+    // [QL] 0x004e3f1a: quit when a demo finishes playing back
     Cvar_Get("cl_quitOnDemoCompleted", "0", 0);
 
     // userinfo
@@ -3220,9 +3220,9 @@ void CL_Init(void) {
     Cvar_Get("handicap", "100", CVAR_USERINFO | CVAR_ARCHIVE);
     Cvar_Get("teamtask", "0", CVAR_USERINFO);
     Cvar_Get("sex", "male", CVAR_USERINFO | CVAR_ARCHIVE);
-    // [QL] el pais que se muestra junto al nombre. Viaja en el userinfo y el servidor lo
-    // publica en la clave "c" del configstring del jugador; el cgame ya tiene cacheadas las
-    // banderas de ui/country.txt. Vacio es "sin bandera".
+    // [QL] the country shown next to the name. It travels in the userinfo and the server
+    // publishes it under the "c" key of the player's configstring; the cgame already caches
+    // the flags from ui/country.txt. Empty means no flag.
     Cvar_Get("country", "", CVAR_USERINFO | CVAR_ARCHIVE);
     Cvar_Get("cl_anonymous", "0", CVAR_USERINFO | CVAR_ARCHIVE);
 
@@ -3672,12 +3672,11 @@ void CL_ServerStatusResponse(netadr_t from, msg_t* msg) {
 ==================
 CL_GlobalServers_f
 
-[QL] 0x00462eb0. Quake Live no tiene master propio ni manda "getservers" a
-ninguna parte: la lista se la pide a Steam, con un solo filtro ("gamedir" =
-"baseq3"). El primer argumento es de donde quiere la lista, igual que en retail:
-0 internet, 1 LAN, 2 amigos, 3 favoritos, 4 historial. El resto de los
-argumentos (protocolo y palabras clave) los acepta para no romper a quien los
-manda, pero Steam no los usa.
+[QL] 0x00462eb0. Quake Live has no master of its own and sends "getservers" nowhere:
+it asks Steam for the list, with a single filter ("gamedir" = "baseq3"). The first
+argument is where it wants the list from, as in retail: 0 internet, 1 LAN, 2 friends,
+3 favourites, 4 history. The remaining arguments -- protocol and keywords -- are
+accepted so as not to break anyone who sends them, but Steam does not use them.
 ==================
 */
 void CL_GlobalServers_f(void) {
@@ -3694,7 +3693,7 @@ void CL_GlobalServers_f(void) {
         source = 0;
     }
 
-    // la lista se arma de nuevo: la bandera de visible es de la interfaz y se respeta
+    // the list is rebuilt: the visible flag belongs to the interface and is left alone
     for (i = 0; i < MAX_GLOBAL_SERVERS; i++) {
         qboolean visible = cls.globalServers[i].visible;
 
@@ -3708,10 +3707,10 @@ void CL_GlobalServers_f(void) {
     cl_steamServersPending = qtrue;
 
     if (!Steam_RequestServerList(source)) {
-        Com_Printf("No hay lista de servidores: Steam no esta disponible.\n");
+        Com_Printf("No server list: Steam is not available.\n");
         return;
     }
-    Com_Printf("Pidiendo la lista de servidores a Steam...\n");
+    Com_Printf("Asking Steam for the server list...\n");
 }
 
 /*
@@ -3719,21 +3718,21 @@ void CL_GlobalServers_f(void) {
 
 LA VOZ
 
-Quake Live no manda la voz por su propia red: la manda por la red entre pares de
-Steam y la comprime y descomprime con la voz de Steam. El cliente solo habla con
-el servidor, que es el que reparte.
+Quake Live does not send voice over its own network: it sends it over Steam's peer to
+peer network and compresses and decompresses it with Steam's voice codec. The client
+only talks to the server, which does the handing out.
 
-  0x004603f0  "+voice" arranca la grabacion (esta en steam.c, que es donde vive
-              la interfaz de Steam).
-  0x00460d10  cada cuadro, mientras graba: junta lo comprimido y se lo manda al
-              Steam ID del servidor, que sale del configstring 714.
-  0x00461a60  cada cuadro, al recibir: el primer byte es el numero del que habla
-              y el resto es la voz, que va a 22050 Hz al mezclador.
+  0x004603f0  "+voice" starts recording (it lives in steam.c, which is where the
+              Steam interface lives).
+  0x00460d10  every frame while recording: gathers what is compressed and sends it
+              to the server's Steam ID, which comes from configstring 714.
+  0x00461a60  every frame on receive: the first byte is the speaker's number and
+              the rest is voice, which goes to the mixer at 22050 Hz.
 
 ===============================================================================
 */
 
-// lo mas que retail junta de una vez, y lo mas que sale al descomprimirlo
+// the most retail gathers in one go, and the most that comes out of decompressing it
 #define CL_VOICE_MAX_COMPRESSED 0x4000
 #define CL_VOICE_MAX_PCM 0x8000
 
@@ -3741,10 +3740,9 @@ el servidor, que es el que reparte.
 ===============
 La lista de silenciados
 
-Va por Steam ID y no por numero de cliente, asi que silenciar a alguien lo
-silencia tambien en el siguiente mapa y en el siguiente servidor. Retail la
-guarda en un conjunto ordenado (0x00461990 la consulta, 0x00461c00 la cambia) y
-se la ofrece al cgame como dos llamadas: preguntar y dar vuelta.
+It goes by Steam ID and not by client number, so muting somebody mutes them on the
+next map and the next server too. Retail keeps it in a sorted set (0x00461990 queries
+it, 0x00461c00 changes it) and offers it to the cgame as two calls: ask and toggle.
 ===============
 */
 #define CL_MAX_IGNORED 64
@@ -3786,10 +3784,10 @@ qboolean CL_VoiceToggleIgnore(uint64_t steamId) {
 ===============
 CL_VoiceIgnored / CL_VoiceTalking
 
-Los dos puentes con el cgame, que es el que sabe el Steam ID de cada jugador y
-el que dibuja quien esta hablando.
+The two bridges to the cgame, which is what knows each player's Steam ID and what
+draws who is talking.
 
-[QL] 0x00461b6a y 0x00461b80: las entradas 15 y 20 de la tabla del cgame.
+[QL] 0x00461b6a and 0x00461b80: entries 15 and 20 of the cgame table.
 ===============
 */
 static qboolean CL_VoiceIgnored(int clientNum) {
@@ -3812,8 +3810,8 @@ static void CL_VoiceTalking(int clientNum, qboolean talking) {
 ===============
 CL_ServerSteamID
 
-El Steam ID del servidor al que estamos conectados, que el servidor publica en
-el configstring 714. Sin el no hay a quien mandarle la voz.
+The Steam ID of the server we are connected to, which the server publishes in
+configstring 714. Without it there is nobody to send voice to.
 ===============
 */
 static uint64_t CL_ServerSteamID(void) {
@@ -3834,33 +3832,32 @@ static uint64_t CL_ServerSteamID(void) {
 ===============
 CL_Friends_f
 
-"friends" imprime la lista de amigos de Steam: quien esta conectado, que esta
-haciendo, y si esta jugando a esto, en que servidor -- para poder saltar ahi con
-"connect".
+"friends" prints the Steam friends list: who is online, what they are doing and, when
+they are playing this, which server they are on -- so you can jump there with "connect".
 
-En retail esta lista era una pagina web (el boton "FRIENDS LIST" de la barra de
-abajo hace exec "web_showBrowser"), asi que no hay nada que calcar: los datos los
-da Steam y la forma es nuestra.
+In retail this list was a web page (the "FRIENDS LIST" button on the bottom bar runs
+exec "web_showBrowser"), so there is nothing to mirror: the data comes from Steam and
+the shape is ours.
 ===============
 */
 /*
 ===============
 CL_FriendByNumber
 
-El amigo que ocupa ese lugar en la lista de conectados, que es la numeracion que
-el jugador tiene delante.
+The friend in that position of the online list, which is the numbering the player has
+in front of them.
 ===============
 */
-static qboolean CL_FriendByNumber(int numero, steamFriend_t* out) {
+static qboolean CL_FriendByNumber(int number, steamFriend_t* out) {
     int total = Steam_FriendCount();
-    int visto = 0;
+    int seen = 0;
     int i;
 
     for (i = 0; i < total; i++) {
         if (!Steam_FriendGet(i, out) || out->state == 0) {
             continue;
         }
-        if (++visto == numero) {
+        if (++seen == number) {
             return qtrue;
         }
     }
@@ -3868,68 +3865,68 @@ static qboolean CL_FriendByNumber(int numero, steamFriend_t* out) {
 }
 
 static void CL_FriendsList(void) {
-    steamFriend_t amigo;
-    int total, mostrados = 0;
+    steamFriend_t fr;
+    int total, shown = 0;
     int i;
 
     total = Steam_FriendCount();
     if (total <= 0) {
-        Com_Printf("Steam no dio ninguna lista de amigos.\n");
+        Com_Printf("Steam returned no friends list.\n");
         return;
     }
 
-    Com_Printf("^7%3s %-28s %-16s %s\n", "", "amigo", "estado", "donde");
+    Com_Printf("^7%3s %-28s %-16s %s\n", "", "friend", "state", "where");
     for (i = 0; i < total; i++) {
-        char donde[64];
+        char where[64];
 
-        if (!Steam_FriendGet(i, &amigo) || amigo.state == 0) {
-            continue;  // los desconectados no se listan
+        if (!Steam_FriendGet(i, &fr) || fr.state == 0) {
+            continue;  // offline friends are not listed
         }
 
-        donde[0] = '\0';
-        if (amigo.sameGame && amigo.ip) {
-            Com_sprintf(donde, sizeof(donde), "^2%u.%u.%u.%u:%u",
-                        (amigo.ip >> 24) & 0xff, (amigo.ip >> 16) & 0xff,
-                        (amigo.ip >> 8) & 0xff, amigo.ip & 0xff, amigo.port);
-        } else if (amigo.sameGame) {
-            Q_strncpyz(donde, "^2en Quake Live", sizeof(donde));
-        } else if (amigo.playing) {
-            Q_strncpyz(donde, "^3en otro juego", sizeof(donde));
+        where[0] = '\0';
+        if (fr.sameGame && fr.ip) {
+            Com_sprintf(where, sizeof(where), "^2%u.%u.%u.%u:%u",
+                        (fr.ip >> 24) & 0xff, (fr.ip >> 16) & 0xff,
+                        (fr.ip >> 8) & 0xff, fr.ip & 0xff, fr.port);
+        } else if (fr.sameGame) {
+            Q_strncpyz(where, "^2in Quake Live", sizeof(where));
+        } else if (fr.playing) {
+            Q_strncpyz(where, "^3in another game", sizeof(where));
         }
 
-        mostrados++;
-        Com_Printf("%3i %-28s %-16s %s^7\n", mostrados, amigo.name,
-                   Steam_FriendStateName(amigo.state), donde);
+        shown++;
+        Com_Printf("%3i %-28s %-16s %s^7\n", shown, fr.name,
+                   Steam_FriendStateName(fr.state), where);
     }
-    Com_Printf("%i de %i conectados. ^7friends join|invite|profile <numero>\n", mostrados, total);
+    Com_Printf("%i of %i online. ^7friends join|invite|profile <number>\n", shown, total);
 }
 
 /*
 ===============
 CL_FriendDo
 
-Lo que se puede hacer con un amigo: entrar a su servidor, abrir la ventana de
-Steam para agregarlo, o ver su perfil. Lo llaman la orden de consola y la franja
-social del menu, que son dos maneras de pedir lo mismo.
+What can be done with a friend: join their server, open the Steam window to add them,
+or view their profile. The console command and the menu's social strip both call it,
+being two ways of asking for the same thing.
 ===============
 */
-void CL_FriendDo(const steamFriend_t* amigo, int accion) {
-    switch (accion) {
+void CL_FriendDo(const steamFriend_t* fr, int action) {
+    switch (action) {
         case UI_FRIEND_JOIN:
-            if (!amigo->sameGame || !amigo->ip) {
-                Com_Printf("%s no esta en un servidor de Quake Live.\n", amigo->name);
+            if (!fr->sameGame || !fr->ip) {
+                Com_Printf("%s is not on a Quake Live server.\n", fr->name);
                 return;
             }
-            Com_Printf("Entrando al servidor de %s...\n", amigo->name);
+            Com_Printf("Joining %s's server...\n", fr->name);
             Cbuf_AddText(va("connect %u.%u.%u.%u:%u\n",
-                            (amigo->ip >> 24) & 0xff, (amigo->ip >> 16) & 0xff,
-                            (amigo->ip >> 8) & 0xff, amigo->ip & 0xff, amigo->port));
+                            (fr->ip >> 24) & 0xff, (fr->ip >> 16) & 0xff,
+                            (fr->ip >> 8) & 0xff, fr->ip & 0xff, fr->port));
             return;
         case UI_FRIEND_INVITE:
-            Steam_ShowFriendAdd(amigo->steamId);
+            Steam_ShowFriendAdd(fr->steamId);
             return;
         case UI_FRIEND_PROFILE:
-            Steam_ShowProfile(amigo->steamId);
+            Steam_ShowProfile(fr->steamId);
             return;
         default:
             return;
@@ -3937,57 +3934,57 @@ void CL_FriendDo(const steamFriend_t* amigo, int accion) {
 }
 
 static void CL_Friends_f(void) {
-    steamFriend_t amigo;
-    const char* que;
+    steamFriend_t fr;
+    const char* what;
 
     if (Cmd_Argc() < 2) {
         CL_FriendsList();
         return;
     }
 
-    que = Cmd_Argv(1);
+    what = Cmd_Argv(1);
     if (Cmd_Argc() != 3) {
-        Com_Printf("uso: friends %s <numero de la lista>\n", que);
+        Com_Printf("usage: friends %s <number from the list>\n", what);
         return;
     }
-    if (!CL_FriendByNumber(atoi(Cmd_Argv(2)), &amigo)) {
-        Com_Printf("No hay ningun amigo con ese numero.\n");
+    if (!CL_FriendByNumber(atoi(Cmd_Argv(2)), &fr)) {
+        Com_Printf("No friend with that number.\n");
         return;
     }
 
-    if (!Q_stricmp(que, "join")) {
-        CL_FriendDo(&amigo, UI_FRIEND_JOIN);
+    if (!Q_stricmp(what, "join")) {
+        CL_FriendDo(&fr, UI_FRIEND_JOIN);
         return;
     }
-    if (!Q_stricmp(que, "invite")) {
-        CL_FriendDo(&amigo, UI_FRIEND_INVITE);
+    if (!Q_stricmp(what, "invite")) {
+        CL_FriendDo(&fr, UI_FRIEND_INVITE);
         return;
     }
-    if (!Q_stricmp(que, "profile")) {
-        CL_FriendDo(&amigo, UI_FRIEND_PROFILE);
+    if (!Q_stricmp(what, "profile")) {
+        CL_FriendDo(&fr, UI_FRIEND_PROFILE);
         return;
     }
-    Com_Printf("uso: friends [join|invite|profile <numero>]\n");
+    Com_Printf("usage: friends [join|invite|profile <number>]\n");
 }
 
 /*
 ===============
 CL_ClientFriendInvite_f / CL_ClientViewProfile_f
 
-"clientfriendinvite <numero>" y "clientviewprofile <numero>": la superposicion de
-Steam sobre otro jugador de la partida, para agregarlo o para ver su perfil. El
-numero de cliente se traduce a Steam ID preguntandole al cgame.
+"clientfriendinvite <number>" and "clientviewprofile <number>": the Steam overlay over
+another player in the match, to add them or to view their profile. The client number is
+turned into a Steam ID by asking the cgame.
 
-[QL] las dos ordenes estan en el motor de retail, junto a los nombres de sus
-dialogos (0x005327f0).
+[QL] both commands are in the retail engine, next to the names of their dialogs
+(0x005327f0).
 ===============
 */
-static void CL_OverlayOnPlayer_f(const char* orden, void (*accion)(uint64_t)) {
+static void CL_OverlayOnPlayer_f(const char* command, void (*action)(uint64_t)) {
     uint64_t steamId = 0;
     int clientNum;
 
     if (Cmd_Argc() != 2) {
-        Com_Printf("uso: %s <numero de cliente>\n", orden);
+        Com_Printf("usage: %s <client number>\n", command);
         return;
     }
     if (clc.state != CA_ACTIVE || !cgvm) {
@@ -4002,7 +3999,7 @@ static void CL_OverlayOnPlayer_f(const char* orden, void (*accion)(uint64_t)) {
     if (!steamId) {
         return;
     }
-    accion(steamId);
+    action(steamId);
 }
 
 static void CL_ClientFriendInvite_f(void) {
@@ -4017,9 +4014,9 @@ static void CL_ClientViewProfile_f(void) {
 ===============
 CL_VoiceOn_f / CL_VoiceOff_f
 
-[QL] 0x004603f0 y 0x00460490. Ademas de arrancar y parar la grabacion, le avisan
-al cgame que uno mismo esta hablando, que es lo que enciende el indicador propio
-sin esperar a que la voz vuelva del servidor.
+[QL] 0x004603f0 and 0x00460490. Besides starting and stopping the recording, they tell
+the cgame that you yourself are talking, which is what lights your own indicator without
+waiting for the voice to come back from the server.
 ===============
 */
 static void CL_VoiceOn_f(void) {
@@ -4061,7 +4058,7 @@ void CL_VoiceFrame(void) {
         server = CL_ServerSteamID();
     }
 
-    // lo que junto el microfono se va tal cual al servidor
+    // what the microphone gathered goes to the server as it is
     if (Steam_VoiceRecording()) {
         bytes = Steam_VoiceCapture(compressed, sizeof(compressed));
         if (bytes > 0 && server) {
@@ -4069,15 +4066,15 @@ void CL_VoiceFrame(void) {
         }
     }
 
-    // el saludo que deja la sesion abierta en los dos sentidos. Retail solo lo manda del lado
-    // del servidor (0x004668ca); sin el del cliente, Steam descarta la voz que llega hasta que
-    // uno habla por primera vez.
+    // the greeting that keeps the session open in both directions. Retail only sends it from
+    // the server side (0x004668ca); without the client's, Steam drops incoming voice until you
+    // speak for the first time.
     if (server && (cls.realtime - lastHello > 10000 || cls.realtime < lastHello)) {
         lastHello = cls.realtime;
         Steam_P2PHello(server, qfalse);
     }
 
-    // y lo que llega es la voz de los demas, con el numero del que habla adelante
+    // and what arrives is everyone else's voice, with the speaker's number in front
     while ((bytes = Steam_P2PReceive(compressed, sizeof(compressed), &from, qfalse)) > 1) {
         int who = compressed[0];
         int out;
@@ -4102,10 +4099,9 @@ void CL_VoiceFrame(void) {
 ==================
 CL_SteamServersFrame
 
-Steam contesta servidor por servidor mientras la busqueda avanza. Lo que va
-llegando se pasa a la lista que mira la interfaz, con el ping que midio Steam,
-asi que no hace falta preguntarle nada a cada servidor: el "getinfo" de ioquake3
-no existe en Quake Live.
+Steam answers server by server as the search goes on. What arrives is copied into the
+list the interface watches, with the ping Steam measured, so there is no need to ask each
+server anything: ioquake3's "getinfo" does not exist in Quake Live.
 ==================
 */
 void CL_SteamServersFrame(void) {
@@ -4135,14 +4131,14 @@ void CL_SteamServersFrame(void) {
         adr.ip[3] = (byte)ip;
         adr.port = BigShort(port);
 
-        // el mismo servidor puede venir dos veces si la busqueda se reintenta
+        // the same server can arrive twice if the search is retried
         for (j = 0; j < cls.numglobalservers; j++) {
             if (NET_CompareAdr(cls.globalServers[j].adr, adr)) {
                 break;
             }
         }
         if (j < cls.numglobalservers) {
-            // ya estaba: se le pone lo ultimo que dijo Steam y sigue en su lugar
+            // already there: it takes Steam's latest word and keeps its place
             CL_SetServerInfo(&cls.globalServers[j], info, ping);
             continue;
         }
@@ -4152,7 +4148,7 @@ void CL_SteamServersFrame(void) {
         CL_SetServerInfo(server, info, ping);
     }
 
-    // el aviso del final, una sola vez, como el que daba el master de ioquake3
+    // the closing message, once only, like the one ioquake3's master printed
     if (cl_steamServersPending && !Steam_ServerListRefreshing()) {
         cl_steamServersPending = qfalse;
         Com_Printf("%d servers parsed\n", cls.numglobalservers);

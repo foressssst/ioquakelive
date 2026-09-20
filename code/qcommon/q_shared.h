@@ -29,10 +29,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // BEGIN Thomas changes
 // END Thomas changes
 
-#define PRODUCT_NAME            "Quake Live"
+#define PRODUCT_NAME            "ioquakelive"
 #define BASEGAME                "baseqz"  // [QL] protocol/game name (sent over network)
 #define BASEGAME_DIR            "baseq3"  // filesystem directory for game data
-#define CLIENT_WINDOW_TITLE     "Quake Live"
+#define CLIENT_WINDOW_TITLE     "ioquakelive"
 // [ioquakelive] the player's own folder, apart from upstream's "quakelive" (on Windows the
 // first start moves that one over: Sys_DefaultHomePath)
 #define HOMEPATH_NAME_UNIX      ".ioquakelive"

@@ -60,8 +60,8 @@ static void LAN_ResetPings(int source) {
             break;
         case AS_MPLAYER:
         case AS_GLOBAL:
-            // [QL] el ping de la lista global lo mide Steam, no un getinfo nuestro: borrarlo
-            // dejaria la lista sin nada que mostrar hasta la proxima busqueda entera
+            // [QL] the global list's ping is measured by Steam, not by a getinfo of ours:
+            // clearing it would leave the list with nothing to show until the next full search
             if (Steam_ServerListCount() > 0) {
                 return;
             }
@@ -915,33 +915,33 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             CL_OpenURL(VMA(1));
             return 0;
 
-        // [ioquakelive] los amigos de Steam para la franja social del menu. El indice es
-        // el de Steam, no el de la lista dibujada: asi la accion cae siempre sobre el
-        // mismo amigo aunque alguien se conecte entre el dibujo y el clic.
+        // [ioquakelive] the Steam friends for the menu's social strip. The index is Steam's,
+        // not the drawn list's, so the action always lands on the same friend even if somebody
+        // comes online between the draw and the click.
         case UI_STEAM_FRIEND_COUNT:
             return Steam_FriendCount();
 
         case UI_STEAM_FRIEND_GET: {
-            steamFriend_t amigo;
+            steamFriend_t fr;
             uiFriend_t* out = VMA(2);
 
-            if (!Steam_FriendGet(args[1], &amigo)) {
+            if (!Steam_FriendGet(args[1], &fr)) {
                 return qfalse;
             }
             Com_Memset(out, 0, sizeof(*out));
-            Q_strncpyz(out->name, amigo.name, sizeof(out->name));
-            out->state = amigo.state;
-            out->playing = amigo.playing;
-            out->sameGame = amigo.sameGame;
-            out->server = (qboolean)(amigo.sameGame && amigo.ip != 0);
+            Q_strncpyz(out->name, fr.name, sizeof(out->name));
+            out->state = fr.state;
+            out->playing = fr.playing;
+            out->sameGame = fr.sameGame;
+            out->server = (qboolean)(fr.sameGame && fr.ip != 0);
             return qtrue;
         }
 
         case UI_STEAM_FRIEND_ACTION: {
-            steamFriend_t amigo;
+            steamFriend_t fr;
 
-            if (Steam_FriendGet(args[1], &amigo)) {
-                CL_FriendDo(&amigo, args[2]);
+            if (Steam_FriendGet(args[1], &fr)) {
+                CL_FriendDo(&fr, args[2]);
             }
             return 0;
         }
