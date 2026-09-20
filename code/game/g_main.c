@@ -1513,6 +1513,16 @@ void G_UpdateCvars(void) {
                     cv->onChanged();
                 }
 
+                // [QL] 0x100529b0: con las trampas encendidas, el servidor anuncia cada
+                // cvar que cambia. En el binario esto vive en su propio export de la
+                // tabla del juego -- el que estaba antes del que creiamos primero --, y
+                // el motor lo llama cuando una cvar se mueve; aca va donde ya se detecta
+                // el cambio, que da el mismo anuncio.
+                if (g_cheats.integer) {
+                    trap_SendServerCommand(-1, va("print \"Server: %s changed to %s\n\"",
+                                                  cv->cvarName, cv->vmCvar->string));
+                }
+
                 // [QL] mark the owning gamerule configstring dirty so it is republished
                 if (cv->cvarFlags & CVAR_GAMERULE_ARMOR)  armorInfoDirty = qtrue;
                 if (cv->cvarFlags & CVAR_GAMERULE_WEAPON) weaponInfoDirty = qtrue;
