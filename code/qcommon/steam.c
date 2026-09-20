@@ -228,6 +228,7 @@ typedef struct {
     uint64_t(QDECL* GetUserSteamID)(void* self);
     void(QDECL* SetInGameVoiceSpeaking)(void* self, uint64_t steamId, steamBool_t speaking);
     void(QDECL* SetRichPresence)(void* self, const char* key, const char* value);
+    void(QDECL* ActivateGameOverlayToUser)(void* self, const char* dialog, uint64_t steamId);
     void(QDECL* RegisterCallback)(void* callback, int id);
     void(QDECL* UnregisterCallback)(void* callback);
 
@@ -330,6 +331,8 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND_OPT(GetUserSteamID, "SteamAPI_ISteamUser_GetSteamID");
     STEAM_BIND_OPT(SetInGameVoiceSpeaking, "SteamAPI_ISteamFriends_SetInGameVoiceSpeaking");
     STEAM_BIND_OPT(SetRichPresence, "SteamAPI_ISteamFriends_SetRichPresence");
+    STEAM_BIND_OPT(ActivateGameOverlayToUser,
+                   "SteamAPI_ISteamFriends_ActivateGameOverlayToUser");
     STEAM_BIND_OPT(RegisterCallback, "SteamAPI_RegisterCallback");
     STEAM_BIND_OPT(UnregisterCallback, "SteamAPI_UnregisterCallback");
     STEAM_BIND_OPT(GetItemState, "SteamAPI_ISteamUGC_GetItemState");
@@ -1356,6 +1359,30 @@ void Steam_P2PHello(uint64_t to, qboolean asServer) {
         st.SendP2PPacket(self, to, hello, (unsigned int)sizeof(hello), STEAM_P2P_RELIABLE,
                          STEAM_P2P_HELLO_CHANNEL);
     }
+}
+
+/*
+===============
+Steam_ShowFriendAdd / Steam_ShowProfile
+
+Las dos paginas de la superposicion de Steam que QL abre sobre otro jugador.
+
+[QL] los nombres de los dialogos estan en 0x005327f0, pegados a las ordenes que
+los usan: "friendadd" para agregarlo y "steamid" para su perfil.
+===============
+*/
+static void Steam_ShowOverlayUser(const char* dialog, uint64_t steamId) {
+    if (st.clientUp && st.friends && st.ActivateGameOverlayToUser && steamId) {
+        st.ActivateGameOverlayToUser(st.friends, dialog, steamId);
+    }
+}
+
+void Steam_ShowFriendAdd(uint64_t steamId) {
+    Steam_ShowOverlayUser("friendadd", steamId);
+}
+
+void Steam_ShowProfile(uint64_t steamId) {
+    Steam_ShowOverlayUser("steamid", steamId);
 }
 
 uint64_t Steam_ClientSteamID(void) {

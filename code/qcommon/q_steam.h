@@ -72,6 +72,8 @@ int Steam_P2PReceive(void* buffer, int maxSize, uint64_t* from, qboolean asServe
 void Steam_P2PAccept(uint64_t who, qboolean asServer);
 void Steam_P2PHello(uint64_t to, qboolean asServer);
 uint64_t Steam_ClientSteamID(void);
+void Steam_ShowFriendAdd(uint64_t steamId);
+void Steam_ShowProfile(uint64_t steamId);
 void Steam_SetRichPresence(const char* status);
 
 #endif
