@@ -2528,6 +2528,45 @@ static void Cmd_Pause_f(gentity_t* ent) {
 
 /*
 =================
+G_FindPlayerArg
+
+[QL] 0x100611d0. El jugador que nombra el primer argumento de las ordenes de
+administracion. Solo acepta el numero de cliente -- no busca por nombre -- y
+tiene dos avisos, que son los unicos que dan estas ordenes cuando el argumento
+esta mal.
+=================
+*/
+static gentity_t* G_FindPlayerArg(gentity_t* ent) {
+    char arg[MAX_TOKEN_CHARS];
+    int id;
+    int i;
+
+    if (trap_Argc() <= 1) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"Missing PlayerID (use \\players for a list)\n\"");
+        return NULL;
+    }
+
+    trap_Argv(1, arg, sizeof(arg));
+    id = atoi(arg);
+
+    for (i = 0; arg[i]; i++) {
+        if (arg[i] < '0' || arg[i] > '9') {
+            id = -1;  // no es un numero: no hay a quien buscar
+            break;
+        }
+    }
+
+    if (id < 0 || id >= level.maxclients || !level.clients[id].pers.connected) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"Invalid PlayerID (use \\players for a list)\n\"");
+        return NULL;
+    }
+    return &g_entities[id];
+}
+
+/*
+=================
 G_ParseTeamArg
 
 [QL] 0x10061350. El argumento de equipo que comparten put, lock y unlock: mira
@@ -2672,29 +2711,9 @@ static void Cmd_Unlock_f(gentity_t* ent) {
 
 // "put" - Move a player to a team (referee+)
 static void Cmd_Put_f(gentity_t* ent) {
-    char pidStr[MAX_TOKEN_CHARS];
-    char teamStr[MAX_TOKEN_CHARS];
-    int pid;
-    gentity_t* target;
+    gentity_t* target = G_FindPlayerArg(ent);
 
-    if (trap_Argc() < 3) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Usage: put <playerid> <R|B|S>\n\"");
-        return;
-    }
-
-    trap_Argv(1, pidStr, sizeof(pidStr));
-    trap_Argv(2, teamStr, sizeof(teamStr));
-
-    pid = atoi(pidStr);
-    if (pid < 0 || pid >= level.maxclients) {
-        trap_SendServerCommand(ent - g_entities, "print \"Invalid player ID.\n\"");
-        return;
-    }
-
-    target = &g_entities[pid];
-    if (!target->client || target->client->pers.connected != CON_CONNECTED) {
-        trap_SendServerCommand(ent - g_entities, "print \"Player not found.\n\"");
+    if (!target) {
         return;
     }
 
@@ -2704,81 +2723,62 @@ static void Cmd_Put_f(gentity_t* ent) {
         case TEAM_BLUE: SetTeam(target, "blue"); break;
         case TEAM_SPECTATOR: SetTeam(target, "spectator"); break;
         case TEAM_FREE: SetTeam(target, "free"); break;
-        default: return;
+        default: break;
     }
-
-    // [QL] retail no manda ningun aviso propio: el cambio de equipo ya lo anuncia
-    // BroadcastTeamChange desde SetTeam. El "moved to" que habia aca no existe en el binario.
 }
 
 // "mute" - Mute a player's chat (referee+)
 static void Cmd_Mute_f(gentity_t* ent) {
-    char pidStr[MAX_TOKEN_CHARS];
-    int pid;
+    gentity_t* target = G_FindPlayerArg(ent);
 
-    if (trap_Argc() < 2) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Usage: mute <playerid>\n\"");
+    if (!target) {
         return;
     }
 
-    trap_Argv(1, pidStr, sizeof(pidStr));
-    pid = atoi(pidStr);
-    if (pid < 0 || pid >= level.maxclients ||
-        g_clients[pid].pers.connected != CON_CONNECTED) {
-        trap_SendServerCommand(ent - g_entities, "print \"Player not found.\n\"");
+    // [QL] 0x100627d4: nadie silencia a alguien de su mismo rango o mayor. Desde la
+    // consola del propio servidor no se mira: retail le pasa a la orden una bandera
+    // que dice que viene de ahi.
+    if (!ent->client->pers.localClient &&
+        ent->client->sess.privileges <= target->client->sess.privileges) {
         return;
     }
 
-    g_clients[pid].sess.muted = 1;
+    target->client->sess.muted = 1;
     trap_SendServerCommand(-1, va("print \"%s ^7has been muted.\n\"",
-        g_clients[pid].pers.netname));
+        target->client->pers.netname));
 }
 
 // "unmute" - Unmute a player's chat (referee+)
 static void Cmd_Unmute_f(gentity_t* ent) {
-    char pidStr[MAX_TOKEN_CHARS];
-    int pid;
+    gentity_t* target = G_FindPlayerArg(ent);
 
-    if (trap_Argc() < 2) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Usage: unmute <playerid>\n\"");
+    if (!target) {
         return;
     }
 
-    trap_Argv(1, pidStr, sizeof(pidStr));
-    pid = atoi(pidStr);
-    if (pid < 0 || pid >= level.maxclients ||
-        g_clients[pid].pers.connected != CON_CONNECTED) {
-        trap_SendServerCommand(ent - g_entities, "print \"Player not found.\n\"");
+    // [QL] 0x100627d4: nadie silencia a alguien de su mismo rango o mayor. Desde la
+    // consola del propio servidor no se mira: retail le pasa a la orden una bandera
+    // que dice que viene de ahi.
+    if (!ent->client->pers.localClient &&
+        ent->client->sess.privileges <= target->client->sess.privileges) {
         return;
     }
 
-    g_clients[pid].sess.muted = 0;
+    target->client->sess.muted = 0;
     trap_SendServerCommand(-1, va("print \"%s ^7has been unmuted.\n\"",
-        g_clients[pid].pers.netname));
+        target->client->pers.netname));
 }
 
 // "tempban" / "ban" - Kick and ban a player (referee+)
 static void Cmd_Ban_f(gentity_t* ent) {
-    char pidStr[MAX_TOKEN_CHARS];
-    int pid;
     char cmd[MAX_TOKEN_CHARS];
+    gentity_t* target = G_FindPlayerArg(ent);
+    int pid;
 
-    if (trap_Argc() < 2) {
-        trap_Argv(0, cmd, sizeof(cmd));
-        trap_SendServerCommand(ent - g_entities,
-            va("print \"Usage: %s <playerid>\n\"", cmd));
+    if (!target) {
         return;
     }
-
-    trap_Argv(1, pidStr, sizeof(pidStr));
-    pid = atoi(pidStr);
-    if (pid < 0 || pid >= level.maxclients ||
-        g_clients[pid].pers.connected != CON_CONNECTED) {
-        trap_SendServerCommand(ent - g_entities, "print \"Player not found.\n\"");
-        return;
-    }
+    pid = target - g_entities;
 
     // [QL] "Can not kick admins."
     if (g_clients[pid].sess.privileges >= ent->client->sess.privileges) {
@@ -2866,22 +2866,13 @@ static void Cmd_OpSay_f(gentity_t* ent) {
 
 // "addadmin" - Grant admin privileges (admin only)
 static void Cmd_AddAdmin_f(gentity_t* ent) {
-    char pidStr[MAX_TOKEN_CHARS];
+    gentity_t* target = G_FindPlayerArg(ent);
     int pid;
 
-    if (trap_Argc() < 2) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Usage: addadmin <playerid>\n\"");
+    if (!target) {
         return;
     }
-
-    trap_Argv(1, pidStr, sizeof(pidStr));
-    pid = atoi(pidStr);
-    if (pid < 0 || pid >= level.maxclients ||
-        g_clients[pid].pers.connected != CON_CONNECTED) {
-        trap_SendServerCommand(ent - g_entities, "print \"Player not found.\n\"");
-        return;
-    }
+    pid = target - g_entities;
 
     g_clients[pid].sess.privileges = 2;
     // [QL] la cuenta queda en la lista de acceso, que se guarda al cambiar de mapa
@@ -2892,22 +2883,13 @@ static void Cmd_AddAdmin_f(gentity_t* ent) {
 
 // "addmod" - Grant moderator/referee privileges (admin only)
 static void Cmd_AddMod_f(gentity_t* ent) {
-    char pidStr[MAX_TOKEN_CHARS];
+    gentity_t* target = G_FindPlayerArg(ent);
     int pid;
 
-    if (trap_Argc() < 2) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Usage: addmod <playerid>\n\"");
+    if (!target) {
         return;
     }
-
-    trap_Argv(1, pidStr, sizeof(pidStr));
-    pid = atoi(pidStr);
-    if (pid < 0 || pid >= level.maxclients ||
-        g_clients[pid].pers.connected != CON_CONNECTED) {
-        trap_SendServerCommand(ent - g_entities, "print \"Player not found.\n\"");
-        return;
-    }
+    pid = target - g_entities;
 
     g_clients[pid].sess.privileges = 1;
     G_SetAccess(g_clients[pid].pers.steamId, 1, qfalse);
@@ -2917,22 +2899,13 @@ static void Cmd_AddMod_f(gentity_t* ent) {
 
 // "demote" - Remove privileges (admin only)
 static void Cmd_Demote_f(gentity_t* ent) {
-    char pidStr[MAX_TOKEN_CHARS];
+    gentity_t* target = G_FindPlayerArg(ent);
     int pid;
 
-    if (trap_Argc() < 2) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Usage: demote <playerid>\n\"");
+    if (!target) {
         return;
     }
-
-    trap_Argv(1, pidStr, sizeof(pidStr));
-    pid = atoi(pidStr);
-    if (pid < 0 || pid >= level.maxclients ||
-        g_clients[pid].pers.connected != CON_CONNECTED) {
-        trap_SendServerCommand(ent - g_entities, "print \"Player not found.\n\"");
-        return;
-    }
+    pid = target - g_entities;
 
     // [QL] "Can not demote someone at or above your level."
     if (g_clients[pid].sess.privileges >= ent->client->sess.privileges) {
@@ -2962,28 +2935,15 @@ static void Cmd_Abort_f(gentity_t* ent) {
 
 // "addscore" - Add to a player's score (referee+)
 static void Cmd_AddScore_f(gentity_t* ent) {
-    char pidStr[MAX_TOKEN_CHARS];
     char scoreStr[MAX_TOKEN_CHARS];
-    int pid, score;
+    gentity_t* target = G_FindPlayerArg(ent);
 
-    if (trap_Argc() < 3) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Usage: addscore <playerid> <score>\n\"");
+    if (!target) {
         return;
     }
-
-    trap_Argv(1, pidStr, sizeof(pidStr));
     trap_Argv(2, scoreStr, sizeof(scoreStr));
-    pid = atoi(pidStr);
-    score = atoi(scoreStr);
 
-    if (pid < 0 || pid >= level.maxclients ||
-        g_clients[pid].pers.connected != CON_CONNECTED) {
-        trap_SendServerCommand(ent - g_entities, "print \"Player not found.\n\"");
-        return;
-    }
-
-    g_clients[pid].ps.persistant[PERS_SCORE] += score;
+    target->client->ps.persistant[PERS_SCORE] += atoi(scoreStr);
     CalculateRanks();
 }
 
