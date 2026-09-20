@@ -1493,6 +1493,8 @@ typedef struct {
     // [QL] POI markers
     qhandle_t poiShader;            // sprites/neutralflagcarrier, the EV_POI marker
     qhandle_t quadHogPoiShader;     // gfx/2d/quad_hog/quadhog, the same marker in Quad Hog
+    qhandle_t powerupPoi[5];        // [QL] gfx/2d/powerup/{quad,bs,haste,invis,regen}
+    qhandle_t powerupIncomingShader;// [QL] gfx/2d/powerup/incoming, mientras vuelve
     qhandle_t infectedPoiShader;    // gfx/2d/infected/bite, the same marker in Red Rover
     qhandle_t friendShader;         // [QL] sprites/friend, a teammate's marker
     qhandle_t friendHitShader;      // [QL] sprites/friend_hit, one hurt within cg_drawHitFriendTime

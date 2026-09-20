@@ -501,6 +501,100 @@ static void CG_DrawItemTimer(centity_t* cent, const gitem_t* item) {
 }
 
 /*
+=================
+CG_PowerupPoiShader
+
+El icono que le toca a cada powerup, o el de "incoming" mientras vuelve.
+
+[QL] 0x10a5fbec y 0x10a5fbac, dos tablas indexadas por el tag del objeto.
+=================
+*/
+static qhandle_t CG_PowerupPoiShader(int giTag, qboolean volviendo) {
+    switch (giTag) {
+        case PW_QUAD:
+        case PW_BATTLESUIT:
+        case PW_HASTE:
+        case PW_INVIS:
+        case PW_REGEN:
+            break;
+        default:
+            return 0;
+    }
+    if (volviendo) {
+        return cgs.media.powerupIncomingShader;
+    }
+    switch (giTag) {
+        case PW_QUAD: return cgs.media.powerupPoi[0];
+        case PW_BATTLESUIT: return cgs.media.powerupPoi[1];
+        case PW_HASTE: return cgs.media.powerupPoi[2];
+        case PW_INVIS: return cgs.media.powerupPoi[3];
+        default: return cgs.media.powerupPoi[4];
+    }
+}
+
+/*
+=================
+CG_DrawPowerupPoi
+
+La marca sobre un powerup. Se ve mientras el powerup esta en el suelo, y
+mientras vuelve cuando falta menos de diez segundos.
+
+[QL] 0x100168f8. cg_powerupPOIs: 0 la apaga, 1 la muestra solo con linea de
+vista, 2 -- el valor que viene de fabrica -- la muestra a traves de las paredes.
+=================
+*/
+static void CG_DrawPowerupPoi(centity_t* cent, const gitem_t* item) {
+    entityState_t* es = &cent->currentState;
+    floatingEffect_t* fx;
+    qboolean volviendo;
+    qhandle_t shader;
+    vec3_t origin;
+
+    if (!cg_powerupPOIs.integer || item->giType != IT_POWERUP) {
+        return;
+    }
+
+    volviendo = (qboolean)(cg.time < es->time);
+    if (volviendo && cg.time < es->time - 10000) {
+        return;  // todavia falta mucho
+    }
+
+    shader = CG_PowerupPoiShader(item->giTag, volviendo);
+    if (!shader) {
+        return;
+    }
+
+    VectorCopy(es->pos.trBase, origin);
+
+    if (cg_powerupPOIs.integer == 1) {
+        trace_t tr;
+
+        CG_Trace(&tr, cg.refdef.vieworg, NULL, NULL, origin, -1, CONTENTS_SOLID);
+        if (tr.fraction < 1.0f) {
+            return;
+        }
+    }
+
+    fx = CG_AllocFloatingEffect();
+    if (!fx) {
+        return;
+    }
+
+    fx->type = FE_SPRITE;
+    fx->owner = cent;
+    VectorCopy(origin, fx->origin);
+    fx->shader = shader;
+    fx->color[0] = fx->color[1] = fx->color[2] = fx->color[3] = 1.0f;
+    fx->clientNum = -1;
+    fx->followNum = -1;
+    fx->zOffset = 48.0f;
+    fx->worldSize = cg_poiMaxWidth.value;
+    fx->minPixels = cg_poiMinWidth.value;
+    fx->lifeRate = 1.0f;
+    fx->doFade = 0;
+}
+
+/*
 ==================
 CG_Item
 ==================
@@ -527,6 +621,9 @@ static void CG_Item(centity_t* cent) {
     // [QL] the respawn timer stands where the item was, so it is drawn before the item itself is
     // skipped for being invisible
     CG_DrawItemTimer(cent, item);
+
+    // [QL] 0x100168f8: y la marca del powerup, que tambien queda cuando el powerup no esta
+    CG_DrawPowerupPoi(cent, item);
 
     // [QL] cgamex86.dll 0x10016026: retail reads cg_skipItems here, as a string, once per item
     // and per frame, and draws nothing when it is "1". The timer above still stands, which is
