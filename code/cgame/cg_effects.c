@@ -263,9 +263,9 @@ CG_SpawnIceShard
 LE_FRAGMENT, axisDefault orientation, TR_GRAVITY trajectory (value 5 in the
 binary), bounceFactor 0.6, endTime = startTime + 5000 + random()*3000.
 
-The binary sets leBounceSoundType = leMarkType = 4 (QL bullet-burn/nail types);
-ioquakelive's fragment handlers only render BLOOD/BURN, so value 4 leaves no
-mark or bounce sound.
+El binario deja leBounceSoundType = leMarkType = 4. El 4 es el hielo: mientras el
+pedazo vuela va dejando estela (CG_IceTrail, 0x1001d790). El sonido de rebote de
+ese tipo todavia no esta mapeado.
 
 Calling convention (binary): hModel is the single stack argument, origin comes
 in EBX and velocity in EDI; expressed here as a normal 3-arg C function.
@@ -296,7 +296,7 @@ void CG_SpawnIceShard(const vec3_t origin, const vec3_t velocity, qhandle_t hMod
 
     // [QL] binary value 4 (LEBS_NAIL / LEMT_BULLETBURN); no ioquakelive equivalent
     le->leBounceSoundType = 4;
-    le->leMarkType = 4;
+    le->leMarkType = LEMT_ICE;  // [QL] 4: la estela de hielo mientras vuela
 }
 
 /*
@@ -324,6 +324,40 @@ void CG_ThawPlayer(const vec3_t origin) {
 
         model = (i & 1) ? blueIce : whiteIce;  // white, blue, white, ...
         CG_SpawnIceShard(origin, vel, model);
+    }
+}
+
+/*
+===============
+CG_IceTrail
+
+[QL] 0x1001d790. La estela que va dejando un pedazo de hielo mientras vuela: una
+bocanada cada 150 ms, en el lugar por donde paso, que se desvanece en dos
+segundos mientras sube despacio.
+
+El paso esta cuantizado al reloj -- no al cuadro --, asi que la estela queda
+igual de espaciada corra a los fps que corra.
+===============
+*/
+#define ICE_TRAIL_STEP 150
+
+void CG_IceTrail(localEntity_t* le) {
+    int t;
+    int limite;
+
+    t = ((cg.oldTime - le->startTime + ICE_TRAIL_STEP) / ICE_TRAIL_STEP) * ICE_TRAIL_STEP;
+    limite = ((cg.time - le->startTime) / ICE_TRAIL_STEP) * ICE_TRAIL_STEP;
+
+    for (; t <= limite; t += ICE_TRAIL_STEP) {
+        localEntity_t* humo;
+        vec3_t donde;
+
+        BG_EvaluateTrajectory(&le->pos, le->startTime + t, donde);
+        humo = CG_SmokePuff(donde, vec3_origin, 20.0f, 1.0f, 1.0f, 1.0f, 1.0f, 2000.0f,
+                            le->startTime + t, 0, 0, cgs.media.iceTrailShader);
+        // [QL] 0x1001d7d0: la bocanada se desvanece de color y sube 40 por segundo
+        humo->leType = LE_FADE_RGB;
+        humo->pos.trDelta[2] = 40.0f;
     }
 }
 
