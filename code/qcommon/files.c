@@ -3138,7 +3138,15 @@ static void FS_Startup(const char* gameName) {
 	fs_debug = Cvar_Get("fs_debug", "0", 0);
 	fs_basepath = Cvar_Get("fs_basepath", Sys_DefaultInstallPath(), CVAR_INIT | CVAR_PROTECTED);
 	fs_basegame = Cvar_Get("fs_basegame", "", CVAR_INIT);
-	homePath = Sys_DefaultHomePath();
+	// [QL] quakelive_steam.exe 0x4d322f: retail keeps the player's files inside the game
+	// folder, not in the user's profile. It builds fs_homepath as "<fs_basepath>/<steam id>"
+	// when it has one and uses fs_basepath itself when it does not, and that second form is
+	// the default here: one installed folder, with one baseq3 in it, holding the pk3s, the
+	// configs, the menus and the demos.
+	//
+	// The profile folder is still there for whoever wants it, with +set com_homepath <name>,
+	// and an explicit +set fs_homepath still wins over both.
+	homePath = Cvar_VariableString("com_homepath")[0] ? Sys_DefaultHomePath() : NULL;
 	if (!homePath || !homePath[0]) {
 		homePath = fs_basepath->string;
 	}
