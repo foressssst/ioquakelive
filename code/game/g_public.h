@@ -336,29 +336,37 @@ typedef struct {
 // QL uses a function pointer table instead of Q3's vmMain dispatcher.
 // QL drops GAME_CLIENT_BEGIN. The bots' frame is still its own export (+0x2c), which the engine
 // calls apart from GAME_RUN_FRAME (SV_BotFrame, quakelive_steam.exe 0x4dd670).
-// The slot numbers are retail's: the table in qagamex86.dll starts at 0x1008fd08 and ends with a
-// -1 sentinel at +0x4c, so there are 19 of them. Five have no counterpart here yet; they are left
-// empty and named so the next one to be ported lands in the same slot retail uses.
+// Los numeros son los de retail. [QL] CORREGIDO el 2026-09-20: la tabla arranca en 0x1008fd00,
+// no en 0x1008fd08, y termina con un -1 en +0x54, o sea que son 21 y no 19. Contando desde el
+// lugar equivocado, todos nuestros numeros quedaban dos por debajo de los de retail; ahora
+// coinciden. El slot 0 esta en cero en el binario y el 1 es 0x100529b0, que anuncia cada cvar
+// que cambia cuando hay trampas -- ese comportamiento esta portado, pero adentro de
+// G_UpdateCvars, que es donde ya se detecta el cambio, y no como export.
+// Los slots sin contraparte quedan nombrados y vacios, para que el que se porte despues caiga
+// en el mismo lugar que en retail.
 typedef enum {
-    GAME_SHUTDOWN                = 0,   // G_ShutdownGame()
-    GAME_RUN_FRAME               = 1,   // G_RunFrame()
-    GAME_REGISTER_CVARS          = 2,   // [QL] G_RegisterCvars()
-    GAME_INIT                    = 3,   // G_InitGame()
-    GAME_CONSOLE_COMMAND         = 4,   // ConsoleCommand()
-    GAME_CLIENT_USERINFO_CHANGED = 5,   // ClientUserinfoChanged()
-    GAME_CLIENT_THINK            = 6,   // ClientThink()
-    GAME_CLIENT_DISCONNECT       = 7,   // ClientDisconnect()
-    GAME_CLIENT_CONNECT          = 8,   // ClientConnect()
-    GAME_CLIENT_COMMAND          = 9,   // ClientCommand()
-    GAME_UNUSED_10               = 10,  // [QL] 0x1003b030, not ported
-    GAME_BOT_AI_START_FRAME      = 11,  // [QL] BotAIStartFrame() (retail 0x10023400)
-    GAME_SNAPSHOT_ALWAYS_SEND    = 12,  // [QL] G_ClientAlwaysInSnapshot() (retail 0x10052dc0)
-    GAME_UNUSED_13               = 13,  // [QL] 0x10053020, only in gametype 9, not ported
-    GAME_UNUSED_14               = 14,  // [QL] 0x10052f40, only in gametypes 5, 6 and 11, not ported
-    GAME_VOICE_FILTER            = 15,  // [QL] G_VoiceFilter() (retail 0x10052e90)
-    GAME_UNUSED_16               = 16,  // [QL] 0x100530c0, not ported
-    GAME_SNAPSHOT_VISIBILITY     = 17,  // [QL] G_ObfuscateEnemyInfoInSnapshotCheck() (retail 0x10052e40)
-    GAME_UNUSED_18               = 18,  // [QL] 0x100530f0, not ported
+    GAME_UNUSED_0                = 0,   // [QL] en cero en la tabla del binario
+    GAME_CVAR_CHANGED            = 1,   // [QL] 0x100529b0, el anuncio de "Server: %s changed to %s";
+                                        //      portado dentro de G_UpdateCvars, no como export
+    GAME_SHUTDOWN                = 2,   // G_ShutdownGame()
+    GAME_RUN_FRAME               = 3,   // G_RunFrame()
+    GAME_REGISTER_CVARS          = 4,   // [QL] G_RegisterCvars()
+    GAME_INIT                    = 5,   // G_InitGame()
+    GAME_CONSOLE_COMMAND         = 6,   // ConsoleCommand()
+    GAME_CLIENT_USERINFO_CHANGED = 7,   // ClientUserinfoChanged()
+    GAME_CLIENT_THINK            = 8,   // ClientThink()
+    GAME_CLIENT_DISCONNECT       = 9,   // ClientDisconnect()
+    GAME_CLIENT_CONNECT          = 10,  // ClientConnect()
+    GAME_CLIENT_COMMAND          = 11,  // ClientCommand()
+    GAME_UNUSED_12               = 12,  // [QL] 0x1003b030, sin portar
+    GAME_BOT_AI_START_FRAME      = 13,  // [QL] BotAIStartFrame() (retail 0x10023400)
+    GAME_SNAPSHOT_ALWAYS_SEND    = 14,  // [QL] G_ClientAlwaysInSnapshot() (retail 0x10052dc0)
+    GAME_UNUSED_15               = 15,  // [QL] 0x10053020, solo en el tipo de juego 9, sin portar
+    GAME_UNUSED_16               = 16,  // [QL] 0x10052f40, solo en los tipos 5, 6 y 11, sin portar
+    GAME_VOICE_FILTER            = 17,  // [QL] G_VoiceFilter() (retail 0x10052e90)
+    GAME_UNUSED_18               = 18,  // [QL] 0x100530c0, sin portar
+    GAME_SNAPSHOT_VISIBILITY     = 19,  // [QL] G_ObfuscateEnemyInfoInSnapshotCheck() (retail 0x10052e40)
+    GAME_UNUSED_20               = 20,  // [QL] 0x100530f0, sin portar
 
     GAME_EXPORT_COUNT
 } gameExport_t;
