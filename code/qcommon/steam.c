@@ -229,6 +229,12 @@ typedef struct {
     void(QDECL* SetInGameVoiceSpeaking)(void* self, uint64_t steamId, steamBool_t speaking);
     void(QDECL* SetRichPresence)(void* self, const char* key, const char* value);
     void(QDECL* ActivateGameOverlayToUser)(void* self, const char* dialog, uint64_t steamId);
+    void(QDECL* ActivateGameOverlay)(void* self, const char* dialog);
+    int(QDECL* GetFriendCount)(void* self, int flags);
+    uint64_t(QDECL* GetFriendByIndex)(void* self, int index, int flags);
+    const char*(QDECL* GetFriendPersonaName)(void* self, uint64_t steamId);
+    int(QDECL* GetFriendPersonaState)(void* self, uint64_t steamId);
+    steamBool_t(QDECL* GetFriendGamePlayed)(void* self, uint64_t steamId, void* info);
     void(QDECL* RegisterCallback)(void* callback, int id);
     void(QDECL* UnregisterCallback)(void* callback);
 
@@ -333,6 +339,12 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND_OPT(SetRichPresence, "SteamAPI_ISteamFriends_SetRichPresence");
     STEAM_BIND_OPT(ActivateGameOverlayToUser,
                    "SteamAPI_ISteamFriends_ActivateGameOverlayToUser");
+    STEAM_BIND_OPT(ActivateGameOverlay, "SteamAPI_ISteamFriends_ActivateGameOverlay");
+    STEAM_BIND_OPT(GetFriendCount, "SteamAPI_ISteamFriends_GetFriendCount");
+    STEAM_BIND_OPT(GetFriendByIndex, "SteamAPI_ISteamFriends_GetFriendByIndex");
+    STEAM_BIND_OPT(GetFriendPersonaName, "SteamAPI_ISteamFriends_GetFriendPersonaName");
+    STEAM_BIND_OPT(GetFriendPersonaState, "SteamAPI_ISteamFriends_GetFriendPersonaState");
+    STEAM_BIND_OPT(GetFriendGamePlayed, "SteamAPI_ISteamFriends_GetFriendGamePlayed");
     STEAM_BIND_OPT(RegisterCallback, "SteamAPI_RegisterCallback");
     STEAM_BIND_OPT(UnregisterCallback, "SteamAPI_UnregisterCallback");
     STEAM_BIND_OPT(GetItemState, "SteamAPI_ISteamUGC_GetItemState");
@@ -1374,6 +1386,91 @@ los usan: "friendadd" para agregarlo y "steamid" para su perfil.
 static void Steam_ShowOverlayUser(const char* dialog, uint64_t steamId) {
     if (st.clientUp && st.friends && st.ActivateGameOverlayToUser && steamId) {
         st.ActivateGameOverlayToUser(st.friends, dialog, steamId);
+    }
+}
+
+/*
+===============
+La lista de amigos
+
+Steam la entrega de a uno: cuantos hay con la bandera de "amigo inmediato" (4) y
+despues, por indice, su Steam ID. De cada uno salen el nombre, el estado y, si
+esta jugando a algo, el juego y el servidor donde esta.
+
+FriendGameInfo_t, tal como lo llena Steam: el id del juego (8 bytes), la IP del
+servidor, el puerto y el puerto de consulta, y el id de la sala. Aca solo
+interesan el juego y el servidor.
+===============
+*/
+#define STEAM_FRIEND_IMMEDIATE 4
+
+typedef struct {
+    uint64_t gameId;
+    unsigned int ip;
+    unsigned short port;
+    unsigned short queryPort;
+    uint64_t lobby;
+} steamFriendGame_t;
+
+int Steam_FriendCount(void) {
+    if (!st.clientUp || !st.friends || !st.GetFriendCount) {
+        return 0;
+    }
+    return st.GetFriendCount(st.friends, STEAM_FRIEND_IMMEDIATE);
+}
+
+qboolean Steam_FriendGet(int index, steamFriend_t* out) {
+    steamFriendGame_t juego;
+    const char* nombre;
+    uint64_t id;
+
+    Com_Memset(out, 0, sizeof(*out));
+    if (!st.clientUp || !st.friends || !st.GetFriendByIndex) {
+        return qfalse;
+    }
+    id = st.GetFriendByIndex(st.friends, index, STEAM_FRIEND_IMMEDIATE);
+    if (!id) {
+        return qfalse;
+    }
+
+    out->steamId = id;
+    nombre = st.GetFriendPersonaName ? st.GetFriendPersonaName(st.friends, id) : NULL;
+    Q_strncpyz(out->name, nombre ? nombre : "", sizeof(out->name));
+    out->state = st.GetFriendPersonaState ? st.GetFriendPersonaState(st.friends, id) : 0;
+
+    Com_Memset(&juego, 0, sizeof(juego));
+    if (st.GetFriendGamePlayed && st.GetFriendGamePlayed(st.friends, id, &juego)) {
+        out->playing = qtrue;
+        // el id de juego de Steam lleva el App ID en sus 32 bits bajos
+        out->sameGame = (qboolean)((unsigned int)juego.gameId == (unsigned int)atoi(STEAM_APP_ID));
+        out->ip = juego.ip;
+        out->port = juego.port;
+    }
+    return qtrue;
+}
+
+/*
+===============
+Steam_FriendStateName
+
+Los nombres que le pone Steam a cada estado, en el orden de su enumeracion.
+===============
+*/
+const char* Steam_FriendStateName(int state) {
+    static const char* nombres[] = {
+        "desconectado", "conectado", "ocupado", "ausente", "dormido",
+        "buscando cambio", "buscando partida"
+    };
+
+    if (state < 0 || state >= (int)ARRAY_LEN(nombres)) {
+        return "?";
+    }
+    return nombres[state];
+}
+
+void Steam_ShowFriends(void) {
+    if (st.clientUp && st.friends && st.ActivateGameOverlay) {
+        st.ActivateGameOverlay(st.friends, "friends");
     }
 }
 
