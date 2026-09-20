@@ -267,6 +267,15 @@ None of them contains `pak00.pk3`. Unzip, drop your own `pak00.pk3` into `baseq3
 and run the executable. On Windows the client does that step for you: if `pak00.pk3`
 is missing it finds Quake Live in your Steam library and offers to copy it.
 
+The dedicated server is started from the command line and takes its config there,
+the way retail's qzeroded does:
+
+```
+ioqlds +set dedicated 2 +exec server.cfg
+```
+
+`dedicated 1` is a local network, `dedicated 2` is the internet.
+
 There is no updater and nothing phones home. A new version is a new download.
 
 The macOS bundle is signed and notarised only when the Apple secrets
@@ -535,7 +544,15 @@ ioqlds-linux-x86_64.zip         server.cfg y un access.txt de ejemplo para edita
 GitHub adjunta al release el código del tag por su cuenta, como `Source code (zip)`
 y `(tar.gz)`, que es lo que pide la GPL v2.
 
-Ninguno trae `pak00.pk3`. Se descomprime, se pone el `pak00.pk3` propio en `baseq3/` y se ejecuta. En Windows el cliente hace ese paso solo: si falta `pak00.pk3`, busca Quake Live en tu biblioteca de Steam y ofrece copiarlo.
+Ninguno trae `pak00.pk3`. Se descomprime, se pone el `pak00.pk3` propio en `baseq3/` y se ejecuta. En Windows el cliente hace ese paso solo: si falta `pak00.pk3`, busca Quake Live en la biblioteca de Steam y ofrece copiarlo.
+
+El servidor dedicado se arranca desde la línea de órdenes y ahí mismo se le pide su configuración, igual que el qzeroded de retail:
+
+```
+ioqlds +set dedicated 2 +exec server.cfg
+```
+
+`dedicated 1` es una red local, `dedicated 2` es internet.
 
 No hay actualizador y nada llama a casa. Una versión nueva es una descarga nueva.
 
