@@ -503,6 +503,8 @@ typedef struct {
     qboolean        restarted;
     qboolean        shufflePending;         /* [QL] */
     int             shuffleReadyTime;       /* [QL] */
+    qboolean        autoShuffleArmed;       /* [QL] 0x105dce84: hubo pocos jugadores y se armo */
+    int             autoShuffleStart;       /* [QL] 0x105dce88: cuando empezo la cuenta */
     int             numConnectedClients;
     int             numNonSpectatorClients;
     int             numPlayingClients;
@@ -641,6 +643,8 @@ void Cmd_Score_f(gentity_t* ent);
 void StopFollowing(gentity_t* ent);
 void BroadcastTeamChange(gclient_t* client, int oldTeam);
 void SetTeam(gentity_t* ent, const char* s);
+void SetTeam_Execute(gentity_t* ent, int team, spectatorState_t specState, int specClient);  // [QL] 0x10040440
+void G_ShuffleTeams(void);  // [QL] 0x1006a2d0
 qboolean G_TeamIsLocked(gentity_t* ent, team_t team);  // [QL] 0x100618b0
 void G_ClearTeamLocks(void);
 void Cmd_FollowCycle_f(gentity_t* ent, int dir);

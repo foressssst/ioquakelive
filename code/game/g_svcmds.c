@@ -402,63 +402,99 @@ void Svcmd_ForceTeam_f(void) {
 
 /*
 ===================
-Svcmd_ForceShuffle_f
-// Address: 0x1006a2b0
+G_ShuffleTeams
 
-Shuffle teams randomly. Used by "forceshuffle" console command
-and by RS_SHUFFLE state in Red Rover.
+[QL] 0x1006a2d0. Baraja los equipos: junta a todos los que estan jugando, los
+revuelve y los reparte uno de cada lado, empezando por un equipo al azar. Con
+cantidad impar, el ultimo se invierte, que es como el binario evita que siempre
+sea el mismo lado el que queda con uno de mas.
 
-[QL] NOT byte-faithful yet - the binary algorithm is:
-  1. startTeam = (rand()&1) ? TEAM_BLUE : TEAM_RED
-  2. level.scoringDisabled = qtrue  (NOT teamShuffleActive); reset two score
-     accumulators (globals 0x105dce84 / 0x105dce88, unidentified).
-  3. If level.numPlayingClients < <threshold @0x105973ac> and gametype != GT_RR:
-     print "Unable to shuffle: Not enough players.\n" and stop.
-  4. Collect connected red/blue clients into players[].
-  5. If warmupTime != 0 || gametype != GT_RR: print "Shuffling Teams.\n"
-  6. qsort(players, count, 4, <random comparator @0x1006a290>)
-  7. Alternate team per player; for the last player of an odd count, flip once.
-     If already on the target team AND gametype==GT_RR: ClientSpawn + SelectSpawnWeapon
-     (and ps.eFlags|=4 when roundState.eCurrent==1); otherwise
-     SetTeam_Execute(ent, team, qfalse, qfalse) and count a move. Each shuffled
-     ent gets ent-> (field @0x4f8) = level.time + 5000 (team-switch cooldown).
-  8. If any moved: CalculateRanks(); else print "No players shuffled.\n"
-  9. level.scoringDisabled = qfalse
-BLOCKED: SetTeam_Execute is not declared in the reimpl (only a comment references
-it in g_gametype_duel.c), and the two reset globals / the 0x4f8 gentity field /
-the "No players shuffled" path are unmapped. Left as the existing approximation
-to avoid an uncompilable reference; see report.
+El orden sale de un comparador que devuelve -1, 0 o 1 al azar (0x1006a2b0). No es
+un comparador valido -- no es consistente consigo mismo -- y eso hace que el
+resultado dependa del qsort de cada biblioteca, pero es exactamente lo que hace
+retail y el efecto buscado, revolver, se cumple igual.
+
+En Red Rover, al que ya estaba en el equipo que le toca no se lo mueve: se lo
+reaparece en el lugar, y si la ronda esta en su cuenta atras se lo deja congelado.
+
+Lo llaman el comando de consola "forceshuffle", el voto "shuffle", el auto-shuffle
+y el estado RS_SHUFFLE de Red Rover.
 ===================
 */
-void Svcmd_ForceShuffle_f(void) {
-    int i, count = 0;
+static int QDECL G_ShuffleCompare(const void* a, const void* b) {
+    (void)a;
+    (void)b;
+    return (rand() % 3) - 1;  // [QL] 0x1006a2b0, tal cual
+}
+
+void G_ShuffleTeams(void) {
     int players[MAX_CLIENTS];
-    int team = (rand() & 1) ? TEAM_RED : TEAM_BLUE;
+    int count = 0, moved = 0;
+    int team = (rand() & 1) + 1;  // [QL] TEAM_RED o TEAM_BLUE
+    int i;
 
     level.teamShuffleActive = qtrue;
+    level.autoShuffleArmed = qfalse;  // [QL] 0x105dce84: el barajado desarma la cuenta
+    level.autoShuffleStart = 0;       // [QL] 0x105dce88
+
+    if (level.numPlayingClients < g_shuffle_minplayers.integer && g_gametype.integer != GT_RR) {
+        trap_SendServerCommand(-1, "print \"Unable to shuffle: Not enough players.\n\"");
+        level.teamShuffleActive = qfalse;
+        return;
+    }
 
     for (i = 0; i < level.maxclients; i++) {
-        if (g_clients[i].pers.connected != CON_CONNECTED) continue;
-        if (g_clients[i].sess.sessionTeam != TEAM_RED &&
-            g_clients[i].sess.sessionTeam != TEAM_BLUE) continue;
+        if (level.clients[i].pers.connected != CON_CONNECTED) {
+            continue;
+        }
+        if (level.clients[i].sess.sessionTeam != TEAM_RED &&
+            level.clients[i].sess.sessionTeam != TEAM_BLUE) {
+            continue;
+        }
         players[count++] = i;
     }
 
-    if (count < level.numNonSpectatorClients) {
-        G_Printf("Unable to shuffle: Not enough players.\n");
-    } else {
-        G_Printf("Shuffling Teams.\n");
-        // Simple alternating assignment
-        for (i = 0; i < count; i++) {
-            gentity_t* target = &g_entities[players[i]];
-            if (target->client->sess.sessionTeam != team) {
-                SetTeam(target, (team == TEAM_RED) ? "red" : "blue");
-            }
+    if (level.warmupTime != 0 || g_gametype.integer != GT_RR) {
+        trap_SendServerCommand(-1, "print \"Shuffling Teams.\n\"");
+    }
+
+    qsort(players, count, sizeof(players[0]), G_ShuffleCompare);
+
+    for (i = 0; i < count; i++) {
+        gentity_t* target = &g_entities[players[i]];
+
+        // [QL] 0x1006a3ee: el ultimo de una cantidad impar cambia de lado
+        if (i == count - 1 && (count & 1)) {
             team = (team == TEAM_RED) ? TEAM_BLUE : TEAM_RED;
         }
+
+        if (target->client->sess.sessionTeam == team) {
+            if (g_gametype.integer == GT_RR) {
+                ClientSpawn(target);
+                if (level.roundState.eCurrent == RS_COUNTDOWN) {
+                    target->client->ps.pm_flags |= PMF_FROZEN;
+                }
+            }
+        } else {
+            SetTeam_Execute(target, team, SPECTATOR_NOT, 0);
+            moved++;
+        }
+
+        team = (team == TEAM_RED) ? TEAM_BLUE : TEAM_RED;
+        target->client->switchTeamTime = level.time + 5000;
+    }
+
+    if (moved) {
+        CalculateRanks();
+    } else {
+        trap_SendServerCommand(-1, "print \"No players shuffled.\n\"");
     }
 
     level.teamShuffleActive = qfalse;
+}
+
+void Svcmd_ForceShuffle_f(void) {
+    G_ShuffleTeams();
 }
 
 char* ConcatArgs(int start);
