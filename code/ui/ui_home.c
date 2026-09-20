@@ -379,6 +379,10 @@ void UI_Home_Go(int nav) {
             Menus_CloseAll();
             Menus_ActivateByName("training");
             break;
+        case HM_NAV_BROWSER:
+            Menus_CloseAll();
+            Menus_ActivateByName("browser");
+            break;
         case HM_NAV_REPLAYS:
             Menus_CloseAll();
             Menus_ActivateByName("demo");
@@ -485,7 +489,7 @@ static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
         {"Quit", "Leave QUAKE LIVE", HM_NAV_QUIT, -1, qfalse},
     },
     {
-        {"Match Browser", "Find a server to play on", -1, -1, qtrue},
+        {"Match Browser", "Find a server to play on", HM_NAV_BROWSER, -1, qfalse},
         {"Start Match", "Pick an arena, a game type and bots", HM_NAV_PLAY, -1, qfalse},
         {"Training Center", "Crash Course, strafe and rocket jump practice", HM_NAV_TRAINING, -1, qfalse},
         {"Back", NULL, -1, HM_MENU_MAIN, qfalse},

@@ -250,6 +250,7 @@ THE FRONT END'S FRAME (ui_home.c)
 typedef enum {
     HM_NAV_HOME,
     HM_NAV_PLAY,
+    HM_NAV_BROWSER,
     HM_NAV_TRAINING,
     HM_NAV_REPLAYS,
     HM_NAV_SETTINGS,

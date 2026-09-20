@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "client.h"
+#include "../qcommon/q_steam.h"
 
 #include "../botlib/botlib.h"
 
@@ -59,6 +60,11 @@ static void LAN_ResetPings(int source) {
             break;
         case AS_MPLAYER:
         case AS_GLOBAL:
+            // [QL] el ping de la lista global lo mide Steam, no un getinfo nuestro: borrarlo
+            // dejaria la lista sin nada que mostrar hasta la proxima busqueda entera
+            if (Steam_ServerListCount() > 0) {
+                return;
+            }
             servers = &cls.globalServers[0];
             count = MAX_GLOBAL_SERVERS;
             break;
