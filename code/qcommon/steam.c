@@ -594,7 +594,10 @@ void Steam_GS_Init(void) {
     st.SetProduct(st.gameServer, STEAM_PRODUCT);
     st.SetModDir(st.gameServer, STEAM_MOD_DIR);
     st.SetGameDescription(st.gameServer, STEAM_PRODUCT);
-    st.EnableHeartbeats(st.gameServer, 1);
+    // [QL] sv_master decide si el servidor contesta consultas y aparece en la lista. El
+    // server.cfg de retail lo explica: apagarlo lo saca del navegador, tambien del de LAN.
+    st.EnableHeartbeats(st.gameServer,
+                        (steamBool_t)(Cvar_VariableIntegerValue("sv_master") != 0));
     Com_Printf("Steam Gameserver initialized.\n");
 }
 

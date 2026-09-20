@@ -2722,6 +2722,16 @@ void Com_Init(char* commandLine) {
     }
 
     Com_Printf("--- Common Initialization Complete ---\n");
+
+    // [QL] serverstartup: la orden que el servidor corre cuando termina de arrancar. El
+    // server.cfg de retail la usa para levantar un mapa ("startRandomMap" o "map <x> <f>").
+    {
+        const char* arranque = Cvar_VariableString("serverstartup");
+
+        if (arranque[0]) {
+            Cbuf_AddText(va("%s\n", arranque));
+        }
+    }
 }
 
 /*
@@ -3278,8 +3288,41 @@ static void Com_JobTest_f(void) {
 Com_Frame
 =================
 */
+/*
+=================
+Com_IdleExit
+
+[QL] 0x004e3e09. Un servidor dedicado que se queda sin mapa -- porque el juego se
+cayo o porque termino y no arranco otro -- se apaga solo tras sv_idleExit
+segundos, y asi lo que lo supervisa lo puede volver a levantar. Con 0 no se apaga
+nunca.
+=================
+*/
+static void Com_IdleExit(void) {
+    static int desdeCuando = 0;
+    int limite = Cvar_VariableIntegerValue("sv_idleExit");
+
+    if (!com_dedicated || !com_dedicated->integer || limite <= 0) {
+        desdeCuando = 0;
+        return;
+    }
+    if (com_sv_running->integer) {
+        desdeCuando = 0;
+        return;
+    }
+    if (!desdeCuando) {
+        desdeCuando = Sys_Milliseconds();
+        return;
+    }
+    if (Sys_Milliseconds() - desdeCuando > limite * 1000) {
+        Com_Printf("Server has been idle for %i seconds, exiting.\n", limite);
+        Com_Quit_f();
+    }
+}
+
 void Com_Frame(void) {
     Steam_Frame();
+    Com_IdleExit();
     SV_VoiceFrame();  // [QL] 0x00466850: el reparto de la voz va en el mismo cuadro que Steam
     ZMQ_Frame();
     int msec, minMsec;
