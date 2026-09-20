@@ -681,6 +681,12 @@ void SetTeam(gentity_t* ent, const char* s) {
     //
     // decide if we will allow the change
     //
+
+    // [QL] 0x10040cc8: un equipo cerrado no recibe a nadie
+    if (G_TeamIsLocked(ent, (team_t)team)) {
+        return;
+    }
+
     oldTeam = client->sess.sessionTeam;
     if (team == oldTeam && team != TEAM_SPECTATOR) {
         return;
@@ -2520,69 +2526,148 @@ static void Cmd_Pause_f(gentity_t* ent) {
 // "unpause" - Unpause the match (referee+), same handler as timein
 // (uses Cmd_Timein_f)
 
-// "lock" - Lock a team (referee+)
-static void Cmd_Lock_f(gentity_t* ent) {
+/*
+=================
+G_ParseTeamArg
+
+[QL] 0x10061350. El argumento de equipo que comparten put, lock y unlock: mira
+la primera letra, sin importar mayusculas. "s" son los espectadores, "r" y "b"
+los equipos (que solo existen en los modos de equipo) y "f" el juego libre (que
+solo existe en los que no son de equipo). Si no se entiende, avisa y devuelve
+TEAM_NUM_TEAMS.
+=================
+*/
+static team_t G_ParseTeamArg(gentity_t* ent, int argIndex) {
     char arg[MAX_TOKEN_CHARS];
-    int team;
+    int c;
+    qboolean teamGame = (qboolean)(g_gametype.integer >= GT_TEAM);
 
-    if (trap_Argc() < 2) {
+    if (trap_Argc() <= argIndex) {
+        trap_SendServerCommand(ent - g_entities, "print \"Missing TeamName\n\"");
+        return TEAM_NUM_TEAMS;
+    }
+
+    trap_Argv(argIndex, arg, sizeof(arg));
+    c = tolower(arg[0]);
+
+    if (c == 's') {
+        return TEAM_SPECTATOR;
+    }
+    if (c == 'r' && teamGame) {
+        return TEAM_RED;
+    }
+    if (c == 'b' && teamGame) {
+        return TEAM_BLUE;
+    }
+    if (c == 'f' && !teamGame) {
+        return TEAM_FREE;
+    }
+
+    if (c == 'r' || c == 'b' || c == 'f') {
+        // la letra existe pero no en este modo
         trap_SendServerCommand(ent - g_entities,
-            "print \"Usage: lock <R|B|both>\n\"");
-        return;
-    }
-
-    trap_Argv(1, arg, sizeof(arg));
-    if (Q_stricmp(arg, "r") == 0 || Q_stricmp(arg, "red") == 0) {
-        team = TEAM_RED;
-    } else if (Q_stricmp(arg, "b") == 0 || Q_stricmp(arg, "blue") == 0) {
-        team = TEAM_BLUE;
+            teamGame ? "print \"Invalid TeamName (use R/B/S)\n\""
+                     : "print \"Invalid TeamName (use F/S)\n\"");
     } else {
-        // Lock both
-        trap_Cvar_Set("g_teamRedLocked", "1");
-        trap_Cvar_Set("g_teamBlueLocked", "1");
-        trap_SendServerCommand(-1, "cp \"Both teams have been locked.\n\"");
-        return;
+        trap_SendServerCommand(ent - g_entities,
+            va("print \"Team %c is not valid for this command\n\"", c ? c : ' '));
     }
-
-    if (team == TEAM_RED) {
-        trap_Cvar_Set("g_teamRedLocked", "1");
-        trap_SendServerCommand(-1, "cp \"Red team has been locked.\n\"");
-    } else {
-        trap_Cvar_Set("g_teamBlueLocked", "1");
-        trap_SendServerCommand(-1, "cp \"Blue team has been locked.\n\"");
-    }
+    return TEAM_NUM_TEAMS;
 }
 
-// "unlock" - Unlock a team (referee+)
-static void Cmd_Unlock_f(gentity_t* ent) {
-    char arg[MAX_TOKEN_CHARS];
-    int team;
+// [QL] 0x1049abec: que equipos estan cerrados. La orden puede cerrar cualquiera, pero al
+// entrar solo se miran el rojo y el azul (0x100618b0).
+static qboolean teamLocked[TEAM_NUM_TEAMS];
+
+/*
+=================
+G_TeamIsLocked
+
+[QL] 0x100618b0, desde SetTeam (0x10040cc8). El juego libre y los espectadores
+nunca estan cerrados.
+=================
+*/
+qboolean G_TeamIsLocked(gentity_t* ent, team_t team) {
+    if (team == TEAM_SPECTATOR || team == TEAM_FREE) {
+        return qfalse;
+    }
+    if (team < 0 || team >= TEAM_NUM_TEAMS || !teamLocked[team]) {
+        return qfalse;
+    }
+    trap_SendServerCommand(ent - g_entities,
+        va("print \"The %s team is locked!\n\"", TeamName(team)));
+    return qtrue;
+}
+
+void G_ClearTeamLocks(void) {
+    Com_Memset(teamLocked, 0, sizeof(teamLocked));
+}
+
+// el aviso que da retail al cerrar o abrir un equipo, igual para los dos
+static void G_AnnounceLock(team_t team, qboolean locked) {
+    trap_SendServerCommand(-1, va("print \"The %s team is now %slocked\n\"",
+                                  TeamName(team), locked ? "" : "un"));
+}
+
+/*
+=================
+Cmd_Lock_f
+
+[QL] 0x10061940. Sin argumento cierra los dos equipos; con uno, el que se pida.
+El que ya estaba cerrado no se vuelve a anunciar.
+=================
+*/
+static void Cmd_Lock_f(gentity_t* ent) {
+    team_t team;
 
     if (trap_Argc() < 2) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Usage: unlock <R|B|both>\n\"");
+        if (!teamLocked[TEAM_RED]) {
+            teamLocked[TEAM_RED] = qtrue;
+            G_AnnounceLock(TEAM_RED, qtrue);
+        }
+        if (!teamLocked[TEAM_BLUE]) {
+            teamLocked[TEAM_BLUE] = qtrue;
+            G_AnnounceLock(TEAM_BLUE, qtrue);
+        }
         return;
     }
 
-    trap_Argv(1, arg, sizeof(arg));
-    if (Q_stricmp(arg, "r") == 0 || Q_stricmp(arg, "red") == 0) {
-        team = TEAM_RED;
-    } else if (Q_stricmp(arg, "b") == 0 || Q_stricmp(arg, "blue") == 0) {
-        team = TEAM_BLUE;
-    } else {
-        trap_Cvar_Set("g_teamRedLocked", "0");
-        trap_Cvar_Set("g_teamBlueLocked", "0");
-        trap_SendServerCommand(-1, "cp \"Both teams have been unlocked.\n\"");
+    team = G_ParseTeamArg(ent, 1);
+    if (team == TEAM_NUM_TEAMS || teamLocked[team]) {
+        return;
+    }
+    teamLocked[team] = qtrue;
+    G_AnnounceLock(team, qtrue);
+}
+
+/*
+=================
+Cmd_Unlock_f
+
+[QL] 0x10061a40, el espejo del anterior.
+=================
+*/
+static void Cmd_Unlock_f(gentity_t* ent) {
+    team_t team;
+
+    if (trap_Argc() < 2) {
+        if (teamLocked[TEAM_RED]) {
+            teamLocked[TEAM_RED] = qfalse;
+            G_AnnounceLock(TEAM_RED, qfalse);
+        }
+        if (teamLocked[TEAM_BLUE]) {
+            teamLocked[TEAM_BLUE] = qfalse;
+            G_AnnounceLock(TEAM_BLUE, qfalse);
+        }
         return;
     }
 
-    if (team == TEAM_RED) {
-        trap_Cvar_Set("g_teamRedLocked", "0");
-        trap_SendServerCommand(-1, "cp \"Red team has been unlocked.\n\"");
-    } else {
-        trap_Cvar_Set("g_teamBlueLocked", "0");
-        trap_SendServerCommand(-1, "cp \"Blue team has been unlocked.\n\"");
+    team = G_ParseTeamArg(ent, 1);
+    if (team == TEAM_NUM_TEAMS || !teamLocked[team]) {
+        return;
     }
+    teamLocked[team] = qfalse;
+    G_AnnounceLock(team, qfalse);
 }
 
 // "put" - Move a player to a team (referee+)
@@ -2613,22 +2698,17 @@ static void Cmd_Put_f(gentity_t* ent) {
         return;
     }
 
-    if (Q_stricmp(teamStr, "r") == 0 || Q_stricmp(teamStr, "red") == 0) {
-        SetTeam(target, "red");
-    } else if (Q_stricmp(teamStr, "b") == 0 || Q_stricmp(teamStr, "blue") == 0) {
-        SetTeam(target, "blue");
-    } else if (Q_stricmp(teamStr, "s") == 0 || Q_stricmp(teamStr, "spec") == 0) {
-        SetTeam(target, "spectator");
-    } else if (Q_stricmp(teamStr, "f") == 0 || Q_stricmp(teamStr, "free") == 0) {
-        SetTeam(target, "free");
-    } else {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Invalid team. Use R, B, S, or F.\n\"");
-        return;
+    // [QL] 0x10061b61: el mismo lector de equipo que lock y unlock
+    switch (G_ParseTeamArg(ent, 2)) {
+        case TEAM_RED: SetTeam(target, "red"); break;
+        case TEAM_BLUE: SetTeam(target, "blue"); break;
+        case TEAM_SPECTATOR: SetTeam(target, "spectator"); break;
+        case TEAM_FREE: SetTeam(target, "free"); break;
+        default: return;
     }
 
-    trap_SendServerCommand(-1, va("cp \"%s ^7moved to %s ^7by %s.\n\"",
-        target->client->pers.netname, teamStr, ent->client->pers.netname));
+    // [QL] retail no manda ningun aviso propio: el cambio de equipo ya lo anuncia
+    // BroadcastTeamChange desde SetTeam. El "moved to" que habia aca no existe en el binario.
 }
 
 // "mute" - Mute a player's chat (referee+)

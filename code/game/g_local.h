@@ -641,6 +641,8 @@ void Cmd_Score_f(gentity_t* ent);
 void StopFollowing(gentity_t* ent);
 void BroadcastTeamChange(gclient_t* client, int oldTeam);
 void SetTeam(gentity_t* ent, const char* s);
+qboolean G_TeamIsLocked(gentity_t* ent, team_t team);  // [QL] 0x100618b0
+void G_ClearTeamLocks(void);
 void Cmd_FollowCycle_f(gentity_t* ent, int dir);
 void FollowCycle(gentity_t* ent, int dir);  // [QL] 0x10041130: the cycle alone, which keeps the session team
 void ClearVote(void);
