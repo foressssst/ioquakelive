@@ -1233,6 +1233,14 @@ void SV_GameBotAIStartFrame(int time) {
         ((int (*)(int))sv_vmMainTable[GAME_BOT_AI_START_FRAME])(time);
 }
 
+// [QL] retail export +0x3c: 0 when the listener may hear the speaker. Anything else and the
+// server does not relay that voice packet.
+int SV_GameVoiceFilter(int speaker, int listener) {
+    if (sv_vmMainTable[GAME_VOICE_FILTER])
+        return ((int (*)(int, int))sv_vmMainTable[GAME_VOICE_FILTER])(speaker, listener);
+    return 0;
+}
+
 //==============================================
 
 /*

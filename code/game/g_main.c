@@ -1136,6 +1136,7 @@ Q_EXPORT void dllEntry(void **vmMainOut, gameImport_t *syscallTable, int *apiVer
     vmMainOut[GAME_SNAPSHOT_VISIBILITY]     = (void *)G_ObfuscateEnemyInfoInSnapshotCheck;
     vmMainOut[GAME_SNAPSHOT_ALWAYS_SEND]    = (void *)G_ClientAlwaysInSnapshot;
     vmMainOut[GAME_BOT_AI_START_FRAME]      = (void *)BotAIStartFrame;
+    vmMainOut[GAME_VOICE_FILTER]            = (void *)G_VoiceFilter;
 
     *apiVersion = GAME_API_VERSION;
 }

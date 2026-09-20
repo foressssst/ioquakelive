@@ -281,6 +281,51 @@ qboolean OnSameTeam(gentity_t* ent1, gentity_t* ent2) {
 
 /*
 ==============
+G_VoiceFilter
+
+Quien oye a quien. El servidor la consulta por cada par al repartir la voz, y
+solo la manda cuando devuelve 0.
+
+[QL] 0x10052e90, export +0x3c. El orden de las condiciones es el del binario:
+
+  - a los bots no se les manda nada;
+  - a quien esta silenciado no se lo reparte;
+  - nadie se oye a si mismo;
+  - en el intermedio y mientras se espera jugadores (warmupTime < 0) se oyen
+    todos con todos;
+  - en los modos por equipos, y siempre que el que habla sea espectador, se
+    oyen solo los del mismo equipo;
+  - en el resto de los modos se oyen todos.
+
+Retail tiene ademas una variable de modo que nada escribe nunca -- las dos
+unicas referencias en el binario la leen. Con su valor fijo en 0 las dos ramas
+que dependen de ella son las de arriba, asi que aca no existe.
+==============
+*/
+int G_VoiceFilter(int speaker, int listener) {
+    gentity_t* from = &g_entities[speaker];
+    gentity_t* to = &g_entities[listener];
+
+    if (to->r.svFlags & SVF_BOT) {
+        return 1;
+    }
+    if (!from->client || from->client->sess.muted) {
+        return 1;
+    }
+    if (speaker == listener) {
+        return 1;
+    }
+    if (level.intermissionTime || level.warmupTime < 0) {
+        return 0;
+    }
+    if (g_gametype.integer >= GT_TEAM || from->client->sess.sessionTeam == TEAM_SPECTATOR) {
+        return !OnSameTeam(from, to);
+    }
+    return 0;
+}
+
+/*
+==============
 Team_SetFlagStatus
 
 [QL] 0x10068770. CTF and Attack & Defend send both flags, '0' at base, '1' taken and '2' for
