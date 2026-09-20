@@ -236,7 +236,10 @@ typedef enum {
     // [wolfcam] The electrogib sphere. It scorches rather than bleeds, and
     // CG_AddFragment also keys the spark trail off this value, so clearing
     // the mark on impact ends the trail too.
-    LEMT_ELECTROGIB
+    LEMT_ELECTROGIB,
+    // [QL] 0x1001efd6: los pedazos de un jugador descongelado. Van dejando una
+    // estela de hielo mientras vuelan.
+    LEMT_ICE
 } leMarkType_t;  // fragment local entities can leave marks on walls
 
 typedef enum {
@@ -1521,6 +1524,7 @@ typedef struct {
     qhandle_t iceShardShader3;   // powerups/ice3
     qhandle_t frozenShader;      // sprites/frozen
     qhandle_t iceMarkShader;     // iceMark
+    qhandle_t iceTrailShader;    // [QL] iceTrail, la estela de los pedazos
 
     // [QL] gametype icons for scoreboard/HUD
     qhandle_t gametypeIcon[GT_MAX_GAME_TYPE];
@@ -2369,6 +2373,7 @@ void CG_DrawFloatingEffects(void);               // [QL] binary "CG_DrawDamagePl
 
 // [QL] freeze-tag / discharge / blood client-side effects (triggered from CG_EntityEvent).
 void CG_ThawPlayer(const vec3_t origin);
+void CG_IceTrail(localEntity_t* le);  // [QL] 0x1001d790
 void CG_SpawnIceShard(const vec3_t origin, const vec3_t velocity, qhandle_t hModel);
 void CG_LightningDischargeEffect(int intensity);
 void CG_BloodSplat(vec3_t origin);      // EV_INVUL_IMPACT (0x46) handler
