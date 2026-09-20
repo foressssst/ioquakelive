@@ -332,8 +332,11 @@ char* CON_Input(void) {
             if ((key) && (key) < ' ') {
                 if (key == '\n') {
 #ifndef DEDICATED
-                    // if not in the game explicitly prepend a slash if needed
-                    if (clc.state != CA_ACTIVE && con_autochat->integer && TTY_con.cursor &&
+                    // [QL] quakelive_steam.exe 0x4b7885, the same gate cl_keys.c uses for the
+                    // in-game console: with cl_allowConsoleChat off the console only takes
+                    // commands, so a line without a leading slash gets one. Retail makes no
+                    // distinction between being in a match and not.
+                    if (!cl_allowConsoleChat->integer && TTY_con.cursor &&
                         TTY_con.buffer[0] != '/' && TTY_con.buffer[0] != '\\') {
                         memmove(TTY_con.buffer + 1, TTY_con.buffer, sizeof(TTY_con.buffer) - 1);
                         TTY_con.buffer[0] = '\\';
@@ -343,7 +346,7 @@ char* CON_Input(void) {
                     if (TTY_con.buffer[0] == '/' || TTY_con.buffer[0] == '\\') {
                         Q_strncpyz(text, TTY_con.buffer + 1, sizeof(text));
                     } else if (TTY_con.cursor) {
-                        if (con_autochat->integer) {
+                        if (cl_allowConsoleChat->integer) {
                             Com_sprintf(text, sizeof(text), "cmd say %s", TTY_con.buffer);
                         } else {
                             Q_strncpyz(text, TTY_con.buffer, sizeof(text));
