@@ -1412,6 +1412,35 @@ typedef struct {
     uint64_t lobby;
 } steamFriendGame_t;
 
+/*
+===============
+Steam_StripColors
+
+Un nombre de Steam es un dato, no una marca: hay jugadores de Quake que llevan
+codigos de color en el suyo ("^2Runnyr") y, sin sacarlos, recolorean lo que venga
+detras y la inicial del menu sale siendo un acento circunflejo.
+
+Q_CleanStr no sirve aca: ademas de los codigos tira todo lo que no sea ASCII
+imprimible, y con eso un nombre como "Gze" con simbolos raros queda vacio.
+===============
+*/
+static void Steam_StripColors(char* s) {
+    char* d = s;
+
+    while (*s) {
+        if (Q_IsColorString(s)) {
+            s += 2;
+            continue;
+        }
+        if ((unsigned char)*s < 0x20) {
+            s++;  // los de control tampoco: rompen la fila
+            continue;
+        }
+        *d++ = *s++;
+    }
+    *d = '\0';
+}
+
 int Steam_FriendCount(void) {
     if (!st.clientUp || !st.friends || !st.GetFriendCount) {
         return 0;
@@ -1436,6 +1465,7 @@ qboolean Steam_FriendGet(int index, steamFriend_t* out) {
     out->steamId = id;
     nombre = st.GetFriendPersonaName ? st.GetFriendPersonaName(st.friends, id) : NULL;
     Q_strncpyz(out->name, nombre ? nombre : "", sizeof(out->name));
+    Steam_StripColors(out->name);
     out->state = st.GetFriendPersonaState ? st.GetFriendPersonaState(st.friends, id) : 0;
 
     Com_Memset(&juego, 0, sizeof(juego));

@@ -970,6 +970,13 @@ void trap_Cvar_LatchedVariableStringBuffer(const char* var_name, char* buffer, i
 int trap_R_Font_Register(const char* name);
 void trap_Sys_OpenURL(const char* url);
 
+// [ioquakelive] los amigos de Steam, para la franja social del menu principal. El
+// indice es el de Steam y se lo vuelve a usar para actuar sobre el amigo, asi el
+// modulo nunca tiene que cargar con un Steam ID de 64 bits.
+int trap_SteamFriendCount(void);
+qboolean trap_SteamFriendGet(int index, uiFriend_t* out);
+void trap_SteamFriendAction(int index, int action);
+
 // ui_startmatch.c: retail's web Start Match page, drawn by one ownerdraw of the
 // "startmatch" menu (the number is ours: retail's menudef.h has none for it)
 #define UI_STARTMATCH 600

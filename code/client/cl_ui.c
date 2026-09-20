@@ -915,6 +915,37 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             CL_OpenURL(VMA(1));
             return 0;
 
+        // [ioquakelive] los amigos de Steam para la franja social del menu. El indice es
+        // el de Steam, no el de la lista dibujada: asi la accion cae siempre sobre el
+        // mismo amigo aunque alguien se conecte entre el dibujo y el clic.
+        case UI_STEAM_FRIEND_COUNT:
+            return Steam_FriendCount();
+
+        case UI_STEAM_FRIEND_GET: {
+            steamFriend_t amigo;
+            uiFriend_t* out = VMA(2);
+
+            if (!Steam_FriendGet(args[1], &amigo)) {
+                return qfalse;
+            }
+            Com_Memset(out, 0, sizeof(*out));
+            Q_strncpyz(out->name, amigo.name, sizeof(out->name));
+            out->state = amigo.state;
+            out->playing = amigo.playing;
+            out->sameGame = amigo.sameGame;
+            out->server = (qboolean)(amigo.sameGame && amigo.ip != 0);
+            return qtrue;
+        }
+
+        case UI_STEAM_FRIEND_ACTION: {
+            steamFriend_t amigo;
+
+            if (Steam_FriendGet(args[1], &amigo)) {
+                CL_FriendDo(&amigo, args[2]);
+            }
+            return 0;
+        }
+
         case UI_MEMSET:
             Com_Memset(VMA(1), args[2], args[3]);
             return 0;
