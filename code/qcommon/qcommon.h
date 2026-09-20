@@ -1058,6 +1058,7 @@ void SV_RegisterGameCvars(void);
 void SV_Shutdown(char* finalmsg);
 void SV_Frame(int msec);
 void SV_VoiceFrame(void);  // [QL] el puente de la voz entre pares
+void SV_SteamAuthResponse(uint64_t steamId, int response);  // [QL] 0x531a80
 
 // [QL] los mapas y las factories que conoce el servidor, que es lo que completa el tabulador
 #define MAX_COMPLETION_NAMES 1024

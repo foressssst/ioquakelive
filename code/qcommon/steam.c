@@ -125,6 +125,7 @@ typedef struct {
 static void Steam_GS_SetGameInfo(void);
 static void Steam_DownloadUGC_f(void);
 static void Steam_P2PListen(qboolean asServer);
+static void Steam_AuthListen(void);
 
 /*
 Una devolucion de llamada de Steam vista desde C. En el SDK es una clase con
@@ -226,6 +227,12 @@ typedef struct {
                                 unsigned int destSize, unsigned int* written, unsigned int sampleRate);
     unsigned int(QDECL* GetVoiceOptimalSampleRate)(void* self);
     uint64_t(QDECL* GetUserSteamID)(void* self);
+
+    // quien es cada uno: el cliente pide un ticket firmado y el servidor lo valida
+    unsigned int(QDECL* GetAuthSessionTicket)(void* self, void* ticket, int maxTicket, unsigned int* written);
+    void(QDECL* CancelAuthTicket)(void* self, unsigned int ticket);
+    int(QDECL* BeginAuthSession)(void* self, const void* ticket, int len, uint64_t steamId);
+    void(QDECL* EndAuthSession)(void* self, uint64_t steamId);
     void(QDECL* SetInGameVoiceSpeaking)(void* self, uint64_t steamId, steamBool_t speaking);
     void(QDECL* SetRichPresence)(void* self, const char* key, const char* value);
     void(QDECL* ActivateGameOverlayToUser)(void* self, const char* dialog, uint64_t steamId);
@@ -245,6 +252,8 @@ typedef struct {
     qboolean voiceRecording;
     steamCallback_t p2pClient;   // la sesion que pide el servidor
     steamCallback_t p2pServer;   // la sesion que pide cada jugador
+    unsigned int authTicket;       // el ticket que pidio este cliente, para cancelarlo
+    steamCallback_t authResponse;  // lo que Steam dice del ticket de otro
 
     void* ugc;           // ISteamUGC *
     uint64_t downloading;  // el item que se esta esperando, o 0
@@ -345,6 +354,10 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND_OPT(GetFriendPersonaName, "SteamAPI_ISteamFriends_GetFriendPersonaName");
     STEAM_BIND_OPT(GetFriendPersonaState, "SteamAPI_ISteamFriends_GetFriendPersonaState");
     STEAM_BIND_OPT(GetFriendGamePlayed, "SteamAPI_ISteamFriends_GetFriendGamePlayed");
+    STEAM_BIND_OPT(GetAuthSessionTicket, "SteamAPI_ISteamUser_GetAuthSessionTicket");
+    STEAM_BIND_OPT(CancelAuthTicket, "SteamAPI_ISteamUser_CancelAuthTicket");
+    STEAM_BIND_OPT(BeginAuthSession, "SteamAPI_ISteamGameServer_BeginAuthSession");
+    STEAM_BIND_OPT(EndAuthSession, "SteamAPI_ISteamGameServer_EndAuthSession");
     STEAM_BIND_OPT(RegisterCallback, "SteamAPI_RegisterCallback");
     STEAM_BIND_OPT(UnregisterCallback, "SteamAPI_UnregisterCallback");
     STEAM_BIND_OPT(GetItemState, "SteamAPI_ISteamUGC_GetItemState");
@@ -444,6 +457,28 @@ static void Steam_Status_f(void) {
     Com_Printf("biblioteca:  %s\n", st.lib ? "cargada" : "no");
     Com_Printf("cliente:     %s\n", st.clientUp ? "iniciado" : "no");
     Com_Printf("servidor:    %s\n", st.serverUp ? "iniciado" : "no");
+
+    // la identidad: el ticket que este cliente mandaria en su getchallenge y, si este
+    // proceso ademas tiene servidor, lo que Steam dice de ese ticket. Es la unica forma
+    // de ver la cadena entera sin dos maquinas.
+    if (st.clientUp) {
+        static byte ticket[512];
+        int len = Steam_AuthTicket(ticket, sizeof(ticket));
+
+        if (len <= 0) {
+            Com_Printf("ticket:      no lo dio Steam\n");
+        } else {
+            Com_Printf("ticket:      %i bytes\n", len);
+            if (st.serverUp) {
+                uint64_t yo = Steam_ClientSteamID();
+                int r = Steam_GS_BeginAuth(yo, ticket, len);
+
+                Com_Printf("BeginAuth:   %i (%s)\n", r, r == STEAM_AUTH_BEGIN_OK ? "aceptado" : "rechazado");
+                Steam_GS_EndAuth(yo);
+            }
+        }
+    }
+
     if (!st.serverUp) {
         return;
     }
@@ -542,6 +577,7 @@ void Steam_GS_Init(void) {
         st.gameServerNetworking = st.GameServerNetworking();  // por donde reparte la voz
         Steam_P2PListen(qtrue);
     }
+    Steam_AuthListen();  // lo que Steam diga de cada ticket
     if (!st.clientUp) {
         Cmd_AddCommand("steamstatus", Steam_Status_f);  // el cliente ya lo agrego si arranco
     }
@@ -652,6 +688,10 @@ qboolean Steam_GS_Running(void) {
 
 void Steam_Shutdown(void) {
     if (st.UnregisterCallback) {
+        if (st.authResponse.vtable) {
+            st.UnregisterCallback(&st.authResponse);
+            st.authResponse.vtable = NULL;
+        }
         if (st.p2pServer.vtable) {
             st.UnregisterCallback(&st.p2pServer);
             st.p2pServer.vtable = NULL;
@@ -1222,6 +1262,179 @@ static void Steam_P2PListen(qboolean asServer) {
     cb->flags = asServer ? STEAM_CB_FLAG_GAMESERVER : 0;
     cb->id = STEAM_CB_P2P_SESSION_REQUEST;
     st.RegisterCallback(cb, STEAM_CB_P2P_SESSION_REQUEST);
+}
+
+/*
+===============================================================================
+
+QUIEN ES CADA UNO
+
+[QL] El servidor de retail no le cree al cliente lo que dice de si mismo. Junto
+al Steam ID, el cliente manda en el getchallenge un ticket que Steam le firmo, y
+el servidor se lo pasa a Steam para que diga si es de quien dice ser. Esta todo
+escrito en el binario del motor:
+
+    0x531b38  "Called BeginAuthSession on steam id %llu, got response %i"
+    0x531b74  "Refusing to re-auth a client that is already being tracked"
+    0x531bb0  "Called EndAuthSession on steam id %llu"
+    0x531a80  "Steam OnValidateAuthTicketResponse: couldn't match auth response to a client"
+    0x531d48  "Found an authed client with steam id %llu but isn't connected to the server."
+    0x55f5c0  el RTTI de un CCallback<..., ValidateAuthTicketResponse_t>
+    0x531778..0x531848  los nueve motivos de rechazo, uno detras de otro
+
+La respuesta no llega en el momento: BeginAuthSession solo dice si el ticket
+tiene forma de ticket, y Steam contesta despues por una devolucion de llamada. De
+ahi que el jugador entre y, si el ticket no vale, lo echen un momento despues.
+
+===============================================================================
+*/
+
+// ValidateAuthTicketResponse_t: k_iSteamUserCallbacks (100) + 43
+#define STEAM_CB_VALIDATE_AUTH 143
+
+/*
+===============
+Steam_AuthResponseName
+
+Los nueve motivos por los que Steam rechaza un ticket, en las palabras de retail
+(0x531778 en adelante, que estan en el binario en el orden inverso al de la
+enumeracion de Steam). El 0 es "vale", y no tiene texto.
+===============
+*/
+const char* Steam_AuthResponseName(int response) {
+    static const char* const motivos[] = {
+        "",
+        "User not connected to Steam",   // 1
+        "License expired",               // 2
+        "VAC ban on record",             // 3
+        "User is logged in elsewhere",   // 4
+        "VAC check timed out",           // 5
+        "Issuer canceled auth ticket",   // 6
+        "Auth ticket already used",      // 7
+        "Auth ticket invalid",           // 8
+        "Game ban on record"             // 9
+    };
+
+    if (response <= 0 || response >= (int)ARRAY_LEN(motivos)) {
+        return NULL;  // el que llama escribe "(Err:%i)", como retail en 0x531a18
+    }
+    return motivos[response];
+}
+
+/*
+===============
+Steam_AuthTicket
+
+El ticket que el cliente le manda al servidor. Steam lo firma para esta sesion y
+solo sirve una vez, asi que se pide uno por conexion y se cancela el anterior.
+Devuelve cuantos bytes ocupa, o cero si no hay Steam.
+===============
+*/
+int Steam_AuthTicket(void* buffer, int size) {
+    unsigned int written = 0;
+
+    if (!st.clientUp || !st.user || !st.GetAuthSessionTicket) {
+        return 0;
+    }
+    if (st.authTicket && st.CancelAuthTicket) {
+        st.CancelAuthTicket(st.user, st.authTicket);
+        st.authTicket = 0;
+    }
+    st.authTicket = st.GetAuthSessionTicket(st.user, buffer, size, &written);
+    if (!st.authTicket) {
+        return 0;
+    }
+    return (int)written;
+}
+
+/*
+===============
+Steam_CB_AuthResponse
+
+ValidateAuthTicketResponse_t: el Steam ID del que se estaba comprobando, el
+motivo, y el Steam ID del dueno del juego -- que es distinto cuando alguien lo
+tiene prestado por familia. Aca solo hacen falta los dos primeros.
+===============
+*/
+// Steam empaqueta las estructuras de sus devoluciones de llamada segun el sistema, no
+// segun el ancho de palabra: de a cuatro bytes en Linux y macOS, de a ocho en Windows
+// (VALVE_CALLBACK_PACK_SMALL / _LARGE). Si el tamano no es el que espera, la devolucion
+// de llamada no le calza y no llega. Aca importa para el servidor dedicado, que corre en
+// Linux.
+#if defined(__linux__) || defined(__APPLE__)
+#pragma pack(push, 4)
+#else
+#pragma pack(push, 8)
+#endif
+typedef struct {
+    uint64_t steamId;
+    int response;
+    uint64_t owner;
+} steamAuthResponse_t;
+#pragma pack(pop)
+
+static void STEAM_CB Steam_CB_AuthIO(STEAM_CB_SELF, void* param, unsigned char failed, uint64_t call) {
+    (void)param;
+    (void)failed;
+    (void)call;
+}
+
+static void STEAM_CB Steam_CB_Auth(STEAM_CB_SELF, void* param) {
+    const steamAuthResponse_t* r = (const steamAuthResponse_t*)param;
+
+    (void)self;
+    SV_SteamAuthResponse(r->steamId, r->response);
+}
+
+static int STEAM_CB Steam_CB_AuthSize(STEAM_CB_SELF) {
+    return (int)sizeof(steamAuthResponse_t);
+}
+
+// el compilador de retail ordena las dos Run al reves de como se declaran: ver 0x00532f1c
+static void* steamAuthVTable[3];
+
+static void Steam_AuthListen(void) {
+    if (!st.RegisterCallback || !st.BeginAuthSession || st.authResponse.vtable) {
+        return;
+    }
+    steamAuthVTable[0] = (void*)Steam_CB_AuthIO;
+    steamAuthVTable[1] = (void*)Steam_CB_Auth;
+    steamAuthVTable[2] = (void*)Steam_CB_AuthSize;
+
+    st.authResponse.vtable = steamAuthVTable;
+    st.authResponse.flags = STEAM_CB_FLAG_GAMESERVER;
+    st.authResponse.id = STEAM_CB_VALIDATE_AUTH;
+    st.RegisterCallback(&st.authResponse, STEAM_CB_VALIDATE_AUTH);
+}
+
+/*
+===============
+Steam_GS_BeginAuth / Steam_GS_EndAuth
+
+Lo que el servidor le pide a Steam por cada jugador. BeginAuthSession devuelve
+EBeginAuthSessionResult: 0 vale, 1 ticket invalido, 2 ya lo estabamos siguiendo,
+3 version equivocada, 4 otro juego, 5 ticket vencido. Lo demas viene despues por
+la devolucion de llamada.
+===============
+*/
+int Steam_GS_BeginAuth(uint64_t steamId, const void* ticket, int len) {
+    int result;
+
+    if (!st.serverUp || !st.gameServer || !st.BeginAuthSession || len <= 0) {
+        return STEAM_AUTH_BEGIN_OK;  // sin Steam no hay a quien preguntarle
+    }
+    result = st.BeginAuthSession(st.gameServer, ticket, len, steamId);
+    Com_DPrintf("Called BeginAuthSession on steam id %llu, got response %i\n",
+                (unsigned long long)steamId, result);
+    return result;
+}
+
+void Steam_GS_EndAuth(uint64_t steamId) {
+    if (!st.serverUp || !st.gameServer || !st.EndAuthSession || !steamId) {
+        return;
+    }
+    st.EndAuthSession(st.gameServer, steamId);
+    Com_DPrintf("Called EndAuthSession on steam id %llu\n", (unsigned long long)steamId);
 }
 
 qboolean Steam_VoiceReady(void) {

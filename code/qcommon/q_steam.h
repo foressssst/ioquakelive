@@ -58,6 +58,15 @@ void Steam_Shutdown(void);
 
 qboolean Steam_GS_Running(void);
 
+// quien es cada uno: el cliente pide un ticket firmado por Steam y el servidor se
+// lo da a Steam para que diga si vale. [QL] 0x531b38 y siguientes.
+#define STEAM_AUTH_BEGIN_OK 0     // EBeginAuthSessionResult
+#define STEAM_AUTH_BEGIN_DUPLICATE 2
+int Steam_AuthTicket(void* buffer, int size);
+int Steam_GS_BeginAuth(uint64_t steamId, const void* ticket, int len);
+void Steam_GS_EndAuth(uint64_t steamId);
+const char* Steam_AuthResponseName(int response);
+
 // la voz, que en Quake Live va por la red entre pares de Steam y no por la del juego
 qboolean Steam_VoiceReady(void);
 void Steam_VoiceStart(void);
