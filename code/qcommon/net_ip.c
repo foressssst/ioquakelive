@@ -1322,8 +1322,16 @@ void NET_OpenIP(void) {
             }
         }
 
-        if (ip_socket == INVALID_SOCKET)
+        if (ip_socket == INVALID_SOCKET) {
             Com_Printf("WARNING: Couldn't bind to a v4 ip address.\n");
+            // [QL] net_strict: un servidor que no pudo tomar su puerto no sirve de nada
+            // callado. El server.cfg de retail lo explica: "Quit out immediately if we
+            // can't bind the IP and port."
+            if (Cvar_VariableIntegerValue("net_strict")) {
+                Com_Error(ERR_FATAL, "net_strict: couldn't bind to %s:%i",
+                          net_ip->string[0] ? net_ip->string : "0.0.0.0", port);
+            }
+        }
     }
 }
 
@@ -1344,6 +1352,9 @@ static qboolean NET_GetCvars(void) {
     /* End users have it enabled so they can connect to ipv6-only hosts, but ipv4 will be
      * used if available due to ping */
     net_enabled = Cvar_Get("net_enabled", "3", CVAR_LATCH | CVAR_ARCHIVE);
+    // [QL] 0x004e3c6a: salir en vez de seguir si no se puede tomar la IP y el puerto
+    Cvar_Get("net_strict", "0", CVAR_LATCH | CVAR_ARCHIVE);
+    Cvar_Get("net_noudp", "0", CVAR_LATCH);
 #endif
     modified = net_enabled->modified;
     net_enabled->modified = qfalse;
