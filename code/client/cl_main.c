@@ -600,6 +600,77 @@ static void CL_CompleteDemoName(char* args, int argNum) {
 }
 
 /*
+==================
+CL_CompleteCallvote
+
+"callvote <que> [...]". Los nombres son los que acepta Cmd_CallVote_f del modulo
+de juego (0x10061e40); cuando el voto es "map", el mapa y la factory se completan
+igual que en la orden "map".
+
+Retail no completa nada de esto: le pasa al tabulador la lista entera de mapas y
+listo (0x004b6a60, que se la pide a la interfaz). Aca va por argumento, que es
+como completa todo lo demas en este motor.
+==================
+*/
+static void CL_CompleteCallvote(char* args, int argNum) {
+    static const char* votos[] = {
+        "ammo", "clientkick", "cointoss", "fraglimit", "g_gametype", "kick", "loadouts",
+        "map", "map_restart", "nextmap", "random", "shuffle", "teamsize", "timelimit",
+        "timers", "weaprespawn"
+    };
+    static const char* nombres[MAX_COMPLETION_NAMES];
+    int count;
+
+    if (argNum == 2) {
+        Field_CompleteList(votos, ARRAY_LEN(votos));
+        return;
+    }
+
+    if (Q_stricmp(Cmd_Argv(1), "map")) {
+        return;
+    }
+
+    if (argNum == 3) {
+        count = SV_ArenaNameList(nombres, ARRAY_LEN(nombres));
+    } else if (argNum == 4) {
+        count = SV_FactoryNameList(nombres, ARRAY_LEN(nombres));
+    } else {
+        return;
+    }
+
+    Field_CompleteList(nombres, count);
+}
+
+static void CL_CompletePlayerName(char* args, int argNum);
+
+/*
+==================
+CL_SetCgameCommandCompletion
+
+El cgame registra sus ordenes cuando arranca (trap_AddCommand), asi que es ahi
+donde hay que colgarles el tabulador. Las que toman el nombre de un jugador lo
+sacan de los configstrings, que es lo unico que el cliente tiene.
+==================
+*/
+void CL_SetCgameCommandCompletion(const char* cmdName) {
+    static const char* porJugador[] = {
+        "addadmin", "addmod", "addscore", "ban", "demote", "follow", "mute", "put", "tell", "unmute"
+    };
+    int i;
+
+    if (!Q_stricmp(cmdName, "callvote")) {
+        Cmd_SetCommandCompletionFunc(cmdName, CL_CompleteCallvote);
+        return;
+    }
+    for (i = 0; i < ARRAY_LEN(porJugador); i++) {
+        if (!Q_stricmp(cmdName, porJugador[i])) {
+            Cmd_SetCommandCompletionFunc(cmdName, CL_CompletePlayerName);
+            return;
+        }
+    }
+}
+
+/*
 ====================
 CL_PlayDemo_f
 

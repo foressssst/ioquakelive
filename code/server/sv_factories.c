@@ -897,6 +897,40 @@ int SV_NumArenas(void) {
     return sv_numArenas;
 }
 
+/*
+===============
+SV_ArenaNameList / SV_FactoryNameList
+
+Las dos listas que completa el tabulador, armadas de una sola vez para que el
+cliente y la consola del servidor saquen lo mismo. De las factories quedan
+afuera las que empiezan con "_", que son plantillas internas -- el mismo filtro
+que usa la lista que imprime "map" sin argumentos.
+===============
+*/
+int SV_ArenaNameList(const char** out, int max) {
+    int count = 0;
+    int i;
+
+    for (i = 0; i < sv_numArenas && count < max; i++) {
+        if (sv_arenas[i].map[0]) {
+            out[count++] = sv_arenas[i].map;
+        }
+    }
+    return count;
+}
+
+int SV_FactoryNameList(const char** out, int max) {
+    int count = 0;
+    int i;
+
+    for (i = 0; i < sv_numFactories && count < max; i++) {
+        if (sv_factories[i].id && sv_factories[i].id[0] != '_') {
+            out[count++] = sv_factories[i].id;
+        }
+    }
+    return count;
+}
+
 const arenaInfo_t* SV_ArenaByNum(int num) {
     if (num < 0 || num >= sv_numArenas) {
         return NULL;
