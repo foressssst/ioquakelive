@@ -1117,6 +1117,28 @@ static qboolean ParseStage(shaderStage_t* stage, char** text) {
             depthMaskExplicit = qtrue;
 
             continue;
+        }
+        //
+        // depthTest <disable>
+        //
+        // [QL] quakelive_steam.exe: "WARNING: missing parm for depthTest in shader '%s'". La unica
+        // palabra que acepta es "disable", y la usa sprites/trainer, que tiene que verse a traves
+        // de las paredes.
+        //
+        else if (!Q_stricmp(token, "depthTest")) {
+            token = COM_ParseExt(text, qfalse);
+            if (token[0] == 0) {
+                ri.Printf(PRINT_WARNING, "WARNING: missing parm for depthTest in shader '%s'\n",
+                          shader.name);
+                continue;
+            }
+            if (!Q_stricmp(token, "disable")) {
+                stage->stateBits |= GLS_DEPTHTEST_DISABLE;
+            } else {
+                ri.Printf(PRINT_WARNING, "WARNING: unknown parameter '%s' in shader '%s'\n", token,
+                          shader.name);
+            }
+            continue;
         } else {
             ri.Printf(PRINT_WARNING, "WARNING: unknown parameter '%s' in shader '%s'\n", token, shader.name);
             return qfalse;
@@ -1493,6 +1515,7 @@ will optimize it.
 =================
 */
 static qboolean ParseShader(char** text) {
+    qboolean noDefault = qfalse;
     char* token;
     int s;
 
@@ -1708,6 +1731,12 @@ static qboolean ParseShader(char** text) {
         } else if (!Q_stricmp(token, "sort")) {  // sort
             ParseSort(text);
             continue;
+        } else if (!Q_stricmp(token, "nodefault")) {
+            // [QL] quakelive_steam.exe 0x004574d0: un shader sin etapas es valido igual. Lo usa
+            // models/players/hunter/harpy_f, que solo tiene "surfaceparm nodraw": sin esto el
+            // shader cae al de por defecto y la pieza que tenia que ser invisible se dibuja.
+            noDefault = qtrue;
+            continue;
         } else if (!Q_stricmp(token, "novlcollapse")) {
             // [QL] quakelive_steam.exe 0x457572: this shader keeps its stages with r_vertexLight, it
             // does not lose its lightmap. Quake Live's bright skins carry it, because the colour a
@@ -1724,7 +1753,7 @@ static qboolean ParseShader(char** text) {
     //
     // ignore shaders that don't have any stages, unless it is a sky or fog
     //
-    if (s == 0 && !shader.isSky && !(shader.contentFlags & CONTENTS_FOG)) {
+    if (s == 0 && !shader.isSky && !(shader.contentFlags & CONTENTS_FOG) && !noDefault) {
         return qfalse;
     }
 
