@@ -1678,6 +1678,9 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
     level.warmupTime = -1;  // PRE_GAME until warmup state machine transitions
 
     level.snd_fry = G_SoundIndex("sound/player/fry.wav");  // FIXME standing in lava / slime
+    // [QL] 0x100551f1: los dos gorgoteos del ahogo se precargan aca, como en retail
+    G_SoundIndex("sound/player/gurp1.wav");
+    G_SoundIndex("sound/player/gurp2.wav");
 
     if (g_logfile.string[0]) {
         if (g_logfileSync.integer) {

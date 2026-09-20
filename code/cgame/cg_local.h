@@ -1185,6 +1185,7 @@ typedef struct {
     qhandle_t wakeMarkShader;
     qhandle_t bloodMarkShader;
     qhandle_t bulletMarkShader;
+    qhandle_t crackedMarkShader;  // [QL] gfx/damage/cracked_mrk, la marca del gancho
     qhandle_t burnMarkShader;
     qhandle_t holeMarkShader;
     qhandle_t energyMarkShader;
@@ -1373,7 +1374,6 @@ typedef struct {
     sfxHandle_t noAmmoSound;
     sfxHandle_t talkSound;
     sfxHandle_t landSound;
-    sfxHandle_t hitSound;           // sound/feedback/hit.wav, cg_hitBeep 1 (as WolfcamQL)
     sfxHandle_t hitSounds[4];       // [QL] sound/feedback/hit0-3, by damage tier
     sfxHandle_t killBeepSounds[8];  // [QL] cg_killBeep 1-8: impact1-6, bell_01, chaching
     sfxHandle_t watrInSound;
@@ -1927,6 +1927,7 @@ extern vmCvar_t cg_forceTeamSkin;
 extern vmCvar_t cg_forceBlueTeamModel;
 extern vmCvar_t cg_forceRedTeamModel;
 extern vmCvar_t cg_hitBeep;
+extern vmCvar_t cg_voiceChatIndicator;
 extern vmCvar_t cg_killBeep;
 extern vmCvar_t cg_lightningImpactCap;
 extern vmCvar_t cg_lightningImpact;         // [QL] gate the LG impact flare
