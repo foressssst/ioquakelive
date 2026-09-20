@@ -660,7 +660,12 @@ void SV_Init(void) {
     sv_minPing = Cvar_Get("sv_minPing", "0", CVAR_ARCHIVE | CVAR_SERVERINFO);
     sv_maxPing = Cvar_Get("sv_maxPing", "0", CVAR_ARCHIVE | CVAR_SERVERINFO);
     sv_serverType = Cvar_Get("sv_serverType", "0", CVAR_ARCHIVE);  // [QL] 1 = LAN-only
-    sv_floodProtect = Cvar_Get("sv_floodProtect", "1", CVAR_ARCHIVE | CVAR_SERVERINFO);
+    sv_floodProtect = Cvar_Get("sv_floodProtect", "10", CVAR_ARCHIVE);  // [QL] 0x004e3c3a
+
+    // [QL] las dos que publica el servidor sobre si mismo: los items del Workshop que usa la
+    // partida y el identificador que le da el servicio. Retail las registra de solo lectura.
+    Cvar_Get("sv_referencedSteamworks", "", CVAR_ROM);
+    Cvar_Get("sv_gtid", "", CVAR_SERVERINFO | CVAR_ROM);
 
     // systeminfo
     Cvar_Get("sv_cheats", "1", CVAR_SYSTEMINFO | CVAR_ROM);
