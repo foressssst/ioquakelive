@@ -668,6 +668,7 @@ void SV_Init(void) {
     sv_idleExit = Cvar_Get("sv_idleExit", "120", CVAR_ARCHIVE);        // [QL] 0x004e3e09
     sv_errorExit = Cvar_Get("sv_errorExit", "1", 0);                   // [QL] 0x004e3e1f
     sv_workshopFile = Cvar_Get("sv_workshopFile", "workshop.txt", CVAR_ARCHIVE);
+    sv_quitOnEmpty = Cvar_Get("sv_quitOnEmpty", "0", CVAR_ARCHIVE);  // [QL] 0x004e3e3a
 
     // [QL] las dos que publica el servidor sobre si mismo: los items del Workshop que usa la
     // partida y el identificador que le da el servicio. Retail las registra de solo lectura.

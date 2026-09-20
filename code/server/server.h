@@ -295,6 +295,7 @@ extern cvar_t* sv_master;
 extern cvar_t* sv_idleExit;
 extern cvar_t* sv_errorExit;
 extern cvar_t* sv_workshopFile;
+extern cvar_t* sv_quitOnEmpty;
 extern cvar_t* sv_lanForceRate;
 extern cvar_t* sv_altEntDir;
 extern cvar_t* sv_dumpEntities;

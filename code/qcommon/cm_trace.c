@@ -804,10 +804,23 @@ the cylinder extends halfheight above and below the origin
 ================
 */
 void CM_TraceThroughVerticalCylinder(traceWork_t* tw, vec3_t origin, float radius, float halfheight, vec3_t start, vec3_t end) {
+    // [QL] 0x004c66d6: el radio del cilindro se escala por sv_cylinderScale, que vale 1.1.
+    // Trazabamos con el radio pelado, o sea con un cilindro un diez por ciento mas angosto
+    // que el de retail: eso es deteccion de impactos. El binario pide la cvar en cada
+    // llamada; aca se la guarda la primera vez, que da lo mismo y no repite la busqueda en
+    // un camino caliente.
+    static cvar_t* sv_cylinderScale;
+
     float length, scale, fraction, l1, l2;
     // float a;
     float b, c, d, sqrtd;
     vec3_t v1, dir, start2d, end2d, org2d, intersection;
+
+    if (!sv_cylinderScale) {
+        // [QL] el valor por defecto en el binario es literalmente "1.1f"
+        sv_cylinderScale = Cvar_Get("sv_cylinderScale", "1.1", 0);
+    }
+    radius *= sv_cylinderScale->value;
 
     // 2d coordinates
     VectorSet(start2d, start[0], start[1], 0);
