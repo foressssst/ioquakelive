@@ -76,6 +76,30 @@
     }
 
     // =============================================
+    // MATCH BROWSER
+    // la lista de servidores que da Steam; code/ui/ui_browser.c la dibuja
+    // =============================================
+    menuDef {
+        name "browser"
+        fullScreen MENU_TRUE
+        rect 0 0 640 480
+        visible MENU_FALSE
+        focusColor 1 .75 0 1
+        popup // clicks beside the 4:3 area reach the page too
+
+        onOpen { uiScript browserOpen }
+        onESC { close browser ; open main }
+
+        itemDef {
+            name browser
+            type ITEM_TYPE_OWNERDRAW
+            ownerdraw 605 // UI_BROWSER
+            rect -2000 -1000 4640 2480
+            visible 1
+        }
+    }
+
+    // =============================================
     // TRAINING CENTER
     // retail's #play/training page; code/ui/ui_training.c draws and runs it
     // =============================================

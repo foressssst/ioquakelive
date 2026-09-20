@@ -2228,6 +2228,9 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
         case UI_REPLAYS:
             UI_Replays_Paint();
             break;
+        case UI_BROWSER:
+            UI_Browser_Paint();
+            break;
         case UI_TRAINING:
             UI_Training_Paint();
             break;
@@ -2807,6 +2810,8 @@ static qboolean UI_OwnerDrawHandleKey(int ownerDraw, int flags, float* special, 
             return UI_Home_HandleKey(key);
         case UI_REPLAYS:
             return UI_Replays_HandleKey(key);
+        case UI_BROWSER:
+            return UI_Browser_HandleKey(key);
         case UI_TRAINING:
             return UI_Training_HandleKey(key);
         case UI_HANDICAP:
@@ -3260,6 +3265,8 @@ static void UI_RunMenuScript(char** args) {
             UI_StartMatch_Open();
         } else if (Q_stricmp(name, "replaysOpen") == 0) {
             UI_Replays_Open();
+        } else if (Q_stricmp(name, "browserOpen") == 0) {
+            UI_Browser_Open();
         } else if (Q_stricmp(name, "trainingOpen") == 0) {
             UI_Training_Open();
         } else if (Q_stricmp(name, "homeEscape") == 0) {
@@ -3926,7 +3933,9 @@ static void UI_BuildServerDisplayList(int force) {
                     continue;
                 }
             }
-            if (uiInfo.joinGameTypes[ui_joinGameType.integer].gtEnum != -1) {
+            // [ioquakelive] sin la lista de tipos de juego cargada, la tabla esta en cero y el
+            // filtro dejaba pasar solo los de free for all
+            if (uiInfo.numJoinGameTypes > 0 && uiInfo.joinGameTypes[ui_joinGameType.integer].gtEnum != -1) {
                 game = atoi(Info_ValueForKey(info, "gametype"));
                 if (game != uiInfo.joinGameTypes[ui_joinGameType.integer].gtEnum) {
                     trap_LAN_MarkServerVisible(ui_netSource.integer, i, qfalse);
@@ -4283,6 +4292,21 @@ mismo que la pagina del navegador: pedir la lista al abrirse y rearmarla mientra
 respuestas. Se expone aca para no escribir una segunda implementacion del mismo barrido.
 ===============
 */
+/*
+===============
+UI_Browser_Sort
+
+El mismo titulo de columna dos veces da vuelta el orden, como el uiScript
+ServerSort de retail.
+===============
+*/
+void UI_Browser_Sort(int column) {
+    if (column == uiInfo.serverStatus.sortKey) {
+        uiInfo.serverStatus.sortDir = !uiInfo.serverStatus.sortDir;
+    }
+    UI_ServersSort(column, qtrue);
+}
+
 void UI_Home_ServerList(qboolean refresh) {
     if (refresh) {
         UI_StartServerRefresh(qtrue);

@@ -2178,6 +2178,7 @@ $(B)/$(BASEGAME)/qagame$(SHLIBNAME): $(Q3GOBJ)
 
 Q3UIOBJ_ = \
   $(B)/$(BASEGAME)/ui/ui_main.o \
+  $(B)/$(BASEGAME)/ui/ui_browser.o \
   $(B)/$(BASEGAME)/ui/ui_atoms.o \
   $(B)/$(BASEGAME)/ui/ui_gameinfo.o \
   $(B)/$(BASEGAME)/ui/ui_web.o \
