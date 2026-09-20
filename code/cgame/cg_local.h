@@ -1192,6 +1192,10 @@ typedef struct {
     // powerup shaders
     qhandle_t quadShader;
     qhandle_t redQuadShader;
+    qhandle_t spawnArmorShader;     // [QL] powerups/spawnArmor, la proteccion al reaparecer
+    qhandle_t spawnArmor2Shader;    // [QL] powerups/spawnArmor2, mientras esta recibiendo dano
+    qhandle_t noPlayerClipShader;   // [QL] noPlayerClipShader, los demas cuando no se chocan
+    qhandle_t gooShader;            // [QL] powerups/goo, el infectado de Red Rover
     qhandle_t quadWeaponShader;
     qhandle_t brightWeaponShader;  // [CPMA] cg_drawBrightWeapons
     qhandle_t invisShader;

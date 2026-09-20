@@ -409,8 +409,8 @@ typedef enum {
     PW_QUAD,                        // 4  [QL moved from 1]
     PW_BATTLESUIT,                  // 5  [QL moved from 2]
     PW_HASTE,                       // 6  [QL moved from 3]
-    PW_REGEN,                       // 7  [QL moved from 5]
-    PW_INVIS,                       // 8  [QL moved from 4]
+    PW_INVIS,                       // 7  [QL moved from 4]
+    PW_REGEN,                       // 8  [QL moved from 5]
     PW_FLIGHT,                      // 9  [QL moved from 6]
     PW_INVULNERABILITY,             // 10 [QL moved from 14]
     PW_SCOUT,                       // 11
