@@ -414,7 +414,7 @@ void Steam_GS_Init(void) {
         return;
     }
 
-    sv_vac = Cvar_Get("sv_vac", "0", CVAR_ARCHIVE);
+    sv_vac = Cvar_Get("sv_vac", "1", CVAR_INIT);  // [QL] asi lo registra retail
     sv_setSteamAccount = Cvar_Get("sv_setSteamAccount", "", CVAR_ARCHIVE);
 
     // retail reads net_ip and net_port here and hands Steam the address it binds
