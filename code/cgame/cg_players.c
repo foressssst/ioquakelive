@@ -2342,45 +2342,73 @@ Adds a piece with modifications or duplications for powerups
 Also called by CG_Missile for quad rockets, but nobody can tell...
 ===============
 */
+/*
+=================
+CG_AddRefEntityWithPowerups
+
+El modelo y encima una pasada por cada cosa que lo cubre. El orden y las
+condiciones son las del binario.
+
+[QL] 0x10041860:
+  - con el bit 0x2000000 de CS_CUSTOM_SETTINGS -- los jugadores se atraviesan --
+    a los demas se los dibuja con noPlayerClipShader y nada mas;
+  - invisible tapa todo lo demas;
+  - la proteccion al reaparecer vive en powerups[0] y cambia de shader mientras
+    el jugador esta recibiendo dano;
+  - el regen parpadea: solo en una decima de cada segundo;
+  - congelado son tres shaders de hielo, y cual va lo dice generic1: se va
+    derritiendo de ice1 a ice3 mientras lo descongelan.
+
+Retail no tiene una version roja del quad: es el mismo shader para los dos
+equipos.
+=================
+*/
 void CG_AddRefEntityWithPowerups(refEntity_t* ent, entityState_t* state, int team) {
+    if ((cgs.customSettings & 0x2000000) && state->number != cg.snap->ps.clientNum) {
+        ent->customShader = cgs.media.noPlayerClipShader;
+        trap_R_AddRefEntityToScene(ent);
+        return;
+    }
+
     if (state->powerups & (1 << PW_INVIS)) {
         ent->customShader = cgs.media.invisShader;
         trap_R_AddRefEntityToScene(ent);
-    } else {
-        /*
-        if ( state->eFlags & EF_KAMIKAZE ) {
-            if (team == TEAM_BLUE)
-                ent->customShader = cgs.media.blueKamikazeShader;
-            else
-                ent->customShader = cgs.media.redKamikazeShader;
-            trap_R_AddRefEntityToScene( ent );
-        }
-        else {*/
-        trap_R_AddRefEntityToScene(ent);
-        //}
+        return;
+    }
 
-        if (state->powerups & (1 << PW_QUAD)) {
-            if (team == TEAM_RED)
-                ent->customShader = cgs.media.redQuadShader;
-            else
-                ent->customShader = cgs.media.quadShader;
-            trap_R_AddRefEntityToScene(ent);
+    trap_R_AddRefEntityToScene(ent);
+
+    if (state->powerups & (1 << PW_NONE)) {
+        ent->customShader = ((state->event & ~EV_EVENT_BITS) == EV_PAIN)
+                                ? cgs.media.spawnArmorShader
+                                : cgs.media.spawnArmor2Shader;
+        trap_R_AddRefEntityToScene(ent);
+    }
+
+    if (state->powerups & (1 << PW_QUAD)) {
+        ent->customShader = cgs.media.quadShader;
+        trap_R_AddRefEntityToScene(ent);
+    }
+
+    if ((state->powerups & (1 << PW_REGEN)) && ((cg.time / 100) % 10) == 1) {
+        ent->customShader = cgs.media.regenShader;
+        trap_R_AddRefEntityToScene(ent);
+    }
+
+    if (state->powerups & (1 << PW_BATTLESUIT)) {
+        ent->customShader = cgs.media.battleSuitShader;
+        trap_R_AddRefEntityToScene(ent);
+    }
+
+    if (state->powerups & (1 << PW_FREEZE)) {
+        if (state->generic1 & 2) {
+            ent->customShader = cgs.media.iceShardShader1;
+        } else if (state->generic1 & 1) {
+            ent->customShader = cgs.media.iceShardShader2;
+        } else {
+            ent->customShader = cgs.media.iceShardShader3;
         }
-        if (state->powerups & (1 << PW_REGEN)) {
-            if (((cg.time / 100) % 10) == 1) {
-                ent->customShader = cgs.media.regenShader;
-                trap_R_AddRefEntityToScene(ent);
-            }
-        }
-        if (state->powerups & (1 << PW_BATTLESUIT)) {
-            ent->customShader = cgs.media.battleSuitShader;
-            trap_R_AddRefEntityToScene(ent);
-        }
-        // [QL] frozen player overlay (freeze tag)
-        if (state->powerups & (1 << PW_FREEZE)) {
-            ent->customShader = cgs.media.frozenShader;
-            trap_R_AddRefEntityToScene(ent);
-        }
+        trap_R_AddRefEntityToScene(ent);
     }
 }
 
@@ -3202,13 +3230,33 @@ void CG_Player(centity_t* cent) {
     //
     // add the gun / barrel / flash
     //
-    CG_AddPlayerWeapon(&torso, NULL, cent, ci->team);
+    // [QL] 0x10042b63: el infectado de Red Rover no muestra arma -- se registra el gauntlet y
+    // nada mas -- porque lo que lleva son las manos
+    if (cgs.gametype == GT_RR && (cgs.customSettings & 0x4000000) && ci->team == TEAM_RED &&
+        cent->currentState.weapon == WP_GAUNTLET) {
+        CG_RegisterWeapon(WP_GAUNTLET);
+    } else {
+        CG_AddPlayerWeapon(&torso, NULL, cent, ci->team);
+    }
 
     // add powerups floating behind the player
     CG_PlayerPowerups(cent, &torso);
 
     // [QL] frozen / flag-carrier ground glow for the followed player (binary calls this last)
     CG_PlayerFreezeEffect(cent);
+
+    // [QL] 0x10042bc8: y por encima de todo, el infectado va cubierto de baba y arrastra un
+    // zumbido. Va ultimo, despues de los powerups y del brillo del congelado.
+    if (cgs.gametype == GT_RR && (cgs.customSettings & 0x4000000) && ci->team == TEAM_RED) {
+        legs.customShader = cgs.media.gooShader;
+        torso.customShader = cgs.media.gooShader;
+        head.customShader = cgs.media.gooShader;
+        trap_R_AddRefEntityToScene(&legs);
+        trap_R_AddRefEntityToScene(&torso);
+        trap_R_AddRefEntityToScene(&head);
+        trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin,
+                               cgs.media.nightmareSound);
+    }
 }
 
 //=====================================================================
