@@ -802,6 +802,8 @@ qboolean G_FilterPacket(char* from);
 void G_InitAccessList(void);  // [QL] 0x100325f0 - loads the steamId access list at boot
 void G_SaveAccessList(void);  // [QL] 0x10032a10 - rewrites it on map exit and shutdown
 void G_SetAccess(uint64_t steamId, int level, qboolean temporary);
+int G_AccessCount(void);
+qboolean G_AccessAt(int index, uint64_t* steamId, int* level, qboolean* temporary);
 int G_GetAccessBySteamId(uint64_t steamId);
 int  G_GetAccess(int clientNum);   // [QL] 0x10032520
 void Svcmd_ForceShuffle_f(void);
