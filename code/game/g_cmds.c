@@ -192,17 +192,21 @@ int ClientNumberFromString(gentity_t* to, char* s, qboolean checkNums, qboolean 
     int idnum;
     char cleanName[MAX_STRING_CHARS];
 
-    if (checkNums) {
-        // numeric values could be slot numbers
-        if (StringIsInteger(s)) {
-            idnum = atoi(s);
-            if (idnum >= 0 && idnum < level.maxclients) {
-                cl = &level.clients[idnum];
-                if (cl->pers.connected == CON_CONNECTED) {
-                    return idnum;
-                }
-            }
+    // [QL] 0x1003f920: retail decide por el primer caracter -- si es un digito, es un
+    // numero de puesto y no se busca por nombre --, y cada final tiene su motivo. El
+    // fork se caia al buscar por nombre y terminaba diciendo "User 5 is not on the
+    // server" cuando lo que pasaba era que el puesto 5 estaba vacio.
+    if (checkNums && s[0] >= '0' && s[0] <= '9') {
+        idnum = atoi(s);
+        if (idnum < 0 || idnum >= level.maxclients) {
+            trap_SendServerCommand(to - g_entities, va("print \"Bad client slot: %i\n\"", idnum));
+            return -1;
         }
+        if (level.clients[idnum].pers.connected != CON_CONNECTED) {
+            trap_SendServerCommand(to - g_entities, va("print \"Client %i is not active\n\"", idnum));
+            return -1;
+        }
+        return idnum;
     }
 
     if (checkNames) {
@@ -404,14 +408,27 @@ hide the scoreboard, and take a special screenshot
 ==================
 */
 void Cmd_LevelShot_f(gentity_t* ent) {
-    if (!ent->client->pers.localClient) {
-        trap_SendServerCommand(ent - g_entities,
-                               "print \"The levelshot command must be executed by a local client\n\"");
+    // [QL] 0x10040010: cuatro compuertas y en este orden -- trampas, vivo, tipo de
+    // juego y cliente local. Al fork le faltaban las dos del medio, y el texto de la
+    // ultima era propio: retail dice solo "Must be executed by a local client".
+    if (!CheatsOk(ent)) {
         return;
     }
-
-    if (!CheatsOk(ent))
+    if (ent->health <= 0) {
+        trap_SendServerCommand(ent - g_entities,
+                               "print \"You must be alive to use this command.\n\"");
         return;
+    }
+    if (g_gametype.integer != GT_FFA) {
+        trap_SendServerCommand(ent - g_entities,
+                               "print \"Must be in g_gametype 0 for levelshot\n\"");
+        return;
+    }
+    if (!ent->client->pers.localClient) {
+        trap_SendServerCommand(ent - g_entities,
+                               "print \"Must be executed by a local client\n\"");
+        return;
+    }
 
     BeginIntermission();
     trap_SendServerCommand(ent - g_entities, "clientLevelShot");
@@ -2432,6 +2449,64 @@ static void Cmd_Players_f(gentity_t* ent) {
 
 /*
 =================
+G_CommandPhaseAllowed
+
+[QL] 0x10061090. En que momento de la partida se puede usar una orden. Retail
+tiene una sola de estas y cada orden le pasa que fases acepta; las tres que la
+llaman son pause (partida en marcha), timein (partida en marcha) y allready
+(calentamiento).
+
+Cuatro respuestas, una por momento, con los textos del binario (0x10088978,
+0x100889b4, 0x100889e8, 0x10088a28). La cuarta -- la de la partida en marcha --
+no estaba en el fork porque la unica copia de esta compuerta vivia adentro de
+MP_Pause, y pause siempre acepta esa fase, asi que nunca se podia ver.
+
+Cuando la orden viene de la consola del servidor el motivo se imprime ahi, con el
+"print" y las comillas incluidos, que es tal cual lo que hace retail: le pasa el
+mismo string a trap_Printf.
+=================
+*/
+#define CMD_PHASE_WARMUP 1        // durante el calentamiento
+#define CMD_PHASE_MATCH 2         // con la partida en marcha, y en la cuenta de ronda
+#define CMD_PHASE_INTERMISSION 4  // en el descanso del final
+
+static qboolean G_CommandPhaseAllowed(gentity_t* ent, int allowed) {
+    const char* motivo;
+
+    if (level.intermissionTime != 0) {
+        if (allowed & CMD_PHASE_INTERMISSION) {
+            return qtrue;
+        }
+        motivo = "print \"This command can not be used during intermission\n\"";
+    } else if (level.warmupTime != 0) {
+        if (allowed & CMD_PHASE_WARMUP) {
+            return qtrue;
+        }
+        motivo = "print \"This command can not be used during warmup\n\"";
+    } else if ((g_gametype.integer == GT_CA || g_gametype.integer == GT_FREEZE ||
+                g_gametype.integer == GT_AD || g_gametype.integer == GT_RR) &&
+               level.roundState.eCurrent == RS_COUNTDOWN) {
+        if (allowed & CMD_PHASE_MATCH) {
+            return qtrue;
+        }
+        motivo = "print \"This command can not be used during a round countdown\n\"";
+    } else {
+        if (allowed & CMD_PHASE_MATCH) {
+            return qtrue;
+        }
+        motivo = "print \"This command can not be used while a match is in progress\n\"";
+    }
+
+    if (ent) {
+        trap_SendServerCommand(ent - g_entities, motivo);
+    } else {
+        G_Printf("%s", motivo);
+    }
+    return qfalse;
+}
+
+/*
+=================
 [QL] MP_Pause -- pause the match (qagame 0x18ba00 / .so MP_Pause).
 
 duration is in seconds (0 = indefinite pause). Records level.timePauseBegin (the frozen
@@ -2443,26 +2518,10 @@ pause. G_RunFrame freezes the clock per-frame; players are frozen via PMF_PAUSED
 void MP_Pause(gentity_t* ent, int duration) {
     const char* name;
 
-    // [QL] binary MP_Pause (0x10061e10) gates via the shared command-phase helper
-    // FUN_100610f0(2): pause is allowed only during live match play. Reject
-    // intermission / warmup / round-countdown (round-based modes) with the exact
-    // binary strings (client-initiated only). The already-paused case is handled by
-    // the caller (Cmd_Pause_f).
-    if (level.intermissionTime != 0) {
-        if (ent) trap_SendServerCommand(ent - g_entities,
-            "print \"This command can not be used during intermission\n\"");
-        return;
-    }
-    if (level.warmupTime != 0) {
-        if (ent) trap_SendServerCommand(ent - g_entities,
-            "print \"This command can not be used during warmup\n\"");
-        return;
-    }
-    if ((g_gametype.integer == GT_CA || g_gametype.integer == GT_FREEZE ||
-         g_gametype.integer == GT_AD || g_gametype.integer == GT_RR) &&
-        level.roundState.eCurrent == RS_COUNTDOWN) {
-        if (ent) trap_SendServerCommand(ent - g_entities,
-            "print \"This command can not be used during a round countdown\n\"");
+    // [QL] 0x10061e10: la pausa solo corre con la partida en marcha, y lo decide la
+    // compuerta compartida, no una copia de sus reglas. La partida ya pausada la
+    // atiende quien llama (Cmd_Pause_f).
+    if (!G_CommandPhaseAllowed(ent, CMD_PHASE_MATCH)) {
         return;
     }
     if (level.timePauseBegin != 0) {
@@ -2599,8 +2658,15 @@ static void Cmd_Timein_f(gentity_t* ent) {
 
     level.mp_unpauseTime = level.time + 5000;
     trap_SetConfigstring(CS_PAUSE_END_TIME, va("%i", level.mp_unpauseTime));
-    trap_SendServerCommand(-1, va("pcp \"%s has called timein\n\"",
-        ent->client ? ent->client->pers.netname : "The server"));
+    // [QL] 0x1006240a: son dos mensajes distintos en el binario, no un %s con "The
+    // server" adentro. Y asi ademas no se desreferencia ent cuando la orden vino de la
+    // consola del servidor, que es justo cuando ent no existe.
+    if (ent && ent->client) {
+        trap_SendServerCommand(-1, va("pcp \"%s has called timein\n\"",
+                                      ent->client->pers.netname));
+    } else {
+        trap_SendServerCommand(-1, "pcp \"The server has called timein\n\"");
+    }
 }
 
 // "allready" - Force all players to ready state (referee+)
@@ -2608,8 +2674,9 @@ static void Cmd_Timein_f(gentity_t* ent) {
 static void Cmd_AllReady_f(gentity_t* ent) {
     int i;
 
-    // [QL] 0x10061800: fuera del calentamiento no hace nada y no dice nada
-    if (level.warmupTime == 0) {
+    // [QL] 0x10061805: allready es del calentamiento y de ningun otro momento -- y
+    // fuera de el lo dice, que es lo que no hacia
+    if (!G_CommandPhaseAllowed(ent, CMD_PHASE_WARMUP)) {
         return;
     }
 
@@ -2849,6 +2916,19 @@ static void Cmd_Put_f(gentity_t* ent) {
         case TEAM_SPECTATOR: destino = "spectator"; break;
         case TEAM_FREE: destino = "free"; break;
         default: return;
+    }
+
+    // [QL] 0x10061b74: en duelo no entra un tercero. Con la partida en marcha o en
+    // cuenta atras se lo niega; esperando jugadores solo se avisa y se lo mueve igual,
+    // que es la diferencia entre las dos ramas del binario.
+    if (g_gametype.integer == GT_DUEL && team == TEAM_FREE && level.numPlayingClients >= 2) {
+        if (level.warmupTime >= 0) {
+            trap_SendServerCommand(ent - g_entities,
+                "print \"A maximum of two players are allowed in the match.\n\"");
+            return;
+        }
+        trap_SendServerCommand(ent - g_entities,
+            "print \"The match cannot begin until only two players are in the match.\n\"");
     }
 
     // [QL] 0x10061c78: si ya estaba ahi, se lo dice al que llamo y no lo mueve
