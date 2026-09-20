@@ -1940,6 +1940,10 @@ static void CG_RegisterGraphics(void) {
     cgs.media.invisShader = trap_R_RegisterShader("powerups/invisibility");
     cgs.media.ghostWeaponShader = trap_R_RegisterShader("ghostWeaponShader");
     cgs.media.regenShader = trap_R_RegisterShader("powerups/regen");
+    cgs.media.spawnArmorShader = trap_R_RegisterShader("powerups/spawnArmor");
+    cgs.media.spawnArmor2Shader = trap_R_RegisterShader("powerups/spawnArmor2");
+    cgs.media.noPlayerClipShader = trap_R_RegisterShader("noPlayerClipShader");
+    cgs.media.gooShader = trap_R_RegisterShader("powerups/goo");
     cgs.media.hastePuffShader = trap_R_RegisterShader("hasteSmokePuff");
 
     // [QL] gametype icons for scoreboard/HUD (from pak00: ui/assets/hud/*.png)

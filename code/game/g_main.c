@@ -2342,6 +2342,7 @@ void FindIntermissionPoint(void) {
     // find the intermission spot
     ent = G_Find(NULL, FOFS(classname), "info_player_intermission");
     if (!ent) {  // the map creator forgot to put in an intermission point...
+        G_Printf("WARNING: no info_player_intermission\n");  // [QL] 0x10054f16
         SelectSpawnPoint(vec3_origin, level.intermission_origin, level.intermission_angle, qfalse);
     } else {
         VectorCopy(ent->s.origin, level.intermission_origin);
