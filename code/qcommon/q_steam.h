@@ -74,6 +74,22 @@ void Steam_P2PHello(uint64_t to, qboolean asServer);
 uint64_t Steam_ClientSteamID(void);
 void Steam_ShowFriendAdd(uint64_t steamId);
 void Steam_ShowProfile(uint64_t steamId);
+void Steam_ShowFriends(void);
+
+// un amigo de Steam, tal como lo ve la lista
+typedef struct {
+    uint64_t steamId;
+    char name[64];
+    int state;           // 0 desconectado, 1 conectado, 2 ocupado, 3 ausente, ...
+    qboolean playing;    // esta jugando a algo
+    qboolean sameGame;   // y ese algo es este juego
+    unsigned int ip;     // el servidor donde esta, 0 si ninguno
+    unsigned short port;
+} steamFriend_t;
+
+int Steam_FriendCount(void);
+qboolean Steam_FriendGet(int index, steamFriend_t* out);
+const char* Steam_FriendStateName(int state);
 void Steam_SetRichPresence(const char* status);
 
 #endif
