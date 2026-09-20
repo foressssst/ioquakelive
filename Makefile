@@ -109,11 +109,11 @@ export CROSS_COMPILING
 
 
 ifndef CLIENTBIN
-CLIENTBIN=quakelive
+CLIENTBIN=ioquakelive
 endif
 
 ifndef SERVERBIN
-SERVERBIN=quakelive_dedicated
+SERVERBIN=ioqlds
 endif
 
 ifndef BASEGAME

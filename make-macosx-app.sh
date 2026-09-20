@@ -1,5 +1,5 @@
 #!/bin/bash
-# Create a macOS .app bundle for Quake Live
+# Create a macOS .app bundle for ioquakelive
 set -euo pipefail
 
 if [ $# -lt 1 ] || [ $# -gt 2 ]; then
@@ -17,7 +17,7 @@ if [ ! -d "${BUILT_PRODUCTS_DIR}" ]; then
 	exit 1
 fi
 
-PRODUCT_NAME="quakelive"
+PRODUCT_NAME="ioquakelive"
 WRAPPER_NAME="${PRODUCT_NAME}.app"
 CONTENTS="${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/Contents"
 MACOS="${CONTENTS}/MacOS"
@@ -39,8 +39,8 @@ mkdir -p "${RESOURCES}"
 
 # Copy executables
 cp "${CLIENT}" "${MACOS}/${PRODUCT_NAME}"
-if [ -f "${BUILT_PRODUCTS_DIR}/quakelive_dedicated.${ARCH}" ]; then
-	cp "${BUILT_PRODUCTS_DIR}/quakelive_dedicated.${ARCH}" "${MACOS}/quakelive_dedicated"
+if [ -f "${BUILT_PRODUCTS_DIR}/ioqlds.${ARCH}" ]; then
+	cp "${BUILT_PRODUCTS_DIR}/ioqlds.${ARCH}" "${MACOS}/ioqlds"
 fi
 
 # Copy renderer (engine loads cl_renderer + ARCH_STRING + DLL_EXT, e.g. opengl2arm64.dylib)
@@ -169,7 +169,7 @@ rewrite_homebrew_deps() {
 echo "Bundling Homebrew dependencies..."
 for bin in \
     "${MACOS}/${PRODUCT_NAME}" \
-    "${MACOS}/quakelive_dedicated" \
+    "${MACOS}/ioqlds" \
     "${MACOS}/opengl2${ARCH}.dylib"; do
     [ -f "$bin" ] || continue
     # Add rpath so this binary (and any dylib it dlopen's) can find Frameworks/
