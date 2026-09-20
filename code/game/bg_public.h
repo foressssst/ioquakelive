@@ -141,8 +141,15 @@ typedef enum {
 // duel players' names to 689/690, 0x1006671e writes "atmosphere" to 691, and
 // 0x10050a33 writes the "\x\%f\y\%f\z\%f" team bases to 694/695; cgamex86.dll
 // 0x10049544-0x10049841 reads 689/690 as names, 692/693/696-699 as one block of
-// six ints and 694/695 from the flag status ownerdraw. The award names below keep
-// the fork's order shifted by two; which award is which slot is not verified.
+// six ints y 694/695 desde el ownerdraw del estado de las banderas.
+//
+// [QL] los seis premios quedaron VERIFICADOS el 2026-09-20 leyendo la funcion que
+// los calcula (0x100559e0) y sus escrituras: 693 sale de aciertos*100/tiros, o sea
+// precision; 692 del contador de dano; 696 de una suma pesada de objetos recogidos,
+// con la mega y la armadura amarilla pesando 480; 697 de asistencias mas capturas
+// por diez; 698 de defensas mas asistencias; y 699 de todo lo anterior mas las
+// capturas por veinticinco, que es por que es el jugador mas valioso. Los seis
+// coinciden uno por uno con los nombres de aca abajo.
 #define CS_NAME1STPLAYER 689       // Name of the duel player on the left
 #define CS_NAME2NDPLAYER 690       // Name of the duel player on the right
 #define CS_ATMOSEFFECT 691         // map "atmosphere" key
