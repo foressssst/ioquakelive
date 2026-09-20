@@ -1393,7 +1393,10 @@ static float CG_MachinegunSpinAngle(centity_t* cent) {
         cent->pe.barrelAngle = AngleMod(angle);
         cent->pe.barrelSpinning = !!(cent->currentState.eFlags & EF_FIRING);
         if (cent->currentState.weapon == WP_CHAINGUN && !cent->pe.barrelSpinning) {
-            trap_S_StartSound(NULL, cent->currentState.number, CHAN_WEAPON, trap_S_RegisterSound("sound/weapons/vulcan/wvulwind.ogg", qfalse));
+            // [QL] 0x1005231a: el handle ya esta registrado; registrarlo de nuevo en
+            // cada frenada era un viaje al sistema de archivos por nada
+            trap_S_StartSound(NULL, cent->currentState.number, CHAN_WEAPON,
+                              cgs.media.chaingunWindSound);
         }
     }
 
@@ -2481,6 +2484,13 @@ void CG_MissileHitWall(int weapon, int clientNum, vec3_t origin, vec3_t dir, imp
             mark = cgs.media.bulletMarkShader;
             sfx = 0;
             radius = 4;
+            break;
+        case WP_GRAPPLING_HOOK:
+            // [QL] 0x1005417c: el gancho deja marca y suena al clavarse. No pone ni
+            // modelo ni shader de explosion, solo el sonido, la marca y el radio.
+            sfx = cgs.media.grappleHitSound;
+            mark = cgs.media.crackedMarkShader;
+            radius = 16;
             break;
         case WP_CHAINGUN:
             mod = cgs.media.bulletFlashModel;
