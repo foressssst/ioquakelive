@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // sv_client.c -- server code for dealing with clients
 
 #include "server.h"
+#include "../qcommon/q_steam.h"
 
 static void SV_CloseDownload(client_t* cl);
 
@@ -51,14 +52,74 @@ to hi-jack client connections.
 ==================
 SV_ValidateSteamAuth
 
-[QL] Stub for Steamworks auth-ticket validation (BeginAuthSession). For now
-the server trusts the Steam ID the client gave in getchallenge. Ticket
-validation via libsteam_api goes here, returning qfalse to reject a client.
+[QL] El ticket que el cliente mando en el getchallenge, puesto en manos de Steam.
+BeginAuthSession solo dice si el ticket tiene forma de ticket; si vale de verdad
+lo contesta Steam despues, por SV_SteamAuthResponse.
+
+Sin Steam del lado del servidor no hay a quien preguntarle y se entra igual, que
+es lo que pasaba hasta ahora y lo unico que deja jugar en una red local.
+
+[QL] 0x531b38 "Called BeginAuthSession on steam id %llu, got response %i",
+0x531b74 "Refusing to re-auth a client that is already being tracked".
 ==================
 */
 static qboolean SV_ValidateSteamAuth(challenge_t* challenge) {
-    (void)challenge;
-    return qtrue;
+    int result;
+    int i;
+
+    if (!Steam_GS_Running()) {
+        return qtrue;
+    }
+
+    // a alguien que ya estamos siguiendo no se lo vuelve a autenticar
+    if (challenge->steamKey) {
+        for (i = 0; i < sv_maxclients->integer; i++) {
+            if (svs.clients[i].state >= CS_CONNECTED && svs.clients[i].steam_id == challenge->steamKey) {
+                Com_Printf("Refusing to re-auth a client that is already being tracked\n");
+                return qfalse;
+            }
+        }
+    }
+
+    // el ticket empieza en 0x19 del paquete; authTokenLen se cuenta desde 0x11, o sea
+    // que abarca ademas los ocho bytes del Steam ID
+    result = Steam_GS_BeginAuth(challenge->steamKey, challenge->authToken, challenge->authTokenLen - 8);
+    return (qboolean)(result == STEAM_AUTH_BEGIN_OK);
+}
+
+/*
+==================
+SV_SteamAuthResponse
+
+[QL] 0x531a80. Lo que Steam contesta, un rato despues de BeginAuthSession, sobre
+el ticket de un jugador: si no vale, se lo echa con el motivo que da retail.
+==================
+*/
+void SV_SteamAuthResponse(uint64_t steamId, int response) {
+    const char* motivo;
+    int i;
+
+    if (!com_sv_running->integer || !svs.clients || !sv_maxclients) {
+        return;
+    }
+    for (i = 0; i < sv_maxclients->integer; i++) {
+        client_t* cl = &svs.clients[i];
+
+        if (cl->state == CS_FREE || cl->steam_id != steamId) {
+            continue;
+        }
+        if (response == 0) {
+            return;  // vale; retail tampoco dice nada
+        }
+        motivo = Steam_AuthResponseName(response);
+        if (motivo) {
+            SV_DropClient(cl, va("Failed to authenticate with Steam: %s", motivo));
+        } else {
+            SV_DropClient(cl, va("Failed to authenticate with Steam: (Err:%i)", response));
+        }
+        return;
+    }
+    Com_Printf("Steam OnValidateAuthTicketResponse: couldn't match auth response to a client\n");
 }
 
 void SV_GetChallenge(netadr_t from, msg_t* msg) {
@@ -477,6 +538,12 @@ void SV_DropClient(client_t* drop, const char* reason) {
     }
 
     if (!isBot) {
+        // [QL] 0x543a44: la sesion que se abrio con BeginAuthSession se cierra aca
+        if (drop->steam_id) {
+            Com_DPrintf("Ending auth session for steam id %llu\n", (unsigned long long)drop->steam_id);
+            Steam_GS_EndAuth(drop->steam_id);
+        }
+
         // see if we already have a challenge for this ip
         challenge = &svs.challenges[0];
 

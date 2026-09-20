@@ -1916,18 +1916,31 @@ void CL_CheckForResend(void) {
         {
             // QL getchallenge payload: "getchallenge " (13) + steam key (8) + auth token (11-512).
             // Can't use NET_OutOfBandPrint (stops at nulls) or NET_OutOfBandData (adds Huffman).
-            byte payload[64];
-            unsigned long long steamId;
-#ifdef _MSC_VER
-            steamId = _strtoui64(cl_steamId->string, NULL, 10);
-#else
-            steamId = strtoull(cl_steamId->string, NULL, 10);
-#endif
-            Com_Memcpy(payload,      "getchallenge ", 13);  // command
-            Com_Memcpy(payload + 13, &steamId, 8);          // steam key (cl_steamId cvar)
-            Com_Memset(payload + 21, 0, 16);                // dummy auth token (min 11 bytes)
+            //
+            // [QL] el ticket lo firma Steam para esta sesion y el servidor se lo da a Steam
+            // para saber si el Steam ID es de quien dice ser. Sin Steam se manda el relleno
+            // de siempre y el identificador de respaldo del fork: asi se sigue pudiendo
+            // jugar en una red local, donde tampoco hay nadie que valide nada.
+            byte payload[13 + 8 + 504];
+            unsigned long long steamId = Steam_ClientSteamID();
+            int ticketLen;
 
-            NET_OutOfBandRaw(NS_CLIENT, clc.serverAddress, payload, 13 + 8 + 16);
+            if (!steamId) {
+#ifdef _MSC_VER
+                steamId = _strtoui64(cl_steamId->string, NULL, 10);
+#else
+                steamId = strtoull(cl_steamId->string, NULL, 10);
+#endif
+            }
+            Com_Memcpy(payload,      "getchallenge ", 13);  // command
+            Com_Memcpy(payload + 13, &steamId, 8);          // steam key
+
+            ticketLen = Steam_AuthTicket(payload + 21, sizeof(payload) - 21);
+            if (ticketLen <= 0) {
+                Com_Memset(payload + 21, 0, 16);  // el servidor exige once bytes como minimo
+                ticketLen = 16;
+            }
+            NET_OutOfBandRaw(NS_CLIENT, clc.serverAddress, payload, 21 + ticketLen);
             break;
         }
 
