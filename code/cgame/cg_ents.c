@@ -452,10 +452,13 @@ static void CG_DrawItemTimer(centity_t* cent, const gitem_t* item) {
     float alpha, dist;
     int total, lit, art, angle, i;
 
-    // [QL] 0x1002db32 reads cg_itemFx, not cg_itemTimers: the client's cg_itemTimers is
-    // registered and never looked at, because it is the server's g_itemTimers that decides
-    // whether the entity carries a timer at all
-    if (!cg_itemFx.integer || !item->itemTimer || cg.time >= es->time || es->time2 <= 0) {
+    // [QL] 0x1002db1a: la compuerta es cg_itemTimers -- su vmCvar vive en 0x10a64fe0 y el
+    // binario lee su .integer en 0x10a64fec --, no cg_itemFx. Estaba al reves, asi que a quien
+    // apagaba los efectos de los items se le iban tambien los relojes.
+    //
+    // El binario tampoco mira es->time2: divide por 5000 sin fijarse. El corte de abajo es
+    // nuestro, para no dibujar cero gajos.
+    if (!cg_itemTimers.integer || !item->itemTimer || cg.time >= es->time || es->time2 <= 0) {
         return;
     }
 
