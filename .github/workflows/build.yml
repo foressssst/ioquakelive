@@ -502,16 +502,6 @@ jobs:
       with:
         name: release-zips
         path: artifacts
-    - name: Build the source zip
-      # GPL v2 obliges us to offer the source that produced these binaries, and a
-      # release is the natural place to put it. git archive takes the tag, so the
-      # zip matches the build exactly.
-      run: |
-        git archive --format=zip \
-          --prefix="ioquakelive-${{ steps.version.outputs.version }}/" \
-          -o "artifacts/ioquakelive-${{ steps.version.outputs.version }}-src.zip" \
-          "${{ steps.version.outputs.tag }}"
-        ls -la artifacts/
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:

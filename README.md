@@ -258,9 +258,10 @@ ioquakelive-macos-arm64.zip     an ioquakelive.app bundle, with ioqlds inside it
 
 ioqlds-windows-x64.zip          the dedicated server: ioqlds, baseq3/, and a
 ioqlds-linux-x86_64.zip         sample server.cfg and access.txt to edit
-
-ioquakelive-<version>-src.zip   the source that produced them, as GPL v2 requires
 ```
+
+GitHub attaches the tagged source to the release by itself, as `Source code (zip)`
+and `(tar.gz)`, which is what GPL v2 asks for.
 
 None of them contains `pak00.pk3`. Unzip, drop your own `pak00.pk3` into `baseq3/`
 and run the executable. On Windows the client does that step for you: if `pak00.pk3`
@@ -529,9 +530,10 @@ ioquakelive-macos-arm64.zip     un paquete ioquakelive.app, con ioqlds adentro
 
 ioqlds-windows-x64.zip          el servidor dedicado: ioqlds, baseq3/, y un
 ioqlds-linux-x86_64.zip         server.cfg y un access.txt de ejemplo para editar
-
-ioquakelive-<versión>-src.zip   el código que los produjo, como exige la GPL v2
 ```
+
+GitHub adjunta al release el código del tag por su cuenta, como `Source code (zip)`
+y `(tar.gz)`, que es lo que pide la GPL v2.
 
 Ninguno trae `pak00.pk3`. Se descomprime, se pone el `pak00.pk3` propio en `baseq3/` y se ejecuta. En Windows el cliente hace ese paso solo: si falta `pak00.pk3`, busca Quake Live en tu biblioteca de Steam y ofrece copiarlo.
 
