@@ -542,12 +542,11 @@ static void SetTeam_SpectateOnly(gentity_t* ent) {
 }
 
 void SetTeam(gentity_t* ent, const char* s) {
-    int team, oldTeam;
+    int team;
     gclient_t* client;
     int clientNum;
     spectatorState_t specState;
     int specClient;
-    int teamLeader;
 
     //
     // see what change is requested
@@ -698,6 +697,24 @@ void SetTeam(gentity_t* ent, const char* s) {
     //
     // decide if we will allow the change
     //
+
+    SetTeam_Execute(ent, team, specState, specClient);
+}
+
+/*
+===============
+SetTeam_Execute
+
+[QL] 0x10040440. El cambio de equipo en si, ya decidido cual: SetTeam lo llama
+despues de leer el texto, y el barajado de equipos lo llama directo con el equipo
+que le toca a cada uno.
+===============
+*/
+void SetTeam_Execute(gentity_t* ent, int team, spectatorState_t specState, int specClient) {
+    gclient_t* client = ent->client;
+    int clientNum = client - level.clients;
+    int oldTeam;
+    int teamLeader;
 
     // [QL] 0x10040cc8: un equipo cerrado no recibe a nadie
     if (G_TeamIsLocked(ent, (team_t)team)) {
@@ -2449,6 +2466,70 @@ static void Cmd_Players_f(gentity_t* ent) {
 
 /*
 =================
+Cmd_Complaint_f
+
+[QL] 0x10043ab0. La respuesta del herido a la ventana de queja que le abrio
+g_combat cuando un companero lo mato: "complaint y" la presenta, cualquier otra
+cosa la descarta. La ventana dura lo que diga pers.complaintEndTime y solo existe
+con la partida en marcha y g_complaintLimit distinto de cero.
+
+Los numeros que vuelven son los que espera el cliente: -1 queja presentada, -2
+descartada, -3 contra alguien que no se puede denunciar.
+
+Al que junta g_complaintLimit quejas lo echa, salvo que sea un cliente local.
+Retail ademas se guarda su Steam ID antes de echarlo (trap_GetSteamID desde
+0x10043d1e) y escribe dos campos de una estructura que no esta identificada; eso
+no esta portado y queda anotado.
+=================
+*/
+static void Cmd_Complaint_f(gentity_t* ent) {
+    gclient_t* mio = ent->client;
+    gentity_t* acusado;
+    char arg[MAX_TOKEN_CHARS];
+
+    if (level.time >= mio->pers.complaintEndTime || level.warmupTime != 0 ||
+        !g_complaintLimit.integer) {
+        mio->pers.complaintEndTime = -1;
+        mio->pers.complaintClient = -1;
+        return;
+    }
+    if (mio->pers.complaintClient < 0 || mio->pers.complaintClient >= level.maxclients) {
+        return;  // [QL] 0x10043d6b: con un acusado que no esta, ni siquiera se limpia
+    }
+
+    acusado = &g_entities[mio->pers.complaintClient];
+    if (!acusado->client || acusado->client->pers.connected != CON_CONNECTED) {
+        return;
+    }
+    if (acusado->client->sess.privileges == 2) {
+        trap_SendServerCommand(ent - g_entities, "complaint -3");
+        return;
+    }
+
+    trap_Argv(1, arg, sizeof(arg));
+    if (arg[0] == 'y' || arg[0] == 'Y' || arg[0] == '1') {
+        acusado->client->pers.complaints++;
+        if (!acusado->client->pers.localClient &&
+            acusado->client->pers.complaints >= g_complaintLimit.integer) {
+            trap_DropClient(acusado - g_entities, "kicked after too many complaints.");
+            trap_SendServerCommand(ent - g_entities, "complaint -1");
+            return;
+        }
+        trap_SendServerCommand(mio->pers.complaintClient,
+            va("print \"^1Warning^7: Complaint filed against you by %s.\n\"", mio->pers.netname));
+        trap_SendServerCommand(ent - g_entities, "complaint -1");
+    } else {
+        trap_SendServerCommand(mio->pers.complaintClient,
+            "print\"No complaint filed against you.\n\"");
+        trap_SendServerCommand(ent - g_entities, "complaint -2");
+    }
+
+    mio->pers.complaintEndTime = -1;
+    mio->pers.complaintClient = -1;
+}
+
+/*
+=================
 G_CommandPhaseAllowed
 
 [QL] 0x10061090. En que momento de la partida se puede usar una orden. Retail
@@ -3797,6 +3878,8 @@ void ClientCommand(int clientNum) {
         Cmd_Team_f(ent);
     else if (Q_stricmp(cmd, "where") == 0)
         Cmd_Where_f(ent);
+    else if (Q_stricmp(cmd, "complaint") == 0)
+        Cmd_Complaint_f(ent);
     else if (Q_stricmp(cmd, "callvote") == 0 || Q_stricmp(cmd, "cv") == 0)
         Cmd_CallVote_f(ent);
     else if (Q_stricmp(cmd, "gc") == 0)

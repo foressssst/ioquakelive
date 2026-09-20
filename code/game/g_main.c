@@ -3497,20 +3497,32 @@ static qboolean ExecuteVoteCommand(const char *voteCmd) {
         }
         return qtrue;
     }
+    // [QL] 0x10058d0c y siguientes: cada uno de estos tres reconoce dos palabras y
+    // rechaza cualquier otra diciendolo. El fork trataba todo lo que no fuera la
+    // primera como si fuera la segunda, asi que un voto con una palabra sin sentido
+    // apagaba la opcion en silencio. Y el reinicio de mapa es solo del de municion:
+    // los otros dos son del calentamiento, donde se reaparece igual.
     if (!Q_stricmp(arg0, "loadouts")) {
         if (!Q_stricmp(arg1, "ON")) {
             trap_Cvar_Set("g_loadout", "1");
-        } else {
+        } else if (!Q_stricmp(arg1, "OFF")) {
             trap_Cvar_Set("g_loadout", "0");
+        } else {
+            trap_SendServerCommand(-1,
+                "print \"^3Valid loadout options are:    ^5ON    ^5OFF^7\n\"");
         }
-        trap_SendConsoleCommand(EXEC_APPEND, "map_restart 0\n");
         return qtrue;
     }
     if (!Q_stricmp(arg0, "ammo")) {
         if (!Q_stricmp(arg1, "GLOBAL")) {
             trap_Cvar_Set("g_ammoPack", "1");
-        } else {
+        } else if (!Q_stricmp(arg1, "WEAP")) {
             trap_Cvar_Set("g_ammoPack", "0");
+        } else {
+            // [QL] 0x10058ee7: el binario dice "loadout" aca, no "ammo"
+            trap_SendServerCommand(-1,
+                "print \"^3Valid loadout options are:    ^5GLOBAL    ^5WEAP^7\n\"");
+            return qtrue;
         }
         trap_SendConsoleCommand(EXEC_APPEND, "map_restart 0\n");
         return qtrue;
@@ -3518,15 +3530,18 @@ static qboolean ExecuteVoteCommand(const char *voteCmd) {
     if (!Q_stricmp(arg0, "timers")) {
         if (!Q_stricmp(arg1, "ON")) {
             trap_Cvar_Set("g_itemTimers", "1");
-        } else {
+        } else if (!Q_stricmp(arg1, "OFF")) {
             trap_Cvar_Set("g_itemTimers", "0");
+        } else {
+            trap_SendServerCommand(-1,
+                "print \"^3Valid item timer options are:    ^5ON    ^5OFF^7\n\"");
         }
         return qtrue;
     }
     if (!Q_stricmp(arg0, "shuffle")) {
-        // shuffle teams by randomly reassigning all playing clients
-        level.shufflePending = qtrue;
-        trap_SendConsoleCommand(EXEC_APPEND, "map_restart 0\n");
+        // [QL] 0x10058e4e: el voto baraja ahi mismo. Antes dejaba level.shufflePending
+        // en alto y no lo miraba nadie, asi que el voto pasaba y no pasaba nada.
+        G_ShuffleTeams();
         return qtrue;
     }
     if (!Q_stricmp(arg0, "teamsize")) {
@@ -3540,6 +3555,58 @@ static qboolean ExecuteVoteCommand(const char *voteCmd) {
     }
 
     return qfalse;
+}
+
+/*
+=================
+G_CheckAutoShuffle
+
+[QL] 0x10059936. Con g_shuffle_automatic encendido, el servidor baraja los equipos
+solo cuando la partida se queda corta de jugadores y despues vuelve a llenarse:
+mientras hay menos de g_shuffle_automatic_minplayers queda armado, y en cuanto
+vuelven a alcanzar arranca una cuenta de g_shuffle_timedelay milisegundos que se
+anuncia una vez por segundo y termina barajando.
+
+Solo corre mientras se espera para empezar (warmupTime negativo), que es donde
+mover a alguien no rompe nada. Las tres cvars estaban registradas en el fork desde
+siempre y no las leia nadie.
+=================
+*/
+static void G_CheckAutoShuffle(void) {
+    int fin;
+
+    if (!g_shuffle_automatic.integer) {
+        return;
+    }
+
+    if (!level.autoShuffleStart) {
+        if (level.numPlayingClients < g_shuffle_automatic_minplayers.integer) {
+            level.autoShuffleArmed = qtrue;  // [QL] 0x10059957
+            return;
+        }
+        if (!level.autoShuffleArmed || !level.time) {
+            return;
+        }
+        level.autoShuffleStart = level.time;  // [QL] 0x10059968
+    }
+
+    if (level.warmupTime >= 0) {
+        return;
+    }
+
+    fin = level.autoShuffleStart + g_shuffle_timedelay.integer;
+    if (level.time < fin) {
+        // [QL] 0x100599a4: un aviso por segundo, y solo cuando el segundo que queda
+        // cambia de un cuadro al siguiente
+        int quedan = (fin - level.time) / 1000;
+
+        if (quedan != (fin - (level.time - level.frametime)) / 1000) {
+            trap_SendServerCommand(-1, va("cp \"Auto-Shuffling Teams in %d seconds.\n\"", quedan));
+        }
+        return;
+    }
+
+    G_ShuffleTeams();
 }
 
 /*
@@ -4034,6 +4101,7 @@ void G_RunFrame(int levelTime) {
     // [QL] 0x1005990d: team gametypes only
     if (g_gametype.integer >= GT_TEAM) {
         CheckTeamStatus();
+        G_CheckAutoShuffle();
     }
 
     // cancel vote if timed out
