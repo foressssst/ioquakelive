@@ -1536,6 +1536,11 @@ void Cmd_CallVote_f(gentity_t *ent) {
             trap_SendServerCommand(clientNum, "print \"Missing player name.\n\"");
             return;
         }
+        if (!Q_stricmp(arg2, "all")) {
+            trap_SendServerCommand(clientNum,
+                "print \"Voting to kick all players is not allowed.\n\"");
+            return;
+        }
         i = ClientNumberFromString(ent, arg2, qfalse, qtrue);
         if (i == -1) {
             trap_SendServerCommand(clientNum,
@@ -1681,11 +1686,39 @@ void Cmd_CallVote_f(gentity_t *ent) {
             return;
         }
         ts = atoi(arg2);
-        if (ts < 0 || ts > 64) {
+        if (ts > 64) {
             trap_SendServerCommand(clientNum,
                 va("print \"Invalid team size. (Valid Range: %d - %d)\n\"",
                    g_teamSizeMin.integer, g_maxclients.integer));
             return;
+        }
+        if (ts > 0) {
+            int total = TeamCount(-1, TEAM_RED) + TeamCount(-1, TEAM_BLUE) +
+                        TeamCount(-1, TEAM_FREE);
+            int rojos = TeamCount(-1, TEAM_RED);
+            int azules = TeamCount(-1, TEAM_BLUE);
+            int maximo = (g_gametype.integer >= GT_TEAM) ? g_maxclients.integer / 2
+                                                         : g_maxclients.integer;
+
+            // [QL] 0x100430e0: primero la arena entera, despues cada equipo
+            if (ts < total) {
+                trap_SendServerCommand(clientNum,
+                    va("print \"^1The arena has more than %d players. Players must leave before this teamsize can be set.^7\"",
+                       ts));
+                return;
+            }
+            if (ts < rojos || ts < azules) {
+                trap_SendServerCommand(clientNum,
+                    va("print \"^1%s has more than %d players. Players must leave the team before this teamsize can be set.^7\"",
+                       (ts < rojos) ? "Red Team" : "Blue Team", ts));
+                return;
+            }
+            if (ts < g_teamSizeMin.integer || ts > maximo) {
+                trap_SendServerCommand(clientNum,
+                    va("print \"Invalid team size. (Valid Range: %d - %d)\n\"",
+                       g_teamSizeMin.integer, maximo));
+                return;
+            }
         }
     }
     else if (!Q_stricmp(arg1, "cointoss")) {
@@ -1978,27 +2011,37 @@ void Cmd_Vote_f(gentity_t *ent) {
         trap_SendServerCommand(ent - g_entities, "print \"No vote in progress.\n\"");
         return;
     }
-    if (ent->client->pers.voteState != VOTE_PENDING) {
-        trap_SendServerCommand(ent - g_entities, "print \"Vote already cast.\n\"");
-        return;
-    }
-    if (!g_allowSpecVote.integer &&
-        ent->client->sess.sessionTeam == TEAM_SPECTATOR) {
-        trap_SendServerCommand(ent - g_entities, "print \"Not allowed to vote as spectator.\n\"");
-        return;
+
+    // [QL] 0x10044270: al administrador no se le mira el estado -- puede votar siempre, y
+    // hasta puede votar de nuevo. A los demas se les dice por que no pueden.
+    if (ent->client->sess.privileges < 1) {
+        if (ent->client->pers.voteState == VOTE_NONE) {
+            trap_SendServerCommand(ent - g_entities,
+                "print \"You may not participate in this vote.\n\"");
+            return;
+        }
+        if (ent->client->pers.voteState != VOTE_PENDING) {
+            trap_SendServerCommand(ent - g_entities, "print \"Vote already cast.\n\"");
+            return;
+        }
     }
 
     trap_SendServerCommand(ent - g_entities, "print \"Vote cast.\n\"");
 
     trap_Argv(1, msg, sizeof(msg));
 
-    if (tolower(msg[0]) == 'y' || msg[0] == '1') {
-        ent->client->pers.voteState = VOTE_YES;
+    // el voto de un administrador no es uno mas: el si fuerza el paso y el no lo veta
+    if (msg[0] != 'y' && msg[0] != 'Y' && msg[0] != '1') {
+        level.voteNo++;
+        trap_SetConfigstring(CS_VOTE_NO, va("%i", level.voteNo));
+        ent->client->pers.voteState =
+            (ent->client->sess.privileges > 0) ? VOTE_VETOED : VOTE_NO;
     } else {
-        ent->client->pers.voteState = VOTE_NO;
+        level.voteYes++;
+        trap_SetConfigstring(CS_VOTE_YES, va("%i", level.voteYes));
+        ent->client->pers.voteState =
+            (ent->client->sess.privileges > 0) ? VOTE_PASSED : VOTE_YES;
     }
-
-    // vote counts are recalculated each frame in CheckVote
 }
 
 /*
@@ -2587,8 +2630,16 @@ static void Cmd_AllReady_f(gentity_t* ent) {
 
 // "pause" - Pause the match indefinitely (referee+)
 static void Cmd_Pause_f(gentity_t* ent) {
+    // [QL] 0x10062140: si ya esta en pausa, el que la vuelve a pedir se queda con ella -- y
+    // entonces es el quien puede levantarla
     if (level.timePauseBegin != 0) {
-        // [QL] 0x10062130: si ya esta en pausa no dice nada, solo no hace nada
+        int clientNum = ent - g_entities;
+
+        if (level.mp_pauseClient != clientNum) {
+            level.mp_pauseClient = clientNum;
+            trap_SendServerCommand(clientNum,
+                "print \"You have taken ownership of the current timeout\n\"");
+        }
         return;
     }
     MP_Pause(ent, 0);  // 0 = indefinite; MP_Pause rejects warmup/intermission
