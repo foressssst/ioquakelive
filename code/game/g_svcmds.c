@@ -508,6 +508,21 @@ static accessEntry_t g_accessList[MAX_ACCESS_ENTRIES];
 static int           g_numAccessEntries;
 
 // find-or-create the entry for a steamId (mirrors std::map::operator[])
+// [QL] 0x100327d0: la orden listaccess recorre la lista tal cual esta
+int G_AccessCount(void) {
+    return g_numAccessEntries;
+}
+
+qboolean G_AccessAt(int index, uint64_t* steamId, int* level, qboolean* temporary) {
+    if (index < 0 || index >= g_numAccessEntries) {
+        return qfalse;
+    }
+    *steamId = g_accessList[index].steamId;
+    *level = g_accessList[index].level;
+    *temporary = (qboolean)(g_accessList[index].flag != 0);
+    return qtrue;
+}
+
 static accessEntry_t* AccessList_Get(uint64_t steamId) {
     int i;
     for (i = 0; i < g_numAccessEntries; i++) {

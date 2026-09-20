@@ -2489,24 +2489,20 @@ static void Cmd_Timein_f(gentity_t* ent) {
 static void Cmd_AllReady_f(gentity_t* ent) {
     int i;
 
-    // Only valid during warmup
+    // [QL] 0x10061800: fuera del calentamiento no hace nada y no dice nada
     if (level.warmupTime == 0) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"allready is only available during warmup.\n\"");
         return;
     }
 
-    // Duel: must have exactly 2 players
     if (g_gametype.integer == GT_DUEL && level.numPlayingClients != 2) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Allready may not be used until two players are in the match.\n\"");
+    trap_SendServerCommand(ent - g_entities, "print \"Allready may not be used until two players are in the match.\n\"");
         return;
     }
 
-    // Set all connected non-spectator players to ready
     for (i = 0; i < level.maxclients; i++) {
         gentity_t* e = &g_entities[i];
         gclient_t* cl = &level.clients[i];
+
         if (e->client && cl->pers.connected == CON_CONNECTED) {
             cl->pers.ready = qtrue;
         }
@@ -2516,8 +2512,7 @@ static void Cmd_AllReady_f(gentity_t* ent) {
 // "pause" - Pause the match indefinitely (referee+)
 static void Cmd_Pause_f(gentity_t* ent) {
     if (level.timePauseBegin != 0) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Match is already paused.\n\"");
+        // [QL] 0x10062130: si ya esta en pausa no dice nada, solo no hace nada
         return;
     }
     MP_Pause(ent, 0);  // 0 = indefinite; MP_Pause rejects warmup/intermission
@@ -2744,7 +2739,7 @@ static void Cmd_Mute_f(gentity_t* ent) {
     }
 
     target->client->sess.muted = 1;
-    trap_SendServerCommand(-1, va("print \"%s ^7has been muted.\n\"",
+    trap_SendServerCommand(-1, va("print \"%s has been muted\n\"",
         target->client->pers.netname));
 }
 
@@ -2765,7 +2760,7 @@ static void Cmd_Unmute_f(gentity_t* ent) {
     }
 
     target->client->sess.muted = 0;
-    trap_SendServerCommand(-1, va("print \"%s ^7has been unmuted.\n\"",
+    trap_SendServerCommand(-1, va("print \"%s has been unmuted\n\"",
         target->client->pers.netname));
 }
 
@@ -2792,8 +2787,6 @@ static void Cmd_Ban_f(gentity_t* ent) {
     trap_Argv(0, cmd, sizeof(cmd));
     G_SetAccess(g_clients[pid].pers.steamId, -1, (qboolean)(Q_stricmp(cmd, "tempban") == 0));
 
-    trap_SendServerCommand(-1, va("print \"%s ^7has been banned by %s.\n\"",
-        g_clients[pid].pers.netname, ent->client->pers.netname));
     trap_DropClient(pid, "You are banned from this server.");
 }
 
@@ -2810,58 +2803,72 @@ static void Cmd_Unban_f(gentity_t* ent) {
     char arg[MAX_TOKEN_CHARS];
     uint64_t steamId;
 
+    // [QL] 0x10062ad0: el unico aviso que da es el del final
     if (trap_Argc() < 2) {
-        trap_SendServerCommand(ent - g_entities, "print \"Usage: unban <account>\n\"");
         return;
     }
     trap_Argv(1, arg, sizeof(arg));
     steamId = (uint64_t)_atoi64(arg);
-    if (!steamId) {
-        trap_SendServerCommand(ent - g_entities, "print \"Usage: unban <account>\n\"");
-        return;
-    }
-    if (G_GetAccessBySteamId(steamId) != -1) {
-        trap_SendServerCommand(ent - g_entities, va("print \"%llu is not banned\n\"",
-            (unsigned long long)steamId));
+    if (!steamId || G_GetAccessBySteamId(steamId) != -1) {
         return;
     }
     G_SetAccess(steamId, 0, qfalse);
-    trap_SendServerCommand(-1, va("print \"%llu has been unbanned\n\"", (unsigned long long)steamId));
+    trap_SendServerCommand(-1, va("print \"%llu has been unbanned\n\"",
+        (unsigned long long)steamId));
 }
 
 // "listaccess" - List access control entries (referee+)
 static void Cmd_ListAccess_f(gentity_t* ent) {
+    // [QL] 0x100327d0: la lista entera, de a veinte por pagina, con el nivel y si es
+    // temporal o permanente
+    static const char* niveles[4] = {"      ", "MOD   ", "ADMIN ", "ROOT  "};
+    char arg[MAX_TOKEN_CHARS];
+    int total = G_AccessCount();
+    int paginas = total / 20;
+    int pagina = 0;
     int i;
-    char msg[128];
+
+    if (trap_Argc() > 1) {
+        trap_Argv(1, arg, sizeof(arg));
+        pagina = atoi(arg);
+    }
+    if (pagina < 0) {
+        pagina = 0;
+    } else if (pagina > paginas) {
+        pagina = paginas;
+    }
 
     trap_SendServerCommand(ent - g_entities,
-        "print \"\n--- Access List ---\n\"");
-    for (i = 0; i < level.maxclients; i++) {
-        if (g_clients[i].pers.connected != CON_CONNECTED) continue;
-        if (g_clients[i].sess.privileges == 0) continue;
-        Com_sprintf(msg, sizeof(msg), "print \"%2d %-5s %s\n\"",
-                   i,
-                   g_clients[i].sess.privileges == 2 ? "ADMIN" : "REF",
-                   g_clients[i].pers.netname);
-        trap_SendServerCommand(ent - g_entities, msg);
+        va("print \"Access List: Page %i of %i\n\"", pagina + 1, paginas + 1));
+    trap_SendServerCommand(ent - g_entities,
+        "print \"=============================\n\"");
+
+    for (i = pagina * 20; i < total && i < (pagina + 1) * 20; i++) {
+        uint64_t steamId = 0;
+        int level = 0;
+        qboolean temporary = qfalse;
+
+        if (!G_AccessAt(i, &steamId, &level, &temporary)) {
+            break;
+        }
+        trap_SendServerCommand(ent - g_entities,
+            va("print \"%llu %s %s\n\"", (unsigned long long)steamId,
+               (level >= 0 && level < 4) ? niveles[level] : "BAN   ",
+               temporary ? "TEMP" : "PERM"));
     }
 }
 
 // "opsay" - Admin chat message (referee+)
 static void Cmd_OpSay_f(gentity_t* ent) {
-    char msg[MAX_SAY_TEXT];
+    char* msg;
 
-    if (trap_Argc() < 2) return;
-
-    trap_Argv(1, msg, sizeof(msg));
-    // ConcatArgs equivalent for remaining args
-    {
-        char* p = ConcatArgs(1);
-        Q_strncpyz(msg, p, sizeof(msg));
+    // [QL] 0x10062bf0: sin nada que decir no dice nada
+    if (trap_Argc() < 2) {
+        return;
     }
-
-    trap_SendServerCommand(-1, va("chat \"^3[ADMIN] %s: ^7%s\n\"",
-        ent->client->pers.netname, msg));
+    msg = ConcatArgs(1);
+    trap_SendServerCommand(-1, va("print \"<@%s^7> %s\n\"",
+        ent->client->pers.localClient ? "server" : ent->client->pers.netname, msg));
 }
 
 // "addadmin" - Grant admin privileges (admin only)
@@ -2922,14 +2929,23 @@ static void Cmd_Demote_f(gentity_t* ent) {
 
 // "abort" - Abort match, return to warmup (referee+)
 static void Cmd_Abort_f(gentity_t* ent) {
+    // [QL] 0x10061550: en calentamiento no hay nada que abortar, y en silencio
     if (level.warmupTime != 0) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Cannot abort - not in a match.\n\"");
         return;
     }
 
-    trap_SendServerCommand(-1, va("cp \"%s ^7has aborted the match.\n\"",
+    // no se aborta una partida en pausa
+    if (level.timePauseBegin) {
+    trap_SendServerCommand(ent - g_entities, "print \"Match is currently paused. You must unpause before aborting the match.\n\"");
+        return;
+    }
+
+    if (ent->client->pers.localClient) {
+    trap_SendServerCommand(-1, "pcp \"The server has aborted the match\n\"");
+    } else {
+    trap_SendServerCommand(-1, va("pcp \"%s has aborted the match\n\"",
         ent->client->pers.netname));
+    }
     trap_SendConsoleCommand(EXEC_APPEND, "map_restart 0\n");
 }
 
@@ -2937,42 +2953,33 @@ static void Cmd_Abort_f(gentity_t* ent) {
 static void Cmd_AddScore_f(gentity_t* ent) {
     char scoreStr[MAX_TOKEN_CHARS];
     gentity_t* target = G_FindPlayerArg(ent);
+    int score;
 
     if (!target) {
         return;
     }
     trap_Argv(2, scoreStr, sizeof(scoreStr));
+    score = atoi(scoreStr);
 
-    target->client->ps.persistant[PERS_SCORE] += atoi(scoreStr);
+    target->client->ps.persistant[PERS_SCORE] += score;
     CalculateRanks();
+    trap_SendServerCommand(-1, "pcp \"Player score adjusted.\n\"");
+    trap_SendServerCommand(-1, va("print \"%s has had their score %screased by %i.\n\"",
+        target->client->pers.netname, score < 0 ? "de" : "in", abs(score)));
 }
 
 // "addteamscore" - Add to a team's score (referee+)
 static void Cmd_AddTeamScore_f(gentity_t* ent) {
-    char teamStr[MAX_TOKEN_CHARS];
     char scoreStr[MAX_TOKEN_CHARS];
-    int score;
+    team_t team = G_ParseTeamArg(ent, 1);
 
-    if (trap_Argc() < 3) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Usage: addteamscore <R|B> <score>\n\"");
+    if (team != TEAM_RED && team != TEAM_BLUE) {
         return;
     }
-
-    trap_Argv(1, teamStr, sizeof(teamStr));
     trap_Argv(2, scoreStr, sizeof(scoreStr));
-    score = atoi(scoreStr);
-
-    if (Q_stricmp(teamStr, "r") == 0 || Q_stricmp(teamStr, "red") == 0) {
-        level.teamScores[TEAM_RED] += score;
-    } else if (Q_stricmp(teamStr, "b") == 0 || Q_stricmp(teamStr, "blue") == 0) {
-        level.teamScores[TEAM_BLUE] += score;
-    } else {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Invalid team. Use R or B.\n\"");
-        return;
-    }
+    level.teamScores[team] += atoi(scoreStr);
     CalculateRanks();
+    trap_SendServerCommand(-1, "pcp \"Team score adjusted.\n\"");
 }
 
 // "setmatchtime" - Set match time in seconds (referee+)
@@ -2980,9 +2987,8 @@ static void Cmd_SetMatchTime_f(gentity_t* ent) {
     char timeStr[MAX_TOKEN_CHARS];
     int seconds;
 
+    // [QL] 0x10062ce0: sin argumento no hace nada y no dice nada
     if (trap_Argc() < 2) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Usage: setmatchtime <seconds>\n\"");
         return;
     }
 
@@ -2991,7 +2997,7 @@ static void Cmd_SetMatchTime_f(gentity_t* ent) {
 
     level.startTime = level.time - (seconds * 1000);
     trap_SetConfigstring(CS_LEVEL_START_TIME, va("%i", level.startTime));
-    trap_SendServerCommand(-1, va("cp \"Match time set to %d seconds.\n\"", seconds));
+    trap_SendServerCommand(-1, va("pcp \"Match time has been set to %s.\n\"", timeStr));
 }
 
 /*
