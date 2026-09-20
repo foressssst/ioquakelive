@@ -412,38 +412,90 @@ void Cmd_RaceInit_f(gentity_t *ent) {
     trap_SendServerCommand(ent - g_entities, "race_init");
 }
 
-// ============================================================================
-// Cmd_RacePoint_f - admin command to add/list/clear race points at runtime
-// Binary: 0x10063f20. Requires g_allowRaceAdmin cvar.
-// Usage: racepoint [add|list|clear]
-// ============================================================================
-void Cmd_RacePoint_f(gentity_t *ent) {
-    char cmd[64];
+/*
+============================================================================
+Cmd_RacePoint_f
 
-    if (g_gametype.integer != GT_RACE)
+[QL] 0x10063ec0. La orden con la que se arma un recorrido de Race sin salir del
+juego: cada vez que se la llama deja un punto donde esta parado el jugador y lo
+encadena con el anterior, "clear" los borra todos y "dump" escupe sus posiciones.
+
+Tres compuertas antes de nada, en el orden del binario: el tipo de juego, las
+trampas y estar vivo. El fork tenia otra cosa -- solo "list", con mensajes
+propios y sin ninguna de las tres --, asi que esto la reemplaza entera.
+
+Los nombres de la cadena son los de retail (arp0, arp1, ...): el punto nuevo se
+llama arp<N> y el anterior pasa a apuntarle. El binario los tiene en una tabla de
+dieciseis y sin embargo acepta hasta sesenta y cuatro puntos, o sea que del
+diecisiete en adelante lee fuera de ella; aca el nombre se arma en el momento, asi
+que el limite es el unico que se ve: los sesenta y cuatro del binario.
+============================================================================
+*/
+static int raceAdminPoints;              // cuantos lleva puestos
+static gentity_t *raceAdminLast;         // el ultimo, que es el que apunta al que viene
+
+void Cmd_RacePoint_f(gentity_t *ent) {
+    char cmd[MAX_TOKEN_CHARS];
+    gentity_t *punto;
+    vec3_t origen;
+
+    if (g_gametype.integer != GT_RACE) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"RacePoint is only permitted in the Race gametype.\n\"");
         return;
+    }
+    if (!g_cheats.integer) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"Cheats are not enabled on this server.\n\"");
+        return;
+    }
+    if (ent->health <= 0) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"You must be alive to use this command.\n\"");
+        return;
+    }
 
     trap_Argv(1, cmd, sizeof(cmd));
 
-    if (!Q_stricmp(cmd, "list")) {
-        int i, count = 0;
-        for (i = 0; i < level.num_entities; i++) {
-            gentity_t *e = &g_entities[i];
-            if (e->inuse && e->touch == Touch_RaceCheckpoint) {
-                const char *type = "MIDDLE";
-                if (e->target != NULL && e->targetname == NULL) type = "START";
-                else if (e->target == NULL) type = "FINISH";
-                trap_SendServerCommand(ent - g_entities,
-                    va("print \"  %d: %s at (%.0f %.0f %.0f)\n\"",
-                        count, type,
-                        e->s.origin[0], e->s.origin[1], e->s.origin[2]));
-                count++;
-            }
+    if (!Q_stricmp(cmd, "clear")) {
+        gentity_t *e = NULL;
+
+        trap_SendServerCommand(-1, "print \"clearing race points\n\"");
+        while ((e = G_Find(e, FOFS(classname), "race_point")) != NULL) {
+            G_FreeEntity(e);
         }
-        trap_SendServerCommand(ent - g_entities,
-            va("print \"Total: %d race points\n\"", count));
-    } else {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Usage: racepoint [list]\n\"");
+        raceAdminPoints = 0;
+        raceAdminLast = NULL;
+        return;
     }
+
+    if (!Q_stricmp(cmd, "dump")) {
+        gentity_t *e = NULL;
+
+        while ((e = G_Find(e, FOFS(classname), "race_point")) != NULL) {
+            trap_SendServerCommand(-1, va("print \"%f %f %f\n\"",
+                e->s.origin[0], e->s.origin[1], e->s.origin[2]));
+        }
+        return;
+    }
+
+    if (raceAdminPoints > 64) {
+        trap_SendServerCommand(-1, "print \"too many race points\n\"");
+        return;
+    }
+
+    punto = G_Spawn();
+    punto->classname = "race_point";
+    VectorCopy(ent->client->ps.origin, origen);
+    G_SetOrigin(punto, origen);
+    punto->targetname = G_NewString(va("arp%i", raceAdminPoints));
+    if (raceAdminLast) {
+        raceAdminLast->target = punto->targetname;
+    }
+    SP_race_point(punto);
+    trap_LinkEntity(punto);
+
+    raceAdminLast = punto;
+    raceAdminPoints++;
+    trap_SendServerCommand(-1, "print \"spawning a race point\n\"");
 }
