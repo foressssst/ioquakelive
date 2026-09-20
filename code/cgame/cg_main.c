@@ -2188,6 +2188,8 @@ static void CG_RegisterGraphics(void) {
     cgs.media.deathEffectShader = trap_R_RegisterShader("deathEffect");
     // [QL] 0x1002321e. The spark sprite that rises out of a gib.
     cgs.media.gibSparkShader = trap_R_RegisterShader("gfx/misc/tracer");
+    // [QL] 0x100231a5: la estela que dejan los pedazos de hielo
+    cgs.media.iceTrailShader = trap_R_RegisterShader("iceTrail");
     cgs.media.iceShardShader1 = trap_R_RegisterShader("powerups/ice1");
     cgs.media.iceShardShader2 = trap_R_RegisterShader("powerups/ice2");
     cgs.media.iceShardShader3 = trap_R_RegisterShader("powerups/ice3");

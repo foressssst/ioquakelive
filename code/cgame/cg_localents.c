@@ -400,6 +400,9 @@ void CG_AddFragment(localEntity_t* le) {
         // impact also shuts the trail off.
         if (le->leMarkType == LEMT_ELECTROGIB) {
             CG_ElectroGibTrail(le);
+        } else if (le->leMarkType == LEMT_ICE) {
+            // [QL] 0x1001efd6
+            CG_IceTrail(le);
         } else if (le->leBounceSoundType == LEBS_BLOOD) {
             CG_BloodTrail(le);
         }
