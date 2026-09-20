@@ -3551,6 +3551,19 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
     CG_RegisterClients();  // if low on memory, some clients will be deferred
     cg.loadingStage++;
 
+    // [QL] 0x10029da7: con com_build el cliente deja de diferir nada -- registra las catorce
+    // armas y las tres frases de Crash del tutorial, que si no se cargan recien al sonar
+    if (trap_Cvar_VariableValue("com_build") != 0) {
+        int weapon;
+
+        for (weapon = WP_GAUNTLET; weapon < WP_NUM_WEAPONS; weapon++) {
+            CG_RegisterWeapon(weapon);
+        }
+        trap_S_RegisterSound("sound/vo/crash/39a.wav", qfalse);
+        trap_S_RegisterSound("sound/vo/crash/41a.wav", qfalse);
+        trap_S_RegisterSound("sound/vo/crash/40b.wav", qfalse);
+    }
+
     CG_AssetCache();
     CG_LoadHudMenu();  // load new hud stuff
 
