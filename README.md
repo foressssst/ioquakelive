@@ -7,11 +7,18 @@
 An implementation of the **Quake Live** game, built on the open-source [ioquake3](https://ioquake3.org/) engine. The goal is to produce a functionally equivalent open-source client/server to the final release of Quake Live (v1069).
 
 #### Why?
-It's really important to me that the Quake Live community prosper - it's such a great game; this is why I have put so much time and effort into working on this fork.
+
+Thomas Jones started this fork and did the hardest part first: reading the retail binaries,
+working out the protocol and the layout of the modules, and getting a Quake Live client and
+server to build on ioquake3 at all. This project carries that work on.
+
+The intention is the same one. Quake Live is worth keeping alive, and an open client and
+server may well be only the first step towards a larger mod, another fork, or implementations
+better than anything either of us has built so far.
 
 ### Project Status
 
-Work in progress, and much further along than it looks. Both programs build and run: `ioquakelive`, the client, and `ioqlds`, the dedicated server. The game modules are name-complete against retail, and the engine-side infrastructure that used to be missing -- Steam authentication, the Steam server list and heartbeat, Workshop downloads, Steam voice, ZeroMQ stats and rcon, the moderation and ban system -- is in.
+Work in progress, and much further along than it looks. Both programs build and run: `ioquakelive`, the client, and `ioqlds`, the dedicated server. The game modules are name-complete against retail, and the engine-side infrastructure that used to be missing is in: Steam authentication, the Steam server list and heartbeat, Workshop downloads, Steam voice, ZeroMQ stats and rcon, and the moderation and ban system.
 
 The tables below were re-audited against the code and against the retail binaries. Every row says what was checked, and a row only says Done when the behaviour was read out of the binary and matched. Two measurements back them up, both reproducible with the tools in `re/tools/`:
 
@@ -82,7 +89,7 @@ Status is one of **Done** (ported and verified against the binary), **Partial** 
 | Frame timing | Done | `Sys_Microseconds` deadline, `com_preciseFrameTiming`; jitter 0.34 → 0.01 ms at 125 fps |
 | Threaded loading | Done | Job system, parallel image/sound decode, shader-text index; campgrounds loads in ~1 s |
 | Borderless fullscreen | Done | `r_fullscreen 2`, no video restart on alt-tab |
-| Demo recording/playback | Partial | A demo recorded by retail plays back here, verified. The other direction -- a demo recorded here played by retail -- is untested |
+| Demo recording/playback | Partial | A demo recorded by retail plays back here, verified. The other direction, a demo recorded here played by retail, is untested |
 | Download system | Done | QL's path is the Steam Workshop: the server publishes its items in `CS_STEAM_WORKSHOP_IDS` and the client fetches what it lacks (`CL_WorkshopDownloads`) before entering |
 | VOIP / Steam voice | Done | Steam P2P voice, with the server as the bridge and the game module deciding who hears whom (`G_VoiceFilter`) |
 | Console auto-complete | Done | `callvote`, the map and factory lists, player names and the cgame's own commands |
@@ -180,7 +187,7 @@ Status is one of **Done** (ported and verified against the binary), **Partial** 
 | RT_RAIL_CORE | Done | Grapple hook chain |
 | Threaded texture decode | Done | JPEG/TGA/PNG decoded on worker threads |
 | GPU frame fence | Done | `r_maxQueuedFrames`, default 0 to match retail's latency |
-| QL-specific shaders | Done | The parser's whole vocabulary pulled out of the engine binary -- 134 words -- and checked against `tr_shader.c`. One was missing: `nobotclip`, which Quake 3 calls `botclip`. `nodefault` and `depthTest disable` are in |
+| QL-specific shaders | Done | The parser's whole vocabulary pulled out of the engine binary (134 words) and checked against `tr_shader.c`. One was missing: `nobotclip`, which Quake 3 calls `botclip`. `nodefault` and `depthTest disable` are in |
 | Freeze shader | Done | Three ice shaders over the model, chosen by how far the thaw has got |
 | Post-processing (bloom) | Done | `tr_qlpost.c`, with retail's own values |
 
@@ -287,11 +294,18 @@ content/pak01/    Asset overrides (menus, fonts, shaders) → pak01.pk3
 Una implementación del juego **Quake Live**, construida sobre el motor de código abierto [ioquake3](https://ioquake3.org/). El objetivo es producir un cliente y un servidor de código abierto funcionalmente equivalentes a la versión final de Quake Live (v1069).
 
 #### ¿Por qué?
-Me importa de verdad que la comunidad de Quake Live prospere — es un juegazo; por eso le puse tanto tiempo y esfuerzo a este fork.
+
+Thomas Jones empezó este fork e hizo primero lo más difícil: leer los binarios de retail,
+deducir el protocolo y la estructura de los módulos, y conseguir que un cliente y un servidor
+de Quake Live llegaran a compilar sobre ioquake3. Este proyecto continúa ese trabajo.
+
+La intención es la misma. Quake Live merece seguir vivo, y un cliente y un servidor abiertos
+quizá sean sólo el primer paso hacia un mod grande, hacia otro fork, o hacia implementaciones
+mejores que todo lo que cualquiera de los dos haya hecho hasta ahora.
 
 ### Estado del proyecto
 
-En obra, y mucho más avanzado de lo que parece. Los dos programas compilan y corren: `ioquakelive`, el cliente, e `ioqlds`, el servidor dedicado. Los módulos de juego están completos contra retail, y la infraestructura del lado del motor que faltaba —autenticación por Steam, la lista de servidores y el latido al master de Steam, descargas del Workshop, voz por Steam, estadísticas y rcon por ZeroMQ, el sistema de moderación y baneos— ya está.
+En obra, y mucho más avanzado de lo que parece. Los dos programas compilan y corren: `ioquakelive`, el cliente, e `ioqlds`, el servidor dedicado. Los módulos de juego están completos contra retail, y la infraestructura del lado del motor que faltaba ya está: autenticación por Steam, la lista de servidores y el latido al master de Steam, descargas del Workshop, voz por Steam, estadísticas y rcon por ZeroMQ, y el sistema de moderación y baneos.
 
 Las tablas de abajo se auditaron de nuevo contra el código y contra los binarios de retail. Cada fila dice qué se comprobó, y una fila sólo dice Hecho cuando el comportamiento se leyó del binario y coincidió. Dos mediciones las respaldan, las dos reproducibles con las herramientas de `re/tools/`:
 
@@ -318,7 +332,7 @@ La comparación a nivel de símbolos **no** es posible para el módulo de juego:
 #### Qué hace falta para correrlo
 Necesitás un `pak00.pk3` original, sacado de una copia **comprada** de [Quake Live](https://steampowered.com/app/282440) en Steam. ioquakelive no arranca sin un `pak00.pk3` legítimo. Quake Live y sus assets siguen siendo propiedad de *id Software*.
 
-No tengo ningún derecho sobre los assets de Quake Live y no puedo —ni **voy a**— redistribuirlos desde mi propia copia legítima.
+No tengo ningún derecho sobre los assets de Quake Live y no puedo, ni **voy a**, redistribuirlos desde mi propia copia legítima.
 
 #### Diferencias principales contra ioquake3
 
@@ -362,12 +376,12 @@ El estado es **Hecho** (portado y verificado contra el binario), **Parcial** (fu
 | Temporización de cuadro | Hecho | objetivo por `Sys_Microseconds`, `com_preciseFrameTiming`; el temblor baja de 0,34 a 0,01 ms a 125 fps |
 | Carga en hilos | Hecho | cola de trabajos, decodificación de imágenes y sonidos en paralelo, índice del texto de shaders; campgrounds carga en ~1 s |
 | Pantalla completa sin bordes | Hecho | `r_fullscreen 2`, sin reiniciar el vídeo al cambiar de ventana |
-| Grabación y reproducción de demos | Parcial | Una demo grabada por retail se reproduce acá, verificado. Al revés —una demo grabada acá abierta por retail— sin probar |
+| Grabación y reproducción de demos | Parcial | Una demo grabada por retail se reproduce aquí, verificado. Al revés, una demo grabada aquí abierta por retail, sin probar |
 | Sistema de descargas | Hecho | la vía de QL es el Workshop de Steam: el servidor publica sus items en `CS_STEAM_WORKSHOP_IDS` y el cliente baja lo que le falta (`CL_WorkshopDownloads`) antes de entrar |
 | VOIP / voz de Steam | Hecho | voz por la red entre pares de Steam, con el servidor de puente y el módulo de juego decidiendo quién oye a quién (`G_VoiceFilter`) |
 | Autocompletado de consola | Hecho | `callvote`, las listas de mapas y factories, nombres de jugadores y las órdenes del propio cgame |
 | Sistema de capturas | Hecho | la ruta y el nombre de retail, levelshot incluido (que escribe un TGA, dijera lo que dijera su nombre) |
-| Cliente x86_64 | Parcial | `Release\|x64` compila; sólo Win32 se juega y se prueba acá |
+| Cliente x86_64 | Parcial | `Release\|x64` compila; sólo Win32 se juega y se prueba aquí |
 
 #### Motor: servidor
 
@@ -378,7 +392,7 @@ El estado es **Hecho** (portado y verificado contra el binario), **Parcial** (fu
 | Autenticación de Steam | Hecho | el servidor le pasa el ticket a Steam con `BeginAuthSession` y echa al que no pasa; sin Steam del lado del servidor se entra igual, que es lo único que deja jugar en red local |
 | Carga del módulo de juego | Hecho | carga de DLL nativa con la tabla de punteros `gameImport_t` |
 | Sistema de baneos | Hecho | retail banea por Steam ID desde `access.txt` (`g_accessFile`, `/reload_access`), no por el `SV_Ban_f` del motor. La lista se lee al conectar, y ban, tempban y unban escriben en ella |
-| Estadísticas y rcon por ZMQ | Hecho | `zmq.c`: el socket de rcon y el publicador de estadísticas, con las cvars `zmq_*` de retail. Un rcon sin contraseña acá sólo acepta conexiones locales, que es una divergencia deliberada |
+| Estadísticas y rcon por ZMQ | Hecho | `zmq.c`: el socket de rcon y el publicador de estadísticas, con las cvars `zmq_*` de retail. Un rcon sin contraseña aquí sólo acepta conexiones locales, que es una divergencia deliberada |
 | Protocolo del navegador de servidores | Hecho | la lista la da Steam, como en retail, no un master propio |
 | Latido al master server | Hecho | el game server de Steam con `EnableHeartbeats`; `sv_master 0` lo saca del navegador |
 | Redirección de descarga de mapas | Hecho | por el Workshop, que es como lo hace QL |
@@ -460,7 +474,7 @@ El estado es **Hecho** (portado y verificado contra el binario), **Parcial** (fu
 | RT_RAIL_CORE | Hecho | la cadena del gancho |
 | Decodificación de texturas en hilos | Hecho | JPEG, TGA y PNG decodificados en hilos trabajadores |
 | Barrera de cuadro en la GPU | Hecho | `r_maxQueuedFrames`, por defecto 0 para igualar la latencia de retail |
-| Shaders específicos de QL | Hecho | el vocabulario entero del parser sacado del binario del motor —134 palabras— y contrastado contra `tr_shader.c`. Faltaba una: `nobotclip`, que Quake 3 llama `botclip`. `nodefault` y `depthTest disable` están |
+| Shaders específicos de QL | Hecho | el vocabulario entero del parser sacado del binario del motor (134 palabras) y contrastado contra `tr_shader.c`. Faltaba una: `nobotclip`, que Quake 3 llama `botclip`. `nodefault` y `depthTest disable` están |
 | Shader de congelado | Hecho | tres shaders de hielo sobre el modelo, elegidos según cuánto avanzó el descongelado |
 | Post-procesado (bloom) | Hecho | `tr_qlpost.c`, con los valores de retail |
 
@@ -468,11 +482,11 @@ El estado es **Hecho** (portado y verificado contra el binario), **Parcial** (fu
 
 Las tablas de arriba van por área. Esto es lo concreto que se sabe que falta o que no está verificado, y es la lista entera:
 
-- **Jugar contra retail, en los dos sentidos.** Un cliente de retail entra acá y este cliente entra a un servidor de retail, pero ninguno de los dos se jugó una partida completa.
-- **Las demos cruzadas.** Una demo de retail se reproduce acá. Una demo grabada acá no la abrió retail todavía.
+- **Jugar contra retail, en los dos sentidos.** Un cliente de retail entra aquí y este cliente entra a un servidor de retail, pero ninguno de los dos se jugó una partida completa.
+- **Las demos cruzadas.** Una demo de retail se reproduce aquí. Una demo grabada aquí no la abrió retail todavía.
 - **La cámara suave en tercera persona** (`cg_thirdPersonSmooth`). Medida en el binario en 0x1004c6f0, sin portar: la cola de esa función no decompila limpio.
-- **`vmCvar_t` tiene un campo menos acá que en retail.** El binario lee la cadena en +0x14 y este árbol la tiene en +0x10. Hoy no rompe nada, porque el motor y los módulos comparten esta definición; importa el día que un módulo de retail cargue en este motor. Anotado a propósito, sin cambiar.
-- **33 cvars de motor de retail no están registradas acá.** Todas restos de Quake 3 que QL conservó y que nadie lee.
+- **`vmCvar_t` tiene un campo menos aquí que en retail.** El binario lee la cadena en +0x14 y este árbol la tiene en +0x10. Hoy no rompe nada, porque el motor y los módulos comparten esta definición; importa el día que un módulo de retail cargue en este motor. Anotado a propósito, sin cambiar.
+- **33 cvars de motor de retail no están registradas aquí.** Todas restos de Quake 3 que QL conservó y que nadie lee.
 - **Sólo se juega Win32.** `Release|x64` y los makefiles de Linux y macOS compilan, y el servidor dedicado corrió en aarch64, pero Win32 es lo que se prueba.
 
 ### Compilar
