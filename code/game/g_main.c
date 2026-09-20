@@ -93,7 +93,6 @@ vmCvar_t g_cubeTimeout;
 vmCvar_t g_enableDust;
 vmCvar_t g_proxMineTimeout;
 vmCvar_t g_infiniteAmmo;
-vmCvar_t g_dropFlag;
 vmCvar_t g_runes;
 
 
@@ -704,7 +703,6 @@ static cvarTable_t gameCvarTable[] = {
     {&g_localTeamPref, "g_localTeamPref", "", 0, 0, NULL},
 
     {&g_infiniteAmmo, "g_infiniteAmmo", "0", CVAR_GAMERULE, 0, OnChangedInfiniteAmmo},  // [QL] binary: CVAR_GAMERULE only; live toggle applies to all clients
-    {&g_dropFlag, "g_dropFlag", "7", 0, 0, NULL},  // [QL] bitmask: 1=flag, 2=powerup, 4=weapon
     {&g_runes, "g_runes", "0", CVAR_GAMERULE | CVAR_LATCH, 0, NULL},  // [QL] binary: 0x100020
 
     // [QL] per-weapon damage cvars

@@ -1323,7 +1323,7 @@ static float G_KnockbackScale(int mod, qboolean isSelf) {
 G_ThrowFlag
 
 // [QL] G_ThrowFlag (binary 0x10051420)
-On a gauntlet kill (g_dropFlag) the victim tosses whatever flag it carries. Traces a
+On a gauntlet kill (g_dropCmds) the victim tosses whatever flag it carries. Traces a
 small box from the carrier origin to the drop point and only drops if the path is
 clear. Flag priority matches the binary: neutral, then red, then blue. point is the
 drop location (the G_Damage caller passes the victim ps.origin raised 64 units); when
