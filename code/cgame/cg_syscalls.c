@@ -477,7 +477,11 @@ void trap_Key_GetBindingBuf(int keynum, char* buf, int buflen) {
     syscall(CG_KEY_GETBINDINGBUF, keynum, buf, buflen);
 }
 
-// [QL] Mute/unmute a client's voice audio
-void trap_S_MuteClient(int clientNum, qboolean mute) {
-    syscall(CG_S_MUTECLIENT, clientNum, mute);
+// [QL] la lista de silenciados de la voz. El Steam ID viaja en dos mitades, como en retail.
+qboolean trap_VoiceIsIgnored(uint64_t steamId) {
+    return (qboolean)syscall(CG_VOICE_IS_IGNORED, (int)(steamId & 0xffffffffu), (int)(steamId >> 32));
+}
+
+qboolean trap_VoiceToggleIgnore(uint64_t steamId) {
+    return (qboolean)syscall(CG_VOICE_TOGGLE_IGNORE, (int)(steamId & 0xffffffffu), (int)(steamId >> 32));
 }

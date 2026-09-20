@@ -2414,6 +2414,9 @@ void CL_Frame(int msec) {
     // [QL] y lo que va trayendo del Workshop mientras se entra a un servidor
     CL_WorkshopFrame();
 
+    // [QL] la voz, que va y viene por la red entre pares de Steam
+    CL_VoiceFrame();
+
     // decide on the serverTime to render
     CL_SetCGameTime();
 
@@ -2976,6 +2979,10 @@ void CL_InitAliases(void) {
 CL_Init
 ====================
 */
+
+static void CL_VoiceOn_f(void);
+static void CL_VoiceOff_f(void);
+
 void CL_Init(void) {
     Com_Printf("----- Client Initialization -----\n");
 
@@ -3150,6 +3157,8 @@ void CL_Init(void) {
     Cmd_SetCommandCompletionFunc("rcon", CL_CompleteRcon);
     Cmd_AddCommand("localservers", CL_LocalServers_f);
     Cmd_AddCommand("globalservers", CL_GlobalServers_f);
+    Cmd_AddCommand("+voice", CL_VoiceOn_f);   // [QL] 0x00461565
+    Cmd_AddCommand("-voice", CL_VoiceOff_f);
     Cmd_AddCommand("showip", CL_ShowIP_f);
     Cmd_AddCommand("fs_openedList", CL_OpenedPK3List_f);
     Cmd_AddCommand("fs_referencedList", CL_ReferencedPK3List_f);
@@ -3604,6 +3613,207 @@ void CL_GlobalServers_f(void) {
         return;
     }
     Com_Printf("Pidiendo la lista de servidores a Steam...\n");
+}
+
+/*
+===============================================================================
+
+LA VOZ
+
+Quake Live no manda la voz por su propia red: la manda por la red entre pares de
+Steam y la comprime y descomprime con la voz de Steam. El cliente solo habla con
+el servidor, que es el que reparte.
+
+  0x004603f0  "+voice" arranca la grabacion (esta en steam.c, que es donde vive
+              la interfaz de Steam).
+  0x00460d10  cada cuadro, mientras graba: junta lo comprimido y se lo manda al
+              Steam ID del servidor, que sale del configstring 714.
+  0x00461a60  cada cuadro, al recibir: el primer byte es el numero del que habla
+              y el resto es la voz, que va a 22050 Hz al mezclador.
+
+===============================================================================
+*/
+
+// lo mas que retail junta de una vez, y lo mas que sale al descomprimirlo
+#define CL_VOICE_MAX_COMPRESSED 0x4000
+#define CL_VOICE_MAX_PCM 0x8000
+
+/*
+===============
+La lista de silenciados
+
+Va por Steam ID y no por numero de cliente, asi que silenciar a alguien lo
+silencia tambien en el siguiente mapa y en el siguiente servidor. Retail la
+guarda en un conjunto ordenado (0x00461990 la consulta, 0x00461c00 la cambia) y
+se la ofrece al cgame como dos llamadas: preguntar y dar vuelta.
+===============
+*/
+#define CL_MAX_IGNORED 64
+
+static uint64_t cl_ignored[CL_MAX_IGNORED];
+static int cl_numIgnored;
+
+qboolean CL_VoiceIsIgnored(uint64_t steamId) {
+    int i;
+
+    for (i = 0; i < cl_numIgnored; i++) {
+        if (cl_ignored[i] == steamId) {
+            return qtrue;
+        }
+    }
+    return qfalse;
+}
+
+// [QL] 0x00461c00: devuelve si quedo silenciado
+qboolean CL_VoiceToggleIgnore(uint64_t steamId) {
+    int i;
+
+    if (!steamId) {
+        return qfalse;
+    }
+    for (i = 0; i < cl_numIgnored; i++) {
+        if (cl_ignored[i] == steamId) {
+            cl_ignored[i] = cl_ignored[--cl_numIgnored];
+            return qfalse;
+        }
+    }
+    if (cl_numIgnored < CL_MAX_IGNORED) {
+        cl_ignored[cl_numIgnored++] = steamId;
+    }
+    return qtrue;
+}
+
+/*
+===============
+CL_VoiceIgnored / CL_VoiceTalking
+
+Los dos puentes con el cgame, que es el que sabe el Steam ID de cada jugador y
+el que dibuja quien esta hablando.
+
+[QL] 0x00461b6a y 0x00461b80: las entradas 15 y 20 de la tabla del cgame.
+===============
+*/
+static qboolean CL_VoiceIgnored(int clientNum) {
+    uint64_t steamId = 0;
+
+    if (!cgvm) {
+        return qfalse;
+    }
+    VM_Call(cgvm, CG_CLIENT_STEAM_ID, clientNum, (intptr_t)&steamId);
+    return CL_VoiceIsIgnored(steamId);
+}
+
+static void CL_VoiceTalking(int clientNum, qboolean talking) {
+    if (cgvm) {
+        VM_Call(cgvm, CG_SET_CLIENT_TALKING, clientNum, talking);
+    }
+}
+
+/*
+===============
+CL_ServerSteamID
+
+El Steam ID del servidor al que estamos conectados, que el servidor publica en
+el configstring 714. Sin el no hay a quien mandarle la voz.
+===============
+*/
+static uint64_t CL_ServerSteamID(void) {
+    const char* s;
+
+    if (!cl.gameState.stringOffsets[CS_STEAM_ID]) {
+        return 0;
+    }
+    s = cl.gameState.stringData + cl.gameState.stringOffsets[CS_STEAM_ID];
+#ifdef _MSC_VER
+    return (uint64_t)_strtoui64(s, NULL, 10);
+#else
+    return (uint64_t)strtoull(s, NULL, 10);
+#endif
+}
+
+/*
+===============
+CL_VoiceOn_f / CL_VoiceOff_f
+
+[QL] 0x004603f0 y 0x00460490. Ademas de arrancar y parar la grabacion, le avisan
+al cgame que uno mismo esta hablando, que es lo que enciende el indicador propio
+sin esperar a que la voz vuelva del servidor.
+===============
+*/
+static void CL_VoiceOn_f(void) {
+    Steam_VoiceStart();
+    if (Steam_VoiceRecording()) {
+        CL_VoiceTalking(clc.clientNum, qtrue);
+    }
+}
+
+static void CL_VoiceOff_f(void) {
+    qboolean wasOn = Steam_VoiceRecording();
+
+    Steam_VoiceStop();
+    if (wasOn) {
+        CL_VoiceTalking(clc.clientNum, qfalse);
+    }
+}
+
+/*
+===============
+CL_VoiceFrame
+
+[QL] 0x00460d10 y 0x00461a60.
+===============
+*/
+void CL_VoiceFrame(void) {
+    static byte compressed[CL_VOICE_MAX_COMPRESSED];
+    static byte pcm[CL_VOICE_MAX_PCM];
+    static int lastHello;
+    uint64_t server = 0;
+    uint64_t from;
+    int bytes;
+
+    if (!Steam_VoiceReady()) {
+        return;
+    }
+
+    if (clc.state == CA_ACTIVE) {
+        server = CL_ServerSteamID();
+    }
+
+    // lo que junto el microfono se va tal cual al servidor
+    if (Steam_VoiceRecording()) {
+        bytes = Steam_VoiceCapture(compressed, sizeof(compressed));
+        if (bytes > 0 && server) {
+            Steam_P2PSend(server, compressed, bytes, qfalse);
+        }
+    }
+
+    // el saludo que deja la sesion abierta en los dos sentidos. Retail solo lo manda del lado
+    // del servidor (0x004668ca); sin el del cliente, Steam descarta la voz que llega hasta que
+    // uno habla por primera vez.
+    if (server && (cls.realtime - lastHello > 10000 || cls.realtime < lastHello)) {
+        lastHello = cls.realtime;
+        Steam_P2PHello(server, qfalse);
+    }
+
+    // y lo que llega es la voz de los demas, con el numero del que habla adelante
+    while ((bytes = Steam_P2PReceive(compressed, sizeof(compressed), &from, qfalse)) > 1) {
+        int who = compressed[0];
+        int out;
+
+        out = Steam_VoiceDecompress(compressed + 1, bytes - 1, pcm, sizeof(pcm));
+        if (out <= 0) {
+            Com_DPrintf("%d compressed voice bytes, decompressed to 0\n", bytes - 1);
+            continue;
+        }
+        if (who < 0 || who >= MAX_CLIENTS) {
+            continue;
+        }
+        if (CL_VoiceIgnored(who)) {
+            continue;
+        }
+        CL_VoiceTalking(who, qtrue);
+        S_RawSamples(who + 1, out / 2, Steam_VoiceRate(), 2, 1, pcm, s_voiceVolume->value, -1);
+    }
 }
 
 /*

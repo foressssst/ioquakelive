@@ -58,4 +58,20 @@ void Steam_Shutdown(void);
 
 qboolean Steam_GS_Running(void);
 
+// la voz, que en Quake Live va por la red entre pares de Steam y no por la del juego
+qboolean Steam_VoiceReady(void);
+void Steam_VoiceStart(void);
+void Steam_VoiceStop(void);
+qboolean Steam_VoiceRecording(void);
+int Steam_VoiceCapture(void* buffer, int maxSize);
+int Steam_VoiceDecompress(const void* compressed, int size, void* out, int outSize);
+int Steam_VoiceRate(void);
+
+qboolean Steam_P2PSend(uint64_t to, const void* data, int size, qboolean asServer);
+int Steam_P2PReceive(void* buffer, int maxSize, uint64_t* from, qboolean asServer);
+void Steam_P2PAccept(uint64_t who, qboolean asServer);
+void Steam_P2PHello(uint64_t to, qboolean asServer);
+uint64_t Steam_ClientSteamID(void);
+void Steam_SetRichPresence(const char* status);
+
 #endif
