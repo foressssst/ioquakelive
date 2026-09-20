@@ -699,6 +699,7 @@ const char* FS_LoadedPakPureChecksums(void);
 // Servers with sv_pure set will get this string and pass it to clients.
 
 const char* FS_ReferencedPakNames(void);
+const char* FS_ReferencedSteamworksItems(void);  // [QL] los items del Workshop de esta partida
 const char* FS_ReferencedPakChecksums(void);
 const char* FS_ReferencedPakPureChecksums(void);
 // Returns a space separated string containing the checksums of all loaded

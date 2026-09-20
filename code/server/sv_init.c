@@ -584,6 +584,16 @@ void SV_SpawnServer(char* server, qboolean killBots) {
     // recien aca esta decidido; la primera vez lo abre, las siguientes no hace nada
     ZMQ_StatsInit();
 
+    // [QL] 0x00465b00: quien es este servidor para Steam y que items del Workshop hacen falta
+    // para jugar aca. El cliente se baja los que no tenga antes de entrar.
+    if (Steam_GS_Running()) {
+        const char* items = FS_ReferencedSteamworksItems();
+
+        SV_SetConfigstring(CS_STEAM_ID, va("%llu", (unsigned long long)Steam_GS_SteamID()));
+        Cvar_Set("sv_referencedSteamworks", items);
+        SV_SetConfigstring(CS_STEAM_WORKSHOP_IDS, items);
+    }
+
     // [ioquakelive] lo que la lista de Steam muestra de este servidor
     Steam_GS_SetServerInfo(Cvar_VariableString("sv_hostname"), server,
                            Cvar_VariableString("g_password")[0] != '\0', 0);

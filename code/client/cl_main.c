@@ -140,6 +140,13 @@ void hA3Dg_ExportRenderGeom(refexport_t* incoming_re);
 
 static int noGameRestart = qfalse;
 
+// [QL] los items del Workshop que la partida pide y todavia no estan
+#define CL_MAX_WORKSHOP 32
+static uint64_t cl_workshopItems[CL_MAX_WORKSHOP];
+static int cl_workshopCount;
+static int cl_workshopIndex;
+static void CL_WorkshopNext(void);
+
 // cuantos servidores de la lista de Steam ya se pasaron a la lista de la interfaz
 static int cl_steamServersTaken;
 static qboolean cl_steamServersPending;
@@ -1647,6 +1654,118 @@ void CL_NextDownload(void) {
 }
 
 /*
+==================
+CL_WorkshopDownloads
+
+[QL] 0x004bba30. Antes de entrar, el cliente mira el configstring
+CS_STEAM_WORKSHOP_IDS: ahi el servidor dejo los items del Workshop que usa la
+partida. Los que no estan se bajan por Steam, de a uno, mostrando el avance en
+cl_downloadName, cl_downloadItem y cl_downloadTime, que es lo que dibuja la
+pantalla de conexion.
+
+Devuelve qtrue si hay que esperar una descarga.
+==================
+*/
+static qboolean CL_WorkshopDownloads(void) {
+    const char* list;
+    char copy[BIG_INFO_STRING];
+    char* token;
+    int total = 0;
+
+    cl_workshopCount = 0;
+    cl_workshopIndex = 0;
+
+    if (!Steam_WorkshopReady()) {
+        return qfalse;
+    }
+    list = cl.gameState.stringData + cl.gameState.stringOffsets[CS_STEAM_WORKSHOP_IDS];
+    if (!list[0]) {
+        return qfalse;
+    }
+
+    Com_Printf("Server requires the following workshop items: %s\n", list);
+    Q_strncpyz(copy, list, sizeof(copy));
+    for (token = strtok(copy, " "); token; token = strtok(NULL, " ")) {
+        uint64_t item = (uint64_t)_strtoui64(token, NULL, 10);
+
+        if (!item || total >= CL_MAX_WORKSHOP) {
+            continue;
+        }
+        if (Steam_WorkshopInstalled(item)) {
+            continue;
+        }
+        cl_workshopItems[total++] = item;
+    }
+    cl_workshopCount = total;
+    if (!total) {
+        return qfalse;
+    }
+
+    // lo que sigue es como una descarga cualquiera: el juego espera conectado y al final
+    // reinicia el sistema de archivos para ver los pk3 nuevos
+    clc.state = CA_CONNECTED;
+    clc.downloadRestart = qtrue;
+    *clc.downloadTempName = *clc.downloadName = 0;
+    Cvar_Set("cl_downloadName", "");
+    CL_WorkshopNext();
+    return qtrue;
+}
+
+/*
+==================
+CL_WorkshopNext
+
+Pide el siguiente item de la lista. Cuando no queda ninguno, sigue el camino de
+siempre: reinicia el sistema de archivos y entra.
+==================
+*/
+void CL_WorkshopNext(void) {
+    while (cl_workshopIndex < cl_workshopCount) {
+        uint64_t item = cl_workshopItems[cl_workshopIndex++];
+
+        Cvar_Set("cl_downloadItem", va("%llu", (unsigned long long)item));
+        Cvar_Set("cl_downloadName", va("Workshop item %i of %i", cl_workshopIndex, cl_workshopCount));
+        Cvar_SetValue("cl_downloadTime", cls.realtime);
+        Cvar_SetValue("cl_downloadSize", 0);
+        Cvar_SetValue("cl_downloadCount", 0);
+        if (Steam_WorkshopDownload(item)) {
+            return;  // hay que esperar a que Steam lo traiga
+        }
+    }
+
+    // no quedo ninguno pendiente
+    cl_workshopCount = 0;
+    Cvar_Set("cl_downloadName", "");
+    Cvar_Set("cl_downloadItem", "");
+    CL_DownloadsComplete();
+}
+
+/*
+==================
+CL_WorkshopFrame
+
+Mientras Steam trae un item, el avance va a las mismas cvars que mira la
+pantalla de conexion. Cuando termina, sigue con el que falte.
+==================
+*/
+void CL_WorkshopFrame(void) {
+    uint64_t done = 0;
+    uint64_t total = 0;
+
+    if (!cl_workshopCount) {
+        return;
+    }
+    if (Steam_WorkshopBusy()) {
+        if (Steam_WorkshopProgress(&done, &total) && total) {
+            Cvar_SetValue("cl_downloadSize", (float)total);
+            Cvar_SetValue("cl_downloadCount", (float)done);
+        }
+        return;
+    }
+    CL_WorkshopNext();
+}
+
+/*
 =================
 CL_InitDownloads
 
@@ -1656,6 +1775,11 @@ and determine if we need to download them
 */
 void CL_InitDownloads(void) {
     char missingfiles[1024];
+
+    // [QL] 0x004bba30: los mapas de Quake Live vienen del Workshop, no por HTTP
+    if (CL_WorkshopDownloads()) {
+        return;
+    }
 
     if (!(cl_allowDownload->integer & DLF_ENABLE)) {
         // autodownload is disabled on the client
@@ -2286,6 +2410,9 @@ void CL_Frame(int msec) {
 
     // [QL] lo que Steam va contestando de la lista de servidores
     CL_SteamServersFrame();
+
+    // [QL] y lo que va trayendo del Workshop mientras se entra a un servidor
+    CL_WorkshopFrame();
 
     // decide on the serverTime to render
     CL_SetCGameTime();
