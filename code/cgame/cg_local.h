@@ -1808,7 +1808,8 @@ extern vmCvar_t cg_tracerWidth;
 extern vmCvar_t cg_tracerLength;
 extern vmCvar_t cg_autoswitch;
 extern vmCvar_t cg_ignore;
-extern vmCvar_t cg_itemFx;  // [QL] 0 hides the respawn timer that floats where an item was
+extern vmCvar_t cg_itemFx;
+extern vmCvar_t cg_itemTimers;  // [QL] 0 apaga el reloj que queda donde estaba el item
 extern vmCvar_t cg_simpleItems;
 extern vmCvar_t cg_skipItems;
 extern vmCvar_t cg_simpleItemsBob;           // [QL] 0 none, 1 every item, 2 only the timed ones
