@@ -267,6 +267,12 @@ None of them contains `pak00.pk3`. Unzip, drop your own `pak00.pk3` into `baseq3
 and run the executable. On Windows the client does that step for you: if `pak00.pk3`
 is missing it finds Quake Live in your Steam library and offers to copy it.
 
+Everything else lives in that same folder. The `baseq3/` next to the executable is
+the only one there is: the pk3s, the configs, the menu and HUD files, the demos and
+the screenshots all go there, and nothing is written to your user profile. To put
+them under your profile instead, start with `+set com_homepath ioquakelive`; to put
+them anywhere at all, `+set fs_homepath <path>`.
+
 The dedicated server reads `baseq3/server.cfg` by itself at startup, the same way
 retail's qzeroded does, so there is nothing to exec by hand:
 
@@ -545,6 +551,8 @@ GitHub adjunta al release el código del tag por su cuenta, como `Source code (z
 y `(tar.gz)`, que es lo que pide la GPL v2.
 
 Ninguno trae `pak00.pk3`. Se descomprime, se pone el `pak00.pk3` propio en `baseq3/` y se ejecuta. En Windows el cliente hace ese paso solo: si falta `pak00.pk3`, busca Quake Live en la biblioteca de Steam y ofrece copiarlo.
+
+Todo lo demás vive en esa misma carpeta. El `baseq3/` que está al lado del ejecutable es el único que hay: los pk3s, las configuraciones, los archivos de menú y de HUD, las demos y las capturas van ahí, y no se escribe nada en el perfil del usuario. Para tenerlos en el perfil, se arranca con `+set com_homepath ioquakelive`; para tenerlos donde sea, `+set fs_homepath <ruta>`.
 
 El servidor dedicado lee `baseq3/server.cfg` por su cuenta al arrancar, igual que el qzeroded de retail, así que no hay nada que ejecutar a mano:
 
