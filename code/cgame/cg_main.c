@@ -1944,6 +1944,13 @@ static void CG_RegisterGraphics(void) {
     cgs.media.spawnArmor2Shader = trap_R_RegisterShader("powerups/spawnArmor2");
     cgs.media.noPlayerClipShader = trap_R_RegisterShader("noPlayerClipShader");
     cgs.media.gooShader = trap_R_RegisterShader("powerups/goo");
+    // [QL] 0x100236e4: las marcas que se ven sobre los powerups
+    cgs.media.powerupPoi[0] = trap_R_RegisterShader("gfx/2d/powerup/quad");
+    cgs.media.powerupPoi[1] = trap_R_RegisterShader("gfx/2d/powerup/bs");
+    cgs.media.powerupPoi[2] = trap_R_RegisterShader("gfx/2d/powerup/haste");
+    cgs.media.powerupPoi[3] = trap_R_RegisterShader("gfx/2d/powerup/invis");
+    cgs.media.powerupPoi[4] = trap_R_RegisterShader("gfx/2d/powerup/regen");
+    cgs.media.powerupIncomingShader = trap_R_RegisterShader("gfx/2d/powerup/incoming");
     cgs.media.hastePuffShader = trap_R_RegisterShader("hasteSmokePuff");
 
     // [QL] gametype icons for scoreboard/HUD (from pak00: ui/assets/hud/*.png)
