@@ -1469,17 +1469,17 @@ void Cmd_CallVote_f(gentity_t *ent) {
     // --- validate vote command + g_voteFlags checks ---
 
     if (!Q_stricmp(arg1, "map_restart")) {
-        if (vf & VF_MAP_RESTART) {
+        if ((vf & VF_MAP_RESTART) && ent->client->sess.privileges < 1) {
             trap_SendServerCommand(clientNum,
-                "print \"Voting on a map restart is disabled.\n\"");
+                "print \"Voting on a map restart is disabled on this server.\n\"");
             return;
         }
     }
     else if (!Q_stricmp(arg1, "nextmap")) {
         char nextmap[MAX_STRING_CHARS];
-        if (vf & VF_NEXTMAP) {
+        if ((vf & VF_NEXTMAP) && ent->client->sess.privileges < 1) {
             trap_SendServerCommand(clientNum,
-                "print \"Voting to move to the next map is disabled.\n\"");
+                "print \"Voting to move to the next map is disabled on this server.\n\"");
             return;
         }
         trap_Cvar_VariableStringBuffer("nextmap", nextmap, sizeof(nextmap));
@@ -1523,20 +1523,60 @@ void Cmd_CallVote_f(gentity_t *ent) {
             return;
         }
     }
-    else if (!Q_stricmp(arg1, "kick") || !Q_stricmp(arg1, "clientkick")) {
+    // [QL] 0x10042580: por nombre y por numero son dos caminos distintos, con sus propios
+    // avisos. Por numero, ademas, no se puede votar la expulsion de un administrador.
+    else if (!Q_stricmp(arg1, "kick")) {
         int i;
-        if (vf & VF_KICK) {
+        if ((vf & VF_KICK) && ent->client->sess.privileges < 1) {
             trap_SendServerCommand(clientNum,
-                "print \"Voting to kick a player is disabled.\n\"");
+                "print \"Voting to kick a player is disabled on this server.\n\"");
             return;
         }
         if (!arg2[0]) {
-            trap_SendServerCommand(clientNum, "print \"Missing player name/id.\n\"");
+            trap_SendServerCommand(clientNum, "print \"Missing player name.\n\"");
             return;
         }
-        i = ClientNumberFromString(ent, arg2,
-            !Q_stricmp(arg1, "clientkick"), !Q_stricmp(arg1, "kick"));
+        i = ClientNumberFromString(ent, arg2, qfalse, qtrue);
         if (i == -1) {
+            trap_SendServerCommand(clientNum,
+                va("print \"Player %s is not on the server.\n\"", arg2));
+            return;
+        }
+        if (level.clients[i].pers.localClient) {
+            trap_SendServerCommand(clientNum,
+                "print \"Cannot kick host player.\n\"");
+            return;
+        }
+        Com_sprintf(level.voteString, sizeof(level.voteString),
+            "clientkick %d", i);
+        Com_sprintf(level.voteDisplayString, sizeof(level.voteDisplayString),
+            "kick %s", level.clients[i].pers.netname);
+        goto start_vote;
+    }
+    else if (!Q_stricmp(arg1, "clientkick")) {
+        int i;
+        if ((vf & VF_KICK) && ent->client->sess.privileges < 1) {
+            trap_SendServerCommand(clientNum,
+                "print \"Voting to kick a player is disabled on this server.\n\"");
+            return;
+        }
+        if (!arg2[0]) {
+            trap_SendServerCommand(clientNum, "print \"Missing player id.\n\"");
+            return;
+        }
+        if (!StringIsInteger(arg2)) {
+            trap_SendServerCommand(clientNum,
+                "print \"Invalid player id, parameter must be an integer.\n\"");
+            return;
+        }
+        i = ClientNumberFromString(ent, arg2, qtrue, qfalse);
+        if (i == -1) {
+            trap_SendServerCommand(clientNum, "print \"Invalid player id.\n\"");
+            return;
+        }
+        if (level.clients[i].sess.privileges > 1) {
+            trap_SendServerCommand(clientNum,
+                "print \"Voting to kick a server admin is not allowed.\n\"");
             return;
         }
         if (level.clients[i].pers.localClient) {
@@ -1551,9 +1591,9 @@ void Cmd_CallVote_f(gentity_t *ent) {
         goto start_vote;
     }
     else if (!Q_stricmp(arg1, "timelimit")) {
-        if (vf & VF_TIMELIMIT) {
+        if ((vf & VF_TIMELIMIT) && ent->client->sess.privileges < 1) {
             trap_SendServerCommand(clientNum,
-                "print \"Voting to change the games time limit is disabled.\n\"");
+                "print \"Voting to change the games time limit is disabled on this server.\n\"");
             return;
         }
         if (!arg2[0]) {
@@ -1561,11 +1601,16 @@ void Cmd_CallVote_f(gentity_t *ent) {
                 "print \"Missing desired timelimit.\n\"");
             return;
         }
+        if (!StringIsInteger(arg2)) {
+            trap_SendServerCommand(clientNum,
+                "print \"Invalid desired timelimit, parameter must be an integer in minutes.\n\"");
+            return;
+        }
     }
     else if (!Q_stricmp(arg1, "fraglimit")) {
-        if (vf & VF_FRAGLIMIT) {
+        if ((vf & VF_FRAGLIMIT) && ent->client->sess.privileges < 1) {
             trap_SendServerCommand(clientNum,
-                "print \"Voting to change the games frag limit is disabled.\n\"");
+                "print \"Voting to change the games frag limit is disabled on this server.\n\"");
             return;
         }
         if (!arg2[0]) {
@@ -1573,11 +1618,16 @@ void Cmd_CallVote_f(gentity_t *ent) {
                 "print \"Missing desired fraglimit.\n\"");
             return;
         }
+        if (!StringIsInteger(arg2)) {
+            trap_SendServerCommand(clientNum,
+                "print \"Invalid desired fraglimit, parameter must be an integer.\n\"");
+            return;
+        }
     }
     else if (!Q_stricmp(arg1, "weaprespawn")) {
-        if (vf & VF_WEAPRESPAWN) {
+        if ((vf & VF_WEAPRESPAWN) && ent->client->sess.privileges < 1) {
             trap_SendServerCommand(clientNum,
-                "print \"Voting to change the weapon respawn time is disabled.\n\"");
+                "print \"Voting to change the weapon respawn time is disabled on this server.\n\"");
             return;
         }
         if (!arg2[0]) {
@@ -1585,16 +1635,26 @@ void Cmd_CallVote_f(gentity_t *ent) {
                 "print \"Missing desired weapon respawn time.\n\"");
             return;
         }
+        if (!StringIsInteger(arg2)) {
+            trap_SendServerCommand(clientNum,
+                "print \"Invalid desired weapon respawn time, parameter must be an integer.\n\"");
+            return;
+        }
     }
     else if (!Q_stricmp(arg1, "shuffle")) {
-        if (vf & VF_SHUFFLE) {
+        if ((vf & VF_SHUFFLE) && ent->client->sess.privileges < 1) {
             trap_SendServerCommand(clientNum,
-                "print \"Voting to shuffle the teams is disabled.\n\"");
+                "print \"Voting to shuffle the teams is disabled on this server.\n\"");
             return;
         }
         if (level.warmupTime == 0) {
             trap_SendServerCommand(clientNum,
                 "print \"Voting to shuffle the teams is only permitted during warmup.\n\"");
+            return;
+        }
+        if (arg2[0]) {
+            trap_SendServerCommand(clientNum,
+                "print \"Too many parameters called for a shuffle.\n\"");
             return;
         }
     }
@@ -1605,14 +1665,19 @@ void Cmd_CallVote_f(gentity_t *ent) {
                 "print \"Teamsize is not available in Duel.\n\"");
             return;
         }
-        if (vf & VF_TEAMSIZE) {
+        if ((vf & VF_TEAMSIZE) && ent->client->sess.privileges < 1) {
             trap_SendServerCommand(clientNum,
-                "print \"Voting to change team size is disabled.\n\"");
+                "print \"Voting to change team size is disabled on this server.\n\"");
             return;
         }
         if (!arg2[0]) {
             trap_SendServerCommand(clientNum,
                 "print \"Missing desired teamsize.\n\"");
+            return;
+        }
+        if (!StringIsInteger(arg2)) {
+            trap_SendServerCommand(clientNum,
+                "print \"Invalid desired teamsize, parameter must be an integer.\n\"");
             return;
         }
         ts = atoi(arg2);
@@ -1624,28 +1689,37 @@ void Cmd_CallVote_f(gentity_t *ent) {
         }
     }
     else if (!Q_stricmp(arg1, "cointoss")) {
-        if (vf & VF_COINTOSS) {
+        if ((vf & VF_COINTOSS) && ent->client->sess.privileges < 1) {
             trap_SendServerCommand(clientNum,
-                "print \"Voting to coin toss is disabled.\n\"");
+                "print \"Voting to coin toss is disabled on this server.\n\"");
             return;
         }
         if (arg2[0] && Q_stricmp(arg2, "heads") && Q_stricmp(arg2, "tails")
             && Q_stricmp(arg2, "h") && Q_stricmp(arg2, "t")) {
             trap_SendServerCommand(clientNum,
-                "print \"Valid cointoss parameters are: ^5heads ^5tails\n\"");
+                "print \"Valid cointoss parameters are:    ^5heads    ^5tails ^7\n\"");
             return;
         }
     }
     else if (!Q_stricmp(arg1, "random")) {
         int val;
-        if (vf & VF_COINTOSS) {
+        if ((vf & VF_COINTOSS) && ent->client->sess.privileges < 1) {
             trap_SendServerCommand(clientNum,
-                "print \"Random number generation is disabled.\n\"");
+                "print \"Random number generation is disabled on this server.\n\"");
             return;
         }
         if (!arg2[0]) {
             trap_SendServerCommand(clientNum,
-                "print \"Missing upper limit.\n\"");
+                "print \"Usage: ^3\\callvote random <2 to 100>^7\n\"");
+            trap_SendServerCommand(clientNum,
+                "print \"       ^7Picks a number from 1 to <value>\n\"");
+            trap_SendServerCommand(clientNum,
+                "print \"       ^2callvote random 2 ^7mimics flipping a coin\n\"");
+            return;
+        }
+        if (!StringIsInteger(arg2)) {
+            trap_SendServerCommand(clientNum,
+                "print \"Invalid upper limit, parameter must be an integer.\n\"");
             return;
         }
         val = atoi(arg2);
@@ -1656,9 +1730,9 @@ void Cmd_CallVote_f(gentity_t *ent) {
         }
     }
     else if (!Q_stricmp(arg1, "loadouts")) {
-        if (vf & VF_LOADOUTS) {
+        if ((vf & VF_LOADOUTS) && ent->client->sess.privileges < 1) {
             trap_SendServerCommand(clientNum,
-                "print \"Voting to alter loadouts is disabled.\n\"");
+                "print \"Voting to alter loadouts is disabled on this server.\n\"");
             return;
         }
         if (level.warmupTime == 0) {
@@ -1668,14 +1742,14 @@ void Cmd_CallVote_f(gentity_t *ent) {
         }
         if (Q_stricmp(arg2, "ON") && Q_stricmp(arg2, "OFF")) {
             trap_SendServerCommand(clientNum,
-                "print \"^3Valid loadout options are: ^5ON ^5OFF\n\"");
+                "print \"^3Valid loadout options are:    ^5ON    ^5OFF^7\n\"");
             return;
         }
     }
     else if (!Q_stricmp(arg1, "ammo")) {
-        if (vf & VF_AMMO) {
+        if ((vf & VF_AMMO) && ent->client->sess.privileges < 1) {
             trap_SendServerCommand(clientNum,
-                "print \"Voting to alter the ammo system is disabled.\n\"");
+                "print \"Voting to alter the ammo system is disabled on this server.\n\"");
             return;
         }
         if (level.warmupTime == 0) {
@@ -1685,14 +1759,14 @@ void Cmd_CallVote_f(gentity_t *ent) {
         }
         if (Q_stricmp(arg2, "GLOBAL") && Q_stricmp(arg2, "WEAP")) {
             trap_SendServerCommand(clientNum,
-                "print \"^3Valid ammo options are: ^5GLOBAL ^5WEAP\n\"");
+                "print \"^3Valid ammo options are:    ^5GLOBAL    ^5WEAP^7\n\"");
             return;
         }
     }
     else if (!Q_stricmp(arg1, "timers")) {
-        if (vf & VF_TIMERS) {
+        if ((vf & VF_TIMERS) && ent->client->sess.privileges < 1) {
             trap_SendServerCommand(clientNum,
-                "print \"Voting to alter the item timers is disabled.\n\"");
+                "print \"Voting to alter the item timers is disabled on this server.\n\"");
             return;
         }
         if (level.warmupTime == 0) {
@@ -1702,15 +1776,15 @@ void Cmd_CallVote_f(gentity_t *ent) {
         }
         if (Q_stricmp(arg2, "ON") && Q_stricmp(arg2, "OFF")) {
             trap_SendServerCommand(clientNum,
-                "print \"^3Valid item timer options are: ^5ON ^5OFF\n\"");
+                "print \"^3Valid item timer options are:    ^5ON    ^5OFF^7\n\"");
             return;
         }
     }
     else if (!Q_stricmp(arg1, "g_gametype")) {
         int gt;
-        if (vf & VF_GAMETYPE) {
+        if ((vf & VF_GAMETYPE) && ent->client->sess.privileges < 1) {
             trap_SendServerCommand(clientNum,
-                "print \"Voting to change the gametype being played is disabled.\n\"");
+                "print \"Voting to change the gametype being played is disabled on this server.\n\"");
             return;
         }
         gt = atoi(arg2);
@@ -1726,32 +1800,34 @@ void Cmd_CallVote_f(gentity_t *ent) {
         goto start_vote;
     }
     else {
-        // [QL] Show color-coded help text: ^5 = enabled, ^1 = disabled
-        trap_SendServerCommand(clientNum, "print \"Invalid vote string.\n\"");
+        // [QL] 0x10042580: el encabezado, las cinco lineas con su color -- 5 si el voto esta
+        // habilitado, 1 si no -- y el uso al final. El "Invalid vote string." de arriba es
+        // para el texto con caracteres raros, no para un voto que no existe.
+        trap_SendServerCommand(clientNum, "print \"^3Callvote commands:\n\"");
         trap_SendServerCommand(clientNum,
-            va("print \"%smap           %snextmap        %smap_restart\n\"",
-               (vf & VF_MAP) ? "^1" : "^5",
-               (vf & VF_NEXTMAP) ? "^1" : "^5",
-               (vf & VF_MAP_RESTART) ? "^1" : "^5"));
+            va("print \"^%imap           ^%inextmap        ^%imap_restart   ^7\n\"",
+               (vf & VF_MAP) ? 1 : 5,
+               (vf & VF_NEXTMAP) ? 1 : 5,
+               (vf & VF_MAP_RESTART) ? 1 : 5));
         trap_SendServerCommand(clientNum,
-            va("print \"%skick          %sclientkick\n\"",
-               (vf & VF_KICK) ? "^1" : "^5",
-               (vf & VF_KICK) ? "^1" : "^5"));
+            va("print \"^%ikick          ^%iclientkick                      ^7\n\"",
+               (vf & VF_KICK) ? 1 : 5,
+               (vf & VF_KICK) ? 1 : 5));
         trap_SendServerCommand(clientNum,
-            va("print \"%sshuffle       %steamsize       %scointoss\n\"",
-               (vf & VF_SHUFFLE) ? "^1" : "^5",
-               (vf & VF_TEAMSIZE) ? "^1" : "^5",
-               (vf & VF_COINTOSS) ? "^1" : "^5"));
+            va("print \"^%ishuffle       ^%iteamsize       ^%icointoss      ^7\n\"",
+               (vf & VF_SHUFFLE) ? 1 : 5,
+               (vf & VF_TEAMSIZE) ? 1 : 5,
+               (vf & VF_COINTOSS) ? 1 : 5));
         trap_SendServerCommand(clientNum,
-            va("print \"%stimelimit     %sfraglimit      %sweaprespawn\n\"",
-               (vf & VF_TIMELIMIT) ? "^1" : "^5",
-               (vf & VF_FRAGLIMIT) ? "^1" : "^5",
-               (vf & VF_WEAPRESPAWN) ? "^1" : "^5"));
+            va("print \"^%itimelimit     ^%ifraglimit      ^%iweaprespawn   ^7\n\"",
+               (vf & VF_TIMELIMIT) ? 1 : 5,
+               (vf & VF_FRAGLIMIT) ? 1 : 5,
+               (vf & VF_WEAPRESPAWN) ? 1 : 5));
         trap_SendServerCommand(clientNum,
-            va("print \"%sloadouts      %sammo            %stimers\n\"",
-               (vf & VF_LOADOUTS) ? "^1" : "^5",
-               (vf & VF_AMMO) ? "^1" : "^5",
-               (vf & VF_TIMERS) ? "^1" : "^5"));
+            va("print \"^%iloadouts      ^%iammo           ^%itimers        ^7\n\"",
+               (vf & VF_LOADOUTS) ? 1 : 5,
+               (vf & VF_AMMO) ? 1 : 5,
+               (vf & VF_TIMERS) ? 1 : 5));
         trap_SendServerCommand(clientNum,
             "print \"Usage: ^3\\callvote <command> <params>^7\n\"");
         return;
@@ -2707,18 +2783,41 @@ static void Cmd_Unlock_f(gentity_t* ent) {
 // "put" - Move a player to a team (referee+)
 static void Cmd_Put_f(gentity_t* ent) {
     gentity_t* target = G_FindPlayerArg(ent);
+    const char* destino;
+    team_t team;
 
     if (!target) {
         return;
     }
 
     // [QL] 0x10061b61: el mismo lector de equipo que lock y unlock
-    switch (G_ParseTeamArg(ent, 2)) {
-        case TEAM_RED: SetTeam(target, "red"); break;
-        case TEAM_BLUE: SetTeam(target, "blue"); break;
-        case TEAM_SPECTATOR: SetTeam(target, "spectator"); break;
-        case TEAM_FREE: SetTeam(target, "free"); break;
-        default: break;
+    team = G_ParseTeamArg(ent, 2);
+    switch (team) {
+        case TEAM_RED: destino = "red"; break;
+        case TEAM_BLUE: destino = "blue"; break;
+        case TEAM_SPECTATOR: destino = "spectator"; break;
+        case TEAM_FREE: destino = "free"; break;
+        default: return;
+    }
+
+    // [QL] 0x10061c78: si ya estaba ahi, se lo dice al que llamo y no lo mueve
+    if (target->client->sess.sessionTeam == team) {
+        trap_SendServerCommand(ent - g_entities,
+            va("print \"%s is already on the %s team\n\"",
+               target->client->pers.netname, TeamName(team)));
+        return;
+    }
+
+    SetTeam(target, destino);
+
+    // [QL] 0x10061d00 y 0x10061d5c: al movido se le dice quien lo movio
+    if (ent->client->pers.localClient) {
+        trap_SendServerCommand(target - g_entities,
+            va("print \"The server has moved you to the %s team\n\"", TeamName(team)));
+    } else {
+        trap_SendServerCommand(target - g_entities,
+            va("print \"%s has moved you to the %s team\n\"",
+               ent->client->pers.netname, TeamName(team)));
     }
 }
 
@@ -3110,10 +3209,26 @@ static qboolean ClientCommandPermissionCheck(gentity_t* ent, const char* cmd) {
 }
 
 /*
+==================
+G_GametypeDisplayName
+
+El nombre largo del tipo de juego que corre, o "Unknown Gametype" si el numero
+se sale de la tabla, que es lo que pone retail en los avisos de las ordenes de
+soltar (0x10044eac).
+==================
+*/
+const char* G_GametypeDisplayName(void) {
+    if (g_gametype.integer < 0 || g_gametype.integer >= GT_MAX_GAME_TYPE) {
+        return "Unknown Gametype";
+    }
+    return gametypeDisplayNames[g_gametype.integer];
+}
+
+/*
 =================
 Cmd_DropFlag_f
 
-[QL] Drop the flag (CTF/1Flag/Harvester). Controlled by g_dropFlag bit 0.
+[QL] Drop the flag (CTF/1Flag/Attack & Defend). Controlled by g_dropCmds bit 0.
 Binary: qagamex86.dll 0x10044af0
 =================
 */
@@ -3124,14 +3239,23 @@ static void Cmd_DropFlag_f(gentity_t* ent) {
     vec3_t angles;
     int pw;
 
-    if (!(g_dropFlag.integer & 1)) {
-        trap_SendServerCommand(ent - g_entities, "print \"Flag dropping is disabled.\n\"");
+    // [QL] 0x10044910
+    if (!(g_dropCmds.integer & 1)) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"DropFlag is not enabled on this server.\n\"");
         return;
     }
 
     if (g_gametype.integer != GT_CTF && g_gametype.integer != GT_1FCTF &&
-        g_gametype.integer != GT_HARVESTER) {
-        trap_SendServerCommand(ent - g_entities, "print \"Can only drop flags in CTF/1Flag/Harvester.\n\"");
+        g_gametype.integer != GT_AD) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"DropFlag is not available in non-flag gametypes.\n\"");
+        return;
+    }
+
+    if (level.timePauseBegin) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"DropFlag is not available during a pause or timeout.\n\"");
         return;
     }
 
@@ -3176,7 +3300,7 @@ static void Cmd_DropFlag_f(gentity_t* ent) {
 Cmd_DropPowerup_f
 
 [QL] Drop a powerup (team gametypes except CA/FT/Harvester/AD).
-Controlled by g_dropFlag bit 1. Dropped powerup has 10s pickup window.
+Controlled by g_dropCmds bit 1. Dropped powerup has 10s pickup window.
 Binary: qagamex86.dll 0x10044cc0
 =================
 */
@@ -3188,18 +3312,35 @@ static void Cmd_DropPowerup_f(gentity_t* ent) {
     int pw;
     int remaining;
 
-    if (!(g_dropFlag.integer & 2)) {
-        trap_SendServerCommand(ent - g_entities, "print \"Powerup dropping is disabled.\n\"");
+    // [QL] 0x10044ae0
+    if (!(g_dropCmds.integer & 2)) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"DropPowerup is not enabled on this server.\n\"");
         return;
     }
 
-    // Team gametypes only, excluding CA/FT/Harvester/AD
-    if (g_gametype.integer < GT_TEAM ||
-        g_gametype.integer == GT_CA ||
-        g_gametype.integer == GT_FREEZE ||
-        g_gametype.integer == GT_HARVESTER ||
-        g_gametype.integer == GT_AD) {
-        trap_SendServerCommand(ent - g_entities, "print \"Can only drop powerups in team gametypes.\n\"");
+    if (g_gametype.integer < GT_TEAM) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"DropPowerup is not available in non-team gametypes.\n\"");
+        return;
+    }
+
+    if (g_gametype.integer == GT_CA || g_gametype.integer == GT_DOMINATION ||
+        g_gametype.integer == GT_AD || g_gametype.integer == GT_RR) {
+        trap_SendServerCommand(ent - g_entities,
+            va("print \"DropPowerup is not available in %s.\n\"", G_GametypeDisplayName()));
+        return;
+    }
+
+    if (level.timePauseBegin) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"DropPowerup is not available during a pause or timeout.\n\"");
+        return;
+    }
+
+    if (g_instaGib.integer) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"DropPowerup is not available in InstaGib.\n\"");
         return;
     }
 
@@ -3256,13 +3397,22 @@ Binary: qagamex86.dll 0x100450f0
 =================
 */
 static void Cmd_DropRune_f(gentity_t* ent) {
+    // [QL] 0x10044f10
     if (!g_runes.integer) {
-        trap_SendServerCommand(ent - g_entities, "print \"Runes are not enabled.\n\"");
+        trap_SendServerCommand(ent - g_entities,
+            "print \"Runes are not enabled on this server.\n\"");
         return;
     }
 
-    if (g_gametype.integer == GT_DUEL) {
-        trap_SendServerCommand(ent - g_entities, "print \"Cannot drop runes in Duel.\n\"");
+    if (g_gametype.integer == GT_RACE) {
+        trap_SendServerCommand(ent - g_entities,
+            va("print \"DropRune is not available in %s.\n\"", G_GametypeDisplayName()));
+        return;
+    }
+
+    if (level.timePauseBegin) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"DropRune is not available during a pause or timeout.\n\"");
         return;
     }
 
@@ -3291,7 +3441,7 @@ static void Cmd_DropRune_f(gentity_t* ent) {
 =================
 Cmd_DropWeapon_f
 
-[QL] Drop current weapon. Controlled by g_dropFlag bit 2.
+[QL] Drop current weapon. Controlled by g_dropCmds bit 2.
 Team gametypes only. Player keeps gauntlet as fallback.
 Fires EV_DROP_WEAPON event. Binary: qagamex86.dll 0x10045430
 =================
@@ -3304,14 +3454,35 @@ static void Cmd_DropWeapon_f(gentity_t* ent) {
     int weapon;
     int ammo;
 
-    if (!(g_dropFlag.integer & 4)) {
-        trap_SendServerCommand(ent - g_entities, "print \"Weapon dropping is disabled.\n\"");
+    // [QL] 0x10045250
+    if (!(g_dropCmds.integer & 4)) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"DropWeapon is not enabled on this server.\n\"");
         return;
     }
 
-    // Team gametypes only
     if (g_gametype.integer < GT_TEAM) {
-        trap_SendServerCommand(ent - g_entities, "print \"Can only drop weapons in team gametypes.\n\"");
+        trap_SendServerCommand(ent - g_entities,
+            "print \"DropWeapon is not available in non-team gametypes.\n\"");
+        return;
+    }
+
+    if (g_gametype.integer == GT_CA || g_gametype.integer == GT_DOMINATION ||
+        g_gametype.integer == GT_AD || g_gametype.integer == GT_RR) {
+        trap_SendServerCommand(ent - g_entities,
+            va("print \"DropWeapon is not available in %s.\n\"", G_GametypeDisplayName()));
+        return;
+    }
+
+    if (level.timePauseBegin) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"DropWeapon is not available during a pause or timeout.\n\"");
+        return;
+    }
+
+    if (g_instaGib.integer) {
+        trap_SendServerCommand(ent - g_entities,
+            "print \"DropWeapon is not available in InstaGib.\n\"");
         return;
     }
 
