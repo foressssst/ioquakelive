@@ -58,6 +58,7 @@ cvar_t* sv_master;       // [QL] contestar consultas y aparecer en la lista
 cvar_t* sv_idleExit;     // [QL] apagarse tras tantos segundos sin mapa
 cvar_t* sv_errorExit;    // [QL] apagarse ante un error
 cvar_t* sv_workshopFile; // [QL] el archivo con los items del Workshop
+cvar_t* sv_quitOnEmpty;  // [QL] apagarse cuando el servidor se queda sin nadie
 cvar_t* sv_lanForceRate;  // dedicated 1 (LAN) server forces local client rates to 99999 (bug #491)
 cvar_t* sv_banFile;
 // [QL] 0x004e3e7a y 0x004e3e90: las entidades del nivel salen de un archivo aparte, o se
@@ -942,6 +943,24 @@ void SV_Frame(int msec) {
         SV_Shutdown("Server was killed");
         Cvar_Set("sv_killserver", "0");
         return;
+    }
+
+    // [QL] 0x004e3e3a: con sv_quitOnEmpty, un servidor que se queda sin nadie se apaga,
+    // para que lo que lo supervisa decida si lo vuelve a levantar
+    if (sv_quitOnEmpty && sv_quitOnEmpty->integer && com_sv_running->integer) {
+        int i, humanos = 0;
+
+        for (i = 0; i < sv_maxclients->integer; i++) {
+            if (svs.clients[i].state >= CS_CONNECTED &&
+                svs.clients[i].netchan.remoteAddress.type != NA_BOT) {
+                humanos++;
+            }
+        }
+        if (!humanos && svs.time > 60000) {
+            Com_Printf("sv_quitOnEmpty: no players left, exiting.\n");
+            Com_Quit_f();
+            return;
+        }
     }
 
     if (!com_sv_running->integer) {

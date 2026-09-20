@@ -443,6 +443,13 @@ CL_DemoCompleted
 void CL_DemoCompleted(void) {
     char buffer[MAX_STRING_CHARS];
 
+    // [QL] cl_quitOnDemoCompleted: salir cuando la demo termina, para poder reproducir
+    // una demo sin nadie delante y que el proceso se cierre solo
+    if (Cvar_VariableIntegerValue("cl_quitOnDemoCompleted")) {
+        Com_Quit_f();
+        return;
+    }
+
     if (cl_timedemo && cl_timedemo->integer) {
         int time;
 
@@ -3198,6 +3205,8 @@ void CL_Init(void) {
     cl_consoleKeys = Cvar_Get("cl_consoleKeys", "~ ` 0x7e 0x60", CVAR_ARCHIVE);
 
     cl_steamId = Cvar_Get("cl_steamId", "0", CVAR_ARCHIVE);
+    // [QL] 0x004e3f1a: salir cuando termina de reproducirse una demo
+    Cvar_Get("cl_quitOnDemoCompleted", "0", 0);
 
     // userinfo
     Cvar_Get("name", "UnnamedPlayer", CVAR_USERINFO | CVAR_ARCHIVE);
