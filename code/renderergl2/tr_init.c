@@ -751,7 +751,9 @@ void R_LevelShot(void) {
     float xScale, yScale;
     int xx, yy;
 
-    Com_sprintf(checkname, sizeof(checkname), "levelshots/preview/%s.jpg", tr.world->baseName);
+    // [QL] 0x00448550: un TGA de 128x128 en levelshots/. El nombre decia ".jpg" pero lo que
+    // se escribe abajo es un TGA, asi que el archivo salia ilegible.
+    Com_sprintf(checkname, sizeof(checkname), "levelshots/%s.tga", tr.world->baseName);
 
     // [QL] with the colour correction, read the corrected frame
     {
@@ -857,7 +859,7 @@ void R_ScreenShot_f(void) {
         }
 
         if (lastNumber == 10000) {
-            ri.Printf(PRINT_ALL, "Screenshot: Couldn't create a file\n");
+            ri.Printf(PRINT_ALL, "ScreenShot: Couldn't create a file\n");  // [QL] 0x0052ea6c
             return;
         }
 
@@ -909,7 +911,7 @@ void R_ScreenShotJPEG_f(void) {
         }
 
         if (lastNumber == 10000) {
-            ri.Printf(PRINT_ALL, "Screenshot: Couldn't create a file\n");
+            ri.Printf(PRINT_ALL, "ScreenShot: Couldn't create a file\n");  // [QL] 0x0052ea6c
             return;
         }
 
