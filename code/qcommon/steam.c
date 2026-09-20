@@ -1141,7 +1141,7 @@ static void Steam_DownloadUGC_f(void) {
         Com_Printf("Usage: steam_downloadugc <itemid>\n");
         return;
     }
-    item = (uint64_t)_strtoui64(Cmd_Argv(1), NULL, 10);
+    item = (uint64_t)strtoull(Cmd_Argv(1), NULL, 10);
     if (!Steam_WorkshopReady()) {
         Com_Printf("Steam is not available.\n");
         return;

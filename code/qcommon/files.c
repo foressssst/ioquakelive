@@ -3562,7 +3562,7 @@ static void FS_AddWorkshopPaks(void) {
 		{
 			searchpath_t *before = fs_searchpaths;
 			searchpath_t *sp;
-			unsigned long long itemId = _strtoui64(dirFd.cFileName, NULL, 10);
+			unsigned long long itemId = strtoull(dirFd.cFileName, NULL, 10);
 
 			FS_AddGameDirectory(itemPath, "");
 
