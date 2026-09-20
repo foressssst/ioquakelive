@@ -3199,11 +3199,16 @@ static void FS_Startup(const char* gameName) {
 	if (fs_homepath->string[0] && Q_stricmp(fs_homepath->string, fs_basepath->string)) {
 		FS_CreatePath(fs_homepath->string);
 		FS_AddGameDirectory(fs_homepath->string, gameName);
-#ifndef DEDICATED
-		// where a player's own fonts go, ready before they look for it (FS_IsFontExt)
-		FS_CreatePath(FS_BuildOSPath(fs_homepath->string, gameName, "fonts/"));
-#endif
 	}
+
+#ifndef DEDICATED
+	// where a player's own fonts go, ready before they look for it (FS_IsFontExt). This
+	// prepares a directory rather than adding a search path, so it stays outside the test
+	// above: by default fs_homepath is the install folder and that test does not fire.
+	if (fs_homepath->string[0]) {
+		FS_CreatePath(FS_BuildOSPath(fs_homepath->string, gameName, "fonts/"));
+	}
+#endif
 
 	// check for additional base game so mods can be based upon other mods
 	if (fs_basegame->string[0] && Q_stricmp(fs_basegame->string, gameName)) {
