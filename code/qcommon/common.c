@@ -2693,7 +2693,13 @@ void Com_Init(char* commandLine) {
 
     // [ioquakelive] Steam, como retail: el cliente en 0x00461500 y el servidor en 0x00466ed0, los
     // dos llamados desde su Com_Init y los dos saltados cuando com_build esta puesto
-    Steam_Init();
+    // [QL] el servidor dedicado no arranca la API de cliente de Steam: no hay ningun
+    // usuario con sesion y la biblioteca de Valve termina abortando por su hilo de
+    // escritura (tier0: "Illegal termination of worker thread CFileWriterThread").
+    // El qzeroded de retail tampoco la usa: le alcanza con la del gameserver.
+    if (!com_dedicated->integer) {
+        Steam_Init();
+    }
     Steam_GS_Init();
 
     // [ioquakelive] ZeroMQ, como retail (idZMQ::Init, 0x004f3f80): las cvars y el socket de rcon
