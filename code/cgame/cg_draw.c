@@ -3782,6 +3782,62 @@ static void CG_DrawLetterbox(void) {
 	cg_letterboxDrawn = qtrue;
 }
 
+/*
+=================
+CG_DrawVoiceIndicator
+
+[QL] 0x10011200. Una fila por jugador que este hablando, con el recuadro del color
+de su equipo, el icono y el nombre. cg_voiceChatIndicator la apaga con 0 y la
+manda a la izquierda con 2; con cualquier otro valor va a la derecha.
+
+Y aca esta lo que faltaba de la marca de "esta hablando": el binario la apaga 500
+ms despues del ultimo paquete, menos la de uno mismo, que la apaga "-voice".
+=================
+*/
+static void CG_DrawVoiceIndicator(void) {
+    static const vec4_t rojo = {0.5f, 0.0f, 0.0f, 0.5f};
+    static const vec4_t azul = {0.0f, 0.25f, 0.5f, 0.5f};
+    static const vec4_t neutro = {0.5f, 0.5f, 0.5f, 0.5f};
+    static const vec4_t blanco = {1.0f, 1.0f, 1.0f, 1.0f};
+    float y = 150.0f;
+    int i;
+
+    if (!cg_voiceChatIndicator.integer || cg.snap->ps.pm_type == PM_INTERMISSION) {
+        return;
+    }
+
+    CG_SetWidescreen(cg_voiceChatIndicator.integer == 2 ? 1 : 3);
+
+    for (i = 0; i < cgs.maxclients; i++) {
+        clientInfo_t* ci = &cgs.clientinfo[i];
+        const float* color;
+        float ancho;
+        float x;
+
+        if (!ci->infoValid || !ci->talking) {
+            continue;
+        }
+
+        trap_R_SetColor(NULL);
+        ancho = (float)(CG_DrawStrlen(ci->name) * SMALLCHAR_WIDTH) + 25.0f;
+        x = (cg_voiceChatIndicator.integer == 2) ? 0.0f : 640.0f - ancho;
+        color = (ci->team == TEAM_RED) ? rojo : (ci->team == TEAM_BLUE) ? azul : neutro;
+
+        CG_FillRect(x, y - 10.0f, ancho, 15.0f, color);
+        CG_DrawPic(x + 5.0f, y - 8.0f, 10.0f, 10.0f, cgs.media.scoreSpeakingShader);
+        CG_DrawSmallStringColor((int)(x + 20.0f), (int)(y + 1.0f), ci->name, (vec_t*)blanco);
+        y += 15.0f;
+
+        // [QL] 0x1001143a: la marca se apaga sola medio segundo despues del ultimo
+        // paquete; la propia no, que la apaga "-voice"
+        if (ci->talkingTime + 500 < cg.time && i != cg.clientNum) {
+            ci->talking = qfalse;
+        }
+    }
+
+    CG_SetWidescreen(0);
+}
+
 static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	static qboolean tutorialStarted;
 
@@ -3943,6 +3999,7 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 
 	CG_SetWidescreen(WIDESCREEN_LEFT);
 	CG_DrawVote();
+	CG_DrawVoiceIndicator();
 	CG_SetWidescreen(WIDESCREEN_RIGHT);
 	CG_DrawTeamVote();
 	CG_SetWidescreen(WIDESCREEN_RIGHT);

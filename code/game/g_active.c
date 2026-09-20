@@ -118,6 +118,12 @@ void P_WorldEffects(gentity_t* ent) {
 
     envirosuit = ent->client->ps.powerups[PW_BATTLESUIT] > level.time;
 
+    // [QL] 0x1003396a: en noclip no se ahoga nadie, y el aire se repone entero
+    if (ent->client->noclip) {
+        ent->client->airOutTime = level.time + 12000;
+        return;
+    }
+
     //
     // check for drowning
     //
@@ -137,6 +143,15 @@ void P_WorldEffects(gentity_t* ent) {
                 if (ent->damage > 15)
                     ent->damage = 15;
 
+                // [QL] 0x100339f8: el gorgoteo suena solo cuando la tanda de dano no lo
+                // mata. Cuando lo mata no suena nada: la rama del "*drown.wav" de Quake 3
+                // no existe en el binario de Quake Live, el string no esta.
+                if (ent->damage < ent->health) {
+                    G_Sound(ent, CHAN_VOICE,
+                            G_SoundIndex((rand() & 1) ? "sound/player/gurp1.wav"
+                                                      : "sound/player/gurp2.wav"));
+                }
+
                 // don't play a normal pain sound
                 ent->pain_debounce_time = level.time + 200;
 
@@ -147,6 +162,10 @@ void P_WorldEffects(gentity_t* ent) {
     } else {
         ent->client->airOutTime = level.time + 12000;
         ent->damage = 2;
+        // [QL] 0x10033a27: fuera del agua no hay nada mas que mirar
+        if (waterlevel == 0) {
+            return;
+        }
     }
 
     //

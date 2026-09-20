@@ -218,7 +218,9 @@ void AssetCache(void) {
         uiInfo.uiDC.Assets.crosshairShader[n] = trap_R_RegisterShaderNoMip(va("gfx/2d/crosshair%i", n));
     }
 
-    uiInfo.newHighScoreSound = trap_S_RegisterSound("sound/vo/new_high_score.ogg", qfalse);
+    // [QL] 0x10009fd1: el de retail es otro archivo; sound/vo/new_high_score.ogg es de
+    // Team Arena y en Quake Live no existe, asi que el aviso no sonaba nunca
+    uiInfo.newHighScoreSound = trap_S_RegisterSound("sound/feedback/voc_newhighscore.ogg", qfalse);
 }
 
 void _UI_DrawSides(float x, float y, float w, float h, float size) {

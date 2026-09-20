@@ -1628,7 +1628,6 @@ static void CG_RegisterSounds(void) {
     cgs.media.talkSound = trap_S_RegisterSound("sound/player/talk.ogg", qfalse);
     cgs.media.landSound = trap_S_RegisterSound("sound/player/land1.ogg", qfalse);
 
-    cgs.media.hitSound = trap_S_RegisterSound("sound/feedback/hit.wav", qfalse);
     cgs.media.hitSounds[0] = trap_S_RegisterSound("sound/feedback/hit0.ogg", qfalse);
     cgs.media.hitSounds[1] = trap_S_RegisterSound("sound/feedback/hit1.ogg", qfalse);
     cgs.media.hitSounds[2] = trap_S_RegisterSound("sound/feedback/hit2.ogg", qfalse);
@@ -2210,6 +2209,8 @@ static void CG_RegisterGraphics(void) {
 
     // wall marks
     cgs.media.bulletMarkShader = trap_R_RegisterShader("gfx/damage/bullet_mrk");
+    // [QL] 0x10024a99: la marca que deja el gancho
+    cgs.media.crackedMarkShader = trap_R_RegisterShader("gfx/damage/cracked_mrk");
     cgs.media.burnMarkShader = trap_R_RegisterShader("gfx/damage/burn_med_mrk");
     cgs.media.holeMarkShader = trap_R_RegisterShader("gfx/damage/hole_lg_mrk");
     cgs.media.energyMarkShader = trap_R_RegisterShader("gfx/damage/plasma_mrk");
