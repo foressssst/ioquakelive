@@ -2436,13 +2436,32 @@ void Com_ExecuteCfg(void) {
     Cbuf_Execute();  // Always execute after exec to prevent text buffer overflowing
 
     if (!Com_SafeMode()) {
-        // [QL] load configs in order: qzconfig (hardware), repconfig (replicated), autoexec
-        Cbuf_ExecuteText(EXEC_NOW, "exec " QZCONFIG_CFG "\n");
-        Cbuf_Execute();
-#ifdef REPCONFIG_CFG
-        Cbuf_ExecuteText(EXEC_NOW, "exec " REPCONFIG_CFG "\n");
-        Cbuf_Execute();
+        // [QL] quakelive_steam.exe 0x4cc269: a dedicated server reads server.cfg and nothing
+        // else of its own; a client reads qzconfig (hardware) and repconfig (replicated).
+        // Both then read autoexec.cfg.
+        //
+        // Retail tests com_dedicated at that address. That cannot be done here: this runs
+        // before the cvar is registered (2588 against 2595). ioqlds is dedicated by
+        // definition, and the client only becomes a server when the command line said so,
+        // which is parsed by this point.
+#ifdef DEDICATED
+        const qboolean dedicated = qtrue;
+#else
+        const qboolean dedicated = (qboolean)(Cvar_VariableIntegerValue("dedicated") != 0);
 #endif
+
+        if (dedicated) {
+            Cbuf_ExecuteText(EXEC_NOW, "exec server.cfg\n");
+            Cbuf_Execute();
+        } else {
+            Cbuf_ExecuteText(EXEC_NOW, "exec " QZCONFIG_CFG "\n");
+            Cbuf_Execute();
+#ifdef REPCONFIG_CFG
+            Cbuf_ExecuteText(EXEC_NOW, "exec " REPCONFIG_CFG "\n");
+            Cbuf_Execute();
+#endif
+        }
+
         Cbuf_ExecuteText(EXEC_NOW, "exec autoexec.cfg\n");
         Cbuf_Execute();
 

@@ -267,11 +267,11 @@ None of them contains `pak00.pk3`. Unzip, drop your own `pak00.pk3` into `baseq3
 and run the executable. On Windows the client does that step for you: if `pak00.pk3`
 is missing it finds Quake Live in your Steam library and offers to copy it.
 
-The dedicated server is started from the command line and takes its config there,
-the way retail's qzeroded does:
+The dedicated server reads `baseq3/server.cfg` by itself at startup, the same way
+retail's qzeroded does, so there is nothing to exec by hand:
 
 ```
-ioqlds +set dedicated 2 +exec server.cfg
+ioqlds +set dedicated 2
 ```
 
 `dedicated 1` is a local network, `dedicated 2` is the internet.
@@ -546,10 +546,10 @@ y `(tar.gz)`, que es lo que pide la GPL v2.
 
 Ninguno trae `pak00.pk3`. Se descomprime, se pone el `pak00.pk3` propio en `baseq3/` y se ejecuta. En Windows el cliente hace ese paso solo: si falta `pak00.pk3`, busca Quake Live en la biblioteca de Steam y ofrece copiarlo.
 
-El servidor dedicado se arranca desde la línea de órdenes y ahí mismo se le pide su configuración, igual que el qzeroded de retail:
+El servidor dedicado lee `baseq3/server.cfg` por su cuenta al arrancar, igual que el qzeroded de retail, así que no hay nada que ejecutar a mano:
 
 ```
-ioqlds +set dedicated 2 +exec server.cfg
+ioqlds +set dedicated 2
 ```
 
 `dedicated 1` es una red local, `dedicated 2` es internet.
