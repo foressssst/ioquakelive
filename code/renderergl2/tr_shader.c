@@ -1442,6 +1442,10 @@ infoParm_t infoParms[] = {
     {"monsterclip", 1, 0, CONTENTS_MONSTERCLIP},
     {"nodrop", 1, 0, CONTENTS_NODROP},  // don't drop items or leave bodies (death fog, lava, etc)
     {"nonsolid", 1, SURF_NONSOLID, 0},  // clears the solid flag
+    // [QL] el binario lo llama "nobotclip", no "botclip" como Quake 3, y va justo aca:
+    // su tabla es water, slime, lava, playerclip, monsterclip, nodrop, nonsolid, nobotclip.
+    // Sin esto, una superficie marcada asi sacaba un aviso de parametro desconocido.
+    {"nobotclip", 1, 0, CONTENTS_BOTCLIP},
 
     // utility relevant attributes
     {"origin", 1, 0, CONTENTS_ORIGIN},                // center of rotating brushes
