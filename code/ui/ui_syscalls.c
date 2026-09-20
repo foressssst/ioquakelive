@@ -178,6 +178,18 @@ void trap_Sys_OpenURL(const char* url) {
     syscall(UI_SYS_OPENURL, url);
 }
 
+int trap_SteamFriendCount(void) {
+    return syscall(UI_STEAM_FRIEND_COUNT);
+}
+
+qboolean trap_SteamFriendGet(int index, uiFriend_t* out) {
+    return syscall(UI_STEAM_FRIEND_GET, index, out);
+}
+
+void trap_SteamFriendAction(int index, int action) {
+    syscall(UI_STEAM_FRIEND_ACTION, index, action);
+}
+
 int trap_R_Font_Register(const char* name) {
     return syscall(UI_R_FONT_REGISTER, name);
 }
