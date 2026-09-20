@@ -181,7 +181,12 @@ static void CON_Show(void) {
     CHAR_INFO line[MAX_EDIT_LINE];
     WORD attrib;
 
-    GetConsoleScreenBufferInfo(qconsole_hout, &binfo);
+    // [ioquakelive] sin esta comprobacion, una salida redirigida deja binfo con
+    // basura de la pila y lo que sigue calcula con ella. Era la caida del servidor
+    // dedicado en Release.
+    if (!GetConsoleScreenBufferInfo(qconsole_hout, &binfo)) {
+        return;
+    }
 
     // if we're in the middle of printf, don't bother writing the buffer
     if (!qconsole_drawinput)
@@ -190,7 +195,7 @@ static void CON_Show(void) {
     writeArea.Left = 0;
     writeArea.Top = binfo.dwCursorPosition.Y;
     writeArea.Bottom = binfo.dwCursorPosition.Y;
-    writeArea.Right = MAX_EDIT_LINE;
+    writeArea.Right = MAX_EDIT_LINE - 1;  // [ioquakelive] SMALL_RECT es inclusivo
 
     // set color to white
     attrib = CON_ColorCharToAttrib(COLOR_WHITE);
@@ -208,13 +213,23 @@ static void CON_Show(void) {
         line[i].Attributes = attrib;
     }
 
+    // [ioquakelive] cuando la linea no entra, se muestra su final; el arreglo que se
+    // le pasa a WriteConsoleOutput tiene que seguir teniendo writeSize.X caracteres
+    // por delante, asi que el desplazamiento se acota al arreglo.
     if (qconsole_linelen > binfo.srWindow.Right) {
-        WriteConsoleOutput(qconsole_hout,
-                           line + (qconsole_linelen - binfo.srWindow.Right),
-                           writeSize, writePos, &writeArea);
+        int desde = qconsole_linelen - binfo.srWindow.Right;
+
+        if (desde < 0) {
+            desde = 0;
+        }
+        if (desde > MAX_EDIT_LINE - 1) {
+            desde = MAX_EDIT_LINE - 1;
+        }
+        writeSize.X = (SHORT)(MAX_EDIT_LINE - desde);
+        writeArea.Right = writeSize.X - 1;
+        WriteConsoleOutput(qconsole_hout, line + desde, writeSize, writePos, &writeArea);
     } else {
-        WriteConsoleOutput(qconsole_hout, line, writeSize,
-                           writePos, &writeArea);
+        WriteConsoleOutput(qconsole_hout, line, writeSize, writePos, &writeArea);
     }
 
     // set curor position
