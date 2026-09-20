@@ -1333,24 +1333,25 @@ static qboolean SV_ClientCommand(client_t* cl, msg_t* msg) {
         return qfalse;
     }
 
-    // malicious users may try using too many string commands
-    // to lag other players.  If we decide that we want to stall
-    // the command, we will stop processing the rest of the packet,
-    // including the usercmd.  This causes flooders to lag themselves
-    // but not other people
-    // We don't do this when the client hasn't been active yet since it's
-    // normal to spam a lot of commands when downloading
-    if (!com_cl_running->integer &&
-        cl->state >= CS_ACTIVE &&
-        sv_floodProtect->integer &&
-        svs.time < cl->nextReliableTime) {
-        // ignore any other text messages from this client but let them keep playing
-        // TTimo - moved the ignored verbose to the actual processing in SV_ExecuteClientCommand, only printing if the core doesn't intercept
-        clientOk = qfalse;
-    }
+    // [QL] 0x004e0180: el limite de ordenes de Quake Live no es el de ioquake3. En vez de
+    // ignorar lo que llegue antes del segundo, lleva un puntaje que sube uno por orden y baja
+    // uno por segundo; si pasa de sv_floodProtect (que es un numero con coma, no un si/no), al
+    // cliente se lo echa con "Flooding the server". Asi se puede mandar una rafaga corta -- lo
+    // normal al entrar -- pero no sostenerla.
+    if (!com_cl_running->integer && cl->state >= CS_ACTIVE && sv_floodProtect->value > 0.0f) {
+        float score = cl->floodScore + 1.0f - (svs.time - cl->floodTime) / 1000.0f;
 
-    // don't allow another command for one second
-    cl->nextReliableTime = svs.time + 1000;
+        if (score < 0.0f) {
+            score = 0.0f;
+        }
+        cl->floodScore = score;
+        cl->floodTime = svs.time;
+
+        if (score > sv_floodProtect->value) {
+            SV_DropClient(cl, "Flooding the server");
+            return qfalse;
+        }
+    }
 
     SV_ExecuteClientCommand(cl, s, clientOk);
 

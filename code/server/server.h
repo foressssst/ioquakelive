@@ -148,6 +148,8 @@ typedef struct client_s {
 
     int deltaMessage;                        // frame last client usercmd message
     int nextReliableTime;                    // svs.time when another reliable command will be allowed
+    float floodScore;                        // [QL] 0x004e0180: el puntaje del cubo que gotea
+    int floodTime;                           // [QL] svs.time de la ultima orden contada
     float floodCount;                        // [QL] token-bucket flood counter
     int lastPacketTime;                      // svs.time when packet was last received
     int lastConnectTime;                     // svs.time when connection started
