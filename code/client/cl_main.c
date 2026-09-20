@@ -1764,7 +1764,7 @@ static qboolean CL_WorkshopDownloads(void) {
     Com_Printf("Server requires the following workshop items: %s\n", list);
     Q_strncpyz(copy, list, sizeof(copy));
     for (token = strtok(copy, " "); token; token = strtok(NULL, " ")) {
-        uint64_t item = (uint64_t)_strtoui64(token, NULL, 10);
+        uint64_t item = (uint64_t)strtoull(token, NULL, 10);
 
         if (!item || total >= CL_MAX_WORKSHOP) {
             continue;
@@ -1934,7 +1934,7 @@ void CL_CheckForResend(void) {
 
             if (!steamId) {
 #ifdef _MSC_VER
-                steamId = _strtoui64(cl_steamId->string, NULL, 10);
+                steamId = strtoull(cl_steamId->string, NULL, 10);
 #else
                 steamId = strtoull(cl_steamId->string, NULL, 10);
 #endif
@@ -3822,7 +3822,7 @@ static uint64_t CL_ServerSteamID(void) {
     }
     s = cl.gameState.stringData + cl.gameState.stringOffsets[CS_STEAM_ID];
 #ifdef _MSC_VER
-    return (uint64_t)_strtoui64(s, NULL, 10);
+    return (uint64_t)strtoull(s, NULL, 10);
 #else
     return (uint64_t)strtoull(s, NULL, 10);
 #endif

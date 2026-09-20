@@ -3115,7 +3115,7 @@ static void Cmd_Unban_f(gentity_t* ent) {
         return;
     }
     trap_Argv(1, arg, sizeof(arg));
-    steamId = (uint64_t)_atoi64(arg);
+    steamId = (uint64_t)strtoll(arg, NULL, 10);
     if (!steamId || G_GetAccessBySteamId(steamId) != -1) {
         return;
     }
