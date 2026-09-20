@@ -3052,6 +3052,8 @@ CL_Init
 */
 
 static void CL_VoiceOn_f(void);
+static void CL_ClientFriendInvite_f(void);
+static void CL_ClientViewProfile_f(void);
 static void CL_VoiceOff_f(void);
 
 void CL_Init(void) {
@@ -3228,6 +3230,8 @@ void CL_Init(void) {
     Cmd_SetCommandCompletionFunc("rcon", CL_CompleteRcon);
     Cmd_AddCommand("localservers", CL_LocalServers_f);
     Cmd_AddCommand("globalservers", CL_GlobalServers_f);
+    Cmd_AddCommand("clientfriendinvite", CL_ClientFriendInvite_f);
+    Cmd_AddCommand("clientviewprofile", CL_ClientViewProfile_f);
     Cmd_AddCommand("+voice", CL_VoiceOn_f);   // [QL] 0x00461565
     Cmd_AddCommand("-voice", CL_VoiceOff_f);
     Cmd_AddCommand("showip", CL_ShowIP_f);
@@ -3800,6 +3804,49 @@ static uint64_t CL_ServerSteamID(void) {
 #else
     return (uint64_t)strtoull(s, NULL, 10);
 #endif
+}
+
+/*
+===============
+CL_ClientFriendInvite_f / CL_ClientViewProfile_f
+
+"clientfriendinvite <numero>" y "clientviewprofile <numero>": la superposicion de
+Steam sobre otro jugador de la partida, para agregarlo o para ver su perfil. El
+numero de cliente se traduce a Steam ID preguntandole al cgame.
+
+[QL] las dos ordenes estan en el motor de retail, junto a los nombres de sus
+dialogos (0x005327f0).
+===============
+*/
+static void CL_OverlayOnPlayer_f(const char* orden, void (*accion)(uint64_t)) {
+    uint64_t steamId = 0;
+    int clientNum;
+
+    if (Cmd_Argc() != 2) {
+        Com_Printf("uso: %s <numero de cliente>\n", orden);
+        return;
+    }
+    if (clc.state != CA_ACTIVE || !cgvm) {
+        Com_Printf("Not connected to a server.\n");
+        return;
+    }
+    clientNum = atoi(Cmd_Argv(1));
+    if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
+        return;
+    }
+    VM_Call(cgvm, CG_CLIENT_STEAM_ID, clientNum, (intptr_t)&steamId);
+    if (!steamId) {
+        return;
+    }
+    accion(steamId);
+}
+
+static void CL_ClientFriendInvite_f(void) {
+    CL_OverlayOnPlayer_f("clientfriendinvite", Steam_ShowFriendAdd);
+}
+
+static void CL_ClientViewProfile_f(void) {
+    CL_OverlayOnPlayer_f("clientviewprofile", Steam_ShowProfile);
 }
 
 /*
