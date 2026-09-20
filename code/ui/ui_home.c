@@ -89,6 +89,7 @@ typedef enum {
     HM_HIT_QUIT,
     HM_HIT_TAB,   // [ioquakelive] una seccion de la barra de arriba
     HM_HIT_SOCIAL, // [ioquakelive] el fondo de la franja social: los clics no pasan a traves
+    HM_HIT_FRIEND, // [ioquakelive] una fila de la lista de amigos
     HM_HIT_MENU    // [ioquakelive] una fila del desplegable de PLAY
 } hmHitType_t;
 
@@ -921,11 +922,241 @@ aparecen los nombres.
 
 Quit sigue en la barra, asi que la franja ya no lo lleva.
 
-Lo que le falta: los amigos de verdad (Steam y quakeclub.com), el estado de cada uno y poder
-unirse a su partida. Hasta entonces las filas son lugares vacios.
+Los amigos son los de Steam (2026-09-20). En retail esta lista era una pagina web -- el boton
+"FRIENDS LIST" de la barra de abajo abre el navegador incrustado, y GetFriendList es un nombre
+del puente con JavaScript, no una funcion del cliente --, asi que no hay nada que calcar: los
+datos los da Steam por API y la forma es nuestra.
+
+De cada uno se ve la inicial, un punto con su estado y, con la franja abierta, el nombre y que
+esta haciendo. Van ordenados como los ordena CS2: primero los que estan en un servidor de Quake
+Live, despues los que tienen el juego abierto, despues los conectados y al final los ausentes. Un
+clic entra al servidor del amigo, o abre su perfil de Steam si no esta en ninguno.
+
+Lo que no hay son las caras: Steam las entrega como pixeles crudos y el renderer no tiene por
+donde recibir una imagen armada en memoria, asi que cada uno lleva su inicial.
 
 ===============================================================================
 */
+#define HV_MAX_FRIENDS 32
+#define HV_FRIEND_ROW (HV_AVATAR + 14.0f)
+#define HV_FRIEND_HEAD 34.0f  // el alto del titulo "Friends", encima de la primera fila
+
+// la lista, releida cada tanto: preguntarsela a Steam en cada cuadro serian cientos
+// de llamadas por nada, porque un amigo no cambia de estado tan seguido
+static struct {
+    uiFriend_t list[HV_MAX_FRIENDS];
+    int index[HV_MAX_FRIENDS];  // su lugar en la lista de Steam, que es por donde se actua
+    int count;                  // cuantos entraron en la lista
+    int online;                 // cuantos hay conectados en total
+    int updated;
+} hvf;
+
+// el orden de CS2: primero a quien se puede entrar, ultimo quien no esta mirando
+static int UI_Home_FriendRank(const uiFriend_t* f) {
+    if (f->server) {
+        return 0;
+    }
+    if (f->sameGame) {
+        return 1;
+    }
+    if (f->state == 1) {
+        return 2;
+    }
+    return 3;
+}
+
+static void UI_Home_FriendRefresh(void) {
+    int total;
+    int i;
+
+    if (hvf.updated && uiInfo.uiDC.realTime - hvf.updated < 2000) {
+        return;
+    }
+    hvf.updated = uiInfo.uiDC.realTime ? uiInfo.uiDC.realTime : 1;
+    hvf.count = 0;
+    hvf.online = 0;
+
+    total = trap_SteamFriendCount();
+    for (i = 0; i < total; i++) {
+        uiFriend_t amigo;
+        int rank;
+        int j;
+
+        if (!trap_SteamFriendGet(i, &amigo) || amigo.state == 0) {
+            continue;  // los desconectados no se muestran, igual que en la consola
+        }
+        hvf.online++;
+
+        rank = UI_Home_FriendRank(&amigo);
+        if (hvf.count == HV_MAX_FRIENDS) {
+            // lleno: solo entra si desplaza a uno que importa menos
+            if (rank >= UI_Home_FriendRank(&hvf.list[hvf.count - 1])) {
+                continue;
+            }
+            hvf.count--;
+        }
+
+        // insercion ordenada: la lista es corta y asi no hace falta ordenarla despues
+        for (j = hvf.count; j > 0 && UI_Home_FriendRank(&hvf.list[j - 1]) > rank; j--) {
+            hvf.list[j] = hvf.list[j - 1];
+            hvf.index[j] = hvf.index[j - 1];
+        }
+        hvf.list[j] = amigo;
+        hvf.index[j] = i;
+        hvf.count++;
+    }
+}
+
+// que esta haciendo, en las palabras de Steam
+static const char* UI_Home_FriendDoing(const uiFriend_t* f) {
+    if (f->server) {
+        return "In a match";
+    }
+    if (f->sameGame) {
+        return "In Quake Live";
+    }
+    if (f->playing) {
+        return "In another game";
+    }
+    switch (f->state) {
+        case 2:
+            return "Busy";
+        case 3:
+            return "Away";
+        case 4:
+            return "Snooze";
+        case 5:
+            return "Looking to trade";
+        case 6:
+            return "Looking to play";
+        default:
+            return "Online";
+    }
+}
+
+static const float* UI_Home_FriendDot(const uiFriend_t* f) {
+    if (f->sameGame) {
+        return smSuccess;
+    }
+    if (f->playing) {
+        return smGold;
+    }
+    if (f->state == 1) {
+        return smText;
+    }
+    return smMuted;
+}
+
+/*
+===============
+UI_Home_FriendInitial
+
+La inicial del nombre, que es lo que lleva el cuadro donde iria la cara. Un nombre
+de Steam puede empezar por una letra de mas de un byte, asi que se copia el
+caracter entero y no su primer byte, que solo dibujaria basura.
+===============
+*/
+static void UI_Home_FriendInitial(const char* name, char* out, int size) {
+    unsigned char c = (unsigned char)name[0];
+    int len = 1;
+
+    if (!c) {
+        Q_strncpyz(out, "?", size);
+        return;
+    }
+    if (c >= 0xf0) {
+        len = 4;
+    } else if (c >= 0xe0) {
+        len = 3;
+    } else if (c >= 0xc0) {
+        len = 2;
+    }
+    if (len >= size) {
+        len = size - 1;
+    }
+    memcpy(out, name, len);
+    out[len] = '\0';
+    if (out[0] >= 'a' && out[0] <= 'z') {
+        out[0] -= 'a' - 'A';
+    }
+}
+
+/*
+===============
+UI_Home_DrawFriendRows
+
+Una fila por amigo: el cuadro con su inicial y el punto de su estado, que es lo
+unico que se ve con la franja plegada, y al abrirla su nombre, que esta haciendo y
+lo que pasa si se lo toca.
+===============
+*/
+static void UI_Home_DrawFriendRows(float x, float y, float w, float icon, float textX, float open, float bottom) {
+    int max = (int)((bottom - 20.0f - y) / HV_FRIEND_ROW);
+    int i;
+
+    if (max > hvf.count) {
+        max = hvf.count;
+    }
+    for (i = 0; i < max; i++) {
+        const uiFriend_t* f = &hvf.list[i];
+        float ry = y + i * HV_FRIEND_ROW;
+        qboolean over = SM_Over(HM_HIT_FRIEND, hvf.index[i]);
+        char inicial[8];
+        vec4_t c;
+
+        SM_Hit(x, ry - 7.0f, w + 1, HV_FRIEND_ROW, HM_HIT_FRIEND, hvf.index[i], NULL);
+        if (over && open > 0.05f) {
+            VectorCopy(smRaised, c);
+            c[3] = 0.9f * open;
+            SM_Fill(x + 1, ry - 7.0f, w, HV_FRIEND_ROW, c, NULL);
+        }
+
+        // el cuadro con la inicial, donde iria la cara
+        SM_Round(icon, ry, HV_AVATAR, HV_AVATAR, SM_RADIUS_SM, over ? smRaisedHover : smRaised, NULL);
+        UI_Home_FriendInitial(f->name, inicial, sizeof(inicial));
+        SM_Centered(icon + HV_AVATAR * 0.5f, SM_Baseline(FONT_SANS, 22.0f, ry + 13.0f, 26.0f), 22.0f,
+                    f->sameGame ? smText : smMuted, inicial, qfalse);
+
+        // el punto de estado, el mismo que lleva el jugador arriba
+        SM_Fill(icon + HV_AVATAR - 11, ry + HV_AVATAR - 11, 11, 11, smPage, NULL);
+        SM_Fill(icon + HV_AVATAR - 9, ry + HV_AVATAR - 9, 9, 9, UI_Home_FriendDot(f), NULL);
+
+        if (open <= 0.05f) {
+            continue;
+        }
+
+        VectorCopy(f->sameGame ? smText : smTextSoft, c);
+        c[3] = open;
+        SM_Text(textX, SM_Baseline(FONT_SANS, 15.0f, ry + 4.0f, 20.0f), FONT_SANS, 15.0f, c, f->name,
+                SM_Fit(FONT_SANS, 15.0f, f->name, w - HV_SOCIAL_W - 88.0f), qfalse);
+        VectorCopy(f->server ? smSuccess : smSubtle, c);
+        c[3] = open;
+        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, ry + 26.0f, 20.0f), FONT_SANS, HV_TEXT, c,
+                UI_Home_FriendDoing(f), -1, qfalse);
+
+        // lo que hace el clic, solo cuando el cursor esta encima: asi la columna se lee
+        // limpia y la accion aparece donde se la va a usar
+        if (over) {
+            const char* que = f->server ? "JOIN" : "PROFILE";
+            float qw = SM_LabelWidth(11.0f, que, 1.6f);
+
+            VectorCopy(f->server ? smGold : smMuted, c);
+            c[3] = open;
+            SM_Label(x + w - 16.0f - qw, SM_Baseline(FONT_SANS, 11.0f, ry + 20.0f, 14.0f), 11.0f, c, que, 1.6f);
+        }
+    }
+
+    // los que no entraron en la columna
+    if (max < hvf.count && open > 0.05f) {
+        vec4_t c;
+
+        VectorCopy(smSubtle, c);
+        c[3] = open;
+        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + max * HV_FRIEND_ROW, 20.0f), FONT_SANS, HV_TEXT, c,
+                va("+%i more", hvf.count - max), -1, qfalse);
+    }
+}
+
 /*
 ===============
 UI_Home_DrawSocial
@@ -950,7 +1181,6 @@ static void UI_Home_DrawSocial(float dt) {
     float textX;
     qboolean inside;
     vec4_t c;
-    int i;
 
     // se abre mientras el cursor este sobre la franja, con el ancho que tenga en ese momento
     w = HV_SOCIAL_W + (HV_SOCIAL_OPEN_W - HV_SOCIAL_W) * UI_Home_Smooth(hv.social);
@@ -1003,27 +1233,56 @@ static void UI_Home_DrawSocial(float dt) {
         SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 29, 20), FONT_SANS, HV_TEXT, c, "Online", -1, qfalse);
     }
 
-    // los amigos: todavia no hay de donde sacarlos, asi que son lugares vacios
+    // los amigos, sacados de Steam
     y = top + HV_BAR_H + 12.0f;
-    for (i = 0; i < 3; i++) {
-        vec4_t slot;
+    UI_Home_FriendRefresh();
 
-        VectorCopy(smText, slot);
-        slot[3] = 0.07f;
-        SM_Fill(icon, y + i * (HV_AVATAR + 14), HV_AVATAR, HV_AVATAR, slot, NULL);
-    }
+    // el encabezado: cuantos hay conectados, a la derecha del titulo
     if (open > 0.05f) {
         VectorCopy(smMuted, c);
         c[3] = open;
-        SM_Label(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 2, 20), HV_TEXT, c, "Friends", 2.0f);
-        VectorCopy(smSubtle, c);
-        c[3] = open;
-        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 26, 20), FONT_SANS, HV_TEXT, c,
-                "They will show up here once", -1, qfalse);
-        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 46, 20), FONT_SANS, HV_TEXT, c, "Steam is wired up", -1,
-                qfalse);
+        SM_Label(textX, SM_Baseline(FONT_SANS, HV_TEXT, y, 20), HV_TEXT, c, "Friends", 2.0f);
+        if (hvf.online > 0) {
+            char cuantos[32];
+
+            Com_sprintf(cuantos, sizeof(cuantos), "%i online", hvf.online);
+            VectorCopy(smSubtle, c);
+            c[3] = open;
+            SM_Text(x + w - 16.0f - SM_Advance(FONT_SANS, HV_TEXT, cuantos, -1),
+                    SM_Baseline(FONT_SANS, HV_TEXT, y, 20), FONT_SANS, HV_TEXT, c, cuantos, -1, qfalse);
+        }
     }
 
+    y += HV_FRIEND_HEAD;
+    if (hvf.count > 0) {
+        UI_Home_DrawFriendRows(x, y, w, icon, textX, open, bottom);
+    } else if (open > 0.05f) {
+        VectorCopy(smSubtle, c);
+        c[3] = open;
+        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 2, 20), FONT_SANS, HV_TEXT, c,
+                hvf.online ? "Nobody online right now" : "No Steam friends here", -1, qfalse);
+        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 22, 20), FONT_SANS, HV_TEXT, c,
+                trap_SteamFriendCount() ? "" : "Steam is not running", -1, qfalse);
+    }
+}
+
+/*
+===============
+UI_Home_FriendClick
+
+Un clic sobre un amigo: si esta en un servidor de Quake Live se entra ahi, y si no
+se abre su perfil de Steam, que es lo unico que se puede hacer con el.
+===============
+*/
+static void UI_Home_FriendClick(int index) {
+    int i;
+
+    for (i = 0; i < hvf.count; i++) {
+        if (hvf.index[i] == index) {
+            trap_SteamFriendAction(index, hvf.list[i].server ? UI_FRIEND_JOIN : UI_FRIEND_PROFILE);
+            return;
+        }
+    }
 }
 
 void UI_Home_Open(void) {
@@ -1082,6 +1341,10 @@ qboolean UI_Home_HandleKey(int key) {
     // [ioquakelive] la fila de mapas, la barra y la salida del menu principal
     if (hit && hit->type == HM_HIT_QUIT) {
         UI_Home_Go(HM_NAV_QUIT);
+        return qtrue;
+    }
+    if (hit && hit->type == HM_HIT_FRIEND) {
+        UI_Home_FriendClick(hit->index);
         return qtrue;
     }
     if (!hit || hit->type != HM_HIT_ITEM) {

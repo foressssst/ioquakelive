@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "../qcommon/q_shared.h"
 #include "../qcommon/qcommon.h"
+#include "../qcommon/q_steam.h"
 #include "../renderercommon/tr_public.h"
 #include "../ui/ui_public.h"
 #include "keys.h"
@@ -463,6 +464,7 @@ void CL_VoiceFrame(void);
 void CL_SetCgameCommandCompletion(const char* cmdName);
 qboolean CL_VoiceIsIgnored(uint64_t steamId);
 qboolean CL_VoiceToggleIgnore(uint64_t steamId);
+void CL_FriendDo(const steamFriend_t* amigo, int accion);
 extern cvar_t* s_voiceVolume;
 void CL_FavoriteServers_f(void);
 qboolean CL_UpdateVisiblePings_f(int source);

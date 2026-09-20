@@ -3882,6 +3882,38 @@ static void CL_FriendsList(void) {
     Com_Printf("%i de %i conectados. ^7friends join|invite|profile <numero>\n", mostrados, total);
 }
 
+/*
+===============
+CL_FriendDo
+
+Lo que se puede hacer con un amigo: entrar a su servidor, abrir la ventana de
+Steam para agregarlo, o ver su perfil. Lo llaman la orden de consola y la franja
+social del menu, que son dos maneras de pedir lo mismo.
+===============
+*/
+void CL_FriendDo(const steamFriend_t* amigo, int accion) {
+    switch (accion) {
+        case UI_FRIEND_JOIN:
+            if (!amigo->sameGame || !amigo->ip) {
+                Com_Printf("%s no esta en un servidor de Quake Live.\n", amigo->name);
+                return;
+            }
+            Com_Printf("Entrando al servidor de %s...\n", amigo->name);
+            Cbuf_AddText(va("connect %u.%u.%u.%u:%u\n",
+                            (amigo->ip >> 24) & 0xff, (amigo->ip >> 16) & 0xff,
+                            (amigo->ip >> 8) & 0xff, amigo->ip & 0xff, amigo->port));
+            return;
+        case UI_FRIEND_INVITE:
+            Steam_ShowFriendAdd(amigo->steamId);
+            return;
+        case UI_FRIEND_PROFILE:
+            Steam_ShowProfile(amigo->steamId);
+            return;
+        default:
+            return;
+    }
+}
+
 static void CL_Friends_f(void) {
     steamFriend_t amigo;
     const char* que;
@@ -3902,22 +3934,15 @@ static void CL_Friends_f(void) {
     }
 
     if (!Q_stricmp(que, "join")) {
-        if (!amigo.sameGame || !amigo.ip) {
-            Com_Printf("%s no esta en un servidor de Quake Live.\n", amigo.name);
-            return;
-        }
-        Com_Printf("Entrando al servidor de %s...\n", amigo.name);
-        Cbuf_AddText(va("connect %u.%u.%u.%u:%u\n",
-                        (amigo.ip >> 24) & 0xff, (amigo.ip >> 16) & 0xff,
-                        (amigo.ip >> 8) & 0xff, amigo.ip & 0xff, amigo.port));
+        CL_FriendDo(&amigo, UI_FRIEND_JOIN);
         return;
     }
     if (!Q_stricmp(que, "invite")) {
-        Steam_ShowFriendAdd(amigo.steamId);
+        CL_FriendDo(&amigo, UI_FRIEND_INVITE);
         return;
     }
     if (!Q_stricmp(que, "profile")) {
-        Steam_ShowProfile(amigo.steamId);
+        CL_FriendDo(&amigo, UI_FRIEND_PROFILE);
         return;
     }
     Com_Printf("uso: friends [join|invite|profile <numero>]\n");
