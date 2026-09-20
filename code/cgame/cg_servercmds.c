@@ -1008,6 +1008,16 @@ void CG_SetConfigValues(void) {
         cgs.flagStatus = s[0] - '0';
     }
     cg.warmup = atoi(Info_ValueForKey(CG_ConfigString(CS_WARMUP), "time"));
+
+    // [ioquakelive] al entrar a una partida ya empezada -- o al abrir una demo -- el
+    // configstring del calentamiento ya esta puesto y CG_ParseWarmup no se llama, asi que el
+    // tipo de juego de la cuenta regresiva quedaba en cero y la pantalla decia "Free For All"
+    // en cualquier modo. Sin la clave no hay cambio de modo: es -1.
+    {
+        const char* gt = Info_ValueForKey(CG_ConfigString(CS_WARMUP), "g_gametype");
+
+        cg.warmupGametype = *gt ? atoi(gt) : -1;
+    }
     CG_UpdateDisableLoadout(atoi(Info_ValueForKey(CG_ConfigString(CS_SERVERINFO), "g_loadout")));
 }
 
