@@ -753,6 +753,7 @@ typedef struct {
 void Field_Clear(field_t* edit);
 void Field_AutoComplete(field_t* edit);
 void Field_CompleteKeyname(void);
+void Field_CompleteList(const char* const* list, int count);
 void Field_CompleteFilename(const char* dir,
                             const char* ext,
                             qboolean stripExt,
@@ -1057,6 +1058,11 @@ void SV_RegisterGameCvars(void);
 void SV_Shutdown(char* finalmsg);
 void SV_Frame(int msec);
 void SV_VoiceFrame(void);  // [QL] el puente de la voz entre pares
+
+// [QL] los mapas y las factories que conoce el servidor, que es lo que completa el tabulador
+#define MAX_COMPLETION_NAMES 1024
+int SV_ArenaNameList(const char** out, int max);
+int SV_FactoryNameList(const char** out, int max);
 void SV_PacketEvent(netadr_t from, msg_t* msg);
 int SV_FrameMsec(void);
 qboolean SV_GameCommand(void);
