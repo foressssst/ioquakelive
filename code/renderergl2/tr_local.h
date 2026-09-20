@@ -1429,7 +1429,7 @@ typedef struct {
     int msec;  // total msec for backend run
 } backEndCounters_t;
 
-// [ioquakelive] cuantos frames puede la GPU tener encolados como mucho
+// [ioquakelive] the most frames the GPU may have queued
 #define MAX_FRAME_FENCES 4
 
 // all state modified by the back end is separated
@@ -1452,8 +1452,8 @@ typedef struct {
     qboolean colorMask[4];
     qboolean depthFill;
 
-    // [ioquakelive] las barreras de los ultimos frames, para no encolar en la GPU mas de
-    // r_maxQueuedFrames (ver RB_SwapBuffers)
+    // [ioquakelive] the last frames' fences, to keep no more than r_maxQueuedFrames queued on the
+    // GPU (see RB_SwapBuffers)
     GLsync frameFences[MAX_FRAME_FENCES];
     int fenceIndex;
 } backEndState_t;
@@ -1715,7 +1715,7 @@ extern cvar_t* r_roundImagesDown;
 extern cvar_t* r_colorMipLevels;  // development aid to see texture mip usage
 extern cvar_t* r_picmip;          // controls picmip values
 extern cvar_t* r_finish;
-// [ioquakelive] el tope de frames encolados en la GPU; 0 vuelve a vaciar la tuberia como antes
+// [ioquakelive] the cap on frames queued on the GPU; 0 drains the pipeline as before
 extern cvar_t* r_maxQueuedFrames;
 extern cvar_t* r_textureMode;
 extern cvar_t* r_offsetFactor;

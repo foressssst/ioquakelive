@@ -283,23 +283,23 @@ qboolean OnSameTeam(gentity_t* ent1, gentity_t* ent2) {
 ==============
 G_VoiceFilter
 
-Quien oye a quien. El servidor la consulta por cada par al repartir la voz, y
-solo la manda cuando devuelve 0.
+Who hears whom. The server asks this for every pair when handing out voice, and only
+sends it when the answer is 0.
 
-[QL] 0x10052e90, export +0x3c. El orden de las condiciones es el del binario:
+[QL] 0x10052e90, export +0x3c. The conditions are in the binary's order:
 
-  - a los bots no se les manda nada;
-  - a quien esta silenciado no se lo reparte;
-  - nadie se oye a si mismo;
-  - en el intermedio y mientras se espera jugadores (warmupTime < 0) se oyen
-    todos con todos;
-  - en los modos por equipos, y siempre que el que habla sea espectador, se
-    oyen solo los del mismo equipo;
-  - en el resto de los modos se oyen todos.
+  - bots are sent nothing;
+  - a muted player is not relayed;
+  - nobody hears themselves;
+  - during intermission and while waiting for players (warmupTime < 0) everyone
+    hears everyone;
+  - in team modes, and whenever the speaker is a spectator, only the same team
+    hears;
+  - in the remaining modes everyone hears.
 
-Retail tiene ademas una variable de modo que nada escribe nunca -- las dos
-unicas referencias en el binario la leen. Con su valor fijo en 0 las dos ramas
-que dependen de ella son las de arriba, asi que aca no existe.
+Retail also has a mode variable that nothing ever writes -- the binary's only two
+references read it. With its value fixed at 0 the two branches that depend on it are
+the ones above, so it does not exist here.
 ==============
 */
 int G_VoiceFilter(int speaker, int listener) {

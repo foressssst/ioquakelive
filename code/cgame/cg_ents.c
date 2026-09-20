@@ -113,13 +113,13 @@ void CG_SetEntitySoundPosition(centity_t* cent) {
 ===============
 CG_AddEffectLight
 
-[ioquakelive] Una luz de las que solo decoran: el fogonazo del arma, un cohete, una explosion,
-el brillo de un objeto. Con r_dynamicLight 2 no se dibuja ninguna, y quedan solo las que
-informan algo -- quien lleva bandera, quien lleva quad --, que siguen llamando al trap directo
-desde CG_PlayerPowerups.
+[ioquakelive] One of the lights that only decorate: the muzzle flash, a rocket, an explosion,
+an item's glow. At r_dynamicLight 2 none of them is drawn, leaving only the lights that tell
+you something -- who carries a flag, who carries quad -- which still call the trap directly
+from CG_PlayerPowerups.
 
-Es idea del jugador: con 1 la luz del portador se pierde entre los cohetes y las explosiones;
-con 2 cualquier luz que se vea es, con certeza, un portador.
+At 1 the carrier's light is lost among the rockets and the explosions; at 2 any light you see
+is, for certain, a carrier.
 ===============
 */
 void CG_AddEffectLight(const vec3_t org, float intensity, float r, float g, float b) {
@@ -452,12 +452,12 @@ static void CG_DrawItemTimer(centity_t* cent, const gitem_t* item) {
     float alpha, dist;
     int total, lit, art, angle, i;
 
-    // [QL] 0x1002db1a: la compuerta es cg_itemTimers -- su vmCvar vive en 0x10a64fe0 y el
-    // binario lee su .integer en 0x10a64fec --, no cg_itemFx. Estaba al reves, asi que a quien
-    // apagaba los efectos de los items se le iban tambien los relojes.
+    // [QL] 0x1002db1a: the gate is cg_itemTimers -- its vmCvar lives at 0x10a64fe0 and the
+    // binary reads its .integer at 0x10a64fec -- not cg_itemFx. It was the other way round
+    // here, so turning item effects off took the timers with them.
     //
-    // El binario tampoco mira es->time2: divide por 5000 sin fijarse. El corte de abajo es
-    // nuestro, para no dibujar cero gajos.
+    // The binary does not look at es->time2 either: it divides by 5000 without checking. The
+    // guard below is ours, to avoid drawing zero slices.
     if (!cg_itemTimers.integer || !item->itemTimer || cg.time >= es->time || es->time2 <= 0) {
         return;
     }
@@ -504,9 +504,9 @@ static void CG_DrawItemTimer(centity_t* cent, const gitem_t* item) {
 =================
 CG_PowerupPoiShader
 
-El icono que le toca a cada powerup, o el de "incoming" mientras vuelve.
+The icon each powerup gets, or the "incoming" one while it respawns.
 
-[QL] 0x10a5fbec y 0x10a5fbac, dos tablas indexadas por el tag del objeto.
+[QL] 0x10a5fbec and 0x10a5fbac, two tables indexed by the item's tag.
 =================
 */
 static qhandle_t CG_PowerupPoiShader(int giTag, qboolean volviendo) {
@@ -536,11 +536,11 @@ static qhandle_t CG_PowerupPoiShader(int giTag, qboolean volviendo) {
 =================
 CG_DrawPowerupPoi
 
-La marca sobre un powerup. Se ve mientras el powerup esta en el suelo, y
-mientras vuelve cuando falta menos de diez segundos.
+The marker over a powerup. It shows while the powerup is on the floor, and while it
+respawns once less than ten seconds remain.
 
-[QL] 0x100168f8. cg_powerupPOIs: 0 la apaga, 1 la muestra solo con linea de
-vista, 2 -- el valor que viene de fabrica -- la muestra a traves de las paredes.
+[QL] 0x100168f8. cg_powerupPOIs: 0 turns it off, 1 shows it only in line of sight, 2 --
+the stock value -- shows it through walls.
 =================
 */
 static void CG_DrawPowerupPoi(centity_t* cent, const gitem_t* item) {
@@ -622,7 +622,7 @@ static void CG_Item(centity_t* cent) {
     // skipped for being invisible
     CG_DrawItemTimer(cent, item);
 
-    // [QL] 0x100168f8: y la marca del powerup, que tambien queda cuando el powerup no esta
+    // [QL] 0x100168f8: and the powerup marker, which stays up while the powerup is gone
     CG_DrawPowerupPoi(cent, item);
 
     // [QL] cgamex86.dll 0x10016026: retail reads cg_skipItems here, as a string, once per item

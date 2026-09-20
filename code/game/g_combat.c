@@ -88,10 +88,10 @@ void AddScore( gentity_t *ent, vec3_t origin, int score ) {
 	if ( level.intermissionQueued || level.intermissionTime ) {
 		return;
 	}
-	// [ioquakelive] Aca habia una guarda que le negaba el puntaje al jugador humano "en modo
-	// entrenamiento" y se habia quitado porque g_training no se lee en AddScore. La guarda si
-	// esta en retail (0x1004666e), pero la cvar es otra: bot_gauntletOnly. Con ella puesta el
-	// humano no suma, que es como se juega el Crash Course.
+	// [ioquakelive] There used to be a guard here denying the human player score "in training
+	// mode", removed because g_training is not read in AddScore. The guard is in retail
+	// (0x1004666e), but the cvar is a different one: bot_gauntletOnly. With it set the human
+	// scores nothing, which is how the Crash Course is played.
 	if ( bot_gauntletOnly.integer && !( ent->r.svFlags & SVF_BOT ) ) {
 		return;
 	}
@@ -102,8 +102,8 @@ void AddScore( gentity_t *ent, vec3_t origin, int score ) {
 		return;
 	}
 
-	// [QL] 0x10046691: el primero que anota queda anotado para siempre; el ultimo, cada vez.
-	// Los dos viajan en el MATCH_REPORT.
+	// [QL] 0x10046691: the first to score is recorded once and for all; the last, every time.
+	// Both are carried in the MATCH_REPORT.
 	if ( !level.firstScorer[0] ) {
 		Q_strncpyz( level.firstScorer, ent->client->pers.netname, sizeof( level.firstScorer ) );
 	}

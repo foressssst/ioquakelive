@@ -192,10 +192,10 @@ int ClientNumberFromString(gentity_t* to, char* s, qboolean checkNums, qboolean 
     int idnum;
     char cleanName[MAX_STRING_CHARS];
 
-    // [QL] 0x1003f920: retail decide por el primer caracter -- si es un digito, es un
-    // numero de puesto y no se busca por nombre --, y cada final tiene su motivo. El
-    // fork se caia al buscar por nombre y terminaba diciendo "User 5 is not on the
-    // server" cuando lo que pasaba era que el puesto 5 estaba vacio.
+    // [QL] 0x1003f920: retail branches on the first character -- a digit means a slot
+    // number, and the name search is skipped -- and every failure has its own message.
+    // Falling through to the name search answered "User 5 is not on the server" when
+    // the real problem was that slot 5 was empty.
     if (checkNums && s[0] >= '0' && s[0] <= '9') {
         idnum = atoi(s);
         if (idnum < 0 || idnum >= level.maxclients) {
@@ -408,9 +408,9 @@ hide the scoreboard, and take a special screenshot
 ==================
 */
 void Cmd_LevelShot_f(gentity_t* ent) {
-    // [QL] 0x10040010: cuatro compuertas y en este orden -- trampas, vivo, tipo de
-    // juego y cliente local. Al fork le faltaban las dos del medio, y el texto de la
-    // ultima era propio: retail dice solo "Must be executed by a local client".
+    // [QL] 0x10040010: four gates, in this order -- cheats, alive, gametype, local
+    // client. The middle two were missing, and the last one said more than retail does:
+    // the binary prints only "Must be executed by a local client".
     if (!CheatsOk(ent)) {
         return;
     }
@@ -497,9 +497,9 @@ Let everyone know about a team change
 =================
 */
 void BroadcastTeamChange(gclient_t* client, int oldTeam) {
-    // [ioquakelive] El binario se sale de entrada en dos casos (0x1004027d): durante el
-    // entrenamiento -- en el Crash Course nadie anuncia nada -- y en los primeros cinco
-    // segundos del nivel, que es cuando entran todos de golpe al cargar el mapa.
+    // [ioquakelive] The binary returns early in two cases (0x1004027d): during training,
+    // where nothing is announced in the Crash Course, and in the first five seconds of a
+    // level, when everyone connects at once.
     if (g_training.integer || level.time < 5000) {
         return;
     }
@@ -553,10 +553,9 @@ void SetTeam(gentity_t* ent, const char* s) {
     //
     client = ent->client;
 
-    // [ioquakelive] NO ES DE RETAIL: lo pidio el jugador. Del entrenamiento no se sale a
-    // espectador -- la salida es terminar la vuelta o saltarsela con readyup, que es lo
-    // que dice Crash. El binario no trae esta regla: SetTeam (0x100406d0) no mira
-    // g_training en ninguna de sus ramas.
+    // [ioquakelive] NOT FROM RETAIL, added for this build. Training is not left by going
+    // spectator: you finish the lap or skip it with readyup, which is what Crash says.
+    // The binary has no such rule -- SetTeam (0x100406d0) never looks at g_training.
     if (g_training.integer && !(ent->r.svFlags & SVF_BOT) &&
         (!Q_stricmp(s, "spectator") || !Q_stricmp(s, "s") || !Q_stricmp(s, "follow1") ||
          !Q_stricmp(s, "follow2"))) {
@@ -705,9 +704,9 @@ void SetTeam(gentity_t* ent, const char* s) {
 ===============
 SetTeam_Execute
 
-[QL] 0x10040440. El cambio de equipo en si, ya decidido cual: SetTeam lo llama
-despues de leer el texto, y el barajado de equipos lo llama directo con el equipo
-que le toca a cada uno.
+[QL] 0x10040440. The team change itself, once the team has been decided. SetTeam
+calls it after parsing the text, and the team shuffle calls it directly with the
+team each player is due.
 ===============
 */
 void SetTeam_Execute(gentity_t* ent, int team, spectatorState_t specState, int specClient) {
@@ -716,7 +715,7 @@ void SetTeam_Execute(gentity_t* ent, int team, spectatorState_t specState, int s
     int oldTeam;
     int teamLeader;
 
-    // [QL] 0x10040cc8: un equipo cerrado no recibe a nadie
+    // [QL] 0x10040cc8: a locked team takes nobody
     if (G_TeamIsLocked(ent, (team_t)team)) {
         return;
     }
@@ -748,8 +747,8 @@ void SetTeam_Execute(gentity_t* ent, int team, spectatorState_t specState, int s
     if (team == TEAM_SPECTATOR && oldTeam != team)
         AddTournamentQueue(client);
 
-    // [QL] 0x10040535: al dejar el equipo se cierra su planilla; en red rover solo cuando
-    // se va a espectador
+    // [QL] 0x10040535: leaving a team closes the player's stats sheet; in Red Rover only
+    // when going to spectator
     if (g_gametype.integer != GT_RR || team == TEAM_SPECTATOR) {
         STAT_PlayerStats(client, qfalse, qtrue);
     }
@@ -788,7 +787,7 @@ void SetTeam_Execute(gentity_t* ent, int team, spectatorState_t specState, int s
 
     ClientBegin(clientNum);
 
-    // [QL] 0x100406b8: lo ultimo de SetTeam es el evento PLAYER_SWITCHTEAM
+    // [QL] 0x100406b8: the last thing SetTeam does is the PLAYER_SWITCHTEAM event
     STAT_PlayerSwitchTeam(ent, oldTeam, client->sess.sessionTeam);
 }
 
@@ -850,9 +849,9 @@ void Cmd_Team_f(gentity_t* ent) {
         return;
     }
 
-    // [QL] 0x10040e55: la espera sale de g_switchTeamDelay, y el mensaje dice cuanto es. El
-    // fork la tenia fija en 5 segundos e ignoraba su propia cvar, que ya existia con el mismo
-    // default que el binario (3).
+    // [QL] 0x10040e55: the delay comes from g_switchTeamDelay, and the message says how
+    // long it is. It used to be hardcoded to 5 seconds, ignoring the cvar, which already
+    // existed with the binary's own default of 3.
     if (ent->client->switchTeamTime > level.time) {
         trap_SendServerCommand(ent - g_entities,
             va("print \"" S_COLOR_RED "May not switch teams more than once per %i seconds." S_COLOR_WHITE "\n\"",
@@ -871,10 +870,10 @@ void Cmd_Team_f(gentity_t* ent) {
     oldTeam = ent->client->sess.sessionTeam;
     SetTeam(ent, s);
 
-    // [QL] 0x10040e88: la espera solo se arma si el cambio ocurrio y si el equipo al que se
-    // llego NO es espectador. El binario mira el valor que devuelve SetTeam y el equipo
-    // resultante; aca se compara el equipo antes y despues, que dice lo mismo. Irse a
-    // espectador no cuesta espera, y pedir el equipo en el que ya estabas tampoco.
+    // [QL] 0x10040e88: the delay is only armed if the change happened and the resulting
+    // team is NOT spectator. The binary tests SetTeam's return value together with the
+    // resulting team; comparing the team before and after says the same thing. Going
+    // spectator costs no delay, and neither does asking for the team you are already on.
     if (ent->client->sess.sessionTeam != oldTeam && ent->client->sess.sessionTeam != TEAM_SPECTATOR) {
         ent->client->switchTeamTime = level.time + g_switchTeamDelay.integer * 1000;
     }
@@ -1069,11 +1068,11 @@ void G_Say(gentity_t* ent, gentity_t* target, int mode, const char* chatText) {
     char text[MAX_SAY_TEXT];
     char location[64];
 
-    // [ioquakelive] NO ES DE RETAIL: lo pidio el jugador. Mientras Crash da la vuelta
-    // explicando (g_training 2) el chat del jugador no sale; lo que escribe se le
-    // devuelve a el con un aviso. Los bots siguen hablando, que son las explicaciones,
-    // y no se toca ni un comando ni una configuracion: solo el say. Al terminar la
-    // vuelta g_training pasa a 1 y el chat vuelve solo.
+    // [ioquakelive] NOT FROM RETAIL, added for this build. While Crash walks the tour and
+    // explains (g_training 2) the player's chat does not go out; what they type comes back
+    // to them with a notice. Bots keep talking, since that is the explanation itself, and
+    // nothing else is touched -- no command, no setting, only say. When the lap ends
+    // g_training drops to 1 and chat comes back on its own.
     if (g_training.integer == 2 && ent && ent->client && !(ent->r.svFlags & SVF_BOT)) {
         trap_SendServerCommand(ent - g_entities,
             "print \"Pay attention to Crash. You can chat once the tour is over.\n\"");
@@ -1442,8 +1441,8 @@ void Cmd_CallVote_f(gentity_t *ent) {
         return;
     }
 
-    // [ioquakelive] En el Crash Course no se vota. El binario lo corta aqui mismo, entre
-    // el retardo de voto y el "Public voting is not allowed here" (0x100423xx, el string
+    // [ioquakelive] There is no voting in the Crash Course. The binary cuts it off right here,
+    // between the vote delay and the "Public voting is not allowed here" (0x100423xx, the string
     // vive en 0x100836a4).
     if (g_training.integer) {
         trap_SendServerCommand(clientNum,
@@ -1557,8 +1556,8 @@ void Cmd_CallVote_f(gentity_t *ent) {
             return;
         }
     }
-    // [QL] 0x10042580: por nombre y por numero son dos caminos distintos, con sus propios
-    // avisos. Por numero, ademas, no se puede votar la expulsion de un administrador.
+    // [QL] 0x10042580: by name and by number are two different paths, each with its own
+    // messages. By number, an admin cannot be voted off either.
     else if (!Q_stricmp(arg1, "kick")) {
         int i;
         if ((vf & VF_KICK) && ent->client->sess.privileges < 1) {
@@ -1729,28 +1728,28 @@ void Cmd_CallVote_f(gentity_t *ent) {
         if (ts > 0) {
             int total = TeamCount(-1, TEAM_RED) + TeamCount(-1, TEAM_BLUE) +
                         TeamCount(-1, TEAM_FREE);
-            int rojos = TeamCount(-1, TEAM_RED);
-            int azules = TeamCount(-1, TEAM_BLUE);
-            int maximo = (g_gametype.integer >= GT_TEAM) ? g_maxclients.integer / 2
+            int red = TeamCount(-1, TEAM_RED);
+            int blue = TeamCount(-1, TEAM_BLUE);
+            int maxSize = (g_gametype.integer >= GT_TEAM) ? g_maxclients.integer / 2
                                                          : g_maxclients.integer;
 
-            // [QL] 0x100430e0: primero la arena entera, despues cada equipo
+            // [QL] 0x100430e0: the whole arena first, then each team
             if (ts < total) {
                 trap_SendServerCommand(clientNum,
                     va("print \"^1The arena has more than %d players. Players must leave before this teamsize can be set.^7\"",
                        ts));
                 return;
             }
-            if (ts < rojos || ts < azules) {
+            if (ts < red || ts < blue) {
                 trap_SendServerCommand(clientNum,
                     va("print \"^1%s has more than %d players. Players must leave the team before this teamsize can be set.^7\"",
-                       (ts < rojos) ? "Red Team" : "Blue Team", ts));
+                       (ts < red) ? "Red Team" : "Blue Team", ts));
                 return;
             }
-            if (ts < g_teamSizeMin.integer || ts > maximo) {
+            if (ts < g_teamSizeMin.integer || ts > maxSize) {
                 trap_SendServerCommand(clientNum,
                     va("print \"Invalid team size. (Valid Range: %d - %d)\n\"",
-                       g_teamSizeMin.integer, maximo));
+                       g_teamSizeMin.integer, maxSize));
                 return;
             }
         }
@@ -1867,9 +1866,9 @@ void Cmd_CallVote_f(gentity_t *ent) {
         goto start_vote;
     }
     else {
-        // [QL] 0x10042580: el encabezado, las cinco lineas con su color -- 5 si el voto esta
-        // habilitado, 1 si no -- y el uso al final. El "Invalid vote string." de arriba es
-        // para el texto con caracteres raros, no para un voto que no existe.
+        // [QL] 0x10042580: the header, the five lines with their colour -- 5 when the vote
+        // is enabled, 1 when it is not -- and the usage at the end. The "Invalid vote
+        // string." above is for text with odd characters, not for an unknown vote.
         trap_SendServerCommand(clientNum, "print \"^3Callvote commands:\n\"");
         trap_SendServerCommand(clientNum,
             va("print \"^%imap           ^%inextmap        ^%imap_restart   ^7\n\"",
@@ -2046,8 +2045,8 @@ void Cmd_Vote_f(gentity_t *ent) {
         return;
     }
 
-    // [QL] 0x10044270: al administrador no se le mira el estado -- puede votar siempre, y
-    // hasta puede votar de nuevo. A los demas se les dice por que no pueden.
+    // [QL] 0x10044270: an admin's state is not checked -- they can always vote, and can
+    // even vote again. Everyone else is told why they cannot.
     if (ent->client->sess.privileges < 1) {
         if (ent->client->pers.voteState == VOTE_NONE) {
             trap_SendServerCommand(ent - g_entities,
@@ -2064,7 +2063,7 @@ void Cmd_Vote_f(gentity_t *ent) {
 
     trap_Argv(1, msg, sizeof(msg));
 
-    // el voto de un administrador no es uno mas: el si fuerza el paso y el no lo veta
+    // an admin's vote is not just another one: a yes forces it through and a no vetoes it
     if (msg[0] != 'y' && msg[0] != 'Y' && msg[0] != '1') {
         level.voteNo++;
         trap_SetConfigstring(CS_VOTE_NO, va("%i", level.voteNo));
@@ -2468,120 +2467,119 @@ static void Cmd_Players_f(gentity_t* ent) {
 =================
 Cmd_Complaint_f
 
-[QL] 0x10043ab0. La respuesta del herido a la ventana de queja que le abrio
-g_combat cuando un companero lo mato: "complaint y" la presenta, cualquier otra
-cosa la descarta. La ventana dura lo que diga pers.complaintEndTime y solo existe
-con la partida en marcha y g_complaintLimit distinto de cero.
+[QL] 0x10043ab0. The victim's answer to the complaint prompt g_combat opened when a
+teammate killed them: "complaint y" files it, anything else drops it. The window
+lasts as long as pers.complaintEndTime says, and only exists with a match running
+and g_complaintLimit non-zero.
 
-Los numeros que vuelven son los que espera el cliente: -1 queja presentada, -2
-descartada, -3 contra alguien que no se puede denunciar.
+The numbers sent back are the ones the client expects: -1 filed, -2 dropped, -3
+against somebody who cannot be reported.
 
-Al que junta g_complaintLimit quejas lo echa, salvo que sea un cliente local.
-Retail ademas se guarda su Steam ID antes de echarlo (trap_GetSteamID desde
-0x10043d1e) y escribe dos campos de una estructura que no esta identificada; eso
-no esta portado y queda anotado.
+Whoever collects g_complaintLimit complaints is kicked, unless they are a local
+client. Retail also stores their Steam ID before kicking (trap_GetSteamID from
+0x10043d1e) and writes two fields of a struct that has not been identified; that
+part is not ported.
 =================
 */
 static void Cmd_Complaint_f(gentity_t* ent) {
-    gclient_t* mio = ent->client;
-    gentity_t* acusado;
+    gclient_t* cl = ent->client;
+    gentity_t* accused;
     char arg[MAX_TOKEN_CHARS];
 
-    if (level.time >= mio->pers.complaintEndTime || level.warmupTime != 0 ||
+    if (level.time >= cl->pers.complaintEndTime || level.warmupTime != 0 ||
         !g_complaintLimit.integer) {
-        mio->pers.complaintEndTime = -1;
-        mio->pers.complaintClient = -1;
+        cl->pers.complaintEndTime = -1;
+        cl->pers.complaintClient = -1;
         return;
     }
-    if (mio->pers.complaintClient < 0 || mio->pers.complaintClient >= level.maxclients) {
-        return;  // [QL] 0x10043d6b: con un acusado que no esta, ni siquiera se limpia
+    if (cl->pers.complaintClient < 0 || cl->pers.complaintClient >= level.maxclients) {
+        return;  // [QL] 0x10043d6b: with the accused gone, it does not even clear it
     }
 
-    acusado = &g_entities[mio->pers.complaintClient];
-    if (!acusado->client || acusado->client->pers.connected != CON_CONNECTED) {
+    accused = &g_entities[cl->pers.complaintClient];
+    if (!accused->client || accused->client->pers.connected != CON_CONNECTED) {
         return;
     }
-    if (acusado->client->sess.privileges == 2) {
+    if (accused->client->sess.privileges == 2) {
         trap_SendServerCommand(ent - g_entities, "complaint -3");
         return;
     }
 
     trap_Argv(1, arg, sizeof(arg));
     if (arg[0] == 'y' || arg[0] == 'Y' || arg[0] == '1') {
-        acusado->client->pers.complaints++;
-        if (!acusado->client->pers.localClient &&
-            acusado->client->pers.complaints >= g_complaintLimit.integer) {
-            trap_DropClient(acusado - g_entities, "kicked after too many complaints.");
+        accused->client->pers.complaints++;
+        if (!accused->client->pers.localClient &&
+            accused->client->pers.complaints >= g_complaintLimit.integer) {
+            trap_DropClient(accused - g_entities, "kicked after too many complaints.");
             trap_SendServerCommand(ent - g_entities, "complaint -1");
             return;
         }
-        trap_SendServerCommand(mio->pers.complaintClient,
-            va("print \"^1Warning^7: Complaint filed against you by %s.\n\"", mio->pers.netname));
+        trap_SendServerCommand(cl->pers.complaintClient,
+            va("print \"^1Warning^7: Complaint filed against you by %s.\n\"", cl->pers.netname));
         trap_SendServerCommand(ent - g_entities, "complaint -1");
     } else {
-        trap_SendServerCommand(mio->pers.complaintClient,
+        trap_SendServerCommand(cl->pers.complaintClient,
             "print\"No complaint filed against you.\n\"");
         trap_SendServerCommand(ent - g_entities, "complaint -2");
     }
 
-    mio->pers.complaintEndTime = -1;
-    mio->pers.complaintClient = -1;
+    cl->pers.complaintEndTime = -1;
+    cl->pers.complaintClient = -1;
 }
 
 /*
 =================
 G_CommandPhaseAllowed
 
-[QL] 0x10061090. En que momento de la partida se puede usar una orden. Retail
-tiene una sola de estas y cada orden le pasa que fases acepta; las tres que la
-llaman son pause (partida en marcha), timein (partida en marcha) y allready
-(calentamiento).
+[QL] 0x10061090. Which phase of a match a command may be used in. Retail has a
+single one of these and every command tells it which phases it accepts; the three
+callers are pause (match running), timein (match running) and allready (warmup).
 
-Cuatro respuestas, una por momento, con los textos del binario (0x10088978,
-0x100889b4, 0x100889e8, 0x10088a28). La cuarta -- la de la partida en marcha --
-no estaba en el fork porque la unica copia de esta compuerta vivia adentro de
-MP_Pause, y pause siempre acepta esa fase, asi que nunca se podia ver.
+Four answers, one per phase, with the binary's own strings (0x10088978, 0x100889b4,
+0x100889e8, 0x10088a28). The fourth -- match in progress -- was missing here because
+the only copy of this gate lived inside MP_Pause, and pause always accepts that
+phase, so it could never be reached.
 
-Cuando la orden viene de la consola del servidor el motivo se imprime ahi, con el
-"print" y las comillas incluidos, que es tal cual lo que hace retail: le pasa el
-mismo string a trap_Printf.
+When the command comes from the server console the reason is printed there, "print"
+and quotes included, which is exactly what retail does: it hands the same string to
+trap_Printf.
 =================
 */
 #define CMD_PHASE_WARMUP 1        // durante el calentamiento
-#define CMD_PHASE_MATCH 2         // con la partida en marcha, y en la cuenta de ronda
-#define CMD_PHASE_INTERMISSION 4  // en el descanso del final
+#define CMD_PHASE_MATCH 2         // with a match running, and during a round countdown
+#define CMD_PHASE_INTERMISSION 4  // during the break at the end
 
 static qboolean G_CommandPhaseAllowed(gentity_t* ent, int allowed) {
-    const char* motivo;
+    const char* reason;
 
     if (level.intermissionTime != 0) {
         if (allowed & CMD_PHASE_INTERMISSION) {
             return qtrue;
         }
-        motivo = "print \"This command can not be used during intermission\n\"";
+        reason = "print \"This command can not be used during intermission\n\"";
     } else if (level.warmupTime != 0) {
         if (allowed & CMD_PHASE_WARMUP) {
             return qtrue;
         }
-        motivo = "print \"This command can not be used during warmup\n\"";
+        reason = "print \"This command can not be used during warmup\n\"";
     } else if ((g_gametype.integer == GT_CA || g_gametype.integer == GT_FREEZE ||
                 g_gametype.integer == GT_AD || g_gametype.integer == GT_RR) &&
                level.roundState.eCurrent == RS_COUNTDOWN) {
         if (allowed & CMD_PHASE_MATCH) {
             return qtrue;
         }
-        motivo = "print \"This command can not be used during a round countdown\n\"";
+        reason = "print \"This command can not be used during a round countdown\n\"";
     } else {
         if (allowed & CMD_PHASE_MATCH) {
             return qtrue;
         }
-        motivo = "print \"This command can not be used while a match is in progress\n\"";
+        reason = "print \"This command can not be used while a match is in progress\n\"";
     }
 
     if (ent) {
-        trap_SendServerCommand(ent - g_entities, motivo);
+        trap_SendServerCommand(ent - g_entities, reason);
     } else {
-        G_Printf("%s", motivo);
+        G_Printf("%s", reason);
     }
     return qfalse;
 }
@@ -2599,9 +2597,9 @@ pause. G_RunFrame freezes the clock per-frame; players are frozen via PMF_PAUSED
 void MP_Pause(gentity_t* ent, int duration) {
     const char* name;
 
-    // [QL] 0x10061e10: la pausa solo corre con la partida en marcha, y lo decide la
-    // compuerta compartida, no una copia de sus reglas. La partida ya pausada la
-    // atiende quien llama (Cmd_Pause_f).
+    // [QL] 0x10061e10: pause only runs with a match in progress, and the shared gate
+    // decides that, not a copy of its rules. An already paused match is handled by the
+    // caller (Cmd_Pause_f).
     if (!G_CommandPhaseAllowed(ent, CMD_PHASE_MATCH)) {
         return;
     }
@@ -2739,9 +2737,9 @@ static void Cmd_Timein_f(gentity_t* ent) {
 
     level.mp_unpauseTime = level.time + 5000;
     trap_SetConfigstring(CS_PAUSE_END_TIME, va("%i", level.mp_unpauseTime));
-    // [QL] 0x1006240a: son dos mensajes distintos en el binario, no un %s con "The
-    // server" adentro. Y asi ademas no se desreferencia ent cuando la orden vino de la
-    // consola del servidor, que es justo cuando ent no existe.
+    // [QL] 0x1006240a: two separate messages in the binary, not one %s with "The server"
+    // in it. Splitting them also avoids dereferencing ent when the command came from the
+    // server console, which is exactly when ent does not exist.
     if (ent && ent->client) {
         trap_SendServerCommand(-1, va("pcp \"%s has called timein\n\"",
                                       ent->client->pers.netname));
@@ -2755,8 +2753,8 @@ static void Cmd_Timein_f(gentity_t* ent) {
 static void Cmd_AllReady_f(gentity_t* ent) {
     int i;
 
-    // [QL] 0x10061805: allready es del calentamiento y de ningun otro momento -- y
-    // fuera de el lo dice, que es lo que no hacia
+    // [QL] 0x10061805: allready belongs to warmup and to no other phase -- and outside it
+    // it says so, which it used not to do
     if (!G_CommandPhaseAllowed(ent, CMD_PHASE_WARMUP)) {
         return;
     }
@@ -2778,8 +2776,8 @@ static void Cmd_AllReady_f(gentity_t* ent) {
 
 // "pause" - Pause the match indefinitely (referee+)
 static void Cmd_Pause_f(gentity_t* ent) {
-    // [QL] 0x10062140: si ya esta en pausa, el que la vuelve a pedir se queda con ella -- y
-    // entonces es el quien puede levantarla
+    // [QL] 0x10062140: on an already paused match, whoever asks again takes ownership of
+    // the timeout -- and is then the one who can lift it
     if (level.timePauseBegin != 0) {
         int clientNum = ent - g_entities;
 
@@ -2800,10 +2798,9 @@ static void Cmd_Pause_f(gentity_t* ent) {
 =================
 G_FindPlayerArg
 
-[QL] 0x100611d0. El jugador que nombra el primer argumento de las ordenes de
-administracion. Solo acepta el numero de cliente -- no busca por nombre -- y
-tiene dos avisos, que son los unicos que dan estas ordenes cuando el argumento
-esta mal.
+[QL] 0x100611d0. The player named by the first argument of the admin commands. It
+takes a client number only -- no name lookup -- and has two messages, which are the
+only ones these commands give when the argument is wrong.
 =================
 */
 static gentity_t* G_FindPlayerArg(gentity_t* ent) {
@@ -2822,7 +2819,7 @@ static gentity_t* G_FindPlayerArg(gentity_t* ent) {
 
     for (i = 0; arg[i]; i++) {
         if (arg[i] < '0' || arg[i] > '9') {
-            id = -1;  // no es un numero: no hay a quien buscar
+            id = -1;  // not a number: there is nobody to look for
             break;
         }
     }
@@ -2839,11 +2836,10 @@ static gentity_t* G_FindPlayerArg(gentity_t* ent) {
 =================
 G_ParseTeamArg
 
-[QL] 0x10061350. El argumento de equipo que comparten put, lock y unlock: mira
-la primera letra, sin importar mayusculas. "s" son los espectadores, "r" y "b"
-los equipos (que solo existen en los modos de equipo) y "f" el juego libre (que
-solo existe en los que no son de equipo). Si no se entiende, avisa y devuelve
-TEAM_NUM_TEAMS.
+[QL] 0x10061350. The team argument shared by put, lock and unlock: it looks at the
+first letter, case insensitive. "s" is spectators, "r" and "b" are the teams (which
+only exist in team modes) and "f" is free play (which only exists outside them). On
+anything else it complains and returns TEAM_NUM_TEAMS.
 =================
 */
 static team_t G_ParseTeamArg(gentity_t* ent, int argIndex) {
@@ -2873,7 +2869,7 @@ static team_t G_ParseTeamArg(gentity_t* ent, int argIndex) {
     }
 
     if (c == 'r' || c == 'b' || c == 'f') {
-        // la letra existe pero no en este modo
+        // the letter exists but not in this gametype
         trap_SendServerCommand(ent - g_entities,
             teamGame ? "print \"Invalid TeamName (use R/B/S)\n\""
                      : "print \"Invalid TeamName (use F/S)\n\"");
@@ -2884,16 +2880,16 @@ static team_t G_ParseTeamArg(gentity_t* ent, int argIndex) {
     return TEAM_NUM_TEAMS;
 }
 
-// [QL] 0x1049abec: que equipos estan cerrados. La orden puede cerrar cualquiera, pero al
-// entrar solo se miran el rojo y el azul (0x100618b0).
+// [QL] 0x1049abec: which teams are locked. The command can lock any of them, but only
+// red and blue are checked on join (0x100618b0).
 static qboolean teamLocked[TEAM_NUM_TEAMS];
 
 /*
 =================
 G_TeamIsLocked
 
-[QL] 0x100618b0, desde SetTeam (0x10040cc8). El juego libre y los espectadores
-nunca estan cerrados.
+[QL] 0x100618b0, from SetTeam (0x10040cc8). Free play and spectators are never
+locked.
 =================
 */
 qboolean G_TeamIsLocked(gentity_t* ent, team_t team) {
@@ -2912,7 +2908,7 @@ void G_ClearTeamLocks(void) {
     Com_Memset(teamLocked, 0, sizeof(teamLocked));
 }
 
-// el aviso que da retail al cerrar o abrir un equipo, igual para los dos
+// the message retail gives on locking or unlocking a team, the same for both
 static void G_AnnounceLock(team_t team, qboolean locked) {
     trap_SendServerCommand(-1, va("print \"The %s team is now %slocked\n\"",
                                   TeamName(team), locked ? "" : "un"));
@@ -2922,8 +2918,8 @@ static void G_AnnounceLock(team_t team, qboolean locked) {
 =================
 Cmd_Lock_f
 
-[QL] 0x10061940. Sin argumento cierra los dos equipos; con uno, el que se pida.
-El que ya estaba cerrado no se vuelve a anunciar.
+[QL] 0x10061940. With no argument it locks both teams; with one, the team asked for.
+A team that was already locked is not announced again.
 =================
 */
 static void Cmd_Lock_f(gentity_t* ent) {
@@ -2982,26 +2978,26 @@ static void Cmd_Unlock_f(gentity_t* ent) {
 // "put" - Move a player to a team (referee+)
 static void Cmd_Put_f(gentity_t* ent) {
     gentity_t* target = G_FindPlayerArg(ent);
-    const char* destino;
+    const char* dest;
     team_t team;
 
     if (!target) {
         return;
     }
 
-    // [QL] 0x10061b61: el mismo lector de equipo que lock y unlock
+    // [QL] 0x10061b61: the same team parser lock and unlock use
     team = G_ParseTeamArg(ent, 2);
     switch (team) {
-        case TEAM_RED: destino = "red"; break;
-        case TEAM_BLUE: destino = "blue"; break;
-        case TEAM_SPECTATOR: destino = "spectator"; break;
-        case TEAM_FREE: destino = "free"; break;
+        case TEAM_RED: dest = "red"; break;
+        case TEAM_BLUE: dest = "blue"; break;
+        case TEAM_SPECTATOR: dest = "spectator"; break;
+        case TEAM_FREE: dest = "free"; break;
         default: return;
     }
 
-    // [QL] 0x10061b74: en duelo no entra un tercero. Con la partida en marcha o en
-    // cuenta atras se lo niega; esperando jugadores solo se avisa y se lo mueve igual,
-    // que es la diferencia entre las dos ramas del binario.
+    // [QL] 0x10061b74: a third player does not enter a duel. With the match running or
+    // counting down the move is refused; while waiting for players it only warns and
+    // moves them anyway, which is the difference between the binary's two branches.
     if (g_gametype.integer == GT_DUEL && team == TEAM_FREE && level.numPlayingClients >= 2) {
         if (level.warmupTime >= 0) {
             trap_SendServerCommand(ent - g_entities,
@@ -3012,7 +3008,7 @@ static void Cmd_Put_f(gentity_t* ent) {
             "print \"The match cannot begin until only two players are in the match.\n\"");
     }
 
-    // [QL] 0x10061c78: si ya estaba ahi, se lo dice al que llamo y no lo mueve
+    // [QL] 0x10061c78: if they were already there, tell the caller and do not move them
     if (target->client->sess.sessionTeam == team) {
         trap_SendServerCommand(ent - g_entities,
             va("print \"%s is already on the %s team\n\"",
@@ -3020,9 +3016,9 @@ static void Cmd_Put_f(gentity_t* ent) {
         return;
     }
 
-    SetTeam(target, destino);
+    SetTeam(target, dest);
 
-    // [QL] 0x10061d00 y 0x10061d5c: al movido se le dice quien lo movio
+    // [QL] 0x10061d00 and 0x10061d5c: whoever is moved is told who moved them
     if (ent->client->pers.localClient) {
         trap_SendServerCommand(target - g_entities,
             va("print \"The server has moved you to the %s team\n\"", TeamName(team)));
@@ -3041,9 +3037,9 @@ static void Cmd_Mute_f(gentity_t* ent) {
         return;
     }
 
-    // [QL] 0x100627d4: nadie silencia a alguien de su mismo rango o mayor. Desde la
-    // consola del propio servidor no se mira: retail le pasa a la orden una bandera
-    // que dice que viene de ahi.
+    // [QL] 0x100627d4: nobody mutes someone of their own rank or above. From the server's
+    // own console the check is skipped: retail passes the command a flag saying it came
+    // from there.
     if (!ent->client->pers.localClient &&
         ent->client->sess.privileges <= target->client->sess.privileges) {
         return;
@@ -3062,9 +3058,9 @@ static void Cmd_Unmute_f(gentity_t* ent) {
         return;
     }
 
-    // [QL] 0x100627d4: nadie silencia a alguien de su mismo rango o mayor. Desde la
-    // consola del propio servidor no se mira: retail le pasa a la orden una bandera
-    // que dice que viene de ahi.
+    // [QL] 0x100627d4: nobody mutes someone of their own rank or above. From the server's
+    // own console the check is skipped: retail passes the command a flag saying it came
+    // from there.
     if (!ent->client->pers.localClient &&
         ent->client->sess.privileges <= target->client->sess.privileges) {
         return;
@@ -3092,9 +3088,9 @@ static void Cmd_Ban_f(gentity_t* ent) {
         return;
     }
 
-    // [QL] la diferencia entre los dos comandos esta en la lista de acceso, no en el corte: ban
-    // deja la cuenta marcada y eso se guarda al cambiar de mapa (G_SaveAccessList, 0x10032a10);
-    // tempban la marca como temporal, asi que se olvida con el mapa
+    // [QL] the two commands differ in the access list, not in the kick: ban leaves the
+    // account marked and that is saved on map change (G_SaveAccessList, 0x10032a10);
+    // tempban marks it as temporary, so it is forgotten with the map
     trap_Argv(0, cmd, sizeof(cmd));
     G_SetAccess(g_clients[pid].pers.steamId, -1, (qboolean)(Q_stricmp(cmd, "tempban") == 0));
 
@@ -3105,16 +3101,16 @@ static void Cmd_Ban_f(gentity_t* ent) {
 ===============
 Cmd_Unban_f
 
-[QL] " <account>^3 removes a player from the banlist": toma el numero de cuenta, no un id de
-jugador, porque el baneado justamente no esta conectado. El aviso es el del binario,
-"%llu has been unbanned".
+[QL] " <account>^3 removes a player from the banlist": it takes an account number, not a
+player id, because a banned player is precisely not connected. The message is the
+binary's own, "%llu has been unbanned".
 ===============
 */
 static void Cmd_Unban_f(gentity_t* ent) {
     char arg[MAX_TOKEN_CHARS];
     uint64_t steamId;
 
-    // [QL] 0x10062ad0: el unico aviso que da es el del final
+    // [QL] 0x10062ad0: the only message it gives is the one at the end
     if (trap_Argc() < 2) {
         return;
     }
@@ -3130,31 +3126,31 @@ static void Cmd_Unban_f(gentity_t* ent) {
 
 // "listaccess" - List access control entries (referee+)
 static void Cmd_ListAccess_f(gentity_t* ent) {
-    // [QL] 0x100327d0: la lista entera, de a veinte por pagina, con el nivel y si es
+    // [QL] 0x100327d0: the whole list, twenty to a page, with the level and whether it is
     // temporal o permanente
-    static const char* niveles[4] = {"      ", "MOD   ", "ADMIN ", "ROOT  "};
+    static const char* levels[4] = {"      ", "MOD   ", "ADMIN ", "ROOT  "};
     char arg[MAX_TOKEN_CHARS];
     int total = G_AccessCount();
-    int paginas = total / 20;
-    int pagina = 0;
+    int pages = total / 20;
+    int page = 0;
     int i;
 
     if (trap_Argc() > 1) {
         trap_Argv(1, arg, sizeof(arg));
-        pagina = atoi(arg);
+        page = atoi(arg);
     }
-    if (pagina < 0) {
-        pagina = 0;
-    } else if (pagina > paginas) {
-        pagina = paginas;
+    if (page < 0) {
+        page = 0;
+    } else if (page > pages) {
+        page = pages;
     }
 
     trap_SendServerCommand(ent - g_entities,
-        va("print \"Access List: Page %i of %i\n\"", pagina + 1, paginas + 1));
+        va("print \"Access List: Page %i of %i\n\"", page + 1, pages + 1));
     trap_SendServerCommand(ent - g_entities,
         "print \"=============================\n\"");
 
-    for (i = pagina * 20; i < total && i < (pagina + 1) * 20; i++) {
+    for (i = page * 20; i < total && i < (page + 1) * 20; i++) {
         uint64_t steamId = 0;
         int level = 0;
         qboolean temporary = qfalse;
@@ -3164,7 +3160,7 @@ static void Cmd_ListAccess_f(gentity_t* ent) {
         }
         trap_SendServerCommand(ent - g_entities,
             va("print \"%llu %s %s\n\"", (unsigned long long)steamId,
-               (level >= 0 && level < 4) ? niveles[level] : "BAN   ",
+               (level >= 0 && level < 4) ? levels[level] : "BAN   ",
                temporary ? "TEMP" : "PERM"));
     }
 }
@@ -3173,7 +3169,7 @@ static void Cmd_ListAccess_f(gentity_t* ent) {
 static void Cmd_OpSay_f(gentity_t* ent) {
     char* msg;
 
-    // [QL] 0x10062bf0: sin nada que decir no dice nada
+    // [QL] 0x10062bf0: with nothing to say it says nothing
     if (trap_Argc() < 2) {
         return;
     }
@@ -3193,7 +3189,7 @@ static void Cmd_AddAdmin_f(gentity_t* ent) {
     pid = target - g_entities;
 
     g_clients[pid].sess.privileges = 2;
-    // [QL] la cuenta queda en la lista de acceso, que se guarda al cambiar de mapa
+    // [QL] the account stays in the access list, which is saved on a map change
     G_SetAccess(g_clients[pid].pers.steamId, 2, qfalse);
     trap_SendServerCommand(-1, va("print \"%s has become an administrator\n\"",
         g_clients[pid].pers.netname));
@@ -3240,12 +3236,12 @@ static void Cmd_Demote_f(gentity_t* ent) {
 
 // "abort" - Abort match, return to warmup (referee+)
 static void Cmd_Abort_f(gentity_t* ent) {
-    // [QL] 0x10061550: en calentamiento no hay nada que abortar, y en silencio
+    // [QL] 0x10061550: nothing to abort during warmup, and it says nothing
     if (level.warmupTime != 0) {
         return;
     }
 
-    // no se aborta una partida en pausa
+    // a paused match is not aborted
     if (level.timePauseBegin) {
     trap_SendServerCommand(ent - g_entities, "print \"Match is currently paused. You must unpause before aborting the match.\n\"");
         return;
@@ -3298,7 +3294,7 @@ static void Cmd_SetMatchTime_f(gentity_t* ent) {
     char timeStr[MAX_TOKEN_CHARS];
     int seconds;
 
-    // [QL] 0x10062ce0: sin argumento no hace nada y no dice nada
+    // [QL] 0x10062ce0: with no argument it does nothing and says nothing
     if (trap_Argc() < 2) {
         return;
     }
@@ -3424,9 +3420,9 @@ static qboolean ClientCommandPermissionCheck(gentity_t* ent, const char* cmd) {
 ==================
 G_GametypeDisplayName
 
-El nombre largo del tipo de juego que corre, o "Unknown Gametype" si el numero
-se sale de la tabla, que es lo que pone retail en los avisos de las ordenes de
-soltar (0x10044eac).
+The long name of the running gametype, or "Unknown Gametype" when the number falls
+outside the table, which is what retail puts in the messages of the drop commands
+(0x10044eac).
 ==================
 */
 const char* G_GametypeDisplayName(void) {

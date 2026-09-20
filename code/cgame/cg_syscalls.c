@@ -477,7 +477,7 @@ void trap_Key_GetBindingBuf(int keynum, char* buf, int buflen) {
     syscall(CG_KEY_GETBINDINGBUF, keynum, buf, buflen);
 }
 
-// [QL] la lista de silenciados de la voz. El Steam ID viaja en dos mitades, como en retail.
+// [QL] the voice mute list. The Steam ID travels in two halves, as in retail.
 qboolean trap_VoiceIsIgnored(uint64_t steamId) {
     return (qboolean)syscall(CG_VOICE_IS_IGNORED, (int)(steamId & 0xffffffffu), (int)(steamId >> 32));
 }

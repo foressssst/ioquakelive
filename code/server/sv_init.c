@@ -361,7 +361,7 @@ void SV_ChangeMaxClients(void) {
         svs.numSnapshotEntities = sv_maxclients->integer * 4 * MAX_SNAPSHOT_ENTITIES;
     }
 
-    // [ioquakelive] retail se lo dice a Steam justo aca (0x004e339e), despues de acotar
+    // [ioquakelive] retail tells Steam right here (0x004e339e), after clamping
     // sv_maxclients a 64
     Steam_GS_SetMaxPlayers(sv_maxclients->integer);
 }
@@ -580,12 +580,12 @@ void SV_SpawnServer(char* server, qboolean killBots) {
     SV_SetConfigstring(CS_SERVERINFO, Cvar_InfoString(CVAR_SERVERINFO));
     cvar_modifiedFlags &= ~CVAR_SERVERINFO;
 
-    // [ioquakelive] el socket de estadisticas (0x004f4210) va en el puerto del servidor, que
-    // recien aca esta decidido; la primera vez lo abre, las siguientes no hace nada
+    // [ioquakelive] the stats socket (0x004f4210) goes on the server's port, which is only
+    // settled here; the first call opens it, later ones do nothing
     ZMQ_StatsInit();
 
-    // [QL] 0x00465b00: quien es este servidor para Steam y que items del Workshop hacen falta
-    // para jugar aca. El cliente se baja los que no tenga antes de entrar.
+    // [QL] 0x00465b00: who this server is as far as Steam is concerned and which Workshop
+    // items are needed to play here. The client downloads the ones it lacks before entering.
     if (Steam_GS_Running()) {
         const char* items = FS_ReferencedSteamworksItems();
 
@@ -594,7 +594,7 @@ void SV_SpawnServer(char* server, qboolean killBots) {
         SV_SetConfigstring(CS_STEAM_WORKSHOP_IDS, items);
     }
 
-    // [ioquakelive] lo que la lista de Steam muestra de este servidor
+    // [ioquakelive] what Steam's list shows about this server
     Steam_GS_SetServerInfo(Cvar_VariableString("sv_hostname"), server,
                            Cvar_VariableString("g_password")[0] != '\0', 0);
 
@@ -662,16 +662,16 @@ void SV_Init(void) {
     sv_serverType = Cvar_Get("sv_serverType", "0", CVAR_ARCHIVE);  // [QL] 1 = LAN-only
     sv_floodProtect = Cvar_Get("sv_floodProtect", "10", CVAR_ARCHIVE);  // [QL] 0x004e3c3a
 
-    // [QL] las cvars de servidor del motor que faltaban. El motor no tiene tabla de cvars
-    // -- las registra una por una --, asi que estas nunca aparecieron en ninguna medicion.
+    // [QL] the engine server cvars that were missing. The engine has no cvar table -- it
+    // registers them one by one -- so these never turned up in any measurement.
     sv_master = Cvar_Get("sv_master", "1", CVAR_ARCHIVE);              // [QL] 0x004e3b80
     sv_idleExit = Cvar_Get("sv_idleExit", "120", CVAR_ARCHIVE);        // [QL] 0x004e3e09
     sv_errorExit = Cvar_Get("sv_errorExit", "1", 0);                   // [QL] 0x004e3e1f
     sv_workshopFile = Cvar_Get("sv_workshopFile", "workshop.txt", CVAR_ARCHIVE);
     sv_quitOnEmpty = Cvar_Get("sv_quitOnEmpty", "0", CVAR_ARCHIVE);  // [QL] 0x004e3e3a
 
-    // [QL] las dos que publica el servidor sobre si mismo: los items del Workshop que usa la
-    // partida y el identificador que le da el servicio. Retail las registra de solo lectura.
+    // [QL] the two the server publishes about itself: the Workshop items the match uses and
+    // the identifier the service gives it. Retail registers both read only.
     Cvar_Get("sv_referencedSteamworks", "", CVAR_ROM);
     Cvar_Get("sv_gtid", "", CVAR_SERVERINFO | CVAR_ROM);
 
@@ -703,7 +703,7 @@ void SV_Init(void) {
     sv_mapChecksum = Cvar_Get("sv_mapChecksum", "", CVAR_ROM);
     sv_lanForceRate = Cvar_Get("sv_lanForceRate", "1", CVAR_ARCHIVE);
     sv_banFile = Cvar_Get("sv_banFile", "serverbans.dat", CVAR_ARCHIVE);
-    // [QL] SV_Init las registra juntas, con "" y "0"
+    // [QL] SV_Init registers them together, with "" and "0"
     sv_altEntDir = Cvar_Get("sv_altEntDir", "", 0);
     sv_dumpEntities = Cvar_Get("sv_dumpEntities", "0", 0);
 

@@ -277,8 +277,8 @@ extern void(APIENTRYP qglUnlockArraysEXT)(void);
 #define QGL_3_0_PROCS \
     GLE(const GLubyte*, GetStringi, GLenum name, GLuint index)
 
-// [ioquakelive] GL_ARB_sync, parte de OpenGL 3.2: sirve para saber cuando la GPU termino un
-// frame sin vaciar la tuberia, y asi limitar cuantos se encolan (ver r_maxQueuedFrames)
+// [ioquakelive] GL_ARB_sync, part of OpenGL 3.2: it tells when the GPU has finished a frame
+// without draining the pipeline, and so caps how many are queued (see r_maxQueuedFrames)
 #define QGL_ARB_sync_PROCS                                                             \
     GLE(GLsync, FenceSync, GLenum condition, GLbitfield flags)                         \
     GLE(GLenum, ClientWaitSync, GLsync sync, GLbitfield flags, GLuint64 timeout)       \

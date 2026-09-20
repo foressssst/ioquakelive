@@ -1322,11 +1322,10 @@ CG_DrawReward
 cg_drawRewards is tested, so hidden medals still advance and play. Retail draws
 32x32 icons with their top at y 42, one per medal, 48 apart and centred on 320,
 or past cg_drawRewardsRowSize one icon with its count at (336, 66).
-[ioquakelive] The layout the user tuned live and chose on 2026-09-13, for a tidy HUD
-where no message runs into another: medals at 0.74 of retail's size, centred on 325
-and with their top at y 128, instead of retail's full size centred on 320 at y 42.
-Both of retail's branches are here over that geometry, so one medal lands exactly
-where it did before the count was added.
+[ioquakelive] A deliberate divergence, for a HUD where no message runs into another:
+medals at 0.74 of retail's size, centred on 325 and with their top at y 128, instead
+of retail's full size centred on 320 at y 42. Both of retail's branches are here over
+that geometry, so one medal lands exactly where it did before the count was added.
 ===================
 */
 #define REWARD_ICON_SCALE 0.74f
@@ -1376,10 +1375,9 @@ static void CG_DrawReward(void) {
 	}
 	trap_R_SetColor(color);
 	CG_DrawRewardIcon(REWARD_ICON_X, REWARD_ICON_Y, REWARD_ICON_SIZE, cg.rewardShader[0]);
-	// [QL] 0x1000ac96, with the user's choice of 2026-09-16: past cg_drawRewardsRowSize medals at
-	// once, retail drops to one icon and writes how many there were beside it, and under that it
-	// lays them side by side. Only the first half is here -- "no pongas mas de 1 medalla, si no que
-	// el numero, es mas sostenible" -- so the cvar is just where the count starts showing: 1 by
+	// [QL] 0x1000ac96, deliberately half ported: past cg_drawRewardsRowSize medals at once, retail
+	// drops to a single icon with the count written beside it, and below that it lays them side by
+	// side. Only the count is wanted here, so the cvar is simply where it starts showing: 1 by
 	// default, which is from the second medal on, and 9 never writes it.
 	if (cg.rewardCount[0] > cg_drawRewardsRowSize.integer) {
 		CG_DrawText(REWARD_COUNT_X, REWARD_COUNT_Y, 0, REWARD_COUNT_SCALE, color,
@@ -1726,9 +1724,8 @@ height in font 0 with the print's scale and ITEM_TEXTSTYLE_SHADOWEDMORE, and
 the next line starts 6 units below it.
 ===================
 */
-// [ioquakelive] The frag message in the layout the user tuned live and chose on 2026-09-13:
-// smaller than retail's and lower, under the medal, in Handel Gothic Ex from pak01
-// (cgs.media.fragMessageFont).
+// [ioquakelive] The frag message, deliberately laid out differently from retail: smaller and
+// lower, under the medal, in Handel Gothic Ex from pak01 (cgs.media.fragMessageFont).
 #define FRAG_MESSAGE_Y 165.0f
 #define FRAG_MESSAGE_SCALE 0.15f
 
@@ -3786,19 +3783,19 @@ static void CG_DrawLetterbox(void) {
 =================
 CG_DrawVoiceIndicator
 
-[QL] 0x10011200. Una fila por jugador que este hablando, con el recuadro del color
-de su equipo, el icono y el nombre. cg_voiceChatIndicator la apaga con 0 y la
-manda a la izquierda con 2; con cualquier otro valor va a la derecha.
+[QL] 0x10011200. One row per talking player, with a box in their team's colour, the
+icon and the name. cg_voiceChatIndicator turns it off at 0 and sends it left at 2; any
+other value puts it on the right.
 
-Y aca esta lo que faltaba de la marca de "esta hablando": el binario la apaga 500
-ms despues del ultimo paquete, menos la de uno mismo, que la apaga "-voice".
+This also closes the "is talking" flag: the binary clears it 500 ms after the last
+packet, except your own, which "-voice" clears.
 =================
 */
 static void CG_DrawVoiceIndicator(void) {
-    static const vec4_t rojo = {0.5f, 0.0f, 0.0f, 0.5f};
-    static const vec4_t azul = {0.0f, 0.25f, 0.5f, 0.5f};
-    static const vec4_t neutro = {0.5f, 0.5f, 0.5f, 0.5f};
-    static const vec4_t blanco = {1.0f, 1.0f, 1.0f, 1.0f};
+    static const vec4_t red = {0.5f, 0.0f, 0.0f, 0.5f};
+    static const vec4_t blue = {0.0f, 0.25f, 0.5f, 0.5f};
+    static const vec4_t neutral = {0.5f, 0.5f, 0.5f, 0.5f};
+    static const vec4_t white = {1.0f, 1.0f, 1.0f, 1.0f};
     float y = 150.0f;
     int i;
 
@@ -3811,7 +3808,7 @@ static void CG_DrawVoiceIndicator(void) {
     for (i = 0; i < cgs.maxclients; i++) {
         clientInfo_t* ci = &cgs.clientinfo[i];
         const float* color;
-        float ancho;
+        float width;
         float x;
 
         if (!ci->infoValid || !ci->talking) {
@@ -3819,17 +3816,17 @@ static void CG_DrawVoiceIndicator(void) {
         }
 
         trap_R_SetColor(NULL);
-        ancho = (float)(CG_DrawStrlen(ci->name) * SMALLCHAR_WIDTH) + 25.0f;
-        x = (cg_voiceChatIndicator.integer == 2) ? 0.0f : 640.0f - ancho;
-        color = (ci->team == TEAM_RED) ? rojo : (ci->team == TEAM_BLUE) ? azul : neutro;
+        width = (float)(CG_DrawStrlen(ci->name) * SMALLCHAR_WIDTH) + 25.0f;
+        x = (cg_voiceChatIndicator.integer == 2) ? 0.0f : 640.0f - width;
+        color = (ci->team == TEAM_RED) ? red : (ci->team == TEAM_BLUE) ? blue : neutral;
 
-        CG_FillRect(x, y - 10.0f, ancho, 15.0f, color);
+        CG_FillRect(x, y - 10.0f, width, 15.0f, color);
         CG_DrawPic(x + 5.0f, y - 8.0f, 10.0f, 10.0f, cgs.media.scoreSpeakingShader);
-        CG_DrawSmallStringColor((int)(x + 20.0f), (int)(y + 1.0f), ci->name, (vec_t*)blanco);
+        CG_DrawSmallStringColor((int)(x + 20.0f), (int)(y + 1.0f), ci->name, (vec_t*)white);
         y += 15.0f;
 
-        // [QL] 0x1001143a: la marca se apaga sola medio segundo despues del ultimo
-        // paquete; la propia no, que la apaga "-voice"
+        // [QL] 0x1001143a: the flag clears itself half a second after the last packet;
+        // your own does not, "-voice" clears that one
         if (ci->talkingTime + 500 < cg.time && i != cg.clientNum) {
             ci->talking = qfalse;
         }
@@ -3886,16 +3883,12 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	if (g_training.integer) {
 		CG_DrawLetterbox();
 		if (cg.snap->ps.pm_type == PM_TUTORIAL) {
-			// [ioquakelive] forzado: durante el tour el HUD no se dibuja, asi que su menu
-			// "chat area" nunca queda WINDOW_VISIBLE y Menu_Paint sin forzar lo saltea.
-			// Las lineas de Crash entraban al historial y no se veian: habia que abrir la
-			// consola para leerlas. El overlay de espectador ya fuerza los suyos igual.
-			// [ioquakelive] el chat se dibuja directo, no por su menu. Menus_FindByName
-			// devuelve NULL para "chat area" en el cgame -medido con una sonda: menu=0
-			// mientras la linea de chat estaba viva-, asi que Menu_Paint no pintaba nada,
-			// forzado o no, y las lineas de Crash durante el cinematico solo quedaban en la
-			// consola. El rect es el absoluto del chatWindow de ui/hud.menu (el menu en x 5,
-			// el item en y 287, 634x120), el mismo que ya usa el overlay de espectador.
+			// [ioquakelive] the chat is drawn directly, not through its menu. Menus_FindByName
+			// returns NULL for "chat area" in the cgame -- measured with a probe: menu = 0
+			// while a chat line was alive -- so Menu_Paint painted nothing, forced or not, and
+			// Crash's lines during the tour ended up in the console only. The rect is the
+			// absolute one of chatWindow in ui/hud.menu (menu at x 5, item at y 287, 634x120),
+			// the same one the spectator overlay already uses.
 			CG_DrawChat(5, 287, 634, 120, 1.0f);
 			CG_SetWidescreen(WIDESCREEN_CENTER);
 			CG_DrawCenterString();

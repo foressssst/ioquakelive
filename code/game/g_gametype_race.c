@@ -178,7 +178,7 @@ void Touch_RaceCheckpoint(gentity_t *self, gentity_t *other, trace_t *trace) {
             }
         }
 
-        // [QL] 0x100637be: el evento PLAYER_RACECOMPLETE, con el tiempo de la vuelta
+        // [QL] 0x100637be: the PLAYER_RACECOMPLETE event, with the lap's time
         STAT_PlayerRaceComplete(other, ri->lastTime, ri->weaponUsed);
 
         ri->nextRacePoint = NULL;
@@ -416,28 +416,28 @@ void Cmd_RaceInit_f(gentity_t *ent) {
 ============================================================================
 Cmd_RacePoint_f
 
-[QL] 0x10063ec0. La orden con la que se arma un recorrido de Race sin salir del
-juego: cada vez que se la llama deja un punto donde esta parado el jugador y lo
-encadena con el anterior, "clear" los borra todos y "dump" escupe sus posiciones.
+[QL] 0x10063ec0. The command that lays out a Race course without leaving the game:
+each call drops a point where the player is standing and chains it to the previous
+one, "clear" deletes them all and "dump" prints their positions.
 
-Tres compuertas antes de nada, en el orden del binario: el tipo de juego, las
-trampas y estar vivo. El fork tenia otra cosa -- solo "list", con mensajes
-propios y sin ninguna de las tres --, asi que esto la reemplaza entera.
+Three gates before anything else, in the binary's order: gametype, cheats and being
+alive. What was here before was something else -- "list" alone, with messages of its
+own and none of the three gates -- so this replaces it whole.
 
-Los nombres de la cadena son los de retail (arp0, arp1, ...): el punto nuevo se
-llama arp<N> y el anterior pasa a apuntarle. El binario los tiene en una tabla de
-dieciseis y sin embargo acepta hasta sesenta y cuatro puntos, o sea que del
-diecisiete en adelante lee fuera de ella; aca el nombre se arma en el momento, asi
-que el limite es el unico que se ve: los sesenta y cuatro del binario.
+The chain's names are retail's (arp0, arp1, ...): the new point is called arp<N> and
+the previous one is pointed at it. The binary keeps them in a table of sixteen and
+still accepts up to sixty-four points, so from the seventeenth on it reads past the
+end; here the name is built on the spot, so the only limit left is the binary's own
+sixty-four.
 ============================================================================
 */
 static int raceAdminPoints;              // cuantos lleva puestos
-static gentity_t *raceAdminLast;         // el ultimo, que es el que apunta al que viene
+static gentity_t *raceAdminLast;         // the last one, which is what points at the next
 
 void Cmd_RacePoint_f(gentity_t *ent) {
     char cmd[MAX_TOKEN_CHARS];
-    gentity_t *punto;
-    vec3_t origen;
+    gentity_t *point;
+    vec3_t origin;
 
     if (g_gametype.integer != GT_RACE) {
         trap_SendServerCommand(ent - g_entities,
@@ -484,18 +484,18 @@ void Cmd_RacePoint_f(gentity_t *ent) {
         return;
     }
 
-    punto = G_Spawn();
-    punto->classname = "race_point";
-    VectorCopy(ent->client->ps.origin, origen);
-    G_SetOrigin(punto, origen);
-    punto->targetname = G_NewString(va("arp%i", raceAdminPoints));
+    point = G_Spawn();
+    point->classname = "race_point";
+    VectorCopy(ent->client->ps.origin, origin);
+    G_SetOrigin(point, origin);
+    point->targetname = G_NewString(va("arp%i", raceAdminPoints));
     if (raceAdminLast) {
-        raceAdminLast->target = punto->targetname;
+        raceAdminLast->target = point->targetname;
     }
-    SP_race_point(punto);
-    trap_LinkEntity(punto);
+    SP_race_point(point);
+    trap_LinkEntity(point);
 
-    raceAdminLast = punto;
+    raceAdminLast = point;
     raceAdminPoints++;
     trap_SendServerCommand(-1, "print \"spawning a race point\n\"");
 }

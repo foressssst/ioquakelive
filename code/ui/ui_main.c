@@ -218,8 +218,8 @@ void AssetCache(void) {
         uiInfo.uiDC.Assets.crosshairShader[n] = trap_R_RegisterShaderNoMip(va("gfx/2d/crosshair%i", n));
     }
 
-    // [QL] 0x10009fd1: el de retail es otro archivo; sound/vo/new_high_score.ogg es de
-    // Team Arena y en Quake Live no existe, asi que el aviso no sonaba nunca
+    // [QL] 0x10009fd1: retail's is a different file; sound/vo/new_high_score.ogg is Team
+    // Arena's and does not exist in Quake Live, so the announcement never played
     uiInfo.newHighScoreSound = trap_S_RegisterSound("sound/feedback/voc_newhighscore.ogg", qfalse);
 }
 
@@ -3935,8 +3935,8 @@ static void UI_BuildServerDisplayList(int force) {
                     continue;
                 }
             }
-            // [ioquakelive] sin la lista de tipos de juego cargada, la tabla esta en cero y el
-            // filtro dejaba pasar solo los de free for all
+            // [ioquakelive] with the gametype list not loaded the table is all zeroes, and the
+            // filter let only free for all through
             if (uiInfo.numJoinGameTypes > 0 && uiInfo.joinGameTypes[ui_joinGameType.integer].gtEnum != -1) {
                 game = atoi(Info_ValueForKey(info, "gametype"));
                 if (game != uiInfo.joinGameTypes[ui_joinGameType.integer].gtEnum) {
@@ -4289,9 +4289,9 @@ static void UI_DoServerRefresh(void) {
 ===============
 UI_Home_ServerList
 
-[ioquakelive] La portada muestra los servidores en su fila de abajo, y para eso necesita lo
-mismo que la pagina del navegador: pedir la lista al abrirse y rearmarla mientras llegan las
-respuestas. Se expone aca para no escribir una segunda implementacion del mismo barrido.
+[ioquakelive] The front page shows the servers in its bottom row, and for that it needs what
+the browser page needs: ask for the list when it opens and rebuild it as the answers arrive.
+It is exposed here so that the same sweep is not implemented twice.
 ===============
 */
 /*

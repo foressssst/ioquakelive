@@ -312,7 +312,7 @@ static qboolean ZMQ_CheckPlain(const zsock_t* zs, const byte* data, int len) {
     return (qboolean)(!strcmp(key, expected) && !strcmp(pass, zs->password->string));
 }
 
-// el cliente de rcon al que va la salida del comando que se esta ejecutando
+// the rcon client the running command's output goes to
 static zconn_t* zRedirect;
 
 static void ZMQ_RconFlush(char* text) {
@@ -438,7 +438,7 @@ static void ZMQ_Process(zsock_t* zs, zconn_t* c) {
             int dataLen = (int)size - 1 - nameLen;
 
             if (dataLen < 0) {
-                ZMQ_Drop(zs, c);  // un nombre mas largo que la trama que lo trae
+                ZMQ_Drop(zs, c);  // a name longer than the frame carrying it
                 return;
             }
 
@@ -506,9 +506,9 @@ static void ZMQ_Poll(zsock_t* zs) {
             zclose(s);
             continue;
         }
-        // [ioquakelive] Divergencia deliberada: retail deja el rcon sin contrasena abierto a
-        // cualquiera que llegue al puerto, que es ejecucion remota sin autenticar. Aca, sin
-        // contrasena, solo se aceptan conexiones de la propia maquina.
+        // [ioquakelive] Deliberate divergence: retail leaves a passwordless rcon open to
+        // anyone who reaches the port, which is unauthenticated remote execution. Here, with
+        // no password, only connections from the machine itself are accepted.
         if (zs == &zRcon && !ZMQ_Plain(zs) && ntohl(from.sin_addr.s_addr) != INADDR_LOOPBACK) {
             zclose(s);
             continue;

@@ -51,10 +51,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define HM_NAV_INSET 39.0f
 
 // the main menu
-// [ioquakelive] la columna en numeros fijos de la grilla (U = 8), no en porcentaje de la
-// pantalla: asi cae siempre en el mismo lugar y el resto se alinea contra ella
+// [ioquakelive] the column in fixed grid units (U = 8) rather than a percentage of the
+// screen: it lands in the same place every time and the rest aligns against it
 #define HM_COL_X 96.0f       // 12 U
-#define HM_COL_BAND 672.0f   // 84 U: hasta donde llega su banda
+#define HM_COL_BAND 672.0f   // 84 U: how far its band reaches
 #define HM_COL_W 480.0f      // what an entry takes, rule to chevron (60 U)
 #define HM_RULE_GAP 26.0f    // the hover rule stands this far left of the text
 #define HM_LOGO_Y 128.0f     // 16 U
@@ -63,8 +63,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define HM_ITEM_H 78.0f
 #define HM_ITEM_SIZE 27.0f
 
-// [ioquakelive] la lista: una entrada por fila, con aire de sobra entre ellas. La fila mide lo
-// mismo con descripcion y sin ella, asi la lista no se mueve cuando el cursor la recorre.
+// [ioquakelive] the list: one entry per row, with room to spare between them. A row is the
+// same height with and without its description, so the list does not shift as the cursor
+// runs down it.
 #define HM_ROW_H 64.0f
 #define HM_HEADING_H 40.0f
 #define HM_ITEM_SPACING 0.7f
@@ -75,7 +76,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // the player and their friends, down the right
 #define HM_SIDE_W 306.0f     // retail's column is 370; a little under it reads calmer
 #define HM_SIDE_RIGHT 64.0f
-#define HV_SOCIAL_W 80.0f  // [ioquakelive] la franja social del menu principal, plegada (10 U)
+#define HV_SOCIAL_W 80.0f  // [ioquakelive] the main menu's social strip, folded (10 U)
 
 // the painting's shape
 #define HM_PAINTING_ASPECT (3122.0f / 1344.0f)
@@ -85,12 +86,12 @@ typedef enum {
     HM_HIT_NAV,
     HM_HIT_BANNER,
     HM_HIT_ITEM,
-    HM_HIT_CARD,  // [ioquakelive] una tarjeta del menu principal
+    HM_HIT_CARD,  // [ioquakelive] a card of the main menu
     HM_HIT_QUIT,
-    HM_HIT_TAB,   // [ioquakelive] una seccion de la barra de arriba
-    HM_HIT_SOCIAL, // [ioquakelive] el fondo de la franja social: los clics no pasan a traves
-    HM_HIT_FRIEND, // [ioquakelive] una fila de la lista de amigos
-    HM_HIT_MENU    // [ioquakelive] una fila del desplegable de PLAY
+    HM_HIT_TAB,   // [ioquakelive] a section of the top bar
+    HM_HIT_SOCIAL, // [ioquakelive] the social strip's background: clicks do not pass through
+    HM_HIT_FRIEND, // [ioquakelive] a row of the friends list
+    HM_HIT_MENU    // [ioquakelive] a row of the PLAY dropdown
 } hmHitType_t;
 
 // arenas whose shots pak00 carries, one of which is the background when the painting is not there
@@ -351,9 +352,9 @@ float UI_Home_FrameBottom(void) {
     return smBottom - 40.0f - (UI_Home_InMatch() ? 38.0f : 0.0f);
 }
 
-// [ioquakelive] the block's middle is the screen's middle, as the user asked ("es centrarla"),
-// not the middle of what the top row leaves, which sat it lower; it still never climbs over the
-// top row, nor under the match banner
+// [ioquakelive] the block's middle is the screen's middle, not the middle of what the top row
+// leaves, which sat it lower; it still never climbs over the top row, nor under the match
+// banner
 float UI_Home_BlockTop(float blockHeight) {
     float first = HM_NAV_H;
     float screenTop = -smTop / smScale;
@@ -539,9 +540,9 @@ static void UI_Home_DrawShade(void) {
     SM_Fill(-1, top, solid + 1, full, shade, NULL);
     UI_Home_WashAcross(solid, 520.0f, smPage, 0.92f, 0.0f);
     UI_Home_Wash(top, 150.0f, smPage, 0.55f, 0.0f);
-    // [ioquakelive] El pie es una banda desde que lleva la franja de marcas: el degradado
-    // de antes se apagaba justo donde estan, y sobre la figura del cuadro quedaban a media
-    // luz. Ahora el degradado termina arriba de ellas y lo que queda abajo es parejo.
+    // [ioquakelive] The footer is a flat band now that it carries the marks strip: the old
+    // gradient faded out exactly where they sit, leaving them half lit over the artwork. The
+    // gradient ends above them and what is left below is even.
     UI_Home_Wash(smBottom - 300.0f, 190.0f, smPage, 0.0f, 0.9f);
     {
         vec4_t band;
@@ -579,8 +580,8 @@ static void UI_Home_DrawColumn(void) {
     (void)panelTop;
     (void)panelH;
 
-    // la lista de un submenu dice cual es; la principal no lo necesita, que ya lo dice el
-    // panel del jugador a la derecha
+    // a submenu's list names itself; the main one does not need to, the player panel on the
+    // right already says it
     if (hm2.menu != HM_MENU_MAIN) {
         Q_strncpyz(heading,
                    hmMenus[HM_MENU_MAIN][hm2.menu == HM_MENU_PLAY ? 0 : hm2.menu == HM_MENU_STATS ? 1 : 2].title,
@@ -598,15 +599,14 @@ static void UI_Home_DrawColumn(void) {
         }
         over = SM_Over(HM_HIT_ITEM, i) && !item->soon;
 
-        // [ioquakelive] Lo unico que marca donde estas es una barra fina al canto izquierdo y el
-        // titulo en dorado. Sin plato y sin caja: el jugador pidio algo mas minimalista, y un
-        // menu de seis entradas sobre un cuadro no necesita mas.
+        // [ioquakelive] All that marks where you are is a thin bar at the left edge and the
+        // title in gold. No plate, no box: a six entry menu over artwork needs nothing more.
         if (over) {
             SM_Fill(x - HM_RULE_GAP, y + 4, 3, HM_ITEM_SIZE + 4, smText, NULL);
         }
 
-        // [ioquakelive] the user asked for the arrow that used to stand at the right of the entry
-        // under the cursor to go ("quitar el < del ui"): the gold of the title says enough
+        // [ioquakelive] no arrow at the right of the entry under the cursor: the gold of the
+        // title says enough
         SM_Label(x, SM_Baseline(FONT_SANS, HM_ITEM_SIZE, y, HM_ITEM_SIZE + 12), HM_ITEM_SIZE,
                  item->soon ? smSubtle : over ? smText : smTextSoft, item->title, HM_ITEM_SPACING);
         if (item->soon) {
@@ -615,9 +615,9 @@ static void UI_Home_DrawColumn(void) {
             SM_Label(x + tw + 16, SM_Baseline(FONT_SANS, 11, y + 10, 18), 11, smSubtle, "soon", 1.6f);
         }
 
-        // La descripcion solo sale en la entrada bajo el cursor. Seis descripciones encendidas a
-        // la vez eran mucho texto para nombres que ya se explican solos, y el hueco que dejan
-        // reservado no se nota porque la fila mide siempre lo mismo.
+        // The description only shows on the entry under the cursor. Six of them lit at once was
+        // a lot of text for names that explain themselves, and the space held for it is not
+        // noticeable because a row is always the same height.
         if (item->note && over) {
             SM_Text(x, SM_Baseline(FONT_SANS, HM_NOTE_SIZE, y + HM_ITEM_SIZE + 10, 18), FONT_SANS, HM_NOTE_SIZE,
                     smTextSoft, item->note, SM_Fit(FONT_SANS, HM_NOTE_SIZE, item->note, HM_COL_W), qfalse);
@@ -704,8 +704,8 @@ static float UI_Home_DrawFriends(float x, float y, float w) {
 static void UI_Home_DrawSide(void) {
     float w = HM_SIDE_W;
     float x = smVW - w - HM_SIDE_RIGHT;
-    // [ioquakelive] arriba a la derecha, a la altura del logo: con las tarjetas abajo, a media
-    // altura pisaba la ultima
+    // [ioquakelive] top right, level with the logo: with the cards below, halfway down it
+    // overlapped the last one
     float y = 104.0f;
 
     if (x < UI_Home_ColumnX() + HM_COL_W + 60.0f) {
@@ -719,19 +719,18 @@ static void UI_Home_DrawSide(void) {
 ===============
 UI_Home_DrawMarks
 
-[ioquakelive] La franja del pie: los cuatro nombres sobre los que esto esta parado, uno
-al lado del otro como en un pie de patrocinadores, porque tambien son creditos. En orden:
-QUAKE III ARENA, que es el codigo que id libero; ioquake3, el motor que lo mantiene vivo;
-QUAKE LIVE, el juego que esto reimplementa; y Quake Club, la comunidad desde la que se
-empuja este trabajo.
+[ioquakelive] The footer strip: the four names this is standing on, side by side the way a
+sponsor footer runs, because they are credits too. In order: QUAKE III ARENA, the code id
+released; ioquake3, the engine that keeps it alive; QUAKE LIVE, the game this reimplements;
+and Quake Club, the community this work is pushed from.
 
-Los cuatro son los logos que dibujo el jugador, pasados a blanco con alfa por
-code/tools/make_menu_marks.py y guardados en pak01. Van todos tenidos al mismo gris, asi
-la fila se lee como una sola cosa y no como cuatro logos pegados.
+All four are logos turned white with alpha by code/tools/make_menu_marks.py and stored in
+pak01. They are tinted to the same grey, so the row reads as one thing rather than four
+logos stuck together.
 
-Las medidas no salen de la imagen: cada una se dibuja al alto que la hace pesar lo mismo
-que las demas, que es lo que hace que una apilada y una palabra sola convivan en la misma
-linea. Salen de la vista previa que deja ese mismo script.
+The sizes do not come from the images: each is drawn at the height that makes it weigh the
+same as the others, which is what lets a stacked mark and a single word share a line. They
+come from the preview that same script leaves behind.
 ===============
 */
 typedef struct {
@@ -747,18 +746,16 @@ static const hmMark_t hmMarks[] = {
 };
 
 #define HM_MARK_GAP 54.0f
-#define HM_MARK_H 80.0f  // el mas alto: la franja se centra sobre esa banda
+#define HM_MARK_H 80.0f  // the tallest one: the strip centres on that band
 
-// [ioquakelive] lo que queda a la izquierda de la columna social
+// [ioquakelive] what is left to the left of the social column
 static float UI_Home_MainW(void) {
     return smVW - HV_SOCIAL_W;
 }
 
-// los logos de los creditos, centrados en una franja de alto h: entran a la mitad de su tamano,
-// que es lo que deja el pie
-// [ioquakelive] el eje del contenido: lo que queda entre la columna del menu y la franja de
-// amigos. La fila de servidores y los logos de los creditos se centran ahi, no en la pantalla,
-// porque la columna ocupa la izquierda.
+// [ioquakelive] the content axis: what is left between the menu column and the friends strip.
+// The server row and the credit logos centre on that, not on the screen, because the column
+// takes up the left side.
 static float UI_Home_ContentX(void) {
     return HM_COL_BAND;
 }
@@ -767,7 +764,7 @@ static float UI_Home_ContentCx(void) {
     return UI_Home_ContentX() + (UI_Home_MainW() - UI_Home_ContentX()) * 0.5f;
 }
 
-// [ioquakelive] centradas en cx, no siempre en la zona principal: ahora van sobre el aviso
+// [ioquakelive] centred on cx, not always in the main area: they now sit over the notice
 static void UI_Home_DrawMarks(float cx, float y, float h) {
     static const vec4_t tint = {1.0f, 1.0f, 1.0f, 0.55f};
     static qhandle_t shaders[ARRAY_LEN(hmMarks)];
@@ -804,54 +801,55 @@ static void UI_Home_DrawMarks(float cx, float y, float h) {
 
 EL MENU PRINCIPAL
 
-[ioquakelive] 2026-09-18. Minimalista y en una grilla: arriba el logo, las secciones y, al
-centro, el emblema de Quake Live recortado por el borde de la pantalla, que es el boton de
-jugar; a la derecha una franja social como la de CS2; abajo los creditos. Sin barras solidas:
-el cuadro de fondo se oscurece arriba y abajo para que se lea lo que va encima.
+[ioquakelive] Minimal and laid out on a grid: the logo on top, the sections and, in the
+middle, Quake Live's emblem cropped by the screen edge, which is the play button; a social
+strip on the right like CS2's; the credits below. No solid bars: the backdrop darkens at top
+and bottom so what sits over it can be read.
 
-La grilla: un margen igual a los dos lados (HV_EDGE); arriba y abajo dos franjas de la misma
-altura (HV_BAR_H), que son tambien la fila del perfil y la de Quit en la franja social, asi las
-cuatro esquinas comparten lineas; y un eje, el centro de la pantalla, para el emblema, las
-secciones y los logos de los creditos.
+The grid: an equal margin on both sides (HV_EDGE); top and bottom, two strips of the same
+height (HV_BAR_H), which are also the profile row and the Quit row of the social strip, so
+all four corners share lines; and one axis, the centre of the screen, for the emblem, the
+sections and the credit logos.
 
 ===============================================================================
 */
 
-#define HV_U 8.0f             // la unidad de la grilla: todo es multiplo de esto
+#define HV_U 8.0f             // the grid's unit: everything is a multiple of it
 #define HV_SOCIAL_OPEN_W 360.0f
-#define HV_SOCIAL_MS 55.0f    // la constante de tiempo de las transiciones
+#define HV_SOCIAL_MS 55.0f    // the transitions' time constant
 #define HV_AVATAR 52.0f
-#define HV_BAR_H (10.0f * HV_U)   // la barra y el pie miden lo mismo
+#define HV_BAR_H (10.0f * HV_U)   // the bar and the footer are the same height
 #define HV_FOOT_H (10.0f * HV_U)
-#define HV_GUTTER (40.0f * HV_U)  // el aire a cada lado de la barra: logo y Quit
+#define HV_GUTTER (40.0f * HV_U)  // the room either side of the bar: logo and Quit
 #define HV_TAB_SLOT (17.0f * HV_U)
 #define HV_PLAY_SLOT (24.0f * HV_U)
 #define HV_TABS_W (4.0f * HV_TAB_SLOT + HV_PLAY_SLOT)
 #define HV_BAR_W (HV_TABS_W + 2.0f * HV_GUTTER)
-#define HV_BAR_R (3.0f * HV_U)    // las esquinas de abajo de la barra
-#define HV_PAD (5.0f * HV_U)      // el aire adentro de la barra, y los margenes del pie
+#define HV_BAR_R (3.0f * HV_U)    // the bar's bottom corners
+#define HV_PAD (5.0f * HV_U)      // the room inside the bar, and the footer's margins
 #define HV_EDGE (5.0f * HV_U)
 #define HV_LOGO_H (7.0f * HV_U)
 #define HV_TAB_SIZE 17.0f
 #define HV_TAB_SPACING 2.2f
-#define HV_PLAY_TOP_W (23.0f * HV_U)  // el trapecio: casi todo su casillero de 24 U
+#define HV_PLAY_TOP_W (23.0f * HV_U)  // the trapezium: almost all of its 24 U cell
 #define HV_PLAY_BOT_W (20.0f * HV_U)
 #define HV_PLAY_DROP (1.0f * HV_U)
 #define HV_PLAY_SIZE 17.0f
 #define HV_PLAY_SPACING 4.0f
-#define HV_MARKS_H (9.0f * HV_U)  // la franja de los logos, encima del aviso
-#define HV_TEXT 14.0f         // la letra chica: aviso legal y textos de la franja
+#define HV_MARKS_H (9.0f * HV_U)  // the logo strip, above the notice
+#define HV_TEXT 14.0f         // the small type: legal notice and the strip's text
 
-// [ioquakelive] el gris de las piezas es smPanel, el de la paleta: la portada no tiene uno
-// propio. Sobre el arte va un velo, para que el fondo quede oscuro y lo de encima se lea.
+// [ioquakelive] the grey of the pieces is smPanel, the palette's own: the front page has none
+// of its own. A veil goes over the artwork, so the backdrop stays dark and what is on top
+// reads.
 static const vec4_t hvVeil = {0.0f, 0.0f, 0.0f, 0.42f};
 
 typedef struct {
     const char* title;
-    int nav;  // -1: la pagina en la que ya estas
+    int nav;  // -1: the page you are already on
 } hvTab_t;
 
-// a los lados del emblema, dos y dos
+// either side of the emblem, two and two
 static const hvTab_t hvTabsLeft[] = {{"Home", -1}, {"Training", HM_NAV_TRAINING}};
 static const hvTab_t hvTabsRight[] = {{"Replays", HM_NAV_REPLAYS}, {"Settings", HM_NAV_SETTINGS}};
 
@@ -865,12 +863,12 @@ static float UI_Home_Top(void) {
     return -smTop / smScale;
 }
 
-// el borde de abajo de la pagina: sube cuando esta el aviso de la partida en curso
+// the page's bottom edge: it rises when the match-in-progress notice is up
 static float UI_Home_Bottom(void) {
     return smBottom - (UI_Home_InMatch() ? 38.0f : 0.0f);
 }
 
-// acerca un valor a su destino con una curva exponencial, igual a cualquier cantidad de cuadros
+// eases a value towards its target on an exponential curve, the same at any framerate
 static float UI_Home_Ease(float value, float target, float dt) {
     return value + (target - value) * (1.0f - (float)exp(-dt / HV_SOCIAL_MS));
 }
@@ -879,12 +877,12 @@ static float UI_Home_Smooth(float t) {
     return t * t * (3.0f - 2.0f * t);
 }
 
-// la linea de base de un texto centrado en una franja de alto HV_BAR_H que empieza en y
+// the baseline of text centred in an HV_BAR_H tall strip starting at y
 static float UI_Home_BarBaseline(float size, float y) {
     return SM_Baseline(FONT_SANS, size, y + (HV_BAR_H - size * 1.4f) * 0.5f, size * 1.4f);
 }
 
-// la banda plana que va detras de la columna, para que su texto se lea sobre el cuadro
+// the flat band behind the column, so its text reads over the artwork
 static void UI_Home_DrawColumnBand(void) {
     vec4_t band;
 
@@ -893,9 +891,9 @@ static void UI_Home_DrawColumnBand(void) {
     SM_Fill(-1, UI_Home_Top(), HM_COL_BAND, UI_Home_Bottom() - UI_Home_Top() + 1, band, NULL);
 }
 
-// abajo del todo, sobre el cuadro y sin contenedor: la version a la izquierda, los logos al centro
-// y el aviso legal a la derecha, los tres en la misma linea. Antes los logos iban en una banda
-// aparte, mas arriba, que era lo que no cerraba.
+// right at the bottom, over the artwork and with no container: the version on the left, the
+// logos in the middle and the legal notice on the right, all three on one line. The logos used
+// to sit in a band of their own further up, which is what did not work.
 static void UI_Home_DrawFooter(void) {
     static const char* const notice =
         "QUAKE LIVE (c) 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
@@ -904,8 +902,8 @@ static void UI_Home_DrawFooter(void) {
     float baseline = SM_Baseline(FONT_SANS, HV_TEXT, y + (HV_FOOT_H - HV_TEXT * 1.4f) * 0.5f, HV_TEXT * 1.4f);
     float w = SM_Advance(FONT_SANS, HV_TEXT, notice, -1);
 
-    // los logos van justo encima del aviso y centrados sobre el: asi el pie es un solo bloque a
-    // la derecha en vez de tres cosas sueltas, que es lo que pidio el jugador
+    // the logos sit right above the notice and centred on it, so the footer is one block on the
+    // right instead of three loose things
     SM_Text(UI_Home_MainW() - HV_EDGE - w, baseline, FONT_SANS, HV_TEXT, smSubtle, notice, -1, qfalse);
     UI_Home_DrawMarks(UI_Home_MainW() - HV_EDGE - w * 0.5f, y - HV_MARKS_H, HV_MARKS_H);
 }
@@ -915,43 +913,42 @@ static void UI_Home_DrawFooter(void) {
 
 LA FRANJA SOCIAL
 
-[ioquakelive] La lista de amigos, encendida de nuevo el 2026-09-19 a pedido del jugador. Es la
-de CS2: plegada, una columna fina a la derecha con tu cara y los lugares de los amigos; con el
-cursor encima se despliega hacia la izquierda por encima de la pagina, que se oscurece, y
-aparecen los nombres.
+[ioquakelive] The friends list, modelled on CS2's: folded, it is a thin column on the right
+with your own avatar and the friends' slots; with the cursor over it, it unfolds leftwards over
+the page, which darkens, and the names appear.
 
-Quit sigue en la barra, asi que la franja ya no lo lleva.
+Quit stays on the bar, so the strip no longer carries it.
 
-Los amigos son los de Steam (2026-09-20). En retail esta lista era una pagina web -- el boton
-"FRIENDS LIST" de la barra de abajo abre el navegador incrustado, y GetFriendList es un nombre
-del puente con JavaScript, no una funcion del cliente --, asi que no hay nada que calcar: los
-datos los da Steam por API y la forma es nuestra.
+The friends are Steam's. In retail this list was a web page -- the "FRIENDS LIST" button on the
+bottom bar opens the embedded browser, and GetFriendList is a name from the JavaScript bridge,
+not a client function -- so there is nothing to mirror: the data comes from the Steam API and
+the shape is ours.
 
-De cada uno se ve la inicial, un punto con su estado y, con la franja abierta, el nombre y que
-esta haciendo. Van ordenados como los ordena CS2: primero los que estan en un servidor de Quake
-Live, despues los que tienen el juego abierto, despues los conectados y al final los ausentes. Un
-clic entra al servidor del amigo, o abre su perfil de Steam si no esta en ninguno.
+Each one shows an initial, a dot with their state and, with the strip open, their name and what
+they are doing. They are sorted the way CS2 sorts them: first those on a Quake Live server, then
+those with the game running, then those online and finally those away. A click joins the
+friend's server, or opens their Steam profile when they are on none.
 
-Lo que no hay son las caras: Steam las entrega como pixeles crudos y el renderer no tiene por
-donde recibir una imagen armada en memoria, asi que cada uno lleva su inicial.
+What is missing are the avatars: Steam hands them over as raw pixels and the renderer has no way
+to take an image built in memory, so each one carries its initial instead.
 
 ===============================================================================
 */
 #define HV_MAX_FRIENDS 32
 #define HV_FRIEND_ROW (HV_AVATAR + 14.0f)
-#define HV_FRIEND_HEAD 34.0f  // el alto del titulo "Friends", encima de la primera fila
+#define HV_FRIEND_HEAD 34.0f  // the height of the "Friends" title, above the first row
 
-// la lista, releida cada tanto: preguntarsela a Steam en cada cuadro serian cientos
-// de llamadas por nada, porque un amigo no cambia de estado tan seguido
+// the list, re-read every so often: asking Steam for it every frame would be hundreds of
+// calls for nothing, since a friend does not change state that often
 static struct {
     uiFriend_t list[HV_MAX_FRIENDS];
-    int index[HV_MAX_FRIENDS];  // su lugar en la lista de Steam, que es por donde se actua
-    int count;                  // cuantos entraron en la lista
-    int online;                 // cuantos hay conectados en total
+    int index[HV_MAX_FRIENDS];  // their place in Steam's list, which is what actions go by
+    int count;                  // how many made it into the list
+    int online;                 // how many are online in total
     int updated;
 } hvf;
 
-// el orden de CS2: primero a quien se puede entrar, ultimo quien no esta mirando
+// CS2's order: first whoever can be joined, last whoever is not looking
 static int UI_Home_FriendRank(const uiFriend_t* f) {
     if (f->server) {
         return 0;
@@ -978,36 +975,36 @@ static void UI_Home_FriendRefresh(void) {
 
     total = trap_SteamFriendCount();
     for (i = 0; i < total; i++) {
-        uiFriend_t amigo;
+        uiFriend_t fr;
         int rank;
         int j;
 
-        if (!trap_SteamFriendGet(i, &amigo) || amigo.state == 0) {
-            continue;  // los desconectados no se muestran, igual que en la consola
+        if (!trap_SteamFriendGet(i, &fr) || fr.state == 0) {
+            continue;  // offline friends are not shown, same as on the console
         }
         hvf.online++;
 
-        rank = UI_Home_FriendRank(&amigo);
+        rank = UI_Home_FriendRank(&fr);
         if (hvf.count == HV_MAX_FRIENDS) {
-            // lleno: solo entra si desplaza a uno que importa menos
+            // full: it only gets in by displacing one that matters less
             if (rank >= UI_Home_FriendRank(&hvf.list[hvf.count - 1])) {
                 continue;
             }
             hvf.count--;
         }
 
-        // insercion ordenada: la lista es corta y asi no hace falta ordenarla despues
+        // sorted insert: the list is short, so it needs no sorting afterwards
         for (j = hvf.count; j > 0 && UI_Home_FriendRank(&hvf.list[j - 1]) > rank; j--) {
             hvf.list[j] = hvf.list[j - 1];
             hvf.index[j] = hvf.index[j - 1];
         }
-        hvf.list[j] = amigo;
+        hvf.list[j] = fr;
         hvf.index[j] = i;
         hvf.count++;
     }
 }
 
-// que esta haciendo, en las palabras de Steam
+// what they are doing, in Steam's own words
 static const char* UI_Home_FriendDoing(const uiFriend_t* f) {
     if (f->server) {
         return "In a match";
@@ -1051,9 +1048,9 @@ static const float* UI_Home_FriendDot(const uiFriend_t* f) {
 ===============
 UI_Home_FriendInitial
 
-La inicial del nombre, que es lo que lleva el cuadro donde iria la cara. Un nombre
-de Steam puede empezar por una letra de mas de un byte, asi que se copia el
-caracter entero y no su primer byte, que solo dibujaria basura.
+The name's initial, which is what goes in the box where the avatar would be. A Steam
+name can start with a letter of more than one byte, so the whole character is copied
+and not just its first byte, which would draw garbage.
 ===============
 */
 static void UI_Home_FriendInitial(const char* name, char* out, int size) {
@@ -1085,9 +1082,9 @@ static void UI_Home_FriendInitial(const char* name, char* out, int size) {
 ===============
 UI_Home_DrawFriendRows
 
-Una fila por amigo: el cuadro con su inicial y el punto de su estado, que es lo
-unico que se ve con la franja plegada, y al abrirla su nombre, que esta haciendo y
-lo que pasa si se lo toca.
+One row per friend: the box with their initial and the dot with their state, which is
+all that shows while the strip is folded, and on opening it their name, what they are
+doing and what a click would do.
 ===============
 */
 static void UI_Home_DrawFriendRows(float x, float y, float w, float icon, float textX, float open, float bottom) {
@@ -1101,7 +1098,7 @@ static void UI_Home_DrawFriendRows(float x, float y, float w, float icon, float 
         const uiFriend_t* f = &hvf.list[i];
         float ry = y + i * HV_FRIEND_ROW;
         qboolean over = SM_Over(HM_HIT_FRIEND, hvf.index[i]);
-        char inicial[8];
+        char initial[8];
         vec4_t c;
 
         SM_Hit(x, ry - 7.0f, w + 1, HV_FRIEND_ROW, HM_HIT_FRIEND, hvf.index[i], NULL);
@@ -1111,13 +1108,13 @@ static void UI_Home_DrawFriendRows(float x, float y, float w, float icon, float 
             SM_Fill(x + 1, ry - 7.0f, w, HV_FRIEND_ROW, c, NULL);
         }
 
-        // el cuadro con la inicial, donde iria la cara
+        // the box with the initial, where the avatar would go
         SM_Round(icon, ry, HV_AVATAR, HV_AVATAR, SM_RADIUS_SM, over ? smRaisedHover : smRaised, NULL);
-        UI_Home_FriendInitial(f->name, inicial, sizeof(inicial));
+        UI_Home_FriendInitial(f->name, initial, sizeof(initial));
         SM_Centered(icon + HV_AVATAR * 0.5f, SM_Baseline(FONT_SANS, 22.0f, ry + 13.0f, 26.0f), 22.0f,
-                    f->sameGame ? smText : smMuted, inicial, qfalse);
+                    f->sameGame ? smText : smMuted, initial, qfalse);
 
-        // el punto de estado, el mismo que lleva el jugador arriba
+        // the state dot, the same one the player carries above
         SM_Fill(icon + HV_AVATAR - 11, ry + HV_AVATAR - 11, 11, 11, smPage, NULL);
         SM_Fill(icon + HV_AVATAR - 9, ry + HV_AVATAR - 9, 9, 9, UI_Home_FriendDot(f), NULL);
 
@@ -1134,19 +1131,19 @@ static void UI_Home_DrawFriendRows(float x, float y, float w, float icon, float 
         SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, ry + 26.0f, 20.0f), FONT_SANS, HV_TEXT, c,
                 UI_Home_FriendDoing(f), -1, qfalse);
 
-        // lo que hace el clic, solo cuando el cursor esta encima: asi la columna se lee
-        // limpia y la accion aparece donde se la va a usar
+        // what the click does, shown only under the cursor: the column reads clean and the
+        // action appears where it is about to be used
         if (over) {
-            const char* que = f->server ? "JOIN" : "PROFILE";
-            float qw = SM_LabelWidth(11.0f, que, 1.6f);
+            const char* label = f->server ? "JOIN" : "PROFILE";
+            float qw = SM_LabelWidth(11.0f, label, 1.6f);
 
             VectorCopy(f->server ? smGold : smMuted, c);
             c[3] = open;
-            SM_Label(x + w - 16.0f - qw, SM_Baseline(FONT_SANS, 11.0f, ry + 20.0f, 14.0f), 11.0f, c, que, 1.6f);
+            SM_Label(x + w - 16.0f - qw, SM_Baseline(FONT_SANS, 11.0f, ry + 20.0f, 14.0f), 11.0f, c, label, 1.6f);
         }
     }
 
-    // los que no entraron en la columna
+    // the ones that did not fit in the column
     if (max < hvf.count && open > 0.05f) {
         vec4_t c;
 
@@ -1161,10 +1158,10 @@ static void UI_Home_DrawFriendRows(float x, float y, float w, float icon, float 
 ===============
 UI_Home_DrawSocial
 
-[ioquakelive] La franja social, como la de CS2: plegada es una columna fina con tu cara arriba,
-los lugares de los amigos y la salida abajo; cuando el cursor entra se despliega hacia la
-izquierda por encima de la pagina, que se oscurece, y aparecen los textos. Las caras viajan
-con el borde; los textos aparecen detras.
+[ioquakelive] The social strip, like CS2's: folded it is a thin column with your avatar on top,
+the friends' slots and the exit below; when the cursor enters it unfolds leftwards over the
+page, which darkens, and the text appears. The avatars travel with the edge; the text fades in
+behind them.
 ===============
 */
 static void UI_Home_DrawSocial(float dt) {
@@ -1182,7 +1179,7 @@ static void UI_Home_DrawSocial(float dt) {
     qboolean inside;
     vec4_t c;
 
-    // se abre mientras el cursor este sobre la franja, con el ancho que tenga en ese momento
+    // it stays open while the cursor is over the strip, at whatever width it has at that moment
     w = HV_SOCIAL_W + (HV_SOCIAL_OPEN_W - HV_SOCIAL_W) * UI_Home_Smooth(hv.social);
     inside = smMX >= smVW - w && smMY >= top && smMY <= bottom;
     hv.social = UI_Home_Ease(hv.social, inside ? 1.0f : 0.0f, dt);
@@ -1192,7 +1189,7 @@ static void UI_Home_DrawSocial(float dt) {
     icon = x + (HV_SOCIAL_W - HV_AVATAR) * 0.5f;
     textX = x + HV_SOCIAL_W;
 
-    // la pagina se oscurece mientras la franja esta abierta
+    // the page darkens while the strip is open
     if (open > 0.01f) {
         c[0] = c[1] = c[2] = 0.0f;
         c[3] = 0.55f * open;
@@ -1203,7 +1200,7 @@ static void UI_Home_DrawSocial(float dt) {
     SM_Fill(x, top, 1, bottom - top, smBorder, NULL);
     SM_Hit(x, top, w + 1, bottom - top + 1, HM_HIT_SOCIAL, 0, NULL);
 
-    // arriba, en la linea de las secciones: tu cara y, al abrir, tu nombre
+    // at the top, on the sections' line: your avatar and, once open, your name
     trap_Cvar_VariableStringBuffer("name", name, sizeof(name));
     Q_CleanStr(name);
     trap_Cvar_VariableStringBuffer("model", model, sizeof(model));
@@ -1237,19 +1234,19 @@ static void UI_Home_DrawSocial(float dt) {
     y = top + HV_BAR_H + 12.0f;
     UI_Home_FriendRefresh();
 
-    // el encabezado: cuantos hay conectados, a la derecha del titulo
+    // the header: how many are online, to the right of the title
     if (open > 0.05f) {
         VectorCopy(smMuted, c);
         c[3] = open;
         SM_Label(textX, SM_Baseline(FONT_SANS, HV_TEXT, y, 20), HV_TEXT, c, "Friends", 2.0f);
         if (hvf.online > 0) {
-            char cuantos[32];
+            char text[32];
 
-            Com_sprintf(cuantos, sizeof(cuantos), "%i online", hvf.online);
+            Com_sprintf(text, sizeof(text), "%i online", hvf.online);
             VectorCopy(smSubtle, c);
             c[3] = open;
-            SM_Text(x + w - 16.0f - SM_Advance(FONT_SANS, HV_TEXT, cuantos, -1),
-                    SM_Baseline(FONT_SANS, HV_TEXT, y, 20), FONT_SANS, HV_TEXT, c, cuantos, -1, qfalse);
+            SM_Text(x + w - 16.0f - SM_Advance(FONT_SANS, HV_TEXT, text, -1),
+                    SM_Baseline(FONT_SANS, HV_TEXT, y, 20), FONT_SANS, HV_TEXT, c, text, -1, qfalse);
         }
     }
 
@@ -1270,8 +1267,8 @@ static void UI_Home_DrawSocial(float dt) {
 ===============
 UI_Home_FriendClick
 
-Un clic sobre un amigo: si esta en un servidor de Quake Live se entra ahi, y si no
-se abre su perfil de Steam, que es lo unico que se puede hacer con el.
+A click on a friend: if they are on a Quake Live server it joins there, and if not it
+opens their Steam profile, which is all that can be done with them.
 ===============
 */
 static void UI_Home_FriendClick(int index) {
@@ -1301,7 +1298,7 @@ void UI_Home_Paint(void) {
     SM_BeginFrame();
     UI_Home_LoadMenu();
 
-    // el tiempo del cuadro, para las animaciones; acotado para que una pausa no las haga saltar
+    // the frame's time, for the animations; clamped so that a stall does not make them jump
     {
         int now = uiInfo.uiDC.realTime;
         float dt = hv.lastTime ? (float)(now - hv.lastTime) : 0.0f;
@@ -1338,7 +1335,7 @@ qboolean UI_Home_HandleKey(int key) {
         return qtrue;
     }
     hit = SM_HitAt(smMX, smMY);
-    // [ioquakelive] la fila de mapas, la barra y la salida del menu principal
+    // [ioquakelive] the map row, the bar and the main menu's exit
     if (hit && hit->type == HM_HIT_QUIT) {
         UI_Home_Go(HM_NAV_QUIT);
         return qtrue;

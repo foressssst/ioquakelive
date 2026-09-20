@@ -138,7 +138,7 @@ Shared by CA, RR, DOM gametypes.
 ==================
 */
 void STAT_AddPlayerMedalStat(gentity_t *ent, const char *medal) {
-    // [ioquakelive] 0x100716a0: sale como evento PLAYER_MEDAL por el canal de estadisticas
+    // [ioquakelive] 0x100716a0: goes out as a PLAYER_MEDAL event on the stats channel
     if (ent && ent->client && medal) {
         STAT_PlayerMedal(ent, medal, STAT_MedalTotal(ent, medal));
     }
@@ -183,14 +183,14 @@ void STAT_AddPlayerDeathStat(gentity_t *self, gentity_t *attacker, int mod) {
     int weapon;
     int victimStreak;
 
-    // [QL] 0x10072716: retail corta por level.teamShuffleActive (0x105df558), la bandera que
-    // levanta el shuffle y el balance mientras mueve gente de equipo. El fork miraba
-    // level.scoringDisabled, que es otra cosa (las rondas de red rover).
+    // [QL] 0x10072716: retail gates on level.teamShuffleActive (0x105df558), the flag the
+    // shuffle and the balance raise while moving people between teams. This looked at
+    // level.scoringDisabled, which is a different thing (the Red Rover rounds).
     if (level.teamShuffleActive) {
         return;
     }
 
-    // [QL] 0x100726e0 lo publica con la racha que traia el muerto, antes de cortarla
+    // [QL] 0x100726e0 publishes it with the streak the victim was on, before cutting it
     victimStreak = self->client->expandedStats.killStreak;
 
     // killer side
@@ -216,7 +216,7 @@ void STAT_AddPlayerDeathStat(gentity_t *self, gentity_t *attacker, int mod) {
     }
     self->client->expandedStats.killStreak = 0;
 
-    // [QL] 0x100726e0: el evento PLAYER_KILL / PLAYER_DEATH por el canal de estadisticas
+    // [QL] 0x100726e0: the PLAYER_KILL / PLAYER_DEATH event on the stats channel
     STAT_PlayerKill(self, attacker, mod, victimStreak);
 }
 

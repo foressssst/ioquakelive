@@ -27,7 +27,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #endif
 
 #ifdef _WIN32
-// [ioquakelive] para leer el mouse en lote hace falta el HWND de la ventana
+// [ioquakelive] reading the mouse in batches needs the window's HWND
 #ifdef USE_LOCAL_HEADERS
 #include "SDL_syswm.h"
 #else
@@ -60,7 +60,7 @@ static int in_rateWanted, in_rateFrames, in_rateEvents, in_rateMouse, in_rateMax
 static qboolean mouseActive = qfalse;
 
 static cvar_t* in_mouse = NULL;
-// [ioquakelive] la lectura del mouse en lote; apagada hasta verificarla en una maquina real
+// [ioquakelive] the batched mouse read; off until it is verified on real hardware
 static cvar_t* in_rawBatch = NULL;
 static cvar_t* in_mouseMode = NULL;
 static cvar_t* in_nograb;
@@ -477,27 +477,27 @@ static void IN_GobbleMotionEvents(void) {
 /*
 ===============================================================================
 
-EL MOUSE, LEIDO EN LOTE   (in_mouse 2, Windows)
+THE MOUSE, READ IN BATCHES   (in_mouse 2, Windows)
 
-[ioquakelive] SDL2 atiende el raw input de a un evento: por cada movimiento llama a
-GetRawInputData, que toma un lock, y a 8000 Hz son ocho llamadas por milisegundo. La lectura en
-lote -- GetRawInputBuffer -- entro en SDL 3, no en el SDL 2 que usa este motor; y el motor de
-retail tampoco la tiene, importa GetRawInputData.
+[ioquakelive] SDL2 services raw input one event at a time: for every movement it calls
+GetRawInputData, which takes a lock, and at 8000 Hz that is eight calls per millisecond. The
+batched read -- GetRawInputBuffer -- arrived in SDL 3, not in the SDL 2 this engine uses; and
+the retail engine does not have it either, it imports GetRawInputData.
 
-Aqui el dispositivo se registra contra nuestra ventana, se apaga el modo relativo de SDL -- sin
-el, SDL ni mira los WM_INPUT, es su propia condicion de entrada, asi que ese costo desaparece --
-y una vez por frame se vacia la cola entera sumando el movimiento, que se encola como un solo
-evento. Los botones y la rueda siguen llegando por SDL, que ahi no cuesta nada.
+Here the device is registered against our own window, SDL's relative mode is turned off --
+without it SDL does not even look at WM_INPUT, that being its own entry condition, so that cost
+disappears -- and once per frame the whole queue is drained, summing the movement, which is
+queued as a single event. Buttons and wheel still arrive through SDL, where they cost nothing.
 
-Importa leer ANTES de que SDL bombee los mensajes: cuando un WM_INPUT llega a DefWindowProc el
-sistema libera su dato y ya no aparece en el lote.
+Reading BEFORE SDL pumps the messages matters: once a WM_INPUT reaches DefWindowProc the system
+frees its data and it no longer shows up in the batch.
 
 ===============================================================================
 */
 
-// NEXTRAWINPUTBLOCK, el macro del sistema, usa QWORD, que no siempre esta declarado y rompe la
-// compilacion en x64. El paso es el mismo: el bloque siguiente, alineado al tamaño de un puntero
-// (4 en 32 bits, 8 en 64).
+// NEXTRAWINPUTBLOCK, the system macro, uses QWORD, which is not always declared and breaks the
+// x64 build. The step is the same: the next block, aligned to a pointer's size (4 on 32 bits,
+// 8 on 64).
 #define IOQL_RAWINPUT_ALIGN(x) (((x) + sizeof(void*) - 1) & ~(ULONG_PTR)(sizeof(void*) - 1))
 #define IOQL_NEXT_RAWINPUT(p) ((PRAWINPUT)IOQL_RAWINPUT_ALIGN((ULONG_PTR)((PBYTE)(p) + (p)->header.dwSize)))
 
@@ -507,7 +507,7 @@ static UINT rawMouseBufferSize;
 static int rawMouseLastAbsX, rawMouseLastAbsY;
 static qboolean rawMouseHasAbs;
 static qboolean rawMouseAnnounced;
-// [ioquakelive] la red de seguridad: cuantos eventos entrego el lote y cuantos vio SDL
+// [ioquakelive] the safety net: how many events the batch delivered and how many SDL saw
 static int rawMouseSeen;
 static int rawMouseSdlMotion;
 
@@ -523,18 +523,18 @@ static qboolean IN_RawMouseStart(void) {
         return qfalse;
     }
     if (!rawMouseBuffer) {
-        // de sobra para lo que entra entre dos frames a 8000 Hz
+        // room to spare for what arrives between two frames at 8000 Hz
         rawMouseBufferSize = sizeof(RAWINPUT) * 512;
         rawMouseBuffer = (BYTE*)Z_Malloc(rawMouseBufferSize);
     }
 
     device.usUsagePage = 0x01;  // generic desktop
     device.usUsage = 0x02;      // mouse
-    device.dwFlags = 0;         // solo con el foco, y sin quitar los mensajes normales
+    device.dwFlags = 0;         // only while focused, and without taking the normal messages away
     device.hwndTarget = info.info.win.window;
 
     if (!RegisterRawInputDevices(&device, 1, sizeof(device))) {
-        Com_DPrintf("RegisterRawInputDevices fallo, se usa el mouse de SDL\n");
+        Com_DPrintf("RegisterRawInputDevices failed, falling back to SDL's mouse\n");
         return qfalse;
     }
     rawMouseHasAbs = qfalse;
@@ -562,7 +562,7 @@ static void IN_RawMouseStop(void) {
     rawMouseOn = qfalse;
 }
 
-// vacia la cola y encola un solo movimiento con la suma de todo lo que llego
+// drains the queue and posts a single movement with the sum of everything that arrived
 static void IN_RawMouseRead(void) {
     int dx = 0, dy = 0;
 
@@ -605,9 +605,9 @@ static void IN_RawMouseRead(void) {
         Com_QueueEvent(in_eventTime, SE_MOUSE, dx, dy, 0, NULL);
     }
 
-    // SDL sigue viendo el puntero del sistema aunque nosotros lo ignoremos. Si el ve movimiento y
-    // el lote no entrego nada, esta via no sirve en esta maquina: se vuelve a la de SDL y se avisa,
-    // para que nadie se quede sin poder mirar.
+    // SDL still sees the system pointer even when we ignore it. If it sees movement and the
+    // batch delivered nothing, this path does not work on this machine: it falls back to SDL's
+    // and says so, so that nobody is left unable to look around.
     if (rawMouseSdlMotion > 30 && rawMouseSeen == 0) {
         Com_Printf("^3Mouse: batched raw input delivered nothing, falling back to SDL\n");
         IN_RawMouseStop();
@@ -621,14 +621,14 @@ static void IN_RawMouseRead(void) {
 ===============
 IN_GrabMouse
 
-[ioquakelive] Tomar el mouse para jugar: por la via en lote si se puede, y si no por el modo
-relativo de SDL, que es lo que habia.
+[ioquakelive] Grabbing the mouse to play: through the batched path when it works, and through
+SDL's relative mode otherwise, which is what was here before.
 ===============
 */
 static void IN_GrabMouse(void) {
 #ifdef _WIN32
-    // [ioquakelive] opcional: en la maquina del jugador la vista no se movia con esta via, y la
-    // red de seguridad no lo detecto (ver el comentario de in_rawBatch en IN_Init)
+    // [ioquakelive] opt in: on real hardware the view did not move through this path, and the
+    // safety net did not catch it (see the in_rawBatch comment in IN_Init)
     if (in_mouse->integer == 2 && in_rawBatch && in_rawBatch->integer && IN_RawMouseStart()) {
         SDL_SetRelativeMouseMode(SDL_FALSE);
         SDL_ShowCursor(SDL_FALSE);
@@ -1236,9 +1236,9 @@ IN_ProcessEvents
 ===============
 IN_InputRate_f
 
-[ioquakelive] /inputrate [n]: mide n frames de entrada y dice la tasa real del mouse, cuantos
-eventos llegan por frame y cuanto cuesta atenderlos. Sirve para saber si un mouse de alta tasa
--- 4000 u 8000 Hz -- le esta costando frames al juego en esta maquina, sin adivinar.
+[ioquakelive] /inputrate [n]: measures n input frames and reports the mouse's real rate, how
+many events arrive per frame and what servicing them costs. It answers whether a high rate
+mouse -- 4000 or 8000 Hz -- is costing this machine frames, without guessing.
 ===============
 */
 
@@ -1286,7 +1286,7 @@ static void IN_ProcessEvents(void) {
         return;
 
     while (SDL_PollEvent(&e)) {
-        // [ioquakelive] para /inputrate: cuantos eventos entran y cuantos son del mouse
+        // [ioquakelive] for /inputrate: how many events come in and how many are the mouse's
         if (in_rateWanted) {
             in_rateEvents++;
 #ifdef _WIN32
@@ -1362,8 +1362,8 @@ static void IN_ProcessEvents(void) {
                 break;
 
             case SDL_MOUSEMOTION:
-                // [ioquakelive] con la via en lote el movimiento ya se leyo del raw input; el de
-                // SDL aqui es el del puntero del sistema, y sumarlo seria contar dos veces
+                // [ioquakelive] on the batched path the movement has already been read from raw
+                // input; SDL's here is the system pointer's, and adding it would count twice
 #ifdef _WIN32
                 if (rawMouseOn) {
                     rawMouseSdlMotion++;
@@ -1422,11 +1422,11 @@ static void IN_ProcessEvents(void) {
                     IN_InitJoystick();
                 break;
 
-            // [ioquakelive] Windows le puede quitar el dispositivo de audio al juego -- al pasar
-            // a otra ventana, al cambiar de salida, o cuando otro programa lo toma en exclusiva.
-            // SDL lo cierra y avisa con esto; el motor no lo escuchaba, asi que el sonido se iba
-            // y no volvia hasta reiniciar. Se vuelve a abrir. El de captura no cuenta: ese lo
-            // maneja la voz por su cuenta.
+            // [ioquakelive] Windows can take the audio device away from the game -- on switching
+            // windows, on an output change, or when another program grabs it exclusively. SDL
+            // closes it and reports it through this event; the engine did not listen, so the
+            // sound went away and did not come back until a restart. It is reopened here. The
+            // capture device does not count: voice handles that one itself.
             case SDL_AUDIODEVICEREMOVED:
                 if (!e.adevice.iscapture) {
                     S_DeviceLost();
@@ -1550,8 +1550,8 @@ void IN_Frame(void) {
     } else
         IN_ActivateMouse(cls.glconfig.isFullscreen);
 
-    // [ioquakelive] /inputrate cronometra lo que cuesta atender la entrada de un frame; sin
-    // medicion pedida esto no hace nada
+    // [ioquakelive] /inputrate times what servicing a frame's input costs; with no measurement
+    // asked for this does nothing
     if (in_rateWanted) {
         int64_t startUs = Sys_Microseconds();
         int before = in_rateEvents;
@@ -1617,11 +1617,11 @@ void IN_Init(void* windowData) {
     // Windows cursor and 0 no mouse; in_mouseMode says which one runs. Here 1 and 2 are SDL's relative
     // mode, which reads raw input, and -1 warps the cursor to the centre like the cursor mode did.
     in_mouse = Cvar_Get("in_mouse", "2", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
-    // [ioquakelive] La lectura del mouse en lote (GetRawInputBuffer), pensada para mouses de
-    // 8000 Hz. En la maquina del jugador la vista no se movia con ella, y la red de seguridad no lo
-    // detecto: comparaba contra el movimiento de SDL, que deja de llegar cuando el cursor
-    // recortado toca el borde de la ventana. Queda apagada hasta verificarla en una maquina real;
-    // in_mouse 2 vuelve a ser el modo relativo de SDL, que es lo que andaba.
+    // [ioquakelive] The batched mouse read (GetRawInputBuffer), meant for 8000 Hz mice. On real
+    // hardware the view did not move with it, and the safety net did not catch that: it compared
+    // against SDL's movement, which stops arriving once the clipped cursor reaches the window's
+    // edge. It stays off until it is verified on real hardware; in_mouse 2 is SDL's relative
+    // mode again, which is what worked.
     in_rawBatch = Cvar_Get("in_rawBatch", "0", CVAR_ARCHIVE | CVAR_LATCH);
     in_mouseMode = Cvar_Get("in_mouseMode", "undefined", CVAR_ROM | CVAR_TEMP | CVAR_USERSAVE);
     in_nograb = Cvar_Get("in_nograb", "0", CVAR_TEMP);
@@ -1631,7 +1631,7 @@ void IN_Init(void* windowData) {
     if (in_mouse->integer == 0) {
         Com_Printf("Mouse control not active.\n");
     } else if (in_mouse->integer == 2) {
-        // [ioquakelive] el raw input se lee en lote aqui mismo en Windows; en las otras
+        // [ioquakelive] raw input is read in batches right here on Windows; on the other
         // plataformas sigue siendo el modo relativo de SDL
         SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "0");
 #ifdef _WIN32

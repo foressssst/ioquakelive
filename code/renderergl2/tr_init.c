@@ -751,8 +751,8 @@ void R_LevelShot(void) {
     float xScale, yScale;
     int xx, yy;
 
-    // [QL] 0x00448550: un TGA de 128x128 en levelshots/. El nombre decia ".jpg" pero lo que
-    // se escribe abajo es un TGA, asi que el archivo salia ilegible.
+    // [QL] 0x00448550: a 128x128 TGA in levelshots/. The name said ".jpg" while what is written
+    // below is a TGA, so the file came out unreadable.
     Com_sprintf(checkname, sizeof(checkname), "levelshots/%s.tga", tr.world->baseName);
 
     // [QL] with the colour correction, read the corrected frame
@@ -1149,7 +1149,7 @@ void GfxInfo_f(void) {
         {
             "disabled",
             "enabled"};
-    // [ioquakelive] 2 es pantalla completa sin bordes, para que el log diga cual de las dos es
+    // [ioquakelive] 2 is borderless fullscreen, so that the log says which of the two it is
     const char* fsstrings[] =
         {
             "windowed",
@@ -1265,8 +1265,8 @@ void R_Register(void) {
     // and 0x80000 (CVAR_USERSAVE) and 0x800 (CVAR_REPLICATE) on most of them
     r_allowExtensions = ri.Cvar_Get("r_allowExtensions", "1", CVAR_ARCHIVE | CVAR_LATCH);
     r_ext_compressed_textures = ri.Cvar_Get("r_ext_compressed_textures", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
-    // [ioquakelive] decodificar las texturas del mapa por adelantado, repartido entre los
-    // hilos trabajadores; 0 vuelve a cargarlas una por una en el hilo principal
+    // [ioquakelive] decode the map's textures ahead of time, spread across the worker threads;
+    // 0 goes back to loading them one by one on the main thread
     r_prefetchTextures = ri.Cvar_Get("r_prefetchTextures", "1", CVAR_ARCHIVE);
     // [QL] only turns off the 3DFX gamma ramp in retail's own GL setup, so it is only registered
     ri.Cvar_Get("r_ext_gamma_control", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
@@ -1423,9 +1423,9 @@ void R_Register(void) {
     r_dynamiclight = ri.Cvar_Get("r_dynamicLight", "1", CVAR_ARCHIVE | CVAR_USERSAVE);
     r_dlightBacks = ri.Cvar_Get("r_dlightBacks", "1", CVAR_ARCHIVE);
     r_finish = ri.Cvar_Get("r_finish", "0", CVAR_ARCHIVE);
-    // [ioquakelive] cuantos frames puede tener la GPU encolados. 0, el default, vacia la tuberia
-    // en cada frame como retail: la menor latencia de entrada. 1 deja uno en vuelo: unos fps mas
-    // (+6% medido) a cambio de hasta un frame de latencia, que un jugador competitivo nota.
+    // [ioquakelive] how many frames the GPU may have queued. 0, the default, drains the pipeline
+    // every frame as retail does: the lowest input latency. 1 leaves one in flight: a few more fps
+    // (+6% measured) in exchange for up to a frame of latency, which a competitive player feels.
     r_maxQueuedFrames = ri.Cvar_Get("r_maxQueuedFrames", "0", CVAR_ARCHIVE);
     r_textureMode = ri.Cvar_Get("r_textureMode", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE | CVAR_USERSAVE);
 #ifdef __EMSCRIPTEN__
@@ -1720,7 +1720,7 @@ Touch all images to make sure they are resident
 =============
 */
 void RE_EndRegistration(void) {
-    R_PrefetchFinish();        // [ioquakelive] suelta lo que sobro y escribe la lista
+    R_PrefetchFinish();        // [ioquakelive] releases what is left over and writes the list
     R_ImageLoadStatsReport();  // [ioquakelive] ver RE_BeginRegistration
     R_IssuePendingRenderCommands();
     if (!ri.Sys_LowPhysicalMemory()) {

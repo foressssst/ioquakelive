@@ -998,8 +998,8 @@ void ClientUserinfoChanged(int clientNum) {
     ent = g_entities + clientNum;
     client = ent->client;
 
-    // [QL] el contador de avalancha sube con cada cambio de userinfo; G_FloodCheck lo
-    // baja solo y echa al que se pase. Es lo que documenta el server.cfg de retail:
+    // [QL] the flood counter goes up with every userinfo change; G_FloodCheck decays it
+    // and kicks whoever goes over. This is what retail's own server.cfg documents:
     // "Kick the player when their userinfo flood counter reaches this level".
     if (client) {
         client->pers.userInfoFloodInfractions++;
@@ -1119,14 +1119,14 @@ void ClientUserinfoChanged(int clientNum) {
     Q_strncpyz(c1, Info_ValueForKey(userinfo, "color1"), sizeof(c1));
     Q_strncpyz(c2, Info_ValueForKey(userinfo, "color2"), sizeof(c2));
 
-    // [QL] 0x1003a7e6: el pais, justo despues del aviso de cambio de nombre. Es una clave mas
-    // del userinfo, no un comando, y sale en el configstring como "c".
+    // [QL] 0x1003a7e6: the country, right after the rename announcement. It is one more
+    // userinfo key, not a command, and goes into the configstring as "c".
     Q_strncpyz(client->pers.country, Info_ValueForKey(userinfo, "country"), sizeof(client->pers.country));
 
     // send over a subset of the userinfo keys so other clients can
     // print scoreboards, display models, and play custom sounds
     // [QL] qagamex86.dll 0x817b8 / 0x81820 add "rp", readied up, which cgame's warmup
-    // messages read, y "c", el pais. NOT PORTED: las claves "p", "so", "pq" y "st".
+    // messages read, and "c", the country. NOT PORTED: the keys "p", "so", "pq" and "st".
     if (ent->r.svFlags & SVF_BOT) {
         s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\skill\\%s\\tt\\%d\\tl\\%d\\rp\\%d\\c\\%s",
                client->pers.netname, client->sess.sessionTeam, model, headModel, c1, c2,
@@ -1176,10 +1176,10 @@ char* ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
 
     trap_GetUserinfo(clientNum, userinfo, sizeof(userinfo));
 
-    // [QL] 0x1003ac76: el baneo se comprueba por Steam ID contra la lista de acceso,
-    // por numero de cliente y no por IP. Antes esto llamaba a G_GetAccessLevel(ip), un
-    // stub que devolvia 0 siempre: la lista de access.txt se cargaba, se guardaba y se
-    // listaba, pero un baneado se conectaba igual.
+    // [QL] 0x1003ac76: a ban is checked by Steam ID against the access list, by client
+    // number and not by IP. This used to call G_GetAccessLevel(ip), a stub that always
+    // returned 0: the access.txt list was loaded, saved and listed, but a banned player
+    // connected all the same.
     value = Info_ValueForKey(userinfo, "ip");
     if (!isBot && G_GetAccess(clientNum) == -1) {
         return "You are banned from this server.";
@@ -1233,9 +1233,9 @@ char* ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
     ClientUserinfoChanged(clientNum);
 
     // [QL] firstTime, non-bot: send privilege level, connected message, init stats
-    // [ioquakelive] El binario condiciona todo este bloque a que no se este entrenando
-    // (0x1003ba4b): en el Crash Course no se manda ni el nivel de privilegio ni el aviso
-    // de conectado, que es de un servidor con gente.
+    // [ioquakelive] The binary gates this whole block on not being in training
+    // (0x1003ba4b): the Crash Course sends neither the privilege level nor the connected
+    // message, which belongs to a server with people on it.
     if (firstTime && !g_isBotOnly.integer && !g_training.integer) {
         // send privilege level to client
         trap_SendServerCommand(clientNum, va("priv %i", client->sess.privileges));
@@ -1255,8 +1255,8 @@ char* ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
             BroadcastTeamChange(client, -1);
         }
 
-        // [QL] 0x1003afb5: el evento sale tambien para los bots (adentro, 0x10078450 mira
-        // svFlags & SVF_BOT solo para poner STEAM_ID "0")
+        // [QL] 0x1003afb5: the event goes out for bots too (inside, 0x10078450 looks at
+        // svFlags & SVF_BOT only to set STEAM_ID "0")
         STAT_SubscribeClient(ent);
     }
 
@@ -2160,7 +2160,7 @@ void STAT_InitClient(gentity_t* ent) {
     client->expandedStats.statId = level.time + r + 636 + (int)(intptr_t)client;   // +0x568
 }
 void STAT_PublishClientDisconnect(gclient_t* client, int reason) {
-    // [QL] 0x1003c812: lo primero de ClientDisconnect es el evento PLAYER_STATS del que se va
+    // [QL] 0x1003c812: the first thing ClientDisconnect does is the leaver's PLAYER_STATS
     STAT_PlayerStats(client, qfalse, (qboolean)(reason != 0));
 }
 void STAT_SubscribeClient(gentity_t* ent) {
@@ -2168,13 +2168,13 @@ void STAT_SubscribeClient(gentity_t* ent) {
     STAT_PlayerConnect(ent);
 }
 void STAT_LogDisconnect(int clientNum) {
-    // [QL] 0x1003cac3: el evento PLAYER_DISCONNECT, despues del log y del forfeit del duelo,
-    // justo antes de desenlazar la entidad
+    // [QL] 0x1003cac3: the PLAYER_DISCONNECT event, after the log and the duel forfeit,
+    // just before unlinking the entity
     STAT_PlayerDisconnect(&g_entities[clientNum]);
 }
 void STAT_MatchEnd(int isShutdown, int restart, const char* exitMsg) {
-    // [QL] 0x100575a7 y 0x100576eb: al cerrar la partida sale la planilla de cada jugador y el
-    // reporte de la partida, una sola vez y nunca en un map_restart
+    // [QL] 0x100575a7 and 0x100576eb: closing the match sends every player's stats sheet and
+    // the match report, once and never on a map_restart
     int i;
 
     if (level.gameStatsReported || trap_Cvar_VariableIntegerValue("g_restarted")) {

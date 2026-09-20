@@ -970,9 +970,9 @@ void trap_Cvar_LatchedVariableStringBuffer(const char* var_name, char* buffer, i
 int trap_R_Font_Register(const char* name);
 void trap_Sys_OpenURL(const char* url);
 
-// [ioquakelive] los amigos de Steam, para la franja social del menu principal. El
-// indice es el de Steam y se lo vuelve a usar para actuar sobre el amigo, asi el
-// modulo nunca tiene que cargar con un Steam ID de 64 bits.
+// [ioquakelive] the Steam friends, for the main menu's social strip. The index is Steam's
+// own and is reused to act on the friend, so the module never has to carry a 64 bit Steam
+// ID around.
 int trap_SteamFriendCount(void);
 qboolean trap_SteamFriendGet(int index, uiFriend_t* out);
 void trap_SteamFriendAction(int index, int action);
@@ -981,9 +981,9 @@ void trap_SteamFriendAction(int index, int action);
 // "startmatch" menu (the number is ours: retail's menudef.h has none for it)
 #define UI_STARTMATCH 600
 void UI_StartMatch_Open(void);
-// [ioquakelive] abre Start Match con un modo ya elegido (los modos destacados del menu principal)
+// [ioquakelive] opens Start Match with a gametype already chosen (the main menu's featured modes)
 void UI_StartMatch_Preselect(const char* factory);
-// [ioquakelive] la lista de servidores del navegador, que la portada tambien muestra
+// [ioquakelive] the browser's server list, which the front page shows as well
 void UI_Home_ServerList(qboolean refresh);
 void UI_StartMatch_Paint(void);
 qboolean UI_StartMatch_HandleKey(int key);

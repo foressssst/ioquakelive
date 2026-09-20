@@ -236,9 +236,9 @@ training warmup. Freeze Tag: thawed/froze. Team games: telefragging a teammate
 is just noted; any other teamkill adds "Watch your fire!". "Teammate" means the
 victim is on the local player's team. Centred at y 90 (144 during a warmup),
 scale 0.3, unless cg_cameraOrbit is on.
-[ioquakelive] The user's format (2026-09-13): every frag but a teamkill or a
-Freeze Tag one reads just "You fragged <name>", on one line with no place or
-score. CG_DrawCenterString lays it out.
+[ioquakelive] A deliberate divergence: every frag but a teamkill or a Freeze Tag one
+reads just "You fragged <name>", on one line with no place or score.
+CG_DrawCenterString lays it out.
 =============
 */
 static void CG_ShowFragMessage(int target, int mod, const char* targetName) {

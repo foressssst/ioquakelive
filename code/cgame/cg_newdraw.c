@@ -2415,9 +2415,9 @@ static void CG_DrawRaceStatus(rectDef_t *rect, float scale, vec4_t color, int te
     // Draws at rect->x, rect->y directly - menu alignment handles positioning
     const char *s;
 
-    // [QL] 0x1002f33a: el hint no depende de si hay carrera, sino de quien mira: se muestra
-    // mientras no seas espectador y no estes viendo una demo. Antes salia solo con la carrera
-    // parada, asi que aparecia y desaparecia al arrancar.
+    // [QL] 0x1002f33a: the hint does not depend on a run being under way but on who is
+    // watching: it shows while you are not a spectator and not watching a demo. Showing it
+    // only with the run stopped made it appear and vanish at the start.
     if (!(cg.snap->ps.eFlags & EF_SPECTATOR) && !cg.demoPlayback) {
         int keynum = trap_Key_GetKey("kill");
         const char *hint;
@@ -2433,8 +2433,8 @@ static void CG_DrawRaceStatus(rectDef_t *rect, float scale, vec4_t color, int te
         CG_DrawText(rect->x + 19.0f, rect->y + 27.0f, 0, 0.18f, hintColor, hint, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
     }
 
-    // [QL] 0x1002f408: siempre hay titulo, y solo hay dos. Antes, sin carrera y sin tiempo
-    // anterior, la funcion se iba sin dibujar nada y el recuadro quedaba vacio.
+    // [QL] 0x1002f408: there is always a title, and there are only two. With no run and no
+    // previous time the function used to return without drawing, leaving the box empty.
     s = cg.race.active ? "CURRENT RUN" : "LAST TIME";
     CG_DrawText(rect->x, rect->y, 0, scale, colorYellow, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);  // [QL] 0x1002f5ae
 }
@@ -2445,9 +2445,9 @@ static void CG_DrawRaceTimes(rectDef_t *rect, float scale, vec4_t color, int tex
     int ms;
     const char *s;
 
-    // [QL] 0x1002f4b8: el reloj se dibuja siempre, corriendo si hay carrera y parado en el
-    // ultimo tiempo si no. Sin carrera y sin tiempo anterior queda en 0:00.000, que es lo que
-    // muestra el binario; antes no se dibujaba nada y parecia que faltaba el reloj.
+    // [QL] 0x1002f4b8: the clock is always drawn, running during a run and stopped at the
+    // last time otherwise. With no run and no previous time it reads 0:00.000, which is what
+    // the binary shows; drawing nothing made it look like the clock was missing.
     if (cg.race.active && cg.race.startTime) {
         ms = cg.time - cg.race.startTime;
     } else {

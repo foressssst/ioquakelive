@@ -296,15 +296,16 @@ void CG_PushReward(sfxHandle_t sfx, qhandle_t shader, int rewardCount) {
 ==================
 CG_HitBeepSound
 
-[QL] cgamex86.dll 0x100435b0, la eleccion del sonido de un golpe. El servidor manda el dano
-del golpe repartido en cuatro escalones en generic1, seis bits mas arriba, y cada escalon
-tiene su sonido: hit0 es el mas flojo, hit3 el mas fuerte.
+[QL] cgamex86.dll 0x100435b0, the choice of sound for a hit. The server sends the hit's damage
+bucketed into four steps in generic1, six bits up, and each step has its own sound: hit0 is the
+weakest, hit3 the strongest.
 
-  cg_hitBeep 1  siempre hit1, sin mirar el dano
-  cg_hitBeep 2  el escalon que toca
-  cg_hitBeep 3  los mismos escalones al reves, o sea el agudo para el golpe flojo
+  cg_hitBeep 1  always hit1, regardless of damage
+  cg_hitBeep 2  the matching step
+  cg_hitBeep 3  the same steps reversed, that is the high one for the weak hit
 
-Ojo con el 1: suena hit1.ogg, no hit.wav. hit.wav es de Quake 3 y el binario no lo toca.
+Watch out for 1: it plays hit1.ogg, not hit.wav. hit.wav is Quake 3's and the binary never
+touches it.
 ==================
 */
 static sfxHandle_t CG_HitBeepSound(const playerState_t* ps) {
@@ -332,19 +333,18 @@ static sfxHandle_t CG_HitBeepSound(const playerState_t* ps) {
 ==================
 CG_CheckHitSounds
 
-[QL] cgamex86.dll 0x100435b0, lo primero que hace CG_CheckLocalSounds. Se llama desde ahi y
-no desde otro lado: es lo que el jugador pidio arreglar, porque antes seguia a WolfcamQL y
-sonaba tarde.
+[QL] cgamex86.dll 0x100435b0, the first thing CG_CheckLocalSounds does. It is called from
+there and from nowhere else; following WolfcamQL instead meant the sound arrived late.
 
-Lo que suena depende de si el golpe mato o no, y eso el servidor lo dice con
-PERS_ATTACKEE_ARMOR, que cuenta los golpes letales:
+What plays depends on whether the hit killed, and the server says so through
+PERS_ATTACKEE_ARMOR, which counts lethal hits:
 
-  golpe letal, con cg_killBeep puesto  el kill beep, a su propio volumen, EN VEZ del hit
-  cualquier otro golpe                 el hit beep que elija cg_hitBeep
-  el contador de golpes BAJA           le pegaste a un companero: hit_teammate
+  lethal hit, with cg_killBeep set   the kill beep, at its own volume, INSTEAD of the hit
+  any other hit                      the hit beep cg_hitBeep selects
+  the hit counter goes DOWN          you hit a teammate: hit_teammate
 
-Que el kill beep reemplace al hit y no se sume es de retail; WolfcamQL los encima, tocandolo
-desde el obituario.
+The kill beep replacing the hit rather than stacking with it is retail's behaviour; WolfcamQL
+overlaps them, triggering from the obituary.
 ==================
 */
 static void CG_CheckHitSounds(const playerState_t* ps, const playerState_t* ops) {
@@ -366,8 +366,8 @@ static void CG_CheckHitSounds(const playerState_t* ps, const playerState_t* ops)
 CG_CheckLocalSounds
 
 [QL] cgamex86.dll 0x100435b0. Nothing plays on the snapshot the spawn count changes, which a
-team change also does. Lo primero que suena es el golpe (CG_CheckHitSounds), que es donde el
-binario lo tiene.
+team change also does. The hit sound comes first (CG_CheckHitSounds), which is where the
+binary has it.
 
 Then come the medals, the player event voices and the flag pickup, which stop once the
 intermission has started, then the lead changes and the time and frag limit warnings, which

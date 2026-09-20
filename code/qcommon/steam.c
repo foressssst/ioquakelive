@@ -53,9 +53,9 @@ everything here turns into a no-op and the game runs exactly as before.
 
 typedef unsigned char steamBool_t;
 
-// Los callbacks de la lista de servidores son metodos virtuales de C++: en Windows la
-// convencion es __thiscall (el objeto en ecx), que se imita con __fastcall y un parametro de
-// relleno para edx; en el ABI de Linux el objeto es el primer argumento normal.
+// The server list callbacks are C++ virtual methods: on Windows the convention is __thiscall
+// (the object in ecx), imitated here with __fastcall and a filler parameter for edx; in the
+// Linux ABI the object is just the first argument.
 #ifdef _WIN32
 #define STEAM_CB __fastcall
 #define STEAM_CB_SELF void* self, void* unusedEdx
@@ -70,7 +70,7 @@ typedef struct {
     char value[256];
 } steamKeyValue_t;
 
-// gameserveritem_t, con los offsets que usa el binario de retail (0x00462a50)
+// gameserveritem_t, with the offsets the retail binary uses (0x00462a50)
 #pragma pack(push, 1)
 typedef struct {
     unsigned short connectionPort;   //   0
@@ -100,7 +100,7 @@ typedef struct {
 
 #define STEAM_MAX_SERVERS 2048
 
-// lo que guardamos de cada servidor que contesta
+// what is kept from each server that answers
 typedef struct {
     unsigned int ip;
     unsigned short port;
@@ -117,7 +117,7 @@ typedef struct {
     char tags[128];
 } steamServer_t;
 
-// el objeto que Steam ve como ISteamMatchmakingServerListResponse
+// the object Steam sees as ISteamMatchmakingServerListResponse
 typedef struct {
     void** vtable;
 } steamListResponse_t;
@@ -128,14 +128,13 @@ static void Steam_P2PListen(qboolean asServer);
 static void Steam_AuthListen(void);
 
 /*
-Una devolucion de llamada de Steam vista desde C. En el SDK es una clase con
-tres funciones virtuales, y el binario de retail deja ver como las ordena el
-compilador: en 0x00532f1c estan Run(dato, fallo, llamada) primero, Run(dato)
-segunda y GetCallbackSizeBytes() tercera -- al reves de como se declaran, que
-es lo que hace MSVC con las sobrecargas.
+A Steam callback seen from C. In the SDK it is a class with three virtual functions,
+and the retail binary shows how the compiler ordered them: at 0x00532f1c comes
+Run(data, failed, call) first, Run(data) second and GetCallbackSizeBytes() third --
+the reverse of how they are declared, which is what MSVC does with overloads.
 
-Los campos son los de CCallbackBase: la tabla, las banderas (0x02 dice que la
-devolucion es del servidor y no del cliente) y el numero de la devolucion.
+The fields are CCallbackBase's: the table, the flags (0x02 says the callback is the
+server's and not the client's) and the callback number.
 */
 typedef struct {
     void** vtable;
@@ -206,7 +205,7 @@ typedef struct {
     unsigned int(QDECL* GetSubscribedItems)(void* self, uint64_t* items, unsigned int max);
     uint64_t(QDECL* GetSteamID)(void* self);
 
-    // la voz y la red entre pares
+    // voice and the peer to peer network
     void*(QDECL* Networking)(void);
     void*(QDECL* GameServerNetworking)(void);
     void*(QDECL* User)(void);
@@ -228,7 +227,7 @@ typedef struct {
     unsigned int(QDECL* GetVoiceOptimalSampleRate)(void* self);
     uint64_t(QDECL* GetUserSteamID)(void* self);
 
-    // quien es cada uno: el cliente pide un ticket firmado y el servidor lo valida
+    // who each player is: the client asks for a signed ticket and the server validates it
     unsigned int(QDECL* GetAuthSessionTicket)(void* self, void* ticket, int maxTicket, unsigned int* written);
     void(QDECL* CancelAuthTicket)(void* self, unsigned int ticket);
     int(QDECL* BeginAuthSession)(void* self, const void* ticket, int len, uint64_t steamId);
@@ -250,13 +249,13 @@ typedef struct {
     void* user;                  // ISteamUser *
     void* friends;               // ISteamFriends *
     qboolean voiceRecording;
-    steamCallback_t p2pClient;   // la sesion que pide el servidor
-    steamCallback_t p2pServer;   // la sesion que pide cada jugador
-    unsigned int authTicket;       // el ticket que pidio este cliente, para cancelarlo
-    steamCallback_t authResponse;  // lo que Steam dice del ticket de otro
+    steamCallback_t p2pClient;   // the session the server asks for
+    steamCallback_t p2pServer;   // the session each player asks for
+    unsigned int authTicket;       // the ticket this client asked for, so it can be cancelled
+    steamCallback_t authResponse;  // what Steam says about somebody else's ticket
 
     void* ugc;           // ISteamUGC *
-    uint64_t downloading;  // el item que se esta esperando, o 0
+    uint64_t downloading;  // the item being waited on, or 0
 
     void* matchmaking;   // ISteamMatchmakingServers *
     void* listRequest;   // HServerListRequest
@@ -325,8 +324,8 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND(HandleIncomingPacket, "SteamAPI_ISteamGameServer_HandleIncomingPacket");
     STEAM_BIND(GetNextOutgoingPacket, "SteamAPI_ISteamGameServer_GetNextOutgoingPacket");
 
-    // Lo del navegador de servidores es opcional a proposito: si esta biblioteca no lo trae,
-    // el resto (el master, las estadisticas, la voz) sigue funcionando igual.
+    // The server browser part is optional on purpose: if this library does not carry it, the
+    // rest -- the master, the stats, the voice -- keeps working.
     STEAM_BIND_OPT(SetGameTags, "SteamAPI_ISteamGameServer_SetGameTags");
     STEAM_BIND_OPT(Matchmaking, "SteamMatchmakingServers");
     STEAM_BIND_OPT(UGC, "SteamUGC");
@@ -397,9 +396,9 @@ static qboolean Steam_Load(void) {
         return qtrue;
     }
 
-    // Retail lo lanza Steam, que le pasa el App ID por el entorno; a nosotros nos lanza el
-    // launcher, asi que se lo decimos nosotros. Sin esto la API no sabe de que juego se trata y
-    // tanto SteamAPI_Init como SteamGameServer_Init fallan.
+    // Retail is launched by Steam, which passes the App ID through the environment; this is
+    // launched on its own, so it says so itself. Without it the API does not know which game
+    // this is and both SteamAPI_Init and SteamGameServer_Init fail.
 #ifdef _WIN32
     SetEnvironmentVariableA("SteamAppId", STEAM_APP_ID);
     SetEnvironmentVariableA("SteamGameId", STEAM_APP_ID);
@@ -446,35 +445,35 @@ when com_build is set, which is how a build with no Steam behind it runs.
 ===============
 Steam_Status_f
 
-[ioquakelive] Diagnostico propio, no de retail: dice si la biblioteca cargo, si el cliente y el
-servidor arrancaron, si la sesion con Steam esta iniciada, si VAC esta activo y con que IP
-publica quedo registrado el servidor.
+[ioquakelive] A diagnostic of our own, not retail's: it says whether the library loaded,
+whether the client and the server came up, whether the Steam session is logged on, whether VAC
+is active and which public IP the server registered with.
 ===============
 */
 static void Steam_Status_f(void) {
     unsigned int ip;
 
-    Com_Printf("biblioteca:  %s\n", st.lib ? "cargada" : "no");
-    Com_Printf("cliente:     %s\n", st.clientUp ? "iniciado" : "no");
-    Com_Printf("servidor:    %s\n", st.serverUp ? "iniciado" : "no");
+    Com_Printf("library:     %s\n", st.lib ? "loaded" : "no");
+    Com_Printf("client:      %s\n", st.clientUp ? "up" : "no");
+    Com_Printf("server:      %s\n", st.serverUp ? "up" : "no");
 
-    // la identidad: el ticket que este cliente mandaria en su getchallenge y, si este
-    // proceso ademas tiene servidor, lo que Steam dice de ese ticket. Es la unica forma
-    // de ver la cadena entera sin dos maquinas.
+    // identity: the ticket this client would send in its getchallenge and, if this process
+    // also runs a server, what Steam says about that ticket. It is the only way to see the
+    // whole chain without two machines.
     if (st.clientUp) {
         static byte ticket[512];
         int len = Steam_AuthTicket(ticket, sizeof(ticket));
 
         if (len <= 0) {
-            Com_Printf("ticket:      no lo dio Steam\n");
+            Com_Printf("ticket:      Steam gave none\n");
         } else {
             Com_Printf("ticket:      %i bytes\n", len);
             if (st.serverUp) {
-                uint64_t yo = Steam_ClientSteamID();
-                int r = Steam_GS_BeginAuth(yo, ticket, len);
+                uint64_t me = Steam_ClientSteamID();
+                int r = Steam_GS_BeginAuth(me, ticket, len);
 
-                Com_Printf("BeginAuth:   %i (%s)\n", r, r == STEAM_AUTH_BEGIN_OK ? "aceptado" : "rechazado");
-                Steam_GS_EndAuth(yo);
+                Com_Printf("BeginAuth:   %i (%s)\n", r, r == STEAM_AUTH_BEGIN_OK ? "accepted" : "refused");
+                Steam_GS_EndAuth(me);
             }
         }
     }
@@ -482,10 +481,10 @@ static void Steam_Status_f(void) {
     if (!st.serverUp) {
         return;
     }
-    Com_Printf("sesion:      %s\n", st.BLoggedOn(st.gameServer) ? "iniciada en Steam" : "sin iniciar");
-    Com_Printf("VAC:         %s\n", st.BSecure(st.gameServer) ? "si" : "no");
+    Com_Printf("session:     %s\n", st.BLoggedOn(st.gameServer) ? "logged on to Steam" : "not logged on");
+    Com_Printf("VAC:         %s\n", st.BSecure(st.gameServer) ? "yes" : "no");
     ip = st.GetPublicIP(st.gameServer);
-    Com_Printf("IP publica:  %u.%u.%u.%u\n", (ip >> 24) & 0xff, (ip >> 16) & 0xff, (ip >> 8) & 0xff,
+    Com_Printf("public IP:   %u.%u.%u.%u\n", (ip >> 24) & 0xff, (ip >> 16) & 0xff, (ip >> 8) & 0xff,
                ip & 0xff);
 }
 
@@ -502,13 +501,13 @@ void Steam_Init(void) {
     }
     st.clientUp = qtrue;
     if (st.Matchmaking) {
-        st.matchmaking = st.Matchmaking();  // la interfaz de la lista de servidores
+        st.matchmaking = st.Matchmaking();  // the server list interface
     }
     if (st.UGC) {
-        st.ugc = st.UGC();  // la del Workshop, de donde salen los mapas
+        st.ugc = st.UGC();  // the Workshop's, where the maps come from
     }
     if (st.Networking) {
-        st.networking = st.Networking();  // la red entre pares, por donde va la voz
+        st.networking = st.Networking();  // the peer to peer network, which voice travels over
     }
     if (st.User) {
         st.user = st.User();
@@ -517,8 +516,8 @@ void Steam_Init(void) {
         st.friends = st.Friends();
     }
     Steam_P2PListen(qfalse);
-    // [QL] 0x00461565: "+voice" y "-voice" se registran del lado del cliente, que es el que
-    // ademas tiene que avisarle al cgame que uno esta hablando
+    // [QL] 0x00461565: "+voice" and "-voice" are registered on the client side, which is also
+    // the side that has to tell the cgame somebody is talking
     Steam_SetRichPresence("At the main menu");    // [QL] 0x00461556
     Cmd_AddCommand("steam_downloadugc", Steam_DownloadUGC_f);
     Cmd_AddCommand("steamservers", Steam_ServerList_f);
@@ -547,7 +546,7 @@ void Steam_GS_Init(void) {
         return;
     }
 
-    sv_vac = Cvar_Get("sv_vac", "1", CVAR_INIT);  // [QL] asi lo registra retail
+    sv_vac = Cvar_Get("sv_vac", "1", CVAR_INIT);  // [QL] retail registers it like this
     sv_setSteamAccount = Cvar_Get("sv_setSteamAccount", "", CVAR_ARCHIVE);
 
     // retail reads net_ip and net_port here and hands Steam the address it binds
@@ -574,12 +573,12 @@ void Steam_GS_Init(void) {
     }
     st.serverUp = qtrue;
     if (st.GameServerNetworking) {
-        st.gameServerNetworking = st.GameServerNetworking();  // por donde reparte la voz
+        st.gameServerNetworking = st.GameServerNetworking();  // what it hands the voice out over
         Steam_P2PListen(qtrue);
     }
-    Steam_AuthListen();  // lo que Steam diga de cada ticket
+    Steam_AuthListen();  // whatever Steam says about each ticket
     if (!st.clientUp) {
-        Cmd_AddCommand("steamstatus", Steam_Status_f);  // el cliente ya lo agrego si arranco
+        Cmd_AddCommand("steamstatus", Steam_Status_f);  // the client added it already if it came up
     }
 
     st.SetDedicatedServer(st.gameServer, (steamBool_t)(Cvar_VariableIntegerValue("dedicated") > 0));
@@ -594,8 +593,9 @@ void Steam_GS_Init(void) {
     st.SetProduct(st.gameServer, STEAM_PRODUCT);
     st.SetModDir(st.gameServer, STEAM_MOD_DIR);
     st.SetGameDescription(st.gameServer, STEAM_PRODUCT);
-    // [QL] sv_master decide si el servidor contesta consultas y aparece en la lista. El
-    // server.cfg de retail lo explica: apagarlo lo saca del navegador, tambien del de LAN.
+    // [QL] sv_master decides whether the server answers queries and shows up in the list.
+    // Retail's server.cfg spells it out: turning it off takes the server out of the browser,
+    // the LAN one included.
     st.EnableHeartbeats(st.gameServer,
                         (steamBool_t)(Cvar_VariableIntegerValue("sv_master") != 0));
     Com_Printf("Steam Gameserver initialized.\n");
@@ -721,33 +721,33 @@ void Steam_Shutdown(void) {
 
 LA LISTA DE SERVIDORES
 
-Quake Live no tiene master propio ni protocolo de navegador: el cliente le pide
-la lista a Steam. En el binario de retail estan las dos mitades.
+Quake Live has no master of its own and no browser protocol: the client asks Steam
+for the list. Both halves are in the retail binary.
 
-El servidor publica lo suyo (0x00466260): la descripcion del juego es el nombre
-largo del tipo de juego ("Free For All", "Clan Arena", ...) y las etiquetas son
-el nombre corto mas una palabra por cada regla que no es la de siempre:
+The server publishes its side (0x00466260): the game description is the gametype's
+long name ("Free For All", "Clan Arena", ...) and the tags are the short name plus one
+word per rule that is not the usual one:
 
-    <corto>,[cheats,][instagib,][lowgrav,|highgrav,][vampiric,][infected,]
+    <short>,[cheats,][instagib,][lowgrav,|highgrav,][vampiric,][infected,]
     [quadhog,][sv_tags]
 
-El cliente pide la lista (0x00462eb0) con un solo filtro, "gamedir" = "baseq3",
-segun de donde la quiera: internet, LAN, amigos, favoritos o historial. Cada
-servidor que contesta se arma (0x00462a50) con lo que Steam devuelve en
-gameserveritem_t: nombre, mapa, jugadores, bots, ping, contraseña, VAC, las
-etiquetas y la descripcion.
+The client asks for the list (0x00462eb0) with a single filter, "gamedir" = "baseq3",
+according to where it wants it from: internet, LAN, friends, favourites or history.
+Each server that answers is built (0x00462a50) from what Steam returns in
+gameserveritem_t: name, map, players, bots, ping, password, VAC, the tags and the
+description.
 
 ===============================================================================
 */
 
-// [QL] 0x00560e50: el nombre largo va en la descripcion del juego
+// [QL] 0x00560e50: the long name goes in the game description
 static const char* steamGametypeNames[] = {
     "Free For All", "Duel", "Race", "Team Deathmatch", "Clan Arena", "Capture the Flag",
     "One Flag CTF", "Overload", "Harvester", "Freeze Tag", "Domination", "Attack and Defend",
     "Red Rover"
 };
 
-// [QL] 0x00560e84: el nombre corto abre las etiquetas
+// [QL] 0x00560e84: the short name opens the tags
 static const char* steamGametypeTags[] = {
     "ffa", "duel", "race", "tdm", "clanarena", "ctf", "oneflag", "overload", "harvester",
     "freezetag", "domination", "a&d", "redrover"
@@ -759,8 +759,8 @@ static const char* steamGametypeTags[] = {
 ===============
 Steam_GS_SetGameInfo
 
-[QL] 0x00466260. Lo que el navegador muestra de este servidor, aparte del nombre
-y el mapa: de que se juega y con que reglas.
+[QL] 0x00466260. What the browser shows about this server beyond the name and the
+map: what is being played and under which rules.
 ===============
 */
 static void Steam_GS_SetGameInfo(void) {
@@ -797,7 +797,7 @@ static void Steam_GS_SetGameInfo(void) {
     if (Cvar_VariableValue("g_vampiricDamage") > 0.0f) {
         Q_strcat(tags, sizeof(tags), "vampiric,");
     }
-    // infectados solo cuenta en red rover, y el quad hog solo en free for all
+    // infected only counts in Red Rover, and quad hog only in free for all
     if (Cvar_VariableIntegerValue("g_rrInfected") && gametype == 12) {
         Q_strcat(tags, sizeof(tags), "infected,");
     }
@@ -812,7 +812,7 @@ static void Steam_GS_SetGameInfo(void) {
         }
     }
 
-    // la coma del final sobra
+    // the trailing comma is not wanted
     if (tags[0] && tags[strlen(tags) - 1] == ',') {
         tags[strlen(tags) - 1] = '\0';
     }
@@ -833,7 +833,7 @@ static void Steam_ServerListReset(void) {
     st.listRefreshing = qfalse;
 }
 
-// lo que Steam contesta de un servidor, pasado a lo que el navegador necesita
+// what Steam answers about a server, turned into what the browser needs
 static void Steam_ServerListAdd(void* request, int index) {
     steamServerItem_t* item;
     steamServer_t* out;
@@ -867,7 +867,7 @@ static void STEAM_CB Steam_CB_ServerResponded(STEAM_CB_SELF, void* request, int 
 }
 
 static void STEAM_CB Steam_CB_ServerFailedToRespond(STEAM_CB_SELF, void* request, int index) {
-    // retail tampoco muestra al que no contesta
+    // retail does not show a server that fails to answer either
     (void)request;
     (void)index;
 }
@@ -875,7 +875,7 @@ static void STEAM_CB Steam_CB_ServerFailedToRespond(STEAM_CB_SELF, void* request
 static void STEAM_CB Steam_CB_RefreshComplete(STEAM_CB_SELF, void* request, int response) {
     (void)request;
     st.listRefreshing = qfalse;
-    Com_DPrintf("Steam: la lista termino con %i servidores (respuesta %i)\n", st.numServers, response);
+    Com_DPrintf("Steam: the list ended with %i servers (response %i)\n", st.numServers, response);
 }
 
 static void* steamListVTable[3];
@@ -903,7 +903,7 @@ qboolean Steam_RequestServerList(int source) {
     steamListVTable[2] = (void*)Steam_CB_RefreshComplete;
     st.listResponse.vtable = steamListVTable;
 
-    // el unico filtro de retail: que sea Quake Live y no otro juego del mismo App ID
+    // retail's only filter: that it is Quake Live and not another game under the same App ID
     Com_Memset(&filter, 0, sizeof(filter));
     Q_strncpyz(filter.key, "gamedir", sizeof(filter.key));
     Q_strncpyz(filter.value, STEAM_MOD_DIR, sizeof(filter.value));
@@ -935,21 +935,21 @@ qboolean Steam_RequestServerList(int source) {
 }
 
 void Steam_ServerList_f(void) {
-    int cuenta = -1;
-    int refrescando = -1;
+    int count = -1;
+    int refreshing = -1;
 
     if (st.matchmaking && st.listRequest) {
         if (st.GetServerCount) {
-            cuenta = st.GetServerCount(st.matchmaking, st.listRequest);
+            count = st.GetServerCount(st.matchmaking, st.listRequest);
         }
         if (st.IsRefreshing) {
-            refrescando = st.IsRefreshing(st.matchmaking, st.listRequest) ? 1 : 0;
+            refreshing = st.IsRefreshing(st.matchmaking, st.listRequest) ? 1 : 0;
         }
     }
-    Com_Printf("Steam: pedido %p, nuestros %i, de Steam %i, refrescando %i (bandera %i)\n",
-               st.listRequest, st.numServers, cuenta, refrescando, st.listRefreshing);
-    for (cuenta = 0; cuenta < st.numServers && cuenta < 5; cuenta++) {
-        const steamServer_t* sv = &st.servers[cuenta];
+    Com_Printf("Steam: request %p, ours %i, Steam's %i, refreshing %i (flag %i)\n",
+               st.listRequest, st.numServers, count, refreshing, st.listRefreshing);
+    for (count = 0; count < st.numServers && count < 5; count++) {
+        const steamServer_t* sv = &st.servers[count];
 
         Com_Printf("  %-28s %-12s %2i/%-2i bots %i ping %3i  %s | %s | %i.%i.%i.%i:%i\n",
                    sv->name, sv->map, sv->players, sv->maxPlayers, sv->bots, sv->ping,
@@ -970,10 +970,10 @@ int Steam_ServerListCount(void) {
 ===============
 Steam_ServerListGet
 
-Devuelve un servidor de la lista como lo espera el navegador: la direccion, el
-ping que midio Steam y una cadena de info igual a la que contestaria el propio
-servidor. El tipo de juego sale de la primera etiqueta, que es como lo publica
-(0x00466260); si no se reconoce, queda en cero.
+Returns one server from the list in the shape the browser expects: the address, the
+ping Steam measured and an info string like the one the server itself would answer
+with. The gametype comes from the first tag, which is how it is published
+(0x00466260); an unrecognised one leaves it at zero.
 ===============
 */
 qboolean Steam_ServerListGet(int index, unsigned int* ip, unsigned short* port, int* ping, char* info,
@@ -1018,18 +1018,18 @@ qboolean Steam_ServerListGet(int index, unsigned int* ip, unsigned short* port, 
 
 EL WORKSHOP
 
-Quake Live no baja mapas por HTTP: los baja del Workshop de Steam. El servidor
-publica los items que usa la partida (0x00465b00) en el configstring
-CS_STEAM_WORKSHOP_IDS y en la cvar sv_referencedSteamworks, y el cliente, antes
-de entrar, se baja los que no tiene (0x004bba30) mostrando el avance en
+Quake Live does not download maps over HTTP: it downloads them from the Steam
+Workshop. The server publishes the items the match uses (0x00465b00) in the
+CS_STEAM_WORKSHOP_IDS configstring and in the sv_referencedSteamworks cvar, and the
+client, before entering, downloads the ones it lacks (0x004bba30), showing progress in
 cl_downloadName / cl_downloadItem / cl_downloadTime.
 
-Retail se entera de que termino por el callback OnDownloadItemResult
-(0x00469630). Aca se pregunta por el estado del item cada cuadro, que da lo
-mismo de afuera y evita registrar callbacks de C++ a mano.
+Retail learns that a download finished through the OnDownloadItemResult callback
+(0x00469630). Here the item's state is polled every frame, which looks the same from
+the outside and avoids registering C++ callbacks by hand.
 
-Las banderas de estado son las de Steam: 1 suscrito, 4 instalado, 8 necesita
-actualizarse, 16 bajando, 32 en cola.
+The state flags are Steam's: 1 subscribed, 4 installed, 8 needs an update, 16
+downloading, 32 queued.
 
 ===============================================================================
 */
@@ -1060,8 +1060,8 @@ qboolean Steam_WorkshopInstalled(uint64_t item) {
 ===============
 Steam_WorkshopDownload
 
-[QL] 0x004699c0. Devuelve qtrue si hay que esperar: el que ya esta instalado no
-se pide de nuevo.
+[QL] 0x004699c0. Returns qtrue when there is something to wait for: an item already
+installed is not asked for again.
 ===============
 */
 qboolean Steam_WorkshopDownload(uint64_t item) {
@@ -1073,7 +1073,7 @@ qboolean Steam_WorkshopDownload(uint64_t item) {
         return qfalse;
     }
     Com_Printf("Workshop item %llu: requesting download.\n", (unsigned long long)item);
-    Com_DPrintf("Workshop item %llu: estado %u antes de pedirlo.\n", (unsigned long long)item,
+    Com_DPrintf("Workshop item %llu: state %u before asking for it.\n", (unsigned long long)item,
                 Steam_WorkshopState(item));
     if (!st.DownloadItem(st.ugc, item, 1)) {
         Com_Printf("Workshop item %llu: Steam did not take the request.\n", (unsigned long long)item);
@@ -1083,7 +1083,7 @@ qboolean Steam_WorkshopDownload(uint64_t item) {
     return qtrue;
 }
 
-// lo que Steam lleva bajado del item que se esta esperando
+// how much Steam has downloaded of the item being waited on
 qboolean Steam_WorkshopProgress(uint64_t* done, uint64_t* total) {
     *done = 0;
     *total = 0;
@@ -1093,7 +1093,7 @@ qboolean Steam_WorkshopProgress(uint64_t* done, uint64_t* total) {
     return st.GetItemDownloadInfo(st.ugc, st.downloading, done, total) ? qtrue : qfalse;
 }
 
-// qtrue mientras el item que se pidio siga sin estar
+// qtrue while the item asked for is still missing
 qboolean Steam_WorkshopBusy(void) {
     unsigned int state;
 
@@ -1115,7 +1115,7 @@ qboolean Steam_WorkshopBusy(void) {
     return qfalse;
 }
 
-// donde quedo instalado un item, para montarlo
+// where an item ended up installed, so it can be mounted
 qboolean Steam_WorkshopPath(uint64_t item, char* buf, int size) {
     uint64_t sizeOnDisk = 0;
     unsigned int stamp = 0;
@@ -1153,9 +1153,9 @@ static void Steam_DownloadUGC_f(void) {
 ===============
 Steam_WorkshopList
 
-Los items suscritos, que es de donde retail saca lo que monta al arrancar
-(0x004697a0). El fork ya recorre la carpeta del Workshop en disco, asi que esto
-sirve para saber cuales conoce Steam, no para montarlos.
+The subscribed items, which is where retail gets what it mounts at startup
+(0x004697a0). The Workshop folder on disk is already walked here, so this is for
+knowing which ones Steam knows about, not for mounting them.
 ===============
 */
 int Steam_WorkshopSubscribed(uint64_t* items, int max) {
@@ -1169,8 +1169,8 @@ int Steam_WorkshopSubscribed(uint64_t* items, int max) {
 ===============
 Steam_GS_SteamID
 
-[QL] 0x00465b00: el servidor publica su propio Steam ID en un configstring, que
-es como el cliente sabe contra quien esta jugando.
+[QL] 0x00465b00: the server publishes its own Steam ID in a configstring, which is
+how the client knows who it is playing against.
 ===============
 */
 uint64_t Steam_GS_SteamID(void) {
@@ -1185,21 +1185,22 @@ uint64_t Steam_GS_SteamID(void) {
 
 LA VOZ
 
-Quake Live no manda la voz por su propia red: la manda por la red entre pares
-(P2P) de Steam, y la comprime y descomprime con la voz de Steam.
+Quake Live does not send voice over its own network: it sends it over Steam's peer to
+peer network, and compresses and decompresses it with Steam's voice codec.
 
-  0x004603f0  "+voice": le avisa a Steam que este jugador esta hablando
-              (SetInGameVoiceSpeaking) y arranca la grabacion.
-  0x00460d10  cada cuadro, mientras graba: GetVoice comprimido en un buffer de
-              16 KB y, si esta en partida, SendP2PPacket al Steam ID del
-              servidor -- que sale del configstring 714 -- por el canal 1, sin
-              garantia de entrega.
-  0x00461a60  cada cuadro, al recibir: ReadP2PPacket del canal 1, el primer byte
-              es el numero del que habla y el resto es la voz comprimida, que va
-              a DecompressVoice a 22050 Hz y de ahi al mezclador.
+  0x004603f0  "+voice": tells Steam this player is speaking
+              (SetInGameVoiceSpeaking) and starts recording.
+  0x00460d10  every frame while recording: GetVoice compressed into a 16 KB
+              buffer and, when in a match, SendP2PPacket to the server's Steam
+              ID -- which comes from configstring 714 -- over channel 1, with no
+              delivery guarantee.
+  0x00461a60  every frame on receive: ReadP2PPacket from channel 1, where the
+              first byte is the speaker's number and the rest is compressed
+              voice, which goes to DecompressVoice at 22050 Hz and from there to
+              the mixer.
 
-El servidor hace de puente: recibe la voz de cada uno y se la reparte a los
-demas poniendole delante el numero de cliente del que habla.
+The server acts as the bridge: it takes each player's voice and hands it out to the
+others with the speaker's client number in front.
 
 ===============================================================================
 */
@@ -1209,12 +1210,12 @@ demas poniendole delante el numero de cliente del que habla.
 #define STEAM_P2P_UNRELIABLE 1
 #define STEAM_P2P_RELIABLE 2
 
-// el canal por el que el servidor saluda a cada jugador cada diez segundos, que es lo que deja
-// la sesion abierta para la voz. Nadie lee lo que viaja por aca.
+// the channel the server greets each player on every ten seconds, which is what keeps the
+// session open for voice. Nobody reads what travels over it.
 #define STEAM_P2P_HELLO_CHANNEL 16
 #define STEAM_P2P_HELLO_INTERVAL 10000
 
-// P2PSessionRequest_t: k_iSteamNetworkingCallbacks (1200) + 2, y adentro viene un solo CSteamID
+// P2PSessionRequest_t: k_iSteamNetworkingCallbacks (1200) + 2, carrying a single CSteamID
 #define STEAM_CB_P2P_SESSION_REQUEST 1202
 #define STEAM_CB_FLAG_GAMESERVER 0x02
 
@@ -1222,11 +1223,10 @@ demas poniendole delante el numero de cliente del que habla.
 ===============
 La sesion entre pares
 
-Steam no entrega los paquetes de alguien con quien no hay sesion: avisa con una
-devolucion de llamada y espera que uno la acepte. Retail no registra ninguna
--- sus dos unicas llamadas a SteamAPI_RegisterCallback son por otra cosa -- asi
-que esto es un agregado nuestro, no algo portado: sin aceptar la sesion la voz
-del servidor no llegaria nunca.
+Steam does not deliver packets from somebody there is no session with: it raises a
+callback and waits for it to be accepted. Retail registers none -- its only two calls
+to SteamAPI_RegisterCallback are for something else -- so this is an addition, not a
+port: without accepting the session the server's voice would never arrive.
 ===============
 */
 static void STEAM_CB Steam_CB_P2PRequestIO(STEAM_CB_SELF, void* param, unsigned char failed,
@@ -1248,7 +1248,8 @@ static int STEAM_CB Steam_CB_P2PRequestSize(STEAM_CB_SELF) {
     return (int)sizeof(uint64_t);
 }
 
-// el compilador de retail ordena las dos Run al reves de como se declaran: ver 0x00532f1c
+// retail's compiler orders the two Run overloads the reverse of how they are declared: see
+// 0x00532f1c
 static void* steamP2PVTable[3];
 
 static void Steam_P2PListen(qboolean asServer) {
@@ -1272,22 +1273,22 @@ static void Steam_P2PListen(qboolean asServer) {
 
 QUIEN ES CADA UNO
 
-[QL] El servidor de retail no le cree al cliente lo que dice de si mismo. Junto
-al Steam ID, el cliente manda en el getchallenge un ticket que Steam le firmo, y
-el servidor se lo pasa a Steam para que diga si es de quien dice ser. Esta todo
-escrito en el binario del motor:
+[QL] The retail server does not take the client's word for who it is. Alongside the
+Steam ID, the client sends a ticket Steam signed for it in the getchallenge, and the
+server hands that to Steam to say whether it belongs to who it claims. It is all
+written in the engine binary:
 
     0x531b38  "Called BeginAuthSession on steam id %llu, got response %i"
     0x531b74  "Refusing to re-auth a client that is already being tracked"
     0x531bb0  "Called EndAuthSession on steam id %llu"
     0x531a80  "Steam OnValidateAuthTicketResponse: couldn't match auth response to a client"
     0x531d48  "Found an authed client with steam id %llu but isn't connected to the server."
-    0x55f5c0  el RTTI de un CCallback<..., ValidateAuthTicketResponse_t>
-    0x531778..0x531848  los nueve motivos de rechazo, uno detras de otro
+    0x55f5c0  the RTTI of a CCallback<..., ValidateAuthTicketResponse_t>
+    0x531778..0x531848  the nine rejection reasons, one after another
 
-La respuesta no llega en el momento: BeginAuthSession solo dice si el ticket
-tiene forma de ticket, y Steam contesta despues por una devolucion de llamada. De
-ahi que el jugador entre y, si el ticket no vale, lo echen un momento despues.
+The verdict does not arrive at once: BeginAuthSession only says whether the ticket has
+the shape of a ticket, and Steam answers later through a callback. That is why a
+player gets in and, if the ticket is no good, is dropped a moment afterwards.
 
 ===============================================================================
 */
@@ -1299,13 +1300,13 @@ ahi que el jugador entre y, si el ticket no vale, lo echen un momento despues.
 ===============
 Steam_AuthResponseName
 
-Los nueve motivos por los que Steam rechaza un ticket, en las palabras de retail
-(0x531778 en adelante, que estan en el binario en el orden inverso al de la
-enumeracion de Steam). El 0 es "vale", y no tiene texto.
+The nine reasons Steam rejects a ticket, in retail's own words (0x531778 onwards,
+which sit in the binary in the reverse order of Steam's enumeration). 0 is "fine", and
+has no text.
 ===============
 */
 const char* Steam_AuthResponseName(int response) {
-    static const char* const motivos[] = {
+    static const char* const reasons[] = {
         "",
         "User not connected to Steam",   // 1
         "License expired",               // 2
@@ -1318,19 +1319,19 @@ const char* Steam_AuthResponseName(int response) {
         "Game ban on record"             // 9
     };
 
-    if (response <= 0 || response >= (int)ARRAY_LEN(motivos)) {
-        return NULL;  // el que llama escribe "(Err:%i)", como retail en 0x531a18
+    if (response <= 0 || response >= (int)ARRAY_LEN(reasons)) {
+        return NULL;  // the caller writes "(Err:%i)", as retail does at 0x531a18
     }
-    return motivos[response];
+    return reasons[response];
 }
 
 /*
 ===============
 Steam_AuthTicket
 
-El ticket que el cliente le manda al servidor. Steam lo firma para esta sesion y
-solo sirve una vez, asi que se pide uno por conexion y se cancela el anterior.
-Devuelve cuantos bytes ocupa, o cero si no hay Steam.
+The ticket the client sends the server. Steam signs it for this session and it is
+good once only, so one is asked for per connection and the previous one is cancelled.
+Returns how many bytes it takes, or zero when there is no Steam.
 ===============
 */
 int Steam_AuthTicket(void* buffer, int size) {
@@ -1354,16 +1355,15 @@ int Steam_AuthTicket(void* buffer, int size) {
 ===============
 Steam_CB_AuthResponse
 
-ValidateAuthTicketResponse_t: el Steam ID del que se estaba comprobando, el
-motivo, y el Steam ID del dueno del juego -- que es distinto cuando alguien lo
-tiene prestado por familia. Aca solo hacen falta los dos primeros.
+ValidateAuthTicketResponse_t: the Steam ID being checked, the reason, and the Steam ID
+of the game's owner -- which differs when somebody has it on family sharing. Only the
+first two are needed here.
 ===============
 */
-// Steam empaqueta las estructuras de sus devoluciones de llamada segun el sistema, no
-// segun el ancho de palabra: de a cuatro bytes en Linux y macOS, de a ocho en Windows
-// (VALVE_CALLBACK_PACK_SMALL / _LARGE). Si el tamano no es el que espera, la devolucion
-// de llamada no le calza y no llega. Aca importa para el servidor dedicado, que corre en
-// Linux.
+// Steam packs its callback structs by operating system, not by word size: four bytes on
+// Linux and macOS, eight on Windows (VALVE_CALLBACK_PACK_SMALL / _LARGE). If the size is
+// not the one it expects, the callback does not match and never arrives. That matters here
+// for the dedicated server, which runs on Linux.
 #if defined(__linux__) || defined(__APPLE__)
 #pragma pack(push, 4)
 #else
@@ -1393,7 +1393,8 @@ static int STEAM_CB Steam_CB_AuthSize(STEAM_CB_SELF) {
     return (int)sizeof(steamAuthResponse_t);
 }
 
-// el compilador de retail ordena las dos Run al reves de como se declaran: ver 0x00532f1c
+// retail's compiler orders the two Run overloads the reverse of how they are declared: see
+// 0x00532f1c
 static void* steamAuthVTable[3];
 
 static void Steam_AuthListen(void) {
@@ -1414,17 +1415,17 @@ static void Steam_AuthListen(void) {
 ===============
 Steam_GS_BeginAuth / Steam_GS_EndAuth
 
-Lo que el servidor le pide a Steam por cada jugador. BeginAuthSession devuelve
-EBeginAuthSessionResult: 0 vale, 1 ticket invalido, 2 ya lo estabamos siguiendo,
-3 version equivocada, 4 otro juego, 5 ticket vencido. Lo demas viene despues por
-la devolucion de llamada.
+What the server asks Steam about each player. BeginAuthSession returns an
+EBeginAuthSessionResult: 0 ok, 1 invalid ticket, 2 already tracked, 3 wrong
+version, 4 different game, 5 expired ticket. The real verdict arrives later,
+through the callback.
 ===============
 */
 int Steam_GS_BeginAuth(uint64_t steamId, const void* ticket, int len) {
     int result;
 
     if (!st.serverUp || !st.gameServer || !st.BeginAuthSession || len <= 0) {
-        return STEAM_AUTH_BEGIN_OK;  // sin Steam no hay a quien preguntarle
+        return STEAM_AUTH_BEGIN_OK;  // nobody to ask without Steam
     }
     result = st.BeginAuthSession(st.gameServer, ticket, len, steamId);
     Com_DPrintf("Called BeginAuthSession on steam id %llu, got response %i\n",
@@ -1484,8 +1485,8 @@ qboolean Steam_VoiceRecording(void) {
 ===============
 Steam_VoiceCapture
 
-Lo que el microfono junto desde la ultima vez, ya comprimido. Devuelve cuantos
-bytes son, o 0 si no hay nada.
+What the microphone has gathered since last time, already compressed. Returns how many
+bytes that is, or 0 when there is nothing.
 ===============
 */
 int Steam_VoiceCapture(void* buffer, int maxSize) {
@@ -1561,7 +1562,7 @@ int Steam_P2PReceive(void* buffer, int maxSize, uint64_t* from, qboolean asServe
     return (int)read;
 }
 
-// hay que aceptar al otro antes de que Steam entregue sus paquetes
+// the peer has to be accepted before Steam will deliver its packets
 void Steam_P2PAccept(uint64_t who, qboolean asServer) {
     void* self = Steam_P2P(asServer);
 
@@ -1574,9 +1575,9 @@ void Steam_P2PAccept(uint64_t who, qboolean asServer) {
 ===============
 Steam_P2PHello
 
-[QL] 0x004668ca. Cada diez segundos el servidor le manda esto a cada jugador,
-por un canal que nadie lee, solo para que Steam mantenga viva la sesion. El
-contenido da igual: el de retail es una broma del equipo de id.
+[QL] 0x004668ca. Every ten seconds the server sends this to each player, over a channel
+nobody reads, purely so that Steam keeps the session alive. The contents do not matter:
+retail's is a joke from the id team.
 ===============
 */
 void Steam_P2PHello(uint64_t to, qboolean asServer) {
@@ -1593,10 +1594,10 @@ void Steam_P2PHello(uint64_t to, qboolean asServer) {
 ===============
 Steam_ShowFriendAdd / Steam_ShowProfile
 
-Las dos paginas de la superposicion de Steam que QL abre sobre otro jugador.
+The two pages of the Steam overlay QL opens on another player.
 
-[QL] los nombres de los dialogos estan en 0x005327f0, pegados a las ordenes que
-los usan: "friendadd" para agregarlo y "steamid" para su perfil.
+[QL] the dialog names are at 0x005327f0, next to the commands that use them:
+"friendadd" to add them and "steamid" for their profile.
 ===============
 */
 static void Steam_ShowOverlayUser(const char* dialog, uint64_t steamId) {
@@ -1609,13 +1610,12 @@ static void Steam_ShowOverlayUser(const char* dialog, uint64_t steamId) {
 ===============
 La lista de amigos
 
-Steam la entrega de a uno: cuantos hay con la bandera de "amigo inmediato" (4) y
-despues, por indice, su Steam ID. De cada uno salen el nombre, el estado y, si
-esta jugando a algo, el juego y el servidor donde esta.
+Steam hands it over one at a time: how many carry the "immediate friend" flag (4) and
+then, by index, their Steam ID. From each one come the name, the state and, when they
+are playing something, the game and the server they are on.
 
-FriendGameInfo_t, tal como lo llena Steam: el id del juego (8 bytes), la IP del
-servidor, el puerto y el puerto de consulta, y el id de la sala. Aca solo
-interesan el juego y el servidor.
+FriendGameInfo_t as Steam fills it: the game id (8 bytes), the server's IP, its port
+and query port, and the lobby id. Only the game and the server matter here.
 ===============
 */
 #define STEAM_FRIEND_IMMEDIATE 4
@@ -1632,12 +1632,12 @@ typedef struct {
 ===============
 Steam_StripColors
 
-Un nombre de Steam es un dato, no una marca: hay jugadores de Quake que llevan
-codigos de color en el suyo ("^2Runnyr") y, sin sacarlos, recolorean lo que venga
-detras y la inicial del menu sale siendo un acento circunflejo.
+A Steam name is data, not markup: Quake players do carry colour codes in theirs
+("^2Runnyr") and, left in, they recolour whatever comes after and the menu's initial
+comes out as a caret.
 
-Q_CleanStr no sirve aca: ademas de los codigos tira todo lo que no sea ASCII
-imprimible, y con eso un nombre como "Gze" con simbolos raros queda vacio.
+Q_CleanStr is no good here: along with the codes it throws away everything that is not
+printable ASCII, which leaves a name written in unusual symbols empty.
 ===============
 */
 static void Steam_StripColors(char* s) {
@@ -1649,7 +1649,7 @@ static void Steam_StripColors(char* s) {
             continue;
         }
         if ((unsigned char)*s < 0x20) {
-            s++;  // los de control tampoco: rompen la fila
+            s++;  // nor control characters: they break the row
             continue;
         }
         *d++ = *s++;
@@ -1665,8 +1665,8 @@ int Steam_FriendCount(void) {
 }
 
 qboolean Steam_FriendGet(int index, steamFriend_t* out) {
-    steamFriendGame_t juego;
-    const char* nombre;
+    steamFriendGame_t game;
+    const char* name;
     uint64_t id;
 
     Com_Memset(out, 0, sizeof(*out));
@@ -1679,18 +1679,18 @@ qboolean Steam_FriendGet(int index, steamFriend_t* out) {
     }
 
     out->steamId = id;
-    nombre = st.GetFriendPersonaName ? st.GetFriendPersonaName(st.friends, id) : NULL;
-    Q_strncpyz(out->name, nombre ? nombre : "", sizeof(out->name));
+    name = st.GetFriendPersonaName ? st.GetFriendPersonaName(st.friends, id) : NULL;
+    Q_strncpyz(out->name, name ? name : "", sizeof(out->name));
     Steam_StripColors(out->name);
     out->state = st.GetFriendPersonaState ? st.GetFriendPersonaState(st.friends, id) : 0;
 
-    Com_Memset(&juego, 0, sizeof(juego));
-    if (st.GetFriendGamePlayed && st.GetFriendGamePlayed(st.friends, id, &juego)) {
+    Com_Memset(&game, 0, sizeof(game));
+    if (st.GetFriendGamePlayed && st.GetFriendGamePlayed(st.friends, id, &game)) {
         out->playing = qtrue;
-        // el id de juego de Steam lleva el App ID en sus 32 bits bajos
-        out->sameGame = (qboolean)((unsigned int)juego.gameId == (unsigned int)atoi(STEAM_APP_ID));
-        out->ip = juego.ip;
-        out->port = juego.port;
+        // Steam's game id carries the App ID in its low 32 bits
+        out->sameGame = (qboolean)((unsigned int)game.gameId == (unsigned int)atoi(STEAM_APP_ID));
+        out->ip = game.ip;
+        out->port = game.port;
     }
     return qtrue;
 }
@@ -1699,19 +1699,19 @@ qboolean Steam_FriendGet(int index, steamFriend_t* out) {
 ===============
 Steam_FriendStateName
 
-Los nombres que le pone Steam a cada estado, en el orden de su enumeracion.
+The names Steam gives each state, in the order of its enumeration.
 ===============
 */
 const char* Steam_FriendStateName(int state) {
-    static const char* nombres[] = {
-        "desconectado", "conectado", "ocupado", "ausente", "dormido",
-        "buscando cambio", "buscando partida"
+    static const char* names[] = {
+        "offline", "online", "busy", "away", "snooze",
+        "looking to trade", "looking to play"
     };
 
-    if (state < 0 || state >= (int)ARRAY_LEN(nombres)) {
+    if (state < 0 || state >= (int)ARRAY_LEN(names)) {
         return "?";
     }
-    return nombres[state];
+    return names[state];
 }
 
 void Steam_ShowFriends(void) {
@@ -1735,7 +1735,7 @@ uint64_t Steam_ClientSteamID(void) {
     return st.GetUserSteamID(st.user);
 }
 
-// [QL] 0x00461556: lo que ve un amigo en la lista de Steam
+// [QL] 0x00461556: what a friend sees in the Steam list
 void Steam_SetRichPresence(const char* status) {
     if (st.clientUp && st.friends && st.SetRichPresence) {
         st.SetRichPresence(st.friends, "status", status);

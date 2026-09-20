@@ -190,7 +190,7 @@ typedef struct {
 	int pure_checksum;             // checksum for pure
 	int numfiles;                  // number of files in pk3
 	int referenced;                // referenced file flags
-	unsigned long long workshopId; // [QL] el item del Workshop del que salio, o 0
+	unsigned long long workshopId; // [QL] the Workshop item it came from, or 0
 	int hashSize;                  // hash table size (power of 2)
 	fileInPack_t** hashTable;      // hash table
 	fileInPack_t* buildBuffer;     // buffer with the filenames etc.
@@ -3566,9 +3566,9 @@ static void FS_AddWorkshopPaks(void) {
 
 			FS_AddGameDirectory(itemPath, "");
 
-			// [QL] 0x004d2e80: el que monta un item lo hace sabiendo cual es, porque
-			// despues el servidor publica la lista (sv_referencedSteamworks) y el cliente
-			// se baja los que le falten. La carpeta se llama como el item.
+			// [QL] 0x004d2e80: whoever mounts an item does so knowing which one it is,
+			// because the server then publishes the list (sv_referencedSteamworks) and the
+			// client downloads the ones it lacks. The folder is named after the item.
 			for (sp = fs_searchpaths; sp && sp != before; sp = sp->next) {
 				if (sp->pack) {
 					sp->pack->workshopId = itemId;
@@ -3630,7 +3630,7 @@ static void FS_CopyFromSteam(void) {
 
 	Q_strcat(message, sizeof(message), "\nProceed with copy?");
 
-	if (Sys_Dialog(DT_YES_NO, message, "Quake Live - First Time Setup") != DR_YES) {
+	if (Sys_Dialog(DT_YES_NO, message, "ioquakelive - First Time Setup") != DR_YES) {
 		Com_Printf("Copy cancelled by user.\n");
 		return;
 	}
@@ -3848,10 +3848,10 @@ const char* FS_ReferencedPakNames(void) {
 =====================
 FS_ReferencedSteamworksItems
 
-[QL] 0x004d25b0. Los items del Workshop de los pk3 que esta partida usa, separados
-por espacios. El servidor los publica en sv_referencedSteamworks y en el
-configstring CS_STEAM_WORKSHOP_IDS (0x00465b00), y el cliente se baja los que no
-tenga antes de entrar.
+[QL] 0x004d25b0. The Workshop items of the pk3s this match uses, separated by spaces.
+The server publishes them in sv_referencedSteamworks and in the CS_STEAM_WORKSHOP_IDS
+configstring (0x00465b00), and the client downloads the ones it does not have before
+entering.
 =====================
 */
 const char* FS_ReferencedSteamworksItems(void) {
@@ -3867,7 +3867,7 @@ const char* FS_ReferencedSteamworksItems(void) {
 		}
 		Com_sprintf(id, sizeof(id), "%llu", search->pack->workshopId);
 
-		// el mismo item puede traer varios pk3: va una sola vez
+		// one item can carry several pk3s: it goes in once
 		if (strstr(info, id)) {
 			continue;
 		}

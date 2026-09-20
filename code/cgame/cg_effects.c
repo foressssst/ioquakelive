@@ -331,33 +331,32 @@ void CG_ThawPlayer(const vec3_t origin) {
 ===============
 CG_IceTrail
 
-[QL] 0x1001d790. La estela que va dejando un pedazo de hielo mientras vuela: una
-bocanada cada 150 ms, en el lugar por donde paso, que se desvanece en dos
-segundos mientras sube despacio.
+[QL] 0x1001d790. The trail an ice shard leaves as it flies: one puff every 150 ms,
+where it passed, fading out over two seconds while drifting slowly upwards.
 
-El paso esta cuantizado al reloj -- no al cuadro --, asi que la estela queda
-igual de espaciada corra a los fps que corra.
+The step is quantised to the clock, not to the frame, so the trail comes out equally
+spaced at any framerate.
 ===============
 */
 #define ICE_TRAIL_STEP 150
 
 void CG_IceTrail(localEntity_t* le) {
     int t;
-    int limite;
+    int last;
 
     t = ((cg.oldTime - le->startTime + ICE_TRAIL_STEP) / ICE_TRAIL_STEP) * ICE_TRAIL_STEP;
-    limite = ((cg.time - le->startTime) / ICE_TRAIL_STEP) * ICE_TRAIL_STEP;
+    last = ((cg.time - le->startTime) / ICE_TRAIL_STEP) * ICE_TRAIL_STEP;
 
-    for (; t <= limite; t += ICE_TRAIL_STEP) {
-        localEntity_t* humo;
-        vec3_t donde;
+    for (; t <= last; t += ICE_TRAIL_STEP) {
+        localEntity_t* puff;
+        vec3_t at;
 
-        BG_EvaluateTrajectory(&le->pos, le->startTime + t, donde);
-        humo = CG_SmokePuff(donde, vec3_origin, 20.0f, 1.0f, 1.0f, 1.0f, 1.0f, 2000.0f,
+        BG_EvaluateTrajectory(&le->pos, le->startTime + t, at);
+        puff = CG_SmokePuff(at, vec3_origin, 20.0f, 1.0f, 1.0f, 1.0f, 1.0f, 2000.0f,
                             le->startTime + t, 0, 0, cgs.media.iceTrailShader);
-        // [QL] 0x1001d7d0: la bocanada se desvanece de color y sube 40 por segundo
-        humo->leType = LE_FADE_RGB;
-        humo->pos.trDelta[2] = 40.0f;
+        // [QL] 0x1001d7d0: the puff fades in colour and rises 40 a second
+        puff->leType = LE_FADE_RGB;
+        puff->pos.trDelta[2] = 40.0f;
     }
 }
 

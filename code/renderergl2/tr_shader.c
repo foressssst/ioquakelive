@@ -1121,9 +1121,9 @@ static qboolean ParseStage(shaderStage_t* stage, char** text) {
         //
         // depthTest <disable>
         //
-        // [QL] quakelive_steam.exe: "WARNING: missing parm for depthTest in shader '%s'". La unica
-        // palabra que acepta es "disable", y la usa sprites/trainer, que tiene que verse a traves
-        // de las paredes.
+        // [QL] quakelive_steam.exe: "WARNING: missing parm for depthTest in shader '%s'". The
+        // only word it takes is "disable", used by sprites/trainer, which has to be visible
+        // through walls.
         //
         else if (!Q_stricmp(token, "depthTest")) {
             token = COM_ParseExt(text, qfalse);
@@ -1442,9 +1442,9 @@ infoParm_t infoParms[] = {
     {"monsterclip", 1, 0, CONTENTS_MONSTERCLIP},
     {"nodrop", 1, 0, CONTENTS_NODROP},  // don't drop items or leave bodies (death fog, lava, etc)
     {"nonsolid", 1, SURF_NONSOLID, 0},  // clears the solid flag
-    // [QL] el binario lo llama "nobotclip", no "botclip" como Quake 3, y va justo aca:
-    // su tabla es water, slime, lava, playerclip, monsterclip, nodrop, nonsolid, nobotclip.
-    // Sin esto, una superficie marcada asi sacaba un aviso de parametro desconocido.
+    // [QL] the binary calls it "nobotclip", not Quake 3's "botclip", and it goes right here:
+    // its table is water, slime, lava, playerclip, monsterclip, nodrop, nonsolid, nobotclip.
+    // Without it, a surface marked that way raised an unknown parameter warning.
     {"nobotclip", 1, 0, CONTENTS_BOTCLIP},
 
     // utility relevant attributes
@@ -1736,9 +1736,10 @@ static qboolean ParseShader(char** text) {
             ParseSort(text);
             continue;
         } else if (!Q_stricmp(token, "nodefault")) {
-            // [QL] quakelive_steam.exe 0x004574d0: un shader sin etapas es valido igual. Lo usa
-            // models/players/hunter/harpy_f, que solo tiene "surfaceparm nodraw": sin esto el
-            // shader cae al de por defecto y la pieza que tenia que ser invisible se dibuja.
+            // [QL] quakelive_steam.exe 0x004574d0: a shader with no stages is valid all the
+            // same. models/players/hunter/harpy_f uses one, having only "surfaceparm nodraw":
+            // without this the shader falls back to the default and the piece that was meant
+            // to be invisible gets drawn.
             noDefault = qtrue;
             continue;
         } else if (!Q_stricmp(token, "novlcollapse")) {
@@ -2910,14 +2911,14 @@ static char* FindShaderInShaderText(const char* shadername) {
         }
     }
 
-    // [ioquakelive] Aqui Quake 3 se recorria entero el texto concatenado de todos los .shader
-    // cuando la tabla fallaba. Con los scripts de Quake Live eso son megabytes tokenizados por
-    // cada textura que no tiene shader propio -- el caso normal -- y era el mayor costo de cargar
-    // un mapa: 1.2 ms por shader, 1.28 s en campgrounds.
+    // [ioquakelive] Here Quake 3 walked the whole concatenated text of every .shader when the
+    // table missed. With Quake Live's scripts that is megabytes tokenised for every texture with
+    // no shader of its own -- the normal case -- and it was the single largest cost of loading a
+    // map: 1.2 ms per shader, 1.28 s on campgrounds.
     //
-    // El barrido no podia encontrar nada que la tabla no tenga: ScanAndLoadShaderFiles la
-    // construye recorriendo el mismo texto, con el mismo tokenizador y el mismo salto de
-    // secciones, e indexa todos los nombres. Si no esta en su cubeta, no esta en el texto.
+    // The sweep could not find anything the table does not have: ScanAndLoadShaderFiles builds it
+    // by walking the same text, with the same tokeniser and the same section skipping, and
+    // indexes every name. If it is not in its bucket, it is not in the text.
     return NULL;
 }
 
@@ -2991,7 +2992,7 @@ shader_t* R_FindShader(const char* name, int lightmapIndex, qboolean mipRawImage
     return R_FindShaderEx(name, lightmapIndex, mipRawImage, lightmapIndex);
 }
 
-// [ioquakelive] cuanto se va en registrar shaders, sin contar lo que cuestan sus imagenes
+// [ioquakelive] how much goes into registering shaders, their images aside
 int64_t r_shaderFindUs, r_shaderCachedUs;
 int r_shaderFindCount, r_shaderCachedCount;
 
@@ -3005,7 +3006,7 @@ shader_t* R_FindShaderEx(const char* name, int lightmapIndex, qboolean mipRawIma
 
     r_shaderFindUs += cost;
     r_shaderFindCount++;
-    // [ioquakelive] si no nacio ninguno, el shader ya estaba y esto fue solo una busqueda
+    // [ioquakelive] if none was created, the shader already existed and this was just a lookup
     if (tr.numShaders == before) {
         r_shaderCachedUs += cost;
         r_shaderCachedCount++;

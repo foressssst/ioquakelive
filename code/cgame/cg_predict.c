@@ -367,23 +367,23 @@ Predict push triggers and items
 =================
 CG_UpdateStepChange
 
-[QL] cgamex86.dll 0x10044620, llamada por CG_PredictPlayerState inmediatamente despues de cada
-Pmove (0x10044bee). Es la que suaviza la camara al subir un escalon.
+[QL] cgamex86.dll 0x10044620, called by CG_PredictPlayerState immediately after every Pmove
+(0x10044bee). This is what smooths the camera when climbing a step.
 
-Tres cosas que no son como en Quake 3, y se ven las tres al subir una escalera:
+Three things that differ from Quake 3, all three visible on a staircase:
 
-- La puerta es `cg.stepTime < pm.stepTime`, o sea "este escalon es mas nuevo que el ultimo que
-  suavice". No sirve comparar contra `cmd.serverTime`: Pmove parte el comando en trozos de hasta
-  66 ms y le pisa el `serverTime` a cada uno, asi que un escalon que cae en un trozo que no es el
-  ultimo no coincidiria nunca y se perderia.
-- El cambio anterior **no se descarta**: se le saca lo que le queda de vida, decayendo lineal en
-  100 ms, y el escalon nuevo se suma encima. Sin esto cada peldano corta el suavizado del anterior
-  de golpe, que es justo el temblor.
-- El total se limita a MAX_STEP_CHANGE (0x10067224 = 32) y la marca de tiempo que queda es
-  `cg.time`, no la del comando, porque CG_StepOffset mide contra el reloj del cliente.
+- The gate is `cg.stepTime < pm.stepTime`, that is "this step is newer than the last one I
+  smoothed". Comparing against `cmd.serverTime` does not work: Pmove splits the command into
+  chunks of up to 66 ms and overwrites each one's `serverTime`, so a step landing in any chunk
+  but the last would never match and would be lost.
+- The previous change is NOT discarded: what is left of its life, decaying linearly over 100 ms,
+  is taken and the new step is added on top. Without this each stair cuts the previous smoothing
+  dead, and that is the judder.
+- The total is clamped to MAX_STEP_CHANGE (0x10067224 = 32) and the timestamp kept is `cg.time`,
+  not the command's, because CG_StepOffset measures against the client's clock.
 
-Retail ademas se saltea el suavizado en dos estados mas que todavia no tengo identificados
-(0x10a6f8a8 y 0x10a6d26c); el que si esta confirmado es PMF_FOLLOW.
+Retail also skips the smoothing in two further states that are not identified yet (0x10a6f8a8
+and 0x10a6d26c); the one that is confirmed is PMF_FOLLOW.
 =================
 */
 void CG_UpdateStepChange(void) {

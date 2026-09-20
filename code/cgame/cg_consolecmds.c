@@ -612,9 +612,9 @@ void CG_ClearChat(void) {
 // [QL] cgamex86.dll 0x10006910. A line ending in '\n' is copied without it;
 // the copy is capped at 72 characters during the intermission, 254 otherwise.
 //
-// [ioquakelive] No imprime a consola, y eso importa: antes lo hacia, y como el manejador
-// de "print" ya imprimia lo suyo, cada aviso del servidor salia dos veces. En el binario
-// imprime cada llamador con su formato, no esta funcion.
+// [ioquakelive] It does not print to the console, and that matters: it used to, and since
+// the "print" handler already printed its own, every server message came out twice. In the
+// binary each caller prints with its own format, not this function.
 void CG_AddChat(const char *text, int teamOnly, int extraTime) {
     int len;
     int size;
@@ -833,12 +833,12 @@ static void CG_Kill_f(void) {
 ==============
 CG_ClientMute_f
 
-"clientmute <numero>" da vuelta el silencio de ese jugador: si se lo oia deja de
-oirse, y si estaba silenciado vuelve. Va por Steam ID, asi que sigue valiendo en
-el mapa siguiente.
+"clientmute <number>" toggles that player's mute: if they could be heard they no longer
+can, and if they were muted they come back. It goes by Steam ID, so it still holds on
+the next map.
 
-[QL] 0x10007e90. No dice nada por consola, ni avisa si el numero no existe: lo
-unico que mira es que ese jugador tenga Steam ID.
+[QL] 0x10007e90. It says nothing on the console, and does not complain when the number
+does not exist: all it checks is that the player has a Steam ID.
 ==============
 */
 static void CG_ClientMute_f(void) {

@@ -2729,8 +2729,8 @@ Called directly from cgame
 =================
 */
 void RE_LoadWorldMap(const char* name) {
-    // [ioquakelive] aqui ya se sabe que mapa es, asi que empieza la lectura por
-    // adelantado de sus texturas (ver el prefetch en tr_image.c)
+    // [ioquakelive] which map it is, is known by this point, so reading its textures ahead
+    // starts here (see the prefetch in tr_image.c)
     R_PrefetchStart(name);
 
     int bsp_version;

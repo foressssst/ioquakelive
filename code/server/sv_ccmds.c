@@ -891,33 +891,33 @@ SV_CompleteMapName
 ==================
 SV_CompleteMapName
 
-"map <mapa> <factory>". El mapa sale de los arenas parseados y no de maps/*.bsp:
-un .bsp sin su .arena no se puede cargar, y en cambio hay arenas cuyo nombre no
-es el del .bsp. La factory sale de scripts/factories.txt, sin las que empiezan
-con "_", que son las plantillas internas -- el mismo filtro que usa la lista que
-imprime "map" sin argumentos.
+"map <map> <factory>". The map comes from the parsed arenas and not from maps/*.bsp: a
+.bsp without its .arena cannot be loaded, and there are arenas whose name is not the
+.bsp's. The factory comes from scripts/factories.txt, minus the ones starting with "_",
+which are internal templates -- the same filter the list "map" prints with no arguments
+uses.
 ==================
 */
 static void SV_CompleteMapName(char* args, int argNum) {
-    static const char* nombres[MAX_COMPLETION_NAMES];
+    static const char* names[MAX_COMPLETION_NAMES];
     int count;
 
     if (argNum == 2) {
-        count = SV_ArenaNameList(nombres, ARRAY_LEN(nombres));
+        count = SV_ArenaNameList(names, ARRAY_LEN(names));
     } else if (argNum == 3) {
-        count = SV_FactoryNameList(nombres, ARRAY_LEN(nombres));
+        count = SV_FactoryNameList(names, ARRAY_LEN(names));
     } else {
         return;
     }
 
-    Field_CompleteList(nombres, count);
+    Field_CompleteList(names, count);
 }
 
 /*
 ==================
 SV_CompletePlayerName
 
-Para "kick", "clientkick" y "dumpuser", que toman el nombre de un jugador.
+For "kick", "clientkick" and "dumpuser", which take a player's name.
 ==================
 */
 static void SV_CompletePlayerName(char* args, int argNum) {
@@ -956,7 +956,7 @@ static void SV_CompletePlayerName(char* args, int argNum) {
 ==================
 SV_CompleteArenaName
 
-"arena <nombre>" carga scripts/<nombre>.sp_arena.
+"arena <name>" loads scripts/<name>.sp_arena.
 ==================
 */
 static void SV_CompleteArenaName(char* args, int argNum) {

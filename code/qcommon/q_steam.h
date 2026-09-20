@@ -32,12 +32,12 @@ void Steam_GS_SetMaxPlayers(int maxPlayers);
 // from SV_SpawnServer: the name and the map the list shows
 void Steam_GS_SetServerInfo(const char* hostname, const char* mapName, qboolean needPassword, int botCount);
 
-// la lista de servidores, que en Quake Live la da Steam y no un master propio
+// the server list, which in Quake Live comes from Steam and not from a master of its own
 qboolean Steam_RequestServerList(int source);  // 0 internet, 1 LAN, 2 amigos, 3 favoritos, 4 historial
 void Steam_ServerList_f(void);
 qboolean Steam_ServerListRefreshing(void);
 
-// el Workshop, que es de donde Quake Live baja los mapas
+// the Workshop, which is where Quake Live downloads its maps from
 qboolean Steam_WorkshopReady(void);
 qboolean Steam_WorkshopInstalled(uint64_t item);
 qboolean Steam_WorkshopDownload(uint64_t item);
@@ -58,8 +58,8 @@ void Steam_Shutdown(void);
 
 qboolean Steam_GS_Running(void);
 
-// quien es cada uno: el cliente pide un ticket firmado por Steam y el servidor se
-// lo da a Steam para que diga si vale. [QL] 0x531b38 y siguientes.
+// who each player is: the client asks for a ticket signed by Steam and the server hands
+// it to Steam to say whether it is good. [QL] 0x531b38 onwards.
 #define STEAM_AUTH_BEGIN_OK 0     // EBeginAuthSessionResult
 #define STEAM_AUTH_BEGIN_DUPLICATE 2
 int Steam_AuthTicket(void* buffer, int size);
@@ -67,7 +67,7 @@ int Steam_GS_BeginAuth(uint64_t steamId, const void* ticket, int len);
 void Steam_GS_EndAuth(uint64_t steamId);
 const char* Steam_AuthResponseName(int response);
 
-// la voz, que en Quake Live va por la red entre pares de Steam y no por la del juego
+// voice, which in Quake Live travels over Steam's peer to peer network and not the game's
 qboolean Steam_VoiceReady(void);
 void Steam_VoiceStart(void);
 void Steam_VoiceStop(void);
@@ -85,14 +85,14 @@ void Steam_ShowFriendAdd(uint64_t steamId);
 void Steam_ShowProfile(uint64_t steamId);
 void Steam_ShowFriends(void);
 
-// un amigo de Steam, tal como lo ve la lista
+// a Steam friend as the list sees one
 typedef struct {
     uint64_t steamId;
     char name[64];
     int state;           // 0 desconectado, 1 conectado, 2 ocupado, 3 ausente, ...
     qboolean playing;    // esta jugando a algo
-    qboolean sameGame;   // y ese algo es este juego
-    unsigned int ip;     // el servidor donde esta, 0 si ninguno
+    qboolean sameGame;   // and that something is this game
+    unsigned int ip;     // the server they are on, 0 for none
     unsigned short port;
 } steamFriend_t;
 

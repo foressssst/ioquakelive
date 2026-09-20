@@ -952,7 +952,7 @@ void CG_RegisterWeapon(int weaponNum) {
             cgs.media.grapplingChainShader = trap_R_RegisterShader("grapplingChain");
             weaponInfo->readySound = trap_S_RegisterSound("sound/weapons/grapple/grhang.ogg", qfalse);
             weaponInfo->firingSound = trap_S_RegisterSound("sound/weapons/grapple/grfire.ogg", qfalse);
-            // [QL] +0x1c0 del weaponInfo_t: el tiron del gancho
+            // [QL] +0x1c0 of weaponInfo_t: the grapple's pull
             weaponInfo->pullSound = trap_S_RegisterSound("sound/weapons/grapple/grpull.ogg", qfalse);
             weaponInfo->missileTrailFunc = NULL;
             weaponInfo->missileSound = trap_S_RegisterSound("sound/weapons/grapple/grfire.ogg", qfalse);
@@ -1393,8 +1393,8 @@ static float CG_MachinegunSpinAngle(centity_t* cent) {
         cent->pe.barrelAngle = AngleMod(angle);
         cent->pe.barrelSpinning = !!(cent->currentState.eFlags & EF_FIRING);
         if (cent->currentState.weapon == WP_CHAINGUN && !cent->pe.barrelSpinning) {
-            // [QL] 0x1005231a: el handle ya esta registrado; registrarlo de nuevo en
-            // cada frenada era un viaje al sistema de archivos por nada
+            // [QL] 0x1005231a: the handle is already registered; registering it again on
+            // every wind-down was a trip through the filesystem for nothing
             trap_S_StartSound(NULL, cent->currentState.number, CHAN_WEAPON,
                               cgs.media.chaingunWindSound);
         }
@@ -1412,17 +1412,17 @@ CG_AddWeaponWithPowerups
 ==============
 CG_AddWeaponWithPowerups
 
-[QL] cgamex86.dll 0x10052350. El arma se dibuja una sola vez con un shader aparte, o normal
-con las capas de quad y battlesuit encima. Las tres razones para el shader aparte, en el
-orden en que el binario las mira:
+[QL] cgamex86.dll 0x10052350. The weapon is drawn once with a shader of its own, or normally
+with the quad and battlesuit layers on top. The reasons for the separate shader, in the order
+the binary checks them:
 
-  invisibilidad   el portador la lleva puesta
-  cg_drawGun 3    y es el arma del jugador que se esta viendo: ghostWeaponShader, aditivo y
-                  con mapa de entorno (pak00, scripts/gfx.shader), que es como retail hace el
-                  arma transparente
+  invisibility    the carrier has it on
+  cg_drawGun 3    and it is the viewed player's weapon: ghostWeaponShader, additive and
+                  environment mapped (pak00, scripts/gfx.shader), which is how retail makes
+                  the transparent weapon
 
-"own" es lo que el binario resuelve comparando el numero de cliente (0x10052357), asi que
-tambien vale en tercera persona, no solo en la vista.
+"own" is what the binary resolves by comparing the client number (0x10052357), so it holds in
+third person too, not only in the view.
 ==============
 */
 static void CG_AddWeaponWithPowerups(refEntity_t* gun, int powerups, qboolean own) {
@@ -1432,10 +1432,10 @@ static void CG_AddWeaponWithPowerups(refEntity_t* gun, int powerups, qboolean ow
         return;
     }
     if (own && cg_drawGun.integer == 3) {
-        // [QL] 0x100523a8. WolfcamQL hace exactamente esto mismo (cg_weapons.c, cg_drawGun > 2):
-        // el shader de retail y el color en blanco opaco, que es lo que el jugador reconoce como
-        // "el arma transparente". El shader es aditivo con mapa de entorno, asi que el arma
-        // queda como un cristal: se ve la forma y se ve a traves.
+        // [QL] 0x100523a8. WolfcamQL does exactly this (cg_weapons.c, cg_drawGun > 2): retail's
+        // shader and opaque white, which is what players recognise as "the transparent weapon".
+        // The shader is additive and environment mapped, so the weapon comes out like glass:
+        // the shape shows and you see through it.
         gun->customShader = cgs.media.ghostWeaponShader;
         gun->shaderRGBA[0] = 255;
         gun->shaderRGBA[1] = 255;
@@ -1541,8 +1541,9 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
     weaponInfo_t* weapon;
     centity_t* nonPredictedCent;
     orientation_t lerped;
-    // [QL] 0x10052357: el binario resuelve "es el arma del que estoy viendo" comparando el
-    // numero de cliente, no si viene playerState, asi que tambien vale en tercera persona
+    // [QL] 0x10052357: the binary answers "is this the weapon of who I am watching" by
+    // comparing the client number, not by whether it came from playerState, so it holds in
+    // third person too
     qboolean own = (cent->currentState.clientNum == cg.snap->ps.clientNum);
 
     weaponNum = cent->currentState.weapon;
@@ -1582,11 +1583,11 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
         return;
     }
 
-    // [ioquakelive] el flag se limpia siempre, tambien en primera persona. El bucle de sonido es
-    // solo para los demas -uno no se escucha a si mismo desde afuera-, pero el flag lo lee
-    // CG_FireWeapon para callar el disparo de un arma que ya suena sola, y si no se limpia ac� se
-    // queda pegado desde la ultima vez que se vio a otro disparando. Ese era el motivo de que el
-    // pu�etazo del gauntlet no sonara.
+    // [ioquakelive] the flag is always cleared, in first person too. The sound loop is only for
+    // other players -- you do not hear yourself from the outside -- but CG_FireWeapon reads the
+    // flag to silence the shot of a weapon that already hums on its own, and unless it is
+    // cleared here it stays stuck from the last time somebody else was seen firing. That was
+    // why the gauntlet's punch made no sound.
     cent->pe.lightningFiring = qfalse;
     if ((cent->currentState.eFlags & EF_FIRING) && weapon->firingSound) {
         // lightning gun and guantlet make a different sound when fire is held down
@@ -1599,11 +1600,11 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
         trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin, weapon->readySound);
     }
 
-    // [ioquakelive] El arma va donde diga la etiqueta del modelo, y nada mas. Antes cg_drawGun
-    // 2 la espejaba a la zurda y el 3 la centraba, que es de Quake 3: en el binario cg_drawGun
-    // se lee en cuatro sitios y en ninguno mueve nada. La posicion es cosa de cg_gunX/Y/Z, que
-    // CG_AddViewWeapon suma sobre los ejes de la vista (0x10052cf0), y esos se cambian desde
-    // Ajustes.
+    // [ioquakelive] The weapon goes where the model's tag says, and nowhere else. cg_drawGun 2
+    // used to mirror it left-handed and 3 to centre it, which is Quake 3 behaviour: in the
+    // binary cg_drawGun is read in four places and none of them moves anything. Position is
+    // cg_gunX/Y/Z, which CG_AddViewWeapon adds along the view axes (0x10052cf0), and those are
+    // changed from the settings menu.
     trap_R_LerpTag(&lerped, parent->hModel, parent->oldframe, parent->frame,
                    1.0 - parent->backlerp, "tag_weapon");
     VectorCopy(parent->origin, gun.origin);
@@ -2315,8 +2316,8 @@ void CG_FireWeapon(centity_t* cent) {
     if (ent->eFlags & EF_NODRAW) {
         nonPredictedCent = &cg_entities[ent->number];
     }
-    // [QL] 0x10053e2a: retail mira solo este flag. El gauntlet no entra porque su golpe es un
-    // disparo con su propio sonido, no el zumbido del lightning gun.
+    // [QL] 0x10053e2a: retail looks at this flag alone. The gauntlet does not qualify because
+    // its swing is a shot with a sound of its own, not the lightning gun's hum.
     if (nonPredictedCent->pe.lightningFiring && ent->weapon != WP_GAUNTLET) {
         return;
     }
@@ -2486,8 +2487,8 @@ void CG_MissileHitWall(int weapon, int clientNum, vec3_t origin, vec3_t dir, imp
             radius = 4;
             break;
         case WP_GRAPPLING_HOOK:
-            // [QL] 0x1005417c: el gancho deja marca y suena al clavarse. No pone ni
-            // modelo ni shader de explosion, solo el sonido, la marca y el radio.
+            // [QL] 0x1005417c: the grapple leaves a mark and makes a sound when it bites. It
+            // sets neither model nor explosion shader, only the sound, the mark and the radius.
             sfx = cgs.media.grappleHitSound;
             mark = cgs.media.crackedMarkShader;
             radius = 16;

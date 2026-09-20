@@ -86,10 +86,10 @@ cvar_t* com_protocol;
 cvar_t* com_basegame;
 cvar_t* com_homepath;
 cvar_t* com_busyWait;
-// [ioquakelive] cuantos hilos trabajadores: -1 es uno por nucleo menos el principal
+// [ioquakelive] how many worker threads: -1 is one per core minus the main one
 cvar_t* com_workers;
 static void Com_JobTest_f(void);
-// [ioquakelive] el ritmo exacto de los frames, en microsegundos; 0 vuelve al de antes
+// [ioquakelive] exact frame pacing, in microseconds; 0 goes back to the previous one
 cvar_t* com_preciseFrameTiming;
 static int64_t com_frameTargetUs;
 static void Com_FrameTimes_f(void);
@@ -2614,14 +2614,15 @@ void Com_Init(char* commandLine) {
     // browser-driven event loop. So default throttling to off.
     com_maxfps = Cvar_Get("com_maxfps", "0", CVAR_ARCHIVE);
 #else
-    // [QL] quakelive_steam.exe 0x4cc2e9 registra 125 con rango 30-250. Aca el techo sube a 1000
-    // y 0 pasa a significar sin limite, que es lo que el limitador de abajo ya hacia con 0 y el
-    // rango de retail no dejaba pedir. El default sigue siendo 125.
+    // [QL] quakelive_steam.exe 0x4cc2e9 registers 125 with a range of 30-250. Here the ceiling
+    // goes up to 1000 and 0 comes to mean uncapped, which is what the limiter below already did
+    // with 0 and retail's range would not let you ask for. The default is still 125.
     //
-    // OJO: el limite de retail no es arbitrario. PM_Footsteps avanza el bobCycle con
-    // (int)(bobmove * pml.msec), asi que con msec de 1 o 2 el producto es menor que 1, se trunca
-    // a 0 y el ciclo se congela: se pierden los pasos y el bob del arma. Por eso esto va junto
-    // con el arrastre de la fraccion en bg_pmove.c; sin eso, subir el techo rompe los pasos.
+    // Retail's cap is not arbitrary: PM_Footsteps advances bobCycle with
+    // (int)(bobmove * pml.msec), so at msec 1 or 2 the product is below 1, truncates to 0 and
+    // the cycle freezes, losing the footsteps and the weapon bob. That is why this goes together
+    // with carrying the fraction in bg_pmove.c; without it, raising the ceiling breaks the
+    // footsteps.
     com_maxfps = Cvar_GetRange("com_maxfps", "125", "0", "1000", CVAR_ARCHIVE | CVAR_USERSAVE);
 #endif
     com_blood = Cvar_Get("com_blood", "1", CVAR_ARCHIVE);
@@ -2655,8 +2656,8 @@ void Com_Init(char* commandLine) {
     com_workers = Cvar_Get("com_workers", "-1", CVAR_ARCHIVE | CVAR_LATCH);
     com_preciseFrameTiming = Cvar_Get("com_preciseFrameTiming", "1", CVAR_ARCHIVE);
 
-    // [ioquakelive] los hilos trabajadores, para repartir lo que es CPU pura (ver la cola de
-    // trabajos, mas abajo)
+    // [ioquakelive] the worker threads, for spreading out what is pure CPU (see the job queue
+    // further down)
     Com_JobsInit();
     Cvar_Get("com_errorMessage", "", CVAR_ROM | CVAR_NORESTART);
 
@@ -2691,18 +2692,19 @@ void Com_Init(char* commandLine) {
     VM_Init();
     SV_Init();
 
-    // [ioquakelive] Steam, como retail: el cliente en 0x00461500 y el servidor en 0x00466ed0, los
-    // dos llamados desde su Com_Init y los dos saltados cuando com_build esta puesto
-    // [QL] el servidor dedicado no arranca la API de cliente de Steam: no hay ningun
-    // usuario con sesion y la biblioteca de Valve termina abortando por su hilo de
-    // escritura (tier0: "Illegal termination of worker thread CFileWriterThread").
-    // El qzeroded de retail tampoco la usa: le alcanza con la del gameserver.
+    // [ioquakelive] Steam, as in retail: the client at 0x00461500 and the server at 0x00466ed0,
+    // both called from its Com_Init and both skipped when com_build is set.
+    //
+    // [QL] the dedicated server does not start Steam's client API: there is no logged on user
+    // and Valve's library ends up aborting through its writer thread (tier0: "Illegal
+    // termination of worker thread CFileWriterThread"). Retail's qzeroded does not use it
+    // either: the gameserver API is enough for it.
     if (!com_dedicated->integer) {
         Steam_Init();
     }
     Steam_GS_Init();
 
-    // [ioquakelive] ZeroMQ, como retail (idZMQ::Init, 0x004f3f80): las cvars y el socket de rcon
+    // [ioquakelive] ZeroMQ, as in retail (idZMQ::Init, 0x004f3f80): the cvars and the rcon socket
     ZMQ_Init();
 
     com_dedicated->modified = qfalse;
@@ -2729,13 +2731,13 @@ void Com_Init(char* commandLine) {
 
     Com_Printf("--- Common Initialization Complete ---\n");
 
-    // [QL] serverstartup: la orden que el servidor corre cuando termina de arrancar. El
-    // server.cfg de retail la usa para levantar un mapa ("startRandomMap" o "map <x> <f>").
+    // [QL] serverstartup: the command the server runs once it has finished coming up. Retail's
+    // server.cfg uses it to bring a map up ("startRandomMap" or "map <x> <f>").
     {
-        const char* arranque = Cvar_VariableString("serverstartup");
+        const char* startup = Cvar_VariableString("serverstartup");
 
-        if (arranque[0]) {
-            Cbuf_AddText(va("%s\n", arranque));
+        if (startup[0]) {
+            Cbuf_AddText(va("%s\n", startup));
         }
     }
 }
@@ -3017,10 +3019,10 @@ int Com_TimeVal(int minMsec) {
 =================
 Com_FrameTimes_f
 
-[ioquakelive] /frametimes [n]: mide n intervalos reales entre frames, en microsegundos, y saca
-el reparto. Es el unico instrumento con el que se puede afirmar que algo mejoro la fluidez:
-com_speeds mide el trabajo de cada frame -- y en milisegundos enteros -- no lo que tarda un
-frame respecto del anterior, que es lo que se siente.
+[ioquakelive] /frametimes [n]: measures n real intervals between frames, in microseconds, and
+prints the distribution. It is the only instrument that can back a claim that something made
+the game smoother: com_speeds measures each frame's work -- and in whole milliseconds -- not
+how long a frame takes with respect to the one before, which is what is felt.
 =================
 */
 #define COM_FT_MAX 8192
@@ -3080,7 +3082,7 @@ static void Com_FrameTimes_f(void) {
     Com_Printf("frametimes: measuring %i frames...\n", wanted);
 }
 
-// se llama una vez por frame mientras haya medicion pedida
+// called once per frame while a measurement is under way
 static void Com_FrameTimeSample(void) {
     int64_t now;
 
@@ -3105,16 +3107,16 @@ static void Com_FrameTimeSample(void) {
 
 LA COLA DE TRABAJOS
 
-[ioquakelive] Reparte trabajo entre los nucleos. Nacio para decodificar imagenes mientras el
-hilo principal sigue cargando el mapa: decodificar es el 94% del costo de las texturas y es CPU
-pura, asi que es lo unico que vale la pena sacar del hilo principal. Leer los archivos se queda
-donde estaba, porque el sistema de archivos no es seguro entre hilos.
+[ioquakelive] Spreads work across the cores. It started out decoding images while the main
+thread carries on loading the map: decoding is 94% of what a texture costs and is pure CPU, so
+it is the only part worth taking off the main thread. Reading the files stays where it was,
+because the filesystem is not thread safe.
 
-La cola es a proposito lo mas simple posible: se encola una funcion con su dato y los
-trabajadores la ejecutan. Quien encola se entera de que termino mirando su propio dato -- una
-bandera suya --, no preguntandole a la cola.
+The queue is deliberately as simple as it can be: a function is queued with its data and the
+workers run it. Whoever queued finds out it finished by looking at its own data -- a flag of
+its own -- not by asking the queue.
 
-com_workers 0 apaga los trabajadores: todo vuelve a correr en el hilo principal.
+com_workers 0 turns the workers off: everything runs on the main thread again.
 
 ==============================================================================
 */
@@ -3158,7 +3160,7 @@ static void Com_JobWorker(void* unused) {
 =================
 Com_JobsInit
 
-Arranca los trabajadores: uno por nucleo menos el principal, hasta ocho.
+Starts the workers: one per core minus the main one, up to eight.
 =================
 */
 void Com_JobsInit(void) {
@@ -3200,8 +3202,8 @@ int Com_JobWorkers(void) {
 =================
 Com_JobsSubmit
 
-Encola un trabajo. Si no hay trabajadores -- o la cola esta llena, que no deberia pasar -- lo
-ejecuta aqui mismo, asi quien llama nunca tiene que tener dos caminos.
+Queues a job. With no workers -- or with the queue full, which should not happen -- it runs it
+right here, so a caller never needs two code paths.
 =================
 */
 void Com_JobsSubmit(void (*function)(void*), void* data) {
@@ -3228,8 +3230,7 @@ void Com_JobsSubmit(void (*function)(void*), void* data) {
 =================
 Com_JobTest_f
 
-Comprueba que los trabajadores anden: la misma cuenta repartida y hecha de una sola vez tienen
-que dar lo mismo.
+Checks the workers run: the same sum spread out and done in one go have to come out equal.
 =================
 */
 typedef struct {
@@ -3298,30 +3299,29 @@ Com_Frame
 =================
 Com_IdleExit
 
-[QL] 0x004e3e09. Un servidor dedicado que se queda sin mapa -- porque el juego se
-cayo o porque termino y no arranco otro -- se apaga solo tras sv_idleExit
-segundos, y asi lo que lo supervisa lo puede volver a levantar. Con 0 no se apaga
-nunca.
+[QL] 0x004e3e09. A dedicated server left with no map -- because the game died or because it
+ended and nothing started another -- shuts itself down after sv_idleExit seconds, so that
+whatever supervises it can bring it back up. At 0 it never shuts down.
 =================
 */
 static void Com_IdleExit(void) {
-    static int desdeCuando = 0;
-    int limite = Cvar_VariableIntegerValue("sv_idleExit");
+    static int idleSince = 0;
+    int limit = Cvar_VariableIntegerValue("sv_idleExit");
 
-    if (!com_dedicated || !com_dedicated->integer || limite <= 0) {
-        desdeCuando = 0;
+    if (!com_dedicated || !com_dedicated->integer || limit <= 0) {
+        idleSince = 0;
         return;
     }
     if (com_sv_running->integer) {
-        desdeCuando = 0;
+        idleSince = 0;
         return;
     }
-    if (!desdeCuando) {
-        desdeCuando = Sys_Milliseconds();
+    if (!idleSince) {
+        idleSince = Sys_Milliseconds();
         return;
     }
-    if (Sys_Milliseconds() - desdeCuando > limite * 1000) {
-        Com_Printf("Server has been idle for %i seconds, exiting.\n", limite);
+    if (Sys_Milliseconds() - idleSince > limit * 1000) {
+        Com_Printf("Server has been idle for %i seconds, exiting.\n", limit);
         Com_Quit_f();
     }
 }
@@ -3329,7 +3329,7 @@ static void Com_IdleExit(void) {
 void Com_Frame(void) {
     Steam_Frame();
     Com_IdleExit();
-    SV_VoiceFrame();  // [QL] 0x00466850: el reparto de la voz va en el mismo cuadro que Steam
+    SV_VoiceFrame();  // [QL] 0x00466850: handing out voice goes in the same frame as Steam
     ZMQ_Frame();
     int msec, minMsec;
     int timeVal, timeValSV;
@@ -3363,8 +3363,8 @@ void Com_Frame(void) {
     }
 
     // Figure out how much time we have
-    // [ioquakelive] capUs es el mismo limite en microsegundos, exacto: 125 fps son 8000 us, no
-    // "1000/125 redondeado". Vale 0 cuando no hay limite.
+    // [ioquakelive] capUs is the same cap in microseconds, exactly: 125 fps is 8000 us, not
+    // "1000/125 rounded". It is 0 when there is no cap.
     capUs = 0;
     if (!com_timedemo->integer) {
         if (com_dedicated->integer)
@@ -3395,16 +3395,16 @@ void Com_Frame(void) {
     } else
         minMsec = 1;
 
-    // [ioquakelive] El ritmo exacto. El camino de abajo apunta a un instante redondeado a
-    // milisegundos, asi que a 125 fps los frames salen de 8 y de 9 ms mezclados. Aqui el objetivo
-    // se lleva en microsegundos y se acumula, de modo que no arrastra deriva: si un frame se pasa,
-    // el siguiente se acorta solo. Se duerme el grueso -- NET_Sleep ademas atiende la red, por eso
-    // no se usa Sys_Sleep -- y el ultimo milisegundo y medio se gira, que es lo que el motor ya
-    // hacia. com_preciseFrameTiming 0 vuelve al camino anterior.
+    // [ioquakelive] Exact pacing. The path below aims at an instant rounded to milliseconds, so
+    // at 125 fps the frames come out 8 and 9 ms mixed. Here the target is carried in microseconds
+    // and accumulated, so it drags no drift: if one frame runs over, the next shortens itself.
+    // The bulk is slept away -- NET_Sleep also services the network, which is why Sys_Sleep is
+    // not used -- and the last millisecond and a half is spun, which is what the engine already
+    // did. com_preciseFrameTiming 0 goes back to the previous path.
     if (com_preciseFrameTiming->integer && capUs > 1000) {
         int64_t nowUs = Sys_Microseconds();
 
-        // un salto grande (cargar un mapa, minimizar, cambiar el limite) reinicia el ritmo
+        // a big jump (loading a map, minimising, changing the cap) restarts the pacing
         if (!com_frameTargetUs || nowUs - com_frameTargetUs > 250000 ||
             com_frameTargetUs - nowUs > 250000) {
             com_frameTargetUs = nowUs;
@@ -3919,9 +3919,9 @@ void Field_CompleteKeyname(void) {
 ===============
 Field_CompleteList
 
-Completar contra una lista armada en el momento: los mapas, las factories, los
-nombres de los jugadores. Los tres salen de tablas que ya existen en memoria y
-no de archivos, asi que no sirve Field_CompleteFilename.
+Completion against a list built on the spot: the maps, the factories, the player
+names. All three come from tables already in memory rather than from files, so
+Field_CompleteFilename is no use.
 ===============
 */
 void Field_CompleteList(const char* const* list, int count) {

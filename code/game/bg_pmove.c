@@ -1879,27 +1879,26 @@ static void PM_Footsteps(void) {
 
     // check for footstep / splash sounds
     //
-    // [QL] EXCEPCION a retail, pedida por el usuario junto con destapar com_maxfps.
+    // [QL] DELIBERATE EXCEPTION to retail, asked for along with uncapping com_maxfps.
     //
-    // Retail hace `bobCycle = (int)(old + bobmove * pml.msec) & 255`, y esa truncacion tira la
-    // parte decimal en cada frame. Con msec de 8 (125 fps) se pierde poco y no se nota, pero
-    // cuanto mas alto el fps mas chico el msec: pasando de ~330 fps el producto queda por debajo
-    // de 1, se trunca a 0 y el ciclo se congela. Ahi dejan de sonar los pasos y se frena el bob
-    // del arma, que es justo el sintoma que aparece al destapar el limite de fps.
+    // Retail does `bobCycle = (int)(old + bobmove * pml.msec) & 255`, and that truncation
+    // throws away the fraction every frame. At msec 8 (125 fps) little is lost and nobody
+    // notices, but the higher the framerate the smaller the msec: past ~330 fps the product
+    // falls below 1, truncates to 0 and the cycle freezes. Footsteps go silent and the weapon
+    // bob stops, which is exactly the symptom that shows up once the fps cap is lifted.
     //
-    // El arreglo es guardar lo que sobra en vez de tirarlo. El ciclo visible sigue siendo de 8
-    // bits, que es lo unico que viaja por red (msg.c: PSF(bobCycle) con 8 bits); la fraccion vive
-    // en los bits 8 a 15 en 1/256 de unidad, o sea del lado local nada mas. La prediccion del
-    // cliente arranca de cada snapshot con esos bits en cero y rehace los mismos comandos, asi
-    // que da lo mismo en las dos puntas.
+    // The fix is to keep the remainder instead of dropping it. The visible cycle is still 8
+    // bits, which is all that goes over the wire (msg.c: PSF(bobCycle) with 8 bits); the
+    // fraction lives in bits 8 to 15 in 1/256 units, local only. Client prediction starts from
+    // each snapshot with those bits at zero and replays the same commands, so both ends agree.
     //
-    // Efecto secundario que hay que saber: ahora el ciclo avanza al ritmo real en vez del
-    // truncado. Corriendo (bobmove 0.4) a 125 fps retail avanzaba 3 por frame en vez de 3.2, o
-    // sea que los pasos salen ~7% mas seguidos que en retail sin parchar. No hay forma de tener
-    // las dos cosas: el ritmo de retail depende del fps, que es el bug.
+    // Side effect worth knowing: the cycle now advances at the real rate instead of the
+    // truncated one. Running (bobmove 0.4) at 125 fps retail advanced 3 per frame instead of
+    // 3.2, so footsteps come ~7% closer together than in unpatched retail. There is no way to
+    // have both: retail's rate depends on the framerate, and that is the bug.
     old = pm->ps->bobCycle & 255;
     {
-        int carry = (pm->ps->bobCycle >> 8) & 255;              // lo que sobro del frame anterior
+        int carry = (pm->ps->bobCycle >> 8) & 255;              // the previous frame's remainder
         int units = (int)(bobmove * pml.msec * 256.0f) + carry;  // avance en 1/256 de unidad
         int cycle = (old + (units >> 8)) & 255;
 

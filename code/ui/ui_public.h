@@ -34,18 +34,18 @@ typedef struct {
     char messageString[MAX_STRING_CHARS];
 } uiClientState_t;
 
-// [ioquakelive] un amigo de Steam, tal como lo ve la interfaz. Es steamFriend_t sin
-// el Steam ID: las acciones viajan por indice, asi el modulo no tiene que mover 64
-// bits por la llamada al motor.
+// [ioquakelive] a Steam friend as the interface sees one. It is steamFriend_t without the
+// Steam ID: actions travel by index, so the module never has to push 64 bits through the
+// engine call.
 typedef struct {
     char name[64];
     int state;          // 0 desconectado, 1 conectado, 2 ocupado, 3 ausente, 4 dormido
     qboolean playing;   // esta jugando a algo
-    qboolean sameGame;  // y ese algo es Quake Live
-    qboolean server;    // y ademas se lo puede alcanzar en un servidor
+    qboolean sameGame;  // and that something is Quake Live
+    qboolean server;    // and they can be reached on a server
 } uiFriend_t;
 
-// lo que trap_SteamFriendAction sabe hacer con uno
+// what trap_SteamFriendAction knows how to do with one
 #define UI_FRIEND_JOIN 0
 #define UI_FRIEND_INVITE 1
 #define UI_FRIEND_PROFILE 2
@@ -169,9 +169,9 @@ typedef enum {
     // web UI did through the Steam overlay (OpenSteamOverlayURL). Only the UI can
     // ask for it: a console command would let a server send one by stufftext.
     UI_SYS_OPENURL,
-    // [ioquakelive] los amigos de Steam para la franja social del menu. En retail esta
-    // lista la daba la pagina web (GetFriendList del puente con JavaScript), que aca no
-    // existe; los datos son los mismos que imprime la orden "friends" de la consola.
+    // [ioquakelive] the Steam friends for the menu's social strip. In retail this list came
+    // from the web page (GetFriendList of the JavaScript bridge), which does not exist here;
+    // the data is the same the console's "friends" command prints.
     UI_STEAM_FRIEND_COUNT,
     UI_STEAM_FRIEND_GET,
     UI_STEAM_FRIEND_ACTION

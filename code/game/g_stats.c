@@ -141,8 +141,8 @@ void STAT_PlayerSwitchTeam(gentity_t* ent, int oldTeam, int newTeam) {
     STAT_Send(STAT_Account(ent), "PLAYER_SWITCHTEAM", data);
 }
 
-// [ioquakelive] cuantas lleva cada jugador de cada medalla, para el TOTAL del evento. Retail lo
-// saca de sus contadores; de cual sale cada llamada no esta verificado contra el binario.
+// [ioquakelive] how many of each medal a player has, for the event's TOTAL. Retail reads
+// it from its own counters; which one feeds each call is not verified against the binary.
 #define STAT_MAX_MEDALS 24
 
 static struct {
@@ -171,7 +171,7 @@ void STAT_ResetMedals(void) {
     Com_Memset(statMedals, 0, sizeof(statMedals));
 }
 
-// cuantas lleva ese jugador de esa medalla, contando esta
+// how many of that medal the player has, this one included
 int STAT_MedalTotal(gentity_t* ent, const char* medal) {
     if (!ent || !ent->client) {
         return 1;
@@ -234,7 +234,7 @@ void STAT_PlayerRaceComplete(gentity_t* ent, int raceTime, qboolean weaponsUsed)
     data = STAT_Begin();
     J_SetString(data, "NAME", ent->client->pers.netname);
     STAT_SteamId(data, ent);
-    J_SetBool(data, "WEAPONS_USED", weaponsUsed);  // [QL] 0x10071f84: es un booleano, no una cuenta
+    J_SetBool(data, "WEAPONS_USED", weaponsUsed);  // [QL] 0x10071f84: a boolean, not a count
     J_SetInt(data, "RACE_TIME", raceTime);
     STAT_Send(STAT_Account(ent), "PLAYER_RACECOMPLETE", data);
 }
@@ -260,16 +260,16 @@ void G_SetMatchGUID(void) {
 
 PLAYER_KILL y PLAYER_DEATH
 
-[QL] 0x100726e0, llamado desde player_die (0x1004751a). Retail arma un solo
-documento y lo manda dos veces: como PLAYER_KILL a la cuenta del que mato y
-como PLAYER_DEATH a la del que murio. La misma funcion lleva adentro la cuenta
-de muertes y de la racha -- en el fork eso ya lo hace STAT_AddPlayerDeathStat --
-y desbloquea logros de Steam, que todavia no tenemos.
+[QL] 0x100726e0, called from player_die (0x1004751a). Retail builds a single document
+and sends it twice: as PLAYER_KILL to the killer's account and as PLAYER_DEATH to the
+victim's. The same function also keeps the death and streak counts -- here that is
+already done by STAT_AddPlayerDeathStat -- and unlocks Steam achievements, which are
+not implemented.
 
 ===============================================================================
 */
 
-// [QL] 0x100711b0: el nombre del MOD
+// [QL] 0x100711b0: the MOD's name
 static const char* STAT_ModName(int mod) {
     switch (mod) {
         case MOD_SHOTGUN: return "SHOTGUN";
@@ -309,7 +309,7 @@ static const char* STAT_ModName(int mod) {
     }
 }
 
-// [QL] 0x100713e0: el nombre del arma. El gancho no tiene nombre propio
+// [QL] 0x100713e0: the weapon's name. The grapple has no name of its own
 static const char* STAT_WeaponName(int weapon) {
     switch (weapon) {
         case WP_GAUNTLET: return "GAUNTLET";
@@ -329,7 +329,7 @@ static const char* STAT_WeaponName(int weapon) {
     }
 }
 
-// [QL] 0x10071480: el nombre del powerup
+// [QL] 0x10071480: the powerup's name
 static const char* STAT_PowerupName(int pw) {
     switch (pw) {
         case PW_REDFLAG: return "RED_FLAG";
@@ -345,12 +345,12 @@ static const char* STAT_PowerupName(int pw) {
         case PW_SCOUT: return "SCOUT";
         case PW_GUARD: return "GUARD";
         case PW_DOUBLER: return "DOUBLER";
-        case PW_AMMOREGEN: return "ARMOR_REGEN";  // [QL] el cuarto persistente se llama asi en las estadisticas
+        case PW_AMMOREGEN: return "ARMOR_REGEN";  // [QL] the fourth persistant is called this in the stats
         default: return "OTHER_POWERUP";
     }
 }
 
-// [QL] el holdable sale del giTag del item que lleva
+// [QL] the holdable comes from the giTag of the carried item
 static const char* STAT_HoldableName(int giTag) {
     switch (giTag) {
         case HI_TELEPORTER: return "TELEPORTER";
@@ -366,10 +366,10 @@ static const char* STAT_HoldableName(int giTag) {
 ===============
 STAT_PlayerFrame
 
-Lo que el evento cuenta de un jugador en el momento de la muerte: con que arma,
-como estaba y donde. El que mato va con el arma del MOD y con la vida que tiene
-ahora; el que murio, con el arma que llevaba y con la vida y la armadura que
-tenia antes del ultimo golpe (expandedStats.previousHealth / previousArmor).
+What the event says about a player at the moment of death: which weapon, what shape
+they were in and where. The killer goes with the MOD's weapon and the health they have
+now; the victim, with the weapon they were holding and the health and armor they had
+before the last hit (expandedStats.previousHealth / previousArmor).
 ===============
 */
 static void STAT_PlayerFrame(jnode_t* obj, gentity_t* ent, int weapon, int health, int armor) {
@@ -390,7 +390,7 @@ static void STAT_PlayerFrame(jnode_t* obj, gentity_t* ent, int weapon, int healt
     J_SetInt(obj, "AMMO", cl->ps.ammo[weapon]);
     J_SetInt(obj, "TEAM", cl->sess.sessionTeam);
 
-    // la velocidad es solo la horizontal, y va como el float que es
+    // speed is horizontal only, and goes out as the float it is
     speed = (float)sqrt((double)(cl->ps.velocity[0] * cl->ps.velocity[0] +
                                  cl->ps.velocity[1] * cl->ps.velocity[1]));
     J_SetFloat(obj, "SPEED", speed);
@@ -409,7 +409,7 @@ static void STAT_PlayerFrame(jnode_t* obj, gentity_t* ent, int weapon, int healt
     J_SetFloat(view, "Z", cl->ps.viewangles[2]);
     J_SetNode(obj, "VIEW", view);
 
-    // las banderas no cuentan: el recorrido empieza en el quad
+    // the flags do not count: the walk starts at the quad
     powerups = J_Array();
     for (i = PW_QUAD; i < PW_NUM_POWERUPS; i++) {
         if (cl->ps.powerups[i]) {
@@ -418,7 +418,7 @@ static void STAT_PlayerFrame(jnode_t* obj, gentity_t* ent, int weapon, int healt
     }
     J_SetNode(obj, "POWERUPS", powerups);
 
-    // el holdable solo aparece si lleva uno
+    // the holdable only shows when one is carried
     if (cl->ps.stats[STAT_HOLDABLE_ITEM]) {
         J_SetString(obj, "HOLDABLE",
                     STAT_HoldableName(bg_itemlist[cl->ps.stats[STAT_HOLDABLE_ITEM]].giTag));
@@ -432,7 +432,7 @@ static void STAT_PlayerFrame(jnode_t* obj, gentity_t* ent, int weapon, int healt
         J_SetFloat(obj, "BOT_SKILL", atof(Info_ValueForKey(userinfo, "skill")));
     } else {
         J_SetBool(obj, "BOT", qfalse);
-        J_SetNull(obj, "BOT_SKILL");  // [QL] 0x10072f49: al humano le va el nulo de jsoncpp
+        J_SetNull(obj, "BOT_SKILL");  // [QL] 0x10072f49: a human gets jsoncpp's null
     }
 }
 
@@ -440,8 +440,8 @@ static void STAT_PlayerFrame(jnode_t* obj, gentity_t* ent, int weapon, int healt
 ===============
 STAT_PlayerKill
 
-victimStreak es la racha que traia el que murio, tomada antes de que la muerte
-la corte, que es el orden que tiene retail adentro de su funcion.
+victimStreak is the streak the victim was on, read before the death cuts it, which is
+the order retail has inside its own function.
 ===============
 */
 void STAT_PlayerKill(gentity_t* victim, gentity_t* attacker, int mod, int victimStreak) {
@@ -452,8 +452,9 @@ void STAT_PlayerKill(gentity_t* victim, gentity_t* attacker, int mod, int victim
     int dead[4];
     int i;
 
-    // [QL] 0x10072716: mientras el juego mueve gente de equipo (shuffle o balance) no sale nada.
-    // La global es 0x105df558 = level.teamShuffleActive, no level.scoringDisabled.
+    // [QL] 0x10072716: while the game is moving people between teams (shuffle or balance)
+    // nothing goes out. The global is 0x105df558 = level.teamShuffleActive, not
+    // level.scoringDisabled.
     if (level.teamShuffleActive) {
         return;
     }
@@ -470,7 +471,7 @@ void STAT_PlayerKill(gentity_t* victim, gentity_t* attacker, int mod, int victim
     J_SetBool(data, "TEAMKILL", teamkill);
     J_SetBool(data, "SUICIDE", (qboolean)(attacker == victim));
 
-    // retail deja las dos en nulo y solo las llena si hay quien
+    // retail leaves both null and only fills them when there is somebody
     J_SetNull(data, "KILLER");
     if (attacker && attacker->client) {
         who = J_Object();
@@ -495,7 +496,7 @@ void STAT_PlayerKill(gentity_t* victim, gentity_t* attacker, int mod, int victim
         case GT_FREEZE:
         case GT_AD:
         case GT_RR:
-            // en attack & defend la ronda cuenta los dos turnos
+            // in attack & defend a round counts both turns
             J_SetInt(data, "ROUND",
                      g_gametype.integer == GT_AD ? level.roundState.turn + level.roundState.round * 2
                                                  : level.roundState.round);
@@ -512,7 +513,7 @@ void STAT_PlayerKill(gentity_t* victim, gentity_t* attacker, int mod, int victim
         int mine = victim->client->sess.sessionTeam == TEAM_RED ? TEAM_RED : TEAM_BLUE;
         int other = victim->client->sess.sessionTeam == TEAM_RED ? TEAM_BLUE : TEAM_RED;
 
-        // [QL] 0x10071520: vivo es el que esta jugando (pm_type normal), muerto todo el resto
+        // [QL] 0x10071520: alive is whoever is playing (normal pm_type), dead is everyone else
         Com_Memset(alive, 0, sizeof(alive));
         Com_Memset(dead, 0, sizeof(dead));
         for (i = 0; i < level.maxclients; i++) {
@@ -536,7 +537,7 @@ void STAT_PlayerKill(gentity_t* victim, gentity_t* attacker, int mod, int victim
         J_SetInt(data, "OTHER_TEAM_DEAD", dead[other]);
     }
 
-    // el mismo documento, a las dos cuentas
+    // the same document, to both accounts
     if (attacker && attacker->client) {
         STAT_Send(STAT_Account(attacker), "PLAYER_KILL", data);
     }
@@ -549,14 +550,14 @@ void STAT_PlayerKill(gentity_t* victim, gentity_t* attacker, int mod, int victim
 ===============
 STAT_MatchStarted
 
-[QL] 0x10077a30, llamado cuando se acaba la cuenta regresiva del calentamiento
-(0x10058860), antes del map_restart que arranca la partida. Este evento no lleva
-el prologo TIME / WARMUP: lleva las reglas con las que se juega y quienes
-estaban. Sale sin cuenta (steam id 0).
+[QL] 0x10077a30, called when the warmup countdown runs out (0x10058860), before the
+map_restart that starts the match. This event carries no TIME / WARMUP prologue: it
+carries the rules being played and who was present. It goes out with no account
+(steam id 0).
 ===============
 */
 
-// [QL] 0x10071110: el nombre corto del tipo de juego
+// [QL] 0x10071110: the gametype's short name
 static const char* STAT_GameTypeName(int gametype) {
     switch (gametype) {
         case GT_FFA: return "FFA";
@@ -592,7 +593,7 @@ void STAT_MatchStarted(void) {
     J_SetString(data, "FACTORY", g_factory.string);
     J_SetString(data, "FACTORY_TITLE", g_factoryTitle.string);
 
-    // el mapa sale del serverinfo y va en minusculas
+    // the map comes from the serverinfo and goes out in lower case
     trap_GetServerinfo(serverinfo, sizeof(serverinfo));
     Q_strncpyz(mapname, Info_ValueForKey(serverinfo, "mapname"), sizeof(mapname));
     Q_strlwr(mapname);
@@ -612,11 +613,11 @@ void STAT_MatchStarted(void) {
     trap_GetConfigstring(CS_MATCH_GUID, guid, sizeof(guid));
     J_SetString(data, "MATCH_GUID", guid);
 
-    // [QL] 0x1007801b: el titulo del servidor sale de la cvar, no del serverinfo
+    // [QL] 0x1007801b: the server title comes from the cvar, not from the serverinfo
     trap_Cvar_VariableStringBuffer("sv_hostname", hostname, sizeof(hostname));
     J_SetString(data, "SERVER_TITLE", hostname);
 
-    // todo el que esta en el servidor, aunque todavia se este conectando
+    // everyone on the server, even those still connecting
     players = J_Array();
     for (i = 0; i < level.maxclients; i++) {
         gentity_t* ent = &g_entities[i];
@@ -641,23 +642,23 @@ void STAT_MatchStarted(void) {
 
 PLAYER_STATS
 
-[QL] 0x10074360. La planilla entera de un jugador. Sale tres veces:
+[QL] 0x10074360. A player's whole stats sheet. It goes out three times:
 
-  - al final de la partida, desde LogExit (0x100576eb), con quit = 0
-  - cuando alguien se va, desde ClientDisconnect (0x1003c812), con quit = 1
-  - cuando alguien deja su equipo, desde SetTeam (0x10040535), con quit = 1
+  - at the end of the match, from LogExit (0x100576eb), with quit = 0
+  - when somebody leaves, from ClientDisconnect (0x1003c812), with quit = 1
+  - when somebody leaves their team, from SetTeam (0x10040535), with quit = 1
 
-El primer parametro de retail (ecx) es "la partida se abortó"; el tercero, "este
-jugador se fue". No sale nada de un jugador que todavia se esta conectando, que
-esta en el intermission o que es espectador.
+Retail's first parameter (ecx) is "the match was aborted"; the third, "this player
+left". Nothing goes out for a player who is still connecting, who is in intermission
+or who is a spectator.
 
 ===============================================================================
 */
 
-// [QL] el valor que usa retail para "este equipo o jugador no tiene puntaje"
+// [QL] the value retail uses for "this team or player has no score"
 #define STAT_NO_SCORE (-999)
 
-// [QL] 0x10074360: los powerups van con el nombre del que se levanto, sin las banderas
+// [QL] 0x10074360: powerups go by the name of the one picked up, flags excluded
 static void STAT_PickupCounts(jnode_t* pickups, const gclient_t* cl) {
     int i;
 
@@ -676,7 +677,7 @@ static void STAT_PickupCounts(jnode_t* pickups, const gclient_t* cl) {
     J_SetInt(pickups, "YELLOW_ARMOR", cl->expandedStats.numYellowArmorPickups);
 }
 
-// el promedio de cuanto tardo en volver a cada item; solo va el que levanto alguna vez
+// the average time taken to return to each item; only items ever picked up are listed
 static void STAT_ItemTiming(jnode_t* data, const gclient_t* cl) {
     jnode_t* timing = J_Object();
     const expandedStatObj_t* st = &cl->expandedStats;
@@ -696,7 +697,7 @@ static void STAT_ItemTiming(jnode_t* data, const gclient_t* cl) {
     J_SetNode(data, "ITEM_TIMING", timing);
 }
 
-// [QL] las medallas: tres salen de persistant y diez del arreglo de premios
+// [QL] the medals: three come from persistant and ten from the awards array
 static void STAT_Medals(jnode_t* data, const gclient_t* cl) {
     jnode_t* medals = J_Object();
 
@@ -719,9 +720,9 @@ static void STAT_Medals(jnode_t* data, const gclient_t* cl) {
     J_SetNode(data, "MEDALS", medals);
 }
 
-// [QL] 0x10076de1: quien gano. Un equipo con menos puntos todavia gana si el otro
-// se quedo sin nadie; fuera de los equipos, gana el primero del ranking o cualquiera
-// si hubo forfeit
+// [QL] 0x10076de1: who won. A team with fewer points still wins if the other one ran
+// out of players; outside team modes the top of the ranking wins, or anybody at all on
+// a forfeit
 static void STAT_WinLose(jnode_t* data, const gclient_t* cl) {
     qboolean win = qfalse;
 
@@ -763,7 +764,8 @@ void STAT_PlayerStats(gclient_t* cl, qboolean aborted, qboolean quit) {
     data = J_Object();
 
     J_SetString(data, "NAME", cl->pers.netname);
-    // [QL] 0x100743fc: aca el bot no lleva "0" -- va su cuenta, que es cero igual
+    // [QL] 0x100743fc: a bot does not carry "0" here -- it carries its account, which is
+    // zero anyway
     J_SetString(data, "STEAM_ID", va("%llu", (unsigned long long)cl->pers.steamId));
     trap_GetConfigstring(CS_MATCH_GUID, guid, sizeof(guid));
     J_SetString(data, "MATCH_GUID", guid);
@@ -774,14 +776,14 @@ void STAT_PlayerStats(gclient_t* cl, qboolean aborted, qboolean quit) {
     J_SetString(data, "MODEL", Info_ValueForKey(userinfo, "model"));
     J_SetInt(data, "PLAY_TIME", (level.time - cl->pers.enterTime) / 1000);
 
-    // en race el que no marco tiempo tiene el puntaje al tope; sale como -1
+    // in race, whoever set no time has the score at its ceiling; it goes out as -1
     if (g_gametype.integer == GT_RACE && cl->ps.persistant[PERS_SCORE] == 0x7fffffff) {
         J_SetInt(data, "SCORE", -1);
     } else {
         J_SetInt(data, "SCORE", cl->ps.persistant[PERS_SCORE]);
     }
 
-    // arma por arma: muertes, muertos, tiros, aciertos, daño, tiempo y cuantas levanto
+    // weapon by weapon: kills, deaths, shots, hits, damage, time and how many were picked up
     weapons = J_Object();
     for (i = 1; i < WP_NUM_WEAPONS; i++) {
         jnode_t* w = J_Object();
@@ -816,7 +818,7 @@ void STAT_PlayerStats(gclient_t* cl, qboolean aborted, qboolean quit) {
 
     STAT_Medals(data, cl);
 
-    // lo de equipos solo aparece en los modos de equipo
+    // the team fields only appear in team modes
     if (g_gametype.integer > GT_RACE) {
         J_SetInt(data, "TEAM", cl->sess.sessionTeam);
         J_SetInt(data, "HOLY_SHITS", cl->expandedStats.numHolyShits);
@@ -836,7 +838,7 @@ void STAT_PlayerStats(gclient_t* cl, qboolean aborted, qboolean quit) {
         J_SetInt(data, "QUIT", 0);
         STAT_WinLose(data, cl);
     } else {
-        // el que se fue no tiene puesto ni gano nada
+        // whoever left has no rank and won nothing
         J_SetInt(data, "RANK", -1);
         J_SetInt(data, "TIED_RANK", 1);
         if (g_gametype.integer >= GT_TEAM) {
@@ -855,12 +857,12 @@ void STAT_PlayerStats(gclient_t* cl, qboolean aborted, qboolean quit) {
 ===============
 STAT_MatchReport
 
-[QL] 0x10076fe0, lo ultimo de LogExit (0x10057785). Cierra la partida: con que
-reglas se jugo, como quedo y quien anoto. Retail se lo pasa al motor por otra
-importacion (+0x2e4, 0x004f4c30), que lo publica como MATCH_REPORT; aca se
-publica igual que los demas eventos, con el mismo documento resultante.
+[QL] 0x10076fe0, the last thing LogExit does (0x10057785). It closes the match: which
+rules were played, how it ended and who scored. Retail hands it to the engine through a
+different import (+0x2e4, 0x004f4c30), which publishes it as MATCH_REPORT; here it is
+published like every other event, with the same resulting document.
 
-Sale una sola vez por partida y nunca en un map_restart.
+It goes out once per match and never on a map_restart.
 ===============
 */
 void STAT_MatchReport(qboolean aborted, int restarted, const char* exitMsg) {
@@ -901,7 +903,7 @@ void STAT_MatchReport(qboolean aborted, int restarted, const char* exitMsg) {
     J_SetInt(data, "QUADHOG", g_quadHog.integer);
     J_SetInt(data, "INFECTED", g_rrInfected.integer);
 
-    // [QL] 0x100776fe: si nadie anoto, va "none"
+    // [QL] 0x100776fe: with nobody scoring, it is "none"
     J_SetString(data, "FIRST_SCORER", level.firstScorer[0] ? level.firstScorer : "none");
     J_SetString(data, "LAST_SCORER", level.lastScorer[0] ? level.lastScorer : "none");
     J_SetString(data, "LAST_TEAMSCORER", level.lastTeamScorer[0] ? level.lastTeamScorer : "none");
@@ -920,10 +922,10 @@ void STAT_MatchReport(qboolean aborted, int restarted, const char* exitMsg) {
 ===============
 STAT_UpdatePlayTime
 
-[QL] 0x10078960, llamado desde ClientThink_real (0x100353cb) cuando el jugador
-esta vivo. Suma el tiempo desde el ultimo paso al total jugado y, si esta en
-juego, al del arma que lleva. De ahi salen el PLAY_TIME y la "T" de cada arma
-del PLAYER_STATS.
+[QL] 0x10078960, called from ClientThink_real (0x100353cb) while the player is alive.
+It adds the time since the last frame to the total played and, if they are in play, to
+that of the weapon they hold. PLAY_TIME and the "T" of each weapon in PLAYER_STATS come
+from here.
 ===============
 */
 void STAT_UpdatePlayTime(gentity_t* ent) {

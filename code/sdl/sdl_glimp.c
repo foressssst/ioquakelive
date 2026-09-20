@@ -328,8 +328,8 @@ static qboolean GLimp_GetProcAddresses(qboolean fixedFunction) {
         QGL_3_0_PROCS;
     }
 
-    // [ioquakelive] las barreras son de OpenGL 3.2; si no estan, qglFenceSync queda en NULL y el
-    // renderer se queda con el camino de siempre
+    // [ioquakelive] fences are OpenGL 3.2; when they are missing qglFenceSync stays NULL and the
+    // renderer keeps to the usual path
     if (QGL_VERSION_ATLEAST(3, 2) || QGLES_VERSION_ATLEAST(3, 0)) {
         QGL_ARB_sync_PROCS;
     }
@@ -488,9 +488,9 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
         SDL_window = NULL;
     }
 
-    // [ioquakelive] 2 es pantalla completa SIN BORDES: una ventana del tamano del escritorio,
-    // sin cambio de modo de video. Es lo que hace que el alt-tab sea inmediato, y con el hint de
-    // abajo el juego tampoco se minimiza solo al hacer clic en otro monitor.
+    // [ioquakelive] 2 is BORDERLESS fullscreen: a window the size of the desktop, with no video
+    // mode change. That is what makes alt-tab immediate, and with the hint below the game no
+    // longer minimises itself when another monitor is clicked.
     if (fullscreen == 2) {
         SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
         flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
@@ -1004,8 +1004,8 @@ void GLimp_Init(qboolean fixedFunction) {
     ri.Sys_GLimpInit();
 
     // [QL] quakelive_steam.exe 0x448110: full screen takes r_mode, a window r_windowedMode
-    // [ioquakelive] r_fullscreen 2, sin bordes, toma siempre la resolucion del escritorio: es lo
-    // que significa una ventana sin bordes del tamano de la pantalla.
+    // [ioquakelive] r_fullscreen 2, borderless, always takes the desktop's resolution: that is
+    // what a borderless window the size of the screen means.
     if (r_fullscreen->integer == 2)
         mode = -2;
     else

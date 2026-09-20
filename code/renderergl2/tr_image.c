@@ -2201,8 +2201,8 @@ Wrapper for R_CreateImage2(), for the old parameters.
 ================
 */
 image_t* R_CreateImage(const char* name, byte* pic, int width, int height, imgType_t type, imgFlags_t flags, int internalFormat) {
-    // [ioquakelive] la subida a la GPU, cronometrada aparte de la decodificacion: esta va por el
-    // contexto de OpenGL y no se puede repartir entre hilos; decodificar si
+    // [ioquakelive] the upload to the GPU, timed apart from the decoding: this one goes through
+    // the OpenGL context and cannot be spread across threads; decoding can
     int64_t uploadStart = ri.Microseconds();
     image_t* uploaded = R_CreateImage2(name, pic, width, height, GL_RGBA8, 0, type, flags, internalFormat);
 
@@ -2331,7 +2331,7 @@ void R_LoadImage(const char* name, byte** pic, int* width, int* height, GLenum* 
     }
 }
 
-// [ioquakelive] el reparto del tiempo de carga de imagenes: decodificar contra subir a la GPU
+// [ioquakelive] where image loading time goes: decoding against uploading to the GPU
 int64_t r_imageDecodeUs, r_imageUploadUs, r_imageReadUs;
 int r_imageCount;
 
@@ -2361,21 +2361,21 @@ void R_ImageLoadStatsReport(void) {
 /*
 ==============================================================================
 
-TEXTURAS DECODIFICADAS POR ADELANTADO
+TEXTURES DECODED AHEAD OF TIME
 
-[ioquakelive] De lo que cuesta cargar las texturas de un mapa, el 94% es decodificar, y eso es
-CPU pura: 0.86 s de 0.92 en campgrounds, contra 0.05 s de leer del pk3 y 0.01 s de subir a la
-GPU. Asi que el hilo principal sigue leyendo los archivos -- el sistema de archivos no es seguro
-entre hilos -- y los trabajadores decodifican mientras el hilo principal sigue registrando
-shaders. Cuando le toca a una imagen, casi siempre ya esta lista.
+[ioquakelive] Of what loading a map's textures costs, 94% is decoding, and that is pure CPU:
+0.86 s out of 0.92 on campgrounds, against 0.05 s reading from the pk3 and 0.01 s uploading to
+the GPU. So the main thread goes on reading the files -- the filesystem is not thread safe --
+and the workers decode while the main thread carries on registering shaders. By the time an
+image comes up, it is almost always ready.
 
-Para leer por adelantado hay que saber QUE, y eso no se sabe hasta que el mapa se cargo una vez:
-al terminar cada carga se escribe la lista de lo que se pidio, y la proxima vez que se cargue ese
-mapa se usa. La primera carga de un mapa no se acelera; las siguientes si.
+Reading ahead means knowing WHAT to read, and that is not known until the map has been loaded
+once: at the end of every load the list of what was asked for is written out, and the next time
+that map loads it is used. A map's first load is not sped up; the ones after it are.
 
-Solo entran los JPEG, que son casi todas las texturas de Quake Live: el resto sigue por el
-camino de siempre. La ventana limita cuantas imagenes decodificadas puede haber a la vez, para
-que la memoria no se dispare con mil texturas sueltas.
+Only JPEGs take this path, which is almost every texture in Quake Live: the rest go the usual
+way. The window caps how many decoded images can be held at once, so that memory does not blow
+up with a thousand loose textures.
 
 ==============================================================================
 */
@@ -2387,28 +2387,28 @@ typedef enum { PF_EMPTY, PF_WORKING, PF_READY, PF_FAILED } prefetchState_t;
 
 typedef struct {
     char name[MAX_QPATH];
-    void* file;  // los bytes del archivo, del hilo principal
+    void* file;  // the file's bytes, from the main thread
     int fileLen;
-    byte* pixels;  // lo que deja el trabajador, con malloc del sistema
+    byte* pixels;  // what the worker leaves behind, from the system's malloc
     int width, height;
     volatile int state;
 } prefetchEntry_t;
 
 static prefetchEntry_t r_prefetch[R_PREFETCH_MAX];
-static int r_prefetchCount;   // cuantas entradas tiene la lista
-static int r_prefetchNext;    // la proxima por leer y encolar
-static int r_prefetchTaken;   // hasta donde consumio el hilo principal
+static int r_prefetchCount;   // how many entries the list has
+static int r_prefetchNext;    // the next one to read and queue
+static int r_prefetchTaken;   // how far the main thread has consumed
 static qboolean r_prefetchOn;
 void R_PrefetchFinish(void);
 static int r_prefetchHits, r_prefetchMisses;
 static int64_t r_prefetchWaitUs;
 
-// la lista de esta carga, para escribirla al terminar
+// this load's list, to be written out at the end
 static char r_loadedNames[R_PREFETCH_MAX][MAX_QPATH];
 static int r_loadedCount;
 static char r_prefetchList[MAX_QPATH];
 
-// el nombre real del ultimo JPEG que se leyo, con su extension; lo pone R_LoadJPG
+// the real name of the last JPEG read, extension included; R_LoadJPG sets it
 char r_lastImageName[MAX_QPATH];
 
 static void R_PrefetchFile(const char* list, char* out, int size) {
@@ -2418,9 +2418,9 @@ static void R_PrefetchFile(const char* list, char* out, int size) {
     Com_sprintf(out, size, "prefetch/%s.txt", COM_SkipPath(base));
 }
 
-// Dos nombres son el mismo si la ruta coincide, sin mirar la extension: los shaders de Quake
-// Live piden .tga y el motor termina cargando el .jpg cuando el tga no esta. La lista guarda el
-// archivo que se cargo de verdad, asi que la extension pedida no tiene por que coincidir.
+// Two names are the same when the path matches, extension aside: Quake Live's shaders ask for
+// .tga and the engine ends up loading the .jpg when the tga is missing. The list stores the file
+// that was actually loaded, so the requested extension need not match.
 static qboolean R_PrefetchSameName(const char* wanted, const char* entry) {
     char a[MAX_QPATH], b[MAX_QPATH];
 
@@ -2429,7 +2429,7 @@ static qboolean R_PrefetchSameName(const char* wanted, const char* entry) {
     return (qboolean)(!Q_stricmp(a, b));
 }
 
-// lo unico que corre en un trabajador: decodificar. Nada de archivos, nada de imprimir, nada de
+// the only thing that runs on a worker: decoding. No files, no printing, no
 // pedirle memoria al motor
 static void R_PrefetchDecode(void* data) {
     prefetchEntry_t* entry = (prefetchEntry_t*)data;
@@ -2450,7 +2450,7 @@ static void R_PrefetchDecode(void* data) {
     entry->state = pixels ? PF_READY : PF_FAILED;
 }
 
-// lee y encola hasta llenar la ventana. Solo el hilo principal llama a esto
+// reads and queues until the window is full. Only the main thread calls this
 static void R_PrefetchPump(void) {
     while (r_prefetchNext < r_prefetchCount && r_prefetchNext - r_prefetchTaken < R_PREFETCH_AHEAD) {
         prefetchEntry_t* entry = &r_prefetch[r_prefetchNext++];
@@ -2464,10 +2464,10 @@ static void R_PrefetchPump(void) {
             entry->state = PF_FAILED;
             continue;
         }
-        // La memoria temporal del motor es una pila: se libera en orden inverso al que se pidio.
-        // Como aqui hay varios archivos vivos a la vez y se sueltan en cualquier orden, cada uno
-        // se copia a memoria propia y la del motor se devuelve en el acto. Se copian los bytes
-        // comprimidos, que son pocos.
+        // The engine's temporary memory is a stack: it is freed in the reverse order it was
+        // asked for. Since several files are alive here at once and released in any order, each
+        // one is copied into memory of its own and the engine's is given straight back. What is
+        // copied are the compressed bytes, which are few.
         entry->file = malloc(len);
         if (entry->file) {
             Com_Memcpy(entry->file, buffer, len);
@@ -2502,8 +2502,8 @@ static void R_PrefetchRelease(prefetchEntry_t* entry) {
 =================
 R_PrefetchTake
 
-Si la imagen venia en la lista, la devuelve ya decodificada. Si el trabajador todavia no
-termino, espera: igual es menos que decodificarla aqui.
+If the image was in the list, returns it already decoded. If the worker has not finished yet it
+waits, which is still less than decoding it here.
 =================
 */
 static qboolean R_PrefetchTake(const char* name, byte** pic, int* width, int* height) {
@@ -2531,11 +2531,11 @@ static qboolean R_PrefetchTake(const char* name, byte** pic, int* width, int* he
         }
         if (entry->state != PF_READY) {
             R_PrefetchRelease(entry);
-            return qfalse;  // que lo cargue el camino de siempre
+            return qfalse;  // let the usual path load it
         }
         bytes = entry->width * entry->height * 4;
-        // [ioquakelive] tambien se anota lo que vino por adelantado, o la lista se encoge en cada
-        // carga hasta quedar vacia
+        // [ioquakelive] what came in ahead of time is recorded too, or the list shrinks on every
+        // load until it is empty
         Q_strncpyz(r_lastImageName, entry->name, sizeof(r_lastImageName));
         r_prefetchHits++;
         *pic = (byte*)ri.Malloc(bytes);
@@ -2554,9 +2554,9 @@ static qboolean R_PrefetchTake(const char* name, byte** pic, int* width, int* he
 =================
 R_PrefetchStart
 
-Empieza una lista: la lee, arranca a leer sus archivos por adelantado, y desde aqui se anota en
-ella lo que se vaya cargando. "common" es lo que el cgame registra antes del mundo -- el HUD,
-que es igual en todos los mapas -- y despues va la del mapa.
+Opens a list: reads it, starts reading its files ahead, and from here on records into it
+whatever gets loaded. "common" is what the cgame registers before the world -- the HUD, which is
+the same on every map -- and the map's own follows it.
 =================
 */
 void R_PrefetchStart(const char* listName) {
@@ -2598,7 +2598,7 @@ void R_PrefetchStart(const char* listName) {
     }
 }
 
-// se anota lo que se cargo, en orden, para la proxima vez
+// records what was loaded, in order, for next time
 static void R_PrefetchRecord(void) {
     if (r_loadedCount < R_PREFETCH_MAX && r_lastImageName[0]) {
         Q_strncpyz(r_loadedNames[r_loadedCount++], r_lastImageName, MAX_QPATH);
@@ -2610,8 +2610,8 @@ static void R_PrefetchRecord(void) {
 =================
 R_PrefetchFinish
 
-Cierra la lista en curso: espera lo que este a medio decodificar, suelta lo que sobro y escribe
-lo que se cargo, para la proxima vez.
+Closes the list in progress: waits on whatever is half decoded, releases what is left over and
+writes out what was loaded, for next time.
 =================
 */
 void R_PrefetchFinish(void) {
@@ -2698,12 +2698,12 @@ image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags) {
     //
     // load the pic from disk
     //
-    // [ioquakelive] leer y decodificar se mide aparte de subir: lo primero es CPU y se puede
-    // repartir entre hilos, lo segundo va por el contexto de GL y no se puede mover
+    // [ioquakelive] reading and decoding are measured apart from uploading: the first is CPU and
+    // can be spread across threads, the second goes through the GL context and cannot move
     {
         int64_t start = ri.Microseconds();
 
-        // [ioquakelive] si venia por adelantado, ya esta decodificada
+        // [ioquakelive] if it came in ahead of time, it is already decoded
         if (R_PrefetchTake(name, &pic, &width, &height)) {
             picFormat = GL_RGBA8;
             picNumMips = 0;
