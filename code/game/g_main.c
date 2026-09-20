@@ -1756,6 +1756,7 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
     // eventos de estadisticas
     G_SetMatchGUID();
     STAT_ResetMedals();
+    G_ClearTeamLocks();
 
     G_Printf("-----------------------------------\n");
 
