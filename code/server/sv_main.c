@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "server.h"
+#include "../qcommon/q_steam.h"
 
 serverStatic_t svs;  // persistant server info
 server_t sv;         // local server
@@ -831,6 +832,73 @@ static qboolean SV_CheckPaused(void) {
     if (!sv_paused->integer)
         Cvar_Set("sv_paused", "1");
     return qtrue;
+}
+
+/*
+==================
+SV_VoiceFrame
+
+El servidor hace de puente para la voz: cada jugador se la manda a el por la red
+entre pares de Steam, y el se la reparte a los demas poniendole delante el numero
+de cliente del que habla.
+
+[QL] 0x00466850, el mismo cuadro que atiende al Steam del servidor. Dos partes:
+
+  - cada diez segundos le manda un saludo a cada jugador, que es lo unico que
+    mantiene viva la sesion entre pares;
+  - mientras haya paquetes en el canal de la voz, busca de quien es por su Steam
+    ID, le pone el numero de cliente adelante y se lo pasa a todos aquellos a los
+    que el modulo de juego deja oirlo.
+
+Una diferencia a proposito contra retail: si el que manda no es ninguno de los
+jugadores, retail reparte igual el paquete -- con el primer byte sin escribir y
+haciendolo pasar por el cliente 0. Aca se descarta.
+==================
+*/
+void SV_VoiceFrame(void) {
+    static int lastHello;
+    byte packet[1 + 16384];
+    uint64_t from;
+    int bytes;
+    int i;
+
+    if (!Steam_GS_Running() || sv.state == SS_DEAD || !svs.clients) {
+        return;
+    }
+
+    if (svs.time - lastHello > 10000 || svs.time < lastHello) {
+        lastHello = svs.time;
+        for (i = 0; i < sv_maxclients->integer; i++) {
+            if (svs.clients[i].state == CS_ACTIVE) {
+                Steam_P2PHello(svs.clients[i].steam_id, qtrue);
+            }
+        }
+    }
+
+    while ((bytes = Steam_P2PReceive(packet + 1, sizeof(packet) - 1, &from, qtrue)) > 0) {
+        int speaker = -1;
+
+        for (i = 0; i < sv_maxclients->integer; i++) {
+            if (svs.clients[i].state == CS_ACTIVE && svs.clients[i].steam_id == from) {
+                speaker = i;
+                break;
+            }
+        }
+        if (speaker < 0) {
+            continue;
+        }
+        packet[0] = (byte)speaker;
+
+        for (i = 0; i < sv_maxclients->integer; i++) {
+            if (svs.clients[i].state != CS_ACTIVE) {
+                continue;
+            }
+            if (SV_GameVoiceFilter(speaker, i) != 0) {
+                continue;
+            }
+            Steam_P2PSend(svs.clients[i].steam_id, packet, bytes + 1, qtrue);
+        }
+    }
 }
 
 /*

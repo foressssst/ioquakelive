@@ -124,6 +124,24 @@ typedef struct {
 
 static void Steam_GS_SetGameInfo(void);
 static void Steam_DownloadUGC_f(void);
+static void Steam_P2PListen(qboolean asServer);
+
+/*
+Una devolucion de llamada de Steam vista desde C. En el SDK es una clase con
+tres funciones virtuales, y el binario de retail deja ver como las ordena el
+compilador: en 0x00532f1c estan Run(dato, fallo, llamada) primero, Run(dato)
+segunda y GetCallbackSizeBytes() tercera -- al reves de como se declaran, que
+es lo que hace MSVC con las sobrecargas.
+
+Los campos son los de CCallbackBase: la tabla, las banderas (0x02 dice que la
+devolucion es del servidor y no del cliente) y el numero de la devolucion.
+*/
+typedef struct {
+    void** vtable;
+    unsigned char flags;
+    unsigned char pad[3];
+    int id;
+} steamCallback_t;
 
 typedef struct {
     void* lib;
@@ -186,6 +204,40 @@ typedef struct {
     unsigned int(QDECL* GetNumSubscribedItems)(void* self);
     unsigned int(QDECL* GetSubscribedItems)(void* self, uint64_t* items, unsigned int max);
     uint64_t(QDECL* GetSteamID)(void* self);
+
+    // la voz y la red entre pares
+    void*(QDECL* Networking)(void);
+    void*(QDECL* GameServerNetworking)(void);
+    void*(QDECL* User)(void);
+    void*(QDECL* Friends)(void);
+    steamBool_t(QDECL* SendP2PPacket)(void* self, uint64_t steamId, const void* data, unsigned int size,
+                                      int sendType, int channel);
+    steamBool_t(QDECL* IsP2PPacketAvailable)(void* self, unsigned int* size, int channel);
+    steamBool_t(QDECL* ReadP2PPacket)(void* self, void* dest, unsigned int destSize, unsigned int* size,
+                                      uint64_t* from, int channel);
+    steamBool_t(QDECL* AcceptP2PSessionWithUser)(void* self, uint64_t steamId);
+    void(QDECL* StartVoiceRecording)(void* self);
+    void(QDECL* StopVoiceRecording)(void* self);
+    int(QDECL* GetVoice)(void* self, steamBool_t wantCompressed, void* dest, unsigned int destSize,
+                         unsigned int* written, steamBool_t wantUncompressed, void* uncompressedDest,
+                         unsigned int uncompressedSize, unsigned int* uncompressedWritten,
+                         unsigned int sampleRate);
+    int(QDECL* DecompressVoice)(void* self, const void* compressed, unsigned int compressedSize, void* dest,
+                                unsigned int destSize, unsigned int* written, unsigned int sampleRate);
+    unsigned int(QDECL* GetVoiceOptimalSampleRate)(void* self);
+    uint64_t(QDECL* GetUserSteamID)(void* self);
+    void(QDECL* SetInGameVoiceSpeaking)(void* self, uint64_t steamId, steamBool_t speaking);
+    void(QDECL* SetRichPresence)(void* self, const char* key, const char* value);
+    void(QDECL* RegisterCallback)(void* callback, int id);
+    void(QDECL* UnregisterCallback)(void* callback);
+
+    void* networking;            // ISteamNetworking * (cliente)
+    void* gameServerNetworking;  // ISteamNetworking * (servidor)
+    void* user;                  // ISteamUser *
+    void* friends;               // ISteamFriends *
+    qboolean voiceRecording;
+    steamCallback_t p2pClient;   // la sesion que pide el servidor
+    steamCallback_t p2pServer;   // la sesion que pide cada jugador
 
     void* ugc;           // ISteamUGC *
     uint64_t downloading;  // el item que se esta esperando, o 0
@@ -262,6 +314,24 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND_OPT(SetGameTags, "SteamAPI_ISteamGameServer_SetGameTags");
     STEAM_BIND_OPT(Matchmaking, "SteamMatchmakingServers");
     STEAM_BIND_OPT(UGC, "SteamUGC");
+    STEAM_BIND_OPT(Networking, "SteamNetworking");
+    STEAM_BIND_OPT(GameServerNetworking, "SteamGameServerNetworking");
+    STEAM_BIND_OPT(User, "SteamUser");
+    STEAM_BIND_OPT(Friends, "SteamFriends");
+    STEAM_BIND_OPT(SendP2PPacket, "SteamAPI_ISteamNetworking_SendP2PPacket");
+    STEAM_BIND_OPT(IsP2PPacketAvailable, "SteamAPI_ISteamNetworking_IsP2PPacketAvailable");
+    STEAM_BIND_OPT(ReadP2PPacket, "SteamAPI_ISteamNetworking_ReadP2PPacket");
+    STEAM_BIND_OPT(AcceptP2PSessionWithUser, "SteamAPI_ISteamNetworking_AcceptP2PSessionWithUser");
+    STEAM_BIND_OPT(StartVoiceRecording, "SteamAPI_ISteamUser_StartVoiceRecording");
+    STEAM_BIND_OPT(StopVoiceRecording, "SteamAPI_ISteamUser_StopVoiceRecording");
+    STEAM_BIND_OPT(GetVoice, "SteamAPI_ISteamUser_GetVoice");
+    STEAM_BIND_OPT(DecompressVoice, "SteamAPI_ISteamUser_DecompressVoice");
+    STEAM_BIND_OPT(GetVoiceOptimalSampleRate, "SteamAPI_ISteamUser_GetVoiceOptimalSampleRate");
+    STEAM_BIND_OPT(GetUserSteamID, "SteamAPI_ISteamUser_GetSteamID");
+    STEAM_BIND_OPT(SetInGameVoiceSpeaking, "SteamAPI_ISteamFriends_SetInGameVoiceSpeaking");
+    STEAM_BIND_OPT(SetRichPresence, "SteamAPI_ISteamFriends_SetRichPresence");
+    STEAM_BIND_OPT(RegisterCallback, "SteamAPI_RegisterCallback");
+    STEAM_BIND_OPT(UnregisterCallback, "SteamAPI_UnregisterCallback");
     STEAM_BIND_OPT(GetItemState, "SteamAPI_ISteamUGC_GetItemState");
     STEAM_BIND_OPT(DownloadItem, "SteamAPI_ISteamUGC_DownloadItem");
     STEAM_BIND_OPT(GetItemInstallInfo, "SteamAPI_ISteamUGC_GetItemInstallInfo");
@@ -387,6 +457,19 @@ void Steam_Init(void) {
     if (st.UGC) {
         st.ugc = st.UGC();  // la del Workshop, de donde salen los mapas
     }
+    if (st.Networking) {
+        st.networking = st.Networking();  // la red entre pares, por donde va la voz
+    }
+    if (st.User) {
+        st.user = st.User();
+    }
+    if (st.Friends) {
+        st.friends = st.Friends();
+    }
+    Steam_P2PListen(qfalse);
+    // [QL] 0x00461565: "+voice" y "-voice" se registran del lado del cliente, que es el que
+    // ademas tiene que avisarle al cgame que uno esta hablando
+    Steam_SetRichPresence("At the main menu");    // [QL] 0x00461556
     Cmd_AddCommand("steam_downloadugc", Steam_DownloadUGC_f);
     Cmd_AddCommand("steamservers", Steam_ServerList_f);
     Cmd_AddCommand("steamstatus", Steam_Status_f);
@@ -440,6 +523,10 @@ void Steam_GS_Init(void) {
         return;
     }
     st.serverUp = qtrue;
+    if (st.GameServerNetworking) {
+        st.gameServerNetworking = st.GameServerNetworking();  // por donde reparte la voz
+        Steam_P2PListen(qtrue);
+    }
     if (!st.clientUp) {
         Cmd_AddCommand("steamstatus", Steam_Status_f);  // el cliente ya lo agrego si arranco
     }
@@ -549,6 +636,16 @@ qboolean Steam_GS_Running(void) {
 }
 
 void Steam_Shutdown(void) {
+    if (st.UnregisterCallback) {
+        if (st.p2pServer.vtable) {
+            st.UnregisterCallback(&st.p2pServer);
+            st.p2pServer.vtable = NULL;
+        }
+        if (st.p2pClient.vtable) {
+            st.UnregisterCallback(&st.p2pClient);
+            st.p2pClient.vtable = NULL;
+        }
+    }
     if (st.serverUp) {
         st.EnableHeartbeats(st.gameServer, 0);
         st.GameServer_Shutdown();
@@ -1023,4 +1120,254 @@ uint64_t Steam_GS_SteamID(void) {
         return 0;
     }
     return st.GetSteamID(st.gameServer);
+}
+
+/*
+===============================================================================
+
+LA VOZ
+
+Quake Live no manda la voz por su propia red: la manda por la red entre pares
+(P2P) de Steam, y la comprime y descomprime con la voz de Steam.
+
+  0x004603f0  "+voice": le avisa a Steam que este jugador esta hablando
+              (SetInGameVoiceSpeaking) y arranca la grabacion.
+  0x00460d10  cada cuadro, mientras graba: GetVoice comprimido en un buffer de
+              16 KB y, si esta en partida, SendP2PPacket al Steam ID del
+              servidor -- que sale del configstring 714 -- por el canal 1, sin
+              garantia de entrega.
+  0x00461a60  cada cuadro, al recibir: ReadP2PPacket del canal 1, el primer byte
+              es el numero del que habla y el resto es la voz comprimida, que va
+              a DecompressVoice a 22050 Hz y de ahi al mezclador.
+
+El servidor hace de puente: recibe la voz de cada uno y se la reparte a los
+demas poniendole delante el numero de cliente del que habla.
+
+===============================================================================
+*/
+
+#define STEAM_VOICE_CHANNEL 1
+#define STEAM_VOICE_RATE 22050
+#define STEAM_P2P_UNRELIABLE 1
+#define STEAM_P2P_RELIABLE 2
+
+// el canal por el que el servidor saluda a cada jugador cada diez segundos, que es lo que deja
+// la sesion abierta para la voz. Nadie lee lo que viaja por aca.
+#define STEAM_P2P_HELLO_CHANNEL 16
+#define STEAM_P2P_HELLO_INTERVAL 10000
+
+// P2PSessionRequest_t: k_iSteamNetworkingCallbacks (1200) + 2, y adentro viene un solo CSteamID
+#define STEAM_CB_P2P_SESSION_REQUEST 1202
+#define STEAM_CB_FLAG_GAMESERVER 0x02
+
+/*
+===============
+La sesion entre pares
+
+Steam no entrega los paquetes de alguien con quien no hay sesion: avisa con una
+devolucion de llamada y espera que uno la acepte. Retail no registra ninguna
+-- sus dos unicas llamadas a SteamAPI_RegisterCallback son por otra cosa -- asi
+que esto es un agregado nuestro, no algo portado: sin aceptar la sesion la voz
+del servidor no llegaria nunca.
+===============
+*/
+static void STEAM_CB Steam_CB_P2PRequestIO(STEAM_CB_SELF, void* param, unsigned char failed,
+                                           uint64_t call) {
+    (void)param;
+    (void)failed;
+    (void)call;
+}
+
+static void STEAM_CB Steam_CB_P2PRequest(STEAM_CB_SELF, void* param) {
+    const steamCallback_t* me = (const steamCallback_t*)self;
+    uint64_t who = *(const uint64_t*)param;
+    qboolean asServer = (qboolean)((me->flags & STEAM_CB_FLAG_GAMESERVER) != 0);
+
+    Steam_P2PAccept(who, asServer);
+}
+
+static int STEAM_CB Steam_CB_P2PRequestSize(STEAM_CB_SELF) {
+    return (int)sizeof(uint64_t);
+}
+
+// el compilador de retail ordena las dos Run al reves de como se declaran: ver 0x00532f1c
+static void* steamP2PVTable[3];
+
+static void Steam_P2PListen(qboolean asServer) {
+    steamCallback_t* cb = asServer ? &st.p2pServer : &st.p2pClient;
+
+    if (!st.RegisterCallback || !st.AcceptP2PSessionWithUser || cb->vtable) {
+        return;
+    }
+    steamP2PVTable[0] = (void*)Steam_CB_P2PRequestIO;
+    steamP2PVTable[1] = (void*)Steam_CB_P2PRequest;
+    steamP2PVTable[2] = (void*)Steam_CB_P2PRequestSize;
+
+    cb->vtable = steamP2PVTable;
+    cb->flags = asServer ? STEAM_CB_FLAG_GAMESERVER : 0;
+    cb->id = STEAM_CB_P2P_SESSION_REQUEST;
+    st.RegisterCallback(cb, STEAM_CB_P2P_SESSION_REQUEST);
+}
+
+qboolean Steam_VoiceReady(void) {
+    return (qboolean)(st.clientUp && st.user && st.StartVoiceRecording != NULL);
+}
+
+/*
+===============
+Steam_VoiceStart / Steam_VoiceStop
+
+[QL] 0x004603f0 y 0x00460490.
+===============
+*/
+void Steam_VoiceStart(void) {
+    if (!Steam_VoiceReady() || st.voiceRecording) {
+        return;
+    }
+    st.voiceRecording = qtrue;
+    if (st.friends && st.SetInGameVoiceSpeaking) {
+        st.SetInGameVoiceSpeaking(st.friends, st.GetUserSteamID(st.user), 1);
+    }
+    st.StartVoiceRecording(st.user);
+    Com_DPrintf("Started recording - optimal sample rate %u\n", st.GetVoiceOptimalSampleRate
+                                                                   ? st.GetVoiceOptimalSampleRate(st.user)
+                                                                   : 0);
+}
+
+void Steam_VoiceStop(void) {
+    if (!Steam_VoiceReady() || !st.voiceRecording) {
+        return;
+    }
+    st.voiceRecording = qfalse;
+    st.StopVoiceRecording(st.user);
+    if (st.friends && st.SetInGameVoiceSpeaking) {
+        st.SetInGameVoiceSpeaking(st.friends, st.GetUserSteamID(st.user), 0);
+    }
+}
+
+qboolean Steam_VoiceRecording(void) {
+    return st.voiceRecording;
+}
+
+/*
+===============
+Steam_VoiceCapture
+
+Lo que el microfono junto desde la ultima vez, ya comprimido. Devuelve cuantos
+bytes son, o 0 si no hay nada.
+===============
+*/
+int Steam_VoiceCapture(void* buffer, int maxSize) {
+    unsigned int written = 0;
+    int result;
+
+    if (!Steam_VoiceReady() || !st.voiceRecording || !st.GetVoice) {
+        return 0;
+    }
+    result = st.GetVoice(st.user, 1, buffer, (unsigned int)maxSize, &written, 0, NULL, 0, NULL, 0);
+    if (result != 0) {  // k_EVoiceResultOK
+        return 0;
+    }
+    return (int)written;
+}
+
+// la voz de otro, de vuelta a sonido: devuelve cuantos bytes de PCM salieron
+int Steam_VoiceDecompress(const void* compressed, int size, void* out, int outSize) {
+    unsigned int written = 0;
+
+    if (!Steam_VoiceReady() || !st.DecompressVoice || size <= 0) {
+        return 0;
+    }
+    if (st.DecompressVoice(st.user, compressed, (unsigned int)size, out, (unsigned int)outSize, &written,
+                           STEAM_VOICE_RATE) != 0) {
+        return 0;
+    }
+    return (int)written;
+}
+
+int Steam_VoiceRate(void) {
+    return STEAM_VOICE_RATE;
+}
+
+/*
+===============
+Steam_P2PSend / Steam_P2PReceive
+
+El puente de Steam entre dos jugadores. El servidor usa su propia interfaz
+(SteamGameServerNetworking) y el cliente la suya.
+===============
+*/
+static void* Steam_P2P(qboolean asServer) {
+    return asServer ? st.gameServerNetworking : st.networking;
+}
+
+qboolean Steam_P2PSend(uint64_t to, const void* data, int size, qboolean asServer) {
+    void* self = Steam_P2P(asServer);
+
+    if (!self || !st.SendP2PPacket || !to) {
+        return qfalse;
+    }
+    return st.SendP2PPacket(self, to, data, (unsigned int)size, STEAM_P2P_UNRELIABLE,
+                            STEAM_VOICE_CHANNEL)
+               ? qtrue
+               : qfalse;
+}
+
+int Steam_P2PReceive(void* buffer, int maxSize, uint64_t* from, qboolean asServer) {
+    void* self = Steam_P2P(asServer);
+    unsigned int size = 0;
+    unsigned int read = 0;
+
+    if (!self || !st.IsP2PPacketAvailable || !st.ReadP2PPacket) {
+        return 0;
+    }
+    if (!st.IsP2PPacketAvailable(self, &size, STEAM_VOICE_CHANNEL)) {
+        return 0;
+    }
+    if (!st.ReadP2PPacket(self, buffer, (unsigned int)maxSize, &read, from, STEAM_VOICE_CHANNEL)) {
+        return 0;
+    }
+    return (int)read;
+}
+
+// hay que aceptar al otro antes de que Steam entregue sus paquetes
+void Steam_P2PAccept(uint64_t who, qboolean asServer) {
+    void* self = Steam_P2P(asServer);
+
+    if (self && st.AcceptP2PSessionWithUser && who) {
+        st.AcceptP2PSessionWithUser(self, who);
+    }
+}
+
+/*
+===============
+Steam_P2PHello
+
+[QL] 0x004668ca. Cada diez segundos el servidor le manda esto a cada jugador,
+por un canal que nadie lee, solo para que Steam mantenga viva la sesion. El
+contenido da igual: el de retail es una broma del equipo de id.
+===============
+*/
+void Steam_P2PHello(uint64_t to, qboolean asServer) {
+    void* self = Steam_P2P(asServer);
+    static const char hello[] = "ioquakelive voice keepalive";
+
+    if (self && st.SendP2PPacket && to) {
+        st.SendP2PPacket(self, to, hello, (unsigned int)sizeof(hello), STEAM_P2P_RELIABLE,
+                         STEAM_P2P_HELLO_CHANNEL);
+    }
+}
+
+uint64_t Steam_ClientSteamID(void) {
+    if (!st.clientUp || !st.user || !st.GetUserSteamID) {
+        return 0;
+    }
+    return st.GetUserSteamID(st.user);
+}
+
+// [QL] 0x00461556: lo que ve un amigo en la lista de Steam
+void Steam_SetRichPresence(const char* status) {
+    if (st.clientUp && st.friends && st.SetRichPresence) {
+        st.SetRichPresence(st.friends, "status", status);
+    }
 }

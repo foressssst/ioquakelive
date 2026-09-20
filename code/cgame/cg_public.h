@@ -184,7 +184,8 @@ typedef enum {
     CG_ACOS,
     CG_GET_ADVERTISEMENTS,
     CG_KEY_KEYNUMTOSTRINGBUF,
-    CG_S_MUTECLIENT,              // [QL] mute/unmute a client's voice
+    CG_VOICE_IS_IGNORED,          // [QL] whether that Steam ID is silenced here (import +0x1f4)
+    CG_VOICE_TOGGLE_IGNORE,       // [QL] silence or unsilence that Steam ID (import +0x1f8)
 
     CG_R_FONT_DRAWSTRING,         // [QL] fontstash/stb_truetype text rendering
     CG_R_FONT_TEXTEXTENTS,
@@ -250,12 +251,18 @@ typedef enum {
     CG_CLEAR_KEY_CATCHER,   // 13  void CG_ClearKeyCatcher( void )
     CG_GET_ACTIVE_FRAME,    // 14  int CG_GetActiveFrame( void )
 
+    // [QL] slot 15 (0x10020910) fills in a client's details for the engine; of everything it
+    // copies out, the engine only reads the Steam ID, which is what it needs to know whether the
+    // player who is talking is one of the silenced ones. Slot 16 is NULL.
+    CG_CLIENT_STEAM_ID = 15,  // 15  void CG_ClientSteamID( int clientNum, uint64_t *out )
+
     // [QL] slots 17-19: the chat bar Con_DrawNotify asks for (quakelive_steam.exe 0x4b416b).
-    // Slot 15 fills in a client's details for the engine (0x10020910) and slot 20 stamps a time
-    // on a client (0x10020a40); this engine uses neither. Slot 16 is NULL.
     CG_CHAT_BAR_Y = 17,     // 17  float CG_ChatBarY( void )
     CG_CHAT_BAR_WIDTH,      // 18  float CG_ChatBarWidth( void )
-    CG_CHAT_FIELD_CHARS     // 19  int CG_ChatFieldChars( void )
+    CG_CHAT_FIELD_CHARS,    // 19  int CG_ChatFieldChars( void )
+
+    // [QL] slot 20 (0x10020a40): marks a client as talking and stamps the time on it
+    CG_SET_CLIENT_TALKING   // 20  void CG_SetClientTalking( int clientNum, int talking )
 } cgameExport_t;
 
 //----------------------------------------------

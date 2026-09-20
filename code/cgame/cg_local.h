@@ -480,6 +480,10 @@ typedef struct {
     team_t team;
     uint64_t steamId;  // steam id for this client ("st")
 
+    // [QL] 0x10020a40: el motor las marca cuando llega la voz de este jugador
+    qboolean talking;
+    int talkingTime;
+
     int botSkill;         // 0 = not bot, 1-5 = bot
     float botSkillValue;  // [QL] the same "skill" key read as a float
     int privileges;       // [QL] "p"
@@ -1498,6 +1502,8 @@ typedef struct {
     qhandle_t cmdRightShader;       // [QL] gfx/2d/race/cmd_right
     qhandle_t cmdLeftShader;        // [QL] gfx/2d/race/cmd_left
     qhandle_t voiceWindowShader;    // [QL] ui/assets/voiceWindow, the followed player's frame in the team vitals
+    qhandle_t scoreMutedShader;     // [QL] ui/assets/score/muted, en la tabla, al que uno silencio
+    qhandle_t scoreSpeakingShader;  // [QL] ui/assets/score/speaking, al que esta hablando
 
     // [QL] freeze tag
     qhandle_t iceShardModel;     // models/gibs/sphere.md3
@@ -2634,7 +2640,8 @@ void trap_Key_SetCatcher(int catcher);
 int trap_Key_GetKey(const char* binding);
 void trap_Key_KeynumToStringBuf(int keynum, char* buf, int buflen);
 void trap_Key_GetBindingBuf(int keynum, char* buf, int buflen);
-void trap_S_MuteClient(int clientNum, qboolean mute);
+qboolean trap_VoiceIsIgnored(uint64_t steamId);
+qboolean trap_VoiceToggleIgnore(uint64_t steamId);
 
 void CG_KeyNameForCommand(const char* command, char* buf, int buflen);
 

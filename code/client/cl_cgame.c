@@ -720,11 +720,12 @@ static intptr_t CL_CgameSystemCallsInner(intptr_t* args) {
             Q_strncpyz(VMA(2), Key_KeynumToString(args[1]), args[3]);
             return 0;
 
-        // [QL] Mute/unmute a client's voice audio
-        case CG_S_MUTECLIENT:
-            // args[1] = clientNum, args[2] = mute (qboolean)
-            // Stub: actual VoIP muting would go here
-            return 0;
+        // [QL] la lista de silenciados de la voz, que va por Steam ID: el id viaja partido en
+        // dos mitades de 32 bits, igual que en retail
+        case CG_VOICE_IS_IGNORED:
+            return CL_VoiceIsIgnored(((uint64_t)(unsigned int)args[2] << 32) | (unsigned int)args[1]);
+        case CG_VOICE_TOGGLE_IGNORE:
+            return CL_VoiceToggleIgnore(((uint64_t)(unsigned int)args[2] << 32) | (unsigned int)args[1]);
 
         case CG_MEMSET:
             Com_Memset(VMA(1), args[2], args[3]);

@@ -1015,6 +1015,7 @@ void ClearClientReadyToExit(void);            // [QL] reset at intermission star
 // g_team.c
 //
 qboolean OnSameTeam(gentity_t* ent1, gentity_t* ent2);
+int G_VoiceFilter(int speaker, int listener);
 void Team_CheckDroppedItem(gentity_t* dropped);
 qboolean CheckObeliskAttack(gentity_t* obelisk, gentity_t* attacker);
 

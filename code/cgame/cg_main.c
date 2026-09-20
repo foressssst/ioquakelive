@@ -37,6 +37,8 @@ void CG_Shutdown(void);
 static float CG_ChatBarY(void);
 static float CG_ChatBarWidth(void);
 static int CG_ChatFieldChars(void);
+static void CG_ClientSteamID(int clientNum, uint64_t* out);
+static void CG_SetClientTalking(int clientNum, int talking);
 
 /*
 ================
@@ -103,6 +105,12 @@ Q_EXPORT intptr_t vmMain(int command, intptr_t arg0, intptr_t arg1, intptr_t arg
             return fi.i;
         case CG_CHAT_FIELD_CHARS:
             return CG_ChatFieldChars();
+        case CG_CLIENT_STEAM_ID:
+            CG_ClientSteamID(arg0, (uint64_t*)arg1);
+            return 0;
+        case CG_SET_CLIENT_TALKING:
+            CG_SetClientTalking(arg0, arg1);
+            return 0;
         default:
             CG_Error("vmMain: unknown command %i", command);
             break;
@@ -135,6 +143,45 @@ static int CG_ChatFieldChars(void) {
     qboolean intermission = (cg.predictedPlayerState.pm_type == PM_INTERMISSION);
 
     return intermission ? 30 : 73;
+}
+
+/*
+================
+CG_ClientSteamID
+
+El Steam ID del que esta hablando, que es lo unico que el motor le pide al cgame
+de todo lo que retail copia aca. Con el decide si esa voz esta silenciada.
+
+[QL] 0x10020910, entrada 15 de la tabla.
+================
+*/
+static void CG_ClientSteamID(int clientNum, uint64_t* out) {
+    *out = 0;
+    if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
+        return;
+    }
+    if (!cgs.clientinfo[clientNum].infoValid) {
+        return;
+    }
+    *out = cgs.clientinfo[clientNum].steamId;
+}
+
+/*
+================
+CG_SetClientTalking
+
+El motor avisa cada vez que llega voz de alguien, y de ahi sale el indicador de
+quien esta hablando.
+
+[QL] 0x10020a40, entrada 20 de la tabla.
+================
+*/
+static void CG_SetClientTalking(int clientNum, int talking) {
+    if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
+        return;
+    }
+    cgs.clientinfo[clientNum].talking = (qboolean)talking;
+    cgs.clientinfo[clientNum].talkingTime = cg.time;
 }
 
 cg_t cg;
@@ -2014,6 +2061,9 @@ static void CG_RegisterGraphics(void) {
     cgs.media.balloonShader = trap_R_RegisterShader("sprites/balloon3");
     // [QL] 0x100244f5: the followed player's frame in the team vitals
     cgs.media.voiceWindowShader = trap_R_RegisterShader("ui/assets/voiceWindow");
+    // [QL] 0x10023696: los dos iconos de la primera columna de la tabla
+    cgs.media.scoreMutedShader = trap_R_RegisterShader("ui/assets/score/muted");
+    cgs.media.scoreSpeakingShader = trap_R_RegisterShader("ui/assets/score/speaking");
 
     cgs.media.bloodExplosionShader = cgs.media.bloodSprayShaders[0];
 
@@ -3004,7 +3054,13 @@ static const char* CG_FeederItemText(float feederID, int index, int column, qhan
         case 0:
             *handle = info->modelIcon;
             return "";
+        // [QL] 0x100262b7: primero el silenciado, y si no esta silenciado, el que habla
         case 1:
+            if (info->steamId && trap_VoiceIsIgnored(info->steamId)) {
+                *handle = cgs.media.scoreMutedShader;
+            } else if (info->talking) {
+                *handle = cgs.media.scoreSpeakingShader;
+            }
             return "";
         case 2:
             return "";

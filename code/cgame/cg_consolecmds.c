@@ -829,14 +829,23 @@ static void CG_Kill_f(void) {
     trap_SendClientCommand("kill");
 }
 
-// [QL] clientmute - mute/unmute a client's voice by number
-// Binary: cgamex86.dll 0x10007E90
+/*
+==============
+CG_ClientMute_f
+
+"clientmute <numero>" da vuelta el silencio de ese jugador: si se lo oia deja de
+oirse, y si estaba silenciado vuelve. Va por Steam ID, asi que sigue valiendo en
+el mapa siguiente.
+
+[QL] 0x10007e90. No dice nada por consola, ni avisa si el numero no existe: lo
+unico que mira es que ese jugador tenga Steam ID.
+==============
+*/
 static void CG_ClientMute_f(void) {
     int clientNum;
     char arg[MAX_TOKEN_CHARS];
 
     if (trap_Argc() < 2) {
-        CG_Printf("Usage: clientmute <clientnum>\n");
         return;
     }
 
@@ -844,17 +853,11 @@ static void CG_ClientMute_f(void) {
     clientNum = atoi(arg);
 
     if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
-        CG_Printf("Invalid client number.\n");
         return;
     }
-
-    if (!cgs.clientinfo[clientNum].infoValid) {
-        CG_Printf("Client %d not connected.\n", clientNum);
-        return;
+    if (cgs.clientinfo[clientNum].steamId) {
+        trap_VoiceToggleIgnore(cgs.clientinfo[clientNum].steamId);
     }
-
-    trap_S_MuteClient(clientNum, qtrue);
-    CG_Printf("Client %d muted.\n", clientNum);
 }
 
 // [QL] Binary-matched acc/pstats handlers with spectator check and request throttling

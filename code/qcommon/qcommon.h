@@ -1056,6 +1056,7 @@ void SV_Init(void);
 void SV_RegisterGameCvars(void);
 void SV_Shutdown(char* finalmsg);
 void SV_Frame(int msec);
+void SV_VoiceFrame(void);  // [QL] el puente de la voz entre pares
 void SV_PacketEvent(netadr_t from, msg_t* msg);
 int SV_FrameMsec(void);
 qboolean SV_GameCommand(void);

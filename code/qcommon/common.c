@@ -3280,6 +3280,7 @@ Com_Frame
 */
 void Com_Frame(void) {
     Steam_Frame();
+    SV_VoiceFrame();  // [QL] 0x00466850: el reparto de la voz va en el mismo cuadro que Steam
     ZMQ_Frame();
     int msec, minMsec;
     int timeVal, timeValSV;
