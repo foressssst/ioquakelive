@@ -887,15 +887,37 @@ static void SV_KillServer_f(void) {
 SV_CompleteMapName
 ==================
 */
+/*
+==================
+SV_CompleteMapName
+
+"map <mapa> <factory>". El mapa sale de los arenas parseados y no de maps/*.bsp:
+un .bsp sin su .arena no se puede cargar, y en cambio hay arenas cuyo nombre no
+es el del .bsp. La factory sale de scripts/factories.txt, sin las que empiezan
+con "_", que son las plantillas internas -- el mismo filtro que usa la lista que
+imprime "map" sin argumentos.
+==================
+*/
 static void SV_CompleteMapName(char* args, int argNum) {
+    static const char* nombres[MAX_COMPLETION_NAMES];
+    int count;
+
     if (argNum == 2) {
-        Field_CompleteFilename("maps", "bsp", qtrue, qfalse);
+        count = SV_ArenaNameList(nombres, ARRAY_LEN(nombres));
+    } else if (argNum == 3) {
+        count = SV_FactoryNameList(nombres, ARRAY_LEN(nombres));
+    } else {
+        return;
     }
+
+    Field_CompleteList(nombres, count);
 }
 
 /*
 ==================
 SV_CompletePlayerName
+
+Para "kick", "clientkick" y "dumpuser", que toman el nombre de un jugador.
 ==================
 */
 static void SV_CompletePlayerName(char* args, int argNum) {
@@ -932,6 +954,19 @@ static void SV_CompletePlayerName(char* args, int argNum) {
 
 /*
 ==================
+SV_CompleteArenaName
+
+"arena <nombre>" carga scripts/<nombre>.sp_arena.
+==================
+*/
+static void SV_CompleteArenaName(char* args, int argNum) {
+    if (argNum == 2) {
+        Field_CompleteFilename("scripts", "sp_arena", qtrue, qfalse);
+    }
+}
+
+/*
+==================
 SV_AddOperatorCommands
 ==================
 */
@@ -944,10 +979,13 @@ void SV_AddOperatorCommands(void) {
     initialized = qtrue;
 
     Cmd_AddCommand("kick", SV_Kick_f);
+    Cmd_SetCommandCompletionFunc("kick", SV_CompletePlayerName);
     Cmd_AddCommand("clientkick", SV_KickNum_f);
+    Cmd_SetCommandCompletionFunc("clientkick", SV_CompletePlayerName);
     Cmd_AddCommand("status", SV_Status_f);
     Cmd_AddCommand("serverinfo", SV_Serverinfo_f);
     Cmd_AddCommand("dumpuser", SV_DumpUser_f);
+    Cmd_SetCommandCompletionFunc("dumpuser", SV_CompletePlayerName);
     Cmd_AddCommand("map_restart", SV_MapRestart_f);
     Cmd_AddCommand("sectorlist", SV_SectorList_f);
     Cmd_AddCommand("map", SV_Map_f);
@@ -961,6 +999,7 @@ void SV_AddOperatorCommands(void) {
 
     // [QL] arenas, factories and the map pool (sv_factories.c)
     Cmd_AddCommand("arena", SV_Arena_f);
+    Cmd_SetCommandCompletionFunc("arena", SV_CompleteArenaName);
     Cmd_AddCommand("startRandomMap", SV_StartRandomMap_f);
     Cmd_AddCommand("reload_mappool", SV_ReloadMapPool_f);
     Cmd_AddCommand("reload_arenas", SV_ReloadArenas_f);

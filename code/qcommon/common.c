@@ -3868,6 +3868,35 @@ void Field_CompleteKeyname(void) {
 
 /*
 ===============
+Field_CompleteList
+
+Completar contra una lista armada en el momento: los mapas, las factories, los
+nombres de los jugadores. Los tres salen de tablas que ya existen en memoria y
+no de archivos, asi que no sirve Field_CompleteFilename.
+===============
+*/
+void Field_CompleteList(const char* const* list, int count) {
+    int i;
+
+    Field_BeginMatches();
+
+    for (i = 0; i < count; i++) {
+        if (list[i]) {
+            FindMatches(list[i]);
+        }
+    }
+
+    if (!Field_Complete()) {
+        for (i = 0; i < count; i++) {
+            if (list[i]) {
+                PrintMatches(list[i]);
+            }
+        }
+    }
+}
+
+/*
+===============
 Field_CompleteFilename
 ===============
 */

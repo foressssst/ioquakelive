@@ -460,6 +460,7 @@ void CL_GlobalServers_f(void);
 void CL_SteamServersFrame(void);
 void CL_WorkshopFrame(void);
 void CL_VoiceFrame(void);
+void CL_SetCgameCommandCompletion(const char* cmdName);
 qboolean CL_VoiceIsIgnored(uint64_t steamId);
 qboolean CL_VoiceToggleIgnore(uint64_t steamId);
 extern cvar_t* s_voiceVolume;
