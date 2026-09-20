@@ -1,0 +1,11 @@
+# The server's access list.
+#
+# One line per account:   <steam id 64>|(mod|admin|ban)
+# Lines starting with # are comments.
+#
+# The server rewrites this file on a map change, keeping only the permanent
+# entries: a tempban is forgotten with the map, a ban is not. Edit it with the
+# server down, or use /reload_access afterwards.
+#
+# example:
+# 76561198072786081|admin

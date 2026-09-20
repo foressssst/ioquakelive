@@ -55,6 +55,7 @@ profile
 !/code/tools/gen_fb_skins.py
 /code/qcommon/git_version.h
 *.lib
+*.obj
 *.pdb
 *.dll
 *.ilk

@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Lets a build be started by hand, without a dummy commit.
+  workflow_dispatch:
 
 jobs:
   linux:
@@ -29,7 +31,7 @@ jobs:
         cp build/release-linux-x86_64/baseq3/uix86_64.so     staging/libs/
         # actions/upload-artifact strips +x; tar to preserve mode bits.
         tar -C build/release-linux-x86_64 -cf staging/engine/linux-x86_64.tar \
-          quakelive.x86_64 quakelive_dedicated.x86_64 opengl2x86_64.so
+          ioquakelive.x86_64 ioqlds.x86_64 opengl2x86_64.so
     - uses: actions/upload-artifact@v4
       with:
         name: libs-linux-x86_64
@@ -137,7 +139,7 @@ jobs:
         # Tar the raw engine binaries to preserve +x. These are unsigned;
         # macos-bundle codesigns them after they're placed inside the .app.
         tar -C build/release-darwin-arm64 -cf staging/engine-raw/raw-macos-engine.tar \
-          quakelive.arm64 quakelive_dedicated.arm64 opengl2arm64.dylib libSDL2-2.0.0.dylib
+          ioquakelive.arm64 ioqlds.arm64 opengl2arm64.dylib libSDL2-2.0.0.dylib
     - uses: actions/upload-artifact@v4
       with:
         name: libs-macos-arm64
@@ -251,7 +253,7 @@ jobs:
       # reach the release artifact.
       run: |
         set -euo pipefail
-        APP=build/release-darwin-arm64/quakelive.app
+        APP=build/release-darwin-arm64/ioquakelive.app
         BASE="$APP/Contents/Resources/baseq3"
         echo "Listing $BASE:"
         ls -la "$BASE" || { echo "ERROR: $BASE does not exist" >&2; exit 1; }
@@ -279,10 +281,10 @@ jobs:
         echo "Signing with: $IDENTITY"
 
         # Walk bundle contents bottom-up. --deep is unreliable with embedded
-        # frameworks. quakelive_dedicated must be signed individually -
+        # frameworks. ioqlds must be signed individually -
         # bundle signing only touches CFBundleExecutable. The game dylibs
         # inside iobin.pk3 were already signed in macos-compile.
-        APP=build/release-darwin-arm64/quakelive.app
+        APP=build/release-darwin-arm64/ioquakelive.app
 
         # Sign nested dylibs/sos first.
         find "$APP" -type f \( -name "*.dylib" -o -name "*.so" \) -print0 \
@@ -316,13 +318,13 @@ jobs:
       run: |
         set -euo pipefail
         echo "$KEY_P8" | base64 -d > AuthKey.p8
-        APP=build/release-darwin-arm64/quakelive.app
+        APP=build/release-darwin-arm64/ioquakelive.app
         # ditto preserves the bundle correctly inside the submission zip.
-        ditto -c -k --keepParent "$APP" quakelive-notarise.zip
+        ditto -c -k --keepParent "$APP" ioquakelive-notarise.zip
 
         # notarytool submit --wait returns 0 even when status is Invalid,
         # so we have to parse the output and react ourselves.
-        SUBMIT_OUT="$(xcrun notarytool submit quakelive-notarise.zip \
+        SUBMIT_OUT="$(xcrun notarytool submit ioquakelive-notarise.zip \
           --key AuthKey.p8 --key-id "$KEY_ID" --issuer "$KEY_ISSUER" \
           --wait 2>&1 | tee /dev/stderr)"
         SUBMIT_ID="$(echo "$SUBMIT_OUT" | awk '/^  id:/ {print $2; exit}')"
@@ -337,7 +339,7 @@ jobs:
           echo "----- end notarisation log -----"
         fi
 
-        rm -f AuthKey.p8 quakelive-notarise.zip
+        rm -f AuthKey.p8 ioquakelive-notarise.zip
 
         if [ "$STATUS" != "Accepted" ]; then
           echo "ERROR: notarisation status was '$STATUS', expected 'Accepted'" >&2
@@ -354,19 +356,19 @@ jobs:
         mkdir -p staging/engine
         # actions/upload-artifact strips POSIX permissions and breaks
         # bundle symlinks, so tar the .app to preserve everything.
-        tar -C build/release-darwin-arm64 -cf staging/engine/quakelive.app.tar quakelive.app
+        tar -C build/release-darwin-arm64 -cf staging/engine/ioquakelive.app.tar ioquakelive.app
         # Re-verify pk3s survived signing/notarisation/stapling. If something
         # along the way silently dropped them, fail before the artifact is
         # uploaded so we can never ship a broken release.
-        BASE="quakelive.app/Contents/Resources/baseq3"
+        BASE="ioquakelive.app/Contents/Resources/baseq3"
         for pk3 in iobin.pk3 pak01.pk3; do
-          if ! tar -tf staging/engine/quakelive.app.tar "$BASE/$pk3" >/dev/null 2>&1; then
-            echo "ERROR: $BASE/$pk3 missing from staged quakelive.app.tar" >&2
+          if ! tar -tf staging/engine/ioquakelive.app.tar "$BASE/$pk3" >/dev/null 2>&1; then
+            echo "ERROR: $BASE/$pk3 missing from staged ioquakelive.app.tar" >&2
             exit 1
           fi
         done
-        tar -xOf staging/engine/quakelive.app.tar "$BASE/iobin.pk3" | shasum -a 256
-        tar -xOf staging/engine/quakelive.app.tar "$BASE/pak01.pk3" | shasum -a 256
+        tar -xOf staging/engine/ioquakelive.app.tar "$BASE/iobin.pk3" | shasum -a 256
+        tar -xOf staging/engine/ioquakelive.app.tar "$BASE/pak01.pk3" | shasum -a 256
     - uses: actions/upload-artifact@v4
       with:
         name: engine-macos-arm64
@@ -395,6 +397,12 @@ jobs:
     - name: Build Solution
       run: msbuild misc/msvc/ioquakelive.sln /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v145 /m
 
+    - name: Build the dedicated server
+      # A project of its own, deliberately outside the solution: it is the same
+      # engine with the client half compiled out, and it has no dependency on
+      # SDL or the renderer.
+      run: msbuild misc/msvc/ioqlds.vcxproj /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v145 /m
+
     - name: Stage build outputs
       shell: pwsh
       run: |
@@ -404,7 +412,7 @@ jobs:
         Copy-Item build/Release/x64/baseq3/qagamex86_64.dll staging/libs/
         Copy-Item build/Release/x64/baseq3/uix86_64.dll     staging/libs/
         # Engine binaries plus the runtime DLLs (SDL2, freetype, ...) that
-        # ship next to quakelive.exe
+        # ship next to ioquakelive.exe
         Copy-Item build/Release/x64/*.exe staging/engine/
         Copy-Item build/Release/x64/*.dll staging/engine/
     - uses: actions/upload-artifact@v4
@@ -435,15 +443,15 @@ jobs:
         # Linux and macOS engine binaries are tarred to preserve +x and
         # bundle structure (upload-artifact strips POSIX mode bits).
         for tar in engines/engine-linux-x86_64/linux-x86_64.tar \
-                   engines/engine-macos-arm64/quakelive.app.tar; do
+                   engines/engine-macos-arm64/ioquakelive.app.tar; do
           if [ -f "$tar" ]; then
             tar -xf "$tar" -C "$(dirname "$tar")"
             rm "$tar"
           fi
         done
         # Sanity-check the executable bit survived.
-        ls -l engines/engine-linux-x86_64/quakelive.x86_64
-        ls -l engines/engine-macos-arm64/quakelive.app/Contents/MacOS/
+        ls -l engines/engine-linux-x86_64/ioquakelive.x86_64
+        ls -l engines/engine-macos-arm64/ioquakelive.app/Contents/MacOS/
     - name: Download universal iobin.pk3
       uses: actions/download-artifact@v4
       with:
@@ -460,13 +468,14 @@ jobs:
       run: |
         python code/tools/build_release_zips.py \
           --shared shared \
+          --server content/server \
           --engines engines \
           --output build
         ls -la build/
     - uses: actions/upload-artifact@v4
       with:
         name: release-zips
-        path: build/quakelive-*.zip
+        path: build/*.zip
 
   release:
     name: Create Release
@@ -493,6 +502,16 @@ jobs:
       with:
         name: release-zips
         path: artifacts
+    - name: Build the source zip
+      # GPL v2 obliges us to offer the source that produced these binaries, and a
+      # release is the natural place to put it. git archive takes the tag, so the
+      # zip matches the build exactly.
+      run: |
+        git archive --format=zip \
+          --prefix="ioquakelive-${{ steps.version.outputs.version }}/" \
+          -o "artifacts/ioquakelive-${{ steps.version.outputs.version }}-src.zip" \
+          "${{ steps.version.outputs.tag }}"
+        ls -la artifacts/
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
