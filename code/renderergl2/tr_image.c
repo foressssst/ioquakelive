@@ -2408,8 +2408,6 @@ static char r_loadedNames[R_PREFETCH_MAX][MAX_QPATH];
 static int r_loadedCount;
 static char r_prefetchList[MAX_QPATH];
 
-// the real name of the last JPEG read, extension included; R_LoadJPG sets it
-char r_lastImageName[MAX_QPATH];
 
 static void R_PrefetchFile(const char* list, char* out, int size) {
     char base[MAX_QPATH];

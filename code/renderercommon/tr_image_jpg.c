@@ -91,7 +91,8 @@ static void* R_JPGAllocEngine(size_t bytes) {
     return ri.Malloc((int)bytes);
 }
 
-// [ioquakelive] the name of the last JPEG read, extension included, for the load list
+// [ioquakelive] the name of the last image file read, extension included, for the
+// load list. R_LoadJPG, R_LoadPNG and R_LoadTGA all set it.
 char r_lastImageName[MAX_QPATH];
 
 /*
