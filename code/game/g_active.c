@@ -418,6 +418,34 @@ match isn't restarting.
 Returns qfalse if the client is dropped or moved to spectator.
 =================
 */
+/*
+=================
+G_FloodCheck
+
+[QL] 0x100341e0. El contador de avalancha de cada jugador: sube cada vez que
+manda un cambio de userinfo y baja de a uno cada g_floodprot_decay milisegundos.
+Si pasa de g_floodprot_maxcount, se lo echa.
+
+Con g_floodprot_maxcount en 0 no se echa a nadie, que es lo que dice el
+server.cfg de retail: "Set g_floodprot_maxcount to 0 to disable completely".
+=================
+*/
+qboolean G_FloodCheck(gclient_t* client) {
+    if (g_floodprot_maxcount.integer != 0 &&
+        g_floodprot_maxcount.integer < client->pers.userInfoFloodInfractions) {
+        trap_DropClient(client - level.clients, "Dropped for flooding the server");
+        return qfalse;
+    }
+
+    if (g_floodprot_decay.integer < level.time - client->pers.lastUserinfoUpdate) {
+        client->pers.lastUserinfoUpdate = level.time;
+        if (client->pers.userInfoFloodInfractions > 0) {
+            client->pers.userInfoFloodInfractions--;
+        }
+    }
+    return qtrue;
+}
+
 qboolean ClientInactivityTimer(gclient_t* client, int msec) {
     int clientNum = client - level.clients;
 
@@ -1052,6 +1080,11 @@ void ClientThink_real(gentity_t* ent) {
     }
 
     // check for inactivity timer, but never drop the local client of a non-dedicated server
+    // [QL] 0x10034e13: la compuerta de avalancha va pegada a la de inactividad
+    if (!G_FloodCheck(client)) {
+        return;
+    }
+
     if (!ClientInactivityTimer(client, msec)) {
         return;
     }
