@@ -676,7 +676,8 @@ gitem_t bg_itemlist[] =
             "team_CTF_redflag",
             NULL,
             {"models/flags/r_flag.md3",
-             NULL, NULL, NULL},
+             "models/flag3/r_flag3.md3",  // [QL] segundo modelo de la tabla de retail
+             NULL, NULL},
             /* icon */ "gfx/2d/flag_status/red_flag_at_base",  // [QL] cgamex86.dll 0x10067c60
             /* pickup */ "Red Flag",
             0,
@@ -694,7 +695,8 @@ gitem_t bg_itemlist[] =
             "team_CTF_blueflag",
             NULL,
             {"models/flags/b_flag.md3",
-             NULL, NULL, NULL},
+             "models/flag3/b_flag3.md3",  // [QL] segundo modelo de la tabla de retail
+             NULL, NULL},
             /* icon */ "gfx/2d/flag_status/blue_flag_at_base",  // [QL] cgamex86.dll 0x10067ca8
             /* pickup */ "Blue Flag",
             0,
@@ -802,7 +804,7 @@ gitem_t bg_itemlist[] =
          */
         {
             "item_scout",
-            "sound/items/scout.wav",
+            "sound/items/scout.ogg",  // [QL] el .wav no existe en pak00
             {"models/powerups/scout.md3",
              NULL, NULL, NULL},
             /* icon */ "icons/scout",
@@ -817,7 +819,7 @@ gitem_t bg_itemlist[] =
          */
         {
             "item_guard",
-            "sound/items/guard.wav",
+            "sound/items/guard.ogg",  // [QL] retail usa el .ogg
             {"models/powerups/guard.md3",
              NULL, NULL, NULL},
             /* icon */ "icons/guard",
@@ -865,7 +867,8 @@ gitem_t bg_itemlist[] =
             "team_CTF_neutralflag",
             NULL,
             {"models/flags/n_flag.md3",
-             NULL, NULL, NULL},
+             "models/flag3/n_flag3.md3",  // [QL] segundo modelo de la tabla de retail
+             NULL, NULL},
             /* icon */ "gfx/2d/flag_status/flag_at_base",  // [QL] cgamex86.dll 0x10067fc0
             /* pickup */ "Neutral Flag",
             0,
