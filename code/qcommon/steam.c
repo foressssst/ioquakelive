@@ -123,6 +123,7 @@ typedef struct {
 } steamListResponse_t;
 
 static void Steam_GS_SetGameInfo(void);
+static void Steam_DownloadUGC_f(void);
 
 typedef struct {
     void* lib;
@@ -175,6 +176,19 @@ typedef struct {
     void(QDECL* ReleaseRequest)(void* self, void* request);
     steamBool_t(QDECL* IsRefreshing)(void* self, void* request);
     void(QDECL* CancelQuery)(void* self, void* request);
+
+    void*(QDECL* UGC)(void);
+    unsigned int(QDECL* GetItemState)(void* self, uint64_t item);
+    steamBool_t(QDECL* DownloadItem)(void* self, uint64_t item, steamBool_t highPriority);
+    steamBool_t(QDECL* GetItemInstallInfo)(void* self, uint64_t item, uint64_t* sizeOnDisk, char* folder,
+                                           unsigned int folderSize, unsigned int* timestamp);
+    steamBool_t(QDECL* GetItemDownloadInfo)(void* self, uint64_t item, uint64_t* downloaded, uint64_t* total);
+    unsigned int(QDECL* GetNumSubscribedItems)(void* self);
+    unsigned int(QDECL* GetSubscribedItems)(void* self, uint64_t* items, unsigned int max);
+    uint64_t(QDECL* GetSteamID)(void* self);
+
+    void* ugc;           // ISteamUGC *
+    uint64_t downloading;  // el item que se esta esperando, o 0
 
     void* matchmaking;   // ISteamMatchmakingServers *
     void* listRequest;   // HServerListRequest
@@ -247,6 +261,14 @@ static qboolean Steam_Bind(void) {
     // el resto (el master, las estadisticas, la voz) sigue funcionando igual.
     STEAM_BIND_OPT(SetGameTags, "SteamAPI_ISteamGameServer_SetGameTags");
     STEAM_BIND_OPT(Matchmaking, "SteamMatchmakingServers");
+    STEAM_BIND_OPT(UGC, "SteamUGC");
+    STEAM_BIND_OPT(GetItemState, "SteamAPI_ISteamUGC_GetItemState");
+    STEAM_BIND_OPT(DownloadItem, "SteamAPI_ISteamUGC_DownloadItem");
+    STEAM_BIND_OPT(GetItemInstallInfo, "SteamAPI_ISteamUGC_GetItemInstallInfo");
+    STEAM_BIND_OPT(GetItemDownloadInfo, "SteamAPI_ISteamUGC_GetItemDownloadInfo");
+    STEAM_BIND_OPT(GetNumSubscribedItems, "SteamAPI_ISteamUGC_GetNumSubscribedItems");
+    STEAM_BIND_OPT(GetSubscribedItems, "SteamAPI_ISteamUGC_GetSubscribedItems");
+    STEAM_BIND_OPT(GetSteamID, "SteamAPI_ISteamGameServer_GetSteamID");
     STEAM_BIND_OPT(RequestInternetServerList, "SteamAPI_ISteamMatchmakingServers_RequestInternetServerList");
     STEAM_BIND_OPT(RequestLANServerList, "SteamAPI_ISteamMatchmakingServers_RequestLANServerList");
     STEAM_BIND_OPT(RequestFriendsServerList, "SteamAPI_ISteamMatchmakingServers_RequestFriendsServerList");
@@ -362,6 +384,10 @@ void Steam_Init(void) {
     if (st.Matchmaking) {
         st.matchmaking = st.Matchmaking();  // la interfaz de la lista de servidores
     }
+    if (st.UGC) {
+        st.ugc = st.UGC();  // la del Workshop, de donde salen los mapas
+    }
+    Cmd_AddCommand("steam_downloadugc", Steam_DownloadUGC_f);
     Cmd_AddCommand("steamservers", Steam_ServerList_f);
     Cmd_AddCommand("steamstatus", Steam_Status_f);
     Com_Printf("Steam API initialized.\n");
@@ -830,4 +856,171 @@ qboolean Steam_ServerListGet(int index, unsigned int* ip, unsigned short* port, 
                 s->name, s->map, s->players, s->players - s->bots, s->maxPlayers, s->gameDir,
                 gametype, s->password ? 1 : 0, s->secure ? 1 : 0, s->tags);
     return qtrue;
+}
+
+/*
+===============================================================================
+
+EL WORKSHOP
+
+Quake Live no baja mapas por HTTP: los baja del Workshop de Steam. El servidor
+publica los items que usa la partida (0x00465b00) en el configstring
+CS_STEAM_WORKSHOP_IDS y en la cvar sv_referencedSteamworks, y el cliente, antes
+de entrar, se baja los que no tiene (0x004bba30) mostrando el avance en
+cl_downloadName / cl_downloadItem / cl_downloadTime.
+
+Retail se entera de que termino por el callback OnDownloadItemResult
+(0x00469630). Aca se pregunta por el estado del item cada cuadro, que da lo
+mismo de afuera y evita registrar callbacks de C++ a mano.
+
+Las banderas de estado son las de Steam: 1 suscrito, 4 instalado, 8 necesita
+actualizarse, 16 bajando, 32 en cola.
+
+===============================================================================
+*/
+
+#define STEAM_ITEM_INSTALLED 4
+#define STEAM_ITEM_NEEDS_UPDATE 8
+#define STEAM_ITEM_DOWNLOADING 16
+#define STEAM_ITEM_PENDING 32
+
+qboolean Steam_WorkshopReady(void) {
+    return (qboolean)(st.ugc != NULL && st.GetItemState != NULL && st.DownloadItem != NULL);
+}
+
+unsigned int Steam_WorkshopState(uint64_t item) {
+    if (!Steam_WorkshopReady()) {
+        return 0;
+    }
+    return st.GetItemState(st.ugc, item);
+}
+
+qboolean Steam_WorkshopInstalled(uint64_t item) {
+    unsigned int state = Steam_WorkshopState(item);
+
+    return (qboolean)((state & STEAM_ITEM_INSTALLED) && !(state & STEAM_ITEM_NEEDS_UPDATE));
+}
+
+/*
+===============
+Steam_WorkshopDownload
+
+[QL] 0x004699c0. Devuelve qtrue si hay que esperar: el que ya esta instalado no
+se pide de nuevo.
+===============
+*/
+qboolean Steam_WorkshopDownload(uint64_t item) {
+    if (!Steam_WorkshopReady() || !item) {
+        return qfalse;
+    }
+    if (Steam_WorkshopInstalled(item)) {
+        Com_Printf("Workshop item %llu: in cache.\n", (unsigned long long)item);
+        return qfalse;
+    }
+    Com_Printf("Workshop item %llu: requesting download.\n", (unsigned long long)item);
+    Com_DPrintf("Workshop item %llu: estado %u antes de pedirlo.\n", (unsigned long long)item,
+                Steam_WorkshopState(item));
+    if (!st.DownloadItem(st.ugc, item, 1)) {
+        Com_Printf("Workshop item %llu: Steam did not take the request.\n", (unsigned long long)item);
+        return qfalse;
+    }
+    st.downloading = item;
+    return qtrue;
+}
+
+// lo que Steam lleva bajado del item que se esta esperando
+qboolean Steam_WorkshopProgress(uint64_t* done, uint64_t* total) {
+    *done = 0;
+    *total = 0;
+    if (!Steam_WorkshopReady() || !st.downloading || !st.GetItemDownloadInfo) {
+        return qfalse;
+    }
+    return st.GetItemDownloadInfo(st.ugc, st.downloading, done, total) ? qtrue : qfalse;
+}
+
+// qtrue mientras el item que se pidio siga sin estar
+qboolean Steam_WorkshopBusy(void) {
+    unsigned int state;
+
+    if (!st.downloading) {
+        return qfalse;
+    }
+    state = Steam_WorkshopState(st.downloading);
+    if (state & (STEAM_ITEM_DOWNLOADING | STEAM_ITEM_PENDING)) {
+        return qtrue;
+    }
+    if (Steam_WorkshopInstalled(st.downloading)) {
+        Com_Printf("Steamworks download complete: %llu\n", (unsigned long long)st.downloading);
+        st.downloading = 0;
+        return qfalse;
+    }
+    // ni bajando ni instalado: Steam lo descarto
+    Com_Printf("Download item %llu failed\n", (unsigned long long)st.downloading);
+    st.downloading = 0;
+    return qfalse;
+}
+
+// donde quedo instalado un item, para montarlo
+qboolean Steam_WorkshopPath(uint64_t item, char* buf, int size) {
+    uint64_t sizeOnDisk = 0;
+    unsigned int stamp = 0;
+
+    buf[0] = '\0';
+    if (!Steam_WorkshopReady() || !st.GetItemInstallInfo) {
+        return qfalse;
+    }
+    return st.GetItemInstallInfo(st.ugc, item, &sizeOnDisk, buf, size, &stamp) ? qtrue : qfalse;
+}
+
+/*
+===============
+Steam_DownloadUGC_f
+
+[QL] "steam_downloadugc <itemid>", el comando que tiene retail (0x004df010).
+===============
+*/
+static void Steam_DownloadUGC_f(void) {
+    uint64_t item;
+
+    if (Cmd_Argc() != 2) {
+        Com_Printf("Usage: steam_downloadugc <itemid>\n");
+        return;
+    }
+    item = (uint64_t)_strtoui64(Cmd_Argv(1), NULL, 10);
+    if (!Steam_WorkshopReady()) {
+        Com_Printf("Steam is not available.\n");
+        return;
+    }
+    Steam_WorkshopDownload(item);
+}
+
+/*
+===============
+Steam_WorkshopList
+
+Los items suscritos, que es de donde retail saca lo que monta al arrancar
+(0x004697a0). El fork ya recorre la carpeta del Workshop en disco, asi que esto
+sirve para saber cuales conoce Steam, no para montarlos.
+===============
+*/
+int Steam_WorkshopSubscribed(uint64_t* items, int max) {
+    if (!Steam_WorkshopReady() || !st.GetSubscribedItems || !st.GetNumSubscribedItems) {
+        return 0;
+    }
+    return (int)st.GetSubscribedItems(st.ugc, items, (unsigned int)max);
+}
+
+/*
+===============
+Steam_GS_SteamID
+
+[QL] 0x00465b00: el servidor publica su propio Steam ID en un configstring, que
+es como el cliente sabe contra quien esta jugando.
+===============
+*/
+uint64_t Steam_GS_SteamID(void) {
+    if (!st.serverUp || !st.GetSteamID) {
+        return 0;
+    }
+    return st.GetSteamID(st.gameServer);
 }

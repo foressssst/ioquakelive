@@ -36,6 +36,17 @@ void Steam_GS_SetServerInfo(const char* hostname, const char* mapName, qboolean 
 qboolean Steam_RequestServerList(int source);  // 0 internet, 1 LAN, 2 amigos, 3 favoritos, 4 historial
 void Steam_ServerList_f(void);
 qboolean Steam_ServerListRefreshing(void);
+
+// el Workshop, que es de donde Quake Live baja los mapas
+qboolean Steam_WorkshopReady(void);
+qboolean Steam_WorkshopInstalled(uint64_t item);
+qboolean Steam_WorkshopDownload(uint64_t item);
+qboolean Steam_WorkshopBusy(void);
+qboolean Steam_WorkshopProgress(uint64_t* done, uint64_t* total);
+qboolean Steam_WorkshopPath(uint64_t item, char* buf, int size);
+int Steam_WorkshopSubscribed(uint64_t* items, int max);
+unsigned int Steam_WorkshopState(uint64_t item);
+uint64_t Steam_GS_SteamID(void);
 int Steam_ServerListCount(void);
 qboolean Steam_ServerListGet(int index, unsigned int* ip, unsigned short* port, int* ping, char* info,
                              int infoSize);

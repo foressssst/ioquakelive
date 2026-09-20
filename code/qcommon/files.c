@@ -190,6 +190,7 @@ typedef struct {
 	int pure_checksum;             // checksum for pure
 	int numfiles;                  // number of files in pk3
 	int referenced;                // referenced file flags
+	unsigned long long workshopId; // [QL] el item del Workshop del que salio, o 0
 	int hashSize;                  // hash table size (power of 2)
 	fileInPack_t** hashTable;      // hash table
 	fileInPack_t* buildBuffer;     // buffer with the filenames etc.
@@ -3558,7 +3559,22 @@ static void FS_AddWorkshopPaks(void) {
 		// We pass "" as gamedir so pk3s are loaded directly from itemPath.
 		// Then we patch pakGamename to BASEGAME_DIR so the paks pass
 		// ioquake3's pure server checks (which filter by gamename).
-		FS_AddGameDirectory(itemPath, "");
+		{
+			searchpath_t *before = fs_searchpaths;
+			searchpath_t *sp;
+			unsigned long long itemId = _strtoui64(dirFd.cFileName, NULL, 10);
+
+			FS_AddGameDirectory(itemPath, "");
+
+			// [QL] 0x004d2e80: el que monta un item lo hace sabiendo cual es, porque
+			// despues el servidor publica la lista (sv_referencedSteamworks) y el cliente
+			// se baja los que le falten. La carpeta se llama como el item.
+			for (sp = fs_searchpaths; sp && sp != before; sp = sp->next) {
+				if (sp->pack) {
+					sp->pack->workshopId = itemId;
+				}
+			}
+		}
 
 		// Binary leaves pakGamename as "" for workshop paks.
 		// FS_Loaded* includes all paks (matching binary behavior).
@@ -3825,6 +3841,41 @@ const char* FS_ReferencedPakNames(void) {
 		}
 	}
 
+	return info;
+}
+
+/*
+=====================
+FS_ReferencedSteamworksItems
+
+[QL] 0x004d25b0. Los items del Workshop de los pk3 que esta partida usa, separados
+por espacios. El servidor los publica en sv_referencedSteamworks y en el
+configstring CS_STEAM_WORKSHOP_IDS (0x00465b00), y el cliente se baja los que no
+tenga antes de entrar.
+=====================
+*/
+const char* FS_ReferencedSteamworksItems(void) {
+	static char info[BIG_INFO_STRING];
+	searchpath_t* search;
+
+	info[0] = 0;
+	for (search = fs_searchpaths; search; search = search->next) {
+		char id[32];
+
+		if (!search->pack || !search->pack->referenced || !search->pack->workshopId) {
+			continue;
+		}
+		Com_sprintf(id, sizeof(id), "%llu", search->pack->workshopId);
+
+		// el mismo item puede traer varios pk3: va una sola vez
+		if (strstr(info, id)) {
+			continue;
+		}
+		if (*info) {
+			Q_strcat(info, sizeof(info), " ");
+		}
+		Q_strcat(info, sizeof(info), id);
+	}
 	return info;
 }
 
