@@ -54,6 +54,10 @@ cvar_t* sv_gametype;
 cvar_t* sv_ammoPack;  // [QL] g_ammoPack
 cvar_t* sv_pure;
 cvar_t* sv_floodProtect;
+cvar_t* sv_master;       // [QL] contestar consultas y aparecer en la lista
+cvar_t* sv_idleExit;     // [QL] apagarse tras tantos segundos sin mapa
+cvar_t* sv_errorExit;    // [QL] apagarse ante un error
+cvar_t* sv_workshopFile; // [QL] el archivo con los items del Workshop
 cvar_t* sv_lanForceRate;  // dedicated 1 (LAN) server forces local client rates to 99999 (bug #491)
 cvar_t* sv_banFile;
 // [QL] 0x004e3e7a y 0x004e3e90: las entidades del nivel salen de un archivo aparte, o se
