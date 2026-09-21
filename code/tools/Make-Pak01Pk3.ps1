@@ -46,8 +46,11 @@ $extraCount = 0
 if (Test-Path $extraSource) {
     $seen = @{}
     foreach ($entry in $entries) { $seen[$entry[1].ToLowerInvariant()] = $true }
-    foreach ($file in Get-ChildItem -Path $extraSource -Recurse -File) {
+    foreach ($file in Get-ChildItem -Path $extraSource -Recurse -File -Force) {
         $relativePath = $file.FullName.Substring($extraSource.Length + 1).Replace('\', '/')
+        if ($relativePath -match '(^|/)\.') {
+            continue  # the folder is a git working copy: .git stays out
+        }
         if ($seen.ContainsKey($relativePath.ToLowerInvariant())) {
             Write-Host "error: $relativePath is both in content\pak01 and in $extraSource"
             exit 1

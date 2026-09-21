@@ -303,7 +303,10 @@ code/
 misc/
   msvc/           Visual Studio solution and project files
 content/pak01/    Asset overrides (menus, fonts, shaders) → pak01.pk3
+content/server/   Sample server.cfg and access.txt, for the ioqlds package
 ```
+
+Releases add to `pak01.pk3` the art this repository cannot carry: Handel Gothic Ex, CPMA 1.53's medal and chat frames, and the menu's background and credit logos. It comes from a private repository the CI reads with a deploy key. A build without it runs the same, with still medals, Quake Live's own font for the frag message and a map's levelshot behind the menu.
 
 ## Español
 
@@ -346,7 +349,7 @@ La comparación a nivel de símbolos **no** es posible para el módulo de juego:
 - Tipografía por FreeType, sistema de coordenadas panorámico, sobreescritura de assets por `pak01.pk3`.
 
 #### Qué hace falta para correrlo
-Necesitás un `pak00.pk3` original, sacado de una copia **comprada** de [Quake Live](https://steampowered.com/app/282440) en Steam. ioquakelive no arranca sin un `pak00.pk3` legítimo. Quake Live y sus assets siguen siendo propiedad de *id Software*.
+Necesitas un `pak00.pk3` original, sacado de una copia **comprada** de [Quake Live](https://steampowered.com/app/282440) en Steam. ioquakelive no arranca sin un `pak00.pk3` legítimo. Quake Live y sus assets siguen siendo propiedad de *id Software*.
 
 No tengo ningún derecho sobre los assets de Quake Live y no puedo, ni **voy a**, redistribuirlos desde mi propia copia legítima.
 
@@ -583,6 +586,8 @@ misc/
 content/pak01/    sobreescritura de assets (menús, fuentes, shaders) → pak01.pk3
 content/server/   server.cfg y access.txt de ejemplo, para el paquete de ioqlds
 ```
+
+Las releases suman a `pak01.pk3` el arte que este repositorio no puede llevar: Handel Gothic Ex, los cuadros de las medallas y del globo de chat de CPMA 1.53, y el fondo y los logos del menú. Sale de un repositorio privado que el CI lee con una deploy key. Un build sin eso funciona igual, con las medallas quietas, el frag message en la fuente de Quake Live y la captura de un mapa detrás del menú.
 
 ## Ancestry
 
