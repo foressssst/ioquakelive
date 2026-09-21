@@ -329,16 +329,13 @@ int BG_ParseGametypeStringtoFlag(const char *str) {
 ===============
 Add_Ammo
 
-[QL] qagamex86.dll 0x1004dab0. With g_infiniteAmmo a pickup adds nothing (the weapons
-already hold -1), except that under g_lightningDischarge the lightning gun's ammo is set
-back to -1. The ammo pack (weapon == WP_NUM_WEAPONS) fills every weapon owned, then the
-ammo is clamped: to g_startingAmmo_<weapon> in Domination, to the fixed table elsewhere.
+[QL] 0x1004dab0. With g_infiniteAmmo a pickup adds nothing (the weapons already hold
+-1), except that under g_lightningDischarge the lightning gun's ammo is set back to
+-1. The ammo pack (weapon == WP_NUM_WEAPONS) fills every weapon owned, then the ammo
+is clamped: to g_startingAmmo_<weapon> in Domination, to the fixed table elsewhere.
 
-The two cvars read first are g_lightningDischarge (integer 0x105acbec, table entry
-0x1008e868) and g_infiniteAmmo (0x105a31cc, 0x1008e550). The fork took them for
-g_infiniteAmmo and g_loadout and returned on g_loadout, so under TDM's factory
-(g_loadout 1) weapons were picked up empty and no ammo box gave anything. Retail's
-g_loadout is 0x104b334c and nothing here reads it.
+The cvars read are g_lightningDischarge (0x105acbec) and g_infiniteAmmo
+(0x105a31cc). Retail's g_loadout is 0x104b334c and nothing here reads it.
 ===============
 */
 void Add_Ammo(gentity_t* ent, int weapon, int count) {
@@ -689,16 +686,14 @@ void G_QG_Think(void) {
 ===============
 Item_NotifySpectator
 
-[QL] qagamex86.dll 0x1004eac0. Tells one spectator (EF_SPECTATOR) about an item with a timer, in an
-EV_ITEM_PICKUP_SPEC event only that client gets:
-- otherEntityNum: the item entity;
-- modelindex: its kind;
-- time: when it comes back (the item's nextthink);
-- modelindex2: whether it belongs to a random-respawn team;
-- groundEntityNum: whether it has just respawned.
-Dropped items, green armor, holdables and items with spawnflag 0x100 are left out. In CTF an
-item with duplicates on the map carries the base it is nearer to in otherEntityNum2 (1 red,
-2 blue), with the squared distance in time2; an item with no duplicate carries 3.
+[QL] 0x1004eac0. Tells one spectator (EF_SPECTATOR) about an item with a timer, in an
+EV_ITEM_PICKUP_SPEC event only that client gets: otherEntityNum the item entity,
+modelindex its kind, time when it comes back, modelindex2 whether it belongs to a
+random-respawn team, groundEntityNum whether it has just respawned.
+
+Dropped items, green armor, holdables and items with spawnflag 0x100 are left out. In
+CTF an item with duplicates carries the base it is nearer to in otherEntityNum2 (1
+red, 2 blue) with the squared distance in time2; one with no duplicate carries 3.
 ===============
 */
 void Item_NotifySpectator(gentity_t *ent, int clientNum, qboolean isRespawn) {
@@ -1420,12 +1415,11 @@ static gitem_t* G_FindAmmoPack(void) {
 ============
 G_ItemFiltered
 
-[QL] Whether a map item stays out of the game (qagamex86.dll 0x10050843). Instagib keeps only
-the flags. Flags spawn in CTF, 1-Flag CTF, Overload and Attack & Defend, which keeps nothing
-but its red and blue flags; race, CA, Domination and Red Rover spawn no items at all. Then
-g_spawnItem* by type, g_infiniteAmmo and the ammo pack cvars, g_quadHog for FFA powerups, and
-disable_<classname>; persistant powerups never spawn from the map. A flag that was not dropped
-publishes where its base is.
+[QL] Whether a map item stays out of the game (0x10050843). Instagib keeps only the
+flags; flags spawn in CTF, 1-Flag, Overload and Attack & Defend, which keeps nothing
+else; race, CA, Domination and Red Rover spawn no items at all. Then g_spawnItem* by
+type, g_infiniteAmmo and the ammo pack cvars, g_quadHog for FFA powerups, and
+disable_<classname>. Persistant powerups never spawn from the map.
 ============
 */
 static qboolean G_ItemFiltered(gentity_t* ent, gitem_t* item) {

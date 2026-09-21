@@ -24,12 +24,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 // The Crash Course is qztraining with the "_training" factory (g_training 1). The
 // tour is the map's: 47 info_tour_point entities chained by tourPointTargetName and
-// tourPointTarget, each holding one line of Crash's script -- the sound she says it
-// with, the text, how long it lasts, how near you have to be, a cvar to set on the
-// way. Crash is the bot "Trainer" of scripts/bots.txt, and walking her from stop to
-// stop is the bot's (AINode_Training, ai_dmnet.c).
+// tourPointTarget, each holding one line of Crash's script. Crash is the bot
+// "Trainer" of scripts/bots.txt, and walking her from stop to stop is the bot's
+// (AINode_Training, ai_dmnet.c). The cinematic it opens with is the player held in
+// PM_TUTORIAL while bot_training is 1.
 //
-// This file is what the game itself does around that, from qagamex86.dll:
+// This file is what the game does around that, from qagamex86.dll:
 //   SP_info_tour_point      0x1005a1f0
 //   its think               0x10059fd0
 //   G_TrainingHumanClient   0x10024ea0
@@ -38,10 +38,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //   G_TrainingAddTrainer    0x100378e0
 //   G_TrainingFrame         0x10024fa0, from BotAIStartFrame
 //   Cmd_SkipTraining        0x10045a80, from readyup
-//
-// The cinematic the tour opens with is the player held in PM_TUTORIAL while
-// bot_training is 1 (client->freezePlayer, set here), which cgame answers with
-// letterbox bars and nothing but the chat, the centre print and the skip prompt.
 //
 
 #include "g_local.h"
@@ -286,14 +282,11 @@ G_TrainingFrame
 
 0x10024fa0, at the end of every BotAIStartFrame while g_training is set.
 
-Away from a training map it switches the training off. With nobody to train it
-holds the match at retail's settings. Otherwise: the music stops for the warmup;
-Crash is added once the player is on a team and no other bot is in (at the skill
-the factory asked for); bot_training 3 starts the arena's loop; the intro's
-g_training 2 becomes 1 when the warmup is over. While the player has not readied
-up, bot_training 1 holds them in the cinematic (freezePlayer) and anything else
-lets them go and keeps Crash at least as good as g_spSkill; once they ready up
-the tour is over. When the match ends the player hears whether they won.
+Away from a training map it switches the training off; with nobody to train it
+holds the match at retail's settings. Otherwise the music stops for the warmup,
+Crash is added once the player is on a team, bot_training 3 starts the arena's loop
+and the intro's g_training 2 becomes 1 when the warmup is over. Until the player
+readies up, bot_training 1 holds them in the cinematic; readying up ends the tour.
 ===============
 */
 void G_TrainingFrame(void) {
@@ -405,15 +398,12 @@ void G_TrainingFrame(void) {
 
 CRASH IN SPANISH (g_trainingSpanish)
 
-[ioquakelive] Not retail's: a switch for testing the tour in Spanish. Set
-g_trainingSpanish 1 before starting the Crash Course and every line Crash says
-comes out in Spanish -- the tour's, which live in the map, and the ones the bot
-says on its own. Her voice stays the original: there is no Spanish audio.
+[ioquakelive] Not retail's: a switch for testing the tour in Spanish. Her voice
+stays the original, there is no Spanish audio.
 
-The map's lines are keyed by the sound file that goes with them, not by their
-text: the text in qztraining.bsp carries Windows-1252 curly quotes, and matching
-those from source would be a matter of luck. The wav names are plain ASCII and
-one per line.
+The map's lines are keyed by the sound file that goes with them, not by their text:
+the text in qztraining.bsp carries Windows-1252 curly quotes, and matching those
+from source would be a matter of luck. The wav names are plain ASCII, one per line.
 
 ===============================================================================
 */

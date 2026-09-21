@@ -2561,12 +2561,10 @@ void CG_SetEndScoreboardMenu(void) {
 =================
 CG_StartMenuCursor
 
-For a cgame menu about to take the keys (the join menu, the end-of-match scoreboard).
-CG_Init memsets cgs, so the cursor sits at (0,0) - the top left corner, well outside the menu -
-until the player happens to move the mouse, and every click before that first movement
-hit-tests there as an out-of-bounds click. Retail never has this problem because its engine
-hands cgame an absolute pointer position (0x1003c4f0); ioquake3's sends deltas, so the starting
-point is chosen here: the centre of the 640x480 virtual screen.
+For a cgame menu about to take the keys. CG_Init memsets cgs, so the cursor sits at
+(0,0) until the player moves the mouse, and every click before that hit-tests
+outside the menu. Retail's engine hands cgame an absolute pointer position
+(0x1003c4f0); ioquake3's sends deltas, so the starting point is chosen here.
 =================
 */
 static void CG_StartMenuCursor(void) {
@@ -3357,13 +3355,11 @@ static const float* CG_SpecTeamColor(int team) {
 =====================
 CG_DrawSpecItemTimers
 
-[QL] cgamex86.dll 0x1000f700, for a spectator (EF_SPECTATOR) with cg_specItemTimers, a bit mask of
-what to show: 1 powerups, 2 mega health, 4 red armor, 8 yellow armor. Down from
-cg_specItemTimersX and Y, each item's icon, cg_specItemTimersSize * 100 square, with the seconds
-until it is back beside it in font 0 at that size. In CTF a band at a quarter opacity marks the
-base an item belongs to, and the items of a random-respawn team go half size, stepped a quarter
-icon each. Retail counts those against the items of every side but red, so a team can end its
-row early or late.
+[QL] 0x1000f700, for a spectator (EF_SPECTATOR) with cg_specItemTimers, a bit mask
+of what to show: 1 powerups, 2 mega health, 4 red armor, 8 yellow armor. Down from
+cg_specItemTimersX and Y, each item's icon, cg_specItemTimersSize * 100 square,
+with the seconds until it is back beside it. In CTF a band at a quarter opacity
+marks the base an item belongs to, and a random-respawn team's items go half size.
 =====================
 */
 static void CG_DrawSpecItemTimers(void) {
@@ -3442,17 +3438,15 @@ static void CG_DrawSpecItemTimers(void) {
 =====================
 CG_DrawSpecTeamVitals
 
-[QL] cgamex86.dll 0x1000fab0, for a spectator in the team modes with cg_specTeamVitals: a row per
-player from cg_specTeamVitalsY, cg_specTeamVitalsWidth wide, the red team down the left and the
-blue team down the right. Each row has:
-- the client number in faint white, and a frame on the followed player;
-- the first powerup, or else the model's portrait where retail draws the weapon in use (a skull
-  once dead);
-- the name in font 0 at 0.18, cut with "..." to fit, and at 2 the health as a number before it;
-- a health bar and an armor bar against the player's maximum health.
-Without cg_specTeamVitalsHealthColor the health bar fills the row behind white text, red or blue
-and stronger past the maximum, with the armor bar under it. With it the bars go thin under the
-name, the health one tinted by health and the armor one cyan, and the text takes the team colour.
+[QL] 0x1000fab0, for a spectator in the team modes with cg_specTeamVitals: a row per
+player from cg_specTeamVitalsY, cg_specTeamVitalsWidth wide, red down the left and
+blue down the right. A row is the client number, the first powerup or else the
+model's portrait where retail draws the weapon in use, the name cut with "..." to
+fit, and a health and an armor bar against the player's maximum health.
+
+Without cg_specTeamVitalsHealthColor the health bar fills the row behind white
+text; with it the bars go thin under the name, the health one tinted by health and
+the armor one cyan, and the text takes the team colour.
 =====================
 */
 static void CG_DrawSpecTeamVitals(void) {
@@ -3621,13 +3615,12 @@ static void CG_DrawSpecTeamVitals(void) {
 =================
 CG_DrawLetterbox
 
-[QL] cgamex86.dll 0x1000d940, drawn by CG_Draw2D in a training match (0x10010ed3). The
-tutorial's cinema bars: two black bands 640 wide, at the top and the bottom of the screen.
-The first frame the player is held for the tour (PM_TUTORIAL) opens them (0x10010f65): they
-grow from 1 to 84 units over 1000 ms and stay at 84. Once pm_type leaves PM_TUTORIAL they
-close from 84 to nothing over another 1000 ms, and then rest until opened again. Nothing over
-the join menu or last frame's scoreboard. cg_letterboxDrawn says whether they were drawn this
-frame: CG_AddViewWeapon (0x10052d33) leaves the gun out while they are.
+[QL] 0x1000d940, drawn by CG_Draw2D in a training match (0x10010ed3): two black
+bands 640 wide at the top and the bottom. The first frame the player is held for the
+tour (PM_TUTORIAL) opens them from 1 to 84 units over 1000 ms; once pm_type leaves
+PM_TUTORIAL they close again over another 1000 ms. cg_letterboxDrawn says whether
+they were drawn this frame, and CG_AddViewWeapon (0x10052d33) leaves the gun out
+while they are.
 =================
 */
 qboolean cg_letterboxDrawn;
@@ -3683,9 +3676,7 @@ static void CG_DrawLetterbox(void) {
 CG_DrawVoiceIndicator
 
 [QL] 0x10011200. One row per talking player, with a box in their team's colour, the
-icon and the name. cg_voiceChatIndicator turns it off at 0 and sends it left at 2; any
-other value puts it on the right.
-
+icon and the name. cg_voiceChatIndicator turns it off at 0 and sends it left at 2.
 This also closes the "is talking" flag: the binary clears it 500 ms after the last
 packet, except your own, which "-voice" clears.
 =================

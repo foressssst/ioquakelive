@@ -2149,21 +2149,14 @@ static void CG_RegisterGraphics(void) {
     cgs.media.medalRevenge = trap_R_RegisterShaderNoMip("medal_revenge");
 
     // [QL] 0x10024343. The Steam Workshop gore pack - the body-part gibs a
-    // player can install if they want Quake 3's look back. Retail's pak00
-    // ships none of these files, so RE_RegisterModel hands back 0 for every
-    // one of them and CG_GibPlayer takes the electrogib branch. That handle
-    // being zero *is* retail's on/off switch; there is no cvar behind it.
-    //
-    // This fork used to ship the pack inside its own pak01.pk3, which made
-    // the handle resolve on every install and turned the Quake 3 gore into
-    // the default - the opposite of retail, and audible as a missing bounce
-    // sound because the matching flesh impacts were never registered. The
-    // assets now sit unshipped in content/optional/gore/; see the README
-    // there for how to turn them on.
+    // player can install if they want Quake 3's look back. Retail's pak00 ships
+    // none of these files, so RE_RegisterModel hands back 0 for every one and
+    // CG_GibPlayer takes the electrogib branch. That handle being zero *is*
+    // retail's on/off switch; there is no cvar behind it. The assets sit
+    // unshipped in content/optional/gore/.
     //
     // The binary keeps sixteen slots because it holds left and right variants
-    // separately, but the duplicated pairs (arm, forearm, fist, leg, foot) all
-    // point at the same file, so ten handles carry the same information.
+    // separately, but the duplicated pairs all point at the same file.
     cgs.media.gibSkull = trap_R_RegisterModel("dlc_gibs/skull.md3");
     cgs.media.gibBrain = trap_R_RegisterModel("dlc_gibs/brain.md3");
     cgs.media.gibChest = trap_R_RegisterModel("dlc_gibs/chest.md3");
@@ -2753,14 +2746,12 @@ static int CG_FeederCount(float feederID) {
 =================
 CG_SetScoreSelection
 
-[QL] cgamex86.dll 0x10025f60 (the menu arrives in edi). A spectator selects no score (-1);
-anyone else selects the score whose client is the snapshot's player, and keeps the previous
+[QL] 0x10025f60 (the menu arrives in edi). A spectator selects no score (-1); anyone
+else selects the score whose client is the snapshot's player, and keeps the previous
 selection while that client is missing from the scores.
 
-Team gametypes hand that score's index to the list of the player's team and -1 to the other
-list. The Team Arena code this replaces handed the team list its player count and never
-touched the other list, which stayed on its first row. Other gametypes select on
-FEEDER_SCOREBOARD.
+Team gametypes hand that score's index to the list of the player's team and -1 to
+the other list. Other gametypes select on FEEDER_SCOREBOARD.
 =================
 */
 void CG_SetScoreSelection(void* p) {
@@ -3128,15 +3119,13 @@ static qhandle_t CG_FeederItemImage(float feederID, int index) {
 =================
 CG_FeederSelection
 
-[QL] cgamex86.dll 0x10028b10. -1 is ignored, and outside the team gametypes the index is the
+[QL] 0x10028b10. -1 is ignored, and outside the team gametypes the index is the
 score.
 
-In a team gametype FEEDER_REDTEAM_LIST means red and every other feeder blue. At intermission
-the index is a row of that team's list and selects its score. Otherwise it arrives as an index
-into cg.scores, the way CG_SetScoreSelection hands it out, and becomes the player's row on the
-team's list, written straight into the in-game board's playerlistRED / playerlistBLUE (the item
-names the menus insist on), while the end board's list of the other team is cleared. That row
-is the one the list box highlights.
+In a team gametype FEEDER_REDTEAM_LIST means red and every other feeder blue. At
+intermission the index is a row of that team's list. Otherwise it arrives as an
+index into cg.scores and becomes the player's row on the team's list, written into
+playerlistRED / playerlistBLUE, while the end board's other team is cleared.
 =================
 */
 static void CG_FeederSelection(float feederID, int index) {
@@ -3235,19 +3224,15 @@ CG_LoadHudMenu();
 =================
 Display-context shims for cgame
 
-ui_shared.c is compiled into both modules and calls these through DC->.
-The UI module wires them to Key_ and Cmd_ traps that cgame's syscall table
-does not export, so they used to be left commented out - which meant six
-NULL function pointers sitting in cgDC waiting for a menu script to reach
-them. Script_Exec did: `exec` is the first command in the join menu's nav
-bar actions, so clicking Settings called DC->executeText(NULL) and took the
-cgame VM down with SIGSEGV.
+ui_shared.c is compiled into both modules and calls these through DC->. The UI module
+wires them to Key_ and Cmd_ traps that cgame's syscall table does not export, so they
+used to be left out - six NULL pointers waiting for a menu script. Script_Exec found
+them: `exec` is the first command in the join menu's nav bar actions, so clicking
+Settings called DC->executeText(NULL).
 
-executeText has a real equivalent here - trap_SendConsoleCommand appends to
-the command buffer exactly like Cmd_ExecuteText(EXEC_APPEND, ...). The rest
-drive key binding and text-field editing, which no cgame-owned menu uses, so
-they are honest no-ops rather than fake behaviour: what matters is that the
-pointers are never NULL.
+executeText has a real equivalent here, trap_SendConsoleCommand. The rest drive key
+binding and text-field editing, which no cgame-owned menu uses, so they are honest
+no-ops: what matters is that the pointers are never NULL.
 =================
 */
 static void CG_DC_ExecuteText(int exec_when, const char* text) {

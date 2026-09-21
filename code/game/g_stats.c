@@ -258,13 +258,13 @@ void G_SetMatchGUID(void) {
 /*
 ===============================================================================
 
-PLAYER_KILL y PLAYER_DEATH
+PLAYER_KILL and PLAYER_DEATH
 
 [QL] 0x100726e0, called from player_die (0x1004751a). Retail builds a single document
 and sends it twice: as PLAYER_KILL to the killer's account and as PLAYER_DEATH to the
-victim's. The same function also keeps the death and streak counts -- here that is
-already done by STAT_AddPlayerDeathStat -- and unlocks Steam achievements, which are
-not implemented.
+victim's. The same function keeps the death and streak counts, which here
+STAT_AddPlayerDeathStat already does, and unlocks Steam achievements, which are not
+implemented.
 
 ===============================================================================
 */
@@ -648,9 +648,8 @@ PLAYER_STATS
   - when somebody leaves, from ClientDisconnect (0x1003c812), with quit = 1
   - when somebody leaves their team, from SetTeam (0x10040535), with quit = 1
 
-Retail's first parameter (ecx) is "the match was aborted"; the third, "this player
-left". Nothing goes out for a player who is still connecting, who is in intermission
-or who is a spectator.
+Nothing goes out for a player who is still connecting, in intermission or a
+spectator.
 
 ===============================================================================
 */
@@ -858,11 +857,9 @@ void STAT_PlayerStats(gclient_t* cl, qboolean aborted, qboolean quit) {
 STAT_MatchReport
 
 [QL] 0x10076fe0, the last thing LogExit does (0x10057785). It closes the match: which
-rules were played, how it ended and who scored. Retail hands it to the engine through a
-different import (+0x2e4, 0x004f4c30), which publishes it as MATCH_REPORT; here it is
-published like every other event, with the same resulting document.
-
-It goes out once per match and never on a map_restart.
+rules were played, how it ended and who scored. Retail publishes it through a
+different import (+0x2e4, 0x004f4c30) as MATCH_REPORT; here it goes out like every
+other event, with the same document. Once per match, never on a map_restart.
 ===============
 */
 void STAT_MatchReport(qboolean aborted, int restarted, const char* exitMsg) {

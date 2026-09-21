@@ -113,13 +113,11 @@ void CG_SetEntitySoundPosition(centity_t* cent) {
 ===============
 CG_AddEffectLight
 
-[ioquakelive] One of the lights that only decorate: the muzzle flash, a rocket, an explosion,
-an item's glow. At r_dynamicLight 2 none of them is drawn, leaving only the lights that tell
-you something -- who carries a flag, who carries quad -- which still call the trap directly
-from CG_PlayerPowerups.
-
-At 1 the carrier's light is lost among the rockets and the explosions; at 2 any light you see
-is, for certain, a carrier.
+[ioquakelive] One of the lights that only decorate: the muzzle flash, a rocket, an
+explosion, an item's glow. At r_dynamicLight 2 none of them is drawn, leaving only
+the lights that tell you something - who carries a flag, who carries quad - which
+call the trap directly from CG_PlayerPowerups. At 1 the carrier's light is lost
+among the rockets; at 2 any light you see is a carrier.
 ===============
 */
 void CG_AddEffectLight(const vec3_t org, float intensity, float r, float g, float b) {
@@ -430,19 +428,15 @@ static void CG_ItemTimerFace(const gitem_t* item, qboolean teamItem, qhandle_t* 
 =================
 CG_DrawItemTimer
 
-[QL] cgamex86.dll 0x1002db00, called from CG_Item (0x1001600b) before the item is skipped for
-being invisible. While an item is away its face floats where it was, with a ring of wedges around
-it counting the wait down. The server keeps sending the entity for this: on pickup g_items.c
-clears SVF_NOCLIENT and fills s.time (when it comes back), s.time2 (how long the wait is) and
-s.generic1 (set for a team's item, which shows the "unknown" face).
+[QL] 0x1002db00, called from CG_Item (0x1001600b) before the item is skipped for
+being invisible. While an item is away its face floats where it was, with a ring of
+wedges counting the wait down. The server keeps sending the entity for this: on
+pickup g_items.c clears SVF_NOCLIENT and fills s.time, s.time2 and s.generic1.
 
-A wedge is five seconds. There are s.time2 / 5000 of them and (s.time2 - remaining) / 5000 + 1 are
-lit, the last of those with the *_current shader, which pulses. The first sits at 180/total degrees
-and each next one 360/total further round. The art follows how many there are: up to 5 wedges
-slice5, 6 or 7 slice7, 8 to 12 slice12, more slice24.
-
-Everything is 16 units across at the item's origin lifted 8, and fades with distance: whole up to
-256 units away, gone at 768, straight line between the two.
+A wedge is five seconds, (s.time2 - remaining) / 5000 + 1 of them lit, the last
+with the pulsing *_current shader. The art follows how many there are: up to 5
+slice5, 6 or 7 slice7, 8 to 12 slice12, more slice24. Everything is 16 units across
+at the origin lifted 8, whole up to 256 units away and gone at 768.
 =================
 */
 static void CG_DrawItemTimer(centity_t* cent, const gitem_t* item) {
@@ -866,21 +860,17 @@ CG_Missile
 =================
 CG_ProjectileLeadOffset
 
-[ioquakelive] Not retail's. Quake Live's projectiles leave the muzzle 5 units ahead (3 ducked) and
-are stepped forward 25 ms on the server, against Quake 3's 14 units and 50 ms, so a rocket's first
-frame is drawn at about 27 units instead of 59: it comes out of your chest and its smoke sits on the
-camera. This draws the projectile and its smoke further along, and only that: the missile, its
-damage and where it explodes are the server's and do not move. The offset fades out over the first
-150 ms.
+[ioquakelive] Not retail's. Quake Live's projectiles leave the muzzle 5 units ahead
+(3 ducked) and are stepped forward 25 ms on the server, against Quake 3's 14 units
+and 50 ms, so a rocket's first frame is drawn at about 27 units instead of 59: it
+comes out of your chest and its smoke sits on the camera. This draws the projectile
+and its smoke further along, and only that - the missile, its damage and where it
+explodes are the server's. The offset fades out over the first 150 ms.
 
-Only the flight the projectile was fired with is drawn ahead. A grenade that bounces gets a new
-trTime (G_BounceMissile, qagamex86.dll 0x1005b4f0), and measuring the fade from it drew the grenade
-28 units ahead again after every bounce, so its flight looked cut in the middle. The offset is also
-never longer than the way to the wall in front: the drawn projectile meets the wall when the real
-one does, and a bounce inside the first 150 ms does not jump either.
-
-The distance is fixed in code on purpose. It was a cvar while it was being tuned; the value the
-player settled on is baked in so no config can change it and everyone sees the same shot.
+Only the flight the projectile was fired with is drawn ahead: a grenade gets a new
+trTime on every bounce (G_BounceMissile, qagamex86.dll 0x1005b4f0). The offset is
+never longer than the way to the wall in front, so the drawn projectile meets the
+wall when the real one does.
 =================
 */
 #define CG_PROJECTILE_LEAD 28.0f
@@ -1118,20 +1108,15 @@ CG_Beam
 
 Also called as an event.
 
-[QL] Unlike Q3's immediate RT_BEAM refEntity, QL draws the target_laser beam
-(entity eType ET_BEAM / 5, still emitted by SP_target_laser - verified in
-qagamex86.dll, which sets es->eType = 5 and installs target_laser_think) as a
-short-lived fading rail-core local entity. The beam runs from the entity's
-pos.trBase to its origin2 (the trace endpoint stored by target_laser_think)
-and fades its dark-red colour out over 500 ms via LE_FADE_RGB.
+[QL] Where Q3 draws an immediate RT_BEAM refEntity, QL draws the target_laser beam
+(eType ET_BEAM, still emitted by SP_target_laser) as a short-lived fading rail-core
+local entity: from the entity's pos.trBase to its origin2, dark red, fading over
+500 ms.
 
-The binary stores leType 7; QL's leType_t inserts an extra LE_MOVE_SCALE_FADE_RGB
-at index 5, so its numbering is shifted one past Q3. Value 7 maps to CG_AddFadeRGB,
-ioquakelive's LE_FADE_RGB, so the enum name is used here, not the raw 7.
-
-NOTE: the QL binary handler shares the CG_SpawnEffect symbol with an unrelated
-RT_MODEL teleport-dust effect at 0x10013140 (called only from CG_EntityEvent);
-different functions, do not conflate.
+The binary stores leType 7. QL's leType_t inserts an extra LE_MOVE_SCALE_FADE_RGB at
+index 5, so its numbering is shifted one past Q3 and 7 is this tree's LE_FADE_RGB.
+The binary's handler shares the CG_SpawnEffect symbol with an unrelated RT_MODEL
+teleport-dust effect at 0x10013140; different functions.
 ===============
 */
 // Address: 0x10017c60
