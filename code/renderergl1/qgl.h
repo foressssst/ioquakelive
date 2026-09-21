@@ -260,6 +260,19 @@ typedef char GLchar;
 #define GL_COMPILE_STATUS                   0x8B81
 #define GL_LINK_STATUS                      0x8B82
 
+// [ioquakelive] GL_ARB_sync, part of OpenGL 3.2: it tells when the GPU has finished a frame
+// without draining the pipeline, and so caps how many are queued (see r_maxQueuedFrames)
+#ifndef GL_ARB_sync
+typedef struct __GLsync *GLsync;
+#define GL_SYNC_GPU_COMMANDS_COMPLETE		0x9117
+#define GL_SYNC_FLUSH_COMMANDS_BIT			0x00000001
+#endif
+
+#define QGL_ARB_SYNC_PROCS \
+	GLE( GLsync, glFenceSync, GLenum condition, GLbitfield flags ) \
+	GLE( GLenum, glClientWaitSync, GLsync sync, GLbitfield flags, unsigned long long timeout ) \
+	GLE( void, glDeleteSync, GLsync sync )
+
 #define QGL_GLSL_PROCS \
 	GLE( GLuint, glCreateShader, GLenum type ) \
 	GLE( void, glShaderSource, GLuint shader, GLsizei count, const GLchar * const *string, const GLint *length ) \

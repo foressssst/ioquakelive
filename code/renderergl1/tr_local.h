@@ -1053,6 +1053,9 @@ enum {
 
 // all state modified by the back end is separated
 // from the front end state
+// [ioquakelive] the most frames the GPU may have queued
+#define MAX_FRAME_FENCES 4
+
 typedef struct {
 	trRefdef_t	refdef;
 	viewParms_t	viewParms;
@@ -1080,6 +1083,10 @@ typedef struct {
 	qboolean throttle;
 	qboolean drawConsole;
 	qboolean doneShadows;
+
+	// [ioquakelive] the last frames' fences, to keep no more than r_maxQueuedFrames queued
+	GLsync	frameFences[MAX_FRAME_FENCES];
+	int		fenceIndex;
 
 } backEndState_t;
 
@@ -1938,6 +1945,9 @@ void *R_GetCommandBuffer( int bytes );
 void FBO_ResolveMultisample( void );
 extern qboolean textureNonPowerOfTwo;
 
+extern cvar_t *r_maxQueuedFrames;	// [ioquakelive] the cap on frames queued on the GPU
+void RB_ClearFrameFences( void );
+
 // the scene frame buffer's format, which the post effects' buffers take too
 extern GLint fboInternalFormat;
 extern GLint fboTextureFormat;
@@ -2021,6 +2031,7 @@ void R_BloomScreen( void );
 	QGL_FBO_PROCS;
 	QGL_FBO_OPT_PROCS;
 	QGL_GLSL_PROCS;
+	QGL_ARB_SYNC_PROCS;
 #undef GLE
 
 // VBO functions

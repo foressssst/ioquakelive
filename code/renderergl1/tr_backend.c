@@ -1570,6 +1570,26 @@ static const void *RB_SwapBuffers( const void *data ) {
 		backEnd.screenshotMask = 0;
 	}
 
+	// [ioquakelive] r_maxQueuedFrames caps how many frames the GPU may have queued: each frame
+	// leaves a fence, and what is waited on is the one from that many frames back
+	if ( r_maxQueuedFrames->integer > 0 && qglFenceSync ) {
+		int depth = r_maxQueuedFrames->integer;
+		int slot;
+
+		if ( depth > MAX_FRAME_FENCES ) {
+			depth = MAX_FRAME_FENCES;
+		}
+		slot = backEnd.fenceIndex % depth;
+		if ( backEnd.frameFences[slot] ) {
+			// a one second cap: if the GPU does not answer, something is badly wrong and
+			// carrying on is better
+			qglClientWaitSync( backEnd.frameFences[slot], GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000 );
+			qglDeleteSync( backEnd.frameFences[slot] );
+		}
+		backEnd.frameFences[slot] = qglFenceSync( GL_SYNC_GPU_COMMANDS_COMPLETE, 0 );
+		backEnd.fenceIndex++;
+	}
+
 	GLimp_EndFrame();
 
 #ifdef USE_FBO
@@ -1641,4 +1661,24 @@ void RB_ExecuteRenderCommands( const void *data ) {
 			return;
 		}
 	}
+}
+
+
+/*
+=============
+RB_ClearFrameFences
+
+[ioquakelive] the fences die with the context: after a vid_restart none of them may be waited on
+=============
+*/
+void RB_ClearFrameFences( void ) {
+	int i;
+
+	for ( i = 0; i < MAX_FRAME_FENCES; i++ ) {
+		if ( backEnd.frameFences[i] && qglDeleteSync ) {
+			qglDeleteSync( backEnd.frameFences[i] );
+		}
+		backEnd.frameFences[i] = NULL;
+	}
+	backEnd.fenceIndex = 0;
 }

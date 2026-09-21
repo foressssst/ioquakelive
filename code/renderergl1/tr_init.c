@@ -66,6 +66,7 @@ cvar_t  *r_teleporterFlash;
 cvar_t	*r_fastsky;
 cvar_t	*r_fastSkyColor;
 cvar_t	*r_prefetchTextures;
+cvar_t	*r_maxQueuedFrames;
 cvar_t	*r_drawSkyFloor;
 cvar_t	*r_neatsky;
 cvar_t	*r_drawSun;
@@ -204,6 +205,7 @@ static char gl_extensions[ 32768 ];
 	QGL_FBO_PROCS;
 	QGL_FBO_OPT_PROCS;
 	QGL_GLSL_PROCS;
+	QGL_ARB_SYNC_PROCS;
 #undef GLE
 
 typedef struct {
@@ -219,6 +221,7 @@ static sym_t vbo_procs[] = { QGL_VBO_PROCS };
 static sym_t fbo_procs[] = { QGL_FBO_PROCS };
 static sym_t fbo_opt_procs[] = { QGL_FBO_OPT_PROCS };
 static sym_t glsl_procs[] = { QGL_GLSL_PROCS };
+static sym_t sync_procs[] = { QGL_ARB_SYNC_PROCS };
 #undef GLE
 
 
@@ -540,6 +543,20 @@ static void R_InitExtensions( void )
 		{
 			ri.Printf( PRINT_WARNING, "Error resolving GLSL function '%s'\n", err );
 			qglCreateProgram = NULL; // indicates presence of GLSL functionality
+		}
+	}
+
+	// [ioquakelive] the fences of r_maxQueuedFrames
+	{
+		int major = 0, minor = 0;
+
+		sscanf( glConfig.version_string, "%d.%d", &major, &minor );
+		if ( R_HaveExtension( "GL_ARB_sync" ) || major > 3 || ( major == 3 && minor >= 2 ) )
+		{
+			if ( R_ResolveSymbols( sync_procs, ARRAY_LEN( sync_procs ) ) )
+			{
+				qglFenceSync = NULL;
+			}
 		}
 	}
 
@@ -1499,6 +1516,11 @@ static void R_Register( void )
 	// 0 goes back to loading them one by one on the main thread
 	r_prefetchTextures = ri.Cvar_Get( "r_prefetchTextures", "1", CVAR_ARCHIVE );
 
+	// [ioquakelive] how many frames the GPU may have queued. 0, the default, leaves it to the
+	// driver, as retail does; 1 waits every frame for the one before it, less input latency in
+	// exchange for a few fps
+	r_maxQueuedFrames = ri.Cvar_Get( "r_maxQueuedFrames", "0", CVAR_ARCHIVE );
+
 	// [QL] the colour r_fastSky clears to, as 0xRRGGBB (0x435d90)
 	r_fastSkyColor = ri.Cvar_Get( "r_fastSkyColor", "0x000000", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE );
 	// [QL] the cloud layer also under the sky box (0x45a9d0)
@@ -1997,6 +2019,8 @@ static void RE_Shutdown( qboolean destroyWindow ) {
 	ri.Cmd_RemoveCommand( "gfxinfo" );
 	ri.Cmd_RemoveCommand( "fontlist" );
 	ri.Cmd_RemoveCommand( "shaderstate" );
+
+	RB_ClearFrameFences();
 
 	//if ( tr.registered ) {
 		//R_IssuePendingRenderCommands();
