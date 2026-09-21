@@ -45,9 +45,11 @@ SERVER_PREFIX = 'ioqlds'
 
 # Maps engine artifact directory name -> (client zip, server zip or None).
 PLATFORM_OUT = {
-    'engine-linux-x86_64': ('ioquakelive-linux-x86_64.zip', 'ioqlds-linux-x86_64.zip'),
-    'engine-windows-x64':  ('ioquakelive-windows-x64.zip',  'ioqlds-windows-x64.zip'),
-    'engine-macos-arm64':  ('ioquakelive-macos-arm64.zip',  None),
+    'engine-linux-x86_64':  ('ioquakelive-linux-x86_64.zip',  'ioqlds-linux-x86_64.zip'),
+    'engine-linux-arm64':   ('ioquakelive-linux-arm64.zip',   'ioqlds-linux-arm64.zip'),
+    'engine-windows-x64':   ('ioquakelive-windows-x64.zip',   'ioqlds-windows-x64.zip'),
+    'engine-windows-arm64': ('ioquakelive-windows-arm64.zip', 'ioqlds-windows-arm64.zip'),
+    'engine-macos-arm64':   ('ioquakelive-macos-arm64.zip',   None),
 }
 
 # Whether to layer shared/baseq3/ on top of the engine artifact for each
@@ -59,9 +61,11 @@ PLATFORM_OUT = {
 # they all come from the same iobin-pk3 artifact, so determinism is
 # preserved at a different path rather than lost.
 LAYER_SHARED = {
-    'engine-linux-x86_64': True,
-    'engine-windows-x64':  True,
-    'engine-macos-arm64':  False,
+    'engine-linux-x86_64':  True,
+    'engine-linux-arm64':   True,
+    'engine-windows-x64':   True,
+    'engine-windows-arm64': True,
+    'engine-macos-arm64':   False,
 }
 
 

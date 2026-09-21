@@ -10,8 +10,19 @@ on:
 
 jobs:
   linux:
-    name: Linux
-    runs-on: ubuntu-22.04
+    name: Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+        - runner: ubuntu-22.04
+          arch: x86_64
+        # native arm64 machines reach private repositories since 2026-01-29
+        - runner: ubuntu-22.04-arm
+          arch: arm64
+    env:
+      # not ARCH: make would take it from the environment
+      BIN_ARCH: ${{ matrix.arch }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -40,24 +51,33 @@ jobs:
       run: |
         export PKG_CONFIG_PATH="$GITHUB_WORKSPACE/sdl3-local/lib/pkgconfig"
         make release -j$(nproc)
+    - name: Start the dedicated server once
+      # the one place a binary runs on its own architecture before a player gets it: with no
+      # pak00.pk3 it stops right after printing its version and platform, which is all this wants
+      run: |
+        mkdir -p empty
+        timeout 60 build/release-linux-$BIN_ARCH/ioqlds.$BIN_ARCH +set fs_basepath "$PWD/empty" \
+          +set fs_homepath "$PWD/empty" +quit > ded.log 2>&1 || true
+        cat ded.log
+        grep -q "linux-$BIN_ARCH" ded.log
     - name: Stage build outputs
       run: |
         mkdir -p staging/libs staging/engine
-        cp build/release-linux-x86_64/baseq3/cgamex86_64.so  staging/libs/
-        cp build/release-linux-x86_64/baseq3/qagamex86_64.so staging/libs/
-        cp build/release-linux-x86_64/baseq3/uix86_64.so     staging/libs/
+        cp build/release-linux-$BIN_ARCH/baseq3/cgame$BIN_ARCH.so  staging/libs/
+        cp build/release-linux-$BIN_ARCH/baseq3/qagame$BIN_ARCH.so staging/libs/
+        cp build/release-linux-$BIN_ARCH/baseq3/ui$BIN_ARCH.so     staging/libs/
         # SDL3 beside the game: the client's rpath is $ORIGIN
-        cp -L "$GITHUB_WORKSPACE/sdl3-local/lib/libSDL3.so.0" build/release-linux-x86_64/
+        cp -L "$GITHUB_WORKSPACE/sdl3-local/lib/libSDL3.so.0" build/release-linux-$BIN_ARCH/
         # actions/upload-artifact strips +x; tar to preserve mode bits.
-        tar -C build/release-linux-x86_64 -cf staging/engine/linux-x86_64.tar \
-          ioquakelive.x86_64 ioquakelive-vulkan.x86_64 ioqlds.x86_64 opengl2x86_64.so opengl1x86_64.so vulkanx86_64.so libSDL3.so.0
+        tar -C build/release-linux-$BIN_ARCH -cf staging/engine/linux-$BIN_ARCH.tar \
+          ioquakelive.$BIN_ARCH ioquakelive-vulkan.$BIN_ARCH ioqlds.$BIN_ARCH opengl2$BIN_ARCH.so opengl1$BIN_ARCH.so vulkan$BIN_ARCH.so libSDL3.so.0
     - uses: actions/upload-artifact@v4
       with:
-        name: libs-linux-x86_64
+        name: libs-linux-${{ matrix.arch }}
         path: staging/libs/
     - uses: actions/upload-artifact@v4
       with:
-        name: engine-linux-x86_64
+        name: engine-linux-${{ matrix.arch }}
         path: staging/engine/
 
   macos-compile:
@@ -427,8 +447,18 @@ jobs:
         path: staging/engine/
 
   windows:
-    name: Windows
+    name: Windows ${{ matrix.platform }}
     runs-on: windows-2022
+    strategy:
+      matrix:
+        include:
+        - platform: x64
+          dir: x64
+          arch: x86_64
+        # cross-compiled: the ARM64 compiler runs on x86-64
+        - platform: ARM64
+          dir: arm64
+          arch: arm64
     steps:
     - uses: actions/checkout@v4
       with:
@@ -439,41 +469,47 @@ jobs:
       run: |
         Write-Host "Installing VS 2026 Build Tools..."
         choco install visualstudio2026buildtools `
-          --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --includeRecommended --quiet" `
+          --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.Tools.ARM64 --includeRecommended --quiet" `
           -y --ignore-package-exit-codes=3010
         Write-Host "VS 2026 Build Tools installation completed"
 
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
 
+    - name: Build SDL3 for ARM64
+      # SDL3's Visual Studio project has no ARM64 platform; its CMake build does
+      if: matrix.platform == 'ARM64'
+      shell: pwsh
+      run: ./code/tools/Build-SDL3.ps1
+
     - name: Build Solution
-      run: msbuild misc/msvc/ioquakelive.sln /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v145 /m
+      run: msbuild misc/msvc/ioquakelive.sln /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:PlatformToolset=v145 /m
 
     - name: Build the dedicated server
       # A project of its own, deliberately outside the solution: it is the same
       # engine with the client half compiled out, and it has no dependency on
       # SDL or the renderer.
-      run: msbuild misc/msvc/ioqlds.vcxproj /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v145 /m
+      run: msbuild misc/msvc/ioqlds.vcxproj /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:PlatformToolset=v145 /m
 
     - name: Stage build outputs
       shell: pwsh
       run: |
         New-Item -ItemType Directory -Force -Path staging/libs   | Out-Null
         New-Item -ItemType Directory -Force -Path staging/engine | Out-Null
-        Copy-Item build/Release/x64/baseq3/cgamex86_64.dll  staging/libs/
-        Copy-Item build/Release/x64/baseq3/qagamex86_64.dll staging/libs/
-        Copy-Item build/Release/x64/baseq3/uix86_64.dll     staging/libs/
+        Copy-Item build/Release/${{ matrix.dir }}/baseq3/cgame${{ matrix.arch }}.dll  staging/libs/
+        Copy-Item build/Release/${{ matrix.dir }}/baseq3/qagame${{ matrix.arch }}.dll staging/libs/
+        Copy-Item build/Release/${{ matrix.dir }}/baseq3/ui${{ matrix.arch }}.dll     staging/libs/
         # Engine binaries plus the runtime DLLs (SDL3, freetype, ...) that
         # ship next to ioquakelive.exe
-        Copy-Item build/Release/x64/*.exe staging/engine/
-        Copy-Item build/Release/x64/*.dll staging/engine/
+        Copy-Item build/Release/${{ matrix.dir }}/*.exe staging/engine/
+        Copy-Item build/Release/${{ matrix.dir }}/*.dll staging/engine/
     - uses: actions/upload-artifact@v4
       with:
-        name: libs-windows-x64
+        name: libs-windows-${{ matrix.dir }}
         path: staging/libs/
     - uses: actions/upload-artifact@v4
       with:
-        name: engine-windows-x64
+        name: engine-windows-${{ matrix.dir }}
         path: staging/engine/
 
   package:
@@ -495,6 +531,7 @@ jobs:
         # Linux and macOS engine binaries are tarred to preserve +x and
         # bundle structure (upload-artifact strips POSIX mode bits).
         for tar in engines/engine-linux-x86_64/linux-x86_64.tar \
+                   engines/engine-linux-arm64/linux-arm64.tar \
                    engines/engine-macos-arm64/ioquakelive.app.tar; do
           if [ -f "$tar" ]; then
             tar -xf "$tar" -C "$(dirname "$tar")"
@@ -503,6 +540,7 @@ jobs:
         done
         # Sanity-check the executable bit survived.
         ls -l engines/engine-linux-x86_64/ioquakelive.x86_64
+        ls -l engines/engine-linux-arm64/ioquakelive.arm64
         ls -l engines/engine-macos-arm64/ioquakelive.app/Contents/MacOS/
     - name: Download universal iobin.pk3
       uses: actions/download-artifact@v4
