@@ -35,6 +35,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../sys/sys_local.h"
 #include "sdl_icon.h"
 
+#ifdef USE_VULKAN_API
+#include "../renderercommon/vulkan/vulkan.h"
+#ifdef USE_LOCAL_HEADERS
+#include "SDL_vulkan.h"
+#else
+#include <SDL_vulkan.h>
+#endif
+#endif
+
 typedef enum {
     RSERR_OK,
 
@@ -46,6 +55,12 @@ typedef enum {
 
 SDL_Window* SDL_window = NULL;
 static SDL_GLContext SDL_glContext = NULL;
+
+#ifdef USE_VULKAN_API
+// [ioquakelive] a window for the Vulkan renderer, which makes its own device
+static qboolean glimp_vulkan;
+static PFN_vkGetInstanceProcAddr qvkGetInstanceProcAddr;
+#endif
 
 cvar_t* r_allowSoftwareGL;  // Don't abort out if a hardware visual can't be obtained
 cvar_t* r_allowResize;      // make window resizable
@@ -411,6 +426,11 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
     int x = SDL_WINDOWPOS_UNDEFINED, y = SDL_WINDOWPOS_UNDEFINED;
     int aspectRatio;
 
+#ifdef USE_VULKAN_API
+    if (glimp_vulkan)
+        flags = SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN;
+#endif
+
     ri.Printf(PRINT_ALL, "Initializing OpenGL display\n");
 
     if (r_allowResize->integer)
@@ -708,6 +728,15 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
 
         SDL_SetWindowIcon(SDL_window, icon);
 
+#ifdef USE_VULKAN_API
+        if (glimp_vulkan) {
+            glConfig.colorBits = testColorBits;
+            glConfig.depthBits = testDepthBits;
+            glConfig.stencilBits = testStencilBits;
+            break;
+        }
+#endif
+
         for (type = 0; type < numContexts; type++) {
             char contextName[32];
 
@@ -798,6 +827,11 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
     }
 
     GLimp_DetectAvailableModes();
+
+#ifdef USE_VULKAN_API
+    if (glimp_vulkan)
+        return RSERR_OK;
+#endif
 
     glstring = (char*)qglGetString(GL_RENDERER);
     ri.Printf(PRINT_ALL, "GL_RENDERER: %s\n", glstring);
@@ -988,17 +1022,10 @@ static void GLimp_InitExtensions(qboolean fixedFunction) {
 
 /*
 ===============
-GLimp_Init
-
-This routine is responsible for initializing the OS specific portions
-of OpenGL
+GLimp_InitCvars
 ===============
 */
-void GLimp_Init(qboolean fixedFunction) {
-    int mode;
-
-    ri.Printf(PRINT_DEVELOPER, "Glimp_Init( )\n");
-
+static void GLimp_InitCvars(void) {
     r_allowSoftwareGL = ri.Cvar_Get("r_allowSoftwareGL", "0", CVAR_LATCH);
     r_sdlDriver = ri.Cvar_Get("r_sdlDriver", "", CVAR_ROM);
     r_allowResize = ri.Cvar_Get("r_allowResize", "0", CVAR_ARCHIVE | CVAR_LATCH);
@@ -1011,6 +1038,22 @@ void GLimp_Init(qboolean fixedFunction) {
         ri.Cvar_Set("r_centerWindow", "0");
         ri.Cvar_Set("com_abnormalExit", "0");
     }
+}
+
+/*
+===============
+GLimp_Init
+
+This routine is responsible for initializing the OS specific portions
+of OpenGL
+===============
+*/
+void GLimp_Init(qboolean fixedFunction) {
+    int mode;
+
+    ri.Printf(PRINT_DEVELOPER, "Glimp_Init( )\n");
+
+    GLimp_InitCvars();
 
     ri.Sys_GLimpInit();
 
@@ -1174,3 +1217,62 @@ void GLimp_EndFrame(void) {
         r_fullscreen->modified = qfalse;
     }
 }
+
+#ifdef USE_VULKAN_API
+/*
+===============
+VKimp_Init
+===============
+*/
+void VKimp_Init(glconfig_t* config) {
+    int mode;
+
+    (void)config;
+    ri.Printf(PRINT_DEVELOPER, "VKimp_Init( )\n");
+
+    GLimp_InitCvars();
+
+    ri.Sys_GLimpInit();
+
+    glimp_vulkan = qtrue;
+
+    // [QL] 0x448110: full screen takes r_mode, a window r_windowedMode; 2 is the desktop's
+    if (r_fullscreen->integer == 2)
+        mode = -2;
+    else
+        mode = r_fullscreen->integer ? r_mode->integer : r_windowedMode->integer;
+
+    if (!GLimp_StartDriverAndSetMode(mode, r_fullscreen->integer, r_noborder->integer, qfalse) &&
+        !GLimp_StartDriverAndSetMode(R_MODE_FALLBACK, qfalse, qfalse, qfalse))
+        ri.Error(ERR_FATAL, "VKimp_Init() - could not load Vulkan subsystem");
+
+    qvkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)SDL_Vulkan_GetVkGetInstanceProcAddr();
+    if (!qvkGetInstanceProcAddr)
+        ri.Error(ERR_FATAL, "VKimp_Init() - vkGetInstanceProcAddr is NULL: %s", SDL_GetError());
+
+    // These values force the UI to disable driver selection
+    glConfig.driverType = GLDRV_ICD;
+    glConfig.hardwareType = GLHW_GENERIC;
+    glConfig.deviceSupportsGamma = !r_ignorehwgamma->integer && SDL_SetWindowBrightness(SDL_window, 1.0f) >= 0;
+
+    ri.Cvar_Get("r_availableModes", "", CVAR_ROM);
+
+    // This depends on SDL_INIT_VIDEO, hence having it here
+    ri.IN_Init(SDL_window);
+}
+
+void* VK_GetInstanceProcAddr(VkInstance instance, const char* name) {
+    return (void*)qvkGetInstanceProcAddr(instance, name);
+}
+
+qboolean VK_CreateSurface(VkInstance instance, VkSurfaceKHR* surface) {
+    return SDL_Vulkan_CreateSurface(SDL_window, instance, surface) == SDL_TRUE ? qtrue : qfalse;
+}
+
+void VKimp_Shutdown(qboolean unloadDLL) {
+    (void)unloadDLL;
+    glimp_vulkan = qfalse;
+    qvkGetInstanceProcAddr = NULL;
+    GLimp_Shutdown();
+}
+#endif
