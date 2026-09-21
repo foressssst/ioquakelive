@@ -746,7 +746,7 @@ static void vk_create_render_passes( void )
 	attachments[1].samples = vkSamples;
 	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // Need empty depth buffer before use
 	attachments[1].stencilLoadOp = glConfig.stencilBits ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	if ( r_bloom->integer ) {
+	if ( vk_bloom_wanted() ) {
 		attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE; // keep it for post-bloom pass
 		attachments[1].stencilStoreOp = glConfig.stencilBits ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	} else {
@@ -788,7 +788,7 @@ static void vk_create_render_passes( void )
 #else
 		attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 #endif
-		if ( r_bloom->integer ) {
+		if ( vk_bloom_wanted() ) {
 			attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE; // keep it for post-bloom pass
 		} else {
 			attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // Intermediate storage (not written)
@@ -854,7 +854,7 @@ static void vk_create_render_passes( void )
 	VK_CHECK( qvkCreateRenderPass( device, &desc, NULL, &vk.render_pass.main ) );
 	SET_OBJECT_NAME( vk.render_pass.main, "render pass - main", VK_DEBUG_REPORT_OBJECT_TYPE_RENDER_PASS_EXT );
 
-	if ( r_bloom->integer ) {
+	if ( vk_bloom_wanted() ) {
 
 		// post-bloom pass
 		// color buffer
@@ -2579,7 +2579,7 @@ void vk_update_attachment_descriptors( void ) {
 		qvkUpdateDescriptorSets( vk.device, 1, &desc, 0, NULL );
 
 		// bloom images
-		if ( r_bloom->integer )
+		if ( vk_bloom_wanted() )
 		{
 			uint32_t i;
 			for ( i = 0; i < ARRAY_LEN( vk.bloom_image_descriptor ); i++ )
@@ -2653,7 +2653,7 @@ void vk_init_descriptors( void )
 		VK_CHECK( qvkAllocateDescriptorSets( vk.device, &alloc, &vk.color_descriptor ) );
 		VK_CHECK( qvkAllocateDescriptorSets( vk.device, &alloc, &vk.color_descriptor_nearest ) );
 
-		if ( r_bloom->integer )
+		if ( vk_bloom_wanted() )
 		{
 			for ( i = 0; i < ARRAY_LEN( vk.bloom_image_descriptor ); i++ )
 			{
@@ -3328,7 +3328,7 @@ void vk_update_post_process_pipelines( void )
 			// update capture pipeline
 			vk_create_post_process_pipeline( 3, gls.captureWidth, gls.captureHeight );
 		}
-		if ( r_bloom->integer ) {
+		if ( vk_bloom_wanted() ) {
 			// update bloom shaders
 			uint32_t width = gls.captureWidth;
 			uint32_t height = gls.captureHeight;
@@ -3631,7 +3631,7 @@ static void vk_create_attachments( void )
 		VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
 		// bloom
-		if ( r_bloom->integer ) {
+		if ( vk_bloom_wanted() ) {
 			uint32_t width = gls.captureWidth;
 			uint32_t height = gls.captureHeight;
 
@@ -3683,7 +3683,7 @@ static void vk_create_attachments( void )
 	//vk_alloc_attachments();
 
 	create_depth_attachment( glConfig.vidWidth, glConfig.vidHeight, vkSamples, &vk.depth_image, &vk.depth_image_view,
-		(vk.fboActive && r_bloom->integer) ? qfalse : qtrue );
+		(vk.fboActive && vk_bloom_wanted()) ? qfalse : qtrue );
 
 	vk_alloc_attachments();
 
@@ -3800,7 +3800,7 @@ static void vk_create_framebuffers( void )
 			SET_OBJECT_NAME( vk.framebuffers.capture, "framebuffer - capture", VK_DEBUG_REPORT_OBJECT_TYPE_FRAMEBUFFER_EXT );
 		}
 
-		if ( r_bloom->integer )
+		if ( vk_bloom_wanted() )
 		{
 			uint32_t width = gls.captureWidth;
 			uint32_t height = gls.captureHeight;
@@ -8373,6 +8373,21 @@ void vk_read_pixels( byte *buffer, uint32_t width, uint32_t height )
 
 		end_command_buffer( command_buffer, "restore layout" );
 	}
+}
+
+
+/*
+=============
+vk_bloom_wanted
+
+[ioquakelive] the bloom's images and passes serve Quake3e's bloom (r_bloom) and Quake Live's
+(r_enableBloom). Neither may set the other's cvar: the config would keep it, and opengl1, which
+reads the same config, would stack Quake3e's bloom on top of retail's.
+=============
+*/
+qboolean vk_bloom_wanted( void )
+{
+	return ( r_bloom->integer || ( r_enablePostProcess->integer && r_enableBloom->integer ) ) ? qtrue : qfalse;
 }
 
 

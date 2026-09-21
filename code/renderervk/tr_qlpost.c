@@ -103,12 +103,6 @@ void R_QLPostRegister( void ) {
 	RI_Cvar_SetGroup( r_bloomIntensity, CVG_RENDERER );
 	RI_Cvar_SetGroup( r_bloomSaturation, CVG_RENDERER );
 
-	// [QL] the bloom works in the renderer's own buffers, so it asks Quake3e's for them
-	if ( r_enablePostProcess->integer && r_enableBloom->integer ) {
-		ri.Cvar_Set( "r_bloom", "1" );
-	} else {
-		ri.Cvar_Set( "r_bloom", "0" );
-	}
 }
 
 /*

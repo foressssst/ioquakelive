@@ -285,6 +285,7 @@ void vk_present_frame( void );
 void vk_end_render_pass( void );
 void vk_begin_main_render_pass( void );
 qboolean vk_ql_bloom( void );
+qboolean vk_bloom_wanted( void );
 void vk_low_latency_input( void );
 void vk_low_latency_flash( void );
 

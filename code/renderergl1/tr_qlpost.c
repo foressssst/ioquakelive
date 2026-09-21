@@ -631,6 +631,7 @@ const void *RB_Bloom( const void *data ) {
 
 	// the passes left their own viewport
 	backEnd.projection2D = qfalse;
+	backEnd.doneBloom = qtrue;
 
 	return (const void *)( cmd + 1 );
 }

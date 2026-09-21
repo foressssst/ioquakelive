@@ -1193,7 +1193,8 @@ static const void *RB_StretchPic( const void *data ) {
 	RB_SetGL2D();
 
 #ifdef USE_VULKAN
-	if ( r_bloom->integer ) {
+	// [ioquakelive] Quake3e's own bloom never on top of Quake Live's
+	if ( r_bloom->integer && !r_bloomActive->integer ) {
 		vk_bloom();
 	}
 #endif
@@ -1690,7 +1691,8 @@ static const void *RB_FinishBloom( const void *data )
 	RB_EndSurface();
 
 #ifdef USE_VULKAN
-	if ( r_bloom->integer ) {
+	// [ioquakelive] Quake3e's own bloom never on top of Quake Live's
+	if ( r_bloom->integer && !r_bloomActive->integer ) {
 		vk_bloom();
 	}
 #endif

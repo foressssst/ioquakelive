@@ -1477,7 +1477,8 @@ static const void *RB_FinishBloom( const void *data )
 			blitMSfbo = qfalse;
 		}
 
-		if ( r_bloom->integer && qglActiveTextureARB )
+		// [ioquakelive] Quake3e's own bloom never on top of Quake Live's
+		if ( r_bloom->integer && !r_bloomActive->integer && qglActiveTextureARB )
 		{
 			if ( !backEnd.doneBloom && backEnd.doneSurfaces )
 			{

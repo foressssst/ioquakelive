@@ -1956,7 +1956,8 @@ qboolean FBO_Bloom( const float gamma, const float obScale, qboolean finalStage 
 
 void R_BloomScreen( void )
 {
-	if ( r_bloom->integer == 1 && fboEnabled && qglActiveTextureARB )
+	// [ioquakelive] Quake3e's own bloom never on top of Quake Live's
+	if ( r_bloom->integer == 1 && !r_bloomActive->integer && fboEnabled && qglActiveTextureARB )
 	{
 		if ( !backEnd.doneBloom && backEnd.doneSurfaces )
 		{
