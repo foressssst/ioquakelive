@@ -24,20 +24,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../qcommon/qcommon.h"
 
 #ifndef DEDICATED
-#ifdef USE_LOCAL_HEADERS
-#include "SDL_version.h"
-#else
-#include <SDL_version.h>
-#endif
+#include <SDL3/SDL_version.h>
 
-// Require a minimum version of SDL
-#define MINSDL_MAJOR 2
-#define MINSDL_MINOR 0
-#if SDL_VERSION_ATLEAST(2, 0, 5)
-#define MINSDL_PATCH 5
-#else
+// Require a minimum version of SDL: 3.2.0 was SDL3's first stable release
+#define MINSDL_MAJOR 3
+#define MINSDL_MINOR 2
 #define MINSDL_PATCH 0
-#endif
 #endif
 
 // Console

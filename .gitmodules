@@ -1,7 +1,3 @@
-[submodule "code/SDL2"]
-	path = code/SDL2
-	url = https://github.com/libsdl-org/SDL.git
-	shallow = true
 [submodule "code/libogg"]
 	path = code/libogg
 	url = https://github.com/xiph/ogg.git
@@ -21,4 +17,8 @@
 [submodule "code/opusfile"]
 	path = code/opusfile
 	url = https://github.com/xiph/opusfile.git
+	shallow = true
+[submodule "code/SDL3"]
+	path = code/SDL3
+	url = https://github.com/libsdl-org/SDL.git
 	shallow = true

@@ -35,16 +35,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define Sys_LibraryError() dlerror()
 #endif
 #else
-#ifdef USE_LOCAL_HEADERS
-#include "SDL.h"
-#include "SDL_loadso.h"
-#else
-#include <SDL.h>
-#include <SDL_loadso.h>
-#endif
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_loadso.h>
 #define Sys_LoadLibrary(f) SDL_LoadObject(f)
 #define Sys_UnloadLibrary(h) SDL_UnloadObject(h)
-#define Sys_LoadFunction(h, fn) SDL_LoadFunction(h, fn)
+// SDL3 hands back a typed function pointer; the callers assign it to their own type
+#define Sys_LoadFunction(h, fn) ((void*)SDL_LoadFunction(h, fn))
 #define Sys_LibraryError() SDL_GetError()
 #endif
 

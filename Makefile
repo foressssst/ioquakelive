@@ -253,7 +253,7 @@ OPUSFILEDIR=$(MOUNT_DIR)/opusfile
 ZDIR=$(MOUNT_DIR)/zlib
 TOOLSDIR=$(MOUNT_DIR)/tools
 WEBDIR=$(MOUNT_DIR)/web
-SDLHDIR=$(MOUNT_DIR)/SDL2
+SDLHDIR=$(MOUNT_DIR)/SDL3
 LIBSDIR=$(MOUNT_DIR)/libs
 
 bin_path=$(shell which $(1) 2> /dev/null)
@@ -277,20 +277,13 @@ endif
 ifneq ($(call bin_path, $(PKG_CONFIG)),)
   CURL_CFLAGS ?= $(shell $(PKG_CONFIG) --silence-errors --cflags libcurl)
   CURL_LIBS ?= $(shell $(PKG_CONFIG) --silence-errors --libs libcurl)
-  SDL_CFLAGS ?= $(shell $(PKG_CONFIG) --silence-errors --cflags sdl2|sed 's/-Dmain=SDL_main//')
-  SDL_LIBS ?= $(shell $(PKG_CONFIG) --silence-errors --libs sdl2)
+  SDL_CFLAGS ?= $(shell $(PKG_CONFIG) --silence-errors --cflags sdl3)
+  SDL_LIBS ?= $(shell $(PKG_CONFIG) --silence-errors --libs sdl3)
 else
   # assume they're in the system default paths (no -I or -L needed)
   CURL_LIBS ?= -lcurl
 endif
 
-# Use sdl2-config if all else fails
-ifeq ($(SDL_CFLAGS),)
-  ifneq ($(call bin_path, sdl2-config),)
-    SDL_CFLAGS = $(shell sdl2-config --cflags)
-    SDL_LIBS = $(shell sdl2-config --libs)
-  endif
-endif
 
 # Add git version info
 USE_GIT=
@@ -370,6 +363,10 @@ ifneq (,$(findstring "$(PLATFORM)", "linux" "gnu_kfreebsd" "kfreebsd-gnu" "gnu")
   LIBS=-ldl -lm
   CLIENT_LIBS=$(SDL_LIBS)
   RENDERER_LIBS = $(SDL_LIBS)
+
+  # [ioquakelive] SDL3 is not on every distribution yet, so it travels beside the game, and the
+  # client looks for it there first
+  CLIENT_LDFLAGS += -Wl,-rpath,'$$ORIGIN'
 
   ifeq ($(USE_CURL),1)
     CLIENT_CFLAGS += $(CURL_CFLAGS)
@@ -534,10 +531,16 @@ ifeq ($(PLATFORM),darwin)
   CLIENT_LIBS += -framework UniformTypeIdentifiers
   RENDERER_LIBS += -framework OpenGL
 
-  # Use system SDL2 (Homebrew or framework)
-  BASE_CFLAGS += $(shell sdl2-config --cflags 2>/dev/null || echo -I/Library/Frameworks/SDL2.framework/Headers)
-  CLIENT_LIBS += $(shell sdl2-config --libs 2>/dev/null || echo -framework SDL2)
-  RENDERER_LIBS += $(shell sdl2-config --libs 2>/dev/null || echo -framework SDL2)
+  # SDL3 through pkg-config (the CI builds it from the submodule), else the framework
+  ifneq ($(SDL_CFLAGS),)
+    BASE_CFLAGS += $(SDL_CFLAGS)
+    CLIENT_LIBS += $(SDL_LIBS)
+    RENDERER_LIBS += $(SDL_LIBS)
+  else
+    BASE_CFLAGS += -F/Library/Frameworks
+    CLIENT_LIBS += -F/Library/Frameworks -framework SDL3
+    RENDERER_LIBS += -F/Library/Frameworks -framework SDL3
+  endif
 
   OPTIMIZE = $(OPTIMIZEVM) -ffast-math
 
@@ -683,25 +686,21 @@ ifdef MINGW
   ifeq ($(USE_LOCAL_HEADERS),1)
     CLIENT_CFLAGS += -I$(SDLHDIR)/include
     ifeq ($(ARCH),x86)
-    CLIENT_LIBS += $(LIBSDIR)/win32/libSDL2main.a \
-                      $(LIBSDIR)/win32/libSDL2.dll.a
-    RENDERER_LIBS += $(LIBSDIR)/win32/libSDL2main.a \
-                      $(LIBSDIR)/win32/libSDL2.dll.a
-    SDLDLL=SDL2.dll
-    CLIENT_EXTRA_FILES += $(LIBSDIR)/win32/SDL2.dll
+    CLIENT_LIBS += $(LIBSDIR)/win32/libSDL3.dll.a
+    RENDERER_LIBS += $(LIBSDIR)/win32/libSDL3.dll.a
+    SDLDLL=SDL3.dll
+    CLIENT_EXTRA_FILES += $(LIBSDIR)/win32/SDL3.dll
     else
-    CLIENT_LIBS += $(LIBSDIR)/win64/SDL2main.lib \
-                      $(LIBSDIR)/win64/SDL2.lib
-    RENDERER_LIBS += $(LIBSDIR)/win64/SDL2main.lib \
-                      $(LIBSDIR)/win64/SDL2.lib
-    SDLDLL=SDL2.dll
-    CLIENT_EXTRA_FILES += $(LIBSDIR)/win64/SDL2.dll
+    CLIENT_LIBS += $(LIBSDIR)/win64/SDL3.lib
+    RENDERER_LIBS += $(LIBSDIR)/win64/SDL3.lib
+    SDLDLL=SDL3.dll
+    CLIENT_EXTRA_FILES += $(LIBSDIR)/win64/SDL3.dll
     endif
   else
     CLIENT_CFLAGS += $(SDL_CFLAGS)
     CLIENT_LIBS += $(SDL_LIBS)
     RENDERER_LIBS += $(SDL_LIBS)
-    SDLDLL=SDL2.dll
+    SDLDLL=SDL3.dll
   endif
 
 else # ifdef MINGW
@@ -951,7 +950,7 @@ ifeq ($(PLATFORM),emscripten)
   BUILD_GAME_SO=0
   BUILD_SERVER=0
 
-  CLIENT_CFLAGS+=-s USE_SDL=2
+  CLIENT_CFLAGS+=-s USE_SDL=3
 
   CLIENT_LDFLAGS+=-s TOTAL_MEMORY=256MB
   CLIENT_LDFLAGS+=-s STACK_SIZE=5MB

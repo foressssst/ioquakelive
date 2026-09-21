@@ -26,11 +26,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef __QGL_H__
 #define __QGL_H__
 
-#ifdef USE_LOCAL_HEADERS
-#include "SDL_opengl.h"
-#else
-#include <SDL_opengl.h>
-#endif
+#include <SDL3/SDL_opengl.h>
 
 // Single-channel font-atlas formats and pixel-store params for the QL font
 // backend (tr_font_gl.c). Core in modern GL and provided by SDL_opengl_glext.h,
@@ -79,7 +75,7 @@ extern void(APIENTRYP qglUnlockArraysEXT)(void);
 //===========================================================================
 
 // GL function loader, based on https://gist.github.com/rygorous/16796a0c876cf8a5f542caddb55bce8a
-// get missing functions from code/SDL2/include/SDL_opengl.h
+// get missing functions from code/SDL3/include/SDL3/SDL_opengl.h
 
 // OpenGL 1.0/1.1, OpenGL ES 1.0, and OpenGL 3.2 core profile
 #define QGL_1_1_PROCS                                                                                                                                                      \

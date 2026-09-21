@@ -36,13 +36,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #endif
 
 #ifndef DEDICATED
-#ifdef USE_LOCAL_HEADERS
-#include "SDL.h"
-#include "SDL_cpuinfo.h"
-#else
-#include <SDL.h>
-#include <SDL_cpuinfo.h>
-#endif
+#include <SDL3/SDL.h>
+// SDL3 has no SDL3main library: this header, in the file with main(), is what gives Windows its
+// WinMain
+#include <SDL3/SDL_main.h>
 #endif
 
 #include "sys_local.h"
@@ -172,7 +169,7 @@ not up. The caller checks the address (CL_OpenURL); nothing else may call this.
 */
 void Sys_OpenURL(const char* url) {
 #ifndef DEDICATED
-    if (SDL_OpenURL(url) < 0) {
+    if (!SDL_OpenURL(url)) {
         Com_Printf("^3could not open %s: %s\n", url, SDL_GetError());
     }
 #else
@@ -357,10 +354,11 @@ cpuFeatures_t Sys_GetProcessorFeatures(void) {
     cpuFeatures_t features = 0;
 
 #ifndef DEDICATED
-    if (SDL_HasRDTSC())
-        features |= CF_RDTSC;
-    if (SDL_Has3DNow())
-        features |= CF_3DNOW;
+    // SDL3 dropped the RDTSC and 3DNow! queries: every x86 has the first, and the second is gone
+    // from current processors
+#if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64)
+    features |= CF_RDTSC;
+#endif
     if (SDL_HasMMX())
         features |= CF_MMX;
     if (SDL_HasSSE())
@@ -777,19 +775,17 @@ int main(int argc, char** argv) {
 #endif
 
     // Run time
-    SDL_version ver;
-    SDL_GetVersion(&ver);
+    int ver = SDL_GetVersion();
 
 #define MINSDL_VERSION    \
     XSTRING(MINSDL_MAJOR) \
     "." XSTRING(MINSDL_MINOR) "." XSTRING(MINSDL_PATCH)
 
-    if (SDL_VERSIONNUM(ver.major, ver.minor, ver.patch) <
-        SDL_VERSIONNUM(MINSDL_MAJOR, MINSDL_MINOR, MINSDL_PATCH)) {
+    if (ver < SDL_VERSIONNUM(MINSDL_MAJOR, MINSDL_MINOR, MINSDL_PATCH)) {
         Sys_Dialog(DT_ERROR, va("SDL version " MINSDL_VERSION " or greater is required, "
                                 "but only version %d.%d.%d was found. You may be able to obtain a more recent copy "
                                 "from http://www.libsdl.org/.",
-                                ver.major, ver.minor, ver.patch),
+                                SDL_VERSIONNUM_MAJOR(ver), SDL_VERSIONNUM_MINOR(ver), SDL_VERSIONNUM_MICRO(ver)),
                    "SDL Library Too Old");
 
         Sys_Exit(1);

@@ -107,7 +107,7 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <AdditionalIncludeDirectories>..\..\code\SDL2\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\jpeg-8c;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\code\SDL3\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\jpeg-8c;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32;WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;BOTLIB;USE_ICON;HAVE_LRINTF;FLOATING_POINT;FLOAT_APPROX;USE_ALLOCA;MISSIONPACK;USE_RENDERER_DLOPEN;USE_CODEC_VORBIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -127,7 +127,7 @@
       <Culture>0x0409</Culture>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>user32.lib;advapi32.lib;winmm.lib;wsock32.lib;ws2_32.lib;SDL2main.lib;SDL2.lib;OpenGL32.lib;psapi.lib;gdi32.lib;libogg.lib;libvorbis.lib;libvorbisfile.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>user32.lib;advapi32.lib;winmm.lib;wsock32.lib;ws2_32.lib;SDL3.lib;OpenGL32.lib;psapi.lib;gdi32.lib;libogg.lib;libvorbis.lib;libvorbisfile.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)\$(TargetName)$(TargetExt)</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <AdditionalLibraryDirectories>..\..\code\libs\win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -145,7 +145,7 @@
     </Link>
     <PostBuildEvent>
       <Message>Copying dependency DLLs and making iobin pk3</Message>
-      <Command>copy /Y "..\..\code\libs\win32\SDL2.dll" "$(OutDir)" 2&gt;nul
+      <Command>copy /Y "..\..\code\libs\win32\SDL3.dll" "$(OutDir)" 2&gt;nul
 copy /Y "..\..\code\libs\win32\libvorbis.dll" "$(OutDir)" 2&gt;nul
 copy /Y "..\..\code\libs\win32\libvorbisfile.dll" "$(OutDir)" 2&gt;nul
 copy /Y "$(TargetPath)" "$(TargetDir)$(TargetName.Replace('ioquakelive', 'ioquakelive-vulkan'))$(TargetExt)"
@@ -164,7 +164,7 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>..\..\code\SDL2\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\jpeg-8c;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\code\SDL3\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\jpeg-8c;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32;WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;BOTLIB;USE_ICON;HAVE_LRINTF;FLOATING_POINT;FLOAT_APPROX;USE_ALLOCA;MISSIONPACK;USE_RENDERER_DLOPEN;USE_CODEC_VORBIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <PrecompiledHeader />
@@ -187,7 +187,7 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
       <ResourceOutputFileName>$(ProductName).res</ResourceOutputFileName>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>user32.lib;advapi32.lib;winmm.lib;wsock32.lib;ws2_32.lib;SDL2main.lib;SDL2.lib;OpenGL32.lib;msvcrtd.lib;psapi.lib;gdi32.lib;libogg.lib;libvorbis.lib;libvorbisfile.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>user32.lib;advapi32.lib;winmm.lib;wsock32.lib;ws2_32.lib;SDL3.lib;OpenGL32.lib;msvcrtd.lib;psapi.lib;gdi32.lib;libogg.lib;libvorbis.lib;libvorbisfile.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <AdditionalLibraryDirectories>..\..\code\libs\win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -201,7 +201,7 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
     </Link>
     <PostBuildEvent>
       <Message>Copying dependency DLLs and making iobin pk3</Message>
-      <Command>copy /Y "..\..\code\libs\win32\SDL2.dll" "$(OutDir)" 2&gt;nul
+      <Command>copy /Y "..\..\code\libs\win32\SDL3.dll" "$(OutDir)" 2&gt;nul
 copy /Y "..\..\code\libs\win32\libvorbis.dll" "$(OutDir)" 2&gt;nul
 copy /Y "..\..\code\libs\win32\libvorbisfile.dll" "$(OutDir)" 2&gt;nul
 copy /Y "$(TargetPath)" "$(TargetDir)$(TargetName.Replace('ioquakelive', 'ioquakelive-vulkan'))$(TargetExt)"
@@ -220,7 +220,7 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <AdditionalIncludeDirectories>..\..\code\SDL2\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\jpeg-8c;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\code\SDL3\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\jpeg-8c;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32;_WIN64;WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;BOTLIB;USE_ICON;HAVE_LRINTF;FLOATING_POINT;FLOAT_APPROX;USE_ALLOCA;MISSIONPACK;USE_RENDERER_DLOPEN;USE_CODEC_VORBIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -240,10 +240,10 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
       <Culture>0x0409</Culture>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>user32.lib;advapi32.lib;winmm.lib;wsock32.lib;ws2_32.lib;SDL2main.lib;SDL2.lib;OpenGL32.lib;psapi.lib;gdi32.lib;libogg.lib;libvorbis.lib;libvorbisfile.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>user32.lib;advapi32.lib;winmm.lib;wsock32.lib;ws2_32.lib;SDL3.lib;OpenGL32.lib;psapi.lib;gdi32.lib;libogg.lib;libvorbis.lib;libvorbisfile.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)\$(TargetName)$(TargetExt)</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
-      <AdditionalLibraryDirectories>..\..\code\libs\win64;..\..\code\SDL2\VisualC\SDL\x64\Debug;..\..\code\SDL2\VisualC\SDLmain\x64\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\..\code\libs\win64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(IntDir)\$(ProductName).pdb</ProgramDatabaseFile>
       <GenerateMapFile>true</GenerateMapFile>
@@ -255,7 +255,7 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
     </Link>
     <PostBuildEvent>
       <Message>Copying dependency DLLs and making iobin pk3</Message>
-      <Command>copy /Y "..\..\code\libs\win64\SDL2.dll" "$(OutDir)" 2&gt;nul
+      <Command>copy /Y "..\..\code\libs\win64\SDL3.dll" "$(OutDir)" 2&gt;nul
 copy /Y "..\..\code\libs\win64\libvorbis.dll" "$(OutDir)" 2&gt;nul
 copy /Y "..\..\code\libs\win64\libvorbisfile.dll" "$(OutDir)" 2&gt;nul
 copy /Y "$(TargetPath)" "$(TargetDir)$(TargetName.Replace('ioquakelive', 'ioquakelive-vulkan'))$(TargetExt)"
@@ -273,7 +273,7 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>..\..\code\SDL2\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\jpeg-8c;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\code\SDL3\include;..\..\code\curl\include;..\..\code\AL;..\..\code\zlib;..\..\code\libogg\include;..\..\code\libvorbis\include;..\..\code\jpeg-8c;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32;_WIN64;WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;BOTLIB;USE_ICON;HAVE_LRINTF;FLOATING_POINT;FLOAT_APPROX;USE_ALLOCA;MISSIONPACK;USE_RENDERER_DLOPEN;USE_CODEC_VORBIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <PrecompiledHeader />
@@ -296,9 +296,9 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
       <ResourceOutputFileName>$(ProductName).res</ResourceOutputFileName>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>user32.lib;advapi32.lib;winmm.lib;wsock32.lib;ws2_32.lib;SDL2main.lib;SDL2.lib;OpenGL32.lib;msvcrtd.lib;psapi.lib;gdi32.lib;libogg.lib;libvorbis.lib;libvorbisfile.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>user32.lib;advapi32.lib;winmm.lib;wsock32.lib;ws2_32.lib;SDL3.lib;OpenGL32.lib;msvcrtd.lib;psapi.lib;gdi32.lib;libogg.lib;libvorbis.lib;libvorbisfile.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SuppressStartupBanner>true</SuppressStartupBanner>
-      <AdditionalLibraryDirectories>..\..\code\libs\win64;..\..\code\SDL2\VisualC\SDL\x64\Debug;..\..\code\SDL2\VisualC\SDLmain\x64\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\..\code\libs\win64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <GenerateMapFile>true</GenerateMapFile>
       <SubSystem>Windows</SubSystem>
@@ -308,7 +308,7 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
     </Link>
     <PostBuildEvent>
       <Message>Copying dependency DLLs and making iobin pk3</Message>
-      <Command>copy /Y "..\..\code\libs\win64\SDL2.dll" "$(OutDir)" 2&gt;nul
+      <Command>copy /Y "..\..\code\libs\win64\SDL3.dll" "$(OutDir)" 2&gt;nul
 copy /Y "..\..\code\libs\win64\libvorbis.dll" "$(OutDir)" 2&gt;nul
 copy /Y "..\..\code\libs\win64\libvorbisfile.dll" "$(OutDir)" 2&gt;nul
 copy /Y "$(TargetPath)" "$(TargetDir)$(TargetName.Replace('ioquakelive', 'ioquakelive-vulkan'))$(TargetExt)"

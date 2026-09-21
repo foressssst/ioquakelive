@@ -127,7 +127,7 @@ fi
 #
 # This is done recursively so transitive deps (e.g. freetype -> libpng) are
 # also caught automatically. dlopen'd deps leave no load command and are
-# invisible to the walk; the submodule-built SDL2 is bundled by hand below.
+# invisible to the walk; the submodule-built SDL3 is bundled by hand below.
 FRAMEWORKS="${CONTENTS}/Frameworks"
 mkdir -p "${FRAMEWORKS}"
 
@@ -186,11 +186,11 @@ for bin in \
 done
 echo "Done bundling Homebrew dependencies."
 
-# SDL2 is built from the code/SDL2 submodule by CI and shipped beside the
-# raw engine binaries; its load command is @rpath/libSDL2-2.0.0.dylib, which
+# SDL3 is built from the code/SDL3 submodule by CI and shipped beside the
+# raw engine binaries; its load command is @rpath/libSDL3.0.dylib, which
 # the otool walk above ignores (not a brew path), so bundle it by hand.
-if [ -f "${BUILT_PRODUCTS_DIR}/libSDL2-2.0.0.dylib" ]; then
-    bundle_dep "${BUILT_PRODUCTS_DIR}/libSDL2-2.0.0.dylib"
+if [ -f "${BUILT_PRODUCTS_DIR}/libSDL3.0.dylib" ]; then
+    bundle_dep "${BUILT_PRODUCTS_DIR}/libSDL3.0.dylib"
 fi
 
 # MoltenVK, for the Vulkan renderer: the engine dlopens it by its path in
@@ -206,23 +206,13 @@ if [ -f "${BUILT_PRODUCTS_DIR}/libMoltenVK.dylib" ]; then
 	fi
 fi
 
-# The app must ship exactly one real SDL2. Homebrew's "sdl2" is now
-# sdl2-compat (the SDL2 ABI over a dlopen'd libSDL3, invisible to otool),
-# which dies on user machines with "Failed loading SDL3 library." Refuse to
-# package a bundle that has no SDL2 or carries the shim.
-SDL2_BUNDLED=$(ls "${FRAMEWORKS}"/libSDL2*.dylib 2>/dev/null || true)
-if [ -z "${SDL2_BUNDLED}" ]; then
-    echo "ERROR: no libSDL2 dylib was bundled into ${FRAMEWORKS}." >&2
-    echo "       Build the code/SDL2 submodule and place libSDL2-2.0.0.dylib in ${BUILT_PRODUCTS_DIR}." >&2
+# The app must ship the SDL3 it was linked against: without it the engine
+# does not start. Refuse to package a bundle that has none.
+if [ ! -f "${FRAMEWORKS}/libSDL3.0.dylib" ]; then
+    echo "ERROR: no libSDL3 dylib was bundled into ${FRAMEWORKS}." >&2
+    echo "       Build the code/SDL3 submodule and place libSDL3.0.dylib in ${BUILT_PRODUCTS_DIR}." >&2
     exit 1
 fi
-for lib in ${SDL2_BUNDLED}; do
-    if grep -qaF 'libSDL3.dylib' "$lib"; then
-        echo "ERROR: $(basename "$lib") is the sdl2-compat shim (wants libSDL3 at runtime)." >&2
-        echo "       Link against the code/SDL2 submodule build, not Homebrew's sdl2." >&2
-        exit 1
-    fi
-done
 
 # Generate .icns from quakelive.ico
 ICNS_NAME="quakelive.icns"
