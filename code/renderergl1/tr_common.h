@@ -102,6 +102,7 @@ extern cvar_t *r_windowedHeight;
 extern cvar_t *r_customPixelAspect;
 extern cvar_t *r_displayRefresh;
 extern cvar_t *r_swapInterval;
+extern cvar_t *r_uiFullScreen;
 extern float displayAspect;
 extern int64_t r_imageDecodeUs, r_imageUploadUs, r_imageReadUs;
 extern int r_imageCount;

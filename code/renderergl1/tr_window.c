@@ -50,6 +50,7 @@ cvar_t *r_sdlDriver;
 cvar_t *r_allowSoftwareGL;
 cvar_t *r_preferOpenGLES;
 cvar_t *r_swapInterval;
+cvar_t *r_uiFullScreen;
 
 float displayAspect;
 
@@ -197,6 +198,9 @@ void R_RegisterWindowCvars( void ) {
 	r_displayRefresh = ri.Cvar_Get( "r_displayRefresh", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
 	// [QL] not latched: GLimp_EndFrame applies it
 	r_swapInterval = ri.Cvar_Get( "r_swapInterval", "0", CVAR_ARCHIVE | CVAR_USERSAVE );
+
+	// [QL] the front end sets it while it covers the screen; the shader collapse looks at it
+	r_uiFullScreen = ri.Cvar_Get( "r_uiFullScreen", "0", 0 );
 
 	ri.Cmd_AddCommand( "modelist", R_ModeList_f );
 }

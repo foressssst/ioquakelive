@@ -1092,6 +1092,30 @@ static qboolean ParseStage( shaderStage_t *stage, const char **text )
 		{
 			stage->bundle[0].dlight = 1;
 		}
+		//
+		// depthTest <disable>
+		//
+		// [QL] quakelive_steam.exe: "WARNING: missing parm for depthTest in shader '%s'". The only
+		// word it takes is "disable", used by sprites/trainer, which has to be seen through walls.
+		//
+		else if ( !Q_stricmp( token, "depthTest" ) )
+		{
+			token = COM_ParseExt( text, qfalse );
+			if ( token[0] == 0 )
+			{
+				ri.Printf( PRINT_WARNING, "WARNING: missing parm for depthTest in shader '%s'\n", shader.name );
+				continue;
+			}
+			if ( !Q_stricmp( token, "disable" ) )
+			{
+				stage->stateBits |= GLS_DEPTHTEST_DISABLE;
+			}
+			else
+			{
+				ri.Printf( PRINT_WARNING, "WARNING: unknown parameter '%s' in shader '%s'\n", token, shader.name );
+			}
+			continue;
+		}
 		else
 		{
 			ri.Printf( PRINT_WARNING, "WARNING: unknown parameter '%s' in shader '%s'\n", token, shader.name );
@@ -1455,6 +1479,9 @@ static const infoParm_t infoParms[] = {
 	{"monsterclip",	1,	0,	CONTENTS_MONSTERCLIP },
 	{"nodrop",		1,	0,	CONTENTS_NODROP },		// don't drop items or leave bodies (death fog, lava, etc)
 	{"nonsolid",	1,	SURF_NONSOLID,	0},						// clears the solid flag
+	// [QL] the binary calls it "nobotclip", not Quake 3's "botclip", and it goes right here: its
+	// table is water, slime, lava, playerclip, monsterclip, nodrop, nonsolid, nobotclip
+	{"nobotclip",	1,	0,	CONTENTS_BOTCLIP },
 
 	// utility relevant attributes
 	{"origin",		1,	0,	CONTENTS_ORIGIN },		// center of rotating brushes
@@ -1486,7 +1513,9 @@ static const infoParm_t infoParms[] = {
 	{"pointlight",	0,	SURF_POINTLIGHT, 0 },	// sample lighting at vertexes
 	{"nolightmap",	0,	SURF_NOLIGHTMAP,0 },	// don't generate a lightmap
 	{"nodlight",	0,	SURF_NODLIGHT, 0 },		// don't ever add dynamic lights
-	{"dust",		0,	SURF_DUST, 0}			// leave a dust trail when walking on this surface
+	{"dust",		0,	SURF_DUST, 0},			// leave a dust trail when walking on this surface
+	{"snowsteps",	0,	SURF_SNOWSTEPS, 0},		// [QL] snow footstep sounds
+	{"woodsteps",	0,	SURF_WOODSTEPS, 0}		// [QL] wood footstep sounds
 };
 
 
@@ -1611,6 +1640,7 @@ static qboolean ParseShader( const char **text )
 {
 	const char *token;
 	int numStages;
+	qboolean noDefault = qfalse;
 
 	numStages = 0;
 
@@ -1727,7 +1757,11 @@ static qboolean ParseShader( const char **text )
 			shader.noPicMip = 1;
 			continue;
 		}
-		else if ( !Q_stricmp( token, "novlcollapse" ) && s_extendedShader )
+		// [QL] quakelive_steam.exe 0x457572: this shader keeps its stages with r_vertexLight, it
+		// does not lose its lightmap. Quake Live's bright skins carry it, because the colour a
+		// player is forced to comes from a second stage with rgbGen entity that the collapse threw
+		// away, leaving the skin white.
+		else if ( !Q_stricmp( token, "novlcollapse" ) )
 		{
 			shader.noVLcollapse = 1;
 			continue;
@@ -1818,6 +1852,15 @@ static qboolean ParseShader( const char **text )
 			ParseSort( text );
 			continue;
 		}
+		// [QL] quakelive_steam.exe 0x004574d0: a shader with no stages is valid all the same.
+		// models/players/hunter/harpy_f uses one, having only "surfaceparm nodraw": without this
+		// the shader falls back to the default and the piece that was meant to be invisible gets
+		// drawn.
+		else if ( !Q_stricmp( token, "nodefault" ) )
+		{
+			noDefault = qtrue;
+			continue;
+		}
 		else
 		{
 			ri.Printf( PRINT_WARNING, "WARNING: unknown general shader parameter '%s' in '%s'\n", token, shader.name );
@@ -1828,7 +1871,7 @@ static qboolean ParseShader( const char **text )
 	//
 	// ignore shaders that don't have any stages, unless it is a sky or fog
 	//
-	if ( numStages == 0 && !shader.isSky && !(shader.contentFlags & CONTENTS_FOG ) ) {
+	if ( numStages == 0 && !shader.isSky && !(shader.contentFlags & CONTENTS_FOG ) && !noDefault ) {
 		return qfalse;
 	}
 
@@ -2779,7 +2822,8 @@ static shader_t *FinishShader( void ) {
 	//
 	// if we are in r_vertexLight mode, never use a lightmap texture
 	//
-	if ( stage > 1 && ( ( r_vertexLight->integer && tr.vertexLightingAllowed && !shader.noVLcollapse ) || glConfig.hardwareType == GLHW_PERMEDIA2 ) ) {
+	// [QL] 0x4581bd: not when the shader says novlcollapse, and not while the front end is up
+	if ( stage > 1 && !shader.noVLcollapse && ( ( r_vertexLight->integer && !r_uiFullScreen->integer ) || glConfig.hardwareType == GLHW_PERMEDIA2 ) ) {
 		VertexLightingCollapse();
 		stage = 1;
 		hasLightmapStage = qfalse;
