@@ -3725,6 +3725,79 @@ static void CG_DrawVoiceIndicator(void) {
     CG_SetWidescreen(0);
 }
 
+/*
+=================
+CG_DemoTimeString
+
+[QL] cgamex86.dll 0x10001320: minutes, seconds padded to two digits and milliseconds,
+signed when negative
+=================
+*/
+static const char *CG_DemoTimeString(int msec) {
+	float seconds = (float)abs(msec) / 1000.0f;
+	int minutes = (int)seconds / 60;
+
+	seconds -= (float)minutes * 60.0f;
+	return va("%s%d:%s%.03f", msec < 0 ? "-" : "", minutes, seconds < 10.0f ? "0" : "", seconds);
+}
+
+/*
+=================
+CG_DrawDemoButton
+
+[QL] one button of the demo controls: the label and its key under it in yellow, both
+centred on x
+=================
+*/
+static void CG_DrawDemoButton(int x, const char *label, const char *key) {
+	CG_DrawText((float)(x - CG_DrawTextWidth(label, 0.25f, 0, 1) / 2), 395, 1, 0.25f,
+		colorWhite, label, 0, 0, 3);
+	CG_DrawText((float)(x - CG_DrawTextWidth(key, 0.15f, 0, 1) / 2), 405, 1, 0.15f,
+		colorYellow, key, 0, 0, 3);
+}
+
+/*
+=================
+CG_DrawDemoHUD
+
+[QL] cgamex86.dll 0x10010450: the time since the join menu closed above a row of buttons.
+Running, the row offers Pause and the speed; frozen, Play and Advance. Advance thaws
+cl_freezeDemo for two frames, so the frozen row holds for the first three running frames
+instead of flickering. The keys are engine binds.
+=================
+*/
+static void CG_DrawDemoHUD(void) {
+	static const vec4_t	back = { 0, 0, 0, 0.5f };
+	static int			running;
+	const char			*label;
+	qboolean			frozenRow;
+
+	if (trap_Cvar_VariableValue("cl_freezeDemo") <= 0) {
+		running++;
+		frozenRow = (running < 4) ? qtrue : qfalse;
+		label = frozenRow ? "Play" : "Pause";
+	} else {
+		running = 0;
+		frozenRow = qtrue;
+		label = "Play";
+	}
+
+	CG_FillRect(210, 355, 220, 60, back);
+	CG_DrawText(288, 375, 2, 0.3f, colorWhite,
+		(char *)CG_DemoTimeString(cg.time - cg.joinMenuCloseTime), 0, 0, 3);
+
+	CG_DrawDemoButton(235, label, "[SPACE]");
+	if (frozenRow) {
+		CG_DrawDemoButton(320, "Advance", "[RIGHT]");
+	} else {
+		CG_DrawDemoButton(275, "-", "[LEFT]");
+		CG_DrawText(290, 395, 1, 0.25f, colorWhite, va("%0.1fx", cg_timescale.value), 0, 0, 3);
+		CG_DrawDemoButton(330, "+", "[RIGHT]");
+		CG_DrawDemoButton(370, "1.0x", "[DOWN]");
+	}
+	CG_DrawDemoButton(410, "Hide", "[DEL]");
+}
+
 static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	static qboolean tutorialStarted;
 
@@ -3927,6 +4000,13 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	if (!cg.scoreBoardShowing && !cg_paused.integer && !cg.showJoinMenu) {
 		CG_SetWidescreen(WIDESCREEN_CENTER);
 		CG_DrawCenterString();
+		CG_SetWidescreen(WIDESCREEN_STRETCH);
+	}
+
+	// [QL] 0x1001140a: the demo controls go last, over everything
+	if (cg.demoPlayback && cg_drawDemoHUD.integer) {
+		CG_SetWidescreen(WIDESCREEN_CENTER);
+		CG_DrawDemoHUD();
 		CG_SetWidescreen(WIDESCREEN_STRETCH);
 	}
 }

@@ -1790,6 +1790,7 @@ extern vmCvar_t cg_crosshairHitColor;
 extern vmCvar_t cg_crosshairHitTime;
 extern vmCvar_t cg_drawStatus;
 extern vmCvar_t cg_draw2D;
+extern vmCvar_t cg_drawDemoHUD;
 extern vmCvar_t cg_animSpeed;
 extern vmCvar_t cg_debugAnim;
 extern vmCvar_t cg_debugEvents;
