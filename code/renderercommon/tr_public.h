@@ -117,6 +117,9 @@ typedef struct {
     // [ioquakelive] the client is about to read input: a renderer with a low latency path uses
     // this to hold the frame back. NULL in the renderers that have none
     void (*LowLatencyWait)(void);
+
+    // [ioquakelive] a left click just happened, for the displays that measure latency
+    void (*LowLatencyFlash)(void);
 } refexport_t;
 
 //

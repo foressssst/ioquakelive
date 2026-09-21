@@ -2167,6 +2167,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.BeginBloomScene = RE_BeginBloomScene;
 	re.ApplyBloom = RE_ApplyBloom;
 	re.LowLatencyWait = vk_low_latency_input;
+	re.LowLatencyFlash = vk_low_latency_flash;
 
 	return &re;
 }

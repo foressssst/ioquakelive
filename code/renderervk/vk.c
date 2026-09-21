@@ -7992,6 +7992,20 @@ static void vk_reflex_sleep( void )
 
 /*
 =============
+vk_low_latency_flash
+
+[ioquakelive] 3.5.1.2.8 of NVIDIA's guide: on the left click the driver paints a shape over a few
+frames, which is what a Reflex Analyzer display looks for. It goes out on every click.
+=============
+*/
+void vk_low_latency_flash( void )
+{
+	vk_latency_marker( VK_LATENCY_MARKER_TRIGGER_FLASH_NV );
+}
+
+
+/*
+=============
 vk_low_latency_input
 
 [ioquakelive] the client is about to read input: this is where the driver holds the frame back so
@@ -8009,7 +8023,6 @@ void vk_low_latency_input( void )
 	vk_reflex_sleep();
 
 	vk_latency_marker( VK_LATENCY_MARKER_SIMULATION_START_NV );
-	vk_latency_marker( VK_LATENCY_MARKER_INPUT_SAMPLE_NV );
 
 	vk_anti_lag_stage( VK_ANTI_LAG_STAGE_INPUT_AMD );
 }

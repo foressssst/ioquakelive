@@ -1487,6 +1487,11 @@ Called by the system for both key up and key down events
 ===================
 */
 void CL_KeyEvent(int key, qboolean down, unsigned time) {
+    // [ioquakelive] the renderer may want to mark the click for a latency analyzer
+    if (down && key == K_MOUSE1 && cls.rendererStarted && re.LowLatencyFlash) {
+        re.LowLatencyFlash();
+    }
+
     if (down)
         CL_KeyDownEvent(key, time);
     else
