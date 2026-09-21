@@ -1214,22 +1214,10 @@ static const struct {
 =================
 CG_OwnerDrawVisible
 
-[QL] cgamex86.dll 0x10031790, rewritten from the binary. The ownerdrawflag tests run first
-and in this order, and several of them settle the answer on their own, false included,
-instead of falling through. The ownerdrawflag2 tests come last and only ever answer true.
-
-Against the Team Arena version the fork carried:
-  - the flags2 team tests (CG_SHOW_IF_PLYR_IS_ON_RED/BLUE_OR_SPEC and _NO_SPEC) were
-    missing, so the TDM board never showed its PLAYER STATS and pickup panels; so were
-    CG_SHOW_IF_PLYR1/2, the duel "followed" tests and the per-weapon "fired" tests;
-  - CG_SHOW_IF_WARMUP is the warmup before the countdown (cg.warmup < 0) and
-    CG_SHOW_IF_NOT_WARMUP everything else, the countdown included;
-  - CG_SHOW_IF_MSG_PRESENT and CG_SHOW_IF_NOTICE_PRESENT blink on cg.time & 0x200 while
-    the lastmsg recall timers run (CG_Draw2D ends them);
-  - CG_SHOW_PLAYERS_REMAINING covers every round gametype, A&D and Red Rover included;
-  - the first-place tests go through CG_PlayerIsFirstPlace, and
-    CG_SHOW_IF_RED_IS_FIRST_PLACE also holds before any score has arrived;
-  - the 1-Flag CTF flag-carrier tests fall through when they fail.
+[QL] 0x10031790. The ownerdrawflag tests run first and in this order, and several settle the
+answer on their own, false included, instead of falling through; the ownerdrawflag2 tests come
+last and only ever answer true. CG_SHOW_IF_WARMUP is the warmup before the countdown
+(cg.warmup < 0) and CG_SHOW_IF_NOT_WARMUP everything else, the countdown included.
 =================
 */
 qboolean CG_OwnerDrawVisible(int flags, int flags2) {
@@ -2178,18 +2166,10 @@ static void CG_DrawMatchWinner(rectDef_t *rect, float scale, vec4_t color, int t
 =================
 CG_DrawFollowPlayerName
 
-[QL] cgamex86.dll 0x10033bf0, reached from CG_OwnerDraw (0x1003ba04) for
-CG_FOLLOW_PLAYER_NAME (94) and CG_FOLLOW_PLAYER_NAME_EX (95).
-
-  - The "Following - " prefix belongs ONLY to id 94 (0x10033c58: cmp ownerDraw, 0x5e).
-    The competitive spectator HUD uses 95, so retail shows just the name there; the
-    version kept before always printed "Following - <name>".
-  - In team gametypes the name takes the followed player's team colour from a table
-    at 0x10078610..0x10078650; otherwise the item's own forecolor is used.
-  - ITEM_ALIGN_CENTER shifts x back by half the text width, ITEM_ALIGN_RIGHT by the
-    whole width (0x10033cbf).
-  - Retail has no PMF_FOLLOW or infoValid test here: it names whoever the snapshot
-    playerState belongs to.
+[QL] 0x10033bf0, for CG_FOLLOW_PLAYER_NAME (94) and its _EX (95). The "Following - " prefix
+belongs to 94 alone (0x10033c58), so the competitive spectator HUD shows just the name. In team
+modes the colour comes from the table at 0x10078610. There is no PMF_FOLLOW test: it names
+whoever the snapshot playerState belongs to.
 =================
 */
 static void CG_DrawFollowPlayerName(rectDef_t *rect, int ownerDraw, int align, float scale, vec4_t color, int textStyle) {
@@ -2236,15 +2216,10 @@ static void CG_DrawFollowPlayerName(rectDef_t *rect, int ownerDraw, int align, f
 =================
 CG_DrawTeamName
 
-[QL] cgamex86.dll 0x10030090, CG_RED_NAME (0x11d) and CG_BLUE_NAME (0x137).
-
-  - The name is cg_redTeamName / cg_blueTeamName cut to 39 characters, or "Red Team" /
-    "Blue Team" while the cvar is empty. The fork printed cgs.redTeam, read from a
-    g_redTeam serverinfo key retail never looks at, and fell back to "RED" / "BLUE".
-  - The item's align places it: ITEM_ALIGN_CENTER moves x back by half the width and
-    ITEM_ALIGN_RIGHT by all of it. The TDM board right-aligns the red name against its
-    score box (align 2); ignoring that ran "RED" into the box.
-  - Measured and drawn in font 0 whatever the item asks for (0x100301ac, 0x1003020d).
+[QL] 0x10030090, CG_RED_NAME and CG_BLUE_NAME. The name is cg_redTeamName or cg_blueTeamName
+cut to 39 characters, or "Red Team" / "Blue Team" while empty. The item's align places it, which
+the TDM board needs to keep the name out of its score box. Measured and drawn in font 0
+whatever the item asks for.
 =================
 */
 static void CG_DrawTeamName(int ownerDraw, rectDef_t* rect, float scale, vec4_t color, int textStyle, int align) {

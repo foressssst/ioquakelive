@@ -36,22 +36,13 @@ menuDef_t* menuEndScoreboard = NULL;
 // which cg_main.c already parses - id put the join menu in the intro file.
 menuDef_t* menuJoinGame = NULL;
 
-// [QL] The spectator HUD. cgamex86.dll caches these right after loading the menus
-// (0x10006eb8..0x10006f12), in one run of Menus_FindByName calls whose results land in
-// consecutive globals. Note that retail looks up ONLY the comp_ variants: the strings
-// "spechud_menu" and "specfollowhud_menu" do not appear anywhere in the binary, even
-// though ui/spectator.menu and ui/spectator_follow.menu are parsed. Quake Live ships the
-// plain pair and uses the competitive one.
+// [QL] the spectator HUD menus, cached where the binary caches them (0x10006eb8). Retail
+// looks up only the comp_ variants: "spechud_menu" and "specfollowhud_menu" are nowhere in
+// it, though both files are parsed.
 //
-//   0x10ab9684  comp_spechud_menu          ui/comp_spectator.menu
-//   0x10ab9688  comp_specfollowhud_menu    ui/comp_spectator_follow.menu
-//   0x10ab968c  comp_specred_top           ui/comp_spectator.menu
-//   0x10ab9690  comp_specred_bottom        ui/comp_spectator.menu
-//   0x10ab9694  comp_specblue_top          ui/comp_spectator.menu
-//   0x10ab9698  comp_specblue_bottom       ui/comp_spectator.menu
-//
-// (The same run also caches stats_menu into 0x10ab967c. Nothing in this fork opens it
-// yet, so it is deliberately left out rather than added as a dead pointer.)
+//   0x10ab9684 comp_spechud_menu        0x10ab968c comp_specred_top
+//   0x10ab9688 comp_specfollowhud_menu  0x10ab9690 comp_specred_bottom
+//   0x10ab9694 comp_specblue_top        0x10ab9698 comp_specblue_bottom
 menuDef_t* menuSpecHud = NULL;
 menuDef_t* menuSpecFollowHud = NULL;
 menuDef_t* menuSpecRedTop = NULL;
@@ -63,15 +54,9 @@ menuDef_t* menuSpecBlueBottom = NULL;
 =================
 CG_CacheMenus
 
-[QL] Resolves every menu cgame keeps a pointer to. The binary does this in one place,
-right after loading the menu files (0x10006eb8), and so do we - both after the initial
-load and after `loadhud` re-parses them.
-
-That second call site matters: Menus_Reset only sets menuCount to 0, so a re-parse fills
-the same Menus[] slots with different menus and every cached pointer is silently pointing
-at the wrong one. menuScoreboard and menuEndScoreboard were already being cleared there;
-menuJoinGame was not, which meant a `loadhud` while spectating left CG_UpdateJoinMenu
-activating and painting whatever menu had landed in that slot.
+[QL] 0x10006eb8. Resolves every menu pointer cgame keeps, after the initial load and after
+loadhud re-parses. Menus_Reset only zeroes menuCount, so a re-parse fills the same slots
+with different menus and a stale pointer paints the wrong one.
 =================
 */
 void CG_CacheMenus(void) {
@@ -92,20 +77,9 @@ void CG_CacheMenus(void) {
 =================
 CG_DrawSpectatorHud
 
-[QL] cgamex86.dll 0x1000dad0. The spectator overlay: a main HUD plus four team banners.
-
-Which main HUD is chosen comes straight off PMF_FOLLOW (0x1000dae1: the binary tests
-ps.pm_flags & 0x1000 at snap+0x38) - following a player gets the follow HUD, free-flying
-gets the plain one. The four banners are painted unconditionally afterwards, with no null
-test in the binary; Menu_Paint already returns on NULL, so this matches.
-
-Every paint is forced (ecx = 1 at the call to Menu_Paint, 0x100609d0), because these menus
-are never activated and so never carry WINDOW_VISIBLE - the normal Menu_PaintAll pass
-would skip them. That is the same trick the join menu uses.
-
-The menus themselves are pure ownerdraw: no literal text, 38 distinct ownerdraws between
-the two files (player names, health/armor, scores, flag status, clan tags), all of which
-this fork already implements. That is why the whole feature is this function plus a cache.
+[QL] 0x1000dad0. The spectator overlay: a main HUD plus four team banners. PMF_FOLLOW picks
+which main HUD (0x1000dae1); the banners follow unconditionally. Every paint is forced,
+because these menus are never activated and so never carry WINDOW_VISIBLE.
 =================
 */
 void CG_DrawSpectatorHud(void) {
@@ -787,15 +761,9 @@ static float CG_DrawTimer(float y) {
 =================
 CG_DrawTeamOverlay
 
-[QL] cgamex86.dll 0x10009da0. Up to eight teammates from the server's sorted list, in the
-TrueType fonts at cg_drawTeamOverlaySize over a team-coloured bar at cg_drawTeamOverlayOpacity.
-Every measure comes from the height of "O" in font 0: a row is that plus 3, and the columns are
-the name, health and armor, the weapon and the location, whose widest name counts up to 64.
-A name past 20 characters is cut to 19 bytes and "..." (retail counts only ^0-^7 as colour
-codes; this tree counts its extended ones too). A dead teammate reads "DEAD" in red and a frozen
-one "FROZEN" with no weapon; this client's own values come from the snapshot and the others'
-from their entities. cg_drawTeamOverlayX moves it right and cg_drawTeamOverlayY up. Returns
-where the next element goes: below the overlay in the upper corner, its top in the lower ones.
+[QL] 0x10009da0. Up to eight teammates from the server's sorted list: name, health and armor,
+weapon and location. Every measure comes from the height of "O" in font 0. A dead teammate
+reads "DEAD" and a frozen one "FROZEN" with no weapon. Returns where the next element goes.
 =================
 */
 static float CG_DrawTeamOverlay(float y, qboolean right, qboolean upper) {
@@ -1159,18 +1127,10 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame) {
 ===================
 CG_DrawPickupItem
 
-[QL] cgamex86.dll 0x1000a800. With cg_drawItemPickups set, no scoreboard up and the player
-alive, the last item picked up shows for 3 s (CG_FadeColor, fading over the last 200 ms),
-48 units above y, in a row from x 5 that each bit adds to:
-- 4, the game clock when it was picked up ("m:ss", as the level timer counts; 0:00 in a
-  warmup);
-- 1, its 16x16 icon;
-- 2, its name;
-- and, from the second of the same item in a row, "x%i" (not for powerups or flags).
-The texts are font 1 at 0.28, dropped by their own height. When the display runs out, the
-count starts over.
-[CPMA] With ch_animateScroll the item also fades in over 150 ms, the fadein CPMA 1.53's
-hud.cfg gives its fading texts, and fades out on CPMA's curve; the 3 s stay as in retail.
+[QL] 0x1000a800. The last item picked up, for 3 s and fading over the last 200 ms: the
+pickup time, the icon, the name and, from the second of the same item, "x%i". Each bit is a
+flag in cg_drawItemPickups.
+[CPMA] ch_animateScroll fades it in over 150 ms and out on CPMA's curve; the 3 s are retail's.
 ===================
 */
 #define PICKUP_ITEM_TIME 3000
@@ -1317,15 +1277,10 @@ static void CG_DrawRewardIcon(float x, float y, float size, qhandle_t shader) {
 ===================
 CG_DrawReward
 
-[QL] cgamex86.dll 0x1000ac30. A medal shows for 2 s and fades over its last
-200 ms. When it runs out the next one is popped and its sound queued before
-cg_drawRewards is tested, so hidden medals still advance and play. Retail draws
-32x32 icons with their top at y 42, one per medal, 48 apart and centred on 320,
-or past cg_drawRewardsRowSize one icon with its count at (336, 66).
-[ioquakelive] A deliberate divergence, for a HUD where no message runs into another:
-medals at 0.74 of retail's size, centred on 325 and with their top at y 128, instead
-of retail's full size centred on 320 at y 42. Both of retail's branches are here over
-that geometry, so one medal lands exactly where it did before the count was added.
+[QL] 0x1000ac30. A medal shows for 2 s and fades over its last 200 ms. The next one is
+popped and its sound queued before cg_drawRewards is tested, so hidden medals still play.
+[ioquakelive] A deliberate divergence: 0.74 of retail's size, centred on 325 with its top
+at y 128, so no message runs into another. Both of retail's branches are kept.
 ===================
 */
 #define REWARD_ICON_SCALE 0.74f
@@ -2227,22 +2182,10 @@ static int CG_OverheadTextWidth(const char* text, int fontIndex, float scale, in
 =====================
 CG_DrawTeammateNames
 
-[QL] cgamex86.dll 0x1000cb60, drawn by CG_Draw2D right after the floating effects (0x10010ea3).
-A box over each living player in front of the view, 40 units above its origin and seen through
-walls, for teammates with cg_teammateNames and for everybody with cg_specNames while spectating
-(a free-floating spectator gets nothing without it):
-- the name, at 1 only while the player is near the middle of the screen (0.4-0.6 across,
-  0.3-0.6 down) and at 2 always, in font 1 at 0.12 without colours, cut with "..." to
-  cg_overheadNamesWidth as measured in font 0. It takes the colour of the viewer's team, or of
-  the player's team for a spectator, over a half-transparent black box;
-- under the name, unless the player is frozen: four health segments tinted like the HUD health
-  (0x1000ca90) and lit past 25, 50 and 75 % of the viewer's maximum health, and a blue armor
-  line up to that maximum;
-- below the box, the player's powerups but flight and the freeze, or else a teammate's marker,
-  red for cg_drawHitFriendTime after a pain event.
-Sizes are pixels scaled by the screen height. Retail also traces from the view to the player
-and never reads the result; retail's colour codes are ^0-^7, this tree's extended ones are
-stripped too.
+[QL] 0x1000cb60. A box over each living player in front of the view, 40 units up and seen
+through walls: the name, four health segments tinted like the HUD health (0x1000ca90), an
+armor line, and the powerups or a teammate marker. cg_teammateNames shows it at 1 only near
+the middle of the screen and at 2 always; cg_specNames does the same for a spectator.
 =====================
 */
 static void CG_DrawTeammateNames(void) {
@@ -2447,17 +2390,10 @@ static void CG_DrawTeammateNames(void) {
 =================
 CG_DrawSpectator
 
-[QL] cgamex86.dll 0x10034d70, reached only through the CG_SPEC_MESSAGES ownerdraw, which passes
-its item's corner. Nothing without cg_drawSpecMessages.
-- In CA and A&D a player out of the round (on a team, in PM_SPECTATOR) gets "Round In Progress",
-  centred at y 60 in font 0 at 0.35, shadowed.
-- Otherwise, while the playerState carries any eFlags and the scoreboard is down: "SPECTATOR MODE"
-  at the corner in font 0 at 0.22, and 12 lower "Press mouse button 1 to cycle through players"
-  at 0.18 in grey, neither shadowed; the texts are fixed, with no key names.
-- Unless the competitive follow HUD covers them while following (0x10034fbd), shadowed from the
-  left edge at 0.28: "waiting to play" in duel, left out when client 0 is spec-only, or "press
-  ESC and use the JOIN buttons" and "to enter the game" in the team modes.
-While following with a free camera retail also looks up the +moveup key, and never uses it.
+[QL] 0x10034d70, reached only through the CG_SPEC_MESSAGES ownerdraw and nothing without
+cg_drawSpecMessages. A player out of a CA or A&D round gets "Round In Progress"; otherwise
+the spectator mode pair, unless the competitive follow HUD covers them (0x10034fbd), which
+is where the duel and team-mode lines go instead. The texts are fixed, with no key names.
 =================
 */
 void CG_DrawSpectator(float x, float y) {
@@ -2676,22 +2612,11 @@ static const char *cg_endScoreboards[] = {
 =================
 CG_DrawScoreboard
 
-[QL] cgamex86.dll 0x1000dfd0, rewritten from the binary.
+[QL] 0x1000dfd0. Up unless the game is paused, on +scores, a dead player or the intermission
+(0x1000dff6, 0x1000e00b). There is no Quake 3 fade: it goes the frame the condition stops.
 
-The board is up unless the game is paused. During warmup it takes +scores or a dead player
-(0x1000dff6); otherwise +scores, a dead player or the intermission (0x1000e00b). There is no
-Quake 3 fade: it goes the frame the condition stops holding, and with no menu to paint the
-answer is false (0x1000e0c8).
-
-At the intermission it is the end-of-match board (0x1000e02e): every in-game board is closed
-by name and the end board is activated the way the join menu is, closing the join menu, with
-the cgame key catcher unless the UI holds the keys. That is what lets the mouse reach its
-Scoreboard / Statistics tabs and the end-of-match vote; the fork only painted it. The in-game
-board is only painted.
-
-When the board goes down after being up (0x1000e180), every board is closed by name and the
-keys are handed back unless the join menu holds them; catcher bit 0x10 always drops. The
-killer's name stays: retail clears it when the player dies again (CG_Obituary), not here.
+The intermission board is activated rather than only painted (0x1000e02e), which is what lets
+the mouse reach its tabs and the end-of-match vote, and the keys go back when it drops.
 =================
 */
 static qboolean CG_DrawScoreboard(void) {
@@ -2908,16 +2833,10 @@ static void CG_DrawWarmupTutorial(void) {
 =================
 CG_DrawADRoundResults
 
-[QL] cgamex86.dll 0x10011a90, over the count before an Attack & Defend round (round state 1):
-a dark panel at (200, 150), 240 by 48, with a row per team and a column per round.
-- The attacking team's row, red on turn 0 and blue on turn 1, is tinted, and its cell for the
-  current round stronger. Past the tenth round the columns scroll to keep that one last.
-- "Round", "Red" and "Blue" down the left, the round numbers across the top, each score of a
-  round (red then blue per column, -1 left empty) and each team's total under "Score".
-- With a scorelimit, once a team is a turn's worth of points from it (the larger of the capture
-  and elimination bonuses, plus the touch bonus), a line at y 214: "Match Point" for red on its
-  turn; on blue's, "Red Wins! Good Game" when red has the limit and a lead blue can't close,
-  "Last Chance" when red has it and blue can still draw level, or else "Match Point" for blue.
+[QL] 0x10011a90, over the count before an Attack & Defend round: a row per team and a column
+per round, with the attacking team's row tinted. Past the tenth round the columns scroll to
+keep the current one last. Near the score limit it adds a line saying whose match point it
+is, or that the round is a last chance.
 =================
 */
 static void CG_DrawADRoundResults(void) {
@@ -3003,20 +2922,10 @@ static void CG_DrawADRoundResults(void) {
 =================
 CG_DrawWarmupCountdown
 
-[QL] cgamex86.dll 0x1000ec00: the count before a match or a round. A header at y 90
-(scale 0.6) over the count at y 125 (scale 0.45), font 0, centred, with
-ITEM_TEXTSTYLE_SHADOWEDMORE, and 10 units lower in Race. The header is:
-- duel: "<first> vs <last>" of the free-team players listed;
-- "Quad Hog" in FFA with custom setting 0x40000, "Infected" in Red Rover with 0x4000000
-  before the first round;
-- Attack & Defend with round state 1: ATTACK or DEFEND THE FLAG for the player's team by
-  whose turn it is, "Red/Blue is on offense" for anyone else;
-- "Freeze Tag" in Freeze Tag without g_freezeRoundDelay;
-- in the rounds of CA, Freeze Tag, A&D and Red Rover, once one has been played: "Round
-  Begins in", or "Sudden Death" once the time limit has run out into overtime;
-- the gametype's name otherwise.
-Those rounds count bare; everything else says "Starts in: %i".
-With round state 1, Attack & Defend puts the round results over it first (CG_DrawADRoundResults).
+[QL] 0x1000ec00. The count before a match or a round, under a header that names what is
+starting: the duel pairing, the rule in force, whose turn it is in Attack & Defend, "Round
+Begins in" once a round has been played, "Sudden Death" in overtime, or the gametype. Rounds
+count bare; everything else says "Starts in: %i".
 =================
 */
 static void CG_DrawWarmupCountdown(int gt) {
@@ -3073,20 +2982,10 @@ static void CG_DrawWarmupCountdown(int gt) {
 =================
 CG_DrawWarmup
 
-[QL] cgamex86.dll 0x1000f090. Nothing in practice mode.
-- The count ticks while a warmup time is set, and once more after it clears; the counting
-  sounds play for 1 to 3, in the rounds of CA, Freeze Tag, A&D and Red Rover only once a
-  round has been played (always in Freeze Tag without g_freezeRoundDelay).
-- Nothing more over the join menu or the scoreboard. A training match the player hasn't readied for shows
-  CG_DrawWarmupTutorial; a running count, CG_DrawWarmupCountdown.
-- Before the match (warmup -1), with cg_drawPregameMessages, two lines at y 88 and 108
-  (font 1, scale 0.35, white, ITEM_TEXTSTYLE_SHADOWED) say what it is waiting for, from
-  the players on each team: more players, fewer (duel), balanced teams, the ready
-  countdown ("Players must ready / within N seconds."), or more players ready.
-- A player in the match, once there are enough players, is told at y 124 (font 0, scale
-  0.25, ITEM_TEXTSTYLE_SHADOWEDMORE) to press the readyup key: red "Press <key> to ready
-  yourself", or green "Press <key> to unready yourself" once ready.
-Everything sits 10 units lower in Race.
+[QL] 0x1000f090, and nothing in practice mode. The count ticks while a warmup time is set
+and once more after it clears, with the counting sounds for 1 to 3. Before the match it says
+what it is waiting for -- players, balance, the ready countdown -- and tells a player in the
+match which key readies them.
 =================
 */
 static void CG_DrawWarmup(void) {
