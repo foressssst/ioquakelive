@@ -1779,13 +1779,13 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 		}
 
 		// [ioquakelive] the anti-lag needs its feature turned on, so it is decided before the device
-		if ( antiLag && r_lowLatency->integer ) {
+		if ( antiLag ) {
 			device_extension_list[ device_extension_count++ ] = VK_AMD_ANTI_LAG_EXTENSION_NAME;
 			vk.antiLag = qtrue;
 		}
 
 		// [ioquakelive] Reflex sleeps on a timeline semaphore and names each frame with a present id
-		if ( lowLatency2 && presentId && timelineSemaphore && r_lowLatency->integer ) {
+		if ( lowLatency2 && presentId && timelineSemaphore ) {
 			device_extension_list[ device_extension_count++ ] = VK_NV_LOW_LATENCY_2_EXTENSION_NAME;
 			device_extension_list[ device_extension_count++ ] = VK_KHR_PRESENT_ID_EXTENSION_NAME;
 			vk.lowLatency2 = qtrue;
@@ -7941,7 +7941,8 @@ static void vk_reflex_sleep( void )
 		return;
 	}
 
-	maxFps = ri.Cvar_VariableIntegerValue( "com_maxfps" );
+	// off has to mean that nothing changes, so the frame cap stays with the engine
+	maxFps = r_lowLatency->integer ? ri.Cvar_VariableIntegerValue( "com_maxfps" ) : 0;
 
 	if ( vk.latencyModeSet != r_lowLatency->integer || vk.latencyMaxFps != maxFps ) {
 		mode.sType = VK_STRUCTURE_TYPE_LATENCY_SLEEP_MODE_INFO_NV;
@@ -7957,10 +7958,6 @@ static void vk_reflex_sleep( void )
 		}
 		vk.latencyModeSet = r_lowLatency->integer;
 		vk.latencyMaxFps = maxFps;
-	}
-
-	if ( !r_lowLatency->integer ) {
-		return;
 	}
 
 	vk.latencyValue++;

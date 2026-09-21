@@ -1838,8 +1838,9 @@ static void R_Register( void )
 	r_showsky = ri.Cvar_Get( "r_showsky", "0", CVAR_CHEAT );
 	ri.Cvar_SetDescription( r_showsky, "Forces sky in front of all surfaces." );
 #ifdef USE_VULKAN
-	// [ioquakelive] the driver holds the frame back so the input is read as late as it can be
-	r_lowLatency = ri.Cvar_Get( "r_lowLatency", "0", CVAR_ARCHIVE_ND | CVAR_LATCH );
+	// [ioquakelive] the driver holds the frame back so the input is read as late as it can be.
+	// chapter 4 of NVIDIA's guide asks for it on by default; a card without it pays nothing
+	r_lowLatency = ri.Cvar_Get( "r_lowLatency", "1", CVAR_ARCHIVE_ND );
 	RI_Cvar_CheckRange( r_lowLatency, "0", "2", CV_INTEGER );
 	ri.Cvar_SetDescription( r_lowLatency, "Low latency mode, when the driver has it:\n" \
 		" 0: off\n" \
