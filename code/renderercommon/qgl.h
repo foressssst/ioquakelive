@@ -67,12 +67,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define GL_UNPACK_SKIP_PIXELS 0x0CF4
 #endif
 
+#ifndef GLIMP_EXTERNAL_QGL
 extern void(APIENTRYP qglActiveTextureARB)(GLenum texture);
 extern void(APIENTRYP qglClientActiveTextureARB)(GLenum texture);
 extern void(APIENTRYP qglMultiTexCoord2fARB)(GLenum target, GLfloat s, GLfloat t);
 
 extern void(APIENTRYP qglLockArraysEXT)(GLint first, GLsizei count);
 extern void(APIENTRYP qglUnlockArraysEXT)(void);
+#endif
 
 //===========================================================================
 

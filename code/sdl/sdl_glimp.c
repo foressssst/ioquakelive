@@ -56,14 +56,22 @@ cvar_t* r_preferOpenGLES;
 int qglMajorVersion, qglMinorVersion;
 int qglesMajorVersion, qglesMinorVersion;
 
-void(APIENTRYP qglActiveTextureARB)(GLenum texture);
-void(APIENTRYP qglClientActiveTextureARB)(GLenum texture);
-void(APIENTRYP qglMultiTexCoord2fARB)(GLenum target, GLfloat s, GLfloat t);
+// [ioquakelive] GLIMP_EXTERNAL_QGL: the renderer this is built into (renderergl1) resolves
+// OpenGL itself, so the pointers here only serve this file
+#ifdef GLIMP_EXTERNAL_QGL
+#define GLIMP_QGL static
+#else
+#define GLIMP_QGL
+#endif
 
-void(APIENTRYP qglLockArraysEXT)(GLint first, GLsizei count);
-void(APIENTRYP qglUnlockArraysEXT)(void);
+GLIMP_QGL void(APIENTRYP qglActiveTextureARB)(GLenum texture);
+GLIMP_QGL void(APIENTRYP qglClientActiveTextureARB)(GLenum texture);
+GLIMP_QGL void(APIENTRYP qglMultiTexCoord2fARB)(GLenum target, GLfloat s, GLfloat t);
 
-#define GLE(ret, name, ...) name##proc* qgl##name = NULL;
+GLIMP_QGL void(APIENTRYP qglLockArraysEXT)(GLint first, GLsizei count);
+GLIMP_QGL void(APIENTRYP qglUnlockArraysEXT)(void);
+
+#define GLE(ret, name, ...) GLIMP_QGL name##proc* qgl##name = NULL;
 QGL_1_1_PROCS;
 QGL_1_1_FIXED_FUNCTION_PROCS;
 QGL_DESKTOP_1_1_PROCS;
@@ -841,6 +849,7 @@ static qboolean GLimp_StartDriverAndSetMode(int mode, int fullscreen, qboolean n
     return qtrue;
 }
 
+#ifndef GLIMP_EXTERNAL_QGL
 /*
 ===============
 GLimp_InitExtensions
@@ -973,6 +982,8 @@ static void GLimp_InitExtensions(qboolean fixedFunction) {
     }
 }
 
+#endif
+
 #define R_MODE_FALLBACK 1  // 640 * 480
 
 /*
@@ -1090,12 +1101,25 @@ success:
     }
 
     // initialize extensions
+#ifndef GLIMP_EXTERNAL_QGL
     GLimp_InitExtensions(fixedFunction);
+#endif
 
     ri.Cvar_Get("r_availableModes", "", CVAR_ROM);
 
     // This depends on SDL_INIT_VIDEO, hence having it here
     ri.IN_Init(SDL_window);
+}
+
+/*
+===============
+GLimp_GetProcAddress
+
+[ioquakelive] for a renderer that resolves OpenGL itself
+===============
+*/
+void* GLimp_GetProcAddress(const char* name) {
+    return SDL_GL_GetProcAddress(name);
 }
 
 /*
