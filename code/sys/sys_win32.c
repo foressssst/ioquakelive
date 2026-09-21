@@ -78,7 +78,8 @@ unsigned int _controlfp(unsigned int new, unsigned int mask);
 #define FPUCWMASK1 (_MCW_RC | _MCW_EM)
 #define FPUCW (_RC_NEAR | _MCW_EM | _PC_53)
 
-#if idx64
+// 64-bit Windows, x86-64 or ARM64, has no x87 precision control to set
+#ifdef _WIN64
 #define FPUCWMASK (FPUCWMASK1)
 #else
 #define FPUCWMASK (FPUCWMASK1 | _MCW_PC)

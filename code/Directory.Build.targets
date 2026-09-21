@@ -10,6 +10,9 @@
   <PropertyGroup Condition="'$(Platform)'=='x64'">
     <OutDir>$(MSBuildThisFileDirectory)libs\win64\</OutDir>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Platform)'=='ARM64'">
+    <OutDir>$(MSBuildThisFileDirectory)libs\winarm64\</OutDir>
+  </PropertyGroup>
   <PropertyGroup>
     <IntDir>$(MSBuildThisFileDirectory)..\build\deps\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
   </PropertyGroup>

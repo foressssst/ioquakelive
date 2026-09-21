@@ -71,8 +71,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #if defined(_WIN64) || defined(__WIN64__)
 
+// [ioquakelive] ARM64 Windows is 64 bits too, but none of the x86-64 paths are for it
+#if defined(_M_X64) || defined(__x86_64__)
 #undef idx64
 #define idx64 1
+#endif
 
 #undef QDECL
 #define QDECL __cdecl
@@ -89,7 +92,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define ID_INLINE __inline
 #define PATH_SEP '\\'
 
-#if defined(__WIN64__) || defined(_M_X64)
+#if defined(_M_ARM64) || defined(__aarch64__)
+#define ARCH_STRING "arm64"
+#elif defined(__WIN64__) || defined(_M_X64)
 #define ARCH_STRING "x86_64"
 #elif defined _M_ALPHA
 #define ARCH_STRING "AXP"
