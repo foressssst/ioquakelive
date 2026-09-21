@@ -1973,15 +1973,10 @@ void R_BloomScreen( void )
 
 [QL] WHAT THE POST EFFECTS NEED FROM HERE
 
-The frame buffers are this file's; the colour correction and the bloom live in tr_qlpost.c and
-reach them through these.
-
 ===============================================================================
 */
 
-// [QL] tr_qlpost.c ties its own buffers through here: FBO_Bind keeps the bound buffer in a
-// couple of statics, and binding behind its back leaves FBO_BindMain believing the main buffer
-// is still tied, so the scene ends up drawn into the last buffer the post used.
+// [QL] the post binds through FBO_Bind, whose cache FBO_BindMain trusts
 void FBO_BindTarget( GLuint target, GLuint buffer ) {
 	FBO_Bind( target, buffer );
 }
@@ -2056,9 +2051,7 @@ void FBO_PostProcess( void )
 
 	minimized = RI_CL_IsMinimized();
 
-	// [QL] the colour correction is the frame's last copy, the one to the screen (0x436dc0).
-	// A capture reads what came out of it, so it goes through the second buffer, as the gamma
-	// pass below does.
+	// [QL] the colour correction is the copy to the screen (0x436dc0); a capture uses buffer 1
 	if ( r_colorCorrectActive->integer ) {
 		if ( backEnd.screenshotMask == 0 && !windowAdjusted && !minimized ) {
 			if ( RB_QLColorCorrect( 0, w, h ) ) {
@@ -2218,8 +2211,7 @@ void QGL_InitFBO( void )
 		default: fboInternalFormat = GL_RGBA16; break;
 	}
 
-	// [QL] quakelive_steam.exe 0x4500b0: r_floatingPointFBOs gives Quake Live's frame buffers 16
-	// bits a channel
+	// [QL] 0x4500b0: r_floatingPointFBOs gives the frame buffers 16 bits a channel
 	if ( fboInternalFormat == GL_RGBA8 && r_enablePostProcess->integer && r_floatingPointFBOs->integer ) {
 		fboInternalFormat = GL_RGBA16;
 	}

@@ -1095,8 +1095,7 @@ static qboolean ParseStage( shaderStage_t *stage, const char **text )
 		//
 		// depthTest <disable>
 		//
-		// [QL] quakelive_steam.exe: "WARNING: missing parm for depthTest in shader '%s'". The only
-		// word it takes is "disable", used by sprites/trainer, which has to be seen through walls.
+		// [QL] only "disable", for sprites/trainer, seen through walls
 		//
 		else if ( !Q_stricmp( token, "depthTest" ) )
 		{
@@ -1479,8 +1478,7 @@ static const infoParm_t infoParms[] = {
 	{"monsterclip",	1,	0,	CONTENTS_MONSTERCLIP },
 	{"nodrop",		1,	0,	CONTENTS_NODROP },		// don't drop items or leave bodies (death fog, lava, etc)
 	{"nonsolid",	1,	SURF_NONSOLID,	0},						// clears the solid flag
-	// [QL] the binary calls it "nobotclip", not Quake 3's "botclip", and it goes right here: its
-	// table is water, slime, lava, playerclip, monsterclip, nodrop, nonsolid, nobotclip
+	// [QL] "nobotclip", not quake 3's "botclip", in retail's order
 	{"nobotclip",	1,	0,	CONTENTS_BOTCLIP },
 
 	// utility relevant attributes
@@ -1757,10 +1755,7 @@ static qboolean ParseShader( const char **text )
 			shader.noPicMip = 1;
 			continue;
 		}
-		// [QL] quakelive_steam.exe 0x457572: this shader keeps its stages with r_vertexLight, it
-		// does not lose its lightmap. Quake Live's bright skins carry it, because the colour a
-		// player is forced to comes from a second stage with rgbGen entity that the collapse threw
-		// away, leaving the skin white.
+		// [QL] 0x457572: bright skins keep the rgbGen entity stage the collapse would drop
 		else if ( !Q_stricmp( token, "novlcollapse" ) )
 		{
 			shader.noVLcollapse = 1;
@@ -1852,10 +1847,7 @@ static qboolean ParseShader( const char **text )
 			ParseSort( text );
 			continue;
 		}
-		// [QL] quakelive_steam.exe 0x004574d0: a shader with no stages is valid all the same.
-		// models/players/hunter/harpy_f uses one, having only "surfaceparm nodraw": without this
-		// the shader falls back to the default and the piece that was meant to be invisible gets
-		// drawn.
+		// [QL] 0x4574d0: a shader without stages is still valid, as harpy_f's nodraw piece
 		else if ( !Q_stricmp( token, "nodefault" ) )
 		{
 			noDefault = qtrue;

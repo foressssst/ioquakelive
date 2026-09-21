@@ -20,16 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 //
-// tr_qlpost.c -- [QL] Quake Live's post effects: the colour correction and the bloom
-//
-// quakelive_steam.exe draws the 3D view into a frame buffer of its own (render command 11),
-// puts the bloom over it and copies the result to the back buffer (command 10), and when the
-// frame ends runs the colour correction over the whole back buffer, HUD included (command 9).
-// This renderer draws the whole frame into its own frame buffer, so the bloom works in place
-// there and the colour correction is the frame's last copy, the one to the screen.
-//
-// The frame is drawn at 1 / 2^r_overBrightBits of its brightness, as for a hardware gamma
-// ramp, and the correction brings it back up.
+// tr_qlpost.c -- [QL] the colour correction and the bloom, retail's render commands 9 to 11
 //
 
 #include "tr_local.h"
@@ -85,10 +76,7 @@ static qboolean qlPostReady;
 ===============
 R_QLPostRegister
 
-[QL] quakelive_steam.exe 0x449000 (R_Register). The three Active cvars are read only and say
-which effects the renderer could start. Nothing reads r_bloomBlurFalloff, r_bloomBlurRadius or
-r_bloomBlurScale; the first and the last have a default below their range, so they start at its
-minimum.
+[QL] 0x449000; nothing reads r_bloomBlurFalloff, r_bloomBlurRadius or r_bloomBlurScale
 ===============
 */
 void R_QLPostRegister( void ) {
@@ -116,8 +104,7 @@ void R_QLPostRegister( void ) {
 ===============
 R_BloomPasses
 
-[QL] retail registers r_bloomPasses with flag 0x2000, which makes its range binary: any value
-over the minimum counts as the maximum
+[QL] flag 0x2000 makes the range binary: over the minimum counts as the maximum
 ===============
 */
 static int R_BloomPasses( void ) {
@@ -325,8 +312,7 @@ static void R_QLPostDeletePrograms( void ) {
 
 THE FRAME BUFFERS
 
-[QL] 0x437e40: the bloom works at half the scene's size, in four frame buffers, and with
-r_bloomPasses 2 goes on at a quarter, in three more.
+[QL] 0x437e40: four at half size, and three more at a quarter with r_bloomPasses 2
 
 ===============================================================================
 */
@@ -370,9 +356,7 @@ static void R_QLPostDeleteBuffers( void ) {
 ===============
 R_QLPostInit
 
-[QL] 0x450710: with r_enablePostProcess the renderer starts the colour correction (0x43cfe0)
-and the bloom (0x4380f0) that are enabled. Both need frame buffers, and an effect whose frame
-buffers cannot be made is turned off with retail's message (0x437e40, 0x43ce50).
+[QL] 0x450710; an effect without its frame buffers stays off (0x437e40, 0x43ce50)
 ===============
 */
 void R_QLPostInit( void ) {
@@ -514,8 +498,7 @@ static void R_QLPostPass( qlProgram_t which, GLuint srcTexture, GLuint dstFbo, i
 =============
 RE_BeginBloomScene
 
-[QL] refexport 30 (0x43cba0), which the cgame calls right before the 3D view: queues render
-command 11
+[QL] refexport 30 (0x43cba0), before the 3D view: queues render command 11
 =============
 */
 void RE_BeginBloomScene( void ) {
@@ -535,8 +518,7 @@ void RE_BeginBloomScene( void ) {
 =============
 RE_ApplyBloom
 
-[QL] refexport 31 (0x4384d0), which the cgame calls right after the 3D view: queues render
-command 10 when the bloom runs
+[QL] refexport 31 (0x4384d0), after the 3D view: queues render command 10
 =============
 */
 void RE_ApplyBloom( void ) {
@@ -556,9 +538,7 @@ void RE_ApplyBloom( void ) {
 =============
 RB_BloomScene
 
-[QL] render command 11 (0x437a50): the view that follows goes into the bloom's frame buffer.
-Here the whole frame is already drawn into the renderer's own, so this only makes sure it is
-the one bound.
+[QL] render command 11 (0x437a50); the frame is already in our own frame buffer
 =============
 */
 const void *RB_BloomScene( const void *data ) {
@@ -579,11 +559,7 @@ const void *RB_BloomScene( const void *data ) {
 =============
 RB_Bloom
 
-[QL] render command 10, 0x436ec0. The scene goes to half size taking one texel of every four,
-with no filtering; there, what is brighter than r_bloomBrightThreshold is kept and stretched
-back to the whole range, then blurred down and across. With r_bloomPasses 2 the blurred light
-goes on to a quarter size and is blurred again. The last pass lays the light over the scene,
-each with its own saturation and intensity; retail's uniforms don't go below 0 (0x438590).
+[QL] render command 10 (0x436ec0); its uniforms don't go below 0 (0x438590)
 =============
 */
 const void *RB_Bloom( const void *data ) {
@@ -663,10 +639,8 @@ const void *RB_Bloom( const void *data ) {
 =============
 RB_QLColorCorrect
 
-[QL] render command 9, 0x436dc0, queued by RE_EndFrame (0x43cd10): the finished frame, HUD
-included, into dst, the screen or a capture's frame buffer. The uniforms are 1 / r_gamma (1
-when r_gamma isn't above 0), twice r_overBrightBits (at least 1) and r_contrast (0x43cfe0,
-0x43cd60). Returns qfalse when the colour correction is off.
+[QL] render command 9 (0x436dc0): 1 / r_gamma, twice r_overBrightBits and r_contrast
+(0x43cfe0, 0x43cd60)
 =============
 */
 qboolean RB_QLColorCorrect( GLuint dstFbo, int width, int height ) {
@@ -701,8 +675,7 @@ qboolean RB_QLColorCorrect( GLuint dstFbo, int width, int height ) {
 =============
 R_CaptureGammaCorrect
 
-[QL] 0x4481c0: a capture only goes through the gamma table when the gamma ramp was giving the
-overbright; the colour correction's copy is already finished
+[QL] 0x4481c0: only when the ramp gave the overbright
 =============
 */
 qboolean R_CaptureGammaCorrect( void ) {

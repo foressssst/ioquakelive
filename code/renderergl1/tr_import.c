@@ -20,11 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 //
-// tr_import.c -- [ioquakelive] what this renderer asks of the engine that this engine does not give
-//
-// The renderer comes from Quake3e, whose engine hands its renderer more than ioquake3's does:
-// cvar groups, ranges given as strings, the window and a few client calls. They are answered
-// here, inside the renderer, so the engine and the other renderer stay as they are.
+// tr_import.c -- [ioquakelive] what quake3e's engine gives its renderer and this one doesn't
 //
 
 #include "tr_local.h"

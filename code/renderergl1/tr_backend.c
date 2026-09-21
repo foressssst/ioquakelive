@@ -1570,8 +1570,7 @@ static const void *RB_SwapBuffers( const void *data ) {
 		backEnd.screenshotMask = 0;
 	}
 
-	// [ioquakelive] r_maxQueuedFrames caps how many frames the GPU may have queued: each frame
-	// leaves a fence, and what is waited on is the one from that many frames back
+	// [ioquakelive] wait on the fence from r_maxQueuedFrames frames back
 	if ( r_maxQueuedFrames->integer > 0 && qglFenceSync ) {
 		int depth = r_maxQueuedFrames->integer;
 		int slot;

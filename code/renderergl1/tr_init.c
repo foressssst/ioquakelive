@@ -374,8 +374,7 @@ static void R_InitExtensions( void )
 
 	ri.Printf( PRINT_ALL, "Initializing OpenGL extensions\n" );
 
-	// [QL] quakelive_steam.exe 0x46b792 looks for GL_ARB_texture_non_power_of_two, which every
-	// OpenGL 2.0 driver has in core
+	// [QL] 0x46b792: GL_ARB_texture_non_power_of_two, core since OpenGL 2.0
 	textureNonPowerOfTwo = ( atoi( glConfig.version_string ) >= 2
 		|| R_HaveExtension( "GL_ARB_texture_non_power_of_two" ) ) ? qtrue : qfalse;
 
@@ -534,8 +533,7 @@ static void R_InitExtensions( void )
 		ri.Printf( PRINT_ALL, "...GL_EXT_texture_filter_anisotropic not found\n" );
 	}
 
-	// [QL] the post effects are GLSL; without it they stay off, as retail leaves them when its
-	// frame buffers fail
+	// [QL] the post effects are GLSL; without it they stay off
 	if ( R_HaveExtension( "GL_ARB_shader_objects" ) || atoi( glConfig.version_string ) >= 2 )
 	{
 		err = R_ResolveSymbols( glsl_procs, ARRAY_LEN( glsl_procs ) );
@@ -1050,8 +1048,7 @@ R_ScreenshotFilename
 ==================
 */
 static qboolean R_ScreenshotFilename( char *fileName, const char *fileExt ) {
-	// [QL] retail's names, screenshots/shot0000 to shot9999: the first free one. The count is kept
-	// for each format, so a video's thousands of frames don't scan from the start every time
+	// [QL] retail's names: the first free of shot0000 to shot9999, counted per format
 	static int	lastNumber[2] = { 0, 0 };
 	int			*last = &lastNumber[ Q_stricmp( fileExt, "jpg" ) == 0 ];
 	int			a, b, c, d;
@@ -1081,8 +1078,7 @@ static qboolean R_ScreenshotFilename( char *fileName, const char *fileExt ) {
 ====================
 RB_TakeLevelShot
 
-[QL] 0x00448550: a 128x128 TGA in levelshots/, read from the corrected frame: it is taken at the
-end of the frame, like the screenshots.
+[QL] 0x448550: taken at the end of the frame, from the corrected one
 
 levelshots are specialized 128*128 thumbnails for
 the menu system, sampled down from full screen distorted images
@@ -1512,14 +1508,10 @@ R_Register
 */
 static void R_Register( void )
 {
-	// make sure all the commands added here are also removed in R_Shutdown
-	// [ioquakelive] decode the map's textures ahead of time, spread across the worker threads;
-	// 0 goes back to loading them one by one on the main thread
+	// [ioquakelive] the map's textures decoded ahead on the workers; 0 loads them one by one
 	r_prefetchTextures = ri.Cvar_Get( "r_prefetchTextures", "1", CVAR_ARCHIVE );
 
-	// [ioquakelive] how many frames the GPU may have queued. 0, the default, leaves it to the
-	// driver, as retail does; 1 waits every frame for the one before it, less input latency in
-	// exchange for a few fps
+	// [ioquakelive] frames the GPU may have queued; 0 leaves it to the driver, as retail
 	r_maxQueuedFrames = ri.Cvar_Get( "r_maxQueuedFrames", "0", CVAR_ARCHIVE );
 
 	// [QL] the colour r_fastSky clears to, as 0xRRGGBB (0x435d90)
@@ -1535,8 +1527,7 @@ static void R_Register( void )
 	ri.Cvar_Get( "r_gl_renderer", "None", CVAR_ROM | CVAR_REPLICATE );
 	ri.Cvar_Get( "r_gl_reserved", "0", CVAR_ROM | CVAR_REPLICATE );
 
-	// [QL] retail registers these for its own debugging, SMP, draw paths, videos and driver
-	// loading, which this renderer doesn't have; nothing reads them
+	// [QL] retail's own, for features this renderer lacks; nothing reads them
 	ri.Cvar_Get( "r_debugAds", "0", CVAR_TEMP );
 	ri.Cvar_Get( "r_debugFontAtlas", "0", CVAR_TEMP );
 	ri.Cvar_Get( "r_debugShaderIndex", "0", CVAR_CHEAT );
@@ -1558,6 +1549,7 @@ static void R_Register( void )
 	ri.Cvar_Get( "r_stereo", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	ri.Cvar_Get( "r_verbose", "0", CVAR_CHEAT );
 
+	// make sure all the commands added here are also removed in R_Shutdown
 	ri.Cmd_AddCommand( "imagelist", R_ImageList_f );
 	ri.Cmd_AddCommand( "shaderlist", R_ShaderList_f );
 	ri.Cmd_AddCommand( "skinlist", R_SkinList_f );
@@ -1748,8 +1740,7 @@ static void R_Register( void )
 	r_railSegmentLength = ri.Cvar_Get( "r_railSegmentLength", "32", CVAR_ARCHIVE | CVAR_USERSAVE );
 	ri.Cvar_SetDescription( r_railSegmentLength, "Length of segments in railgun trails." );
 
-	// [QL] quakelive_steam.exe 0x449031: 10 in 1-100, neither archived nor cheat protected; 0x44ab56
-	// multiplies the light grid's ambient by it, as here
+	// [QL] 0x449031: 10 in 1-100; 0x44ab56 scales the grid's ambient by it
 	r_ambientScale = ri.Cvar_GetRange( "r_ambientScale", "10", "1", "100", CVAR_REPLICATE | CVAR_USERSAVE );
 	ri.Cvar_SetDescription( r_ambientScale, "Light grid ambient light scaling on entity models." );
 	r_directedScale = ri.Cvar_Get( "r_directedScale", "1", CVAR_CHEAT );
@@ -1880,8 +1871,7 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_flares, "Enables corona effects on light sources." );
 
 #ifdef USE_FBO
-	// [QL] retail draws the frame offscreen whenever the post effects are on, which is what
-	// r_enablePostProcess says; without them it goes straight to the back buffer
+	// [QL] retail draws offscreen while the post effects are on
 	r_fbo = ri.Cvar_Get( "r_fbo", "1", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	ri.Cvar_SetDescription( r_fbo, "Use framebuffer objects, enables gamma correction in windowed mode and allows arbitrary video size and screenshot/video capture.\n Required for bloom, HDR rendering, anti-aliasing and greyscale effects.\n OpenGL 3.0+ required." );
 

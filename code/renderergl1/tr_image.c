@@ -305,8 +305,7 @@ lighting range
 */
 static void R_LightScaleTexture( byte *in, int inwidth, int inheight, qboolean only_gamma )
 {
-	// [QL] quakelive_steam.exe 0x444d00: with the colour correction the textures are left as they
-	// are, neither gamma nor r_intensity
+	// [QL] 0x444d00: with the colour correction, neither gamma nor r_intensity
 	if ( r_colorCorrectActive->integer ) {
 		return;
 	}
@@ -619,8 +618,7 @@ static void Upload32( byte *data, int x, int y, int width, int height, image_t *
 	byte		*resampledBuffer = NULL;
 	int			scaled_width, scaled_height;
 
-	// [QL] quakelive_steam.exe 0x4452f0 leaves every image at its own size when the card takes any
-	// size; only a mipmapped one on an old card still goes to a power of two
+	// [QL] 0x4452f0: every image keeps its size when the card allows it
 	if ( ( image->flags & IMGFLAG_NOSCALE ) || !mipmap || textureNonPowerOfTwo ) {
 		//
 		// keep original dimensions
@@ -860,8 +858,7 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 
 	GL_Bind( image );
 	{
-		// [ioquakelive] the upload to the GPU, timed apart from the decoding: it goes through the
-		// GL context, so it stays on the main thread
+		// [ioquakelive] the upload, timed apart: it stays on the GL thread
 		int64_t uploadStart = ri.Microseconds();
 
 		Upload32( pic, 0, 0, image->width, image->height, image, qfalse ); // subImage = qfalse
@@ -1033,14 +1030,8 @@ void R_ImageLoadStatsReport( void ) {
 
 TEXTURES DECODED AHEAD OF TIME
 
-[ioquakelive] Of what loading a map's textures costs, 94% is decoding, and that is pure
-CPU: 0.86 s out of 0.92 on campgrounds, against 0.05 s reading from the pk3 and 0.01 s
-uploading. So the main thread goes on reading the files - the filesystem is not thread
-safe - and the workers decode while it carries on registering shaders.
-
-Reading ahead means knowing what to read, which is not known until the map has been
-loaded once: at the end of every load the list of what was asked for is written out and
-the next load of that map uses it. A window caps how many decoded images are held at once.
+[ioquakelive] the workers decode what the last load of the map asked for, while the main
+thread reads the files: the filesystem is only safe from there
 
 ==============================================================================
 */
@@ -1194,8 +1185,7 @@ static qboolean R_PrefetchTake( const char *name, byte **pic, int *width, int *h
 			return qfalse;	// let the usual path load it
 		}
 		bytes = entry->width * entry->height * 4;
-		// [ioquakelive] what came in ahead of time is recorded too, or the list shrinks on every
-		// load until it is empty
+		// [ioquakelive] recorded too, or the list shrinks on every load
 		Q_strncpyz( r_lastImageName, entry->name, sizeof( r_lastImageName ) );
 		Q_strncpyz( takenName, entry->name, sizeof( takenName ) );
 		*localName = takenName;
@@ -1375,8 +1365,7 @@ image_t	*R_FindImageFile( const char *name, imgFlags_t flags )
 	//
 	// load the pic from disk
 	//
-	// [ioquakelive] reading and decoding are measured apart from uploading: the first is CPU and
-	// can be spread across threads, the second goes through the GL context and cannot move
+	// [ioquakelive] decoding is timed apart from uploading: only the first can leave this thread
 	{
 		int64_t start = ri.Microseconds();
 
@@ -1719,10 +1708,7 @@ void R_SetColorMappings( void ) {
 		return;
 	}
 
-	// [QL] quakelive_steam.exe 0x4475d0: the colour correction gives the overbright in any window;
-	// without it the overbright needs the gamma ramp and full screen, as in Quake 3. Here the frame
-	// buffer counts as well, because then the gamma pass is the one applying it. The colour bits cap
-	// it, r_mapOverBrightBits doesn't
+	// [QL] 0x4475d0: in any window when a pass gives it, capped by the colour bits only
 	postGamma = ( r_colorCorrectActive->integer || fboEnabled ) ? qtrue : qfalse;
 
 	tr.overbrightBits = r_overBrightBits->integer;

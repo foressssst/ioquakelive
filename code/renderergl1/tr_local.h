@@ -1051,11 +1051,11 @@ enum {
 	SCREENSHOT_LEVELSHOT = 1<<5	// [QL] the 128x128 thumbnail, from the corrected frame
 };
 
-// all state modified by the back end is separated
-// from the front end state
 // [ioquakelive] the most frames the GPU may have queued
 #define MAX_FRAME_FENCES 4
 
+// all state modified by the back end is separated
+// from the front end state
 typedef struct {
 	trRefdef_t	refdef;
 	viewParms_t	viewParms;

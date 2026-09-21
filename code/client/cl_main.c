@@ -2666,9 +2666,7 @@ void CL_InitRef(void) {
     // stays as the backup
     cl_renderer = Cvar_Get("cl_renderer", "opengl1", CVAR_ARCHIVE | CVAR_LATCH);
 
-    // [ioquakelive] when the default changes, whoever was on the old one moves with it, and whoever
-    // picked another renderer keeps it: cl_rendererDefault remembers the default the config saw.
-    // Before it, every config saved "opengl2", since there was no other renderer to pick
+    // [ioquakelive] a config on the old default moves to the new one; another choice is kept
     {
         cvar_t* seen = Cvar_Get("cl_rendererDefault", "opengl2", CVAR_ARCHIVE);
 

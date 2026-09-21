@@ -20,11 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 //
-// tr_window.c -- [ioquakelive] the window's cvars and Quake Live's video modes
-//
-// This engine's renderer creates the window (sdl/sdl_glimp.c is built into it), so the cvars
-// that code reads are registered here, with retail's values, and so is the mode table it asks
-// about. The other renderer carries the same in its own tr_init.c.
+// tr_window.c -- [ioquakelive] the window's cvars and quake live's video modes
 //
 
 #include "tr_local.h"
@@ -102,9 +98,7 @@ static const int s_numVidModes = ARRAY_LEN( r_vidModes );
 ===============
 R_AspectRatioOf
 
-[QL] quakelive_steam.exe 0x448010: the shape of a size that isn't in the table, for
-r_aspectRatio. The thresholds are 16/9 and 16/10 worked out as floats and 4/3, so an exact 16:9
-size lands on 16:9.
+[QL] 0x448010: the thresholds are 16/9 and 16/10 as floats, and 4/3
 ===============
 */
 int R_AspectRatioOf( int width, int height ) {
@@ -126,8 +120,7 @@ int R_AspectRatioOf( int width, int height ) {
 ===============
 R_GetModeInfo
 
-[QL] 0x448010: mode -1 takes r_customWidth and r_customHeight in full screen and
-r_windowedWidth and r_windowedHeight in a window
+[QL] 0x448010: mode -1 is r_custom* in full screen and r_windowed* in a window
 ===============
 */
 qboolean R_GetModeInfo( int *width, int *height, float *windowAspect, int *aspectRatio, int mode, qboolean fullscreen ) {

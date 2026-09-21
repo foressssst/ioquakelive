@@ -20,11 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 //
-// tr_font.c -- [QL] Quake Live's TrueType text: fontstash's atlas and the engine's entry points
-//
-// Retail draws its text through fontstash (renderercommon/tr_fontstash.c). The glyphs live in
-// one GL_ALPHA atlas, as in retail, and each glyph goes out as a quad through the 2D path with
-// the colour of RE_SetColor, so texture alpha times vertex colour gives coloured, smoothed text.
+// tr_font.c -- [QL] truetype text through fontstash, in one GL_ALPHA atlas as in retail
 //
 
 #include "tr_local.h"
@@ -259,9 +255,7 @@ static int R_Font_LoadTTF( const char *path, const char *name ) {
 ===============
 R_InitFonts
 
-[QL] retail's R_InitFonts: the three fonts of the menus, and droidsansfallbackfull for the
-glyphs they lack. Retail also reads a fallback from the Windows fonts folder; here only the
-game's files are read.
+[QL] the menus' three fonts, and droidsansfallbackfull for the glyphs they lack
 ===============
 */
 void R_InitFonts( void ) {
@@ -472,9 +466,7 @@ void RE_Font_DrawString( int x, int y, const char *text, int fontIndex, float sc
 ===============
 RE_TextBounds
 
-[QL] quakelive_steam.exe 0x43cc50. extents[0..3] is fonsTextBounds' box at the origin and
-extents[4] the font's ascender at this size (0x43ccb8, 0x441c50): the game modules take a
-text's width from maxx - minx and its height from extents[4].
+[QL] 0x43cc50: extents[4] is the ascender at this size, the height the game uses (0x43ccb8)
 ===============
 */
 void RE_TextBounds( const char *text, int start, int fontIndex, float scale, int limit, float *extents ) {

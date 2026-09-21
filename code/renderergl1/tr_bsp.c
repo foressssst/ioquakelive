@@ -118,8 +118,7 @@ void R_ColorShiftLightingBytes( const byte in[4], byte out[4], qboolean hasAlpha
 	// shift the color data based on overbright range
 	shift = r_mapOverBrightBits->integer - tr.overbrightBits;
 
-	// [QL] retail no longer caps the overbright at r_mapOverBrightBits (0x4475d0), so the shift can
-	// come out negative; it doesn't darken then, it stays at 0
+	// [QL] 0x4475d0 no longer caps the overbright, so a negative shift stays at 0
 	if ( shift < 0 ) {
 		shift = 0;
 	}
@@ -128,8 +127,7 @@ void R_ColorShiftLightingBytes( const byte in[4], byte out[4], qboolean hasAlpha
 	g = in[1] << shift;
 	b = in[2] << shift;
 
-	// normalize by color instead of saturating to white; [QL] quakelive_steam.exe 0x4388f0 brings the
-	// brightest channel down to r_mapOverBrightCap, not 255
+	// normalize by color instead of saturating to white; [QL] to r_mapOverBrightCap (0x4388f0)
 	if ( ( r | g | b ) > 255 ) {
 		int max = r > g ? r : g;
 		max = max > b ? max : b;
@@ -2307,8 +2305,7 @@ qboolean RE_GetEntityToken( char *buffer, int size ) {
 ===============
 R_LoadAdvertisements
 
-[QL] lump 17 of a Quake Live map: the surfaces a match's advertisements are drawn on. The cgame
-asks for them with Get_Advertisements and puts its own shaders on them.
+[QL] lump 17: the surfaces the cgame draws a match's advertisements on
 ===============
 */
 static void R_LoadAdvertisements( const lump_t *l ) {
@@ -2351,8 +2348,7 @@ static void R_LoadAdvertisements( const lump_t *l ) {
 ===============
 RE_Get_Advertisements
 
-[QL] the cgame reads the surfaces to draw an advertisement on: four corners, the normal and the
-cell the surface belongs to, sixteen floats each.
+[QL] sixteen floats a surface: four corners, the normal and its cell
 ===============
 */
 void RE_Get_Advertisements( int *num, float *verts, char shaders[][MAX_QPATH] ) {
@@ -2404,8 +2400,7 @@ void RE_LoadWorldMap( const char *name ) {
 		ri.Error( ERR_DROP, "ERROR: attempted to redundantly load world map" );
 	}
 
-	// [ioquakelive] which map it is, is known by this point, so reading its textures ahead
-	// starts here (see the prefetch in tr_image.c)
+	// [ioquakelive] the map is known here, so its textures start decoding ahead
 	R_PrefetchStart( name );
 
 	// set default sun direction to be used if it isn't
