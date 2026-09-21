@@ -63,8 +63,6 @@ cvar_t	*r_greyscale;
 cvar_t	*r_dither;
 cvar_t	*r_presentBits;
 
-static cvar_t *r_ignorehwgamma;
-
 cvar_t  *r_teleporterFlash;
 
 cvar_t	*r_fastsky;
@@ -258,7 +256,7 @@ static void R_ClearSymTables( void )
 
 // for modular renderer
 #ifdef USE_RENDERER_DLOPEN
-void QDECL Com_Error( errorParm_t code, const char *fmt, ... )
+void QDECL Com_Error( int code, const char *fmt, ... )
 {
 	char buf[ 4096 ];
 	va_list	argptr;
