@@ -1524,9 +1524,18 @@ void IN_Frame(void) {
     // update isFullscreen since it might of changed since the last vid_restart
     cls.glconfig.isFullscreen = Cvar_VariableIntegerValue("r_fullscreen") != 0;
 
-    if (!cls.glconfig.isFullscreen && (Key_GetCatcher() & KEYCATCH_CONSOLE)) {
-        // Console is down in windowed mode
-        IN_DeactivateMouse(cls.glconfig.isFullscreen);
+    if (Key_GetCatcher() & KEYCATCH_CONSOLE) {
+        // [ioquakelive] The console lets go of the mouse, fullscreen included, because the
+        // arrow the system draws is the one that clicks its links, and it is told where that
+        // arrow is for the same reason the menus are.
+        IN_DeactivateMouse(qfalse);
+
+        if (SDL_GetMouseFocus() == SDL_window) {
+            int mx, my;
+
+            SDL_GetMouseState(&mx, &my);
+            Com_QueueEvent(in_eventTime, SE_MOUSE_ABS, mx, my, 0, NULL);
+        }
     } else if (Key_GetCatcher() & KEYCATCH_UI) {
         // [ioquakelive] A menu is up. Quake Live has no cursor of its own out there: it
         // lets go of the mouse and you move the one the system draws, fullscreen included,

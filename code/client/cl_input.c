@@ -461,7 +461,9 @@ void CL_MouseAbsEvent(int x, int y) {
     if (cg_ignoreMouseInput->integer) {
         return;
     }
-    if (Key_GetCatcher() & KEYCATCH_UI) {
+    if (Key_GetCatcher() & KEYCATCH_CONSOLE) {
+        Con_MousePosition(x, y);  // [ioquakelive] its links are clicked with it
+    } else if (Key_GetCatcher() & KEYCATCH_UI) {
         VM_Call(uivm, UI_MOUSE_POSITION, x, y);
     }
 }

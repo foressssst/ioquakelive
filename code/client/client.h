@@ -484,6 +484,12 @@ void Con_DrawNotify(void);
 void Con_ClearNotify(void);
 void Con_RunConsole(void);
 void Con_DrawConsole(void);
+
+// [ioquakelive] the links the console draws
+void Con_MousePosition(int x, int y);
+qboolean Con_MouseClick(void);
+qboolean Con_LinkPromptActive(void);
+qboolean Con_LinkPromptKey(int key);
 void Con_PageUp(void);
 void Con_PageDown(void);
 void Con_Top(void);

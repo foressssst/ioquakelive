@@ -58,6 +58,15 @@ int g_console_field_width = 119;
 #define DRAWHELP_ATTRIBS_BIT 8
 #define DRAWHELP_MAX 15
 
+// [ioquakelive] a link the console drew this frame, and where it drew it
+#define CON_MAX_LINKS 64
+#define CON_MAX_URL 512
+
+typedef struct {
+    float x, y, w, h;
+    char url[CON_MAX_URL];
+} conLink_t;
+
 typedef struct {
     qboolean initialized;
 
@@ -103,6 +112,15 @@ typedef struct {
     int markStartX;  // selection start
     int markStartY;
     qboolean swallowCtrlC;  // the copy key's char event must not clear the input line
+
+    // [ioquakelive] links
+    conLink_t links[CON_MAX_LINKS];
+    int numLinks;                 // filled while drawing, read by a click
+    float mouseX, mouseY;         // the system pointer, in screen pixels
+    qboolean mouseSeen;
+    char linkAsked[CON_MAX_URL];  // the link the prompt is asking about
+    vec4_t promptOpen;            // x, y, w, h of each answer
+    vec4_t promptCancel;
 } console_t;
 
 console_t con;
@@ -354,6 +372,237 @@ static void Con_GetMetrics(conMetrics_t* m) {
         m->adv = m->cellW;
     }
     m->asc = one[4] > 0.0f ? one[4] : m->cellH * 0.8f;
+}
+
+/*
+===============================================================================
+
+[ioquakelive] LINKS IN THE CONSOLE
+
+Retail has no links: its front end was a browser and its console was only a
+console. Here an https link printed to the console is underlined and can be
+clicked, and the click asks before leaving the game, because the address goes to
+the system's browser and the line it came from may have been written by a server.
+
+Only https is marked, which is all CL_OpenURL opens. The rows are monospace, so
+a column is one advance wide and a link's rectangle is its first column, its
+width in columns and the row's height.
+
+===============================================================================
+*/
+
+// what a link may carry once "https://" has been seen
+static qboolean Con_LinkChar(int c) {
+    return (c > ' ' && c < 127 && c != '"' && c != '\'' && c != '\\' && c != '<' && c != '>') ? qtrue : qfalse;
+}
+
+/*
+================
+Con_LinkLength
+
+How many columns from the given one are a link, or 0. Trailing punctuation is
+left out, so a link at the end of a sentence keeps the full stop out of the
+address.
+================
+*/
+static int Con_LinkLength(const short* text, int width, int start) {
+    static const char scheme[] = "https://";
+    int i, len;
+
+    for (i = 0; scheme[i]; i++) {
+        if (start + i >= width || (text[start + i] & 0xff) != scheme[i]) {
+            return 0;
+        }
+    }
+    len = i;
+    while (start + len < width && Con_LinkChar(text[start + len] & 0xff)) {
+        len++;
+    }
+    while (len > i && strchr(".,;:!?)]}", text[start + len - 1] & 0xff) != NULL) {
+        len--;
+    }
+    return len > i ? len : 0;
+}
+
+/*
+================
+Con_RowLinks
+
+Underlines the links of one drawn row and remembers where they landed. x0 is the
+row's left edge and y its baseline, both in pixels.
+================
+*/
+static void Con_RowLinks(const short* text, int width, float x0, float y, float adv, float asc, float cellH) {
+    static const vec4_t underline = {0.86f, 0.86f, 0.90f, 0.90f};
+    int x, len, i;
+
+    for (x = 0; x < width; x++) {
+        len = Con_LinkLength(text, width, x);
+        if (!len) {
+            continue;
+        }
+        if (con.numLinks < CON_MAX_LINKS) {
+            conLink_t* l = &con.links[con.numLinks++];
+
+            l->x = x0 + x * adv;
+            l->y = y - asc;
+            l->w = len * adv;
+            l->h = cellH;
+            for (i = 0; i < len && i < CON_MAX_URL - 1; i++) {
+                l->url[i] = (char)(text[x + i] & 0xff);
+            }
+            l->url[i] = '\0';
+        }
+        Con_FillRectPx(x0 + x * adv, y + 2.0f, len * adv, 1.0f, underline);
+        x += len - 1;
+    }
+}
+
+/*
+================
+Con_MousePosition
+
+Where the system pointer is while the console is down. The console does not grab
+the mouse, so the arrow on screen is the system's and this is where it is.
+================
+*/
+void Con_MousePosition(int x, int y) {
+    con.mouseX = (float)x;
+    con.mouseY = (float)y;
+    con.mouseSeen = qtrue;
+}
+
+static void Con_SetRect(vec4_t r, float x, float y, float w, float h) {
+    r[0] = x;
+    r[1] = y;
+    r[2] = w;
+    r[3] = h;
+}
+
+static qboolean Con_MouseInRect(float x, float y, float w, float h) {
+    return (con.mouseSeen && con.mouseX >= x && con.mouseX < x + w &&
+            con.mouseY >= y && con.mouseY < y + h)
+               ? qtrue
+               : qfalse;
+}
+
+qboolean Con_LinkPromptActive(void) {
+    return con.linkAsked[0] ? qtrue : qfalse;
+}
+
+static void Con_OpenAskedLink(void) {
+    char url[CON_MAX_URL];
+
+    Q_strncpyz(url, con.linkAsked, sizeof(url));
+    con.linkAsked[0] = '\0';
+    CL_OpenURL(url);
+}
+
+/*
+================
+Con_LinkPromptKey
+
+The prompt takes every key while it is up: enter or a click on Open leaves the
+game, anything else closes it.
+================
+*/
+qboolean Con_LinkPromptKey(int key) {
+    if (!Con_LinkPromptActive()) {
+        return qfalse;
+    }
+    if (key == K_ENTER || key == K_KP_ENTER || key == 'y') {
+        Con_OpenAskedLink();
+    } else if (key == K_MOUSE1) {
+        if (Con_MouseInRect(con.promptOpen[0], con.promptOpen[1], con.promptOpen[2], con.promptOpen[3])) {
+            Con_OpenAskedLink();
+        } else if (Con_MouseInRect(con.promptCancel[0], con.promptCancel[1], con.promptCancel[2], con.promptCancel[3])) {
+            con.linkAsked[0] = '\0';
+        }
+    } else {
+        con.linkAsked[0] = '\0';
+    }
+    return qtrue;
+}
+
+/*
+================
+Con_MouseClick
+
+A click on a link raises the prompt. Nothing opens from here.
+================
+*/
+qboolean Con_MouseClick(void) {
+    int i;
+
+    for (i = 0; i < con.numLinks; i++) {
+        const conLink_t* l = &con.links[i];
+
+        if (Con_MouseInRect(l->x, l->y, l->w, l->h)) {
+            Q_strncpyz(con.linkAsked, l->url, sizeof(con.linkAsked));
+            return qtrue;
+        }
+    }
+    return qfalse;
+}
+
+/*
+================
+Con_DrawLinkPrompt
+
+The question a clicked link opens, over the console: the address, and the two
+answers. The one under the pointer is lit.
+================
+*/
+static void Con_DrawLinkPrompt(void) {
+    static const vec4_t dim = {0.0f, 0.0f, 0.0f, 0.55f};
+    conMetrics_t m;
+    float w, h, x, y, row, bw, bh, by;
+    int i;
+
+    if (!Con_LinkPromptActive()) {
+        return;
+    }
+    Con_GetMetrics(&m);
+
+    row = m.cellH;
+    w = cls.glconfig.vidWidth * 0.72f;
+    h = row * 7.0f;
+    x = (cls.glconfig.vidWidth - w) * 0.5f;
+    y = (cls.glconfig.vidHeight - h) * 0.5f;
+
+    Con_FillRectPx(0, 0, (float)cls.glconfig.vidWidth, (float)cls.glconfig.vidHeight, dim);
+    Con_FillRectPx(x, y, w, h, con_colors[CC_BG].color);
+    Con_FillRectPx(x, y, w, 2.0f, con_colors[CC_BORDER].color);
+    Con_FillRectPx(x, y + h - 2.0f, w, 2.0f, con_colors[CC_BORDER].color);
+
+    re.SetColor(con_colors[CC_TEXT].color);
+    re.Font_DrawString((int)(x + m.adv), (int)(y + row * 1.6f), "You are about to leave the game and open this link.",
+                       CON_FONT_MONO, m.fontSize, -1, NULL, CON_TEXT_LITERAL);
+    re.SetColor(con_colors[CC_VALUE].color);
+    re.Font_DrawString((int)(x + m.adv), (int)(y + row * 3.0f), con.linkAsked, CON_FONT_MONO, m.fontSize,
+                       (int)((w - m.adv * 2.0f) / m.adv), NULL, CON_TEXT_LITERAL);
+
+    bw = m.adv * 10.0f;
+    bh = row * 1.2f;
+    by = y + h - row * 2.0f;
+    Con_SetRect(con.promptOpen, x + w - bw * 2.0f - m.adv * 3.0f, by, bw, bh);
+    Con_SetRect(con.promptCancel, x + w - bw - m.adv, by, bw, bh);
+
+    for (i = 0; i < 2; i++) {
+        const float* r = i ? con.promptCancel : con.promptOpen;
+        const char* label = i ? "  CANCEL" : "   OPEN";
+        const qboolean lit = Con_MouseInRect(r[0], r[1], r[2], r[3]);
+
+        Con_FillRectPx(r[0], r[1], r[2], r[3], lit ? con_colors[CC_HL].color : con_colors[CC_MKBG].color);
+        re.SetColor(lit ? con_colors[CC_MKTEXT].color : con_colors[CC_TEXT].color);
+        re.Font_DrawString((int)r[0], (int)(r[1] + m.asc + (bh - m.cellH) * 0.5f), label, CON_FONT_MONO, m.fontSize,
+                           -1, NULL, CON_TEXT_LITERAL);
+    }
+
+    re.SetColor(con_colors[CC_HELP].color);
+    re.Font_DrawString((int)(x + m.adv), (int)(by + m.asc + (bh - m.cellH) * 0.5f), "enter opens it, escape cancels",
+                       CON_FONT_MONO, m.fontSize, -1, NULL, CON_TEXT_LITERAL);
+    re.SetColor(NULL);
 }
 
 /*
@@ -1770,6 +2019,8 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
         }
 
         Con_DrawRuns(&m, x0, y, chars, ids, count, qfalse);
+
+        Con_RowLinks(text, count, x0, y, m.adv, m.asc, m.cellH);
     }
 
     Con_DrawInputCNQ3(&m);
@@ -1859,11 +2110,10 @@ void Con_DrawSolidConsole(float frac) {
     currentColor = ColorIndex(COLOR_WHITE);
 
     // [CNQ3] mark mode and the search marker, only drawn once used
+    // [ioquakelive] the metrics are wanted for the links too, so they are always taken
+    Con_GetMetrics(&m);
+    haveMetrics = qtrue;
     drawMark = Con_MarkBounds(&markStartX, &markStartY, &markEndX, &markEndY);
-    if (drawMark || con.searchStarted) {
-        Con_GetMetrics(&m);
-        haveMetrics = qtrue;
-    }
     con.rowsVisible = 0;
 
     for (i = 0; i < rows; i++, y = (int)(y - CON_CELL_HEIGHT * s), row--) {
@@ -1924,6 +2174,9 @@ void Con_DrawSolidConsole(float frac) {
 
         re.Font_DrawString((int)(CON_CELL_WIDTH * s + con.xadjust), y, line, CON_FONT_MONO,
                            CON_CELL_WIDTH * s * CON_FONT_SCALE, -1, NULL, 0);
+
+        Con_RowLinks(text, con.linewidth, CON_CELL_WIDTH * s + con.xadjust, (float)y, m.adv, m.asc, m.cellH);
+        re.SetColor(g_color_table[ColorIndex(currentColor)]);
     }
 
     // draw the input prompt, user text, and cursor if desired
@@ -1941,16 +2194,21 @@ void Con_DrawConsole(void) {
     // check for console width changes from a vid mode change
     Con_CheckResize();
 
+    // [ioquakelive] the link table is this frame's
+    con.numLinks = 0;
+
     // if disconnected, render console full screen
     if (clc.state == CA_DISCONNECTED) {
         if (!(Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CGAME))) {
             Con_DrawSolidConsole(1.0);
+            Con_DrawLinkPrompt();
             return;
         }
     }
 
     if (con.displayFrac) {
         Con_DrawSolidConsole(con.displayFrac);
+        Con_DrawLinkPrompt();
     } else {
         // draw notify lines
         if (clc.state == CA_ACTIVE) {
@@ -1974,6 +2232,7 @@ void Con_RunConsole(void) {
         con.finalFrac = con_height->value;
     } else {
         con.finalFrac = 0;
+        con.linkAsked[0] = '\0';  // [ioquakelive] a closed console asks nothing
     }
 
     // scroll towards the destination height

@@ -645,6 +645,11 @@ Handles history and console scrollback
 ====================
 */
 void Console_Key(int key) {
+    // [ioquakelive] a click on a link asks before leaving the game
+    if (key == K_MOUSE1 && Con_MouseClick()) {
+        return;
+    }
+
     // [CNQ3] mark mode gets the keys first
     if (Con_HandleMarkMode(keys[K_CTRL].down, keys[K_SHIFT].down, key)) {
         return;
@@ -1370,6 +1375,11 @@ void CL_KeyDownEvent(int key, unsigned time) {
     if (keys[K_SHIFT].down && key == K_ESCAPE) {
         Con_ToggleConsole_Forced();
         Key_ClearStates();
+        return;
+    }
+
+    // [ioquakelive] the link prompt takes every key while it is up, Escape included
+    if ((Key_GetCatcher() & KEYCATCH_CONSOLE) && Con_LinkPromptKey(key)) {
         return;
     }
 
