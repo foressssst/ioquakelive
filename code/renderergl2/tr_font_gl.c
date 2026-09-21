@@ -420,7 +420,7 @@ static void R_FontListFiles(const char *extension) {
     ri.FS_FreeFileList(files);
 }
 
-// fontlist: the fonts loaded, then the ones cvars can name, and where a player's own go
+// fontlist: the fonts loaded, then the ones a cvar can name
 void R_FontList_f(void) {
     int i;
 
@@ -431,9 +431,6 @@ void R_FontList_f(void) {
     ri.Printf(PRINT_ALL, "Fonts to choose from, by name without the extension:\n");
     R_FontListFiles(".ttf");
     R_FontListFiles(".otf");
-
-    ri.Printf(PRINT_ALL, "Put your own .ttf or .otf fonts in %s%cbaseq3%cfonts\n",
-              ri.Cvar_Get("fs_homepath", "", CVAR_INIT | CVAR_PROTECTED)->string, PATH_SEP, PATH_SEP);
 }
 
 // -------------------------------------------------------------------------

@@ -1049,19 +1049,6 @@ qboolean FS_IsExt(const char* filename, const char* ext, int namelen) {
 
 /*
 ===========
-FS_IsFontExt
-
-TrueType and OpenType fonts only letter the client's own HUD (RE_Font_Register), so like
-configs and menus they may be read from a directory on a pure server: a player can drop
-fonts in baseq3/fonts without them being refused.
-===========
-*/
-static qboolean FS_IsFontExt(const char* filename, int namelen) {
-	return FS_IsExt(filename, ".ttf", namelen) || FS_IsExt(filename, ".otf", namelen);
-}
-
-/*
-===========
 FS_IsDemoExt
 
 Return qtrue if filename has a demo extension
@@ -1270,7 +1257,6 @@ long FS_FOpenFileReadDir(const char* filename, searchpath_t* search, fileHandle_
 				!FS_IsExt(filename, ".menu", len) &&  // menu files
 				!FS_IsExt(filename, ".game", len) &&  // menu files
 				!FS_IsExt(filename, ".dat", len) &&   // for journal files
-				!FS_IsFontExt(filename, len) &&       // HUD fonts
 				!FS_IsDemoExt(filename, len))         // demos
 			{
 				*file = 0;
@@ -2182,8 +2168,8 @@ char** FS_ListFilteredFiles(const char* path, const char* extension, char* filte
 			char** sysFiles;
 			char* name;
 
-			// don't scan directories for files if we are pure or restricted, fonts aside
-			if (fs_numServerPaks && !allowNonPureFilesOnDisk && !FS_IsFontExt(extension, extensionLength)) {
+			// don't scan directories for files if we are pure or restricted
+			if (fs_numServerPaks && !allowNonPureFilesOnDisk) {
 				continue;
 			} else {
 				netpath = FS_BuildOSPath(search->dir->path, search->dir->gamedir, path);
@@ -3200,15 +3186,6 @@ static void FS_Startup(const char* gameName) {
 		FS_CreatePath(fs_homepath->string);
 		FS_AddGameDirectory(fs_homepath->string, gameName);
 	}
-
-#ifndef DEDICATED
-	// where a player's own fonts go, ready before they look for it (FS_IsFontExt). This
-	// prepares a directory rather than adding a search path, so it stays outside the test
-	// above: by default fs_homepath is the install folder and that test does not fire.
-	if (fs_homepath->string[0]) {
-		FS_CreatePath(FS_BuildOSPath(fs_homepath->string, gameName, "fonts/"));
-	}
-#endif
 
 	// check for additional base game so mods can be based upon other mods
 	if (fs_basegame->string[0] && Q_stricmp(fs_basegame->string, gameName)) {
