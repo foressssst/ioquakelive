@@ -844,6 +844,39 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
 GLimp_StartDriverAndSetMode
 ===============
 */
+#if defined(__APPLE__) && defined(USE_VULKAN_API)
+static qboolean vkBundledLibrary;
+
+/*
+===============
+VKimp_LoadBundledLibrary
+
+[ioquakelive] MoltenVK travels inside the app, in Contents/Frameworks, where SDL's own search does
+not look. Without it there, SDL's search still runs when the window is made.
+===============
+*/
+static void VKimp_LoadBundledLibrary(void) {
+    char path[MAX_OSPATH];
+    char* base;
+
+    if (vkBundledLibrary)
+        return;
+
+    // Contents/Resources/ inside a bundle
+    base = SDL_GetBasePath();
+    if (!base)
+        return;
+
+    Com_sprintf(path, sizeof(path), "%s../Frameworks/libMoltenVK.dylib", base);
+    SDL_free(base);
+
+    if (SDL_Vulkan_LoadLibrary(path) == 0) {
+        vkBundledLibrary = qtrue;
+        ri.Printf(PRINT_ALL, "...using %s\n", path);
+    }
+}
+#endif
+
 static qboolean GLimp_StartDriverAndSetMode(int mode, int fullscreen, qboolean noborder, qboolean gl3Core) {
     rserr_t err;
 
@@ -866,6 +899,12 @@ static qboolean GLimp_StartDriverAndSetMode(int mode, int fullscreen, qboolean n
         r_fullscreen->modified = qfalse;
         fullscreen = qfalse;
     }
+
+#if defined(__APPLE__) && defined(USE_VULKAN_API)
+    // before the window, which loads SDL's pick if nothing is loaded yet
+    if (glimp_vulkan)
+        VKimp_LoadBundledLibrary();
+#endif
 
     err = GLimp_SetMode(mode, fullscreen, noborder, gl3Core);
 
@@ -1271,6 +1310,15 @@ qboolean VK_CreateSurface(VkInstance instance, VkSurfaceKHR* surface) {
 
 void VKimp_Shutdown(qboolean unloadDLL) {
     (void)unloadDLL;
+
+#ifdef __APPLE__
+    // our reference goes first: the window still holds SDL's, and the video goes down after
+    if (vkBundledLibrary) {
+        SDL_Vulkan_UnloadLibrary();
+        vkBundledLibrary = qfalse;
+    }
+#endif
+
     glimp_vulkan = qfalse;
     qvkGetInstanceProcAddr = NULL;
     GLimp_Shutdown();

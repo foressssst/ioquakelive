@@ -193,6 +193,19 @@ if [ -f "${BUILT_PRODUCTS_DIR}/libSDL2-2.0.0.dylib" ]; then
     bundle_dep "${BUILT_PRODUCTS_DIR}/libSDL2-2.0.0.dylib"
 fi
 
+# MoltenVK, for the Vulkan renderer: the engine dlopens it by its path in
+# Frameworks/, so nothing links against it, and it is copied untouched -
+# rewriting its id would break the signature it ships with, which is all an
+# arm64 Mac has to go on when the bundle is not signed. Its licence travels
+# beside it.
+if [ -f "${BUILT_PRODUCTS_DIR}/libMoltenVK.dylib" ]; then
+	cp "${BUILT_PRODUCTS_DIR}/libMoltenVK.dylib" "${FRAMEWORKS}/libMoltenVK.dylib"
+	chmod 755 "${FRAMEWORKS}/libMoltenVK.dylib"
+	if [ -f "${BUILT_PRODUCTS_DIR}/MoltenVK-LICENSE.txt" ]; then
+		cp "${BUILT_PRODUCTS_DIR}/MoltenVK-LICENSE.txt" "${CONTENTS}/Resources/MoltenVK-LICENSE.txt"
+	fi
+fi
+
 # The app must ship exactly one real SDL2. Homebrew's "sdl2" is now
 # sdl2-compat (the SDL2 ABI over a dlopen'd libSDL3, invisible to otool),
 # which dies on user machines with "Failed loading SDL3 library." Refuse to

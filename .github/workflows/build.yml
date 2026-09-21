@@ -223,6 +223,22 @@ jobs:
         # make-macosx-app.sh picks up pak01.pk3 from this path automatically.
         cp shared/baseq3/pak01.pk3 build/release-darwin-arm64/baseq3/pak01.pk3
         ls -l build/release-darwin-arm64/
+    - name: Fetch MoltenVK
+      # The Vulkan renderer runs over Metal through MoltenVK (Apache 2.0). The
+      # official universal build, pinned by version and hash; it wants macOS
+      # 12, and on 11 the engine falls back to opengl1 by itself.
+      env:
+        MOLTENVK_VERSION: v1.4.2
+        MOLTENVK_SHA256: f95765a6229cb7b915990a2890ce12ebe36a730b021545d3d52ae69ce4c4024e
+      run: |
+        set -euo pipefail
+        curl -fsSL -o MoltenVK-macos.tar \
+          "https://github.com/KhronosGroup/MoltenVK/releases/download/${MOLTENVK_VERSION}/MoltenVK-macos.tar"
+        echo "${MOLTENVK_SHA256}  MoltenVK-macos.tar" | shasum -a 256 -c -
+        tar -xf MoltenVK-macos.tar \
+          MoltenVK/MoltenVK/dynamic/dylib/macOS/libMoltenVK.dylib MoltenVK/LICENSE
+        cp MoltenVK/MoltenVK/dynamic/dylib/macOS/libMoltenVK.dylib build/release-darwin-arm64/
+        cp MoltenVK/LICENSE build/release-darwin-arm64/MoltenVK-LICENSE.txt
     - name: Import signing certificate
       env:
         CERT_B64: ${{ secrets.MACOS_CERTIFICATE_P12 }}

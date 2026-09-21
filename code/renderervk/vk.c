@@ -1275,6 +1275,9 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugReportFlagsEXT flags
 #endif
 
 
+// [ioquakelive] provisional, so its name lives in vulkan_beta.h, which is not vendored
+#define VK_KHR_PORTABILITY_SUBSET_NAME "VK_KHR_portability_subset"
+
 static qboolean used_instance_extension( const char *ext )
 {
 	const char *u;
@@ -1674,7 +1677,7 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 
 	// create VkDevice
 	{
-		const char *device_extension_list[12];
+		const char *device_extension_list[16];
 		uint32_t device_extension_count;
 		const char *ext, *end;
 		char *str;
@@ -1690,6 +1693,7 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 		qboolean memoryRequirements2 = qfalse;
 		qboolean debugMarker = qfalse;
 		qboolean antiLag = qfalse;
+		qboolean portabilitySubset = qfalse;
 		qboolean lowLatency2 = qfalse;
 		qboolean presentId = qfalse;
 		qboolean timelineSemaphore = qfalse;
@@ -1721,6 +1725,8 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 				debugMarker = qtrue;
 			} else if ( strcmp( ext, VK_AMD_ANTI_LAG_EXTENSION_NAME ) == 0 ) {
 				antiLag = qtrue;
+			} else if ( strcmp( ext, VK_KHR_PORTABILITY_SUBSET_NAME ) == 0 ) {
+				portabilitySubset = qtrue;
 			} else if ( strcmp( ext, VK_NV_LOW_LATENCY_2_EXTENSION_NAME ) == 0 ) {
 				lowLatency2 = qtrue;
 			} else if ( strcmp( ext, VK_KHR_PRESENT_ID_EXTENSION_NAME ) == 0 ) {
@@ -1776,6 +1782,12 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 		if ( debugMarker ) {
 			device_extension_list[ device_extension_count++ ] = VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
 			vk.debugMarkers = qtrue;
+		}
+
+		// [ioquakelive] a device that only does part of Vulkan, like MoltenVK over Metal, says so with
+		// this one, and the specification wants it enabled whenever it is there
+		if ( portabilitySubset ) {
+			device_extension_list[ device_extension_count++ ] = VK_KHR_PORTABILITY_SUBSET_NAME;
 		}
 
 		// [ioquakelive] the anti-lag needs its feature turned on, so it is decided before the device
