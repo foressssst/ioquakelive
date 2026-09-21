@@ -2662,11 +2662,41 @@ void CL_InitRef(void) {
     Com_Printf("----- Initializing Renderer ----\n");
 
 #ifdef USE_RENDERER_DLOPEN
-    cl_renderer = Cvar_Get("cl_renderer", "opengl2", CVAR_ARCHIVE | CVAR_LATCH);
+    // [ioquakelive] the renderer of retail's lineage, on Quake3e's, is the default; renderergl2
+    // stays as the backup
+    cl_renderer = Cvar_Get("cl_renderer", "opengl1", CVAR_ARCHIVE | CVAR_LATCH);
+
+    // [ioquakelive] when the default changes, whoever was on the old one moves with it, and whoever
+    // picked another renderer keeps it: cl_rendererDefault remembers the default the config saw.
+    // Before it, every config saved "opengl2", since there was no other renderer to pick
+    {
+        cvar_t* seen = Cvar_Get("cl_rendererDefault", "opengl2", CVAR_ARCHIVE);
+
+        if (Q_stricmp(seen->string, cl_renderer->resetString)) {
+            if (!Q_stricmp(cl_renderer->string, seen->string)) {
+                Cvar_Set("cl_renderer", cl_renderer->resetString);
+            }
+            Cvar_Set("cl_rendererDefault", cl_renderer->resetString);
+        }
+    }
 
     Com_sprintf(dllName, sizeof(dllName), "%s" ARCH_STRING DLL_EXT, cl_renderer->string);
+    rendererLib = Sys_LoadDll(dllName, qfalse);
 
-    if (!(rendererLib = Sys_LoadDll(dllName, qfalse)) && strcmp(cl_renderer->string, cl_renderer->resetString)) {
+    // [ioquakelive] a renderer that doesn't load falls back to the default, and the default to
+    // renderergl2, without keeping it: the next start tries the chosen one again
+    if (!rendererLib && Q_stricmp(cl_renderer->string, cl_renderer->resetString)) {
+        Com_Printf("failed:\n\"%s\"\n", Sys_LibraryError());
+        Cvar_ForceReset("cl_renderer");
+        Com_sprintf(dllName, sizeof(dllName), "%s" ARCH_STRING DLL_EXT, cl_renderer->string);
+        rendererLib = Sys_LoadDll(dllName, qfalse);
+    }
+    if (!rendererLib && Q_stricmp(cl_renderer->string, "opengl2")) {
+        Com_Printf("failed:\n\"%s\"\n", Sys_LibraryError());
+        Com_sprintf(dllName, sizeof(dllName), "opengl2" ARCH_STRING DLL_EXT);
+        rendererLib = Sys_LoadDll(dllName, qfalse);
+    }
+    if (!rendererLib) {
         Com_Printf("failed:\n\"%s\"\n", Sys_LibraryError());
         Com_Error(ERR_FATAL, "Failed to load renderer");
     }
