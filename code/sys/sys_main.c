@@ -52,6 +52,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../qcommon/qcommon.h"
 
 static char binaryPath[MAX_OSPATH] = {0};
+static char binaryName[MAX_OSPATH] = {0};
 static char installPath[MAX_OSPATH] = {0};
 
 /*
@@ -70,6 +71,17 @@ Sys_BinaryPath
 */
 char* Sys_BinaryPath(void) {
     return binaryPath;
+}
+
+/*
+=================
+Sys_BinaryName
+
+[ioquakelive] the name this executable was started as, without its directory
+=================
+*/
+const char* Sys_BinaryName(void) {
+    return binaryName;
 }
 
 /*
@@ -800,6 +812,18 @@ int main(int argc, char** argv) {
 
     Sys_ParseArgs(argc, argv);
     Sys_SetBinaryPath(Sys_Dirname(argv[0]));
+
+    // both separators: a shell on Windows may hand over either
+    {
+        const char* name = argv[0];
+        const char* p;
+
+        for (p = argv[0]; *p; p++) {
+            if (*p == '/' || *p == '\\')
+                name = p + 1;
+        }
+        Q_strncpyz(binaryName, name, sizeof(binaryName));
+    }
     Sys_SetDefaultInstallPath(DEFAULT_BASEDIR);
 
     // Concatenate the command line for passing to Com_Init

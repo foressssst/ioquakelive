@@ -31,7 +31,7 @@ jobs:
         cp build/release-linux-x86_64/baseq3/uix86_64.so     staging/libs/
         # actions/upload-artifact strips +x; tar to preserve mode bits.
         tar -C build/release-linux-x86_64 -cf staging/engine/linux-x86_64.tar \
-          ioquakelive.x86_64 ioqlds.x86_64 opengl2x86_64.so opengl1x86_64.so vulkanx86_64.so
+          ioquakelive.x86_64 ioquakelive-vulkan.x86_64 ioqlds.x86_64 opengl2x86_64.so opengl1x86_64.so vulkanx86_64.so
     - uses: actions/upload-artifact@v4
       with:
         name: libs-linux-x86_64

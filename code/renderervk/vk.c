@@ -4270,6 +4270,13 @@ void vk_initialize( void )
 		uint32_t drvMajor = props.driverVersion >> 14;
 		uint32_t drvMinor = props.driverVersion & 0x3FFF;
 		if ( drvMajor == 101 && drvMinor >= 5333 && drvMinor <= 6737 ) {
+#ifdef _WIN64
+			// [ioquakelive] in 64 bits these die inside vkCreateSwapchainKHR, which no fallback can
+			// catch: measured on 101.5522, where a bare Vulkan program does the same and 32 bits works
+			ri.Error( ERR_FATAL, "Intel driver %i.%i crashes Vulkan in 64 bits.\n"
+				"Update it to 101.6790 or later, or play with ioquakelive, the OpenGL one.",
+				drvMajor, drvMinor );
+#endif
 			Com_sprintf( vk.driverNote, sizeof( vk.driverNote ), S_COLOR_WARNING
 				"\nWARNING: Intel driver %i.%i is known to cause Vulkan crashes.\n"
 				"Consider updating to driver >= 101.6790 or downgrading to <= 101.5186.\n",

@@ -2691,8 +2691,22 @@ void CL_InitRef(void) {
         }
     }
 
-    Com_sprintf(dllName, sizeof(dllName), "%s" ARCH_STRING DLL_EXT, cl_renderer->string);
-    rendererLib = Sys_LoadDll(dllName, qfalse);
+    rendererLib = NULL;
+
+    // [ioquakelive] ioquakelive-vulkan is this same executable under another name, the way Quake3e
+    // ships its two: it asks for vulkan and leaves cl_renderer alone, so the OpenGL one keeps what
+    // the config says. Without Vulkan it goes on to the OpenGL chain below
+    if (Q_stristr(Sys_BinaryName(), "-vulkan")) {
+        Com_sprintf(dllName, sizeof(dllName), "vulkan" ARCH_STRING DLL_EXT);
+        rendererLib = Sys_LoadDll(dllName, qfalse);
+        if (!rendererLib)
+            Com_Printf("failed:\n\"%s\"\n", Sys_LibraryError());
+    }
+
+    if (!rendererLib) {
+        Com_sprintf(dllName, sizeof(dllName), "%s" ARCH_STRING DLL_EXT, cl_renderer->string);
+        rendererLib = Sys_LoadDll(dllName, qfalse);
+    }
 
     // [ioquakelive] a renderer that doesn't load falls back to the default, and the default to
     // renderergl2, without keeping it: the next start tries the chosen one again

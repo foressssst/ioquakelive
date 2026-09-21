@@ -1042,6 +1042,10 @@ endif
 ifneq ($(BUILD_CLIENT),0)
   ifneq ($(USE_RENDERER_DLOPEN),0)
     TARGETS += $(B)/$(CLIENTBIN)$(FULLBINEXT)
+    # [ioquakelive] the Vulkan executable is this same binary under the name it looks for
+    ifneq ($(BUILD_RENDERER_VULKAN),0)
+      TARGETS += $(B)/$(CLIENTBIN)-vulkan$(FULLBINEXT)
+    endif
     ifneq ($(BUILD_RENDERER_OPENGL2),0)
       TARGETS += $(B)/opengl2$(SHLIBNAME)
     endif
@@ -2061,6 +2065,10 @@ $(B)/$(CLIENTBIN)$(FULLBINEXT): $(Q3OBJ) $(LIBSDLMAIN)
 		-o $@ $(Q3OBJ) \
 		$(LIBSDLMAIN) $(CLIENT_LIBS) $(LIBS)
 
+$(B)/$(CLIENTBIN)-vulkan$(FULLBINEXT): $(B)/$(CLIENTBIN)$(FULLBINEXT)
+	$(echo_cmd) "CP $@"
+	$(Q)cp $< $@
+
 $(B)/opengl2$(SHLIBNAME): $(Q3R2OBJ) $(Q3R2STRINGOBJ) $(JPGOBJ)
 	$(echo_cmd) "LD $@"
 	$(Q)$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(Q3R2OBJ) $(Q3R2STRINGOBJ) $(JPGOBJ) \
@@ -2562,6 +2570,9 @@ endif
 ifneq ($(BUILD_CLIENT),0)
   ifneq ($(USE_RENDERER_DLOPEN),0)
 	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/$(CLIENTBIN)$(FULLBINEXT) $(COPYBINDIR)/$(CLIENTBIN)$(FULLBINEXT)
+    ifneq ($(BUILD_RENDERER_VULKAN),0)
+	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/$(CLIENTBIN)-vulkan$(FULLBINEXT) $(COPYBINDIR)/$(CLIENTBIN)-vulkan$(FULLBINEXT)
+    endif
     ifneq ($(BUILD_RENDERER_OPENGL2),0)
 	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/opengl2$(SHLIBNAME) $(COPYBINDIR)/opengl2$(SHLIBNAME)
     endif
