@@ -1979,12 +1979,20 @@ reach them through these.
 ===============================================================================
 */
 
+// [QL] tr_qlpost.c ties its own buffers through here: FBO_Bind keeps the bound buffer in a
+// couple of statics, and binding behind its back leaves FBO_BindMain believing the main buffer
+// is still tied, so the scene ends up drawn into the last buffer the post used.
+void FBO_BindTarget( GLuint target, GLuint buffer ) {
+	FBO_Bind( target, buffer );
+}
+
 void FBO_ResolveMultisample( void ) {
 	if ( blitMSfbo ) {
 		FBO_BlitMS( qfalse );
 		blitMSfbo = qfalse;
 	}
 }
+
 
 GLuint FBO_MainTexture( void ) {
 	return fboEnabled ? frameBuffers[ fboReadIndex ].color : 0;
@@ -2048,12 +2056,18 @@ void FBO_PostProcess( void )
 
 	minimized = RI_CL_IsMinimized();
 
-	// [QL] the colour correction is the frame's last copy, the one to the screen (0x436dc0)
+	// [QL] the colour correction is the frame's last copy, the one to the screen (0x436dc0).
+	// A capture reads what came out of it, so it goes through the second buffer, as the gamma
+	// pass below does.
 	if ( r_colorCorrectActive->integer ) {
-		if ( !minimized && RB_QLColorCorrect( 0, w, h ) ) {
-			return;
-		}
-		if ( minimized && RB_QLColorCorrect( frameBuffers[ 1 ].fbo, w, h ) ) {
+		if ( backEnd.screenshotMask == 0 && !windowAdjusted && !minimized ) {
+			if ( RB_QLColorCorrect( 0, w, h ) ) {
+				return;
+			}
+		} else if ( RB_QLColorCorrect( frameBuffers[ 1 ].fbo, w, h ) ) {
+			if ( !minimized ) {
+				FBO_BlitToBackBuffer( 1 );
+			}
 			return;
 		}
 	}

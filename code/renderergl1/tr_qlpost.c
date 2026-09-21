@@ -341,7 +341,7 @@ static qboolean R_QLPostCreateBuffer( int index, int width, int height ) {
 	qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
 
 	qglGenFramebuffers( 1, &qlBloomFbo[index] );
-	qglBindFramebuffer( GL_FRAMEBUFFER, qlBloomFbo[index] );
+	FBO_BindTarget( GL_FRAMEBUFFER, qlBloomFbo[index] );
 	qglFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, qlBloomTex[index], 0 );
 
 	qlBloomWidth[index] = width;
@@ -446,10 +446,10 @@ THE PASSES
 
 // a straight copy between frame buffers, as retail's downsamples are
 static void R_QLPostBlit( GLuint srcFbo, int srcW, int srcH, GLuint dstFbo, int dstW, int dstH, GLenum filter ) {
-	qglBindFramebuffer( GL_READ_FRAMEBUFFER, srcFbo );
-	qglBindFramebuffer( GL_DRAW_FRAMEBUFFER, dstFbo );
+	FBO_BindTarget( GL_READ_FRAMEBUFFER, srcFbo );
+	FBO_BindTarget( GL_DRAW_FRAMEBUFFER, dstFbo );
 	qglBlitFramebuffer( 0, 0, srcW, srcH, 0, 0, dstW, dstH, GL_COLOR_BUFFER_BIT, filter );
-	qglBindFramebuffer( GL_FRAMEBUFFER, 0 );
+	FBO_BindTarget( GL_FRAMEBUFFER, 0 );
 }
 
 // the quad every pass draws, in the ortho the post process set up
@@ -473,7 +473,7 @@ static void R_QLPostPass( qlProgram_t which, GLuint srcTexture, GLuint dstFbo, i
 	const vec4_t color, const vec2_t invTexRes, GLuint levelsTexture ) {
 	const qlPostProgram_t *p = &qlPrograms[which];
 
-	qglBindFramebuffer( GL_FRAMEBUFFER, dstFbo );
+	FBO_BindTarget( GL_FRAMEBUFFER, dstFbo );
 	qglViewport( 0, 0, dstWidth, dstHeight );
 	qglScissor( 0, 0, dstWidth, dstHeight );
 	qglMatrixMode( GL_PROJECTION );
