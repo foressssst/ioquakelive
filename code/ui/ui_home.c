@@ -22,25 +22,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 // ui_home.c -- [QL] the main menu, and the frame the other pages sit in
 //
-// Retail's front end is its browser, and it is two different things. The main
-// menu (web.pak src/home.js, "#main-menu") is a screen of its own, outside the
-// app frame: the QUAKE LIVE logo over a vertical menu down the left, with art
-// beside it. Its menu opens into itself -- Play gives Match Browser, Start
-// Match, Training Center and Back -- and the pages it leads to (src/appframe.js,
-// "#app-frame") are the ones with the nav bar across the top.
-//
-// The menu keeps that shape: the logo, the list down the left, Play opening into
-// its own list with Back under it. Its look is this build's own, in Quake Club's
-// surfaces, type and gold: a painting covers the screen, its figure standing on
-// the right, and the page's colour comes in from the left under the list. Each
-// entry says in a line what it leads to, and the one under the cursor turns gold
-// on a raised plate. Nothing moves. The painting is ui/ioql/menu_background,
-// which pak01 carries from assets\pak01 (it is not in git); a build without it
-// falls back to a map's levelshot.
+// Retail's main menu (web.pak src/home.js, "#main-menu") is a screen of its own,
+// outside the app frame: the logo over a vertical menu down the left, with art
+// beside it, and a menu that opens into itself. This keeps that shape and dresses
+// it in this build's own surfaces, type and gold.
 //
 // The bar the other pages carry is here too, since they share it, along with the
-// background, which lies under their panels thickly enough for them to read, and
-// the green banner a match puts at the bottom of every page.
+// background and the banner a running match puts at the bottom of every page.
 //
 
 #include "ui_web.h"
@@ -459,16 +447,9 @@ void UI_Home_Banner(void) {
 
 THE MAIN MENU
 
-Retail's #main-menu: the QUAKE LIVE logo over a list that opens into itself, and
-beside it the player and their friends, which its app frame keeps in a column of
-its own (web.pak src/home.js: ProfileCard, Lobby and FriendList). Retail has that
-column on the left of the pages; here it sits on the right of the menu, where the
-painting leaves room.
-
-The list is retail's, whole: Play, Statistics, Community, Settings and Quit, with
-the three that open into their own lists doing so. What this build cannot do yet
-is listed all the same, marked "soon" and inert, so nothing of retail's is
-missing from the menu.
+Retail's #main-menu, with the friends column moved to the right of the menu where
+the painting leaves room. The list is retail's whole: what this build cannot do
+yet is listed all the same, marked "soon" and inert.
 
 ===============================================================================
 */

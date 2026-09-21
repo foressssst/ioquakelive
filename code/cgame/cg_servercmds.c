@@ -71,15 +71,10 @@ static const char* cg_disableLoadoutCvarNames[WP_NUM_WEAPONS] = {
 =================
 CG_UpdateDisableLoadout
 
-[QL] cgamex86.dll 0x100498b0, the end of CG_ParseServerinfo. A weapon's picture on the join screen
-(ui/intro.menu) is off -- only its dimmed copy shows, under "ADDITIONAL UNAVAILABLE" -- when
-loadouts are off altogether (cg_loadout 0, 0x10a249cc), when the map turns it off
-(CS_DISABLE_LOADOUT, bit 1 << weapon), or when it already is a starting weapon
-(CS_STARTING_WEAPONS, bit 1 << (weapon - 1)). Otherwise a cvar that is on goes back to 0.
-
-The fork only looked at the map's mask, so with loadouts off every weapon showed lit. The value of
-g_loadout is read from the serverinfo being parsed rather than from cg_loadout, which is set in the
-same pass and would still hold the old value.
+[QL] 0x100498b0, the end of CG_ParseServerinfo. A weapon is unavailable on the join screen when
+loadouts are off, when the map turns it off (CS_DISABLE_LOADOUT) or when it already is a starting
+weapon. g_loadout is read from the serverinfo being parsed, not from cg_loadout, which is set in
+the same pass and would still hold the old value.
 =================
 */
 static void CG_UpdateDisableLoadout(int loadout) {
@@ -1289,23 +1284,12 @@ static void CG_AddToTeamChat(const char* str) {
 
 [QL] CLIENT-SIDE VOICE-CHAT RECEIVE SYSTEM
 
-Ported from cgamex86.dll.  Quake Live kept the
-Quake 3 voice-chat plumbing but ships no loader for the parsed voice data:
-nothing in the binary ever writes the voiceFiles[] table (every xref to its base
-0x107d98c0 is a loop bound or the gender read), and there is no CG_LoadVoiceChats
-in the binary at all.  At runtime the tables therefore stay empty and
-CG_GetVoiceChat never matches, so the whole receive path is inert - but the code
-paths are all present in the binary and reproduced here.
+Quake Live keeps Quake 3's voice-chat plumbing and ships no loader for it: nothing writes
+voiceFiles[] and there is no CG_LoadVoiceChats in the binary, so the whole path is inert. It is
+reproduced anyway because the code is there.
 
-QL's storage does NOT match ioquake3's voiceChatList_t, so the file-static
-structs below are sized to the binary exactly:
-  - voiceFiles[8]       at 0x107d98c0, stride 0x45148  (the parsed voice lists)
-  - voiceChatLists[64]  at 0x107d87c0, stride 0x44     (model/skin -> file cache)
-  - voiceChatBuffer[32] at 0x10a02300, stride 0x138    (the received ring buffer)
-The public prototypes in cg_local.h are kept unchanged.  CG_VoiceChatListForClient
-resolves the "current" list; the binary passes that pointer to CG_GetVoiceChat in
-EBX, which the fixed 3-arg prototype cannot carry, so it is bridged through the
-file-static cg_currentVoiceChatList.
+The storage is sized to the binary: voiceFiles[8] at 0x107d98c0 stride 0x45148,
+voiceChatLists[64] at 0x107d87c0 stride 0x44, voiceChatBuffer[32] at 0x10a02300 stride 0x138.
 
 ===============================================================================
 */
@@ -1562,14 +1546,9 @@ void CG_VoiceChatListForClient(int clientNum) {
 =================
 CG_PlayVoiceChat
 
-Address: 0x1004aac0
-
-[QL] Play one buffered voice chat.  Gates (Ghidra-verified branch sense):
-  - cg.intermissionStarted != 1  (DAT_10a6f8b8) to proceed at all
-  - cg_playVoiceChats.integer     (DAT_10a62acc, != 0) plays the sound on CHAN_VOICE
-  - cg_showVoiceText.integer      (DAT_10abb2ec, != 0) prints the team-chat text
-These QL cvars are positive-sense (enable flags), the opposite polarity to Q3's
-cg_noVoiceChats / cg_noVoiceText.
+[QL] 0x1004aac0. One buffered voice chat: nothing during the intermission, the sound on
+CHAN_VOICE with cg_playVoiceChats and the text with cg_showVoiceText. Both are enable flags,
+the opposite polarity to Quake 3's cg_noVoiceChats and cg_noVoiceText.
 =================
 */
 void CG_PlayVoiceChat(bufferedVoiceChat_t* vchat) {
