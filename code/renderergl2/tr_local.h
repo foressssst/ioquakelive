@@ -1373,6 +1373,7 @@ typedef struct {
 
     qboolean framebufferObject;
     int maxRenderbufferSize;
+    qboolean textureNonPowerOfTwo;  // [QL] images are uploaded at their own size
     int maxColorAttachments;
 
     qboolean textureFloat;

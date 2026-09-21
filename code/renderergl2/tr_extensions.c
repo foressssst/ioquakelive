@@ -139,6 +139,12 @@ void GLimp_InitExtraExtensions(void) {
         goto done;
     }
 
+    // [QL] quakelive_steam.exe 0x46b792 looks for GL_ARB_texture_non_power_of_two, which
+    // OpenGL 2.0 and OpenGL ES 3.0 carry in the core
+    glRefConfig.textureNonPowerOfTwo = QGL_VERSION_ATLEAST(2, 0) || QGLES_VERSION_ATLEAST(3, 0) ||
+                                       SDL_GL_ExtensionSupported("GL_ARB_texture_non_power_of_two") ||
+                                       SDL_GL_ExtensionSupported("GL_OES_texture_npot");
+
     // OpenGL 1.5 - GL_ARB_occlusion_query
     glRefConfig.occlusionQuery = qtrue;
     glRefConfig.occlusionQueryTarget = GL_SAMPLES_PASSED;

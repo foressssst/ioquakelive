@@ -1256,58 +1256,89 @@ void R_LightScaleTexture(byte* in, int inwidth, int inheight, qboolean only_gamm
 
 /*
 ================
-R_MipMapsRGB
+R_MipMap2
 
-Operates in place, quartering the size of the texture
-Colors are gamma correct
+[QL] quakelive_steam.exe 0x444e20, used when r_simpleMipMaps is 0: a 4x4 tent filter,
+weights 1 2 2 1 over 36, wrapping at the edges with a mask that only holds for power of
+two sizes. An image one pixel wide is left as it is.
 ================
 */
-static void R_MipMapsRGB(byte* in, int inWidth, int inHeight) {
-    int x, y, c, stride;
-    const byte* in2;
-    float total;
-    static float downmipSrgbLookup[256];
-    static int downmipSrgbLookupSet = 0;
-    byte* out = in;
+static void R_MipMap2(byte* in, int inWidth, int inHeight) {
+    int i, j, k, total;
+    int outWidth, outHeight;
+    int widthMask, heightMask;
+    byte* temp;
+    byte* out;
 
-    if (!downmipSrgbLookupSet) {
-        for (x = 0; x < 256; x++)
-            downmipSrgbLookup[x] = powf(x / 255.0f, 2.2f) * 0.25f;
-        downmipSrgbLookupSet = 1;
-    }
+    outWidth = inWidth >> 1;
+    outHeight = inHeight >> 1;
+    temp = ri.Hunk_AllocateTempMemory(MAX(1, outWidth * outHeight * 4));
 
-    if (inWidth == 1 && inHeight == 1)
-        return;
+    widthMask = inWidth - 1;
+    heightMask = inHeight - 1;
 
-    if (inWidth == 1 || inHeight == 1) {
-        for (x = (inWidth * inHeight) >> 1; x; x--) {
-            for (c = 3; c; c--, in++) {
-                total = (downmipSrgbLookup[*(in)] + downmipSrgbLookup[*(in + 4)]) * 2.0f;
-
-                *out++ = (byte)(powf(total, 1.0f / 2.2f) * 255.0f);
+#define TAP(y, x) in[(((i * 2 + (y)) & heightMask) * inWidth + ((j * 2 + (x)) & widthMask)) * 4 + k]
+    for (i = 0; i < outHeight; i++) {
+        for (j = 0; j < outWidth; j++) {
+            out = temp + (i * outWidth + j) * 4;
+            for (k = 0; k < 4; k++) {
+                total = TAP(-1, -1) + 2 * TAP(-1, 0) + 2 * TAP(-1, 1) + TAP(-1, 2) +
+                        2 * TAP(0, -1) + 4 * TAP(0, 0) + 4 * TAP(0, 1) + 2 * TAP(0, 2) +
+                        2 * TAP(1, -1) + 4 * TAP(1, 0) + 4 * TAP(1, 1) + 2 * TAP(1, 2) +
+                        TAP(2, -1) + 2 * TAP(2, 0) + 2 * TAP(2, 1) + TAP(2, 2);
+                out[k] = total / 36;
             }
-            *out++ = (*(in) + *(in + 4)) >> 1;
-            in += 5;
         }
+    }
+#undef TAP
 
+    Com_Memcpy(in, temp, outWidth * outHeight * 4);
+    ri.Hunk_FreeTempMemory(temp);
+}
+
+/*
+================
+R_MipMap
+
+[QL] 0x4450a0. Operates in place, quartering the size of the texture. With r_simpleMipMaps,
+the default, each 2x2 block is averaged as it is, in gamma space; otherwise the tent filter.
+================
+*/
+static void R_MipMap(byte* in, int width, int height) {
+    int i, j, row;
+    byte* out;
+
+    if (!r_simpleMipMaps->integer) {
+        R_MipMap2(in, width, height);
         return;
     }
 
-    stride = inWidth * 4;
-    inWidth >>= 1;
-    inHeight >>= 1;
+    if (width == 1 && height == 1) {
+        return;
+    }
 
-    in2 = in + stride;
-    for (y = inHeight; y; y--, in += stride, in2 += stride) {
-        for (x = inWidth; x; x--) {
-            for (c = 3; c; c--, in++, in2++) {
-                total = downmipSrgbLookup[*(in)] + downmipSrgbLookup[*(in + 4)] + downmipSrgbLookup[*(in2)] + downmipSrgbLookup[*(in2 + 4)];
+    row = width * 4;
+    out = in;
+    width >>= 1;
+    height >>= 1;
 
-                *out++ = (byte)(powf(total, 1.0f / 2.2f) * 255.0f);
-            }
+    if (width == 0 || height == 0) {
+        width += height;  // get largest
+        for (i = 0; i < width; i++, out += 4, in += 8) {
+            out[0] = (in[0] + in[4]) >> 1;
+            out[1] = (in[1] + in[5]) >> 1;
+            out[2] = (in[2] + in[6]) >> 1;
+            out[3] = (in[3] + in[7]) >> 1;
+        }
+        return;
+    }
 
-            *out++ = (*(in) + *(in + 4) + *(in2) + *(in2 + 4)) >> 2;
-            in += 5, in2 += 5;
+    for (i = 0; i < height; i++, in += row) {
+        for (j = 0; j < width; j++, out += 4, in += 8) {
+            out[0] = (in[0] + in[4] + in[row + 0] + in[row + 4]) >> 2;
+            out[1] = (in[1] + in[5] + in[row + 1] + in[row + 5]) >> 2;
+            out[2] = (in[2] + in[6] + in[row + 2] + in[row + 6]) >> 2;
+            out[3] = (in[3] + in[7] + in[row + 3] + in[row + 7]) >> 2;
         }
     }
 }
@@ -1508,7 +1539,8 @@ static qboolean RawImage_ScaleToPower2(byte** data, int* inout_width, int* inout
     //
     // convert to exact power of 2 sizes
     //
-    if (!mipmap) {
+    // [QL] 0x4452f0 leaves every image at its own size when the card takes any size
+    if (!mipmap || glRefConfig.textureNonPowerOfTwo) {
         scaled_width = width;
         scaled_height = height;
     } else {
@@ -1583,8 +1615,9 @@ static qboolean RawImage_ScaleToPower2(byte** data, int* inout_width, int* inout
     // perform optional picmip operation
     //
     if (picmip) {
-        scaled_width >>= r_picmip->integer;
-        scaled_height >>= r_picmip->integer;
+        // [QL] the count is masked as an x86 shift masks it
+        scaled_width >>= r_picmip->integer & 31;
+        scaled_height >>= r_picmip->integer & 31;
     }
 
     //
@@ -1613,7 +1646,7 @@ static qboolean RawImage_ScaleToPower2(byte** data, int* inout_width, int* inout
             if (type == IMGTYPE_NORMAL || type == IMGTYPE_NORMALHEIGHT)
                 R_MipMapNormalHeight(*data, *data, width, height, qfalse);
             else
-                R_MipMapsRGB(*data, width, height);
+                R_MipMap(*data, width, height);
 
             width = MAX(1, width >> 1);
             height = MAX(1, height >> 1);
@@ -1912,14 +1945,14 @@ static void RawImage_UploadTexture(GLuint texture, byte* data, int x, int y, int
         }
 
         if (!lastMip && numMips < 2) {
-            if (glRefConfig.framebufferObject) {
+            // [QL] 0x4452f0 builds the chain on the CPU, with the filter the picmip used
+            if (rgba8 && type != IMGTYPE_NORMAL && type != IMGTYPE_NORMALHEIGHT) {
+                R_MipMap(data, width, height);
+            } else if (glRefConfig.framebufferObject) {
                 qglGenerateTextureMipmapEXT(texture, target);
                 break;
             } else if (rgba8) {
-                if (type == IMGTYPE_NORMAL || type == IMGTYPE_NORMALHEIGHT)
-                    R_MipMapNormalHeight(data, data, width, height, glRefConfig.swizzleNormalmap);
-                else
-                    R_MipMapsRGB(data, width, height);
+                R_MipMapNormalHeight(data, data, width, height, glRefConfig.swizzleNormalmap);
             }
         }
 
