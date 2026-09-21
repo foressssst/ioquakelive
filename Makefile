@@ -37,6 +37,9 @@ endif
 ifndef BUILD_RENDERER_OPENGL2
   BUILD_RENDERER_OPENGL2=
 endif
+ifndef BUILD_RENDERER_OPENGL1
+  BUILD_RENDERER_OPENGL1=
+endif
 
 #############################################################################
 #
@@ -229,6 +232,7 @@ CDIR=$(MOUNT_DIR)/client
 SDIR=$(MOUNT_DIR)/server
 RCOMMONDIR=$(MOUNT_DIR)/renderercommon
 RGL2DIR=$(MOUNT_DIR)/renderergl2
+RGL1DIR=$(MOUNT_DIR)/renderergl1
 CMDIR=$(MOUNT_DIR)/qcommon
 SDLDIR=$(MOUNT_DIR)/sdl
 SYSDIR=$(MOUNT_DIR)/sys
@@ -1037,6 +1041,10 @@ ifneq ($(BUILD_CLIENT),0)
     ifneq ($(BUILD_RENDERER_OPENGL2),0)
       TARGETS += $(B)/opengl2$(SHLIBNAME)
     endif
+    # [ioquakelive] the renderer of retail's lineage, on Quake3e's; only as a library
+    ifneq ($(BUILD_RENDERER_OPENGL1),0)
+      TARGETS += $(B)/opengl1$(SHLIBNAME)
+    endif
   else
     ifneq ($(BUILD_RENDERER_OPENGL2),0)
       TARGETS += $(B)/$(CLIENTBIN)_opengl2$(FULLBINEXT)
@@ -1227,6 +1235,12 @@ endef
 define DO_REF_CC
 $(echo_cmd) "REF_CC $<"
 $(Q)$(CC) $(SHLIBCFLAGS) $(CFLAGS) $(CLIENT_CFLAGS) $(OPTIMIZE) -o $@ -c $<
+endef
+
+# [ioquakelive] renderergl1 brings its own GL function pointers: sdl_glimp.c must not define them
+define DO_REF1_CC
+$(echo_cmd) "REF1_CC $<"
+$(Q)$(CC) $(SHLIBCFLAGS) $(CFLAGS) $(CLIENT_CFLAGS) $(OPTIMIZE) -DGLIMP_EXTERNAL_QGL -o $@ -c $<
 endef
 
 define DO_REF_STR
@@ -1424,6 +1438,7 @@ makedirs:
 	@$(MKDIR) $(B)/client/vorbis
 	@$(MKDIR) $(B)/renderergl2
 	@$(MKDIR) $(B)/renderergl2/glsl
+	@$(MKDIR) $(B)/renderergl1
 	@$(MKDIR) $(B)/tools
 	@$(MKDIR) $(B)/ded
 	@$(MKDIR) $(B)/$(BASEGAME)/cgame
@@ -1654,6 +1669,56 @@ Q3R2STRINGOBJ = \
   $(B)/renderergl2/glsl/qlbrightpass_fp.o \
   $(B)/renderergl2/glsl/qlblur_fp.o \
   $(B)/renderergl2/glsl/qlcombine_fp.o
+
+# [ioquakelive] renderergl1: Quake3e's renderer with what is Quake Live's in it (opengl1)
+Q3R1OBJ = \
+  $(B)/renderergl1/tr_animation.o \
+  $(B)/renderergl1/tr_arb.o \
+  $(B)/renderergl1/tr_backend.o \
+  $(B)/renderergl1/tr_bsp.o \
+  $(B)/renderergl1/tr_cmds.o \
+  $(B)/renderergl1/tr_curve.o \
+  $(B)/renderergl1/tr_flares.o \
+  $(B)/renderergl1/tr_font.o \
+  $(B)/renderergl1/tr_image.o \
+  $(B)/renderergl1/tr_import.o \
+  $(B)/renderergl1/tr_init.o \
+  $(B)/renderergl1/tr_light.o \
+  $(B)/renderergl1/tr_main.o \
+  $(B)/renderergl1/tr_marks.o \
+  $(B)/renderergl1/tr_mesh.o \
+  $(B)/renderergl1/tr_model.o \
+  $(B)/renderergl1/tr_model_iqm.o \
+  $(B)/renderergl1/tr_qlpost.o \
+  $(B)/renderergl1/tr_scene.o \
+  $(B)/renderergl1/tr_shade.o \
+  $(B)/renderergl1/tr_shade_calc.o \
+  $(B)/renderergl1/tr_shader.o \
+  $(B)/renderergl1/tr_shadows.o \
+  $(B)/renderergl1/tr_sky.o \
+  $(B)/renderergl1/tr_surface.o \
+  $(B)/renderergl1/tr_vbo.o \
+  $(B)/renderergl1/tr_window.o \
+  $(B)/renderergl1/tr_world.o \
+  \
+  $(B)/renderergl1/tr_stbtt.o \
+  $(B)/renderergl1/tr_fontstash.o \
+  $(B)/renderergl1/tr_image_bmp.o \
+  $(B)/renderergl1/tr_image_jpg.o \
+  $(B)/renderergl1/tr_image_pcx.o \
+  $(B)/renderergl1/tr_image_png.o \
+  $(B)/renderergl1/tr_image_tga.o \
+  $(B)/renderergl1/tr_noise.o \
+  \
+  $(B)/renderergl1/sdl_gamma.o \
+  $(B)/renderergl1/sdl_glimp.o
+
+ifneq ($(USE_RENDERER_DLOPEN), 0)
+  Q3R1OBJ += \
+    $(B)/renderergl1/q_shared.o \
+    $(B)/renderergl1/puff.o \
+    $(B)/renderergl1/q_math.o
+endif
 
 ifneq ($(USE_RENDERER_DLOPEN), 0)
   Q3R2OBJ += \
@@ -1935,6 +2000,11 @@ $(B)/$(CLIENTBIN)$(FULLBINEXT): $(Q3OBJ) $(LIBSDLMAIN)
 $(B)/opengl2$(SHLIBNAME): $(Q3R2OBJ) $(Q3R2STRINGOBJ) $(JPGOBJ)
 	$(echo_cmd) "LD $@"
 	$(Q)$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(Q3R2OBJ) $(Q3R2STRINGOBJ) $(JPGOBJ) \
+		$(THREAD_LIBS) $(LIBSDLMAIN) $(RENDERER_LIBS) $(LIBS)
+
+$(B)/opengl1$(SHLIBNAME): $(Q3R1OBJ) $(JPGOBJ)
+	$(echo_cmd) "LD $@"
+	$(Q)$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(Q3R1OBJ) $(JPGOBJ) \
 		$(THREAD_LIBS) $(LIBSDLMAIN) $(RENDERER_LIBS) $(LIBS)
 else
 $(B)/$(CLIENTBIN)_opengl2$(FULLBINEXT): $(Q3OBJ) $(Q3R2OBJ) $(Q3R2STRINGOBJ) $(JPGOBJ) $(LIBSDLMAIN)
@@ -2307,6 +2377,18 @@ $(B)/renderergl2/%.o: $(RCOMMONDIR)/%.c
 $(B)/renderergl2/%.o: $(RGL2DIR)/%.c
 	$(DO_REF_CC)
 
+$(B)/renderergl1/%.o: $(CMDIR)/%.c
+	$(DO_REF1_CC)
+
+$(B)/renderergl1/%.o: $(SDLDIR)/%.c
+	$(DO_REF1_CC)
+
+$(B)/renderergl1/%.o: $(RCOMMONDIR)/%.c
+	$(DO_REF1_CC)
+
+$(B)/renderergl1/%.o: $(RGL1DIR)/%.c
+	$(DO_REF1_CC)
+
 
 $(B)/ded/%.o: $(SDIR)/%.c
 	$(DO_DED_CC)
@@ -2383,7 +2465,7 @@ $(B)/$(CLIENTBIN)-config.json: $(WEBDIR)/client-config.json
 # MISC
 #############################################################################
 
-OBJ = $(Q3OBJ) $(Q3R2OBJ) $(Q3DOBJ) $(JPGOBJ) \
+OBJ = $(Q3OBJ) $(Q3R2OBJ) $(Q3R1OBJ) $(Q3DOBJ) $(JPGOBJ) \
   $(Q3GOBJ) $(Q3CGOBJ) $(Q3UIOBJ)
 STRINGOBJ = $(Q3R2STRINGOBJ)
 
@@ -2401,6 +2483,9 @@ ifneq ($(BUILD_CLIENT),0)
 	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/$(CLIENTBIN)$(FULLBINEXT) $(COPYBINDIR)/$(CLIENTBIN)$(FULLBINEXT)
     ifneq ($(BUILD_RENDERER_OPENGL2),0)
 	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/opengl2$(SHLIBNAME) $(COPYBINDIR)/opengl2$(SHLIBNAME)
+    endif
+    ifneq ($(BUILD_RENDERER_OPENGL1),0)
+	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/opengl1$(SHLIBNAME) $(COPYBINDIR)/opengl1$(SHLIBNAME)
     endif
   else
     ifneq ($(BUILD_RENDERER_OPENGL2),0)
