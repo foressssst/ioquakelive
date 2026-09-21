@@ -2456,6 +2456,13 @@ void vk_update_attachment_descriptors( void ) {
 
 		qvkUpdateDescriptorSets( vk.device, 1, &desc, 0, NULL );
 
+		// [QL] 0x436ec0 halves the scene with a point blit, so the bright pass never averages
+		sd.gl_mag_filter = sd.gl_min_filter = GL_NEAREST;
+		info.sampler = vk_find_sampler( &sd );
+		desc.dstSet = vk.color_descriptor_nearest;
+
+		qvkUpdateDescriptorSets( vk.device, 1, &desc, 0, NULL );
+
 		// screenmap
 		sd.gl_mag_filter = sd.gl_min_filter = GL_LINEAR;
 		sd.max_lod_1_0 = qfalse;
@@ -2541,6 +2548,7 @@ void vk_init_descriptors( void )
 		alloc.pSetLayouts = &vk.set_layout_sampler;
 
 		VK_CHECK( qvkAllocateDescriptorSets( vk.device, &alloc, &vk.color_descriptor ) );
+		VK_CHECK( qvkAllocateDescriptorSets( vk.device, &alloc, &vk.color_descriptor_nearest ) );
 
 		if ( r_bloom->integer )
 		{
@@ -8035,7 +8043,7 @@ qboolean vk_ql_bloom( void )
 	// the scene at half size, and what is brighter than the threshold
 	vk_begin_blur_render_pass( 0 );
 	qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.ql_bright_pipeline );
-	qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.color_descriptor, 0, NULL );
+	qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.color_descriptor_nearest, 0, NULL );
 	qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
 	vk_end_render_pass();
 
@@ -8044,7 +8052,7 @@ qboolean vk_ql_bloom( void )
 
 	if ( quarter ) {
 		vk_ql_blur_pass( 3, 1 );
-		vk_ql_blur_pass( 2, 3 );
+		vk_ql_blur_pass( 2, 4 );
 	}
 
 	vk_begin_post_bloom_render_pass();

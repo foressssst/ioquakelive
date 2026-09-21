@@ -404,6 +404,7 @@ typedef struct {
 	VkPipelineLayout pipeline_layout_blend;		// post-processing
 
 	VkDescriptorSet color_descriptor;
+	VkDescriptorSet color_descriptor_nearest;
 
 	VkImage color_image;
 	VkImageView color_image_view;
