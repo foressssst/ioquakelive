@@ -47,6 +47,9 @@ fi
 if [ -f "${BUILT_PRODUCTS_DIR}/opengl2${ARCH}.dylib" ]; then
 	cp "${BUILT_PRODUCTS_DIR}/opengl2${ARCH}.dylib" "${MACOS}/opengl2${ARCH}.dylib"
 fi
+if [ -f "${BUILT_PRODUCTS_DIR}/opengl1${ARCH}.dylib" ]; then
+	cp "${BUILT_PRODUCTS_DIR}/opengl1${ARCH}.dylib" "${MACOS}/opengl1${ARCH}.dylib"
+fi
 
 # Populate Contents/Resources/baseq3/ with our bundled pk3s.
 # fs_apppath on macOS points to Contents/Resources (via Sys_DefaultAppPath),
@@ -170,7 +173,8 @@ echo "Bundling Homebrew dependencies..."
 for bin in \
     "${MACOS}/${PRODUCT_NAME}" \
     "${MACOS}/ioqlds" \
-    "${MACOS}/opengl2${ARCH}.dylib"; do
+    "${MACOS}/opengl2${ARCH}.dylib" \
+    "${MACOS}/opengl1${ARCH}.dylib"; do
     [ -f "$bin" ] || continue
     # Add rpath so this binary (and any dylib it dlopen's) can find Frameworks/
     install_name_tool -add_rpath "@executable_path/../Frameworks" "$bin" 2>/dev/null || true
