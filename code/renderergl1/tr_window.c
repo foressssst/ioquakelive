@@ -40,11 +40,6 @@ cvar_t *r_windowedWidth;
 cvar_t *r_windowedHeight;
 cvar_t *r_customPixelAspect;
 cvar_t *r_displayRefresh;
-cvar_t *r_allowResize;
-cvar_t *r_centerWindow;
-cvar_t *r_sdlDriver;
-cvar_t *r_allowSoftwareGL;
-cvar_t *r_preferOpenGLES;
 cvar_t *r_swapInterval;
 cvar_t *r_uiFullScreen;
 
