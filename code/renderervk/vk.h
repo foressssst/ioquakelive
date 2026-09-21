@@ -284,6 +284,7 @@ void vk_present_frame( void );
 
 void vk_end_render_pass( void );
 void vk_begin_main_render_pass( void );
+qboolean vk_ql_bloom( void );
 
 void vk_bind_pipeline( uint32_t pipeline );
 void vk_bind_index( void );
@@ -508,6 +509,10 @@ typedef struct {
 		VkShaderModule bloom_fs;
 		VkShaderModule blur_fs;
 		VkShaderModule blend_fs;
+		// [QL] the bright pass, the blur and the light of Quake Live's bloom
+		VkShaderModule ql_bright_fs;
+		VkShaderModule ql_blur_fs;
+		VkShaderModule ql_bloom_fs;
 
 		VkShaderModule gamma_fs;
 		VkShaderModule gamma_vs;
@@ -577,6 +582,9 @@ typedef struct {
 	VkPipeline capture_pipeline;
 	VkPipeline bloom_extract_pipeline;
 	VkPipeline blur_pipeline[VK_NUM_BLOOM_PASSES*2]; // horizontal & vertical pairs
+	// [QL] Quake Live's bloom: its bright pass and the light it lays over the scene
+	VkPipeline ql_bright_pipeline;
+	VkPipeline ql_bloom_pipeline;
 	VkPipeline bloom_blend_pipeline;
 
 	uint32_t frame_count;

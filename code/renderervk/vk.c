@@ -2955,6 +2955,11 @@ static void vk_create_shader_modules( void )
 	SET_OBJECT_NAME( vk.modules.blend_fs, "final bloom blend fragment module", VK_DEBUG_REPORT_OBJECT_TYPE_SHADER_MODULE_EXT );
 
 	vk.modules.gamma_fs = SHADER_MODULE( gamma_frag_spv );
+
+	// [QL] the bloom of Quake Live
+	vk.modules.ql_bright_fs = SHADER_MODULE( qlbright_frag_spv );
+	vk.modules.ql_blur_fs = SHADER_MODULE( qlblur_frag_spv );
+	vk.modules.ql_bloom_fs = SHADER_MODULE( qlbloom_frag_spv );
 	vk.modules.gamma_vs = SHADER_MODULE( gamma_vert_spv );
 
 	SET_OBJECT_NAME( vk.modules.gamma_fs, "gamma post-processing fragment module", VK_DEBUG_REPORT_OBJECT_TYPE_SHADER_MODULE_EXT );
@@ -3226,6 +3231,10 @@ void vk_update_post_process_pipelines( void )
 			}
 
 			vk_create_post_process_pipeline( 2, glConfig.vidWidth, glConfig.vidHeight ); // bloom blending
+
+			// [QL] the bright pass works at half the scene's size, the light over the whole frame
+			vk_create_post_process_pipeline( 4, gls.captureWidth / 2, gls.captureHeight / 2 );
+			vk_create_post_process_pipeline( 5, glConfig.vidWidth, glConfig.vidHeight );
 		}
 	}
 }
@@ -4504,6 +4513,16 @@ static void vk_destroy_pipelines( qboolean resetCounter )
 		vk.pipelines_count = 0;
 	}
 
+	if ( vk.ql_bright_pipeline ) {
+		qvkDestroyPipeline( vk.device, vk.ql_bright_pipeline, NULL );
+		vk.ql_bright_pipeline = VK_NULL_HANDLE;
+	}
+
+	if ( vk.ql_bloom_pipeline ) {
+		qvkDestroyPipeline( vk.device, vk.ql_bloom_pipeline, NULL );
+		vk.ql_bloom_pipeline = VK_NULL_HANDLE;
+	}
+
 	if ( vk.gamma_pipeline ) {
 		qvkDestroyPipeline( vk.device, vk.gamma_pipeline, NULL );
 		vk.gamma_pipeline = VK_NULL_HANDLE;
@@ -5147,7 +5166,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	VkGraphicsPipelineCreateInfo create_info;
 	VkViewport viewport;
 	VkRect2D scissor;
-	VkSpecializationMapEntry spec_entries[12];
+	VkSpecializationMapEntry spec_entries[13];
 	VkSpecializationInfo frag_spec_info;
 	VkPipeline *pipeline;
 	VkShaderModule fsmodule;
@@ -5155,7 +5174,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	VkPipelineLayout layout;
 	VkSampleCountFlagBits samples;
 	const char *pipeline_name;
-	qboolean blend;
+	int blend;
 
 	struct FragSpecData {
 		float gamma;
@@ -5170,6 +5189,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 		int depth_g;
 		int depth_b;
 		float contrast;
+		float bloom_saturation;
 	} frag_spec_data;
 
 	switch ( program_index ) {
@@ -5190,6 +5210,24 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 			samples = vkSamples;
 			pipeline_name = "bloom blend pipeline";
 			blend = qtrue;
+			break;
+		case 4: // [QL] the bright pass of Quake Live's bloom
+			pipeline = &vk.ql_bright_pipeline;
+			fsmodule = vk.modules.ql_bright_fs;
+			renderpass = vk.render_pass.blur[0];
+			layout = vk.pipeline_layout_post_process;
+			samples = VK_SAMPLE_COUNT_1_BIT;
+			pipeline_name = "QL bloom bright pass pipeline";
+			blend = 0;
+			break;
+		case 5: // [QL] the light of Quake Live's bloom over the scene
+			pipeline = &vk.ql_bloom_pipeline;
+			fsmodule = vk.modules.ql_bloom_fs;
+			renderpass = vk.render_pass.post_bloom;
+			layout = vk.pipeline_layout_post_process;
+			samples = vkSamples;
+			pipeline_name = "QL bloom blend pipeline";
+			blend = 2;
 			break;
 		case 3: // capture buffer extraction
 			pipeline = &vk.capture_pipeline;
@@ -5240,8 +5278,16 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 		frag_spec_data.contrast = 1.0f;
 	}
 	frag_spec_data.greyscale = r_greyscale->value;
-	frag_spec_data.bloom_threshold = r_bloom_threshold->value;
-	frag_spec_data.bloom_intensity = r_bloom_intensity->value;
+	if ( r_enablePostProcess->integer && r_enableBloom->integer ) {
+		// [QL] 0x449000: the bloom takes retail's cvars
+		frag_spec_data.bloom_threshold = MAX( r_bloomBrightThreshold->value, 0.0f );
+		frag_spec_data.bloom_intensity = MAX( r_bloomIntensity->value, 0.0f );
+		frag_spec_data.bloom_saturation = MAX( r_bloomSaturation->value, 0.0f );
+	} else {
+		frag_spec_data.bloom_threshold = r_bloom_threshold->value;
+		frag_spec_data.bloom_intensity = r_bloom_intensity->value;
+		frag_spec_data.bloom_saturation = 1.0f;
+	}
 	frag_spec_data.bloom_threshold_mode = r_bloom_threshold_mode->integer;
 	frag_spec_data.bloom_modulate = r_bloom_modulate->integer;
 	frag_spec_data.dither = r_dither->integer;
@@ -5297,7 +5343,11 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	spec_entries[11].offset = offsetof(struct FragSpecData, contrast);
 	spec_entries[11].size = sizeof(frag_spec_data.contrast);
 
-	frag_spec_info.mapEntryCount = 12;
+	spec_entries[12].constantID = 12;
+	spec_entries[12].offset = offsetof(struct FragSpecData, bloom_saturation);
+	spec_entries[12].size = sizeof(frag_spec_data.bloom_saturation);
+
+	frag_spec_info.mapEntryCount = 13;
 	frag_spec_info.pMapEntries = spec_entries;
 	frag_spec_info.dataSize = sizeof( frag_spec_data );
 	frag_spec_info.pData = &frag_spec_data;
@@ -5376,7 +5426,12 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 
 	Com_Memset(&attachment_blend_state, 0, sizeof(attachment_blend_state));
 	attachment_blend_state.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-	if ( blend ) {
+	if ( blend == 2 ) {
+		// [QL] the light over the scene: scene * (1 - bloom) + bloom
+		attachment_blend_state.blendEnable = VK_TRUE;
+		attachment_blend_state.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+		attachment_blend_state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+	} else if ( blend ) {
 		attachment_blend_state.blendEnable = VK_TRUE;
 		attachment_blend_state.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
 		attachment_blend_state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
@@ -5472,10 +5527,16 @@ void vk_create_blur_pipeline( uint32_t index, uint32_t width, uint32_t height, q
 
 	// shaders
 	set_shader_stage_desc( shader_stages+0, VK_SHADER_STAGE_VERTEX_BIT, vk.modules.gamma_vs, "main" );
-	set_shader_stage_desc( shader_stages+1, VK_SHADER_STAGE_FRAGMENT_BIT, vk.modules.blur_fs, "main" );
-
-	frag_spec_data[0] = 1.2 / (float) width; // x offset
-	frag_spec_data[1] = 1.2 / (float) height; // y offset
+	// [QL] Quake Live's blur reads its own offsets, a texel apart
+	if ( r_enablePostProcess->integer && r_enableBloom->integer ) {
+		set_shader_stage_desc( shader_stages+1, VK_SHADER_STAGE_FRAGMENT_BIT, vk.modules.ql_blur_fs, "main" );
+		frag_spec_data[0] = 1.0 / (float) width;
+		frag_spec_data[1] = 1.0 / (float) height;
+	} else {
+		set_shader_stage_desc( shader_stages+1, VK_SHADER_STAGE_FRAGMENT_BIT, vk.modules.blur_fs, "main" );
+		frag_spec_data[0] = 1.2 / (float) width; // x offset
+		frag_spec_data[1] = 1.2 / (float) height; // y offset
+	}
 	frag_spec_data[2] = 1.0; // intensity?
 
 	if ( horizontal_pass ) {
@@ -7530,7 +7591,7 @@ void vk_end_frame( void )
 	{
 		vk.cmd->last_pipeline = VK_NULL_HANDLE; // do not restore clobbered descriptors in vk_bloom()
 
-		if ( r_bloom->integer )
+		if ( r_bloom->integer && !r_bloomActive->integer )
 		{
 			vk_bloom();
 		}
@@ -7934,6 +7995,68 @@ void vk_read_pixels( byte *buffer, uint32_t width, uint32_t height )
 
 		end_command_buffer( command_buffer, "restore layout" );
 	}
+}
+
+
+// [QL] one blur pass: where it lands and what it reads
+static void vk_ql_blur_pass( uint32_t index, uint32_t source )
+{
+	vk_begin_blur_render_pass( index );
+	qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.blur_pipeline[ index ] );
+	qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.bloom_image_descriptor[ source ], 0, NULL );
+	qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
+	vk_end_render_pass();
+}
+
+
+/*
+=============
+vk_ql_bloom
+
+[QL] render command 10 (0x436ec0): the scene at half size, what is bright kept and stretched
+back, blurred down and across, again at a quarter with r_bloomPasses 2, and the light laid over
+the scene. The blend gives scene * (1 - bloom) + bloom, so the scene is never read.
+=============
+*/
+qboolean vk_ql_bloom( void )
+{
+	qboolean quarter = ( r_bloomPasses->value > 1.0f && vk.blur_pipeline[3] ) ? qtrue : qfalse;
+
+	if ( vk.renderPassIndex == RENDER_PASS_SCREENMAP || !vk.fboActive || !backEnd.doneSurfaces ) {
+		return qfalse;
+	}
+
+	if ( backEnd.doneBloom || !vk.ql_bright_pipeline || !vk.ql_bloom_pipeline ) {
+		return qfalse;
+	}
+
+	vk_end_render_pass();
+
+	// the scene at half size, and what is brighter than the threshold
+	vk_begin_blur_render_pass( 0 );
+	qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.ql_bright_pipeline );
+	qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.color_descriptor, 0, NULL );
+	qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
+	vk_end_render_pass();
+
+	vk_ql_blur_pass( 1, 1 );
+	vk_ql_blur_pass( 0, 2 );
+
+	if ( quarter ) {
+		vk_ql_blur_pass( 3, 1 );
+		vk_ql_blur_pass( 2, 3 );
+	}
+
+	vk_begin_post_bloom_render_pass();
+	qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.ql_bloom_pipeline );
+	qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1,
+		&vk.bloom_image_descriptor[ quarter ? 3 : 1 ], 0, NULL );
+	qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
+
+	vk.cmd->last_pipeline = VK_NULL_HANDLE;
+	backEnd.doneBloom = qtrue;
+
+	return qtrue;
 }
 
 

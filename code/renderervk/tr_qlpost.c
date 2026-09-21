@@ -91,13 +91,24 @@ void R_QLPostRegister( void ) {
 	r_bloomSceneSaturation = ri.Cvar_GetRange( "r_bloomSceneSaturation", "1.0", "0.0", "10.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE );
 	r_colorCorrectActive = ri.Cvar_Get( "r_colorCorrectActive", "0", CVAR_ROM | CVAR_TEMP );
 	r_contrast = ri.Cvar_Get( "r_contrast", "1.0", CVAR_ARCHIVE | CVAR_USERSAVE );
-	// the gamma pass bakes it, so a change rebuilds the pipeline
-	RI_Cvar_SetGroup( r_contrast, CVG_RENDERER );
 	r_enableBloom = ri.Cvar_Get( "r_enableBloom", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
 	r_enableColorCorrect = ri.Cvar_Get( "r_enableColorCorrect", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
 	r_enablePostProcess = ri.Cvar_Get( "r_enablePostProcess", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
 	r_floatingPointFBOs = ri.Cvar_Get( "r_floatingPointFBOs", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_postProcessActive = ri.Cvar_Get( "r_postProcessActive", "0", CVAR_ROM | CVAR_TEMP );
+
+	// the pipelines bake these, so a change has to rebuild them
+	RI_Cvar_SetGroup( r_contrast, CVG_RENDERER );
+	RI_Cvar_SetGroup( r_bloomBrightThreshold, CVG_RENDERER );
+	RI_Cvar_SetGroup( r_bloomIntensity, CVG_RENDERER );
+	RI_Cvar_SetGroup( r_bloomSaturation, CVG_RENDERER );
+
+	// [QL] the bloom works in the renderer's own buffers, so it asks Quake3e's for them
+	if ( r_enablePostProcess->integer && r_enableBloom->integer ) {
+		ri.Cvar_Set( "r_bloom", "1" );
+	} else {
+		ri.Cvar_Set( "r_bloom", "0" );
+	}
 }
 
 /*
@@ -121,22 +132,67 @@ void R_QLPostInit( void ) {
 	if ( r_enableColorCorrect->integer ) {
 		ri.Cvar_Set( "r_colorCorrectActive", "1" );
 	}
+
+	// the pipelines arrive later, when R_InitImages builds them out of r_bloom
+	if ( r_enableBloom->integer ) {
+		ri.Cvar_Set( "r_bloomActive", "1" );
+	}
 }
 
 void R_QLPostShutdown( void ) {
 }
 
+/*
+=============
+RE_BeginBloomScene
+
+[QL] refexport 30 (0x43cba0), before the 3D view: queues render command 11, which here has
+nothing to do because the scene always lands in our own attachment
+=============
+*/
 void RE_BeginBloomScene( void ) {
 }
 
+/*
+=============
+RE_ApplyBloom
+
+[QL] refexport 31 (0x4384d0), after the 3D view: queues render command 10
+=============
+*/
 void RE_ApplyBloom( void ) {
+	bloomCommand_t *cmd;
+
+	if ( !tr.registered || !r_bloomActive->integer ) {
+		return;
+	}
+	cmd = R_GetCommandBuffer( sizeof( *cmd ) );
+	if ( !cmd ) {
+		return;
+	}
+	cmd->commandId = RC_BLOOM;
 }
 
+/*
+=============
+RB_BloomScene
+
+[QL] render command 11 (0x437a50)
+=============
+*/
 const void *RB_BloomScene( const void *data ) {
 	return (const void *)( (const bloomCommand_t *)data + 1 );
 }
 
 const void *RB_Bloom( const void *data ) {
+	if ( tess.numIndexes ) {
+		RB_EndSurface();
+	}
+
+	if ( r_bloomActive->integer ) {
+		vk_ql_bloom();
+	}
+
 	return (const void *)( (const bloomCommand_t *)data + 1 );
 }
 
