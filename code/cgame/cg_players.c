@@ -828,14 +828,9 @@ void CG_ResolveHeadSkinName(clientInfo_t* ci, qboolean modelForced, qboolean ski
 ==============
 CG_ResolveModelForClient
 
-[QL] 0x1003e0c0, for every player but the local one (and the local player infected in Red
-Rover). The viewer is the local player, or the followed one; the viewer's team decides between
-cg_forceEnemyModel/Skin and cg_forceTeamModel/Skin (in Duel the opponent is the enemy), and
-cg_forceRedTeamModel and cg_forceBlueTeamModel override the model per team. A spectator who
-follows nobody forces nothing but the per-team models. Red Rover's infected are bones. Nothing
-is forced in training or while the server pins the model (g_playermodelOverride), and the head
-is left alone while it pins the head model. It reads cg.predictedPlayerState, which is valid
-before the first snapshot.
+[QL] 0x1003e0c0, for every player but the local one. The viewer's team picks between
+cg_forceEnemyModel and cg_forceTeamModel, with cg_forceRedTeamModel and cg_forceBlueTeamModel
+overriding per team. Nothing is forced in training or while the server pins the model.
 ==============
 */
 static void CG_ResolveModelForClient(clientInfo_t* ci, int clientNum) {
@@ -959,13 +954,9 @@ void CG_UpdateAllModelScales(void) {
 ======================
 CG_NewClientInfo
 
-[QL] 0x1003e640. The name carries the clan tag ("cn"); "c1" and "c2" are among the 26 colours.
-modelName keeps the "model/skin" the player picked: CG_ResolveModelForClient splits it for every
-other player, forcing their models, and the local player splits it here and wears the team's
-colour in team games. headModelName/headSkinName name the icon (the team's colour in team
-games); forcedHeadModel/forcedHeadSkin are the head that is loaded, from "hmodel" when the
-server allows custom heads (g_allowCustomHeadmodels). When the local player changes, every other
-player is read again against the new team.
+[QL] 0x1003e640. The name carries the clan tag ("cn") and "c1"/"c2" are among the 26 colours.
+modelName keeps what the player picked; forcedHeadModel is the head actually loaded, from
+"hmodel" when g_allowCustomHeadmodels allows it.
 ======================
 */
 void CG_NewClientInfo(int clientNum) {
@@ -2005,15 +1996,9 @@ qhandle_t CG_ChatBalloonShader(void) {
 ===============
 CG_PlayerFloatSprite
 
-// Address: 0x10040cd0
-[QL] A teammate's sprite goes to the shared floating-effect pool (FE_FLOAT_SPRITE), 48 units
-over the player and sized by the teammate marker cvars, so it shows through walls. Its tint
-follows the teammate's health against this client's maximum: red to yellow while hurt, then
-yellow to white up to twice the maximum, and plain yellow while this client is a spectator or
-dead (pm_type & 2). An enemy gets Quake 3's RT_SPRITE, radius 10 and 48 units above the origin
-(0x10040f98). In Red Rover with infection only the infected see a survivor's sprite, in the
-pool, fading out as the survivor's speed reaches CS_INFECTED_SURVIVOR_MINSPEED (0x10040e29).
-Nobody sees their own sprite in first person.
+[QL] 0x10040cd0. A teammate's sprite goes to the floating-effect pool so it shows through
+walls, tinted by their health; an enemy gets Quake 3's flat RT_SPRITE (0x10040f98). In Red
+Rover only the infected see a survivor's, fading with their speed (0x10040e29).
 ===============
 */
 static void CG_PlayerFloatSprite(centity_t* cent, qhandle_t shader, qboolean sameTeam) {
@@ -2094,20 +2079,9 @@ static void CG_PlayerFloatSprite(centity_t* cent, qhandle_t shader, qboolean sam
 ===============
 CG_PlayerSprites
 
-[QL] 0x100411a0. Retail calls it only with cg_drawSprites (0x10041cd1), and never for your own
-player unless cg_drawSpriteSelf. The first match wins:
-- the connection icon;
-- in 1-Flag CTF, a teammate carrying the flag;
-- in the team modes, with cg_teammatePOIs and no cg_teammateNames, a teammate carrying a flag,
-  in its "hit" version for 1.5 s after a pain event;
-- in Freeze Tag, a frozen teammate;
-- the talk balloon, but not on the dead;
-- the medals;
-- in Red Rover with infection, the bite over a survivor, for the infected;
-- in the team modes, with cg_teammatePOIs and no cg_teammateNames, a living teammate's marker,
-  in its "hit" version for cg_drawHitFriendTime after a pain event.
-With infection the infected don't see a survivor's balloon, nor the impressive, excellent and
-gauntlet medals. sameTeam picks the sprite kind.
+[QL] 0x100411a0, only with cg_drawSprites (0x10041cd1) and never for your own player unless
+cg_drawSpriteSelf. One sprite wins, in the order below. With infection the infected see
+neither a survivor's balloon nor the impressive, excellent and gauntlet medals.
 ===============
 */
 static void CG_PlayerSprites(centity_t* cent) {
@@ -2346,20 +2320,10 @@ Also called by CG_Missile for quad rockets, but nobody can tell...
 =================
 CG_AddRefEntityWithPowerups
 
-The model and then one pass per thing covering it. The order and the conditions are
-the binary's.
-
-[QL] 0x10041860:
-  - with bit 0x2000000 of CS_CUSTOM_SETTINGS -- players pass through each other --
-    everyone else is drawn with noPlayerClipShader and nothing more;
-  - invisibility hides everything else;
-  - spawn protection lives in powerups[0] and switches shader while the player is
-    taking damage;
-  - regeneration blinks: one tenth of every second only;
-  - frozen is three ice shaders, and generic1 says which: it melts from ice1 to
-    ice3 as the player is thawed.
-
-Retail has no red version of the quad: it is the same shader for both teams.
+[QL] 0x10041860. The model, then one pass per thing covering it, in the binary's order.
+Spawn protection lives in powerups[0], regeneration blinks one tenth of every second, and
+frozen is three ice shaders picked by generic1 as the player thaws. Retail has no red quad:
+both teams share the shader.
 =================
 */
 void CG_AddRefEntityWithPowerups(refEntity_t* ent, entityState_t* state, int team) {
@@ -2482,13 +2446,10 @@ static void Color_UnpackScale(refEntity_t* ent, int packed, int scale) {
 ==============
 CG_PlayerTeamSkins
 
-[QL] 0x100419f0. Tints the legs, torso and head with the team or enemy colours
-(cg_team*Color / cg_enemy*Color, packed 0xRRGGBBAA), which the bright skins pick up through
-rgbGen entity. The viewer is cg.predictedPlayerState's client; a spectator who follows nobody
-sees blue as the enemy, and a forced red or blue team model decides that team's side. Dead
-bodies take cg_deadBodyColor. The colours are doubled unless Quake Live's colour correction pass
-is running (r_colorCorrectActive), which brightens the whole screen by the same factor; the
-fork's renderer has no such pass, so they are doubled.
+[QL] 0x100419f0. Tints legs, torso and head with the team or enemy colours, which the bright
+skins pick up through rgbGen entity; dead bodies take cg_deadBodyColor. The colours are
+doubled, because retail's colour correction pass would otherwise halve them and this renderer
+has no such pass.
 ==============
 */
 static void CG_PlayerTeamSkins(centity_t* cent, refEntity_t* legs, refEntity_t* torso, refEntity_t* head) {
@@ -2565,18 +2526,10 @@ static void CG_PlayerTeamSkins(centity_t* cent, refEntity_t* legs, refEntity_t* 
 ==============
 CG_PlayerOutline
 
-// Address: 0x10041060
-[QL] Draws a coloured team/enemy outline decal under an entity. The shipped binary calls
-this from the entity dispatch (cg_ents.c) for the Attack & Defend objective entities - it
-is NOT called from CG_Player. The outline shader is chosen from the outline media by style
-(currentState.powerups-1, offset 0xC4) and friend/enemy; colour is by team
-(currentState.modelindex2, offset 0xAC); currentState.weapon (0xD0) selects the "powerup"
-shader variant.
-
-QL emits this as a screen-projected billboard through the shared floating-effect pool
-(FE_OUTLINE record -> CG_AllocFloatingEffect, rendered by CG_DrawFloatingEffects). The
-outline is a team-coloured billboard 80 world units above the entity, sized from the POI
-width cvars (binary DAT_10a634e8 / DAT_10a69248) - NOT a ground decal.
+[QL] 0x10041060, called from the entity dispatch for the Attack & Defend objectives, not
+from CG_Player. The shader comes from powerups-1 and friend/enemy, the colour from
+modelindex2, and weapon picks the powerup variant. It is a billboard in the floating-effect
+pool 80 units above the entity, not a ground decal.
 ==============
 */
 void CG_PlayerOutline(centity_t* cent) {
@@ -2642,16 +2595,10 @@ void CG_PlayerOutline(centity_t* cent) {
 ==============
 CG_PlayerFreezeEffect
 
-// Address: 0x10040870
-[QL] Draws a coloured ground glow under the local (followed) player when frozen or when
-carrying a flag, keyed on currentState.generic1 & 0x3f (offset 0xE0, the frozen bits) and
-the flag powerups. Runs only for the entity of the client being followed/played.
-
-QL emits these as screen-projected billboards through the shared floating-effect pool
-(FE_FREEZE records -> CG_AllocFloatingEffect, rendered by CG_DrawFloatingEffects) 64 world
-units above the entity, NOT ground decals.
-The binary's first block is gated on
-gametype 8, which couldn't be fully reconciled from the stripped build.
+[QL] 0x10040870, only for the client being played or followed, keyed on generic1 & 0x3f and
+the flag powerups. Billboards in the floating-effect pool 64 units above the entity, not
+ground decals. The binary's first block is gated on gametype 8, which the stripped build
+does not resolve.
 ==============
 */
 static void CG_PlayerFreezeEffect(centity_t* cent) {

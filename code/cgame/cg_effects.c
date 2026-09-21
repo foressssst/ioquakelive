@@ -158,15 +158,8 @@ localEntity_t* CG_SmokePuff(const vec3_t p, const vec3_t vel, float radius, floa
 ==================
 CG_SmokePuff_ql
 
-[wolfcam] cg_localents.c. CG_SmokePuff with one line taken out: the puff is
-not given a random rotation. A smoke cloud wants one so that neighbouring
-puffs do not look stamped from the same die; a 3.5 unit spark is round and a
-rotation on it costs a multiply for nothing.
-
-Both callers overwrite rotation with 0 straight afterwards, so this is not
-strictly load-bearing - but it is the function wolfcam's gib code calls, and
-keeping them apart means a later change to one cannot quietly alter the
-other.
+[wolfcam] CG_SmokePuff without the random rotation: a 3.5 unit spark is round,
+so the rotation costs a multiply for nothing.
 ==================
 */
 localEntity_t* CG_SmokePuff_ql(const vec3_t p, const vec3_t vel, float radius, float r, float g, float b, float a, float duration, int startTime, int fadeInTime, int leFlags, qhandle_t hShader) {
@@ -259,17 +252,10 @@ void CG_SpawnEffect(vec3_t org) {
 ==================
 CG_SpawnIceShard
 
-[QL] Launches a single ice-shard fragment (same shape as CG_LaunchGib):
-LE_FRAGMENT, axisDefault orientation, TR_GRAVITY trajectory (value 5 in the
-binary), bounceFactor 0.6, endTime = startTime + 5000 + random()*3000.
-
-El binario deja leBounceSoundType = leMarkType = 4. El 4 es el hielo: mientras el
-pedazo vuela va dejando estela (CG_IceTrail, 0x1001d790). El sonido de rebote de
-ese tipo todavia no esta mapeado.
-
-Calling convention (binary): hModel is the single stack argument, origin comes
-in EBX and velocity in EDI; expressed here as a normal 3-arg C function.
-// Address: 0x10014670
+[QL] 0x10014670. One ice fragment, shaped like CG_LaunchGib: LE_FRAGMENT,
+TR_GRAVITY, bounceFactor 0.6, endTime + 5000 + random() * 3000. Its
+leBounceSoundType and leMarkType are 4, the ice type, which trails through
+CG_IceTrail (0x1001d790).
 ==================
 */
 void CG_SpawnIceShard(const vec3_t origin, const vec3_t velocity, qhandle_t hModel) {
@@ -389,19 +375,9 @@ void CG_LightningBoltBeam(vec3_t start, vec3_t end) {
 ==================
 CG_LightningDischargeEffect
 
-[QL] Brief electrical-discharge sprite for the lightning gun's water/self
-discharge. Takes the discharge intensity (no origin): the sprite is spawned
-at the viewer (cg.refdef.vieworg). Final leType is LE_SCALE_FADE, handled by
-CG_AddScaleFade.
-
-  radius   = (intensity * 10 + 48) >> 4
-  duration = intensity + 300
-
-The binary calls CG_SpawnParticleEffect (0x10012f30), which is a
-CG_SmokePuff-equivalent spawner (fadeInTime = 0, zero velocity). Since
-LE_SCALE_FADE uses only re->origin and radius, CG_SmokePuff does the
-job.
-// Address: 0x10013310
+[QL] 0x10013310. The lightning gun's discharge sprite, spawned at the viewer:
+radius = (intensity * 10 + 48) >> 4, duration = intensity + 300. LE_SCALE_FADE
+reads only origin and radius, so CG_SmokePuff does the job.
 ==================
 */
 void CG_LightningDischargeEffect(int intensity) {
@@ -735,13 +711,10 @@ void CG_UpdateFloatingEffects(void) {
 /*
 ==================
 CG_DrawFloatingEffects
-// Address: 0x10011680
-[QL] Ghidra "CG_DrawDamagePlums" - renders the WHOLE pool, not only plums. Every active record
-in front of the view, except a world sprite (FE_SPRITE) of the viewer's own team (team modes)
-or, with custom setting 0x40000, of the viewer himself. Its size is the larger of minPixels and
-twice the projected height of half worldSize, in 480-line units, and it drifts linearly plus
-quadratically with the life fraction. The text goes through CG_DrawText in the 640x480 space;
-the picture is drawn in real pixels, square, scaled by the vertical screen scale.
+
+[QL] 0x10011680, which Ghidra names CG_DrawDamagePlums: it draws the whole pool,
+not only plums. A world sprite of the viewer's own team is skipped, and so is one
+of the viewer himself under custom setting 0x40000.
 ==================
 */
 void CG_DrawFloatingEffects(void) {
@@ -926,32 +899,12 @@ CG_Bleed
 
 The spurt of blood when a character gets hit.
 
-[QL] cgamex86.dll 0x10013da0. Q3 built a rotating RT_SPRITE of radius 24 by
-hand and left it as LE_EXPLOSION. QL routes the whole thing through
-CG_SmokePuff (0x10012f30) and then overrides two fields, exactly the way
-CG_BloodTrail does:
+[QL] 0x10013da0. Routed through CG_SmokePuff and then overridden: radius 32,
+duration 500, shader bloodSpray[rand() & 3], trDelta[2] 40 so the puff sinks.
 
-    0x10013e2e  radius   = 32.0     (0x10067224, was 24 in Q3)
-    0x10013e02  duration = 500.0    (0x10073d68)
-    0x10013dfb  shader   = bloodSpray[rand() & 3]
-    0x10013e4d  leType   = 6        -> LE_FALL_SCALE_FADE, see note below
-    0x10013e54  trDelta[2] = 40.0   (0x10073c68), so the puff sinks as it fades
-
-On the leType: the binary's 6 is not the fork's 6. QL's leType enum carries one
-extra entry between LE_MOVE_SCALE_FADE and LE_FALL_SCALE_FADE, which shifts
-everything after it by one. Two independent anchors pin that down - the gib
-launcher stores 3 (0x10014509) where both enums agree on LE_FRAGMENT, and
-CG_SpawnEffect stores 7 where the fork uses LE_FADE_RGB (6). So QL 6 is the
-fork's LE_FALL_SCALE_FADE (5), which is also what Q3's own blood trail used and
-what makes the trDelta[2] drop mean anything. leType never leaves cgame, so the
-symbol is what matters here, not the number.
-
-Not replicated: at 0x10013daf the binary allocates a local entity, sets
-RF_THIRD_PERSON on it for your own blood and gives it a random rotation, then
-overwrites the register holding it with the origin argument and never uses it
-again - dead work left behind when this was refactored onto CG_SmokePuff. The
-self-blood check is kept here on the entity that actually gets drawn, which is
-what Q3 intended and what the fork already did.
+The binary's leType 6 is this tree's LE_FALL_SCALE_FADE (5). QL's enum carries
+one extra entry earlier on, pinned by the gib launcher storing 3 where both
+agree and by CG_SpawnEffect storing 7 for LE_FADE_RGB.
 =================
 */
 void CG_Bleed(vec3_t origin, int entityNum) {
@@ -994,16 +947,10 @@ void CG_Bleed(vec3_t origin, int entityNum) {
 ==================
 CG_BloodSplatEffect
 
-The blood thrown off at an impact point. QL calls this twice per hit rather
-than once (CG_MissileHitPlayer and the rail/lightning paths in cg_weapons.c),
-which is where the heavier look comes from.
-
-The binary has a dedicated splat routine around 0x1001da00 that picks from
-bloodSpray[2 + (rand() & 1)] and randomises the radius over 16..47
-(0x1001da52: `and esi, 0x1f; add esi, 0x10`), but it carries a 0x1794-byte
-frame and a good deal of decal work that has not been decoded, so it is not
-reproduced here. What is reproduced is the pair of blood puffs at the hit
-point, which is the visible part.
+The blood thrown off at an impact point, called twice per hit as QL does, which
+is where the heavier look comes from. The binary's own splat routine
+(0x1001da00) carries decal work that is not decoded, so only the pair of puffs
+is reproduced.
 ==================
 */
 void CG_BloodSplatEffect(vec3_t origin, int entityNum) {
@@ -1014,16 +961,10 @@ void CG_BloodSplatEffect(vec3_t origin, int entityNum) {
 ==================
 CG_SpawnParticleEffect
 
-[QL] cgamex86.dll 0x10012f30: one impact spark. A sprite that flies off along vel and fades as it
-goes, which is what the four hit paths spawn while cg_impactSparks is on (0x10054ced, 0x10055577,
-0x10055b67, 0x1005635f), each with size, lifetime and upward speed from their cvars.
-
-The picture is all in the sprite: the shader is gfx/misc/tracer, it starts at a random rotation,
-and the local entity is a LE_MOVE_SCALE_FADE, which CG_AddMoveScaleFade shrinks and fades over the
-life. Retail keeps the origin in a register instead of an argument, so it is one here.
-
-The RagePro branch (a 1998 card, glconfig.hardwareType 3) swaps the shader for smokePuffRagePro
-and draws it white; this engine has no such hardware type, so only the sprite path is here.
+[QL] 0x10012f30. One impact spark: a gfx/misc/tracer sprite at a random rotation,
+LE_MOVE_SCALE_FADE, spawned by the four hit paths while cg_impactSparks is on
+(0x10054ced, 0x10055577, 0x10055b67, 0x1005635f). The RagePro branch is left out:
+this engine has no such hardware type.
 ==================
 */
 void CG_SpawnParticleEffect(vec3_t origin, vec3_t vel, float size, float r, float g, float b, float a,
@@ -1367,17 +1308,10 @@ static void CG_LaunchGib(vec3_t origin, vec3_t velocity, qhandle_t hModel) {
 ===================
 CG_GibPlayerBodyParts
 
-[QL] cgamex86.dll 0x10014cad, the branch taken when the gore pack is
-installed. Eleven pieces thrown from the body origin, each at
-crandom() * 250 on x and y and 250 + crandom() * 250 upwards, with the head
-decided by a coin flip (0x10014cb9: `call rand; test al, 1`). That is Quake
-3's CG_GibPlayer to the constant, which is the point - the pack exists to
-give Quake 3's gibs back.
-
-Unreachable on a stock install, and untestable here for the same reason: the
-models are workshop content and nothing in this tree may redistribute them.
-It is written out anyway so that a player who installs the pack gets the
-effect rather than eleven invisible fragments.
+[QL] 0x10014cad, the branch taken when the gore pack is installed. Eleven pieces
+thrown from the body origin, with the head decided by a coin flip (0x10014cb9).
+That is Quake 3's CG_GibPlayer to the constant, which is the point of the pack.
+Unreachable, and so untestable, on a stock install.
 ===================
 */
 static void CG_GibPlayerBodyParts(vec3_t playerOrigin) {
@@ -1410,35 +1344,13 @@ static void CG_GibPlayerBodyParts(vec3_t playerOrigin) {
 ===================
 CG_GibPlayer
 
-[QL] cgamex86.dll 0x10014c80. There is no cvar here, and that is the whole
-design. The first thing the function does is
+[QL] 0x10014c80. There is no cvar: the switch is whether dlc_gibs/skull.md3
+registered (the handle at 0x10a5f430, tested at 0x10014c94). With the gore pack
+installed the body parts come out, without it the electrogibs do. The same handle
+steers the death sound (0x1001bf80), the bounce sound (0x1001ec16) and the juiced
+effect (0x1001ab39).
 
-  0x10014c94  cmp dword ptr [0x10a5f430], 0
-  0x10014ca7  je  0x10014d99
-
-and 0x10a5f430 is not a flag - it is the qhandle_t that 0x10024343 filled in
-from trap_R_RegisterModel("dlc_gibs/skull.md3"). Install the Steam Workshop
-gore pack and the handle resolves, so the body parts come out; leave it off
-and the handle is 0 and the electrogibs do. That one test is Quake Live's
-entire enable/disable, and it is what the player is choosing when they
-subscribe to the pack.
-
-cg_blood exists in the retail cvar table (0x10076b50: default "1", range 0
-to 1, archived) but nothing in cgamex86.dll ever reads it back - there is not
-one reference to its vmCvar_t anywhere in .text. It survives so that old
-configs keep parsing, not because it does anything.
-
-The same handle steers the other three places gore and electrogibs differ:
-0x1001bf80 picks the death sound, 0x1001ec16 picks the bounce sound, and
-0x1001ab39 picks the juiced-player effect.
-
-On the direction: a Quake Live server packs the direction of the last hit
-into EV_GIB_PLAYER's eventParm, and since GibEntity (0x10046d80) was ported
-this fork's does too. Retail's CG_EntityEvent does not seem to decode it: its
-EV_GIB_PLAYER case hands 0x10014c80 a local vector the function sets to
-(0, 0, -1) on entry (0x10019eea) and a flag of 1. That reading is not
-confirmed yet, so for now the callers pass a direction explicitly, and a null
-or zero one means straight up.
+cg_blood is in retail's cvar table and nothing reads it back.
 ===================
 */
 void CG_GibPlayer(vec3_t playerOrigin, vec3_t dir) {
