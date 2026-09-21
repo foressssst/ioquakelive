@@ -933,12 +933,9 @@ static gitem_t* CG_FindItemByTypeTag(int type, int tag) {
 =================
 CG_DrawPersistantPowerUp
 
-[QL] cgamex86.dll 0x100310f0, the handler of CG_CTF_POWERUP (60). Draws the icon of the
-persistant powerup (rune) in stats[STAT_RUNE], in any gametype. The case used to call a
-Quake 3 "selected team player's weapon" drawer, from a Ghidra name for the slot.
-
-CG_RegisterItemVisuals is an addition: retail relies on the icon having been registered
-already, and an unregistered one would draw the default shader.
+[QL] 0x100310f0, CG_CTF_POWERUP (60). The icon of the rune in stats[STAT_RUNE], in
+any gametype. CG_RegisterItemVisuals is an addition: retail relies on the icon
+having been registered already.
 =================
 */
 static void CG_DrawPersistantPowerUp(rectDef_t* rect) {
@@ -2453,15 +2450,11 @@ static void CG_DrawSpeedometer(rectDef_t *rect, float scale, vec4_t color, int t
 =================
 CG_HealthGradientColor
 
-[QL] cgamex86.dll 0x1000ca90. The health tint used by CG_HEALTH_COLORIZED, a smooth
-gradient rather than steps:
-  max    = handicap / 100 * g_startingHealth, falling back to g_startingHealth when
-           that is below 1 or above it (0x1000cab7)
-  health <  max : (1, health/max, 0)            red towards yellow
-  health >= max : (1, 1, min(health/(2*max), 1)) yellow towards white
-The per-client value read is clientInfo_t+0x130 in the binary; it is taken here to be
-the handicap from how it is used (x / 100 * g_startingHealth) - the fork's clientInfo_t
-does not share the binary's layout, so the offset cannot be matched field for field.
+[QL] 0x1000ca90. The health tint of CG_HEALTH_COLORIZED, a gradient rather than
+steps: below max it runs red to yellow, above it yellow to white, with max =
+handicap / 100 * g_startingHealth clamped to g_startingHealth (0x1000cab7). The
+per-client value at clientInfo_t+0x130 is taken to be the handicap from how it is
+used; the fork's clientInfo_t does not share the binary's layout.
 =================
 */
 void CG_HealthGradientColor(int clientNum, int health, vec3_t out) {
@@ -2851,26 +2844,14 @@ static void CG_DrawDuelPlayerAvatar(rectDef_t *rect, int ownerDraw) {
 =================
 CG_DrawDuelHealthArmorBar
 
-[QL] cgamex86.dll 0x10033040, for CG_1ST_PLYR_HEALTH_ARMOR (116) and
-CG_2ND_PLYR_HEALTH_ARMOR (206) - the health and armor bars of the competitive
-spectator HUD. Transcribed; the version kept before was an approximation that said so.
-
-  - Ids 193..282 are the second player's, everything else the first's (0x10033043).
-    The player is cgs.clientNum1stPlayer / clientNum2ndPlayer (0x10a40450/0x10a40454).
-  - Nothing is drawn unless cg_specDuelHealthArmor is set, the entity's eType passes
-    the binary's `& 0xb` test (0x10033091), and it is not EF_DEAD (0x10033166).
-  - Health and armor come from the local playerState when that player is the one the
-    snapshot belongs to, otherwise from the entity's currentState.health/armor.
-  - The scale is 2 * maxHealth, maxHealth = handicap / 100 * g_startingHealth, clamped
-    to g_startingHealth. Bars are anchored toward the middle: the FIRST player's bar is
-    right-aligned in its rect, the SECOND player's left-aligned.
-  - Health bar: 8 units tall at y+2, gold (1,0.8,0.2) unless cg_specDuelHealthColor
-    gives it the health gradient.
-  - Damage trail: while the last hit is under 2 s old (cg.damageTime for the local
-    player, pe.painTime for others), the health lost since the stored value is drawn
-    next to the bar in red, half-transparent when cg_specDuelHealthColor is set. The
-    stored value is refreshed only once the hit is older than that (0x100332ec).
-  - Armor bar: 2 units tall at y+10, cyan, width armor / scale * handicap / 100.
+[QL] 0x10033040, CG_1ST_PLYR_HEALTH_ARMOR (116) and CG_2ND_PLYR_HEALTH_ARMOR (206):
+the health and armor bars of the competitive spectator HUD. Ids 193..282 are the
+second player's, the rest the first's. Nothing is drawn unless
+cg_specDuelHealthArmor is set, the eType passes the binary's `& 0xb` test
+(0x10033091) and the player is not EF_DEAD. The bars are anchored toward the middle
+and scaled to 2 * maxHealth. While the last hit is under 2 s old the health lost
+since the stored value is drawn beside the bar in red; the stored value is only
+refreshed once the hit is older than that (0x100332ec).
 =================
 */
 static void CG_DrawDuelHealthArmorBar(rectDef_t *rect, int ownerDraw) {
@@ -3170,12 +3151,9 @@ static void CG_DrawGameTypeIcon(rectDef_t *rect) {
 =================
 CG_DrawTeamColorized
 
-[QL] cgamex86.dll 0x1002f5d0. Tints the item's shader with the colour of the local
-playerState's team (persistant[PERS_TEAM]), taking only the alpha from the item. The
-table (0x10076264, 0x100785f0, 0x10078600, 0x10076224, 0x10076214) applies in every
+[QL] 0x1002f5d0. Tints the item's shader with the colour of the local playerState's
+team, taking only the alpha from the item. The five-colour table applies in every
 gametype - there is no team-game gate - and the shader is always drawn as a pic.
-The version kept before only coloured RED and BLUE, with other colours, and only in
-team games.
 =================
 */
 static void CG_DrawTeamColorized(rectDef_t *rect, vec4_t color, qhandle_t shader) {
@@ -3207,13 +3185,10 @@ static void CG_DrawTeamColorized(rectDef_t *rect, vec4_t color, qhandle_t shader
 =================
 CG_DrawArmorTieredColorized
 
-[QL] cgamex86.dll 0x1002f780. The tint follows the ARMOR TIER (stats[STAT_ARMORTYPE],
-ps+0xf8), not the amount: tier 0 green (0,1,0), tier 1 yellow (1,1,0), tier 2 red
-(1,0,0), alpha from the item. The version kept before stepped on the armor value with
-invented colours.
-
-For a tier outside 0..2 the binary sets the colour from an uninitialised local; that
-cannot be reproduced meaningfully, so the item colour is used as is.
+[QL] 0x1002f780. The tint follows the armor tier (stats[STAT_ARMORTYPE]), not the
+amount: tier 0 green, tier 1 yellow, tier 2 red, alpha from the item. Outside 0..2
+the binary takes the colour from an uninitialised local, so the item's own colour
+is used instead.
 =================
 */
 static void CG_DrawArmorTieredColorized(rectDef_t *rect, vec4_t color, qhandle_t shader) {
@@ -3245,13 +3220,10 @@ static vec3_t obitTeamColors[] = {
 =================
 CG_DrawPlayerObit
 
-[QL] cgamex86.dll 0x1002e9b0, CG_PLAYER_OBIT. Each of the 16 slots lives two
-seconds and fades over its last 200 ms. A line is the attacker's name (team
-coloured, only when there is an attacker), the means-of-death icon as tall as
-the text and half a text height after the name, then the victim's name two
-text heights after the attacker's. Heights come from the victim's name; the
-next line starts text height + 2 lower. Font 0, no text style, the item's
-colour is not used.
+[QL] 0x1002e9b0, CG_PLAYER_OBIT. Each of the 16 slots lives two seconds and fades
+over its last 200 ms: the attacker's name team coloured, the means-of-death icon as
+tall as the text, then the victim's name. Heights come from the victim's name, and
+the next line starts text height + 2 lower. Font 0, no text style.
 =================
 */
 static const float *CG_ObitTeamColor(int team) {
@@ -3715,19 +3687,13 @@ static void CG_Draw1stPlacePlayerModel(rectDef_t *rect) {
 =================
 CG_DrawPlayerStatusLeft / CG_DrawPlayerStatusRight
 
-[QL] cgamex86.dll 0x10037ba0 / 0x10037d60, CG_1ST_PLYR_READY (0x68) / CG_2ND_PLYR_READY (0xc2):
-the duelist's plate from ui/assets/score, left handed for the first player and right handed
-for the second, with its word on it.
-
-  - No valid duelist: nothing, except once the intermission has started, when the empty
-    not-ready plate shows.
-  - Warmup or intermission: READY on the ready plate while the duelist's STAT_CLIENTS_READY bit
-    is up, NOT READY on the not-ready plate otherwise.
-  - In play: LEADS, TRAILS or TIED from CS_SCORE1STPLAYER against CS_SCORE2NDPLAYER.
-
-The fork drew plate handles nobody registered (the grey placeholder box), wrote READY on
-every warmup plate and compared the scoreboard scores. The word is white at 0.16, 16 below the
-plate's top: 16 in on the first plate, right-aligned to x + 164 on the second (0x10037efb).
+[QL] 0x10037ba0 / 0x10037d60, CG_1ST_PLYR_READY (0x68) / CG_2ND_PLYR_READY (0xc2):
+the duelist's plate from ui/assets/score, left handed for the first player and right
+handed for the second. Without a valid duelist nothing shows until the intermission
+starts, and then the empty not-ready plate. In warmup or intermission the word is
+READY or NOT READY from the duelist's STAT_CLIENTS_READY bit; in play it is LEADS,
+TRAILS or TIED from CS_SCORE1STPLAYER against CS_SCORE2NDPLAYER. White at 0.16, 16
+below the plate's top (0x10037efb).
 =================
 */
 static void CG_DrawDuelStatusPlate(rectDef_t *rect, int player) {
@@ -4576,20 +4542,12 @@ void CG_MouseEvent(int x, int y) {
         cgs.activeCursor = cgs.media.sizeCursor;
     }
 
-    // The shared menu code hit-tests against DC->cursorx/cursory, NOT against the
-    // coordinates handed to Display_MouseMove/Display_HandleKey - see Menu_HandleKey's
-    // Rect_ContainsWidescreenPoint call. Until now those two fields were written in
-    // exactly one place, the CG_MOUSE_EVENT dispatch in cg_main.c, and written there
-    // BEFORE this function accumulates the delta. So they always lagged a mouse event
-    // behind, and before the very first mouse movement they were still (0,0) - the top
-    // left corner. Every click on the join menu therefore hit-tested outside the menu
-    // rect and went to Menus_HandleOOBClick instead of the button under the pointer.
-    //
-    // ADAPTATION, not a replica. Retail's CG_MouseEvent (0x1003c4f0) receives an
-    // ABSOLUTE pointer position, un-biases it and assigns cursorX/cursorY, so a
-    // copy-before-dispatch is always current there. ioquake3's engine sends deltas
-    // (cl_input.c CL_MouseEvent), so the fork has to publish the accumulated value
-    // itself.
+    // The shared menu code hit-tests against DC->cursorx/cursory, not against the
+    // coordinates handed to Display_MouseMove - see Menu_HandleKey's
+    // Rect_ContainsWidescreenPoint call - so the accumulated position has to be
+    // published here. Retail's CG_MouseEvent (0x1003c4f0) receives an absolute
+    // position and assigns cursorX/cursorY straight away; ioquake3's engine sends
+    // deltas, so the fork accumulates first and publishes after.
     cgDC.cursorx = cgs.cursorX;
     cgDC.cursory = cgs.cursorY;
 
@@ -4671,23 +4629,10 @@ void CG_KeyEvent(int key, qboolean down) {
         }
     }
 
-    // The menu half is a deliberate replica of the UI module's _UI_KeyEvent (ui_main.c),
-    // releases included: ui_shared's Item_HandleKey needs the release to close its capture,
-    // where retail's menu code hands Menu_HandleKey (0x1005cc70) only the presses.
-    //
-    // The reference is the UI module: a working implementation of menu input against this
-    // same engine, proven by the fact that the Escape menu accepts clicks while the cgame
-    // join menu did not. What cgame had was Quake 3's version with two additions of ours,
-    // and both were wrong:
-    //
-    //   - `if (!down) return;` threw away every key-release event. Item_HandleKey
-    //     needs the release to close its capture (Item_StopCapture), so every click
-    //     left a capture dangling and the next one was swallowed clearing it.
-    //   - A Q3 early-out dumped the key catcher whenever the join menu was not up,
-    //     which is also what the UI module does NOT do.
-    //
-    // cgame's parallel cgs.capturedItem bookkeeping is gone with it: ui_shared owns
-    // that state in `itemCapture` and Menu_HandleKey drives it.
+    // The menu half is a replica of the UI module's _UI_KeyEvent, releases included:
+    // ui_shared's Item_HandleKey needs the release to close its capture, where
+    // retail's menu code hands Menu_HandleKey (0x1005cc70) only the presses. That
+    // state lives in ui_shared's itemCapture, so cgame keeps none of its own.
     if (Menu_Count() <= 0) {
         return;
     }

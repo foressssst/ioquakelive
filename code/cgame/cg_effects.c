@@ -901,10 +901,8 @@ The spurt of blood when a character gets hit.
 
 [QL] 0x10013da0. Routed through CG_SmokePuff and then overridden: radius 32,
 duration 500, shader bloodSpray[rand() & 3], trDelta[2] 40 so the puff sinks.
-
-The binary's leType 6 is this tree's LE_FALL_SCALE_FADE (5). QL's enum carries
-one extra entry earlier on, pinned by the gib launcher storing 3 where both
-agree and by CG_SpawnEffect storing 7 for LE_FADE_RGB.
+The binary's leType 6 is this tree's LE_FALL_SCALE_FADE (5), QL's enum carrying
+one extra entry earlier on.
 =================
 */
 void CG_Bleed(vec3_t origin, int entityNum) {
@@ -1010,27 +1008,19 @@ void CG_SpawnParticleEffect(vec3_t origin, vec3_t vel, float size, float r, floa
 ELECTROGIBS
 
 Quake Live's death effect, reimplemented from wolfcamql's *_ql gib functions.
+wolfcamql plays Quake Live demos on a Quake 3 engine, so those functions are a
+working reconstruction in the same local-entity vocabulary this fork speaks.
 
-wolfcamql is a Quake 3 engine that plays Quake Live demos, so its *_ql
-functions are a working reconstruction of what the retail client draws,
-written in the same local-entity vocabulary this fork already speaks. That
-makes it a far better template than a decompiler listing: the shapes line up
-one to one and nothing has to be guessed at.
+There is no blood in any of it. Retail ships its gore as DLC a stock install
+does not have, and the retail code self-disables when those assets fail to
+resolve, so this is the whole of what Quake Live shows.
 
-There is no blood anywhere in it. Retail ships its gore as DLC that a stock
-install does not have, and the retail code self-disables when those assets
-fail to resolve, so this is the whole of what Quake Live actually shows.
-
-Every number lives in a cg_gib* cvar carrying wolfcam's default. Retail has
-no such cvars - it hardcodes all of this - so they are an addition rather
-than a reconstruction, and the defaults reproduce wolfcam's picture exactly.
-
-A few values are clamped here where wolfcam trusts the user. A cg_gibTime or
-cg_gibStepTime of 0 divides by zero, and a large cg_gibCount overruns
-MAX_LOCAL_ENTITIES - which does not merely drop entities but recycles the one
-CG_AddLocalEntities is walking toward, and crashes the client. The clamps sit
-far outside the useful range, so no reachable setting behaves differently
-from wolfcam.
+Every number lives in a cg_gib* cvar carrying wolfcam's default. Retail
+hardcodes all of it, so the cvars are an addition. A few are clamped where
+wolfcam trusts the user: a cg_gibTime or cg_gibStepTime of 0 divides by zero,
+and a large cg_gibCount overruns MAX_LOCAL_ENTITIES and recycles the entity
+CG_AddLocalEntities is walking toward. The clamps sit far outside the useful
+range.
 ===================
 */
 
@@ -1065,13 +1055,11 @@ static int CG_ElectroGibColorValue(const vmCvar_t* cvar) {
 ===================
 CG_ElectroGibTracerShader
 
-[wolfcam] The coloured paths draw on "wc/tracer" and "wc/tracerHighlight",
-two shaders wolfcamql ships in its own pk3. A Quake Live install has neither,
-and a shader that cannot be found comes back as handle 0 from
-trap_R_RegisterShader - so rather than draw the white default over every
-spark, this falls back to "gfx/misc/tracer", which is the shader the
-uncoloured path uses anyway and takes the tint just as well. Drop wolfcam's
-pk3 in and the intended shaders are picked up with no code change.
+[wolfcam] The coloured paths draw on "wc/tracer" and "wc/tracerHighlight", two
+shaders wolfcamql ships in its own pk3 and a Quake Live install has neither. A
+shader that cannot be found comes back as handle 0, which would draw the white
+default over every spark, so this falls back to "gfx/misc/tracer" - the shader
+the uncoloured path uses, and it takes the tint just as well.
 ===================
 */
 static qhandle_t CG_ElectroGibTracerShader(qboolean highlight) {
@@ -1122,20 +1110,15 @@ static int CG_ElectroGibTime(void) {
 ===================
 CG_LaunchElectroGib
 
-One of the spheres a player breaks into. [wolfcam] CG_LaunchGib_ql.
-
-Two details carry the whole look, and both differ from Quake 3's CG_LaunchGib:
-
-  - The lifetime is a flat cg_gibTime, 1000 ms, where Quake 3 rolls
-    5000..8000. Retail gibs are gone in a second; they do not pile up.
-  - leMarkType is LEMT_ELECTROGIB, and CG_AddFragment reads that to hang a
-    spark trail off the sphere while it is in free fall (CG_ElectroGibTrail
-    in cg_localents.c). Without the trail the spheres read as bare rocks.
+One of the spheres a player breaks into. [wolfcam] CG_LaunchGib_ql. Two details
+carry the look, and both differ from Quake 3's CG_LaunchGib: the lifetime is a
+flat cg_gibTime where Quake 3 rolls 5000..8000, and leMarkType is
+LEMT_ELECTROGIB, which CG_AddFragment reads to hang a spark trail off the sphere
+while it falls.
 
 wolfcam writes pos.gravity and selects TR_GRAVITY, which in this fork ignores
-the field and uses DEFAULT_GRAVITY - the same 800 the cvar defaults to, but
-only by coincidence. TR_CUSTOM_GRAVITY actually reads the field, so the cvar
-means what it says at every value (bg_misc.c, BG_EvaluateTrajectory).
+the field and uses DEFAULT_GRAVITY. TR_CUSTOM_GRAVITY reads it, so the cvar
+means what it says at every value.
 ===================
 */
 static void CG_LaunchElectroGib(vec3_t origin, vec3_t velocity) {
@@ -1184,14 +1167,10 @@ static void CG_LaunchElectroGib(vec3_t origin, vec3_t velocity) {
 CG_LaunchElectroGibSpark
 
 One of the sparks that drift up out of the kill. [wolfcam]
-CG_LaunchGib_ql_floating - despite that name it is not a fragment at all. It
-is a smoke puff whose type is rewritten afterwards, so it travels on the
-TR_LINEAR trajectory CG_SmokePuff_ql set up and fades instead of bouncing.
-The don't-scale flags are what keep it a hard point of light; without them
-CG_AddMoveScaleFade grows it into a smoke ball.
-
-The velocity the caller passes is purely vertical, which is what makes the
-sparks rise clear of the sphere burst instead of travelling with it.
+CG_LaunchGib_ql_floating - despite the name it is a smoke puff whose type is
+rewritten afterwards, so it travels on CG_SmokePuff_ql's TR_LINEAR trajectory
+and fades instead of bouncing. The don't-scale flags keep it a hard point of
+light; without them CG_AddMoveScaleFade grows it into a smoke ball.
 ===================
 */
 static void CG_LaunchElectroGibSpark(vec3_t origin, vec3_t velocity) {
@@ -1226,14 +1205,12 @@ static void CG_LaunchElectroGibSpark(vec3_t origin, vec3_t velocity) {
 CG_DeathEffect
 
 The flash the kill opens with. [wolfcam] CG_DeathEffect: a single
-LE_SPRITE_EXPLOSION on the "deathEffect" shader, lifted 16 units so it sits
-on the torso rather than the feet, and no dynamic light - le->light stays 0,
-so CG_AddSpriteExplosion skips the trap_R_AddLightToScene call.
+LE_SPRITE_EXPLOSION on the "deathEffect" shader, lifted 16 units so it sits on
+the torso, and no dynamic light.
 
-The radius set here is written over every frame: CG_AddSpriteExplosion
-hardcodes `42 * (1 - c) + 30`, so the sprite always swells from 30 to 72 over
-its life at a third of full alpha. That handler is identical in this fork and
-in wolfcamql, so the flash comes out the same without touching it.
+The radius set here is written over every frame - CG_AddSpriteExplosion
+hardcodes `42 * (1 - c) + 30` - so the sprite swells from 30 to 72 over its life
+at a third of full alpha.
 ===================
 */
 static void CG_DeathEffect(vec3_t org) {
@@ -1346,11 +1323,9 @@ CG_GibPlayer
 
 [QL] 0x10014c80. There is no cvar: the switch is whether dlc_gibs/skull.md3
 registered (the handle at 0x10a5f430, tested at 0x10014c94). With the gore pack
-installed the body parts come out, without it the electrogibs do. The same handle
-steers the death sound (0x1001bf80), the bounce sound (0x1001ec16) and the juiced
-effect (0x1001ab39).
-
-cg_blood is in retail's cvar table and nothing reads it back.
+installed the body parts come out, without it the electrogibs do. The same
+handle steers the death sound (0x1001bf80), the bounce sound (0x1001ec16) and
+the juiced effect (0x1001ab39).
 ===================
 */
 void CG_GibPlayer(vec3_t playerOrigin, vec3_t dir) {

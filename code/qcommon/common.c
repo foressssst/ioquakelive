@@ -3124,7 +3124,7 @@ static void Com_FrameTimeSample(void) {
 /*
 ==============================================================================
 
-LA COLA DE TRABAJOS
+THE WORK QUEUE
 
 [ioquakelive] Spreads work across the cores. It started out decoding images while the main
 thread carries on loading the map: decoding is 94% of what a texture costs and is pure CPU, so

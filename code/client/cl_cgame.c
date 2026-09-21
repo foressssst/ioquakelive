@@ -402,7 +402,7 @@ The cgame module is making a system call
 */
 /*
 =====================
-El reparto del tiempo de carga
+Where the load time goes
 
 [ioquakelive] Everything a map loads is asked of the engine by the cgame. During the load each
 call is timed and added to its category; at the end, CL_InitCGame prints the breakdown. It is

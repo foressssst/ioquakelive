@@ -178,7 +178,7 @@ typedef struct {
     int(QDECL* GetNextOutgoingPacket)(void* self, void* out, int maxOut, unsigned int* ip, unsigned short* port);
     void(QDECL* SetGameTags)(void* self, const char* tags);
 
-    // la lista de servidores
+    // the server list
     void*(QDECL* Matchmaking)(void);
     void*(QDECL* RequestInternetServerList)(void* self, unsigned int appId, steamKeyValue_t** filters,
                                             unsigned int numFilters, void* response);
@@ -719,7 +719,7 @@ void Steam_Shutdown(void) {
 /*
 ===============================================================================
 
-LA LISTA DE SERVIDORES
+THE SERVER LIST
 
 Quake Live has no master of its own and no browser protocol: the client asks Steam
 for the list. Both halves are in the retail binary.
@@ -1016,7 +1016,7 @@ qboolean Steam_ServerListGet(int index, unsigned int* ip, unsigned short* port, 
 /*
 ===============================================================================
 
-EL WORKSHOP
+THE WORKSHOP
 
 Quake Live does not download maps over HTTP: it downloads them from the Steam
 Workshop. The server publishes the items the match uses (0x00465b00) in the
@@ -1131,7 +1131,7 @@ qboolean Steam_WorkshopPath(uint64_t item, char* buf, int size) {
 ===============
 Steam_DownloadUGC_f
 
-[QL] "steam_downloadugc <itemid>", el comando que tiene retail (0x004df010).
+[QL] "steam_downloadugc <itemid>", the command retail has (0x004df010).
 ===============
 */
 static void Steam_DownloadUGC_f(void) {
@@ -1183,7 +1183,7 @@ uint64_t Steam_GS_SteamID(void) {
 /*
 ===============================================================================
 
-LA VOZ
+VOICE
 
 Quake Live does not send voice over its own network: it sends it over Steam's peer to
 peer network, and compresses and decompresses it with Steam's voice codec.
@@ -1221,7 +1221,7 @@ others with the speaker's client number in front.
 
 /*
 ===============
-La sesion entre pares
+The peer to peer session
 
 Steam does not deliver packets from somebody there is no session with: it raises a
 callback and waits for it to be accepted. Retail registers none -- its only two calls
@@ -1271,7 +1271,7 @@ static void Steam_P2PListen(qboolean asServer) {
 /*
 ===============================================================================
 
-QUIEN ES CADA UNO
+WHO EACH PLAYER IS
 
 [QL] The retail server does not take the client's word for who it is. Alongside the
 Steam ID, the client sends a ticket Steam signed for it in the getchallenge, and the
@@ -1525,8 +1525,8 @@ int Steam_VoiceRate(void) {
 ===============
 Steam_P2PSend / Steam_P2PReceive
 
-El puente de Steam entre dos jugadores. El servidor usa su propia interfaz
-(SteamGameServerNetworking) y el cliente la suya.
+Steam's bridge between two players. The server uses its own interface
+(SteamGameServerNetworking) and the client uses its own.
 ===============
 */
 static void* Steam_P2P(qboolean asServer) {
@@ -1608,7 +1608,7 @@ static void Steam_ShowOverlayUser(const char* dialog, uint64_t steamId) {
 
 /*
 ===============
-La lista de amigos
+The friends list
 
 Steam hands it over one at a time: how many carry the "immediate friend" flag (4) and
 then, by index, their Steam ID. From each one come the name, the state and, when they

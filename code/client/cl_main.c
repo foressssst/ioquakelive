@@ -610,13 +610,11 @@ static void CL_CompleteDemoName(char* args, int argNum) {
 ==================
 CL_CompleteCallvote
 
-"callvote <what> [...]". The names are the ones Cmd_CallVote_f of the game module
-accepts (0x10061e40); when the vote is "map", the map and the factory complete the
-same way as in the "map" command.
-
-Retail completes none of this: it hands tab completion the whole map list and leaves it
-there (0x004b6a60, which asks the interface for it). Here it goes argument by argument,
-which is how everything else in this engine completes.
+"callvote <what> [...]". The names are the ones Cmd_CallVote_f accepts
+(0x10061e40); on "map" the map and the factory complete as they do for the "map"
+command. Retail hands tab completion the whole map list and leaves it there
+(0x004b6a60); here it goes argument by argument, like everything else in this
+engine.
 ==================
 */
 static void CL_CompleteCallvote(char* args, int argNum) {
@@ -1735,13 +1733,10 @@ void CL_NextDownload(void) {
 ==================
 CL_WorkshopDownloads
 
-[QL] 0x004bba30. Before entering, the client looks at the CS_STEAM_WORKSHOP_IDS
-configstring: that is where the server left the Workshop items the match uses. The ones
-that are missing are downloaded through Steam, one at a time, with progress in
-cl_downloadName, cl_downloadItem and cl_downloadTime, which is what the connection
-screen draws.
-
-Returns qtrue when there is a download to wait for.
+[QL] 0x004bba30. Before entering, the client downloads through Steam whatever
+Workshop items of CS_STEAM_WORKSHOP_IDS it lacks, one at a time, with progress in
+cl_downloadName, cl_downloadItem and cl_downloadTime. Returns qtrue when there is
+a download to wait for.
 ==================
 */
 static qboolean CL_WorkshopDownloads(void) {
@@ -1793,8 +1788,8 @@ static qboolean CL_WorkshopDownloads(void) {
 ==================
 CL_WorkshopNext
 
-Pide el siguiente item de la lista. Cuando no queda ninguno, sigue el camino de
-siempre: reinicia el sistema de archivos y entra.
+Asks for the next item on the list. With none left it takes the usual path:
+restarts the filesystem and enters.
 ==================
 */
 void CL_WorkshopNext(void) {
@@ -2888,13 +2883,11 @@ static void CL_Web_HideBrowser_f(void) {
 ====================
 CL_OpenURL
 
-[ioquakelive] Opens a link outside the game. Retail's web UI handed its links to
-the Steam overlay (qz_instance.OpenSteamOverlayURL), which opens the system
-browser when the overlay is off; without Steam that is all this build can do.
-
-Only the UI module asks for it (UI_SYS_OPENURL). Nothing but a plain https link
-is opened: the address goes to the shell, and a server that could reach this
-would be handing the shell whatever it liked.
+[ioquakelive] Opens a link outside the game. Retail handed its links to the Steam
+overlay, which opens the system browser when the overlay is off; without Steam
+that is all this build can do. Only a plain https link is opened: the address goes
+to the shell, and a server that could reach this would be handing the shell
+whatever it liked.
 ====================
 */
 void CL_OpenURL(const char* url) {
@@ -3716,7 +3709,7 @@ void CL_GlobalServers_f(void) {
 /*
 ===============================================================================
 
-LA VOZ
+VOICE
 
 Quake Live does not send voice over its own network: it sends it over Steam's peer to
 peer network and compresses and decompresses it with Steam's voice codec. The client
@@ -3738,7 +3731,7 @@ only talks to the server, which does the handing out.
 
 /*
 ===============
-La lista de silenciados
+The mute list
 
 It goes by Steam ID and not by client number, so muting somebody mutes them on the
 next map and the next server too. Retail keeps it in a sorted set (0x00461990 queries
@@ -3832,12 +3825,10 @@ static uint64_t CL_ServerSteamID(void) {
 ===============
 CL_Friends_f
 
-"friends" prints the Steam friends list: who is online, what they are doing and, when
-they are playing this, which server they are on -- so you can jump there with "connect".
-
-In retail this list was a web page (the "FRIENDS LIST" button on the bottom bar runs
-exec "web_showBrowser"), so there is nothing to mirror: the data comes from Steam and
-the shape is ours.
+"friends" prints the Steam friends list: who is online, what they are doing and,
+when they are playing this, which server they are on. In retail the list was a web
+page, so there is nothing to mirror: the data comes from Steam and the shape is
+ours.
 ===============
 */
 /*
@@ -3971,12 +3962,9 @@ static void CL_Friends_f(void) {
 ===============
 CL_ClientFriendInvite_f / CL_ClientViewProfile_f
 
-"clientfriendinvite <number>" and "clientviewprofile <number>": the Steam overlay over
-another player in the match, to add them or to view their profile. The client number is
-turned into a Steam ID by asking the cgame.
-
-[QL] both commands are in the retail engine, next to the names of their dialogs
-(0x005327f0).
+The Steam overlay over another player in the match, to add them or to view their
+profile. The client number is turned into a Steam ID by asking the cgame. [QL]
+both commands are in the retail engine, next to their dialogs' names (0x005327f0).
 ===============
 */
 static void CL_OverlayOnPlayer_f(const char* command, void (*action)(uint64_t)) {

@@ -2949,7 +2949,7 @@ static void Cmd_Lock_f(gentity_t* ent) {
 =================
 Cmd_Unlock_f
 
-[QL] 0x10061a40, el espejo del anterior.
+[QL] 0x10061a40, the mirror of the one above.
 =================
 */
 static void Cmd_Unlock_f(gentity_t* ent) {

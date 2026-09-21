@@ -4298,8 +4298,8 @@ It is exposed here so that the same sweep is not implemented twice.
 ===============
 UI_Browser_Sort
 
-El mismo titulo de columna dos veces da vuelta el orden, como el uiScript
-ServerSort de retail.
+The same column title twice reverses the order, as retail's ServerSort
+uiScript does.
 ===============
 */
 void UI_Browser_Sort(int column) {

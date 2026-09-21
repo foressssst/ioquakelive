@@ -166,11 +166,9 @@ static void UI_Home_Load(void) {
 UI_Home_Wash
 
 A vertical wash: a colour whose alpha runs from a0 at the top to a1 at the bottom.
-It is drawn in bands a few screen pixels high whose edges are whole pixels, so
-two bands meet without a row between them drawn twice -- with bands in page
-units, a row where they overlapped came out as a dark line across the screen.
-UI_Home_WashAcross is the same from left to right, eased so it thins out
-without an edge.
+The bands are a few screen pixels high with whole-pixel edges, so two of them meet
+without a row drawn twice - in page units that overlap came out as a dark line
+across the screen. UI_Home_WashAcross is the same left to right, eased.
 ===============
 */
 #define HM_WASH_STEP 4
@@ -538,12 +536,10 @@ static void UI_Home_DrawShade(void) {
 ===============
 UI_Home_DrawColumn
 
-The logo, then the list with its heading: the name you play under on the main
-list, the list's own name on the others. An entry is its title in bold upper case
-and a line of what it does; under the cursor the title turns Quake Live yellow
-and a 3px rule stands at the left, which is what .nav-column a:hover does with
-its border. What this build has not got is dimmed and says so. Back sits a little
-apart and smaller, as retail's a.back does.
+The logo, then the list with its heading. An entry is its title in bold upper case
+and a line of what it does; under the cursor the title turns Quake Live yellow and
+a 3px rule stands at the left, which is what .nav-column a:hover does with its
+border. What this build has not got is dimmed and says so.
 ===============
 */
 static void UI_Home_DrawColumn(void) {
@@ -700,18 +696,13 @@ static void UI_Home_DrawSide(void) {
 ===============
 UI_Home_DrawMarks
 
-[ioquakelive] The footer strip: the four names this is standing on, side by side the way a
-sponsor footer runs, because they are credits too. In order: QUAKE III ARENA, the code id
-released; ioquake3, the engine that keeps it alive; QUAKE LIVE, the game this reimplements;
-and Quake Club, the community this work is pushed from.
+[ioquakelive] The footer strip: QUAKE III ARENA, ioquake3, QUAKE LIVE and Quake
+Club, side by side the way a sponsor footer runs, because they are credits too.
+All four are logos turned white with alpha by code/tools/make_menu_marks.py and
+tinted to the same grey, so the row reads as one thing.
 
-All four are logos turned white with alpha by code/tools/make_menu_marks.py and stored in
-pak01. They are tinted to the same grey, so the row reads as one thing rather than four
-logos stuck together.
-
-The sizes do not come from the images: each is drawn at the height that makes it weigh the
-same as the others, which is what lets a stacked mark and a single word share a line. They
-come from the preview that same script leaves behind.
+The sizes do not come from the images: each is drawn at the height that makes it
+weigh the same as the others, taken from that script's preview.
 ===============
 */
 typedef struct {
@@ -780,17 +771,16 @@ static void UI_Home_DrawMarks(float cx, float y, float h) {
 /*
 ===============================================================================
 
-EL MENU PRINCIPAL
+THE MAIN MENU
 
-[ioquakelive] Minimal and laid out on a grid: the logo on top, the sections and, in the
-middle, Quake Live's emblem cropped by the screen edge, which is the play button; a social
-strip on the right like CS2's; the credits below. No solid bars: the backdrop darkens at top
-and bottom so what sits over it can be read.
+[ioquakelive] Minimal and laid out on a grid: the logo on top, the sections and, in
+the middle, Quake Live's emblem cropped by the screen edge, which is the play
+button; a social strip on the right; the credits below. No solid bars: the backdrop
+darkens at top and bottom so what sits over it can be read.
 
-The grid: an equal margin on both sides (HV_EDGE); top and bottom, two strips of the same
-height (HV_BAR_H), which are also the profile row and the Quit row of the social strip, so
-all four corners share lines; and one axis, the centre of the screen, for the emblem, the
-sections and the credit logos.
+The grid is an equal margin on both sides (HV_EDGE), two strips of the same height
+top and bottom (HV_BAR_H), which are also the social strip's profile and Quit rows,
+and the centre of the screen as the one axis.
 
 ===============================================================================
 */
@@ -892,26 +882,20 @@ static void UI_Home_DrawFooter(void) {
 /*
 ===============================================================================
 
-LA FRANJA SOCIAL
+THE SOCIAL STRIP
 
-[ioquakelive] The friends list, modelled on CS2's: folded, it is a thin column on the right
-with your own avatar and the friends' slots; with the cursor over it, it unfolds leftwards over
-the page, which darkens, and the names appear.
+[ioquakelive] The friends list, modelled on CS2's: folded, a thin column on the
+right with your own avatar and the friends' slots; with the cursor over it, it
+unfolds leftwards over the page, which darkens, and the names appear.
 
-Quit stays on the bar, so the strip no longer carries it.
+The friends are Steam's. In retail this list was a web page, so there is nothing to
+mirror: the data comes from the Steam API and the shape is ours. Each one shows an
+initial, a dot with their state and, open, their name and what they are doing,
+sorted the way CS2 sorts them. A click joins the friend's server, or opens their
+Steam profile when they are on none.
 
-The friends are Steam's. In retail this list was a web page -- the "FRIENDS LIST" button on the
-bottom bar opens the embedded browser, and GetFriendList is a name from the JavaScript bridge,
-not a client function -- so there is nothing to mirror: the data comes from the Steam API and
-the shape is ours.
-
-Each one shows an initial, a dot with their state and, with the strip open, their name and what
-they are doing. They are sorted the way CS2 sorts them: first those on a Quake Live server, then
-those with the game running, then those online and finally those away. A click joins the
-friend's server, or opens their Steam profile when they are on none.
-
-What is missing are the avatars: Steam hands them over as raw pixels and the renderer has no way
-to take an image built in memory, so each one carries its initial instead.
+The avatars are missing: Steam hands them over as raw pixels and the renderer
+cannot take an image built in memory, so each carries its initial instead.
 
 ===============================================================================
 */
@@ -1211,7 +1195,7 @@ static void UI_Home_DrawSocial(float dt) {
         SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 29, 20), FONT_SANS, HV_TEXT, c, "Online", -1, qfalse);
     }
 
-    // los amigos, sacados de Steam
+    // the friends, as Steam gives them
     y = top + HV_BAR_H + 12.0f;
     UI_Home_FriendRefresh();
 
