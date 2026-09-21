@@ -56,6 +56,10 @@ void R_GammaCorrect( byte *buffer, int bufSize ) {
 	if ( !gls.deviceSupportsGamma ) {
 		return;
 	}
+	// [QL] 0x4481c0: only when the gamma ramp was giving the overbright
+	if ( !R_CaptureGammaCorrect() ) {
+		return;
+	}
 	for ( i = 0; i < bufSize; i++ ) {
 		buffer[i] = s_gammatable[buffer[i]];
 	}

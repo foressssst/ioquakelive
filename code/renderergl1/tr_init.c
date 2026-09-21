@@ -1031,34 +1031,46 @@ void RB_TakeScreenshotBMP( int x, int y, int width, int height, const char *file
 R_ScreenshotFilename
 ==================
 */
-static void R_ScreenshotFilename( char *fileName, const char *fileExt ) {
-	qtime_t t;
-	int count;
+static qboolean R_ScreenshotFilename( char *fileName, const char *fileExt ) {
+	// [QL] retail's names, screenshots/shot0000 to shot9999: the first free one. The count is kept
+	// for each format, so a video's thousands of frames don't scan from the start every time
+	static int	lastNumber[2] = { 0, 0 };
+	int			*last = &lastNumber[ Q_stricmp( fileExt, "jpg" ) == 0 ];
+	int			a, b, c, d;
 
-	count = 0;
-	RI_Com_RealTime( &t );
-
-	Com_sprintf( fileName, MAX_OSPATH, "screenshots/shot-%04d%02d%02d-%02d%02d%02d.%s",
-			1900 + t.tm_year, 1 + t.tm_mon,	t.tm_mday,
-			t.tm_hour, t.tm_min, t.tm_sec, fileExt );
-
-	while (	ri.FS_FileExists( fileName ) && ++count < 1000 ) {
-		Com_sprintf( fileName, MAX_OSPATH, "screenshots/shot-%04d%02d%02d-%02d%02d%02d-%d.%s",
-				1900 + t.tm_year, 1 + t.tm_mon,	t.tm_mday,
-				t.tm_hour, t.tm_min, t.tm_sec, count, fileExt );
+	for ( ; *last <= 9999; (*last)++ ) {
+		a = *last / 1000;
+		b = ( *last % 1000 ) / 100;
+		c = ( *last % 100 ) / 10;
+		d = *last % 10;
+		Com_sprintf( fileName, MAX_OSPATH, "screenshots/shot%i%i%i%i.%s", a, b, c, d, fileExt );
+		if ( !ri.FS_FileExists( fileName ) ) {
+			break;
+		}
 	}
+
+	if ( *last == 10000 ) {
+		ri.Printf( PRINT_ALL, "ScreenShot: Couldn't create a file\n" );	// [QL] 0x0052ea6c
+		return qfalse;
+	}
+
+	(*last)++;
+	return qtrue;
 }
 
 
 /*
 ====================
-R_LevelShot
+RB_TakeLevelShot
+
+[QL] 0x00448550: a 128x128 TGA in levelshots/, read from the corrected frame: it is taken at the
+end of the frame, like the screenshots.
 
 levelshots are specialized 128*128 thumbnails for
 the menu system, sampled down from full screen distorted images
 ====================
 */
-static void R_LevelShot( void ) {
+void RB_TakeLevelShot( void ) {
 	char		checkname[MAX_OSPATH];
 	byte		*buffer;
 	byte		*source, *allsource;
@@ -1140,16 +1152,15 @@ static void R_ScreenShot_f( void ) {
 	}
 
 	if ( !strcmp( ri.Cmd_Argv(1), "levelshot" ) ) {
-		R_LevelShot();
+		if ( tr.world ) {
+			backEnd.screenshotMask |= SCREENSHOT_LEVELSHOT;
+		}
 		return;
 	}
 
 	if ( Q_stricmp( ri.Cmd_Argv(0), "screenshotJPEG" ) == 0 ) {
 		typeMask = SCREENSHOT_JPG;
 		ext = "jpg";
-	} else if ( Q_stricmp( ri.Cmd_Argv(0), "screenshotBMP" ) == 0 ) {
-		typeMask = SCREENSHOT_BMP;
-		ext = "bmp";
 	} else {
 		typeMask = SCREENSHOT_TGA;
 		ext = "tga";
@@ -1161,9 +1172,6 @@ static void R_ScreenShot_f( void ) {
 
 	if ( !strcmp( ri.Cmd_Argv(1), "silent" ) ) {
 		silent = qtrue;
-	} else if ( typeMask == SCREENSHOT_BMP && !strcmp( ri.Cmd_Argv(1), "clipboard" ) ) {
-		backEnd.screenshotMask |= SCREENSHOT_BMP_CLIPBOARD;
-		silent = qtrue;
 	} else {
 		silent = qfalse;
 	}
@@ -1172,12 +1180,9 @@ static void R_ScreenShot_f( void ) {
 		// explicit filename
 		Com_sprintf( checkname, MAX_OSPATH, "screenshots/%s.%s", ri.Cmd_Argv( 1 ), ext );
 	} else {
-		if ( backEnd.screenshotMask & SCREENSHOT_BMP_CLIPBOARD ) {
-			// no need for filename, copy to system buffer
-			checkname[0] = '\0';
-		} else {
-			// scan for a free filename
-			R_ScreenshotFilename( checkname, ext );
+		// scan for a free filename
+		if ( !R_ScreenshotFilename( checkname, ext ) ) {
+			return;
 		}
 	}
 
@@ -1186,9 +1191,6 @@ static void R_ScreenShot_f( void ) {
 	if ( typeMask == SCREENSHOT_JPG ) {
 		backEnd.screenShotJPGsilent = silent;
 		Q_strncpyz( backEnd.screenshotJPG, checkname, sizeof( backEnd.screenshotJPG ) );
-	} else if ( typeMask == SCREENSHOT_BMP ) {
-		backEnd.screenShotBMPsilent = silent;
-		Q_strncpyz( backEnd.screenshotBMP, checkname, sizeof( backEnd.screenshotBMP ) );
 	} else {
 		backEnd.screenShotTGAsilent = silent;
 		Q_strncpyz( backEnd.screenshotTGA, checkname, sizeof( backEnd.screenshotTGA ) );
@@ -1534,7 +1536,6 @@ static void R_Register( void )
 	ri.Cmd_AddCommand( "modellist", R_Modellist_f );
 	ri.Cmd_AddCommand( "screenshot", R_ScreenShot_f );
 	ri.Cmd_AddCommand( "screenshotJPEG", R_ScreenShot_f );
-	ri.Cmd_AddCommand( "screenshotBMP", R_ScreenShot_f );
 	ri.Cmd_AddCommand( "gfxinfo", GfxInfo_f );
 	ri.Cmd_AddCommand( "fontlist", R_FontList_f );
 
@@ -1983,7 +1984,6 @@ static void RE_Shutdown( qboolean destroyWindow ) {
 	ri.Printf( PRINT_ALL, "RE_Shutdown( %i )\n", code );
 
 	ri.Cmd_RemoveCommand( "modellist" );
-	ri.Cmd_RemoveCommand( "screenshotBMP" );
 	ri.Cmd_RemoveCommand( "screenshotJPEG" );
 	ri.Cmd_RemoveCommand( "screenshot" );
 	ri.Cmd_RemoveCommand( "imagelist" );

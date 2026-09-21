@@ -1560,6 +1560,9 @@ static const void *RB_SwapBuffers( const void *data ) {
 		if ( backEnd.screenshotMask & SCREENSHOT_AVI ) {
 			RB_TakeVideoFrameCmd( &backEnd.vcmd );
 		}
+		if ( backEnd.screenshotMask & SCREENSHOT_LEVELSHOT ) {
+			RB_TakeLevelShot();
+		}
 
 		backEnd.screenshotJPG[0] = '\0';
 		backEnd.screenshotTGA[0] = '\0';

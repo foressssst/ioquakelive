@@ -1047,7 +1047,8 @@ enum {
 	SCREENSHOT_JPG = 1<<1,
 	SCREENSHOT_BMP = 1<<2,
 	SCREENSHOT_BMP_CLIPBOARD = 1<<3,
-	SCREENSHOT_AVI = 1<<4 // take video frame
+	SCREENSHOT_AVI = 1<<4, // take video frame
+	SCREENSHOT_LEVELSHOT = 1<<5	// [QL] the 128x128 thumbnail, from the corrected frame
 };
 
 // all state modified by the back end is separated
@@ -1930,6 +1931,8 @@ const void *RB_BloomScene( const void *data );
 const void *RB_Bloom( const void *data );
 qboolean RB_QLColorCorrect( GLuint dstFbo, int width, int height );
 qboolean R_CaptureGammaCorrect( void );
+void RB_TakeLevelShot( void );
+void *R_GetCommandBuffer( int bytes );
 
 // [QL] the frame buffers the post effects work on, from tr_arb.c
 void FBO_ResolveMultisample( void );
