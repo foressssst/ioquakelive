@@ -4187,7 +4187,7 @@ qboolean FS_ExtractGamecode(const char* module, char* outOSPath) {
 				Com_Error(ERR_FATAL, "FS_ExtractGamecode: short write");
 			}
 
-			Com_Printf("Extracted '%s' (%d bytes) from '%s/%s.pk3' to '%s'\n", filename, fileLen, pak->pakGamename, pak->pakBasename, path);
+			Com_DPrintf("Extracted '%s' (%d bytes) from '%s/%s.pk3' to '%s'\n", filename, fileLen, pak->pakGamename, pak->pakBasename, path);
 
 			Z_Free(buffer);
 			FS_FCloseFile(handleIn);

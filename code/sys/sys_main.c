@@ -602,7 +602,8 @@ void* Sys_LoadGameDll(const char* name,
         return NULL;
     }
 
-    Com_Printf("Loading DLL file: %s\n", name);
+    // [QL] quakelive_steam.exe: "Loading dll file %s"
+    Com_Printf("Loading dll file %s\n", name);
     libHandle = Sys_LoadLibrary(name);
 
     if (!libHandle) {
@@ -620,7 +621,7 @@ void* Sys_LoadGameDll(const char* name,
         return NULL;
     }
 
-    Com_Printf("Sys_LoadGameDll(%s) found vmMain function at %p\n", name, *entryPoint);
+    Com_DPrintf("Sys_LoadGameDll(%s) found vmMain function at %p\n", name, *entryPoint);
     dllEntry(systemcalls);
 
     return libHandle;

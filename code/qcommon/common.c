@@ -3210,7 +3210,7 @@ void Com_JobsInit(void) {
         }
         com_jobWorkers++;
     }
-    Com_Printf("Workers: %i\n", com_jobWorkers);
+    Com_DPrintf("Workers: %i\n", com_jobWorkers);
 }
 
 int Com_JobWorkers(void) {

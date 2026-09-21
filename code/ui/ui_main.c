@@ -4828,7 +4828,6 @@ static qboolean Character_Parse(char** p) {
             uiInfo.characterList[uiInfo.characterCount].headImage = -1;
             uiInfo.characterList[uiInfo.characterCount].imageName = String_Alloc(va("models/players/%s/icon_%s.tga", uiInfo.characterList[uiInfo.characterCount].base, uiInfo.characterList[uiInfo.characterCount].name));
 
-            Com_Printf("Loaded character model %s skin %s.\n", uiInfo.characterList[uiInfo.characterCount].base, uiInfo.characterList[uiInfo.characterCount].name);
             uiInfo.characterCount++;
 
             token = COM_ParseExt(p, qtrue);
