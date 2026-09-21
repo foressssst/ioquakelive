@@ -2384,6 +2384,19 @@ void CL_CheckUserinfo(void) {
 
 /*
 ==================
+CL_LowLatencyWait
+
+[ioquakelive] the renderer decides: without a low latency path this costs nothing
+==================
+*/
+void CL_LowLatencyWait(void) {
+    if (cls.rendererStarted && re.LowLatencyWait) {
+        re.LowLatencyWait();
+    }
+}
+
+/*
+==================
 CL_Frame
 
 ==================

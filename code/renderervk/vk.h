@@ -285,6 +285,7 @@ void vk_present_frame( void );
 void vk_end_render_pass( void );
 void vk_begin_main_render_pass( void );
 qboolean vk_ql_bloom( void );
+void vk_low_latency_input( void );
 
 void vk_bind_pipeline( uint32_t pipeline );
 void vk_bind_index( void );
@@ -600,6 +601,10 @@ typedef struct {
 	qboolean fragmentStores;
 	qboolean dedicatedAllocation;
 	qboolean debugMarkers;
+
+	// [ioquakelive] AMD's Anti-Lag 2, when the driver brings it
+	qboolean antiLag;
+	uint64_t latencyFrame;
 
 	float maxAnisotropy;
 	float maxLod;

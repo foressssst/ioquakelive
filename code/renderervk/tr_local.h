@@ -1334,6 +1334,7 @@ extern cvar_t	*r_dlightIntensity;		// 0.1 - 1.0
 extern cvar_t	*r_dlightSaturation;	// 0.0 - 1.0
 #ifdef USE_VULKAN
 extern cvar_t	*r_device;
+extern cvar_t	*r_lowLatency;
 #ifdef USE_VBO
 extern cvar_t	*r_vbo;
 #endif

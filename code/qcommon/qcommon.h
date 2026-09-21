@@ -992,6 +992,7 @@ void CL_Init(void);
 void CL_Disconnect(qboolean showMainMenu);
 void CL_Shutdown(char* finalmsg, qboolean disconnect, qboolean quit);
 void CL_Frame(int msec);
+void CL_LowLatencyWait(void);
 qboolean CL_GameCommand(void);
 void *CL_FindAlias(const char *name);
 void CL_RunAlias(void);

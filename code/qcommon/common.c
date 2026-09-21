@@ -3472,6 +3472,13 @@ void Com_Frame(void) {
 
     Com_FrameTimeSample();
 
+#ifndef DEDICATED
+    // [ioquakelive] the last chance to hold the frame back before the input is read
+    if (!com_dedicated->integer) {
+        CL_LowLatencyWait();
+    }
+#endif
+
     IN_Frame();
 
     lastTime = com_frameTime;

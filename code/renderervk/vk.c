@@ -125,6 +125,9 @@ static PFN_vkDestroySwapchainKHR						qvkDestroySwapchainKHR;
 static PFN_vkGetSwapchainImagesKHR						qvkGetSwapchainImagesKHR;
 static PFN_vkQueuePresentKHR							qvkQueuePresentKHR;
 
+// [ioquakelive] AMD's Anti-Lag 2
+static PFN_vkAntiLagUpdateAMD							qvkAntiLagUpdateAMD;
+
 static PFN_vkGetBufferMemoryRequirements2KHR			qvkGetBufferMemoryRequirements2KHR;
 static PFN_vkGetImageMemoryRequirements2KHR				qvkGetImageMemoryRequirements2KHR;
 
@@ -1602,6 +1605,9 @@ static const char *renderer_name( const VkPhysicalDeviceProperties *props ) {
 
 static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_index ) {
 
+	VkPhysicalDeviceAntiLagFeaturesAMD anti_lag_features;
+	const void **pNextPtr;
+
 #ifdef _DEBUG
 	VkPhysicalDeviceTimelineSemaphoreFeatures timeline_semaphore;
 	VkPhysicalDeviceVulkanMemoryModelFeatures memory_model;
@@ -1651,7 +1657,7 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 
 	// create VkDevice
 	{
-		const char *device_extension_list[8];
+		const char *device_extension_list[12];
 		uint32_t device_extension_count;
 		const char *ext, *end;
 		char *str;
@@ -1666,12 +1672,12 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 		qboolean dedicatedAllocation = qfalse;
 		qboolean memoryRequirements2 = qfalse;
 		qboolean debugMarker = qfalse;
+		qboolean antiLag = qfalse;
 #ifdef _DEBUG
 		qboolean timelineSemaphore = qfalse;
 		qboolean memoryModel = qfalse;
 		qboolean devAddrFeat = qfalse;
 		qboolean storage8bit = qfalse;
-		const void** pNextPtr;
 #endif
 		uint32_t i, len, count = 0;
 
@@ -1693,6 +1699,8 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 				memoryRequirements2 = qtrue;
 			} else if ( strcmp( ext, VK_EXT_DEBUG_MARKER_EXTENSION_NAME ) == 0 ) {
 				debugMarker = qtrue;
+			} else if ( strcmp( ext, VK_AMD_ANTI_LAG_EXTENSION_NAME ) == 0 ) {
+				antiLag = qtrue;
 #ifdef _DEBUG
 			} else if ( strcmp( ext, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME ) == 0 ) {
 				timelineSemaphore = qtrue;
@@ -1744,6 +1752,12 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 		if ( debugMarker ) {
 			device_extension_list[ device_extension_count++ ] = VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
 			vk.debugMarkers = qtrue;
+		}
+
+		// [ioquakelive] the anti-lag needs its feature turned on, so it is decided before the device
+		if ( antiLag && r_lowLatency->integer ) {
+			device_extension_list[ device_extension_count++ ] = VK_AMD_ANTI_LAG_EXTENSION_NAME;
+			vk.antiLag = qtrue;
 		}
 #ifdef _DEBUG
 		if ( timelineSemaphore ) {
@@ -1811,9 +1825,17 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 		device_desc.ppEnabledExtensionNames = device_extension_list;
 		device_desc.pEnabledFeatures = &features;
 
-#ifdef _DEBUG
 		pNextPtr = (const void **)&device_desc.pNext;
 
+		if ( vk.antiLag ) {
+			*pNextPtr = &anti_lag_features;
+			anti_lag_features.pNext = NULL;
+			anti_lag_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ANTI_LAG_FEATURES_AMD;
+			anti_lag_features.antiLag = VK_TRUE;
+			pNextPtr = (const void **)&anti_lag_features.pNext;
+		}
+
+#ifdef _DEBUG
 		if ( timelineSemaphore ) {
 			*pNextPtr = &timeline_semaphore;
 			timeline_semaphore.pNext = NULL;
@@ -2115,6 +2137,13 @@ static void init_vulkan_library( void )
 	if ( vk.debugMarkers ) {
 		INIT_DEVICE_FUNCTION_EXT(vkDebugMarkerSetObjectNameEXT)
 	}
+
+	if ( vk.antiLag ) {
+		INIT_DEVICE_FUNCTION_EXT(vkAntiLagUpdateAMD)
+		if ( !qvkAntiLagUpdateAMD ) {
+			vk.antiLag = qfalse;
+		}
+	}
 }
 
 #undef INIT_INSTANCE_FUNCTION
@@ -2238,6 +2267,8 @@ static void deinit_device_functions( void )
 	qvkGetImageMemoryRequirements2KHR			= NULL;
 
 	qvkDebugMarkerSetObjectNameEXT				= NULL;
+
+	qvkAntiLagUpdateAMD							= NULL;
 }
 
 
@@ -7753,6 +7784,64 @@ void vk_end_frame( void )
 }
 
 
+/*
+=============
+vk_low_latency_input
+
+[ioquakelive] the client is about to read input: this is where the driver holds the frame back so
+what is read is as fresh as it can be. Both stages of a frame carry the same index.
+=============
+*/
+void vk_low_latency_input( void )
+{
+	VkAntiLagPresentationInfoAMD presentation;
+	VkAntiLagDataAMD data;
+
+	if ( !vk.antiLag || qvkAntiLagUpdateAMD == NULL ) {
+		return;
+	}
+
+	vk.latencyFrame++;
+
+	presentation.sType = VK_STRUCTURE_TYPE_ANTI_LAG_PRESENTATION_INFO_AMD;
+	presentation.pNext = NULL;
+	presentation.stage = VK_ANTI_LAG_STAGE_INPUT_AMD;
+	presentation.frameIndex = vk.latencyFrame;
+
+	data.sType = VK_STRUCTURE_TYPE_ANTI_LAG_DATA_AMD;
+	data.pNext = NULL;
+	data.mode = r_lowLatency->integer ? VK_ANTI_LAG_MODE_ON_AMD : VK_ANTI_LAG_MODE_OFF_AMD;
+	data.maxFPS = 0; // the engine has its own limiter
+	data.pPresentationInfo = &presentation;
+
+	qvkAntiLagUpdateAMD( vk.device, &data );
+}
+
+
+static void vk_low_latency_present( void )
+{
+	VkAntiLagPresentationInfoAMD presentation;
+	VkAntiLagDataAMD data;
+
+	if ( !vk.antiLag || qvkAntiLagUpdateAMD == NULL ) {
+		return;
+	}
+
+	presentation.sType = VK_STRUCTURE_TYPE_ANTI_LAG_PRESENTATION_INFO_AMD;
+	presentation.pNext = NULL;
+	presentation.stage = VK_ANTI_LAG_STAGE_PRESENT_AMD;
+	presentation.frameIndex = vk.latencyFrame;
+
+	data.sType = VK_STRUCTURE_TYPE_ANTI_LAG_DATA_AMD;
+	data.pNext = NULL;
+	data.mode = r_lowLatency->integer ? VK_ANTI_LAG_MODE_ON_AMD : VK_ANTI_LAG_MODE_OFF_AMD;
+	data.maxFPS = 0;
+	data.pPresentationInfo = &presentation;
+
+	qvkAntiLagUpdateAMD( vk.device, &data );
+}
+
+
 void vk_present_frame( void )
 {
 	VkPresentInfoKHR present_info;
@@ -7777,6 +7866,8 @@ void vk_present_frame( void )
 	present_info.pResults = NULL;
 
 	vk.cmd->swapchain_image_acquired = qfalse;
+
+	vk_low_latency_present();
 
 	res = qvkQueuePresentKHR( vk.queue, &present_info );
 	switch ( res ) {

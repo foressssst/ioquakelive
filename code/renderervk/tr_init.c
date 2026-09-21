@@ -84,6 +84,7 @@ cvar_t	*r_dlightIntensity;
 cvar_t	*r_dlightSaturation;
 #ifdef USE_VULKAN
 cvar_t	*r_device;
+cvar_t	*r_lowLatency;
 #ifdef USE_VBO
 cvar_t	*r_vbo;
 #endif
@@ -1837,6 +1838,14 @@ static void R_Register( void )
 	r_showsky = ri.Cvar_Get( "r_showsky", "0", CVAR_CHEAT );
 	ri.Cvar_SetDescription( r_showsky, "Forces sky in front of all surfaces." );
 #ifdef USE_VULKAN
+	// [ioquakelive] the driver holds the frame back so the input is read as late as it can be
+	r_lowLatency = ri.Cvar_Get( "r_lowLatency", "0", CVAR_ARCHIVE_ND | CVAR_LATCH );
+	RI_Cvar_CheckRange( r_lowLatency, "0", "2", CV_INTEGER );
+	ri.Cvar_SetDescription( r_lowLatency, "Low latency mode, when the driver has it:\n" \
+		" 0: off\n" \
+		" 1: on\n" \
+		" 2: on, asking the card for its highest clocks\n" );
+
 	r_device = ri.Cvar_Get( "r_device", "-1", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	RI_Cvar_CheckRange( r_device, "-2", NULL, CV_INTEGER );
 	ri.Cvar_SetDescription( r_device, "Select physical device to render:\n" \
@@ -2157,6 +2166,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	// [QL] the bloom, which the cgame puts around the 3D view
 	re.BeginBloomScene = RE_BeginBloomScene;
 	re.ApplyBloom = RE_ApplyBloom;
+	re.LowLatencyWait = vk_low_latency_input;
 
 	return &re;
 }

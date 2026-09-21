@@ -113,6 +113,10 @@ typedef struct {
     void (*ApplyBloom)(void);
 
     void (*Get_Advertisements)(int* num, float* verts, char shaders[][MAX_QPATH]);
+
+    // [ioquakelive] the client is about to read input: a renderer with a low latency path uses
+    // this to hold the frame back. NULL in the renderers that have none
+    void (*LowLatencyWait)(void);
 } refexport_t;
 
 //
