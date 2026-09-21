@@ -13,6 +13,8 @@ jobs:
     name: Linux ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
     strategy:
+      # una plataforma que falla no cancela a la otra: interesa el informe de las dos
+      fail-fast: false
       matrix:
         include:
         - runner: ubuntu-22.04
@@ -450,6 +452,8 @@ jobs:
     name: Windows ${{ matrix.platform }}
     runs-on: windows-2022
     strategy:
+      # una plataforma que falla no cancela a la otra: interesa el informe de las dos
+      fail-fast: false
       matrix:
         include:
         - platform: x64
