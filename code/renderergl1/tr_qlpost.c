@@ -334,7 +334,8 @@ r_bloomPasses 2 goes on at a quarter, in three more.
 static qboolean R_QLPostCreateBuffer( int index, int width, int height ) {
 	qglGenTextures( 1, &qlBloomTex[index] );
 	GL_BindTexture( 0, qlBloomTex[index] );
-	qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL );
+	// [QL] 0x437e40: they take the scene's format
+	qglTexImage2D( GL_TEXTURE_2D, 0, fboInternalFormat, width, height, 0, fboTextureFormat, fboTextureType, NULL );
 	qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
 	qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
 	qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );

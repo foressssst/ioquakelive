@@ -1935,6 +1935,11 @@ qboolean R_CaptureGammaCorrect( void );
 void FBO_ResolveMultisample( void );
 extern qboolean textureNonPowerOfTwo;
 
+// the scene frame buffer's format, which the post effects' buffers take too
+extern GLint fboInternalFormat;
+extern GLint fboTextureFormat;
+extern GLint fboTextureType;
+
 void FBO_BindTarget( GLuint target, GLuint buffer );
 GLuint FBO_MainTexture( void );
 GLuint FBO_MainBuffer( void );

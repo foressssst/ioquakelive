@@ -2218,6 +2218,12 @@ void QGL_InitFBO( void )
 		default: fboInternalFormat = GL_RGBA16; break;
 	}
 
+	// [QL] quakelive_steam.exe 0x4500b0: r_floatingPointFBOs gives Quake Live's frame buffers 16
+	// bits a channel
+	if ( fboInternalFormat == GL_RGBA8 && r_enablePostProcess->integer && r_floatingPointFBOs->integer ) {
+		fboInternalFormat = GL_RGBA16;
+	}
+
 	if ( FBO_CreateMS( &frameBufferMS, w, h ) )
 	{
 		frameBufferMultiSampling = qtrue;
