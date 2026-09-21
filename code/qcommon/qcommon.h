@@ -552,6 +552,9 @@ const cvar_t* Cvar_Find(const char* var_name);
 void Cvar_SetHelp(const char* var_name, const char* help);
 qboolean Cvar_GetHelp(const char* var_name, const char** help);
 void Cvar_EnumHelp(helpSearchCallback_t callback, const char* pattern);
+// [ioquakelive] the help text of an engine command, NULL if it has none (cmd_help.c)
+const char* Cmd_BuiltInHelp(const char* cmd_name);
+
 // [ioquakelive] the help text of a Quake Live cvar, NULL if it has none (cvar_help.c)
 const char* Cvar_BuiltInHelp(const char* var_name);
 void Cvar_PrintFirstHelpLine(const cvar_t* var, printf_t print);
