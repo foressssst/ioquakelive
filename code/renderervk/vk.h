@@ -514,6 +514,8 @@ typedef struct {
 		VkShaderModule ql_bright_fs;
 		VkShaderModule ql_blur_fs;
 		VkShaderModule ql_bloom_fs;
+		VkShaderModule ql_combine_fs;
+		VkShaderModule ql_copy_fs;
 
 		VkShaderModule gamma_fs;
 		VkShaderModule gamma_vs;
@@ -583,9 +585,12 @@ typedef struct {
 	VkPipeline capture_pipeline;
 	VkPipeline bloom_extract_pipeline;
 	VkPipeline blur_pipeline[VK_NUM_BLOOM_PASSES*2]; // horizontal & vertical pairs
-	// [QL] Quake Live's bloom: its bright pass and the light it lays over the scene
+	// [QL] Quake Live's bloom: its bright pass and the light it lays over the scene, plus the
+	// whole sum in one shader when the scene has to be read
 	VkPipeline ql_bright_pipeline;
 	VkPipeline ql_bloom_pipeline;
+	VkPipeline ql_combine_pipeline;
+	VkPipeline ql_copy_pipeline;
 	VkPipeline bloom_blend_pipeline;
 
 	uint32_t frame_count;

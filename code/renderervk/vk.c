@@ -2968,6 +2968,8 @@ static void vk_create_shader_modules( void )
 	vk.modules.ql_bright_fs = SHADER_MODULE( qlbright_frag_spv );
 	vk.modules.ql_blur_fs = SHADER_MODULE( qlblur_frag_spv );
 	vk.modules.ql_bloom_fs = SHADER_MODULE( qlbloom_frag_spv );
+	vk.modules.ql_combine_fs = SHADER_MODULE( qlcombine_frag_spv );
+	vk.modules.ql_copy_fs = SHADER_MODULE( qlcopy_frag_spv );
 	vk.modules.gamma_vs = SHADER_MODULE( gamma_vert_spv );
 
 	SET_OBJECT_NAME( vk.modules.gamma_fs, "gamma post-processing fragment module", VK_DEBUG_REPORT_OBJECT_TYPE_SHADER_MODULE_EXT );
@@ -3243,6 +3245,8 @@ void vk_update_post_process_pipelines( void )
 			// [QL] the bright pass works at half the scene's size, the light over the whole frame
 			vk_create_post_process_pipeline( 4, gls.captureWidth / 2, gls.captureHeight / 2 );
 			vk_create_post_process_pipeline( 5, glConfig.vidWidth, glConfig.vidHeight );
+			vk_create_post_process_pipeline( 6, gls.captureWidth, gls.captureHeight );
+			vk_create_post_process_pipeline( 7, glConfig.vidWidth, glConfig.vidHeight );
 		}
 	}
 }
@@ -4531,6 +4535,16 @@ static void vk_destroy_pipelines( qboolean resetCounter )
 		vk.ql_bloom_pipeline = VK_NULL_HANDLE;
 	}
 
+	if ( vk.ql_combine_pipeline ) {
+		qvkDestroyPipeline( vk.device, vk.ql_combine_pipeline, NULL );
+		vk.ql_combine_pipeline = VK_NULL_HANDLE;
+	}
+
+	if ( vk.ql_copy_pipeline ) {
+		qvkDestroyPipeline( vk.device, vk.ql_copy_pipeline, NULL );
+		vk.ql_copy_pipeline = VK_NULL_HANDLE;
+	}
+
 	if ( vk.gamma_pipeline ) {
 		qvkDestroyPipeline( vk.device, vk.gamma_pipeline, NULL );
 		vk.gamma_pipeline = VK_NULL_HANDLE;
@@ -4689,6 +4703,12 @@ void vk_shutdown( refShutdownCode_t code )
 	qvkDestroyShaderModule(vk.device, vk.modules.bloom_fs, NULL);
 	qvkDestroyShaderModule(vk.device, vk.modules.blur_fs, NULL);
 	qvkDestroyShaderModule(vk.device, vk.modules.blend_fs, NULL);
+
+	qvkDestroyShaderModule(vk.device, vk.modules.ql_bright_fs, NULL);
+	qvkDestroyShaderModule(vk.device, vk.modules.ql_blur_fs, NULL);
+	qvkDestroyShaderModule(vk.device, vk.modules.ql_bloom_fs, NULL);
+	qvkDestroyShaderModule(vk.device, vk.modules.ql_combine_fs, NULL);
+	qvkDestroyShaderModule(vk.device, vk.modules.ql_copy_fs, NULL);
 
 	qvkDestroyShaderModule(vk.device, vk.modules.gamma_vs, NULL);
 	qvkDestroyShaderModule(vk.device, vk.modules.gamma_fs, NULL);
@@ -5174,7 +5194,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	VkGraphicsPipelineCreateInfo create_info;
 	VkViewport viewport;
 	VkRect2D scissor;
-	VkSpecializationMapEntry spec_entries[13];
+	VkSpecializationMapEntry spec_entries[15];
 	VkSpecializationInfo frag_spec_info;
 	VkPipeline *pipeline;
 	VkShaderModule fsmodule;
@@ -5198,6 +5218,8 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 		int depth_b;
 		float contrast;
 		float bloom_saturation;
+		float bloom_scene_saturation;
+		float bloom_scene_intensity;
 	} frag_spec_data;
 
 	switch ( program_index ) {
@@ -5236,6 +5258,24 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 			samples = vkSamples;
 			pipeline_name = "QL bloom blend pipeline";
 			blend = 2;
+			break;
+		case 6: // [QL] the whole sum, scene included, into the scratch buffer
+			pipeline = &vk.ql_combine_pipeline;
+			fsmodule = vk.modules.ql_combine_fs;
+			renderpass = vk.render_pass.bloom_extract;
+			layout = vk.pipeline_layout_blend;
+			samples = VK_SAMPLE_COUNT_1_BIT;
+			pipeline_name = "QL bloom combine pipeline";
+			blend = 0;
+			break;
+		case 7: // [QL] the scratch buffer back over the scene
+			pipeline = &vk.ql_copy_pipeline;
+			fsmodule = vk.modules.ql_copy_fs;
+			renderpass = vk.render_pass.post_bloom;
+			layout = vk.pipeline_layout_post_process;
+			samples = vkSamples;
+			pipeline_name = "QL bloom scratch copy pipeline";
+			blend = 0;
 			break;
 		case 3: // capture buffer extraction
 			pipeline = &vk.capture_pipeline;
@@ -5291,10 +5331,14 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 		frag_spec_data.bloom_threshold = MAX( r_bloomBrightThreshold->value, 0.0f );
 		frag_spec_data.bloom_intensity = MAX( r_bloomIntensity->value, 0.0f );
 		frag_spec_data.bloom_saturation = MAX( r_bloomSaturation->value, 0.0f );
+		frag_spec_data.bloom_scene_saturation = MAX( r_bloomSceneSaturation->value, 0.0f );
+		frag_spec_data.bloom_scene_intensity = MAX( r_bloomSceneIntensity->value, 0.0f );
 	} else {
 		frag_spec_data.bloom_threshold = r_bloom_threshold->value;
 		frag_spec_data.bloom_intensity = r_bloom_intensity->value;
 		frag_spec_data.bloom_saturation = 1.0f;
+		frag_spec_data.bloom_scene_saturation = 1.0f;
+		frag_spec_data.bloom_scene_intensity = 1.0f;
 	}
 	frag_spec_data.bloom_threshold_mode = r_bloom_threshold_mode->integer;
 	frag_spec_data.bloom_modulate = r_bloom_modulate->integer;
@@ -5355,7 +5399,15 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	spec_entries[12].offset = offsetof(struct FragSpecData, bloom_saturation);
 	spec_entries[12].size = sizeof(frag_spec_data.bloom_saturation);
 
-	frag_spec_info.mapEntryCount = 13;
+	spec_entries[13].constantID = 13;
+	spec_entries[13].offset = offsetof(struct FragSpecData, bloom_scene_saturation);
+	spec_entries[13].size = sizeof(frag_spec_data.bloom_scene_saturation);
+
+	spec_entries[14].constantID = 14;
+	spec_entries[14].offset = offsetof(struct FragSpecData, bloom_scene_intensity);
+	spec_entries[14].size = sizeof(frag_spec_data.bloom_scene_intensity);
+
+	frag_spec_info.mapEntryCount = 15;
 	frag_spec_info.pMapEntries = spec_entries;
 	frag_spec_info.dataSize = sizeof( frag_spec_data );
 	frag_spec_info.pData = &frag_spec_data;
@@ -8029,12 +8081,17 @@ the scene. The blend gives scene * (1 - bloom) + bloom, so the scene is never re
 qboolean vk_ql_bloom( void )
 {
 	qboolean quarter = ( r_bloomPasses->value > 1.0f && vk.blur_pipeline[3] ) ? qtrue : qfalse;
+	uint32_t level;
 
 	if ( vk.renderPassIndex == RENDER_PASS_SCREENMAP || !vk.fboActive || !backEnd.doneSurfaces ) {
 		return qfalse;
 	}
 
 	if ( backEnd.doneBloom || !vk.ql_bright_pipeline || !vk.ql_bloom_pipeline ) {
+		return qfalse;
+	}
+
+	if ( !vk.ql_combine_pipeline || !vk.ql_copy_pipeline ) {
 		return qfalse;
 	}
 
@@ -8055,11 +8112,34 @@ qboolean vk_ql_bloom( void )
 		vk_ql_blur_pass( 2, 4 );
 	}
 
-	vk_begin_post_bloom_render_pass();
-	qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.ql_bloom_pipeline );
-	qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1,
-		&vk.bloom_image_descriptor[ quarter ? 3 : 1 ], 0, NULL );
-	qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
+	level = quarter ? 3 : 1;
+
+	// [QL] 0x438590: the scene as it is needs no reading, the blend adds up to the same
+	if ( r_bloomSceneSaturation->value == 1.0f && r_bloomSceneIntensity->value == 1.0f ) {
+		vk_begin_post_bloom_render_pass();
+		qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.ql_bloom_pipeline );
+		qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1,
+			&vk.bloom_image_descriptor[ level ], 0, NULL );
+		qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
+	} else {
+		VkDescriptorSet dset[2];
+
+		dset[0] = vk.color_descriptor;
+		dset[1] = vk.bloom_image_descriptor[ level ];
+
+		// the whole sum into bloom_image[0], which is the scene's size and free while we bloom
+		vk_begin_bloom_extract_render_pass();
+		qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.ql_combine_pipeline );
+		qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_blend, 0, ARRAY_LEN( dset ), dset, 0, NULL );
+		qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
+		vk_end_render_pass();
+
+		vk_begin_post_bloom_render_pass();
+		qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.ql_copy_pipeline );
+		qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1,
+			&vk.bloom_image_descriptor[0], 0, NULL );
+		qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
+	}
 
 	vk.cmd->last_pipeline = VK_NULL_HANDLE;
 	backEnd.doneBloom = qtrue;
