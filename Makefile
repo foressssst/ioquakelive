@@ -1483,6 +1483,7 @@ Q3OBJ = \
   $(B)/client/cmd.o \
   $(B)/client/common.o \
   $(B)/client/cvar.o \
+  $(B)/client/cmd_help.o \
   $(B)/client/cvar_help.o \
   $(B)/client/files.o \
   $(B)/client/md4.o \
@@ -1980,6 +1981,7 @@ Q3DOBJ = \
   $(B)/ded/cmd.o \
   $(B)/ded/common.o \
   $(B)/ded/cvar.o \
+  $(B)/ded/cmd_help.o \
   $(B)/ded/cvar_help.o \
   $(B)/ded/files.o \
   $(B)/ded/md4.o \

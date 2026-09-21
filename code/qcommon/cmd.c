@@ -662,7 +662,13 @@ void Cmd_AddCommand(const char* cmd_name, xcommand_t function) {
     cmd->name = CopyString(cmd_name);
     cmd->function = function;
     cmd->complete = NULL;
-    cmd->help = NULL;
+    // [ioquakelive] a command gets its help text as it is registered, wherever it is
+    // registered from (cmd_help.c), the same way a cvar does
+    {
+        const char* help = Cmd_BuiltInHelp(cmd_name);
+
+        cmd->help = help ? CopyString(help) : NULL;
+    }
     cmd->next = cmd_functions;
     cmd_functions = cmd;
 }
