@@ -14,6 +14,8 @@ layout(constant_id = 7) const int ditherMode = 0; // 0 - disabled, 1 - ordered
 layout(constant_id = 8) const int depth_r = 255;
 layout(constant_id = 9) const int depth_g = 255;
 layout(constant_id = 10) const int depth_b = 255;
+// [QL] r_contrast, the last step of the colour correction
+layout(constant_id = 11) const float contrast = 1.0;
 
 const vec3 sRGB = { 0.2126, 0.7152, 0.0722 };
 
@@ -66,6 +68,11 @@ void main() {
 	else
 	{
 		out_color = vec4(base * obScale, 1);
+	}
+
+	if ( contrast != 1.0 )
+	{
+		out_color.rgb = mix( vec3( 0.5 ), out_color.rgb, contrast );
 	}
 
 	if ( ditherMode == 1 ) {

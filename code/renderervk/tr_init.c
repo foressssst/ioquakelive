@@ -572,6 +572,9 @@ static void InitOpenGL( void )
 		}
 
 		vk_initialize();
+
+		// [QL] the post effects know now whether they have frame buffers
+		R_QLPostInit();
 #else
 		const char *err;
 

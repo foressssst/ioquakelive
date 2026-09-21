@@ -3547,7 +3547,8 @@ static void vk_create_attachments( void )
 				VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &vk.msaa_image, &vk.msaa_image_view, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, qtrue );
 		}
 
-		if ( r_ext_supersample->integer ) {
+		// [QL] 0x448550: a capture reads the corrected frame, so it needs a buffer of its own
+		if ( r_ext_supersample->integer || ( r_enablePostProcess->integer && r_enableColorCorrect->integer ) ) {
 			// capture buffer
 			usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 			create_color_attachment( gls.captureWidth, gls.captureHeight, VK_SAMPLE_COUNT_1_BIT, vk.capture_format,
@@ -5146,7 +5147,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	VkGraphicsPipelineCreateInfo create_info;
 	VkViewport viewport;
 	VkRect2D scissor;
-	VkSpecializationMapEntry spec_entries[11];
+	VkSpecializationMapEntry spec_entries[12];
 	VkSpecializationInfo frag_spec_info;
 	VkPipeline *pipeline;
 	VkShaderModule fsmodule;
@@ -5168,6 +5169,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 		int depth_r;
 		int depth_g;
 		int depth_b;
+		float contrast;
 	} frag_spec_data;
 
 	switch ( program_index ) {
@@ -5228,7 +5230,15 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	set_shader_stage_desc( shader_stages+1, VK_SHADER_STAGE_FRAGMENT_BIT, fsmodule, "main" );
 
 	frag_spec_data.gamma = 1.0 / (r_gamma->value);
-	frag_spec_data.overbright = (float)(1 << tr.overbrightBits);
+	// [QL] 0x43cfe0: with the colour correction the overbright is twice r_overBrightBits, at
+	// least 1, and r_contrast closes the pass
+	if ( r_colorCorrectActive->integer ) {
+		frag_spec_data.overbright = MAX( 2.0f * r_overBrightBits->integer, 1.0f );
+		frag_spec_data.contrast = r_contrast->value;
+	} else {
+		frag_spec_data.overbright = (float)(1 << tr.overbrightBits);
+		frag_spec_data.contrast = 1.0f;
+	}
 	frag_spec_data.greyscale = r_greyscale->value;
 	frag_spec_data.bloom_threshold = r_bloom_threshold->value;
 	frag_spec_data.bloom_intensity = r_bloom_intensity->value;
@@ -5283,7 +5293,11 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	spec_entries[10].offset = offsetof(struct FragSpecData, depth_b);
 	spec_entries[10].size = sizeof(frag_spec_data.depth_b);
 
-	frag_spec_info.mapEntryCount = 11;
+	spec_entries[11].constantID = 11;
+	spec_entries[11].offset = offsetof(struct FragSpecData, contrast);
+	spec_entries[11].size = sizeof(frag_spec_data.contrast);
+
+	frag_spec_info.mapEntryCount = 12;
 	frag_spec_info.pMapEntries = spec_entries;
 	frag_spec_info.dataSize = sizeof( frag_spec_data );
 	frag_spec_info.pData = &frag_spec_data;

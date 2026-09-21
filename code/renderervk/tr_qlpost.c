@@ -91,6 +91,8 @@ void R_QLPostRegister( void ) {
 	r_bloomSceneSaturation = ri.Cvar_GetRange( "r_bloomSceneSaturation", "1.0", "0.0", "10.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE );
 	r_colorCorrectActive = ri.Cvar_Get( "r_colorCorrectActive", "0", CVAR_ROM | CVAR_TEMP );
 	r_contrast = ri.Cvar_Get( "r_contrast", "1.0", CVAR_ARCHIVE | CVAR_USERSAVE );
+	// the gamma pass bakes it, so a change rebuilds the pipeline
+	RI_Cvar_SetGroup( r_contrast, CVG_RENDERER );
 	r_enableBloom = ri.Cvar_Get( "r_enableBloom", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
 	r_enableColorCorrect = ri.Cvar_Get( "r_enableColorCorrect", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
 	r_enablePostProcess = ri.Cvar_Get( "r_enablePostProcess", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
@@ -102,13 +104,23 @@ void R_QLPostRegister( void ) {
 ===============
 R_QLPostInit
 
-[ioquakelive] the Vulkan post effects are still to come; the gamma pass gives the overbright
+[QL] 0x450710: the colour correction rides the gamma pass, which needs the frame buffer
 ===============
 */
 void R_QLPostInit( void ) {
 	ri.Cvar_Set( "r_postProcessActive", "0" );
 	ri.Cvar_Set( "r_colorCorrectActive", "0" );
 	ri.Cvar_Set( "r_bloomActive", "0" );
+
+	if ( !r_enablePostProcess->integer || !vk.fboActive ) {
+		return;
+	}
+
+	ri.Cvar_Set( "r_postProcessActive", "1" );
+
+	if ( r_enableColorCorrect->integer ) {
+		ri.Cvar_Set( "r_colorCorrectActive", "1" );
+	}
 }
 
 void R_QLPostShutdown( void ) {
