@@ -31,7 +31,7 @@ jobs:
         cp build/release-linux-x86_64/baseq3/uix86_64.so     staging/libs/
         # actions/upload-artifact strips +x; tar to preserve mode bits.
         tar -C build/release-linux-x86_64 -cf staging/engine/linux-x86_64.tar \
-          ioquakelive.x86_64 ioqlds.x86_64 opengl2x86_64.so opengl1x86_64.so
+          ioquakelive.x86_64 ioqlds.x86_64 opengl2x86_64.so opengl1x86_64.so vulkanx86_64.so
     - uses: actions/upload-artifact@v4
       with:
         name: libs-linux-x86_64
@@ -139,7 +139,7 @@ jobs:
         # Tar the raw engine binaries to preserve +x. These are unsigned;
         # macos-bundle codesigns them after they're placed inside the .app.
         tar -C build/release-darwin-arm64 -cf staging/engine-raw/raw-macos-engine.tar \
-          ioquakelive.arm64 ioqlds.arm64 opengl2arm64.dylib opengl1arm64.dylib libSDL2-2.0.0.dylib
+          ioquakelive.arm64 ioqlds.arm64 opengl2arm64.dylib opengl1arm64.dylib vulkanarm64.dylib libSDL2-2.0.0.dylib
     - uses: actions/upload-artifact@v4
       with:
         name: libs-macos-arm64
