@@ -7624,15 +7624,15 @@ static void vk_latency_marker( VkLatencyMarkerNV marker );
 
 void vk_begin_frame( void )
 {
-	// [ioquakelive] 3.5.1.2 of NVIDIA's guide: the simulation ends where the drawing begins
-	vk_latency_marker( VK_LATENCY_MARKER_SIMULATION_END_NV );
-	vk_latency_marker( VK_LATENCY_MARKER_RENDERSUBMIT_START_NV );
-
 	VkCommandBufferBeginInfo begin_info;
 	VkResult res;
 
 	if ( vk.frame_count++ ) // might happen during stereo rendering
 		return;
+
+	// [ioquakelive] 3.5.1.2 of NVIDIA's guide: the simulation ends where the drawing begins
+	vk_latency_marker( VK_LATENCY_MARKER_SIMULATION_END_NV );
+	vk_latency_marker( VK_LATENCY_MARKER_RENDERSUBMIT_START_NV );
 
 #ifdef USE_UPLOAD_QUEUE
 	vk_flush_staging_buffer( qtrue );
@@ -7653,6 +7653,18 @@ void vk_begin_frame( void )
 			}
 		}
 		VK_CHECK( qvkResetFences( vk.device, 1, &vk.cmd->rendering_finished_fence ) );
+	}
+
+	// [ioquakelive] r_maxQueuedFrames as in the OpenGL renderers. The ring already waits for the
+	// frame NUM_COMMAND_BUFFERS back; a smaller cap waits for the frame that many back, and the
+	// older ones are done too because the queue runs in order. 1 keeps the CPU from ever running
+	// ahead of the GPU, which is the least latency without Reflex or Anti-Lag
+	if ( r_maxQueuedFrames->integer > 0 && r_maxQueuedFrames->integer < NUM_COMMAND_BUFFERS ) {
+		vk_tess_t *back = &vk.tess[ ( vk.cmd_index + NUM_COMMAND_BUFFERS - r_maxQueuedFrames->integer ) % NUM_COMMAND_BUFFERS ];
+
+		if ( back->waitForFence ) {
+			qvkWaitForFences( vk.device, 1, &back->rendering_finished_fence, VK_FALSE, 1000000000ULL );
+		}
 	}
 
 	if ( !RI_CL_IsMinimized() && !vk.cmd->swapchain_image_acquired ) {
