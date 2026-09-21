@@ -118,23 +118,24 @@ void R_ColorShiftLightingBytes( const byte in[4], byte out[4], qboolean hasAlpha
 	// shift the color data based on overbright range
 	shift = r_mapOverBrightBits->integer - tr.overbrightBits;
 
-	// shift the data based on overbright range
-	if ( shift >= 0 ) {
-		r = in[0] << shift;
-		g = in[1] << shift;
-		b = in[2] << shift;
-		// normalize by color instead of saturating to white
-		if ( ( r | g | b ) > 255 ) {
-			int max = r > g ? r : g;
-			max = max > b ? max : b;
-			r = r * 255 / max;
-			g = g * 255 / max;
-			b = b * 255 / max;
-		}
-	} else {
-		r = in[0] >> -shift;
-		g = in[1] >> -shift;
-		b = in[2] >> -shift;
+	// [QL] retail no longer caps the overbright at r_mapOverBrightBits (0x4475d0), so the shift can
+	// come out negative; it doesn't darken then, it stays at 0
+	if ( shift < 0 ) {
+		shift = 0;
+	}
+
+	r = in[0] << shift;
+	g = in[1] << shift;
+	b = in[2] << shift;
+
+	// normalize by color instead of saturating to white; [QL] quakelive_steam.exe 0x4388f0 brings the
+	// brightest channel down to r_mapOverBrightCap, not 255
+	if ( ( r | g | b ) > 255 ) {
+		int max = r > g ? r : g;
+		max = max > b ? max : b;
+		r = r * r_mapOverBrightCap->integer / max;
+		g = g * r_mapOverBrightCap->integer / max;
+		b = b * r_mapOverBrightCap->integer / max;
 	}
 
 	if ( r_mapGreyScale->integer ) {

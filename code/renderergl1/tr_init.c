@@ -167,6 +167,7 @@ cvar_t	*r_lodCurveError;
 
 cvar_t	*r_overBrightBits;
 cvar_t	*r_mapOverBrightBits;
+cvar_t	*r_mapOverBrightCap;
 cvar_t	*r_mapGreyScale;
 
 cvar_t	*r_debugSurface;
@@ -1550,7 +1551,9 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_fullbright, "Debugging tool to render the entire level without lighting." );
 	r_overBrightBits = ri.Cvar_Get( "r_overBrightBits", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
 	ri.Cvar_SetDescription( r_overBrightBits, "Sets the intensity of overall brightness of texture pixels." );
+	// [QL] quakelive_steam.exe 0x449800-0x449824: both archived, and the lightmap cap 255 in 0-255
 	r_mapOverBrightBits = ri.Cvar_Get( "r_mapOverBrightBits", "2", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
+	r_mapOverBrightCap = ri.Cvar_GetRange( "r_mapOverBrightCap", "255", "0", "255", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
 	ri.Cvar_SetDescription( r_mapOverBrightBits, "Sets the number of overbright bits baked into all lightmaps and map data." );
 	r_intensity = ri.Cvar_Get( "r_intensity", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	RI_Cvar_CheckRange( r_intensity, "1", "255", CV_FLOAT );
@@ -1716,7 +1719,9 @@ static void R_Register( void )
 	r_railSegmentLength = ri.Cvar_Get( "r_railSegmentLength", "32", CVAR_ARCHIVE | CVAR_USERSAVE );
 	ri.Cvar_SetDescription( r_railSegmentLength, "Length of segments in railgun trails." );
 
-	r_ambientScale = ri.Cvar_Get( "r_ambientScale", "0.6", CVAR_CHEAT );
+	// [QL] quakelive_steam.exe 0x449031: 10 in 1-100, neither archived nor cheat protected; 0x44ab56
+	// multiplies the light grid's ambient by it, as here
+	r_ambientScale = ri.Cvar_GetRange( "r_ambientScale", "10", "1", "100", CVAR_REPLICATE | CVAR_USERSAVE );
 	ri.Cvar_SetDescription( r_ambientScale, "Light grid ambient light scaling on entity models." );
 	r_directedScale = ri.Cvar_Get( "r_directedScale", "1", CVAR_CHEAT );
 	ri.Cvar_SetDescription( r_directedScale, "Light grid direct light scaling on entity models." );
@@ -1765,7 +1770,8 @@ static void R_Register( void )
 	r_skipBackEnd = ri.Cvar_Get ("r_skipBackEnd", "0", CVAR_CHEAT);
 	ri.Cvar_SetDescription( r_skipBackEnd, "Skips loading rendering backend." );
 
-	r_lodscale = ri.Cvar_Get( "r_lodscale", "5", CVAR_CHEAT );
+	// [QL] 10 in 1-50, not cheat protected in retail
+	r_lodscale = ri.Cvar_GetRange( "r_lodScale", "10", "1", "50", CVAR_USERSAVE );
 	ri.Cvar_SetDescription( r_lodscale, "Set scale for level of detail adjustment." );
 	r_norefresh = ri.Cvar_Get ("r_norefresh", "0", CVAR_CHEAT);
 	ri.Cvar_SetDescription( r_norefresh, "Bypasses refreshing of the rendered scene." );
