@@ -294,17 +294,11 @@ typedef struct {
 /*
 ===========
 SelectSpawnSpot
-Address: 0x10039080
 
-[QL] Retail's spawn chooser. It walks the spots of team's classname (the "player" spots when
-initial; with no team the deathmatch spots, where initial keeps those flagged 1) and ranks up to
-26 by how far the nearest living player is along the longest axis, players of otherTeam counting
-g_enemyTeamRespawnRatio times as far, or not at all when it is 0. The furthest
-ceil(spots * g_spawnRandomRatio), 3 to 26, cut back to those at least g_spawnMinDistance away,
-are the candidates for a random pick; with nobody to measure against any spot of the class will
-do. Spots flagged 2 are never used, and on a training map warming up bots take the spots flagged
-2 and humans those flagged 1. With no candidate left mode 2 gives NULL and mode 1 takes the best
-spot; a class without spots retries the non-initial ones, and is an error in mode 1.
+[QL] 0x10039080. Ranks up to 26 spots of the team's classname by how far the nearest living
+player is, weighing the other team by g_enemyTeamRespawnRatio, and picks at random among the
+furthest ceil(spots * g_spawnRandomRatio) that are at least g_spawnMinDistance away. Spots
+flagged 2 are never used, except by bots warming up on a training map.
 ===========
 */
 static gentity_t* SelectSpawnSpot(qboolean isBot, int otherTeam, vec3_t origin, vec3_t angles,
@@ -544,15 +538,10 @@ static gentity_t* SelectDominationSpawnPoint(gentity_t* ent, vec3_t origin, vec3
 /*
 ===========
 SelectClientSpawnPoint
-Address: 0x10039730
 
-[QL] Retail's ClientSpawn chooser. In CA, CTF, 1-Flag, Overload, Harvester, Freeze Tag, Domination
-and Attack & Defend a player spawns at their team's spots: the "player" ones until the team has
-started, and always in Attack & Defend once warmup is over. The other team is weighed by
-g_enemyTeamRespawnRatio, or the player's own in Freeze Tag and Domination. A duel player's first
-spawn is initial too, and Domination tries its control points first. Except in CTF, 1-Flag,
-Overload, Harvester and Attack & Defend a failed pick falls back to the non-initial spots, then a
-random team's bases; after g_maxDeferredSpawns failed spawns in a row the deathmatch spots are
+[QL] 0x10039730. In the team modes a player spawns at their team's spots, the "player" ones
+until the team has started. A failed pick falls back to the non-initial spots and then to a
+random team's bases, and after g_maxDeferredSpawns failures in a row the deathmatch spots are
 taken regardless.
 ===========
 */
