@@ -139,6 +139,7 @@ void R_QLPostInit( void ) {
 	}
 }
 
+// the pipelines and the bloom images belong to vk.c, which destroys them
 void R_QLPostShutdown( void ) {
 }
 
