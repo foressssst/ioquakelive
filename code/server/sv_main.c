@@ -846,17 +846,13 @@ SV_VoiceFrame
 The server bridges the voice: each player sends theirs to it over Steam's peer to peer
 network, and it hands them out to the others with the speaker's client number in front.
 
-[QL] 0x00466850, the same frame that services the server's Steam. Two parts:
+[QL] 0x00466850, in the same frame that services the server's Steam. Every ten seconds
+it sends each player a greeting, which is the only thing keeping the peer session alive,
+and while there are packets on the voice channel it finds whose they are by Steam ID and
+passes them to everyone the game module lets hear that player.
 
-  - every ten seconds it sends each player a greeting, which is the only thing
-    keeping the peer session alive;
-  - while there are packets on the voice channel, it finds whose they are by Steam
-    ID, puts the client number in front and passes them to everyone the game module
-    lets hear that player.
-
-One deliberate difference from retail: when the sender is none of the players, retail
-hands the packet out anyway -- with the first byte never written, passing it off as
-client 0. Here it is dropped.
+One deliberate difference: when the sender is none of the players retail hands the packet
+out anyway, passing it off as client 0. Here it is dropped.
 ==================
 */
 void SV_VoiceFrame(void) {

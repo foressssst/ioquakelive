@@ -22,15 +22,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 // cvar_help.c -- [ioquakelive] help texts for Quake Live's cvars
 //
-// The console shows a cvar's help in "help <name>", in the panel under the
-// console and next to completions. Retail Quake Live has no help texts: these
-// say what each cvar does in this engine and its modules, as they were ported
-// from retail. The range and the default come from the cvar itself and are
-// printed with the text, so the texts don't repeat them.
+// The console shows a cvar's help in "help <name>", in the panel under the console
+// and next to completions. Retail has no help texts: these say what each cvar does
+// in this engine and its modules. The range and the default come from the cvar
+// itself and are printed with the text, so the texts don't repeat them.
 //
 // Cvar_Get looks the name up when it creates a cvar, which gives the modules'
-// cvars their text as they register. A cvar with no entry has no help; read-only
-// state the game keeps for its menus is left out on purpose.
+// cvars their text as they register. A cvar with no entry has no help.
 //
 
 #include "q_shared.h"

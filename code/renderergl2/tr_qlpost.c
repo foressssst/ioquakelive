@@ -22,16 +22,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 // tr_qlpost.c -- [QL] Quake Live's post effects: the colour correction and the bloom
 //
-// quakelive_steam.exe draws the 3D view into a frame buffer of its own (render command 11, which
-// the cgame queues right before the view), puts the bloom over it and copies the result to the
-// back buffer (command 10, right after the view), and when the frame ends runs the colour
-// correction over the whole back buffer, HUD included (command 9, queued by RE_EndFrame). This
-// renderer already draws the whole frame into tr.renderFbo, so the bloom works in place there and
-// the colour correction is the frame's last copy, the one to the screen.
+// quakelive_steam.exe draws the 3D view into a frame buffer of its own (render
+// command 11), puts the bloom over it and copies the result to the back buffer
+// (command 10), and when the frame ends runs the colour correction over the whole
+// back buffer, HUD included (command 9). This renderer already draws the whole
+// frame into tr.renderFbo, so the bloom works in place there and the colour
+// correction is the frame's last copy, the one to the screen.
 //
-// The colour correction gives the gamma, the overbright and the contrast also in a window. The
-// frame is drawn at 1 / 2^r_overBrightBits of its brightness, as for a hardware gamma ramp (see
-// R_SetColorMappings and ComputeShaderColors), and the correction brings it back up.
+// The frame is drawn at 1 / 2^r_overBrightBits of its brightness, as for a
+// hardware gamma ramp, and the correction brings it back up.
 //
 
 #include "tr_local.h"

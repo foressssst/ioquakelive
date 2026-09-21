@@ -485,17 +485,14 @@ static void IN_GobbleMotionEvents(void) {
 THE MOUSE, READ IN BATCHES   (in_mouse 2, Windows)
 
 [ioquakelive] SDL2 services raw input one event at a time: for every movement it calls
-GetRawInputData, which takes a lock, and at 8000 Hz that is eight calls per millisecond. The
-batched read -- GetRawInputBuffer -- arrived in SDL 3, not in the SDL 2 this engine uses; and
-the retail engine does not have it either, it imports GetRawInputData.
+GetRawInputData, which takes a lock, and at 8000 Hz that is eight calls per
+millisecond. The batched read, GetRawInputBuffer, arrived in SDL 3, and the retail
+engine does not have it either.
 
-Here the device is registered against our own window, SDL's relative mode is turned off --
-without it SDL does not even look at WM_INPUT, that being its own entry condition, so that cost
-disappears -- and once per frame the whole queue is drained, summing the movement, which is
-queued as a single event. Buttons and wheel still arrive through SDL, where they cost nothing.
-
-Reading BEFORE SDL pumps the messages matters: once a WM_INPUT reaches DefWindowProc the system
-frees its data and it no longer shows up in the batch.
+Here the device is registered against our own window, SDL's relative mode is turned off
+- without it SDL does not even look at WM_INPUT - and once per frame the whole queue is
+drained and summed into a single event. Reading before SDL pumps the messages matters:
+once a WM_INPUT reaches DefWindowProc the system frees its data.
 
 ===============================================================================
 */

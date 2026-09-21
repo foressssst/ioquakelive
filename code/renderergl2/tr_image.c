@@ -2363,19 +2363,15 @@ void R_ImageLoadStatsReport(void) {
 
 TEXTURES DECODED AHEAD OF TIME
 
-[ioquakelive] Of what loading a map's textures costs, 94% is decoding, and that is pure CPU:
-0.86 s out of 0.92 on campgrounds, against 0.05 s reading from the pk3 and 0.01 s uploading to
-the GPU. So the main thread goes on reading the files -- the filesystem is not thread safe --
-and the workers decode while the main thread carries on registering shaders. By the time an
-image comes up, it is almost always ready.
+[ioquakelive] Of what loading a map's textures costs, 94% is decoding, and that is pure
+CPU: 0.86 s out of 0.92 on campgrounds, against 0.05 s reading from the pk3 and 0.01 s
+uploading. So the main thread goes on reading the files - the filesystem is not thread
+safe - and the workers decode while it carries on registering shaders.
 
-Reading ahead means knowing WHAT to read, and that is not known until the map has been loaded
-once: at the end of every load the list of what was asked for is written out, and the next time
-that map loads it is used. A map's first load is not sped up; the ones after it are.
-
-Only JPEGs take this path, which is almost every texture in Quake Live: the rest go the usual
-way. The window caps how many decoded images can be held at once, so that memory does not blow
-up with a thousand loose textures.
+Reading ahead means knowing what to read, which is not known until the map has been
+loaded once: at the end of every load the list of what was asked for is written out and
+the next load of that map uses it. Only JPEGs take this path, and a window caps how many
+decoded images can be held at once.
 
 ==============================================================================
 */

@@ -23,17 +23,16 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // sv_factories.c -- [QL] arenas, factories and the map pool
 //
 // Quake Live's engine keeps three tables the game modes are built from
-// (quakelive_steam.exe 0x45e570..0x45fc26):
-// - arenas: every map from scripts/arenas.txt and scripts/*.arena, with the
-//   gametypes its "type" key names;
-// - factories: gametype presets from scripts/factories.txt and
-//   scripts/*.factories, a JSON array of objects with an id, a base gametype,
-//   a title and the cvars they set;
-// - the map pool: "map|factory" lines from sv_mapPoolFile, which feed nextmap,
-//   startRandomMap and the maps offered at the end of a match.
-// "map <map> <factory>" (sv_ccmds.c) applies a factory: it restores the cvars
-// the previous one changed, saves the current value of each cvar the new one
-// sets, sets them and then g_gametype, g_factory and g_factoryTitle.
+// (quakelive_steam.exe 0x45e570..0x45fc26): the arenas, every map from
+// scripts/arenas.txt and scripts/*.arena with the gametypes its "type" key names;
+// the factories, presets from scripts/factories.txt and *.factories, a JSON array
+// with an id, a base gametype, a title and the cvars they set; and the map pool,
+// "map|factory" lines from sv_mapPoolFile.
+//
+// "map <map> <factory>" applies a factory: it restores the cvars the previous one
+// changed, saves the current value of each cvar the new one sets, sets them and
+// then g_gametype, g_factory and g_factoryTitle.
+//
 
 #include "server.h"
 

@@ -2,18 +2,16 @@
 ===========================================================================
 ioquakelive - a small JSON builder for the stats events
 
-The writer follows jsoncpp's StyledWriter, which is the only JSON writer in the
-retail engine (quakelive_steam.exe has Json::StyledWriter and no FastWriter):
+The writer follows jsoncpp's StyledWriter, the only JSON writer in the retail
+engine:
 
-  - an object is "{", then each member on its own line as "key" : value, with a
-    comma after all but the last, then "}" on its own line; members are sorted
-    by key, because jsoncpp keeps them in a std::map
+  - an object is "{", each member on its own line as "key" : value with a comma
+    after all but the last, then "}"; members are sorted by key
   - an empty object is {}, an empty array is []
-  - an array goes on one line, "[ a, b ]", unless it holds a non-empty object
-    or array, or the line would reach 74 characters; then one element a line
-  - the indentation is three spaces, and the document ends with a newline
-  - a real is printed with %#.16g and its trailing zeros are cut, keeping one
-    after the point
+  - an array goes on one line, "[ a, b ]", unless it holds a non-empty object or
+    array or the line would reach 74 characters; then one element a line
+  - three spaces of indentation, a newline at the end, and a real printed with
+    %#.16g with its trailing zeros cut, keeping one after the point
 ===========================================================================
 */
 

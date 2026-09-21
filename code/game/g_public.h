@@ -332,17 +332,15 @@ typedef struct {
     /* 0x688 */ /* end - total 209 slots x 8 = 1672 bytes */
 } gameImport_t;
 
-// [QL] vmMain export table - completely reordered vs Q3.
-// QL uses a function pointer table instead of Q3's vmMain dispatcher.
-// QL drops GAME_CLIENT_BEGIN. The bots' frame is still its own export (+0x2c), which the engine
-// calls apart from GAME_RUN_FRAME (SV_BotFrame, quakelive_steam.exe 0x4dd670).
-// The numbers are retail's. The table starts at 0x1008fd00, not at 0x1008fd08, and ends with
-// a -1 at +0x54, so there are 21 slots and not 19; counting from the wrong place left every
-// number here two below retail's. Slot 0 is zero in the binary and slot 1 is 0x100529b0, which
-// announces every cvar that changes while cheats are on -- that behaviour is ported, but inside
-// G_UpdateCvars, where the change is already detected, rather than as an export.
-// Slots with no counterpart are named and left empty, so that whatever is ported later lands in
-// the same place as in retail.
+// [QL] the vmMain export table, completely reordered against Q3: QL uses a function
+// pointer table instead of Q3's dispatcher and drops GAME_CLIENT_BEGIN. The bots' frame
+// is still its own export (+0x2c), called apart from GAME_RUN_FRAME (SV_BotFrame,
+// quakelive_steam.exe 0x4dd670).
+//
+// The table starts at 0x1008fd00 and ends with a -1 at +0x54, so there are 21 slots.
+// Slot 1 is 0x100529b0, which announces every cvar that changes while cheats are on;
+// that is ported inside G_UpdateCvars instead of as an export. Slots with no
+// counterpart are named and left empty.
 typedef enum {
     GAME_UNUSED_0                = 0,   // [QL] zero in the binary's table
     GAME_CVAR_CHANGED            = 1,   // [QL] 0x100529b0, el anuncio de "Server: %s changed to %s";

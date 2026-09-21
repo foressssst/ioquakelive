@@ -898,19 +898,16 @@ void CG_ResetSpecItemTimers(void) {
 ==============
 CG_PointOfInterest
 
-[QL] cgamex86.dll case 0x5a of CG_EntityEvent. The server broadcasts this where a player
-who has to be given away is standing -- the Quad Hog, or whoever carries the neutral flag --
-and it becomes one sprite of the floating-effect pool, which already knows how to keep a
-marker on screen through the walls, shrink it with distance and fade it out.
+[QL] case 0x5a of CG_EntityEvent. The server broadcasts this where a player who has to
+be given away is standing - the Quad Hog, or whoever carries the neutral flag - and it
+becomes one sprite of the floating-effect pool, which already keeps a marker on screen
+through the walls and fades it with distance.
 
-es->powerups carries how long the marker lives (the server sends the ping rate, so one
-marker lasts exactly until the next), and the fade starts at a quarter of that.
-es->generic1 is the client for the Quad Hog and the team for a flag, which is why the two
-go into different fields: followNum hides the marker from its own team, clientNum from its
-own player.
-
-Which of the three it is does not travel with the event -- it follows the rules the match is
-running under (CS_CUSTOM_SETTINGS), because a match only ever emits one kind.
+es->powerups carries how long the marker lives, and the fade starts at a quarter of
+that. es->generic1 is the client for the Quad Hog and the team for a flag, which is why
+the two go into different fields: followNum hides the marker from its own team,
+clientNum from its own player. Which of the three it is follows CS_CUSTOM_SETTINGS,
+because a match only ever emits one kind.
 ==============
 */
 static void CG_PointOfInterest(centity_t* cent) {

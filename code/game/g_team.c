@@ -286,20 +286,14 @@ G_VoiceFilter
 Who hears whom. The server asks this for every pair when handing out voice, and only
 sends it when the answer is 0.
 
-[QL] 0x10052e90, export +0x3c. The conditions are in the binary's order:
+[QL] 0x10052e90, export +0x3c. The conditions in the binary's order: bots are sent
+nothing; a muted player is not relayed; nobody hears themselves; during intermission
+and while waiting for players (warmupTime < 0) everyone hears everyone; in team
+modes, and whenever the speaker is a spectator, only the same team hears; in the
+remaining modes everyone hears.
 
-  - bots are sent nothing;
-  - a muted player is not relayed;
-  - nobody hears themselves;
-  - during intermission and while waiting for players (warmupTime < 0) everyone
-    hears everyone;
-  - in team modes, and whenever the speaker is a spectator, only the same team
-    hears;
-  - in the remaining modes everyone hears.
-
-Retail also has a mode variable that nothing ever writes -- the binary's only two
-references read it. With its value fixed at 0 the two branches that depend on it are
-the ones above, so it does not exist here.
+Retail also has a mode variable that nothing ever writes. With its value fixed at 0
+the two branches that depend on it are the ones above, so it is not here.
 ==============
 */
 int G_VoiceFilter(int speaker, int listener) {

@@ -137,18 +137,16 @@ typedef enum {
 #define CS_SCORE2NDPLAYER 686      // Score of the duel player on the right
 #define CS_CLIENTNUM1STPLAYER 687  // ClientNum of the duel player on the left
 #define CS_CLIENTNUM2NDPLAYER 688  // ClientNum of the duel player on the right
-// [QL] 689-703 were two slots low. qagamex86.dll 0x10056a35/0x10056920 write the
-// duel players' names to 689/690, 0x1006671e writes "atmosphere" to 691, and
-// 0x10050a33 writes the "\x\%f\y\%f\z\%f" team bases to 694/695; cgamex86.dll
-// 0x10049544-0x10049841 reads 689/690 as names, 692/693/696-699 as one block of
-// six ints, and 694/695 from the flag status ownerdraw.
+// [QL] 689-703 were two slots low. qagamex86.dll 0x10056a35/0x10056920 write the duel
+// players' names to 689/690, 0x1006671e writes "atmosphere" to 691 and 0x10050a33 the
+// team bases to 694/695; cgamex86.dll 0x10049544-0x10049841 reads 689/690 as names and
+// 692/693/696-699 as one block of six ints.
 //
-// [QL] the six awards are VERIFIED: read from the function that computes them
-// (0x100559e0) and from its writes. 693 is hits*100/shots, that is accuracy; 692 is
-// the damage counter; 696 is a weighted sum of items picked up, with the mega and the
-// yellow armor weighing 480; 697 is assists plus captures times ten; 698 is defends
-// plus assists; and 699 is all of the above plus captures times twenty-five, which is
-// why it is the most valuable player. All six match the names below one by one.
+// The six awards are verified, read from the function that computes them (0x100559e0):
+// 693 is hits*100/shots, 692 the damage counter, 696 a weighted sum of items picked up
+// with the mega and the yellow armor weighing 480, 697 assists plus captures times ten,
+// 698 defends plus assists, and 699 all of that plus captures times twenty-five, which
+// is why it is the most valuable player.
 #define CS_NAME1STPLAYER 689       // Name of the duel player on the left
 #define CS_NAME2NDPLAYER 690       // Name of the duel player on the right
 #define CS_ATMOSEFFECT 691         // map "atmosphere" key

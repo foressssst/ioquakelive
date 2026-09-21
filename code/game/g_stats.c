@@ -3,19 +3,13 @@
 ioquakelive - the match statistics events
 
 Retail's game module builds these with jsoncpp and hands them to the engine
-through its import +0x2e8 (0x004e2640 in the engine), which sends each one to
-Steam's stats and to the ZeroMQ stats socket as {"DATA": ..., "TYPE": ...}.
-The event names and the keys of each one were read in qagamex86.dll with
-re/tools/stat_keys.py; the addresses are next to each function.
+through its import +0x2e8 (0x004e2640), which sends each one to Steam's stats and
+to the ZeroMQ stats socket as {"DATA": ..., "TYPE": ...}. The event names and the
+keys were read in qagamex86.dll with re/tools/stat_keys.py.
 
-Every event carries the same three members first (the prologue each of retail's
-builders repeats):
-
-    TIME        seconds since the level started: (level.time - level.startTime) / 1000
-    WARMUP      whether the match is still in warmup
-    MATCH_GUID  the match's GUID, configstring CS_MATCH_GUID, set by G_InitGame
-
-A player's STEAM_ID goes as a string ("%llu"); a bot's is "0".
+Every event carries the same three members first: TIME, seconds since the level
+started; WARMUP, whether the match is still in warmup; and MATCH_GUID, from
+configstring CS_MATCH_GUID. A player's STEAM_ID goes as a string, a bot's is "0".
 ===========================================================================
 */
 

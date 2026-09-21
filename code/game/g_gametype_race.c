@@ -416,19 +416,14 @@ void Cmd_RaceInit_f(gentity_t *ent) {
 ============================================================================
 Cmd_RacePoint_f
 
-[QL] 0x10063ec0. The command that lays out a Race course without leaving the game:
-each call drops a point where the player is standing and chains it to the previous
-one, "clear" deletes them all and "dump" prints their positions.
+[QL] 0x10063ec0. Lays out a Race course without leaving the game: each call drops a
+point where the player is standing and chains it to the previous one, "clear" deletes
+them all and "dump" prints their positions. Three gates first, in the binary's order:
+gametype, cheats and being alive.
 
-Three gates before anything else, in the binary's order: gametype, cheats and being
-alive. What was here before was something else -- "list" alone, with messages of its
-own and none of the three gates -- so this replaces it whole.
-
-The chain's names are retail's (arp0, arp1, ...): the new point is called arp<N> and
-the previous one is pointed at it. The binary keeps them in a table of sixteen and
-still accepts up to sixty-four points, so from the seventeenth on it reads past the
-end; here the name is built on the spot, so the only limit left is the binary's own
-sixty-four.
+The chain's names are retail's (arp0, arp1, ...). The binary keeps them in a table of
+sixteen and still accepts up to sixty-four points, so from the seventeenth on it reads
+past the end; here the name is built on the spot.
 ============================================================================
 */
 static int raceAdminPoints;              // cuantos lleva puestos

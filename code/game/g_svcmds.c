@@ -404,21 +404,16 @@ void Svcmd_ForceTeam_f(void) {
 ===================
 G_ShuffleTeams
 
-[QL] 0x1006a2d0. Shuffles the teams: gathers everyone in play, stirs them and deals
-them out one per side, starting from a random team. On an odd count the last one is
-flipped, which is how the binary keeps the same side from always being the one with
-the extra player.
+[QL] 0x1006a2d0. Gathers everyone in play, stirs them and deals them out one per side,
+starting from a random team; on an odd count the last one is flipped, which is how the
+binary keeps the same side from always having the extra player.
 
-The order comes from a comparator that returns -1, 0 or 1 at random (0x1006a2b0). It
-is not a valid comparator -- it is not consistent with itself -- and that makes the
-result depend on each library's qsort, but it is exactly what retail does and the
-intended effect, stirring, happens all the same.
+The order comes from a comparator that returns -1, 0 or 1 at random (0x1006a2b0). It is
+not consistent with itself, so the result depends on the library's qsort, but it is what
+retail does and it stirs all the same.
 
-In Red Rover, a player already on the team they are dealt is not moved: they are
-respawned in place, and if the round is counting down they are left frozen.
-
-Its callers are the "forceshuffle" console command, the "shuffle" vote, the auto
-shuffle and Red Rover's RS_SHUFFLE state.
+In Red Rover a player already on the team they are dealt is respawned in place, and left
+frozen if the round is counting down.
 ===================
 */
 static int QDECL G_ShuffleCompare(const void* a, const void* b) {

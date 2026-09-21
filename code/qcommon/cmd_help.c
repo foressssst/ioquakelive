@@ -23,17 +23,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // cmd_help.c -- [ioquakelive] help texts for the engine's console commands
 //
 // "help <name>" prints these, "searchhelp <text>" searches them, and the
-// completion panel shows the first line. This is the same arrangement
-// cvar_help.c has for cvars, and for the same reason: Cmd_AddCommand looks the
-// name up as it registers, so a command gets its text wherever it is added
-// from, and nothing has to be kept in order.
+// completion panel shows the first line. Cmd_AddCommand looks the name up as it
+// registers, so a command gets its text wherever it is added from; cvar_help.c
+// does the same for cvars.
 //
-// The first line is the summary and is the only part some views show, so it
-// says what the command does on its own. The lines under it are the usage and
-// whatever is worth knowing before typing it.
-//
-// A command registered by the game, cgame or ui modules is not here: those are
-// forwarded and the module owns them.
+// The first line is the summary and is the only part some views show. A command
+// registered by the game, cgame or ui modules is not here: those are forwarded
+// and the module owns them.
 //
 
 #include "q_shared.h"

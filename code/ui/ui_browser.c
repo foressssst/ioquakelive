@@ -23,15 +23,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // ui_browser.c -- [QL] the Match Browser page
 //
 // Retail's browser is a web page fed by Steam: the client asks Steam for the
-// servers of the app (0x00462eb0, one filter "gamedir" = "baseq3") and shows
-// what Steam answers for each one (0x00462a50): name, map, players, bots, ping,
-// password, VAC and the game's description, which is the gametype. Clicking a
-// row connects.
+// servers of the app (0x00462eb0, one filter "gamedir" = "baseq3") and shows what
+// Steam answers for each (0x00462a50): name, map, players, bots, ping, password,
+// VAC and the game's description, which is the gametype. Clicking a row connects.
 //
-// The same list, the same columns and the same click, drawn in the panel the
-// rest of the front end uses. The list itself comes from the engine
-// (cls.globalServers, filled by Steam) through the LAN_* traps, which is where
-// the sorting and the filtering already live.
+// The same list drawn in the panel the rest of the front end uses. It comes from
+// the engine (cls.globalServers) through the LAN_* traps, which is where the
+// sorting and the filtering already live.
 //
 
 #include "ui_web.h"

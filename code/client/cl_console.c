@@ -1311,16 +1311,14 @@ void Con_DrawInput(void) {
 ================
 Con_DrawNotify
 
-[QL] Only the chat input field. Quake Live's engine (quakelive_steam.exe
-0x4b4100) draws the "say:" / "say team:" / "reply:" field here and nothing else:
-there is no loop over recent console lines, so console output never shows over
-the game. Chat and obituaries are drawn by cgame's HUD ownerdraws instead.
-The field sits on a translucent bar near the bottom of the screen, in amber
-DroidSansMono at the console's unscaled 12x24 cells. With cgame loaded, the
-bar's y and width and the field's width in characters come from cgame's exports
-17 to 19 (0x4b416b, through its export table at 0x146cc38): 413, 640 and 73, or
-455, 300 and 30 during the intermission, and team chat takes 5 characters fewer.
-Without cgame the bar stays at y 413 across the screen.
+[QL] Only the chat input field. Quake Live's engine (quakelive_steam.exe 0x4b4100)
+draws the "say:" / "say team:" / "reply:" field here and nothing else: there is no loop
+over recent console lines, so console output never shows over the game.
+
+The field sits on a translucent bar near the bottom, in amber DroidSansMono at the
+console's unscaled 12x24 cells. With cgame loaded the bar's y and width and the field's
+width in characters come from cgame's exports 17 to 19 (0x4b416b): 413, 640 and 73, or
+455, 300 and 30 during the intermission, team chat taking 5 fewer.
 ================
 */
 void Con_DrawNotify(void) {

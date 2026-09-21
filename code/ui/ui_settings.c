@@ -23,19 +23,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // ui_settings.c -- [QL] the Settings page
 //
 // Retail's Settings button hands the screen to the embedded browser
-// ("web_changeHash /settings", ingame.menu's navbtn6), so the real settings page
-// is in web.pak and there is nothing native to port. It is drawn here instead.
+// ("web_changeHash /settings", ingame.menu's navbtn6), so the real page is in
+// web.pak and there is nothing native to port. It is drawn here instead.
 //
-// Everything it offers is retail's: the ten sections in the order its nav lists
-// them (Gamepad only while a pad is connected, as ui_joyavail says), every cvar
-// in the order its page lists it, with the title, widget, range and value list the
-// web UI gives it, generated into ui_settings_table.h straight out of web.pak; and
-// the buttons its pages end with (Reset Default Bindings, Apply Video Settings,
-// Apply Sound Settings). How it looks is quakeclub.com's: see ui_web.h.
-//
-// The Team section keeps what the pre-browser pages had and the web UI never did:
-// the model your teammates and your enemies will wear, beside their options, in
-// the colours the rows set, and turned by dragging it.
+// Everything it offers is retail's: the ten sections in its nav's order, every
+// cvar in its page's order with the title, widget, range and value list the web
+// UI gives it, generated into ui_settings_table.h out of web.pak, and the buttons
+// its pages end with. How it looks is quakeclub.com's, see ui_web.h. The Team
+// section also keeps the model preview the pre-browser pages had.
 //
 
 #include "ui_web.h"

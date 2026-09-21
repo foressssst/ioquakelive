@@ -367,23 +367,19 @@ Predict push triggers and items
 =================
 CG_UpdateStepChange
 
-[QL] cgamex86.dll 0x10044620, called by CG_PredictPlayerState immediately after every Pmove
-(0x10044bee). This is what smooths the camera when climbing a step.
+[QL] 0x10044620, called by CG_PredictPlayerState right after every Pmove
+(0x10044bee). This is what smooths the camera when climbing a step, and three things
+differ from Quake 3, all visible on a staircase.
 
-Three things that differ from Quake 3, all three visible on a staircase:
+The gate is `cg.stepTime < pm.stepTime`: comparing against cmd.serverTime does not
+work, because Pmove splits the command into chunks of up to 66 ms and overwrites
+each one's serverTime. The previous change is not discarded - what is left of its
+life, decaying linearly over 100 ms, is taken and the new step added on top. And the
+total is clamped to MAX_STEP_CHANGE (0x10067224 = 32) with cg.time as the timestamp,
+because CG_StepOffset measures against the client's clock.
 
-- The gate is `cg.stepTime < pm.stepTime`, that is "this step is newer than the last one I
-  smoothed". Comparing against `cmd.serverTime` does not work: Pmove splits the command into
-  chunks of up to 66 ms and overwrites each one's `serverTime`, so a step landing in any chunk
-  but the last would never match and would be lost.
-- The previous change is NOT discarded: what is left of its life, decaying linearly over 100 ms,
-  is taken and the new step is added on top. Without this each stair cuts the previous smoothing
-  dead, and that is the judder.
-- The total is clamped to MAX_STEP_CHANGE (0x10067224 = 32) and the timestamp kept is `cg.time`,
-  not the command's, because CG_StepOffset measures against the client's clock.
-
-Retail also skips the smoothing in two further states that are not identified yet (0x10a6f8a8
-and 0x10a6d26c); the one that is confirmed is PMF_FOLLOW.
+Retail skips the smoothing in two further states that are not identified yet; the
+one that is confirmed is PMF_FOLLOW.
 =================
 */
 void CG_UpdateStepChange(void) {

@@ -437,21 +437,18 @@ void Freeze_Think(void) {
     }
 }
 
-// ============================================================================
-// Freeze_InstaKill (binary: 0x1004bc80, .so Freeze_InstaKill 0x76fa0)
-//
-// Destroy (mode 1) or auto-thaw-respawn (mode 0) a frozen body.
-//   mode 1 = real destruction of a frozen body (called from player_die and
-//            G_Damage): clears PW_FREEZE, sets GIB health, arms respawnTime.
-//            With PW_FREEZE cleared, the tail GibEntity skips the
-//            thaw-respawn and only gibs the body.
-//   mode 0 = auto-thaw timeout respawn (called from Freeze_ClientThawCheck):
-//            leaves PW_FREEZE set so the tail GibEntity fires
-//            EV_THAW_PLAYER + ClientSpawn (respawn).
-// [QL] byte-faithful to the disassembly. Field offsets mapped to named reimpl
-// fields; DAT_105aac6c (InstaKill respawn delay) resolves to g_respawn_delay_min
-// (decl-phase cvar-table mapping; default "2100").
-// ============================================================================
+/*
+===============
+Freeze_InstaKill
+
+[QL] 0x1004bc80. Destroys a frozen body, or thaws it back into a respawn. Mode 1, from
+player_die and G_Damage, clears PW_FREEZE, sets GIB health and arms respawnTime, so the
+GibEntity at the end only gibs the body. Mode 0, from Freeze_ClientThawCheck, leaves
+PW_FREEZE set and that same GibEntity fires EV_THAW_PLAYER and respawns the player.
+
+DAT_105aac6c, the InstaKill respawn delay, is g_respawn_delay_min.
+===============
+*/
 void Freeze_InstaKill(gentity_t *self, int mode) {
     gclient_t *client = self->client;
     gentity_t *tent;

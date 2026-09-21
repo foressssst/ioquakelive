@@ -2468,17 +2468,14 @@ static void Cmd_Players_f(gentity_t* ent) {
 Cmd_Complaint_f
 
 [QL] 0x10043ab0. The victim's answer to the complaint prompt g_combat opened when a
-teammate killed them: "complaint y" files it, anything else drops it. The window
-lasts as long as pers.complaintEndTime says, and only exists with a match running
-and g_complaintLimit non-zero.
+teammate killed them: "complaint y" files it, anything else drops it. The window lasts
+as long as pers.complaintEndTime says, and only exists with a match running and
+g_complaintLimit non-zero. The numbers sent back are the ones the client expects: -1
+filed, -2 dropped, -3 against somebody who cannot be reported.
 
-The numbers sent back are the ones the client expects: -1 filed, -2 dropped, -3
-against somebody who cannot be reported.
-
-Whoever collects g_complaintLimit complaints is kicked, unless they are a local
-client. Retail also stores their Steam ID before kicking (trap_GetSteamID from
-0x10043d1e) and writes two fields of a struct that has not been identified; that
-part is not ported.
+Whoever collects g_complaintLimit complaints is kicked, unless they are a local client.
+Retail also stores their Steam ID and writes two fields of a struct that has not been
+identified; that part is not ported.
 =================
 */
 static void Cmd_Complaint_f(gentity_t* ent) {
@@ -2531,18 +2528,13 @@ static void Cmd_Complaint_f(gentity_t* ent) {
 =================
 G_CommandPhaseAllowed
 
-[QL] 0x10061090. Which phase of a match a command may be used in. Retail has a
-single one of these and every command tells it which phases it accepts; the three
-callers are pause (match running), timein (match running) and allready (warmup).
+[QL] 0x10061090. Which phase of a match a command may be used in. Retail has a single
+one of these and every command tells it which phases it accepts; the three callers are
+pause, timein and allready.
 
 Four answers, one per phase, with the binary's own strings (0x10088978, 0x100889b4,
-0x100889e8, 0x10088a28). The fourth -- match in progress -- was missing here because
-the only copy of this gate lived inside MP_Pause, and pause always accepts that
-phase, so it could never be reached.
-
-When the command comes from the server console the reason is printed there, "print"
-and quotes included, which is exactly what retail does: it hands the same string to
-trap_Printf.
+0x100889e8, 0x10088a28). From the server console the reason is printed there, "print"
+and quotes included, which is what retail hands to trap_Printf.
 =================
 */
 #define CMD_PHASE_WARMUP 1        // durante el calentamiento

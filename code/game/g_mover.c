@@ -1125,20 +1125,14 @@ If the plat is at the bottom position, start it going up
 ===============
 */
 void Touch_PlatCenterTrigger(gentity_t* ent, gentity_t* other, trace_t* trace) {
-    // [QL] qagamex86.dll 0x1005f390. What cannot be used is a mover that is ALREADY on its
-    // way up (MOVER_1TO2), and that is the whole condition.
+    // [QL] qagamex86.dll 0x1005f390. What cannot be used is a mover ALREADY on its way
+    // up (MOVER_1TO2), and that is the whole condition.
     //
-    // [ioquakelive] This said != MOVER_POS2, and that single difference was the whole door
-    // bug. While the door opens, whoever used it is still inside the trigger; with
-    // != MOVER_POS2 every frame's touch called Use_BinaryMover again, which in MOVER_1TO2
-    // reverses the travel. The door went back and forth at full speed, and oscillating
-    // against the player it crushed them once per swing until they died. It also meant a
-    // spectator never got through: their teleport asks for the door to be still, and it
-    // never was.
-    //
-    // The condition works for a plat too: down it rises, rising it is left alone, up it only
-    // delays the close -- which is what should happen if you stay on it -- and descending it
-    // rises again.
+    // [ioquakelive] This said != MOVER_POS2, and that one difference was the door bug:
+    // while the door opens whoever used it is still inside the trigger, so every frame's
+    // touch called Use_BinaryMover again, which in MOVER_1TO2 reverses the travel. The
+    // door swung back and forth and crushed the player. It works for a plat too: down it
+    // rises, rising it is left alone, up it only delays the close, descending it rises.
     if (!other->client || other->client->sess.sessionTeam != TEAM_SPECTATOR) {
         if (ent->parent->moverState != MOVER_1TO2) {
             Use_BinaryMover(ent->parent, ent, other);

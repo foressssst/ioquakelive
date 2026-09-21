@@ -170,22 +170,14 @@ CG_ElectroGibTrail
 
 The stream of sparks a sphere drags behind it while it is still in the air.
 
-[wolfcam] CG_BloodTrail_ql. Structurally it is Quake 3's CG_BloodTrail with
-every number changed: a cg_gibStepTime of 50 ms instead of 150, a 3.5 unit
-spark on "gfx/misc/tracer" instead of a 20 unit blood puff, and a third of
-the gib's own lifetime instead of a flat 2000 ms.
-
-That last number is not cosmetic. At 50 ms a sphere emits twenty sparks over
-its 1000 ms life; holding each one to ~333 ms keeps about seven alive per
-sphere, so fifteen spheres cost roughly a hundred local entities at peak
-against a MAX_LOCAL_ENTITIES of 512. Pairing the short step with Quake 3's
-long lifetime is what overran the pool and crashed the client earlier in this
-port: CG_AllocLocalEntity recycles the oldest entity when the pool is full,
-including the one CG_AddLocalEntities is walking toward.
+[wolfcam] CG_BloodTrail_ql: Quake 3's CG_BloodTrail with every number changed - a
+cg_gibStepTime of 50 ms instead of 150, a 3.5 unit spark on "gfx/misc/tracer"
+instead of a 20 unit blood puff, and a third of the gib's own lifetime instead of a
+flat 2000 ms. That last one matters: a sphere emits twenty sparks over its 1000 ms
+life, and the short step with Quake 3's long lifetime overruns MAX_LOCAL_ENTITIES.
 
 CG_AddFragment only calls this while the sphere is in free fall, and
-CG_FragmentBounceMark clears leMarkType on the first impact, so the trail
-stops the moment the sphere hits something.
+CG_FragmentBounceMark clears leMarkType on the first impact.
 ================
 */
 static void CG_ElectroGibTrail(localEntity_t* le) {

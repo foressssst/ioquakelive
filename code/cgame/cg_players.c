@@ -2679,24 +2679,16 @@ static void CG_PlayerFreezeEffect(centity_t* cent) {
 ===============
 CG_Draw3DPlayerModel
 
-[QL] cgamex86.dll 0x10008c40, rewritten from the binary. A client's legs, torso and head, and
-the weapon when one is given, rendered into a box of the 640x480 screen: the model of the
-end-of-match boards (CG_1STPLACE_PLYR_MODEL) and of CG_PLAYERMODEL.
+[QL] 0x10008c40. A client's legs, torso and head, and the weapon when one is given,
+rendered into a box of the 640x480 screen: the model of the end-of-match boards and
+of CG_PLAYERMODEL.
 
-  - The binary takes the client in ecx and the torso animation in edx, then the box, the
-    weapon, a fraction into the animations and the model's angles.
-  - The horizontal fov follows the box's pixel width, (int)(width / 640 * 90); the vertical
-    one keeps the box's aspect. The model stands (size + 24) * 1.1 / tan(fov_x / 2) in front of
-    the camera, (size - 24) / 2 down, where size is 32 scaled back by the bounding-box factor.
-  - Legs play LEGS_IDLE and the torso the given animation, both at the fraction; the parts are
-    RF_NOSHADOW | RF_LIGHTING_ORIGIN and carry shaderRGBA 0 128 0 255.
-  - The weapon hangs from tag_weapon; the gauntlet, machinegun and BFG add their barrel.
-    Retail also hangs the grappling hook's _ammo.md3 on tag_ammo, a model this fork does not
-    register; that piece is left out.
-  - A white light 100 back, up and to the side, and a red one 200 back, both of 500.
-
-The version this replaces framed with a fixed 30-degree fov, faced the model straight at the
-camera and always idled the torso.
+The horizontal fov follows the box's pixel width, (int)(width / 640 * 90), and the
+vertical one keeps the box's aspect; the model stands (size + 24) * 1.1 /
+tan(fov_x / 2) in front of the camera and (size - 24) / 2 down. Legs play LEGS_IDLE
+and the torso the given animation, both at the fraction the caller gives, with
+shaderRGBA 0 128 0 255. The weapon hangs from tag_weapon; retail also hangs the
+hook's _ammo.md3, which this fork does not register, so that piece is left out.
 ===============
 */
 void CG_Draw3DPlayerModel(int clientNum, int torsoAnim, float x, float y, float w, float h, int weapon,

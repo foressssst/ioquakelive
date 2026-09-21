@@ -22,18 +22,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 // ui_startmatch.c -- [QL] the Start Match page
 //
-// Retail Quake Live has no native menu to start a local match. Its web UI does
-// it, with the Start Match page of web.pak (module 262, its options in module
-// 263): the page reads the engine's factories and arenas through GetFactoryList
-// and GetMapList (quakelive_steam.exe 0x432edc and 0x432c2c) and launches the
-// match with "map <map> <factory>". This draws that page with the renderer and
-// runs it the way the page's code does, quirks included.
+// Retail has no native menu to start a local match: its web UI does it, with
+// web.pak's Start Match page, which reads the engine's factories and arenas
+// through GetFactoryList and GetMapList (quakelive_steam.exe 0x432edc and
+// 0x432c2c) and launches with "map <map> <factory>". This draws that page with
+// the renderer and runs it the way the page's code does, quirks included.
 //
-// Sizes are the page's CSS pixels at the 1920x1080 it was laid out for (it zooms
-// by the window height / 1080), measured on the page itself, and the colours are
-// its stylesheet's. The web UI's own art is in web.pak, which is not shipped:
-// pak00's gametype icons and fonts stand in for it, and a second pass one pixel
-// to the right stands in for Noto Sans Bold.
+// Sizes are the page's CSS pixels at the 1920x1080 it was laid out for, and the
+// colours are its stylesheet's. Its own art is in web.pak, which is not shipped,
+// so pak00's gametype icons and fonts stand in.
 //
 
 // The frame, the palette and the drawing are shared with the other pages.

@@ -22,15 +22,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 // ui_web.h -- [QL] the front end's pages, drawn with the renderer
 //
-// Retail Quake Live draws everything outside the match in an embedded browser
-// reading web.pak. The pages this build has are drawn here instead. What they
-// offer and in what order is retail's; how they look is quakeclub.com's, in its
-// dark theme, measured off the site itself: the colours are its tokens, the
-// shapes its components (pill buttons and tabs, 10px cards, a 32x18 switch, a
-// 6px slider track), and nothing moves -- no transition, no entrance, no lift.
+// Retail draws everything outside the match in an embedded browser reading
+// web.pak. The pages this build has are drawn here instead. What they offer and in
+// what order is retail's; how they look is quakeclub.com's, in its dark theme,
+// measured off the site: its colour tokens, its components (pill buttons and tabs,
+// 10px cards, a 32x18 switch, a 6px slider track), and nothing moves.
 //
-// Lengths are CSS pixels of a 1920x1080 page; the page zooms by the window
-// height / 1080. ui_startmatch.c was the first page and still names it all SM_.
+// Lengths are CSS pixels of a 1920x1080 page; the page zooms by the window height
+// / 1080. ui_startmatch.c was the first page and still names it all SM_.
 //
 
 #ifndef __UI_WEB_H

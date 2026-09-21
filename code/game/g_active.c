@@ -382,19 +382,14 @@ void SpectatorThink(gentity_t* ent, usercmd_t* ucmd) {
         return;  // [QL] 0x10033f62 returns straight after the cycle
     }
 
-    // [QL] 0x10033f82..0x10033fb1: a fresh press of button 0x800 drops a follower
-    // back to free-fly (StopFollowing, 0x10040d10) - when they are a real spectator,
-    // or when team spectators are allowed a free camera (g_teamSpecFreeCam 1).
+    // [QL] 0x10033f82..0x10033fb1: a fresh press of button 0x800 drops a follower back
+    // to free-fly (StopFollowing, 0x10040d10), when they are a real spectator or when
+    // team spectators are allowed a free camera (g_teamSpecFreeCam 1).
     //
-    // What bit 0x800 means differs between the two engines, and that is why this
-    // tests upmove rather than the bit:
-    //   - Quake Live's engine (quakelive_steam.exe 0x004b542f) sets it from the jump
-    //     key: `if (in_up.active) cmd->buttons |= 0x800`, in_up being the kbutton_t
-    //     behind "+moveup" (0x004b4d80). So retail's test is "jump freshly pressed".
-    //   - ioquake3's engine sets the same bit as BUTTON_ANY, "any key at all is
-    //     down" (cl_input.c CL_CmdButtons), so testing it literally here would make
-    //     every movement key stop following.
-    // The jump key's press edge, read from upmove, is the same trigger retail uses.
+    // The test is on upmove rather than the bit because the bit means different things
+    // in the two engines: Quake Live's sets it from the jump key (0x004b542f, in_up),
+    // while ioquake3's sets it as BUTTON_ANY, "any key at all is down". The jump key's
+    // press edge, read from upmove, is the same trigger retail uses.
     if (jumpPressed &&
         (client->sess.sessionTeam == TEAM_SPECTATOR ||
          (g_teamSpecFreeCam.integer == 1 && client->sess.spectatorState == SPECTATOR_FOLLOW))) {
