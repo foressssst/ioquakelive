@@ -445,7 +445,12 @@ static keyNum_t IN_TranslateSDLToQ3Key(SDL_Keysym* keysym, qboolean down) {
     if (in_keyboardDebug->integer)
         IN_PrintKey(keysym, key, down);
 
-    if (IN_IsConsoleKey(key, 0)) {
+    // [ioquakelive] The key under Escape opens the console whatever it prints. cl_consoleKeys
+    // matches by the character produced, and on a Latin American or Spanish layout that key
+    // is not ` or ~, which left those keyboards with no console at all. SDL reports the same
+    // scancode for that physical key on every layout, so that is what decides here; the cvar
+    // still works, for anyone who wants a different key as well.
+    if (keysym->scancode == SDL_SCANCODE_GRAVE || IN_IsConsoleKey(key, 0)) {
         // Console keys can't be bound or generate characters
         key = K_CONSOLE;
     }
