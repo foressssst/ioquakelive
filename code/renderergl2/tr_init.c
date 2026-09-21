@@ -1423,9 +1423,8 @@ void R_Register(void) {
     r_dynamiclight = ri.Cvar_Get("r_dynamicLight", "1", CVAR_ARCHIVE | CVAR_USERSAVE);
     r_dlightBacks = ri.Cvar_Get("r_dlightBacks", "1", CVAR_ARCHIVE);
     r_finish = ri.Cvar_Get("r_finish", "0", CVAR_ARCHIVE);
-    // [ioquakelive] how many frames the GPU may have queued. 0, the default, drains the pipeline
-    // every frame as retail does: the lowest input latency. 1 leaves one in flight: a few more fps
-    // (+6% measured) in exchange for up to a frame of latency, which a competitive player feels.
+    // [ioquakelive] frames the GPU may have queued; 0 leaves it to the driver, as retail, which with
+    // r_finish 0 only drains in frames without a 3D view (0x4377e6). 1 is the least latency
     r_maxQueuedFrames = ri.Cvar_Get("r_maxQueuedFrames", "0", CVAR_ARCHIVE);
     r_textureMode = ri.Cvar_Get("r_textureMode", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE | CVAR_USERSAVE);
 #ifdef __EMSCRIPTEN__
