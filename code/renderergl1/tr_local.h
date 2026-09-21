@@ -1930,6 +1930,8 @@ qboolean R_CaptureGammaCorrect( void );
 
 // [QL] the frame buffers the post effects work on, from tr_arb.c
 void FBO_ResolveMultisample( void );
+extern qboolean textureNonPowerOfTwo;
+
 void FBO_BindTarget( GLuint target, GLuint buffer );
 GLuint FBO_MainTexture( void );
 GLuint FBO_MainBuffer( void );

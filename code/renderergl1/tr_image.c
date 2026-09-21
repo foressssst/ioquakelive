@@ -23,6 +23,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tr_local.h"
 
 static byte	s_intensitytable[256];
+qboolean	textureNonPowerOfTwo;
+
 static byte	s_gammatable[256];
 
 static byte	s_gammatable_linear[256];
@@ -299,6 +301,12 @@ lighting range
 */
 static void R_LightScaleTexture( byte *in, int inwidth, int inheight, qboolean only_gamma )
 {
+	// [QL] quakelive_steam.exe 0x444d00: with the colour correction the textures are left as they
+	// are, neither gamma nor r_intensity
+	if ( r_colorCorrectActive->integer ) {
+		return;
+	}
+
 	if ( in == NULL )
 		return;
 
@@ -607,7 +615,9 @@ static void Upload32( byte *data, int x, int y, int width, int height, image_t *
 	byte		*resampledBuffer = NULL;
 	int			scaled_width, scaled_height;
 
-	if ( image->flags & IMGFLAG_NOSCALE ) {
+	// [QL] quakelive_steam.exe 0x4452f0 leaves every image at its own size when the card takes any
+	// size; only a mipmapped one on an old card still goes to a power of two
+	if ( ( image->flags & IMGFLAG_NOSCALE ) || !mipmap || textureNonPowerOfTwo ) {
 		//
 		// keep original dimensions
 		//
@@ -663,10 +673,11 @@ static void Upload32( byte *data, int x, int y, int width, int height, image_t *
 	// perform optional picmip operation
 	//
 	if ( picmip && ( tr.mapLoading || r_nomip->integer == 0 ) ) {
-		scaled_width >>= r_picmip->integer;
-		scaled_height >>= r_picmip->integer;
-		x >>= r_picmip->integer;
-		y >>= r_picmip->integer;
+		// [QL] the count is masked as an x86 shift masks it
+		scaled_width >>= r_picmip->integer & 31;
+		scaled_height >>= r_picmip->integer & 31;
+		x >>= r_picmip->integer & 31;
+		y >>= r_picmip->integer & 31;
 	}
 
 	//
@@ -1363,37 +1374,23 @@ void R_SetColorMappings( void ) {
 	int		i, j;
 	float	g;
 	int		inf;
-	int		shift;
-	qboolean applyGamma;
+	qboolean postGamma;
 
 	if ( !tr.inited ) {
 		// it may be called from window handling functions where gamma flags is now yet known/set
 		return;
 	}
 
-	// setup the overbright lighting
-	// negative value will force gamma in windowed mode
-	tr.overbrightBits = abs( r_overBrightBits->integer );
+	// [QL] quakelive_steam.exe 0x4475d0: the colour correction gives the overbright in any window;
+	// without it the overbright needs the gamma ramp and full screen, as in Quake 3. Here the frame
+	// buffer counts as well, because then the gamma pass is the one applying it. The colour bits cap
+	// it, r_mapOverBrightBits doesn't
+	postGamma = ( r_colorCorrectActive->integer || fboEnabled ) ? qtrue : qfalse;
 
-	// never overbright in windowed mode
-#ifdef USE_FBO
-	if ( !glConfig.isFullscreen && r_overBrightBits->integer >= 0 && !fboEnabled ) {
-#else
-	if ( !glConfig.isFullscreen && r_overBrightBits->integer >= 0 ) {
-#endif
+	tr.overbrightBits = r_overBrightBits->integer;
+
+	if ( !postGamma && ( !glConfig.deviceSupportsGamma || !glConfig.isFullscreen ) ) {
 		tr.overbrightBits = 0;
-		applyGamma = qfalse;
-	} else {
-#ifdef USE_FBO
-		if ( !glConfig.deviceSupportsGamma && !fboEnabled ) {
-#else
-		if ( !glConfig.deviceSupportsGamma ) {
-#endif
-			tr.overbrightBits = 0; // need hardware gamma for overbright
-			applyGamma = qfalse;
-		} else {
-			applyGamma = qtrue;
-		}
 	}
 
 	// allow 2 overbright bits in 24 bit, but only 1 in 16 bit
@@ -1413,9 +1410,17 @@ void R_SetColorMappings( void ) {
 	tr.identityLight = 1.0f / ( 1 << tr.overbrightBits );
 	tr.identityLightByte = 255 * tr.identityLight;
 
-	g = r_gamma->value;
+	if ( r_intensity->value <= 1.0f ) {
+		ri.Cvar_Set( "r_intensity", "1" );
+	}
 
-	shift = tr.overbrightBits;
+	if ( r_gamma->value < 0.5f ) {
+		ri.Cvar_Set( "r_gamma", "0.5" );
+	} else if ( r_gamma->value > 3.0f ) {
+		ri.Cvar_Set( "r_gamma", "3.0" );
+	}
+
+	g = r_gamma->value;
 
 	for ( i = 0; i < ARRAY_LEN( s_gammatable ); i++ ) {
 		if ( g == 1.0f ) {
@@ -1423,7 +1428,8 @@ void R_SetColorMappings( void ) {
 		} else {
 			inf = 255 * powf( i/255.0f, 1.0f / g ) + 0.5f;
 		}
-		inf <<= shift;
+		// [QL] the ramp gives the overbright when the colour correction doesn't, as in Quake 3
+		inf <<= tr.overbrightBits;
 		if (inf < 0) {
 			inf = 0;
 		}
@@ -1441,19 +1447,16 @@ void R_SetColorMappings( void ) {
 		s_intensitytable[i] = j;
 	}
 
+	// [QL] the colour correction does the gamma itself and leaves the screen's ramp alone
 	if ( gls.deviceSupportsGamma ) {
-#ifdef USE_FBO
-		if ( fboEnabled )
+		if ( postGamma ) {
 			GLimp_SetGamma( s_gammatable_linear, s_gammatable_linear, s_gammatable_linear );
-		else
-#endif
-		{
-			if ( applyGamma ) {
-				GLimp_SetGamma( s_gammatable, s_gammatable, s_gammatable );
-			}
+		} else {
+			GLimp_SetGamma( s_gammatable, s_gammatable, s_gammatable );
 		}
 	}
 }
+
 
 
 /*

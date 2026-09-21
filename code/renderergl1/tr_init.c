@@ -367,6 +367,11 @@ static void R_InitExtensions( void )
 
 	ri.Printf( PRINT_ALL, "Initializing OpenGL extensions\n" );
 
+	// [QL] quakelive_steam.exe 0x46b792 looks for GL_ARB_texture_non_power_of_two, which every
+	// OpenGL 2.0 driver has in core
+	textureNonPowerOfTwo = ( atoi( glConfig.version_string ) >= 2
+		|| R_HaveExtension( "GL_ARB_texture_non_power_of_two" ) ) ? qtrue : qfalse;
+
 	if ( R_HaveExtension( "GL_EXT_texture_edge_clamp" ) || R_HaveExtension( "GL_SGIS_texture_edge_clamp" ) ) {
 		gl_clamp_mode = GL_CLAMP_TO_EDGE;
 		ri.Printf( PRINT_ALL, "...using GL_EXT_texture_edge_clamp\n" );
