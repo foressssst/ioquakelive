@@ -1559,7 +1559,13 @@ static void FBO_BlitToBackBuffer( int index )
 		qglScissor( blitX0, blitY0, blitX1 - blitX0, blitY1 - blitY0 );
 	}
 
-	qglBlitFramebuffer( 0, 0, src->width, src->height, blitX0, blitY0, blitX1, blitY1, GL_COLOR_BUFFER_BIT, blitFilter );
+	// r_fsr upscales with its own two passes; without it, or at the same size, the blit stretches
+	if ( !RB_FSRBlit( src->color, src->width, src->height, blitX0, blitY0, blitX1, blitY1 ) )
+	{
+		FBO_Bind( GL_READ_FRAMEBUFFER, src->fbo );
+		FBO_Bind( GL_DRAW_FRAMEBUFFER, 0 );
+		qglBlitFramebuffer( 0, 0, src->width, src->height, blitX0, blitY0, blitX1, blitY1, GL_COLOR_BUFFER_BIT, blitFilter );
+	}
 	fboReadIndex = index;
 }
 
@@ -2161,6 +2167,7 @@ void QGL_SetRenderScale( qboolean verbose )
 void QGL_DoneFBO( void )
 {
 	R_QLPostShutdown();
+	R_FSRShutdown();
 	if ( qglGenFramebuffers )
 	{
 		FBO_Bind(GL_FRAMEBUFFER, 0);
@@ -2248,6 +2255,7 @@ void QGL_InitFBO( void )
 		fboEnabled = qtrue;
 		FBO_BindMain();
 		R_QLPostInit();
+		R_FSRInit();
 		ri.Printf( PRINT_ALL, "...using %s (%s:%s) FBO\n", glDefToStr( fboInternalFormat ),
 			glDefToStr( fboTextureFormat ), glDefToStr( fboTextureType ) );
 	}

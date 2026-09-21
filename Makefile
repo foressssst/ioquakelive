@@ -1697,6 +1697,7 @@ Q3R1OBJ = \
   $(B)/renderergl1/tr_curve.o \
   $(B)/renderergl1/tr_flares.o \
   $(B)/renderergl1/tr_font.o \
+  $(B)/renderergl1/tr_fsr.o \
   $(B)/renderergl1/tr_image.o \
   $(B)/renderergl1/tr_import.o \
   $(B)/renderergl1/tr_init.o \

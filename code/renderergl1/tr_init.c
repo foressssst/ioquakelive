@@ -1563,6 +1563,8 @@ static void R_Register( void )
 	// [QL] the colour correction and the bloom
 	R_QLPostRegister();
 
+	R_FSRRegister();
+
 	//
 	// temporary latched variables that can only change over a restart
 	//

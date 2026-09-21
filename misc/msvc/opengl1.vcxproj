@@ -373,6 +373,7 @@
     <ClCompile Include="..\..\code\renderergl1\tr_curve.c" />
     <ClCompile Include="..\..\code\renderergl1\tr_flares.c" />
     <ClCompile Include="..\..\code\renderergl1\tr_font.c" />
+    <ClCompile Include="..\..\code\renderergl1\tr_fsr.c" />
     <ClCompile Include="..\..\code\renderergl1\tr_image.c" />
     <ClCompile Include="..\..\code\renderergl1\tr_import.c" />
     <ClCompile Include="..\..\code\renderergl1\tr_init.c" />
