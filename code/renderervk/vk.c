@@ -128,6 +128,12 @@ static PFN_vkQueuePresentKHR							qvkQueuePresentKHR;
 // [ioquakelive] AMD's Anti-Lag 2
 static PFN_vkAntiLagUpdateAMD							qvkAntiLagUpdateAMD;
 
+// [ioquakelive] NVIDIA's Reflex
+static PFN_vkSetLatencySleepModeNV						qvkSetLatencySleepModeNV;
+static PFN_vkLatencySleepNV								qvkLatencySleepNV;
+static PFN_vkSetLatencyMarkerNV							qvkSetLatencyMarkerNV;
+static PFN_vkWaitSemaphoresKHR							qvkWaitSemaphoresKHR;
+
 static PFN_vkGetBufferMemoryRequirements2KHR			qvkGetBufferMemoryRequirements2KHR;
 static PFN_vkGetImageMemoryRequirements2KHR				qvkGetImageMemoryRequirements2KHR;
 
@@ -488,6 +494,7 @@ static void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice devi
 	VkPresentModeKHR *present_modes;
 	uint32_t image_count;
 	VkSwapchainCreateInfoKHR desc;
+	VkSwapchainLatencyCreateInfoNV latency_desc;
 	qboolean mailbox_supported = qfalse;
 	qboolean immediate_supported = qfalse;
 	qboolean fifo_relaxed_supported = qfalse;
@@ -583,6 +590,15 @@ static void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice devi
 	desc.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	desc.pNext = NULL;
 	desc.flags = 0;
+
+	// [ioquakelive] Reflex hangs off the swapchain, so a new one asks for it again
+	vk.latencyModeSet = -1;
+	if ( vk.lowLatency2 ) {
+		latency_desc.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_LATENCY_CREATE_INFO_NV;
+		latency_desc.pNext = NULL;
+		latency_desc.latencyModeEnable = VK_TRUE;
+		desc.pNext = &latency_desc;
+	}
 	desc.surface = surface;
 	desc.minImageCount = image_count;
 	desc.imageFormat = surface_format.format;
@@ -1606,10 +1622,11 @@ static const char *renderer_name( const VkPhysicalDeviceProperties *props ) {
 static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_index ) {
 
 	VkPhysicalDeviceAntiLagFeaturesAMD anti_lag_features;
+	VkPhysicalDevicePresentIdFeaturesKHR present_id_features;
+	VkPhysicalDeviceTimelineSemaphoreFeatures timeline_semaphore;
 	const void **pNextPtr;
 
 #ifdef _DEBUG
-	VkPhysicalDeviceTimelineSemaphoreFeatures timeline_semaphore;
 	VkPhysicalDeviceVulkanMemoryModelFeatures memory_model;
 	VkPhysicalDeviceBufferDeviceAddressFeatures devaddr_features;
 	VkPhysicalDevice8BitStorageFeatures storage_8bit_features;
@@ -1673,8 +1690,11 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 		qboolean memoryRequirements2 = qfalse;
 		qboolean debugMarker = qfalse;
 		qboolean antiLag = qfalse;
-#ifdef _DEBUG
+		qboolean lowLatency2 = qfalse;
+		qboolean presentId = qfalse;
 		qboolean timelineSemaphore = qfalse;
+		qboolean timelineEnabled = qfalse;
+#ifdef _DEBUG
 		qboolean memoryModel = qfalse;
 		qboolean devAddrFeat = qfalse;
 		qboolean storage8bit = qfalse;
@@ -1701,9 +1721,13 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 				debugMarker = qtrue;
 			} else if ( strcmp( ext, VK_AMD_ANTI_LAG_EXTENSION_NAME ) == 0 ) {
 				antiLag = qtrue;
-#ifdef _DEBUG
+			} else if ( strcmp( ext, VK_NV_LOW_LATENCY_2_EXTENSION_NAME ) == 0 ) {
+				lowLatency2 = qtrue;
+			} else if ( strcmp( ext, VK_KHR_PRESENT_ID_EXTENSION_NAME ) == 0 ) {
+				presentId = qtrue;
 			} else if ( strcmp( ext, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME ) == 0 ) {
 				timelineSemaphore = qtrue;
+#ifdef _DEBUG
 			} else if ( strcmp( ext, VK_KHR_VULKAN_MEMORY_MODEL_EXTENSION_NAME ) == 0 ) {
 				memoryModel = qtrue;
 			} else if ( strcmp( ext, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME ) == 0 ) {
@@ -1759,10 +1783,23 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 			device_extension_list[ device_extension_count++ ] = VK_AMD_ANTI_LAG_EXTENSION_NAME;
 			vk.antiLag = qtrue;
 		}
+
+		// [ioquakelive] Reflex sleeps on a timeline semaphore and names each frame with a present id
+		if ( lowLatency2 && presentId && timelineSemaphore && r_lowLatency->integer ) {
+			device_extension_list[ device_extension_count++ ] = VK_NV_LOW_LATENCY_2_EXTENSION_NAME;
+			device_extension_list[ device_extension_count++ ] = VK_KHR_PRESENT_ID_EXTENSION_NAME;
+			vk.lowLatency2 = qtrue;
+		}
+
 #ifdef _DEBUG
 		if ( timelineSemaphore ) {
+#else
+		if ( timelineSemaphore && vk.lowLatency2 ) {
+#endif
 			device_extension_list[ device_extension_count++ ] = VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME;
+			timelineEnabled = qtrue;
 		}
+#ifdef _DEBUG
 
 		if ( memoryModel ) {
 			device_extension_list[ device_extension_count++ ] = VK_KHR_VULKAN_MEMORY_MODEL_EXTENSION_NAME;
@@ -1835,8 +1872,15 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 			pNextPtr = (const void **)&anti_lag_features.pNext;
 		}
 
-#ifdef _DEBUG
-		if ( timelineSemaphore ) {
+		if ( vk.lowLatency2 ) {
+			*pNextPtr = &present_id_features;
+			present_id_features.pNext = NULL;
+			present_id_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR;
+			present_id_features.presentId = VK_TRUE;
+			pNextPtr = (void **)&present_id_features.pNext;
+		}
+
+		if ( timelineEnabled ) {
 			*pNextPtr = &timeline_semaphore;
 			timeline_semaphore.pNext = NULL;
 			timeline_semaphore.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
@@ -1844,6 +1888,7 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 			pNextPtr = (const void **)&timeline_semaphore.pNext;
 		}
 
+#ifdef _DEBUG
 		if ( memoryModel ) {
 			*pNextPtr = &memory_model;
 			memory_model.pNext = NULL;
@@ -2144,6 +2189,16 @@ static void init_vulkan_library( void )
 			vk.antiLag = qfalse;
 		}
 	}
+
+	if ( vk.lowLatency2 ) {
+		INIT_DEVICE_FUNCTION_EXT(vkSetLatencySleepModeNV)
+		INIT_DEVICE_FUNCTION_EXT(vkLatencySleepNV)
+		INIT_DEVICE_FUNCTION_EXT(vkSetLatencyMarkerNV)
+		INIT_DEVICE_FUNCTION_EXT(vkWaitSemaphoresKHR)
+		if ( !qvkSetLatencySleepModeNV || !qvkLatencySleepNV || !qvkSetLatencyMarkerNV || !qvkWaitSemaphoresKHR ) {
+			vk.lowLatency2 = qfalse;
+		}
+	}
 }
 
 #undef INIT_INSTANCE_FUNCTION
@@ -2269,6 +2324,11 @@ static void deinit_device_functions( void )
 	qvkDebugMarkerSetObjectNameEXT				= NULL;
 
 	qvkAntiLagUpdateAMD							= NULL;
+
+	qvkSetLatencySleepModeNV					= NULL;
+	qvkLatencySleepNV							= NULL;
+	qvkSetLatencyMarkerNV						= NULL;
+	qvkWaitSemaphoresKHR						= NULL;
 }
 
 
@@ -3775,6 +3835,24 @@ static void vk_create_sync_primitives( void ) {
 	VkFenceCreateInfo fence_desc;
 	uint32_t i;
 
+	// [ioquakelive] Reflex signals the end of its sleep on a timeline semaphore
+	if ( vk.lowLatency2 ) {
+		VkSemaphoreTypeCreateInfo type_desc;
+		VkSemaphoreCreateInfo latency_desc;
+
+		type_desc.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+		type_desc.pNext = NULL;
+		type_desc.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+		type_desc.initialValue = 0;
+
+		latency_desc.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+		latency_desc.pNext = &type_desc;
+		latency_desc.flags = 0;
+
+		VK_CHECK( qvkCreateSemaphore( vk.device, &latency_desc, NULL, &vk.latencySemaphore ) );
+		vk.latencyValue = 0;
+	}
+
 	desc.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 	desc.pNext = NULL;
 	desc.flags = 0;
@@ -3829,6 +3907,12 @@ static void vk_create_sync_primitives( void ) {
 
 static void vk_destroy_sync_primitives( void  ) {
 	uint32_t i;
+
+	if ( vk.latencySemaphore != VK_NULL_HANDLE ) {
+		qvkDestroySemaphore( vk.device, vk.latencySemaphore, NULL );
+		vk.latencySemaphore = VK_NULL_HANDLE;
+		vk.latencyValue = 0;
+	}
 
 #ifdef USE_UPLOAD_QUEUE
 	qvkDestroySemaphore( vk.device, vk.image_uploaded2, NULL );
@@ -7516,8 +7600,15 @@ static qboolean vk_find_screenmap_drawsurfs( void )
 #define UINT64_MAX 0xFFFFFFFFFFFFFFFFULL
 #endif
 
+static void vk_latency_marker( VkLatencyMarkerNV marker );
+
+
 void vk_begin_frame( void )
 {
+	// [ioquakelive] 3.5.1.2 of NVIDIA's guide: the simulation ends where the drawing begins
+	vk_latency_marker( VK_LATENCY_MARKER_SIMULATION_END_NV );
+	vk_latency_marker( VK_LATENCY_MARKER_RENDERSUBMIT_START_NV );
+
 	VkCommandBufferBeginInfo begin_info;
 	VkResult res;
 
@@ -7664,6 +7755,7 @@ void vk_end_frame( void )
 	const VkPipelineStageFlags wait_dst_stage_mask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 #endif
 	VkSubmitInfo submit_info;
+	VkLatencySubmissionPresentIdNV latency_submit;
 
 	if ( vk.frame_count == 0 )
 		return;
@@ -7774,8 +7866,18 @@ void vk_end_frame( void )
 		submit_info.pSignalSemaphores = NULL;
 	}
 
+	// [ioquakelive] Reflex pairs the submission with the frame it belongs to
+	if ( vk.lowLatency2 && vk.latencyFrame ) {
+		latency_submit.sType = VK_STRUCTURE_TYPE_LATENCY_SUBMISSION_PRESENT_ID_NV;
+		latency_submit.pNext = NULL;
+		latency_submit.presentID = vk.latencyFrame;
+		submit_info.pNext = &latency_submit;
+	}
+
 	VK_CHECK( qvkQueueSubmit( vk.queue, 1, &submit_info, vk.cmd->rendering_finished_fence ) );
 	vk.cmd->waitForFence = qtrue;
+
+	vk_latency_marker( VK_LATENCY_MARKER_RENDERSUBMIT_END_NV );
 
 	// presentation may take undefined time to complete, we can't measure it in a reliable way
 	backEnd.pc.msec = ri.Milliseconds() - backEnd.pc.msec;
@@ -7784,15 +7886,8 @@ void vk_end_frame( void )
 }
 
 
-/*
-=============
-vk_low_latency_input
-
-[ioquakelive] the client is about to read input: this is where the driver holds the frame back so
-what is read is as fresh as it can be. Both stages of a frame carry the same index.
-=============
-*/
-void vk_low_latency_input( void )
+// [ioquakelive] one of the two stages AMD's anti-lag wants, both carrying the same frame
+static void vk_anti_lag_stage( VkAntiLagStageAMD stage )
 {
 	VkAntiLagPresentationInfoAMD presentation;
 	VkAntiLagDataAMD data;
@@ -7801,11 +7896,9 @@ void vk_low_latency_input( void )
 		return;
 	}
 
-	vk.latencyFrame++;
-
 	presentation.sType = VK_STRUCTURE_TYPE_ANTI_LAG_PRESENTATION_INFO_AMD;
 	presentation.pNext = NULL;
-	presentation.stage = VK_ANTI_LAG_STAGE_INPUT_AMD;
+	presentation.stage = stage;
 	presentation.frameIndex = vk.latencyFrame;
 
 	data.sType = VK_STRUCTURE_TYPE_ANTI_LAG_DATA_AMD;
@@ -7818,33 +7911,114 @@ void vk_low_latency_input( void )
 }
 
 
-static void vk_low_latency_present( void )
+// [ioquakelive] where Reflex is told this frame stands, so it can work out when to wake it up
+static void vk_latency_marker( VkLatencyMarkerNV marker )
 {
-	VkAntiLagPresentationInfoAMD presentation;
-	VkAntiLagDataAMD data;
+	VkSetLatencyMarkerInfoNV info;
 
-	if ( !vk.antiLag || qvkAntiLagUpdateAMD == NULL ) {
+	if ( !vk.lowLatency2 || vk.swapchain == VK_NULL_HANDLE ) {
 		return;
 	}
 
-	presentation.sType = VK_STRUCTURE_TYPE_ANTI_LAG_PRESENTATION_INFO_AMD;
-	presentation.pNext = NULL;
-	presentation.stage = VK_ANTI_LAG_STAGE_PRESENT_AMD;
-	presentation.frameIndex = vk.latencyFrame;
+	info.sType = VK_STRUCTURE_TYPE_SET_LATENCY_MARKER_INFO_NV;
+	info.pNext = NULL;
+	info.presentID = vk.latencyFrame;
+	info.marker = marker;
 
-	data.sType = VK_STRUCTURE_TYPE_ANTI_LAG_DATA_AMD;
-	data.pNext = NULL;
-	data.mode = r_lowLatency->integer ? VK_ANTI_LAG_MODE_ON_AMD : VK_ANTI_LAG_MODE_OFF_AMD;
-	data.maxFPS = 0;
-	data.pPresentationInfo = &presentation;
+	qvkSetLatencyMarkerNV( vk.device, vk.swapchain, &info );
+}
 
-	qvkAntiLagUpdateAMD( vk.device, &data );
+
+// [ioquakelive] Reflex's sleep: the driver decides how long the frame waits here
+static void vk_reflex_sleep( void )
+{
+	VkLatencySleepModeInfoNV mode;
+	VkLatencySleepInfoNV sleep;
+	VkSemaphoreWaitInfo wait;
+	int maxFps;
+
+	if ( !vk.lowLatency2 || vk.swapchain == VK_NULL_HANDLE || vk.latencySemaphore == VK_NULL_HANDLE ) {
+		return;
+	}
+
+	maxFps = ri.Cvar_VariableIntegerValue( "com_maxfps" );
+
+	if ( vk.latencyModeSet != r_lowLatency->integer || vk.latencyMaxFps != maxFps ) {
+		mode.sType = VK_STRUCTURE_TYPE_LATENCY_SLEEP_MODE_INFO_NV;
+		mode.pNext = NULL;
+		mode.lowLatencyMode = r_lowLatency->integer ? VK_TRUE : VK_FALSE;
+		mode.lowLatencyBoost = r_lowLatency->integer > 1 ? VK_TRUE : VK_FALSE;
+		// the driver takes the lowest of its own limits and this one, and enforces it inside the
+		// sleep, which is the best place in the pipeline for it
+		mode.minimumIntervalUs = maxFps > 0 ? (uint32_t)( 1000000 / maxFps ) : 0;
+		if ( qvkSetLatencySleepModeNV( vk.device, vk.swapchain, &mode ) != VK_SUCCESS ) {
+			vk.lowLatency2 = qfalse;
+			return;
+		}
+		vk.latencyModeSet = r_lowLatency->integer;
+		vk.latencyMaxFps = maxFps;
+	}
+
+	if ( !r_lowLatency->integer ) {
+		return;
+	}
+
+	vk.latencyValue++;
+
+	sleep.sType = VK_STRUCTURE_TYPE_LATENCY_SLEEP_INFO_NV;
+	sleep.pNext = NULL;
+	sleep.signalSemaphore = vk.latencySemaphore;
+	sleep.value = vk.latencyValue;
+
+	if ( qvkLatencySleepNV( vk.device, vk.swapchain, &sleep ) != VK_SUCCESS ) {
+		vk.lowLatency2 = qfalse;
+		return;
+	}
+
+	wait.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+	wait.pNext = NULL;
+	wait.flags = 0;
+	wait.semaphoreCount = 1;
+	wait.pSemaphores = &vk.latencySemaphore;
+	wait.pValues = &vk.latencyValue;
+
+	// a sleep this long is a driver that stopped answering, not a frame
+	if ( qvkWaitSemaphoresKHR( vk.device, &wait, 1000000000ULL ) != VK_SUCCESS ) {
+		ri.Printf( PRINT_WARNING, "...the low latency sleep timed out, turning it off\n" );
+		vk.lowLatency2 = qfalse;
+	}
+}
+
+
+/*
+=============
+vk_low_latency_input
+
+[ioquakelive] the client is about to read input: this is where the driver holds the frame back so
+what is read is as fresh as it can be. Every stage and marker of a frame carries the same index.
+=============
+*/
+void vk_low_latency_input( void )
+{
+	if ( !vk.antiLag && !vk.lowLatency2 ) {
+		return;
+	}
+
+	vk.latencyFrame++;
+
+	vk_reflex_sleep();
+
+	vk_latency_marker( VK_LATENCY_MARKER_SIMULATION_START_NV );
+	vk_latency_marker( VK_LATENCY_MARKER_INPUT_SAMPLE_NV );
+
+	vk_anti_lag_stage( VK_ANTI_LAG_STAGE_INPUT_AMD );
 }
 
 
 void vk_present_frame( void )
 {
 	VkPresentInfoKHR present_info;
+	VkPresentIdKHR present_id;
 	VkResult res;
 
 	if ( RI_CL_IsMinimized() || !vk.cmd->swapchain_image_acquired ) {
@@ -7867,9 +8041,21 @@ void vk_present_frame( void )
 
 	vk.cmd->swapchain_image_acquired = qfalse;
 
-	vk_low_latency_present();
+	// [ioquakelive] the frame's number travels with it so Reflex can close the measurement
+	if ( vk.lowLatency2 && vk.latencyFrame ) {
+		present_id.sType = VK_STRUCTURE_TYPE_PRESENT_ID_KHR;
+		present_id.pNext = NULL;
+		present_id.swapchainCount = 1;
+		present_id.pPresentIds = &vk.latencyFrame;
+		present_info.pNext = &present_id;
+	}
+
+	vk_latency_marker( VK_LATENCY_MARKER_PRESENT_START_NV );
+	vk_anti_lag_stage( VK_ANTI_LAG_STAGE_PRESENT_AMD );
 
 	res = qvkQueuePresentKHR( vk.queue, &present_info );
+
+	vk_latency_marker( VK_LATENCY_MARKER_PRESENT_END_NV );
 	switch ( res ) {
 		case VK_SUCCESS:
 			break;

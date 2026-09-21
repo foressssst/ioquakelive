@@ -602,9 +602,14 @@ typedef struct {
 	qboolean dedicatedAllocation;
 	qboolean debugMarkers;
 
-	// [ioquakelive] AMD's Anti-Lag 2, when the driver brings it
-	qboolean antiLag;
-	uint64_t latencyFrame;
+	// [ioquakelive] the low latency paths, each one only when its driver brings it
+	qboolean antiLag;			// AMD's Anti-Lag 2
+	qboolean lowLatency2;		// NVIDIA's Reflex
+	uint64_t latencyFrame;		// the frame both stages and every marker carry
+	VkSemaphore latencySemaphore;	// timeline, the one Reflex's sleep signals
+	uint64_t latencyValue;
+	int latencyModeSet;
+	int latencyMaxFps;
 
 	float maxAnisotropy;
 	float maxLod;
