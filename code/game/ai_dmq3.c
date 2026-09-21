@@ -5262,19 +5262,12 @@ void BotDeathmatchAI(bot_state_t* bs, float thinktime) {
         //   0x1001f11d  push "team %s"
         //   0x1001f14c  trap_EA_Command(bs->client, buf)
         //
-        // This one command is the whole of how a bot joins a match. In
-        // Quake 3 it was nearly redundant - G_InitSessionData handed
-        // non-team gametypes a TEAM_FREE session, so a bot was already
-        // playing before it ran. Quake Live starts every client on
-        // TEAM_SPECTATOR instead and expects the UI's `team` command to be
-        // what puts them in, which is also what triggers ClientBegin on a
-        // real server (see the note in G_RunFrame). A bot has no UI, so
-        // without this it connects, spawns nothing, stays a spectator, and
-        // is neither visible nor followable.
-        //
-        // Duel is excluded because its bots join through the play queue
-        // instead, which ClientBegin already handles (0x1003b16e). A map
-        // restart is excluded because the session survives it.
+        // This one command is the whole of how a bot joins a match. Quake Live
+        // starts every client on TEAM_SPECTATOR and expects the UI's `team`
+        // command to put them in; a bot has no UI, so without this it connects,
+        // spawns nothing and stays a spectator. Duel is excluded because its
+        // bots join through the play queue, and a map restart because the
+        // session survives it.
         if (!bs->map_restart && gametype != GT_DUEL) {
             Com_sprintf(buf, sizeof(buf), "team %s", bs->settings.team);
             trap_EA_Command(bs->client, buf);

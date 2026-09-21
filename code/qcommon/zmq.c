@@ -4,30 +4,21 @@ ioquakelive - ZeroMQ stats and rcon
 
 What retail does, read in quakelive_steam.exe (class idZMQ, zmq\id_zmq.cpp):
 
-  0x004f3f80  idZMQ::Init. Registers the eight cvars, all CVAR_INIT except the
-              two passwords, which are CVAR_ARCHIVE:
-                zmq_rcon_enable "0", zmq_stats_enable "0", zmq_rcon_ip "0.0.0.0",
-                zmq_rcon_port "28960", zmq_stats_ip "", zmq_stats_port "",
-                zmq_stats_password "", zmq_rcon_password ""
-              With zmq_rcon_enable above 0 it binds a ROUTER socket on
-              tcp://zmq_rcon_ip:zmq_rcon_port, uses the PLAIN mechanism when a
-              password is set, and prints "zmq RCON socket: %s" or
-              "zmq RCON socket error, bind failed: %s".
-  0x004f4210  the stats socket. With zmq_stats_enable above 0 it binds a PUB
-              socket on tcp://ip:port, where an empty zmq_stats_ip means net_ip
-              and a zero zmq_stats_port means net_port. PLAIN when there is a
-              password. "zmq PUB socket: %s" or "zmq PUB socket error, bind
-              failed: %s".
-  0x004d2460  writes zmqpass.txt with "stats_stats=<password>" and
-              "rcon_rcon=<password>": the key is the authentication domain
-              ("stats" or "rcon") and the user name joined by an underscore.
-              A client logs in with the user name "stats" on the stats socket
-              and "rcon" on the rcon one.
+  0x004f3f80  idZMQ::Init. Eight cvars, all CVAR_INIT but the two passwords,
+              which are CVAR_ARCHIVE: zmq_rcon_enable "0", zmq_stats_enable "0",
+              zmq_rcon_ip "0.0.0.0", zmq_rcon_port "28960", zmq_stats_ip "",
+              zmq_stats_port "", zmq_stats_password "", zmq_rcon_password "".
+              Above 0 it binds a ROUTER socket on tcp://zmq_rcon_ip:zmq_rcon_port,
+              PLAIN when a password is set.
+  0x004f4210  the stats socket: a PUB socket on tcp://ip:port, where an empty
+              zmq_stats_ip means net_ip and a zero zmq_stats_port means net_port.
+  0x004d2460  writes zmqpass.txt with "stats_stats=" and "rcon_rcon=": the
+              authentication domain and the user name joined by an underscore.
 
-Retail does this with libzmq and CZMQ's zauth. This file speaks the part of the
-wire protocol those two sockets need -- ZMTP 3.0, the NULL and PLAIN
-mechanisms, PUB and ROUTER -- so that any ZeroMQ client works against it and no
-library is added to the project.
+Retail does this with libzmq and CZMQ's zauth. This file speaks only the part of
+the wire protocol those two sockets need - ZMTP 3.0, the NULL and PLAIN
+mechanisms, PUB and ROUTER - so any ZeroMQ client works against it and no library
+is added to the project.
 ===========================================================================
 */
 

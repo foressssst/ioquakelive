@@ -1881,21 +1881,16 @@ static void PM_Footsteps(void) {
     //
     // [QL] DELIBERATE EXCEPTION to retail, asked for along with uncapping com_maxfps.
     //
-    // Retail does `bobCycle = (int)(old + bobmove * pml.msec) & 255`, and that truncation
-    // throws away the fraction every frame. At msec 8 (125 fps) little is lost and nobody
-    // notices, but the higher the framerate the smaller the msec: past ~330 fps the product
-    // falls below 1, truncates to 0 and the cycle freezes. Footsteps go silent and the weapon
-    // bob stops, which is exactly the symptom that shows up once the fps cap is lifted.
+    // Retail does `bobCycle = (int)(old + bobmove * pml.msec) & 255`, and that
+    // truncation throws away the fraction every frame. Past ~330 fps the product
+    // falls below 1, truncates to 0 and the cycle freezes: footsteps go silent and
+    // the weapon bob stops. Here the remainder is kept in bits 8 to 15 in 1/256
+    // units, local only - the visible cycle is still the 8 bits that go over the
+    // wire, and prediction starts from each snapshot with the fraction at zero, so
+    // both ends agree.
     //
-    // The fix is to keep the remainder instead of dropping it. The visible cycle is still 8
-    // bits, which is all that goes over the wire (msg.c: PSF(bobCycle) with 8 bits); the
-    // fraction lives in bits 8 to 15 in 1/256 units, local only. Client prediction starts from
-    // each snapshot with those bits at zero and replays the same commands, so both ends agree.
-    //
-    // Side effect worth knowing: the cycle now advances at the real rate instead of the
-    // truncated one. Running (bobmove 0.4) at 125 fps retail advanced 3 per frame instead of
-    // 3.2, so footsteps come ~7% closer together than in unpatched retail. There is no way to
-    // have both: retail's rate depends on the framerate, and that is the bug.
+    // The cycle now advances at the real rate instead of the truncated one, so
+    // running at 125 fps footsteps come about 7% closer together than in retail.
     old = pm->ps->bobCycle & 255;
     {
         int carry = (pm->ps->bobCycle >> 8) & 255;              // the previous frame's remainder

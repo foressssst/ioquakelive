@@ -3096,9 +3096,7 @@ void CL_Init(void) {
     // [QL] quakelive_steam.exe 0x4bca53: 40 seconds
     cl_timeout = Cvar_Get("cl_timeout", "40", 0);
 
-    // [QL] 0x4bca3d and 0x4bc731: cl_timeNudge is -20 to 0 and cl_autoTimeNudge a switch, 0 or 1.
-    // The fork gave the switch cl_timeNudge's range, so every 1 became 0 and the automatic nudge
-    // could never be turned on (CL_SetCGameTime, 0x4b07c0).
+    // [QL] 0x4bca3d and 0x4bc731: cl_timeNudge is -20 to 0, cl_autoTimeNudge a switch
     cl_timeNudge = Cvar_GetRange("cl_timeNudge", "0", "-20", "0", CVAR_ARCHIVE | CVAR_REPLICATE);
     cl_autoTimeNudge = Cvar_GetRange("cl_autoTimeNudge", "0", "0", "1", CVAR_ARCHIVE | CVAR_REPLICATE);
     cl_shownet = Cvar_Get("cl_shownet", "0", CVAR_TEMP);

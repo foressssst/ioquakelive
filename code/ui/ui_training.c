@@ -22,26 +22,21 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 // ui_training.c -- [QL] the Training Center page
 //
-// Retail's is web.pak's src/training.js, reached from Play > Training Center
-// (#play/training): an h1 and three sections, each an image, a title, a line under
-// it, a paragraph, and the buttons the section ends with. A section launches its
-// map, and two of them also open a video. The words, the order, the maps and the
-// commands here are that file's; how it looks is quakeclub.com's, see ui_web.h.
+// Retail's is web.pak's src/training.js, reached from Play > Training Center: an
+// h1 and three sections, each an image, a title, a line under it, a paragraph and
+// the buttons it ends with. The words, the order, the maps and the commands are
+// that file's; how it looks is quakeclub.com's, see ui_web.h.
 //
-// What each one sends, from its launchTraining (bot_minplayers and sv_serverType
-// are set to 0 first, as it does):
+// What each one sends (bot_minplayers and sv_serverType go to 0 first):
 //
 //     Crash Course  map qztraining _training
 //     Accelerate    map qzpractice2 _sj; wait 2; team f
 //     Elevate       map qzpractice1 _rj; wait 2; team f
 //
-// The three factories are pak00's hidden ones (scripts/factories.txt: "_training",
-// "_sj", "_rj"), which set g_training 1 and, for the practice maps, infinite ammo
-// and one weapon. The maps carry the trainingMap worldspawn key, so the game puts
-// Crash in and takes the training spawns (g_spawn.c, g_client.c).
-//
-// The image is each map's own levelshot, from pak00. Retail's cards used three
-// screenshots of its own in web.pak, which is not ours to ship.
+// The three factories are pak00's hidden ones, which set g_training 1 and, for
+// the practice maps, infinite ammo and one weapon. The image is each map's own
+// levelshot: retail's cards used screenshots of its own in web.pak, which is not
+// ours to ship.
 //
 
 #include "ui_web.h"

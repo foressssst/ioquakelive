@@ -2,35 +2,23 @@
 ===========================================================================
 ioquakelive - Steam integration
 
-Quake Live's own master server is Steam's. Checked in the retail client
-(quakelive_steam.exe): it imports steam_api.dll and uses SteamGameServer_Init to
-register the server, and SteamMatchmakingServers for the browser. There is no
-master host name anywhere in the binary because there does not need to be -- the
-address comes from Steam.
+Quake Live's master server is Steam's: the retail client imports steam_api.dll,
+registers the server with SteamGameServer_Init and browses with
+SteamMatchmakingServers, so there is no master host name in the binary at all.
 
-What retail does, and what this file replicates:
+  0x00466ed0  Steam GS init, from Com_Init (0x004cc2b3), only when com_build is
+              0: net_ip and net_port, (sv_vac != 0) + 2 as the server mode, 0 as
+              the Steam port and 0xffff as the query port, version "1069", then
+              LogOn with sv_setSteamAccount or LogOnAnonymous, product name
+              "Quake Live", mod dir "baseq3".
+  0x00465a40  SetMaxPlayerCount, from SV_ChangeMaxClients (0x004e339e).
+  0x00461500  the client's SteamAPI_Init, from Com_Init (0x004cc16e): +voice,
+              -voice and the rich presence "status".
 
-  0x00466ed0  Steam GS init, called from Com_Init (0x004cc2b3) after the config
-              files are executed. It only runs when com_build is 0. It reads
-              net_ip ("localhost") and net_port (0x6d38 = 27960), takes sv_vac
-              for the server mode ((sv_vac != 0) + 2, so 2 or 3), passes 0 as the
-              Steam port and 0xffff as the query port -- which means "share the
-              game socket" -- and the version string "1069". Then it sets the
-              dedicated flag, logs on (LogOn with sv_setSteamAccount if it is
-              set, LogOnAnonymous otherwise), and sets the product name
-              "Quake Live" and the mod dir "baseq3".
-  0x00465a40  SetMaxPlayerCount, called from SV_ChangeMaxClients (0x004e339e)
-              after sv_maxclients is clamped to 64.
-  0x00461500  The client's SteamAPI_Init, called from Com_Init (0x004cc16e),
-              also only when com_build is 0. It registers +voice and -voice and
-              sets the Steam rich presence "status" to "At the main menu".
-
-One call in retail's init is not identified: a vtable slot at +0x9c called with
-0. It is not replicated here rather than guessed at.
-
-The library is loaded at run time from the player's own Quake Live installation
-(fs_steampath), so this project redistributes no Valve or id file. Without it,
-everything here turns into a no-op and the game runs exactly as before.
+A vtable slot at +0x9c called with 0 is not identified and is left out rather
+than guessed at. The library is loaded at run time from the player's own Quake
+Live installation, so nothing of Valve's or id's is redistributed; without it
+everything here turns into a no-op.
 ===========================================================================
 */
 

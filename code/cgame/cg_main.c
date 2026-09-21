@@ -2800,7 +2800,6 @@ CG_SetScoreboardSelection
 
 [QL] What every score parser in the binary ends with (0x1004541d, 0x10045d7a, ...): the
 selection goes to the end-of-match board at intermission and to the in-game board otherwise.
-The fork passed NULL there, so a scores message never moved the board's lists.
 =================
 */
 void CG_SetScoreboardSelection(void) {

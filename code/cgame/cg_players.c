@@ -997,7 +997,7 @@ void CG_NewClientInfo(int clientNum) {
     CG_ColorFromString(Info_ValueForKey(configstring, "c1"), newInfo.color1);
     CG_ColorFromString(Info_ValueForKey(configstring, "c2"), newInfo.color2);
 
-    // the fork's byte copies of the colours, for the rail item and the gun
+    // byte copies of the colours, for the rail item and the gun
     newInfo.c1RGBA[0] = 255 * newInfo.color1[0];
     newInfo.c1RGBA[1] = 255 * newInfo.color1[1];
     newInfo.c1RGBA[2] = 255 * newInfo.color1[2];

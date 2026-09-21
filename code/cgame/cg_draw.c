@@ -3812,7 +3812,6 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	// frame it stands in for the HUD, unless last frame's scoreboard is up. The frame
 	// goes on (0x10010ff2 jumps to 0x100110c5), so the vote, the corners, the warmup
 	// text and the scoreboard still draw and +scores raises the board over the menu.
-	// The fork returned here and the board could never come up over the join menu.
 	if (cg.showJoinMenu && !cg.scoreBoardShowing) {
 		CG_UpdateJoinMenu();
 	}

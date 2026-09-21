@@ -3923,26 +3923,17 @@ void G_RunFrame(int levelTime) {
         playerInfoDirty = qfalse;
     }
 
-    // [QL listen server] Auto-begin connecting clients.
-    // Real QL dedicated servers rely on the "team" command from UI to trigger
-    // ClientBegin.  Q3 had GAME_CLIENT_BEGIN in vmMain which the engine called
-    // from SV_ClientEnterWorld - QL removed it.  For listen servers we need to
-    // auto-begin clients so they get a valid player state and receive snapshots.
+    // [QL listen server] Auto-begin connecting clients. Retail's dedicated servers
+    // rely on the "team" command from the UI to trigger ClientBegin; Q3 had
+    // GAME_CLIENT_BEGIN in vmMain and QL removed it. A listen server has to begin
+    // its clients here or they get no player state and no snapshots.
     //
-    // [ioquakelive] A bot added with a delay (G_AddBot's fourth argument, 5000 ms for the
-    // Crash Course trainer) has to stay a half-connected client until G_CheckBotSpawn
-    // begins it. Begun here as well it spawned twice: once at the training map's spawn
-    // next to the player, and again when its turn came, which on a training map skips
-    // those two spawns (qagamex86.dll 0x10039226) and drops it anywhere. Crash would
-    // appear, say its first lines and vanish to the other side of the arena.
-    //
-    // Excluding every bot was the obvious fix and it was the bug: a map_restart leaves
-    // EVERYONE in CON_CONNECTING -- bots included, since SV_MapRestart_f calls
-    // ClientConnect for them again -- and then nobody began the bot. Its other two callers
-    // are the bot's own registration and the queue, and neither runs on a restart. The bot
-    // stayed connecting forever: the scoreboard showed it as "connect", it did not count
-    // as playing and the match went to forfeit. Since a match starts with a map_restart,
-    // this broke every time. Only a bot genuinely waiting in the queue is excluded now.
+    // [ioquakelive] A bot added with a delay (G_AddBot's fourth argument) stays a
+    // half-connected client until G_CheckBotSpawn begins it, and begun here as well
+    // it spawns twice. Excluding every bot is worse: a map_restart leaves everyone
+    // in CON_CONNECTING, bots included, and then nothing begins them - the bot's
+    // other two callers are its own registration and the queue, and neither runs on
+    // a restart. Only a bot genuinely waiting in the queue is excluded.
     for (i = 0; i < level.maxclients; i++) {
         if (level.clients[i].pers.connected != CON_CONNECTING) {
             continue;
