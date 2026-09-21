@@ -1229,7 +1229,9 @@ extern cvar_t	*r_lodscale;
 
 extern cvar_t	*r_teleporterFlash;		// teleport hyperspace visual
 
-extern cvar_t	*r_fastsky;				// controls whether sky should be cleared or drawn
+extern cvar_t	*r_fastsky;
+extern cvar_t	*r_fastSkyColor;		// [QL] 0xRRGGBB
+extern cvar_t	*r_drawSkyFloor;		// [QL] the sky box's bottom face				// controls whether sky should be cleared or drawn
 extern cvar_t	*r_neatsky;				// nomip and nopicmip for skyboxes, cnq3 like look
 extern cvar_t	*r_drawSun;				// controls drawing of sun quad
 extern cvar_t	*r_dynamiclight;		// dynamic lights enabled/disabled

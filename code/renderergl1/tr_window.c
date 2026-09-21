@@ -200,7 +200,7 @@ void R_RegisterWindowCvars( void ) {
 	r_swapInterval = ri.Cvar_Get( "r_swapInterval", "0", CVAR_ARCHIVE | CVAR_USERSAVE );
 
 	// [QL] the front end sets it while it covers the screen; the shader collapse looks at it
-	r_uiFullScreen = ri.Cvar_Get( "r_uiFullScreen", "0", 0 );
+	r_uiFullScreen = ri.Cvar_Get( "r_uifullscreen", "0", 0 );
 
 	ri.Cmd_AddCommand( "modelist", R_ModeList_f );
 }

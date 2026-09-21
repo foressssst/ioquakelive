@@ -1433,7 +1433,14 @@ static const void *RB_ClearColor( const void *data )
 		qglColorMask( GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE );
 	}
 
-	qglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+	// [QL] quakelive_steam.exe 0x435d90: the colour r_fastSky clears to, as 0xRRGGBB
+	if ( r_fastsky->integer ) {
+		qglClearColor( ( ( r_fastSkyColor->integer >> 16 ) & 0xff ) / 255.0f,
+			( ( r_fastSkyColor->integer >> 8 ) & 0xff ) / 255.0f,
+			( r_fastSkyColor->integer & 0xff ) / 255.0f, 1.0f );
+	} else {
+		qglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+	}
 
 	if ( cmd->frontAndBack )
 	{

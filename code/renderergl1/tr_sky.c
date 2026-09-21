@@ -546,7 +546,8 @@ static void FillCloudBox( void )
 			MIN_T = -HALF_SKY_SUBDIVISIONS;
 
 			// still don't want to draw the bottom, even if fullClouds
-			if ( i == 5 )
+			// [QL] quakelive_steam.exe 0x45a9d0: unless r_drawSkyFloor, which is on by default
+			if ( i == 5 && !r_drawSkyFloor->integer )
 				continue;
 		}
 		else
