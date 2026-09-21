@@ -3062,7 +3062,29 @@ most world construction surfaces.
 
 ===============
 */
+// [ioquakelive] how much goes into registering shaders, their images aside
+int64_t	r_shaderFindUs, r_shaderCachedUs;
+int		r_shaderFindCount, r_shaderCachedCount;
+
+static shader_t *R_FindShaderInner( const char *name, int lightmapIndex, qboolean mipRawImage );
+
 shader_t *R_FindShader( const char *name, int lightmapIndex, qboolean mipRawImage ) {
+	int64_t		start = ri.Microseconds();
+	int			before = tr.numShaders;
+	shader_t	*found = R_FindShaderInner( name, lightmapIndex, mipRawImage );
+	int64_t		cost = ri.Microseconds() - start;
+
+	r_shaderFindUs += cost;
+	r_shaderFindCount++;
+	// [ioquakelive] if none was created, the shader already existed and this was just a lookup
+	if ( tr.numShaders == before ) {
+		r_shaderCachedUs += cost;
+		r_shaderCachedCount++;
+	}
+	return found;
+}
+
+static shader_t *R_FindShaderInner( const char *name, int lightmapIndex, qboolean mipRawImage ) {
 	char		strippedName[MAX_QPATH];
 	unsigned long hash;
 	const char	*shaderText;

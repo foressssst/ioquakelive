@@ -65,6 +65,7 @@ cvar_t  *r_teleporterFlash;
 
 cvar_t	*r_fastsky;
 cvar_t	*r_fastSkyColor;
+cvar_t	*r_prefetchTextures;
 cvar_t	*r_drawSkyFloor;
 cvar_t	*r_neatsky;
 cvar_t	*r_drawSun;
@@ -1494,6 +1495,10 @@ R_Register
 static void R_Register( void )
 {
 	// make sure all the commands added here are also removed in R_Shutdown
+	// [ioquakelive] decode the map's textures ahead of time, spread across the worker threads;
+	// 0 goes back to loading them one by one on the main thread
+	r_prefetchTextures = ri.Cvar_Get( "r_prefetchTextures", "1", CVAR_ARCHIVE );
+
 	// [QL] the colour r_fastSky clears to, as 0xRRGGBB (0x435d90)
 	r_fastSkyColor = ri.Cvar_Get( "r_fastSkyColor", "0x000000", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE );
 	// [QL] the cloud layer also under the sky box (0x45a9d0)
@@ -2034,6 +2039,8 @@ Touch all images to make sure they are resident (probably obsolete on modern sys
 =============
 */
 static void RE_EndRegistration( void ) {
+	R_PrefetchFinish();			// [ioquakelive] releases what is left over and writes the list
+	R_ImageLoadStatsReport();	// [ioquakelive] see RE_BeginRegistration
 	//FBO_BindMain(); // otherwise we may draw images to the back buffer
 	//R_IssuePendingRenderCommands();
 	//if ( !ri.Sys_LowPhysicalMemory() ) {

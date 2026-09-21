@@ -2404,6 +2404,10 @@ void RE_LoadWorldMap( const char *name ) {
 		ri.Error( ERR_DROP, "ERROR: attempted to redundantly load world map" );
 	}
 
+	// [ioquakelive] which map it is, is known by this point, so reading its textures ahead
+	// starts here (see the prefetch in tr_image.c)
+	R_PrefetchStart( name );
+
 	// set default sun direction to be used if it isn't
 	// overridden by a shader
 	tr.sunDirection[0] = 0.45f;

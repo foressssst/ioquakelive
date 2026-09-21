@@ -936,6 +936,13 @@ void RE_BeginRegistration( glconfig_t *glconfigOut ) {
 
 	R_Init();
 
+	// [ioquakelive] after R_Init, which is what registers the renderer's cvars: this function is
+	// the one that calls it, so further up they do not exist yet.
+	R_ImageLoadStatsReset();
+	// what the cgame registers before the world -- the HUD above all -- is the same on every map,
+	// so it has a list of its own
+	R_PrefetchStart( "common" );
+
 	*glconfigOut = glConfig;
 
 	//R_IssuePendingRenderCommands();

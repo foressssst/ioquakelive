@@ -106,6 +106,24 @@ extern cvar_t *r_uiFullScreen;
 extern float displayAspect;
 extern int64_t r_imageDecodeUs, r_imageUploadUs, r_imageReadUs;
 extern int r_imageCount;
+// [ioquakelive] what registering shaders costs, images aside
+extern int64_t r_shaderFindUs, r_shaderCachedUs;
+extern int r_shaderFindCount, r_shaderCachedCount;
+void R_ImageLoadStatsReset( void );
+void R_ImageLoadStatsReport( void );
+
+// [ioquakelive] the map's textures, decoded ahead of time across the workers
+extern cvar_t *r_prefetchTextures;
+void R_PrefetchStart( const char *listName );
+void R_PrefetchFinish( void );
+
+// the decoders in renderercommon, which can also run on a worker
+void R_DecodeJPG( byte *fileData, int fileLen, byte **pic, int *width, int *height,
+	void *(*allocator)( size_t ), qboolean silent );
+void R_DecodeTGA( byte *fileData, int fileLen, const char *name, byte **pic, int *width,
+	int *height, void *(*allocator)( size_t ), void (*deallocator)( void * ), qboolean silent );
+void R_DecodePNG( byte *fileData, int fileLen, const char *name, byte **pic, int *width, int *height );
+extern char r_lastImageName[MAX_QPATH];
 
 void R_RegisterWindowCvars( void );
 int R_AspectRatioOf( int width, int height );

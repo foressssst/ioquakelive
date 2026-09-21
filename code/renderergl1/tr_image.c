@@ -859,7 +859,14 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 	}
 
 	GL_Bind( image );
-	Upload32( pic, 0, 0, image->width, image->height, image, qfalse ); // subImage = qfalse
+	{
+		// [ioquakelive] the upload to the GPU, timed apart from the decoding: it goes through the
+		// GL context, so it stays on the main thread
+		int64_t uploadStart = ri.Microseconds();
+
+		Upload32( pic, 0, 0, image->width, image->height, image, qfalse ); // subImage = qfalse
+		r_imageUploadUs += ri.Microseconds() - uploadStart;
+	}
 
 	if ( image->flags & IMGFLAG_MIPMAP )
 	{
@@ -997,6 +1004,321 @@ static const char *R_LoadImage( const char *name, byte **pic, int *width, int *h
 }
 
 
+// [ioquakelive] where image loading time goes: decoding against uploading to the GPU
+void R_ImageLoadStatsReset( void ) {
+	r_shaderFindUs = r_shaderCachedUs = 0;
+	r_shaderFindCount = r_shaderCachedCount = 0;
+	r_imageDecodeUs = 0;
+	r_imageUploadUs = 0;
+	r_imageReadUs = 0;
+	r_imageCount = 0;
+}
+
+void R_ImageLoadStatsReport( void ) {
+	if ( !r_imageCount ) {
+		return;
+	}
+	ri.Printf( PRINT_ALL, "shaders: %i asked, %.2f s of which %.2f s is their images\n",
+		r_shaderFindCount, r_shaderFindUs / 1000000.0f,
+		( r_imageDecodeUs + r_imageUploadUs ) / 1000000.0f );
+	ri.Printf( PRINT_ALL, "  %i were already loaded and cost %.2f s just to look up\n",
+		r_shaderCachedCount, r_shaderCachedUs / 1000000.0f );
+	ri.Printf( PRINT_ALL, "images: %i loaded, %.2f s reading, %.2f s decoding, %.2f s uploading\n",
+		r_imageCount, r_imageReadUs / 1000000.0f,
+		( r_imageDecodeUs - r_imageReadUs ) / 1000000.0f, r_imageUploadUs / 1000000.0f );
+}
+
+/*
+==============================================================================
+
+TEXTURES DECODED AHEAD OF TIME
+
+[ioquakelive] Of what loading a map's textures costs, 94% is decoding, and that is pure
+CPU: 0.86 s out of 0.92 on campgrounds, against 0.05 s reading from the pk3 and 0.01 s
+uploading. So the main thread goes on reading the files - the filesystem is not thread
+safe - and the workers decode while it carries on registering shaders.
+
+Reading ahead means knowing what to read, which is not known until the map has been
+loaded once: at the end of every load the list of what was asked for is written out and
+the next load of that map uses it. A window caps how many decoded images are held at once.
+
+==============================================================================
+*/
+
+#define R_PREFETCH_MAX		2048
+#define R_PREFETCH_AHEAD	16
+
+typedef enum { PF_EMPTY, PF_WORKING, PF_READY, PF_FAILED } prefetchState_t;
+
+typedef struct {
+	char			name[MAX_QPATH];
+	void			*file;		// the file's bytes, from the main thread
+	int				fileLen;
+	byte			*pixels;	// what the worker leaves behind, from the system's malloc
+	int				width, height;
+	volatile int	state;
+} prefetchEntry_t;
+
+static prefetchEntry_t	r_prefetch[R_PREFETCH_MAX];
+static int				r_prefetchCount;	// how many entries the list has
+static int				r_prefetchNext;		// the next one to read and queue
+static int				r_prefetchTaken;	// how far the main thread has consumed
+static qboolean			r_prefetchOn;
+static int				r_prefetchHits, r_prefetchMisses;
+static int64_t			r_prefetchWaitUs;
+
+// this load's list, to be written out at the end
+static char				r_loadedNames[R_PREFETCH_MAX][MAX_QPATH];
+static int				r_loadedCount;
+static char				r_prefetchList[MAX_QPATH];
+
+static void R_PrefetchFile( const char *list, char *out, int size ) {
+	char base[MAX_QPATH];
+
+	COM_StripExtension( list, base, sizeof( base ) );
+	Com_sprintf( out, size, "prefetch/%s.txt", COM_SkipPath( base ) );
+}
+
+// Two names are the same when the path matches, extension aside: Quake Live's shaders ask for
+// .tga and the engine ends up loading the .jpg when the tga is missing. The list stores the file
+// that was actually loaded, so the requested extension need not match.
+static qboolean R_PrefetchSameName( const char *wanted, const char *entry ) {
+	char a[MAX_QPATH], b[MAX_QPATH];
+
+	COM_StripExtension( wanted, a, sizeof( a ) );
+	COM_StripExtension( entry, b, sizeof( b ) );
+	return !Q_stricmp( a, b ) ? qtrue : qfalse;
+}
+
+// the only thing that runs on a worker: decoding. No files, no printing, no engine memory
+static void R_PrefetchDecode( void *data ) {
+	prefetchEntry_t *entry = (prefetchEntry_t *)data;
+	byte *pixels = NULL;
+	int width = 0, height = 0;
+
+	if ( !Q_stricmp( COM_GetExtension( entry->name ), "png" ) ) {
+		R_DecodePNG( (byte *)entry->file, entry->fileLen, entry->name, &pixels, &width, &height );
+	} else if ( !Q_stricmp( COM_GetExtension( entry->name ), "tga" ) ) {
+		R_DecodeTGA( (byte *)entry->file, entry->fileLen, entry->name, &pixels, &width, &height, malloc, free, qtrue );
+	} else {
+		R_DecodeJPG( (byte *)entry->file, entry->fileLen, &pixels, &width, &height, malloc, qtrue );
+	}
+	entry->pixels = pixels;
+	entry->width = width;
+	entry->height = height;
+	entry->state = pixels ? PF_READY : PF_FAILED;
+}
+
+// reads and queues until the window is full. Only the main thread calls this
+static void R_PrefetchPump( void ) {
+	while ( r_prefetchNext < r_prefetchCount && r_prefetchNext - r_prefetchTaken < R_PREFETCH_AHEAD ) {
+		prefetchEntry_t *entry = &r_prefetch[r_prefetchNext++];
+		void *buffer = NULL;
+		int len = ri.FS_ReadFile( entry->name, &buffer );
+
+		if ( len <= 0 || !buffer ) {
+			if ( buffer ) {
+				ri.FS_FreeFile( buffer );
+			}
+			entry->state = PF_FAILED;
+			continue;
+		}
+		// The engine's temporary memory is a stack: it is freed in the reverse order it was
+		// asked for. Since several files are alive here at once and released in any order, each
+		// one is copied into memory of its own and the engine's is given straight back. What is
+		// copied are the compressed bytes, which are few.
+		entry->file = malloc( len );
+		if ( entry->file ) {
+			Com_Memcpy( entry->file, buffer, len );
+		}
+		ri.FS_FreeFile( buffer );
+		if ( !entry->file ) {
+			entry->state = PF_FAILED;
+			continue;
+		}
+		entry->fileLen = len;
+		entry->state = PF_WORKING;
+		ri.JobsSubmit( R_PrefetchDecode, entry );
+	}
+}
+
+static void R_PrefetchRelease( prefetchEntry_t *entry ) {
+	if ( entry->file ) {
+		free( entry->file );
+		entry->file = NULL;
+	}
+	if ( entry->pixels ) {
+		free( entry->pixels );
+		entry->pixels = NULL;
+	}
+	entry->state = PF_EMPTY;
+	while ( r_prefetchTaken < r_prefetchNext && r_prefetch[r_prefetchTaken].state == PF_EMPTY ) {
+		r_prefetchTaken++;
+	}
+}
+
+/*
+=================
+R_PrefetchTake
+
+If the image was in the list, returns it already decoded, with the name of the file that was
+read. If the worker has not finished yet it waits, which is still less than decoding it here.
+=================
+*/
+static qboolean R_PrefetchTake( const char *name, byte **pic, int *width, int *height, const char **localName ) {
+	static char	takenName[MAX_QPATH];
+	int			i;
+
+	if ( !r_prefetchOn ) {
+		return qfalse;
+	}
+	R_PrefetchPump();
+
+	for ( i = r_prefetchTaken; i < r_prefetchNext; i++ ) {
+		prefetchEntry_t *entry = &r_prefetch[i];
+		int bytes;
+
+		if ( entry->state == PF_EMPTY || !R_PrefetchSameName( name, entry->name ) ) {
+			continue;
+		}
+		if ( entry->state == PF_WORKING ) {
+			int64_t waitStart = ri.Microseconds();
+
+			while ( entry->state == PF_WORKING ) {
+				ri.ThreadYield();
+			}
+			r_prefetchWaitUs += ri.Microseconds() - waitStart;
+		}
+		if ( entry->state != PF_READY ) {
+			R_PrefetchRelease( entry );
+			return qfalse;	// let the usual path load it
+		}
+		bytes = entry->width * entry->height * 4;
+		// [ioquakelive] what came in ahead of time is recorded too, or the list shrinks on every
+		// load until it is empty
+		Q_strncpyz( r_lastImageName, entry->name, sizeof( r_lastImageName ) );
+		Q_strncpyz( takenName, entry->name, sizeof( takenName ) );
+		*localName = takenName;
+		r_prefetchHits++;
+		*pic = (byte *)ri.Malloc( bytes );
+		Com_Memcpy( *pic, entry->pixels, bytes );
+		*width = entry->width;
+		*height = entry->height;
+		R_PrefetchRelease( entry );
+		R_PrefetchPump();
+		return qtrue;
+	}
+	r_prefetchMisses++;
+	return qfalse;
+}
+
+/*
+=================
+R_PrefetchStart
+
+Opens a list: reads it, starts reading its files ahead, and from here on records into it
+whatever gets loaded. "common" is what the cgame registers before the world -- the HUD, which is
+the same on every map -- and the map's own follows it.
+=================
+*/
+void R_PrefetchStart( const char *listName ) {
+	char	fileName[MAX_QPATH];
+	char	*text;
+	char	*line;
+	int		len;
+
+	R_PrefetchFinish();
+
+	r_prefetchCount = r_prefetchNext = r_prefetchTaken = 0;
+	r_prefetchHits = r_prefetchMisses = 0;
+	r_prefetchWaitUs = 0;
+	r_loadedCount = 0;
+	r_prefetchOn = qfalse;
+	Q_strncpyz( r_prefetchList, listName, sizeof( r_prefetchList ) );
+
+	if ( !ri.JobWorkers() || !r_prefetchTextures || !r_prefetchTextures->integer ) {
+		return;
+	}
+	R_PrefetchFile( listName, fileName, sizeof( fileName ) );
+	len = ri.FS_ReadFile( fileName, (void **)&text );
+	if ( len <= 0 || !text ) {
+		return;
+	}
+	for ( line = strtok( text, "\r\n" ); line && r_prefetchCount < R_PREFETCH_MAX; line = strtok( NULL, "\r\n" ) ) {
+		if ( *line ) {
+			Q_strncpyz( r_prefetch[r_prefetchCount].name, line, MAX_QPATH );
+			r_prefetch[r_prefetchCount].state = PF_EMPTY;
+			r_prefetchCount++;
+		}
+	}
+	ri.FS_FreeFile( text );
+
+	if ( r_prefetchCount ) {
+		r_prefetchOn = qtrue;
+		R_PrefetchPump();
+	}
+}
+
+// records what was loaded, in order, for next time
+static void R_PrefetchRecord( void ) {
+	if ( r_loadedCount < R_PREFETCH_MAX && r_lastImageName[0] ) {
+		Q_strncpyz( r_loadedNames[r_loadedCount++], r_lastImageName, MAX_QPATH );
+	}
+	r_lastImageName[0] = '\0';
+}
+
+/*
+=================
+R_PrefetchFinish
+
+Closes the list in progress: waits on whatever is half decoded, releases what is left over and
+writes out what was loaded, for next time.
+=================
+*/
+void R_PrefetchFinish( void ) {
+	char	fileName[MAX_QPATH];
+	char	*text;
+	int		size = 0;
+	int		i;
+
+	if ( r_prefetchCount || r_prefetchHits ) {
+		ri.Printf( PRINT_ALL, "prefetch: %i ready, %i not listed, %i listed, %.2f s waiting\n",
+			r_prefetchHits, r_prefetchMisses, r_prefetchCount, r_prefetchWaitUs / 1000000.0f );
+	}
+
+	while ( r_prefetchTaken < r_prefetchNext ) {
+		prefetchEntry_t *entry = &r_prefetch[r_prefetchTaken];
+
+		while ( entry->state == PF_WORKING ) {
+			ri.ThreadYield();
+		}
+		R_PrefetchRelease( entry );
+		if ( r_prefetch[r_prefetchTaken].state != PF_EMPTY ) {
+			r_prefetchTaken++;
+		}
+	}
+	r_prefetchOn = qfalse;
+
+	if ( !r_loadedCount || !r_prefetchList[0] || !r_prefetchTextures || !r_prefetchTextures->integer ) {
+		return;
+	}
+	for ( i = 0; i < r_loadedCount; i++ ) {
+		size += (int)strlen( r_loadedNames[i] ) + 1;
+	}
+	text = (char *)ri.Malloc( size + 1 );
+	text[0] = '\0';
+	for ( i = 0; i < r_loadedCount; i++ ) {
+		Q_strcat( text, size + 1, r_loadedNames[i] );
+		Q_strcat( text, size + 1, "\n" );
+	}
+	R_PrefetchFile( r_prefetchList, fileName, sizeof( fileName ) );
+	ri.FS_WriteFile( fileName, text, (int)strlen( text ) );
+	ri.Free( text );
+	r_loadedCount = 0;
+	r_prefetchList[0] = '\0';
+}
+
+
 /*
 ===============
 R_FindImageFile
@@ -1053,10 +1375,22 @@ image_t	*R_FindImageFile( const char *name, imgFlags_t flags )
 	//
 	// load the pic from disk
 	//
-	localName = R_LoadImage( name, &pic, &width, &height );
+	// [ioquakelive] reading and decoding are measured apart from uploading: the first is CPU and
+	// can be spread across threads, the second goes through the GL context and cannot move
+	{
+		int64_t start = ri.Microseconds();
+
+		// [ioquakelive] if it came in ahead of time, it is already decoded
+		if ( !R_PrefetchTake( name, &pic, &width, &height, &localName ) ) {
+			localName = R_LoadImage( name, &pic, &width, &height );
+		}
+		r_imageDecodeUs += ri.Microseconds() - start;
+	}
 	if ( pic == NULL ) {
 		return NULL;
 	}
+	R_PrefetchRecord();
+	r_imageCount++;
 
 	if ( tr.mapLoading && r_mapGreyScale->value > 0 ) {
 		byte *img;
