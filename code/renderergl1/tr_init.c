@@ -1408,7 +1408,8 @@ Prints persistent rendering configuration
 static void GfxInfo( void )
 {
 	const char *enablestrings[] = { "disabled", "enabled" };
-	const char *fsstrings[] = { "windowed", "fullscreen" };
+	// [ioquakelive] 2 is borderless fullscreen, so that the log says which of the two it is
+	const char *fsstrings[] = { "windowed", "fullscreen", "borderless fullscreen" };
 	const char *fs;
 	int mode;
 
@@ -1426,7 +1427,7 @@ static void GfxInfo( void )
 	if ( glConfig.isFullscreen )
 	{
 		mode = ri.Cvar_VariableIntegerValue( "r_mode" );
-		fs = fsstrings[1];
+		fs = fsstrings[ r_fullscreen->integer == 2 ? 2 : 1 ];
 	}
 	else
 	{
