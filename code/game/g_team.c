@@ -751,8 +751,9 @@ void Team_CaptureFlagSound(gentity_t* ent, int team, gentity_t* capturer) {
     te = G_TempEntity(ent->s.pos.trBase, EV_GLOBAL_TEAM_SOUND);
     te->r.svFlags |= SVF_BROADCAST | SVF_NOTSINGLECLIENT;
     // [ioquakelive] NOT FROM RETAIL: who captured, so the feed can name them, the way the
-    // flag taken event already carries its player
-    te->s.otherEntityNum = capturer->client->ps.clientNum;
+    // flag taken event already carries its player. It goes as the number plus one, because a
+    // server that does not send it leaves a zero there, and zero is a player
+    te->s.otherEntityNum = capturer->client->ps.clientNum + 1;
     if (team == TEAM_BLUE) {
         te->s.eventParm = GTS_BLUE_CAPTURE;
     } else {

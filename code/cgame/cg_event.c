@@ -1560,13 +1560,14 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                 case GTS_RED_CAPTURE:  // CTF: red team captured the blue flag, 1FCTF: red team captured the neutral flag
                     trap_S_StartLocalSound(team == TEAM_RED ? cgs.media.captureYourTeamSound : cgs.media.captureOpponentSound,
                                            CHAN_LOCAL_SOUND);
-                    CG_AddGameEvent(es->otherEntityNum,
+                    // the number comes one up, and a zero means the server did not send it
+                    CG_AddGameEvent(es->otherEntityNum - 1,
                                     CG_FlagIcon(cgs.gametype == GT_1FCTF ? PW_NEUTRALFLAG : PW_BLUEFLAG), "captured");
                     break;
                 case GTS_BLUE_CAPTURE:  // CTF: blue team captured the red flag, 1FCTF: blue team captured the neutral flag
                     trap_S_StartLocalSound(team == TEAM_BLUE ? cgs.media.captureYourTeamSound : cgs.media.captureOpponentSound,
                                            CHAN_LOCAL_SOUND);
-                    CG_AddGameEvent(es->otherEntityNum,
+                    CG_AddGameEvent(es->otherEntityNum - 1,
                                     CG_FlagIcon(cgs.gametype == GT_1FCTF ? PW_NEUTRALFLAG : PW_REDFLAG), "captured");
                     break;
                 case GTS_RED_RETURN:  // CTF: blue flag returned, 1FCTF: never used
