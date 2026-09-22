@@ -331,8 +331,14 @@ static void SV_AddEntitiesVisibleFromPoint(vec3_t origin, clientSnapshot_t* fram
         }
 
         // entities can be flagged to be sent to only one client
+        // [QL] 0x4e53d9: a spectator is matched by its own number, not by the clientNum of
+        // the player it follows, so what the game sends it alone (the item timers) still gets there
         if (ent->r.svFlags & SVF_SINGLECLIENT) {
-            if (ent->r.singleClient != frame->ps.clientNum) {
+            if (frame->ps.eFlags & EF_SPECTATOR) {
+                if (ent->r.singleClient != viewerNum) {
+                    continue;
+                }
+            } else if (ent->r.singleClient != frame->ps.clientNum) {
                 continue;
             }
         }
