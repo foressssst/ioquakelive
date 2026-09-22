@@ -27,9 +27,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // registers, so a command gets its text wherever it is added from; cvar_help.c
 // does the same for cvars.
 //
-// The first line is the summary and is the only part some views show. A command
-// registered by the game, cgame or ui modules is not here: those are forwarded
-// and the module owns them.
+// The first line is the summary and is the only part some views show. The ones the
+// modules add are here too: the engine registers them when cgame or ui asks for
+// them, so they get their text the same way, and a module cannot carry one.
 //
 
 #include "q_shared.h"
@@ -290,6 +290,155 @@ static const cmdHelp_t cmdHelp[] = {
     {"web_changeHash", "moves the embedded browser to another page\n"
                        "usage: web_changeHash <path>, and only while in a match"},
     {"web_hideBrowser", "closes the embedded browser"},
+
+    // ----------------------------------------- what the scoreboard keys show
+    {"+scores", HELD("the scoreboard up")},
+    {"-scores", RELEASE("+scores")},
+    {"+acc", HELD("the accuracy sheet up")},
+    {"-acc", RELEASE("+acc")},
+    {"+pstats", HELD("your match statistics up")},
+    {"-pstats", RELEASE("+pstats")},
+    {"+chat", HELD("the chat history up")},
+    {"-chat", RELEASE("+chat")},
+    {"+zoom", HELD("the view zoomed in")},
+    {"-zoom", RELEASE("+zoom")},
+
+    // ----------------------------------------------------------- the weapons
+    {"weapnext", "takes the next weapon you carry"},
+    {"weapprev", "takes the weapon before the one you carry"},
+    {"weapon", "takes a weapon by its number\n"
+               "usage: weapon <1-15>, and several numbers pick the first you have"},
+    {"dropweapon", "drops the weapon you are holding"},
+    {"dropflag", "drops the flag you carry"},
+    {"droppowerup", "drops the powerup you carry"},
+    {"droprune", "drops the rune you carry"},
+
+    // -------------------------------------------------------------- the view
+    {"sizeup", "makes the view bigger"},
+    {"sizedown", "makes the view smaller"},
+    {"viewpos", "prints where you stand and where you look"},
+    {"setviewpos", "puts you somewhere else, with cheats on\n"
+                   "usage: setviewpos <x> <y> <z> <yaw>"},
+    {"startOrbit", "swings the camera around you, with developer on"},
+    {"nextframe", "steps the test model on to its next frame"},
+    {"prevframe", "steps the test model back a frame"},
+    {"levelshot", "takes the picture the menus show of the map, with cheats on"},
+    {"loaddeferred", "loads the player models that were left for later"},
+    {"loadhud", "reads the HUD in cg_hudFiles again"},
+    {"togglechathistory", "shows the chat history, or hides it"},
+    {"print", "prints what it is given on your own console\n"
+              "usage: print <text>"},
+    {"fragforward", "in a demo, jumps to just before the next frag of the player you watch\n"
+                    "usage: fragforward [seconds before it]"},
+    {"vkinfo", "prints what the Vulkan renderer runs on"},
+
+    // ------------------------------------------------- talking to the others
+    {"say_team", "says something to your team\n"
+                 "usage: say_team <message>"},
+    {"tell", "says something to one player\n"
+             "usage: tell <player> <message>"},
+    {"tell_target", "says something to the player under your crosshair\n"
+                    "usage: tell_target <message>"},
+    {"tell_attacker", "says something to whoever hit you last\n"
+                      "usage: tell_attacker <message>"},
+    {"vtell_target", "plays a voice line for the player under your crosshair\n"
+                     "usage: vtell_target <line>"},
+    {"vtell_attacker", "plays a voice line for whoever hit you last\n"
+                       "usage: vtell_attacker <line>"},
+    {"tcmd", "orders the player under your crosshair about\n"
+             "usage: tcmd <order>"},
+    {"tauntTaunt", "taunts"},
+    {"tauntPraise", "praises your team"},
+    {"tauntKillInsult", "insults whoever you just killed"},
+    {"tauntDeathInsult", "insults whoever just killed you"},
+    {"tauntGauntlet", "crows about a gauntlet frag"},
+    {"clientmute", "stops you hearing a player's voice chat\n"
+                   "usage: clientmute <player>"},
+
+    // --------------------------------------------------------- the team menu
+    {"nextOrder", "moves on to the next order in the team menu"},
+    {"confirmOrder", "takes the order you were given"},
+    {"denyOrder", "turns the order you were given down"},
+    {"nextTeamMember", "picks the next teammate in the team menu"},
+    {"prevTeamMember", "picks the teammate before that one"},
+    {"taskOffense", "tells your team you are going for the attack"},
+    {"taskDefense", "tells your team you are defending"},
+    {"taskPatrol", "tells your team you are on patrol"},
+    {"taskCamp", "tells your team you are holding a spot"},
+    {"taskFollow", "tells your team you are following them"},
+    {"taskRetrieve", "tells your team you are going for the flag"},
+    {"taskEscort", "tells your team you are escorting the carrier"},
+    {"taskSuicide", "tells the player under your crosshair to kill themselves"},
+    {"taskOwnFlag", "tells the player under your crosshair to get your own flag back"},
+    {"setteamcolor", "sets the colour your teammates are drawn in\n"
+                     "usage: setteamcolor <colour>"},
+    {"setenemycolor", "sets the colour your enemies are drawn in\n"
+                      "usage: setenemycolor <colour>"},
+
+    // ------------------------------------------------------------- the match
+    {"team", "joins a team\n"
+             "usage: team <r|b|f|s|a>, and with nothing it prints the one you are on"},
+    {"spec", "watches the next player that matches\n"
+             "usage: spec [stats|red|blue|powerup], and with nothing it watches the next one"},
+    {"follow", "watches a player from the sidelines\n"
+               "usage: follow <player>, and with nothing it stops"},
+    {"readyup", "readies you up during warmup"},
+    {"kill", "kills you"},
+    {"forfeit", "gives the match up, where the server allows it"},
+    {"ragequit", "leaves the server there and then"},
+    {"callvote", "calls a vote\n"
+                 "usage: callvote <what> [value]"},
+    {"vote", "votes on the vote going on\n"
+             "usage: vote <yes|no>"},
+    {"players", "prints who is on the server and what they are up to"},
+    {"timeout", "calls a time out, which pauses the match"},
+    {"timein", "calls the time back in, with a countdown of five seconds"},
+    {"give", "gives you what you ask for, with cheats on\n"
+             "usage: give <all|weapons|ammo|health|armor|item>"},
+    {"god", "nothing hurts you, with cheats on"},
+    {"notarget", "the bots stop going for you, with cheats on"},
+    {"noclip", "you walk through the map, with cheats on"},
+
+    // ---------------------------------------------------- running the server
+    {"addbot", "adds a bot to the match\n"
+               "usage: addbot <name> [skill 1-5] [team] [delay] [other name]"},
+    {"allready", "readies everyone up and starts the match (referee)"},
+    {"pause", "pauses the match for as long as it takes (referee)"},
+    {"unpause", "puts the match back on (referee)"},
+    {"abort", "gives the match up and goes back to warmup (referee)"},
+    {"lock", "stops players joining a team (referee)\n"
+             "usage: lock [team], and with nothing it locks both"},
+    {"unlock", "lets players join a team again (referee)\n"
+               "usage: unlock [team], and with nothing it opens both"},
+    {"put", "moves a player to a team (referee)\n"
+            "usage: put <player> <r|b|s|f>"},
+    {"mute", "stops a player from chatting (referee)\n"
+             "usage: mute <player>"},
+    {"unmute", "lets a muted player chat again (referee)\n"
+               "usage: unmute <player>"},
+    {"tempban", "throws a player out for the rest of the match (referee)\n"
+                "usage: tempban <player>"},
+    {"ban", "bans a player from the server (referee)\n"
+            "usage: ban <player>"},
+    {"unban", "takes an account off the ban list (referee)\n"
+              "usage: unban <account>"},
+    {"listaccess", "prints the accounts that have access (referee)\n"
+                   "usage: listaccess [page]"},
+    {"opsay", "says something to everyone as the server (referee)\n"
+              "usage: opsay <message>"},
+    {"addscore", "adds points to a player's score (referee)\n"
+                 "usage: addscore <player> <points>"},
+    {"addteamscore", "adds points to a team's score (referee)\n"
+                     "usage: addteamscore <r|b> <points>"},
+    {"setmatchtime", "sets how long the match has been going (referee)\n"
+                     "usage: setmatchtime <seconds>"},
+    {"addadmin", "gives a player the run of the server (administrator)\n"
+                 "usage: addadmin <player>"},
+    {"addmod", "makes a player a referee (administrator)\n"
+               "usage: addmod <player>"},
+    {"demote", "takes a player's privileges away (administrator)\n"
+               "usage: demote <player>"},
+    {"reload_access", "reads the access file again and applies it to everyone playing"},
 };
 
 /*
