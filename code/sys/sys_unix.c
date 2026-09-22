@@ -111,6 +111,50 @@ char* Sys_DefaultHomePath(void) {
 }
 
 /*
+==================
+Sys_DefaultCachePath
+
+[ioquakelive] what is kept only to load faster goes to the system's cache, out of the game folder
+==================
+*/
+char* Sys_DefaultCachePath(void) {
+    static char cachePath[MAX_OSPATH];
+    const char* name;
+    char* p;
+
+    if (cachePath[0]) {
+        return cachePath;
+    }
+
+    name = (com_homepath && com_homepath->string[0]) ? com_homepath->string : HOMEPATH_NAME_UNIX;
+    if (name[0] == '.' && name[1] != '\0') {
+        name++;
+    }
+#ifdef __APPLE__
+    if ((p = getenv("HOME")) != NULL && *p != '\0') {
+        Com_sprintf(cachePath, sizeof(cachePath), "%s%cLibrary%cCaches%c%s", p, PATH_SEP, PATH_SEP, PATH_SEP, name);
+    }
+#else
+    if ((p = getenv("XDG_CACHE_HOME")) != NULL && *p != '\0') {
+        Com_sprintf(cachePath, sizeof(cachePath), "%s%c%s", p, PATH_SEP, name);
+    } else if ((p = getenv("HOME")) != NULL && *p != '\0') {
+        Com_sprintf(cachePath, sizeof(cachePath), "%s%c.cache%c%s", p, PATH_SEP, PATH_SEP, name);
+    }
+#endif
+
+    return cachePath[0] ? cachePath : NULL;
+}
+
+/*
+==================
+Sys_RemoveDir
+==================
+*/
+qboolean Sys_RemoveDir(const char* path) {
+    return rmdir(path) == 0 ? qtrue : qfalse;
+}
+
+/*
 ================
 Sys_SteamPath
 ================

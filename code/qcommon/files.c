@@ -1833,6 +1833,118 @@ void FS_FreeFile(void* buffer) {
 
 /*
 ============
+FS_CacheFilePath
+
+[ioquakelive] the system's cache (Sys_DefaultCachePath), for what is kept only to go faster
+============
+*/
+static qboolean FS_CacheFilePath(const char* name, char* path, int size) {
+	const char* base = Sys_DefaultCachePath();
+
+	if (!base || !base[0] || !name || !name[0] || strstr(name, "..") || strstr(name, "::")) {
+		return qfalse;
+	}
+	Com_sprintf(path, size, "%s%c%s", base, PATH_SEP, name);
+	FS_ReplaceSeparators(path);
+	return qtrue;
+}
+
+/*
+============
+FS_ReadCacheFile
+
+Like FS_ReadFile, and freed with FS_FreeFile. -1 when it is not there
+============
+*/
+long FS_ReadCacheFile(const char* name, void** buffer) {
+	char path[MAX_OSPATH];
+	FILE* f;
+	long len;
+	byte* buf;
+
+	*buffer = NULL;
+	if (!FS_CacheFilePath(name, path, sizeof(path))) {
+		return -1;
+	}
+	f = Sys_FOpen(path, "rb");
+	if (!f) {
+		return -1;
+	}
+	fseek(f, 0, SEEK_END);
+	len = ftell(f);
+	fseek(f, 0, SEEK_SET);
+	if (len <= 0) {
+		fclose(f);
+		return -1;
+	}
+
+	fs_loadStack++;
+	buf = Hunk_AllocateTempMemory(len + 1);
+	if (fread(buf, 1, len, f) != (size_t)len) {
+		fclose(f);
+		FS_FreeFile(buf);
+		return -1;
+	}
+	fclose(f);
+	buf[len] = 0;
+	*buffer = buf;
+	return len;
+}
+
+/*
+============
+FS_WriteCacheFile
+============
+*/
+void FS_WriteCacheFile(const char* name, const void* buffer, int size) {
+	char path[MAX_OSPATH];
+	FILE* f;
+
+	if (!FS_CacheFilePath(name, path, sizeof(path)) || FS_CreatePath(path)) {
+		return;
+	}
+	f = Sys_FOpen(path, "wb");
+	if (!f) {
+		Com_DPrintf("FS_WriteCacheFile: couldn't write %s\n", path);
+		return;
+	}
+	fwrite(buffer, 1, size, f);
+	fclose(f);
+}
+
+#ifndef DEDICATED
+/*
+============
+FS_RemoveOldPrefetch
+
+[ioquakelive] the renderer's texture lists used to be written into baseq3/prefetch; they are in
+the system's cache now, and the old folder goes
+============
+*/
+static void FS_RemoveOldPrefetch(const char* gameName) {
+	char dir[MAX_OSPATH];
+	char** list;
+	int count;
+	int i;
+
+	if (!fs_homepath || !fs_homepath->string[0]) {
+		return;
+	}
+	Q_strncpyz(dir, FS_BuildOSPath(fs_homepath->string, gameName, "prefetch"), sizeof(dir));
+	list = Sys_ListFiles(dir, ".txt", NULL, &count, qfalse);
+	if (!list) {
+		return;
+	}
+	for (i = 0; i < count; i++) {
+		remove(va("%s%c%s", dir, PATH_SEP, list[i]));
+	}
+	Sys_FreeFileList(list);
+	Sys_RemoveDir(dir);
+}
+#endif
+
+/*
+============
 FS_WriteFile
 
 Filename are relative to the quake search path
@@ -3138,6 +3250,9 @@ static void FS_Startup(const char* gameName) {
 	}
 	fs_homepath = Cvar_Get("fs_homepath", homePath, CVAR_INIT | CVAR_PROTECTED);
 	fs_gamedirvar = Cvar_Get("fs_game", "", CVAR_INIT | CVAR_SYSTEMINFO);
+#ifndef DEDICATED
+	FS_RemoveOldPrefetch(gameName);
+#endif
 
 	if (!gameName[0]) {
 		Cvar_ForceReset("com_basegame");
@@ -3578,7 +3693,7 @@ static void FS_AddWorkshopPaks(void) {
 	Q_strncpyz(fs_gamedir, savedGamedir, sizeof(fs_gamedir));
 
 	if (count > 0) {
-		Com_Printf("Added %d Steam Workshop item%s to search path.\n",
+		Com_DPrintf("Added %d Steam Workshop item%s to search path.\n",
 		           count, count == 1 ? "" : "s");
 	}
 }

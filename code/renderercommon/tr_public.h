@@ -190,6 +190,9 @@ typedef struct {
     void (*FS_FreeFileList)(char** filelist);
     void (*FS_WriteFile)(const char* qpath, const void* buffer, int size);
     qboolean (*FS_FileExists)(const char* file);
+    // [ioquakelive] the system's cache, out of the game folder: what is kept only to load faster
+    long (*FS_ReadCacheFile)(const char* name, void** buf);
+    void (*FS_WriteCacheFile)(const char* name, const void* buffer, int size);
 
     // cinematic stuff
     void (*CIN_UploadCinematic)(int handle);

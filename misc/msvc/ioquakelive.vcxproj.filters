@@ -43,7 +43,6 @@
     <ClCompile Include="..\..\code\qcommon\unzip.c" />
     <ClCompile Include="..\..\code\qcommon\vm.c" />
     <ClCompile Include="..\..\code\sdl\sdl_input.c" />
-    <ClCompile Include="..\..\code\sdl\sdl_snd.c" />
     <ClCompile Include="..\..\code\server\sv_bot.c" />
     <ClCompile Include="..\..\code\server\sv_ccmds.c" />
     <ClCompile Include="..\..\code\server\sv_client.c" />
@@ -59,6 +58,7 @@
     <ClCompile Include="..\..\code\sys\sys_autoupdater.c" />
     <ClCompile Include="..\..\code\sys\sys_main.c" />
     <ClCompile Include="..\..\code\sys\sys_win32.c" />
+    <ClCompile Include="..\..\code\sys\win_snd.c" />
     <ClCompile Include="..\..\code\botlib\be_aas_bspq3.c">
       <Filter>botlib</Filter>
     </ClCompile>

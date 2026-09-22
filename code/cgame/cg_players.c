@@ -2452,7 +2452,7 @@ doubled, because retail's colour correction pass would otherwise halve them and 
 has no such pass.
 ==============
 */
-static void CG_PlayerTeamSkins(centity_t* cent, refEntity_t* legs, refEntity_t* torso, refEntity_t* head) {
+static qboolean CG_PlayerTeamSkins(centity_t* cent, refEntity_t* legs, refEntity_t* torso, refEntity_t* head) {
     int viewerTeam;
     int playerTeam;
     qboolean useEnemy;
@@ -2491,7 +2491,7 @@ static void CG_PlayerTeamSkins(centity_t* cent, refEntity_t* legs, refEntity_t* 
         Color_UnpackScale(legs, cg_deadBodyColor.integer, scale);
         Color_UnpackScale(torso, cg_deadBodyColor.integer, scale);
         Color_UnpackScale(head, cg_deadBodyColor.integer, scale);
-        return;
+        return useEnemy;
     }
 
     if (useEnemy) {
@@ -2520,6 +2520,7 @@ static void CG_PlayerTeamSkins(centity_t* cent, refEntity_t* legs, refEntity_t* 
     } else {
         Color_UnpackScale(head, headColor->integer, scale);
     }
+    return useEnemy;
 }
 
 /*
@@ -2828,24 +2829,23 @@ qboolean CG_XrayAllowed(void) {
 ===============
 CG_AddXray
 
-one part of the model again, added on top in the team colour with the depth range of the
-view weapon, so walls do not hide it
+one part of the model twice more, in the depth range of the view weapon so walls do not hide
+them: a mask that keeps the inside clear, and the part grown and seen from behind, whose rim
+is the outline (ioql_xray.shader)
 ===============
 */
-static void CG_AddXray(const refEntity_t* part, int team) {
+static void CG_AddXray(const refEntity_t* part, const byte* color) {
     refEntity_t ent = *part;
-    byte* c = ent.shaderRGBA;
+
+    ent.renderfx = (ent.renderfx & ~RF_THIRD_PERSON) | RF_DEPTHHACK | RF_NOSHADOW;
+    ent.customShader = cgs.media.xrayMaskShader;
+    trap_R_AddRefEntityToScene(&ent);
 
     ent.customShader = cgs.media.xrayShader;
-    ent.renderfx |= RF_DEPTHHACK | RF_NOSHADOW;
-    if (team == TEAM_RED) {
-        c[0] = 200, c[1] = 40, c[2] = 40;
-    } else if (team == TEAM_BLUE) {
-        c[0] = 40, c[1] = 90, c[2] = 220;
-    } else {
-        c[0] = 200, c[1] = 160, c[2] = 30;
-    }
-    c[3] = 255;
+    ent.shaderRGBA[0] = color[0];
+    ent.shaderRGBA[1] = color[1];
+    ent.shaderRGBA[2] = color[2];
+    ent.shaderRGBA[3] = 255;
     trap_R_AddRefEntityToScene(&ent);
 }
 
@@ -2869,6 +2869,7 @@ void CG_Player(centity_t* cent) {
     float c;
     float angle;
     vec3_t dir, angles;
+    qboolean enemy;
 
     // the client number is stored in clientNum.  It can't be derived
     // from the entity number, because a single client may have
@@ -2903,7 +2904,7 @@ void CG_Player(centity_t* cent) {
 
     // [QL] tint the body parts for enemy/team skins (and darken dead bodies) before they
     // are added to the scene. Called here in the binary, right after the memsets.
-    CG_PlayerTeamSkins(cent, &legs, &torso, &head);
+    enemy = CG_PlayerTeamSkins(cent, &legs, &torso, &head);
 
     // get the rotation information
     CG_PlayerAngles(cent, legs.axis, torso.axis, head.axis);
@@ -3235,11 +3236,13 @@ void CG_Player(centity_t* cent) {
                                cgs.media.nightmareSound);
     }
 
-    // [ioquakelive] cg_xray: and seen through walls, for a demo or a spectator
-    if (CG_XrayAllowed()) {
-        CG_AddXray(&legs, ci->team);
-        CG_AddXray(&torso, ci->team);
-        CG_AddXray(&head, ci->team);
+    // [ioquakelive] cg_xray: an enemy's outline through walls, for a demo or a spectator, in the
+    // colour its model was given; not the player being watched, nor a body
+    if (CG_XrayAllowed() && enemy && !(cent->currentState.eFlags & EF_DEAD) &&
+        cent->currentState.number != cg.snap->ps.clientNum) {
+        CG_AddXray(&legs, torso.shaderRGBA);
+        CG_AddXray(&torso, torso.shaderRGBA);
+        CG_AddXray(&head, torso.shaderRGBA);
     }
 }
 

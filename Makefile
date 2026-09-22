@@ -1587,7 +1587,6 @@ Q3OBJ = \
   $(B)/client/l_struct.o \
   \
   $(B)/client/sdl_input.o \
-  $(B)/client/sdl_snd.o \
   \
   $(B)/client/con_log.o \
   $(B)/client/sys_autoupdater.o \
@@ -1596,14 +1595,17 @@ Q3OBJ = \
 
 ifdef MINGW
   Q3OBJ += \
-    $(B)/client/con_passive.o
+    $(B)/client/con_passive.o \
+    $(B)/client/win_snd.o
 else
 ifeq ($(PLATFORM),emscripten)
   Q3OBJ += \
-    $(B)/client/con_passive.o
+    $(B)/client/con_passive.o \
+    $(B)/client/sdl_snd.o
 else
   Q3OBJ += \
-    $(B)/client/con_tty.o
+    $(B)/client/con_tty.o \
+    $(B)/client/sdl_snd.o
 endif
 endif
 

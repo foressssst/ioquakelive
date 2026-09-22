@@ -1360,8 +1360,9 @@ void IN_Frame(void) {
             SDL_GetMouseState(&mx, &my);
             Com_QueueEvent(in_eventTime, SE_MOUSE_ABS, (int)mx, (int)my, 0, NULL);
         }
-    } else if (Key_GetCatcher() & KEYCATCH_UI) {
-        // [ioquakelive] A menu is up. Quake Live has no cursor of its own out there: it
+    } else if (Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CGAME)) {
+        // [ioquakelive] A menu is up, the UI's or cgame's (the join menu, the end-of-match
+        // board, the demo controls). Quake Live has no cursor of its own out there: it
         // lets go of the mouse and you move the one the system draws, fullscreen included,
         // so the pointer is passed as qfalse rather than the real mode.
         IN_DeactivateMouse(qfalse);
@@ -1513,6 +1514,8 @@ IN_Shutdown
 ===============
 */
 void IN_Shutdown(void) {
+    Cmd_RemoveCommand("inputrate");
+
     SDL_StopTextInput(SDL_window);
 
     IN_DeactivateMouse(Cvar_VariableIntegerValue("r_fullscreen") != 0);

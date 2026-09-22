@@ -229,7 +229,7 @@ static void GLimp_DetectAvailableModes(void) {
 
     if (*buf) {
         buf[strlen(buf) - 1] = 0;
-        ri.Printf(PRINT_ALL, "Available modes: '%s'\n", buf);
+        ri.Printf(PRINT_DEVELOPER, "Available modes: '%s'\n", buf);
         ri.Cvar_Set("r_availableModes", buf);
     }
     SDL_free(modes);
@@ -499,7 +499,7 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
         desktopMode = *desktop;
         displayAspect = (float)desktopMode.w / (float)desktopMode.h;
 
-        ri.Printf(PRINT_ALL, "Display aspect: %.3f\n", displayAspect);
+        ri.Printf(PRINT_DEVELOPER, "Display aspect: %.3f\n", displayAspect);
     } else {
         Com_Memset(&desktopMode, 0, sizeof(SDL_DisplayMode));
 
@@ -847,7 +847,7 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
 
         glConfig.colorBits = realColorBits[0] + realColorBits[1] + realColorBits[2];
 
-        ri.Printf(PRINT_ALL, "Using %d color bits, %d depth, %d stencil display.\n",
+        ri.Printf(PRINT_DEVELOPER, "Using %d color bits, %d depth, %d stencil display.\n",
                   glConfig.colorBits, glConfig.depthBits, glConfig.stencilBits);
         break;
     }
@@ -922,7 +922,7 @@ static qboolean GLimp_StartDriverAndSetMode(int mode, int fullscreen, qboolean n
         }
 
         driverName = SDL_GetCurrentVideoDriver();
-        ri.Printf(PRINT_ALL, "SDL using driver \"%s\"\n", driverName);
+        ri.Printf(PRINT_DEVELOPER, "SDL using driver \"%s\"\n", driverName);
         ri.Cvar_Set("r_sdlDriver", driverName);
     }
 

@@ -2451,7 +2451,6 @@ static void VertexLightingCollapse( void ) {
 	shaderStage_t	*bestStage;
 	int		bestImageRank;
 	int		rank;
-	qboolean vertexColors;
 
 	// if we aren't opaque, just use the first pass
 	if ( shader.sort == SS_OPAQUE ) {
@@ -2459,7 +2458,6 @@ static void VertexLightingCollapse( void ) {
 		// pick the best texture for the single pass
 		bestStage = &stages[0];
 		bestImageRank = -999999;
-		vertexColors = qfalse;
 
 		for ( stage = 0; stage < MAX_SHADER_STAGES; stage++ ) {
 			shaderStage_t *pStage = &stages[stage];
@@ -2486,11 +2484,6 @@ static void VertexLightingCollapse( void ) {
 				bestImageRank = rank;
 				bestStage = pStage;
 			}
-
-			// detect missing vertex colors on ojfc-17 for green/dark pink flags
-			if ( pStage->rgbGen != CGEN_IDENTITY || pStage->bundle[0].tcGen == TCGEN_LIGHTMAP || pStage->stateBits & GLS_ATEST_BITS ) {
-				vertexColors = qtrue;
-			}
 		}
 
 		stages[0].bundle[0] = bestStage->bundle[0];
@@ -2499,11 +2492,9 @@ static void VertexLightingCollapse( void ) {
 		if ( shader.lightmapIndex == LIGHTMAP_NONE ) {
 			stages[0].rgbGen = CGEN_LIGHTING_DIFFUSE;
 		} else {
-			if ( vertexColors ) {
-				stages[0].rgbGen = CGEN_EXACT_VERTEX;
-			} else {
-				stages[0].rgbGen = CGEN_IDENTITY_LIGHTING;
-			}
+			// [QL] 0x457f3a: always the vertex colours. Quake3e only took them when some stage
+			// looked vertex-coloured, and left the rest flat and bright under r_vertexLight
+			stages[0].rgbGen = CGEN_EXACT_VERTEX;
 		}
 		stages[0].alphaGen = AGEN_SKIP;
 	} else {
@@ -2767,6 +2758,17 @@ static shader_t *FinishShader( void ) {
 		}
 	}
 
+	//
+	// if we are in r_vertexLight mode, never use a lightmap texture
+	//
+	// [QL] 0x4581bd: not when the shader says novlcollapse, and not while the front end is up.
+	// Before Quake3e merges any stages, as retail collapses the ones the shader was written with
+	if ( stage > 1 && !shader.noVLcollapse && ( ( r_vertexLight->integer && !r_uiFullScreen->integer ) || glConfig.hardwareType == GLHW_PERMEDIA2 ) ) {
+		VertexLightingCollapse();
+		stage = 1;
+		hasLightmapStage = qfalse;
+	}
+
 	DetectNeeds();
 
 	// fix alphaGen flags to avoid redundant comparisons in R_ComputeColors()
@@ -2809,16 +2811,6 @@ static shader_t *FinishShader( void ) {
 				}
 			}
 		}
-	}
-
-	//
-	// if we are in r_vertexLight mode, never use a lightmap texture
-	//
-	// [QL] 0x4581bd: not when the shader says novlcollapse, and not while the front end is up
-	if ( stage > 1 && !shader.noVLcollapse && ( ( r_vertexLight->integer && !r_uiFullScreen->integer ) || glConfig.hardwareType == GLHW_PERMEDIA2 ) ) {
-		VertexLightingCollapse();
-		stage = 1;
-		hasLightmapStage = qfalse;
 	}
 
 	for ( i = 0; i < stage; i++ ) {

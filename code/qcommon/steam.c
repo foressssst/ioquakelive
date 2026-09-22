@@ -537,8 +537,9 @@ void Steam_GS_Init(void) {
     sv_vac = Cvar_Get("sv_vac", "1", CVAR_INIT);  // [QL] retail registers it like this
     sv_setSteamAccount = Cvar_Get("sv_setSteamAccount", "", CVAR_ARCHIVE);
 
-    // retail reads net_ip and net_port here and hands Steam the address it binds
-    if (NET_StringToAdr(Cvar_VariableString("net_ip"), &adr, NA_IP)) {
+    // retail reads net_ip and net_port here and hands Steam the address it binds. Before the
+    // network is up net_ip is still empty, which is every interface: nothing to resolve
+    if (Cvar_VariableString("net_ip")[0] && NET_StringToAdr(Cvar_VariableString("net_ip"), &adr, NA_IP)) {
         ip = (adr.ip[0] << 24) | (adr.ip[1] << 16) | (adr.ip[2] << 8) | adr.ip[3];
     }
     port = Cvar_VariableIntegerValue("net_port");

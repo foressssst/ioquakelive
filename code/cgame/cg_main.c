@@ -1269,7 +1269,9 @@ int CG_GetOvertimeCount(void) {
         timeUsed = cg.time;
     }
 
-    elapsed = (cgs.timelimit * 60000 - timeUsed + cgs.levelStartTime) / 1000;
+    // [QL] seconds past the time limit: retail divides by -1000 (the magic -0x10624dd3), and
+    // without the minus this counted overtimes while there was still time left
+    elapsed = (timeUsed - cgs.levelStartTime - cgs.timelimit * 60000) / 1000;
 
     if (elapsed <= 0) {
         return 0;
@@ -1948,6 +1950,7 @@ static void CG_RegisterGraphics(void) {
     cgs.media.spawnArmor2Shader = trap_R_RegisterShader("powerups/spawnArmor2");
     cgs.media.noPlayerClipShader = trap_R_RegisterShader("noPlayerClipShader");
     cgs.media.gooShader = trap_R_RegisterShader("powerups/goo");
+    cgs.media.xrayMaskShader = trap_R_RegisterShader("ioqlXrayMask");
     cgs.media.xrayShader = trap_R_RegisterShader("ioqlXray");
     // [QL] 0x100236e4: the markers drawn over the powerups
     cgs.media.powerupPoi[0] = trap_R_RegisterShader("gfx/2d/powerup/quad");

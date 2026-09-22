@@ -1960,17 +1960,25 @@ static void CG_ServerCommand(void) {
         return;
     }
 
-    // [QL] screenshot/record commands from server
+    // [QL] 0x1004a500, 0x1004a4a0, 0x1004a460: the server's captures, with the name it sends, and
+    // never while a demo plays: a server that records its matches left the command in the demo,
+    // and a recording started then took the file being played away
     if (!strcmp(cmd, "screenshot")) {
-        trap_SendConsoleCommand("screenshot\n");
+        if (!cg.demoPlayback) {
+            trap_SendConsoleCommand(va("screenshotJPEG \"%s\"\n", CG_Argv(1)));
+        }
         return;
     }
     if (!strcmp(cmd, "record")) {
-        trap_SendConsoleCommand("record\n");
+        if (!cg.demoPlayback) {
+            trap_SendConsoleCommand(va("record \"%s\"\n", CG_Argv(1)));
+        }
         return;
     }
     if (!strcmp(cmd, "stoprecord")) {
-        trap_SendConsoleCommand("stoprecord\n");
+        if (!cg.demoPlayback) {
+            trap_SendConsoleCommand("stoprecord; wait\n");
+        }
         return;
     }
 

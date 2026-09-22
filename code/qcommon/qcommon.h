@@ -727,6 +727,8 @@ void FS_Rename(const char* from, const char* to);
 
 void FS_Remove(const char* osPath);
 void FS_HomeRemove(const char* homePath);
+long FS_ReadCacheFile(const char* name, void** buffer);
+void FS_WriteCacheFile(const char* name, const void* buffer, int size);
 
 void FS_FilenameCompletion(const char* dir, const char* ext, qboolean stripExt, void (*callback)(const char* s), qboolean allowNonPureFilesOnDisk);
 
@@ -1174,6 +1176,8 @@ qboolean Sys_LocatePak0(const char *destDir);
 
 void Sys_SetDefaultHomePath(const char* path);
 char* Sys_DefaultHomePath(void);
+char* Sys_DefaultCachePath(void);
+qboolean Sys_RemoveDir(const char* path);
 const char* Sys_Dirname(char* path);
 const char* Sys_BinaryName(void);
 const char* Sys_Basename(char* path);

@@ -962,8 +962,6 @@ void CG_RegisterWeapon(int weaponNum) {
         case WP_CHAINGUN:
             weaponInfo->firingSound = trap_S_RegisterSound("sound/weapons/vulcan/wvulfire.ogg", qfalse);
             MAKERGB(weaponInfo->flashDlightColor, 1, 1, 0);
-            // [QL] 0x100510fd: its whine does not replace the shots
-            weaponInfo->loopFireSound = qtrue;
             weaponInfo->flashSound[0] =trap_S_RegisterSound("sound/weapons/vulcan/vulcanf1b.ogg", qfalse);
             weaponInfo->flashSound[1] = trap_S_RegisterSound("sound/weapons/vulcan/vulcanf2b.ogg", qfalse);
             weaponInfo->flashSound[2] = trap_S_RegisterSound("sound/weapons/vulcan/vulcanf3b.ogg", qfalse);
@@ -1551,6 +1549,46 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
     CG_RegisterWeapon(weaponNum);
     weapon = &cg_weapons[weaponNum];
 
+    // [QL] 0x10052477: the weapon's loops, for a player seen from outside or for the one being
+    // followed, whose playerState is PM_SPECTATOR and who has no body in the scene
+    if (!ps || ps->pm_type == PM_SPECTATOR) {
+        cent->pe.lightningFiring = qfalse;
+        cent->pe.continuousFiring = qfalse;
+        if ((cent->currentState.eFlags & EF_FIRING) && weapon->firingSound) {
+            // lightning gun and guantlet make a different sound when fire is held down, and the
+            // grapple another once it holds
+            if (VectorCompare(cg.snap->ps.grapplePoint, vec3_origin)) {
+                trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin,
+                                       weapon->firingSound);
+            } else {
+                trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin,
+                                       weapon->pullSound);
+            }
+            if (weaponNum == WP_LIGHTNING) {
+                cent->pe.lightningFiring = qtrue;
+            }
+            // [QL] 0x1005254b: this one asks the predicted player's weapon, not the entity's
+            if (cg.predictedPlayerState.weapon == WP_GRAPPLING_HOOK) {
+                cent->pe.lightningFiring = qtrue;
+            }
+        } else if (weapon->readySound) {
+            trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin, weapon->readySound);
+        }
+        // [QL] 0x10052587: the predicted player's weapon too
+        if (cent->currentState.eFlags & EF_FIRING) {
+            switch (cg.predictedPlayerState.weapon) {
+                case WP_MACHINEGUN:
+                case WP_PLASMAGUN:
+                case WP_CHAINGUN:
+                case WP_HMG:
+                    cent->pe.continuousFiring = qtrue;
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
     // add the weapon
     memset(&gun, 0, sizeof(gun));
     VectorCopy(parent->lightingOrigin, gun.lightingOrigin);
@@ -1581,23 +1619,6 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
     gun.hModel = weapon->weaponModel;
     if (!gun.hModel) {
         return;
-    }
-
-    // [ioquakelive] the flag is always cleared, in first person too. The sound loop is only for
-    // other players -- you do not hear yourself from the outside -- but CG_FireWeapon reads the
-    // flag to silence the shot of a weapon that already hums on its own, and unless it is
-    // cleared here it stays stuck from the last time somebody else was seen firing. That was
-    // why the gauntlet's punch made no sound.
-    cent->pe.lightningFiring = qfalse;
-    if ((cent->currentState.eFlags & EF_FIRING) && weapon->firingSound) {
-        // lightning gun and guantlet make a different sound when fire is held down
-        if (!ps) {
-            trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin,
-                                   weapon->firingSound);
-        }
-        cent->pe.lightningFiring = qtrue;
-    } else if (!ps && weapon->readySound) {
-        trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin, weapon->readySound);
     }
 
     // [ioquakelive] The weapon goes where the model's tag says, and nowhere else. cg_drawGun 2
@@ -1746,7 +1767,8 @@ void CG_AddViewWeapon(playerState_t* ps) {
     vec3_t angles;
     weaponInfo_t* weapon;
 
-    if (ps->persistant[PERS_TEAM] == TEAM_SPECTATOR) {
+    // [QL] 0x10052d0a: a free spectator has no gun; one who follows has the followed player's
+    if (ps->pm_type == PM_SPECTATOR && !(ps->pm_flags & PMF_FOLLOW)) {
         return;
     }
 
@@ -1771,12 +1793,39 @@ void CG_AddViewWeapon(playerState_t* ps) {
     // allow the gun to be completely removed
     if (!cg_drawGun.integer) {
         vec3_t origin;
+        sfxHandle_t sfx;
+
+        if (ps->pm_type == PM_SPECTATOR) {
+            cg.predictedPlayerEntity.pe.lightningFiring = qfalse;
+            cg.predictedPlayerEntity.pe.continuousFiring = qfalse;
+        }
 
         if (cg.predictedPlayerState.eFlags & EF_FIRING) {
             // special hack for lightning gun...
             VectorCopy(cg.refdef.vieworg, origin);
             VectorMA(origin, -8, cg.refdef.viewaxis[2], origin);
             CG_LightningBolt(&cg_entities[ps->clientNum], origin);
+        }
+
+        // [QL] 0x10052e28: the followed player's loops, as nothing else adds them. Any weapon held
+        // down counts as humming here, so its shots stay quiet
+        if (ps->pm_type != PM_SPECTATOR) {
+            return;
+        }
+        CG_RegisterWeapon(ps->weapon);
+        weapon = &cg_weapons[ps->weapon];
+        if (cg.predictedPlayerState.eFlags & EF_FIRING) {
+            cg.predictedPlayerEntity.pe.lightningFiring = qtrue;
+            sfx = weapon->pullSound;
+            if (!sfx || VectorCompare(cg.snap->ps.grapplePoint, vec3_origin)) {
+                sfx = weapon->firingSound;
+            }
+        } else {
+            sfx = weapon->readySound;
+        }
+        if (sfx) {
+            trap_S_AddLoopingSound(cg.predictedPlayerEntity.currentState.number,
+                                   cg.predictedPlayerEntity.lerpOrigin, vec3_origin, sfx);
         }
         return;
     }
@@ -2304,21 +2353,13 @@ void CG_FireWeapon(centity_t* cent) {
     // append the flash to the weapon model
     cent->muzzleFlashTime = cg.time;
 
-    if (ent->weapon == WP_RAILGUN) {
-        cent->pe.railFireTime = cg.time;
-    }
-
-    // [QL] resolve the non-predicted centity (EF_NODRAW players are drawn from
-    // cg_entities[number]). A weapon whose looping sound replaces its shots, the lightning gun and the
-    // gauntlet, plays nothing else while it fires; the chaingun's whine sounds under its shots
-    // (loopFireSound, 0x100510fd), so it keeps them, and its brass and quad sound with them.
+    // [QL] 0x10053e10: a shot that came as a player event is looked up on its player. While the
+    // lightning gun hums there is no shot sound, brass or quad (0x10053e32)
     nonPredictedCent = cent;
-    if (ent->eFlags & EF_NODRAW) {
+    if (ent->eFlags & EF_PLAYER_EVENT) {
         nonPredictedCent = &cg_entities[ent->number];
     }
-    // [QL] 0x10053e2a: retail looks at this flag alone. The gauntlet does not qualify because
-    // its swing is a shot with a sound of its own, not the lightning gun's hum.
-    if (nonPredictedCent->pe.lightningFiring && ent->weapon != WP_GAUNTLET) {
+    if (nonPredictedCent->pe.lightningFiring) {
         return;
     }
 
@@ -2340,20 +2381,11 @@ void CG_FireWeapon(centity_t* cent) {
         weap->ejectBrassFunc(cent);
     }
 
-    // play quad sound if needed, rate-limited so continuous-fire weapons don't spam it
-    if (cent->currentState.powerups & (1 << PW_QUAD)) {
-        // [QL] binary gates this on (pe.barrelSpinning2 == 0 || cg.time - lastQuad > 999).
-        // ioquakelive's playerEntity_t has no barrelSpinning2 flag (binary pe offset
-        // 0x298), so approximate it: continuous-fire weapons (MG/plasma/CG/HMG while
-        // firing) get the 999 ms cooldown; every other weapon plays unthrottled.
-        qboolean continuousFire =
-            (nonPredictedCent->currentState.eFlags & EF_FIRING) &&
-            (ent->weapon == WP_MACHINEGUN || ent->weapon == WP_PLASMAGUN ||
-             ent->weapon == WP_CHAINGUN || ent->weapon == WP_HMG);
-        if (!continuousFire || cg.time - lastQuadSoundTime > 999) {
-            trap_S_StartSound(NULL, cent->currentState.number, CHAN_ITEM, cgs.media.quadSound);
-            lastQuadSoundTime = cg.time;
-        }
+    // play quad sound if needed, once a second while a rapid-fire weapon is held down (0x10053e98)
+    if ((!nonPredictedCent->pe.continuousFiring || cg.time - lastQuadSoundTime > 999) &&
+        (cent->currentState.powerups & (1 << PW_QUAD))) {
+        trap_S_StartSound(NULL, cent->currentState.number, CHAN_ITEM, cgs.media.quadSound);
+        lastQuadSoundTime = cg.time;
     }
 }
 

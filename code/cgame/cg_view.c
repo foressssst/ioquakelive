@@ -1249,10 +1249,6 @@ void CG_DrawAdvertisements(void) {
     if (!cgs.adsLoaded) {
         trap_Get_Advertisements(&cgs.numAds, cgs.adverts, cgs.adShaders);
         cgs.adsLoaded = qtrue;
-        Com_Printf("ads: %d\n", cgs.numAds);
-        for (i = 0; i < cgs.numAds; i++) {
-            Com_Printf("ad %d: '%s'\n", i + 1, cgs.adShaders[i]);
-        }
     }
 
     if (cg.hyperspace || cgs.numAds <= 0) {
@@ -1508,6 +1504,9 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
 
     // [QL] duel spectator weapon-stats overlay
     CG_DrawDuelWeaponStats();
+
+    // [ioquakelive] the pointer over the demo controls
+    CG_DemoCursorFrame();
 
     if (cg_stats.integer) {
         CG_Printf("cg.clientFrame:%i\n", cg.clientFrame);

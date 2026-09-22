@@ -169,6 +169,46 @@ char* Sys_DefaultHomePath(void) {
 
 /*
 ================
+Sys_DefaultCachePath
+
+[ioquakelive] what is kept only to load faster goes to %LOCALAPPDATA%, out of the game folder
+================
+*/
+char* Sys_DefaultCachePath(void) {
+    static char cachePath[MAX_OSPATH];
+    TCHAR szPath[MAX_PATH];
+    FARPROC qSHGetFolderPath;
+    HMODULE shfolder;
+
+    if (cachePath[0]) {
+        return cachePath;
+    }
+
+    shfolder = LoadLibrary("shfolder.dll");
+    if (shfolder == NULL) {
+        return NULL;
+    }
+    qSHGetFolderPath = GetProcAddress(shfolder, "SHGetFolderPathA");
+    if (qSHGetFolderPath && SUCCEEDED(qSHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, szPath))) {
+        Com_sprintf(cachePath, sizeof(cachePath), "%s%c%s", szPath, PATH_SEP,
+                    (com_homepath && com_homepath->string[0]) ? com_homepath->string : HOMEPATH_NAME_WIN);
+    }
+    FreeLibrary(shfolder);
+
+    return cachePath[0] ? cachePath : NULL;
+}
+
+/*
+================
+Sys_RemoveDir
+================
+*/
+qboolean Sys_RemoveDir(const char* path) {
+    return RemoveDirectoryA(path) ? qtrue : qfalse;
+}
+
+/*
+================
 Sys_SteamPath
 ================
 */

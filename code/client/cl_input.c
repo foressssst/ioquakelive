@@ -465,6 +465,9 @@ void CL_MouseAbsEvent(int x, int y) {
         Con_MousePosition(x, y);  // [ioquakelive] its links are clicked with it
     } else if (Key_GetCatcher() & KEYCATCH_UI) {
         VM_Call(uivm, UI_MOUSE_POSITION, x, y);
+    } else if (Key_GetCatcher() & KEYCATCH_CGAME) {
+        // [QL] retail's cgame takes the pointer's position too (CG_MouseEvent, 0x1003c4f0)
+        VM_Call(cgvm, CG_MOUSE_EVENT, x, y);
     }
 }
 
@@ -476,7 +479,7 @@ void CL_MouseEvent(int dx, int dy, int time) {
     if (Key_GetCatcher() & KEYCATCH_UI) {
         VM_Call(uivm, UI_MOUSE_EVENT, dx, dy);
     } else if (Key_GetCatcher() & KEYCATCH_CGAME) {
-        VM_Call(cgvm, CG_MOUSE_EVENT, dx, dy);
+        // cgame is told where the pointer is instead (CL_MouseAbsEvent)
     } else if (!(Key_GetCatcher() & ~0x10)) {
         cl.mouseDx[0] += dx;
         cl.mouseDy[0] += dy;

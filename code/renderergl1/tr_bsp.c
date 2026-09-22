@@ -551,7 +551,8 @@ static shader_t *ShaderForShaderNum( const int shaderNum, int lightmapNum ) {
 
 	dsh = &s_worldData.shaders[ shaderNum ];
 
-	if ( ( r_vertexLight->integer && tr.vertexLightingAllowed ) || glConfig.hardwareType == GLHW_PERMEDIA2 ) {
+	// [QL] 0x438d80: r_vertexLight alone decides, as in Quake 3
+	if ( r_vertexLight->integer || glConfig.hardwareType == GLHW_PERMEDIA2 ) {
 		lightmapNum = LIGHTMAP_BY_VERTEX;
 	}
 
@@ -2251,7 +2252,8 @@ static void R_LoadEntities( const lump_t *l ) {
 				break;
 			}
 			*vs++ = '\0';
-			if ( r_vertexLight->integer && tr.vertexLightingAllowed ) {
+			// [QL] 0x43bdf4: whenever r_vertexLight is on
+			if ( r_vertexLight->integer ) {
 				RE_RemapShader(value, s, "0");
 			}
 			continue;

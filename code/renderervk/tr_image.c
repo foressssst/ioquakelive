@@ -1278,12 +1278,12 @@ void R_ImageLoadStatsReport( void ) {
 	if ( !r_imageCount ) {
 		return;
 	}
-	ri.Printf( PRINT_ALL, "shaders: %i asked, %.2f s of which %.2f s is their images\n",
+	ri.Printf( PRINT_DEVELOPER, "shaders: %i asked, %.2f s of which %.2f s is their images\n",
 		r_shaderFindCount, r_shaderFindUs / 1000000.0f,
 		( r_imageDecodeUs + r_imageUploadUs ) / 1000000.0f );
-	ri.Printf( PRINT_ALL, "  %i were already loaded and cost %.2f s just to look up\n",
+	ri.Printf( PRINT_DEVELOPER, "  %i were already loaded and cost %.2f s just to look up\n",
 		r_shaderCachedCount, r_shaderCachedUs / 1000000.0f );
-	ri.Printf( PRINT_ALL, "images: %i loaded, %.2f s reading, %.2f s decoding, %.2f s uploading\n",
+	ri.Printf( PRINT_DEVELOPER, "images: %i loaded, %.2f s reading, %.2f s decoding, %.2f s uploading\n",
 		r_imageCount, r_imageReadUs / 1000000.0f,
 		( r_imageDecodeUs - r_imageReadUs ) / 1000000.0f, r_imageUploadUs / 1000000.0f );
 }
@@ -1493,7 +1493,7 @@ void R_PrefetchStart( const char *listName ) {
 		return;
 	}
 	R_PrefetchFile( listName, fileName, sizeof( fileName ) );
-	len = ri.FS_ReadFile( fileName, (void **)&text );
+	len = ri.FS_ReadCacheFile( fileName, (void **)&text );
 	if ( len <= 0 || !text ) {
 		return;
 	}
@@ -1535,7 +1535,7 @@ void R_PrefetchFinish( void ) {
 	int		i;
 
 	if ( r_prefetchCount || r_prefetchHits ) {
-		ri.Printf( PRINT_ALL, "prefetch: %i ready, %i not listed, %i listed, %.2f s waiting\n",
+		ri.Printf( PRINT_DEVELOPER, "prefetch: %i ready, %i not listed, %i listed, %.2f s waiting\n",
 			r_prefetchHits, r_prefetchMisses, r_prefetchCount, r_prefetchWaitUs / 1000000.0f );
 	}
 
@@ -1565,7 +1565,7 @@ void R_PrefetchFinish( void ) {
 		Q_strcat( text, size + 1, "\n" );
 	}
 	R_PrefetchFile( r_prefetchList, fileName, sizeof( fileName ) );
-	ri.FS_WriteFile( fileName, text, (int)strlen( text ) );
+	ri.FS_WriteCacheFile( fileName, text, (int)strlen( text ) );
 	ri.Free( text );
 	r_loadedCount = 0;
 	r_prefetchList[0] = '\0';

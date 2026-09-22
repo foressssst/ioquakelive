@@ -4500,35 +4500,29 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
 }
 
 void CG_MouseEvent(int x, int y) {
-    int n;
     float xscale43;
+    int n;
     int bias;
 
-    // [QL] cgamex86.dll CG_MouseEvent (0x1003c4f0) has no early-out at all: it just
-    // converts the pointer into 640x480 space, honouring widescreenBias, and stores
-    // cursorX/cursorY. Quake 3's bail-out used to sit here and dropped the key catcher
-    // on the first mouse move, which tore the menu across the screen at two widths.
-    //
-    // The body below is a deliberate replica of the UI module's _UI_MouseEvent
-    // (ui_main.c). Retail resolves menu input in the QL engine, which is not in
-    // bin.pk3, so there is no binary to copy for this half - but the UI module is a
-    // working implementation of exactly this against exactly this engine, and cgame
-    // had drifted from it. Keep the two in step.
-
-    // Convert the widescreen bias into 640-space. CG_AdjustFrom640 maps a 640 x to
-    // `x * xscale43 + widescreenBias`, so the on-screen span [0, vidWidth] corresponds
-    // to [-bias640, 640 + bias640]. Clamping to [0, 640] like before left the cursor
-    // unable to reach either edge of a widescreen display.
+    // [QL] cgamex86.dll CG_MouseEvent (0x1003c4f0) has no early-out at all: the engine hands it
+    // where the pointer is, in window pixels, and it converts that into 640x480, honouring
+    // widescreenBias, and stores cursorX/cursorY. The pointer is the one the system draws, as
+    // over the UI's menus (_UI_MousePosition does the same sums); cgame draws none of its own.
+    // CG_AdjustFrom640 maps a 640 x to `x * xscale43 + widescreenBias`, so the on-screen span
+    // [0, vidWidth] is [-bias640, 640 + bias640] here.
     xscale43 = (4.0f * cgs.glconfig.vidHeight / 3.0f) / (float)SCREEN_WIDTH;
-    bias = (xscale43 > 0.0f) ? (int)(cgs.widescreenBias / xscale43) : 0;
+    if (xscale43 <= 0.0f || cgs.screenYScale <= 0.0f) {
+        return;
+    }
+    bias = (int)(cgs.widescreenBias / xscale43);
 
-    cgs.cursorX += x;
+    cgs.cursorX = (int)((x - cgs.widescreenBias) / xscale43);
     if (cgs.cursorX < -bias)
         cgs.cursorX = -bias;
     else if (cgs.cursorX > SCREEN_WIDTH + bias)
         cgs.cursorX = SCREEN_WIDTH + bias;
 
-    cgs.cursorY += y;
+    cgs.cursorY = (int)(y / cgs.screenYScale);
     if (cgs.cursorY < 0)
         cgs.cursorY = 0;
     else if (cgs.cursorY > SCREEN_HEIGHT)
@@ -4544,18 +4538,10 @@ void CG_MouseEvent(int x, int y) {
 
     // The shared menu code hit-tests against DC->cursorx/cursory, not against the
     // coordinates handed to Display_MouseMove - see Menu_HandleKey's
-    // Rect_ContainsWidescreenPoint call - so the accumulated position has to be
-    // published here. Retail's CG_MouseEvent (0x1003c4f0) receives an absolute
-    // position and assigns cursorX/cursorY straight away; ioquake3's engine sends
-    // deltas, so the fork accumulates first and publishes after.
+    // Rect_ContainsWidescreenPoint call.
     cgDC.cursorx = cgs.cursorX;
     cgDC.cursory = cgs.cursorY;
 
-    // [QL] _UI_MouseEvent guards this with Menu_Count(), and hands the shared code the
-    // accumulated position rather than the raw delta. cgame's own capturedItem
-    // bookkeeping is gone: ui_shared already tracks a captured item in its own
-    // `itemCapture` and Menu_HandleKey drives it, so the parallel copy here only ever
-    // diverged from it.
     if (Menu_Count() > 0) {
         Display_MouseMove(NULL, cgs.cursorX, cgs.cursorY);
     }
@@ -4603,6 +4589,11 @@ void CG_EventHandling(int type) {
 
 void CG_KeyEvent(int key, qboolean down) {
     menuDef_t* menu;
+
+    // [ioquakelive] the demo controls take the left button while their pointer is up
+    if (CG_DemoHUDKey(key, down)) {
+        return;
+    }
 
     // [QL] cgamex86.dll 0x1003c6f0. While a cgame menu holds the keys (the join menu, the
     // end-of-match scoreboard) the engine runs no key-down binds, so retail forwards the

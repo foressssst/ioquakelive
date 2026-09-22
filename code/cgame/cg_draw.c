@@ -166,7 +166,7 @@ static float CG_FontPixelSize(float scale) {
 // Horizontal scale mapping 640-space x to screen pixels, honouring widescreen.
 static float CG_TextXScale(void) {
 	int ws = cg_currentWidescreen;
-	if (cgs.widescreenBias > 0.0f && (ws != 0 || (trap_Key_GetCatcher() & KEYCATCH_CGAME)))
+	if (cgs.widescreenBias > 0.0f && (ws != 0 || CG_MenuHoldsKeys()))
 		return (cgs.glconfig.vidHeight * 4.0f / 3.0f) / 640.0f;
 	return cgs.screenXScale;
 }
@@ -177,8 +177,8 @@ static void CG_TextToScreen(float* x, float* y) {
 	float xscale = CG_TextXScale();
 	float xbias = 0.0f;
 	int ws = cg_currentWidescreen;
-	if (cgs.widescreenBias > 0.0f && (ws != 0 || (trap_Key_GetCatcher() & KEYCATCH_CGAME))) {
-		if (ws == 2 || (trap_Key_GetCatcher() & KEYCATCH_CGAME))
+	if (cgs.widescreenBias > 0.0f && (ws != 0 || CG_MenuHoldsKeys())) {
+		if (ws == 2 || CG_MenuHoldsKeys())
 			xbias = cgs.widescreenBias;
 		else if (ws == 3)
 			xbias = cgs.widescreenBias * 2.0f;
@@ -1414,6 +1414,13 @@ static void CG_DrawDisconnect(void) {
 	const char* s;
 	int w;
 
+	// [ioquakelive] never in a demo: retail's engine makes no commands while one plays, so
+	// this could not fire there; ours makes them for the free camera, and a pause looked like
+	// a dropped connection
+	if (cg.demoPlayback) {
+		return;
+	}
+
 	// draw the phone jack if we are completely past our buffers
 	cmdNum = trap_GetCurrentCmdNumber() - CMD_BACKUP + 1;
 	trap_GetUserCmd(cmdNum, &cmd);
@@ -2576,22 +2583,6 @@ static void CG_StartMenuCursor(void) {
 	}
 }
 
-/*
-=================
-CG_DrawMenuCursor
-
-The pointer over a cgame menu that holds the keys. Retail's engine draws it; this one does not,
-and nothing in cgame read cgs.activeCursor, so the pointer was invisible on every cgame-owned
-menu. Drawn with the same 16-pixel centring the UI module uses (ui_main.c:524) so the two look
-alike. CG_DrawPic runs the coordinates through CG_AdjustFrom640, the mapping the menu itself
-just used, so the arrow lands where the cursor actually is.
-=================
-*/
-static void CG_DrawMenuCursor(void) {
-	CG_DrawPic(cgs.cursorX - 16, cgs.cursorY - 16, 32, 32,
-	           cgs.activeCursor ? cgs.activeCursor : cgs.media.selectCursor);
-}
-
 // [QL] the scoreboard menus CG_DrawScoreboard closes by name (0x10068fd8..0x100691f4)
 static const char *cg_inGameScoreboards[] = {
 	"score_menu", "teamscore_menu", "score_menu_ffa", "score_menu_duel", "score_menu_race",
@@ -2672,10 +2663,6 @@ static qboolean CG_DrawScoreboard(void) {
 			firstTime = qfalse;
 		}
 		Menu_Paint(menu, qtrue);
-
-		if (menu == menuEndScoreboard && (trap_Key_GetCatcher() & KEYCATCH_CGAME)) {
-			CG_DrawMenuCursor();
-		}
 	}
 
 	// load any models that have been deferred
@@ -3320,7 +3307,6 @@ void CG_UpdateJoinMenu(void) {
 	// [QL] 0x1000ea30: Menu_Paint(menuJoinGame, qtrue). Forced, because the
 	// normal Menu_PaintAll pass is skipped on this path.
 	Menu_Paint(menu, qtrue);
-	CG_DrawMenuCursor();
 }
 
 /*
@@ -3743,16 +3729,140 @@ toggles apart over its right end. Retail's own box is in HALLAZGOS.md.
 #define DEMOBAR_W	360
 #define DEMOBAR_Y	318
 #define DEMOBAR_H	56
+#define DEMOBAR_SPAN	(DEMOBAR_W - 20)	// the timeline, inside the box
+#define DEMOBAR_LINE	(DEMOBAR_Y + 21)
 
 static const vec4_t demoBack = { 0, 0, 0, 0.5f };		// retail's 0x10076344
 static const vec4_t demoTrack = { 1, 1, 1, 0.25f };
+static const vec4_t demoRestart = { 1, 1, 1, 0.5f };
+static const vec4_t demoGhost = { 1, 1, 1, 0.7f };
 
-// a retail button: the label, yellow when it is on, over its key in yellow, both centred on x
-static void CG_DrawDemoButton(float x, float y, const char *label, const char *key, qboolean on) {
+// what the last frame drew, for the mouse to find between frames
+#define MAX_DEMO_BUTTONS	16
+static struct {
+	float		x, y, w, h;
+	const char	*cmd;
+} demoButtons[MAX_DEMO_BUTTONS];
+static int		demoButtonCount;
+static int		demoLength;
+qboolean		cg_demoCursor;		// the cursor is ours: cgame holds the keys for it
+static qboolean	demoDragging;
+
+// a retail button: the label, yellow when it is on, over its key in yellow, both centred on x.
+// A command makes it clickable
+static void CG_DrawDemoButton(float x, float y, const char *label, const char *key, qboolean on,
+	const char *cmd) {
 	CG_DrawText(x - CG_DrawTextWidth(label, 0.25f, 0, 1) / 2, y, 1, 0.25f,
 		on ? colorYellow : colorWhite, (char *)label, 0, 0, 3);
 	CG_DrawText(x - CG_DrawTextWidth(key, 0.15f, 0, 1) / 2, y + 10, 1, 0.15f, colorYellow,
 		(char *)key, 0, 0, 3);
+	if (cmd && demoButtonCount < MAX_DEMO_BUTTONS) {
+		demoButtons[demoButtonCount].x = x - 17;
+		demoButtons[demoButtonCount].y = y - 9;
+		demoButtons[demoButtonCount].w = 34;
+		demoButtons[demoButtonCount].h = 22;
+		demoButtons[demoButtonCount].cmd = cmd;
+		demoButtonCount++;
+	}
+}
+
+// marks along the timeline, from a list of demo times
+static void CG_DrawDemoMarks(const char *cvar, int length, float y, float w, float h, const float *color) {
+	char		buf[MAX_STRING_CHARS];
+	const char	*p;
+	int			t;
+
+	trap_Cvar_VariableStringBuffer(cvar, buf, sizeof(buf));
+	for (p = buf; *p; ) {
+		t = atoi(p);
+		if (t > 0 && t < length) {
+			CG_FillRect(DEMOBAR_X + 10 + (float)DEMOBAR_SPAN * t / length - w / 2, y, w, h, color);
+		}
+		while (*p && *p != ' ') {
+			p++;
+		}
+		while (*p == ' ') {
+			p++;
+		}
+	}
+}
+
+static void CG_DemoTimeString(int ms, char *buf, int size) {
+	Com_sprintf(buf, size, "%d:%02d", ms / 60000, ms / 1000 % 60);
+}
+
+// the demo time under the cursor, on the timeline
+static int CG_DemoCursorTime(void) {
+	float f = (cgs.cursorX - (DEMOBAR_X + 10)) / (float)DEMOBAR_SPAN;
+
+	return (int)(Com_Clamp(0, 1, f) * demoLength);
+}
+
+/*
+=================
+CG_DemoCursorFrame
+
+[ioquakelive] while a demo plays with its controls up, and the free camera is not using the
+mouse, cgame holds the keys: the engine lets go of the mouse and the system's pointer works
+the controls, as over the menus
+=================
+*/
+void CG_DemoCursorFrame(void) {
+	qboolean	want = cg.demoPlayback && cg_drawDemoHUD.integer && cg_draw2D.integer &&
+		!cg_freecam.integer ? qtrue : qfalse;
+	int			catcher = trap_Key_GetCatcher();
+
+	if (want && !cg_demoCursor && !(catcher & ~KEYCATCH_CGAME)) {
+		if (!(catcher & KEYCATCH_CGAME)) {
+			trap_Key_SetCatcher(catcher | KEYCATCH_CGAME);
+		}
+		cg_demoCursor = qtrue;
+	} else if (!want && cg_demoCursor) {
+		if (catcher & KEYCATCH_CGAME) {
+			trap_Key_SetCatcher(catcher & ~KEYCATCH_CGAME);
+		}
+		cg_demoCursor = qfalse;
+		demoDragging = qfalse;
+	} else if (cg_demoCursor && !(catcher & KEYCATCH_CGAME)) {
+		cg_demoCursor = qfalse;	// Escape or a menu took it
+		demoDragging = qfalse;
+	}
+}
+
+/*
+=================
+CG_DemoHUDKey
+
+the left button over the controls: a button runs its command, and on the timeline it picks up
+the playhead, which goes where it is let go
+=================
+*/
+qboolean CG_DemoHUDKey(int key, qboolean down) {
+	int i;
+
+	if (!cg_demoCursor || key != K_MOUSE1) {
+		return qfalse;
+	}
+	if (!down) {
+		if (demoDragging) {
+			demoDragging = qfalse;
+			trap_SendConsoleCommand(va("seekdemo %.3f\n", CG_DemoCursorTime() / 1000.0f));
+		}
+		return qtrue;
+	}
+	if (demoLength && cgs.cursorX >= DEMOBAR_X + 4 && cgs.cursorX <= DEMOBAR_X + DEMOBAR_W - 4 &&
+		cgs.cursorY >= DEMOBAR_LINE - 9 && cgs.cursorY <= DEMOBAR_LINE + 9) {
+		demoDragging = qtrue;
+		return qtrue;
+	}
+	for (i = 0; i < demoButtonCount; i++) {
+		if (cgs.cursorX >= demoButtons[i].x && cgs.cursorX <= demoButtons[i].x + demoButtons[i].w &&
+			cgs.cursorY >= demoButtons[i].y && cgs.cursorY <= demoButtons[i].y + demoButtons[i].h) {
+			trap_SendConsoleCommand(demoButtons[i].cmd);
+			return qtrue;
+		}
+	}
+	return qtrue;
 }
 
 /*
@@ -3763,20 +3873,20 @@ Frozen, the middle button is Play and Advance joins it, as in retail; running, P
 Advance thaws cl_freezeDemo for two frames, so it counts as frozen for the first three running
 frames instead of flickering. The time is written as retail's 0x10001320 writes it. The
 timeline comes from the engine, in demo time, which runs on when a server starts its clock over:
-cl_demoPos, cl_demoLength and the match restarts in cl_demoMarks.
+cl_demoPos and cl_demoLength, the match restarts in cl_demoMarks and the watched player's frags
+in cl_demoFrags. The playhead is the yellow bar; the mouse drags it.
 =================
 */
 static void CG_DrawDemoHUD(void) {
 	static int		running;
 	char			buf[MAX_STRING_CHARS], speed[16];
-	const char		*p;
 	int				length, now, minutes, i, n;
-	float			seconds, x, w, span = DEMOBAR_W - 20;
+	float			seconds, x, w, step;
 	qboolean		frozen;
 	struct {
-		const char	*label, *key;
+		const char	*label, *key, *cmd;
 		qboolean	on;
-	} options[7];
+	} row[8];
 
 	if (trap_Cvar_VariableValue("cl_freezeDemo") <= 0) {
 		running++;
@@ -3790,6 +3900,8 @@ static void CG_DrawDemoHUD(void) {
 	length = atoi(buf);
 	trap_Cvar_VariableStringBuffer("cl_demoPos", buf, sizeof(buf));
 	now = Com_Clamp(0, length, atoi(buf));
+	demoLength = length;
+	demoButtonCount = 0;
 
 	CG_SetWidescreen(WIDESCREEN_CENTER);
 
@@ -3804,56 +3916,63 @@ static void CG_DrawDemoHUD(void) {
 		buf, 0, 0, 3);
 
 	if (length) {
-		Com_sprintf(buf, sizeof(buf), "%d:%02d", length / 60000, length / 1000 % 60);
+		CG_DemoTimeString(length, buf, sizeof(buf));
 		CG_DrawText(DEMOBAR_X + DEMOBAR_W - 10 - CG_DrawTextWidth(buf, 0.15f, 0, 1), DEMOBAR_Y + 15,
 			1, 0.15f, colorWhite, buf, 0, 0, 3);
 
-		CG_FillRect(DEMOBAR_X + 10, DEMOBAR_Y + 21, span, 3, demoTrack);
-		CG_FillRect(DEMOBAR_X + 10, DEMOBAR_Y + 21, span * now / length, 3, colorWhite);
-		trap_Cvar_VariableStringBuffer("cl_demoMarks", buf, sizeof(buf));
-		for (p = buf; *p; ) {
-			x = (float)atoi(p);
-			if (x > 0 && x < length) {
-				CG_FillRect(DEMOBAR_X + 10 + span * x / length - 0.5f, DEMOBAR_Y + 19, 1, 7, colorYellow);
-			}
-			while (*p && *p != ' ') {
-				p++;
-			}
-			while (*p == ' ') {
-				p++;
-			}
+		CG_FillRect(DEMOBAR_X + 10, DEMOBAR_LINE, DEMOBAR_SPAN, 3, demoTrack);
+		x = (float)DEMOBAR_SPAN * now / length;
+		CG_FillRect(DEMOBAR_X + 10, DEMOBAR_LINE, x, 3, colorWhite);
+		CG_DrawDemoMarks("cl_demoMarks", length, DEMOBAR_LINE - 2, 1, 7, demoRestart);
+		CG_DrawDemoMarks("cl_demoFrags", length, DEMOBAR_LINE + 4, 2, 3, colorRed);
+		// the playhead
+		CG_FillRect(DEMOBAR_X + 10 + x - 1, DEMOBAR_LINE - 4, 2, 11, colorYellow);
+
+		if (demoDragging) {
+			x = (float)DEMOBAR_SPAN * CG_DemoCursorTime() / length;
+			CG_FillRect(DEMOBAR_X + 10 + x - 1, DEMOBAR_LINE - 4, 2, 11, demoGhost);
+			CG_DemoTimeString(CG_DemoCursorTime(), buf, sizeof(buf));
+			CG_DrawText(DEMOBAR_X + 10 + x - CG_DrawTextWidth(buf, 0.15f, 0, 1) / 2, DEMOBAR_LINE - 6,
+				1, 0.15f, colorWhite, buf, 0, 0, 3);
 		}
 	}
 
+	n = 0;
+	row[n].label = "Start", row[n].key = "[HOME]", row[n].cmd = "seekdemo 0\n", row[n++].on = qfalse;
+	row[n].label = "-10s", row[n].key = "[PGDN]", row[n].cmd = "rewind 10\n", row[n++].on = qfalse;
+	row[n].label = frozen ? "Play" : "Pause", row[n].key = "[SPACE]", row[n].cmd = "toggle cl_freezeDemo\n",
+		row[n++].on = qfalse;
 	if (frozen) {
-		CG_DrawDemoButton(230, DEMOBAR_Y + 40, "Start", "[HOME]", qfalse);
-		CG_DrawDemoButton(275, DEMOBAR_Y + 40, "-10s", "[PGDN]", qfalse);
-		CG_DrawDemoButton(320, DEMOBAR_Y + 40, "Play", "[SPACE]", qfalse);
-		CG_DrawDemoButton(365, DEMOBAR_Y + 40, "Advance", "[RIGHT]", qfalse);
-		CG_DrawDemoButton(410, DEMOBAR_Y + 40, "+10s", "[PGUP]", qfalse);
-	} else {
-		CG_DrawDemoButton(245, DEMOBAR_Y + 40, "Start", "[HOME]", qfalse);
-		CG_DrawDemoButton(295, DEMOBAR_Y + 40, "-10s", "[PGDN]", qfalse);
-		CG_DrawDemoButton(345, DEMOBAR_Y + 40, "Pause", "[SPACE]", qfalse);
-		CG_DrawDemoButton(395, DEMOBAR_Y + 40, "+10s", "[PGUP]", qfalse);
+		row[n].label = "Advance", row[n].key = "[RIGHT]",
+			row[n].cmd = "timescale 1; cl_freezeDemo 0; wait; wait; cl_freezeDemo 1\n", row[n++].on = qfalse;
+	}
+	row[n].label = "+10s", row[n].key = "[PGUP]", row[n].cmd = "fastforward 10\n", row[n++].on = qfalse;
+	row[n].label = "Frag", row[n].key = "[F]", row[n].cmd = "fragforward\n", row[n++].on = qfalse;
+
+	step = frozen ? 45.0f : 50.0f;
+	for (i = 0; i < n; i++) {
+		CG_DrawDemoButton(320 + (i - (n - 1) / 2.0f) * step, DEMOBAR_Y + 40, row[i].label, row[i].key,
+			row[i].on, row[i].cmd);
 	}
 
-	// apart, over the right end of the playing box: the speed and the toggles
+	// apart, over the playing box and centred on it: the speed and the toggles
 	Com_sprintf(speed, sizeof(speed), "%0.1fx", cg_timescale.value);
 	n = 0;
-	options[n].label = "-", options[n].key = "[LEFT]", options[n++].on = qfalse;
-	options[n].label = speed, options[n].key = "", options[n++].on = cg_timescale.value != 1.0f;
-	options[n].label = "+", options[n].key = "[RIGHT]", options[n++].on = qfalse;
-	options[n].label = "1.0x", options[n].key = "[DOWN]", options[n++].on = qfalse;
-	options[n].label = "Cam", options[n].key = "[C]", options[n++].on = cg_freecam.integer ? qtrue : qfalse;
-	options[n].label = "X-ray", options[n].key = "[X]", options[n++].on = cg_xray.integer ? qtrue : qfalse;
-	options[n].label = "Hide", options[n].key = "[DEL]", options[n++].on = qfalse;
+	row[n].label = "-", row[n].key = "[LEFT]", row[n].cmd = "cvarAdd timescale -0.1\n", row[n++].on = qfalse;
+	row[n].label = speed, row[n].key = "", row[n].cmd = NULL, row[n++].on = cg_timescale.value != 1.0f;
+	row[n].label = "+", row[n].key = "[RIGHT]", row[n].cmd = "cvarAdd timescale 0.1\n", row[n++].on = qfalse;
+	row[n].label = "1.0x", row[n].key = "[DOWN]", row[n].cmd = "timescale 1\n", row[n++].on = qfalse;
+	row[n].label = "Cam", row[n].key = "[C]", row[n].cmd = "toggle cg_freecam\n",
+		row[n++].on = cg_freecam.integer ? qtrue : qfalse;
+	row[n].label = "X-ray", row[n].key = "[X]", row[n].cmd = "toggle cg_xray\n",
+		row[n++].on = cg_xray.integer ? qtrue : qfalse;
+	row[n].label = "Hide", row[n].key = "[DEL]", row[n].cmd = "toggle cg_drawDemoHUD\n", row[n++].on = qfalse;
 
 	w = 34.0f * n + 8;
-	CG_FillRect(DEMOBAR_X + DEMOBAR_W - w, DEMOBAR_Y - 30, w, 26, demoBack);
+	CG_FillRect(320 - w / 2, DEMOBAR_Y - 30, w, 26, demoBack);
 	for (i = 0; i < n; i++) {
-		CG_DrawDemoButton(DEMOBAR_X + DEMOBAR_W - w + 4 + 17 + 34 * i, DEMOBAR_Y - 17,
-			options[i].label, options[i].key, options[i].on);
+		CG_DrawDemoButton(320 - w / 2 + 4 + 17 + 34 * i, DEMOBAR_Y - 17, row[i].label, row[i].key,
+			row[i].on, row[i].cmd);
 	}
 
 	CG_SetWidescreen(WIDESCREEN_STRETCH);

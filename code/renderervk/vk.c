@@ -529,11 +529,11 @@ static void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice devi
 	VK_CHECK(qvkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &present_mode_count, present_modes));
 
 	if ( verbose ) {
-		ri.Printf( PRINT_ALL, "...presentation modes:" );
+		ri.Printf( PRINT_DEVELOPER, "...presentation modes:" );
 	}
 	for ( i = 0; i < present_mode_count; i++ ) {
 		if ( verbose ) {
-			ri.Printf( PRINT_ALL, " %s", pmode_to_str( present_modes[i] ) );
+			ri.Printf( PRINT_DEVELOPER, " %s", pmode_to_str( present_modes[i] ) );
 		}
 		if ( present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR )
 			mailbox_supported = qtrue;
@@ -543,7 +543,7 @@ static void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice devi
 			fifo_relaxed_supported = qtrue;
 	}
 	if ( verbose ) {
-		ri.Printf( PRINT_ALL, "\n" );
+		ri.Printf( PRINT_DEVELOPER, "\n" );
 	}
 
 	ri.Free( present_modes );
@@ -583,7 +583,7 @@ static void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice devi
 	}
 
 	if ( verbose ) {
-		ri.Printf( PRINT_ALL, "...selected presentation mode: %s, image count: %i\n", pmode_to_str( present_mode ), image_count );
+		ri.Printf( PRINT_DEVELOPER, "...selected presentation mode: %s, image count: %i\n", pmode_to_str( present_mode ), image_count );
 	}
 
 	// create swap chain
@@ -1635,7 +1635,7 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 	VkPhysicalDevice8BitStorageFeatures storage_8bit_features;
 #endif
 
-	ri.Printf( PRINT_ALL, "...selected physical device: %i\n", device_index );
+	ri.Printf( PRINT_DEVELOPER, "...selected physical device: %i\n", device_index );
 
 	// select surface format
 	if ( !vk_select_surface_format( physical_device, vk_surface ) ) {
@@ -2068,10 +2068,10 @@ static void init_vulkan_library( void )
 	// initial physical device index
 	device_index = r_device->integer;
 
-	ri.Printf( PRINT_ALL, ".......................\nAvailable physical devices:\n" );
+	ri.Printf( PRINT_DEVELOPER, ".......................\nAvailable physical devices:\n" );
 	for ( i = 0; i < device_count; i++ ) {
 		qvkGetPhysicalDeviceProperties( physical_devices[ i ], &props );
-		ri.Printf( PRINT_ALL, " %i: %s\n", i, renderer_name( &props ) );
+		ri.Printf( PRINT_DEVELOPER, " %i: %s\n", i, renderer_name( &props ) );
 		if ( device_index == -1 && props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ) {
 			device_index = i;
 		} else if ( device_index == -2 && props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ) {
@@ -4188,7 +4188,7 @@ void vk_initialize( void )
 		}
 
 		if ( maxDedicatedSize != 0 ) {
-			ri.Printf( PRINT_ALL, "...device memory size: %iMB\n", (int)((maxDedicatedSize + (1024 * 1024) - 1) / (1024 * 1024)) );
+			ri.Printf( PRINT_DEVELOPER, "...device memory size: %iMB\n", (int)((maxDedicatedSize + (1024 * 1024) - 1) / (1024 * 1024)) );
 		}
 		if ( maxBARSize != 0 ) {
 			if ( maxBARSize >= 128 * 1024 * 1024 ) {

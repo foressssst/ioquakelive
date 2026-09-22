@@ -709,25 +709,174 @@ static qboolean	demoSeekRestart;			// the next demo command is a seek going back
 ====================
 CL_DemoScan
 
-one pass over the file before it plays, reading only the start of each message: where each
-stretch of server time begins and how long it runs, and the times the match restarts, which
-the timeline marks
+one pass over the file before it plays: where each stretch of server time begins and how long
+it runs, the times the match restarts, and the frags of the player being watched, which the
+timeline marks and fragforward jumps to. The snapshots are read whole, as CL_ParseSnapshot reads
+them, into a parse state of the scan's own that is thrown away at the end
 ====================
 */
+typedef struct {
+	qboolean		valid;
+	int				messageNum;
+	playerState_t	ps;
+	int				numEntities;
+	int				parseEntitiesNum;
+} demoScanFrame_t;
+
+typedef struct {
+	entityState_t	baselines[MAX_GENTITIES];
+	entityState_t	parseEntities[MAX_PARSE_ENTITIES];
+	int				parseEntitiesNum;
+	demoScanFrame_t	frames[PACKET_BACKUP];
+	int				obituarySeen[MAX_GENTITIES];	// the last message whose snapshot carried it
+} demoScan_t;
+
+static void CL_DemoScanGamestate(msg_t *msg, demoScan_t *scan) {
+	entityState_t	nullstate;
+	int				cmd, num;
+
+	Com_Memset(&nullstate, 0, sizeof(nullstate));
+	Com_Memset(scan->baselines, 0, sizeof(scan->baselines));
+	// the frames before a gamestate are no base for a delta after it
+	Com_Memset(scan->frames, 0, sizeof(scan->frames));
+
+	MSG_ReadLong(msg);	// server command sequence
+	while (msg->readcount <= msg->cursize) {
+		cmd = MSG_ReadByte(msg);
+		if (cmd == svc_configstring) {
+			MSG_ReadShort(msg);
+			MSG_ReadBigString(msg);
+		} else if (cmd == svc_baseline) {
+			num = MSG_ReadBits(msg, GENTITYNUM_BITS);
+			if (num < 0 || num >= MAX_GENTITIES) {
+				return;
+			}
+			MSG_ReadDeltaEntity(msg, &nullstate, &scan->baselines[num], num);
+		} else {
+			break;	// svc_EOF
+		}
+	}
+	MSG_ReadLong(msg);	// client number
+	MSG_ReadLong(msg);	// checksum feed
+}
+
+// one entity into the scan's ring, as CL_DeltaEntity puts it into cl.parseEntities
+static void CL_DemoScanDelta(msg_t *msg, demoScan_t *scan, demoScanFrame_t *frame, int num,
+	entityState_t *from, qboolean unchanged) {
+	entityState_t *state = &scan->parseEntities[scan->parseEntitiesNum & (MAX_PARSE_ENTITIES - 1)];
+
+	if (unchanged) {
+		*state = *from;
+	} else {
+		MSG_ReadDeltaEntity(msg, from, state, num);
+	}
+	if (state->number == MAX_GENTITIES - 1) {
+		return;	// removed
+	}
+	scan->parseEntitiesNum++;
+	frame->numEntities++;
+}
+
+// the next entity of the frame being deltaed from, 99999 past its last
+static int CL_DemoScanNextOld(demoScan_t *scan, demoScanFrame_t *old, int *index, entityState_t **state) {
+	if (!old || ++*index >= old->numEntities) {
+		return 99999;
+	}
+	*state = &scan->parseEntities[(old->parseEntitiesNum + *index) & (MAX_PARSE_ENTITIES - 1)];
+	return (*state)->number;
+}
+
+// as CL_ParsePacketEntities; qfalse when the message runs out
+static qboolean CL_DemoScanEntities(msg_t *msg, demoScan_t *scan, demoScanFrame_t *old, demoScanFrame_t *frame) {
+	entityState_t	*oldstate = NULL;
+	int				oldindex = -1, oldnum, newnum;
+
+	frame->parseEntitiesNum = scan->parseEntitiesNum;
+	frame->numEntities = 0;
+	oldnum = CL_DemoScanNextOld(scan, old, &oldindex, &oldstate);
+
+	while (1) {
+		newnum = MSG_ReadBits(msg, GENTITYNUM_BITS);
+		if (newnum == MAX_GENTITIES - 1) {
+			break;
+		}
+		if (msg->readcount > msg->cursize) {
+			return qfalse;
+		}
+		while (oldnum < newnum) {
+			CL_DemoScanDelta(msg, scan, frame, oldnum, oldstate, qtrue);
+			oldnum = CL_DemoScanNextOld(scan, old, &oldindex, &oldstate);
+		}
+		if (oldnum == newnum) {
+			CL_DemoScanDelta(msg, scan, frame, newnum, oldstate, qfalse);
+			oldnum = CL_DemoScanNextOld(scan, old, &oldindex, &oldstate);
+		} else {
+			CL_DemoScanDelta(msg, scan, frame, newnum, &scan->baselines[newnum], qfalse);
+		}
+	}
+	while (oldnum != 99999) {
+		CL_DemoScanDelta(msg, scan, frame, oldnum, oldstate, qtrue);
+		oldnum = CL_DemoScanNextOld(scan, old, &oldindex, &oldstate);
+	}
+	return qtrue;
+}
+
+// as CL_ParseSnapshot: the frame it read, or NULL when it is no good
+static demoScanFrame_t *CL_DemoScanSnapshot(msg_t *msg, demoScan_t *scan, int seq, int *serverTime) {
+	static demoScanFrame_t	frame;
+	demoScanFrame_t			*old = NULL;
+	byte					areamask[MAX_MAP_AREA_BYTES];
+	int						delta, len;
+
+	*serverTime = MSG_ReadLong(msg);
+	delta = MSG_ReadByte(msg);
+	MSG_ReadByte(msg);	// snapFlags
+
+	Com_Memset(&frame, 0, sizeof(frame));
+	frame.messageNum = seq;
+	frame.valid = qtrue;
+	if (delta) {
+		old = &scan->frames[(seq - delta) & PACKET_MASK];
+		if (!old->valid || old->messageNum != seq - delta
+			|| scan->parseEntitiesNum - old->parseEntitiesNum > MAX_PARSE_ENTITIES - MAX_SNAPSHOT_ENTITIES) {
+			frame.valid = qfalse;
+		}
+	}
+
+	len = MSG_ReadByte(msg);
+	if (len > (int)sizeof(areamask)) {
+		return NULL;
+	}
+	MSG_ReadData(msg, areamask, len);
+	MSG_ReadDeltaPlayerstate(msg, old ? &old->ps : NULL, &frame.ps);
+	if (!CL_DemoScanEntities(msg, scan, old, &frame)) {
+		return NULL;
+	}
+
+	scan->frames[seq & PACKET_MASK] = frame;
+	return frame.valid ? &scan->frames[seq & PACKET_MASK] : NULL;
+}
+
 static void CL_DemoScan(const char *name) {
 	static byte		data[MAX_MSGLEN];
-	char			marks[MAX_STRING_CHARS];
+	char			marks[MAX_STRING_CHARS], frags[MAX_STRING_CHARS];
+	demoScan_t		*scan;
+	demoScanFrame_t	*frame;
+	entityState_t	*es;
 	fileHandle_t	f;
 	msg_t			buf;
-	int				seq, len, cmd, t, n, last = 0;
-	qboolean		mark = qfalse, gamestate = qfalse;
+	int				seq, len, cmd, t, n, i, last = 0, lastSeq = -1, start = Sys_Milliseconds();
+	qboolean		mark = qfalse, gamestate = qfalse, fresh;
 
 	demoStretches = 0;
 	marks[0] = '\0';
+	frags[0] = '\0';
 
+	scan = Z_Malloc(sizeof(*scan));
 	FS_FOpenFileRead(name, &f, qtrue);
 	if (f) {
 		while (FS_Read(&seq, 4, f) == 4 && FS_Read(&len, 4, f) == 4) {
+			seq = LittleLong(seq);
 			len = LittleLong(len);
 			if (len < 0 || len > MAX_MSGLEN || FS_Read(data, len, f) != len) {
 				break;	// -1 ends the demo; anything else is a damaged tail
@@ -750,40 +899,65 @@ static void CL_DemoScan(const char *name) {
 					continue;
 				}
 				if (cmd == svc_gamestate) {
+					CL_DemoScanGamestate(&buf, scan);
 					gamestate = qtrue;
-				} else if (cmd == svc_snapshot) {
-					t = MSG_ReadLong(&buf);
-					// a new stretch after a gamestate, or if the clock went back without one
-					if (!demoStretches || gamestate || t < last - 1000) {
-						if (demoStretches == MAX_DEMO_STRETCHES) {
-							break;
-						}
-						n = demoStretches++;
-						demoStretchStart[n] = t;
-						demoStretchLength[n] = 0;
-						demoStretchAt[n] = n ? demoStretchAt[n - 1] + demoStretchLength[n - 1] : 0;
-						mark = n ? qtrue : qfalse;
+					continue;
+				}
+				if (cmd != svc_snapshot) {
+					break;	// svc_EOF, or nothing the timeline needs
+				}
+				frame = CL_DemoScanSnapshot(&buf, scan, seq, &t);
+
+				// a new stretch after a gamestate, or if the clock went back without one
+				if (!demoStretches || gamestate || t < last - 1000) {
+					if (demoStretches == MAX_DEMO_STRETCHES) {
+						break;
 					}
-					gamestate = qfalse;
-					n = demoStretches - 1;
-					demoStretchLength[n] = t - demoStretchStart[n];
-					if (mark && strlen(marks) < sizeof(marks) - 16) {
-						Q_strcat(marks, sizeof(marks), va("%s%d", marks[0] ? " " : "",
+					n = demoStretches++;
+					demoStretchStart[n] = t;
+					demoStretchLength[n] = 0;
+					demoStretchAt[n] = n ? demoStretchAt[n - 1] + demoStretchLength[n - 1] : 0;
+					mark = n ? qtrue : qfalse;
+				}
+				gamestate = qfalse;
+				n = demoStretches - 1;
+				demoStretchLength[n] = t - demoStretchStart[n];
+				if (mark && strlen(marks) < sizeof(marks) - 16) {
+					Q_strcat(marks, sizeof(marks), va("%s%d", marks[0] ? " " : "",
+						demoStretchAt[n] + demoStretchLength[n]));
+				}
+				mark = qfalse;
+				last = t;
+
+				// a frag: an obituary new in this snapshot, with the watched player the killer.
+				// The event entity lives on for a few snapshots and counts in the first
+				for (i = 0; frame && i < frame->numEntities; i++) {
+					es = &scan->parseEntities[(frame->parseEntitiesNum + i) & (MAX_PARSE_ENTITIES - 1)];
+					if (es->eType != ET_EVENTS + EV_OBITUARY) {
+						continue;
+					}
+					fresh = scan->obituarySeen[es->number] != lastSeq ? qtrue : qfalse;
+					scan->obituarySeen[es->number] = seq;
+					if (fresh && es->otherEntityNum2 == frame->ps.clientNum
+						&& es->otherEntityNum != es->otherEntityNum2 && strlen(frags) < sizeof(frags) - 16) {
+						Q_strcat(frags, sizeof(frags), va("%s%d", frags[0] ? " " : "",
 							demoStretchAt[n] + demoStretchLength[n]));
 					}
-					mark = qfalse;
-					last = t;
 				}
-				break;	// nothing else the timeline needs is in the rest of the message
+				lastSeq = seq;
+				break;
 			}
 		}
 		FS_FCloseFile(f);
 	}
+	Z_Free(scan);
 
 	n = demoStretches - 1;
 	Cvar_Set("cl_demoLength", va("%d", demoStretches ? demoStretchAt[n] + demoStretchLength[n] : 0));
 	Cvar_Set("cl_demoMarks", marks);
+	Cvar_Set("cl_demoFrags", frags);
 	Cvar_Set("cl_demoPos", "0");
+	Com_DPrintf("demo scan: %d ms\n", Sys_Milliseconds() - start);
 }
 
 // demo time of what is on screen
@@ -876,7 +1050,7 @@ demo again and running through it
 static void CL_DemoSeek(int pos) {
 	int n;
 
-	if (!clc.demoplaying || clc.state != CA_ACTIVE || !demoStretches) {
+	if (!clc.demoplaying || !demoStretches) {
 		Com_Printf("no demo is playing\n");
 		return;
 	}
@@ -892,6 +1066,10 @@ static void CL_DemoSeek(int pos) {
 
 	demoSeekStretch = n;
 	demoSeekTarget = demoStretchStart[n] + pos - demoStretchAt[n];
+	// still starting, or starting over: at the top of the file, where every target is ahead
+	if (clc.state != CA_ACTIVE) {
+		return;
+	}
 	if (n != demoStretch || demoSeekTarget < cl.serverTime) {
 		// inserted, not appended: whatever else is queued runs after the demo is back
 		demoSeekRestart = qtrue;
@@ -943,6 +1121,32 @@ static void CL_FastForward_f(void) {
 	CL_DemoSeek(CL_DemoPos() + (int)(CL_SeekSeconds(10) * 1000));
 }
 
+// fragforward [seconds]: that long before the next frag of the player being watched, as WolfcamQL
+static void CL_FragForward_f(void) {
+	char		frags[MAX_STRING_CHARS];
+	const char	*p;
+	int			before = (int)(CL_SeekSeconds(3) * 1000);
+	int			now = CL_DemoPos();
+	int			t;
+
+	Cvar_VariableStringBuffer("cl_demoFrags", frags, sizeof(frags));
+	for (p = frags; *p; ) {
+		t = atoi(p);
+		// past the one it last jumped to
+		if (t - before > now + 500) {
+			CL_DemoSeek(t - before);
+			return;
+		}
+		while (*p && *p != ' ') {
+			p++;
+		}
+		while (*p == ' ') {
+			p++;
+		}
+	}
+	Com_Printf("no more frags\n");
+}
+
 // seekdemo <seconds> or <m:ss>, from the start of the demo
 static void CL_SeekDemo_f(void) {
 	const char *s = Cmd_Argv(1);
@@ -971,6 +1175,7 @@ void CL_PlayDemo_f(void) {
     char* ext_test;
     int protocol, i;
     char retry[MAX_OSPATH];
+    qboolean seekRestart;
 
     if (Cmd_Argc() != 2) {
         Com_Printf("demo <demoname>\n");
@@ -1024,14 +1229,18 @@ void CL_PlayDemo_f(void) {
 
     // [ioquakelive] a seek going back keeps its target through the restart; any other demo
     // drops it
+    seekRestart = demoSeekRestart;
     if (!demoSeekRestart) {
         demoSeekTarget = -1;
     }
     demoSeekRestart = qfalse;
     demoStretch = 0;
     demoLastSnap = -1;
-    Q_strncpyz(demoPath, name, sizeof(demoPath));
-    CL_DemoScan(name);
+    // a seek going back plays the same file again: what the scan found still holds
+    if (!seekRestart || Q_stricmp(demoPath, name)) {
+        Q_strncpyz(demoPath, name, sizeof(demoPath));
+        CL_DemoScan(name);
+    }
 
     Con_Close();
 
@@ -3058,6 +3267,8 @@ void CL_InitRef(void) {
     ri.FS_ListFiles = FS_ListFiles;
     ri.FS_FileIsInPAK = FS_FileIsInPAK;
     ri.FS_FileExists = FS_FileExists;
+    ri.FS_ReadCacheFile = FS_ReadCacheFile;
+    ri.FS_WriteCacheFile = FS_WriteCacheFile;
     ri.Cvar_Get = Cvar_Get;
     ri.Cvar_Set = Cvar_Set;
     ri.Cvar_SetValue = Cvar_SetValue;
@@ -3589,9 +3800,11 @@ void CL_Init(void) {
     Cmd_AddCommand("rewind", CL_Rewind_f);
     Cmd_AddCommand("fastforward", CL_FastForward_f);
     Cmd_AddCommand("seekdemo", CL_SeekDemo_f);
+    Cmd_AddCommand("fragforward", CL_FragForward_f);
     Cvar_Get("cl_demoLength", "0", CVAR_ROM);
     Cvar_Get("cl_demoPos", "0", CVAR_ROM);
     Cvar_Get("cl_demoMarks", "", CVAR_ROM);
+    Cvar_Get("cl_demoFrags", "", CVAR_ROM);
     Cmd_AddCommand("stoprecord", CL_StopRecord_f);
     Cmd_AddCommand("connect", CL_Connect_f);
     Cmd_AddCommand("reconnect", CL_Reconnect_f);
@@ -3667,6 +3880,10 @@ void CL_Shutdown(char* finalmsg, qboolean disconnect, qboolean quit) {
     Cmd_RemoveCommand("disconnect");
     Cmd_RemoveCommand("record");
     Cmd_RemoveCommand("demo");
+    Cmd_RemoveCommand("rewind");
+    Cmd_RemoveCommand("fastforward");
+    Cmd_RemoveCommand("seekdemo");
+    Cmd_RemoveCommand("fragforward");
     Cmd_RemoveCommand("stoprecord");
     Cmd_RemoveCommand("connect");
     Cmd_RemoveCommand("reconnect");

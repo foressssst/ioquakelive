@@ -454,13 +454,13 @@ static void CL_LoadProfileReport(float total) {
     for (i = 0; i < CL_LOAD_CATEGORIES; i++) {
         sum += cl_loadUs[i];
     }
-    Com_Printf("load: %.2f s, of which the cgame asked the engine for %.2f s\n", total,
+    Com_DPrintf("load: %.2f s, of which the cgame asked the engine for %.2f s\n", total,
                sum / 1000000.0f);
     for (i = 0; i < CL_LOAD_CATEGORIES; i++) {
         if (cl_loadUs[i] < 1000) {
             continue;
         }
-        Com_Printf("  %-17s %6.2f s   %5i calls\n", cl_loadNames[i], cl_loadUs[i] / 1000000.0f,
+        Com_DPrintf("  %-17s %6.2f s   %5i calls\n", cl_loadNames[i], cl_loadUs[i] / 1000000.0f,
                    cl_loadCalls[i]);
     }
 }
@@ -1032,13 +1032,23 @@ void CL_SetCGameTime(void) {
             return;
         }
         if (clc.demoplaying) {
+            int i;
+
             // we shouldn't get the first snapshot on the same frame
             // as the gamestate, because it causes a bad time skip
             if (!clc.firstDemoFrameSkipped) {
                 clc.firstDemoFrameSkipped = qtrue;
                 return;
             }
-            CL_ReadDemoMessage();
+            // [ioquakelive] the snapshots a recording starts with, from before its player was in
+            // the game, are read in one go up to the first that can be shown, not one a frame
+            for (i = 0; i < 4096 && clc.state == CA_PRIMED && clc.demoplaying; i++) {
+                CL_ReadDemoMessage();
+                if (cl.newSnapshots) {
+                    cl.newSnapshots = qfalse;
+                    CL_FirstSnapshot();
+                }
+            }
         }
         if (cl.newSnapshots) {
             cl.newSnapshots = qfalse;
@@ -1079,13 +1089,17 @@ void CL_SetCGameTime(void) {
 
     if (clc.demoplaying && cl_freezeDemo->integer) {
         // cl_freezeDemo is used to lock a demo in place for single frame advances
-
+        // [ioquakelive] and the clock waits with it: it used to run on underneath, and letting
+        // the demo go jumped it ahead by the whole pause
+        cl.serverTimeDelta = cl.serverTime - cls.realtime;
     } else {
         // [QL] timeNudge: disabled for spectators and LAN connections
         static int prevTimeNudge;
         int tn;
 
-        if (Cvar_VariableIntegerValue("cg_spectating") ||
+        // [ioquakelive] nor in a demo, where there is no lag to make up for and a frame
+        // advance has to be one frame
+        if (clc.demoplaying || Cvar_VariableIntegerValue("cg_spectating") ||
             Sys_IsLANAddress(clc.netchan.remoteAddress)) {
             tn = 0;
         } else if (cl_autoTimeNudge->integer == 0) {

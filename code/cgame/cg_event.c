@@ -1459,8 +1459,10 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             cent->currentState.weapon = WP_RAILGUN;
 
             // [QL] 0x1001b0bd: CG_CheckAutoFire already drew the local player's own shot,
-            // trail and impact, when it was predicted
-            if (!cg_nopredict.integer && !cg.renderingThirdPerson && cg_predictLocalRailshots.integer &&
+            // trail and impact, when it was predicted; never in a demo (0x1001b0c6), where
+            // nothing predicts it
+            if (!cg_nopredict.integer && !cg.demoPlayback && !cg.renderingThirdPerson &&
+                cg_predictLocalRailshots.integer &&
                 !(cg.snap && cg.snap->ps.pm_type == PM_SPECTATOR) &&
                 cg.predictedPlayerEntity.currentState.clientNum == es->clientNum) {
                 break;

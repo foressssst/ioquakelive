@@ -135,8 +135,7 @@ typedef struct {
     int painTime;
     int painDirection;  // flip from 0 to 1
     int lightningFiring;
-
-    int railFireTime;
+    qboolean continuousFiring;  // [QL] cent+0x298: firing while the watched weapon is MG, PG, CG or HMG
     vec3_t railgunImpact;   // [QL] cent+0x29c
     qboolean railgunFlash;  // [QL] cent+0x2a8; nothing sets it, as in Q3 (see CG_SpawnRailTrail)
 
@@ -595,12 +594,9 @@ typedef struct weaponInfo_s {
 
     sfxHandle_t readySound;
     sfxHandle_t firingSound;
-    // [QL] the weapon's third sound, +0x1c0 in the binary's weaponInfo_t: the grapple's
-    // is grpull. Where retail plays it is not identified yet
+    // [QL] the weapon's third sound, +0x1c0 in the binary's weaponInfo_t: the grapple's is
+    // grpull. It loops instead of firingSound while the hook holds (0x100524ad)
     sfxHandle_t pullSound;
-    // [QL] cgamex86.dll 0x100510fd: the chaingun's firingSound is a background whine that plays
-    // alongside each shot, not instead of it like the lightning gun's
-    qboolean loopFireSound;
 } weaponInfo_t;
 
 // each IT_* item has an associated itemInfo_t
@@ -1200,7 +1196,8 @@ typedef struct {
     qhandle_t spawnArmor2Shader;    // [QL] powerups/spawnArmor2, mientras esta recibiendo dano
     qhandle_t noPlayerClipShader;   // [QL] noPlayerClipShader, others when they do not collide
     qhandle_t gooShader;            // [QL] powerups/goo, el infectado de Red Rover
-    qhandle_t xrayShader;           // [ioquakelive] cg_xray, pak01's ioqlXray
+    qhandle_t xrayMaskShader;       // [ioquakelive] cg_xray, pak01's ioqlXrayMask and ioqlXray
+    qhandle_t xrayShader;
     qhandle_t quadWeaponShader;
     qhandle_t brightWeaponShader;  // [CPMA] cg_drawBrightWeapons
     qhandle_t invisShader;
@@ -1795,6 +1792,10 @@ extern vmCvar_t cg_drawDemoHUD;
 extern vmCvar_t cg_xray;
 extern vmCvar_t cg_freecam;
 qboolean CG_XrayAllowed(void);
+extern qboolean cg_demoCursor;
+qboolean CG_MenuHoldsKeys(void);
+void CG_DemoCursorFrame(void);
+qboolean CG_DemoHUDKey(int key, qboolean down);
 extern vmCvar_t cg_animSpeed;
 extern vmCvar_t cg_debugAnim;
 extern vmCvar_t cg_debugEvents;

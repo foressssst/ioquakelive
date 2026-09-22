@@ -1370,6 +1370,8 @@ static const char *CL_DemoKeyCommand(int key) {
         return "toggle cg_freecam\n";
     case 'x':
         return "toggle cg_xray\n";
+    case 'f':
+        return "fragforward\n";
     }
     return NULL;
 }
@@ -1461,8 +1463,9 @@ void CL_KeyDownEvent(int key, unsigned time) {
     }
 
     // [QL] quakelive_steam.exe 0x4b7cbb: while a demo plays and nothing catches keys, these
-    // drive it instead of their binds, as the demo HUD shows
-    if (clc.demoplaying && !Key_GetCatcher()) {
+    // drive it instead of their binds, as the demo HUD shows. [ioquakelive] cgame may hold the
+    // keys for the pointer over those controls, and they still drive it then
+    if (clc.demoplaying && !(Key_GetCatcher() & ~KEYCATCH_CGAME)) {
         const char *cmd = CL_DemoKeyCommand(key);
 
         if (cmd) {
