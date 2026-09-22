@@ -551,6 +551,7 @@ void CL_ReadDemoMessage(void) {
     clc.lastPacketTime = cls.realtime;
     buf.readcount = 0;
     CL_ParseServerMessage(&buf);
+    CL_DemoSnapshotRead();
 }
 
 /*
@@ -676,6 +677,287 @@ void CL_SetCgameCommandCompletion(const char* cmdName) {
 }
 
 /*
+===============================================================================
+
+[ioquakelive] DEMO SEEKING
+
+A demo is a chain of deltas, so going back means playing it again from the start and
+running through it undrawn up to the time asked for, the way WolfcamQL does. Going
+forward only moves the clock, and CL_SetCGameTime reads up to it.
+
+A server that reloads the map halfway, as QuakeClub's do when the readyup starts the match,
+sends a new gamestate and starts its clock over, so a demo can hold several stretches of
+server time. Demo time runs on across them: each stretch starts where the last one ended.
+
+===============================================================================
+*/
+
+#define MAX_DEMO_STRETCHES	32
+
+static char		demoPath[MAX_OSPATH];		// the file being played, for reopening it
+static int		demoStretchStart[MAX_DEMO_STRETCHES];	// server time of its first snapshot
+static int		demoStretchLength[MAX_DEMO_STRETCHES];
+static int		demoStretchAt[MAX_DEMO_STRETCHES];		// demo time it begins at
+static int		demoStretches;
+static int		demoStretch;				// the one being played
+static int		demoLastSnap = -1;			// server time of the last snapshot read
+static int		demoSeekTarget = -1;		// server time to reach in demoSeekStretch, -1 for none
+static int		demoSeekStretch;
+static qboolean	demoSeekRestart;			// the next demo command is a seek going back
+
+/*
+====================
+CL_DemoScan
+
+one pass over the file before it plays, reading only the start of each message: where each
+stretch of server time begins and how long it runs, and the times the match restarts, which
+the timeline marks
+====================
+*/
+static void CL_DemoScan(const char *name) {
+	static byte		data[MAX_MSGLEN];
+	char			marks[MAX_STRING_CHARS];
+	fileHandle_t	f;
+	msg_t			buf;
+	int				seq, len, cmd, t, n, last = 0;
+	qboolean		mark = qfalse, gamestate = qfalse;
+
+	demoStretches = 0;
+	marks[0] = '\0';
+
+	FS_FOpenFileRead(name, &f, qtrue);
+	if (f) {
+		while (FS_Read(&seq, 4, f) == 4 && FS_Read(&len, 4, f) == 4) {
+			len = LittleLong(len);
+			if (len < 0 || len > MAX_MSGLEN || FS_Read(data, len, f) != len) {
+				break;	// -1 ends the demo; anything else is a damaged tail
+			}
+			MSG_Init(&buf, data, sizeof(data));
+			buf.cursize = len;
+			MSG_Bitstream(&buf);
+			MSG_ReadLong(&buf);	// reliable acknowledge
+
+			while (buf.readcount <= buf.cursize) {
+				cmd = MSG_ReadByte(&buf);
+				if (cmd == svc_nop) {
+					continue;
+				}
+				if (cmd == svc_serverCommand) {
+					MSG_ReadLong(&buf);
+					if (!Q_stricmpn(MSG_ReadString(&buf), "map_restart", 11)) {
+						mark = qtrue;
+					}
+					continue;
+				}
+				if (cmd == svc_gamestate) {
+					gamestate = qtrue;
+				} else if (cmd == svc_snapshot) {
+					t = MSG_ReadLong(&buf);
+					// a new stretch after a gamestate, or if the clock went back without one
+					if (!demoStretches || gamestate || t < last - 1000) {
+						if (demoStretches == MAX_DEMO_STRETCHES) {
+							break;
+						}
+						n = demoStretches++;
+						demoStretchStart[n] = t;
+						demoStretchLength[n] = 0;
+						demoStretchAt[n] = n ? demoStretchAt[n - 1] + demoStretchLength[n - 1] : 0;
+						mark = n ? qtrue : qfalse;
+					}
+					gamestate = qfalse;
+					n = demoStretches - 1;
+					demoStretchLength[n] = t - demoStretchStart[n];
+					if (mark && strlen(marks) < sizeof(marks) - 16) {
+						Q_strcat(marks, sizeof(marks), va("%s%d", marks[0] ? " " : "",
+							demoStretchAt[n] + demoStretchLength[n]));
+					}
+					mark = qfalse;
+					last = t;
+				}
+				break;	// nothing else the timeline needs is in the rest of the message
+			}
+		}
+		FS_FCloseFile(f);
+	}
+
+	n = demoStretches - 1;
+	Cvar_Set("cl_demoLength", va("%d", demoStretches ? demoStretchAt[n] + demoStretchLength[n] : 0));
+	Cvar_Set("cl_demoMarks", marks);
+	Cvar_Set("cl_demoPos", "0");
+}
+
+// demo time of what is on screen
+static int CL_DemoPos(void) {
+	int n = demoStretch < demoStretches ? demoStretch : demoStretches - 1;
+	int t;
+
+	if (n < 0) {
+		return 0;
+	}
+	t = cl.serverTime - demoStretchStart[n];
+	if (t < 0) {
+		t = 0;
+	} else if (t > demoStretchLength[n]) {
+		t = demoStretchLength[n];
+	}
+	return demoStretchAt[n] + t;
+}
+
+/*
+====================
+CL_DemoGamestate
+
+called by CL_ParseGamestate: one arriving while the demo already runs begins its next stretch
+====================
+*/
+void CL_DemoGamestate(void) {
+	if (clc.demoplaying && clc.state == CA_ACTIVE) {
+		demoStretch++;
+		demoLastSnap = -1;
+	}
+}
+
+/*
+====================
+CL_DemoSnapshotRead
+
+called after each demo message: the server's clock starting over without a gamestate begins
+the next stretch too, as CL_DemoScan counts them
+====================
+*/
+void CL_DemoSnapshotRead(void) {
+	if (!cl.snap.valid) {
+		return;
+	}
+	if (demoLastSnap >= 0 && cl.snap.serverTime < demoLastSnap - 1000 && demoStretch + 1 < demoStretches) {
+		demoStretch++;
+	}
+	demoLastSnap = cl.snap.serverTime;
+}
+
+/*
+====================
+CL_DemoSuspend / CL_DemoResume
+
+around a filesystem restart, which closes every open file: the demo is put down with its
+place kept, and taken up again there
+====================
+*/
+int CL_DemoSuspend(void) {
+	int pos;
+
+	if (!clc.demoplaying || !clc.demofile) {
+		return -1;
+	}
+	pos = FS_FTell(clc.demofile);
+	FS_FCloseFile(clc.demofile);
+	clc.demofile = 0;
+	return pos;
+}
+
+void CL_DemoResume(int pos) {
+	if (pos < 0) {
+		return;
+	}
+	FS_FOpenFileRead(demoPath, &clc.demofile, qtrue);
+	if (clc.demofile) {
+		FS_Seek(clc.demofile, pos, FS_SEEK_SET);
+	}
+}
+
+/*
+====================
+CL_DemoSeek
+
+jumps to demo time pos: ahead in the same stretch right away, anywhere else by playing the
+demo again and running through it
+====================
+*/
+static void CL_DemoSeek(int pos) {
+	int n;
+
+	if (!clc.demoplaying || clc.state != CA_ACTIVE || !demoStretches) {
+		Com_Printf("no demo is playing\n");
+		return;
+	}
+	n = demoStretches - 1;
+	if (pos < 0) {
+		pos = 0;
+	} else if (pos > demoStretchAt[n] + demoStretchLength[n]) {
+		pos = demoStretchAt[n] + demoStretchLength[n];
+	}
+	while (n > 0 && demoStretchAt[n] > pos) {
+		n--;
+	}
+
+	demoSeekStretch = n;
+	demoSeekTarget = demoStretchStart[n] + pos - demoStretchAt[n];
+	if (n != demoStretch || demoSeekTarget < cl.serverTime) {
+		// inserted, not appended: whatever else is queued runs after the demo is back
+		demoSeekRestart = qtrue;
+		Cbuf_ExecuteText(EXEC_INSERT, va("demo \"%s\"\n", clc.demoName));
+	}
+}
+
+/*
+====================
+CL_DemoSeekApply
+
+called by CL_SetCGameTime before it reads the demo: moves the clock toward a pending seek,
+and the demo is then read up to it in one go, undrawn. A seek into a later stretch runs off
+the end of each one before it, into its gamestate, until it gets there.
+====================
+*/
+void CL_DemoSeekApply(void) {
+	int target, ahead;
+
+	if (!clc.demoplaying || clc.state != CA_ACTIVE || cl_timedemo->integer) {
+		return;
+	}
+	if (demoSeekTarget >= 0) {
+		if (demoStretch < demoSeekStretch && demoStretch < demoStretches) {
+			target = demoStretchStart[demoStretch] + demoStretchLength[demoStretch] + 1000;
+		} else {
+			target = demoStretch == demoSeekStretch ? demoSeekTarget : cl.serverTime;
+			demoSeekTarget = -1;
+		}
+		ahead = target - cl.serverTime;
+		if (ahead > 0) {
+			cl.serverTimeDelta += ahead;
+			cl.serverTime += ahead;
+			cl.oldServerTime = cl.serverTime;
+		}
+	}
+	Cvar_Set("cl_demoPos", va("%d", CL_DemoPos()));
+}
+
+static float CL_SeekSeconds(float fallback) {
+	return Cmd_Argc() > 1 ? atof(Cmd_Argv(1)) : fallback;
+}
+
+static void CL_Rewind_f(void) {
+	CL_DemoSeek(CL_DemoPos() - (int)(CL_SeekSeconds(10) * 1000));
+}
+
+static void CL_FastForward_f(void) {
+	CL_DemoSeek(CL_DemoPos() + (int)(CL_SeekSeconds(10) * 1000));
+}
+
+// seekdemo <seconds> or <m:ss>, from the start of the demo
+static void CL_SeekDemo_f(void) {
+	const char *s = Cmd_Argv(1);
+	const char *colon = strchr(s, ':');
+	float seconds;
+
+	if (Cmd_Argc() < 2) {
+		Com_Printf("usage: seekdemo <seconds> or <m:ss>\n");
+		return;
+	}
+	seconds = colon ? atoi(s) * 60 + atof(colon + 1) : atof(s);
+	CL_DemoSeek((int)(seconds * 1000));
+}
+
+/*
 ====================
 CL_PlayDemo_f
 
@@ -739,6 +1021,17 @@ void CL_PlayDemo_f(void) {
         return;
     }
     Q_strncpyz(clc.demoName, arg, sizeof(clc.demoName));
+
+    // [ioquakelive] a seek going back keeps its target through the restart; any other demo
+    // drops it
+    if (!demoSeekRestart) {
+        demoSeekTarget = -1;
+    }
+    demoSeekRestart = qfalse;
+    demoStretch = 0;
+    demoLastSnap = -1;
+    Q_strncpyz(demoPath, name, sizeof(demoPath));
+    CL_DemoScan(name);
 
     Con_Close();
 
@@ -3292,6 +3585,13 @@ void CL_Init(void) {
     Cmd_AddCommand("record", CL_Record_f);
     Cmd_AddCommand("demo", CL_PlayDemo_f);
     Cmd_SetCommandCompletionFunc("demo", CL_CompleteDemoName);
+    // [ioquakelive] moving through a demo, and what its timeline is drawn from
+    Cmd_AddCommand("rewind", CL_Rewind_f);
+    Cmd_AddCommand("fastforward", CL_FastForward_f);
+    Cmd_AddCommand("seekdemo", CL_SeekDemo_f);
+    Cvar_Get("cl_demoLength", "0", CVAR_ROM);
+    Cvar_Get("cl_demoPos", "0", CVAR_ROM);
+    Cvar_Get("cl_demoMarks", "", CVAR_ROM);
     Cmd_AddCommand("stoprecord", CL_StopRecord_f);
     Cmd_AddCommand("connect", CL_Connect_f);
     Cmd_AddCommand("reconnect", CL_Reconnect_f);

@@ -425,8 +425,13 @@ void CL_ParseGamestate(msg_t* msg) {
     int cmd;
     char* s;
     char oldGame[MAX_QPATH];
+    int demoPos;
+    qboolean restarted;
 
     Con_Close();
+
+    // [ioquakelive] a gamestate halfway through a demo begins a new stretch of server time
+    CL_DemoGamestate();
 
     clc.connectPacketCount = 0;
 
@@ -502,7 +507,13 @@ void CL_ParseGamestate(msg_t* msg) {
     // Address: 0x004bd790 - reinitialise the filesystem if the game directory or checksum
     // changed. When a restart happens QL stops and restarts the background track from the
     // CS_MUSIC configstring (S_StopMusic + S_StartBackgroundTrack in the binary).
-    if (FS_ConditionalRestart(clc.checksumFeed, qfalse)) {
+    // [ioquakelive] a filesystem restart closes every open file, the demo being played too, and
+    // it ended there: a server that reloads the map when the readyup starts the match cut its
+    // demos short at that point. The demo keeps its place across the restart.
+    demoPos = CL_DemoSuspend();
+    restarted = FS_ConditionalRestart(clc.checksumFeed, qfalse);
+    CL_DemoResume(demoPos);
+    if (restarted) {
         char* music;
         char track[MAX_QPATH];
         char loopTrack[MAX_QPATH];

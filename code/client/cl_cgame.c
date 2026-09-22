@@ -1061,8 +1061,13 @@ void CL_SetCGameTime(void) {
     }
 
     if (cl.snap.serverTime < cl.oldFrameServerTime) {
+        // [ioquakelive] a demo whose server started its clock over halfway follows it instead
+        // of ending there
+        if (clc.demoplaying) {
+            cl.serverTimeDelta = cl.snap.serverTime - cls.realtime;
+            cl.oldServerTime = cl.snap.serverTime;
         // [QL] only fatal if already active; otherwise just warn
-        if (clc.state == CA_ACTIVE) {
+        } else if (clc.state == CA_ACTIVE) {
             Com_Error(ERR_DROP, "cl.snap.serverTime < cl.oldFrameServerTime");
         } else {
             Com_Printf("^3CL_SetCGameTime: cl.snap.serverTime < cl.oldFrameServerTime\n");
@@ -1172,12 +1177,24 @@ void CL_SetCGameTime(void) {
         cl.serverTime = clc.timeDemoBaseTime + clc.timeDemoFrames * 50;
     }
 
+    // [ioquakelive] a seek moves the clock here, and the loop reads up to it
+    CL_DemoSeekApply();
+
     while (cl.serverTime >= cl.snap.serverTime) {
+        int before = cl.snap.serverTime;
+
         // feed another messag, which should change
         // the contents of cl.snap
         CL_ReadDemoMessage();
         if (clc.state != CA_ACTIVE) {
             return;  // end of demo
+        }
+        // [ioquakelive] the server's clock went back: follow it, rather than read the rest of the
+        // demo in one go trying to catch up with the old one
+        if (cl.snap.serverTime < before - 1000) {
+            cl.serverTimeDelta += cl.snap.serverTime - cl.serverTime;
+            cl.serverTime = cl.oldServerTime = cl.snap.serverTime;
+            break;
         }
     }
 }

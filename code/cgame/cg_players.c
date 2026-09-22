@@ -2812,6 +2812,45 @@ void CG_Draw3DPlayerModel(int clientNum, int torsoAnim, float x, float y, float 
 
 /*
 ===============
+CG_XrayAllowed
+
+[ioquakelive] cg_xray works in a demo or while spectating, never for someone on a team
+===============
+*/
+qboolean CG_XrayAllowed(void) {
+    if (!cg_xray.integer) {
+        return qfalse;
+    }
+    return (cg.demoPlayback || cgs.clientinfo[cg.clientNum].team == TEAM_SPECTATOR) ? qtrue : qfalse;
+}
+
+/*
+===============
+CG_AddXray
+
+one part of the model again, added on top in the team colour with the depth range of the
+view weapon, so walls do not hide it
+===============
+*/
+static void CG_AddXray(const refEntity_t* part, int team) {
+    refEntity_t ent = *part;
+    byte* c = ent.shaderRGBA;
+
+    ent.customShader = cgs.media.xrayShader;
+    ent.renderfx |= RF_DEPTHHACK | RF_NOSHADOW;
+    if (team == TEAM_RED) {
+        c[0] = 200, c[1] = 40, c[2] = 40;
+    } else if (team == TEAM_BLUE) {
+        c[0] = 40, c[1] = 90, c[2] = 220;
+    } else {
+        c[0] = 200, c[1] = 160, c[2] = 30;
+    }
+    c[3] = 255;
+    trap_R_AddRefEntityToScene(&ent);
+}
+
+/*
+===============
 CG_Player
 ===============
 */
@@ -3194,6 +3233,13 @@ void CG_Player(centity_t* cent) {
         trap_R_AddRefEntityToScene(&head);
         trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin,
                                cgs.media.nightmareSound);
+    }
+
+    // [ioquakelive] cg_xray: and seen through walls, for a demo or a spectator
+    if (CG_XrayAllowed()) {
+        CG_AddXray(&legs, ci->team);
+        CG_AddXray(&torso, ci->team);
+        CG_AddXray(&head, ci->team);
     }
 }
 

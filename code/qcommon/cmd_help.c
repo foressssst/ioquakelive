@@ -180,6 +180,12 @@ static const cmdHelp_t cmdHelp[] = {
     {"stoprecord", "stops recording"},
     {"demo", "plays a demo back\n"
              "usage: demo <name>"},
+    {"rewind", "jumps back in the demo, 10 seconds unless told\n"
+               "usage: rewind [seconds]"},
+    {"fastforward", "jumps ahead in the demo, 10 seconds unless told\n"
+                    "usage: fastforward [seconds]"},
+    {"seekdemo", "jumps to a time counted from the start of the demo\n"
+                 "usage: seekdemo <seconds> or <m:ss>"},
 
     // -------------------------------------------------------------- the host
     {"map", "loads a map and starts a match\n"

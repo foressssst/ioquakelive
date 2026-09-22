@@ -429,6 +429,8 @@ vmCvar_t cg_weaponPrimary;
 
 // [QL] spectator/demo cvars
 vmCvar_t cg_drawDemoHUD;
+vmCvar_t cg_xray;
+vmCvar_t cg_freecam;
 vmCvar_t cg_followKiller;
 vmCvar_t cg_followPowerup;
 vmCvar_t cg_specDuelHealthArmor;
@@ -842,6 +844,9 @@ static cvarTable_t cvarTable[] = {
 
     // [QL] spectator/demo cvars
     {&cg_drawDemoHUD, "cg_drawDemoHUD", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    // [ioquakelive] for demos and spectators only: players through walls, and a free camera
+    {&cg_xray, "cg_xray", "0", CVAR_ARCHIVE, "0", "1"},
+    {&cg_freecam, "cg_freecam", "0", 0, "0", "1"},
     {&cg_followKiller, "cg_followKiller", "0", CVAR_VM_CREATED, "0", "1"},
     {&cg_followPowerup, "cg_followPowerup", "0", CVAR_VM_CREATED, "0", "2"},
     {&cg_specDuelHealthArmor, "cg_specDuelHealthArmor", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
@@ -1943,6 +1948,7 @@ static void CG_RegisterGraphics(void) {
     cgs.media.spawnArmor2Shader = trap_R_RegisterShader("powerups/spawnArmor2");
     cgs.media.noPlayerClipShader = trap_R_RegisterShader("noPlayerClipShader");
     cgs.media.gooShader = trap_R_RegisterShader("powerups/goo");
+    cgs.media.xrayShader = trap_R_RegisterShader("ioqlXray");
     // [QL] 0x100236e4: the markers drawn over the powerups
     cgs.media.powerupPoi[0] = trap_R_RegisterShader("gfx/2d/powerup/quad");
     cgs.media.powerupPoi[1] = trap_R_RegisterShader("gfx/2d/powerup/bs");

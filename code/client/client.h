@@ -334,6 +334,12 @@ extern cvar_t* cl_autoTimeNudge;
 extern cvar_t* cl_showTimeDelta;
 extern cvar_t* cl_freezeDemo;
 
+void CL_DemoSeekApply(void);
+void CL_DemoGamestate(void);
+void CL_DemoSnapshotRead(void);
+int CL_DemoSuspend(void);
+void CL_DemoResume(int pos);
+
 extern cvar_t* cl_yawspeed;
 extern cvar_t* cl_pitchspeed;
 extern cvar_t* cl_run;

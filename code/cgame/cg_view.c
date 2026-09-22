@@ -937,6 +937,46 @@ qboolean CG_GetLevelTimerMsec(int* msec) {
 
 /*
 ===============
+CG_FreeCamera
+
+[ioquakelive] cg_freecam in a demo: the view flies with the player's movement keys and the
+mouse, on real time so it moves with the demo frozen too. After being off it takes off from
+where the view was, looking the same way.
+===============
+*/
+static void CG_FreeCamera(void) {
+    static vec3_t origin, offset;
+    static int lastTime;
+    usercmd_t cmd;
+    vec3_t angles, axis[3];
+    int now = trap_Milliseconds();
+    float seconds = (now - lastTime) * 0.001f;
+    int i;
+
+    trap_GetUserCmd(trap_GetCurrentCmdNumber(), &cmd);
+    for (i = 0; i < 3; i++) {
+        angles[i] = SHORT2ANGLE(cmd.angles[i]);
+    }
+    if (seconds > 0.5f) {
+        VectorCopy(cg.refdef.vieworg, origin);
+        VectorSubtract(cg.refdefViewAngles, angles, offset);
+        seconds = 0;
+    }
+    lastTime = now;
+
+    VectorAdd(angles, offset, angles);
+    AnglesToAxis(angles, axis);
+    // 127 is a full run, about 450 units a second
+    VectorMA(origin, cmd.forwardmove * 3.5f * seconds, axis[0], origin);
+    VectorMA(origin, -cmd.rightmove * 3.5f * seconds, axis[1], origin);
+    VectorMA(origin, cmd.upmove * 3.5f * seconds, axis[2], origin);
+
+    VectorCopy(origin, cg.refdef.vieworg);
+    VectorCopy(angles, cg.refdefViewAngles);
+}
+
+/*
+===============
 CG_CalcViewValues
 
 Sets cg.refdef view values
@@ -1026,6 +1066,10 @@ static int CG_CalcViewValues(void) {
     } else {
         // offset for local bobbing and kicks
         CG_OffsetFirstPersonView();
+    }
+
+    if (cg.demoPlayback && cg_freecam.integer) {
+        CG_FreeCamera();
     }
 
     // position eye relative to origin
@@ -1388,6 +1432,10 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
 
     // decide on third person view
     cg.renderingThirdPerson = cg.snap->ps.persistant[PERS_TEAM] != TEAM_SPECTATOR && (cg_thirdPerson.integer || (cg.snap->ps.stats[STAT_HEALTH] <= 0));
+    // [ioquakelive] a free camera sees the demo's own player from outside
+    if (cg.demoPlayback && cg_freecam.integer) {
+        cg.renderingThirdPerson = qtrue;
+    }
 
     // build cg.refdef
     CG_CalcViewValues();

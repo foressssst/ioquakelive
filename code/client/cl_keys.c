@@ -1337,6 +1337,45 @@ void CL_ParseBinding(int key, qboolean down, unsigned time) {
 
 /*
 ===================
+CL_DemoKeyCommand
+
+[QL] the switch at quakelive_steam.exe 0x4b7cea, key minus 32 into the table at 0x4b803c.
+Right and the wheel up step one frame while the demo is frozen, and speed it up otherwise.
+The jumps and the free camera are ioquakelive's.
+===================
+*/
+static const char *CL_DemoKeyCommand(int key) {
+    switch (key) {
+    case K_SPACE:
+        return "toggle cl_freezeDemo\n";
+    case K_RIGHTARROW:
+    case K_MWHEELUP:
+        return cl_freezeDemo->integer ? "timescale 1; cl_freezeDemo 0; wait; wait; cl_freezeDemo 1\n"
+                                      : "cvarAdd timescale 0.1\n";
+    case K_LEFTARROW:
+    case K_MWHEELDOWN:
+        return "cvarAdd timescale -0.1\n";
+    case K_DOWNARROW:
+    case K_MOUSE3:
+        return "timescale 1\n";
+    case K_DEL:
+        return "toggle cg_drawDemoHUD\n";
+    case K_PGDN:
+        return "rewind 10\n";
+    case K_PGUP:
+        return "fastforward 10\n";
+    case K_HOME:
+        return "seekdemo 0\n";
+    case 'c':
+        return "toggle cg_freecam\n";
+    case 'x':
+        return "toggle cg_xray\n";
+    }
+    return NULL;
+}
+
+/*
+===================
 CL_KeyDownEvent
 
 Called by CL_KeyEvent to handle a keypress
@@ -1384,8 +1423,8 @@ void CL_KeyDownEvent(int key, unsigned time) {
     }
 
     // keys can still be used for bound actions
-    if ((key < 128 || key == K_MOUSE1) &&
-        (clc.demoplaying || clc.state == CA_CINEMATIC) && Key_GetCatcher() == 0) {
+    // [QL] a key no longer cuts a demo short: retail drives the demo with them (below)
+    if ((key < 128 || key == K_MOUSE1) && clc.state == CA_CINEMATIC && Key_GetCatcher() == 0) {
         if (Cvar_VariableValue("com_cameraMode") == 0) {
             Cvar_Set("nextdemo", "");
             key = K_ESCAPE;
@@ -1419,6 +1458,17 @@ void CL_KeyDownEvent(int key, unsigned time) {
 
         VM_Call(uivm, UI_KEY_EVENT, key, qtrue);
         return;
+    }
+
+    // [QL] quakelive_steam.exe 0x4b7cbb: while a demo plays and nothing catches keys, these
+    // drive it instead of their binds, as the demo HUD shows
+    if (clc.demoplaying && !Key_GetCatcher()) {
+        const char *cmd = CL_DemoKeyCommand(key);
+
+        if (cmd) {
+            Cbuf_ExecuteText(EXEC_APPEND, cmd);
+            return;
+        }
     }
 
     // send the bound action

@@ -1200,6 +1200,7 @@ typedef struct {
     qhandle_t spawnArmor2Shader;    // [QL] powerups/spawnArmor2, mientras esta recibiendo dano
     qhandle_t noPlayerClipShader;   // [QL] noPlayerClipShader, others when they do not collide
     qhandle_t gooShader;            // [QL] powerups/goo, el infectado de Red Rover
+    qhandle_t xrayShader;           // [ioquakelive] cg_xray, pak01's ioqlXray
     qhandle_t quadWeaponShader;
     qhandle_t brightWeaponShader;  // [CPMA] cg_drawBrightWeapons
     qhandle_t invisShader;
@@ -1791,6 +1792,9 @@ extern vmCvar_t cg_crosshairHitTime;
 extern vmCvar_t cg_drawStatus;
 extern vmCvar_t cg_draw2D;
 extern vmCvar_t cg_drawDemoHUD;
+extern vmCvar_t cg_xray;
+extern vmCvar_t cg_freecam;
+qboolean CG_XrayAllowed(void);
 extern vmCvar_t cg_animSpeed;
 extern vmCvar_t cg_debugAnim;
 extern vmCvar_t cg_debugEvents;
