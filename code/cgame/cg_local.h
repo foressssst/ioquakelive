@@ -2015,6 +2015,8 @@ extern vmCvar_t cg_zoomAnimationTime;
 extern vmCvar_t cg_drawBrightWeapons;  // [CPMA] bitmask of the weapons drawn as flat silhouettes
 extern vmCvar_t ch_chatLines;
 extern vmCvar_t ch_drawLocalTime;
+extern vmCvar_t ch_drawTargetStatus;
+extern vmCvar_t ch_drawKeys;
 extern vmCvar_t ch_recordMessage;
 extern vmCvar_t cg_demoRecording;
 extern vmCvar_t cg_demoName;

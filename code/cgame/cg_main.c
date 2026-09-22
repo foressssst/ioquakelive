@@ -366,6 +366,8 @@ vmCvar_t cg_zoomAnimationTime;
 vmCvar_t cg_drawBrightWeapons;
 vmCvar_t ch_chatLines;
 vmCvar_t ch_drawLocalTime;
+vmCvar_t ch_drawTargetStatus;
+vmCvar_t ch_drawKeys;
 vmCvar_t ch_recordMessage;
 vmCvar_t cg_demoRecording;
 vmCvar_t cg_demoName;
@@ -783,6 +785,8 @@ static cvarTable_t cvarTable[] = {
     {&ch_chatLines, "ch_chatLines", "3", CVAR_ARCHIVE},
     // [CPMA] the LocalTime and RecordingDemo elements of CPMA 1.53, in Quake Live's own type
     {&ch_drawLocalTime, "ch_drawLocalTime", "0", CVAR_ARCHIVE},
+    {&ch_drawTargetStatus, "ch_drawTargetStatus", "1", CVAR_ARCHIVE},
+    {&ch_drawKeys, "ch_drawKeys", "0", CVAR_ARCHIVE},
     {&ch_recordMessage, "ch_recordMessage", "1", CVAR_ARCHIVE},
     {&cg_demoRecording, "cl_demorecording", "0", CVAR_ROM},
     {&cg_demoName, "cl_demoname", "", CVAR_ROM},

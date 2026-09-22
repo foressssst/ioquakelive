@@ -1000,6 +1000,12 @@ static const cvarHelp_t cvarHelp[] = {
                          HV("1") "24 hours\n"
                          HV("2") "12 hours, with am and pm"},
     {"ch_recordMessage", "while a demo is being recorded, its name on the screen"},
+    {"ch_drawKeys", "the movement keys of whoever you are watching, over the left of the "
+                    "screen; yours are the ones you press, anybody else's are read back "
+                    "from the way they move"},
+    {"ch_drawTargetStatus", "watching a demo or spectating, the health and armour under the "
+                            "crosshair are anybody's, not only your team's; it needs "
+                            HC("cg_drawCrosshairTeamHealth")},
     {"cl_demorecording", "set by the game: 1 while a demo is being recorded"},
     {"cl_demoname", "set by the game: the demo being recorded"},
 

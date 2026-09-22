@@ -1142,6 +1142,136 @@ static float CG_DrawRecording(float y) {
 }
 
 /*
+==================
+CG_KeysOf
+
+[CPMA] Which movement keys are down. Your own are the ones you are sending; for anybody
+else, and inside a demo, nothing carries them, so they are read back from the way the
+player moves, the same as the speed shown on the screen
+==================
+*/
+#define KEY_FORWARD 1
+#define KEY_BACK 2
+#define KEY_LEFT 4
+#define KEY_RIGHT 8
+#define KEY_JUMP 16
+#define KEY_CROUCH 32
+#define KEY_ATTACK 64
+
+static int CG_KeysOf(const playerState_t* ps) {
+	usercmd_t cmd;
+	vec3_t forward, right;
+	float f, s;
+	int keys = 0;
+
+	if (!cg.demoPlayback && ps->clientNum == cg.clientNum && !(ps->pm_flags & PMF_FOLLOW)) {
+		if (!trap_GetUserCmd(trap_GetCurrentCmdNumber(), &cmd)) {
+			return 0;
+		}
+		if (cmd.forwardmove > 0) {
+			keys |= KEY_FORWARD;
+		} else if (cmd.forwardmove < 0) {
+			keys |= KEY_BACK;
+		}
+		if (cmd.rightmove > 0) {
+			keys |= KEY_RIGHT;
+		} else if (cmd.rightmove < 0) {
+			keys |= KEY_LEFT;
+		}
+		if (cmd.upmove > 0) {
+			keys |= KEY_JUMP;
+		} else if (cmd.upmove < 0) {
+			keys |= KEY_CROUCH;
+		}
+		if (cmd.buttons & BUTTON_ATTACK) {
+			keys |= KEY_ATTACK;
+		}
+		return keys;
+	}
+
+	AngleVectors(ps->viewangles, forward, right, NULL);
+	forward[2] = 0;
+	right[2] = 0;
+	VectorNormalize(forward);
+	VectorNormalize(right);
+	f = DotProduct(ps->velocity, forward);
+	s = DotProduct(ps->velocity, right);
+	if (f > 40.0f) {
+		keys |= KEY_FORWARD;
+	} else if (f < -40.0f) {
+		keys |= KEY_BACK;
+	}
+	if (s > 40.0f) {
+		keys |= KEY_RIGHT;
+	} else if (s < -40.0f) {
+		keys |= KEY_LEFT;
+	}
+	if (ps->groundEntityNum == ENTITYNUM_NONE && ps->velocity[2] > 100.0f) {
+		keys |= KEY_JUMP;
+	}
+	if (ps->pm_flags & PMF_DUCKED) {
+		keys |= KEY_CROUCH;
+	}
+	if (ps->weaponstate == WEAPON_FIRING) {
+		keys |= KEY_ATTACK;
+	}
+
+	return keys;
+}
+
+/*
+==================
+CG_DrawKey
+==================
+*/
+static void CG_DrawKey(float x, float y, float size, const char* label, qboolean down) {
+	vec4_t box = {0.0f, 0.0f, 0.0f, 0.35f};
+	vec4_t text = {1.0f, 1.0f, 1.0f, 0.45f};
+	float scale = size * 0.014f;
+
+	if (down) {
+		box[0] = box[1] = box[2] = 0.85f;
+		box[3] = 0.65f;
+		text[0] = text[1] = text[2] = 0.0f;
+		text[3] = 1.0f;
+	}
+	CG_FillRect(x, y, size, size, box);
+	CG_DrawText(x + (size - CG_DrawTextWidth(label, scale, 0, 0)) * 0.5f,
+				y + (size + CG_DrawTextHeight(label, scale, 0, 0)) * 0.5f, 0, scale, text, label, 0, 0, 0);
+}
+
+/*
+==================
+CG_DrawKeys
+
+[CPMA] the KeyDown element of CPMA 1.53's HUD: the keys of whoever is being watched, over
+the left of the screen. Three rows, the way a hand sits on them
+==================
+*/
+static void CG_DrawKeys(void) {
+	const float size = 16.0f;
+	const float gap = 2.0f;
+	float x = 24.0f;
+	float y = 330.0f;
+	int keys;
+
+	if (!cg.snap) {
+		return;
+	}
+	keys = CG_KeysOf(&cg.snap->ps);
+
+	CG_DrawKey(x + size + gap, y, size, "W", (keys & KEY_FORWARD) ? qtrue : qfalse);
+	y += size + gap;
+	CG_DrawKey(x, y, size, "A", (keys & KEY_LEFT) ? qtrue : qfalse);
+	CG_DrawKey(x + size + gap, y, size, "S", (keys & KEY_BACK) ? qtrue : qfalse);
+	CG_DrawKey(x + (size + gap) * 2.0f, y, size, "D", (keys & KEY_RIGHT) ? qtrue : qfalse);
+	y += size + gap;
+	CG_DrawKey(x, y, size, "C", (keys & KEY_CROUCH) ? qtrue : qfalse);
+	CG_DrawKey(x + size + gap, y, size, "J", (keys & KEY_JUMP) ? qtrue : qfalse);
+	CG_DrawKey(x + (size + gap) * 2.0f, y, size, "F", (keys & KEY_ATTACK) ? qtrue : qfalse);
+}
+
+/*
 =====================
 CG_DrawUpperRight
 
@@ -1163,6 +1293,9 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame) {
 	}
 	if (cg_drawTimer.integer) {
 		y = CG_DrawTimer(y);
+	}
+	if (ch_drawKeys.integer) {
+		CG_DrawKeys();
 	}
 	if (ch_recordMessage.integer) {
 		y = CG_DrawRecording(y);
@@ -2108,6 +2241,7 @@ static void CG_DrawCrosshairNames(void) {
 	char* name;
 	float opacity;
 	qboolean teammate;
+	qboolean watching;
 	centity_t* cent;
 	float size, y;
 	char text[16];
@@ -2137,6 +2271,10 @@ static void CG_DrawCrosshairNames(void) {
 
 	teammate = cgs.gametype >= GT_TEAM &&
 			   cg.snap->ps.persistant[PERS_TEAM] == cgs.clientinfo[cg.crosshairClientNum].team;
+	// [CPMA] TargetStatus: watching a demo or spectating, the status is anybody's, because
+	// there is nothing to give away. Playing, retail's rule stands and it is your team's only
+	watching = ch_drawTargetStatus.integer &&
+			   (cg.demoPlayback || cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR);
 	if (teammate) {
 		if (cg_teammateNames.integer || !cg_teammateCrosshairNames.integer) {
 			return;
@@ -2155,7 +2293,8 @@ static void CG_DrawCrosshairNames(void) {
 
 	// [QL] 0x1000c7c4: "health / armor" under a teammate's name in the name's alpha, at
 	// cg_drawCrosshairTeamHealthSize, the health ending and the armor starting at the middle
-	if (cg_drawCrosshairTeamHealth.value != 0.0f && teammate) {
+	if (cg_drawCrosshairTeamHealth.value != 0.0f && (teammate || watching) &&
+		cg_entities[cg.crosshairClientNum].currentState.health > 0) {
 		cent = &cg_entities[cg.crosshairClientNum];
 		size = cg_drawCrosshairTeamHealthSize.value;
 		y = size * 16.0f + 198.0f;
