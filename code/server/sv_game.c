@@ -1424,7 +1424,7 @@ static void SV_LoadGameProgs(void) {
     sv_apiVersion = 0;
     dllEntry(sv_vmMainTable, &sv_gameImports, &sv_apiVersion);
 
-    Com_DPrintf("Game DLL loaded, API version %d\n", sv_apiVersion);
+    Com_Printf("Game DLL loaded, API version %d\n", sv_apiVersion);
 }
 
 /*

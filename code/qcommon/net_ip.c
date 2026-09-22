@@ -768,7 +768,7 @@ void Sys_ShowIP(void) {
         if (localIP[i].type == NA_IP)
             Com_Printf("IP: %s\n", addrbuf);
         else if (localIP[i].type == NA_IP6)
-            Com_DPrintf("IP6: %s\n", addrbuf);
+            Com_Printf("IP6: %s\n", addrbuf);
     }
 }
 
@@ -852,11 +852,11 @@ SOCKET NET_IP6Socket(char* net_interface, int port, struct sockaddr_in6* bindto,
     if (net_interface) {
         // Print the name in brackets if there is a colon:
         if (Q_CountChar(net_interface, ':'))
-            Com_DPrintf("Opening IPv6 socket: [%s]:%i\n", net_interface, port);
+            Com_Printf("Opening IPv6 socket: [%s]:%i\n", net_interface, port);
         else
-            Com_DPrintf("Opening IPv6 socket: %s:%i\n", net_interface, port);
+            Com_Printf("Opening IPv6 socket: %s:%i\n", net_interface, port);
     } else
-        Com_DPrintf("Opening IPv6 socket: [::]:%i\n", port);
+        Com_Printf("Opening IPv6 socket: [::]:%i\n", port);
 
     if ((newsocket = socket(PF_INET6, SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET) {
         *err = socketError;

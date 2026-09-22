@@ -3693,7 +3693,7 @@ static void FS_AddWorkshopPaks(void) {
 	Q_strncpyz(fs_gamedir, savedGamedir, sizeof(fs_gamedir));
 
 	if (count > 0) {
-		Com_DPrintf("Added %d Steam Workshop item%s to search path.\n",
+		Com_Printf("Added %d Steam Workshop item%s to search path.\n",
 		           count, count == 1 ? "" : "s");
 	}
 }

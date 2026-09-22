@@ -149,7 +149,7 @@ vm_t* VM_Create(const char* module, intptr_t (*systemCalls)(intptr_t*)) {
     vm = &vmTable[vmSlot];
     Q_strncpyz(vm->name, module, sizeof(vm->name));
 
-    Com_DPrintf("VM_Create: loading module '%s'\n", module);
+    Com_Printf("VM_Create: loading module '%s'\n", module);
 
     // Static buffer for storing extracted DLL path
     static char vm_osPaths[MAX_VM][MAX_OSPATH];
@@ -171,7 +171,7 @@ vm_t* VM_Create(const char* module, intptr_t (*systemCalls)(intptr_t*)) {
         Com_Error(ERR_FATAL, "VM_Create: failed to set system call for '%s'", module);
     }
 
-    Com_DPrintf("VM_Create: successfully loaded '%s'\n", module);
+    Com_Printf("VM_Create: successfully loaded '%s'\n", module);
     return vm;
 }
 
