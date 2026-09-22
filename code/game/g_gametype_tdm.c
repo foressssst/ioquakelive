@@ -27,12 +27,11 @@ to FreeForAllScoreboardMessage otherwise. ioquakelive uses a self-consistent
 send-internally model (this fn is void and sends), so that gate/fallback is not
 reproduced here.
 
-Header (31 values before player data):
-  redArmor[RED] redArmor[BLUE] yellowArmor[R] yellowArmor[B] greenArmor[R] greenArmor[B]
-  megaHealth[R] megaHealth[B] quad[R] quad[B] battleSuit[R] battleSuit[B]
-  regen[R] regen[B] haste[R] haste[B] invis[R] invis[B]
-  quadTime[R] quadTime[B] battleSuitTime[R] battleSuitTime[B]
-  regenTime[R] regenTime[B] hasteTime[R] hasteTime[B] invisTime[R] invisTime[B]
+Header (31 values before player data): the 14 of red, then the 14 of blue, as retail
+reads them (cgamex86.dll 0x10045f20 fills one team's block and then the other's):
+  redArmor yellowArmor greenArmor megaHealth quad battleSuit regen haste invis
+  quadTime battleSuitTime regenTime hasteTime invisTime
+and after both blocks:
   numPlayers teamScoreRed teamScoreBlue
 
 Fields per player (15):

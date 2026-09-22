@@ -545,6 +545,32 @@ void ClientTimerActions(gentity_t* ent, int msec) {
     while (client->timeResidual >= 1000) {
         client->timeResidual -= 1000;
 
+        // [QL] 0x10034414: a second more of what this team has held, counted on the client's
+        // own team. Every team mode but clan arena, which has neither powerups nor a flag
+        if (g_gametype.integer > GT_RACE && g_gametype.integer != GT_CA) {
+            int team = client->sess.sessionTeam;
+
+            if (client->ps.powerups[PW_QUAD]) {
+                level.quadDamagePossessionTime[team]++;
+            }
+            if (client->ps.powerups[PW_BATTLESUIT]) {
+                level.battleSuitPossessionTime[team]++;
+            }
+            if (client->ps.powerups[PW_REGEN]) {
+                level.regenerationPossessionTime[team]++;
+            }
+            if (client->ps.powerups[PW_HASTE]) {
+                level.hastePossessionTime[team]++;
+            }
+            if (client->ps.powerups[PW_INVIS]) {
+                level.invisibilityPossessionTime[team]++;
+            }
+            if (client->ps.powerups[PW_REDFLAG] || client->ps.powerups[PW_BLUEFLAG] ||
+                client->ps.powerups[PW_NEUTRALFLAG]) {
+                level.flagPossessionTime[team]++;
+            }
+        }
+
         // regenerate
         if (bg_itemlist[client->ps.stats[STAT_PERSISTANT_POWERUP]].giTag == PW_GUARD) {
             maxHealth = client->ps.stats[STAT_MAX_HEALTH] / 2;
