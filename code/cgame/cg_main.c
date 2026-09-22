@@ -111,6 +111,9 @@ Q_EXPORT intptr_t vmMain(int command, intptr_t arg0, intptr_t arg1, intptr_t arg
         case CG_SET_CLIENT_TALKING:
             CG_SetClientTalking(arg0, arg1);
             return 0;
+        case CG_DEMO_REWIND:
+            CG_DemoRewind(arg0, arg1);
+            return 0;
         default:
             CG_Error("vmMain: unknown command %i", command);
             break;

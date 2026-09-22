@@ -262,7 +262,10 @@ typedef enum {
     CG_CHAT_FIELD_CHARS,    // 19  int CG_ChatFieldChars( void )
 
     // [QL] slot 20 (0x10020a40): marks a client as talking and stamps the time on it
-    CG_SET_CLIENT_TALKING   // 20  void CG_SetClientTalking( int clientNum, int talking )
+    CG_SET_CLIENT_TALKING,  // 20  void CG_SetClientTalking( int clientNum, int talking )
+
+    // [ioquakelive] the engine went back in a demo, to a copy of the client it kept
+    CG_DEMO_REWIND          // 21  void CG_DemoRewind( int snapshotNum, int serverCommandSequence )
 } cgameExport_t;
 
 //----------------------------------------------

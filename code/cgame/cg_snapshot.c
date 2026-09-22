@@ -72,6 +72,59 @@ static void CG_TransitionEntity(centity_t* cent) {
 
 /*
 ==================
+CG_DemoRewind
+
+[ioquakelive] the engine went back in a demo (cl_main.c, CL_DemoRewind): the client is again as
+it was at snapshot snapshotNum, with the gamestate of then, and serverCommandSequence is the
+last server command the cgame had taken by then. What was drawn and timed since goes, as
+CG_Init leaves it, and the snapshots start over from that one; everything loaded stays.
+==================
+*/
+void CG_DemoRewind(int snapshotNum, int serverCommandSequence) {
+    int clientNum = cg.clientNum;
+    qboolean showJoinMenu = cg.showJoinMenu;
+    int i;
+
+    memset(&cg, 0, sizeof(cg));
+    memset(cg_entities, 0, sizeof(cg_entities));
+    cg.clientNum = clientNum;
+    cg.race.nextCheckpointEnt = -1;
+    cg.race.nextNextCheckpointEnt = -1;
+    cg.race.currentCheckpointEnt = -1;
+    cg.autoFollowClient = -1;
+    CG_ClearChat();
+    cg.speedBarColor1[0] = 0.0f; cg.speedBarColor1[1] = 1.0f;
+    cg.speedBarColor1[2] = 0.0f; cg.speedBarColor1[3] = 1.0f;
+    cg.speedBarColor2[0] = 1.0f; cg.speedBarColor2[1] = 1.0f;
+    cg.speedBarColor2[2] = 0.0f; cg.speedBarColor2[3] = 1.0f;
+    cg.weaponSelect = WP_MACHINEGUN;
+    cg.showJoinMenu = showJoinMenu;
+
+    CG_InitLocalEntities();
+    CG_InitMarkPolys();
+    CG_ClearParticles();
+    CG_InitTeamChat();
+    trap_S_ClearLoopingSounds(qtrue);
+
+    // the configstrings as they were then
+    trap_GetGameState(&cgs.gameState);
+    CG_ParseServerinfo();
+    CG_SetConfigValues();
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        CG_NewClientInfo(i);
+    }
+    CG_BuildSpectatorString();
+    CG_ShaderStateChanged();
+    CG_StartMusic();
+
+    // the next CG_ProcessSnapshots takes it as the first snapshot
+    cg.latestSnapshotNum = snapshotNum;
+    cgs.processedSnapshotNum = snapshotNum - 1;
+    cgs.serverCommandSequence = serverCommandSequence;
+}
+
+/*
+==================
 CG_SetInitialSnapshot
 
 This will only happen on the very first snapshot.
@@ -258,7 +311,8 @@ static snapshot_t* CG_ReadNextSnapshot(void) {
     qboolean r;
     snapshot_t* dest;
 
-    if (cg.latestSnapshotNum > cgs.processedSnapshotNum + 1000) {
+    // [ioquakelive] not in a demo, where a seek skips them on purpose
+    if (cg.latestSnapshotNum > cgs.processedSnapshotNum + 1000 && !cg.demoPlayback) {
         CG_Printf("WARNING: CG_ReadNextSnapshot: way out of range, %i > %i\n",
                   cg.latestSnapshotNum, cgs.processedSnapshotNum);
     }

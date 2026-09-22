@@ -2376,6 +2376,7 @@ localEntity_t* CG_MakeExplosion(vec3_t origin, vec3_t dir, qhandle_t hModel, qha
 // cg_snapshot.c
 //
 void CG_ProcessSnapshots(void);
+void CG_DemoRewind(int snapshotNum, int serverCommandSequence);
 
 //
 // cg_info.c

@@ -960,21 +960,143 @@ static void CL_DemoScan(const char *name) {
 	Com_DPrintf("demo scan: %d ms\n", Sys_Milliseconds() - start);
 }
 
-// demo time of what is on screen
-static int CL_DemoPos(void) {
+// demo time of server time t in the stretch being played
+static int CL_DemoTimeAt(int t) {
 	int n = demoStretch < demoStretches ? demoStretch : demoStretches - 1;
-	int t;
 
 	if (n < 0) {
 		return 0;
 	}
-	t = cl.serverTime - demoStretchStart[n];
+	t -= demoStretchStart[n];
 	if (t < 0) {
 		t = 0;
 	} else if (t > demoStretchLength[n]) {
 		t = demoStretchLength[n];
 	}
 	return demoStretchAt[n] + t;
+}
+
+// demo time of what is on screen
+static int CL_DemoPos(void) {
+	return CL_DemoTimeAt(cl.serverTime);
+}
+
+/*
+===============================================================================
+
+REWIND
+
+[ioquakelive] NOT FROM RETAIL, the way WolfcamQL does it. While a demo plays, the client is
+copied every so often with its place in the file: once in each eighth of the demo, so any
+point can be reached, and every ten seconds for the last eighty, so a short step back has
+little to read. Going back restores the newest copy a second before the target and the demo
+is read on from there, undrawn, in the same frame, while the cgame starts over from the
+snapshot restored with everything it loaded. The demo is played again, with its loading
+screen, only for a point before every copy or behind a gamestate.
+
+Reading a whole demo takes some 40 milliseconds; what going back used to cost was the cgame
+loading everything again.
+
+===============================================================================
+*/
+
+#define DEMO_SPREAD_BACKUPS		8
+#define DEMO_RECENT_BACKUPS		8
+#define DEMO_BACKUPS			(DEMO_SPREAD_BACKUPS + DEMO_RECENT_BACKUPS)
+#define DEMO_RECENT_SPACING		10000
+
+typedef struct {
+	qboolean			valid;
+	int					pos;			// demo time of its snapshot
+	int					filePos;		// the demo file right after it
+	int					stretch;
+	int					lastSnap;
+	clientActive_t		cl;
+	clientConnection_t	clc;
+} demoBackup_t;
+
+static demoBackup_t*	demoBackups;		// DEMO_BACKUPS of them, while a demo plays
+static int				demoRecentNext;		// demo time the next recent copy is due
+static int				demoRecentSlot;
+
+/*
+====================
+CL_DemoForgetBackups
+
+a new demo, this one again, or a gamestate halfway: none of the copies holds any more
+====================
+*/
+static void CL_DemoForgetBackups(void) {
+	int i;
+
+	if (demoBackups) {
+		for (i = 0; i < DEMO_BACKUPS; i++) {
+			demoBackups[i].valid = qfalse;
+		}
+	}
+	demoRecentNext = 0;
+	demoRecentSlot = 0;
+}
+
+/*
+====================
+CL_DemoFreeBackups
+
+the demo is over; the copies are some 40 megabytes
+====================
+*/
+static void CL_DemoFreeBackups(void) {
+	free(demoBackups);
+	demoBackups = NULL;
+	CL_DemoForgetBackups();
+}
+
+static void CL_DemoTakeBackup(demoBackup_t* b, int pos) {
+	b->valid = qtrue;
+	b->pos = pos;
+	b->filePos = FS_FTell(clc.demofile);
+	b->stretch = demoStretch;
+	b->lastSnap = demoLastSnap;
+	memcpy(&b->cl, &cl, sizeof(cl));
+	memcpy(&b->clc, &clc, sizeof(clc));
+}
+
+/*
+====================
+CL_DemoBackup
+
+after each snapshot of a demo being watched: the first in each eighth of the demo, and one
+every DEMO_RECENT_SPACING into the ring of recent ones
+====================
+*/
+static void CL_DemoBackup(void) {
+	int pos, length, slot;
+
+	if (clc.state != CA_ACTIVE || !demoStretches || !clc.demofile || cl_timedemo->integer) {
+		return;
+	}
+	if (!demoBackups) {
+		demoBackups = calloc(DEMO_BACKUPS, sizeof(demoBackup_t));
+		if (!demoBackups) {
+			return;
+		}
+	}
+
+	pos = CL_DemoTimeAt(cl.snap.serverTime);
+	length = demoStretchAt[demoStretches - 1] + demoStretchLength[demoStretches - 1];
+	slot = length > 0 ? (int)((long long)pos * DEMO_SPREAD_BACKUPS / length) : 0;
+	if (slot >= DEMO_SPREAD_BACKUPS) {
+		slot = DEMO_SPREAD_BACKUPS - 1;
+	}
+	if (!demoBackups[slot].valid) {
+		CL_DemoTakeBackup(&demoBackups[slot], pos);
+	}
+
+	if (pos >= demoRecentNext) {
+		CL_DemoTakeBackup(&demoBackups[DEMO_SPREAD_BACKUPS + demoRecentSlot], pos);
+		demoRecentSlot = (demoRecentSlot + 1) % DEMO_RECENT_BACKUPS;
+		demoRecentNext = pos + DEMO_RECENT_SPACING;
+	}
 }
 
 /*
@@ -988,6 +1110,8 @@ void CL_DemoGamestate(void) {
 	if (clc.demoplaying && clc.state == CA_ACTIVE) {
 		demoStretch++;
 		demoLastSnap = -1;
+		// [ioquakelive] the cgame starts over on it: going back past it plays the demo again
+		CL_DemoForgetBackups();
 	}
 }
 
@@ -1007,6 +1131,7 @@ void CL_DemoSnapshotRead(void) {
 		demoStretch++;
 	}
 	demoLastSnap = cl.snap.serverTime;
+	CL_DemoBackup();
 }
 
 /*
@@ -1041,6 +1166,54 @@ void CL_DemoResume(int pos) {
 
 /*
 ====================
+CL_DemoRewind
+
+back to demo time pos from the newest copy of the client a second before it, which leaves
+snapshots behind the target to draw it from, or failing that the newest at it; qfalse when
+there is none
+====================
+*/
+static qboolean CL_DemoRewind(int pos) {
+	demoBackup_t* b = NULL;
+	fileHandle_t demofile;
+	int i, lead;
+
+	if (!demoBackups || !cgvm) {
+		return qfalse;
+	}
+	for (lead = 1000; lead >= 0 && !b; lead -= 1000) {
+		for (i = 0; i < DEMO_BACKUPS; i++) {
+			if (demoBackups[i].valid && demoBackups[i].pos <= pos - lead && (!b || demoBackups[i].pos > b->pos)) {
+				b = &demoBackups[i];
+			}
+		}
+	}
+	if (!b) {
+		return qfalse;
+	}
+
+	S_StopAllSounds();
+
+	// the file handle is the current one: a filesystem restart reopens the demo
+	demofile = clc.demofile;
+	memcpy(&cl, &b->cl, sizeof(cl));
+	memcpy(&clc, &b->clc, sizeof(clc));
+	clc.demofile = demofile;
+	FS_Seek(clc.demofile, b->filePos, FS_SEEK_SET);
+	demoStretch = b->stretch;
+	demoLastSnap = b->lastSnap;
+	demoRecentNext = b->pos + DEMO_RECENT_SPACING;
+
+	// the clock goes back with it, and CL_DemoSeekApply takes it on to the target
+	cl.serverTimeDelta = cl.snap.serverTime - cls.realtime;
+	cl.serverTime = cl.oldServerTime = cl.oldFrameServerTime = cl.snap.serverTime;
+
+	VM_Call(cgvm, CG_DEMO_REWIND, cl.snap.messageNum, clc.lastExecutedServerCommand);
+	return qtrue;
+}
+
+/*
+====================
 CL_DemoSeek
 
 jumps to demo time pos: ahead in the same stretch right away, anywhere else by playing the
@@ -1071,6 +1244,10 @@ static void CL_DemoSeek(int pos) {
 		return;
 	}
 	if (n != demoStretch || demoSeekTarget < cl.serverTime) {
+		// [ioquakelive] going back starts from a copy of the client when there is one
+		if (pos < CL_DemoPos() && CL_DemoRewind(pos)) {
+			return;
+		}
 		// inserted, not appended: whatever else is queued runs after the demo is back
 		demoSeekRestart = qtrue;
 		Cbuf_ExecuteText(EXEC_INSERT, va("demo \"%s\"\n", clc.demoName));
@@ -1236,6 +1413,7 @@ void CL_PlayDemo_f(void) {
     demoSeekRestart = qfalse;
     demoStretch = 0;
     demoLastSnap = -1;
+    CL_DemoForgetBackups();
     // a seek going back plays the same file again: what the scan found still holds
     if (!seekRestart || Q_stricmp(demoPath, name)) {
         Q_strncpyz(demoPath, name, sizeof(demoPath));
@@ -1469,6 +1647,8 @@ void CL_Disconnect(qboolean showMainMenu) {
         FS_FCloseFile(clc.demofile);
         clc.demofile = 0;
     }
+    // [ioquakelive] and the copies of the client kept for going back in it
+    CL_DemoFreeBackups();
 
     if (uivm && showMainMenu) {
         VM_Call(uivm, UI_SET_ACTIVE_MENU, UIMENU_NONE);
