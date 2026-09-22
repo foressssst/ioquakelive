@@ -2064,6 +2064,7 @@ int         CG_GetOvertimeCount(void);
 qboolean    CG_LocalPlayerLeads(void);
 const char* CG_TranslateMapName(const char* mapname);
 void        CG_CacheCountryFlags(void);
+qhandle_t   CG_CountryFlagShader(const char* country);
 
 //
 // cg_view.c

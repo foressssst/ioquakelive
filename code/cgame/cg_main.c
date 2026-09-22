@@ -1197,6 +1197,27 @@ void CG_CacheCountryFlags(void) {
     }
 }
 
+/*
+=================
+CG_CountryFlagShader
+
+[QL] 0x1002df70: the flag of a country code, ui/assets/flags/<code>, or the blank one when
+there is none. With no country at all (a bot, or nobody set one) retail looks up an empty
+name first, and the renderer warns about it; that lookup is skipped.
+=================
+*/
+qhandle_t CG_CountryFlagShader(const char* country) {
+    qhandle_t h = 0;
+
+    if (country && country[0]) {
+        h = trap_R_RegisterShaderNoMip(va("ui/assets/flags/%s.tga", country));
+    }
+    if (!h) {
+        h = trap_R_RegisterShaderNoMip("ui/assets/flags/none.tga");
+    }
+    return h;
+}
+
 // Address: 0x1002a4a0
 // Resets race-mode tracking state; on a full reset also clears the personal
 // best. Only acts in GT_RACE.
@@ -3171,7 +3192,9 @@ static const char* CG_FeederItemText(float feederID, int index, int column, qhan
                 *handle = trap_R_RegisterShader("ui/assets/score/ca_arrow_blue");
             }
             return "";
+        // [QL] 0x10026381, and at column 4 of every scoreboard: the country flag
         case 4:
+            *handle = CG_CountryFlagShader(info->country);
             return "";
         case 5:
             return info->name;

@@ -2765,10 +2765,16 @@ static void CG_DrawDuelPlayerAcc(rectDef_t *rect, float scale, vec4_t color, int
     CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// 0x71/0xcb CG_DrawDuelPlayerFlag. The per-player flag handle isn't tracked in
-// the ioquakelive duel score, so no-op.
+// 0x71/0xcb CG_DrawDuelPlayerFlag (0x10036720): the duelist's country flag. Retail keeps the
+// handle it looked up while reading the scores (0x10045ab8); here it comes from the clientinfo.
 static void CG_DrawDuelPlayerFlag(rectDef_t *rect, int ownerDraw) {
-    (void)rect; (void)ownerDraw;
+    duelScore_t *ds = &cg.duelScores[CG_DuelPlayerIndex(ownerDraw)];
+
+    if (!cg.duelScoresValid || ds->clientNum < 0 || ds->clientNum >= MAX_CLIENTS ||
+        !cgs.clientinfo[ds->clientNum].infoValid) {
+        return;
+    }
+    CG_DrawPic(rect->x, rect->y, rect->w, rect->h, CG_CountryFlagShader(cgs.clientinfo[ds->clientNum].country));
 }
 
 // 0x72/0xcc CG_DrawDuelPlayerAvatar. Draws the player's head/model icon.

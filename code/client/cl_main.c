@@ -3959,9 +3959,12 @@ void CL_Init(void) {
     Cvar_Get("teamtask", "0", CVAR_USERINFO);
     Cvar_Get("sex", "male", CVAR_USERINFO | CVAR_ARCHIVE);
     // [QL] the country shown next to the name. It travels in the userinfo and the server
-    // publishes it under the "c" key of the player's configstring; the cgame already caches
-    // the flags from ui/country.txt. Empty means no flag.
-    Cvar_Get("country", "", CVAR_USERINFO | CVAR_ARCHIVE);
+    // publishes it under the "c" key of the player's configstring; the scoreboards draw its
+    // flag from ui/assets/flags. Retail filled it in from Steam; here the player sets it.
+    // Empty means no flag.
+    Cvar_SetDescription(Cvar_Get("country", "", CVAR_USERINFO | CVAR_ARCHIVE),
+                        "Your country, as its two-letter code in lower case (cl, ar, us...), for the flag\n"
+                        "next to your name on the scoreboards. Empty shows no flag.");
     Cvar_Get("cl_anonymous", "0", CVAR_USERINFO | CVAR_ARCHIVE);
 
     Cvar_Get("password", "", CVAR_USERINFO);
