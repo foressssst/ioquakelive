@@ -4047,6 +4047,50 @@ qboolean CG_DemoHUDKey(int key, qboolean down) {
 
 /*
 =================
+CG_DrawDemoKeys
+
+[CPMA] CPMA 1.53 lists every key of its demo player behind F1. Here the same list, in the
+type of the controls, over the box that holds them
+=================
+*/
+static void CG_DrawDemoKeys(void) {
+	static const struct {
+		const char *key, *what;
+	} keys[] = {
+		{"SPACE", "Pause, or play again"},
+		{"RIGHT", "One frame on, or faster while it plays"},
+		{"LEFT", "Slower"},
+		{"DOWN", "Back to normal speed"},
+		{"PGUP", "Ten seconds on"},
+		{"PGDN", "Ten seconds back"},
+		{"HOME", "Back to the start"},
+		{"F", "To just before the next frag"},
+		{"C", "The free camera"},
+		{"X", "The X-ray"},
+		{"DEL", "Hides the controls"},
+		{"F1", "This list"},
+		{"MOUSE", "Drags the playhead and works the buttons"},
+	};
+	const float x = 150.0f;
+	const float w = 340.0f;
+	const float step = 13.0f;
+	float y = 60.0f;
+	int i;
+
+	CG_SetWidescreen(WIDESCREEN_CENTER);
+	CG_FillRect(x, y - 14.0f, w, step * ARRAY_LEN(keys) + 22.0f, demoBack);
+	CG_DrawText(x + 10.0f, y - 2.0f, 1, 0.22f, colorWhite, "DEMO KEYS", 0, 0, 3);
+	y += 12.0f;
+	for (i = 0; i < (int)ARRAY_LEN(keys); i++) {
+		CG_DrawText(x + 10.0f, y, 1, 0.18f, colorYellow, (char *)keys[i].key, 0, 0, 3);
+		CG_DrawText(x + 80.0f, y, 1, 0.18f, colorWhite, (char *)keys[i].what, 0, 0, 3);
+		y += step;
+	}
+	CG_SetWidescreen(WIDESCREEN_STRETCH);
+}
+
+/*
+=================
 CG_DrawDemoHUD
 
 Frozen, the middle button is Play and Advance joins it, as in retail; running, Pause.
@@ -4147,6 +4191,8 @@ static void CG_DrawDemoHUD(void) {
 	row[n].label = "X-ray", row[n].key = "[X]", row[n].cmd = "toggle cg_xray\n",
 		row[n++].on = cg_xray.integer ? qtrue : qfalse;
 	row[n].label = "Hide", row[n].key = "[DEL]", row[n].cmd = "toggle cg_drawDemoHUD\n", row[n++].on = qfalse;
+	row[n].label = "Keys", row[n].key = "[F1]", row[n].cmd = "toggle cg_demoKeys\n",
+		row[n++].on = cg_demoKeys.integer ? qtrue : qfalse;
 
 	w = 34.0f * n + 8;
 	CG_FillRect(320 - w / 2, DEMOBAR_Y - 30, w, 26, demoBack);
@@ -4156,6 +4202,10 @@ static void CG_DrawDemoHUD(void) {
 	}
 
 	CG_SetWidescreen(WIDESCREEN_STRETCH);
+
+	if (cg_demoKeys.integer) {
+		CG_DrawDemoKeys();
+	}
 }
 
 static void CG_Draw2D(stereoFrame_t stereoFrame) {

@@ -359,6 +359,7 @@ static void CG_Obituary(entityState_t* ent) {
         attackerTeam = cgs.clientinfo[attacker].team;
         CG_AddObituary(cgs.clientinfo[target].name, cgs.clientinfo[attacker].name,
                        victimTeam, attackerTeam, 1, weaponIcon);
+        CG_SpecFollowKiller(attacker);
     } else {
         // retail's adder copies the attacker name unconditionally, so it
         // never gets a NULL

@@ -869,3 +869,29 @@ void CG_SpecAutoFollow(int clientNum, int mode) {
 
     trap_SendConsoleCommand(va("follow %d%s", clientNum, suffix));
 }
+
+/*
+===============
+CG_SpecFollowKiller
+
+[CPMA] retail jumps to whoever takes a powerup or the flag, and CPMA's spectator camera
+also jumps to whoever gets the frag. Two seconds have to pass between jumps, so a trade
+does not throw the camera about
+===============
+*/
+void CG_SpecFollowKiller(int clientNum) {
+    if (!ch_followKiller.integer || clientNum < 0 || clientNum >= MAX_CLIENTS) {
+        return;
+    }
+    if (!cg.snap || cg.snap->ps.pm_type != PM_SPECTATOR) {
+        return;
+    }
+    if (cgs.clientinfo[cg.clientNum].team != TEAM_SPECTATOR) {
+        return;
+    }
+    if (cg.time < cg.followKillerTime + 2000) {
+        return;
+    }
+    cg.followKillerTime = cg.time;
+    trap_SendConsoleCommand(va("follow %d\n", clientNum));
+}

@@ -1341,7 +1341,7 @@ CL_DemoKeyCommand
 
 [QL] the switch at quakelive_steam.exe 0x4b7cea, key minus 32 into the table at 0x4b803c.
 Right and the wheel up step one frame while the demo is frozen, and speed it up otherwise.
-The jumps and the free camera are ioquakelive's.
+The jumps, the free camera and the list of keys are ioquakelive's.
 ===================
 */
 static const char *CL_DemoKeyCommand(int key) {
@@ -1372,6 +1372,8 @@ static const char *CL_DemoKeyCommand(int key) {
         return "toggle cg_xray\n";
     case 'f':
         return "fragforward\n";
+    case K_F1:
+        return "toggle cg_demoKeys\n";
     }
     return NULL;
 }

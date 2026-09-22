@@ -1002,6 +1002,10 @@ static const cvarHelp_t cvarHelp[] = {
     {"ch_recordMessage", "while a demo is being recorded, its name on the screen"},
     {"ch_autoStats", "when a match ends, writes the console, with the scores in it, to a file "
                      "under stats/"},
+    {"cg_demoKeys", "the list of the demo player's keys, which F1 opens and closes"},
+    {"ch_followKiller", "watching, the camera jumps to whoever gets a frag, at most once "
+                        "every two seconds; " HC("cg_followPowerup") " does the same with the "
+                        "powerups and the flag"},
     {"ch_gameEvents", "the kill feed also carries the flag taken and captured, and, while you "
                       "watch, what the players pick up"},
     {"ch_drawKeys", "the movement keys of whoever you are watching, over the left of the "

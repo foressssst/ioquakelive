@@ -828,6 +828,9 @@ typedef struct {
     qboolean autoActionLive;
     qboolean autoActionEnded;
     qboolean autoActionRecording;
+
+    // [CPMA] when the spectator camera last jumped to whoever got the frag
+    int followKillerTime;
     int warmupGametype;     // [QL] gametype override from CS_WARMUP (-1 = use current)
     int warmupRound;             // [QL] CS_ROUND_WARMUP "round" (0x10ab8f58), +1 in GT_AD
     int warmupTurn;              // [QL] CS_ROUND_WARMUP "turn", GT_AD only (0x10ab8f5c)
@@ -2025,6 +2028,8 @@ extern vmCvar_t ch_drawTargetStatus;
 extern vmCvar_t ch_drawKeys;
 extern vmCvar_t cg_autoAction;
 extern vmCvar_t ch_autoStats;
+extern vmCvar_t cg_demoKeys;
+extern vmCvar_t ch_followKiller;
 extern vmCvar_t ch_gameEvents;
 extern vmCvar_t ch_recordMessage;
 extern vmCvar_t cg_demoRecording;
@@ -2402,6 +2407,7 @@ void CG_BloodSplatEffect(vec3_t origin, int entityNum);  // QL: blood splat (rep
 void CG_SpawnParticleEffect(vec3_t origin, vec3_t vel, float size, float r, float g, float b, float a, float lifetime, int startTime, int flags, qhandle_t shader);  // [QL] 0x10012f30: one impact spark
 void CG_SpecAutoFollow(int clientNum, int mode);  // QL: auto-follow spectator
 void CG_AddGameEvent(int clientNum, qhandle_t icon, const char* what);
+void CG_SpecFollowKiller(int clientNum);
 
 localEntity_t* CG_MakeExplosion(vec3_t origin, vec3_t dir, qhandle_t hModel, qhandle_t shader, int msec, qboolean isSprite);
 
