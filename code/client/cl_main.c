@@ -2830,6 +2830,14 @@ CL_CheckTimeout
 ==================
 */
 void CL_CheckTimeout(void) {
+    // [ioquakelive] a demo is a file, not a connection: it has nothing to time out. The clock
+    // only moved while the demo was being read, so a demo held on pause ran out cl_timeout
+    // (40 seconds) and dropped to the menu by itself
+    if (clc.demoplaying) {
+        cl.timeoutcount = 0;
+        return;
+    }
+
     //
     // check timeout
     //
