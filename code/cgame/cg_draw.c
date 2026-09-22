@@ -2171,7 +2171,7 @@ static void CG_DrawTeammateNames(void) {
 	static const vec4_t armorColor = {0.0f, 0.625f, 1.0f, 1.0f};
 	int i, j, len, count, boxWidth, nameWidth, nameHeight, xoff, armorWidth;
 	int health, armor, maxHealth, localTeam;
-	qboolean sameTeam, spectator, frozen, showName, showBars;
+	qboolean sameTeam, spectator, frozen, showName, showBars, xrayNames;
 	float scale, fontSize, sx, sy, nx, ny, x, y, extra, barX, barY, iconX, iconY;
 	const float* textColor;
 	vec3_t point, delta;
@@ -2184,8 +2184,13 @@ static void CG_DrawTeammateNames(void) {
 	char* in;
 	char* out;
 
+	// [ioquakelive] NOT FROM RETAIL: in a demo with the x-ray on, every outline gets its name
+	// over it too, as cg_specNames 2 gives a spectator; the bars stay as they were, since a
+	// player's demo does not carry the others' health
+	xrayNames = cg.demoPlayback && CG_XrayAllowed();
+
 	if (cg.predictedPlayerState.pm_type == PM_SPECTATOR && !(cg.predictedPlayerState.pm_flags & PMF_FOLLOW) &&
-		!cg_specNames.integer) {
+		!cg_specNames.integer && !xrayNames) {
 		return;
 	}
 
@@ -2249,7 +2254,7 @@ static void CG_DrawTeammateNames(void) {
 		sameTeam = cgs.gametype >= GT_TEAM && localTeam == ci->team;
 		spectator = localTeam == TEAM_SPECTATOR;
 		textColor = CG_OverheadTeamColor(localTeam);
-		if (spectator && cgs.gametype >= GT_TEAM) {
+		if ((spectator || xrayNames) && cgs.gametype >= GT_TEAM) {
 			textColor = CG_OverheadTeamColor(ci->team);
 		}
 
@@ -2258,7 +2263,7 @@ static void CG_DrawTeammateNames(void) {
 		nx = sx / 640.0f;
 		ny = 1.0f - sy / 480.0f;
 
-		if (spectator && cg_specNames.integer == 2) {
+		if (xrayNames || (spectator && cg_specNames.integer == 2)) {
 			showName = qtrue;
 		} else if (sameTeam && cg_teammateNames.integer == 2) {
 			showName = qtrue;
