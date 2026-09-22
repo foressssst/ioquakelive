@@ -365,6 +365,10 @@ vmCvar_t ch_animateScroll;
 vmCvar_t cg_zoomAnimationTime;
 vmCvar_t cg_drawBrightWeapons;
 vmCvar_t ch_chatLines;
+vmCvar_t ch_drawLocalTime;
+vmCvar_t ch_recordMessage;
+vmCvar_t cg_demoRecording;
+vmCvar_t cg_demoName;
 vmCvar_t cg_rocketStyle;
 vmCvar_t cg_raceBeep;
 vmCvar_t cg_screenDamage_Self;
@@ -777,6 +781,11 @@ static cvarTable_t cvarTable[] = {
     // lying on the map, 16 anybody's while you spectate with the free camera
     {&cg_drawBrightWeapons, "cg_drawBrightWeapons", "0", CVAR_ARCHIVE},
     {&ch_chatLines, "ch_chatLines", "3", CVAR_ARCHIVE},
+    // [CPMA] the LocalTime and RecordingDemo elements of CPMA 1.53, in Quake Live's own type
+    {&ch_drawLocalTime, "ch_drawLocalTime", "0", CVAR_ARCHIVE},
+    {&ch_recordMessage, "ch_recordMessage", "1", CVAR_ARCHIVE},
+    {&cg_demoRecording, "cl_demorecording", "0", CVAR_ROM},
+    {&cg_demoName, "cl_demoname", "", CVAR_ROM},
     {&cg_rocketStyle, "cg_rocketStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "2"},
     {&cg_raceBeep, "cg_raceBeep", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "8"},
     {&cg_screenDamage_Self, "cg_screenDamage_Self", "0x00000000", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},

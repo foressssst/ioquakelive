@@ -2014,6 +2014,10 @@ extern vmCvar_t ch_animateScroll;
 extern vmCvar_t cg_zoomAnimationTime;
 extern vmCvar_t cg_drawBrightWeapons;  // [CPMA] bitmask of the weapons drawn as flat silhouettes
 extern vmCvar_t ch_chatLines;
+extern vmCvar_t ch_drawLocalTime;
+extern vmCvar_t ch_recordMessage;
+extern vmCvar_t cg_demoRecording;
+extern vmCvar_t cg_demoName;
 extern vmCvar_t cg_rocketStyle;
 
 void CG_ProjectileLeadOffset(const centity_t* cent, vec3_t offset);

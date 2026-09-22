@@ -3428,7 +3428,9 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
             cg.obitSlideKey = cg.obituaries[0].time;
         }
         if (cg.obitSlideStart) {
-            slide = CG_CpmaSlide(cg.obitSlideStart, OBIT_FADEOUT) * (float)(CG_DrawTextHeight("A", scale, 0, 0) + 2);
+            // the list slides by the row that is leaving, which is the one drawn at the anchor
+            slide = CG_CpmaSlide(cg.obitSlideStart, OBIT_FADEOUT) *
+                    (float)(CG_DrawTextHeight(cg.obituaries[0].victimName, scale, 0, 0) + 2);
         }
     }
 

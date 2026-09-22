@@ -245,6 +245,8 @@ void CL_StopRecord_f(void) {
     FS_FCloseFile(clc.demofile);
     clc.demofile = 0;
     clc.demorecording = qfalse;
+    Cvar_Set("cl_demorecording", "0");
+    Cvar_Set("cl_demoname", "");
     Com_Printf("Stopped demo.\n");
 }
 
@@ -338,6 +340,8 @@ void CL_Record_f(void) {
     clc.demorecording = qtrue;
 
     Q_strncpyz(clc.demoName, demoName, sizeof(clc.demoName));
+    Cvar_Set("cl_demorecording", "1");
+    Cvar_Set("cl_demoname", clc.demoName);
 
     // don't start saving messages until a non-delta compressed message is received
     clc.demowaiting = qtrue;
@@ -3996,6 +4000,9 @@ void CL_Init(void) {
     Cvar_Get("cl_demoPos", "0", CVAR_ROM);
     Cvar_Get("cl_demoMarks", "", CVAR_ROM);
     Cvar_Get("cl_demoFrags", "", CVAR_ROM);
+    // [ioquakelive] what the cgame needs to put the recording message up
+    Cvar_Get("cl_demorecording", "0", CVAR_ROM);
+    Cvar_Get("cl_demoname", "", CVAR_ROM);
     Cmd_AddCommand("stoprecord", CL_StopRecord_f);
     Cmd_AddCommand("connect", CL_Connect_f);
     Cmd_AddCommand("reconnect", CL_Reconnect_f);

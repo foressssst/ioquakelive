@@ -1083,6 +1083,65 @@ static void CG_DrawSpeedometer(void) {
 }
 
 /*
+==================
+CG_DrawLocalTime
+
+[CPMA] the LocalTime element of CPMA 1.53's HUD: the clock of the machine, in the upper
+right column and in the same type as the rest of it
+==================
+*/
+static float CG_DrawLocalTime(float y) {
+	qtime_t now;
+	const char* s;
+	int w, h, hour;
+
+	trap_RealTime(&now);
+	hour = now.tm_hour;
+	if (ch_drawLocalTime.integer == 2) {
+		const char* suffix = (hour < 12) ? "am" : "pm";
+
+		hour %= 12;
+		if (!hour) {
+			hour = 12;
+		}
+		s = va("%i:%02i%s", hour, now.tm_min, suffix);
+	} else {
+		s = va("%i:%02i", hour, now.tm_min);
+	}
+	w = CG_DrawTextWidth(s, 0.25f, 0, 2);
+	h = CG_DrawTextHeight(s, 0.25f, 0, 2);
+
+	CG_DrawText((float)(635 - w), y + h, 2, 0.25f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+
+	return y + h;
+}
+
+/*
+==================
+CG_DrawRecording
+
+[CPMA] the RecordingDemo element of CPMA 1.53's HUD: while a demo is being recorded, its
+name sits in the upper right column. The engine puts the two cvars up when it opens and
+closes the file
+==================
+*/
+static float CG_DrawRecording(float y) {
+	const char* s;
+	int w, h;
+
+	if (!cg_demoRecording.integer) {
+		return y;
+	}
+	s = cg_demoName.string[0] ? va("REC %s", cg_demoName.string) : "REC";
+	w = CG_DrawTextWidth(s, 0.25f, 0, 2);
+	h = CG_DrawTextHeight(s, 0.25f, 0, 2);
+
+	CG_DrawText((float)(635 - w), y + h, 2, 0.25f, colorRed, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+
+	return y + h;
+}
+
+/*
 =====================
 CG_DrawUpperRight
 
@@ -1104,6 +1163,12 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame) {
 	}
 	if (cg_drawTimer.integer) {
 		y = CG_DrawTimer(y);
+	}
+	if (ch_recordMessage.integer) {
+		y = CG_DrawRecording(y);
+	}
+	if (ch_drawLocalTime.integer) {
+		y = CG_DrawLocalTime(y);
 	}
 	if (cg_drawAttacker.integer) {
 		CG_DrawAttacker(y);

@@ -1691,6 +1691,9 @@ static void CG_MapRestart(void) {
     CG_StartMusic();
     trap_S_ClearLoopingSounds(qtrue);
     memset(cg.obituaries, 0, sizeof(cg.obituaries));  // [QL] 0x1004a396
+    // [CPMA] with the list gone the slide has nothing to move, so it starts clean
+    cg.obitSlideStart = 0;
+    cg.obitSlideKey = 0;
 
     // play the "fight" sound if this is a restart without warmup; the round modes play
     // theirs when each round starts

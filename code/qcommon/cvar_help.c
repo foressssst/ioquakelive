@@ -995,6 +995,13 @@ static const cvarHelp_t cvarHelp[] = {
     {"showdrop", "prints dropped packets"},
     {"cl_packetdelay", "delays sent packets by this many milliseconds"},
     {"sv_packetdelay", "delays the server's packets by this many milliseconds"},
+    {"ch_drawLocalTime", "the clock of your machine, over the game\n"
+                         HV("0") "Off\n"
+                         HV("1") "24 hours\n"
+                         HV("2") "12 hours, with am and pm"},
+    {"ch_recordMessage", "while a demo is being recorded, its name on the screen"},
+    {"cl_demorecording", "set by the game: 1 while a demo is being recorded"},
+    {"cl_demoname", "set by the game: the demo being recorded"},
 
     //
     // engine: more
