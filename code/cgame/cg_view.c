@@ -1386,6 +1386,58 @@ static void CG_WeaponConfig(void) {
 
 /*
 =================
+CG_AutoAction
+
+[QL] cg_autoAction: 1 records the match and 2 takes a picture when it ends. Retail
+registers it with those two values and a default of 3, and then never reads it. [CPMA]
+ch_autoStats writes the console, with the scores in it, next to the picture, the way CPMA
+1.53's own autoaction does. The match is live once the warmup is over and ends at the
+intermission, and nothing runs while a demo plays
+=================
+*/
+static void CG_AutoAction(void) {
+    qboolean live;
+
+    if (cg.demoPlayback || !cg.snap || (!cg_autoAction.integer && !ch_autoStats.integer)) {
+        return;
+    }
+    live = (!cg.warmup && !cg.intermissionStarted && cg.snap->ps.pm_type != PM_INTERMISSION);
+
+    if (live && !cg.autoActionLive) {
+        cg.autoActionLive = qtrue;
+        cg.autoActionEnded = qfalse;
+        if ((cg_autoAction.integer & 1) && !cg_demoRecording.integer) {
+            cg.autoActionRecording = qtrue;
+            trap_SendConsoleCommand("record\n");
+        }
+        return;
+    }
+    if (!live) {
+        cg.autoActionLive = qfalse;
+    }
+    if (!cg.intermissionStarted || cg.autoActionEnded) {
+        return;
+    }
+    cg.autoActionEnded = qtrue;
+    if (cg.autoActionRecording) {
+        cg.autoActionRecording = qfalse;
+        trap_SendConsoleCommand("stoprecord\n");
+    }
+    if (cg_autoAction.integer & 2) {
+        trap_SendConsoleCommand("screenshotJPEG\n");
+    }
+    if (ch_autoStats.integer) {
+        qtime_t now;
+
+        trap_RealTime(&now);
+        trap_SendConsoleCommand(va("condump stats/%s-%04i%02i%02i-%02i%02i%02i.txt\n", cgs.mapname,
+                                   now.tm_year + 1900, now.tm_mon + 1, now.tm_mday, now.tm_hour,
+                                   now.tm_min, now.tm_sec));
+    }
+}
+
+/*
+=================
 CG_DrawActiveFrame
 
 Generates and draws a game scene and status information at the given time.
@@ -1486,6 +1538,7 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
 
     // [QL] the weapon selected brings its own config
     CG_WeaponConfig();
+    CG_AutoAction();
 
     // add buffered sounds
     CG_PlayBufferedSounds();

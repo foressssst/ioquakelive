@@ -822,6 +822,12 @@ typedef struct {
     // warmup countdown
     int warmup;
     int warmupCount;
+
+    // [CPMA] cg_autoAction: whether the match is running, whether its end was dealt with
+    // and whether the demo being recorded was started here
+    qboolean autoActionLive;
+    qboolean autoActionEnded;
+    qboolean autoActionRecording;
     int warmupGametype;     // [QL] gametype override from CS_WARMUP (-1 = use current)
     int warmupRound;             // [QL] CS_ROUND_WARMUP "round" (0x10ab8f58), +1 in GT_AD
     int warmupTurn;              // [QL] CS_ROUND_WARMUP "turn", GT_AD only (0x10ab8f5c)
@@ -2017,6 +2023,9 @@ extern vmCvar_t ch_chatLines;
 extern vmCvar_t ch_drawLocalTime;
 extern vmCvar_t ch_drawTargetStatus;
 extern vmCvar_t ch_drawKeys;
+extern vmCvar_t cg_autoAction;
+extern vmCvar_t ch_autoStats;
+extern vmCvar_t ch_gameEvents;
 extern vmCvar_t ch_recordMessage;
 extern vmCvar_t cg_demoRecording;
 extern vmCvar_t cg_demoName;
@@ -2392,6 +2401,7 @@ void CG_Bleed(vec3_t origin, int entityNum);
 void CG_BloodSplatEffect(vec3_t origin, int entityNum);  // QL: blood splat (replaces CG_Bleed for hit effects)
 void CG_SpawnParticleEffect(vec3_t origin, vec3_t vel, float size, float r, float g, float b, float a, float lifetime, int startTime, int flags, qhandle_t shader);  // [QL] 0x10012f30: one impact spark
 void CG_SpecAutoFollow(int clientNum, int mode);  // QL: auto-follow spectator
+void CG_AddGameEvent(int clientNum, qhandle_t icon, const char* what);
 
 localEntity_t* CG_MakeExplosion(vec3_t origin, vec3_t dir, qhandle_t hModel, qhandle_t shader, int msec, qboolean isSprite);
 

@@ -1000,6 +1000,10 @@ static const cvarHelp_t cvarHelp[] = {
                          HV("1") "24 hours\n"
                          HV("2") "12 hours, with am and pm"},
     {"ch_recordMessage", "while a demo is being recorded, its name on the screen"},
+    {"ch_autoStats", "when a match ends, writes the console, with the scores in it, to a file "
+                     "under stats/"},
+    {"ch_gameEvents", "the kill feed also carries the flag taken and captured, and, while you "
+                      "watch, what the players pick up"},
     {"ch_drawKeys", "the movement keys of whoever you are watching, over the left of the "
                     "screen; yours are the ones you press, anybody else's are read back "
                     "from the way they move"},

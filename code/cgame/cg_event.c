@@ -270,6 +270,34 @@ static void CG_ShowFragMessage(int target, int mod, const char* targetName) {
 
 /*
 =============
+CG_GameEventIcon / CG_AddGameEvent
+
+[CPMA] the GameEvents element of CPMA 1.53 also carries what happens with the flag and,
+while watching, what the players pick up. They go in the same feed as the kills, in the
+same shape: who, what, and the icon between them
+=============
+*/
+static qhandle_t CG_FlagIcon(int powerup) {
+    gitem_t* item = BG_FindItemForPowerup((powerup_t)powerup);
+
+    return item ? cg_items[ITEM_INDEX(item)].icon : 0;
+}
+
+void CG_AddGameEvent(int clientNum, qhandle_t icon, const char* what) {
+    if (!ch_gameEvents.integer || clientNum < 0 || clientNum >= MAX_CLIENTS || !icon) {
+        return;
+    }
+    CG_AddObituary(what, cgs.clientinfo[clientNum].name, TEAM_FREE, cgs.clientinfo[clientNum].team, 1, icon);
+}
+
+// whether what is watched is watched from outside: a demo, a spectator, or following a player
+static qboolean CG_Watching(void) {
+    return (cg.demoPlayback || cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR ||
+            (cg.snap->ps.pm_flags & PMF_FOLLOW)) ? qtrue : qfalse;
+}
+
+/*
+=============
 CG_Obituary
 =============
 */
@@ -1185,6 +1213,14 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                     }
                 }
 
+                // [CPMA] watching, what the others pick up goes in the feed: the armours,
+                // the mega health and the powerups, which are what a match turns on
+                if (es->number != cg.snap->ps.clientNum && CG_Watching() &&
+                    (item->giType == IT_POWERUP || item->giType == IT_ARMOR ||
+                     (item->giType == IT_HEALTH && item->quantity >= 100))) {
+                    CG_AddGameEvent(es->number, cg_items[index].icon, "+");
+                }
+
                 // show icon and name on status bar
                 if (es->number == cg.snap->ps.clientNum) {
                     CG_ItemPickup(index);
@@ -1517,10 +1553,14 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                 case GTS_RED_CAPTURE:  // CTF: red team captured the blue flag, 1FCTF: red team captured the neutral flag
                     trap_S_StartLocalSound(team == TEAM_RED ? cgs.media.captureYourTeamSound : cgs.media.captureOpponentSound,
                                            CHAN_LOCAL_SOUND);
+                    CG_AddGameEvent(es->otherEntityNum,
+                                    CG_FlagIcon(cgs.gametype == GT_1FCTF ? PW_NEUTRALFLAG : PW_BLUEFLAG), "captured");
                     break;
                 case GTS_BLUE_CAPTURE:  // CTF: blue team captured the red flag, 1FCTF: blue team captured the neutral flag
                     trap_S_StartLocalSound(team == TEAM_BLUE ? cgs.media.captureYourTeamSound : cgs.media.captureOpponentSound,
                                            CHAN_LOCAL_SOUND);
+                    CG_AddGameEvent(es->otherEntityNum,
+                                    CG_FlagIcon(cgs.gametype == GT_1FCTF ? PW_NEUTRALFLAG : PW_REDFLAG), "captured");
                     break;
                 case GTS_RED_RETURN:  // CTF: blue flag returned, 1FCTF: never used
                     if (team == TEAM_BLUE) {
@@ -1547,6 +1587,9 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
 
                 case GTS_RED_TAKEN:  // CTF: red team took blue flag, 1FCTF: blue team took the neutral flag
                     CG_SpecAutoFollow(es->otherEntityNum, 1);
+                    CG_AddGameEvent(es->otherEntityNum,
+                                    CG_FlagIcon(cgs.gametype == GT_1FCTF ? PW_NEUTRALFLAG : PW_BLUEFLAG),
+                                    "took the flag");
                     // if this player picked up the flag then a sound is played in CG_CheckLocalSounds
                     if (cg.snap->ps.powerups[PW_BLUEFLAG] || cg.snap->ps.powerups[PW_NEUTRALFLAG]) {
                         break;
@@ -1569,6 +1612,9 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                     break;
                 case GTS_BLUE_TAKEN:  // CTF: blue team took the red flag, 1FCTF red team took the neutral flag
                     CG_SpecAutoFollow(es->otherEntityNum, 1);
+                    CG_AddGameEvent(es->otherEntityNum,
+                                    CG_FlagIcon(cgs.gametype == GT_1FCTF ? PW_NEUTRALFLAG : PW_REDFLAG),
+                                    "took the flag");
                     // if this player picked up the flag then a sound is played in CG_CheckLocalSounds
                     if (cg.snap->ps.powerups[PW_REDFLAG] || cg.snap->ps.powerups[PW_NEUTRALFLAG]) {
                         break;
