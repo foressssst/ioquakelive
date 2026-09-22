@@ -3434,7 +3434,9 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
         }
     }
 
-    y = (float)(int)rect->y - slide;
+    // [ioquakelive] the feed sits a little lower than the HUD's own rect, which is where it
+    // reads best. ch_obituaryY is for picking the number on screen
+    y = (float)(int)rect->y + ch_obituaryY.value - slide;
 
     for (i = 0; i < MAX_OBITUARIES; i++) {
         if (!cg.obituaries[i].active) {
@@ -3455,6 +3457,19 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
 
         textH = CG_DrawTextHeight(cg.obituaries[i].victimName, scale, 0, 0);
         attackerW = 0;
+
+        // [CPMA] the band behind the row, which is what makes the feed read over the map. It
+        // takes the row's own alpha, so it comes and goes with the line
+        if (ch_obituaryBand.integer) {
+            vec4_t band = {0.0f, 0.0f, 0.0f, 0.0f};
+            float rowW = (float)(textH * 2) + CG_DrawTextWidth(cg.obituaries[i].victimName, scale, 0, 0);
+
+            if (cg.obituaries[i].hasAttacker == 1) {
+                rowW += (float)CG_DrawTextWidth(cg.obituaries[i].attackerName, scale, 0, 0);
+            }
+            band[3] = obitColor[3] * 0.45f;
+            CG_FillRect(rect->x - 4.0f, y - (float)textH - 2.0f, rowW + 8.0f, (float)textH + 5.0f, band);
+        }
 
         if (cg.obituaries[i].hasAttacker == 1) {
             team = CG_ObitTeamColor(cg.obituaries[i].attackerTeam);

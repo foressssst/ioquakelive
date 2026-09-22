@@ -349,6 +349,10 @@ static void CG_Obituary(entityState_t* ent) {
             fx->minPixels = cg_teammatePOIsMinWidth.value;
             fx->shader = cgs.media.friendDeadShader;
             fx->lifeRate = cg_drawDeadFriendTime.value;
+            // [ioquakelive] retail lets it go out at once; it fades over its last quarter, the
+            // way the powerup mark of the binary fades over what is left of its own life
+            fx->fadeStart = fx->lifeRate * 0.75f;
+            fx->doFade = 1;
         }
     }
 
@@ -1214,10 +1218,12 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                     }
                 }
 
-                // [CPMA] watching, what the others pick up goes in the feed: the armours,
-                // the mega health and the powerups, which are what a match turns on
+                // [CPMA] watching, what the others pick up goes in the feed, and only what a
+                // match turns on: the armours that are not a shard, the mega health and the
+                // powerups, runes included. The small healths and the shards stay out
                 if (es->number != cg.snap->ps.clientNum && CG_Watching() &&
-                    (item->giType == IT_POWERUP || item->giType == IT_ARMOR ||
+                    (item->giType == IT_POWERUP || item->giType == IT_PERSISTANT_POWERUP ||
+                     (item->giType == IT_ARMOR && item->giTag >= 1 && item->giTag <= 3) ||
                      (item->giType == IT_HEALTH && item->quantity >= 100))) {
                     CG_AddGameEvent(es->number, cg_items[index].icon, "+");
                 }
