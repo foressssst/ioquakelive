@@ -1352,6 +1352,40 @@ static int CG_WeaponPrimaryFromCvar(void) {
 
 /*
 =================
+CG_WeaponConfig
+
+[QL] 0x1004e68f, in CG_DrawActiveFrame: when the weapon selected changes, its
+cg_weaponConfig_<weapon> is run as a command, or cg_weaponConfig when that one is empty,
+so a player can have a sensitivity or a crosshair of their own for each weapon
+=================
+*/
+static void CG_WeaponConfig(void) {
+    static vmCvar_t* const configs[] = {
+        &cg_weaponConfig_g, &cg_weaponConfig_mg, &cg_weaponConfig_sg, &cg_weaponConfig_gl,
+        &cg_weaponConfig_rl, &cg_weaponConfig_lg, &cg_weaponConfig_rg, &cg_weaponConfig_pg,
+        &cg_weaponConfig_bfg, &cg_weaponConfig_gh, &cg_weaponConfig_ng, &cg_weaponConfig_pl,
+        &cg_weaponConfig_cg, &cg_weaponConfig_hmg,
+    };
+    const char* config;
+
+    if (cg.weaponSelect == cg.weaponConfigSelect) {
+        return;
+    }
+    cg.weaponConfigSelect = cg.weaponSelect;
+    if (cg.weaponSelect < WP_GAUNTLET || cg.weaponSelect > WP_HMG) {
+        return;
+    }
+    config = configs[cg.weaponSelect - WP_GAUNTLET]->string;
+    if (!config[0]) {
+        config = cg_weaponConfig.string;
+    }
+    if (config[0]) {
+        trap_SendConsoleCommand(va("%s\n", config));
+    }
+}
+
+/*
+=================
 CG_DrawActiveFrame
 
 Generates and draws a game scene and status information at the given time.
@@ -1449,6 +1483,9 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
         CG_AddLocalEntities();
     }
     CG_AddViewWeapon(&cg.predictedPlayerState);
+
+    // [QL] the weapon selected brings its own config
+    CG_WeaponConfig();
 
     // add buffered sounds
     CG_PlayBufferedSounds();

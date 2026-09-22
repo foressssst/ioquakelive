@@ -847,6 +847,7 @@ typedef struct {
     qboolean chatSlideIn;  // the rows rise into place (a line came in) rather than sink
 
     int weaponSelectTime;
+    int weaponConfigSelect;  // [QL] 0x10a9c7b0: the weapon whose config ran last
     int weaponAnimation;
     int weaponAnimationTime;
 
@@ -1791,6 +1792,21 @@ extern vmCvar_t cg_gun_x;
 extern vmCvar_t cg_gun_y;
 extern vmCvar_t cg_gun_z;
 extern vmCvar_t cg_drawGun;
+extern vmCvar_t cg_weaponConfig;
+extern vmCvar_t cg_weaponConfig_g;
+extern vmCvar_t cg_weaponConfig_mg;
+extern vmCvar_t cg_weaponConfig_sg;
+extern vmCvar_t cg_weaponConfig_gl;
+extern vmCvar_t cg_weaponConfig_rl;
+extern vmCvar_t cg_weaponConfig_lg;
+extern vmCvar_t cg_weaponConfig_rg;
+extern vmCvar_t cg_weaponConfig_pg;
+extern vmCvar_t cg_weaponConfig_bfg;
+extern vmCvar_t cg_weaponConfig_gh;
+extern vmCvar_t cg_weaponConfig_ng;
+extern vmCvar_t cg_weaponConfig_pl;
+extern vmCvar_t cg_weaponConfig_cg;
+extern vmCvar_t cg_weaponConfig_hmg;
 extern vmCvar_t r_dynamicLight;  // [ioquakelive] ver CG_AddEffectLight
 extern vmCvar_t cg_viewsize;
 extern vmCvar_t cg_tracerChance;
