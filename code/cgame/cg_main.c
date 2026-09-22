@@ -2155,6 +2155,21 @@ static void CG_RegisterGraphics(void) {
     cgs.media.medalRampage = trap_R_RegisterShaderNoMip("medal_rampage");
     cgs.media.medalRevenge = trap_R_RegisterShaderNoMip("medal_revenge");
 
+    // [QL] 0x10024808: the scoreboards' pickup icons, in retail's order
+    cgs.media.pickupRA = trap_R_RegisterShaderNoMip("pickup_RA");
+    cgs.media.pickupYA = trap_R_RegisterShaderNoMip("pickup_YA");
+    cgs.media.pickupGA = trap_R_RegisterShaderNoMip("pickup_GA");
+    cgs.media.pickupMH = trap_R_RegisterShaderNoMip("pickup_MH");
+    cgs.media.pickupMK = trap_R_RegisterShaderNoMip("pickup_MK");
+    cgs.media.pickupBlueFlag = trap_R_RegisterShaderNoMip("pickup_BLUEFLAG");
+    cgs.media.pickupNeutralFlag = trap_R_RegisterShaderNoMip("pickup_NTRLFLAG");
+    cgs.media.pickupRedFlag = trap_R_RegisterShaderNoMip("pickup_REDFLAG");
+    cgs.media.pickupQuad = trap_R_RegisterShaderNoMip("pickup_QUAD");
+    cgs.media.pickupBS = trap_R_RegisterShaderNoMip("pickup_BS");
+    cgs.media.pickupRegen = trap_R_RegisterShaderNoMip("pickup_REGEN");
+    cgs.media.pickupHaste = trap_R_RegisterShaderNoMip("pickup_HASTE");
+    cgs.media.pickupInvis = trap_R_RegisterShaderNoMip("pickup_INVIS");
+
     // [QL] 0x10024343. The Steam Workshop gore pack - the body-part gibs a
     // player can install if they want Quake 3's look back. Retail's pak00 ships
     // none of these files, so RE_RegisterModel hands back 0 for every one and

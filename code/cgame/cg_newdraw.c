@@ -3011,7 +3011,7 @@ static void CG_DrawDuelWeaponAcc(rectDef_t *rect, float scale, vec4_t color, int
     CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, c, s, 0, 0, textStyle);
 }
 
-// pickup slot data for CG_DrawDuelPlayerPickups / accuracy: count + avg time.
+// pickup slot data for CG_DrawDuelPlayerPickups / CG_DrawDuelAvgPickupTime: count + avg time.
 static void CG_DuelPickupSlot(duelScore_t *ds, int slot, int *count, float *avgTime) {
     switch (slot) {
     case 0: *count = ds->redArmorPickups;    *avgTime = ds->redArmorTime;    break;
@@ -3021,51 +3021,98 @@ static void CG_DuelPickupSlot(duelScore_t *ds, int slot, int *count, float *avgT
     }
 }
 
-// 0xb3-0xb7/0x10d-0x111 CG_DrawDuelPlayerPickups. 0xb3 draws the full RA/YA/GA/MH
-// row (icon + count + avg time); the others draw a single count.
-static void CG_DrawDuelPlayerPickups(rectDef_t *rect, float scale, vec4_t color, int textStyle, int ownerDraw) {
-    int idx = CG_DuelPlayerIndex(ownerDraw);
-    duelScore_t *ds = &cg.duelScores[idx];
-    int base = (idx == 0) ? CG_1ST_PLYR_PICKUPS : CG_2ND_PLYR_PICKUPS;
+/*
+=================
+CG_DrawDuelPlayerPickups
+
+[QL] 0x10036eb0, 0xb3-0xb7 and 0x10d-0x111. The first id of each block draws the duelist's
+column: for red, yellow and green armor and mega health picked up at least once, the icon at
+the item's size, and 15 lower the count and the average time between pickups, each placed by
+the item's align, the next item 15 down. The first duelist reads rightwards from the icon
+(count 15 on, time 30 on), the second leftwards (count at the icon, time 15 before it). The
+other ids draw one count, 0 included. Font 0 throughout.
+=================
+*/
+static void CG_DrawDuelPlayerPickups(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
+    int player = CG_DuelPlayerIndex(ownerDraw);
+    duelScore_t *ds = &cg.duelScores[player];
+    int base = player ? CG_2ND_PLYR_PICKUPS : CG_1ST_PLYR_PICKUPS;
     int off = ownerDraw - base;
-    int count;
-    float avgTime;
-    int i;
-    float x, y;
+    qhandle_t icons[4];
+    rectDef_t text;
+    const char *s;
+    int count, i;
+    float avgTime, x, y;
 
     if (off == 0) {
-        // full pickup row: count + avg time per slot (RA/YA/GA/MH item icons are
-        // not registered in this media set, so only the numbers are drawn).
+        icons[0] = cgs.media.pickupRA;
+        icons[1] = cgs.media.pickupYA;
+        icons[2] = cgs.media.pickupGA;
+        icons[3] = cgs.media.pickupMH;
         x = rect->x;
         y = rect->y;
         for (i = 0; i < 4; i++) {
             CG_DuelPickupSlot(ds, i, &count, &avgTime);
-            if (!count) continue;
-            CG_OwnerDrawText(x + 15, y + 15, scale, color, va("%i", count), 0, 0, textStyle);
-            CG_OwnerDrawText(x + 30, y + 15, scale, color, va("%3.2f", avgTime), 0, 0, textStyle);
-            x += 45;
+            if (!count) {
+                continue;
+            }
+            CG_DrawPic(x, y, rect->w, rect->h, icons[i]);
+            if (!player) {
+                x += 15;
+            }
+            y += 15;
+
+            s = va("%d", count);
+            text.x = x;
+            text.y = y;
+            CG_AlignRectText(&text, s, scale, align);
+            CG_DrawText(text.x, text.y, 0, scale, color, s, 0, 0, textStyle);
+            x += player ? -15 : 15;
+
+            s = va("%3.2f", avgTime);
+            text.x = x;
+            text.y = y;
+            CG_AlignRectText(&text, s, scale, align);
+            CG_DrawText(text.x, text.y, 0, scale, color, s, 0, 0, textStyle);
+            x += player ? 15 : -30;
         }
         return;
     }
 
-    if (off < 1 || off > 4) return;
+    if (off < 1 || off > 4) {
+        return;
+    }
     CG_DuelPickupSlot(ds, off - 1, &count, &avgTime);
-    CG_OwnerDrawText(rect->x, rect->y, scale, color, va("%i", count), 0, 0, textStyle);
+    s = va("%d", count);
+    CG_AlignRectText(rect, s, scale, align);
+    CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-// 0xb8-0xbb/0x112-0x115 CG_DrawDuelAccuracy. Avg pickup time for RA/YA/GA/MH, only
-// shown when the matching pickup count is non-zero.
-static void CG_DrawDuelAccuracy(rectDef_t *rect, float scale, vec4_t color, int textStyle, int ownerDraw) {
-    int idx = CG_DuelPlayerIndex(ownerDraw);
-    duelScore_t *ds = &cg.duelScores[idx];
-    int base = (idx == 0) ? CG_1ST_PLYR_AVG_PICKUP_TIME_RA : CG_2ND_PLYR_AVG_PICKUP_TIME_RA;
+/*
+=================
+CG_DrawDuelAvgPickupTime
+
+[QL] 0x10037730, 0xb8-0xbb and 0x112-0x115: a duelist's average time between pickups of red,
+yellow or green armor or mega health, "%3.2f", or "-" when there was none; font 0, placed by
+the item's align
+=================
+*/
+static void CG_DrawDuelAvgPickupTime(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
+    int player = CG_DuelPlayerIndex(ownerDraw);
+    duelScore_t *ds = &cg.duelScores[player];
+    int base = player ? CG_2ND_PLYR_AVG_PICKUP_TIME_RA : CG_1ST_PLYR_AVG_PICKUP_TIME_RA;
     int slot = ownerDraw - base;
+    const char *s;
     int count;
     float avgTime;
-    if (slot < 0 || slot > 3) return;
+
+    if (slot < 0 || slot > 3) {
+        return;
+    }
     CG_DuelPickupSlot(ds, slot, &count, &avgTime);
-    if (!count) return;
-    CG_OwnerDrawText(rect->x, rect->y, scale, color, va("%3.2f", avgTime), 0, 0, textStyle);
+    s = count ? va("%3.2f", avgTime) : "-";
+    CG_AlignRectText(rect, s, scale, align);
+    CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
 // 0xbc-0xbe/0x116-0x118 CG_DrawDuelAwards (0x10037990): the duelist's excellent, impressive
@@ -3099,41 +3146,201 @@ static void CG_DrawDuelAwards(rectDef_t *rect, float scale, vec4_t color, int te
     CG_DrawText(x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] Team pickup stat columns (binary CG_OwnerDraw_StatColumn1 / StatColumn2).
-// Column 1 = pickup counts, column 2 = time-held values. Data comes from
-// cg.teamPickups; slots without a tracked field draw nothing.
-static void CG_OwnerDraw_StatColumn1(rectDef_t *rect, float scale, vec4_t color, int textStyle, int ownerDraw) {
-    int val = 0;
-    if (!cg.teamPickups.valid) return;
-    switch (ownerDraw) {
-        case CG_RED_TEAM_PICKUPS_RA:   val = cg.teamPickups.rra; break;
-        case CG_RED_TEAM_PICKUPS_YA:   val = cg.teamPickups.rya; break;
-        case CG_RED_TEAM_PICKUPS_GA:   val = cg.teamPickups.rga; break;
-        case CG_RED_TEAM_PICKUPS_MH:   val = cg.teamPickups.rmh; break;
-        case CG_RED_TEAM_PICKUPS_QUAD: val = cg.teamPickups.rquad; break;
-        case CG_RED_TEAM_PICKUPS_BS:   val = cg.teamPickups.rbs; break;
-        case CG_BLUE_TEAM_PICKUPS_RA:  val = cg.teamPickups.bra; break;
-        case CG_BLUE_TEAM_PICKUPS_YA:  val = cg.teamPickups.bya; break;
-        case CG_BLUE_TEAM_PICKUPS_GA:  val = cg.teamPickups.bga; break;
-        case CG_BLUE_TEAM_PICKUPS_MH:  val = cg.teamPickups.bmh; break;
-        case CG_BLUE_TEAM_PICKUPS_QUAD:val = cg.teamPickups.bquad; break;
-        case CG_BLUE_TEAM_PICKUPS_BS:  val = cg.teamPickups.bbs; break;
-        default: return;  // map-pickups header / flag / medkit / regen / haste / invis: no data
-    }
-    CG_OwnerDrawText(rect->x, rect->y, scale, color, va("%i", val), 0, 0, textStyle);
+/*
+=================
+CG_ClockFromSeconds
+
+[QL] 0x10057470: seconds as "m:ss"
+=================
+*/
+static const char* CG_ClockFromSeconds(int seconds) {
+    int mins = seconds / 60;
+
+    seconds -= mins * 60;
+    return va("%i:%i%i", mins, seconds / 10, seconds % 10);
 }
 
-static void CG_OwnerDraw_StatColumn2(rectDef_t *rect, float scale, vec4_t color, int textStyle, int ownerDraw) {
-    int val = 0;
-    if (!cg.teamPickups.valid) return;
-    switch (ownerDraw) {
-        case CG_RED_TEAM_TIMEHELD_QUAD:  val = cg.teamPickups.rquadTime; break;
-        case CG_RED_TEAM_TIMEHELD_BS:    val = cg.teamPickups.rbsTime; break;
-        case CG_BLUE_TEAM_TIMEHELD_QUAD: val = cg.teamPickups.bquadTime; break;
-        case CG_BLUE_TEAM_TIMEHELD_BS:   val = cg.teamPickups.bbsTime; break;
-        default: return;  // flag / regen / haste / invis time-held: no data
+/*
+=================
+CG_DrawTeamPickupItem
+
+An armor, the mega health or the medkit in a team's pickup row: the icon at the item's size
+and the count countX to its right; the next one 25 on.
+=================
+*/
+static void CG_DrawTeamPickupItem(int* x, int y, const rectDef_t* rect, qhandle_t icon, int count, int countX,
+                                  float scale, vec4_t color, int textStyle) {
+    if (count <= 0) {
+        return;
     }
-    CG_OwnerDrawText(rect->x, rect->y, scale, color, va("%i", val), 0, 0, textStyle);
+    CG_DrawPic(*x, y, rect->w, rect->h, icon);
+    CG_OwnerDrawText(*x + countX, y + 15, scale, color, va("%d", count), 0, 0, textStyle);
+    *x += 25;
+}
+
+/*
+=================
+CG_DrawTeamPickupPowerup
+
+The flag or a powerup in a team's pickup row, never less than 75 into it: the icon 7 higher,
+the count beside it and the time held under it, "-" for none; the next one 28 on.
+=================
+*/
+static void CG_DrawTeamPickupPowerup(int* x, int y, const rectDef_t* rect, qhandle_t icon, int count, int seconds,
+                                     float scale, vec4_t color, int textStyle) {
+    if (count <= 0) {
+        return;
+    }
+    if (*x < rect->x + 75.0f) {
+        *x = (int)(rect->x + 75.0f);
+    }
+    CG_DrawPic(*x, y - 7, rect->w, rect->h, icon);
+    CG_OwnerDrawText(*x + 14, y + 8, scale, color, va("%d", count), 0, 0, textStyle);
+    CG_OwnerDrawText(*x + 2, y + 15, scale, color, seconds ? CG_ClockFromSeconds(seconds) : "-", 0, 0, textStyle);
+    *x += 28;
+}
+
+/*
+=================
+CG_DrawTeamPickups
+
+[QL] 0x10037f80, the team scoreboards' pickup counts. CG_RED_TEAM_MAP_PICKUPS and
+CG_BLUE_TEAM_MAP_PICKUPS draw the team's row: armor, mega health and medkit, then the flag
+and the powerups. The flag is the one the team takes home, the enemy's, or the neutral one in
+1-Flag CTF. Every other id draws one count, placed by the item's align.
+=================
+*/
+static void CG_DrawTeamPickups(rectDef_t* rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
+    const teamPickups_t* p;
+    qhandle_t flag;
+    const char* s;
+    int blue, x, y, count;
+
+    blue = (ownerDraw >= CG_BLUE_TEAM_MAP_PICKUPS);
+    p = &cg.teamPickups[blue];
+
+    switch (ownerDraw) {
+    case CG_RED_TEAM_MAP_PICKUPS:
+    case CG_BLUE_TEAM_MAP_PICKUPS:
+        x = (int)rect->x;
+        y = (int)rect->y;
+        // retail sets the red row's yellow armor count 3 closer to its icon (0x100380ad)
+        CG_DrawTeamPickupItem(&x, y, rect, cgs.media.pickupRA, p->ra, 14, scale, color, textStyle);
+        CG_DrawTeamPickupItem(&x, y, rect, cgs.media.pickupYA, p->ya, blue ? 14 : 11, scale, color, textStyle);
+        CG_DrawTeamPickupItem(&x, y, rect, cgs.media.pickupGA, p->ga, 14, scale, color, textStyle);
+        CG_DrawTeamPickupItem(&x, y, rect, cgs.media.pickupMH, p->mh, 14, scale, color, textStyle);
+        CG_DrawTeamPickupItem(&x, y, rect, cgs.media.pickupMK, p->medkit, 14, scale, color, textStyle);
+
+        if (cgs.gametype == GT_1FCTF) {
+            flag = cgs.media.pickupNeutralFlag;
+        } else {
+            flag = blue ? cgs.media.pickupRedFlag : cgs.media.pickupBlueFlag;
+        }
+        CG_DrawTeamPickupPowerup(&x, y, rect, flag, p->flag, p->flagTime, scale, color, textStyle);
+        CG_DrawTeamPickupPowerup(&x, y, rect, cgs.media.pickupQuad, p->quad, p->quadTime, scale, color, textStyle);
+        CG_DrawTeamPickupPowerup(&x, y, rect, cgs.media.pickupBS, p->bs, p->bsTime, scale, color, textStyle);
+        CG_DrawTeamPickupPowerup(&x, y, rect, cgs.media.pickupRegen, p->regen, p->regenTime, scale, color, textStyle);
+        CG_DrawTeamPickupPowerup(&x, y, rect, cgs.media.pickupHaste, p->haste, p->hasteTime, scale, color, textStyle);
+        CG_DrawTeamPickupPowerup(&x, y, rect, cgs.media.pickupInvis, p->invis, p->invisTime, scale, color, textStyle);
+        return;
+    case CG_RED_TEAM_PICKUPS_RA:
+    case CG_BLUE_TEAM_PICKUPS_RA:
+        count = p->ra;
+        break;
+    case CG_RED_TEAM_PICKUPS_YA:
+    case CG_BLUE_TEAM_PICKUPS_YA:
+        count = p->ya;
+        break;
+    case CG_RED_TEAM_PICKUPS_GA:
+    case CG_BLUE_TEAM_PICKUPS_GA:
+        count = p->ga;
+        break;
+    case CG_RED_TEAM_PICKUPS_MH:
+    case CG_BLUE_TEAM_PICKUPS_MH:
+        count = p->mh;
+        break;
+    case CG_RED_TEAM_PICKUPS_QUAD:
+    case CG_BLUE_TEAM_PICKUPS_QUAD:
+        count = p->quad;
+        break;
+    case CG_RED_TEAM_PICKUPS_BS:
+    case CG_BLUE_TEAM_PICKUPS_BS:
+        count = p->bs;
+        break;
+    case CG_RED_TEAM_PICKUPS_FLAG:
+    case CG_BLUE_TEAM_PICKUPS_FLAG:
+        count = p->flag;
+        break;
+    case CG_RED_TEAM_PICKUPS_MEDKIT:
+    case CG_BLUE_TEAM_PICKUPS_MEDKIT:
+        count = p->medkit;
+        break;
+    case CG_RED_TEAM_PICKUPS_REGEN:
+    case CG_BLUE_TEAM_PICKUPS_REGEN:
+        count = p->regen;
+        break;
+    case CG_RED_TEAM_PICKUPS_HASTE:
+    case CG_BLUE_TEAM_PICKUPS_HASTE:
+        count = p->haste;
+        break;
+    case CG_RED_TEAM_PICKUPS_INVIS:
+    case CG_BLUE_TEAM_PICKUPS_INVIS:
+        count = p->invis;
+        break;
+    default:
+        return;
+    }
+
+    s = va("%d", count);
+    CG_AlignRectText(rect, s, scale, align);
+    CG_OwnerDrawText(rect->x, rect->y, scale, color, s, 0, 0, textStyle);
+}
+
+/*
+=================
+CG_DrawTeamTimeHeld
+
+[QL] 0x10039ae0: how long a team held the flag or a powerup, "m:ss", or "-" for none; font 0,
+placed by the item's align
+=================
+*/
+static void CG_DrawTeamTimeHeld(rectDef_t* rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
+    const teamPickups_t* p = &cg.teamPickups[ownerDraw >= CG_BLUE_TEAM_MAP_PICKUPS];
+    const char* s;
+    int seconds;
+
+    switch (ownerDraw) {
+    case CG_RED_TEAM_TIMEHELD_QUAD:
+    case CG_BLUE_TEAM_TIMEHELD_QUAD:
+        seconds = p->quadTime;
+        break;
+    case CG_RED_TEAM_TIMEHELD_BS:
+    case CG_BLUE_TEAM_TIMEHELD_BS:
+        seconds = p->bsTime;
+        break;
+    case CG_RED_TEAM_TIMEHELD_FLAG:
+    case CG_BLUE_TEAM_TIMEHELD_FLAG:
+        seconds = p->flagTime;
+        break;
+    case CG_RED_TEAM_TIMEHELD_REGEN:
+    case CG_BLUE_TEAM_TIMEHELD_REGEN:
+        seconds = p->regenTime;
+        break;
+    case CG_RED_TEAM_TIMEHELD_HASTE:
+    case CG_BLUE_TEAM_TIMEHELD_HASTE:
+        seconds = p->hasteTime;
+        break;
+    case CG_RED_TEAM_TIMEHELD_INVIS:
+    case CG_BLUE_TEAM_TIMEHELD_INVIS:
+        seconds = p->invisTime;
+        break;
+    default:
+        return;
+    }
+
+    s = seconds ? CG_ClockFromSeconds(seconds) : "-";
+    CG_AlignRectText(rect, s, scale, align);
+    CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
 // [QL] Draw gametype icon for the current gametype
@@ -4372,14 +4579,14 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_1ST_PLYR_PICKUPS_GA: case CG_1ST_PLYR_PICKUPS_MH:
         case CG_2ND_PLYR_PICKUPS: case CG_2ND_PLYR_PICKUPS_RA: case CG_2ND_PLYR_PICKUPS_YA:
         case CG_2ND_PLYR_PICKUPS_GA: case CG_2ND_PLYR_PICKUPS_MH:  // 0xb3-0xb7/0x10d-0x111
-            CG_DrawDuelPlayerPickups(&rect, scale, color, textStyle, ownerDraw);
+            CG_DrawDuelPlayerPickups(&rect, scale, color, textStyle, align, ownerDraw);
             break;
         case CG_1ST_PLYR_AVG_PICKUP_TIME_RA: case CG_1ST_PLYR_AVG_PICKUP_TIME_YA:
         case CG_1ST_PLYR_AVG_PICKUP_TIME_GA: case CG_1ST_PLYR_AVG_PICKUP_TIME_MH:
         case CG_2ND_PLYR_AVG_PICKUP_TIME_RA: case CG_2ND_PLYR_AVG_PICKUP_TIME_YA:
         case CG_2ND_PLYR_AVG_PICKUP_TIME_GA: case CG_2ND_PLYR_AVG_PICKUP_TIME_MH:
                                                                  // 0xb8-0xbb/0x112-0x115
-            CG_DrawDuelAccuracy(&rect, scale, color, textStyle, ownerDraw);
+            CG_DrawDuelAvgPickupTime(&rect, scale, color, textStyle, align, ownerDraw);
             break;
         case CG_1ST_PLYR_EXCELLENT: case CG_1ST_PLYR_IMPRESSIVE: case CG_1ST_PLYR_HUMILIATION:
         case CG_2ND_PLYR_EXCELLENT: case CG_2ND_PLYR_IMPRESSIVE: case CG_2ND_PLYR_HUMILIATION:
@@ -4444,7 +4651,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             break;
 
         // ---- team pickup stat columns (0x124-0x135 red, 0x13f-0x150 blue) ----
-        case CG_RED_TEAM_MAP_PICKUPS:       // column 1: pickup counts
+        case CG_RED_TEAM_MAP_PICKUPS:       // 0x10037f80 counts
         case CG_RED_TEAM_PICKUPS_RA: case CG_RED_TEAM_PICKUPS_YA:
         case CG_RED_TEAM_PICKUPS_GA: case CG_RED_TEAM_PICKUPS_MH:
         case CG_RED_TEAM_PICKUPS_QUAD: case CG_RED_TEAM_PICKUPS_BS:
@@ -4458,16 +4665,16 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_BLUE_TEAM_PICKUPS_FLAG: case CG_BLUE_TEAM_PICKUPS_MEDKIT:
         case CG_BLUE_TEAM_PICKUPS_REGEN: case CG_BLUE_TEAM_PICKUPS_HASTE:
         case CG_BLUE_TEAM_PICKUPS_INVIS:
-            CG_OwnerDraw_StatColumn1(&rect, scale, color, textStyle, ownerDraw);
+            CG_DrawTeamPickups(&rect, scale, color, textStyle, align, ownerDraw);
             break;
-        case CG_RED_TEAM_TIMEHELD_QUAD:     // column 2: time-held values
+        case CG_RED_TEAM_TIMEHELD_QUAD:     // 0x10039ae0 times held
         case CG_RED_TEAM_TIMEHELD_BS:
         case CG_RED_TEAM_TIMEHELD_FLAG: case CG_RED_TEAM_TIMEHELD_REGEN:
         case CG_RED_TEAM_TIMEHELD_HASTE: case CG_RED_TEAM_TIMEHELD_INVIS:
         case CG_BLUE_TEAM_TIMEHELD_QUAD: case CG_BLUE_TEAM_TIMEHELD_BS:
         case CG_BLUE_TEAM_TIMEHELD_FLAG: case CG_BLUE_TEAM_TIMEHELD_REGEN:
         case CG_BLUE_TEAM_TIMEHELD_HASTE: case CG_BLUE_TEAM_TIMEHELD_INVIS:
-            CG_OwnerDraw_StatColumn2(&rect, scale, color, textStyle, ownerDraw);
+            CG_DrawTeamTimeHeld(&rect, scale, color, textStyle, align, ownerDraw);
             break;
 
         case CG_FLAG_STATUS:                // 0x151

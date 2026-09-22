@@ -514,8 +514,8 @@ void CG_DrawTourneyScoreboard(void) {
 // [QL] Extended per-client team-stats parsers
 //
 // These are QL additions, separate from the main scoreboard (scores_tdm /
-// scores_ca / scores_ctf) and from the team-wide pickup-count
-// CG_ParseTeamStats. The server emits ONE command per connected client; the
+// scores_ca / scores_ctf) and from the team-wide pickup counts those carry
+// (CG_ParseTeamPickups). The server emits ONE command per connected client; the
 // first argument is that client's scoreboard slot index, used verbatim as the
 // row index into cg.teamStats[] (a per-client store with a 0x268-byte /
 // 154-int stride). All values are signed decimal integers read with atoi().

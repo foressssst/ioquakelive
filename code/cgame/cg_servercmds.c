@@ -164,6 +164,47 @@ static void CG_ParseScores_Ffa(void) {
 
 /*
 =================
+CG_ParseTeamPickups
+
+[QL] the team header of scores_tdm, scores_ft and scores_ctf (cgamex86.dll 0x10045f20,
+0x100476a0, 0x10046bf0), red then blue: the counts of each armor, mega health and powerup,
+then the seconds each powerup was held. CTF adds the flag and medkit counts and the flag's
+time. Returns the next argument.
+=================
+*/
+static int CG_ParseTeamPickups(int i, qboolean ctf) {
+    teamPickups_t* p;
+    int t;
+
+    for (t = 0; t < 2; t++) {
+        p = &cg.teamPickups[t];
+        p->ra = atoi(CG_Argv(i++));
+        p->ya = atoi(CG_Argv(i++));
+        p->ga = atoi(CG_Argv(i++));
+        p->mh = atoi(CG_Argv(i++));
+        p->quad = atoi(CG_Argv(i++));
+        p->bs = atoi(CG_Argv(i++));
+        p->regen = atoi(CG_Argv(i++));
+        p->haste = atoi(CG_Argv(i++));
+        p->invis = atoi(CG_Argv(i++));
+        if (ctf) {
+            p->flag = atoi(CG_Argv(i++));
+            p->medkit = atoi(CG_Argv(i++));
+        }
+        p->quadTime = atoi(CG_Argv(i++));
+        p->bsTime = atoi(CG_Argv(i++));
+        p->regenTime = atoi(CG_Argv(i++));
+        p->hasteTime = atoi(CG_Argv(i++));
+        p->invisTime = atoi(CG_Argv(i++));
+        if (ctf) {
+            p->flagTime = atoi(CG_Argv(i++));
+        }
+    }
+    return i;
+}
+
+/*
+=================
 CG_ParseScores_Tdm
 
 [QL] scores_tdm: 28-field team header + 16 fields per player
@@ -171,26 +212,8 @@ CG_ParseScores_Tdm
 */
 static void CG_ParseScores_Tdm(void) {
     int i, n;
-    tdmScoreHeader_t *h = &cg.tdmScoreHeader;
 
-    i = 1;
-    h->rra = atoi(CG_Argv(i++));    h->rya = atoi(CG_Argv(i++));
-    h->rga = atoi(CG_Argv(i++));    h->rmh = atoi(CG_Argv(i++));
-    h->rquad = atoi(CG_Argv(i++));  h->rbs = atoi(CG_Argv(i++));
-    h->rregen = atoi(CG_Argv(i++)); h->rhaste = atoi(CG_Argv(i++));
-    h->rinvis = atoi(CG_Argv(i++));
-    h->rquadTime = atoi(CG_Argv(i++)); h->rbsTime = atoi(CG_Argv(i++));
-    h->rregenTime = atoi(CG_Argv(i++)); h->rhasteTime = atoi(CG_Argv(i++));
-    h->rinvisTime = atoi(CG_Argv(i++));
-    h->bra = atoi(CG_Argv(i++));    h->bya = atoi(CG_Argv(i++));
-    h->bga = atoi(CG_Argv(i++));    h->bmh = atoi(CG_Argv(i++));
-    h->bquad = atoi(CG_Argv(i++));  h->bbs = atoi(CG_Argv(i++));
-    h->bregen = atoi(CG_Argv(i++)); h->bhaste = atoi(CG_Argv(i++));
-    h->binvis = atoi(CG_Argv(i++));
-    h->bquadTime = atoi(CG_Argv(i++)); h->bbsTime = atoi(CG_Argv(i++));
-    h->bregenTime = atoi(CG_Argv(i++)); h->bhasteTime = atoi(CG_Argv(i++));
-    h->binvisTime = atoi(CG_Argv(i++));
-    h->valid = qtrue;
+    i = CG_ParseTeamPickups(1, qfalse);
 
     cg.numScores = atoi(CG_Argv(i++));
     if (cg.numScores > MAX_CLIENTS) {
@@ -287,28 +310,8 @@ CG_ParseScores_Ctf
 */
 static void CG_ParseScores_Ctf(void) {
     int i, n;
-    ctfScoreHeader_t *h = &cg.ctfScoreHeader;
 
-    i = 1;
-    h->rra = atoi(CG_Argv(i++));    h->rya = atoi(CG_Argv(i++));
-    h->rga = atoi(CG_Argv(i++));    h->rmh = atoi(CG_Argv(i++));
-    h->rquad = atoi(CG_Argv(i++));  h->rbs = atoi(CG_Argv(i++));
-    h->rregen = atoi(CG_Argv(i++)); h->rhaste = atoi(CG_Argv(i++));
-    h->rinvis = atoi(CG_Argv(i++)); h->rflag = atoi(CG_Argv(i++));
-    h->rmedkit = atoi(CG_Argv(i++));
-    h->rquadTime = atoi(CG_Argv(i++)); h->rbsTime = atoi(CG_Argv(i++));
-    h->rregenTime = atoi(CG_Argv(i++)); h->rhasteTime = atoi(CG_Argv(i++));
-    h->rinvisTime = atoi(CG_Argv(i++)); h->rflagTime = atoi(CG_Argv(i++));
-    h->bra = atoi(CG_Argv(i++));    h->bya = atoi(CG_Argv(i++));
-    h->bga = atoi(CG_Argv(i++));    h->bmh = atoi(CG_Argv(i++));
-    h->bquad = atoi(CG_Argv(i++));  h->bbs = atoi(CG_Argv(i++));
-    h->bregen = atoi(CG_Argv(i++)); h->bhaste = atoi(CG_Argv(i++));
-    h->binvis = atoi(CG_Argv(i++)); h->bflag = atoi(CG_Argv(i++));
-    h->bmedkit = atoi(CG_Argv(i++));
-    h->bquadTime = atoi(CG_Argv(i++)); h->bbsTime = atoi(CG_Argv(i++));
-    h->bregenTime = atoi(CG_Argv(i++)); h->bhasteTime = atoi(CG_Argv(i++));
-    h->binvisTime = atoi(CG_Argv(i++)); h->bflagTime = atoi(CG_Argv(i++));
-    h->valid = qtrue;
+    i = CG_ParseTeamPickups(1, qtrue);
 
     cg.numScores = atoi(CG_Argv(i++));
     if (cg.numScores > MAX_CLIENTS) {
@@ -358,26 +361,8 @@ CG_ParseScores_Ft
 */
 static void CG_ParseScores_Ft(void) {
     int i, n;
-    tdmScoreHeader_t *h = &cg.tdmScoreHeader;
 
-    i = 1;
-    h->rra = atoi(CG_Argv(i++));    h->rya = atoi(CG_Argv(i++));
-    h->rga = atoi(CG_Argv(i++));    h->rmh = atoi(CG_Argv(i++));
-    h->rquad = atoi(CG_Argv(i++));  h->rbs = atoi(CG_Argv(i++));
-    h->rregen = atoi(CG_Argv(i++)); h->rhaste = atoi(CG_Argv(i++));
-    h->rinvis = atoi(CG_Argv(i++));
-    h->rquadTime = atoi(CG_Argv(i++)); h->rbsTime = atoi(CG_Argv(i++));
-    h->rregenTime = atoi(CG_Argv(i++)); h->rhasteTime = atoi(CG_Argv(i++));
-    h->rinvisTime = atoi(CG_Argv(i++));
-    h->bra = atoi(CG_Argv(i++));    h->bya = atoi(CG_Argv(i++));
-    h->bga = atoi(CG_Argv(i++));    h->bmh = atoi(CG_Argv(i++));
-    h->bquad = atoi(CG_Argv(i++));  h->bbs = atoi(CG_Argv(i++));
-    h->bregen = atoi(CG_Argv(i++)); h->bhaste = atoi(CG_Argv(i++));
-    h->binvis = atoi(CG_Argv(i++));
-    h->bquadTime = atoi(CG_Argv(i++)); h->bbsTime = atoi(CG_Argv(i++));
-    h->bregenTime = atoi(CG_Argv(i++)); h->bhasteTime = atoi(CG_Argv(i++));
-    h->binvisTime = atoi(CG_Argv(i++));
-    h->valid = qtrue;
+    i = CG_ParseTeamPickups(1, qfalse);
 
     cg.numScores = atoi(CG_Argv(i++));
     if (cg.numScores > MAX_CLIENTS) {
@@ -1733,34 +1718,6 @@ static void CG_RemoveChatEscapeChar(char* text) {
         text[l++] = text[i];
     }
     text[l] = '\0';
-}
-
-/*
-=================
-CG_ParseTeamStats
-
-[QL] Parse team stats (tdmstats/castats/ctfstats) - item pickup counts
-=================
-*/
-void CG_ParseTeamStats(void) {
-    int i = 1;
-    cg.teamPickups.rra = atoi(CG_Argv(i++));
-    cg.teamPickups.rya = atoi(CG_Argv(i++));
-    cg.teamPickups.rga = atoi(CG_Argv(i++));
-    cg.teamPickups.rmh = atoi(CG_Argv(i++));
-    cg.teamPickups.rquad = atoi(CG_Argv(i++));
-    cg.teamPickups.rbs = atoi(CG_Argv(i++));
-    cg.teamPickups.rquadTime = atoi(CG_Argv(i++));
-    cg.teamPickups.rbsTime = atoi(CG_Argv(i++));
-    cg.teamPickups.bra = atoi(CG_Argv(i++));
-    cg.teamPickups.bya = atoi(CG_Argv(i++));
-    cg.teamPickups.bga = atoi(CG_Argv(i++));
-    cg.teamPickups.bmh = atoi(CG_Argv(i++));
-    cg.teamPickups.bquad = atoi(CG_Argv(i++));
-    cg.teamPickups.bbs = atoi(CG_Argv(i++));
-    cg.teamPickups.bquadTime = atoi(CG_Argv(i++));
-    cg.teamPickups.bbsTime = atoi(CG_Argv(i++));
-    cg.teamPickups.valid = qtrue;
 }
 
 /*

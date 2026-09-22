@@ -423,38 +423,13 @@ typedef struct {
     duelWeaponStats_t weaponStats[MAX_WEAPONS];
 } duelScore_t;
 
-// [QL] team stats from castats/tdmstats/ctfstats commands
+// [QL] a team's pickups, the header scores_tdm, scores_ft and scores_ctf send ahead of the
+// players. Retail keeps both teams in one block (cgamex86.dll 0x10aa6864 red, 0x10aa68a8
+// blue); the flag and medkit fields only come in CTF. Times held are in seconds.
 typedef struct {
-    qboolean valid;
-    // red team pickups
-    int rra, rya, rga, rmh, rquad, rbs;
-    int rquadTime, rbsTime;
-    // blue team pickups
-    int bra, bya, bga, bmh, bquad, bbs;
-    int bquadTime, bbsTime;
-} teamPickupStats_t;
-
-// [QL] team score header for TDM/FT scores (powerup pickup counts + times)
-typedef struct {
-    qboolean valid;
-    // red team
-    int rra, rya, rga, rmh, rquad, rbs, rregen, rhaste, rinvis;
-    int rquadTime, rbsTime, rregenTime, rhasteTime, rinvisTime;
-    // blue team
-    int bra, bya, bga, bmh, bquad, bbs, bregen, bhaste, binvis;
-    int bquadTime, bbsTime, bregenTime, bhasteTime, binvisTime;
-} tdmScoreHeader_t;
-
-// [QL] team score header for CTF scores (includes flag + medkit)
-typedef struct {
-    qboolean valid;
-    // red team
-    int rra, rya, rga, rmh, rquad, rbs, rregen, rhaste, rinvis, rflag, rmedkit;
-    int rquadTime, rbsTime, rregenTime, rhasteTime, rinvisTime, rflagTime;
-    // blue team
-    int bra, bya, bga, bmh, bquad, bbs, bregen, bhaste, binvis, bflag, bmedkit;
-    int bquadTime, bbsTime, bregenTime, bhasteTime, binvisTime, bflagTime;
-} ctfScoreHeader_t;
+    int ra, ya, ga, mh, quad, bs, regen, haste, invis, flag, medkit;
+    int quadTime, bsTime, regenTime, hasteTime, invisTime, flagTime;
+} teamPickups_t;
 
 // [QL] per-player weapon accuracy (from "acc" command)
 typedef struct {
@@ -940,12 +915,8 @@ typedef struct {
     int duelPlayer2;        // clientNum of 2nd duel player (from CS_CLIENTNUM2NDPLAYER)
     qboolean duelScoresValid;
 
-    // [QL] team pickup stats (from "tdmstats" etc.)
-    teamPickupStats_t teamPickups;
-
-    // [QL] team score headers (from scores_tdm/scores_ft/scores_ctf)
-    tdmScoreHeader_t tdmScoreHeader;
-    ctfScoreHeader_t ctfScoreHeader;
+    // [QL] each team's pickups (from scores_tdm/scores_ft/scores_ctf), red then blue
+    teamPickups_t teamPickups[2];
 
     // [QL] per-player accuracy (from "acc" command)
     accuracyStats_t accuracyStats;
@@ -1266,6 +1237,21 @@ typedef struct {
     qhandle_t medalQuadGod;
     qhandle_t medalRampage;
     qhandle_t medalRevenge;
+
+    // [QL] the scoreboards' pickup icons, registered after the medals (0x10024808)
+    qhandle_t pickupRA;
+    qhandle_t pickupYA;
+    qhandle_t pickupGA;
+    qhandle_t pickupMH;
+    qhandle_t pickupMK;
+    qhandle_t pickupBlueFlag;
+    qhandle_t pickupNeutralFlag;
+    qhandle_t pickupRedFlag;
+    qhandle_t pickupQuad;
+    qhandle_t pickupBS;
+    qhandle_t pickupRegen;
+    qhandle_t pickupHaste;
+    qhandle_t pickupInvis;
 
     // [QL] sounds, in the order cgamex86.dll's CG_RegisterSounds (0x10020e70) loads them.
     // "vo" marks the announcer voices under sound/vo, vo_evil or vo_female.
@@ -2121,7 +2107,6 @@ qboolean CG_GetLevelTimerMsec(int* msec);
 // [QL] server command parsers
 void CG_ParseDuelScores(void);
 void CG_ParseAccuracy(void);
-void CG_ParseTeamStats(void);
 
 void CG_AdjustFrom640(float* x, float* y, float* w, float* h);
 void CG_SetWidescreen(int mode);
