@@ -359,7 +359,6 @@ vmCvar_t cg_railStyle;
 vmCvar_t ch_animateRewardIcons;
 vmCvar_t cg_animateChatBalloon;
 vmCvar_t ch_animateScroll;
-vmCvar_t ch_crosshairPulse;
 vmCvar_t cg_zoomAnimationTime;
 vmCvar_t cg_drawBrightWeapons;
 vmCvar_t ch_chatLines;
@@ -770,7 +769,6 @@ static cvarTable_t cvarTable[] = {
     {&ch_animateRewardIcons, "ch_animateRewardIcons", "1", CVAR_ARCHIVE},
     {&cg_animateChatBalloon, "cg_animateChatBalloon", "1", CVAR_ARCHIVE},
     {&ch_animateScroll, "ch_animateScroll", "1", CVAR_ARCHIVE},
-    {&ch_crosshairPulse, "ch_crosshairPulse", "0", CVAR_ARCHIVE},
     {&cg_zoomAnimationTime, "cg_zoomAnimationTime", "150", CVAR_ARCHIVE},
     // [CPMA] weapons drawn as flat silhouettes: 1 your own gun, 2 teammates', 4 enemies', 8 the ones
     // lying on the map, 16 anybody's while you spectate with the free camera

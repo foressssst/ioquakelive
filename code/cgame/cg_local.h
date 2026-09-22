@@ -869,7 +869,6 @@ typedef struct {
     int itemPickupBlendTime;  // the pulse around the crosshair is timed separately
     int crosshairHitTime;     // [QL] 0x10ab8fb0, set on a hit (0x10043c2e)
     int crosshairHitType;     // [QL] 0x10ab8fb4, (generic1 >> 6) + 1
-    int crosshairFragTime;    // [CPMA] ch_crosshairPulse 3: last enemy frag
 
     // [CPMA] ch_animateScroll: when a list started sliding a row (0 while still) and the
     // start time of the item that set it off (see CG_CpmaSlide)
@@ -2017,7 +2016,6 @@ extern vmCvar_t cg_railStyle;
 extern vmCvar_t ch_animateRewardIcons;
 extern vmCvar_t cg_animateChatBalloon;
 extern vmCvar_t ch_animateScroll;
-extern vmCvar_t ch_crosshairPulse;
 extern vmCvar_t cg_zoomAnimationTime;
 extern vmCvar_t cg_drawBrightWeapons;  // [CPMA] bitmask of the weapons drawn as flat silhouettes
 extern vmCvar_t ch_chatLines;

@@ -1840,30 +1840,6 @@ static void CG_CrosshairHitEffect(float* w, float* h) {
 
 /*
 =================
-CG_CrosshairCPMAPulse
-
-[CPMA] ch_crosshairPulse 1-3: after an item pickup (200 ms), enemy damage or an
-enemy frag (225 ms) the crosshair jumps to twice its size and eases back to it
-with a cubic ease-out.
-=================
-*/
-static void CG_CrosshairCPMAPulse(float* w, float* h) {
-	static const float durations[3] = {200.0f, 225.0f, 225.0f};
-	int mode = ch_crosshairPulse.integer;
-	int eventTime = (mode == 1) ? cg.itemPickupBlendTime : (mode == 2) ? cg.crosshairHitTime : cg.crosshairFragTime;
-	float elapsed = (float)(cg.time - eventTime);
-	float t;
-
-	if (!eventTime || elapsed <= 0.0f || elapsed >= durations[mode - 1]) {
-		return;
-	}
-	t = 1.0f - elapsed / durations[mode - 1];
-	*w *= 1.0f + t * t * t;
-	*h *= 1.0f + t * t * t;
-}
-
-/*
-=================
 CG_DrawCrosshair
 
 [QL] cgamex86.dll 0x1000c2a0. Nothing for cg_drawCrosshair <= 0 or a multiple of 30, or
@@ -1893,12 +1869,7 @@ static void CG_DrawCrosshair(void) {
 
 	w = h = cg_crosshairSize.value;
 
-	if (ch_crosshairPulse.integer >= 1 && ch_crosshairPulse.integer <= 3) {
-		CG_CrosshairCPMAPulse(&w, &h);
-		if (cg.itemPickupBlendTime <= cg.crosshairHitTime) {
-			CG_CrosshairHitEffect(&w, &h);
-		}
-	} else if (cg.itemPickupBlendTime > cg.crosshairHitTime) {
+	if (cg.itemPickupBlendTime > cg.crosshairHitTime) {
 		f = (float)(cg.time - cg.itemPickupBlendTime);
 		if (cg_crosshairPulse.integer && f > 0.0f && f < ITEM_BLOB_TIME) {
 			w = h = cg_crosshairSize.value * (1.0f + f / ITEM_BLOB_TIME);

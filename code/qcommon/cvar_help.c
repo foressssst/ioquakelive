@@ -419,11 +419,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"cg_tracerchance", "chance that a machinegun bullet draws a tracer"},
     {"cg_tracerlength", "length of machinegun tracers"},
     {"cg_tracerwidth", "width of machinegun tracers"},
-    {"ch_crosshairPulse", "the crosshair jumps to twice its size and eases back\n"
-                          HV("0") "Never\n"
-                          HV("1") "When you pick up an item\n"
-                          HV("2") "When you damage an enemy\n"
-                          HV("3") "When you frag an enemy"},
 
     //
     // ui

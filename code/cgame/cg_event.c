@@ -324,12 +324,6 @@ static void CG_Obituary(entityState_t* ent) {
         }
     }
 
-    // [CPMA] ch_crosshairPulse 3 pulses on an enemy frag
-    if (attacker == cg.snap->ps.clientNum && attacker != target &&
-        (cgs.gametype < GT_TEAM || cgs.clientinfo[target].team != cg.snap->ps.persistant[PERS_TEAM])) {
-        cg.crosshairFragTime = cg.time;
-    }
-
     // [QL] Resolve weapon icon and add to obituary display buffer
     weaponIcon = CG_ModToWeaponIcon(mod);
     victimTeam = cgs.clientinfo[target].team;
