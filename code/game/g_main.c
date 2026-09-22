@@ -4123,6 +4123,9 @@ void G_RunFrame(int levelTime) {
     // [QL] duel queue rotation (pull in spectators)
     AddDuelPlayer();
 
+    // [QL] 0x100598c6: a place in the duel queue that moved goes out to everyone
+    G_CheckPlayQueueChanged();
+
     // [QL] warmup / forfeit driver (all gametypes)
     CheckWarmupAndForfeit();
 

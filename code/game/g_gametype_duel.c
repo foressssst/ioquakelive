@@ -365,6 +365,44 @@ gclient_t *G_NextDuelPlayer(void) {
 
 /*
 =============
+G_CheckPlayQueueChanged
+
+[QL] 0x10058410, once a frame in duel from G_RunFrame: when somebody's place in the queue
+moved, every spectator waiting to play has their configstring built again, which is what
+carries the new place to everyone's scoreboard. Retail also reads the client's userinfo and
+writes it straight back before that; nothing of it changes, so only the rebuild is kept.
+=============
+*/
+void G_CheckPlayQueueChanged(void) {
+    gclient_t* cl;
+    qboolean moved = qfalse;
+    int i;
+
+    if (g_gametype.integer != GT_DUEL) {
+        return;
+    }
+
+    for (i = 0; i < level.numConnectedClients; i++) {
+        cl = level.clients + level.sortedClients[i];
+        if (cl->sess.updatePlayQueue) {
+            cl->sess.updatePlayQueue = qfalse;
+            moved = qtrue;
+        }
+    }
+    if (!moved) {
+        return;
+    }
+
+    for (i = 0; i < level.numConnectedClients; i++) {
+        cl = level.clients + level.sortedClients[i];
+        if (!cl->sess.specOnly && cl->sess.playQueue) {
+            ClientUserinfoChanged(cl - level.clients);
+        }
+    }
+}
+
+/*
+=============
 AddDuelPlayer
 
 [QL] Duel-only: pull in spectators from the queue when a slot opens. Called every

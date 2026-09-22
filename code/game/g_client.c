@@ -972,6 +972,60 @@ The game can override any of the settings and call trap_SetUserinfo
 if desired.
 ============
 */
+/*
+===========
+G_CompareQueueTime
+
+[QL] 0x1003a220: whoever has been waiting longest goes first
+============
+*/
+static int QDECL G_CompareQueueTime(const void* a, const void* b) {
+    gclient_t* ca = level.clients + *(const int*)a;
+    gclient_t* cb = level.clients + *(const int*)b;
+
+    if (ca->sess.spectatorTime > cb->sess.spectatorTime) {
+        return 1;
+    }
+    return (ca->sess.spectatorTime == cb->sess.spectatorTime) ? 0 : -1;
+}
+
+/*
+===========
+G_UpdatePlayQueue
+
+[QL] 0x1003a270, from ClientUserinfoChanged. In duel the spectators who asked to play take
+their place in the queue by how long they have waited, counting from one. A place that moves
+is flagged, and G_CheckPlayQueueChanged then sends everyone the new one; the "pq" of the
+configstring is what the scoreboards read to show who is waiting and in what order.
+============
+*/
+void G_UpdatePlayQueue(void) {
+    int list[MAX_CLIENTS];
+    int count = 0;
+    gclient_t* cl;
+    int i;
+
+    if (g_gametype.integer != GT_DUEL) {
+        return;
+    }
+
+    for (i = 0; i < level.numConnectedClients; i++) {
+        cl = level.clients + level.sortedClients[i];
+        if (cl->sess.sessionTeam == TEAM_SPECTATOR && !cl->sess.specOnly) {
+            list[count++] = level.sortedClients[i];
+        }
+    }
+    qsort(list, count, sizeof(list[0]), G_CompareQueueTime);
+
+    for (i = 0; i < count; i++) {
+        cl = level.clients + list[i];
+        if (cl->sess.playQueue != i + 1) {
+            cl->sess.playQueue = i + 1;
+            cl->sess.updatePlayQueue = qtrue;
+        }
+    }
+}
+
 void ClientUserinfoChanged(int clientNum) {
     gentity_t* ent;
     int teamTask, teamLeader, health;
@@ -1112,21 +1166,27 @@ void ClientUserinfoChanged(int clientNum) {
     // userinfo key, not a command, and goes into the configstring as "c".
     Q_strncpyz(client->pers.country, Info_ValueForKey(userinfo, "country"), sizeof(client->pers.country));
 
+    // [QL] 0x1003a9b2: the play queue is renumbered here, so the "pq" below is current
+    G_UpdatePlayQueue();
+
     // send over a subset of the userinfo keys so other clients can
     // print scoreboards, display models, and play custom sounds
-    // [QL] qagamex86.dll 0x817b8 / 0x81820 add "rp", readied up, which cgame's warmup
-    // messages read, and "c", the country. NOT PORTED: the keys "p", "so", "pq" and "st".
+    // [QL] qagamex86.dll 0x817b8 / 0x81820: "rp" is readied up, which cgame's warmup messages
+    // read; "p" the privileges, "so" a spectator who only watches and "pq" the place in the
+    // play queue, which the scoreboards show; "c" is the country. NOT PORTED: "st", the Steam
+    // id, which this build has no account system for.
     if (ent->r.svFlags & SVF_BOT) {
-        s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\skill\\%s\\tt\\%d\\tl\\%d\\rp\\%d\\c\\%s",
+        s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\skill\\%s\\tt\\%d\\tl\\%d\\rp\\%d\\p\\%d\\so\\%i\\pq\\%i",
                client->pers.netname, client->sess.sessionTeam, model, headModel, c1, c2,
                client->pers.maxHealth, client->sess.wins, client->sess.losses,
                Info_ValueForKey(userinfo, "skill"), teamTask, teamLeader, client->pers.ready ? 1 : 0,
-               client->pers.country);
+               client->sess.privileges, client->sess.specOnly, client->sess.playQueue);
     } else {
-        s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\tt\\%d\\tl\\%d\\rp\\%d\\c\\%s",
+        s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\tt\\%d\\tl\\%d\\rp\\%d\\p\\%d\\so\\%i\\pq\\%i\\c\\%s",
                client->pers.netname, client->sess.sessionTeam, model, headModel, c1, c2,
                client->pers.maxHealth, client->sess.wins, client->sess.losses, teamTask, teamLeader,
-               client->pers.ready ? 1 : 0, client->pers.country);
+               client->pers.ready ? 1 : 0, client->sess.privileges, client->sess.specOnly,
+               client->sess.playQueue, client->pers.country);
     }
 
     trap_SetConfigstring(CS_PLAYERS + clientNum, s);

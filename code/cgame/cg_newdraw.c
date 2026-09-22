@@ -1720,62 +1720,6 @@ void CG_DrawNewTeamInfo(rectDef_t* rect, float text_x, float text_y, float scale
     }
 }
 
-void CG_DrawTeamSpectators(rectDef_t* rect, float scale, vec4_t color, qhandle_t shader) {
-    if (cg.spectatorLen) {
-        float maxX;
-
-        if (cg.spectatorWidth == -1) {
-            cg.spectatorWidth = 0;
-            cg.spectatorPaintX = rect->x + 1;
-            cg.spectatorPaintX2 = -1;
-        }
-
-        if (cg.spectatorOffset > cg.spectatorLen) {
-            cg.spectatorOffset = 0;
-            cg.spectatorPaintX = rect->x + 1;
-            cg.spectatorPaintX2 = -1;
-        }
-
-        if (cg.time > cg.spectatorTime) {
-            cg.spectatorTime = cg.time + 10;
-            if (cg.spectatorPaintX <= rect->x + 2) {
-                if (cg.spectatorOffset < cg.spectatorLen) {
-                    cg.spectatorPaintX += CG_OwnerDrawTextWidth(&cg.spectatorList[cg.spectatorOffset], scale, 1) - 1;
-                    cg.spectatorOffset++;
-                } else {
-                    cg.spectatorOffset = 0;
-                    if (cg.spectatorPaintX2 >= 0) {
-                        cg.spectatorPaintX = cg.spectatorPaintX2;
-                    } else {
-                        cg.spectatorPaintX = rect->x + rect->w - 2;
-                    }
-                    cg.spectatorPaintX2 = -1;
-                }
-            } else {
-                cg.spectatorPaintX--;
-                if (cg.spectatorPaintX2 >= 0) {
-                    cg.spectatorPaintX2--;
-                }
-            }
-        }
-
-        maxX = rect->x + rect->w - 2;
-        CG_Text_Paint_Limit(&maxX, cg.spectatorPaintX, rect->y + rect->h - 3, scale, color, &cg.spectatorList[cg.spectatorOffset], 0, 0);
-        if (cg.spectatorPaintX2 >= 0) {
-            float maxX2 = rect->x + rect->w - 2;
-            CG_Text_Paint_Limit(&maxX2, cg.spectatorPaintX2, rect->y + rect->h - 3, scale, color, cg.spectatorList, 0, cg.spectatorOffset);
-        }
-        if (cg.spectatorOffset && maxX > 0) {
-            // if we have an offset ( we are skipping the first part of the string ) and we fit the string
-            if (cg.spectatorPaintX2 == -1) {
-                cg.spectatorPaintX2 = rect->x + rect->w - 2;
-            }
-        } else {
-            cg.spectatorPaintX2 = -1;
-        }
-    }
-}
-
 void CG_DrawMedal(int ownerDraw, rectDef_t* rect, float scale, vec4_t color, qhandle_t shader) {
     score_t* score = &cg.scores[cg.selectedScore];
     float value = 0;
@@ -4413,8 +4357,6 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_SPECTATORS:                 // 0x51  CG_DrawScrollingNotify
             if (cg.notifyCount > 0) {
                 CG_DrawScrollingNotify(&rect, fontIndex, scale, color);
-            } else {
-                CG_DrawTeamSpectators(&rect, scale, color, shader);
             }
             break;
         case CG_MATCH_WINNER:               // 0x52

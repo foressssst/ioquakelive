@@ -756,13 +756,6 @@ typedef struct {
     int scoreFadeTime;
     char killerName[MAX_NAME_LENGTH];
     qhandle_t killerIcon;  // [QL] the killing weapon's icon, drawn after "Fragged by" (0x10aa69b0)
-    char spectatorList[MAX_STRING_CHARS];  // list of names
-    int spectatorLen;                      // length of list
-    float spectatorWidth;                  // width in device units
-    int spectatorTime;                     // next time to offset
-    int spectatorPaintX;                   // current paint x
-    int spectatorPaintX2;                  // current paint x
-    int spectatorOffset;                   // current offset from start
     int spectatorPaintLen;                 // current offset from start
 
     // skull trails
@@ -968,11 +961,11 @@ typedef struct {
     chatLine_t currentChatLine;
     int chatIndex;
 
-    // [QL] scrolling-notify (spectator list) queue for CG_DrawScrollingNotify.
-    // Binary: 0x40-byte string stride (DAT_10aa69b4), count (DAT_10ab69b4),
-    // rolling start index (DAT_10ab69bc), 4000ms advance timer (DAT_10ab69b8).
-    // Array length 8 is a placeholder; confirm capacity when the producer is ported.
-    char notifyMessages[8][64];
+    // [QL] the spectator list the scoreboards scroll, one entry per spectator, built by
+    // CG_BuildSpectatorString (0x10024ff0) and drawn by CG_DrawScrollingNotify (0x100351a0).
+    // Binary: 0x40-byte stride (DAT_10aa69b4), count (DAT_10ab69b4), rolling start index
+    // (DAT_10ab69bc), 4000ms advance timer (DAT_10ab69b8).
+    char notifyMessages[MAX_CLIENTS][64];
     int  notifyCount;
     int  notifyScrollStart;
     int  notifyScrollTime;

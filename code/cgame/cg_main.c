@@ -2333,22 +2333,90 @@ static void CG_RegisterGraphics(void) {
 
 /*
 =======================
+CG_CompareSpectators
+
+[QL] 0x10024f90: the spectators who only watch last, the rest by their place in the play
+queue, so the ones waiting to play read in turn
+=======================
+*/
+static int QDECL CG_CompareSpectators(const void* a, const void* b) {
+    const clientInfo_t* ca = &cgs.clientinfo[*(const int*)a];
+    const clientInfo_t* cb = &cgs.clientinfo[*(const int*)b];
+
+    if (ca->specOnly != cb->specOnly) {
+        return (ca->specOnly > cb->specOnly) ? 1 : -1;
+    }
+    if (ca->playQueue > cb->playQueue) {
+        return 1;
+    }
+    return (ca->playQueue == cb->playQueue) ? 0 : -1;
+}
+
+/*
+=======================
 CG_BuildSpectatorString
 
+[QL] 0x10024ff0, the spectator list the scoreboards scroll along their bottom: one entry per
+spectator, in the order above. In duel the entry opens with the spectator's place in the
+play queue, renumbered so the list counts from one, and with "(s)" for a spectator who only
+ever watches. Retail strips the colours from the stored name, so a spectator reads plain
+everywhere until their next configstring.
 =======================
 */
 void CG_BuildSpectatorString(void) {
-    int i;
-    cg.spectatorList[0] = 0;
+    int list[MAX_CLIENTS];
+    int count = 0;
+    int queued = 0;
+    int i, place;
+    clientInfo_t* ci;
+    const char* prefix;
+    char* in;
+    char* out;
+
     for (i = 0; i < MAX_CLIENTS; i++) {
         if (cgs.clientinfo[i].infoValid && cgs.clientinfo[i].team == TEAM_SPECTATOR) {
-            Q_strcat(cg.spectatorList, sizeof(cg.spectatorList), va("%s     ", cgs.clientinfo[i].name));
+            list[count++] = i;
         }
     }
-    i = strlen(cg.spectatorList);
-    if (i != cg.spectatorLen) {
-        cg.spectatorLen = i;
-        cg.spectatorWidth = -1;
+    qsort(list, count, sizeof(list[0]), CG_CompareSpectators);
+
+    memset(cg.notifyMessages, 0, sizeof(cg.notifyMessages));
+    for (i = 0; i < count; i++) {
+        ci = &cgs.clientinfo[list[i]];
+
+        prefix = "";
+        if (cgs.gametype == GT_DUEL) {
+            if (ci->specOnly) {
+                prefix = "^7(^5s^7)";
+            } else if (ci->playQueue) {
+                place = ci->playQueue;
+                if (queued != place - 1) {
+                    place = queued + 1;
+                }
+                prefix = va("(%d)", place);
+                queued++;
+            }
+        }
+
+        // the colours and the control characters go, in the name itself
+        out = ci->name;
+        for (in = ci->name; *in; in++) {
+            if (*in == Q_COLOR_ESCAPE && in[1] && in[1] >= '0' && in[1] <= '7') {
+                in++;
+            } else if ((unsigned char)*in >= ' ') {
+                *out++ = *in;
+            }
+        }
+        *out = '\0';
+
+        Q_strncpyz(cg.notifyMessages[i], va("%s%s", prefix, ci->name), sizeof(cg.notifyMessages[i]));
+    }
+
+    if (count != cg.notifyCount) {
+        cg.notifyCount = count;
+        if (count < cg.notifyScrollStart) {
+            cg.notifyScrollStart = 0;
+        }
     }
 }
 

@@ -989,6 +989,8 @@ void G_UpdateCustomSettings(void);
 //
 char* ClientConnect(int clientNum, qboolean firstTime, qboolean isBot);
 void ClientUserinfoChanged(int clientNum);
+void G_UpdatePlayQueue(void);
+void G_CheckPlayQueueChanged(void);
 void ClientDisconnect(int clientNum);
 void ClientBegin(int clientNum);
 void ClientCommand(int clientNum);
