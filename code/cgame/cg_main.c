@@ -597,7 +597,7 @@ static cvarTable_t cvarTable[] = {
     {&cg_autoswitch, "cg_autoswitch", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},  // [QL] default 0 (was Q3 "1")
     {&cg_drawGun, "cg_drawGun", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "3"},
     // [ioquakelive] a renderer cvar; the cgame reads it to know which lights to draw. The
-    // 2 is ours: it leaves only the ones that tell you something. See CG_AddEffectLight.
+    // 2 is ours: it leaves only the carriers' lights, and not your own. See CG_AddEffectLight.
     {&r_dynamicLight, "r_dynamicLight", "1", CVAR_ARCHIVE | CVAR_USERSAVE, "0", "2"},
     {&cg_zoomFov, "cg_zoomfov", "30", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "10", "130"},
     {&cg_fov, "cg_fov", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "10", "130"},

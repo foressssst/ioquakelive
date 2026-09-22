@@ -116,8 +116,8 @@ CG_AddEffectLight
 [ioquakelive] One of the lights that only decorate: the muzzle flash, a rocket, an
 explosion, an item's glow. At r_dynamicLight 2 none of them is drawn, leaving only
 the lights that tell you something - who carries a flag, who carries quad - which
-call the trap directly from CG_PlayerPowerups. At 1 the carrier's light is lost
-among the rockets; at 2 any light you see is a carrier.
+CG_PlayerPowerups adds through CG_CarrierLight, for everyone but yourself. At 1 the
+carrier's light is lost among the rockets; at 2 any light you see is a carrier.
 ===============
 */
 void CG_AddEffectLight(const vec3_t org, float intensity, float r, float g, float b) {

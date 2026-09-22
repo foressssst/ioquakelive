@@ -1919,6 +1919,22 @@ static void CG_PlayerTokens(centity_t* cent, int renderfx) {
 CG_PlayerPowerups
 ===============
 */
+/*
+===============
+CG_CarrierLight
+
+[ioquakelive] the light of whoever carries a flag or quad. At r_dynamicLight 2, the mode that
+leaves only these, the player the view belongs to gives none: everyone else still shows it,
+teammates and enemies, but your own would only light up your screen
+===============
+*/
+static void CG_CarrierLight(const centity_t* cent, float r, float g, float b) {
+    if (r_dynamicLight.integer == 2 && cent->currentState.clientNum == cg.snap->ps.clientNum) {
+        return;
+    }
+    trap_R_AddLightToScene(cent->lerpOrigin, 200 + (rand() & 31), r, g, b);
+}
+
 static void CG_PlayerPowerups(centity_t* cent, refEntity_t* torso) {
     int powerups;
     clientInfo_t* ci;
@@ -1930,7 +1946,7 @@ static void CG_PlayerPowerups(centity_t* cent, refEntity_t* torso) {
 
     // quad gives a dlight
     if (powerups & (1 << PW_QUAD)) {
-        trap_R_AddLightToScene(cent->lerpOrigin, 200 + (rand() & 31), 0.2f, 0.2f, 1);
+        CG_CarrierLight(cent, 0.2f, 0.2f, 1);
     }
 
     // flight plays a looped sound and leaves a trail
@@ -1947,7 +1963,7 @@ static void CG_PlayerPowerups(centity_t* cent, refEntity_t* torso) {
         } else {
             CG_TrailItem(cent, cgs.media.redFlagModel);
         }
-        trap_R_AddLightToScene(cent->lerpOrigin, 200 + (rand() & 31), 1.0, 0.2f, 0.2f);
+        CG_CarrierLight(cent, 1.0, 0.2f, 0.2f);
     }
 
     // blueflag
@@ -1957,7 +1973,7 @@ static void CG_PlayerPowerups(centity_t* cent, refEntity_t* torso) {
         } else {
             CG_TrailItem(cent, cgs.media.blueFlagModel);
         }
-        trap_R_AddLightToScene(cent->lerpOrigin, 200 + (rand() & 31), 0.2f, 0.2f, 1.0);
+        CG_CarrierLight(cent, 0.2f, 0.2f, 1.0);
     }
 
     // neutralflag
@@ -1967,7 +1983,7 @@ static void CG_PlayerPowerups(centity_t* cent, refEntity_t* torso) {
         } else {
             CG_TrailItem(cent, cgs.media.neutralFlagModel);
         }
-        trap_R_AddLightToScene(cent->lerpOrigin, 200 + (rand() & 31), 1.0, 1.0, 1.0);
+        CG_CarrierLight(cent, 1.0, 1.0, 1.0);
     }
 
     // haste leaves smoke trails
