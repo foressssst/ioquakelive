@@ -1491,6 +1491,88 @@ void G_RegisterCvars(void) {
 
 /*
 =================
+G_CvarAnnounced
+
+[QL] with cheats on, the server announces a change only for the cvars whose entry in the
+binary's table (0x1008d830) has one of its announcing callbacks, 0x10051ae0 to 0x10052d8a.
+g_gameState has none, and the model overrides have a callback that does not announce
+=================
+*/
+static const char* const g_announcedCvars[] = {
+    "armor_tiered", "capturelimit", "dmflags", "fraglimit", "g_allTalk", "g_ammoPack",
+    "g_ammoPackHack", "g_ammoRespawn", "g_bestStartingWeapons", "g_complaintDamageThreshold",
+    "g_complaintLimit", "g_damage_bfg", "g_damage_cg", "g_damage_g", "g_damage_gh", "g_damage_gl",
+    "g_damage_hmg", "g_damage_lg", "g_damage_lg_falloff", "g_damage_mg", "g_damage_ng",
+    "g_damage_pg", "g_damage_pl", "g_damage_rg", "g_damage_rl", "g_damage_sg",
+    "g_damage_sg_falloff", "g_damage_sg_outer", "g_debugFlags", "g_debugInactivity",
+    "g_dmgThroughSurfaceDistance", "g_domCapTime", "g_domNeutralFlag", "g_domScoreRate",
+    "g_domTeammateCapScale", "g_doWarmup", "g_dropInactive", "g_droppedPowerupsDecay",
+    "g_dropPowerups", "g_dropSkulls", "g_enableDust", "g_flagBounce", "g_flagPhysics",
+    "g_forceAtmosphericEffects", "g_forceDmgThroughSurface", "g_freezeAutoThawTime",
+    "g_freezeEnvironmentalRespawnDelay", "g_freezeProtectedSpawnTime",
+    "g_freezeRemovePowerupsOnRound", "g_freezeResetArmorOnRound", "g_freezeResetHealthOnRound",
+    "g_freezeResetWeaponsOnRound", "g_freezeThawRadius", "g_freezeThawThroughSurface",
+    "g_freezeThawTick", "g_freezeThawTime", "g_freezeThawWinningTeam", "g_friendlyFire",
+    "g_friendlyFireDampen", "g_gauntletSpeedFactor", "g_gravity", "g_guidedRocket",
+    "g_headShotDamage_rg", "g_inactivity", "g_inactivityWarning", "g_infiniteAmmo", "g_instaGib",
+    "g_ironsights_mg", "g_itemHeight", "g_itemTimers", "g_knockback", "g_knockback_bfg",
+    "g_knockback_cg", "g_knockback_cripple", "g_knockback_g", "g_knockback_gh", "g_knockback_gl",
+    "g_knockback_hmg", "g_knockback_lg", "g_knockback_mg", "g_knockback_ng", "g_knockback_pg",
+    "g_knockback_pg_self", "g_knockback_pl", "g_knockback_rg", "g_knockback_rl",
+    "g_knockback_rl_self", "g_knockback_sg", "g_knockback_z", "g_knockback_z_self",
+    "g_lightningDischarge", "g_loadout", "g_max_knockback", "g_mercytime", "g_nailbounce",
+    "g_nailbouncepercentage", "g_nailcount", "g_nailspeed", "g_nailspread",
+    "g_neutralFlagPingRate", "g_overtime", "g_playerCylinders", "g_quadDamageFactor", "g_quadHog",
+    "g_quadHogIdle", "g_quadHogPingRate", "g_quadHogTime", "g_railJump", "g_range_lg_falloff",
+    "g_range_sg_falloff", "g_regenArmor", "g_regenArmorAfterHealth", "g_regenArmorRate",
+    "g_regenHealth", "g_regenHealthRate", "g_respawn_delay_max", "g_respawn_delay_min",
+    "g_returnFlagOnSuicide", "g_roundWarmupDelay", "g_rrAllowNegativeScores",
+    "g_rrDamageScoreBonus", "g_rrDeathScorePenalty", "g_rrInfected", "g_rrInfectedSpreadTime",
+    "g_rrInfectedSpreadWarningTime", "g_rrInfectedSurvivorMinSpeed",
+    "g_rrInfectedSurvivorPingRate", "g_rrInfectedSurvivorScoreBonus",
+    "g_rrInfectedSurvivorScoreMethod", "g_rrInfectedSurvivorScoreRate",
+    "g_rrInfectedZombieFragBonus", "g_rrInfectedZombieHealthBonus", "g_rrInfectedZombieSpeed",
+    "g_rrRoundScoreBonus", "g_runes", "g_spawnArmor", "g_spawnItemAmmo", "g_spawnItemArmor",
+    "g_spawnItemHealth", "g_spawnItemHoldable", "g_spawnItemPowerup", "g_spawnItemWeapons",
+    "g_speed", "g_splashdamage_bfg", "g_splashdamage_gl", "g_splashdamage_pg", "g_splashdamage_pl",
+    "g_splashdamage_rl", "g_splashradius_bfg", "g_splashradius_gl", "g_splashradius_pg",
+    "g_splashradius_pl", "g_splashradius_rl", "g_startingAmmo_bfg", "g_startingAmmo_cg",
+    "g_startingAmmo_g", "g_startingAmmo_gh", "g_startingAmmo_gl", "g_startingAmmo_hmg",
+    "g_startingAmmo_lg", "g_startingAmmo_mg", "g_startingAmmo_ng", "g_startingAmmo_pg",
+    "g_startingAmmo_pl", "g_startingAmmo_rg", "g_startingAmmo_rl", "g_startingAmmo_sg",
+    "g_startingArmor", "g_startingHealth", "g_startingHealthBonus", "g_startingWeapons",
+    "g_suddenDeathRespawn", "g_tackleFlag", "g_teamForcePresent", "g_teamSizeMin",
+    "g_teamSpawnAsSpec", "g_teamSpecFreeCam", "g_throwFlagForwardMult", "g_throwFlagVelocity",
+    "g_timeoutCount", "g_timeoutLen", "g_vampiricDamage", "g_velocity_bfg", "g_velocity_gh",
+    "g_velocity_gl", "g_velocity_pg", "g_velocity_rl", "g_warmup", "g_weaponRespawn", "mercylimit",
+    "pmove_AirAccel", "pmove_AirStepFriction", "pmove_AirSteps", "pmove_AirStopAccel",
+    "pmove_AutoHop", "pmove_BunnyHop", "pmove_ChainJump", "pmove_ChainJumpVelocity",
+    "pmove_CircleStrafeFriction", "pmove_CrouchSlideFriction", "pmove_CrouchSlideTime",
+    "pmove_CrouchStepJump", "pmove_JumpTimeDeltaMin", "pmove_JumpVelocity",
+    "pmove_JumpVelocityMax", "pmove_JumpVelocityScaleAdd", "pmove_JumpVelocityTimeThreshold",
+    "pmove_JumpVelocityTimeThresholdOffset", "pmove_noPlayerClip", "pmove_RampJump",
+    "pmove_RampJumpScale", "pmove_StepHeight", "pmove_StepJump", "pmove_StepJumpVelocity",
+    "pmove_StrafeAccel", "pmove_velocity_gh", "pmove_WalkAccel", "pmove_WalkFriction",
+    "pmove_WaterSwimScale", "pmove_WaterWadeScale", "pmove_WeaponDropTime",
+    "pmove_WeaponRaiseTime", "pmove_WishSpeed", "roundlimit", "roundtimelimit", "scorelimit",
+    "teamsize", "timelimit", "weapon_gravity_bfg", "weapon_gravity_ng", "weapon_gravity_pg",
+    "weapon_gravity_rl", "weapon_reload_bfg", "weapon_reload_cg", "weapon_reload_gauntlet",
+    "weapon_reload_gh", "weapon_reload_gl", "weapon_reload_hmg", "weapon_reload_hook",
+    "weapon_reload_lg", "weapon_reload_mg", "weapon_reload_ng", "weapon_reload_pg",
+    "weapon_reload_prox", "weapon_reload_rg", "weapon_reload_rl", "weapon_reload_sg",
+};
+
+static int G_CompareCvarName(const void* a, const void* b) {
+    return Q_stricmp((const char*)a, *(const char* const*)b);
+}
+
+static qboolean G_CvarAnnounced(const char* name) {
+    return bsearch(name, g_announcedCvars, ARRAY_LEN(g_announcedCvars), sizeof(g_announcedCvars[0]),
+                   G_CompareCvarName) ? qtrue : qfalse;
+}
+
+/*
+=================
 G_UpdateCvars
 =================
 */
@@ -1513,12 +1595,9 @@ void G_UpdateCvars(void) {
                     cv->onChanged();
                 }
 
-                // [QL] 0x100529b0: with cheats on, the server announces every cvar that
-                // changes. In the binary this lives in its own export of the game table
-                // -- the one sitting before what we first took for the first slot -- and
-                // the engine calls it when a cvar moves; here it goes where the change is
-                // already detected, which gives the same announcement.
-                if (g_cheats.integer) {
+                // [QL] 0x100529b0: with cheats on, the server announces the change, for the
+                // cvars whose callback in the binary's table does (G_CvarAnnounced)
+                if (g_cheats.integer && G_CvarAnnounced(cv->cvarName)) {
                     trap_SendServerCommand(-1, va("print \"Server: %s changed to %s\n\"",
                                                   cv->cvarName, cv->vmCvar->string));
                 }

@@ -586,6 +586,12 @@ jobs:
         MSG: ${{ github.event.head_commit.message }}
       run: |
         VERSION=$(echo "$MSG" | head -1 | sed 's/^release: *//')
+        # the version the console shows has to be the one being released
+        CODE=$(sed -n 's/^#define PRODUCT_VERSION "\(.*\)"/\1/p' code/qcommon/q_shared.h)
+        if [ "$CODE" != "$VERSION" ]; then
+          echo "::error::release: ${VERSION}, but PRODUCT_VERSION in code/qcommon/q_shared.h is ${CODE}"
+          exit 1
+        fi
         echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
         echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
     - name: Create tag

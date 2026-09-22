@@ -42,8 +42,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define STEAMPATH_NAME			"Quake Live"
 #define STEAMPATH_APPID         "282440"
 
+// [ioquakelive] the release, raised by each "release:" commit; the CI checks the two match
 #ifndef PRODUCT_VERSION
-#define PRODUCT_VERSION "1070"
+#define PRODUCT_VERSION "0.2.1"
 #endif
 
 #ifndef PRODUCT_DATE

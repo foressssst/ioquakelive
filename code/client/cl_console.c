@@ -172,10 +172,10 @@ typedef struct {
     vec4_t color;
 } conColor_t;
 
-// a Quake Live palette: black, reds and ambers
+// a Quake Live palette: black, reds and ambers, and QuakeClub's green around it
 static conColor_t con_colors[CC_COUNT] = {
     {"con_colBG", "0B0B0DEB", qtrue, "RGBA color of the background"},
-    {"con_colBorder", "C01A1AFF", qtrue, "RGBA color of the border"},
+    {"con_colBorder", "16A34AFF", qtrue, "RGBA color of the border"},
     {"con_colArrow", "E03C3CFF", qtrue, "RGBA color of backscroll arrows"},
     {"con_colShadow", "000000FF", qtrue, "RGBA color of text shadows"},
     {"con_colMkBG", "D8D8D8FF", qtrue, "RGBA color of the mark background"},
@@ -1205,6 +1205,10 @@ void Con_Init(void) {
         c->cvar = Cvar_Get(c->name, c->defaultValue, CVAR_ARCHIVE);
         c->modificationCount = -1;
         Cvar_SetHelp(c->name, c->help);
+    }
+    // [ioquakelive] the border was red up to 0.2.1; a config that kept that default follows the new one
+    if (!Q_stricmp(con_colors[CC_BORDER].cvar->string, "C01A1AFF")) {
+        Cvar_Set(con_colors[CC_BORDER].name, con_colors[CC_BORDER].defaultValue);
     }
     Con_UpdateColors();
 
