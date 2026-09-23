@@ -893,6 +893,7 @@ void PM_SetMovementConfig(void);  // sets VQ3/CPM mode based on pm_flags
 
 gitem_t* BG_FindItem(const char* pickupName);
 gitem_t* BG_FindItemForWeapon(weapon_t weapon);
+qboolean BG_WeaponInLoadout(int weapon);
 gitem_t* BG_FindItemForPowerup(powerup_t pw);
 gitem_t* BG_FindItemForHoldable(holdable_t pw);
 #define ITEM_INDEX(x) ((x) - bg_itemlist)

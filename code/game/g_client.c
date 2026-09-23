@@ -1668,7 +1668,9 @@ void ClientSpawn(gentity_t* ent) {
         // [QL] binary gates on pm_flags & 0x80000 (PMF_LOADOUT_FORCED), not PMF_FROZEN
         if (g_loadout.integer && !(client->ps.pm_flags & PMF_LOADOUT_FORCED)) {
             int wp = client->sess.weaponPrimary;
-            qboolean invalid = (wp <= 0 || wp >= WP_NUM_WEAPONS ||
+            // [QL] 0x1003b96a: the choice has to be one of the six the binary marks, and the
+            // map must not have disabled it
+            qboolean invalid = (wp <= 0 || wp >= WP_NUM_WEAPONS || !BG_WeaponInLoadout(wp) ||
                                 (g_disableLoadout.integer & (1 << wp)) != 0);
             if (invalid) {
                 if (!isBot) {
@@ -1679,7 +1681,9 @@ void ClientSpawn(gentity_t* ent) {
                     int picked = 0;
                     for (tries = 0; tries < 16 && picked == 0; tries++) {
                         int r = (rand() % (WP_NUM_WEAPONS - 1)) + 1;
-                        if (!(g_disableLoadout.integer & (1 << r))) {
+                        // [QL] 0x1003b9c1: the draw only takes one of the six, and the sixteen
+                        // tries over, it falls back to the heavy machinegun
+                        if (BG_WeaponInLoadout(r) && !(g_disableLoadout.integer & (1 << r))) {
                             picked = r;
                         }
                     }

@@ -1103,6 +1103,31 @@ gitem_t* BG_FindItemForHoldable(holdable_t pw) {
 }
 
 /*
+==============
+BG_WeaponInLoadout
+
+[QL] Whether a weapon can be the one picked to start with. The binary keeps a flag per
+weapon (qagamex86.dll 0x1008ff1c, one dword every 0x30) and only these six carry it: the
+shotgun, the rocket launcher, the lightning gun, the railgun, the plasma gun and the heavy
+machinegun. GiveDefaultWeapons reads it both for the choice it validates and for the one it
+draws for a bot
+==============
+*/
+qboolean BG_WeaponInLoadout(int weapon) {
+    switch (weapon) {
+        case WP_SHOTGUN:
+        case WP_ROCKET_LAUNCHER:
+        case WP_LIGHTNING:
+        case WP_RAILGUN:
+        case WP_PLASMAGUN:
+        case WP_HMG:
+            return qtrue;
+        default:
+            return qfalse;
+    }
+}
+
+/*
 ===============
 BG_FindItemForWeapon
 
