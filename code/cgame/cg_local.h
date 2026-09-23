@@ -831,6 +831,10 @@ typedef struct {
 
     // [CPMA] when the spectator camera last jumped to whoever got the frag
     int followKillerTime;
+
+    // [ioquakelive] hits the client sounded on its own, and when the last one was
+    int predictedHits;
+    int predictedHitTime;
     int warmupGametype;     // [QL] gametype override from CS_WARMUP (-1 = use current)
     int warmupRound;             // [QL] CS_ROUND_WARMUP "round" (0x10ab8f58), +1 in GT_AD
     int warmupTurn;              // [QL] CS_ROUND_WARMUP "turn", GT_AD only (0x10ab8f5c)
@@ -2033,6 +2037,7 @@ extern vmCvar_t ch_obituaryBand;
 extern vmCvar_t ch_obituaryY;
 extern vmCvar_t ch_obituaryScale;
 extern vmCvar_t cg_ambient;
+extern vmCvar_t ch_predictHitSounds;
 extern vmCvar_t ch_gameEvents;
 extern vmCvar_t ch_recordMessage;
 extern vmCvar_t cg_demoRecording;
