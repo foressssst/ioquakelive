@@ -1555,6 +1555,7 @@ static void R_Register( void )
 	ri.Cmd_AddCommand( "screenshot", R_ScreenShot_f );
 	ri.Cmd_AddCommand( "screenshotJPEG", R_ScreenShot_f );
 	ri.Cmd_AddCommand( "gfxinfo", GfxInfo_f );
+	ri.Cmd_AddCommand( "modelist", R_ModeList_f );
 	ri.Cmd_AddCommand( "fontlist", R_FontList_f );
 
 	// [QL] the window's cvars, which sdl_glimp.c reads, and the mode table
@@ -2041,6 +2042,42 @@ static qboolean RE_WindowResized( int width, int height )
 
 
 /*
+=====================
+RE_ApplyVideoMode
+
+[QL] The window takes the mode the cvars ask for -- full screen or not, and at what size --
+without the renderer being loaded again, which is the renderer's part of retail's
+"vid_restart fast". Getting the window cvars again is what applies the latched ones, and what
+hangs off the size is made again the same way dragging the window does it
+=====================
+*/
+static qboolean RE_ApplyVideoMode( glconfig_t *config )
+{
+	int width, height;
+
+	if ( ri.Cvar_VariableIntegerValue( "r_noFastRestart" ) ) {
+		return qfalse;
+	}
+
+	R_RegisterWindowCvars();
+
+	if ( !GLimp_ApplyVideoMode( &width, &height ) ) {
+		return qfalse;
+	}
+
+	gls.windowWidth = 0;	// so the size below is taken even when the window kept it
+
+	if ( !RE_WindowResized( width, height ) ) {
+		return qfalse;
+	}
+
+	*config = glConfig;
+
+	return qtrue;
+}
+
+
+/*
 ===============
 RE_Shutdown
 ===============
@@ -2152,6 +2189,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.EndRegistration = RE_EndRegistration;
 
 	re.WindowResized = RE_WindowResized;
+	re.ApplyVideoMode = RE_ApplyVideoMode;
 	re.BeginFrame = RE_BeginFrame;
 	re.EndFrame = RE_EndFrame;
 

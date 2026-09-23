@@ -1442,10 +1442,12 @@ void CL_KeyDownEvent(int key, unsigned time) {
             return;
         }
 
-        // [ioquakelive] only the cvar changes: the renderer applies it on the next frame and
-        // asks for a video restart itself if SDL cannot do it in place
+        // [QL] quakelive_steam.exe 0x004f1750, message 0x104: retail flips the cvar and runs
+        // its own "vid_restart fast". r_fullscreen is latched in both, so the restart is what
+        // applies it; ours keeps the modules and the media where the renderer can
         Cvar_SetValue("r_fullscreen",
                       !Cvar_VariableIntegerValue("r_fullscreen"));
+        Cbuf_ExecuteText(EXEC_APPEND, "vid_restart fast\n");
         return;
     }
 

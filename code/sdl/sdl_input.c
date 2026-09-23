@@ -1274,11 +1274,19 @@ static void IN_ProcessEvents(void) {
                     width = e.window.data1;
                     height = e.window.data2;
 
-                    // ignore it while the window is away: going to another window and coming
-                    // back resizes it twice, and neither time is the player changing anything.
-                    // Fullscreen does come through here, because that is how the picture takes
-                    // the size when the mode is switched in place
-                    if (Cvar_VariableIntegerValue("com_minimized")) {
+                    // [ioquakelive] only the player resizing the window counts. Going to
+                    // another window sends sizes of its own while it is minimised or without
+                    // the focus, and taking those brought the game back to the front, which is
+                    // what stopped alt-tab from working
+                    {
+                        SDL_WindowFlags wflags = SDL_GetWindowFlags(SDL_window);
+
+                        if ((wflags & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_HIDDEN)) ||
+                            !(wflags & SDL_WINDOW_INPUT_FOCUS)) {
+                            break;
+                        }
+                    }
+                    if (width < 32 || height < 32 || Cvar_VariableIntegerValue("com_minimized")) {
                         break;
                     }
 
@@ -1287,10 +1295,13 @@ static void IN_ProcessEvents(void) {
                         break;
                     }
 
-                    // [QL] a window keeps its size in r_windowedWidth and r_windowedHeight
-                    Cvar_SetValue("r_windowedWidth", width);
-                    Cvar_SetValue("r_windowedHeight", height);
-                    Cvar_Set("r_windowedMode", "-1");
+                    // [QL] a window keeps its size in r_windowedWidth and r_windowedHeight. In
+                    // fullscreen they are left alone: that size is the screen's, not the window's
+                    if (!Cvar_VariableIntegerValue("r_fullscreen")) {
+                        Cvar_SetValue("r_windowedWidth", width);
+                        Cvar_SetValue("r_windowedHeight", height);
+                        Cvar_Set("r_windowedMode", "-1");
+                    }
 
                     // [ioquakelive] the renderer takes the new size where it can, so dragging
                     // the window resizes the picture as it goes instead of restarting the video
@@ -1545,6 +1556,9 @@ IN_Restart
 ===============
 */
 void IN_Restart(void) {
+    // IN_Init adds it again, and this is called on every "vid_restart fast"
+    Cmd_RemoveCommand("inputrate");
+
     IN_ShutdownJoystick();
     IN_Init(SDL_window);
 }

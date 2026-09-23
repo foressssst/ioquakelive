@@ -2048,6 +2048,20 @@ doesn't know what graphics to reload
 =================
 */
 void CL_Vid_Restart_f(void) {
+    // [QL] quakelive_steam.exe 0x004bb7e0: "vid_restart fast" keeps the modules and everything
+    // loaded and only does the window over, which is what retail runs on alt+enter and after a
+    // resize. It reads r_noFastRestart first and falls back to the slow way when the window
+    // cannot take it; so does this
+    if (Cmd_Argc() > 1 && !Q_stricmp(Cmd_Argv(1), "fast") && cls.rendererStarted &&
+        !Cvar_VariableIntegerValue("r_noFastRestart") && re.ApplyVideoMode &&
+        re.ApplyVideoMode(&cls.glconfig)) {
+        // this is how the modules hear about the new resolution
+        Cvar_SetValue("vid_resizeCount", Cvar_VariableIntegerValue("vid_resizeCount") + 1);
+        // and the mouse follows the window's new state
+        IN_Restart();
+        return;
+    }
+
     // Settings may have changed so stop recording now
     if (CL_VideoRecording()) {
         CL_CloseAVI();

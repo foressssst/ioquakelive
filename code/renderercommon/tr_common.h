@@ -194,6 +194,7 @@ IMPLEMENTATION SPECIFIC FUNCTIONS
 */
 
 void GLimp_Init(qboolean fixedFunction);
+qboolean GLimp_ApplyVideoMode(int* width, int* height);
 void GLimp_Shutdown(void);
 void GLimp_EndFrame(void);
 

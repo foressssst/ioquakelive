@@ -126,6 +126,7 @@ void R_DecodePNG( byte *fileData, int fileLen, const char *name, byte **pic, int
 extern char r_lastImageName[MAX_QPATH];
 
 void R_RegisterWindowCvars( void );
+void R_ModeList_f( void );
 int R_AspectRatioOf( int width, int height );
 qboolean R_GetModeInfo( int *width, int *height, float *windowAspect, int *aspectRatio, int mode, qboolean fullscreen );
 float Q_atof( const char *str );
@@ -170,6 +171,7 @@ void RI_CL_SetScaling( float factor, int captureWidth, int captureHeight );
 
 // the window, from sdl/sdl_glimp.c and sdl/sdl_gamma.c built into this renderer
 void GLimp_Init( qboolean fixedFunction );
+qboolean GLimp_ApplyVideoMode( int *width, int *height );
 void GLimp_Shutdown( void );
 void GLimp_EndFrame( void );
 void GLimp_Minimize( void );

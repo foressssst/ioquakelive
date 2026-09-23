@@ -190,7 +190,6 @@ void R_RegisterWindowCvars( void ) {
 	// [QL] the front end sets it while it covers the screen; the shader collapse looks at it
 	r_uiFullScreen = ri.Cvar_Get( "r_uifullscreen", "0", 0 );
 
-	ri.Cmd_AddCommand( "modelist", R_ModeList_f );
 }
 
 /*

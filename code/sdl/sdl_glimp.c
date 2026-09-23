@@ -1114,6 +1114,74 @@ static void GLimp_InitCvars(void) {
 
 /*
 ===============
+GLimp_ApplyVideoMode
+
+[QL] The window takes the mode the cvars ask for without being made again: this is the window
+half of retail's "vid_restart fast" (quakelive_steam.exe 0x004bb7e0, which its WndProc runs on
+alt+enter at 0x004f1750). The caller applies the latched cvars first, and what comes back is the
+size the window really ended with
+===============
+*/
+qboolean GLimp_ApplyVideoMode(int* width, int* height) {
+    int mode, w, h, aspectRatio;
+    float aspect;
+
+    if (!SDL_window) {
+        return qfalse;
+    }
+
+    // [QL] quakelive_steam.exe 0x448110: full screen takes r_mode, a window r_windowedMode,
+    // and borderless is always the desktop's own
+    if (r_fullscreen->integer == 2) {
+        mode = -2;
+    } else {
+        mode = r_fullscreen->integer ? r_mode->integer : r_windowedMode->integer;
+    }
+
+    if (mode == -2) {
+        const SDL_DisplayMode* desktop = SDL_GetDesktopDisplayMode(SDL_GetDisplayForWindow(SDL_window));
+
+        if (!desktop) {
+            return qfalse;
+        }
+        w = desktop->w;
+        h = desktop->h;
+        aspect = (float)w / (float)h;
+        aspectRatio = R_AspectRatioOf(w, h);
+    } else if (!R_GetModeInfo(&w, &h, &aspect, &aspectRatio, mode, r_fullscreen->integer)) {
+        return qfalse;
+    }
+
+    glConfig.vidWidth = w;
+    glConfig.vidHeight = h;
+    glConfig.windowAspect = aspect;
+
+    // [QL] quakelive_steam.exe 0x46ab80: the UI reads the shape of the screen here
+    ri.Cvar_Set("r_aspectRatio", va("%d", aspectRatio));
+
+    if (!GLimp_ApplyFullscreen(r_fullscreen->integer)) {
+        return qfalse;
+    }
+
+    if (!r_fullscreen->integer) {
+        SDL_SetWindowSize(SDL_window, w, h);
+        SDL_SyncWindow(SDL_window);
+    }
+
+    if (!SDL_GetWindowSizeInPixels(SDL_window, &w, &h) || w < 32 || h < 32) {
+        return qfalse;
+    }
+
+    glConfig.isFullscreen = r_fullscreen->integer ? qtrue : qfalse;
+    *width = w;
+    *height = h;
+
+    return qtrue;
+}
+
+
+/*
+===============
 GLimp_Init
 
 This routine is responsible for initializing the OS specific portions

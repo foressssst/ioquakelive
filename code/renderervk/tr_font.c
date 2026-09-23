@@ -50,18 +50,28 @@ static int fallbackFontId = FONS_INVALID;
 // latin beyond ASCII, so a name with a letter like U+01B6 came out as dots. Noto Sans ships in
 // pak00 and carries latin extended, cyrillic, greek and the currency signs
 static int textFallbackFontId = FONS_INVALID;
+// [ioquakelive] and the symbols nobody else has: stars, hearts, arrows, ticks, boxes and
+// the circled numbers players decorate a name with. Retail draws every one of them as a dot
+static int symbolFontId = FONS_INVALID;
+static int symbol2FontId = FONS_INVALID;
+static int mathFontId = FONS_INVALID;
+
+static void R_Font_AddFallback( int id, int fallback ) {
+	if ( fallback != FONS_INVALID && fallback != id ) {
+		fonsAddFallbackFont( fontContext, id, fallback );
+	}
+}
 
 // the fallbacks of a font, in the order they are tried
 static void R_Font_AddFallbacks( int id ) {
 	if ( id == FONS_INVALID ) {
 		return;
 	}
-	if ( textFallbackFontId != FONS_INVALID && textFallbackFontId != id ) {
-		fonsAddFallbackFont( fontContext, id, textFallbackFontId );
-	}
-	if ( fallbackFontId != FONS_INVALID && fallbackFontId != id ) {
-		fonsAddFallbackFont( fontContext, id, fallbackFontId );
-	}
+	R_Font_AddFallback( id, textFallbackFontId );
+	R_Font_AddFallback( id, symbolFontId );
+	R_Font_AddFallback( id, symbol2FontId );
+	R_Font_AddFallback( id, mathFontId );
+	R_Font_AddFallback( id, fallbackFontId );
 }
 
 // the input method's composition font
@@ -307,6 +317,9 @@ void R_InitFonts( void ) {
 	mono = R_Font_LoadTTF( DEFAULT_MONO_FONT, "mono" );
 	fallback = R_Font_LoadTTF( "fonts/droidsansfallbackfull.ttf", "sans-fallback" );
 	textFallbackFontId = R_Font_LoadTTF( "fonts/notosans-regular.ttf", "text-fallback" );
+	symbolFontId = R_Font_LoadTTF( "fonts/notosanssymbols-regular.ttf", "symbol-fallback" );
+	symbol2FontId = R_Font_LoadTTF( "fonts/notosanssymbols2-regular.ttf", "symbol2-fallback" );
+	mathFontId = R_Font_LoadTTF( "fonts/notosansmath-regular.ttf", "math-fallback" );
 
 	fontIndexToId[0] = normal != FONS_INVALID ? normal : 0;
 	fontIndexToId[1] = sans != FONS_INVALID ? sans : fontIndexToId[0];
@@ -335,6 +348,9 @@ void R_FontShutdown( void ) {
 	numFontIndices = 0;
 	fallbackFontId = FONS_INVALID;
 	textFallbackFontId = FONS_INVALID;
+	symbolFontId = FONS_INVALID;
+	symbol2FontId = FONS_INVALID;
+	mathFontId = FONS_INVALID;
 }
 
 /*

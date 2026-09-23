@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_types.h"
 
-#define REF_API_VERSION 11
+#define REF_API_VERSION 12
 
 //
 // these are the functions exported by the refresh module
@@ -79,6 +79,11 @@ typedef struct {
     // [ioquakelive] the window changed size: the renderer takes the new one without being
     // restarted, and answers qfalse when it cannot, so the caller restarts the video instead
     qboolean (*WindowResized)(int width, int height);
+
+    // [QL] the renderer half of "vid_restart fast": the mode the cvars ask for is applied on
+    // the window that is already there, and the new configuration comes back. qfalse means it
+    // could not, so the caller restarts the video the slow way
+    qboolean (*ApplyVideoMode)(glconfig_t* config);
 
     void (*BeginFrame)(stereoFrame_t stereoFrame);
 
