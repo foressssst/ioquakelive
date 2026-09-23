@@ -1991,6 +1991,54 @@ void R_Init( void ) {
 
 
 /*
+=====================
+RE_WindowResized
+
+[ioquakelive] The window was dragged to another size. The frame buffers are the only thing
+tied to it, so they are made again and the blit rectangle is worked out afresh; the rest of
+the renderer reads glConfig every frame. With a render scale of its own the picture keeps
+its size and only the blit changes
+=====================
+*/
+static qboolean RE_WindowResized( int width, int height )
+{
+	if ( width <= 0 || height <= 0 )
+		return qfalse;
+
+	if ( gls.windowWidth == width && gls.windowHeight == height )
+		return qtrue;
+
+	gls.windowWidth = width;
+	gls.windowHeight = height;
+
+	if ( !r_renderScale->integer )
+	{
+		glConfig.vidWidth = width;
+		glConfig.vidHeight = height;
+		gls.captureWidth = width;
+		gls.captureHeight = height;
+		RI_CL_SetScaling( 1.0, gls.captureWidth, gls.captureHeight );
+#ifdef USE_FBO
+		if ( r_ext_supersample->integer )
+		{
+			glConfig.vidWidth *= 2;
+			glConfig.vidHeight *= 2;
+			RI_CL_SetScaling( 2.0, gls.captureWidth, gls.captureHeight );
+		}
+		QGL_InitFBO();
+#endif
+	}
+#ifdef USE_FBO
+	QGL_SetRenderScale( qfalse );
+#endif
+
+	tr.needScreenMap = 0;
+
+	return qtrue;
+}
+
+
+/*
 ===============
 RE_Shutdown
 ===============
@@ -2101,6 +2149,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.SetWorldVisData = RE_SetWorldVisData;
 	re.EndRegistration = RE_EndRegistration;
 
+	re.WindowResized = RE_WindowResized;
 	re.BeginFrame = RE_BeginFrame;
 	re.EndFrame = RE_EndFrame;
 

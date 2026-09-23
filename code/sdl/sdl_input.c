@@ -1292,9 +1292,19 @@ static void IN_ProcessEvents(void) {
                     Cvar_SetValue("r_windowedHeight", height);
                     Cvar_Set("r_windowedMode", "-1");
 
-                    // Wait until user stops dragging for 1 second, so
-                    // we aren't constantly recreating the GL context while
-                    // he tries to drag...
+                    // [ioquakelive] the renderer takes the new size where it can, so dragging
+                    // the window resizes the picture as it goes instead of restarting the video
+                    // under the player's hands. cls.glconfig is what the modules read, and
+                    // vid_resizeCount is how they hear about it
+                    if (re.WindowResized && re.WindowResized(width, height)) {
+                        cls.glconfig.vidWidth = width;
+                        cls.glconfig.vidHeight = height;
+                        Cvar_SetValue("vid_resizeCount", Cvar_VariableIntegerValue("vid_resizeCount") + 1);
+                        break;
+                    }
+
+                    // the renderer could not: wait until the player stops dragging for a
+                    // second, so the context is not made again on every step
                     vidRestartTime = Sys_Milliseconds() + 1000;
                 } break;
 

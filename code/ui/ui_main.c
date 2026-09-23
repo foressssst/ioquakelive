@@ -490,6 +490,32 @@ void UI_DrawCenteredPic(qhandle_t image, int w, int h) {
     UI_DrawHandlePic(x, y, w, h, image);
 }
 
+/*
+=================
+UI_ReadResolution
+
+[ioquakelive] The resolution and the scales worked out from it. It runs at startup and again
+when the window is dragged to another size, which the engine counts in vid_resizeCount
+=================
+*/
+static void UI_ReadResolution(void) {
+    trap_GetGlconfig(&uiInfo.uiDC.glconfig);
+
+    trap_Cvar_Set("ui_videomode", va("%dx%d", uiInfo.uiDC.glconfig.vidWidth, uiInfo.uiDC.glconfig.vidHeight));
+
+    // for 640x480 virtualized screen
+    uiInfo.uiDC.yscale = uiInfo.uiDC.glconfig.vidHeight * (1.0 / (float)SCREEN_HEIGHT);
+    uiInfo.uiDC.xscale = uiInfo.uiDC.glconfig.vidWidth * (1.0 / (float)SCREEN_WIDTH);
+    if (uiInfo.uiDC.glconfig.vidWidth * SCREEN_HEIGHT > uiInfo.uiDC.glconfig.vidHeight * SCREEN_WIDTH) {
+        // wide screen
+        uiInfo.uiDC.bias = 0.5 * (uiInfo.uiDC.glconfig.vidWidth - (uiInfo.uiDC.glconfig.vidHeight * ((float)SCREEN_WIDTH / (float)SCREEN_HEIGHT)));
+        uiInfo.uiDC.xscale = uiInfo.uiDC.yscale;
+    } else {
+        // no wide screen
+        uiInfo.uiDC.bias = 0;
+    }
+}
+
 int frameCount = 0;
 int startTime;
 
@@ -497,6 +523,14 @@ int startTime;
 void _UI_Refresh(int realtime) {
     static int index;
     static int previousTimes[UI_FPS_FRAMES];
+    static int lastResize = -1;
+    int resizeCount = (int)trap_Cvar_VariableValue("vid_resizeCount");
+
+    // [ioquakelive] the window was dragged to another size: the menus are laid out again
+    if (lastResize != resizeCount) {
+        lastResize = resizeCount;
+        UI_ReadResolution();
+    }
 
     uiInfo.uiDC.frameTime = realtime - uiInfo.uiDC.realTime;
     uiInfo.uiDC.realTime = realtime;

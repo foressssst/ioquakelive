@@ -4002,6 +4002,9 @@ void CL_Init(void) {
     Cvar_Get("cl_demoFrags", "", CVAR_ROM);
     // [ioquakelive] what the cgame needs to put the recording message up
     Cvar_Get("cl_demorecording", "0", CVAR_ROM);
+    // [ioquakelive] goes up every time the window changes size without a video restart, so the
+    // game and menu modules know to read the resolution again
+    Cvar_Get("vid_resizeCount", "0", CVAR_ROM);
     Cvar_Get("cl_demoname", "", CVAR_ROM);
     Cmd_AddCommand("stoprecord", CL_StopRecord_f);
     Cmd_AddCommand("connect", CL_Connect_f);

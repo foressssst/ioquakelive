@@ -1999,6 +1999,39 @@ void R_Init( void ) {
 RE_Shutdown
 ===============
 */
+/*
+=====================
+RE_WindowResized
+
+[ioquakelive] The window was dragged to another size. Vulkan sees its swapchain go out of
+date by itself and makes it again, so the only thing needed here is the size the rest of the
+renderer reads. With a render scale of its own the picture keeps its size
+=====================
+*/
+static qboolean RE_WindowResized( int width, int height )
+{
+	if ( width <= 0 || height <= 0 )
+		return qfalse;
+
+	if ( gls.windowWidth == width && gls.windowHeight == height )
+		return qtrue;
+
+	gls.windowWidth = width;
+	gls.windowHeight = height;
+
+	if ( !r_renderScale->integer )
+	{
+		glConfig.vidWidth = width;
+		glConfig.vidHeight = height;
+		gls.captureWidth = width;
+		gls.captureHeight = height;
+		RI_CL_SetScaling( 1.0, gls.captureWidth, gls.captureHeight );
+	}
+
+	return qtrue;
+}
+
+
 static void RE_Shutdown( qboolean destroyWindow ) {
 	// the engine only says whether the window goes; Quake3e's codes, from what that means
 	refShutdownCode_t code = destroyWindow ? REF_UNLOAD_DLL : REF_KEEP_CONTEXT;
@@ -2126,6 +2159,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.SetWorldVisData = RE_SetWorldVisData;
 	re.EndRegistration = RE_EndRegistration;
 
+	re.WindowResized = RE_WindowResized;
 	re.BeginFrame = RE_BeginFrame;
 	re.EndFrame = RE_EndFrame;
 

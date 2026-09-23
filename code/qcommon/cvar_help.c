@@ -1086,10 +1086,9 @@ static const cvarHelp_t cvarHelp[] = {
     {"s_asyncLoad", "sounds are decoded on the workers while the map loads"},
     {"s_muteBackground", "the game goes quiet while another window is in front; read when the sound starts"},
     {"s_ambient", "the sounds the map makes by itself, like machinery and wind"},
-    {"ch_predictHitSounds", "the hit sound of your own hitscan shots plays at once instead of "
-                            "when the server confirms it, so it lands with the shot the way it "
-                            "does with no ping; a shot the server does not count as a hit still "
-                            "sounds"},
+    {"ch_predictHitSounds", "set by the game: the hit sound of your own hitscan shots plays at "
+                            "once instead of when the server confirms it, so it lands with the "
+                            "shot the way it does with no ping"},
     {"s_muted", "set by the game: 1 while the game is quiet"},
     {"s_pvs", "only plays the sounds of what you could see from where you stand"},
     {"s_voiceStep", "how much the voice volume moves per step (no effect in this build)"},

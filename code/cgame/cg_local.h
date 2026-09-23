@@ -2038,6 +2038,7 @@ extern vmCvar_t ch_obituaryY;
 extern vmCvar_t ch_obituaryScale;
 extern vmCvar_t cg_ambient;
 extern vmCvar_t ch_predictHitSounds;
+extern vmCvar_t cg_vidResizeCount;
 extern vmCvar_t ch_gameEvents;
 extern vmCvar_t ch_recordMessage;
 extern vmCvar_t cg_demoRecording;
@@ -2415,6 +2416,7 @@ void CG_BloodSplatEffect(vec3_t origin, int entityNum);  // QL: blood splat (rep
 void CG_SpawnParticleEffect(vec3_t origin, vec3_t vel, float size, float r, float g, float b, float a, float lifetime, int startTime, int flags, qhandle_t shader);  // [QL] 0x10012f30: one impact spark
 void CG_SpecAutoFollow(int clientNum, int mode);  // QL: auto-follow spectator
 void CG_AddGameEvent(int clientNum, qhandle_t icon, const char* what);
+void CG_ReadResolution(void);
 void CG_SpecFollowKiller(int clientNum);
 
 localEntity_t* CG_MakeExplosion(vec3_t origin, vec3_t dir, qhandle_t hModel, qhandle_t shader, int msec, qboolean isSprite);

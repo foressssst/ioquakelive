@@ -375,6 +375,7 @@ vmCvar_t ch_obituaryY;
 vmCvar_t ch_obituaryScale;
 vmCvar_t cg_ambient;
 vmCvar_t ch_predictHitSounds;
+vmCvar_t cg_vidResizeCount;
 vmCvar_t ch_gameEvents;
 vmCvar_t ch_recordMessage;
 vmCvar_t cg_demoRecording;
@@ -802,7 +803,9 @@ static cvarTable_t cvarTable[] = {
     {&ch_obituaryScale, "ch_obituaryScale", "0.85", CVAR_ARCHIVE},
     // [QL] the engine owns this one; the cgame only reads it to leave the map's sounds out
     {&cg_ambient, "s_ambient", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE | CVAR_LATCH},
-    {&ch_predictHitSounds, "ch_predictHitSounds", "0", CVAR_ARCHIVE},
+    // the hit sound of your own shots always goes at once; the cvar is there to be read, not set
+    {&ch_predictHitSounds, "ch_predictHitSounds", "1", CVAR_ROM},
+    {&cg_vidResizeCount, "vid_resizeCount", "0", CVAR_ROM},
     {&ch_gameEvents, "ch_gameEvents", "1", CVAR_ARCHIVE},
     {&ch_recordMessage, "ch_recordMessage", "1", CVAR_ARCHIVE},
     {&cg_demoRecording, "cl_demorecording", "0", CVAR_ROM},
@@ -3548,6 +3551,30 @@ void CG_AssetCache(void) {
 
 /*
 =================
+CG_ReadResolution
+
+[ioquakelive] Reads the resolution and everything drawn from it. It runs at startup and again
+whenever the window is dragged to another size, which the engine counts in vid_resizeCount
+=================
+*/
+void CG_ReadResolution(void) {
+    float width43;
+
+    trap_GetGlconfig(&cgs.glconfig);
+    cgs.screenXScale = cgs.glconfig.vidWidth / (float)SCREEN_WIDTH;
+    cgs.screenYScale = cgs.glconfig.vidHeight / (float)SCREEN_HEIGHT;
+
+    // [QL] the widescreen bias: half the extra width beyond 4:3
+    width43 = 4.0f * cgs.glconfig.vidHeight / 3.0f;
+    if ((float)cgs.glconfig.vidWidth > width43) {
+        cgs.widescreenBias = ((float)cgs.glconfig.vidWidth - width43) * 0.5f;
+    } else {
+        cgs.widescreenBias = 0.0f;
+    }
+}
+
+/*
+=================
 CG_Init
 
 Called after every level change or subsystem restart
@@ -3627,19 +3654,7 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
     cgs.flagStatus = -1;              // old servers
 
     // get the rendering configuration from the client system
-    trap_GetGlconfig(&cgs.glconfig);
-    cgs.screenXScale = cgs.glconfig.vidWidth / (float)SCREEN_WIDTH;
-    cgs.screenYScale = cgs.glconfig.vidHeight / (float)SCREEN_HEIGHT;
-
-    // [QL] compute widescreen bias: half the extra width beyond 4:3
-    {
-        float width43 = 4.0f * cgs.glconfig.vidHeight / 3.0f;
-        if ((float)cgs.glconfig.vidWidth > width43) {
-            cgs.widescreenBias = ((float)cgs.glconfig.vidWidth - width43) * 0.5f;
-        } else {
-            cgs.widescreenBias = 0.0f;
-        }
-    }
+    CG_ReadResolution();
 
     // get the gamestate from the client system
     trap_GetGameState(&cgs.gameState);

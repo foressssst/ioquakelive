@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_types.h"
 
-#define REF_API_VERSION 10
+#define REF_API_VERSION 11
 
 //
 // these are the functions exported by the refresh module
@@ -75,6 +75,10 @@ typedef struct {
     // Draw images for cinematic rendering, pass as 32 bit rgba
     void (*DrawStretchRaw)(int x, int y, int w, int h, int cols, int rows, const byte* data, int client, qboolean dirty);
     void (*UploadCinematic)(int w, int h, int cols, int rows, const byte* data, int client, qboolean dirty);
+
+    // [ioquakelive] the window changed size: the renderer takes the new one without being
+    // restarted, and answers qfalse when it cannot, so the caller restarts the video instead
+    qboolean (*WindowResized)(int width, int height);
 
     void (*BeginFrame)(stereoFrame_t stereoFrame);
 

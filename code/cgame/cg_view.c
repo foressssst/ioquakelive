@@ -1540,6 +1540,17 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
     CG_WeaponConfig();
     CG_AutoAction();
 
+    // [ioquakelive] the window was dragged to another size: everything drawn from the
+    // resolution is worked out again, without the game reloading
+    {
+        static int lastResize = -1;
+
+        if (lastResize != cg_vidResizeCount.integer) {
+            lastResize = cg_vidResizeCount.integer;
+            CG_ReadResolution();
+        }
+    }
+
     // add buffered sounds
     CG_PlayBufferedSounds();
     // [QL] drain buffered voice chats (inert unless a .voice file loaded, matching QL)
