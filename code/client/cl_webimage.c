@@ -546,6 +546,11 @@ void CL_WebImage_Init(void) {
     // [ioquakelive] where a picture of your own goes. QuakeClub's endpoint takes PNG and JPEG,
     // keeps them for a month and answers with the link
     cl_imageHost = Cvar_Get("cl_imageHost", "https://quakeclub.com/ioql/upload", CVAR_ARCHIVE);
+
+    // The endpoint asks for this in a header, and it rides in every copy of the game: it is no
+    // secret and it guards nothing. It only keeps whatever crawls the web from posting pictures
+    // by accident. What holds the door is on the other side -- nginx's rate limit, the size cap,
+    // the two formats it will take and the month it keeps them
     cl_imageKey = Cvar_Get("cl_imageKey", "IdtyFF3bEOWEhiT69HV6wsBNFwuOgTfC", CVAR_ARCHIVE);
     cl_imageMaxKB = Cvar_Get("cl_imageMaxKB", "4096", CVAR_ARCHIVE);
 
