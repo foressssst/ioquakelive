@@ -1258,11 +1258,14 @@ long FS_FOpenFileReadDir(const char* filename, searchpath_t* search, fileHandle_
 			// names .menu files, so one outside a pk3 fell back to ui/hud.txt in a game and
 			// only worked in a demo. Any loose .txt is allowed here: it is text the player
 			// reads their own hud from, never a model or a texture the server plays by
+			// [ioquakelive] and the pictures the client itself fetched from a link: they
+			// live in a folder of its own that only it writes, and no server plays by them
 			if (!FS_IsExt(filename, ".cfg", len) &&   // for config files
 				!FS_IsExt(filename, ".menu", len) &&  // menu files
 				!FS_IsExt(filename, ".game", len) &&  // menu files
 				!FS_IsExt(filename, ".dat", len) &&   // for journal files
 				!FS_IsExt(filename, ".txt", len) &&   // hud files
+				Q_stricmpn(filename, "webimages/", 10) &&
 				!FS_IsDemoExt(filename, len))         // demos
 			{
 				*file = 0;

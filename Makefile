@@ -1537,6 +1537,7 @@ Q3OBJ = \
   $(B)/client/snd_codec_ogg.o \
   \
   $(B)/client/cl_curl.o \
+  $(B)/client/cl_webimage.o \
   \
   $(B)/client/sv_bot.o \
   $(B)/client/sv_ccmds.o \

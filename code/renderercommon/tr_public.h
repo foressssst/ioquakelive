@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_types.h"
 
-#define REF_API_VERSION 12
+#define REF_API_VERSION 13
 
 //
 // these are the functions exported by the refresh module
@@ -84,6 +84,10 @@ typedef struct {
     // the window that is already there, and the new configuration comes back. qfalse means it
     // could not, so the caller restarts the video the slow way
     qboolean (*ApplyVideoMode)(glconfig_t* config);
+
+    // [ioquakelive] how big the picture behind a shader is, so whoever draws it can keep its
+    // shape. qfalse when the shader has no image of its own
+    qboolean (*ShaderImageSize)(qhandle_t shader, int* width, int* height);
 
     void (*BeginFrame)(stereoFrame_t stereoFrame);
 

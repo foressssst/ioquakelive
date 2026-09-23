@@ -1493,6 +1493,7 @@ void CL_ShutdownAll(qboolean shutdownRef) {
 #ifdef USE_CURL
     CL_cURL_Shutdown();
 #endif
+    CL_WebImage_Shutdown();
     // clear sounds
     S_DisableSounds();
     // shutdown CGame
@@ -3224,6 +3225,9 @@ void CL_Frame(int msec) {
     // [QL] voice, which comes and goes over Steam's peer to peer network
     CL_VoiceFrame();
 
+    // [ioquakelive] and the pictures behind the links people write
+    CL_WebImage_Frame();
+
     // decide on the serverTime to render
     CL_SetCGameTime();
 
@@ -4040,6 +4044,9 @@ void CL_Init(void) {
     Cmd_AddCommand("web_hideBrowser", CL_Web_HideBrowser_f);
     // [QL] additional client commands
     Cmd_AddCommand("postprocess_restart", CL_PostProcessRestart_f);
+
+    // [ioquakelive] the pictures behind the links people write, off until asked for
+    CL_WebImage_Init();
     Cmd_AddCommand("userinfo", CL_Userinfo_f);
     if (!com_dedicated->integer) {
         Cmd_AddCommand("sayto", CL_Sayto_f);

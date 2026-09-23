@@ -778,6 +778,8 @@ static const cvarHelp_t cvarHelp[] = {
     {"in_mouseMode", "how the mouse ended up being read"},
     {"cl_freelook", "the mouse also looks up and down"},
     {"cl_run", "runs by default; +speed walks"},
+    {"cl_webImages", "draws the picture behind a link the pointer is on; it is fetched from whoever hosts it, so it is off until asked for"},
+    {"cl_webImageMaxKB", "the most a picture from a link may weigh, in kilobytes"},
     {"cl_yawspeed", "turning speed with the keys, in degrees per second"},
     {"cl_pitchspeed", "looking up and down with the keys, in degrees per second"},
     {"cl_anglespeedkey", "turning speed factor while +speed is held"},

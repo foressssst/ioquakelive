@@ -547,6 +547,85 @@ qboolean Con_MouseClick(void) {
 
 /*
 ================
+Con_DrawLinkImage
+
+[ioquakelive] NOT FROM RETAIL: the picture behind the link the pointer is on, hanging off it like
+a label. Nothing is fetched until somebody points at a link, and only with cl_webImages on: asking
+for a picture tells whoever hosts it that this machine is here, and the link is somebody else's
+================
+*/
+static void Con_DrawLinkImage(void) {
+    static const vec4_t shade = {0.0f, 0.0f, 0.0f, 0.75f};
+    const conLink_t* link = NULL;
+    qhandle_t shader;
+    int imgW, imgH;
+    float w, h, x, y, maxW, maxH;
+    int i;
+
+    if (!cl_webImages || !cl_webImages->integer || Con_LinkPromptActive()) {
+        return;
+    }
+
+    for (i = 0; i < con.numLinks; i++) {
+        if (Con_MouseInRect(con.links[i].x, con.links[i].y, con.links[i].w, con.links[i].h)) {
+            link = &con.links[i];
+            break;
+        }
+    }
+    if (!link) {
+        return;
+    }
+
+    shader = CL_WebImage_Get(link->url);
+    if (!shader || !re.ShaderImageSize(shader, &imgW, &imgH) || imgW <= 0 || imgH <= 0) {
+        return;
+    }
+
+    // as big as it fits in a third of the screen, and never so small that it cannot be
+    // looked at, always keeping its shape
+    maxW = cls.glconfig.vidWidth * 0.34f;
+    maxH = cls.glconfig.vidHeight * 0.34f;
+    w = (float)imgW;
+    h = (float)imgH;
+    if (h < cls.glconfig.vidHeight * 0.12f) {
+        w *= (cls.glconfig.vidHeight * 0.12f) / h;
+        h = cls.glconfig.vidHeight * 0.12f;
+    }
+    if (w > maxW) {
+        h *= maxW / w;
+        w = maxW;
+    }
+    if (h > maxH) {
+        w *= maxH / h;
+        h = maxH;
+    }
+
+    // under the link, and inside the screen
+    x = link->x;
+    y = link->y + link->h + 4.0f;
+    if (x + w + 4.0f > cls.glconfig.vidWidth) {
+        x = cls.glconfig.vidWidth - w - 4.0f;
+    }
+    if (y + h + 4.0f > cls.glconfig.vidHeight) {
+        y = link->y - h - 6.0f;
+    }
+    if (x < 2.0f) {
+        x = 2.0f;
+    }
+    if (y < 2.0f) {
+        y = 2.0f;
+    }
+
+    Con_FillRectPx(x - 2.0f, y - 2.0f, w + 4.0f, h + 4.0f, shade);
+    Con_FillRectPx(x - 2.0f, y - 2.0f, w + 4.0f, 1.0f, con_colors[CC_BORDER].color);
+    Con_FillRectPx(x - 2.0f, y + h + 1.0f, w + 4.0f, 1.0f, con_colors[CC_BORDER].color);
+
+    re.SetColor(NULL);
+    re.DrawStretchPic(x, y, w, h, 0.0f, 0.0f, 1.0f, 1.0f, shader);
+}
+
+/*
+================
 Con_DrawLinkPrompt
 
 The question a clicked link opens, over the console: the address, and the two
@@ -2208,6 +2287,7 @@ void Con_DrawConsole(void) {
     if (clc.state == CA_DISCONNECTED) {
         if (!(Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CGAME))) {
             Con_DrawSolidConsole(1.0);
+            Con_DrawLinkImage();
             Con_DrawLinkPrompt();
             return;
         }
@@ -2215,6 +2295,7 @@ void Con_DrawConsole(void) {
 
     if (con.displayFrac) {
         Con_DrawSolidConsole(con.displayFrac);
+        Con_DrawLinkImage();
         Con_DrawLinkPrompt();
     } else {
         // draw notify lines

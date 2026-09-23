@@ -1129,6 +1129,11 @@ int Sys_Milliseconds(void);
 int64_t Sys_Microseconds(void);
 
 // [ioquakelive] the minimum needed to spread work across cores; the queue is in common.c
+#ifdef _WIN32
+// [ioquakelive] one file off the web, blocking: what the pictures behind a link use
+qboolean Sys_WebFetch(const char* url, const char* ospath, int maxBytes);
+#endif
+
 void* Sys_ThreadCreate(void (*function)(void*), void* argument);
 void* Sys_MutexCreate(void);
 void Sys_MutexLock(void* mutex);

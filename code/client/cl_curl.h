@@ -93,6 +93,8 @@ extern const char* (*qcurl_multi_strerror)(CURLMcode);
 #define qcurl_multi_strerror curl_multi_strerror
 #endif
 
+CURLcode qcurl_easy_setopt_warn(CURL* curl, CURLoption option, ...);
+
 qboolean CL_cURL_Init(void);
 void CL_cURL_Shutdown(void);
 void CL_cURL_BeginDownload(const char* localName, const char* remoteURL);
