@@ -732,33 +732,6 @@ static float CG_DrawFPS(float y) {
 
 /*
 =================
-CG_DrawTimer
-=================
-*/
-static float CG_DrawTimer(float y) {
-	char* s;
-	int w;
-	int mins, seconds, tens;
-	int msec;
-
-	msec = cg.time - cgs.levelStartTime;
-
-	seconds = msec / 1000;
-	mins = seconds / 60;
-	seconds -= mins * 60;
-	tens = seconds / 10;
-	seconds -= tens * 10;
-
-	s = va("%i:%i%i", mins, tens, seconds);
-	w = CG_Text_Width(s, 0.3f, 0);
-
-	CG_Text_Paint(635 - w, y + 14, 0.3f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE);
-
-	return y + BIGCHAR_HEIGHT + 4;
-}
-
-/*
-=================
 CG_DrawTeamOverlay
 
 [QL] 0x10009da0. Up to eight teammates from the server's sorted list: name, health and armor,
@@ -1290,9 +1263,6 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame) {
 	}
 	if (cg_drawFPS.integer && (stereoFrame == STEREO_CENTER || stereoFrame == STEREO_RIGHT)) {
 		y = CG_DrawFPS(y);
-	}
-	if (cg_drawTimer.integer) {
-		y = CG_DrawTimer(y);
 	}
 	if (ch_drawKeys.integer) {
 		CG_DrawKeys();

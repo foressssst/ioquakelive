@@ -1169,6 +1169,11 @@ gentity_t* LaunchItem(gitem_t* item, vec3_t origin, vec3_t velocity) {
     dropped->s.eType = ET_ITEM;
     dropped->s.modelindex = item - bg_itemlist;  // store item number in modelindex
     dropped->s.modelindex2 = 1;                  // This is non-zero is it's a dropped item
+    // [QL] 0x10044e28: when it was dropped and by whom, which is what stops the dropper from
+    // walking back into it (BG_CanItemBeGrabbed). Both travel in the entity state. Nobody
+    // is MAX_CLIENTS, which no player can be
+    dropped->s.time = level.time;
+    dropped->s.clientNum = MAX_CLIENTS;
 
     dropped->classname = item->classname;
     dropped->item = item;
@@ -1208,6 +1213,7 @@ Spawns an item and tosses it forward
 ================
 */
 gentity_t* Drop_Item(gentity_t* ent, gitem_t* item, float angle) {
+    gentity_t* dropped;
     vec3_t velocity;
     vec3_t angles;
 
@@ -1219,7 +1225,12 @@ gentity_t* Drop_Item(gentity_t* ent, gitem_t* item, float angle) {
     VectorScale(velocity, 150, velocity);
     velocity[2] += 200 + crandom() * 50;
 
-    return LaunchItem(item, ent->s.pos.trBase, velocity);
+    dropped = LaunchItem(item, ent->s.pos.trBase, velocity);
+    if (dropped && ent->client) {
+        dropped->s.clientNum = ent->s.clientNum;
+    }
+
+    return dropped;
 }
 
 /*

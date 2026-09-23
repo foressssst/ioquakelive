@@ -197,7 +197,6 @@ vmCvar_t cg_railTrailTime;
 vmCvar_t cg_centertime;
 vmCvar_t cg_swingSpeed;
 vmCvar_t cg_shadows;
-vmCvar_t cg_drawTimer;
 vmCvar_t cg_drawFPS;
 vmCvar_t cg_drawSnapshot;
 vmCvar_t cg_draw3dIcons;
@@ -648,7 +647,6 @@ static cvarTable_t cvarTable[] = {
     {&cg_gibFloatingOriginOffsetZ, "cg_gibFloatingOriginOffsetZ", "0", CVAR_ARCHIVE},
     {&cg_draw2D, "cg_draw2D", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_drawStatus, "cg_drawStatus", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
-    {&cg_drawTimer, "cg_drawTimer", "0", CVAR_ARCHIVE},
     {&cg_drawFPS, "cg_drawFPS", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_drawSnapshot, "cg_drawSnapshot", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
     {&cg_draw3dIcons, "cg_draw3dIcons", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},

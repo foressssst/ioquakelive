@@ -3488,6 +3488,7 @@ static void Cmd_DropFlag_f(gentity_t* ent) {
 
     drop = LaunchItem(item, ent->s.pos.trBase, velocity);
     if (drop) {
+        drop->s.clientNum = ent->s.clientNum;
         drop->think = Team_DroppedFlagThink;
         drop->nextthink = level.time + 30000;  // 30 second timeout
     }
@@ -3576,10 +3577,14 @@ static void Cmd_DropPowerup_f(gentity_t* ent) {
 
     drop = LaunchItem(item, ent->s.pos.trBase, velocity);
     if (drop) {
-        // Transfer remaining powerup time
-        remaining = ent->client->ps.powerups[pw] - level.time;
-        if (remaining < 1000) remaining = 1000;
-        drop->count = remaining;           // store remaining time
+        // [QL] 0x10044e0c: what is left of the powerup, in seconds, which is what a pickup
+        // adds back; never less than one
+        remaining = (ent->client->ps.powerups[pw] - level.time) / 1000;
+        if (remaining < 1) {
+            remaining = 1;
+        }
+        drop->s.clientNum = ent->s.clientNum;
+        drop->count = remaining;
         drop->nextthink = level.time + 10000;  // 10 second pickup window
         drop->think = G_FreeEntity;
     }
@@ -3714,6 +3719,7 @@ static void Cmd_DropWeapon_f(gentity_t* ent) {
         // Transfer ammo to the dropped weapon
         ammo = ent->client->ps.ammo[weapon];
         drop->count = ammo;
+        drop->s.clientNum = ent->s.clientNum;
     }
 
     // Remove weapon and ammo from player

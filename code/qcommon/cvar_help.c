@@ -1527,7 +1527,6 @@ static const cvarHelp_t cvarHelp[] = {
                              HV("4") "Enemies'\n"
                              HV("8") "The ones lying on the map\n"
                              HV("16") "Everyone's while you spectate with the free camera"},
-    {"cg_drawTimer", "shows the time since the level started, under the FPS counter"},
     {"cg_filter_angles", "smooths the view by averaging its angles over this many frames, up to 31; 0 for none"},
     {"cg_lightningImpactCap", "closer than this distance the lightning gun's impact gets smaller; 0 keeps it whole"},
     {"cg_railReloadTime", "milliseconds the railgun in your hand takes to light up again after a shot"},
