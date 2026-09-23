@@ -46,6 +46,23 @@ static int fontIndexToId[MAX_FONT_INDICES];
 static char fontIndexPath[MAX_FONT_INDICES][MAX_QPATH];
 static int numFontIndices;
 static int fallbackFontId = FONS_INVALID;
+// [ioquakelive] the one tried before it: handelgothic has 231 glyphs and the CJK fallback has no
+// latin beyond ASCII, so a name with a letter like U+01B6 came out as dots. Noto Sans ships in
+// pak00 and carries latin extended, cyrillic, greek and the currency signs
+static int textFallbackFontId = FONS_INVALID;
+
+// the fallbacks of a font, in the order they are tried
+static void R_Font_AddFallbacks( int id ) {
+	if ( id == FONS_INVALID ) {
+		return;
+	}
+	if ( textFallbackFontId != FONS_INVALID && textFallbackFontId != id ) {
+		fonsAddFallbackFont( fontContext, id, textFallbackFontId );
+	}
+	if ( fallbackFontId != FONS_INVALID && fallbackFontId != id ) {
+		fonsAddFallbackFont( fontContext, id, fallbackFontId );
+	}
+}
 
 // the input method's composition font
 static int imeCompositionFont;
@@ -287,6 +304,7 @@ void R_InitFonts( void ) {
 	sans = R_Font_LoadTTF( DEFAULT_SANS_FONT, "sans" );
 	mono = R_Font_LoadTTF( DEFAULT_MONO_FONT, "mono" );
 	fallback = R_Font_LoadTTF( "fonts/droidsansfallbackfull.ttf", "sans-fallback" );
+	textFallbackFontId = R_Font_LoadTTF( "fonts/notosans-regular.ttf", "text-fallback" );
 
 	fontIndexToId[0] = normal != FONS_INVALID ? normal : 0;
 	fontIndexToId[1] = sans != FONS_INVALID ? sans : fontIndexToId[0];
@@ -297,17 +315,9 @@ void R_InitFonts( void ) {
 	numFontIndices = 3;
 	fallbackFontId = fallback;
 
-	if ( fallback != FONS_INVALID ) {
-		if ( normal != FONS_INVALID ) {
-			fonsAddFallbackFont( fontContext, normal, fallback );
-		}
-		if ( sans != FONS_INVALID ) {
-			fonsAddFallbackFont( fontContext, sans, fallback );
-		}
-		if ( mono != FONS_INVALID ) {
-			fonsAddFallbackFont( fontContext, mono, fallback );
-		}
-	}
+	R_Font_AddFallbacks( normal );
+	R_Font_AddFallbacks( sans );
+	R_Font_AddFallbacks( mono );
 
 	if ( normal == FONS_INVALID ) {
 		ri.Printf( PRINT_WARNING, "R_InitFonts: default font '%s' missing - text will not render\n", DEFAULT_FONT );
@@ -322,6 +332,7 @@ void R_FontShutdown( void ) {
 	fontContext = NULL;
 	numFontIndices = 0;
 	fallbackFontId = FONS_INVALID;
+	textFallbackFontId = FONS_INVALID;
 }
 
 /*
@@ -370,9 +381,7 @@ int RE_Font_Register( const char *name ) {
 		if ( id == FONS_INVALID ) {
 			continue;
 		}
-		if ( fallbackFontId != FONS_INVALID ) {
-			fonsAddFallbackFont( fontContext, id, fallbackFontId );
-		}
+		R_Font_AddFallbacks( id );
 		fontIndexToId[numFontIndices] = id;
 		Q_strncpyz( fontIndexPath[numFontIndices], paths[p], sizeof( fontIndexPath[numFontIndices] ) );
 		return numFontIndices++;

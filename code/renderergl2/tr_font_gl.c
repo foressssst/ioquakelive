@@ -49,6 +49,19 @@ static int fontIndexToId[MAX_FONT_INDICES];
 static char fontIndexPath[MAX_FONT_INDICES][MAX_QPATH];
 static int numFontIndices = 0;
 static int fallbackFontId = FONS_INVALID;
+// [ioquakelive] tried before it: the primaries have no latin beyond ASCII and neither does the
+// CJK fallback, so a name with a letter like U+01B6 came out as dots. Noto Sans is in pak00
+static int textFallbackFontId = FONS_INVALID;
+
+// the fallbacks of a font, in the order they are tried
+static void R_Font_AddFallbacks(int id) {
+    if (id == FONS_INVALID)
+        return;
+    if (textFallbackFontId != FONS_INVALID && textFallbackFontId != id)
+        fonsAddFallbackFont(fontContext, id, textFallbackFontId);
+    if (fallbackFontId != FONS_INVALID && fallbackFontId != id)
+        fonsAddFallbackFont(fontContext, id, fallbackFontId);
+}
 
 // IME composition font state (recorded for the IME candidate window).
 static int imeCompositionFont = 0;
@@ -314,6 +327,7 @@ void R_InitFonts(void) {
     sans = R_Font_LoadTTF(DEFAULT_SANS_FONT, "sans");
     mono = R_Font_LoadTTF(DEFAULT_MONO_FONT, "mono");
     fallback = R_Font_LoadTTF("fonts/droidsansfallbackfull.ttf", "sans-fallback");
+    textFallbackFontId = R_Font_LoadTTF("fonts/notosans-regular.ttf", "text-fallback");
 
     // NOTE: QL also loads an OS-host Unicode fallback (ARIALUNI.TTF / segoeui.ttf
     // / l_10646.ttf) by reading the Windows fonts directory directly.  This loads
@@ -330,15 +344,10 @@ void R_InitFonts(void) {
     numFontIndices = 3;
     fallbackFontId = fallback;
 
-    // Fall back to the broad-coverage font for glyphs the primaries lack.
-    if (fallback != FONS_INVALID) {
-        if (normal != FONS_INVALID)
-            fonsAddFallbackFont(fontContext, normal, fallback);
-        if (sans != FONS_INVALID)
-            fonsAddFallbackFont(fontContext, sans, fallback);
-        if (mono != FONS_INVALID)
-            fonsAddFallbackFont(fontContext, mono, fallback);
-    }
+    // Fall back to the broad-coverage fonts for glyphs the primaries lack.
+    R_Font_AddFallbacks(normal);
+    R_Font_AddFallbacks(sans);
+    R_Font_AddFallbacks(mono);
 
     if (normal == FONS_INVALID)
         ri.Printf(PRINT_WARNING, "R_InitFonts: default font '%s' missing - text will not render\n", DEFAULT_FONT);
