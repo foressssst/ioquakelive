@@ -3405,7 +3405,7 @@ static const float *CG_ObitTeamColor(int team) {
 static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
     static vec4_t obitColor;
     int i;
-    int textH, attackerW, remaining;
+    int textH, lineH, attackerW, remaining;
     float x, y, iconY, iconW, iconH;
     const float *team;
     int lifetime = ch_animateScroll.integer ? OBIT_FADEIN + OBIT_FADEDELAY + OBIT_FADEOUT : 2000;
@@ -3437,7 +3437,7 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
         if (cg.obitSlideStart) {
             // the list slides by the row that is leaving, which is the one drawn at the anchor
             slide = CG_CpmaSlide(cg.obitSlideStart, OBIT_FADEOUT) *
-                    (float)(CG_DrawTextHeight(cg.obituaries[0].victimName, scale, 0, 0) + OBIT_ROW_GAP);
+                    (float)(CG_DrawTextLineHeight(scale, 0) + OBIT_ROW_GAP);
         }
     }
 
@@ -3462,7 +3462,10 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
             obitColor[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
         }
 
+        // the ascender places the icon and the text; the whole line box, tails included,
+        // is what the band has to cover and what one row moves over the next
         textH = CG_DrawTextHeight(cg.obituaries[i].victimName, scale, 0, 0);
+        lineH = CG_DrawTextLineHeight(scale, 0);
         attackerW = 0;
 
         // [CPMA] the band behind the row, which is what makes the feed read over the map. It
@@ -3475,9 +3478,9 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
                 rowW += (float)CG_DrawTextWidth(cg.obituaries[i].attackerName, scale, 0, 0);
             }
             band[3] = obitColor[3] * 0.45f;
-            // a unit shorter than the row, so one band never touches the next
-            CG_FillRect(rect->x - 4.0f, y - (float)textH - 2.0f, rowW + 8.0f,
-                        (float)(textH + OBIT_ROW_GAP - 1), band);
+            // the line box with a unit of air over the caps and under the tails
+            CG_FillRect(rect->x - 4.0f, y - (float)textH - 1.0f, rowW + 8.0f,
+                        (float)(lineH + 2), band);
         }
 
         if (cg.obituaries[i].hasAttacker == 1) {
@@ -3503,7 +3506,7 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
         CG_DrawText((float)attackerW + rect->x + (float)(textH * 2), (float)y, 0, scale, obitColor,
                     cg.obituaries[i].victimName, 0, 0, 0);
 
-        y += textH + OBIT_ROW_GAP;
+        y += lineH + OBIT_ROW_GAP;
     }
 }
 

@@ -2199,6 +2199,7 @@ void CG_DrawText_DC(float x, float y, float scale, vec4_t color, const char* tex
 void CG_DrawText(float x, float y, int fontIndex, float scale, vec4_t color, const char *text, float adjust, int maxChars, int textStyle);
 int CG_DrawTextWidth(const char *text, float scale, int limit, int fontIndex);
 int CG_DrawTextHeight(const char *text, float scale, int limit, int fontIndex);
+int CG_DrawTextLineHeight(float scale, int fontIndex);
 void CG_DrawTextClipped(float *maxX, float x, float y, float scale, const vec4_t color, const char *text);
 extern vmCvar_t cg_redTeamName;
 extern vmCvar_t cg_blueTeamName;

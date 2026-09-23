@@ -96,7 +96,18 @@ CG_MenuHoldsKeys
 ================
 */
 qboolean CG_MenuHoldsKeys(void) {
-    return (trap_Key_GetCatcher() & KEYCATCH_CGAME) && !cg_demoCursor ? qtrue : qfalse;
+    if (!(trap_Key_GetCatcher() & KEYCATCH_CGAME)) {
+        return qfalse;
+    }
+    if (!cg_demoCursor) {
+        return qtrue;
+    }
+
+    // [ioquakelive] the pointer over the demo controls is no menu, but the board, the summary at
+    // the end of the match and the join screen are, and they lay out in 4:3 even while it holds
+    // the pointer. Without this a demo drew them stretched across the whole width
+    return (cg.scoreBoardShowing || cg.showJoinMenu ||
+            (cg.snap && cg.snap->ps.pm_type == PM_INTERMISSION)) ? qtrue : qfalse;
 }
 
 /*

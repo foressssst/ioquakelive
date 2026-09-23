@@ -1124,11 +1124,14 @@ size the window really ended with
 */
 qboolean GLimp_ApplyVideoMode(int* width, int* height) {
     int mode, w, h, aspectRatio;
+    qboolean wasFullscreen;
     float aspect;
 
     if (!SDL_window) {
         return qfalse;
     }
+
+    wasFullscreen = glConfig.isFullscreen;
 
     // [QL] quakelive_steam.exe 0x448110: full screen takes r_mode, a window r_windowedMode,
     // and borderless is always the desktop's own
@@ -1163,8 +1166,23 @@ qboolean GLimp_ApplyVideoMode(int* width, int* height) {
         return qfalse;
     }
 
+    // [QL] quakelive_steam.exe 0x0046bc70: coming back to a window is not only leaving the mode
+    // behind. Retail gives the window its whole style again -- the caption and the sizing border
+    // among them -- and puts it back on the screen, or the player is left with a borderless slab
+    // stuck in a corner. Full screen keeps neither
+    SDL_SetWindowBordered(SDL_window, (r_fullscreen->integer || r_noborder->integer) ? false : true);
+    SDL_SetWindowResizable(SDL_window, r_fullscreen->integer ? false : true);
+
     if (!r_fullscreen->integer) {
         SDL_SetWindowSize(SDL_window, w, h);
+
+        // out of full screen there is no window position to go back to
+        if (wasFullscreen || r_centerWindow->integer) {
+            SDL_DisplayID display = SDL_GetDisplayForWindow(SDL_window);
+
+            SDL_SetWindowPosition(SDL_window, SDL_WINDOWPOS_CENTERED_DISPLAY(display),
+                                  SDL_WINDOWPOS_CENTERED_DISPLAY(display));
+        }
         SDL_SyncWindow(SDL_window);
     }
 

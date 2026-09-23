@@ -177,6 +177,43 @@ static unsigned int fons__decutf8(unsigned int *state, unsigned int *codep, unsi
 }
 
 // -------------------------------------------------------------------------
+//  what a character that is not meant to be seen turns into
+// -------------------------------------------------------------------------
+
+// [ioquakelive] No font has a glyph for a control or format code, so fontstash would draw the
+// empty box for one in the middle of the text -- which is what a long chat line carrying a line
+// separator (U+2028) looked like. A line break, a tab and the line and paragraph separators read
+// as a space on a single line; the rest draw nothing. Zero means "not a character to draw"
+static unsigned int fons__visibleCodepoint(unsigned int codepoint) {
+    switch (codepoint) {
+        case '\t':
+        case '\n':
+        case '\r':
+        case 0x2028:  // line separator
+        case 0x2029:  // paragraph separator
+            return ' ';
+        case 0x200b:  // zero width space
+        case 0x200c:  // zero width non-joiner
+        case 0x200d:  // zero width joiner
+        case 0x2060:  // word joiner
+        case 0x180e:  // mongolian vowel separator
+        case 0xfeff:  // byte order mark
+            return 0;
+        default:
+            break;
+    }
+
+    if (codepoint < 0x20 || codepoint == 0x7f) {
+        return 0;  // the ascii controls
+    }
+    if (codepoint >= 0x80 && codepoint <= 0x9f) {
+        return 0;  // and the ones latin-1 adds
+    }
+
+    return codepoint;
+}
+
+// -------------------------------------------------------------------------
 //  atlas (skyline bottom-left packer)
 // -------------------------------------------------------------------------
 
@@ -973,6 +1010,9 @@ int fonsTextIterNext(FONScontext *stash, FONStextIter *iter, FONSquad *quad) {
     for (; str != iter->end; str++) {
         if (fons__decutf8(&iter->utf8state, &iter->codepoint, *(const unsigned char *)str))
             continue;
+        iter->codepoint = fons__visibleCodepoint(iter->codepoint);
+        if (iter->codepoint == 0)
+            continue;
         str++;
         // Get glyph and quad
         iter->x = iter->nextx;
@@ -1078,6 +1118,9 @@ float fonsDrawText(FONScontext *stash, float x, float y, const char *str, const 
 
         if (fons__decutf8(&utf8state, &codepoint, *(const unsigned char *)str))
             continue;
+        codepoint = fons__visibleCodepoint(codepoint);
+        if (codepoint == 0)
+            continue;
 
         glyph = fons__getGlyph(stash, font, codepoint, isize, iblur, FONS_GLYPH_BITMAP_REQUIRED);
         if (glyph != NULL) {
@@ -1154,6 +1197,9 @@ float fonsTextBounds(FONScontext *stash, float x, float y, const char *str, cons
             continue;
         }
         if (fons__decutf8(&utf8state, &codepoint, *(const unsigned char *)str))
+            continue;
+        codepoint = fons__visibleCodepoint(codepoint);
+        if (codepoint == 0)
             continue;
         glyph = fons__getGlyph(stash, font, codepoint, isize, iblur, FONS_GLYPH_BITMAP_OPTIONAL);
         if (glyph != NULL) {

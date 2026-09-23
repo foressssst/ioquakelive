@@ -342,6 +342,33 @@ int CG_DrawTextHeight(const char *text, float scale, int limit, int fontIndex) {
 	return h;
 }
 
+/*
+================
+CG_DrawTextLineHeight
+
+[ioquakelive] The whole box a line of text takes: the font's ascender, which is what
+CG_DrawTextHeight answers (0x100082b0 measures that way), plus how far a tail drops below the
+baseline. Measured on a string that has both, so it is the same for every name. What hangs a
+box behind a row of text needs this and not the ascender, or the tails fall outside it
+================
+*/
+int CG_DrawTextLineHeight(float scale, int fontIndex) {
+	float extents[5];
+	float yscale = cgs.screenYScale;
+	float below;
+
+	trap_R_Font_TextExtents("Ag", 0, CG_EngineFont(fontIndex), CG_FontPixelSize(scale), -1, extents);
+
+	if (yscale <= 0.0f) {
+		yscale = 1.0f;
+	}
+
+	// the baseline is at zero and y grows downwards: what is under it is the tail
+	below = extents[3] > 0.0f ? extents[3] : 0.0f;
+
+	return (int)((extents[4] + below) / yscale);
+}
+
 // [QL] cgamex86.dll 0x100087c0: text that stops at *maxX (640 space), font 0,
 // no text style. The engine skips the first glyph that would end past the bound
 // and writes back where it stopped; a string that fits leaves *maxX unchanged,
@@ -2450,7 +2477,13 @@ static void CG_DrawTeammateNames(void) {
 		if (frozen) {
 			showBars = qfalse;
 		} else {
-			showBars = (sameTeam && cg_teammateNames.integer) || (spectator && cg_specNames.integer);
+			// [ioquakelive] the x-ray gets the health and the armour of the outline it names,
+			// the same bars a team mate's name carries. Both travel in the entity (0x1003572f
+			// for the health), and a demo taken from a player's own eyes carries neither for
+			// the others: with nothing to show, the bars stay away
+			showBars = (xrayNames && cent->currentState.health > 0) ||
+					   (sameTeam && cg_teammateNames.integer) ||
+					   (spectator && cg_specNames.integer);
 		}
 
 		if (showName) {

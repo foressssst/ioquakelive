@@ -175,7 +175,7 @@ typedef struct {
 // a Quake Live palette: black, reds and ambers, and QuakeClub's green around it
 static conColor_t con_colors[CC_COUNT] = {
     {"con_colBG", "0B0B0DEB", qtrue, "RGBA color of the background"},
-    {"con_colBorder", "16A34AFF", qtrue, "RGBA color of the border"},
+    {"con_colBorder", "FFCC33FF", qtrue, "RGBA color of the border"},
     {"con_colArrow", "E03C3CFF", qtrue, "RGBA color of backscroll arrows"},
     {"con_colShadow", "000000FF", qtrue, "RGBA color of text shadows"},
     {"con_colMkBG", "D8D8D8FF", qtrue, "RGBA color of the mark background"},
@@ -593,7 +593,10 @@ static void Con_DrawLinkPrompt(void) {
         const char* label = i ? "  CANCEL" : "   OPEN";
         const qboolean lit = Con_MouseInRect(r[0], r[1], r[2], r[3]);
 
-        Con_FillRectPx(r[0], r[1], r[2], r[3], lit ? con_colors[CC_HL].color : con_colors[CC_MKBG].color);
+        // [ioquakelive] a dark plate with the console's own text on it, and the one under the
+        // pointer takes the edge colour with dark letters. The mark colours were being used here,
+        // and those are a light grey with near-white text: the two buttons could not be read
+        Con_FillRectPx(r[0], r[1], r[2], r[3], lit ? con_colors[CC_BORDER].color : con_colors[CC_HL].color);
         re.SetColor(lit ? con_colors[CC_MKTEXT].color : con_colors[CC_TEXT].color);
         re.Font_DrawString((int)r[0], (int)(r[1] + m.asc + (bh - m.cellH) * 0.5f), label, CON_FONT_MONO, m.fontSize,
                            -1, NULL, CON_TEXT_LITERAL);
@@ -1958,10 +1961,10 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
     Con_FillRectPx(0, 0, cls.glconfig.vidWidth, lines - 2, con_colors[CC_BG].color);
     Con_FillRectPx(0, lines - 2, cls.glconfig.vidWidth, 2, con_colors[CC_BORDER].color);
 
-    // version, where Quake Live puts it
+    // version, where Quake Live puts it, in the colour of the edge it sits on
     len = strlen(FULL_PRODUCT_VERSION);
     Con_DrawStringTTF(cls.glconfig.vidWidth - CON_CELL_WIDTH * len, lines - CON_CELL_HEIGHT / 2 - CON_CELL_HEIGHT,
-                      FULL_PRODUCT_VERSION, con_colors[CC_ARROW].color, CON_CELL_WIDTH, CON_CELL_HEIGHT, CON_TEXT_LITERAL);
+                      FULL_PRODUCT_VERSION, con_colors[CC_BORDER].color, CON_CELL_WIDTH, CON_CELL_HEIGHT, CON_TEXT_LITERAL);
 
     con.vislines = lines;
     rows = (int)((lines - m.cellH) / m.cellH);

@@ -2876,7 +2876,14 @@ static int CG_FeederCount(float feederID) {
             }
         }
     } else if (feederID == FEEDER_SCOREBOARD || feederID == FEEDER_ENDSCOREBOARD) {
-        return cg.numScores;
+        // [QL] the scores carry every connected client, spectators included (the server sends
+        // them in the same message, 0x1003d090), but the board lists players only: the
+        // spectators have their own row, the CG_SPECTATORS owner draw
+        for (i = 0; i < cg.numScores; i++) {
+            if (cg.scores[i].team != TEAM_SPECTATOR) {
+                count++;
+            }
+        }
     } else if (feederID == FEEDER_REDTEAM_STATS) {
         for (i = 0; i < cg.numScores; i++) {
             if (cg.scores[i].team == TEAM_RED) count++;
@@ -2959,20 +2966,23 @@ void CG_SetScoreboardSelection(void) {
 // FIXME: might need to cache this info
 static clientInfo_t* CG_InfoFromScoreIndex(int index, int team, int* scoreIndex) {
     int i, count;
-    if (cgs.gametype >= GT_TEAM) {
-        count = 0;
-        for (i = 0; i < cg.numScores; i++) {
-            if (cg.scores[i].team == team) {
-                if (count == index) {
-                    *scoreIndex = i;
-                    return &cgs.clientinfo[cg.scores[i].client];
-                }
-                count++;
-            }
+
+    count = 0;
+    for (i = 0; i < cg.numScores; i++) {
+        // a team's list takes that team's scores; every other list takes the players, which
+        // leaves out the spectators the server sends in the same scores
+        if (team != -1 ? cg.scores[i].team != team : cg.scores[i].team == TEAM_SPECTATOR) {
+            continue;
         }
+        if (count == index) {
+            *scoreIndex = i;
+            return &cgs.clientinfo[cg.scores[i].client];
+        }
+        count++;
     }
-    *scoreIndex = index;
-    return &cgs.clientinfo[cg.scores[index].client];
+
+    *scoreIndex = 0;
+    return NULL;
 }
 
 // [QL] Format damage with "k" suffix for scoreboard display (binary-verified)
