@@ -1322,6 +1322,7 @@ long FS_FOpenFileRead(const char* filename, fileHandle_t* file, qboolean uniqueF
 
 		len = FS_FOpenFileReadDir(filename, search, file, uniqueFILE, qfalse);
 
+
 		if (file == NULL) {
 			if (len > 0)
 				return len;
@@ -3204,6 +3205,16 @@ static void FS_ReorderPurePaks(void) {
 		return;
 
 	p_insert_index = &fs_searchpaths;  // we insert in order at the beginning of the list
+
+	// [ioquakelive] NOT FROM RETAIL: the folders keep their place at the head. Moving the
+	// server's paks in front of them hid the player's own loose files behind the ones in
+	// pak00 -- a hud dropped in baseq3/ui was read from the pak in a game and from the folder
+	// in a demo, which is where the difference came from. What may be read loose is still the
+	// filter's call in FS_FOpenFileReadDir, so nothing the server plays by gets through here
+	while (*p_insert_index && (*p_insert_index)->dir) {
+		p_insert_index = &(*p_insert_index)->next;
+	}
+
 	for (i = 0; i < fs_numServerPaks; i++) {
 		p_previous = p_insert_index;  // track the pointer-to-current-item
 		for (s = *p_insert_index; s; s = s->next) {
