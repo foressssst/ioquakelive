@@ -247,8 +247,12 @@ CL_WebImage_Frame
 Picks up whatever the threads finished, once per client frame
 ==================
 */
+static void CL_ImageUpload_Frame(void);
+
 void CL_WebImage_Frame(void) {
     int i;
+
+    CL_ImageUpload_Frame();
 
     if (!webImagesFetching) {
         return;
@@ -360,6 +364,176 @@ qhandle_t CL_WebImage_Get(const char* url) {
     return 0;
 }
 
+
+/*
+==============================================================================
+
+SENDING ONE
+
+[ioquakelive] What is on the clipboard goes up to the endpoint as a PNG and the link comes back
+into the line being typed. The picture is squeezed with the zlib the engine already carries, and
+both the wait and the sending happen on a thread
+
+==============================================================================
+*/
+
+cvar_t* cl_imageHost;
+cvar_t* cl_imageKey;
+cvar_t* cl_imageMaxKB;
+
+typedef struct {
+    byte* png;
+    int length;
+    volatile int result;  // 0 going, 1 done, -1 failed
+    char reply[512];
+} webUpload_t;
+
+static webUpload_t webUpload;
+static qboolean webUploading;
+
+/*
+==================
+CL_ImageUpload_Thread
+==================
+*/
+static void CL_ImageUpload_Thread(void* argument) {
+    webUpload_t* up = (webUpload_t*)argument;
+    char header[256];
+
+    Com_sprintf(header, sizeof(header), "X-IOQL-Key: %s\r\n", cl_imageKey->string);
+
+    if (Sys_WebPost(cl_imageHost->string, "image/jpeg", header, up->png, up->length, up->reply, sizeof(up->reply))) {
+        up->result = 1;
+    } else {
+        up->result = -1;
+    }
+}
+
+/*
+==================
+CL_ImageUpload_Frame
+
+Picks up the answer, once per client frame: the link goes to the line being typed when there is
+one, and to the console either way
+==================
+*/
+static void CL_ImageUpload_Frame(void) {
+    char* p;
+
+    if (!webUploading || webUpload.result == 0) {
+        return;
+    }
+
+    webUploading = qfalse;
+    free(webUpload.png);
+    webUpload.png = NULL;
+
+    if (webUpload.result < 0) {
+        Com_Printf("^3La imagen no se pudo subir.\n");
+        return;
+    }
+
+    // the answer is the link and nothing else
+    for (p = webUpload.reply; *p; p++) {
+        if (*p == '\r' || *p == '\n') {
+            *p = '\0';
+            break;
+        }
+    }
+
+    if (!webUpload.reply[0]) {
+        Com_Printf("^3La imagen se subio pero no volvio ningun link.\n");
+        return;
+    }
+
+    Com_Printf("Imagen: %s\n", webUpload.reply);
+
+    if (Key_GetCatcher() & KEYCATCH_MESSAGE) {
+        if (chatField.buffer[0] && chatField.buffer[strlen(chatField.buffer) - 1] != ' ') {
+            Q_strcat(chatField.buffer, sizeof(chatField.buffer), " ");
+        }
+        Q_strcat(chatField.buffer, sizeof(chatField.buffer), webUpload.reply);
+        chatField.cursor = (int)strlen(chatField.buffer);
+    }
+}
+
+/*
+==================
+CL_ImagePaste_f
+
+The picture on the clipboard, up to the endpoint. What a screen clip is for
+==================
+*/
+static void CL_ImagePaste_f(void) {
+    byte* rgb;
+    byte* flipped;
+    byte* jpeg;
+    size_t size;
+    int width = 0, height = 0, length = 0, y;
+
+    if (webUploading) {
+        Com_Printf("Ya hay una imagen subiendo.\n");
+        return;
+    }
+    if (!cl_imageHost->string[0]) {
+        Com_Printf("^3cl_imageHost esta vacia: no hay donde subir la imagen.\n");
+        return;
+    }
+
+    rgb = Sys_ClipboardImage(&width, &height);
+    if (!rgb) {
+        Com_Printf("^3No hay ninguna imagen en el portapapeles.\n");
+        return;
+    }
+
+    // the renderer's encoder takes the rows from the bottom up, as a screenshot comes off the
+    // card, and the clipboard hands them over the other way round
+    flipped = (byte*)malloc((size_t)width * height * 3);
+    if (!flipped) {
+        free(rgb);
+        return;
+    }
+    for (y = 0; y < height; y++) {
+        Com_Memcpy(flipped + (size_t)y * width * 3, rgb + (size_t)(height - 1 - y) * width * 3, width * 3);
+    }
+    free(rgb);
+
+    size = (size_t)width * height * 3 + 8192;
+    jpeg = (byte*)malloc(size);
+    if (!jpeg) {
+        free(flipped);
+        return;
+    }
+
+    length = (int)re.SaveJPGToBuffer(jpeg, size, 92, width, height, flipped, 0);
+    free(flipped);
+
+    if (length <= 0) {
+        Com_Printf("^3No se pudo armar la imagen.\n");
+        free(jpeg);
+        return;
+    }
+    if (length > cl_imageMaxKB->integer * 1024) {
+        Com_Printf("^3La imagen pesa %d KB y el tope es %d KB.\n", length / 1024, cl_imageMaxKB->integer);
+        free(jpeg);
+        return;
+    }
+
+    Com_Memset(&webUpload, 0, sizeof(webUpload));
+    webUpload.png = jpeg;
+    webUpload.length = length;
+    webUploading = qtrue;
+
+    Com_Printf("Subiendo la imagen (%d x %d, %d KB)...\n", width, height, length / 1024);
+
+    if (!Sys_ThreadCreate(CL_ImageUpload_Thread, &webUpload)) {
+        Com_Printf("^3No se pudo empezar la subida.\n");
+        free(jpeg);
+        webUpload.png = NULL;
+        webUploading = qfalse;
+    }
+}
+
 /*
 ==================
 CL_WebImage_Init
@@ -368,6 +542,14 @@ CL_WebImage_Init
 void CL_WebImage_Init(void) {
     cl_webImages = Cvar_Get("cl_webImages", "0", CVAR_ARCHIVE);
     cl_webImageMaxKB = Cvar_Get("cl_webImageMaxKB", "2048", CVAR_ARCHIVE);
+
+    // [ioquakelive] where a picture of your own goes. QuakeClub's endpoint takes PNG and JPEG,
+    // keeps them for a month and answers with the link
+    cl_imageHost = Cvar_Get("cl_imageHost", "https://quakeclub.com/ioql/upload", CVAR_ARCHIVE);
+    cl_imageKey = Cvar_Get("cl_imageKey", "IdtyFF3bEOWEhiT69HV6wsBNFwuOgTfC", CVAR_ARCHIVE);
+    cl_imageMaxKB = Cvar_Get("cl_imageMaxKB", "4096", CVAR_ARCHIVE);
+
+    Cmd_AddCommand("imagepaste", CL_ImagePaste_f);
 }
 
 /*

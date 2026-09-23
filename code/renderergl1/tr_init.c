@@ -2224,6 +2224,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.WindowResized = RE_WindowResized;
 	re.ApplyVideoMode = RE_ApplyVideoMode;
 	re.ShaderImageSize = RE_ShaderImageSize;
+	re.SaveJPGToBuffer = RE_SaveJPGToBuffer;
 	re.BeginFrame = RE_BeginFrame;
 	re.EndFrame = RE_EndFrame;
 

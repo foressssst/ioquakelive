@@ -666,6 +666,13 @@ static intptr_t CL_CgameSystemCallsInner(intptr_t* args) {
         case CG_R_BEGINBLOOMSCENE:
             re.BeginBloomScene();
             return 0;
+        case CG_R_WEBIMAGE:
+            // [ioquakelive] the picture behind a link somebody wrote in the chat
+            return CL_WebImage_Get(VMA(1));
+
+        case CG_R_SHADERIMAGESIZE:
+            return re.ShaderImageSize(args[1], VMA(2), VMA(3));
+
         case CG_R_APPLYBLOOM:
             re.ApplyBloom();
             return 0;

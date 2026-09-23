@@ -1129,10 +1129,14 @@ int Sys_Milliseconds(void);
 int64_t Sys_Microseconds(void);
 
 // [ioquakelive] the minimum needed to spread work across cores; the queue is in common.c
-#ifdef _WIN32
-// [ioquakelive] one file off the web, blocking: what the pictures behind a link use
+// [ioquakelive] one file off the web, blocking: what the pictures behind a link use. Only
+// Windows has its own; elsewhere the client goes through libcurl
 qboolean Sys_WebFetch(const char* url, const char* ospath, int maxBytes);
-#endif
+// [ioquakelive] and one the other way, with what the other side answers as text
+qboolean Sys_WebPost(const char* url, const char* contentType, const char* header, const byte* data,
+                     int length, char* reply, int replySize);
+// [ioquakelive] the picture somebody copied, as rows of red, green and blue; free() it
+byte* Sys_ClipboardImage(int* width, int* height);
 
 void* Sys_ThreadCreate(void (*function)(void*), void* argument);
 void* Sys_MutexCreate(void);

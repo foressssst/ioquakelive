@@ -2673,6 +2673,8 @@ int trap_MemoryRemaining(void);
 void trap_R_RegisterFont(const char* fontName, int pointSize, fontInfo_t* font);
 void trap_R_Font_DrawString(int x, int y, const char* text, int fontIndex, float scale, int limit, float* maxX, int flags);
 void trap_R_Font_TextExtents(const char* text, int start, int fontIndex, float scale, int limit, float* extents);  // extents[5]
+qhandle_t trap_R_WebImage(const char* url);
+qboolean trap_R_ShaderImageSize(qhandle_t shader, int* width, int* height);
 void trap_R_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t* glyph);
 void trap_IME_SetCompositionFont(int fontIndex, float scale);
 int trap_R_Font_Register(const char* name);

@@ -238,6 +238,7 @@ static const cmdHelp_t cmdHelp[] = {
     {"vid_restart", "restarts the renderer, applying video settings"},
     {"snd_restart", "restarts the sound system, reloading every sound"},
     {"net_restart", "restarts the network, picking up changed net settings"},
+    {"imagepaste", "sends the picture on the clipboard and puts its link in the line you are typing"},
     {"postprocess_restart", "reloads the post-processing shaders"},
 
     // -------------------------------------------------------------- pictures

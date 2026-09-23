@@ -462,6 +462,209 @@ done:
 
 
 /*
+==================
+Sys_ClipboardImage
+
+[ioquakelive] The picture somebody copied, as rows of red, green and blue from the top down.
+Windows keeps a screen clip as a device independent bitmap, which is upside down and in blue,
+green, red order, so this turns it around. NULL when the clipboard has no picture; free it with
+free() when done
+==================
+*/
+byte* Sys_ClipboardImage(int* width, int* height) {
+    HANDLE handle;
+    BITMAPINFOHEADER* header;
+    byte* bits;
+    byte* out;
+    int w, h, bpp, stride, x, y;
+    int top_down = 0;
+
+    if (!IsClipboardFormatAvailable(CF_DIB) || !OpenClipboard(NULL)) {
+        return NULL;
+    }
+
+    handle = GetClipboardData(CF_DIB);
+    if (!handle) {
+        CloseClipboard();
+        return NULL;
+    }
+
+    header = (BITMAPINFOHEADER*)GlobalLock(handle);
+    if (!header) {
+        CloseClipboard();
+        return NULL;
+    }
+
+    w = header->biWidth;
+    h = header->biHeight;
+    bpp = header->biBitCount;
+
+    if (h < 0) {
+        h = -h;
+        top_down = 1;
+    }
+
+    if (w <= 0 || h <= 0 || w > 8192 || h > 8192 || (bpp != 24 && bpp != 32)) {
+        GlobalUnlock(handle);
+        CloseClipboard();
+        return NULL;
+    }
+
+    // the pixels come after the header and whatever colour masks it carries
+    bits = (byte*)header + header->biSize;
+    if (header->biCompression == BI_BITFIELDS) {
+        bits += 3 * sizeof(DWORD);
+    }
+    bits += header->biClrUsed * sizeof(RGBQUAD);
+
+    stride = ((w * bpp / 8) + 3) & ~3;
+
+    out = (byte*)malloc((size_t)w * h * 3);
+    if (!out) {
+        GlobalUnlock(handle);
+        CloseClipboard();
+        return NULL;
+    }
+
+    for (y = 0; y < h; y++) {
+        const byte* row = bits + (size_t)(top_down ? y : (h - 1 - y)) * stride;
+        byte* dst = out + (size_t)y * w * 3;
+
+        for (x = 0; x < w; x++) {
+            dst[0] = row[2];  // blue, green, red in the file
+            dst[1] = row[1];
+            dst[2] = row[0];
+            dst += 3;
+            row += bpp / 8;
+        }
+    }
+
+    GlobalUnlock(handle);
+    CloseClipboard();
+
+    *width = w;
+    *height = h;
+
+    return out;
+}
+
+/*
+==================
+Sys_WebPost
+
+[ioquakelive] Sends what it is given to a url and brings back what the other side answers, as
+text. Blocking, like the fetch above, and for the same kind of caller: a thread of its own
+==================
+*/
+qboolean Sys_WebPost(const char* url, const char* contentType, const char* header, const byte* data, int length,
+                     char* reply, int replySize) {
+    wchar_t wideUrl[2048];
+    wchar_t host[256];
+    wchar_t path[1536];
+    wchar_t headers[512];
+    URL_COMPONENTS parts;
+    HINTERNET session = NULL;
+    HINTERNET connection = NULL;
+    HINTERNET request = NULL;
+    DWORD status = 0;
+    DWORD statusSize = sizeof(status);
+    DWORD read = 0;
+    int got = 0;
+    qboolean ok = qfalse;
+
+    if (reply && replySize > 0) {
+        reply[0] = '\0';
+    }
+    if (!url || !data || length <= 0) {
+        return qfalse;
+    }
+
+    if (MultiByteToWideChar(CP_UTF8, 0, url, -1, wideUrl, (int)ARRAY_LEN(wideUrl)) == 0) {
+        return qfalse;
+    }
+
+    memset(&parts, 0, sizeof(parts));
+    parts.dwStructSize = sizeof(parts);
+    parts.lpszHostName = host;
+    parts.dwHostNameLength = (DWORD)ARRAY_LEN(host);
+    parts.lpszUrlPath = path;
+    parts.dwUrlPathLength = (DWORD)ARRAY_LEN(path);
+
+    if (!WinHttpCrackUrl(wideUrl, 0, 0, &parts)) {
+        return qfalse;
+    }
+    if (parts.nScheme != INTERNET_SCHEME_HTTP && parts.nScheme != INTERNET_SCHEME_HTTPS) {
+        return qfalse;
+    }
+
+    {
+        char both[512];
+
+        Com_sprintf(both, sizeof(both), "Content-Type: %s\r\n%s", contentType ? contentType : "application/octet-stream",
+                    header ? header : "");
+        if (MultiByteToWideChar(CP_UTF8, 0, both, -1, headers, (int)ARRAY_LEN(headers)) == 0) {
+            return qfalse;
+        }
+    }
+
+    session = WinHttpOpen(L"ioquakelive", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+                          WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!session) {
+        return qfalse;
+    }
+    WinHttpSetTimeouts(session, 10000, 10000, 20000, 60000);
+
+    connection = WinHttpConnect(session, host, parts.nPort, 0);
+    if (!connection) {
+        goto done;
+    }
+
+    request = WinHttpOpenRequest(connection, L"POST", path, NULL, WINHTTP_NO_REFERER,
+                                 WINHTTP_DEFAULT_ACCEPT_TYPES,
+                                 parts.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0);
+    if (!request) {
+        goto done;
+    }
+
+    if (!WinHttpSendRequest(request, headers, (DWORD)-1, (LPVOID)data, (DWORD)length, (DWORD)length, 0) ||
+        !WinHttpReceiveResponse(request, NULL)) {
+        goto done;
+    }
+
+    if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                             WINHTTP_HEADER_NAME_BY_INDEX, &status, &statusSize, WINHTTP_NO_HEADER_INDEX) ||
+        status != 200) {
+        goto done;
+    }
+
+    while (reply && got < replySize - 1) {
+        if (!WinHttpReadData(request, reply + got, (DWORD)(replySize - 1 - got), &read) || read == 0) {
+            break;
+        }
+        got += (int)read;
+    }
+    if (reply && replySize > 0) {
+        reply[got] = '\0';
+    }
+
+    ok = qtrue;
+
+done:
+    if (request) {
+        WinHttpCloseHandle(request);
+    }
+    if (connection) {
+        WinHttpCloseHandle(connection);
+    }
+    if (session) {
+        WinHttpCloseHandle(session);
+    }
+
+    return ok;
+}
+
+
+/*
 ==============================================================================
 
 THREADS   (Win32)
