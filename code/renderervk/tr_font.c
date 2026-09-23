@@ -45,33 +45,64 @@ static int fontAtlasHeight;
 static int fontIndexToId[MAX_FONT_INDICES];
 static char fontIndexPath[MAX_FONT_INDICES][MAX_QPATH];
 static int numFontIndices;
-static int fallbackFontId = FONS_INVALID;
-// [ioquakelive] the one tried before it: handelgothic has 231 glyphs and the CJK fallback has no
-// latin beyond ASCII, so a name with a letter like U+01B6 came out as dots. Noto Sans ships in
-// pak00 and carries latin extended, cyrillic, greek and the currency signs
-static int textFallbackFontId = FONS_INVALID;
-// [ioquakelive] and the symbols nobody else has: stars, hearts, arrows, ticks, boxes and
-// the circled numbers players decorate a name with. Retail draws every one of them as a dot
-static int symbolFontId = FONS_INVALID;
-static int symbol2FontId = FONS_INVALID;
-static int mathFontId = FONS_INVALID;
-
-static void R_Font_AddFallback( int id, int fallback ) {
-	if ( fallback != FONS_INVALID && fallback != id ) {
-		fonsAddFallbackFont( fontContext, id, fallback );
-	}
-}
+// [ioquakelive] What a font falls back on, in the order it is tried. Handel Gothic has 231 glyphs
+// and Quake Live's own fallback is CJK, without so much as an accented latin letter, so a name
+// with anything out of the ordinary came out in dots -- in retail too. The first and the last ship
+// in pak00; the rest ride in pak01, and between them they draw the letters and the symbols the
+// "name style" pages hand out. A font that is not there is skipped
+static const char *fallbackFontPaths[] = {
+	"fonts/notosans-regular.ttf",					// latin extended, greek, cyrillic, currency
+	"fonts/notosans-latinext.ttf",					// what that one lacks, latin extended E among it
+	"fonts/notosanssymbols-regular.ttf",			// stars, ticks, scissors, circled numbers
+	"fonts/notosanssymbols2-regular.ttf",			// shapes, boxes, card suits, dingbats
+	"fonts/notosansmath-regular.ttf",				// the operators and the double arrows
+	"fonts/notosanshebrew-regular.ttf",
+	"fonts/notosanssyriac-regular.ttf",
+	"fonts/notosansmongolian-regular.ttf",
+	"fonts/notosanstaiviet-regular.ttf",
+	"fonts/notosanstaitham-regular.ttf",
+	"fonts/notosansnewtailue-regular.ttf",
+	"fonts/notosanslimbu-regular.ttf",
+	"fonts/notosansmeeteimayek-regular.ttf",
+	"fonts/notosansvai-regular.ttf",
+	"fonts/notosansbatak-regular.ttf",
+	"fonts/notosansegyptianhieroglyphs-regular.ttf",
+	"fonts/notosanscanadianaboriginal-regular.ttf",		// the syllabics half of those names are made of
+	"fonts/notosanscherokee-regular.ttf",
+	"fonts/notosansrunic-regular.ttf",
+	"fonts/notosanstifinagh-regular.ttf",
+	"fonts/notosansarmenian-regular.ttf",
+	"fonts/notosansgeorgian-regular.ttf",
+	"fonts/notosanscoptic-regular.ttf",
+	"fonts/notosansglagolitic-regular.ttf",
+	"fonts/notosansthaana-regular.ttf",
+	"fonts/notosansnko-regular.ttf",
+	"fonts/notosansadlam-regular.ttf",
+	"fonts/notosansolchiki-regular.ttf",
+	"fonts/notosansosage-regular.ttf",
+	"fonts/notosanslisu-regular.ttf",
+	"fonts/notosansjavanese-regular.ttf",
+	"fonts/notosansbalinese-regular.ttf",
+	"fonts/notosanssundanese-regular.ttf",
+	"fonts/notosansbuginese-regular.ttf",
+	"fonts/notosanstagalog-regular.ttf",
+	"fonts/notosansbamum-regular.ttf",
+	"fonts/droidsansfallbackfull.ttf",				// CJK and the kana, last: it is the biggest
+};
+static int fallbackFontIds[ARRAY_LEN( fallbackFontPaths )];
 
 // the fallbacks of a font, in the order they are tried
 static void R_Font_AddFallbacks( int id ) {
+	int i;
+
 	if ( id == FONS_INVALID ) {
 		return;
 	}
-	R_Font_AddFallback( id, textFallbackFontId );
-	R_Font_AddFallback( id, symbolFontId );
-	R_Font_AddFallback( id, symbol2FontId );
-	R_Font_AddFallback( id, mathFontId );
-	R_Font_AddFallback( id, fallbackFontId );
+	for ( i = 0; i < (int)ARRAY_LEN( fallbackFontIds ); i++ ) {
+		if ( fallbackFontIds[i] != FONS_INVALID && fallbackFontIds[i] != id ) {
+			fonsAddFallbackFont( fontContext, id, fallbackFontIds[i] );
+		}
+	}
 }
 
 // the input method's composition font
@@ -289,7 +320,7 @@ R_InitFonts
 */
 void R_InitFonts( void ) {
 	FONSparams params;
-	int normal, sans, mono, fallback;
+	int normal, sans, mono, i;
 
 	if ( fontContext ) {
 		return;
@@ -315,11 +346,10 @@ void R_InitFonts( void ) {
 	normal = R_Font_LoadTTF( DEFAULT_FONT, "normal" );
 	sans = R_Font_LoadTTF( DEFAULT_SANS_FONT, "sans" );
 	mono = R_Font_LoadTTF( DEFAULT_MONO_FONT, "mono" );
-	fallback = R_Font_LoadTTF( "fonts/droidsansfallbackfull.ttf", "sans-fallback" );
-	textFallbackFontId = R_Font_LoadTTF( "fonts/notosans-regular.ttf", "text-fallback" );
-	symbolFontId = R_Font_LoadTTF( "fonts/notosanssymbols-regular.ttf", "symbol-fallback" );
-	symbol2FontId = R_Font_LoadTTF( "fonts/notosanssymbols2-regular.ttf", "symbol2-fallback" );
-	mathFontId = R_Font_LoadTTF( "fonts/notosansmath-regular.ttf", "math-fallback" );
+
+	for ( i = 0; i < (int)ARRAY_LEN( fallbackFontPaths ); i++ ) {
+		fallbackFontIds[i] = R_Font_LoadTTF( fallbackFontPaths[i], fallbackFontPaths[i] );
+	}
 
 	fontIndexToId[0] = normal != FONS_INVALID ? normal : 0;
 	fontIndexToId[1] = sans != FONS_INVALID ? sans : fontIndexToId[0];
@@ -328,7 +358,6 @@ void R_InitFonts( void ) {
 	Q_strncpyz( fontIndexPath[1], DEFAULT_SANS_FONT, sizeof( fontIndexPath[1] ) );
 	Q_strncpyz( fontIndexPath[2], DEFAULT_MONO_FONT, sizeof( fontIndexPath[2] ) );
 	numFontIndices = 3;
-	fallbackFontId = fallback;
 
 	R_Font_AddFallbacks( normal );
 	R_Font_AddFallbacks( sans );
@@ -340,17 +369,17 @@ void R_InitFonts( void ) {
 }
 
 void R_FontShutdown( void ) {
+	int i;
+
 	if ( !fontContext ) {
 		return;
 	}
 	fonsDeleteInternal( fontContext );
 	fontContext = NULL;
 	numFontIndices = 0;
-	fallbackFontId = FONS_INVALID;
-	textFallbackFontId = FONS_INVALID;
-	symbolFontId = FONS_INVALID;
-	symbol2FontId = FONS_INVALID;
-	mathFontId = FONS_INVALID;
+	for ( i = 0; i < (int)ARRAY_LEN( fallbackFontIds ); i++ ) {
+		fallbackFontIds[i] = FONS_INVALID;
+	}
 }
 
 /*
