@@ -2031,6 +2031,7 @@ extern vmCvar_t cg_demoKeys;
 extern vmCvar_t ch_followKiller;
 extern vmCvar_t ch_obituaryBand;
 extern vmCvar_t ch_obituaryY;
+extern vmCvar_t ch_obituaryScale;
 extern vmCvar_t ch_gameEvents;
 extern vmCvar_t ch_recordMessage;
 extern vmCvar_t cg_demoRecording;

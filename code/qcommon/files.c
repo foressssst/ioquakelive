@@ -1254,15 +1254,15 @@ long FS_FOpenFileReadDir(const char* filename, searchpath_t* search, fileHandle_
 		// turned out I used FS_FileExists instead
 		if (!unpure && fs_numServerPaks) {
 			// [ioquakelive] NOT FROM RETAIL: a player's own hud. Quake Live (0x4cf957) lets a
-			// pure server through only .cfg, .menu, .game and demos, and the list a hud is
-			// named in is a .txt, so cg_hudFiles pointing at one outside a pk3 fell back to
-			// ui/hud.txt in a game and only worked in a demo. The .txt under ui/ is allowed
-			// here; it names menus, which were already allowed, and nothing the server plays by
+			// pure server through only .cfg, .menu, .game and demos, and a hud is a .txt that
+			// names .menu files, so one outside a pk3 fell back to ui/hud.txt in a game and
+			// only worked in a demo. Any loose .txt is allowed here: it is text the player
+			// reads their own hud from, never a model or a texture the server plays by
 			if (!FS_IsExt(filename, ".cfg", len) &&   // for config files
 				!FS_IsExt(filename, ".menu", len) &&  // menu files
 				!FS_IsExt(filename, ".game", len) &&  // menu files
 				!FS_IsExt(filename, ".dat", len) &&   // for journal files
-				!(FS_IsExt(filename, ".txt", len) && !Q_stricmpn(filename, "ui/", 3)) &&  // hud files
+				!FS_IsExt(filename, ".txt", len) &&   // hud files
 				!FS_IsDemoExt(filename, len))         // demos
 			{
 				*file = 0;

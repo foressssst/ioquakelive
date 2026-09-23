@@ -372,6 +372,7 @@ vmCvar_t cg_demoKeys;
 vmCvar_t ch_followKiller;
 vmCvar_t ch_obituaryBand;
 vmCvar_t ch_obituaryY;
+vmCvar_t ch_obituaryScale;
 vmCvar_t ch_gameEvents;
 vmCvar_t ch_recordMessage;
 vmCvar_t cg_demoRecording;
@@ -796,6 +797,7 @@ static cvarTable_t cvarTable[] = {
     {&ch_followKiller, "ch_followKiller", "0", CVAR_ARCHIVE},
     {&ch_obituaryBand, "ch_obituaryBand", "1", CVAR_ARCHIVE},
     {&ch_obituaryY, "ch_obituaryY", "14", CVAR_ARCHIVE},
+    {&ch_obituaryScale, "ch_obituaryScale", "0.85", CVAR_ARCHIVE},
     {&ch_gameEvents, "ch_gameEvents", "1", CVAR_ARCHIVE},
     {&ch_recordMessage, "ch_recordMessage", "1", CVAR_ARCHIVE},
     {&cg_demoRecording, "cl_demorecording", "0", CVAR_ROM},
