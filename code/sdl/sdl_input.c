@@ -1274,11 +1274,11 @@ static void IN_ProcessEvents(void) {
                     width = e.window.data1;
                     height = e.window.data2;
 
-                    // ignore this event on fullscreen, and while the window is away: going to
-                    // another window and coming back resizes it twice, and neither time is the
-                    // player dragging its edge
-                    if (cls.glconfig.isFullscreen || Cvar_VariableIntegerValue("r_fullscreen") ||
-                        Cvar_VariableIntegerValue("com_minimized")) {
+                    // ignore it while the window is away: going to another window and coming
+                    // back resizes it twice, and neither time is the player changing anything.
+                    // Fullscreen does come through here, because that is how the picture takes
+                    // the size when the mode is switched in place
+                    if (Cvar_VariableIntegerValue("com_minimized")) {
                         break;
                     }
 

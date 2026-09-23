@@ -7622,6 +7622,27 @@ static qboolean vk_find_screenmap_drawsurfs( void )
 static void vk_latency_marker( VkLatencyMarkerNV marker );
 
 
+/*
+==================
+vk_window_resized
+
+[ioquakelive] The window is another size now: everything that was made for the old one --
+swapchain, attachments, render passes, framebuffers and pipelines -- is made again. It waits
+for the device to go idle first, so it only runs between frames, which is where the engine
+calls it from. Moving the size without this left the attachments on the old one and the
+device was lost on the next frame
+==================
+*/
+void vk_window_resized( void )
+{
+	if ( !vk.device ) {
+		return;
+	}
+
+	vk_restart_swapchain( __func__, VK_SUCCESS );
+}
+
+
 void vk_begin_frame( void )
 {
 	VkCommandBufferBeginInfo begin_info;

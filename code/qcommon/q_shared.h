@@ -739,6 +739,10 @@ void Q_strcat(char* dest, int size, const char* src);
 
 // strlen that discounts Quake color sequences
 int Q_PrintStrlen(const char* string);
+// [ioquakelive] a Unicode code point as UTF-8 bytes, and walking a string of them
+int Q_UTF8_Encode(char* out, int codepoint);
+int Q_UTF8_Start(const char* s, int pos);
+int Q_UTF8_Next(const char* s, int pos);
 // removes color sequences from string
 char* Q_CleanStr(char* string);
 // Count the number of char tocount encountered in string

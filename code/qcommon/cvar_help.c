@@ -1120,7 +1120,8 @@ static const cvarHelp_t cvarHelp[] = {
     {"r_ignore", "retail registers it for its own renderer, which this one does not have (no effect in this build)"},
     {"r_ignoreFastPath", "retail registers it for its own renderer, which this one does not have (no effect in this build)"},
     {"r_logFile", "retail registers it for its own renderer, which this one does not have (no effect in this build)"},
-    {"r_noFastRestart", "retail registers it for its own renderer, which this one does not have (no effect in this build)"},
+    {"r_noFastRestart", "the window changing size restarts the whole video instead of taking the "
+                        "new size where the renderer can"},
     {"r_primitives", "retail registers it for its own renderer, which this one does not have (no effect in this build)"},
     {"r_showSmp", "retail registers it for its own renderer, which this one does not have (no effect in this build)"},
     {"r_skipLargeBatches", "retail registers it for its own renderer, which this one does not have (no effect in this build)"},

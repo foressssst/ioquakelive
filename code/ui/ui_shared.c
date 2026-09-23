@@ -2187,10 +2187,13 @@ qboolean Item_TextField_HandleKey(itemDef_t* item, int key) {
 
             if (key == 'h' - 'a' + 1) {  // ctrl-h is backspace
                 if (item->cursorPos > 0) {
-                    memmove(&buff[item->cursorPos - 1], &buff[item->cursorPos], len + 1 - item->cursorPos);
-                    item->cursorPos--;
+                    // [ioquakelive] a letter outside ASCII is several bytes: the whole one goes
+                    int start = Q_UTF8_Start(buff, item->cursorPos);
+
+                    memmove(&buff[start], &buff[item->cursorPos], len + 1 - item->cursorPos);
+                    item->cursorPos = start;
                     if (item->cursorPos < editPtr->paintOffset) {
-                        editPtr->paintOffset--;
+                        editPtr->paintOffset = item->cursorPos;
                     }
                 }
                 DC->setCVar(item->cvar, buff);
@@ -2210,25 +2213,39 @@ qboolean Item_TextField_HandleKey(itemDef_t* item, int key) {
                 }
             }
 
-            if (!DC->getOverstrikeMode()) {
-                if ((len == MAX_EDITFIELD - 1) || (editPtr->maxChars && len >= editPtr->maxChars)) {
+            {
+                // [ioquakelive] the key comes as a Unicode code point and the field is bytes:
+                // a letter outside ASCII takes two to four of them
+                char utf8[4];
+                int bytes = Q_UTF8_Encode(utf8, key);
+
+                if (bytes < 1) {
                     return qtrue;
                 }
-                memmove(&buff[item->cursorPos + 1], &buff[item->cursorPos], len + 1 - item->cursorPos);
-            } else {
-                if (editPtr->maxChars && item->cursorPos >= editPtr->maxChars) {
-                    return qtrue;
+                if (!DC->getOverstrikeMode()) {
+                    if ((len + bytes > MAX_EDITFIELD - 1) ||
+                        (editPtr->maxChars && len + bytes > editPtr->maxChars)) {
+                        return qtrue;
+                    }
+                    memmove(&buff[item->cursorPos + bytes], &buff[item->cursorPos], len + 1 - item->cursorPos);
+                } else {
+                    if (editPtr->maxChars && item->cursorPos + bytes > editPtr->maxChars) {
+                        return qtrue;
+                    }
+                    if (item->cursorPos + bytes > len) {
+                        buff[item->cursorPos + bytes] = '\0';
+                    }
                 }
-            }
 
-            buff[item->cursorPos] = key;
+                memcpy(&buff[item->cursorPos], utf8, bytes);
 
-            DC->setCVar(item->cvar, buff);
+                DC->setCVar(item->cvar, buff);
 
-            if (item->cursorPos < len + 1) {
-                item->cursorPos++;
-                if (editPtr->maxPaintChars && item->cursorPos > editPtr->maxPaintChars) {
-                    editPtr->paintOffset++;
+                if (item->cursorPos < len + bytes) {
+                    item->cursorPos += bytes;
+                    if (editPtr->maxPaintChars && item->cursorPos > editPtr->maxPaintChars) {
+                        editPtr->paintOffset++;
+                    }
                 }
             }
 

@@ -2003,30 +2003,35 @@ RE_Shutdown
 =====================
 RE_WindowResized
 
-[ioquakelive] The window was dragged to another size. Vulkan sees its swapchain go out of
-date by itself and makes it again, so the only thing needed here is the size the rest of the
-renderer reads. With a render scale of its own the picture keeps its size
+[ioquakelive] The window was dragged to another size. Retail answers this with its own
+"vid_restart fast" (quakelive_steam.exe 0x004bb7e0), which keeps the modules and the loaded
+media and only does the window over; here the same idea is the swapchain and everything made
+from it, which vk_window_resized rebuilds. r_noFastRestart, which retail reads in that very
+place, sends it back to restarting the video instead
 =====================
 */
 static qboolean RE_WindowResized( int width, int height )
 {
-	if ( width <= 0 || height <= 0 )
+	if ( width <= 0 || height <= 0 || ri.Cvar_VariableIntegerValue( "r_noFastRestart" ) ) {
 		return qfalse;
+	}
 
-	if ( gls.windowWidth == width && gls.windowHeight == height )
+	if ( gls.windowWidth == width && gls.windowHeight == height ) {
 		return qtrue;
+	}
 
 	gls.windowWidth = width;
 	gls.windowHeight = height;
 
-	if ( !r_renderScale->integer )
-	{
+	if ( !r_renderScale->integer ) {
 		glConfig.vidWidth = width;
 		glConfig.vidHeight = height;
 		gls.captureWidth = width;
 		gls.captureHeight = height;
 		RI_CL_SetScaling( 1.0, gls.captureWidth, gls.captureHeight );
 	}
+
+	vk_window_resized();
 
 	return qtrue;
 }

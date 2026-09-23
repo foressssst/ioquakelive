@@ -907,6 +907,86 @@ const char* Q_stristr(const char* s, const char* find) {
     return s;
 }
 
+/*
+============
+Q_UTF8_Encode
+
+[ioquakelive] Writes a Unicode code point as UTF-8 and answers how many bytes it took. The
+input layer hands typed characters over as code points, and a name, a chat line or a console
+line is a string of bytes, so this is where one becomes the other
+============
+*/
+int Q_UTF8_Encode(char* out, int codepoint) {
+    if (codepoint < 0) {
+        return 0;
+    }
+    if (codepoint < 0x80) {
+        out[0] = (char)codepoint;
+        return 1;
+    }
+    if (codepoint < 0x800) {
+        out[0] = (char)(0xC0 | (codepoint >> 6));
+        out[1] = (char)(0x80 | (codepoint & 0x3F));
+        return 2;
+    }
+    if (codepoint < 0x10000) {
+        out[0] = (char)(0xE0 | (codepoint >> 12));
+        out[1] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+        out[2] = (char)(0x80 | (codepoint & 0x3F));
+        return 3;
+    }
+    if (codepoint <= 0x10FFFF) {
+        out[0] = (char)(0xF0 | (codepoint >> 18));
+        out[1] = (char)(0x80 | ((codepoint >> 12) & 0x3F));
+        out[2] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+        out[3] = (char)(0x80 | (codepoint & 0x3F));
+        return 4;
+    }
+
+    return 0;
+}
+
+/*
+============
+Q_UTF8_Start
+
+[ioquakelive] Where the character that ends at pos begins. A letter outside ASCII is several
+bytes, and erasing or stepping over one byte of it would leave the rest as rubbish
+============
+*/
+int Q_UTF8_Start(const char* s, int pos) {
+    if (pos <= 0) {
+        return 0;
+    }
+    pos--;
+    while (pos > 0 && ((unsigned char)s[pos] & 0xC0) == 0x80) {
+        pos--;
+    }
+
+    return pos;
+}
+
+/*
+============
+Q_UTF8_Next
+
+[ioquakelive] Where the character that begins at pos ends
+============
+*/
+int Q_UTF8_Next(const char* s, int pos) {
+    int len = (int)strlen(s);
+
+    if (pos >= len) {
+        return len;
+    }
+    pos++;
+    while (pos < len && ((unsigned char)s[pos] & 0xC0) == 0x80) {
+        pos++;
+    }
+
+    return pos;
+}
+
 int Q_PrintStrlen(const char* string) {
     int len;
     const char* p;

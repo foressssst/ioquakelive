@@ -2002,7 +2002,9 @@ its size and only the blit changes
 */
 static qboolean RE_WindowResized( int width, int height )
 {
-	if ( width <= 0 || height <= 0 )
+	// [QL] r_noFastRestart: retail reads it in its own vid_restart to fall back to the slow
+	// way, and it does the same here
+	if ( width <= 0 || height <= 0 || ri.Cvar_VariableIntegerValue( "r_noFastRestart" ) )
 		return qfalse;
 
 	if ( gls.windowWidth == width && gls.windowHeight == height )

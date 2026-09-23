@@ -278,6 +278,7 @@ void vk_create_pipelines( void );
 
 void vk_clear_color( const vec4_t color );
 void vk_clear_depth( qboolean clear_stencil );
+void vk_window_resized( void );
 void vk_begin_frame( void );
 void vk_end_frame( void );
 void vk_present_frame( void );

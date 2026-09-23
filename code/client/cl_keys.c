@@ -431,10 +431,36 @@ void Field_Paste(field_t* edit) {
         return;
     }
 
-    // send as if typed, so insert / overstrike works properly
+    // send as if typed, so insert / overstrike works properly. [ioquakelive] the clipboard
+    // is UTF-8 and the field takes code points, so each character travels whole
     pasteLen = strlen(cbd);
-    for (i = 0; i < pasteLen; i++) {
-        Field_CharEvent(edit, cbd[i]);
+    for (i = 0; i < pasteLen;) {
+        unsigned char c = (unsigned char)cbd[i];
+        int codepoint, extra, n;
+
+        if (c < 0x80) {
+            codepoint = c;
+            extra = 0;
+        } else if ((c & 0xE0) == 0xC0) {
+            codepoint = c & 0x1F;
+            extra = 1;
+        } else if ((c & 0xF0) == 0xE0) {
+            codepoint = c & 0x0F;
+            extra = 2;
+        } else if ((c & 0xF8) == 0xF0) {
+            codepoint = c & 0x07;
+            extra = 3;
+        } else {
+            i++;  // a byte that begins nothing
+            continue;
+        }
+        i++;
+        for (n = 0; n < extra && i < pasteLen && ((unsigned char)cbd[i] & 0xC0) == 0x80; n++, i++) {
+            codepoint = (codepoint << 6) | ((unsigned char)cbd[i] & 0x3F);
+        }
+        if (n == extra) {
+            Field_CharEvent(edit, codepoint);
+        }
     }
 
     Z_Free(cbd);
@@ -465,8 +491,11 @@ void Field_KeyDownEvent(field_t* edit, int key) {
     switch (key) {
         case K_DEL:
             if (edit->cursor < len) {
+                // [ioquakelive] the whole character, however many bytes it is
+                int next = Q_UTF8_Next(edit->buffer, edit->cursor);
+
                 memmove(edit->buffer + edit->cursor,
-                        edit->buffer + edit->cursor + 1, len - edit->cursor);
+                        edit->buffer + next, len + 1 - next);
             }
             break;
 
@@ -574,11 +603,14 @@ void Field_CharEvent(field_t* edit, int ch) {
 
     if (ch == 'h' - 'a' + 1) {  // ctrl-h is backspace
         if (edit->cursor > 0) {
-            memmove(edit->buffer + edit->cursor - 1,
+            // [ioquakelive] a character outside ASCII is several bytes: the whole one goes
+            int start = Q_UTF8_Start(edit->buffer, edit->cursor);
+
+            memmove(edit->buffer + start,
                     edit->buffer + edit->cursor, len + 1 - edit->cursor);
-            edit->cursor--;
+            edit->cursor = start;
             if (edit->cursor < edit->scroll) {
-                edit->scroll--;
+                edit->scroll = edit->cursor;
             }
         }
         return;
@@ -603,21 +635,34 @@ void Field_CharEvent(field_t* edit, int ch) {
         return;
     }
 
-    if (key_overstrikeMode) {
-        // - 2 to leave room for the leading slash and trailing \0
-        if (edit->cursor == MAX_EDIT_LINE - 2)
+    {
+        // [ioquakelive] what comes in is a Unicode code point, and the line is bytes: a letter
+        // outside ASCII takes two to four of them
+        char utf8[4];
+        int bytes = Q_UTF8_Encode(utf8, ch);
+
+        if (bytes < 1) {
             return;
-        edit->buffer[edit->cursor] = ch;
-        edit->cursor++;
-    } else {  // insert mode
-        // - 2 to leave room for the leading slash and trailing \0
-        if (len == MAX_EDIT_LINE - 2) {
-            return;  // all full
         }
-        memmove(edit->buffer + edit->cursor + 1,
-                edit->buffer + edit->cursor, len + 1 - edit->cursor);
-        edit->buffer[edit->cursor] = ch;
-        edit->cursor++;
+        if (key_overstrikeMode) {
+            // - 2 to leave room for the leading slash and trailing \0
+            if (edit->cursor + bytes > MAX_EDIT_LINE - 2)
+                return;
+            Com_Memcpy(edit->buffer + edit->cursor, utf8, bytes);
+            if (edit->cursor + bytes > len) {
+                edit->buffer[edit->cursor + bytes] = '\0';
+            }
+            edit->cursor += bytes;
+        } else {  // insert mode
+            // - 2 to leave room for the leading slash and trailing \0
+            if (len + bytes > MAX_EDIT_LINE - 2) {
+                return;  // all full
+            }
+            memmove(edit->buffer + edit->cursor + bytes,
+                    edit->buffer + edit->cursor, len + 1 - edit->cursor);
+            Com_Memcpy(edit->buffer + edit->cursor, utf8, bytes);
+            edit->cursor += bytes;
+        }
     }
 
     if (edit->cursor >= edit->widthInChars) {
@@ -1397,11 +1442,10 @@ void CL_KeyDownEvent(int key, unsigned time) {
             return;
         }
 
-        // [QL] r_fullscreen is latched, and a window has a mode of its own: the change takes a
-        // vid_restart
+        // [ioquakelive] only the cvar changes: the renderer applies it on the next frame and
+        // asks for a video restart itself if SDL cannot do it in place
         Cvar_SetValue("r_fullscreen",
                       !Cvar_VariableIntegerValue("r_fullscreen"));
-        Cbuf_ExecuteText(EXEC_APPEND, "vid_restart\n");
         return;
     }
 
