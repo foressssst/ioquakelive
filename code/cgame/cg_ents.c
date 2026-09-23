@@ -139,7 +139,8 @@ static void CG_EntityEffects(centity_t* cent) {
     CG_SetEntitySoundPosition(cent);
 
     // add loop sound
-    if (cent->currentState.loopSound) {
+    // [QL] 0x10015516: with s_ambient off the map's loops stay quiet
+    if (cent->currentState.loopSound && cg_ambient.integer) {
         if (cent->currentState.eType != ET_SPEAKER) {
             trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin,
                                    cgs.gameSounds[cent->currentState.loopSound]);
@@ -1528,7 +1529,10 @@ static void CG_AddCEntity(centity_t* cent) {
             CG_Portal(cent);
             break;
         case ET_SPEAKER:
-            CG_Speaker(cent);
+            // [QL] 0x10018b6e: a speaker is the map talking, so s_ambient decides
+            if (cg_ambient.integer) {
+                CG_Speaker(cent);
+            }
             break;
         case ET_GRAPPLE:
             CG_Grapple(cent);

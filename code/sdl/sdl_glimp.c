@@ -55,7 +55,6 @@ static PFN_vkGetInstanceProcAddr qvkGetInstanceProcAddr;
 #endif
 
 cvar_t* r_allowSoftwareGL;  // Don't abort out if a hardware visual can't be obtained
-cvar_t* r_allowResize;      // make window resizable
 cvar_t* r_centerWindow;
 cvar_t* r_sdlDriver;
 cvar_t* r_preferOpenGLES;
@@ -471,8 +470,10 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
 
     ri.Printf(PRINT_ALL, "Initializing OpenGL display\n");
 
-    if (r_allowResize->integer)
+    // [QL] a window of Quake Live takes the mouse on its edge; only fullscreen is fixed
+    if (!r_fullscreen->integer) {
         flags |= SDL_WINDOW_RESIZABLE;
+    }
 
 #ifdef USE_ICON
     // the icon's bytes are R, G, B, A in memory on either endianness
@@ -1100,7 +1101,6 @@ GLimp_InitCvars
 static void GLimp_InitCvars(void) {
     r_allowSoftwareGL = ri.Cvar_Get("r_allowSoftwareGL", "0", CVAR_LATCH);
     r_sdlDriver = ri.Cvar_Get("r_sdlDriver", "", CVAR_ROM);
-    r_allowResize = ri.Cvar_Get("r_allowResize", "0", CVAR_ARCHIVE | CVAR_LATCH);
     r_centerWindow = ri.Cvar_Get("r_centerWindow", "0", CVAR_ARCHIVE | CVAR_LATCH);
     r_preferOpenGLES = ri.Cvar_Get("r_preferOpenGLES", "-1", CVAR_ARCHIVE | CVAR_LATCH);
 

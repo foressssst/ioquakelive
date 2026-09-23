@@ -178,10 +178,14 @@ static qboolean SNDDMA_InitDS(void) {
     memset(&dsbuf, 0, sizeof(dsbuf));
     dsbuf.dwSize = sizeof(DSBUFFERDESC);
 
-    // take advantage of 2D hardware if available. [QL] retail adds global focus when
-    // s_muteBackground is 0; here it is always on, as the window it would follow is SDL's and a
-    // vid_restart replaces it. S_Update does the muting behind other windows instead
-    dsbuf.dwFlags = DSBCAPS_LOCHARDWARE | DSBCAPS_GLOBALFOCUS;
+    // take advantage of 2D hardware if available. [QL] 0x4efd70: retail only asks for global
+    // focus when s_muteBackground is 0. With the mute on, the buffer belongs to the window and
+    // Windows silences it the moment it loses focus, which is instant; muting it by hand while
+    // the game runs slowed down behind another window left the device repeating what it had
+    dsbuf.dwFlags = DSBCAPS_LOCHARDWARE;
+    if (!Cvar_VariableIntegerValue("s_muteBackground")) {
+        dsbuf.dwFlags |= DSBCAPS_GLOBALFOCUS;
+    }
     if (use8) {
         dsbuf.dwFlags |= DSBCAPS_GETCURRENTPOSITION2;
     }
@@ -196,7 +200,10 @@ static qboolean SNDDMA_InitDS(void) {
         Com_Printf("locked hardware.  ok\n");
     } else {
         // Couldn't get hardware, fallback to software.
-        dsbuf.dwFlags = DSBCAPS_LOCSOFTWARE | DSBCAPS_GLOBALFOCUS;
+        dsbuf.dwFlags = DSBCAPS_LOCSOFTWARE;
+        if (!Cvar_VariableIntegerValue("s_muteBackground")) {
+            dsbuf.dwFlags |= DSBCAPS_GLOBALFOCUS;
+        }
         if (use8) {
             dsbuf.dwFlags |= DSBCAPS_GETCURRENTPOSITION2;
         }

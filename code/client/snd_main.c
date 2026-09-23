@@ -439,6 +439,9 @@ void S_Init(void) {
     s_volume = Cvar_Get("s_volume", "0.8", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     Cvar_CheckRange(s_volume, 0.0f, 2.0f, qfalse);
     s_muteBackground = Cvar_Get("s_muteBackground", "1", CVAR_ARCHIVE | CVAR_LATCH);
+    // [QL] the map's own sounds: the engine keeps it and the cgame reads it (its flags in the
+    // binary are 0x80821, archived, replicated and latched)
+    Cvar_Get("s_ambient", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE | CVAR_REPLICATE);
     s_muted = Cvar_Get("s_muted", "0", CVAR_ROM);
 
     if (!cv->integer) {
