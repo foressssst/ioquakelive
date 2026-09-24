@@ -306,21 +306,50 @@ int SCR_GetBigStringWidth(const char* str) {
 
 /*
 =================
+SCR_DrawRecordText
+
+[QL] quakelive_steam.exe 0x004bddf0: text in 640x480 units, in the console's font at the size it
+is given, white
+=================
+*/
+static void SCR_DrawRecordText(float x, float y, float size, const char* text) {
+    re.SetColor(colorWhite);
+    re.Font_DrawString((int)(x * cls.glconfig.vidWidth / 640.0f), (int)(y * cls.glconfig.vidHeight / 480.0f), text,
+                       2, cls.glconfig.vidHeight / 480.0f * size, -1, NULL, 1);
+    re.SetColor(NULL);
+}
+
+/*
+=================
 SCR_DrawDemoRecording
+
+[QL] quakelive_steam.exe 0x004bdeb0, gated by cl_demoRecordMessage (default 2, CL_Init). 1 is
+Quake 3's line -- the demo's name and how big it is -- centred low on the screen, at y 420; 2 is
+the record icon in the bottom left corner with "REC" beside it, and 0 turns it off. Retail
+also skips a single player demo, which this engine does not record
 =================
 */
 void SCR_DrawDemoRecording(void) {
     char string[1024];
+    float size;
     int pos;
 
-    if (!clc.demorecording) {
+    if (!clc.demorecording || !cl_demoRecordMessage->integer) {
         return;
     }
 
-    pos = FS_FTell(clc.demofile);
-    sprintf(string, "RECORDING %s: %ik", clc.demoName, pos / 1024);
-
-    SCR_DrawStringExt(320 - strlen(string) * 4, 20, 8, string, g_color_table[7], qtrue, qfalse);
+    if (cl_demoRecordMessage->integer == 1) {
+        pos = FS_FTell(clc.demofile);
+        Com_sprintf(string, sizeof(string), "RECORDING %s: %ik", clc.demoName, pos / 1024);
+        SCR_DrawRecordText((float)((80 - (int)strlen(string)) * 4), 420.0f, 8.0f, string);
+    } else if (cl_demoRecordMessage->integer == 2) {
+        // retail divides the height as an integer here, so the icon grows in steps of 11 pixels
+        size = (float)((cls.glconfig.vidHeight / 480) * 11);
+        re.SetColor(NULL);
+        re.DrawStretchPic(cls.glconfig.vidWidth * 0.0015625f, cls.glconfig.vidHeight * 0.979167f, size, size, 0, 0, 1,
+                          1, cls.recordShader);
+        SCR_DrawRecordText(9.0f, 477.0f, 8.0f, "REC");
+    }
 }
 
 /*

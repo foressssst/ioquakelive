@@ -352,6 +352,21 @@ baseline. Measured on a string that has both, so it is the same for every name. 
 box behind a row of text needs this and not the ascender, or the tails fall outside it
 ================
 */
+float CG_DrawTextCapHeight(float scale, int fontIndex) {
+	float extents[5];
+	float yscale = cgs.screenYScale;
+
+	// [ioquakelive] how far a capital rises over the baseline: the top of the ink of an H, which
+	// is what a row of text looks centred by. The baseline is at zero and y grows downwards
+	trap_R_Font_TextExtents("H", 0, CG_EngineFont(fontIndex), CG_FontPixelSize(scale), -1, extents);
+
+	if (yscale <= 0.0f) {
+		yscale = 1.0f;
+	}
+
+	return extents[1] < 0.0f ? -extents[1] / yscale : 0.0f;
+}
+
 int CG_DrawTextLineHeight(float scale, int fontIndex) {
 	float extents[5];
 	float yscale = cgs.screenYScale;
@@ -1122,14 +1137,15 @@ CG_DrawRecording
 
 [CPMA] the RecordingDemo element of CPMA 1.53's HUD: while a demo is being recorded, its
 name sits in the upper right column. The engine puts the two cvars up when it opens and
-closes the file
+closes the file. Off unless ch_recordingDemo asks for it: the engine already shows retail's
+own indicator (cl_demoRecordMessage), and both at once said the same thing twice
 ==================
 */
 static float CG_DrawRecording(float y) {
 	const char* s;
 	int w, h;
 
-	if (!cg_demoRecording.integer) {
+	if (!cg_demoRecording.integer || !ch_recordingDemo.integer) {
 		return y;
 	}
 	s = cg_demoName.string[0] ? va("REC %s", cg_demoName.string) : "REC";

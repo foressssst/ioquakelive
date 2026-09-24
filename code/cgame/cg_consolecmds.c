@@ -962,8 +962,33 @@ typedef struct {
 } consoleCommand_t;
 
 // [QL] Command table - matches cgamex86.dll binary at 0x10078DC0 (57 entries)
+/*
+=================
+CG_TestObits_f
+
+[ioquakelive] testobits [lines]: sample lines in the kill feed, held on screen while its measures
+are picked; 0 takes them away
+=================
+*/
+static void CG_TestObits_f(void) {
+    int n = 4;
+
+    if (trap_Argc() > 1) {
+        n = atoi(CG_Argv(1));
+    }
+    if (n < 0) {
+        n = 0;
+    }
+
+    cg.obitTestLines = n;
+    if (!n) {
+        memset(cg.obituaries, 0, sizeof(cg.obituaries));
+    }
+}
+
 static consoleCommand_t commands[] = {
     {"viewpos", CG_Viewpos_f},
+    {"testobits", CG_TestObits_f},
     {"+scores", CG_ScoresDown_f},
     {"-scores", CG_ScoresUp_f},
     {"+acc", CG_AccDown_f},

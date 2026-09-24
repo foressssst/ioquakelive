@@ -3402,17 +3402,63 @@ static const float *CG_ObitTeamColor(int team) {
 // text. Anything less and the bands touch
 #define OBIT_ROW_GAP 4
 
+/*
+=================
+CG_ObitTestFill
+
+[ioquakelive] The sample lines testobits keeps on screen, for picking the feed's measures: names
+with and without tails, a few weapons, both teams. Their time is held halfway through their life
+so they neither fade nor leave
+=================
+*/
+static void CG_ObitTestFill(int lifetime) {
+    static const char *attackers[] = {"Wrack", "Geƶe", "jgpqy", "Keel", "Anarki", "Doom"};
+    static const char *victims[] = {"Bones", "Ranger", "Biker", "Sarge", "Crash", "Visor"};
+    static const char *icons[] = {"icons/iconw_rocket", "icons/iconw_railgun", "icons/iconw_lightning",
+                                  "icons/iconw_shotgun", "icons/iconw_plasma", "icons/iconw_grenade"};
+    int k, n = cg.obitTestLines;
+
+    if (n > 6) {
+        n = 6;
+    }
+
+    for (k = 0; k < n; k++) {
+        cg.obituaries[k].active = 1;
+        cg.obituaries[k].time = cg.time - lifetime / 3;
+        cg.obituaries[k].hasAttacker = 1;
+        cg.obituaries[k].attackerTeam = (k & 1) ? TEAM_BLUE : TEAM_RED;
+        cg.obituaries[k].victimTeam = (k & 1) ? TEAM_RED : TEAM_BLUE;
+        Q_strncpyz(cg.obituaries[k].attackerName, attackers[k], sizeof(cg.obituaries[k].attackerName));
+        Q_strncpyz(cg.obituaries[k].victimName, victims[k], sizeof(cg.obituaries[k].victimName));
+        cg.obituaries[k].weaponIcon = trap_R_RegisterShaderNoMip(icons[k]);
+    }
+}
+
 static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
     static vec4_t obitColor;
     int i;
-    int textH, lineH, attackerW, remaining;
-    float x, y, iconY, iconW, iconH;
+    int remaining;
+    float asc, lineH, capH, padX, padY, bandH, pitch, iconSize, gapX;
+    float left, bandTop, baseline, x, iconX, iconY, iconW, iconH, attackerW, victimW;
     const float *team;
     int lifetime = ch_animateScroll.integer ? OBIT_FADEIN + OBIT_FADEDELAY + OBIT_FADEOUT : 2000;
     float slide = 0.0f;
 
     // [ioquakelive] the feed reads better a little under the type the HUD asks for
     scale *= ch_obituaryScale.value;
+
+    // [ioquakelive] every measure comes out of the font and a cvar. The ascender places the
+    // text as retail does; the whole line box, tails included, is the band; and the capitals'
+    // height is what a row looks centred by
+    asc = (float)CG_DrawTextHeight("H", scale, 0, 0);
+    lineH = (float)CG_DrawTextLineHeight(scale, 0);
+    capH = CG_DrawTextCapHeight(scale, 0);
+    padX = ch_obituaryPadX.value;
+    padY = ch_obituaryPadY.value;
+    bandH = lineH + 2.0f * padY;
+    pitch = lineH + ch_obituaryRowGap.value;
+    iconSize = asc * ch_obituaryIconScale.value;
+    gapX = asc * ch_obituaryIconGap.value;
 
     // 0x1002e9d7: an expired slot shifts the whole array up from slot 0 and
     // the same index is looked at again
@@ -3422,6 +3468,11 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
             memset(&cg.obituaries[MAX_OBITUARIES - 1], 0, sizeof(cg.obituaries[0]));
             i--;
         }
+    }
+
+    // [ioquakelive] testobits keeps its sample lines alive, halfway through their life
+    if (cg.obitTestLines > 0) {
+        CG_ObitTestFill(lifetime);
     }
 
     if (ch_animateScroll.integer) {
@@ -3436,14 +3487,14 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
         }
         if (cg.obitSlideStart) {
             // the list slides by the row that is leaving, which is the one drawn at the anchor
-            slide = CG_CpmaSlide(cg.obitSlideStart, OBIT_FADEOUT) *
-                    (float)(CG_DrawTextLineHeight(scale, 0) + OBIT_ROW_GAP);
+            slide = CG_CpmaSlide(cg.obitSlideStart, OBIT_FADEOUT) * pitch;
         }
     }
 
-    // [ioquakelive] the feed sits a little lower than the HUD's own rect, which is where it
-    // reads best. ch_obituaryY is for picking the number on screen
-    y = (float)(int)rect->y + ch_obituaryY.value - slide;
+    // the first band hangs from where the HUD puts the feed; ch_obituaryY is the baseline of
+    // that first row under the rect's top, as it always was, and ch_obituaryX moves it sideways
+    left = (float)(int)rect->x + ch_obituaryX.value;
+    bandTop = (float)(int)rect->y + ch_obituaryY.value - asc - padY - slide;
 
     for (i = 0; i < MAX_OBITUARIES; i++) {
         if (!cg.obituaries[i].active) {
@@ -3462,51 +3513,62 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
             obitColor[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
         }
 
-        // the ascender places the icon and the text; the whole line box, tails included,
-        // is what the band has to cover and what one row moves over the next
-        textH = CG_DrawTextHeight(cg.obituaries[i].victimName, scale, 0, 0);
-        lineH = CG_DrawTextLineHeight(scale, 0);
-        attackerW = 0;
+        // where the text and the icon sit inside the band. By default as they always did: the
+        // baseline an ascender under the band's top. With ch_obituaryCenter the capitals and
+        // the icon go on the band's middle line, whatever the font and the size
+        if (ch_obituaryCenter.integer) {
+            baseline = bandTop + (bandH + capH) * 0.5f;
+            iconY = bandTop + (bandH - iconSize) * 0.5f;
+        } else {
+            baseline = bandTop + padY + asc;
+            iconY = baseline - asc;
+        }
+        baseline += ch_obituaryTextY.value;
+        iconY += ch_obituaryIconY.value;
+
+        attackerW = 0.0f;
+        if (cg.obituaries[i].hasAttacker == 1) {
+            attackerW = (float)CG_DrawTextWidth(cg.obituaries[i].attackerName, scale, 0, 0);
+        }
+        victimW = (float)CG_DrawTextWidth(cg.obituaries[i].victimName, scale, 0, 0);
+        iconX = left + attackerW + gapX;
 
         // [CPMA] the band behind the row, which is what makes the feed read over the map. It
         // takes the row's own alpha, so it comes and goes with the line
         if (ch_obituaryBand.integer) {
             vec4_t band = {0.0f, 0.0f, 0.0f, 0.0f};
-            float rowW = (float)(textH * 2) + CG_DrawTextWidth(cg.obituaries[i].victimName, scale, 0, 0);
+            float rowW = attackerW + gapX + iconSize + gapX + victimW;
 
-            if (cg.obituaries[i].hasAttacker == 1) {
-                rowW += (float)CG_DrawTextWidth(cg.obituaries[i].attackerName, scale, 0, 0);
-            }
-            band[3] = obitColor[3] * 0.45f;
-            // the line box with a unit of air over the caps and under the tails
-            CG_FillRect(rect->x - 4.0f, y - (float)textH - 1.0f, rowW + 8.0f,
-                        (float)(lineH + 2), band);
+            band[3] = obitColor[3] * ch_obituaryBandAlpha.value;
+            CG_FillRect(left - padX, bandTop, rowW + 2.0f * padX, bandH, band);
         }
 
         if (cg.obituaries[i].hasAttacker == 1) {
             team = CG_ObitTeamColor(cg.obituaries[i].attackerTeam);
             VectorCopy(team, obitColor);
-            CG_DrawText(rect->x, (float)y, 0, scale, obitColor, cg.obituaries[i].attackerName, 0, 0, 0);
-            attackerW = CG_DrawTextWidth(cg.obituaries[i].attackerName, scale, 0, 0);
+            CG_DrawText(left, baseline, 0, scale, obitColor, cg.obituaries[i].attackerName, 0, 0, 0);
         }
 
         if (cg.obituaries[i].weaponIcon) {
             obitColor[0] = obitColor[1] = obitColor[2] = 1.0f;
             trap_R_SetColor(obitColor);
-            x = (float)attackerW + rect->x + (float)(textH / 2);
-            iconY = (float)(y - textH);
-            iconW = iconH = (float)textH;
-            CG_AdjustFrom640(&x, &iconY, &iconW, &iconH);
-            trap_R_DrawStretchPic(x, iconY, iconW, iconH, 0, 0, 1, 1, cg.obituaries[i].weaponIcon);
+            x = iconX;
+            iconH = iconY;
+            iconW = iconSize;
+            {
+                float w = iconSize, h = iconSize;
+
+                CG_AdjustFrom640(&x, &iconH, &w, &h);
+                trap_R_DrawStretchPic(x, iconH, w, h, 0, 0, 1, 1, cg.obituaries[i].weaponIcon);
+            }
             trap_R_SetColor(NULL);
         }
 
         team = CG_ObitTeamColor(cg.obituaries[i].victimTeam);
         VectorCopy(team, obitColor);
-        CG_DrawText((float)attackerW + rect->x + (float)(textH * 2), (float)y, 0, scale, obitColor,
-                    cg.obituaries[i].victimName, 0, 0, 0);
+        CG_DrawText(iconX + iconSize + gapX, baseline, 0, scale, obitColor, cg.obituaries[i].victimName, 0, 0, 0);
 
-        y += lineH + OBIT_ROW_GAP;
+        bandTop += pitch;
     }
 }
 

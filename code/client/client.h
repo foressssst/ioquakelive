@@ -305,6 +305,7 @@ typedef struct {
     qhandle_t charSetShader;
     qhandle_t whiteShader;
     qhandle_t consoleShader;
+    qhandle_t recordShader;  // [QL] icons/record, the recording indicator's dot (0x004b9ae6)
 } clientStatic_t;
 
 extern clientStatic_t cls;
@@ -408,6 +409,7 @@ void CL_Vid_Restart_f(void);
 //
 // cl_webimage.c
 //
+extern cvar_t* cl_demoRecordMessage;
 extern cvar_t* cl_webImages;
 extern cvar_t* cl_webImageMaxKB;
 

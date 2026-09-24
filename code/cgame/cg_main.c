@@ -373,6 +373,18 @@ vmCvar_t ch_followKiller;
 vmCvar_t ch_obituaryBand;
 vmCvar_t ch_obituaryY;
 vmCvar_t ch_obituaryScale;
+vmCvar_t ch_recordingDemo;
+// [ioquakelive] the feed's measures, to pick on screen; not archived, they go once chosen
+vmCvar_t ch_obituaryX;
+vmCvar_t ch_obituaryRowGap;
+vmCvar_t ch_obituaryPadX;
+vmCvar_t ch_obituaryPadY;
+vmCvar_t ch_obituaryIconScale;
+vmCvar_t ch_obituaryIconGap;
+vmCvar_t ch_obituaryIconY;
+vmCvar_t ch_obituaryTextY;
+vmCvar_t ch_obituaryBandAlpha;
+vmCvar_t ch_obituaryCenter;
 vmCvar_t cg_ambient;
 vmCvar_t ch_predictHitSounds;
 vmCvar_t cg_vidResizeCount;
@@ -801,6 +813,17 @@ static cvarTable_t cvarTable[] = {
     {&ch_obituaryBand, "ch_obituaryBand", "1", CVAR_ARCHIVE},
     {&ch_obituaryY, "ch_obituaryY", "14", CVAR_ARCHIVE},
     {&ch_obituaryScale, "ch_obituaryScale", "0.85", CVAR_ARCHIVE},
+    {&ch_recordingDemo, "ch_recordingDemo", "0", CVAR_ARCHIVE},
+    {&ch_obituaryX, "ch_obituaryX", "0", 0},
+    {&ch_obituaryRowGap, "ch_obituaryRowGap", "4", 0},
+    {&ch_obituaryPadX, "ch_obituaryPadX", "4", 0},
+    {&ch_obituaryPadY, "ch_obituaryPadY", "1", 0},
+    {&ch_obituaryIconScale, "ch_obituaryIconScale", "1", 0},
+    {&ch_obituaryIconGap, "ch_obituaryIconGap", "0.5", 0},
+    {&ch_obituaryIconY, "ch_obituaryIconY", "0", 0},
+    {&ch_obituaryTextY, "ch_obituaryTextY", "0", 0},
+    {&ch_obituaryBandAlpha, "ch_obituaryBandAlpha", "0.45", 0},
+    {&ch_obituaryCenter, "ch_obituaryCenter", "0", 0},
     // [QL] the engine owns this one; the cgame only reads it to leave the map's sounds out
     {&cg_ambient, "s_ambient", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE | CVAR_LATCH},
     // the hit sound of your own shots always goes at once; the cvar is there to be read, not set

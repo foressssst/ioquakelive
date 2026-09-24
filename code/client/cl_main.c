@@ -44,6 +44,7 @@ cvar_t* rcon_client_password;
 cvar_t* rconAddress;
 
 cvar_t* cl_timeout;
+cvar_t* cl_demoRecordMessage;
 cvar_t* cl_maxpackets;
 cvar_t* cl_packetdup;
 cvar_t* cl_timeNudge;
@@ -3308,6 +3309,8 @@ void CL_InitRenderer(void) {
     cls.charSetShader = re.RegisterShader("gfx/2d/bigchars");
     cls.whiteShader = re.RegisterShader("white");
     cls.consoleShader = re.RegisterShader("console");
+    // [QL] quakelive_steam.exe 0x004b9ae6
+    cls.recordShader = re.RegisterShaderNoMip("icons/record");
     g_console_field_width = cls.glconfig.vidWidth / SMALLCHAR_WIDTH - 2;
     g_consoleField.widthInChars = g_console_field_width;
 }
@@ -4044,6 +4047,10 @@ void CL_Init(void) {
     Cmd_AddCommand("web_hideBrowser", CL_Web_HideBrowser_f);
     // [QL] additional client commands
     Cmd_AddCommand("postprocess_restart", CL_PostProcessRestart_f);
+
+    // [QL] quakelive_steam.exe 0x004bc690: the recording indicator, 2 by default
+    cl_demoRecordMessage = Cvar_Get("cl_demoRecordMessage", "2", CVAR_ARCHIVE | CVAR_USERSAVE);
+    Cvar_CheckRange(cl_demoRecordMessage, 0, 2, qtrue);
 
     // [ioquakelive] the pictures behind the links people write, off until asked for
     CL_WebImage_Init();

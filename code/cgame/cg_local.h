@@ -855,6 +855,7 @@ typedef struct {
     // start time of the item that set it off (see CG_CpmaSlide)
     int obitSlideStart;
     int obitSlideKey;
+    int obitTestLines;  // [ioquakelive] testobits: sample lines kept on screen
     int chatSlideStart;
     int chatSlideKey;
     qboolean chatSlideIn;  // the rows rise into place (a line came in) rather than sink
@@ -2036,6 +2037,17 @@ extern vmCvar_t ch_followKiller;
 extern vmCvar_t ch_obituaryBand;
 extern vmCvar_t ch_obituaryY;
 extern vmCvar_t ch_obituaryScale;
+extern vmCvar_t ch_recordingDemo;
+extern vmCvar_t ch_obituaryX;
+extern vmCvar_t ch_obituaryRowGap;
+extern vmCvar_t ch_obituaryPadX;
+extern vmCvar_t ch_obituaryPadY;
+extern vmCvar_t ch_obituaryIconScale;
+extern vmCvar_t ch_obituaryIconGap;
+extern vmCvar_t ch_obituaryIconY;
+extern vmCvar_t ch_obituaryTextY;
+extern vmCvar_t ch_obituaryBandAlpha;
+extern vmCvar_t ch_obituaryCenter;
 extern vmCvar_t cg_ambient;
 extern vmCvar_t ch_predictHitSounds;
 extern vmCvar_t cg_vidResizeCount;
@@ -2200,6 +2212,7 @@ void CG_DrawText(float x, float y, int fontIndex, float scale, vec4_t color, con
 int CG_DrawTextWidth(const char *text, float scale, int limit, int fontIndex);
 int CG_DrawTextHeight(const char *text, float scale, int limit, int fontIndex);
 int CG_DrawTextLineHeight(float scale, int fontIndex);
+float CG_DrawTextCapHeight(float scale, int fontIndex);
 void CG_DrawTextClipped(float *maxX, float x, float y, float scale, const vec4_t color, const char *text);
 extern vmCvar_t cg_redTeamName;
 extern vmCvar_t cg_blueTeamName;

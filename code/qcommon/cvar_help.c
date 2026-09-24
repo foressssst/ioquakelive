@@ -1010,6 +1010,7 @@ static const cvarHelp_t cvarHelp[] = {
     {"ch_obituaryBand", "a dark band behind each line of the kill feed, so it reads over the "
                         "map; it fades with the line"},
     {"ch_obituaryY", "how far down the kill feed sits from where the HUD puts it"},
+    {"ch_recordingDemo", "CPMA's REC with the demo's name in the upper right while recording; the engine's own indicator is " HC("cl_demoRecordMessage")},
     {"ch_obituaryScale", "size of the kill feed's text, over the one the HUD asks for"},
     {"ch_followKiller", "watching, the camera jumps to whoever gets a frag, at most once "
                         "every two seconds; " HC("cg_followPowerup") " does the same with the "
