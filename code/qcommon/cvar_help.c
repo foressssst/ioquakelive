@@ -1012,6 +1012,16 @@ static const cvarHelp_t cvarHelp[] = {
     {"ch_obituaryY", "how far down the kill feed sits from where the HUD puts it"},
     {"ch_recordingDemo", "CPMA's REC with the demo's name in the upper right while recording; the engine's own indicator is " HC("cl_demoRecordMessage")},
     {"ch_obituaryScale", "size of the kill feed's text, over the one the HUD asks for"},
+    {"ch_obituaryX", "moves the kill feed sideways, in pixels of a 640x480 screen"},
+    {"ch_obituaryRowGap", "the space between one line of the kill feed and the next, in pixels"},
+    {"ch_obituaryPadX", "how far the band reaches past the names at each end, in pixels"},
+    {"ch_obituaryPadY", "how far the band reaches over and under the line, in pixels"},
+    {"ch_obituaryIconScale", "the weapon's size, over the height of a capital letter"},
+    {"ch_obituaryIconGap", "the space at each side of the weapon, over the height of a capital letter"},
+    {"ch_obituaryIconY", "moves the weapon up or down inside the band, in pixels"},
+    {"ch_obituaryTextY", "moves the names up or down inside the band, in pixels"},
+    {"ch_obituaryBandAlpha", "how dark the band is, from 0 to 1"},
+    {"ch_obituaryCenter", "1 puts the capitals and the weapon on the band's middle line"},
     {"ch_followKiller", "watching, the camera jumps to whoever gets a frag, at most once "
                         "every two seconds; " HC("cg_followPowerup") " does the same with the "
                         "powerups and the flag"},

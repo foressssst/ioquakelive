@@ -961,7 +961,6 @@ typedef struct {
     void (*function)(void);
 } consoleCommand_t;
 
-// [QL] Command table - matches cgamex86.dll binary at 0x10078DC0 (57 entries)
 /*
 =================
 CG_TestObits_f
@@ -986,9 +985,9 @@ static void CG_TestObits_f(void) {
     }
 }
 
+// [QL] Command table - matches cgamex86.dll binary at 0x10078DC0 (57 entries)
 static consoleCommand_t commands[] = {
     {"viewpos", CG_Viewpos_f},
-    {"testobits", CG_TestObits_f},
     {"+scores", CG_ScoresDown_f},
     {"-scores", CG_ScoresUp_f},
     {"+acc", CG_AccDown_f},
@@ -1048,6 +1047,8 @@ static consoleCommand_t commands[] = {
     {"print", CG_Print_f},
     {"kill", CG_Kill_f},
     {"clientmute", CG_ClientMute_f},
+    // [ioquakelive] not in retail's table
+    {"testobits", CG_TestObits_f},
 };
 
 /*

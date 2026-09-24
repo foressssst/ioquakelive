@@ -324,6 +324,9 @@ static const cmdHelp_t cmdHelp[] = {
     {"nextframe", "steps the test model on to its next frame"},
     {"prevframe", "steps the test model back a frame"},
     {"levelshot", "takes the picture the menus show of the map, with cheats on"},
+    {"testobits", "sample lines in the kill feed that stay on screen while its ch_obituary cvars "
+                  "are tuned; testobits 0 takes them away\n"
+                  "usage: testobits [lines, up to 6]"},
     {"loaddeferred", "loads the player models that were left for later"},
     {"loadhud", "reads the HUD in cg_hudFiles again"},
     {"togglechathistory", "shows the chat history, or hides it"},
