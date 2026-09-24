@@ -29,6 +29,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <windows.h>
 #include <winhttp.h>
+#include <shellapi.h>
 #ifdef _MSC_VER
 #pragma comment(lib, "winhttp.lib")
 #endif
@@ -460,6 +461,39 @@ done:
     return ok;
 }
 
+
+/*
+==================
+Sys_ClipboardImageFile
+
+[ioquakelive] The first file somebody copied in the file explorer, as a UTF-8 path. Copying a
+picture on the desktop leaves the file there, not the picture; qfalse when there is none
+==================
+*/
+qboolean Sys_ClipboardImageFile(char* path, int size) {
+    HANDLE handle;
+    HDROP drop;
+    wchar_t wide[MAX_PATH * 2];
+    qboolean ok = qfalse;
+
+    if (!path || size <= 0 || !IsClipboardFormatAvailable(CF_HDROP) || !OpenClipboard(NULL)) {
+        return qfalse;
+    }
+
+    handle = GetClipboardData(CF_HDROP);
+    drop = handle ? (HDROP)GlobalLock(handle) : NULL;
+    if (drop) {
+        if (DragQueryFileW(drop, 0xFFFFFFFF, NULL, 0) > 0 &&
+            DragQueryFileW(drop, 0, wide, (UINT)ARRAY_LEN(wide)) > 0 &&
+            WideCharToMultiByte(CP_UTF8, 0, wide, -1, path, size, NULL, NULL) > 0) {
+            ok = qtrue;
+        }
+        GlobalUnlock(handle);
+    }
+    CloseClipboard();
+
+    return ok;
+}
 
 /*
 ==================

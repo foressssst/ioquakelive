@@ -547,74 +547,36 @@ qboolean Con_MouseClick(void) {
 
 /*
 ================
-Con_DrawLinkImage
+Con_FitImage
 
-[ioquakelive] NOT FROM RETAIL: the picture behind the link the pointer is on, hanging off it like
-a label. Nothing is fetched until somebody points at a link, and only with cl_webImages on: asking
-for a picture tells whoever hosts it that this machine is here, and the link is somebody else's
+A picture's size inside a box, keeping its shape, and never so small it cannot be looked at
 ================
 */
-static void Con_DrawLinkImage(void) {
+static void Con_FitImage(qhandle_t shader, float maxW, float maxH, float* w, float* h) {
+    int imgW = 0, imgH = 0;
+
+    if (!re.ShaderImageSize(shader, &imgW, &imgH) || imgW <= 0 || imgH <= 0) {
+        imgW = imgH = 64;
+    }
+
+    *w = (float)imgW;
+    *h = (float)imgH;
+    if (*h < maxH * 0.35f) {
+        *w *= (maxH * 0.35f) / *h;
+        *h = maxH * 0.35f;
+    }
+    if (*w > maxW) {
+        *h *= maxW / *w;
+        *w = maxW;
+    }
+    if (*h > maxH) {
+        *w *= maxH / *h;
+        *h = maxH;
+    }
+}
+
+static void Con_DrawImageFramed(qhandle_t shader, float x, float y, float w, float h) {
     static const vec4_t shade = {0.0f, 0.0f, 0.0f, 0.75f};
-    const conLink_t* link = NULL;
-    qhandle_t shader;
-    int imgW, imgH;
-    float w, h, x, y, maxW, maxH;
-    int i;
-
-    if (!cl_webImages || !cl_webImages->integer || Con_LinkPromptActive()) {
-        return;
-    }
-
-    for (i = 0; i < con.numLinks; i++) {
-        if (Con_MouseInRect(con.links[i].x, con.links[i].y, con.links[i].w, con.links[i].h)) {
-            link = &con.links[i];
-            break;
-        }
-    }
-    if (!link) {
-        return;
-    }
-
-    shader = CL_WebImage_Get(link->url);
-    if (!shader || !re.ShaderImageSize(shader, &imgW, &imgH) || imgW <= 0 || imgH <= 0) {
-        return;
-    }
-
-    // as big as it fits in a third of the screen, and never so small that it cannot be
-    // looked at, always keeping its shape
-    maxW = cls.glconfig.vidWidth * 0.34f;
-    maxH = cls.glconfig.vidHeight * 0.34f;
-    w = (float)imgW;
-    h = (float)imgH;
-    if (h < cls.glconfig.vidHeight * 0.12f) {
-        w *= (cls.glconfig.vidHeight * 0.12f) / h;
-        h = cls.glconfig.vidHeight * 0.12f;
-    }
-    if (w > maxW) {
-        h *= maxW / w;
-        w = maxW;
-    }
-    if (h > maxH) {
-        w *= maxH / h;
-        h = maxH;
-    }
-
-    // under the link, and inside the screen
-    x = link->x;
-    y = link->y + link->h + 4.0f;
-    if (x + w + 4.0f > cls.glconfig.vidWidth) {
-        x = cls.glconfig.vidWidth - w - 4.0f;
-    }
-    if (y + h + 4.0f > cls.glconfig.vidHeight) {
-        y = link->y - h - 6.0f;
-    }
-    if (x < 2.0f) {
-        x = 2.0f;
-    }
-    if (y < 2.0f) {
-        y = 2.0f;
-    }
 
     Con_FillRectPx(x - 2.0f, y - 2.0f, w + 4.0f, h + 4.0f, shade);
     Con_FillRectPx(x - 2.0f, y - 2.0f, w + 4.0f, 1.0f, con_colors[CC_BORDER].color);
@@ -622,6 +584,72 @@ static void Con_DrawLinkImage(void) {
 
     re.SetColor(NULL);
     re.DrawStretchPic(x, y, w, h, 0.0f, 0.0f, 1.0f, 1.0f, shader);
+}
+
+/*
+================
+Con_DrawLinkImage
+
+[ioquakelive] NOT FROM RETAIL: pictures in the console. The newest link to a picture among the
+lines in view shows on the right, the way a chat app shows what was posted; the one under the
+pointer shows under its own link. A GIF moves. The engine fetches the image host's own pictures
+always, and anybody else's only with cl_webImages
+================
+*/
+static void Con_DrawLinkImage(void) {
+    const conLink_t* link = NULL;
+    qhandle_t shader = 0;
+    float w, h, x, y;
+    int i;
+
+    if (Con_LinkPromptActive() || !con.numLinks) {
+        return;
+    }
+
+    // the one under the pointer
+    for (i = 0; i < con.numLinks; i++) {
+        if (Con_MouseInRect(con.links[i].x, con.links[i].y, con.links[i].w, con.links[i].h)) {
+            link = &con.links[i];
+            break;
+        }
+    }
+    if (link && (shader = CL_WebImage_Get(link->url)) != 0) {
+        Con_FitImage(shader, cls.glconfig.vidWidth * 0.34f, cls.glconfig.vidHeight * 0.34f, &w, &h);
+
+        // under the link, and inside the screen
+        x = link->x;
+        y = link->y + link->h + 4.0f;
+        if (x + w + 4.0f > cls.glconfig.vidWidth) {
+            x = cls.glconfig.vidWidth - w - 4.0f;
+        }
+        if (y + h + 4.0f > cls.glconfig.vidHeight) {
+            y = link->y - h - 6.0f;
+        }
+        if (x < 2.0f) {
+            x = 2.0f;
+        }
+        if (y < 2.0f) {
+            y = 2.0f;
+        }
+        Con_DrawImageFramed(shader, x, y, w, h);
+        return;
+    }
+
+    // the newest one in view, docked on the right of the console. The table fills from the top
+    // row down, so the newest is the last that turns out to be a picture
+    for (i = con.numLinks - 1; i >= 0; i--) {
+        if ((shader = CL_WebImage_Get(con.links[i].url)) != 0) {
+            break;
+        }
+    }
+    if (!shader || con.vislines <= 0) {
+        return;
+    }
+
+    Con_FitImage(shader, cls.glconfig.vidWidth * 0.28f, con.vislines * 0.7f, &w, &h);
+    x = cls.glconfig.vidWidth - w - 12.0f;
+    y = 12.0f;
+    Con_DrawImageFramed(shader, x, y, w, h);
 }
 
 /*

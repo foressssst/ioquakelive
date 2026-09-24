@@ -87,6 +87,7 @@ static const char *fallbackFontPaths[] = {
 	"fonts/notosansbuginese-regular.ttf",
 	"fonts/notosanstagalog-regular.ttf",
 	"fonts/notosansbamum-regular.ttf",
+	"fonts/notoemoji-regular.ttf",			// the emoji, in the colour of the text around them
 	"fonts/droidsansfallbackfull.ttf",				// CJK and the kana, last: it is the biggest
 };
 static int fallbackFontIds[ARRAY_LEN( fallbackFontPaths )];

@@ -417,6 +417,7 @@ void CL_WebImage_Init(void);
 void CL_WebImage_Shutdown(void);
 void CL_WebImage_Frame(void);
 qhandle_t CL_WebImage_Get(const char* url);
+qboolean CL_ImagePasteInto(field_t* field);
 void CL_Snd_Restart_f(void);
 void CL_StartDemoLoop(void);
 void CL_NextDemo(void);

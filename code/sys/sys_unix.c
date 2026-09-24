@@ -311,6 +311,10 @@ byte* Sys_ClipboardImage(int* width, int* height) {
     return NULL;
 }
 
+qboolean Sys_ClipboardImageFile(char* path, int size) {
+    return qfalse;
+}
+
 
 void* Sys_ThreadCreate(void (*function)(void*), void* argument) {
     static sysThreadStart_t starts[16];

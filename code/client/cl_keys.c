@@ -425,6 +425,13 @@ void Field_Paste(field_t* edit) {
     char* cbd;
     int pasteLen, i;
 
+    // [ioquakelive] in the chat and the console a picture pastes too: a screen clip, an image file
+    // copied on the desktop or the link of one goes up to the image host, and its link comes back
+    // into the line. Plain text pastes the usual way
+    if ((edit == &chatField || edit == &g_consoleField) && CL_ImagePasteInto(edit)) {
+        return;
+    }
+
     cbd = Sys_GetClipboardData();
 
     if (!cbd) {

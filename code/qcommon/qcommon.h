@@ -1137,6 +1137,8 @@ qboolean Sys_WebPost(const char* url, const char* contentType, const char* heade
                      int length, char* reply, int replySize);
 // [ioquakelive] the picture somebody copied, as rows of red, green and blue; free() it
 byte* Sys_ClipboardImage(int* width, int* height);
+// [ioquakelive] the first file somebody copied in the file explorer, as a UTF-8 path
+qboolean Sys_ClipboardImageFile(char* path, int size);
 
 void* Sys_ThreadCreate(void (*function)(void*), void* argument);
 void* Sys_MutexCreate(void);
