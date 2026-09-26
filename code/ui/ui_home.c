@@ -33,14 +33,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "ui_web.h"
 
-#define HM_NAV_ITEM_SIZE 15.0f
-#define HM_NAV_ITEM_SPACING 0.6f
-#define HM_NAV_ITEM_GAP 26.0f
-#define HM_NAV_INSET 39.0f
-
-// the painting's shape
-#define HM_PAINTING_ASPECT (3122.0f / 1344.0f)
-
 typedef enum {
     HM_HIT_NONE = SM_HIT_SHARED,
     HM_HIT_NAV,
@@ -54,18 +46,6 @@ typedef enum {
     HM_HIT_MENU    // [ioquakelive] a row of the PLAY dropdown
 } hmHitType_t;
 
-// arenas whose shots pak00 carries, one of which is the background when the painting is not there
-static const char* const hmBackdrops[] = {
-    "bloodrun", "campgrounds", "toxicity", "aerowalk", "furiousheights", "sinister", "lostworld",
-    "hektik", "silence", "cure", "almostlost", "asylum", "battleforged", "trinity", "elder", "overkill",
-};
-
-static struct {
-    qboolean loaded;
-    qhandle_t backdrop;
-    qboolean painting;  // the backdrop is the menu's painting, not a levelshot
-} hm;
-
 // which of the lists is showing
 #define HM_MENU_MAIN 0
 #define HM_MENU_PLAY 1
@@ -76,7 +56,6 @@ static struct {
 
 static struct {
     qboolean loadedMenu;
-    qhandle_t logo;
     int menu;  // which of hmMenus is showing
     qhandle_t face;
     char faceModel[MAX_QPATH];
@@ -88,205 +67,260 @@ static void UI_Home_LoadMenu(void) {
     }
     hm2.loadedMenu = qtrue;
     hm2.menu = HM_MENU_MAIN;
-    hm2.logo = trap_R_RegisterShaderNoMip("ui/assets/main_menu/ql_logo");
 }
 
-float UI_Home_Left(void) {
-    return (smVW - HM_CONTAINER_W) * 0.5f;
-}
-
-/*
-===============
-UI_Home_Load
-
-The background: the menu's painting, or, when pak01 has not got it, one of the
-arenas above whose levelshot pak00 has, picked once per session the way retail's
-App picked a random map for its page.
-===============
-*/
-static void UI_Home_Load(void) {
-    int count = (int)ARRAY_LEN(hmBackdrops);
-    int start, k;
-
-    if (hm.loaded) {
-        return;
-    }
-    hm.loaded = qtrue;
-    hm.backdrop = trap_R_RegisterShaderNoMip("ui/ioql/menu_background");
-    if (hm.backdrop) {
-        hm.painting = qtrue;
-        return;
-    }
-    start = (int)((unsigned int)trap_Milliseconds() % (unsigned int)count);
-    for (k = 0; k < count; k++) {
-        const char* map = hmBackdrops[(start + k) % count];
-        fileHandle_t f;
-        int len = trap_FS_FOpenFile(va("levelshots/%s.jpg", map), &f, FS_READ);
-
-        if (len > 0) {
-            trap_FS_FCloseFile(f);
-            hm.backdrop = trap_R_RegisterShaderNoMip(va("levelshots/%s", map));
-            if (hm.backdrop) {
-                return;
-            }
-        }
-    }
-}
-
-/*
-===============
-UI_Home_Wash
-
-A vertical wash: a colour whose alpha runs from a0 at the top to a1 at the bottom.
-The bands are a few screen pixels high with whole-pixel edges, so two of them meet
-without a row drawn twice - in page units that overlap came out as a dark line
-across the screen. UI_Home_WashAcross is the same left to right, eased.
-===============
-*/
-#define HM_WASH_STEP 4
-
-static void UI_Home_Wash(float y, float h, const float* color, float a0, float a1) {
-    float top = smTop + y * smScale;
-    float bottom = smTop + (y + h) * smScale;
-    int last = (int)(bottom + 0.5f);
-    int py;
-    vec4_t c;
-
-    if (bottom <= top) {
-        return;
-    }
-    VectorCopy(color, c);
-    for (py = (int)(top + 0.5f); py < last; py += HM_WASH_STEP) {
-        int end = py + HM_WASH_STEP < last ? py + HM_WASH_STEP : last;
-
-        c[3] = a0 + (a1 - a0) * ((py + end) * 0.5f - top) / (bottom - top);
-        trap_R_SetColor(c);
-        trap_R_DrawStretchPic(0, (float)py, (float)uiInfo.uiDC.glconfig.vidWidth, (float)(end - py), 0, 0, 0, 0,
-                              uiInfo.uiDC.whiteShader);
-    }
-    trap_R_SetColor(NULL);
-}
-
-static void UI_Home_WashAcross(float x, float w, const float* color, float a0, float a1) {
-    float left = x * smScale;
-    float right = (x + w) * smScale;
-    int last = (int)(right + 0.5f);
-    int px;
-    vec4_t c;
-
-    if (right <= left) {
-        return;
-    }
-    VectorCopy(color, c);
-    for (px = (int)(left + 0.5f); px < last; px += HM_WASH_STEP) {
-        int end = px + HM_WASH_STEP < last ? px + HM_WASH_STEP : last;
-        float t = ((px + end) * 0.5f - left) / (right - left);
-
-        t = t * t * (3.0f - 2.0f * t);
-        c[3] = a0 + (a1 - a0) * t;
-        trap_R_SetColor(c);
-        trap_R_DrawStretchPic((float)px, 0, (float)(end - px), (float)uiInfo.uiDC.glconfig.vidHeight, 0, 0, 0, 0,
-                              uiInfo.uiDC.whiteShader);
-    }
-    trap_R_SetColor(NULL);
-}
-
-/*
-===============
-UI_Home_DrawBackground
-
-The background covers the screen whatever its shape. The painting keeps its right
-edge on the screen's, where its figure stands, and gives up its left, which is
-haze; a levelshot is centred.
-===============
-*/
-static void UI_Home_DrawBackground(void) {
-    float top = -smTop / smScale;
-    float full = smBottom - top;
-    float aspect = hm.painting ? HM_PAINTING_ASPECT : 1920.0f / 1080.0f;
-    float w = smVW;
-    float h = full;
-
-    UI_Home_Load();
-    SM_FillScreen(smPage);
-    if (!hm.backdrop) {
-        return;
-    }
-    if (w / h > aspect) {
-        h = w / aspect;  // cover: overflow the height rather than letterbox
-    } else {
-        w = h * aspect;
-    }
-    // the painting covers the screen whole: pulled off the right edge it left a band of
-    // page showing, so it stays anchored there and the panels over it are seen through
-    SM_Pic(hm.painting ? smVW - w : (smVW - w) * 0.5f, top + (full - h) * 0.5f, w, h, hm.backdrop, NULL);
-}
 
 /*
 ===============
 UI_Home_Backdrop
 
-What the other pages sit on: the background, and the page's colour over it thick
-enough for the panels to read -- heavier at the top where the bar is and at the
-bottom, lighter in the middle, which is what retail's radial gradient did.
+[QL] What the other pages sit on: the #app's background, the same as the main menu's
 ===============
 */
-void UI_Home_Backdrop(void) {
-    float top = -smTop / smScale;
-    float full = smBottom - top;
+void UI_Home_RetailBackdrop(void);
 
-    UI_Home_DrawBackground();
-    UI_Home_Wash(top, full * 0.5f, smPage, 0.96f, 0.80f);
-    UI_Home_Wash(top + full * 0.5f, full * 0.5f, smPage, 0.80f, 0.97f);
+void UI_Home_Backdrop(void) {
+    UI_Home_RetailBackdrop();
+}
+
+/*
+===============================================================================
+
+THE FRAME
+
+[QL] web.pak src/appframe.js: a 75px bar black at 0.8, with the ProfileCard at the left and the
+navItems -- the house, PLAY, STATISTICS and COMMUNITY 250px each, the power button and the gear at
+the right -- in Handel Gothic 18pt upper case; the chosen one yellow over black 0.3 with a 3px
+yellow line under it. PLAY, STATISTICS and COMMUNITY open a menu under them, as wide as they are.
+Down the left, the Lobby and under it the friends
+
+===============================================================================
+*/
+
+#define HV_MAX_FRIENDS 32
+
+// the list, re-read every so often: asking Steam for it every frame would be hundreds of calls
+// for nothing, since a friend does not change state that often
+static struct {
+    uiFriend_t list[HV_MAX_FRIENDS];
+    int index[HV_MAX_FRIENDS];  // their place in Steam's list, which is what actions go by
+    int count;
+    int updated;
+} hvf;
+
+#define HM_FRIEND_H 42.0f
+
+static void UI_Home_LoadRetail(void);
+static qhandle_t UI_Home_Face(void);
+static void UI_Home_FriendRefresh(void);
+static void UI_Home_DrawFriends(float x, float y, float w, float h);
+
+#define HF_BAR_H 75.0f
+#define HF_ITEM_W 75.0f
+#define HF_WIDE_W 250.0f
+#define HF_FIRST_X 435.0f     // after the profile card: 30 + 370 + 35
+#define HF_NAV_SIZE 24.0f     // 18pt
+#define HF_MENU_SIZE (14.0f * 4.0f / 3.0f)  // 14pt
+#define HF_MENU_ROW 48.5f     // li: 0.5em over and under a 1.6 line
+#define HF_COL_X 30.0f
+#define HF_COL_W 370.0f
+
+static const vec4_t hfBlack80 = {0.0f, 0.0f, 0.0f, 0.8f};
+static const vec4_t hfBlack75 = {0.0f, 0.0f, 0.0f, 0.75f};
+static const vec4_t hfBlack30 = {0.0f, 0.0f, 0.0f, 0.3f};
+static const vec4_t hfBlack20 = {0.0f, 0.0f, 0.0f, 0.2f};
+static const vec4_t hfWhite = {1.0f, 1.0f, 1.0f, 1.0f};
+static const vec4_t hfMenuHoverText = {17 / 255.0f, 17 / 255.0f, 17 / 255.0f, 1.0f};
+static const vec4_t hfButtonBorder = {77 / 255.0f, 77 / 255.0f, 77 / 255.0f, 1.0f};
+
+typedef struct {
+    const char* title;
+    int nav;          // the page it opens, or -1
+    const char* url;  // or what it opens where Steam's overlay would
+} hfMenuItem_t;
+
+// appframe.js's playContext, statsContext and communityContext. Career Stats and Recent Matches
+// came off Quake Live's stats servers, which are gone
+static const hfMenuItem_t hfMenus[3][3] = {
+    {{"Match Browser", HM_NAV_BROWSER, NULL}, {"Start Match", HM_NAV_PLAY, NULL}, {"Training Center", HM_NAV_TRAINING, NULL}},
+    {{"Replays", HM_NAV_REPLAYS, NULL}},
+    {{"Steam Workshop", -1, "http://steamcommunity.com/app/282440/workshop"},
+     {"Steam Community", -1, "http://steamcommunity.com/app/282440"}},
+};
+static const char* const hfTabs[3] = {"Play", "Statistics", "Community"};
+
+static int hfOpen = -1;  // the menu that is down, -1 none
+
+float UI_Home_Left(void) {
+    return 430.0f;
+}
+
+float UI_Home_ContentW(void) {
+    return smVW - 430.0f - 30.0f;
+}
+
+// a FontAwesome glyph in the middle of a navItem
+static void UI_Home_NavIcon(float x, float top, int glyph, const float* color) {
+    float w = SM_IconWidth(HF_NAV_SIZE, glyph);
+
+    SM_Icon(x + (HF_ITEM_W - w) * 0.5f, top + HF_BAR_H * 0.5f + HF_NAV_SIZE * SM_AWESOME_BASE, HF_NAV_SIZE, color,
+            glyph);
+}
+
+// a navItem's box: black 0.3 when it is chosen or under the cursor, and the chosen one's line
+static const float* UI_Home_NavBox(float x, float top, float w, qboolean chosen, qboolean over) {
+    if (chosen || over) {
+        SM_Fill(x, top, w, HF_BAR_H, hfBlack30, NULL);
+    }
+    if (chosen) {
+        SM_Fill(x, top + HF_BAR_H - 3.0f, w, 3.0f, smGold, NULL);
+    }
+    return (chosen || over) ? smGold : hfWhite;
 }
 
 /*
 ===============
 UI_Home_PageTop
 
-What a page carries instead of the bar of links the front end used to have: this
-is a game's front end and not a web site (the player's words), so there is the
-QUAKE LIVE logo at the left and, at the right, the one way back to the menu.
-Escape does the same.
+[QL] The bar and the left column of every page but the main menu
 ===============
 */
 void UI_Home_PageTop(int active) {
-    float left = UI_Home_Left();
-    float w = SM_LabelWidth(HM_NAV_ITEM_SIZE, "Back", HM_NAV_ITEM_SPACING);
-    float bx = left + HM_CONTAINER_W - w;
-    qboolean over = SM_Over(HM_HIT_NAV, HM_NAV_HOME);
+    char name[MAX_CVAR_VALUE_STRING];
+    float top = -smTop / smScale;
+    float x;
+    int tab = active == HM_NAV_REPLAYS ? 1 : (active == HM_NAV_BROWSER || active == HM_NAV_PLAY ||
+                                             active == HM_NAV_TRAINING) ? 0 : -1;
+    qhandle_t face;
+    int i;
 
-    (void)active;
     UI_Home_LoadMenu();
-    if (hm2.logo) {
-        SM_Pic(left, 26.0f, 196.0f, 49.0f, hm2.logo, NULL);
+    UI_Home_LoadRetail();
+
+    // .nav.orow: the whole width but the 3px the scrollbar kept
+    SM_Fill(0, top, smVW - 3.0f, HF_BAR_H, hfBlack80, NULL);
+
+    // the ProfileCard, 30px in: the avatar as tall as the card and the name beside it
+    face = UI_Home_Face();
+    x = HF_COL_X;
+    if (face) {
+        SM_Pic(x, top + 5.0f, 65.0f, 65.0f, face, NULL);
+        x += 65.0f + 7.5f;
     }
-    SM_Label(bx, SM_Baseline(FONT_SANS, HM_NAV_ITEM_SIZE, 47, 22), HM_NAV_ITEM_SIZE,
-             over ? smGold : smTextSoft, "Back", HM_NAV_ITEM_SPACING);
-    SM_Hit(bx - 20.0f, 30.0f, w + 40.0f, 46.0f, HM_HIT_NAV, HM_NAV_HOME, NULL);
+    trap_Cvar_VariableStringBuffer("name", name, sizeof(name));
+    SM_Text(x, SM_Baseline(FONT_SANS, 15.0f, top + 5.0f, 24.0f), FONT_SANS, 15.0f, smText, name[0] ? name : "Player",
+            SM_Fit(FONT_SANS, 15.0f, name, HF_COL_X + HF_COL_W - x), qfalse);
+
+    // the house
+    x = HF_FIRST_X;
+    UI_Home_NavIcon(x, top, SM_FA_HOME,
+                    UI_Home_NavBox(x, top, HF_ITEM_W, qfalse, SM_Over(HM_HIT_NAV, HM_NAV_HOME)));
+    SM_Hit(x, top, HF_ITEM_W, HF_BAR_H, HM_HIT_NAV, HM_NAV_HOME, NULL);
+    x += HF_ITEM_W;
+
+    // PLAY, STATISTICS, COMMUNITY
+    for (i = 0; i < 3; i++) {
+        char upper[32];
+        const float* color = UI_Home_NavBox(x, top, HF_WIDE_W, tab == i || hfOpen == i, SM_Over(HM_HIT_TAB, i));
+        int k;
+
+        for (k = 0; hfTabs[i][k] && k < (int)sizeof(upper) - 1; k++) {
+            upper[k] = (char)toupper((unsigned char)hfTabs[i][k]);
+        }
+        upper[k] = '\0';
+        SM_Text(x + (HF_WIDE_W - SM_Advance(FONT_DEFAULT, HF_NAV_SIZE, upper, -1)) * 0.5f,
+                SM_Baseline(FONT_DEFAULT, HF_NAV_SIZE, top, HF_BAR_H), FONT_DEFAULT, HF_NAV_SIZE, color, upper, -1,
+                qfalse);
+        SM_Hit(x, top, HF_WIDE_W, HF_BAR_H, HM_HIT_TAB, i, NULL);
+        x += HF_WIDE_W;
+    }
+
+    // at the right: the power button, and the gear left of it
+    x = smVW - 3.0f - HF_ITEM_W;
+    UI_Home_NavIcon(x, top, SM_FA_POWER, UI_Home_NavBox(x, top, HF_ITEM_W, qfalse, SM_Over(HM_HIT_NAV, HM_NAV_QUIT)));
+    SM_Hit(x, top, HF_ITEM_W, HF_BAR_H, HM_HIT_NAV, HM_NAV_QUIT, NULL);
+    x -= HF_ITEM_W;
+    UI_Home_NavIcon(x, top, SM_FA_GEAR,
+                    UI_Home_NavBox(x, top, HF_ITEM_W, active == HM_NAV_SETTINGS, SM_Over(HM_HIT_NAV, HM_NAV_SETTINGS)));
+    SM_Hit(x, top, HF_ITEM_W, HF_BAR_H, HM_HIT_NAV, HM_NAV_SETTINGS, NULL);
+
+    // the left column: the Lobby (header black 0.75, its body black 0.8 down to 51%)
+    {
+        float colTop = top + HM_NAV_H;
+        float colH = smBottom - colTop;
+        float lobbyBottom = colTop + colH * 0.49f;
+        float bw = 88.2f;
+        const char* create = "CREATE";
+
+        SM_Fill(HF_COL_X, colTop, HF_COL_W, 25.6f, hfBlack75, NULL);
+        SM_Text(HF_COL_X + 10.0f, SM_Baseline(FONT_DEFAULT, 16.0f, colTop, 25.6f), FONT_DEFAULT, 16.0f, smGold, "Lobby", -1,
+                qfalse);
+        SM_Fill(HF_COL_X, colTop + 25.6f, HF_COL_W, lobbyBottom - colTop - 25.6f, hfBlack80, NULL);
+
+        // skeleton's button: 30px high, a #4d4d4d line, 11px bold upper case spaced 1px
+        SM_Fill(HF_COL_X + (HF_COL_W - bw) * 0.5f, colTop + 65.0f, bw, 1, hfButtonBorder, NULL);
+        SM_Fill(HF_COL_X + (HF_COL_W - bw) * 0.5f, colTop + 94.0f, bw, 1, hfButtonBorder, NULL);
+        SM_Fill(HF_COL_X + (HF_COL_W - bw) * 0.5f, colTop + 65.0f, 1, 30, hfButtonBorder, NULL);
+        SM_Fill(HF_COL_X + (HF_COL_W + bw) * 0.5f - 1, colTop + 65.0f, 1, 30, hfButtonBorder, NULL);
+        SM_SpacedText(HF_COL_X + (HF_COL_W - SM_SpacedWidth(FONT_SANS, 11.0f, create, 1.0f) + 1.0f) * 0.5f,
+                      SM_Baseline(FONT_SANS, 11.0f, colTop + 65.0f, 30.0f), FONT_SANS, 11.0f, smText, create, 1.0f,
+                      qtrue);
+        SM_Centered(HF_COL_X + HF_COL_W * 0.5f, SM_Baseline(FONT_SANS, 15.0f, colTop + 105.0f, 24.0f), 15.0f, smText,
+                    "Not in a lobby.", qfalse);
+
+        // the friends, from 51% down to 30px off the bottom
+        UI_Home_FriendRefresh();
+        if (hvf.count > 0) {
+            float fTop = colTop + colH * 0.51f;
+            float fH = smBottom - 30.0f - fTop;
+            float rows = hvf.count * HM_FRIEND_H;
+
+            SM_Fill(HF_COL_X, fTop, HF_COL_W, rows < fH ? rows : fH, hfBlack80, NULL);
+            UI_Home_DrawFriends(HF_COL_X, fTop, HF_COL_W, fH);
+        }
+    }
+}
+
+// the menu under PLAY, STATISTICS or COMMUNITY: drawn last, over the page
+static void UI_Home_DrawNavMenu(void) {
+    float top = -smTop / smScale;
+    float x = HF_FIRST_X + HF_ITEM_W + hfOpen * HF_WIDE_W;
+    float y = top + HF_BAR_H;
+    int i;
+
+    if (hfOpen < 0) {
+        return;
+    }
+    // #context-wrapper: the whole screen at black 0.2, and a click on it closes the menu
+    SM_Fill(-1, top, smVW + 2, smBottom - top + 1, hfBlack20, NULL);
+    SM_Hit(0, top, smVW, smBottom - top, HM_HIT_SOCIAL, 0, NULL);
+    for (i = 0; i < 3 && hfMenus[hfOpen][i].title; i++) {
+        qboolean over = SM_Over(HM_HIT_MENU, i);
+
+        SM_Fill(x, y, HF_WIDE_W, HF_MENU_ROW, over ? smGold : smRaised, NULL);
+        SM_Text(x + HF_MENU_SIZE, SM_Baseline(FONT_DEFAULT, HF_MENU_SIZE, y, HF_MENU_ROW), FONT_DEFAULT, HF_MENU_SIZE,
+                over ? hfMenuHoverText : smText, hfMenus[hfOpen][i].title, -1, qfalse);
+        SM_Hit(x, y, HF_WIDE_W, HF_MENU_ROW, HM_HIT_MENU, i, NULL);
+        y += HF_MENU_ROW;
+    }
 }
 
 /*
 ===============
 UI_Home_Header
 
-A page's title panel, as the site heads its pages: a panel the container's width
-with the title in bold upper case, and, over it, the small gold line some pages
-carry. Returns where the panel ends.
+[QL] A page's h1.title: a black 0.8 bar the column's width, the title in Handel Gothic 24pt with
+0.25em over and under it and 0.2em in, and 2px under the bar
 ===============
 */
 float UI_Home_Header(float y, const char* eyebrow, const char* title) {
     float left = UI_Home_Left();
-    float h = eyebrow ? 92.0f : 72.0f;
 
-    SM_Round(left, y, HM_CONTAINER_W, h, SM_RADIUS_MD, smPanel, NULL);
-    if (eyebrow) {
-        SM_Label(left + 25, SM_Baseline(FONT_SANS, 11, y + 18, 16), 11, smGold, eyebrow, 1.6f);
-        SM_Label(left + 25, SM_Baseline(FONT_SANS, 24, y + 38, 32), 24, smText, title, 0.2f);
-    } else {
-        SM_Label(left + 25, SM_Baseline(FONT_SANS, 22, y, h), 22, smText, title, 0.2f);
-    }
-    return y + h;
+    (void)eyebrow;
+    SM_Fill(left, y, HM_CONTAINER_W, 54.4f, hfBlack80, NULL);
+    SM_Text(left + 6.4f, SM_Baseline(FONT_DEFAULT, 32.0f, y + 8.0f, 38.4f), FONT_DEFAULT, 32.0f, smText, title, -1,
+            qfalse);
+    return y + 54.4f + 2.0f;
 }
 
 /*
@@ -307,7 +341,7 @@ page fills the same box.
 ===============
 */
 float UI_Home_FrameBottom(void) {
-    return smBottom - 40.0f - (UI_Home_InMatch() ? 38.0f : 0.0f);
+    return smBottom - 30.0f;  // .body.orow: bottom 30px
 }
 
 // [ioquakelive] the block's middle is the screen's middle, not the middle of what the top row
@@ -372,8 +406,28 @@ qboolean UI_Home_InMatch(void) {
 qboolean UI_Home_NavClick(void) {
     const smHit_t* hit = SM_HitAt(smMX, smMY);
 
+    // a menu that is down takes the click: a row of it, or anywhere else to close it
+    if (hfOpen >= 0) {
+        int open = hfOpen;
+
+        hfOpen = -1;
+        if (hit && hit->type == HM_HIT_MENU) {
+            const hfMenuItem_t* item = &hfMenus[open][hit->index];
+
+            if (item->nav >= 0) {
+                UI_Home_Go(item->nav);
+            } else if (item->url) {
+                trap_Sys_OpenURL(item->url);
+            }
+        }
+        return qtrue;
+    }
     if (!hit) {
         return qfalse;
+    }
+    if (hit->type == HM_HIT_TAB) {
+        hfOpen = hit->index;
+        return qtrue;
     }
     if (hit->type == HM_HIT_NAV) {
         UI_Home_Go(hit->index);
@@ -403,6 +457,7 @@ void UI_Home_Banner(void) {
     float y = smBottom - h;
     qboolean over;
 
+    UI_Home_DrawNavMenu();
     if (!UI_Home_InMatch()) {
         return;
     }
@@ -438,7 +493,6 @@ Lobby switch and the list under it; and the legal notice the first time the menu
 #define HM_SELECTOR_TOP 155.0f
 #define HM_SELECTOR_H 25.0f
 #define HM_LIST_TOP 183.0f
-#define HM_FRIEND_H 42.0f
 #define HM_LEGALS_MS 5000     // setTimeout(this.skipLegals, 5000)
 #define HM_LEGALS_FADE 500    // .legals-leave: opacity .5s
 #define HM_TEXT 15.0f
@@ -642,16 +696,6 @@ static int UI_Home_FriendRank(const uiFriend_t* f) {
     return 3;
 }
 
-#define HV_MAX_FRIENDS 32
-
-// the list, re-read every so often: asking Steam for it every frame would be hundreds of calls
-// for nothing, since a friend does not change state that often
-static struct {
-    uiFriend_t list[HV_MAX_FRIENDS];
-    int index[HV_MAX_FRIENDS];  // their place in Steam's list, which is what actions go by
-    int count;
-    int updated;
-} hvf;
 
 static void UI_Home_FriendRefresh(void) {
     int total;

@@ -289,12 +289,14 @@ typedef enum {
     HM_NUM_NAV
 } hmNav_t;
 
-// the page's column, as quakeclub.com's container
-#define HM_CONTAINER_W 1110.0f
-#define HM_NAV_H 88.0f
+// [QL] the page's column: retail's .right.col, from 430px to 30px off the right edge, under the
+// 75px bar and the 35px below it
+#define HM_CONTAINER_W (UI_Home_ContentW())
+#define HM_NAV_H 110.0f
 #define HM_PANEL_GAP 17.0f
 
 float UI_Home_Left(void);
+float UI_Home_ContentW(void);
 qboolean UI_Home_InMatch(void);
 void UI_Home_Backdrop(void);
 void UI_Home_PageTop(int active);
