@@ -38,34 +38,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define HM_NAV_ITEM_GAP 26.0f
 #define HM_NAV_INSET 39.0f
 
-// the main menu
-// [ioquakelive] the column in fixed grid units (U = 8) rather than a percentage of the
-// screen: it lands in the same place every time and the rest aligns against it
-#define HM_COL_X 96.0f       // 12 U
-#define HM_COL_BAND 672.0f   // 84 U: how far its band reaches
-#define HM_COL_W 480.0f      // what an entry takes, rule to chevron (60 U)
-#define HM_RULE_GAP 26.0f    // the hover rule stands this far left of the text
-#define HM_LOGO_Y 128.0f     // 16 U
-#define HM_LOGO_W 400.0f     // 50 U
-#define HM_LIST_Y 320.0f     // 40 U
-#define HM_ITEM_H 78.0f
-#define HM_ITEM_SIZE 27.0f
-
-// [ioquakelive] the list: one entry per row, with room to spare between them. A row is the
-// same height with and without its description, so the list does not shift as the cursor
-// runs down it.
-#define HM_ROW_H 64.0f
-#define HM_HEADING_H 40.0f
-#define HM_ITEM_SPACING 0.7f
-#define HM_NOTE_SIZE 14.0f
-#define HM_BACK_SIZE 17.0f
-#define HM_BACK_H 46.0f
-
-// the player and their friends, down the right
-#define HM_SIDE_W 306.0f     // retail's column is 370; a little under it reads calmer
-#define HM_SIDE_RIGHT 64.0f
-#define HV_SOCIAL_W 80.0f  // [ioquakelive] the main menu's social strip, folded (10 U)
-
 // the painting's shape
 #define HM_PAINTING_ASPECT (3122.0f / 1344.0f)
 
@@ -445,196 +417,178 @@ void UI_Home_Banner(void) {
 
 THE MAIN MENU
 
-Retail's #main-menu, with the friends column moved to the right of the menu where
-the painting leaves room. The list is retail's whole: what this build cannot do
-yet is listed all the same, marked "soon" and inert.
+[QL] Retail's #main-menu (web.pak src/home.js and css/main.css), in its page's pixels at 1920x1080:
+a column 20% wide at 4% from the left, black at 0.8, with the logo and the menu in Handel Gothic
+24pt set to the right; the Ranger standing at 24%; on the right the player's card, the Friends and
+Lobby switch and the list under it; and the legal notice the first time the menu is up.
 
 ===============================================================================
 */
 
+#define HM_ITEM_FONT 32.0f    // 24pt
+#define HM_ITEM_PAD 16.0f     // padding: 0.5em
+#define HM_ITEM_LINE 51.2f    // skeleton's line-height, 1.6
+#define HM_ITEM_H (HM_ITEM_LINE + 2.0f * HM_ITEM_PAD)
+#define HM_ITEM_BORDER 3.0f
+#define HM_BACK_GAP 32.0f     // a.back: margin-top 1em
+#define HM_LOGO_GAP 4.5f      // the logo is inline: its line runs 4.5px past it, measured
+#define HM_CARD_TOP 75.0f
+#define HM_CARD_H 75.0f
+#define HM_CARD_PAD 7.5f      // padding: 0.5em
+#define HM_SELECTOR_TOP 155.0f
+#define HM_SELECTOR_H 25.0f
+#define HM_LIST_TOP 183.0f
+#define HM_FRIEND_H 42.0f
+#define HM_LEGALS_MS 5000     // setTimeout(this.skipLegals, 5000)
+#define HM_LEGALS_FADE 500    // .legals-leave: opacity .5s
+#define HM_TEXT 15.0f
+
+static const vec4_t hmBlack80 = {0.0f, 0.0f, 0.0f, 0.8f};
+static const vec4_t hmBlack30 = {0.0f, 0.0f, 0.0f, 0.3f};
+static const vec4_t hmWhite = {1.0f, 1.0f, 1.0f, 1.0f};
+static const vec4_t hmNameGrey = {106 / 255.0f, 106 / 255.0f, 106 / 255.0f, 1.0f};  // .name i
+
 typedef struct {
     const char* title;
-    const char* note;  // the line under it
-    int nav;           // the page it opens, or -1
-    int submenu;       // the list it opens instead, or -1
-    qboolean soon;     // listed, but this build has not got it
+    int nav;          // the page it opens, or -1
+    int submenu;      // the list it opens, or -1
+    const char* url;  // what it opens where Steam's overlay would
+    qboolean back;    // a.back, a line further down
 } hmItem_t;
 
-
+// src/home.js's menu. Career Stats and Recent Matches came off Quake Live's stats servers, which
+// are gone, so the Statistics list keeps Replays
 static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
     {
-        {"Play", "Start a match, or train with Crash", -1, HM_MENU_PLAY, qfalse},
-        {"Statistics", "Your career, your matches, your replays", -1, HM_MENU_STATS, qfalse},
-        {"Community", "The Workshop and the Steam community", -1, HM_MENU_COMMUNITY, qfalse},
-        {"Settings", "Controls, video, sound and your player", HM_NAV_SETTINGS, -1, qfalse},
-        {"Quit", "Leave QUAKE LIVE", HM_NAV_QUIT, -1, qfalse},
+        {"Play", -1, HM_MENU_PLAY, NULL, qfalse},
+        {"Statistics", -1, HM_MENU_STATS, NULL, qfalse},
+        {"Steam Workshop", -1, -1, "http://steamcommunity.com/app/282440/workshop", qfalse},
+        {"Steam Community", -1, -1, "http://steamcommunity.com/app/282440", qfalse},
+        {"Settings", HM_NAV_SETTINGS, -1, NULL, qfalse},
+        {"Quit", HM_NAV_QUIT, -1, NULL, qfalse},
     },
     {
-        {"Match Browser", "Find a server to play on", HM_NAV_BROWSER, -1, qfalse},
-        {"Start Match", "Pick an arena, a game type and bots", HM_NAV_PLAY, -1, qfalse},
-        {"Training Center", "Crash Course, strafe and rocket jump practice", HM_NAV_TRAINING, -1, qfalse},
-        {"Back", NULL, -1, HM_MENU_MAIN, qfalse},
-        {NULL, NULL, -1, -1, qfalse},
-        {NULL, NULL, -1, -1, qfalse},
+        {"Match Browser", HM_NAV_BROWSER, -1, NULL, qfalse},
+        {"Start Match", HM_NAV_PLAY, -1, NULL, qfalse},
+        {"Training Center", HM_NAV_TRAINING, -1, NULL, qfalse},
+        {"Back", -1, HM_MENU_MAIN, NULL, qtrue},
     },
     {
-        {"Career Stats", "Everything you have played", -1, -1, qtrue},
-        {"Recent Matches", "How the last ones went", -1, -1, qtrue},
-        {"Replays", "Watch the matches you recorded", HM_NAV_REPLAYS, -1, qfalse},
-        {"Back", NULL, -1, HM_MENU_MAIN, qfalse},
-        {NULL, NULL, -1, -1, qfalse},
-        {NULL, NULL, -1, -1, qfalse},
-    },
-    {
-        {"Steam Workshop", "Maps and models other players made", -1, -1, qtrue},
-        {"Steam Community", "The game's hub", -1, -1, qtrue},
-        {"Back", NULL, -1, HM_MENU_MAIN, qfalse},
-        {NULL, NULL, -1, -1, qfalse},
-        {NULL, NULL, -1, -1, qfalse},
+        {"Replays", HM_NAV_REPLAYS, -1, NULL, qfalse},
+        {"Back", -1, HM_MENU_MAIN, NULL, qtrue},
     },
 };
 
+static struct {
+    qboolean loaded;
+    qhandle_t bg, vignette, logo, ranger, idLogo, bethLogo;
+    qboolean legalsViewed;  // window.legals_viewed: once a session
+    int legalsStart;
+    int legalsLeave;        // when it started to fade, 0 while it has not
+    int panel;              // 0 friends, 1 lobby
+} hr;
 
-
-static float UI_Home_ColumnX(void) {
-    return HM_COL_X;
+static void UI_Home_LoadRetail(void) {
+    if (hr.loaded) {
+        return;
+    }
+    hr.loaded = qtrue;
+    hr.bg = trap_R_RegisterShaderNoMip("webui/img/bg.jpg");
+    hr.vignette = trap_R_RegisterShaderNoMip("ui/ioql/vignette.png");
+    hr.logo = trap_R_RegisterShaderNoMip("webui/img/logo.png");
+    hr.ranger = trap_R_RegisterShaderNoMip("webui/img/characters/ranger.png");
+    hr.idLogo = trap_R_RegisterShaderNoMip("webui/img/id-logo-footer.png");
+    hr.bethLogo = trap_R_RegisterShaderNoMip("webui/img/beth-logo-footer.png");
 }
 
 /*
 ===============
-UI_Home_DrawShade
+UI_Home_RetailBackdrop
 
-The page's colour under the list, thinning out towards the figure, and a little
-of it along the top and, for the notice, along the bottom.
+[QL] The #app's background: bg.jpg from the page's corner at its own size, repeated, under the
+radial gradient; over a match, body.ingame's rgba(19,68,92,0.7) and the game behind it
 ===============
 */
-static void UI_Home_DrawShade(void) {
+void UI_Home_RetailBackdrop(void) {
+    static const vec4_t ingame = {19 / 255.0f, 68 / 255.0f, 92 / 255.0f, 0.7f};
     float top = -smTop / smScale;
-    float full = smBottom - top;
-    float solid = UI_Home_ColumnX() + HM_COL_W - 40.0f;
-    vec4_t shade;
+    float x, y;
 
-    VectorCopy(smPage, shade);
-    shade[3] = 0.92f;
-    SM_Fill(-1, top, solid + 1, full, shade, NULL);
-    UI_Home_WashAcross(solid, 520.0f, smPage, 0.92f, 0.0f);
-    UI_Home_Wash(top, 150.0f, smPage, 0.55f, 0.0f);
-    // [ioquakelive] The footer is a flat band now that it carries the marks strip: the old
-    // gradient faded out exactly where they sit, leaving them half lit over the artwork. The
-    // gradient ends above them and what is left below is even.
-    UI_Home_Wash(smBottom - 300.0f, 190.0f, smPage, 0.0f, 0.9f);
-    {
-        vec4_t band;
-
-        VectorCopy(smPage, band);
-        band[3] = 0.9f;
-        SM_Fill(-1, smBottom - 110.0f, smVW + 2, 111.0f, band, NULL);
+    UI_Home_LoadRetail();
+    if (UI_Home_InMatch()) {
+        SM_Fill(-1, top, smVW + 2, smBottom - top + 1, ingame, NULL);
+        return;
+    }
+    SM_FillScreen(smPage);
+    if (hr.bg) {
+        for (y = top; y < smBottom; y += 1080.0f) {
+            for (x = 0; x < smVW; x += 1920.0f) {
+                SM_Pic(x, y, 1920.0f, 1080.0f, hr.bg, NULL);
+            }
+        }
+    }
+    if (hr.vignette) {
+        SM_Pic(0, top, smVW, smBottom - top, hr.vignette, NULL);
     }
 }
 
-/*
-===============
-UI_Home_DrawColumn
+static float UI_Home_ColX(void) {
+    return smVW * 0.04f;
+}
 
-The logo, then the list with its heading. An entry is its title in bold upper case
-and a line of what it does; under the cursor the title turns Quake Live yellow and
-a 3px rule stands at the left, which is what .nav-column a:hover does with its
-border. What this build has not got is dimmed and says so.
-===============
-*/
+static float UI_Home_ColW(void) {
+    return smVW * 0.20f;
+}
+
+// where the first entry of the list starts: under the logo and its 15% margins
+static float UI_Home_ItemsTop(void) {
+    float colW = UI_Home_ColW();
+
+    return -smTop / smScale + colW * 0.15f + colW * 0.9f * (485.0f / 1920.0f) + colW * 0.15f + HM_LOGO_GAP;
+}
+
 static void UI_Home_DrawColumn(void) {
-    float x = UI_Home_ColumnX();
-    float y = HM_LIST_Y;
-    float panelTop, panelH;
-    char heading[MAX_CVAR_VALUE_STRING];
-    int i, rows = 0;
+    float top = -smTop / smScale;
+    float colX = UI_Home_ColX();
+    float colW = UI_Home_ColW();
+    float right = colX + colW - HM_ITEM_PAD - HM_ITEM_BORDER;
+    float y = UI_Home_ItemsTop();
+    int i;
 
-    if (hm2.logo) {
-        SM_Pic(x - 56.0f * (HM_LOGO_W / 512.0f), HM_LOGO_Y, HM_LOGO_W, HM_LOGO_W * 0.25f, hm2.logo, NULL);
-    }
-
-    (void)rows;
-    (void)panelTop;
-    (void)panelH;
-
-    // a submenu's list names itself; the main one does not need to, the player panel on the
-    // right already says it
-    if (hm2.menu != HM_MENU_MAIN) {
-        Q_strncpyz(heading,
-                   hmMenus[HM_MENU_MAIN][hm2.menu == HM_MENU_PLAY ? 0 : hm2.menu == HM_MENU_STATS ? 1 : 2].title,
-                   sizeof(heading));
-        SM_Label(x, SM_Baseline(FONT_SANS, 12, y, 18), 12, smMuted, heading, 1.8f);
-        y += HM_HEADING_H;
+    SM_Fill(colX, top, colW, smBottom - top + 1, hmBlack80, NULL);
+    if (hr.logo) {
+        SM_Pic(colX + colW * 0.05f, top + colW * 0.15f, colW * 0.9f, colW * 0.9f * (485.0f / 1920.0f), hr.logo, NULL);
     }
 
     for (i = 0; i < HM_MAX_ITEMS; i++) {
         const hmItem_t* item = &hmMenus[hm2.menu][i];
         qboolean over;
+        float w;
 
         if (!item->title) {
             break;
         }
-        over = SM_Over(HM_HIT_ITEM, i) && !item->soon;
-
-        // [ioquakelive] All that marks where you are is a thin bar at the left edge and the
-        // title in gold. No plate, no box: a six entry menu over artwork needs nothing more.
+        if (item->back) {
+            y += HM_BACK_GAP;
+        }
+        over = SM_Over(HM_HIT_ITEM, i);
         if (over) {
-            SM_Fill(x - HM_RULE_GAP, y + 4, 3, HM_ITEM_SIZE + 4, smText, NULL);
+            SM_Fill(colX, y, colW, HM_ITEM_H, hmBlack30, NULL);
+            SM_Fill(colX + colW - HM_ITEM_BORDER, y, HM_ITEM_BORDER, HM_ITEM_H, smGold, NULL);
         }
-
-        // [ioquakelive] no arrow at the right of the entry under the cursor: the gold of the
-        // title says enough
-        SM_Label(x, SM_Baseline(FONT_SANS, HM_ITEM_SIZE, y, HM_ITEM_SIZE + 12), HM_ITEM_SIZE,
-                 item->soon ? smSubtle : over ? smText : smTextSoft, item->title, HM_ITEM_SPACING);
-        if (item->soon) {
-            float tw = SM_LabelWidth(HM_ITEM_SIZE, item->title, HM_ITEM_SPACING);
-
-            SM_Label(x + tw + 16, SM_Baseline(FONT_SANS, 11, y + 10, 18), 11, smSubtle, "soon", 1.6f);
-        }
-
-        // The description only shows on the entry under the cursor. Six of them lit at once was
-        // a lot of text for names that explain themselves, and the space held for it is not
-        // noticeable because a row is always the same height.
-        if (item->note && over) {
-            SM_Text(x, SM_Baseline(FONT_SANS, HM_NOTE_SIZE, y + HM_ITEM_SIZE + 10, 18), FONT_SANS, HM_NOTE_SIZE,
-                    smTextSoft, item->note, SM_Fit(FONT_SANS, HM_NOTE_SIZE, item->note, HM_COL_W), qfalse);
-        }
-        if (!item->soon) {
-            SM_Hit(x - HM_RULE_GAP, y, HM_COL_W, HM_ROW_H - 8, HM_HIT_ITEM, i, NULL);
-        }
-        y += HM_ROW_H;
+        w = SM_Advance(FONT_DEFAULT, HM_ITEM_FONT, item->title, -1);
+        SM_Text(right - w, SM_Baseline(FONT_DEFAULT, HM_ITEM_FONT, y + HM_ITEM_PAD, HM_ITEM_LINE), FONT_DEFAULT,
+                HM_ITEM_FONT, over ? smGold : hmWhite, item->title, -1, qfalse);
+        SM_Hit(colX, y, colW, HM_ITEM_H, HM_HIT_ITEM, i, NULL);
+        y += HM_ITEM_H;
     }
 }
 
-// the panels at the right sit over the painting, so they are the page colour with a
-// little of it left showing rather than a flat block
-static const float* UI_Home_SidePanel(void) {
-    static vec4_t panel;
-
-    VectorCopy(smPanel, panel);
-    panel[3] = 0.88f;
-    return panel;
-}
-
-/*
-===============
-UI_Home_DrawProfile
-
-Retail's ProfileCard: the Steam avatar, the name you play under and a line of
-career numbers. There is no Steam session here yet, so the avatar is the icon of
-the model you wear and the numbers say where they will come from. Under it, the
-friends, as its FriendList has them: an avatar, a name and what they are doing.
-===============
-*/
-static void UI_Home_DrawProfile(float x, float y, float w) {
-    char name[MAX_CVAR_VALUE_STRING];
+// the model you wear stands in for the Steam avatar
+static qhandle_t UI_Home_Face(void) {
     char model[MAX_QPATH];
     char* slash;
-    float pic = 52.0f;
-    float h = 88.0f;
 
-    trap_Cvar_VariableStringBuffer("name", name, sizeof(name));
-    Q_CleanStr(name);
     trap_Cvar_VariableStringBuffer("model", model, sizeof(model));
     slash = strchr(model, '/');
     if (slash) {
@@ -647,273 +601,34 @@ static void UI_Home_DrawProfile(float x, float y, float w) {
         Q_strncpyz(hm2.faceModel, model, sizeof(hm2.faceModel));
         hm2.face = trap_R_RegisterShaderNoMip(va("models/players/%s/icon_default", model));
     }
-
-    SM_Fill(x, y, w, h, UI_Home_SidePanel(), NULL);
-    if (hm2.face) {
-        SM_Pic(x + 16, y + (h - pic) * 0.5f, pic, pic, hm2.face, NULL);
-    }
-    SM_Label(x + 16 + pic + 14, SM_Baseline(FONT_SANS, 16, y + 18, 22), 16, smText,
-             name[0] ? name : "Player", 0.4f);
-    SM_Text(x + 16 + pic + 14, SM_Baseline(FONT_SANS, 12, y + 44, 18), FONT_SANS, 12, smSubtle,
-            "Steam and quakeclub.com soon", -1, qfalse);
-}
-
-static float UI_Home_DrawFriends(float x, float y, float w) {
-    static const char* const rows[3] = {"Your Steam friends", "Who is in a match", "Who is in a lobby"};
-    float ry = y + 40.0f;
-    float h = 40.0f + 3 * 44.0f + 34.0f;
-    int i;
-
-    SM_Fill(x, y, w, h, UI_Home_SidePanel(), NULL);
-    SM_Label(x + 16, SM_Baseline(FONT_SANS, 11, y + 12, 16), 11, smMuted, "Friends", 1.8f);
-    SM_Fill(x + 16, y + 33, w - 32, 1, smBorder, NULL);
-
-    for (i = 0; i < 3; i++) {
-        SM_Fill(x + 16, ry + 8, 28, 28, smRaised, NULL);
-        SM_Text(x + 54, SM_Baseline(FONT_SANS, 13, ry + 12, 20), FONT_SANS, 13, smMuted, rows[i], -1, qfalse);
-        ry += 44.0f;
-    }
-    SM_Text(x + 16, SM_Baseline(FONT_SANS, 11, y + h - 28, 18), FONT_SANS, 11, smSubtle,
-            "Once Steam is wired up", -1, qfalse);
-    return h;
-}
-
-static void UI_Home_DrawSide(void) {
-    float w = HM_SIDE_W;
-    float x = smVW - w - HM_SIDE_RIGHT;
-    // [ioquakelive] top right, level with the logo: with the cards below, halfway down it
-    // overlapped the last one
-    float y = 104.0f;
-
-    if (x < UI_Home_ColumnX() + HM_COL_W + 60.0f) {
-        return;  // a narrow screen keeps the menu alone
-    }
-    UI_Home_DrawProfile(x, y, w);
-    UI_Home_DrawFriends(x, y + 88.0f + 14.0f, w);
+    return hm2.face;
 }
 
 /*
 ===============
-UI_Home_DrawMarks
+UI_Home_DrawCard
 
-[ioquakelive] The footer strip: QUAKE III ARENA, ioquake3, QUAKE LIVE and Quake
-Club, side by side the way a sponsor footer runs, because they are credits too.
-All four are logos turned white with alpha by code/tools/make_menu_marks.py and
-tinted to the same grey, so the row reads as one thing.
-
-The sizes do not come from the images: each is drawn at the height that makes it
-weigh the same as the others, taken from that script's preview.
+[QL] ProfileCard (css .profile-card): the avatar as tall as the card's inside and the name beside
+it, in a black 0.8 box 75px high at 75px from the top, 20% wide at 4% from the right
 ===============
 */
-typedef struct {
-    const char* shader;
-    float w, h;
-} hmMark_t;
+static void UI_Home_DrawCard(float x, float y, float w) {
+    char name[MAX_CVAR_VALUE_STRING];
+    float pic = HM_CARD_H - 2.0f * HM_CARD_PAD;
+    float tx = x + HM_CARD_PAD;
+    qhandle_t face = UI_Home_Face();
 
-static const hmMark_t hmMarks[] = {
-    {"ui/ioql/mark_quake3", 112.0f, 80.0f},
-    {"ui/ioql/mark_ioquake3", 97.0f, 40.0f},
-    {"ui/ioql/mark_quakelive", 149.0f, 38.0f},
-    {"ui/ioql/mark_quakeclub", 96.0f, 75.0f},
-};
-
-#define HM_MARK_GAP 54.0f
-#define HM_MARK_H 80.0f  // the tallest one: the strip centres on that band
-
-// [ioquakelive] what is left to the left of the social column
-static float UI_Home_MainW(void) {
-    return smVW - HV_SOCIAL_W;
-}
-
-// [ioquakelive] the content axis: what is left between the menu column and the friends strip.
-// The server row and the credit logos centre on that, not on the screen, because the column
-// takes up the left side.
-static float UI_Home_ContentX(void) {
-    return HM_COL_BAND;
-}
-
-static float UI_Home_ContentCx(void) {
-    return UI_Home_ContentX() + (UI_Home_MainW() - UI_Home_ContentX()) * 0.5f;
-}
-
-// [ioquakelive] centred on cx, not always in the main area: they now sit over the notice
-static void UI_Home_DrawMarks(float cx, float y, float h) {
-    static const vec4_t tint = {1.0f, 1.0f, 1.0f, 0.55f};
-    static qhandle_t shaders[ARRAY_LEN(hmMarks)];
-    static qboolean loaded;
-    float scale = (h - 18.0f) / HM_MARK_H;
-    float total = 0;
-    float x;
-    int i;
-
-    if (!loaded) {
-        loaded = qtrue;
-        for (i = 0; i < (int)ARRAY_LEN(hmMarks); i++) {
-            shaders[i] = trap_R_RegisterShaderNoMip(hmMarks[i].shader);
-        }
+    SM_Fill(x, y, w, HM_CARD_H, hmBlack80, NULL);
+    if (face) {
+        SM_Pic(x + HM_CARD_PAD, y + HM_CARD_PAD, pic, pic, face, NULL);
+        tx += pic + HM_CARD_PAD;
     }
-    for (i = 0; i < (int)ARRAY_LEN(hmMarks); i++) {
-        total += (hmMarks[i].w + (i ? HM_MARK_GAP : 0)) * scale;
-    }
-    x = cx - total * 0.5f;
-
-    for (i = 0; i < (int)ARRAY_LEN(hmMarks); i++) {
-        float mw = hmMarks[i].w * scale;
-        float mh = hmMarks[i].h * scale;
-
-        if (shaders[i]) {
-            SM_PicColor(x, y + (h - mh) * 0.5f, mw, mh, shaders[i], tint, NULL);
-        }
-        x += mw + HM_MARK_GAP * scale;
-    }
+    trap_Cvar_VariableStringBuffer("name", name, sizeof(name));
+    SM_Text(tx, SM_Baseline(FONT_SANS, HM_TEXT, y + HM_CARD_PAD, 24.0f), FONT_SANS, HM_TEXT, smText,
+            name[0] ? name : "Player", SM_Fit(FONT_SANS, HM_TEXT, name, x + w - tx - HM_CARD_PAD), qfalse);
 }
 
-/*
-===============================================================================
-
-THE MAIN MENU
-
-[ioquakelive] Minimal and laid out on a grid: the logo on top, the sections and, in
-the middle, Quake Live's emblem cropped by the screen edge, which is the play
-button; a social strip on the right; the credits below. No solid bars: the backdrop
-darkens at top and bottom so what sits over it can be read.
-
-The grid is an equal margin on both sides (HV_EDGE), two strips of the same height
-top and bottom (HV_BAR_H), which are also the social strip's profile and Quit rows,
-and the centre of the screen as the one axis.
-
-===============================================================================
-*/
-
-#define HV_U 8.0f             // the grid's unit: everything is a multiple of it
-#define HV_SOCIAL_OPEN_W 360.0f
-#define HV_SOCIAL_MS 55.0f    // the transitions' time constant
-#define HV_AVATAR 52.0f
-#define HV_BAR_H (10.0f * HV_U)   // the bar and the footer are the same height
-#define HV_FOOT_H (10.0f * HV_U)
-#define HV_GUTTER (40.0f * HV_U)  // the room either side of the bar: logo and Quit
-#define HV_TAB_SLOT (17.0f * HV_U)
-#define HV_PLAY_SLOT (24.0f * HV_U)
-#define HV_TABS_W (4.0f * HV_TAB_SLOT + HV_PLAY_SLOT)
-#define HV_BAR_W (HV_TABS_W + 2.0f * HV_GUTTER)
-#define HV_BAR_R (3.0f * HV_U)    // the bar's bottom corners
-#define HV_PAD (5.0f * HV_U)      // the room inside the bar, and the footer's margins
-#define HV_EDGE (5.0f * HV_U)
-#define HV_LOGO_H (7.0f * HV_U)
-#define HV_TAB_SIZE 17.0f
-#define HV_TAB_SPACING 2.2f
-#define HV_PLAY_TOP_W (23.0f * HV_U)  // the trapezium: almost all of its 24 U cell
-#define HV_PLAY_BOT_W (20.0f * HV_U)
-#define HV_PLAY_DROP (1.0f * HV_U)
-#define HV_PLAY_SIZE 17.0f
-#define HV_PLAY_SPACING 4.0f
-#define HV_MARKS_H (9.0f * HV_U)  // the logo strip, above the notice
-#define HV_TEXT 14.0f         // the small type: legal notice and the strip's text
-
-// [ioquakelive] the grey of the pieces is smPanel, the palette's own: the front page has none
-// of its own. A veil goes over the artwork, so the backdrop stays dark and what is on top
-// reads.
-static const vec4_t hvVeil = {0.0f, 0.0f, 0.0f, 0.42f};
-
-typedef struct {
-    const char* title;
-    int nav;  // -1: the page you are already on
-} hvTab_t;
-
-// either side of the emblem, two and two
-static const hvTab_t hvTabsLeft[] = {{"Home", -1}, {"Training", HM_NAV_TRAINING}};
-static const hvTab_t hvTabsRight[] = {{"Replays", HM_NAV_REPLAYS}, {"Settings", HM_NAV_SETTINGS}};
-
-static struct {
-    float social;  // 0 plegada, 1 desplegada
-    float play;    // 0 quieto, 1 bajo el cursor
-    int lastTime;
-} hv;
-
-static float UI_Home_Top(void) {
-    return -smTop / smScale;
-}
-
-// the page's bottom edge: it rises when the match-in-progress notice is up
-static float UI_Home_Bottom(void) {
-    return smBottom - (UI_Home_InMatch() ? 38.0f : 0.0f);
-}
-
-// eases a value towards its target on an exponential curve, the same at any framerate
-static float UI_Home_Ease(float value, float target, float dt) {
-    return value + (target - value) * (1.0f - (float)exp(-dt / HV_SOCIAL_MS));
-}
-
-static float UI_Home_Smooth(float t) {
-    return t * t * (3.0f - 2.0f * t);
-}
-
-// the baseline of text centred in an HV_BAR_H tall strip starting at y
-static float UI_Home_BarBaseline(float size, float y) {
-    return SM_Baseline(FONT_SANS, size, y + (HV_BAR_H - size * 1.4f) * 0.5f, size * 1.4f);
-}
-
-// the flat band behind the column, so its text reads over the artwork
-static void UI_Home_DrawColumnBand(void) {
-    vec4_t band;
-
-    VectorCopy(smPanel, band);
-    band[3] = 0.88f;
-    SM_Fill(-1, UI_Home_Top(), HM_COL_BAND, UI_Home_Bottom() - UI_Home_Top() + 1, band, NULL);
-}
-
-// right at the bottom, over the artwork and with no container: the version on the left, the
-// logos in the middle and the legal notice on the right, all three on one line. The logos used
-// to sit in a band of their own further up, which is what did not work.
-static void UI_Home_DrawFooter(void) {
-    static const char* const notice =
-        "QUAKE LIVE (c) 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
-    float bottom = UI_Home_Bottom();
-    float y = bottom - HV_FOOT_H;
-    float baseline = SM_Baseline(FONT_SANS, HV_TEXT, y + (HV_FOOT_H - HV_TEXT * 1.4f) * 0.5f, HV_TEXT * 1.4f);
-    float w = SM_Advance(FONT_SANS, HV_TEXT, notice, -1);
-
-    // the logos sit right above the notice and centred on it, so the footer is one block on the
-    // right instead of three loose things
-    SM_Text(UI_Home_MainW() - HV_EDGE - w, baseline, FONT_SANS, HV_TEXT, smSubtle, notice, -1, qfalse);
-    UI_Home_DrawMarks(UI_Home_MainW() - HV_EDGE - w * 0.5f, y - HV_MARKS_H, HV_MARKS_H);
-}
-
-/*
-===============================================================================
-
-THE SOCIAL STRIP
-
-[ioquakelive] The friends list, modelled on CS2's: folded, a thin column on the
-right with your own avatar and the friends' slots; with the cursor over it, it
-unfolds leftwards over the page, which darkens, and the names appear.
-
-The friends are Steam's. In retail this list was a web page, so there is nothing to
-mirror: the data comes from the Steam API and the shape is ours. Each one shows an
-initial, a dot with their state and, open, their name and what they are doing,
-sorted the way CS2 sorts them. A click joins the friend's server, or opens their
-Steam profile when they are on none.
-
-The avatars are missing: Steam hands them over as raw pixels and the renderer
-cannot take an image built in memory, so each carries its initial instead.
-
-===============================================================================
-*/
-#define HV_MAX_FRIENDS 32
-#define HV_FRIEND_ROW (HV_AVATAR + 14.0f)
-#define HV_FRIEND_HEAD 34.0f  // the height of the "Friends" title, above the first row
-
-// the list, re-read every so often: asking Steam for it every frame would be hundreds of
-// calls for nothing, since a friend does not change state that often
-static struct {
-    uiFriend_t list[HV_MAX_FRIENDS];
-    int index[HV_MAX_FRIENDS];  // their place in Steam's list, which is what actions go by
-    int count;                  // how many made it into the list
-    int online;                 // how many are online in total
-    int updated;
-} hvf;
-
-// CS2's order: first whoever can be joined, last whoever is not looking
+// CS2's order, which Steam's list has no opinion on: whoever can be joined, then the rest
 static int UI_Home_FriendRank(const uiFriend_t* f) {
     if (f->server) {
         return 0;
@@ -927,6 +642,17 @@ static int UI_Home_FriendRank(const uiFriend_t* f) {
     return 3;
 }
 
+#define HV_MAX_FRIENDS 32
+
+// the list, re-read every so often: asking Steam for it every frame would be hundreds of calls
+// for nothing, since a friend does not change state that often
+static struct {
+    uiFriend_t list[HV_MAX_FRIENDS];
+    int index[HV_MAX_FRIENDS];  // their place in Steam's list, which is what actions go by
+    int count;
+    int updated;
+} hvf;
+
 static void UI_Home_FriendRefresh(void) {
     int total;
     int i;
@@ -936,7 +662,6 @@ static void UI_Home_FriendRefresh(void) {
     }
     hvf.updated = uiInfo.uiDC.realTime ? uiInfo.uiDC.realTime : 1;
     hvf.count = 0;
-    hvf.online = 0;
 
     total = trap_SteamFriendCount();
     for (i = 0; i < total; i++) {
@@ -945,20 +670,15 @@ static void UI_Home_FriendRefresh(void) {
         int j;
 
         if (!trap_SteamFriendGet(i, &fr) || fr.state == 0) {
-            continue;  // offline friends are not shown, same as on the console
+            continue;
         }
-        hvf.online++;
-
         rank = UI_Home_FriendRank(&fr);
         if (hvf.count == HV_MAX_FRIENDS) {
-            // full: it only gets in by displacing one that matters less
             if (rank >= UI_Home_FriendRank(&hvf.list[hvf.count - 1])) {
                 continue;
             }
             hvf.count--;
         }
-
-        // sorted insert: the list is short, so it needs no sorting afterwards
         for (j = hvf.count; j > 0 && UI_Home_FriendRank(&hvf.list[j - 1]) > rank; j--) {
             hvf.list[j] = hvf.list[j - 1];
             hvf.index[j] = hvf.index[j - 1];
@@ -996,255 +716,147 @@ static const char* UI_Home_FriendDoing(const uiFriend_t* f) {
     }
 }
 
-static const float* UI_Home_FriendDot(const uiFriend_t* f) {
-    if (f->sameGame) {
-        return smSuccess;
-    }
-    if (f->playing) {
-        return smGold;
-    }
-    if (f->state == 1) {
-        return smText;
-    }
-    return smMuted;
-}
-
 /*
 ===============
-UI_Home_FriendInitial
+UI_Home_DrawFriends
 
-The name's initial, which is what goes in the box where the avatar would be. A Steam
-name can start with a letter of more than one byte, so the whole character is copied
-and not just its first byte, which would draw garbage.
+[QL] FriendList (css .friend-list): a section per friend, padded 5px, a darker row under the
+cursor, the avatar with a black border at the left and the name with what they are doing in
+grey. Steam hands avatars over as raw pixels the renderer cannot take, so the box carries the
+name's initial
 ===============
 */
-static void UI_Home_FriendInitial(const char* name, char* out, int size) {
-    unsigned char c = (unsigned char)name[0];
-    int len = 1;
-
-    if (!c) {
-        Q_strncpyz(out, "?", size);
-        return;
-    }
-    if (c >= 0xf0) {
-        len = 4;
-    } else if (c >= 0xe0) {
-        len = 3;
-    } else if (c >= 0xc0) {
-        len = 2;
-    }
-    if (len >= size) {
-        len = size - 1;
-    }
-    memcpy(out, name, len);
-    out[len] = '\0';
-    if (out[0] >= 'a' && out[0] <= 'z') {
-        out[0] -= 'a' - 'A';
-    }
-}
-
-/*
-===============
-UI_Home_DrawFriendRows
-
-One row per friend: the box with their initial and the dot with their state, which is
-all that shows while the strip is folded, and on opening it their name, what they are
-doing and what a click would do.
-===============
-*/
-static void UI_Home_DrawFriendRows(float x, float y, float w, float icon, float textX, float open, float bottom) {
-    int max = (int)((bottom - 20.0f - y) / HV_FRIEND_ROW);
+static void UI_Home_DrawFriends(float x, float y, float w, float h) {
+    static const vec4_t rowOver = {30 / 255.0f, 30 / 255.0f, 30 / 255.0f, 1.0f};
+    int max = (int)(h / HM_FRIEND_H);
     int i;
 
+    UI_Home_FriendRefresh();
     if (max > hvf.count) {
         max = hvf.count;
     }
     for (i = 0; i < max; i++) {
         const uiFriend_t* f = &hvf.list[i];
-        float ry = y + i * HV_FRIEND_ROW;
+        float ry = y + i * HM_FRIEND_H;
+        float box = HM_FRIEND_H - 10.0f;
         qboolean over = SM_Over(HM_HIT_FRIEND, hvf.index[i]);
         char initial[8];
-        vec4_t c;
+        int len = 1;
 
-        SM_Hit(x, ry - 7.0f, w + 1, HV_FRIEND_ROW, HM_HIT_FRIEND, hvf.index[i], NULL);
-        if (over && open > 0.05f) {
-            VectorCopy(smRaised, c);
-            c[3] = 0.9f * open;
-            SM_Fill(x + 1, ry - 7.0f, w, HV_FRIEND_ROW, c, NULL);
-        }
-
-        // the box with the initial, where the avatar would go
-        SM_Round(icon, ry, HV_AVATAR, HV_AVATAR, SM_RADIUS_SM, over ? smRaisedHover : smRaised, NULL);
-        UI_Home_FriendInitial(f->name, initial, sizeof(initial));
-        SM_Centered(icon + HV_AVATAR * 0.5f, SM_Baseline(FONT_SANS, 22.0f, ry + 13.0f, 26.0f), 22.0f,
-                    f->sameGame ? smText : smMuted, initial, qfalse);
-
-        // the state dot, the same one the player carries above
-        SM_Fill(icon + HV_AVATAR - 11, ry + HV_AVATAR - 11, 11, 11, smPage, NULL);
-        SM_Fill(icon + HV_AVATAR - 9, ry + HV_AVATAR - 9, 9, 9, UI_Home_FriendDot(f), NULL);
-
-        if (open <= 0.05f) {
-            continue;
-        }
-
-        VectorCopy(f->sameGame ? smText : smTextSoft, c);
-        c[3] = open;
-        SM_Text(textX, SM_Baseline(FONT_SANS, 15.0f, ry + 4.0f, 20.0f), FONT_SANS, 15.0f, c, f->name,
-                SM_Fit(FONT_SANS, 15.0f, f->name, w - HV_SOCIAL_W - 88.0f), qfalse);
-        VectorCopy(f->server ? smSuccess : smSubtle, c);
-        c[3] = open;
-        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, ry + 26.0f, 20.0f), FONT_SANS, HV_TEXT, c,
-                UI_Home_FriendDoing(f), -1, qfalse);
-
-        // what the click does, shown only under the cursor: the column reads clean and the
-        // action appears where it is about to be used
         if (over) {
-            const char* label = f->server ? "JOIN" : "PROFILE";
-            float qw = SM_LabelWidth(11.0f, label, 1.6f);
-
-            VectorCopy(f->server ? smGold : smMuted, c);
-            c[3] = open;
-            SM_Label(x + w - 16.0f - qw, SM_Baseline(FONT_SANS, 11.0f, ry + 20.0f, 14.0f), 11.0f, c, label, 1.6f);
+            SM_Fill(x, ry, w, HM_FRIEND_H, rowOver, NULL);
         }
-    }
-
-    // the ones that did not fit in the column
-    if (max < hvf.count && open > 0.05f) {
-        vec4_t c;
-
-        VectorCopy(smSubtle, c);
-        c[3] = open;
-        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + max * HV_FRIEND_ROW, 20.0f), FONT_SANS, HV_TEXT, c,
-                va("+%i more", hvf.count - max), -1, qfalse);
+        SM_Fill(x + 5, ry + 5, box, box, smPage, NULL);
+        SM_Fill(x + 7, ry + 7, box - 4, box - 4, smField, NULL);
+        if ((unsigned char)f->name[0] >= 0xf0) {
+            len = 4;
+        } else if ((unsigned char)f->name[0] >= 0xe0) {
+            len = 3;
+        } else if ((unsigned char)f->name[0] >= 0xc0) {
+            len = 2;
+        }
+        Q_strncpyz(initial, f->name[0] ? f->name : "?", len + 1);
+        SM_Text(x + 5 + (box - SM_Advance(FONT_SANS, HM_TEXT, initial, -1)) * 0.5f,
+                SM_Baseline(FONT_SANS, HM_TEXT, ry + 5, box), FONT_SANS, HM_TEXT, smText, initial, -1, qtrue);
+        SM_Text(x + 5 + box + 8, SM_Baseline(FONT_SANS, HM_TEXT, ry + 2, 20.0f), FONT_SANS, HM_TEXT, smText, f->name,
+                SM_Fit(FONT_SANS, HM_TEXT, f->name, w - box - 23), qfalse);
+        SM_Text(x + 5 + box + 8, SM_Baseline(FONT_SANS, 13.0f, ry + 20, 18.0f), FONT_SANS, 13.0f, hmNameGrey,
+                UI_Home_FriendDoing(f), -1, qfalse);
+        SM_Hit(x, ry, w, HM_FRIEND_H, HM_HIT_FRIEND, hvf.index[i], NULL);
     }
 }
 
-/*
-===============
-UI_Home_DrawSocial
-
-[ioquakelive] The social strip, like CS2's: folded it is a thin column with your avatar on top,
-the friends' slots and the exit below; when the cursor enters it unfolds leftwards over the
-page, which darkens, and the text appears. The avatars travel with the edge; the text fades in
-behind them.
-===============
-*/
-static void UI_Home_DrawSocial(float dt) {
-    char name[MAX_CVAR_VALUE_STRING];
-    char model[MAX_QPATH];
-    char* slash;
-    float top = UI_Home_Top();
-    float bottom = UI_Home_Bottom();
-    float open;
-    float w;
-    float x;
-    float y;
-    float icon;
-    float textX;
-    qboolean inside;
-    vec4_t c;
-
-    // it stays open while the cursor is over the strip, at whatever width it has at that moment
-    w = HV_SOCIAL_W + (HV_SOCIAL_OPEN_W - HV_SOCIAL_W) * UI_Home_Smooth(hv.social);
-    inside = smMX >= smVW - w && smMY >= top && smMY <= bottom;
-    hv.social = UI_Home_Ease(hv.social, inside ? 1.0f : 0.0f, dt);
-    open = UI_Home_Smooth(hv.social);
-    w = HV_SOCIAL_W + (HV_SOCIAL_OPEN_W - HV_SOCIAL_W) * open;
-    x = smVW - w;
-    icon = x + (HV_SOCIAL_W - HV_AVATAR) * 0.5f;
-    textX = x + HV_SOCIAL_W;
-
-    // the page darkens while the strip is open
-    if (open > 0.01f) {
-        c[0] = c[1] = c[2] = 0.0f;
-        c[3] = 0.55f * open;
-        SM_Fill(-1, top, x + 1, bottom - top + 1, c, NULL);
-    }
-
-    SM_Fill(x, top, w + 1, bottom - top + 1, smPanel, NULL);
-    SM_Fill(x, top, 1, bottom - top, smBorder, NULL);
-    SM_Hit(x, top, w + 1, bottom - top + 1, HM_HIT_SOCIAL, 0, NULL);
-
-    // at the top, on the sections' line: your avatar and, once open, your name
-    trap_Cvar_VariableStringBuffer("name", name, sizeof(name));
-    Q_CleanStr(name);
-    trap_Cvar_VariableStringBuffer("model", model, sizeof(model));
-    slash = strchr(model, '/');
-    if (slash) {
-        *slash = '\0';
-    }
-    if (!model[0]) {
-        Q_strncpyz(model, "sarge", sizeof(model));
-    }
-    if (Q_stricmp(model, hm2.faceModel)) {
-        Q_strncpyz(hm2.faceModel, model, sizeof(hm2.faceModel));
-        hm2.face = trap_R_RegisterShaderNoMip(va("models/players/%s/icon_default", model));
-    }
-    y = top + (HV_BAR_H - HV_AVATAR) * 0.5f;
-    if (hm2.face) {
-        SM_Pic(icon, y, HV_AVATAR, HV_AVATAR, hm2.face, NULL);
-    }
-    SM_Fill(icon + HV_AVATAR - 11, y + HV_AVATAR - 11, 11, 11, smPage, NULL);
-    SM_Fill(icon + HV_AVATAR - 9, y + HV_AVATAR - 9, 9, 9, smText, NULL);  // en linea
-    if (open > 0.05f) {
-        VectorCopy(smText, c);
-        c[3] = open;
-        SM_Label(textX, SM_Baseline(FONT_SANS, 17, y + 3, 24), 17, c, name[0] ? name : "Player", 0.4f);
-        VectorCopy(smTextSoft, c);
-        c[3] = open;
-        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 29, 20), FONT_SANS, HV_TEXT, c, "Online", -1, qfalse);
-    }
-
-    // the friends, as Steam gives them
-    y = top + HV_BAR_H + 12.0f;
-    UI_Home_FriendRefresh();
-
-    // the header: how many are online, to the right of the title
-    if (open > 0.05f) {
-        VectorCopy(smMuted, c);
-        c[3] = open;
-        SM_Label(textX, SM_Baseline(FONT_SANS, HV_TEXT, y, 20), HV_TEXT, c, "Friends", 2.0f);
-        if (hvf.online > 0) {
-            char text[32];
-
-            Com_sprintf(text, sizeof(text), "%i online", hvf.online);
-            VectorCopy(smSubtle, c);
-            c[3] = open;
-            SM_Text(x + w - 16.0f - SM_Advance(FONT_SANS, HV_TEXT, text, -1),
-                    SM_Baseline(FONT_SANS, HV_TEXT, y, 20), FONT_SANS, HV_TEXT, c, text, -1, qfalse);
-        }
-    }
-
-    y += HV_FRIEND_HEAD;
-    if (hvf.count > 0) {
-        UI_Home_DrawFriendRows(x, y, w, icon, textX, open, bottom);
-    } else if (open > 0.05f) {
-        VectorCopy(smSubtle, c);
-        c[3] = open;
-        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 2, 20), FONT_SANS, HV_TEXT, c,
-                hvf.online ? "Nobody online right now" : "No Steam friends here", -1, qfalse);
-        SM_Text(textX, SM_Baseline(FONT_SANS, HV_TEXT, y + 22, 20), FONT_SANS, HV_TEXT, c,
-                trap_SteamFriendCount() ? "" : "Steam is not running", -1, qfalse);
-    }
-}
-
-/*
-===============
-UI_Home_FriendClick
-
-A click on a friend: if they are on a Quake Live server it joins there, and if not it
-opens their Steam profile, which is all that can be done with them.
-===============
-*/
-static void UI_Home_FriendClick(int index) {
+static void UI_Home_DrawSide(void) {
+    static const char* const tabs[2] = {"Friends", "Lobby"};
+    float top = -smTop / smScale;
+    float w = smVW * 0.20f;
+    float x = smVW - smVW * 0.04f - w;
+    float tx = x;
+    float listH = (smBottom - top) * 0.5f;
     int i;
 
-    for (i = 0; i < hvf.count; i++) {
-        if (hvf.index[i] == index) {
-            trap_SteamFriendAction(index, hvf.list[i].server ? UI_FRIEND_JOIN : UI_FRIEND_PROFILE);
+    UI_Home_DrawCard(x, top + HM_CARD_TOP, w);
+
+    // .panel-selector: the two links, 10px of padding each and 3px apart, and the space between
+    SM_Fill(x, top + HM_SELECTOR_TOP, w, HM_SELECTOR_H, hmBlack80, NULL);
+    for (i = 0; i < 2; i++) {
+        float tw = SM_Advance(FONT_SANS, HM_TEXT, tabs[i], -1);
+
+        SM_Text(tx + 10, SM_Baseline(FONT_SANS, HM_TEXT, top + HM_SELECTOR_TOP + 2, 20.0f), FONT_SANS, HM_TEXT, smGold,
+                tabs[i], -1, qfalse);
+        SM_Hit(tx, top + HM_SELECTOR_TOP, tw + 20, HM_SELECTOR_H, HM_HIT_TAB, i, NULL);
+        tx += tw + 20 + 3 + SM_Advance(FONT_SANS, HM_TEXT, " ", -1);
+    }
+
+    // .friend-list and .lobby: black 0.8, half the page high
+    SM_Fill(x, top + HM_LIST_TOP, w, listH, hmBlack80, NULL);
+    if (hr.panel == 0) {
+        UI_Home_DrawFriends(x, top + HM_LIST_TOP, w, listH);
+    } else {
+        SM_Centered(x + w * 0.5f, SM_Baseline(FONT_SANS, HM_TEXT, top + HM_LIST_TOP + 44.0f, 24.0f), HM_TEXT, smText,
+                    "Not in a lobby.", qfalse);
+    }
+}
+
+/*
+===============
+UI_Home_DrawLegals
+
+[QL] #legals: black over everything, the logo half the page wide 20% down, and at 84% the id and
+Bethesda logos with the notice in #666 under them. A click skips it, and it goes by itself after
+five seconds, fading out in half of one
+===============
+*/
+static void UI_Home_DrawLegals(void) {
+    static const char* const notice =
+        "QUAKE LIVE\xe2\x84\xa2 \xc2\xa9 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
+    float top = -smTop / smScale;
+    float alpha = 1.0f;
+    float lw = smVW * 0.5f;
+    float body = top + (smBottom - top) * 0.84f;
+    vec4_t black = {0, 0, 0, 1};
+    vec4_t tint = {1, 1, 1, 1};
+    vec4_t grey;
+    int now = uiInfo.uiDC.realTime;
+
+    if (hr.legalsViewed) {
+        return;
+    }
+    if (!hr.legalsStart) {
+        hr.legalsStart = now ? now : 1;
+    }
+    if (!hr.legalsLeave && now - hr.legalsStart >= HM_LEGALS_MS) {
+        hr.legalsLeave = now;
+    }
+    if (hr.legalsLeave) {
+        float t = (float)(now - hr.legalsLeave) / HM_LEGALS_FADE;
+
+        if (t >= 1.0f) {
+            hr.legalsViewed = qtrue;
             return;
         }
+        alpha = 0.99f - 0.98f * t * t;  // ease-in
     }
+
+    black[3] = alpha;
+    tint[3] = alpha;
+    Vector4Copy(smSubtle, grey);
+    grey[3] = alpha;
+
+    SM_Fill(-1, top, smVW + 2, smBottom - top + 1, black, NULL);
+    if (hr.logo) {
+        SM_PicColor((smVW - lw) * 0.5f, top + smVW * 0.2f, lw, lw * (485.0f / 1920.0f), hr.logo, tint, NULL);
+    }
+    // the two logos sit on one line with 12px each side and 30px over them, the id one 80x80 and
+    // Bethesda's 144x46, both on the line's bottom
+    if (hr.idLogo) {
+        SM_PicColor(smVW * 0.5f - 138.0f + 12.0f, body + 30.0f, 80.0f, 80.0f, hr.idLogo, tint, NULL);
+    }
+    if (hr.bethLogo) {
+        SM_PicColor(smVW * 0.5f - 30.0f + 12.0f, body + 64.0f, 144.0f, 46.0f, hr.bethLogo, tint, NULL);
+    }
+    SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, HM_TEXT, body + 146.0f, 24.0f), HM_TEXT, grey, notice, qfalse);
+    SM_Hit(0, top, smVW, smBottom - top, HM_HIT_SOCIAL, 0, NULL);
 }
 
 void UI_Home_Open(void) {
@@ -1260,26 +872,24 @@ void UI_Home_Open(void) {
 }
 
 void UI_Home_Paint(void) {
+    float top;
+
     SM_BeginFrame();
     UI_Home_LoadMenu();
+    UI_Home_LoadRetail();
+    top = -smTop / smScale;
 
-    // the frame's time, for the animations; clamped so that a stall does not make them jump
-    {
-        int now = uiInfo.uiDC.realTime;
-        float dt = hv.lastTime ? (float)(now - hv.lastTime) : 0.0f;
-
-        hv.lastTime = now;
-        dt = dt < 0 ? 0 : dt > 100.0f ? 100.0f : dt;
-
-        UI_Home_DrawBackground();
-        SM_Fill(-1, UI_Home_Top(), smVW + 2, smBottom - UI_Home_Top() + 1, hvVeil, NULL);
-        UI_Home_DrawColumnBand();
-        UI_Home_DrawColumn();
-        UI_Home_DrawFooter();
-        UI_Home_DrawSocial(dt);
+    UI_Home_RetailBackdrop();
+    // .character: position fixed, bottom 0, left 24%, at its own 1350x959
+    if (hr.ranger && !UI_Home_InMatch()) {
+        SM_Pic(smVW * 0.24f, smBottom - 959.0f, 1350.0f, 959.0f, hr.ranger, NULL);
     }
+    UI_Home_DrawColumn();
+    UI_Home_DrawSide();
+    (void)top;
 
     UI_Home_Banner();
+    UI_Home_DrawLegals();
     SM_EndFrame();
 }
 
@@ -1287,6 +897,13 @@ qboolean UI_Home_HandleKey(int key) {
     const smHit_t* hit;
 
     if (key & K_CHAR_FLAG) {
+        return qtrue;
+    }
+    // the legal notice takes the click that skips it, and nothing else goes through it
+    if (!hr.legalsViewed && hr.legalsStart) {
+        if (key == K_MOUSE1 && !hr.legalsLeave) {
+            hr.legalsLeave = uiInfo.uiDC.realTime ? uiInfo.uiDC.realTime : 1;
+        }
         return qtrue;
     }
     if (key == K_ESCAPE && hm2.menu != HM_MENU_MAIN) {
@@ -1300,25 +917,33 @@ qboolean UI_Home_HandleKey(int key) {
         return qtrue;
     }
     hit = SM_HitAt(smMX, smMY);
-    // [ioquakelive] the map row, the bar and the main menu's exit
-    if (hit && hit->type == HM_HIT_QUIT) {
-        UI_Home_Go(HM_NAV_QUIT);
+    if (!hit) {
         return qtrue;
     }
-    if (hit && hit->type == HM_HIT_FRIEND) {
-        UI_Home_FriendClick(hit->index);
+    if (hit->type == HM_HIT_FRIEND) {
+        int i;
+
+        for (i = 0; i < hvf.count; i++) {
+            if (hvf.index[i] == hit->index) {
+                trap_SteamFriendAction(hit->index, hvf.list[i].server ? UI_FRIEND_JOIN : UI_FRIEND_PROFILE);
+                break;
+            }
+        }
         return qtrue;
     }
-    if (!hit || hit->type != HM_HIT_ITEM) {
+    if (hit->type == HM_HIT_TAB) {
+        hr.panel = hit->index;
         return qtrue;
     }
-    {
+    if (hit->type == HM_HIT_ITEM) {
         const hmItem_t* item = &hmMenus[hm2.menu][hit->index];
 
         if (item->submenu >= 0) {
             hm2.menu = item->submenu;
         } else if (item->nav >= 0) {
             UI_Home_Go(item->nav);
+        } else if (item->url) {
+            trap_Sys_OpenURL(item->url);
         }
     }
     return qtrue;

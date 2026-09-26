@@ -27,29 +27,29 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "ui_web.h"
 
-// [ioquakelive] Every grey sits a few points up from where it started. smField is up further:
-// it is the slider's track and the fields' border, and it was worth the same as the panel, so
-// it could not be seen over one. The front page takes its grey from this palette rather than
-// one of its own, so the settings page and the rest share tones by construction.
-const vec4_t smPage = SM_RGB(18, 18, 20);
-const vec4_t smPanel = SM_RGB(30, 31, 33);
-const vec4_t smRaised = SM_RGB(42, 43, 46);
-const vec4_t smRaisedHover = SM_RGB(54, 55, 59);
-const vec4_t smBorder = SM_RGB(72, 74, 78);
-const vec4_t smField = SM_RGB(52, 53, 57);
+// [QL] web.pak css/main.css and skeleton.css: the panels (rgba(0,0,0,0.8), 35 rules), the fields
+// (rgba(15,15,15) on #333), a row under the cursor rgba(30,30,30), the slider's track #222, text
+// #DDD, #CCC, #999 and #666, and the yellow for what is chosen or under the cursor
+const vec4_t smPage = SM_RGB(0, 0, 0);
+const vec4_t smPanel = {0.0f, 0.0f, 0.0f, 0.8f};
+const vec4_t smRaised = SM_RGB(15, 15, 15);
+const vec4_t smRaisedHover = SM_RGB(30, 30, 30);
+const vec4_t smBorder = SM_RGB(51, 51, 51);
+const vec4_t smField = SM_RGB(34, 34, 34);
 const vec4_t smText = SM_RGB(221, 221, 221);
-const vec4_t smTextSoft = SM_RGB(190, 190, 190);
+const vec4_t smTextSoft = SM_RGB(204, 204, 204);
 const vec4_t smMuted = SM_RGB(153, 153, 153);
-const vec4_t smSubtle = SM_RGB(106, 106, 106);
-const vec4_t smPrimary = SM_RGB(226, 222, 214);
-const vec4_t smOnPrimary = SM_RGB(12, 12, 12);
+const vec4_t smSubtle = SM_RGB(102, 102, 102);
+const vec4_t smPrimary = SM_RGB(247, 209, 0);
+const vec4_t smOnPrimary = SM_RGB(0, 0, 0);
 const vec4_t smGold = SM_RGB(247, 209, 0);
 const vec4_t smRing = SM_RGB(247, 209, 0);
-const vec4_t smDanger = SM_RGB(239, 68, 68);
+const vec4_t smDanger = SM_RGB(204, 51, 51);
 const vec4_t smSuccess = SM_RGB(22, 163, 74);
 const vec4_t smSuccessHover = SM_RGB(21, 128, 61);
 const vec4_t smShadow = {0.0f, 0.0f, 0.0f, 0.48f};
 
+smLook_t smLook;
 float smScale;
 float smTop;
 float smVW;
@@ -131,6 +131,10 @@ void SM_Round(float x, float y, float w, float h, float r, const float* color, c
     float step;
     int slices, k;
 
+    // retail's web UI has square corners
+    if (smLook == SM_LOOK_RETAIL) {
+        r = 0;
+    }
     if (r > w * 0.5f) {
         r = w * 0.5f;
     }
@@ -324,7 +328,13 @@ TYPE
 static struct {
     qboolean tried;
     int regular, strong;  // font indices, -1 when Barlow is not there
-} smFonts = {qfalse, -1, -1};
+    // [ioquakelive] retail's own faces, out of the player's web.pak: -1 when it is not there
+    int sans, sansBold, handel, handelBold, awesome;
+} smFonts = {qfalse, -1, -1, -1, -1, -1, -1, -1};
+
+void SM_SetLook(smLook_t look) {
+    smLook = look;
+}
 
 void SM_LoadFonts(void) {
     // [ioquakelive] Barlow, from pak01, is what every page but the front page takes: pak00 carries
@@ -347,14 +357,45 @@ void SM_LoadFonts(void) {
         smFonts.regular = -1;
         smFonts.strong = -1;
     }
+
+    // [QL] the faces of retail's web UI (web.pak css/main.css @font-face): NotoSans for running
+    // text, HandelGothic for headings and the menus, in their real bold, and FontAwesome's icons.
+    // The webfonts the page itself loaded, which are TrueType: the .otf beside them are CFF
+    smFonts.sans = trap_R_Font_Register("webui/fonts/NotoSans-Regular.ttf");
+    smFonts.sansBold = trap_R_Font_Register("webui/fonts/NotoSans-Bold.ttf");
+    smFonts.handel = trap_R_Font_Register("webui/fonts/handelgothic-medium-webfont.ttf");
+    smFonts.handelBold = trap_R_Font_Register("webui/fonts/handelgothic-bold-webfont.ttf");
+    smFonts.awesome = trap_R_Font_Register("webui/fonts/fontawesome-webfont.ttf");
+    if (smFonts.sans < 0 || smFonts.sansBold < 0 || smFonts.handel < 0 || smFonts.handelBold < 0) {
+        Com_Printf("^3front end: no web.pak, so pak00's fonts stand in for retail's web UI\n");
+        smFonts.sans = smFonts.sansBold = smFonts.handel = smFonts.handelBold = -1;
+    }
 }
 
 // the face a page's font and weight come out in
 static int SM_Face(int font, qboolean bold) {
-    if (smFonts.regular >= 0 && (font == FONT_SANS || font == FONT_DEFAULT)) {
+    if (font != FONT_SANS && font != FONT_DEFAULT) {
+        return font;
+    }
+    if (smLook == SM_LOOK_OURS && smFonts.regular >= 0) {
         return (bold || font == FONT_DEFAULT) ? smFonts.strong : smFonts.regular;
     }
+    if (smLook == SM_LOOK_RETAIL && smFonts.sans >= 0) {
+        if (font == FONT_DEFAULT) {
+            return bold ? smFonts.handelBold : smFonts.handel;
+        }
+        return bold ? smFonts.sansBold : smFonts.sans;
+    }
     return font;
+}
+
+// whether a face has a bold of its own, or needs the second pass a pixel over
+static qboolean SM_HasBold(int face) {
+    return face != FONT_SANS && face != FONT_DEFAULT;
+}
+
+static qboolean SM_IsWebHandel(int face) {
+    return face >= 0 && (face == smFonts.handel || face == smFonts.handelBold);
 }
 
 static qboolean SM_IsBarlow(int face) {
@@ -365,6 +406,10 @@ static float SM_FaceEm(int face) {
     if (SM_IsBarlow(face)) {
         return SM_BARLOW_EM;
     }
+    if (SM_IsWebHandel(face)) {
+        return face == smFonts.handelBold ? SM_WEB_HANDEL_BOLD_EM : SM_WEB_HANDEL_EM;
+    }
+    // web.pak's Noto Sans has pak00's metrics
     return face == FONT_DEFAULT ? SM_HANDEL_EM : SM_SANS_EM;
 }
 
@@ -378,6 +423,8 @@ float SM_Baseline(int font, float size, float lineTop, float lineHeight) {
 
     if (SM_IsBarlow(face)) {
         base = SM_BARLOW_BASE;
+    } else if (SM_IsWebHandel(face)) {
+        base = face == smFonts.handelBold ? SM_WEB_HANDEL_BOLD_BASE : SM_WEB_HANDEL_BASE;
     } else {
         base = face == FONT_DEFAULT ? SM_HANDEL_BASE : SM_SANS_BASE;
     }
@@ -420,8 +467,10 @@ static float SM_AdvanceFace(int face, float size, const char* text, int len) {
     return (withBar[2] - bar[2]) / smScale;
 }
 
+// the face SM_Text draws without bold: Barlow's titles are its strong weight either way, and
+// retail's Handel Gothic is the medium one
 float SM_Advance(int font, float size, const char* text, int len) {
-    return SM_AdvanceFace(SM_Face(font, font == FONT_DEFAULT), size, text, len);
+    return SM_AdvanceFace(SM_Face(font, qfalse), size, text, len);
 }
 
 float SM_AdvanceBold(int font, float size, const char* text, int len, qboolean bold) {
@@ -457,12 +506,62 @@ void SM_Text(float x, float baseline, int font, float size, const float* color, 
     trap_R_SetColor(color);
     trap_R_Font_DrawString(sx, sy, text, face, px, limit, NULL, 0);
     // pak00 has no bold weight: a second pass a pixel to the right stands in for it
-    if (bold && !SM_IsBarlow(face)) {
+    if (bold && !SM_HasBold(face)) {
         int shift = (int)(smScale + 0.5f);
 
         trap_R_Font_DrawString(sx + (shift < 1 ? 1 : shift), sy, text, face, px, limit, NULL, 0);
     }
     trap_R_SetColor(NULL);
+}
+
+/*
+===============
+SM_Icon
+
+[QL] FontAwesome's glyph, as retail's pages draw their <i class="fa">: sized by font-size and
+sitting on the line's baseline
+===============
+*/
+static int SM_Utf8(int cp, char* out) {
+    if (cp < 0x80) {
+        out[0] = (char)cp;
+        out[1] = 0;
+        return 1;
+    }
+    if (cp < 0x800) {
+        out[0] = (char)(0xc0 | (cp >> 6));
+        out[1] = (char)(0x80 | (cp & 0x3f));
+        out[2] = 0;
+        return 2;
+    }
+    out[0] = (char)(0xe0 | (cp >> 12));
+    out[1] = (char)(0x80 | ((cp >> 6) & 0x3f));
+    out[2] = (char)(0x80 | (cp & 0x3f));
+    out[3] = 0;
+    return 3;
+}
+
+void SM_Icon(float x, float baseline, float size, const float* color, int codepoint) {
+    char glyph[4];
+
+    if (smFonts.awesome < 0) {
+        return;
+    }
+    SM_Utf8(codepoint, glyph);
+    trap_R_SetColor(color);
+    trap_R_Font_DrawString((int)(x * smScale + 0.5f), (int)(smTop + baseline * smScale + 0.5f), glyph,
+                           smFonts.awesome, size * SM_AWESOME_EM * smScale, -1, NULL, 0);
+    trap_R_SetColor(NULL);
+}
+
+float SM_IconWidth(float size, int codepoint) {
+    char glyph[4];
+
+    if (smFonts.awesome < 0) {
+        return 0;
+    }
+    SM_Utf8(codepoint, glyph);
+    return SM_AdvanceFace(smFonts.awesome, size * SM_AWESOME_EM / SM_FaceEm(smFonts.awesome), glyph, -1);
 }
 
 void SM_Centered(float middle, float baseline, float size, const float* color, const char* text, qboolean bold) {
@@ -787,6 +886,7 @@ qboolean SM_Over(int type, int index) {
 void SM_BeginFrame(void) {
     const smHit_t* under;
 
+    smLook = SM_LOOK_RETAIL;
     SM_Frame();
     under = SM_HitAt(smMX, smMY);
     smHasUnder = under != NULL;

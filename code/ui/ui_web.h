@@ -53,15 +53,33 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define SM_HANDEL_BASE (694.5f / 2048.0f)
 #define SM_BARLOW_EM (1200.0f / 1000.0f)   // pak01's Barlow
 #define SM_BARLOW_BASE (400.0f / 1000.0f)
+#define SM_WEB_HANDEL_EM (2274.0f / 2048.0f)  // web.pak's Handel Gothic webfonts, medium
+#define SM_WEB_HANDEL_BASE (704.0f / 2048.0f)
+#define SM_WEB_HANDEL_BOLD_EM (2289.0f / 2048.0f)  // and bold
+#define SM_WEB_HANDEL_BOLD_BASE (694.5f / 2048.0f)
+#define SM_AWESOME_EM 1.0f                 // web.pak's FontAwesome
+#define SM_AWESOME_BASE (640.0f / 1792.0f)
+
+// FontAwesome's glyphs that retail's pages use
+#define SM_FA_HOME 0xf015
+#define SM_FA_GEAR 0xf013
+#define SM_FA_POWER 0xf011
+#define SM_FA_FILTER 0xf0b0
+#define SM_FA_CARET_UP 0xf0d8
+#define SM_FA_CARET_DOWN 0xf0d7
+#define SM_FA_LOCK 0xf023
+#define SM_FA_PLAY 0xf04b
+#define SM_FA_STAR 0xf005
+#define SM_FA_SIGNAL 0xf012
 
 #define SM_RGB(r, g, b) {(r) / 255.0f, (g) / 255.0f, (b) / 255.0f, 1.0f}
 
 /*
 The colours are Quake Live's own, off the web UI's stylesheet (web.pak
-css/main.css): its page is black, a panel rgba(15,15,15) with a #333 border, its
-text #DDD over #999 and #666, and #f7d100 -- the yellow of the QUAKE LIVE logo --
-is the accent, used for whatever is chosen or under the cursor. The shapes stay
-Quake Club's, which is what these names came from.
+css/main.css): its page is black, a panel rgba(0,0,0,0.8) over the background, a
+field rgba(15,15,15) with a #333 border, text #DDD over #CCC, #999 and #666, and
+#f7d100 -- the yellow of the QUAKE LIVE logo -- for whatever is chosen or under the
+cursor. The names are the ones Quake Club's palette gave them.
 */
 extern const vec4_t smPage;        // --background
 extern const vec4_t smPanel;       // --qc-bg-dark, every card and panel
@@ -102,7 +120,7 @@ extern const vec4_t smShadow;
 #define smButton smRaised
 #define smButtonHover smRaisedHover
 #define smButtonBorder smBorder
-#define smDialog smPanel
+#define smDialog smRaised  // over a page: it has to hide what is under it
 #define smOnAccent smOnPrimary
 
 typedef struct {
@@ -117,6 +135,20 @@ extern float smBottom;    // the screen's bottom edge in CSS pixels
 extern float smMX, smMY;  // the cursor in the frame
 
 void SM_Frame(void);
+
+// [ioquakelive] a page looks like retail's web UI, with its fonts and square corners; the settings
+// page keeps its own type and corners. Every page starts as retail's
+typedef enum {
+    SM_LOOK_RETAIL,
+    SM_LOOK_OURS
+} smLook_t;
+
+extern smLook_t smLook;
+void SM_SetLook(smLook_t look);
+
+// a FontAwesome glyph out of web.pak, and its width; nothing when web.pak is not there
+void SM_Icon(float x, float baseline, float size, const float* color, int codepoint);
+float SM_IconWidth(float size, int codepoint);
 
 smRect_t SM_R(float x, float y, float w, float h);
 qboolean SM_In(const smRect_t* r, float x, float y);

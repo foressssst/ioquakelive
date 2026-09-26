@@ -2184,6 +2184,7 @@ void UI_Settings_Paint(void) {
     qboolean held;
 
     SM_BeginFrame();
+    SM_SetLook(SM_LOOK_OURS);  // the settings page keeps its own type, in retail's colours
     if (!st.loaded) {
         UI_Settings_Open();
     }

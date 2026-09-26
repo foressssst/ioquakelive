@@ -293,6 +293,13 @@ static int R_Font_LoadTTF( const char *path, const char *name ) {
 		return FONS_INVALID;
 	}
 
+	// [ioquakelive] only TrueType outlines are read: an OpenType font with CFF ones took the game down
+	if ( len >= 4 && !memcmp( buffer, "OTTO", 4 ) ) {
+		ri.FS_FreeFile( buffer );
+		ri.Printf( PRINT_WARNING, "font '%s' has CFF outlines, which are not read; a TrueType one is needed\n", path );
+		return FONS_INVALID;
+	}
+
 	// fontstash keeps the font for as long as the context lives, so it gets its own copy
 	copy = (unsigned char *)malloc( len );
 	if ( !copy ) {
