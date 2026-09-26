@@ -2754,14 +2754,11 @@ void Com_Init(char* commandLine) {
 
     Com_Printf("--- Common Initialization Complete ---\n");
 
-    // [QL] serverstartup: the command the server runs once it has finished coming up. Retail's
-    // server.cfg uses it to bring a map up ("startRandomMap" or "map <x> <f>").
-    {
-        const char* startup = Cvar_VariableString("serverstartup");
-
-        if (startup[0]) {
-            Cbuf_AddText(va("%s\n", startup));
-        }
+    // [QL] qzeroded.x64 0x424ccd: a dedicated server runs serverstartup once it has come up.
+    // Retail's server.cfg uses it to bring a map up ("startRandomMap" or "map <x> <f>"), and it
+    // runs after a map given on the command line as well
+    if (com_dedicated->integer) {
+        Cbuf_AddText("vstr serverstartup\n");
     }
 }
 
