@@ -1687,6 +1687,10 @@ a null buffer will just return the file length without loading
 If searchPath is non-NULL search only in that specific search path
 ============
 */
+#ifndef DEDICATED
+static long FS_WebPak_ReadFile(const char* name, void** buffer);
+#endif
+
 long FS_ReadFileDir(const char* qpath, void* searchPath, qboolean unpure, void** buffer) {
 	fileHandle_t h;
 	searchpath_t* search;
@@ -1701,6 +1705,13 @@ long FS_ReadFileDir(const char* qpath, void* searchPath, qboolean unpure, void**
 	if (!qpath || !qpath[0]) {
 		Com_Error(ERR_FATAL, "FS_ReadFile with empty name");
 	}
+
+#ifndef DEDICATED
+	// [ioquakelive] retail's web UI, out of the player's web.pak
+	if (!Q_stricmpn(qpath, "webui/", 6)) {
+		return FS_WebPak_ReadFile(qpath + 6, buffer);
+	}
+#endif
 
 	buf = NULL;  // quiet compiler warning
 
@@ -1805,6 +1816,190 @@ long FS_ReadFileDir(const char* qpath, void* searchPath, qboolean unpure, void**
 	}
 	return len;
 }
+
+/*
+=============================================================================
+
+[ioquakelive] RETAIL'S WEB UI
+
+The front end draws with the images and fonts of retail's web UI, read from web.pak where the
+player's Quake Live keeps it, the way pak00 is: nothing of id's travels with the game. web.pak is
+Chromium's resource pack (version 4): a table of ids and offsets, and resource 0 is the index that
+names the rest -- a length, the name in UTF-16 padded to four bytes, a type and the id. Its files
+are read as webui/<name>, and a missing web.pak only leaves the pictures out
+
+=============================================================================
+*/
+
+#ifndef DEDICATED
+
+typedef struct {
+	char name[MAX_QPATH];
+	int offset;
+	int length;
+} webPakFile_t;
+
+static webPakFile_t* webPakFiles;
+static int numWebPakFiles;
+static char webPakPath[MAX_OSPATH];
+static qboolean webPakTried;
+
+static int FS_WebPak_Compare(const void* a, const void* b) {
+	return Q_stricmp(((const webPakFile_t*)a)->name, ((const webPakFile_t*)b)->name);
+}
+
+static void FS_WebPak_Open(void) {
+	const char* bases[3];
+	FILE* f = NULL;
+	unsigned char head[9];
+	unsigned char* table = NULL;
+	unsigned char* index = NULL;
+	int count, i, indexOff = -1, indexLen = 0, pos;
+
+	webPakTried = qtrue;
+
+	// beside the game first, then in the player's Quake Live
+	bases[0] = fs_basepath ? fs_basepath->string : "";
+	bases[1] = fs_homepath ? fs_homepath->string : "";
+	bases[2] = fs_steampath ? fs_steampath->string : "";
+	for (i = 0; i < 3 && !f; i++) {
+		if (!bases[i][0]) {
+			continue;
+		}
+		Com_sprintf(webPakPath, sizeof(webPakPath), "%s%cweb.pak", bases[i], PATH_SEP);
+		f = Sys_FOpen(webPakPath, "rb");
+	}
+	if (!f) {
+		webPakPath[0] = '\0';
+		return;
+	}
+
+	if (fread(head, 1, sizeof(head), f) != sizeof(head) || LittleLong(*(int*)head) != 4) {
+		goto fail;
+	}
+	count = LittleLong(*(int*)(head + 4));
+	if (count <= 0 || count > 65536) {
+		goto fail;
+	}
+
+	// (count + 1) entries of an id and an offset: a resource ends where the next one starts
+	table = Z_Malloc((count + 1) * 6);
+	if (fread(table, 6, count + 1, f) != (size_t)(count + 1)) {
+		goto fail;
+	}
+	for (i = 0; i < count; i++) {
+		if ((table[i * 6] | (table[i * 6 + 1] << 8)) == 0) {
+			indexOff = LittleLong(*(int*)(table + i * 6 + 2));
+			indexLen = LittleLong(*(int*)(table + (i + 1) * 6 + 2)) - indexOff;
+		}
+	}
+	if (indexOff <= 0 || indexLen <= 16 || indexLen > 4 * 1024 * 1024) {
+		goto fail;
+	}
+
+	index = Z_Malloc(indexLen);
+	if (fseek(f, indexOff, SEEK_SET) || fread(index, 1, indexLen, f) != (size_t)indexLen) {
+		goto fail;
+	}
+
+	webPakFiles = Z_Malloc(count * sizeof(*webPakFiles));
+	numWebPakFiles = 0;
+	for (pos = 16; pos + 4 <= indexLen && numWebPakFiles < count;) {
+		int len = LittleLong(*(int*)(index + pos)), id, k, n;
+		webPakFile_t* w = &webPakFiles[numWebPakFiles];
+
+		pos += 4;
+		if (len <= 0 || len >= MAX_QPATH || pos + len * 2 + 8 > indexLen) {
+			break;
+		}
+		for (k = 0; k < len; k++) {
+			w->name[k] = (char)index[pos + k * 2];
+		}
+		w->name[len] = '\0';
+		pos = (pos + len * 2 + 3) & ~3;
+		id = LittleLong(*(int*)(index + pos + 4));
+		pos += 8;
+
+		for (n = 0; n < count; n++) {
+			if ((table[n * 6] | (table[n * 6 + 1] << 8)) == id) {
+				w->offset = LittleLong(*(int*)(table + n * 6 + 2));
+				w->length = LittleLong(*(int*)(table + (n + 1) * 6 + 2)) - w->offset;
+				break;
+			}
+		}
+		if (n < count && w->length > 0) {
+			numWebPakFiles++;
+		}
+	}
+	qsort(webPakFiles, numWebPakFiles, sizeof(*webPakFiles), FS_WebPak_Compare);
+
+	Z_Free(table);
+	Z_Free(index);
+	fclose(f);
+	Com_Printf("web.pak: %d files from %s\n", numWebPakFiles, webPakPath);
+	return;
+
+fail:
+	if (table) {
+		Z_Free(table);
+	}
+	if (index) {
+		Z_Free(index);
+	}
+	if (webPakFiles) {
+		Z_Free(webPakFiles);
+		webPakFiles = NULL;
+	}
+	numWebPakFiles = 0;
+	fclose(f);
+	Com_Printf("web.pak at %s could not be read\n", webPakPath);
+	webPakPath[0] = '\0';
+}
+
+// the length of a file of web.pak, and with a buffer the file itself, as FS_ReadFile gives one
+static long FS_WebPak_ReadFile(const char* name, void** buffer) {
+	webPakFile_t key;
+	const webPakFile_t* w;
+	FILE* f;
+	byte* buf;
+
+	if (buffer) {
+		*buffer = NULL;
+	}
+	if (!webPakTried) {
+		FS_WebPak_Open();
+	}
+	if (!numWebPakFiles) {
+		return -1;
+	}
+
+	Q_strncpyz(key.name, name, sizeof(key.name));
+	w = bsearch(&key, webPakFiles, numWebPakFiles, sizeof(*webPakFiles), FS_WebPak_Compare);
+	if (!w) {
+		return -1;
+	}
+	if (!buffer) {
+		return w->length;
+	}
+
+	f = Sys_FOpen(webPakPath, "rb");
+	if (!f) {
+		return -1;
+	}
+	fs_loadCount++;
+	fs_loadStack++;
+	buf = Hunk_AllocateTempMemory(w->length + 1);
+	if (fseek(f, w->offset, SEEK_SET) || fread(buf, 1, w->length, f) != (size_t)w->length) {
+		Com_Memset(buf, 0, w->length);
+	}
+	buf[w->length] = 0;
+	fclose(f);
+
+	*buffer = buf;
+	return w->length;
+}
+
+#endif
 
 /*
 ============
