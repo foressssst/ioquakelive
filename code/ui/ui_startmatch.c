@@ -40,18 +40,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define SM_MAX_ARENAS 1024     // MAX_ARENA_INFOS
 #define SM_MAX_INPUT 200       // the Cvar widget's maxLength
 
-// The page, centred. Retail draws it in the right column of its 1920x1080 frame,
-// 1460 wide from y 110 to 1050, the lobby and friends list on its left.
-#define SM_PAGE_W HM_CONTAINER_W  // Quake Club's container
-#define SM_COL_W 420.0f      // the cards' column
-#define SM_OPT_X 437.0f      // the options' panel, after the cards and the gap
-#define SM_OPT_W 673.0f
-#define SM_PAD 25.0f
-#define SM_ROW_W (SM_OPT_W - 2 * SM_PAD)
-#define SM_VAL_W 224.0f      // a row's control, at its right
-#define SM_VAL_X (SM_ROW_W - 12.0f - SM_VAL_W)
-#define SM_FIELD_H 36.0f
-#define SM_LAUNCH_H 44.0f
 
 /*
 ===============================================================================
@@ -66,29 +54,29 @@ typedef struct {
     const char* title;
     const char* factory;  // the one the page picks with the gametype
     const char* map;      // the one it falls back on
-    const char* icon;     // pak00's HUD icon; the page's own are in web.pak
+    const char* name;     // module 237's, which names its icons in web.pak's img/gametype
 } smGametype_t;
 
 // module 237's gametypes, in the order the page lists them (it has no Overload)
 static const smGametype_t smGametypes[] = {
-    {GT_FFA, "Free For All", "ffa", "campgrounds", "ui/assets/hud/ffa.png"},
-    {GT_DUEL, "Duel", "duel", "bloodrun", "ui/assets/hud/duel.png"},
-    {GT_RACE, "Race", "race", "foolishlegacy", "ui/assets/hud/race.png"},
-    {GT_TEAM, "Team Deathmatch", "tdm", "campgrounds", "ui/assets/hud/tdm.png"},
-    {GT_CA, "Clan Arena", "ca", "repent", "ui/assets/hud/ca.png"},
-    {GT_CTF, "Capture The Flag", "ctf", "spidercrossings", "ui/assets/hud/ctf.png"},
-    {GT_1FCTF, "1-Flag CTF", "oneflag", "spidercrossings", "ui/assets/hud/1f.png"},
-    {GT_HARVESTER, "Harvester", "har", "spidercrossings", "ui/assets/hud/har.png"},
-    {GT_FREEZE, "Freeze Tag", "ft", "coldwar", "ui/assets/hud/ft.png"},
-    {GT_DOMINATION, "Domination", "dom", "chemicalreaction", "ui/assets/hud/dom.png"},
-    {GT_AD, "Attack & Defend", "ad", "stonekeep", "ui/assets/hud/ad.png"},
-    {GT_RR, "Red Rover", "rr", "devilish", "ui/assets/hud/rr.png"},
+    {GT_FFA, "Free For All", "ffa", "campgrounds", "ffa"},
+    {GT_DUEL, "Duel", "duel", "bloodrun", "duel"},
+    {GT_RACE, "Race", "race", "foolishlegacy", "race"},
+    {GT_TEAM, "Team Deathmatch", "tdm", "campgrounds", "tdm"},
+    {GT_CA, "Clan Arena", "ca", "repent", "ca"},
+    {GT_CTF, "Capture The Flag", "ctf", "spidercrossings", "ctf"},
+    {GT_1FCTF, "1-Flag CTF", "oneflag", "spidercrossings", "1fctf"},
+    {GT_HARVESTER, "Harvester", "har", "spidercrossings", "harvester"},
+    {GT_FREEZE, "Freeze Tag", "ft", "coldwar", "ft"},
+    {GT_DOMINATION, "Domination", "dom", "chemicalreaction", "dom"},
+    {GT_AD, "Attack & Defend", "ad", "stonekeep", "ad"},
+    {GT_RR, "Red Rover", "rr", "devilish", "rr"},
 };
 
 #define SM_NUM_GAMETYPES ((int)ARRAY_LEN(smGametypes))
 
 // getById for anything else: "Unknown Gametype", with no factory or map of its own
-static const smGametype_t smUnknownGametype = {-1, "Unknown Gametype", NULL, NULL, NULL};
+static const smGametype_t smUnknownGametype = {-1, "Unknown Gametype", NULL, NULL, "unknown"};
 
 typedef struct {
     const char* label;
@@ -175,7 +163,7 @@ static smArena_t smArenas[SM_MAX_ARENAS];          // by sysname, as its mapdb o
 static int smNumArenas;
 static int smMapList[SM_MAX_ARENAS];               // the maps dialog's, by name
 static int smNumMapList;
-static qhandle_t smIcons[SM_NUM_GAMETYPES];
+static qhandle_t smIcons[SM_NUM_GAMETYPES + 1][2];  // small and large, the unknown one last
 static qhandle_t smDefaultPreview;
 
 typedef enum { SM_DIALOG_NONE, SM_DIALOG_FACTORIES, SM_DIALOG_MAPS } smDialog_t;
@@ -380,16 +368,17 @@ static qboolean SM_Supports(const char* map, int gametype) {
     return arena && gametype >= 0 && gametype < 31 && (arena->gametypes & (1 << gametype));
 }
 
-static qhandle_t SM_GametypeIcon(const smGametype_t* gt) {
+// img/gametype/sm (28 square) for the dialog's list, xl (75 square) for the card
+static qhandle_t SM_GametypeIcon(const smGametype_t* gt, qboolean large) {
     int i = (int)(gt - smGametypes);
 
     if (i < 0 || i >= SM_NUM_GAMETYPES) {
-        return 0;
+        i = SM_NUM_GAMETYPES;
     }
-    if (!smIcons[i]) {
-        smIcons[i] = trap_R_RegisterShaderNoMip(gt->icon);
+    if (!smIcons[i][large]) {
+        smIcons[i][large] = trap_R_RegisterShaderNoMip(va("webui/img/gametype/%s/%s.png", large ? "xl" : "sm", gt->name));
     }
-    return smIcons[i];
+    return smIcons[i][large];
 }
 
 // url(sm/<map>.jpg) over url(sm/default.jpg): the default shows where a map has none
@@ -397,12 +386,12 @@ static qhandle_t SM_Preview(smArena_t* arena, const char* map) {
     qhandle_t shot;
 
     if (!smDefaultPreview) {
-        smDefaultPreview = trap_R_RegisterShaderNoMip("levelshots/preview/default.jpg");
+        smDefaultPreview = trap_R_RegisterShaderNoMip("webui/img/levelshots/sm/default.jpg");
     }
     if (arena && arena->previewTried) {
         return arena->preview ? arena->preview : smDefaultPreview;
     }
-    shot = trap_R_RegisterShaderNoMip(va("levelshots/preview/%s.jpg", map));
+    shot = trap_R_RegisterShaderNoMip(va("webui/img/levelshots/sm/%s.jpg", map));
     if (arena) {
         arena->preview = shot;
         arena->previewTried = qtrue;
@@ -418,7 +407,7 @@ static qhandle_t SM_Levelshot(const char* map) {
 
     if (!tried || strcmp(last, map)) {
         Q_strncpyz(last, map, sizeof(last));
-        shot = trap_R_RegisterShaderNoMip(va("levelshots/%s.jpg", map));
+        shot = trap_R_RegisterShaderNoMip(va("webui/img/levelshots/lg/%s.jpg", map));
         tried = qtrue;
     }
     return shot;
@@ -752,80 +741,118 @@ static void SM_FormatRange(int i, float value, char* buf, int size) {
 
 THE PAGE
 
+css/main.css's .start-match: a panel at 80% black with the page's h1, two columns of
+48% with 4% between them -- the two cards on the left, the cvar list on the right --
+and the launch button under them, half the page wide. The page is overflow-y: scroll,
+so its bar's gutter is always there.
+
 ===============================================================================
 */
 
-// [ioquakelive] There is no change button: the card lights up under the pointer and its whole
-// area is the hit, so the button said nothing the card did not.
-//
-// The two choices are real cards inside their panel, like the Patch Notes index, with their
-// title above. They used to be half a column each with the content centred in the middle,
-// which left a small icon surrounded by empty space.
-#define SM_PANEL_IN 20.0f   // the margin the panels leave on the inside
-#define SM_CARD_PAD 12.0f
-#define SM_EYEBROW_H 26.0f  // the small title above each card
+#define SM_BAR 8.0f
+#define SM_CARD_H 200.0f
+#define SM_CARD_FONT 21.3333f  // 16pt
+#define SM_LAN_H 39.0f         // p.lan, with its padding
 
-// the small title over each choice, gold while the pointer is on its card
-static void SM_DrawChoiceTitle(float x, float y, const char* label, qboolean over) {
-    SM_Label(x + 4, SM_Baseline(FONT_SANS, 11, y, 16), 11, over ? smGold : smMuted, label, 1.6f);
+static const vec4_t smrCard = SM_RGB(44, 41, 41);
+static const vec4_t smrCardHover = SM_RGB(60, 57, 57);
+static const vec4_t smrRowOdd = SM_RGB(36, 33, 33);
+static const vec4_t smrRowEven = SM_RGB(28, 25, 25);
+static const vec4_t smrYellow = SM_RGB(247, 209, 0);
+static const vec4_t smrSelect = SM_RGB(51, 51, 51);
+static const vec4_t smrSelectHover = SM_RGB(68, 68, 68);
+static const vec4_t smrSelectValue = SM_RGB(204, 204, 204);
+static const vec4_t smrPlaceholder = SM_RGB(170, 170, 170);
+static const vec4_t smrOption = SM_RGB(187, 187, 187);
+static const vec4_t smrOptionFocus = SM_RGB(34, 34, 34);
+static const vec4_t smrInput = SM_RGB(15, 15, 15);
+static const vec4_t smrInputBorder = SM_RGB(51, 51, 51);
+static const vec4_t smrRange = SM_RGB(34, 34, 34);
+static const vec4_t smrRangeHover = SM_RGB(68, 68, 68);
+static const vec4_t smrLink = SM_RGB(30, 174, 219);
+static const vec4_t smrLinkHover = SM_RGB(15, 160, 206);
+static const vec4_t smrLaunch = SM_RGB(61, 61, 61);
+static const vec4_t smrLaunchHover = SM_RGB(93, 93, 93);
+static const vec4_t smrDialog = SM_RGB(30, 30, 30);
+static const vec4_t smrBlack80 = {0, 0, 0, 0.8f};
+static const vec4_t smrThumb = SM_RGB(51, 51, 51);
+static const vec4_t smrThumbHover = SM_RGB(153, 153, 153);
+
+// the layout of the page for this frame: set by SM_DrawPage, read by the rows
+static struct {
+    float x;         // the content's left, inside the panel's padding
+    float width;     // the content's width
+    float colW;      // one of the two columns
+    float listX;     // the cvar list's left
+    float valX;      // a row's control, from the row's left
+    float valW;
+} smL;
+
+static void SM_Layout(void) {
+    float page = UI_Home_Left();
+
+    smL.x = page + 5;
+    smL.width = HM_CONTAINER_W - SM_BAR - 10;
+    smL.colW = smL.width * 0.48f;
+    smL.listX = smL.x + smL.colW + smL.width * 0.04f;
+    // children seven columns and val five columns, inside the row's padding
+    smL.valX = 7.5f + (smL.colW - 15) * (0.566667f + 0.04f);
+    smL.valW = (smL.colW - 15) * 0.393333f;
 }
 
-static float SM_DrawGametypeCard(float x, float y, float w) {
+// centred in the card's content
+static void SM_CardCentered(float x, float w, float lineTop, float lineHeight, const char* text) {
+    SM_Text(x + (w - SM_Advance(FONT_SANS, SM_CARD_FONT, text, -1)) * 0.5f,
+            SM_Baseline(FONT_SANS, SM_CARD_FONT, lineTop, lineHeight), FONT_SANS, SM_CARD_FONT, smText, text, -1,
+            qfalse);
+}
+
+// button.card: #2C2929, #3C3939 under the cursor, with its yellow h2
+static void SM_DrawCardBack(float x, float y, float w, const char* title, int hit) {
+    SM_Fill(x, y, w, SM_CARD_H, SM_Over(hit, 0) ? smrCardHover : smrCard, NULL);
+    SM_Text(x + 10.6667f, SM_Baseline(FONT_SANS, 24, y + 12, 30), FONT_SANS, 24, smrYellow, title, -1, qfalse);
+    SM_Hit(x, y, w, SM_CARD_H, hit, 0, NULL);
+}
+
+static void SM_DrawGametypeCard(float x, float y, float w) {
     const smFactory_t* factory = SM_Factory(sm.selectedFactory);
     const smGametype_t* gt = SM_Gametype(factory ? factory->basegt : -1);
-    qboolean over = SM_Over(SM_HIT_GAMETYPE_CARD, 0);
-    float h = 88.0f;
-    float icon = 56.0f;
-    float tx = x + SM_CARD_PAD + 4 + icon + 16;
-    const char* line = "";
+    float cx = x + 10.6667f, cw = w - 21.3333f;
 
-    SM_DrawChoiceTitle(x, y, "Game Type", over);
-    y += SM_EYEBROW_H;
-    if (over) {
-        SM_Round(x, y, w, h, SM_RADIUS_MD, smRaised, NULL);
-    }
-    SM_Pic(x + SM_CARD_PAD + 4, y + (h - icon) * 0.5f, icon, icon, SM_GametypeIcon(gt), NULL);
-    SM_Label(tx, SM_Baseline(FONT_SANS, 20, y + 18, 28), 20, over ? smGold : smText, gt->title, 0.2f);
+    SM_DrawCardBack(x, y, w, "Game Type", SM_HIT_GAMETYPE_CARD);
+    SM_Pic(cx + (cw - 75) * 0.5f, y + 54, 75, 75, SM_GametypeIcon(gt, qtrue), NULL);
+    SM_CardCentered(cx, cw, y + 134.6f, 26.6667f, gt->title);
     // the factory's title, or "Default" when it is the gametype's
-    if (factory) {
-        line = strcmp(gt->title, factory->title) ? factory->title : "Default";
-    }
-    SM_Text(tx, SM_Baseline(FONT_SANS, 14, y + 48, 20), FONT_SANS, 14, smMuted, line,
-            SM_Fit(FONT_SANS, 14, line, x + w - SM_CARD_PAD - tx), qfalse);
-    SM_Hit(x, y, w, h, SM_HIT_GAMETYPE_CARD, 0, NULL);
-    return SM_EYEBROW_H + h;
+    SM_CardCentered(cx, cw, y + 161.3f, 26.6667f,
+                    factory ? (strcmp(gt->title, factory->title) ? factory->title : "Default") : "");
 }
 
-static float SM_DrawArenaCard(float x, float y, float w) {
+static void SM_DrawArenaCard(float x, float y, float w) {
     smArena_t* arena = SM_Arena(sm.selectedMap);
-    qboolean over = SM_Over(SM_HIT_ARENA_CARD, 0);
-    float picW = w - 2 * SM_CARD_PAD;
-    float picH = picW * 9.0f / 16.0f;  // the levelshots are 16:9
-    float h = SM_CARD_PAD + picH + 48.0f;
+    float cx = x + 10.6667f, cw = w - 21.3333f;
 
-    SM_DrawChoiceTitle(x, y, "Map", over);
-    y += SM_EYEBROW_H;
-    if (over) {
-        SM_Round(x, y, w, h, SM_RADIUS_MD, smRaised, NULL);
+    SM_DrawCardBack(x, y, w, "Current Arena", SM_HIT_ARENA_CARD);
+    // span.mapshot: 179 by 100 with the shot's width filling it
+    {
+        float sx = cx + (cw - 179) * 0.5f;
+        smRect_t shot = SM_R(sx, y + 54.8f, 179, 100);
+
+        SM_Pic(sx, y + 54.8f, 179, 179 * 270.0f / 480.0f, SM_Preview(arena, sm.selectedMap), &shot);
     }
-    SM_Pic(x + SM_CARD_PAD, y + SM_CARD_PAD, picW, picH, SM_Preview(arena, sm.selectedMap), NULL);
-    if (arena) {
-        SM_Label(x + SM_CARD_PAD + 4, SM_Baseline(FONT_SANS, 18, y + SM_CARD_PAD + picH + 10, 28), 18,
-                 over ? smGold : smText, arena->name, 0.2f);
-    }
-    SM_Hit(x, y, w, h, SM_HIT_ARENA_CARD, 0, NULL);
-    return SM_EYEBROW_H + h;
+    SM_CardCentered(cx, cw, y + 160.5f, 26.6667f, arena ? arena->name : sm.selectedMap);
 }
 
-// a text input: a field, the text from 12 in, and a steady caret while typing
+// a text input: #0F0F0F with a #333 border, the text 9 pixels in, a caret while typing
 static void SM_DrawInput(int i, float x, float y) {
     const char* value = sm.values[i];
-    float width = SM_VAL_W - 24;
+    float w = smL.valW, h = 38;
+    float width = w - 17;
     int len = (int)strlen(value);
     int start = 0;
     qboolean editing = sm.edit == i;
 
-    SM_FieldBox(x, y, SM_VAL_W, SM_FIELD_H, editing, SM_Over(SM_HIT_INPUT, i), NULL);
+    SM_Fill(x, y, w, h, smrInput, NULL);
+    SM_Border(x, y, w, h, 1, smrInputBorder, NULL);
     if (editing) {
         if (sm.editCursor > len) {
             sm.editCursor = len;
@@ -839,42 +866,45 @@ static void SM_DrawInput(int i, float x, float y) {
         }
         start = sm.editStart;
     }
-    SM_Text(x + 12, SM_Baseline(FONT_SANS, 15, y, SM_FIELD_H), FONT_SANS, 15, smText, value + start,
-            SM_Fit(FONT_SANS, 15, value + start, width), qfalse);
-    if (editing) {
-        SM_Fill(x + 12 + SM_Advance(FONT_SANS, 15, value + start, sm.editCursor - start), y + 9, 1.5f,
-                SM_FIELD_H - 18, smText, NULL);
+    SM_TextRaw(x + 9, SM_Baseline(FONT_SANS, 15, y, h), FONT_SANS, 15, smText, value + start,
+               SM_Fit(FONT_SANS, 15, value + start, width), qfalse);
+    if (editing && ((uiInfo.uiDC.realTime - sm.editTime) / 500) % 2 == 0) {
+        SM_Fill(x + 9 + SM_AdvanceRaw(FONT_SANS, 15, value + start, sm.editCursor - start, qfalse), y + 10, 1, h - 20,
+                smText, NULL);
     }
-    SM_Hit(x, y, SM_VAL_W, SM_FIELD_H, SM_HIT_INPUT, i, NULL);
+    SM_Hit(x, y, w, h, SM_HIT_INPUT, i, NULL);
 }
 
-// react-select: the label of the value's option, or its "Default" placeholder
+// react-select's control: the option's label in #CCC, or its placeholder in #AAA
 static void SM_DrawSelect(int i, float x, float y) {
     const smCvar_t* cv = &smCvars[i];
     const char* label = "Default";
+    qboolean chosen = qfalse;
     qboolean open = sm.select == i;
-    qboolean over = SM_Over(SM_HIT_SELECT, i);
+    float w = smL.valW, h = 36;
     int k;
 
     for (k = 0; k < cv->numOptions; k++) {
         if (!strcmp(cv->options[k].value, sm.values[i])) {
             label = cv->options[k].label;
+            chosen = qtrue;
         }
     }
-    SM_FieldBox(x, y, SM_VAL_W, SM_FIELD_H, open, over, NULL);
-    SM_Text(x + 12, SM_Baseline(FONT_SANS, 15, y, SM_FIELD_H), FONT_SANS, 15, smText, label,
-            SM_Fit(FONT_SANS, 15, label, SM_VAL_W - 44), qfalse);
-    SM_Chevron(x + SM_VAL_W - 22, y + SM_FIELD_H * 0.5f - 2, open, over || open ? smText : smMuted);
-    SM_Hit(x, y, SM_VAL_W, SM_FIELD_H, SM_HIT_SELECT, i, NULL);
+    SM_Fill(x, y, w, h, SM_Over(SM_HIT_SELECT, i) ? smrSelectHover : smrSelect, NULL);
+    SM_Text(x + 10, SM_Baseline(FONT_SANS, 15, y + 8, 24), FONT_SANS, 15, chosen ? smrSelectValue : smrPlaceholder,
+            label, SM_Fit(FONT_SANS, 15, label, w - 52), qfalse);
+    SM_Arrow(x + w - 20, y + 18, open);
+    SM_Hit(x, y, w, h, SM_HIT_SELECT, i, NULL);
     if (open) {
-        sm.selectControl = SM_R(x, y, SM_VAL_W, SM_FIELD_H);
+        sm.selectControl = SM_R(x, y, w, h);
     }
 }
 
-// the value with the step's decimals, then the slider
+// .range: the value in 20% of the width, then the input: #222 with a #333 border and a yellow
+// square of a thumb
 static void SM_DrawRange(int i, float x, float y) {
     const smCvar_t* cv = &smCvars[i];
-    float bx = x + 58, bw = SM_VAL_W - 58;
+    float bx = x + smL.valW * 0.2f, bw = smL.valW * 0.8f;
     float value, frac;
     char text[32];
 
@@ -886,16 +916,30 @@ static void SM_DrawRange(int i, float x, float y) {
         value = (float)atof(sm.values[i]);
     }
     SM_FormatRange(i, value, text, sizeof(text));
-    SM_Text(x, SM_Baseline(FONT_SANS, 15, y, SM_FIELD_H), FONT_SANS, 15, smText, text, -1, qfalse);
+    SM_Text(x + 8, SM_Baseline(FONT_SANS, 15, y + 1, 16), FONT_SANS, 15, smText, text, -1, qfalse);
     frac = (value - cv->min) / (cv->max - cv->min);
-    SM_SliderTrack(bx, y + (SM_FIELD_H - SM_SLIDER_H) * 0.5f, bw, frac, SM_Over(SM_HIT_RANGE, i) || sm.drag == i);
-    // the hit is the track itself: SM_RangeAt reads the value off it
-    SM_Hit(bx - 1, y, bw + 2, SM_FIELD_H, SM_HIT_RANGE, i, NULL);
+    if (frac < 0) {
+        frac = 0;
+    } else if (frac > 1) {
+        frac = 1;
+    }
+    SM_Fill(bx, y, bw, 18, (SM_Over(SM_HIT_RANGE, i) || sm.drag == i) ? smrRangeHover : smrRange, NULL);
+    SM_Border(bx, y, bw, 18, 1, smrInputBorder, NULL);
+    SM_Fill(bx + 1 + frac * (bw - 2 - 16), y + 1, 16, 16, smrYellow, NULL);
+    // the hit is the input itself: SM_RangeAt reads the value off it
+    SM_Hit(bx, y, bw, 18, SM_HIT_RANGE, i, NULL);
+}
+
+static float SM_RowHeight(int i) {
+    if (sm.locked[i]) {
+        return 50;  // div.disabled holds nothing
+    }
+    return smCvars[i].widget == SM_INPUT ? 53.0f : smCvars[i].widget == SM_SELECT ? 51.0f : 50.0f;
 }
 
 // the row itself and the dropdown it opened count as hovering it
 static qboolean SM_RowHovered(int i, float x, float y, float h) {
-    smRect_t row = SM_R(x, y, SM_ROW_W, h);
+    smRect_t row = SM_R(x, y, smL.colW, h);
 
     if (sm.dialog != SM_DIALOG_NONE) {
         return qfalse;
@@ -906,145 +950,116 @@ static qboolean SM_RowHovered(int i, float x, float y, float h) {
     return SM_In(&row, smMX, smMY);
 }
 
-static float SM_DrawRow(int i, float x, float y) {
+/*
+===============
+SM_DrawRow
+
+.row.cvar: #242121 and #1C1919 by turns, its title on the left with "(Reset)" after it while
+the row is under the cursor -- or "(Locked)" when the factory sets that cvar -- and the
+control on the right.
+===============
+*/
+static float SM_DrawRow(int i, float x, float y, int child) {
     const smCvar_t* cv = &smCvars[i];
-    float h = 50.0f;
-    float base = SM_Baseline(FONT_SANS, 15, y, h);
-    float after = x + 12 + SM_Advance(FONT_SANS, 15, cv->title, -1) + 10;
+    float h = SM_RowHeight(i);
+    float base = SM_Baseline(FONT_SANS, 15, y + 13.5f, 24);
+    float after = x + 7.5f + SM_Advance(FONT_SANS, 15, va("%s ", cv->title), -1);
     qboolean hovered = SM_RowHovered(i, x, y, h);
 
-    if (hovered) {
-        SM_Round(x, y, SM_ROW_W, h, SM_RADIUS_SM, smRaised, NULL);
-    }
-    SM_Text(x + 12, base, FONT_SANS, 15, smText, cv->title, -1, qfalse);
+    SM_Fill(x, y, smL.colW, h, child % 2 ? smrRowOdd : smrRowEven, NULL);
+    SM_Text(x + 7.5f, base, FONT_SANS, 15, smText, cv->title, -1, qfalse);
     if (sm.locked[i]) {
-        // disabled: "Locked" and no value, as getWidget reads it from a variable
+        // disabled: "(Locked)" and no value, as getWidget reads it from a variable
         // declared further down, still undefined there
-        SM_Label(after, SM_Baseline(FONT_SANS, 11, y, h), 11, smSubtle, "Locked", 1.2f);
+        SM_Text(after, base, FONT_SANS, 15, smText, "(Locked)", -1, qfalse);
         return h;
     }
     // a.resetLink shows while the row is hovered
     if (hovered) {
-        float rw = SM_LabelWidth(11, "Reset", 1.2f);
+        float rw = SM_Advance(FONT_SANS, 15, "(Reset)", -1);
 
-        SM_Label(after, SM_Baseline(FONT_SANS, 11, y, h), 11, SM_Over(SM_HIT_RESET, i) ? smText : smGold, "Reset",
-                 1.2f);
-        SM_Hit(after - 4, y + 12, rw + 8, h - 24, SM_HIT_RESET, i, NULL);
+        SM_Text(after, base, FONT_SANS, 15, SM_Over(SM_HIT_RESET, i) ? smrLinkHover : smrLink, "(Reset)", -1, qfalse);
+        SM_Hit(after, y + 13.5f, rw, 24, SM_HIT_RESET, i, NULL);
     }
     if (cv->widget == SM_INPUT) {
-        SM_DrawInput(i, x + SM_VAL_X, y + (h - SM_FIELD_H) * 0.5f);
+        SM_DrawInput(i, x + smL.valX, y + 7.5f);
     } else if (cv->widget == SM_SELECT) {
-        SM_DrawSelect(i, x + SM_VAL_X, y + (h - SM_FIELD_H) * 0.5f);
+        SM_DrawSelect(i, x + smL.valX, y + 7.5f);
     } else {
-        SM_DrawRange(i, x + SM_VAL_X, y + (h - SM_FIELD_H) * 0.5f);
+        SM_DrawRange(i, x + smL.valX, y + 16.5f);
     }
     return h;
 }
-
-// [ioquakelive] The page's action goes top right, in the header, which is where Settings puts
-// Apply Video Settings. It used to be a cream bar across the whole footer, and it weighed more
-// than the rest of the page put together.
-static void SM_DrawLaunch(float headerY) {
-    float w = SM_ButtonWidth("Launch Match", SM_BUTTON_H) + 16;
-    float x = UI_Home_Left() + HM_CONTAINER_W - 25 - w;
-    float y = headerY + (72.0f - SM_BUTTON_H) * 0.5f;
-    qboolean over = SM_Over(SM_HIT_LAUNCH, 0);
-
-    SM_Button(x, y, w, SM_BUTTON_H, "Launch Match", SM_BUTTON_PRIMARY, over);
-    SM_Hit(x, y, w, SM_BUTTON_H, SM_HIT_LAUNCH, 0, NULL);
-}
-
-// [ioquakelive] The options go in subsection cards with their title in gold, as in Settings.
-// Each card groups rows that are already neighbours in retail's list, so the order does not
-// change. It also fixes the slider: its empty track is smField, the same as the panel, and only
-// shows over a darker card, which is how Settings has it.
-static const struct {
-    const char* title;
-    int first, last;
-} smGroups[] = {
-    {"Match", SM_HOSTNAME, SM_SERVERTYPE},
-    {"Players", SM_MAXCLIENTS, SM_TEAMSIZE},
-    {"Server", SM_PASSWORD, SM_MAPPOOL},
-};
-
-#define SM_GROUP_HEAD 40.0f  // the card's gold title
-#define SM_GROUP_FOOT 10.0f
-#define SM_GROUP_GAP 16.0f
-#define SM_ROW_H 50.0f
-#define SM_NOTE_H 36.0f      // the port note under Match Type, when it is Internet
 
 static qboolean SM_ShowPortNote(void) {
     return SM_Equals(SM_Value(SM_SERVERTYPE), 2);
 }
 
+// p.launch: a button half the page wide, 16pt, without skeleton's capitals
+static void SM_DrawLaunch(float y) {
+    float w = smL.width * 0.5f, h = 51.3333f;
+    float x = smL.x + (smL.width - w) * 0.5f;
+    qboolean over = SM_Over(SM_HIT_LAUNCH, 0);
+    float tw = SM_SpacedWidth(FONT_SANS, SM_CARD_FONT, "Launch Match", 1.0f);
+
+    SM_Fill(x, y, w, h, over ? smrLaunchHover : smrLaunch, NULL);
+    SM_SpacedText(x + (w - tw) * 0.5f, SM_Baseline(FONT_SANS, SM_CARD_FONT, y, h), FONT_SANS, SM_CARD_FONT,
+                  over ? smrYellow : smText, "Launch Match", 1.0f, qtrue);
+    SM_Hit(x, y, w, h, SM_HIT_LAUNCH, 0, NULL);
+}
+
 static void SM_DrawPage(void) {
     float page = UI_Home_Left();
-    float top, bottom, optX, rowX, y;
-    int g, i;
+    float top = HM_NAV_H, bottom = UI_Home_FrameBottom();
+    float y, listY;
+    int child = 0;
+    int i;
 
     // the page sits in the front end's frame, under its top row
     UI_Home_Backdrop();
     UI_Home_PageTop(HM_NAV_PLAY);
+    SM_Layout();
 
-    // [ioquakelive] The Patch Notes skeleton: the header with the action on the right, and
-    // below it two panels that run down to the frame's edge. The panel's height used to be the
-    // content's, ending halfway down the screen, which is where the gap at the bottom came
-    // from.
-    top = UI_Home_Header(HM_NAV_H, NULL, "Start Match") + HM_PANEL_GAP;
-    bottom = UI_Home_FrameBottom();
-    SM_DrawLaunch(HM_NAV_H);
+    SM_Fill(page, top, HM_CONTAINER_W, bottom - top, smrBlack80, NULL);
+    SM_Text(smL.x + 6.4f, SM_Baseline(FONT_DEFAULT, 32, top + 8, 38.4f), FONT_DEFAULT, 32, smText, "Start Match", -1,
+            qfalse);
+    y = top + 54.4f;
 
-    // the choices, in a panel of their own, like Patch Notes' index
-    SM_Round(page, top, SM_COL_W, bottom - top, SM_RADIUS_MD, smPanel, NULL);
-    y = top + SM_PANEL_IN + 6;
-    y += SM_DrawGametypeCard(page + SM_PANEL_IN, y, SM_COL_W - 2 * SM_PANEL_IN);
-    y += 28;
-    SM_DrawArenaCard(page + SM_PANEL_IN, y, SM_COL_W - 2 * SM_PANEL_IN);
+    // the two cards
+    SM_DrawGametypeCard(smL.x, y, smL.colW);
+    SM_DrawArenaCard(smL.x, y + SM_CARD_H + SM_CARD_FONT, smL.colW);
 
-    // the options, in Settings' subsection cards
-    optX = page + SM_OPT_X;
-    rowX = optX + SM_PAD;
-    SM_Round(optX, top, SM_OPT_W, bottom - top, SM_RADIUS_MD, smPanel, NULL);
-    y = top + SM_PANEL_IN;
-    for (g = 0; g < (int)ARRAY_LEN(smGroups); g++) {
-        float h = SM_GROUP_HEAD + SM_GROUP_FOOT;
+    // the cvar list: p.lan follows the match type when it is Internet, one more of the rows'
+    // siblings, so the rows after it swap their shades
+    listY = y;
+    for (i = 0; i < SM_NUM_CVARS; i++) {
+        listY += SM_DrawRow(i, smL.listX, listY, ++child);
+        if (i == SM_SERVERTYPE && SM_ShowPortNote()) {
+            char note[128];
 
-        for (i = smGroups[g].first; i <= smGroups[g].last; i++) {
-            h += SM_ROW_H + (i == SM_SERVERTYPE && SM_ShowPortNote() ? SM_NOTE_H : 0);
+            Com_sprintf(note, sizeof(note),
+                        "To host public Internet servers, you will need to forward UDP port %s to your machine.",
+                        sm.netPort);
+            SM_Text(smL.listX + 11.25f, SM_Baseline(FONT_SANS, 15, listY + 7.5f, 24), FONT_SANS, 15, smText, note,
+                    SM_Fit(FONT_SANS, 15, note, smL.colW - 11.25f), qfalse);
+            listY += SM_LAN_H;
+            child++;
         }
-        // [ioquakelive] no black card: a thin line separates each group from the one above
-        if (g > 0) {
-            SM_Fill(rowX, y - SM_GROUP_GAP * 0.5f, SM_ROW_W, 1, smBorder, NULL);
-        }
-        SM_Label(rowX + 12, SM_Baseline(FONT_SANS, 11, y + 12, 18), 11, smGold, smGroups[g].title, 1.6f);
-        y += SM_GROUP_HEAD;
-
-        for (i = smGroups[g].first; i <= smGroups[g].last; i++) {
-            y += SM_DrawRow(i, rowX, y);
-            // p.lan follows the match type when it is Internet, one more of the rows' siblings
-            if (i == SM_SERVERTYPE && SM_ShowPortNote()) {
-                char note[128];
-
-                Com_sprintf(note, sizeof(note),
-                            "To host public Internet servers, you will need to forward UDP port %s to your machine.",
-                            sm.netPort);
-                SM_Text(rowX + 12, SM_Baseline(FONT_SANS, 13, y, 30), FONT_SANS, 13, smMuted, note,
-                        SM_Fit(FONT_SANS, 13, note, SM_ROW_W - 24), qfalse);
-                y += SM_NOTE_H;
-            }
-        }
-        y += SM_GROUP_FOOT + SM_GROUP_GAP;
     }
+
+    // the row is as tall as its taller column; the launch paragraph comes 1em under it
+    y += 2 * (SM_CARD_H + SM_CARD_FONT) > listY - y ? 2 * (SM_CARD_H + SM_CARD_FONT) : listY - y;
+    SM_DrawLaunch(y + 15 + 5.3333f);
 }
 
-// .Select-menu-outer, under the control: the site's popover, options 34 high
+// .Select-menu-outer, under the control: #333, options 40 high, the focused one #222
 static void SM_DrawDropdown(void) {
     const smCvar_t* cv = &smCvars[sm.select];
-    float pad = 6.0f;
-    float x = sm.selectControl.x, y = sm.selectControl.y + SM_FIELD_H + 6;
-    float full = cv->numOptions * 34.0f;
-    float view = full < 7 * 34.0f ? full : 7 * 34.0f;
-    smRect_t box = SM_R(x, y + pad, SM_VAL_W, view);
+    float x = sm.selectControl.x, y = sm.selectControl.y + sm.selectControl.h - 1;
+    float w = sm.selectControl.w;
+    float full = cv->numOptions * 40.0f;
+    float view = full < 198.0f ? full : 198.0f;
+    smRect_t box = SM_R(x, y, w, view);
     int k;
 
     if (sm.optionScroll > full - view) {
@@ -1053,31 +1068,26 @@ static void SM_DrawDropdown(void) {
     if (sm.optionScroll < 0) {
         sm.optionScroll = 0;
     }
-    SM_Shadow(x, y, SM_VAL_W, view + 2 * pad, SM_RADIUS_MD);
-    SM_Round(x, y, SM_VAL_W, view + 2 * pad, SM_RADIUS_MD, smRaised, NULL);
-    SM_Hit(x, y, SM_VAL_W, view + 2 * pad, SM_HIT_MENU, sm.select, NULL);
+    SM_Fill(x, y, w, view, smrSelect, NULL);
+    SM_Hit(x, y, w, view, SM_HIT_MENU, sm.select, NULL);
     for (k = 0; k < cv->numOptions; k++) {
-        float oy = box.y + k * 34.0f - sm.optionScroll;
-        float base = SM_Baseline(FONT_SANS, 14, oy, 34);
-        qboolean chosen = !strcmp(cv->options[k].value, sm.values[sm.select]);
+        float oy = y + k * 40.0f - sm.optionScroll;
+        float base = SM_Baseline(FONT_SANS, 15, oy + 8, 24);
 
         // the option under the mouse takes the focus
         if (SM_Over(SM_HIT_OPTION, k)) {
             sm.selectFocus = k;
         }
         if (k == sm.selectFocus) {
-            SM_Round(x + pad, oy, SM_VAL_W - 2 * pad, 34, SM_RADIUS_SM, smRaisedHover, &box);
+            SM_Fill(x, oy, w, 40, smrOptionFocus, &box);
         }
-        if (SM_TextInside(base, 14, &box)) {
-            SM_Text(x + 16, base, FONT_SANS, 14, (k == sm.selectFocus || chosen) ? smText : smTextSoft,
-                    cv->options[k].label, -1, chosen);
-            if (chosen) {
-                SM_Pill(x + SM_VAL_W - 22, oy + 14, 6, 6, smGold, &box);
-            }
+        if (SM_TextInside(base, 15, &box)) {
+            SM_Text(x + 10, base, FONT_SANS, 15, k == sm.selectFocus ? smrSelectValue : smrOption,
+                    cv->options[k].label, -1, qfalse);
         }
-        SM_Hit(x + pad, oy, SM_VAL_W - 2 * pad, 34, SM_HIT_OPTION, k, &box);
+        SM_Hit(x, oy, w, 40, SM_HIT_OPTION, k, &box);
     }
-    sm.selectMenu = SM_R(x, y, SM_VAL_W, view + 2 * pad);
+    sm.selectMenu = SM_R(x, y, w, view);
 }
 
 /*
@@ -1085,52 +1095,56 @@ static void SM_DrawDropdown(void) {
 
 THE DIALOGS
 
+The modal-styles module: an overlay at 80% black, and a band across the whole screen --
+600 high for the gametypes, over the chosen arena's large shot, 980 for the arenas -- with
+the widemodal-content at 80% black in its middle 70%.
+
 ===============================================================================
 */
 
-// the scrim and the modal: the page's 70% in the middle, a panel with a shadow
 static smRect_t SM_DrawDialog(float height, qhandle_t background) {
     float top = (SM_VIEW_H - height) * 0.5f;
     float cx = smVW * 0.15f, cw = smVW * 0.7f;
-    vec4_t scrim = {0.0f, 0.0f, 0.0f, 0.6f};
 
-    (void)background;
-    // the scrim takes the mouse off the page
-    SM_FillScreen(scrim);
+    SM_Fill(-smVW, -SM_VIEW_H, 3 * smVW, 3 * SM_VIEW_H, smrBlack80, NULL);
     SM_Hit(-smVW, -SM_VIEW_H, 3 * smVW, 3 * SM_VIEW_H, SM_HIT_BLOCK, 0, NULL);
-    SM_Shadow(cx, top, cw, height, SM_RADIUS_LG);
-    SM_Round(cx, top, cw, height, SM_RADIUS_LG, smPanel, NULL);
-    return SM_R(cx + SM_PAD, top + SM_PAD, cw - 2 * SM_PAD, height - 2 * SM_PAD);
+    SM_Fill(0, top, smVW, height, smrDialog, NULL);
+    if (background) {
+        // background-size: 100%, centred
+        smRect_t band = SM_R(0, top, smVW, height);
+        float shotH = smVW * 1080.0f / 1920.0f;
+
+        SM_Pic(0, top + (height - shotH) * 0.5f, smVW, shotH, background, &band);
+    }
+    SM_Fill(cx, top, cw, height, smrBlack80, NULL);
+    return SM_R(cx + 15, top + 15, cw - 30, height - 30);
 }
 
-static void SM_DrawButton(float x, float y, float w, const char* text, smHitType_t type) {
-    SM_Button(x, y, w, SM_BUTTON_H, text, type == SM_HIT_OK ? SM_BUTTON_PRIMARY : SM_BUTTON_SECONDARY,
-              SM_Over(type, 0));
-    SM_Hit(x, y, w, SM_BUTTON_H, type, 0, NULL);
-}
-
-// Cancel and OK at the right
+// Cancel and OK at the right, skeleton's buttons with a space between them
 static void SM_DrawButtons(float right, float y) {
-    float okW = SM_ButtonWidth("OK", SM_BUTTON_H) + 16;
-    float cancelW = SM_ButtonWidth("Cancel", SM_BUTTON_H);
+    float okW = SM_WebButtonWidth("OK");
+    float cancelW = SM_WebButtonWidth("Cancel");
     float okX = right - okW;
+    float cancelX = okX - SM_Advance(FONT_SANS, 15, " ", -1) - cancelW;
 
-    SM_DrawButton(okX - 10 - cancelW, y, cancelW, "Cancel", SM_HIT_CANCEL);
-    SM_DrawButton(okX, y, okW, "OK", SM_HIT_OK);
+    SM_WebButton(cancelX, y, cancelW, "Cancel", qfalse, SM_Over(SM_HIT_CANCEL, 0), NULL);
+    SM_Hit(cancelX, y, cancelW, SM_WEB_BUTTON_H, SM_HIT_CANCEL, 0, NULL);
+    SM_WebButton(okX, y, okW, "OK", qfalse, SM_Over(SM_HIT_OK, 0), NULL);
+    SM_Hit(okX, y, okW, SM_WEB_BUTTON_H, SM_HIT_OK, 0, NULL);
 }
 
-// a thin scrollbar with only its thumb drawn
+// the webkit scrollbar: an 8 pixel #333 thumb, #999 under the cursor
 static void SM_DrawScrollbar(float x, float y, float h, float content, float scroll) {
     float thumbH = h * h / content;
     float thumbY;
 
-    if (thumbH < 28) {
-        thumbH = 28;
+    if (thumbH < 16) {
+        thumbH = 16;
     }
     thumbY = y + (h - thumbH) * scroll / (content - h);
-    SM_Hit(x - 2, y, 10, h, SM_HIT_TRACK, 0, NULL);
-    SM_Pill(x + 1, thumbY, 6, thumbH, (SM_Over(SM_HIT_THUMB, 0) || sm.scrollDrag) ? smMuted : smBorder, NULL);
-    SM_Hit(x - 2, thumbY, 10, thumbH, SM_HIT_THUMB, 0, NULL);
+    SM_Hit(x, y, 8, h, SM_HIT_TRACK, 0, NULL);
+    SM_Fill(x, thumbY, 8, thumbH, (SM_Over(SM_HIT_THUMB, 0) || sm.scrollDrag) ? smrThumbHover : smrThumb, NULL);
+    SM_Hit(x, thumbY, 8, thumbH, SM_HIT_THUMB, 0, NULL);
 }
 
 static float SM_ClampScroll(float scroll, float content, float view) {
@@ -1145,7 +1159,7 @@ static float SM_FactoryHeight(const smFactory_t* f, float width) {
     int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
     float h = 7.5f;
 
-    h += SM_Wrap(FONT_SANS, 24, f->title, width, starts, lens) * 38.39f;
+    h += SM_Wrap(FONT_SANS, 24, f->title, width, starts, lens) * 38.4f;
     h += SM_Wrap(FONT_SANS, 15, f->author[0] ? f->author : "No author provided", width, starts, lens) * 24.0f;
     h += SM_Wrap(FONT_SANS, 15, f->description[0] ? f->description : "No description.", width, starts, lens) * 24.0f;
     return h;
@@ -1168,34 +1182,40 @@ static float SM_DrawLines(float x, float y, float size, float lineHeight, const 
     return y;
 }
 
+/*
+===============
+SM_DrawFactories
+
+The gametypes on the left, each its small icon and its title, the chosen one on #333;
+the factories of that gametype on the right, the chosen one on #333 in yellow.
+===============
+*/
 static void SM_DrawFactories(void) {
     smRect_t in = SM_DrawDialog(600, SM_Levelshot(sm.tempMap));
     smRect_t clip;
-    float space = SM_Advance(FONT_SANS, 18.67f, " ", 1);
+    float space = SM_Advance(FONT_SANS, 18.6667f, " ", 1);
     float itemW = 0, menuW, ax, aw, ah = in.h * 0.95f, ew, content, y;
     int list[SM_MAX_FACTORIES];
     int n, k;
 
     // menu: the gametypes, as wide as the widest with its icon and padding
     for (k = 0; k < SM_NUM_GAMETYPES; k++) {
-        float w = SM_Advance(FONT_SANS, 18.67f, smGametypes[k].title, -1);
+        float w = SM_Advance(FONT_SANS, 18.6667f, smGametypes[k].title, -1);
 
         if (w > itemW) {
             itemW = w;
         }
     }
     itemW += 3 + 28 + 5 + space + 50;
-    menuW = itemW + 18.67f;
+    menuW = itemW + 18.6667f;
     for (k = 0; k < SM_NUM_GAMETYPES; k++) {
         float ry = in.y + k * 36.0f;
 
         if (smGametypes[k].gametype == sm.selectedGametype) {
-            SM_Round(in.x, ry, itemW, 36, SM_RADIUS_SM, smRaisedHover, NULL);
-        } else if (SM_Over(SM_HIT_GAMETYPE, k)) {
-            SM_Round(in.x, ry, itemW, 36, SM_RADIUS_SM, smRaised, NULL);
+            SM_Fill(in.x, ry, itemW, 36, smrSelect, NULL);
         }
-        SM_Pic(in.x + 3, ry + 5, 28, 28, SM_GametypeIcon(&smGametypes[k]), NULL);
-        SM_Text(in.x + 36 + space, SM_Baseline(FONT_SANS, 18.67f, ry + 3, 29.87f), FONT_SANS, 18.67f, smText,
+        SM_Pic(in.x + 3, ry + 4, 28, 28, SM_GametypeIcon(&smGametypes[k], qfalse), NULL);
+        SM_Text(in.x + 36 + space, SM_Baseline(FONT_SANS, 18.6667f, ry + 3, 29.8667f), FONT_SANS, 18.6667f, smText,
                 smGametypes[k].title, -1, qfalse);
         SM_Hit(in.x, ry, itemW, 36, SM_HIT_GAMETYPE, k, NULL);
     }
@@ -1225,15 +1245,13 @@ static void SM_DrawFactories(void) {
 
         if (y < clip.y + clip.h && y + eh > clip.y) {
             qboolean selected = !strcmp(f->id, sm.tempFactory);
-            const float* color = selected ? smText : smTextSoft;
+            const float* color = selected ? smrYellow : smText;
             float ty = y + 3.75f;
 
             if (selected) {
-                SM_Round(ax, y, ew, eh, SM_RADIUS_MD, smRaisedHover, &clip);
-            } else if (SM_Over(SM_HIT_FACTORY, list[k])) {
-                SM_Round(ax, y, ew, eh, SM_RADIUS_MD, smRaised, &clip);
+                SM_Fill(ax, y, ew, eh, smrSelect, &clip);
             }
-            ty = SM_DrawLines(ax + 15, ty, 24, 38.39f, color, f->title, ew - 15, qtrue, &clip);
+            ty = SM_DrawLines(ax + 15, ty, 24, 38.4f, color, f->title, ew - 15, qtrue, &clip);
             ty = SM_DrawLines(ax + 15, ty, 15, 24, color, f->author[0] ? f->author : "No author provided", ew - 15,
                               qfalse, &clip);
             SM_DrawLines(ax + 15, ty, 15, 24, color, f->description[0] ? f->description : "No description.", ew - 15,
@@ -1263,48 +1281,59 @@ static float SM_MapTiles(float x, float y, float width, const smRect_t* clip) {
         tw = (tw > 250 ? tw : 250) + 12;
         if (cx > 0 && cx + tw + 24 > width) {
             cx = 0;
-            cy += 214.39f;
+            cy += 214.4f;
         }
-        if (clip && y + cy < clip->y + clip->h && y + cy + 190.39f > clip->y) {
+        if (clip && y + cy < clip->y + clip->h && y + cy + 190.4f > clip->y) {
             float tx = x + cx, ty = y + cy;
             float base = SM_Baseline(FONT_SANS, 24, ty + 146, 38.4f);
             qboolean selected = !strcmp(a->sysname, sm.tempMap);
+            smRect_t shot = SM_R(tx + (tw - 250) * 0.5f, ty + 6, 250, 140);
 
             if (selected) {
-                SM_Round(tx, ty, tw, 190.39f, SM_RADIUS_MD, smRaisedHover, clip);
-            } else if (SM_Over(SM_HIT_MAP, smMapList[k])) {
-                SM_Round(tx, ty, tw, 190.39f, SM_RADIUS_MD, smRaised, clip);
+                SM_Fill(tx, ty, tw, 190.4f, smrSelect, clip);
             }
-            SM_Pic(tx + 6, ty + 6, 250, 140, SM_Preview(a, a->sysname), clip);
+            if (SM_Clip(&shot, clip)) {
+                SM_Pic(tx + (tw - 250) * 0.5f, ty + 6, 250, 250 * 270.0f / 480.0f, SM_Preview(a, a->sysname), &shot);
+            }
             if (SM_TextInside(base, 24, clip)) {
-                SM_Centered(tx + tw * 0.5f, base, 20, selected ? smText : smTextSoft, a->name, qtrue);
+                SM_Text(tx + (tw - SM_NameWidth(a)) * 0.5f, base, FONT_SANS, 24, selected ? smrYellow : smText, a->name,
+                        -1, qtrue);
             }
-            SM_Hit(tx, ty, tw, 190.39f, SM_HIT_MAP, smMapList[k], clip);
+            SM_Hit(tx, ty, tw, 190.4f, SM_HIT_MAP, smMapList[k], clip);
         }
         cx += tw + 24;
     }
-    return smNumMapList ? cy + 214.39f : 0;
+    return smNumMapList ? cy + 214.4f : 0;
 }
 
+/*
+===============
+SM_DrawMaps
+
+ALL, A to Z and # down the left, the chosen one on #333, and the arenas that play the
+gametype in tiles, the chosen one on #333 with its name in yellow.
+===============
+*/
 static void SM_DrawMaps(void) {
     smRect_t in = SM_DrawDialog(980, 0);
     smRect_t clip;
-    float itemW = SM_Advance(FONT_SANS, 18.67f, "ALL", -1) + 18.67f;
-    float menuW = itemW + 18.67f;
+    float itemW = SM_Advance(FONT_SANS, 18.6667f, "ALL", -1) + 18.6667f;
+    float menuW = itemW + 18.6667f;
     float ax = in.x + menuW, aw = in.w - menuW, ah = in.h * 0.95f, width, content;
     int k;
 
     // menu: ALL, A to Z and #, one under the other
     for (k = 0; k < 28; k++) {
         const char* label = k == 0 ? "ALL" : va("%c", SM_FilterChar(k));
-        float ry = in.y + k * 33.59f;
+        float ry = in.y + k * 33.6f;
 
         if (SM_FilterChar(k) == sm.filter) {
-            SM_Round(in.x, ry, itemW, 33.59f, SM_RADIUS_SM, smRaisedHover, NULL);
+            SM_Fill(in.x, ry, itemW, 33.6f, smrSelect, NULL);
         }
-        SM_Text(in.x + (itemW - SM_Advance(FONT_SANS, 18.67f, label, -1)) * 0.5f,
-                SM_Baseline(FONT_SANS, 18.67f, ry + 1.87f, 29.87f), FONT_SANS, 18.67f, smText, label, -1, qfalse);
-        SM_Hit(in.x, ry, itemW, 33.59f, SM_HIT_FILTER, k, NULL);
+        SM_Text(in.x + (itemW - SM_Advance(FONT_SANS, 18.6667f, label, -1)) * 0.5f,
+                SM_Baseline(FONT_SANS, 18.6667f, ry + 1.8667f, 29.8667f), FONT_SANS, 18.6667f, smText, label, -1,
+                qfalse);
+        SM_Hit(in.x, ry, itemW, 33.6f, SM_HIT_FILTER, k, NULL);
     }
 
     // article: the maps, scrolling when they do not fit
@@ -1619,6 +1648,7 @@ void UI_StartMatch_Paint(void) {
     const smHit_t* under;
 
     SM_Frame();
+    SM_SetLook(SM_LOOK_RETAIL);
     if (!sm.loaded) {
         SM_Load();
         SM_ReadCvars(qfalse);
