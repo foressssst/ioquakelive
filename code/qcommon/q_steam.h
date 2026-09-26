@@ -43,6 +43,18 @@ void Steam_GS_UpdateGameInfo(qboolean force, char* const* factoryTags, int numFa
 qboolean Steam_RequestServerList(int source);  // 0 internet, 1 LAN, 2 friends, 3 favourites, 4 history
 void Steam_ServerList_f(void);
 qboolean Steam_ServerListRefreshing(void);
+qboolean Steam_RefreshServerList(void);  // Quick Refresh: the same servers, asked again
+int Steam_ServerListNextUpdated(void);   // one that answered again, or -1
+const char* Steam_ServerListName(int index);  // the name as it is, which an info string cannot carry
+
+// what the browser shows about the server it has selected
+#define STEAM_DETAILS_NONE 0
+#define STEAM_DETAILS_LOADING 1
+#define STEAM_DETAILS_DONE 2
+#define STEAM_DETAILS_FAILED 3
+qboolean Steam_RequestServerDetails(unsigned int ip, unsigned short port);
+int Steam_ServerDetails(char* rules, int rulesSize, char* players, int playersSize);
+qboolean Steam_SetFavorite(unsigned int ip, unsigned short port, qboolean favorite);
 
 // the Workshop, which is where Quake Live downloads its maps from
 qboolean Steam_WorkshopReady(void);

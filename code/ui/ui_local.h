@@ -977,6 +977,16 @@ int trap_SteamFriendCount(void);
 qboolean trap_SteamFriendGet(int index, uiFriend_t* out);
 void trap_SteamFriendAction(int index, int action);
 
+// [ioquakelive] the rest of what retail's browser asked Steam for: the same servers again
+// (Quick Refresh), the rules and players of one (one player per line: name, score and seconds,
+// separated by tabs) and Steam's favourites
+qboolean trap_LAN_SteamRefresh(void);
+qboolean trap_LAN_SteamRefreshing(void);
+qboolean trap_LAN_SteamDetails(const char* address);
+int trap_LAN_SteamDetailsGet(char* rules, int rulesSize, char* players, int playersSize);
+qboolean trap_LAN_SteamFavorite(const char* address, qboolean favorite);
+void trap_LAN_ServerName(int source, int n, char* buf, int size);
+
 // ui_startmatch.c: retail's web Start Match page, drawn by one ownerdraw of the
 // "startmatch" menu (the number is ours: retail's menudef.h has none for it)
 #define UI_STARTMATCH 600
@@ -1022,6 +1032,7 @@ void UI_Browser_Open(void);
 void UI_Browser_Paint(void);
 qboolean UI_Browser_HandleKey(int key);
 void UI_Browser_Sort(int column);
+void UI_Browser_SetSource(int source);  // Steam's list: 0 internet, 1 LAN, 2 friends, 3 favourites, 4 history
 void UI_Home_ServerList(qboolean refresh);
 
 // [QL] the Training Center page; see ui_training.c

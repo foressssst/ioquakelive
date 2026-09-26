@@ -4343,6 +4343,13 @@ void UI_Browser_Sort(int column) {
     UI_ServersSort(column, qtrue);
 }
 
+// which of Steam's lists the global one asks for: the browser's "Type"
+static int uiBrowserSource;
+
+void UI_Browser_SetSource(int source) {
+    uiBrowserSource = (source >= 0 && source <= 4) ? source : 0;
+}
+
 void UI_Home_ServerList(qboolean refresh) {
     if (refresh) {
         UI_StartServerRefresh(qtrue);
@@ -4382,7 +4389,7 @@ static void UI_StartServerRefresh(qboolean full) {
 
     uiInfo.serverStatus.refreshtime = uiInfo.uiDC.realTime + 5000;
     if (ui_netSource.integer == AS_GLOBAL || ui_netSource.integer == AS_MPLAYER) {
-        i = (ui_netSource.integer == AS_GLOBAL) ? 0 : 1;
+        i = (ui_netSource.integer == AS_GLOBAL) ? uiBrowserSource : 1;
         ptr = UI_Cvar_VariableString("debug_protocol");
         if (strlen(ptr)) {
             trap_Cmd_ExecuteText(EXEC_APPEND, va("globalservers %d %s full empty\n", i, ptr));

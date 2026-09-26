@@ -190,6 +190,30 @@ void trap_SteamFriendAction(int index, int action) {
     syscall(UI_STEAM_FRIEND_ACTION, index, action);
 }
 
+qboolean trap_LAN_SteamRefresh(void) {
+    return syscall(UI_LAN_STEAM_REFRESH, 0);
+}
+
+qboolean trap_LAN_SteamRefreshing(void) {
+    return syscall(UI_LAN_STEAM_REFRESH, 1);
+}
+
+qboolean trap_LAN_SteamDetails(const char* address) {
+    return syscall(UI_LAN_STEAM_DETAILS, address);
+}
+
+int trap_LAN_SteamDetailsGet(char* rules, int rulesSize, char* players, int playersSize) {
+    return syscall(UI_LAN_STEAM_DETAILS_GET, rules, rulesSize, players, playersSize);
+}
+
+qboolean trap_LAN_SteamFavorite(const char* address, qboolean favorite) {
+    return syscall(UI_LAN_STEAM_FAVORITE, address, favorite);
+}
+
+void trap_LAN_ServerName(int source, int n, char* buf, int size) {
+    syscall(UI_LAN_SERVER_NAME, source, n, buf, size);
+}
+
 int trap_R_Font_Register(const char* name) {
     return syscall(UI_R_FONT_REGISTER, name);
 }

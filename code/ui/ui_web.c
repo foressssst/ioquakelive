@@ -516,6 +516,58 @@ void SM_Text(float x, float baseline, int font, float size, const float* color, 
 
 /*
 ===============
+SM_TextRaw / SM_AdvanceRaw
+
+[QL] retail's pages print what they are given: a server named "^1Foo" shows the caret and
+the one. The renderer draws that way with TEXT_LITERAL; measuring has no such flag, so each
+caret is measured on its own, where it cannot start a colour.
+===============
+*/
+float SM_AdvanceRaw(int font, float size, const char* text, int len, qboolean bold) {
+    int face = SM_Face(font, bold);
+    float w = 0;
+    int start = 0;
+    int i;
+
+    if (len < 0) {
+        len = (int)strlen(text);
+    }
+    for (i = 0; i <= len; i++) {
+        if (i == len || text[i] == '^') {
+            if (i > start) {
+                w += SM_AdvanceFace(face, size, text + start, i - start);
+            }
+            if (i < len) {
+                w += SM_AdvanceFace(face, size, "^", 1);
+            }
+            start = i + 1;
+        }
+    }
+    return w;
+}
+
+void SM_TextRaw(float x, float baseline, int font, float size, const float* color, const char* text, int limit,
+                qboolean bold) {
+    int face = SM_Face(font, bold);
+    float px = size * SM_FaceEm(face) * smScale;
+    int sx = (int)(x * smScale + 0.5f);
+    int sy = (int)(smTop + baseline * smScale + 0.5f);
+
+    if (!text || !text[0] || limit == 0) {
+        return;
+    }
+    trap_R_SetColor(color);
+    trap_R_Font_DrawString(sx, sy, text, face, px, limit, NULL, TEXT_LITERAL);
+    if (bold && !SM_HasBold(face)) {
+        int shift = (int)(smScale + 0.5f);
+
+        trap_R_Font_DrawString(sx + (shift < 1 ? 1 : shift), sy, text, face, px, limit, NULL, TEXT_LITERAL);
+    }
+    trap_R_SetColor(NULL);
+}
+
+/*
+===============
 SM_Icon
 
 [QL] FontAwesome's glyph, as retail's pages draw their <i class="fa">: sized by font-size and

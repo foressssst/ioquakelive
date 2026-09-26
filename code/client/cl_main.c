@@ -151,6 +151,7 @@ static void CL_WorkshopNext(void);
 // how many servers from Steam's list have been copied into the interface's
 static int cl_steamServersTaken;
 static qboolean cl_steamServersPending;
+static int cl_steamServerSlot[MAX_GLOBAL_SERVERS];  // each of Steam's, in cls.globalServers
 
 extern void SV_BotFrame(int time);
 void CL_CheckForResend(void);
@@ -2719,6 +2720,9 @@ void CL_InitServerInfo(serverInfo_t* server, netadr_t* address) {
     server->netType = 0;
     server->g_humanplayers = 0;
     server->g_needpass = 0;
+    server->vac = 0;
+    server->description[0] = '\0';
+    server->tags[0] = '\0';
 }
 
 #define MAX_SERVERSPERPACKET 256
@@ -4134,7 +4138,7 @@ static void CL_SetServerInfo(serverInfo_t* server, const char* info, int ping) {
     if (server) {
         if (info) {
             server->clients = atoi(Info_ValueForKey(info, "clients"));
-            Q_strncpyz(server->hostName, Info_ValueForKey(info, "hostname"), MAX_NAME_LENGTH);
+            Q_strncpyz(server->hostName, Info_ValueForKey(info, "hostname"), sizeof(server->hostName));
             Q_strncpyz(server->mapName, Info_ValueForKey(info, "mapname"), MAX_NAME_LENGTH);
             server->maxClients = atoi(Info_ValueForKey(info, "sv_maxclients"));
             Q_strncpyz(server->game, Info_ValueForKey(info, "game"), MAX_NAME_LENGTH);
@@ -4144,6 +4148,9 @@ static void CL_SetServerInfo(serverInfo_t* server, const char* info, int ping) {
             server->maxPing = atoi(Info_ValueForKey(info, "maxPing"));  // [QL] binary uses camelCase
             server->g_humanplayers = atoi(Info_ValueForKey(info, "g_humanplayers"));
             server->g_needpass = atoi(Info_ValueForKey(info, "g_needpass"));
+            server->vac = atoi(Info_ValueForKey(info, "sv_vac"));
+            Q_strncpyz(server->description, Info_ValueForKey(info, "gamedesc"), sizeof(server->description));
+            Q_strncpyz(server->tags, Info_ValueForKey(info, "tags"), sizeof(server->tags));
         }
         server->ping = ping;
     }
@@ -4920,12 +4927,34 @@ void CL_SteamServersFrame(void) {
         if (j < cls.numglobalservers) {
             // already there: it takes Steam's latest word and keeps its place
             CL_SetServerInfo(&cls.globalServers[j], info, ping);
+            Q_strncpyz(cls.globalServers[j].hostName, Steam_ServerListName(i), sizeof(cls.globalServers[j].hostName));
+            cl_steamServerSlot[i] = j;
             continue;
         }
 
+        cl_steamServerSlot[i] = cls.numglobalservers;
         server = &cls.globalServers[cls.numglobalservers++];
         CL_InitServerInfo(server, &adr);
         CL_SetServerInfo(server, info, ping);
+        // the name as it is: an info string cannot carry a backslash, a quote or a semicolon
+        Q_strncpyz(server->hostName, Steam_ServerListName(i), sizeof(server->hostName));
+    }
+
+    // the ones that answered again, after a Quick Refresh, take the new ping in their place
+    while ((i = Steam_ServerListNextUpdated()) >= 0) {
+        unsigned int ip = 0;
+        unsigned short port = 0;
+        int ping = 0;
+        char info[MAX_INFO_STRING];
+
+        if (i >= cl_steamServersTaken || i >= MAX_GLOBAL_SERVERS) {
+            continue;  // not taken yet: the loop above will, with what is there now
+        }
+        if (Steam_ServerListGet(i, &ip, &port, &ping, info, sizeof(info))) {
+            CL_SetServerInfo(&cls.globalServers[cl_steamServerSlot[i]], info, ping);
+            Q_strncpyz(cls.globalServers[cl_steamServerSlot[i]].hostName, Steam_ServerListName(i),
+                       sizeof(cls.globalServers[0].hostName));
+        }
     }
 
     // the closing message, once only, like the one ioquake3's master printed

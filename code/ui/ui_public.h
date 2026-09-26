@@ -174,8 +174,22 @@ typedef enum {
     // the data is the same the console's "friends" command prints.
     UI_STEAM_FRIEND_COUNT,
     UI_STEAM_FRIEND_GET,
-    UI_STEAM_FRIEND_ACTION
+    UI_STEAM_FRIEND_ACTION,
+    // [ioquakelive] what retail's browser asked of its JavaScript bridge besides the list:
+    // RefreshList, RequestServerDetails and SetFavoriteServer
+    UI_LAN_STEAM_REFRESH,
+    UI_LAN_STEAM_DETAILS,
+    UI_LAN_STEAM_DETAILS_GET,
+    UI_LAN_STEAM_FAVORITE,
+    // [ioquakelive] a server's name as it is: the info string loses one with a backslash in it
+    UI_LAN_SERVER_NAME
 } uiImport_t;
+
+// what trap_LAN_SteamDetailsGet says about the request
+#define UI_DETAILS_NONE 0
+#define UI_DETAILS_LOADING 1
+#define UI_DETAILS_DONE 2
+#define UI_DETAILS_FAILED 3
 
 typedef enum {
     UIMENU_NONE,

@@ -250,7 +250,7 @@ typedef struct {
 
 typedef struct {
     netadr_t adr;
-    char hostName[MAX_NAME_LENGTH];
+    char hostName[64];  // [QL] as long as Steam's (k_cbMaxGameServerName), which is what the list shows
     char mapName[MAX_NAME_LENGTH];
     char game[MAX_NAME_LENGTH];
     int netType;
@@ -263,6 +263,9 @@ typedef struct {
     qboolean visible;
     int g_humanplayers;
     int g_needpass;
+    int vac;               // [QL] what the browser filters by, as Steam lists it
+    char description[64];  // [QL] the gametype's long name, which the server publishes
+    char tags[128];        // [QL] the short name and the rules, then sv_tags and the factory's
 } serverInfo_t;
 
 typedef struct {

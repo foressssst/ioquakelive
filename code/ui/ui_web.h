@@ -196,6 +196,10 @@ int SM_Fit(int font, float size, const char* text, float width);
 void SM_Text(float x, float baseline, int font, float size, const float* color, const char* text, int limit,
              qboolean bold);
 void SM_Centered(float middle, float baseline, float size, const float* color, const char* text, qboolean bold);
+// [QL] text as a web page prints it: a ^ and what follows are characters, not a colour
+float SM_AdvanceRaw(int font, float size, const char* text, int len, qboolean bold);
+void SM_TextRaw(float x, float baseline, int font, float size, const float* color, const char* text, int limit,
+                qboolean bold);
 float SM_SpacedWidth(int font, float size, const char* text, float spacing);
 void SM_SpacedText(float x, float baseline, int font, float size, const float* color, const char* text, float spacing,
                    qboolean bold);

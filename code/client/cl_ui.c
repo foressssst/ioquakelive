@@ -261,6 +261,9 @@ static void LAN_GetServerInfo(int source, int n, char* buf, int buflen) {
         Info_SetValueForKey(info, "addr", NET_AdrToStringwPort(server->adr));
         Info_SetValueForKey(info, "g_needpass", va("%i", server->g_needpass));
         Info_SetValueForKey(info, "g_humanplayers", va("%i", server->g_humanplayers));
+        Info_SetValueForKey(info, "sv_vac", va("%i", server->vac));
+        Info_SetValueForKey(info, "gamedesc", server->description);
+        Info_SetValueForKey(info, "tags", server->tags);
         Q_strncpyz(buf, info, buflen);
     } else {
         if (buf) {
@@ -850,6 +853,37 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
         case UI_LAN_GETSERVERINFO:
             LAN_GetServerInfo(args[1], args[2], VMA(3), args[4]);
             return 0;
+
+        case UI_LAN_STEAM_REFRESH:
+            return args[1] ? Steam_ServerListRefreshing() : Steam_RefreshServerList();
+
+        case UI_LAN_STEAM_DETAILS:
+        case UI_LAN_STEAM_FAVORITE: {
+            netadr_t adr;
+            unsigned int ip;
+
+            if (!NET_StringToAdr(VMA(1), &adr, NA_IP) || adr.type != NA_IP) {
+                return 0;
+            }
+            ip = ((unsigned int)adr.ip[0] << 24) | (adr.ip[1] << 16) | (adr.ip[2] << 8) | adr.ip[3];
+            if (args[0] == UI_LAN_STEAM_FAVORITE) {
+                return Steam_SetFavorite(ip, BigShort(adr.port), (qboolean)args[2]);
+            }
+            return Steam_RequestServerDetails(ip, BigShort(adr.port));
+        }
+
+        case UI_LAN_STEAM_DETAILS_GET:
+            return Steam_ServerDetails(VMA(1), args[2], VMA(3), args[4]);
+
+        case UI_LAN_SERVER_NAME: {
+            char* buf = VMA(3);
+
+            buf[0] = '\0';
+            if (args[1] == AS_GLOBAL && args[2] >= 0 && args[2] < cls.numglobalservers) {
+                Q_strncpyz(buf, cls.globalServers[args[2]].hostName, args[4]);
+            }
+            return 0;
+        }
 
         case UI_LAN_GETSERVERPING:
             return LAN_GetServerPing(args[1], args[2]);

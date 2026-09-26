@@ -105,12 +105,18 @@ typedef struct {
     char gameDir[32];
     char description[64];
     char tags[128];
+    qboolean queued;  // answered again, waiting for the client to take it
 } steamServer_t;
 
-// the object Steam sees as ISteamMatchmakingServerListResponse
+// the object Steam sees as ISteamMatchmakingServerListResponse, and the same shape for the
+// rules and the players of a single server (ISteamMatchmakingRulesResponse and
+// ISteamMatchmakingPlayersResponse)
 typedef struct {
     void** vtable;
 } steamListResponse_t;
+
+#define STEAM_DETAILS_RULES 8192
+#define STEAM_DETAILS_PLAYERS 4096
 
 static void Steam_DownloadUGC_f(void);
 static void Steam_P2PListen(qboolean asServer);
@@ -186,6 +192,16 @@ typedef struct {
     void(QDECL* ReleaseRequest)(void* self, void* request);
     steamBool_t(QDECL* IsRefreshing)(void* self, void* request);
     void(QDECL* CancelQuery)(void* self, void* request);
+    void(QDECL* RefreshQuery)(void* self, void* request);
+    int(QDECL* ServerRules)(void* self, unsigned int ip, unsigned short port, void* response);
+    int(QDECL* PlayerDetails)(void* self, unsigned int ip, unsigned short port, void* response);
+    void(QDECL* CancelServerQuery)(void* self, int query);
+    void*(QDECL* Lobbies)(void);
+    int(QDECL* AddFavoriteGame)(void* self, unsigned int appId, unsigned int ip, unsigned short connPort,
+                                unsigned short queryPort, unsigned int flags, unsigned int lastPlayed);
+    steamBool_t(QDECL* RemoveFavoriteGame)(void* self, unsigned int appId, unsigned int ip,
+                                           unsigned short connPort, unsigned short queryPort,
+                                           unsigned int flags);
 
     void*(QDECL* UGC)(void);
     unsigned int(QDECL* GetItemState)(void* self, uint64_t item);
@@ -258,6 +274,23 @@ typedef struct {
     steamListResponse_t listResponse;
     int numServers;
     steamServer_t servers[STEAM_MAX_SERVERS];
+    int serverIndex[STEAM_MAX_SERVERS];   // Steam's index + 1 -> ours + 1, 0 until it answers
+    int queued[STEAM_MAX_SERVERS];        // the ones that answered again
+    int numQueued;
+
+    void* lobbies;  // ISteamMatchmaking *, where the favourites are kept
+
+    // the rules and the players of the server the browser has selected
+    steamListResponse_t rulesResponse;
+    steamListResponse_t playersResponse;
+    int rulesQuery;    // HServerQuery, 0 when none is going on
+    int playersQuery;
+    int detailsState;  // STEAM_DETAILS_*
+    qboolean playersDone;
+    int rulesLen;
+    int playersLen;
+    char rules[STEAM_DETAILS_RULES];
+    char players[STEAM_DETAILS_PLAYERS];
 } steamState_t;
 
 static steamState_t st;
@@ -373,6 +406,13 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND_OPT(ReleaseRequest, "SteamAPI_ISteamMatchmakingServers_ReleaseRequest");
     STEAM_BIND_OPT(IsRefreshing, "SteamAPI_ISteamMatchmakingServers_IsRefreshing");
     STEAM_BIND_OPT(CancelQuery, "SteamAPI_ISteamMatchmakingServers_CancelQuery");
+    STEAM_BIND_OPT(RefreshQuery, "SteamAPI_ISteamMatchmakingServers_RefreshQuery");
+    STEAM_BIND_OPT(ServerRules, "SteamAPI_ISteamMatchmakingServers_ServerRules");
+    STEAM_BIND_OPT(PlayerDetails, "SteamAPI_ISteamMatchmakingServers_PlayerDetails");
+    STEAM_BIND_OPT(CancelServerQuery, "SteamAPI_ISteamMatchmakingServers_CancelServerQuery");
+    STEAM_BIND_OPT(Lobbies, "SteamMatchmaking");
+    STEAM_BIND_OPT(AddFavoriteGame, "SteamAPI_ISteamMatchmaking_AddFavoriteGame");
+    STEAM_BIND_OPT(RemoveFavoriteGame, "SteamAPI_ISteamMatchmaking_RemoveFavoriteGame");
     return qtrue;
 }
 
@@ -499,6 +539,9 @@ void Steam_Init(void) {
     st.clientUp = qtrue;
     if (st.Matchmaking) {
         st.matchmaking = st.Matchmaking();  // the server list interface
+    }
+    if (st.Lobbies) {
+        st.lobbies = st.Lobbies();  // the favourites live here
     }
     if (st.UGC) {
         st.ugc = st.UGC();  // the Workshop's, where the maps come from
@@ -975,6 +1018,8 @@ static void Steam_ServerListReset(void) {
     }
     st.listRequest = NULL;
     st.numServers = 0;
+    st.numQueued = 0;
+    Com_Memset(st.serverIndex, 0, sizeof(st.serverIndex));
     st.listRefreshing = qfalse;
 }
 
@@ -982,16 +1027,31 @@ static void Steam_ServerListReset(void) {
 static void Steam_ServerListAdd(void* request, int index) {
     steamServerItem_t* item;
     steamServer_t* out;
+    int ours;
 
-    if (st.numServers >= STEAM_MAX_SERVERS) {
-        return;
-    }
     item = (steamServerItem_t*)st.GetServerDetails(st.matchmaking, request, index);
     if (!item || !item->hadResponse) {
         return;
     }
 
-    out = &st.servers[st.numServers++];
+    // a server that answers again after a refresh keeps its place and waits for the client
+    ours = (index >= 0 && index < STEAM_MAX_SERVERS) ? st.serverIndex[index] - 1 : -1;
+    if (ours >= 0) {
+        out = &st.servers[ours];
+        if (!out->queued && st.numQueued < STEAM_MAX_SERVERS) {
+            out->queued = qtrue;
+            st.queued[st.numQueued++] = ours;
+        }
+    } else {
+        if (st.numServers >= STEAM_MAX_SERVERS) {
+            return;
+        }
+        if (index >= 0 && index < STEAM_MAX_SERVERS) {
+            st.serverIndex[index] = st.numServers + 1;
+        }
+        out = &st.servers[st.numServers++];
+        out->queued = qfalse;
+    }
     out->ip = item->ip;
     out->port = item->connectionPort;
     out->ping = item->ping;
@@ -1107,6 +1167,191 @@ qboolean Steam_ServerListRefreshing(void) {
     return st.listRefreshing;
 }
 
+/*
+===============
+Steam_RefreshServerList
+
+The browser's Quick Refresh (retail's RefreshList): Steam asks every server already in the
+list again, without looking for new ones. What answers comes back through
+Steam_ServerListNextUpdated.
+===============
+*/
+qboolean Steam_RefreshServerList(void) {
+    if (!st.listRequest || !st.RefreshQuery || st.listRefreshing) {
+        return qfalse;
+    }
+    st.listRefreshing = qtrue;
+    st.RefreshQuery(st.matchmaking, st.listRequest);
+    return qtrue;
+}
+
+// a server that answered again since the last call, or -1
+int Steam_ServerListNextUpdated(void) {
+    int ours;
+
+    if (!st.numQueued) {
+        return -1;
+    }
+    ours = st.queued[--st.numQueued];
+    st.servers[ours].queued = qfalse;
+    return ours;
+}
+
+/*
+===============
+A server's rules and players
+
+What the browser shows about the server it has selected (retail's RequestServerDetails):
+Steam asks the server itself, which answers with the keys it published (SetKeyValue) and the
+players it listed (BUpdateUserData). The rules arrive one by one and end in a complete or a
+failure; the players, the same.
+===============
+*/
+static void Steam_DetailsAppend(char* buf, int size, int* len, const char* text) {
+    int n;
+
+    for (n = 0; text[n] && *len + 1 < size; n++) {
+        char c = text[n];
+
+        // the separators of each format and anything unprintable go out as spaces
+        buf[(*len)++] = (c == '\\' || c == '\n' || c == '\t' || (unsigned char)c < ' ') ? ' ' : c;
+    }
+    buf[*len] = '\0';
+}
+
+static void STEAM_CB Steam_CB_RulesResponded(STEAM_CB_SELF, const char* rule, const char* value) {
+    (void)self;
+    if (!rule || !rule[0]) {
+        return;
+    }
+    if (!value) {
+        value = "";
+    }
+    if (st.rulesLen + (int)strlen(rule) + (int)strlen(value) + 3 >= STEAM_DETAILS_RULES) {
+        return;
+    }
+    st.rules[st.rulesLen++] = '\\';
+    Steam_DetailsAppend(st.rules, sizeof(st.rules), &st.rulesLen, rule);
+    st.rules[st.rulesLen++] = '\\';
+    st.rules[st.rulesLen] = '\0';
+    Steam_DetailsAppend(st.rules, sizeof(st.rules), &st.rulesLen, value);
+}
+
+static void STEAM_CB Steam_CB_RulesFailed(STEAM_CB_SELF) {
+    (void)self;
+    st.rulesQuery = 0;
+    st.detailsState = STEAM_DETAILS_FAILED;
+}
+
+static void STEAM_CB Steam_CB_RulesComplete(STEAM_CB_SELF) {
+    (void)self;
+    st.rulesQuery = 0;
+    st.detailsState = STEAM_DETAILS_DONE;
+}
+
+// one line per player: the name, the score and the seconds on the server
+static void STEAM_CB Steam_CB_PlayerAdded(STEAM_CB_SELF, const char* name, int score, float seconds) {
+    char line[64];
+
+    (void)self;
+    if (st.playersLen + MAX_NAME_LENGTH + (int)sizeof(line) >= STEAM_DETAILS_PLAYERS) {
+        return;
+    }
+    Steam_DetailsAppend(st.players, sizeof(st.players), &st.playersLen, name ? name : "");
+    Com_sprintf(line, sizeof(line), "\t%i\t%i\n", score, (int)seconds);
+    Q_strncpyz(st.players + st.playersLen, line, sizeof(st.players) - st.playersLen);
+    st.playersLen += (int)strlen(st.players + st.playersLen);
+}
+
+static void STEAM_CB Steam_CB_PlayersFailed(STEAM_CB_SELF) {
+    (void)self;
+    st.playersQuery = 0;
+    st.playersLen = 0;
+    st.players[0] = '\0';
+    st.playersDone = qtrue;
+}
+
+static void STEAM_CB Steam_CB_PlayersComplete(STEAM_CB_SELF) {
+    (void)self;
+    st.playersQuery = 0;
+    st.playersDone = qtrue;
+}
+
+static void* steamRulesVTable[3];
+static void* steamPlayersVTable[3];
+
+// whatever is still going on is dropped: Steam must not answer into a request nobody reads
+static void Steam_CancelDetails(void) {
+    if (st.rulesQuery && st.CancelServerQuery) {
+        st.CancelServerQuery(st.matchmaking, st.rulesQuery);
+    }
+    if (st.playersQuery && st.CancelServerQuery) {
+        st.CancelServerQuery(st.matchmaking, st.playersQuery);
+    }
+    st.rulesQuery = 0;
+    st.playersQuery = 0;
+}
+
+qboolean Steam_RequestServerDetails(unsigned int ip, unsigned short port) {
+    if (!st.clientUp || !st.matchmaking || !st.ServerRules || !st.PlayerDetails) {
+        return qfalse;
+    }
+    Steam_CancelDetails();
+
+    steamRulesVTable[0] = (void*)Steam_CB_RulesResponded;
+    steamRulesVTable[1] = (void*)Steam_CB_RulesFailed;
+    steamRulesVTable[2] = (void*)Steam_CB_RulesComplete;
+    st.rulesResponse.vtable = steamRulesVTable;
+    steamPlayersVTable[0] = (void*)Steam_CB_PlayerAdded;
+    steamPlayersVTable[1] = (void*)Steam_CB_PlayersFailed;
+    steamPlayersVTable[2] = (void*)Steam_CB_PlayersComplete;
+    st.playersResponse.vtable = steamPlayersVTable;
+
+    st.rulesLen = 0;
+    st.rules[0] = '\0';
+    st.playersLen = 0;
+    st.players[0] = '\0';
+    st.playersDone = qfalse;
+    st.detailsState = STEAM_DETAILS_LOADING;
+
+    // Quake Live's servers answer queries on the game port (STEAM_QUERY_PORT_SHARED)
+    st.rulesQuery = st.ServerRules(st.matchmaking, ip, port, &st.rulesResponse);
+    st.playersQuery = st.PlayerDetails(st.matchmaking, ip, port, &st.playersResponse);
+    return qtrue;
+}
+
+int Steam_ServerDetails(char* rules, int rulesSize, char* players, int playersSize) {
+    if (rules && rulesSize > 0) {
+        Q_strncpyz(rules, st.detailsState == STEAM_DETAILS_DONE ? st.rules : "", rulesSize);
+    }
+    if (players && playersSize > 0) {
+        Q_strncpyz(players, st.playersDone ? st.players : "", playersSize);
+    }
+    return st.detailsState;
+}
+
+/*
+===============
+Steam_SetFavorite
+
+Retail's SetFavoriteServer (0x00432736 removes): the favourites are Steam's own, the ones
+its server browser shows, and the list's type 3 reads them back.
+===============
+*/
+qboolean Steam_SetFavorite(unsigned int ip, unsigned short port, qboolean favorite) {
+    unsigned int appId = (unsigned int)atoi(STEAM_APP_ID);
+
+    if (!st.clientUp || !st.lobbies || !st.AddFavoriteGame || !st.RemoveFavoriteGame) {
+        return qfalse;
+    }
+    if (favorite) {
+        st.AddFavoriteGame(st.lobbies, appId, ip, port, port, 1, (unsigned int)time(NULL));
+    } else {
+        st.RemoveFavoriteGame(st.lobbies, appId, ip, port, port, 1);
+    }
+    return qtrue;
+}
+
 int Steam_ServerListCount(void) {
     return st.numServers;
 }
@@ -1121,10 +1366,30 @@ with. The gametype comes from the first tag, which is how it is published
 (0x00466260); an unrecognised one leaves it at zero.
 ===============
 */
+// a value for the info string: the backslash that separates its keys cannot be in one
+static const char* Steam_InfoValue(const char* in, char* out, int size) {
+    int n;
+
+    for (n = 0; in[n] && n < size - 1; n++) {
+        out[n] = in[n] == '\\' ? ' ' : in[n];
+    }
+    out[n] = '\0';
+    return out;
+}
+
+// the server's name as Steam has it, which the info string can only carry cleaned
+const char* Steam_ServerListName(int index) {
+    if (index < 0 || index >= st.numServers) {
+        return "";
+    }
+    return st.servers[index].name;
+}
+
 qboolean Steam_ServerListGet(int index, unsigned int* ip, unsigned short* port, int* ping, char* info,
                              int infoSize) {
     const steamServer_t* s;
     char firstTag[32];
+    char name[64], map[32], desc[64], tags[128];
     const char* comma;
     int gametype;
     int i;
@@ -1152,9 +1417,12 @@ qboolean Steam_ServerListGet(int index, unsigned int* ip, unsigned short* port, 
 
     Com_sprintf(info, infoSize,
                 "\\hostname\\%s\\mapname\\%s\\clients\\%i\\g_humanplayers\\%i\\sv_maxclients\\%i"
-                "\\game\\%s\\gametype\\%i\\g_needpass\\%i\\nettype\\1\\sv_vac\\%i\\tags\\%s",
-                s->name, s->map, s->players, s->players - s->bots, s->maxPlayers, s->gameDir,
-                gametype, s->password ? 1 : 0, s->secure ? 1 : 0, s->tags);
+                "\\game\\%s\\gametype\\%i\\g_needpass\\%i\\nettype\\1\\sv_vac\\%i\\tags\\%s"
+                "\\gamedesc\\%s",
+                Steam_InfoValue(s->name, name, sizeof(name)), Steam_InfoValue(s->map, map, sizeof(map)),
+                s->players, s->players - s->bots, s->maxPlayers, s->gameDir, gametype, s->password ? 1 : 0,
+                s->secure ? 1 : 0, Steam_InfoValue(s->tags, tags, sizeof(tags)),
+                Steam_InfoValue(s->description, desc, sizeof(desc)));
     return qtrue;
 }
 
