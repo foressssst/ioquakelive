@@ -638,6 +638,10 @@ static void SV_ConnectionlessPacket(netadr_t from, msg_t* msg) {
         // if a client starts up a local server, we may see some spurious
         // server disconnect messages when their new server sees our final
         // sequenced messages to the old client
+    } else if (Steam_GS_HandlePacket(from, msg->data, msg->cursize)) {
+        // [QL] qzeroded.x64 0x43e268: what the server does not know goes to Steam, whose
+        // queries arrive on the game's socket (query port 0xffff). Only here: a client's packets
+        // never go to Steam, which would keep the server's answers for itself
     } else {
         Com_DPrintf("bad connectionless packet from %s:\n%s\n",
                     NET_AdrToString(from), s);

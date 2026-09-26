@@ -1551,11 +1551,6 @@ void NET_Event(fd_set* fdr) {
                     continue;  // drop this packet
             }
 
-            // [ioquakelive] the server shares its socket with Steam (query port 0xffff, as in
-            // retail), so the master's queries arrive through here
-            if (Steam_GS_HandlePacket(from, netmsg.data, netmsg.cursize))
-                continue;
-
             if (com_sv_running->integer)
                 Com_RunAndTimeServerPacket(&from, &netmsg);
             else
