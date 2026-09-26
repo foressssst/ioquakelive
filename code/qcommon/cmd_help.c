@@ -238,7 +238,6 @@ static const cmdHelp_t cmdHelp[] = {
     {"vid_restart", "restarts the renderer, applying video settings"},
     {"snd_restart", "restarts the sound system, reloading every sound"},
     {"net_restart", "restarts the network, picking up changed net settings"},
-    {"imagepaste", "sends what is on the clipboard -- a picture, an image file or the link of one -- and puts its link in the line you are typing; Ctrl+V does the same in the chat and the console"},
     {"postprocess_restart", "reloads the post-processing shaders"},
 
     // -------------------------------------------------------------- pictures

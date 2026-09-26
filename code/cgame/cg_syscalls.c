@@ -253,14 +253,6 @@ void trap_R_Font_DrawString(int x, int y, const char* text, int fontIndex, float
     syscall(CG_R_FONT_DRAWSTRING, x, y, text, fontIndex, PASSFLOAT(scale), limit, maxX, flags);
 }
 
-qhandle_t trap_R_WebImage(const char* url) {
-    return syscall(CG_R_WEBIMAGE, url);
-}
-
-qboolean trap_R_ShaderImageSize(qhandle_t shader, int* width, int* height) {
-    return syscall(CG_R_SHADERIMAGESIZE, shader, width, height);
-}
-
 void trap_R_Font_TextExtents(const char* text, int start, int fontIndex, float scale, int limit, float* extents) {
     syscall(CG_R_FONT_TEXTEXTENTS, text, start, fontIndex, PASSFLOAT(scale), limit, extents);
 }

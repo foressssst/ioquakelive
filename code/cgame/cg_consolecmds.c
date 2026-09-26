@@ -746,67 +746,6 @@ static void CG_DrawCpmaChat(float x, float bottom, float scale) {
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
 
-/*
-[ioquakelive] NOT FROM RETAIL: the picture behind a link in the newest chat line, over the window
-and no bigger than a sticker. The engine only fetches it with cl_webImages on, so with that off
-this finds nothing and draws nothing
-*/
-static void CG_DrawChatImage(float x, float bottom, float scale) {
-    const chatLine_t* line = CG_ChatLine(0);
-    const char* text;
-    const char* p;
-    char url[256];
-    qhandle_t shader;
-    int imgW = 0, imgH = 0, i;
-    float w, h, maxW, maxH;
-
-    if (!line || !line->text[0] || !CG_ChatLineShowing(line)) {
-        return;
-    }
-
-    text = line->text;
-    p = NULL;
-    for (i = 0; text[i]; i++) {
-        if ((text[i] == 'h' || text[i] == 'H') &&
-            (!Q_stricmpn(text + i, "http://", 7) || !Q_stricmpn(text + i, "https://", 8))) {
-            p = text + i;
-            break;
-        }
-    }
-    if (!p) {
-        return;
-    }
-
-    for (i = 0; i < (int)sizeof(url) - 1 && p[i] > ' ' && p[i] != '"'; i++) {
-        url[i] = p[i];
-    }
-    url[i] = '\0';
-
-    shader = trap_R_WebImage(url);
-    if (!shader || !trap_R_ShaderImageSize(shader, &imgW, &imgH) || imgW <= 0 || imgH <= 0) {
-        return;
-    }
-
-    // a sticker, not a poster: it fits in this box keeping its shape
-    maxW = 160.0f;
-    maxH = 120.0f;
-    w = (float)imgW;
-    h = (float)imgH;
-    if (w > maxW) {
-        h *= maxW / w;
-        w = maxW;
-    }
-    if (h > maxH) {
-        w *= maxH / h;
-        h = maxH;
-    }
-
-    CG_SetWidescreen(WIDESCREEN_LEFT);
-    CG_DrawPic(x, bottom - 15.0f - h, w, h, shader);
-    CG_SetWidescreen(WIDESCREEN_STRETCH);
-    (void)scale;
-}
-
 // [QL] cgamex86.dll 0x10006a10. Drawn by the CG_AREA_NEW_CHAT ownerdraw with
 // the menu item's rect, and by the spectator overlay. The newest line sits on
 // the rect's bottom edge (font 1, style 3, left widescreen) until it expires
@@ -833,8 +772,6 @@ void CG_DrawChat(float x, float y, float w, float h, float scale) {
         memcpy(&cg.chatLines[cg.chatIndex], &cg.currentChatLine, sizeof(cg.currentChatLine));
         memset(&cg.currentChatLine, 0, sizeof(cg.currentChatLine));
     }
-
-    CG_DrawChatImage(x, bottom, scale);
 
     if (ch_animateScroll.integer && !cg.chatHistoryShowing && !cg.scoreBoardShowing) {
         CG_DrawCpmaChat(x, bottom, scale);

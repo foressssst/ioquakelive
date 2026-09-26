@@ -284,38 +284,6 @@ static void* Sys_ThreadEntry(void* parameter) {
     return NULL;
 }
 
-/*
-==============================================================================
-
-THE WEB AND THE CLIPBOARD   (Unix)
-
-[ioquakelive] The client fetches with libcurl here, and the two that only Windows has answer
-that they cannot: sending a picture from the clipboard is a Windows thing for now
-
-==============================================================================
-*/
-
-qboolean Sys_WebFetch(const char* url, const char* ospath, int maxBytes) {
-    return qfalse;
-}
-
-qboolean Sys_WebPost(const char* url, const char* contentType, const char* header, const byte* data,
-                     int length, char* reply, int replySize) {
-    if (reply && replySize > 0) {
-        reply[0] = '\0';
-    }
-    return qfalse;
-}
-
-byte* Sys_ClipboardImage(int* width, int* height) {
-    return NULL;
-}
-
-qboolean Sys_ClipboardImageFile(char* path, int size) {
-    return qfalse;
-}
-
-
 void* Sys_ThreadCreate(void (*function)(void*), void* argument) {
     static sysThreadStart_t starts[16];
     static int next;
