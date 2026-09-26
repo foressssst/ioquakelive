@@ -903,6 +903,113 @@ void SV_VoiceFrame(void) {
 
 /*
 ==================
+SV_SteamIdentity
+
+[QL] 0x00465b00 (qzeroded.x64 0x447120): who this server is as far as Steam is concerned
+and which Workshop items are needed to play here. The client downloads the ones it lacks
+before entering.
+==================
+*/
+void SV_SteamIdentity(void) {
+    const char* items;
+
+    if (!Steam_GS_Running()) {
+        return;
+    }
+    SV_SetConfigstring(CS_STEAM_ID, va("%llu", (unsigned long long)Steam_GS_SteamID()));
+    items = FS_ReferencedSteamworksItems();
+    Cvar_Set("sv_referencedSteamworks", items);
+    SV_SetConfigstring(CS_STEAM_WORKSHOP_IDS, items);
+}
+
+/*
+==================
+SV_SteamFrame
+
+[QL] qzeroded.x64 0x4468a0. The server's entry in Steam's list: the password, the name
+and the map when they change, and every three seconds the score, who is playing and
+how many of them are bots, which is what the browser shows about a match. Forced when
+the map starts and when the server logs on, and then everything goes out again.
+
+Each player goes with the score the game keeps; a bot has "(Bot) " in front, and only
+a client with a Steam ID can be listed.
+==================
+*/
+void SV_SteamFrame(qboolean force) {
+    static int lastPlayers;
+    const cvar_t* needPass;
+    client_t* cl;
+    int bots;
+    int i;
+
+    if (!Steam_GS_Running() || !svs.clients) {
+        return;
+    }
+
+    if (force) {
+        Steam_GS_SetMaxPlayers(sv_maxclients->integer);
+    }
+    needPass = Cvar_Find("g_needpass");
+    if (needPass && (force || needPass->modified)) {
+        Steam_GS_SetPassword((qboolean)(needPass->integer != 0));
+        ((cvar_t*)needPass)->modified = qfalse;
+    }
+    if (force || sv_hostname->modified) {
+        Steam_GS_SetName(sv_hostname->string);
+        sv_hostname->modified = qfalse;
+    }
+    if (force || sv_mapname->modified) {
+        Steam_GS_SetMap(sv_mapname->string);
+        sv_mapname->modified = qfalse;
+    }
+
+    if (force || Sys_Milliseconds() - lastPlayers > 3000) {
+        Steam_GS_SetKeyValue("g_redScore", sv.configstrings[CS_SCORES1]);
+        Steam_GS_SetKeyValue("g_blueScore", sv.configstrings[CS_SCORES2]);
+
+        bots = 0;
+        for (i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++) {
+            qboolean bot;
+
+            if (cl->state == CS_FREE) {
+                continue;
+            }
+            bot = (qboolean)(cl->gentity && (cl->gentity->r.svFlags & SVF_BOT));
+            if (bot) {
+                bots++;
+            }
+            if (!cl->steam_id) {
+                continue;
+            }
+            Steam_GS_UpdateUser(cl->steam_id, va("%s%s", bot ? "(Bot) " : "", Info_ValueForKey(cl->userinfo, "name")),
+                                SV_GameClientScore(i));
+        }
+        lastPlayers = Sys_Milliseconds();
+        Steam_GS_SetBotCount(bots);
+    }
+
+    Steam_GS_UpdateGameInfo(force, svs.factory ? svs.factory->tags : NULL, svs.factory ? MAX_FACTORY_TAGS : 0);
+}
+
+/*
+==================
+SV_SteamConnected
+
+[QL] qzeroded.x64 0x447190. The server logged on to Steam: everything its entry shows
+goes out again, now under its own Steam ID.
+==================
+*/
+void SV_SteamConnected(void) {
+    if (!com_sv_running || !com_sv_running->integer) {
+        return;
+    }
+    SV_SteamIdentity();
+    SV_SteamFrame(qtrue);
+    Steam_GS_SetKeyValues(Cvar_InfoString(CVAR_SERVERINFO));
+}
+
+/*
+==================
 SV_FrameMsec
 Return time in millseconds until processing of the next server frame.
 ==================
@@ -1014,7 +1121,11 @@ void SV_Frame(int msec) {
 
     // update infostrings if anything has been changed
     if (cvar_modifiedFlags & CVAR_SERVERINFO) {
-        SV_SetConfigstring(CS_SERVERINFO, Cvar_InfoString(CVAR_SERVERINFO));
+        // [QL] qzeroded.x64 0x43ead0: Steam's list carries the same keys, as the server's rules
+        const char* info = Cvar_InfoString(CVAR_SERVERINFO);
+
+        Steam_GS_SetKeyValues(info);
+        SV_SetConfigstring(CS_SERVERINFO, info);
         cvar_modifiedFlags &= ~CVAR_SERVERINFO;
     }
     if (cvar_modifiedFlags & CVAR_SYSTEMINFO) {

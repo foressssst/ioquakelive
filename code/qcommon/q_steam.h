@@ -29,8 +29,15 @@ void Steam_Frame(void);
 // from SV_ChangeMaxClients, where retail updates it
 void Steam_GS_SetMaxPlayers(int maxPlayers);
 
-// from SV_SpawnServer: the name and the map the list shows
-void Steam_GS_SetServerInfo(const char* hostname, const char* mapName, qboolean needPassword, int botCount);
+// the server's entry in the list, kept up to date by SV_SteamFrame
+void Steam_GS_SetPassword(qboolean needPassword);
+void Steam_GS_SetName(const char* name);
+void Steam_GS_SetMap(const char* map);
+void Steam_GS_SetBotCount(int bots);
+void Steam_GS_SetKeyValue(const char* key, const char* value);
+void Steam_GS_SetKeyValues(const char* info);
+void Steam_GS_UpdateUser(uint64_t steamId, const char* name, int score);
+void Steam_GS_UpdateGameInfo(qboolean force, char* const* factoryTags, int numFactoryTags);
 
 // the server list, which in Quake Live comes from Steam and not from a master of its own
 qboolean Steam_RequestServerList(int source);  // 0 internet, 1 LAN, 2 friends, 3 favourites, 4 history

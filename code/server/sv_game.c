@@ -1241,6 +1241,13 @@ int SV_GameVoiceFilter(int speaker, int listener) {
     return 0;
 }
 
+// [QL] retail export +0x48: a client's score, which the server hands Steam's list
+int SV_GameClientScore(int clientNum) {
+    if (sv_vmMainTable[GAME_CLIENT_SCORE])
+        return ((int (*)(int))sv_vmMainTable[GAME_CLIENT_SCORE])(clientNum);
+    return 0;
+}
+
 //==============================================
 
 /*

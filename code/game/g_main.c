@@ -1114,6 +1114,7 @@ void G_InitGame(int levelTime, int randomSeed, int restart);
 void G_RunFrame(int levelTime);
 void G_ShutdownGame(int restart);
 void CheckExitRules(void);
+int G_ClientScore(int clientNum);
 
 // [QL] dllEntry - module entry point
 // The engine calls this when loading the game module.
@@ -1135,8 +1136,24 @@ Q_EXPORT void dllEntry(void **vmMainOut, gameImport_t *syscallTable, int *apiVer
     vmMainOut[GAME_SNAPSHOT_ALWAYS_SEND]    = (void *)G_ClientAlwaysInSnapshot;
     vmMainOut[GAME_BOT_AI_START_FRAME]      = (void *)BotAIStartFrame;
     vmMainOut[GAME_VOICE_FILTER]            = (void *)G_VoiceFilter;
+    vmMainOut[GAME_CLIENT_SCORE]            = (void *)G_ClientScore;
 
     *apiVersion = GAME_API_VERSION;
+}
+
+/*
+================
+G_ClientScore
+
+[QL] export 20 (retail 0x100530f0): a client's score, which the server hands Steam's
+list every few seconds.
+================
+*/
+int G_ClientScore(int clientNum) {
+    if (clientNum < 0 || clientNum >= MAX_CLIENTS || !g_entities[clientNum].client) {
+        return 0;
+    }
+    return g_entities[clientNum].client->ps.persistant[PERS_SCORE];
 }
 
 void QDECL G_Printf(const char* fmt, ...) {

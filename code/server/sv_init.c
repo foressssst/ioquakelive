@@ -584,19 +584,11 @@ void SV_SpawnServer(char* server, qboolean killBots) {
     // settled here; the first call opens it, later ones do nothing
     ZMQ_StatsInit();
 
-    // [QL] 0x00465b00: who this server is as far as Steam is concerned and which Workshop
-    // items are needed to play here. The client downloads the ones it lacks before entering.
-    if (Steam_GS_Running()) {
-        const char* items = FS_ReferencedSteamworksItems();
+    SV_SteamIdentity();
 
-        SV_SetConfigstring(CS_STEAM_ID, va("%llu", (unsigned long long)Steam_GS_SteamID()));
-        Cvar_Set("sv_referencedSteamworks", items);
-        SV_SetConfigstring(CS_STEAM_WORKSHOP_IDS, items);
-    }
-
-    // [ioquakelive] what Steam's list shows about this server
-    Steam_GS_SetServerInfo(Cvar_VariableString("sv_hostname"), server,
-                           Cvar_VariableString("g_password")[0] != '\0', 0);
+    // [QL] qzeroded.x64 0x43d01a: what Steam's list shows about this server, its rules first
+    Steam_GS_SetKeyValues(Cvar_InfoString(CVAR_SERVERINFO));
+    SV_SteamFrame(qtrue);
 
     // any media configstring setting now should issue a warning
     // and any configstring changes should be reliably transmitted

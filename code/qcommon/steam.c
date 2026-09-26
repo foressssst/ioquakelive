@@ -47,9 +47,11 @@ typedef unsigned char steamBool_t;
 #ifdef _WIN32
 #define STEAM_CB __fastcall
 #define STEAM_CB_SELF void* self, void* unusedEdx
+#define STEAM_CB_PASS self, unusedEdx
 #else
 #define STEAM_CB
 #define STEAM_CB_SELF void* self
+#define STEAM_CB_PASS self
 #endif
 
 // MatchMakingKeyValuePair_t
@@ -110,10 +112,10 @@ typedef struct {
     void** vtable;
 } steamListResponse_t;
 
-static void Steam_GS_SetGameInfo(void);
 static void Steam_DownloadUGC_f(void);
 static void Steam_P2PListen(qboolean asServer);
 static void Steam_AuthListen(void);
+static void Steam_ServersListen(void);
 
 /*
 A Steam callback seen from C. In the SDK it is a class with three virtual functions,
@@ -165,6 +167,8 @@ typedef struct {
                                      unsigned short srcPort);
     int(QDECL* GetNextOutgoingPacket)(void* self, void* out, int maxOut, unsigned int* ip, unsigned short* port);
     void(QDECL* SetGameTags)(void* self, const char* tags);
+    void(QDECL* SetKeyValue)(void* self, const char* key, const char* value);
+    steamBool_t(QDECL* BUpdateUserData)(void* self, uint64_t steamId, const char* name, unsigned int score);
 
     // the server list
     void*(QDECL* Matchmaking)(void);
@@ -241,6 +245,9 @@ typedef struct {
     steamCallback_t p2pServer;   // the session each player asks for
     unsigned int authTicket;       // the ticket this client asked for, so it can be cancelled
     steamCallback_t authResponse;  // what Steam says about somebody else's ticket
+    steamCallback_t serversConnected;     // the server logged on to Steam
+    steamCallback_t serversFailed;        // it could not
+    steamCallback_t serversDisconnected;  // it lost the connection
 
     void* ugc;           // ISteamUGC *
     uint64_t downloading;  // the item being waited on, or 0
@@ -315,6 +322,8 @@ static qboolean Steam_Bind(void) {
     // The server browser part is optional on purpose: if this library does not carry it, the
     // rest -- the master, the stats, the voice -- keeps working.
     STEAM_BIND_OPT(SetGameTags, "SteamAPI_ISteamGameServer_SetGameTags");
+    STEAM_BIND_OPT(SetKeyValue, "SteamAPI_ISteamGameServer_SetKeyValue");
+    STEAM_BIND_OPT(BUpdateUserData, "SteamAPI_ISteamGameServer_BUpdateUserData");
     STEAM_BIND_OPT(Matchmaking, "SteamMatchmakingServers");
     STEAM_BIND_OPT(UGC, "SteamUGC");
     STEAM_BIND_OPT(Networking, "SteamNetworking");
@@ -566,6 +575,7 @@ void Steam_GS_Init(void) {
         Steam_P2PListen(qtrue);
     }
     Steam_AuthListen();  // whatever Steam says about each ticket
+    Steam_ServersListen();  // whether it logs on
     if (!st.clientUp) {
         Cmd_AddCommand("steamstatus", Steam_Status_f);  // the client added it already if it came up
     }
@@ -604,19 +614,80 @@ void Steam_GS_SetMaxPlayers(int maxPlayers) {
     st.SetMaxPlayerCount(st.gameServer, maxPlayers);
 }
 
-void Steam_GS_SetServerInfo(const char* hostname, const char* mapName, qboolean needPassword, int botCount) {
+/*
+===============
+The server's entry in the list
+
+[QL] qzeroded.x64 0x4468a0 keeps it up to date. The server's side of it, what it reads
+from the players and the cvars, is SV_SteamFrame; these hand each piece to Steam.
+===============
+*/
+void Steam_GS_SetPassword(qboolean needPassword) {
     if (!st.serverUp) {
         return;
     }
-    if (hostname && hostname[0]) {
-        st.SetServerName(st.gameServer, hostname);
-    }
-    if (mapName && mapName[0]) {
-        st.SetMapName(st.gameServer, mapName);
-    }
     st.SetPasswordProtected(st.gameServer, (steamBool_t)(needPassword != qfalse));
-    st.SetBotPlayerCount(st.gameServer, botCount);
-    Steam_GS_SetGameInfo();
+}
+
+void Steam_GS_SetName(const char* name) {
+    if (!st.serverUp) {
+        return;
+    }
+    st.SetServerName(st.gameServer, name);
+}
+
+void Steam_GS_SetMap(const char* map) {
+    if (!st.serverUp) {
+        return;
+    }
+    st.SetMapName(st.gameServer, map);
+}
+
+void Steam_GS_SetBotCount(int bots) {
+    if (!st.serverUp) {
+        return;
+    }
+    st.SetBotPlayerCount(st.gameServer, bots);
+}
+
+void Steam_GS_SetKeyValue(const char* key, const char* value) {
+    if (!st.serverUp || !st.SetKeyValue) {
+        return;
+    }
+    st.SetKeyValue(st.gameServer, key, value ? value : "");
+}
+
+// a player as the browser lists it: the name, the score and, counted by Steam, the time
+void Steam_GS_UpdateUser(uint64_t steamId, const char* name, int score) {
+    if (!st.serverUp || !st.BUpdateUserData) {
+        return;
+    }
+    st.BUpdateUserData(st.gameServer, steamId, name, (unsigned int)score);
+}
+
+/*
+===============
+Steam_GS_SetKeyValues
+
+[QL] qzeroded.x64 0x447080. Every key of an info string as one of the server's rules,
+which is what the browser shows about a match: retail hands over the serverinfo cvars
+whenever they change.
+===============
+*/
+void Steam_GS_SetKeyValues(const char* info) {
+    static char key[BIG_INFO_KEY];
+    static char value[BIG_INFO_VALUE];
+
+    if (!st.serverUp || !st.SetKeyValue || !info) {
+        return;
+    }
+    for (;;) {
+        Info_NextPair(&info, key, value);
+        if (!key[0]) {
+            break;
+        }
+        st.SetKeyValue(st.gameServer, key, value);
+    }
 }
 
 /*
@@ -651,6 +722,9 @@ void Steam_Frame(void) {
         return;
     }
     st.GameServer_RunCallbacks();
+    if (com_sv_running && com_sv_running->integer) {
+        SV_SteamFrame(qfalse);
+    }
 
     // whatever Steam wants to answer goes out on our own socket
     for (;;) {
@@ -683,6 +757,12 @@ void Steam_Shutdown(void) {
         if (st.authResponse.vtable) {
             st.UnregisterCallback(&st.authResponse);
             st.authResponse.vtable = NULL;
+        }
+        if (st.serversConnected.vtable) {
+            st.UnregisterCallback(&st.serversConnected);
+            st.UnregisterCallback(&st.serversFailed);
+            st.UnregisterCallback(&st.serversDisconnected);
+            st.serversConnected.vtable = NULL;
         }
         if (st.p2pServer.vtable) {
             st.UnregisterCallback(&st.p2pServer);
@@ -744,66 +824,142 @@ static const char* steamGametypeTags[] = {
 
 #define STEAM_NUM_GAMETYPES ((int)ARRAY_LEN(steamGametypeNames))
 
+// the cvars the tags are made of, found as retail finds them: one that does not exist is skipped
+static cvar_t* Steam_Cvar(const char* name) {
+    return (cvar_t*)Cvar_Find(name);
+}
+
+static void Steam_TagsAdd(char* tags, int size, const char* tag) {
+    Q_strcat(tags, size, tag);
+}
+
 /*
 ===============
-Steam_GS_SetGameInfo
+Steam_GS_UpdateGameInfo
 
-[QL] 0x00466260. What the browser shows about this server beyond the name and the
-map: what is being played and under which rules.
+[QL] qzeroded.x64 0x446abc, the end of the list update. What the browser shows about
+this server beyond the name and the map: what is being played and under which rules,
+followed by the tags the server's owner adds in sv_tags and the factory's own. It is
+only rebuilt when a cvar it reads changed, or when forced.
+
+The description waits for a gametype that only comes in with the next map.
 ===============
 */
-static void Steam_GS_SetGameInfo(void) {
+void Steam_GS_UpdateGameInfo(qboolean force, char* const* factoryTags, int numFactoryTags) {
+    static int gametypeCount = -1;
+    cvar_t* gametypeVar;
+    cvar_t* watched[7];
+    cvar_t* cheats;
+    cvar_t* instagib;
+    cvar_t* gravity;
+    cvar_t* vampiric;
+    cvar_t* infected;
+    cvar_t* quadHog;
+    cvar_t* extra;
+    char tags[1024];
+    qboolean gametypeChanged;
     int gametype;
-    float gravity;
-    char tags[256];
-    const char* extra;
+    int len;
+    int i;
 
     if (!st.serverUp || !st.SetGameTags) {
         return;
     }
 
-    gametype = Cvar_VariableIntegerValue("g_gametype");
-    if (gametype < 0 || gametype >= STEAM_NUM_GAMETYPES) {
-        st.SetGameDescription(st.gameServer, "Unknown Gametype");
-        Q_strncpyz(tags, "", sizeof(tags));
-    } else {
-        st.SetGameDescription(st.gameServer, steamGametypeNames[gametype]);
-        Com_sprintf(tags, sizeof(tags), "%s,", steamGametypeTags[gametype]);
+    watched[0] = cheats = Steam_Cvar("sv_cheats");
+    watched[1] = instagib = Steam_Cvar("g_instagib");
+    watched[2] = gravity = Steam_Cvar("g_gravity");
+    watched[3] = vampiric = Steam_Cvar("g_vampiricDamage");
+    watched[4] = infected = Steam_Cvar("g_rrInfected");
+    watched[5] = quadHog = Steam_Cvar("g_quadhog");
+    watched[6] = extra = Steam_Cvar("sv_tags");
+    gametypeVar = Steam_Cvar("g_gametype");
+
+    // retail looks at g_gametype's modified flag and leaves it set; the count says the same
+    // without touching the flag
+    gametypeChanged = (qboolean)(gametypeVar && gametypeVar->modificationCount != gametypeCount);
+    if (gametypeVar) {
+        gametypeCount = gametypeVar->modificationCount;
     }
 
-    if (Cvar_VariableIntegerValue("sv_cheats")) {
-        Q_strcat(tags, sizeof(tags), "cheats,");
+    gametype = (int)Cvar_VariableValue("g_gametype");
+    if (gametypeVar && (force || (gametypeChanged && !gametypeVar->latchedString))) {
+        st.SetGameDescription(st.gameServer, (unsigned int)gametype < STEAM_NUM_GAMETYPES
+                                                 ? steamGametypeNames[gametype]
+                                                 : "Unknown Gametype");
     }
-    if (Cvar_VariableIntegerValue("g_instagib")) {
-        Q_strcat(tags, sizeof(tags), "instagib,");
+    if (!force && !gametypeChanged) {
+        for (i = 0; i < (int)ARRAY_LEN(watched); i++) {
+            if (watched[i] && watched[i]->modified) {
+                break;
+            }
+        }
+        if (i == (int)ARRAY_LEN(watched)) {
+            return;
+        }
     }
-    gravity = Cvar_VariableValue("g_gravity");
-    if (gravity < 800.0f) {
-        Q_strcat(tags, sizeof(tags), "lowgrav,");
-    } else if (gravity > 800.0f) {
-        Q_strcat(tags, sizeof(tags), "highgrav,");
+
+    Com_sprintf(tags, sizeof(tags), "%s,",
+                (unsigned int)gametype < STEAM_NUM_GAMETYPES ? steamGametypeTags[gametype] : "");
+    if (cheats) {
+        if (cheats->integer) {
+            Steam_TagsAdd(tags, sizeof(tags), "cheats,");
+        }
+        cheats->modified = qfalse;
     }
-    if (Cvar_VariableValue("g_vampiricDamage") > 0.0f) {
-        Q_strcat(tags, sizeof(tags), "vampiric,");
+    if (instagib) {
+        if (instagib->integer) {
+            Steam_TagsAdd(tags, sizeof(tags), "instagib,");
+        }
+        instagib->modified = qfalse;
+    }
+    if (gravity) {
+        if (gravity->value > 800.0f) {
+            Steam_TagsAdd(tags, sizeof(tags), "highgrav,");
+        } else if (gravity->value < 800.0f) {
+            Steam_TagsAdd(tags, sizeof(tags), "lowgrav,");
+        }
+        gravity->modified = qfalse;
+    }
+    if (vampiric) {
+        if (vampiric->value > 0.0f) {
+            Steam_TagsAdd(tags, sizeof(tags), "vampiric,");
+        }
+        vampiric->modified = qfalse;
     }
     // infected only counts in Red Rover, and quad hog only in free for all
-    if (Cvar_VariableIntegerValue("g_rrInfected") && gametype == 12) {
-        Q_strcat(tags, sizeof(tags), "infected,");
+    if (infected) {
+        if (infected->integer && gametype == 12) {
+            Steam_TagsAdd(tags, sizeof(tags), "infected,");
+        }
+        infected->modified = qfalse;
     }
-    if (Cvar_VariableIntegerValue("g_quadHog") && gametype == 0) {
-        Q_strcat(tags, sizeof(tags), "quadhog,");
+    if (quadHog) {
+        if (quadHog->integer && gametype == 0) {
+            Steam_TagsAdd(tags, sizeof(tags), "quadhog,");
+        }
+        quadHog->modified = qfalse;
     }
-    extra = Cvar_VariableString("sv_tags");
-    if (extra[0]) {
-        Q_strcat(tags, sizeof(tags), extra);
-        if (tags[strlen(tags) - 1] != ',') {
-            Q_strcat(tags, sizeof(tags), ",");
+    if (extra) {
+        if (extra->string[0]) {
+            Steam_TagsAdd(tags, sizeof(tags), extra->string);
+            if (tags[strlen(tags) - 1] != ',') {
+                Steam_TagsAdd(tags, sizeof(tags), ",");
+            }
+        }
+        extra->modified = qfalse;
+    }
+    for (i = 0; factoryTags && i < numFactoryTags; i++) {
+        if (factoryTags[i]) {
+            Steam_TagsAdd(tags, sizeof(tags), factoryTags[i]);
+            Steam_TagsAdd(tags, sizeof(tags), ",");
         }
     }
 
     // the trailing comma is not wanted
-    if (tags[0] && tags[strlen(tags) - 1] == ',') {
-        tags[strlen(tags) - 1] = '\0';
+    len = (int)strlen(tags);
+    if (len && tags[len - 1] == ',') {
+        tags[len - 1] = '\0';
     }
     st.SetGameTags(st.gameServer, tags);
 }
@@ -1218,13 +1374,6 @@ to SteamAPI_RegisterCallback are for something else -- so this is an addition, n
 port: without accepting the session the server's voice would never arrive.
 ===============
 */
-static void STEAM_CB Steam_CB_P2PRequestIO(STEAM_CB_SELF, void* param, unsigned char failed,
-                                           uint64_t call) {
-    (void)param;
-    (void)failed;
-    (void)call;
-}
-
 static void STEAM_CB Steam_CB_P2PRequest(STEAM_CB_SELF, void* param) {
     const steamCallback_t* me = (const steamCallback_t*)self;
     uint64_t who = *(const uint64_t*)param;
@@ -1233,12 +1382,19 @@ static void STEAM_CB Steam_CB_P2PRequest(STEAM_CB_SELF, void* param) {
     Steam_P2PAccept(who, asServer);
 }
 
+static void STEAM_CB Steam_CB_P2PRequestIO(STEAM_CB_SELF, void* param, unsigned char failed,
+                                           uint64_t call) {
+    (void)failed;
+    (void)call;
+    Steam_CB_P2PRequest(STEAM_CB_PASS, param);
+}
+
 static int STEAM_CB Steam_CB_P2PRequestSize(STEAM_CB_SELF) {
     return (int)sizeof(uint64_t);
 }
 
-// retail's compiler orders the two Run overloads the reverse of how they are declared: see
-// 0x00532f1c
+// retail's compiler orders the two Run overloads the reverse of how they are declared (see
+// 0x00532f1c); GCC and clang keep the declared order, so both do the same job
 static void* steamP2PVTable[3];
 
 static void Steam_P2PListen(qboolean asServer) {
@@ -1365,12 +1521,6 @@ typedef struct {
 } steamAuthResponse_t;
 #pragma pack(pop)
 
-static void STEAM_CB Steam_CB_AuthIO(STEAM_CB_SELF, void* param, unsigned char failed, uint64_t call) {
-    (void)param;
-    (void)failed;
-    (void)call;
-}
-
 static void STEAM_CB Steam_CB_Auth(STEAM_CB_SELF, void* param) {
     const steamAuthResponse_t* r = (const steamAuthResponse_t*)param;
 
@@ -1378,12 +1528,18 @@ static void STEAM_CB Steam_CB_Auth(STEAM_CB_SELF, void* param) {
     SV_SteamAuthResponse(r->steamId, r->response);
 }
 
+static void STEAM_CB Steam_CB_AuthIO(STEAM_CB_SELF, void* param, unsigned char failed, uint64_t call) {
+    (void)failed;
+    (void)call;
+    Steam_CB_Auth(STEAM_CB_PASS, param);
+}
+
 static int STEAM_CB Steam_CB_AuthSize(STEAM_CB_SELF) {
     return (int)sizeof(steamAuthResponse_t);
 }
 
-// retail's compiler orders the two Run overloads the reverse of how they are declared: see
-// 0x00532f1c
+// retail's compiler orders the two Run overloads the reverse of how they are declared (see
+// 0x00532f1c); GCC and clang keep the declared order, so both do the same job
 static void* steamAuthVTable[3];
 
 static void Steam_AuthListen(void) {
@@ -1398,6 +1554,72 @@ static void Steam_AuthListen(void) {
     st.authResponse.flags = STEAM_CB_FLAG_GAMESERVER;
     st.authResponse.id = STEAM_CB_VALIDATE_AUTH;
     st.RegisterCallback(&st.authResponse, STEAM_CB_VALIDATE_AUTH);
+}
+
+/*
+===============
+Whether the server is logged on
+
+[QL] qzeroded.x64 0x4471f0 registers three: the connection (0x447190), the failure
+(0x446640) and the disconnection (0x446660). When the server logs on, everything the list
+shows goes out again, and the Steam ID with it: until then the one the server has is not
+its own. SteamServersConnected_t, SteamServerConnectFailure_t and SteamServersDisconnected_t
+are k_iSteamUserCallbacks (100) + 1, + 2 and + 3.
+===============
+*/
+#define STEAM_CB_SERVERS_CONNECTED 101
+#define STEAM_CB_SERVERS_FAILED 102
+#define STEAM_CB_SERVERS_DISCONNECTED 103
+
+static void STEAM_CB Steam_CB_Servers(STEAM_CB_SELF, void* param) {
+    const steamCallback_t* me = (const steamCallback_t*)self;
+
+    (void)param;
+    switch (me->id) {
+        case STEAM_CB_SERVERS_CONNECTED:
+            Com_Printf("Connected to Steam servers\n");
+            SV_SteamConnected();
+            break;
+        case STEAM_CB_SERVERS_FAILED:
+            Com_Printf("Failed to connect to Steam servers\n");
+            break;
+        default:
+            Com_Printf("Disconnected from Steam servers\n");
+            break;
+    }
+}
+
+static void STEAM_CB Steam_CB_ServersIO(STEAM_CB_SELF, void* param, unsigned char failed, uint64_t call) {
+    (void)failed;
+    (void)call;
+    Steam_CB_Servers(STEAM_CB_PASS, param);
+}
+
+// the sizes of retail's (0x510c30, 0x510c70, 0x510cb0): the first is an empty struct
+static int STEAM_CB Steam_CB_ServersSize(STEAM_CB_SELF) {
+    return ((const steamCallback_t*)self)->id == STEAM_CB_SERVERS_CONNECTED ? 1 : 4;
+}
+
+static void* steamServersVTable[3];
+
+static void Steam_ServersListenOne(steamCallback_t* cb, int id) {
+    cb->vtable = steamServersVTable;
+    cb->flags = STEAM_CB_FLAG_GAMESERVER;
+    cb->id = id;
+    st.RegisterCallback(cb, id);
+}
+
+static void Steam_ServersListen(void) {
+    if (!st.RegisterCallback || st.serversConnected.vtable) {
+        return;
+    }
+    steamServersVTable[0] = (void*)Steam_CB_ServersIO;
+    steamServersVTable[1] = (void*)Steam_CB_Servers;
+    steamServersVTable[2] = (void*)Steam_CB_ServersSize;
+
+    Steam_ServersListenOne(&st.serversConnected, STEAM_CB_SERVERS_CONNECTED);
+    Steam_ServersListenOne(&st.serversFailed, STEAM_CB_SERVERS_FAILED);
+    Steam_ServersListenOne(&st.serversDisconnected, STEAM_CB_SERVERS_DISCONNECTED);
 }
 
 /*

@@ -363,7 +363,7 @@ typedef enum {
     GAME_VOICE_FILTER            = 17,  // [QL] G_VoiceFilter() (retail 0x10052e90)
     GAME_UNUSED_18               = 18,  // [QL] 0x100530c0, sin portar
     GAME_SNAPSHOT_VISIBILITY     = 19,  // [QL] G_ObfuscateEnemyInfoInSnapshotCheck() (retail 0x10052e40)
-    GAME_UNUSED_20               = 20,  // [QL] 0x100530f0, sin portar
+    GAME_CLIENT_SCORE            = 20,  // [QL] G_ClientScore() (retail 0x100530f0)
 
     GAME_EXPORT_COUNT
 } gameExport_t;

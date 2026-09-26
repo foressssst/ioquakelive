@@ -1063,6 +1063,8 @@ void SV_Shutdown(char* finalmsg);
 void SV_Frame(int msec);
 void SV_VoiceFrame(void);  // [QL] the peer to peer voice bridge
 void SV_SteamAuthResponse(uint64_t steamId, int response);  // [QL] 0x531a80
+void SV_SteamFrame(qboolean force);  // [QL] qzeroded.x64 0x4468a0, the entry in Steam's list
+void SV_SteamConnected(void);        // [QL] qzeroded.x64 0x447190, logged on to Steam
 
 // [QL] the maps and factories the server knows, which is what tab completion completes against
 #define MAX_COMPLETION_NAMES 1024
