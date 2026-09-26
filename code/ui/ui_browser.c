@@ -193,12 +193,7 @@ static const vec4_t brDesc = SM_RGB(85, 85, 85);
 static const vec4_t brPingText = SM_RGB(221, 221, 221);
 static const vec4_t brLink = SM_RGB(30, 174, 219);
 static const vec4_t brLinkHover = SM_RGB(15, 160, 206);
-static const vec4_t brButton = SM_RGB(61, 61, 61);
-static const vec4_t brButtonBorder = SM_RGB(77, 77, 77);
-static const vec4_t brButtonHover = SM_RGB(93, 93, 93);
-static const vec4_t brButtonHoverBorder = SM_RGB(153, 153, 153);
 static const vec4_t brDisabled = SM_RGB(34, 34, 34);
-static const vec4_t brDisabledBorder = SM_RGB(17, 17, 17);
 static const vec4_t brDisabledText = SM_RGB(51, 51, 51);
 static const vec4_t brYellow = SM_RGB(247, 209, 0);
 static const vec4_t brPlayHover = {75 / 255.0f, 75 / 255.0f, 75 / 255.0f, 0.8f};
@@ -745,36 +740,17 @@ static void BR_Border(float x, float y, float w, float h, float t, const float* 
     SM_Fill(x + w - t, y + t, t, h - 2 * t, color, clip);
 }
 
-// skeleton's button: #3d3d3d, a #4d4d4d border, 11px semibold upper case spaced by a pixel
 static float BR_ButtonWidth(const char* label) {
-    char upper[64];
-
-    Q_strncpyz(upper, label, sizeof(upper));
-    Q_strupr(upper);
-    return SM_SpacedWidth(FONT_SANS, 11, upper, 1.0f) + 40 + 2;
+    return SM_WebButtonWidth(label);
 }
 
 static void BR_Button(float x, float y, const char* label, qboolean disabled, int hit, int index,
                       const smRect_t* clip) {
-    char upper[64];
-    float w = BR_ButtonWidth(label);
-    qboolean over = (qboolean)(!disabled && SM_Over(hit, index));
+    float w = SM_WebButtonWidth(label);
 
-    Q_strncpyz(upper, label, sizeof(upper));
-    Q_strupr(upper);
-    SM_Fill(x, y, w, BR_BUTTON_H, disabled ? brDisabled : over ? brButtonHover : brButton, clip);
-    BR_Border(x, y, w, BR_BUTTON_H, 1, disabled ? brDisabledBorder : over ? brButtonHoverBorder : brButtonBorder,
-              clip);
-    {
-        float baseline = SM_Baseline(FONT_SANS, 11, y, BR_BUTTON_H);
-
-        if (!clip || SM_TextInside(baseline, 11, clip)) {
-            SM_SpacedText(x + 21, baseline, FONT_SANS, 11, disabled ? brDisabledText : over ? brYellow : smText,
-                          upper, 1.0f, qtrue);
-        }
-    }
+    SM_WebButton(x, y, w, label, disabled, SM_Over(hit, index), clip);
     if (!disabled) {
-        SM_Hit(x, y, w, BR_BUTTON_H, hit, index, clip);
+        SM_Hit(x, y, w, SM_WEB_BUTTON_H, hit, index, clip);
     }
 }
 

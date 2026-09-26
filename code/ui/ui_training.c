@@ -22,10 +22,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 // ui_training.c -- [QL] the Training Center page
 //
-// Retail's is web.pak's src/training.js, reached from Play > Training Center: an
-// h1 and three sections, each an image, a title, a line under it, a paragraph and
-// the buttons it ends with. The words, the order, the maps and the commands are
-// that file's; how it looks is quakeclub.com's, see ui_web.h.
+// Retail's is web.pak's module 267, reached from Play > Training Center: the page's
+// title and three sections side by side, each a square picture, a yellow title, a
+// line under it, a justified paragraph and the buttons it ends with. Drawn as
+// css/main.css lays it out (.training): each section 30% of the page wide with 3% of
+// margin, 675 high, black at 80% that goes solid under the cursor while the picture
+// comes up from 40%, both over a second.
 //
 // What each one sends (bot_minplayers and sv_serverType go to 0 first):
 //
@@ -34,16 +36,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //     Elevate       map qzpractice1 _rj; wait 2; team f
 //
 // The three factories are pak00's hidden ones, which set g_training 1 and, for
-// the practice maps, infinite ammo and one weapon. The image is each map's own
-// levelshot: retail's cards used screenshots of its own in web.pak, which is not
-// ours to ship.
+// the practice maps, infinite ammo and one weapon. The pictures are the page's own,
+// read from the player's web.pak.
 //
 
 #include "ui_web.h"
 
-#define TR_PAD 14.0f
-#define TR_CARD_H 420.0f
-#define TR_PIC_ASPECT (9.0f / 16.0f)
+#define TR_SECTION_H 675.0f
+#define TR_BAR 8.0f  // the page is overflow-y: scroll, so its bar's gutter is always there
 
 typedef enum {
     TR_HIT_NONE,
@@ -54,39 +54,42 @@ typedef enum {
 
 typedef struct {
     const char* map;
-    const char* title;     // the section's h2
+    const char* picture;   // the section's img
+    const char* title;     // its h2
     const char* subtitle;  // its h3
-    const char* text;      // its paragraph
+    const char* text;      // its paragraph, the em between underscores
     const char* command;   // what launchTraining sends for it
     const char* video;     // what its Watch Video opens, NULL when it has none
 } trCard_t;
 
 /*
-The videos are each section's own: Accelerate's button opens HnIeHqBk8v4 and
-Elevate's opens pVs1KGK0VLY. Retail names the two handlers the other way round
-(watchRocketVideo hangs off Accelerate), which reads like a slip of its own; the
-links are left on the sections retail leaves them on. Neither title could be
-checked -- YouTube answers 403 to anything but a browser.
+The videos are wired as retail wires them: Accelerate's button calls watchRocketVideo,
+which opens HnIeHqBk8v4, and Elevate's calls watchStrafeVideo, which opens pVs1KGK0VLY.
+The names say each opens the other section's video.
 */
 static const trCard_t trCards[] = {
-    {"qztraining", "Crash Course", "Welcome to the Arena",
-     "Meet Crash, our QUAKE LIVE trainer, and get a guided tour of some of the basic items of combat.",
+    {"qztraining", "webui/img/training/training.jpg", "Crash Course", "Welcome to the Arena",
+     "Meet _Crash_, our QUAKE LIVE trainer, and get a guided tour of some of the basic items of combat.",
      "map qztraining _training", NULL},
-    {"qzpractice2", "Accelerate", "Travelling at High Speed",
-     "Practice the basics of Strafe Jumping, an essential skill to learning how to move faster than other arena "
+    {"qzpractice2", "webui/img/training/strafe.jpg", "Accelerate", "Travelling at High Speed",
+     "Practice the basics of _Strafe Jumping_, an essential skill to learning how to move faster than other arena "
      "combatants.",
      "map qzpractice2 _sj; wait 2; team f", "https://youtu.be/HnIeHqBk8v4"},
-    {"qzpractice1", "Elevate", "Reaching Great Heights",
-     "Use your projectile weapons to perform Rocket Jumps, and access areas of the arena in entirely different ways.",
+    {"qzpractice1", "webui/img/training/rocket.jpg", "Elevate", "Reaching Great Heights",
+     "Use your projectile weapons to perform _Rocket Jumps_, and access areas of the arena in entirely different "
+     "ways.",
      "map qzpractice1 _rj; wait 2; team f", "https://youtu.be/pVs1KGK0VLY"},
 };
-
 #define TR_NUM_CARDS ((int)ARRAY_LEN(trCards))
 
 static struct {
     qboolean loaded;
-    qhandle_t shot[TR_NUM_CARDS];
+    qhandle_t picture[TR_NUM_CARDS];
+    float hover[TR_NUM_CARDS];  // how far each section's transition has gone, 0 to 1
+    int lastTime;
 } tr;
+
+static const vec4_t trYellow = SM_RGB(247, 209, 0);
 
 /*
 ===============
@@ -103,52 +106,164 @@ static void TR_Launch(int i) {
     trap_Cmd_ExecuteText(EXEC_APPEND, va("%s\n", trCards[i].command));
 }
 
-static void TR_DrawCard(int i, float x, float y, float w, float h) {
+/*
+===============
+The paragraph
+
+text-align: justify with an em inside: the words go on a line while they fit, and every
+line but the last spreads its spaces to fill the width. A word is one or more pieces, the
+em's in italics, and the underscores say where the em starts and ends.
+===============
+*/
+#define TR_MAX_WORDS 48
+#define TR_TEXT_SIZE 15.0f
+
+typedef struct {
+    char text[32];
+    float width;
+} trWord_t;
+
+static float TR_WordWidth(const char* word, qboolean* italic) {
+    char piece[32];
+    float w = 0;
+    int n = 0;
+
+    for (;; word++) {
+        if (*word == '_' || !*word) {
+            piece[n] = '\0';
+            if (n) {
+                w += SM_Advance(*italic ? SM_ItalicFace() : FONT_SANS, TR_TEXT_SIZE, piece, -1);
+            }
+            n = 0;
+            if (!*word) {
+                return w;
+            }
+            *italic = (qboolean)!*italic;
+            continue;
+        }
+        if (n < (int)sizeof(piece) - 1) {
+            piece[n++] = *word;
+        }
+    }
+}
+
+static float TR_DrawWord(float x, float baseline, const char* word, qboolean* italic) {
+    char piece[32];
+    int n = 0;
+
+    for (;; word++) {
+        if (*word == '_' || !*word) {
+            piece[n] = '\0';
+            if (n) {
+                int font = *italic ? SM_ItalicFace() : FONT_SANS;
+
+                SM_Text(x, baseline, font, TR_TEXT_SIZE, smText, piece, -1, qfalse);
+                x += SM_Advance(font, TR_TEXT_SIZE, piece, -1);
+            }
+            n = 0;
+            if (!*word) {
+                return x;
+            }
+            *italic = (qboolean)!*italic;
+            continue;
+        }
+        if (n < (int)sizeof(piece) - 1) {
+            piece[n++] = *word;
+        }
+    }
+}
+
+static void TR_DrawParagraph(float x, float y, float width, const char* text) {
+    trWord_t words[TR_MAX_WORDS];
+    float space = SM_Advance(FONT_SANS, TR_TEXT_SIZE, " ", -1);
+    qboolean measureItalic = qfalse, drawItalic = qfalse;
+    int count = 0, first = 0;
+    const char* p = text;
+
+    // the words, each measured with the italics it carries
+    while (*p && count < TR_MAX_WORDS) {
+        int n = 0;
+
+        while (*p == ' ') {
+            p++;
+        }
+        while (*p && *p != ' ' && n < (int)sizeof(words[0].text) - 1) {
+            words[count].text[n++] = *p++;
+        }
+        words[count].text[n] = '\0';
+        if (n) {
+            words[count].width = TR_WordWidth(words[count].text, &measureItalic);
+            count++;
+        }
+    }
+
+    // the lines: as many words as fit, spread to the width unless it is the last
+    while (first < count) {
+        float used = words[first].width;
+        float gap = space;
+        float cx = x;
+        int last = first;
+        int i;
+
+        while (last + 1 < count && used + space + words[last + 1].width <= width) {
+            last++;
+            used += space + words[last].width;
+        }
+        if (last + 1 < count && last > first) {
+            gap = space + (width - used) / (last - first);
+        }
+        for (i = first; i <= last; i++) {
+            TR_DrawWord(cx, SM_Baseline(FONT_SANS, TR_TEXT_SIZE, y, 24), words[i].text, &drawItalic);
+            cx += words[i].width + gap;
+        }
+        y += 24;
+        first = last + 1;
+    }
+}
+
+// CSS's "ease" over the second the section takes to change
+static float TR_Ease(float t) {
+    return t * t * (3 - 2 * t);
+}
+
+static void TR_DrawSection(int i, float x, float y, float w) {
     const trCard_t* card = &trCards[i];
-    float inner = w - 2 * TR_PAD;
-    float picH = inner * TR_PIC_ASPECT;
-    smRect_t box = SM_R(x, y, w, h);
-    qboolean over = SM_In(&box, smMX, smMY);
-    int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
-    float by, bw;
-    vec4_t tint = {1.0f, 1.0f, 1.0f, 1.0f};
-    int lines, k;
+    float f = TR_Ease(tr.hover[i]);
+    vec4_t back = {0, 0, 0, 0.8f + 0.2f * f};
+    vec4_t shade = {0, 0, 0, 0.6f * (1 - f)};
+    float ty = y + w + 6;
+    int buttons = card->video ? 2 : 1;
+    float bw = w * 0.45f;
+    float bx = x + (w - (buttons * bw + w * 0.04f)) * 0.5f;
+    float by = y + TR_SECTION_H - 15 - SM_WEB_BUTTON_H;
 
-    // [ioquakelive] the card is the panel, with nothing wrapped around it; the cursor lifts it
-    SM_Round(x, y, w, h, SM_RADIUS_MD, over ? smRaised : smPanel, NULL);
+    SM_Fill(x, y, w, TR_SECTION_H, back, NULL);
+    // the picture's opacity, as black over it: the shader of a plain image takes no alpha
+    SM_Pic(x, y, w, w, tr.picture[i], NULL);
+    SM_Fill(x, y, w, w, shade, NULL);
 
-    // retail dims the image to 40% and brings it up under the cursor
-    tint[3] = over ? 1.0f : 0.4f;
-    SM_Round(x + TR_PAD, y + TR_PAD, inner, picH, SM_RADIUS_SM, smPage, NULL);
-    trap_R_SetColor(tint);
-    SM_Pic(x + TR_PAD, y + TR_PAD, inner, picH, tr.shot[i], NULL);
-    trap_R_SetColor(NULL);
+    // the h2 in Handel Gothic and yellow, the h3 under it in bold, both centred
+    SM_Text(x + (w - SM_Advance(FONT_DEFAULT, 36, card->title, -1)) * 0.5f, SM_Baseline(FONT_DEFAULT, 36, ty, 45),
+            FONT_DEFAULT, 36, trYellow, card->title, -1, qfalse);
+    ty += 45;
+    SM_Text(x + (w - SM_AdvanceBold(FONT_SANS, 18.6667f, card->subtitle, -1, qtrue)) * 0.5f,
+            SM_Baseline(FONT_SANS, 18.6667f, ty, 24.3f), FONT_SANS, 18.6667f, smText, card->subtitle, -1, qtrue);
+    ty += 24.3f + 20;
+    TR_DrawParagraph(x + 15, ty + 15, w - 30, card->text);
 
-    by = y + TR_PAD + picH + 22;
-    SM_Label(x + TR_PAD + 4, SM_Baseline(FONT_SANS, 11, by, 16), 11, smGold, card->subtitle, 1.6f);
-    SM_Label(x + TR_PAD + 4, SM_Baseline(FONT_SANS, 24, by + 20, 32), 24, smText, card->title, 0.2f);
-
-    lines = SM_Wrap(FONT_SANS, 14, card->text, inner - 8, starts, lens);
-    for (k = 0; k < lines && k < 4; k++) {
-        SM_Text(x + TR_PAD + 4, SM_Baseline(FONT_SANS, 14, by + 60 + k * 21, 21), FONT_SANS, 14, smMuted,
-                card->text + starts[k], lens[k], qfalse);
-    }
-
-    // the buttons the section ends with: Watch Video first, as retail orders them
-    by = y + h - TR_PAD - SM_BUTTON_H;
+    // the whole section launches it, and so do its buttons; Watch Video does not go on to it
+    SM_Hit(x, y, w, TR_SECTION_H, TR_HIT_CARD, i, NULL);
     if (card->video) {
-        bw = (inner - 10) * 0.5f;
-        SM_Button(x + TR_PAD, by, bw, SM_BUTTON_H, "Watch Video", SM_BUTTON_SECONDARY, SM_Over(TR_HIT_VIDEO, i));
-        SM_Hit(x + TR_PAD, by, bw, SM_BUTTON_H, TR_HIT_VIDEO, i, NULL);
-        SM_Button(x + TR_PAD + bw + 10, by, bw, SM_BUTTON_H, "Start Training", SM_BUTTON_PRIMARY,
-                  SM_Over(TR_HIT_START, i));
-        SM_Hit(x + TR_PAD + bw + 10, by, bw, SM_BUTTON_H, TR_HIT_START, i, NULL);
-    } else {
-        SM_Button(x + TR_PAD, by, inner, SM_BUTTON_H, "Start Training", SM_BUTTON_PRIMARY, SM_Over(TR_HIT_START, i));
-        SM_Hit(x + TR_PAD, by, inner, SM_BUTTON_H, TR_HIT_START, i, NULL);
+        SM_WebButton(bx, by, bw, "Watch Video", qfalse, SM_Over(TR_HIT_VIDEO, i), NULL);
+        SM_Hit(bx, by, bw, SM_WEB_BUTTON_H, TR_HIT_VIDEO, i, NULL);
+        bx += bw;
     }
-    // the whole section launches it too, the way retail's does
-    SM_Hit(x, y, w, h, TR_HIT_CARD, i, NULL);
+    // the first of them keeps a margin of 4% on its right
+    if (card->video) {
+        bx += w * 0.04f;
+    }
+    SM_WebButton(bx, by, bw, "Start Training", qfalse, SM_Over(TR_HIT_START, i), NULL);
+    SM_Hit(bx, by, bw, SM_WEB_BUTTON_H, TR_HIT_START, i, NULL);
 }
 
 void UI_Training_Open(void) {
@@ -159,9 +274,17 @@ void UI_Training_Open(void) {
     if (!tr.loaded) {
         tr.loaded = qtrue;
         for (i = 0; i < TR_NUM_CARDS; i++) {
-            tr.shot[i] = trap_R_RegisterShaderNoMip(va("levelshots/%s", trCards[i].map));
+            tr.picture[i] = trap_R_RegisterShaderNoMip(trCards[i].picture);
+            if (!tr.picture[i]) {
+                tr.picture[i] = trap_R_RegisterShaderNoMip(va("levelshots/%s", trCards[i].map));
+            }
         }
     }
+    for (i = 0; i < TR_NUM_CARDS; i++) {
+        tr.hover[i] = 0;
+    }
+    tr.lastTime = uiInfo.uiDC.realTime;
+
     // the page takes keys before the mouse moves over it
     menu = Menus_FindByName("training");
     item = menu ? Menu_FindItemByName(menu, "training") : NULL;
@@ -172,31 +295,37 @@ void UI_Training_Open(void) {
 
 void UI_Training_Paint(void) {
     float left = UI_Home_Left();
-    float w = (HM_CONTAINER_W - (TR_NUM_CARDS - 1) * HM_PANEL_GAP) / TR_NUM_CARDS;
-    float top, bottom, y;
+    float width = HM_CONTAINER_W - TR_BAR;
+    float w = width * 0.3f;
+    float margin = width * 0.03f;
+    float y, dt;
     int i;
 
     SM_BeginFrame();
     if (!tr.loaded) {
         UI_Training_Open();
     }
-
     UI_Home_Backdrop();
     UI_Home_PageTop(HM_NAV_TRAINING);
 
-    // [ioquakelive] Only the three training cards are centred, not the hero above them. The
-    // header stays anchored at the top as on every page, and the three cards centre vertically
-    // in what is left down to the edge. No panel wraps them any more: the cards are the panels,
-    // with no container inside another.
-    top = UI_Home_Header(HM_NAV_H, NULL, "Training Center") + HM_PANEL_GAP;
-    bottom = UI_Home_FrameBottom();
-    y = top + (bottom - top - TR_CARD_H) * 0.5f;
-    if (y < top) {
-        y = top;
+    y = UI_Home_Header(HM_NAV_H, NULL, "Training Center") + margin;
+
+    // each section eases toward what the cursor says over a second
+    dt = (uiInfo.uiDC.realTime - tr.lastTime) / 1000.0f;
+    tr.lastTime = uiInfo.uiDC.realTime;
+    for (i = 0; i < TR_NUM_CARDS; i++) {
+        smRect_t box = SM_R(left + i * (w + margin), y, w, TR_SECTION_H);
+
+        tr.hover[i] += SM_In(&box, smMX, smMY) ? dt : -dt;
+        if (tr.hover[i] < 0) {
+            tr.hover[i] = 0;
+        } else if (tr.hover[i] > 1) {
+            tr.hover[i] = 1;
+        }
     }
 
     for (i = 0; i < TR_NUM_CARDS; i++) {
-        TR_DrawCard(i, left + i * (w + HM_PANEL_GAP), y, w, TR_CARD_H);
+        TR_DrawSection(i, left + i * (w + margin), y, w);
     }
 
     UI_Home_Banner();

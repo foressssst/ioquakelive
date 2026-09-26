@@ -196,6 +196,8 @@ int SM_Fit(int font, float size, const char* text, float width);
 void SM_Text(float x, float baseline, int font, float size, const float* color, const char* text, int limit,
              qboolean bold);
 void SM_Centered(float middle, float baseline, float size, const float* color, const char* text, qboolean bold);
+// [QL] the italic of web.pak's Noto Sans, for a page's em: pass it as the font
+int SM_ItalicFace(void);
 // [QL] text as a web page prints it: a ^ and what follows are characters, not a colour
 float SM_AdvanceRaw(int font, float size, const char* text, int len, qboolean bold);
 void SM_TextRaw(float x, float baseline, int font, float size, const float* color, const char* text, int limit,
@@ -230,6 +232,12 @@ typedef enum {
 #define SM_PILL_H 28.0f
 
 float SM_ButtonWidth(const char* text, float height);
+// [QL] skeleton's button, the one retail's pages use, 30 pixels high
+#define SM_WEB_BUTTON_H 30.0f
+float SM_WebButtonWidth(const char* label);
+void SM_WebButton(float x, float y, float w, const char* label, qboolean disabled, qboolean over,
+                  const smRect_t* clip);
+void SM_Border(float x, float y, float w, float h, float t, const float* color, const smRect_t* clip);
 void SM_Button(float x, float y, float w, float h, const char* text, int style, qboolean over);
 void SM_Switch(float x, float y, qboolean on, qboolean over);
 #define SM_SWITCH_W 34.0f

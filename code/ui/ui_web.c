@@ -330,7 +330,8 @@ static struct {
     int regular, strong;  // font indices, -1 when Barlow is not there
     // [ioquakelive] retail's own faces, out of the player's web.pak: -1 when it is not there
     int sans, sansBold, handel, handelBold, awesome;
-} smFonts = {qfalse, -1, -1, -1, -1, -1, -1, -1};
+    int sansItalic;  // the page's em
+} smFonts = {qfalse, -1, -1, -1, -1, -1, -1, -1, -1};
 
 void SM_SetLook(smLook_t look) {
     smLook = look;
@@ -366,6 +367,9 @@ void SM_LoadFonts(void) {
     smFonts.handel = trap_R_Font_Register("webui/fonts/handelgothic-medium-webfont.ttf");
     smFonts.handelBold = trap_R_Font_Register("webui/fonts/handelgothic-bold-webfont.ttf");
     smFonts.awesome = trap_R_Font_Register("webui/fonts/fontawesome-webfont.ttf");
+    // [QL] the page's italic is the bold one: css/main.css declares NotoSans italic twice, both
+    // times with NotoSans-BoldItalic.ttf, so an em comes out bold as well
+    smFonts.sansItalic = trap_R_Font_Register("webui/fonts/NotoSans-BoldItalic.ttf");
     if (smFonts.sans < 0 || smFonts.sansBold < 0 || smFonts.handel < 0 || smFonts.handelBold < 0) {
         Com_Printf("^3front end: no web.pak, so pak00's fonts stand in for retail's web UI\n");
         smFonts.sans = smFonts.sansBold = smFonts.handel = smFonts.handelBold = -1;
@@ -411,6 +415,11 @@ static float SM_FaceEm(int face) {
     }
     // web.pak's Noto Sans has pak00's metrics
     return face == FONT_DEFAULT ? SM_HANDEL_EM : SM_SANS_EM;
+}
+
+// the italic the pages set their em in (bold, see SM_LoadFonts); the upright face without web.pak
+int SM_ItalicFace(void) {
+    return smFonts.sansItalic >= 0 ? smFonts.sansItalic : FONT_SANS;
 }
 
 float SM_Em(int font) {
@@ -512,6 +521,59 @@ void SM_Text(float x, float baseline, int font, float size, const float* color, 
         trap_R_Font_DrawString(sx + (shift < 1 ? 1 : shift), sy, text, face, px, limit, NULL, 0);
     }
     trap_R_SetColor(NULL);
+}
+
+/*
+===============
+SM_WebButton
+
+[QL] skeleton's button, which every page of retail's web UI uses: #3d3d3d with a #4d4d4d
+border, 11 pixel semibold capitals spaced a pixel apart; under the cursor the text turns
+yellow over #5d5d5d and a #999 border, and a disabled one goes dark.
+===============
+*/
+static const vec4_t smWebButton = SM_RGB(61, 61, 61);
+static const vec4_t smWebButtonBorder = SM_RGB(77, 77, 77);
+static const vec4_t smWebButtonHover = SM_RGB(93, 93, 93);
+static const vec4_t smWebButtonHoverBorder = SM_RGB(153, 153, 153);
+static const vec4_t smWebButtonOff = SM_RGB(34, 34, 34);
+static const vec4_t smWebButtonOffBorder = SM_RGB(17, 17, 17);
+static const vec4_t smWebButtonOffText = SM_RGB(51, 51, 51);
+static const vec4_t smWebYellow = SM_RGB(247, 209, 0);
+
+void SM_Border(float x, float y, float w, float h, float t, const float* color, const smRect_t* clip) {
+    SM_Fill(x, y, w, t, color, clip);
+    SM_Fill(x, y + h - t, w, t, color, clip);
+    SM_Fill(x, y + t, t, h - 2 * t, color, clip);
+    SM_Fill(x + w - t, y + t, t, h - 2 * t, color, clip);
+}
+
+// the width it takes on its own: 20 pixels of padding a side and the border
+float SM_WebButtonWidth(const char* label) {
+    char upper[64];
+
+    Q_strncpyz(upper, label, sizeof(upper));
+    Q_strupr(upper);
+    return SM_SpacedWidth(FONT_SANS, 11, upper, 1.0f) + 40 + 2;
+}
+
+void SM_WebButton(float x, float y, float w, const char* label, qboolean disabled, qboolean over,
+                  const smRect_t* clip) {
+    char upper[64];
+    float baseline = SM_Baseline(FONT_SANS, 11, y, SM_WEB_BUTTON_H);
+
+    Q_strncpyz(upper, label, sizeof(upper));
+    Q_strupr(upper);
+    if (disabled) {
+        over = qfalse;
+    }
+    SM_Fill(x, y, w, SM_WEB_BUTTON_H, disabled ? smWebButtonOff : over ? smWebButtonHover : smWebButton, clip);
+    SM_Border(x, y, w, SM_WEB_BUTTON_H, 1,
+              disabled ? smWebButtonOffBorder : over ? smWebButtonHoverBorder : smWebButtonBorder, clip);
+    if (!clip || SM_TextInside(baseline, 11, clip)) {
+        SM_SpacedText(x + (w - SM_SpacedWidth(FONT_SANS, 11, upper, 1.0f)) * 0.5f, baseline, FONT_SANS, 11,
+                      disabled ? smWebButtonOffText : over ? smWebYellow : smText, upper, 1.0f, qtrue);
+    }
 }
 
 /*
