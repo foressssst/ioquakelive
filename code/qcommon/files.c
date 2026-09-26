@@ -3385,6 +3385,7 @@ keeps its own in fs_homepath.
 */
 #ifdef _WIN32
 #include <windows.h>
+#include <shellapi.h>
 #include <stdio.h>
 
 #define QL_PAK00_SIZE   962052238ULL
@@ -3516,57 +3517,51 @@ static qboolean FS_FindSteamQLPath(char *qlPath, int pathSize) {
 FS_CopyFileWithProgress - Copy a file with console progress display.
 Returns qtrue on success.
 */
+// [ioquakelive] what a pak00.pk3 from Steam weighs
+static qboolean FS_Pak00SizeOk(const char *path) {
+	WIN32_FILE_ATTRIBUTE_DATA info;
+
+	if (!GetFileAttributesExA(path, GetFileExInfoStandard, &info))
+		return qfalse;
+	return (((ULONGLONG)info.nFileSizeHigh << 32) | info.nFileSizeLow) == QL_PAK00_SIZE ? qtrue : qfalse;
+}
+
+// [ioquakelive] with Windows' own copy progress, into a .part renamed once it is whole, so a copy
+// cut short never leaves a pak00.pk3 behind
 static qboolean FS_CopyFileWithProgress(const char *src, const char *dst,
                                          const char *displayName) {
-	FILE *fin, *fout;
-	char buf[65536];
-	LARGE_INTEGER fileSize;
-	ULONGLONG totalRead = 0;
-	size_t bytesRead;
-	int lastPercent = -1;
-	HANDLE hFile;
+	char from[MAX_OSPATH + 2];
+	char part[MAX_OSPATH + 8];
+	SHFILEOPSTRUCTA op;
+	int result;
 
-	// Get file size
-	hFile = CreateFileA(src, GENERIC_READ, FILE_SHARE_READ, NULL,
-	                    OPEN_EXISTING, 0, NULL);
-	if (hFile == INVALID_HANDLE_VALUE)
-		return qfalse;
-	GetFileSizeEx(hFile, &fileSize);
-	CloseHandle(hFile);
+	Com_sprintf(part, sizeof(part), "%s.part", dst);
+	DeleteFileA(part);
 
-	fin = fopen(src, "rb");
-	if (!fin)
-		return qfalse;
+	// both lists end in two nulls
+	Com_Memset(from, 0, sizeof(from));
+	Q_strncpyz(from, src, sizeof(from) - 1);
+	part[strlen(part) + 1] = '\0';
 
-	fout = fopen(dst, "wb");
-	if (!fout) {
-		fclose(fin);
+	Com_Memset(&op, 0, sizeof(op));
+	op.wFunc = FO_COPY;
+	op.pFrom = from;
+	op.pTo = part;
+	op.fFlags = FOF_NOCONFIRMATION | FOF_NOCONFIRMMKDIR | FOF_NOERRORUI;
+	op.lpszProgressTitle = "ioquakelive";
+
+	Com_Printf("Copying %s...\n", displayName);
+	result = SHFileOperationA(&op);
+	if (result != 0 || op.fAnyOperationsAborted || !FS_Pak00SizeOk(part)) {
+		Com_Printf("Copying %s failed (%d)\n", displayName, result);
+		DeleteFileA(part);
 		return qfalse;
 	}
 
-	Com_Printf("Copying %s (%.1f MB)...\n", displayName,
-	           (double)fileSize.QuadPart / (1024.0 * 1024.0));
-
-	while ((bytesRead = fread(buf, 1, sizeof(buf), fin)) > 0) {
-		if (fwrite(buf, 1, bytesRead, fout) != bytesRead) {
-			Com_Printf("\nError writing %s\n", dst);
-			fclose(fin);
-			fclose(fout);
-			remove(dst);
-			return qfalse;
-		}
-		totalRead += bytesRead;
-		if (fileSize.QuadPart > 0) {
-			int pct = (int)((totalRead * 100ULL) / (ULONGLONG)fileSize.QuadPart);
-			if (pct != lastPercent) {
-				lastPercent = pct;
-				Com_Printf("\r  %s: %d%%", displayName, pct);
-			}
-		}
+	if (!MoveFileExA(part, dst, MOVEFILE_REPLACE_EXISTING)) {
+		DeleteFileA(part);
+		return qfalse;
 	}
-	Com_Printf("\r  %s: done       \n", displayName);
-	fclose(fin);
-	fclose(fout);
 	return qtrue;
 }
 
@@ -3725,15 +3720,15 @@ static void FS_CopyFromSteam(void) {
 	qboolean needPak;
 	char message[2048];
 
-	// Only run on Windows, only if pak00.pk3 is missing
+	// Only run on Windows, only if pak00.pk3 is missing or not whole
 	Com_sprintf(pak00Dest, sizeof(pak00Dest), "%s\\%s\\pak00.pk3",
 	            fs_basepath->string, BASEGAME_DIR);
-	needPak = !FS_FileExistsOS(pak00Dest);
+	needPak = !FS_Pak00SizeOk(pak00Dest);
 
 	if (!needPak)
 		return;
 
-	Com_Printf("\npak00.pk3 not found in %s\\%s\\\n", fs_basepath->string, BASEGAME_DIR);
+	Com_Printf("\npak00.pk3 missing or incomplete in %s\\%s\\\n", fs_basepath->string, BASEGAME_DIR);
 	Com_Printf("Searching for Quake Live Steam installation...\n");
 
 	if (!FS_FindSteamQLPath(qlPath, sizeof(qlPath))) {
@@ -4377,9 +4372,9 @@ void FS_InitFilesystem(void) {
 		char pak00Path[MAX_OSPATH];
 		Com_sprintf(pak00Path, sizeof(pak00Path), "%s%c%s%cpak00.pk3",
 		            fs_basepath->string, PATH_SEP, BASEGAME_DIR, PATH_SEP);
-		if (!FS_FileExistsOS(pak00Path)) {
+		if (!FS_Pak00SizeOk(pak00Path)) {
 			FS_CopyFromSteam();
-			if (FS_FileExistsOS(pak00Path)) {
+			if (FS_Pak00SizeOk(pak00Path)) {
 				// pak00.pk3 was copied - restart filesystem to pick it up
 				FS_Shutdown(qfalse);
 				FS_Startup(com_basegame->string);
