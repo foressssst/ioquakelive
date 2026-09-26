@@ -4866,6 +4866,11 @@ __cleanup:
 
 void vk_wait_idle( void )
 {
+	// [ioquakelive] nothing to wait on when the device never came up: an error during
+	// vk_initialize shuts the renderer down with the function pointers still empty
+	if ( qvkDeviceWaitIdle == NULL || vk.device == VK_NULL_HANDLE ) {
+		return;
+	}
 	VK_CHECK( qvkDeviceWaitIdle( vk.device ) );
 }
 
@@ -4878,6 +4883,11 @@ void vk_queue_wait_idle( void )
 
 void vk_release_resources( void ) {
 	int i, j;
+
+	// [ioquakelive] nothing was made yet if vk_initialize did not finish
+	if ( !vk.active ) {
+		return;
+	}
 
 	vk_wait_idle();
 
