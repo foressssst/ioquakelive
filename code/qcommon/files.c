@@ -2378,7 +2378,11 @@ static int FS_AddFileToList(char* name, char* list[MAX_FOUND_FILES], int nfiles)
 			return nfiles;  // already in list
 		}
 	}
-	list[nfiles] = CopyString(name);
+	// [ioquakelive] in the main zone: a listing can be thousands of names (emoji/ has 4012), more
+	// than the half megabyte of the small zone CopyString takes them from. It ran out on the second
+	// renderer start in 64 bits
+	list[nfiles] = Z_Malloc((int)strlen(name) + 1);
+	strcpy(list[nfiles], name);
 	nfiles++;
 
 	return nfiles;
