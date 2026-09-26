@@ -1705,8 +1705,11 @@ static void ST_DrawPage(void) {
         SM_FillScreen(tint);
         headerY = 40;
     } else {
+        // [ioquakelive] the frame is every page's, in retail's type; only the page is Settings' own
+        SM_SetLook(SM_LOOK_RETAIL);
         UI_Home_Backdrop();
         UI_Home_PageTop(HM_NAV_SETTINGS);
+        SM_SetLook(SM_LOOK_OURS);
         headerY = HM_NAV_H;
     }
     if (!ST_TabShown(st.tab)) {
@@ -2245,6 +2248,7 @@ void UI_Settings_Paint(void) {
     if (st.model >= 0) {
         ST_DrawModelChooser();
     }
+    SM_SetLook(SM_LOOK_RETAIL);
     UI_Home_Banner();
     SM_EndFrame();
 }
