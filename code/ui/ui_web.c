@@ -122,47 +122,14 @@ void SM_Fill(float x, float y, float w, float h, const float* color, const smRec
 ===============
 SM_Round
 
-A filled rectangle with rounded corners. There is no rounded-corner texture to
-hand, so each corner is drawn as horizontal slices along the arc, as thin as one
-screen pixel so the edge stays smooth at any resolution.
+[ioquakelive] Retail's web UI has square corners, and since 2026-09-26 every page follows it,
+Settings included: the player asked for no rounded edges anywhere. The radius stays in the
+calls so the pages read as before, and is ignored.
 ===============
 */
 void SM_Round(float x, float y, float w, float h, float r, const float* color, const smRect_t* clip) {
-    float step;
-    int slices, k;
-
-    // retail's web UI has square corners
-    if (smLook == SM_LOOK_RETAIL) {
-        r = 0;
-    }
-    if (r > w * 0.5f) {
-        r = w * 0.5f;
-    }
-    if (r > h * 0.5f) {
-        r = h * 0.5f;
-    }
-    if (r * smScale < 1.0f) {
-        SM_Fill(x, y, w, h, color, clip);
-        return;
-    }
-    SM_Fill(x, y + r, w, h - 2 * r, color, clip);
-
-    slices = (int)(r * smScale + 0.5f);
-    if (slices > 24) {
-        slices = 24;
-    }
-    if (slices < 1) {
-        slices = 1;
-    }
-    step = r / slices;
-    for (k = 0; k < slices; k++) {
-        float mid = r - (k + 0.5f) * step;  // distance from the straight edge
-        float inset = r - (float)sqrt(r * r - mid * mid);
-        float sy = k * step;
-
-        SM_Fill(x + inset, y + sy, w - 2 * inset, step, color, clip);
-        SM_Fill(x + inset, y + h - sy - step, w - 2 * inset, step, color, clip);
-    }
+    (void)r;
+    SM_Fill(x, y, w, h, color, clip);
 }
 
 void SM_Pill(float x, float y, float w, float h, const float* color, const smRect_t* clip) {
