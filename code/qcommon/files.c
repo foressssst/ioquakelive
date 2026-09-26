@@ -1314,9 +1314,11 @@ long FS_FOpenFileRead(const char* filename, fileHandle_t* file, qboolean uniqueF
 	if (!fs_searchpaths)
 		Com_Error(ERR_FATAL, "Filesystem call made without initialization");
 
-	isLocalConfig = !strcmp(filename, "autoexec.cfg") || !strcmp(filename, QZCONFIG_CFG);
+	isLocalConfig = !strcmp(filename, "autoexec.cfg") || !strcmp(filename, QZCONFIG_CFG) ||
+	                !strcmp(filename, "server.cfg");
 	for (search = fs_searchpaths; search; search = search->next) {
-		// autoexec.cfg and qzconfig.cfg can only be loaded outside of pk3 files.
+		// autoexec.cfg, qzconfig.cfg and server.cfg can only be loaded outside of pk3 files,
+		// so a downloaded pk3 cannot bring its own
 		if (isLocalConfig && search->pack)
 			continue;
 

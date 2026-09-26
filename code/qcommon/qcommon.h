@@ -590,10 +590,8 @@ issues.
 #define FS_QAGAME_REF 0x08
 #define MAX_FILE_HANDLES 64
 
-#ifdef DEDICATED
-#define QZCONFIG_CFG "server.cfg"
-#else
 #define QZCONFIG_CFG "qzconfig.cfg"
+#ifndef DEDICATED
 #define REPCONFIG_CFG "repconfig.cfg"
 #endif
 

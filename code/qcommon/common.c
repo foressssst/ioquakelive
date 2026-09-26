@@ -2435,10 +2435,10 @@ void Com_ExecuteCfg(void) {
     Cbuf_ExecuteText(EXEC_NOW, "exec default.cfg\n");
     Cbuf_Execute();  // Always execute after exec to prevent text buffer overflowing
 
-    if (!Com_SafeMode()) {
-        // [QL] quakelive_steam.exe 0x4cc269: a dedicated server reads server.cfg and nothing
-        // else of its own; a client reads qzconfig (hardware) and repconfig (replicated).
-        // Both then read autoexec.cfg.
+    {
+        // [QL] quakelive_steam.exe 0x4cc269 (qzeroded.x64 0x4248f8): a dedicated server reads
+        // server.cfg and nothing else of its own; a client reads qzconfig (hardware), unless
+        // in safe mode, and repconfig (replicated). Both then read autoexec.cfg.
         //
         // Retail tests com_dedicated at that address. That cannot be done here: this runs
         // before the cvar is registered (2588 against 2595). ioqlds is dedicated by
@@ -2454,8 +2454,10 @@ void Com_ExecuteCfg(void) {
             Cbuf_ExecuteText(EXEC_NOW, "exec server.cfg\n");
             Cbuf_Execute();
         } else {
-            Cbuf_ExecuteText(EXEC_NOW, "exec " QZCONFIG_CFG "\n");
-            Cbuf_Execute();
+            if (!Com_SafeMode()) {
+                Cbuf_ExecuteText(EXEC_NOW, "exec " QZCONFIG_CFG "\n");
+                Cbuf_Execute();
+            }
 #ifdef REPCONFIG_CFG
             Cbuf_ExecuteText(EXEC_NOW, "exec " REPCONFIG_CFG "\n");
             Cbuf_Execute();
@@ -2465,7 +2467,9 @@ void Com_ExecuteCfg(void) {
         Cbuf_ExecuteText(EXEC_NOW, "exec autoexec.cfg\n");
         Cbuf_Execute();
 
-        Com_MigrateConfig();
+        if (!Com_SafeMode()) {
+            Com_MigrateConfig();
+        }
     }
 }
 
@@ -2885,11 +2889,15 @@ void Com_WriteConfiguration(void) {
     }
     cvar_modifiedFlags &= ~CVAR_ARCHIVE;
 
+    // [QL] qzeroded.x64 0x4233c4: a dedicated server never writes a config, so the admin's
+    // server.cfg is only ever read
+    if (com_dedicated->integer) {
+        return;
+    }
+
 #ifndef DEDICATED
     // [QL] client writes split configs: qzconfig.cfg + repconfig.cfg
     Com_WriteSplitConfig(QZCONFIG_CFG, REPCONFIG_CFG);
-#else
-    Com_WriteConfigToFile(QZCONFIG_CFG);
 #endif
 }
 
