@@ -1230,6 +1230,12 @@ BASE_CFLAGS += -Wstrict-aliasing=2 -Wmissing-format-attribute
 BASE_CFLAGS += -Wdisabled-optimization
 BASE_CFLAGS += -Werror-implicit-function-declaration
 
+# [ioquakelive] no fused multiply-adds: on ARM, GCC and clang fuse a*b+c into one instruction that
+# rounds once, and the physics then comes out a hair different from an x86 build -- the server and
+# the client prediction stop agreeing. Retail only ever ran on x86, which never fuses. MSVC does not
+# fuse by default either (checked on ARM64: bg_pmove.c has none)
+BASE_CFLAGS += -ffp-contract=off
+
 ifeq ($(V),1)
 echo_cmd=@:
 Q=
