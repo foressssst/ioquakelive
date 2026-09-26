@@ -312,6 +312,84 @@ static int R_Font_LoadTTF( const char *path, const char *name ) {
 	return id;
 }
 
+// [ioquakelive] the colour emoji: the pictures in emoji/, named by their codepoints. fontstash
+// matches them in the text; each shader is registered the first time its emoji is drawn
+#define MAX_EMOJI_NAME 80
+static char (*emojiNames)[MAX_EMOJI_NAME];
+static qhandle_t *emojiShaders;  // 0 until drawn, -1 when the picture would not load
+static int numEmoji;
+
+static void R_Font_LoadEmoji( void ) {
+	char **list;
+	const char **names;
+	int n, i;
+
+	list = ri.FS_ListFiles( "emoji", ".png", &n );
+	if ( !list || n <= 0 ) {
+		if ( list ) {
+			ri.FS_FreeFileList( list );
+		}
+		return;
+	}
+
+	emojiNames = ri.Malloc( n * sizeof( *emojiNames ) );
+	emojiShaders = ri.Malloc( n * sizeof( *emojiShaders ) );
+	names = ri.Malloc( n * sizeof( *names ) );
+	for ( i = 0; i < n; i++ ) {
+		Q_strncpyz( emojiNames[i], list[i], sizeof( emojiNames[i] ) );
+		COM_StripExtension( emojiNames[i], emojiNames[i], sizeof( emojiNames[i] ) );
+		emojiShaders[i] = 0;
+		names[i] = emojiNames[i];
+	}
+	numEmoji = n;
+	ri.FS_FreeFileList( list );
+
+	fonsSetEmoji( names, n );
+	ri.Free( (void *)names );
+}
+
+static void R_Font_FreeEmoji( void ) {
+	fonsSetEmoji( NULL, 0 );
+	if ( emojiNames ) {
+		ri.Free( emojiNames );
+	}
+	if ( emojiShaders ) {
+		ri.Free( emojiShaders );
+	}
+	emojiNames = NULL;
+	emojiShaders = NULL;
+	numEmoji = 0;
+}
+
+// in white, so the picture keeps its colours, and with the text's alpha, so it fades with it
+static void RB_Font_renderEmoji( void *uptr, float x0, float y0, float x1, float y1, unsigned int color, int emoji ) {
+	vec4_t rgba;
+
+	(void)uptr;
+
+	if ( emoji < 0 || emoji >= numEmoji ) {
+		return;
+	}
+	if ( !emojiShaders[emoji] ) {
+		char name[MAX_QPATH];
+
+		Com_sprintf( name, sizeof( name ), "emoji/%s.png", emojiNames[emoji] );
+		emojiShaders[emoji] = RE_RegisterShader( name );
+		if ( !emojiShaders[emoji] ) {
+			emojiShaders[emoji] = -1;
+		}
+	}
+	if ( emojiShaders[emoji] < 0 ) {
+		return;
+	}
+
+	rgba[0] = rgba[1] = rgba[2] = 1.0f;
+	rgba[3] = (float)( ( color >> 24 ) & 0xff ) / 255.0f;
+	RE_SetColor( rgba );
+	RE_StretchPic( x0, y0, x1 - x0, y1 - y0, 0.0f, 0.0f, 1.0f, 1.0f, emojiShaders[emoji] );
+	RE_SetColor( NULL );
+}
+
 /*
 ===============
 R_InitFonts
@@ -336,6 +414,7 @@ void R_InitFonts( void ) {
 	params.renderUpdate = RB_Font_renderUpdate;
 	params.renderDraw = RB_Font_renderDraw;
 	params.renderDelete = RB_Font_renderDelete;
+	params.renderEmoji = RB_Font_renderEmoji;
 
 	fontContext = fonsCreateInternal( &params );
 	if ( !fontContext ) {
@@ -367,6 +446,8 @@ void R_InitFonts( void ) {
 	if ( normal == FONS_INVALID ) {
 		ri.Printf( PRINT_WARNING, "R_InitFonts: default font '%s' missing - text will not render\n", DEFAULT_FONT );
 	}
+
+	R_Font_LoadEmoji();
 }
 
 void R_FontShutdown( void ) {
@@ -378,6 +459,7 @@ void R_FontShutdown( void ) {
 	fonsDeleteInternal( fontContext );
 	fontContext = NULL;
 	numFontIndices = 0;
+	R_Font_FreeEmoji();
 	for ( i = 0; i < (int)ARRAY_LEN( fallbackFontIds ); i++ ) {
 		fallbackFontIds[i] = FONS_INVALID;
 	}

@@ -1057,6 +1057,193 @@ static int fons__colorCode(const char *p, const char *end) {
     return -1;
 }
 
+// -------------------------------------------------------------------------
+//  [ioquakelive] colour emoji
+// -------------------------------------------------------------------------
+
+#define FONS_EMOJI_MAXSEQ 10
+
+typedef struct {
+    int len;
+    unsigned int cp[FONS_EMOJI_MAXSEQ];
+    int index;
+} FONSemoji;
+
+static FONSemoji *fons__emoji = NULL;
+static int fons__numEmoji = 0;
+
+static int fons__emojiCompare(const void *a, const void *b) {
+    const FONSemoji *x = (const FONSemoji *)a;
+    const FONSemoji *y = (const FONSemoji *)b;
+    int i;
+
+    if (x->len != y->len)
+        return x->len - y->len;
+    for (i = 0; i < x->len; i++) {
+        if (x->cp[i] != y->cp[i])
+            return x->cp[i] < y->cp[i] ? -1 : 1;
+    }
+    return 0;
+}
+
+void fonsSetEmoji(const char *const *names, int count) {
+    int i, n = 0;
+
+    free(fons__emoji);
+    fons__emoji = NULL;
+    fons__numEmoji = 0;
+    if (!names || count <= 0)
+        return;
+
+    fons__emoji = (FONSemoji *)malloc(sizeof(FONSemoji) * count);
+    if (!fons__emoji)
+        return;
+
+    for (i = 0; i < count; i++) {
+        const char *p = names[i];
+        FONSemoji e;
+
+        memset(&e, 0, sizeof(e));
+        while (*p && e.len < FONS_EMOJI_MAXSEQ) {
+            char *after;
+            unsigned long v = strtoul(p, &after, 16);
+
+            if (after == p)
+                break;
+            // the variation selector is never part of a match
+            if (v != 0xfe0f)
+                e.cp[e.len++] = (unsigned int)v;
+            p = after;
+            if (*p != '-')
+                break;
+            p++;
+        }
+        if (*p || !e.len)
+            continue;
+        e.index = i;
+        fons__emoji[n++] = e;
+    }
+
+    fons__numEmoji = n;
+    qsort(fons__emoji, n, sizeof(FONSemoji), fons__emojiCompare);
+}
+
+// what Unicode shows as an emoji without asking (Emoji_Presentation): the whole of the
+// pictographs from U+1F000 up, and these few below. The rest -- the digits, (c), (tm), the
+// hearts and stars of the name styles -- are text unless U+FE0F asks for the picture
+static int fons__emojiByDefault(unsigned int cp) {
+    static const unsigned int ranges[][2] = {
+        {0x231a, 0x231b}, {0x23e9, 0x23ec}, {0x23f0, 0x23f0}, {0x23f3, 0x23f3},
+        {0x25fd, 0x25fe}, {0x2614, 0x2615}, {0x2648, 0x2653}, {0x267f, 0x267f},
+        {0x2693, 0x2693}, {0x26a1, 0x26a1}, {0x26aa, 0x26ab}, {0x26bd, 0x26be},
+        {0x26c4, 0x26c5}, {0x26ce, 0x26ce}, {0x26d4, 0x26d4}, {0x26ea, 0x26ea},
+        {0x26f2, 0x26f3}, {0x26f5, 0x26f5}, {0x26fa, 0x26fa}, {0x26fd, 0x26fd},
+        {0x2705, 0x2705}, {0x270a, 0x270b}, {0x2728, 0x2728}, {0x274c, 0x274c},
+        {0x274e, 0x274e}, {0x2753, 0x2755}, {0x2757, 0x2757}, {0x2795, 0x2797},
+        {0x27b0, 0x27b0}, {0x27bf, 0x27bf}, {0x2b1b, 0x2b1c}, {0x2b50, 0x2b50},
+        {0x2b55, 0x2b55},
+    };
+    int i;
+
+    if (cp >= 0x1f000)
+        return 1;
+    for (i = 0; i < (int)(sizeof(ranges) / sizeof(ranges[0])); i++) {
+        if (cp >= ranges[i][0] && cp <= ranges[i][1])
+            return 1;
+    }
+    return 0;
+}
+
+// what can carry a sequence on after cp: a joiner (and whatever follows it), a skin tone, the
+// keycap, the tags of a subdivision flag, and the second letter of a flag
+static int fons__emojiGoesOn(unsigned int prev, unsigned int cp, int n) {
+    if (prev == 0x200d)
+        return 1;
+    if (cp == 0x200d || cp == 0x20e3)
+        return 1;
+    if (cp >= 0x1f3fb && cp <= 0x1f3ff)
+        return 1;
+    if (cp >= 0xe0020 && cp <= 0xe007f)
+        return 1;
+    if (n == 1 && prev >= 0x1f1e6 && prev <= 0x1f1ff && cp >= 0x1f1e6 && cp <= 0x1f1ff)
+        return 1;
+    return 0;
+}
+
+// the longest emoji with a picture that starts at str: its index, and in *next where the text
+// goes on after it. -1 when there is none
+static int fons__emojiMatch(const char *str, const char *end, const char **next) {
+    unsigned int seq[FONS_EMOJI_MAXSEQ];
+    const char *after[FONS_EMOJI_MAXSEQ];
+    int asked[FONS_EMOJI_MAXSEQ];
+    unsigned int state = 0, cp, prev = 0;
+    const char *p = str;
+    int n = 0, len;
+
+    if (!fons__numEmoji)
+        return -1;
+
+    while (p < end && n < FONS_EMOJI_MAXSEQ) {
+        if (*p == '^' && fons__colorCode(p, end) >= 0)
+            break;
+        if (fons__decutf8(&state, &cp, *(const unsigned char *)p++))
+            continue;
+        if (cp == 0xfe0f) {
+            if (n) {
+                asked[n - 1] = 1;
+                after[n - 1] = p;
+            }
+            continue;
+        }
+        if (n && !fons__emojiGoesOn(prev, cp, n))
+            break;
+        seq[n] = cp;
+        after[n] = p;
+        asked[n] = 0;
+        prev = cp;
+        n++;
+    }
+
+    for (len = n; len > 0; len--) {
+        FONSemoji key;
+        const FONSemoji *hit;
+
+        // alone, a text-by-default character is only a picture when U+FE0F asks for one
+        if (len == 1 && !asked[0] && !fons__emojiByDefault(seq[0]))
+            continue;
+        key.len = len;
+        memcpy(key.cp, seq, sizeof(seq[0]) * len);
+        hit = (const FONSemoji *)bsearch(&key, fons__emoji, fons__numEmoji, sizeof(FONSemoji), fons__emojiCompare);
+        if (hit) {
+            *next = after[len - 1];
+            return hit->index;
+        }
+    }
+    return -1;
+}
+
+// cheap test on the first byte: what an emoji can start with in UTF-8
+static int fons__emojiLead(const char *p) {
+    unsigned char c = *(const unsigned char *)p;
+
+    return c >= 0xe2 || c == 0xc2 || c == '#' || c == '*' || (c >= '0' && c <= '9');
+}
+
+// the square an emoji takes on the line, and how far the pen moves: the height of the base font's
+// line, a hair less, standing on the same box as the letters
+static void fons__emojiBox(FONSfont *font, short isize, float x, float y, float *box, float *advance) {
+    float size = (float)isize / 10.0f;
+    float top = y - font->ascender * size;
+    float bottom = y - font->descender * size;
+    float side = (bottom - top) * 0.9f;
+
+    box[0] = x + side * 0.05f;
+    box[1] = top + (bottom - top - side) * 0.5f;
+    box[2] = box[0] + side;
+    box[3] = box[1] + side;
+    *advance = side * 1.1f;
+}
+
 float fonsDrawText(FONScontext *stash, float x, float y, const char *str, const char *end, int flags, float *maxX) {
     FONSstate *state = fons__getState(stash);
     unsigned int codepoint;
@@ -1104,6 +1291,34 @@ float fonsDrawText(FONScontext *stash, float x, float y, const char *str, const 
     y += fons__getVertAlign(stash, font, state->align, isize);
 
     for (; str != end; ++str) {
+        // [ioquakelive] a colour emoji: its picture in place of the glyphs of its sequence. The
+        // shadow pass moves the pen past it without drawing it
+        if (utf8state == 0 && stash->params.renderEmoji && (stash->params.flags & FONS_ZERO_TOPLEFT) &&
+            fons__emojiLead(str)) {
+            const char *next;
+            int emoji = fons__emojiMatch(str, end, &next);
+
+            if (emoji >= 0) {
+                float box[4], advance;
+
+                fons__emojiBox(font, isize, x, y, box, &advance);
+                if (maxX && x + advance > *maxX) {
+                    *maxX = x;
+                    fons__flush(stash);
+                    return x;
+                }
+                if (recolor) {
+                    fons__flush(stash);
+                    stash->params.renderEmoji(stash->params.userPtr, box[0], box[1], box[2], box[3],
+                                              baseAlpha | 0x00ffffffu, emoji);
+                }
+                x += advance;
+                prevGlyphIndex = -1;
+                str = next - 1;
+                continue;
+            }
+        }
+
         // QL: interpret Quake3 '^' colour codes unless literal mode is set.
         if (!literal && fons__colorCode(str, end) >= 0) {
             // Replace rgb from the colour table, keeping the state alpha.  With
@@ -1190,6 +1405,31 @@ float fonsTextBounds(FONScontext *stash, float x, float y, const char *str, cons
         end = str + strlen(str);
 
     for (; str != end; ++str) {
+        // [ioquakelive] a colour emoji measures as the square it is drawn in
+        if (utf8state == 0 && stash->params.renderEmoji && (stash->params.flags & FONS_ZERO_TOPLEFT) &&
+            fons__emojiLead(str)) {
+            const char *next;
+            int emoji = fons__emojiMatch(str, end, &next);
+
+            if (emoji >= 0) {
+                float box[4], emojiAdvance;
+
+                fons__emojiBox(font, isize, x, y, box, &emojiAdvance);
+                if (box[0] < minx)
+                    minx = box[0];
+                if (box[2] > maxx)
+                    maxx = box[2];
+                if (box[1] < miny)
+                    miny = box[1];
+                if (box[3] > maxy)
+                    maxy = box[3];
+                x += emojiAdvance;
+                prevGlyphIndex = -1;
+                str = next - 1;
+                continue;
+            }
+        }
+
         // Skip colour codes when measuring (they contribute no width).
         if (fons__colorCode(str, end) >= 0) {
             ++str;

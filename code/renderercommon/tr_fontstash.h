@@ -73,6 +73,9 @@ typedef struct FONSparams {
     void (*renderUpdate)(void *uptr, int *rect, const unsigned char *data);
     void (*renderDraw)(void *uptr, const float *verts, const float *tcoords, const unsigned int *colors, int nverts);
     void (*renderDelete)(void *uptr);
+    // [ioquakelive] a colour emoji, drawn in place of the glyphs of its whole sequence; color
+    // carries the text's alpha. Left NULL, emoji stay the one-colour glyphs of the fallback font
+    void (*renderEmoji)(void *uptr, float x0, float y0, float x1, float y1, unsigned int color, int emoji);
 } FONSparams;
 
 typedef struct FONSquad {
@@ -125,6 +128,9 @@ void fonsSetBlur(FONScontext *s, float blur);
 void fonsSetAlign(FONScontext *s, int align);
 void fonsSetFont(FONScontext *s, int font);
 void fonsSetExtendedColors(int extended);
+// [ioquakelive] the colour emoji there are pictures of, named by their codepoints in hex joined by
+// '-' ("1f600", "1f44d-1f3fd"); renderEmoji gets an emoji by its index here. NULL, 0 clears it
+void fonsSetEmoji(const char *const *names, int count);
 
 // Draw text.  'flags' carries the QL draw flags (colour-code control).  Returns
 // the x advance.  A non-NULL maxX is a clip bound: drawing stops before the
