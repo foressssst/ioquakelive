@@ -410,24 +410,15 @@ void ShotgunPattern(vec3_t origin, vec3_t origin2, int seed, gentity_t* ent) {
         ent->client->ps.generic1 = (ent->client->ps.generic1 & 0x3f) | (quality << 6);
     }
 
-    // [QL] emit EV_DAMAGEPLUM events for each hit client
+    // [QL] emit EV_DAMAGEPLUM events for each hit client, through DamagePlum as the binary does
+    // (qagamex64.so 0x9a172): the delivery g_damagePlums asks for, single client or broadcast
     if (g_damagePlums.integer && ent->client) {
         int j;
         for (j = 0; j < level.maxclients; j++) {
-            if (ent->client->damagePlum[j] != 0) {
-                gentity_t *plum;
-                vec3_t org;
-
-                VectorCopy(g_entities[j].r.currentOrigin, org);
-                org[2] += 32.0f;
-
-                plum = G_TempEntity(org, EV_DAMAGEPLUM);
-                plum->s.eFlags |= EF_NODRAW;
-                plum->s.clientNum = ent->s.clientNum;
-                plum->s.time = ent->client->damagePlum[j];
-                plum->s.generic1 = WP_SHOTGUN;
-                ent->client->damagePlum[j] = 0;
+            if (ent->client->damagePlum[j] != 0 && g_entities[j].inuse && g_entities[j].client) {
+                DamagePlum(ent, &g_entities[j], ent->client->damagePlum[j], MOD_SHOTGUN);
             }
+            ent->client->damagePlum[j] = 0;
         }
     }
 }

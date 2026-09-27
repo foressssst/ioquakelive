@@ -52,7 +52,7 @@ weapon in s.generic1. Delivered single-client unless g_damagePlums == 2 (then
 broadcast). Shotgun damage is instead accumulated and flushed once per blast.
 ============
 */
-static void DamagePlum(gentity_t *attacker, gentity_t *victim, int damage, int mod) {
+void DamagePlum(gentity_t *attacker, gentity_t *victim, int damage, int mod) {
     gentity_t *te;
     vec3_t org;
 
