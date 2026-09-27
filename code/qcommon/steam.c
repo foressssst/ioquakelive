@@ -1745,6 +1745,7 @@ qboolean Steam_RequestServerList(int source) {
 void Steam_ServerList_f(void) {
     int count = -1;
     int refreshing = -1;
+    int shown = 0;
 
     if (st.matchmaking && st.listRequest) {
         if (st.GetServerCount) {
@@ -1756,9 +1757,14 @@ void Steam_ServerList_f(void) {
     }
     Com_Printf("Steam: request %p, ours %i, Steam's %i, refreshing %i (flag %i)\n",
                st.listRequest, st.numServers, count, refreshing, st.listRefreshing);
-    for (count = 0; count < st.numServers && count < 5; count++) {
+    // [ioquakelive] "steamservers <text>": every server whose name has it, not just the first five
+    for (count = 0; count < st.numServers; count++) {
         const steamServer_t* sv = &st.servers[count];
 
+        if (Cmd_Argc() > 1 ? !Q_stristr(sv->name, Cmd_Argv(1)) : shown >= 5) {
+            continue;
+        }
+        shown++;
         Com_Printf("  %-28s %-12s %2i/%-2i bots %i ping %3i  %s | %s | %i.%i.%i.%i:%i\n",
                    sv->name, sv->map, sv->players, sv->maxPlayers, sv->bots, sv->ping,
                    sv->description, sv->tags, (sv->ip >> 24) & 0xff, (sv->ip >> 16) & 0xff,
