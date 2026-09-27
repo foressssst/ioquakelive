@@ -277,7 +277,6 @@ vmCvar_t cg_teamChatsOnly;
 
 vmCvar_t cg_hudFiles;
 vmCvar_t cg_scorePlum;
-vmCvar_t cg_smoothClients;
 vmCvar_t cg_pmove_msec;
 vmCvar_t cg_cameraMode;
 vmCvar_t cg_cameraOrbit;
@@ -720,7 +719,6 @@ static cvarTable_t cvarTable[] = {
     {&cg_timescaleFadeSpeed, "cg_timescaleFadeSpeed", "0", 0},
     {&cg_timescale, "timescale", "1", CVAR_VM_CREATED, "0.1", "10"},
     {&cg_scorePlum, "cg_scorePlums", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},  // [QL] default 0 (was Q3 "1")
-    {&cg_smoothClients, "cg_smoothClients", "0", CVAR_USERINFO | CVAR_ARCHIVE},
     {&cg_cameraMode, "com_cameraMode", "0", CVAR_CHEAT},
 
     {&cg_smallFont, "ui_smallFont", "0.25", CVAR_ROM},

@@ -1306,14 +1306,8 @@ CG_CalcEntityLerpPositions
 ===============
 */
 static void CG_CalcEntityLerpPositions(centity_t* cent) {
-    // if this player does not want to see extrapolated players
-    if (!cg_smoothClients.integer) {
-        // make sure the clients use TR_INTERPOLATE
-        if (cent->currentState.number < MAX_CLIENTS) {
-            cent->currentState.pos.trType = TR_INTERPOLATE;
-            cent->nextState.pos.trType = TR_INTERPOLATE;
-        }
-    }
+    // [QL] 0x10018190: no cg_smoothClients; a player the server extrapolates is interpolated
+    // between snapshots when it can be, and extrapolated otherwise
 
     if (cent->interpolate && cent->currentState.pos.trType == TR_INTERPOLATE) {
         CG_InterpolateEntityPosition(cent);

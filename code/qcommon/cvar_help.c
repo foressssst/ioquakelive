@@ -1535,7 +1535,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"cg_filter_angles", "smooths the view by averaging its angles over this many frames, up to 31; 0 for none"},
     {"cg_lightningImpactCap", "closer than this distance the lightning gun's impact gets smaller; 0 keeps it whole"},
     {"cg_skipItems", "hides the items lying on the map; their timers stay"},
-    {"cg_smoothClients", "shows the other players where the server extrapolates them, smoother on a bad connection"},
     {"cg_lastmsg", "the last chat message, which the chat recall shows again"},
     {"cg_redTeamName", "name the scoreboards show for the red team; empty shows Red Team"},
     {"cg_blueTeamName", "name the scoreboards show for the blue team; empty shows Blue Team"},

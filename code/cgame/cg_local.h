@@ -1889,7 +1889,6 @@ extern vmCvar_t cg_teamChatsOnly;
 extern vmCvar_t cg_complaintWarning;
 
 extern vmCvar_t cg_scorePlum;
-extern vmCvar_t cg_smoothClients;
 // pmove_fixed / pmove_msec removed - not in QL binary
 extern vmCvar_t cg_cameraOrbit;
 extern vmCvar_t cg_cameraOrbitDelay;
