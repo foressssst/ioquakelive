@@ -244,13 +244,11 @@ static void CG_OffsetThirdPersonView(void) {
 
     VectorCopy(cg.refdefViewAngles, focusAngles);
 
-    // if dead, look at killer
-    if (cg.predictedPlayerState.stats[STAT_HEALTH] <= 0) {
-        focusAngles[YAW] = cg.predictedPlayerState.stats[STAT_DEAD_YAW];
-        cg.refdefViewAngles[YAW] = cg.predictedPlayerState.stats[STAT_DEAD_YAW];
-    }
-
-    if (focusAngles[PITCH] > 45) {
+    // [QL] 0x1004ca50: dead, the view keeps the player's own angles, which the server turned to
+    // the killer when it died (player_die) -- Quake 3's STAT_DEAD_YAW is not what faces it here,
+    // and forcing it locked the view while the free camera after a death moved with the mouse:
+    // forward went backwards. Only the pitch is held down, and only when dead
+    if (cg.predictedPlayerState.stats[STAT_HEALTH] <= 0 && focusAngles[PITCH] > 45) {
         focusAngles[PITCH] = 45;  // don't go too far overhead
     }
     AngleVectors(focusAngles, forward, NULL, NULL);
@@ -335,10 +333,11 @@ static void CG_OffsetFirstPersonView(void) {
     angles = cg.refdefViewAngles;
 
     // if dead, fix the angle and don't add any kick
+    // [QL] 0x1004d160: the yaw stays the player's own, which faces the killer (see
+    // CG_OffsetThirdPersonView)
     if (cg.snap->ps.stats[STAT_HEALTH] <= 0) {
         angles[ROLL] = 40;
         angles[PITCH] = -15;
-        angles[YAW] = cg.snap->ps.stats[STAT_DEAD_YAW];
         origin[2] += cg.predictedPlayerState.viewheight;
         return;
     }
