@@ -441,6 +441,16 @@ qboolean SV_GameSnapshotSkipEntity(int viewerNum, int entityNum);
 qboolean SV_GameClientIsAdmin(int clientNum);
 qboolean SV_GameEntityAlwaysSend(int entityNum);
 void SV_RedirectedCommand(netadr_t to, const char* text);
+
+//
+// sv_steamstats.c
+//
+void SV_SteamStatsAddUser(uint64_t steamId);
+void SV_SteamStatsConnected(void);
+void SV_SteamStatsIncrement(uint64_t steamId, int stat, int amount);
+void SV_SteamStatsSetAchievement(uint64_t steamId, int achievement);
+qboolean SV_SteamStatsHasAchievement(uint64_t steamId, int achievement);
+void SV_SteamStatsEvent(uint64_t steamId, const char* type, const char* document);
 void SV_VoiceFrame(void);
 void SV_SteamIdentity(void);
 void SV_RegisterGameCvars(void);

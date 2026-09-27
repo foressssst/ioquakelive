@@ -50,45 +50,6 @@ to hi-jack client connections.
 */
 /*
 ==================
-SV_ValidateSteamAuth
-
-[QL] The ticket the client sent in its getchallenge, put in Steam's hands.
-BeginAuthSession only says whether the ticket has the shape of a ticket; whether it is
-actually good is answered by Steam later, through SV_SteamAuthResponse.
-
-With no Steam on the server side there is nobody to ask and the client gets in anyway,
-which is what happened before and is the only thing that lets a local network play.
-
-[QL] 0x531b38 "Called BeginAuthSession on steam id %llu, got response %i",
-0x531b74 "Refusing to re-auth a client that is already being tracked".
-==================
-*/
-static qboolean SV_ValidateSteamAuth(challenge_t* challenge) {
-    int result;
-    int i;
-
-    if (!Steam_GS_Running()) {
-        return qtrue;
-    }
-
-    // somebody already being tracked is not authenticated again
-    if (challenge->steamKey) {
-        for (i = 0; i < sv_maxclients->integer; i++) {
-            if (svs.clients[i].state >= CS_CONNECTED && svs.clients[i].steam_id == challenge->steamKey) {
-                Com_Printf("Refusing to re-auth a client that is already being tracked\n");
-                return qfalse;
-            }
-        }
-    }
-
-    // the ticket starts at 0x19 of the packet; authTokenLen counts from 0x11, so it also
-    // covers the Steam ID's eight bytes
-    result = Steam_GS_BeginAuth(challenge->steamKey, challenge->authToken, challenge->authTokenLen - 8);
-    return (qboolean)(result == STEAM_AUTH_BEGIN_OK);
-}
-
-/*
-==================
 SV_SteamAuthResponse
 
 [QL] 0x531a80. What Steam answers, a while after BeginAuthSession, about a player's
@@ -332,12 +293,6 @@ void SV_DirectConnect(netadr_t from) {
             return;
         }
 
-        // [QL] Steam auth validation hook (currently store-and-trust)
-        if (!SV_ValidateSteamAuth(challengeptr)) {
-            NET_OutOfBandPrint(NS_SERVER, from, "print\nSteam authentication failed.\n");
-            return;
-        }
-
         ping = svs.time - challengeptr->pingTime;
 
         // never reject a LAN client based on ping
@@ -455,11 +410,23 @@ gotnewcl:
     // init the netchan queue
     newcl->netchan_end_queue = &newcl->netchan_start_queue;
 
-    // [QL] stamp the Steam ID into the game module's userinfo and onto the client.
-    // Remote clients use the ID from getchallenge (store-and-trust); the local host
-    // uses a Steam_GetSteamID() stub (0).
+    // [QL] stamp the Steam ID into the game module's userinfo and onto the client. A remote
+    // client's comes with its getchallenge, and the game has Steam check its ticket
+    // (ClientConnect, import +0x334).
     {
         uint64_t steamId = (challengeNum >= 0) ? svs.challenges[challengeNum].steamKey : 0;
+
+        // [QL] 0x004e0e66: the host is the player at this machine, whose ticket Steam is
+        // only asked about when others can join
+        if (from.type == NA_LOOPBACK && !Cvar_VariableIntegerValue("com_build")) {
+            static byte ticket[0x1000];
+
+            steamId = Steam_ClientSteamID();
+            if (sv_serverType->integer > 0) {
+                Steam_GS_BeginAuth(steamId, ticket, Steam_AuthTicket(ticket, sizeof(ticket)));
+            }
+            SV_SteamStatsAddUser(steamId);
+        }
         newcl->steam_id = steamId;
         Info_SetValueForKey(userinfo, "steam", va("%llu", (unsigned long long)steamId));
     }
@@ -542,6 +509,7 @@ void SV_DropClient(client_t* drop, const char* reason) {
         if (drop->steam_id) {
             Com_DPrintf("Ending auth session for steam id %llu\n", (unsigned long long)drop->steam_id);
             Steam_GS_EndAuth(drop->steam_id);
+            SV_SteamStatsRemoveUser(drop->steam_id);  // [QL] 0x004df7f4
         }
 
         // see if we already have a challenge for this ip

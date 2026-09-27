@@ -1021,6 +1021,7 @@ goes out again, now under its own Steam ID.
 ==================
 */
 void SV_SteamConnected(void) {
+    SV_SteamStatsConnected();  // [QL] 0x00467190, each player's stats are asked for
     if (!com_sv_running || !com_sv_running->integer) {
         return;
     }

@@ -82,9 +82,18 @@ qboolean Steam_GS_Running(void);
 #define STEAM_AUTH_BEGIN_OK 0     // EBeginAuthSessionResult
 #define STEAM_AUTH_BEGIN_DUPLICATE 2
 int Steam_AuthTicket(void* buffer, int size);
-int Steam_GS_BeginAuth(uint64_t steamId, const void* ticket, int len);
+qboolean Steam_GS_BeginAuth(uint64_t steamId, const void* ticket, int len);
 void Steam_GS_EndAuth(uint64_t steamId);
 const char* Steam_AuthResponseName(int response);
+
+// the players' stats and achievements, kept by sv_steamstats.c
+void Steam_GS_RequestUserStats(uint64_t steamId);
+qboolean Steam_GS_GetUserStat(uint64_t steamId, const char* name, int* value);
+qboolean Steam_GS_SetUserStat(uint64_t steamId, const char* name, int value);
+qboolean Steam_GS_SetUserAchievement(uint64_t steamId, const char* name);
+void Steam_GS_StoreUserStats(uint64_t steamId);
+qboolean Steam_SetAchievement(const char* name);
+void Steam_StoreStats(void);
 
 // voice, which in Quake Live travels over Steam's peer to peer network and not the game's
 qboolean Steam_VoiceReady(void);

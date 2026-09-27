@@ -140,17 +140,12 @@ void trap_GetUserinfo(int num, char* buffer, int bufferSize) {
     imports->trap_GetUserinfo(num, buffer, bufferSize);
 }
 
-// [QL] Steam achievements aren't available in a standalone build, so target_achievement's
-// check/grant traps are inert stubs. The map entity still links, does nothing.
 qboolean trap_HasAchievement(int clientNum, int achievementId) {
-    (void)clientNum;
-    (void)achievementId;
-    return qfalse;
+    return imports->trap_HasAchievement(clientNum, achievementId);
 }
 
 void trap_SetAchievement(int clientNum, int achievementId) {
-    (void)clientNum;
-    (void)achievementId;
+    imports->trap_SetAchievement(clientNum, achievementId);
 }
 
 void trap_SetUserinfo(int num, const char* buffer) {
@@ -581,12 +576,8 @@ void trap_GetServerSteamID(char* buf, int size) {
     imports->trap_GetServerSteamID(buf, size);
 }
 
-void trap_IncrementSteamStat(int clientNum, int statID) {
-    imports->trap_IncrementSteamStat(clientNum, statID);
-}
-
-int trap_GetSteamStat(int clientNum, int statID) {
-    return imports->trap_GetSteamStat(clientNum, statID);
+void trap_IncrementSteamStat(int clientNum, int stat, int amount) {
+    imports->trap_IncrementSteamStat(clientNum, stat, amount);
 }
 
 qboolean trap_VerifySteamAuth(int clientNum) {

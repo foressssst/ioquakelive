@@ -1561,8 +1561,8 @@ void trap_SendServerCommand(int clientNum, const char* text);
 void trap_SetConfigstring(int num, const char* string);
 void trap_GetConfigstring(int num, char* buffer, int bufferSize);
 void trap_GetUserinfo(int num, char* buffer, int bufferSize);
-qboolean trap_HasAchievement(int clientNum, int achievementId);  // [QL] inert in standalone
-void trap_SetAchievement(int clientNum, int achievementId);      // [QL] inert in standalone
+qboolean trap_HasAchievement(int clientNum, int achievementId);
+void trap_SetAchievement(int clientNum, int achievementId);
 void trap_SetUserinfo(int num, const char* buffer);
 void trap_GetServerinfo(char* buffer, int bufferSize);
 void trap_SetBrushModel(gentity_t* ent, const char* name);
@@ -1737,8 +1737,8 @@ int trap_GeneticParentsAndChildSelection(int numranks, float* ranks, int* parent
 
 void trap_SnapVector(float* v);
 
-void trap_IncrementSteamStat(int clientNum, int statID);
-int trap_GetSteamStat(int clientNum, int statID);
+void trap_IncrementSteamStat(int clientNum, int stat, int amount);
+qboolean trap_VerifySteamAuth(int clientNum);
 qboolean trap_FactoryExists(const char* id);  // [QL] callvote map <map> <factory>
 void trap_GenerateMatchGUID(char* buf, int size);  // [QL] 0x004e27d0
 void trap_StatsEvent(uint64_t steamId, const char* type, const char* document);  // [QL] 0x004e2640

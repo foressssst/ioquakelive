@@ -52,6 +52,7 @@
     <ClCompile Include="..\..\code\server\sv_main.c" />
     <ClCompile Include="..\..\code\server\sv_net_chan.c" />
     <ClCompile Include="..\..\code\server\sv_snapshot.c" />
+    <ClCompile Include="..\..\code\server\sv_steamstats.c" />
     <ClCompile Include="..\..\code\server\sv_world.c" />
     <ClCompile Include="..\..\code\sys\con_log.c" />
     <ClCompile Include="..\..\code\sys\con_passive.c" />

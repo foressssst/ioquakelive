@@ -89,6 +89,7 @@ typedef struct {
 #pragma pack(pop)
 
 #define STEAM_MAX_SERVERS 2048
+#define STEAM_MAX_TRACKED 256
 
 // what is kept from each server that answers
 typedef struct {
@@ -122,6 +123,7 @@ static void Steam_DownloadUGC_f(void);
 static void Steam_P2PListen(qboolean asServer);
 static void Steam_AuthListen(void);
 static void Steam_ServersListen(void);
+static void Steam_StatsListen(void);
 
 /*
 A Steam callback seen from C. In the SDK it is a class with three virtual functions,
@@ -264,6 +266,27 @@ typedef struct {
     steamCallback_t serversConnected;     // the server logged on to Steam
     steamCallback_t serversFailed;        // it could not
     steamCallback_t serversDisconnected;  // it lost the connection
+
+    // the players' stats and achievements: ISteamGameServerStats001 on the server and
+    // ISteamUserStats011 for a game of one's own
+    void*(QDECL* GameServerStats)(void);
+    void*(QDECL* UserStats)(void);
+    uint64_t(QDECL* RequestUserStats)(void* self, uint64_t steamId);
+    steamBool_t(QDECL* GetUserStat)(void* self, uint64_t steamId, const char* name, int* value);
+    steamBool_t(QDECL* SetUserStat)(void* self, uint64_t steamId, const char* name, int value);
+    steamBool_t(QDECL* SetUserAchievement)(void* self, uint64_t steamId, const char* name);
+    uint64_t(QDECL* StoreUserStats)(void* self, uint64_t steamId);
+    steamBool_t(QDECL* RequestCurrentStats)(void* self);
+    steamBool_t(QDECL* SetAchievement)(void* self, const char* name);
+    steamBool_t(QDECL* StoreStats)(void* self);
+    void* gameServerStats;          // ISteamGameServerStats *
+    void* userStats;                // ISteamUserStats *
+    steamCallback_t statsReceived;  // GSStatsReceived_t
+    steamCallback_t statsStored;    // GSStatsStored_t
+
+    // the Steam IDs with an auth session open (retail's set at 0x00e3035c)
+    uint64_t tracked[STEAM_MAX_TRACKED];
+    int numTracked;
 
     void* ugc;           // ISteamUGC *
     uint64_t downloading;  // the item being waited on, or 0
@@ -413,6 +436,16 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND_OPT(Lobbies, "SteamMatchmaking");
     STEAM_BIND_OPT(AddFavoriteGame, "SteamAPI_ISteamMatchmaking_AddFavoriteGame");
     STEAM_BIND_OPT(RemoveFavoriteGame, "SteamAPI_ISteamMatchmaking_RemoveFavoriteGame");
+    STEAM_BIND_OPT(GameServerStats, "SteamGameServerStats");
+    STEAM_BIND_OPT(UserStats, "SteamUserStats");
+    STEAM_BIND_OPT(RequestUserStats, "SteamAPI_ISteamGameServerStats_RequestUserStats");
+    STEAM_BIND_OPT(GetUserStat, "SteamAPI_ISteamGameServerStats_GetUserStat");  // the int32 one
+    STEAM_BIND_OPT(SetUserStat, "SteamAPI_ISteamGameServerStats_SetUserStat");  // the int32 one
+    STEAM_BIND_OPT(SetUserAchievement, "SteamAPI_ISteamGameServerStats_SetUserAchievement");
+    STEAM_BIND_OPT(StoreUserStats, "SteamAPI_ISteamGameServerStats_StoreUserStats");
+    STEAM_BIND_OPT(RequestCurrentStats, "SteamAPI_ISteamUserStats_RequestCurrentStats");
+    STEAM_BIND_OPT(SetAchievement, "SteamAPI_ISteamUserStats_SetAchievement");
+    STEAM_BIND_OPT(StoreStats, "SteamAPI_ISteamUserStats_StoreStats");
     return qtrue;
 }
 
@@ -468,6 +501,8 @@ static struct {
     void* utils;        // ISteamUtils007 *, the client's
     void* gameServer;   // ISteamGameServer012 *
     void* gameServerNetworking;
+    void* gameServerStats;  // ISteamGameServerStats001 *
+    void* userStats;        // ISteamUserStats011 *
 
     steamCallback_t* callbacks[SD_MAX_CALLBACKS];
     int numCallbacks;
@@ -502,7 +537,8 @@ static void SD_SetLocalIPBinding(unsigned int ip, unsigned short port) {
 }
 
 // GetISteamUser (5), GetISteamGameServer (6), GetISteamFriends (8), GetISteamMatchmaking (10),
-// GetISteamMatchmakingServers (11), GetISteamNetworking (16), GetISteamUGC (26)
+// GetISteamMatchmakingServers (11), GetISteamUserStats (13), GetISteamGameServerStats (14),
+// GetISteamNetworking (16), GetISteamUGC (26)
 static void* SD_Interface(int slot, int user, int pipe, const char* version) {
     return ((void* (*)(void*, int, int, const char*))SD_VT(sd.client, slot))(sd.client, user, pipe, version);
 }
@@ -658,6 +694,19 @@ SD_VOID(ActivateGameOverlay, 28, (void* self, const char* a), (self, a))
 SD_VOID(ActivateGameOverlayToUser, 29, (void* self, const char* a, uint64_t b), (self, a, b))
 SD_VOID(SetRichPresence, 43, (void* self, const char* a, const char* b), (self, a, b))
 
+// ISteamGameServerStats001, the slots Quake Live's steam_api.dll calls (the int32 overloads are
+// 2 and 5: MSVC puts each pair the other way round)
+SD_RET(uint64_t, RequestUserStats, 0, (void* self, uint64_t a), (self, a))
+SD_RET(steamBool_t, GetUserStat, 2, (void* self, uint64_t a, const char* b, int* c), (self, a, b, c))
+SD_RET(steamBool_t, SetUserStat, 5, (void* self, uint64_t a, const char* b, int c), (self, a, b, c))
+SD_RET(steamBool_t, SetUserAchievement, 7, (void* self, uint64_t a, const char* b), (self, a, b))
+SD_RET(uint64_t, StoreUserStats, 9, (void* self, uint64_t a), (self, a))
+
+// ISteamUserStats011
+SD_RET(steamBool_t, RequestCurrentStats, 0, (void* self), (self))
+SD_RET(steamBool_t, SetAchievement, 7, (void* self, const char* a), (self, a))
+SD_RET(steamBool_t, StoreStats, 10, (void* self), (self))
+
 // the accessors, which steam_api answers from its context
 static void* QDECL SD_GameServer(void) {
     return sd.gameServer;
@@ -682,6 +731,12 @@ static void* QDECL SD_User(void) {
 }
 static void* QDECL SD_Friends(void) {
     return sd.friends;
+}
+static void* QDECL SD_GameServerStats(void) {
+    return sd.gameServerStats;
+}
+static void* QDECL SD_UserStats(void) {
+    return sd.userStats;
 }
 
 /*
@@ -715,6 +770,7 @@ static steamBool_t QDECL SD_API_Init(void) {
     sd.matchmaking = SD_Interface(11, sd.clientUser, sd.clientPipe, "SteamMatchMakingServers002");
     sd.networking = SD_Interface(16, sd.clientUser, sd.clientPipe, "SteamNetworking005");
     sd.ugc = SD_Interface(26, sd.clientUser, sd.clientPipe, "STEAMUGC_INTERFACE_VERSION007");
+    sd.userStats = SD_Interface(13, sd.clientUser, sd.clientPipe, "STEAMUSERSTATS_INTERFACE_VERSION011");
     sd.utils = ((void* (*)(void*, int, const char*))SD_VT(sd.client, 9))(sd.client, sd.clientPipe, "SteamUtils007");
     return 1;
 }
@@ -728,6 +784,7 @@ static void QDECL SD_API_Shutdown(void) {
     }
     sd.clientPipe = sd.clientUser = 0;
     sd.user = sd.friends = sd.lobbies = sd.matchmaking = sd.networking = sd.ugc = sd.utils = NULL;
+    sd.userStats = NULL;
     SD_ShutdownIfAllPipesClosed();
 }
 
@@ -755,6 +812,7 @@ static steamBool_t QDECL SD_GameServer_Init(unsigned int ip, unsigned short stea
     }
     sd.gameServer = SD_Interface(6, sd.serverUser, sd.serverPipe, "SteamGameServer012");
     sd.gameServerNetworking = SD_Interface(16, sd.serverUser, sd.serverPipe, "SteamNetworking005");
+    sd.gameServerStats = SD_Interface(14, sd.serverUser, sd.serverPipe, "SteamGameServerStats001");
 
     flags = serverMode == 3 ? SD_FLAG_SECURE : 0;
     if (serverMode == 1) {
@@ -778,7 +836,7 @@ static void QDECL SD_GameServer_Shutdown(void) {
         SD_ReleaseSteamPipe(sd.serverPipe);
     }
     sd.serverPipe = sd.serverUser = 0;
-    sd.gameServer = sd.gameServerNetworking = NULL;
+    sd.gameServer = sd.gameServerNetworking = sd.gameServerStats = NULL;
     SD_ShutdownIfAllPipesClosed();
 }
 
@@ -993,6 +1051,16 @@ static void SD_Bind(void) {
     SD_SET(GetFriendGamePlayed);
     SD_SET(RegisterCallback);
     SD_SET(UnregisterCallback);
+    SD_SET(GameServerStats);
+    SD_SET(UserStats);
+    SD_SET(RequestUserStats);
+    SD_SET(GetUserStat);
+    SD_SET(SetUserStat);
+    SD_SET(SetUserAchievement);
+    SD_SET(StoreUserStats);
+    SD_SET(RequestCurrentStats);
+    SD_SET(SetAchievement);
+    SD_SET(StoreStats);
 #undef SD_SET
 }
 #endif  // 64-bit Windows
@@ -1105,9 +1173,9 @@ static void Steam_Status_f(void) {
             Com_Printf("ticket:      %i bytes\n", len);
             if (st.serverUp) {
                 uint64_t me = Steam_ClientSteamID();
-                int r = Steam_GS_BeginAuth(me, ticket, len);
+                qboolean ok = Steam_GS_BeginAuth(me, ticket, len);
 
-                Com_Printf("BeginAuth:   %i (%s)\n", r, r == STEAM_AUTH_BEGIN_OK ? "accepted" : "refused");
+                Com_Printf("BeginAuth:   %s\n", ok ? "accepted" : "refused");
                 Steam_GS_EndAuth(me);
             }
         }
@@ -1157,6 +1225,14 @@ void Steam_Init(void) {
     }
     if (st.Friends) {
         st.friends = st.Friends();
+    }
+    // [ioquakelive] what a game of one's own gives goes to the player's own stats, which Steam
+    // only takes once they are loaded
+    if (st.UserStats) {
+        st.userStats = st.UserStats();
+    }
+    if (st.userStats && st.RequestCurrentStats) {
+        st.RequestCurrentStats(st.userStats);
     }
     Steam_P2PListen(qfalse);
     // [QL] 0x00461565: "+voice" and "-voice" are registered on the client side, which is also
@@ -1222,6 +1298,10 @@ void Steam_GS_Init(void) {
     }
     Steam_AuthListen();  // whatever Steam says about each ticket
     Steam_ServersListen();  // whether it logs on
+    if (st.GameServerStats) {
+        st.gameServerStats = st.GameServerStats();
+    }
+    Steam_StatsListen();  // the players' stats, when they arrive and when they are stored
     if (!st.clientUp) {
         Cmd_AddCommand("steamstatus", Steam_Status_f);  // the client added it already if it came up
     }
@@ -1410,6 +1490,11 @@ void Steam_Shutdown(void) {
             st.UnregisterCallback(&st.serversDisconnected);
             st.serversConnected.vtable = NULL;
         }
+        if (st.statsReceived.vtable) {
+            st.UnregisterCallback(&st.statsReceived);
+            st.UnregisterCallback(&st.statsStored);
+            st.statsReceived.vtable = NULL;
+        }
         if (st.p2pServer.vtable) {
             st.UnregisterCallback(&st.p2pServer);
             st.p2pServer.vtable = NULL;
@@ -1424,6 +1509,8 @@ void Steam_Shutdown(void) {
         st.GameServer_Shutdown();
         st.serverUp = qfalse;
         st.gameServer = NULL;
+        st.gameServerStats = NULL;
+        st.numTracked = 0;
     }
     if (st.clientUp) {
         st.API_Shutdown();
@@ -2503,30 +2590,177 @@ static void Steam_ServersListen(void) {
 ===============
 Steam_GS_BeginAuth / Steam_GS_EndAuth
 
-What the server asks Steam about each player. BeginAuthSession returns an
-EBeginAuthSessionResult: 0 ok, 1 invalid ticket, 2 already tracked, 3 wrong
-version, 4 different game, 5 expired ticket. The real verdict arrives later,
-through the callback.
+What the server asks Steam about each player. [QL] 0x00465fd0: somebody with a session
+already open is let through without asking again, and a ticket Steam takes
+(k_EBeginAuthSessionResultOK) opens one. The real verdict arrives later, through the
+callback. 0x004661e0 closes it.
+
+Retail turns everybody away while its Steam is not up; here the server goes on without it,
+as it always has.
 ===============
 */
-int Steam_GS_BeginAuth(uint64_t steamId, const void* ticket, int len) {
+static int Steam_GS_TrackedIndex(uint64_t steamId) {
+    int i;
+
+    for (i = 0; i < st.numTracked; i++) {
+        if (st.tracked[i] == steamId) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+qboolean Steam_GS_BeginAuth(uint64_t steamId, const void* ticket, int len) {
     int result;
 
     if (!st.serverUp || !st.gameServer || !st.BeginAuthSession || len <= 0) {
-        return STEAM_AUTH_BEGIN_OK;  // nobody to ask without Steam
+        return qtrue;  // nobody to ask without Steam
+    }
+    if (Steam_GS_TrackedIndex(steamId) >= 0) {
+        Com_DPrintf("Refusing to re-auth a client that is already being tracked\n");
+        return qtrue;
     }
     result = st.BeginAuthSession(st.gameServer, ticket, len, steamId);
     Com_DPrintf("Called BeginAuthSession on steam id %llu, got response %i\n",
                 (unsigned long long)steamId, result);
-    return result;
+    if (result != STEAM_AUTH_BEGIN_OK) {
+        return qfalse;
+    }
+    if (st.numTracked < STEAM_MAX_TRACKED) {
+        st.tracked[st.numTracked++] = steamId;
+    }
+    return qtrue;
 }
 
 void Steam_GS_EndAuth(uint64_t steamId) {
-    if (!st.serverUp || !st.gameServer || !st.EndAuthSession || !steamId) {
+    int i;
+
+    if (!st.serverUp || !st.gameServer || !st.EndAuthSession) {
+        Com_DPrintf("Can't end auth session on steam id %llu, isServerActive == false\n",
+                    (unsigned long long)steamId);
         return;
     }
     st.EndAuthSession(st.gameServer, steamId);
+    i = Steam_GS_TrackedIndex(steamId);
+    if (i >= 0) {
+        st.tracked[i] = st.tracked[--st.numTracked];
+    }
     Com_DPrintf("Called EndAuthSession on steam id %llu\n", (unsigned long long)steamId);
+}
+
+/*
+===============================================================================
+
+THE PLAYERS' STATS AND ACHIEVEMENTS
+
+What sv_steamstats.c keeps for each player goes to Steam through here: on a server with
+ISteamGameServerStats, in a game of one's own with the player's ISteamUserStats.
+
+[QL] 0x00467850 registers two callbacks for each player, GSStatsReceived_t (1800) and
+GSStatsStored_t (1801), k_iSteamGameServerStatsCallbacks + 0 and + 1. Both carry the result
+and the player; CSteamID is packed to one byte in the SDK, so the Steam ID sits right after
+the result and the struct is twelve bytes on every system (retail's size, 0x00467480).
+===============================================================================
+*/
+#define STEAM_CB_GS_STATS_RECEIVED 1800
+#define STEAM_CB_GS_STATS_STORED 1801
+
+#pragma pack(push, 4)
+typedef struct {
+    int result;  // EResult, 1 is k_EResultOK
+    uint64_t steamId;
+} steamStatsResult_t;
+#pragma pack(pop)
+
+static void STEAM_CB Steam_CB_Stats(STEAM_CB_SELF, void* param) {
+    const steamCallback_t* me = (const steamCallback_t*)self;
+    const steamStatsResult_t* r = (const steamStatsResult_t*)param;
+
+    if (me->id == STEAM_CB_GS_STATS_RECEIVED) {
+        SV_SteamStatsReceived(r->result);
+    } else {
+        SV_SteamStatsStored(r->result);
+    }
+}
+
+static void STEAM_CB Steam_CB_StatsIO(STEAM_CB_SELF, void* param, unsigned char failed, uint64_t call) {
+    (void)failed;
+    (void)call;
+    Steam_CB_Stats(STEAM_CB_PASS, param);
+}
+
+static int STEAM_CB Steam_CB_StatsSize(STEAM_CB_SELF) {
+    return (int)sizeof(steamStatsResult_t);
+}
+
+static void* steamStatsVTable[3];
+
+static void Steam_StatsListen(void) {
+    if (!st.RegisterCallback || !st.gameServerStats || st.statsReceived.vtable) {
+        return;
+    }
+    steamStatsVTable[0] = (void*)Steam_CB_StatsIO;
+    steamStatsVTable[1] = (void*)Steam_CB_Stats;
+    steamStatsVTable[2] = (void*)Steam_CB_StatsSize;
+
+    st.statsReceived.vtable = steamStatsVTable;
+    st.statsReceived.flags = STEAM_CB_FLAG_GAMESERVER;
+    st.statsReceived.id = STEAM_CB_GS_STATS_RECEIVED;
+    st.RegisterCallback(&st.statsReceived, STEAM_CB_GS_STATS_RECEIVED);
+
+    st.statsStored.vtable = steamStatsVTable;
+    st.statsStored.flags = STEAM_CB_FLAG_GAMESERVER;
+    st.statsStored.id = STEAM_CB_GS_STATS_STORED;
+    st.RegisterCallback(&st.statsStored, STEAM_CB_GS_STATS_STORED);
+}
+
+// [QL] 0x00467190 and the end of 0x00467850: only asked for once the server is logged on
+void Steam_GS_RequestUserStats(uint64_t steamId) {
+    if (!st.serverUp || !st.gameServerStats || !st.RequestUserStats || !st.BLoggedOn(st.gameServer)) {
+        return;
+    }
+    st.RequestUserStats(st.gameServerStats, steamId);
+}
+
+qboolean Steam_GS_GetUserStat(uint64_t steamId, const char* name, int* value) {
+    if (!st.gameServerStats || !st.GetUserStat) {
+        return qfalse;
+    }
+    return st.GetUserStat(st.gameServerStats, steamId, name, value) ? qtrue : qfalse;
+}
+
+qboolean Steam_GS_SetUserStat(uint64_t steamId, const char* name, int value) {
+    if (!st.gameServerStats || !st.SetUserStat) {
+        return qfalse;
+    }
+    return st.SetUserStat(st.gameServerStats, steamId, name, value) ? qtrue : qfalse;
+}
+
+qboolean Steam_GS_SetUserAchievement(uint64_t steamId, const char* name) {
+    if (!st.gameServerStats || !st.SetUserAchievement) {
+        return qfalse;
+    }
+    return st.SetUserAchievement(st.gameServerStats, steamId, name) ? qtrue : qfalse;
+}
+
+void Steam_GS_StoreUserStats(uint64_t steamId) {
+    if (st.gameServerStats && st.StoreUserStats) {
+        st.StoreUserStats(st.gameServerStats, steamId);
+    }
+}
+
+// [QL] 0x00467eeb: in a game of one's own the achievement goes to the player's own Steam
+qboolean Steam_SetAchievement(const char* name) {
+    if (!st.userStats || !st.SetAchievement) {
+        return qfalse;
+    }
+    return st.SetAchievement(st.userStats, name) ? qtrue : qfalse;
+}
+
+void Steam_StoreStats(void) {
+    if (st.userStats && st.StoreStats) {
+        st.StoreStats(st.userStats);
+    }
 }
 
 qboolean Steam_VoiceReady(void) {

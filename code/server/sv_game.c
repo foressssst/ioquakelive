@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "server.h"
 #include "../qcommon/q_zmq.h"
+#include "../qcommon/q_steam.h"
 
 /*
 ===============
@@ -52,12 +53,11 @@ SV_GI_StatsEvent
 [QL] 0x004e2640: retail sends the event to Steam's stats (0x00468030) and to the
 ZeroMQ stats socket (0x004f4e10). The document already comes written the way
 retail's engine writes it, {"DATA": ..., "TYPE": ...} with StyledWriter, so it
-goes out as it is. The Steam side is not done yet.
+goes out as it is.
 ===============
 */
 static void SV_GI_StatsEvent(uint64_t steamId, const char* type, const char* document) {
-    (void)steamId;
-    (void)type;
+    SV_SteamStatsEvent(steamId, type, document);
     ZMQ_PublishStats(document);
 }
 
@@ -914,21 +914,107 @@ static void SV_GI_BotUserCommand(int clientNum, usercmd_t *cmd) {
     }
 }
 
-// --- Steam trap stubs (not implemented in open-source engine) ---
+// --- Steam ---
 
+// [QL] 0x004e2710, import +0x320: a bot has none (its userinfo carries a characterfile)
 static uint64_t SV_GI_GetSteamID(int clientNum) {
-    if (clientNum >= 0 && clientNum < sv_maxclients->integer)
-        return svs.clients[clientNum].steam_id;
-    return 0;
+    client_t* cl;
+
+    if (clientNum < 0 || clientNum >= sv_maxclients->integer) {
+        return 0;
+    }
+    cl = &svs.clients[clientNum];
+    if (Info_ValueForKey(cl->userinfo, "characterfile")[0]) {
+        return 0;
+    }
+    return cl->steam_id;
+}
+
+// the player the stats and achievement imports are about: somebody in the game, not a bot
+static client_t* SV_GI_StatsClient(int clientNum) {
+    client_t* cl;
+
+    if (clientNum < 0 || clientNum >= sv_maxclients->integer) {
+        return NULL;
+    }
+    cl = &svs.clients[clientNum];
+    if (!cl->gentity || (cl->gentity->r.svFlags & SVF_BOT)) {
+        return NULL;
+    }
+    return cl;
+}
+
+// [QL] 0x004e2770, import +0x324
+static void SV_GI_IncrementSteamStat(int clientNum, int stat, int amount) {
+    client_t* cl = SV_GI_StatsClient(clientNum);
+
+    if (cl) {
+        SV_SteamStatsIncrement(cl->steam_id, stat, amount);
+    }
+}
+
+// [QL] 0x004e2860, import +0x32c
+static void SV_GI_SetAchievement(int clientNum, int achievement) {
+    client_t* cl = SV_GI_StatsClient(clientNum);
+
+    if (cl) {
+        SV_SteamStatsSetAchievement(cl->steam_id, achievement);
+    }
+}
+
+// [QL] 0x004e28c0, import +0x330
+static qboolean SV_GI_HasAchievement(int clientNum, int achievement) {
+    client_t* cl = SV_GI_StatsClient(clientNum);
+
+    return cl ? SV_SteamStatsHasAchievement(cl->steam_id, achievement) : qfalse;
+}
+
+/*
+===============
+SV_GI_VerifySteamAuth
+
+[QL] 0x004e2920, import +0x334, from ClientConnect the first time a player joins. The
+ticket is the one that came in the player's getchallenge; the challenge is found by the
+number the client was given. There is nothing to check in a game of one's own
+(sv_serverType 0) or with com_build, and the host went through it in SV_DirectConnect.
+===============
+*/
+static qboolean SV_GI_VerifySteamAuth(int clientNum) {
+    client_t* cl;
+    challenge_t* challenge;
+    int i;
+
+    if (clientNum < 0 || clientNum >= sv_maxclients->integer) {
+        return qfalse;
+    }
+    if (!sv_serverType->integer || Cvar_VariableIntegerValue("com_build") == 1) {
+        return qtrue;
+    }
+    cl = &svs.clients[clientNum];
+    for (i = 0, challenge = svs.challenges; i < MAX_CHALLENGES; i++, challenge++) {
+        if (challenge->challenge == cl->challenge) {
+            break;
+        }
+    }
+    if (i == MAX_CHALLENGES) {
+        return qfalse;
+    }
+    if (cl->netchan.remoteAddress.type == NA_LOOPBACK) {
+        return qtrue;
+    }
+    // the ticket starts at 0x19 of the packet; authTokenLen counts from 0x11, so it also
+    // covers the Steam ID's eight bytes
+    if (!Steam_GS_BeginAuth(cl->steam_id, challenge->authToken, challenge->authTokenLen - 8)) {
+        return qfalse;
+    }
+    SV_SteamStatsAddUser(cl->steam_id);
+    return qtrue;
 }
 
 static void SV_GI_GetServerSteamID(char *buf, int size) {
     if (buf && size > 0) buf[0] = '\0';
 }
 
-static void SV_GI_IncrementSteamStat(int clientNum, int statID) { (void)clientNum; (void)statID; }
-static int SV_GI_GetSteamStat(int clientNum, int statID) { (void)clientNum; (void)statID; return 0; }
-static qboolean SV_GI_VerifySteamAuth(int clientNum) { (void)clientNum; return qtrue; }
 
 // [QL] import slot 206: whether a factory with this id is loaded, for callvote
 // map (quakelive_steam.exe 0x4e2a20)
@@ -1148,8 +1234,9 @@ static void SV_PopulateGameImports(void) {
     // QL extensions
     sv_gameImports.trap_GetSteamID             = SV_GI_GetSteamID;
     sv_gameImports.trap_GetServerSteamID       = SV_GI_GetServerSteamID;
+    sv_gameImports.trap_SetAchievement         = SV_GI_SetAchievement;
+    sv_gameImports.trap_HasAchievement         = SV_GI_HasAchievement;
     sv_gameImports.trap_IncrementSteamStat     = SV_GI_IncrementSteamStat;
-    sv_gameImports.trap_GetSteamStat           = SV_GI_GetSteamStat;
     sv_gameImports.trap_VerifySteamAuth        = SV_GI_VerifySteamAuth;
     sv_gameImports.trap_FactoryExists          = SV_GI_FactoryExists;
     sv_gameImports.trap_GenerateMatchGUID      = SV_GI_GenerateMatchGUID;

@@ -320,8 +320,8 @@ typedef struct {
     /* 0x640 */ uint64_t(*trap_GetSteamID)(int clientNum);
     /* 0x648 */ void    *_unused_c9;
     /* 0x650 */ void    (*trap_GetServerSteamID)(char *buf, int size);
-    /* 0x658 */ void    (*trap_IncrementSteamStat)(int clientNum, int statID);
-    /* 0x660 */ int     (*trap_GetSteamStat)(int clientNum, int statID);
+    /* 0x658 */ void    (*trap_SetAchievement)(int clientNum, int achievement);  // [QL] x86 +0x32c -> 0x4e2860
+    /* 0x660 */ qboolean(*trap_HasAchievement)(int clientNum, int achievement);  // [QL] x86 +0x330 -> 0x4e28c0
     /* 0x668 */ qboolean(*trap_VerifySteamAuth)(int clientNum);
     /* 0x670 */ qboolean(*trap_FactoryExists)(const char *id);  // [QL] slot 206, x86 table 0x56d2b8 -> 0x4e2a20
 
@@ -329,7 +329,9 @@ typedef struct {
     /* 0x678 */ void    (*trap_GenerateMatchGUID)(char *buf, int size);  // [QL] x86 +0x328 -> 0x4e27d0
     /* 0x680 */ void    (*trap_StatsEvent)(uint64_t steamId, const char *type, const char *document);  // [QL] x86 +0x2e8 -> 0x4e2640
 
-    /* 0x688 */ /* end - total 209 slots x 8 = 1672 bytes */
+    /* 0x688 */ void    (*trap_IncrementSteamStat)(int clientNum, int stat, int amount);  // [QL] x86 +0x324 -> 0x4e2770
+
+    /* 0x690 */ /* end - total 210 slots x 8 = 1680 bytes */
 } gameImport_t;
 
 // [QL] the vmMain export table, completely reordered against Q3: QL uses a function

@@ -262,16 +262,11 @@ void CA_RoundStateTransition(void) {
                 STAT_AddPlayerMedalStat(ent, "PERFECT");
             }
 
-            // Clutch: one-time Steam achievement for last-alive win with kills
-            // Steam stat 0x31 (49): awarded once when sole survivor wins
-            // with 2+ round kills (tracked via expandedStats.killStreak)
-            if (cl->sess.sessionTeam == winTeam) {
-                int hasClutch = trap_GetSteamStat(cl->ps.clientNum, 0x31);
-                if (hasClutch == 0 &&
-                    aliveCounts[cl->sess.sessionTeam] == 1 &&
-                    cl->expandedStats.killStreak > 2) {
-                    trap_IncrementSteamStat(cl->ps.clientNum, 0x31);
-                }
+            // [QL] 0x100387bc: AW_LAST_HOPE (0x31), winning the round as the last one
+            // standing with more than two kills in it
+            if (cl->sess.sessionTeam == winTeam && !trap_HasAchievement(cl->ps.clientNum, 0x31) &&
+                aliveCounts[cl->sess.sessionTeam] == 1 && cl->expandedStats.killStreak > 2) {
+                trap_SetAchievement(cl->ps.clientNum, 0x31);
             }
         }
 

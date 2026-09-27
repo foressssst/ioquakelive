@@ -1679,6 +1679,11 @@ void CL_Disconnect(qboolean showMainMenu) {
     FS_PureServerSetLoadedPaks("", "");
     FS_PureServerSetReferencedPaks("", "");
 
+    // [QL] 0x004b8a26: the host's stats are stored as they leave their own game
+    if (com_sv_running && com_sv_running->integer) {
+        SV_SteamStatsRemoveUser(Steam_ClientSteamID());
+    }
+
     CL_ClearState();
 
     // wipe the client connection

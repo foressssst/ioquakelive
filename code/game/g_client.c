@@ -1278,6 +1278,7 @@ char* ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
     memset(client, 0, sizeof(*client));
 
     client->pers.connected = CON_CONNECTING;
+    client->pers.steamId = trap_GetSteamID(clientNum);  // [QL] 0x1003adbd
 
     // check for local client
     value = Info_ValueForKey(userinfo, "ip");
@@ -1306,6 +1307,11 @@ char* ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
         if (!G_BotConnect(clientNum, !firstTime)) {
             return "BotConnectfailed";
         }
+    }
+
+    // [QL] 0x1003ae8e: Steam is asked about the player's ticket when they first join
+    if (firstTime && !isBot && !trap_VerifySteamAuth(clientNum)) {
+        return "Failed to verify Steam auth token";
     }
 
     // get and distribute relevant parameters
