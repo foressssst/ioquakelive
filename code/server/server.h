@@ -437,6 +437,7 @@ void SV_GameBotAIStartFrame(int time);
 int SV_GameVoiceFilter(int speaker, int listener);
 int SV_GameClientScore(int clientNum);
 void SV_GameClientBegin(int clientNum);
+qboolean SV_GameSnapshotSkipEntity(int viewerNum, int entityNum);
 void SV_VoiceFrame(void);
 void SV_SteamIdentity(void);
 void SV_RegisterGameCvars(void);

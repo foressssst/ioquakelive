@@ -358,7 +358,7 @@ typedef enum {
     GAME_CLIENT_BEGIN            = 12,  // [QL] ClientBegin() (retail 0x1003b030)
     GAME_BOT_AI_START_FRAME      = 13,  // [QL] BotAIStartFrame() (retail 0x10023400)
     GAME_SNAPSHOT_ALWAYS_SEND    = 14,  // [QL] G_ClientAlwaysInSnapshot() (retail 0x10052dc0)
-    GAME_UNUSED_15               = 15,  // [QL] 0x10053020, gametype 9 only, not ported
+    GAME_SNAPSHOT_SKIP_ENTITY    = 15,  // [QL] G_SnapshotSkipEntity() (retail 0x10053020)
     GAME_UNUSED_16               = 16,  // [QL] 0x10052f40, gametypes 5, 6 and 11 only, not ported
     GAME_VOICE_FILTER            = 17,  // [QL] G_VoiceFilter() (retail 0x10052e90)
     GAME_UNUSED_18               = 18,  // [QL] 0x100530c0, sin portar

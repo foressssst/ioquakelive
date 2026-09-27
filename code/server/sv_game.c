@@ -1242,6 +1242,13 @@ int SV_GameVoiceFilter(int speaker, int listener) {
     return 0;
 }
 
+// [QL] retail export 15 (0x10053020): an entity the game keeps out of this viewer's snapshot
+qboolean SV_GameSnapshotSkipEntity(int viewerNum, int entityNum) {
+    if (sv_vmMainTable[GAME_SNAPSHOT_SKIP_ENTITY])
+        return ((qboolean (*)(int, int))sv_vmMainTable[GAME_SNAPSHOT_SKIP_ENTITY])(viewerNum, entityNum);
+    return qfalse;
+}
+
 // [QL] retail export 12 (0x1003b030): the game begins a client once it is in the world
 void SV_GameClientBegin(int clientNum) {
     if (sv_vmMainTable[GAME_CLIENT_BEGIN])

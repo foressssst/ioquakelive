@@ -881,6 +881,7 @@ void PlayerAwardEF(gentity_t *ent, int persIdx, int efBit);  // .so PlayerAwardE
 void LastManStanding(int team);
 qboolean G_ObfuscateEnemyInfoInSnapshotCheck(int clientNum1, int clientNum2);
 qboolean G_ClientAlwaysInSnapshot(int viewerNum, int clientNum);
+qboolean G_SnapshotSkipEntity(int viewerNum, int entityNum);
 
 // g_gametype_duel.c - Duel / Tournament
 void CheckTournament(void);   // [QL] duel ready-start countdown (0x10058600)

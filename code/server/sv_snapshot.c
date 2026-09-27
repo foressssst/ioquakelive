@@ -369,6 +369,12 @@ static void SV_AddEntitiesVisibleFromPoint(vec3_t origin, clientSnapshot_t* fram
             continue;
         }
 
+        // [QL] 0x4e548c: the game can keep an entity from this viewer, like a Freeze Tag thaw
+        // tick from the other team (export 15)
+        if (SV_GameSnapshotSkipEntity(viewerNum, e)) {
+            continue;
+        }
+
         // [QL] 0x4e54b2: the game can send a client from anywhere on the map, like a viewer's
         // teammates, whom the team overlay and the teammate markers follow (export +0x30)
         if (e < MAX_CLIENTS && SV_GameSnapshotAlwaysSend(viewerNum, ent->s.number)) {

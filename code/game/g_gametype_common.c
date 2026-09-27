@@ -353,6 +353,41 @@ qboolean G_ClientAlwaysInSnapshot(int viewerNum, int clientNum) {
 
 /*
 ==================
+G_SnapshotSkipEntity
+
+[QL] qagamex86.dll 0x10053020, the export (15) the engine asks about every entity before it
+goes into a viewer's snapshot (quakelive_steam.exe 0x4e548c): qtrue keeps it out. In Freeze Tag
+with g_freezeThawTick 1, a thaw tick only goes to the team of the player thawing.
+==================
+*/
+qboolean G_SnapshotSkipEntity(int viewerNum, int entityNum) {
+    gentity_t* viewer;
+    gentity_t* ent;
+    int owner;
+
+    if ((unsigned)viewerNum > MAX_CLIENTS || (unsigned)entityNum > MAX_GENTITIES) {
+        return qfalse;
+    }
+    if (g_gametype.integer != GT_FREEZE || g_freezeThawTick.integer != 1) {
+        return qfalse;
+    }
+    viewer = &g_entities[viewerNum];
+    if (!viewer->r.linked) {
+        return qfalse;
+    }
+    ent = &g_entities[entityNum];
+    if (ent->s.eType != ET_EVENTS + EV_THAW_TICK) {
+        return qfalse;
+    }
+    owner = ent->r.ownerNum;
+    if (owner < 0 || owner >= MAX_GENTITIES) {
+        return qfalse;
+    }
+    return !OnSameTeam(viewer, &g_entities[owner]);
+}
+
+/*
+==================
 SendScoreboardMessageToTeam
 
 Sends the current scoreboard to all connected clients on a given team.
