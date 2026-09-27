@@ -107,6 +107,13 @@ int Pickup_Powerup(gentity_t* ent, gentity_t* other) {
         }
     }
 
+    // [QL] 0x1004e271: AW_RESOURCE_HOG (0x1d), a quad and a battle suit picked up
+    if (!trap_HasAchievement(other->client->ps.clientNum, 0x1d) &&
+        other->client->expandedStats.numQuadDamagePickups > 0 &&
+        other->client->expandedStats.numBattleSuitPickups > 0) {
+        trap_SetAchievement(other->client->ps.clientNum, 0x1d);
+    }
+
     // give any nearby players a "denied" anti-reward
     for (i = 0; i < level.maxclients; i++) {
         vec3_t delta;
@@ -148,6 +155,11 @@ int Pickup_Powerup(gentity_t* ent, gentity_t* other) {
         trap_Trace(&tr, client->ps.origin, NULL, NULL, ent->s.pos.trBase, ENTITYNUM_NONE, CONTENTS_SOLID);
         if (tr.fraction != 1.0) {
             continue;
+        }
+
+        // [QL] 0x1004e3f6: AW_BANDIT (0xf), the quad taken in front of somebody
+        if (!trap_HasAchievement(other->client->ps.clientNum, 0xf) && ent->item->giTag == PW_QUAD) {
+            trap_SetAchievement(other->client->ps.clientNum, 0xf);
         }
 
         // anti-reward

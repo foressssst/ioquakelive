@@ -871,7 +871,8 @@ void MP_PauseThink(void);                      // [QL] per-frame while paused: a
 int STAT_GetBestWeapon(gclient_t *cl);
 void STAT_AddPlayerMedalStat(gentity_t *ent, const char *medal);
 void STAT_AddRoundOverStat(int round, int winTeam, int isDraw);
-void STAT_AddScore(gentity_t *ent, int weapon, int amount);   // [QL] 0x10072250 (external stats wire stubbed)
+void STAT_AddShots(gentity_t *ent, int weapon, int amount);   // [QL] 0x10072320
+void STAT_AddHits(gentity_t *ent, int weapon, int amount);
 void STAT_AddPlayerDeathStat(gentity_t *self, gentity_t *attacker, int mod);  // [QL] .so 0xa0420 (Win STAT_PublishDeath); numKills/numDeaths/killStreak/per-weapon accum
 void STAT_AddDamageStat(gentity_t *targ, gentity_t *attacker, int mod, int damage);  // [QL] .so 0x9f5a0 (Win STAT_PublishDamage); totalDamage{Dealt,Taken}/per-weapon accum, called from G_Damage
 void STAT_UpdatePlaytime(gentity_t *ent);  // [QL] .so STAT_UpdatePlaytime (0x10078890); totalPlayTime/weaponUsageTime, called from ClientThink_real

@@ -438,6 +438,95 @@ victimStreak is the streak the victim was on, read before the death cuts it, whi
 the order retail has inside its own function.
 ===============
 */
+// AIRBORNE of the stats events: off the ground, or flying
+static qboolean STAT_Airborne(const gclient_t* cl) {
+    return (qboolean)(cl->ps.groundEntityNum == ENTITYNUM_NONE || cl->ps.powerups[PW_FLIGHT] != 0);
+}
+
+/*
+===============
+STAT_KillAchievements
+
+[QL] 0x10073026 on, in the killer's half of PLAYER_KILL: what a kill can earn
+===============
+*/
+static void STAT_KillAchievements(gentity_t* attacker, gentity_t* victim, int weapon) {
+    gclient_t* cl = attacker->client;
+    gclient_t* vc = victim ? victim->client : NULL;
+    int clientNum = cl->ps.clientNum;
+    qboolean enemy = (qboolean)(victim && !OnSameTeam(attacker, victim) && attacker != victim);
+    int i;
+
+    // AW_CAMPER: fifteen railgun kills
+    if (!trap_HasAchievement(clientNum, 0x10) && weapon == WP_RAILGUN &&
+        cl->expandedStats.numWeaponKills[WP_RAILGUN] > 14) {
+        trap_SetAchievement(clientNum, 0x10);
+    }
+    // AW_RAPTOR: a kill in the air
+    if (!trap_HasAchievement(clientNum, 0x14) && STAT_Airborne(cl) && enemy) {
+        trap_SetAchievement(clientNum, 0x14);
+    }
+    // AW_PLUS_ONE: a kill with one point of health left
+    if (!trap_HasAchievement(clientNum, 0x15) && cl->ps.stats[STAT_HEALTH] == 1 && enemy) {
+        trap_SetAchievement(clientNum, 0x15);
+    }
+    // AW_KILLJOY: the quad carrier, killed without a powerup of one's own
+    if (!trap_HasAchievement(clientNum, 0x16) && vc && vc->ps.powerups[PW_QUAD] && enemy) {
+        for (i = PW_QUAD; i < MAX_POWERUPS; i++) {
+            if (cl->ps.powerups[i]) {
+                break;
+            }
+        }
+        if (i == MAX_POWERUPS) {
+            trap_SetAchievement(clientNum, 0x16);
+        }
+    }
+    // AW_BRAWLER: five gauntlet kills
+    if (!trap_HasAchievement(clientNum, 0x19) && weapon == WP_GAUNTLET &&
+        cl->expandedStats.numWeaponKills[WP_GAUNTLET] > 4) {
+        trap_SetAchievement(clientNum, 0x19);
+    }
+    // AW_AIR_HAMMER: the gauntlet with both in the air -- or anybody who was flying
+    if (!trap_HasAchievement(clientNum, 0x1a) && vc &&
+        ((weapon == WP_GAUNTLET && STAT_Airborne(cl) && vc->ps.groundEntityNum == ENTITYNUM_NONE) ||
+         vc->ps.powerups[PW_FLIGHT])) {
+        trap_SetAchievement(clientNum, 0x1a);
+    }
+    // AW_SUCKER_PUNCH: the quad carrier, with the gauntlet
+    if (!trap_HasAchievement(clientNum, 0x1c) && weapon == WP_GAUNTLET && vc && vc->ps.powerups[PW_QUAD]) {
+        trap_SetAchievement(clientNum, 0x1c);
+    }
+}
+
+/*
+===============
+STAT_DeathAchievements
+
+[QL] 0x10073c9a on, in the victim's half of PLAYER_KILL
+===============
+*/
+static void STAT_DeathAchievements(gentity_t* attacker, gentity_t* victim, int weapon) {
+    gclient_t* cl = attacker ? attacker->client : NULL;
+    gclient_t* vc = victim->client;
+
+    if (!cl || attacker == victim) {
+        return;
+    }
+    if (vc && !(g_gametype.integer < GT_TEAM && cl->sess.sessionTeam != TEAM_SPECTATOR) &&
+        cl->sess.sessionTeam == vc->sess.sessionTeam) {
+        return;
+    }
+    // AW_PSYCHIC: a rocket into somebody in the air
+    if (!trap_HasAchievement(cl->ps.clientNum, 0x11) && weapon == WP_ROCKET_LAUNCHER && vc && STAT_Airborne(vc)) {
+        trap_SetAchievement(cl->ps.clientNum, 0x11);
+    }
+    // AW_OVERKILL: the railgun on somebody with one point of health
+    if (!trap_HasAchievement(cl->ps.clientNum, 0x13) && weapon == WP_RAILGUN && vc &&
+        vc->expandedStats.previousHealth == 1) {
+        trap_SetAchievement(cl->ps.clientNum, 0x13);
+    }
+}
+
 void STAT_PlayerKill(gentity_t* victim, gentity_t* attacker, int mod, int victimStreak) {
     jnode_t* data;
     jnode_t* who;
@@ -473,6 +562,7 @@ void STAT_PlayerKill(gentity_t* victim, gentity_t* attacker, int mod, int victim
                          attacker->client->ps.stats[STAT_HEALTH],
                          attacker->client->ps.stats[STAT_ARMOR]);
         J_SetNode(data, "KILLER", who);
+        STAT_KillAchievements(attacker, victim, BG_GetWeaponFromMeansOfDeath(mod));
     }
     J_SetNull(data, "VICTIM");
     if (victim && victim->client) {
@@ -482,6 +572,7 @@ void STAT_PlayerKill(gentity_t* victim, gentity_t* attacker, int mod, int victim
                          victim->client->expandedStats.previousHealth,
                          victim->client->expandedStats.previousArmor);
         J_SetNode(data, "VICTIM", who);
+        STAT_DeathAchievements(attacker, victim, BG_GetWeaponFromMeansOfDeath(mod));
     }
 
     J_SetNull(data, "ROUND");
@@ -792,6 +883,19 @@ void STAT_PlayerStats(gclient_t* cl, qboolean aborted, qboolean quit) {
         J_SetNode(weapons, STAT_WeaponName(i), w);
     }
     J_SetNode(data, "WEAPONS", weapons);
+
+    // [QL] 0x100748ff: AW_AIM_BOT (0x1b), sixty per cent of every shot on target
+    {
+        int hits = 0, shots = 0;
+
+        for (i = 1; i < WP_NUM_WEAPONS; i++) {
+            hits += cl->expandedStats.shotsHit[i];
+            shots += cl->expandedStats.shotsFired[i];
+        }
+        if (!trap_HasAchievement(cl->ps.clientNum, 0x1b) && shots && (double)hits / (double)shots >= 0.6) {
+            trap_SetAchievement(cl->ps.clientNum, 0x1b);
+        }
+    }
 
     J_SetInt(data, "MAX_STREAK", cl->expandedStats.maxKillStreak);
 

@@ -140,6 +140,20 @@ Shared by CA, RR, DOM gametypes.
 void STAT_AddPlayerMedalStat(gentity_t *ent, const char *medal) {
     // [ioquakelive] 0x100716a0: goes out as a PLAYER_MEDAL event on the stats channel
     if (ent && ent->client && medal) {
+        gclient_t *cl = ent->client;
+
+        // [QL] 0x100716f2: in CTF a medal can complete AW_FULL_HOUSE (a capture, an assist
+        // and a defense) and AW_TRIFECTA (three of each)
+        if (g_gametype.integer == GT_CTF) {
+            if (!trap_HasAchievement(cl->ps.clientNum, 0x38) && cl->expandedStats.numCaptures > 0 &&
+                cl->expandedStats.numAssists > 0 && cl->expandedStats.numDefends > 0) {
+                trap_SetAchievement(cl->ps.clientNum, 0x38);
+            }
+            if (!trap_HasAchievement(cl->ps.clientNum, 0x39) && cl->expandedStats.numCaptures > 2 &&
+                cl->expandedStats.numAssists > 2 && cl->expandedStats.numDefends > 2) {
+                trap_SetAchievement(cl->ps.clientNum, 0x39);
+            }
+        }
         STAT_PlayerMedal(ent, medal, STAT_MedalTotal(ent, medal));
     }
 }
@@ -151,22 +165,34 @@ void STAT_AddRoundOverStat(int round, int winTeam, int isDraw) {
 
 /*
 ==================
-STAT_AddScore
+STAT_AddShots / STAT_AddHits
 
-[QL] 0x10072250. Forwards a per-weapon accuracy event to the engine stats trap
-(syscall table +0x324, index 201). The binary is a thin 2-arg fastcall(statValue,
-clientNum) wrapper; that engine trap is QL-external (ZMQ stats backend) with no
-ioquakelive equivalent, so the emission is a flagged stub. The
-warmupTime==0 && !scoringDisabled guard IS faithful. Callers (FireWeapon scoring,
-G_ExplodeMissile, G_MissileImpact accuracy paths) pass (ent, weapon, amount) in
-reimpl form. Real external wire deferred to the stats backend (Phase 6).
+[QL] 0x10072320. What a player fires and hits goes to their Steam stats too (import
++0x324), outside warmup and while the teams are not being shuffled: shots_<weapon> and
+hits_<weapon>, the weapon table's +0x08 and +0x0c (0x1008ff00). The gauntlet and the hook
+have none there, so theirs land on stat 0, as in retail.
 ==================
 */
-void STAT_AddScore(gentity_t *ent, int weapon, int amount) {
-    if (level.warmupTime != 0 || level.scoringDisabled) {
+static const int statWeaponShots[WP_NUM_WEAPONS] = {0, 0, 26, 27, 28, 29, 30, 31, 32, 33, 0, 34, 35, 36, 37};
+static const int statWeaponHits[WP_NUM_WEAPONS] = {0, 0, 14, 15, 16, 17, 18, 19, 20, 21, 0, 22, 23, 24, 25};
+
+static void STAT_AddSteamStat(gentity_t *ent, int stat, int amount) {
+    if (level.warmupTime != 0 || level.teamShuffleActive || !ent->client) {
         return;
     }
-    (void)ent; (void)weapon; (void)amount;   // external QL stats trap - no-op in standalone
+    trap_IncrementSteamStat(ent->client->ps.clientNum, stat, amount);
+}
+
+void STAT_AddShots(gentity_t *ent, int weapon, int amount) {
+    if (weapon > WP_NONE && weapon < WP_NUM_WEAPONS) {
+        STAT_AddSteamStat(ent, statWeaponShots[weapon], amount);
+    }
+}
+
+void STAT_AddHits(gentity_t *ent, int weapon, int amount) {
+    if (weapon > WP_NONE && weapon < WP_NUM_WEAPONS) {
+        STAT_AddSteamStat(ent, statWeaponHits[weapon], amount);
+    }
 }
 
 /*

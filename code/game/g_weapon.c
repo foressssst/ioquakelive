@@ -229,6 +229,10 @@ void Bullet_Fire(gentity_t* ent, float spread, int damage, int mod) {
                     if (ent->s.weapon < 16) {
                         ent->client->expandedStats.shotsHit[ent->s.weapon]++;
                     }
+                    // [QL] 0x1006d716: and the Steam stat, outside race
+                    if (g_gametype.integer != GT_RACE) {
+                        STAT_AddHits(ent, ent->s.weapon, 1);
+                    }
                 }
                 G_Damage(traceEnt, ent, ent, forward, tr.endpos,
                          damage, 0, mod);
@@ -395,6 +399,9 @@ void ShotgunPattern(vec3_t origin, vec3_t origin2, int seed, gentity_t* ent) {
                     ent->client->accuracy_hits++;
                 }
                 ent->client->expandedStats.shotsHit[WP_SHOTGUN]++;
+                if (g_gametype.integer != GT_RACE) {
+                    STAT_AddHits(ent, WP_SHOTGUN, 1);
+                }
             }
         }
     }
@@ -656,6 +663,9 @@ void weapon_railgun_fire(gentity_t* ent) {
         }
         ent->client->accuracy_hits++;
         ent->client->expandedStats.shotsHit[WP_RAILGUN]++;
+        if (g_gametype.integer != GT_RACE) {
+            STAT_AddHits(ent, WP_RAILGUN, 1);
+        }
     }
 }
 
@@ -825,7 +835,7 @@ void Weapon_LightningFire(gentity_t* ent) {
                     ent->client->accuracy_hits++;
                     ent->client->expandedStats.shotsHit[ent->s.weapon]++;
                     if (g_gametype.integer != GT_RACE) {
-                        STAT_AddScore(ent, ent->s.weapon, 1);
+                        STAT_AddHits(ent, ent->s.weapon, 1);
                     }
                     if (BG_IsRoundBasedGameType(g_gametype.integer)) {
                         ent->client->round_hits++;
@@ -878,6 +888,9 @@ void Weapon_LightningFire(gentity_t* ent) {
             if (LogAccuracyHit(traceEnt, ent)) {
                 ent->client->accuracy_hits++;
                 ent->client->expandedStats.shotsHit[WP_LIGHTNING]++;
+                if (g_gametype.integer != GT_RACE) {
+                    STAT_AddHits(ent, WP_LIGHTNING, 1);
+                }
             }
             // [QL] LG distance falloff on base damage, then quad at G_Damage (matches binary)
             {
@@ -1057,11 +1070,11 @@ void FireWeapon(gentity_t* ent) {
         if (ent->s.weapon < 16) {
             ent->client->expandedStats.shotsFired[ent->s.weapon] += shotsFired;
         }
-        // [QL] FireWeapon @0x1006f280 also publishes the shot to the stats
-        // backend (STAT_AddScore, unless GT_RACE) and, in round-based gametypes,
-        // accumulates the per-round accuracy shot count.
+        // [QL] FireWeapon @0x1006f280 also counts the shot on the player's Steam stats
+        // (unless GT_RACE) and, in round-based gametypes, accumulates the per-round
+        // accuracy shot count.
         if (g_gametype.integer != GT_RACE) {
-            STAT_AddScore(ent, ent->s.weapon, shotsFired);
+            STAT_AddShots(ent, ent->s.weapon, shotsFired);
         }
         if (BG_IsRoundBasedGameType(g_gametype.integer)) {
             ent->client->round_shots += shotsFired;

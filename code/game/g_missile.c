@@ -96,10 +96,9 @@ void G_ExplodeMissile(gentity_t* ent) {
         if (G_RadiusDamage(ent->r.currentOrigin, NULL, NULL, ent, ent)) {
             g_entities[ent->r.ownerNum].client->accuracy_hits++;
             g_entities[ent->r.ownerNum].client->expandedStats.shotsHit[ent->s.weapon]++;
-            // [QL] binary inlines STAT_AddScore (engine syscall table +0x324); it
-            //      internally gates on !warmupTime && !scoringDisabled.
+            // [QL] 0x1005b67d: and the Steam stat, outside race
             if (g_gametype.integer != GT_RACE) {
-                STAT_AddScore(&g_entities[ent->r.ownerNum], ent->s.weapon, 1);
+                STAT_AddHits(&g_entities[ent->r.ownerNum], ent->s.weapon, 1);
             }
             if (BG_IsRoundBasedGameType(g_gametype.integer)) {
                 g_entities[ent->r.ownerNum].client->round_hits++;
@@ -470,7 +469,7 @@ void G_MissileImpact(gentity_t* ent, trace_t* trace) {
             g_entities[ent->r.ownerNum].client->accuracy_hits++;
             g_entities[ent->r.ownerNum].client->expandedStats.shotsHit[ent->s.weapon]++;
             if (g_gametype.integer != GT_RACE) {
-                STAT_AddScore(&g_entities[ent->r.ownerNum], ent->s.weapon, 1);
+                STAT_AddHits(&g_entities[ent->r.ownerNum], ent->s.weapon, 1);
             }
             hitClient = qtrue;
             if (BG_IsRoundBasedGameType(g_gametype.integer)) {
@@ -508,7 +507,7 @@ void G_MissileImpact(gentity_t* ent, trace_t* trace) {
             g_entities[ent->r.ownerNum].client->accuracy_hits++;
             g_entities[ent->r.ownerNum].client->expandedStats.shotsHit[ent->s.weapon]++;
             if (g_gametype.integer != GT_RACE) {
-                STAT_AddScore(&g_entities[ent->r.ownerNum], ent->s.weapon, 1);
+                STAT_AddHits(&g_entities[ent->r.ownerNum], ent->s.weapon, 1);
             }
             if (BG_IsRoundBasedGameType(g_gametype.integer)) {
                 g_entities[ent->r.ownerNum].client->round_hits++;

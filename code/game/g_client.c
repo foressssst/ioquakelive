@@ -2277,6 +2277,11 @@ void STAT_MatchEnd(int isShutdown, int restart, const char* exitMsg) {
         if (cl->pers.connected == CON_CONNECTING || cl->sess.sessionTeam == TEAM_SPECTATOR) {
             continue;
         }
+        // [QL] 0x10057603: AW_JESSE_JAMES (0x37), a duel won without dying
+        if (g_gametype.integer == GT_DUEL && !trap_HasAchievement(level.sortedClients[i], 0x37) &&
+            cl->ps.persistant[PERS_KILLED] == 0 && cl->expandedStats.serverRank == 0) {
+            trap_SetAchievement(level.sortedClients[i], 0x37);
+        }
         STAT_PlayerStats(cl, (qboolean)(isShutdown == 1), qfalse);
     }
     STAT_MatchReport((qboolean)(isShutdown == 1), restart, exitMsg);

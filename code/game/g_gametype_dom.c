@@ -324,12 +324,35 @@ static void DOM_Think(gentity_t *ent) {
     if (domScoreTick < numDomPoints)
         return;
 
-    // NOTE: after the tick, retail (DOM_Think 0x1004b5d0, from 0x1004b644) counts
-    // the points that are unused or held by domPoints[0]'s owner. With 3 or more,
-    // every client on that team adds g_domScoreRate to a counter (gclient +0x88c)
-    // and gets achievement 41 through trap_HasAchievement / trap_SetAchievement
-    // once the counter reaches 30. It is an achievement, not an announcement, and
-    // the counter is not in this gclient_t, so it is not reproduced here.
+    // [QL] 0x1004b644: with three or more points held by domPoints[0]'s owner (a point not
+    // in use counts too), everybody on that team adds the tick's seconds to the time held,
+    // and at 30 gets AW_POINT_DENIED (0x29)
+    {
+        int owner = domPoints[0]->s.modelindex2;
+        int held = 0;
+        int i;
+
+        for (i = 0; i < numDomPoints; i++) {
+            if (!domPoints[i]->inuse ||
+                (domPoints[i]->s.modelindex2 != 0 && domPoints[i]->s.modelindex2 == owner)) {
+                held++;
+            }
+        }
+        if (held >= 3) {
+            for (i = 0; i < MAX_CLIENTS; i++) {
+                gclient_t *cl = g_entities[i].client;
+
+                if (!cl || cl->sess.sessionTeam != owner) {
+                    continue;
+                }
+                if (!trap_HasAchievement(cl->ps.clientNum, 0x29) && cl->expandedStats.domThreeFlagsTime < 30 &&
+                    cl->expandedStats.domThreeFlagsTime + g_domScoreRate.integer >= 30) {
+                    trap_SetAchievement(cl->ps.clientNum, 0x29);
+                }
+                cl->expandedStats.domThreeFlagsTime += g_domScoreRate.integer;
+            }
+        }
+    }
 
     red = level.teamScores[TEAM_RED];
     blue = level.teamScores[TEAM_BLUE];

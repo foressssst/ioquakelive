@@ -369,6 +369,19 @@ void AD_RoundStateTransition(void) {
             winTeam = TEAM_RED;
         }
 
+        // [QL] 0x10035ec9: AW_MISSED_OPPORTUNITY (0x1f), the attackers winning the round by
+        // elimination without having touched the flag
+        if (level.roundState.capture != 1 && !level.roundState.touch && winTeam == level.roundState.turn + 1) {
+            for (i = 0; i < level.maxclients; i++) {
+                gclient_t *cl = &level.clients[i];
+
+                if (cl->pers.connected == CON_CONNECTED && !trap_HasAchievement(i, 0x1f) &&
+                    cl->sess.sessionTeam == winTeam) {
+                    trap_SetAchievement(i, 0x1f);
+                }
+            }
+        }
+
         // Award medals
         // [QL] 0x10035f84: through PlayerAwardEV like every other medal, so the client finds the
         // player in clientNum, the medal in generic1 and the count in modelindex2
