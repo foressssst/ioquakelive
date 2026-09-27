@@ -461,6 +461,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+        # the Windows build that loads Quake Live's own steam_api.dll, which is 32-bit
+        - platform: Win32
+          dir: x86
+          arch: x86
         - platform: x64
           dir: x64
           arch: x86_64

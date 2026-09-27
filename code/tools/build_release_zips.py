@@ -47,6 +47,7 @@ SERVER_PREFIX = 'ioqlds'
 PLATFORM_OUT = {
     'engine-linux-x86_64':  ('ioquakelive-linux-x86_64.zip',  'ioqlds-linux-x86_64.zip'),
     'engine-linux-arm64':   ('ioquakelive-linux-arm64.zip',   'ioqlds-linux-arm64.zip'),
+    'engine-windows-x86':   ('ioquakelive-windows-x86.zip',   'ioqlds-windows-x86.zip'),
     'engine-windows-x64':   ('ioquakelive-windows-x64.zip',   'ioqlds-windows-x64.zip'),
     'engine-windows-arm64': ('ioquakelive-windows-arm64.zip', 'ioqlds-windows-arm64.zip'),
     'engine-macos-arm64':   ('ioquakelive-macos-arm64.zip',   None),
@@ -63,6 +64,7 @@ PLATFORM_OUT = {
 LAYER_SHARED = {
     'engine-linux-x86_64':  True,
     'engine-linux-arm64':   True,
+    'engine-windows-x86':   True,
     'engine-windows-x64':   True,
     'engine-windows-arm64': True,
     'engine-macos-arm64':   False,
