@@ -446,9 +446,8 @@ struct gclient_s {
     qboolean healthRegenActive; // [QL]
     qboolean armorRegenActive;  // [QL]
 
-    gentity_t* persistantPowerup;
+    gentity_t* persistantPowerup;  // [QL] gclient_t+0x51c: the rune taken
     int portalID;
-    int ammoTimes[WP_NUM_WEAPONS];
     int invulnerabilityTime;
 
     expandedStatObj_t expandedStats;  // [QL] (812 bytes)
@@ -624,6 +623,10 @@ typedef struct {
     int             itemTimerCounts[MAX_ITEMS];  /* [QL] 0x105df32c: CTF, items of each kind with a timer */
     vec3_t          itemTimerRedBase;       /* [QL] 0x105df2f0: CTF, where the red flag stands */
     vec3_t          itemTimerBlueBase;      /* [QL] 0x105df2fc */
+    int             numSpawnSpotsFFA;       /* [QL] 0x105df308: info_player_deathmatch, 25 at most */
+    int             numSpawnSpotsRed;       /* [QL] 0x105df30c: team_CTF_redspawn */
+    int             numSpawnSpotsBlue;      /* [QL] 0x105df310: team_CTF_bluespawn */
+    int             runeSpawnSpot[5];       /* [QL] 0x105df318: where each rune (1-4) came out */
 } level_locals_t;
 
 //
@@ -727,7 +730,6 @@ void body_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int da
 void Kamikaze_DeathActivate(gentity_t* self);  // [QL] 0x10046f20: the kamikaze timer's think, frees the entity it runs on
 void GibEntity(gentity_t* self);               // [QL] 0x10046d80: gibs, and thaw-respawns a frozen Freeze Tag body
 void TossClientItems(gentity_t* self);
-void TossClientPersistantPowerups(gentity_t* self);
 void TossClientCubes(gentity_t* self);
 
 // damage flags
@@ -1376,9 +1378,10 @@ extern vmCvar_t g_ironsights_mg;
 extern vmCvar_t g_quadHog;
 extern vmCvar_t g_quadHogTime;
 extern vmCvar_t g_damagePlums;
-void G_QG_Touch_Item(gentity_t *ent, gentity_t *other, trace_t *trace);
-gentity_t *G_QG_RespawnQuad(vec3_t origin);
-void G_QG_Think(void);
+void QuadHog_Spawn(void);        // [QL] 0x1004d420
+void QuadHog_Check(void);        // [QL] 0x1004d500
+void G_CountSpawnSpots(void);    // [QL] 0x10055000
+void G_SpawnRunes(void);         // [QL] 0x1004d950
 
 // [QL] starting loadout cvars
 extern vmCvar_t g_startingWeapons;

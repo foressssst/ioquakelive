@@ -1834,6 +1834,9 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
     // general initialization
     G_FindTeams();
 
+    // [QL] 0x10055430: the spawn points the runes are placed with
+    G_CountSpawnSpots();
+
     // [QL] Lag compensation - allocate the per-client position-history rings
     if (g_lagHaxMs.integer != 0 && g_lagHaxHistory.integer != 0) {
         HAX_Init();
@@ -1897,6 +1900,12 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
     default:
         break;
     }
+
+    // [QL] 0x100555aa: last, the quad of the Quad Hog and the runes
+    if (g_gametype.integer == GT_FFA && g_quadHog.integer) {
+        QuadHog_Spawn();
+    }
+    G_SpawnRunes();
 
     // [QL] publish starting weapons bitmask
     trap_SetConfigstring(CS_STARTING_WEAPONS, va("%i", g_startingWeapons.integer));
@@ -4399,7 +4408,12 @@ void G_RunFrame(int levelTime) {
     CheckWarmupAndForfeit();
 
     // [QL] per-gametype frame logic (0x100599f0)
-    if (g_gametype.integer == GT_RR) {
+    if (g_gametype.integer == GT_FFA) {
+        // [QL] 0x10059a05: a new quad for the Quad Hog when nobody has one
+        if (g_quadHog.integer) {
+            QuadHog_Check();
+        }
+    } else if (g_gametype.integer == GT_RR) {
         // infection, survival bonus, round end
         RR_Think();
     } else if (g_gametype.integer == GT_CTF) {

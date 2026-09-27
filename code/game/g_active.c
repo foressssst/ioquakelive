@@ -571,15 +571,10 @@ void ClientTimerActions(gentity_t* ent, int msec) {
             }
         }
 
-        // regenerate
-        if (bg_itemlist[client->ps.stats[STAT_PERSISTANT_POWERUP]].giTag == PW_GUARD) {
-            maxHealth = client->ps.stats[STAT_MAX_HEALTH] / 2;
-        } else if (client->ps.powerups[PW_REGEN]) {
+        // [QL] 0x100344cc: the regeneration powerup heals, and over the maximum health comes down
+        // a point a second; in the round modes only while the round is being played
+        if (client->ps.powerups[PW_REGEN]) {
             maxHealth = client->ps.stats[STAT_MAX_HEALTH];
-        } else {
-            maxHealth = 0;
-        }
-        if (maxHealth) {
             if (ent->health < maxHealth) {
                 ent->health += 15;
                 if (ent->health > maxHealth * 1.1) {
@@ -593,107 +588,84 @@ void ClientTimerActions(gentity_t* ent, int msec) {
                 }
                 G_AddEvent(ent, EV_POWERUP_REGEN, 0);
             }
-        } else {
-            // count down health when over max
-            if (ent->health > client->ps.stats[STAT_MAX_HEALTH]) {
+        } else if (ent->health > client->ps.stats[STAT_MAX_HEALTH]) {
+            int roundState = RS_PLAYING;
+
+            switch (g_gametype.integer) {
+                case GT_CA:
+                    roundState = CA_GetRoundState();
+                    break;
+                case GT_FREEZE:
+                    roundState = Freeze_GetRoundState();
+                    break;
+                case GT_AD:
+                    roundState = AD_GetRoundState();
+                    break;
+                case GT_RR:
+                    roundState = RR_GetRoundState();
+                    break;
+                default:
+                    break;
+            }
+            if (roundState == RS_PLAYING) {
                 ent->health--;
             }
         }
 
-        // count down armor when over max
-        if (client->ps.stats[STAT_ARMOR] > client->ps.stats[STAT_MAX_HEALTH]) {
-            client->ps.stats[STAT_ARMOR]--;
-            // [QL] 0x100346ed: in the entity too, for teammates
+        // [QL] 0x100345fb: the Armor Regen rune gives 10 a second up to the maximum health (over
+        // it with tiered armour)
+        if (client->ps.stats[STAT_RUNE] == 4 && client->ps.stats[STAT_ARMOR] < client->ps.stats[STAT_MAX_HEALTH]) {
+            client->ps.stats[STAT_ARMOR] += 10;
+            if (client->ps.stats[STAT_ARMOR] > client->ps.stats[STAT_MAX_HEALTH] && !armor_tiered.integer) {
+                client->ps.stats[STAT_ARMOR] = client->ps.stats[STAT_MAX_HEALTH];
+            }
             ent->s.armor = client->ps.stats[STAT_ARMOR];
+            G_AddEvent(ent, EV_POWERUP_ARMORREGEN, 0);
+        }
+
+        // count down armor when over max. In CA only with tiered armour; elsewhere never with it,
+        // nor with the Scout rune, which has its own count below
+        if (client->ps.stats[STAT_ARMOR] > client->ps.stats[STAT_MAX_HEALTH]) {
+            qboolean countDown;
+
+            if (g_gametype.integer == GT_CA) {
+                countDown = armor_tiered.integer != 0;
+            } else {
+                countDown = !armor_tiered.integer && client->ps.stats[STAT_RUNE] != 1;
+            }
+            if (countDown) {
+                client->ps.stats[STAT_ARMOR]--;
+                // [QL] 0x100346ed: in the entity too, for teammates
+                ent->s.armor = client->ps.stats[STAT_ARMOR];
+            }
         }
     }
 
-    if (bg_itemlist[client->ps.stats[STAT_PERSISTANT_POWERUP]].giTag == PW_AMMOREGEN) {
-        int w, max, inc, t, i;
-        int weapList[] = {WP_MACHINEGUN, WP_SHOTGUN, WP_GRENADE_LAUNCHER, WP_ROCKET_LAUNCHER, WP_LIGHTNING, WP_RAILGUN, WP_PLASMAGUN, WP_BFG, WP_NAILGUN, WP_PROX_LAUNCHER, WP_CHAINGUN};
-        int weapCount = ARRAY_LEN(weapList);
-        //
-        for (i = 0; i < weapCount; i++) {
-            w = weapList[i];
+    // [QL] 0x1003473b: the Quad Hog gives themselves away every g_quadHogPingRate ms
+    if (g_gametype.integer == GT_FFA && g_quadHog.integer && client->ps.powerups[PW_QUAD]) {
+        client->timeResidualPingPOI += msec;
+        if (client->timeResidualPingPOI >= g_quadHogPingRate.integer) {
+            G_PointOfInterest(ent, g_quadHogPingRate.integer, client->ps.clientNum);
+        }
+    }
 
-            switch (w) {
-                case WP_MACHINEGUN:
-                    max = 50;
-                    inc = 4;
-                    t = 1000;
-                    break;
-                case WP_SHOTGUN:
-                    max = 10;
-                    inc = 1;
-                    t = 1500;
-                    break;
-                case WP_GRENADE_LAUNCHER:
-                    max = 10;
-                    inc = 1;
-                    t = 2000;
-                    break;
-                case WP_ROCKET_LAUNCHER:
-                    max = 10;
-                    inc = 1;
-                    t = 1750;
-                    break;
-                case WP_LIGHTNING:
-                    max = 50;
-                    inc = 5;
-                    t = 1500;
-                    break;
-                case WP_RAILGUN:
-                    max = 10;
-                    inc = 1;
-                    t = 1750;
-                    break;
-                case WP_PLASMAGUN:
-                    max = 50;
-                    inc = 5;
-                    t = 1500;
-                    break;
-                case WP_BFG:
-                    max = 10;
-                    inc = 1;
-                    t = 4000;
-                    break;
-                case WP_NAILGUN:
-                    max = 10;
-                    inc = 1;
-                    t = 1250;
-                    break;
-                case WP_PROX_LAUNCHER:
-                    max = 5;
-                    inc = 1;
-                    t = 2000;
-                    break;
-                case WP_CHAINGUN:
-                    max = 100;
-                    inc = 5;
-                    t = 1000;
-                    break;
-                default:
-                    max = 0;
-                    inc = 0;
-                    t = 1000;
-                    break;
-            }
-            // Skip ammo regen when ammo is infinite (-1)
-            if (client->ps.ammo[w] == -1) {
-                client->ammoTimes[w] = 0;
-                continue;
-            }
-            client->ammoTimes[w] += msec;
-            if (client->ps.ammo[w] >= max) {
-                client->ammoTimes[w] = 0;
-            }
-            if (client->ammoTimes[w] >= t) {
-                while (client->ammoTimes[w] >= t)
-                    client->ammoTimes[w] -= t;
-                client->ps.ammo[w] += inc;
-                if (client->ps.ammo[w] > max) {
-                    client->ps.ammo[w] = max;
-                }
+    // [QL] 0x10034791: so does whoever runs with the neutral flag, but by team
+    if (client->ps.powerups[PW_NEUTRALFLAG]) {
+        client->timeResidualPingPOI += msec;
+        if (client->timeResidualPingPOI >= g_neutralFlagPingRate.integer) {
+            G_PointOfInterest(ent, g_neutralFlagPingRate.integer,
+                              client->ps.persistant[PERS_TEAM]);
+        }
+    }
+
+    // [QL] 0x100347c6: the Scout rune takes armour away, a point every half second down to 50,
+    // except in CA
+    if (g_gametype.integer != GT_CA && client->ps.stats[STAT_RUNE] == 1) {
+        client->timeResidualScout += msec;
+        while (client->timeResidualScout >= 500) {
+            client->timeResidualScout -= 500;
+            if (client->ps.stats[STAT_ARMOR] > 50) {
+                client->ps.stats[STAT_ARMOR]--;
             }
         }
     }
@@ -742,22 +714,6 @@ void ClientTimerActions(gentity_t* ent, int msec) {
             client->ps.stats[STAT_ARMOR] += 1;
             ent->s.armor = client->ps.stats[STAT_ARMOR];
             client->timeResidualArmor -= g_regenArmorRate.integer;
-        }
-    }
-    // [QL] 0x1003473b: the Quad Hog gives themselves away every g_quadHogPingRate ms
-    if (g_gametype.integer == GT_FFA && g_quadHog.integer && client->ps.powerups[PW_QUAD]) {
-        client->timeResidualPingPOI += msec;
-        if (client->timeResidualPingPOI >= g_quadHogPingRate.integer) {
-            G_PointOfInterest(ent, g_quadHogPingRate.integer, client->ps.clientNum);
-        }
-    }
-
-    // [QL] 0x10034791: so does whoever runs with the neutral flag, but by team
-    if (client->ps.powerups[PW_NEUTRALFLAG]) {
-        client->timeResidualPingPOI += msec;
-        if (client->timeResidualPingPOI >= g_neutralFlagPingRate.integer) {
-            G_PointOfInterest(ent, g_neutralFlagPingRate.integer,
-                              client->ps.persistant[PERS_TEAM]);
         }
     }
 }
@@ -1470,19 +1426,7 @@ void ClientEndFrame(gentity_t* ent) {
         }
     }
 
-    // set powerup for player animation
-    if (bg_itemlist[ent->client->ps.stats[STAT_PERSISTANT_POWERUP]].giTag == PW_GUARD) {
-        ent->client->ps.powerups[PW_GUARD] = level.time;
-    }
-    if (bg_itemlist[ent->client->ps.stats[STAT_PERSISTANT_POWERUP]].giTag == PW_SCOUT) {
-        ent->client->ps.powerups[PW_SCOUT] = level.time;
-    }
-    if (bg_itemlist[ent->client->ps.stats[STAT_PERSISTANT_POWERUP]].giTag == PW_DOUBLER) {
-        ent->client->ps.powerups[PW_DOUBLER] = level.time;
-    }
-    if (bg_itemlist[ent->client->ps.stats[STAT_PERSISTANT_POWERUP]].giTag == PW_AMMOREGEN) {
-        ent->client->ps.powerups[PW_AMMOREGEN] = level.time;
-    }
+    // set powerup for player animation (a rune's powerup is set for good when it is taken)
     if (ent->client->invulnerabilityTime > level.time) {
         ent->client->ps.powerups[PW_INVULNERABILITY] = level.time;
     }

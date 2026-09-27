@@ -171,73 +171,21 @@ int Pickup_Powerup(gentity_t* ent, gentity_t* other) {
 
 //======================================================================
 
+/*
+===============
+Pickup_PersistantPowerup
+
+[QL] 0x1004e4a0. The rune's number goes in STAT_RUNE and its powerup never runs out; the
+spawn point it stood on is free again. It does not respawn: -1.
+===============
+*/
 int Pickup_PersistantPowerup(gentity_t* ent, gentity_t* other) {
-    int clientNum;
-    char userinfo[MAX_INFO_STRING];
-    float handicap;
-    int max;
+    int rune = ent->item->giTag;
 
-    other->client->ps.stats[STAT_PERSISTANT_POWERUP] = ent->item - bg_itemlist;
     other->client->persistantPowerup = ent;
-
-    switch (ent->item->giTag) {
-        case PW_GUARD:
-            clientNum = other->client->ps.clientNum;
-            trap_GetUserinfo(clientNum, userinfo, sizeof(userinfo));
-            handicap = atof(Info_ValueForKey(userinfo, "handicap"));
-            if (handicap <= 0.0f || handicap > 100.0f) {
-                handicap = 100.0f;
-            }
-            max = (int)(2 * handicap);
-
-            other->health = max;
-            other->client->ps.stats[STAT_HEALTH] = max;
-            other->client->ps.stats[STAT_MAX_HEALTH] = max;
-            other->client->ps.stats[STAT_ARMOR] = max;
-            other->client->pers.maxHealth = max;
-
-            break;
-
-        case PW_SCOUT:
-            clientNum = other->client->ps.clientNum;
-            trap_GetUserinfo(clientNum, userinfo, sizeof(userinfo));
-            handicap = atof(Info_ValueForKey(userinfo, "handicap"));
-            if (handicap <= 0.0f || handicap > 100.0f) {
-                handicap = 100.0f;
-            }
-            other->client->pers.maxHealth = handicap;
-            other->client->ps.stats[STAT_ARMOR] = 0;
-            break;
-
-        case PW_DOUBLER:
-            clientNum = other->client->ps.clientNum;
-            trap_GetUserinfo(clientNum, userinfo, sizeof(userinfo));
-            handicap = atof(Info_ValueForKey(userinfo, "handicap"));
-            if (handicap <= 0.0f || handicap > 100.0f) {
-                handicap = 100.0f;
-            }
-            other->client->pers.maxHealth = handicap;
-            break;
-        case PW_AMMOREGEN:
-            clientNum = other->client->ps.clientNum;
-            trap_GetUserinfo(clientNum, userinfo, sizeof(userinfo));
-            handicap = atof(Info_ValueForKey(userinfo, "handicap"));
-            if (handicap <= 0.0f || handicap > 100.0f) {
-                handicap = 100.0f;
-            }
-            other->client->pers.maxHealth = handicap;
-            memset(other->client->ammoTimes, 0, sizeof(other->client->ammoTimes));
-            break;
-        default:
-            clientNum = other->client->ps.clientNum;
-            trap_GetUserinfo(clientNum, userinfo, sizeof(userinfo));
-            handicap = atof(Info_ValueForKey(userinfo, "handicap"));
-            if (handicap <= 0.0f || handicap > 100.0f) {
-                handicap = 100.0f;
-            }
-            other->client->pers.maxHealth = handicap;
-            break;
-    }
+    other->client->ps.stats[STAT_RUNE] = rune;
+    other->client->ps.powerups[PW_INVULNERABILITY + rune] = INT_MAX;
+    level.runeSpawnSpot[rune] = 0;
 
     return -1;
 }
@@ -634,73 +582,278 @@ int Pickup_Armor(gentity_t* ent, gentity_t* other) {
 
 /*
 ===============
-[QL] Quad Hog - touch handler, respawn, and think
+QuadHog_Touch
+
+[QL] 0x1004d290. Whoever takes the quad of the Quad Hog is announced to everybody.
 ===============
 */
-void G_QG_Touch_Item(gentity_t *ent, gentity_t *other, trace_t *trace) {
-    if (!other->client)
+static void QuadHog_Touch(gentity_t* ent, gentity_t* other, trace_t* trace) {
+    if (!other->client) {
         return;
-    trap_SendServerCommand(-1,
-        va("cp \"%s is the ^5Quad Hog!\"", other->client->pers.netname));
+    }
+    trap_SendServerCommand(-1, va("cp \"%s is the ^5Quad Hog!\"", other->client->pers.netname));
     Touch_Item(ent, other, trace);
 }
 
-gentity_t *G_QG_RespawnQuad(vec3_t origin) {
-    gentity_t *ent;
-    gitem_t *quadItem;
+/*
+===============
+QuadHog_Launch
 
-    quadItem = BG_FindItemForPowerup(PW_QUAD);
-    if (!quadItem)
-        return NULL;
+[QL] 0x1004d2d0. The quad of the Quad Hog, thrown like a dropped item: it announces whoever
+takes it and goes away after g_quadHogIdle seconds on the ground.
+===============
+*/
+static gentity_t* QuadHog_Launch(gitem_t* item, vec3_t origin, vec3_t velocity) {
+    gentity_t* ent;
 
     ent = G_Spawn();
     ent->s.eType = ET_ITEM;
-    ent->s.modelindex = quadItem - bg_itemlist;
     ent->s.modelindex2 = 1;
-    ent->classname = quadItem->classname;
-    ent->item = quadItem;
-    VectorSet(ent->r.mins, -15, -15, -15);
-    VectorSet(ent->r.maxs, 15, 15, 15);
+    ent->s.modelindex = item - bg_itemlist;
+    ent->classname = item->classname;
+    ent->item = item;
+    VectorSet(ent->r.mins, -ITEM_RADIUS, -ITEM_RADIUS, -ITEM_RADIUS);
+    VectorSet(ent->r.maxs, ITEM_RADIUS, ITEM_RADIUS, ITEM_RADIUS);
     ent->r.contents = CONTENTS_TRIGGER;
-    ent->touch = G_QG_Touch_Item;
-    VectorCopy(origin, ent->s.pos.trBase);
-    VectorCopy(origin, ent->r.currentOrigin);
-    ent->s.pos.trType = TR_STATIONARY;
-    ent->nextthink = level.time + g_quadHogTime.integer * 1000;
-    ent->think = G_FreeEntity;
-    trap_LinkEntity(ent);
+    ent->touch = QuadHog_Touch;
 
+    G_SetOrigin(ent, origin);
+    ent->s.pos.trType = TR_GRAVITY;
+    ent->s.pos.trTime = level.time;
+    VectorCopy(velocity, ent->s.pos.trDelta);
+    ent->s.eFlags |= EF_BOUNCE_HALF;
+    ent->flags = FL_DROPPED_ITEM;
+
+    ent->think = G_FreeEntity;
+    ent->nextthink = level.time + g_quadHogIdle.integer * 1000;
+
+    trap_LinkEntity(ent);
     return ent;
 }
 
-void G_QG_Think(void) {
-    gentity_t *spot;
-    int count, pick;
+/*
+===============
+QuadHog_Spawn
 
-    if (!g_quadHog.integer)
-        return;
-    if (level.intermissionQueued || level.intermissionTime)
-        return;
+[QL] 0x1004d420. The quad comes out at one of the first sixteen deathmatch spawns, with the
+powerup respawn sound for everybody. Retail looks for a spawn forever on a map with none;
+here it gives up.
+===============
+*/
+void QuadHog_Spawn(void) {
+    gentity_t* spot;
+    gentity_t* te;
+    int n;
 
-    // Pick random spawn point
-    count = 0;
-    spot = NULL;
-    while ((spot = G_Find(spot, FOFS(classname), "info_player_deathmatch")) != NULL) {
-        count++;
+    if (level.intermissionQueued || level.intermissionTime) {
+        return;
     }
-    if (count < 1)
-        return;
 
-    pick = rand() % count;
     spot = NULL;
-    while (pick-- >= 0) {
+    for (n = (int)((rand() & 0x7fff) / 32767.0 * 16.0); n > 0; n--) {
         spot = G_Find(spot, FOFS(classname), "info_player_deathmatch");
     }
-    if (!spot)
-        return;
+    if (!spot) {
+        spot = G_Find(NULL, FOFS(classname), "info_player_deathmatch");
+        if (!spot) {
+            return;
+        }
+    }
 
-    G_QG_RespawnQuad(spot->r.currentOrigin);
+    QuadHog_Launch(BG_FindItemForPowerup(PW_QUAD), spot->s.origin, vec3_origin);
+    te = G_TempEntity(spot->s.origin, EV_GLOBAL_SOUND);
+    te->s.eventParm = G_SoundIndex("sound/items/poweruprespawn.wav");
+    te->r.svFlags |= SVF_BROADCAST;
     trap_SendServerCommand(-1, "cp \" ^5Quad ^7respawned!\"");
+}
+
+/*
+===============
+QuadHog_Check
+
+[QL] 0x1004d500. Each frame of an FFA with g_quadHog: when nobody holds the quad and none
+lies in the map, a new one comes out.
+===============
+*/
+void QuadHog_Check(void) {
+    gentity_t* ent;
+    int i;
+
+    for (i = 0; i < level.maxclients; i++) {
+        if (g_entities[i].client && g_entities[i].client->ps.powerups[PW_QUAD]) {
+            return;
+        }
+    }
+    ent = NULL;
+    while ((ent = G_Find(ent, FOFS(classname), "item_quad")) != NULL) {
+        if (ent->r.linked) {
+            return;
+        }
+    }
+    QuadHog_Spawn();
+}
+
+/*
+===============
+G_CountSpawnSpots
+
+[QL] 0x10055000. The deathmatch, red and blue spawn points of the map, 25 at most of each,
+which is what the runes are placed with.
+===============
+*/
+void G_CountSpawnSpots(void) {
+    gentity_t* spot;
+
+    level.numSpawnSpotsFFA = 0;
+    level.numSpawnSpotsRed = 0;
+    level.numSpawnSpotsBlue = 0;
+
+    spot = NULL;
+    while ((spot = G_Find(spot, FOFS(classname), "info_player_deathmatch")) != NULL) {
+        if (level.numSpawnSpotsFFA < 25) {
+            level.numSpawnSpotsFFA++;
+        }
+    }
+    spot = NULL;
+    while ((spot = G_Find(spot, FOFS(classname), "team_CTF_redspawn")) != NULL) {
+        if (level.numSpawnSpotsRed < 25) {
+            level.numSpawnSpotsRed++;
+        }
+    }
+    spot = NULL;
+    while ((spot = G_Find(spot, FOFS(classname), "team_CTF_bluespawn")) != NULL) {
+        if (level.numSpawnSpotsBlue < 25) {
+            level.numSpawnSpotsBlue++;
+        }
+    }
+}
+
+/*
+===============
+G_SpawnRune
+
+[QL] 0x1004d650. A rune falls in at a spawn point no other rune stands on: a red or a blue one
+when that team has five or more, a deathmatch one otherwise. The spot is kept until somebody
+takes it. Retail looks for a spot forever when none is left; here the rune stays out.
+===============
+*/
+static void G_SpawnRune(int rune, int team) {
+    const char* classname;
+    gentity_t* ent;
+    gentity_t* spot;
+    gitem_t* item;
+    int spots[16];
+    int total, count, i, j;
+
+    ent = G_Spawn();
+
+    if (team == TEAM_RED && level.numSpawnSpotsRed >= 5) {
+        classname = "team_CTF_redspawn";
+        total = level.numSpawnSpotsRed;
+    } else if (team == TEAM_BLUE && level.numSpawnSpotsBlue >= 5) {
+        classname = "team_CTF_bluespawn";
+        total = level.numSpawnSpotsBlue;
+    } else {
+        classname = "info_player_deathmatch";
+        total = (level.numSpawnSpotsFFA > 4) ? level.numSpawnSpotsFFA : 0;
+    }
+
+    count = 0;
+    spot = NULL;
+    for (i = 0; i < total && count < 16; i++) {
+        spot = G_Find(spot, FOFS(classname), classname);
+        if (!spot) {
+            break;
+        }
+        for (j = 1; j < 5; j++) {
+            if (level.runeSpawnSpot[j] == spot->s.number) {
+                break;
+            }
+        }
+        if (j == 5) {
+            spots[count++] = spot->s.number;
+        }
+    }
+    if (!count) {
+        G_FreeEntity(ent);
+        return;
+    }
+
+    level.runeSpawnSpot[rune] = spots[rand() % count];
+    spot = &g_entities[level.runeSpawnSpot[rune]];
+
+    item = BG_FindItemForPowerup((powerup_t)(PW_INVULNERABILITY + rune));
+    ent->s.eType = ET_ITEM;
+    ent->s.modelindex2 = 1;
+    ent->s.modelindex = item - bg_itemlist;
+    ent->item = item;
+    ent->classname = item->classname;
+    VectorSet(ent->r.mins, -ITEM_RADIUS, -ITEM_RADIUS, -ITEM_RADIUS);
+    VectorSet(ent->r.maxs, ITEM_RADIUS, ITEM_RADIUS, ITEM_RADIUS);
+    ent->r.contents = CONTENTS_TRIGGER;
+    ent->touch = Touch_Item;
+
+    G_SetOrigin(ent, spot->s.origin);
+    ent->s.pos.trType = TR_GRAVITY;
+    ent->s.pos.trTime = level.time;
+    ent->s.eFlags |= EF_BOUNCE_HALF;
+
+    trap_LinkEntity(ent);
+}
+
+/*
+===============
+G_SpawnRunes
+
+[QL] 0x1004d950. With g_runes, outside race, the four runes come out when the level starts.
+A map with five red and five blue spawns alternates them between the two sides.
+===============
+*/
+void G_SpawnRunes(void) {
+    qboolean alternate = qfalse;
+    int team = TEAM_FREE;
+    int rune;
+
+    if (!g_runes.integer || g_gametype.integer == GT_RACE || level.intermissionQueued ||
+        level.intermissionTime) {
+        return;
+    }
+
+    if (level.numSpawnSpotsRed < 5) {
+        if (level.numSpawnSpotsBlue < 5 && level.numSpawnSpotsFFA < 5) {
+            G_Printf("WARNING: not enough available spawns for rune spawning\n");
+            return;
+        }
+    } else if (level.numSpawnSpotsBlue > 4) {
+        alternate = qtrue;
+        team = (rand() & 1) ? TEAM_BLUE : TEAM_RED;
+    }
+
+    for (rune = 1; rune < 5; rune++) {
+        if (alternate) {
+            team = (team == TEAM_RED) ? TEAM_BLUE : TEAM_RED;
+        }
+        G_SpawnRune(rune, team);
+    }
+}
+
+/*
+===============
+G_RuneRespawn
+
+[QL] 0x1004da10. A rune left on the ground goes back to a spawn point, a team's one when the
+map has five of each.
+===============
+*/
+static void G_RuneRespawn(gentity_t* ent) {
+    int rune = ent->item->giTag;
+    int team = TEAM_FREE;
+
+    if (level.numSpawnSpotsRed >= 5 && level.numSpawnSpotsBlue >= 5) {
+        team = (rand() & 1) ? TEAM_BLUE : TEAM_RED;
+    }
+    G_FreeEntity(ent);
+    G_SpawnRune(rune, team);
 }
 
 /*
@@ -1184,22 +1337,19 @@ Spawns an item and tosses it forward
 */
 gentity_t* LaunchItem(gitem_t* item, vec3_t origin, vec3_t velocity) {
     gentity_t* dropped;
+    qboolean flag = item->giType == IT_TEAM && item->giTag >= PW_REDFLAG && item->giTag <= PW_NEUTRALFLAG;
 
     dropped = G_Spawn();
 
     dropped->s.eType = ET_ITEM;
     dropped->s.modelindex = item - bg_itemlist;  // store item number in modelindex
     dropped->s.modelindex2 = 1;                  // This is non-zero is it's a dropped item
-    // [QL] 0x10044e28: when it was dropped and by whom, which is what stops the dropper from
-    // walking back into it (BG_CanItemBeGrabbed). Both travel in the entity state. Nobody
-    // is MAX_CLIENTS, which no player can be
-    dropped->s.time = level.time;
-    dropped->s.clientNum = MAX_CLIENTS;
 
     dropped->classname = item->classname;
     dropped->item = item;
+    // [QL] 0x1004f5bd: a flag stands 35 high
     VectorSet(dropped->r.mins, -ITEM_RADIUS, -ITEM_RADIUS, -ITEM_RADIUS);
-    VectorSet(dropped->r.maxs, ITEM_RADIUS, ITEM_RADIUS, ITEM_RADIUS);
+    VectorSet(dropped->r.maxs, ITEM_RADIUS, ITEM_RADIUS, flag ? 35 : ITEM_RADIUS);
     dropped->r.contents = CONTENTS_TRIGGER;
 
     dropped->touch = Touch_Item;
@@ -1210,16 +1360,28 @@ gentity_t* LaunchItem(gitem_t* item, vec3_t origin, vec3_t velocity) {
     VectorCopy(velocity, dropped->s.pos.trDelta);
 
     dropped->s.eFlags |= EF_BOUNCE_HALF;
-    if ((g_gametype.integer == GT_CTF || g_gametype.integer == GT_1FCTF) && item->giType == IT_TEAM) {  // Special case for CTF flags
+    dropped->flags = FL_DROPPED_ITEM;
+
+    // [QL] 0x1004f63f: a flag waits to go home, a rune goes back to a spawn after 30 seconds, and
+    // the rest are gone in 30, or in 10 when the health bleeds out of the wounded
+    if ((g_gametype.integer == GT_CTF || g_gametype.integer == GT_1FCTF) && item->giType == IT_TEAM) {
         dropped->think = Team_DroppedFlagThink;
         dropped->nextthink = level.time + 30000;
-        Team_CheckDroppedItem(dropped);
-    } else {  // auto-remove after 30 seconds
-        dropped->think = G_FreeEntity;
+        if (flag) {
+            Team_CheckDroppedItem(dropped);
+        }
+    } else if (g_gametype.integer == GT_AD && item->giType == IT_TEAM) {
+        dropped->think = Team_DroppedFlagThink;
+        if (flag) {
+            Team_CheckDroppedItem(dropped);
+        }
+    } else if (item->giType == IT_PERSISTANT_POWERUP) {
+        dropped->think = G_RuneRespawn;
         dropped->nextthink = level.time + 30000;
+    } else {
+        dropped->think = G_FreeEntity;
+        dropped->nextthink = level.time + (g_dropDamagedHealth.integer ? 10000 : 30000);
     }
-
-    dropped->flags = FL_DROPPED_ITEM;
 
     trap_LinkEntity(dropped);
 
@@ -1231,10 +1393,11 @@ gentity_t* LaunchItem(gitem_t* item, vec3_t origin, vec3_t velocity) {
 Drop_Item
 
 Spawns an item and tosses it forward
+
+[QL] 0x1004f740: the quad of an FFA with g_quadHog goes out as the Quad Hog's.
 ================
 */
 gentity_t* Drop_Item(gentity_t* ent, gitem_t* item, float angle) {
-    gentity_t* dropped;
     vec3_t velocity;
     vec3_t angles;
 
@@ -1246,12 +1409,11 @@ gentity_t* Drop_Item(gentity_t* ent, gitem_t* item, float angle) {
     VectorScale(velocity, 150, velocity);
     velocity[2] += 200 + crandom() * 50;
 
-    dropped = LaunchItem(item, ent->s.pos.trBase, velocity);
-    if (dropped && ent->client) {
-        dropped->s.clientNum = ent->s.clientNum;
+    if (g_gametype.integer == GT_FFA && g_quadHog.integer && item->giType == IT_POWERUP &&
+        item->giTag == PW_QUAD) {
+        return QuadHog_Launch(item, ent->s.pos.trBase, velocity);
     }
-
-    return dropped;
+    return LaunchItem(item, ent->s.pos.trBase, velocity);
 }
 
 /*
@@ -1361,11 +1523,23 @@ ClearRegisteredItems
 void ClearRegisteredItems(void) {
     memset(itemRegistered, 0, sizeof(itemRegistered));
 
-    // players always start with the base weapon
-    RegisterItem(BG_FindItemForWeapon(WP_MACHINEGUN));
-    RegisterItem(BG_FindItemForWeapon(WP_GAUNTLET));
+    // [QL] 0x1004ffd0: the skulls of harvester, the quad of the Quad Hog, the runes (also on
+    // a com_build server) and the healths the wounded bleed; ClientSpawn registers the weapons
     if (g_gametype.integer == GT_HARVESTER) {
         Harvester_RegisterItems();
+    }
+    if (g_gametype.integer == GT_FFA && g_quadHog.integer) {
+        RegisterItem(BG_FindItemForPowerup(PW_QUAD));
+    }
+    if (g_runes.integer || trap_Cvar_VariableValue("com_build") != 0) {
+        RegisterItem(BG_FindItemForPowerup(PW_AMMOREGEN));
+        RegisterItem(BG_FindItemForPowerup(PW_DOUBLER));
+        RegisterItem(BG_FindItemForPowerup(PW_GUARD));
+        RegisterItem(BG_FindItemForPowerup(PW_SCOUT));
+    }
+    if (g_dropDamagedHealth.integer) {
+        RegisterItem(BG_FindItem("5 Health"));
+        RegisterItem(BG_FindItem("25 Health"));
     }
 }
 

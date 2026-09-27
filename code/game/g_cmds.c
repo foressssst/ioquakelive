@@ -3617,13 +3617,20 @@ static void Cmd_DropPowerup_f(gentity_t* ent) {
 =================
 Cmd_DropRune_f
 
-[QL] Drop a rune (persistant powerup). Controlled by g_runes cvar.
-Not available in Duel. Targets item type IT_HOLDABLE (rune category).
-Binary: qagamex86.dll 0x100450f0
+[QL] 0x10044f10. The rune is set down 64 units ahead, standing, if there is no wall in the way.
+Somebody else has ten seconds to take it; after that it goes back to a spawn point.
 =================
 */
 static void Cmd_DropRune_f(gentity_t* ent) {
-    // [QL] 0x10044f10
+    static vec3_t mins = { -ITEM_RADIUS, -ITEM_RADIUS, -ITEM_RADIUS };
+    static vec3_t maxs = { ITEM_RADIUS, ITEM_RADIUS, ITEM_RADIUS };
+    gclient_t* client = ent->client;
+    vec3_t angles, forward, end;
+    gentity_t* drop;
+    gitem_t* item;
+    trace_t tr;
+    int i;
+
     if (!g_runes.integer) {
         trap_SendServerCommand(ent - g_entities,
             "print \"Runes are not enabled on this server.\n\"");
@@ -3642,25 +3649,38 @@ static void Cmd_DropRune_f(gentity_t* ent) {
         return;
     }
 
-    if (ent->client->sess.sessionTeam == TEAM_SPECTATOR) {
+    if (!client || client->ps.pm_type == PM_SPECTATOR) {
         return;
     }
 
-    if (!ent->client->persistantPowerup) {
-        trap_SendServerCommand(ent - g_entities, "print \"You have no rune to drop.\n\"");
+    VectorSet(angles, 0, client->ps.viewangles[YAW], 0);
+    AngleVectors(angles, forward, NULL, NULL);
+    VectorMA(client->ps.origin, 64, forward, end);
+    trap_Trace(&tr, client->ps.origin, mins, maxs, end, ENTITYNUM_NONE, CONTENTS_SOLID);
+    if (tr.fraction != 1.0f) {
         return;
     }
 
-    // Drop the persistant powerup
-    Drop_Item(ent, ent->client->persistantPowerup->item, 0);
-    ent->client->persistantPowerup = NULL;
-
-    // Clear rune-related powerup stats
-    ent->client->ps.stats[STAT_PERSISTANT_POWERUP] = 0;
-    ent->client->ps.powerups[PW_SCOUT] = 0;
-    ent->client->ps.powerups[PW_GUARD] = 0;
-    ent->client->ps.powerups[PW_DOUBLER] = 0;
-    ent->client->ps.powerups[PW_AMMOREGEN] = 0;
+    for (i = 1; i < PW_NUM_POWERUPS; i++) {
+        if (client->ps.powerups[i] <= level.time || i == PW_FLIGHT || i == PW_FREEZE) {
+            continue;
+        }
+        item = BG_FindItemForPowerup((powerup_t)i);
+        if (!item || item->giType != IT_PERSISTANT_POWERUP) {
+            continue;
+        }
+        drop = LaunchItem(item, tr.endpos, vec3_origin);
+        drop->count = (client->ps.powerups[i] - level.time) / 1000;
+        drop->s.clientNum = ent->s.clientNum;
+        drop->s.time = level.time;
+        drop->nextthink = level.time + 10000;
+        client->ps.powerups[i] = 0;
+        client->persistantPowerup = NULL;
+        client->ps.stats[STAT_RUNE] = 0;
+        if (drop->count < 1) {
+            drop->count = 1;
+        }
+    }
 }
 
 /*

@@ -138,69 +138,74 @@ Toss the weapon and powerups for the killed player
 =================
 */
 void TossClientItems(gentity_t* self) {
+    gclient_t* client = self->client;
     gitem_t* item;
-    int weapon;
-    float angle;
-    int i;
     gentity_t* drop;
+    qboolean flag;
+    float angle;
+    int weapon;
+    int i;
 
-    // [QL] qagamex86.dll 0x10046760: the round based modes and the ones that hand out the weapons keep
-    // them, and so does instagib
-    if (!g_instaGib.integer &&
-        g_gametype.integer != GT_RACE && g_gametype.integer != GT_CA &&
-        g_gametype.integer != GT_AD && g_gametype.integer != GT_RR) {
-        // drop the weapon if not a gauntlet or machinegun
-        weapon = self->s.weapon;
-
-        // make a special check to see if they are changing to a new
-        // weapon that isn't the mg or gauntlet.  Without this, a client
-        // can pick up a weapon, be killed, and not drop the weapon because
-        // their weapon change hasn't completed yet and they are still holding the MG.
-        if (weapon == WP_MACHINEGUN || weapon == WP_GRAPPLING_HOOK) {
-            if (self->client->ps.weaponstate == WEAPON_DROPPING) {
-                weapon = self->client->pers.cmd.weapon;
-            }
-            if (!(self->client->ps.stats[STAT_WEAPONS] & (1 << weapon))) {
-                weapon = WP_NONE;
-            }
+    // [QL] 0x10046760: first the powerups, in every mode. With g_dropPowerups off only the flags
+    // go, and invisibility (retail tests the item's tag against 7). Flight and the freeze stay.
+    angle = 45;
+    for (i = 1; i < PW_NUM_POWERUPS; i++) {
+        if (client->ps.powerups[i] <= level.time || i == PW_FLIGHT || i == PW_FREEZE) {
+            continue;
+        }
+        item = BG_FindItemForPowerup((powerup_t)i);
+        if (!item) {
+            continue;
+        }
+        flag = item->giType == IT_TEAM && item->giTag >= PW_REDFLAG && item->giTag <= PW_NEUTRALFLAG;
+        if (!g_dropPowerups.integer && !flag && item->giTag != PW_INVIS) {
+            continue;
         }
 
-        if (weapon > WP_MACHINEGUN && weapon < WP_NUM_WEAPONS && weapon != WP_GRAPPLING_HOOK &&
-            self->client->ps.ammo[weapon]) {
-            // find the item type for this weapon
-            item = BG_FindItemForWeapon(weapon);
+        drop = Drop_Item(self, item, angle);
+        // a flag bounces with g_flagBounce and remembers who dropped it (g_droppedFlagBonus)
+        if (flag) {
+            drop->physicsObject = qtrue;
+            drop->physicsBounce = g_flagBounce.value;
+            drop->activator = self;
+        }
+        if (client->persistantPowerup) {
+            client->ps.stats[STAT_RUNE] = 0;
+            client->persistantPowerup = NULL;
+        }
+        // decide how many seconds it has left
+        drop->count = (client->ps.powerups[i] - level.time) / 1000;
+        if (drop->count < 1) {
+            drop->count = 1;
+        }
+        angle += 45;
+    }
 
-            // spawn the item
-            Drop_Item(self, item, 0);
+    // then the weapon, if it has ammo left, but not in instagib nor in the modes that hand the
+    // weapons out
+    if (g_instaGib.integer || g_gametype.integer == GT_RACE || g_gametype.integer == GT_CA ||
+        g_gametype.integer == GT_AD || g_gametype.integer == GT_RR) {
+        return;
+    }
+
+    weapon = self->s.weapon;
+
+    // make a special check to see if they are changing to a new
+    // weapon that isn't the mg or gauntlet.  Without this, a client
+    // can pick up a weapon, be killed, and not drop the weapon because
+    // their weapon change hasn't completed yet and they are still holding the MG.
+    if (weapon == WP_MACHINEGUN || weapon == WP_GRAPPLING_HOOK) {
+        if (client->ps.weaponstate == WEAPON_DROPPING) {
+            weapon = client->pers.cmd.weapon;
+        }
+        if (!(client->ps.stats[STAT_WEAPONS] & (1 << weapon))) {
+            weapon = WP_NONE;
         }
     }
 
-    // drop all the powerups if not in teamplay
-    if (g_gametype.integer != GT_TEAM) {
-        angle = 45;
-        for (i = 1; i < PW_NUM_POWERUPS; i++) {
-            if (self->client->ps.powerups[i] > level.time) {
-                item = BG_FindItemForPowerup(i);
-                if (!item) {
-                    continue;
-                }
-                drop = Drop_Item(self, item, angle);
-                // [QL] 0x1004680d: a dropped flag bounces with g_flagBounce and remembers who
-                // dropped it (Team_TouchEnemyFlag's g_droppedFlagBonus). The rest of retail's
-                // TossClientItems (0x10046760) is not ported yet.
-                if (item->giType == IT_TEAM && item->giTag >= PW_REDFLAG && item->giTag <= PW_NEUTRALFLAG) {
-                    drop->physicsObject = qtrue;
-                    drop->physicsBounce = g_flagBounce.value;
-                    drop->activator = self;
-                }
-                // decide how many seconds it has left
-                drop->count = (self->client->ps.powerups[i] - level.time) / 1000;
-                if (drop->count < 1) {
-                    drop->count = 1;
-                }
-                angle += 45;
-            }
-        }
+    if (weapon > WP_MACHINEGUN && weapon <= WP_HMG && weapon != WP_GRAPPLING_HOOK &&
+        client->ps.ammo[weapon] > 0) {
+        Drop_Item(self, BG_FindItemForWeapon(weapon), 0);
     }
 }
 
@@ -252,33 +257,6 @@ void TossClientCubes(gentity_t* self) {
     drop->nextthink = level.time + g_cubeTimeout.integer * 1000;
     drop->think = G_FreeEntity;
     drop->spawnflags = self->client->sess.sessionTeam;
-}
-
-/*
-=================
-TossClientPersistantPowerups
-=================
-*/
-void TossClientPersistantPowerups(gentity_t* ent) {
-    gentity_t* powerup;
-
-    if (!ent->client) {
-        return;
-    }
-
-    if (!ent->client->persistantPowerup) {
-        return;
-    }
-
-    powerup = ent->client->persistantPowerup;
-
-    powerup->r.svFlags &= ~SVF_NOCLIENT;
-    powerup->s.eFlags &= ~EF_NODRAW;
-    powerup->r.contents = CONTENTS_TRIGGER;
-    trap_LinkEntity(powerup);
-
-    ent->client->ps.stats[STAT_PERSISTANT_POWERUP] = 0;
-    ent->client->persistantPowerup = NULL;
 }
 
 /*
@@ -897,7 +875,6 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
     } else {
         TossClientItems(self);
     }
-    TossClientPersistantPowerups(self);
 
     // 19. harvester cubes
     if (g_gametype.integer == GT_HARVESTER && meansOfDeath != MOD_SWITCH_TEAMS) {
