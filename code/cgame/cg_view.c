@@ -217,8 +217,71 @@ static void CG_CalcVrect(void) {
 
 /*
 ===============
+CG_ThirdPersonOrbit
+
+[QL] 0x1004c8f0, cg_thirdPerson 2: turned by cg_thirdPersonAngle, held at cg_thirdPersonPitch
+unless that is -1, and moved back cg_thirdPersonRange, with nothing traced
+===============
+*/
+static void CG_ThirdPersonOrbit(void) {
+    vec3_t forward;
+
+    cg.refdef.vieworg[2] += cg.predictedPlayerState.viewheight;
+    if (cg_thirdPersonAngle.value != 0) {
+        cg.refdefViewAngles[YAW] += cg_thirdPersonAngle.value;
+    }
+    if (cg_thirdPersonPitch.value != -1) {
+        cg.refdefViewAngles[PITCH] = cg_thirdPersonPitch.value;
+    }
+    AngleVectors(cg.refdefViewAngles, forward, NULL, NULL);
+    VectorMA(cg.refdef.vieworg, -cg_thirdPersonRange.value, forward, cg.refdef.vieworg);
+}
+
+/*
+===============
+CG_ThirdPersonCameraRadius
+
+[QL] 0x1004c6f0, with the aspect ratio of 0x1004c5f0: how far the smart camera keeps from a
+wall, the distance from the eye to a corner of the near plane. cg_fov is taken over 640x480 as a
+vertical angle, stretched by r_aspectRatio (16:9, 16:10, 5:4), and r_znear is the plane
+===============
+*/
+static float CG_ThirdPersonCameraRadius(void) {
+    char buf[MAX_CVAR_VALUE_STRING];
+    float znear, fovY, x, w, h;
+    int aspect;
+
+    trap_Cvar_VariableStringBuffer("r_znear", buf, sizeof(buf));
+    znear = atof(buf);
+    x = 640 / tan(cg_fov.value / 360 * M_PI);
+    fovY = atan2(480, x) * 360 / M_PI;
+
+    trap_Cvar_VariableStringBuffer("r_aspectRatio", buf, sizeof(buf));
+    aspect = atoi(buf);
+    if (aspect) {
+        if (aspect == 1) {
+            w = 16;
+            h = 9;
+        } else if (aspect == 2) {
+            w = 16;
+            h = 10;
+        } else {
+            w = 5;
+            h = 4;
+        }
+        x = h / tan(fovY / 360 * M_PI);
+        fovY = atan2(w, x) * 360 / M_PI;
+    }
+
+    x = znear / tan((90 - fovY * 0.5f) * M_PI / 180);
+    return sqrt(znear * znear + x * x);
+}
+
+/*
+===============
 CG_OffsetThirdPersonView
 
+[QL] 0x1004ca50
 ===============
 */
 #define FOCUS_DISTANCE 512
@@ -226,31 +289,49 @@ static void CG_StepOffset(void);
 
 static void CG_OffsetThirdPersonView(void) {
     vec3_t forward, right, up;
-    vec3_t view;
+    vec3_t view, start;
     vec3_t focusAngles;
     trace_t trace;
-    static vec3_t mins = {-4, -4, -4};
-    static vec3_t maxs = {4, 4, 4};
+    vec3_t mins = {-4, -4, -4};
+    vec3_t maxs = {4, 4, 4};
     vec3_t focusPoint;
     float focusDist;
     float forwardScale, sideScale;
+    int timeDelta;
+
+    if (cg_thirdPerson.integer == 2) {
+        CG_ThirdPersonOrbit();
+        return;
+    }
 
     // [QL] 0x1004cad3: the step is smoothed in third person too. Retail has CG_StepOffset
     // inlined in both views, and both write the same cg.refdef.vieworg[2] with the same
     // formula; Quake 3 has it in first person only.
     CG_StepOffset();
 
+    // [QL] a spectator's view is left as it is
+    if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR) {
+        return;
+    }
+
     cg.refdef.vieworg[2] += cg.predictedPlayerState.viewheight;
 
     VectorCopy(cg.refdefViewAngles, focusAngles);
 
-    // [QL] 0x1004ca50: dead, the view keeps the player's own angles, which the server turned to
-    // the killer when it died (player_die) -- Quake 3's STAT_DEAD_YAW is not what faces it here,
-    // and forcing it locked the view while the free camera after a death moved with the mouse:
-    // forward went backwards. Only the pitch is held down, and only when dead
-    if (cg.predictedPlayerState.stats[STAT_HEALTH] <= 0 && focusAngles[PITCH] > 45) {
+    // [QL] dead, the view keeps the player's own angles, which the server turned to the killer
+    // when it died (player_die) -- Quake 3's STAT_DEAD_YAW is not what faces it here, and forcing
+    // it locked the view while the free camera after a death moved with the mouse: forward went
+    // backwards. Only the pitch is held down, and only when dead
+    if (cg.snap->ps.stats[STAT_HEALTH] <= 0 && focusAngles[PITCH] > 45) {
         focusAngles[PITCH] = 45;  // don't go too far overhead
     }
+
+    // [QL] crouching is smoothed here too, as in first person
+    timeDelta = cg.time - cg.duckTime;
+    if (timeDelta < DUCK_TIME) {
+        cg.refdef.vieworg[2] -= cg.duckChange * (DUCK_TIME - timeDelta) / DUCK_TIME;
+    }
+
     AngleVectors(focusAngles, forward, NULL, NULL);
 
     VectorMA(cg.refdef.vieworg, FOCUS_DISTANCE, forward, focusPoint);
@@ -263,25 +344,53 @@ static void CG_OffsetThirdPersonView(void) {
 
     AngleVectors(cg.refdefViewAngles, forward, right, up);
 
-    forwardScale = cos(cg_thirdPersonAngle.value / 180 * M_PI);
-    sideScale = sin(cg_thirdPersonAngle.value / 180 * M_PI);
-    VectorMA(view, -cg_thirdPersonRange.value * forwardScale, forward, view);
-    VectorMA(view, -cg_thirdPersonRange.value * sideScale, right, view);
-
-    // trace a ray from the origin to the viewpoint to make sure the view isn't
-    // in a solid block.  Use an 8 by 8 block to prevent the view from near clipping anything
+    if (cg_thirdPerson.integer || cg_cameraSmartMode.integer || cg.snap->ps.stats[STAT_HEALTH] <= 0) {
+        forwardScale = cos(cg_thirdPersonAngle.value / 180 * M_PI);
+        sideScale = sin(cg_thirdPersonAngle.value / 180 * M_PI);
+        VectorMA(view, -cg_thirdPersonRange.value * forwardScale, forward, view);
+        VectorMA(view, -cg_thirdPersonRange.value * sideScale, right, view);
+    }
 
     if (!cg_cameraMode.integer) {
-        CG_Trace(&trace, cg.refdef.vieworg, mins, maxs, view, cg.predictedPlayerState.clientNum, MASK_SOLID);
-
-        if (trace.fraction != 1.0) {
-            VectorCopy(trace.endpos, view);
-            view[2] += (1.0 - trace.fraction) * 32;
-            // try another trace to this position, because a tunnel may have the ceiling
-            // close enough that this is poking out
-
+        if ((!cg_thirdPerson.integer || !cg_cameraThirdPersonSmartMode.integer) && !cg_cameraSmartMode.integer &&
+            cg.snap->ps.stats[STAT_HEALTH] > 0) {
+            // trace a ray from the origin to the viewpoint to make sure the view isn't
+            // in a solid block.  Use an 8 by 8 block to prevent the view from near clipping anything
             CG_Trace(&trace, cg.refdef.vieworg, mins, maxs, view, cg.predictedPlayerState.clientNum, MASK_SOLID);
-            VectorCopy(trace.endpos, view);
+
+            if (trace.fraction != 1.0) {
+                VectorCopy(trace.endpos, view);
+                view[2] += (1.0 - trace.fraction) * 32;
+                // try another trace to this position, because a tunnel may have the ceiling
+                // close enough that this is poking out
+
+                CG_Trace(&trace, cg.refdef.vieworg, mins, maxs, view, cg.predictedPlayerState.clientNum, MASK_SOLID);
+                VectorCopy(trace.endpos, view);
+            }
+        } else {
+            // [QL] the smart camera: from the point the camera looks at, back to the view with a
+            // box as wide as the near plane, and on a hit it stands r_znear off the wall along the
+            // line of sight
+            char buf[MAX_CVAR_VALUE_STRING];
+            float radius = CG_ThirdPersonCameraRadius();
+            float znear;
+
+            VectorSet(mins, -radius, -radius, -radius);
+            VectorSet(maxs, radius, radius, radius);
+            VectorMA(view, cg_thirdPersonRange.value, forward, start);
+
+            CG_Trace(&trace, start, mins, maxs, view, cg.predictedPlayerState.clientNum, MASK_SOLID);
+            if (trace.fraction != 1.0) {
+                trap_Cvar_VariableStringBuffer("r_znear", buf, sizeof(buf));
+                znear = atof(buf);
+                VectorMA(trace.endpos, znear, forward, view);
+                view[2] += (1.0 - trace.fraction) * 32;
+
+                CG_Trace(&trace, start, mins, maxs, view, cg.predictedPlayerState.clientNum, MASK_SOLID);
+                if (trace.fraction != 1.0) {
+                    VectorMA(trace.endpos, znear, forward, view);
+                }
+            }
         }
     }
 
