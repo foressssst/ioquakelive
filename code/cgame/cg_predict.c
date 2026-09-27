@@ -672,6 +672,7 @@ void CG_PredictPlayerState(void) {
         cg_pmove.tracemask &= ~CONTENTS_BODY;  // spectators can fly through bodies
     }
     cg_pmove.noFootsteps = (cgs.dmflags & DF_NO_FOOTSTEPS) > 0;
+    cg_pmove.retailBobCycle = !cgs.ioqlServer;  // [ioquakelive] see PM_Footsteps
 
     // [QL] set PMF_NO_AUTOHOP from client cvar for prediction
     if (cg_autoHop.integer == 0) {

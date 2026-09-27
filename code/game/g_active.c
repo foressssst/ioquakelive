@@ -1234,6 +1234,8 @@ void ClientThink_real(gentity_t* ent) {
     pm.pointcontents = trap_PointContents;
     pm.debugLevel = g_debugMove.integer;
     pm.noFootsteps = (g_dmflags.integer & DF_NO_FOOTSTEPS) > 0;
+    // [ioquakelive] a retail client predicts its steps retail's way (see PM_Footsteps)
+    pm.retailBobCycle = !client->pers.ioqlClient && !(ent->r.svFlags & SVF_BOT);
     pm.hookEnemy = (client->hook && client->hook->enemy && client->hook->enemy->client != NULL);
 
     // [QL] pmove_fixed/pmove_msec removed from pmove_t; pmoveFixed removed from clientPersistant_t

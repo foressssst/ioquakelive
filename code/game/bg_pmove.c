@@ -1891,8 +1891,15 @@ static void PM_Footsteps(void) {
     //
     // The cycle now advances at the real rate instead of the truncated one, so
     // running at 125 fps footsteps come about 7% closer together than in retail.
+    //
+    // [ioquakelive] Against retail (a retail server, or a retail client on ours) the cycle is
+    // retail's, truncation and all: the steps are an event the client predicts and the server
+    // sends, and counted two ways they cross the boundary on different commands, so the
+    // predicted one plays and then the server's too.
     old = pm->ps->bobCycle & 255;
-    {
+    if (pm->retailBobCycle) {
+        pm->ps->bobCycle = (int)(old + bobmove * pml.msec) & 255;  // [QL] 0x100314d0
+    } else {
         int carry = (pm->ps->bobCycle >> 8) & 255;              // the previous frame's remainder
         int units = (int)(bobmove * pml.msec * 256.0f) + carry;  // avance en 1/256 de unidad
         int cycle = (old + (units >> 8)) & 255;

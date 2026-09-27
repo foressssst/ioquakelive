@@ -1572,6 +1572,7 @@ typedef struct {
     int processedSnapshotNum;   // the number of snapshots cgame has requested
 
     qboolean localServer;  // detected on startup by checking sv_running
+    qboolean ioqlServer;   // [ioquakelive] the server is ours, not retail's: its com_gamename
 
     // parsed from serverinfo (order matches QL binary's CG_ParseServerinfo)
     gametype_t gametype;

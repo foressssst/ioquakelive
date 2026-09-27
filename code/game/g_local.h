@@ -278,6 +278,7 @@ typedef struct {
     qboolean localClient;              // 0x20 (0x270)
     qboolean initialSpawn;             // 0x24 (0x274)
     qboolean predictItemPickup;        // 0x28 (0x278)
+    qboolean ioqlClient;               // [ioquakelive] the client is ours: its userinfo has "ioql"
     char netname[40];                  // 0x2C (0x27C) - [QL] was 36, now 40
     char country[24];                  // 0x54 (0x2A4) - [QL] GeoIP country code
     int _pad_steamId;                  // 0x6C (0x2BC) - alignment padding for uint64_t

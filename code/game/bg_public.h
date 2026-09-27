@@ -314,6 +314,11 @@ typedef struct {
     int (*pointcontents)(const vec3_t point, int passEntityNum);
 
     qboolean hookEnemy;  // [QL]
+
+    // [ioquakelive] the other end runs retail's PM_Footsteps, which truncates the cycle: a retail
+    // server for the client's prediction, a retail client for the server. Both ends have to count
+    // the same way, or every step comes a command apart on each side and sounds twice
+    qboolean retailBobCycle;
 } pmove_t;
 
 // if a full pmove isn't done on the client, you can just update the angles

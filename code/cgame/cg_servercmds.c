@@ -636,6 +636,8 @@ void CG_ParseServerinfo(void) {
 
     // [QL] matches binary CG_ParseServerinfo field order
     cgs.gametype = atoi(Info_ValueForKey(info, "g_gametype"));
+    // [ioquakelive] only our engine puts com_gamename in the serverinfo; retail has no such cvar
+    cgs.ioqlServer = !Q_stricmp(Info_ValueForKey(info, "com_gamename"), "ioquakelive");
     trap_Cvar_Set("cg_gametype", va("%i", cgs.gametype));
     cgs.teamsize = atoi(Info_ValueForKey(info, "teamsize"));
     cgs.teamSizeMin = atoi(Info_ValueForKey(info, "g_teamSizeMin"));

@@ -4011,6 +4011,9 @@ void CL_Init(void) {
 
     Cvar_Get("password", "", CVAR_USERINFO);
     Cvar_Get("cg_predictItems", "1", CVAR_USERINFO | CVAR_ARCHIVE);
+    // [ioquakelive] who this client is, for an ioquakelive server: it counts the footstep cycle
+    // our way for us and retail's way for a retail client. A retail server ignores the key
+    Cvar_Get("ioql", PRODUCT_VERSION, CVAR_USERINFO | CVAR_ROM);
 
     // cgame might not be initialized before menu is used
     Cvar_Get("cg_viewsize", "100", CVAR_ARCHIVE);

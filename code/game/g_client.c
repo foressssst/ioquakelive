@@ -1057,6 +1057,9 @@ void ClientUserinfoChanged(int clientNum) {
         trap_DropClient(clientNum, "Invalid userinfo");
     }
 
+    // [ioquakelive] our client says so (cl_main.c registers "ioql"); a retail one has no such key
+    client->pers.ioqlClient = (qboolean)(Info_ValueForKey(userinfo, "ioql")[0] != '\0');
+
     // check the item prediction
     s = Info_ValueForKey(userinfo, "cg_predictItems");
     if (!atoi(s)) {
