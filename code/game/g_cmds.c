@@ -2157,20 +2157,23 @@ static void Cmd_Acc_f(gentity_t* ent) {
     char buf[MAX_TOKEN_CHARS];
     int i;
 
+    // [QL] 0x1003f4d0: somebody following a player gets that player's
     cl = ent->client;
-    if (cl->sess.sessionTeam == TEAM_SPECTATOR &&
-        cl->sess.spectatorState == SPECTATOR_FOLLOW) {
-        cl = &g_clients[cl->sess.spectatorClient];
+    if (!cl) {
+        return;
     }
-    if (!cl) return;
+    if (cl->ps.pm_type == PM_SPECTATOR && cl->sess.spectatorState == SPECTATOR_FOLLOW) {
+        cl = &level.clients[cl->sess.spectatorClient];
+    }
 
+    // each weapon's own accuracy, " 0" for one not fired or never on target
     result[0] = '\0';
     for (i = 0; i < WP_NUM_WEAPONS; i++) {
-        if (cl->accuracy_shots == 0 || cl->accuracy_hits == 0) {
-            Com_sprintf(buf, sizeof(buf), " ");
+        if (cl->expandedStats.shotsHit[i] == 0 || cl->expandedStats.shotsFired[i] == 0) {
+            Com_sprintf(buf, sizeof(buf), " 0");
         } else {
-            Com_sprintf(buf, sizeof(buf), "%d",
-                       (cl->accuracy_hits * 100) / cl->accuracy_shots);
+            Com_sprintf(buf, sizeof(buf), " %i",
+                        cl->expandedStats.shotsHit[i] * 100 / cl->expandedStats.shotsFired[i]);
         }
         if (strlen(result) + strlen(buf) < sizeof(result)) {
             Q_strcat(result, sizeof(result), buf);
@@ -2182,7 +2185,7 @@ static void Cmd_Acc_f(gentity_t* ent) {
 /*
 =================
 [QL] PStats command - sends per-weapon stats to client
-Binary: qagamex86.dll 0x1003f840 (identical structure to Cmd_Acc_f)
+Binary: qagamex86.dll 0x1003f660 (identical structure to Cmd_Acc_f)
 =================
 */
 static void Cmd_PStats_f(gentity_t* ent) {
@@ -2191,20 +2194,23 @@ static void Cmd_PStats_f(gentity_t* ent) {
     char buf[MAX_TOKEN_CHARS];
     int i;
 
+    // [QL] 0x1003f4d0: somebody following a player gets that player's
     cl = ent->client;
-    if (cl->sess.sessionTeam == TEAM_SPECTATOR &&
-        cl->sess.spectatorState == SPECTATOR_FOLLOW) {
-        cl = &g_clients[cl->sess.spectatorClient];
+    if (!cl) {
+        return;
     }
-    if (!cl) return;
+    if (cl->ps.pm_type == PM_SPECTATOR && cl->sess.spectatorState == SPECTATOR_FOLLOW) {
+        cl = &level.clients[cl->sess.spectatorClient];
+    }
 
+    // each weapon's own accuracy, " 0" for one not fired or never on target
     result[0] = '\0';
     for (i = 0; i < WP_NUM_WEAPONS; i++) {
-        if (cl->accuracy_shots == 0 || cl->accuracy_hits == 0) {
-            Com_sprintf(buf, sizeof(buf), " ");
+        if (cl->expandedStats.shotsHit[i] == 0 || cl->expandedStats.shotsFired[i] == 0) {
+            Com_sprintf(buf, sizeof(buf), " 0");
         } else {
-            Com_sprintf(buf, sizeof(buf), "%d",
-                       (cl->accuracy_hits * 100) / cl->accuracy_shots);
+            Com_sprintf(buf, sizeof(buf), " %i",
+                        cl->expandedStats.shotsHit[i] * 100 / cl->expandedStats.shotsFired[i]);
         }
         if (strlen(result) + strlen(buf) < sizeof(result)) {
             Q_strcat(result, sizeof(result), buf);
