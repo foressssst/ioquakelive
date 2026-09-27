@@ -1204,8 +1204,7 @@ void ClientUserinfoChanged(int clientNum) {
     // print scoreboards, display models, and play custom sounds
     // [QL] qagamex86.dll 0x817b8 / 0x81820: "rp" is readied up, which cgame's warmup messages
     // read; "p" the privileges, "so" a spectator who only watches and "pq" the place in the
-    // play queue, which the scoreboards show; "c" is the country. NOT PORTED: "st", the Steam
-    // id, which this build has no account system for.
+    // play queue, which the scoreboards show; "st" is the Steam ID and "c" the country.
     if (ent->r.svFlags & SVF_BOT) {
         s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\skill\\%s\\tt\\%d\\tl\\%d\\rp\\%d\\p\\%d\\so\\%i\\pq\\%i",
                client->pers.netname, client->sess.sessionTeam, model, headModel, c1, c2,
@@ -1213,11 +1212,11 @@ void ClientUserinfoChanged(int clientNum) {
                Info_ValueForKey(userinfo, "skill"), teamTask, teamLeader, client->pers.ready ? 1 : 0,
                client->sess.privileges, client->sess.specOnly, client->sess.playQueue);
     } else {
-        s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\tt\\%d\\tl\\%d\\rp\\%d\\p\\%d\\so\\%i\\pq\\%i\\c\\%s",
+        s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\tt\\%d\\tl\\%d\\rp\\%d\\p\\%d\\so\\%i\\pq\\%i\\st\\%llu\\c\\%s",
                client->pers.netname, client->sess.sessionTeam, model, headModel, c1, c2,
                client->pers.maxHealth, client->sess.wins, client->sess.losses, teamTask, teamLeader,
                client->pers.ready ? 1 : 0, client->sess.privileges, client->sess.specOnly,
-               client->sess.playQueue, client->pers.country);
+               client->sess.playQueue, (unsigned long long)client->pers.steamId, client->pers.country);
     }
 
     trap_SetConfigstring(CS_PLAYERS + clientNum, s);
