@@ -529,15 +529,21 @@ void MSG_ReadData(msg_t* msg, void* data, int len) {
 
 // a string hasher which gives the same hash value even if the
 // string is later modified via the legacy MSG read/write code
+// [QL] qzeroded.x64 0x422360: every byte counts as it is, as a signed char, whatever the
+// platform's char is. ioq3 also counted each byte over 127 as '.', and Quake Live sends those
+// bytes as they are (MSG_ReadString 0x430550 only turns '%' into '.'): a command with an accented
+// letter or an emoji keyed the usercmds differently on each side, and the server read them
+// garbled: the view went up to the sky and jump came out as use item. '%' still counts as the '.'
+// both ends end up with, as MSG_WriteString sends it
 int MSG_HashKey(const char* string, int maxlen) {
     int hash, i;
 
     hash = 0;
     for (i = 0; i < maxlen && string[i] != '\0'; i++) {
-        if (string[i] & 0x80 || string[i] == '%')
+        if (string[i] == '%')
             hash += '.' * (119 + i);
         else
-            hash += string[i] * (119 + i);
+            hash += (signed char)string[i] * (119 + i);
     }
     hash = (hash ^ (hash >> 10) ^ (hash >> 20));
     return hash;
