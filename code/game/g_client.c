@@ -1461,6 +1461,292 @@ void ClientBegin(int clientNum) {
 
 /*
 ===========
+G_StartingAmmo
+
+[QL] What g_startingAmmo_<weapon> gives of a weapon.
+============
+*/
+static int G_StartingAmmo(int weapon) {
+    return trap_Cvar_VariableIntegerValue(va("g_startingAmmo_%s", weaponShortName[weapon]));
+}
+
+/*
+===========
+G_GiveStartingWeapons
+
+[QL] 0x1003b2a0. Nothing for a player held to the gauntlet. Otherwise the loadout weapon, if it
+is one of the six and the map allows it, and then what g_startingWeapons says, each with its
+g_startingAmmo; the hand ends on the last one. With bit 0x4000 it is every weapon registered for
+the match instead, the gauntlet, machinegun and grapple only if their own bits are set too.
+============
+*/
+void G_GiveStartingWeapons(gentity_t* ent) {
+    gclient_t* client = ent->client;
+    gitem_t* item;
+    int w;
+
+    if (client->ps.pm_flags & PMF_LOADOUT_FORCED) {
+        return;
+    }
+
+    for (w = WP_GAUNTLET; w < WP_NUM_WEAPONS; w++) {
+        int ammo = G_StartingAmmo(w);
+
+        if (g_loadout.integer && BG_WeaponInLoadout(w) && client->sess.weaponPrimary == w &&
+            !(g_disableLoadout.integer & (1 << w))) {
+            client->ps.stats[STAT_WEAPONS] |= 1 << w;
+            client->ps.ammo[w] = ammo;
+            RegisterItem(BG_FindItemForWeapon((weapon_t)w));
+        }
+    }
+
+    if (g_startingWeapons.integer & 0x4000) {
+        for (w = WP_HMG; w >= WP_GAUNTLET; w--) {
+            int ammo;
+
+            item = BG_FindItemForWeapon((weapon_t)w);
+            ammo = G_StartingAmmo(w);
+            if ((w == WP_GAUNTLET && !(g_startingWeapons.integer & 1)) ||
+                (w == WP_MACHINEGUN && !(g_startingWeapons.integer & 2)) ||
+                (w == WP_GRAPPLING_HOOK && !(g_startingWeapons.integer & 0x200))) {
+                continue;
+            }
+            if (item && itemRegistered[item - bg_itemlist]) {
+                client->ps.stats[STAT_WEAPONS] |= 1 << w;
+                client->ps.ammo[w] = ammo;
+            }
+        }
+        return;
+    }
+
+    for (w = WP_GAUNTLET; w < WP_NUM_WEAPONS; w++) {
+        if (g_startingWeapons.integer & (1 << (w - 1))) {
+            client->ps.stats[STAT_WEAPONS] |= 1 << w;
+            client->ps.ammo[w] = G_StartingAmmo(w);
+            client->ps.weapon = w;
+            RegisterItem(BG_FindItemForWeapon((weapon_t)w));
+        }
+    }
+}
+
+/*
+===========
+G_SetInfiniteAmmo
+
+[QL] 0x1003b1f0. With g_infiniteAmmo or in instagib no weapon runs out.
+============
+*/
+void G_SetInfiniteAmmo(gentity_t* ent) {
+    int w;
+
+    if (g_infiniteAmmo.integer || g_instaGib.integer) {
+        for (w = WP_GAUNTLET; w < WP_NUM_WEAPONS; w++) {
+            ent->client->ps.ammo[w] = -1;
+        }
+    }
+}
+
+/*
+===========
+G_SetStartingHealth
+
+[QL] 0x1003b230. g_startingHealth and g_startingHealthBonus, at most 999; the maximum health when
+they come to nothing.
+============
+*/
+void G_SetStartingHealth(gentity_t* ent) {
+    int health = g_startingHealth.integer + g_startingHealthBonus.integer;
+
+    if (health < 1) {
+        health = ent->client->pers.maxHealth;
+    } else if (health > 999) {
+        health = 999;
+    }
+    ent->client->ps.stats[STAT_HEALTH] = health;
+    ent->s.health = health;
+    ent->health = health;
+}
+
+/*
+===========
+G_GrantItem
+
+[QL] 0x1003bb90. An item named in g_grantItemOnSpawn (by its pickup name) is put where the player
+stands and touched at once; whatever is left of it goes.
+============
+*/
+static void G_GrantItem(gentity_t* ent, const char* name) {
+    gentity_t* it;
+    gitem_t* item;
+
+    for (item = bg_itemlist + 1; item->classname; item++) {
+        if (item->pickup_name && name && !Q_stricmp(name, item->pickup_name)) {
+            break;
+        }
+    }
+    if (!item->classname) {
+        return;
+    }
+
+    it = G_Spawn();
+    VectorCopy(ent->r.currentOrigin, it->s.origin);
+    it->classname = item->classname;
+    G_SpawnItem(it, item, qtrue);
+    FinishSpawningItem(it);
+    Touch_Item(it, ent, NULL);
+    if (it->inuse) {
+        G_FreeEntity(it);
+    }
+}
+
+/*
+===========
+RR_SpawnLoadout
+
+[QL] 0x10064380. An infected player gets the gauntlet alone and g_startingHealth plus
+g_rrInfectedZombieHealthBonus of health; anyone else picks a weapon as usual.
+============
+*/
+static void RR_SpawnLoadout(gentity_t* ent) {
+    gclient_t* client = ent->client;
+
+    if (client->ps.pm_flags & PMF_LOADOUT_FORCED) {
+        client->ps.stats[STAT_WEAPONS] = 1 << WP_GAUNTLET;
+        client->pers.maxHealth = g_rrInfectedZombieHealthBonus.integer + g_startingHealth.integer;
+        ent->health = client->pers.maxHealth;
+        client->ps.weapon = WP_GAUNTLET;
+        return;
+    }
+    SelectSpawnWeapon(ent);
+}
+
+/*
+===========
+G_SpawnLoadout
+
+[QL] 0x1003b6c0. What a player comes into the game with: the gauntlet and grapple never run out,
+the weapons of g_startingWeapons and the loadout (a bot with a loadout weapon it may not use draws
+one of the six, a human gets the heavy machinegun), g_playerCylinders' capsule, the starting
+health and armour, Red Rover's infected, in warmup every weapon the match has with its full ammo,
+and the targets of the spawn point. The weapon in hand comes from g_bestStartingWeapons.
+============
+*/
+static void G_SpawnLoadout(gentity_t* ent, gentity_t* spawnPoint) {
+    gclient_t* client = ent->client;
+    gitem_t* item;
+    int w;
+
+    client->ps.ammo[WP_GAUNTLET] = -1;
+    client->ps.ammo[WP_GRAPPLING_HOOK] = -1;
+    RegisterItem(BG_FindItemForWeapon(WP_GAUNTLET));
+    RegisterItem(BG_FindItemForWeapon(WP_MACHINEGUN));
+    RegisterItem(BG_FindItemForWeapon(WP_GRAPPLING_HOOK));
+    client->ps.weaponstate = WEAPON_READY;
+    client->ps.weaponTime = 0;
+
+    if (g_playerCylinders.integer) {
+        ent->r.svFlags |= SVF_CAPSULE;
+    } else {
+        ent->r.svFlags &= ~SVF_CAPSULE;
+    }
+
+    if (g_loadout.integer && !(client->ps.pm_flags & PMF_LOADOUT_FORCED) &&
+        (!BG_WeaponInLoadout(client->sess.weaponPrimary) ||
+         (g_disableLoadout.integer & (1 << client->sess.weaponPrimary)))) {
+        if (!(ent->r.svFlags & SVF_BOT)) {
+            client->sess.weaponPrimary = WP_HMG;
+        } else {
+            int tries = 0;
+            int picked = 0;
+
+            // 0x1003b8d0: sixteen draws of 0..16, the first that is one of the six
+            while (!picked) {
+                int r;
+
+                if (tries >= 16) {
+                    picked = WP_HMG;
+                    break;
+                }
+                r = (int)((rand() & 0x7fff) / 32767.0 * 16.0);
+                if (BG_WeaponInLoadout(r)) {
+                    picked = r;
+                }
+                tries++;
+            }
+            client->sess.weaponPrimary = picked;
+        }
+    }
+
+    G_GiveStartingWeapons(ent);
+    G_SetInfiniteAmmo(ent);
+
+    if (level.intermissionTime) {
+        MoveClientToIntermission(ent);
+        return;
+    }
+    if (client->ps.pm_type == PM_SPECTATOR) {
+        return;
+    }
+
+    G_SetStartingHealth(ent);
+    ent->s.armor = client->ps.stats[STAT_ARMOR] = g_startingArmor.integer;
+    if (armor_tiered.integer && g_startingArmor.integer) {
+        if (g_startingArmor.integer >= 150) {
+            client->ps.stats[STAT_ARMORTYPE] = 2;
+        } else if (g_startingArmor.integer >= 100) {
+            client->ps.stats[STAT_ARMORTYPE] = 1;
+        } else {
+            client->ps.stats[STAT_ARMORTYPE] = 0;
+        }
+    }
+
+    if (g_instaGib.integer) {
+        if (g_gametype.integer != GT_RR || !g_rrInfected.integer) {
+            return;
+        }
+        RR_SpawnLoadout(ent);
+    } else if (g_gametype.integer == GT_RR) {
+        RR_SpawnLoadout(ent);
+    }
+
+    // 0x1003ba3e: in warmup, outside the training, practice and loadouts, every weapon the match
+    // has, with its full ammo (the machinegun and grapple only if g_startingWeapons has them; an
+    // infected player keeps the gauntlet)
+    if (level.warmupTime && !g_training.integer && !(practiceflags.integer & 1) && !g_loadout.integer) {
+        for (w = WP_MACHINEGUN; w < WP_NUM_WEAPONS; w++) {
+            item = BG_FindItemForWeapon((weapon_t)w);
+            if (!item || !itemRegistered[item - bg_itemlist]) {
+                continue;
+            }
+            if ((w == WP_MACHINEGUN && !(g_startingWeapons.integer & 2)) ||
+                (w == WP_GRAPPLING_HOOK && !(g_startingWeapons.integer & 0x200))) {
+                continue;
+            }
+            if (g_gametype.integer != GT_RR || !g_rrInfected.integer || client->sess.sessionTeam != TEAM_RED) {
+                client->ps.stats[STAT_WEAPONS] |= 1 << w;
+            }
+            if (g_infiniteAmmo.integer || g_instaGib.integer) {
+                client->ps.ammo[w] = -1;
+            } else {
+                client->ps.ammo[w] = maxAmmoStandard[w];
+            }
+        }
+        // 0x1003bb4f: outside race, CA, Domination and Red Rover that is all in warmup
+        if (g_gametype.integer != GT_RACE && g_gametype.integer != GT_CA &&
+            g_gametype.integer != GT_DOMINATION && g_gametype.integer != GT_RR) {
+            return;
+        }
+    }
+
+    G_UseTargets(spawnPoint, ent);
+    if (practiceflags.integer & 1) {
+        return;
+    }
+    SelectSpawnWeapon(ent);
+}
+
+/*
+===========
 ClientSpawn
 
 Called every time a client is placed fresh in the world:
@@ -1620,28 +1906,35 @@ void ClientSpawn(gentity_t* ent) {
         client->ps.pm_type = PM_SPECTATOR;
     }
 
-    // increment the spawncount so the client will detect the respawn
-    client->ps.persistant[PERS_SPAWN_COUNT]++;
+    // [QL] 0x1003c146: the spawn count only goes up for a player in the game
+    if (client->sess.sessionTeam != TEAM_SPECTATOR) {
+        client->ps.persistant[PERS_SPAWN_COUNT]++;
+    }
     client->ps.persistant[PERS_TEAM] = client->sess.sessionTeam;
 
     client->airOutTime = level.time + 12000;
 
+    // [QL] 0x1003c0f7: the pmove rules of the server; autoHop is opt-in per client ("cg_autoHop")
     trap_GetUserinfo(index, userinfo, sizeof(userinfo));
-    // [QL] set max health: g_startingHealth * handicap factor
-    {
-        int handicap = atoi(Info_ValueForKey(userinfo, "handicap"));
-        float hcFactor = 1.0f;
-        int maxHealth;
-        if (handicap >= 1 && handicap <= 100) {
-            hcFactor = (float)handicap / 100.0f;
+    if (pmove_AutoHop.integer) {
+        if (!atoi(Info_ValueForKey(userinfo, "cg_autoHop"))) {
+            client->ps.pm_flags |= PMF_NO_AUTOHOP;
+        } else {
+            client->ps.pm_flags &= ~PMF_NO_AUTOHOP;
         }
-        maxHealth = (int)(g_startingHealth.integer * hcFactor);
-        if (maxHealth < 1 || maxHealth > g_startingHealth.integer) {
-            maxHealth = g_startingHealth.integer;
-        }
-        client->pers.maxHealth = maxHealth;
     }
-    // clear entity values
+    if (pmove_CrouchSlide.integer) {
+        client->ps.pm_flags |= PMF_CROUCH_SLIDE;
+    }
+    if (pmove_DoubleJump.integer) {
+        client->ps.pm_flags |= PMF_DOUBLE_JUMPED;
+    }
+    if (pmove_AirControl.integer) {
+        client->ps.pm_flags |= PMF_PROMODE;
+    }
+
+    // clear entity values. [QL] 0x1003c177: the maximum health is the one ClientUserinfoChanged
+    // worked out with the handicap
     client->ps.stats[STAT_MAX_HEALTH] = client->pers.maxHealth;
     client->ps.eFlags = flags;
 
@@ -1667,240 +1960,25 @@ void ClientSpawn(gentity_t* ent) {
 
     client->ps.clientNum = index;
 
-    // [QL] Starting weapons: loadout + bitmask + warmup extras
-    // Binary: GiveDefaultWeapons (0x1003b8d0) + GiveStartingAmmo (0x1003b470)
-    {
-        static vmCvar_t *startingAmmoCvars[WP_NUM_WEAPONS] = {
-            NULL,                   // WP_NONE = 0
-            &g_startingAmmo_g,      // WP_GAUNTLET = 1
-            &g_startingAmmo_mg,     // WP_MACHINEGUN = 2
-            &g_startingAmmo_sg,     // WP_SHOTGUN = 3
-            &g_startingAmmo_gl,     // WP_GRENADE_LAUNCHER = 4
-            &g_startingAmmo_rl,     // WP_ROCKET_LAUNCHER = 5
-            &g_startingAmmo_lg,     // WP_LIGHTNING = 6
-            &g_startingAmmo_rg,     // WP_RAILGUN = 7
-            &g_startingAmmo_pg,     // WP_PLASMAGUN = 8
-            &g_startingAmmo_bfg,    // WP_BFG = 9
-            &g_startingAmmo_gh,     // WP_GRAPPLING_HOOK = 10
-            &g_startingAmmo_ng,     // WP_NAILGUN = 11
-            &g_startingAmmo_pl,     // WP_PROX_LAUNCHER = 12
-            &g_startingAmmo_cg,     // WP_CHAINGUN = 13
-            &g_startingAmmo_hmg,    // WP_HMG = 14
-        };
-        // [QL] fixed per-weapon warmup ammo. The binary's warmup grant (GiveDefaultWeapons
-        // 0x1003bcf5) reads this static table (weapon-info table at 0x1008ff18, stride 0x30,
-        // field +0x14), NOT the g_startingAmmo cvars. Values read straight from qagamex86.dll.
-        static const int warmupDefaultAmmo[WP_NUM_WEAPONS] = {
-            0,    // WP_NONE
-            -1,   // WP_GAUNTLET
-            150,  // WP_MACHINEGUN
-            25,   // WP_SHOTGUN
-            25,   // WP_GRENADE_LAUNCHER
-            25,   // WP_ROCKET_LAUNCHER
-            150,  // WP_LIGHTNING
-            25,   // WP_RAILGUN
-            150,  // WP_PLASMAGUN
-            25,   // WP_BFG
-            -1,   // WP_GRAPPLING_HOOK
-            25,   // WP_NAILGUN
-            5,    // WP_PROX_LAUNCHER
-            200,  // WP_CHAINGUN
-            150,  // WP_HMG
-        };
-        int w;
-        qboolean isBot = (ent->r.svFlags & SVF_BOT) != 0;
-
-        // Validate/default weaponPrimary for loadout mode (binary: GiveDefaultWeapons)
-        // Only re-default if current primary is out of range or disabled by map.
-        // [QL] binary gates on pm_flags & 0x80000 (PMF_LOADOUT_FORCED), not PMF_FROZEN
-        if (g_loadout.integer && !(client->ps.pm_flags & PMF_LOADOUT_FORCED)) {
-            int wp = client->sess.weaponPrimary;
-            // [QL] 0x1003b96a: the choice has to be one of the six the binary marks, and the
-            // map must not have disabled it
-            qboolean invalid = (wp <= 0 || wp >= WP_NUM_WEAPONS || !BG_WeaponInLoadout(wp) ||
-                                (g_disableLoadout.integer & (1 << wp)) != 0);
-            if (invalid) {
-                if (!isBot) {
-                    client->sess.weaponPrimary = WP_HMG;
-                } else {
-                    // Bots: try up to 16 random weapons, pick first valid one
-                    int tries;
-                    int picked = 0;
-                    for (tries = 0; tries < 16 && picked == 0; tries++) {
-                        int r = (rand() % (WP_NUM_WEAPONS - 1)) + 1;
-                        // [QL] 0x1003b9c1: the draw only takes one of the six, and the sixteen
-                        // tries over, it falls back to the heavy machinegun
-                        if (BG_WeaponInLoadout(r) && !(g_disableLoadout.integer & (1 << r))) {
-                            picked = r;
-                        }
-                    }
-                    client->sess.weaponPrimary = picked ? picked : WP_HMG;
-                }
-            }
-        }
-
-        // Path 1: Loadout grant - weaponPrimary (if loadout enabled, not forced-loadout, not disabled)
-        // Binary: GiveStartingAmmo whole-body gate is (pm_flags & 0x80000)==0, i.e. PMF_LOADOUT_FORCED
-        if (g_loadout.integer && !(client->ps.pm_flags & PMF_LOADOUT_FORCED)) {
-            int wp = client->sess.weaponPrimary;
-            if (wp > 0 && wp < WP_NUM_WEAPONS && !(g_disableLoadout.integer & (1 << wp))) {
-                client->ps.stats[STAT_WEAPONS] |= (1 << wp);
-                if (startingAmmoCvars[wp]) {
-                    client->ps.ammo[wp] = startingAmmoCvars[wp]->integer;
-                }
-            }
-        }
-
-        // [QL] always-registered weapons (top of GiveDefaultWeapons, binary 0x1003b8b0):
-        // gauntlet, machinegun and grapple are registered every spawn regardless of
-        // g_startingWeapons, so the warmup grant below and the CS_ITEMS precache include them.
-        RegisterItem(BG_FindItemForWeapon(WP_GAUNTLET));
-        RegisterItem(BG_FindItemForWeapon(WP_MACHINEGUN));
-        RegisterItem(BG_FindItemForWeapon(WP_GRAPPLING_HOOK));
-
-        // Path 2: Normal bitmask grant - runs regardless of loadout mode
-        // Binary: GiveStartingAmmo second block (unconditional on loadout)
-        for (w = WP_GAUNTLET; w < WP_NUM_WEAPONS; w++) {
-            if (g_startingWeapons.integer & (1 << (w - 1))) {
-                client->ps.stats[STAT_WEAPONS] |= (1 << w);
-                client->ps.ammo[w] = startingAmmoCvars[w]->integer;
-                // [QL] register each granted weapon so the warmup grant re-grants only this
-                // set, not the full arsenal (GiveStartingAmmo calls RegisterItem per bit).
-                RegisterItem(BG_FindItemForWeapon(w));
-            }
-        }
-
-        // Gauntlet and grapple always have infinite ammo when present
-        if (client->ps.stats[STAT_WEAPONS] & (1 << WP_GAUNTLET))
-            client->ps.ammo[WP_GAUNTLET] = -1;
-        if (client->ps.stats[STAT_WEAPONS] & (1 << WP_GRAPPLING_HOOK))
-            client->ps.ammo[WP_GRAPPLING_HOOK] = -1;
-
-        // [QL] all ammo becomes infinite for g_infiniteAmmo or instagib. The binary's top block
-        // (GiveDefaultWeapons 0x1003b8b0) keys on g_infiniteAmmo (0x105a31cc) || g_instaGib - NOT
-        // g_loadout - so loadout mode keeps the finite g_startingAmmo cvar ammo that the bitmask
-        // grant above assigned (GiveStartingAmmo does the same).
-        if (g_infiniteAmmo.integer || (g_dmflags.integer & DF_INSTAGIB)) {
-            for (w = WP_GAUNTLET; w < WP_NUM_WEAPONS; w++) {
-                client->ps.ammo[w] = -1;
-            }
-        }
-
-        // Warmup extras: grant weapons 2..14 during warmup (binary: GiveDefaultWeapons end)
-        // [QL] 0x1003ba3e: not in the Crash Course, not with practiceflags 1, not with loadouts,
-        // and not in instagib.
-        // MG (2) and grapple (10) are only granted if already in g_startingWeapons.
-        // RR infected red team (zombies) don't get warmup extras.
-        if (level.warmupTime && !g_training.integer && !(practiceflags.integer & 1) && !g_loadout.integer &&
-            !(g_dmflags.integer & DF_INSTAGIB)) {
-            qboolean infectedRedZombie = (g_gametype.integer == GT_RR &&
-                                          g_rrInfected.integer != 0 &&
-                                          client->sess.sessionTeam == TEAM_RED);
-            for (w = WP_MACHINEGUN; w < WP_NUM_WEAPONS; w++) {
-                gitem_t* wItem = BG_FindItemForWeapon(w);
-                // [QL] only re-grant weapons registered for this match (binary warmup block
-                // gates on itemRegistered). With no map weapon spawns the registered set is the
-                // always-present weapons plus g_startingWeapons, so the player keeps exactly that
-                // loadout in warmup instead of the full arsenal.
-                if (!wItem || !itemRegistered[wItem - bg_itemlist]) {
-                    continue;
-                }
-                // [QL] MG and grapple are registered every spawn, so the itemRegistered gate
-                // alone would grant them in warmup. The binary also skips them unless
-                // g_startingWeapons includes the weapon (TEST bit; JZ skip), so with
-                // 8447 (no grapple bit) the grapple is not handed out.
-                if (w == WP_MACHINEGUN && !(g_startingWeapons.integer & 0x2))
-                    continue;
-                if (w == WP_GRAPPLING_HOOK && !(g_startingWeapons.integer & 0x200))
-                    continue;
-                if (!infectedRedZombie) {
-                    client->ps.stats[STAT_WEAPONS] |= (1 << w);
-                }
-                // [QL] warmup ammo comes from the fixed warmupDefaultAmmo table, not the
-                // g_startingAmmo cvars (binary GiveDefaultWeapons warmup block, 0x1003bcf5:
-                // ammo[w] = (g_infiniteAmmo || g_instaGib) ? -1 : warmupDefaultAmmo[w]).
-                // g_infiniteAmmo still yields the infinite sentinel here.
-                if (g_infiniteAmmo.integer || (g_dmflags.integer & DF_INSTAGIB)) {
-                    client->ps.ammo[w] = -1;
-                } else {
-                    client->ps.ammo[w] = warmupDefaultAmmo[w];
-                }
-            }
-        }
+    // [QL] 0x1003c26d: g_spawnArmor protects a new spawn for that many ms, outside CA
+    if (g_spawnArmor.integer && g_gametype.integer != GT_CA) {
+        client->ps.powerups[PW_NONE] = (level.time / 1000) * 1000 + g_spawnArmor.integer;
     }
-
-    // [QL] starting health: g_startingHealth + g_startingHealthBonus (default 100+25=125)
-    {
-        int startHealth = g_startingHealth.integer + g_startingHealthBonus.integer;
-        if (startHealth < 1) {
-            startHealth = client->pers.maxHealth;
-        } else if (startHealth > 999) {
-            startHealth = 999;
-        }
-        ent->health = client->ps.stats[STAT_HEALTH] = startHealth;
+    // [QL] 0x1003c28f: the regeneration counts from the spawn
+    if (g_regenHealth.integer || g_regenArmor.integer) {
+        client->healthRegenActive = (qboolean)(g_regenHealth.integer != 0);
+        client->armorRegenActive = (qboolean)(g_regenArmor.integer != 0);
+        client->lasthurt_time[0] = level.time;
     }
-
-    // [QL] RR Infection: zombie health bonus + gauntlet only (binary: SelectSpawnLoadout)
-    if (g_gametype.integer == GT_RR && g_rrInfected.integer != 0
-        && client->sess.sessionTeam == TEAM_RED) {
-        int zombieHealth = g_startingHealth.integer + g_rrInfectedZombieHealthBonus.integer;
-        if (zombieHealth > 999) zombieHealth = 999;
-        ent->health = client->ps.stats[STAT_HEALTH] = zombieHealth;
-        client->ps.stats[STAT_WEAPONS] = (1 << WP_GAUNTLET);
-        client->ps.ammo[WP_GAUNTLET] = -1;
-        client->ps.weapon = WP_GAUNTLET;
-    }
-
-    // [QL] starting armor from cvar, in the entity too (0x1003b9ae)
-    ent->s.armor = client->ps.stats[STAT_ARMOR] = g_startingArmor.integer;
 
     G_SetOrigin(ent, spawn_origin);
     VectorCopy(spawn_origin, client->ps.origin);
 
-    // [QL] Lag compensation - clear position history on spawn
-    if (g_lagHaxMs.integer != 0 && g_lagHaxHistory.integer != 0) {
-        HAX_Clear(ent);
-    }
-
     // the respawned flag will be cleared after the attack and jump keys come up
     client->ps.pm_flags |= PMF_RESPAWNED;
 
-    trap_GetUsercmd(client - level.clients, &ent->client->pers.cmd);
-    SetClientViewAngle(ent, spawn_angles);
-    // don't allow full run speed for a bit
-    client->ps.pm_flags |= PMF_TIME_KNOCKBACK;
-    client->ps.pm_time = 100;
-
-    // [QL] set movement mode flags from server cvars
-    if (pmove_AirControl.integer) {
-        client->ps.pm_flags |= PMF_PROMODE;
-    }
-    if (pmove_DoubleJump.integer) {
-        client->ps.pm_flags |= PMF_DOUBLE_JUMPED;
-    }
-    if (pmove_CrouchSlide.integer) {
-        client->ps.pm_flags |= PMF_CROUCH_SLIDE;
-    }
-    if (pmove_AutoHop.integer) {
-        // autoHop is opt-in per-client via userinfo "cg_autoHop"
-        // [QL] binary (ClientSpawn 0x1003be20) has NO gametype gate here - runs in every gametype
-        char *s = Info_ValueForKey(userinfo, "cg_autoHop");
-        if (!*s || !atoi(s)) {
-            client->ps.pm_flags |= PMF_NO_AUTOHOP;
-        } else {
-            client->ps.pm_flags &= ~PMF_NO_AUTOHOP;
-        }
-    }
-
-    client->respawnTime = level.time;
-    client->pers.inactivityTime = 0;  // [QL] accumulator-based; reset to zero on spawn
-    client->pers.inactivityWarning = qfalse;
-
-    // set default animations
-    client->ps.torsoAnim = TORSO_STAND;
-    client->ps.legsAnim = LEGS_IDLE;
-
-    // [QL] gametype-specific spawn logic (freeze during warmup/countdown)
+    // [QL] 0x1003c2f1: what each mode does to a new spawn. The round modes hold the players still
+    // in a countdown, Freeze Tag only with g_freezeRoundDelay
     switch (g_gametype.integer) {
     case GT_RACE:
         // [QL] 0x1003c3f8: a race's best checkpoint times outlive the respawn
@@ -1908,16 +1986,13 @@ void ClientSpawn(gentity_t* ent) {
         break;
     case GT_CA:
     case GT_AD:
-        // freeze during warmup or countdown (roundState 1)
-        if (level.warmupTime > 0 || level.roundState.eCurrent == 1) {
-            client->ps.pm_flags |= PMF_TIME_KNOCKBACK;
+        if (level.warmupTime > 0 || level.roundState.eCurrent == RS_COUNTDOWN) {
+            client->ps.pm_flags |= PMF_FROZEN;
         }
         break;
     case GT_FREEZE:
-        // freeze during warmup/countdown, but only if roundState != 0
-        if ((level.warmupTime > 0 || level.roundState.eCurrent == 1)
-            && level.roundState.eCurrent != 0) {
-            client->ps.pm_flags |= PMF_TIME_KNOCKBACK;
+        if ((level.warmupTime > 0 || level.roundState.eCurrent == RS_COUNTDOWN) && g_freezeRoundDelay.integer) {
+            client->ps.pm_flags |= PMF_FROZEN;
         }
         break;
     case GT_RR:
@@ -1927,66 +2002,72 @@ void ClientSpawn(gentity_t* ent) {
         break;
     }
 
-    if (!level.intermissionTime) {
-        if (ent->client->ps.pm_type != PM_SPECTATOR) {
-            // fire the targets of the spawn point
-            G_UseTargets(spawnPoint, ent);
+    G_SpawnLoadout(ent, spawnPoint);
 
-            // positively link the client, even if the command times are weird
-            VectorCopy(ent->client->ps.origin, ent->r.currentOrigin);
+    trap_GetUsercmd(client - level.clients, &ent->client->pers.cmd);
+    SetClientViewAngle(ent, spawn_angles);
 
-            // [QL] G_KillBox after SetClientViewAngle (binary order)
-            G_KillBox(ent);
-            trap_LinkEntity(ent);
-        }
-    } else {
-        // move players to intermission
-        MoveClientToIntermission(ent);
+    if (client->ps.pm_type != PM_SPECTATOR) {
+        G_KillBox(ent);
+        trap_LinkEntity(ent);
     }
+
+    // don't allow full run speed for a bit
+    client->ps.pm_flags |= PMF_TIME_KNOCKBACK;
+    client->ps.pm_time = 100;
+
+    client->respawnTime = level.time;
+
+    // set default animations
+    client->ps.torsoAnim = TORSO_STAND;
+    client->ps.legsAnim = LEGS_IDLE;
 
     // run a client frame to drop exactly to the floor,
     // initialize animations and other things
     client->ps.commandTime = level.time - 100;
     ent->client->pers.cmd.serverTime = level.time;
-    trap_GetUsercmd(client - level.clients, &ent->client->pers.cmd);
-    ent->client->pers.cmd.serverTime = level.time;
     ClientThink(ent - g_entities);
 
-    // run the presend to set anything else, follow spectators wait
-    // until all clients have been reconnected after map_restart
-    if (!(ent->r.svFlags & SVF_BOT)) {
-        ClientEndFrame(ent);
+    if (client->ps.pm_type != PM_SPECTATOR) {
+        // [QL] 0x1003c5a0: g_grantItemOnSpawn names items, ';' between them, that every spawn gets
+        if (g_grantItemOnSpawn.string[0]) {
+            char grant[1024];
+            char* tok;
+
+            Q_strncpyz(grant, g_grantItemOnSpawn.string, sizeof(grant));
+            for (tok = strtok(grant, ";"); tok; tok = strtok(NULL, ";")) {
+                G_GrantItem(ent, tok);
+            }
+        }
+        BG_PlayerStateToEntityState(&client->ps, &ent->s, qtrue);
+        VectorCopy(client->ps.origin, ent->r.currentOrigin);
+        trap_LinkEntity(ent);
     }
+
+    // [QL] Lag compensation - clear position history on spawn
+    if (g_lagHaxMs.integer != 0 && g_lagHaxHistory.integer != 0) {
+        HAX_Clear(ent);
+    }
+
+    // [QL] 0x1003c66f: a spectator who was following goes back to it on the next think
+    // (SpectatorThink), once the follow has been dropped below
+    if (client->ps.pm_type == PM_SPECTATOR && client->sess.spectatorState == SPECTATOR_FOLLOW &&
+        client->sess.spectatorClient >= 0) {
+        client->pendingFollowClient = client->sess.spectatorClient;
+        client->pendingFollow = qtrue;
+    }
+
+    // run the presend to set anything else
+    ClientEndFrame(ent);
 
     // [QL] 0x1003c713: in team gametypes the team overlay goes out a second after a spawn
     if (g_gametype.integer >= GT_TEAM) {
         level.nextTeamInfoTime = level.time + 1000;
     }
 
-    // [QL] a spectator, on a team or not, is never linked (retail unlinks it at the end of
-    // ClientSpawn, 0x1003c77a).
-    if (ent->client->ps.pm_type != PM_SPECTATOR) {
-        // update origin after ClientThink
-        VectorCopy(ent->client->ps.origin, ent->r.currentOrigin);
-        trap_LinkEntity(ent);
-    }
-
-    // [QL] spectator auto-follow: if spawned as spectator in follow mode, attach to target
-    if (client->sess.sessionTeam == TEAM_SPECTATOR
-        && client->sess.spectatorState == SPECTATOR_FOLLOW
-        && client->sess.spectatorClient >= 0) {
-        client->ps.clientNum = client->sess.spectatorClient;
-        client->ps.pm_flags |= PMF_FOLLOW;
-    }
-
-    // [QL] select best weapon after spawn (binary does this inside GiveDefaultWeapons)
-    if (!level.intermissionTime && client->sess.sessionTeam != TEAM_SPECTATOR) {
-        SelectSpawnWeapon(ent);
-    }
-
-    // [QL] team alive counting for team gametypes
-    if (g_gametype.integer > GT_RACE) {
-        Team_LivingTeamCounts(NULL, NULL);
+    // [QL] 0x1003c74b: a spectator comes out free floating and never linked (StopFollowing)
+    if (client->ps.pm_type == PM_SPECTATOR) {
+        StopFollowing(ent);
     }
 
     // clear entity state values
@@ -2156,31 +2237,48 @@ SelectSpawnWeapon
 */
 void SelectSpawnWeapon(gentity_t* ent) {
     gclient_t* client = ent->client;
-    int i;
+    char* p;
+    char* token;
+    int n, w, i;
 
-    // frozen players get gauntlet only
-    if (client->ps.pm_flags & 0x80000) {
+    // a player held to the gauntlet has the gauntlet
+    if (client->ps.pm_flags & PMF_LOADOUT_FORCED) {
         client->ps.weapon = WP_GAUNTLET;
         return;
     }
 
-    // loadout: prefer weaponPrimary if available
-    if (g_loadout.integer && client->sess.weaponPrimary > 0
-        && client->sess.weaponPrimary < WP_NUM_WEAPONS) {
-        if (client->ps.stats[STAT_WEAPONS] & (1 << client->sess.weaponPrimary)) {
-            client->ps.weapon = client->sess.weaponPrimary;
-            return;
-        }
+    // [QL] 0x1003b5c6: the loadout weapon, if the map allows it
+    if (g_loadout.integer && client->sess.weaponPrimary > 0 &&
+        !(g_disableLoadout.integer & (1 << client->sess.weaponPrimary))) {
+        client->ps.weapon = client->sess.weaponPrimary;
+        return;
     }
 
-    // fallback: select highest weapon
-    for (i = WP_NUM_WEAPONS - 1; i > 0; i--) {
-        if (client->ps.stats[STAT_WEAPONS] & (1 << i)) {
-            client->ps.weapon = i;
+    // [QL] 0x1003b5f0: otherwise the first weapon held in g_bestStartingWeapons (short names or
+    // numbers), fourteen at most; with none held the weapon stays as it is
+    p = g_bestStartingWeapons.string;
+    w = 0;
+    for (n = 1; ; n++) {
+        token = COM_ParseExt(&p, qtrue);
+        if (!token[0]) {
+            return;
+        }
+        for (i = WP_GAUNTLET; i < WP_NUM_WEAPONS; i++) {
+            if (weaponShortName[i][0] && !Q_stricmp(token, weaponShortName[i])) {
+                w = i;
+            }
+        }
+        if (!w) {
+            w = atoi(token);
+        }
+        if (w >= WP_GAUNTLET && w <= WP_HMG && (client->ps.stats[STAT_WEAPONS] & (1 << w))) {
+            break;
+        }
+        if (n >= 14) {
             return;
         }
     }
-    client->ps.weapon = WP_GAUNTLET;
+    client->ps.weapon = w;
 }
 
 /*

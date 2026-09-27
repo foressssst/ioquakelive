@@ -451,6 +451,8 @@ struct gclient_s {
     int invulnerabilityTime;
 
     expandedStatObj_t expandedStats;  // [QL] (812 bytes)
+    qboolean pendingFollow;       // [QL] gclient_t+0xbd0: follow again on the next think
+    int pendingFollowClient;      // [QL] gclient_t+0xbd4: whom
 
     int ignoreChatsTime;        // [QL]
     int lastUserCmdTime;        // [QL]
@@ -1011,7 +1013,11 @@ void G_AutoAction(void);                           // g_main.c
 void G_AutoActionClientConnect(gentity_t* ent);    // g_main.c
 void Freeze_ClientBegin(gentity_t* ent);
 void RR_ClientBegin(gentity_t* ent);
-void SelectSpawnWeapon(gentity_t* ent);
+void SelectSpawnWeapon(gentity_t* ent);           // [QL] 0x1003b5a0
+void G_GiveStartingWeapons(gentity_t* ent);       // [QL] 0x1003b2a0
+void G_SetInfiniteAmmo(gentity_t* ent);           // [QL] 0x1003b1f0
+void G_SetStartingHealth(gentity_t* ent);         // [QL] 0x1003b230
+extern const char* weaponShortName[WP_NUM_WEAPONS];
 void Team_LivingTeamCounts(int *outRed, int *outBlue);
 int G_GetAccess(int clientNum);  // [QL] 0x10032460, a client's access level
 qboolean G_FloodCheck(gclient_t* client);  // [QL] 0x100341e0

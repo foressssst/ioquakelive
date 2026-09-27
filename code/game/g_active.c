@@ -345,6 +345,20 @@ void SpectatorThink(gentity_t* ent, usercmd_t* ucmd) {
     client = ent->client;
     clientNum = (int)(client - level.clients);
 
+    // [QL] 0x10033e44: a spectator is never linked, and one who was following when respawned
+    // (ClientSpawn keeps whom) follows them again, with the scoreboard of the mode
+    if (ent->r.linked) {
+        trap_UnlinkEntity(ent);
+    }
+    if (client->pendingFollow) {
+        client->sess.spectatorClient = client->pendingFollowClient;
+        if (client->sess.spectatorState != SPECTATOR_FOLLOW) {
+            Cmd_Score_f(ent);
+        }
+        client->sess.spectatorState = SPECTATOR_FOLLOW;
+        client->pendingFollow = qfalse;
+    }
+
     // [QL] qagamex86.dll 0x10033e30. Quake 3's version was kept verbatim; retail
     // differs in the free-fly setup and in having a way back out of follow mode.
     if (client->sess.spectatorState != SPECTATOR_FOLLOW) {
