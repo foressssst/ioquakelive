@@ -462,3 +462,60 @@ void SP_func_timer(gentity_t* self) {
 
     self->r.svFlags = SVF_NOCLIENT;
 }
+
+/*
+==============================================================================
+
+trigger_capturezone
+
+==============================================================================
+*/
+
+/*
+==============
+CaptureZone_Touch
+
+[QL] 0x1006bda0. A player of the other team who comes into the zone of the "red" or "blue"
+team captures on that team's flag, and so does, in CTF and 1-Flag, a flag thrown into it, for
+whoever threw it. The capture is worth the zone's count.
+==============
+*/
+void CaptureZone_Touch(gentity_t* self, gentity_t* other) {
+    gentity_t* thrown = NULL;
+    gentity_t* flag;
+    int team;
+
+    if (!other->client && other->item &&
+        (g_gametype.integer == GT_CTF || g_gametype.integer == GT_1FCTF) && other->item->giType == IT_TEAM) {
+        thrown = other;
+        other = other->parent;
+    }
+    if (!other || !other->client || !self->team) {
+        return;
+    }
+
+    team = strcmp("red", self->team);
+    team = (team == 0) ? TEAM_RED : (team > 0 ? TEAM_BLUE : TEAM_FREE);
+    if (other->client->sess.sessionTeam == team) {
+        return;
+    }
+
+    flag = G_Find(NULL, FOFS(classname), team == TEAM_RED ? "team_CTF_redflag" : "team_CTF_blueflag");
+    if (flag) {
+        Team_TouchOurFlag(flag, other, other->client->sess.sessionTeam, thrown, self->count);
+    }
+}
+
+static void CaptureZone_TriggerTouch(gentity_t* self, gentity_t* other, trace_t* trace) {
+    CaptureZone_Touch(self, other);
+}
+
+/*QUAKED trigger_capturezone (.5 .5 .5) ?
+[QL] 0x1006be70. Where the other team scores on this one's flag ("team" red or blue); "count" is
+what the capture is worth.
+*/
+void SP_trigger_capturezone(gentity_t* self) {
+    InitTrigger(self);
+    self->touch = CaptureZone_TriggerTouch;
+    self->r.contents = CONTENTS_TRIGGER;
+}

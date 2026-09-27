@@ -1297,47 +1297,104 @@ static float G_KnockbackScale(int mod, qboolean isSelf) {
 
 /*
 ============
-G_ThrowFlag
+G_FlagPhysicsThink
 
-// [QL] G_ThrowFlag (binary 0x10051420)
-On a gauntlet kill (g_dropCmds) the victim tosses whatever flag it carries. Traces a
-small box from the carrier origin to the drop point and only drops if the path is
-clear. Flag priority matches the binary: neutral, then red, then blue. point is the
-drop location (the G_Damage caller passes the victim ps.origin raised 64 units); when
-NULL the drop is placed forward of the carrier.
+[QL] 0x10050f80, with g_flagPhysics. A thrown flag goes up jump pads (with their sound, every
+1.5 s at most), through teleporters (out at 400 where the destination looks, and 96 up), and
+into capture zones.
 ============
 */
-void G_ThrowFlag(gentity_t* self, vec3_t point) {
+static void G_FlagPhysicsThink(gentity_t* ent) {
+    int touch[MAX_GENTITIES];
+    vec3_t mins, maxs, forward;
+    gentity_t* hit;
+    gentity_t* dest;
+    gentity_t* te;
+    int num, i;
+
+    VectorSet(mins, ent->r.currentOrigin[0] - 15, ent->r.currentOrigin[1] - 15, ent->r.currentOrigin[2] - 15);
+    VectorSet(maxs, ent->r.currentOrigin[0] + 15, ent->r.currentOrigin[1] + 15, ent->r.currentOrigin[2] + 15);
+    num = trap_EntitiesInBox(mins, maxs, touch, MAX_GENTITIES);
+
+    for (i = 0; i < num; i++) {
+        hit = &g_entities[touch[i]];
+        if (!hit->classname) {
+            continue;
+        }
+        if (!strcmp(hit->classname, "trigger_push")) {
+            if (ent->fly_sound_debounce_time < level.time) {
+                ent->fly_sound_debounce_time = level.time + 1500;
+                te = G_TempEntity(ent->r.currentOrigin, EV_GENERAL_SOUND);
+                te->s.eventParm = G_SoundIndex("sound/world/jumppad.wav");
+            }
+            VectorCopy(ent->r.currentOrigin, ent->s.pos.trBase);
+            VectorCopy(hit->s.origin2, ent->s.pos.trDelta);
+            ent->s.pos.trTime = level.time - level.frametime;
+        } else if (!strcmp(hit->classname, "trigger_teleport")) {
+            dest = G_PickTarget(hit->target);
+            if (!dest) {
+                G_Printf("Couldn't find teleporter destination\n");
+                return;
+            }
+            te = G_TempEntity(ent->r.currentOrigin, EV_GENERAL_SOUND);
+            te->s.eventParm = G_SoundIndex("sound/world/teleout.ogg");
+
+            VectorCopy(dest->s.origin, ent->s.pos.trBase);
+            VectorCopy(dest->s.origin, ent->r.currentOrigin);
+            AngleVectors(dest->s.angles, forward, NULL, NULL);
+            VectorScale(forward, 400, ent->s.pos.trDelta);
+            ent->s.pos.trDelta[2] += 96;
+            ent->s.pos.trTime = level.time - level.frametime;
+            SnapVector(ent->s.pos.trDelta);
+
+            te = G_TempEntity(ent->r.currentOrigin, EV_GENERAL_SOUND);
+            te->s.eventParm = G_SoundIndex("sound/world/telein.ogg");
+        } else if (!strcmp(hit->classname, "trigger_capturezone")) {
+            CaptureZone_Touch(hit, ent);
+        }
+    }
+}
+
+/*
+============
+G_ThrowFlag
+
+[QL] 0x100513b0. The flag the player carries (the neutral one first, then red, then blue) leaves
+them at point, or 64 units ahead when there is none, if the way there is clear. It bounces with
+g_flagBounce, knows who threw it, is gone back home in ten seconds if nobody takes it and, with
+g_flagPhysics, rides jump pads and teleporters. Without a velocity it only drops, straight
+ahead on the yaw; with one it goes where the view points.
+============
+*/
+void G_ThrowFlag(gentity_t* self, vec3_t velocity, vec3_t point) {
+    static vec3_t mins = { -15, -15, -15 };
+    static vec3_t maxs = { 15, 15, 35 };
     gclient_t* client = self->client;
-    vec3_t launch;
-    vec3_t velocity = { 0, 0, 0 };
-    vec3_t mins = { -15, -15, -15 };
-    vec3_t maxs = { 15, 15, 15 };
+    vec3_t angles, forward, end;
+    gentity_t* drop;
     trace_t tr;
     int pw;
-    gitem_t* item;
-    gentity_t* drop;
 
-    if (!client) {
+    if (!client || client->ps.pm_type == PM_SPECTATOR || (client->ps.pm_flags & PMF_PAUSED)) {
         return;
     }
-    if (client->ps.pm_type == PM_SPECTATOR) {
-        return;
+
+    if (!velocity) {
+        VectorSet(angles, 0, client->ps.viewangles[YAW], 0);
+        velocity = vec3_origin;
+    } else {
+        VectorCopy(client->ps.viewangles, angles);
     }
-    if (client->ps.pm_flags & PMF_PAUSED) {   // binary: (ps.pm_flags & 0x100) == 0
-        return;
-    }
+    AngleVectors(angles, forward, NULL, NULL);
 
     if (point) {
-        VectorCopy(point, launch);
+        VectorCopy(point, end);
     } else {
-        vec3_t forward;
-        AngleVectors(client->ps.viewangles, forward, NULL, NULL);
-        VectorMA(client->ps.origin, 64.0f, forward, launch);
+        VectorMA(client->ps.origin, 64, forward, end);
     }
 
     // don't drop the flag into a wall
-    trap_Trace(&tr, client->ps.origin, mins, maxs, launch, ENTITYNUM_NONE, CONTENTS_SOLID);
+    trap_Trace(&tr, client->ps.origin, mins, maxs, end, ENTITYNUM_NONE, CONTENTS_SOLID);
     if (tr.fraction != 1.0f) {
         return;
     }
@@ -1352,15 +1409,16 @@ void G_ThrowFlag(gentity_t* self, vec3_t point) {
         return;
     }
 
-    item = BG_FindItemForPowerup(pw);
-    if (!item) {
-        return;
+    drop = LaunchItem(BG_FindItemForPowerup((powerup_t)pw), end, velocity);
+    drop->physicsObject = qtrue;
+    drop->physicsBounce = g_flagBounce.value;
+    drop->parent = self;
+    if (g_flagPhysics.integer) {
+        drop->framethink = G_FlagPhysicsThink;
     }
-
-    drop = LaunchItem(item, launch, velocity);
-    drop->s.modelindex2 = 1;               // dropped-item marker (binary +0x26c)
-    drop->parent = self;                   // binary +0x2e0
-    drop->nextthink = level.time + 10000;  // binary +0x2f4: 10s timeout
+    drop->nextthink = level.time + 10000;
+    drop->s.clientNum = self->s.clientNum;
+    drop->s.time = level.time;
     client->ps.powerups[pw] = 0;
 }
 
@@ -1812,13 +1870,15 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
     }
 
     // 28. [QL] 0x1004983a: with g_tackleFlag a gauntlet hit makes the victim toss any flag it
-    // carries, from its ps.origin raised 64 units
+    // carries, from its ps.origin raised 64 units, g_tackleFlag up in the air
     if (g_tackleFlag.integer && mod == MOD_GAUNTLET && targ->client) {
         vec3_t flagPoint;
+        vec3_t flagVelocity;
         flagPoint[0] = targ->client->ps.origin[0];
         flagPoint[1] = targ->client->ps.origin[1];
         flagPoint[2] = targ->client->ps.origin[2] + 64.0f;
-        G_ThrowFlag(targ, flagPoint);
+        VectorSet(flagVelocity, 0, 0, (float)g_tackleFlag.integer);
+        G_ThrowFlag(targ, flagVelocity, flagPoint);
     }
 
     // 29. DamagePlum

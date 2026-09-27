@@ -3449,18 +3449,13 @@ const char* G_GametypeDisplayName(void) {
 =================
 Cmd_DropFlag_f
 
-[QL] Drop the flag (CTF/1Flag/Attack & Defend). Controlled by g_dropCmds bit 0.
-Binary: qagamex86.dll 0x10044af0
+[QL] 0x10044910. The flag is set down ahead (G_ThrowFlag); with g_throwFlagVelocity it is thrown
+from the carrier, where the view points, g_throwFlagForwardMult times that speed.
 =================
 */
 static void Cmd_DropFlag_f(gentity_t* ent) {
-    gitem_t* item;
-    gentity_t* drop;
-    vec3_t velocity;
-    vec3_t angles;
-    int pw;
+    vec3_t forward, velocity;
 
-    // [QL] 0x10044910
     if (!(g_dropCmds.integer & 1)) {
         trap_SendServerCommand(ent - g_entities,
             "print \"DropFlag is not enabled on this server.\n\"");
@@ -3480,61 +3475,35 @@ static void Cmd_DropFlag_f(gentity_t* ent) {
         return;
     }
 
-    if (ent->client->sess.sessionTeam == TEAM_SPECTATOR) {
-        return;
-    }
-
-    // Find which flag the player is carrying
-    if (ent->client->ps.powerups[PW_REDFLAG]) {
-        pw = PW_REDFLAG;
-    } else if (ent->client->ps.powerups[PW_BLUEFLAG]) {
-        pw = PW_BLUEFLAG;
-    } else if (ent->client->ps.powerups[PW_NEUTRALFLAG]) {
-        pw = PW_NEUTRALFLAG;
+    if (g_throwFlagVelocity.integer) {
+        AngleVectors(ent->client->ps.viewangles, forward, NULL, NULL);
+        VectorScale(forward, g_throwFlagForwardMult.value, forward);
+        VectorMA(vec3_origin, g_throwFlagVelocity.value, forward, velocity);
+        G_ThrowFlag(ent, velocity, ent->client->ps.origin);
     } else {
-        trap_SendServerCommand(ent - g_entities, "print \"You are not carrying a flag.\n\"");
-        return;
+        G_ThrowFlag(ent, NULL, NULL);
     }
-
-    item = BG_FindItemForPowerup(pw);
-    if (!item) {
-        return;
-    }
-
-    // Calculate drop velocity from view angles
-    VectorCopy(ent->client->ps.viewangles, angles);
-    AngleVectors(angles, velocity, NULL, NULL);
-    VectorScale(velocity, 400, velocity);
-    velocity[2] += 200;
-
-    drop = LaunchItem(item, ent->s.pos.trBase, velocity);
-    if (drop) {
-        drop->s.clientNum = ent->s.clientNum;
-        drop->think = Team_DroppedFlagThink;
-        drop->nextthink = level.time + 30000;  // 30 second timeout
-    }
-
-    ent->client->ps.powerups[pw] = 0;
 }
 
 /*
 =================
 Cmd_DropPowerup_f
 
-[QL] Drop a powerup (team gametypes except CA/FT/Harvester/AD).
-Controlled by g_dropCmds bit 1. Dropped powerup has 10s pickup window.
-Binary: qagamex86.dll 0x10044cc0
+[QL] 0x10044ae0. Every powerup the player runs with is set down 64 units ahead, if there is no
+wall in the way; flags and runes stay. Somebody else has ten seconds to take them, and with
+g_droppedPowerupsDecay what is left keeps running out on the ground.
 =================
 */
 static void Cmd_DropPowerup_f(gentity_t* ent) {
-    gitem_t* item;
+    static vec3_t mins = { -ITEM_RADIUS, -ITEM_RADIUS, -ITEM_RADIUS };
+    static vec3_t maxs = { ITEM_RADIUS, ITEM_RADIUS, ITEM_RADIUS };
+    gclient_t* client = ent->client;
+    vec3_t angles, forward, end;
     gentity_t* drop;
-    vec3_t velocity;
-    vec3_t angles;
-    int pw;
-    int remaining;
+    gitem_t* item;
+    trace_t tr;
+    int i;
 
-    // [QL] 0x10044ae0
     if (!(g_dropCmds.integer & 2)) {
         trap_SendServerCommand(ent - g_entities,
             "print \"DropPowerup is not enabled on this server.\n\"");
@@ -3566,51 +3535,43 @@ static void Cmd_DropPowerup_f(gentity_t* ent) {
         return;
     }
 
-    if (ent->client->sess.sessionTeam == TEAM_SPECTATOR) {
+    if (!client || client->ps.pm_type == PM_SPECTATOR) {
         return;
     }
 
-    // Find a powerup the player has (skip flags at PW_REDFLAG/BLUEFLAG/NEUTRALFLAG = 1-3)
-    pw = -1;
-    for (int i = PW_QUAD; i < PW_NUM_POWERUPS; i++) {
-        if (i == PW_FREEZE) continue;
-        if (ent->client->ps.powerups[i] > level.time) {
-            pw = i;
-            break;
+    VectorSet(angles, 0, client->ps.viewangles[YAW], 0);
+    AngleVectors(angles, forward, NULL, NULL);
+    VectorMA(client->ps.origin, 64, forward, end);
+    trap_Trace(&tr, client->ps.origin, mins, maxs, end, ENTITYNUM_NONE, CONTENTS_SOLID);
+    if (tr.fraction != 1.0f) {
+        return;
+    }
+
+    for (i = 1; i < PW_NUM_POWERUPS; i++) {
+        if (client->ps.powerups[i] <= level.time || i == PW_FLIGHT || i == PW_FREEZE) {
+            continue;
         }
-    }
-
-    if (pw < 0) {
-        trap_SendServerCommand(ent - g_entities, "print \"You have no powerup to drop.\n\"");
-        return;
-    }
-
-    item = BG_FindItemForPowerup(pw);
-    if (!item) {
-        return;
-    }
-
-    // Calculate drop velocity
-    VectorCopy(ent->client->ps.viewangles, angles);
-    AngleVectors(angles, velocity, NULL, NULL);
-    VectorScale(velocity, 400, velocity);
-    velocity[2] += 200;
-
-    drop = LaunchItem(item, ent->s.pos.trBase, velocity);
-    if (drop) {
-        // [QL] 0x10044e0c: what is left of the powerup, in seconds, which is what a pickup
-        // adds back; never less than one
-        remaining = (ent->client->ps.powerups[pw] - level.time) / 1000;
-        if (remaining < 1) {
-            remaining = 1;
+        item = BG_FindItemForPowerup((powerup_t)i);
+        if (!item || item->giType == IT_PERSISTANT_POWERUP ||
+            (item->giType == IT_TEAM && item->giTag >= PW_REDFLAG && item->giTag <= PW_NEUTRALFLAG)) {
+            continue;
         }
+        drop = LaunchItem(item, tr.endpos, vec3_origin);
+        drop->count = (client->ps.powerups[i] - level.time) / 1000;
         drop->s.clientNum = ent->s.clientNum;
-        drop->count = remaining;
-        drop->nextthink = level.time + 10000;  // 10 second pickup window
-        drop->think = G_FreeEntity;
+        drop->s.time = level.time;
+        if (g_droppedPowerupsDecay.integer) {
+            // gone when it would have run out, or in ten seconds
+            drop->flags |= FL_DROPPED_ITEM_TIMED;
+            drop->nextthink = MIN(client->ps.powerups[i], level.time + 10000);
+        } else {
+            drop->nextthink = level.time + 10000;
+        }
+        client->ps.powerups[i] = 0;
+        if (drop->count < 1) {
+            drop->count = 1;
+        }
     }
-
-    ent->client->ps.powerups[pw] = 0;
 }
 
 /*
@@ -3687,20 +3648,21 @@ static void Cmd_DropRune_f(gentity_t* ent) {
 =================
 Cmd_DropWeapon_f
 
-[QL] Drop current weapon. Controlled by g_dropCmds bit 2.
-Team gametypes only. Player keeps gauntlet as fallback.
-Fires EV_DROP_WEAPON event. Binary: qagamex86.dll 0x10045430
+[QL] 0x10045250. The weapon in hand, if it has ammo, is set down 64 units ahead with as much of
+it as the weapon comes with, if there is no wall in the way. The player goes to the next weapon
+below it they have.
 =================
 */
 static void Cmd_DropWeapon_f(gentity_t* ent) {
-    gitem_t* item;
+    static vec3_t mins = { -ITEM_RADIUS, -ITEM_RADIUS, -ITEM_RADIUS };
+    static vec3_t maxs = { ITEM_RADIUS, ITEM_RADIUS, ITEM_RADIUS };
+    gclient_t* client = ent->client;
+    vec3_t angles, forward, end;
     gentity_t* drop;
-    vec3_t velocity;
-    vec3_t angles;
-    int weapon;
-    int ammo;
+    gitem_t* item;
+    trace_t tr;
+    int weapon, amount, next;
 
-    // [QL] 0x10045250
     if (!(g_dropCmds.integer & 4)) {
         trap_SendServerCommand(ent - g_entities,
             "print \"DropWeapon is not enabled on this server.\n\"");
@@ -3732,52 +3694,42 @@ static void Cmd_DropWeapon_f(gentity_t* ent) {
         return;
     }
 
-    if (ent->client->sess.sessionTeam == TEAM_SPECTATOR) {
+    if (!client || client->ps.pm_type == PM_SPECTATOR) {
+        return;
+    }
+    weapon = ent->s.weapon;
+    if (weapon <= WP_MACHINEGUN || weapon > WP_HMG || client->ps.ammo[weapon] <= 0 ||
+        !(client->ps.stats[STAT_WEAPONS] & (1 << weapon))) {
         return;
     }
 
-    weapon = ent->client->ps.weapon;
-
-    // Can't drop gauntlet, grapple, or no weapon
-    if (weapon <= WP_GAUNTLET || weapon == WP_GRAPPLING_HOOK || weapon >= WP_NUM_WEAPONS) {
-        trap_SendServerCommand(ent - g_entities, "print \"Cannot drop this weapon.\n\"");
+    VectorSet(angles, 0, client->ps.viewangles[YAW], 0);
+    AngleVectors(angles, forward, NULL, NULL);
+    VectorMA(client->ps.origin, 64, forward, end);
+    trap_Trace(&tr, client->ps.origin, mins, maxs, end, ENTITYNUM_NONE, CONTENTS_SOLID);
+    if (tr.fraction != 1.0f) {
         return;
     }
 
-    item = BG_FindItemForWeapon(weapon);
-    if (!item) {
-        return;
-    }
-
-    // Calculate drop velocity
-    VectorCopy(ent->client->ps.viewangles, angles);
-    AngleVectors(angles, velocity, NULL, NULL);
-    VectorScale(velocity, 400, velocity);
-    velocity[2] += 200;
-
-    drop = LaunchItem(item, ent->s.pos.trBase, velocity);
-    if (drop) {
-        // Transfer ammo to the dropped weapon
-        ammo = ent->client->ps.ammo[weapon];
-        drop->count = ammo;
-        drop->s.clientNum = ent->s.clientNum;
-    }
-
-    // Remove weapon and ammo from player
-    ent->client->ps.stats[STAT_WEAPONS] &= ~(1 << weapon);
-    ent->client->ps.ammo[weapon] = 0;
-
-    // Fire the drop weapon event
-    G_AddEvent(ent, EV_DROP_WEAPON, weapon);
-
-    // Switch to best available weapon
-    ent->client->ps.weapon = WP_GAUNTLET;
-    for (int i = WP_NUM_WEAPONS - 1; i > WP_GAUNTLET; i--) {
-        if (ent->client->ps.stats[STAT_WEAPONS] & (1 << i)) {
-            ent->client->ps.weapon = i;
+    item = BG_FindItemForWeapon((weapon_t)weapon);
+    amount = MIN(client->ps.ammo[weapon], item->quantity);
+    for (next = item->giTag - 1; next > 0; next--) {
+        if (client->ps.stats[STAT_WEAPONS] & (1 << next)) {
             break;
         }
     }
+
+    client->ps.ammo[weapon] -= amount;
+    client->ps.stats[STAT_WEAPONS] &= ~(1 << item->giTag);
+    client->ps.weapon = next;
+
+    drop = LaunchItem(item, tr.endpos, vec3_origin);
+    drop->count = amount;
+    drop->nextthink = level.time + 10000;
+    drop->s.clientNum = ent->s.clientNum;
+    drop->s.time = level.time;
+
+    BG_AddPredictableEventToPlayerstate(EV_DROP_WEAPON, weapon, &client->ps);
 }
 
 /*

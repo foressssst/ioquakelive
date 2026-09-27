@@ -975,7 +975,9 @@ void Freeze_Think(void);
 void Freeze_ClientThawCheck(gentity_t *ent, int msec);  // [QL] msec = clamped pmove frame delta from ClientThink_real (binary 0x1004cdc0)
 void Freeze_PlayerFrozen(gentity_t *self);
 void Freeze_AutoThaw(int team);   // [QL] 0x1004cc20 (twin of CA_PlayerKilled; last-man-standing announce)
-void G_ThrowFlag(gentity_t *self, vec3_t point);        // [QL] 0x10051420 (gauntlet flag toss, g_dropCmds)
+void G_ThrowFlag(gentity_t *self, vec3_t velocity, vec3_t point);  // [QL] 0x100513b0 (dropflag, g_tackleFlag)
+void CaptureZone_Touch(gentity_t *self, gentity_t *other);       // [QL] 0x1006bda0
+int Team_TouchOurFlag(gentity_t *ent, gentity_t *other, int team, gentity_t *thrown, int score);  // [QL] 0x10069800
 const char* G_GametypeDisplayName(void);                // [QL] the gametype's long name
 void Drop_DamagedHealth(gentity_t *attacker, gentity_t *targ, int amount);  // [QL] 0x1004f930 (bleeding health, g_dropDamagedHealth)
 qboolean Freeze_TeamFrozen(int team);

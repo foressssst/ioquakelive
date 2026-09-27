@@ -152,6 +152,7 @@ void SP_trigger_multiple(gentity_t* ent);
 void SP_trigger_push(gentity_t* ent);
 void SP_trigger_teleport(gentity_t* ent);
 void SP_trigger_hurt(gentity_t* ent);
+void SP_trigger_capturezone(gentity_t* ent);
 
 void SP_target_remove_powerups(gentity_t* ent);
 void SP_target_give(gentity_t* ent);
@@ -248,6 +249,7 @@ spawn_t spawns[] = {
     {"trigger_push", SP_trigger_push},
     {"trigger_teleport", SP_trigger_teleport},
     {"trigger_hurt", SP_trigger_hurt},
+    {"trigger_capturezone", SP_trigger_capturezone},  // [QL] 0x1006be70
 
     // targets perform no action by themselves, but must be triggered
     // by another entity
@@ -298,8 +300,7 @@ spawn_t spawns[] = {
 
     // [QL] qagamex86.dll spawns[] (0x10080560) lists info_tour_point right after
     // advertisement (0x10080710 -> SP_info_tour_point 0x1005a1f0; the 0x1005a260 an
-    // older note gave falls inside it). It also lists trigger_capturezone
-    // (0x1006be60), which this tree does not have yet.
+    // older note gave falls inside it).
     {"info_tour_point", SP_info_tour_point},
 
     {NULL, 0}};

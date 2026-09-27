@@ -865,11 +865,11 @@ was carried ("captured in" when it came straight from the enemy base, "held for"
 picked up off the ground on the way), gives the capture medal, and gives the assist medal to
 every teammate who returned the flag or fragged the enemy carrier in the last 10 seconds, the
 capturer included. The capture that reaches the capture limit plays no capture sound, outside
-warmup. 'score' is what the capture adds to the team score. Retail has a second caller
-(0x1006bda0, a team trigger) that is not in ioquakelive.
+warmup. 'score' is what the capture adds to the team score. 'thrown' is the flag a capture zone
+took in (CaptureZone_Touch, 0x1006bda0): in 1-Flag it captures for whoever threw it.
 ==============
 */
-int Team_TouchOurFlag(gentity_t* ent, gentity_t* other, int team, int score) {
+int Team_TouchOurFlag(gentity_t* ent, gentity_t* other, int team, gentity_t* thrown, int score) {
     int i;
     int enemy_flag;
     int minutes;
@@ -883,7 +883,11 @@ int Team_TouchOurFlag(gentity_t* ent, gentity_t* other, int team, int score) {
 
     if (g_gametype.integer == GT_1FCTF) {
         enemy_flag = PW_NEUTRALFLAG;
-        if (!cl->ps.powerups[PW_NEUTRALFLAG]) {
+        if (thrown) {
+            if (!thrown->parent) {
+                return 0;
+            }
+        } else if (!cl->ps.powerups[PW_NEUTRALFLAG]) {
             return 0;
         }
     } else {
@@ -1127,7 +1131,7 @@ int Pickup_Team(gentity_t* ent, gentity_t* other) {
             return Team_TouchEnemyFlag(ent, other, cl->sess.sessionTeam);
         }
         if (team != cl->sess.sessionTeam) {
-            return Team_TouchOurFlag(ent, other, cl->sess.sessionTeam, 1);
+            return Team_TouchOurFlag(ent, other, cl->sess.sessionTeam, NULL, 1);
         }
         return 0;
     }
@@ -1138,7 +1142,7 @@ int Pickup_Team(gentity_t* ent, gentity_t* other) {
     }
 
     if (team == cl->sess.sessionTeam) {
-        return Team_TouchOurFlag(ent, other, team, g_gametype.integer == GT_AD ? g_adCaptureScoreBonus.integer : 1);
+        return Team_TouchOurFlag(ent, other, team, NULL, g_gametype.integer == GT_AD ? g_adCaptureScoreBonus.integer : 1);
     }
     return Team_TouchEnemyFlag(ent, other, team);
 }

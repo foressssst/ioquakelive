@@ -44,6 +44,76 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 //======================================================================
 
+/*
+===============
+G_ItemPickupAnnounce
+
+[QL] 0x1004dc20. A powerup taken is told to everybody ("X got the Quad Damage!"); the red armour
+and the mega health to the taker's teammates and the spectators ("X got the Red Armor."), in
+the flag modes coloured by the base the item is nearer to. What was dropped is not told.
+===============
+*/
+static void G_ItemPickupAnnounce(gentity_t* ent, gentity_t* other, qboolean powerup) {
+    const char* color = S_COLOR_WHITE;
+    const char* name;
+    vec3_t red, blue;
+    int side, enemy, i;
+
+    if (!other->client || (ent->flags & FL_DROPPED_ITEM)) {
+        return;
+    }
+
+    VectorSubtract(ent->s.origin, level.itemTimerRedBase, red);
+    VectorSubtract(level.itemTimerBlueBase, ent->s.origin, blue);
+    side = (VectorLengthSquared(blue) > VectorLengthSquared(red)) ? TEAM_RED : TEAM_BLUE;
+
+    switch (g_gametype.integer) {
+        case GT_CTF:
+        case GT_1FCTF:
+        case GT_OBELISK:
+        case GT_HARVESTER:
+        case GT_DOMINATION:
+        case GT_AD:
+            break;
+        default:
+            color = S_COLOR_YELLOW;
+            break;
+    }
+
+    name = ent->item->pickup_name;
+    if (powerup) {
+        trap_SendServerCommand(-1, va("print \"%s%s got the %s!^7\n\"", other->client->pers.netname, color, name));
+        return;
+    }
+
+    enemy = other->client->sess.sessionTeam;
+    if (enemy == TEAM_RED) {
+        enemy = TEAM_BLUE;
+    } else if (enemy == TEAM_BLUE) {
+        enemy = TEAM_RED;
+    }
+    for (i = 0; i < level.maxclients; i++) {
+        gclient_t* cl = &level.clients[i];
+
+        if (cl->pers.connected != CON_CONNECTED || &g_entities[i] == other || cl->sess.sessionTeam == enemy) {
+            continue;
+        }
+        if ((g_gametype.integer >= GT_CTF && g_gametype.integer <= GT_HARVESTER) || g_gametype.integer == GT_AD) {
+            color = (side == TEAM_RED) ? S_COLOR_RED : S_COLOR_BLUE;
+        } else {
+            color = S_COLOR_WHITE;
+        }
+        trap_SendServerCommand(i, va("print \"%s ^7got the %s%s.\n\"", other->client->pers.netname, color, name));
+    }
+}
+
+/*
+===============
+Pickup_Powerup
+
+[QL] 0x1004dfe0.
+===============
+*/
 int Pickup_Powerup(gentity_t* ent, gentity_t* other) {
     int quantity;
     int i;
@@ -58,6 +128,29 @@ int Pickup_Powerup(gentity_t* ent, gentity_t* other) {
         quantity = ent->count;
     } else {
         quantity = ent->item->quantity;
+    }
+
+    // [QL] 0x1004dffb: a powerup dropped with g_droppedPowerupsDecay lost a second for each
+    // second it lay on the ground
+    if (ent->flags & FL_DROPPED_ITEM_TIMED) {
+        quantity -= (level.time - ent->s.time) / 1000;
+        if (quantity < 0) {
+            quantity = 0;
+        }
+    }
+
+    // [QL] 0x1004e02a: a new battle suit or quad starts its kill count again (ps.stats[5] and
+    // ps.stats[13], the award counters of player_die)
+    if (giTag == PW_BATTLESUIT && !other->client->ps.powerups[PW_BATTLESUIT]) {
+        other->client->ps.stats[5] = 0;
+    }
+    if (giTag == PW_QUAD && !other->client->ps.powerups[PW_QUAD]) {
+        other->client->ps.stats[13] = 0;
+    }
+
+    // [QL] 0x1004e089: the quad of the Quad Hog lasts g_quadHogTime
+    if (g_quadHog.integer && g_gametype.integer == GT_FFA) {
+        quantity = g_quadHogTime.integer;
     }
 
     if (!other->client->ps.powerups[giTag]) {
@@ -106,6 +199,8 @@ int Pickup_Powerup(gentity_t* ent, gentity_t* other) {
                 break;
         }
     }
+
+    G_ItemPickupAnnounce(ent, other, qtrue);
 
     // [QL] 0x1004e271: AW_RESOURCE_HOG (0x1d), a quad and a battle suit picked up
     if (!trap_HasAchievement(other->client->ps.clientNum, 0x1d) &&
@@ -453,8 +548,11 @@ int Pickup_Health(gentity_t* ent, gentity_t* other) {
 
     client = other->client;
 
-    // small (5) and mega (100) healths overheal to 2x max; others cap at max
-    if (ent->item->quantity == 5 || ent->item->quantity == 100) {
+    // the small (4) and the mega (1) overheal to 2x max; others cap at max. [QL] 0x1004e810: in the
+    // training below skill 3 the bots never go over their maximum
+    if (g_training.integer && trap_Cvar_VariableValue("g_spSkill") < 3.0f && (other->r.svFlags & SVF_BOT)) {
+        max = client->ps.stats[STAT_MAX_HEALTH];
+    } else if (ent->item->giTag == 4 || ent->item->giTag == 1) {
         max = client->ps.stats[STAT_MAX_HEALTH] * 2;
     } else {
         max = client->ps.stats[STAT_MAX_HEALTH];
@@ -482,6 +580,10 @@ int Pickup_Health(gentity_t* ent, gentity_t* other) {
         }
     } else {
         client->expandedStats.numHealthPickups++;
+    }
+
+    if (ent->item->giTag == 1) {  // the mega, 0x1004e939
+        G_ItemPickupAnnounce(ent, other, qfalse);
     }
 
     return RESPAWN_HEALTH;
@@ -541,6 +643,9 @@ int Pickup_Armor(gentity_t* ent, gentity_t* other) {
         if (other->client->ps.stats[STAT_ARMOR] > max) {
             other->client->ps.stats[STAT_ARMOR] = max;
         }
+        if (giTag == 1) {
+            G_ItemPickupAnnounce(ent, other, qfalse);
+        }
         // [QL] 0x1004e6f4 and 0x1004e803: the armor also goes out in the entity, for teammates
         other->s.armor = other->client->ps.stats[STAT_ARMOR];
         return RESPAWN_ARMOR;
@@ -572,6 +677,9 @@ int Pickup_Armor(gentity_t* ent, gentity_t* other) {
 
     if (other->client->ps.stats[STAT_ARMOR] > max) {
         other->client->ps.stats[STAT_ARMOR] = max;
+    }
+    if (giTag == 1) {
+        G_ItemPickupAnnounce(ent, other, qfalse);
     }
     other->s.armor = other->client->ps.stats[STAT_ARMOR];
 
@@ -1173,6 +1281,23 @@ void Touch_Item(gentity_t* ent, gentity_t* other, trace_t* trace) {
         return;
     }
 
+    // [QL] 0x1004f06c: nothing is taken in the countdown of a match, nor in that of a round but
+    // in Freeze Tag without g_freezeRoundDelay; nor by a player kept from items, and no powerup
+    // by one kept from powerups
+    if (level.warmupTime > 0) {
+        return;
+    }
+    if (level.roundState.eCurrent == RS_COUNTDOWN &&
+        (g_gametype.integer != GT_FREEZE || g_freezeRoundDelay.integer)) {
+        return;
+    }
+    if (other->flags & FL_NOPICKUP) {
+        return;
+    }
+    if ((other->flags & FL_NOPOWERUP) && ent->item->giType == IT_POWERUP) {
+        return;
+    }
+
     G_LogPrintf("Item: %i %s\n", other->s.number, ent->item->classname);
 
     predict = other->client->pers.predictItemPickup;
@@ -1212,7 +1337,6 @@ void Touch_Item(gentity_t* ent, gentity_t* other, trace_t* trace) {
                 other->client->ps.stats[STAT_KEY] |= ent->item->giTag;
             }
             respawn = -1;  // keys don't auto-respawn
-            predict = qfalse;
             break;
         default:
             return;
@@ -1221,6 +1345,11 @@ void Touch_Item(gentity_t* ent, gentity_t* other, trace_t* trace) {
     // [QL] count every touch that reached a pickup handler; drives the
     // "first pickup" and time-held item stats
     ent->pickupCount++;
+
+    // dropped items will not respawn
+    if (ent->flags & FL_DROPPED_ITEM) {
+        ent->freeAfterEvent = qtrue;
+    }
 
     if (!respawn) {
         return;
@@ -1251,12 +1380,14 @@ void Touch_Item(gentity_t* ent, gentity_t* other, trace_t* trace) {
 
             te = G_TempEntity(ent->s.pos.trBase, EV_GLOBAL_ITEM_PICKUP);
             te->s.eventParm = ent->s.modelindex;
+            te->s.otherEntityNum = other->s.number;  // [QL] 0x1004f2f2: who took it
             te->r.svFlags |= SVF_BROADCAST;
         } else {
             gentity_t* te;
 
             te = G_TempEntity(ent->s.pos.trBase, EV_GLOBAL_ITEM_PICKUP);
             te->s.eventParm = ent->s.modelindex;
+            te->s.otherEntityNum = other->s.number;
             // only send this temp entity to a single client
             te->r.svFlags |= SVF_SINGLECLIENT;
             te->r.singleClient = other->s.number;
@@ -1288,9 +1419,9 @@ void Touch_Item(gentity_t* ent, gentity_t* other, trace_t* trace) {
         }
     }
 
-    // dropped items will not respawn
-    if (ent->flags & FL_DROPPED_ITEM) {
-        ent->freeAfterEvent = qtrue;
+    // [QL] 0x1004f33c: in the gauntlet-only training the items take bot_itemDelayTime longer
+    if (bot_gauntletOnly.integer) {
+        respawn += bot_itemDelayTime.integer;
     }
 
     // picked up items still stay around, they just don't
