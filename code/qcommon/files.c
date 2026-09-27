@@ -241,6 +241,19 @@ static qboolean FS_IsGamecodePak(const char* pakBasename) {
 	return Q_stricmp(pakBasename, IOBIN_PAKNAME) == 0;
 }
 
+/*
+[ioquakelive] The engine's own paks: iobin.pk3 with the game modules and pak01.pk3 with what
+ioquakelive adds to the game (its menus, fonts, emoji). They go with each build, the way
+retail's bin.pk3 goes with the game, so a pure server has no say over them: a client always
+reads them, whatever the server's version, architecture or system, and neither side lists
+them. The pure check keeps doing its job on pak00 and the Workshop's paks.
+*/
+#define ENGINE_CONTENT_PAKNAME "pak01"
+
+static qboolean FS_IsEnginePak(const pack_t* pack) {
+	return pack && (FS_IsGamecodePak(pack->pakBasename) || !Q_stricmp(pack->pakBasename, ENGINE_CONTENT_PAKNAME));
+}
+
 typedef union qfile_gus {
 	FILE* o;
 	unzFile z;
@@ -324,6 +337,9 @@ FS_PakIsPure
 qboolean FS_PakIsPure(pack_t* pack) {
 	int i;
 
+	if (FS_IsEnginePak(pack)) {
+		return qtrue;  // the engine's own, see FS_IsEnginePak
+	}
 	if (fs_numServerPaks) {
 		for (i = 0; i < fs_numServerPaks; i++) {
 			// FIXME: also use hashed file names
@@ -1617,6 +1633,32 @@ CONVENIENCE FUNCTIONS FOR ENTIRE FILES
 
 ======================================================================================
 */
+
+/*
+================
+FS_FileIsInEnginePak
+
+[ioquakelive] Whether the first pak that has this file is one of the engine's own.
+================
+*/
+qboolean FS_FileIsInEnginePak(const char* filename) {
+	searchpath_t* search;
+	fileInPack_t* pakFile;
+	long hash;
+
+	for (search = fs_searchpaths; search; search = search->next) {
+		if (!search->pack) {
+			continue;
+		}
+		hash = FS_HashFileName(filename, search->pack->hashSize);
+		for (pakFile = search->pack->hashTable[hash]; pakFile; pakFile = pakFile->next) {
+			if (!FS_FilenameCompare(pakFile->name, filename)) {
+				return FS_IsEnginePak(search->pack);
+			}
+		}
+	}
+	return qfalse;
+}
 
 int FS_FileIsInPAK(const char* filename, int* pChecksum) {
 	searchpath_t* search;
@@ -3993,7 +4035,7 @@ const char* FS_LoadedPakChecksums(void) {
 
 	for (search = fs_searchpaths; search; search = search->next) {
 		// is the element a pak file?
-		if (!search->pack) {
+		if (!search->pack || FS_IsEnginePak(search->pack)) {
 			continue;
 		}
 
@@ -4019,7 +4061,7 @@ const char* FS_LoadedPakNames(void) {
 
 	for (search = fs_searchpaths; search; search = search->next) {
 		// is the element a pak file?
-		if (!search->pack) {
+		if (!search->pack || FS_IsEnginePak(search->pack)) {
 			continue;
 		}
 
@@ -4049,7 +4091,7 @@ const char* FS_LoadedPakPureChecksums(void) {
 
 	for (search = fs_searchpaths; search; search = search->next) {
 		// is the element a pak file?
-		if (!search->pack) {
+		if (!search->pack || FS_IsEnginePak(search->pack)) {
 			continue;
 		}
 
@@ -4075,7 +4117,7 @@ const char* FS_ReferencedPakChecksums(void) {
 
 	// [QL] Binary only includes paks with referenced flag set - no gamename fallback
 	for (search = fs_searchpaths; search; search = search->next) {
-		if (search->pack && search->pack->referenced) {
+		if (search->pack && search->pack->referenced && !FS_IsEnginePak(search->pack)) {
 			Q_strcat(info, sizeof(info), va("%i ", search->pack->checksum));
 		}
 	}
@@ -4094,6 +4136,30 @@ The string has a specific order, "qagame cgame ui @ ref1 ref2 ref3 ..."
 [QL] qagame slot added - server validates all three game modules instead of two.
 =====================
 */
+/*
+=====================
+FS_ModulePakPureChecksum
+
+[ioquakelive] The pak a module slot of the pure report names. The modules come out of our own
+iobin.pk3, which a server running retail has never heard of; what it expects there is its own
+bin.pk3, the one Steam installs with Quake Live, so that one is named when the client has it.
+An ioquakelive server does not check these slots when its modules are the engine's.
+=====================
+*/
+static int FS_ModulePakPureChecksum(const pack_t* pack) {
+	searchpath_t* search;
+
+	if (!FS_IsGamecodePak(pack->pakBasename)) {
+		return pack->pure_checksum;
+	}
+	for (search = fs_searchpaths; search; search = search->next) {
+		if (search->pack && !Q_stricmp(search->pack->pakBasename, "bin")) {
+			return search->pack->pure_checksum;
+		}
+	}
+	return pack->pure_checksum;
+}
+
 const char* FS_ReferencedPakPureChecksums(void) {
 	static char info[BIG_INFO_STRING];
 	searchpath_t* search;
@@ -4116,11 +4182,16 @@ const char* FS_ReferencedPakPureChecksums(void) {
 		for (search = fs_searchpaths; search; search = search->next) {
 			// is the element a pak file and has it been referenced based on flag?
 			if (search->pack && (search->pack->referenced & nFlags)) {
-				Q_strcat(info, sizeof(info), va("%i ", search->pack->pure_checksum));
 				// [QL] qagame slot has same "first match wins" semantics as cgame/ui
 				if (nFlags & (FS_QAGAME_REF | FS_CGAME_REF | FS_UI_REF)) {
+					Q_strcat(info, sizeof(info), va("%i ", FS_ModulePakPureChecksum(search->pack)));
 					break;
 				}
+				// [ioquakelive] the engine's own paks are nobody else's business
+				if (FS_IsEnginePak(search->pack)) {
+					continue;
+				}
+				Q_strcat(info, sizeof(info), va("%i ", search->pack->pure_checksum));
 				checksum ^= search->pack->pure_checksum;
 				numPaks++;
 			}
@@ -4149,7 +4220,7 @@ const char* FS_ReferencedPakNames(void) {
 
 	// [QL] Binary only includes paks with referenced flag set
 	for (search = fs_searchpaths; search; search = search->next) {
-		if (search->pack && search->pack->referenced) {
+		if (search->pack && search->pack->referenced && !FS_IsEnginePak(search->pack)) {
 			if (*info) {
 				Q_strcat(info, sizeof(info), " ");
 			}
@@ -4371,6 +4442,10 @@ qboolean FS_VerifyPureGamecode(void) {
 		if (pak && (pak->referenced & FS_UI_REF) && fs_numServerPaks > 0) {
 			int checksum = pak->checksum;
 
+			// [ioquakelive] the engine's iobin is always allowed, see FS_IsEnginePak
+			if (FS_IsEnginePak(pak) && fs_uiBinChecksum == checksum) {
+				return qtrue;
+			}
 			if (checksum != fs_serverPaks[0]) {  // Check if not first server pak
 				qboolean found = qfalse;
 				for (int i = 0; i < fs_numServerPaks; i++) {
@@ -4430,14 +4505,13 @@ qboolean FS_ExtractGamecode(const char* module, char* outOSPath) {
 		if (!pak)
 			continue;
 
-		// [QL] Universal iobin pk3 is part of the normal pure-checked pak set.
-		// Enforce that any pak we'd extract from must be in the server's
-		// whitelist when sv_pure is active - same as every other asset pak.
-		// Anti-cheat: a tampered iobin (different checksum) gets rejected here
-		// instead of slipping through a special-case bypass.
-		if (fs_numServerPaks > 0) {
+		// [QL] A pak we'd extract from must be in the server's whitelist when sv_pure is
+		// active, as every other asset pak -- except the engine's own iobin, which only
+		// loads from the install (FS_AddGameDirectory) and which no other build's server
+		// lists: see FS_IsEnginePak.
+		checksum = pak->checksum;
+		if (fs_numServerPaks > 0 && !FS_IsEnginePak(pak)) {
 			qboolean matched = qfalse;
-			checksum = pak->checksum;
 
 			for (int i = 0; i < fs_numServerPaks; i++) {
 				if (fs_serverPaks[i] == checksum) {

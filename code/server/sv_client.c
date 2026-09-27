@@ -1132,6 +1132,24 @@ static void SV_VerifyPaks_f(client_t* cl) {
                 bGood = qfalse;
                 break;
             }
+            // [ioquakelive] when the server's modules are the engine's own (iobin.pk3), each
+            // client's are its own business too: a client of another build, architecture or
+            // system, or retail's, names another pak there. The slots still have to be there
+            if (FS_FileIsInEnginePak("qagame" ARCH_STRING DLL_EXT)) {
+                for (i = 0; i < 3; i++) {
+                    pArg = Cmd_Argv(nCurArg++);
+                    if (!pArg || *pArg == '@') {
+                        bGood = qfalse;
+                    }
+                }
+                if (!bGood) {
+                    break;
+                }
+                nCurArg -= 3;
+                nChkSum0 = atoi(Cmd_Argv(nCurArg));
+                nChkSum1 = atoi(Cmd_Argv(nCurArg + 1));
+                nChkSum2 = atoi(Cmd_Argv(nCurArg + 2));
+            }
             // [QL] verify first to be the qagame checksum
             pArg = Cmd_Argv(nCurArg++);
             if (!pArg || *pArg == '@' || atoi(pArg) != nChkSum0) {

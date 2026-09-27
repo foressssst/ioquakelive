@@ -646,6 +646,7 @@ long FS_FOpenFileRead(const char* qpath, fileHandle_t* file, qboolean uniqueFILE
 // file IO goes through FS_ReadFile, which Does The Right Thing already.
 
 int FS_FileIsInPAK(const char* filename, int* pChecksum);
+qboolean FS_FileIsInEnginePak(const char* filename);  // [ioquakelive] iobin.pk3 or pak01.pk3
 // returns 1 if a file is in the PAK file, otherwise -1
 
 int FS_Write(const void* buffer, int len, fileHandle_t f);
