@@ -711,6 +711,8 @@ void SV_ClientEnterWorld(client_t* client, usercmd_t* cmd) {
     else
         memset(&client->lastUsercmd, '\0', sizeof(client->lastUsercmd));
 
+    // [QL] 0x4dfaaa: call the game begin function
+    SV_GameClientBegin(clientNum);
 }
 
 /*

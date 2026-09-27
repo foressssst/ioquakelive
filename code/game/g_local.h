@@ -1063,7 +1063,6 @@ char* G_GetBotInfoByName(const char* name);
 void G_CheckBotSpawn(void);
 void G_RemoveQueuedBotBegin(int clientNum);
 qboolean G_BotConnect(int clientNum, qboolean restart);
-qboolean G_BotWaitingToSpawn(int clientNum);
 void Svcmd_AddBot_f(void);
 void G_AddBot(const char* name, float skill, const char* team, int delay, char* altname);
 

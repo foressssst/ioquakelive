@@ -605,26 +605,6 @@ void G_CheckMinimumPlayers(void) {
 
 /*
 ===============
-G_BotWaitingToSpawn
-
-Whether this bot is waiting its turn in G_CheckBotSpawn's queue. Asked before rescuing a
-client left half connected: a queued bot must be left alone, because beginning it twice
-spawns it twice.
-===============
-*/
-qboolean G_BotWaitingToSpawn(int clientNum) {
-    int n;
-
-    for (n = 0; n < BOT_SPAWN_QUEUE_DEPTH; n++) {
-        if (botSpawnQueue[n].spawnTime && botSpawnQueue[n].clientNum == clientNum) {
-            return qtrue;
-        }
-    }
-    return qfalse;
-}
-
-/*
-===============
 G_CheckBotSpawn
 ===============
 */

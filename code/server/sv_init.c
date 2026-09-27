@@ -540,6 +540,8 @@ void SV_SpawnServer(char* server, qboolean killBots) {
 
                     client->deltaMessage = -1;
                     client->nextSnapshotTime = 0;  // generate a snapshot immediately
+                    // [QL] 0x4e386d: a bot is begun at once
+                    SV_GameClientBegin(i);
                 }
             }
         }

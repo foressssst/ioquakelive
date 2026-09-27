@@ -333,7 +333,7 @@ typedef struct {
 } gameImport_t;
 
 // [QL] the vmMain export table, completely reordered against Q3: QL uses a function
-// pointer table instead of Q3's dispatcher and drops GAME_CLIENT_BEGIN. The bots' frame
+// pointer table instead of Q3's dispatcher. The bots' frame
 // is still its own export (+0x2c), called apart from GAME_RUN_FRAME (SV_BotFrame,
 // quakelive_steam.exe 0x4dd670).
 //
@@ -355,7 +355,7 @@ typedef enum {
     GAME_CLIENT_DISCONNECT       = 9,   // ClientDisconnect()
     GAME_CLIENT_CONNECT          = 10,  // ClientConnect()
     GAME_CLIENT_COMMAND          = 11,  // ClientCommand()
-    GAME_UNUSED_12               = 12,  // [QL] 0x1003b030, sin portar
+    GAME_CLIENT_BEGIN            = 12,  // [QL] ClientBegin() (retail 0x1003b030)
     GAME_BOT_AI_START_FRAME      = 13,  // [QL] BotAIStartFrame() (retail 0x10023400)
     GAME_SNAPSHOT_ALWAYS_SEND    = 14,  // [QL] G_ClientAlwaysInSnapshot() (retail 0x10052dc0)
     GAME_UNUSED_15               = 15,  // [QL] 0x10053020, gametype 9 only, not ported

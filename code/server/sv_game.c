@@ -1242,6 +1242,12 @@ int SV_GameVoiceFilter(int speaker, int listener) {
     return 0;
 }
 
+// [QL] retail export 12 (0x1003b030): the game begins a client once it is in the world
+void SV_GameClientBegin(int clientNum) {
+    if (sv_vmMainTable[GAME_CLIENT_BEGIN])
+        ((void (*)(int))sv_vmMainTable[GAME_CLIENT_BEGIN])(clientNum);
+}
+
 // [QL] retail export +0x48: a client's score, which the server hands Steam's list
 int SV_GameClientScore(int clientNum) {
     if (sv_vmMainTable[GAME_CLIENT_SCORE])

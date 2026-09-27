@@ -436,6 +436,7 @@ qboolean SV_GameSnapshotAlwaysSend(int viewerNum, int clientNum);
 void SV_GameBotAIStartFrame(int time);
 int SV_GameVoiceFilter(int speaker, int listener);
 int SV_GameClientScore(int clientNum);
+void SV_GameClientBegin(int clientNum);
 void SV_VoiceFrame(void);
 void SV_SteamIdentity(void);
 void SV_RegisterGameCvars(void);

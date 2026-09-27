@@ -1114,6 +1114,7 @@ Q_EXPORT void dllEntry(void **vmMainOut, gameImport_t *syscallTable, int *apiVer
     vmMainOut[GAME_CLIENT_DISCONNECT]       = (void *)ClientDisconnect;
     vmMainOut[GAME_CLIENT_CONNECT]          = (void *)ClientConnect;
     vmMainOut[GAME_CLIENT_COMMAND]          = (void *)ClientCommand;
+    vmMainOut[GAME_CLIENT_BEGIN]            = (void *)ClientBegin;
     vmMainOut[GAME_SNAPSHOT_VISIBILITY]     = (void *)G_ObfuscateEnemyInfoInSnapshotCheck;
     vmMainOut[GAME_SNAPSHOT_ALWAYS_SEND]    = (void *)G_ClientAlwaysInSnapshot;
     vmMainOut[GAME_BOT_AI_START_FRAME]      = (void *)BotAIStartFrame;
@@ -4177,28 +4178,6 @@ void G_RunFrame(int levelTime) {
     if (playerInfoDirty) {
         G_SendPlayerInfo();
         playerInfoDirty = qfalse;
-    }
-
-    // [QL listen server] Auto-begin connecting clients. Retail's dedicated servers
-    // rely on the "team" command from the UI to trigger ClientBegin; Q3 had
-    // GAME_CLIENT_BEGIN in vmMain and QL removed it. A listen server has to begin
-    // its clients here or they get no player state and no snapshots.
-    //
-    // [ioquakelive] A bot added with a delay (G_AddBot's fourth argument) stays a
-    // half-connected client until G_CheckBotSpawn begins it, and begun here as well
-    // it spawns twice. Excluding every bot is worse: a map_restart leaves everyone
-    // in CON_CONNECTING, bots included, and then nothing begins them - the bot's
-    // other two callers are its own registration and the queue, and neither runs on
-    // a restart. Only a bot genuinely waiting in the queue is excluded.
-    for (i = 0; i < level.maxclients; i++) {
-        if (level.clients[i].pers.connected != CON_CONNECTING) {
-            continue;
-        }
-        // a bot waiting its turn in the queue is left alone; G_CheckBotSpawn begins it
-        if ((g_entities[i].r.svFlags & SVF_BOT) && G_BotWaitingToSpawn(i)) {
-            continue;
-        }
-        ClientBegin(i);
     }
 
     // [QL] Intermission map-vote UI: re-enable a client's vote UI ~2.25s after
