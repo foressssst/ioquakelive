@@ -251,6 +251,15 @@ int Pickup_Holdable(gentity_t* ent, gentity_t* other) {
         other->client->ps.eFlags |= EF_KAMIKAZE;
     }
 
+    // [QL] 0x1004df18: flight comes with its thrust, a full tank and the refuel rate. The
+    // tank is kept under 32001, since pmove only burns it when it is 32000 or less
+    if (ent->item->giTag == HI_FLIGHT) {
+        other->client->ps.stats[STAT_FLIGHT_THRUST] = g_flightThrust.integer;
+        other->client->ps.stats[STAT_CUR_FLIGHT_FUEL] = MIN(g_maxFlightFuel.integer, 32001);
+        other->client->ps.stats[STAT_MAX_FLIGHT_FUEL] = MIN(g_maxFlightFuel.integer, 32001);
+        other->client->ps.stats[STAT_FLIGHT_REFUEL] = g_flightRefuelRate.integer;
+    }
+
     // [QL] pickup statistics
     if (ent->item->giTag == HI_MEDKIT && g_gametype.integer > GT_RACE) {
         other->client->expandedStats.numMedkitPickups++;

@@ -267,7 +267,7 @@ char* BotWeaponNameForMeansOfDeath(int mod) {
         case MOD_GAUNTLET:
             return "Gauntlet";
         case MOD_MACHINEGUN:
-            return "Machinegun";
+            return "Machine Gun";
         case MOD_GRENADE:
         case MOD_GRENADE_SPLASH:
             return "Grenade Launcher";
@@ -278,8 +278,10 @@ char* BotWeaponNameForMeansOfDeath(int mod) {
         case MOD_PLASMA_SPLASH:
             return "Plasmagun";
         case MOD_RAILGUN:
+        case MOD_RAILGUN_HEADSHOT:  // [QL] 0x10001840
             return "Railgun";
         case MOD_LIGHTNING:
+        case MOD_LIGHTNING_DISCHARGE:
             return "Lightning Gun";
         case MOD_BFG:
         case MOD_BFG_SPLASH:
@@ -296,6 +298,8 @@ char* BotWeaponNameForMeansOfDeath(int mod) {
             return "Prox mine";
         case MOD_GRAPPLE:
             return "Grapple";
+        case MOD_HMG:
+            return "Heavy Machine Gun";
         default:
             return "[unknown weapon]";
     }
@@ -316,7 +320,7 @@ char* BotRandomWeaponName(void) {
         case 1:
             return "Shotgun";
         case 2:
-            return "Machinegun";
+            return "Machine Gun";
         case 3:
             return "Grenade Launcher";
         case 4:

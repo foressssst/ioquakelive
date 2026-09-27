@@ -144,7 +144,7 @@ gitem_t bg_itemlist[] =
             {"models/powerups/armor/armor_yel.md3",
              NULL, NULL, NULL},
             /* icon */ "icons/iconr_yellow",
-            /* pickup */ "Armor",
+            /* pickup */ "Yellow Armor",
             50,
             IT_ARMOR,
             2,
@@ -160,7 +160,7 @@ gitem_t bg_itemlist[] =
             {"models/powerups/armor/armor_red.md3",
              NULL, NULL, NULL},
             /* icon */ "icons/iconr_red",
-            /* pickup */ "Heavy Armor",
+            /* pickup */ "Red Armor",
             100,
             IT_ARMOR,
             1,
@@ -295,8 +295,8 @@ gitem_t bg_itemlist[] =
             {"models/weapons2/machinegun/machinegun.md3",
              NULL, NULL, NULL},
             /* icon */ "icons/iconw_machinegun",
-            /* pickup */ "Machinegun",
-            40,
+            /* pickup */ "Machine Gun",
+            100,
             IT_WEAPON,
             WP_MACHINEGUN,
             /* precache */ "",
@@ -386,7 +386,7 @@ gitem_t bg_itemlist[] =
              NULL, NULL, NULL},
             /* icon */ "icons/iconw_bfg",
             /* pickup */ "BFG10K",
-            20,
+            10,
             IT_WEAPON,
             WP_BFG,
             /* precache */ "",
@@ -420,7 +420,7 @@ gitem_t bg_itemlist[] =
              NULL, NULL, NULL},
             /* icon */ "icons/icona_shotgun",
             /* pickup */ "Shells",
-            10,
+            5,
             IT_AMMO,
             WP_SHOTGUN,
             /* precache */ "",
@@ -465,7 +465,7 @@ gitem_t bg_itemlist[] =
              NULL, NULL, NULL},
             /* icon */ "icons/icona_plasma",
             /* pickup */ "Cells",
-            30,
+            50,
             IT_AMMO,
             WP_PLASMAGUN,
             /* precache */ "",
@@ -480,7 +480,7 @@ gitem_t bg_itemlist[] =
              NULL, NULL, NULL},
             /* icon */ "icons/icona_lightning",
             /* pickup */ "Lightning",
-            60,
+            50,
             IT_AMMO,
             WP_LIGHTNING,
             /* precache */ "",
@@ -510,7 +510,7 @@ gitem_t bg_itemlist[] =
              NULL, NULL, NULL},
             /* icon */ "icons/icona_railgun",
             /* pickup */ "Slugs",
-            10,
+            5,
             IT_AMMO,
             WP_RAILGUN,
             /* precache */ "",
@@ -524,8 +524,8 @@ gitem_t bg_itemlist[] =
             {"models/powerups/ammo/bfgam.md3",
              NULL, NULL, NULL},
             /* icon */ "icons/icona_bfg",
-            /* pickup */ "Bfg Ammo",
-            15,
+            /* pickup */ "BFG Ammo",
+            5,
             IT_AMMO,
             WP_BFG,
             /* precache */ "",
@@ -611,7 +611,7 @@ gitem_t bg_itemlist[] =
              "models/powerups/instant/haste_ring.md3",
              NULL, NULL},
             /* icon */ "icons/haste",
-            /* pickup */ "Speed",
+            /* pickup */ "Haste",
             30,
             IT_POWERUP,
             PW_HASTE,
@@ -664,8 +664,8 @@ gitem_t bg_itemlist[] =
             /* icon */ "icons/flight",
             /* pickup */ "Flight",
             60,
-            IT_POWERUP,
-            PW_FLIGHT,
+            IT_HOLDABLE,  // [QL] a holdable with fuel, not a timed powerup
+            HI_FLIGHT,
             /* precache */ "",
             /* sounds */ "sound/items/flight.wav"},
 
@@ -761,7 +761,7 @@ gitem_t bg_itemlist[] =
              NULL, NULL, NULL},
             /* icon */ "icons/icona_nailgun",
             /* pickup */ "Nails",
-            20,
+            5,
             IT_AMMO,
             WP_NAILGUN,
             /* precache */ "",
@@ -776,7 +776,7 @@ gitem_t bg_itemlist[] =
              NULL, NULL, NULL},
             /* icon */ "icons/icona_proxlauncher",
             /* pickup */ "Proximity Mines",
-            10,
+            5,
             IT_AMMO,
             WP_PROX_LAUNCHER,
             /* precache */ "",
@@ -809,9 +809,9 @@ gitem_t bg_itemlist[] =
              NULL, NULL, NULL},
             /* icon */ "icons/scout",
             /* pickup */ "Scout",
-            30,
+            0,
             IT_PERSISTANT_POWERUP,
-            PW_SCOUT,
+            1,  // [QL] a rune carries its own number, 1-4, which is what STAT_RUNE holds
             /* precache */ "",
             /* sounds */ ""},
 
@@ -824,9 +824,9 @@ gitem_t bg_itemlist[] =
              NULL, NULL, NULL},
             /* icon */ "icons/guard",
             /* pickup */ "Guard",
-            30,
+            0,
             IT_PERSISTANT_POWERUP,
-            PW_GUARD,
+            2,
             /* precache */ "",
             /* sounds */ ""},
 
@@ -838,10 +838,10 @@ gitem_t bg_itemlist[] =
             {"models/powerups/doubler.md3",
              NULL, NULL, NULL},
             /* icon */ "icons/doubler",
-            /* pickup */ "Doubler",
-            30,
+            /* pickup */ "Damage",
+            0,
             IT_PERSISTANT_POWERUP,
-            PW_DOUBLER,
+            3,
             /* precache */ "",
             /* sounds */ ""},
 
@@ -854,9 +854,9 @@ gitem_t bg_itemlist[] =
              NULL, NULL, NULL},
             /* icon */ "icons/armor_regen",
             /* pickup */ "Armor Regen",
-            30,
+            0,
             IT_PERSISTANT_POWERUP,
-            PW_AMMOREGEN,
+            4,
             /* precache */ "",
             /* sounds */ ""},
 
@@ -882,7 +882,7 @@ gitem_t bg_itemlist[] =
          {"models/powerups/orb/r_orb.md3",
           NULL, NULL, NULL},
          /* icon */ "icons/iconh_rorb",
-         /* pickup */ "Red Cube",
+         /* pickup */ "Red Skull",
          0,
          IT_TEAM,
          0,
@@ -894,7 +894,7 @@ gitem_t bg_itemlist[] =
          {"models/powerups/orb/b_orb.md3",
           NULL, NULL, NULL},
          /* icon */ "icons/iconh_borb",
-         /* pickup */ "Blue Cube",
+         /* pickup */ "Blue Skull",
          0,
          IT_TEAM,
          0,
@@ -944,7 +944,7 @@ gitem_t bg_itemlist[] =
              NULL, NULL, NULL},
             /* icon */ "icons/iconw_chaingun",
             /* pickup */ "Chaingun",
-            80,
+            100,
             IT_WEAPON,
             WP_CHAINGUN,
             /* precache */ "",
@@ -1066,20 +1066,48 @@ int bg_numItems = ARRAY_LEN(bg_itemlist) - 1;
 /*
 ==============
 BG_FindItemForPowerup
+
+[QL] 0x1002cb60 (the same in cgamex86.dll 0x100011c0). The runes, 11 to 14, are found by
+their own number among the persistant powerups, and invulnerability, 10, is the holdable;
+the rest are a powerup and then a flag. What has no item is a drop error, so flight and
+the freeze, which have none, are never asked for.
 ==============
 */
 gitem_t* BG_FindItemForPowerup(powerup_t pw) {
     int i;
 
+    if (pw >= PW_SCOUT && pw <= PW_AMMOREGEN) {
+        for (i = 1; i < bg_numItems; i++) {
+            if (bg_itemlist[i].giType == IT_PERSISTANT_POWERUP && bg_itemlist[i].giTag == pw - PW_INVULNERABILITY) {
+                return &bg_itemlist[i];
+            }
+        }
+        Com_Error(ERR_DROP, "BG_FindItemForPowerup: couldn't find TA rune %i", pw - PW_INVULNERABILITY);
+        return NULL;
+    }
+
+    if (pw == PW_INVULNERABILITY) {
+        for (i = 1; i < bg_numItems; i++) {
+            if (bg_itemlist[i].giType == IT_HOLDABLE && bg_itemlist[i].giTag == HI_INVULNERABILITY) {
+                return &bg_itemlist[i];
+            }
+        }
+        // retail goes on with the tag it was looking for, which is the battle suit's
+        pw = (powerup_t)HI_INVULNERABILITY;
+    }
+
     for (i = 0; i < bg_numItems; i++) {
-        if ((bg_itemlist[i].giType == IT_POWERUP ||
-             bg_itemlist[i].giType == IT_TEAM ||
-             bg_itemlist[i].giType == IT_PERSISTANT_POWERUP) &&
-            bg_itemlist[i].giTag == pw) {
+        if (bg_itemlist[i].giType == IT_POWERUP && bg_itemlist[i].giTag == pw) {
+            return &bg_itemlist[i];
+        }
+    }
+    for (i = 0; i < bg_numItems; i++) {
+        if (bg_itemlist[i].giType == IT_TEAM && bg_itemlist[i].giTag == pw) {
             return &bg_itemlist[i];
         }
     }
 
+    Com_Error(ERR_DROP, "BG_FindItemForPowerup: couldn't find item for powerup %i", pw);
     return NULL;
 }
 

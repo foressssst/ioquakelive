@@ -1115,14 +1115,14 @@ void ClientUserinfoChanged(int clientNum) {
     }
 
     // set max health
-    if (client->ps.powerups[PW_GUARD]) {
-        client->pers.maxHealth = 200;
-    } else {
-        health = atoi(Info_ValueForKey(userinfo, "handicap"));
-        client->pers.maxHealth = health;
-        if (client->pers.maxHealth < 1 || client->pers.maxHealth > 100) {
-            client->pers.maxHealth = 100;
-        }
+    // [QL] 0x1003a833: the handicap is a share of g_startingHealth, as in ClientSpawn
+    health = atoi(Info_ValueForKey(userinfo, "handicap"));
+    if (health < 1 || health > 100) {
+        health = 100;
+    }
+    client->pers.maxHealth = (int)(health / 100.0 * g_startingHealth.integer);
+    if (client->pers.maxHealth < 1 || client->pers.maxHealth > g_startingHealth.integer) {
+        client->pers.maxHealth = g_startingHealth.integer;
     }
 
     client->ps.stats[STAT_MAX_HEALTH] = client->pers.maxHealth;

@@ -29,6 +29,6 @@ void Harvester_CheckTeamItems(void) {
 }
 
 void Harvester_RegisterItems(void) {
-    RegisterItem(BG_FindItem("Red Cube"));
-    RegisterItem(BG_FindItem("Blue Cube"));
+    RegisterItem(BG_FindItem("Red Skull"));
+    RegisterItem(BG_FindItem("Blue Skull"));
 }

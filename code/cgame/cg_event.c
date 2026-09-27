@@ -1200,19 +1200,19 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                     trap_S_StartSound(NULL, es->number, CHAN_AUTO, trap_S_RegisterSound(item->pickup_sound, qfalse));
                 }
 
-                // [QL] 0x1001a553: a rune's name is announced
+                // [QL] 0x1001a553: a rune's name is announced, by the rune's number
                 if (item->giType == IT_PERSISTANT_POWERUP) {
                     switch (item->giTag) {
-                        case PW_SCOUT:
+                        case 1:
                             CG_AddBufferedSound(cgs.media.scoutVoSound);
                             break;
-                        case PW_GUARD:
+                        case 2:
                             CG_AddBufferedSound(cgs.media.guardVoSound);
                             break;
-                        case PW_DOUBLER:
+                        case 3:
                             CG_AddBufferedSound(cgs.media.damageVoSound);
                             break;
-                        case PW_AMMOREGEN:
+                        case 4:
                             CG_AddBufferedSound(cgs.media.armorRegenVoSound);
                             break;
                     }

@@ -518,7 +518,8 @@ static void CG_DrawSelectedPlayerPowerup(rectDef_t* rect, qboolean draw2D) {
         y = rect->y;
 
         for (j = 0; j < PW_NUM_POWERUPS; j++) {
-            if (ci->powerups & (1 << j)) {
+            // flight and the freeze have no item
+            if ((ci->powerups & (1 << j)) && j != PW_FLIGHT && j != PW_FREEZE) {
                 gitem_t* item;
                 item = BG_FindItemForPowerup(j);
                 if (item) {
@@ -1017,7 +1018,7 @@ static void CG_DrawAreaPowerUp(rectDef_t* rect, int align, float special, float 
     // sort the list by time remaining
     active = 0;
     for (i = 0; i < MAX_POWERUPS; i++) {
-        if (!ps->powerups[i]) {
+        if (!ps->powerups[i] || i == PW_FLIGHT || i == PW_FREEZE) {
             continue;
         }
 
@@ -1657,7 +1658,7 @@ void CG_DrawNewTeamInfo(rectDef_t* rect, float text_x, float text_y, float scale
         if (ci->infoValid && ci->team == cg.snap->ps.persistant[PERS_TEAM]) {
             xx = rect->x + 1;
             for (j = 0; j <= PW_NUM_POWERUPS; j++) {
-                if (ci->powerups & (1 << j)) {
+                if ((ci->powerups & (1 << j)) && j != PW_FLIGHT && j != PW_FREEZE) {
                     item = BG_FindItemForPowerup(j);
 
                     if (item) {

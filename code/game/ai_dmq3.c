@@ -1761,10 +1761,11 @@ void BotUpdateInventory(bot_state_t* bs) {
     bs->inventory[INVENTORY_INVISIBILITY] = bs->cur_ps.powerups[PW_INVIS] != 0;
     bs->inventory[INVENTORY_REGEN] = bs->cur_ps.powerups[PW_REGEN] != 0;
     bs->inventory[INVENTORY_FLIGHT] = bs->cur_ps.powerups[PW_FLIGHT] != 0;
-    bs->inventory[INVENTORY_SCOUT] = bs->cur_ps.stats[STAT_PERSISTANT_POWERUP] == MODELINDEX_SCOUT;
-    bs->inventory[INVENTORY_GUARD] = bs->cur_ps.stats[STAT_PERSISTANT_POWERUP] == MODELINDEX_GUARD;
-    bs->inventory[INVENTORY_DOUBLER] = bs->cur_ps.stats[STAT_PERSISTANT_POWERUP] == MODELINDEX_DOUBLER;
-    bs->inventory[INVENTORY_AMMOREGEN] = bs->cur_ps.stats[STAT_PERSISTANT_POWERUP] == MODELINDEX_AMMOREGEN;
+    // [QL] 0x100165a5: STAT_RUNE holds the rune's number, 1 to 4, not its item
+    bs->inventory[INVENTORY_SCOUT] = bs->cur_ps.stats[STAT_RUNE] == 1;
+    bs->inventory[INVENTORY_GUARD] = bs->cur_ps.stats[STAT_RUNE] == 2;
+    bs->inventory[INVENTORY_DOUBLER] = bs->cur_ps.stats[STAT_RUNE] == 3;
+    bs->inventory[INVENTORY_AMMOREGEN] = bs->cur_ps.stats[STAT_RUNE] == 4;
     bs->inventory[INVENTORY_REDFLAG] = bs->cur_ps.powerups[PW_REDFLAG] != 0;
     bs->inventory[INVENTORY_BLUEFLAG] = bs->cur_ps.powerups[PW_BLUEFLAG] != 0;
     bs->inventory[INVENTORY_NEUTRALFLAG] = bs->cur_ps.powerups[PW_NEUTRALFLAG] != 0;

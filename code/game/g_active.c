@@ -862,9 +862,9 @@ void ClientEvents(gentity_t* ent, int oldEventSequence) {
                 if (g_gametype.integer == GT_HARVESTER) {
                     if (ent->client->ps.generic1 > 0) {
                         if (ent->client->sess.sessionTeam == TEAM_RED) {
-                            item = BG_FindItem("Blue Cube");
+                            item = BG_FindItem("Blue Skull");
                         } else {
-                            item = BG_FindItem("Red Cube");
+                            item = BG_FindItem("Red Skull");
                         }
                         if (item) {
                             for (j = 0; j < ent->client->ps.generic1; j++) {

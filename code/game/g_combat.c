@@ -227,9 +227,9 @@ void TossClientCubes(gentity_t* self) {
     }
 
     if (self->client->sess.sessionTeam == TEAM_RED) {
-        item = BG_FindItem("Red Cube");
+        item = BG_FindItem("Red Skull");
     } else {
-        item = BG_FindItem("Blue Cube");
+        item = BG_FindItem("Blue Skull");
     }
 
     angles[YAW] = (float)(level.time % 360);
