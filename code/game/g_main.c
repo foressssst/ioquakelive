@@ -2650,10 +2650,6 @@ void BeginIntermission(void) {
         if (!ent->inuse || !ent->client) {
             continue;
         }
-        // [QL] reset per-client ready state
-        if (ent->client->pers.connected == CON_CONNECTED) {
-            ClearClientReadyToExit();
-        }
         MoveClientToIntermission(ent);
     }
     CalculateAwards();  // [QL] 0x10055e9c
@@ -2956,7 +2952,7 @@ void CheckIntermissionExit(void) {
         if (g_entities[i].r.svFlags & SVF_BOT) {
             continue;
         }
-        if (ClientIsReadyToExit(i)) {
+        if (cl->pers.ready) {  // [QL] 0x10057b6a
             if (i < 16) {
                 readyMask |= 1 << i;
             }

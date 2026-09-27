@@ -767,9 +767,6 @@ void ClientTimerActions(gentity_t* ent, int msec) {
 ClientIntermissionThink
 ====================
 */
-// [QL] readyToExit removed from gclient_s, tracked here instead
-static qboolean clientReadyToExit[MAX_CLIENTS];
-
 void ClientIntermissionThink(gclient_t* client) {
     client->ps.eFlags &= ~EF_TALK;
     client->ps.eFlags &= ~EF_FIRING;
@@ -780,18 +777,11 @@ void ClientIntermissionThink(gclient_t* client) {
     client->oldbuttons = client->buttons;
     client->buttons = client->pers.cmd.buttons;
     if (client->buttons & (BUTTON_ATTACK | BUTTON_USE_HOLDABLE) & (client->oldbuttons ^ client->buttons)) {
-        // [QL] binary (ClientThink_real intermission inline @ 0x10034d40) toggles
-        // readyToExit each press (readyToExit ^= 1) at client+0x2e8; it does NOT stick.
-        clientReadyToExit[client - level.clients] = !clientReadyToExit[client - level.clients];
+        // [QL] 0x10034d53: each press toggles client+0x2e8, which is pers.ready -- the same
+        // flag readyup sets, so whoever readied up during the match starts the intermission
+        // ready to leave
+        client->pers.ready = !client->pers.ready;
     }
-}
-
-qboolean ClientIsReadyToExit(int clientNum) {
-    return clientReadyToExit[clientNum];
-}
-
-void ClearClientReadyToExit(void) {
-    memset(clientReadyToExit, 0, sizeof(clientReadyToExit));
 }
 
 /*

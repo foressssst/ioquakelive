@@ -1025,8 +1025,6 @@ qboolean G_IsTeamLocked(team_t team);
 void ClientThink(int clientNum);
 void ClientEndFrame(gentity_t* ent);
 void G_RunClient(gentity_t* ent);
-qboolean ClientIsReadyToExit(int clientNum);  // [QL] readyToExit tracking
-void ClearClientReadyToExit(void);            // [QL] reset at intermission start
 
 //
 // g_team.c
