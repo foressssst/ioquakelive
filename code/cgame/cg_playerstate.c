@@ -348,16 +348,6 @@ overlaps them, triggering from the obituary.
 ==================
 */
 static void CG_CheckHitSounds(const playerState_t* ps, const playerState_t* ops) {
-    // [ioquakelive] a hit the client already sounded is not sounded again. One that the server
-    // never confirms is forgotten after a second, so a miss does not eat the next real hit
-    if (cg.predictedHits > 0 && cg.time > cg.predictedHitTime + 1000) {
-        cg.predictedHits = 0;
-    }
-    if (cg.predictedHits > 0 && ps->persistant[PERS_HITS] > ops->persistant[PERS_HITS]) {
-        cg.predictedHits--;
-        return;
-    }
-
     if (ps->persistant[PERS_HITS] > ops->persistant[PERS_HITS]) {
         if (cg_killBeep.integer >= 1 &&
             ps->persistant[PERS_ATTACKEE_ARMOR] > ops->persistant[PERS_ATTACKEE_ARMOR]) {

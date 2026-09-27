@@ -386,7 +386,6 @@ vmCvar_t ch_obituaryTextY;
 vmCvar_t ch_obituaryBandAlpha;
 vmCvar_t ch_obituaryCenter;
 vmCvar_t cg_ambient;
-vmCvar_t ch_predictHitSounds;
 vmCvar_t cg_vidResizeCount;
 vmCvar_t ch_gameEvents;
 vmCvar_t ch_recordMessage;
@@ -827,7 +826,6 @@ static cvarTable_t cvarTable[] = {
     // [QL] the engine owns this one; the cgame only reads it to leave the map's sounds out
     {&cg_ambient, "s_ambient", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE | CVAR_LATCH},
     // the hit sound of your own shots always goes at once; the cvar is there to be read, not set
-    {&ch_predictHitSounds, "ch_predictHitSounds", "1", CVAR_ROM},
     {&cg_vidResizeCount, "vid_resizeCount", "0", CVAR_ROM},
     {&ch_gameEvents, "ch_gameEvents", "1", CVAR_ARCHIVE},
     {&ch_recordMessage, "ch_recordMessage", "1", CVAR_ARCHIVE},

@@ -2327,66 +2327,6 @@ WEAPON EVENTS
 
 /*
 ================
-CG_PredictHitSound
-
-[ioquakelive] NOT FROM RETAIL. The hit sound rides on PERS_HITS, which arrives in the
-server's snapshot, so on a server it lands a ping after the impact and several hits come in
-one batch. With ch_predictHitSounds the client traces its own hitscan shot the moment it
-fires, from the eye it is aiming with -- the same view the server rewinds to -- and sounds
-right there. The hit the server confirms afterwards is swallowed by CG_CheckHitSounds, so
-the beep is heard once
-================
-*/
-static void CG_PredictHitSound(int weapon) {
-    vec3_t start, end, forward;
-    trace_t tr;
-    float range;
-    int me;
-
-    if (!ch_predictHitSounds.integer || !cg_hitBeep.integer || !cg.snap || cg.demoPlayback) {
-        return;
-    }
-    if (cg.snap->ps.pm_flags & PMF_FOLLOW) {
-        return;
-    }
-    switch (weapon) {
-        case WP_MACHINEGUN:
-        case WP_SHOTGUN:
-        case WP_RAILGUN:
-        case WP_CHAINGUN:
-        case WP_HMG:
-            range = 8192.0f;
-            break;
-        case WP_LIGHTNING:
-            range = LIGHTNING_RANGE;
-            break;
-        default:
-            return;
-    }
-
-    me = cg.predictedPlayerState.clientNum;
-    VectorCopy(cg.predictedPlayerState.origin, start);
-    start[2] += cg.predictedPlayerState.viewheight;
-    AngleVectors(cg.predictedPlayerState.viewangles, forward, NULL, NULL);
-    VectorMA(start, range, forward, end);
-
-    CG_Trace(&tr, start, NULL, NULL, end, me, MASK_SHOT);
-    if (tr.entityNum >= MAX_CLIENTS || tr.entityNum == me) {
-        return;
-    }
-    // a teammate is not a hit: that one has its own sound and comes from the server
-    if (cgs.gametype >= GT_TEAM &&
-        cgs.clientinfo[tr.entityNum].team == cg.snap->ps.persistant[PERS_TEAM]) {
-        return;
-    }
-
-    trap_S_StartLocalSound(cgs.media.hitSounds[1], CHAN_LOCAL_SOUND);
-    cg.predictedHits++;
-    cg.predictedHitTime = cg.time;
-}
-
-/*
-================
 CG_FireWeapon
 
 Caused by an EV_FIRE_WEAPON event
@@ -2408,11 +2348,6 @@ void CG_FireWeapon(centity_t* cent) {
         return;
     }
     weap = &cg_weapons[ent->weapon];
-
-    // [ioquakelive] your own shot sounds its hit without waiting for the server
-    if (cg.snap && ent->number == cg.snap->ps.clientNum) {
-        CG_PredictHitSound(ent->weapon);
-    }
 
     // mark the entity as muzzle flashing, so when it is added it will
     // append the flash to the weapon model
