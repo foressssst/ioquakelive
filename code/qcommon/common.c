@@ -3065,11 +3065,15 @@ static int Com_FtCompare(const void* a, const void* b) {
 
 static void Com_FrameTimesReport(void) {
     static int64_t sorted[COM_FT_MAX];
-    int64_t total = 0, deviation = 0;
+    int64_t total = 0, deviation = 0, worstAt = 0;
     float average;
-    int i;
+    int i, worst = 0;
 
     for (i = 0; i < com_ftCount; i++) {
+        if (com_ftSamples[i] > com_ftSamples[worst]) {
+            worst = i;
+            worstAt = total;
+        }
         total += com_ftSamples[i];
     }
     average = (float)total / com_ftCount;
@@ -3086,6 +3090,8 @@ static void Com_FrameTimesReport(void) {
     Com_Printf("  median %.2f   1%% worst %.2f   jitter %.2f ms\n",
                sorted[com_ftCount / 2] / 1000.0f, sorted[com_ftCount - 1 - com_ftCount / 100] / 1000.0f,
                (float)deviation / com_ftCount / 1000.0f);
+    // when the worst one came, to tell it apart: a load, a disk write, the system
+    Com_Printf("  worst: frame %i, %.3f s in\n", worst, worstAt / 1000000.0f);
 }
 
 static void Com_FrameTimes_f(void) {
