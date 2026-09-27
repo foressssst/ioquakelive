@@ -3441,9 +3441,14 @@ void Com_Frame(void) {
 
             timeValSV = com_sv_running->integer ? SV_SendQueuedPackets() : 0;
 
+            // a late frame still reads the network, as the path below always does: a machine
+            // that cannot keep up with the cap would otherwise read no packet at all until the
+            // pacing restarts, and the server would see a 250 ms ping
             remainUs = com_frameTargetUs - Sys_Microseconds();
-            if (remainUs <= 0)
+            if (remainUs <= 0) {
+                NET_Sleep(0);
                 break;
+            }
 
             sleepMs = (int)((remainUs - 1500) / 1000);
             if (com_sv_running->integer && timeValSV < sleepMs)
