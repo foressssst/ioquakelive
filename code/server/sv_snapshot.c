@@ -551,8 +551,9 @@ Called by SV_SendClientSnapshot and SV_SendClientGameState
 */
 void SV_SendMessageToClient(msg_t* msg, client_t* client) {
     // record information about the message
+    // [QL] qzeroded.x64 0x43f49e: in real time, not svs.time, which only moves once a server frame
     client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSize = msg->cursize;
-    client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSent = svs.time;
+    client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSent = Sys_Milliseconds();
     client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageAcked = -1;
 
     // send the datagram

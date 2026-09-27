@@ -1077,184 +1077,186 @@ SV_VerifyPaks_f
 
 If we are pure, disconnect the client if they do no meet the following conditions:
 
-1. the first two checksums match our view of cgame and ui
+1. the first checksum matches the pak our binaries came from
 2. there are no any additional checksums that we do not have
 
-This routine would be a bit simpler with a goto but i abstained
-
+[QL] qzeroded.x64 0x439ec0. The report is "cp <serverId> <bin> @ <ref> ... <encoded>": a single
+slot for the pak with the binaries, where Quake 3 had cgame and ui. Every failure says why under
+developer 1.
 =================
 */
 static void SV_VerifyPaks_f(client_t* cl) {
-    int nChkSum0, nChkSum1, nChkSum2, nClientPaks, nServerPaks, i, j, nCurArg;
+    int nBinChkSum, nClientPaks, nServerPaks, nModuleSlots, i, j, nCurArg, workChk;
     int nClientChkSum[1024];
     int nServerChkSum[1024];
     const char *pPaks, *pArg;
-    qboolean bGood = qtrue;
+    qboolean bGood, engineBin;
 
-    // if we are pure, we "expect" the client to load certain things from
-    // certain pk3 files, namely we want the client to have loaded the
-    // qagame, cgame and ui that we think should be loaded based on the pure setting
-    //
-    if (sv_pure->integer != 0) {
-        nChkSum0 = nChkSum1 = nChkSum2 = 0;
-        // [QL] we run the game, so determine which qagame, cgame and ui the
-        // client "should" be running. With universal iobin all three return
-        // the same pak pure_checksum (the iobin pak), but we keep three
-        // independent slots for defense-in-depth and clearer error reporting.
-        bGood = (FS_FileIsInPAK("qagame" ARCH_STRING DLL_EXT, &nChkSum0) == 1);
-        if (bGood)
-            bGood = (FS_FileIsInPAK("cgame" ARCH_STRING DLL_EXT, &nChkSum1) == 1);
-        if (bGood)
-            bGood = (FS_FileIsInPAK("ui" ARCH_STRING DLL_EXT, &nChkSum2) == 1);
-        nClientPaks = Cmd_Argc();
+    if (!sv_pure->integer) {
+        return;
+    }
 
-        // start at arg 2 ( skip serverId cl_paks )
-        nCurArg = 1;
+    bGood = qtrue;
+    nClientPaks = Cmd_Argc();
 
-        pArg = Cmd_Argv(nCurArg++);
-        if (!pArg) {
+    // https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=475
+    // we may get incoming cp sequences from a previous checksumFeed, which we need to ignore
+    // since serverId is a frame count, it always goes up
+    pArg = Cmd_Argv(1);
+    if (!*pArg) {
+        Com_DPrintf("pure check failed: pArg is NULL\n");
+        bGood = qfalse;
+    } else if (atoi(pArg) < sv.checksumFeedServerId) {
+        Com_DPrintf("ignoring outdated cp command from client %s\n", cl->name);
+        return;
+    }
+
+    // the pak our binaries came from. [ioquakelive] When it is the engine's own (iobin.pk3), the
+    // client's is its own business too: a client of another build, architecture or system, or
+    // retail's, names another pak there, so the slot only has to be there
+    nBinChkSum = 0;
+    engineBin = FS_FileIsInEnginePak("qagame" ARCH_STRING DLL_EXT);
+    if (!engineBin && FS_FileIsInPAK("qagame" ARCH_STRING DLL_EXT, &nBinChkSum) != 1) {
+        // [ioquakelive] retail brings the whole server down here (Com_Error, ERR_DROP); only the
+        // client goes
+        Com_DPrintf("pure mode failure: no pak file for binaries\n");
+        bGood = qfalse;
+    }
+
+    // we basically use this while loop to avoid using 'goto' :)
+    while (bGood) {
+        if (nClientPaks < 6) {
+            Com_DPrintf("pure check failure: nClientPaks < 6\n");
             bGood = qfalse;
-        } else {
-            // https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=475
-            // we may get incoming cp sequences from a previous checksumFeed, which we need to ignore
-            // since serverId is a frame count, it always goes up
-            if (atoi(pArg) < sv.checksumFeedServerId) {
-                Com_DPrintf("ignoring outdated cp command from client %s\n", cl->name);
-                return;
-            }
+            break;
         }
 
-        // we basically use this while loop to avoid using 'goto' :)
-        while (bGood) {
-            // [QL] must be at least 6: "cl_paks qagame cgame ui @ firstref ... numChecksums"
-            // numChecksums is encoded
-            if (nClientPaks < 6) {
-                bGood = qfalse;
-                break;
-            }
-            // [ioquakelive] when the server's modules are the engine's own (iobin.pk3), each
-            // client's are its own business too: a client of another build, architecture or
-            // system, or retail's, names another pak there. The slots still have to be there
-            if (FS_FileIsInEnginePak("qagame" ARCH_STRING DLL_EXT)) {
-                for (i = 0; i < 3; i++) {
-                    pArg = Cmd_Argv(nCurArg++);
-                    if (!pArg || *pArg == '@') {
-                        bGood = qfalse;
-                    }
-                }
-                if (!bGood) {
-                    break;
-                }
-                nCurArg -= 3;
-                nChkSum0 = atoi(Cmd_Argv(nCurArg));
-                nChkSum1 = atoi(Cmd_Argv(nCurArg + 1));
-                nChkSum2 = atoi(Cmd_Argv(nCurArg + 2));
-            }
-            // [QL] verify first to be the qagame checksum
+        // [ioquakelive] ioquakelive up to 0.2.12 sent three module slots, qagame cgame ui, before
+        // the delimiter; the pak with the binaries is the first of them
+        nModuleSlots = 1;
+        if (*Cmd_Argv(3) != '@' && nClientPaks >= 8 && *Cmd_Argv(5) == '@') {
+            nModuleSlots = 3;
+        }
+
+        nCurArg = 2;
+        for (i = 0; i < nModuleSlots; i++) {
             pArg = Cmd_Argv(nCurArg++);
-            if (!pArg || *pArg == '@' || atoi(pArg) != nChkSum0) {
-                Com_DPrintf("SV_VerifyPaks_f: client %s qagame mismatch\n", cl->name);
+            if (!*pArg) {
+                Com_DPrintf("pure mode failure: bin pArg is NULL\n");
                 bGood = qfalse;
                 break;
             }
-            // verify second to be the cgame checksum
-            pArg = Cmd_Argv(nCurArg++);
-            if (!pArg || *pArg == '@' || atoi(pArg) != nChkSum1) {
-                Com_DPrintf("SV_VerifyPaks_f: client %s cgame mismatch\n", cl->name);
+            if (*pArg == '@') {
+                Com_DPrintf("pure mode failure: unexpected delimiter\n");
                 bGood = qfalse;
                 break;
             }
-            // verify third to be the ui checksum
-            pArg = Cmd_Argv(nCurArg++);
-            if (!pArg || *pArg == '@' || atoi(pArg) != nChkSum2) {
-                Com_DPrintf("SV_VerifyPaks_f: client %s ui mismatch\n", cl->name);
+            if (!i && !engineBin && atoi(pArg) != nBinChkSum) {
+                Com_DPrintf("pure mode failure: bin %i != %i\n", atoi(pArg), nBinChkSum);
                 bGood = qfalse;
                 break;
             }
-            // should be sitting at the delimeter now
-            pArg = Cmd_Argv(nCurArg++);
-            if (*pArg != '@') {
-                bGood = qfalse;
-                break;
-            }
-            // store checksums since tokenization is not re-entrant
-            for (i = 0; nCurArg < nClientPaks; i++) {
-                nClientChkSum[i] = atoi(Cmd_Argv(nCurArg++));
-            }
+        }
+        if (!bGood) {
+            break;
+        }
 
-            // store number to compare against (minus one cause the last is the number of checksums)
-            nClientPaks = i - 1;
+        // should be sitting at the delimeter now
+        pArg = Cmd_Argv(nCurArg++);
+        if (*pArg != '@') {
+            Com_DPrintf("pure mode failure: didn't find delimiter\n");
+            bGood = qfalse;
+            break;
+        }
 
-            // make sure none of the client check sums are the same
-            // so the client can't send 5 the same checksums
-            for (i = 0; i < nClientPaks; i++) {
-                for (j = 0; j < nClientPaks; j++) {
-                    if (i == j)
-                        continue;
-                    if (nClientChkSum[i] == nClientChkSum[j]) {
-                        bGood = qfalse;
-                        break;
-                    }
-                }
-                if (bGood == qfalse)
-                    break;
-            }
-            if (bGood == qfalse)
-                break;
+        // store checksums since tokenization is not re-entrant
+        for (i = 0; nCurArg < nClientPaks && i < 1024; i++) {
+            nClientChkSum[i] = atoi(Cmd_Argv(nCurArg++));
+        }
 
-            // get the pure checksums of the pk3 files loaded by the server
-            pPaks = FS_LoadedPakPureChecksums();
-            Cmd_TokenizeString(pPaks);
-            nServerPaks = Cmd_Argc();
-            if (nServerPaks > 1024)
-                nServerPaks = 1024;
+        // store number to compare against (minus one cause the last is the number of checksums)
+        nClientPaks = i - 1;
 
-            for (i = 0; i < nServerPaks; i++) {
-                nServerChkSum[i] = atoi(Cmd_Argv(i));
-            }
-
-            // check if the client has provided any pure checksums of pk3 files not loaded by the server
-            for (i = 0; i < nClientPaks; i++) {
-                for (j = 0; j < nServerPaks; j++) {
-                    if (nClientChkSum[i] == nServerChkSum[j]) {
-                        break;
-                    }
-                }
-                if (j >= nServerPaks) {
+        // make sure none of the client check sums are the same
+        // so the client can't send 5 the same checksums
+        for (i = 0; i < nClientPaks && bGood; i++) {
+            for (j = 0; j < nClientPaks; j++) {
+                if (i != j && nClientChkSum[i] == nClientChkSum[j]) {
+                    Com_DPrintf("pure mode failure: got duplicate checksum %i\n", nClientChkSum[i]);
                     bGood = qfalse;
                     break;
                 }
             }
-            if (bGood == qfalse) {
-                break;
-            }
-
-            // check if the number of checksums was correct
-            nChkSum1 = sv.checksumFeed;
-            for (i = 0; i < nClientPaks; i++) {
-                nChkSum1 ^= nClientChkSum[i];
-            }
-            nChkSum1 ^= nClientPaks;
-            if (nChkSum1 != nClientChkSum[nClientPaks]) {
-                bGood = qfalse;
-                break;
-            }
-
-            // break out
+        }
+        if (!bGood) {
             break;
         }
 
-        cl->gotCP = qtrue;
-
-        if (bGood) {
-            cl->pureAuthentic = 1;
-        } else {
-            cl->pureAuthentic = 0;
-            cl->nextSnapshotTime = 0;
-            cl->state = CS_ACTIVE;
-            SV_SendClientSnapshot(cl);
-            SV_DropClient(cl, "Unpure client detected. Invalid .PK3 files referenced!");
+        // get the pure checksums of the pk3 files loaded by the server
+        pPaks = FS_LoadedPakPureChecksums();
+        Cmd_TokenizeString(pPaks);
+        nServerPaks = Cmd_Argc();
+        if (nServerPaks > 1024) {
+            nServerPaks = 1024;
         }
+        for (i = 0; i < nServerPaks; i++) {
+            nServerChkSum[i] = atoi(Cmd_Argv(i));
+        }
+
+        // check if the client has provided any pure checksums of pk3 files not loaded by the server
+        for (i = 0; i < nClientPaks; i++) {
+            for (j = 0; j < nServerPaks; j++) {
+                if (nClientChkSum[i] == nServerChkSum[j]) {
+                    break;
+                }
+            }
+            if (j >= nServerPaks) {
+                bGood = qfalse;
+                break;
+            }
+        }
+        if (!bGood) {
+            Com_DPrintf("pure mode failure: client checksums:");
+            for (i = 0; i < nClientPaks; i++) {
+                Com_DPrintf("%i ", nClientChkSum[i]);
+            }
+            Com_DPrintf("\n");
+            Com_DPrintf("pure mode failure: server checksums:");
+            for (i = 0; i < nServerPaks; i++) {
+                Com_DPrintf("%i ", nServerChkSum[i]);
+            }
+            Com_DPrintf("\n");
+            Com_DPrintf("pure mode failure: client has extra pk3s\n");
+            break;
+        }
+
+        // check if the number of checksums was correct
+        workChk = sv.checksumFeed;
+        for (i = 0; i < nClientPaks; i++) {
+            workChk ^= nClientChkSum[i];
+        }
+        workChk ^= nClientPaks;
+        if (workChk != nClientChkSum[nClientPaks]) {
+            Com_DPrintf("pure mode failure: workChk %i != nClientChkSum[nClientPaks] %i\n", workChk,
+                        nClientChkSum[nClientPaks]);
+            bGood = qfalse;
+            break;
+        }
+
+        // break out
+        break;
+    }
+
+    cl->gotCP = qtrue;
+
+    if (bGood) {
+        cl->pureAuthentic = 1;
+    } else {
+        cl->pureAuthentic = 0;
+        cl->nextSnapshotTime = -1;
+        cl->state = CS_ACTIVE;
+        SV_SendClientSnapshot(cl);
+        SV_DropClient(cl, "Unpure client detected. Invalid .PK3 files referenced!");
     }
 }
 
@@ -1518,7 +1520,12 @@ static void SV_UserMove(client_t* cl, msg_t* msg, qboolean delta) {
     }
 
     // save time for ping calculation
-    cl->frames[cl->messageAcknowledge & PACKET_MASK].messageAcked = svs.time;
+    // [QL] qzeroded.x64 0x43a836: the first ack of a snapshot, in real time. A client sends several
+    // packets for each snapshot and every one acks it again; keeping the last one added the time
+    // between snapshots to the ping
+    if (cl->frames[cl->messageAcknowledge & PACKET_MASK].messageAcked <= 0) {
+        cl->frames[cl->messageAcknowledge & PACKET_MASK].messageAcked = Sys_Milliseconds();
+    }
 
     // TTimo
     // catch the no-cp-yet situation before SV_ClientEnterWorld

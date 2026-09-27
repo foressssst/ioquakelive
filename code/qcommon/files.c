@@ -4127,23 +4127,12 @@ const char* FS_ReferencedPakChecksums(void) {
 
 /*
 =====================
-FS_ReferencedPakPureChecksums
-
-Returns a space separated string containing the pure checksums of all referenced pk3 files.
-Servers with sv_pure set will get this string back from clients for pure validation
-
-The string has a specific order, "qagame cgame ui @ ref1 ref2 ref3 ..."
-[QL] qagame slot added - server validates all three game modules instead of two.
-=====================
-*/
-/*
-=====================
 FS_ModulePakPureChecksum
 
-[ioquakelive] The pak a module slot of the pure report names. The modules come out of our own
+[ioquakelive] The pak the binaries' slot of the pure report names. The modules come out of our own
 iobin.pk3, which a server running retail has never heard of; what it expects there is its own
 bin.pk3, the one Steam installs with Quake Live, so that one is named when the client has it.
-An ioquakelive server does not check these slots when its modules are the engine's.
+An ioquakelive server does not check the slot when its modules are the engine's.
 =====================
 */
 static int FS_ModulePakPureChecksum(const pack_t* pack) {
@@ -4160,41 +4149,45 @@ static int FS_ModulePakPureChecksum(const pack_t* pack) {
 	return pack->pure_checksum;
 }
 
+/*
+=====================
+FS_ReferencedPakPureChecksums
+
+Returns a space separated string containing the pure checksums of all referenced pk3 files.
+Servers with sv_pure set will get this string back from clients for pure validation
+
+The string has a specific order, "bin @ ref1 ref2 ref3 ..."
+[QL] A single slot for the pak the binaries came from, where Quake 3 had cgame and ui: it is what
+retail's client sends and what its server reads (qzeroded.x64 0x439ec0).
+=====================
+*/
 const char* FS_ReferencedPakPureChecksums(void) {
 	static char info[BIG_INFO_STRING];
 	searchpath_t* search;
-	int nFlags, numPaks, checksum;
+	int numPaks, checksum;
 
 	info[0] = 0;
 
+	// the pak with the binaries
+	for (search = fs_searchpaths; search; search = search->next) {
+		if (search->pack && (search->pack->referenced & (FS_QAGAME_REF | FS_CGAME_REF | FS_UI_REF))) {
+			Q_strcat(info, sizeof(info), va("%i ", FS_ModulePakPureChecksum(search->pack)));
+			break;
+		}
+	}
+
+	// a delimiter between must haves and general refs
+	Q_strcat(info, sizeof(info), "@ ");
+
 	checksum = fs_checksumFeed;
 	numPaks = 0;
-	// [QL] iterate qagame -> cgame -> ui -> general (was cgame -> ui -> general)
-	for (nFlags = FS_QAGAME_REF; nFlags; nFlags = nFlags >> 1) {
-		if (nFlags & FS_GENERAL_REF) {
-			// add a delimter between must haves and general refs
-			// Q_strcat(info, sizeof(info), "@ ");
-			info[strlen(info) + 1] = '\0';
-			info[strlen(info) + 2] = '\0';
-			info[strlen(info)] = '@';
-			info[strlen(info)] = ' ';
-		}
-		for (search = fs_searchpaths; search; search = search->next) {
-			// is the element a pak file and has it been referenced based on flag?
-			if (search->pack && (search->pack->referenced & nFlags)) {
-				// [QL] qagame slot has same "first match wins" semantics as cgame/ui
-				if (nFlags & (FS_QAGAME_REF | FS_CGAME_REF | FS_UI_REF)) {
-					Q_strcat(info, sizeof(info), va("%i ", FS_ModulePakPureChecksum(search->pack)));
-					break;
-				}
-				// [ioquakelive] the engine's own paks are nobody else's business
-				if (FS_IsEnginePak(search->pack)) {
-					continue;
-				}
-				Q_strcat(info, sizeof(info), va("%i ", search->pack->pure_checksum));
-				checksum ^= search->pack->pure_checksum;
-				numPaks++;
-			}
+	for (search = fs_searchpaths; search; search = search->next) {
+		// is the element a pak file and has it been referenced?
+		// [ioquakelive] the engine's own paks are nobody else's business
+		if (search->pack && (search->pack->referenced & FS_GENERAL_REF) && !FS_IsEnginePak(search->pack)) {
+			Q_strcat(info, sizeof(info), va("%i ", search->pack->pure_checksum));
+			checksum ^= search->pack->pure_checksum;
+			numPaks++;
 		}
 	}
 	// last checksum is the encoded number of referenced pk3s
