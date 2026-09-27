@@ -2762,8 +2762,9 @@ void Com_Init(char* commandLine) {
     s = va("%s %s %s", FULL_PRODUCT_VERSION, PLATFORM_STRING, PRODUCT_DATE);
     com_version = Cvar_Get("version", s, CVAR_ROM | CVAR_SERVERINFO);
     com_gamename = Cvar_Get("com_gamename", PRODUCT_NAME, CVAR_SERVERINFO | CVAR_INIT);
-    com_protocol = Cvar_Get("com_protocol", va("%i", PROTOCOL_VERSION), CVAR_SERVERINFO | CVAR_INIT);
-    Cvar_Get("protocol", com_protocol->string, CVAR_ROM);
+    com_protocol = Cvar_Get("com_protocol", va("%i", PROTOCOL_VERSION), CVAR_INIT);
+    // [QL] 0x004e3bbf: the serverinfo carries "protocol", as in Quake 3, and not com_protocol
+    Cvar_Get("protocol", com_protocol->string, CVAR_SERVERINFO | CVAR_ROM);
 
 #ifndef DEDICATED
     // [QL] quakelive_steam.exe 0x4bc6eb and 0x4cc4c2, both CVAR_ARCHIVE | CVAR_REPLICATE |

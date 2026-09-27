@@ -648,11 +648,13 @@ void SV_Init(void) {
     sv_hostname = Cvar_Get("sv_hostname", "noname", CVAR_SERVERINFO | CVAR_ARCHIVE);
     sv_maxclients = Cvar_Get("sv_maxclients", "8", CVAR_SERVERINFO | CVAR_LATCH);
 
-    sv_minRate = Cvar_Get("sv_minRate", "0", CVAR_ARCHIVE | CVAR_SERVERINFO);
-    sv_maxRate = Cvar_Get("sv_maxRate", "0", CVAR_ARCHIVE | CVAR_SERVERINFO);
-    sv_dlRate = Cvar_Get("sv_dlRate", "100", CVAR_ARCHIVE | CVAR_SERVERINFO);
-    sv_minPing = Cvar_Get("sv_minPing", "0", CVAR_ARCHIVE | CVAR_SERVERINFO);
-    sv_maxPing = Cvar_Get("sv_maxPing", "0", CVAR_ARCHIVE | CVAR_SERVERINFO);
+    // [ioquakelive] ioquake3's, which retail does not have: they stay, off, but out of the
+    // serverinfo, so what a server shows is what a retail one shows
+    sv_minRate = Cvar_Get("sv_minRate", "0", CVAR_ARCHIVE);
+    sv_maxRate = Cvar_Get("sv_maxRate", "0", CVAR_ARCHIVE);
+    sv_dlRate = Cvar_Get("sv_dlRate", "100", CVAR_ARCHIVE);
+    sv_minPing = Cvar_Get("sv_minPing", "0", CVAR_ARCHIVE);
+    sv_maxPing = Cvar_Get("sv_maxPing", "0", CVAR_ARCHIVE);
     sv_serverType = Cvar_Get("sv_serverType", "0", CVAR_ARCHIVE);  // [QL] 1 = LAN-only
     sv_floodProtect = Cvar_Get("sv_floodProtect", "10", CVAR_ARCHIVE);  // [QL] 0x004e3c3a
 
@@ -687,7 +689,7 @@ void SV_Init(void) {
     sv_zombietime = Cvar_Get("sv_zombietime", "2", CVAR_TEMP);
     Cvar_Get("nextmap", "", CVAR_TEMP);
 
-    sv_allowDownload = Cvar_Get("sv_allowDownload", "0", CVAR_SERVERINFO);
+    sv_allowDownload = Cvar_Get("sv_allowDownload", "0", 0);
     Cvar_Get("sv_dlURL", "", CVAR_SERVERINFO | CVAR_ARCHIVE);
 
     sv_reconnectlimit = Cvar_Get("sv_reconnectlimit", "3", 0);
