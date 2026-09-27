@@ -1060,6 +1060,10 @@ void ClientUserinfoChanged(int clientNum) {
     // [ioquakelive] our client says so (cl_main.c registers "ioql"); a retail one has no such key
     client->pers.ioqlClient = (qboolean)(Info_ValueForKey(userinfo, "ioql")[0] != '\0');
 
+    // [QL] 0x1003a98d: what the client wants done on its own when a match starts and ends (1
+    // records it, 2 takes a picture of the scores); g_autoAction turns it on for everybody
+    client->pers.autoaction = atoi(Info_ValueForKey(userinfo, "cg_autoAction")) | g_autoAction.integer;
+
     // check the item prediction
     s = Info_ValueForKey(userinfo, "cg_predictItems");
     if (!atoi(s)) {
@@ -1294,7 +1298,13 @@ char* ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
 
         // [QL] gate "connected" message behind level.time > 5000
         if (level.time > 5000) {
+            uint64_t steamId = trap_GetSteamID(clientNum);
+
             trap_SendServerCommand(-1, va("print \"%s" S_COLOR_WHITE " connected\n\"", client->pers.netname));
+            // [QL] 0x1003af8c: and the server's console gets the Steam ID
+            if (steamId) {
+                G_Printf("%s connected with Steam ID %llu\n", client->pers.netname, (unsigned long long)steamId);
+            }
         }
 
         // NOTE: binary ClientConnect does NOT call STAT_InitClient here; the
@@ -1302,14 +1312,19 @@ char* ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
         // STAT_InitClient's only binary caller is SetTeam_Execute (team-change
         // re-init), which is not yet reimplemented. See STAT_InitClient below.
 
+        // [QL] 0x1003afb5: the event goes out for bots too (inside, 0x10078450 looks at
+        // svFlags & SVF_BOT only to set STEAM_ID "0")
+        STAT_SubscribeClient(ent);
+
         if (g_gametype.integer > GT_RACE &&
             client->sess.sessionTeam != TEAM_SPECTATOR) {
             BroadcastTeamChange(client, -1);
         }
 
-        // [QL] 0x1003afb5: the event goes out for bots too (inside, 0x10078450 looks at
-        // svFlags & SVF_BOT only to set STEAM_ID "0")
-        STAT_SubscribeClient(ent);
+        // [QL] 0x1003afea: a player who arrives during a recorded match records too
+        if (!isBot) {
+            G_AutoActionClientConnect(ent);
+        }
     }
 
     // count current clients and rank for scoreboard

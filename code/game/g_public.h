@@ -104,7 +104,7 @@ typedef struct gclient_s gclient_t;
 typedef struct {
     /* --- Core Engine Traps --- */
     /* 0x00  */ void    (*trap_SendConsoleCommand)(const char *text);
-    /* 0x08  */ void    *_unused_01;
+    /* 0x08  */ int     (*trap_RealTime)(qtime_t *qtime);  // [QL] qagamex86.dll 0x10063187
     /* 0x10  */ void    (*trap_Printf)(const char *fmt, ...);
     /* 0x18  */ void    *_unused_03;
     /* 0x20  */ int     (*trap_FS_Write)(const void *buf, int len, fileHandle_t f);

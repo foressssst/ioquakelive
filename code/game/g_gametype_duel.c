@@ -412,8 +412,8 @@ queued/active or the match is paused/timed-out.
 line (G_NextDuelPlayer) comes in through SetTeam "f", after the game drops back to the
 pre-game warmup; then every connected client's ready flag is cleared.
 
-Note: the binary also calls G_AutoRecordAndScreenshot(-1) when a player is
-pulled in; ioquakelive has no equivalent yet, so that step is skipped.
+The drop back to the pre-game warmup also stops the automatic recordings (SetWarmupState
+runs G_AutoAction, as the binary does at 0x1005582a).
 =============
 */
 void AddDuelPlayer(void) {

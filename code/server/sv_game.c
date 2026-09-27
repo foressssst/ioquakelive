@@ -946,6 +946,7 @@ static void SV_PopulateGameImports(void) {
 
     // Core engine traps
     sv_gameImports.trap_SendConsoleCommand    = SV_GI_SendConsoleCommand;
+    sv_gameImports.trap_RealTime              = Com_RealTime;
     sv_gameImports.trap_Printf                = SV_GI_Printf;
     sv_gameImports.trap_FS_Write              = (int (*)(const void*, int, fileHandle_t))FS_Write;
     sv_gameImports.trap_FS_Read               = (int (*)(void*, int, fileHandle_t))FS_Read;

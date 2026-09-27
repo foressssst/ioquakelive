@@ -827,7 +827,6 @@ typedef struct {
     // and whether the demo being recorded was started here
     qboolean autoActionLive;
     qboolean autoActionEnded;
-    qboolean autoActionRecording;
 
     // [CPMA] when the spectator camera last jumped to whoever got the frag
     int followKillerTime;

@@ -620,7 +620,7 @@ int trap_FS_GetFileList(const char* path, const char* extension, char* listbuf, 
 int trap_FS_Seek(fileHandle_t f, long offset, int origin) { (void)f; (void)offset; (void)origin; return 0; }
 int trap_DebugPolygonCreate(int color, int numPoints, vec3_t* points) { (void)color; (void)numPoints; (void)points; return 0; }
 void trap_DebugPolygonDelete(int id) { (void)id; }
-int trap_RealTime(qtime_t* qtime) { (void)qtime; return 0; }
+int trap_RealTime(qtime_t* qtime) { return imports->trap_RealTime(qtime); }
 void trap_SnapVector(float* v) { (void)v; }
 int trap_Cvar_VariableIntegerValue(const char* var_name) { return (int)imports->trap_Cvar_VariableValue(var_name); }
 qboolean trap_EntityContactCapsule(const vec3_t mins, const vec3_t maxs, const gentity_t* ent) { (void)mins; (void)maxs; (void)ent; return qfalse; }

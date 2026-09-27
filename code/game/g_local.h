@@ -998,6 +998,8 @@ void ClientCommand(int clientNum);
 void RACE_ClientBegin(gentity_t* ent);
 void ClientBegin_RoundBased(gentity_t* ent);
 void DamagePlum(gentity_t* attacker, gentity_t* victim, int damage, int mod);  // g_combat.c
+void G_AutoAction(void);                           // g_main.c
+void G_AutoActionClientConnect(gentity_t* ent);    // g_main.c
 void Freeze_ClientBegin(gentity_t* ent);
 void RR_ClientBegin(gentity_t* ent);
 void SelectSpawnWeapon(gentity_t* ent);

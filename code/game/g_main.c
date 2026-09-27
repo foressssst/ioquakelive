@@ -2839,6 +2839,9 @@ void CheckIntermissionExit(void) {
     int timeout;
     char nextmaps[MAX_STRING_CHARS];
 
+    // [QL] 0x10057af7: the picture of the scores and the end of the recording
+    G_AutoAction();
+
     // [QL] Determine timeout: 20s if map voting active, 10s otherwise
     trap_Cvar_VariableStringBuffer("nextmaps", nextmaps, sizeof(nextmaps));
     if (nextmaps[0] && !(g_voteFlags.integer & VF_ENDMAP_VOTING)) {
@@ -3096,6 +3099,191 @@ void SetWarmupState(int warmupTime) {
         gameState = "COUNT_DOWN";
     }
     trap_Cvar_Set("g_gameState", gameState);
+
+    // [QL] every place that sets the warmup state runs the automatic recording after it
+    G_AutoAction();
+}
+
+/*
+=============
+G_AutoActionClean
+
+[QL] 0x10062ef0: a name as a file can take it: no colours, none of " ' * . / : < > ? \ |,
+nothing below a space, 39 characters at most, and "invalid" when nothing is left
+=============
+*/
+static void G_AutoActionClean(char* out, const char* in) {
+    int len = 0;
+
+    while (*in && len < 39) {
+        if (*in == '^') {
+            in += in[1] ? 2 : 1;
+            continue;
+        }
+        if (*in > ' ' && *in < 127 && !strchr("\"'*./:<>?\\|", *in)) {
+            out[len++] = *in;
+        }
+        in++;
+    }
+    out[len] = '\0';
+    if (!len) {
+        Q_strncpyz(out, "invalid", 40);
+    }
+}
+
+/*
+=============
+G_AutoActionGameType
+
+[QL] 0x1002ca00
+=============
+*/
+static const char* G_AutoActionGameType(int gametype) {
+    switch (gametype) {
+        case GT_FFA: return "FFA";
+        case GT_DUEL: return "DUEL";
+        case GT_RACE: return "RACE";
+        case GT_TEAM: return "TDM";
+        case GT_CA: return "CA";
+        case GT_CTF: return "CTF";
+        case GT_1FCTF: return "1F";
+        case GT_OBELISK: return "OB";
+        case GT_HARVESTER: return "HAR";
+        case GT_FREEZE: return "FT";
+        case GT_DOMINATION: return "DOM";
+        case GT_AD: return "AD";
+        case GT_RR: return "RR";
+        default: return "ERR";
+    }
+}
+
+/*
+=============
+G_AutoActionName
+
+[QL] 0x10062fd0: in duel the two leaders, the client's own first with (POV), otherwise the
+gametype and the client unless a spectator; then the map and the date
+=============
+*/
+static const char* G_AutoActionName(gentity_t* ent) {
+    static char name[256];
+    char first[40], second[40], raw[40], info[MAX_INFO_STRING];
+    int clientNum = ent - g_entities;
+    qtime_t t;
+
+    name[0] = '\0';
+    if (g_gametype.integer == GT_DUEL) {
+        trap_GetConfigstring(CS_SCORES1PLAYER, raw, sizeof(raw));
+        G_AutoActionClean(first, raw);
+        trap_GetConfigstring(CS_SCORES2PLAYER, raw, sizeof(raw));
+        G_AutoActionClean(second, raw);
+        if (clientNum == level.sortedClients[0]) {
+            Q_strncpyz(name, va("%s(POV)-vs-%s", first, second), sizeof(name));
+        } else if (clientNum == level.sortedClients[1]) {
+            Q_strncpyz(name, va("%s(POV)-vs-%s", second, first), sizeof(name));
+        } else {
+            Q_strncpyz(name, va("%s-vs-%s", first, second), sizeof(name));
+        }
+    } else {
+        if (g_instaGib.integer) {
+            Q_strcat(name, sizeof(name), "i");
+        }
+        Q_strcat(name, sizeof(name), G_AutoActionGameType(g_gametype.integer));
+        if (ent->client->sess.sessionTeam != TEAM_SPECTATOR) {
+            G_AutoActionClean(first, ent->client->pers.netname);
+            Q_strcat(name, sizeof(name), va("-%s", first));
+        }
+    }
+    trap_GetServerinfo(info, sizeof(info));
+    Q_strcat(name, sizeof(name), va("-%s", Info_ValueForKey(info, "mapname")));
+    trap_RealTime(&t);
+    Q_strcat(name, sizeof(name), va("-%d_%02d_%02d-%02d_%02d_%02d", t.tm_year + 1900, t.tm_mon + 1,
+                                    t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec));
+    return name;
+}
+
+// [QL] 0x1049abfc: 1 while the match is being recorded, 2 once its picture has been taken
+static int autoActionFlags;
+
+/*
+=============
+G_AutoActionStopRecording
+
+[QL] 0x100631f0
+=============
+*/
+static void G_AutoActionStopRecording(void) {
+    int i;
+
+    if (!(autoActionFlags & 1)) {
+        return;
+    }
+    autoActionFlags &= ~1;
+    for (i = 0; i < level.maxclients; i++) {
+        gentity_t* ent = &g_entities[i];
+        if (ent->inuse && ent->client->pers.connected == CON_CONNECTED && (ent->client->pers.autoaction & 1)) {
+            trap_SendServerCommand(i, "stoprecord");
+        }
+    }
+}
+
+/*
+=============
+G_AutoActionClientConnect
+
+[QL] 0x10063270: somebody who arrives while the match is being recorded starts recording too
+=============
+*/
+void G_AutoActionClientConnect(gentity_t* ent) {
+    if ((autoActionFlags & 1) && (ent->client->pers.autoaction & 1)) {
+        trap_SendServerCommand(ent - g_entities, va("record \"%s\"\n", G_AutoActionName(ent)));
+    }
+}
+
+/*
+=============
+G_AutoAction
+
+[QL] 0x100632d0, run whenever the warmup state is set and at every frame of the intermission.
+cg_autoAction lives here and not in the cgame: 1 records the match from the countdown, 2 takes
+a picture of the scores four seconds into the intermission, when the recording also ends.
+Back in the pre-game warmup the recordings stop.
+=============
+*/
+void G_AutoAction(void) {
+    int i;
+
+    if (level.warmupTime == -1) {
+        G_AutoActionStopRecording();
+        autoActionFlags = 0;
+        return;
+    }
+    if (level.warmupTime == 0) {
+        if (!level.intermissionTime) {
+            autoActionFlags |= 1;
+            return;
+        }
+        if (level.time - level.intermissionTime > 4000 && !(autoActionFlags & 2)) {
+            G_AutoActionStopRecording();
+            autoActionFlags |= 2;
+            for (i = 0; i < level.maxclients; i++) {
+                gentity_t* ent = &g_entities[i];
+                if (ent->inuse && ent->client->pers.connected == CON_CONNECTED && (ent->client->pers.autoaction & 2)) {
+                    trap_SendServerCommand(i, va("screenshot \"%s\"\n", G_AutoActionName(ent)));
+                }
+            }
+        }
+        return;
+    }
+    if (!(autoActionFlags & 1)) {
+        autoActionFlags |= 1;
+        for (i = 0; i < level.maxclients; i++) {
+            gentity_t* ent = &g_entities[i];
+            if (ent->inuse && ent->client->pers.connected == CON_CONNECTED && (ent->client->pers.autoaction & 1)) {
+                trap_SendServerCommand(i, va("record \"%s\"\n", G_AutoActionName(ent)));
+            }
+        }
+    }
 }
 
 /*
@@ -3502,9 +3690,8 @@ static void CheckWarmupAndForfeit(void) {
             return;
         }
 
-        // Countdown was running: drop back to PRE_GAME. (Binary inlines the
-        // SetWarmupState(-1) transition and also calls G_AutoRecordAndScreenshot(-1),
-        // which ioquakelive does not model.)
+        // Countdown was running: drop back to PRE_GAME (the binary inlines the
+        // SetWarmupState(-1) transition, the automatic recording included).
         SetWarmupState(-1);
         G_LogPrintf("Warmup:\n");
 

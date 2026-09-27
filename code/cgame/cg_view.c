@@ -1387,17 +1387,18 @@ static void CG_WeaponConfig(void) {
 =================
 CG_AutoAction
 
-[QL] cg_autoAction: 1 records the match and 2 takes a picture when it ends. Retail
-registers it with those two values and a default of 3, and then never reads it. [CPMA]
-ch_autoStats writes the console, with the scores in it, next to the picture, the way CPMA
-1.53's own autoaction does. The match is live once the warmup is over and ends at the
-intermission, and nothing runs while a demo plays
+[CPMA] ch_autoStats writes the console, with the scores in it, when the match ends, the way
+CPMA 1.53's own autoaction does. cg_autoAction is not read here: retail's cgame only registers
+it for the userinfo, and the server records the match and takes the picture (qagamex86.dll
+0x100632d0, the "record" and "screenshot" commands). The match is live once the warmup is over
+and ends at the intermission, and nothing runs while a demo plays
 =================
 */
 static void CG_AutoAction(void) {
     qboolean live;
+    qtime_t now;
 
-    if (cg.demoPlayback || !cg.snap || (!cg_autoAction.integer && !ch_autoStats.integer)) {
+    if (cg.demoPlayback || !cg.snap || !ch_autoStats.integer) {
         return;
     }
     live = (!cg.warmup && !cg.intermissionStarted && cg.snap->ps.pm_type != PM_INTERMISSION);
@@ -1405,10 +1406,6 @@ static void CG_AutoAction(void) {
     if (live && !cg.autoActionLive) {
         cg.autoActionLive = qtrue;
         cg.autoActionEnded = qfalse;
-        if ((cg_autoAction.integer & 1) && !cg_demoRecording.integer) {
-            cg.autoActionRecording = qtrue;
-            trap_SendConsoleCommand("record\n");
-        }
         return;
     }
     if (!live) {
@@ -1418,21 +1415,10 @@ static void CG_AutoAction(void) {
         return;
     }
     cg.autoActionEnded = qtrue;
-    if (cg.autoActionRecording) {
-        cg.autoActionRecording = qfalse;
-        trap_SendConsoleCommand("stoprecord\n");
-    }
-    if (cg_autoAction.integer & 2) {
-        trap_SendConsoleCommand("screenshotJPEG\n");
-    }
-    if (ch_autoStats.integer) {
-        qtime_t now;
-
-        trap_RealTime(&now);
-        trap_SendConsoleCommand(va("condump stats/%s-%04i%02i%02i-%02i%02i%02i.txt\n", cgs.mapname,
-                                   now.tm_year + 1900, now.tm_mon + 1, now.tm_mday, now.tm_hour,
-                                   now.tm_min, now.tm_sec));
-    }
+    trap_RealTime(&now);
+    trap_SendConsoleCommand(va("condump stats/%s-%04i%02i%02i-%02i%02i%02i.txt\n", cgs.mapname,
+                               now.tm_year + 1900, now.tm_mon + 1, now.tm_mday, now.tm_hour,
+                               now.tm_min, now.tm_sec));
 }
 
 /*
