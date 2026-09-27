@@ -1586,7 +1586,8 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
     gun.renderfx = parent->renderfx;
 
     // [QL] railgun view-model tint tracks the refire cooldown via ps->weaponstate
-    // and cg_railReloadTime (binary), not the Q3 railFireTime+1500 window. World
+    // and the railgun's interval from CS_WEAPONINFO (0x100791c0), not the Q3
+    // railFireTime+1500 window. World
     // model gets a fixed green tint; local view model fades from black up to the
     // player's colour as the reload completes.
     if (weaponNum == WP_RAILGUN) {
@@ -1596,7 +1597,7 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
             gun.shaderRGBA[1] = 255;
             gun.shaderRGBA[2] = 0;
         } else if (ps->weaponstate == WEAPON_FIRING) {
-            float fscale = (1.0f - (float)ps->weaponTime / (float)cg_railReloadTime.integer) * 255.0f;
+            float fscale = (1.0f - (float)ps->weaponTime / (float)bg_weaponReloadTime[WP_RAILGUN]) * 255.0f;
             gun.shaderRGBA[0] = (byte)(ci->color1[0] * fscale);
             gun.shaderRGBA[1] = (byte)(ci->color1[1] * fscale);
             gun.shaderRGBA[2] = (byte)(ci->color1[2] * fscale);

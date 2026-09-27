@@ -1534,7 +1534,6 @@ static const cvarHelp_t cvarHelp[] = {
                              HV("16") "Everyone's while you spectate with the free camera"},
     {"cg_filter_angles", "smooths the view by averaging its angles over this many frames, up to 31; 0 for none"},
     {"cg_lightningImpactCap", "closer than this distance the lightning gun's impact gets smaller; 0 keeps it whole"},
-    {"cg_railReloadTime", "milliseconds the railgun in your hand takes to light up again after a shot"},
     {"cg_skipItems", "hides the items lying on the map; their timers stay"},
     {"cg_smoothClients", "shows the other players where the server extrapolates them, smoother on a bad connection"},
     {"cg_lastmsg", "the last chat message, which the chat recall shows again"},
@@ -1599,7 +1598,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"cg_gibFloatingOriginOffsetZ", "how far from the body the floating sparks start, up and down"},
     {"cg_stats", "prints the client frame number every frame"},
     {"cg_swingSpeed", "how fast player models turn their torso and legs toward where they move"},
-    {"cg_ignore", "for debugging (no effect in this build)"},
     {"cg_debugFlags", "debugging flags (no effect in this build)"},
     {"cg_trackPlayer", "follows a player with the camera, for testing (no effect in this build)"},
     {"cg_cameraSmartMode", "camera test mode (no effect in this build)"},
@@ -1609,10 +1607,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"cg_projectileNudge", "milliseconds projectiles are drawn ahead to make up for your ping (no effect in this build)"},
     {"cg_forceDrawCrosshair", "keeps the crosshair drawn where it would be hidden (no effect in this build)"},
     {"cg_preferredStartingWeapons", "starting weapons you prefer when the server lets you choose (no effect in this build)"},
-    {"cg_noTaunt", "turns off the players' taunts (no effect in this build)"},
-    {"cg_oldPlasma", "the plasma gun's older look (no effect in this build)"},
-    {"cg_oldRocket", "the rocket's older look (no effect in this build)"},
-    {"cg_noProjectileTrail", "kept from Quake 3; the trails follow the cg_smokeRadius cvars (no effect in this build)"},
 };
 
 #define HELP_HASH_SIZE 1024

@@ -232,7 +232,6 @@ vmCvar_t cg_tracerChance;
 vmCvar_t cg_tracerWidth;
 vmCvar_t cg_tracerLength;
 vmCvar_t cg_autoswitch;
-vmCvar_t cg_ignore;
 vmCvar_t cg_simpleItems;
 vmCvar_t cg_skipItems;  // [QL] 0x10016026: at 1, the items are not drawn
 vmCvar_t cg_fov;
@@ -289,11 +288,7 @@ vmCvar_t cg_timescale;
 
 vmCvar_t cg_smallFont;
 vmCvar_t cg_bigFont;
-vmCvar_t cg_noTaunt;
 
-vmCvar_t cg_noProjectileTrail;
-vmCvar_t cg_oldRocket;
-vmCvar_t cg_oldPlasma;
 vmCvar_t cg_trueLightning;
 
 vmCvar_t cg_currentSelectedPlayer;
@@ -350,7 +345,6 @@ vmCvar_t cg_itemTimers;
 vmCvar_t cg_killBeep;
 vmCvar_t cg_levelTimerDirection;
 vmCvar_t cg_lightningImpact;
-vmCvar_t cg_railReloadTime;
 vmCvar_t cg_lowAmmoWarningPercentile;
 vmCvar_t cg_lowAmmoWarningSound;
 vmCvar_t cg_muzzleFlash;
@@ -619,7 +613,6 @@ typedef struct {
 } cvarTable_t;
 
 static cvarTable_t cvarTable[] = {
-    {&cg_ignore, "cg_ignore", "0", 0},  // used for debugging
     {&cg_autoswitch, "cg_autoswitch", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},  // [QL] default 0 (was Q3 "1")
     {&cg_drawGun, "cg_drawGun", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "3"},
     // [ioquakelive] a renderer cvar; the cgame reads it to know which lights to draw. The
@@ -732,11 +725,7 @@ static cvarTable_t cvarTable[] = {
 
     {&cg_smallFont, "ui_smallFont", "0.25", CVAR_ROM},
     {&cg_bigFont, "ui_bigFont", "0.4", CVAR_ROM},
-    {&cg_noTaunt, "cg_noTaunt", "0", CVAR_ARCHIVE},
 
-    {&cg_noProjectileTrail, "cg_noProjectileTrail", "0", CVAR_ARCHIVE},
-    {&cg_oldRocket, "cg_oldRocket", "1", CVAR_ARCHIVE},
-    {&cg_oldPlasma, "cg_oldPlasma", "1", CVAR_ARCHIVE},
     {&cg_trueLightning, "cg_trueLightning", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},  // [QL] default 1 (was Q3 "0.0")
     {&cg_lightningStyle, "cg_lightningStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "5"},
     {&cg_screenDamage, "cg_screenDamage", "0x700000C8", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
@@ -785,7 +774,6 @@ static cvarTable_t cvarTable[] = {
     {&cg_killBeep, "cg_killBeep", "7", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "8"},
     {&cg_levelTimerDirection, "cg_levelTimerDirection", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_lightningImpact, "cg_lightningImpact", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
-    {&cg_railReloadTime, "cg_railReloadTime", "1500", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_lowAmmoWarningPercentile, "cg_lowAmmoWarningPercentile", "0.20", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0.01", "1.00"},
     {&cg_lowAmmoWarningSound, "cg_lowAmmoWarningSound", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
     {&cg_muzzleFlash, "cg_muzzleFlash", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
@@ -3744,6 +3732,8 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
     // [QL] parse player model/head overrides before clients are registered so the
     // g_allowCustomHeadmodels / model-override rules apply on the initial load.
     CG_ParseConfigParams();
+    // [QL] 0x10029c03: and the fire intervals, for the prediction
+    CG_ParseWeaponInfo();
     // [QL] custom-settings bitmask must be set before CG_RegisterClients so the RR-infected
     // bones model (customSettings bit 0x4000000) applies to clients on the initial load.
     cgs.customSettings = atoi(CG_ConfigString(CS_CUSTOM_SETTINGS));

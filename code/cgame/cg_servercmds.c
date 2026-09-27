@@ -813,6 +813,46 @@ void CG_ParseConfigParams(void) {
 
 /*
 ================
+CG_ParseWeaponInfo
+
+[QL] 0x100492e0: each weapon's fire interval from CS_WEAPONINFO, so the prediction fires when
+the server does. A key the server did not send leaves the interval as it was
+================
+*/
+void CG_ParseWeaponInfo(void) {
+    static const struct {
+        int weapon;
+        const char* key;
+    } reloads[] = {
+        {WP_GAUNTLET, "weapon_reload_gauntlet"},
+        {WP_MACHINEGUN, "weapon_reload_mg"},
+        {WP_SHOTGUN, "weapon_reload_sg"},
+        {WP_GRENADE_LAUNCHER, "weapon_reload_gl"},
+        {WP_ROCKET_LAUNCHER, "weapon_reload_rl"},
+        {WP_LIGHTNING, "weapon_reload_lg"},
+        {WP_RAILGUN, "weapon_reload_rg"},
+        {WP_PLASMAGUN, "weapon_reload_pg"},
+        {WP_BFG, "weapon_reload_bfg"},
+        {WP_GRAPPLING_HOOK, "weapon_reload_hook"},
+        {WP_NAILGUN, "weapon_reload_ng"},
+        {WP_PROX_LAUNCHER, "weapon_reload_prox"},
+        {WP_CHAINGUN, "weapon_reload_cg"},
+        {WP_HMG, "weapon_reload_hmg"},
+    };
+    const char* info = CG_ConfigString(CS_WEAPONINFO);
+    const char* val;
+    int i;
+
+    for (i = 0; i < ARRAY_LEN(reloads); i++) {
+        val = Info_ValueForKey(info, reloads[i].key);
+        if (val[0]) {
+            bg_weaponReloadTime[reloads[i].weapon] = atoi(val);
+        }
+    }
+}
+
+/*
+================
 CG_ParsePmoveParams
 
 [QL] Parse pmove_* parameters from CS_PMOVEINFO configstring.
@@ -982,6 +1022,7 @@ void CG_SetConfigValues(void) {
     CG_ParsePmoveParams();
     // [QL] parse player model/head overrides + scales from CS_PLAYERINFO
     CG_ParseConfigParams();
+    CG_ParseWeaponInfo();
     if (cgs.gametype == GT_CTF) {
         s = CG_ConfigString(CS_FLAGSTATUS);
         cgs.redflag = s[0] - '0';
@@ -1169,6 +1210,8 @@ static void CG_ConfigStringModified(void) {
         CG_ShaderStateChanged();
     } else if (num == CS_PMOVEINFO) {
         CG_ParsePmoveParams();
+    } else if (num == CS_WEAPONINFO) {
+        CG_ParseWeaponInfo();
     } else if (num == CS_CUSTOM_SETTINGS) {
         cgs.customSettings = atoi(str);
     } else if (num == CS_DMGTHROUGHDEPTH) {

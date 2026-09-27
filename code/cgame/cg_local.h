@@ -1825,7 +1825,6 @@ extern vmCvar_t cg_tracerChance;
 extern vmCvar_t cg_tracerWidth;
 extern vmCvar_t cg_tracerLength;
 extern vmCvar_t cg_autoswitch;
-extern vmCvar_t cg_ignore;
 extern vmCvar_t cg_itemFx;
 extern vmCvar_t cg_itemTimers;  // [QL] 0 turns off the timer left where the item was
 extern vmCvar_t cg_simpleItems;
@@ -1901,12 +1900,8 @@ extern vmCvar_t cg_cameraMode;
 
 extern vmCvar_t cg_smallFont;
 extern vmCvar_t cg_bigFont;
-extern vmCvar_t cg_noTaunt;
 
-extern vmCvar_t cg_noProjectileTrail;
 extern vmCvar_t cg_bubbleTrail;
-extern vmCvar_t cg_oldRocket;
-extern vmCvar_t cg_oldPlasma;
 extern vmCvar_t cg_trueLightning;
 
 extern vmCvar_t cg_currentSelectedPlayer;
@@ -1957,7 +1952,6 @@ extern vmCvar_t cg_smokeRadius_NG;
 extern vmCvar_t cg_smokeRadius_dust;
 extern vmCvar_t cg_smokeRadius_haste;
 extern vmCvar_t cg_smokeRadius_flight;
-extern vmCvar_t cg_railReloadTime;          // [QL] railgun refire interval (ms) for view-model tint
 extern vmCvar_t cg_loadout;
 extern vmCvar_t cg_scalePlayerModelsToBB;
 extern vmCvar_t cg_screenDamageAlpha;
@@ -2475,6 +2469,7 @@ void CG_ParseServerinfo(void);
 void CG_SetConfigValues(void);
 void CG_ParsePmoveParams(void);
 void CG_ParseConfigParams(void);
+void CG_ParseWeaponInfo(void);
 void CG_ShaderStateChanged(void);
 void CG_LoadVoiceChats(void);
 void CG_VoiceChatLocal(int clientNum, const char* cmd);
