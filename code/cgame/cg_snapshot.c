@@ -208,6 +208,13 @@ static void CG_TransitionSnapshot(void) {
         cent = &cg_entities[cg.snap->entities[i].number];
         CG_TransitionEntity(cent);
 
+        // [QL] 0x1004c238: a hook in flight or on a wall is noted under its owner, for the chain
+        if ((cent->currentState.eType == ET_MISSILE || cent->currentState.eType == ET_GRAPPLE) &&
+            cent->currentState.weapon == WP_GRAPPLING_HOOK &&
+            cent->currentState.otherEntityNum >= 0 && cent->currentState.otherEntityNum < MAX_CLIENTS) {
+            cg.hookEntities[cent->currentState.otherEntityNum] = cent;
+        }
+
         // remember time of snapshot this entity was last updated in
         cent->snapShotTime = cg.snap->serverTime;
     }

@@ -785,28 +785,18 @@ static void CG_PlasmaTrail(centity_t* cent, const weaponInfo_t* wi) {
 CG_GrappleTrail
 ==========================
 */
-void CG_GrappleTrail(centity_t* ent, const weaponInfo_t* wi) {
-    vec3_t origin;
-    entityState_t* es;
+void CG_GrappleTrail(centity_t* owner, const centity_t* hook, const vec3_t start) {
     refEntity_t beam;
 
-    es = &ent->currentState;
-
-    // [QL] only draw the chain for the grapple weapon (binary CG_GrappleTrail @0x10050990)
-    if (es->weapon != WP_GRAPPLING_HOOK) {
+    // [QL] 0x10050990: from where the owner holds the hook to the hook, while the grappling hook
+    // is the weapon in hand
+    if (owner->currentState.weapon != WP_GRAPPLING_HOOK) {
         return;
     }
 
-    BG_EvaluateTrajectory(&es->pos, cg.time, origin);
-
     memset(&beam, 0, sizeof(beam));
-
-    // [QL] origin is the owner's lerp origin directly (no muzzle +26/-6 offset),
-    // endpoint is the hook position. Now called from CG_AddPlayerWeapon via
-    // tag_chain (not as a missileTrailFunc), so it doesn't touch ent->trailTime and
-    // has no Distance<16 early-out.
-    VectorCopy(cg_entities[es->otherEntityNum].lerpOrigin, beam.origin);
-    VectorCopy(origin, beam.oldorigin);
+    BG_EvaluateTrajectory(&hook->currentState.pos, cg.time, beam.oldorigin);
+    VectorCopy(start, beam.origin);
 
     beam.radius = 64;  // [QL]
 
@@ -1730,12 +1720,14 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
 
     if (ps || cg.renderingThirdPerson ||
         cent->currentState.number != cg.predictedPlayerState.clientNum) {
-        // [QL] draw the grapple chain (CG_GrappleTrail self-guards on WP_GRAPPLING_HOOK)
-        // TODO [QL] the binary first repositions the flash onto its own tag_chain
-        //   (guarded by clientinfo infoValid && legsModel) before this call. Omitted
-        //   here, it would perturb the LG bolt origin for flash models without a
-        //   tag_chain.
-        CG_GrappleTrail(nonPredictedCent, weapon);
+        // [QL] 0x10052bb2: with the owner's hook out, the flash moves onto the weapon's
+        // tag_chain and the chain runs from there to the hook
+        centity_t* hook = cg.hookEntities[cent->currentState.clientNum];
+
+        if (hook && hook->currentValid) {
+            CG_PositionRotatedEntityOnTag(&flash, &gun, weapon->weaponModel, "tag_chain");
+            CG_GrappleTrail(nonPredictedCent, hook, flash.origin);
+        }
 
         // add lightning bolt
         CG_LightningBolt(nonPredictedCent, flash.origin);
@@ -1794,6 +1786,7 @@ void CG_AddViewWeapon(playerState_t* ps) {
     if (!cg_drawGun.integer) {
         vec3_t origin;
         sfxHandle_t sfx;
+        centity_t* hook;
 
         if (ps->pm_type == PM_SPECTATOR) {
             cg.predictedPlayerEntity.pe.lightningFiring = qfalse;
@@ -1805,6 +1798,11 @@ void CG_AddViewWeapon(playerState_t* ps) {
             VectorCopy(cg.refdef.vieworg, origin);
             VectorMA(origin, -8, cg.refdef.viewaxis[2], origin);
             CG_LightningBolt(&cg_entities[ps->clientNum], origin);
+            // [QL] 0x10052dee: and the hook's chain, from the same point
+            hook = cg.hookEntities[cg.predictedPlayerEntity.currentState.clientNum];
+            if (hook && hook->currentValid) {
+                CG_GrappleTrail(&cg_entities[ps->clientNum], hook, origin);
+            }
         }
 
         // [QL] 0x10052e28: the followed player's loops, as nothing else adds them. Any weapon held

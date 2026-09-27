@@ -827,6 +827,7 @@ typedef struct {
     // and whether the demo being recorded was started here
     qboolean autoActionLive;
     qboolean autoActionEnded;
+    centity_t* hookEntities[MAX_CLIENTS];  // [QL] 0x10aba9a8: each client's hook, as the snapshots bring it
 
     // [CPMA] when the spectator camera last jumped to whoever got the frag
     int followKillerTime;
@@ -2327,7 +2328,7 @@ void CG_RailTrail(clientInfo_t* ci, vec3_t start, vec3_t end);
 // own first-person view, or one a player carries
 typedef enum { BRIGHTWEAPON_ON_MAP, BRIGHTWEAPON_OWN_VIEW, BRIGHTWEAPON_CARRIED } brightWeapon_t;
 void CG_BrightWeapon(refEntity_t* ent, int weaponNum, int owner, brightWeapon_t kind);
-void CG_GrappleTrail(centity_t* ent, const weaponInfo_t* wi);
+void CG_GrappleTrail(centity_t* owner, const centity_t* hook, const vec3_t start);
 // CG_RailTrailCore, CG_SpawnRailTrail, CG_GetRailColorFloat, CG_GetRailColorByte are file-static in cg_weapons.c.
 void CG_MissileHitWall_DmgThrough(vec3_t origin, vec3_t dir, int weapon);  // wallbang (EV_MISSILE_MISS_DMGTHROUGH)
 void CG_ShotgunKillEffect(centity_t* cent);  // EV_SHOTGUN_KILL blood-puff burst

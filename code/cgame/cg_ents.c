@@ -1042,9 +1042,6 @@ static void CG_Grapple(centity_t* cent) {
         trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin, weapon->missileSound);
     }
 
-    // Will draw chain if needed
-    CG_GrappleTrail(cent, weapon);
-
     // create the render entity
     memset(&ent, 0, sizeof(ent));
     VectorCopy(cent->lerpOrigin, ent.origin);
