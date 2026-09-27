@@ -1948,6 +1948,8 @@ Cmd_IntermissionVote_f
 Binary: FUN_100441d0
 ==================
 */
+void G_TallyMapVotes(void);
+
 static void Cmd_IntermissionVote_f(gentity_t *ent) {
     int clientNum = ent - g_entities;
     char msg[64];
@@ -1989,16 +1991,9 @@ static void Cmd_IntermissionVote_f(gentity_t *ent) {
         return;
     }
 
-    // Remove previous vote if any
-    if (ent->client->pers.lastMapVoteIndex > 0 &&
-        ent->client->pers.lastMapVoteIndex <= 3) {
-        level.intermissionMapVotes[ent->client->pers.lastMapVoteIndex - 1]--;
-    }
-
     // Record new vote
     ent->client->pers.lastMapVoteTime = level.time;
     ent->client->pers.lastMapVoteIndex = choice;
-    level.intermissionMapVotes[choice - 1]++;
 
     // [QL] Hide this client's map-vote UI now that they have voted.
     // Binary: Cmd_IntermissionVote_f 0x100441d0 -> trap_SendServerCommand(client, "disable_vote_ui").
@@ -2013,12 +2008,35 @@ static void Cmd_IntermissionVote_f(gentity_t *ent) {
                ? level.intermissionMapTitles[choice - 1]
                : level.intermissionMapNames[choice - 1]));
 
-    // Update map vote counts configstring
-    trap_SetConfigstring(CS_ROTATIONVOTES,
-        va("%d %d %d",
-           level.intermissionMapVotes[0],
-           level.intermissionMapVotes[1],
-           level.intermissionMapVotes[2]));
+    G_TallyMapVotes();
+}
+
+/*
+==================
+G_TallyMapVotes
+
+[QL] 0x10043d80: the votes are counted again from what each connected player last chose,
+so the vote of somebody who left no longer counts, and go out as an infostring by slot
+==================
+*/
+void G_TallyMapVotes(void) {
+    char votes[MAX_INFO_STRING];
+    int i;
+
+    level.intermissionMapVotes[0] = level.intermissionMapVotes[1] = level.intermissionMapVotes[2] = 0;
+    for (i = 0; i < level.maxclients; i++) {
+        gclient_t *cl = &level.clients[i];
+
+        if (cl->pers.connected == CON_CONNECTED && cl->pers.lastMapVoteIndex >= 1 &&
+            cl->pers.lastMapVoteIndex <= 3) {
+            level.intermissionMapVotes[cl->pers.lastMapVoteIndex - 1]++;
+        }
+    }
+    votes[0] = '\0';
+    for (i = 0; i < 3; i++) {
+        Info_SetValueForKey(votes, va("%i", i), va("%i", level.intermissionMapVotes[i]));
+    }
+    trap_SetConfigstring(CS_ROTATIONVOTES, votes);
 }
 
 /*

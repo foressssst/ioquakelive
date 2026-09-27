@@ -2605,6 +2605,7 @@ void BeginIntermission(void) {
     trap_Cvar_VariableStringBuffer("nextmaps", nextmaps, sizeof(nextmaps));
     if (nextmaps[0]) {
         char mapInfo[MAX_INFO_STRING];
+        char votes[MAX_INFO_STRING];
 
         for (i = 0; i < 3; i++) {
             char key[16];
@@ -2625,21 +2626,19 @@ void BeginIntermission(void) {
             level.intermissionMapVotes[i] = 0;
         }
 
-        // Build map info configstring for clients
+        // [QL] 0x10056e2a: what the clients show of each map -- its name, its title and its
+        // gametype -- and the votes as an infostring by slot, all at zero
         mapInfo[0] = '\0';
+        votes[0] = '\0';
         for (i = 0; i < 3; i++) {
-            if (level.intermissionMapNames[i][0]) {
-                char k[16];
-                Com_sprintf(k, sizeof(k), "map_%d", i);
-                Info_SetValueForKey(mapInfo, k, level.intermissionMapNames[i]);
-                Com_sprintf(k, sizeof(k), "title_%d", i);
-                Info_SetValueForKey(mapInfo, k,
-                    level.intermissionMapTitles[i][0] ? level.intermissionMapTitles[i] : level.intermissionMapNames[i]);
-            }
+            Info_SetValueForKey(mapInfo, va("map_%i", i), level.intermissionMapNames[i]);
+            Info_SetValueForKey(mapInfo, va("title_%i", i), level.intermissionMapTitles[i]);
+            Info_SetValueForKey(mapInfo, va("gt_%i", i), Info_ValueForKey(nextmaps, va("gt_%i", i)));
+            Info_SetValueForKey(votes, va("%i", i), "0");
         }
 
         trap_SetConfigstring(CS_ROTATIONMAPS, mapInfo);
-        trap_SetConfigstring(CS_ROTATIONVOTES, "0 0 0");
+        trap_SetConfigstring(CS_ROTATIONVOTES, votes);
         level.voteTime = level.time;
         trap_SetConfigstring(CS_VOTE_TIME, va("%i", level.voteTime));
     }
