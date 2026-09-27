@@ -1433,4 +1433,108 @@ void VKimp_Shutdown(qboolean unloadDLL) {
     qvkGetInstanceProcAddr = NULL;
     GLimp_Shutdown();
 }
+
+/*
+===============
+VKimp_Probe
+
+[ioquakelive] Whether Vulkan can run on this machine at all, asked before anything is opened:
+there is a Vulkan driver, it has a device, and the device the renderer would take (vk.c, by
+r_device) is not on the list of drivers that crash it. The renderer says no from GetRefAPI when
+it cannot, and the client goes on with OpenGL instead of the game closing with an error.
+===============
+*/
+qboolean VKimp_Probe(char* reason, int reasonSize) {
+#ifdef __APPLE__
+    (void)reasonSize;
+    reason[0] = '\0';
+    return qtrue;  // MoltenVK travels inside the bundle: there always is a Vulkan
+#else
+    PFN_vkGetInstanceProcAddr gipa;
+    PFN_vkCreateInstance createInstance;
+    PFN_vkDestroyInstance destroyInstance = NULL;
+    PFN_vkEnumeratePhysicalDevices enumerateDevices = NULL;
+    PFN_vkGetPhysicalDeviceProperties getProperties = NULL;
+    VkApplicationInfo app;
+    VkInstanceCreateInfo info;
+    VkInstance instance = VK_NULL_HANDLE;
+    VkPhysicalDevice devices[16];
+    VkPhysicalDeviceProperties props;
+    uint32_t count = 16, i;
+    int index;
+    qboolean videoStarted = qfalse, ok = qfalse;
+
+    reason[0] = '\0';
+    if (!SDL_WasInit(SDL_INIT_VIDEO)) {
+        if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
+            return qtrue;  // no video at all: the renderer's own start says why
+        }
+        videoStarted = qtrue;
+    }
+    if (!SDL_Vulkan_LoadLibrary(NULL)) {
+        Com_sprintf(reason, reasonSize, "no Vulkan driver (%s)", SDL_GetError());
+        goto done;
+    }
+
+    gipa = (PFN_vkGetInstanceProcAddr)SDL_Vulkan_GetVkGetInstanceProcAddr();
+    createInstance = gipa ? (PFN_vkCreateInstance)gipa(VK_NULL_HANDLE, "vkCreateInstance") : NULL;
+    Com_Memset(&app, 0, sizeof(app));
+    app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    app.apiVersion = VK_API_VERSION_1_0;
+    Com_Memset(&info, 0, sizeof(info));
+    info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    info.pApplicationInfo = &app;
+    if (!createInstance || createInstance(&info, NULL, &instance) != VK_SUCCESS) {
+        Com_sprintf(reason, reasonSize, "the Vulkan driver does not start");
+        goto unload;
+    }
+
+    destroyInstance = (PFN_vkDestroyInstance)gipa(instance, "vkDestroyInstance");
+    enumerateDevices = (PFN_vkEnumeratePhysicalDevices)gipa(instance, "vkEnumeratePhysicalDevices");
+    getProperties = (PFN_vkGetPhysicalDeviceProperties)gipa(instance, "vkGetPhysicalDeviceProperties");
+    if (!enumerateDevices || !getProperties || enumerateDevices(instance, &count, devices) < 0 || !count) {
+        Com_sprintf(reason, reasonSize, "no graphics card with Vulkan");
+        goto destroy;
+    }
+
+    // the device the renderer would take: the first discrete one for -1, the first integrated
+    // one for -2, that index otherwise, the first when it is out of range
+    index = ri.Cvar_Get("r_device", "-1", CVAR_ARCHIVE | CVAR_LATCH)->integer;  // as tr_init.c registers it
+    for (i = 0; i < count; i++) {
+        getProperties(devices[i], &props);
+        if (index == -1 && props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+            index = (int)i;
+        } else if (index == -2 && props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
+            index = (int)i;
+        }
+    }
+    if (index < 0 || index >= (int)count) {
+        index = 0;
+    }
+    getProperties(devices[index], &props);
+
+#ifdef _WIN64
+    // the same list vk.c refuses at device creation: in 64 bits these die in vkCreateSwapchainKHR
+    if (props.vendorID == 0x8086 && (props.driverVersion >> 14) == 101 &&
+        (props.driverVersion & 0x3FFF) >= 5333 && (props.driverVersion & 0x3FFF) <= 6737) {
+        Com_sprintf(reason, reasonSize, "Intel driver 101.%u crashes Vulkan in 64 bits; 101.6790 or later does not",
+                    props.driverVersion & 0x3FFF);
+        goto destroy;
+    }
+#endif
+    ok = qtrue;
+
+destroy:
+    if (destroyInstance) {
+        destroyInstance(instance, NULL);
+    }
+unload:
+    SDL_Vulkan_UnloadLibrary();
+done:
+    if (videoStarted) {
+        SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    }
+    return ok;
+#endif
+}
 #endif

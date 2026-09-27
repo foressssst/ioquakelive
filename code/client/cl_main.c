@@ -3515,6 +3515,23 @@ void CL_InitRef(void) {
     hA3Dg_ExportRenderGeom(ret);
 #endif
 
+#ifdef USE_RENDERER_DLOPEN
+    // [ioquakelive] a renderer that cannot run on this machine (Vulkan with no usable device or
+    // driver) says so here, and the default one takes over -- without keeping it, as above
+    if (!ret) {
+        char fallback[MAX_OSPATH];
+
+        Com_sprintf(fallback, sizeof(fallback), "%s" ARCH_STRING DLL_EXT, cl_renderer->resetString);
+        if (Q_stricmp(dllName, fallback)) {
+            Com_Printf("...going on with %s\n", fallback);
+            Sys_UnloadLibrary(rendererLib);
+            rendererLib = Sys_LoadDll(fallback, qfalse);
+            GetRefAPI = rendererLib ? Sys_LoadFunction(rendererLib, "GetRefAPI") : NULL;
+            ret = GetRefAPI ? GetRefAPI(REF_API_VERSION, &ri) : NULL;
+        }
+    }
+#endif
+
     Com_Printf("-------------------------------\n");
 
     if (!ret) {

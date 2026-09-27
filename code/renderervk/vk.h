@@ -6,6 +6,7 @@
 // [ioquakelive] sdl_glimp.c is built into this renderer and answers these itself
 void		VKimp_Init( glconfig_t *config );
 void		VKimp_Shutdown( qboolean unloadDLL );
+qboolean	VKimp_Probe( char *reason, int reasonSize );
 void		*VK_GetInstanceProcAddr( VkInstance instance, const char *name );
 qboolean	VK_CreateSurface( VkInstance instance, VkSurfaceKHR *pSurface );
 

@@ -2188,6 +2188,17 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 		return NULL;
 	}
 
+	// [ioquakelive] a machine where Vulkan cannot run gets no Vulkan renderer: the client goes on
+	// with OpenGL rather than the game closing with an error
+	{
+		char reason[256];
+
+		if ( !VKimp_Probe( reason, sizeof( reason ) ) ) {
+			ri.Printf( PRINT_WARNING, "Vulkan cannot run here: %s\n", reason );
+			return NULL;
+		}
+	}
+
 	// the RE_ functions are Renderer Entry points
 
 	re.Shutdown = RE_Shutdown;
