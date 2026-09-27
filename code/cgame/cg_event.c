@@ -2166,7 +2166,9 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             // The server (DamagePlum 0x10046680 / the shotgun flush) packs the amount
             // in s.time, the recipient clientNum in s.clientNum, and the weapon in
             // s.generic1 - NOT pos.trTime/otherEntityNum/weapon.
-            if (cg_damagePlum.string[0] && cg.snap->ps.clientNum == es->clientNum) {
+            // [QL] 0x1001c3db only checks whose hit it is: which weapons show is up to
+            // CG_DamagePlum and the cg_damagePlum list
+            if (cg.snap->ps.clientNum == es->clientNum) {
                 CG_DamagePlum(es->time, es->generic1, cent->lerpOrigin);
             }
             break;

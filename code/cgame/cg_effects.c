@@ -783,14 +783,40 @@ CG_DamagePlum
 // Address: 0x10013660
 [QL] Floating damage number. Allocates a shared floating-effect record (FE_DAMAGE_NUMBER)
 carrying the damage as text; CG_DrawFloatingEffects projects and floats it. Replaces the
-old LE_DAMAGEPLUM local-entity / number-sprite path. (The binary also filters by weapon via
-a cvar weapon-flag mask; that filter is not reproduced here.)
+old LE_DAMAGEPLUM local-entity / number-sprite path. Only the weapons cg_damagePlum lists
+show one: the binary makes the list a weapon mask (BG_ParseWeaponStringtoFlag, 0x10001e50)
+and tests the hit's weapon bit.
 ==================
 */
+
+// [QL] 0x10079080, 48 bytes a weapon: the colour each weapon's damage numbers take with
+// cg_damagePlumColorStyle 3
+static const vec4_t cg_damagePlumWeaponColors[16] = {
+    {0.0f, 0.0f, 0.0f, 1.0f},        // none
+    {0.0f, 0.847f, 1.0f, 1.0f},      // gauntlet
+    {1.0f, 1.0f, 0.0f, 1.0f},        // machinegun
+    {1.0f, 0.49f, 0.0f, 1.0f},       // shotgun
+    {0.007f, 0.564f, 0.07f, 1.0f},   // grenade launcher
+    {1.0f, 0.003f, 0.003f, 1.0f},    // rocket launcher
+    {1.0f, 1.0f, 0.729f, 1.0f},      // lightning gun
+    {0.0f, 1.0f, 0.0f, 1.0f},        // railgun
+    {0.772f, 0.0f, 1.0f, 1.0f},      // plasma gun
+    {0.003f, 0.352f, 1.0f, 1.0f},    // bfg
+    {0.317f, 0.666f, 0.862f, 1.0f},  // grappling hook
+    {0.0f, 1.0f, 0.701f, 1.0f},      // nailgun
+    {1.0f, 0.0f, 0.486f, 1.0f},      // proximity launcher
+    {0.721f, 0.721f, 0.721f, 1.0f},  // chaingun
+    {0.807f, 0.647f, 0.0f, 1.0f},    // heavy machinegun
+    {0.0f, 0.0f, 0.0f, 0.0f},
+};
+
 void CG_DamagePlum(int damage, int weapon, vec3_t org) {
     floatingEffect_t* fx;
 
-    (void)weapon;
+    // [QL] 0x1001366a: a weapon the list leaves out shows none
+    if (weapon < 0 || weapon >= 16 || !(BG_ParseWeaponStringtoFlag(cg_damagePlum.string) & (1 << weapon))) {
+        return;
+    }
 
     fx = CG_AllocFloatingEffect();
     if (!fx) {
@@ -802,8 +828,11 @@ void CG_DamagePlum(int damage, int weapon, vec3_t org) {
     fx->fadeStart = 600.0f;  // 0x44160000
     fx->doFade = 1;
 
-    // colour style based on cg_damagePlumColorStyle (binary DAT_10b71fec)
+    // colour style based on cg_damagePlumColorStyle (binary DAT_10b71fec, 0x10013698)
     switch (cg_damagePlumColorStyle.integer) {
+    case 3:  // the weapon's own colour (0x100136d5)
+        Vector4Copy(cg_damagePlumWeaponColors[weapon], fx->color);
+        break;
     case 2:  // damage tier colours
         if (damage >= 76) {
             fx->color[0] = 1.0f; fx->color[1] = 0.0f; fx->color[2] = 0.0f;
@@ -816,9 +845,20 @@ void CG_DamagePlum(int damage, int weapon, vec3_t org) {
         }
         fx->color[3] = 1.0f;
         break;
-    default:  // style 1: white (binary calls CG_DamageColor(damage/100); not ported)
-        fx->color[0] = fx->color[1] = fx->color[2] = fx->color[3] = 1.0f;
+    default: {  // style 1: white to red by damage/100 (0x100136a5, the lerp at 0x10057a30)
+        float t = damage / 100.0f;
+        float gb = 1.0f - t;
+
+        if (gb < 0.0f) {
+            gb = 0.0f;
+        } else if (gb > 1.0f) {
+            gb = 1.0f;
+        }
+        fx->color[0] = 1.0f;
+        fx->color[1] = fx->color[2] = gb;
+        fx->color[3] = 1.0f;
         break;
+    }
     }
 
     VectorCopy(org, fx->origin);
