@@ -465,6 +465,7 @@ static struct {
     void* matchmaking;  // ISteamMatchmakingServers002 *
     void* networking;   // ISteamNetworking005 *
     void* ugc;          // ISteamUGC007 *
+    void* utils;        // ISteamUtils007 *, the client's
     void* gameServer;   // ISteamGameServer012 *
     void* gameServerNetworking;
 
@@ -714,6 +715,7 @@ static steamBool_t QDECL SD_API_Init(void) {
     sd.matchmaking = SD_Interface(11, sd.clientUser, sd.clientPipe, "SteamMatchMakingServers002");
     sd.networking = SD_Interface(16, sd.clientUser, sd.clientPipe, "SteamNetworking005");
     sd.ugc = SD_Interface(26, sd.clientUser, sd.clientPipe, "STEAMUGC_INTERFACE_VERSION007");
+    sd.utils = ((void* (*)(void*, int, const char*))SD_VT(sd.client, 9))(sd.client, sd.clientPipe, "SteamUtils007");
     return 1;
 }
 
@@ -725,7 +727,7 @@ static void QDECL SD_API_Shutdown(void) {
         SD_ReleaseSteamPipe(sd.clientPipe);
     }
     sd.clientPipe = sd.clientUser = 0;
-    sd.user = sd.friends = sd.lobbies = sd.matchmaking = sd.networking = sd.ugc = NULL;
+    sd.user = sd.friends = sd.lobbies = sd.matchmaking = sd.networking = sd.ugc = sd.utils = NULL;
     SD_ShutdownIfAllPipesClosed();
 }
 
@@ -834,7 +836,15 @@ static void SD_Dispatch(int pipe, qboolean server) {
     }
 }
 
+/*
+Quake Live's SteamAPI_RunCallbacks (0x3b407260) runs ISteamUtils007::RunFrame, slot 14, before
+anything else: it is what works through the results of a server list, which otherwise stays
+empty and refreshing forever.
+*/
 static void QDECL SD_API_RunCallbacks(void) {
+    if (sd.utils) {
+        ((void (*)(void*))SD_VT(sd.utils, 14))(sd.utils);
+    }
     SD_Dispatch(sd.clientPipe, qfalse);
 }
 
@@ -1081,7 +1091,11 @@ static void Steam_Status_f(void) {
     // identity: the ticket this client would send in its getchallenge and, if this process
     // also runs a server, what Steam says about that ticket. It is the only way to see the
     // whole chain without two machines.
-    if (st.clientUp) {
+    // a new ticket cancels the one this client handed a server when it connected, and Steam then
+    // tells that server so: it drops the player ("Issuer canceled auth ticket")
+    if (st.clientUp && st.authTicket) {
+        Com_Printf("ticket:      one in use, handed to the server this client joined\n");
+    } else if (st.clientUp) {
         static byte ticket[512];
         int len = Steam_AuthTicket(ticket, sizeof(ticket));
 
@@ -1096,6 +1110,11 @@ static void Steam_Status_f(void) {
                 Com_Printf("BeginAuth:   %i (%s)\n", r, r == STEAM_AUTH_BEGIN_OK ? "accepted" : "refused");
                 Steam_GS_EndAuth(me);
             }
+        }
+        // the test ticket goes, so a live one always means a connection's
+        if (st.authTicket && st.CancelAuthTicket) {
+            st.CancelAuthTicket(st.user, st.authTicket);
+            st.authTicket = 0;
         }
     }
 
