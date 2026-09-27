@@ -547,10 +547,14 @@ static void SV_MapRestart_f(void) {
 SV_Kick_f
 
 Kick a user off of the server
+
+[QL] 0x004dea40: a third argument is the reason the others read ("was kicked: <reason>",
+under 128 characters), and trying to kick the host tells everybody it cannot be done.
 ==================
 */
 static void SV_Kick_f(void) {
     client_t* cl;
+    const char* reason;
     int i;
 
     // make sure server is running
@@ -559,9 +563,14 @@ static void SV_Kick_f(void) {
         return;
     }
 
-    if (Cmd_Argc() != 2) {
+    if (Cmd_Argc() == 1) {
         Com_Printf("Usage: kick <player name>\nkick all = kick everyone\nkick allbots = kick all bots\n");
         return;
+    }
+
+    reason = "was kicked";
+    if (Cmd_Argc() > 2 && strlen(Cmd_Argv(2)) < 128) {
+        reason = va("was kicked: %s", Cmd_Argv(2));
     }
 
     cl = SV_GetPlayerByHandle();
@@ -574,7 +583,7 @@ static void SV_Kick_f(void) {
                 if (cl->netchan.remoteAddress.type == NA_LOOPBACK) {
                     continue;
                 }
-                SV_DropClient(cl, "was kicked");
+                SV_DropClient(cl, reason);
                 cl->lastPacketTime = svs.time;  // in case there is a funny zombie
             }
         } else if (!Q_stricmp(Cmd_Argv(1), "allbots")) {
@@ -585,18 +594,18 @@ static void SV_Kick_f(void) {
                 if (cl->netchan.remoteAddress.type != NA_BOT) {
                     continue;
                 }
-                SV_DropClient(cl, "was kicked");
+                SV_DropClient(cl, reason);
                 cl->lastPacketTime = svs.time;  // in case there is a funny zombie
             }
         }
         return;
     }
     if (cl->netchan.remoteAddress.type == NA_LOOPBACK) {
-        Com_Printf("Cannot kick host player\n");
+        SV_SendServerCommand(NULL, "print \"%s\"", "Cannot kick host player.\n");
         return;
     }
 
-    SV_DropClient(cl, "was kicked");
+    SV_DropClient(cl, reason);
     cl->lastPacketTime = svs.time;  // in case there is a funny zombie
 }
 
@@ -616,8 +625,9 @@ static void SV_KickNum_f(void) {
         return;
     }
 
+    // [QL] 0x004debe0
     if (Cmd_Argc() != 2) {
-        Com_Printf("Usage: %s <client number>\n", Cmd_Argv(0));
+        Com_Printf("Usage: kicknum <client number>\n");
         return;
     }
 
@@ -626,82 +636,12 @@ static void SV_KickNum_f(void) {
         return;
     }
     if (cl->netchan.remoteAddress.type == NA_LOOPBACK) {
-        Com_Printf("Cannot kick host player\n");
+        SV_SendServerCommand(NULL, "print \"%s\"", "Cannot kick host player\n");
         return;
     }
 
     SV_DropClient(cl, "was kicked");
     cl->lastPacketTime = svs.time;  // in case there is a funny zombie
-}
-
-/*
-==================
-SV_Ban_f
-
-Ban a user from being able to play on this server through the auth
-server
-==================
-*/
-static void SV_Ban_f(void) {
-    client_t* cl;
-
-    // make sure server is running
-    if (!com_sv_running->integer) {
-        Com_Printf("Server is not running.\n");
-        return;
-    }
-
-    if (Cmd_Argc() != 2) {
-        Com_Printf("Usage: banUser <player name>\n");
-        return;
-    }
-
-    cl = SV_GetPlayerByHandle();
-
-    if (!cl) {
-        return;
-    }
-
-    if (cl->netchan.remoteAddress.type == NA_LOOPBACK) {
-        Com_Printf("Cannot kick host player\n");
-        return;
-    }
-
-    Com_Printf("Not yet implemented.\n");
-}
-
-/*
-==================
-SV_BanNum_f
-
-Ban a user from being able to play on this server through the auth
-server
-==================
-*/
-static void SV_BanNum_f(void) {
-    client_t* cl;
-
-    // make sure server is running
-    if (!com_sv_running->integer) {
-        Com_Printf("Server is not running.\n");
-        return;
-    }
-
-    if (Cmd_Argc() != 2) {
-        Com_Printf("Usage: banClient <client number>\n");
-        return;
-    }
-
-    cl = SV_GetPlayerByNum();
-    if (!cl) {
-        return;
-    }
-    if (cl->netchan.remoteAddress.type == NA_LOOPBACK) {
-        Com_Printf("Cannot kick host player\n");
-        return;
-    }
-
-    Com_Printf("Not yet implemented.\n");
 }
 
 /*
