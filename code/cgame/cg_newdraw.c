@@ -2537,12 +2537,24 @@ static void CG_DrawVoteTimer(rectDef_t *rect, float scale, vec4_t color, int tex
     }
 }
 
-// [QL] Timeout count display
-static void CG_DrawTimeoutCount(rectDef_t *rect, float scale, vec4_t color, int textStyle, int csIndex) {
+// [QL] 0x10033530: "TO: n", the timeouts the team has left -- g_timeoutCount while its
+// configstring is empty (0x100495ef) -- aligned by the item. Nothing without timeouts
+// (0x1003b996).
+static void CG_DrawTimeoutCount(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int csIndex) {
     const char *s = CG_ConfigString(csIndex);
-    if (s && s[0]) {
-        CG_OwnerDrawText(rect->x, rect->y, scale, color, s, 0, 0, textStyle);
+    const char *text;
+    float x = rect->x;
+
+    if (cgs.timeoutCount <= 0) {
+        return;
     }
+    text = va("TO: %d", s[0] ? atoi(s) : cgs.timeoutCount);
+    if (align == ITEM_ALIGN_CENTER) {
+        x -= CG_OwnerDrawTextWidth(text, scale, 0) * 0.5f;
+    } else if (align == ITEM_ALIGN_RIGHT) {
+        x -= CG_OwnerDrawTextWidth(text, scale, 0);
+    }
+    CG_DrawText(x, rect->y, 0, scale, color, text, 0, 0, textStyle);
 }
 
 // [QL] Duel overlay owner-draws.
@@ -4680,10 +4692,10 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             }
             break;
         case CG_RED_TIMEOUT_COUNT:          // 0x123  CG_DrawTimeoutCount
-            CG_DrawTimeoutCount(&rect, scale, color, textStyle, CS_TIMEOUTS_RED);
+            CG_DrawTimeoutCount(&rect, scale, color, textStyle, align, CS_TIMEOUTS_RED);
             break;
         case CG_BLUE_TIMEOUT_COUNT:         // 0x13e
-            CG_DrawTimeoutCount(&rect, scale, color, textStyle, CS_TIMEOUTS_BLUE);
+            CG_DrawTimeoutCount(&rect, scale, color, textStyle, align, CS_TIMEOUTS_BLUE);
             break;
 
         // ---- team pickup stat columns (0x124-0x135 red, 0x13f-0x150 blue) ----
