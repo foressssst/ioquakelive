@@ -60,6 +60,10 @@ cvar_t* cl_autoRecordDemo;
 cvar_t* cl_aviFrameRate;
 cvar_t* cl_aviMotionJpeg;
 cvar_t* cl_forceavidemo;
+static cvar_t* cl_avidemo;          // [QL] frames a second of silent screenshots
+static cvar_t* cl_avidemoLatch;     // [QL] cl_avidemo to start once past cl_avidemo_mintime
+static cvar_t* cl_avidemoMinTime;   // [QL] server time before which nothing is captured
+static cvar_t* cl_avidemoMaxTime;   // [QL] server time past which the capture disconnects
 
 cvar_t* cl_freelook;
 cvar_t* cl_sensitivity;
@@ -3143,6 +3147,34 @@ void CL_Frame(int msec) {
         VM_Call(uivm, UI_SET_ACTIVE_MENU, UIMENU_MAIN);
     }
 
+    // [QL] 0x4bc43c: cl_avidemo_latch starts cl_avidemo once the server time is past
+    // cl_avidemo_mintime
+    if (cl_avidemoLatch->integer &&
+        (!cl_avidemoMinTime->integer || cl.serverTime > cl_avidemoMinTime->integer)) {
+        Cvar_Set("cl_avidemo", va("%d", cl_avidemoLatch->integer));
+        Cvar_Set("cl_avidemo_latch", "");
+    }
+
+    // [QL] cl_avidemo: a silent screenshot every frame and the game clock locked to it; nothing
+    // before cl_avidemo_mintime, and past cl_avidemo_maxtime the capture ends with a disconnect
+    if (cl_avidemo->integer && msec) {
+        if (clc.state == CA_ACTIVE || cl_forceavidemo->integer) {
+            qboolean early = (qboolean)(cl_avidemoMinTime->integer && cl.serverTime < cl_avidemoMinTime->integer);
+
+            if (cl_avidemoMaxTime->integer && cl.serverTime > cl_avidemoMaxTime->integer) {
+                CL_Disconnect_f();
+                return;
+            }
+            if (!early) {
+                Cbuf_ExecuteText(EXEC_NOW, "screenshot silent\n");
+            }
+        }
+        msec = (1000 / cl_avidemo->integer) * com_timescale->value;
+        if (msec == 0) {
+            msec = 1;
+        }
+    }
+
     // if recording an avi, lock to a fixed fps
     if (CL_VideoRecording() && cl_aviFrameRate->integer && msec) {
         // save the current screen
@@ -3900,6 +3932,10 @@ void CL_Init(void) {
     cl_aviFrameRate = Cvar_Get("cl_aviFrameRate", "25", CVAR_ARCHIVE);
     cl_aviMotionJpeg = Cvar_Get("cl_aviMotionJpeg", "1", CVAR_ARCHIVE);
     cl_forceavidemo = Cvar_Get("cl_forceavidemo", "0", 0);
+    cl_avidemo = Cvar_Get("cl_avidemo", "0", 0);
+    cl_avidemoLatch = Cvar_Get("cl_avidemo_latch", "", 0);
+    cl_avidemoMinTime = Cvar_Get("cl_avidemo_mintime", "", 0);
+    cl_avidemoMaxTime = Cvar_Get("cl_avidemo_maxtime", "", 0);
 
     rconAddress = Cvar_Get("rconAddress", "", 0);
 

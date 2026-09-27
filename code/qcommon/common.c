@@ -2733,6 +2733,24 @@ void Com_Init(char* commandLine) {
     com_minimized = Cvar_Get("com_minimized", "0", CVAR_ROM);
     com_maxfpsMinimized = Cvar_Get("com_maxfpsMinimized", "10", CVAR_ARCHIVE);
     com_busyWait = Cvar_Get("com_busyWait", "0", CVAR_ARCHIVE);
+
+    // [QL] quakelive_steam.exe 0x4cc115: the process number, for the safe-mode check
+    Cvar_Get("com_pid", va("%d", Sys_PID()), CVAR_ROM);
+    // [QL] registered by retail's engine and read by nothing (0x4cc493, 0x4e3dc7, 0x4d3161,
+    // 0x4d3256); here so the cvar list is retail's
+    Cvar_Get("com_idleSleep", "1", CVAR_ARCHIVE | CVAR_USERSAVE);
+    Cvar_Get("sv_idleRestart", "1", 0);
+    Cvar_Get("fs_copyfiles", "0", CVAR_INIT);
+    Cvar_Get("fs_restrict", "", CVAR_INIT);
+#ifndef DEDICATED
+    // [QL] and the client's (0x4bcb7f, 0x4ec36a, 0x4ec2e4, 0x4ec2b8, 0x46c2fa, 0x46c391)
+    Cvar_Get("cl_platform", "1", CVAR_ROM);
+    Cvar_Get("in_joyBallScale", "1.0", CVAR_ARCHIVE);
+    Cvar_Get("in_mididevice", "0", CVAR_ARCHIVE);
+    Cvar_Get("in_midiport", "1", CVAR_ARCHIVE);
+    Cvar_Get("r_lastValidRenderer", "(uninitialized)", CVAR_ARCHIVE);
+    Cvar_Get("r_maskMinidriver", "0", CVAR_LATCH);
+#endif
     com_workers = Cvar_Get("com_workers", "-1", CVAR_ARCHIVE | CVAR_LATCH);
     com_preciseFrameTiming = Cvar_Get("com_preciseFrameTiming", "1", CVAR_ARCHIVE);
 

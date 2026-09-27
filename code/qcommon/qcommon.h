@@ -1212,6 +1212,7 @@ dialogResult_t Sys_Dialog(dialogType_t type, const char* message, const char* ti
 
 void Sys_RemovePIDFile(const char* gamedir);
 qboolean Sys_WritePIDFile(const char* gamedir);
+int Sys_PID(void);
 
 /* This is based on the Adaptive Huffman algorithm described in Sayood's Data
  * Compression book.  The ranks are not actually stored, but implicitly defined
