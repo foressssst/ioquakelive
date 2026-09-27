@@ -883,6 +883,7 @@ qboolean G_ObfuscateEnemyInfoInSnapshotCheck(int clientNum1, int clientNum2);
 qboolean G_ClientAlwaysInSnapshot(int viewerNum, int clientNum);
 qboolean G_SnapshotSkipEntity(int viewerNum, int entityNum);
 qboolean G_ClientIsAdmin(int clientNum);
+qboolean G_EntityAlwaysInSnapshot(int entityNum);
 
 // g_gametype_duel.c - Duel / Tournament
 void CheckTournament(void);   // [QL] duel ready-start countdown (0x10058600)

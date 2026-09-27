@@ -382,6 +382,13 @@ static void SV_AddEntitiesVisibleFromPoint(vec3_t origin, clientSnapshot_t* fram
             continue;
         }
 
+        // [QL] 0x4e54e3: and past the clients, an entity everybody gets from anywhere, like the
+        // flags, the obelisks, the quad hog's quad and the items the timers follow (export 16)
+        if (e >= MAX_CLIENTS && SV_GameEntityAlwaysSend(e)) {
+            SV_AddEntToSnapshot(svEnt, ent, eNums);
+            continue;
+        }
+
         // ignore if not touching a PV leaf
         // check area
         if (!CM_AreasConnected(clientarea, svEnt->areanum)) {

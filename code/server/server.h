@@ -439,6 +439,7 @@ int SV_GameClientScore(int clientNum);
 void SV_GameClientBegin(int clientNum);
 qboolean SV_GameSnapshotSkipEntity(int viewerNum, int entityNum);
 qboolean SV_GameClientIsAdmin(int clientNum);
+qboolean SV_GameEntityAlwaysSend(int entityNum);
 void SV_RedirectedCommand(netadr_t to, const char* text);
 void SV_VoiceFrame(void);
 void SV_SteamIdentity(void);

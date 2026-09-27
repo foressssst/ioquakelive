@@ -359,7 +359,7 @@ typedef enum {
     GAME_BOT_AI_START_FRAME      = 13,  // [QL] BotAIStartFrame() (retail 0x10023400)
     GAME_SNAPSHOT_ALWAYS_SEND    = 14,  // [QL] G_ClientAlwaysInSnapshot() (retail 0x10052dc0)
     GAME_SNAPSHOT_SKIP_ENTITY    = 15,  // [QL] G_SnapshotSkipEntity() (retail 0x10053020)
-    GAME_UNUSED_16               = 16,  // [QL] 0x10052f40, gametypes 5, 6 and 11 only, not ported
+    GAME_ENTITY_ALWAYS_SEND      = 16,  // [QL] G_EntityAlwaysInSnapshot() (retail 0x10052f40)
     GAME_VOICE_FILTER            = 17,  // [QL] G_VoiceFilter() (retail 0x10052e90)
     GAME_CLIENT_IS_ADMIN         = 18,  // [QL] G_ClientIsAdmin() (retail 0x100530c0)
     GAME_SNAPSHOT_VISIBILITY     = 19,  // [QL] G_ObfuscateEnemyInfoInSnapshotCheck() (retail 0x10052e40)

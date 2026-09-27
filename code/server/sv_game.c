@@ -1242,6 +1242,13 @@ int SV_GameVoiceFilter(int speaker, int listener) {
     return 0;
 }
 
+// [QL] retail export 16 (0x10052f40): an entity past the clients sent from anywhere on the map
+qboolean SV_GameEntityAlwaysSend(int entityNum) {
+    if (sv_vmMainTable[GAME_ENTITY_ALWAYS_SEND])
+        return ((qboolean (*)(int))sv_vmMainTable[GAME_ENTITY_ALWAYS_SEND])(entityNum);
+    return qfalse;
+}
+
 // [QL] retail export 18 (0x100530c0): whether the game counts this client as an admin
 qboolean SV_GameClientIsAdmin(int clientNum) {
     if (sv_vmMainTable[GAME_CLIENT_IS_ADMIN])

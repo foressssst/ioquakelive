@@ -353,6 +353,53 @@ qboolean G_ClientAlwaysInSnapshot(int viewerNum, int clientNum) {
 
 /*
 ==================
+G_EntityAlwaysInSnapshot
+
+[QL] qagamex86.dll 0x10052f40, the export (16) the engine asks about every entity past the
+clients before the PVS test (quakelive_steam.exe 0x4e54e3): qtrue sends it from anywhere on the
+map. The flags in CTF, 1-Flag and A&D, the obelisks in Harvester, the quad in FFA with g_quadHog,
+and with g_itemTimers every item that has a timer.
+==================
+*/
+qboolean G_EntityAlwaysInSnapshot(int entityNum) {
+    gentity_t* ent;
+
+    if ((unsigned)entityNum > MAX_GENTITIES - 1) {
+        return qfalse;
+    }
+    ent = &g_entities[entityNum];
+
+    switch (g_gametype.integer) {
+        case GT_CTF:
+        case GT_1FCTF:
+        case GT_AD:
+            if (ent->item && ent->item->giType == IT_TEAM && ent->item->giTag >= 1 && ent->item->giTag <= 3) {
+                return qtrue;
+            }
+            break;
+        case GT_FFA:
+            if (g_quadHog.integer) {
+                return (qboolean)(ent->item && ent->item->giType == IT_POWERUP && ent->item->giTag == PW_QUAD);
+            }
+            break;
+        case GT_HARVESTER:
+            if (ent->classname &&
+                (!Q_stricmp(ent->classname, "team_redobelisk") || !Q_stricmp(ent->classname, "team_blueobelisk"))) {
+                return qtrue;
+            }
+            break;
+        default:
+            break;
+    }
+
+    if (g_itemTimers.integer && ent->item && ent->item->itemTimer) {
+        return qtrue;
+    }
+    return qfalse;
+}
+
+/*
+==================
 G_ClientIsAdmin
 
 [QL] qagamex86.dll 0x100530c0, the export (18) the engine asks before an in-game rcon
