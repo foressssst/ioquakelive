@@ -386,9 +386,10 @@ static void CG_ParseScores_Ft(void) {
         sp->impressiveCount = atoi(CG_Argv(i++));
         sp->excellentCount = atoi(CG_Argv(i++));
         sp->guantletCount = atoi(CG_Argv(i++));
+        // [QL] 0x100476a0: thaws, then the team kills and the times team-killed
         sp->thaws = atoi(CG_Argv(i++));
+        sp->tks = atoi(CG_Argv(i++));
         sp->tkd = atoi(CG_Argv(i++));
-        i++;  // unknown field
         sp->damageDone = atoi(CG_Argv(i++));
         sp->alive = atoi(CG_Argv(i++));
         sp->net = sp->frags - sp->deaths;
