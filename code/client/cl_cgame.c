@@ -819,6 +819,24 @@ static intptr_t CL_CgameSystemCallsInner(intptr_t* args) {
 
 /*
 ====================
+CL_RegisterCGameCvars
+====================
+*/
+void CL_RegisterCGameCvars(void) {
+    // [QL] quakelive_steam.exe 0x4cc240: load the cgame (0x4b0460), run its cvar registration
+    // (export +0x04) and put it away again (0x4afbf0), before the configs are read
+    cgvm = VM_Create("cgame", CL_CgameSystemCalls);
+    if (!cgvm) {
+        Com_Printf("Couldn't load cgame VM during cvar registration.\n");
+        return;
+    }
+    VM_Call(cgvm, CG_REGISTER_CVARS);
+    VM_Free(cgvm);
+    cgvm = NULL;
+}
+
+/*
+====================
 CL_InitCGame
 
 Should only be called by CL_StartHunkUsers

@@ -787,10 +787,11 @@ SOCKET NET_IPSocket(char* net_interface, int port, int* err) {
 
     *err = 0;
 
+    // [QL] retail's wording (quakelive_steam.exe strings); the IPv6 socket is ours
     if (net_interface) {
-        Com_Printf("Opening IPv4 socket: %s:%i\n", net_interface, port);
+        Com_Printf("Opening IP socket: %s:%i\n", net_interface, port);
     } else {
-        Com_Printf("Opening IPv4 socket: 0.0.0.0:%i\n", port);
+        Com_Printf("Opening IP socket: localhost:%i\n", port);
     }
 
     if ((newsocket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET) {

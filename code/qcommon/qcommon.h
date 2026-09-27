@@ -990,6 +990,7 @@ void CL_InitKeyCommands(void);
 // config files, but the rest of client startup will happen later
 
 void CL_Init(void);
+void CL_RegisterCGameCvars(void);
 void CL_Disconnect(qboolean showMainMenu);
 void CL_Shutdown(char* finalmsg, qboolean disconnect, qboolean quit);
 void CL_Frame(int msec);
@@ -1210,7 +1211,7 @@ typedef enum {
 dialogResult_t Sys_Dialog(dialogType_t type, const char* message, const char* title);
 
 void Sys_RemovePIDFile(const char* gamedir);
-void Sys_InitPIDFile(const char* gamedir);
+qboolean Sys_WritePIDFile(const char* gamedir);
 
 /* This is based on the Adaptive Huffman algorithm described in Sayood's Data
  * Compression book.  The ranks are not actually stored, but implicitly defined

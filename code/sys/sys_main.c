@@ -208,7 +208,8 @@ char* Sys_GetClipboardData(void) {
 #ifdef DEDICATED
 #define PID_FILENAME PRODUCT_NAME "_server.pid"
 #else
-#define PID_FILENAME PRODUCT_NAME ".pid"
+// [QL] quakelive_steam.exe 0x4c93e0: the client keeps one profile.pid, in baseq3 whatever the mod
+#define PID_FILENAME "profile.pid"
 #endif
 
 /*
@@ -244,7 +245,7 @@ Sys_WritePIDFile
 Return qtrue if there is an existing stale PID file
 =================
 */
-static qboolean Sys_WritePIDFile(const char* gamedir) {
+qboolean Sys_WritePIDFile(const char* gamedir) {
     char* pidFile = Sys_PIDFileName(gamedir);
     FILE* f;
     qboolean stale = qfalse;
@@ -283,35 +284,6 @@ static qboolean Sys_WritePIDFile(const char* gamedir) {
 
 /*
 =================
-Sys_InitPIDFile
-=================
-*/
-void Sys_InitPIDFile(const char* gamedir) {
-    if (Sys_WritePIDFile(gamedir)) {
-#ifndef DEDICATED
-        char message[1024];
-        char modName[MAX_OSPATH];
-
-        FS_GetModDescription(gamedir, modName, sizeof(modName));
-        Q_CleanStr(modName);
-
-        Com_sprintf(message, sizeof(message),
-                    "The last time %s ran, "
-                    "it didn't exit properly. This may be due to inappropriate video "
-                    "settings. Would you like to start with \"safe\" video settings?",
-                    modName);
-
-#ifndef _DEBUG
-        if (Sys_Dialog(DT_YES_NO, message, "Abnormal Exit") == DR_YES) {
-            Cvar_Set("com_abnormalExit", "1");
-        }
-#endif
-#endif
-    }
-}
-
-/*
-=================
 Sys_Exit
 
 Single exit point (regular exit or in case of error)
@@ -326,7 +298,11 @@ static __attribute__((noreturn)) void Sys_Exit(int exitCode) {
 
     if (exitCode < 2 && com_fullyInitialized) {
         // Normal exit
+#ifdef DEDICATED
         Sys_RemovePIDFile(FS_GetCurrentGameDir());
+#else
+        Sys_RemovePIDFile(BASEGAME_DIR);
+#endif
     }
 
     NET_Shutdown();

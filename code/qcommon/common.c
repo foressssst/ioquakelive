@@ -80,7 +80,6 @@ cvar_t* com_unfocused;
 cvar_t* com_maxfpsUnfocused;
 cvar_t* com_minimized;
 cvar_t* com_maxfpsMinimized;
-cvar_t* com_abnormalExit;
 cvar_t* com_gamename;
 cvar_t* com_protocol;
 cvar_t* com_basegame;
@@ -154,6 +153,10 @@ to the appropriate place.
 A raw string should NEVER be passed as fmt, because of "%f" type crashers.
 =============
 */
+#ifndef DEDICATED
+static cvar_t* com_ignoreCrash;  // [QL] 0x1205e40
+static cvar_t* com_crashed;      // [QL] 0x1205e44
+#endif
 static cvar_t* con_completionStyle;  // [CNQ3] tab completion: 0 = list the matches, 1 = list once then cycle
 
 /*
@@ -470,6 +473,12 @@ skip loading of qzconfig.cfg
 qboolean Com_SafeMode(void) {
     int i;
 
+#ifndef DEDICATED
+    // [QL] 0x4c89e0: a crash the player did not wave away is safe mode too
+    if (com_crashed && com_crashed->integer && !com_ignoreCrash->integer) {
+        return qtrue;
+    }
+#endif
     for (i = 0; i < com_numConsoleLines; i++) {
         Cmd_TokenizeString(com_consoleLines[i]);
         if (!Q_stricmp(Cmd_Argv(0), "safe") || !Q_stricmp(Cmd_Argv(0), "cvar_restart")) {
@@ -2431,7 +2440,45 @@ static void Com_MigrateConfig(void) {
         Cvar_Set("com_configVersion", va("%i", COM_CONFIG_VERSION));
 }
 
+#ifndef DEDICATED
+/*
+=================
+Com_CheckCrash
+
+[QL] quakelive_steam.exe 0x4c93e0, 0x4cc1c3 and 0x4cc1ec. A profile.pid left by a process that is
+gone means the last run did not quit properly, and the client offers safe mode: this once it skips
+the system settings of qzconfig.cfg and keeps the controls. Without a qzconfig there is nothing to
+protect, and com_ignoreCrash skips the whole check.
+=================
+*/
+static void Com_CheckCrash(void) {
+    com_ignoreCrash = Cvar_Get("com_ignoreCrash", "0", 0);
+    com_crashed = Cvar_Get("com_crashed", "0", CVAR_ROM);
+
+    if (Sys_WritePIDFile(BASEGAME_DIR) && !com_ignoreCrash->integer) {
+        Cvar_Set("com_crashed", "1");
+    }
+    if (!com_crashed->integer) {
+        return;
+    }
+    if (FS_ReadFile(QZCONFIG_CFG, NULL) <= 0) {
+        Cvar_Set("com_ignoreCrash", "1");
+        return;
+    }
+    if (Sys_Dialog(DT_YES_NO, "Quake Live didn't quit properly the last time it ran.\n"
+                              "Would you like to launch the game in safe mode?\n"
+                              "It will change your system settings, but not your controls.",
+                   "Enable Safe Mode?") != DR_YES) {
+        Cvar_Set("com_ignoreCrash", "1");
+    }
+}
+#endif
+
 void Com_ExecuteCfg(void) {
+    // it takes "safe" off the command line, so it is asked once
+    const qboolean safe = Com_SafeMode();
+    qboolean readConfig = qfalse;
+
     Cbuf_ExecuteText(EXEC_NOW, "exec default.cfg\n");
     Cbuf_Execute();  // Always execute after exec to prevent text buffer overflowing
 
@@ -2454,7 +2501,8 @@ void Com_ExecuteCfg(void) {
             Cbuf_ExecuteText(EXEC_NOW, "exec server.cfg\n");
             Cbuf_Execute();
         } else {
-            if (!Com_SafeMode()) {
+            if (!safe) {
+                readConfig = (qboolean)(FS_ReadFile(QZCONFIG_CFG, NULL) > 0);
                 Cbuf_ExecuteText(EXEC_NOW, "exec " QZCONFIG_CFG "\n");
                 Cbuf_Execute();
             }
@@ -2467,8 +2515,12 @@ void Com_ExecuteCfg(void) {
         Cbuf_ExecuteText(EXEC_NOW, "exec autoexec.cfg\n");
         Cbuf_Execute();
 
-        if (!Com_SafeMode()) {
+        // a config written by an older build gets the steps it missed; with none read there is
+        // nothing to migrate, and what the command line set stays as it was set
+        if (readConfig) {
             Com_MigrateConfig();
+        } else {
+            Cvar_Get("com_configVersion", va("%i", COM_CONFIG_VERSION), CVAR_ARCHIVE);
         }
     }
 }
@@ -2606,7 +2658,13 @@ void Com_Init(char* commandLine) {
 
     // [QL] quakelive_steam.exe 0x4cc216: the game's cvars are registered before the configs are
     // read, so they all exist with their own defaults before anything sets them
+#ifndef DEDICATED
+    Com_CheckCrash();
+#endif
+
     SV_RegisterGameCvars();
+    // [QL] 0x4cc240: and then the cgame's, the same way
+    CL_RegisterCGameCvars();
 
     Com_ExecuteCfg();
 
@@ -2674,7 +2732,6 @@ void Com_Init(char* commandLine) {
     com_maxfpsUnfocused = Cvar_Get("com_maxfpsUnfocused", "60", CVAR_ARCHIVE);
     com_minimized = Cvar_Get("com_minimized", "0", CVAR_ROM);
     com_maxfpsMinimized = Cvar_Get("com_maxfpsMinimized", "10", CVAR_ARCHIVE);
-    com_abnormalExit = Cvar_Get("com_abnormalExit", "0", CVAR_ROM);
     com_busyWait = Cvar_Get("com_busyWait", "0", CVAR_ARCHIVE);
     com_workers = Cvar_Get("com_workers", "-1", CVAR_ARCHIVE | CVAR_LATCH);
     com_preciseFrameTiming = Cvar_Get("com_preciseFrameTiming", "1", CVAR_ARCHIVE);
@@ -2706,7 +2763,9 @@ void Com_Init(char* commandLine) {
 
     Sys_Init();
 
-    Sys_InitPIDFile(FS_GetCurrentGameDir());
+#ifdef DEDICATED
+    Sys_WritePIDFile(FS_GetCurrentGameDir());
+#endif
 
     // Pick a random port value
     Com_RandomBytes((byte*)&qport, sizeof(int));

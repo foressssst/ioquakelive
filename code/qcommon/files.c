@@ -2977,12 +2977,12 @@ FS_Path_f
 */
 void FS_Path_f(void) {
 	searchpath_t* s;
-	int i;
 
-	Com_Printf("We are looking in the current search path:\n");
+	// [QL] quakelive_steam.exe strings: the checksum on each pak, and no list of open handles
+	Com_Printf("Current search path:\n");
 	for (s = fs_searchpaths; s; s = s->next) {
 		if (s->pack) {
-			Com_Printf("%s (%i files)\n", s->pack->pakFilename, s->pack->numfiles);
+			Com_Printf("%s (0x%08x - %i files)\n", s->pack->pakFilename, s->pack->checksum, s->pack->numfiles);
 			if (fs_numServerPaks) {
 				if (!FS_PakIsPure(s->pack)) {
 					Com_Printf("    not on the pure list\n");
@@ -2995,12 +2995,6 @@ void FS_Path_f(void) {
 		}
 	}
 
-	Com_Printf("\n");
-	for (i = 1; i < MAX_FILE_HANDLES; i++) {
-		if (fsh[i].handleFiles.file.o) {
-			Com_Printf("handle %i: %s\n", i, fsh[i].name);
-		}
-	}
 }
 
 /*
@@ -4768,8 +4762,10 @@ void FS_Restart(int checksumFeed) {
 	lastGameDir = (lastValidGame[0]) ? lastValidGame : lastValidComBaseGame;
 
 	if (Q_stricmp(FS_GetCurrentGameDir(), lastGameDir)) {
+#ifdef DEDICATED
 		Sys_RemovePIDFile(lastGameDir);
-		Sys_InitPIDFile(FS_GetCurrentGameDir());
+		Sys_WritePIDFile(FS_GetCurrentGameDir());
+#endif
 
 		// skip the qzconfig.cfg if "safe" is on the command line
 		if (!Com_SafeMode()) {

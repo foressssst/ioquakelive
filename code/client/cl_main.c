@@ -294,24 +294,18 @@ void CL_Record_f(void) {
     entityState_t nullstate;
     char* s;
 
-    if (Cmd_Argc() > 2) {
-        Com_Printf("record <demoname>\n");
-        return;
-    }
-
+    // [QL] 0x4b8447: a recording in progress is cut and a new one starts
     if (clc.demorecording) {
         Com_Printf("Already recording.\n");
-        return;
+        CL_StopRecord_f();
+        if (clc.demorecording) {
+            Com_Error(ERR_DROP, "stoprecord failed");
+        }
     }
 
     if (clc.state != CA_ACTIVE) {
         Com_Printf("You must be in a level to record.\n");
         return;
-    }
-
-    // sync 0 doesn't prevent recording, so not forcing it off .. everyone does g_sync 1 ; record ; g_sync 0 ..
-    if (NET_IsLocalAddress(clc.serverAddress) && !Cvar_VariableValue("g_synchronousClients")) {
-        Com_Printf(S_COLOR_YELLOW "WARNING: You should set 'g_synchronousClients 1' for smoother demo recording\n");
     }
 
     if (Cmd_Argc() == 2) {
@@ -320,6 +314,11 @@ void CL_Record_f(void) {
         Com_sprintf(name, sizeof(name), "demos/%s.%s%d", demoName, DEMOEXT, com_protocol->integer);
     } else {
         int number;
+
+        // [QL] 0x4b84e6: too many arguments only warns, and the demo gets a free name
+        if (Cmd_Argc() > 2) {
+            Com_Printf("Correct usage: record <demoname>\n");
+        }
 
         // scan for a free demo name
         for (number = 0; number <= 9999; number++) {
@@ -3945,10 +3944,6 @@ void CL_Init(void) {
 
     cl_serverStatusResendTime = Cvar_Get("cl_serverStatusResendTime", "750", 0);
 
-    // init autoswitch so the ui will have it correctly even
-    // if the cgame hasn't been started
-    Cvar_Get("cg_autoswitch", "1", CVAR_ARCHIVE);
-
     m_pitch = Cvar_Get("m_pitch", "0.022", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     m_yaw = Cvar_Get("m_yaw", "0.022", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     m_forward = Cvar_Get("m_forward", "0.25", CVAR_ARCHIVE | CVAR_USERSAVE);
@@ -4017,8 +4012,6 @@ void CL_Init(void) {
 
     // cgame might not be initialized before menu is used
     Cvar_Get("cg_viewsize", "100", CVAR_ARCHIVE);
-    // Make sure cg_stereoSeparation is zero as that variable is deprecated and should not be used anymore.
-    Cvar_Get("cg_stereoSeparation", "0", CVAR_ROM);
 
     //
     // register our commands
@@ -4102,7 +4095,7 @@ void CL_Shutdown(char* finalmsg, qboolean disconnect, qboolean quit) {
     if (!(com_cl_running && com_cl_running->integer))
         return;
 
-    Com_Printf("----- Client Shutdown (%s) -----\n", finalmsg);
+    Com_Printf("----- CL_Shutdown -----\n");
 
     if (recursive) {
         Com_Printf("WARNING: Recursive shutdown\n");
