@@ -796,6 +796,7 @@ void AddScore(gentity_t* ent, vec3_t origin, int score);
 qboolean FreezeTagInGame(void);      // [QL] 0x10067e00
 qboolean FreezeTagInWarmup(void);    // [QL] 0x10067e30
 void CalculateRanks(void);
+void CalculateAwards(void);
 qboolean SpotWouldTelefrag(gentity_t* spot);
 
 //

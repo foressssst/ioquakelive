@@ -2131,6 +2131,118 @@ This will be called on every client connect, begin, disconnect, death,
 and team change.
 ============
 */
+/*
+============
+CalculateAwards
+
+[QL] 0x100559e0: the end of match awards, when the intermission starts and whenever the
+ranks change during it. Who did the most damage and who was the most accurate, then, where
+the gametype has them, who controlled the items best and the three most valuable players.
+Each goes out as the client number in its configstring, empty for nobody.
+============
+*/
+static void G_AwardConfigstring(int index, int clientNum) {
+    trap_SetConfigstring(index, clientNum < 0 ? "" : va("%i", clientNum));
+}
+
+void CalculateAwards(void) {
+    int mostAccurate = -1, mostDamage = -1, itemControl = -1;
+    int offensive = -1, defensive = -1, valuable = -1;
+    int bestAccuracy = 0, accuracyShots = 0;
+    int bestDamage = 0, damageShots = 0;
+    int bestItems = 0;
+    int bestOffense = 0, bestDefense = 0, bestValue = 0;
+    int offenseScore = -999, defenseScore = -999, valueScore = -999;
+    qboolean hasItems, hasValuable;
+    int players = 0;
+    int i;
+
+    hasItems = (qboolean)(g_gametype.integer != GT_RACE && g_gametype.integer != GT_CA &&
+                          g_gametype.integer != GT_DOMINATION && g_gametype.integer != GT_AD &&
+                          g_gametype.integer != GT_RR);
+    hasValuable = (qboolean)((g_gametype.integer >= GT_CTF && g_gametype.integer <= GT_HARVESTER) ||
+                             g_gametype.integer == GT_DOMINATION || g_gametype.integer == GT_AD);
+
+    for (i = 0; i < level.maxclients; i++) {
+        gclient_t* cl = &level.clients[i];
+        expandedStatObj_t* st = &cl->expandedStats;
+        int accuracy = 0;
+        int score = cl->ps.persistant[PERS_SCORE];
+
+        if (cl->pers.connected != CON_CONNECTED || cl->sess.sessionTeam == TEAM_SPECTATOR) {
+            continue;
+        }
+        players++;
+
+        // the most accurate: the more shots settle a tie
+        if (cl->accuracy_hits > 0 && cl->accuracy_shots > 0) {
+            accuracy = cl->accuracy_hits * 100 / cl->accuracy_shots;
+        }
+        if (accuracy == bestAccuracy ? cl->accuracy_shots > accuracyShots : accuracy > bestAccuracy) {
+            bestAccuracy = accuracy;
+            accuracyShots = cl->accuracy_shots;
+            mostAccurate = i;
+        }
+
+        // the most damage: the fewer shots settle a tie
+        if (st->totalDamageDealt == bestDamage ? cl->accuracy_shots < damageShots : st->totalDamageDealt > bestDamage) {
+            bestDamage = st->totalDamageDealt;
+            damageShots = cl->accuracy_shots;
+            mostDamage = i;
+        }
+
+        // item control: armor and mega by weight, the quad and the battle suit worth most
+        if (hasItems) {
+            int items = (st->numGreenArmorPickups +
+                         (st->numYellowArmorPickups + (st->numRedArmorPickups + st->numMegaHealthPickups) * 2) * 2) *
+                            25 +
+                        (st->numBattleSuitPickups + st->numQuadDamagePickups) * 480;
+
+            if (items > bestItems) {
+                bestItems = items;
+                itemControl = i;
+            }
+        }
+
+        // the most valuable, offensive and defensive: the score settles a tie
+        if (hasValuable) {
+            int defense = (st->numDefends + st->numAssists) * 10;
+            int offense = (st->numAssists + st->numCaptures * 10) * 10;
+            int value = st->numCaptures * 25 + (st->maxKillStreak - st->numDeaths) + st->numKills + defense;
+
+            if (offense > bestOffense || (offense == bestOffense && score > offenseScore)) {
+                bestOffense = offense;
+                offenseScore = score;
+                offensive = i;
+            }
+            if (defense > bestDefense || (defense == bestDefense && score > defenseScore)) {
+                bestDefense = defense;
+                defenseScore = score;
+                defensive = i;
+            }
+            if (value > bestValue || (value == bestValue && score > valueScore)) {
+                bestValue = value;
+                valueScore = score;
+                valuable = i;
+            }
+        }
+    }
+
+    if (!players) {
+        return;
+    }
+    G_AwardConfigstring(CS_MOST_ACCURATE_PLYR, mostAccurate);
+    G_AwardConfigstring(CS_MOST_DAMAGEDEALT_PLYR, mostDamage);
+    if (hasItems) {
+        G_AwardConfigstring(CS_BEST_ITEMCONTROL_PLYR, itemControl);
+    }
+    if (hasValuable) {
+        G_AwardConfigstring(CS_MOST_VALUABLE_OFFENSIVE_PLYR, offensive);
+        G_AwardConfigstring(CS_MOST_VALUABLE_DEFENSIVE_PLYR, defensive);
+        G_AwardConfigstring(CS_MOST_VALUABLE_PLYR, valuable);
+    }
+}
+
 void CalculateRanks(void) {
     int i;
     int rank;
@@ -2359,6 +2471,7 @@ void CalculateRanks(void) {
                 MoveClientToIntermission(g_entities + i);
             }
         }
+        CalculateAwards();  // [QL] 0x10056ae9
         SendScoreboardMessageToAllClients();
     }
 }
@@ -2543,6 +2656,7 @@ void BeginIntermission(void) {
         }
         MoveClientToIntermission(ent);
     }
+    CalculateAwards();  // [QL] 0x10055e9c
 
     // send the current scoring to all clients
     SendScoreboardMessageToAllClients();
@@ -2766,9 +2880,10 @@ void LogExit(int isShutdown, int restart, const char* string) {
 
         ping = cl->ps.ping < 999 ? cl->ps.ping : 999;
 
-        G_LogPrintf("score: %i  ping: %i  client: %i %s\n",
+        // [QL] 0x100575e0: and the player's stats id at the end
+        G_LogPrintf("score: %i  ping: %i  client: %i %s stats: %d \n",
                     cl->ps.persistant[PERS_SCORE], ping,
-                    level.sortedClients[i], cl->pers.netname);
+                    level.sortedClients[i], cl->pers.netname, cl->expandedStats.statId);
     }
 
     // [QL] game-over events (only on normal match end, not restart)
