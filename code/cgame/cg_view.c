@@ -1416,46 +1416,19 @@ void CG_DrawAdvertisements(void) {
 
 /*
 =================
-CG_WeaponPrimaryFromCvar
+CG_QueuedPrimaryWeapon
 
-[QL] Translate cg_weaponPrimaryQueued cvar string ("hmg", "rl", ...) into a
-WP_* index so it can be passed through trap_SetUserCmdValue into the usercmd.
-Keyed off the same short-names used by weaponShortName[] in g_items.c:205.
-Returns 0 (unchanged) if the cvar is empty or unrecognized.
+[QL] 0x10001df0: the weapon cg_weaponPrimaryQueued names with its first word, or 0
 =================
 */
-static int CG_WeaponPrimaryFromCvar(void) {
-    static const struct {
-        const char* name;
-        int wp;
-    } map[] = {
-        {"g",   WP_GAUNTLET},
-        {"mg",  WP_MACHINEGUN},
-        {"sg",  WP_SHOTGUN},
-        {"gl",  WP_GRENADE_LAUNCHER},
-        {"rl",  WP_ROCKET_LAUNCHER},
-        {"lg",  WP_LIGHTNING},
-        {"rg",  WP_RAILGUN},
-        {"pg",  WP_PLASMAGUN},
-        {"bfg", WP_BFG},
-        {"gh",  WP_GRAPPLING_HOOK},
-        {"ng",  WP_NAILGUN},
-        {"pl",  WP_PROX_LAUNCHER},
-        {"cg",  WP_CHAINGUN},
-        {"hmg", WP_HMG},
-    };
-    char buf[16];
-    int i;
-    trap_Cvar_VariableStringBuffer("cg_weaponPrimaryQueued", buf, sizeof(buf));
-    if (!buf[0]) {
+static int CG_QueuedPrimaryWeapon(void) {
+    char* p = cg_weaponPrimaryQueued.string;
+    const char* token = COM_ParseExt(&p, qtrue);
+
+    if (!token[0]) {
         return 0;
     }
-    for (i = 0; i < (int)ARRAY_LEN(map); i++) {
-        if (!Q_stricmp(buf, map[i].name)) {
-            return map[i].wp;
-        }
-    }
-    return 0;
+    return CG_WeaponForShortName(token);
 }
 
 /*
@@ -1583,7 +1556,7 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
     // [QL] 4-arg call matches cgamex86.dll CG_DrawActiveFrame: also passes
     //      queued loadout primary weapon (-> cmd.weaponPrimary) and effective
     //      fov (-> cmd.fov), so the engine can stamp them each frame.
-    trap_SetUserCmdValue(cg.weaponSelect, CG_WeaponPrimaryFromCvar(),
+    trap_SetUserCmdValue(cg.weaponSelect, cg.weaponPrimaryQueued,
                          cg.zoomSensitivity, cg.fovTarget);
 
     // this counter will be bumped for every valid scene we generate
@@ -1629,6 +1602,9 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
         CG_AddLocalEntities();
     }
     CG_AddViewWeapon(&cg.predictedPlayerState);
+
+    // [QL] 0x1004e660: read after the usercmd went out, so it reaches the next one
+    cg.weaponPrimaryQueued = CG_QueuedPrimaryWeapon();
 
     // [QL] the weapon selected brings its own config
     CG_WeaponConfig();

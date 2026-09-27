@@ -823,6 +823,28 @@ static void CG_GrenadeTrail(centity_t* ent, const weaponInfo_t* wi) {
 
 /*
 =================
+CG_WeaponForShortName
+
+[QL] the cgame's table of the 14 weapons (0x10079094), looked up by short name, "rl", "hmg"...
+Answers 0 when the name is none of them
+=================
+*/
+int CG_WeaponForShortName(const char* name) {
+    static const char* shortNames[] = {
+        "g", "mg", "sg", "gl", "rl", "lg", "rg", "pg", "bfg", "gh", "ng", "pl", "cg", "hmg",
+    };
+    int i;
+
+    for (i = 0; i < (int)ARRAY_LEN(shortNames); i++) {
+        if (!Q_stricmp(name, shortNames[i])) {
+            return WP_GAUNTLET + i;
+        }
+    }
+    return 0;
+}
+
+/*
+=================
 CG_RegisterWeapon
 
 The server says this item is used on this level

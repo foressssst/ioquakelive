@@ -1605,7 +1605,7 @@ static const cvarHelp_t cvarHelp[] = {
     {"cg_autoProjectileNudge", "sets the projectile nudge from your ping (no effect in this build)"},
     {"cg_projectileNudge", "milliseconds projectiles are drawn ahead to make up for your ping (no effect in this build)"},
     {"cg_forceDrawCrosshair", "keeps the crosshair drawn where it would be hidden (no effect in this build)"},
-    {"cg_preferredStartingWeapons", "starting weapons you prefer when the server lets you choose (no effect in this build)"},
+    {"cg_preferredStartingWeapons", "weapons to hold when you spawn, in order: the first one you have is selected, by short name (rl rg lg...) or number"},
 };
 
 #define HELP_HASH_SIZE 1024

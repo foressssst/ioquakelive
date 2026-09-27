@@ -707,6 +707,7 @@ typedef struct {
 
     // input state sent to server
     int weaponSelect;
+    int weaponPrimaryQueued;  // [QL] 0x10a9c7a4: cg_weaponPrimaryQueued as a weapon number
 
     // auto rotating items
     vec3_t autoAngles;
@@ -1952,6 +1953,8 @@ extern vmCvar_t cg_smokeRadius_dust;
 extern vmCvar_t cg_smokeRadius_haste;
 extern vmCvar_t cg_smokeRadius_flight;
 extern vmCvar_t cg_loadout;
+extern vmCvar_t cg_weaponPrimaryQueued;
+extern vmCvar_t cg_preferredStartingWeapons;
 extern vmCvar_t cg_scalePlayerModelsToBB;
 extern vmCvar_t cg_screenDamageAlpha;
 extern vmCvar_t cg_screenDamageAlpha_Team;
@@ -2311,6 +2314,7 @@ void CG_PrevWeapon_f(void);
 void CG_Weapon_f(void);
 
 void CG_RegisterWeapon(int weaponNum);
+int CG_WeaponForShortName(const char* name);
 void CG_RegisterItemVisuals(int itemNum);
 
 void CG_FireWeapon(centity_t* cent);

@@ -163,6 +163,37 @@ void CG_DamageFeedback(int yawByte, int pitchByte, int damage) {
 
 /*
 ================
+CG_SelectPreferredWeapon
+
+[QL] 0x10043300: the first weapon of cg_preferredStartingWeapons the player holds, by short
+name or number; the one the server gave when none of them
+================
+*/
+static void CG_SelectPreferredWeapon(void) {
+    char* p = cg_preferredStartingWeapons.string;
+    int i;
+
+    for (i = 1; i < 15; i++) {
+        const char* token = COM_ParseExt(&p, qtrue);
+        int weapon;
+
+        if (!token[0]) {
+            break;
+        }
+        weapon = CG_WeaponForShortName(token);
+        if (!weapon) {
+            weapon = atoi(token);
+        }
+        if (weapon >= WP_GAUNTLET && weapon <= WP_HMG && (cg.snap->ps.stats[STAT_WEAPONS] & (1 << weapon))) {
+            cg.weaponSelect = weapon;
+            return;
+        }
+    }
+    cg.weaponSelect = cg.snap->ps.weapon;
+}
+
+/*
+================
 CG_Respawn
 
 A respawn happened this snapshot
@@ -175,8 +206,10 @@ void CG_Respawn(void) {
     // display weapons available
     cg.weaponSelectTime = cg.time;
 
-    // select the weapon the server says we are using
-    cg.weaponSelect = cg.snap->ps.weapon;
+    // [QL] the ROM cvar holds the primary weapon queued in the loadout
+    trap_Cvar_Set("cg_weaponPrimary", va("%i", cg.weaponPrimaryQueued));
+
+    CG_SelectPreferredWeapon();
 
     // [QL] 0x1004340f: the pickup display starts over
     cg.itemPickup = 0;
@@ -184,10 +217,6 @@ void CG_Respawn(void) {
     cg.itemPickupLast = 0;
     cg.itemPickupBlendTime = 0;
     cg.itemPickupCount = 1;
-
-    // [QL] mirror loadout primary into ROM cvar so HUD/UI elements can read
-    // the actual server-side selection. Matches qagame cgamex86.dll CG_Respawn.
-    trap_Cvar_Set("cg_weaponPrimary", va("%i", cg.snap->ps.weaponPrimary));
 
     // [QL] Race: reset checkpoints on respawn
     if (cgs.gametype == GT_RACE) {

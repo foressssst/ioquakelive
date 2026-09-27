@@ -2478,14 +2478,6 @@ static void CG_DrawEnemyPlyrCount(rectDef_t *rect, float scale, vec4_t color, in
     CG_OwnerDrawText(rect->x, rect->y, scale, color, va("%d", count), 0, 0, textStyle);
 }
 
-// [QL] Starting weapons display
-static void CG_DrawStartingWeapons(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
-    const char *s = CG_ConfigString(CS_STARTING_WEAPONS);
-    if (s && s[0]) {
-        CG_OwnerDrawText(rect->x, rect->y, scale, color, s, 0, 0, textStyle);
-    }
-}
-
 // [QL] Server settings display
 // [QL] Vote display helpers
 static void CG_DrawVoteMapShot(rectDef_t *rect, int index, qhandle_t shader) {
@@ -4012,16 +4004,17 @@ static void CG_DrawModifiers(rectDef_t *rect, float scale, vec4_t color) {
     }
 }
 
-// [QL] CG_DrawWeaponHorizontal (id 2). Row of owned weapon icons, then the
-// selected weapon after a gap.
-static void CG_DrawWeaponHorizontal(rectDef_t *rect, vec4_t color) {
-    int i, weapons, cur;
-    float x = rect->x;
+// [QL] CG_DrawWeaponHorizontal (id 2, 0x10033910). The join screen's starting weapons: an icon
+// for each bit of CS_STARTING_WEAPONS (bit 0 is the gauntlet), a width and a half apart. With
+// loadouts on, a "+" and the primary weapon queued, the heavy machinegun when none is.
+static void CG_DrawWeaponHorizontal(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
+    int starting = atoi(CG_ConfigString(CS_STARTING_WEAPONS));
+    float x = 0.0f;
+    qhandle_t icon;
+    int i, h;
 
-    weapons = cg.snap->ps.stats[STAT_WEAPONS];
     for (i = WP_GAUNTLET; i < WP_NUM_WEAPONS; i++) {
-        qhandle_t icon;
-        if (!(weapons & (1 << i))) {
+        if (!(starting & (1 << (i - 1)))) {
             continue;
         }
         CG_RegisterWeapon(i);
@@ -4030,24 +4023,28 @@ static void CG_DrawWeaponHorizontal(rectDef_t *rect, vec4_t color) {
             continue;
         }
         trap_R_SetColor(colorWhite);
-        CG_DrawPic(x, rect->y, rect->w, rect->h, icon);
+        CG_DrawPic(rect->x + x, rect->y, rect->w, rect->h, icon);
         x += rect->w * 1.5f;
         trap_R_SetColor(NULL);
     }
 
-    cur = cg.weaponSelect;
-    if (cur > 0) {
-        qhandle_t icon;
-        if (cur < 1 || cur > 14) {
-            cur = 14;
-        }
-        CG_RegisterWeapon(cur);
-        icon = cg_weapons[cur].weaponIcon;
-        if (icon) {
-            trap_R_SetColor(colorWhite);
-            CG_DrawPic(x + rect->w, rect->y, rect->w, rect->h, icon);
-            trap_R_SetColor(NULL);
-        }
+    if (!cg_loadout.integer) {
+        return;
+    }
+    h = CG_DrawTextHeight("+", scale, 0, 0);
+    CG_DrawText(rect->x + x, rect->y + rect->h * 0.5f + 0.5f * h, 0, scale, color, "+", 0, 0, textStyle);
+    x += rect->w;
+
+    i = cg.weaponPrimaryQueued;
+    if (i < 1 || i > 14) {
+        i = WP_HMG;
+    }
+    CG_RegisterWeapon(i);
+    icon = cg_weapons[i].weaponIcon;
+    if (icon) {
+        trap_R_SetColor(colorWhite);
+        CG_DrawPic(rect->x + x, rect->y, rect->w, rect->h, icon);
+        trap_R_SetColor(NULL);
     }
 }
 
@@ -4252,7 +4249,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             CG_DrawModifiers(&rect, scale, color);
             break;
         case CG_STARTING_WEAPONS:           // 2  CG_DrawWeaponHorizontal
-            CG_DrawWeaponHorizontal(&rect, color);
+            CG_DrawWeaponHorizontal(&rect, scale, color, textStyle);
             break;
         case CG_GAME_LIMIT:                 // 3  CG_DrawFragLimit
             CG_DrawGameLimit(&rect, scale, color, textStyle);
