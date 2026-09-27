@@ -353,6 +353,23 @@ qboolean G_ClientAlwaysInSnapshot(int viewerNum, int clientNum) {
 
 /*
 ==================
+G_ClientIsAdmin
+
+[QL] qagamex86.dll 0x100530c0, the export (18) the engine asks before an in-game rcon
+(quakelive_steam.exe 0x4dffeb): only an admin, privileges 2, may run one.
+==================
+*/
+qboolean G_ClientIsAdmin(int clientNum) {
+    gclient_t* client = g_entities[clientNum].client;
+
+    if (!client) {
+        return qfalse;
+    }
+    return client->sess.privileges == 2;
+}
+
+/*
+==================
 G_SnapshotSkipEntity
 
 [QL] qagamex86.dll 0x10053020, the export (15) the engine asks about every entity before it

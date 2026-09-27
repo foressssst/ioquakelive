@@ -1978,6 +1978,12 @@ void CL_Rcon_f(void) {
     netadr_t to;
 
     if (!rcon_client_password->string[0]) {
+        // [QL] retail's client has no rcon of its own: "rcon ..." goes to the server as a client
+        // command, which runs it for an admin (quakelive_steam.exe 0x4dff80)
+        if (clc.state >= CA_CONNECTED) {
+            CL_AddReliableCommand(Cmd_Cmd(), qfalse);
+            return;
+        }
         Com_Printf(
             "You must set 'rconpassword' before\n"
             "issuing an rcon command.\n");

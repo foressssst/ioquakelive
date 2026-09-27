@@ -598,6 +598,23 @@ static void SVC_RemoteCommand(netadr_t from, msg_t* msg) {
 }
 
 /*
+===============
+SV_RedirectedCommand
+
+[QL] quakelive_steam.exe 0x4e001d: a server command whose output goes to one address, as an
+admin's in-game rcon does
+===============
+*/
+void SV_RedirectedCommand(netadr_t to, const char* text) {
+    char outputbuf[SV_OUTPUTBUF_LENGTH];
+
+    svs.redirectAddress = to;
+    Com_BeginRedirect(outputbuf, SV_OUTPUTBUF_LENGTH, SV_FlushRedirect);
+    Cmd_ExecuteString(text);
+    Com_EndRedirect();
+}
+
+/*
 =================
 SV_ConnectionlessPacket
 

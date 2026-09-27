@@ -1242,6 +1242,13 @@ int SV_GameVoiceFilter(int speaker, int listener) {
     return 0;
 }
 
+// [QL] retail export 18 (0x100530c0): whether the game counts this client as an admin
+qboolean SV_GameClientIsAdmin(int clientNum) {
+    if (sv_vmMainTable[GAME_CLIENT_IS_ADMIN])
+        return ((qboolean (*)(int))sv_vmMainTable[GAME_CLIENT_IS_ADMIN])(clientNum);
+    return qfalse;
+}
+
 // [QL] retail export 15 (0x10053020): an entity the game keeps out of this viewer's snapshot
 qboolean SV_GameSnapshotSkipEntity(int viewerNum, int entityNum) {
     if (sv_vmMainTable[GAME_SNAPSHOT_SKIP_ENTITY])

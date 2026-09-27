@@ -361,7 +361,7 @@ typedef enum {
     GAME_SNAPSHOT_SKIP_ENTITY    = 15,  // [QL] G_SnapshotSkipEntity() (retail 0x10053020)
     GAME_UNUSED_16               = 16,  // [QL] 0x10052f40, gametypes 5, 6 and 11 only, not ported
     GAME_VOICE_FILTER            = 17,  // [QL] G_VoiceFilter() (retail 0x10052e90)
-    GAME_UNUSED_18               = 18,  // [QL] 0x100530c0, sin portar
+    GAME_CLIENT_IS_ADMIN         = 18,  // [QL] G_ClientIsAdmin() (retail 0x100530c0)
     GAME_SNAPSHOT_VISIBILITY     = 19,  // [QL] G_ObfuscateEnemyInfoInSnapshotCheck() (retail 0x10052e40)
     GAME_CLIENT_SCORE            = 20,  // [QL] G_ClientScore() (retail 0x100530f0)
 

@@ -1118,6 +1118,7 @@ Q_EXPORT void dllEntry(void **vmMainOut, gameImport_t *syscallTable, int *apiVer
     vmMainOut[GAME_SNAPSHOT_VISIBILITY]     = (void *)G_ObfuscateEnemyInfoInSnapshotCheck;
     vmMainOut[GAME_SNAPSHOT_ALWAYS_SEND]    = (void *)G_ClientAlwaysInSnapshot;
     vmMainOut[GAME_SNAPSHOT_SKIP_ENTITY]    = (void *)G_SnapshotSkipEntity;
+    vmMainOut[GAME_CLIENT_IS_ADMIN]         = (void *)G_ClientIsAdmin;
     vmMainOut[GAME_BOT_AI_START_FRAME]      = (void *)BotAIStartFrame;
     vmMainOut[GAME_VOICE_FILTER]            = (void *)G_VoiceFilter;
     vmMainOut[GAME_CLIENT_SCORE]            = (void *)G_ClientScore;

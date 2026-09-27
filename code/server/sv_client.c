@@ -1350,6 +1350,29 @@ typedef struct {
     void (*func)(client_t* cl);
 } ucmd_t;
 
+/*
+==================
+SV_Rcon_f
+
+[QL] quakelive_steam.exe 0x4dff80, the "rcon" client command: a player the game counts as an
+admin runs a server command from inside the game, with no rcon password, and the output comes
+back to them
+==================
+*/
+static void SV_Rcon_f(client_t* cl) {
+    char text[1024];
+
+    if (!com_sv_running->integer) {
+        Com_Printf("Server is not running.\n");
+        return;
+    }
+    if (Cmd_Argc() < 2 || !SV_GameClientIsAdmin(cl - svs.clients)) {
+        return;
+    }
+    Q_strncpyz(text, Cmd_Cmd() + 5, sizeof(text));
+    SV_RedirectedCommand(cl->netchan.remoteAddress, text);
+}
+
 static ucmd_t ucmds[] = {
     {"userinfo", SV_UpdateUserinfo_f},
     {"disconnect", SV_Disconnect_f},
@@ -1359,6 +1382,7 @@ static ucmd_t ucmds[] = {
     {"nextdl", SV_NextDownload_f},
     {"stopdl", SV_StopDownload_f},
     {"donedl", SV_DoneDownload_f},
+    {"rcon", SV_Rcon_f},
 
     {NULL, NULL}};
 
