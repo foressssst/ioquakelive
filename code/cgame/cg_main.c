@@ -3203,6 +3203,29 @@ static const char* CG_FeederItemTextStats(float feederID, int index, int column,
 
 // [QL] Main feeder dispatcher - dispatches to per-gametype functions
 // Binary: FUN_10028830 dispatches by feederID + gametype
+/*
+=================
+CG_ScorePowerupIcon
+
+[QL] The top of every scoreboard feeder (0x10026160, 0x100265a0...): the icon of the first
+powerup the player carries, powerups 9 and 15 left out, or 0 for none.
+=================
+*/
+static qhandle_t CG_ScorePowerupIcon(const clientInfo_t* info) {
+    int i;
+
+    for (i = 1; i < 17; i++) {
+        if ((info->powerups & (1 << i)) && i != 9 && i != 15) {
+            const gitem_t* item = BG_FindItemForPowerup((powerup_t)i);
+
+            if (item) {
+                return trap_R_RegisterShader(item->icon);
+            }
+        }
+    }
+    return 0;
+}
+
 static const char* CG_FeederItemText(float feederID, int index, int column, qhandle_t* handle) {
     int scoreIndex = 0;
     clientInfo_t* info = NULL;
@@ -3247,17 +3270,30 @@ static const char* CG_FeederItemText(float feederID, int index, int column, qhan
             return "";
         case 2:
             return "";
-        case 3:
-            if (cg.warmup) {
+        // [QL] 0x10026a87 in the team lists, 0x10026313 in the others: warmup and intermission
+        // show who is ready; in play, the powerup the player carries, or else -- a team list of a
+        // round gametype -- the team's arrow, only while the player is alive. A dead one has none
+        case 3: {
+            qhandle_t powerup;
+
+            if (cg.warmup || cg.snap->ps.pm_type == PM_INTERMISSION) {
                 *handle = (cg.snap->ps.stats[STAT_CLIENTS_READY] & (1 << sp->client))
                     ? trap_R_RegisterShader("ui/assets/score/arrowg")
                     : trap_R_RegisterShader("ui/assets/score/arrowr");
-            } else if (info->team == TEAM_RED) {
-                *handle = trap_R_RegisterShader("ui/assets/score/ca_arrow_red");
-            } else if (info->team == TEAM_BLUE) {
-                *handle = trap_R_RegisterShader("ui/assets/score/ca_arrow_blue");
+                return "";
             }
-            return "";
+            powerup = CG_ScorePowerupIcon(info);
+            if (powerup) {
+                *handle = powerup;
+                return "";
+            }
+            if (team != -1 && BG_IsRoundBasedGameType(cgs.gametype) && sp->alive >= 1) {
+                *handle = trap_R_RegisterShader(team == TEAM_RED ? "ui/assets/score/ca_arrow_red"
+                                                                 : "ui/assets/score/ca_arrow_blue");
+                return "";
+            }
+            return " ";
+        }
         // [QL] 0x10026381, and at column 4 of every scoreboard: the country flag
         case 4:
             *handle = CG_CountryFlagShader(info->country);
