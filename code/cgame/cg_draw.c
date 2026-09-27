@@ -35,6 +35,8 @@ menuDef_t* menuEndScoreboard = NULL;
 // spectator huds (0x10006ecc, stored at 0x10ab9680). It lives in ui/intro.menu,
 // which cg_main.c already parses - id put the join menu in the intro file.
 menuDef_t* menuJoinGame = NULL;
+// [QL] 0x10ab967c: the accuracy panel +acc raises, "stats_menu" of ui/ingamestats.menu
+menuDef_t* menuStats = NULL;
 
 // [QL] the spectator HUD menus, cached where the binary caches them (0x10006eb8). Retail
 // looks up only the comp_ variants: "spechud_menu" and "specfollowhud_menu" are nowhere in
@@ -64,6 +66,7 @@ void CG_CacheMenus(void) {
     // resolves them again for the local player. The fork only did that, and a player who
     // stayed a spectator never had a scoreboard to raise.
     CG_SetEndScoreboardMenu();
+    menuStats = Menus_FindByName("stats_menu");
     menuJoinGame = Menus_FindByName("joingame_menu");
     menuSpecHud = Menus_FindByName("comp_spechud_menu");
     menuSpecFollowHud = Menus_FindByName("comp_specfollowhud_menu");
@@ -71,6 +74,26 @@ void CG_CacheMenus(void) {
     menuSpecRedBottom = Menus_FindByName("comp_specred_bottom");
     menuSpecBlueTop = Menus_FindByName("comp_specblue_top");
     menuSpecBlueBottom = Menus_FindByName("comp_specblue_bottom");
+}
+
+/*
+=================
+CG_DrawAccuracyPanel
+
+[QL] 0x1000e320. While +acc is held by somebody playing or following a player, the accuracy
+panel, asking the server for fresh numbers once a second. Forced, as it is never activated.
+=================
+*/
+static void CG_DrawAccuracyPanel(void) {
+    if ((cg.predictedPlayerState.pm_type == PM_SPECTATOR && !(cg.predictedPlayerState.pm_flags & PMF_FOLLOW)) ||
+        !cg.accShowing) {
+        return;
+    }
+    if (cg.accRequestTime + 1000 < cg.time) {
+        cg.accRequestTime = cg.time;
+        trap_SendClientCommand("acc");
+    }
+    Menu_Paint(menuStats, qtrue);
 }
 
 /*
@@ -4426,6 +4449,10 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	// don't draw center string if scoreboard is up
 	// [QL] 0x10011190: nor over the join menu or while paused
 	cg.scoreBoardShowing = CG_DrawScoreboard();
+	// [QL] 0x100111be: the accuracy panel, when the scoreboard is not up
+	if (!cg.scoreBoardShowing) {
+		CG_DrawAccuracyPanel();
+	}
 	if (!cg.scoreBoardShowing && !cg_paused.integer && !cg.showJoinMenu) {
 		CG_SetWidescreen(WIDESCREEN_CENTER);
 		CG_DrawCenterString();
