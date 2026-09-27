@@ -897,9 +897,8 @@ void Svcmd_AddBot_f(void) {
         return;
     }
 
-    // [QL] bots may not be added manually while in bot-only training mode
-    // (0x10037a10)
-    if (g_isBotOnly.integer) {
+    // [QL] bots may not be added by hand during the Crash Course (0x1003794c)
+    if (g_training.integer) {
         G_Printf("Addbot not allowed during training.\n");
         return;
     }
@@ -945,9 +944,9 @@ void Svcmd_AddBot_f(void) {
         trap_SendServerCommand(-1, "loaddeferred\n");
     }
 
-    // [QL] in bot-only training mode, force the client to reload media now
-    // regardless of the elapsed-time / cl_running gate above. (0x10037a10)
-    if (g_isBotOnly.integer) {
+    // [QL] during the Crash Course the client reloads media now, regardless of the
+    // elapsed-time / cl_running gate above (0x10037ade)
+    if (g_training.integer) {
         trap_SendServerCommand(-1, "loaddeferred\n");
     }
 }

@@ -797,23 +797,47 @@ ClientRespawn
 ================
 */
 void ClientRespawn(gentity_t* ent) {
-    // [QL] in a live CA/AD round a dead player sits the round out as a spectator
-    // instead of respawning. ClientBegin_RoundBased_impl queues the body and drops
-    // them into follow. Countdown still spawns normally.
-    // TODO: make byte-faithful to binary ClientRespawn 0x1003a110. Full
-    // structure: outer guard skips respawn when (FreezeTag && ps.pm_type==PM_FREEZE
-    // && !intermission); gate on client->respawnTime<=level.time; CA/AD RoundBased
-    // branch is inside that gate; a force-respawn window ((client+0x264 & 5)==0 &&
-    // level.time-respawnTime<=DAT_104b2dac) returns early for gametypes 4/9/0xb/0xc;
-    // CopyToBodyQue is gated on ((intermission||warmup||gametype!=FREEZE) &&
-    // !AD_IsWarmup()); then pm_type=0, ClientSpawn. Needs freeze context (phase 3).
-    if (!level.intermissionTime && !level.warmupTime &&
-        (g_gametype.integer == GT_CA || g_gametype.integer == GT_AD) &&
-        level.roundState.eCurrent != RS_COUNTDOWN) {
+    gclient_t* client = ent->client;
+
+    // [QL] 0x10039f20, run every frame while dead. A frozen player waits for the thaw
+    if (!level.intermissionTime && !level.intermissionQueued && g_gametype.integer == GT_FREEZE &&
+        client->ps.pm_type == PM_FREEZE) {
+        return;
+    }
+    if (client->respawnTime > level.time) {
+        return;
+    }
+
+    // in a live CA or A&D round a dead player sits the round out as a spectator
+    if (!level.warmupTime && level.roundState.eCurrent != RS_COUNTDOWN &&
+        (g_gametype.integer == GT_CA || g_gametype.integer == GT_AD)) {
         ClientBegin_RoundBased_impl(ent);
         return;
     }
-    CopyToBodyQue(ent);
+
+    // attack or use brings the player back, and g_respawn_delay_max later nothing is needed;
+    // the round-based modes wait for the round, except in the warmup countdown
+    if (!(client->buttons & (BUTTON_ATTACK | BUTTON_USE_HOLDABLE)) &&
+        level.time - client->respawnTime <= g_respawn_delay_max.integer) {
+        switch (g_gametype.integer) {
+            case GT_CA:
+            case GT_FREEZE:
+            case GT_AD:
+            case GT_RR:
+                if (level.warmupTime < 1 && level.roundState.eCurrent != RS_COUNTDOWN) {
+                    return;
+                }
+                break;
+            default:
+                return;
+        }
+    }
+
+    // Freeze Tag leaves a body only in the intermission (0x10067e50)
+    if (g_gametype.integer != GT_FREEZE || level.intermissionTime || level.intermissionQueued) {
+        CopyToBodyQue(ent);
+    }
+    client->ps.pm_type = PM_NORMAL;
     ClientSpawn(ent);
 }
 
@@ -1292,7 +1316,7 @@ char* ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
     // [ioquakelive] The binary gates this whole block on not being in training
     // (0x1003ba4b): the Crash Course sends neither the privilege level nor the connected
     // message, which belongs to a server with people on it.
-    if (firstTime && !g_isBotOnly.integer && !g_training.integer) {
+    if (firstTime && !g_training.integer) {
         // send privilege level to client
         trap_SendServerCommand(clientNum, va("priv %i", client->sess.privileges));
 
@@ -1758,10 +1782,11 @@ void ClientSpawn(gentity_t* ent) {
         }
 
         // Warmup extras: grant weapons 2..14 during warmup (binary: GiveDefaultWeapons end)
-        // Only when loadout is OFF, not bot-only, and not instagib.
+        // [QL] 0x1003ba3e: not in the Crash Course, not with practiceflags 1, not with loadouts,
+        // and not in instagib.
         // MG (2) and grapple (10) are only granted if already in g_startingWeapons.
         // RR infected red team (zombies) don't get warmup extras.
-        if (level.warmupTime && !g_loadout.integer && !g_isBotOnly.integer &&
+        if (level.warmupTime && !g_training.integer && !(practiceflags.integer & 1) && !g_loadout.integer &&
             !(g_dmflags.integer & DF_INSTAGIB)) {
             qboolean infectedRedZombie = (g_gametype.integer == GT_RR &&
                                           g_rrInfected.integer != 0 &&
@@ -1933,20 +1958,9 @@ void ClientSpawn(gentity_t* ent) {
         level.nextTeamInfoTime = level.time + 1000;
     }
 
-    // [QL] g_spawnItems processing: give items listed in semicolon-delimited string. A spectator,
-    // on a team or not, is never linked (retail unlinks it at the end of ClientSpawn, 0x1003c77a).
+    // [QL] a spectator, on a team or not, is never linked (retail unlinks it at the end of
+    // ClientSpawn, 0x1003c77a).
     if (ent->client->ps.pm_type != PM_SPECTATOR) {
-        if (g_spawnItems.string[0]) {
-            char spawnItemsBuf[1024];
-            char *tok;
-            Q_strncpyz(spawnItemsBuf, g_spawnItems.string, sizeof(spawnItemsBuf));
-            tok = strtok(spawnItemsBuf, ";");
-            while (tok) {
-                // GiveItem would parse "item count" pairs - stub for now
-                tok = strtok(NULL, ";");
-            }
-        }
-
         // update origin after ClientThink
         VectorCopy(ent->client->ps.origin, ent->r.currentOrigin);
         trap_LinkEntity(ent);

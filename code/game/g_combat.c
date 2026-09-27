@@ -964,8 +964,9 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
         if (!handled) {
             if (level.intermissionTime || level.intermissionQueued ||
                 g_gametype.integer != GT_FREEZE || meansOfDeath == MOD_SWITCH_TEAMS) {
-                int delay = g_forcerespawn.integer ? level.forceRespawnDelay
-                                                   : g_respawn_delay_min.integer;
+                // [QL] 0x10048289: the sudden-death delay only with g_suddenDeathRespawn
+                int delay = g_suddenDeathRespawn.integer ? level.forceRespawnDelay
+                                                         : g_respawn_delay_min.integer;
                 self->client->respawnTime = level.time + delay;
             }
         }
@@ -975,9 +976,8 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
     {
         qboolean doDeathBranch = qtrue;
         if (meansOfDeath == MOD_SUICIDE) {
-            if (g_suicidePenaltyTime.integer != 0) {
-                self->client->respawnTime += g_suicidePenaltyTime.integer;
-            }
+            // [QL] retail adds a suicide penalty here from a global it never sets
+            // (DAT_105a136c, always 0), so a suicide waits the same as any death
             // SUICIDE_ACTIVATE: unless live-freeze, gib-finalize and SKIP the gib/death block
             if (!(!level.intermissionTime && !level.intermissionQueued &&
                   g_gametype.integer == GT_FREEZE)) {

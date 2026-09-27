@@ -3155,9 +3155,6 @@ static void UI_StartSkirmish(qboolean next) {
     if (g >= GT_TEAM) {
         // send team command for vanilla q3 game qvm
         trap_Cmd_ExecuteText(EXEC_APPEND, "wait 5; team Red\n");
-
-        // set g_localTeamPref for ioq3 game qvm
-        trap_Cvar_Set("g_localTeamPref", "Red");
     }
 }
 
@@ -6216,7 +6213,6 @@ static cvarTable_t cvarTable[] = {
     {NULL, "ui_spSelection", "", CVAR_ROM},
 
     {NULL, "ui_videomode", "", CVAR_ROM},
-    {NULL, "g_localTeamPref", "", 0},
     // [QL] missing UI cvars from binary parity audit
     {&ui_cg_announcer, "cg_announcer", "1", CVAR_TEMP, UI_OnAnnouncerChanged},
     {&ui_cdkeychecked, "ui_cdkeychecked", "0", CVAR_ROM},

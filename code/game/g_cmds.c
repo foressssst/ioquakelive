@@ -688,9 +688,6 @@ void SetTeam(gentity_t* ent, const char* s) {
             }
             team = TEAM_SPECTATOR;
         }
-    } else if (g_maxGameClients.integer > 0 &&
-               level.numNonSpectatorClients >= g_maxGameClients.integer) {
-        team = TEAM_SPECTATOR;
     }
 
     //

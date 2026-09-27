@@ -1517,7 +1517,7 @@ Sets the clipping size and plants the object on the floor.
 Items can't be immediately dropped to floor, because they might
 be on an entity that hasn't spawned yet.
 
-[QL] give and g_spawnItems force the item past G_ItemFiltered, and so does, in race, a
+[QL] give forces the item past G_ItemFiltered, and so does, in race, a
 "gametype" key that names race.
 ============
 */

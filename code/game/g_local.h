@@ -567,7 +567,7 @@ typedef struct {
     int             itemCount[60];          /* [QL] */
     int             suddenDeathRespawnDelay; /* [QL] */
     int             suddenDeathRespawnDelayLastAnnounced; /* [QL] */
-    int             forceRespawnDelay;       /* [QL] level+0x5DC (DAT_105df41c): effective forced-respawn delay (ms) used when g_forcerespawn != 0 */
+    int             forceRespawnDelay;       /* [QL] level+0x5DC (DAT_105df41c): respawn delay (ms) used when g_suddenDeathRespawn != 0 */
     int             numRedArmorPickups[4];
     int             numYellowArmorPickups[4];
     int             numGreenArmorPickups[4];
@@ -1124,7 +1124,6 @@ extern vmCvar_t g_gametype;
 extern vmCvar_t g_dedicated;
 extern vmCvar_t g_cheats;
 extern vmCvar_t g_maxclients;      // allow this many total, including spectators
-extern vmCvar_t g_maxGameClients;  // allow this many active
 extern vmCvar_t g_restarted;
 
 extern vmCvar_t g_dmflags;
@@ -1137,7 +1136,6 @@ extern vmCvar_t g_needpass;
 extern vmCvar_t g_gravity;
 extern vmCvar_t g_speed;
 extern vmCvar_t g_knockback;
-extern vmCvar_t g_forcerespawn;
 extern vmCvar_t g_inactivity;
 extern vmCvar_t g_inactivityWarning;  // [QL]
 extern vmCvar_t g_dropInactive;       // [QL]
@@ -1157,7 +1155,6 @@ extern vmCvar_t g_warmupReadyDelayAction;
 extern vmCvar_t g_lastManStandingMessage;
 extern vmCvar_t bot_autoReady;
 extern vmCvar_t g_teamForcePresent;
-extern vmCvar_t g_forfeit;
 extern vmCvar_t g_allowVote;
 extern vmCvar_t g_allowVoteMidGame;
 extern vmCvar_t g_allowSpecVote;
@@ -1178,7 +1175,6 @@ extern vmCvar_t g_knockback_z_self;
 extern vmCvar_t g_knockback_cripple;
 extern vmCvar_t g_enableDust;
 extern vmCvar_t g_proxMineTimeout;
-extern vmCvar_t g_localTeamPref;
 extern vmCvar_t g_infiniteAmmo;
 extern vmCvar_t g_runes;
 
@@ -1315,9 +1311,7 @@ extern vmCvar_t g_scorelimit;
 extern vmCvar_t g_mercylimit;
 extern vmCvar_t g_mercytime;
 extern vmCvar_t g_rrAllowNegativeScores;
-extern vmCvar_t g_spawnItems;
 extern vmCvar_t sv_quitOnExitLevel;
-extern vmCvar_t g_isBotOnly;
 extern vmCvar_t g_training;
 extern vmCvar_t g_itemHeight;
 extern vmCvar_t g_itemTimers;
@@ -1342,7 +1336,6 @@ extern vmCvar_t sv_fps;
 extern vmCvar_t roundtimelimit;
 extern vmCvar_t g_roundWarmupDelay;
 extern vmCvar_t roundlimit;
-extern vmCvar_t g_accuracyFlags;
 extern vmCvar_t g_lastManStandingWarning;
 extern vmCvar_t g_roundDrawLivingCount;
 extern vmCvar_t g_roundDrawHealthCount;
@@ -1362,7 +1355,6 @@ extern vmCvar_t g_freezeRemovePowerupsOnRound;
 extern vmCvar_t g_freezeResetHealthOnRound;
 extern vmCvar_t g_freezeResetArmorOnRound;
 extern vmCvar_t g_freezeResetWeaponsOnRound;
-extern vmCvar_t g_freezeAllowRespawn;
 
 // [QL] lag compensation
 extern vmCvar_t g_lagHaxHistory;
@@ -1526,7 +1518,6 @@ extern vmCvar_t g_suddenDeathRespawnMax;
 extern vmCvar_t g_suddenDeathRespawnPrint;
 extern vmCvar_t g_suddenDeathRespawnStart;
 extern vmCvar_t g_suddenDeathRespawnTick;
-extern vmCvar_t g_suicidePenaltyTime;   // [QL] DAT_105a136c: ms added to respawnTime on MOD_SUICIDE (player_die/Cmd_Kill_f). Unregistered global in the shipped DLL (reads 0); name is the spec's best-guess. Default "0".
 extern vmCvar_t g_switchTeamDelay;
 extern vmCvar_t g_tackleFlag;
 extern vmCvar_t g_teamSpawnAsSpec;

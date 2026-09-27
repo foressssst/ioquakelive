@@ -48,13 +48,11 @@ vmCvar_t g_friendlyFire;
 vmCvar_t g_password;
 vmCvar_t g_needpass;
 vmCvar_t g_maxclients;
-vmCvar_t g_maxGameClients;
 vmCvar_t g_dedicated;
 vmCvar_t g_speed;
 vmCvar_t g_gravity;
 vmCvar_t g_cheats;
 vmCvar_t g_knockback;
-vmCvar_t g_forcerespawn;
 vmCvar_t g_inactivity;
 vmCvar_t g_inactivityWarning;  // [QL] seconds before kick to start warning
 vmCvar_t g_dropInactive;       // [QL] 1=kick, 0=move-to-spectator
@@ -84,7 +82,6 @@ vmCvar_t g_filterBan;
 vmCvar_t g_knockback_z;
 vmCvar_t g_knockback_z_self;
 vmCvar_t g_knockback_cripple;
-vmCvar_t g_localTeamPref;
 vmCvar_t g_obeliskHealth;
 vmCvar_t g_obeliskRegenPeriod;
 vmCvar_t g_obeliskRegenAmount;
@@ -213,7 +210,6 @@ vmCvar_t g_suddenDeathRespawnMax;
 vmCvar_t g_suddenDeathRespawnPrint;
 vmCvar_t g_suddenDeathRespawnStart;
 vmCvar_t g_suddenDeathRespawnTick;
-vmCvar_t g_suicidePenaltyTime;   // [QL] see g_local.h
 vmCvar_t g_switchTeamDelay;
 vmCvar_t g_tackleFlag;
 vmCvar_t g_teamSpawnAsSpec;
@@ -347,7 +343,6 @@ vmCvar_t g_warmupReadyDelayAction;
 vmCvar_t g_lastManStandingMessage;
 vmCvar_t bot_autoReady;
 vmCvar_t g_teamForcePresent;
-vmCvar_t g_forfeit;
 
 // [QL] serverinfo cvars read by cgame
 vmCvar_t g_teamsize;
@@ -357,9 +352,7 @@ vmCvar_t g_scorelimit;
 vmCvar_t g_mercylimit;
 vmCvar_t g_mercytime;
 vmCvar_t g_rrAllowNegativeScores;
-vmCvar_t g_spawnItems;
 vmCvar_t sv_quitOnExitLevel;
-vmCvar_t g_isBotOnly;
 vmCvar_t g_training;
 vmCvar_t g_itemHeight;
 vmCvar_t g_itemTimers;
@@ -384,7 +377,6 @@ vmCvar_t sv_fps;
 vmCvar_t roundtimelimit;
 vmCvar_t g_roundWarmupDelay;
 vmCvar_t roundlimit;
-vmCvar_t g_accuracyFlags;
 vmCvar_t g_lastManStandingWarning;
 vmCvar_t g_roundDrawLivingCount;
 vmCvar_t g_roundDrawHealthCount;
@@ -404,7 +396,6 @@ vmCvar_t g_freezeRemovePowerupsOnRound;
 vmCvar_t g_freezeResetHealthOnRound;
 vmCvar_t g_freezeResetArmorOnRound;
 vmCvar_t g_freezeResetWeaponsOnRound;
-vmCvar_t g_freezeAllowRespawn;
 
 // [QL] lag compensation
 vmCvar_t g_lagHaxHistory;
@@ -628,7 +619,6 @@ static cvarTable_t gameCvarTable[] = {
     {&g_gametype, "g_gametype", "0", CVAR_ROM | CVAR_LATCH | CVAR_SERVERINFO, 0, NULL},
 
     {&g_maxclients, "sv_maxclients", "8", CVAR_LATCH | CVAR_SERVERINFO | CVAR_ARCHIVE, 0, NULL},
-    {&g_maxGameClients, "g_maxGameClients", "0", CVAR_LATCH | CVAR_SERVERINFO | CVAR_ARCHIVE, 0, NULL},
 
     // change anytime vars
     {&g_dmflags, "dmflags", "0", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
@@ -652,7 +642,6 @@ static cvarTable_t gameCvarTable[] = {
     {&g_lastManStandingMessage, "g_lastManStandingMessage", "You are the last standing", 0, 0, NULL},
     {&bot_autoReady, "bot_autoReady", "1", CVAR_GAMERULE, 0, NULL},
     {&g_teamForcePresent, "g_teamForcePresent", "1", 0, 0, NULL},
-    {&g_forfeit, "g_forfeit", "0", CVAR_ARCHIVE, 0, NULL},
     {&g_logfile, "g_log", "", CVAR_ARCHIVE, 0, NULL},  // [QL] binary default empty string
     {&g_logfileSync, "g_logSync", "0", CVAR_ARCHIVE, 0, NULL},  // [QL] binary name uses camelCase
 
@@ -669,7 +658,6 @@ static cvarTable_t gameCvarTable[] = {
     {&g_gravity, "g_gravity", "800", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
     {&g_knockback, "g_knockback", "1000", CVAR_GAMERULE, 0, NULL},
     {&g_weaponRespawn, "g_weaponRespawn", "5", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},  // [QL] note capital R; binary: 0x100004
-    {&g_forcerespawn, "g_forcerespawn", "20", 0, 0, NULL},
     {&g_inactivity, "g_inactivity", "0", 0, 0, NULL},
     {&g_inactivityWarning, "g_inactivityWarning", "10", 0, 0, NULL},  // [QL]
     {&g_dropInactive, "g_dropInactive", "1", 0, 0, NULL},              // [QL] binary default "1"
@@ -700,7 +688,6 @@ static cvarTable_t gameCvarTable[] = {
     {&g_proxMineTimeout, "g_proxMineTimeout", "20", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},  // [QL] binary default "20" (seconds, NOT ms)
 
 
-    {&g_localTeamPref, "g_localTeamPref", "", 0, 0, NULL},
 
     {&g_infiniteAmmo, "g_infiniteAmmo", "0", CVAR_GAMERULE, 0, OnChangedInfiniteAmmo},  // [QL] binary: CVAR_GAMERULE only; live toggle applies to all clients
     {&g_runes, "g_runes", "0", CVAR_GAMERULE | CVAR_LATCH, 0, NULL},  // [QL] binary: 0x100020
@@ -825,9 +812,7 @@ static cvarTable_t gameCvarTable[] = {
     {&g_mercylimit, "mercylimit", "0", CVAR_GAMERULE | CVAR_NORESTART | CVAR_SERVERINFO, 0, NULL},
     {&g_mercytime, "g_mercytime", "0", CVAR_GAMERULE | CVAR_NORESTART, 0, NULL},  // [QL] binary: 0x100400
     {&g_rrAllowNegativeScores, "g_rrAllowNegativeScores", "0", CVAR_GAMERULE, 0, NULL},
-    {&g_spawnItems, "g_spawnItems", "", 0, 0, NULL},
     {&sv_quitOnExitLevel, "sv_quitOnExitLevel", "0", 0, 0, NULL},
-    {&g_isBotOnly, "g_isBotOnly", "0", 0, 0, NULL},
     {&g_training, "g_training", "0", CVAR_GAMERULE | CVAR_SYSTEMINFO, 0, NULL},  // [QL] binary: 0x100008
     {&g_itemHeight, "g_itemHeight", "35", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
     {&g_itemTimers, "g_itemTimers", "1", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},  // [QL] default "1", flags 0x100004
@@ -909,7 +894,6 @@ static cvarTable_t gameCvarTable[] = {
     {&roundtimelimit, "roundtimelimit", "180", CVAR_GAMERULE | CVAR_NORESTART | CVAR_SERVERINFO, 0, NULL},
     {&g_roundWarmupDelay, "g_roundWarmupDelay", "10000", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
     {&roundlimit, "roundlimit", "10", CVAR_GAMERULE | CVAR_NORESTART | CVAR_SERVERINFO, 0, NULL},  // [QL] default "10", flags 0x100404
-    {&g_accuracyFlags, "g_accuracyFlags", "0", 0, 0, NULL},
     {&g_lastManStandingWarning, "g_lastManStandingWarning", "1", 0, 0, NULL},  // [QL] binary default "1"
     {&g_roundDrawLivingCount, "g_roundDrawLivingCount", "1", CVAR_GAMERULE, 0, NULL},
     {&g_roundDrawHealthCount, "g_roundDrawHealthCount", "1", CVAR_GAMERULE, 0, NULL},
@@ -929,7 +913,6 @@ static cvarTable_t gameCvarTable[] = {
     {&g_freezeResetHealthOnRound, "g_freezeResetHealthOnRound", "1", CVAR_GAMERULE, 0, NULL},
     {&g_freezeResetArmorOnRound, "g_freezeResetArmorOnRound", "1", CVAR_GAMERULE, 0, NULL},
     {&g_freezeResetWeaponsOnRound, "g_freezeResetWeaponsOnRound", "1", CVAR_GAMERULE, 0, NULL},
-    {&g_freezeAllowRespawn, "g_freezeAllowRespawn", "0", 0, 0, NULL},
 
     // [QL] lag compensation / weapon modifiers
     {&g_lagHaxHistory, "g_lagHaxHistory", "4", CVAR_LATCH, 0, NULL},
@@ -1085,7 +1068,6 @@ static cvarTable_t gameCvarTable[] = {
     {&g_suddenDeathRespawnPrint, "g_suddenDeathRespawnPrint", "1", CVAR_GAMERULE, 0, NULL},
     {&g_suddenDeathRespawnStart, "g_suddenDeathRespawnStart", "3", CVAR_GAMERULE, 0, NULL},
     {&g_suddenDeathRespawnTick, "g_suddenDeathRespawnTick", "60", CVAR_GAMERULE, 0, NULL},
-    {&g_suicidePenaltyTime, "g_suicidePenaltyTime", "0", CVAR_GAMERULE, 0, NULL},   // [QL] DAT_105a136c; ms penalty added to respawnTime on suicide (unregistered/0 in shipped DLL)
     {&g_switchTeamDelay, "g_switchTeamDelay", "3", CVAR_GAMERULE, 0, NULL},
     {&g_tackleFlag, "g_tackleFlag", "0", CVAR_GAMERULE, 0, NULL},
     {&g_teamAutoJoin, "g_teamAutoJoin", "0", CVAR_ARCHIVE, 0, NULL},
@@ -2585,11 +2567,6 @@ void ExitLevel(void) {
         trap_SendConsoleCommand( EXEC_APPEND, "killserver\n" );
         return;
     }
-    // [QL] Bot-only server: kill on exit
-    if ( g_isBotOnly.integer ) {
-        trap_SendConsoleCommand( EXEC_APPEND, "killserver\n" );
-        return;
-    }
     // [QL] Quit on exit level
     if ( sv_quitOnExitLevel.integer ) {
         trap_SendConsoleCommand( EXEC_APPEND, "quit\n" );
@@ -3335,11 +3312,11 @@ qboolean TeamsPresent(void) {
     }
 
     // [QL] TeamCount order matches the binary: BLUE first, RED second. The gate
-    // tests blueCount OR'd against g_forfeit (old code used redCount + AND).
+    // tests blueCount OR'd against g_rrInfected (0x10068165; the fork called it g_forfeit).
     blueCount = TeamCount(-1, TEAM_BLUE);
     redCount = TeamCount(-1, TEAM_RED);
 
-    if (g_forfeit.integer == 0 ||
+    if (g_rrInfected.integer == 0 ||
         (blueCount < g_teamSizeMin.integer && level.numPlayingClients < g_teamSizeMin.integer)) {
         if (g_gametype.integer < GT_TEAM) {
             if (level.numPlayingClients < 2) {
@@ -3428,12 +3405,12 @@ static qboolean CheckWarmupConditions(void) {
     }
 
     // [QL] g_teamForcePresent gate (inline in 0x10057830). TeamCount order = BLUE,
-    // RED; the gate tests blueCount OR'd against g_forfeit (was AND + redCount).
+    // RED; the gate tests blueCount OR'd against g_rrInfected (was AND + redCount).
     if (g_teamForcePresent.integer != 0) {
         blueCount = TeamCount(-1, TEAM_BLUE);
         redCount = TeamCount(-1, TEAM_RED);
 
-        if (g_forfeit.integer == 0 ||
+        if (g_rrInfected.integer == 0 ||
             (blueCount < g_teamSizeMin.integer && level.numPlayingClients < g_teamSizeMin.integer)) {
             if (g_gametype.integer < GT_TEAM) {
                 if (level.numPlayingClients < 2) {
@@ -4158,15 +4135,11 @@ void G_RunFrame(int levelTime) {
     // get any cvar changes
     G_UpdateCvars();
 
-    // [QL] Respawn-delay computation (== QL G_RunFrame @0x100594e0, DAT_105df41c).
-    // player_die reads the effective delay from level.forceRespawnDelay whenever
-    // g_forcerespawn is set (its default is 20, so this is the normal path); it
-    // is only computed here.  Without it the field stayed 0, so respawnTime =
-    // level.time and any death where the attack/use button was held (mid-fight,
-    // or mashing to respawn) came back instantly instead of after the ~2.1s
-    // delay.  In overtime (past the time limit) the delay scales up via the
-    // g_suddenDeathRespawn* cvars, announced once per change.
-    if (g_forcerespawn.integer && !level.intermissionTime && !level.intermissionQueued) {
+    // [QL] G_RunFrame (0x100594d0, DAT_105df41c): with g_suddenDeathRespawn on, the delay
+    // player_die gives a dead player (level.forceRespawnDelay) grows in overtime, past the
+    // time limit, through the g_suddenDeathRespawn* cvars and is announced once per change;
+    // otherwise it is g_respawn_delay_min. With it off retail leaves the field alone.
+    if (g_suddenDeathRespawn.integer && !level.intermissionTime && !level.intermissionQueued) {
         int overtime = level.time - level.startTime - g_timelimit.integer * 60000;
         if (g_timelimit.integer && level.warmupTime == 0 && overtime > 0) {
             int tickMs = g_suddenDeathRespawnTick.integer * 1000;
