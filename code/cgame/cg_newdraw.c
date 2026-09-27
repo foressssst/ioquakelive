@@ -4000,19 +4000,102 @@ static void CG_DrawPlayerStatusRight(rectDef_t *rect) {
 // cgs yet, so only the gravity/quad-factor lines (read straight from the
 // serverinfo, as the binary does) are recovered here.
 static void CG_DrawModifiers(rectDef_t *rect, float scale, vec4_t color) {
+    // [QL] 0x1003a1c0: a line for each way the server's game differs from the usual one, twelve
+    // apart, and with modified weapons their icons in a row, each with the "modified" mark
+    static const char *const weaponIcons[] = {
+        "icons/iconw_gauntlet.tga", "icons/iconw_machinegun.tga", "icons/iconw_shotgun.tga",
+        "icons/iconw_grenade.tga", "icons/iconw_rocket.tga", "icons/iconw_lightning.tga",
+        "icons/iconw_railgun.tga", "icons/iconw_plasma.tga", "icons/iconw_bfg.tga",
+        "icons/iconw_grapple.tga", "icons/iconw_nailgun.tga", "icons/iconw_proxlauncher.tga",
+        "icons/iconw_chaingun.tga",
+    };
     const char *info = CG_ConfigString(CS_SERVERINFO);
+    int cs = cgs.customSettings;
+    float x = rect->x;
     float y = rect->y;
-    int v;
+    int lines = 0;
 
-    v = atoi(Info_ValueForKey(info, "g_quadfactor"));
-    if (v && v != 3) {
-        CG_OwnerDrawText(rect->x, y, scale, color, va("%ix QUAD", v), 0, 0, 0);
-        y += 12.0f;
+#define MODIFIER_LINE(text) do { CG_DrawText(x, y, 0, scale, color, (text), 0, 0, 0); y += 12.0f; lines++; } while (0)
+
+    if (cs & 0x2000) {
+        MODIFIER_LINE("AIR CONTROL");
     }
-    v = atoi(Info_ValueForKey(info, "g_gravity"));
-    if (v && v != 800) {
-        CG_OwnerDrawText(rect->x, y, scale, color, va("GRAVITY %i", v), 0, 0, 0);
+    if (cs & 0x4000) {
+        MODIFIER_LINE("RAMP JUMPING");
+    }
+    if (cgs.armorTiered) {
+        MODIFIER_LINE("TIERED ARMOR");
+    }
+    if (cs & 0x10000) {
+        MODIFIER_LINE("MODIFIED WEAPON SWITCH");
+    }
+    if (cgs.quadDamageFactor != 3) {
+        MODIFIER_LINE(va("%ix QUAD", atoi(Info_ValueForKey(info, "g_quadDamageFactor"))));
+    }
+    if (cs & 0x8000) {
+        MODIFIER_LINE("MODIFIED PHYSICS");
+    }
+    if (cgs.gravity != 800) {
+        MODIFIER_LINE(va("GRAVITY %i", atoi(Info_ValueForKey(info, "g_gravity"))));
+    }
+    if (cs & 0x20000) {
+        MODIFIER_LINE("INSTAGIB");
+    }
+    if (cs & 0x40000) {
+        MODIFIER_LINE("QUAD HOG");
+    }
+    if (cs & 0x80000) {
+        MODIFIER_LINE("REGEN HEALTH");
+    }
+    if ((cs & 0x100000) && !(cs & 0x20000)) {
+        MODIFIER_LINE("DROP DAMAGED HEALTH");
+    }
+    if (cs & 0x200000) {
+        MODIFIER_LINE("VAMPIRIC DAMAGE");
+    }
+    if (cs & 0x400000) {
+        MODIFIER_LINE("MODIFIED ITEM SPAWNING");
+    }
+    if (cs & 0x800000) {
+        MODIFIER_LINE("HEADSHOTS ENABLED");
+    }
+    if (cs & 0x1000000) {
+        MODIFIER_LINE("RAIL JUMPING");
+    }
+#undef MODIFIER_LINE
+
+    if ((cs & 0xff) || (cs & 0x1f00)) {
+        float ox = 0.0f;
+        int n = 0;
+        int i;
+
+        CG_DrawText(x, y, 0, scale, color, "MODIFIED WEAPONS", 0, 0, 0);
+        if (lines >= 15) {
+            return;
+        }
         y += 12.0f;
+        // the icons sit at 445 of the 640 screen whatever the item says, and retail only
+        // starts a new row from the plasma gun on -- the prox launcher checks without
+        // counting itself and the chaingun does not check at all
+        for (i = 0; i < (int)ARRAY_LEN(weaponIcons); i++) {
+            if (!(cs & (1 << i))) {
+                continue;
+            }
+            CG_DrawPic(445.0f + ox, y, 16.0f, 16.0f, trap_R_RegisterShaderNoMip(weaponIcons[i]));
+            CG_DrawPic(457.0f + ox, y + 8.0f, 8.0f, 8.0f, cgs.media.modifiedShader);
+            ox += 24.0f;
+            if (i < 11) {
+                n++;
+                if (i >= 7 && n > 7) {
+                    y += 12.0f;
+                    ox = 0.0f;
+                    n = 0;
+                }
+            } else if (i == 11 && n + 1 > 7) {
+                y += 12.0f;
+                ox = 0.0f;
+            }
+        }
     }
 }
 

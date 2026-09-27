@@ -3657,6 +3657,7 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
     // load a few needed things before we do any screen updates
     cgs.media.charsetShader = trap_R_RegisterShader("gfx/2d/bigchars");
     cgs.media.whiteShader = trap_R_RegisterShader("white");
+    cgs.media.modifiedShader = trap_R_RegisterShaderNoMip("icons/modified.tga");  // [QL] 0x100299a3
     cgs.media.charsetProp = trap_R_RegisterShaderNoMip("menu/art/font1_prop.png");
     cgs.media.charsetPropGlow = trap_R_RegisterShaderNoMip("menu/art/font1_prop_glo.png");
     cgs.media.charsetPropB = trap_R_RegisterShaderNoMip("menu/art/font2_prop.png");

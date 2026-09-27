@@ -1034,6 +1034,7 @@ typedef struct {
     qhandle_t charsetPropGlow;
     qhandle_t charsetPropB;
     qhandle_t whiteShader;
+    qhandle_t modifiedShader;  // [QL] the mark on a modified weapon's icon
 
     // [QL] loading screen assets
     qhandle_t loadingbackShader;
