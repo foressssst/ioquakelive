@@ -41,10 +41,10 @@ everything here turns into a no-op.
 
 typedef unsigned char steamBool_t;
 
-// The server list callbacks are C++ virtual methods: on Windows the convention is __thiscall
-// (the object in ecx), imitated here with __fastcall and a filler parameter for edx; in the
-// Linux ABI the object is just the first argument.
-#ifdef _WIN32
+// The server list callbacks are C++ virtual methods: on 32-bit Windows the convention is
+// __thiscall (the object in ecx), imitated here with __fastcall and a filler parameter for edx;
+// on 64-bit Windows and in the Linux ABI the object is just the first argument.
+#if defined(_WIN32) && !defined(_WIN64)
 #define STEAM_CB __fastcall
 #define STEAM_CB_SELF void* self, void* unusedEdx
 #define STEAM_CB_PASS self, unusedEdx
@@ -416,6 +416,577 @@ static qboolean Steam_Bind(void) {
     return qtrue;
 }
 
+#if defined(_WIN32) && defined(_WIN64)
+/*
+===============================================================================
+
+STEAM ON 64-BIT WINDOWS
+
+[ioquakelive] Quake Live only ships a 32-bit steam_api.dll, and nothing of Valve's goes in our
+package, so the 64-bit build does what steam_api does inside, against the steamclient64.dll of
+the player's own Steam: CreateInterface for SteamClient017, a pipe and a user, and every
+interface at the version Quake Live's steam_api.dll asks for. Each entry point below stands for
+one of that dll's SteamAPI_ISteam*_* wrappers, which only call a slot of the interface's table;
+the slots were read out of it, and a table keeps its order whatever the pointer size.
+
+steamclient64 no longer runs callbacks for a library that does not register itself with it, so
+they are fetched and handed out here (Steam_BGetCallback), on the thread that runs the frame.
+===============================================================================
+*/
+
+// CallbackMsg_t
+typedef struct {
+    int user;
+    int id;
+    unsigned char* param;
+    int size;
+} steamCallbackMsg_t;
+
+#define SD_MAX_CALLBACKS 32
+#define SD_ACCOUNT_GAMESERVER 3  // k_EAccountTypeGameServer
+#define SD_FLAG_SECURE 0x02      // k_unServerFlagSecure
+#define SD_FLAG_PRIVATE 0x20     // k_unServerFlagPrivate
+#define SD_CB_GAMESERVER 0x02    // CCallbackBase's flag for a server's callback
+
+static struct {
+    HMODULE lib;
+    void* client;  // ISteamClient017 *
+    void*(QDECL* CreateInterface)(const char* version, int* returnCode);
+    steamBool_t(QDECL* BGetCallback)(int pipe, steamCallbackMsg_t* msg, int* call);
+    void(QDECL* FreeLastCallback)(int pipe);
+
+    int clientPipe;
+    int clientUser;
+    int serverPipe;
+    int serverUser;
+    void* user;         // ISteamUser018 *
+    void* friends;      // ISteamFriends015 *
+    void* lobbies;      // ISteamMatchmaking009 *
+    void* matchmaking;  // ISteamMatchmakingServers002 *
+    void* networking;   // ISteamNetworking005 *
+    void* ugc;          // ISteamUGC007 *
+    void* gameServer;   // ISteamGameServer012 *
+    void* gameServerNetworking;
+
+    steamCallback_t* callbacks[SD_MAX_CALLBACKS];
+    int numCallbacks;
+} sd;
+
+// a slot of an interface's table
+#define SD_VT(self, slot) ((*(void***)(self))[slot])
+
+// ISteamClient017, at the slots Quake Live's steam_api.dll calls (0x3b406565, 0x3b407730)
+static int SD_CreateSteamPipe(void) {
+    return ((int (*)(void*))SD_VT(sd.client, 0))(sd.client);
+}
+
+static void SD_ReleaseSteamPipe(int pipe) {
+    ((steamBool_t(*)(void*, int))SD_VT(sd.client, 1))(sd.client, pipe);
+}
+
+static int SD_ConnectToGlobalUser(int pipe) {
+    return ((int (*)(void*, int))SD_VT(sd.client, 2))(sd.client, pipe);
+}
+
+static int SD_CreateLocalUser(int* pipe, int accountType) {
+    return ((int (*)(void*, int*, int))SD_VT(sd.client, 3))(sd.client, pipe, accountType);
+}
+
+static void SD_ReleaseUser(int pipe, int user) {
+    ((void (*)(void*, int, int))SD_VT(sd.client, 4))(sd.client, pipe, user);
+}
+
+static void SD_SetLocalIPBinding(unsigned int ip, unsigned short port) {
+    ((void (*)(void*, unsigned int, unsigned short))SD_VT(sd.client, 7))(sd.client, ip, port);
+}
+
+// GetISteamUser (5), GetISteamGameServer (6), GetISteamFriends (8), GetISteamMatchmaking (10),
+// GetISteamMatchmakingServers (11), GetISteamNetworking (16), GetISteamUGC (26)
+static void* SD_Interface(int slot, int user, int pipe, const char* version) {
+    return ((void* (*)(void*, int, int, const char*))SD_VT(sd.client, slot))(sd.client, user, pipe, version);
+}
+
+// GetISteamUtils (9), and its GetAppID (9): the App ID this process says it is
+static unsigned int SD_AppID(int pipe) {
+    void* utils = ((void* (*)(void*, int, const char*))SD_VT(sd.client, 9))(sd.client, pipe, "SteamUtils007");
+
+    if (!utils) {
+        return 0;
+    }
+    return ((unsigned int (*)(void*))SD_VT(utils, 9))(utils);
+}
+
+static void SD_ShutdownIfAllPipesClosed(void) {
+    ((steamBool_t(*)(void*))SD_VT(sd.client, 22))(sd.client);
+}
+
+/*
+The wrappers. On 64-bit Windows a method gets its object as the first argument, as a plain
+function would, so each one only fetches its slot.
+*/
+#define SD_VOID(name, slot, params, args) \
+    static void QDECL SD_##name params { ((void (*) params)SD_VT(self, slot)) args; }
+#define SD_RET(type, name, slot, params, args) \
+    static type QDECL SD_##name params { return ((type (*) params)SD_VT(self, slot)) args; }
+
+// ISteamGameServer012
+SD_VOID(SetProduct, 1, (void* self, const char* a), (self, a))
+SD_VOID(SetGameDescription, 2, (void* self, const char* a), (self, a))
+SD_VOID(SetModDir, 3, (void* self, const char* a), (self, a))
+SD_VOID(SetDedicatedServer, 4, (void* self, steamBool_t a), (self, a))
+SD_VOID(LogOn, 5, (void* self, const char* a), (self, a))
+SD_VOID(LogOnAnonymous, 6, (void* self), (self))
+SD_RET(steamBool_t, BLoggedOn, 8, (void* self), (self))
+SD_RET(steamBool_t, BSecure, 9, (void* self), (self))
+SD_VOID(SetMaxPlayerCount, 12, (void* self, int a), (self, a))
+SD_VOID(SetBotPlayerCount, 13, (void* self, int a), (self, a))
+SD_VOID(SetServerName, 14, (void* self, const char* a), (self, a))
+SD_VOID(SetMapName, 15, (void* self, const char* a), (self, a))
+SD_VOID(SetPasswordProtected, 16, (void* self, steamBool_t a), (self, a))
+SD_VOID(SetKeyValue, 20, (void* self, const char* a, const char* b), (self, a, b))
+SD_VOID(SetGameTags, 21, (void* self, const char* a), (self, a))
+SD_RET(steamBool_t, BUpdateUserData, 27, (void* self, uint64_t a, const char* b, unsigned int c), (self, a, b, c))
+SD_RET(int, BeginAuthSession, 29, (void* self, const void* a, int b, uint64_t c), (self, a, b, c))
+SD_VOID(EndAuthSession, 30, (void* self, uint64_t a), (self, a))
+SD_RET(unsigned int, GetPublicIP, 36, (void* self), (self))
+SD_RET(int, GetNextOutgoingPacket, 38, (void* self, void* a, int b, unsigned int* c, unsigned short* d),
+       (self, a, b, c, d))
+SD_VOID(EnableHeartbeats, 39, (void* self, steamBool_t a), (self, a))
+
+// the method answers a bool: only its low byte means anything
+static int QDECL SD_HandleIncomingPacket(void* self, const void* data, int len, unsigned int ip,
+                                         unsigned short port) {
+    return ((steamBool_t(*)(void*, const void*, int, unsigned int, unsigned short))SD_VT(self, 37))(
+               self, data, len, ip, port)
+               ? 1
+               : 0;
+}
+
+/*
+A method that answers a CSteamID: MSVC hands a class back through a pointer that goes right
+after the object, not in a register, so these three are spelled out.
+*/
+static uint64_t QDECL SD_GetSteamID(void* self) {
+    uint64_t id = 0;
+
+    ((void* (*)(void*, uint64_t*))SD_VT(self, 10))(self, &id);  // ISteamGameServer012
+    return id;
+}
+
+static uint64_t QDECL SD_GetUserSteamID(void* self) {
+    uint64_t id = 0;
+
+    ((void* (*)(void*, uint64_t*))SD_VT(self, 2))(self, &id);  // ISteamUser018
+    return id;
+}
+
+static uint64_t QDECL SD_GetFriendByIndex(void* self, int index, int flags) {
+    uint64_t id = 0;
+
+    ((void* (*)(void*, uint64_t*, int, int))SD_VT(self, 4))(self, &id, index, flags);  // ISteamFriends015
+    return id;
+}
+
+// ISteamMatchmakingServers002
+SD_RET(void*, RequestInternetServerList, 0,
+       (void* self, unsigned int a, steamKeyValue_t** b, unsigned int c, void* d), (self, a, b, c, d))
+SD_RET(void*, RequestLANServerList, 1, (void* self, unsigned int a, void* b), (self, a, b))
+SD_RET(void*, RequestFriendsServerList, 2,
+       (void* self, unsigned int a, steamKeyValue_t** b, unsigned int c, void* d), (self, a, b, c, d))
+SD_RET(void*, RequestFavoritesServerList, 3,
+       (void* self, unsigned int a, steamKeyValue_t** b, unsigned int c, void* d), (self, a, b, c, d))
+SD_RET(void*, RequestHistoryServerList, 4,
+       (void* self, unsigned int a, steamKeyValue_t** b, unsigned int c, void* d), (self, a, b, c, d))
+SD_VOID(ReleaseRequest, 6, (void* self, void* a), (self, a))
+SD_RET(void*, GetServerDetails, 7, (void* self, void* a, int b), (self, a, b))
+SD_VOID(CancelQuery, 8, (void* self, void* a), (self, a))
+SD_VOID(RefreshQuery, 9, (void* self, void* a), (self, a))
+SD_RET(steamBool_t, IsRefreshing, 10, (void* self, void* a), (self, a))
+SD_RET(int, GetServerCount, 11, (void* self, void* a), (self, a))
+SD_RET(int, PlayerDetails, 14, (void* self, unsigned int a, unsigned short b, void* c), (self, a, b, c))
+SD_RET(int, ServerRules, 15, (void* self, unsigned int a, unsigned short b, void* c), (self, a, b, c))
+SD_VOID(CancelServerQuery, 16, (void* self, int a), (self, a))
+
+// ISteamMatchmaking009
+SD_RET(int, AddFavoriteGame, 2,
+       (void* self, unsigned int a, unsigned int b, unsigned short c, unsigned short d, unsigned int e,
+        unsigned int f),
+       (self, a, b, c, d, e, f))
+SD_RET(steamBool_t, RemoveFavoriteGame, 3,
+       (void* self, unsigned int a, unsigned int b, unsigned short c, unsigned short d, unsigned int e),
+       (self, a, b, c, d, e))
+
+// ISteamUGC007
+SD_RET(unsigned int, GetNumSubscribedItems, 50, (void* self), (self))
+SD_RET(unsigned int, GetSubscribedItems, 51, (void* self, uint64_t* a, unsigned int b), (self, a, b))
+SD_RET(unsigned int, GetItemState, 52, (void* self, uint64_t a), (self, a))
+SD_RET(steamBool_t, GetItemInstallInfo, 53,
+       (void* self, uint64_t a, uint64_t* b, char* c, unsigned int d, unsigned int* e), (self, a, b, c, d, e))
+SD_RET(steamBool_t, GetItemDownloadInfo, 54, (void* self, uint64_t a, uint64_t* b, uint64_t* c), (self, a, b, c))
+SD_RET(steamBool_t, DownloadItem, 55, (void* self, uint64_t a, steamBool_t b), (self, a, b))
+
+// ISteamNetworking005, the client's and the server's
+SD_RET(steamBool_t, SendP2PPacket, 0,
+       (void* self, uint64_t a, const void* b, unsigned int c, int d, int e), (self, a, b, c, d, e))
+SD_RET(steamBool_t, IsP2PPacketAvailable, 1, (void* self, unsigned int* a, int b), (self, a, b))
+SD_RET(steamBool_t, ReadP2PPacket, 2,
+       (void* self, void* a, unsigned int b, unsigned int* c, uint64_t* d, int e), (self, a, b, c, d, e))
+SD_RET(steamBool_t, AcceptP2PSessionWithUser, 3, (void* self, uint64_t a), (self, a))
+
+// ISteamUser018
+SD_VOID(StartVoiceRecording, 7, (void* self), (self))
+SD_VOID(StopVoiceRecording, 8, (void* self), (self))
+SD_RET(int, GetVoice, 10,
+       (void* self, steamBool_t a, void* b, unsigned int c, unsigned int* d, steamBool_t e, void* f,
+        unsigned int g, unsigned int* h, unsigned int i),
+       (self, a, b, c, d, e, f, g, h, i))
+SD_RET(int, DecompressVoice, 11,
+       (void* self, const void* a, unsigned int b, void* c, unsigned int d, unsigned int* e, unsigned int f),
+       (self, a, b, c, d, e, f))
+SD_RET(unsigned int, GetVoiceOptimalSampleRate, 12, (void* self), (self))
+SD_RET(unsigned int, GetAuthSessionTicket, 13, (void* self, void* a, int b, unsigned int* c), (self, a, b, c))
+SD_VOID(CancelAuthTicket, 16, (void* self, unsigned int a), (self, a))
+
+// ISteamFriends015
+SD_RET(int, GetFriendCount, 3, (void* self, int a), (self, a))
+SD_RET(int, GetFriendPersonaState, 6, (void* self, uint64_t a), (self, a))
+SD_RET(const char*, GetFriendPersonaName, 7, (void* self, uint64_t a), (self, a))
+SD_RET(steamBool_t, GetFriendGamePlayed, 8, (void* self, uint64_t a, void* b), (self, a, b))
+SD_VOID(SetInGameVoiceSpeaking, 27, (void* self, uint64_t a, steamBool_t b), (self, a, b))
+SD_VOID(ActivateGameOverlay, 28, (void* self, const char* a), (self, a))
+SD_VOID(ActivateGameOverlayToUser, 29, (void* self, const char* a, uint64_t b), (self, a, b))
+SD_VOID(SetRichPresence, 43, (void* self, const char* a, const char* b), (self, a, b))
+
+// the accessors, which steam_api answers from its context
+static void* QDECL SD_GameServer(void) {
+    return sd.gameServer;
+}
+static void* QDECL SD_Matchmaking(void) {
+    return sd.matchmaking;
+}
+static void* QDECL SD_Lobbies(void) {
+    return sd.lobbies;
+}
+static void* QDECL SD_UGC(void) {
+    return sd.ugc;
+}
+static void* QDECL SD_Networking(void) {
+    return sd.networking;
+}
+static void* QDECL SD_GameServerNetworking(void) {
+    return sd.gameServerNetworking;
+}
+static void* QDECL SD_User(void) {
+    return sd.user;
+}
+static void* QDECL SD_Friends(void) {
+    return sd.friends;
+}
+
+/*
+===============
+SD_API_Init
+
+SteamAPI_Init: a pipe to the Steam client that is running and its logged on user. Without a
+running Steam there is no user, and the client goes on without Steam, as with steam_api.
+===============
+*/
+static steamBool_t QDECL SD_API_Init(void) {
+    if (sd.clientUser) {
+        return 1;
+    }
+    sd.clientPipe = SD_CreateSteamPipe();
+    if (!sd.clientPipe) {
+        return 0;
+    }
+    sd.clientUser = SD_ConnectToGlobalUser(sd.clientPipe);
+    if (!sd.clientUser || !SD_AppID(sd.clientPipe)) {
+        if (sd.clientUser) {
+            SD_ReleaseUser(sd.clientPipe, sd.clientUser);
+        }
+        SD_ReleaseSteamPipe(sd.clientPipe);
+        sd.clientPipe = sd.clientUser = 0;
+        return 0;
+    }
+    sd.user = SD_Interface(5, sd.clientUser, sd.clientPipe, "SteamUser018");
+    sd.friends = SD_Interface(8, sd.clientUser, sd.clientPipe, "SteamFriends015");
+    sd.lobbies = SD_Interface(10, sd.clientUser, sd.clientPipe, "SteamMatchMaking009");
+    sd.matchmaking = SD_Interface(11, sd.clientUser, sd.clientPipe, "SteamMatchMakingServers002");
+    sd.networking = SD_Interface(16, sd.clientUser, sd.clientPipe, "SteamNetworking005");
+    sd.ugc = SD_Interface(26, sd.clientUser, sd.clientPipe, "STEAMUGC_INTERFACE_VERSION007");
+    return 1;
+}
+
+static void QDECL SD_API_Shutdown(void) {
+    if (sd.clientUser) {
+        SD_ReleaseUser(sd.clientPipe, sd.clientUser);
+    }
+    if (sd.clientPipe) {
+        SD_ReleaseSteamPipe(sd.clientPipe);
+    }
+    sd.clientPipe = sd.clientUser = 0;
+    sd.user = sd.friends = sd.lobbies = sd.matchmaking = sd.networking = sd.ugc = NULL;
+    SD_ShutdownIfAllPipesClosed();
+}
+
+/*
+===============
+SD_GameServer_Init
+
+SteamGameServer_Init, as Quake Live's steam_api.dll does it (0x3b407730): the address to bind,
+a user of its own of the game server kind, the interfaces, and InitGameServer with the flags
+the server mode stands for. A game server needs no running Steam client.
+===============
+*/
+static steamBool_t QDECL SD_GameServer_Init(unsigned int ip, unsigned short steamPort, unsigned short gamePort,
+                                            unsigned short queryPort, int serverMode, const char* version) {
+    unsigned int flags, appId;
+
+    if (sd.serverUser) {
+        return 1;
+    }
+    SD_SetLocalIPBinding(ip, steamPort);
+    sd.serverPipe = 0;
+    sd.serverUser = SD_CreateLocalUser(&sd.serverPipe, SD_ACCOUNT_GAMESERVER);
+    if (!sd.serverUser) {
+        return 0;
+    }
+    sd.gameServer = SD_Interface(6, sd.serverUser, sd.serverPipe, "SteamGameServer012");
+    sd.gameServerNetworking = SD_Interface(16, sd.serverUser, sd.serverPipe, "SteamNetworking005");
+
+    flags = serverMode == 3 ? SD_FLAG_SECURE : 0;
+    if (serverMode == 1) {
+        flags |= SD_FLAG_PRIVATE;
+    }
+    appId = SD_AppID(sd.serverPipe);
+    if (!sd.gameServer || !appId) {
+        return 0;
+    }
+    // InitGameServer(ip, game port, query port, flags, App ID, version), slot 0
+    return ((steamBool_t(*)(void*, unsigned int, unsigned short, unsigned short, unsigned int, unsigned int,
+                            const char*))SD_VT(sd.gameServer, 0))(sd.gameServer, ip, gamePort, queryPort, flags,
+                                                                  appId, version);
+}
+
+static void QDECL SD_GameServer_Shutdown(void) {
+    if (sd.serverUser) {
+        SD_ReleaseUser(sd.serverPipe, sd.serverUser);
+    }
+    if (sd.serverPipe) {
+        SD_ReleaseSteamPipe(sd.serverPipe);
+    }
+    sd.serverPipe = sd.serverUser = 0;
+    sd.gameServer = sd.gameServerNetworking = NULL;
+    SD_ShutdownIfAllPipesClosed();
+}
+
+/*
+===============
+SD_RegisterCallback / SD_Dispatch
+
+What steam_api's callback registry does: each callback object says which callback it is and
+whether it is the server's (flag 0x02), and each one that arrives on a pipe goes to its Run(data),
+the second slot of the object's table as MSVC orders it.
+===============
+*/
+static void QDECL SD_RegisterCallback(void* callback, int id) {
+    int i;
+
+    (void)id;  // the object carries it
+    for (i = 0; i < sd.numCallbacks; i++) {
+        if (sd.callbacks[i] == callback) {
+            return;
+        }
+    }
+    if (sd.numCallbacks < SD_MAX_CALLBACKS) {
+        sd.callbacks[sd.numCallbacks++] = (steamCallback_t*)callback;
+    }
+}
+
+static void QDECL SD_UnregisterCallback(void* callback) {
+    int i;
+
+    for (i = 0; i < sd.numCallbacks; i++) {
+        if (sd.callbacks[i] == callback) {
+            sd.callbacks[i] = sd.callbacks[--sd.numCallbacks];
+            return;
+        }
+    }
+}
+
+static void SD_Dispatch(int pipe, qboolean server) {
+    steamCallbackMsg_t msg;
+    int call;
+    int i;
+
+    if (!pipe) {
+        return;
+    }
+    while (sd.BGetCallback(pipe, &msg, &call)) {
+        for (i = 0; i < sd.numCallbacks; i++) {
+            steamCallback_t* cb = sd.callbacks[i];
+
+            if (cb->id == msg.id && ((cb->flags & SD_CB_GAMESERVER) != 0) == (server != qfalse)) {
+                ((void (*)(void*, void*))cb->vtable[1])(cb, msg.param);
+            }
+        }
+        sd.FreeLastCallback(pipe);
+    }
+}
+
+static void QDECL SD_API_RunCallbacks(void) {
+    SD_Dispatch(sd.clientPipe, qfalse);
+}
+
+static void QDECL SD_GameServer_RunCallbacks(void) {
+    SD_Dispatch(sd.serverPipe, qtrue);
+}
+
+/*
+===============
+SD_Load
+
+steamclient64.dll: next to our own executable first, then the one of the player's Steam client,
+which Steam writes down in the registry while it runs, and last the Steam folder itself.
+===============
+*/
+static qboolean SD_RegistryString(const char* subkey, const char* value, char* out, DWORD size) {
+    HKEY key;
+    DWORD type = 0;
+    LONG r;
+
+    out[0] = '\0';
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, subkey, 0, KEY_QUERY_VALUE, &key) != ERROR_SUCCESS) {
+        return qfalse;
+    }
+    r = RegQueryValueExA(key, value, NULL, &type, (LPBYTE)out, &size);
+    RegCloseKey(key);
+    return (qboolean)(r == ERROR_SUCCESS && type == REG_SZ && out[0]);
+}
+
+static qboolean SD_Load(void) {
+    char path[MAX_OSPATH];
+    char dir[MAX_OSPATH];
+
+    if (sd.client) {
+        return qtrue;
+    }
+    sd.lib = LoadLibraryA("steamclient64.dll");
+    if (!sd.lib && SD_RegistryString("Software\\Valve\\Steam\\ActiveProcess", "SteamClientDll64", path,
+                                     sizeof(path))) {
+        sd.lib = LoadLibraryExA(path, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+    }
+    if (!sd.lib && SD_RegistryString("Software\\Valve\\Steam", "SteamPath", dir, sizeof(dir))) {
+        Com_sprintf(path, sizeof(path), "%s\\steamclient64.dll", dir);
+        sd.lib = LoadLibraryExA(path, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+    }
+    if (!sd.lib) {
+        return qfalse;
+    }
+    *(void**)&sd.CreateInterface = (void*)GetProcAddress(sd.lib, "CreateInterface");
+    *(void**)&sd.BGetCallback = (void*)GetProcAddress(sd.lib, "Steam_BGetCallback");
+    *(void**)&sd.FreeLastCallback = (void*)GetProcAddress(sd.lib, "Steam_FreeLastCallback");
+    if (sd.CreateInterface && sd.BGetCallback && sd.FreeLastCallback) {
+        sd.client = sd.CreateInterface("SteamClient017", NULL);
+    }
+    if (!sd.client) {
+        Com_Printf("Steam: steamclient64.dll does not offer SteamClient017\n");
+        FreeLibrary(sd.lib);
+        Com_Memset(&sd, 0, sizeof(sd));
+        return qfalse;
+    }
+    return qtrue;
+}
+
+// every entry point the rest of this file uses, pointed at the wrappers above
+static void SD_Bind(void) {
+#define SD_SET(field) *(void**)&st.field = (void*)SD_##field
+    SD_SET(GameServer_Init);
+    SD_SET(GameServer);
+    SD_SET(GameServer_RunCallbacks);
+    SD_SET(GameServer_Shutdown);
+    SD_SET(API_Init);
+    SD_SET(API_RunCallbacks);
+    SD_SET(API_Shutdown);
+    SD_SET(SetProduct);
+    SD_SET(SetModDir);
+    SD_SET(SetGameDescription);
+    SD_SET(SetDedicatedServer);
+    SD_SET(LogOn);
+    SD_SET(LogOnAnonymous);
+    SD_SET(EnableHeartbeats);
+    SD_SET(SetMaxPlayerCount);
+    SD_SET(SetBotPlayerCount);
+    SD_SET(SetServerName);
+    SD_SET(SetMapName);
+    SD_SET(SetPasswordProtected);
+    SD_SET(BLoggedOn);
+    SD_SET(BSecure);
+    SD_SET(GetPublicIP);
+    SD_SET(HandleIncomingPacket);
+    SD_SET(GetNextOutgoingPacket);
+    SD_SET(SetGameTags);
+    SD_SET(SetKeyValue);
+    SD_SET(BUpdateUserData);
+    SD_SET(Matchmaking);
+    SD_SET(RequestInternetServerList);
+    SD_SET(RequestLANServerList);
+    SD_SET(RequestFriendsServerList);
+    SD_SET(RequestFavoritesServerList);
+    SD_SET(RequestHistoryServerList);
+    SD_SET(GetServerDetails);
+    SD_SET(GetServerCount);
+    SD_SET(ReleaseRequest);
+    SD_SET(IsRefreshing);
+    SD_SET(CancelQuery);
+    SD_SET(RefreshQuery);
+    SD_SET(ServerRules);
+    SD_SET(PlayerDetails);
+    SD_SET(CancelServerQuery);
+    SD_SET(Lobbies);
+    SD_SET(AddFavoriteGame);
+    SD_SET(RemoveFavoriteGame);
+    SD_SET(UGC);
+    SD_SET(GetItemState);
+    SD_SET(DownloadItem);
+    SD_SET(GetItemInstallInfo);
+    SD_SET(GetItemDownloadInfo);
+    SD_SET(GetNumSubscribedItems);
+    SD_SET(GetSubscribedItems);
+    SD_SET(GetSteamID);
+    SD_SET(Networking);
+    SD_SET(GameServerNetworking);
+    SD_SET(User);
+    SD_SET(Friends);
+    SD_SET(SendP2PPacket);
+    SD_SET(IsP2PPacketAvailable);
+    SD_SET(ReadP2PPacket);
+    SD_SET(AcceptP2PSessionWithUser);
+    SD_SET(StartVoiceRecording);
+    SD_SET(StopVoiceRecording);
+    SD_SET(GetVoice);
+    SD_SET(DecompressVoice);
+    SD_SET(GetVoiceOptimalSampleRate);
+    SD_SET(GetUserSteamID);
+    SD_SET(GetAuthSessionTicket);
+    SD_SET(CancelAuthTicket);
+    SD_SET(BeginAuthSession);
+    SD_SET(EndAuthSession);
+    SD_SET(SetInGameVoiceSpeaking);
+    SD_SET(SetRichPresence);
+    SD_SET(ActivateGameOverlayToUser);
+    SD_SET(ActivateGameOverlay);
+    SD_SET(GetFriendCount);
+    SD_SET(GetFriendByIndex);
+    SD_SET(GetFriendPersonaName);
+    SD_SET(GetFriendPersonaState);
+    SD_SET(GetFriendGamePlayed);
+    SD_SET(RegisterCallback);
+    SD_SET(UnregisterCallback);
+#undef SD_SET
+}
+#endif  // 64-bit Windows
+
 /*
 ===============
 Steam_Load
@@ -426,8 +997,10 @@ first, so a player who drops one there wins.
 ===============
 */
 static qboolean Steam_Load(void) {
+#if !defined(_WIN32) || !defined(_WIN64)
     const char* steamPath;
     char path[MAX_OSPATH];
+#endif
 
     if (st.lib) {
         return qtrue;
@@ -443,6 +1016,16 @@ static qboolean Steam_Load(void) {
     setenv("SteamAppId", STEAM_APP_ID, 1);
     setenv("SteamGameId", STEAM_APP_ID, 1);
 #endif
+#if defined(_WIN32) && defined(_WIN64)
+    // no steam_api here: see "Steam on 64-bit Windows"
+    if (!SD_Load()) {
+        Com_Printf("Steam: steamclient64.dll not found; running without Steam\n");
+        return qfalse;
+    }
+    st.lib = (void*)sd.lib;
+    SD_Bind();
+    return qtrue;
+#else
 #ifdef _WIN32
     st.lib = (void*)LoadLibraryA(STEAM_LIB);
 #else
@@ -468,6 +1051,7 @@ static qboolean Steam_Load(void) {
         return qfalse;
     }
     return qtrue;
+#endif
 }
 
 /*
