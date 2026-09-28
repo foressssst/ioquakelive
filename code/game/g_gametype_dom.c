@@ -12,14 +12,14 @@
  * counts to configstrings 700/701 each frame.
  *
  * Binary addresses (qagamex86.dll):
- *   DOM_CheckFlagScore    0x1004ac40
- *   DOM_AddTeamScores     0x1004adb0
- *   DOM_FrameThink        0x1004aea0   (ent->framethink, per-frame capture)
- *   DOM_Think             0x1004b790   (ent->think, periodic scoring)
- *   DOM_FlagFirstThink    0x1004b8e0
- *   DOM_CheckPlayers      0x1004bac0
- *   DOM_FragBonuses       0x1004bb40
- *   SP_team_dom_point     0x1004bcd0
+ *   DOM_CheckFlagScore    0x1004aa80
+ *   DOM_AddTeamScores     0x1004abf0
+ *   DOM_FrameThink        0x1004ace0   (ent->framethink, per-frame capture)
+ *   DOM_Think             0x1004b5d0   (ent->think, periodic scoring)
+ *   DOM_FlagFirstThink    0x1004b720
+ *   DOM_CheckPlayers      0x1004b900
+ *   DOM_FragBonuses       0x1004b980
+ *   SP_team_dom_point     0x1004bb10
  */
 #include "g_local.h"
 
@@ -79,7 +79,7 @@ static void DOM_CheckFlagScore(gentity_t *ent, gentity_t **players, int count) {
 }
 
 // ============================================================================
-// DOM_AddTeamScores (binary: 0x1004adb0)
+// DOM_AddTeamScores (binary: 0x1004abf0)
 //
 // Pick the capturer for the point from the players stood on it this frame.
 // One team present: keep the existing capturer if still on the point,
@@ -140,7 +140,7 @@ static void DOM_AddTeamScores(int redCount, int blueCount, gentity_t *ent,
 }
 
 // ============================================================================
-// DOM_FrameThink (binary: 0x1004aea0)  ent->framethink
+// DOM_FrameThink (binary: 0x1004ace0)  ent->framethink
 //
 // Runs every frame. Scans players within ent->count units, advances the
 // capture accumulator (ent->health) and fires the capture event when it hits
@@ -156,6 +156,7 @@ static void DOM_FrameThink(gentity_t *ent) {
     int capDelta;
     int oldAccum, accum, progress;
     float scale;
+    double base;
     qboolean neutralized = qfalse;
 
     ent->s.weapon = 0;
@@ -198,7 +199,10 @@ static void DOM_FrameThink(gentity_t *ent) {
     if (g_domCapTime.integer > 0)
         deltaBase = level.frametime / g_domCapTime.integer;
 
+    // [QL] 0x1004b135..0x1004b1e9: the step is worked out as base + base * scale * (n - 1), in
+    // wider than float precision, and truncated
     scale = g_domTeammateCapScale.value;
+    base = (float)deltaBase;
     capDelta = 0;
 
     if (g_domEnableContention.integer != 0 && g_domNeutralFlag.integer != 0 &&
@@ -206,20 +210,16 @@ static void DOM_FrameThink(gentity_t *ent) {
         // contested with neutral flag: bleed the accumulator back toward zero
         oldAccum = ent->health;
         if (oldAccum != 0) {
-            float step = (float)deltaBase * (1.0f + scale);
-            if (oldAccum > 0)
-                capDelta = -(int)step;
-            else
-                capDelta = (int)step;
+            capDelta = (int)((base + base * scale) * (oldAccum > 0 ? -1.0 : 1.0));
             if (capDelta != 0 && ent->health + capDelta == 0)
                 neutralized = qtrue;
         }
     } else {
         // more players on a point capture it faster
         if (redCount > 0)
-            capDelta = -(int)((float)deltaBase * (1.0f + scale * (redCount - 1)));
+            capDelta = (int)(0.0 - (base + base * scale * (redCount - 1)));
         if (blueCount > 0)
-            capDelta = (int)((float)deltaBase * (1.0f + scale * (blueCount - 1)) + capDelta);
+            capDelta = (int)(base + base * scale * (blueCount - 1) + capDelta);
     }
 
     oldAccum = ent->health;
@@ -256,8 +256,9 @@ static void DOM_FrameThink(gentity_t *ent) {
         int absOld = oldAccum < 0 ? -oldAccum : oldAccum;
         int absDelta = deltaBase < 0 ? -deltaBase : deltaBase;
         if (neutralized || (absOld < absDelta && ent->s.modelindex2 != 0)) {
-            if (g_domEnableContention.integer == 0) {
-                // no contention: flip straight to the other team's extreme
+            // [QL] 0x1004b372: g_domNeutralFlag decides whether a lost point goes neutral
+            if (g_domNeutralFlag.integer == 0) {
+                // no neutral flag: flip straight to the other team's extreme
                 ent->health = (ent->s.modelindex2 == TEAM_RED) ? DOM_CAPTURE_LIMIT
                                                                : -DOM_CAPTURE_LIMIT;
                 ent->s.modelindex2 = 0;
@@ -302,7 +303,7 @@ static void DOM_FrameThink(gentity_t *ent) {
 }
 
 // ============================================================================
-// DOM_Think (binary: 0x1004b790)  ent->think
+// DOM_Think (binary: 0x1004b5d0)  ent->think
 //
 // Fires every g_domScoreRate seconds. Each point adds one to its owner's
 // pending score; once every point has ticked, the pending totals are applied
@@ -395,7 +396,7 @@ static void DOM_Think(gentity_t *ent) {
 }
 
 // ============================================================================
-// DOM_FlagFirstThink (binary: 0x1004b8e0)
+// DOM_FlagFirstThink (binary: 0x1004b720)
 //
 // Drop the point to the ground, then switch over to the real think/framethink.
 // ============================================================================
@@ -434,7 +435,7 @@ done:
 }
 
 // ============================================================================
-// DOM_CheckPlayers (binary: 0x1004bac0)
+// DOM_CheckPlayers (binary: 0x1004b900)
 //
 // Publish the number of control points each team holds. Called every frame
 // from G_RunFrame. CS 700 = red owned, CS 701 = blue owned.
@@ -492,7 +493,7 @@ void DOM_FragBonuses(gentity_t *attacker, gentity_t *victim) {
 }
 
 // ============================================================================
-// SP_team_dom_point (binary: 0x1004bcd0)
+// SP_team_dom_point (binary: 0x1004bb10)
 //
 // Spawn a control point. Only active in GT_DOMINATION.
 // ============================================================================
