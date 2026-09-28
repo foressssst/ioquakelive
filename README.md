@@ -38,7 +38,8 @@ Symbol-level comparison is **not** possible for the game module: `qagamex64.so` 
 - QL network protocol (custom netchan, entity/player state field tables, usercmd layout).
 - QL game module (`qagame`): all game types, the full cvar table, physics, weapons, items, warmup, voting, unlagged.
 - QL cgame module: HUD, scoreboards, announcer, medals, damage plums, obituaries, effects, prediction.
-- QL UI module: the whole front end rebuilt on the retail web UI's own structure, with 220 settings in retail's order.
+- QL UI module: the whole front end rebuilt on the retail web UI's own structure, with 220 settings in retail's order, Career Stats and Recent Matches from Steam, the friends' menu and the Legal Notices.
+- Bots with Quake Live's own AI: item choice, hearing, dynamic skill, `bot_hud`, the round modes and A&D.
 - The Crash Course, ported whole: Crash spawns, the cinematic, his voice lines and the route.
 - Font rendering via FreeType, widescreen coordinate system, `pak01.pk3` asset overrides.
 
@@ -59,7 +60,7 @@ I do not have any rights to use any Quake Live game assets and cannot/**will not
 | Widescreen | Stretch only | 4:3 constrained with left/center/right modes for anchoring elements |
 | Key/door system | N/A | IT_KEY items, key-locked func_door |
 | Stats | Basic scoreboard | Detailed per-weapon accuracy, 'premium' scoreboards from QL |
-| Front end | Q3 menu files | Quake Live's web UI rebuilt natively: home, Start Match, Training, Replays, 220 settings |
+| Front end | Q3 menu files | Quake Live's web UI rebuilt natively: home, Start Match, Training, Career Stats, Recent Matches, Replays, 220 settings |
 
 ### Implementation progress
 
@@ -89,12 +90,12 @@ Status is one of **Done** (ported and verified against the binary), **Partial** 
 | Frame timing | Done | `Sys_Microseconds` deadline, `com_preciseFrameTiming`; jitter 0.34 → 0.01 ms at 125 fps |
 | Threaded loading | Done | Job system, parallel image/sound decode, shader-text index; campgrounds loads in ~1 s |
 | Borderless fullscreen | Done | `r_fullscreen 2`, no video restart on alt-tab |
-| Demo recording/playback | Partial | A demo recorded by retail plays back here, verified. The other direction, a demo recorded here played by retail, is untested |
+| Demo recording/playback | Done | Both ways: a demo recorded by retail plays back here, and one recorded here plays in retail with its HUD, entities and demo controls |
 | Download system | Done | QL's path is the Steam Workshop: the server publishes its items in `CS_STEAM_WORKSHOP_IDS` and the client fetches what it lacks (`CL_WorkshopDownloads`) before entering |
 | VOIP / Steam voice | Done | Steam P2P voice, with the server as the bridge and the game module deciding who hears whom (`G_VoiceFilter`) |
 | Console auto-complete | Done | `callvote`, the map and factory lists, player names and the cgame's own commands |
 | Screenshot system | Done | Retail's path and naming, levelshot included (which writes a TGA, whatever its name said) |
-| x86_64 client | Partial | Release\|x64 builds; only Win32 is played and tested here |
+| x86_64 client | Done | `Release\|x64` is the main build, with Steam, and the one that gets played |
 
 #### Server engine
 
@@ -147,12 +148,15 @@ Status is one of **Done** (ported and verified against the binary), **Partial** 
 | Start Match | Done | Retail's own page: factories, map picker, bots |
 | Settings | Done | 220 options in retail's order, taken from `web.pak`'s CSS and scripts |
 | Training Center | Done | Crash Course, Accelerate, Elevate, with retail's commands |
-| Replays | Done | Demo list and playback from the front end |
+| Replays | Done | Retail's page: each demo recorded in a match shows as that match, with a link to its page |
+| Career Stats | Done | Statistics and Medals, read from the player's Steam stats as retail did; wins and KDR on the profile card |
+| Recent Matches | Done | The server sends each player the match report over Steam's peer to peer network, as retail's did; the list and the match page with Basic, Medals, Items, Kills, Deaths, Accuracy, Damage and Events |
+| Legal Notices | Done | The page and its link, with the text read from the player's `web.pak` |
 | Scoreboards (menu files) | Done | Non-team and team boards draw correctly |
 | Server browser | Done | `ui_browser.c`: the list from Steam, sortable columns, filters and the map shot per row |
 | UI script actions | Done | All 13 run their commands for real: `clientViewProfile`, `modPlayer`, `putspec`, `banPlayer` and the rest |
-| Player profile display | Done | Through the Steam overlay, which is where retail sent it |
-| Friend/social features | Done | The Steam friends list in the menu's strip and in `/friends`, with join, invite and view profile |
+| Player profile display | Done | Career Stats, Steam avatars and the Steam overlay profile, as retail |
+| Friend/social features | Done | The Steam friends list with retail's menu on every page: Join Match, Send Message, Send Invite, View Statistics, View Achievements, Show Steam Profile; also in `/friends` |
 | Map voting UI | Done | The whole chain: the server builds `nextmaps`, the cgame loads `ui/endgamevote.menu` and the button votes. It needs a `mappool.txt`, as retail does |
 
 #### Game module (server-side game logic)
@@ -193,23 +197,18 @@ Status is one of **Done** (ported and verified against the binary), **Partial** 
 
 ### What is still open
 
-The tables above are per area. These are the specific things known to be missing or
-unverified, and they are the whole list:
+The tables above are per area. These are the specific things known to be missing, and they
+are the whole list:
 
-- **Playing against retail, both ways.** A retail client connects here and this client
-  connects to a retail server, but neither has been played through a full match.
-- **Demos across the two.** A retail demo plays back here. A demo recorded here has not
-  been opened by retail.
-- **The smart third-person camera** (`cg_thirdPersonSmooth`). Measured in the binary at
-  0x1004c6f0, not ported: the tail of that function does not decompile cleanly.
+- **Part of the bots' AI is not yet compared with the binary.** Goal choice, combat, chat,
+  orders and the round modes are; the team roles of CTF and A&D (retail picks them without a
+  team leader) and the voice-chat orders are not.
+- **The main menu's hidden "???" page** (typing `iddqd` on it) is not ported.
+- **Screenshots are not linked to the match they were taken in.** Demos are.
 - **`vmCvar_t` has one field fewer here than in retail.** The binary reads the string at
-  +0x14 and this tree has it at +0x10. Nothing breaks today, because the engine and the
-  modules share this definition; it matters the day a retail module is loaded by this
-  engine. Recorded deliberately, not changed.
-- **33 engine cvars from retail are not registered here.** All of them Quake 3 leftovers
-  that QL kept and nothing reads.
-- **Only Win32 is played.** `Release|x64` and the Linux and macOS makefiles build, and the
-  dedicated server has been run on aarch64, but Win32 is what gets tested.
+  +0x14 and this tree has it at +0x10. Nothing breaks, because the engine and the modules
+  share this definition; it would matter only to load a retail module. Recorded
+  deliberately, not changed.
 
 ### Building
 
@@ -344,7 +343,8 @@ La comparación a nivel de símbolos **no** es posible para el módulo de juego:
 - El protocolo de red de QL (netchan propio, tablas de campos de entity/player state, formato de usercmd).
 - El módulo de juego de QL (`qagame`): todos los tipos de juego, la tabla de cvars entera, físicas, armas, ítems, calentamiento, votaciones, unlagged.
 - El módulo cgame de QL: HUD, marcadores, locutor, medallas, números de daño, mensajes de muerte, efectos, predicción.
-- El módulo de interfaz de QL: el front end entero rehecho sobre la estructura de la web UI de retail, con 220 opciones en el orden de retail.
+- El módulo de interfaz de QL: el front end entero rehecho sobre la estructura de la web UI de retail, con 220 opciones en el orden de retail, Career Stats y Recent Matches desde Steam, el menú de amigos y los avisos legales.
+- Bots con la IA de Quake Live: elección de objetos, oído, habilidad dinámica, `bot_hud`, los modos por rondas y A&D.
 - El Crash Course, portado entero: Crash aparece, la cinemática, sus líneas con voz y el recorrido.
 - Tipografía por FreeType, sistema de coordenadas panorámico, sobreescritura de assets por `pak01.pk3`.
 
@@ -365,7 +365,7 @@ No tengo ningún derecho sobre los assets de Quake Live y no puedo, ni **voy a**
 | Panorámico | sólo estirado | 4:3 restringido, con modos izquierda/centro/derecha para anclar elementos |
 | Llaves y puertas | no existe | ítems `IT_KEY`, `func_door` con llave |
 | Estadísticas | marcador básico | precisión por arma detallada, marcadores 'premium' de QL |
-| Front end | archivos `.menu` de Q3 | la web UI de Quake Live rehecha de forma nativa: portada, Start Match, Training, Replays, 220 opciones |
+| Front end | archivos `.menu` de Q3 | la web UI de Quake Live rehecha de forma nativa: portada, Start Match, Training, Career Stats, Recent Matches, Replays, 220 opciones |
 
 ### Avance de la implementación
 
@@ -395,12 +395,12 @@ El estado es **Hecho** (portado y verificado contra el binario), **Parcial** (fu
 | Temporización de cuadro | Hecho | objetivo por `Sys_Microseconds`, `com_preciseFrameTiming`; el temblor baja de 0,34 a 0,01 ms a 125 fps |
 | Carga en hilos | Hecho | cola de trabajos, decodificación de imágenes y sonidos en paralelo, índice del texto de shaders; campgrounds carga en ~1 s |
 | Pantalla completa sin bordes | Hecho | `r_fullscreen 2`, sin reiniciar el vídeo al cambiar de ventana |
-| Grabación y reproducción de demos | Parcial | Una demo grabada por retail se reproduce aquí, verificado. Al revés, una demo grabada aquí abierta por retail, sin probar |
+| Grabación y reproducción de demos | Hecho | en los dos sentidos: una demo de retail se reproduce aquí, y una grabada aquí se reproduce en retail con su HUD, entidades y control de demo |
 | Sistema de descargas | Hecho | la vía de QL es el Workshop de Steam: el servidor publica sus items en `CS_STEAM_WORKSHOP_IDS` y el cliente baja lo que le falta (`CL_WorkshopDownloads`) antes de entrar |
 | VOIP / voz de Steam | Hecho | voz por la red entre pares de Steam, con el servidor de puente y el módulo de juego decidiendo quién oye a quién (`G_VoiceFilter`) |
 | Autocompletado de consola | Hecho | `callvote`, las listas de mapas y factories, nombres de jugadores y las órdenes del propio cgame |
 | Sistema de capturas | Hecho | la ruta y el nombre de retail, levelshot incluido (que escribe un TGA, dijera lo que dijera su nombre) |
-| Cliente x86_64 | Parcial | `Release\|x64` compila; sólo Win32 se juega y se prueba aquí |
+| Cliente x86_64 | Hecho | `Release\|x64` es la compilación principal, con Steam, y la que se juega |
 
 #### Motor: servidor
 
@@ -453,12 +453,15 @@ El estado es **Hecho** (portado y verificado contra el binario), **Parcial** (fu
 | Start Match | Hecho | la página de retail: factories, selector de mapa, bots |
 | Ajustes | Hecho | 220 opciones en el orden de retail, sacadas del CSS y los scripts de `web.pak` |
 | Centro de entrenamiento | Hecho | Crash Course, Accelerate, Elevate, con las órdenes de retail |
-| Replays | Hecho | lista de demos y reproducción desde el front end |
+| Replays | Hecho | la página de retail: cada demo grabada en una partida se muestra como esa partida, con acceso a su página |
+| Career Stats | Hecho | Statistics y Medals, leídas de las estadísticas de Steam del jugador como en retail; victorias y KDR en la tarjeta de perfil |
+| Recent Matches | Hecho | el servidor le manda a cada jugador el reporte de la partida por la red peer to peer de Steam, como el de retail; la lista y la página de la partida con Basic, Medals, Items, Kills, Deaths, Accuracy, Damage y Events |
+| Avisos legales | Hecho | la página y su enlace, con el texto leído del `web.pak` del jugador |
 | Marcadores (archivos .menu) | Hecho | los de equipo y los de no-equipo dibujan correctamente |
 | Navegador de servidores | Hecho | `ui_browser.c`: la lista desde Steam, columnas que ordenan, filtros y el cuadrito del mapa por fila |
 | Acciones de scripts de UI | Hecho | los 13 ejecutan sus órdenes de verdad: `clientViewProfile`, `modPlayer`, `putspec`, `banPlayer` y el resto |
-| Perfil del jugador | Hecho | por la superposición de Steam, que es adonde mandaba retail |
-| Amigos y funciones sociales | Hecho | la lista de amigos de Steam en la franja del menú y en `/friends`, con entrar, invitar y ver perfil |
+| Perfil del jugador | Hecho | Career Stats, avatares de Steam y el perfil en la superposición de Steam, como retail |
+| Amigos y funciones sociales | Hecho | la lista de amigos de Steam con el menú de retail en todas las páginas: Join Match, Send Message, Send Invite, View Statistics, View Achievements, Show Steam Profile; también en `/friends` |
 | UI de votación de mapa | Hecho | la cadena entera: el servidor arma `nextmaps`, el cgame carga `ui/endgamevote.menu` y el botón vota. Hace falta un `mappool.txt`, igual que en retail |
 
 #### Módulo de juego (lógica del lado del servidor)
@@ -499,14 +502,17 @@ El estado es **Hecho** (portado y verificado contra el binario), **Parcial** (fu
 
 ### Lo que sigue abierto
 
-Las tablas de arriba van por área. Esto es lo concreto que se sabe que falta o que no está verificado, y es la lista entera:
+Las tablas de arriba van por área. Esto es lo concreto que se sabe que falta, y es la lista
+entera:
 
-- **Jugar contra retail, en los dos sentidos.** Un cliente de retail entra aquí y este cliente entra a un servidor de retail, pero ninguno de los dos se jugó una partida completa.
-- **Las demos cruzadas.** Una demo de retail se reproduce aquí. Una demo grabada aquí no la abrió retail todavía.
-- **La cámara suave en tercera persona** (`cg_thirdPersonSmooth`). Medida en el binario en 0x1004c6f0, sin portar: la cola de esa función no decompila limpio.
-- **`vmCvar_t` tiene un campo menos aquí que en retail.** El binario lee la cadena en +0x14 y este árbol la tiene en +0x10. Hoy no rompe nada, porque el motor y los módulos comparten esta definición; importa el día que un módulo de retail cargue en este motor. Anotado a propósito, sin cambiar.
-- **33 cvars de motor de retail no están registradas aquí.** Todas restos de Quake 3 que QL conservó y que nadie lee.
-- **Sólo se juega Win32.** `Release|x64` y los makefiles de Linux y macOS compilan, y el servidor dedicado corrió en aarch64, pero Win32 es lo que se prueba.
+- **Una parte de la IA de los bots todavía no se comparó con el binario.** La elección de
+  objetivos, el combate, el chat, las órdenes y los modos por rondas sí; los papeles de equipo
+  de CTF y A&D (retail los reparte sin líder de equipo) y las órdenes por chat de voz no.
+- **La página escondida "???" del menú principal** (escribiendo `iddqd` en él) no está portada.
+- **Las capturas de pantalla no quedan asociadas a la partida en que se sacaron.** Las demos sí.
+- **`vmCvar_t` tiene un campo menos aquí que en retail.** El binario lee la cadena en +0x14 y
+  este árbol la tiene en +0x10. No rompe nada, porque el motor y los módulos comparten esta
+  definición; solo importaría para cargar un módulo de retail. Anotado a propósito, sin cambiar.
 
 ### Compilar
 
