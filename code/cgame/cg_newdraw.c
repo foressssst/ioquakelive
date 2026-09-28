@@ -4434,9 +4434,10 @@ static void CG_DrawTeamScore(int which, rectDef_t *rect, float scale, vec4_t col
     CG_OwnerDrawText(x, rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] CG_DrawWeaponIcon (0x225). Draws a weapon icon shader, gated by the
-// owner-draw visibility flags.
-static void CG_DrawWeaponIcon(rectDef_t *rect, vec4_t color, qhandle_t iconShader, int ownerDrawFlags) {
+// [QL] 0x10035540, UI_ADVERT: an advertisement cell of the scoreboards and the spectator HUD,
+// whose picture is the item's defaultContent (textures/ad_content/...). Retail then tells the
+// engine how many pixels it covered, for the advertiser's count; that service is gone.
+static void CG_DrawAdvert(rectDef_t *rect, vec4_t color, qhandle_t iconShader, int ownerDrawFlags) {
     if (ownerDrawFlags && !CG_OwnerDrawVisible(ownerDrawFlags, 0)) {
         return;
     }
@@ -4959,8 +4960,8 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             CG_DrawRaceTimes(&rect, scale, color, textStyle);
             break;
 
-        case UI_ADVERT:                     // 0x225  CG_DrawWeaponIcon
-            CG_DrawWeaponIcon(&rect, color, shader, ownerDrawFlags);
+        case UI_ADVERT:                     // 0x225
+            CG_DrawAdvert(&rect, color, shader, ownerDrawFlags);
             break;
 
         default:

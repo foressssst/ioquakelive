@@ -2250,7 +2250,11 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
             UI_DrawCrosshairColor(&rect, color);
             break;
         case UI_ADVERT:
-            // [QL] Advertisement display - no-op in standalone build
+            // [QL] 0x10009340: the advertisement cell's picture (its defaultContent); the pixel
+            // count retail reported to the engine went to an advertiser that is gone
+            trap_R_SetColor(color);
+            UI_DrawHandlePic(rect.x, rect.y, rect.w, rect.h, shader);
+            trap_R_SetColor(NULL);
             break;
         case UI_STARTMATCH:
             UI_StartMatch_Paint();
