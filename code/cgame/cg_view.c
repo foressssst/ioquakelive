@@ -953,28 +953,43 @@ static void CG_FilterAngles(void) {
     historyIndex = (historyIndex + 1) % FILTER_ANGLES_SIZE;
 }
 
-// Address: 0x1004e2e0
-// [QL] CG_DrawDuelWeaponStats -- duel spectator weapon-accuracy overlay for the
-// 2nd duel player. Reads per-weapon accuracy keys out of that player's
-// configstring and draws a two-column table starting at y=300.
-// The 14 weapon key strings and the "Enemy"/"You" column labels live in a
-// pointer table at 0x10076568 spanning several .rdata regions. The guard and
-// configstring fetch are done; the per-weapon draw loop is still a stub.
-static void CG_DrawDuelWeaponStats(void) {
+/*
+=================
+CG_DrawBotHud
+
+[QL] 0x1004e2e0: bot_hud's table, from CS_BOTINFO (the game's BotHud), while alive: seven
+rows of two, "Enemy = ... | Dist = ...", from 140,316 down 16 a row, small and white.
+=================
+*/
+static void CG_DrawBotHud(void) {
+    static const char* keys[14][2] = {
+        {"e", "Enemy   = "}, {"ed", "Dist    = "}, {"tg", "LTG     = "}, {"tgd", "Dist    = "},
+        {"sg", "NBG     = "}, {"sgd", "Dist    = "}, {"ainode", "AI Node = "}, {"ltg", "LTGType = "},
+        {"ban", "Area#   = "}, {"gan", "G_Area# = "}, {"bh", "Health  = "}, {"ba", "Armor   = "},
+        {"sk", "Skill   = "}, {"eh", "Hear_E  = "},
+    };
+    static vec4_t white = {1.0f, 1.0f, 1.0f, 1.0f};
+    char values[14][15];
     const char* info;
+    float y;
+    int i;
 
     if (cg.snap->ps.stats[STAT_HEALTH] <= 0) {
         return;
     }
-
-    info = CG_ConfigString(CS_PLAYERS + cgs.clientNum2ndPlayer);
+    info = CG_ConfigString(CS_BOTINFO);
     if (!info[0]) {
         return;
     }
-
-    // TODO: iterate the 14 weapon accuracy keys (table @0x10076568),
-    // Info_ValueForKey into a 15x30 buffer, then CG_DrawText two columns per row
-    // ("Enemy | You"), y = 300 + row*16. Key/label strings still to be extracted.
+    for (i = 0; i < 14; i++) {
+        Q_strncpyz(values[i], Info_ValueForKey(info, keys[i][0]), sizeof(values[i]));
+    }
+    y = 300;
+    for (i = 0; i < 14; i += 2) {
+        y += 16;
+        CG_DrawText(140, y, 0, 0.12f, white,
+                    va("%s%15s | %s%15s", keys[i][1], values[i], keys[i + 1][1], values[i + 1]), 0, 0, 3);
+    }
 }
 
 // Address: 0x1004e480
@@ -1666,8 +1681,8 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
     // actually issue the rendering calls
     CG_DrawActive(stereoView);
 
-    // [QL] duel spectator weapon-stats overlay
-    CG_DrawDuelWeaponStats();
+    // [QL] 0x1004e8d3: bot_hud's table
+    CG_DrawBotHud();
 
     // [ioquakelive] the pointer over the demo controls
     CG_DemoCursorFrame();

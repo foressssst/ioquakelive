@@ -431,133 +431,6 @@ void BotTeamplayReport(void) {
 }
 
 /*
-==================
-BotSetInfoConfigString
-==================
-*/
-void BotSetInfoConfigString(bot_state_t* bs) {
-    char goalname[MAX_MESSAGE_SIZE];
-    char netname[MAX_MESSAGE_SIZE];
-    char action[MAX_MESSAGE_SIZE];
-    char *leader, carrying[32], *cs;
-    bot_goal_t goal;
-    //
-    ClientName(bs->client, netname, sizeof(netname));
-    if (Q_stricmp(netname, bs->teamleader) == 0)
-        leader = "L";
-    else
-        leader = " ";
-
-    strcpy(carrying, "  ");
-    if (gametype == GT_CTF) {
-        if (BotCTFCarryingFlag(bs)) {
-            strcpy(carrying, "F ");
-        }
-    } else if (gametype == GT_1FCTF) {
-        if (Bot1FCTFCarryingFlag(bs)) {
-            strcpy(carrying, "F ");
-        }
-    } else if (gametype == GT_HARVESTER) {
-        if (BotHarvesterCarryingCubes(bs)) {
-            if (BotTeam(bs) == TEAM_RED)
-                Com_sprintf(carrying, sizeof(carrying), "%2d", bs->inventory[INVENTORY_REDCUBE]);
-            else
-                Com_sprintf(carrying, sizeof(carrying), "%2d", bs->inventory[INVENTORY_BLUECUBE]);
-        }
-    }
-
-    switch (bs->ltgtype) {
-        case LTG_TEAMHELP: {
-            EasyClientName(bs->teammate, goalname, sizeof(goalname));
-            Com_sprintf(action, sizeof(action), "helping %s", goalname);
-            break;
-        }
-        case LTG_TEAMACCOMPANY: {
-            EasyClientName(bs->teammate, goalname, sizeof(goalname));
-            Com_sprintf(action, sizeof(action), "accompanying %s", goalname);
-            break;
-        }
-        case LTG_DEFENDKEYAREA: {
-            trap_BotGoalName(bs->teamgoal.number, goalname, sizeof(goalname));
-            Com_sprintf(action, sizeof(action), "defending %s", goalname);
-            break;
-        }
-        case LTG_GETITEM: {
-            trap_BotGoalName(bs->teamgoal.number, goalname, sizeof(goalname));
-            Com_sprintf(action, sizeof(action), "getting item %s", goalname);
-            break;
-        }
-        case LTG_KILL: {
-            ClientName(bs->teamgoal.entitynum, goalname, sizeof(goalname));
-            Com_sprintf(action, sizeof(action), "killing %s", goalname);
-            break;
-        }
-        case LTG_CAMP:
-        case LTG_CAMPORDER: {
-            Com_sprintf(action, sizeof(action), "camping");
-            break;
-        }
-        case LTG_PATROL: {
-            Com_sprintf(action, sizeof(action), "patrolling");
-            break;
-        }
-        case LTG_GETFLAG: {
-            Com_sprintf(action, sizeof(action), "capturing flag");
-            break;
-        }
-        case LTG_RUSHBASE: {
-            Com_sprintf(action, sizeof(action), "rushing base");
-            break;
-        }
-        case LTG_RETURNFLAG: {
-            Com_sprintf(action, sizeof(action), "returning flag");
-            break;
-        }
-        case LTG_ATTACKENEMYBASE: {
-            Com_sprintf(action, sizeof(action), "attacking the enemy base");
-            break;
-        }
-        case LTG_HARVEST: {
-            Com_sprintf(action, sizeof(action), "harvesting");
-            break;
-        }
-        default: {
-            trap_BotGetTopGoal(bs->gs, &goal);
-            trap_BotGoalName(goal.number, goalname, sizeof(goalname));
-            Com_sprintf(action, sizeof(action), "roaming %s", goalname);
-            break;
-        }
-    }
-    cs = va("l\\%s\\c\\%s\\a\\%s",
-            leader,
-            carrying,
-            action);
-    trap_SetConfigstring(CS_BOTINFO + bs->client, cs);
-}
-
-/*
-==============
-BotUpdateInfoConfigStrings
-==============
-*/
-void BotUpdateInfoConfigStrings(void) {
-    int i;
-    char buf[MAX_INFO_STRING];
-
-    for (i = 0; i < level.maxclients; i++) {
-        //
-        if (!botstates[i] || !botstates[i]->inuse)
-            continue;
-        //
-        trap_GetConfigstring(CS_PLAYERS + i, buf, sizeof(buf));
-        // if no config string or no name
-        if (!strlen(buf) || !strlen(Info_ValueForKey(buf, "n")))
-            continue;
-        BotSetInfoConfigString(botstates[i]);
-    }
-}
-
-/*
 ==============
 BotInterbreedBots
 ==============
@@ -1420,6 +1293,255 @@ int BotAILoadMap(int restart) {
 void ProximityMine_Trigger(gentity_t* trigger, gentity_t* other, trace_t* trace);
 
 /*
+==============
+BotHud
+
+[QL] 0x10022ee0, for the bot bot_hud names: what it is after, as an info string in
+CS_BOTINFO that the cgame lays out as a table (cg_view.c). The enemy and its distance, the
+top and the second goal with theirs, the AI node, the long term goal, the areas of the bot
+and of its goal or enemy, health, armour, skill and whether the enemy was only heard.
+==============
+*/
+static void BotHud(bot_state_t* bs) {
+    char enemyname[40], ltgname[144], nbgname[144], ltgtype[144];
+    float enemydist = 0, ltgdist = 0, nbgdist = 0;
+    int goalarea = -1;
+    bot_goal_t goal;
+    vec3_t dir;
+    const char* type;
+
+    enemyname[0] = ltgname[0] = nbgname[0] = ltgtype[0] = '\0';
+    if (trap_BotGetTopGoal(bs->gs, &goal)) {
+        trap_BotGoalName(goal.number, ltgname, sizeof(ltgname));
+        VectorSubtract(goal.origin, bs->origin, dir);
+        ltgdist = VectorLength(dir);
+        goalarea = goal.areanum;
+    }
+    if (trap_BotGetSecondGoal(bs->gs, &goal)) {
+        trap_BotGoalName(goal.number, nbgname, sizeof(nbgname));
+        VectorSubtract(goal.origin, bs->origin, dir);
+        nbgdist = VectorLength(dir);
+    }
+    if (bs->enemy >= 0 && g_entities[bs->enemy].client &&
+        g_entities[bs->enemy].client->pers.connected == CON_CONNECTED) {
+        ClientName(bs->enemy, enemyname, sizeof(enemyname));
+        VectorSubtract(g_entities[bs->enemy].r.currentOrigin, bs->origin, dir);
+        enemydist = VectorLength(dir);
+        goalarea = BotPointAreaNum(g_entities[bs->enemy].r.currentOrigin);
+    }
+    switch (bs->ltgtype) {
+        case 1: type = "helping"; break;
+        case 2: type = "escorting"; break;
+        case 3: type = "defending"; break;
+        case 4: type = "get flag"; break;
+        case 5: type = "rush base"; break;
+        case 6: type = "return flag"; break;
+        case 7:
+        case 8: type = "camping"; break;
+        case 9: type = "patroling"; break;
+        case 10: type = "get item"; break;
+        case 11: type = "kill"; break;
+        case 12: type = "harvest"; break;
+        case 13: type = "attack base"; break;
+        case 16: type = "following"; break;
+        case 17: type = "training"; break;
+        case 18: type = "touring"; break;
+        case 19: type = "tormenting"; break;
+        case 20: type = "target"; break;
+        case 21: type = "insta-gibbing"; break;
+        default: type = "roaming"; break;
+    }
+    Q_strncpyz(ltgtype, type, sizeof(ltgtype));
+    trap_SetConfigstring(CS_BOTINFO,
+        va("e\\%s\\ed\\%.1f\\tg\\%s\\tgd\\%.1f\\sg\\%s\\sgd\\%.1f\\ainode\\%s\\ltg\\%s\\ban\\%i\\gan\\%i\\bh\\%i\\ba\\%i\\sk\\%.1f\\eh\\%i\\",
+           enemyname, enemydist, ltgname, ltgdist, nbgname, nbgdist, bs->ainodename, ltgtype, bs->areanum,
+           goalarea, g_entities[bs->client].health, g_entities[bs->client].client->ps.stats[STAT_ARMOR],
+           bs->settings.skill, bs->enemyHeard));
+}
+
+/*
+==============
+BotItemDelayTime
+
+[QL] 0x10024640, every frame of a gauntlet-only match: the items come back no later than usual,
+or ten seconds later past skill 3. The binary goes on to 15, 20 and 25 seconds as the match
+goes, but it compares the time in milliseconds against seconds, so it never gets past 10.
+==============
+*/
+static void BotItemDelayTime(int time) {
+    float skill;
+
+    if (!bot_gauntletOnly.integer)
+        return;
+    skill = trap_Cvar_VariableValue("g_spSkill");
+    trap_Cvar_Set("bot_itemDelayTime", "0");
+    if (skill > 3 && time > 60)
+        trap_Cvar_Set("bot_itemDelayTime", "10");
+}
+
+/*
+==============
+BotLocalHuman
+
+[QL] 0x10024ea0: the player on the machine running the game, or -1
+==============
+*/
+static int BotLocalHuman(void) {
+    int i;
+
+    for (i = 0; i < level.maxclients; i++) {
+        if (g_entities[i].inuse && g_entities[i].client->pers.connected == CON_CONNECTED &&
+            g_entities[i].client->pers.localClient)
+            return i;
+    }
+    return -1;
+}
+
+/*
+==============
+BotLogSkill
+
+[QL] 0x10024700: the last 32 changes of a bot's skill, oldest dropped first
+==============
+*/
+static void BotLogSkill(bot_state_t* bs, int diff, float skill, int time) {
+    if (bs->numSkillLog >= 32) {
+        memmove(&bs->skillLog[0], &bs->skillLog[1], sizeof(bs->skillLog[0]) * 31);
+        bs->numSkillLog = 31;
+    }
+    bs->skillLog[bs->numSkillLog].diff = diff;
+    bs->skillLog[bs->numSkillLog].skill = skill;
+    bs->skillLog[bs->numSkillLog].time = time;
+    bs->numSkillLog++;
+}
+
+/*
+==============
+BotDynamicSkill
+
+[QL] 0x100247c0, bot_dynamicSkill: in a game played on this machine, every five seconds of a
+running match and while the player is active, each bot is measured by how many more kills the
+player has than it. Three or more ahead sends its skill up and two or more behind sends it down,
+1/12 a check, while the gap keeps widening; the step stops when the gap turns back or holds
+for 30 seconds. The skill stays within 1 and 5, and a change reloads the bot's character and
+weights at the new skill, with the handicap and the powerups that go with it.
+==============
+*/
+static void BotDynamicSkill(int time) {
+    static int nextcheck;
+    bot_settings_t settings;
+    char userinfo[MAX_INFO_STRING];
+    char filename[144];
+    int now, human, humankills, i, diff, forced, character;
+    float skill, oldskill;
+    bot_state_t* bs;
+
+    if (!bot_dynamicSkill.integer || !trap_Cvar_VariableValue("cl_running") || level.warmupTime)
+        return;
+    now = (time - level.startTime) / 1000;
+    if (now >= nextcheck - 5 && now < nextcheck)
+        return;
+    nextcheck = now + 5;
+    human = BotLocalHuman();
+    if (human == -1 || time > g_entities[human].client->lastUserCmdTime + 10000)
+        return;
+    humankills = g_entities[human].client->expandedStats.numKills;
+
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        bs = botstates[i];
+        if (!bs || !bs->inuse || !g_entities[i].client || g_entities[i].client->pers.connected != CON_CONNECTED)
+            continue;
+        skill = bs->settings.skill;
+        diff = humankills - g_entities[i].client->expandedStats.numKills;
+        // the low-skill walk out of step with the skill forces a reload
+        forced = (skill < 2 && bs->walker != 1) || (skill >= 2 && bs->walker != 0);
+        if (diff != bs->skillLastDiff) {
+            bs->skillLastDiff = diff;
+            bs->skillDiffTime = now;
+        }
+        oldskill = skill;
+        if (!forced) {
+            if (bs->skillStep != 0) {
+                if (now - bs->skillDiffTime > 30) {
+                    bs->skillStep = 0;
+                    BotLogSkill(bs, diff, skill, now);
+                }
+                if (bs->skillStep > 0) {
+                    if (diff < bs->skillBestDiff) {
+                        bs->skillStep = 0;
+                        BotLogSkill(bs, diff, skill, now);
+                    } else if (diff > bs->skillBestDiff) {
+                        bs->skillBestDiff = diff;
+                    }
+                } else if (bs->skillStep < 0) {
+                    if (diff > bs->skillBestDiff) {
+                        bs->skillStep = 0;
+                        BotLogSkill(bs, diff, skill, now);
+                    } else if (diff < bs->skillBestDiff) {
+                        bs->skillBestDiff = diff;
+                    }
+                }
+                skill += bs->skillStep;
+            } else if (diff < -1 && diff < bs->skillBestDiff) {
+                bs->skillStep = -1.0f / 12;
+                skill += bs->skillStep;
+                BotLogSkill(bs, diff, skill, now);
+            } else if (diff > 2 && diff > bs->skillBestDiff) {
+                bs->skillStep = 1.0f / 12;
+                skill += bs->skillStep;
+                BotLogSkill(bs, diff, skill, now);
+            } else {
+                continue;
+            }
+        }
+        if (skill < 1)
+            skill = 1;
+        else if (skill > 5)
+            skill = 5;
+        if (!forced && oldskill == skill)
+            continue;
+
+        trap_GetUserinfo(i, userinfo, sizeof(userinfo));
+        Info_SetValueForKey(userinfo, "skill", va("%1.2f", skill));
+        if (skill >= 1 && skill < 2)
+            Info_SetValueForKey(userinfo, "handicap", "50");
+        else if (skill < 3)
+            Info_SetValueForKey(userinfo, "handicap", "70");
+        else if (skill < 4)
+            Info_SetValueForKey(userinfo, "handicap", "90");
+        else
+            Info_SetValueForKey(userinfo, "handicap", "0");
+        memset(&settings, 0, sizeof(settings));
+        Q_strncpyz(settings.characterfile, Info_ValueForKey(userinfo, "characterfile"), sizeof(settings.characterfile));
+        settings.skill = atof(Info_ValueForKey(userinfo, "skill"));
+        Q_strncpyz(settings.team, Info_ValueForKey(userinfo, "team"), sizeof(settings.team));
+        character = trap_BotLoadCharacter(settings.characterfile, settings.skill);
+        if (!character) {
+            BotAI_Print(PRT_FATAL, "couldn't load skill %f from %s\n", settings.skill, settings.characterfile);
+            break;
+        }
+        trap_Characteristic_String(character, CHARACTERISTIC_ITEMWEIGHTS, filename, sizeof(filename));
+        if (trap_BotLoadItemWeights(bs->gs, filename) != BLERR_NOERROR)
+            break;
+        trap_Characteristic_String(character, CHARACTERISTIC_WEAPONWEIGHTS, filename, sizeof(filename));
+        if (trap_BotLoadWeaponWeights(bs->ws, filename) != BLERR_NOERROR)
+            break;
+        // [QL] 0x10024590: below skill 3 a bot leaves the powerups alone
+        if (skill < 3)
+            g_entities[i].flags |= FL_NOPOWERUP;
+        else
+            g_entities[i].flags &= ~FL_NOPOWERUP;
+        trap_SetUserinfo(i, userinfo);
+        bs->character = character;
+        bs->walker = (forced ? oldskill : skill) >= 2 ? 0 : 1;
+        bs->settings = settings;
+        ClientUserinfoChanged(i);
+        if (g_training.integer)
+            trap_Cvar_Set("g_spSkill", va("%f", skill));
+    }
+}
+
+/*
 ==================
 BotAIStartFrame
 ==================
@@ -1446,11 +1568,7 @@ int BotAIStartFrame(int time) {
     trap_Cvar_Update(&bot_pause);
     trap_Cvar_Update(&bot_report);
 
-    if (bot_report.integer) {
-        //		BotTeamplayReport();
-        //		trap_Cvar_Set("bot_report", "0");
-        BotUpdateInfoConfigStrings();
-    }
+    // [QL] 0x100234d2: bot_report is registered and updated, and nothing reads it
 
     if (bot_pause.integer) {
         // execute bot user commands every frame
@@ -1634,6 +1752,20 @@ int BotAIStartFrame(int time) {
         trap_BotUserCommand(botstates[i]->client, &botstates[i]->lastucmd);
     }
 
+    // [QL] 0x10023b6f: bot_hud shows what one bot is after
+    if (bot_hud.integer == -1) {
+        trap_SetConfigstring(CS_BOTINFO, "");
+    } else {
+        for (i = 0; i < MAX_CLIENTS; i++) {
+            if (i == bot_hud.integer && botstates[i] && botstates[i]->inuse &&
+                g_entities[i].client->pers.connected == CON_CONNECTED) {
+                BotHud(botstates[i]);
+            }
+        }
+    }
+    // [QL] 0x10023bd3: the gauntlet-only item delay and the dynamic skill
+    BotItemDelayTime(time);
+    BotDynamicSkill(time);
     // [QL] qagamex86.dll BotAIStartFrame ends with the training tick (0x10023bdf)
     G_TrainingFrame();
 

@@ -290,6 +290,17 @@ typedef struct bot_state_s {
     int heardClients;           // [QL] 0x2488 the client of the last event heard, a bit each
     int enemyHeard;             // [QL] 0x248c the enemy was found by ear, not by sight
     char ainodename[80];        // [QL] 0x23cc the node the bot last entered, for bot_hud
+    // [QL] bot_dynamicSkill (0x100247c0), 0x2504 on
+    float skillStep;            // the step being taken, 1/12 up or down a check
+    int skillBestDiff;          // the kill difference the step is measured against
+    int skillLastDiff;          // the last kill difference seen
+    int skillDiffTime;          // when it last changed, in seconds of match
+    struct {
+        int diff;
+        float skill;
+        int time;
+    } skillLog[32];             // the changes, for inspection (0x10024700)
+    int numSkillLog;
     int tourSaidCareful;        // 0x244c "You've got to be careful in the Arena!" said
     int tourPlayerNear;         // 0x2454 the player has caught up
     int tourWait;               // 0x246c the last stop's wait, whole seconds
