@@ -82,6 +82,9 @@ double JSON_ValueGetDouble(const char* json, const char* jsonEnd);
 float JSON_ValueGetFloat(const char* json, const char* jsonEnd);
 int JSON_ValueGetInt(const char* json, const char* jsonEnd);
 
+// [ioquakelive] where a value ends, its closing quote or bracket included
+const char* JSON_ValueGetEnd(const char* json, const char* jsonEnd);
+
 #endif
 
 #ifdef JSON_IMPLEMENTATION
@@ -226,6 +229,10 @@ const char* JSON_ObjectGetNamedValue(const char* json, const char* jsonEnd, cons
 // --------------------------------------------------------------------------
 //   Value Functions
 // --------------------------------------------------------------------------
+
+const char* JSON_ValueGetEnd(const char* json, const char* jsonEnd) {
+    return JSON_SkipValue(json, jsonEnd);
+}
 
 unsigned int JSON_ValueGetType(const char* json, const char* jsonEnd) {
     if (!json || json >= jsonEnd)

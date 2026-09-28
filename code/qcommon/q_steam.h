@@ -116,6 +116,8 @@ qboolean Steam_P2PSend(uint64_t to, const void* data, int size, qboolean asServe
 int Steam_P2PReceive(void* buffer, int maxSize, uint64_t* from, qboolean asServer);
 void Steam_P2PAccept(uint64_t who, qboolean asServer);
 void Steam_P2PHello(uint64_t to, qboolean asServer);
+qboolean Steam_GS_SendReport(uint64_t to, const void* data, int size);
+void* Steam_P2PReadReport(int* size);
 uint64_t Steam_ClientSteamID(void);
 void Steam_ShowFriendAdd(uint64_t steamId);
 void Steam_ShowProfile(uint64_t steamId);

@@ -3052,6 +3052,52 @@ int Steam_P2PReceive(void* buffer, int maxSize, uint64_t* from, qboolean asServe
     return (int)read;
 }
 
+/*
+===============
+Steam_GS_SendReport / Steam_P2PReadReport
+
+[QL] The match report goes from the server to each player over channel 0, reliably
+(0x00468ee0), and the client reads it whole, as big as Steam says it is (0x00461d40).
+===============
+*/
+#define STEAM_REPORT_CHANNEL 0
+
+qboolean Steam_GS_SendReport(uint64_t to, const void* data, int size) {
+    void* self = Steam_P2P(qtrue);
+
+    if (!self || !st.SendP2PPacket || !to) {
+        return qfalse;
+    }
+    return st.SendP2PPacket(self, to, data, (unsigned int)size, STEAM_P2P_RELIABLE, STEAM_REPORT_CHANNEL) ? qtrue
+                                                                                                    : qfalse;
+}
+
+// a report that has arrived, in memory the caller frees; NULL when none has
+void* Steam_P2PReadReport(int* size) {
+    void* self = Steam_P2P(qfalse);
+    unsigned int avail = 0;
+    unsigned int read = 0;
+    uint64_t from = 0;
+    void* buffer;
+
+    if (!self || !st.IsP2PPacketAvailable || !st.ReadP2PPacket) {
+        return NULL;
+    }
+    if (!st.IsP2PPacketAvailable(self, &avail, STEAM_REPORT_CHANNEL) || !avail) {
+        return NULL;
+    }
+    buffer = malloc(avail);
+    if (!buffer) {
+        return NULL;
+    }
+    if (!st.ReadP2PPacket(self, buffer, avail, &read, &from, STEAM_REPORT_CHANNEL)) {
+        free(buffer);
+        return NULL;
+    }
+    *size = (int)read;
+    return buffer;
+}
+
 // the peer has to be accepted before Steam will deliver its packets
 void Steam_P2PAccept(uint64_t who, qboolean asServer) {
     void* self = Steam_P2P(asServer);

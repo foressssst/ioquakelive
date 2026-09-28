@@ -1506,6 +1506,7 @@ Q3OBJ = \
   $(B)/client/cl_input.o \
   $(B)/client/cl_keys.o \
   $(B)/client/cl_main.o \
+  $(B)/client/cl_matches.o \
   $(B)/client/cl_net_chan.o \
   $(B)/client/cl_parse.o \
   $(B)/client/cl_scrn.o \
@@ -2047,6 +2048,10 @@ Q3OBJ += \
   $(B)/client/crc32.o \
   $(B)/client/inffast.o \
   $(B)/client/inflate.o \
+  $(B)/client/compress.o \
+  $(B)/client/deflate.o \
+  $(B)/client/trees.o \
+  $(B)/client/uncompr.o \
   $(B)/client/inftrees.o \
   $(B)/client/zutil.o
 endif
@@ -2201,6 +2206,10 @@ Q3DOBJ += \
   $(B)/ded/crc32.o \
   $(B)/ded/inffast.o \
   $(B)/ded/inflate.o \
+  $(B)/ded/compress.o \
+  $(B)/ded/deflate.o \
+  $(B)/ded/trees.o \
+  $(B)/ded/uncompr.o \
   $(B)/ded/inftrees.o \
   $(B)/ded/zutil.o
 endif

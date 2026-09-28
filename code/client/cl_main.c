@@ -3284,6 +3284,7 @@ void CL_Frame(int msec) {
     CL_WorkshopFrame();
 
     // [QL] voice, which comes and goes over Steam's peer to peer network
+    CL_MatchReportFrame();
     CL_VoiceFrame();
 
     // decide on the serverTime to render

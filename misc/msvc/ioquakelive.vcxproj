@@ -530,6 +530,12 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">MaxSpeed</Optimization>
       <BrowseInformation Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</BrowseInformation>
     </ClCompile>
+    <ClCompile Include="..\..\code\client\cl_matches.c">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Disabled</Optimization>
+      <BrowseInformation Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</BrowseInformation>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">MaxSpeed</Optimization>
+      <BrowseInformation Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</BrowseInformation>
+    </ClCompile>
     <ClCompile Include="..\..\code\client\cl_net_chan.c">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Disabled</Optimization>
       <BrowseInformation Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</BrowseInformation>
@@ -773,6 +779,10 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
     <ClCompile Include="..\..\code\zlib\crc32.c" />
     <ClCompile Include="..\..\code\zlib\inffast.c" />
     <ClCompile Include="..\..\code\zlib\inflate.c" />
+    <ClCompile Include="..\..\code\zlib\compress.c" />
+    <ClCompile Include="..\..\code\zlib\deflate.c" />
+    <ClCompile Include="..\..\code\zlib\trees.c" />
+    <ClCompile Include="..\..\code\zlib\uncompr.c" />
     <ClCompile Include="..\..\code\zlib\inftrees.c" />
     <ClCompile Include="..\..\code\zlib\zutil.c" />
     <ClCompile Include="..\..\code\qcommon\q_math_sse.c" />

@@ -156,6 +156,18 @@
     <ClCompile Include="..\..\code\zlib\inflate.c">
       <Filter>zlib</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\code\zlib\compress.c">
+      <Filter>zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\code\zlib\deflate.c">
+      <Filter>zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\code\zlib\trees.c">
+      <Filter>zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\code\zlib\uncompr.c">
+      <Filter>zlib</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\code\zlib\inftrees.c">
       <Filter>zlib</Filter>
     </ClCompile>

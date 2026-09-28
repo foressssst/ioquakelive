@@ -16,6 +16,7 @@ is never asked: "has it" means granted in this session, as in retail.
 #include "server.h"
 #include "../qcommon/q_steam.h"
 #include "../qcommon/q_steamstats.h"
+#include "zlib.h"
 
 #define JSON_IMPLEMENTATION
 #include "../qcommon/json.h"
@@ -364,6 +365,192 @@ static void SV_SteamCountStat(svSteamUser_t* u, int stat, qboolean withId) {
     }
 }
 
+/*
+===============================================================================
+
+THE MATCH REPORT FOR THE PLAYERS
+
+[QL] Besides the stats, 0x00468030 keeps what the front end's Recent Matches shows of a
+match: every PLAYER_STATS as it comes (PLYR_STATS), and each death but in Race, up to a
+thousand, cut down to its time, how it happened and the killer's and the victim's name,
+Steam ID, team and powerups (PLYR_EVENTS). A player whose stats Steam keeps goes on the
+list of who gets the report. When the game hands over the match's report (0x004e2620),
+0x00468ee0 puts both in it unless the match was training or aborted, writes it, packs it
+with zlib at its best and sends it to each of them over the peer to peer network, on
+channel 0 and reliably; then all of it is forgotten. Nothing else forgets it: a match
+that ends without a report leaves its players and deaths for the next one, as in retail.
+===============================================================================
+*/
+#define SV_REPORT_MAX_EVENTS 1000
+#define SV_REPORT_MAX_TO (MAX_CLIENTS * 2)
+
+typedef struct {
+    char* text;
+    int len;
+    int size;
+} svText_t;
+
+static svText_t svReportStats;   // the PLAYER_STATS, one after another with commas
+static svText_t svReportEvents;  // and the deaths
+static int svReportNumEvents;
+static uint64_t svReportTo[SV_REPORT_MAX_TO];
+static int svReportNumTo;
+
+static void SV_TextAdd(svText_t* t, const char* text, int len) {
+    if (len < 0) {
+        len = (int)strlen(text);
+    }
+    if (t->len + len + 1 > t->size) {
+        int size = t->size ? t->size : 16384;
+        char* grown;
+
+        while (size < t->len + len + 1) {
+            size *= 2;
+        }
+        grown = (char*)malloc(size);
+        if (!grown) {
+            return;
+        }
+        if (t->text) {
+            Com_Memcpy(grown, t->text, t->len);
+            free(t->text);
+        }
+        t->text = grown;
+        t->size = size;
+    }
+    Com_Memcpy(t->text + t->len, text, len);
+    t->len += len;
+    t->text[t->len] = '\0';
+}
+
+static void SV_TextFree(svText_t* t) {
+    free(t->text);
+    Com_Memset(t, 0, sizeof(*t));
+}
+
+static void SV_ReportForget(void) {
+    SV_TextFree(&svReportStats);
+    SV_TextFree(&svReportEvents);
+    svReportNumEvents = 0;
+    svReportNumTo = 0;
+}
+
+// a member as it is written, or nothing
+static void SV_ReportCopy(svText_t* t, const char* obj, const char* end, const char* name, const char* none) {
+    const char* v = SV_JsonMember(obj, end, name);
+
+    if (v && v < end) {
+        SV_TextAdd(t, v, (int)(JSON_ValueGetEnd(v, end) - v));
+    } else {
+        SV_TextAdd(t, none, -1);
+    }
+}
+
+// the killer or the victim: the name and Steam ID as strings, the team as it came and the
+// powerups when there are any, the keys in the order jsoncpp writes them
+static void SV_ReportPerson(svText_t* t, const char* who, const char* end) {
+    const char* powerups = SV_JsonMember(who, end, "POWERUPS");
+
+    SV_TextAdd(t, "{\"NAME\":", -1);
+    SV_ReportCopy(t, who, end, "NAME", "\"\"");
+    if (powerups && JSON_ArrayGetFirstValue(powerups, end)) {
+        SV_TextAdd(t, ",\"POWERUPS\":", -1);
+        SV_TextAdd(t, powerups, (int)(JSON_ValueGetEnd(powerups, end) - powerups));
+    }
+    SV_TextAdd(t, ",\"STEAM_ID\":", -1);
+    SV_ReportCopy(t, who, end, "STEAM_ID", "\"\"");
+    SV_TextAdd(t, ",\"TEAM\":", -1);
+    SV_ReportCopy(t, who, end, "TEAM", "null");
+    SV_TextAdd(t, "}", 1);
+}
+
+static void SV_ReportDeath(const char* data, const char* end) {
+    const char* killer;
+
+    if (svReportNumEvents >= SV_REPORT_MAX_EVENTS || Cvar_VariableIntegerValue("g_gametype") == GT_RACE) {
+        return;
+    }
+    if (svReportNumEvents++) {
+        SV_TextAdd(&svReportEvents, ",", 1);
+    }
+    SV_TextAdd(&svReportEvents, "{", 1);
+    killer = SV_JsonMember(data, end, "KILLER");
+    if (killer && *killer == '{') {
+        SV_TextAdd(&svReportEvents, "\"KILLER\":", -1);
+        SV_ReportPerson(&svReportEvents, killer, end);
+        SV_TextAdd(&svReportEvents, ",", 1);
+    }
+    SV_TextAdd(&svReportEvents, "\"MOD\":", -1);
+    SV_ReportCopy(&svReportEvents, data, end, "MOD", "\"\"");
+    SV_TextAdd(&svReportEvents, ",\"TIME\":", -1);
+    SV_ReportCopy(&svReportEvents, data, end, "TIME", "0");
+    SV_TextAdd(&svReportEvents, ",\"VICTIM\":", -1);
+    SV_ReportPerson(&svReportEvents, SV_JsonMember(data, end, "VICTIM"), end);
+    SV_TextAdd(&svReportEvents, "}", 1);
+}
+
+static void SV_ReportPlayer(const char* data, const char* end) {
+    if (svReportStats.len) {
+        SV_TextAdd(&svReportStats, ",", 1);
+    }
+    SV_TextAdd(&svReportStats, data, (int)(JSON_ValueGetEnd(data, end) - data));
+}
+
+static void SV_ReportTo(uint64_t steamId) {
+    int i;
+
+    for (i = 0; i < svReportNumTo; i++) {
+        if (svReportTo[i] == steamId) {
+            return;
+        }
+    }
+    if (svReportNumTo < SV_REPORT_MAX_TO) {
+        svReportTo[svReportNumTo++] = steamId;
+    }
+}
+
+static void SV_ReportSend(const char* data, const char* end) {
+    svText_t out;
+    const char* close;
+    Bytef* packed;
+    uLongf packedLen;
+    int i;
+
+    if (SV_JsonInt(SV_JsonMember(data, end, "TRAINING"), end) || SV_JsonInt(SV_JsonMember(data, end, "ABORTED"), end)) {
+        SV_ReportForget();
+        return;
+    }
+
+    // the report with the players and the deaths added at its end
+    close = JSON_ValueGetEnd(data, end) - 1;
+    if (close <= data || *close != '}') {
+        SV_ReportForget();
+        return;
+    }
+    Com_Memset(&out, 0, sizeof(out));
+    SV_TextAdd(&out, data, (int)(close - data));
+    if (JSON_ArrayGetFirstValue(data, end)) {
+        SV_TextAdd(&out, ",", 1);
+    }
+    SV_TextAdd(&out, "\"PLYR_EVENTS\":[", -1);
+    SV_TextAdd(&out, svReportEvents.text ? svReportEvents.text : "", svReportEvents.len);
+    SV_TextAdd(&out, "],\"PLYR_STATS\":[", -1);
+    SV_TextAdd(&out, svReportStats.text ? svReportStats.text : "", svReportStats.len);
+    SV_TextAdd(&out, "]}", 2);
+
+    packedLen = compressBound((uLong)out.len);
+    packed = (Bytef*)malloc(packedLen);
+    if (out.text && packed && compress2(packed, &packedLen, (const Bytef*)out.text, (uLong)out.len, 9) == Z_OK) {
+        for (i = 0; i < svReportNumTo; i++) {
+            Steam_GS_SendReport(svReportTo[i], packed, (int)packedLen);
+        }
+        Com_DPrintf("match report: %i bytes, %i packed, to %i players\n", out.len, (int)packedLen, svReportNumTo);
+    }
+    free(packed);
+    SV_TextFree(&out);
+    SV_ReportForget();
+}
+
 void SV_SteamStatsEvent(uint64_t steamId, const char* type, const char* document) {
     const char* end;
     const char* data;
@@ -379,9 +566,20 @@ void SV_SteamStatsEvent(uint64_t steamId, const char* type, const char* document
     if (!data) {
         return;
     }
+    // [QL] the report comes through its own import in retail (0x004e2620)
+    if (!strcmp(type, "MATCH_REPORT")) {
+        SV_ReportSend(data, end);
+        return;
+    }
     if (SV_JsonInt(SV_JsonMember(data, end, "WARMUP"), end) == 1 ||
         SV_JsonInt(SV_JsonMember(data, end, "ABORTED"), end) == 1) {
         return;
+    }
+    // the report keeps everyone's, bots' too, before it asks whose stats Steam keeps
+    if (!strcmp(type, "PLAYER_STATS")) {
+        SV_ReportPlayer(data, end);
+    } else if (!strcmp(type, "PLAYER_DEATH")) {
+        SV_ReportDeath(data, end);
     }
     u = SV_SteamUser(steamId);
     if (!u) {
@@ -390,6 +588,8 @@ void SV_SteamStatsEvent(uint64_t steamId, const char* type, const char* document
 
     if (!strcmp(type, "PLAYER_STATS")) {
         int win = SV_JsonInt(SV_JsonMember(data, end, "WIN"), end);
+
+        SV_ReportTo(steamId);
 
         SV_SteamStatsIncrement(steamId, STAT_WINS, win);
         SV_SteamStatsIncrement(steamId, STAT_LOSSES, SV_JsonInt(SV_JsonMember(data, end, "LOSE"), end));
