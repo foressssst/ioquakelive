@@ -772,10 +772,11 @@ void SetTeam_Execute(gentity_t* ent, int team, spectatorState_t specState, int s
         client->sess.spectatorTime = 0;
     }
 
-    // [QL] 0x10040535: leaving a team closes the player's stats sheet; in Red Rover only
-    // when going to spectator
+    // [QL] 0x10040535: leaving a team closes the player's stats sheet and starts a new one;
+    // in Red Rover only when going to spectator
     if (g_gametype.integer != GT_RR || team == TEAM_SPECTATOR) {
         STAT_PlayerStats(client, qfalse, qtrue);
+        STAT_InitClient(ent);
     }
 
     client->sess.sessionTeam = team;
@@ -2526,9 +2527,8 @@ as long as pers.complaintEndTime says, and only exists with a match running and
 g_complaintLimit non-zero. The numbers sent back are the ones the client expects: -1
 filed, -2 dropped, -3 against somebody who cannot be reported.
 
-Whoever collects g_complaintLimit complaints is kicked, unless they are a local client.
-Retail also stores their Steam ID and writes two fields of a struct that has not been
-identified; that part is not ported.
+Whoever collects g_complaintLimit complaints is kicked, unless they are a local client,
+and stays out until the map changes: a temporary ban in the access list.
 =================
 */
 static void Cmd_Complaint_f(gentity_t* ent) {
@@ -2560,6 +2560,8 @@ static void Cmd_Complaint_f(gentity_t* ent) {
         accused->client->pers.complaints++;
         if (!accused->client->pers.localClient &&
             accused->client->pers.complaints >= g_complaintLimit.integer) {
+            // [QL] 0x10043c6a
+            G_SetAccess(accused->client->pers.steamId, -1, qtrue);
             trap_DropClient(accused - g_entities, "kicked after too many complaints.");
             trap_SendServerCommand(ent - g_entities, "complaint -1");
             return;

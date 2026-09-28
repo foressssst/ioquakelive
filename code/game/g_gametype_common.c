@@ -201,9 +201,8 @@ void STAT_AddHits(gentity_t *ent, int weapon, int amount) {
 STAT_AddPlayerDeathStat
 
 [QL] 0x10072610 (.so STAT_AddPlayerDeathStat; the "STAT_PublishDeath" Ghidra label
-is wrong). self = victim, attacker = killer. The ZMQ PLAYER_KILL/PLAYER_DEATH JSON
-emit is stubbed (external); the LOCAL expandedStats accumulation below IS in scope.
-Called from player_die (replaces its old inline numKills/numDeaths double-counts).
+is wrong). self = victim, attacker = killer. Counts the kill and the death in
+expandedStats and sends PLAYER_KILL / PLAYER_DEATH. Called from player_die.
 ==================
 */
 void STAT_AddPlayerDeathStat(gentity_t *self, gentity_t *attacker, int mod) {
@@ -251,9 +250,8 @@ void STAT_AddPlayerDeathStat(gentity_t *self, gentity_t *attacker, int mod) {
 ==================
 STAT_AddDamageStat
 
-[QL] 0x100714b0 (.so STAT_AddDamageStat; the "STAT_PublishDamage" Ghidra label is
-wrong). targ = victim, attacker = dealer. The ZMQ emit is stubbed; the LOCAL
-per-weapon damage-dealt/taken accumulation below IS in scope. Called from G_Damage.
+[QL] 0x10071580 (.so STAT_AddDamageStat). targ = victim, attacker = dealer. Only the
+per-weapon damage dealt and taken in expandedStats; no event goes out. Called from G_Damage.
 Attacker (dealt) uses RAW damage; victim (taken) clamps to remaining health+armour.
 ==================
 */

@@ -1338,8 +1338,7 @@ char* ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
 
         // NOTE: binary ClientConnect does NOT call STAT_InitClient here; the
         // expandedStats init is done inline above (firstTime || newSession).
-        // STAT_InitClient's only binary caller is SetTeam_Execute (team-change
-        // re-init), which is not yet reimplemented. See STAT_InitClient below.
+        // STAT_InitClient's only binary caller is SetTeam_Execute (0x10040543).
 
         // [QL] 0x1003afb5: the event goes out for bots too (inside, 0x10078450 looks at
         // svFlags & SVF_BOT only to set STEAM_ID "0")
@@ -2345,12 +2344,12 @@ void G_ReleaseGrapple(gentity_t* ent) {
 STAT_InitClient
 
 [QL] Zero the per-client expandedStats block (0x32C bytes) and seed timing plus a
-unique statId. In the binary this standalone helper (0x10078330) has exactly one
+unique statId. In the binary this standalone helper (0x10078400) has exactly one
 caller: SetTeam_Execute, the team-change re-init path. ClientConnect performs the
 identical init inline.
 ============
 */
-// Address: 0x10078330
+// Address: 0x10078400
 void STAT_InitClient(gentity_t* ent) {
     gclient_t* client = ent->client;
     int r;
