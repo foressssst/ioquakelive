@@ -1031,6 +1031,7 @@ qboolean UI_Replays_HandleKey(int key);
 // [QL] the Match Browser page; see ui_browser.c
 #define UI_BROWSER 605
 void UI_Browser_Open(void);
+void UI_Browser_ShowGameInfo(const char* address, const char* name);
 void UI_Browser_Paint(void);
 qboolean UI_Browser_HandleKey(int key);
 void UI_Browser_Sort(int column);

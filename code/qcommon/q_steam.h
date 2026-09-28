@@ -121,6 +121,10 @@ void* Steam_P2PReadReport(int* size);
 uint64_t Steam_ClientSteamID(void);
 void Steam_ShowFriendAdd(uint64_t steamId);
 void Steam_ShowProfile(uint64_t steamId);
+void Steam_ShowChat(uint64_t steamId);
+void Steam_ShowAchievements(uint64_t steamId);
+qboolean Steam_InviteToGame(uint64_t steamId, const char* connect);
+unsigned int Steam_GS_PublicIP(void);
 void Steam_ShowFriends(void);
 
 // a Steam friend as the list sees one

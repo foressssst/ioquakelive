@@ -639,6 +639,10 @@ static void BR_ShowDetails(const brServer_t* s) {
     }
 }
 
+// a server whose game info the page opens with, for the friend list's Join Match
+static char brPendingInfo[MAX_ADDRESSLENGTH];
+static char brPendingName[64];
+
 // the game info dialog asks on its own, and again every five seconds while it is open
 static void BR_ShowGameInfo(const brServer_t* s) {
     br.modal = BR_MODAL_INFO;
@@ -1610,6 +1614,14 @@ static void BR_DrawPage(void) {
     }
 }
 
+// [QL] friendlist.js's Join Match: window.showModalGameInfo over the Match Browser
+void UI_Browser_ShowGameInfo(const char* address, const char* name) {
+    Q_strncpyz(brPendingInfo, address, sizeof(brPendingInfo));
+    Q_strncpyz(brPendingName, name, sizeof(brPendingName));
+    Menus_CloseAll();
+    Menus_ActivateByName("browser");
+}
+
 void UI_Browser_Open(void) {
     if (!br.loaded) {
         br.loaded = qtrue;
@@ -1622,6 +1634,22 @@ void UI_Browser_Open(void) {
     br.menuOpen = qfalse;
     br.modal = BR_MODAL_NONE;
     br.lastBuild = 0;
+    if (brPendingInfo[0]) {
+        brServer_t s;
+        int i;
+
+        Com_Memset(&s, 0, sizeof(s));
+        Q_strncpyz(s.address, brPendingInfo, sizeof(s.address));
+        Q_strncpyz(s.name, brPendingName, sizeof(s.name));
+        for (i = 0; i < brNumServers; i++) {
+            if (!Q_stricmp(brServers[i].address, brPendingInfo)) {
+                s = brServers[i];
+                break;
+            }
+        }
+        brPendingInfo[0] = '\0';
+        BR_ShowGameInfo(&s);
+    }
     // the list is the global one, which is what Steam gives. The cached value is updated by
     // hand: UI_UpdateCvars does not run until the next frame and the refresh goes out now.
     trap_Cvar_Set("ui_netSource", "2");  // AS_GLOBAL

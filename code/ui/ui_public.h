@@ -43,12 +43,16 @@ typedef struct {
     qboolean playing;   // esta jugando a algo
     qboolean sameGame;  // and that something is Quake Live
     qboolean server;    // and they can be reached on a server
+    char steamId[24];   // for the page that shows their stats
+    char address[48];   // the server they are on, "" for none
 } uiFriend_t;
 
 // what trap_SteamFriendAction knows how to do with one
 #define UI_FRIEND_JOIN 0
 #define UI_FRIEND_INVITE 1
 #define UI_FRIEND_PROFILE 2
+#define UI_FRIEND_MESSAGE 3
+#define UI_FRIEND_ACHIEVEMENTS 4
 
 typedef enum {
     UI_ERROR,

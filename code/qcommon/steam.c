@@ -248,6 +248,7 @@ typedef struct {
     void(QDECL* SetRichPresence)(void* self, const char* key, const char* value);
     void(QDECL* ActivateGameOverlayToUser)(void* self, const char* dialog, uint64_t steamId);
     void(QDECL* ActivateGameOverlay)(void* self, const char* dialog);
+    steamBool_t(QDECL* InviteUserToGame)(void* self, uint64_t steamId, const char* connect);
     int(QDECL* GetFriendCount)(void* self, int flags);
     uint64_t(QDECL* GetFriendByIndex)(void* self, int index, int flags);
     const char*(QDECL* GetFriendPersonaName)(void* self, uint64_t steamId);
@@ -408,6 +409,7 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND_OPT(ActivateGameOverlayToUser,
                    "SteamAPI_ISteamFriends_ActivateGameOverlayToUser");
     STEAM_BIND_OPT(ActivateGameOverlay, "SteamAPI_ISteamFriends_ActivateGameOverlay");
+    STEAM_BIND_OPT(InviteUserToGame, "SteamAPI_ISteamFriends_InviteUserToGame");
     STEAM_BIND_OPT(GetFriendCount, "SteamAPI_ISteamFriends_GetFriendCount");
     STEAM_BIND_OPT(GetFriendByIndex, "SteamAPI_ISteamFriends_GetFriendByIndex");
     STEAM_BIND_OPT(GetFriendPersonaName, "SteamAPI_ISteamFriends_GetFriendPersonaName");
@@ -705,6 +707,8 @@ SD_RET(steamBool_t, GetFriendGamePlayed, 8, (void* self, uint64_t a, void* b), (
 SD_VOID(SetInGameVoiceSpeaking, 27, (void* self, uint64_t a, steamBool_t b), (self, a, b))
 SD_VOID(ActivateGameOverlay, 28, (void* self, const char* a), (self, a))
 SD_VOID(ActivateGameOverlayToUser, 29, (void* self, const char* a, uint64_t b), (self, a, b))
+// [QL] 0x004325e6 calls it through +0xc4
+SD_RET(steamBool_t, InviteUserToGame, 49, (void* self, uint64_t a, const char* b), (self, a, b))
 SD_VOID(SetRichPresence, 43, (void* self, const char* a, const char* b), (self, a, b))
 
 // ISteamGameServerStats001, the slots Quake Live's steam_api.dll calls (the int32 overloads are
@@ -1061,6 +1065,7 @@ static void SD_Bind(void) {
     SD_SET(SetRichPresence);
     SD_SET(ActivateGameOverlayToUser);
     SD_SET(ActivateGameOverlay);
+    SD_SET(InviteUserToGame);
     SD_SET(GetFriendCount);
     SD_SET(GetFriendByIndex);
     SD_SET(GetFriendPersonaName);
@@ -3262,6 +3267,32 @@ void Steam_ShowFriendAdd(uint64_t steamId) {
 
 void Steam_ShowProfile(uint64_t steamId) {
     Steam_ShowOverlayUser("steamid", steamId);
+}
+
+// the friend list's Send Message and View Achievements
+void Steam_ShowChat(uint64_t steamId) {
+    Steam_ShowOverlayUser("chat", steamId);
+}
+
+void Steam_ShowAchievements(uint64_t steamId) {
+    Steam_ShowOverlayUser("achievements", steamId);
+}
+
+// [QL] Send Invite (0x00432520): an invitation to the match one is in, which Steam hands the
+// friend with its connect line
+qboolean Steam_InviteToGame(uint64_t steamId, const char* connect) {
+    if (!st.clientUp || !st.friends || !st.InviteUserToGame || !steamId) {
+        return qfalse;
+    }
+    return st.InviteUserToGame(st.friends, steamId, connect) ? qtrue : qfalse;
+}
+
+// the address Steam sees the server at, 0 when it is not logged on
+unsigned int Steam_GS_PublicIP(void) {
+    if (!st.serverUp || !st.GetPublicIP) {
+        return 0;
+    }
+    return st.GetPublicIP(st.gameServer);
 }
 
 uint64_t Steam_ClientSteamID(void) {

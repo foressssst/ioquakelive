@@ -4771,8 +4771,8 @@ static void CL_FriendsList(void) {
 ===============
 CL_FriendDo
 
-What can be done with a friend: join their server, open the Steam window to add them,
-or view their profile. The console command and the menu's social strip both call it,
+What can be done with a friend: join their server, invite them to one's match, or open
+their profile, a chat with them or their achievements in Steam's overlay. The console command and the menu's social strip both call it,
 being two ways of asking for the same thing.
 ===============
 */
@@ -4788,11 +4788,34 @@ void CL_FriendDo(const steamFriend_t* fr, int action) {
                             (fr->ip >> 24) & 0xff, (fr->ip >> 16) & 0xff,
                             (fr->ip >> 8) & 0xff, fr->ip & 0xff, fr->port));
             return;
-        case UI_FRIEND_INVITE:
-            Steam_ShowFriendAdd(fr->steamId);
+        case UI_FRIEND_INVITE: {
+            // [QL] 0x00432520: to the match one is in; one hosted here goes by the address
+            // Steam sees the server at
+            char connect[128];
+
+            if (clc.state < CA_CONNECTED) {
+                Com_Printf("You are not in a match to invite %s to.\n", fr->name);
+                return;
+            }
+            if (clc.serverAddress.type == NA_LOOPBACK) {
+                unsigned int ip = Steam_GS_PublicIP();
+
+                Com_sprintf(connect, sizeof(connect), "+connect %u.%u.%u.%u:%s", (ip >> 24) & 0xff,
+                            (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff, Cvar_VariableString("net_port"));
+            } else {
+                Com_sprintf(connect, sizeof(connect), "+connect %s", NET_AdrToString(clc.serverAddress));
+            }
+            Steam_InviteToGame(fr->steamId, connect);
             return;
+        }
         case UI_FRIEND_PROFILE:
             Steam_ShowProfile(fr->steamId);
+            return;
+        case UI_FRIEND_MESSAGE:
+            Steam_ShowChat(fr->steamId);
+            return;
+        case UI_FRIEND_ACHIEVEMENTS:
+            Steam_ShowAchievements(fr->steamId);
             return;
         default:
             return;

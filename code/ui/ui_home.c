@@ -43,6 +43,8 @@ typedef enum {
     HM_HIT_TAB,   // [ioquakelive] a section of the top bar
     HM_HIT_SOCIAL, // [ioquakelive] the social strip's background: clicks do not pass through
     HM_HIT_FRIEND, // [ioquakelive] a row of the friends list
+    HM_HIT_CONTEXT,      // an item of a friend's context menu
+    HM_HIT_CONTEXT_BACK, // the screen under it, which closes it
     HM_HIT_MENU    // [ioquakelive] a row of the PLAY dropdown
 } hmHitType_t;
 
@@ -174,6 +176,121 @@ static const float* UI_Home_NavBox(float x, float top, float w, qboolean chosen,
         SM_Fill(x, top + HF_BAR_H - 3.0f, w, 3.0f, smGold, NULL);
     }
     return (chosen || over) ? smGold : hfWhite;
+}
+
+/*
+===============
+The friend's context menu
+
+[QL] friendlist.js opens web.pak's context.js on a friend: a white list at the cursor, 5px
+down and right, over the whole screen darkened to 0.2, whose item under the cursor goes
+yellow; any click closes it, and one on an item does what it says. Join Match comes first
+when the friend is on a server (it opens the server's game info); there are no lobbies.
+===============
+*/
+typedef enum {
+    HC_JOIN,
+    HC_MESSAGE,
+    HC_INVITE,
+    HC_STATS,
+    HC_ACHIEVEMENTS,
+    HC_PROFILE
+} hcItem_t;
+
+static const char* const hcNames[] = {"Join Match", "Send Message", "Send Invite", "View Statistics",
+                                      "View Achievements", "Show Steam Profile"};
+
+static struct {
+    qboolean open;
+    float x, y;
+    int index;  // the friend's place in Steam's list
+    uiFriend_t fr;
+    int items[6];
+    int numItems;
+} hfc;
+
+static const vec4_t hcWhite = {1.0f, 1.0f, 1.0f, 1.0f};
+static const vec4_t hcBlack = {0.0f, 0.0f, 0.0f, 1.0f};
+
+static void UI_Home_ContextOpen(int index) {
+    int i;
+
+    for (i = 0; i < hvf.count; i++) {
+        if (hvf.index[i] == index) {
+            break;
+        }
+    }
+    if (i == hvf.count) {
+        return;
+    }
+    hfc.open = qtrue;
+    hfc.index = index;
+    hfc.fr = hvf.list[i];
+    hfc.x = smMX + 5;
+    hfc.y = smMY + 5;
+    hfc.numItems = 0;
+    if (hfc.fr.server && hfc.fr.address[0]) {
+        hfc.items[hfc.numItems++] = HC_JOIN;
+    }
+    hfc.items[hfc.numItems++] = HC_MESSAGE;
+    hfc.items[hfc.numItems++] = HC_INVITE;
+    hfc.items[hfc.numItems++] = HC_STATS;
+    hfc.items[hfc.numItems++] = HC_ACHIEVEMENTS;
+    hfc.items[hfc.numItems++] = HC_PROFILE;
+}
+
+static void UI_Home_ContextDo(int item) {
+    switch (item) {
+        case HC_JOIN:
+            UI_Browser_ShowGameInfo(hfc.fr.address, hfc.fr.name);
+            break;
+        case HC_MESSAGE:
+            trap_SteamFriendAction(hfc.index, UI_FRIEND_MESSAGE);
+            break;
+        case HC_INVITE:
+            trap_SteamFriendAction(hfc.index, UI_FRIEND_INVITE);
+            break;
+        case HC_STATS:
+            UI_Stats_Show(hfc.fr.steamId);
+            break;
+        case HC_ACHIEVEMENTS:
+            trap_SteamFriendAction(hfc.index, UI_FRIEND_ACHIEVEMENTS);
+            break;
+        case HC_PROFILE:
+            trap_SteamFriendAction(hfc.index, UI_FRIEND_PROFILE);
+            break;
+        default:
+            break;
+    }
+}
+
+// #context li: 0.25em over and under, 1em aside, the page's 15px text
+static void UI_Home_DrawContext(void) {
+    float top = -smTop / smScale;
+    float w = 0, rowH = 24 + 7.5f;
+    int i;
+
+    if (!hfc.open) {
+        return;
+    }
+    SM_Fill(-1, top, smVW + 2, smBottom - top + 1, hfBlack20, NULL);
+    SM_Hit(0, top, smVW, smBottom - top, HM_HIT_CONTEXT_BACK, 0, NULL);
+    for (i = 0; i < hfc.numItems; i++) {
+        float tw = SM_Advance(FONT_SANS, 15, hcNames[hfc.items[i]], -1) + 30;
+
+        w = tw > w ? tw : w;
+    }
+    SM_Fill(hfc.x, hfc.y, w, rowH * hfc.numItems, hcWhite, NULL);
+    for (i = 0; i < hfc.numItems; i++) {
+        float ry = hfc.y + i * rowH;
+
+        if (SM_Over(HM_HIT_CONTEXT, i)) {
+            SM_Fill(hfc.x, ry, w, rowH, smGold, NULL);
+        }
+        SM_Text(hfc.x + 15, SM_Baseline(FONT_SANS, 15, ry + 3.75f, 24), FONT_SANS, 15, hcBlack, hcNames[hfc.items[i]],
+                -1, qfalse);
+        SM_Hit(hfc.x, ry, w, rowH, HM_HIT_CONTEXT, i, NULL);
+    }
 }
 
 /*
@@ -414,6 +531,19 @@ qboolean UI_Home_InMatch(void) {
 qboolean UI_Home_NavClick(void) {
     const smHit_t* hit = SM_HitAt(smMX, smMY);
 
+    // a friend's menu takes the click, and closes either way
+    if (hfc.open) {
+        hfc.open = qfalse;
+        if (hit && hit->type == HM_HIT_CONTEXT) {
+            UI_Home_ContextDo(hfc.items[hit->index]);
+        }
+        return qtrue;
+    }
+    if (hit && hit->type == HM_HIT_FRIEND) {
+        UI_Home_ContextOpen(hit->index);
+        return qtrue;
+    }
+
     // a menu that is down takes the click: a row of it, or anywhere else to close it
     if (hfOpen >= 0) {
         int open = hfOpen;
@@ -466,6 +596,7 @@ void UI_Home_Banner(void) {
     qboolean over;
 
     UI_Home_DrawNavMenu();
+    UI_Home_DrawContext();
     if (!UI_Home_InMatch()) {
         return;
     }
