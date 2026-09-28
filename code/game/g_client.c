@@ -2308,13 +2308,13 @@ void Team_LivingTeamCounts(int *outRed, int *outBlue) {
 ============
 Team_ConnectedTeamCounts
 
-[QL] 0x1006b1c0. The connected players of each team, alive or not.
+[QL] 0x1006b1c0. The connected players of each team, alive or not, spectators included.
 ============
 */
-void Team_ConnectedTeamCounts(int *outRed, int *outBlue) {
-    int counts[TEAM_NUM_TEAMS] = { 0 };
+void Team_ConnectedTeamCounts(int counts[TEAM_NUM_TEAMS]) {
     int i;
 
+    memset(counts, 0, TEAM_NUM_TEAMS * sizeof(counts[0]));
     for (i = 0; i < level.maxclients; i++) {
         gclient_t* cl = &level.clients[i];
 
@@ -2322,8 +2322,6 @@ void Team_ConnectedTeamCounts(int *outRed, int *outBlue) {
             counts[cl->sess.sessionTeam]++;
         }
     }
-    if (outRed) *outRed = counts[TEAM_RED];
-    if (outBlue) *outBlue = counts[TEAM_BLUE];
 }
 
 /*

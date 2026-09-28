@@ -1734,22 +1734,26 @@ void Cmd_CallVote_f(gentity_t *ent) {
             return;
         }
         ts = atoi(arg2);
-        if (ts > 64) {
+        // [QL] 0x10043049: an unsigned test, so a negative size is out of range too
+        if ((unsigned)ts > 64) {
             trap_SendServerCommand(clientNum,
                 va("print \"Invalid team size. (Valid Range: %d - %d)\n\"",
                    g_teamSizeMin.integer, g_maxclients.integer));
             return;
         }
         if (ts > 0) {
-            int total = TeamCount(-1, TEAM_RED) + TeamCount(-1, TEAM_BLUE) +
-                        TeamCount(-1, TEAM_FREE);
-            int red = TeamCount(-1, TEAM_RED);
-            int blue = TeamCount(-1, TEAM_BLUE);
+            int counts[TEAM_NUM_TEAMS];
+            int red, blue;
             int maxSize = (g_gametype.integer >= GT_TEAM) ? g_maxclients.integer / 2
                                                          : g_maxclients.integer;
 
+            // [QL] 0x10042f74: the connected players of each team; the arena is the free team
+            Team_ConnectedTeamCounts(counts);
+            red = counts[TEAM_RED];
+            blue = counts[TEAM_BLUE];
+
             // [QL] 0x100430e0: the whole arena first, then each team
-            if (ts < total) {
+            if (ts < counts[TEAM_FREE]) {
                 trap_SendServerCommand(clientNum,
                     va("print \"^1The arena has more than %d players. Players must leave before this teamsize can be set.^7\"",
                        ts));

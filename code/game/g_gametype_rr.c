@@ -20,7 +20,7 @@ static int rr_infectionStartTime = -1;
 // ============================================================================
 void RR_SpreadInfection(void) {
     int i;
-    int blueCount;
+    int counts[TEAM_NUM_TEAMS];
 
     if (g_rrInfected.integer == 0)
         return;
@@ -29,8 +29,8 @@ void RR_SpreadInfection(void) {
         return;
 
     // [QL] 0x1006544c: the blues in the game, alive or not
-    Team_ConnectedTeamCounts(NULL, &blueCount);
-    if (blueCount <= 1)
+    Team_ConnectedTeamCounts(counts);
+    if (counts[TEAM_BLUE] <= 1)
         return;
 
     // Warning message
@@ -182,7 +182,7 @@ void RR_InitRoundState(void) {
 // ============================================================================
 static void StartNewRound(void) {
     int i;
-    int redCount;
+    int counts[TEAM_NUM_TEAMS];
 
     level.scoringDisabled = qtrue;
 
@@ -205,8 +205,8 @@ static void StartNewRound(void) {
 
     // If no red player, pick a random playing client
     // (retail divides by zero here with nobody playing; the guard keeps the server up)
-    Team_ConnectedTeamCounts(&redCount, NULL);
-    if (redCount == 0 && level.numPlayingClients > 0) {
+    Team_ConnectedTeamCounts(counts);
+    if (counts[TEAM_RED] == 0 && level.numPlayingClients > 0) {
         int idx = level.sortedClients[rand() % level.numPlayingClients];
         gclient_t *cl = &level.clients[idx];
         if (cl->pers.connected == CON_CONNECTED) {
@@ -618,7 +618,7 @@ checkRound:
 //  - RS_PLAYING (3): team count, survival bonus, infection, round timeout
 // ============================================================================
 void RR_Think(void) {
-    int redCount, blueCount;
+    int counts[TEAM_NUM_TEAMS];
     int state;
 
     if (level.intermissionQueued || level.intermissionTime || level.warmupTime > 0)
@@ -653,7 +653,7 @@ void RR_Think(void) {
         return;
 
     // [QL] 0x100655ff: who is on each team, alive or not; the dead change sides as they fall
-    Team_ConnectedTeamCounts(&redCount, &blueCount);
+    Team_ConnectedTeamCounts(counts);
 
     // [QL] Infection mode: survival bonus + periodic team switch (binary order)
     RR_SurvivorBonuses(0);
@@ -661,7 +661,7 @@ void RR_Think(void) {
 
     // the round keeps going while both teams have players and the round timelimit has
     // not run out; CheckRoundTimeout also records the lone blue survivor as MVP
-    if (!CheckRoundTimeout(redCount, blueCount)) {
+    if (!CheckRoundTimeout(counts[TEAM_RED], counts[TEAM_BLUE])) {
         return;
     }
 

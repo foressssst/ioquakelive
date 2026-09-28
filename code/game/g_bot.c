@@ -493,24 +493,6 @@ static int G_CountBotPlayersWithQueued(int team) {
 
 /*
 ===============
-G_CountConnectedByTeam
-
-[QL] Connected clients on each team, bots and spectators included (0x1006b1c0).
-===============
-*/
-static void G_CountConnectedByTeam(int counts[TEAM_NUM_TEAMS]) {
-    int i;
-
-    memset(counts, 0, TEAM_NUM_TEAMS * sizeof(counts[0]));
-    for (i = 0; i < level.maxclients; i++) {
-        if (level.clients[i].pers.connected == CON_CONNECTED) {
-            counts[level.clients[i].sess.sessionTeam]++;
-        }
-    }
-}
-
-/*
-===============
 G_CheckMinimumPlayers
 Address: 0x10036e80
 
@@ -565,7 +547,7 @@ void G_CheckMinimumPlayers(void) {
 
     if (g_gametype.integer >= GT_TEAM) {
         // [QL] 0x10036fea
-        G_CountConnectedByTeam(counts);
+        Team_ConnectedTeamCounts(counts);
         humanplayers = G_CountHumanPlayers(TEAM_BLUE) + G_CountHumanPlayers(TEAM_RED);
         botplayers = G_CountBotPlayersWithQueued(TEAM_BLUE) + G_CountBotPlayersWithQueued(TEAM_RED);
         //
