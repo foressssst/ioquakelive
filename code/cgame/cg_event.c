@@ -967,7 +967,7 @@ static void CG_PointOfInterest(centity_t* cent) {
         fx->color[0] = 1.0f;
         fx->color[1] = 1.0f;
         fx->color[2] = 1.0f;
-        fx->shader = cgs.media.infectedPoiShader;
+        fx->shader = cgs.media.infectedShader;
         fx->followNum = es->generic1;
         fx->zOffset = 48.0f;
         fx->worldSize = cg_poiMaxWidth.value;

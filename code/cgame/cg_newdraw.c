@@ -886,29 +886,33 @@ static void CG_HarvesterSkulls(rectDef_t* rect, float scale, vec4_t color, qbool
     }
 }
 
+/*
+=================
+CG_OneFlagStatus
+
+[QL] 0x10030ff0, CG_ONEFLAG_STATUS: the neutral flag's status icon, in white. Taken by a team
+it is the "stolen" one, moved 9 units down while the carrier's team is behind (or has no
+score yet) and 9 up otherwise, beside that team's score.
+=================
+*/
 static void CG_OneFlagStatus(rectDef_t* rect) {
-    if (cgs.gametype != GT_1FCTF) {
+    static const vec4_t white = {1.0f, 1.0f, 1.0f, 1.0f};
+    int icon = cgs.flagStatus;
+    float offset = 0.0f;
+
+    if (cgs.gametype != GT_1FCTF || !BG_FindItemForPowerup(PW_NEUTRALFLAG) || cgs.flagStatus > FLAG_TAKEN_BLUE) {
         return;
-    } else {
-        gitem_t* item = BG_FindItemForPowerup(PW_NEUTRALFLAG);
-        if (item) {
-            if (cgs.flagStatus >= 0 && cgs.flagStatus <= 4) {
-                vec4_t color = {1, 1, 1, 1};
-                int index = 0;
-                if (cgs.flagStatus == FLAG_TAKEN_RED) {
-                    color[1] = color[2] = 0;
-                    index = 1;
-                } else if (cgs.flagStatus == FLAG_TAKEN_BLUE) {
-                    color[0] = color[1] = 0;
-                    index = 1;
-                } else if (cgs.flagStatus == FLAG_DROPPED) {
-                    index = 2;
-                }
-                trap_R_SetColor(color);
-                CG_DrawPic(rect->x, rect->y, rect->w, rect->h, cgs.media.flagShaders[index]);
-            }
-        }
     }
+    if (cgs.flagStatus == FLAG_TAKEN_RED) {
+        icon = 3;
+        offset = (cgs.scores1 == SCORE_NOT_PRESENT || cgs.scores1 < cgs.scores2) ? 9.0f : -9.0f;
+    } else if (cgs.flagStatus == FLAG_TAKEN_BLUE) {
+        icon = 3;
+        offset = (cgs.scores2 == SCORE_NOT_PRESENT || cgs.scores2 <= cgs.scores1) ? 9.0f : -9.0f;
+    }
+    trap_R_SetColor(white);
+    CG_DrawPic(rect->x, rect->y + offset, rect->w, rect->h, cgs.media.flagStatusHandles[icon]);
+    trap_R_SetColor(NULL);
 }
 
 /*
@@ -3929,33 +3933,102 @@ static void CG_DrawFlagStatus(rectDef_t *rect, int ownerDraw) {
     trap_R_SetColor(NULL);
 }
 
-// [QL] CG_DrawFlagStatusBar - flag-carrier proximity bar (CG_FLAG_STATUS)
-// Address: 0x10030240.
-// The real body reads six flag-carrier world positions from a server info string
-// (Info_ValueForKey + atof) and plots carrier head icons along a horizontal bar by
-// normalised distance to each flag. The info-string key names are not recoverable
-// from the stripped binary and the qagame emitter that writes them is not yet ported,
-// so the carrier plotting can't be reproduced faithfully. The gametype/flag guards
-// and the two background half-shaders are kept, carrier plotting is stubbed.
+/*
+=================
+CG_DrawFlagStatusBar
+
+[QL] 0x10030240, CG_FLAG_STATUS, for spectators in the modes with bases (not one flag): a bar
+from the red base (left half, red) to the blue one (right half, blue), rect->h / 8 high and
+centred on rect->x, with each flag that is away from home placed along it by how far it is
+from the base it would be captured at, relative to the distance between the two bases. The
+bases come from CS_REDTEAMBASE / CS_BLUETEAMBASE; a flag is where its carrier is, or where
+it was last seen standing. Over each flag its "stolen" or "dropped" icon, and a pointer.
+=================
+*/
+static float CG_TeamBaseDistance(const vec3_t base, const vec3_t flag, float span) {
+    vec3_t delta;
+    float d;
+
+    VectorSubtract(base, flag, delta);
+    d = VectorLength(delta);
+    return d > span ? span : d;
+}
+
+static void CG_ReadTeamBase(int index, vec3_t origin) {
+    const char* info = CG_ConfigString(index);
+
+    origin[0] = atof(Info_ValueForKey(info, "x"));
+    origin[1] = atof(Info_ValueForKey(info, "y"));
+    origin[2] = atof(Info_ValueForKey(info, "z"));
+}
+
 static void CG_DrawFlagStatusBar(rectDef_t *rect) {
+    static const vec4_t redHalf = {1.0f, 0.0f, 0.0f, 0.5f};
+    static const vec4_t blueHalf = {0.0f, 0.0f, 1.0f, 0.5f};
+    vec3_t redBase, blueBase, redFlag, blueFlag, delta;
+    float size, barHeight, span, x;
+    int i;
+
+    size = rect->h;
+    barHeight = (float)(int)(rect->h * 0.125);
+
     switch (cgs.gametype) {
-        case GT_CTF: case GT_OBELISK: case GT_HARVESTER:
-        case GT_DOMINATION: case GT_AD:
+        case GT_CTF:
+        case GT_1FCTF:
+        case GT_OBELISK:
+        case GT_HARVESTER:
+        case GT_DOMINATION:
+        case GT_AD:
             break;
         default:
-            return;   // binary also excludes GT_1FCTF (case 6)
+            return;
     }
-    if (!cgs.media.flagStatusBarLeft || !cgs.media.flagStatusBarRight) {
+    if (!(cg.predictedPlayerState.eFlags & EF_SPECTATOR) || cgs.gametype == GT_1FCTF) {
         return;
     }
-    if (!cgs.redflag && !cgs.blueflag) {
+
+    CG_ReadTeamBase(CS_REDTEAMBASE, redBase);
+    CG_ReadTeamBase(CS_BLUETEAMBASE, blueBase);
+    VectorCopy(cg.flagOrigin[TEAM_RED], redFlag);
+    VectorCopy(cg.flagOrigin[TEAM_BLUE], blueFlag);
+    for (i = 0; i < cgs.maxclients; i++) {
+        const centity_t* cent = &cg_entities[i];
+
+        if (!cgs.clientinfo[cent->currentState.clientNum].infoValid) {
+            continue;
+        }
+        if (cent->currentState.powerups & (1 << PW_REDFLAG)) {
+            VectorCopy(cent->lerpOrigin, redFlag);
+        }
+        if (cent->currentState.powerups & (1 << PW_BLUEFLAG)) {
+            VectorCopy(cent->lerpOrigin, blueFlag);
+        }
+    }
+
+    VectorSubtract(blueBase, redBase, delta);
+    span = VectorLength(delta);
+    if (span <= 0.0f || (!cgs.redflag && !cgs.blueflag)) {
         return;
     }
-    // Background halves (carrier icons require the un-ported flag-position feed).
-    CG_DrawPic(rect->x - rect->w * 0.5f, rect->y, rect->w * 0.5f, rect->h,
-               cgs.media.flagStatusBarLeft);
-    CG_DrawPic(rect->x, rect->y, rect->w * 0.5f, rect->h,
-               cgs.media.flagStatusBarRight);
+
+    CG_FillRect(rect->x - rect->w * 0.5f, rect->y, rect->w * 0.5f, barHeight, redHalf);
+    CG_FillRect(rect->x, rect->y, rect->w * 0.5f, barHeight, blueHalf);
+
+    // the red flag goes from its base on the left to the blue base on the right
+    if (cgs.redflag) {
+        x = rect->x - size * 0.5f + rect->w * 0.5f -
+            (CG_TeamBaseDistance(blueBase, redFlag, span) / span) * rect->w;
+        CG_DrawPic(x + size * 0.25f, rect->y, size * 0.5f, size * 0.5f, cgs.media.flagTrackPointerShader);
+        CG_DrawPic(x, rect->y + barHeight + size * 0.25f, size, size,
+                   cgs.media.flagStatusHandles[TEAM_RED * 4 + (cgs.redflag == 1 ? 3 : 2)]);
+    }
+    if (cgs.blueflag) {
+        x = rect->x - size * 0.5f - rect->w * 0.5f +
+            (CG_TeamBaseDistance(redBase, blueFlag, span) / span) * rect->w;
+        CG_DrawPic(x + size * 0.25f, rect->y, size * 0.5f, size * 0.5f, cgs.media.flagTrackPointerShader);
+        CG_DrawPic(x, rect->y + barHeight + size * 0.25f, size, size,
+                   cgs.media.flagStatusHandles[TEAM_BLUE * 4 + (cgs.blueflag == 1 ? 3 : 2)]);
+    }
 }
 
 /*

@@ -2541,48 +2541,45 @@ static qboolean CG_PlayerTeamSkins(centity_t* cent, refEntity_t* legs, refEntity
 
 /*
 ==============
-CG_PlayerOutline
+CG_DomPointMarker
 
-[QL] 0x10041060, called from the entity dispatch for the Attack & Defend objectives, not
-from CG_Player. The shader comes from powerups-1 and friend/enemy, the colour from
-modelindex2, and weapon picks the powerup variant. It is a billboard in the floating-effect
-pool 80 units above the entity, not a ground decal.
+[QL] 0x10041060, from the domination point's own drawing (0x10015bb3): the point's letter
+(powerups 1-5, A to E) over it, "defend" when it is the viewer's team's and "capture" when it
+is not, in the _dist variant while it is being fought over (weapon). The colour is the
+owner's (modelindex2). A billboard 80 units up in the floating-effect pool.
 ==============
 */
-void CG_PlayerOutline(centity_t* cent) {
+void CG_DomPointMarker(centity_t* cent) {
     int myTeam;
-    int theirTeam;
+    int owner;
     unsigned idx;
     qhandle_t shader;
     float r, g, b;
     floatingEffect_t* fx;
 
     myTeam = cgs.clientinfo[cg.clientNum].team;
-    idx = (unsigned)(cent->currentState.powerups - 1);  // 0xC4: outline style index
-    theirTeam = cent->currentState.modelindex2;         // 0xAC: friend/enemy + colour team
+    idx = (unsigned)(cent->currentState.powerups - 1);
+    owner = cent->currentState.modelindex2;
 
     if (idx >= 5) {
         idx = 0;
     }
 
-    if (cent->currentState.weapon != 0) {  // 0xD0: powerup-active outline variant
-        shader = (myTeam == theirTeam) ? cgs.media.friendlyPowerupOutlineShader[idx]
-                                       : cgs.media.enemyPowerupOutlineShader[idx];
+    if (cent->currentState.weapon != 0) {
+        shader = (myTeam == owner) ? cgs.media.domDefendDistShader[idx] : cgs.media.domCaptureDistShader[idx];
     } else {
-        shader = (myTeam == theirTeam) ? cgs.media.friendlyOutlineShader[idx]
-                                       : cgs.media.enemyOutlineShader[idx];
+        shader = (myTeam == owner) ? cgs.media.domDefendShader[idx] : cgs.media.domCaptureShader[idx];
     }
 
-    // team colour (verified against the binary's packed constants):
-    //   red -> (1,0,0), blue -> (0,0.5,1), free -> (1,1,1), other -> (0,1,0)
-    r = (theirTeam == TEAM_FREE || theirTeam == TEAM_RED) ? 1.0f : 0.0f;
-    if (theirTeam == TEAM_RED) {
+    // red (1,0,0), blue (0,0.5,1), nobody's (1,1,1), anything else (0,1,0)
+    r = (owner == TEAM_FREE || owner == TEAM_RED) ? 1.0f : 0.0f;
+    if (owner == TEAM_RED) {
         g = 0.0f;
         b = 0.0f;
-    } else if (theirTeam == TEAM_BLUE) {
+    } else if (owner == TEAM_BLUE) {
         g = 0.5f;
         b = 1.0f;
-    } else if (theirTeam == TEAM_FREE) {
+    } else if (owner == TEAM_FREE) {
         g = 1.0f;
         b = 1.0f;
     } else {
@@ -2595,7 +2592,7 @@ void CG_PlayerOutline(centity_t* cent) {
         return;
     }
 
-    fx->type = FE_OUTLINE;
+    fx->type = FE_ENTITY_POI;
     fx->owner = cent;
     VectorCopy(cent->lerpOrigin, fx->origin);
     fx->color[0] = r;
@@ -2603,92 +2600,107 @@ void CG_PlayerOutline(centity_t* cent) {
     fx->color[2] = b;
     fx->color[3] = 1.0f;
     fx->shader = shader;
-    fx->zOffset = 80.0f;                    // 0x42a00000
-    fx->worldSize = cg_poiMaxWidth.value;   // 0xf  (DAT_10a634e8)
-    fx->minPixels = cg_poiMinWidth.value;   // 0x11 (DAT_10a69248)
+    fx->zOffset = 80.0f;
+    fx->worldSize = cg_poiMaxWidth.value;
+    fx->minPixels = cg_poiMinWidth.value;
 }
 
 /*
 ==============
-CG_PlayerFreezeEffect
+CG_ObjectiveMarker
 
-[QL] 0x10040870, only for the client being played or followed, keyed on generic1 & 0x3f and
-the flag powerups. Billboards in the floating-effect pool 64 units above the entity, not
-ground decals. The binary's first block is gated on gametype 8, which the stripped build
-does not resolve.
+[QL] 0x10040870, for the player being played or followed: where to take what he carries.
+Skulls in Harvester point at the enemy's receptacle. A flag points at the base it is
+captured at: in CTF the carrier's own, and only while his team's flag is home; in one flag
+the enemy's. The marks go where the flags were last seen standing (cg.flagOrigin), in the
+carrier's team colour, 64 units up in the floating-effect pool.
 ==============
 */
-static void CG_PlayerFreezeEffect(centity_t* cent) {
-    int myTeam;
+static void CG_ObjectiveMarker(centity_t* cent) {
+    static const vec4_t redColor = {1.0f, 0.2f, 0.2f, 1.0f};
+    static const vec4_t blueColor = {0.2f, 0.6f, 1.0f, 1.0f};
     int powerups;
-    float r, g, b;
+    int team;
+    qboolean carrying = qfalse;
+    qboolean twoFlags = qtrue;
+    vec3_t origin;
+    vec4_t color;
     floatingEffect_t* fx;
 
-    // only for the client we are playing / following
     if (cent->currentState.clientNum != cg.snap->ps.clientNum) {
         return;
     }
 
-    myTeam = cgs.clientinfo[cg.clientNum].team;
+    powerups = cent->currentState.powerups;
+    team = cgs.clientinfo[cg.snap->ps.clientNum].team;
+    VectorClear(origin);
+    color[0] = color[1] = color[2] = color[3] = 0.0f;
 
-    // ice colour by viewer team (blue-ish for red team, red for blue team)
-    if (myTeam == TEAM_BLUE) {
-        r = 1.0f;
-        g = 0.2f;
-        b = 0.2f;
-    } else {
-        r = 0.2f;
-        g = 0.6f;
-        b = 1.0f;
-    }
-
-    // frozen (generic1 low 6 bits) -> ice overlay billboard (binary shader DAT_10a5fba8)
-    if (cent->currentState.generic1 & 0x3f) {
-        fx = CG_AllocFloatingEffect();
-        if (fx) {
-            fx->type = FE_FREEZE;
-            VectorCopy(cent->lerpOrigin, fx->origin);
-            fx->color[0] = r;
-            fx->color[1] = g;
-            fx->color[2] = b;
-            fx->color[3] = 1.0f;
-            fx->shader = cgs.media.iceMarkShader;
-            fx->zOffset = 64.0f;                    // 0x42800000
+    if (cgs.gametype == GT_HARVESTER) {
+        if (team == TEAM_RED) {
+            VectorCopy(cg.flagOrigin[TEAM_BLUE], origin);
+            Vector4Copy(blueColor, color);
+        } else if (team == TEAM_BLUE) {
+            VectorCopy(cg.flagOrigin[TEAM_RED], origin);
+            Vector4Copy(redColor, color);
+        }
+        if ((cent->currentState.generic1 & 0x3f) && (fx = CG_AllocFloatingEffect()) != NULL) {
+            fx->type = FE_POI;
+            fx->owner = NULL;
+            VectorCopy(origin, fx->origin);
+            Vector4Copy(color, fx->color);
+            fx->zOffset = 64.0f;
             fx->worldSize = cg_poiMaxWidth.value;
             fx->minPixels = cg_poiMinWidth.value;
+            fx->shader = cgs.media.harvesterCaptureShader;
         }
     }
 
-    // flag-carrier glow billboard (binary radius 0x42800000 == 64.0, shader DAT_10a5fc70)
-    powerups = cent->currentState.powerups;
     if (!powerups) {
         return;
     }
 
-    if (powerups & (1 << PW_REDFLAG)) {
-        r = 1.0f;
-        g = 0.2f;
-        b = 0.2f;
-    } else if (powerups & (1 << PW_BLUEFLAG)) {
-        r = 0.2f;
-        g = 0.6f;
-        b = 1.0f;
+    if (cgs.gametype == GT_CTF) {
+        // nothing to capture at while your own flag is away
+        if ((team == TEAM_RED && cgs.redflag > 0) || (team == TEAM_BLUE && cgs.blueflag > 0)) {
+            return;
+        }
+    } else if (cgs.gametype == GT_1FCTF) {
+        twoFlags = qfalse;
     }
 
-    if (powerups & ((1 << PW_REDFLAG) | (1 << PW_BLUEFLAG) | (1 << PW_NEUTRALFLAG))) {
-        fx = CG_AllocFloatingEffect();
-        if (fx) {
-            fx->type = FE_FREEZE;
-            VectorCopy(cent->lerpOrigin, fx->origin);
-            fx->color[0] = r;
-            fx->color[1] = g;
-            fx->color[2] = b;
-            fx->color[3] = 1.0f;
-            fx->shader = cgs.media.freezeShader;
-            fx->zOffset = 64.0f;
-            fx->worldSize = cg_poiMaxWidth.value;
-            fx->minPixels = cg_poiMinWidth.value;
+    if (powerups & (1 << PW_REDFLAG)) {
+        carrying = qtrue;
+        VectorCopy(cg.flagOrigin[twoFlags ? TEAM_BLUE : TEAM_RED], origin);
+        Vector4Copy(twoFlags ? blueColor : redColor, color);
+    }
+    if (powerups & (1 << PW_BLUEFLAG)) {
+        carrying = qtrue;
+        VectorCopy(cg.flagOrigin[twoFlags ? TEAM_RED : TEAM_BLUE], origin);
+        Vector4Copy(twoFlags ? redColor : blueColor, color);
+    }
+    if (powerups & (1 << PW_NEUTRALFLAG)) {
+        carrying = qtrue;
+        if (twoFlags) {
+            VectorCopy(cg.flagOrigin[team == TEAM_RED ? TEAM_RED : TEAM_BLUE], origin);
+        } else {
+            VectorCopy(cg.flagOrigin[team == TEAM_RED ? TEAM_BLUE : TEAM_RED], origin);
         }
+        Vector4Copy(team == TEAM_RED ? redColor : blueColor, color);
+    }
+    if (!carrying) {
+        return;
+    }
+
+    if (cg_flagPOIs.integer && (fx = CG_AllocFloatingEffect()) != NULL) {
+        fx->type = FE_POI;
+        fx->owner = NULL;
+        VectorCopy(origin, fx->origin);
+        Vector4Copy(color, fx->color);
+        fx->zOffset = 64.0f;
+        fx->worldSize = cg_poiMaxWidth.value;
+        fx->minPixels = cg_poiMinWidth.value;
+        fx->shader = cgs.media.adCaptureShader;
     }
 }
 
@@ -3236,8 +3248,8 @@ void CG_Player(centity_t* cent) {
     // add powerups floating behind the player
     CG_PlayerPowerups(cent, &torso);
 
-    // [QL] frozen / flag-carrier ground glow for the followed player (binary calls this last)
-    CG_PlayerFreezeEffect(cent);
+    // [QL] 0x10042bc3: where to take the flag or the skulls
+    CG_ObjectiveMarker(cent);
 
     // [QL] 0x10042bc8: and over everything else, the infected is covered in slime and drags a
     // hum along. It goes last, after the powerups and the frozen glow.

@@ -294,7 +294,7 @@ static void CG_General(centity_t* cent) {
         VectorCopy(cent->lerpOrigin, lightOrigin);
         lightOrigin[2] += 16.0f;
 
-        CG_PlayerOutline(cent);
+        CG_DomPointMarker(cent);
 
         memset(&pedestal, 0, sizeof(pedestal));
         VectorCopy(cent->lerpOrigin, pedestal.lightingOrigin);
@@ -661,6 +661,130 @@ static void CG_DrawPowerupPoi(centity_t* cent, const gitem_t* item) {
 CG_Item
 ==================
 */
+/*
+==================
+CG_FlagMarkerAt
+
+[QL] One flag marker: a billboard 64 units over the flag, in the floating-effect pool.
+==================
+*/
+static void CG_FlagMarkerAt(centity_t* cent, const vec4_t color, qhandle_t shader) {
+    floatingEffect_t* fx = CG_AllocFloatingEffect();
+
+    if (!fx) {
+        return;
+    }
+    fx->type = FE_POI;
+    fx->owner = cent;
+    VectorCopy(cent->lerpOrigin, fx->origin);
+    Vector4Copy(color, fx->color);
+    fx->zOffset = 64.0f;
+    fx->worldSize = cg_poiMaxWidth.value;
+    fx->minPixels = cg_poiMinWidth.value;
+    fx->shader = shader;
+}
+
+/*
+==================
+CG_FlagMarker
+
+[QL] 0x10016147, from CG_Item for the flags. In CTF a flag at home, and in A&D once the
+round is under way, is marked by what the viewer's team does with it: the enemy's "attack",
+their own "defend" (in CTF only while the viewer is not carrying the enemy's, in A&D by
+which side attacks this turn), in the flag's colour. A flag lying away from its base is
+marked for both teams, and with its "dropped" icon for a spectator. All that waits on
+cg_flagPOIs. Anything else marks only the neutral flag, with "capture", and always.
+==================
+*/
+static void CG_FlagMarker(centity_t* cent, const gitem_t* item) {
+    static const vec4_t white = {1.0f, 1.0f, 1.0f, 1.0f};
+    static const vec4_t red = {1.0f, 0.2f, 0.2f, 1.0f};
+    static const vec4_t blue = {0.2f, 0.6f, 1.0f, 1.0f};
+    int tag = item->giTag;
+    int team;
+    qboolean marked;
+
+    if (cgs.gametype == GT_AD) {
+        marked = cg.warmupState >= 1;
+    } else {
+        marked = cgs.gametype == GT_CTF && cent->currentState.modelindex2 != 1;
+    }
+    if (!marked) {
+        if (tag == PW_NEUTRALFLAG) {
+            CG_FlagMarkerAt(cent, white, cgs.media.adCaptureShader);
+        }
+        return;
+    }
+
+    if (tag < PW_REDFLAG || tag > PW_NEUTRALFLAG) {
+        return;
+    }
+    team = cgs.clientinfo[cg.predictedPlayerState.clientNum].team;
+
+    if (cent->currentState.modelindex2 == 0) {
+        if (!cg_flagPOIs.integer) {
+            return;
+        }
+        if (team == TEAM_RED) {
+            if (cg_gametype.integer == GT_AD) {
+                if (cg.warmupTurn == 0) {
+                    if (tag == PW_BLUEFLAG) {
+                        CG_FlagMarkerAt(cent, blue, cgs.media.adAttackShader);
+                    }
+                } else if (cg.warmupTurn == 1 && tag == PW_REDFLAG) {
+                    CG_FlagMarkerAt(cent, red, cgs.media.adDefendShader);
+                }
+            } else if (cg_gametype.integer == GT_CTF) {
+                if (tag == PW_BLUEFLAG) {
+                    CG_FlagMarkerAt(cent, blue, cgs.media.adAttackShader);
+                } else if (tag == PW_REDFLAG && !cg.snap->ps.powerups[PW_BLUEFLAG]) {
+                    CG_FlagMarkerAt(cent, red, cgs.media.adDefendShader);
+                }
+            }
+        } else if (team == TEAM_BLUE) {
+            if (cg_gametype.integer == GT_AD) {
+                if (cg.warmupTurn == 1) {
+                    if (tag == PW_REDFLAG) {
+                        CG_FlagMarkerAt(cent, red, cgs.media.adAttackShader);
+                    }
+                } else if (cg.warmupTurn == 0 && tag == PW_BLUEFLAG) {
+                    CG_FlagMarkerAt(cent, blue, cgs.media.adDefendShader);
+                }
+            } else if (cg_gametype.integer == GT_CTF) {
+                if (tag == PW_REDFLAG) {
+                    CG_FlagMarkerAt(cent, red, cgs.media.adAttackShader);
+                } else if (tag == PW_BLUEFLAG && !cg.snap->ps.powerups[PW_REDFLAG]) {
+                    CG_FlagMarkerAt(cent, blue, cgs.media.adDefendShader);
+                }
+            }
+        }
+        return;
+    }
+
+    if (!cg_flagPOIs.integer) {
+        return;
+    }
+    if (tag == PW_REDFLAG) {
+        if (team == TEAM_RED) {
+            CG_FlagMarkerAt(cent, red, cgs.media.adDefendShader);
+        } else if (team == TEAM_BLUE) {
+            CG_FlagMarkerAt(cent, red, cgs.media.adAttackShader);
+        } else {
+            CG_FlagMarkerAt(cent, white, cgs.media.flagStatusHandles[2 + TEAM_RED * 4]);
+        }
+    } else if (tag == PW_BLUEFLAG) {
+        if (team == TEAM_RED) {
+            CG_FlagMarkerAt(cent, blue, cgs.media.adAttackShader);
+        } else if (team == TEAM_BLUE) {
+            CG_FlagMarkerAt(cent, blue, cgs.media.adDefendShader);
+        } else {
+            CG_FlagMarkerAt(cent, white, cgs.media.flagStatusHandles[2 + TEAM_BLUE * 4]);
+        }
+    } else {
+        CG_FlagMarkerAt(cent, white, cgs.media.flagStatusHandles[2]);
+    }
+}
+
 static void CG_Item(centity_t* cent) {
     refEntity_t ent;
     entityState_t* es;
@@ -702,6 +826,20 @@ static void CG_Item(centity_t* cent) {
     if (es->eFlags & EF_NODRAW) {
         return;
     }
+
+    // [QL] 0x10016086: a flag standing is where it will be looked for, by the flag status bar
+    // and the carrier's marker; one being carried is NODRAW and keeps its last place
+    if (item->giType == IT_TEAM) {
+        if (item->giTag == PW_REDFLAG) {
+            VectorCopy(cent->lerpOrigin, cg.flagOrigin[TEAM_RED]);
+        } else if (item->giTag == PW_BLUEFLAG) {
+            VectorCopy(cent->lerpOrigin, cg.flagOrigin[TEAM_BLUE]);
+        } else if (item->giTag == PW_NEUTRALFLAG) {
+            VectorCopy(cent->lerpOrigin, cg.flagOrigin[TEAM_FREE]);
+        }
+        CG_FlagMarker(cent, item);
+    }
+
     // [QL] cgamex86.dll 0x10016cab: a simple item is its icon as a sprite, and the three cvars
     // beside cg_simpleItems shape it. It is lifted by cg_simpleItemsHeightOffset, except a rune,
     // which is always lifted 10. cg_simpleItemsBob floats it instead: 1 floats every item, 2 (the
@@ -1404,6 +1542,11 @@ static void CG_CalcEntityLerpPositions(centity_t* cent) {
 /*
 ===============
 CG_TeamBase
+
+[QL] 0x100183e0. CTF and A&D stand the flag bases. One flag puts the harvester in the team's
+skin on the red and blue bases and the neutral flag base in the middle. Overload has the
+obelisk, and harvester its receptacles, whose place 16 units up is kept for the carrier's
+marker and the flag status bar.
 ===============
 */
 static void CG_TeamBase(centity_t* cent) {
@@ -1412,7 +1555,7 @@ static void CG_TeamBase(centity_t* cent) {
     int t, h;
     float c;
 
-    if (cgs.gametype == GT_CTF || cgs.gametype == GT_1FCTF || cgs.gametype == GT_AD) {
+    if (cgs.gametype == GT_CTF || cgs.gametype == GT_AD) {
         // show the flag base
         memset(&model, 0, sizeof(model));
         model.reType = RT_MODEL;
@@ -1423,6 +1566,22 @@ static void CG_TeamBase(centity_t* cent) {
             model.hModel = cgs.media.redFlagBaseModel;
         } else if (cent->currentState.modelindex == TEAM_BLUE) {
             model.hModel = cgs.media.blueFlagBaseModel;
+        } else {
+            model.hModel = cgs.media.neutralFlagBaseModel;
+        }
+        trap_R_AddRefEntityToScene(&model);
+    } else if (cgs.gametype == GT_1FCTF) {
+        memset(&model, 0, sizeof(model));
+        model.reType = RT_MODEL;
+        VectorCopy(cent->lerpOrigin, model.lightingOrigin);
+        VectorCopy(cent->lerpOrigin, model.origin);
+        AnglesToAxis(cent->currentState.angles, model.axis);
+        if (cent->currentState.modelindex == TEAM_RED) {
+            model.hModel = cgs.media.harvesterModel;
+            model.customSkin = cgs.media.harvesterRedSkin;
+        } else if (cent->currentState.modelindex == TEAM_BLUE) {
+            model.hModel = cgs.media.harvesterModel;
+            model.customSkin = cgs.media.harvesterBlueSkin;
         } else {
             model.hModel = cgs.media.neutralFlagBaseModel;
         }
@@ -1467,11 +1626,11 @@ static void CG_TeamBase(centity_t* cent) {
             }
             // show the lights
             AnglesToAxis(cent->currentState.angles, model.axis);
-            //
-            model.shaderRGBA[0] = c * 0xff;
-            model.shaderRGBA[1] = c * 0xff;
-            model.shaderRGBA[2] = c * 0xff;
-            model.shaderRGBA[3] = c * 0xff;
+            // [QL] 0x10018670: rounded, not cut
+            model.shaderRGBA[0] = (byte)(int)(c * 255.0f + 0.5f);
+            model.shaderRGBA[1] = model.shaderRGBA[0];
+            model.shaderRGBA[2] = model.shaderRGBA[0];
+            model.shaderRGBA[3] = model.shaderRGBA[0];
 
             model.hModel = cgs.media.overloadLightsModel;
             trap_R_AddRefEntityToScene(&model);
@@ -1518,22 +1677,29 @@ static void CG_TeamBase(centity_t* cent) {
             trap_R_AddRefEntityToScene(&model);
         }
     } else if (cgs.gametype == GT_HARVESTER) {
+        vec3_t receptacle;
+
         // show harvester model
         memset(&model, 0, sizeof(model));
         model.reType = RT_MODEL;
         VectorCopy(cent->lerpOrigin, model.lightingOrigin);
         VectorCopy(cent->lerpOrigin, model.origin);
         AnglesToAxis(cent->currentState.angles, model.axis);
+        VectorCopy(cent->lerpOrigin, receptacle);
+        receptacle[2] += 16.0f;
 
         if (cent->currentState.modelindex == TEAM_RED) {
             model.hModel = cgs.media.harvesterModel;
             model.customSkin = cgs.media.harvesterRedSkin;
+            VectorCopy(receptacle, cg.flagOrigin[TEAM_RED]);
         } else if (cent->currentState.modelindex == TEAM_BLUE) {
             model.hModel = cgs.media.harvesterModel;
             model.customSkin = cgs.media.harvesterBlueSkin;
+            VectorCopy(receptacle, cg.flagOrigin[TEAM_BLUE]);
         } else {
             model.hModel = cgs.media.harvesterNeutralModel;
             model.customSkin = 0;
+            VectorCopy(receptacle, cg.flagOrigin[TEAM_FREE]);
         }
         trap_R_AddRefEntityToScene(&model);
     }

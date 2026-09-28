@@ -296,8 +296,8 @@ typedef struct localEntity_s {
 
 typedef enum {
     FE_DAMAGE_NUMBER = 0,  // floating damage plum (drawn as text)
-    FE_OUTLINE       = 1,  // team/enemy player outline billboard
-    FE_FREEZE        = 2,  // freeze overlay / flag-carrier glow billboard
+    FE_ENTITY_POI    = 1,  // a marker over an entity (the domination points)
+    FE_POI           = 2,  // a marker at a point: flags, capture points
     FE_SPRITE        = 3,  // generic world sprite (CG_General/Item/Obituary/EntityEvent)
     FE_FLOAT_SPRITE  = 4   // player head float-sprite (medals, talk, connection icons)
 } floatingEffectType_t;
@@ -1000,6 +1000,10 @@ typedef struct {
     // [QL] per-client extended team-stats array (tdmstats/castats/ctfstats), indexed by scoreboard slot.
     teamStatsRow_t teamStats[MAX_CLIENTS];
 
+    // [QL] 0x10aba978: where each flag was last seen standing, by team (TEAM_FREE the neutral
+    // one); CG_Item keeps it for the flags and CG_TeamBase for the harvester's receptacles
+    vec3_t flagOrigin[3];
+
 } cg_t;
 
 // all of the model, shader, and sound references that are
@@ -1046,9 +1050,6 @@ typedef struct {
     qhandle_t droppedFlagModel;   // [QL] "models/flags/d_flag.md3"
     qhandle_t flagTrackPointerShader;  // [QL] "gfx/2d/flag_status/track_pointer.tga"
     qhandle_t keyGoldModel;       // [QL] "models/powerups/keys/key_gold.md3"
-    qhandle_t redFlagShader[3];
-    qhandle_t blueFlagShader[3];
-    qhandle_t flagShader[4];
 
     qhandle_t flagPoleModel;
     qhandle_t flagFlapModel;
@@ -1161,7 +1162,6 @@ typedef struct {
 
     // powerup shaders
     qhandle_t quadShader;
-    qhandle_t redQuadShader;
     qhandle_t spawnArmorShader;     // [QL] powerups/spawnArmor, spawn protection
     qhandle_t spawnArmor2Shader;    // [QL] powerups/spawnArmor2, mientras esta recibiendo dano
     qhandle_t noPlayerClipShader;   // [QL] noPlayerClipShader, others when they do not collide
@@ -1454,7 +1454,6 @@ typedef struct {
     qhandle_t teamLeaderShader;
     qhandle_t retrieveShader;
     qhandle_t escortShader;
-    qhandle_t flagShaders[3];
 
     qhandle_t cursor;
     qhandle_t selectCursor;
@@ -1482,13 +1481,20 @@ typedef struct {
     qhandle_t quadHogPoiShader;     // gfx/2d/quad_hog/quadhog, the same marker in Quad Hog
     qhandle_t powerupPoi[5];        // [QL] gfx/2d/powerup/{quad,bs,haste,invis,regen}
     qhandle_t powerupIncomingShader;// [QL] gfx/2d/powerup/incoming, mientras vuelve
-    qhandle_t infectedPoiShader;    // gfx/2d/infected/bite, the same marker in Red Rover
     qhandle_t friendShader;         // [QL] sprites/friend, a teammate's marker
     qhandle_t friendHitShader;      // [QL] sprites/friend_hit, one hurt within cg_drawHitFriendTime
     qhandle_t friendDeadShader;     // [QL] sprites/friend_dead, where a teammate died
     qhandle_t flagCarrierShader;    // [QL] sprites/flagcarrier
     qhandle_t flagCarrierHitShader; // [QL] sprites/flagcarrier_hit
     qhandle_t infectedShader;       // [QL] gfx/2d/infected/bite, over Red Rover's survivors
+    qhandle_t adAttackShader;       // [QL] gfx/2d/ad/poi_attack, the enemy flag to take
+    qhandle_t adCaptureShader;      // [QL] gfx/2d/ad/poi_capture, where to bring it
+    qhandle_t adDefendShader;       // [QL] gfx/2d/ad/poi_defend, your own flag
+    qhandle_t harvesterCaptureShader;  // [QL] gfx/2d/har/poi_capture, where to bring the skulls
+    qhandle_t domCaptureShader[5];     // [QL] gfx/2d/dom_point/dom_cap_a..e
+    qhandle_t domDefendShader[5];      // [QL] gfx/2d/dom_point/dom_def_a..e
+    qhandle_t domCaptureDistShader[5]; // [QL] the same, _dist: a point being fought over
+    qhandle_t domDefendDistShader[5];
     qhandle_t healthSegmentShader;  // [QL] gfx/2d/health_segment.tga, the bars over teammates
     qhandle_t cmdUpShader;          // [QL] gfx/2d/race/cmd_up, the arrows of cg_drawInputCmds
     qhandle_t cmdDownShader;        // [QL] gfx/2d/race/cmd_down
@@ -1513,17 +1519,8 @@ typedef struct {
     // [QL] gametype icons for scoreboard/HUD
     qhandle_t gametypeIcon[GT_MAX_GAME_TYPE];
 
-    // [QL] player outline shaders, indexed 0..4 by outline style (= currentState.powerups-1).
-    // Used by CG_PlayerOutline. Register order in CG_RegisterGraphics still to be pinned.
-    qhandle_t friendlyOutlineShader[5];
-    qhandle_t enemyOutlineShader[5];
-    qhandle_t friendlyPowerupOutlineShader[5];
-    qhandle_t enemyPowerupOutlineShader[5];
-
-    // [QL] freeze-tag effect media (CG_PlayerFreezeEffect / CG_ThawPlayer).
+    // [QL] freeze-tag effect media (CG_ThawPlayer).
     // (frozenShader already declared above.)
-    qhandle_t freezeShader;        // freeze overlay shader
-    qhandle_t frozenFlagShader;    // frozen flag overlay
     qhandle_t iceWhiteModel;      // ice shard model A, global 0x10a5f428 (first/odd shards)
     qhandle_t iceBlueModel;        // ice shard model B, global 0x10a5f42c (alternate shards)
 
@@ -1531,16 +1528,12 @@ typedef struct {
     qhandle_t friendMarkModel;
 
     // [QL] wallbang / shotgun-kill debris
-    qhandle_t debrisPuffShader;    // CG_MissileHitWall_DmgThrough debris
+    qhandle_t debrisPuffShader;    // [QL] surfacePuff, CG_MissileHitWall_DmgThrough debris
     qhandle_t bloodPuffShader;     // CG_ShotgunKillEffect / CG_ShotgunPellet blood puff
 
-    // [QL] CTF flag-status HUD media (CG_DrawFlagStatus / CG_DrawFlagStatusBar).
-    // flagStatusHandles indexed as [iconIndex + team*4] (icon 0=atbase,1=taken,2=dropped,3=neutral;
-    // team 0=neutral,1=red,2=blue). Distinct from the 4-entry flagShader[] above; base DAT_10a5fc2c.
+    // [QL] the flag status icons (CG_DrawFlagStatus / CG_DrawFlagStatusBar), 0x10a5fc2c, indexed
+    // [icon + team*4]: icon 0 at base, 1 taken, 2 dropped, 3 stolen; team 0 neutral, 1 red, 2 blue
     qhandle_t flagStatusHandles[12];
-    qhandle_t flagStatusBarLeft;   // background left half-shader (DAT_10076354)
-    qhandle_t flagStatusBarRight;  // background right half-shader (DAT_10076374)
-    qhandle_t flagCarrierIcon;     // shared carrier head/marker (DAT_10a5fc78)
 
     // [QL] duel player-status plate shaders (CG_DrawPlayerStatusLeft/Right).
     // Globals DAT_10a5f360..0x10a5f384.
@@ -1968,6 +1961,7 @@ extern vmCvar_t cg_specDuelHealthArmor;  // [QL] gates the spectator HUD health/
 extern vmCvar_t cg_specDuelHealthColor;  // [QL] health-gradient tint for those bars
 extern vmCvar_t cg_speedometer;
 extern vmCvar_t cg_flagPOIs;
+extern vmCvar_t cg_gametype;
 extern vmCvar_t cg_poiMaxWidth;
 extern vmCvar_t cg_poiMinWidth;
 extern vmCvar_t cg_powerupPOIs;
@@ -2251,12 +2245,12 @@ void CG_NewClientInfo(int clientNum);
 sfxHandle_t CG_CustomSound(int clientNum, const char* soundName);
 
 // [QL] model/skin forcing + scaling. CG_ResolveModelForClient, CG_CalcModelScale,
-// CG_PlayerTeamSkins and CG_PlayerFreezeEffect are file-static in cg_players.c;
-// CG_PlayerOutline and CG_Draw3DPlayerModel are cross-file (see below).
+// CG_PlayerTeamSkins and CG_ObjectiveMarker are file-static in cg_players.c;
+// CG_DomPointMarker and CG_Draw3DPlayerModel are cross-file (see below).
 qboolean CG_ShouldForceTeamSkin(int viewerTeam, int playerTeam);
 // [QL] AD-objective outline decal - the binary calls this from the entity dispatch in
 // cg_ents.c (not from CG_Player), so it's declared here.
-void CG_PlayerOutline(centity_t* cent);
+void CG_DomPointMarker(centity_t* cent);
 // [QL] full legs+torso+head player model for the spectator/duel model owner-draws in
 // cg_newdraw.c (replaces the head-only CG_DrawHead stand-in).
 void CG_Draw3DPlayerModel(int clientNum, int torsoAnim, float x, float y, float w, float h, int weapon,

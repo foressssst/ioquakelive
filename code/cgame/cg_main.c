@@ -1874,21 +1874,7 @@ static void CG_RegisterGraphics(void) {
         "gfx/2d/numbers/nine_32b",
         "gfx/2d/numbers/minus_32b",
     };
-    // [QL] Race checkpoint assets (binary-verified from cgamex86.dll CG_RegisterGraphics)
-    cgs.media.raceFlagB = trap_R_RegisterModel("models/flag3/b_flag3.md3");
-    cgs.media.raceFlagR = trap_R_RegisterModel("models/flag3/r_flag3.md3");
-    cgs.media.raceFlagN = trap_R_RegisterModel("models/flag3/n_flag3.md3");
-    cgs.media.raceFlagF = trap_R_RegisterModel("models/flag3/f_flag3.md3");
-    cgs.media.raceFlagG = trap_R_RegisterModel("models/flag3/g_flag3.md3");
-    cgs.media.raceFlagD = trap_R_RegisterModel("models/flag3/d_flag3.md3");
-    cgs.media.raceMarkerStart = trap_R_RegisterShader("gfx/2d/race/start");
-    cgs.media.raceMarkerCheckpoint = trap_R_RegisterShader("gfx/2d/race/checkpoint");
-    cgs.media.raceMarkerFinish = trap_R_RegisterShader("gfx/2d/race/finish");
-    cgs.media.domPointModel = trap_R_RegisterModel("models/powerups/domination/dompoint.md3");
     cgs.media.domShadowShader = trap_R_RegisterShader("domShadow");  // [QL] 0x10024abc
-    cgs.media.domSkinRed = trap_R_RegisterSkin("models/powerups/domination/domred.skin");
-    cgs.media.domSkinBlue = trap_R_RegisterSkin("models/powerups/domination/domblue.skin");
-    cgs.media.domSkinNeutral = trap_R_RegisterSkin("models/powerups/domination/domntrl.skin");
 
     // clear any references to old media
     memset(&cg.refdef, 0, sizeof(cg.refdef));
@@ -1928,17 +1914,19 @@ static void CG_RegisterGraphics(void) {
     cgs.media.scoreboardScore = trap_R_RegisterShaderNoMip("menu/tab/score.tga");
     cgs.media.scoreboardTime = trap_R_RegisterShaderNoMip("menu/tab/time.tga");
 
-    // [QL] the duel board's status plates, in the binary's order (0x10023804..0x100238e3)
-    cgs.media.duelPlateReady[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_ready.tga");
-    cgs.media.duelPlateNotReady[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_notready.tga");
-    cgs.media.duelPlateReady[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_ready.tga");
-    cgs.media.duelPlateNotReady[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_notready.tga");
-    cgs.media.duelPlateLeads[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_leads.tga");
-    cgs.media.duelPlateTied[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_tied.tga");
-    cgs.media.duelPlateTrails[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_trails.tga");
-    cgs.media.duelPlateLeads[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_leads.tga");
-    cgs.media.duelPlateTied[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_tied.tga");
-    cgs.media.duelPlateTrails[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_trails.tga");
+    // [QL] the duel board's status plates, in duel and in the binary's order (0x100237ec..0x100238e3)
+    if (cgs.gametype == GT_DUEL) {
+        cgs.media.duelPlateReady[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_ready.tga");
+        cgs.media.duelPlateNotReady[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_notready.tga");
+        cgs.media.duelPlateReady[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_ready.tga");
+        cgs.media.duelPlateNotReady[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_notready.tga");
+        cgs.media.duelPlateLeads[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_leads.tga");
+        cgs.media.duelPlateTied[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_tied.tga");
+        cgs.media.duelPlateTrails[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_trails.tga");
+        cgs.media.duelPlateLeads[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_leads.tga");
+        cgs.media.duelPlateTied[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_tied.tga");
+        cgs.media.duelPlateTrails[1] = trap_R_RegisterShader("ui/assets/score/2nd_plyr_trails.tga");
+    }
     if (cgs.gametype >= GT_FREEZE) {
         cgs.media.thawIconShader = trap_R_RegisterShader("icons/thaw");
         // [QL] the base gibs, registered right here by the binary and distinct from the gore
@@ -2017,13 +2005,27 @@ static void CG_RegisterGraphics(void) {
     cgs.media.gooShader = trap_R_RegisterShader("powerups/goo");
     cgs.media.xrayMaskShader = trap_R_RegisterShader("ioqlXrayMask");
     cgs.media.xrayShader = trap_R_RegisterShader("ioqlXray");
-    // [QL] 0x100236e4: the markers drawn over the powerups
-    cgs.media.powerupPoi[0] = trap_R_RegisterShader("gfx/2d/powerup/quad");
-    cgs.media.powerupPoi[1] = trap_R_RegisterShader("gfx/2d/powerup/bs");
-    cgs.media.powerupPoi[2] = trap_R_RegisterShader("gfx/2d/powerup/haste");
-    cgs.media.powerupPoi[3] = trap_R_RegisterShader("gfx/2d/powerup/invis");
-    cgs.media.powerupPoi[4] = trap_R_RegisterShader("gfx/2d/powerup/regen");
-    cgs.media.powerupIncomingShader = trap_R_RegisterShader("gfx/2d/powerup/incoming");
+    // [QL] 0x100236c5: the markers drawn over the powerups, in every mode but FFA, race,
+    // harvester and domination
+    switch (cgs.gametype) {
+        case GT_FFA:
+        case GT_RACE:
+        case GT_HARVESTER:
+        case GT_DOMINATION:
+            break;
+        default:
+            cgs.media.powerupPoi[0] = trap_R_RegisterShaderNoMip("gfx/2d/powerup/quad");
+            cgs.media.powerupPoi[1] = trap_R_RegisterShaderNoMip("gfx/2d/powerup/bs");
+            cgs.media.powerupPoi[3] = trap_R_RegisterShaderNoMip("gfx/2d/powerup/invis");
+            cgs.media.powerupPoi[2] = trap_R_RegisterShaderNoMip("gfx/2d/powerup/haste");
+            cgs.media.powerupPoi[4] = trap_R_RegisterShaderNoMip("gfx/2d/powerup/regen");
+            cgs.media.powerupIncomingShader = trap_R_RegisterShaderNoMip("gfx/2d/powerup/incoming");
+            break;
+    }
+    // [QL] 0x100237c8: Quad Hog is played in FFA
+    if (cgs.gametype == GT_FFA) {
+        cgs.media.quadHogPoiShader = trap_R_RegisterShaderNoMip("gfx/2d/quad_hog/quadhog");
+    }
     cgs.media.hastePuffShader = trap_R_RegisterShader("hasteSmokePuff");
 
     // [QL] gametype icons for scoreboard/HUD (from pak00: ui/assets/hud/*.png)
@@ -2042,60 +2044,126 @@ static void CG_RegisterGraphics(void) {
     cgs.media.gametypeIcon[GT_RR]         = trap_R_RegisterShaderNoMip("ui/assets/hud/rr");
     cgs.media.raceNavShader = trap_R_RegisterShader("gfx/misc/racenav.jpg");
 
+    // [QL] the binary always registers the gold key, outside any conditional
+    cgs.media.keyGoldModel = trap_R_RegisterModel("models/powerups/keys/key_gold.md3");
+
+    // [QL] 0x10023996: the flags, their poles and bases and the flag status icons, in the
+    // modes that have flags: race, CTF, one flag, overload, domination and A&D
+    switch (cgs.gametype) {
+        case GT_RACE:
+        case GT_CTF:
+        case GT_1FCTF:
+        case GT_OBELISK:
+        case GT_DOMINATION:
+        case GT_AD: {
+            // indexed [icon + team*4]: team 0 neutral, 1 red, 2 blue; icon 0 at base, 1 taken,
+            // 2 dropped, 3 stolen
+            static const char* flagStatusShaders[12] = {
+                "gfx/2d/flag_status/flag_at_base.tga",
+                "gfx/2d/flag_status/flag_taken.tga",
+                "gfx/2d/flag_status/flag_dropped.tga",
+                "gfx/2d/flag_status/flag_stolen.tga",
+                "gfx/2d/flag_status/red_flag_at_base.tga",
+                "gfx/2d/flag_status/red_flag_taken.tga",
+                "gfx/2d/flag_status/red_flag_dropped.tga",
+                "gfx/2d/flag_status/red_flag_stolen.tga",
+                "gfx/2d/flag_status/blue_flag_at_base.tga",
+                "gfx/2d/flag_status/blue_flag_taken.tga",
+                "gfx/2d/flag_status/blue_flag_dropped.tga",
+                "gfx/2d/flag_status/blue_flag_stolen.tga",
+            };
+
+            cgs.media.redFlagModel = trap_R_RegisterModel("models/flags/r_flag.md3");
+            cgs.media.blueFlagModel = trap_R_RegisterModel("models/flags/b_flag.md3");
+            cgs.media.raceFlagR = trap_R_RegisterModel("models/flag3/r_flag3.md3");
+            cgs.media.raceFlagB = trap_R_RegisterModel("models/flag3/b_flag3.md3");
+            cgs.media.raceFlagF = trap_R_RegisterModel("models/flag3/f_flag3.md3");
+            cgs.media.raceFlagG = trap_R_RegisterModel("models/flag3/g_flag3.md3");
+            for (i = 0; i < 12; i++) {
+                cgs.media.flagStatusHandles[i] = trap_R_RegisterShaderNoMip(flagStatusShaders[i]);
+            }
+            cgs.media.flagTrackPointerShader = trap_R_RegisterShaderNoMip("gfx/2d/flag_status/track_pointer.tga");
+            cgs.media.flagPoleModel = trap_R_RegisterModel("models/flag2/flagpole.md3");
+            cgs.media.flagFlapModel = trap_R_RegisterModel("models/flag2/flagflap3.md3");
+            cgs.media.redFlagFlapSkin = trap_R_RegisterSkin("models/flag2/red.skin");
+            cgs.media.blueFlagFlapSkin = trap_R_RegisterSkin("models/flag2/blue.skin");
+            cgs.media.neutralFlagFlapSkin = trap_R_RegisterSkin("models/flag2/white.skin");
+            cgs.media.redFlagBaseModel = trap_R_RegisterModel("models/mapobjects/flagbase/red_base.md3");
+            cgs.media.blueFlagBaseModel = trap_R_RegisterModel("models/mapobjects/flagbase/blue_base.md3");
+            cgs.media.neutralFlagBaseModel = trap_R_RegisterModel("models/mapobjects/flagbase/ntrl_base.md3");
+            break;
+        }
+        default:
+            break;
+    }
+    // [QL] 0x10023c33: the neutral and the dropped flag
+    if (cgs.gametype == GT_1FCTF || cgs.gametype == GT_DOMINATION || cgs.gametype == GT_AD ||
+        cgs.gametype == GT_RACE) {
+        cgs.media.neutralFlagModel = trap_R_RegisterModel("models/flags/n_flag.md3");
+        cgs.media.droppedFlagModel = trap_R_RegisterModel("models/flags/d_flag.md3");
+        cgs.media.raceFlagN = trap_R_RegisterModel("models/flag3/n_flag3.md3");
+        cgs.media.raceFlagD = trap_R_RegisterModel("models/flag3/d_flag3.md3");
+    }
+    // [QL] 0x10023cad: the harvester, which one flag also uses for the team bases
+    if (cgs.gametype == GT_1FCTF || cgs.gametype == GT_HARVESTER) {
+        cgs.media.harvesterModel = trap_R_RegisterModel("models/powerups/harvester/harvester.md3");
+        cgs.media.harvesterRedSkin = trap_R_RegisterSkin("models/powerups/harvester/red.skin");
+        cgs.media.harvesterBlueSkin = trap_R_RegisterSkin("models/powerups/harvester/blue.skin");
+        cgs.media.harvesterNeutralModel = trap_R_RegisterModel("models/powerups/obelisk/obelisk.md3");
+    }
     if (cgs.gametype == GT_HARVESTER) {
         cgs.media.redCubeModel = trap_R_RegisterModel("models/powerups/orb/r_orb.md3");
         cgs.media.blueCubeModel = trap_R_RegisterModel("models/powerups/orb/b_orb.md3");
         cgs.media.redCubeIcon = trap_R_RegisterShader("icons/skull_red");
         cgs.media.blueCubeIcon = trap_R_RegisterShader("icons/skull_blue");
+        cgs.media.harvesterCaptureShader = trap_R_RegisterShaderNoMip("gfx/2d/har/poi_capture");
     }
-
-    if (cgs.gametype == GT_CTF || cgs.gametype == GT_1FCTF || cgs.gametype == GT_HARVESTER) {
-        cgs.media.redFlagModel = trap_R_RegisterModel("models/flags/r_flag.md3");
-        cgs.media.blueFlagModel = trap_R_RegisterModel("models/flags/b_flag.md3");
-        cgs.media.redFlagShader[0] = trap_R_RegisterShaderNoMip("icons/iconf_red1");
-        cgs.media.redFlagShader[1] = trap_R_RegisterShaderNoMip("icons/iconf_red2");
-        cgs.media.redFlagShader[2] = trap_R_RegisterShaderNoMip("icons/iconf_red3");
-        cgs.media.blueFlagShader[0] = trap_R_RegisterShaderNoMip("icons/iconf_blu1");
-        cgs.media.blueFlagShader[1] = trap_R_RegisterShaderNoMip("icons/iconf_blu2");
-        cgs.media.blueFlagShader[2] = trap_R_RegisterShaderNoMip("icons/iconf_blu3");
-
-        cgs.media.flagPoleModel = trap_R_RegisterModel("models/flag2/flagpole.md3");
-        cgs.media.flagFlapModel = trap_R_RegisterModel("models/flag2/flagflap3.md3");
-
-        cgs.media.redFlagFlapSkin = trap_R_RegisterSkin("models/flag2/red.skin");
-        cgs.media.blueFlagFlapSkin = trap_R_RegisterSkin("models/flag2/blue.skin");
-        cgs.media.neutralFlagFlapSkin = trap_R_RegisterSkin("models/flag2/white.skin");
-
-        cgs.media.redFlagBaseModel = trap_R_RegisterModel("models/mapobjects/flagbase/red_base.md3");
-        cgs.media.blueFlagBaseModel = trap_R_RegisterModel("models/mapobjects/flagbase/blue_base.md3");
-        cgs.media.neutralFlagBaseModel = trap_R_RegisterModel("models/mapobjects/flagbase/ntrl_base.md3");
-    }
-
-    // [QL] the binary always registers the gold key, outside any conditional
-    cgs.media.keyGoldModel = trap_R_RegisterModel("models/powerups/keys/key_gold.md3");
-    cgs.media.droppedFlagModel = trap_R_RegisterModel("models/flags/d_flag.md3");
-
-    if (cgs.gametype == GT_1FCTF) {
-        cgs.media.neutralFlagModel = trap_R_RegisterModel("models/flags/n_flag.md3");
-        cgs.media.flagShader[0] = trap_R_RegisterShaderNoMip("icons/iconf_neutral1");
-        cgs.media.flagShader[1] = trap_R_RegisterShaderNoMip("icons/iconf_red2");
-        cgs.media.flagShader[2] = trap_R_RegisterShaderNoMip("icons/iconf_blu2");
-        cgs.media.flagShader[3] = trap_R_RegisterShaderNoMip("icons/iconf_neutral3");
-    }
-
     if (cgs.gametype == GT_OBELISK) {
-        cgs.media.rocketExplosionShader = trap_R_RegisterShader("rocketExplosion");
         cgs.media.overloadBaseModel = trap_R_RegisterModel("models/powerups/overload_base.md3");
         cgs.media.overloadTargetModel = trap_R_RegisterModel("models/powerups/overload_target.md3");
         cgs.media.overloadLightsModel = trap_R_RegisterModel("models/powerups/overload_lights.md3");
         cgs.media.overloadEnergyModel = trap_R_RegisterModel("models/powerups/overload_energy.md3");
     }
-
-    if (cgs.gametype == GT_HARVESTER) {
-        cgs.media.harvesterModel = trap_R_RegisterModel("models/powerups/harvester/harvester.md3");
-        cgs.media.harvesterRedSkin = trap_R_RegisterSkin("models/powerups/harvester/red.skin");
-        cgs.media.harvesterBlueSkin = trap_R_RegisterSkin("models/powerups/harvester/blue.skin");
-        cgs.media.harvesterNeutralModel = trap_R_RegisterModel("models/powerups/obelisk/obelisk.md3");
+    // [QL] 0x10023e11: the domination point, which race also puts up
+    if (cgs.gametype == GT_DOMINATION || cgs.gametype == GT_RACE) {
+        cgs.media.domPointModel = trap_R_RegisterModel("models/powerups/domination/dompoint.md3");
+        cgs.media.domSkinRed = trap_R_RegisterSkin("models/powerups/domination/domred.skin");
+        cgs.media.domSkinBlue = trap_R_RegisterSkin("models/powerups/domination/domblue.skin");
+        cgs.media.domSkinNeutral = trap_R_RegisterSkin("models/powerups/domination/domntrl.skin");
+    }
+    // [QL] 0x10023e82: the domination point markers, "capture" or "defend" and a letter each, and
+    // the same for a point being fought over
+    if (cgs.gametype == GT_DOMINATION) {
+        for (i = 0; i < 5; i++) {
+            cgs.media.domCaptureShader[i] = trap_R_RegisterShaderNoMip(va("gfx/2d/dom_point/dom_cap_%c", 'a' + i));
+        }
+        for (i = 0; i < 5; i++) {
+            cgs.media.domDefendShader[i] = trap_R_RegisterShaderNoMip(va("gfx/2d/dom_point/dom_def_%c", 'a' + i));
+        }
+        for (i = 0; i < 5; i++) {
+            cgs.media.domCaptureDistShader[i] =
+                trap_R_RegisterShaderNoMip(va("gfx/2d/dom_point/dom_cap_%c_dist", 'a' + i));
+        }
+        for (i = 0; i < 5; i++) {
+            cgs.media.domDefendDistShader[i] =
+                trap_R_RegisterShaderNoMip(va("gfx/2d/dom_point/dom_def_%c_dist", 'a' + i));
+        }
+    }
+    // [QL] 0x1002406f: the race markers, which the objective modes use too
+    switch (cgs.gametype) {
+        case GT_RACE:
+        case GT_CTF:
+        case GT_1FCTF:
+        case GT_OBELISK:
+        case GT_HARVESTER:
+        case GT_DOMINATION:
+        case GT_AD:
+            cgs.media.raceMarkerStart = trap_R_RegisterShaderNoMip("gfx/2d/race/start");
+            cgs.media.raceMarkerCheckpoint = trap_R_RegisterShaderNoMip("gfx/2d/race/checkpoint");
+            cgs.media.raceMarkerFinish = trap_R_RegisterShaderNoMip("gfx/2d/race/finish");
+            break;
+        default:
+            break;
     }
 
     // [QL] 0x1002303c: the segments of the health bars over teammates
@@ -2106,32 +2174,30 @@ static void CG_RegisterGraphics(void) {
     cgs.media.cmdRightShader = trap_R_RegisterShaderNoMip("gfx/2d/race/cmd_right");
     cgs.media.cmdLeftShader = trap_R_RegisterShaderNoMip("gfx/2d/race/cmd_left");
 
-    // [QL] 0x100240d9: the bite over Red Rover's survivors
+    // [QL] 0x100240d9: the bite over Red Rover's survivors, which is also their marker
     if (cgs.gametype == GT_RR) {
         cgs.media.infectedShader = trap_R_RegisterShaderNoMip("gfx/2d/infected/bite");
     }
 
     cgs.media.redKamikazeShader = trap_R_RegisterShader("models/weaphits/kamikred");
     cgs.media.dustPuffShader = trap_R_RegisterShader("hasteSmokePuff");
+    // [QL] 0x1002413b: the debris of a shot through a wall (0x10055357)
+    cgs.media.debrisPuffShader = trap_R_RegisterShader("surfacePuff");
 
     if (cgs.gametype >= GT_TEAM) {
-        cgs.media.redQuadShader = trap_R_RegisterShader("powerups/blueflag");
-        cgs.media.teamStatusBar = trap_R_RegisterShader("gfx/2d/colorbar.tga");
-        cgs.media.blueKamikazeShader = trap_R_RegisterShader("models/weaphits/kamikblu");
-        cgs.media.poiShader = trap_R_RegisterShader("sprites/neutralflagcarrier");
-        // [QL] 0x100237e7 and 0x100240f4: the same marker wears a different face when
-        // the match is running Quad Hog or Red Rover
-        cgs.media.quadHogPoiShader = trap_R_RegisterShader("gfx/2d/quad_hog/quadhog");
-        cgs.media.infectedPoiShader = trap_R_RegisterShader("gfx/2d/infected/bite");
         // [QL] 0x1002415d: the teammate markers
         cgs.media.friendShader = trap_R_RegisterShader("sprites/friend");
         cgs.media.friendHitShader = trap_R_RegisterShader("sprites/friend_hit");
         cgs.media.friendDeadShader = trap_R_RegisterShader("sprites/friend_dead");
+        cgs.media.teamStatusBar = trap_R_RegisterShader("gfx/2d/colorbar");
+        cgs.media.blueKamikazeShader = trap_R_RegisterShader("models/weaphits/kamikblu");
+        cgs.media.frozenShader = trap_R_RegisterShader("sprites/frozen");
     }
     // [QL] 0x100241e7: the flag carriers' markers, in the modes with flags
     if (cgs.gametype == GT_CTF || cgs.gametype == GT_1FCTF || cgs.gametype == GT_AD) {
         cgs.media.flagCarrierShader = trap_R_RegisterShader("sprites/flagcarrier");
         cgs.media.flagCarrierHitShader = trap_R_RegisterShader("sprites/flagcarrier_hit");
+        cgs.media.poiShader = trap_R_RegisterShader("sprites/neutralflagcarrier");
     }
 
     cgs.media.armorModel = trap_R_RegisterModel("models/powerups/armor/armor_yel.md3");
@@ -2274,7 +2340,6 @@ static void CG_RegisterGraphics(void) {
     cgs.media.iceShardShader1 = trap_R_RegisterShader("powerups/ice1");
     cgs.media.iceShardShader2 = trap_R_RegisterShader("powerups/ice2");
     cgs.media.iceShardShader3 = trap_R_RegisterShader("powerups/ice3");
-    cgs.media.frozenShader = trap_R_RegisterShader("sprites/frozen");
     cgs.media.iceMarkShader = trap_R_RegisterShader("iceMark");
 
     memset(cg_items, 0, sizeof(cg_items));
@@ -2343,36 +2408,11 @@ static void CG_RegisterGraphics(void) {
     // handle used to resolve to the default shader - invisible in practice.
     // pak00 ships the file as .png; the renderer resolves the extension.
     cgs.media.selectCursor = trap_R_RegisterShaderNoMip("ui/assets/3_cursor3");
-    cgs.media.flagShaders[0] = trap_R_RegisterShaderNoMip("ui/assets/statusbar/flag_in_base.tga");
-    cgs.media.flagShaders[1] = trap_R_RegisterShaderNoMip("ui/assets/statusbar/flag_capture.tga");
-    cgs.media.flagShaders[2] = trap_R_RegisterShaderNoMip("ui/assets/statusbar/flag_missing.tga");
 
-    // [QL] flag-status HUD icon set for CG_DrawFlagStatus / CG_DrawOneFlagStatus.
-    // Indexed [icon + team*4]: team 0 neutral, 1 red, 2 blue; icon 0 at-base, 1 taken,
-    // 2 dropped, 3 stolen. (binary CG_RegisterGraphics, store base DAT_10a5fc2c @0x10023a4f.)
-    {
-        static const char* flagStatusShaders[12] = {
-            "gfx/2d/flag_status/flag_at_base.tga",
-            "gfx/2d/flag_status/flag_taken.tga",
-            "gfx/2d/flag_status/flag_dropped.tga",
-            "gfx/2d/flag_status/flag_stolen.tga",
-            "gfx/2d/flag_status/red_flag_at_base.tga",
-            "gfx/2d/flag_status/red_flag_taken.tga",
-            "gfx/2d/flag_status/red_flag_dropped.tga",
-            "gfx/2d/flag_status/red_flag_stolen.tga",
-            "gfx/2d/flag_status/blue_flag_at_base.tga",
-            "gfx/2d/flag_status/blue_flag_taken.tga",
-            "gfx/2d/flag_status/blue_flag_dropped.tga",
-            "gfx/2d/flag_status/blue_flag_stolen.tga",
-        };
-        int fi;
-        for (fi = 0; fi < 12; fi++) {
-            cgs.media.flagStatusHandles[fi] = trap_R_RegisterShaderNoMip(flagStatusShaders[fi]);
-        }
-    }
-
-    // [QL] the follow pointer is kept apart from the set of twelve icons
-    cgs.media.flagTrackPointerShader = trap_R_RegisterShaderNoMip("gfx/2d/flag_status/track_pointer.tga");
+    // [QL] 0x10024d30: the objective markers of A&D and CTF, in every mode
+    cgs.media.adAttackShader = trap_R_RegisterShaderNoMip("gfx/2d/ad/poi_attack");
+    cgs.media.adCaptureShader = trap_R_RegisterShaderNoMip("gfx/2d/ad/poi_capture");
+    cgs.media.adDefendShader = trap_R_RegisterShaderNoMip("gfx/2d/ad/poi_defend");
 
     // [QL] head models are in the player directory, not a separate heads/ directory
     trap_R_RegisterModel("models/players/james/lower.md3");
