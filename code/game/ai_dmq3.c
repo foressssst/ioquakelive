@@ -103,20 +103,6 @@ int blue_numaltroutegoals;
 
 /*
 ==================
-BotSetUserInfo
-==================
-*/
-void BotSetUserInfo(bot_state_t* bs, char* key, char* value) {
-    char userinfo[MAX_INFO_STRING];
-
-    trap_GetUserinfo(bs->client, userinfo, sizeof(userinfo));
-    Info_SetValueForKey(userinfo, key, value);
-    trap_SetUserinfo(bs->client, userinfo);
-    ClientUserinfoChanged(bs->client);
-}
-
-/*
-==================
 BotCTFCarryingFlag
 ==================
 */
@@ -360,58 +346,7 @@ BotSetTeamStatus
 ==================
 */
 void BotSetTeamStatus(bot_state_t* bs) {
-    int teamtask;
-    aas_entityinfo_t entinfo;
-
-    teamtask = TEAMTASK_PATROL;
-
-    switch (bs->ltgtype) {
-        case LTG_TEAMHELP:
-            break;
-        case LTG_TEAMACCOMPANY:
-            BotEntityInfo(bs->teammate, &entinfo);
-            if (((gametype == GT_CTF || gametype == GT_1FCTF) && EntityCarriesFlag(&entinfo)) || (gametype == GT_HARVESTER && EntityCarriesCubes(&entinfo))) {
-                teamtask = TEAMTASK_ESCORT;
-            } else {
-                teamtask = TEAMTASK_FOLLOW;
-            }
-            break;
-        case LTG_DEFENDKEYAREA:
-            teamtask = TEAMTASK_DEFENSE;
-            break;
-        case LTG_GETFLAG:
-            teamtask = TEAMTASK_OFFENSE;
-            break;
-        case LTG_RUSHBASE:
-            teamtask = TEAMTASK_DEFENSE;
-            break;
-        case LTG_RETURNFLAG:
-            teamtask = TEAMTASK_RETRIEVE;
-            break;
-        case LTG_CAMP:
-        case LTG_CAMPORDER:
-            teamtask = TEAMTASK_CAMP;
-            break;
-        case LTG_PATROL:
-            teamtask = TEAMTASK_PATROL;
-            break;
-        case LTG_GETITEM:
-            teamtask = TEAMTASK_PATROL;
-            break;
-        case LTG_KILL:
-            teamtask = TEAMTASK_PATROL;
-            break;
-        case LTG_HARVEST:
-            teamtask = TEAMTASK_OFFENSE;
-            break;
-        case LTG_ATTACKENEMYBASE:
-            teamtask = TEAMTASK_OFFENSE;
-            break;
-        default:
-            teamtask = TEAMTASK_PATROL;
-            break;
-    }
-    BotSetUserInfo(bs, "teamtask", va("%d", teamtask));
+    // [QL] 0x10013da0: the team task no longer reaches the userinfo
 }
 
 /*
@@ -420,7 +355,8 @@ BotSetLastOrderedTask
 ==================
 */
 int BotSetLastOrderedTask(bot_state_t* bs) {
-    if (gametype == GT_CTF) {
+    // [QL] 0x10013e20: A&D too
+    if (gametype == GT_CTF || gametype == GT_AD) {
         // don't go back to returning the flag if it's at the base
         if (bs->lastgoal_ltgtype == LTG_RETURNFLAG) {
             if (BotTeam(bs) == TEAM_RED) {
@@ -444,7 +380,7 @@ int BotSetLastOrderedTask(bot_state_t* bs) {
         bs->teamgoal_time = FloatTime() + 300;
         BotSetTeamStatus(bs);
         //
-        if (gametype == GT_CTF) {
+        if (gametype == GT_CTF || gametype == GT_AD) {
             if (bs->ltgtype == LTG_GETFLAG) {
                 bot_goal_t *tb, *eb;
                 int tt, et;
@@ -494,6 +430,16 @@ void BotCTFSeekGoals(bot_state_t* bs) {
 
     // when carrying a flag in ctf the bot should rush to the base
     if (BotCTFCarryingFlag(bs)) {
+        // [QL] 0x100140a0: with our own flag gone, a carrier already near our base stays there
+        if (BotTeam(bs) == TEAM_RED) {
+            flagstatus = bs->redflagstatus * 2 + bs->blueflagstatus;
+            VectorSubtract(bs->origin, ctf_redflag.origin, dir);
+        } else {
+            flagstatus = bs->blueflagstatus * 2 + bs->redflagstatus;
+            VectorSubtract(bs->origin, ctf_blueflag.origin, dir);
+        }
+        if (flagstatus > 1 && VectorLength(dir) < 1000)
+            return;
         // if not already rushing to the base
         if (bs->ltgtype != LTG_RUSHBASE) {
             BotRefuseOrder(bs);
@@ -522,7 +468,6 @@ void BotCTFSeekGoals(bot_state_t* bs) {
                 // don't use any alt route goal, just get the hell out of the base
                 bs->altroutegoal.areanum = 0;
             }
-            BotSetUserInfo(bs, "teamtask", va("%d", TEAMTASK_OFFENSE));
             BotVoiceChat(bs, -1, VOICECHAT_IHAVEFLAG);
         } else if (bs->rushbaseaway_time > FloatTime()) {
             if (BotTeam(bs) == TEAM_RED)
@@ -1326,8 +1271,9 @@ BotTeamGoals
 ==================
 */
 void BotTeamGoals(bot_state_t* bs, int retreat) {
+    // [QL] 0x10015960: A&D plays the CTF goals
     if (retreat) {
-        if (gametype == GT_CTF) {
+        if (gametype == GT_CTF || gametype == GT_AD) {
             BotCTFRetreatGoals(bs);
         } else if (gametype == GT_1FCTF) {
             Bot1FCTFRetreatGoals(bs);
@@ -1337,7 +1283,7 @@ void BotTeamGoals(bot_state_t* bs, int retreat) {
             BotHarvesterRetreatGoals(bs);
         }
     } else {
-        if (gametype == GT_CTF) {
+        if (gametype == GT_CTF || gametype == GT_AD) {
             // decide what to do in CTF mode
             BotCTFSeekGoals(bs);
         } else if (gametype == GT_1FCTF) {
@@ -1671,8 +1617,9 @@ void BotCheckItemPickup(bot_state_t* bs, int* oldinventory) {
                             BotVoiceChat(bs, leader, VOICECHAT_WANTONOFFENSE);
                         }
                     }
+                    // [QL] 0x10016204: only a bot deciding on its own takes the attacker role
+                    bs->teamtaskpreference |= TEAMTP_ATTACKER;
                 }
-                bs->teamtaskpreference |= TEAMTP_ATTACKER;
             }
             bs->teamtaskpreference &= ~TEAMTP_DEFENDER;
         } else {
@@ -5247,9 +5194,10 @@ BotSetupAlternateRouteGoals
 void BotSetupAlternativeRouteGoals(void) {
     if (altroutegoals_setup)
         return;
-    if (gametype == GT_CTF) {
+    // [QL] 0x1001ee30: A&D routes like CTF; only Overload looks the neutral obelisk up here
+    if (gametype == GT_CTF || gametype == GT_AD) {
         if (trap_BotGetLevelItemGoal(-1, "Neutral Flag", &ctf_neutralflag) < 0)
-            BotAI_Print(PRT_WARNING, "No alt routes without Neutral Flag\n");
+            BotAI_Print(PRT_WARNING, "no alt routes without Neutral Flag\n");
         if (ctf_neutralflag.areanum) {
             //
             red_numaltroutegoals = trap_AAS_AlternativeRouteGoals(
@@ -5266,8 +5214,6 @@ void BotSetupAlternativeRouteGoals(void) {
                     ALTROUTEGOAL_VIEWPORTALS);
         }
     } else if (gametype == GT_1FCTF) {
-        if (trap_BotGetLevelItemGoal(-1, "Neutral Obelisk", &neutralobelisk) < 0)
-            BotAI_Print(PRT_WARNING, "One Flag CTF without Neutral Obelisk\n");
         red_numaltroutegoals = trap_AAS_AlternativeRouteGoals(
             ctf_neutralflag.origin, ctf_neutralflag.areanum,
             ctf_redflag.origin, ctf_redflag.areanum, TFL_DEFAULT,
@@ -5282,7 +5228,7 @@ void BotSetupAlternativeRouteGoals(void) {
                 ALTROUTEGOAL_VIEWPORTALS);
     } else if (gametype == GT_OBELISK) {
         if (trap_BotGetLevelItemGoal(-1, "Neutral Obelisk", &neutralobelisk) < 0)
-            BotAI_Print(PRT_WARNING, "No alt routes without Neutral Obelisk\n");
+            BotAI_Print(PRT_WARNING, "Harvester without neutral obelisk\n");
         //
         red_numaltroutegoals = trap_AAS_AlternativeRouteGoals(
             neutralobelisk.origin, neutralobelisk.areanum,
@@ -5297,8 +5243,6 @@ void BotSetupAlternativeRouteGoals(void) {
             ALTROUTEGOAL_CLUSTERPORTALS |
                 ALTROUTEGOAL_VIEWPORTALS);
     } else if (gametype == GT_HARVESTER) {
-        if (trap_BotGetLevelItemGoal(-1, "Neutral Obelisk", &neutralobelisk) < 0)
-            BotAI_Print(PRT_WARNING, "Harvester without Neutral Obelisk\n");
         red_numaltroutegoals = trap_AAS_AlternativeRouteGoals(
             neutralobelisk.origin, neutralobelisk.areanum,
             redobelisk.origin, redobelisk.areanum, TFL_DEFAULT,
@@ -5576,13 +5520,14 @@ void BotSetupDeathmatchAI(void) {
     trap_Cvar_Register(&bot_rocketjump, "bot_rocketjump", "1", 0);
     trap_Cvar_Register(&bot_grapple, "bot_grapple", "0", 0);
     trap_Cvar_Register(&bot_fastchat, "bot_fastchat", "0", 0);
-    trap_Cvar_Register(&bot_nochat, "bot_nochat", "0", 0);
+    // [QL] 0x1001f580: kept with the user's settings
+    trap_Cvar_Register(&bot_nochat, "bot_nochat", "0", CVAR_USERSAVE);
     trap_Cvar_Register(&bot_testrchat, "bot_testrchat", "0", 0);
-    trap_Cvar_Register(&bot_challenge, "bot_challenge", "0", 0);
+    trap_Cvar_Register(&bot_challenge, "bot_challenge", "0", CVAR_USERSAVE);
     trap_Cvar_Register(&bot_predictobstacles, "bot_predictobstacles", "1", 0);
     trap_Cvar_Register(&g_spSkill, "g_spSkill", "2", 0);
     //
-    if (gametype == GT_CTF) {
+    if (gametype == GT_CTF || gametype == GT_AD) {
         if (trap_BotGetLevelItemGoal(-1, "Red Flag", &ctf_redflag) < 0)
             BotAI_Print(PRT_WARNING, "CTF without Red Flag\n");
         if (trap_BotGetLevelItemGoal(-1, "Blue Flag", &ctf_blueflag) < 0)
@@ -5591,25 +5536,25 @@ void BotSetupDeathmatchAI(void) {
         if (trap_BotGetLevelItemGoal(-1, "Neutral Flag", &ctf_neutralflag) < 0)
             BotAI_Print(PRT_WARNING, "One Flag CTF without Neutral Flag\n");
         if (trap_BotGetLevelItemGoal(-1, "Red Flag", &ctf_redflag) < 0)
-            BotAI_Print(PRT_WARNING, "One Flag CTF without Red Flag\n");
+            BotAI_Print(PRT_WARNING, "CTF without Red Flag\n");
         if (trap_BotGetLevelItemGoal(-1, "Blue Flag", &ctf_blueflag) < 0)
-            BotAI_Print(PRT_WARNING, "One Flag CTF without Blue Flag\n");
+            BotAI_Print(PRT_WARNING, "CTF without Blue Flag\n");
     } else if (gametype == GT_OBELISK) {
         if (trap_BotGetLevelItemGoal(-1, "Red Obelisk", &redobelisk) < 0)
-            BotAI_Print(PRT_WARNING, "Overload without Red Obelisk\n");
+            BotAI_Print(PRT_WARNING, "Obelisk without red obelisk\n");
         BotSetEntityNumForGoalWithActivator(&redobelisk, "team_redobelisk");
         if (trap_BotGetLevelItemGoal(-1, "Blue Obelisk", &blueobelisk) < 0)
-            BotAI_Print(PRT_WARNING, "Overload without Blue Obelisk\n");
+            BotAI_Print(PRT_WARNING, "Obelisk without blue obelisk\n");
         BotSetEntityNumForGoalWithActivator(&blueobelisk, "team_blueobelisk");
     } else if (gametype == GT_HARVESTER) {
         if (trap_BotGetLevelItemGoal(-1, "Red Obelisk", &redobelisk) < 0)
-            BotAI_Print(PRT_WARNING, "Harvester without Red Obelisk\n");
+            BotAI_Print(PRT_WARNING, "Harvester without red obelisk\n");
         BotSetEntityNumForGoalWithActivator(&redobelisk, "team_redobelisk");
         if (trap_BotGetLevelItemGoal(-1, "Blue Obelisk", &blueobelisk) < 0)
-            BotAI_Print(PRT_WARNING, "Harvester without Blue Obelisk\n");
+            BotAI_Print(PRT_WARNING, "Harvester without blue obelisk\n");
         BotSetEntityNumForGoalWithActivator(&blueobelisk, "team_blueobelisk");
         if (trap_BotGetLevelItemGoal(-1, "Neutral Obelisk", &neutralobelisk) < 0)
-            BotAI_Print(PRT_WARNING, "Harvester without Neutral Obelisk\n");
+            BotAI_Print(PRT_WARNING, "Harvester without neutral obelisk\n");
         BotSetEntityNumForGoalWithActivator(&neutralobelisk, "team_neutralobelisk");
     }
 
