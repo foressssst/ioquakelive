@@ -149,14 +149,12 @@ void SnapVectorTowards(vec3_t v, vec3_t to) {
     }
 }
 
-#define CHAINGUN_SPREAD 600
+// [QL] 0x1006f588: the chaingun spreads from 700 at rest to 1400 fully spun up
+#define CHAINGUN_SPREAD 700
+#define CHAINGUN_MAX_SPREAD 1400
 #define CHAINGUN_DAMAGE 7
 
-// [QL] Heavy Machine Gun
-// TODO [QL faithfulness]: the binary computes HMG spread dynamically per shot in
-// FireWeapon (case 0xe) from a per-client field (spin-up/heat style), not a fixed
-// constant. Formula needs a disassembly pass to recover; until then this uses
-// a fixed spread.
+// [QL] Heavy Machine Gun (0x1006f513)
 #define HMG_SPREAD  350
 #define HMG_DAMAGE  8
 
@@ -1106,13 +1104,11 @@ void FireWeapon(gentity_t* ent) {
             weapon_supershotgun_fire(ent);
             break;
         case WP_MACHINEGUN: {
-            // [QL] MG spread is 150 base, scaled by g_ironsights_mg when crouched
-            // (binary FireWeapon case 2 @0x1006f4b9). Q3 used a fixed 200.
-            float mgSpread = 150.0f;
-            if (ent->client->ps.pm_flags & PMF_DUCKED) {
-                mgSpread *= g_ironsights_mg.value;
-            }
-            Bullet_Fire(ent, mgSpread, g_damage_mg.integer, MOD_MACHINEGUN);
+            // [QL] 0x1006f4c9: 150 whole units, scaled by g_ironsights_mg when crouched. Q3 used
+            // a fixed 200.
+            float scale = (ent->client->ps.pm_flags & PMF_DUCKED) ? g_ironsights_mg.value : 1.0f;
+
+            Bullet_Fire(ent, (float)(int)(scale * 150.0), g_damage_mg.integer, MOD_MACHINEGUN);
             break;
         }
         case WP_GRENADE_LAUNCHER:
@@ -1139,15 +1135,21 @@ void FireWeapon(gentity_t* ent) {
         case WP_PROX_LAUNCHER:
             weapon_proxlauncher_fire(ent);
             break;
-        case WP_CHAINGUN:
-            // [QL] binary FireWeapon pushes mod 0x20 (MOD_HMG) for the chaingun and
-            // 0x18 (MOD_CHAINGUN) for the HMG - the two means-of-death are swapped
-            // relative to the intuitive mapping. This drives knockback cvar,
-            // obituary text, kill icon and MOD-keyed stats.
-            Bullet_Fire(ent, CHAINGUN_SPREAD, g_damage_cg.integer, MOD_HMG);
+        case WP_CHAINGUN: {
+            // [QL] 0x1006f588: the further it has spun up (STAT_SPINUP, 0..1000) the wider it sprays
+            float spin = 1.0 - (1000.0 - ent->client->ps.stats[STAT_SPINUP]) / 1000.0;
+            int spread = (int)(spin * CHAINGUN_SPREAD + CHAINGUN_SPREAD);
+
+            if (spread < 0) {
+                spread = 0;
+            } else if (spread > CHAINGUN_MAX_SPREAD) {
+                spread = CHAINGUN_MAX_SPREAD;
+            }
+            Bullet_Fire(ent, spread, g_damage_cg.integer, MOD_CHAINGUN);
             break;
+        }
         case WP_HMG:
-            Bullet_Fire(ent, HMG_SPREAD, g_damage_hmg.integer, MOD_CHAINGUN);
+            Bullet_Fire(ent, HMG_SPREAD, g_damage_hmg.integer, MOD_HMG);
             break;
         default:
             // FIXME		G_Error( "Bad ent->s.weapon" );
