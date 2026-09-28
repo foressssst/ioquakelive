@@ -1102,6 +1102,8 @@ int BotAI(int client, float thinktime) {
     for (j = 0; j < 3; j++) {
         bs->viewangles[j] = AngleMod(bs->viewangles[j] - SHORT2ANGLE(bs->cur_ps.delta_angles[j]));
     }
+    // [QL] 0x1002244d: G_Damage asks it before the trainer protests
+    g_entities[bs->client].client->trainerSayTime = (int)(bs->tourNextSay * 1000);
     // everything was ok
     return qtrue;
 }

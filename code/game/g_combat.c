@@ -561,10 +561,9 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
 
     // 2. bot humour (training mode)
     if ((self->r.svFlags & SVF_BOT) && (g_training.integer == 1 || g_training.integer == 2)) {
-        // [QL] binary uses syscall +0x15c (force client console command); reimpl approximates
-        // with trap_SendServerCommand (imprecise, cosmetic). TODO: exact bot force-command trap.
-        trap_SendServerCommand(self->client->ps.clientNum,
-            "say Oops! Um... I meant to do that! Just don't you do it, ok?");
+        // [QL] 0x10047291: the bot itself says it
+        trap_EA_Command(self->client->ps.clientNum,
+            (char*)G_TrainingSay("say Oops! Um... I meant to do that! Just don't you do it, ok?"));
     }
 
     // 3. almost-capture / almost-score
@@ -673,13 +672,13 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
             if (g_complaintLimit.integer && BG_IsScoreBasedGameType() &&
                 level.warmupTime == 0 && meansOfDeath != MOD_TELEFRAG &&
                 !(attacker->r.svFlags & SVF_BOT)) {
-                if (attacker->client->sess.privileges == 2) {  // VERIFY C1: admin (privileges==2)
+                if (attacker->client->sess.privileges == 2) {  // [QL] 0x100475b1: admins draw no complaint
                     trap_SendServerCommand(self->s.number, "complaint -4");
                 } else {
                     trap_SendServerCommand(self->s.number, va("complaint %i", attacker->s.number));
-                    self->client->pers.complaintClient = attacker->s.clientNum;   // VERIFY C2
+                    self->client->pers.complaintClient = attacker->s.clientNum;
                     self->client->pers.complaintEndTime = level.time + 15500;
-                    attacker->client->pers.damageToTeammates = 0;   // VERIFY C3 (not "complaintCount")
+                    attacker->client->pers.damageToTeammates = 0;
                     self->client->pers.damageFromTeammates = 0;
                 }
             }
@@ -693,16 +692,17 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
             if (g_quadHog.integer == 0) {
                 int score = 1;
                 if (g_gametype.integer == GT_RR && g_rrInfected.integer &&
-                    self->client->sess.sessionTeam == TEAM_RED) {  // VERIFY C4: victim's team
+                    self->client->sess.sessionTeam == TEAM_RED) {  // [QL] 0x10047ac4: the victim was a zombie
                     score = g_rrInfectedZombieFragBonus.integer;
                 }
                 AddScore(attacker, self->r.currentOrigin, score);
-                if (g_gametype.integer == GT_RR && g_rrDamageScoreBonus.integer) {
-                    AddScore(attacker, self->r.currentOrigin, g_rrDamageScoreBonus.integer);
+                // [QL] 0x100476ee: in Red Rover dying costs the victim a point
+                if (g_gametype.integer == GT_RR && g_rrDeathScorePenalty.integer) {
+                    AddScore(self, self->r.currentOrigin, g_rrDeathScorePenalty.integer);
                 }
             } else if (g_quadHog.integer == 1 && g_gametype.integer == GT_FFA &&
                        (attacker->client->ps.powerups[PW_QUAD] ||
-                        self->client->ps.powerups[PW_QUAD])) {  // VERIFY C5: attacker OR victim quad
+                        self->client->ps.powerups[PW_QUAD])) {  // [QL] 0x100476b0: either one carrying the quad
                 AddScore(attacker, self->r.currentOrigin, 1);
             }
 
@@ -949,7 +949,7 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
         }
     }
 
-    // 23/24. suicide penalty + gib / death-anim / freeze (control flow per VERIFY C7)
+    // 23/24. suicide penalty + gib / death-anim / freeze ([QL] 0x100482b4)
     {
         qboolean doDeathBranch = qtrue;
         if (meansOfDeath == MOD_SUICIDE) {
@@ -993,7 +993,8 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
                     case 2:
                     default: anim = BOTH_DEATH3; break;
                 }
-                G_AddEvent(self, EV_DEATH1 + deathAnim, killer);
+                // [QL] 0x10048433: drowning has its own cry, and the event carries no killer
+                G_AddEvent(self, meansOfDeath == MOD_WATER ? EV_DROWN : EV_DEATH1 + deathAnim, 0);
                 deathAnim = (deathAnim + 1) % 3;
 
                 // prevent the health from staying at gib level (no-blood option)
@@ -1028,7 +1029,7 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
                     e->classname = "kamikaze timer";
                     VectorCopy(self->s.pos.trBase, e->s.pos.trBase);
                     e->r.svFlags |= SVF_NOCLIENT;
-                    e->think = Kamikaze_DeathActivate;  // [QL] 0x10048580
+                    e->think = Kamikaze_DeathActivate;  // [QL] 0x10046f20
                     e->nextthink = level.time + 3000;
                     e->activator = self;
                 }
@@ -1488,7 +1489,7 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
     if (!targ->takedamage) {
         return;
     }
-    if (client && client->noclip) {  // VERIFY #1: noclip guard is early (NOT pm_type)
+    if (client && client->noclip) {  // [QL] 0x10048c87
         return;
     }
     if (level.intermissionQueued) {
@@ -1506,7 +1507,7 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
             }
             return;
         }
-        if (client->ps.pm_type == PM_SPECTATOR) {  // VERIFY #1: pm_type==2 == PM_SPECTATOR
+        if (client->ps.pm_type == PM_SPECTATOR) {  // [QL] 0x10048cfe
             return;
         }
     }
@@ -1610,7 +1611,7 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
             float cr = g_knockback_cripple.value;
             float t = (float)(k * 2);
             float r = cr;
-            if (cr <= t) {  // VERIFY V1: the 200 cap only applies on the cripple<=t branch
+            if (cr <= t) {  // [QL] 0x1004906a: the 200 cap only when the cripple time is shorter
                 r = t;
                 if (t > 200.0f) {
                     r = 200.0f;
@@ -1657,9 +1658,17 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
         }
         // godmode
         if (targ->flags & FL_GODMODE) {
-            // [QL] 0x100491b8 first lets a bot with flag 0x20000 say "Stop wasting your ammo! I'm here
-            // to help you out!" to its attacker (client+0x894 in the past, 7 s apart, 25 %). Not
-            // ported yet: the flag and that client field are still unidentified.
+            // [QL] 0x100491b8: the trainer leading the tour, with nothing else to say, may protest
+            static int lastProtestTime;
+
+            if ((targ->r.svFlags & SVF_BOT) && (targ->flags & FL_TRAINER) && client && attacker->client &&
+                client->trainerSayTime < level.time && lastProtestTime + 7000 < level.time &&
+                random() * 100 < 25) {
+                trap_EA_Command(client->ps.clientNum,
+                    (char*)G_TrainingSay("say Stop wasting your ammo! I'm here to help you out!"));
+                trap_SendServerCommand(attacker->client->ps.clientNum, "playSound sound/vo/crash/40b.wav");
+                lastProtestTime = level.time;
+            }
             return;
         }
     }
@@ -1668,7 +1677,7 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
     if (client) {
         if (client->ps.powerups[PW_BATTLESUIT]) {
             G_AddEvent(targ, EV_POWERUP_BATTLESUIT, 0);
-            if (mod == MOD_FALLING) {  // VERIFY: battlesuit blocks ONLY falling (not all radius)
+            if (mod == MOD_FALLING) {  // [QL] 0x100492a4: the battlesuit only blocks falling
                 return;
             }
             damage = (int)((float)damage * g_battleSuitDampen.value);
@@ -1678,7 +1687,7 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
         }
     }
 
-    // 16. attacker hit counter + generic1 damage-tier (DamageTier spec + VERIFY)
+    // 16. attacker hit counter + generic1 damage-tier ([QL] 0x100492e5)
     if (attacker->client && targ != attacker && targ->health > 0 &&
         targ->s.eType != ET_MISSILE && targ->s.eType != ET_GENERAL) {
         if (OnSameTeam(targ, attacker)) {
@@ -1703,7 +1712,7 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
         damage = 1;
     }
 
-    // 18. rune pre-multiply (stats[STAT_PERSISTANT_POWERUP]; VERIFY #2)
+    // 18. rune pre-multiply ([QL] 0x10049516)
     if (client) {
         if (client->ps.stats[STAT_PERSISTANT_POWERUP] == 2) {
             damage = (int)((float)damage * 0.5f);
@@ -1796,7 +1805,7 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
             VectorCopy(dir, client->damage_from);
             client->damage_fromWorld = qfalse;
         } else {
-            VectorClear(client->damage_from);  // VERIFY #9: zeroed, not targ origin
+            VectorClear(client->damage_from);  // [QL] 0x10049728
             client->damage_fromWorld = qtrue;
         }
         client->lasthurt_client[1] = client->lasthurt_client[0];
@@ -1846,7 +1855,7 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
             case MOD_GRAPPLE:
             case MOD_HMG:
             case MOD_RAILGUN_HEADSHOT:
-                targ->health = -39;  // VERIFY #8: -39 (NOT -999)
+                targ->health = -39;  // [QL] 0x1004980a
                 if (attacker->client && targ != attacker) {
                     attacker->client->ps.persistant[PERS_ATTACKEE_ARMOR]++;  // lethal-hit kill counter
                 }

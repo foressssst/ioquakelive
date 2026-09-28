@@ -426,6 +426,7 @@ struct gclient_s {
 
     // timers
     int respawnTime;             // can respawn when time > this
+    int trainerSayTime;          // [QL] +0x894: a bot's tourNextSay in ms, copied every AI frame
     int spawnRetryTime;          // [QL] +0x8a0: a spawn that found no spawn point is retried after this
     int failedSpawns;            // [QL] +0x8a4: spawns in a row that found no spawn point
     int rewardTime;              // clear the EF_AWARD_IMPRESSIVE, etc when time > this

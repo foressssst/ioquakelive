@@ -485,6 +485,10 @@ static const trainingLine_t trainingSpanish[] = {
     {"Grab this powerup! No time to waste!", "Agarra este power-up! No hay tiempo que perder!"},
     {"Grab this holdable! No time to waste!", "Agarra este objeto! No hay tiempo que perder!"},
     {"Grab this item! No time to waste!", "Agarra este objeto! No hay tiempo que perder!"},
+    {"Oops! Um... I meant to do that! Just don't you do it, ok?",
+     "Uy! Eh... lo hice a proposito! Pero tu no lo hagas, ok?"},
+    {"Stop wasting your ammo! I'm here to help you out!",
+     "Deja de gastar municion! Estoy aqui para ayudarte!"},
 };
 
 /*
