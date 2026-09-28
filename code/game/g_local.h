@@ -371,18 +371,18 @@ typedef struct {
     int         numMidairShotgunKills;
 } expandedStatObj_t;
 
-// [QL] Per-client race data (552 bytes)
+// [QL] Per-client race data (gclient 0x8a8..0xac0); the run is timed with
+// pers.teamState.flagsince
 typedef struct {
-    qboolean    racingActive;
-    int         startTime;
-    int         lastTime;
-    int         best_race[64];
-    int         current_race[64];
-    int         currentCheckPoint;
-    qboolean    weaponUsed;
-    int         _pad;
-    gentity_t   *nextRacePoint;
-    gentity_t   *nextRacePoint2;
+    qboolean    racingActive;       // 0x8a8
+    int         startTime;          // 0x8ac: level.time at the start
+    int         lastTime;           // 0x8b0: the last finish
+    int         best_race[64];      // 0x8b4: splits of the best run
+    int         current_race[64];   // 0x9b4: splits of this run
+    int         currentCheckPoint;  // 0xab4
+    qboolean    weaponUsed;         // 0xab8
+    gentity_t   *nextRacePoint;     // 0xabc
+    gentity_t   *nextRacePoint2;    // 0xac0
 } raceInfo_t;
 
 // [QL] this structure is cleared on each ClientSpawn(),
@@ -630,6 +630,7 @@ typedef struct {
     int             numSpawnSpotsBlue;      /* [QL] 0x105df310: team_CTF_bluespawn */
     int             runeSpawnSpot[5];       /* [QL] 0x105df318: where each rune (1-4) came out */
     qboolean        ftDropCmdsSuspended;    /* [QL] 0x105df554: Freeze Tag took dropweapon away */
+    int             numRacePoints;          /* [QL] 0x105df550: race_point entities in the map */
 } level_locals_t;
 
 //
@@ -834,6 +835,7 @@ void FFAScoreboardMessage_impl(void);
 void DuelScoreboardMessage_impl(void);
 void DuelScoreboardMessage(gentity_t *ent);
 void RaceScoreboardMessage(gentity_t *ent);
+void QDECL PrintMsg(gentity_t *ent, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void TeamDeathmatchScoreboardMessage(gentity_t *ent);
 void TeamDeathmatchStatisticsMessage(gentity_t *ent);
 void ClanArenaScoreboardMessage(gentity_t *ent);
@@ -914,8 +916,6 @@ void Harvester_RegisterItems(void);
 // g_gametype_race.c - Race mode checkpoint system
 void SP_race_point(gentity_t *ent);
 void Touch_RaceCheckpoint(gentity_t *self, gentity_t *other, trace_t *trace);
-int Race_GetNumPoints(void);
-void Race_ResetCheckpoints(gentity_t *playerEnt);
 void Cmd_RaceInit_f(gentity_t *ent);
 void Cmd_RacePoint_f(gentity_t *ent);
 

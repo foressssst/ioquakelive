@@ -1,31 +1,45 @@
 /*
  * g_gametype_race.c -- Race mode (GT_RACE) checkpoint system
  *
- * Ported from ql-decompiled/game/g_race.c (Quake Live build 1069)
+ * Rewritten from qagamex86.dll (Quake Live build 1069), 0x10063580..0x1006427e and 0x1003dbb0.
  *
- * Players race through checkpoint entities (race_point). Checkpoints are
- * linked via target/target2 chains. Start checkpoint has target2 but no
- * target; end checkpoint has no target2.
+ * Players race through checkpoint entities (race_point) chained by target/targetname: the
+ * start has a target and no targetname, the finish a targetname and no target. The run is
+ * timed with pers.teamState.flagsince, the same per-frame clock that times a CTF flag carry,
+ * and the personal best lives in PERS_SCORE (0x7fffffff until the first finish). The server
+ * never marks the next checkpoint: the client does that from the race events.
  */
 #include "g_local.h"
 
 #define MAX_RACE_POINTS      64
-#define MAX_RACE_CHECKPOINTS 64
 
-static int numRacePoints;
+/*
+==================
+Race_TimeString
+
+[QL] 0x1002cc40. A run's time as the finish message prints it: m:ss.mmm, in floats.
+==================
+*/
+static const char *Race_TimeString(int msec) {
+    float seconds;
+    int minutes;
+
+    seconds = (float)abs(msec) / (float)1000.0;
+    minutes = (int)seconds / 60;
+    seconds = seconds - (float)minutes * (float)60.0;
+    return va("%s%d:%s%.03f", msec < 0 ? "-" : "", minutes, seconds < 10.0f ? "0" : "", seconds);
+}
 
 /*
 ==================
 RaceScoreboardMessage
 
-[QL] Race scoreboard emitter (dispatched from Cmd_Score_f for GT_RACE). Four
-fields per connected client: clientNum, best finish time in ms (-1 if no run),
-ping (-1 while connecting, else clamped to 999), and minutes connected. Sent as
+[QL] 0x1003dbb0. Four fields per connected client: clientNum, best time in ms (-1 before the
+first finish), ping (-1 while connecting, else clamped to 999) and minutes connected. Sent as
 "scores_race <numPlaying><perClient...>".
 
 QL returns the va() string and lets Cmd_Score send it; ioquakelive follows the
 sibling *ScoreboardMessage convention and sends it here directly.
-Address: 0x1003dd80
 ==================
 */
 void RaceScoreboardMessage(gentity_t *ent) {
@@ -34,19 +48,12 @@ void RaceScoreboardMessage(gentity_t *ent) {
     int stringlength;
     int i, j;
     gclient_t *cl;
-    int numSorted;
-    int bestTime, ping;
-
-    // don't send scores to bots, they don't parse it
-    if (ent->r.svFlags & SVF_BOT) {
-        return;
-    }
+    int best, ping;
 
     string[0] = 0;
     stringlength = 0;
-    numSorted = level.numConnectedClients;
 
-    for (i = 0; i < numSorted; i++) {
+    for (i = 0; i < level.numConnectedClients; i++) {
         cl = &level.clients[level.sortedClients[i]];
 
         if (cl->pers.connected == CON_CONNECTING) {
@@ -55,14 +62,13 @@ void RaceScoreboardMessage(gentity_t *ent) {
             ping = cl->ps.ping < 999 ? cl->ps.ping : 999;
         }
 
-        // best/last completed run; <= 0 means no time yet (binary sentinel -1)
-        bestTime = cl->race.lastTime;
-        if (bestTime <= 0) {
-            bestTime = -1;
+        best = cl->ps.persistant[PERS_SCORE];
+        if (best == 0x7fffffff) {
+            best = -1;
         }
 
         Com_sprintf(entry, sizeof(entry), " %i %i %i %i",
-                    level.sortedClients[i], bestTime, ping,
+                    level.sortedClients[i], best, ping,
                     (level.time - cl->pers.enterTime) / 60000);
         j = strlen(entry);
         if (stringlength + j >= sizeof(string)) {
@@ -76,340 +82,235 @@ void RaceScoreboardMessage(gentity_t *ent) {
                            va("scores_race %i%s", level.numPlayingClients, string));
 }
 
-// ============================================================================
-// FinishSpawningRacePoint - drop to ground, quantize coordinates
-// ============================================================================
+/*
+==================
+FinishSpawningRacePoint
+
+[QL] 0x10063a60. Drops the point to the floor (unless suspended) and rounds its origin to whole
+units, one above the ground. The entity is not linked again: the trigger stays where the spawn
+linked it.
+==================
+*/
 static void FinishSpawningRacePoint(gentity_t *ent) {
     trace_t tr;
-    vec3_t dest;
+    vec3_t start, dest;
 
     if (!(ent->spawnflags & 1)) {
-        // Drop to ground using point trace (not bounding box) to avoid ceiling clipping
-        VectorCopy(ent->s.origin, dest);
-        dest[2] -= 4096.0f;
-
-        trap_Trace(&tr, ent->s.origin, NULL, NULL, dest,
-            ENTITYNUM_WORLD, CONTENTS_SOLID);
-
+        VectorSet(dest, ent->s.origin[0], ent->s.origin[1], ent->s.origin[2] - 256);
+        trap_Trace(&tr, ent->s.origin, ent->r.mins, ent->r.maxs, dest, ENTITYNUM_NONE, CONTENTS_SOLID);
         if (tr.startsolid) {
-            vec3_t start;
-            VectorCopy(ent->s.origin, start);
-            start[2] += 128.0f;
-            trap_Trace(&tr, start, NULL, NULL, dest,
-                ENTITYNUM_WORLD, CONTENTS_SOLID);
+            G_Printf("FinishSpawningItem: race_point startsolid at %s\n", vtos(ent->s.origin));
+            VectorSet(start, ent->s.origin[0], ent->s.origin[1], ent->s.origin[2] + 128);
+            trap_Trace(&tr, start, ent->r.mins, ent->r.maxs, dest, ENTITYNUM_NONE, CONTENTS_SOLID);
         }
-
-        if (tr.fraction < 1.0f) {
+        if (!tr.startsolid && tr.fraction < 1.0f) {
             VectorCopy(tr.endpos, ent->s.origin);
             ent->s.groundEntityNum = tr.entityNum;
         }
+    } else {
+        G_SetOrigin(ent, ent->s.origin);
     }
 
-    // Quantize to integer + 1 unit above ground
     ent->s.origin[0] = (float)(int)ent->s.origin[0];
     ent->s.origin[1] = (float)(int)ent->s.origin[1];
-    ent->s.origin[2] = (float)((int)(ent->s.origin[2] + 1.0f));
-
-    VectorCopy(ent->s.origin, ent->s.pos.trBase);
-    VectorClear(ent->s.pos.trDelta);
-    VectorClear(ent->s.apos.trDelta);
-    VectorCopy(ent->s.origin, ent->r.currentOrigin);
-
-    ent->r.contents = CONTENTS_TRIGGER;
-    trap_LinkEntity(ent);
+    ent->s.origin[2] = (float)(int)(ent->s.origin[2] + 1.0);
+    G_SetOrigin(ent, ent->s.origin);
 }
 
-// ============================================================================
-// Touch_RaceCheckpoint - handles start, intermediate, and finish checkpoints
-// ============================================================================
+/*
+==================
+Touch_RaceCheckpoint
+
+[QL] 0x10063580. The start (no targetname) starts or restarts the run, at most once a second
+while racing; a checkpoint takes the split against the best run's; the finish takes the time,
+nudged a millisecond past any player's best it would tie, and keeps it when it is a personal
+best. The events carry the next point and the one after it for the client to mark.
+==================
+*/
 void Touch_RaceCheckpoint(gentity_t *self, gentity_t *other, trace_t *trace) {
     gclient_t *cl = other->client;
     raceInfo_t *ri;
+    gentity_t *te;
+    int i;
 
-    if (!cl || level.warmupTime > 0)
+    if (!cl || level.warmupTime > 0) {
         return;
-
+    }
     ri = &cl->race;
 
-    // Race checkpoint chaining uses standard target/targetname:
-    //   START:  has target (forward), no targetname (not referenced by previous)
-    //   MIDDLE: has both target (forward) and targetname (referenced by previous)
-    //   FINISH: has targetname (referenced by previous), no target (end of chain)
-
-    if (self->target == NULL) {
-        // --- FINISH CHECKPOINT (no forward target = end of chain) ---
-        if (!ri->racingActive)
+    if (!self->targetname) {
+        // start
+        if (ri->racingActive == 1 && cl->pers.teamState.flagsince <= 999) {
             return;
-        if (ri->nextRacePoint != self)
+        }
+        ri->nextRacePoint = G_PickTarget(self->target);
+        if (ri->nextRacePoint && ri->nextRacePoint->target) {
+            ri->nextRacePoint2 = G_PickTarget(ri->nextRacePoint->target);
+        }
+        if (!ri->nextRacePoint) {
             return;
+        }
 
-        // Record finish time
-        ri->lastTime = level.time - ri->startTime;
+        cl->pers.teamState.flagsince = 0;
+        memset(ri->current_race, 0, sizeof(ri->current_race));
 
-        // Check personal best
-        {
-            qboolean newBest = qfalse;
+        te = G_TempEntity(cl->ps.origin, EV_RACE_START);
+        te->s.clientNum = other - g_entities;
+        te->s.otherEntityNum = ri->currentCheckPoint;
+        te->s.otherEntityNum2 = ri->nextRacePoint->s.number;
+        te->s.powerups = ri->nextRacePoint2 ? ri->nextRacePoint2->s.number : -1;
+        te->s.time = level.time;
+        te->r.svFlags = SVF_BROADCAST;
 
-            if (ri->lastTime < cl->ps.localPersistant[0] || cl->ps.localPersistant[0] == 0) {
-                cl->ps.localPersistant[0] = ri->lastTime;
-                memcpy(ri->best_race, ri->current_race, sizeof(ri->best_race));
-                newBest = qtrue;
-            }
+        ri->currentCheckPoint = 0;
+        ri->startTime = level.time;
+        ri->racingActive = 1;
+        ri->weaponUsed = 0;
+        return;
+    }
 
-            cl->ps.persistant[PERS_SCORE] = ri->lastTime;
+    if (!ri->racingActive || ri->nextRacePoint != self) {
+        return;
+    }
 
-            // Race finish event - fields must match cgame EV_RACE_FINISH handler
-            {
-                gentity_t *te = G_TempEntity(other->r.currentOrigin, EV_RACE_FINISH);
-                te->s.clientNum = other->s.number;
-                te->s.time = ri->lastTime;  // finishTime
-                te->s.powerups = 1;  // valid finish (not DNF)
-                te->r.svFlags |= SVF_BROADCAST;
-            }
+    if (!self->target) {
+        // finish
+        qboolean personalBest;
 
-            if (newBest) {
-                trap_SendServerCommand(-1,
-                    va("print \"^1Personal best! ^7%s^7 finished in %d.%03d\n\"",
-                        cl->pers.netname, ri->lastTime / 1000, ri->lastTime % 1000));
-            } else {
-                trap_SendServerCommand(-1,
-                    va("print \"%s^7 finished in %d.%03d\n\"",
-                        cl->pers.netname, ri->lastTime / 1000, ri->lastTime % 1000));
+        for (i = 0; i < level.numPlayingClients; i++) {
+            if (cl->pers.teamState.flagsince ==
+                level.clients[level.sortedClients[i]].ps.persistant[PERS_SCORE]) {
+                cl->pers.teamState.flagsince++;
             }
         }
+        ri->lastTime = cl->pers.teamState.flagsince;
 
         // [QL] 0x100637be: the PLAYER_RACECOMPLETE event, with the lap's time
         STAT_PlayerRaceComplete(other, ri->lastTime, ri->weaponUsed);
 
-        ri->nextRacePoint = NULL;
-        ri->racingActive = qfalse;
-        CalculateRanks();
-
-    } else if (self->targetname == NULL) {
-        // --- START CHECKPOINT (has target but no targetname = start of chain) ---
-
-        // Rate limit: only fire once per second
-        if (ri->racingActive && level.time - ri->startTime < 1000)
-            return;
-
-        gentity_t *next = G_PickTarget(self->target);
-        if (!next)
-            return;
-
-        // Clear previous next-checkpoint highlight
-        if (ri->nextRacePoint) {
-            ri->nextRacePoint->s.generic1 = 0;
-        }
-
-        ri->nextRacePoint = next;
-        // Two-level lookahead: resolve next-next checkpoint
-        if (next->target) {
-            ri->nextRacePoint2 = G_PickTarget(next->target);
-        } else {
-            ri->nextRacePoint2 = NULL;
-        }
-        ri->startTime = level.time;
-        ri->racingActive = qtrue;
-        ri->currentCheckPoint = 0;
-        memset(ri->current_race, 0, sizeof(ri->current_race));
-
-        // Highlight next checkpoint
-        next->s.generic1 = 1;
-
-        // Race start event - fields must match cgame EV_RACE_START handler
-        {
-            gentity_t *te = G_TempEntity(other->r.currentOrigin, EV_RACE_START);
-            te->s.clientNum = other->s.number;
-            te->s.otherEntityNum = level.time;  // startTime
-            te->s.otherEntityNum2 = next->s.number;  // first checkpoint entity number
-            te->s.eventParm = numRacePoints;  // total checkpoint count
+        if (ri->lastTime < level.clients[level.sortedClients[0]].ps.persistant[PERS_SCORE]) {
+            te = G_TempEntity(cl->ps.origin, EV_NEW_HIGH_SCORE);
             te->r.svFlags |= SVF_BROADCAST;
         }
 
+        personalBest = ri->lastTime < cl->ps.persistant[PERS_SCORE];
+        if (personalBest) {
+            cl->ps.persistant[PERS_SCORE] = ri->lastTime;
+        }
+
+        te = G_TempEntity(cl->ps.origin, EV_RACE_FINISH);
+        te->s.clientNum = other - g_entities;
+        te->s.time = ri->lastTime;
+        te->s.generic1 = 1;
+        te->r.svFlags = SVF_BROADCAST;
+
+        if (personalBest) {
+            memcpy(ri->best_race, ri->current_race, sizeof(ri->best_race));
+            PrintMsg(NULL, "^1Personal best! ^7%s^7 finished the race in in %s\n", cl->pers.netname,
+                     Race_TimeString(cl->pers.teamState.flagsince));
+        } else {
+            PrintMsg(NULL, "%s^7 finished the race in %s\n", cl->pers.netname,
+                     Race_TimeString(cl->pers.teamState.flagsince));
+        }
+
+        ri->nextRacePoint = NULL;
+        ri->racingActive = 0;
+        CalculateRanks();
     } else {
-        // --- INTERMEDIATE CHECKPOINT (has both target and targetname) ---
-        if (!ri->racingActive || ri->nextRacePoint != self)
-            return;
+        // checkpoint
+        int best = 0, split = 0;
 
-        // Clear current highlight
-        self->s.generic1 = 0;
-
-        // Record split time
-        ri->current_race[ri->currentCheckPoint] = level.time - ri->startTime;
+        if (ri->currentCheckPoint < MAX_RACE_POINTS) {
+            best = ri->best_race[ri->currentCheckPoint];
+            if (best != 0) {
+                split = cl->pers.teamState.flagsince - best;
+            }
+            ri->current_race[ri->currentCheckPoint] = cl->pers.teamState.flagsince;
+        }
         ri->currentCheckPoint++;
 
-        // Compute split time delta from personal best
-        {
-            int splitTime = ri->current_race[ri->currentCheckPoint - 1];
-            int timeDiff = 0;
-            if (ri->best_race[ri->currentCheckPoint - 1] != 0) {
-                timeDiff = splitTime - ri->best_race[ri->currentCheckPoint - 1];
-            }
-
-            // Advance to next checkpoint and highlight it
-            {
-                gentity_t *next = G_PickTarget(self->target);
-                ri->nextRacePoint = next;
-                // Two-level lookahead
-                if (next && next->target) {
-                    ri->nextRacePoint2 = G_PickTarget(next->target);
-                } else {
-                    ri->nextRacePoint2 = NULL;
-                }
-                if (next) {
-                    next->s.generic1 = 1;
-                }
-            }
-
-            // Checkpoint event
-            {
-                gentity_t *te = G_TempEntity(other->r.currentOrigin, EV_RACE_CHECKPOINT);
-                te->s.clientNum = other->s.number;
-                te->s.time = timeDiff;  // delta from personal best (0 if no best)
-                te->s.otherEntityNum = ri->nextRacePoint ? ri->nextRacePoint->s.number : 0;
-                te->s.otherEntityNum2 = ri->nextRacePoint2 ? ri->nextRacePoint2->s.number : 0;
-                te->s.generic1 = ri->currentCheckPoint;
-                te->r.svFlags |= SVF_BROADCAST;
-            }
+        ri->nextRacePoint = G_PickTarget(self->target);
+        if (ri->nextRacePoint && ri->nextRacePoint->target) {
+            ri->nextRacePoint2 = G_PickTarget(ri->nextRacePoint->target);
         }
+
+        te = G_TempEntity(cl->ps.origin, EV_RACE_CHECKPOINT);
+        te->s.clientNum = other - g_entities;
+        te->s.otherEntityNum = ri->currentCheckPoint;
+        te->s.otherEntityNum2 = ri->nextRacePoint ? ri->nextRacePoint->s.number : -1;
+        te->s.powerups = ri->nextRacePoint2 ? ri->nextRacePoint2->s.number : -1;
+        te->s.time = split;
+        te->r.svFlags = SVF_BROADCAST;
+        te->s.generic1 = (best != 0);
     }
 }
 
-// ============================================================================
-// SP_race_point - spawn function for "race_point" entities
-// ============================================================================
+/*
+==================
+SP_race_point
+
+[QL] 0x10063cd0. Only in Race, and only chained points. They are broadcast, carry their
+spawnflags in generic1 and all use the same flag model; modelindex2 marks the finish.
+==================
+*/
 void SP_race_point(gentity_t *ent) {
     if (g_gametype.integer != GT_RACE) {
         G_FreeEntity(ent);
         return;
     }
 
-    // Must have at least target (forward) or targetname (referenced by previous)
-    if (ent->target == NULL && ent->targetname == NULL) {
-        G_FreeEntity(ent);
-        return;
-    }
-
-    // [QL] race points are VISIBLE to clients - rendered as flag3 checkpoint markers
-    // SVF_BROADCAST ensures they're sent to all clients regardless of PVS
-    ent->r.svFlags |= SVF_BROADCAST;
-    VectorSet(ent->r.mins, -40, -40, -15);
-    VectorSet(ent->r.maxs, 40, 40, 128);
-    ent->r.contents = CONTENTS_TRIGGER;
-
-    ent->touch = Touch_RaceCheckpoint;
-    ent->think = FinishSpawningRacePoint;
-    ent->nextthink = level.time + 1;
-
-    // [QL] encode spawnflags into eType for client-side identification
-    ent->s.eType = ent->spawnflags;
-
-    // [QL] Register the checkpoint visual model (binary-verified from qagamex86.dll 0x10063e47)
-    // Three flag3 models depending on checkpoint type:
-    {
-        const char *modelName;
-        if (ent->target == NULL) {
-            // FINISH checkpoint (no forward target) - finish flag
-            modelName = "models/flag3/f_flag3.md3";
-        } else if (ent->targetname == NULL) {
-            // START checkpoint (no targetname, has target) - green flag
-            modelName = "models/flag3/g_flag3.md3";
-            ent->count = 1;  // start marker
-        } else {
-            // INTERMEDIATE checkpoint (has both) - default checkpoint flag
-            modelName = "models/flag3/d_flag3.md3";
+    if (ent->target || ent->targetname) {
+        ent->r.svFlags |= SVF_BROADCAST;
+        VectorSet(ent->r.mins, -40, -40, -15);
+        VectorSet(ent->r.maxs, 40, 40, 128);
+        ent->r.contents = CONTENTS_TRIGGER;
+        ent->s.modelindex2 = 0;
+        ent->touch = Touch_RaceCheckpoint;
+        ent->think = FinishSpawningRacePoint;
+        ent->nextthink = level.time + 1;
+        ent->s.generic1 = ent->spawnflags;
+        if (ent->targetname && !ent->target) {
+            ent->s.modelindex2 = 1;
         }
-        ent->s.modelindex = G_ModelIndex((char *)modelName);
-        ent->s.modelindex2 = ent->s.modelindex;
-    }
+        ent->s.modelindex = G_ModelIndex("models/flag3/d_flag3.md3");
 
-    if (numRacePoints < MAX_RACE_POINTS) {
-        numRacePoints++;
-        trap_LinkEntity(ent);
-    } else {
-        G_FreeEntity(ent);
+        if (level.numRacePoints < MAX_RACE_POINTS) {
+            level.numRacePoints++;
+            trap_LinkEntity(ent);
+            return;
+        }
     }
+    G_FreeEntity(ent);
 }
 
-// ============================================================================
-// RACE_ClientBegin - race gametype begin
-// ============================================================================
-void RACE_ClientBegin(gentity_t* ent) {
-    gclient_t* client = ent->client;
+/*
+==================
+RACE_ClientBegin
 
-    // clear race info (timing, checkpoints)
-    memset(&client->race, 0, sizeof(client->race));
-    // sentinel value: no best time yet
-    client->ps.persistant[PERS_SCORE] = 0x7FFFFFFF;
+[QL] 0x100634f0. A new racer has no best run yet; the point count goes out for the HUD.
+==================
+*/
+void RACE_ClientBegin(gentity_t *ent) {
+    gclient_t *client = ent->client;
 
-    // Find the start checkpoint and highlight the first target
-    Race_ResetCheckpoints(ent);
-
-    // send race_init to the client
+    memset(client->race.best_race, 0, sizeof(client->race.best_race));
+    client->ps.persistant[PERS_SCORE] = 0x7fffffff;
+    trap_SetConfigstring(CS_RACE_POINTS, va("%i", level.numRacePoints));
     trap_SendServerCommand(ent - g_entities, "race_init");
     ClientSpawn(ent);
 }
 
-// ============================================================================
-// Race_ResetCheckpoints - reset race state and highlight first checkpoint
-// Called on spawn, death, and race_init
-// ============================================================================
-void Race_ResetCheckpoints(gentity_t *playerEnt) {
-    int i;
-    gentity_t *startPoint = NULL;
-    gclient_t *client = playerEnt->client;
+/*
+==================
+Cmd_RaceInit_f
 
-    // Clear racing state
-    client->race.racingActive = qfalse;
-    client->race.nextRacePoint = NULL;
-    client->race.startTime = 0;
-    client->race.currentCheckPoint = 0;
-
-    // Find the start checkpoint (has target but no targetname)
-    for (i = 0; i < level.num_entities; i++) {
-        gentity_t *e = &g_entities[i];
-        if (!e->inuse) continue;
-        if (e->touch != Touch_RaceCheckpoint) continue;
-        if (e->target != NULL && e->targetname == NULL) {
-            startPoint = e;
-            break;
-        }
-    }
-
-    if (startPoint) {
-        // Find the first checkpoint (targeted by start)
-        gentity_t *firstCheckpoint = G_PickTarget(startPoint->target);
-        if (firstCheckpoint) {
-            // Clear all checkpoint highlights
-            for (i = 0; i < level.num_entities; i++) {
-                gentity_t *e = &g_entities[i];
-                if (e->inuse && e->touch == Touch_RaceCheckpoint) {
-                    e->s.generic1 = 0;
-                }
-            }
-            // Highlight the first checkpoint - cgame reads s.generic1 for glow
-            firstCheckpoint->s.generic1 = 1;
-        }
-    }
-}
-
-// ============================================================================
-// Race_GetNumPoints - accessor for race point count
-// ============================================================================
-int Race_GetNumPoints(void) {
-    return numRacePoints;
-}
-
-// ============================================================================
-// Cmd_RaceInit_f - reset race state for calling player
-// Binary: 0x10063eb0
-// ============================================================================
+[QL] 0x10063e50, the "raceinit" the client sends when it respawns: the run is dropped.
+==================
+*/
 void Cmd_RaceInit_f(gentity_t *ent) {
-    if (g_gametype.integer != GT_RACE)
-        return;
-
-    Race_ResetCheckpoints(ent);
-    trap_SendServerCommand(ent - g_entities, "race_init");
+    ent->client->race.nextRacePoint = NULL;
+    ent->client->race.nextRacePoint2 = NULL;
+    ent->client->race.racingActive = 0;
 }
 
 /*
@@ -417,16 +318,16 @@ void Cmd_RaceInit_f(gentity_t *ent) {
 Cmd_RacePoint_f
 
 [QL] 0x10063ec0. Lays out a Race course without leaving the game: each call drops a
-point where the player is standing and chains it to the previous one, "clear" deletes
-them all and "dump" prints their positions. Three gates first, in the binary's order:
-gametype, cheats and being alive.
+point just under where the player stands and chains it to the previous one, "clear"
+deletes them all and "dump" prints their positions. Three gates first, in the binary's
+order: gametype, cheats and being alive.
 
 The chain's names are retail's (arp0, arp1, ...). The binary keeps them in a table of
 sixteen and still accepts up to sixty-four points, so from the seventeenth on it reads
 past the end; here the name is built on the spot.
 ============================================================================
 */
-static int raceAdminPoints;              // cuantos lleva puestos
+static int raceAdminPoints;              // points laid so far
 static gentity_t *raceAdminLast;         // the last one, which is what points at the next
 
 void Cmd_RacePoint_f(gentity_t *ent) {
@@ -459,8 +360,8 @@ void Cmd_RacePoint_f(gentity_t *ent) {
         while ((e = G_Find(e, FOFS(classname), "race_point")) != NULL) {
             G_FreeEntity(e);
         }
-        raceAdminPoints = 0;
         raceAdminLast = NULL;
+        raceAdminPoints = 0;
         return;
     }
 
@@ -469,28 +370,30 @@ void Cmd_RacePoint_f(gentity_t *ent) {
 
         while ((e = G_Find(e, FOFS(classname), "race_point")) != NULL) {
             trap_SendServerCommand(-1, va("print \"%f %f %f\n\"",
-                e->s.origin[0], e->s.origin[1], e->s.origin[2]));
+                e->r.currentOrigin[0], e->r.currentOrigin[1], e->r.currentOrigin[2]));
         }
         return;
     }
 
-    if (raceAdminPoints > 64) {
+    // [QL] 0x10064180: the entity is taken before the limit is checked, as retail does
+    point = G_Spawn();
+    if (raceAdminPoints > MAX_RACE_POINTS) {
         trap_SendServerCommand(-1, "print \"too many race points\n\"");
         return;
     }
 
-    point = G_Spawn();
     point->classname = "race_point";
+    point->s.eType = ET_GENERAL;
     VectorCopy(ent->client->ps.origin, origin);
+    origin[2] -= 8;
     G_SetOrigin(point, origin);
     point->targetname = G_NewString(va("arp%i", raceAdminPoints));
     if (raceAdminLast) {
         raceAdminLast->target = point->targetname;
     }
     SP_race_point(point);
-    trap_LinkEntity(point);
 
-    raceAdminLast = point;
     raceAdminPoints++;
+    raceAdminLast = point;
     trap_SendServerCommand(-1, "print \"spawning a race point\n\"");
 }
