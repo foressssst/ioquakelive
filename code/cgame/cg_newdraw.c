@@ -1923,22 +1923,47 @@ static void CG_DrawBestWeaponName(rectDef_t *rect, float scale, vec4_t color, in
 }
 
 // [QL] Game limit display (frag/cap/round/score limit based on gametype)
-static void CG_DrawGameLimit(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
+/*
+[QL] cgamex86.dll 0x10032260: the number alone, the limit of the mode (frags, captures,
+rounds or score) and in Race the points still ahead; centred or right-aligned on the
+rect's x as the item asks.
+*/
+static void CG_DrawGameLimit(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
     const char *s;
-    if (cgs.gametype == GT_CA || cgs.gametype == GT_FREEZE || cgs.gametype == GT_RR) {
-        s = va("Round Limit: %d", cgs.roundlimit);
-    } else if (cgs.gametype == GT_CTF || cgs.gametype == GT_1FCTF || cgs.gametype == GT_HARVESTER) {
-        s = va("Cap Limit: %d", cgs.capturelimit);
-    } else if (cgs.gametype == GT_DOMINATION) {
-        s = va("Score Limit: %d", cgs.capturelimit);
-    } else {
-        if (cgs.fraglimit) {
-            s = va("Frag Limit: %d", cgs.fraglimit);
-        } else {
-            s = va("Time Limit: %d", cgs.timelimit);
-        }
+    int limit;
+    float x = rect->x;
+
+    switch (cgs.gametype) {
+    case GT_RACE:
+        limit = CG_RaceCheckpointsLeft();
+        break;
+    case GT_CTF:
+    case GT_1FCTF:
+    case GT_OBELISK:
+    case GT_HARVESTER:
+        limit = cgs.capturelimit;
+        break;
+    case GT_CA:
+    case GT_FREEZE:
+    case GT_RR:
+        limit = cgs.roundlimit;
+        break;
+    case GT_DOMINATION:
+    case GT_AD:
+        limit = cgs.scorelimit;
+        break;
+    default:
+        limit = cgs.fraglimit;
+        break;
     }
-    CG_OwnerDrawText(rect->x, rect->y, scale, color, s, 0, 0, textStyle);
+
+    s = va("%i", limit);
+    if (align == ITEM_ALIGN_CENTER) {
+        x -= (float)CG_DrawTextWidth(s, scale, 0, 0) * 0.5f;
+    } else if (align == ITEM_ALIGN_RIGHT) {
+        x -= (float)CG_DrawTextWidth(s, scale, 0, 0);
+    }
+    CG_DrawText(x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
 /*
@@ -4350,7 +4375,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             CG_DrawWeaponHorizontal(&rect, scale, color, textStyle);
             break;
         case CG_GAME_LIMIT:                 // 3  CG_DrawFragLimit
-            CG_DrawGameLimit(&rect, scale, color, textStyle);
+            CG_DrawGameLimit(&rect, scale, color, textStyle, align);
             break;
         case CG_GAME_TYPE:                  // 4
             CG_DrawGameType(&rect, scale, color, shader, textStyle);
