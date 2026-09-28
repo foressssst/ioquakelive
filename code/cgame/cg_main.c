@@ -1885,6 +1885,7 @@ static void CG_RegisterGraphics(void) {
     cgs.media.raceMarkerCheckpoint = trap_R_RegisterShader("gfx/2d/race/checkpoint");
     cgs.media.raceMarkerFinish = trap_R_RegisterShader("gfx/2d/race/finish");
     cgs.media.domPointModel = trap_R_RegisterModel("models/powerups/domination/dompoint.md3");
+    cgs.media.domShadowShader = trap_R_RegisterShader("domShadow");  // [QL] 0x10024abc
     cgs.media.domSkinRed = trap_R_RegisterSkin("models/powerups/domination/domred.skin");
     cgs.media.domSkinBlue = trap_R_RegisterSkin("models/powerups/domination/domblue.skin");
     cgs.media.domSkinNeutral = trap_R_RegisterSkin("models/powerups/domination/domntrl.skin");

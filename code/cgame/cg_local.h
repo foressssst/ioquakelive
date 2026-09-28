@@ -1475,6 +1475,7 @@ typedef struct {
     qhandle_t domSkinRed;         // models/powerups/domination/domred.skin
     qhandle_t domSkinBlue;        // models/powerups/domination/domblue.skin
     qhandle_t domSkinNeutral;     // models/powerups/domination/domntrl.skin
+    qhandle_t domShadowShader;    // [QL] "domShadow", the pulsing ring under a point
 
     // [QL] POI markers
     qhandle_t poiShader;            // sprites/neutralflagcarrier, the EV_POI marker

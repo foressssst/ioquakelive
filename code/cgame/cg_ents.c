@@ -280,13 +280,72 @@ static void CG_General(centity_t* cent) {
         }
     }
 
-    // [QL] Domination point objectives (binary CG_General, gametype GT_DOMINATION,
-    // modelindex 1-3): draw the team-coloured objective outline. The binary also adds a
-    // floating marker sprite + ground ring here (0x10015c40+); those extra decorations
-    // are a follow-up. Outline colour/style come from the entity's modelindex2 (team)
-    // and powerups fields, read inside CG_PlayerOutline.
+    // [QL] 0x10015b7c: a domination point. Over the outline it stands on a pedestal in its
+    // owner's colour, the flag takes that colour too, a light flickers over it (harder while
+    // it is contested) and a ring the size of its capture radius pulses on the floor.
     if (cgs.gametype == GT_DOMINATION && s1->modelindex >= 1 && s1->modelindex <= 3) {
+        int team = s1->modelindex2;
+        float flicker = s1->weapon ? (float)(rand() & 0x1f) : (float)(rand() & 3);
+        refEntity_t pedestal;
+        vec3_t lightOrigin;
+        vec3_t up = {0, 0, 1};
+        vec3_t color, markColor;
+
+        VectorCopy(cent->lerpOrigin, lightOrigin);
+        lightOrigin[2] += 16.0f;
+
         CG_PlayerOutline(cent);
+
+        memset(&pedestal, 0, sizeof(pedestal));
+        VectorCopy(cent->lerpOrigin, pedestal.lightingOrigin);
+        VectorCopy(cent->lerpOrigin, pedestal.origin);
+        pedestal.origin[2] -= 16.0f;
+        AxisClear(pedestal.axis);
+        pedestal.hModel = cgs.media.domPointModel;
+        if (team == TEAM_RED) {
+            pedestal.customSkin = cgs.media.domSkinRed;
+        } else if (team == TEAM_BLUE) {
+            pedestal.customSkin = cgs.media.domSkinBlue;
+        } else {
+            pedestal.customSkin = cgs.media.domSkinNeutral;
+        }
+        trap_R_AddRefEntityToScene(&pedestal);
+
+        if (cg_itemFx.integer & 1) {
+            ent.origin[2] += sin((double)(float)(cg.time & 0x3ff) * 6.2831854820251465 * 0.0009765625) * 6.0 + 4.0;
+        }
+        if (cg_itemFx.integer & 2) {
+            AxisCopy(cg.autoAxisFast, ent.axis);
+        } else {
+            AxisCopy(cg.autoAxis, ent.axis);
+        }
+
+        if (team == TEAM_RED) {
+            ent.shaderRGBA[0] = 0xff;
+            ent.shaderRGBA[1] = 0;
+            ent.shaderRGBA[2] = 0;
+            VectorSet(color, 1.0f, 0.2f, 0.2f);
+            VectorSet(markColor, 1.0f, 0.2f, 0.2f);
+        } else if (team == TEAM_BLUE) {
+            ent.shaderRGBA[0] = 0;
+            ent.shaderRGBA[1] = 0x80;
+            ent.shaderRGBA[2] = 0xff;
+            VectorSet(color, 0.2f, 0.6f, 1.0f);
+            VectorSet(markColor, 0.2f, 0.6f, 1.0f);
+        } else {
+            ent.shaderRGBA[0] = team ? 0 : 0xff;
+            ent.shaderRGBA[1] = 0xff;
+            ent.shaderRGBA[2] = team ? 0 : 0xff;
+            VectorSet(color, 1.0f, 1.0f, 1.0f);
+            VectorSet(markColor, 0.8f, 0.8f, 0.8f);
+        }
+        ent.shaderRGBA[3] = 0xff;
+
+        trap_R_AddLightToScene(lightOrigin, (float)((int)flicker + s1->groundEntityNum * 2),
+                               color[0], color[1], color[2]);
+        lightOrigin[2] -= 15.0f;
+        CG_ImpactMark(cgs.media.domShadowShader, lightOrigin, up, 0, markColor[0], markColor[1],
+                      markColor[2], 1.0f, qfalse, (float)s1->groundEntityNum, qtrue);
     }
 
     if (!hideFlag) {
