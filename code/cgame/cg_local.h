@@ -2036,7 +2036,6 @@ extern vmCvar_t ch_obituaryTextY;
 extern vmCvar_t ch_obituaryBandAlpha;
 extern vmCvar_t ch_obituaryCenter;
 extern vmCvar_t cg_ambient;
-extern vmCvar_t cg_vidResizeCount;
 extern vmCvar_t ch_gameEvents;
 extern vmCvar_t ch_recordMessage;
 extern vmCvar_t cg_demoRecording;

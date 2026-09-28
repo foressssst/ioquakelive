@@ -5044,13 +5044,15 @@ CG_EventHandling
 [QL] cgamex86.dll 0x1003c620. The event is kept in cgs.eventHandling. 0 closes Quake 3's
 team menu (0x1003c570), 5 hides the join menu (0x1000e930): the retail engine sends 5 from
 its Escape handler (quakelive_steam.exe 0x4b7c1c) and then goes on to open the in-game
-menu. 4 recomputes the screen scale and is not ported.
+menu. 4 reads the resolution again (0x1003c643), after the window changed size.
 ==================
 */
 void CG_EventHandling(int type) {
     cgs.eventHandling = type;
     if (type == CGAME_EVENT_NONE) {
         CG_HideTeamMenu();
+    } else if (type == CGAME_EVENT_RESOLUTION) {
+        CG_ReadResolution();
     } else if (type == CGAME_EVENT_ESCAPE) {
         CG_HideJoinMenu();
     }

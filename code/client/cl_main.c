@@ -2055,6 +2055,21 @@ void CL_ResetPureClientAtServer(void) {
 
 /*
 =================
+CL_ResolutionChanged
+
+[QL] quakelive_steam.exe 0x4bb88f: once the window has its new size the cgame is told with
+event 4, when it is running. The UI hears it from vid_resizeCount.
+=================
+*/
+void CL_ResolutionChanged(void) {
+    Cvar_SetValue("vid_resizeCount", Cvar_VariableIntegerValue("vid_resizeCount") + 1);
+    if (cls.cgameStarted && cgvm) {
+        VM_Call(cgvm, CG_EVENT_HANDLING, CGAME_EVENT_RESOLUTION);
+    }
+}
+
+/*
+=================
 CL_Vid_Restart_f
 
 Restart the video subsystem
@@ -2072,7 +2087,7 @@ void CL_Vid_Restart_f(void) {
         !Cvar_VariableIntegerValue("r_noFastRestart") && re.ApplyVideoMode &&
         re.ApplyVideoMode(&cls.glconfig)) {
         // this is how the modules hear about the new resolution
-        Cvar_SetValue("vid_resizeCount", Cvar_VariableIntegerValue("vid_resizeCount") + 1);
+        CL_ResolutionChanged();
         // and the mouse follows the window's new state
         IN_Restart();
         return;

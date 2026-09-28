@@ -1306,11 +1306,11 @@ static void IN_ProcessEvents(void) {
                     // [ioquakelive] the renderer takes the new size where it can, so dragging
                     // the window resizes the picture as it goes instead of restarting the video
                     // under the player's hands. cls.glconfig is what the modules read, and
-                    // vid_resizeCount is how they hear about it
+                    // CL_ResolutionChanged is how they hear about it
                     if (re.WindowResized && re.WindowResized(width, height)) {
                         cls.glconfig.vidWidth = width;
                         cls.glconfig.vidHeight = height;
-                        Cvar_SetValue("vid_resizeCount", Cvar_VariableIntegerValue("vid_resizeCount") + 1);
+                        CL_ResolutionChanged();
                         break;
                     }
 
