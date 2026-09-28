@@ -99,22 +99,23 @@ int RR_GetRoundState(void) {
 ============
 CheckRoundTimeout
 
-[QL] Returns 1 if the round should end: either team eliminated, or roundtimelimit exceeded.
-When exactly one blue is alive at timeout, records that client as rr_lastBlueClient for the
+[QL] Returns 1 if the round should end: either team left empty, or roundtimelimit exceeded.
+The counts are the connected players of each team (the dead change sides as they fall).
+When exactly one blue is left at timeout, records that client as rr_lastBlueClient for the
 next round. Called from RR_Think.
-Address: 0x100646d0
+Address: 0x10064670
 ============
 */
-int CheckRoundTimeout(int redAlive, int blueAlive) {
+int CheckRoundTimeout(int redCount, int blueCount) {
     int i;
 
-    if (redAlive != 0 && blueAlive != 0) {
+    if (redCount != 0 && blueCount != 0) {
         if (roundtimelimit.integer == 0 ||
             level.time - level.roundState.startTime < roundtimelimit.integer * 1000) {
             return 0;
         }
-        // timed out with both teams alive: if one blue left, remember them
-        if (blueAlive == 1) {
+        // timed out with both teams standing: if one blue left, remember them
+        if (blueCount == 1) {
             for (i = 0; i < level.numPlayingClients; i++) {
                 gclient_t* cl = &level.clients[level.sortedClients[i]];
                 if (cl->pers.connected == CON_CONNECTED &&

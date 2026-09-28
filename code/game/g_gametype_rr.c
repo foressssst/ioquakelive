@@ -8,9 +8,6 @@
  */
 #include "g_local.h"
 
-// RR round survivors list, published for the scoreboard (binary CS 0x2bf)
-#define CS_RR_SURVIVORS 703
-
 // RR infection mode globals (binary: DAT_105df5a8-105df5b4)
 // rr_last{Red,Blue}Client are shared with CheckRoundTimeout in g_gametype_common.c
 int rr_lastRedClient = -1;
@@ -23,7 +20,7 @@ static int rr_infectionStartTime = -1;
 // ============================================================================
 void RR_SpreadInfection(void) {
     int i;
-    int redAlive, blueAlive;
+    int blueCount;
 
     if (g_rrInfected.integer == 0)
         return;
@@ -31,8 +28,9 @@ void RR_SpreadInfection(void) {
     if (g_rrInfectedSpreadTime.integer == 0 || rr_infectionStartTime == -1)
         return;
 
-    Team_LivingTeamCounts(&redAlive, &blueAlive);
-    if (blueAlive <= 1)
+    // [QL] 0x1006544c: the blues in the game, alive or not
+    Team_ConnectedTeamCounts(NULL, &blueCount);
+    if (blueCount <= 1)
         return;
 
     // Warning message
@@ -54,8 +52,10 @@ void RR_SpreadInfection(void) {
             gclient_t *cl = &level.clients[level.sortedClients[i]];
             if (cl->pers.connected == CON_CONNECTED && cl->sess.sessionTeam == TEAM_BLUE) {
                 gentity_t *ent = &g_entities[level.sortedClients[i]];
+                // [QL] 0x10065565: straight to the team, as SetTeam would send an infected
+                // game through PickTeam_RoundAware
                 level.scoringDisabled = qtrue;
-                SetTeam(ent, "red");
+                SetTeam_Execute(ent, TEAM_RED, SPECTATOR_NOT, 0);
                 level.scoringDisabled = qfalse;
                 rr_infectionStartTime = level.time;
                 return;
@@ -171,27 +171,26 @@ void RR_InitRoundState(void) {
 
 // ============================================================================
 // StartNewRound
-// Binary: 0x10064880 (exists but has zero callers in binary - dead code)
+// Binary: 0x10064820, called from RR_Think when an infected game shuffles
 //
 // Between-round team reset for infection mode:
 // 1. Move all RED players to BLUE
 // 2. If rr_lastBlueClient is valid, make them the first zombie (RED)
 // 3. If no RED exists, pick a random playing client as zombie
 // 4. Track the new zombie in rr_lastRedClient
+// The moves go straight through SetTeam_Execute with scoring off.
 // ============================================================================
 static void StartNewRound(void) {
     int i;
-    int redCount = 0;
+    int redCount;
 
     level.scoringDisabled = qtrue;
 
     // Move all red players to blue
     for (i = 0; i < level.maxclients; i++) {
         gclient_t *cl = &level.clients[i];
-        if (cl->pers.connected == CON_CONNECTED &&
-            cl->ps.pm_type != PM_SPECTATOR &&
-            cl->sess.sessionTeam == TEAM_RED) {
-            SetTeam(&g_entities[i], "blue");
+        if (cl->pers.connected == CON_CONNECTED && cl->sess.sessionTeam == TEAM_RED) {
+            SetTeam_Execute(&g_entities[i], TEAM_BLUE, SPECTATOR_NOT, 0);
         }
     }
 
@@ -200,33 +199,72 @@ static void StartNewRound(void) {
         gclient_t *cl = &level.clients[rr_lastBlueClient];
         if (cl->pers.connected == CON_CONNECTED &&
             cl->sess.sessionTeam == TEAM_BLUE) {
-            SetTeam(&g_entities[rr_lastBlueClient], "red");
-        }
-    }
-
-    // Count red players after the swap
-    for (i = 0; i < level.maxclients; i++) {
-        gclient_t *cl = &level.clients[i];
-        if (cl->pers.connected == CON_CONNECTED &&
-            cl->ps.pm_type != PM_SPECTATOR &&
-            cl->sess.sessionTeam == TEAM_RED) {
-            redCount++;
+            SetTeam_Execute(&g_entities[rr_lastBlueClient], TEAM_RED, SPECTATOR_NOT, 0);
         }
     }
 
     // If no red player, pick a random playing client
+    // (retail divides by zero here with nobody playing; the guard keeps the server up)
+    Team_ConnectedTeamCounts(&redCount, NULL);
     if (redCount == 0 && level.numPlayingClients > 0) {
-        int pick = rand() % level.numPlayingClients;
-        int idx = level.sortedClients[pick];
+        int idx = level.sortedClients[rand() % level.numPlayingClients];
         gclient_t *cl = &level.clients[idx];
-        if (cl->pers.connected == CON_CONNECTED &&
-            cl->ps.pm_type != PM_SPECTATOR) {
-            SetTeam(&g_entities[idx], "red");
+        if (cl->pers.connected == CON_CONNECTED) {
+            SetTeam_Execute(&g_entities[idx], TEAM_RED, SPECTATOR_NOT, 0);
             rr_lastRedClient = cl->ps.clientNum;
         }
     }
 
     level.scoringDisabled = qfalse;
+}
+
+/*
+============
+RR_SortRoundScores
+
+[QL] 0x100642d0. Orders the round-over list: clients with no follow target and connecting
+clients last, then spectators by the time they joined, and everyone else by round score.
+============
+*/
+static int QDECL RR_SortRoundScores(const void *a, const void *b) {
+    gclient_t *ca = &level.clients[*(const int *)a];
+    gclient_t *cb = &level.clients[*(const int *)b];
+
+    if (ca->sess.spectatorClient < 0) return 1;
+    if (cb->sess.spectatorClient < 0) return -1;
+
+    if (ca->pers.connected == CON_CONNECTING) return 1;
+    if (cb->pers.connected == CON_CONNECTING) return -1;
+
+    if (ca->sess.sessionTeam == TEAM_SPECTATOR) {
+        if (cb->sess.sessionTeam != TEAM_SPECTATOR) return 1;
+        if (ca->sess.spectatorTime < cb->sess.spectatorTime) return -1;
+        return ca->sess.spectatorTime > cb->sess.spectatorTime;
+    }
+    if (cb->sess.sessionTeam == TEAM_SPECTATOR) return -1;
+
+    if (ca->ps.localPersistant[0] > cb->ps.localPersistant[0]) return -1;
+    return ca->ps.localPersistant[0] < cb->ps.localPersistant[0];
+}
+
+/*
+============
+RR_RoundScoreList
+
+[QL] 0x10055fa0 as the round over uses it: every client in the game, connecting ones too,
+sorted by RR_SortRoundScores. Returns how many.
+============
+*/
+static int RR_RoundScoreList(int *list) {
+    int i, count = 0;
+
+    for (i = 0; i < level.maxclients; i++) {
+        if (level.clients[i].pers.connected != CON_DISCONNECTED) {
+            list[count++] = i;
+        }
+    }
+    qsort(list, count, sizeof(list[0]), RR_SortRoundScores);
+    return count;
 }
 
 // ============================================================================
@@ -329,8 +367,9 @@ void RR_RoundStateTransition(void) {
                 cl->round_hits = 0;
                 cl->round_damage = 0;
                 cl->expandedStats.killStreak = 0;
+                // [QL] 0x10064c48: the spawn armor time goes in powerups[PW_NONE]
                 if (g_spawnArmor.integer != 0) {
-                    cl->ps.powerups[PW_QUAD] =
+                    cl->ps.powerups[PW_NONE] =
                         (level.time / 1000) * 1000 + g_spawnArmor.integer;
                 }
             }
@@ -349,6 +388,8 @@ void RR_RoundStateTransition(void) {
         int redAlive, blueAlive;
         int j;
         int survivor[MAX_CLIENTS];
+        int sorted[MAX_CLIENTS];
+        int numSorted;
         char survivorList[1024];
 
         // Freeze all non-spectators and hand out the per-round score bonus.
@@ -386,37 +427,33 @@ void RR_RoundStateTransition(void) {
         CalculateRanks();
 
         // Build the survivor set and the survivor configstring.
+        // [QL] 0x10064dea: from every client in the game ordered by round score; the winners
+        // are the first one and whoever ties with them
+        numSorted = RR_RoundScoreList(sorted);
         memset(survivor, 0, sizeof(survivor));
         survivorList[0] = '\0';
         if (g_rrInfected.integer == 0) {
             if (winTeam != 0) {
-                int best = -0x7fffffff;
-                for (j = 0; j < level.numConnectedClients; j++) {
-                    int cn = level.sortedClients[j];
-                    if (level.clients[cn].ps.localPersistant[0] > best) {
-                        best = level.clients[cn].ps.localPersistant[0];
-                    }
-                }
-                for (j = 0; j < level.numConnectedClients; j++) {
-                    int cn = level.sortedClients[j];
-                    if (level.clients[cn].pers.connected == CON_CONNECTED &&
-                        level.clients[cn].ps.localPersistant[0] == best) {
-                        survivor[cn] = 1;
-                        Q_strcat(survivorList, sizeof(survivorList), va(" %i", cn));
+                for (j = 0; j < numSorted; j++) {
+                    survivor[sorted[j]] = 1;
+                    Q_strcat(survivorList, sizeof(survivorList), va("%d ", sorted[j]));
+                    if (j + 1 < numSorted &&
+                        level.clients[sorted[j]].ps.localPersistant[0] !=
+                        level.clients[sorted[j + 1]].ps.localPersistant[0]) {
+                        break;
                     }
                 }
             }
         } else if (rr_lastBlueClient == -1) {
-            for (j = 0; j < level.numConnectedClients; j++) {
-                int cn = level.sortedClients[j];
-                if (level.clients[cn].sess.sessionTeam == TEAM_BLUE) {
-                    survivor[cn] = 1;
-                    Q_strcat(survivorList, sizeof(survivorList), va(" %i", cn));
+            for (j = 0; j < numSorted; j++) {
+                if (level.clients[sorted[j]].sess.sessionTeam == TEAM_BLUE) {
+                    survivor[sorted[j]] = 1;
+                    Q_strcat(survivorList, sizeof(survivorList), va("%d ", sorted[j]));
                 }
             }
         } else {
             survivor[rr_lastBlueClient] = 1;
-            Q_strcat(survivorList, sizeof(survivorList), va(" %i", rr_lastBlueClient));
+            Q_strcat(survivorList, sizeof(survivorList), va("%d ", rr_lastBlueClient));
         }
 
         // Round-over medals: accuracy for a >50% round, perfect for surviving
@@ -442,7 +479,7 @@ void RR_RoundStateTransition(void) {
             }
         }
 
-        trap_SetConfigstring(CS_RR_SURVIVORS, survivorList);
+        trap_SetConfigstring(CS_ROUND_WINNER, survivorList);
 
         STAT_AddRoundOverStat(level.roundState.round - 1, winTeam, winTeam == 0);
 
@@ -578,10 +615,10 @@ checkRound:
 //
 // Advances the round state, then:
 //  - RS_SHUFFLE (2) + infected: calls StartNewRound, schedules RS_COUNTDOWN
-//  - RS_PLAYING (3): alive count, survival bonus, infection, round timeout
+//  - RS_PLAYING (3): team count, survival bonus, infection, round timeout
 // ============================================================================
 void RR_Think(void) {
-    int redAlive, blueAlive;
+    int redCount, blueCount;
     int state;
 
     if (level.intermissionQueued || level.intermissionTime || level.warmupTime > 0)
@@ -615,15 +652,16 @@ void RR_Think(void) {
     if (state != RS_PLAYING)
         return;
 
-    Team_LivingTeamCounts(&redAlive, &blueAlive);
+    // [QL] 0x100655ff: who is on each team, alive or not; the dead change sides as they fall
+    Team_ConnectedTeamCounts(&redCount, &blueCount);
 
     // [QL] Infection mode: survival bonus + periodic team switch (binary order)
     RR_SurvivorBonuses(0);
     RR_SpreadInfection();
 
-    // the round keeps going while both teams are alive and the round timelimit has
+    // the round keeps going while both teams have players and the round timelimit has
     // not run out; CheckRoundTimeout also records the lone blue survivor as MVP
-    if (!CheckRoundTimeout(redAlive, blueAlive)) {
+    if (!CheckRoundTimeout(redCount, blueCount)) {
         return;
     }
 
@@ -667,8 +705,8 @@ void RR_OnPlayerDeath(gentity_t *victim) {
     // Team switch on death (binary: direct sess.sessionTeam set + ClientUserinfoChanged)
     if (g_rrInfected.integer == 0 || killedTeam == TEAM_BLUE) {
         // Non-infected: swap any dead player; infected: only blue->red
-        int newTeam = (killedTeam == TEAM_RED) ? TEAM_BLUE : TEAM_RED;
-        victim->client->sess.sessionTeam = newTeam;
+        // [QL] 0x1002caf0: red and blue trade places, any other team stays
+        victim->client->sess.sessionTeam = OtherTeam(killedTeam);
         ClientUserinfoChanged(victim->client->ps.clientNum);
 
         // In infected mode, fire EV_INFECTED event (binary: SVF_SINGLECLIENT to victim)
@@ -754,9 +792,10 @@ void RR_ClientBegin(gentity_t* ent) {
         return;
     }
     // countdown: spawn + freeze
+    // [QL] 0x100645cd: PMF_FROZEN
     ClientSpawn(ent);
     SelectSpawnWeapon(ent);
-    client->ps.pm_flags |= PMF_TIME_KNOCKBACK;
+    client->ps.pm_flags |= PMF_FROZEN;
 }
 
 /*

@@ -961,7 +961,7 @@ extern int rr_lastBlueClient;
 // shared round framework (g_gametype_common.c) + per-gametype hooks the frame
 // dispatch calls
 int RR_GetRoundState(void);
-int CheckRoundTimeout(int redAlive, int blueAlive);
+int CheckRoundTimeout(int redCount, int blueCount);
 void ClientBegin_RoundBased_impl(gentity_t *ent);
 void Team_InitGame(void);
 void DOM_CheckPlayers(void);
@@ -1019,6 +1019,7 @@ void G_SetInfiniteAmmo(gentity_t* ent);           // [QL] 0x1003b1f0
 void G_SetStartingHealth(gentity_t* ent);         // [QL] 0x1003b230
 extern const char* weaponShortName[WP_NUM_WEAPONS];
 void Team_LivingTeamCounts(int *outRed, int *outBlue);
+void Team_ConnectedTeamCounts(int *outRed, int *outBlue);
 int G_GetAccess(int clientNum);  // [QL] 0x10032460, a client's access level
 qboolean G_FloodCheck(gclient_t* client);  // [QL] 0x100341e0
 void G_ReleaseGrapple(gentity_t* ent);

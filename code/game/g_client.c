@@ -2306,6 +2306,28 @@ void Team_LivingTeamCounts(int *outRed, int *outBlue) {
 
 /*
 ============
+Team_ConnectedTeamCounts
+
+[QL] 0x1006b1c0. The connected players of each team, alive or not.
+============
+*/
+void Team_ConnectedTeamCounts(int *outRed, int *outBlue) {
+    int counts[TEAM_NUM_TEAMS] = { 0 };
+    int i;
+
+    for (i = 0; i < level.maxclients; i++) {
+        gclient_t* cl = &level.clients[i];
+
+        if (cl->pers.connected == CON_CONNECTED) {
+            counts[cl->sess.sessionTeam]++;
+        }
+    }
+    if (outRed) *outRed = counts[TEAM_RED];
+    if (outBlue) *outBlue = counts[TEAM_BLUE];
+}
+
+/*
+============
 G_ReleaseGrapple
 
 [QL] Release grapple hook if the entity has one active
