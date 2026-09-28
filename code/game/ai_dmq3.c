@@ -1529,7 +1529,8 @@ int BotSynonymContext(bot_state_t* bs) {
 
     context = CONTEXT_NORMAL | CONTEXT_NEARBYITEM | CONTEXT_NAMES;
     //
-    if (gametype == GT_CTF || gametype == GT_1FCTF) {
+    // [QL] 0x1001e02c: A&D talks like CTF
+    if (gametype == GT_CTF || gametype == GT_1FCTF || gametype == GT_AD) {
         if (BotTeam(bs) == TEAM_RED)
             context |= CONTEXT_CTFREDTEAM;
         else
@@ -4771,7 +4772,8 @@ void BotCheckConsoleMessages(bot_state_t* bs) {
         // if there's no match
         if (!BotMatchMessage(bs, m.message)) {
             // if it is a chat message
-            if (m.type == CMS_CHAT && !bot_nochat.integer) {
+            // [QL] 0x1001e0b0: nor in insta gib
+            if (m.type == CMS_CHAT && !bot_nochat.integer && !g_instaGib.integer) {
                 //
                 if (!trap_BotFindMatch(m.message, &match, MTCONTEXT_REPLYCHAT)) {
                     trap_BotRemoveConsoleMessage(bs->cs, handle);

@@ -560,7 +560,8 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
     }
 
     // 2. bot humour (training mode)
-    if ((self->r.svFlags & SVF_BOT) && (g_training.integer == 1 || g_training.integer == 2)) {
+    // [QL] 0x1004726a: bot_training, the training tour's own cvar
+    if ((self->r.svFlags & SVF_BOT) && (bot_training.integer == 1 || bot_training.integer == 2)) {
         // [QL] 0x10047291: the bot itself says it
         trap_EA_Command(self->client->ps.clientNum,
             (char*)G_TrainingSay("say Oops! Um... I meant to do that! Just don't you do it, ok?"));
