@@ -2327,11 +2327,24 @@ int AINode_Battle_Chase(bot_state_t* bs) {
     // map specific code
     BotMapScripts(bs);
     // create the chase goal
+    memset(&goal, 0, sizeof(goal));
     goal.entitynum = bs->enemy;
-    goal.areanum = bs->lastenemyareanum;
-    VectorCopy(bs->lastenemyorigin, goal.origin);
-    VectorSet(goal.mins, -8, -8, -8);
-    VectorSet(goal.maxs, 8, 8, 8);
+    if (!bs->enemyHeard) {
+        goal.areanum = bs->lastenemyareanum;
+        VectorCopy(bs->lastenemyorigin, goal.origin);
+        VectorSet(goal.mins, -8, -8, -8);
+        VectorSet(goal.maxs, 8, 8, 8);
+    } else {
+        // [QL] 0x1000dade: an enemy the bot only heard is chased where it really is
+        aas_entityinfo_t heard;
+
+        BotEntityInfo(bs->enemy, &heard);
+        goal.areanum = BotPointAreaNum(heard.origin);
+        VectorCopy(heard.origin, goal.origin);
+        VectorCopy(heard.mins, goal.mins);
+        VectorCopy(heard.maxs, goal.maxs);
+        bs->lastenemyareanum = goal.areanum;
+    }
     // if the last seen enemy spot is reached the enemy could not be found
     if (trap_BotTouchingGoal(bs->origin, &goal))
         bs->chase_time = 0;
@@ -2375,7 +2388,9 @@ int AINode_Battle_Chase(bot_state_t* bs) {
         if (bs->chase_time > FloatTime() - 2) {
             BotAimAtEnemy(bs);
         } else {
-            if (trap_BotMovementViewTarget(bs->ms, &goal, bs->tfl, 300, target)) {
+            // [QL] 0x1000e3b6: looking along the way further ahead while in the air
+            if (trap_BotMovementViewTarget(bs->ms, &goal, bs->tfl,
+                                           bs->cur_ps.groundEntityNum == ENTITYNUM_NONE ? 2048 : 300, target)) {
                 VectorSubtract(target, bs->origin, dir);
                 vectoangles(dir, bs->ideal_viewangles);
             } else {
@@ -2516,13 +2531,12 @@ int AINode_Battle_Retreat(bot_state_t* bs) {
     if (bs->check_time < FloatTime()) {
         bs->check_time = FloatTime() + 1;
         range = 150;
-#ifdef CTF
-        if (gametype == GT_CTF) {
+        // [QL] 0x1000e42f: A&D too
+        if (gametype == GT_CTF || gametype == GT_AD) {
             // if carrying a flag the bot shouldn't be distracted too much
             if (BotCTFCarryingFlag(bs))
                 range = 50;
         }
-#endif  // CTF
         else if (gametype == GT_1FCTF) {
             if (Bot1FCTFCarryingFlag(bs))
                 range = 50;
@@ -2563,7 +2577,9 @@ int AINode_Battle_Retreat(bot_state_t* bs) {
         if (attack_skill > 0.3) {
             BotAimAtEnemy(bs);
         } else {
-            if (trap_BotMovementViewTarget(bs->ms, &goal, bs->tfl, 300, target)) {
+            // [QL] 0x1000e3b6: looking along the way further ahead while in the air
+            if (trap_BotMovementViewTarget(bs->ms, &goal, bs->tfl,
+                                           bs->cur_ps.groundEntityNum == ENTITYNUM_NONE ? 2048 : 300, target)) {
                 VectorSubtract(target, bs->origin, dir);
                 vectoangles(dir, bs->ideal_viewangles);
             } else {
@@ -2706,7 +2722,9 @@ int AINode_Battle_NBG(bot_state_t* bs) {
             //&& BotEntityVisible(bs->entitynum, bs->eye, bs->viewangles, 360, bs->enemy)
             BotAimAtEnemy(bs);
         } else {
-            if (trap_BotMovementViewTarget(bs->ms, &goal, bs->tfl, 300, target)) {
+            // [QL] 0x1000e3b6: looking along the way further ahead while in the air
+            if (trap_BotMovementViewTarget(bs->ms, &goal, bs->tfl,
+                                           bs->cur_ps.groundEntityNum == ENTITYNUM_NONE ? 2048 : 300, target)) {
                 VectorSubtract(target, bs->origin, dir);
                 vectoangles(dir, bs->ideal_viewangles);
             } else {
