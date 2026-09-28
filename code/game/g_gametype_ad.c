@@ -329,6 +329,11 @@ void AD_RoundStateTransition(void) {
             }
         }
 
+        // [QL] 0x10035d8c: the attacking side of the round is noted in the level (retail writes it
+        // and nothing reads it)
+        level.attackingTeam = (AD_GetRoundState() == RS_PLAYING) ? (level.roundState.turn ? TEAM_BLUE : TEAM_RED)
+                                                                : TEAM_FREE;
+
         level.roundState.capture = 0;
         level.roundState.touch = 0;
 
@@ -406,7 +411,11 @@ void AD_RoundStateTransition(void) {
             }
         }
 
-        CalculateRanks();
+        // [QL] 0x10035f4e: the ranks are worked out again when the round had a winner, not when the
+        // time ran out with both sides standing
+        if (level.roundState.capture == 1 || redAlive == 0 || blueAlive == 0) {
+            CalculateRanks();
+        }
         AD_UpdateScoreHistory();
 
         // Return flags
