@@ -121,7 +121,8 @@ BotCTFCarryingFlag
 ==================
 */
 int BotCTFCarryingFlag(bot_state_t* bs) {
-    if (gametype != GT_CTF)
+    // [QL] 0x10013ac0: A&D flags count as well
+    if (gametype != GT_CTF && gametype != GT_AD)
         return CTF_FLAG_NONE;
 
     if (bs->inventory[INVENTORY_REDFLAG] > 0)
@@ -1558,6 +1559,10 @@ void BotChooseWeapon(bot_state_t* bs) {
     if (bs->cur_ps.weaponstate == WEAPON_RAISING ||
         bs->cur_ps.weaponstate == WEAPON_DROPPING) {
         trap_EA_SelectWeapon(bs->client, bs->weaponnum);
+    } else if (bot_gauntlet.integer) {
+        // [QL] 0x10015ef1: bot_gauntlet keeps the gauntlet in hand
+        bs->weaponnum = WP_GAUNTLET;
+        trap_EA_SelectWeapon(bs->client, bs->weaponnum);
     } else {
         newweaponnum = trap_BotChooseBestFightWeapon(bs->ws, bs->inventory);
         if (bs->weaponnum != newweaponnum)
@@ -1732,22 +1737,6 @@ void BotUpdateInventory(bot_state_t* bs) {
     bs->inventory[INVENTORY_NAILS] = bs->cur_ps.ammo[WP_NAILGUN];
     bs->inventory[INVENTORY_MINES] = bs->cur_ps.ammo[WP_PROX_LAUNCHER];
     bs->inventory[INVENTORY_BELT] = bs->cur_ps.ammo[WP_CHAINGUN];
-    // [QL] clamp the infinite-ammo sentinel (-1) to 999. The fuzzy weapon-weight logic treats
-    // ammo < 1 as empty, so without this a bot with g_infiniteAmmo/loadout (all ammo == -1)
-    // scores every ammo weapon as out of ammo and only ever fires the gauntlet.
-    {
-        static const int ammoSlots[] = {
-            INVENTORY_SHELLS, INVENTORY_BULLETS, INVENTORY_GRENADES, INVENTORY_CELLS,
-            INVENTORY_LIGHTNINGAMMO, INVENTORY_ROCKETS, INVENTORY_SLUGS, INVENTORY_BFGAMMO,
-            INVENTORY_NAILS, INVENTORY_MINES, INVENTORY_BELT
-        };
-        int a;
-        for (a = 0; a < (int)ARRAY_LEN(ammoSlots); a++) {
-            if (bs->inventory[ammoSlots[a]] == -1) {
-                bs->inventory[ammoSlots[a]] = 999;
-            }
-        }
-    }
     // powerups
     bs->inventory[INVENTORY_HEALTH] = bs->cur_ps.stats[STAT_HEALTH];
     bs->inventory[INVENTORY_TELEPORTER] = bs->cur_ps.stats[STAT_HOLDABLE_ITEM] == MODELINDEX_TELEPORTER;
@@ -1769,14 +1758,31 @@ void BotUpdateInventory(bot_state_t* bs) {
     bs->inventory[INVENTORY_REDFLAG] = bs->cur_ps.powerups[PW_REDFLAG] != 0;
     bs->inventory[INVENTORY_BLUEFLAG] = bs->cur_ps.powerups[PW_BLUEFLAG] != 0;
     bs->inventory[INVENTORY_NEUTRALFLAG] = bs->cur_ps.powerups[PW_NEUTRALFLAG] != 0;
+    // [QL] 0x10016600: generic1 carries more than the skulls; they are its low six bits
     if (BotTeam(bs) == TEAM_RED) {
-        bs->inventory[INVENTORY_REDCUBE] = bs->cur_ps.generic1;
+        bs->inventory[INVENTORY_REDCUBE] = bs->cur_ps.generic1 & 0x3f;
         bs->inventory[INVENTORY_BLUECUBE] = 0;
     } else {
         bs->inventory[INVENTORY_REDCUBE] = 0;
-        bs->inventory[INVENTORY_BLUECUBE] = bs->cur_ps.generic1;
+        bs->inventory[INVENTORY_BLUECUBE] = bs->cur_ps.generic1 & 0x3f;
     }
     BotCheckItemPickup(bs, oldinventory);
+    // [QL] 0x100162d0, after the pickup check: clamp the infinite-ammo sentinel (-1) to 999. The fuzzy weapon-weight logic treats
+    // ammo < 1 as empty, so without this a bot with g_infiniteAmmo/loadout (all ammo == -1)
+    // scores every ammo weapon as out of ammo and only ever fires the gauntlet.
+    {
+        static const int ammoSlots[] = {
+            INVENTORY_SHELLS, INVENTORY_BULLETS, INVENTORY_GRENADES, INVENTORY_CELLS,
+            INVENTORY_LIGHTNINGAMMO, INVENTORY_ROCKETS, INVENTORY_SLUGS, INVENTORY_BFGAMMO,
+            INVENTORY_NAILS, INVENTORY_MINES, INVENTORY_BELT
+        };
+        int a;
+        for (a = 0; a < (int)ARRAY_LEN(ammoSlots); a++) {
+            if (bs->inventory[ammoSlots[a]] == -1) {
+                bs->inventory[ammoSlots[a]] = 999;
+            }
+        }
+    }
 }
 
 /*
