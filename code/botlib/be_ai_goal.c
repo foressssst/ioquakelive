@@ -1547,6 +1547,15 @@ int BotTouchingGoal(vec3_t origin, bot_goal_t* goal) {
     vec3_t absmins, absmaxs;
     vec3_t safety_maxs = {0, 0, 0};  //{4, 4, 10};
     vec3_t safety_mins = {0, 0, 0};  //{-4, -4, 0};
+    aas_entityinfo_t entinfo;
+
+    // [QL] 0x49f3e2: an item that somebody took since it was chosen is done with; an important
+    // one that is there, or back within five seconds, is waited for on the spot
+    AAS_EntityInfo(goal->entitynum, &entinfo);
+    if ((goal->flags & GFL_ITEM) && entinfo.nextthink != goal->respawnTime)
+        return qtrue;
+    if ((goal->flags & GFL_ITEM) && goal->important && entinfo.nextthink < AAS_Time() + 5.0)
+        return qfalse;
 
     AAS_PresenceTypeBoundingBox(PRESENCE_NORMAL, boxmins, boxmaxs);
     VectorSubtract(goal->mins, boxmaxs, absmins);
@@ -1575,6 +1584,9 @@ int BotItemGoalInVisButNotVisible(int viewer, vec3_t eye, vec3_t viewangles, bot
     vec3_t middle;
 
     if (!(goal->flags & GFL_ITEM))
+        return qfalse;
+    // [QL] 0x49f581: an important item is not given up for not being seen
+    if (goal->important)
         return qfalse;
     //
     VectorAdd(goal->mins, goal->mins, middle);
