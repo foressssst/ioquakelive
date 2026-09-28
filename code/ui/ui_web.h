@@ -296,6 +296,7 @@ typedef enum {
     HM_NAV_BROWSER,
     HM_NAV_TRAINING,
     HM_NAV_REPLAYS,
+    HM_NAV_STATS,
     HM_NAV_SETTINGS,
     HM_NAV_QUIT,
     HM_NUM_NAV
@@ -318,5 +319,11 @@ void UI_Home_Go(int nav);
 float UI_Home_Header(float y, const char* eyebrow, const char* title);
 float UI_Home_BlockTop(float blockHeight);
 float UI_Home_FrameBottom(void);
+qhandle_t UI_Home_Face(void);
+
+// Career Stats (ui_stats.c), and the profile card's wins and KDR
+void UI_Stats_Show(const char* steamId);
+void UI_Stats_CardFor(int page);
+void UI_Stats_DrawCardLine(float x, float lineTop, float width);
 
 #endif  // __UI_WEB_H

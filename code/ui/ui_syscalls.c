@@ -190,6 +190,10 @@ void trap_SteamFriendAction(int index, int action) {
     syscall(UI_STEAM_FRIEND_ACTION, index, action);
 }
 
+int trap_SteamUserStats(const char* steamId, uiUserStats_t* out, qboolean request) {
+    return syscall(UI_STEAM_USER_STATS, steamId, out, request);
+}
+
 qboolean trap_LAN_SteamRefresh(void) {
     return syscall(UI_LAN_STEAM_REFRESH, 0);
 }

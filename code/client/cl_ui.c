@@ -971,6 +971,17 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             return qtrue;
         }
 
+        // [ioquakelive] a player's Steam stats: "" is oneself, and a request asks Steam again
+        case UI_STEAM_USER_STATS: {
+            const char* id = VMA(1);
+            uiUserStats_t* out = VMA(2);
+
+            Com_Memset(out, 0, sizeof(*out));
+            out->state = Steam_UserStats(id[0] ? strtoull(id, NULL, 10) : 0, (qboolean)args[3], out->name,
+                                         sizeof(out->name), out->stats, UI_STEAM_NUM_STATS);
+            return out->state;
+        }
+
         case UI_STEAM_FRIEND_ACTION: {
             steamFriend_t fr;
 

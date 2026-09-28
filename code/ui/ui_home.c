@@ -111,7 +111,6 @@ static struct {
 #define HM_FRIEND_H 42.0f
 
 static void UI_Home_LoadRetail(void);
-static qhandle_t UI_Home_Face(void);
 static void UI_Home_FriendRefresh(void);
 static void UI_Home_DrawFriends(float x, float y, float w, float h);
 
@@ -139,11 +138,10 @@ typedef struct {
     const char* url;  // or what it opens where Steam's overlay would
 } hfMenuItem_t;
 
-// appframe.js's playContext, statsContext and communityContext. Career Stats and Recent Matches
-// came off Quake Live's stats servers, which are gone
+// appframe.js's playContext, statsContext and communityContext
 static const hfMenuItem_t hfMenus[3][3] = {
     {{"Match Browser", HM_NAV_BROWSER, NULL}, {"Start Match", HM_NAV_PLAY, NULL}, {"Training Center", HM_NAV_TRAINING, NULL}},
-    {{"Replays", HM_NAV_REPLAYS, NULL}},
+    {{"Career Stats", HM_NAV_STATS, NULL}, {"Replays", HM_NAV_REPLAYS, NULL}},
     {{"Steam Workshop", -1, "http://steamcommunity.com/app/282440/workshop"},
      {"Steam Community", -1, "http://steamcommunity.com/app/282440"}},
 };
@@ -189,7 +187,7 @@ void UI_Home_PageTop(int active) {
     char name[MAX_CVAR_VALUE_STRING];
     float top = -smTop / smScale;
     float x;
-    int tab = active == HM_NAV_REPLAYS ? 1 : (active == HM_NAV_BROWSER || active == HM_NAV_PLAY ||
+    int tab = (active == HM_NAV_REPLAYS || active == HM_NAV_STATS) ? 1 : (active == HM_NAV_BROWSER || active == HM_NAV_PLAY ||
                                              active == HM_NAV_TRAINING) ? 0 : -1;
     qhandle_t face;
     int i;
@@ -210,6 +208,9 @@ void UI_Home_PageTop(int active) {
     trap_Cvar_VariableStringBuffer("name", name, sizeof(name));
     SM_Text(x, SM_Baseline(FONT_SANS, 15.0f, top + 5.0f, 24.0f), FONT_SANS, 15.0f, smText, name[0] ? name : "Player",
             SM_Fit(FONT_SANS, 15.0f, name, HF_COL_X + HF_COL_W - x), qfalse);
+    // and under it the wins and KDR, which the card asks Steam for each time it comes up
+    UI_Stats_CardFor(active);
+    UI_Stats_DrawCardLine(x, top + 29.0f, HF_COL_X + HF_COL_W - x);
 
     // the house
     x = HF_FIRST_X;
@@ -381,6 +382,9 @@ void UI_Home_Go(int nav) {
             Menus_CloseAll();
             Menus_ActivateByName("demo");
             break;
+        case HM_NAV_STATS:
+            UI_Stats_Show("");
+            break;
         case HM_NAV_SETTINGS:
             Menus_CloseAll();
             Menus_ActivateByName("settings");
@@ -510,8 +514,7 @@ typedef struct {
     qboolean back;    // a.back, a line further down
 } hmItem_t;
 
-// src/home.js's menu. Career Stats and Recent Matches came off Quake Live's stats servers, which
-// are gone, so the Statistics list keeps Replays
+// src/home.js's menu
 static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
     {
         {"Play", -1, HM_MENU_PLAY, NULL, qfalse},
@@ -528,6 +531,7 @@ static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
         {"Back", -1, HM_MENU_MAIN, NULL, qtrue},
     },
     {
+        {"Career Stats", HM_NAV_STATS, -1, NULL, qfalse},
         {"Replays", HM_NAV_REPLAYS, -1, NULL, qfalse},
         {"Back", -1, HM_MENU_MAIN, NULL, qtrue},
     },
@@ -639,7 +643,7 @@ static void UI_Home_DrawColumn(void) {
 }
 
 // the model you wear stands in for the Steam avatar
-static qhandle_t UI_Home_Face(void) {
+qhandle_t UI_Home_Face(void) {
     char model[MAX_QPATH];
     char* slash;
 
@@ -680,6 +684,8 @@ static void UI_Home_DrawCard(float x, float y, float w) {
     trap_Cvar_VariableStringBuffer("name", name, sizeof(name));
     SM_Text(tx, SM_Baseline(FONT_SANS, HM_TEXT, y + HM_CARD_PAD, 24.0f), FONT_SANS, HM_TEXT, smText,
             name[0] ? name : "Player", SM_Fit(FONT_SANS, HM_TEXT, name, x + w - tx - HM_CARD_PAD), qfalse);
+    UI_Stats_CardFor(-1);
+    UI_Stats_DrawCardLine(tx, y + HM_CARD_PAD + 24.0f, x + w - tx - HM_CARD_PAD);
 }
 
 // CS2's order, which Steam's list has no opinion on: whoever can be joined, then the rest

@@ -15,6 +15,7 @@ is never asked: "has it" means granted in this session, as in retail.
 
 #include "server.h"
 #include "../qcommon/q_steam.h"
+#include "../qcommon/q_steamstats.h"
 
 #define JSON_IMPLEMENTATION
 #include "../qcommon/json.h"
@@ -22,31 +23,8 @@ is never asked: "has it" means granted in this session, as in retail.
 
 #define STEAMSTATS_MAX_USERS (MAX_CLIENTS * 2)
 
-// [QL] 0x00561060: every stat is an integer, and its Steam ID is its place in the table
-static const char* const svStatNames[] = {
-    "version",
-    "kill_gauntlet", "kill_machinegun", "kill_shotgun", "kill_grenade", "kill_rocket",
-    "kill_lightning", "kill_railgun", "kill_plasma", "kill_bfg", "kill_nailgun", "kill_proxmine",
-    "kill_chaingun", "kill_hmg",
-    "hits_machinegun", "hits_shotgun", "hits_grenade", "hits_rocket", "hits_lightning",
-    "hits_railgun", "hits_plasma", "hits_bfg", "hits_nailgun", "hits_proxmine", "hits_chaingun",
-    "hits_hmg",
-    "shots_machinegun", "shots_shotgun", "shots_grenade", "shots_rocket", "shots_lightning",
-    "shots_railgun", "shots_plasma", "shots_bfg", "shots_nailgun", "shots_proxmine",
-    "shots_chaingun", "shots_hmg",
-    "mod_shotgun", "mod_gauntlet", "mod_machinegun", "mod_grenade", "mod_rocket", "mod_plasma",
-    "mod_railgun", "mod_lightning", "mod_bfg", "mod_water", "mod_slime", "mod_lava", "mod_crush",
-    "mod_telefrag", "mod_laser", "BROKEN1", "mod_nailgun", "mod_chaingun", "mod_proxmine",
-    "mod_kamikaze", "mod_juiced", "mod_suicide", "mod_falling", "mod_grapple", "mod_hmg",
-    "mod_lightning_discharge", "mod_other",
-    "medal_firstfrag", "medal_gauntlet", "medal_excellent", "medal_revenge", "medal_combokill",
-    "medal_midair", "medal_perforated", "medal_rampage", "medal_impressive", "medal_capture",
-    "medal_assist", "medal_defense", "medal_headshot", "medal_quadgod", "medal_perfect",
-    "medal_accuracy",
-    "wins", "losses", "played", "BROKEN2", "mod_hurt", "total_kills", "total_deaths",
-};
 
-#define STEAMSTATS_NUM_STATS ((int)ARRAY_LEN(svStatNames))
+#define STEAMSTATS_NUM_STATS STEAM_NUM_STATS
 
 #define STAT_MEDAL_CAPTURE 74
 #define STAT_MEDAL_ASSIST 75
@@ -150,7 +128,7 @@ static void SV_SteamStoreStats(svSteamUser_t* u) {
         return;
     }
     for (i = 0; i < STEAMSTATS_NUM_STATS; i++) {
-        Steam_GS_SetUserStat(u->steamId, svStatNames[i], u->stats[i]);
+        Steam_GS_SetUserStat(u->steamId, steamStatNames[i], u->stats[i]);
     }
     Steam_GS_StoreUserStats(u->steamId);
 }
@@ -172,7 +150,7 @@ static void SV_SteamReadStats(svSteamUser_t* u, int result) {
     }
     Com_DPrintf("Received stats and achievements from Steam\n");
     for (i = 0; i < STEAMSTATS_NUM_STATS; i++) {
-        Steam_GS_GetUserStat(u->steamId, svStatNames[i], &u->stats[i]);
+        Steam_GS_GetUserStat(u->steamId, steamStatNames[i], &u->stats[i]);
     }
     u->received = qtrue;
 }
@@ -274,7 +252,7 @@ void SV_SteamStatsIncrement(uint64_t steamId, int stat, int amount) {
         return;
     }
     u->stats[stat] += amount;
-    Com_DPrintf("%llu: %s: %i\n", (unsigned long long)steamId, svStatNames[stat], u->stats[stat]);
+    Com_DPrintf("%llu: %s: %i\n", (unsigned long long)steamId, steamStatNames[stat], u->stats[stat]);
 }
 
 /*
@@ -380,9 +358,9 @@ static void SV_SteamCountStat(svSteamUser_t* u, int stat, qboolean withId) {
     u->stats[stat]++;
     SV_SteamStoreStats(u);
     if (withId) {
-        Com_DPrintf("%llu: %s: %i\n", (unsigned long long)u->steamId, svStatNames[stat], u->stats[stat]);
+        Com_DPrintf("%llu: %s: %i\n", (unsigned long long)u->steamId, steamStatNames[stat], u->stats[stat]);
     } else {
-        Com_DPrintf("%s: %i\n", svStatNames[stat], u->stats[stat]);
+        Com_DPrintf("%s: %i\n", steamStatNames[stat], u->stats[stat]);
     }
 }
 

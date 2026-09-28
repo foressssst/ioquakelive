@@ -124,6 +124,30 @@
     }
 
     // =============================================
+    // CAREER STATS
+    // retail's #stats/profile/<steamid> page; code/ui/ui_stats.c draws and runs it
+    // =============================================
+    menuDef {
+        name "stats"
+        fullScreen MENU_TRUE
+        rect 0 0 640 480
+        visible MENU_FALSE
+        focusColor 1 .75 0 1
+        popup // clicks beside the 4:3 area reach the page too
+
+        onOpen { uiScript statsOpen }
+        onESC { close stats ; open main }
+
+        itemDef {
+            name stats
+            type ITEM_TYPE_OWNERDRAW
+            ownerdraw 606 // UI_STATS
+            rect -2000 -1000 4640 2480
+            visible 1
+        }
+    }
+
+    // =============================================
     // SETTINGS
     // retail hands this to the web browser; code/ui/ui_settings.c draws and runs it
     // =============================================

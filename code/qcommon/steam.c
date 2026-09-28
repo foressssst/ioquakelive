@@ -23,6 +23,7 @@ everything here turns into a no-op.
 */
 
 #include "q_steam.h"
+#include "q_steamstats.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -124,6 +125,7 @@ static void Steam_P2PListen(qboolean asServer);
 static void Steam_AuthListen(void);
 static void Steam_ServersListen(void);
 static void Steam_StatsListen(void);
+static void Steam_UserStatsListen(void);
 
 /*
 A Steam callback seen from C. In the SDK it is a class with three virtual functions,
@@ -283,6 +285,11 @@ typedef struct {
     void* userStats;                // ISteamUserStats *
     steamCallback_t statsReceived;  // GSStatsReceived_t
     steamCallback_t statsStored;    // GSStatsStored_t
+
+    // any player's stats as the client's ISteamUserStats hands them over, for the front end
+    uint64_t(QDECL* UserRequestUserStats)(void* self, uint64_t steamId);
+    steamBool_t(QDECL* UserGetUserStat)(void* self, uint64_t steamId, const char* name, int* value);
+    steamCallback_t userStatsReceived;  // UserStatsReceived_t
 
     // the Steam IDs with an auth session open (retail's set at 0x00e3035c)
     uint64_t tracked[STEAM_MAX_TRACKED];
@@ -446,6 +453,12 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND_OPT(RequestCurrentStats, "SteamAPI_ISteamUserStats_RequestCurrentStats");
     STEAM_BIND_OPT(SetAchievement, "SteamAPI_ISteamUserStats_SetAchievement");
     STEAM_BIND_OPT(StoreStats, "SteamAPI_ISteamUserStats_StoreStats");
+    STEAM_BIND_OPT(UserRequestUserStats, "SteamAPI_ISteamUserStats_RequestUserStats");
+    STEAM_BIND_OPT(UserGetUserStat, "SteamAPI_ISteamUserStats_GetUserStat");  // the int32 one
+    if (!st.UserGetUserStat) {
+        // later flat APIs give each overload its own name
+        STEAM_BIND_OPT(UserGetUserStat, "SteamAPI_ISteamUserStats_GetUserStatInt32");
+    }
     return qtrue;
 }
 
@@ -706,6 +719,10 @@ SD_RET(uint64_t, StoreUserStats, 9, (void* self, uint64_t a), (self, a))
 SD_RET(steamBool_t, RequestCurrentStats, 0, (void* self), (self))
 SD_RET(steamBool_t, SetAchievement, 7, (void* self, const char* a), (self, a))
 SD_RET(steamBool_t, StoreStats, 10, (void* self), (self))
+// [QL] 0x0045ffd0 reads a player's stats through slot 18, the int32 GetUserStat, for the same
+// reason as above; RequestUserStats is 16
+SD_RET(uint64_t, UserRequestUserStats, 16, (void* self, uint64_t a), (self, a))
+SD_RET(steamBool_t, UserGetUserStat, 18, (void* self, uint64_t a, const char* b, int* c), (self, a, b, c))
 
 // the accessors, which steam_api answers from its context
 static void* QDECL SD_GameServer(void) {
@@ -1061,6 +1078,8 @@ static void SD_Bind(void) {
     SD_SET(RequestCurrentStats);
     SD_SET(SetAchievement);
     SD_SET(StoreStats);
+    SD_SET(UserRequestUserStats);
+    SD_SET(UserGetUserStat);
 #undef SD_SET
 }
 #endif  // 64-bit Windows
@@ -1235,6 +1254,7 @@ void Steam_Init(void) {
         st.RequestCurrentStats(st.userStats);
     }
     Steam_P2PListen(qfalse);
+    Steam_UserStatsListen();
     // [QL] 0x00461565: "+voice" and "-voice" are registered on the client side, which is also
     // the side that has to tell the cgame somebody is talking
     Steam_SetRichPresence("At the main menu");    // [QL] 0x00461556
@@ -1489,6 +1509,10 @@ void Steam_Shutdown(void) {
             st.UnregisterCallback(&st.serversFailed);
             st.UnregisterCallback(&st.serversDisconnected);
             st.serversConnected.vtable = NULL;
+        }
+        if (st.userStatsReceived.vtable) {
+            st.UnregisterCallback(&st.userStatsReceived);
+            st.userStatsReceived.vtable = NULL;
         }
         if (st.statsReceived.vtable) {
             st.UnregisterCallback(&st.statsReceived);
@@ -2761,6 +2785,150 @@ void Steam_StoreStats(void) {
     if (st.userStats && st.StoreStats) {
         st.StoreStats(st.userStats);
     }
+}
+
+/*
+===============================================================================
+
+A PLAYER'S STATS FOR THE FRONT END
+
+[QL] The web UI's Career Stats and profile card asked for them with RequestUserStats
+(0x00431e50) and Steam answered with UserStatsReceived_t (1101, k_iSteamUserStatsCallbacks
++ 1), which 0x0045ffd0 turned into what the page read: the player's Steam name and every
+stat of the table, 0 when the answer was not k_EResultOK. It came for any player asked
+about, and for the player's own stats when the game started (RequestCurrentStats).
+
+The struct: the game's ID, the result and the player, whose CSteamID is packed to one
+byte, so the player sits at 12 on every system. Steam packs its callbacks to 8 on Windows
+and to 4 elsewhere, which only changes the size it is told.
+
+The pages ask every frame, so the answers are kept: the latest few players.
+===============================================================================
+*/
+#define STEAM_CB_USER_STATS_RECEIVED 1101
+#ifdef _WIN32
+#define STEAM_USER_STATS_SIZE 24
+#else
+#define STEAM_USER_STATS_SIZE 20
+#endif
+
+#define STEAM_MAX_USER_STATS 16
+
+typedef struct {
+    uint64_t steamId;
+    int state;  // STEAM_STATS_*
+    int asked;  // when it was last asked for or answered, to know which to drop
+    char name[64];
+    int stats[STEAM_NUM_STATS];
+} steamUserStats_t;
+
+static steamUserStats_t steamUserStats[STEAM_MAX_USER_STATS];
+
+static steamUserStats_t* Steam_UserStatsSlot(uint64_t steamId, qboolean make) {
+    steamUserStats_t* oldest = &steamUserStats[0];
+    int i;
+
+    for (i = 0; i < STEAM_MAX_USER_STATS; i++) {
+        if (steamUserStats[i].steamId == steamId) {
+            return &steamUserStats[i];
+        }
+        if (steamUserStats[i].asked < oldest->asked) {
+            oldest = &steamUserStats[i];
+        }
+    }
+    if (!make) {
+        return NULL;
+    }
+    Com_Memset(oldest, 0, sizeof(*oldest));
+    oldest->steamId = steamId;
+    return oldest;
+}
+
+static void STEAM_CB Steam_CB_UserStats(STEAM_CB_SELF, void* param) {
+    const byte* data = (const byte*)param;
+    steamUserStats_t* u;
+    uint64_t steamId;
+    const char* name;
+    int result;
+    int i;
+
+    Com_Memcpy(&result, data + 8, sizeof(result));
+    Com_Memcpy(&steamId, data + 12, sizeof(steamId));
+    u = Steam_UserStatsSlot(steamId, qtrue);
+    u->state = result == 1 ? STEAM_STATS_DONE : STEAM_STATS_FAILED;
+    u->asked = Sys_Milliseconds();
+    name = (st.friends && st.GetFriendPersonaName) ? st.GetFriendPersonaName(st.friends, steamId) : NULL;
+    Q_strncpyz(u->name, name ? name : "", sizeof(u->name));
+    for (i = 0; i < STEAM_NUM_STATS; i++) {
+        u->stats[i] = 0;
+        if (result == 1 && st.userStats && st.UserGetUserStat) {
+            st.UserGetUserStat(st.userStats, steamId, steamStatNames[i], &u->stats[i]);
+        }
+    }
+}
+
+static void STEAM_CB Steam_CB_UserStatsIO(STEAM_CB_SELF, void* param, unsigned char failed, uint64_t call) {
+    (void)failed;
+    (void)call;
+    Steam_CB_UserStats(STEAM_CB_PASS, param);
+}
+
+static int STEAM_CB Steam_CB_UserStatsSize(STEAM_CB_SELF) {
+    return STEAM_USER_STATS_SIZE;
+}
+
+static void* steamUserStatsVTable[3];
+
+static void Steam_UserStatsListen(void) {
+    if (!st.RegisterCallback || !st.userStats || !st.UserGetUserStat || st.userStatsReceived.vtable) {
+        return;
+    }
+    steamUserStatsVTable[0] = (void*)Steam_CB_UserStatsIO;
+    steamUserStatsVTable[1] = (void*)Steam_CB_UserStats;
+    steamUserStatsVTable[2] = (void*)Steam_CB_UserStatsSize;
+
+    st.userStatsReceived.vtable = steamUserStatsVTable;
+    st.userStatsReceived.flags = 0;
+    st.userStatsReceived.id = STEAM_CB_USER_STATS_RECEIVED;
+    st.RegisterCallback(&st.userStatsReceived, STEAM_CB_USER_STATS_RECEIVED);
+}
+
+/*
+===============
+Steam_UserStats
+
+What the front end knows of a player's stats, 0 for oneself. With request it asks Steam
+again, as each page of retail's did when it opened, and keeps showing the last answer
+meanwhile.
+===============
+*/
+int Steam_UserStats(uint64_t steamId, qboolean request, char* name, int nameSize, int* stats, int numStats) {
+    steamUserStats_t* u;
+
+    if (!steamId) {
+        steamId = Steam_ClientSteamID();
+    }
+    if (!steamId || !st.clientUp || !st.userStats || !st.UserRequestUserStats || !st.userStatsReceived.vtable) {
+        return STEAM_STATS_NONE;
+    }
+    u = Steam_UserStatsSlot(steamId, request);
+    if (!u) {
+        return STEAM_STATS_NONE;
+    }
+    if (request) {
+        if (u->state == STEAM_STATS_NONE || u->state == STEAM_STATS_FAILED) {
+            u->state = STEAM_STATS_LOADING;
+        }
+        u->asked = Sys_Milliseconds();
+        st.UserRequestUserStats(st.userStats, steamId);
+    }
+    if (name && nameSize > 0) {
+        Q_strncpyz(name, u->name, nameSize);
+    }
+    if (stats && numStats > 0) {
+        Com_Memcpy(stats, u->stats, sizeof(int) * (numStats < STEAM_NUM_STATS ? numStats : STEAM_NUM_STATS));
+    }
+    return u->state;
 }
 
 qboolean Steam_VoiceReady(void) {

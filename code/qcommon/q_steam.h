@@ -95,6 +95,14 @@ void Steam_GS_StoreUserStats(uint64_t steamId);
 qboolean Steam_SetAchievement(const char* name);
 void Steam_StoreStats(void);
 
+// a player's stats as the front end shows them (0 is oneself): the state, and when it has
+// them the Steam name and every stat of q_steamstats.h's table
+#define STEAM_STATS_NONE 0
+#define STEAM_STATS_LOADING 1
+#define STEAM_STATS_DONE 2
+#define STEAM_STATS_FAILED 3
+int Steam_UserStats(uint64_t steamId, qboolean request, char* name, int nameSize, int* stats, int numStats);
+
 // voice, which in Quake Live travels over Steam's peer to peer network and not the game's
 qboolean Steam_VoiceReady(void);
 void Steam_VoiceStart(void);

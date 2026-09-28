@@ -182,8 +182,21 @@ typedef enum {
     UI_LAN_STEAM_DETAILS_GET,
     UI_LAN_STEAM_FAVORITE,
     // [ioquakelive] a server's name as it is: the info string loses one with a backslash in it
-    UI_LAN_SERVER_NAME
+    UI_LAN_SERVER_NAME,
+    // [ioquakelive] a player's Steam stats, for Career Stats and the profile card: what retail's
+    // pages asked of the JavaScript bridge with RequestUserStats and got on
+    // users.stats.<id>.received
+    UI_STEAM_USER_STATS
 } uiImport_t;
+
+// [ioquakelive] what trap_SteamUserStats hands over: the state (UI_DETAILS_*), the player's
+// Steam name and every stat of qcommon/q_steamstats.h's table, in its order
+#define UI_STEAM_NUM_STATS 88
+typedef struct {
+    int state;
+    char name[64];
+    int stats[UI_STEAM_NUM_STATS];
+} uiUserStats_t;
 
 // what trap_LAN_SteamDetailsGet says about the request
 #define UI_DETAILS_NONE 0
