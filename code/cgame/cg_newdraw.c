@@ -1491,9 +1491,47 @@ static void CG_DrawKiller(rectDef_t* rect, float scale, vec4_t color, int textSt
     CG_DrawPic(x + w + 8, rect->y - 4, 16, 16, cg.killerIcon);
 }
 
-static void CG_DrawCapFragLimit(rectDef_t* rect, float scale, vec4_t color, qhandle_t shader, int textStyle) {
-    const char* s = va("%2i", ((cgs.gametype >= GT_CTF) ? cgs.capturelimit : cgs.fraglimit));
-    CG_OwnerDrawText(rect->x - (CG_OwnerDrawTextWidth(s, scale, 0) / 2), rect->y, scale, color, s, 0, 0, textStyle);
+/*
+[QL] cgamex86.dll 0x10032260, CG_CAPFRAGLIMIT: the number alone, the limit of the mode (frags,
+captures, rounds or score) and in Race the points still ahead; centred or right-aligned on
+the rect's x as the item asks.
+*/
+static void CG_DrawCapFragLimit(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
+    const char *s;
+    int limit;
+    float x = rect->x;
+
+    switch (cgs.gametype) {
+    case GT_RACE:
+        limit = CG_RaceCheckpointsLeft();
+        break;
+    case GT_CTF:
+    case GT_1FCTF:
+    case GT_OBELISK:
+    case GT_HARVESTER:
+        limit = cgs.capturelimit;
+        break;
+    case GT_CA:
+    case GT_FREEZE:
+    case GT_RR:
+        limit = cgs.roundlimit;
+        break;
+    case GT_DOMINATION:
+    case GT_AD:
+        limit = cgs.scorelimit;
+        break;
+    default:
+        limit = cgs.fraglimit;
+        break;
+    }
+
+    s = va("%i", limit);
+    if (align == ITEM_ALIGN_CENTER) {
+        x -= (float)CG_DrawTextWidth(s, scale, 0, 0) * 0.5f;
+    } else if (align == ITEM_ALIGN_RIGHT) {
+        x -= (float)CG_DrawTextWidth(s, scale, 0, 0);
+    }
+    CG_DrawText(x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
 static void CG_Draw1stPlace(rectDef_t* rect, float scale, vec4_t color, qhandle_t shader, int textStyle) {
@@ -1924,44 +1962,36 @@ static void CG_DrawBestWeaponName(rectDef_t *rect, float scale, vec4_t color, in
 
 // [QL] Game limit display (frag/cap/round/score limit based on gametype)
 /*
-[QL] cgamex86.dll 0x10032260: the number alone, the limit of the mode (frags, captures,
-rounds or score) and in Race the points still ahead; centred or right-aligned on the
-rect's x as the item asks.
+[QL] cgamex86.dll 0x10033800, CG_GAME_LIMIT: "Frag Limit: 50", or the captures, rounds or
+score of the mode; centred on the rect's x when the item asks.
 */
 static void CG_DrawGameLimit(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
     const char *s;
-    int limit;
     float x = rect->x;
 
     switch (cgs.gametype) {
-    case GT_RACE:
-        limit = CG_RaceCheckpointsLeft();
-        break;
     case GT_CTF:
     case GT_1FCTF:
     case GT_OBELISK:
     case GT_HARVESTER:
-        limit = cgs.capturelimit;
+        s = va("Cap Limit: %d", cgs.capturelimit);
         break;
     case GT_CA:
     case GT_FREEZE:
     case GT_RR:
-        limit = cgs.roundlimit;
+        s = va("Round Limit: %d", cgs.roundlimit);
         break;
     case GT_DOMINATION:
     case GT_AD:
-        limit = cgs.scorelimit;
+        s = va("Score Limit: %d", cgs.scorelimit);
         break;
     default:
-        limit = cgs.fraglimit;
+        s = va("Frag Limit: %d", cgs.fraglimit);
         break;
     }
 
-    s = va("%i", limit);
     if (align == ITEM_ALIGN_CENTER) {
-        x -= (float)CG_DrawTextWidth(s, scale, 0, 0) * 0.5f;
-    } else if (align == ITEM_ALIGN_RIGHT) {
-        x -= (float)CG_DrawTextWidth(s, scale, 0, 0);
+        x -= (float)(CG_DrawTextWidth(s, scale, 0, 0) / 2);
     }
     CG_DrawText(x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
@@ -4399,7 +4429,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             CG_DrawMatchStatus(&rect, scale, color, textStyle);
             break;
         case CG_CAPFRAGLIMIT:               // 0xb
-            CG_DrawCapFragLimit(&rect, scale, color, shader, textStyle);
+            CG_DrawCapFragLimit(&rect, scale, color, textStyle, align);
             break;
         case CG_LEVELTIMER:                 // 0xc  0x10030c00
             CG_DrawLevelTimer(&rect, scale, color, textStyle, align);
