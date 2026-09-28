@@ -3721,6 +3721,9 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
         CG_Error("Client/Server game mismatch: %s/%s", GAME_VERSION, s);
     }
 
+    // [QL] 0x10029b90: read once, it lets cg_thirdPerson work
+    cgs.svCheats = (Info_ValueForKey(CG_ConfigString(CS_SYSTEMINFO), "sv_cheats")[0] == '1');
+
     s = CG_ConfigString(CS_LEVEL_START_TIME);
     cgs.levelStartTime = atoi(s);
 

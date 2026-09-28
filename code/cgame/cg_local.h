@@ -1619,6 +1619,7 @@ typedef struct {
     char teamVoteString[2][MAX_STRING_TOKENS];
 
     int levelStartTime;
+    qboolean svCheats;  // [QL] 0x10abaaa8: sv_cheats of the systeminfo when the map loaded
 
     int scores1, scores2;   // from configstrings
     char firstPlaceName[40];   // [QL] CS_SCORES1PLAYER (0x10a40400)

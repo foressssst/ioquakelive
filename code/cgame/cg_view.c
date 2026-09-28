@@ -1580,7 +1580,11 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
     }
 
     // decide on third person view
-    cg.renderingThirdPerson = cg.snap->ps.persistant[PERS_TEAM] != TEAM_SPECTATOR && (cg_thirdPerson.integer || (cg.snap->ps.stats[STAT_HEALTH] <= 0));
+    // [QL] 0x1004e566: cg_thirdPerson counts only with cheats or in a demo; with no health the
+    // view is always third person, a spectator's too: there CG_OffsetThirdPersonView leaves it
+    // as the server set it, which is how the camera of the join menu comes out level
+    cg.renderingThirdPerson = ((cgs.svCheats || cg.demoPlayback) && cg_thirdPerson.integer) ||
+                              cg.snap->ps.stats[STAT_HEALTH] <= 0;
     // [ioquakelive] a free camera sees the demo's own player from outside
     if (cg.demoPlayback && cg_freecam.integer) {
         cg.renderingThirdPerson = qtrue;
