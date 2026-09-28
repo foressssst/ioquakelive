@@ -3424,7 +3424,7 @@ TeamsPresent
 
 [QL] Small team-presence gate. Called by Cmd_ReadyUp_f. Distinct from
 CheckWarmupConditions (the reimpl previously conflated the two).
-.so symbol: TeamsPresent   Binary: 0x10068120 in qagamex86.dll
+.so symbol: TeamsPresent   Binary: 0x10068140 in qagamex86.dll
 =============
 */
 qboolean TeamsPresent(void) {
@@ -4119,6 +4119,8 @@ void PrintTeam(int team, char* message) {
 /*
 ==================
 SetLeader
+
+[QL] 0x10068310: the new leader is not announced
 ==================
 */
 void SetLeader(int team, int client) {
@@ -4142,7 +4144,6 @@ void SetLeader(int team, int client) {
     }
     level.clients[client].sess.teamLeader = qtrue;
     ClientUserinfoChanged(client);
-    PrintTeam(team, va("print \"%s is the new team leader\n\"", level.clients[client].pers.netname));
 }
 
 /*

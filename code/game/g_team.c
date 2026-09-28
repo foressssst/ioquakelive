@@ -1197,91 +1197,10 @@ qboolean Team_GetLocationMsg(gentity_t* ent, char* loc, int loclen) {
     if (!best)
         return qfalse;
 
-    if (best->count) {
-        if (best->count < 0)
-            best->count = 0;
-        if (best->count > 7)
-            best->count = 7;
-        Com_sprintf(loc, loclen, "%c%c%s" S_COLOR_WHITE, Q_COLOR_ESCAPE, best->count + '0', best->message);
-    } else
-        Com_sprintf(loc, loclen, "%s", best->message);
+    // [QL] 0x1006a530: the name alone, without the target_location colour
+    Com_sprintf(loc, loclen, "%s", best->message);
 
     return qtrue;
-}
-
-/*---------------------------------------------------------------------------*/
-
-/*
-================
-SelectRandomTeamSpawnPoint
-
-go to a random point that doesn't telefrag
-================
-*/
-#define MAX_TEAM_SPAWN_POINTS 32
-gentity_t* SelectRandomTeamSpawnPoint(int teamstate, team_t team) {
-    gentity_t* spot;
-    int count;
-    int selection;
-    gentity_t* spots[MAX_TEAM_SPAWN_POINTS];
-    char* classname;
-
-    if (teamstate == TEAM_BEGIN) {
-        if (team == TEAM_RED)
-            classname = "team_CTF_redplayer";
-        else if (team == TEAM_BLUE)
-            classname = "team_CTF_blueplayer";
-        else
-            return NULL;
-    } else {
-        if (team == TEAM_RED)
-            classname = "team_CTF_redspawn";
-        else if (team == TEAM_BLUE)
-            classname = "team_CTF_bluespawn";
-        else
-            return NULL;
-    }
-    count = 0;
-
-    spot = NULL;
-
-    while ((spot = G_Find(spot, FOFS(classname), classname)) != NULL) {
-        if (SpotWouldTelefrag(spot)) {
-            continue;
-        }
-        spots[count] = spot;
-        if (++count == MAX_TEAM_SPAWN_POINTS)
-            break;
-    }
-
-    if (!count) {  // no spots that won't telefrag
-        return G_Find(NULL, FOFS(classname), classname);
-    }
-
-    selection = rand() % count;
-    return spots[selection];
-}
-
-/*
-===========
-SelectCTFSpawnPoint
-
-============
-*/
-gentity_t* SelectCTFSpawnPoint(team_t team, int teamstate, vec3_t origin, vec3_t angles, qboolean isbot) {
-    gentity_t* spot;
-
-    spot = SelectRandomTeamSpawnPoint(teamstate, team);
-
-    if (!spot) {
-        return SelectSpawnPoint(vec3_origin, origin, angles, isbot);
-    }
-
-    VectorCopy(spot->s.origin, origin);
-    origin[2] += 9;
-    VectorCopy(spot->s.angles, angles);
-
-    return spot;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -1533,8 +1452,17 @@ static void ObeliskPain(gentity_t* self, gentity_t* attacker, int damage) {
     AddScore(attacker, self->r.currentOrigin, actualDamage);
 }
 
-// spawn invisible damagable obelisk entity / harvester base trigger.
-gentity_t* SpawnObelisk(vec3_t origin, vec3_t mins, vec3_t maxs, int team) {
+/*
+================
+SpawnObelisk
+
+[QL] 0x1006aaf0. The invisible, damageable obelisk or the Harvester base trigger. It is the one
+that drops to the floor; the base model that spawns it stays where the map put it.
+================
+*/
+gentity_t* SpawnObelisk(vec3_t origin, int team, int spawnflags) {
+    trace_t tr;
+    vec3_t dest;
     gentity_t* ent;
 
     ent = G_Spawn();
@@ -1543,8 +1471,8 @@ gentity_t* SpawnObelisk(vec3_t origin, vec3_t mins, vec3_t maxs, int team) {
     VectorCopy(origin, ent->s.pos.trBase);
     VectorCopy(origin, ent->r.currentOrigin);
 
-    VectorCopy(mins, ent->r.mins);
-    VectorCopy(maxs, ent->r.maxs);
+    VectorSet(ent->r.mins, -15, -15, 0);
+    VectorSet(ent->r.maxs, 15, 15, 87);
 
     ent->s.eType = ET_GENERAL;
     ent->flags = FL_NO_KNOCKBACK;
@@ -1563,26 +1491,7 @@ gentity_t* SpawnObelisk(vec3_t origin, vec3_t mins, vec3_t maxs, int team) {
         ent->touch = ObeliskTouch;
     }
 
-    G_SetOrigin(ent, ent->s.origin);
-
-    ent->spawnflags = team;
-
-    trap_LinkEntity(ent);
-
-    return ent;
-}
-
-// setup entity for team base model / obelisk model.
-void ObeliskInit(gentity_t* ent) {
-    trace_t tr;
-    vec3_t dest;
-
-    ent->s.eType = ET_TEAM;
-
-    VectorSet(ent->r.mins, -15, -15, 0);
-    VectorSet(ent->r.maxs, 15, 15, 87);
-
-    if (ent->spawnflags & 1) {
+    if (spawnflags & 1) {
         // suspended
         G_SetOrigin(ent, ent->s.origin);
     } else {
@@ -1605,6 +1514,12 @@ void ObeliskInit(gentity_t* ent) {
             G_SetOrigin(ent, tr.endpos);
         }
     }
+
+    ent->spawnflags = team;
+
+    trap_LinkEntity(ent);
+
+    return ent;
 }
 
 /*QUAKED team_redobelisk (1 0 0) (-16 -16 0) (16 16 8)
@@ -1616,16 +1531,16 @@ void SP_team_redobelisk(gentity_t* ent) {
         G_FreeEntity(ent);
         return;
     }
-    ObeliskInit(ent);
+    ent->s.eType = ET_TEAM;
     if (g_gametype.integer == GT_OBELISK) {
-        obelisk = SpawnObelisk(ent->s.origin, ent->r.mins, ent->r.maxs, TEAM_RED);
+        obelisk = SpawnObelisk(ent->s.origin, TEAM_RED, ent->spawnflags);
         obelisk->activator = ent;
         // initial obelisk health value
         ent->s.modelindex2 = 0xff;
         ent->s.frame = 0;
     }
     if (g_gametype.integer == GT_HARVESTER) {
-        obelisk = SpawnObelisk(ent->s.origin, ent->r.mins, ent->r.maxs, TEAM_RED);
+        obelisk = SpawnObelisk(ent->s.origin, TEAM_RED, ent->spawnflags);
         obelisk->activator = ent;
     }
     ent->s.modelindex = TEAM_RED;
@@ -1641,16 +1556,16 @@ void SP_team_blueobelisk(gentity_t* ent) {
         G_FreeEntity(ent);
         return;
     }
-    ObeliskInit(ent);
+    ent->s.eType = ET_TEAM;
     if (g_gametype.integer == GT_OBELISK) {
-        obelisk = SpawnObelisk(ent->s.origin, ent->r.mins, ent->r.maxs, TEAM_BLUE);
+        obelisk = SpawnObelisk(ent->s.origin, TEAM_BLUE, ent->spawnflags);
         obelisk->activator = ent;
         // initial obelisk health value
         ent->s.modelindex2 = 0xff;
         ent->s.frame = 0;
     }
     if (g_gametype.integer == GT_HARVESTER) {
-        obelisk = SpawnObelisk(ent->s.origin, ent->r.mins, ent->r.maxs, TEAM_BLUE);
+        obelisk = SpawnObelisk(ent->s.origin, TEAM_BLUE, ent->spawnflags);
         obelisk->activator = ent;
     }
     ent->s.modelindex = TEAM_BLUE;
@@ -1664,10 +1579,10 @@ void SP_team_neutralobelisk(gentity_t* ent) {
         G_FreeEntity(ent);
         return;
     }
-    ObeliskInit(ent);
+    ent->s.eType = ET_TEAM;
     if (g_gametype.integer == GT_HARVESTER) {
-        neutralObelisk = SpawnObelisk(ent->s.origin, ent->r.mins, ent->r.maxs, TEAM_FREE);
-        neutralObelisk->activator = ent;
+        neutralObelisk = SpawnObelisk(ent->s.origin, TEAM_FREE, ent->spawnflags);
+        neutralObelisk->spawnflags = TEAM_FREE;
     }
     ent->s.modelindex = TEAM_FREE;
     trap_LinkEntity(ent);
