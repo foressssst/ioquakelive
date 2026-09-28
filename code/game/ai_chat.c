@@ -432,7 +432,9 @@ int BotChat_EnterGame(bot_state_t* bs) {
     char name[32];
     float rnd;
 
-    if (bot_nochat.integer)
+    // [QL] 0x10001d10: quiet in insta gib and in the training, gauntlet-only and follow-me modes
+    if (bot_nochat.integer || g_instaGib.integer || bot_training.integer || bot_gauntletOnly.integer ||
+        bot_followMe.integer)
         return qfalse;
     if (bs->lastchat_time > FloatTime() - TIME_BETWEENCHATTING)
         return qfalse;
@@ -511,7 +513,8 @@ int BotChat_StartLevel(bot_state_t* bs) {
     char name[32];
     float rnd;
 
-    if (bot_nochat.integer)
+    // [QL] 0x10001fc0: quiet in insta gib
+    if (bot_nochat.integer || g_instaGib.integer)
         return qfalse;
     if (BotIsObserver(bs))
         return qfalse;
@@ -549,7 +552,9 @@ int BotChat_EndLevel(bot_state_t* bs) {
     char name[32];
     float rnd;
 
-    if (bot_nochat.integer)
+    // [QL] 0x10002100: quiet in insta gib and in the training, gauntlet-only and follow-me modes
+    if (bot_nochat.integer || g_instaGib.integer || bot_training.integer || bot_gauntletOnly.integer ||
+        bot_followMe.integer)
         return qfalse;
     if (BotIsObserver(bs))
         return qfalse;
@@ -612,18 +617,23 @@ int BotChat_Death(bot_state_t* bs) {
     char name[32];
     float rnd;
 
-    if (bot_nochat.integer)
+    // [QL] 0x10002350: quiet in insta gib, the gauntlet-only mode and the first two training
+    // modes; the later training modes talk on every death
+    if (bot_nochat.integer || g_instaGib.integer || bot_gauntletOnly.integer ||
+        bot_training.integer == 1 || bot_training.integer == 2)
         return qfalse;
-    if (bs->lastchat_time > FloatTime() - TIME_BETWEENCHATTING)
-        return qfalse;
-    rnd = trap_Characteristic_BFloat(bs->character, CHARACTERISTIC_CHAT_DEATH, 0, 1);
-    // don't chat in tournament mode
-    if (gametype == GT_DUEL)
-        return qfalse;
-    // if fast chatting is off
-    if (!bot_fastchat.integer) {
-        if (random() > rnd)
+    if (!bot_training.integer) {
+        if (bs->lastchat_time > FloatTime() - TIME_BETWEENCHATTING)
             return qfalse;
+        rnd = trap_Characteristic_BFloat(bs->character, CHARACTERISTIC_CHAT_DEATH, 0, 1);
+        // don't chat in tournament mode
+        if (gametype == GT_DUEL)
+            return qfalse;
+        // if fast chatting is off
+        if (!bot_fastchat.integer) {
+            if (random() > rnd)
+                return qfalse;
+        }
     }
     if (BotNumActivePlayers() <= 1)
         return qfalse;
@@ -633,7 +643,8 @@ int BotChat_Death(bot_state_t* bs) {
     else
         strcpy(name, "[world]");
     //
-    if (TeamPlayIsOn() && BotSameTeam(bs, bs->lastkilledby)) {
+    // [QL] 0x1000249e: in Red Rover the dead join their killer's team
+    if (TeamPlayIsOn() && BotSameTeam(bs, bs->lastkilledby) && gametype != GT_RR) {
         if (bs->lastkilledby == bs->client)
             return qfalse;
         BotAI_BotInitialChat(bs, "death_teammate", name, NULL);
@@ -675,7 +686,7 @@ int BotChat_Death(bot_state_t* bs) {
                                          name,                                            // 0
                                          BotWeaponNameForMeansOfDeath(bs->botdeathtype),  // 1
                                          NULL);
-                else if (bs->botdeathtype == MOD_RAILGUN)
+                else if (bs->botdeathtype == MOD_RAILGUN || bs->botdeathtype == MOD_RAILGUN_HEADSHOT)
                     BotAI_BotInitialChat(bs, "death_rail",
                                          name,                                            // 0
                                          BotWeaponNameForMeansOfDeath(bs->botdeathtype),  // 1
@@ -714,7 +725,8 @@ int BotChat_Kill(bot_state_t* bs) {
     char name[32];
     float rnd;
 
-    if (bot_nochat.integer)
+    // [QL] 0x100027a0: quiet in insta gib
+    if (bot_nochat.integer || g_instaGib.integer)
         return qfalse;
     if (bs->lastchat_time > FloatTime() - TIME_BETWEENCHATTING)
         return qfalse;
@@ -752,7 +764,8 @@ int BotChat_Kill(bot_state_t* bs) {
         //
         if (bs->enemydeathtype == MOD_GAUNTLET) {
             BotAI_BotInitialChat(bs, "kill_gauntlet", name, NULL);
-        } else if (bs->enemydeathtype == MOD_RAILGUN) {
+        } else if (bs->enemydeathtype == MOD_RAILGUN ||
+                   bs->enemydeathtype == MOD_RAILGUN_HEADSHOT) {  // [QL] 0x10002941
             BotAI_BotInitialChat(bs, "kill_rail", name, NULL);
         } else if (bs->enemydeathtype == MOD_TELEFRAG) {
             BotAI_BotInitialChat(bs, "kill_telefrag", name, NULL);
@@ -778,7 +791,8 @@ int BotChat_EnemySuicide(bot_state_t* bs) {
     char name[32];
     float rnd;
 
-    if (bot_nochat.integer)
+    // [QL] 0x10002a40: quiet in insta gib
+    if (bot_nochat.integer || g_instaGib.integer)
         return qfalse;
     if (bs->lastchat_time > FloatTime() - TIME_BETWEENCHATTING)
         return qfalse;
@@ -823,7 +837,8 @@ int BotChat_HitTalking(bot_state_t* bs) {
     int lasthurt_client;
     float rnd;
 
-    if (bot_nochat.integer)
+    // [QL] 0x10002b90: quiet in insta gib
+    if (bot_nochat.integer || g_instaGib.integer)
         return qfalse;
     if (bs->lastchat_time > FloatTime() - TIME_BETWEENCHATTING)
         return qfalse;
@@ -882,7 +897,8 @@ int BotChat_HitNoDeath(bot_state_t* bs) {
     if (lasthurt_client < 0 || lasthurt_client >= MAX_CLIENTS)
         return qfalse;
     //
-    if (bot_nochat.integer)
+    // [QL] 0x10002d40: quiet in insta gib
+    if (bot_nochat.integer || g_instaGib.integer)
         return qfalse;
     if (bs->lastchat_time > FloatTime() - TIME_BETWEENCHATTING)
         return qfalse;
@@ -929,7 +945,8 @@ int BotChat_HitNoKill(bot_state_t* bs) {
     float rnd;
     aas_entityinfo_t entinfo;
 
-    if (bot_nochat.integer)
+    // [QL] 0x10002f20: quiet in insta gib
+    if (bot_nochat.integer || g_instaGib.integer)
         return qfalse;
     if (bs->lastchat_time > FloatTime() - TIME_BETWEENCHATTING)
         return qfalse;
@@ -975,7 +992,9 @@ int BotChat_Random(bot_state_t* bs) {
     float rnd;
     char name[32];
 
-    if (bot_nochat.integer)
+    // [QL] 0x100030d0: quiet in insta gib and in the training, gauntlet-only and follow-me modes
+    if (bot_nochat.integer || g_instaGib.integer || bot_training.integer || bot_gauntletOnly.integer ||
+        bot_followMe.integer || g_training.integer)
         return qfalse;
     if (BotIsObserver(bs))
         return qfalse;
