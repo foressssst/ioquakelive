@@ -744,8 +744,8 @@ void SetTeam_Execute(gentity_t* ent, int team, spectatorState_t specState, int s
     // execute the team change
     //
 
-    // if the player was dead leave the body, but only if they're actually in game
-    if (client->ps.stats[STAT_HEALTH] <= 0 && client->pers.connected == CON_CONNECTED) {
+    // if the player was dead leave the body
+    if (client->ps.stats[STAT_HEALTH] <= 0) {
         CopyToBodyQue(ent);
     }
 
@@ -754,13 +754,23 @@ void SetTeam_Execute(gentity_t* ent, int team, spectatorState_t specState, int s
     if (oldTeam != TEAM_SPECTATOR) {
         // Kill him (makes sure he loses flags, etc)
         ent->flags &= ~FL_GODMODE;
+        ent->s.health = 0;
         ent->client->ps.stats[STAT_HEALTH] = ent->health = 0;
         player_die(ent, ent, ent, 100000, MOD_SUICIDE);
     }
 
-    // they go to the end of the line for tournements
-    if (team == TEAM_SPECTATOR && oldTeam != team)
-        AddTournamentQueue(client);
+    // [QL] 0x100404d4: a spectator takes a place in the play queue by the clock, unless already
+    // queued, and is no longer ready; anyone else leaves the queue
+    if (team == TEAM_SPECTATOR) {
+        if (!client->sess.playQueue) {
+            client->sess.spectatorTime = (int)time(NULL);
+        }
+        client->ps.eFlags |= EF_SPECTATOR;
+        client->pers.ready = qfalse;
+    } else {
+        client->sess.playQueue = 0;
+        client->sess.spectatorTime = 0;
+    }
 
     // [QL] 0x10040535: leaving a team closes the player's stats sheet; in Red Rover only
     // when going to spectator

@@ -856,7 +856,6 @@ void FindIntermissionPoint(void);
 void SetLeader(int team, int client);
 void CheckTeamLeader(int team);
 void G_RunThink(gentity_t* ent);
-void AddTournamentQueue(gclient_t* client);
 void SetWarmupState(int warmupTime);    // [QL] .so symbol: SetWarmupTime (0x10059c80)
 qboolean TeamsPresent(void);   // [QL] small team-present gate (0x10068120, .so: TeamsPresent)
 qboolean CheckForfeitConditions(gentity_t *ent, int mode);  // [QL] 0x10057d60

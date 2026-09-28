@@ -1987,30 +1987,6 @@ PLAYER COUNTING / SCORE SORTING
 
 /*
 =======================
-AddTournamentQueue
-
-Add client to end of tournament queue
-=======================
-*/
-
-void AddTournamentQueue(gclient_t* client) {
-    int index;
-    gclient_t* curclient;
-
-    for (index = 0; index < level.maxclients; index++) {
-        curclient = &level.clients[index];
-
-        if (curclient->pers.connected != CON_DISCONNECTED) {
-            if (curclient == client)
-                curclient->sess.spectatorTime = 0;
-            else if (curclient->sess.sessionTeam == TEAM_SPECTATOR)
-                curclient->sess.spectatorTime++;
-        }
-    }
-}
-
-/*
-=======================
 RemoveTournamentLoser
 
 Make the loser a spectator at the back of the line
@@ -2088,11 +2064,12 @@ int QDECL SortRanks(const void* a, const void* b) {
     ca = &level.clients[*(int*)a];
     cb = &level.clients[*(int*)b];
 
+    // [QL] 0x10055eb0
     // sort special clients last
-    if (ca->sess.spectatorState == SPECTATOR_SCOREBOARD || ca->sess.spectatorClient < 0) {
+    if (ca->sess.spectatorClient < 0) {
         return 1;
     }
-    if (cb->sess.spectatorState == SPECTATOR_SCOREBOARD || cb->sess.spectatorClient < 0) {
+    if (cb->sess.spectatorClient < 0) {
         return -1;
     }
 
@@ -2104,12 +2081,12 @@ int QDECL SortRanks(const void* a, const void* b) {
         return -1;
     }
 
-    // then spectators
+    // then spectators, the one who has waited longest first
     if (ca->sess.sessionTeam == TEAM_SPECTATOR && cb->sess.sessionTeam == TEAM_SPECTATOR) {
-        if (ca->sess.spectatorTime > cb->sess.spectatorTime) {
+        if (ca->sess.spectatorTime < cb->sess.spectatorTime) {
             return -1;
         }
-        if (ca->sess.spectatorTime < cb->sess.spectatorTime) {
+        if (ca->sess.spectatorTime > cb->sess.spectatorTime) {
             return 1;
         }
         return 0;
@@ -2121,12 +2098,31 @@ int QDECL SortRanks(const void* a, const void* b) {
         return -1;
     }
 
-    // then sort by score
+    // then by score: a race is won by the lowest time
+    if (g_gametype.integer == GT_RACE) {
+        if (ca->ps.persistant[PERS_SCORE] > cb->ps.persistant[PERS_SCORE]) {
+            return 1;
+        }
+        if (ca->ps.persistant[PERS_SCORE] < cb->ps.persistant[PERS_SCORE]) {
+            return -1;
+        }
+        return 0;
+    }
     if (ca->ps.persistant[PERS_SCORE] > cb->ps.persistant[PERS_SCORE]) {
         return -1;
     }
     if (ca->ps.persistant[PERS_SCORE] < cb->ps.persistant[PERS_SCORE]) {
         return 1;
+    }
+
+    // Red Rover breaks a tie with the round score
+    if (g_gametype.integer == GT_RR) {
+        if (ca->ps.localPersistant[0] > cb->ps.localPersistant[0]) {
+            return -1;
+        }
+        if (ca->ps.localPersistant[0] < cb->ps.localPersistant[0]) {
+            return 1;
+        }
     }
     return 0;
 }
