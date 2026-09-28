@@ -2335,19 +2335,25 @@ static void CG_DrawRaceStatus(rectDef_t *rect, float scale, vec4_t color, int te
     // [QL] 0x1002f33a: the hint does not depend on a run being under way but on who is
     // watching: it shows while you are not a spectator and not watching a demo. Showing it
     // only with the run stopped made it appear and vanish at the start.
+    // [QL] 0x1002f372: once the kill command has been used the key is known and the hint goes;
+    // with no key bound it stays
     if (!(cg.snap->ps.eFlags & EF_SPECTATOR) && !cg.demoPlayback) {
         int keynum = trap_Key_GetKey("kill");
-        const char *hint;
+        const char *hint = NULL;
         if (keynum > 0) {
-            char keyName[32];
-            trap_Key_KeynumToStringBuf(keynum, keyName, sizeof(keyName));
-            hint = va("Press %s to respawn.", keyName);
+            if (!cg.killRequested) {
+                char keyName[32];
+                trap_Key_KeynumToStringBuf(keynum, keyName, sizeof(keyName));
+                hint = va("Press %s to respawn.", keyName);
+            }
         } else {
             hint = "Bind 'kill' to respawn";
         }
-        // [QL] 0x1002f400: font 0, scale 0.18, half-transparent white, shadowed
-        vec4_t hintColor = {1.0f, 1.0f, 1.0f, 0.5f};
-        CG_DrawText(rect->x + 19.0f, rect->y + 27.0f, 0, 0.18f, hintColor, hint, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+        if (hint) {
+            // [QL] 0x1002f400: font 0, scale 0.18, half-transparent white, shadowed
+            vec4_t hintColor = {1.0f, 1.0f, 1.0f, 0.5f};
+            CG_DrawText(rect->x + 19.0f, rect->y + 27.0f, 0, 0.18f, hintColor, hint, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+        }
     }
 
     // [QL] 0x1002f408: there is always a title, and there are only two. With no run and no
@@ -2362,18 +2368,14 @@ static void CG_DrawRaceTimes(rectDef_t *rect, float scale, vec4_t color, int tex
     int ms;
     const char *s;
 
-    // [QL] 0x1002f4b8: the clock is always drawn, running during a run and stopped at the
-    // last time otherwise. With no run and no previous time it reads 0:00.000, which is what
-    // the binary shows; drawing nothing made it look like the clock was missing.
-    if (cg.race.active && cg.race.startTime) {
-        ms = cg.time - cg.race.startTime;
+    // [QL] 0x1002f4c0: the clock is always drawn, running during a run (held at the start of a
+    // pause) and stopped at the last time otherwise, in 0x10001320's format
+    if (cg.race.active) {
+        ms = (cgs.freezeEnd ? cgs.freezeEnd : cg.time) - cg.race.startTime;
     } else {
-        ms = cg.race.finishTime;
+        ms = cg.race.lastTime;
     }
-    if (ms < 0) {
-        ms = 0;
-    }
-    s = va("%d:%02d.%03d", ms / 60000, (ms / 1000) % 60, ms % 1000);
+    s = CG_FormatRaceTime(ms);
     CG_DrawText(rect->x, rect->y, 0, scale, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);  // [QL] 0x1002f5ae
 }
 

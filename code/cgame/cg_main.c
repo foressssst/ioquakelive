@@ -1259,31 +1259,33 @@ qhandle_t CG_CountryFlagShader(const char* country) {
 }
 
 // Address: 0x1002a4a0
-// Resets race-mode tracking state; on a full reset also clears the personal
-// best. Only acts in GT_RACE.
-// NOTE: the QL race globals (0x10abaab0..0x10abaad4) map onto ioquakelive's
-// cg.race sub-struct + cg.raceActive; the exact field pairing is a Phase-3
-// reconciliation item (see cg_local.h race notes).
+// Drops the run and tells the server so; a full reset (race_init) also forgets the last and
+// the best time. Only in GT_RACE.
 void CG_RaceInit(int fullReset) {
     if (cgs.gametype != GT_RACE) {
         return;
     }
 
-    cg.raceActive = 0;                    // 0x10abaab0
-    cg.race.startTime = 0;                // 0x10abaab4
-    cg.race.finishTime = 0;               // 0x10abaac0
-    cg.race.bestSplit = -1;               // 0x10abaac4
-    cg.race.checkpointDiff = -1;          // 0x10abaac8
-    cg.race.hasDiff = qfalse;             // 0x10abaacc
-    cg.race.checkpointCount = 0;          // 0x10abaad0
-    cg.race.currentCheckpointEnt = 0;     // 0x10abaad4
-
-    if (fullReset) {
-        cg.race.bestTime = 0;             // 0x10abaab8
-        cg.race.totalCheckpoints = 0;     // 0x10abaabc
+    cg.race.active = qfalse;
+    cg.race.startTime = 0;
+    cg.race.currentCheckPoint = 0;
+    cg.race.nextCheckpointEnt = -1;
+    cg.race.nextNextCheckpointEnt = -1;
+    cg.race.checkpointDiff = 0;
+    cg.race.hasDiff = qfalse;
+    cg.race.checkpointsPassed = 0;
+    if (fullReset == 1) {
+        cg.race.lastTime = 0;
+        cg.race.bestTime = 0;
     }
 
-    trap_SendConsoleCommand("race_reset");
+    trap_SendClientCommand("raceinit");
+}
+
+// Address: 0x10032240
+// The race points still ahead: the map's count less the ones passed.
+int CG_RaceCheckpointsLeft(void) {
+    return atoi(CG_ConfigString(CS_RACE_POINTS)) - cg.race.checkpointsPassed;
 }
 
 // Address: 0x1002a500
@@ -3647,7 +3649,6 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
     cg.clientNum = clientNum;
     cg.race.nextCheckpointEnt = -1;
     cg.race.nextNextCheckpointEnt = -1;
-    cg.race.currentCheckpointEnt = -1;
     cg.autoFollowClient = -1;  // [QL] deferred auto-follow idle (CG_CheckAutoFollow)
     CG_ClearChat();
 

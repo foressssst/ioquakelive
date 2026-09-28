@@ -172,6 +172,7 @@ CG_General
 static void CG_General(centity_t* cent) {
     refEntity_t ent;
     entityState_t* s1;
+    qboolean hideFlag = qfalse;
 
     s1 = &cent->currentState;
 
@@ -182,92 +183,6 @@ static void CG_General(centity_t* cent) {
 
     memset(&ent, 0, sizeof(ent));
 
-    // [QL] Race checkpoint rendering (binary-verified from cgamex86.dll CG_General)
-    if (cgs.gametype == GT_RACE) {
-        qhandle_t flagModel = cgs.gameModels[s1->modelindex];
-        qboolean isRaceFlag = (flagModel == cgs.media.raceFlagD ||
-                               flagModel == cgs.media.raceFlagB ||
-                               flagModel == cgs.media.raceFlagF ||
-                               flagModel == cgs.media.raceFlagG);
-
-        if (isRaceFlag) {
-            // Next checkpoint: tracked by race events OR marked by server via generic1
-            qboolean isNextCheckpoint = (s1->number == cg.race.nextCheckpointEnt) || (s1->generic1 != 0);
-            qhandle_t displayModel = flagModel;
-
-            // [QL] Model swapping for active checkpoint:
-            //   Start checkpoint (g_flag3/green) - stays green always
-            //   Finish checkpoint (f_flag3/red) - stays red always
-            //   Intermediate checkpoint (d_flag3/default):
-            //     - When it's the NEXT target: swap to b_flag3 (blue glow model)
-            //     - Otherwise: stays as d_flag3 (unlit default)
-            if (isNextCheckpoint && flagModel == cgs.media.raceFlagD) {
-                displayModel = cgs.media.raceFlagB;  // blue glow model
-            }
-
-            // Pedestal (domination point model beneath the flag)
-            {
-                refEntity_t pedestal;
-                memset(&pedestal, 0, sizeof(pedestal));
-
-                pedestal.hModel = cgs.media.domPointModel;
-                if (flagModel == cgs.media.raceFlagF) {
-                    pedestal.customSkin = cgs.media.domSkinRed;
-                } else if (flagModel == cgs.media.raceFlagG) {
-                    pedestal.customSkin = cgs.media.domSkinBlue;
-                } else {
-                    pedestal.customSkin = cgs.media.domSkinNeutral;
-                }
-
-                VectorCopy(cent->lerpOrigin, pedestal.origin);
-                VectorCopy(pedestal.origin, pedestal.oldorigin);
-                AnglesToAxis(vec3_origin, pedestal.axis);
-                pedestal.renderfx |= RF_MINLIGHT;
-
-                trap_R_AddRefEntityToScene(&pedestal);
-            }
-
-            // Bobbing animation
-            {
-                float bobPhase = (float)(cg.time & 0x3FF);
-                float bob = sin(bobPhase * M_PI * 2.0f / 1024.0f) * 6.0f + 4.0f;
-                cent->lerpOrigin[2] += bob;
-            }
-
-            VectorCopy(cent->lerpOrigin, ent.origin);
-            VectorCopy(cent->lerpOrigin, ent.oldorigin);
-
-            // Auto-rotation
-            VectorCopy(cg.autoAngles, cent->lerpAngles);
-            AxisCopy(cg.autoAxis, ent.axis);
-
-            ent.hModel = displayModel;
-
-            // Frame animation for flag waving
-            {
-                int frameTime = 100;
-                ent.frame = (cg.time / frameTime) % 16;
-                ent.oldframe = (ent.frame > 0) ? ent.frame - 1 : 15;
-                ent.backlerp = 1.0f - (float)(cg.time % frameTime) / (float)frameTime;
-            }
-
-            ent.renderfx |= RF_MINLIGHT;
-
-            trap_R_AddRefEntityToScene(&ent);
-            return;
-        }
-    }
-
-    // [QL] Domination point objectives (binary CG_General, gametype GT_DOMINATION,
-    // modelindex 1-3): draw the team-coloured objective outline. The binary also adds a
-    // floating marker sprite + ground ring here (0x10015c40+); those extra decorations
-    // are a follow-up. Outline colour/style come from the entity's modelindex2 (team)
-    // and powerups fields, read inside CG_PlayerOutline.
-    if (cgs.gametype == GT_DOMINATION && s1->modelindex >= 1 && s1->modelindex <= 3) {
-        CG_PlayerOutline(cent);
-    }
-
-    // Standard general entity rendering
     ent.frame = s1->frame;
     ent.oldframe = ent.frame;
     ent.backlerp = 0;
@@ -283,7 +198,100 @@ static void CG_General(centity_t* cent) {
 
     AnglesToAxis(cent->lerpAngles, ent.axis);
 
-    trap_R_AddRefEntityToScene(&ent);
+    // [QL] 0x10015745: race points. The next one is marked for the racer (the finish keeps its
+    // flag, a checkpoint turns blue) and gets a floating marker; during a run the other flags
+    // are hidden, all but the one after the next, and their pedestals stay.
+    if (cgs.gametype == GT_RACE) {
+        qboolean following = !(cg.snap->ps.eFlags & EF_SPECTATOR) || (cg.snap->ps.pm_flags & PMF_FOLLOW);
+
+        if (s1->number == cg.race.nextCheckpointEnt ||
+            (ent.hModel == cgs.media.raceFlagG && cg.race.nextCheckpointEnt == -1)) {
+            floatingEffect_t *fx = CG_AllocFloatingEffect();
+
+            if (s1->number == cg.race.nextCheckpointEnt) {
+                ent.hModel = cgs.media.raceFlagF;
+                if (!s1->modelindex2) {
+                    ent.hModel = following ? cgs.media.raceFlagB : cgs.media.raceFlagD;
+                }
+            }
+            if (fx) {
+                fx->type = 0;
+                fx->owner = cent;
+                VectorCopy(cent->lerpOrigin, fx->origin);
+                fx->zOffset = 64.0f;
+                fx->worldSize = cg_poiMaxWidth.value;
+                fx->minPixels = cg_poiMinWidth.value;
+                if (ent.hModel == cgs.media.raceFlagG) {
+                    fx->color[0] = 0.0f;
+                    fx->color[1] = 1.0f;
+                    fx->color[2] = 0.0f;
+                    fx->shader = cgs.media.raceMarkerStart;
+                } else if (!s1->modelindex2) {
+                    fx->color[0] = 0.2f;
+                    fx->color[1] = 0.6f;
+                    fx->color[2] = 1.0f;
+                    fx->shader = cgs.media.raceMarkerCheckpoint;
+                } else {
+                    fx->color[0] = 1.0f;
+                    fx->color[1] = 0.2f;
+                    fx->color[2] = 0.2f;
+                    fx->shader = cgs.media.raceMarkerFinish;
+                }
+                fx->color[3] = 1.0f;
+            }
+        } else if (s1->number != cg.race.nextNextCheckpointEnt &&
+                   (ent.hModel == cgs.media.raceFlagD || ent.hModel == cgs.media.raceFlagF) &&
+                   cg.race.active == 1) {
+            hideFlag = qtrue;
+        }
+
+        if (ent.hModel == cgs.media.raceFlagD || ent.hModel == cgs.media.raceFlagB ||
+            ent.hModel == cgs.media.raceFlagF || ent.hModel == cgs.media.raceFlagG) {
+            // cg_itemFx 1 bobs the flag, 2 turns it the fast way
+            if (cg_itemFx.integer & 1) {
+                ent.origin[2] += sin((double)(float)(cg.time & 0x3ff) * 6.2831854820251465 * 0.0009765625) * 6.0 + 4.0;
+            }
+            if (cg_itemFx.integer & 2) {
+                AxisCopy(cg.autoAxisFast, ent.axis);
+            } else {
+                AxisCopy(cg.autoAxis, ent.axis);
+            }
+
+            // a point on the floor stands on a domination pedestal: red under the finish,
+            // blue under the marked checkpoint
+            if (!(s1->generic1 & 1)) {
+                refEntity_t pedestal;
+
+                memset(&pedestal, 0, sizeof(pedestal));
+                VectorCopy(cent->lerpOrigin, pedestal.lightingOrigin);
+                VectorCopy(cent->lerpOrigin, pedestal.origin);
+                pedestal.origin[2] -= 16.0f;
+                AxisClear(pedestal.axis);
+                pedestal.hModel = cgs.media.domPointModel;
+                pedestal.customSkin = cgs.media.domSkinRed;
+                if (ent.hModel != cgs.media.raceFlagF) {
+                    pedestal.customSkin = cgs.media.domSkinNeutral;
+                    if (following && ent.hModel == cgs.media.raceFlagB) {
+                        pedestal.customSkin = cgs.media.domSkinBlue;
+                    }
+                }
+                trap_R_AddRefEntityToScene(&pedestal);
+            }
+        }
+    }
+
+    // [QL] Domination point objectives (binary CG_General, gametype GT_DOMINATION,
+    // modelindex 1-3): draw the team-coloured objective outline. The binary also adds a
+    // floating marker sprite + ground ring here (0x10015c40+); those extra decorations
+    // are a follow-up. Outline colour/style come from the entity's modelindex2 (team)
+    // and powerups fields, read inside CG_PlayerOutline.
+    if (cgs.gametype == GT_DOMINATION && s1->modelindex >= 1 && s1->modelindex <= 3) {
+        CG_PlayerOutline(cent);
+    }
+
+    if (!hideFlag) {
+        trap_R_AddRefEntityToScene(&ent);
+    }
 }
 
 /*

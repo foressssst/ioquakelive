@@ -218,17 +218,22 @@ void CG_Respawn(void) {
     cg.itemPickupBlendTime = 0;
     cg.itemPickupCount = 1;
 
-    // [QL] Race: reset checkpoints on respawn
+    // [QL] 0x10043447: a respawn drops the run, the last and best times stay
     if (cgs.gametype == GT_RACE) {
-        memset(&cg.race, 0, sizeof(cg.race));
+        cg.race.active = qfalse;
+        cg.race.startTime = 0;
+        cg.race.currentCheckPoint = 0;
+        cg.race.checkpointDiff = 0;
+        cg.race.hasDiff = qfalse;
+        cg.race.checkpointsPassed = 0;
         cg.race.nextCheckpointEnt = -1;
         cg.race.nextNextCheckpointEnt = -1;
-        trap_SendConsoleCommand("raceinit\n");
+        trap_SendClientCommand("raceinit");
     }
 
     // [QL] Spectator item timers: request current item respawn state
     if (cg.snap->ps.eFlags & EF_SPECTATOR) {
-        trap_SendConsoleCommand("specresp\n");
+        trap_SendClientCommand("specresp");
     }
 }
 

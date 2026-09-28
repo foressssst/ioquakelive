@@ -824,6 +824,7 @@ static void CG_Print_f(void) {
     CG_AddChat(text, 0, 0);
 }
 
+// [QL] 0x10007e70
 static void CG_Kill_f(void) {
     cg.killRequested = qtrue;
     trap_SendClientCommand("kill");

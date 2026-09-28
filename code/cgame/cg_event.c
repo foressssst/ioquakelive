@@ -2041,120 +2041,74 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_RACE_START:
             DEBUGNAME("EV_RACE_START");
-            // [QL] race mode start - init race state for local player
+            // [QL] 0x1001abfd: the start counts as the first point passed
             if (cg.snap->ps.clientNum == es->clientNum) {
-                // [QL] binary transport (CG_EntityEvent 0x5d): startTime rides
-                // es->time (0x5c), the total rides es->powerups (0xc4) and the
-                // first checkpoint ent rides es->otherEntityNum2 (0x98). It does
-                // NOT use otherEntityNum/eventParm here.
                 cg.race.active = qtrue;
                 cg.race.startTime = es->time;
                 cg.race.checkpointDiff = 0;
                 cg.race.hasDiff = qfalse;
-                cg.race.totalCheckpoints = es->powerups;  // total checkpoint count
-                cg.race.bestSplit = 0;
-                cg.race.checkpointCount = 0;
-                cg.race.nextCheckpointEnt = es->otherEntityNum2;  // entity number of first checkpoint
-                cg.race.nextNextCheckpointEnt = -1;
-                cg.race.currentCheckpointEnt = -1;
+                cg.race.nextCheckpointEnt = es->otherEntityNum2;
+                cg.race.nextNextCheckpointEnt = es->powerups;
+                cg.race.checkpointsPassed = 1;
                 CG_RaceBeep();
             }
             break;
         case EV_RACE_CHECKPOINT:
             DEBUGNAME("EV_RACE_CHECKPOINT");
-            // [QL] race checkpoint - show split time center print
+            // [QL] 0x1001ad3a: the split against the best run when there is one, and how many
+            // points are left when fewer than four
             if (cg.snap->ps.clientNum == es->clientNum) {
-                // [QL] binary transport (CG_EntityEvent 0x5e): the running count
-                // is incremented locally (not sent), the next checkpoint ent rides
-                // es->otherEntityNum2 (0x98), the total rides es->powerups (0xc4),
-                // and the split time rides es->time (0x5c) but is only valid when
-                // es->generic1 (0xe0) is nonzero. The binary has no second-level
-                // lookahead. Previously read generic1 as the count, otherEntityNum
-                // as the next ent, and gated the split on time.
-                cg.race.checkpointCount++;
-                cg.race.totalCheckpoints = es->powerups;
-                cg.race.currentCheckpointEnt = cent->currentState.number;
-                cg.race.nextCheckpointEnt = es->otherEntityNum2 ? es->otherEntityNum2 : -1;
-                cg.race.nextNextCheckpointEnt = -1;
-                if (es->generic1 != 0) {
-                    cg.race.checkpointDiff = es->time;
-                    cg.race.hasDiff = qtrue;
-                } else {
-                    cg.race.checkpointDiff = 0;
-                    cg.race.hasDiff = qfalse;
-                }
+                char remaining[32];
+                const char *color;
+
+                cg.race.nextCheckpointEnt = es->otherEntityNum2;
+                cg.race.nextNextCheckpointEnt = es->powerups;
+                cg.race.checkpointsPassed++;
+                cg.race.checkpointDiff = es->generic1 ? es->time : 0;
+                cg.race.hasDiff = (es->generic1 != 0);
                 CG_RaceBeep();
-                // show split time
-                {
-                    int remaining = cg.race.totalCheckpoints - cg.race.checkpointCount;
-                    char remainStr[64] = "";
-                    if (remaining < 4 && cg_drawCheckpointRemaining.integer) {
-                        Com_sprintf(remainStr, sizeof(remainStr), "^7%d remaining", remaining);
-                    }
-                    if (cg.race.hasDiff) {
-                        const char *color;
-                        int absDiff = cg.race.checkpointDiff < 0 ? -cg.race.checkpointDiff : cg.race.checkpointDiff;
-                        int ms = absDiff % 1000;
-                        int sec = (absDiff / 1000) % 60;
-                        int min = absDiff / 60000;
-                        if (cg.race.checkpointDiff < 0) color = "^2";       // ahead (green)
-                        else if (cg.race.checkpointDiff == 0) color = "^7"; // tied (white)
-                        else color = "^1";                                    // behind (red)
-                        if (min > 0) {
-                            CG_CenterPrint(va("%s%s%d:%02d.%03d\n%s",
-                                color, cg.race.checkpointDiff < 0 ? "-" : "+",
-                                min, sec, ms, remainStr), 320, 0.3f);  // [QL] 0x1001ae4e: y 320, scale 0.3
-                        } else {
-                            CG_CenterPrint(va("%s%s%d.%03d\n%s",
-                                color, cg.race.checkpointDiff < 0 ? "-" : "+",
-                                sec, ms, remainStr), 320, 0.3f);  // [QL] 0x1001ae4e: y 320, scale 0.3
-                        }
+
+                remaining[0] = 0;
+                if (CG_RaceCheckpointsLeft() < 4 && cg_drawCheckpointRemaining.integer) {
+                    Q_strncpyz(remaining, va("^7%i remaining", CG_RaceCheckpointsLeft()), sizeof(remaining));
+                }
+                if (cg.race.hasDiff == 1) {
+                    if (cg.race.checkpointDiff < 0) {
+                        color = "^2";
                     } else {
-                        CG_CenterPrint(va("Checkpoint %d\n%s", cg.race.checkpointCount, remainStr), 320, 0.3f);  // [QL] 0x1001ae4e: y 320, scale 0.3
+                        color = cg.race.checkpointDiff != 0 ? "^1" : "^7";
                     }
+                    CG_CenterPrint(va("%s%s\n%s", color, CG_FormatRaceTime(cg.race.checkpointDiff), remaining),
+                                   320, 0.3f);
+                } else {
+                    CG_CenterPrint(va("Checkpoint\n%s", remaining), 320, 0.3f);
                 }
             }
             break;
         case EV_RACE_FINISH:
             DEBUGNAME("EV_RACE_FINISH");
-            // [QL] race finish - show final time, update personal best
+            // [QL] 0x1001aee3: the run is dropped; a valid finish shows the difference with the
+            // best one and keeps the better of the two
             if (cg.snap->ps.clientNum == es->clientNum) {
-                cg.race.active = qfalse;
-                cg.race.nextCheckpointEnt = -1;
-                cg.race.currentCheckpointEnt = -1;
-                // [QL] binary gates the DNF branch on es->generic1 (0xe0), not
-                // powerups; finish time still rides es->time (0x5c).
-                if (es->generic1 == 0) {
-                    // invalid finish (DNF)
+                CG_RaceInit(0);
+                if (!es->generic1) {
                     cg.race.hasDiff = qfalse;
                     cg.race.checkpointDiff = 0;
                 } else {
-                    cg.race.finishTime = es->time;
-                    if (cg.race.bestTime > 0) {
-                        // show split vs personal best
-                        int diff = cg.race.finishTime - cg.race.bestTime;
-                        int absDiff = diff < 0 ? -diff : diff;
-                        int ms = absDiff % 1000;
-                        int sec = (absDiff / 1000) % 60;
-                        int min = absDiff / 60000;
+                    cg.race.lastTime = es->time;
+                    if (cg.race.bestTime != 0) {
+                        int diff = cg.race.lastTime - cg.race.bestTime;
                         const char *color;
-                        if (diff < 0) color = "^2";
-                        else if (diff == 0) color = "^7";
-                        else color = "^1";
-                        if (min > 0) {
-                            CG_CenterPrint(va("%s%s%d:%02d.%03d",
-                                color, diff < 0 ? "-" : "+", min, sec, ms), 320, 0.3f);  // [QL] 0x1001ae4e: y 320, scale 0.3
+
+                        if (diff < 0) {
+                            color = "^2";
                         } else {
-                            CG_CenterPrint(va("%s%s%d.%03d",
-                                color, diff < 0 ? "-" : "+", sec, ms), 320, 0.3f);  // [QL] 0x1001ae4e: y 320, scale 0.3
+                            color = diff != 0 ? "^1" : "^7";
                         }
-                        // update PB only if improved
-                        if (cg.race.finishTime < cg.race.bestTime) {
-                            cg.race.bestTime = cg.race.finishTime;
-                        }
-                    } else {
-                        // first finish - set as PB
-                        cg.race.bestTime = cg.race.finishTime;
+                        CG_CenterPrint(va("%s%s\n", color, CG_FormatRaceTime(diff)), 320, 0.3f);
+                    }
+                    if (cg.race.bestTime == 0 || cg.race.lastTime < cg.race.bestTime) {
+                        cg.race.bestTime = cg.race.lastTime;
                     }
                 }
                 trap_S_StartLocalSound(cgs.media.klaxon1Sound, CHAN_LOCAL_SOUND);  // [QL] 0x1001af7f

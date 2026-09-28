@@ -1121,7 +1121,12 @@ static void CG_ConfigStringModified(void) {
     } else if (num == CS_SCORES2PLAYER) {
         Q_strncpyz(cgs.secondPlaceName, str, sizeof(cgs.secondPlaceName));
     } else if (num == CS_LEVEL_START_TIME) {
-        cgs.levelStartTime = atoi(str);
+        // [QL] 0x10049b9b: a pause moves the level start, and a run's start along with it
+        int levelStartTime = atoi(str);
+        if (cgs.gametype == GT_RACE && cg.race.active == 1) {
+            cg.race.startTime += levelStartTime - cgs.levelStartTime;
+        }
+        cgs.levelStartTime = levelStartTime;
     } else if (num == CS_VOTE_TIME) {
         cgs.voteTime = atoi(str);
         cgs.voteModified = qtrue;
@@ -1737,6 +1742,7 @@ static void CG_MapRestart(void) {
     CG_StartMusic();
     trap_S_ClearLoopingSounds(qtrue);
     memset(cg.obituaries, 0, sizeof(cg.obituaries));  // [QL] 0x1004a396
+    memset(&cg.race, 0, sizeof(cg.race));              // [QL] 0x1004a3b3
     // [CPMA] with the list gone the slide has nothing to move, so it starts clean
     cg.obitSlideStart = 0;
     cg.obitSlideKey = 0;
@@ -2187,21 +2193,19 @@ static void CG_ServerCommand(void) {
         return;
     }
 
-    // [QL] race mode commands
+    // [QL] 0x10048820: the run of the player being followed, as the server keeps it
     if (!strcmp(cmd, "race_info")) {
-        cg.race.totalCheckpoints = atoi(CG_Argv(1));
-        cg.race.bestTime = atoi(CG_Argv(2));
-        if (trap_Argc() > 3) {
-            cg.race.bestSplit = atoi(CG_Argv(3));
-        }
+        cg.race.active = (atoi(CG_Argv(1)) != 0);
+        cg.race.startTime = atoi(CG_Argv(2));
+        cg.race.lastTime = atoi(CG_Argv(3));
+        cg.race.currentCheckPoint = atoi(CG_Argv(4));
+        cg.race.nextCheckpointEnt = atoi(CG_Argv(5));
+        cg.race.nextNextCheckpointEnt = atoi(CG_Argv(6));
         return;
     }
+    // [QL] 0x1004bbf0
     if (!strcmp(cmd, "race_init")) {
-        // reset race state
-        memset(&cg.race, 0, sizeof(cg.race));
-        cg.race.nextCheckpointEnt = -1;
-        cg.race.nextNextCheckpointEnt = -1;
-        cg.race.currentCheckpointEnt = -1;
+        CG_RaceInit(1);
         return;
     }
 

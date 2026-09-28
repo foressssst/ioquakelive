@@ -90,7 +90,6 @@ void CG_DemoRewind(int snapshotNum, int serverCommandSequence) {
     cg.clientNum = clientNum;
     cg.race.nextCheckpointEnt = -1;
     cg.race.nextNextCheckpointEnt = -1;
-    cg.race.currentCheckpointEnt = -1;
     cg.autoFollowClient = -1;
     CG_ClearChat();
     cg.speedBarColor1[0] = 0.0f; cg.speedBarColor1[1] = 1.0f;

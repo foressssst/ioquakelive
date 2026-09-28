@@ -896,20 +896,18 @@ typedef struct {
     char testModelName[MAX_QPATH];
     qboolean testGun;
 
-    // [QL] race mode state
+    // [QL] race state, 0x10abaab0..0x10abaad4
     struct {
-        qboolean active;            // race in progress
-        int      startTime;         // server time of race start
-        int      finishTime;        // last finish time
-        int      bestTime;          // personal best time
-        int      totalCheckpoints;  // total checkpoints on this map
-        int      bestSplit;         // best/target split time
-        int      checkpointDiff;    // time diff at last checkpoint
-        qboolean hasDiff;           // whether diff is valid
-        int      checkpointCount;   // current checkpoint number
-        int      nextCheckpointEnt;     // entity number of next checkpoint (-1 = none)
-        int      nextNextCheckpointEnt; // two-level lookahead (-1 = none)
-        int      currentCheckpointEnt; // entity number of current/last checkpoint (-1 = none)
+        qboolean active;                // 0x10abaab0: a run under way
+        int      startTime;             // 0x10abaab4: server time of the start
+        int      lastTime;              // 0x10abaab8: the last finish
+        int      bestTime;              // 0x10abaabc: the best finish on this map
+        int      currentCheckPoint;     // 0x10abaac0: only race_info fills it
+        int      nextCheckpointEnt;     // 0x10abaac4: the next point (-1 none)
+        int      nextNextCheckpointEnt; // 0x10abaac8: the one after it (-1 none)
+        int      checkpointDiff;        // 0x10abaacc: split against the best run
+        qboolean hasDiff;               // 0x10abaad0
+        int      checkpointsPassed;     // 0x10abaad4: the start counts as one
     } race;
 
     // [QL] the spectator item timers (count at 0x10ab994c)
@@ -962,7 +960,7 @@ typedef struct {
 
     // [QL] chat history and misc client-side flags
     qboolean chatHistoryShowing;
-    qboolean killRequested;
+    qboolean killRequested;  // [QL] 0x10abaad8: the kill command was used; race stops hinting it
     int      disconnectRequest;
 
     // [QL] chat ring buffer (binary: 24 entries at DAT_10079950)
@@ -984,12 +982,6 @@ typedef struct {
     int  notifyScrollStart;
     int  notifyScrollTime;
 
-    // [QL] race-mode flags read by CG_DrawRespawnMessage.
-    // raceStarted (DAT_10abaad8) gates the 'Press <key> to respawn' hint;
-    // raceActive (DAT_10abaab0) selects 'CURRENT RUN'/'LAST TIME' and which time CG_FormatRaceTime formats.
-    // (Distinct from the cg.race sub-struct's own 'active' flag; reconcile in Phase 3.)
-    int raceActive;
-    int raceStarted;
 
     // [QL] A&D round-overlay scoreboard, written by CG_InitScores (argv 1..20), read by CG_DrawRoundOverlay.
     // Dedicated array at global 0x10aa67d0 (memset 0x50 = 20 ints); -1 means "no score".
@@ -2114,6 +2106,7 @@ int  CG_GetActiveFrame(void);
 
 // [QL] race / match-state helpers
 void        CG_RaceInit(int fullReset);
+int         CG_RaceCheckpointsLeft(void);
 const char* CG_FormatRaceTime(int msec);
 int         CG_GetOvertimeCount(void);
 qboolean    CG_LocalPlayerLeads(void);
