@@ -148,6 +148,30 @@
     }
 
     // =============================================
+    // RECENT MATCHES
+    // retail's #stats/matches pages; code/ui/ui_matches.c draws and runs them
+    // =============================================
+    menuDef {
+        name "matches"
+        fullScreen MENU_TRUE
+        rect 0 0 640 480
+        visible MENU_FALSE
+        focusColor 1 .75 0 1
+        popup // clicks beside the 4:3 area reach the page too
+
+        onOpen { uiScript matchesOpen }
+        onESC { close matches ; open main }
+
+        itemDef {
+            name matches
+            type ITEM_TYPE_OWNERDRAW
+            ownerdraw 607 // UI_MATCHES
+            rect -2000 -1000 4640 2480
+            visible 1
+        }
+    }
+
+    // =============================================
     // SETTINGS
     // retail hands this to the web browser; code/ui/ui_settings.c draws and runs it
     // =============================================

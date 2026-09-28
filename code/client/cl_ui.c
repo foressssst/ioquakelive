@@ -982,6 +982,15 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             return out->state;
         }
 
+        case UI_STEAM_SHOW_PROFILE: {
+            const char* id = VMA(1);
+
+            if (id[0]) {
+                Steam_ShowProfile(strtoull(id, NULL, 10));
+            }
+            return 0;
+        }
+
         case UI_STEAM_FRIEND_ACTION: {
             steamFriend_t fr;
 

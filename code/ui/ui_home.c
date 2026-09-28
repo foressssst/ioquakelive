@@ -141,7 +141,7 @@ typedef struct {
 // appframe.js's playContext, statsContext and communityContext
 static const hfMenuItem_t hfMenus[3][3] = {
     {{"Match Browser", HM_NAV_BROWSER, NULL}, {"Start Match", HM_NAV_PLAY, NULL}, {"Training Center", HM_NAV_TRAINING, NULL}},
-    {{"Career Stats", HM_NAV_STATS, NULL}, {"Replays", HM_NAV_REPLAYS, NULL}},
+    {{"Career Stats", HM_NAV_STATS, NULL}, {"Recent Matches", HM_NAV_MATCHES, NULL}, {"Replays", HM_NAV_REPLAYS, NULL}},
     {{"Steam Workshop", -1, "http://steamcommunity.com/app/282440/workshop"},
      {"Steam Community", -1, "http://steamcommunity.com/app/282440"}},
 };
@@ -187,7 +187,7 @@ void UI_Home_PageTop(int active) {
     char name[MAX_CVAR_VALUE_STRING];
     float top = -smTop / smScale;
     float x;
-    int tab = (active == HM_NAV_REPLAYS || active == HM_NAV_STATS) ? 1 : (active == HM_NAV_BROWSER || active == HM_NAV_PLAY ||
+    int tab = (active == HM_NAV_REPLAYS || active == HM_NAV_STATS || active == HM_NAV_MATCHES) ? 1 : (active == HM_NAV_BROWSER || active == HM_NAV_PLAY ||
                                              active == HM_NAV_TRAINING) ? 0 : -1;
     qhandle_t face;
     int i;
@@ -385,6 +385,10 @@ void UI_Home_Go(int nav) {
         case HM_NAV_STATS:
             UI_Stats_Show("");
             break;
+        case HM_NAV_MATCHES:
+            Menus_CloseAll();
+            Menus_ActivateByName("matches");
+            break;
         case HM_NAV_SETTINGS:
             Menus_CloseAll();
             Menus_ActivateByName("settings");
@@ -532,6 +536,7 @@ static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
     },
     {
         {"Career Stats", HM_NAV_STATS, -1, NULL, qfalse},
+        {"Recent Matches", HM_NAV_MATCHES, -1, NULL, qfalse},
         {"Replays", HM_NAV_REPLAYS, -1, NULL, qfalse},
         {"Back", -1, HM_MENU_MAIN, NULL, qtrue},
     },

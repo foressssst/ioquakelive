@@ -977,6 +977,7 @@ int trap_SteamFriendCount(void);
 qboolean trap_SteamFriendGet(int index, uiFriend_t* out);
 void trap_SteamFriendAction(int index, int action);
 int trap_SteamUserStats(const char* steamId, uiUserStats_t* out, qboolean request);
+void trap_SteamShowProfile(const char* steamId);
 
 // [ioquakelive] the rest of what retail's browser asked Steam for: the same servers again
 // (Quick Refresh), the rules and players of one (one player per line: name, score and seconds,
@@ -1047,6 +1048,12 @@ qboolean UI_Training_HandleKey(int key);
 void UI_Stats_Open(void);
 void UI_Stats_Paint(void);
 qboolean UI_Stats_HandleKey(int key);
+
+// [QL] Recent Matches; see ui_matches.c
+#define UI_MATCHES 607
+void UI_Matches_Open(void);
+void UI_Matches_Paint(void);
+qboolean UI_Matches_HandleKey(int key);
 
 void trap_S_StopBackgroundTrack(void);
 void trap_S_StartBackgroundTrack(const char* intro, const char* loop);

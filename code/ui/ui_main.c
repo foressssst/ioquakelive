@@ -2277,6 +2277,9 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
         case UI_STATS:
             UI_Stats_Paint();
             break;
+        case UI_MATCHES:
+            UI_Matches_Paint();
+            break;
         default:
             break;
     }
@@ -2859,6 +2862,8 @@ static qboolean UI_OwnerDrawHandleKey(int ownerDraw, int flags, float* special, 
             return UI_Training_HandleKey(key);
         case UI_STATS:
             return UI_Stats_HandleKey(key);
+        case UI_MATCHES:
+            return UI_Matches_HandleKey(key);
         case UI_HANDICAP:
             return UI_Handicap_HandleKey(flags, special, key);
             break;
@@ -3313,6 +3318,8 @@ static void UI_RunMenuScript(char** args) {
             UI_Training_Open();
         } else if (Q_stricmp(name, "statsOpen") == 0) {
             UI_Stats_Open();
+        } else if (Q_stricmp(name, "matchesOpen") == 0) {
+            UI_Matches_Open();
         } else if (Q_stricmp(name, "homeEscape") == 0) {
             // [ioquakelive] Escape on the front end: over a match it goes back to the
             // match's menu, which is where "Main Menu" was pressed; otherwise it asks

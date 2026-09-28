@@ -186,7 +186,10 @@ typedef enum {
     // [ioquakelive] a player's Steam stats, for Career Stats and the profile card: what retail's
     // pages asked of the JavaScript bridge with RequestUserStats and got on
     // users.stats.<id>.received
-    UI_STEAM_USER_STATS
+    UI_STEAM_USER_STATS,
+    // [ioquakelive] a player's Steam profile in the overlay, which retail's player tables
+    // opened with ActivateGameOverlayToUser("steamid", ...)
+    UI_STEAM_SHOW_PROFILE
 } uiImport_t;
 
 // [ioquakelive] what trap_SteamUserStats hands over: the state (UI_DETAILS_*), the player's

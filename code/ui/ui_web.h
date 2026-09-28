@@ -297,6 +297,7 @@ typedef enum {
     HM_NAV_TRAINING,
     HM_NAV_REPLAYS,
     HM_NAV_STATS,
+    HM_NAV_MATCHES,
     HM_NAV_SETTINGS,
     HM_NAV_QUIT,
     HM_NUM_NAV

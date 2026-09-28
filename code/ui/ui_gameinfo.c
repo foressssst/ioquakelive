@@ -160,6 +160,24 @@ void UI_LoadArenas(void) {
 
 /*
 ===============
+UI_GetArenaInfoByMap
+
+A map's arena, as Quake 3's q3_ui had it; NULL when no arena names the map
+===============
+*/
+const char* UI_GetArenaInfoByMap(const char* map) {
+    int n;
+
+    for (n = 0; n < ui_numArenas; n++) {
+        if (!Q_stricmp(Info_ValueForKey(ui_arenaInfos[n], "map"), map)) {
+            return ui_arenaInfos[n];
+        }
+    }
+    return NULL;
+}
+
+/*
+===============
 UI_LoadArenasIntoMapList
 ===============
 */
