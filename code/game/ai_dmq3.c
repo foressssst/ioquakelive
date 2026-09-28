@@ -2197,6 +2197,9 @@ BotAggression
 ==================
 */
 float BotAggression(bot_state_t* bs) {
+    // [QL] 0x100172d0: a gauntlet-only bot always fights
+    if (bot_gauntlet.integer)
+        return 100;
     // if the bot has quad
     if (bs->inventory[INVENTORY_QUAD]) {
         // if the bot is not holding the gauntlet or the enemy is really nearby
@@ -2217,33 +2220,34 @@ float BotAggression(bot_state_t* bs) {
         if (bs->inventory[INVENTORY_ARMOR] < 40)
             return 0;
     }
+    // [QL] 0x10017337: unlimited ammo (-1) counts as plenty
     // if the bot can use the bfg
     if (bs->inventory[INVENTORY_BFG10K] > 0 &&
-        bs->inventory[INVENTORY_BFGAMMO] > 7)
+        (bs->inventory[INVENTORY_BFGAMMO] > 7 || bs->inventory[INVENTORY_BFGAMMO] == -1))
         return 100;
     // if the bot can use the railgun
     if (bs->inventory[INVENTORY_RAILGUN] > 0 &&
-        bs->inventory[INVENTORY_SLUGS] > 5)
+        (bs->inventory[INVENTORY_SLUGS] > 5 || bs->inventory[INVENTORY_SLUGS] == -1))
         return 95;
     // if the bot can use the lightning gun
     if (bs->inventory[INVENTORY_LIGHTNING] > 0 &&
-        bs->inventory[INVENTORY_LIGHTNINGAMMO] > 50)
+        (bs->inventory[INVENTORY_LIGHTNINGAMMO] > 50 || bs->inventory[INVENTORY_LIGHTNINGAMMO] == -1))
         return 90;
     // if the bot can use the rocketlauncher
     if (bs->inventory[INVENTORY_ROCKETLAUNCHER] > 0 &&
-        bs->inventory[INVENTORY_ROCKETS] > 5)
+        (bs->inventory[INVENTORY_ROCKETS] > 5 || bs->inventory[INVENTORY_ROCKETS] == -1))
         return 90;
     // if the bot can use the plasmagun
     if (bs->inventory[INVENTORY_PLASMAGUN] > 0 &&
-        bs->inventory[INVENTORY_CELLS] > 40)
+        (bs->inventory[INVENTORY_CELLS] > 40 || bs->inventory[INVENTORY_CELLS] == -1))
         return 85;
     // if the bot can use the grenade launcher
     if (bs->inventory[INVENTORY_GRENADELAUNCHER] > 0 &&
-        bs->inventory[INVENTORY_GRENADES] > 10)
+        (bs->inventory[INVENTORY_GRENADES] > 10 || bs->inventory[INVENTORY_GRENADES] == -1))
         return 80;
     // if the bot can use the shotgun
     if (bs->inventory[INVENTORY_SHOTGUN] > 0 &&
-        bs->inventory[INVENTORY_SHELLS] > 10)
+        (bs->inventory[INVENTORY_SHELLS] > 10 || bs->inventory[INVENTORY_SHELLS] == -1))
         return 50;
     // otherwise the bot is not feeling too good
     return 0;
@@ -2255,7 +2259,8 @@ BotFeelingBad
 ==================
 */
 float BotFeelingBad(bot_state_t* bs) {
-    if (bs->weaponnum == WP_GAUNTLET) {
+    // [QL] 0x10017420: the gauntlet is only bad news when it is not the only weapon
+    if (bs->weaponnum == WP_GAUNTLET && !bot_gauntlet.integer) {
         return 100;
     }
     if (bs->inventory[INVENTORY_HEALTH] < 40) {
@@ -2278,6 +2283,9 @@ BotWantsToRetreat
 int BotWantsToRetreat(bot_state_t* bs) {
     aas_entityinfo_t entinfo;
 
+    // [QL] 0x10017484: a gauntlet-only bot feeling bad has nowhere better to be
+    if (bot_gauntlet.integer && BotFeelingBad(bs) > 50)
+        return qfalse;
     if (gametype == GT_CTF) {
         // always retreat when carrying a CTF flag
         if (BotCTFCarryingFlag(bs))
@@ -2288,8 +2296,9 @@ int BotWantsToRetreat(bot_state_t* bs) {
             return qtrue;
     } else if (gametype == GT_OBELISK) {
         // the bots should be dedicated to attacking the enemy obelisk
+        // [QL] 0x1001755d: with Quake 3's ||, which ioquake3 had turned into &&
         if (bs->ltgtype == LTG_ATTACKENEMYBASE) {
-            if (bs->enemy != redobelisk.entitynum &&
+            if (bs->enemy != redobelisk.entitynum ||
                 bs->enemy != blueobelisk.entitynum) {
                 return qtrue;
             }
@@ -2308,9 +2317,6 @@ int BotWantsToRetreat(bot_state_t* bs) {
         BotEntityInfo(bs->enemy, &entinfo);
         // if the enemy is carrying a flag
         if (EntityCarriesFlag(&entinfo))
-            return qfalse;
-        // if the enemy is carrying cubes
-        if (EntityCarriesCubes(&entinfo))
             return qfalse;
     }
     // if the bot is getting the flag
@@ -2335,21 +2341,28 @@ int BotWantsToChase(bot_state_t* bs) {
         if (BotCTFCarryingFlag(bs))
             return qfalse;
         // always chase if the enemy is carrying a flag
-        BotEntityInfo(bs->enemy, &entinfo);
-        if (EntityCarriesFlag(&entinfo))
-            return qtrue;
+        // [QL] 0x10017658: when there is an enemy
+        if (bs->enemy > -1) {
+            BotEntityInfo(bs->enemy, &entinfo);
+            if (EntityCarriesFlag(&entinfo))
+                return qtrue;
+        }
     } else if (gametype == GT_1FCTF) {
         // never chase if carrying the flag
         if (Bot1FCTFCarryingFlag(bs))
             return qfalse;
         // always chase if the enemy is carrying a flag
-        BotEntityInfo(bs->enemy, &entinfo);
-        if (EntityCarriesFlag(&entinfo))
-            return qtrue;
+        // [QL] 0x10017658: when there is an enemy
+        if (bs->enemy > -1) {
+            BotEntityInfo(bs->enemy, &entinfo);
+            if (EntityCarriesFlag(&entinfo))
+                return qtrue;
+        }
     } else if (gametype == GT_OBELISK) {
         // the bots should be dedicated to attacking the enemy obelisk
+        // [QL] 0x100176b5: Quake 3's ||
         if (bs->ltgtype == LTG_ATTACKENEMYBASE) {
-            if (bs->enemy != redobelisk.entitynum &&
+            if (bs->enemy != redobelisk.entitynum ||
                 bs->enemy != blueobelisk.entitynum) {
                 return qfalse;
             }
@@ -2358,11 +2371,6 @@ int BotWantsToChase(bot_state_t* bs) {
         // never chase if carrying cubes
         if (BotHarvesterCarryingCubes(bs))
             return qfalse;
-
-        BotEntityInfo(bs->enemy, &entinfo);
-        // always chase if the enemy is carrying cubes
-        if (EntityCarriesCubes(&entinfo))
-            return qtrue;
     }
     // if the bot is getting the flag
     if (bs->ltgtype == LTG_GETFLAG)
@@ -2390,15 +2398,18 @@ BotCanAndWantsToRocketJump
 int BotCanAndWantsToRocketJump(bot_state_t* bs) {
     float rocketjumper;
 
+    // [QL] 0x10017740: not with the gauntlet modes
+    if (bot_gauntlet.integer || bot_gauntletOnly.integer)
+        return qfalse;
     // if rocket jumping is disabled
     if (!bot_rocketjump.integer)
         return qfalse;
     // if no rocket launcher
     if (bs->inventory[INVENTORY_ROCKETLAUNCHER] <= 0)
         return qfalse;
-    // if low on rockets
+    // [QL] 0x1001776c: low on rockets it clears the count and goes on, where Quake 3 gave up
     if (bs->inventory[INVENTORY_ROCKETS] < 3)
-        return qfalse;
+        bs->inventory[INVENTORY_ROCKETS] = 0;
     // never rocket jump with the Quad
     if (bs->inventory[INVENTORY_QUAD])
         return qfalse;
@@ -2971,15 +2982,52 @@ float BotEntityVisible(int viewer, vec3_t eye, vec3_t viewangles, float fov, int
 BotFindEnemy
 ==================
 */
+/*
+==================
+BotHearsEnemy
+
+[QL] 0x10020c10. A bot of skill 4 or more with no enemy, that would rather chase than retreat
+and is not on its way to a big armour or health or a powerup, takes a player it cannot see as
+its enemy when the last event it heard was theirs (BotCheckEvents).
+==================
+*/
+static int BotHearsEnemy(bot_state_t* bs, int client) {
+    bot_goal_t goal;
+    aas_entityinfo_t entinfo;
+    int i;
+
+    if (bs->enemy != -1)
+        return qfalse;
+    if (BotWantsToRetreat(bs))
+        return qfalse;
+    if (!BotWantsToChase(bs))
+        return qfalse;
+    for (i = 0; i < 2; i++) {
+        if (!(i == 0 ? trap_BotGetTopGoal(bs->gs, &goal) : trap_BotGetSecondGoal(bs->gs, &goal)))
+            continue;
+        BotEntityInfo(goal.entitynum, &entinfo);
+        if (((entinfo.itemType == IT_HEALTH || entinfo.itemType == IT_ARMOR) && entinfo.itemQuantity >= 25) ||
+            entinfo.itemType == IT_POWERUP)
+            return qfalse;
+    }
+    if (bs->settings.skill < 4)
+        return qfalse;
+    return (bs->heardClients & (1 << client)) != 0;
+}
+
 int BotFindEnemy(bot_state_t* bs, int curenemy) {
-    int i, healthdecrease;
+    int i, healthdecrease, heard;
     float f, alertness, easyfragger, vis;
     float squaredist, cursquaredist;
     aas_entityinfo_t entinfo, curenemyinfo;
     vec3_t dir, angles;
 
     alertness = trap_Characteristic_BFloat(bs->character, CHARACTERISTIC_ALERTNESS, 0, 1);
-    easyfragger = trap_Characteristic_BFloat(bs->character, CHARACTERISTIC_EASY_FRAGGER, 0, 1);
+    // [QL] 0x100192e4: only above skill 1 is anybody an easy frag
+    if (bs->settings.skill > 1)
+        easyfragger = trap_Characteristic_BFloat(bs->character, CHARACTERISTIC_EASY_FRAGGER, 0, 1);
+    else
+        easyfragger = 0;
     // check if the health decreased
     healthdecrease = bs->lasthealth > bs->inventory[INVENTORY_HEALTH];
     // remember the current health value
@@ -3073,8 +3121,13 @@ int BotFindEnemy(bot_state_t* bs, int curenemy) {
             f = 90 + 90 - (90 - (squaredist > Square(810) ? Square(810) : squaredist) / (810 * 9));
         // check if the enemy is visible
         vis = BotEntityVisible(bs->entitynum, bs->eye, bs->viewangles, f, i);
-        if (vis <= 0)
-            continue;
+        // [QL] 0x10019721: or heard
+        heard = qfalse;
+        if (vis <= 0) {
+            if (!BotHearsEnemy(bs, i))
+                continue;
+            heard = qtrue;
+        }
         // if the enemy is quite far away, not shooting and the bot is not damaged
         if (curenemy < 0 && squaredist > Square(100) && !healthdecrease && !EntityIsShooting(&entinfo)) {
             // check if we can avoid this enemy
@@ -3095,6 +3148,7 @@ int BotFindEnemy(bot_state_t* bs, int curenemy) {
             bs->enemysight_time = FloatTime() - 2;
         else
             bs->enemysight_time = FloatTime();
+        bs->enemyHeard = heard;
         bs->enemysuicide = qfalse;
         bs->enemydeath_time = 0;
         bs->enemyvisible_time = FloatTime();
@@ -3367,7 +3421,14 @@ void BotAimAtEnemy(bot_state_t* bs) {
     }
 
     // get the weapon information
+    // [QL] 0x10019fda: a bot holding no weapon the botlib knows takes the machinegun
+    wi.number = -1;
     trap_BotGetWeaponInfo(bs->ws, bs->weaponnum, &wi);
+    if (wi.number == -1) {
+        bs->weaponnum = WP_MACHINEGUN;
+        trap_EA_SelectWeapon(bs->client, WP_MACHINEGUN);
+        return;
+    }
     // get the weapon specific aim accuracy and or aim skill
     if (wi.number == WP_MACHINEGUN) {
         aim_accuracy = trap_Characteristic_BFloat(bs->character, CHARACTERISTIC_AIM_ACCURACY_MACHINEGUN, 0, 1);
@@ -3389,6 +3450,11 @@ void BotAimAtEnemy(bot_state_t* bs) {
     } else if (wi.number == WP_BFG) {
         aim_accuracy = trap_Characteristic_BFloat(bs->character, CHARACTERISTIC_AIM_ACCURACY_BFG10K, 0, 1);
         aim_skill = trap_Characteristic_BFloat(bs->character, CHARACTERISTIC_AIM_SKILL_BFG10K, 0, 1);
+    }
+    // [QL] 0x1001a26c: in insta gib the aim is bot_instaGibAimSkill, skill and accuracy both
+    if (g_instaGib.integer) {
+        aim_accuracy = bot_instaGibAimSkill.value;
+        aim_skill = bot_instaGibAimSkill.value;
     }
     //
     if (aim_accuracy <= 0)
@@ -4834,6 +4900,8 @@ void BotCheckEvents(bot_state_t* bs, entityState_t* state) {
         return;
     }
     bs->entityeventTime[state->number] = g_entities[state->number].eventTime;
+    // [QL] 0x1001e4ec: only the latest event is remembered by ear
+    bs->heardClients = 0;
     // if it's an event only entity
     if (state->eType > ET_EVENTS) {
         event = (state->eType - ET_EVENTS) & ~EV_EVENT_BITS;
@@ -4842,6 +4910,33 @@ void BotCheckEvents(bot_state_t* bs, entityState_t* state) {
     }
     //
     switch (event) {
+        // [QL] 0x1001e550: the noises a player makes: steps, falls, jumps, water, pickups, an
+        // empty gun, a weapon change, a shot, a taunt
+        case EV_FOOTSTEP:
+        case EV_FOOTSTEP_METAL:
+        case EV_FOOTSPLASH:
+        case EV_FOOTWADE:
+        case EV_SWIM:
+        case EV_FALL_SHORT:
+        case EV_FALL_MEDIUM:
+        case EV_FALL_FAR:
+        case EV_JUMP_PAD:
+        case EV_JUMP:
+        case EV_WATER_TOUCH:
+        case EV_WATER_LEAVE:
+        case EV_WATER_UNDER:
+        case EV_WATER_CLEAR:
+        case EV_ITEM_PICKUP:
+        case EV_GLOBAL_ITEM_PICKUP:
+        case EV_NOAMMO:
+        case EV_CHANGE_WEAPON:
+        case EV_FIRE_WEAPON:
+        case EV_TAUNT: {
+            if (state->clientNum != bs->client && (unsigned)state->clientNum < 32) {
+                bs->heardClients |= 1 << state->clientNum;
+            }
+            break;
+        }
         // client obituary event
         case EV_OBITUARY: {
             int target, attacker, mod;
@@ -5004,29 +5099,6 @@ void BotCheckEvents(bot_state_t* bs, entityState_t* state) {
             }
             break;
         }
-        case EV_FOOTSTEP:
-        case EV_FOOTSTEP_METAL:
-        case EV_FOOTSPLASH:
-        case EV_FOOTWADE:
-        case EV_SWIM:
-        case EV_FALL_SHORT:
-        case EV_FALL_MEDIUM:
-        case EV_FALL_FAR:
-        // [QL] EV_STEP_4/8/12/16 removed - step smoothing via pmove_t fields
-        case EV_JUMP_PAD:
-        case EV_JUMP:
-        case EV_TAUNT:
-        case EV_WATER_TOUCH:
-        case EV_WATER_LEAVE:
-        case EV_WATER_UNDER:
-        case EV_WATER_CLEAR:
-        case EV_ITEM_PICKUP:
-        case EV_GLOBAL_ITEM_PICKUP:
-        case EV_NOAMMO:
-        case EV_CHANGE_WEAPON:
-        case EV_FIRE_WEAPON:
-            // FIXME: either add to sound queue or mark player as someone making noise
-            break;
         case EV_USE_ITEM0:
         case EV_USE_ITEM1:
         case EV_USE_ITEM2:

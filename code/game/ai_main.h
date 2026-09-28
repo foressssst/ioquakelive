@@ -287,6 +287,9 @@ typedef struct bot_state_s {
     float tourLastNudge;        // 0x2448 the last "This way!"
     float tourReachTime;        // 0x2450 when the current stop fired
     float tourNextSay;          // 0x2484 no nudge before then
+    int heardClients;           // [QL] 0x2488 the client of the last event heard, a bit each
+    int enemyHeard;             // [QL] 0x248c the enemy was found by ear, not by sight
+    char ainodename[80];        // [QL] 0x23cc the node the bot last entered, for bot_hud
     int tourSaidCareful;        // 0x244c "You've got to be careful in the Arena!" said
     int tourPlayerNear;         // 0x2454 the player has caught up
     int tourWait;               // 0x246c the last stop's wait, whole seconds
