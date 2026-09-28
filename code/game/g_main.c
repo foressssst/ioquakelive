@@ -3385,11 +3385,14 @@ void G_AutoAction(void) {
 /*
 =================
 BG_IsScoreBasedGameType
-Returns qtrue for team-based (score-based) gametypes (GT_TEAM and above).
+
+[QL] 0x1002c9e0: the team games but Red Rover, whose players change sides as they fall, so an
+empty team there is no forfeit. Ready-up, friendly-fire complaints and the automatic forfeit
+all ask this.
 =================
 */
 qboolean BG_IsScoreBasedGameType(void) {
-    return g_gametype.integer >= GT_TEAM;
+    return g_gametype.integer < 0 || (g_gametype.integer > GT_RACE && g_gametype.integer != GT_RR);
 }
 
 /*

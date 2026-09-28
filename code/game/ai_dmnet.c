@@ -321,6 +321,87 @@ int BotGetItemLongTermGoal(bot_state_t* bs, int tfl, bot_goal_t* goal) {
 
 /*
 ==================
+BotUpdateKillGoal
+
+[QL] 0x10020600. While the victim of an LTG_KILL is still worth chasing (the goal time not
+out, the entity known and alive) the team goal follows it, and the goal time goes on for
+five more seconds. A dead victim drops the goal.
+==================
+*/
+static int BotUpdateKillGoal(bot_state_t* bs) {
+    aas_entityinfo_t entinfo;
+
+    if (bs->ltg_time < FloatTime()) {
+        return qfalse;
+    }
+    BotEntityInfo(bs->teamgoal.entitynum, &entinfo);
+    if (!entinfo.valid) {
+        return qfalse;
+    }
+    if (EntityIsDead(&entinfo)) {
+        bs->ltg_time = 0;
+        return qfalse;
+    }
+    bs->ltg_time = FloatTime() + 5;
+    VectorCopy(entinfo.origin, bs->teamgoal.origin);
+    bs->teamgoal.areanum = BotPointAreaNum(entinfo.origin);
+    VectorSet(bs->teamgoal.mins, -8, -8, -8);
+    VectorSet(bs->teamgoal.maxs, 8, 8, 8);
+    bs->teamgoal.flags = 0;
+    return qtrue;
+}
+
+/*
+==================
+BotGetRoundGoal
+
+[QL] 0x10020730. Clan Arena and Red Rover have no items to go for, so the long term goal is
+an enemy: the one being chased while it lives, or else the nearest one still standing, as an
+LTG_KILL for up to a minute.
+==================
+*/
+static int BotGetRoundGoal(bot_state_t* bs, bot_goal_t* goal) {
+    aas_entityinfo_t entinfo;
+    gentity_t* best = NULL;
+    int i;
+
+    if (!BotUpdateKillGoal(bs)) {
+        for (i = 0; i < level.maxclients; i++) {
+            if (BotSameTeam(bs, i)) {
+                continue;
+            }
+            BotEntityInfo(i, &entinfo);
+            if (!entinfo.valid) {
+                continue;
+            }
+            if (entinfo.number < MAX_CLIENTS) {
+                gentity_t* ent = &g_entities[entinfo.number];
+
+                if (!ent->inuse || !ent->client || ent->client->ps.pm_type != PM_NORMAL) {
+                    continue;
+                }
+            }
+            if (best && DistanceSquared(bs->origin, best->r.currentOrigin) <=
+                            DistanceSquared(bs->origin, entinfo.origin)) {
+                continue;
+            }
+            best = &g_entities[i];
+        }
+        if (!best) {
+            return qfalse;
+        }
+        bs->ltgtype = LTG_KILL;
+        bs->ltg_time = FloatTime() + 5;
+        bs->teamgoal_time = FloatTime() + 60;
+        bs->teamgoal.entitynum = best->s.number;
+        BotUpdateKillGoal(bs);
+    }
+    memcpy(goal, &bs->teamgoal, sizeof(bot_goal_t));
+    return qtrue;
+}
+
+/*
+==================
 BotGetLongTermGoal
 
 we could also create a separate AI node for every long term goal type
@@ -335,6 +416,11 @@ int BotGetLongTermGoal(bot_state_t* bs, int tfl, int retreat, bot_goal_t* goal) 
     float croucher;
     aas_entityinfo_t entinfo, botinfo;
     bot_waypoint_t* wp;
+
+    // [QL] 0x1000afa9: the round modes hunt, there is nothing to pick up
+    if (gametype == GT_CA || gametype == GT_RR) {
+        return BotGetRoundGoal(bs, goal);
+    }
 
     if (bs->ltgtype == LTG_TEAMHELP && !retreat) {
         // check for bot typing status message

@@ -2801,6 +2801,11 @@ BotSameTeam
 ==================
 */
 int BotSameTeam(bot_state_t* bs, int entnum) {
+    // [QL] 0x10018900: with bot_teamkill nobody is a teammate
+    if (bot_teamkill.integer) {
+        return qfalse;
+    }
+
     if (bs->client < 0 || bs->client >= MAX_CLIENTS) {
         return qfalse;
     }
