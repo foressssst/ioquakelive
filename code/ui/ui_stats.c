@@ -551,14 +551,16 @@ static void ST_DrawTitle(float left, float top, float width, const smRect_t* cli
     float baseline = top + 8 + ST_AVATAR;
 
     SM_Fill(left, top, width, ST_TITLE_H, stBlack80, clip);
-    // the avatar: one's own model stands in for it, as on the card; anybody else's is the
-    // initial of the name, as in the friend list
+    // the avatar, once Steam has it; meanwhile one's own model stands in for one's own, as on
+    // the card, and anybody else's is the initial of the name, as in the friend list
     if (!st.steamId[0]) {
         qhandle_t face = UI_Home_Face();
 
         if (face) {
             SM_Pic(left + 6.4f, top + 8, ST_AVATAR, ST_AVATAR, face, clip);
         }
+    } else if (SM_Avatar(st.steamId)) {
+        SM_Pic(left + 6.4f, top + 8, ST_AVATAR, ST_AVATAR, SM_Avatar(st.steamId), clip);
     } else {
         char initial[8];
 

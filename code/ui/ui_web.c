@@ -981,3 +981,44 @@ void SM_EndFrame(void) {
     memcpy(smLastHits, smHits, smNumHits * sizeof(smHits[0]));
     smNumLastHits = smNumHits;
 }
+
+/*
+===============
+SM_Avatar
+
+[QL] A player's Steam avatar as an image, 0 until Steam has it. Each player is asked about
+once a second at most, and the image is kept once it is there.
+===============
+*/
+#define SM_MAX_AVATARS 64
+
+qhandle_t SM_Avatar(const char* steamId) {
+    static struct {
+        char id[24];
+        qhandle_t image;
+        int asked;
+    } cache[SM_MAX_AVATARS];
+    static int next;
+    char path[MAX_QPATH];
+    int i;
+
+    for (i = 0; i < SM_MAX_AVATARS; i++) {
+        if (cache[i].asked && !strcmp(cache[i].id, steamId)) {
+            break;
+        }
+    }
+    if (i == SM_MAX_AVATARS) {
+        i = next;
+        next = (next + 1) % SM_MAX_AVATARS;
+        Q_strncpyz(cache[i].id, steamId, sizeof(cache[i].id));
+        cache[i].image = 0;
+        cache[i].asked = uiInfo.uiDC.realTime - 1000;
+    }
+    if (!cache[i].image && uiInfo.uiDC.realTime - cache[i].asked >= 1000) {
+        cache[i].asked = uiInfo.uiDC.realTime;
+        if (trap_SteamAvatar(steamId, path, sizeof(path))) {
+            cache[i].image = trap_R_RegisterShaderNoMip(path);
+        }
+    }
+    return cache[i].image;
+}

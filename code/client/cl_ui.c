@@ -987,6 +987,12 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             return out->state;
         }
 
+        case UI_STEAM_AVATAR: {
+            const char* id = VMA(1);
+
+            return Steam_Avatar(id[0] ? strtoull(id, NULL, 10) : 0, VMA(2), args[3]);
+        }
+
         case UI_STEAM_SHOW_PROFILE: {
             const char* id = VMA(1);
 

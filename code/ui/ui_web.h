@@ -321,6 +321,7 @@ float UI_Home_Header(float y, const char* eyebrow, const char* title);
 float UI_Home_BlockTop(float blockHeight);
 float UI_Home_FrameBottom(void);
 qhandle_t UI_Home_Face(void);
+qhandle_t SM_Avatar(const char* steamId);  // "" is oneself
 
 // Career Stats (ui_stats.c), and the profile card's wins and KDR
 void UI_Stats_Show(const char* steamId);

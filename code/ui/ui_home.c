@@ -782,7 +782,11 @@ static void UI_Home_DrawColumn(void) {
 qhandle_t UI_Home_Face(void) {
     char model[MAX_QPATH];
     char* slash;
+    qhandle_t avatar = SM_Avatar("");
 
+    if (avatar) {
+        return avatar;
+    }
     trap_Cvar_VariableStringBuffer("model", model, sizeof(model));
     slash = strchr(model, '/');
     if (slash) {
@@ -942,8 +946,12 @@ static void UI_Home_DrawFriends(float x, float y, float w, float h) {
             len = 2;
         }
         Q_strncpyz(initial, f->name[0] ? f->name : "?", len + 1);
-        SM_Text(x + 5 + (box - SM_Advance(FONT_SANS, HM_TEXT, initial, -1)) * 0.5f,
-                SM_Baseline(FONT_SANS, HM_TEXT, ry + 5, box), FONT_SANS, HM_TEXT, smText, initial, -1, qtrue);
+        if (SM_Avatar(f->steamId)) {
+            SM_Pic(x + 7, ry + 7, box - 4, box - 4, SM_Avatar(f->steamId), NULL);
+        } else {
+            SM_Text(x + 5 + (box - SM_Advance(FONT_SANS, HM_TEXT, initial, -1)) * 0.5f,
+                    SM_Baseline(FONT_SANS, HM_TEXT, ry + 5, box), FONT_SANS, HM_TEXT, smText, initial, -1, qtrue);
+        }
         SM_Text(x + 5 + box + 8, SM_Baseline(FONT_SANS, HM_TEXT, ry + 2, 20.0f), FONT_SANS, HM_TEXT, smText, f->name,
                 SM_Fit(FONT_SANS, HM_TEXT, f->name, w - box - 23), qfalse);
         SM_Text(x + 5 + box + 8, SM_Baseline(FONT_SANS, 13.0f, ry + 20, 18.0f), FONT_SANS, 13.0f, hmNameGrey,

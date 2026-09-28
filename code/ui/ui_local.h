@@ -978,6 +978,7 @@ qboolean trap_SteamFriendGet(int index, uiFriend_t* out);
 void trap_SteamFriendAction(int index, int action);
 int trap_SteamUserStats(const char* steamId, uiUserStats_t* out, qboolean request);
 void trap_SteamShowProfile(const char* steamId);
+qboolean trap_SteamAvatar(const char* steamId, char* path, int size);
 
 // [ioquakelive] the rest of what retail's browser asked Steam for: the same servers again
 // (Quick Refresh), the rules and players of one (one player per line: name, score and seconds,

@@ -190,6 +190,10 @@ void trap_SteamFriendAction(int index, int action) {
     syscall(UI_STEAM_FRIEND_ACTION, index, action);
 }
 
+qboolean trap_SteamAvatar(const char* steamId, char* path, int size) {
+    return syscall(UI_STEAM_AVATAR, steamId, path, size);
+}
+
 void trap_SteamShowProfile(const char* steamId) {
     syscall(UI_STEAM_SHOW_PROFILE, steamId);
 }

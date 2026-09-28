@@ -208,6 +208,11 @@ typedef struct {
                                            unsigned int flags);
 
     void*(QDECL* UGC)(void);
+    void*(QDECL* Utils)(void);
+    int(QDECL* GetMediumFriendAvatar)(void* self, uint64_t steamId);
+    steamBool_t(QDECL* GetImageSize)(void* self, int image, unsigned int* width, unsigned int* height);
+    steamBool_t(QDECL* GetImageRGBA)(void* self, int image, unsigned char* dest, int size);
+    void* utils;  // ISteamUtils *
     unsigned int(QDECL* GetItemState)(void* self, uint64_t item);
     steamBool_t(QDECL* DownloadItem)(void* self, uint64_t item, steamBool_t highPriority);
     steamBool_t(QDECL* GetItemInstallInfo)(void* self, uint64_t item, uint64_t* sizeOnDisk, char* folder,
@@ -390,6 +395,10 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND_OPT(BUpdateUserData, "SteamAPI_ISteamGameServer_BUpdateUserData");
     STEAM_BIND_OPT(Matchmaking, "SteamMatchmakingServers");
     STEAM_BIND_OPT(UGC, "SteamUGC");
+    STEAM_BIND_OPT(Utils, "SteamUtils");
+    STEAM_BIND_OPT(GetMediumFriendAvatar, "SteamAPI_ISteamFriends_GetMediumFriendAvatar");
+    STEAM_BIND_OPT(GetImageSize, "SteamAPI_ISteamUtils_GetImageSize");
+    STEAM_BIND_OPT(GetImageRGBA, "SteamAPI_ISteamUtils_GetImageRGBA");
     STEAM_BIND_OPT(Networking, "SteamNetworking");
     STEAM_BIND_OPT(GameServerNetworking, "SteamGameServerNetworking");
     STEAM_BIND_OPT(User, "SteamUser");
@@ -703,6 +712,11 @@ SD_VOID(CancelAuthTicket, 16, (void* self, unsigned int a), (self, a))
 SD_RET(int, GetFriendCount, 3, (void* self, int a), (self, a))
 SD_RET(int, GetFriendPersonaState, 6, (void* self, uint64_t a), (self, a))
 SD_RET(const char*, GetFriendPersonaName, 7, (void* self, uint64_t a), (self, a))
+SD_RET(int, GetMediumFriendAvatar, 35, (void* self, uint64_t a), (self, a))
+
+// ISteamUtils007
+SD_RET(steamBool_t, GetImageSize, 5, (void* self, int a, unsigned int* b, unsigned int* c), (self, a, b, c))
+SD_RET(steamBool_t, GetImageRGBA, 6, (void* self, int a, unsigned char* b, int c), (self, a, b, c))
 SD_RET(steamBool_t, GetFriendGamePlayed, 8, (void* self, uint64_t a, void* b), (self, a, b))
 SD_VOID(SetInGameVoiceSpeaking, 27, (void* self, uint64_t a, steamBool_t b), (self, a, b))
 SD_VOID(ActivateGameOverlay, 28, (void* self, const char* a), (self, a))
@@ -737,6 +751,9 @@ static void* QDECL SD_Matchmaking(void) {
 }
 static void* QDECL SD_Lobbies(void) {
     return sd.lobbies;
+}
+static void* QDECL SD_Utils(void) {
+    return sd.utils;
 }
 static void* QDECL SD_UGC(void) {
     return sd.ugc;
@@ -1036,6 +1053,10 @@ static void SD_Bind(void) {
     SD_SET(AddFavoriteGame);
     SD_SET(RemoveFavoriteGame);
     SD_SET(UGC);
+    SD_SET(Utils);
+    SD_SET(GetMediumFriendAvatar);
+    SD_SET(GetImageSize);
+    SD_SET(GetImageRGBA);
     SD_SET(GetItemState);
     SD_SET(DownloadItem);
     SD_SET(GetItemInstallInfo);
@@ -1240,6 +1261,9 @@ void Steam_Init(void) {
     }
     if (st.UGC) {
         st.ugc = st.UGC();  // the Workshop's, where the maps come from
+    }
+    if (st.Utils) {
+        st.utils = st.Utils();  // where the avatars' pixels come from
     }
     if (st.Networking) {
         st.networking = st.Networking();  // the peer to peer network, which voice travels over
@@ -3285,6 +3309,83 @@ qboolean Steam_InviteToGame(uint64_t steamId, const char* connect) {
         return qfalse;
     }
     return st.InviteUserToGame(st.friends, steamId, connect) ? qtrue : qfalse;
+}
+
+/*
+===============
+Steam_Avatar
+
+[QL] The web UI showed a player's Steam avatar as asset://steam/avatar/<id>. The renderer
+only reads images from files, so the medium avatar (64x64) goes to avatars/<id>.tga,
+once a session per player; Steam may take a moment to have it, and until then the
+answer is no.
+===============
+*/
+#define STEAM_MAX_AVATARS 128
+
+qboolean Steam_Avatar(uint64_t steamId, char* path, int size) {
+    static uint64_t written[STEAM_MAX_AVATARS];
+    static int numWritten;
+    unsigned int w = 0, h = 0, i;
+    byte header[18];
+    byte* pixels;
+    fileHandle_t f;
+    int image;
+
+    if (!steamId) {
+        steamId = Steam_ClientSteamID();
+    }
+    if (!steamId) {
+        return qfalse;
+    }
+    Com_sprintf(path, size, "avatars/%llu.tga", (unsigned long long)steamId);
+    for (i = 0; i < (unsigned int)numWritten; i++) {
+        if (written[i] == steamId) {
+            return qtrue;
+        }
+    }
+    if (!st.clientUp || !st.friends || !st.utils || !st.GetMediumFriendAvatar || !st.GetImageSize ||
+        !st.GetImageRGBA) {
+        return qfalse;
+    }
+    image = st.GetMediumFriendAvatar(st.friends, steamId);
+    if (image <= 0 || !st.GetImageSize(st.utils, image, &w, &h) || !w || !h || w > 512 || h > 512) {
+        return qfalse;  // none, or still on its way
+    }
+    pixels = (byte*)Z_Malloc(w * h * 4);
+    if (!st.GetImageRGBA(st.utils, image, pixels, (int)(w * h * 4))) {
+        Z_Free(pixels);
+        return qfalse;
+    }
+    // an uncompressed 32-bit TGA from the top left, whose pixels go blue, green, red, alpha
+    for (i = 0; i < w * h; i++) {
+        byte r = pixels[i * 4];
+
+        pixels[i * 4] = pixels[i * 4 + 2];
+        pixels[i * 4 + 2] = r;
+    }
+    Com_Memset(header, 0, sizeof(header));
+    header[2] = 2;
+    header[12] = (byte)(w & 0xff);
+    header[13] = (byte)(w >> 8);
+    header[14] = (byte)(h & 0xff);
+    header[15] = (byte)(h >> 8);
+    header[16] = 32;
+    header[17] = 0x28;
+    f = FS_FOpenFileWrite(path);
+    if (f) {
+        FS_Write(header, sizeof(header), f);
+        FS_Write(pixels, (int)(w * h * 4), f);
+        FS_FCloseFile(f);
+    }
+    Z_Free(pixels);
+    if (!f) {
+        return qfalse;
+    }
+    if (numWritten < STEAM_MAX_AVATARS) {
+        written[numWritten++] = steamId;
+    }
+    return qtrue;
 }
 
 // the address Steam sees the server at, 0 when it is not logged on

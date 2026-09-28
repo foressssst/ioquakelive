@@ -193,7 +193,10 @@ typedef enum {
     UI_STEAM_USER_STATS,
     // [ioquakelive] a player's Steam profile in the overlay, which retail's player tables
     // opened with ActivateGameOverlayToUser("steamid", ...)
-    UI_STEAM_SHOW_PROFILE
+    UI_STEAM_SHOW_PROFILE,
+    // [ioquakelive] where a player's Steam avatar is as an image, once Steam has it: retail's
+    // asset://steam/avatar/<id>
+    UI_STEAM_AVATAR
 } uiImport_t;
 
 // [ioquakelive] what trap_SteamUserStats hands over: the state (UI_DETAILS_*), the player's
