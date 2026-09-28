@@ -474,6 +474,7 @@ void CL_SteamServersFrame(void);
 void CL_WorkshopFrame(void);
 void CL_VoiceFrame(void);
 void CL_MatchReportFrame(void);
+void CL_MatchMedia(const char* path);
 void CL_SetCgameCommandCompletion(const char* cmdName);
 qboolean CL_VoiceIsIgnored(uint64_t steamId);
 qboolean CL_VoiceToggleIgnore(uint64_t steamId);

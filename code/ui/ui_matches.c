@@ -755,8 +755,27 @@ static void MT_Open(int index) {
         }
     }
 
-    // what was recorded of it: the match kept none, so the demo and the screenshot named by it
+    // what was recorded of it: the media index's files for the guid, and else the demo and
+    // the screenshot named by it, as the page looked for when a match had no MEDIA
     mt.numMedia = 0;
+    len = MT_ReadFile("matches/media.txt", mtBuffer, sizeof(mtBuffer));
+    for (p = len > 0 ? mtBuffer : NULL; p && *p && mt.numMedia < MT_MAX_MEDIA;) {
+        char* eol = strchr((char*)p, '\n');
+        char* space;
+
+        if (eol) {
+            *eol = '\0';
+        }
+        space = strchr((char*)p, ' ');
+        if (space && !Q_stricmpn(space + 1, m->guid, (int)strlen(m->guid))) {
+            *space = '\0';
+            Q_strncpyz(mt.media[mt.numMedia++], p, MAX_QPATH);
+        }
+        p = eol ? eol + 1 : NULL;
+    }
+    if (mt.numMedia) {
+        return;
+    }
     if (MT_Exists(va("screenshots/%s.jpg", m->guid))) {
         Com_sprintf(mt.media[mt.numMedia++], MAX_QPATH, "%s.jpg", m->guid);
     }
@@ -1205,15 +1224,40 @@ static void MT_Load(void) {
     }
 }
 
+// the match the page opens on, "" for the list
+static char mtPending[64];
+
+// [QL] Replays' info mark: /stats/matches/<guid>/players
+void UI_Matches_ShowMatch(const char* guid) {
+    Q_strncpyz(mtPending, guid, sizeof(mtPending));
+    Menus_CloseAll();
+    Menus_ActivateByName("matches");
+}
+
 void UI_Matches_Open(void) {
     menuDef_t* menu;
     itemDef_t* item;
+    int i;
 
     MT_Load();
     MT_LoadList();
     mt.open = -1;
     mt.scroll = 0;
     mt.shot[0] = '\0';
+    if (mtPending[0]) {
+        for (i = 0; i < mt.count && Q_stricmp(mt.match[i].guid, mtPending); i++) {
+        }
+        if (i == mt.count && mt.count < MT_MAX_MATCHES) {
+            MT_LoadMatch(&mt.match[i], mtPending);  // older than the list goes
+            if (mt.match[i].guid[0]) {
+                mt.count++;
+            }
+        }
+        if (i < mt.count) {
+            MT_Open(i);
+        }
+        mtPending[0] = '\0';
+    }
 
     menu = Menus_FindByName("matches");
     item = menu ? Menu_FindItemByName(menu, "matches") : NULL;

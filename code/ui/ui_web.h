@@ -324,6 +324,7 @@ qhandle_t UI_Home_Face(void);
 
 // Career Stats (ui_stats.c), and the profile card's wins and KDR
 void UI_Stats_Show(const char* steamId);
+void UI_Matches_ShowMatch(const char* guid);
 void UI_Stats_CardFor(int page);
 void UI_Stats_DrawCardLine(float x, float lineTop, float width);
 

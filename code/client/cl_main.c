@@ -338,6 +338,9 @@ void CL_Record_f(void) {
 
     Com_Printf("recording to %s.\n", name);
     clc.demofile = FS_FOpenFileWrite(name);
+    if (clc.demofile) {
+        CL_MatchMedia(name);  // [QL] "game.demo"
+    }
     if (!clc.demofile) {
         Com_Printf("ERROR: couldn't open.\n");
         return;

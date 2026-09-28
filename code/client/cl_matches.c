@@ -179,6 +179,46 @@ static void CL_SaveMatchReport(const char* report, int len) {
 
 /*
 ===============
+CL_MatchMedia
+
+[QL] What is recorded during a match belongs to it: the engine told the web UI of each demo
+it started ("game.demo") and each screenshot ("game.screenshot", 0x004f3c20) with the
+match's guid, from configstring 712, and the page kept the file against the guid in
+localStorage's media_index, which Replays and a match's page read. Here that index is
+matches/media.txt, a file and its guid a line.
+===============
+*/
+void CL_MatchMedia(const char* path) {
+    const char* name = strchr(path, '/');
+    const char* guid;
+    fileHandle_t f;
+    int i;
+
+    if (clc.state < CA_CONNECTED || !name || !name[1]) {
+        return;
+    }
+    name++;
+    guid = cl.gameState.stringData + cl.gameState.stringOffsets[CS_MATCH_GUID];
+    for (i = 0; guid[i]; i++) {
+        if (!isalnum((unsigned char)guid[i]) && guid[i] != '-') {
+            return;
+        }
+    }
+    if (!i) {
+        return;
+    }
+    f = FS_FOpenFileAppend("matches/media.txt");
+    if (f) {
+        FS_Write(name, (int)strlen(name), f);
+        FS_Write(" ", 1, f);
+        FS_Write(guid, i, f);
+        FS_Write("\n", 1, f);
+        FS_FCloseFile(f);
+    }
+}
+
+/*
+===============
 CL_MatchReportFrame
 
 [QL] 0x00461d40, every frame the client runs Steam's callbacks, before the voice

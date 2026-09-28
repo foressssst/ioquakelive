@@ -22,124 +22,170 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 // ui_replays.c -- [QL] the Replays page
 //
-// Retail's is a plain list: an h1 that says Replays and a <ul> of the files
-// GetDemoList returns, sorted, where clicking one sends `demo "<file>"`. Each row
-// carries the match it came from when the browser has it in localStorage, which
-// is a thing only its stats service fills in, so here a row is the demo.
-//
-// Same list, same click, in a panel the way quakeclub.com lays out its tables.
+// Retail's is web.pak's demos.js: an h1 that says Replays and a list of the files
+// GetDemoList returns, sorted. A demo recorded during a match the player kept (the media
+// index, see client/cl_matches.c) is shown as the match -- when, the mode on the map,
+// and the server -- with an info mark in front that opens the match's page; any other
+// is its file name. Clicking a row sends `demo "<file>"`.
 //
 
 #include "ui_web.h"
+#include "../qcommon/json.h"
 
-#define RP_ROW_H 44.0f
-#define RP_PAD 25.0f
+#include <time.h>
+
+#define RP_MAX_DEMOS 256
+#define RP_ROW_H 39.0f  // 0.5em over and under a 24px line
 
 typedef enum {
     RP_HIT_NONE,
     RP_HIT_ROW,
-    RP_HIT_TRACK,
-    RP_HIT_THUMB,
-    RP_HIT_REFRESH
+    RP_HIT_INFO
 } rpHitType_t;
 
+typedef struct {
+    char file[MAX_QPATH];
+    char guid[64];     // the match it belongs to, "" when none was kept
+    char date[64];     // "September 28th 2026, 12:28 pm"
+    char label[256];   // " FFA on Campgrounds: server"
+} rpDemo_t;
+
 static struct {
-    float listTop, view, content;
+    int count;
+    rpDemo_t demo[RP_MAX_DEMOS];
     float scroll;
-    qboolean scrollDrag;
-    float scrollGrab;
+    float content;
 } rp;
 
-static float RP_ClampScroll(float scroll) {
-    if (scroll > rp.content - rp.view) {
-        scroll = rp.content - rp.view;
-    }
-    return scroll < 0 ? 0 : scroll;
+static const vec4_t rpBlack80 = {0.0f, 0.0f, 0.0f, 0.8f};
+static const vec4_t rpOdd = SM_RGB(36, 33, 33);
+static const vec4_t rpEven = SM_RGB(28, 25, 25);
+static const vec4_t rpHover = SM_RGB(60, 57, 57);
+static const vec4_t rpYellow = SM_RGB(247, 209, 0);
+static const vec4_t rpGrey = SM_RGB(153, 153, 153);
+
+static int RP_Compare(const void* a, const void* b) {
+    return strcmp(((const rpDemo_t*)a)->file, ((const rpDemo_t*)b)->file);
 }
 
-static void RP_DrawScrollbar(float x) {
-    float thumbH = rp.view * rp.view / rp.content;
-    float thumbY;
+// moment's "MMMM Do YYYY, h:mm a"
+static void RP_Date(double ms, char* out, int size) {
+    static const char* const months[12] = {"January", "February", "March",     "April",   "May",      "June",
+                                           "July",    "August",   "September", "October", "November", "December"};
+    time_t t = (time_t)(ms / 1000);
+    struct tm* lt = localtime(&t);
+    int d, h;
+    const char* th;
 
-    if (thumbH < 28) {
-        thumbH = 28;
-    }
-    thumbY = rp.listTop + (rp.view - thumbH) * rp.scroll / (rp.content - rp.view);
-    SM_Hit(x - 4, rp.listTop, 14, rp.view, RP_HIT_TRACK, 0, NULL);
-    SM_Pill(x, thumbY, 6, thumbH, (SM_Over(RP_HIT_THUMB, 0) || rp.scrollDrag) ? smMuted : smBorder, NULL);
-    SM_Hit(x - 4, thumbY, 14, thumbH, RP_HIT_THUMB, 0, NULL);
-}
-
-static void RP_DrawPage(void) {
-    float left = UI_Home_Left();
-    float y = HM_NAV_H;
-    float panelTop, panelH;
-    char count[64];
-    float cw;
-    smRect_t clip;
-    int i;
-
-    UI_Home_Backdrop();
-    UI_Home_PageTop(HM_NAV_REPLAYS);
-
-    // the header, with the count and a refresh pill at its right
-    y = UI_Home_Header(y, NULL, "Replays");
-    Com_sprintf(count, sizeof(count), uiInfo.demoCount == 1 ? "%i demo" : "%i demos", uiInfo.demoCount);
-    cw = SM_ButtonWidth("Refresh", SM_PILL_H);
-    SM_Button(left + HM_CONTAINER_W - RP_PAD - cw, y - 72 + (72 - SM_PILL_H) * 0.5f, cw, SM_PILL_H, "Refresh",
-              SM_BUTTON_SECONDARY, SM_Over(RP_HIT_REFRESH, 0));
-    SM_Hit(left + HM_CONTAINER_W - RP_PAD - cw, y - 72 + (72 - SM_PILL_H) * 0.5f, cw, SM_PILL_H, RP_HIT_REFRESH, 0,
-           NULL);
-    SM_Label(left + HM_CONTAINER_W - RP_PAD - cw - 20 - SM_LabelWidth(11, count, 1.4f),
-             SM_Baseline(FONT_SANS, 11, y - 72, 72), 11, smMuted, count, 1.4f);
-
-    panelTop = y + HM_PANEL_GAP;
-    panelH = smBottom - 40 - panelTop;
-    SM_Round(left, panelTop, HM_CONTAINER_W, panelH, SM_RADIUS_MD, smPanel, NULL);
-
-    // the table's head, as the site's: small muted labels
-    SM_Label(left + RP_PAD + 12, SM_Baseline(FONT_SANS, 11, panelTop + 22, 16), 11, smMuted, "Demo", 1.4f);
-
-    rp.listTop = panelTop + 50;
-    rp.view = panelTop + panelH - RP_PAD - rp.listTop;
-    rp.content = uiInfo.demoCount * RP_ROW_H;
-    rp.scroll = RP_ClampScroll(rp.scroll);
-
-    if (!uiInfo.demoCount) {
-        SM_Text(left + RP_PAD + 12, SM_Baseline(FONT_SANS, 15, rp.listTop + 4, 24), FONT_SANS, 15, smMuted,
-                "Nothing recorded yet. Record with \\record, or turn on Auto Record Actions in Settings > Game.", -1,
-                qfalse);
+    if (!lt) {
+        out[0] = '\0';
         return;
     }
+    d = lt->tm_mday;
+    th = (d % 10 == 1 && d != 11) ? "st" : (d % 10 == 2 && d != 12) ? "nd" : (d % 10 == 3 && d != 13) ? "rd" : "th";
+    h = lt->tm_hour % 12;
+    Com_sprintf(out, size, "%s %i%s %i, %i:%02i %s", months[lt->tm_mon], d, th, lt->tm_year + 1900, h ? h : 12,
+                lt->tm_min, lt->tm_hour < 12 ? "am" : "pm");
+}
 
-    clip = SM_R(left, rp.listTop, HM_CONTAINER_W, rp.view);
-    for (i = 0; i < uiInfo.demoCount; i++) {
-        float ry = rp.listTop + i * RP_ROW_H - rp.scroll;
-        float rx = left + RP_PAD;
-        float rw = HM_CONTAINER_W - 2 * RP_PAD;
-        qboolean over = SM_Over(RP_HIT_ROW, i);
+static int RP_ReadFile(const char* name, char* buf, int size) {
+    fileHandle_t f;
+    int len = trap_FS_FOpenFile(name, &f, FS_READ);
 
-        if (ry + RP_ROW_H < rp.listTop || ry > rp.listTop + rp.view) {
-            continue;
-        }
-        // rows are told apart by the background under the cursor, never by lines
-        if (over) {
-            SM_Round(rx, ry, rw, RP_ROW_H, SM_RADIUS_SM, smRaised, &clip);
-        }
-        if (SM_TextInside(SM_Baseline(FONT_SANS, 15, ry, RP_ROW_H), 15, &clip)) {
-            SM_Text(rx + 12, SM_Baseline(FONT_SANS, 15, ry, RP_ROW_H), FONT_SANS, 15, over ? smText : smTextSoft,
-                    uiInfo.demoList[i], SM_Fit(FONT_SANS, 15, uiInfo.demoList[i], rw - 140), qfalse);
-        }
-        if (over) {
-            float bw = SM_ButtonWidth("Play", SM_PILL_H);
-
-            SM_Button(rx + rw - 8 - bw, ry + (RP_ROW_H - SM_PILL_H) * 0.5f, bw, SM_PILL_H, "Play",
-                      SM_BUTTON_PRIMARY, qfalse);
-        }
-        SM_Hit(rx, ry, rw, RP_ROW_H, RP_HIT_ROW, i, &clip);
+    if (!f) {
+        return -1;
     }
-    if (rp.content > rp.view) {
-        RP_DrawScrollbar(left + HM_CONTAINER_W - 14);
+    if (len <= 0 || len >= size) {
+        trap_FS_FCloseFile(f);
+        return -1;
+    }
+    trap_FS_Read(buf, len, f);
+    buf[len] = '\0';
+    trap_FS_FCloseFile(f);
+    return len;
+}
+
+static void RP_String(const char* obj, const char* end, const char* name, char* out, int size) {
+    const char* v = obj ? JSON_ObjectGetNamedValue(obj, end, name) : NULL;
+
+    out[0] = '\0';
+    if (v && JSON_ValueGetType(v, end) == JSONTYPE_STRING) {
+        JSON_ValueGetString(v, end, out, (unsigned int)size);
+    }
+}
+
+// the match a demo belongs to, as its row shows it
+static void RP_Describe(rpDemo_t* d) {
+    static char buf[0x10000];
+    char map[64], type[32], server[128];
+    const char* info;
+    const char* v;
+    const char* end;
+    const char* mapName;
+    int len = RP_ReadFile(va("matches/%s.json", d->guid), buf, sizeof(buf));
+
+    if (len <= 0) {
+        d->guid[0] = '\0';
+        return;
+    }
+    end = buf + len;
+    RP_String(buf, end, "MAP", map, sizeof(map));
+    RP_String(buf, end, "GAME_TYPE", type, sizeof(type));
+    RP_String(buf, end, "SERVER_TITLE", server, sizeof(server));
+    v = JSON_ObjectGetNamedValue(buf, end, "TIME_PLAYED");
+    RP_Date(v ? JSON_ValueGetDouble(v, end) : 0, d->date, sizeof(d->date));
+    info = UI_GetArenaInfoByMap(map);
+    mapName = info ? Info_ValueForKey(info, "longname") : "";
+    Com_sprintf(d->label, sizeof(d->label), " %s on %s: %s", type, mapName[0] ? mapName : map, server);
+}
+
+static void RP_Load(void) {
+    static char list[0x10000];
+    static char media[0x40000];
+    char ext[32];
+    char* p;
+    int n, i, len;
+
+    rp.count = 0;
+    Com_sprintf(ext, sizeof(ext), "dm_%d", (int)trap_Cvar_VariableValue("protocol"));
+    n = trap_FS_GetFileList("demos", ext, list, sizeof(list));
+    for (p = list, i = 0; i < n && rp.count < RP_MAX_DEMOS; i++) {
+        Com_Memset(&rp.demo[rp.count], 0, sizeof(rp.demo[0]));
+        Q_strncpyz(rp.demo[rp.count].file, p, sizeof(rp.demo[0].file));
+        rp.count++;
+        p += strlen(p) + 1;
+    }
+    qsort(rp.demo, rp.count, sizeof(rp.demo[0]), RP_Compare);
+
+    // the media index: the last line for a file says its match
+    len = RP_ReadFile("matches/media.txt", media, sizeof(media));
+    for (p = len > 0 ? media : NULL; p && *p;) {
+        char* eol = strchr(p, '\n');
+        char* space;
+
+        if (eol) {
+            *eol = '\0';
+        }
+        space = strchr(p, ' ');
+        if (space) {
+            *space = '\0';
+            for (i = 0; i < rp.count; i++) {
+                if (!Q_stricmp(rp.demo[i].file, p)) {
+                    Q_strncpyz(rp.demo[i].guid, space + 1, sizeof(rp.demo[i].guid));
+                }
+            }
+        }
+        p = eol ? eol + 1 : NULL;
+    }
+    for (i = 0; i < rp.count; i++) {
+        char* cr = strchr(rp.demo[i].guid, '\r');
+
+        if (cr) {
+            *cr = '\0';
+        }
+        if (rp.demo[i].guid[0]) {
+            RP_Describe(&rp.demo[i]);
+        }
     }
 }
 
@@ -148,9 +194,7 @@ void UI_Replays_Open(void) {
     itemDef_t* item;
 
     rp.scroll = 0;
-    rp.scrollDrag = qfalse;
-    UI_LoadDemos();
-
+    RP_Load();
     menu = Menus_FindByName("demo");
     item = menu ? Menu_FindItemByName(menu, "replays") : NULL;
     if (item) {
@@ -159,25 +203,67 @@ void UI_Replays_Open(void) {
 }
 
 void UI_Replays_Paint(void) {
+    float left = UI_Home_Left();
+    float width = HM_CONTAINER_W;
+    float view = smBottom - 30 - HM_NAV_H;
+    float x0 = left + 5, w0 = width - 10;
+    float infoW = w0 * 0.03f;
+    float top, y;
+    smRect_t clip;
+    int i;
+
     SM_BeginFrame();
+    UI_Home_Backdrop();
+    UI_Home_PageTop(HM_NAV_REPLAYS);
 
-    // the thumb follows the mouse while the button is held, and lets go with it
-    if (rp.scrollDrag) {
-        if (!trap_Key_IsDown(K_MOUSE1)) {
-            rp.scrollDrag = qfalse;
-        } else if (rp.content > rp.view) {
-            float thumbH = rp.view * rp.view / rp.content;
+    if (rp.scroll > rp.content - view) {
+        rp.scroll = rp.content - view;
+    }
+    if (rp.scroll < 0) {
+        rp.scroll = 0;
+    }
+    clip = SM_R(left, HM_NAV_H - 8, width, view + 8);
+    top = HM_NAV_H - rp.scroll;
 
-            if (thumbH < 28) {
-                thumbH = 28;
-            }
-            rp.scroll =
-                RP_ClampScroll(rp.scroll + (smMY - rp.scrollGrab) * (rp.content - rp.view) / (rp.view - thumbH));
-            rp.scrollGrab = smMY;
+    // .replays: black at 0.8 the whole height, the h1, and the list 5px in
+    SM_Fill(left, HM_NAV_H, width, view, rpBlack80, NULL);
+    {
+        float b = SM_Baseline(FONT_DEFAULT, 32, top + 8, 38.4f);
+
+        if (SM_TextInside(b, 32, &clip)) {
+            SM_Text(left + 11.4f, b, FONT_DEFAULT, 32, smText, "Replays", -1, qfalse);
         }
     }
+    y = top + 54.4f;
+    for (i = 0; i < rp.count; i++) {
+        const rpDemo_t* d = &rp.demo[i];
+        float baseline = SM_Baseline(FONT_SANS, 15, y + 9.5f, 20);
+        qboolean over = SM_Over(RP_HIT_ROW, i) || SM_Over(RP_HIT_INFO, i);
 
-    RP_DrawPage();
+        if (y + RP_ROW_H >= clip.y && y <= clip.y + clip.h) {
+            SM_Fill(x0, y, w0, RP_ROW_H, over ? rpHover : (i & 1) ? rpEven : rpOdd, &clip);
+            SM_Hit(x0 + infoW, y, w0 - infoW, RP_ROW_H, RP_HIT_ROW, i, &clip);
+            if (SM_TextInside(baseline, 15, &clip)) {
+                float nx = x0 + infoW;
+
+                if (d->guid[0]) {
+                    float iw = SM_IconWidth(15, 0xf05a) + SM_Advance(FONT_SANS, 15, "  ", -1);
+                    float ix = x0 + (infoW - iw) * 0.5f;
+
+                    SM_Icon(ix, baseline, 15, rpYellow, 0xf05a);
+                    SM_Hit(ix, y, SM_IconWidth(15, 0xf05a), RP_ROW_H, RP_HIT_INFO, i, &clip);
+                    SM_TextRaw(nx, baseline, FONT_SANS, 15, rpGrey, va("%s:", d->date), -1, qfalse);
+                    nx += SM_AdvanceRaw(FONT_SANS, 15, va("%s:", d->date), -1, qfalse);
+                    SM_TextRaw(nx, baseline, FONT_SANS, 15, smText, d->label, -1, qfalse);
+                } else {
+                    SM_TextRaw(nx, baseline, FONT_SANS, 15, smText, d->file, -1, qfalse);
+                }
+            }
+        }
+        y += RP_ROW_H;
+    }
+    rp.content = y - top + 5;
+
     UI_Home_Banner();
     SM_EndFrame();
 }
@@ -188,19 +274,13 @@ qboolean UI_Replays_HandleKey(int key) {
     if (key & K_CHAR_FLAG) {
         return qtrue;
     }
-    switch (key) {
-        case K_MWHEELUP:
-            rp.scroll = RP_ClampScroll(rp.scroll - 3 * RP_ROW_H);
-            return qtrue;
-        case K_MWHEELDOWN:
-            rp.scroll = RP_ClampScroll(rp.scroll + 3 * RP_ROW_H);
-            return qtrue;
-        case K_MOUSE1:
-            break;
-        default:
-            return qfalse;  // Escape goes back through the menu's onESC
+    if (key == K_MWHEELUP || key == K_MWHEELDOWN) {
+        rp.scroll += key == K_MWHEELUP ? -60.0f : 60.0f;
+        return qtrue;
     }
-
+    if (key != K_MOUSE1) {
+        return qfalse;  // Escape goes back through the menu's onESC
+    }
     if (UI_Home_NavClick()) {
         return qtrue;
     }
@@ -210,17 +290,11 @@ qboolean UI_Replays_HandleKey(int key) {
     }
     switch (hit->type) {
         case RP_HIT_ROW:
-            if (hit->index >= 0 && hit->index < uiInfo.demoCount) {
-                // retail sends exactly this
-                trap_Cmd_ExecuteText(EXEC_APPEND, va("demo \"%s\"\n", uiInfo.demoList[hit->index]));
-            }
+            // retail sends exactly this
+            trap_Cmd_ExecuteText(EXEC_APPEND, va("demo \"%s\"\n", rp.demo[hit->index].file));
             break;
-        case RP_HIT_THUMB:
-            rp.scrollDrag = qtrue;
-            rp.scrollGrab = smMY;
-            break;
-        case RP_HIT_REFRESH:
-            UI_LoadDemos();
+        case RP_HIT_INFO:
+            UI_Matches_ShowMatch(rp.demo[hit->index].guid);
             break;
         default:
             break;
