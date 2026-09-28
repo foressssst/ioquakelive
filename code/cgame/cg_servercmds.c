@@ -2210,11 +2210,11 @@ static void CG_ServerCommand(void) {
     }
 
     // [QL] complaint system (prefix match). binary CG_ServerCommand (0x1004adc0):
-    // gated on !cg.demoPlayback (DAT_10ab8f4c). complaintClient = atoi(argv(1))
+    // ignored in warmup (0x1004bc2a, DAT_10ab8f4c is cg.warmup). complaintClient = atoi(argv(1))
     // (DAT_10a5fdc8); complaintEndTime = cg.time + (client < 0 ? 10000 : 15000)
     // (DAT_10a5fdcc; the negative code is a "no complaint available" status).
     if (!Q_stricmpn(cmd, "complaint", 9)) {
-        if (!cg.demoPlayback) {
+        if (!cg.warmup) {
             cg.complaintClient = atoi(CG_Argv(1));
             cg.complaintEndTime = cg.time + (cg.complaintClient < 0 ? 10000 : 15000);
         }
