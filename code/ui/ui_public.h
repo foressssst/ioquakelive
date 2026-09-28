@@ -196,7 +196,10 @@ typedef enum {
     UI_STEAM_SHOW_PROFILE,
     // [ioquakelive] where a player's Steam avatar is as an image, once Steam has it: retail's
     // asset://steam/avatar/<id>
-    UI_STEAM_AVATAR
+    UI_STEAM_AVATAR,
+    // [ioquakelive] a piece of a file of the player's web.pak, from where a text first appears:
+    // the pages that show retail's own text read it this way, and none of it travels with us
+    UI_WEBPAK_EXCERPT
 } uiImport_t;
 
 // [ioquakelive] what trap_SteamUserStats hands over: the state (UI_DETAILS_*), the player's

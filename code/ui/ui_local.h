@@ -979,6 +979,7 @@ void trap_SteamFriendAction(int index, int action);
 int trap_SteamUserStats(const char* steamId, uiUserStats_t* out, qboolean request);
 void trap_SteamShowProfile(const char* steamId);
 qboolean trap_SteamAvatar(const char* steamId, char* path, int size);
+int trap_WebPakExcerpt(const char* name, const char* marker, char* out, int size);
 
 // [ioquakelive] the rest of what retail's browser asked Steam for: the same servers again
 // (Quick Refresh), the rules and players of one (one player per line: name, score and seconds,
@@ -1050,6 +1051,12 @@ qboolean UI_Training_HandleKey(int key);
 void UI_Stats_Open(void);
 void UI_Stats_Paint(void);
 qboolean UI_Stats_HandleKey(int key);
+
+// [QL] the Legal Notices page; see ui_legal.c
+#define UI_LEGAL 608
+void UI_Legal_Open(void);
+void UI_Legal_Paint(void);
+qboolean UI_Legal_HandleKey(int key);
 
 // [QL] Recent Matches; see ui_matches.c
 #define UI_MATCHES 607

@@ -44,6 +44,7 @@ typedef enum {
     HM_HIT_SOCIAL, // [ioquakelive] the social strip's background: clicks do not pass through
     HM_HIT_FRIEND, // [ioquakelive] a row of the friends list
     HM_HIT_CONTEXT,      // an item of a friend's context menu
+    HM_HIT_LEGAL,        // the main menu's Legal Notices link
     HM_HIT_CONTEXT_BACK, // the screen under it, which closes it
     HM_HIT_MENU    // [ioquakelive] a row of the PLAY dropdown
 } hmHitType_t;
@@ -1080,6 +1081,19 @@ void UI_Home_Paint(void) {
     }
     UI_Home_DrawColumn();
     UI_Home_DrawSide();
+
+    // .legal-links: the link to the notices, over black at the bottom right
+    {
+        static const vec4_t link = {30 / 255.0f, 174 / 255.0f, 219 / 255.0f, 1.0f};
+        float lw = SM_Advance(FONT_SANS, 15, "Legal Notices", -1);
+        float ly = smBottom - 24;
+        float b = SM_Baseline(FONT_SANS, 15, ly + 2, 20);
+
+        SM_Fill(smVW - lw, ly, lw, 24, smPage, NULL);
+        SM_Text(smVW - lw, b, FONT_SANS, 15, link, "Legal Notices", -1, qfalse);
+        SM_Fill(smVW - lw, b + 2, lw, 1, link, NULL);
+        SM_Hit(smVW - lw, ly, lw, 24, HM_HIT_LEGAL, 0, NULL);
+    }
     (void)top;
 
     UI_Home_Banner();
@@ -1127,6 +1141,11 @@ qboolean UI_Home_HandleKey(int key) {
     }
     if (hit->type == HM_HIT_TAB) {
         hr.panel = hit->index;
+        return qtrue;
+    }
+    if (hit->type == HM_HIT_LEGAL) {
+        Menus_CloseAll();
+        Menus_ActivateByName("legal");
         return qtrue;
     }
     if (hit->type == HM_HIT_ITEM) {

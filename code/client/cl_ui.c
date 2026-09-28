@@ -987,6 +987,36 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             return out->state;
         }
 
+        case UI_WEBPAK_EXCERPT: {
+            const char* marker = VMA(2);
+            char* out = VMA(3);
+            int size = args[4];
+            int markerLen = (int)strlen(marker);
+            void* file;
+            long len;
+            long i;
+            int n = 0;
+
+            if (size <= 0 || markerLen <= 0 || Q_stricmpn(VMA(1), "webui/", 6)) {
+                return 0;
+            }
+            out[0] = '\0';
+            len = FS_ReadFile(VMA(1), &file);
+            if (len <= 0 || !file) {
+                return 0;
+            }
+            for (i = 0; i + markerLen <= len; i++) {
+                if (!memcmp((const char*)file + i, marker, markerLen)) {
+                    n = (int)(len - i < size - 1 ? len - i : size - 1);
+                    Com_Memcpy(out, (const char*)file + i, n);
+                    out[n] = '\0';
+                    break;
+                }
+            }
+            FS_FreeFile(file);
+            return n;
+        }
+
         case UI_STEAM_AVATAR: {
             const char* id = VMA(1);
 

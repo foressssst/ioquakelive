@@ -148,6 +148,30 @@
     }
 
     // =============================================
+    // LEGAL NOTICES
+    // retail's #legal-notices page; code/ui/ui_legal.c draws and runs it
+    // =============================================
+    menuDef {
+        name "legal"
+        fullScreen MENU_TRUE
+        rect 0 0 640 480
+        visible MENU_FALSE
+        focusColor 1 .75 0 1
+        popup // clicks beside the 4:3 area reach the page too
+
+        onOpen { uiScript legalOpen }
+        onESC { close legal ; open main }
+
+        itemDef {
+            name legal
+            type ITEM_TYPE_OWNERDRAW
+            ownerdraw 608 // UI_LEGAL
+            rect -2000 -1000 4640 2480
+            visible 1
+        }
+    }
+
+    // =============================================
     // RECENT MATCHES
     // retail's #stats/matches pages; code/ui/ui_matches.c draws and runs them
     // =============================================
