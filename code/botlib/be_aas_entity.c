@@ -99,6 +99,16 @@ int AAS_UpdateEntity(int entnum, bot_entitystate_t* state) {
     ent->i.weapon = state->weapon;
     ent->i.legsAnim = state->legsAnim;
     ent->i.torsoAnim = state->torsoAnim;
+    // [QL] quakelive_steam.exe 0x484e20: and what QL adds
+    ent->i.nextthink = state->nextthink;
+    ent->i.itemQuantity = state->itemQuantity;
+    ent->i.itemType = state->itemType;
+    ent->i.itemTag = state->itemTag;
+    ent->i.health = state->health;
+    ent->i.maxHealth = state->maxHealth;
+    Com_Memcpy(ent->i.ammoFull, state->ammoFull, sizeof(ent->i.ammoFull));
+    ent->i.powerupPickup = state->powerupPickup;
+    ent->i.carriesFlag = state->carriesFlag;
     // number of the entity
     ent->i.number = entnum;
     // updated so set valid flag

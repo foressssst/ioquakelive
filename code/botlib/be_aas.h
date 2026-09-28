@@ -142,6 +142,16 @@ typedef struct aas_entityinfo_s {
     int weapon;            // determines weapon and flash model, etc
     int legsAnim;          // mask off ANIM_TOGGLEBIT
     int torsoAnim;         // mask off ANIM_TOGGLEBIT
+    // [QL] the same as bot_entitystate_t adds (quakelive_steam.exe 0x4851b0 copies 0xec bytes)
+    float nextthink;
+    int itemQuantity;
+    int itemType;
+    int itemTag;
+    int health;
+    int maxHealth;
+    int ammoFull[16];
+    int powerupPickup;
+    int carriesFlag;
 } aas_entityinfo_t;
 
 // area info

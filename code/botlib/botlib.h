@@ -160,6 +160,16 @@ typedef struct bot_entitystate_s {
     int weapon;         // determines weapon and flash model, etc
     int legsAnim;       // mask off ANIM_TOGGLEBIT
     int torsoAnim;      // mask off ANIM_TOGGLEBIT
+    // [QL] what QL hands its bots besides (qagamex86.dll 0x10023884, 0xd0 bytes in all)
+    float nextthink;        // the entity's next think in seconds: when a taken item comes back
+    int itemQuantity;       // an item's quantity, type and tag
+    int itemType;
+    int itemTag;
+    int health;             // a player's health and STAT_MAX_HEALTH
+    int maxHealth;
+    int ammoFull[16];       // a player's ammo for each weapon is at its maximum (or unlimited)
+    int powerupPickup;      // can take powerups: not FL_NOPOWERUP
+    int carriesFlag;        // carrying the red or the blue flag
 } bot_entitystate_t;
 
 // bot AI library exported functions

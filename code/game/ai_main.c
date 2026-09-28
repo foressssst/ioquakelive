@@ -1521,7 +1521,8 @@ int BotAIStartFrame(int time) {
                 trap_BotLibUpdateEntity(i, NULL);
                 continue;
             }
-            if (ent->r.svFlags & SVF_NOCLIENT) {
+            // [QL] 0x1002371f: an item waiting to come back is kept, with its nextthink
+            if ((ent->r.svFlags & SVF_NOCLIENT) && !(ent->item && ent->nextthink)) {
                 trap_BotLibUpdateEntity(i, NULL);
                 continue;
             }
@@ -1570,6 +1571,27 @@ int BotAIStartFrame(int time) {
             state.legsAnim = ent->s.legsAnim;
             state.torsoAnim = ent->s.torsoAnim;
             state.weapon = ent->s.weapon;
+            // [QL] 0x10023872: and what QL adds
+            state.nextthink = (float)(ent->nextthink / 1000);
+            state.powerupPickup = !(ent->flags & FL_NOPOWERUP);
+            if (ent->item) {
+                state.itemQuantity = ent->item->quantity;
+                state.itemType = ent->item->giType;
+                state.itemTag = ent->item->giTag;
+            }
+            if (ent->client) {
+                int w;
+
+                state.health = ent->health;
+                state.maxHealth = ent->client->ps.stats[STAT_MAX_HEALTH];
+                state.carriesFlag = ent->client->ps.powerups[PW_REDFLAG] || ent->client->ps.powerups[PW_BLUEFLAG];
+                for (w = 0; w < 16; w++) {
+                    int ammo = ent->client->ps.ammo[w];
+                    int max = w < WP_NUM_WEAPONS ? maxAmmoStandard[w] : 0;
+
+                    state.ammoFull[w] = !(ammo < max && ammo != -1);
+                }
+            }
             //
             trap_BotLibUpdateEntity(i, &state);
         }
