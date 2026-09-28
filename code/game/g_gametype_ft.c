@@ -174,6 +174,9 @@ void Freeze_RoundStateTransition(void) {
         return;
 
     case RS_COUNTDOWN:
+        // [QL] 0x1004c1b0, case 1. The frozen and the dead come back for the new round (the winners' frozen
+        // ones only with g_freezeThawWinningTeam), and the g_freezeReset*OnRound cvars start the
+        // others over; with g_freezeRoundDelay everybody waits where they stand
         for (i = 0; i < level.maxclients; i++) {
             gclient_t *cl = &level.clients[i];
             gentity_t *ent = &g_entities[i];
@@ -181,23 +184,18 @@ void Freeze_RoundStateTransition(void) {
             if (cl->pers.connected != CON_CONNECTED || cl->sess.sessionTeam == TEAM_SPECTATOR)
                 continue;
 
-            // Handle frozen/dead players from previous round
-            if (cl->ps.pm_type == PM_FREEZE) {
-                if (g_freezeThawWinningTeam.integer != 0 ||
-                    cl->sess.sessionTeam != level.roundState.prevRoundWinningTeam) {
-                    // Thaw event
-                    G_TempEntity(ent->r.currentOrigin, EV_THAW_PLAYER);
-                    cl->ps.pm_type = PM_NORMAL;
-                    ClientSpawn(ent);
-                }
+            if (cl->ps.pm_type == PM_FREEZE &&
+                (g_freezeThawWinningTeam.integer || cl->sess.sessionTeam != level.roundState.prevRoundWinningTeam)) {
+                G_TempEntity(ent->r.currentOrigin, EV_THAW_PLAYER);
+                cl->ps.pm_type = PM_NORMAL;
+                ClientSpawn(ent);
             } else if (cl->ps.pm_type == PM_SPECTATOR || cl->ps.pm_type == PM_DEAD) {
                 cl->ps.pm_type = PM_NORMAL;
                 ClientSpawn(ent);
             }
 
-            // Clamp powerup timers when removing powerups on round start.
-            // Binary clamps powerups[4]..powerups[8] (QUAD..INVIS), not FLIGHT.
-            if (g_freezeRemovePowerupsOnRound.integer != 0) {
+            // the powerups held run out in three seconds (quad to invisibility, not flight)
+            if (g_freezeRemovePowerupsOnRound.integer) {
                 int j;
                 for (j = PW_QUAD; j <= PW_INVIS; j++) {
                     if (cl->ps.powerups[j] > level.time + 3000) {
@@ -206,30 +204,48 @@ void Freeze_RoundStateTransition(void) {
                 }
             }
 
-            // Reset weapons on round start
-            if (g_freezeResetWeaponsOnRound.integer != 0 && cl->ps.pm_type != PM_FREEZE) {
-                SelectSpawnWeapon(ent);
+            if (g_freezeResetHealthOnRound.integer && cl->ps.pm_type != PM_FREEZE) {
+                G_SetStartingHealth(ent);
             }
 
-            // Reset health/armor on round start
-            if (g_freezeResetHealthOnRound.integer != 0 && cl->ps.pm_type != PM_FREEZE) {
-                ent->health = cl->pers.maxHealth;
-                cl->ps.stats[STAT_HEALTH] = ent->health;
-                if (g_freezeResetArmorOnRound.integer != 0) {
-                    cl->ps.stats[STAT_ARMOR] = g_startingArmor.integer;
+            if (g_freezeResetArmorOnRound.integer && cl->ps.pm_type != PM_FREEZE) {
+                ent->s.armor = cl->ps.stats[STAT_ARMOR] = g_startingArmor.integer;
+                if (armor_tiered.integer && g_startingArmor.integer) {
+                    if (g_startingArmor.integer > 150) {
+                        cl->ps.stats[STAT_ARMORTYPE] = 2;
+                    } else if (g_startingArmor.integer > 100) {
+                        cl->ps.stats[STAT_ARMORTYPE] = 1;
+                    } else {
+                        cl->ps.stats[STAT_ARMORTYPE] = 0;
+                    }
                 }
             }
 
-            // Freeze all players (if not first round)
-            if (level.roundState.eCurrent != RS_WARMUP) {
+            if (g_freezeResetWeaponsOnRound.integer && cl->ps.pm_type != PM_FREEZE) {
+                int w;
+                for (w = 0; w < MAX_WEAPONS; w++) {
+                    cl->ps.stats[STAT_WEAPONS] &= ~(1 << w);
+                    cl->ps.ammo[w] = 0;
+                }
+                G_GiveStartingWeapons(ent);
+                SelectSpawnWeapon(ent);
+                G_SetInfiniteAmmo(ent);
+            }
+
+            if (g_freezeRoundDelay.integer) {
                 cl->ps.pm_flags |= PMF_FROZEN;
+                // the weapons are dealt again: dropweapon, held back since the round ended, is back
+                if (g_freezeResetWeaponsOnRound.integer && level.ftDropCmdsSuspended) {
+                    level.ftDropCmdsSuspended = qfalse;
+                    trap_Cvar_Set("g_dropCmds", va("%i", g_dropCmds.integer | 4));
+                }
             }
         }
 
-        // Remove powerup items from map
-        if (g_freezeRemovePowerupsOnRound.integer != 0) {
+        // the powerups left on the ground go away
+        if (g_freezeRemovePowerupsOnRound.integer) {
             gentity_t *mapEnt;
-            for (mapEnt = &g_entities[0]; mapEnt < &g_entities[level.num_entities]; mapEnt++) {
+            for (mapEnt = &g_entities[0]; mapEnt < &g_entities[MAX_GENTITIES]; mapEnt++) {
                 if (mapEnt->inuse && mapEnt->item &&
                     mapEnt->item->giType == IT_POWERUP &&
                     (mapEnt->flags & FL_DROPPED_ITEM)) {
@@ -239,27 +255,32 @@ void Freeze_RoundStateTransition(void) {
         }
 
         Team_LivingTeamCounts(NULL, NULL);
-        level.roundState.round = level.teamScores[TEAM_BLUE] + level.teamScores[TEAM_RED] + 1;
+        level.roundState.round = level.teamScores[TEAM_BLUE] + 1 + level.teamScores[TEAM_RED];
 
+        // [QL] 0x1004c547: without g_freezeRoundDelay the round starts four seconds later and the
+        // players are not held; with it, after that delay (g_roundWarmupDelay for the first round),
+        // or at once if it comes to nothing
+        if (!g_freezeRoundDelay.integer) {
+            level.roundState.tNext = level.time + 4000;
+            level.roundState.eNext = RS_PLAYING;
+            return;
+        }
         {
             int countdown = g_freezeRoundDelay.integer;
+
             if (level.roundState.round == 1) {
                 countdown = g_roundWarmupDelay.integer;
             }
-            if (countdown == 0) {
+            if (countdown) {
+                level.roundState.tNext = level.time + countdown;
+                level.roundState.eNext = RS_PLAYING;
+            } else {
                 level.roundState.tNext = 0;
                 level.roundState.eCurrent = RS_PLAYING;
                 Freeze_RoundStateTransition();
-            } else {
-                level.roundState.tNext = level.time + countdown;
-                level.roundState.eNext = RS_PLAYING;
             }
-        }
-
-        if (level.roundState.eCurrent != RS_WARMUP) {
             trap_SetConfigstring(CS_ROUND_STATUS,
-                va("\\time\\%d\\round\\%d",
-                    level.roundState.tNext, level.roundState.round));
+                va("\\time\\%d\\round\\%d", level.time + countdown, level.roundState.round));
         }
         return;
 
@@ -267,10 +288,12 @@ void Freeze_RoundStateTransition(void) {
         for (i = 0; i < level.maxclients; i++) {
             gclient_t *cl = &level.clients[i];
             if (cl->pers.connected == CON_CONNECTED) {
-                cl->ps.pm_flags &= ~PMF_FROZEN;
-                cl->round_shots = 0;
-                cl->round_hits = 0;
+                if (g_freezeRoundDelay.integer) {
+                    cl->ps.pm_flags &= ~PMF_FROZEN;
+                }
                 cl->round_damage = 0;
+                cl->round_hits = 0;
+                cl->round_shots = 0;
                 cl->expandedStats.killStreak = 0;
                 if (g_spawnArmor.integer != 0) {
                     // [QL] binary writes powerups[PW_NONE] (client+0x140), not PW_QUAD (+0x150)
@@ -288,13 +311,19 @@ void Freeze_RoundStateTransition(void) {
     {
         int winTeam = level.roundState.prevRoundWinningTeam;
         int aliveCounts[4] = {0}, healthTotals[4] = {0};
+        int delay;
 
-        // Freeze all non-spectators
+        // [QL] 0x1004c6f4: with g_freezeRoundDelay everybody is held, and while the weapons are
+        // dealt again dropweapon is held back too
         for (i = 0; i < level.maxclients; i++) {
             gclient_t *cl = &level.clients[i];
             if (cl->pers.connected == CON_CONNECTED &&
-                cl->sess.sessionTeam != TEAM_SPECTATOR) {
+                cl->sess.sessionTeam != TEAM_SPECTATOR && g_freezeRoundDelay.integer) {
                 cl->ps.pm_flags |= PMF_FROZEN;
+                if (g_freezeResetWeaponsOnRound.integer && (g_dropCmds.integer & 4)) {
+                    level.ftDropCmdsSuspended = qtrue;
+                    trap_Cvar_Set("g_dropCmds", va("%i", g_dropCmds.integer & ~4));
+                }
             }
         }
 
@@ -308,20 +337,34 @@ void Freeze_RoundStateTransition(void) {
         Team_LivingTeamCounts(&aliveCounts[TEAM_RED], &aliveCounts[TEAM_BLUE]);
         TeamCount_Health_FT(aliveCounts, healthTotals);
 
-        // Announce winner
-        if (winTeam == TEAM_RED || winTeam == TEAM_BLUE) {
-            const char *teamName = TeamName(winTeam);
+        // [QL] 0x1004c783: who won, with g_freezeRoundDelay. When a team is out, by the players
+        // left, or the health of the last one; when the time ran out, by the players left, or the
+        // health of both teams. A draw names no team
+        if (g_freezeRoundDelay.integer) {
             const char *teamColor = FT_TeamColor(winTeam);
-            int count = aliveCounts[winTeam];
+            const char *teamName = TeamName(winTeam);
 
-            if (count < 2) {
-                trap_SendServerCommand(-1,
-                    va("print \"%s%s TEAM^3 WINS the round!^7 (%i hp remaining)\n\"",
-                        teamColor, teamName, healthTotals[winTeam]));
+            if (aliveCounts[TEAM_RED] == 0 || aliveCounts[TEAM_BLUE] == 0) {
+                if (aliveCounts[winTeam] < 2) {
+                    trap_SendServerCommand(-1,
+                        va("print \"%s%s TEAM^3 WINS the round!^7 (%i hp remaining)\n\"",
+                            teamColor, teamName, healthTotals[winTeam]));
+                } else {
+                    trap_SendServerCommand(-1,
+                        va("print \"%s%s TEAM^3 WINS the round!^7 (%i players remaining)\n\"",
+                            teamColor, teamName, aliveCounts[winTeam]));
+                }
+            } else if (!g_roundDrawLivingCount.integer || aliveCounts[TEAM_RED] == aliveCounts[TEAM_BLUE]) {
+                if (g_roundDrawHealthCount.integer) {
+                    trap_SendServerCommand(-1,
+                        va("print \"%s%s TEAM^3 WINS the round!^7 (%s%i^7 hp vs %s%i^7 hp)\n\"",
+                            teamColor, teamName, S_COLOR_RED, healthTotals[TEAM_RED],
+                            S_COLOR_BLUE, healthTotals[TEAM_BLUE]));
+                }
             } else {
                 trap_SendServerCommand(-1,
                     va("print \"%s%s TEAM^3 WINS the round!^7 (%i players remaining)\n\"",
-                        teamColor, teamName, count));
+                        teamColor, teamName, aliveCounts[winTeam]));
             }
         }
 
@@ -352,6 +395,15 @@ void Freeze_RoundStateTransition(void) {
         level.roundState.round++;
         CalculateRanks();
 
+        // [QL] 0x1004c9a0: the next countdown comes after g_freezeRoundDelay, 3.5 s at most
+        delay = g_freezeRoundDelay.integer;
+        if (delay > 3500) {
+            delay = 3500;
+        }
+
+        // [QL] 0x1004c9c9: the ROUND_OVER statistics event, for the round just played
+        STAT_AddRoundOverStat(level.roundState.round - 1, winTeam, winTeam == TEAM_FREE);
+
         // Check for game end
         if (level.teamScores[TEAM_RED] != level.teamScores[TEAM_BLUE]) {
             if ((g_timelimit.integer != 0 &&
@@ -379,17 +431,24 @@ void Freeze_RoundStateTransition(void) {
         // Round-end sound
         {
             int soundType;
+            gentity_t *te;
             if (winTeam == TEAM_RED) soundType = GTS_REDTEAM_SCORED;     // 0x08
             else if (winTeam == TEAM_BLUE) soundType = GTS_BLUETEAM_SCORED;  // 0x09
             else soundType = GTS_DRAW_ROUND;  // 0x12
             // [QL] binary carries the GTS index in eventParm (0xc0), not otherEntityNum2
-            gentity_t *te = G_TempEntity(vec3_origin, EV_GLOBAL_TEAM_SOUND);
+            te = G_TempEntity(vec3_origin, EV_GLOBAL_TEAM_SOUND);
             te->r.svFlags |= SVF_BROADCAST;   // binary writes r.svFlags|=0x20 (gentity+0x1e0), not s.eFlags
             te->s.eventParm = soundType;
         }
 
-        level.roundState.tNext = level.time + 3500;
-        level.roundState.eNext = RS_COUNTDOWN;
+        if (delay == 0) {
+            level.roundState.tNext = 0;
+            level.roundState.eCurrent = RS_COUNTDOWN;
+            Freeze_RoundStateTransition();
+        } else {
+            level.roundState.tNext = level.time + delay;
+            level.roundState.eNext = RS_COUNTDOWN;
+        }
         trap_SetConfigstring(CS_ROUND_TIME, va("%d", -1));
         return;
     }
@@ -584,11 +643,8 @@ void Freeze_ClientThawCheck(gentity_t *ent, int msec) {
         goto do_thaw;                        // 0x1004d19d
     }
 
-    // [QL] round gate: the binary reads a distinct "match-live" global @0x105a03ac
-    // (FLAG#3, unmapped in the reimpl; Ghidra alias "roundState_eCurrent" but NOT the
-    // real roundState.eCurrent @0x105df580). Using roundState.eCurrent as a stand-in.
-    // TODO: identify the real gate global @0x105a03ac.
-    if (level.roundState.eCurrent != RS_WARMUP && Freeze_GetRoundState() != RS_PLAYING)
+    // [QL] 0x1004ce06: with g_freezeRoundDelay nobody thaws outside the round being played
+    if (g_freezeRoundDelay.integer && Freeze_GetRoundState() != RS_PLAYING)
         return;
 
     // --- (C) auto-thaw timeout -> Freeze_InstaKill(self, 0) (respawn) ---
@@ -706,39 +762,6 @@ do_thaw:                                                       // 0x1004d19d
     GibEntity(ent);
 }
 
-// ============================================================================
-// Freeze_PlayerFrozen
-//
-// Called when a player is "killed" in Freeze Tag. Freezes them instead.
-// ============================================================================
-void Freeze_PlayerFrozen(gentity_t *self) {
-    if (level.roundState.eCurrent != RS_PLAYING)
-        return;
-
-    self->client->ps.stats[STAT_HEALTH] = 0;
-    self->client->ps.pm_type = PM_FREEZE;
-    self->takedamage = qfalse;
-    self->health = -40;
-
-    // [QL] real playerState freeze fields (binary player_die FreezeTag fork,
-    // 0x100473e0). The rewritten Freeze_ClientThawCheck operates on THESE, not the
-    // fabricated freezePlayer frame-counter:
-    //   powerups[PW_FREEZE] (client+0x17c) = 0x7fffffff -> marks the frozen statue
-    //     (only this field distinguishes frozen; also the ClientThink_real gate)
-    //   freezetime (client+0x1f0) = level.time -> stamps the freeze for auto-thaw
-    //   thawtime   (client+0x1f4) = g_freezeThawTime.integer -> ms countdown seeded
-    //     to the full thaw time (binary: ps.thawtime = DAT_105a472c)
-    self->client->ps.powerups[PW_FREEZE] = 0x7fffffff;
-    self->client->ps.freezetime = level.time;
-    self->client->ps.thawtime = g_freezeThawTime.integer;
-
-    // legacy flag still read by ClientThink_real's pm_type block (g_active.c) to
-    // keep PM_FREEZE instead of PM_DEAD; ps.thawtime above is now the real counter.
-    self->client->freezePlayer = qtrue;
-
-    Team_LivingTeamCounts(NULL, NULL);
-}
-
 /*
 ============
 Freeze_ClientBegin
@@ -764,12 +787,8 @@ void Freeze_ClientBegin(gentity_t* ent) {
         }
         ClientSpawn(ent);
         SelectSpawnWeapon(ent);
-        // [QL] binary sets pm_flags |= PMF_FROZEN (0x4), NOT PMF_TIME_KNOCKBACK.
-        // NOTE: the true binary guard is a separate gate global (0x105a03ac,
-        // Ghidra alias "roundState_eCurrent"), distinct from roundState.eCurrent
-        // (0x105df580); its reimpl mapping is unresolved. In this branch
-        // eCurrent==1, so the guard holds here regardless.
-        if (level.roundState.eCurrent != 0) {
+        // [QL] 0x1004bea2: held still in the countdown only with g_freezeRoundDelay
+        if (g_freezeRoundDelay.integer) {
             client->ps.pm_flags |= PMF_FROZEN;
         }
     } else {

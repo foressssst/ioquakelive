@@ -629,6 +629,7 @@ typedef struct {
     int             numSpawnSpotsRed;       /* [QL] 0x105df30c: team_CTF_redspawn */
     int             numSpawnSpotsBlue;      /* [QL] 0x105df310: team_CTF_bluespawn */
     int             runeSpawnSpot[5];       /* [QL] 0x105df318: where each rune (1-4) came out */
+    qboolean        ftDropCmdsSuspended;    /* [QL] 0x105df554: Freeze Tag took dropweapon away */
 } level_locals_t;
 
 //
@@ -975,7 +976,6 @@ int Freeze_GetRoundState(void);
 void Freeze_InstaKill(gentity_t *self, int mode);  // [QL] .so Freeze_InstaKill (0x76fa0); mode 1 = destroy frozen body (gib), mode 0 = auto-thaw respawn
 void Freeze_Think(void);
 void Freeze_ClientThawCheck(gentity_t *ent, int msec);  // [QL] msec = clamped pmove frame delta from ClientThink_real (binary 0x1004cdc0)
-void Freeze_PlayerFrozen(gentity_t *self);
 void Freeze_AutoThaw(int team);   // [QL] 0x1004cc20 (twin of CA_PlayerKilled; last-man-standing announce)
 void G_ThrowFlag(gentity_t *self, vec3_t velocity, vec3_t point);  // [QL] 0x100513b0 (dropflag, g_tackleFlag)
 void CaptureZone_Touch(gentity_t *self, gentity_t *other);       // [QL] 0x1006bda0
