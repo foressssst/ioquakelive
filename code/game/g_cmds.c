@@ -541,22 +541,49 @@ static void SetTeam_SpectateOnly(gentity_t* ent) {
     trap_SendServerCommand(ent - g_entities, va("cp \"%s\n\"", "You are set to spectate only"));
 }
 
-void SetTeam(gentity_t* ent, const char* s) {
-    int team;
-    gclient_t* client;
-    int clientNum;
-    spectatorState_t specState;
-    int specClient;
+/*
+=================
+G_TeamsBalanced
 
-    //
-    // see what change is requested
-    //
-    client = ent->client;
+[QL] 0x10068100. With g_teamForceBalance the teams are off balance when one has two players
+more than the other.
+=================
+*/
+static qboolean G_TeamsBalanced(void) {
+    int blue, red;
+
+    if (g_teamForceBalance.integer) {
+        blue = TeamCount(-1, TEAM_BLUE);
+        red = TeamCount(-1, TEAM_RED);
+        if (blue + 1 < red || red + 1 < blue) {
+            return qfalse;
+        }
+    }
+    return qtrue;
+}
+
+/*
+=================
+SetTeam
+
+[QL] 0x100406d0. follow1, follow2, spectator (s) or a team. In the team modes the team asked for
+is only honoured before the match; once it is on, PickTeam decides. A full team, and with
+g_teamForceBalance off balance teams, turn the player away, and so does switching sides when
+the teams are even. Duel takes the next in line only; a locked team nobody.
+=================
+*/
+void SetTeam(gentity_t* ent, const char* s) {
+    gclient_t* client = ent->client;
+    int clientNum = client - level.clients;
+    int oldTeam = client->sess.sessionTeam;
+    spectatorState_t specState = SPECTATOR_NOT;
+    int specClient = 0;
+    int team;
 
     // [ioquakelive] NOT FROM RETAIL, added for this build. Training is not left by going
     // spectator: you finish the lap or skip it with readyup, which is what Crash says.
     // The binary has no such rule -- SetTeam (0x100406d0) never looks at g_training.
-    if (g_training.integer && !(ent->r.svFlags & SVF_BOT) &&
+    if (g_training.integer && !(ent->r.svFlags & SVF_BOT) && s &&
         (!Q_stricmp(s, "spectator") || !Q_stricmp(s, "s") || !Q_stricmp(s, "follow1") ||
          !Q_stricmp(s, "follow2"))) {
         trap_SendServerCommand(ent - g_entities,
@@ -564,25 +591,19 @@ void SetTeam(gentity_t* ent, const char* s) {
         return;
     }
 
-    clientNum = client - level.clients;
-    specClient = 0;
-    specState = SPECTATOR_NOT;
-    if (!Q_stricmp(s, "scoreboard") || !Q_stricmp(s, "score")) {
-        team = TEAM_SPECTATOR;
-        specState = SPECTATOR_SCOREBOARD;
-    } else if (!Q_stricmp(s, "follow1")) {
-        // [QL] qagamex86.dll 0x10040729: follow the leading player only if there is
-        // somebody playing, free-fly otherwise. In Duel, asking to spectate also marks
-        // the client spectate-only and takes them out of the play queue.
+    if (s && !Q_stricmp(s, "follow1")) {
+        // [QL] 0x10040729: follow the leading player only if there is somebody playing,
+        // free-fly otherwise. In Duel, asking to spectate also marks the client
+        // spectate-only and takes them out of the play queue.
         team = TEAM_SPECTATOR;
         SetTeam_SpectateOnly(ent);
-        if (level.numPlayingClients > 0) {
+        if (level.numPlayingClients < 1) {
+            specState = SPECTATOR_FREE;
+        } else {
             specState = SPECTATOR_FOLLOW;
             specClient = -1;
-        } else {
-            specState = SPECTATOR_FREE;
         }
-    } else if (!Q_stricmp(s, "follow2")) {
+    } else if (s && !Q_stricmp(s, "follow2")) {
         // [QL] 0x100407c9: the second-place slot needs two players; with exactly one
         // it falls back to following the leader, with none it free-flies.
         team = TEAM_SPECTATOR;
@@ -596,55 +617,76 @@ void SetTeam(gentity_t* ent, const char* s) {
         } else {
             specState = SPECTATOR_FREE;
         }
-    } else if (!Q_stricmp(s, "spectator") || !Q_stricmp(s, "s")) {
-        // [QL] 0x10040c10: plain spectate is ALWAYS free-fly. The version kept here
-        // auto-followed the leader whenever anybody was playing, which neither retail
-        // nor Quake 3 does - and it is why the SPECTATE button of the in-game menu,
-        // whose action is `exec "team s"`, left a player who was following someone
-        // still following them instead of returning them to the free camera.
+    } else if (s && (!Q_stricmp(s, "spectator") || !Q_stricmp(s, "s"))) {
+        // [QL] 0x10040883: plain spectate is always free-fly, and outside Duel it goes straight
+        // to the change
         team = TEAM_SPECTATOR;
         specState = SPECTATOR_FREE;
+        if (g_gametype.integer != GT_DUEL) {
+            goto change;
+        }
         SetTeam_SpectateOnly(ent);
+    } else if (g_gametype.integer == GT_RR) {
+        // [QL] 0x100408b5: Red Rover picks the side itself
+        team = g_rrInfected.integer ? PickTeam_RoundAware(clientNum) : PickTeam(clientNum);
     } else if (g_gametype.integer >= GT_TEAM) {
-        // if running a team game, assign player to one of the teams
-        specState = SPECTATOR_NOT;
-        if (!Q_stricmp(s, "red") || !Q_stricmp(s, "r")) {
-            team = TEAM_RED;
-        } else if (!Q_stricmp(s, "blue") || !Q_stricmp(s, "b")) {
-            team = TEAM_BLUE;
-        } else {
-            // pick the team with the least number of players
-            // [QL] RR infection: use round-aware team picker (binary: SetTeam 0x10040a9a)
-            if (g_gametype.integer == GT_RR && g_rrInfected.integer != 0) {
-                team = PickTeam_RoundAware(clientNum);
+        int counts[TEAM_NUM_TEAMS];
+
+        counts[TEAM_FREE] = counts[TEAM_SPECTATOR] = 0;
+        counts[TEAM_BLUE] = TeamCount(clientNum, TEAM_BLUE);
+        counts[TEAM_RED] = TeamCount(clientNum, TEAM_RED);
+
+        // [QL] 0x10040921: the side asked for counts before the match only
+        if (level.warmupTime < 0 && s) {
+            if (!Q_stricmp(s, "red") || !Q_stricmp(s, "r")) {
+                team = TEAM_RED;
+            } else if (!Q_stricmp(s, "blue") || !Q_stricmp(s, "b")) {
+                team = TEAM_BLUE;
             } else {
                 team = PickTeam(clientNum);
             }
+        } else {
+            team = PickTeam(clientNum);
         }
 
-        if (g_teamForceBalance.integer && !client->pers.localClient && !(ent->r.svFlags & SVF_BOT)) {
-            int counts[TEAM_NUM_TEAMS];
+        if (g_teamsize.integer > 0 && team != TEAM_SPECTATOR && counts[team] >= g_teamsize.integer) {
+            trap_SendServerCommand(clientNum,
+                va("print \"^1Team is full. Team size is currently set to %d.^7\n\"", g_teamsize.integer));
+            return;
+        }
 
+        if (!G_TeamsBalanced()) {
+            // [QL] 0x10040a15: off balance, nobody joins the bigger side
             counts[TEAM_BLUE] = TeamCount(clientNum, TEAM_BLUE);
             counts[TEAM_RED] = TeamCount(clientNum, TEAM_RED);
-
-            // [QL] Spread of one (not two like Q3)
-            if (team == TEAM_RED && counts[TEAM_RED] - counts[TEAM_BLUE] > 0) {
-                trap_SendServerCommand(clientNum,
-                                       "cp \"Red team has too many players.\n\"");
-                return;  // ignore the request
+            if (team == TEAM_RED && counts[TEAM_BLUE] < counts[TEAM_RED]) {
+                trap_SendServerCommand(clientNum, va("cp \"%s has too many players.\n\"", "Red Team"));
+                return;
             }
-            if (team == TEAM_BLUE && counts[TEAM_BLUE] - counts[TEAM_RED] > 0) {
-                trap_SendServerCommand(clientNum,
-                                       "cp \"Blue team has too many players.\n\"");
-                return;  // ignore the request
+            if (team == TEAM_BLUE && counts[TEAM_RED] < counts[TEAM_BLUE]) {
+                trap_SendServerCommand(clientNum, va("cp \"%s has too many players.\n\"", "Blue Team"));
+                return;
             }
-
-            // It's ok, the team we are switching to has fewer players
+        } else {
+            // [QL] 0x10040aca: even teams, nobody goes over to the other side
+            counts[TEAM_BLUE] = TeamCount(clientNum, TEAM_BLUE);
+            counts[TEAM_RED] = TeamCount(clientNum, TEAM_RED);
+            counts[oldTeam]++;
+            if (team != oldTeam && (oldTeam == TEAM_RED || oldTeam == TEAM_BLUE) &&
+                (team == TEAM_RED || team == TEAM_BLUE) && counts[TEAM_RED] == counts[TEAM_BLUE]) {
+                trap_SendServerCommand(clientNum,
+                    va("cp \"%s team has too many players.\n\"", team == TEAM_RED ? "Red" : "Blue"));
+                return;
+            }
         }
-
     } else {
-        // force them to spectators if there aren't any spots free
+        // [QL] 0x10040b6a: a full arena turns a free for all player away
+        if (g_gametype.integer == GT_FFA && g_teamsize.integer > 0 &&
+            g_teamsize.integer <= level.numNonSpectatorClients) {
+            trap_SendServerCommand(clientNum,
+                va("print \"^1Arena is full. Team size is currently set to %d.^7\n\"", g_teamsize.integer));
+            return;
+        }
         team = TEAM_FREE;
         // [QL] 0x10040bd7: asking to play a duel puts the client in the play queue
         if (g_gametype.integer == GT_DUEL) {
@@ -653,48 +695,24 @@ void SetTeam(gentity_t* ent, const char* s) {
         }
     }
 
-    // [QL] Team lock check
-    if (team != TEAM_SPECTATOR && G_IsTeamLocked(team)) {
-        trap_SendServerCommand(clientNum, "cp \"That team is locked.\n\"");
-        return;
-    }
-
-    // [QL] Team size limit
-    if (g_teamsize.integer > 0 && team != TEAM_SPECTATOR) {
-        if (g_gametype.integer >= GT_TEAM) {
-            int tc = TeamCount(ent - g_entities, team);
-            if (tc >= g_teamsize.integer) {
-                trap_SendServerCommand(ent - g_entities,
-                    va("cp \"Team is full. Team size is currently set to %d.\n\"", g_teamsize.integer));
-                return;
-            }
-        } else if (g_gametype.integer == GT_FFA) {
-            if (level.numNonSpectatorClients >= g_teamsize.integer) {
-                trap_SendServerCommand(ent - g_entities,
-                    va("cp \"Arena is full. Team size is currently set to %d.\n\"", g_teamsize.integer));
-                return;
-            }
-        }
-    }
-
-    // override decision if limiting the players
     // [QL] 0x10040c7c: a duel only takes the next in line (G_NextDuelPlayer), and only
     // while a spot is free; everyone else waits in the queue as a spectator, and a player
     // already in the match asking for the same team changes nothing
     if (g_gametype.integer == GT_DUEL) {
         if (level.numNonSpectatorClients > 1 || G_NextDuelPlayer() != client) {
-            if (team == client->sess.sessionTeam && team != TEAM_SPECTATOR) {
+            if (team == oldTeam && team != TEAM_SPECTATOR) {
                 return;
             }
             team = TEAM_SPECTATOR;
         }
     }
 
-    //
-    // decide if we will allow the change
-    //
-
-    SetTeam_Execute(ent, team, specState, specClient);
+change:
+    // [QL] 0x10040cb5: only a change, or a spectator again; never into a locked team
+    if ((team != oldTeam || team == TEAM_SPECTATOR) && !G_TeamIsLocked(ent, team)) {
+        SetTeam_Execute(ent, team, specState, specClient);
+        CalculateRanks();
+    }
 }
 
 /*

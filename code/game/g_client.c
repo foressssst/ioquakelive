@@ -2384,15 +2384,3 @@ void STAT_MatchEnd(int isShutdown, int restart, const char* exitMsg) {
     STAT_MatchReport((qboolean)(isShutdown == 1), restart, exitMsg);
 }
 
-/*
-============
-G_IsTeamLocked
-
-[QL] Check if a team is locked (via /lock command by admin/referee)
-Currently returns qfalse (unlocked) - lock state would need
-a level-scope variable to track per-team lock status.
-============
-*/
-qboolean G_IsTeamLocked(team_t team) {
-    return qfalse;
-}

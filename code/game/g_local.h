@@ -1027,7 +1027,6 @@ void STAT_PublishClientDisconnect(gclient_t* client, int reason);
 void STAT_SubscribeClient(gentity_t* ent);
 void STAT_LogDisconnect(int clientNum);
 void STAT_MatchEnd(int isShutdown, int restart, const char* exitMsg);
-qboolean G_IsTeamLocked(team_t team);
 
 //
 // g_active.c
