@@ -46,6 +46,9 @@ typedef struct bot_goal_s {
     int number;         // goal number
     int flags;          // goal flags
     int iteminfo;       // item information
+    // [QL] quakelive_steam.exe 0x49ed0f: two more for a long term item goal
+    int important;      // a mega, a big armour or a powerup: worth staying on
+    float respawnTime;  // the item's nextthink when it was chosen
 } bot_goal_t;
 
 // reset the whole goal state, but keep the item weights

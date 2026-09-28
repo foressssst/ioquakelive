@@ -629,6 +629,76 @@ void BotInitLevelItems(void) {
     }  // end for
     botimport.Print(PRT_MESSAGE, "found %d level items\n", numlevelitems);
 }  // end of the function BotInitLevelItems
+// [QL] the item types of the game, which the entity info carries
+#define ITEMTYPE_WEAPON 1
+#define ITEMTYPE_AMMO 2
+#define ITEMTYPE_ARMOR 3
+#define ITEMTYPE_HEALTH 4
+#define ITEMTYPE_POWERUP 5
+#define ITEMTYPE_TEAM 8
+
+//===========================================================================
+// [QL] quakelive_steam.exe 0x49e2ce: race, where Quake 3 had single player, keeps the
+// "notsingle" items out, the team modes the "notteam" ones and the rest the "notfree" ones
+//===========================================================================
+static qboolean BotLevelItemInGame(levelitem_t* li) {
+    if (g_gametype == GT_RACE)
+        return !(li->flags & IFL_NOTSINGLE);
+    if (g_gametype < GT_TEAM)
+        return !(li->flags & IFL_NOTFREE);
+    return !(li->flags & IFL_NOTTEAM);
+}
+
+//===========================================================================
+// [QL] quakelive_steam.exe 0x49e9d6: whether the bot has any use for an item, by what the
+// entity info says of it and of the bot. Small health only below the maximum, weapons and
+// ammo only while that ammo is not full (and a weapon not while it is being avoided), a
+// flag while carrying one only if it has a think pending, powerups only if they can be taken.
+//===========================================================================
+static qboolean BotWantsLevelItem(int goalstate, levelitem_t* li, aas_entityinfo_t* item, aas_entityinfo_t* self) {
+    switch (item->itemType) {
+        case ITEMTYPE_HEALTH:
+            if (item->itemQuantity < 100 && self->health >= self->maxHealth)
+                return qfalse;
+            break;
+        case ITEMTYPE_TEAM:
+            if (self->carriesFlag && item->nextthink == 0)
+                return qfalse;
+            break;
+        case ITEMTYPE_WEAPON:
+        case ITEMTYPE_AMMO:
+            if ((unsigned)item->itemTag < 16 && self->ammoFull[item->itemTag])
+                return qfalse;
+            if (item->itemType == ITEMTYPE_WEAPON && BotAvoidGoalTime(goalstate, li->number) > 0)
+                return qfalse;
+            break;
+        default:
+            break;
+    }
+    return self->powerupPickup || item->itemType != ITEMTYPE_POWERUP;
+}
+
+//===========================================================================
+// [QL] quakelive_steam.exe 0x49ed0f: how long a chosen item is avoided. A mega, a big armour or
+// a powerup that was not dropped only for a second, so the bot can stay on it; the rest for
+// their respawn time (30 when unknown, at least 10), a dropped item for 10
+//===========================================================================
+static float BotItemGoalAvoidTime(levelitem_t* li, iteminfo_t* iteminfo, aas_entityinfo_t* item) {
+    float avoidtime;
+
+    if (((item->itemType == ITEMTYPE_HEALTH || item->itemType == ITEMTYPE_ARMOR) && item->itemQuantity > 24) ||
+        (item->itemType == ITEMTYPE_POWERUP && !li->timeout))
+        return 1;
+    if (li->timeout)
+        return AVOID_DROPPED_TIME;
+    avoidtime = iteminfo->respawntime;
+    if (!avoidtime)
+        return AVOID_DEFAULT_TIME;
+    if (avoidtime < AVOID_MINIMUM_TIME)
+        return AVOID_MINIMUM_TIME;
+    return avoidtime;
+}
+
 //===========================================================================
 //
 // Parameter:				-
@@ -811,13 +881,8 @@ int BotGetLevelItemGoal(int index, char* name, bot_goal_t* goal) {
     }  // end for
     for (; li; li = li->next) {
         //
-        if (g_gametype >= GT_TEAM) {
-            if (li->flags & IFL_NOTTEAM)
-                continue;
-        } else {
-            if (li->flags & IFL_NOTFREE)
-                continue;
-        }
+        if (!BotLevelItemInGame(li))
+            continue;
         if (li->flags & IFL_NOTBOT)
             continue;
         //
@@ -1017,13 +1082,8 @@ void BotUpdateEntityItems(void) {
             if (li->entitynum)
                 continue;
             //
-            if (g_gametype >= GT_TEAM) {
-                if (li->flags & IFL_NOTTEAM)
-                    continue;
-            } else {
-                if (li->flags & IFL_NOTFREE)
-                    continue;
-            }
+            if (!BotLevelItemInGame(li))
+                continue;
             // if the model of the level item and the entity are the same
             if (ic->iteminfo[li->iteminfo].modelindex == modelindex) {
                 // check if the entity is very close
@@ -1209,12 +1269,13 @@ int BotGetSecondGoal(int goalstate, bot_goal_t* goal) {
 //===========================================================================
 int BotChooseLTGItem(int goalstate, vec3_t origin, int* inventory, int travelflags) {
     int areanum, t, weightnum;
-    float weight, bestweight, avoidtime;
+    float weight, bestweight;
     iteminfo_t* iteminfo;
     itemconfig_t* ic;
     levelitem_t *li, *bestitem;
     bot_goal_t goal;
     bot_goalstate_t* gs;
+    aas_entityinfo_t self, item;
 
     gs = BotGoalStateFromHandle(goalstate);
     if (!gs)
@@ -1237,19 +1298,16 @@ int BotChooseLTGItem(int goalstate, vec3_t origin, int* inventory, int travelfla
     ic = itemconfig;
     if (!itemconfig)
         return qfalse;
+    // [QL] 0x49e94d: what the bot is carrying and how it is
+    AAS_EntityInfo(gs->client, &self);
     // best weight and item so far
     bestweight = 0;
     bestitem = NULL;
     Com_Memset(&goal, 0, sizeof(bot_goal_t));
     // go through the items in the level
     for (li = levelitems; li; li = li->next) {
-        if (g_gametype >= GT_TEAM) {
-            if (li->flags & IFL_NOTTEAM)
-                continue;
-        } else {
-            if (li->flags & IFL_NOTFREE)
-                continue;
-        }
+        if (!BotLevelItemInGame(li))
+            continue;
         if (li->flags & IFL_NOTBOT)
             continue;
         // if the item is not in a possible goal area
@@ -1257,6 +1315,9 @@ int BotChooseLTGItem(int goalstate, vec3_t origin, int* inventory, int travelfla
             continue;
         // FIXME: is this a good thing? added this for items that never spawned into the game (f.i. CTF flags in obelisk)
         if (!li->entitynum && !(li->flags & IFL_ROAM))
+            continue;
+        AAS_EntityInfo(li->entitynum, &item);
+        if (!BotWantsLevelItem(goalstate, li, &item, &self))
             continue;
         // get the fuzzy weight function for this item
         iteminfo = &ic->iteminfo[li->iteminfo];
@@ -1283,9 +1344,8 @@ int BotChooseLTGItem(int goalstate, vec3_t origin, int* inventory, int travelfla
             t = AAS_AreaTravelTimeToGoalArea(areanum, origin, li->goalareanum, travelflags);
             // if the goal is reachable
             if (t > 0) {
-                // if this item won't respawn before we get there
-                avoidtime = BotAvoidGoalTime(goalstate, li->number);
-                if (avoidtime - t * 0.009 > 0)
+                // [QL] 0x49eb2a: an item that will not be back by the time the bot gets there
+                if (t * TRAVELTIME_SCALE < item.nextthink - AAS_Time() && item.itemType != ITEMTYPE_TEAM)
                     continue;
                 //
                 weight /= (float)t * TRAVELTIME_SCALE;
@@ -1298,58 +1358,34 @@ int BotChooseLTGItem(int goalstate, vec3_t origin, int* inventory, int travelfla
         }  // end if
     }  // end for
     // if no goal item found
-    if (!bestitem) {
-        /*
-        //if not in lava or slime
-        if (!AAS_AreaLava(areanum) && !AAS_AreaSlime(areanum))
-        {
-            if (AAS_RandomGoalArea(areanum, travelflags, &goal.areanum, goal.origin))
-            {
-                VectorSet(goal.mins, -15, -15, -15);
-                VectorSet(goal.maxs, 15, 15, 15);
-                goal.entitynum = 0;
-                goal.number = 0;
-                goal.flags = GFL_ROAM;
-                goal.iteminfo = 0;
-                //push the goal on the stack
-                BotPushGoal(goalstate, &goal);
-                //
-#ifdef DEBUG
-                botimport.Print(PRT_MESSAGE, "chosen roam goal area %d\n", goal.areanum);
-#endif //DEBUG
-                return qtrue;
-            } //end if
-        } //end if
-        */
+    if (!bestitem)
         return qfalse;
-    }  // end if
     // create a bot goal for this item
     iteminfo = &ic->iteminfo[bestitem->iteminfo];
+    AAS_EntityInfo(bestitem->entitynum, &item);
     VectorCopy(bestitem->goalorigin, goal.origin);
     VectorCopy(iteminfo->mins, goal.mins);
     VectorCopy(iteminfo->maxs, goal.maxs);
     goal.areanum = bestitem->goalareanum;
     goal.entitynum = bestitem->entitynum;
     goal.number = bestitem->number;
+    goal.respawnTime = item.nextthink;
     goal.flags = GFL_ITEM;
-    if (bestitem->timeout)
-        goal.flags |= GFL_DROPPED;
-    if (bestitem->flags & IFL_ROAM)
-        goal.flags |= GFL_ROAM;
-    goal.iteminfo = bestitem->iteminfo;
-    // if it's a dropped item
     if (bestitem->timeout) {
-        avoidtime = AVOID_DROPPED_TIME;
-    }  // end if
-    else {
-        avoidtime = iteminfo->respawntime;
-        if (!avoidtime)
-            avoidtime = AVOID_DEFAULT_TIME;
-        if (avoidtime < AVOID_MINIMUM_TIME)
-            avoidtime = AVOID_MINIMUM_TIME;
-    }  // end else
+        goal.flags |= GFL_DROPPED;
+        goal.respawnTime = 0;
+    }
+    if (bestitem->flags & IFL_ROAM) {
+        goal.flags |= GFL_ROAM;
+        goal.respawnTime = 0;
+    }
+    goal.iteminfo = bestitem->iteminfo;
+    // [QL] 0x49ecfb: a mega, a big armour or a powerup that was not dropped is worth staying on
+    if (((item.itemType == ITEMTYPE_HEALTH || item.itemType == ITEMTYPE_ARMOR) && item.itemQuantity > 24) ||
+        (item.itemType == ITEMTYPE_POWERUP && !bestitem->timeout))
+        goal.important = qtrue;
     // add the chosen goal to the goals to avoid for a while
-    BotAddToAvoidGoals(gs, bestitem->number, avoidtime);
+    BotAddToAvoidGoals(gs, bestitem->number, BotItemGoalAvoidTime(bestitem, iteminfo, &item));
     // push the goal on the stack
     BotPushGoal(goalstate, &goal);
     //
@@ -1363,12 +1399,13 @@ int BotChooseLTGItem(int goalstate, vec3_t origin, int* inventory, int travelfla
 //===========================================================================
 int BotChooseNBGItem(int goalstate, vec3_t origin, int* inventory, int travelflags, bot_goal_t* ltg, float maxtime) {
     int areanum, t, weightnum, ltg_time;
-    float weight, bestweight, avoidtime;
+    float weight, bestweight, itemmaxtime;
     iteminfo_t* iteminfo;
     itemconfig_t* ic;
     levelitem_t *li, *bestitem;
     bot_goal_t goal;
     bot_goalstate_t* gs;
+    aas_entityinfo_t self, item, ltgitem;
 
     gs = BotGoalStateFromHandle(goalstate);
     if (!gs)
@@ -1388,27 +1425,26 @@ int BotChooseNBGItem(int goalstate, vec3_t origin, int* inventory, int travelfla
     if (!areanum)
         return qfalse;
     //
-    if (ltg)
+    Com_Memset(&ltgitem, 0, sizeof(ltgitem));
+    if (ltg) {
         ltg_time = AAS_AreaTravelTimeToGoalArea(areanum, origin, ltg->areanum, travelflags);
-    else
+        // [QL] 0x49ee9b: and what the long term goal is
+        AAS_EntityInfo(ltg->entitynum, &ltgitem);
+    } else
         ltg_time = 99999;
     // the item configuration
     ic = itemconfig;
     if (!itemconfig)
         return qfalse;
+    AAS_EntityInfo(gs->client, &self);
     // best weight and item so far
     bestweight = 0;
     bestitem = NULL;
     Com_Memset(&goal, 0, sizeof(bot_goal_t));
     // go through the items in the level
     for (li = levelitems; li; li = li->next) {
-        if (g_gametype >= GT_TEAM) {
-            if (li->flags & IFL_NOTTEAM)
-                continue;
-        } else {
-            if (li->flags & IFL_NOTFREE)
-                continue;
-        }
+        if (!BotLevelItemInGame(li))
+            continue;
         if (li->flags & IFL_NOTBOT)
             continue;
         // if the item is in a possible goal area
@@ -1416,6 +1452,9 @@ int BotChooseNBGItem(int goalstate, vec3_t origin, int* inventory, int travelfla
             continue;
         // FIXME: is this a good thing? added this for items that never spawned into the game (f.i. CTF flags in obelisk)
         if (!li->entitynum && !(li->flags & IFL_ROAM))
+            continue;
+        AAS_EntityInfo(li->entitynum, &item);
+        if (!BotWantsLevelItem(goalstate, li, &item, &self))
             continue;
         // get the fuzzy weight function for this item
         iteminfo = &ic->iteminfo[li->iteminfo];
@@ -1440,11 +1479,18 @@ int BotChooseNBGItem(int goalstate, vec3_t origin, int* inventory, int travelfla
         if (weight > 0) {
             // get the travel time towards the goal area
             t = AAS_AreaTravelTimeToGoalArea(areanum, origin, li->goalareanum, travelflags);
+            // [QL] 0x49f080: on the way to a big armour or health, ammo and the small shards and
+            // bubbles may take up to half a second
+            itemmaxtime = maxtime;
+            if (ltg && (ltgitem.itemType == ITEMTYPE_ARMOR || ltgitem.itemType == ITEMTYPE_HEALTH) &&
+                ltgitem.itemQuantity > 24 &&
+                (item.itemType == ITEMTYPE_AMMO ||
+                 ((item.itemType == ITEMTYPE_ARMOR || item.itemType == ITEMTYPE_HEALTH) && item.itemQuantity == 5)))
+                itemmaxtime = 50;
             // if the goal is reachable
-            if (t > 0 && t < maxtime) {
-                // if this item won't respawn before we get there
-                avoidtime = BotAvoidGoalTime(goalstate, li->number);
-                if (avoidtime - t * 0.009 > 0)
+            if (t > 0 && t < itemmaxtime) {
+                // [QL] 0x49f0f0: an item that will not be back by the time the bot gets there
+                if (item.nextthink - AAS_Time() > t * TRAVELTIME_SCALE && item.itemType != ITEMTYPE_TEAM)
                     continue;
                 //
                 weight /= (float)t * TRAVELTIME_SCALE;
@@ -1469,6 +1515,7 @@ int BotChooseNBGItem(int goalstate, vec3_t origin, int* inventory, int travelfla
         return qfalse;
     // create a bot goal for this item
     iteminfo = &ic->iteminfo[bestitem->iteminfo];
+    AAS_EntityInfo(bestitem->entitynum, &item);
     VectorCopy(bestitem->goalorigin, goal.origin);
     VectorCopy(iteminfo->mins, goal.mins);
     VectorCopy(iteminfo->maxs, goal.maxs);
@@ -1481,19 +1528,8 @@ int BotChooseNBGItem(int goalstate, vec3_t origin, int* inventory, int travelfla
     if (bestitem->flags & IFL_ROAM)
         goal.flags |= GFL_ROAM;
     goal.iteminfo = bestitem->iteminfo;
-    // if it's a dropped item
-    if (bestitem->timeout) {
-        avoidtime = AVOID_DROPPED_TIME;
-    }  // end if
-    else {
-        avoidtime = iteminfo->respawntime;
-        if (!avoidtime)
-            avoidtime = AVOID_DEFAULT_TIME;
-        if (avoidtime < AVOID_MINIMUM_TIME)
-            avoidtime = AVOID_MINIMUM_TIME;
-    }  // end else
     // add the chosen goal to the goals to avoid for a while
-    BotAddToAvoidGoals(gs, bestitem->number, avoidtime);
+    BotAddToAvoidGoals(gs, bestitem->number, BotItemGoalAvoidTime(bestitem, iteminfo, &item));
     // push the goal on the stack
     BotPushGoal(goalstate, &goal);
     //
