@@ -2285,29 +2285,23 @@ void SelectSpawnWeapon(gentity_t* ent) {
 ============
 Team_LivingTeamCounts
 
-[QL] Count alive (non-spectator, non-dead, connected) players per team.
-Sets configstring for each team's alive count.
+[QL] 0x1006b170. The connected players of each team whose pm_type is PM_NORMAL: neither dead,
+frozen nor spectating. The HUD's counts go out apart, from G_UpdateTeamCounts.
 ============
 */
 void Team_LivingTeamCounts(int *outRed, int *outBlue) {
+    int counts[TEAM_NUM_TEAMS] = { 0 };
     int i;
-    int aliveRed = 0, aliveBlue = 0;
 
     for (i = 0; i < level.maxclients; i++) {
         gclient_t* cl = &level.clients[i];
-        if (cl->pers.connected != CON_CONNECTED) continue;
-        if (cl->sess.sessionTeam == TEAM_SPECTATOR) continue;
-        if (cl->ps.pm_type == PM_SPECTATOR) continue;
-        if (cl->ps.stats[STAT_HEALTH] <= 0) continue;
-        if (cl->sess.sessionTeam == TEAM_RED) aliveRed++;
-        else if (cl->sess.sessionTeam == TEAM_BLUE) aliveBlue++;
+
+        if (cl->pers.connected == CON_CONNECTED && cl->ps.pm_type == PM_NORMAL) {
+            counts[cl->sess.sessionTeam]++;
+        }
     }
-
-    trap_SetConfigstring(CS_TEAMCOUNT_RED, va("%i", aliveRed));
-    trap_SetConfigstring(CS_TEAMCOUNT_BLUE, va("%i", aliveBlue));
-
-    if (outRed) *outRed = aliveRed;
-    if (outBlue) *outBlue = aliveBlue;
+    if (outRed) *outRed = counts[TEAM_RED];
+    if (outBlue) *outBlue = counts[TEAM_BLUE];
 }
 
 /*

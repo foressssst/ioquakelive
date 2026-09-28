@@ -22,11 +22,8 @@
 // Helper functions
 // ============================================================================
 
-// [QL] Team health+armor totals for tiebreaker (binary: 0x1006b100)
-// Takes a 4-element int array, fills healthTotals[team] with sum of
-// (health + armor) for all alive players (pm_type == PM_NORMAL) on that team.
-// Note: binary passes this via registers (fastcall), not as explicit params
-// to Team_LivingTeamCounts.
+// [QL] 0x1006b110: the health of each team's living players (pm_type == PM_NORMAL), for the
+// tiebreak. The entity's health alone, not the armour: Freeze Tag shares it
 static void TeamCount_Health(int *healthTotals) {
     int i;
     healthTotals[TEAM_FREE] = 0;
@@ -38,8 +35,7 @@ static void TeamCount_Health(int *healthTotals) {
         gclient_t *cl = &level.clients[i];
         if (cl->pers.connected != CON_CONNECTED) continue;
         if (cl->ps.pm_type != PM_NORMAL) continue;
-        healthTotals[cl->sess.sessionTeam] +=
-            cl->ps.stats[STAT_HEALTH] + cl->ps.stats[STAT_ARMOR];
+        healthTotals[cl->sess.sessionTeam] += g_entities[i].health;
     }
 }
 
@@ -141,8 +137,10 @@ void CA_RoundStateTransition(void) {
                 cl->round_hits = 0;
                 cl->round_damage = 0;
                 cl->expandedStats.killStreak = 0;
+                // [QL] 0x100383ef: the spawn protection of g_spawnArmor goes in powerups[0], the
+                // quad's slot took it before
                 if (g_spawnArmor.integer != 0) {
-                    cl->ps.powerups[PW_QUAD] =
+                    cl->ps.powerups[PW_NONE] =
                         (level.time / 1000) * 1000 + g_spawnArmor.integer;
                 }
             }

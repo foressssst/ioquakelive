@@ -4200,6 +4200,32 @@ void CheckCvars(void) {
 
 /*
 =============
+G_UpdateTeamCounts
+
+[QL] 0x100593e0. The team counts of the HUD in the round modes, four times a second: before
+the rounds everybody on each team, then the ones still alive.
+=============
+*/
+static void G_UpdateTeamCounts(void) {
+    int red, blue;
+
+    if (level.time > level.lastTeamCountSent && level.time - level.lastTeamCountSent <= 250) {
+        return;
+    }
+    level.lastTeamCountSent = level.time;
+
+    if (level.roundState.eCurrent == RS_WARMUP) {
+        red = TeamCount(-1, TEAM_RED);
+        blue = TeamCount(-1, TEAM_BLUE);
+    } else {
+        Team_LivingTeamCounts(&red, &blue);
+    }
+    trap_SetConfigstring(CS_TEAMCOUNT_RED, va("%i", red));
+    trap_SetConfigstring(CS_TEAMCOUNT_BLUE, va("%i", blue));
+}
+
+/*
+=============
 G_RunThink
 
 Runs thinking code for this frame if necessary
@@ -4403,6 +4429,12 @@ void G_RunFrame(int levelTime) {
 
     // [QL] 0x100598c6: a place in the duel queue that moved goes out to everyone
     G_CheckPlayQueueChanged();
+
+    // [QL] 0x100598eb: the team counts of the round modes
+    if (g_gametype.integer == GT_CA || g_gametype.integer == GT_FREEZE ||
+        g_gametype.integer == GT_AD || g_gametype.integer == GT_RR) {
+        G_UpdateTeamCounts();
+    }
 
     // [QL] warmup / forfeit driver (all gametypes)
     CheckWarmupAndForfeit();
