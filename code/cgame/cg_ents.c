@@ -1808,7 +1808,16 @@ void CG_AddPacketEntities(void) {
     // generate and add the entity from the playerstate
     ps = &cg.predictedPlayerState;
     BG_PlayerStateToEntityState(ps, &cg.predictedPlayerEntity.currentState, qfalse);
-    CG_AddCEntity(&cg.predictedPlayerEntity);
+    // [QL] 0x10018cf0: following, the playerState is a spectator's (the server puts
+    // PM_SPECTATOR back, qagamex86 0x1003550c) and comes out invisible, so retail draws
+    // the followed player anyway, dead body included, unless gibbed
+    if ((ps->pm_flags & PMF_FOLLOW) && ps->stats[STAT_HEALTH] > GIB_HEALTH) {
+        CG_CalcEntityLerpPositions(&cg.predictedPlayerEntity);
+        CG_EntityEffects(&cg.predictedPlayerEntity);
+        CG_Player(&cg.predictedPlayerEntity);
+    } else {
+        CG_AddCEntity(&cg.predictedPlayerEntity);
+    }
 
     // lerp the non-predicted value for lightning gun origins
     CG_CalcEntityLerpPositions(&cg_entities[cg.snap->ps.clientNum]);
