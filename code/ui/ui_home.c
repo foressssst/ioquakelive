@@ -694,6 +694,37 @@ static void UI_Home_LoadRetail(void) {
     hr.ranger = trap_R_RegisterShaderNoMip("webui/img/characters/ranger.png");
     hr.idLogo = trap_R_RegisterShaderNoMip("webui/img/id-logo-footer.png");
     hr.bethLogo = trap_R_RegisterShaderNoMip("webui/img/beth-logo-footer.png");
+
+    // [ioquakelive] window.legals_viewed lives as long as retail's web view, the whole session;
+    // this module is reloaded on every disconnect and map change, so the engine keeps it
+    trap_Cvar_Register(NULL, "ui_legalsViewed", "0", CVAR_TEMP | CVAR_NORESTART);
+    hr.legalsViewed = trap_Cvar_VariableValue("ui_legalsViewed") != 0 ||
+                      trap_Cvar_VariableValue("web_skipLegals") > 0;  // componentWillMount
+}
+
+/*
+===============
+UI_Home_SkipLegals
+
+[QL] skipLegals: the notice starts to go, and for this session it is seen
+===============
+*/
+static void UI_Home_SkipLegals(int now) {
+    hr.legalsLeave = now ? now : 1;
+    trap_Cvar_Set("ui_legalsViewed", "1");
+}
+
+/*
+===============
+UI_Home_Leave
+
+[QL] componentWillUnmount: leaving the home page counts as having seen its notice
+===============
+*/
+void UI_Home_Leave(void) {
+    if (hr.legalsStart) {
+        trap_Cvar_Set("ui_legalsViewed", "1");
+    }
 }
 
 /*
@@ -1021,7 +1052,7 @@ static void UI_Home_DrawLegals(void) {
         hr.legalsStart = now ? now : 1;
     }
     if (!hr.legalsLeave && now - hr.legalsStart >= HM_LEGALS_MS) {
-        hr.legalsLeave = now;
+        UI_Home_SkipLegals(now);
     }
     if (hr.legalsLeave) {
         float t = (float)(now - hr.legalsLeave) / HM_LEGALS_FADE;
@@ -1110,7 +1141,7 @@ qboolean UI_Home_HandleKey(int key) {
     // the legal notice takes the click that skips it, and nothing else goes through it
     if (!hr.legalsViewed && hr.legalsStart) {
         if (key == K_MOUSE1 && !hr.legalsLeave) {
-            hr.legalsLeave = uiInfo.uiDC.realTime ? uiInfo.uiDC.realTime : 1;
+            UI_Home_SkipLegals(uiInfo.uiDC.realTime);
         }
         return qtrue;
     }

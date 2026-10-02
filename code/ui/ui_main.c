@@ -575,6 +575,8 @@ _UI_Shutdown
 =================
 */
 void _UI_Shutdown(void) {
+    // a map loading or a disconnect takes the home page down with the module
+    UI_Home_Leave();
 }
 
 char* defaultMenu = NULL;
@@ -5513,6 +5515,7 @@ void _UI_SetActiveMenu(uiMenuCommand_t menu) {
         v[0] = v[1] = v[2] = 0;
         switch (menu) {
             case UIMENU_NONE:
+                UI_Home_Leave();
                 trap_Key_SetCatcher(trap_Key_GetCatcher() & ~KEYCATCH_UI);
                 trap_Key_ClearStates();
                 Menus_CloseAll();
