@@ -3464,41 +3464,17 @@ static const float *CG_ObitTeamColor(int team) {
 // [CPMA] with ch_animateScroll a line lives as CPMA 1.53's GameEvents item (eases in,
 // holds, eases out), and the list slides up a row while its top line eases out
 // (CG_CpmaSlide)
-// [ioquakelive] the gap between one line of the feed and the next, over the height of the
-// text. Anything less and the bands touch
-#define OBIT_ROW_GAP 4
 
-/*
-=================
-CG_ObitTestFill
-
-[ioquakelive] The sample lines testobits keeps on screen, for picking the feed's measures: names
-with and without tails, a few weapons, both teams. Their time is held halfway through their life
-so they neither fade nor leave
-=================
-*/
-static void CG_ObitTestFill(int lifetime) {
-    static const char *attackers[] = {"Wrack", "Geƶe", "jgpqy", "Keel", "Anarki", "Doom"};
-    static const char *victims[] = {"Bones", "Ranger", "Biker", "Sarge", "Crash", "Visor"};
-    static const char *icons[] = {"icons/iconw_rocket", "icons/iconw_railgun", "icons/iconw_lightning",
-                                  "icons/iconw_shotgun", "icons/iconw_plasma", "icons/iconw_grenade"};
-    int k, n = cg.obitTestLines;
-
-    if (n > 6) {
-        n = 6;
-    }
-
-    for (k = 0; k < n; k++) {
-        cg.obituaries[k].active = 1;
-        cg.obituaries[k].time = cg.time - lifetime / 3;
-        cg.obituaries[k].hasAttacker = 1;
-        cg.obituaries[k].attackerTeam = (k & 1) ? TEAM_BLUE : TEAM_RED;
-        cg.obituaries[k].victimTeam = (k & 1) ? TEAM_RED : TEAM_BLUE;
-        Q_strncpyz(cg.obituaries[k].attackerName, attackers[k], sizeof(cg.obituaries[k].attackerName));
-        Q_strncpyz(cg.obituaries[k].victimName, victims[k], sizeof(cg.obituaries[k].victimName));
-        cg.obituaries[k].weaponIcon = trap_R_RegisterShaderNoMip(icons[k]);
-    }
-}
+// [ioquakelive] the kill feed's measures, as the user picked them on screen (2026-10-02)
+#define OBIT_SCALE 0.85f       // over the type the HUD asks for
+#define OBIT_X 8.0f            // sideways from where the HUD puts the feed
+#define OBIT_Y 14.0f           // the first row's baseline under the rect's top
+#define OBIT_ROW_GAP 6.5f
+#define OBIT_PAD_X 4.5f        // how far the band reaches past the names
+#define OBIT_PAD_Y 2.5f        // and over and under the line
+#define OBIT_ICON_SCALE 1.3f   // the weapon, over an ascender
+#define OBIT_ICON_GAP 0.7f     // the space at each side of it, the same way
+#define OBIT_BAND_ALPHA 0.45f
 
 static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
     static vec4_t obitColor;
@@ -3511,20 +3487,19 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
     float slide = 0.0f;
 
     // [ioquakelive] the feed reads better a little under the type the HUD asks for
-    scale *= ch_obituaryScale.value;
+    scale *= OBIT_SCALE;
 
-    // [ioquakelive] every measure comes out of the font and a cvar. The ascender places the
-    // text as retail does; the whole line box, tails included, is the band; and the capitals'
-    // height is what a row looks centred by
+    // [ioquakelive] every measure comes out of the font. The whole line box, tails included,
+    // is the band, and the capitals' height is what a row looks centred by
     asc = (float)CG_DrawTextHeight("H", scale, 0, 0);
     lineH = (float)CG_DrawTextLineHeight(scale, 0);
     capH = CG_DrawTextCapHeight(scale, 0);
-    padX = ch_obituaryPadX.value;
-    padY = ch_obituaryPadY.value;
+    padX = OBIT_PAD_X;
+    padY = OBIT_PAD_Y;
     bandH = lineH + 2.0f * padY;
-    pitch = lineH + ch_obituaryRowGap.value;
-    iconSize = asc * ch_obituaryIconScale.value;
-    gapX = asc * ch_obituaryIconGap.value;
+    pitch = lineH + OBIT_ROW_GAP;
+    iconSize = asc * OBIT_ICON_SCALE;
+    gapX = asc * OBIT_ICON_GAP;
 
     // 0x1002e9d7: an expired slot shifts the whole array up from slot 0 and
     // the same index is looked at again
@@ -3534,11 +3509,6 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
             memset(&cg.obituaries[MAX_OBITUARIES - 1], 0, sizeof(cg.obituaries[0]));
             i--;
         }
-    }
-
-    // [ioquakelive] testobits keeps its sample lines alive, halfway through their life
-    if (cg.obitTestLines > 0) {
-        CG_ObitTestFill(lifetime);
     }
 
     if (ch_animateScroll.integer) {
@@ -3557,10 +3527,9 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
         }
     }
 
-    // the first band hangs from where the HUD puts the feed; ch_obituaryY is the baseline of
-    // that first row under the rect's top, as it always was, and ch_obituaryX moves it sideways
-    left = (float)(int)rect->x + ch_obituaryX.value;
-    bandTop = (float)(int)rect->y + ch_obituaryY.value - asc - padY - slide;
+    // the first band hangs from where the HUD puts the feed
+    left = (float)(int)rect->x + OBIT_X;
+    bandTop = (float)(int)rect->y + OBIT_Y - asc - padY - slide;
 
     for (i = 0; i < MAX_OBITUARIES; i++) {
         if (!cg.obituaries[i].active) {
@@ -3579,18 +3548,9 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
             obitColor[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
         }
 
-        // where the text and the icon sit inside the band. By default as they always did: the
-        // baseline an ascender under the band's top. With ch_obituaryCenter the capitals and
-        // the icon go on the band's middle line, whatever the font and the size
-        if (ch_obituaryCenter.integer) {
-            baseline = bandTop + (bandH + capH) * 0.5f;
-            iconY = bandTop + (bandH - iconSize) * 0.5f;
-        } else {
-            baseline = bandTop + padY + asc;
-            iconY = baseline - asc;
-        }
-        baseline += ch_obituaryTextY.value;
-        iconY += ch_obituaryIconY.value;
+        // the capitals and the icon on the band's middle line, whatever the font and the size
+        baseline = bandTop + (bandH + capH) * 0.5f;
+        iconY = bandTop + (bandH - iconSize) * 0.5f;
 
         attackerW = 0.0f;
         if (cg.obituaries[i].hasAttacker == 1) {
@@ -3601,11 +3561,11 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
 
         // [CPMA] the band behind the row, which is what makes the feed read over the map. It
         // takes the row's own alpha, so it comes and goes with the line
-        if (ch_obituaryBand.integer) {
+        {
             vec4_t band = {0.0f, 0.0f, 0.0f, 0.0f};
             float rowW = attackerW + gapX + iconSize + gapX + victimW;
 
-            band[3] = obitColor[3] * ch_obituaryBandAlpha.value;
+            band[3] = obitColor[3] * OBIT_BAND_ALPHA;
             CG_FillRect(left - padX, bandTop, rowW + 2.0f * padX, bandH, band);
         }
 

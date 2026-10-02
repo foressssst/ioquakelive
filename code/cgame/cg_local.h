@@ -854,7 +854,6 @@ typedef struct {
     // start time of the item that set it off (see CG_CpmaSlide)
     int obitSlideStart;
     int obitSlideKey;
-    int obitTestLines;  // [ioquakelive] testobits: sample lines kept on screen
     int chatSlideStart;
     int chatSlideKey;
     qboolean chatSlideIn;  // the rows rise into place (a line came in) rather than sink
@@ -2015,20 +2014,7 @@ extern vmCvar_t cg_autoAction;
 extern vmCvar_t ch_autoStats;
 extern vmCvar_t cg_demoKeys;
 extern vmCvar_t ch_followKiller;
-extern vmCvar_t ch_obituaryBand;
-extern vmCvar_t ch_obituaryY;
-extern vmCvar_t ch_obituaryScale;
 extern vmCvar_t ch_recordingDemo;
-extern vmCvar_t ch_obituaryX;
-extern vmCvar_t ch_obituaryRowGap;
-extern vmCvar_t ch_obituaryPadX;
-extern vmCvar_t ch_obituaryPadY;
-extern vmCvar_t ch_obituaryIconScale;
-extern vmCvar_t ch_obituaryIconGap;
-extern vmCvar_t ch_obituaryIconY;
-extern vmCvar_t ch_obituaryTextY;
-extern vmCvar_t ch_obituaryBandAlpha;
-extern vmCvar_t ch_obituaryCenter;
 extern vmCvar_t cg_ambient;
 extern vmCvar_t ch_gameEvents;
 extern vmCvar_t ch_recordMessage;
