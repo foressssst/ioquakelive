@@ -197,21 +197,18 @@ void SP_team_neutralobelisk(gentity_t* ent);
 
 void SP_item_botroam(gentity_t* ent) {}
 
-// [QL] QL-specific entity types
+// [QL] 0x10059ee0: the renderer draws an advertisement from the map itself, so the entity goes;
+// a map being built (com_build) must give each one its cellId
 void SP_advertisement(gentity_t *ent) {
-    // [QL] In real QL, the engine's ADVERT subsystem handles ad rendering.
-    // We render the brush model as a static mover entity instead.
-    trap_SetBrushModel(ent, ent->model);
-    if (!ent->s.modelindex) {
-        G_FreeEntity(ent);
-        return;
+    char *s;
+
+    if (trap_Cvar_VariableValue("com_build")) {
+        G_SpawnString("cellId", "0", &s);
+        if (!atoi(s)) {
+            G_Error("advertisement entity with no cellId at %s", vtos(ent->s.origin));
+        }
     }
-    ent->s.eType = ET_MOVER;
-    ent->r.svFlags = SVF_USE_CURRENT_ORIGIN;
-    ent->s.pos.trType = TR_STATIONARY;
-    VectorCopy(ent->s.origin, ent->s.pos.trBase);
-    VectorCopy(ent->s.origin, ent->r.currentOrigin);
-    trap_LinkEntity(ent);
+    G_FreeEntity(ent);
 }
 
 // defined in g_gametype_dom.c / g_gametype_race.c

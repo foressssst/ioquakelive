@@ -1661,12 +1661,6 @@ typedef struct {
     // media
     cgMedia_t media;
 
-    // ads
-    qboolean adsLoaded;
-    int numAds;
-    float adverts[MAX_MAP_ADVERTISEMENTS * 16];
-    char adShaders[MAX_MAP_ADVERTISEMENTS][MAX_QPATH];
-
     // [QL] round-based mode tracking
     qboolean roundStarted;
     int roundNum;
@@ -2125,7 +2119,6 @@ void CG_ResetAnnouncements(void);
 void CG_PlayFightSound(void);
 void CG_PlayCountdownSound(int count);
 
-void CG_DrawAdvertisements(void);
 void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoPlayback);
 void CG_CloseMenus(void);
 void CG_HideJoinMenu(void);

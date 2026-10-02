@@ -885,6 +885,81 @@ static void R_MarkLeaves (void) {
 
 /*
 =============
+R_AddAdvertisements
+
+[QL] 0x434e40: the match's advertisements, brush models no entity carries
+=============
+*/
+static void R_AddAdvertisements( unsigned int dlightBits ) {
+	int i, j, k;
+
+	for ( i = 0; i < tr.world->numAdSurfaces; i++ ) {
+		const adSurface_t *ad = &tr.world->adSurfaces[i];
+		msurface_t *surf = ad->bmodel->firstSurface;
+		vec3_t delta;
+
+		if ( !R_inPVS( tr.viewParms.or.origin, ad->center ) ) {
+			continue;
+		}
+		if ( surf->viewCount == tr.viewCount ) {
+			continue;
+		}
+
+		// 0x434bc0: only from its front
+		VectorSubtract( tr.viewParms.or.origin, ad->center, delta );
+		if ( DotProduct( ad->normal, delta ) < 0.0f ) {
+			continue;
+		}
+
+		// 0x44b130: out when one plane of the frustum has all four corners behind it
+		if ( !r_nocull->integer ) {
+			for ( j = 0; j < 4; j++ ) {
+				const cplane_t *frust = &tr.viewParms.frustum[j];
+
+				for ( k = 0; k < 4; k++ ) {
+					if ( DotProduct( ad->rect[k], frust->normal ) > frust->dist ) {
+						break;
+					}
+				}
+				if ( k == 4 ) {
+					break;
+				}
+			}
+			if ( j < 4 ) {
+				surf->viewCount = tr.viewCount;
+				continue;
+			}
+		}
+
+		R_AddWorldSurface( surf, dlightBits );
+	}
+}
+
+
+#ifdef USE_PMLIGHT
+/*
+=============
+R_LightAdvertisements
+
+[ioquakelive] the current dynamic light on the advertisements, as on the world's surfaces
+=============
+*/
+static void R_LightAdvertisements( const dlight_t *dl ) {
+	int i;
+
+	for ( i = 0; i < tr.world->numAdSurfaces; i++ ) {
+		const bmodel_t *bmodel = tr.world->adSurfaces[i].bmodel;
+
+		if ( !R_LightCullBounds( dl, bmodel->bounds[0], bmodel->bounds[1] ) ) {
+			R_AddLitSurface( bmodel->firstSurface, dl );
+		}
+	}
+}
+#endif // USE_PMLIGHT
+
+
+/*
+=============
 R_AddWorldSurfaces
 =============
 */
@@ -918,6 +993,11 @@ void R_AddWorldSurfaces( void ) {
 
 	R_RecursiveWorldNode( tr.world->nodes, 15, ( 1ULL << tr.refdef.num_dlights ) - 1 );
 
+	// [QL] 0x44d77b: right after the world, but not in the teleport flash
+	if ( !( tr.refdef.rdflags & RDF_HYPERSPACE ) ) {
+		R_AddAdvertisements( ( 1ULL << tr.refdef.num_dlights ) - 1 );
+	}
+
 #ifdef USE_PMLIGHT
 #ifdef USE_LEGACY_DLIGHTS
 	if ( !R_GetDlightMode() )
@@ -941,6 +1021,7 @@ void R_AddWorldSurfaces( void ) {
 		tr.lightCount++;
 		tr.light = dl;
 		R_RecursiveLightNode( tr.world->nodes );
+		R_LightAdvertisements( dl );
 	}
 #endif // USE_PMLIGHT
 }

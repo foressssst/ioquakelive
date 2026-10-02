@@ -837,6 +837,15 @@ typedef struct {
 	int			numSurfaces;
 } bmodel_t;
 
+// [QL] an advertisement R_LoadAdvertisements kept, on the brush model it names (0x434c80)
+typedef struct {
+	int			cellId;
+	bmodel_t	*bmodel;
+	vec3_t		center;			// the middle of the brush model's bounds
+	vec3_t		normal;
+	vec3_t		rect[4];
+} adSurface_t;
+
 typedef struct {
 	char		name[MAX_QPATH];		// ie: maps/tim_dm2.bsp
 	char		baseName[MAX_QPATH];	// ie: tim_dm2
@@ -847,6 +856,7 @@ typedef struct {
 	dshader_t	*shaders;
 
 	bmodel_t	*bmodels;
+	int			numBModels;
 
 	int			numplanes;
 	cplane_t	*planes;
@@ -884,6 +894,10 @@ typedef struct {
 	int			numAds;
 	dadvertisement_t ads[MAX_MAP_ADVERTISEMENTS];
 	shader_t	*adShaders[MAX_MAP_ADVERTISEMENTS];
+
+	// [QL] the ones on a brush model of one surface, which the renderer adds itself
+	int			numAdSurfaces;
+	adSurface_t	adSurfaces[MAX_MAP_ADVERTISEMENTS];
 } world_t;
 
 //======================================================================

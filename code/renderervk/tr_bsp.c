@@ -1783,6 +1783,7 @@ static void R_LoadSubmodels( const lump_t *l ) {
 	count = l->filelen / sizeof(*in);
 
 	s_worldData.bmodels = out = ri.Hunk_Alloc( count * sizeof(*out), h_low );
+	s_worldData.numBModels = count;
 
 	for ( i=0 ; i<count ; i++, in++, out++ ) {
 		model_t *model;
@@ -2366,7 +2367,7 @@ qboolean RE_GetEntityToken( char *buffer, int size ) {
 ===============
 R_LoadAdvertisements
 
-[QL] lump 17: the surfaces the cgame draws a match's advertisements on
+[QL] 0x434c80, lump 17: each advertisement names the brush model it lies on
 ===============
 */
 static void R_LoadAdvertisements( const lump_t *l ) {
@@ -2375,24 +2376,22 @@ static void R_LoadAdvertisements( const lump_t *l ) {
 
 	ads = (void *)( fileBase + l->fileofs );
 	if ( l->filelen % sizeof( *ads ) ) {
-		ri.Error( ERR_DROP, "R_LoadAdvertisements: funny lump size in %s", s_worldData.name );
+		ri.Error( ERR_DROP, "R_LoadAdvertisements: funny lump size\n" );
 	}
 	count = l->filelen / sizeof( *ads );
-
-	s_worldData.numAds = 0;
-	Com_Memset( s_worldData.adShaders, 0, sizeof( s_worldData.adShaders ) );
-
-	if ( count > MAX_MAP_ADVERTISEMENTS ) {
-		ri.Printf( PRINT_ALL, "count > MAX_MAP_ADVERTISEMENTS\n" );
-		return;
-	}
-	if ( !count ) {
-		return;
+	if ( count > MAX_MAP_ADVERTISEMENTS - 1 ) {
+		ri.Error( ERR_DROP, "R_LoadAdvertisements: number of advertisements exceeds level limit.\n" );
 	}
 
 	s_worldData.numAds = count;
+	s_worldData.numAdSurfaces = 0;
+	Com_Memset( s_worldData.adShaders, 0, sizeof( s_worldData.adShaders ) );
 
 	for ( i = 0; i < count; i++, ads++ ) {
+		adSurface_t *ad;
+		bmodel_t *bmodel;
+		int n;
+
 		s_worldData.ads[i].cellId = LittleLong( ads->cellId );
 		for ( j = 0; j < 3; j++ ) {
 			s_worldData.ads[i].normal[j] = LittleFloat( ads->normal[j] );
@@ -2402,6 +2401,30 @@ static void R_LoadAdvertisements( const lump_t *l ) {
 			s_worldData.ads[i].rect[3][j] = LittleFloat( ads->rect[3][j] );
 		}
 		Q_strncpyz( s_worldData.ads[i].model, ads->model, sizeof( s_worldData.ads[i].model ) );
+
+		// "*N", with a single surface
+		n = atoi( s_worldData.ads[i].model + 1 );
+		bmodel = ( n >= 0 && n < s_worldData.numBModels ) ? &s_worldData.bmodels[n] : NULL;
+		if ( !bmodel || bmodel->numSurfaces < 1 ) {
+			ri.Printf( PRINT_WARNING, "cell ID %d has no brush model. It has been ignored.\n", s_worldData.ads[i].cellId );
+			continue;
+		}
+		if ( bmodel->numSurfaces > 1 ) {
+			ri.Printf( PRINT_WARNING, "cell ID %d has multiple surfaces. It has been ignored.\n", s_worldData.ads[i].cellId );
+			continue;
+		}
+
+		ad = &s_worldData.adSurfaces[s_worldData.numAdSurfaces++];
+		ad->cellId = s_worldData.ads[i].cellId;
+		ad->bmodel = bmodel;
+		for ( j = 0; j < 3; j++ ) {
+			ad->center[j] = ( bmodel->bounds[0][j] + bmodel->bounds[1][j] ) * 0.5f;
+			ad->normal[j] = s_worldData.ads[i].normal[j];
+			ad->rect[0][j] = s_worldData.ads[i].rect[0][j];
+			ad->rect[1][j] = s_worldData.ads[i].rect[1][j];
+			ad->rect[2][j] = s_worldData.ads[i].rect[2][j];
+			ad->rect[3][j] = s_worldData.ads[i].rect[3][j];
+		}
 	}
 }
 

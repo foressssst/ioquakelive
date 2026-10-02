@@ -684,6 +684,58 @@ static void R_MarkLeaves(void) {
 
 /*
 =============
+R_AddAdvertisements
+
+[QL] 0x434e40: the match's advertisements, brush models no entity carries
+=============
+*/
+static void R_AddAdvertisements(uint32_t dlightBits) {
+    int i, j, k;
+
+    for (i = 0; i < tr.world->numAdSurfaces; i++) {
+        const adSurface_t* ad = &tr.world->adSurfaces[i];
+        int surf = ad->bmodel->firstSurface;
+        vec3_t delta;
+
+        if (!R_inPVS(tr.viewParms.or.origin, ad->center)) {
+            continue;
+        }
+        if (tr.world->surfacesViewCount[surf] == tr.viewCount) {
+            continue;
+        }
+
+        // 0x434bc0: only from its front
+        VectorSubtract(tr.viewParms.or.origin, ad->center, delta);
+        if (DotProduct(ad->normal, delta) < 0.0f) {
+            continue;
+        }
+        tr.world->surfacesViewCount[surf] = tr.viewCount;
+
+        // 0x44b130: out when one plane of the frustum has all four corners behind it
+        if (!r_nocull->integer) {
+            for (j = 0; j < 4; j++) {
+                const cplane_t* frust = &tr.viewParms.frustum[j];
+
+                for (k = 0; k < 4; k++) {
+                    if (DotProduct(ad->rect[k], frust->normal) > frust->dist) {
+                        break;
+                    }
+                }
+                if (k == 4) {
+                    break;
+                }
+            }
+            if (j < 4) {
+                continue;
+            }
+        }
+
+        R_AddWorldSurface(tr.world->surfaces + surf, dlightBits, 0);
+    }
+}
+
+/*
+=============
 R_AddWorldSurfaces
 =============
 */
@@ -748,5 +800,10 @@ void R_AddWorldSurfaces(void) {
         }
 
         tr.refdef.dlightMask = ~tr.refdef.dlightMask;
+    }
+
+    // [QL] 0x44d77b: right after the world, but not in the teleport flash
+    if (!(tr.refdef.rdflags & RDF_HYPERSPACE)) {
+        R_AddAdvertisements(dlightBits);
     }
 }
