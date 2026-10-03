@@ -137,6 +137,9 @@ typedef struct {
     qboolean sameGame;   // and that something is this game
     unsigned int ip;     // the server they are on, 0 for none
     unsigned short port;
+    qboolean lobby;      // in a Steam lobby of their game
+    char nickname[64];   // the one this player gave them
+    char status[128];    // their game's rich presence "status"
 } steamFriend_t;
 
 int Steam_FriendCount(void);

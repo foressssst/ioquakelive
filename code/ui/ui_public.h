@@ -45,6 +45,9 @@ typedef struct {
     qboolean server;    // and they can be reached on a server
     char steamId[24];   // for the page that shows their stats
     char address[48];   // the server they are on, "" for none
+    qboolean lobby;     // in a Steam lobby of Quake Live
+    char nickname[64];  // the one this player gave them
+    char status[128];   // their game's rich presence "status"
 } uiFriend_t;
 
 // what trap_SteamFriendAction knows how to do with one

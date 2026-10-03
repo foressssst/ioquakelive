@@ -111,7 +111,7 @@ static struct {
     int updated;
 } hvf;
 
-#define HM_FRIEND_H 42.0f
+#define HM_FRIEND_H 62.0f
 
 static void UI_Home_LoadRetail(void);
 static void UI_Home_FriendRefresh(void);
@@ -860,18 +860,19 @@ static void UI_Home_DrawCard(float x, float y, float w) {
     UI_Stats_DrawCardLine(tx, y + HM_CARD_PAD + 24.0f, x + w - tx - HM_CARD_PAD);
 }
 
-// CS2's order, which Steam's list has no opinion on: whoever can be joined, then the rest
+// [QL] FriendList.sortFriends: playing Quake Live, then another game, then the rest, by name
 static int UI_Home_FriendRank(const uiFriend_t* f) {
-    if (f->server) {
-        return 0;
+    return f->sameGame ? 0 : f->playing ? 1 : 2;
+}
+
+static qboolean UI_Home_FriendBefore(const uiFriend_t* a, const uiFriend_t* b) {
+    int ra = UI_Home_FriendRank(a);
+    int rb = UI_Home_FriendRank(b);
+
+    if (ra != rb) {
+        return (qboolean)(ra < rb);
     }
-    if (f->sameGame) {
-        return 1;
-    }
-    if (f->state == 1) {
-        return 2;
-    }
-    return 3;
+    return (qboolean)(Q_stricmp(a->name, b->name) < 0);
 }
 
 
@@ -888,20 +889,18 @@ static void UI_Home_FriendRefresh(void) {
     total = trap_SteamFriendCount();
     for (i = 0; i < total; i++) {
         uiFriend_t fr;
-        int rank;
         int j;
 
         if (!trap_SteamFriendGet(i, &fr) || fr.state == 0) {
             continue;
         }
-        rank = UI_Home_FriendRank(&fr);
         if (hvf.count == HV_MAX_FRIENDS) {
-            if (rank >= UI_Home_FriendRank(&hvf.list[hvf.count - 1])) {
+            if (!UI_Home_FriendBefore(&fr, &hvf.list[hvf.count - 1])) {
                 continue;
             }
             hvf.count--;
         }
-        for (j = hvf.count; j > 0 && UI_Home_FriendRank(&hvf.list[j - 1]) > rank; j--) {
+        for (j = hvf.count; j > 0 && UI_Home_FriendBefore(&fr, &hvf.list[j - 1]); j--) {
             hvf.list[j] = hvf.list[j - 1];
             hvf.index[j] = hvf.index[j - 1];
         }
@@ -911,16 +910,16 @@ static void UI_Home_FriendRefresh(void) {
     }
 }
 
-// what they are doing, in Steam's own words
+// [QL] what they are doing, as FriendList writes it under the name
 static const char* UI_Home_FriendDoing(const uiFriend_t* f) {
     if (f->server) {
-        return "In a match";
+        return f->status[0] ? f->status : "In a match";
     }
-    if (f->sameGame) {
-        return "In Quake Live";
+    if (f->sameGame && f->lobby) {
+        return "In a lobby";
     }
     if (f->playing) {
-        return "In another game";
+        return f->sameGame ? "Playing Quake Live" : "Playing other game";
     }
     switch (f->state) {
         case 2:
@@ -930,9 +929,9 @@ static const char* UI_Home_FriendDoing(const uiFriend_t* f) {
         case 4:
             return "Snooze";
         case 5:
-            return "Looking to trade";
+            return "Looking to Trade";
         case 6:
-            return "Looking to play";
+            return "Looking to Play";
         default:
             return "Online";
     }
@@ -942,14 +941,16 @@ static const char* UI_Home_FriendDoing(const uiFriend_t* f) {
 ===============
 UI_Home_DrawFriends
 
-[QL] FriendList (css .friend-list): a section per friend, padded 5px, a darker row under the
-cursor, the avatar with a black border at the left and the name with what they are doing in
-grey. Steam hands avatars over as raw pixels the renderer cannot take, so the box carries the
-name's initial
+[QL] FriendList (css .friend-list): a section per friend in the colour of what they are doing
 ===============
 */
 static void UI_Home_DrawFriends(float x, float y, float w, float h) {
     static const vec4_t rowOver = {30 / 255.0f, 30 / 255.0f, 30 / 255.0f, 1.0f};
+    // yellow playing Quake Live, #8FB93B another game, #53A4C4 online; the nickname #6A6A6A
+    static const vec4_t inQuake = {1.0f, 1.0f, 0.0f, 1.0f};
+    static const vec4_t inOther = {0x8f / 255.0f, 0xb9 / 255.0f, 0x3b / 255.0f, 1.0f};
+    static const vec4_t online = {0x53 / 255.0f, 0xa4 / 255.0f, 0xc4 / 255.0f, 1.0f};
+    static const vec4_t nickGrey = {0x6a / 255.0f, 0x6a / 255.0f, 0x6a / 255.0f, 1.0f};
     int max = (int)(h / HM_FRIEND_H);
     int i;
 
@@ -959,35 +960,52 @@ static void UI_Home_DrawFriends(float x, float y, float w, float h) {
     }
     for (i = 0; i < max; i++) {
         const uiFriend_t* f = &hvf.list[i];
+        const float* color = f->playing ? (f->sameGame ? inQuake : inOther) : online;
         float ry = y + i * HM_FRIEND_H;
-        float box = HM_FRIEND_H - 10.0f;
+        float tx = x + 5 + 52 + 8;  // padding, the avatar and its border, margin-right
+        float room = x + w - 5 - tx;
         qboolean over = SM_Over(HM_HIT_FRIEND, hvf.index[i]);
-        char initial[8];
-        int len = 1;
+        int nameLen;
+        float nameW;
 
         if (over) {
             SM_Fill(x, ry, w, HM_FRIEND_H, rowOver, NULL);
         }
-        SM_Fill(x + 5, ry + 5, box, box, smPage, NULL);
-        SM_Fill(x + 7, ry + 7, box - 4, box - 4, smField, NULL);
-        if ((unsigned char)f->name[0] >= 0xf0) {
-            len = 4;
-        } else if ((unsigned char)f->name[0] >= 0xe0) {
-            len = 3;
-        } else if ((unsigned char)f->name[0] >= 0xc0) {
-            len = 2;
-        }
-        Q_strncpyz(initial, f->name[0] ? f->name : "?", len + 1);
+        // the avatar, 48 across, in a 2px border of the row's colour
+        SM_Fill(x + 5, ry + 5, 52, 52, color, NULL);
+        SM_Fill(x + 7, ry + 7, 48, 48, smField, NULL);
         if (SM_Avatar(f->steamId)) {
-            SM_Pic(x + 7, ry + 7, box - 4, box - 4, SM_Avatar(f->steamId), NULL);
+            SM_Pic(x + 7, ry + 7, 48, 48, SM_Avatar(f->steamId), NULL);
         } else {
-            SM_Text(x + 5 + (box - SM_Advance(FONT_SANS, HM_TEXT, initial, -1)) * 0.5f,
-                    SM_Baseline(FONT_SANS, HM_TEXT, ry + 5, box), FONT_SANS, HM_TEXT, smText, initial, -1, qtrue);
+            char initial[8];
+            int len = 1;
+
+            if ((unsigned char)f->name[0] >= 0xf0) {
+                len = 4;
+            } else if ((unsigned char)f->name[0] >= 0xe0) {
+                len = 3;
+            } else if ((unsigned char)f->name[0] >= 0xc0) {
+                len = 2;
+            }
+            Q_strncpyz(initial, f->name[0] ? f->name : "?", len + 1);
+            SM_Text(x + 7 + (48 - SM_Advance(FONT_SANS, HM_TEXT, initial, -1)) * 0.5f,
+                    SM_Baseline(FONT_SANS, HM_TEXT, ry + 7, 48), FONT_SANS, HM_TEXT, smText, initial, -1, qtrue);
         }
-        SM_Text(x + 5 + box + 8, SM_Baseline(FONT_SANS, HM_TEXT, ry + 2, 20.0f), FONT_SANS, HM_TEXT, smText, f->name,
-                SM_Fit(FONT_SANS, HM_TEXT, f->name, w - box - 23), qfalse);
-        SM_Text(x + 5 + box + 8, SM_Baseline(FONT_SANS, 13.0f, ry + 20, 18.0f), FONT_SANS, 13.0f, hmNameGrey,
-                UI_Home_FriendDoing(f), -1, qfalse);
+
+        // the name, with the nickname after it, and what they are doing under it
+        nameLen = SM_Fit(FONT_SANS, HM_TEXT, f->name, room);
+        nameW = SM_Advance(FONT_SANS, HM_TEXT, f->name, nameLen);
+        SM_Text(tx, SM_Baseline(FONT_SANS, HM_TEXT, ry + 5, 20.0f), FONT_SANS, HM_TEXT, color, f->name, nameLen,
+                qfalse);
+        if (f->nickname[0]) {
+            const char* nick = va(" (%s)", f->nickname);
+            float nx = tx + nameW;
+
+            SM_Text(nx, SM_Baseline(FONT_SANS, HM_TEXT, ry + 5, 20.0f), FONT_SANS, HM_TEXT, nickGrey, nick,
+                    SM_Fit(FONT_SANS, HM_TEXT, nick, x + w - 5 - nx), qfalse);
+        }
+        SM_Text(tx, SM_Baseline(FONT_SANS, HM_TEXT, ry + 25, 20.0f), FONT_SANS, HM_TEXT, color,
+                UI_Home_FriendDoing(f), SM_Fit(FONT_SANS, HM_TEXT, UI_Home_FriendDoing(f), room), qfalse);
         SM_Hit(x, ry, w, HM_FRIEND_H, HM_HIT_FRIEND, hvf.index[i], NULL);
     }
 }

@@ -259,6 +259,8 @@ typedef struct {
     const char*(QDECL* GetFriendPersonaName)(void* self, uint64_t steamId);
     int(QDECL* GetFriendPersonaState)(void* self, uint64_t steamId);
     steamBool_t(QDECL* GetFriendGamePlayed)(void* self, uint64_t steamId, void* info);
+    const char*(QDECL* GetPlayerNickname)(void* self, uint64_t steamId);
+    const char*(QDECL* GetFriendRichPresence)(void* self, uint64_t steamId, const char* key);
     void(QDECL* RegisterCallback)(void* callback, int id);
     void(QDECL* UnregisterCallback)(void* callback);
 
@@ -424,6 +426,8 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND_OPT(GetFriendPersonaName, "SteamAPI_ISteamFriends_GetFriendPersonaName");
     STEAM_BIND_OPT(GetFriendPersonaState, "SteamAPI_ISteamFriends_GetFriendPersonaState");
     STEAM_BIND_OPT(GetFriendGamePlayed, "SteamAPI_ISteamFriends_GetFriendGamePlayed");
+    STEAM_BIND_OPT(GetPlayerNickname, "SteamAPI_ISteamFriends_GetPlayerNickname");
+    STEAM_BIND_OPT(GetFriendRichPresence, "SteamAPI_ISteamFriends_GetFriendRichPresence");
     STEAM_BIND_OPT(GetAuthSessionTicket, "SteamAPI_ISteamUser_GetAuthSessionTicket");
     STEAM_BIND_OPT(CancelAuthTicket, "SteamAPI_ISteamUser_CancelAuthTicket");
     STEAM_BIND_OPT(BeginAuthSession, "SteamAPI_ISteamGameServer_BeginAuthSession");
@@ -718,6 +722,9 @@ SD_RET(int, GetMediumFriendAvatar, 35, (void* self, uint64_t a), (self, a))
 SD_RET(steamBool_t, GetImageSize, 5, (void* self, int a, unsigned int* b, unsigned int* c), (self, a, b, c))
 SD_RET(steamBool_t, GetImageRGBA, 6, (void* self, int a, unsigned char* b, int c), (self, a, b, c))
 SD_RET(steamBool_t, GetFriendGamePlayed, 8, (void* self, uint64_t a, void* b), (self, a, b))
+// [QL] 0x00433837 reads the nickname through +0x2c and the rich presence through +0xb4
+SD_RET(const char*, GetPlayerNickname, 11, (void* self, uint64_t a), (self, a))
+SD_RET(const char*, GetFriendRichPresence, 45, (void* self, uint64_t a, const char* b), (self, a, b))
 SD_VOID(SetInGameVoiceSpeaking, 27, (void* self, uint64_t a, steamBool_t b), (self, a, b))
 SD_VOID(ActivateGameOverlay, 28, (void* self, const char* a), (self, a))
 SD_VOID(ActivateGameOverlayToUser, 29, (void* self, const char* a, uint64_t b), (self, a, b))
@@ -1092,6 +1099,8 @@ static void SD_Bind(void) {
     SD_SET(GetFriendPersonaName);
     SD_SET(GetFriendPersonaState);
     SD_SET(GetFriendGamePlayed);
+    SD_SET(GetPlayerNickname);
+    SD_SET(GetFriendRichPresence);
     SD_SET(RegisterCallback);
     SD_SET(UnregisterCallback);
     SD_SET(GameServerStats);
@@ -3252,6 +3261,12 @@ qboolean Steam_FriendGet(int index, steamFriend_t* out) {
     Q_strncpyz(out->name, name ? name : "", sizeof(out->name));
     Steam_StripColors(out->name);
     out->state = st.GetFriendPersonaState ? st.GetFriendPersonaState(st.friends, id) : 0;
+    // [QL] 0x00433837: the nickname one gave them, and what their game says they are doing
+    name = st.GetPlayerNickname ? st.GetPlayerNickname(st.friends, id) : NULL;
+    Q_strncpyz(out->nickname, name ? name : "", sizeof(out->nickname));
+    Steam_StripColors(out->nickname);
+    name = st.GetFriendRichPresence ? st.GetFriendRichPresence(st.friends, id, "status") : NULL;
+    Q_strncpyz(out->status, name ? name : "", sizeof(out->status));
 
     Com_Memset(&game, 0, sizeof(game));
     if (st.GetFriendGamePlayed && st.GetFriendGamePlayed(st.friends, id, &game)) {
@@ -3260,6 +3275,7 @@ qboolean Steam_FriendGet(int index, steamFriend_t* out) {
         out->sameGame = (qboolean)((unsigned int)game.gameId == (unsigned int)atoi(STEAM_APP_ID));
         out->ip = game.ip;
         out->port = game.port;
+        out->lobby = (qboolean)(game.lobby != 0);
     }
     return qtrue;
 }

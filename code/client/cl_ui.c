@@ -968,6 +968,9 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             out->playing = fr.playing;
             out->sameGame = fr.sameGame;
             out->server = (qboolean)(fr.sameGame && fr.ip != 0);
+            out->lobby = fr.lobby;
+            Q_strncpyz(out->nickname, fr.nickname, sizeof(out->nickname));
+            Q_strncpyz(out->status, fr.status, sizeof(out->status));
             Com_sprintf(out->steamId, sizeof(out->steamId), "%llu", (unsigned long long)fr.steamId);
             if (out->server) {
                 Com_sprintf(out->address, sizeof(out->address), "%u.%u.%u.%u:%u", (fr.ip >> 24) & 0xff,
