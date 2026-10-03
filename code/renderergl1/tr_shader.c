@@ -3527,7 +3527,7 @@ static void ScanAndLoadShaderFiles( void )
 	const char *token, *hashMem;
 	char *textEnd;
 	const char *p, *oldp;
-	int shaderTextHashTableSizes[MAX_SHADERTEXT_HASH], hash, size;
+	int shaderTextHashTableSizes[MAX_SHADERTEXT_HASH], hash, size, pass;
 
 	long sum = 0;
 
@@ -3619,19 +3619,25 @@ static void ScanAndLoadShaderFiles( void )
 		hashMem = ((char *) hashMem) + ((shaderTextHashTableSizes[i] + 1) * sizeof(char *));
 	}
 
-	p = s_shaderText;
-	// look for shader names
-	while ( 1 ) {
-		oldp = p;
-		token = COM_ParseExt( &p, qtrue );
-		if ( token[0] == 0 ) {
-			break;
+	// [QL] the first definition of a name is the one that counts, as in retail (0x458bf0 and
+	// Quake 3's search from the start of the text). The text starts with the paths of lowest
+	// priority, so a Workshop item redefines the base game's shaders: a server's banners.
+	// Quake3e filled the table backwards and had the last one win. Extended shaders go first.
+	Com_Memset( shaderTextHashTableSizes, 0, sizeof( shaderTextHashTableSizes ) );
+	for ( pass = 0; pass < 2; pass++ ) {
+		p = s_shaderText;
+		while ( 1 ) {
+			oldp = p;
+			token = COM_ParseExt( &p, qtrue );
+			if ( token[0] == 0 ) {
+				break;
+			}
+			if ( ( oldp >= s_extensionOffset ) == ( pass == 0 ) ) {
+				hash = generateHashValue( token, MAX_SHADERTEXT_HASH );
+				shaderTextHashTable[hash][shaderTextHashTableSizes[hash]++] = (char*)oldp;
+			}
+			SkipBracedSection( &p, 0 );
 		}
-
-		hash = generateHashValue(token, MAX_SHADERTEXT_HASH);
-		shaderTextHashTable[hash][--shaderTextHashTableSizes[hash]] = (char*)oldp;
-
-		SkipBracedSection(&p, 0);
 	}
 }
 
