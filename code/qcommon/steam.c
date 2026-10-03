@@ -1155,7 +1155,11 @@ static qboolean Steam_Load(void) {
     st.lib = dlopen("./" STEAM_LIB, RTLD_NOW);
 #endif
     if (!st.lib) {
+        // the client's Steam comes up before the filesystem creates fs_steampath
         steamPath = Cvar_VariableString("fs_steampath");
+        if (!steamPath[0]) {
+            steamPath = Sys_SteamPath();
+        }
         if (steamPath[0]) {
             Com_sprintf(path, sizeof(path), "%s%c%s", steamPath, PATH_SEP, STEAM_LIB);
 #ifdef _WIN32

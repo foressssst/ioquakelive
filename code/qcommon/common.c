@@ -2637,6 +2637,13 @@ void Com_Init(char* commandLine) {
     com_basegame = Cvar_Get("com_basegame", BASEGAME_DIR, CVAR_INIT);
     com_homepath = Cvar_Get("com_homepath", "", CVAR_INIT | CVAR_PROTECTED);
 
+#ifndef DEDICATED
+    // [QL] 0x004cc16e: the client's Steam comes up before the filesystem, which mounts the
+    // Workshop items it is subscribed to (0x004697a0)
+    if (!Cvar_VariableIntegerValue("dedicated")) {
+        Steam_Init();
+    }
+#endif
     FS_InitFilesystem();
 
     Com_InitJournaling();
@@ -2800,9 +2807,6 @@ void Com_Init(char* commandLine) {
     // and Valve's library ends up aborting through its writer thread (tier0: "Illegal
     // termination of worker thread CFileWriterThread"). Retail's qzeroded does not use it
     // either: the gameserver API is enough for it.
-    if (!com_dedicated->integer) {
-        Steam_Init();
-    }
     Steam_GS_Init();
 
     // [ioquakelive] ZeroMQ, as in retail (idZMQ::Init, 0x004f3f80): the cvars and the rcon socket

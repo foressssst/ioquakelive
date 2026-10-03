@@ -1681,6 +1681,8 @@ void CL_Disconnect(qboolean showMainMenu) {
     // Remove pure paks
     FS_PureServerSetLoadedPaks("", "");
     FS_PureServerSetReferencedPaks("", "");
+    // [ioquakelive] and the server's Workshop items go with it at the next restart
+    FS_SetServerWorkshop("");
 
     // [QL] 0x004b8a26: the host's stats are stored as they leave their own game
     if (com_sv_running && com_sv_running->integer) {
@@ -2478,33 +2480,37 @@ static qboolean CL_WorkshopDownloads(void) {
     char copy[BIG_INFO_STRING];
     char* token;
     int total = 0;
+    qboolean remount;
 
     cl_workshopCount = 0;
     cl_workshopIndex = 0;
 
-    if (!Steam_WorkshopReady()) {
-        return qfalse;
-    }
     list = cl.gameState.stringData + cl.gameState.stringOffsets[CS_STEAM_WORKSHOP_IDS];
-    if (!list[0]) {
-        return qfalse;
-    }
 
-    Com_Printf("Server requires the following workshop items: %s\n", list);
-    Q_strncpyz(copy, list, sizeof(copy));
-    for (token = strtok(copy, " "); token; token = strtok(NULL, " ")) {
-        uint64_t item = (uint64_t)strtoull(token, NULL, 10);
+    // [ioquakelive] what this server asks for is what is mounted, in place of the last server's
+    // (FS_SetServerWorkshop): a remote server's set that changed takes a filesystem restart even
+    // with nothing to download; a local game's filesystem restarts with its map anyway
+    FS_SetServerWorkshop(list);
+    remount = (Steam_WorkshopReady() && !clc.demoplaying && !com_sv_running->integer &&
+               FS_ServerWorkshopChanged()) ? qtrue : qfalse;
 
-        if (!item || total >= CL_MAX_WORKSHOP) {
-            continue;
+    if (Steam_WorkshopReady() && list[0]) {
+        Com_Printf("Server requires the following workshop items: %s\n", list);
+        Q_strncpyz(copy, list, sizeof(copy));
+        for (token = strtok(copy, " "); token; token = strtok(NULL, " ")) {
+            uint64_t item = (uint64_t)strtoull(token, NULL, 10);
+
+            if (!item || total >= CL_MAX_WORKSHOP) {
+                continue;
+            }
+            if (Steam_WorkshopInstalled(item)) {
+                continue;
+            }
+            cl_workshopItems[total++] = item;
         }
-        if (Steam_WorkshopInstalled(item)) {
-            continue;
-        }
-        cl_workshopItems[total++] = item;
     }
     cl_workshopCount = total;
-    if (!total) {
+    if (!total && !remount) {
         return qfalse;
     }
 
