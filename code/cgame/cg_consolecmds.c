@@ -677,15 +677,15 @@ Live's chat window, used with ch_animateScroll. The ch_chatLines newest lines sh
 easing in, holding and easing out. CPMA anchors its list at the oldest line and slides it a
 row as that line leaves (CG_CpmaSlide); Quake Live's window is anchored at the newest line,
 on its bottom edge, so here the lines above rise a row when a line comes in, and the bottom
-line sinks a row as it leaves. As in CPMA (cgame.qvm func 158881), a line pushed out of the
-window goes at once and the window skips its fade-in.
+line sinks a row as it leaves. CPMA (cgame.qvm func 158881) drops a line pushed out of the
+window at once and has the window skip its fade-in; here, the user's call (2026-10-02), that
+line fades out a row above the window while the rest come in as usual, so a burst animates too.
 */
 static void CG_DrawCpmaChat(float x, float bottom, float scale) {
     vec4_t color = {1.0f, 1.0f, 1.0f, 1.0f};
     int lines = ch_chatLines.integer;
     chatLine_t* line;
     chatLine_t* anchor = NULL;
-    qboolean overflow = qfalse;
     float slide = 0.0f;
     int n, row;
 
@@ -696,18 +696,16 @@ static void CG_DrawCpmaChat(float x, float bottom, float scale) {
         lines = MAX_CHAT_LINES;
     }
 
-    for (n = lines; (line = CG_ChatLine(n)) != NULL; n++) {
+    // the line just pushed out of the window starts to fade out, if it was not already;
+    // anything older goes at once
+    line = CG_ChatLine(lines);
+    if (line && CG_ChatLineShowing(line) &&
+        cg.time - line->fadeTime - CHAT_FADEIN - CG_ChatLineHold(line) < 0) {
+        line->fadeTime = cg.time - CHAT_FADEIN - CG_ChatLineHold(line);
+    }
+    for (n = lines + 1; (line = CG_ChatLine(n)) != NULL; n++) {
         if (CG_ChatLineShowing(line)) {
             line->fadeTime = cg.time - CHAT_FADEIN - CG_ChatLineHold(line) - CHAT_FADEOUT;
-            overflow = qtrue;
-        }
-    }
-    if (overflow) {
-        cg.chatSlideStart = 0;
-        for (n = 0; n < lines && (line = CG_ChatLine(n)) != NULL; n++) {
-            if (CG_ChatLineShowing(line)) {
-                line->fadeTime -= CHAT_FADEIN;
-            }
         }
     }
 
@@ -735,7 +733,7 @@ static void CG_DrawCpmaChat(float x, float bottom, float scale) {
     }
 
     CG_SetWidescreen(WIDESCREEN_LEFT);
-    for (n = 0, row = 0; n < lines && (line = CG_ChatLine(n)) != NULL; n++) {
+    for (n = 0, row = 0; n <= lines && (line = CG_ChatLine(n)) != NULL; n++) {
         if (!CG_ChatLineShowing(line)) {
             continue;
         }
