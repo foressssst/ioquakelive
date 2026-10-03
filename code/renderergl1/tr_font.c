@@ -379,7 +379,7 @@ static void RB_Font_renderEmoji( void *uptr, float x0, float y0, float x1, float
 		char name[MAX_QPATH];
 
 		Com_sprintf( name, sizeof( name ), "emoji/%s.png", emojiNames[emoji] );
-		emojiShaders[emoji] = RE_RegisterShader( name );
+		emojiShaders[emoji] = RE_RegisterShaderNoMip( name );  // a picture on the 2D layer: no picmip
 		if ( !emojiShaders[emoji] ) {
 			emojiShaders[emoji] = -1;
 		}
