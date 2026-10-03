@@ -246,7 +246,9 @@ git commit --allow-empty -m "release: 1.0.0"
 git push origin main
 ```
 
-CI builds every platform, tags the commit `v1.0.0` and publishes a GitHub Release.
+CI builds every platform, tags the commit `v1.0.0` and publishes a GitHub Release. A small
+patch goes out the same way with `prerelease: 1.0.1`: CI builds Windows x86 and x64 only and
+publishes them marked as a pre-release.
 Client and dedicated server come out of one build but are two things to install, so
 they are two downloads:
 
@@ -545,7 +547,7 @@ git commit --allow-empty -m "release: 1.0.0"
 git push origin main
 ```
 
-El CI compila todas las plataformas, etiqueta el commit `v1.0.0` y publica un Release en GitHub. El cliente y el servidor dedicado salen de una sola compilación pero son dos cosas de instalar, así que son dos descargas:
+El CI compila todas las plataformas, etiqueta el commit `v1.0.0` y publica un Release en GitHub. Un parche chico sale igual con `prerelease: 1.0.1`: el CI compila solo Windows x86 y x64 y lo publica marcado como pre-release. El cliente y el servidor dedicado salen de una sola compilación pero son dos cosas de instalar, así que son dos descargas:
 
 ```
 ioquakelive-windows-x64.zip     el cliente: motor, renderer, módulos de juego, baseq3/

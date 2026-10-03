@@ -7,10 +7,22 @@ on:
     branches: [main]
   # Lets a build be started by hand, without a dummy commit.
   workflow_dispatch:
+    inputs:
+      windows_only:
+        description: 'Only the Windows build of a pre-release (x86 and x64): no Linux, no macOS, no ARM64'
+        type: boolean
+        default: false
+
+# Three ways in:
+#   "release: X"     every platform, published as the release X
+#   "prerelease: X"  Windows x86 and x64 only, published as the pre-release X: a small patch
+#                    costs a fraction of the minutes and still comes out of a clean machine
+#   by hand          everything, or the Windows pair with windows_only; nothing is published
 
 jobs:
   linux:
     name: Linux ${{ matrix.arch }}
+    if: ${{ !((github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:')) || (github.event_name == 'workflow_dispatch' && inputs.windows_only)) }}
     runs-on: ${{ matrix.runner }}
     strategy:
       # una plataforma que falla no cancela a la otra: interesa el informe de las dos
@@ -86,7 +98,7 @@ jobs:
     name: macOS (compile + sign dylibs)
     # macOS counts ten times and Windows twice against the Actions minutes: they run for a release
     # or by hand, and every other push is checked by Linux alone
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:'))
+    if: (github.event_name == 'workflow_dispatch' && !inputs.windows_only) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:'))
     runs-on: macos-14
     steps:
     - uses: actions/checkout@v4
@@ -192,7 +204,7 @@ jobs:
 
   macos-bundle:
     name: macOS (bundle + notarise)
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:'))
+    if: (github.event_name == 'workflow_dispatch' && !inputs.windows_only) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:'))
     needs: [linux, windows, macos-compile]
     runs-on: macos-14
     env:
@@ -454,24 +466,15 @@ jobs:
 
   windows:
     name: Windows ${{ matrix.platform }}
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:'))
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:')) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:'))
     runs-on: windows-2022
     strategy:
       # una plataforma que falla no cancela a la otra: interesa el informe de las dos
       fail-fast: false
       matrix:
-        include:
-        # the Windows build that loads Quake Live's own steam_api.dll, which is 32-bit
-        - platform: Win32
-          dir: x86
-          arch: x86
-        - platform: x64
-          dir: x64
-          arch: x86_64
-        # cross-compiled: the ARM64 compiler runs on x86-64
-        - platform: ARM64
-          dir: arm64
-          arch: arm64
+        # Win32 is the build that loads Quake Live's own steam_api.dll, which is 32-bit. ARM64 is
+        # cross-compiled (its compiler runs on x86-64) and stays out of a Windows-only build.
+        include: ${{ fromJSON(((github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:')) || (github.event_name == 'workflow_dispatch' && inputs.windows_only)) && '[{"platform":"Win32","dir":"x86","arch":"x86"},{"platform":"x64","dir":"x64","arch":"x86_64"}]' || '[{"platform":"Win32","dir":"x86","arch":"x86"},{"platform":"x64","dir":"x64","arch":"x86_64"},{"platform":"ARM64","dir":"arm64","arch":"arm64"}]') }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -527,7 +530,7 @@ jobs:
 
   package:
     name: Package release artifacts
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:'))
+    if: (github.event_name == 'workflow_dispatch' && !inputs.windows_only) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:'))
     needs: [linux, macos-bundle, windows]
     runs-on: ubuntu-latest
     steps:
@@ -580,6 +583,112 @@ jobs:
       with:
         name: release-zips
         path: build/*.zip
+
+  package-windows:
+    name: Package the Windows pre-release
+    # The Windows pair alone: its own iobin.pk3 (the Windows game modules) and pak01.pk3, made
+    # here because the job that makes the universal ones is the macOS one.
+    if: ${{ (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:')) || (github.event_name == 'workflow_dispatch' && inputs.windows_only) }}
+    needs: [windows]
+    runs-on: ubuntu-latest
+    env:
+      HAS_ASSETS_KEY: ${{ secrets.ASSETS_DEPLOY_KEY != '' }}
+      IS_RELEASE: ${{ github.event_name == 'push' }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Check out the art that is not in git
+      if: env.HAS_ASSETS_KEY == 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: foressssst/ioquakelive-assets
+        ssh-key: ${{ secrets.ASSETS_DEPLOY_KEY }}
+        path: assets-pak01
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+    - name: Download game library artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: libs-windows-*
+        path: iobin-stage
+        merge-multiple: true
+    - name: Build iobin.pk3
+      run: |
+        mkdir -p shared/baseq3
+        python3 code/tools/make_deterministic_pk3.py \
+          --input iobin-stage \
+          --output shared/baseq3/iobin.pk3
+    - name: Build deterministic pak01.pk3
+      run: |
+        EXTRA=""
+        if [ -d assets-pak01 ]; then
+          EXTRA="--input assets-pak01"
+        elif [ "$IS_RELEASE" = "true" ]; then
+          echo "::error::a pre-release needs the art from ioquakelive-assets (secret ASSETS_DEPLOY_KEY)"
+          exit 1
+        fi
+        python3 code/tools/make_deterministic_pk3.py \
+          --input content/pak01 $EXTRA \
+          --output shared/baseq3/pak01.pk3
+    - name: Download engine artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: engine-windows-*
+        path: engines
+    - name: Build the release zips
+      run: |
+        python code/tools/build_release_zips.py \
+          --shared shared \
+          --server content/server \
+          --engines engines \
+          --output build
+        ls -la build/
+        # what a player can check a download against
+        sha256sum build/*.zip
+    - uses: actions/upload-artifact@v4
+      with:
+        name: release-zips
+        path: build/*.zip
+
+  prerelease:
+    name: Create Pre-release
+    needs: [package-windows]
+    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+    - name: Extract version from commit message
+      id: version
+      env:
+        MSG: ${{ github.event.head_commit.message }}
+      run: |
+        VERSION=$(echo "$MSG" | head -1 | sed 's/^prerelease: *//')
+        # the version the console shows has to be the one being released
+        CODE=$(sed -n 's/^#define PRODUCT_VERSION "\(.*\)"/\1/p' code/qcommon/q_shared.h)
+        if [ "$CODE" != "$VERSION" ]; then
+          echo "::error::prerelease: ${VERSION}, but PRODUCT_VERSION in code/qcommon/q_shared.h is ${CODE}"
+          exit 1
+        fi
+        echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+        echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+    - name: Create tag
+      run: |
+        git tag "${{ steps.version.outputs.tag }}"
+        git push origin "${{ steps.version.outputs.tag }}"
+    - uses: actions/download-artifact@v4
+      with:
+        name: release-zips
+        path: artifacts
+    - name: Create Pre-release
+      # the notes go on the page afterwards, by hand
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.tag }}
+        name: ${{ steps.version.outputs.version }}
+        files: artifacts/*.zip
+        prerelease: true
 
   release:
     name: Create Release
