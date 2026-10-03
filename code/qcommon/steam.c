@@ -3361,7 +3361,8 @@ qboolean Steam_Avatar(uint64_t steamId, char* path, int size) {
         Z_Free(pixels);
         return qfalse;
     }
-    // an uncompressed 32-bit TGA from the top left, whose pixels go blue, green, red, alpha
+    // an uncompressed 32-bit TGA from the bottom left, whose pixels go blue, green, red, alpha:
+    // the renderer's loader does not take the top-down flag
     for (i = 0; i < w * h; i++) {
         byte r = pixels[i * 4];
 
@@ -3375,11 +3376,13 @@ qboolean Steam_Avatar(uint64_t steamId, char* path, int size) {
     header[14] = (byte)(h & 0xff);
     header[15] = (byte)(h >> 8);
     header[16] = 32;
-    header[17] = 0x28;
+    header[17] = 0x08;
     f = FS_FOpenFileWrite(path);
     if (f) {
         FS_Write(header, sizeof(header), f);
-        FS_Write(pixels, (int)(w * h * 4), f);
+        for (i = h; i > 0; i--) {
+            FS_Write(pixels + (i - 1) * w * 4, (int)(w * 4), f);
+        }
         FS_FCloseFile(f);
     }
     Z_Free(pixels);
