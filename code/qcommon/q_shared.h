@@ -44,7 +44,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 // [ioquakelive] the release, raised by each "release:" commit; the CI checks the two match
 #ifndef PRODUCT_VERSION
-#define PRODUCT_VERSION "0.3.0"
+#define PRODUCT_VERSION "0.3.1"
 #endif
 
 #ifndef PRODUCT_DATE
