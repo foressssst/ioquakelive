@@ -134,8 +134,9 @@ void CG_ImpactMark(qhandle_t markShader, const vec3_t origin, const vec3_t dir, 
     vec3_t markPoints[MAX_MARK_POINTS];
     vec3_t projection;
 
-    // QL binary: checks both cg_addMarks AND cg_impactMarkTime (vmCvar 0x10A252C0)
-    if (!cg_addMarks.integer || !cg_impactMarkTime.integer) {
+    // [QL] cgamex86.dll 0x1002a740: cg_marks and cg_impactMarkTime gate the marks that stay, and a
+    // temporary one, the shadow under a player, is drawn whatever they say
+    if ((!cg_addMarks.integer || !cg_impactMarkTime.integer) && !temporary) {
         return;
     }
 
