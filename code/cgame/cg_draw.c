@@ -2207,7 +2207,6 @@ CG_ScanForCrosshairEntity
 static void CG_ScanForCrosshairEntity(void) {
 	trace_t trace;
 	vec3_t start, end;
-	int content;
 
 	VectorCopy(cg.refdef.vieworg, start);
 	VectorMA(start, 131072, cg.refdef.viewaxis[0], end);
@@ -2218,14 +2217,11 @@ static void CG_ScanForCrosshairEntity(void) {
 		return;
 	}
 
-	// if the player is in fog, don't show it
-	content = CG_PointContents(trace.endpos, 0);
-	if (content & CONTENTS_FOG) {
-		return;
-	}
-
-	// if the player is invisible, don't show it
-	if (cg_entities[trace.entityNum].currentState.powerups & (1 << PW_INVIS)) {
+	// [QL] cgamex86.dll 0x1000c570: an invisible player is not named unless he is a teammate, and
+	// there is no test for fog as there is in Quake 3
+	if ((cg_entities[trace.entityNum].currentState.powerups & (1 << PW_INVIS)) &&
+		!(cgs.gametype >= GT_TEAM &&
+		  cg.snap->ps.persistant[PERS_TEAM] == cgs.clientinfo[trace.entityNum].team)) {
 		return;
 	}
 
