@@ -352,6 +352,9 @@ vmCvar_t cg_playerLean;
 vmCvar_t cg_plasmaStyle;
 vmCvar_t cg_railStyle;
 vmCvar_t ch_animateRewardIcons;
+vmCvar_t ch_rewardY;
+vmCvar_t ch_fragMessageY;
+vmCvar_t ch_fragMessageScale;
 vmCvar_t cg_animateChatBalloon;
 vmCvar_t ch_animateScroll;
 vmCvar_t cg_zoomAnimationTime;
@@ -766,6 +769,10 @@ static cvarTable_t cvarTable[] = {
     {&cg_railStyle, "cg_railStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "2"},
     // [CPMA] 1.53 animations with CPMA's defaults, except ch_animateScroll, on by default here
     {&ch_animateRewardIcons, "ch_animateRewardIcons", "1", CVAR_ARCHIVE},
+    // for tuning by eye: the values chosen get baked in and these three go
+    {&ch_rewardY, "ch_rewardY", "113", CVAR_ARCHIVE},
+    {&ch_fragMessageY, "ch_fragMessageY", "150", CVAR_ARCHIVE},
+    {&ch_fragMessageScale, "ch_fragMessageScale", "0.15", CVAR_ARCHIVE},
     {&cg_animateChatBalloon, "cg_animateChatBalloon", "1", CVAR_ARCHIVE},
     {&ch_animateScroll, "ch_animateScroll", "1", CVAR_ARCHIVE},
     {&cg_zoomAnimationTime, "cg_zoomAnimationTime", "150", CVAR_ARCHIVE},

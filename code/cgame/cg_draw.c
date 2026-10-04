@@ -1514,7 +1514,7 @@ CG_DrawReward
 [QL] 0x1000ac30. A medal shows for 2 s and fades over its last 200 ms. The next one is
 popped and its sound queued before cg_drawRewards is tested, so hidden medals still play.
 [ioquakelive] A deliberate divergence: 0.74 of retail's size, centred on 325 with its top
-at y 128, so no message runs into another. Both of retail's branches are kept.
+at ch_rewardY, so no message runs into another. Both of retail's branches are kept.
 ===================
 */
 #define REWARD_ICON_SCALE 0.74f
@@ -1522,11 +1522,10 @@ at y 128, so no message runs into another. Both of retail's branches are kept.
 #define REWARD_ICON_STEP (48.0f * REWARD_ICON_SCALE)
 #define REWARD_ROW_CENTER 325.0f
 #define REWARD_ICON_X (REWARD_ROW_CENTER - REWARD_ICON_STEP / 2.0f)
-#define REWARD_ICON_Y 128.0f
 // the count sits where retail puts it, at the same fraction of the icon: retail's icon is at
 // (296, 42) and its count at (336, 66) in scale 0.2
 #define REWARD_COUNT_X (REWARD_ICON_X + 40.0f * REWARD_ICON_SCALE)
-#define REWARD_COUNT_Y (REWARD_ICON_Y + 24.0f * REWARD_ICON_SCALE)
+#define REWARD_COUNT_DY (24.0f * REWARD_ICON_SCALE)
 #define REWARD_COUNT_SCALE (0.2f * REWARD_ICON_SCALE)
 
 static void CG_DrawReward(void) {
@@ -1563,13 +1562,13 @@ static void CG_DrawReward(void) {
 		color[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
 	}
 	trap_R_SetColor(color);
-	CG_DrawRewardIcon(REWARD_ICON_X, REWARD_ICON_Y, REWARD_ICON_SIZE, cg.rewardShader[0]);
+	CG_DrawRewardIcon(REWARD_ICON_X, ch_rewardY.value, REWARD_ICON_SIZE, cg.rewardShader[0]);
 	// [QL] 0x1000ac96, deliberately half ported: past cg_drawRewardsRowSize medals at once, retail
 	// drops to a single icon with the count written beside it, and below that it lays them side by
 	// side. Only the count is wanted here, so the cvar is simply where it starts showing: 1 by
 	// default, which is from the second medal on, and 9 never writes it.
 	if (cg.rewardCount[0] > cg_drawRewardsRowSize.integer) {
-		CG_DrawText(REWARD_COUNT_X, REWARD_COUNT_Y, 0, REWARD_COUNT_SCALE, color,
+		CG_DrawText(REWARD_COUNT_X, ch_rewardY.value + REWARD_COUNT_DY, 0, REWARD_COUNT_SCALE, color,
 					va("%d", cg.rewardCount[0]), 0, 0, 0);
 	}
 	trap_R_SetColor(NULL);
@@ -1921,9 +1920,8 @@ the next line starts 6 units below it.
 ===================
 */
 // [ioquakelive] The frag message, deliberately laid out differently from retail: smaller and
-// lower, under the medal, in Handel Gothic Ex from pak01 (cgs.media.fragMessageFont).
-#define FRAG_MESSAGE_Y 165.0f
-#define FRAG_MESSAGE_SCALE 0.15f
+// lower, under the medal, in Handel Gothic Ex from pak01 (cgs.media.fragMessageFont). Its height
+// and size are ch_fragMessageY and ch_fragMessageScale while they are being tuned.
 
 static void CG_DrawCenterString(void) {
 	static vec4_t color;
@@ -1955,8 +1953,8 @@ static void CG_DrawCenterString(void) {
 	trap_R_SetColor(color);
 
 	if (cg.centerPrintFrag) {
-		y = FRAG_MESSAGE_Y;
-		scale = FRAG_MESSAGE_SCALE;
+		y = ch_fragMessageY.value;
+		scale = ch_fragMessageScale.value;
 		font = cgs.media.fragMessageFont;
 	} else {
 		y = (float)cg.centerPrintY;
