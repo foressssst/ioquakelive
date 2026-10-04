@@ -2788,7 +2788,9 @@ static void CG_ShotgunPattern(vec3_t origin, vec3_t origin2, int seed, int other
 
     // derive the right and up vectors from the forward vector, because
     // the client won't have any other information
-    VectorNormalize2(origin2, forward);
+    // [QL] cgamex86.dll 0x10055650: origin2 is a point ahead of the muzzle, not Quake 3's direction
+    VectorSubtract(origin2, origin, forward);
+    VectorNormalize(forward);
     PerpendicularVector(right, forward);
     CrossProduct(forward, right, up);
 

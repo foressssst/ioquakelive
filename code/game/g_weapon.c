@@ -354,7 +354,9 @@ void ShotgunPattern(vec3_t origin, vec3_t origin2, int seed, gentity_t* ent) {
     vec3_t forward, right, up;
     qboolean hitClient = qfalse;
 
-    VectorNormalize2(origin2, forward);
+    // [QL] qagamex86.dll 0x1006d460: origin2 is a point ahead of the muzzle
+    VectorSubtract(origin2, origin, forward);
+    VectorNormalize(forward);
     PerpendicularVector(right, forward);
     CrossProduct(forward, right, up);
 
@@ -433,7 +435,9 @@ void weapon_supershotgun_fire(gentity_t* ent) {
 
     // send shotgun blast
     tent = G_TempEntity(muzzle, EV_SHOTGUN);
-    VectorScale(forward, 4096, tent->s.origin2);
+    // [QL] qagamex86.dll 0x1006d8d0: the point 4096 ahead of the muzzle, where Quake 3 sent the
+    // direction alone; a client of either reads the other's blast some twenty degrees off
+    VectorMA(muzzle, 4096, forward, tent->s.origin2);
     SnapVector(tent->s.origin2);
     tent->s.eventParm = rand() & 255;  // seed for spread pattern
     tent->s.otherEntityNum = ent->s.number;
