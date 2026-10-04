@@ -1508,11 +1508,19 @@ static void CG_InterpolateEntityPosition(centity_t* cent) {
 ===============
 CG_CalcEntityLerpPositions
 
+[QL] cgamex86.dll 0x10018190, which is Unlagged's. There is no cg_smoothClients. A player that
+cannot be interpolated, because no snapshot is ahead of cg.time yet as under a negative
+cl_timeNudge, is carried along its velocity for one server frame instead of standing where the
+last snapshot left him. A missile is drawn ahead of where the server has it: one's own by a
+server frame, and the others' by cg_projectileNudge more, or by the ping with
+cg_autoProjectileNudge. Grenades and mines of the others are left where they are.
 ===============
 */
 static void CG_CalcEntityLerpPositions(centity_t* cent) {
-    // [QL] 0x10018190: no cg_smoothClients; a player the server extrapolates is interpolated
-    // between snapshots when it can be, and extrapolated otherwise
+    static int lastNudge;  // 0x10abaadc
+    // sv_fps comes from the server and is never 0 there
+    int frameMsec = cg_svFps.integer > 0 ? (int)(1000.0f / cg_svFps.integer) : 0;
+    int timeshift = 0;
 
     if (cent->interpolate && cent->currentState.pos.trType == TR_INTERPOLATE) {
         CG_InterpolateEntityPosition(cent);
@@ -1527,9 +1535,58 @@ static void CG_CalcEntityLerpPositions(centity_t* cent) {
         return;
     }
 
+    // interpolating failed, so extrapolate
+    if (cent->currentState.number < MAX_CLIENTS &&
+        cent->currentState.clientNum != cg.predictedPlayerState.clientNum) {
+        cent->currentState.pos.trType = TR_LINEAR_STOP;
+        cent->currentState.pos.trTime = cg.snap->serverTime;
+        cent->currentState.pos.trDuration = frameMsec;
+    }
+
+    if (cent->currentState.eType == ET_MISSILE && cent->currentState.weapon != WP_GRAPPLING_HOOK) {
+        if (cent->currentState.otherEntityNum == cg.clientNum) {
+            timeshift = frameMsec;
+        } else if (cent->currentState.weapon != WP_GRENADE_LAUNCHER &&
+                   cent->currentState.weapon != WP_PROX_LAUNCHER) {
+            int nudge;
+
+            if (cg_autoProjectileNudge.integer) {
+                // the ping, and once there is one it is kept: retail's own test never lets go of it
+                nudge = cg.snap->ping;
+                if (lastNudge != 0 && lastNudge != nudge) {
+                    nudge = lastNudge;
+                }
+                if (nudge > 80) {
+                    nudge = 80;
+                } else if (nudge < 0) {
+                    nudge = 0;
+                }
+            } else {
+                nudge = cg_projectileNudge.integer;
+            }
+            timeshift = nudge + frameMsec;
+            lastNudge = nudge;
+        }
+    }
+
     // just use the current frame and evaluate as best we can
-    BG_EvaluateTrajectory(&cent->currentState.pos, cg.time, cent->lerpOrigin);
-    BG_EvaluateTrajectory(&cent->currentState.apos, cg.time, cent->lerpAngles);
+    BG_EvaluateTrajectory(&cent->currentState.pos, cg.time + timeshift, cent->lerpOrigin);
+    BG_EvaluateTrajectory(&cent->currentState.apos, cg.time + timeshift, cent->lerpAngles);
+
+    if (timeshift != 0) {
+        trace_t tr;
+        vec3_t lastOrigin;
+
+        BG_EvaluateTrajectory(&cent->currentState.pos, cg.time, lastOrigin);
+        CG_Trace(&tr, lastOrigin, vec3_origin, vec3_origin, cent->lerpOrigin, cent->currentState.number, MASK_SHOT);
+
+        // don't let the projectile go through the floor
+        if (tr.fraction < 1.0f) {
+            cent->lerpOrigin[0] = lastOrigin[0] + tr.fraction * (cent->lerpOrigin[0] - lastOrigin[0]);
+            cent->lerpOrigin[1] = lastOrigin[1] + tr.fraction * (cent->lerpOrigin[1] - lastOrigin[1]);
+            cent->lerpOrigin[2] = lastOrigin[2] + tr.fraction * (cent->lerpOrigin[2] - lastOrigin[2]);
+        }
+    }
 
     // adjust for riding a mover if it wasn't rolled into the predicted
     // player state
