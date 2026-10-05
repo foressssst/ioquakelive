@@ -998,6 +998,8 @@ void CL_Disconnect(qboolean showMainMenu);
 void CL_Shutdown(char* finalmsg, qboolean disconnect, qboolean quit);
 void CL_Frame(int msec);
 void CL_LowLatencyWait(void);
+// [ioquakelive] the refresh rate of the display the game is on, 0 when it is not known
+int CL_DisplayFrequency(void);
 qboolean CL_GameCommand(void);
 void *CL_FindAlias(const char *name);
 void CL_RunAlias(void);

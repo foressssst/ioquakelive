@@ -85,6 +85,7 @@ cvar_t* com_protocol;
 cvar_t* com_basegame;
 cvar_t* com_homepath;
 cvar_t* com_busyWait;
+cvar_t* com_maxfpsVRR;
 // [ioquakelive] how many worker threads: -1 is one per core minus the main one
 cvar_t* com_workers;
 static void Com_JobTest_f(void);
@@ -2740,6 +2741,11 @@ void Com_Init(char* commandLine) {
     com_minimized = Cvar_Get("com_minimized", "0", CVAR_ROM);
     com_maxfpsMinimized = Cvar_Get("com_maxfpsMinimized", "10", CVAR_ARCHIVE);
     com_busyWait = Cvar_Get("com_busyWait", "0", CVAR_ARCHIVE);
+    // [ioquakelive] for a display with variable refresh: the frame cap never goes over the
+    // display's rate less 3, whatever com_maxfps says. Past the rate the driver's vertical sync
+    // takes over and the frames queue up: 16 ms from present to screen at 240 Hz, measured,
+    // against half a millisecond under it. Off by default, as retail has nothing like it.
+    com_maxfpsVRR = Cvar_Get("com_maxfpsVRR", "0", CVAR_ARCHIVE);
 
     // [QL] quakelive_steam.exe 0x4cc115: the process number, for the safe-mode check
     Cvar_Get("com_pid", va("%d", Sys_PID()), CVAR_ROM);
@@ -3404,6 +3410,29 @@ static void Com_JobTest_f(void) {
 
 /*
 =================
+Com_FrameCap
+
+[ioquakelive] the frame cap in force: com_maxfps, held under the display's refresh rate when
+com_maxfpsVRR asks for it. 0 is no cap.
+=================
+*/
+static int Com_FrameCap(void) {
+    int cap = com_maxfps->integer;
+
+#ifndef DEDICATED
+    if (com_maxfpsVRR->integer) {
+        int hz = CL_DisplayFrequency();
+
+        if (hz > 3 && (cap <= 0 || cap > hz - 3)) {
+            cap = hz - 3;
+        }
+    }
+#endif
+    return cap;
+}
+
+/*
+=================
 Com_Frame
 =================
 */
@@ -3488,9 +3517,9 @@ void Com_Frame(void) {
             } else if (com_unfocused->integer && com_maxfpsUnfocused->integer > 0) {
                 minMsec = 1000 / com_maxfpsUnfocused->integer;
                 capUs = 1000000 / com_maxfpsUnfocused->integer;
-            } else if (com_maxfps->integer > 0) {
-                minMsec = 1000 / com_maxfps->integer;
-                capUs = 1000000 / com_maxfps->integer;
+            } else if (Com_FrameCap() > 0) {
+                minMsec = 1000 / Com_FrameCap();
+                capUs = 1000000 / Com_FrameCap();
             } else
                 minMsec = 1;
 

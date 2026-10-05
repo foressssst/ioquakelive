@@ -8009,6 +8009,11 @@ static void vk_reflex_sleep( void )
 
 	// off has to mean that nothing changes, so the frame cap stays with the engine
 	maxFps = r_lowLatency->integer ? ri.Cvar_VariableIntegerValue( "com_maxfps" ) : 0;
+	// [ioquakelive] com_maxfpsVRR, as Com_FrameCap works it out: Reflex paces by the same cap
+	if ( r_lowLatency->integer && ri.Cvar_VariableIntegerValue( "com_maxfpsVRR" ) && glConfig.displayFrequency > 3 &&
+		( maxFps <= 0 || maxFps > glConfig.displayFrequency - 3 ) ) {
+		maxFps = glConfig.displayFrequency - 3;
+	}
 
 	if ( vk.latencyModeSet != r_lowLatency->integer || vk.latencyMaxFps != maxFps ) {
 		mode.sType = VK_STRUCTURE_TYPE_LATENCY_SLEEP_MODE_INFO_NV;

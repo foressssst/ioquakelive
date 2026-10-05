@@ -947,6 +947,7 @@ static const cvarHelp_t cvarHelp[] = {
     {"com_maxfpsUnfocused", "most frames per second while the window is in the background; 0 for no limit"},
     {"com_maxfpsMinimized", "most frames per second while the window is minimized; 0 for no limit"},
     {"com_busyWait", "waits for the next frame by spinning instead of sleeping"},
+    {"com_maxfpsVRR", "keeps the frame cap 3 under the display's refresh rate, for G-SYNC and FreeSync"},
     {"com_hunkMegs", "megabytes of hunk memory"},
     {"com_zoneMegs", "megabytes of zone memory"},
     {"com_ansiColor", "colours in the terminal"},

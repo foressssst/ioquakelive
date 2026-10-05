@@ -3148,6 +3148,17 @@ void CL_LowLatencyWait(void) {
 
 /*
 ==================
+CL_DisplayFrequency
+
+[ioquakelive] for com_maxfpsVRR
+==================
+*/
+int CL_DisplayFrequency(void) {
+    return cls.rendererStarted ? cls.glconfig.displayFrequency : 0;
+}
+
+/*
+==================
 CL_Frame
 
 ==================
