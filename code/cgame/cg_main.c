@@ -3147,6 +3147,38 @@ static const char* CG_FeederItemTextRace(clientInfo_t* info, score_t* sp, int co
 }
 
 // [QL] Stats feeder - returns available data, stubs for unavailable per-weapon/item stats
+/*
+=================
+CG_ScoreboardName
+
+[QL] the name column of the team lists and of the stats lists (0x100274b4, 0x10028099,
+0x10026b15, 0x100283a6...): measured at 0.16, a name `wide` units or wider loses one character
+at a time until it measures under `fit`, then gets "...". Without it a long name runs over the
+columns to its right, since those lists take up to 117 and 99 characters there.
+=================
+*/
+static const char* CG_ScoreboardName(const char* name, int wide, int fit) {
+    char full[40];
+    char shortName[40];
+    int len, i;
+
+    if (CG_DrawTextWidth(name, 0.16f, 0, 0) < wide) {
+        return name;
+    }
+
+    Q_strncpyz(full, name, sizeof(full));
+    Q_strncpyz(shortName, full, sizeof(shortName));
+    len = strlen(full);
+    for (i = 0; i < len; i++) {
+        Q_strncpyz(shortName, full, len - i);
+        if (CG_DrawTextWidth(shortName, 0.16f, 0, 0) < fit) {
+            break;
+        }
+    }
+    Q_strncpyz(full, va("%s%s", shortName, "..."), sizeof(full));
+    return va("%s", full);
+}
+
 // Binary has separate functions per gametype: FUN_10028300 (TDM/FT), CG_FeederItemText (CA), FUN_10026cf0 (CTF)
 static const char* CG_FeederItemTextStats(float feederID, int index, int column, qhandle_t* handle) {
     int scoreIndex = 0;
@@ -3160,7 +3192,7 @@ static const char* CG_FeederItemTextStats(float feederID, int index, int column,
         case GT_CA:
             // CA stats: 17 columns
             switch (column) {
-                case 0: return info->name;
+                case 0: return CG_ScoreboardName(info->name, 100, 92);
                 case 1: return va("%d", sp->score);
                 case 2: return va("%d", sp->frags);
                 case 3: return va("%d", sp->deaths);
@@ -3174,7 +3206,7 @@ static const char* CG_FeederItemTextStats(float feederID, int index, int column,
         case GT_FREEZE:
             // TDM/FT stats: 18 columns
             switch (column) {
-                case 0: return info->name;
+                case 0: return CG_ScoreboardName(info->name, 100, 92);
                 case 1: return va("%d", sp->score);
                 case 2: return va("%d", sp->frags);
                 case 3: return va("%d", sp->deaths);
@@ -3191,7 +3223,7 @@ static const char* CG_FeederItemTextStats(float feederID, int index, int column,
         default:
             // CTF/etc stats: 19 columns
             switch (column) {
-                case 0: return info->name;
+                case 0: return CG_ScoreboardName(info->name, 100, 92);
                 case 1: return va("%d", sp->score);
                 case 2: return va("%d", sp->frags);
                 case 3: return va("%d", sp->deaths);
@@ -3303,7 +3335,25 @@ static const char* CG_FeederItemText(float feederID, int index, int column, qhan
         case 4:
             *handle = CG_CountryFlagShader(info->country);
             return "";
+        // [QL] the free-for-all and duel lists give the name whole; their column takes 18 characters
         case 5:
+            if (team != -1) {
+                switch (cgs.gametype) {
+                    case GT_TEAM:
+                    case GT_FREEZE:
+                        return CG_ScoreboardName(info->name, 100, 92);
+                    case GT_CA:
+                        return CG_ScoreboardName(info->name, 70, 62);
+                    case GT_CTF:
+                    case GT_1FCTF:
+                    case GT_HARVESTER:
+                    case GT_DOMINATION:
+                    case GT_AD:
+                        return CG_ScoreboardName(info->name, 74, 66);
+                    default:
+                        break;
+                }
+            }
             return info->name;
     }
 
