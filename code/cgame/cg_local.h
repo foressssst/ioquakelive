@@ -943,7 +943,7 @@ typedef struct {
         int         time;           // cg.time when it happened
         char        victimName[40]; // resolved + color-stripped for team games
         int         victimTeam;     // 0=free, 1=red, 2=blue, 3=spec
-        char        attackerName[40];
+        char        attackerName[80];   // [ioquakelive] room for "killer + assist"
         int         attackerTeam;
         int         hasAttacker;    // 0 for world/suicide
         qhandle_t   weaponIcon;     // shader handle for weapon/skull icon

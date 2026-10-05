@@ -383,6 +383,37 @@ static const char *CG_ObituaryExtra(int target, int attacker, int mod) {
 
 /*
 =============
+CG_ObituaryMark
+
+[ioquakelive] The mark of a kill: the ones above first, then the ones Quake Live has medals for
+and any server lets the client work out -- a rail to the head, a gauntlet kill, killing the
+one who killed you last, and a second kill within two seconds.
+=============
+*/
+static const char *CG_ObituaryMark(int target, int attacker, int mod) {
+    static int lastKiller[MAX_CLIENTS];    // who killed each player last, as client number plus one
+    static int lastKillTime[MAX_CLIENTS];  // when each player last killed someone
+    const char *mark = CG_ObituaryExtra(target, attacker, mod);
+
+    if (!mark[0]) {
+        if (mod == MOD_RAILGUN_HEADSHOT) {
+            mark = "HEADSHOT";
+        } else if (mod == MOD_GAUNTLET) {
+            mark = "HUMILIATION";
+        } else if (lastKiller[attacker] == target + 1) {
+            mark = "REVENGE";
+        } else if (lastKillTime[attacker] && cg.time >= lastKillTime[attacker] && cg.time - lastKillTime[attacker] < 2000) {
+            mark = "EXCELLENT";
+        }
+    }
+    lastKiller[target] = attacker + 1;
+    lastKiller[attacker] = (lastKiller[attacker] == target + 1) ? 0 : lastKiller[attacker];
+    lastKillTime[attacker] = cg.time;
+    return mark;
+}
+
+/*
+=============
 CG_Obituary
 =============
 */
@@ -399,6 +430,8 @@ static void CG_Obituary(entityState_t* ent) {
     clientInfo_t* ci;
     qhandle_t weaponIcon;
     int victimTeam, attackerTeam;
+    int helper;
+    qboolean pushed;
 
     target = ent->otherEntityNum;
     attacker = ent->otherEntityNum2;
@@ -441,17 +474,36 @@ static void CG_Obituary(entityState_t* ent) {
         }
     }
 
+    // [ioquakelive] the second player of the event, which only our own server sends (see
+    // G_ObituaryHelper in g_combat.c): zero everywhere else
+    helper = (ent->generic1 & 0x7f) - 1;
+    pushed = (ent->generic1 & 0x80) ? qtrue : qfalse;
+    if (helper < 0 || helper >= MAX_CLIENTS || helper == target || !cgs.clientinfo[helper].infoValid) {
+        helper = -1;
+    }
+
     // [QL] Resolve weapon icon and add to obituary display buffer
     weaponIcon = CG_ModToWeaponIcon(mod);
     victimTeam = cgs.clientinfo[target].team;
     if (attacker >= 0 && attacker < MAX_CLIENTS && attacker != target) {
         attackerTeam = cgs.clientinfo[attacker].team;
-        obitExtra = CG_ObituaryExtra(target, attacker, mod);
+        obitExtra = CG_ObituaryMark(target, attacker, mod);
         obitAttacker = attacker;
         obitMod = mod;
-        CG_AddObituary(cgs.clientinfo[target].name, cgs.clientinfo[attacker].name,
+        // an assist goes next to the killer's name, as "killer + helper"
+        CG_AddObituary(cgs.clientinfo[target].name,
+                       (helper >= 0 && helper != attacker && !pushed)
+                           ? va("%s ^7+ %s", cgs.clientinfo[attacker].name, cgs.clientinfo[helper].name)
+                           : cgs.clientinfo[attacker].name,
                        victimTeam, attackerTeam, 1, weaponIcon);
         CG_SpecFollowKiller(attacker);
+    } else if (pushed && helper >= 0) {
+        // the map did the killing and someone had just hurt them: the line names who
+        obitExtra = "PUSHED";
+        obitAttacker = helper;
+        obitMod = mod;
+        CG_AddObituary(cgs.clientinfo[target].name, cgs.clientinfo[helper].name,
+                       victimTeam, cgs.clientinfo[helper].team, 1, weaponIcon);
     } else {
         // retail's adder copies the attacker name unconditionally, so it
         // never gets a NULL

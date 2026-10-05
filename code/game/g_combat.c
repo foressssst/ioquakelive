@@ -538,6 +538,49 @@ void PlayerAwardEF(gentity_t* self, int persIdx, int efBit) {
 
 /*
 ==================
+G_ObituaryHelper
+
+[ioquakelive] What the obituary says besides victim, killer and weapon, in a field Quake Live
+leaves at zero, so its own client reads the event as always. The low seven bits are a second
+player, as client number plus one, and the high bit says what they did:
+- clear: an assist, the enemy who hurt the victim most in the last six seconds, 25 at least
+- set: a push, the last enemy to hurt them in the five seconds before the map killed them
+The score is not touched: this is only what the feed shows.
+==================
+*/
+#define OBIT_ASSIST_MSEC 6000
+#define OBIT_PUSH_MSEC 5000
+#define OBIT_ASSIST_DAMAGE 25
+
+static int G_ObituaryHelper(gentity_t* self, int killer) {
+    gclient_t* cl = self->client;
+    int i, helper = -1, best = 0;
+    qboolean pushed = (killer == ENTITYNUM_WORLD) ? qtrue : qfalse;
+
+    for (i = 0; i < level.maxclients; i++) {
+        if (i == self->s.number || i == killer || !cl->hurtTime[i] || !g_entities[i].client ||
+            g_entities[i].client->pers.connected != CON_CONNECTED || OnSameTeam(self, &g_entities[i])) {
+            continue;
+        }
+        if (pushed) {
+            if (level.time - cl->hurtTime[i] < OBIT_PUSH_MSEC && cl->hurtTime[i] > best) {
+                best = cl->hurtTime[i];
+                helper = i;
+            }
+        } else if (level.time - cl->hurtTime[i] < OBIT_ASSIST_MSEC && cl->hurtDamage[i] >= OBIT_ASSIST_DAMAGE &&
+                   cl->hurtDamage[i] > best) {
+            best = cl->hurtDamage[i];
+            helper = i;
+        }
+    }
+    if (helper < 0) {
+        return 0;
+    }
+    return (helper + 1) | (pushed ? 0x80 : 0);
+}
+
+/*
+==================
 player_die
 ==================
 */
@@ -648,6 +691,7 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
         ent->s.otherEntityNum = self->s.number;
         ent->s.otherEntityNum2 = killer;
         ent->r.svFlags = SVF_BROADCAST;
+        ent->s.generic1 = G_ObituaryHelper(self, killer);
     }
 
     // 13. enemy / PERS_KILLED / death stat.  STAT_AddPlayerDeathStat does numKills/numDeaths/
@@ -1815,6 +1859,16 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
         client->lasthurt_mod[0] = mod;
         client->lasthurt_time[1] = client->lasthurt_time[0];
         client->lasthurt_time[0] = level.time;
+        // [ioquakelive] the damage each player did to this one in the last few seconds
+        if (attacker->client && attacker != targ) {
+            int from = attacker->s.number;
+
+            if (level.time - client->hurtTime[from] > OBIT_ASSIST_MSEC) {
+                client->hurtDamage[from] = 0;
+            }
+            client->hurtDamage[from] += damage;
+            client->hurtTime[from] = level.time;
+        }
         // [QL] flag regen on the target when the regen gamerules are enabled (binary 0x1004996f/0x1004997e):
         //      if (g_regenHealth.integer) client->healthRegenActive = 1;
         //      if (g_regenArmor.integer)  client->armorRegenActive  = 1;
