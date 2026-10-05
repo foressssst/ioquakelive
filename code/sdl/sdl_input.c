@@ -1362,6 +1362,7 @@ IN_Frame
 ===============
 */
 void IN_Frame(void) {
+    static qboolean menuPointerSeen;  // a menu has been told where the pointer is
     qboolean loading;
 
     IN_JoyMove();
@@ -1391,15 +1392,27 @@ void IN_Frame(void) {
         // so the pointer is passed as qfalse rather than the real mode.
         IN_DeactivateMouse(qfalse);
 
-        // The menu is told where the pointer is, every frame. Walking its cursor by relative
-        // moves left it a little away from the arrow the system draws -- clicks landed where
-        // the arrow was not -- and reading the position instead cannot drift: whatever the
-        // menu thought, the next frame puts it back under the arrow.
+        // The menu is told where the pointer is. Walking its cursor by relative moves left
+        // it a little away from the arrow the system draws -- clicks landed where the arrow
+        // was not -- and reading the position instead cannot drift. It is told when the
+        // pointer moves and when a menu comes up, as retail's mouse messages did, not every
+        // frame: where two items overlap the focus goes from one to the other on each
+        // report, and with the pointer at rest there the focus sound never stopped.
         if (SDL_GetMouseFocus() == SDL_window) {
+            static int lastX, lastY, lastCatcher = -1;
+            int catcher = Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CGAME);
             float mx, my;
 
             SDL_GetMouseState(&mx, &my);
-            Com_QueueEvent(in_eventTime, SE_MOUSE_ABS, (int)mx, (int)my, 0, NULL);
+            if ((int)mx != lastX || (int)my != lastY || catcher != lastCatcher || !menuPointerSeen) {
+                lastX = (int)mx;
+                lastY = (int)my;
+                lastCatcher = catcher;
+                menuPointerSeen = qtrue;
+                Com_QueueEvent(in_eventTime, SE_MOUSE_ABS, (int)mx, (int)my, 0, NULL);
+            }
+        } else {
+            menuPointerSeen = qfalse;
         }
     } else if (!cls.glconfig.isFullscreen && loading) {
         // Loading in windowed mode
