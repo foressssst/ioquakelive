@@ -158,7 +158,10 @@ void SNDDMA_Submit(void);
 
 //====================================================================
 
-#define MAX_CHANNELS 96
+// [ioquakelive] retail mixes 96 at once, and in a crowded fight they run out: a new sound then
+// takes over the oldest one of the same player, which is the lightning gun and the hit beeps
+// cutting out on a full server. Measured with 24 bots on a duel map.
+#define MAX_CHANNELS 256
 
 extern channel_t s_channels[MAX_CHANNELS];
 extern channel_t loop_channels[MAX_CHANNELS];

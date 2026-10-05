@@ -425,7 +425,9 @@ if origin is NULL, the sound will be dynamically sourced from the entity
 [QL] quakelive_steam.exe 0x4da050. A sound is only refused when the same entity already
 started the same sfx within the same millisecond; there is no limit on how many copies
 play at once. With no free channel it takes the oldest one of the same entity that is not
-an announcer channel, else the oldest world sound, else the sound is not played. The start
+an announcer channel, else the oldest world sound, else the sound is not played. Here the
+listener's own sounds first try the oldest one of somebody else, so they do not cut each
+other short. The start
 volume goes straight into both sides and holds until the next respatialize, which the
 listener's own sounds never get.
 ====================
@@ -472,10 +474,20 @@ static void S_Base_StartSoundEx(vec3_t origin, int entityNum, int entchannel, sf
 
     ch = S_ChannelMalloc();
     if (!ch) {
-        for (i = 0; i < MAX_CHANNELS; i++) {
-            if (s_channels[i].entnum == entityNum && s_channels[i].entchannel != CHAN_ANNOUNCER &&
-                (!ch || s_channels[i].allocTime < ch->allocTime)) {
-                ch = &s_channels[i];
+        if (entityNum == listener_number) {
+            for (i = 0; i < MAX_CHANNELS; i++) {
+                if (s_channels[i].entnum != listener_number && s_channels[i].entchannel != CHAN_ANNOUNCER &&
+                    (!ch || s_channels[i].allocTime < ch->allocTime)) {
+                    ch = &s_channels[i];
+                }
+            }
+        }
+        if (!ch) {
+            for (i = 0; i < MAX_CHANNELS; i++) {
+                if (s_channels[i].entnum == entityNum && s_channels[i].entchannel != CHAN_ANNOUNCER &&
+                    (!ch || s_channels[i].allocTime < ch->allocTime)) {
+                    ch = &s_channels[i];
+                }
             }
         }
         if (!ch) {
