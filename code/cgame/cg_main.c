@@ -416,6 +416,7 @@ vmCvar_t cg_announcerTiesVO;
 vmCvar_t s_ambient;
 vmCvar_t s_announcerVolume;
 vmCvar_t s_killBeepVolume;
+vmCvar_t s_playSoundVolume;
 
 // [QL] weapon loadout/config cvars
 vmCvar_t cg_weaponConfig;
@@ -841,6 +842,8 @@ static cvarTable_t cvarTable[] = {
     {&s_ambient, "s_ambient", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_LATCH | CVAR_ARCHIVE},
     {&s_announcerVolume, "s_announcerVolume", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
     {&s_killBeepVolume, "s_killBeepVolume", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "4"},
+    // [ioquakelive] the sounds a server plays with playSound, which retail always plays in full
+    {&s_playSoundVolume, "s_playSoundVolume", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_ARCHIVE, "0", "2"},
 
     // [QL] weapon config cvars
     {&cg_weaponConfig, "cg_weaponConfig", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},

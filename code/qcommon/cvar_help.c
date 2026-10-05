@@ -311,6 +311,7 @@ static const cvarHelp_t cvarHelp[] = {
     {"cg_footsteps", "footstep sounds"},
     {"s_killBeepVolume", "volume of " HC("cg_killBeep")},
     {"s_announcerVolume", "volume of the announcer"},
+    {"s_playSoundVolume", "volume of the sounds a server plays on its own, like a plugin's; 0 turns them off"},
     {"s_ambient", "the maps' ambient sounds"},
 
     //

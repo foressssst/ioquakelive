@@ -1986,6 +1986,7 @@ extern vmCvar_t cg_useItemWarning;
 extern vmCvar_t cg_obituaryRowSize;
 extern vmCvar_t s_announcerVolume;
 extern vmCvar_t s_killBeepVolume;
+extern vmCvar_t s_playSoundVolume;
 
 // QL cvars (binary-verified from cgamex86.dll)
 extern vmCvar_t cg_chatbeep;

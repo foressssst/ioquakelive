@@ -2071,11 +2071,15 @@ static void CG_ServerCommand(void) {
         return;
     }
 
-    // [QL] 0x1004b369: playSound, a server-triggered local sound
+    // [QL] 0x1004b369: playSound, a server-triggered local sound. Retail plays it in full.
+    // The game's own are the Training Center's voice, in a local game, and those stay so;
+    // on a server they are a plugin's, and s_playSoundVolume turns them down, or off at 0
     if (!strcmp(cmd, "playSound")) {
         sfxHandle_t sfx = trap_S_RegisterSound(CG_Argv(1), qfalse);
-        if (sfx) {
-            trap_S_StartLocalSound(sfx, CHAN_LOCAL_SOUND);
+        float volume = cgs.localServer ? 1.0f : s_playSoundVolume.value;
+
+        if (sfx && volume > 0.0f) {
+            trap_S_StartLocalSoundVolume(sfx, CHAN_LOCAL_SOUND, volume);
         }
         return;
     }
