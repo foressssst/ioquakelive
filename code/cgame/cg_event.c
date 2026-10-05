@@ -168,6 +168,11 @@ everything from that row on is cleared, so only the newest rows remain.
 skip their fade-in, as in CPMA 1.53 (cgame.qvm func 158881).
 =============
 */
+// [ioquakelive] what CG_Obituary leaves for the next line that goes in
+static const char *obitExtra = "";
+static int obitAttacker = -1;
+static int obitMod;
+
 static void CG_AddObituary(const char *victimName, const char *attackerName,
                             int victimTeam, int attackerTeam,
                             int hasAttacker, qhandle_t weaponIcon) {
@@ -196,6 +201,13 @@ static void CG_AddObituary(const char *victimName, const char *attackerName,
     cg.obituaries[idx].attackerTeam = attackerTeam;
     cg.obituaries[idx].weaponIcon = weaponIcon;
     cg.obituaries[idx].time = cg.time;
+    Q_strncpyz(cg.obituaries[idx].extra, obitExtra, sizeof(cg.obituaries[idx].extra));
+    cg.obituaries[idx].attacker = obitAttacker;
+    cg.obituaries[idx].mod = obitMod;
+    cg.obituaries[idx].shotTime = cg.time;
+    obitExtra = "";
+    obitAttacker = -1;
+    obitMod = 0;
 
     if (cgs.gametype >= GT_TEAM) {
         CG_ObitStripColors(cg.obituaries[idx].attackerName);
@@ -298,6 +310,79 @@ static qboolean CG_Watching(void) {
 
 /*
 =============
+CG_ObituaryExtra
+
+[ioquakelive] The kills the feed marks, all worked out here from what any server sends:
+- one rail through several players: "x2", "x3"... on every line of that shot
+- a telefrag
+- a mid-air, by the rule of the server's own medal (g_combat.c): a direct rocket, grenade,
+  plasma, BFG or nail on someone off the ground, out of the water, with the 96 units of
+  g_midAirMinHeight clear below
+=============
+*/
+static qboolean CG_ObituaryIsRail(int mod) {
+    return (mod == MOD_RAILGUN || mod == MOD_RAILGUN_HEADSHOT) ? qtrue : qfalse;
+}
+
+static const char *CG_ObituaryExtra(int target, int attacker, int mod) {
+    static char multi[8];
+    int i, kills;
+
+    if (mod == MOD_TELEFRAG) {
+        return "TELEFRAG";
+    }
+
+    if (CG_ObituaryIsRail(mod)) {
+        kills = 1;
+        for (i = 0; i < MAX_OBITUARIES; i++) {
+            if (cg.obituaries[i].active && cg.obituaries[i].attacker == attacker &&
+                cg.obituaries[i].shotTime == cg.time && CG_ObituaryIsRail(cg.obituaries[i].mod)) {
+                kills++;
+            }
+        }
+        if (kills < 2) {
+            return "";
+        }
+        Com_sprintf(multi, sizeof(multi), "x%d", kills);
+        for (i = 0; i < MAX_OBITUARIES; i++) {
+            if (cg.obituaries[i].active && cg.obituaries[i].attacker == attacker &&
+                cg.obituaries[i].shotTime == cg.time && CG_ObituaryIsRail(cg.obituaries[i].mod)) {
+                Q_strncpyz(cg.obituaries[i].extra, multi, sizeof(cg.obituaries[i].extra));
+            }
+        }
+        return multi;
+    }
+
+    if (mod == MOD_GRENADE || mod == MOD_ROCKET || mod == MOD_PLASMA || mod == MOD_BFG || mod == MOD_NAIL) {
+        vec3_t origin, end;
+        trace_t tr;
+        int ground;
+
+        if (target == cg.snap->ps.clientNum) {
+            VectorCopy(cg.snap->ps.origin, origin);
+            ground = cg.snap->ps.groundEntityNum;
+        } else {
+            if (!cg_entities[target].currentValid) {
+                return "";
+            }
+            VectorCopy(cg_entities[target].lerpOrigin, origin);
+            ground = cg_entities[target].currentState.groundEntityNum;
+        }
+        if (ground != ENTITYNUM_NONE || (CG_PointContents(origin, -1) & MASK_WATER)) {
+            return "";
+        }
+        VectorCopy(origin, end);
+        end[2] -= 96.0f;
+        CG_Trace(&tr, origin, NULL, NULL, end, target, MASK_SOLID);
+        if (tr.fraction == 1.0f) {
+            return "MID-AIR";
+        }
+    }
+    return "";
+}
+
+/*
+=============
 CG_Obituary
 =============
 */
@@ -361,6 +446,9 @@ static void CG_Obituary(entityState_t* ent) {
     victimTeam = cgs.clientinfo[target].team;
     if (attacker >= 0 && attacker < MAX_CLIENTS && attacker != target) {
         attackerTeam = cgs.clientinfo[attacker].team;
+        obitExtra = CG_ObituaryExtra(target, attacker, mod);
+        obitAttacker = attacker;
+        obitMod = mod;
         CG_AddObituary(cgs.clientinfo[target].name, cgs.clientinfo[attacker].name,
                        victimTeam, attackerTeam, 1, weaponIcon);
         CG_SpecFollowKiller(attacker);
