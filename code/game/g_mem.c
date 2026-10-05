@@ -26,7 +26,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "g_local.h"
 
-#define POOLSIZE (256 * 1024)
+// [QL] qagamex86.dll 0x100516c4: retail's pool is 4 MB, sixteen times Quake 3's. Each bot takes
+// 9952 bytes of it for its state, so with the old 256 KB the server died around the twentieth bot
+#define POOLSIZE (4 * 1024 * 1024)
 
 static char memoryPool[POOLSIZE];
 static int allocPoint;
