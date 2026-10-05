@@ -427,6 +427,13 @@ void CL_KeyMove(usercmd_t* cmd) {
     side += movespeed * CL_KeyState(&in_moveright);
     side -= movespeed * CL_KeyState(&in_moveleft);
 
+    // [QL] quakelive_steam.exe 0x4b542f: the jump key is also a button, set and cleared here
+    if (in_up.active) {
+        cmd->buttons |= BUTTON_JUMP;
+    } else {
+        cmd->buttons &= ~BUTTON_JUMP;
+    }
+
     up += movespeed * CL_KeyState(&in_up);
     up -= movespeed * CL_KeyState(&in_down);
 
@@ -776,13 +783,14 @@ void CL_CmdButtons(usercmd_t* cmd) {
         in_buttons[i].wasPressed = qfalse;
     }
 
-    if (Key_GetCatcher()) {
+    // [QL] quakelive_steam.exe 0x4b5bd0: retail's catcher bit 0x10 counts for neither test
+    if (Key_GetCatcher() & ~0x10) {
         cmd->buttons |= BUTTON_TALK;
     }
 
     // allow the game to know if any key at all is
     // currently pressed, even if it isn't bound to anything
-    if (anykeydown && Key_GetCatcher() == 0) {
+    if (anykeydown && (Key_GetCatcher() & ~0x10) == 0) {
         cmd->buttons |= BUTTON_ANY;
     }
 }

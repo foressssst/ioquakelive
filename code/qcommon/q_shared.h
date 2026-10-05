@@ -1169,7 +1169,11 @@ typedef struct playerState_s {
 #define BUTTON_PATROL 512
 #define BUTTON_FOLLOWME 1024
 
-#define BUTTON_ANY 2048  // any key whatsoever
+// [QL] quakelive_steam.exe 0x4b542f and 0x4b5bd0: Quake 3 had "any key" on 2048. In Quake Live
+// that bit is the jump key while it is held, which is what sends a follower back to flying
+// free, and "any key" moved up one
+#define BUTTON_JUMP 2048
+#define BUTTON_ANY 4096  // any key whatsoever
 
 #define MOVE_RUN 120  // if forwardmove or rightmove are >= MOVE_RUN,
                       // then BUTTON_WALKING should be set

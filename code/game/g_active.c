@@ -400,10 +400,11 @@ void SpectatorThink(gentity_t* ent, usercmd_t* ucmd) {
     // to free-fly (StopFollowing, 0x10040d10), when they are a real spectator or when
     // team spectators are allowed a free camera (g_teamSpecFreeCam 1).
     //
-    // The test is on upmove rather than the bit because the bit means different things
+    // The test is on upmove rather than the bit because the bit meant different things
     // in the two engines: Quake Live's sets it from the jump key (0x004b542f, in_up),
-    // while ioquake3's sets it as BUTTON_ANY, "any key at all is down". The jump key's
-    // press edge, read from upmove, is the same trigger retail uses.
+    // while ioquake3's set it as BUTTON_ANY, "any key at all is down". Our client sends
+    // it as retail does now (BUTTON_JUMP), but one from before that would still drop out
+    // of follow on any key, so the jump key's press edge is read from upmove.
     if (jumpPressed &&
         (client->sess.sessionTeam == TEAM_SPECTATOR ||
          (g_teamSpecFreeCam.integer == 1 && client->sess.spectatorState == SPECTATOR_FOLLOW))) {
