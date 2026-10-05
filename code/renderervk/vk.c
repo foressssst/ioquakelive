@@ -584,6 +584,10 @@ static void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice devi
 
 	if ( verbose ) {
 		ri.Printf( PRINT_ALL, "...selected presentation mode: %s, image count: %i\n", pmode_to_str( present_mode ), image_count );
+		// [ioquakelive] which low latency path the card gave, so a log answers it
+		ri.Printf( PRINT_ALL, "...low latency: %s, r_lowLatency %i\n",
+			vk.lowLatency2 ? "Reflex (VK_NV_low_latency2)" : ( vk.antiLag ? "Anti-Lag 2 (VK_AMD_anti_lag)" : "not offered by the driver" ),
+			r_lowLatency->integer );
 	}
 
 	// create swap chain
