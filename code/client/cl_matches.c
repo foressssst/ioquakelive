@@ -167,7 +167,7 @@ static void CL_SaveMatchReport(const char* report, int len) {
                      (int)(JSON_ValueGetEnd(events, end) - events), "}", 1);
     }
 
-    f = FS_FOpenFileAppend("matches/index.txt");
+    f = FS_FOpenFileAppendQuiet("matches/index.txt");
     if (f) {
         FS_Write(guid, (int)strlen(guid), f);
         FS_Write("\n", 1, f);
@@ -207,7 +207,7 @@ void CL_MatchMedia(const char* path) {
     if (!i) {
         return;
     }
-    f = FS_FOpenFileAppend("matches/media.txt");
+    f = FS_FOpenFileAppendQuiet("matches/media.txt");
     if (f) {
         FS_Write(name, (int)strlen(name), f);
         FS_Write(" ", 1, f);

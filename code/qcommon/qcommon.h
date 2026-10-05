@@ -635,6 +635,7 @@ void FS_GetModDescription(const char* modDir, char* description, int description
 
 fileHandle_t FS_FOpenFileWrite(const char* qpath);
 fileHandle_t FS_FOpenFileAppend(const char* filename);
+fileHandle_t FS_FOpenFileAppendQuiet(const char* filename);  // without clearing the sound buffer
 fileHandle_t FS_FCreateOpenPipeFile(const char* filename);
 // will properly create any needed paths and deal with seperater character issues
 

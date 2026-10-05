@@ -921,11 +921,14 @@ fileHandle_t FS_FOpenFileWrite(const char* filename) {
 
 /*
 ===========
-FS_FOpenFileAppend
+FS_OpenAppend
 
+[QL] quakelive_steam.exe 0x4cf4d0 clears the sound buffer before opening the file, as Quake 3
+does, and that stops every sound that is playing. The client's own match records are written
+in the middle of a match, so they ask for it quiet.
 ===========
 */
-fileHandle_t FS_FOpenFileAppend(const char* filename) {
+static fileHandle_t FS_OpenAppend(const char* filename, qboolean quiet) {
 	char* ospath;
 	fileHandle_t f;
 
@@ -939,7 +942,9 @@ fileHandle_t FS_FOpenFileAppend(const char* filename) {
 	Q_strncpyz(fsh[f].name, filename, sizeof(fsh[f].name));
 
 	// don't let sound stutter
-	S_ClearSoundBuffer();
+	if (!quiet) {
+		S_ClearSoundBuffer();
+	}
 
 	ospath = FS_BuildOSPath(fs_homepath->string, fs_gamedir, filename);
 
@@ -959,6 +964,26 @@ fileHandle_t FS_FOpenFileAppend(const char* filename) {
 		f = 0;
 	}
 	return f;
+}
+
+/*
+===========
+FS_FOpenFileAppend
+
+===========
+*/
+fileHandle_t FS_FOpenFileAppend(const char* filename) {
+	return FS_OpenAppend(filename, qfalse);
+}
+
+/*
+===========
+FS_FOpenFileAppendQuiet
+
+===========
+*/
+fileHandle_t FS_FOpenFileAppendQuiet(const char* filename) {
+	return FS_OpenAppend(filename, qtrue);
 }
 
 /*
