@@ -644,7 +644,7 @@ void ClanArenaScoreboardMessage(gentity_t *ent) {
                     cl->ps.persistant[PERS_GAUNTLET_FRAG_COUNT],
                     perfect, alive);
         j = strlen(entry);
-        if (stringlength + j >= (int)sizeof(string))
+        if (stringlength + j > SCORES_LIST_ROOM)
             break;
         strcpy(string + stringlength, entry);
         stringlength += j;

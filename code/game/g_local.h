@@ -830,6 +830,14 @@ void G_StartKamikaze(gentity_t* ent);
 //
 // g_cmds.c
 //
+// [ioquakelive] how long the player list of a "scores_ca", "scores_ffa", "smscores" or
+// "scores_rr" may get. A server command of more than 1022 characters is dropped whole
+// (SV_SendServerCommand), and retail's own lists send nothing at all once they pass 1024
+// (qagamex86.dll 0x1003e34d): that is why a full server loses damage and accuracy until the map
+// ends. The list is cut where the command still fits, name and three numbers included; the
+// spectators come last in it, so the ones playing are the ones kept.
+#define SCORES_LIST_ROOM 990
+
 void FreeForAllScoreboardMessage(gentity_t* ent);   // "scores_ffa" (Ghidra: QL's FreeForAllScoreboardMessage; the Q3 name Deathmatch... is QL's info parser)
 int STAT_GetBestWeapon(gclient_t *cl);
 void FFAScoreboardMessage_impl(void);
