@@ -183,6 +183,7 @@ cvar_t* r_singleShader;
 cvar_t* r_roundImagesDown;
 cvar_t* r_colorMipLevels;
 cvar_t* r_picmip;
+cvar_t* r_picmipExplosions;
 cvar_t* r_showtris;
 cvar_t* r_showsky;
 cvar_t* r_shownormals;
@@ -1287,6 +1288,7 @@ void R_Register(void) {
 
     // [QL] full texture detail by default
     r_picmip = ri.Cvar_Get("r_picmip", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_REPLICATE | CVAR_USERSAVE);
+    r_picmipExplosions = ri.Cvar_Get("r_picmipExplosions", "0", CVAR_ARCHIVE | CVAR_LATCH);
     r_roundImagesDown = ri.Cvar_Get("r_roundImagesDown", "1", CVAR_ARCHIVE | CVAR_LATCH);
     r_colorMipLevels = ri.Cvar_Get("r_colorMipLevels", "0", CVAR_LATCH);
     ri.Cvar_CheckRange(r_picmip, 0, 16, qtrue);

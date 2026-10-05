@@ -1728,6 +1728,7 @@ extern cvar_t* r_singleShader;  // make most world faces use default shader
 extern cvar_t* r_roundImagesDown;
 extern cvar_t* r_colorMipLevels;  // development aid to see texture mip usage
 extern cvar_t* r_picmip;          // controls picmip values
+extern cvar_t* r_picmipExplosions;
 extern cvar_t* r_finish;
 // [ioquakelive] the cap on frames queued on the GPU; 0 drains the pipeline as before
 extern cvar_t* r_maxQueuedFrames;

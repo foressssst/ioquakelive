@@ -883,6 +883,7 @@ static const cvarHelp_t cvarHelp[] = {
     {"r_intensity", "brightness factor of textures"},
     {"r_greyscale", "takes the colour out of the picture: 0 is colour, 1 grey"},
     {"r_picmip", "texture detail: 0 is full, each step halves the textures"},
+    {"r_picmipExplosions", "the rocket and grenade explosions take r_picmip, as they did in Quake 3; with a high r_picmip they show as blurred blocks"},
     {"r_texturebits", "texture colour depth: 0 for the default, 16 or 32"},
     {"r_textureMode", "texture filtering\n"
                       HV("GL_NEAREST_MIPMAP_NEAREST") "None\n"

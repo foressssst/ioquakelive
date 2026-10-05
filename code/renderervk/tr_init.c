@@ -141,6 +141,7 @@ cvar_t	*r_singleShader;
 cvar_t	*r_roundImagesDown;
 cvar_t	*r_colorMipLevels;
 cvar_t	*r_picmip;
+cvar_t	*r_picmipExplosions;
 cvar_t	*r_nomip;
 cvar_t	*r_showtris;
 cvar_t	*r_showsky;
@@ -1580,6 +1581,7 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_vertexLight, "Set to 1 to use vertex light instead of lightmaps, collapse all multi-stage shaders into single-stage ones, might cause rendering artifacts." );
 
 	r_picmip = ri.Cvar_Get( "r_picmip", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_REPLICATE | CVAR_USERSAVE );
+	r_picmipExplosions = ri.Cvar_Get( "r_picmipExplosions", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	RI_Cvar_CheckRange( r_picmip, "0", "16", CV_INTEGER );
 	ri.Cvar_SetDescription( r_picmip, "Set texture quality, lower is better." );
 

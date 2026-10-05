@@ -1661,7 +1661,12 @@ static qboolean ParseShader(char** text) {
         }
         // no picmip adjustment
         else if (!Q_stricmp(token, "nopicmip")) {
-            shader.noPicMip = qtrue;
+            // [ioquakelive] Quake 3's rocket and grenade explosions had no nopicmip, and with a
+            // high r_picmip they were blurred blocks: r_picmipExplosions lets them be that again
+            if (!r_picmipExplosions->integer ||
+                (Q_stricmp(shader.name, "rocketExplosion") && Q_stricmp(shader.name, "grenadeExplosion"))) {
+                shader.noPicMip = qtrue;
+            }
             continue;
         }
         // polygonOffset
