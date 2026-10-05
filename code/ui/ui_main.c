@@ -5894,6 +5894,11 @@ void UI_DrawConnectScreen(qboolean overlay) {
         Text_PaintCenter(centerPoint, yStart + 80, scale, colorWhite, s, 0);
     }
 
+    // [QL] uix86.dll 0x100111ef: the way out, for as long as it is still connecting
+    if (cstate.connState <= CA_CONNECTED) {
+        Text_PaintCenter(centerPoint, 440, scale, colorWhite, "Press ESC to cancel", 0);
+    }
+
     // password required / connection rejected information goes here
 }
 
