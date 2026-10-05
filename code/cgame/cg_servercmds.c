@@ -1004,6 +1004,12 @@ void CG_SetConfigValues(void) {
         Q_strncpyz(cgs.name2ndPlayer, CG_ConfigString(CS_NAME2NDPLAYER), sizeof(cgs.name2ndPlayer));
     }
     cgs.levelStartTime = atoi(CG_ConfigString(CS_LEVEL_START_TIME));
+    // [QL] binary 0x100495c5: the players left on each team are seeded too, in the team games,
+    // so someone who joins in the middle of a round does not read zero until the next death
+    if (cgs.gametype >= GT_TEAM) {
+        cgs.teamCountRed = atoi(CG_ConfigString(CS_TEAMCOUNT_RED));
+        cgs.teamCountBlue = atoi(CG_ConfigString(CS_TEAMCOUNT_BLUE));
+    }
     // [QL] custom-settings bitmask (drives the RR-infected bones model), wallbang depth,
     // and the capsule-hull flag for client-side hit prediction
     cgs.customSettings = atoi(CG_ConfigString(CS_CUSTOM_SETTINGS));
