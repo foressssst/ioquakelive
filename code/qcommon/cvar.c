@@ -39,19 +39,23 @@ static cvar_t* hashTable[FILE_HASH_SIZE];
 ================
 Cvar_ComputeNumeric
 
-[QL] Fill var->value / var->integer from var->string. A leading "0x"/"0X" is
-parsed as hex, so packed-colour cvars (cg_enemyLowerColor "0x2a8000FF",
-cg_screenDamage, cg_deadBodyColor, ...) carry the packed value in .integer the
-way the shipped engine does. Everything else stays plain decimal - the prefix
-test avoids strtol's octal handling for leading-zero decimals.
+[QL] quakelive_steam.exe 0x4ce0d0, 0x4cdd30 and 0x4cccc0: fill var->value / var->integer from
+var->string. The integer is atoi, unless the string has "0x" anywhere in it: then it is read as
+hex from the start, and stays 0 when the string does not start with it. That packs the colour
+cvars (cg_enemyLowerColor "0x2a8000FF", cg_screenDamage, cg_deadBodyColor, ...) into .integer,
+and it is also why com_maxfps "250x" passes the range as 250 but leaves the integer at 0, which
+is no frame cap at all: players set it that way to hand the cap to the driver or to RTSS.
 ================
 */
 static void Cvar_ComputeNumeric(cvar_t* var) {
     const char* s = var->string;
 
-    if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X') && s[2] != '\0') {
-        var->integer = (int)strtoul(s, NULL, 16);
-        var->value = (float)var->integer;
+    if (strstr(s, "0x")) {
+        unsigned int packed = 0;
+
+        sscanf(s, "0x%08x", &packed);
+        var->integer = (int)packed;
+        var->value = (s[0] == '0' && s[1] == 'x') ? (float)var->integer : atof(s);
     } else {
         var->value = atof(s);
         var->integer = atoi(s);
