@@ -1836,6 +1836,9 @@ void UI_BuildPlayerList(void) {
         if (info[0]) {
             Q_strncpyz(uiInfo.playerNames[uiInfo.playerCount], Info_ValueForKey(info, "n"), MAX_NAME_LENGTH);
             Q_CleanStr(uiInfo.playerNames[uiInfo.playerCount]);
+            // [QL] 0x10008d2e: the player list selects by this index, and the admin menu's
+            // actions need the client it stands for
+            uiInfo.clientNums[uiInfo.playerCount] = n;
             uiInfo.playerCount++;
             team2 = atoi(Info_ValueForKey(info, "t"));
             if (team2 == team) {
@@ -3583,72 +3586,72 @@ static void UI_RunMenuScript(char** args) {
         } else if (Q_stricmp(name, "clientViewProfile") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("clientviewprofile %i\n",
-                    uiInfo.teamClientNums[uiInfo.playerIndex]));
+                    uiInfo.clientNums[uiInfo.playerIndex]));
             }
         } else if (Q_stricmp(name, "clientFriendInvite") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("clientfriendinvite %i\n",
-                    uiInfo.teamClientNums[uiInfo.playerIndex]));
+                    uiInfo.clientNums[uiInfo.playerIndex]));
             }
         } else if (Q_stricmp(name, "clientMutePlayer") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("clientmute %i\n",
-                    uiInfo.teamClientNums[uiInfo.playerIndex]));
+                    uiInfo.clientNums[uiInfo.playerIndex]));
             }
         } else if (Q_stricmp(name, "modPlayer") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("addmod %i\n",
-                    uiInfo.teamClientNums[uiInfo.playerIndex]));
+                    uiInfo.clientNums[uiInfo.playerIndex]));
             }
         } else if (Q_stricmp(name, "adminPlayer") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("addadmin %i\n",
-                    uiInfo.teamClientNums[uiInfo.playerIndex]));
+                    uiInfo.clientNums[uiInfo.playerIndex]));
             }
         } else if (Q_stricmp(name, "deopPlayer") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("demote %i\n",
-                    uiInfo.teamClientNums[uiInfo.playerIndex]));
+                    uiInfo.clientNums[uiInfo.playerIndex]));
             }
         } else if (Q_stricmp(name, "putred") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("put %i r\n",
-                    uiInfo.teamClientNums[uiInfo.playerIndex]));
+                    uiInfo.clientNums[uiInfo.playerIndex]));
             }
         } else if (Q_stricmp(name, "putblue") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("put %i b\n",
-                    uiInfo.teamClientNums[uiInfo.playerIndex]));
+                    uiInfo.clientNums[uiInfo.playerIndex]));
             }
         } else if (Q_stricmp(name, "putspec") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("put %i s\n",
-                    uiInfo.teamClientNums[uiInfo.playerIndex]));
+                    uiInfo.clientNums[uiInfo.playerIndex]));
             }
         } else if (Q_stricmp(name, "mutePlayer") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("mute %i\n",
-                    uiInfo.teamClientNums[uiInfo.playerIndex]));
+                    uiInfo.clientNums[uiInfo.playerIndex]));
             }
         } else if (Q_stricmp(name, "unmutePlayer") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("unmute %i\n",
-                    uiInfo.teamClientNums[uiInfo.playerIndex]));
+                    uiInfo.clientNums[uiInfo.playerIndex]));
             }
         } else if (Q_stricmp(name, "tempbanPlayer") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("tempban %i\n",
-                    uiInfo.teamClientNums[uiInfo.playerIndex]));
+                    uiInfo.clientNums[uiInfo.playerIndex]));
             }
         } else if (Q_stricmp(name, "banPlayer") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("ban %i\n",
-                    uiInfo.teamClientNums[uiInfo.playerIndex]));
+                    uiInfo.clientNums[uiInfo.playerIndex]));
             }
         } else if (Q_stricmp(name, "kickPlayer") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("clientkick %i\n",
-                    uiInfo.teamClientNums[uiInfo.playerIndex]));
+                    uiInfo.clientNums[uiInfo.playerIndex]));
             }
         } else if (Q_stricmp(name, "teamModelChanged") == 0) {
             // [QL] Force team model preview to refresh
