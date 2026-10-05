@@ -2540,8 +2540,12 @@ static void CG_DrawEnemyPlyrCount(rectDef_t *rect, float scale, vec4_t color, in
     CG_OwnerDrawText(rect->x, rect->y, scale, color, va("%d", count), 0, 0, textStyle);
 }
 
-// [QL] Server settings display
-// [QL] Vote display helpers
+static float CG_OwnerDrawAlignX(rectDef_t *rect, const char *s, float scale, int align);
+
+// [QL] the map vote at the end of a match (ui/endgamevote.menu). Its three options are in
+// CS_ROTATIONMAPS as map_N, title_N and gt_N, and every text is aligned the way its item asks.
+
+// [QL] 0x10035790: the picture is the preview levelshot, "default" for a map without a name
 static void CG_DrawVoteMapShot(rectDef_t *rect, int index, qhandle_t shader) {
     const char *info = CG_ConfigString(CS_ROTATIONMAPS);
     const char *mapname;
@@ -2550,39 +2554,29 @@ static void CG_DrawVoteMapShot(rectDef_t *rect, int index, qhandle_t shader) {
 
     Com_sprintf(key, sizeof(key), "map_%d", index);
     mapname = Info_ValueForKey(info, key);
-    if (mapname && mapname[0]) {
-        pic = trap_R_RegisterShaderNoMip(va("levelshots/%s", mapname));
-        if (!pic) pic = trap_R_RegisterShaderNoMip("levelshots/preview/default");
-        if (pic) CG_DrawPic(rect->x, rect->y, rect->w, rect->h, pic);
+    if (!mapname[0]) {
+        mapname = "default";
     }
+    pic = trap_R_RegisterShaderNoMip(va("levelshots/preview/%s", mapname));
+    CG_DrawPic(rect->x, rect->y, rect->w, rect->h, pic);
 }
 
-static void CG_DrawVoteMapName(rectDef_t *rect, float scale, vec4_t color, int textStyle, int index) {
+// [QL] 0x10035660 (title_N) and 0x100355d0 (map_N): one value of the options, aligned
+static void CG_DrawVoteMapValue(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, const char *field, int index) {
     const char *info = CG_ConfigString(CS_ROTATIONMAPS);
-    const char *title;
-    char key[16];
+    const char *value;
 
-    Com_sprintf(key, sizeof(key), "title_%d", index);
-    title = Info_ValueForKey(info, key);
-    if (!title || !title[0]) {
-        Com_sprintf(key, sizeof(key), "map_%d", index);
-        title = Info_ValueForKey(info, key);
-    }
-    if (title && title[0]) {
-        CG_OwnerDrawText(rect->x, rect->y, scale, color, title, 0, 0, textStyle);
-    }
+    value = Info_ValueForKey(info, va("%s_%d", field, index));
+    CG_DrawText(CG_OwnerDrawAlignX(rect, value, scale, align), rect->y, 0, scale, color, value, 0, 0, textStyle);
 }
 
-static void CG_DrawVoteGameType(rectDef_t *rect, float scale, vec4_t color, int textStyle, int index) {
+// [QL] 0x100356f0: the game type sits 8 units above its item's line
+static void CG_DrawVoteGameType(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int index) {
     const char *info = CG_ConfigString(CS_ROTATIONMAPS);
     const char *gt;
-    char key[8];
 
-    Com_sprintf(key, sizeof(key), "gt_%d", index);
-    gt = Info_ValueForKey(info, key);
-    if (gt && gt[0]) {
-        CG_OwnerDrawText(rect->x, rect->y, scale, color, gt, 0, 0, textStyle);
-    }
+    gt = Info_ValueForKey(info, va("gt_%d", index));
+    CG_DrawText(CG_OwnerDrawAlignX(rect, gt, scale, align), rect->y - 8.0f, 0, scale, color, gt, 0, 0, textStyle);
 }
 
 
@@ -4515,17 +4509,22 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             CG_DrawMapName(&rect, scale, color, textStyle);
             break;
         case CG_VOTEGAMETYPE1:              // 0x13-0x15  CG_DrawVoteGameType
-            CG_DrawVoteGameType(&rect, scale, color, textStyle, 0);
+            CG_DrawVoteGameType(&rect, scale, color, textStyle, align, 0);
             break;
         case CG_VOTEGAMETYPE2:
-            CG_DrawVoteGameType(&rect, scale, color, textStyle, 1);
+            CG_DrawVoteGameType(&rect, scale, color, textStyle, align, 1);
             break;
         case CG_VOTEGAMETYPE3:
-            CG_DrawVoteGameType(&rect, scale, color, textStyle, 2);
+            CG_DrawVoteGameType(&rect, scale, color, textStyle, align, 2);
             break;
-        case CG_VOTEMAP1:                   // 0x16-0x18  CG_Draw1stPlyrInfoValue
-        case CG_VOTEMAP2:                   //   (duel selected-player info; no data source)
+        case CG_VOTEMAP1:                   // 0x16-0x18  the option's map name
+            CG_DrawVoteMapValue(&rect, scale, color, textStyle, align, "map", 0);
+            break;
+        case CG_VOTEMAP2:
+            CG_DrawVoteMapValue(&rect, scale, color, textStyle, align, "map", 1);
+            break;
         case CG_VOTEMAP3:
+            CG_DrawVoteMapValue(&rect, scale, color, textStyle, align, "map", 2);
             break;
         case CG_VOTESHOT1:                  // 0x19-0x1b  CG_DrawVoteMapShot
             CG_DrawVoteMapShot(&rect, 0, shader);
@@ -4536,14 +4535,14 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_VOTESHOT3:
             CG_DrawVoteMapShot(&rect, 2, shader);
             break;
-        case CG_VOTENAME1:                  // 0x1c-0x1e  CG_Draw2ndPlyrInfoValue
-            CG_DrawVoteMapName(&rect, scale, color, textStyle, 0);
+        case CG_VOTENAME1:                  // 0x1c-0x1e  the option's title
+            CG_DrawVoteMapValue(&rect, scale, color, textStyle, align, "title", 0);
             break;
         case CG_VOTENAME2:
-            CG_DrawVoteMapName(&rect, scale, color, textStyle, 1);
+            CG_DrawVoteMapValue(&rect, scale, color, textStyle, align, "title", 1);
             break;
         case CG_VOTENAME3:
-            CG_DrawVoteMapName(&rect, scale, color, textStyle, 2);
+            CG_DrawVoteMapValue(&rect, scale, color, textStyle, align, "title", 2);
             break;
         case CG_VOTECOUNT1:                 // 0x1f-0x21
         case CG_VOTECOUNT2:
