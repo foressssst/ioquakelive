@@ -589,6 +589,7 @@ typedef struct {
 	VkPipeline gamma_pipeline;
 	VkPipeline gamma_neutral_pipeline;	// [ioquakelive] for a frame without the world
 	VkPipeline capture_pipeline;
+	VkPipeline capture_neutral_pipeline;	// [ioquakelive] for a frame without the world
 	VkPipeline bloom_extract_pipeline;
 	VkPipeline blur_pipeline[VK_NUM_BLOOM_PASSES*2]; // horizontal & vertical pairs
 	// [QL] Quake Live's bloom: its bright pass and the light it lays over the scene, plus the

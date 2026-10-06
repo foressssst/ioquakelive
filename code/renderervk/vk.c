@@ -3332,6 +3332,7 @@ void vk_update_post_process_pipelines( void )
 		if ( vk.capture.image ) {
 			// update capture pipeline
 			vk_create_post_process_pipeline( 3, gls.captureWidth, gls.captureHeight );
+			vk_create_post_process_pipeline( 9, gls.captureWidth, gls.captureHeight );
 		}
 		if ( vk_bloom_wanted() ) {
 			// update bloom shaders
@@ -4697,6 +4698,10 @@ static void vk_destroy_pipelines( qboolean resetCounter )
 		qvkDestroyPipeline( vk.device, vk.capture_pipeline, NULL );
 		vk.capture_pipeline = VK_NULL_HANDLE;
 	}
+	if ( vk.capture_neutral_pipeline ) {
+		qvkDestroyPipeline( vk.device, vk.capture_neutral_pipeline, NULL );
+		vk.capture_neutral_pipeline = VK_NULL_HANDLE;
+	}
 
 	if ( vk.bloom_extract_pipeline != VK_NULL_HANDLE ) {
 		qvkDestroyPipeline( vk.device, vk.bloom_extract_pipeline, NULL );
@@ -5439,6 +5444,15 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 			pipeline_name = "neutral gamma pipeline";
 			blend = qfalse;
 			break;
+		case 9: // [ioquakelive] the capture of a frame without the world, through the neutral pass
+			pipeline = &vk.capture_neutral_pipeline;
+			fsmodule = vk.modules.gamma_fs;
+			renderpass = vk.render_pass.capture;
+			layout = vk.pipeline_layout_post_process;
+			samples = VK_SAMPLE_COUNT_1_BIT;
+			pipeline_name = "neutral capture buffer pipeline";
+			blend = qfalse;
+			break;
 		case 3: // capture buffer extraction
 			pipeline = &vk.capture_pipeline;
 			fsmodule = vk.modules.gamma_fs;
@@ -5488,7 +5502,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 		frag_spec_data.contrast = 1.0f;
 	}
 	frag_spec_data.greyscale = r_greyscale->value;
-	if ( program_index == 8 ) {
+	if ( program_index == 8 || program_index == 9 ) {
 		// [ioquakelive] no gamma, contrast or grey: only what the 2D colours lost to identityLight
 		frag_spec_data.gamma = 1.0f;
 		frag_spec_data.overbright = 1.0f / tr.identityLight;
@@ -7872,7 +7886,8 @@ void vk_end_frame( void )
 
 			// render to capture FBO
 			vk_begin_render_pass( vk.render_pass.capture, vk.framebuffers.capture, qfalse, gls.captureWidth, gls.captureHeight );
-			qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.capture_pipeline );
+			qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+				( !tr.frameHasWorld && vk.capture_neutral_pipeline ) ? vk.capture_neutral_pipeline : vk.capture_pipeline );
 			qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.color_descriptor, 0, NULL );
 
 			qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
