@@ -320,7 +320,6 @@ typedef struct bot_state_s {
     float dodgeTurnTime;        // when it turns next on its own
     float dodgeHitTime;         // when it turns because it was hit, 0 when not hit
     float dodgeJumpTime;        // when it jumps next
-    float dodgeRadial;          // how much it drifts toward or away from the player
 } bot_state_t;
 
 // resets the whole bot state

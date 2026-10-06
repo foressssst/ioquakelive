@@ -3919,24 +3919,16 @@ void AIEnter_DodgeTrainer(bot_state_t* bs) {
     bs->dodgeRunStart = FloatTime();
     bs->dodgeTurnTime = FloatTime() + 0.3f;
     bs->dodgeHitTime = 0;
-    bs->dodgeJumpTime = FloatTime() + 1.0f + random();
-    bs->dodgeRadial = 0;
+    bs->dodgeJumpTime = FloatTime() + 8.0f + random() * 8.0f;
     BotRecordNodeSwitch(bs, "dodge trainer", "", "");
 }
 
-// across the line to the player, inside the lightning gun's reach, and back toward home
-static void BotDodgeDirection(bot_state_t* bs, const vec3_t toHuman, float dist, vec3_t dir) {
+// left or right of the player, never toward or away from it, and back toward home
+static void BotDodgeDirection(bot_state_t* bs, const vec3_t toHuman, vec3_t dir) {
     vec3_t home;
     float away;
 
     VectorSet(dir, -toHuman[1] * bs->dodgeDir, toHuman[0] * bs->dodgeDir, 0);
-    if (dist < 200) {
-        VectorMA(dir, -0.7f, toHuman, dir);
-    } else if (dist > 600) {
-        VectorMA(dir, 0.7f, toHuman, dir);
-    } else {
-        VectorMA(dir, bs->dodgeRadial, toHuman, dir);
-    }
     VectorSubtract(bs->dodgeAnchor, bs->origin, home);
     home[2] = 0;
     away = VectorNormalize(home);
@@ -3979,7 +3971,6 @@ int AINode_DodgeTrainer(bot_state_t* bs) {
     gentity_t* ent = &g_entities[bs->client];
     int human = G_TrainingHumanClient();
     float now = FloatTime();
-    float dist;
     vec3_t toHuman, dir;
     qboolean hit;
 
@@ -4030,7 +4021,7 @@ int AINode_DodgeTrainer(bot_state_t* bs) {
     VectorSubtract(g_entities[human].r.currentOrigin, bs->origin, toHuman);
     vectoangles(toHuman, bs->ideal_viewangles);
     toHuman[2] = 0;
-    dist = VectorNormalize(toHuman);
+    VectorNormalize(toHuman);
 
     // it turns on its own clock, with a short juke now and then, and a moment after a hit
     if (hit && !bs->dodgeHitTime) {
@@ -4041,16 +4032,15 @@ int AINode_DodgeTrainer(bot_state_t* bs) {
         bs->dodgeRunStart = now;
         bs->dodgeTurnTime = now + (random() < 0.3f ? 0.1f + random() * 0.15f : 0.25f + random() * 0.5f);
         bs->dodgeHitTime = 0;
-        bs->dodgeRadial = crandom() * 0.35f;
     }
 
     // a wall or a drop that way turns it round; with both ways shut it heads home
-    BotDodgeDirection(bs, toHuman, dist, dir);
+    BotDodgeDirection(bs, toHuman, dir);
     if (!BotDodgeClear(bs, dir)) {
         bs->dodgeDir = -bs->dodgeDir;
         bs->dodgeRunStart = now;
         bs->dodgeTurnTime = now + 0.25f + random() * 0.5f;
-        BotDodgeDirection(bs, toHuman, dist, dir);
+        BotDodgeDirection(bs, toHuman, dir);
         if (!BotDodgeClear(bs, dir)) {
             VectorSubtract(bs->dodgeAnchor, bs->origin, dir);
             dir[2] = 0;
@@ -4063,7 +4053,7 @@ int AINode_DodgeTrainer(bot_state_t* bs) {
         if (bs->cur_ps.groundEntityNum != ENTITYNUM_NONE) {
             trap_EA_Jump(bs->client);
         }
-        bs->dodgeJumpTime = now + 0.6f + random() * 1.8f;
+        bs->dodgeJumpTime = now + 8.0f + random() * 8.0f;  // now and then, not as a habit
     }
     return qtrue;
 }
