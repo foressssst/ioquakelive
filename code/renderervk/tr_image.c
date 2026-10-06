@@ -608,7 +608,10 @@ static void generate_image_upload_data( image_t *image, byte *data, Image_Upload
 
 	Com_Memset( upload_data, 0, sizeof( *upload_data ) );
 
-	if ( image->flags & IMGFLAG_NOSCALE ) {
+	// [QL] 0x4452f0: an image without mipmaps keeps its size, as the OpenGL renderer does; rounded
+	// down to a power of two, the front end's 62x62 icons became 32x32 and its 1920x1080 levelshots
+	// 1024x512, stretched back when drawn
+	if ( ( image->flags & IMGFLAG_NOSCALE ) || !mipmap ) {
 		//
 		// keep original dimensions
 		//
