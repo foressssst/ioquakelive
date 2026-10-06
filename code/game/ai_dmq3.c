@@ -5356,7 +5356,12 @@ void BotDeathmatchAI(bot_state_t* bs, float thinktime) {
     // (Retail also has a bot_gauntletOnly node at ltgtype 19 and a bot_training 3 node
     // at 20, which no training map reaches and which are not ported.)
     if (!BotIntermission(bs) && !BotIsObserver(bs) && !BotIsDead(bs)) {
-        if ((bot_training.integer == 1 || bot_training.integer == 2) && bs->ltgtype != LTG_TRAINING) {
+        // [ioquakelive] the advanced training room's bot only dodges
+        if (g_advancedTraining.integer == 1) {
+            if (bs->ltgtype != LTG_DODGETRAINER) {
+                AIEnter_DodgeTrainer(bs);
+            }
+        } else if ((bot_training.integer == 1 || bot_training.integer == 2) && bs->ltgtype != LTG_TRAINING) {
             AIEnter_Training(bs);
         } else if (bot_followMe.integer && bs->ltgtype != LTG_FOLLOWME) {
             AIEnter_FollowMe(bs);

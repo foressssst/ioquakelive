@@ -67,6 +67,8 @@ void AIEnter_Training(bot_state_t* bs);
 int AINode_Training(bot_state_t* bs);
 void AIEnter_FollowMe(bot_state_t* bs);
 int AINode_FollowMe(bot_state_t* bs);
+void AIEnter_DodgeTrainer(bot_state_t* bs);
+int AINode_DodgeTrainer(bot_state_t* bs);
 
 void BotResetNodeSwitches(void);
 void BotDumpNodeSwitches(bot_state_t* bs);

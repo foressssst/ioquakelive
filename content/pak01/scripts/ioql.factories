@@ -1,0 +1,25 @@
+[
+	{
+		"id": "_lgtrack",
+		"title": "LG Tracking",
+		"author": "ioquakelive",
+		"description": "Lightning gun tracking against a bot that only dodges.",
+		"basegt": "ffa",
+		"cvars": {
+			"timelimit": "0",
+			"fraglimit": "0",
+			"g_overtime": "0",
+			"g_doWarmup": "0",
+			"g_infiniteAmmo": "1",
+			"practiceflags": "1",
+			"g_startingWeapons": "33",
+			"dmflags": "28",
+			"g_voteFlags": "2048",
+			"bot_nochat": "1",
+			"bot_thinktime": "50",
+			"g_advancedTraining": "1",
+			"g_trainingSpawn": "808 664 -128 225",
+			"g_trainingTarget": "600 400 -190"
+		}
+	}
+]

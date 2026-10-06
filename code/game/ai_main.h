@@ -61,6 +61,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // [QL] qagamex86.dll BotDeathmatchAI (0x1001f29e) keys its extra nodes by these
 #define LTG_FOLLOWME 16      // AIEnter_FollowMe 0x1000ecc0 (bot_followMe)
 #define LTG_TRAINING 18      // AIEnter_Training 0x1000f880 (bot_training 1 or 2)
+#define LTG_DODGETRAINER 22  // [ioquakelive] AIEnter_DodgeTrainer (g_advancedTraining 1)
 // some goal dedication times
 #define TEAM_HELP_TIME 60              // 1 minute teamplay help time
 #define TEAM_ACCOMPANY_TIME 600        // 10 minutes teamplay accompany time
@@ -312,6 +313,14 @@ typedef struct bot_state_s {
     int tourSavedLookSet;       // 0x24fc
     int tourGoBack;             // 0x2500 the tour may go back for the player
     int nodeEnterTime;          // 0x23c8 (int)floattime of the last move, follow-me's idle clock
+    // [ioquakelive] AINode_DodgeTrainer
+    vec3_t dodgeAnchor;         // where it spawned, the middle of its ground
+    int dodgeDir;               // strafing left (1) or right (-1) of the player
+    float dodgeRunStart;        // when it last turned
+    float dodgeTurnTime;        // when it turns next on its own
+    float dodgeHitTime;         // when it turns because it was hit, 0 when not hit
+    float dodgeJumpTime;        // when it jumps next
+    float dodgeRadial;          // how much it drifts toward or away from the player
 } bot_state_t;
 
 // resets the whole bot state

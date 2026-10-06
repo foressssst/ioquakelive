@@ -3898,3 +3898,172 @@ int AINode_FollowMe(bot_state_t* bs) {
     }
     return qtrue;
 }
+
+/*
+===============
+AIEnter_DodgeTrainer
+
+[ioquakelive] g_advancedTraining 1, the lightning gun room: the bot holds the gauntlet, never
+attacks, never goes down, and dodges around where it spawned as well as it can
+===============
+*/
+#define DODGE_HEALTH 9999
+#define DODGE_LEASH 240.0f
+
+void AIEnter_DodgeTrainer(bot_state_t* bs) {
+    bs->ltgtype = LTG_DODGETRAINER;
+    bs->ainode = AINode_DodgeTrainer;
+    bs->enemy = -1;
+    VectorCopy(bs->origin, bs->dodgeAnchor);
+    bs->dodgeDir = random() < 0.5f ? 1 : -1;
+    bs->dodgeRunStart = FloatTime();
+    bs->dodgeTurnTime = FloatTime() + 0.3f;
+    bs->dodgeHitTime = 0;
+    bs->dodgeJumpTime = FloatTime() + 1.0f + random();
+    bs->dodgeRadial = 0;
+    BotRecordNodeSwitch(bs, "dodge trainer", "", "");
+}
+
+// across the line to the player, inside the lightning gun's reach, and back toward home
+static void BotDodgeDirection(bot_state_t* bs, const vec3_t toHuman, float dist, vec3_t dir) {
+    vec3_t home;
+    float away;
+
+    VectorSet(dir, -toHuman[1] * bs->dodgeDir, toHuman[0] * bs->dodgeDir, 0);
+    if (dist < 200) {
+        VectorMA(dir, -0.7f, toHuman, dir);
+    } else if (dist > 600) {
+        VectorMA(dir, 0.7f, toHuman, dir);
+    } else {
+        VectorMA(dir, bs->dodgeRadial, toHuman, dir);
+    }
+    VectorSubtract(bs->dodgeAnchor, bs->origin, home);
+    home[2] = 0;
+    away = VectorNormalize(home);
+    if (away > DODGE_LEASH) {
+        VectorMA(dir, MIN((away - DODGE_LEASH) / 60.0f, 2.0f), home, dir);
+    }
+    dir[2] = 0;
+    VectorNormalize(dir);
+}
+
+// a step that way stays off the walls, on its own floor, out of lava and slime, and does not
+// take it further out than its ground
+static qboolean BotDodgeClear(bot_state_t* bs, const vec3_t dir) {
+    gentity_t* ent = &g_entities[bs->client];
+    vec3_t end, down;
+    trace_t tr;
+    float dx, dy, out;
+
+    VectorMA(bs->origin, 48, dir, end);
+    dx = end[0] - bs->dodgeAnchor[0];
+    dy = end[1] - bs->dodgeAnchor[1];
+    out = dx * dx + dy * dy;
+    dx = bs->origin[0] - bs->dodgeAnchor[0];
+    dy = bs->origin[1] - bs->dodgeAnchor[1];
+    if (out > DODGE_LEASH * DODGE_LEASH && out > dx * dx + dy * dy) {
+        return qfalse;
+    }
+    trap_Trace(&tr, bs->origin, ent->r.mins, ent->r.maxs, end, bs->client, MASK_PLAYERSOLID);
+    if (tr.fraction < 1.0f) {
+        return qfalse;
+    }
+    VectorCopy(end, down);
+    down[2] -= 80;
+    trap_Trace(&tr, end, ent->r.mins, ent->r.maxs, down, bs->client, MASK_PLAYERSOLID | CONTENTS_LAVA | CONTENTS_SLIME);
+    return tr.fraction < 1.0f && !(tr.contents & (CONTENTS_LAVA | CONTENTS_SLIME)) &&
+           fabs(tr.endpos[2] - bs->dodgeAnchor[2]) <= 24;
+}
+
+int AINode_DodgeTrainer(bot_state_t* bs) {
+    gentity_t* ent = &g_entities[bs->client];
+    int human = G_TrainingHumanClient();
+    float now = FloatTime();
+    float dist;
+    vec3_t toHuman, dir;
+    qboolean hit;
+
+    if (BotIsObserver(bs)) {
+        ent->flags &= ~FL_NOPICKUP;
+        bs->ltgtype = 0;
+        BotRecordNodeSwitch(bs, "observer", "", "dodge trainer: observer");
+        BotResetState(bs);
+        bs->ainode = AINode_Observer;
+        bs->ltgtype = 0;
+        return qfalse;
+    }
+    if (bs->cur_ps.pm_type == PM_INTERMISSION) {
+        ent->flags &= ~FL_NOPICKUP;
+        bs->ltgtype = 0;
+        AIEnter_Intermission(bs, "dodge trainer: intermission");
+        return qfalse;
+    }
+    if (bs->cur_ps.pm_type == PM_DEAD) {
+        ent->flags &= ~FL_NOPICKUP;
+        bs->ltgtype = 0;
+        AIEnter_Respawn(bs, "dodge trainer: bot dead");
+        return qfalse;
+    }
+    if (g_advancedTraining.integer != 1) {
+        ent->flags &= ~FL_NOPICKUP;
+        bs->ltgtype = 0;
+        AIEnter_Seek_LTG(bs, "dodge trainer: no ai node");
+        return qfalse;
+    }
+
+    // whether it was hit since the last frame (over a hundred, both count down a point a second);
+    // then back to full, with only the gauntlet
+    hit = 2 * DODGE_HEALTH - ent->health - ent->client->ps.stats[STAT_ARMOR] > 3;
+    ent->health = ent->client->ps.stats[STAT_HEALTH] = DODGE_HEALTH;
+    ent->client->ps.stats[STAT_ARMOR] = DODGE_HEALTH;
+    ent->client->ps.stats[STAT_WEAPONS] = 1 << WP_GAUNTLET;
+    ent->flags |= FL_NOPICKUP;
+    bs->weaponnum = WP_GAUNTLET;
+    trap_EA_SelectWeapon(bs->client, WP_GAUNTLET);
+    bs->enemy = -1;
+
+    if (human == -1) {
+        return qtrue;
+    }
+
+    // it faces the player
+    VectorSubtract(g_entities[human].r.currentOrigin, bs->origin, toHuman);
+    vectoangles(toHuman, bs->ideal_viewangles);
+    toHuman[2] = 0;
+    dist = VectorNormalize(toHuman);
+
+    // it turns on its own clock, with a short juke now and then, and a moment after a hit
+    if (hit && !bs->dodgeHitTime) {
+        bs->dodgeHitTime = now + 0.12f + random() * 0.12f;
+    }
+    if (now >= bs->dodgeTurnTime || (bs->dodgeHitTime && now >= bs->dodgeHitTime && now - bs->dodgeRunStart > 0.15f)) {
+        bs->dodgeDir = -bs->dodgeDir;
+        bs->dodgeRunStart = now;
+        bs->dodgeTurnTime = now + (random() < 0.3f ? 0.1f + random() * 0.15f : 0.25f + random() * 0.5f);
+        bs->dodgeHitTime = 0;
+        bs->dodgeRadial = crandom() * 0.35f;
+    }
+
+    // a wall or a drop that way turns it round; with both ways shut it heads home
+    BotDodgeDirection(bs, toHuman, dist, dir);
+    if (!BotDodgeClear(bs, dir)) {
+        bs->dodgeDir = -bs->dodgeDir;
+        bs->dodgeRunStart = now;
+        bs->dodgeTurnTime = now + 0.25f + random() * 0.5f;
+        BotDodgeDirection(bs, toHuman, dist, dir);
+        if (!BotDodgeClear(bs, dir)) {
+            VectorSubtract(bs->dodgeAnchor, bs->origin, dir);
+            dir[2] = 0;
+            VectorNormalize(dir);
+        }
+    }
+    trap_EA_Move(bs->client, dir, 400);
+
+    if (now >= bs->dodgeJumpTime) {
+        if (bs->cur_ps.groundEntityNum != ENTITYNUM_NONE) {
+            trap_EA_Jump(bs->client);
+        }
+        bs->dodgeJumpTime = now + 0.6f + random() * 1.8f;
+    }
+    return qtrue;
+}

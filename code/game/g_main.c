@@ -222,6 +222,9 @@ vmCvar_t g_vampiricDamage;
 vmCvar_t gamedate;
 vmCvar_t g_version;  // [QL] build string, CVAR_ROM; registered in G_RegisterCvars tail by binary
 vmCvar_t practiceflags;
+vmCvar_t g_advancedTraining;
+vmCvar_t g_trainingSpawn;
+vmCvar_t g_trainingTarget;
 vmCvar_t sv_mapname;
 vmCvar_t ui_singlePlayerActive;
 vmCvar_t weapon_reload_gauntlet;
@@ -1080,6 +1083,11 @@ static cvarTable_t gameCvarTable[] = {
     {&g_timeoutLen, "g_timeoutLen", "60", CVAR_GAMERULE, 0, NULL},
     {&g_vampiricDamage, "g_vampiricDamage", "0", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&practiceflags, "practiceflags", "0", CVAR_GAMERULE | CVAR_TEMP, 0, NULL},
+    // [ioquakelive] the Training Center's advanced room, 1 the lightning gun bot, and where the
+    // player and the bot start ("x y z yaw"); its factory sets them
+    {&g_advancedTraining, "g_advancedTraining", "0", CVAR_GAMERULE | CVAR_TEMP, 0, NULL},
+    {&g_trainingSpawn, "g_trainingSpawn", "", CVAR_GAMERULE | CVAR_TEMP, 0, NULL},
+    {&g_trainingTarget, "g_trainingTarget", "", CVAR_GAMERULE | CVAR_TEMP, 0, NULL},
     {&sv_mapname, "sv_mapname", "", CVAR_ROM | CVAR_SERVERINFO, 0, NULL},
     {&ui_singlePlayerActive, "ui_singlePlayerActive", "", 0, 0, NULL},
     {&weapon_reload_gauntlet, "weapon_reload_gauntlet", "400", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_WEAPON, 0, OnChangedWeaponReloadGauntlet},

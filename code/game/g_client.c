@@ -545,6 +545,50 @@ random team's bases, and after g_maxDeferredSpawns failures in a row the deathma
 taken regardless.
 ===========
 */
+/*
+===========
+G_TrainingRoomSpot
+
+[ioquakelive] where the advanced training room puts the player (g_trainingSpawn) and its bot
+(g_trainingTarget); the nearest spawn point is the one returned, for its targets
+===========
+*/
+static gentity_t* G_TrainingRoomSpot(qboolean isBot, vec3_t origin, vec3_t angles) {
+    char buf[MAX_CVAR_VALUE_STRING];
+    char* p = buf;
+    float v[4] = {0, 0, 0, 0};
+    gentity_t* spot = NULL;
+    gentity_t* nearest = NULL;
+    float d, best = 0;
+    int i;
+
+    Q_strncpyz(buf, isBot ? g_trainingTarget.string : g_trainingSpawn.string, sizeof(buf));
+    for (i = 0; i < 4; i++) {
+        const char* token = COM_Parse(&p);
+
+        if (!token[0]) {
+            break;
+        }
+        v[i] = atof(token);
+    }
+    if (i < 3) {
+        return NULL;
+    }
+    while ((spot = G_Find(spot, FOFS(classname), "info_player_deathmatch")) != NULL) {
+        d = DistanceSquared(spot->s.origin, v);
+        if (!nearest || d < best) {
+            nearest = spot;
+            best = d;
+        }
+    }
+    if (nearest) {
+        VectorCopy(v, origin);
+        origin[2] += 9;
+        VectorSet(angles, 0, v[3], 0);
+    }
+    return nearest;
+}
+
 static gentity_t* SelectClientSpawnPoint(gentity_t* ent, vec3_t origin, vec3_t angles) {
     gclient_t* client = ent->client;
     qboolean isBot = (ent->r.svFlags & SVF_BOT) != 0;
@@ -555,6 +599,13 @@ static gentity_t* SelectClientSpawnPoint(gentity_t* ent, vec3_t origin, vec3_t a
     int team = 0;
     int otherTeam = 0;
     gentity_t* spot;
+
+    if (g_advancedTraining.integer) {
+        spot = G_TrainingRoomSpot(isBot, origin, angles);
+        if (spot) {
+            return spot;
+        }
+    }
 
     if (gt == GT_DUEL && !client->pers.initialSpawn) {
         client->pers.initialSpawn = qtrue;

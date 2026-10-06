@@ -35,6 +35,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //     Accelerate    map qzpractice2 _sj; wait 2; team f
 //     Elevate       map qzpractice1 _rj; wait 2; team f
 //
+// [ioquakelive] Under them, the advanced room, and the page scrolls to it:
+//
+//     Tracking      map thunderstruck _lgtrack; wait 2; team f; addbot crash 5
+//
+// _lgtrack is pak01's (scripts/ioql.factories).
+//
 // The three factories are pak00's hidden ones, which set g_training 1 and, for
 // the practice maps, infinite ammo and one weapon. The pictures are the page's own,
 // read from the player's web.pak.
@@ -43,6 +49,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "ui_web.h"
 
 #define TR_SECTION_H 675.0f
+#define TR_RETAIL_CARDS 3   // retail's row; the advanced room's go under "Advanced Training"
+#define TR_HEADING_H 54.4f  // that heading, as UI_Home_Header draws the page's
 #define TR_BAR 8.0f  // the page is overflow-y: scroll, so its bar's gutter is always there
 
 typedef enum {
@@ -79,6 +87,11 @@ static const trCard_t trCards[] = {
      "Use your projectile weapons to perform _Rocket Jumps_, and access areas of the arena in entirely different "
      "ways.",
      "map qzpractice1 _rj; wait 2; team f", "https://youtu.be/pVs1KGK0VLY"},
+    // [ioquakelive] the advanced room; no picture of its own, so the map's levelshot
+    {"thunderstruck", "", "Tracking", "Keeping the Beam On",
+     "Keep the _Lightning Gun_ on a bot that does nothing but dodge. It never fights back and never goes "
+     "down.",
+     "map thunderstruck _lgtrack; wait 2; team f; addbot crash 5", NULL},
 };
 #define TR_NUM_CARDS ((int)ARRAY_LEN(trCards))
 
@@ -87,9 +100,12 @@ static struct {
     qhandle_t picture[TR_NUM_CARDS];
     float hover[TR_NUM_CARDS];  // how far each section's transition has gone, 0 to 1
     int lastTime;
+    float scroll;   // [ioquakelive] how far the sections are scrolled
+    float content;  // and how tall they are
 } tr;
 
 static const vec4_t trYellow = SM_RGB(247, 209, 0);
+static const vec4_t trBlack80 = {0.0f, 0.0f, 0.0f, 0.8f};
 
 /*
 ===============
@@ -147,7 +163,7 @@ static float TR_WordWidth(const char* word, qboolean* italic) {
     }
 }
 
-static float TR_DrawWord(float x, float baseline, const char* word, qboolean* italic) {
+static float TR_DrawWord(float x, float baseline, const char* word, qboolean* italic, const smRect_t* clip) {
     char piece[32];
     int n = 0;
 
@@ -157,7 +173,9 @@ static float TR_DrawWord(float x, float baseline, const char* word, qboolean* it
             if (n) {
                 int font = *italic ? SM_ItalicFace() : FONT_SANS;
 
-                SM_Text(x, baseline, font, TR_TEXT_SIZE, smText, piece, -1, qfalse);
+                if (SM_TextInside(baseline, TR_TEXT_SIZE, clip)) {
+                    SM_Text(x, baseline, font, TR_TEXT_SIZE, smText, piece, -1, qfalse);
+                }
                 x += SM_Advance(font, TR_TEXT_SIZE, piece, -1);
             }
             n = 0;
@@ -173,7 +191,7 @@ static float TR_DrawWord(float x, float baseline, const char* word, qboolean* it
     }
 }
 
-static void TR_DrawParagraph(float x, float y, float width, const char* text) {
+static void TR_DrawParagraph(float x, float y, float width, const char* text, const smRect_t* clip) {
     trWord_t words[TR_MAX_WORDS];
     float space = SM_Advance(FONT_SANS, TR_TEXT_SIZE, " ", -1);
     qboolean measureItalic = qfalse, drawItalic = qfalse;
@@ -213,7 +231,7 @@ static void TR_DrawParagraph(float x, float y, float width, const char* text) {
             gap = space + (width - used) / (last - first);
         }
         for (i = first; i <= last; i++) {
-            TR_DrawWord(cx, SM_Baseline(FONT_SANS, TR_TEXT_SIZE, y, 24), words[i].text, &drawItalic);
+            TR_DrawWord(cx, SM_Baseline(FONT_SANS, TR_TEXT_SIZE, y, 24), words[i].text, &drawItalic, clip);
             cx += words[i].width + gap;
         }
         y += 24;
@@ -226,7 +244,7 @@ static float TR_Ease(float t) {
     return t * t * (3 - 2 * t);
 }
 
-static void TR_DrawSection(int i, float x, float y, float w) {
+static void TR_DrawSection(int i, float x, float y, float w, const smRect_t* clip) {
     const trCard_t* card = &trCards[i];
     float f = TR_Ease(tr.hover[i]);
     vec4_t back = {0, 0, 0, 0.8f + 0.2f * f};
@@ -237,33 +255,48 @@ static void TR_DrawSection(int i, float x, float y, float w) {
     float bx = x + (w - (buttons * bw + w * 0.04f)) * 0.5f;
     float by = y + TR_SECTION_H - 15 - SM_WEB_BUTTON_H;
 
-    SM_Fill(x, y, w, TR_SECTION_H, back, NULL);
+    SM_Fill(x, y, w, TR_SECTION_H, back, clip);
     // the picture's opacity, as black over it: the shader of a plain image takes no alpha
-    SM_Pic(x, y, w, w, tr.picture[i], NULL);
-    SM_Fill(x, y, w, w, shade, NULL);
+    SM_Pic(x, y, w, w, tr.picture[i], clip);
+    SM_Fill(x, y, w, w, shade, clip);
 
     // the h2 in Handel Gothic and yellow, the h3 under it in bold, both centred
-    SM_Text(x + (w - SM_Advance(FONT_DEFAULT, 36, card->title, -1)) * 0.5f, SM_Baseline(FONT_DEFAULT, 36, ty, 45),
-            FONT_DEFAULT, 36, trYellow, card->title, -1, qfalse);
+    if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 36, ty, 45), 36, clip)) {
+        SM_Text(x + (w - SM_Advance(FONT_DEFAULT, 36, card->title, -1)) * 0.5f, SM_Baseline(FONT_DEFAULT, 36, ty, 45),
+                FONT_DEFAULT, 36, trYellow, card->title, -1, qfalse);
+    }
     ty += 45;
-    SM_Text(x + (w - SM_AdvanceBold(FONT_SANS, 18.6667f, card->subtitle, -1, qtrue)) * 0.5f,
-            SM_Baseline(FONT_SANS, 18.6667f, ty, 24.3f), FONT_SANS, 18.6667f, smText, card->subtitle, -1, qtrue);
+    if (SM_TextInside(SM_Baseline(FONT_SANS, 18.6667f, ty, 24.3f), 18.6667f, clip)) {
+        SM_Text(x + (w - SM_AdvanceBold(FONT_SANS, 18.6667f, card->subtitle, -1, qtrue)) * 0.5f,
+                SM_Baseline(FONT_SANS, 18.6667f, ty, 24.3f), FONT_SANS, 18.6667f, smText, card->subtitle, -1, qtrue);
+    }
     ty += 24.3f + 20;
-    TR_DrawParagraph(x + 15, ty + 15, w - 30, card->text);
+    TR_DrawParagraph(x + 15, ty + 15, w - 30, card->text, clip);
 
     // the whole section launches it, and so do its buttons; Watch Video does not go on to it
-    SM_Hit(x, y, w, TR_SECTION_H, TR_HIT_CARD, i, NULL);
+    SM_Hit(x, y, w, TR_SECTION_H, TR_HIT_CARD, i, clip);
     if (card->video) {
-        SM_WebButton(bx, by, bw, "Watch Video", qfalse, SM_Over(TR_HIT_VIDEO, i), NULL);
-        SM_Hit(bx, by, bw, SM_WEB_BUTTON_H, TR_HIT_VIDEO, i, NULL);
+        SM_WebButton(bx, by, bw, "Watch Video", qfalse, SM_Over(TR_HIT_VIDEO, i), clip);
+        SM_Hit(bx, by, bw, SM_WEB_BUTTON_H, TR_HIT_VIDEO, i, clip);
         bx += bw;
     }
     // the first of them keeps a margin of 4% on its right
     if (card->video) {
         bx += w * 0.04f;
     }
-    SM_WebButton(bx, by, bw, "Start Training", qfalse, SM_Over(TR_HIT_START, i), NULL);
-    SM_Hit(bx, by, bw, SM_WEB_BUTTON_H, TR_HIT_START, i, NULL);
+    SM_WebButton(bx, by, bw, "Start Training", qfalse, SM_Over(TR_HIT_START, i), clip);
+    SM_Hit(bx, by, bw, SM_WEB_BUTTON_H, TR_HIT_START, i, clip);
+}
+
+// [ioquakelive] retail's row first, then the advanced room's under its heading
+static void TR_SectionAt(int i, float left, float top, float w, float margin, float* x, float* y) {
+    if (i < TR_RETAIL_CARDS) {
+        *x = left + i * (w + margin);
+        *y = top;
+    } else {
+        *x = left + (i - TR_RETAIL_CARDS) * (w + margin);
+        *y = top + TR_SECTION_H + margin + TR_HEADING_H + margin;
+    }
 }
 
 void UI_Training_Open(void) {
@@ -274,7 +307,7 @@ void UI_Training_Open(void) {
     if (!tr.loaded) {
         tr.loaded = qtrue;
         for (i = 0; i < TR_NUM_CARDS; i++) {
-            tr.picture[i] = trap_R_RegisterShaderNoMip(trCards[i].picture);
+            tr.picture[i] = trCards[i].picture[0] ? trap_R_RegisterShaderNoMip(trCards[i].picture) : 0;
             if (!tr.picture[i]) {
                 tr.picture[i] = trap_R_RegisterShaderNoMip(va("levelshots/%s", trCards[i].map));
             }
@@ -284,6 +317,7 @@ void UI_Training_Open(void) {
         tr.hover[i] = 0;
     }
     tr.lastTime = uiInfo.uiDC.realTime;
+    tr.scroll = 0;
 
     // the page takes keys before the mouse moves over it
     menu = Menus_FindByName("training");
@@ -298,7 +332,8 @@ void UI_Training_Paint(void) {
     float width = HM_CONTAINER_W - TR_BAR;
     float w = width * 0.3f;
     float margin = width * 0.03f;
-    float y, dt;
+    float top, view, y, x, sy, dt;
+    smRect_t clip;
     int i;
 
     SM_BeginFrame();
@@ -308,15 +343,29 @@ void UI_Training_Paint(void) {
     UI_Home_Backdrop();
     UI_Home_PageTop(HM_NAV_TRAINING);
 
-    y = UI_Home_Header(HM_NAV_H, NULL, "Training Center") + margin;
+    top = UI_Home_Header(HM_NAV_H, NULL, "Training Center");
+
+    // [ioquakelive] the sections scroll under the header
+    view = UI_Home_FrameBottom() - top;
+    tr.content = margin + 2 * TR_SECTION_H + TR_HEADING_H + 2 * margin;
+    if (tr.scroll > tr.content - view) {
+        tr.scroll = tr.content - view;
+    }
+    if (tr.scroll < 0) {
+        tr.scroll = 0;
+    }
+    clip = SM_R(left, top, HM_CONTAINER_W, view);
+    y = top + margin - tr.scroll;
 
     // each section eases toward what the cursor says over a second
     dt = (uiInfo.uiDC.realTime - tr.lastTime) / 1000.0f;
     tr.lastTime = uiInfo.uiDC.realTime;
     for (i = 0; i < TR_NUM_CARDS; i++) {
-        smRect_t box = SM_R(left + i * (w + margin), y, w, TR_SECTION_H);
+        smRect_t box;
 
-        tr.hover[i] += SM_In(&box, smMX, smMY) ? dt : -dt;
+        TR_SectionAt(i, left, y, w, margin, &x, &sy);
+        box = SM_R(x, sy, w, TR_SECTION_H);
+        tr.hover[i] += SM_In(&box, smMX, smMY) && SM_In(&clip, smMX, smMY) ? dt : -dt;
         if (tr.hover[i] < 0) {
             tr.hover[i] = 0;
         } else if (tr.hover[i] > 1) {
@@ -325,7 +374,16 @@ void UI_Training_Paint(void) {
     }
 
     for (i = 0; i < TR_NUM_CARDS; i++) {
-        TR_DrawSection(i, left + i * (w + margin), y, w);
+        TR_SectionAt(i, left, y, w, margin, &x, &sy);
+        TR_DrawSection(i, x, sy, w, &clip);
+    }
+
+    // the advanced room's heading, as the page's
+    sy = y + TR_SECTION_H + margin;
+    SM_Fill(left, sy, HM_CONTAINER_W, TR_HEADING_H, trBlack80, &clip);
+    if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 32.0f, sy + 8.0f, 38.4f), 32.0f, &clip)) {
+        SM_Text(left + 6.4f, SM_Baseline(FONT_DEFAULT, 32.0f, sy + 8.0f, 38.4f), FONT_DEFAULT, 32.0f, smText,
+                "Advanced Training", -1, qfalse);
     }
 
     UI_Home_Banner();
@@ -336,6 +394,10 @@ qboolean UI_Training_HandleKey(int key) {
     const smHit_t* hit;
 
     if (key & K_CHAR_FLAG) {
+        return qtrue;
+    }
+    if (key == K_MWHEELUP || key == K_MWHEELDOWN) {
+        tr.scroll += key == K_MWHEELUP ? -60.0f : 60.0f;
         return qtrue;
     }
     if (key != K_MOUSE1) {
