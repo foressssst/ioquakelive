@@ -217,7 +217,8 @@ static const vec4_t strThumb = SM_RGB(51, 51, 51);
 static const vec4_t strThumbHover = SM_RGB(153, 153, 153);
 
 #define STR_TITLE_H 54.4f     // h1.title: 24pt Handel Gothic, 0.25em above and below
-#define STR_NAV_H 38.0f       // nav.button-row: skeleton's buttons
+#define STR_NAV_H 30.0f       // nav.button-row: its buttons, 30 high with 20 each side (measured)
+#define STR_NAV_PAD 20.0f
 #define STR_NAV_GAP 15.0f     // and its 1em under it
 #define STR_SECTION_PAD 5.0f
 #define STR_BAR 8.0f          // .scroll-y: the bar's gutter is always there
@@ -1441,6 +1442,23 @@ h1.title "Game Settings" and the nav.button-row under it: skeleton's buttons wit
 border, the section's in yellow. Over a match the title also has Done at its right.
 ===============
 */
+// a tab's word: the page's sans in bold, upper case, 1px apart, as retail's buttons
+static float ST_TabWidth(const char* name) {
+    char upper[64];
+    char c[2];
+    const char* p;
+    float w = 0;
+
+    Q_strncpyz(upper, name, sizeof(upper));
+    Q_strupr(upper);
+    c[1] = '\0';
+    for (p = upper; *p; p++) {
+        c[0] = *p;
+        w += SM_AdvanceBold(FONT_SANS, 11, c, 1, qtrue) + 1.0f;
+    }
+    return w - 1.0f;
+}
+
 static void ST_DrawHeader(float y, const smRect_t* clip) {
     float left = st.left;
     float x = left;
@@ -1469,16 +1487,20 @@ static void ST_DrawHeader(float y, const smRect_t* clip) {
         if (!ST_TabShown(i)) {
             continue;
         }
-        w = SM_LabelWidth(11, stTabNames[i], 1.6f) + 60;
+        w = ST_TabWidth(stTabNames[i]) + 2 * STR_NAV_PAD;
         if (on) {
             SM_Fill(x, navY, w, STR_NAV_H, strYellow, clip);
         }
         if (SM_TextInside(SM_Baseline(FONT_SANS, 11, navY, STR_NAV_H), 11, clip)) {
-            SM_Label(x + 30, SM_Baseline(FONT_SANS, 11, navY, STR_NAV_H), 11,
-                     on ? colorBlack : SM_Over(ST_HIT_TAB, i) ? smText : strOption, stTabNames[i], 1.6f);
+            char upper[64];
+
+            Q_strncpyz(upper, stTabNames[i], sizeof(upper));
+            Q_strupr(upper);
+            SM_SpacedText(x + STR_NAV_PAD, SM_Baseline(FONT_SANS, 11, navY, STR_NAV_H), FONT_SANS, 11,
+                          on ? colorBlack : SM_Over(ST_HIT_TAB, i) ? smText : strOption, upper, 1.0f, qtrue);
         }
         SM_Hit(x, navY, w, STR_NAV_H, ST_HIT_TAB, i, clip);
-        x += w + SM_Advance(FONT_SANS, 15, " ", -1);
+        x += w + 1.0f;  // measured off retail's nav
     }
 }
 
