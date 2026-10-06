@@ -2814,6 +2814,10 @@ void Com_Init(char* commandLine) {
     // termination of worker thread CFileWriterThread"). Retail's qzeroded does not use it
     // either: the gameserver API is enough for it.
     Steam_GS_Init();
+#ifdef DEDICATED
+    // [QL] qzeroded.x64 0x43d352: what sv_workshopFile lists comes down before the first map
+    SV_WorkshopInit();
+#endif
 
     // [ioquakelive] ZeroMQ, as in retail (idZMQ::Init, 0x004f3f80): the cvars and the rcon socket
     ZMQ_Init();

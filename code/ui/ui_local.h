@@ -981,6 +981,7 @@ int trap_SteamUserStats(const char* steamId, uiUserStats_t* out, qboolean reques
 void trap_SteamShowProfile(const char* steamId);
 qboolean trap_SteamAvatar(const char* steamId, char* path, int size);
 int trap_WebPakExcerpt(const char* name, const char* marker, char* out, int size);
+qboolean trap_WorkshopDownloadInfo(const char* item, uint64_t* done, uint64_t* total);
 
 // [ioquakelive] the rest of what retail's browser asked Steam for: the same servers again
 // (Quick Refresh), the rules and players of one (one player per line: name, score and seconds,

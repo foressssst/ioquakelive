@@ -120,7 +120,7 @@ typedef struct {
 #define STEAM_DETAILS_RULES 8192
 #define STEAM_DETAILS_PLAYERS 4096
 
-static void Steam_DownloadUGC_f(void);
+static void Steam_WorkshopListen(qboolean asServer);
 static void Steam_P2PListen(qboolean asServer);
 static void Steam_AuthListen(void);
 static void Steam_ServersListen(void);
@@ -208,6 +208,9 @@ typedef struct {
                                            unsigned int flags);
 
     void*(QDECL* UGC)(void);
+    void*(QDECL* GameServerUGC)(void);
+    uint64_t(QDECL* SubscribeItem)(void* self, uint64_t item);
+    uint64_t(QDECL* UnsubscribeItem)(void* self, uint64_t item);
     void*(QDECL* Utils)(void);
     int(QDECL* GetMediumFriendAvatar)(void* self, uint64_t steamId);
     steamBool_t(QDECL* GetImageSize)(void* self, int image, unsigned int* width, unsigned int* height);
@@ -276,6 +279,9 @@ typedef struct {
     steamCallback_t serversConnected;     // the server logged on to Steam
     steamCallback_t serversFailed;        // it could not
     steamCallback_t serversDisconnected;  // it lost the connection
+    qboolean loggedOn;                    // [QL] 0x008e0644, between the first and the other two
+    steamCallback_t itemInstalled;        // ItemInstalled_t, the Workshop's
+    steamCallback_t downloadResult;       // DownloadItemResult_t
 
     // the players' stats and achievements: ISteamGameServerStats001 on the server and
     // ISteamUserStats011 for a game of one's own
@@ -303,8 +309,7 @@ typedef struct {
     uint64_t tracked[STEAM_MAX_TRACKED];
     int numTracked;
 
-    void* ugc;           // ISteamUGC *
-    uint64_t downloading;  // the item being waited on, or 0
+    void* ugc;  // ISteamUGC *, the server's on a dedicated server and the player's otherwise
 
     void* matchmaking;   // ISteamMatchmakingServers *
     void* listRequest;   // HServerListRequest
@@ -397,6 +402,9 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND_OPT(BUpdateUserData, "SteamAPI_ISteamGameServer_BUpdateUserData");
     STEAM_BIND_OPT(Matchmaking, "SteamMatchmakingServers");
     STEAM_BIND_OPT(UGC, "SteamUGC");
+    STEAM_BIND_OPT(GameServerUGC, "SteamGameServerUGC");
+    STEAM_BIND_OPT(SubscribeItem, "SteamAPI_ISteamUGC_SubscribeItem");
+    STEAM_BIND_OPT(UnsubscribeItem, "SteamAPI_ISteamUGC_UnsubscribeItem");
     STEAM_BIND_OPT(Utils, "SteamUtils");
     STEAM_BIND_OPT(GetMediumFriendAvatar, "SteamAPI_ISteamFriends_GetMediumFriendAvatar");
     STEAM_BIND_OPT(GetImageSize, "SteamAPI_ISteamUtils_GetImageSize");
@@ -530,6 +538,7 @@ static struct {
     void* gameServer;   // ISteamGameServer012 *
     void* gameServerNetworking;
     void* gameServerStats;  // ISteamGameServerStats001 *
+    void* gameServerUGC;    // ISteamUGC007 *, the server's
     void* userStats;        // ISteamUserStats011 *
 
     steamCallback_t* callbacks[SD_MAX_CALLBACKS];
@@ -682,6 +691,8 @@ SD_RET(steamBool_t, RemoveFavoriteGame, 3,
        (self, a, b, c, d, e))
 
 // ISteamUGC007
+SD_RET(uint64_t, SubscribeItem, 48, (void* self, uint64_t a), (self, a))
+SD_RET(uint64_t, UnsubscribeItem, 49, (void* self, uint64_t a), (self, a))
 SD_RET(unsigned int, GetNumSubscribedItems, 50, (void* self), (self))
 SD_RET(unsigned int, GetSubscribedItems, 51, (void* self, uint64_t* a, unsigned int b), (self, a, b))
 SD_RET(unsigned int, GetItemState, 52, (void* self, uint64_t a), (self, a))
@@ -764,6 +775,9 @@ static void* QDECL SD_Utils(void) {
 }
 static void* QDECL SD_UGC(void) {
     return sd.ugc;
+}
+static void* QDECL SD_GameServerUGC(void) {
+    return sd.gameServerUGC;
 }
 static void* QDECL SD_Networking(void) {
     return sd.networking;
@@ -858,6 +872,7 @@ static steamBool_t QDECL SD_GameServer_Init(unsigned int ip, unsigned short stea
     sd.gameServer = SD_Interface(6, sd.serverUser, sd.serverPipe, "SteamGameServer012");
     sd.gameServerNetworking = SD_Interface(16, sd.serverUser, sd.serverPipe, "SteamNetworking005");
     sd.gameServerStats = SD_Interface(14, sd.serverUser, sd.serverPipe, "SteamGameServerStats001");
+    sd.gameServerUGC = SD_Interface(26, sd.serverUser, sd.serverPipe, "STEAMUGC_INTERFACE_VERSION007");
 
     flags = serverMode == 3 ? SD_FLAG_SECURE : 0;
     if (serverMode == 1) {
@@ -881,7 +896,7 @@ static void QDECL SD_GameServer_Shutdown(void) {
         SD_ReleaseSteamPipe(sd.serverPipe);
     }
     sd.serverPipe = sd.serverUser = 0;
-    sd.gameServer = sd.gameServerNetworking = sd.gameServerStats = NULL;
+    sd.gameServer = sd.gameServerNetworking = sd.gameServerStats = sd.gameServerUGC = NULL;
     SD_ShutdownIfAllPipesClosed();
 }
 
@@ -1060,6 +1075,9 @@ static void SD_Bind(void) {
     SD_SET(AddFavoriteGame);
     SD_SET(RemoveFavoriteGame);
     SD_SET(UGC);
+    SD_SET(GameServerUGC);
+    SD_SET(SubscribeItem);
+    SD_SET(UnsubscribeItem);
     SD_SET(Utils);
     SD_SET(GetMediumFriendAvatar);
     SD_SET(GetImageSize);
@@ -1272,9 +1290,13 @@ void Steam_Init(void) {
     if (st.Lobbies) {
         st.lobbies = st.Lobbies();  // the favourites live here
     }
+    // [QL] the player's Workshop. Retail takes it with the server's Steam (0x46700e), after the
+    // filesystem's first start, and then restarts the filesystem to mount it; taken here, the
+    // first start already mounts it and the second is not needed
     if (st.UGC) {
-        st.ugc = st.UGC();  // the Workshop's, where the maps come from
+        st.ugc = st.UGC();
     }
+    Steam_WorkshopListen(qfalse);
     if (st.Utils) {
         st.utils = st.Utils();  // where the avatars' pixels come from
     }
@@ -1300,7 +1322,6 @@ void Steam_Init(void) {
     // [QL] 0x00461565: "+voice" and "-voice" are registered on the client side, which is also
     // the side that has to tell the cgame somebody is talking
     Steam_SetRichPresence("At the main menu");    // [QL] 0x00461556
-    Cmd_AddCommand("steam_downloadugc", Steam_DownloadUGC_f);
     Cmd_AddCommand("steamservers", Steam_ServerList_f);
     Cmd_AddCommand("steamstatus", Steam_Status_f);
     Com_Printf("Steam API initialized.\n");
@@ -1354,6 +1375,11 @@ void Steam_GS_Init(void) {
         return;
     }
     st.serverUp = qtrue;
+    // [QL] qzeroded.x64 0x4474e6: a dedicated server downloads with its own Workshop interface
+    if (Cvar_VariableIntegerValue("dedicated") > 0) {
+        st.ugc = st.GameServerUGC ? st.GameServerUGC() : NULL;
+        Steam_WorkshopListen(qtrue);
+    }
     if (st.GameServerNetworking) {
         st.gameServerNetworking = st.GameServerNetworking();  // what it hands the voice out over
         Steam_P2PListen(qtrue);
@@ -1552,6 +1578,11 @@ void Steam_Shutdown(void) {
             st.UnregisterCallback(&st.serversDisconnected);
             st.serversConnected.vtable = NULL;
         }
+        if (st.itemInstalled.vtable) {
+            st.UnregisterCallback(&st.itemInstalled);
+            st.UnregisterCallback(&st.downloadResult);
+            st.itemInstalled.vtable = NULL;
+        }
         if (st.userStatsReceived.vtable) {
             st.UnregisterCallback(&st.userStatsReceived);
             st.userStatsReceived.vtable = NULL;
@@ -1576,12 +1607,14 @@ void Steam_Shutdown(void) {
         st.serverUp = qfalse;
         st.gameServer = NULL;
         st.gameServerStats = NULL;
+        st.loggedOn = qfalse;
         st.numTracked = 0;
     }
     if (st.clientUp) {
         st.API_Shutdown();
         st.clientUp = qfalse;
     }
+    st.ugc = NULL;
 }
 
 /*
@@ -2194,100 +2227,224 @@ qboolean Steam_ServerListGet(int index, unsigned int* ip, unsigned short* port, 
 THE WORKSHOP
 
 Quake Live does not download maps over HTTP: it downloads them from the Steam
-Workshop. The server publishes the items the match uses (0x00465b00) in the
-CS_STEAM_WORKSHOP_IDS configstring and in the sv_referencedSteamworks cvar, and the
-client, before entering, downloads the ones it lacks (0x004bba30), showing progress in
-cl_downloadName / cl_downloadItem / cl_downloadTime.
+Workshop, and both sides do it the same way ([QL] qzeroded.x64 0x44e300-0x44ec60,
+quakelive_steam.exe 0x469260-0x469ab0). A queue of items, which Steam downloads one at
+a time, and a table with the folders they were installed to, which the filesystem
+mounts at every restart for the rest of the session (FS_AddWorkshop). The dedicated
+server fills the queue from sv_workshopFile before it starts (SV_WorkshopInit); the
+client, with the items the server it joins publishes in CS_STEAM_WORKSHOP_IDS
+(CL_InitDownloads).
 
-Retail learns that a download finished through the OnDownloadItemResult callback
-(0x00469630). Here the item's state is polled every frame, which looks the same from
-the outside and avoids registering C++ callbacks by hand.
-
-The state flags are Steam's: 1 subscribed, 4 installed, 8 needs an update, 16
-downloading, 32 queued.
+Steam says an item is done through ItemInstalled_t and DownloadItemResult_t,
+k_iClientUGCCallbacks (3400) + 5 and + 6. Of its state flags only two matter here:
+1 subscribed and 4 installed.
 
 ===============================================================================
 */
 
+#define STEAM_ITEM_SUBSCRIBED 1
 #define STEAM_ITEM_INSTALLED 4
-#define STEAM_ITEM_NEEDS_UPDATE 8
-#define STEAM_ITEM_DOWNLOADING 16
-#define STEAM_ITEM_PENDING 32
 
-qboolean Steam_WorkshopReady(void) {
+#define STEAM_CB_ITEM_INSTALLED 3405
+#define STEAM_CB_DOWNLOAD_RESULT 3406
+#define STEAM_CB_FLAG_GAMESERVER 0x02
+
+#define STEAM_WORKSHOP_FOLDERS 256  // [QL] what the table holds
+#define STEAM_WORKSHOP_QUEUE 256
+
+// what the two callbacks carry, packed as the SDK packs them: by 8 on Windows, by 4 elsewhere
+#ifdef _WIN32
+#pragma pack(push, 8)
+#else
+#pragma pack(push, 4)
+#endif
+typedef struct {
+    unsigned int appId;
+    uint64_t item;
+} steamItemInstalled_t;
+
+typedef struct {
+    unsigned int appId;
+    uint64_t item;
+    int result;  // EResult, 1 is k_EResultOK
+} steamDownloadResult_t;
+#pragma pack(pop)
+
+static struct {
+    qboolean active;                       // a queue is going on (0x01309860)
+    uint64_t current;                      // the item Steam is downloading (0x01309840)
+    uint64_t queue[STEAM_WORKSHOP_QUEUE];  // the ones still missing, the current one first
+    int numQueued;
+    char folders[STEAM_WORKSHOP_FOLDERS][MAX_OSPATH];  // (0x01309880)
+    uint64_t folderItems[STEAM_WORKSHOP_FOLDERS];
+} ws;
+
+qboolean Steam_WorkshopUGC(void) {
     return (qboolean)(st.ugc != NULL && st.GetItemState != NULL && st.DownloadItem != NULL);
 }
 
-unsigned int Steam_WorkshopState(uint64_t item) {
-    if (!Steam_WorkshopReady()) {
-        return 0;
-    }
+static unsigned int Steam_ItemState(uint64_t item) {
     return st.GetItemState(st.ugc, item);
-}
-
-qboolean Steam_WorkshopInstalled(uint64_t item) {
-    unsigned int state = Steam_WorkshopState(item);
-
-    return (qboolean)((state & STEAM_ITEM_INSTALLED) && !(state & STEAM_ITEM_NEEDS_UPDATE));
 }
 
 /*
 ===============
-Steam_WorkshopDownload
+Steam_WorkshopNext
 
-[QL] 0x004699c0. Returns qtrue when there is something to wait for: an item already
-installed is not asked for again.
+[QL] 0x44e300 / 0x469400: the item that finished leaves the queue and Steam is asked
+for the next one
 ===============
 */
-qboolean Steam_WorkshopDownload(uint64_t item) {
-    if (!Steam_WorkshopReady() || !item) {
-        return qfalse;
+static void Steam_WorkshopNext(void) {
+    int i, j;
+
+    for (i = j = 0; i < ws.numQueued; i++) {
+        if (ws.queue[i] != ws.current) {
+            ws.queue[j++] = ws.queue[i];
+        }
     }
-    if (Steam_WorkshopInstalled(item)) {
-        Com_Printf("Workshop item %llu: in cache.\n", (unsigned long long)item);
-        return qfalse;
+    ws.numQueued = j;
+    if (!ws.numQueued) {
+        ws.current = 0;
+        return;
     }
-    Com_Printf("Workshop item %llu: requesting download.\n", (unsigned long long)item);
-    Com_DPrintf("Workshop item %llu: state %u before asking for it.\n", (unsigned long long)item,
-                Steam_WorkshopState(item));
-    if (!st.DownloadItem(st.ugc, item, 1)) {
-        Com_Printf("Workshop item %llu: Steam did not take the request.\n", (unsigned long long)item);
-        return qfalse;
-    }
-    st.downloading = item;
-    return qtrue;
+    ws.current = ws.queue[0];
+    Com_Printf("Workshop item %llu: was queued, requesting download.\n", (unsigned long long)ws.current);
+    st.DownloadItem(st.ugc, ws.current, 1);
 }
 
-// how much Steam has downloaded of the item being waited on
-qboolean Steam_WorkshopProgress(uint64_t* done, uint64_t* total) {
-    *done = 0;
-    *total = 0;
-    if (!Steam_WorkshopReady() || !st.downloading || !st.GetItemDownloadInfo) {
-        return qfalse;
+/*
+===============
+Steam_WorkshopMount
+
+[QL] 0x44e3f0 / 0x469470: the folder the item was installed to goes into the table the
+filesystem mounts. Outside a queue the filesystem restarts at once to mount it; inside
+one, a download that finished brings the next one. A subscribed item stays out of the
+table, because the filesystem mounts it with the rest of the subscribed ones.
+===============
+*/
+static void Steam_WorkshopMount(uint64_t item, qboolean inCache) {
+    char folder[MAX_OSPATH];
+    uint64_t size = 0;
+    unsigned int stamp = 0;
+    int i;
+
+    folder[0] = '\0';
+    if (st.GetItemInstallInfo) {
+        st.GetItemInstallInfo(st.ugc, item, &size, folder, sizeof(folder), &stamp);
     }
-    return st.GetItemDownloadInfo(st.ugc, st.downloading, done, total) ? qtrue : qfalse;
+    if (!(Steam_ItemState(item) & STEAM_ITEM_SUBSCRIBED)) {
+        // [ioquakelive] once per item: retail adds it again each time a server asks for it
+        for (i = 0; i < STEAM_WORKSHOP_FOLDERS; i++) {
+            if (!ws.folders[i][0] || ws.folderItems[i] == item) {
+                Q_strncpyz(ws.folders[i], folder, sizeof(ws.folders[i]));
+                ws.folderItems[i] = item;
+                break;
+            }
+        }
+        if (!ws.active) {
+            FS_WorkshopRestart();
+            return;
+        }
+        if (!inCache) {
+            Com_DPrintf("Steamworks download complete: %llu\n", (unsigned long long)item);
+            Steam_WorkshopNext();
+        }
+        return;
+    }
+    if (!ws.active) {
+        FS_WorkshopRestart();
+        return;
+    }
+    // [ioquakelive] retail leaves the queue waiting forever when the item it was downloading
+    // turns out to be subscribed
+    if (!inCache) {
+        Steam_WorkshopNext();
+    }
 }
 
-// qtrue while the item asked for is still missing
-qboolean Steam_WorkshopBusy(void) {
-    unsigned int state;
+/*
+===============
+Steam_WorkshopQueue
 
-    if (!st.downloading) {
+[QL] 0x44e8d0 / 0x4699c0. In a queue (the server's file, the items of the server being
+joined) an item Steam already has is mounted from its cache and the rest wait their
+turn. Outside one (steam_downloadugc) an item is downloaded on its own, unless a queue
+is going on. Returns qtrue when there is a download to wait for.
+===============
+*/
+qboolean Steam_WorkshopQueue(uint64_t item, qboolean queued) {
+    if (!Steam_WorkshopUGC()) {
         return qfalse;
     }
-    state = Steam_WorkshopState(st.downloading);
-    if (state & (STEAM_ITEM_DOWNLOADING | STEAM_ITEM_PENDING)) {
+    if (!queued) {
+        if (ws.active) {
+            Com_Printf("Steamworks downloads are already active, ignoring an explicit download request for %llu\n",
+                       (unsigned long long)item);
+            return qfalse;
+        }
+        if (!(Steam_ItemState(item) & STEAM_ITEM_INSTALLED)) {
+            Com_Printf("Workshop item %llu: download\n", (unsigned long long)item);
+            st.DownloadItem(st.ugc, item, 1);
+            return qtrue;
+        }
+    } else {
+        ws.active = qtrue;
+        if (!(Steam_ItemState(item) & STEAM_ITEM_INSTALLED)) {
+            if (ws.numQueued) {
+                Com_Printf("Workshop item %llu: queueing download.\n", (unsigned long long)item);
+            } else {
+                Com_Printf("Workshop item %llu: requesting download.\n", (unsigned long long)item);
+                st.DownloadItem(st.ugc, item, 1);
+                ws.current = item;
+            }
+            if (ws.numQueued < STEAM_WORKSHOP_QUEUE) {
+                ws.queue[ws.numQueued++] = item;
+            }
+            return qtrue;
+        }
+    }
+    Com_Printf("Workshop item %llu: in cache.\n", (unsigned long long)item);
+    Steam_WorkshopMount(item, qtrue);
+    return qfalse;
+}
+
+/*
+===============
+Steam_WorkshopDone
+
+[QL] 0x44ea60 / 0x4692d0: qtrue when no queue is going on. The call that finds the queue
+empty says so and still answers qfalse.
+===============
+*/
+qboolean Steam_WorkshopDone(void) {
+    if (!ws.active) {
         return qtrue;
     }
-    if (Steam_WorkshopInstalled(st.downloading)) {
-        Com_Printf("Steamworks download complete: %llu\n", (unsigned long long)st.downloading);
-        st.downloading = 0;
+    if (!ws.numQueued) {
+        Com_Printf("Download completed for all steamworks items\n");
+        ws.active = qfalse;
+    }
+    return qfalse;
+}
+
+// the items still missing, the one being downloaded included
+int Steam_WorkshopPending(void) {
+    return ws.numQueued;
+}
+
+uint64_t Steam_WorkshopCurrent(void) {
+    return ws.current;
+}
+
+// how much of an item Steam has, for the connection screen and the server's wait
+qboolean Steam_WorkshopProgress(uint64_t item, uint64_t* done, uint64_t* total) {
+    *done = 0;
+    *total = 0;
+    if (!Steam_WorkshopUGC() || !st.GetItemDownloadInfo || !item) {
         return qfalse;
     }
-    // ni bajando ni instalado: Steam lo descarto
-    Com_Printf("Download item %llu failed\n", (unsigned long long)st.downloading);
-    st.downloading = 0;
-    return qfalse;
+    return st.GetItemDownloadInfo(st.ugc, item, done, total) ? qtrue : qfalse;
 }
 
 // where an item ended up installed, so it can be mounted
@@ -2296,48 +2453,195 @@ qboolean Steam_WorkshopPath(uint64_t item, char* buf, int size) {
     unsigned int stamp = 0;
 
     buf[0] = '\0';
-    if (!Steam_WorkshopReady() || !st.GetItemInstallInfo) {
+    if (!Steam_WorkshopUGC() || !st.GetItemInstallInfo) {
         return qfalse;
     }
     return st.GetItemInstallInfo(st.ugc, item, &sizeOnDisk, buf, size, &stamp) ? qtrue : qfalse;
+}
+
+// [QL] 0x44e690 / 0x4697a0: the items the player is subscribed to, up to 256
+int Steam_WorkshopSubscribed(uint64_t* items, int max) {
+    if (!Steam_WorkshopUGC() || !st.GetSubscribedItems || !st.GetNumSubscribedItems) {
+        return 0;
+    }
+    return (int)st.GetSubscribedItems(st.ugc, items, (unsigned int)max);
+}
+
+// a folder of the table, NULL past the last one
+const char* Steam_WorkshopFolder(int index, uint64_t* item) {
+    if (index < 0 || index >= STEAM_WORKSHOP_FOLDERS || !ws.folders[index][0]) {
+        return NULL;
+    }
+    *item = ws.folderItems[index];
+    return ws.folders[index];
+}
+
+/*
+===============
+Steam_CB_ItemInstalled / Steam_CB_DownloadResult
+
+[QL] 0x44e510 / 0x4695c0 and 0x44e570 / 0x469630. The first mounts an item that is not
+subscribed; the second, the one the queue is waiting for, or moves on when Steam could
+not download it. Retail compares the App ID with ISteamUtils::GetAppID, which here is
+always the one Steam_Load declares.
+===============
+*/
+static unsigned int Steam_OwnAppID(void) {
+    return (unsigned int)atoi(STEAM_APP_ID);
+}
+
+static void STEAM_CB Steam_CB_ItemInstalled(STEAM_CB_SELF, void* param) {
+    const steamItemInstalled_t* p = (const steamItemInstalled_t*)param;
+
+    if (p->appId != Steam_OwnAppID()) {
+        Com_DPrintf("OnDownloadItemResult skip, invalid app id %d\n", (int)p->appId);
+        return;
+    }
+    if (!Steam_WorkshopUGC() || (Steam_ItemState(p->item) & STEAM_ITEM_SUBSCRIBED)) {
+        return;
+    }
+    Steam_WorkshopMount(p->item, qfalse);
+}
+
+static void STEAM_CB Steam_CB_DownloadResult(STEAM_CB_SELF, void* param) {
+    const steamDownloadResult_t* p = (const steamDownloadResult_t*)param;
+
+    if (p->appId != Steam_OwnAppID()) {
+        Com_Printf("OnDownloadItemResult skip, invalid app id %d\n", (int)p->appId);
+        return;
+    }
+    if (ws.active && p->item != ws.current) {
+        Com_DPrintf("OnDownloadItemResult skip, not the active download %llu\n", (unsigned long long)p->item);
+        return;
+    }
+    if (p->result != 1) {
+        Com_Printf("Download item %llu failed with EResult code %i\n", (unsigned long long)p->item, p->result);
+        Steam_WorkshopNext();
+        return;
+    }
+    if (!Steam_WorkshopUGC()) {
+        return;
+    }
+    Steam_WorkshopMount(p->item, qfalse);
+}
+
+static void STEAM_CB Steam_CB_ItemInstalledIO(STEAM_CB_SELF, void* param, unsigned char failed, uint64_t call) {
+    (void)failed;
+    (void)call;
+    Steam_CB_ItemInstalled(STEAM_CB_PASS, param);
+}
+
+static void STEAM_CB Steam_CB_DownloadResultIO(STEAM_CB_SELF, void* param, unsigned char failed, uint64_t call) {
+    (void)failed;
+    (void)call;
+    Steam_CB_DownloadResult(STEAM_CB_PASS, param);
+}
+
+static int STEAM_CB Steam_CB_ItemInstalledSize(STEAM_CB_SELF) {
+    return (int)sizeof(steamItemInstalled_t);
+}
+
+static int STEAM_CB Steam_CB_DownloadResultSize(STEAM_CB_SELF) {
+    return (int)sizeof(steamDownloadResult_t);
+}
+
+static void* steamItemInstalledVTable[3];
+static void* steamDownloadResultVTable[3];
+
+// [QL] SteamWorkshopCallbacks (0x44e5f0 / 0x4696d0): the server's callbacks on a dedicated
+// server, the client's otherwise
+static void Steam_WorkshopListen(qboolean asServer) {
+    if (!st.RegisterCallback || st.itemInstalled.vtable) {
+        return;
+    }
+    steamItemInstalledVTable[0] = (void*)Steam_CB_ItemInstalledIO;
+    steamItemInstalledVTable[1] = (void*)Steam_CB_ItemInstalled;
+    steamItemInstalledVTable[2] = (void*)Steam_CB_ItemInstalledSize;
+    steamDownloadResultVTable[0] = (void*)Steam_CB_DownloadResultIO;
+    steamDownloadResultVTable[1] = (void*)Steam_CB_DownloadResult;
+    steamDownloadResultVTable[2] = (void*)Steam_CB_DownloadResultSize;
+
+    st.itemInstalled.vtable = steamItemInstalledVTable;
+    st.itemInstalled.flags = asServer ? STEAM_CB_FLAG_GAMESERVER : 0;
+    st.itemInstalled.id = STEAM_CB_ITEM_INSTALLED;
+    st.RegisterCallback(&st.itemInstalled, STEAM_CB_ITEM_INSTALLED);
+
+    st.downloadResult.vtable = steamDownloadResultVTable;
+    st.downloadResult.flags = asServer ? STEAM_CB_FLAG_GAMESERVER : 0;
+    st.downloadResult.id = STEAM_CB_DOWNLOAD_RESULT;
+    st.RegisterCallback(&st.downloadResult, STEAM_CB_DOWNLOAD_RESULT);
 }
 
 /*
 ===============
 Steam_DownloadUGC_f
 
-[QL] "steam_downloadugc <itemid>", the command retail has (0x004df010).
+[QL] "steam_downloadugc <itemid>" (qzeroded.x64 0x4376e0, quakelive_steam.exe 0x4df010),
+one of the server's operator commands: an item downloaded on its own, outside the queue
 ===============
 */
-static void Steam_DownloadUGC_f(void) {
-    uint64_t item;
+void Steam_DownloadUGC_f(void) {
+    unsigned long long item = 0;
 
     if (Cmd_Argc() != 2) {
         Com_Printf("Usage: steam_downloadugc <itemid>\n");
         return;
     }
-    item = (uint64_t)strtoull(Cmd_Argv(1), NULL, 10);
-    if (!Steam_WorkshopReady()) {
-        Com_Printf("Steam is not available.\n");
-        return;
-    }
-    Steam_WorkshopDownload(item);
+    sscanf(Cmd_Argv(1), "%llu", &item);
+    Steam_WorkshopQueue((uint64_t)item, qfalse);
 }
 
+#ifndef DEDICATED
 /*
 ===============
-Steam_WorkshopList
+Steam_SubscribeUGC_f / Steam_UnsubscribeUGC_f
 
-The subscribed items, which is where retail gets what it mounts at startup
-(0x004697a0). The Workshop folder on disk is already walked here, so this is for
-knowing which ones Steam knows about, not for mounting them.
+[QL] quakelive_steam.exe 0x4df070 and 0x4df0d0: the player's subscription to an item. One
+Steam already has installed is mounted at once.
 ===============
 */
-int Steam_WorkshopSubscribed(uint64_t* items, int max) {
-    if (!Steam_WorkshopReady() || !st.GetSubscribedItems || !st.GetNumSubscribedItems) {
-        return 0;
+void Steam_SubscribeUGC_f(void) {
+    unsigned long long item = 0;
+
+    if (Cmd_Argc() != 2) {
+        Com_Printf("Usage: steam_subscribeugc <itemid>\n");
+        return;
     }
-    return (int)st.GetSubscribedItems(st.ugc, items, (unsigned int)max);
+    sscanf(Cmd_Argv(1), "%llu", &item);
+    if (!Steam_WorkshopUGC() || !st.SubscribeItem) {
+        return;
+    }
+    st.SubscribeItem(st.ugc, (uint64_t)item);
+    if (Steam_ItemState((uint64_t)item) & STEAM_ITEM_INSTALLED) {
+        FS_WorkshopRestart();
+    }
+}
+
+void Steam_UnsubscribeUGC_f(void) {
+    unsigned long long item = 0;
+
+    if (Cmd_Argc() != 2) {
+        Com_Printf("Usage: steam_unsubscribeugc <itemid>\n");
+        return;
+    }
+    sscanf(Cmd_Argv(1), "%llu", &item);
+    if (!Steam_WorkshopUGC() || !st.UnsubscribeItem) {
+        return;
+    }
+    st.UnsubscribeItem(st.ugc, (uint64_t)item);
+}
+#endif
+
+// [QL] 0x008e0644: whether the server is logged on to Steam
+qboolean Steam_GS_LoggedOn(void) {
+    return (qboolean)(st.serverUp && st.loggedOn);
+}
+
+// what the dedicated server runs while it waits at startup
+void Steam_GS_RunCallbacks(void) {
+    if (st.serverUp) {
+        st.GameServer_RunCallbacks();
+    }
 }
 
 /*
@@ -2608,12 +2912,15 @@ static void STEAM_CB Steam_CB_Servers(STEAM_CB_SELF, void* param) {
     switch (me->id) {
         case STEAM_CB_SERVERS_CONNECTED:
             Com_Printf("Connected to Steam servers\n");
+            st.loggedOn = qtrue;
             SV_SteamConnected();
             break;
         case STEAM_CB_SERVERS_FAILED:
+            st.loggedOn = qfalse;
             Com_Printf("Failed to connect to Steam servers\n");
             break;
         default:
+            st.loggedOn = qfalse;
             Com_Printf("Disconnected from Steam servers\n");
             break;
     }

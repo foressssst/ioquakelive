@@ -416,7 +416,8 @@ void CL_NextDemo(void);
 void CL_ReadDemoMessage(void);
 void CL_StopRecord_f(void);
 
-void CL_InitDownloads(void);
+qboolean CL_InitDownloads(void);
+void CL_DownloadsComplete(void);
 void CL_NextDownload(void);
 
 void CL_GetPing(int n, char* buf, int buflen, int* pingtime);

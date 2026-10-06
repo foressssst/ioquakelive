@@ -202,7 +202,9 @@ typedef enum {
     UI_STEAM_AVATAR,
     // [ioquakelive] a piece of a file of the player's web.pak, from where a text first appears:
     // the pages that show retail's own text read it this way, and none of it travels with us
-    UI_WEBPAK_EXCERPT
+    UI_WEBPAK_EXCERPT,
+    // [QL] uix86.dll 0x10010902 (import +0x180): how much of a Workshop item has come down
+    UI_WORKSHOP_DOWNLOAD_INFO
 } uiImport_t;
 
 // [ioquakelive] what trap_SteamUserStats hands over: the state (UI_DETAILS_*), the player's

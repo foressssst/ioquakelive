@@ -149,12 +149,10 @@ void hA3Dg_ExportRenderGeom(refexport_t* incoming_re);
 
 static int noGameRestart = qfalse;
 
-// [QL] the Workshop items the match asks for and does not have yet
-#define CL_MAX_WORKSHOP 32
-static uint64_t cl_workshopItems[CL_MAX_WORKSHOP];
-static int cl_workshopCount;
-static int cl_workshopIndex;
-static void CL_WorkshopNext(void);
+// [QL] 0x015ee388 and 0x015ee38c: the Workshop items of the server being joined are coming
+// down, and some were missing, which takes a filesystem restart
+static qboolean cl_workshopActive;
+static qboolean cl_workshopRestart;
 
 // how many servers from Steam's list have been copied into the interface's
 static int cl_steamServersTaken;
@@ -1810,8 +1808,6 @@ void CL_Disconnect(qboolean showMainMenu) {
     // Remove pure paks
     FS_PureServerSetLoadedPaks("", "");
     FS_PureServerSetReferencedPaks("", "");
-    // [ioquakelive] and the server's Workshop items go with it at the next restart
-    FS_SetServerWorkshop("");
 
     // [QL] 0x004b8a26: the host's stats are stored as they leave their own game
     if (com_sv_running && com_sv_running->integer) {
@@ -2615,161 +2611,80 @@ void CL_NextDownload(void) {
 
 /*
 ==================
-CL_WorkshopDownloads
+CL_InitDownloads
 
-[QL] 0x004bba30. Before entering, the client downloads through Steam whatever
-Workshop items of CS_STEAM_WORKSHOP_IDS it lacks, one at a time, with progress in
-cl_downloadName, cl_downloadItem and cl_downloadTime. Returns qtrue when there is
-a download to wait for.
+[QL] 0x004bba30. Quake Live's maps come from the Workshop, not over HTTP: with the
+gamestate the client queues the items the server publishes in CS_STEAM_WORKSHOP_IDS
+and waits connected while Steam brings down the missing ones (CL_WorkshopFrame). The
+connection screen shows the last one it asked for. Returns qtrue when it waits.
 ==================
 */
-static qboolean CL_WorkshopDownloads(void) {
-    const char* list;
+qboolean CL_InitDownloads(void) {
     char copy[BIG_INFO_STRING];
+    const char* list;
     char* token;
+    unsigned long long item;
     int total = 0;
-    qboolean remount;
-
-    cl_workshopCount = 0;
-    cl_workshopIndex = 0;
+    int index = 0;
 
     list = cl.gameState.stringData + cl.gameState.stringOffsets[CS_STEAM_WORKSHOP_IDS];
-
-    // [ioquakelive] what this server asks for is what is mounted, in place of the last server's
-    // (FS_SetServerWorkshop): a remote server's set that changed takes a filesystem restart even
-    // with nothing to download; a local game's filesystem restarts with its map anyway
-    FS_SetServerWorkshop(list);
-    remount = (Steam_WorkshopReady() && !clc.demoplaying && !com_sv_running->integer &&
-               FS_ServerWorkshopChanged()) ? qtrue : qfalse;
-
-    if (Steam_WorkshopReady() && list[0]) {
-        Com_Printf("Server requires the following workshop items: %s\n", list);
-        Q_strncpyz(copy, list, sizeof(copy));
-        for (token = strtok(copy, " "); token; token = strtok(NULL, " ")) {
-            uint64_t item = (uint64_t)strtoull(token, NULL, 10);
-
-            if (!item || total >= CL_MAX_WORKSHOP) {
-                continue;
-            }
-            if (Steam_WorkshopInstalled(item)) {
-                continue;
-            }
-            cl_workshopItems[total++] = item;
-        }
-    }
-    cl_workshopCount = total;
-    if (!total && !remount) {
+    if (clc.demoplaying || !list[0]) {
         return qfalse;
     }
-
-    // from here it is like any other download: the game waits connected and restarts the
-    // filesystem at the end to see the new pk3s
-    clc.state = CA_CONNECTED;
-    clc.downloadRestart = qtrue;
-    *clc.downloadTempName = *clc.downloadName = 0;
-    Cvar_Set("cl_downloadName", "");
-    CL_WorkshopNext();
-    return qtrue;
-}
-
-/*
-==================
-CL_WorkshopNext
-
-Asks for the next item on the list. With none left it takes the usual path:
-restarts the filesystem and enters.
-==================
-*/
-void CL_WorkshopNext(void) {
-    while (cl_workshopIndex < cl_workshopCount) {
-        uint64_t item = cl_workshopItems[cl_workshopIndex++];
-
-        Cvar_Set("cl_downloadItem", va("%llu", (unsigned long long)item));
-        Cvar_Set("cl_downloadName", va("Workshop item %i of %i", cl_workshopIndex, cl_workshopCount));
-        Cvar_SetValue("cl_downloadTime", cls.realtime);
-        Cvar_SetValue("cl_downloadSize", 0);
-        Cvar_SetValue("cl_downloadCount", 0);
-        if (Steam_WorkshopDownload(item)) {
-            return;  // wait for Steam to bring it down
+    Com_Printf("Server requires the following workshop items: %s\n", list);
+    Q_strncpyz(copy, list, sizeof(copy));
+    for (token = strtok(copy, " "); token; token = strtok(NULL, " ")) {
+        total++;
+    }
+    Q_strncpyz(copy, list, sizeof(copy));
+    for (token = strtok(copy, " "); token; token = strtok(NULL, " ")) {
+        item = 0;
+        sscanf(token, "%llu", &item);
+        if (Steam_WorkshopQueue((uint64_t)item, qtrue)) {
+            cl_workshopRestart = qtrue;
+            index++;
+            Cvar_Set("cl_downloadItem", token);
+            Cvar_Set("cl_downloadName", va("Workshop item %i of %i", index, total));
+            Cvar_SetValue("cl_downloadTime", cls.realtime);
         }
     }
-
-    // no quedo ninguno pendiente
-    cl_workshopCount = 0;
-    Cvar_Set("cl_downloadName", "");
-    Cvar_Set("cl_downloadItem", "");
-    CL_DownloadsComplete();
+    clc.state = CA_CONNECTED;
+    cl_workshopActive = qtrue;
+    return qtrue;
 }
 
 /*
 ==================
 CL_WorkshopFrame
 
-While Steam fetches an item, progress goes into the same cvars the connection screen
-watches. When it finishes, it moves on to whichever is still missing.
+[QL] 0x004bc320, every frame. With the queue empty, the filesystem restarts on a frame of
+its own to mount what came down; on the next one the client enters, warning first about
+the pk3s of the server it still lacks.
 ==================
 */
 void CL_WorkshopFrame(void) {
-    uint64_t done = 0;
-    uint64_t total = 0;
+    char missing[2048];
 
-    if (!cl_workshopCount) {
+    if (!cl_workshopActive || !Steam_WorkshopDone()) {
         return;
     }
-    if (Steam_WorkshopBusy()) {
-        if (Steam_WorkshopProgress(&done, &total) && total) {
-            Cvar_SetValue("cl_downloadSize", (float)total);
-            Cvar_SetValue("cl_downloadCount", (float)done);
-        }
+    if (cl_workshopRestart) {
+        Com_Printf("Steamworks downloads complete - FS restart is required\n");
+        FS_Restart(clc.checksumFeed);
+        cl_workshopRestart = qfalse;
         return;
     }
-    CL_WorkshopNext();
-}
-
-/*
-=================
-CL_InitDownloads
-
-After receiving a valid game state, we valid the cgame and local zip files here
-and determine if we need to download them
-=================
-*/
-void CL_InitDownloads(void) {
-    char missingfiles[1024];
-
-    // [QL] 0x004bba30: Quake Live's maps come from the Workshop, not over HTTP
-    if (CL_WorkshopDownloads()) {
-        return;
+    Com_DPrintf("Steamworks downloads complete\n");
+    if (FS_ComparePaks(missing, sizeof(missing), qfalse)) {
+        Com_Printf("WARNING: Missing pk3s referenced by the server:\n%s\nThe server will most likely refuse the "
+                   "connection.\n",
+                   missing);
     }
-
-    if (!(cl_allowDownload->integer & DLF_ENABLE)) {
-        // autodownload is disabled on the client
-        // but it's possible that some referenced files on the server are missing
-        if (FS_ComparePaks(missingfiles, sizeof(missingfiles), qfalse)) {
-            // NOTE TTimo I would rather have that printed as a modal message box
-            //   but at this point while joining the game we don't know wether we will successfully join or not
-            Com_Printf(
-                "\nWARNING: You are missing some files referenced by the server:\n%s"
-                "You might not be able to join the game\n"
-                "Go to the setting menu to turn on autodownload, or get the file elsewhere\n\n",
-                missingfiles);
-        }
-    } else if (FS_ComparePaks(clc.downloadList, sizeof(clc.downloadList), qtrue)) {
-        Com_Printf("Need paks: %s\n", clc.downloadList);
-
-        if (*clc.downloadList) {
-            // if autodownloading is not enabled on the server
-            clc.state = CA_CONNECTED;
-
-            *clc.downloadTempName = *clc.downloadName = 0;
-            Cvar_Set("cl_downloadName", "");
-
-            CL_NextDownload();
-            return;
-        }
+    cl_workshopActive = qfalse;
+    // [ioquakelive] retail enters even when the player left while the items came down
+    if (clc.state == CA_CONNECTED) {
+        CL_DownloadsComplete();
     }
-
-    CL_DownloadsComplete();
 }
 
 /*

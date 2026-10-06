@@ -602,9 +602,8 @@ void FS_Shutdown(qboolean closemfp);
 
 qboolean FS_ConditionalRestart(int checksumFeed, qboolean disconnect);
 void FS_Restart(int checksumFeed);
-// [ioquakelive] the Workshop items of the server being joined (CS_STEAM_WORKSHOP_IDS)
-void FS_SetServerWorkshop(const char* list);
-qboolean FS_ServerWorkshopChanged(void);
+// [QL] the restart that mounts a Workshop item downloaded outside a queue
+void FS_WorkshopRestart(void);
 // shutdown and restart the filesystem so changes to fs_gamedir can take effect
 
 void FS_AddGameDirectory(const char* path, const char* dir);
@@ -1065,6 +1064,9 @@ void SCR_DebugGraph(float value);  // FIXME: move logging to common?
 // server interface
 //
 void SV_Init(void);
+#ifdef DEDICATED
+void SV_WorkshopInit(void);
+#endif
 // [QL] 0x4cc216: registers the game module's cvars at boot, before the configs are read
 void SV_RegisterGameCvars(void);
 void SV_Shutdown(char* finalmsg);

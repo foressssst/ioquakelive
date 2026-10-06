@@ -615,6 +615,83 @@ void SV_SpawnServer(char* server, qboolean killBots) {
     Com_Printf("-----------------------------------\n");
 }
 
+#ifdef DEDICATED
+/*
+================
+SV_WorkshopInit
+
+[QL] qzeroded.x64 0x44eac0, before the server starts: once logged on to Steam it queues the
+items of sv_workshopFile, one id per line and '#' for a comment, and waits for them saying
+every second how it goes. A filesystem restart mounts them at the end.
+================
+*/
+void SV_WorkshopInit(void) {
+    unsigned long long item;
+    uint64_t done, total;
+    fileHandle_t f;
+    qboolean any = qfalse;
+    char* buf;
+    char* line;
+    int next, now, len;
+
+    // [ioquakelive] without Steam's server side there is nothing to wait for: retail waits forever
+    if (!Steam_GS_Running()) {
+        return;
+    }
+    next = Sys_Milliseconds() + 1000;
+    while (!Steam_GS_LoggedOn()) {
+        Steam_GS_RunCallbacks();
+        now = Sys_Milliseconds();
+        if (now > next) {
+            next = now + 1000;
+            Com_Printf("Waiting for steam servers\n");
+        }
+        Sys_Sleep(10);
+    }
+
+    len = FS_FOpenFileRead(sv_workshopFile->string, &f, qfalse);
+    if (!f) {
+        Com_Printf("No workshop items file: %s\n", sv_workshopFile->string);
+        return;
+    }
+    buf = Z_Malloc(len + 1);
+    FS_Read(buf, len, f);
+    buf[len] = '\0';
+    FS_FCloseFile(f);
+
+    for (line = strtok(buf, "\n"); line; line = strtok(NULL, "\n")) {
+        if (line[0] == '#') {
+            continue;
+        }
+        if (sscanf(line, "%llu", &item) < 1) {
+            Com_Printf("Parse fail, skip line: \"%s\"\n", line);
+            continue;
+        }
+        any = qtrue;
+        Steam_WorkshopQueue((uint64_t)item, qtrue);
+    }
+    Z_Free(buf);
+    if (!any) {
+        return;
+    }
+
+    Steam_WorkshopDone();
+    next = Sys_Milliseconds() + 1000;
+    while (!Steam_WorkshopDone()) {
+        now = Sys_Milliseconds();
+        if (now > next) {
+            Steam_WorkshopProgress(Steam_WorkshopCurrent(), &done, &total);
+            Com_Printf("Waiting on %i Workshop downloads: %0.2f%% (%llu bytes remain)\n", Steam_WorkshopPending(),
+                       total ? (double)done / (double)total * 100.0 : 0.0, (unsigned long long)(total - done));
+            next = now + 1000;
+        }
+        Steam_GS_RunCallbacks();
+        Sys_Sleep(10);
+    }
+    FS_Restart(0);
+}
+#endif
+
 /*
 ===============
 SV_Init
@@ -663,7 +740,9 @@ void SV_Init(void) {
     sv_master = Cvar_Get("sv_master", "1", CVAR_ARCHIVE);              // [QL] 0x004e3b80
     sv_idleExit = Cvar_Get("sv_idleExit", "120", CVAR_ARCHIVE);        // [QL] 0x004e3e09
     sv_errorExit = Cvar_Get("sv_errorExit", "1", 0);                   // [QL] 0x004e3e1f
-    sv_workshopFile = Cvar_Get("sv_workshopFile", "workshop.txt", CVAR_ARCHIVE);
+#ifdef DEDICATED
+    sv_workshopFile = Cvar_Get("sv_workshopFile", "workshop.txt", CVAR_ARCHIVE);  // [QL] 0x44eb1c
+#endif
     sv_quitOnEmpty = Cvar_Get("sv_quitOnEmpty", "0", CVAR_ARCHIVE);  // [QL] 0x004e3e3a
     sv_fullRedirect = Cvar_Get("sv_fullRedirect", "", CVAR_ARCHIVE);  // [ioquakelive]
 

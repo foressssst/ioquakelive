@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "server.h"
+#include "../qcommon/q_steam.h"
 
 /*
 ===============================================================================
@@ -933,6 +934,12 @@ void SV_AddOperatorCommands(void) {
     Cmd_AddCommand("devmap", SV_Map_f);
     Cmd_SetCommandCompletionFunc("devmap", SV_CompleteMapName);
     Cmd_AddCommand("killserver", SV_KillServer_f);
+    // [QL] qzeroded.x64 0x438d4e, quakelive_steam.exe 0x4df1d8: the Workshop's, after killserver
+    Cmd_AddCommand("steam_downloadugc", Steam_DownloadUGC_f);
+#ifndef DEDICATED
+    Cmd_AddCommand("steam_subscribeugc", Steam_SubscribeUGC_f);
+    Cmd_AddCommand("steam_unsubscribeugc", Steam_UnsubscribeUGC_f);
+#endif
     if (com_dedicated->integer) {
         Cmd_AddCommand("say", SV_ConSay_f);
     }

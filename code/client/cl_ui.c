@@ -1020,6 +1020,13 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             return n;
         }
 
+        case UI_WORKSHOP_DOWNLOAD_INFO: {
+            const char* id = VMA(1);
+            uint64_t* out = VMA(2);
+
+            return Steam_WorkshopProgress(id[0] ? strtoull(id, NULL, 10) : 0, &out[0], &out[1]);
+        }
+
         case UI_STEAM_AVATAR: {
             const char* id = VMA(1);
 

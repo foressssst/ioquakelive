@@ -1174,7 +1174,7 @@ static const cvarHelp_t cvarHelp[] = {
     {"sv_setSteamAccount", "the Steam game server account the server logs in with; empty to log in anonymously"},
     {"sv_showloss", "prints the moves lost between a client and the server (no effect in this build)"},
     {"sv_vac", "the server runs with VAC; read when the game starts"},
-    {"sv_workshopFile", "file that lists the Workshop items the server loads (no effect in this build)"},
+    {"sv_workshopFile", "file that lists the Workshop items the server downloads before it starts, one id per line"},
     {"sv_fullRedirect", "other servers (ip:port, separated by spaces) where an ioquakelive player who finds this one full is sent; the one with room and the most players"},
     {"pmove_AirStepFriction", "speed lost when stepping up in the air"},
     {"pmove_BunnyHop", "hopping forward keeps accelerating past the running speed"},

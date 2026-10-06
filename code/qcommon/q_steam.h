@@ -56,15 +56,23 @@ qboolean Steam_RequestServerDetails(unsigned int ip, unsigned short port);
 int Steam_ServerDetails(char* rules, int rulesSize, char* players, int playersSize);
 qboolean Steam_SetFavorite(unsigned int ip, unsigned short port, qboolean favorite);
 
-// the Workshop, which is where Quake Live downloads its maps from
-qboolean Steam_WorkshopReady(void);
-qboolean Steam_WorkshopInstalled(uint64_t item);
-qboolean Steam_WorkshopDownload(uint64_t item);
-qboolean Steam_WorkshopBusy(void);
-qboolean Steam_WorkshopProgress(uint64_t* done, uint64_t* total);
+// the Workshop, which is where Quake Live downloads its maps from: the same queue on both sides
+qboolean Steam_WorkshopUGC(void);
+qboolean Steam_WorkshopQueue(uint64_t item, qboolean queued);
+qboolean Steam_WorkshopDone(void);
+int Steam_WorkshopPending(void);
+uint64_t Steam_WorkshopCurrent(void);
+qboolean Steam_WorkshopProgress(uint64_t item, uint64_t* done, uint64_t* total);
 qboolean Steam_WorkshopPath(uint64_t item, char* buf, int size);
 int Steam_WorkshopSubscribed(uint64_t* items, int max);
-unsigned int Steam_WorkshopState(uint64_t item);
+const char* Steam_WorkshopFolder(int index, uint64_t* item);
+void Steam_DownloadUGC_f(void);
+#ifndef DEDICATED
+void Steam_SubscribeUGC_f(void);
+void Steam_UnsubscribeUGC_f(void);
+#endif
+qboolean Steam_GS_LoggedOn(void);
+void Steam_GS_RunCallbacks(void);
 uint64_t Steam_GS_SteamID(void);
 int Steam_ServerListCount(void);
 qboolean Steam_ServerListGet(int index, unsigned int* ip, unsigned short* port, int* ping, char* info,

@@ -427,6 +427,7 @@ void CL_ParseGamestate(msg_t* msg) {
     char oldGame[MAX_QPATH];
     int demoPos;
     qboolean restarted;
+    qboolean workshop;
 
     Con_Close();
 
@@ -510,6 +511,10 @@ void CL_ParseGamestate(msg_t* msg) {
     // [ioquakelive] a filesystem restart closes every open file, the demo being played too, and
     // it ended there: a server that reloads the map when the readyup starts the match cut its
     // demos short at that point. The demo keeps its place across the restart.
+    // [QL] 0x004bd948: the Workshop's items are queued before the filesystem restarts, so the
+    // ones Steam already has go in with this restart
+    workshop = CL_InitDownloads();
+
     demoPos = CL_DemoSuspend();
     restarted = FS_ConditionalRestart(clc.checksumFeed, qfalse);
     CL_DemoResume(demoPos);
@@ -526,9 +531,10 @@ void CL_ParseGamestate(msg_t* msg) {
         S_StartBackgroundTrack(track, loopTrack);
     }
 
-    // This used to call CL_StartHunkUsers, but now we enter the download state before loading the
-    // cgame
-    CL_InitDownloads();
+    // without Workshop items to wait for, straight in
+    if (!workshop) {
+        CL_DownloadsComplete();
+    }
 
     // make sure the game starts
     Cvar_Set("cl_paused", "0");

@@ -3684,11 +3684,7 @@ static void FS_ReorderPurePaks(void) {
 FS_Startup
 ================
 */
-#ifndef DEDICATED
-static void FS_AddWorkshopPaks(void);
-#elif defined(_WIN32)
-static void FS_AddWorkshopFolders(void);
-#endif
+static void FS_AddWorkshop(void);
 
 static void FS_Startup(const char* gameName) {
 	const char* homePath;
@@ -3700,6 +3696,7 @@ static void FS_Startup(const char* gameName) {
 	fs_debug = Cvar_Get("fs_debug", "0", 0);
 	fs_basepath = Cvar_Get("fs_basepath", Sys_DefaultInstallPath(), CVAR_INIT | CVAR_PROTECTED);
 	fs_basegame = Cvar_Get("fs_basegame", "", CVAR_INIT);
+	Cvar_Get("fs_skipWorkshop", "0", CVAR_INIT);  // [QL] 0x42cf54
 	// [QL] quakelive_steam.exe 0x4d322f: retail keeps the player's files inside the game
 	// folder, not in the user's profile. It builds fs_homepath as "<fs_basepath>/<steam id>"
 	// when it has one and uses fs_basepath itself when it does not, and that second form is
@@ -3739,14 +3736,11 @@ static void FS_Startup(const char* gameName) {
 		Com_Error(ERR_DROP, "Invalid fs_game '%s'", fs_gamedirvar->string);
 	}
 
-	// add search path elements in reverse priority order
-	// Workshop pk3s have lowest priority - must not override pak00 resources
-#ifndef DEDICATED
-	FS_AddWorkshopPaks();
-#elif defined(_WIN32)
-	FS_AddWorkshopFolders();
-#endif
 	fs_steampath = Cvar_Get("fs_steampath", Sys_SteamPath(), CVAR_INIT | CVAR_PROTECTED);
+
+	// add search path elements in reverse priority order
+	// [QL] 0x42d1b0: the Workshop first, under everything else
+	FS_AddWorkshop();
 	if (fs_steampath->string[0]) {
 		FS_AddGameDirectory(fs_steampath->string, gameName);
 	}
@@ -4014,157 +4008,6 @@ static qboolean FS_CopyFileWithProgress(const char *src, const char *dst,
 	return qtrue;
 }
 
-#ifdef DEDICATED
-/*
-===================
-FS_AddWorkshopFolders
-
-[ioquakelive] the dedicated server's; the client mounts through Steam (FS_AddWorkshopPaks).
-Find the Steam workshop directory for Quake Live (app 282440) and add
-each workshop item's directory to the filesystem search path so that
-any pk3 files within are loaded.
-
-Workshop content lives at:
-  <steamLibrary>/steamapps/workshop/content/282440/<workshopItemId>/
-
-We derive the library path from the QL install path by stripping
-"steamapps/common/Quake Live" to get back to the library root.
-===================
-*/
-static void FS_AddWorkshopFolders(void) {
-	char qlPath[MAX_OSPATH];
-	char workshopBase[MAX_OSPATH];
-	char searchPath[MAX_OSPATH];
-	char savedGamedir[MAX_OSPATH];
-	char *steamapps;
-	WIN32_FIND_DATAA dirFd;
-	HANDLE hDirFind;
-	int count = 0;
-
-	// Binary checks fs_skipWorkshop cvar (default 0)
-	if (Cvar_VariableIntegerValue("fs_skipWorkshop")) {
-		Com_Printf("Skipping workshop since fs_skipWorkshop is set.\n");
-		return;
-	}
-
-	if (!FS_FindSteamQLPath(qlPath, sizeof(qlPath))) {
-		Com_Printf("Workshop: Could not find Steam QL installation.\n");
-		return;
-	}
-
-	Com_Printf("Workshop: QL found at %s\n", qlPath);
-
-	// Find "steamapps" in the QL path to get the library root.
-	// qlPath = "<library>/steamapps/common/Quake Live"
-	// We want "<library>/steamapps/workshop/content/282440/"
-	{
-		char *p;
-		char temp[MAX_OSPATH];
-		Q_strncpyz(temp, qlPath, sizeof(temp));
-
-		for (p = temp; *p; p++) {
-			if (*p >= 'A' && *p <= 'Z') *p += 32;
-		}
-
-		steamapps = strstr(temp, "steamapps");
-		if (!steamapps)
-			return;
-
-		steamapps = qlPath + (steamapps - temp);
-	}
-
-	{
-		char libraryRoot[MAX_OSPATH];
-		int steamappsEnd = (int)(steamapps - qlPath) + 9;
-		if (steamappsEnd >= (int)sizeof(libraryRoot))
-			return;
-		Q_strncpyz(libraryRoot, qlPath, steamappsEnd + 1);
-		Com_sprintf(workshopBase, sizeof(workshopBase),
-		            "%s\\workshop\\content\\282440", libraryRoot);
-	}
-
-	Com_Printf("Workshop: checking %s\n", workshopBase);
-
-	if (!FS_DirExistsOS(workshopBase)) {
-		Com_Printf("Workshop: directory not found.\n");
-		return;
-	}
-
-	// Save fs_gamedir - FS_AddGameDirectory sets it to the dir param,
-	// and we pass "" which would leave it empty
-	Q_strncpyz(savedGamedir, fs_gamedir, sizeof(savedGamedir));
-
-	// Enumerate workshop item directories.
-	// The binary calls FS_AddGameDirectory(installPath, "") for each item,
-	// passing the full item path as the base and empty string as gamedir.
-	// This makes FS_BuildOSPath resolve to just the item directory.
-	Com_sprintf(searchPath, sizeof(searchPath), "%s\\*", workshopBase);
-	hDirFind = FindFirstFileA(searchPath, &dirFd);
-	if (hDirFind == INVALID_HANDLE_VALUE) {
-		Q_strncpyz(fs_gamedir, savedGamedir, sizeof(fs_gamedir));
-		return;
-	}
-
-	do {
-		char itemPath[MAX_OSPATH];
-		char pk3Test[MAX_OSPATH];
-		WIN32_FIND_DATAA pk3Fd;
-		HANDLE hPk3;
-
-		if (!(dirFd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-			continue;
-		if (dirFd.cFileName[0] == '.')
-			continue;
-
-		Com_sprintf(itemPath, sizeof(itemPath), "%s\\%s",
-		            workshopBase, dirFd.cFileName);
-
-		// Only add if the directory contains at least one pk3
-		Com_sprintf(pk3Test, sizeof(pk3Test), "%s\\*.pk3", itemPath);
-		hPk3 = FindFirstFileA(pk3Test, &pk3Fd);
-		if (hPk3 == INVALID_HANDLE_VALUE)
-			continue;
-		FindClose(hPk3);
-
-		// Load pk3s from the workshop item directory.
-		// We pass "" as gamedir so pk3s are loaded directly from itemPath.
-		// Then we patch pakGamename to BASEGAME_DIR so the paks pass
-		// ioquake3's pure server checks (which filter by gamename).
-		{
-			searchpath_t *before = fs_searchpaths;
-			searchpath_t *sp;
-			unsigned long long itemId = strtoull(dirFd.cFileName, NULL, 10);
-
-			FS_AddGameDirectory(itemPath, "");
-
-			// [QL] 0x004d2e80: whoever mounts an item does so knowing which one it is,
-			// because the server then publishes the list (sv_referencedSteamworks) and the
-			// client downloads the ones it lacks. The folder is named after the item.
-			for (sp = fs_searchpaths; sp && sp != before; sp = sp->next) {
-				if (sp->pack) {
-					sp->pack->workshopId = itemId;
-				}
-			}
-		}
-
-		// Binary leaves pakGamename as "" for workshop paks.
-		// FS_Loaded* includes all paks (matching binary behavior).
-		// FS_Referenced* only includes paks with referenced flag set.
-		count++;
-	} while (FindNextFileA(hDirFind, &dirFd));
-
-	FindClose(hDirFind);
-
-	// Restore fs_gamedir to what it was before workshop loading
-	Q_strncpyz(fs_gamedir, savedGamedir, sizeof(fs_gamedir));
-
-	if (count > 0) {
-		Com_Printf("Added %d Steam Workshop item%s to search path.\n",
-		           count, count == 1 ? "" : "s");
-	}
-}
-#endif // DEDICATED
-
 static void FS_CopyFromSteam(void) {
 	char qlPath[MAX_OSPATH];
 	char pak00Dest[MAX_OSPATH];
@@ -4233,71 +4076,83 @@ static void FS_CopyFromSteam(void) {
 
 /*
 ===================
-FS_SetServerWorkshop
+FS_AddWorkshopDir
 
-[ioquakelive] the Workshop items of the server being joined, mounted with the subscribed ones
+[QL] 0x42cb70 with an item: its folder as a game directory, its pk3s marked with the item
+the server publishes them under (sv_referencedSteamworks). Without pak00 the folder goes
+in alone, without its pk3s.
 ===================
 */
-// Retail keeps every item a server made it download mounted for the rest of the session (the
-// table 0x004697a0 walks after the subscribed ones), so a server's custom banners outlive it:
-// on the next server they show over its own, or as a missing image where it is pure. Here only
-// the current server's items are mounted, and leaving it takes them away.
-static char fs_serverWorkshop[BIG_INFO_STRING];
-static char fs_mountedServerWorkshop[BIG_INFO_STRING];
-
-void FS_SetServerWorkshop(const char* list) {
-	Q_strncpyz(fs_serverWorkshop, list ? list : "", sizeof(fs_serverWorkshop));
-}
-
-// whether the filesystem has to restart to mount what the server asks for
-qboolean FS_ServerWorkshopChanged(void) {
-	return strcmp(fs_serverWorkshop, fs_mountedServerWorkshop) ? qtrue : qfalse;
-}
-
-#ifndef DEDICATED
-#define FS_MAX_WORKSHOP_ITEMS 256  // [QL] 0x004697a0 asks Steam for up to 256 subscribed items
-
-/*
-===================
-FS_AddWorkshopItem
-
-[QL] 0x004d2e80: an installed item's folder as a game directory, its pk3s marked with the item
-===================
-*/
-static int FS_AddWorkshopItem(uint64_t item) {
-	char folder[MAX_OSPATH];
+static void FS_AddWorkshopDir(const char* folder, qboolean skipPaks, uint64_t item) {
+	char savedGamedir[MAX_OSPATH];
+	char curpath[MAX_OSPATH + 1];
 	searchpath_t* before = fs_searchpaths;
 	searchpath_t* sp;
 
-	if (!Steam_WorkshopPath(item, folder, sizeof(folder)) || !folder[0]) {
-		return 0;
+	if (!folder[0]) {
+		return;
 	}
+	if (skipPaks) {
+		for (sp = fs_searchpaths; sp; sp = sp->next) {
+			if (sp->dir && !Q_stricmp(sp->dir->path, folder) && !sp->dir->gamedir[0]) {
+				return;
+			}
+		}
+		Q_strncpyz(curpath, FS_BuildOSPath(folder, "", ""), sizeof(curpath));
+		curpath[strlen(curpath) - 1] = '\0';
+		sp = Z_Malloc(sizeof(searchpath_t));
+		sp->dir = Z_Malloc(sizeof(*sp->dir));
+		Q_strncpyz(sp->dir->path, folder, sizeof(sp->dir->path));
+		Q_strncpyz(sp->dir->fullpath, curpath, sizeof(sp->dir->fullpath));
+		sp->next = fs_searchpaths;
+		fs_searchpaths = sp;
+		return;
+	}
+	Q_strncpyz(savedGamedir, fs_gamedir, sizeof(savedGamedir));
 	FS_AddGameDirectory(folder, "");
-	// the server publishes the items its pk3s came from (sv_referencedSteamworks)
+	Q_strncpyz(fs_gamedir, savedGamedir, sizeof(fs_gamedir));
 	for (sp = fs_searchpaths; sp && sp != before; sp = sp->next) {
 		if (sp->pack) {
 			sp->pack->workshopId = item;
 		}
 	}
-	return 1;
+}
+
+// [QL] 0x44e690 / 0x4697a0 look for pak00 in the install folder; ours can also be Steam's
+static qboolean FS_HavePak00(void) {
+	FILE* f = Sys_FOpen(FS_BuildOSPath(fs_basepath->string, BASEGAME_DIR, "pak00.pk3"), "rb");
+
+	if (!f && fs_steampath && fs_steampath->string[0]) {
+		f = Sys_FOpen(FS_BuildOSPath(fs_steampath->string, BASEGAME_DIR, "pak00.pk3"), "rb");
+	}
+	if (!f) {
+		return qfalse;
+	}
+	fclose(f);
+	return qtrue;
 }
 
 /*
 ===================
-FS_AddWorkshopPaks
+FS_AddWorkshop
 
-[QL] 0x004697a0, under everything else: the server's items and the subscribed ones
+[QL] qzeroded.x64 0x44e690, quakelive_steam.exe 0x4697a0, under everything else: the
+items the player is subscribed to and then the ones downloaded this session, which stay
+mounted until the game quits (Steam_WorkshopFolder).
 ===================
 */
-static void FS_AddWorkshopPaks(void) {
-	uint64_t server[FS_MAX_WORKSHOP_ITEMS];
-	uint64_t subscribed[FS_MAX_WORKSHOP_ITEMS];
-	char savedGamedir[MAX_OSPATH];
-	const char* p;
-	int numServer = 0, numSubscribed, count = 0, i, j;
+static void FS_AddWorkshop(void) {
+	uint64_t items[256];
+	char folder[MAX_OSPATH];
+	const char* path;
+	uint64_t item;
+	qboolean skipPaks;
+	int count, i;
 
-	Q_strncpyz(fs_mountedServerWorkshop, fs_serverWorkshop, sizeof(fs_mountedServerWorkshop));
-
+	skipPaks = (qboolean)!FS_HavePak00();
+	if (skipPaks) {
+		Com_Printf("WARNING: Skipping workshop PK3s since pak00 doesn't exist.\n");
+	}
 	if (Cvar_VariableIntegerValue("fs_skipWorkshop")) {
 		Com_Printf("Skipping workshop since fs_skipWorkshop is set.\n");
 		return;
@@ -4306,54 +4161,25 @@ static void FS_AddWorkshopPaks(void) {
 		Com_Printf("Skipping workshop since running in build mode.\n");
 		return;
 	}
-	if (!Steam_WorkshopReady()) {
+	if (!Steam_WorkshopUGC()) {
 		Com_Printf("WARNING: Skipping workshop, ISteamUGC is NULL.\n");
 		return;
 	}
-
-	p = fs_serverWorkshop;
-	while (*p && numServer < FS_MAX_WORKSHOP_ITEMS) {
-		char* end;
-		uint64_t item = (uint64_t)strtoull(p, &end, 10);
-
-		if (end == p) {
-			p++;
-			continue;
-		}
-		if (item) {
-			server[numServer++] = item;
-		}
-		p = end;
-	}
-
-	Q_strncpyz(savedGamedir, fs_gamedir, sizeof(savedGamedir));
-
-	// the first one mounted has the lowest priority and its shaders are the ones that count, so
-	// the server's items go first and from the end of its list: the last one wins, as it does on
-	// a retail server, and a server's banners win over the subscribed ones'
-	for (i = numServer - 1; i >= 0; i--) {
-		for (j = i + 1; j < numServer && server[j] != server[i]; j++) {
-		}
-		if (j == numServer) {
-			count += FS_AddWorkshopItem(server[i]);
+	count = Steam_WorkshopSubscribed(items, ARRAY_LEN(items));
+	for (i = 0; i < count; i++) {
+		if (Steam_WorkshopPath(items[i], folder, sizeof(folder))) {
+			FS_AddWorkshopDir(folder, skipPaks, items[i]);
 		}
 	}
-	numSubscribed = Steam_WorkshopSubscribed(subscribed, FS_MAX_WORKSHOP_ITEMS);
-	for (i = 0; i < numSubscribed; i++) {
-		for (j = 0; j < numServer && server[j] != subscribed[i]; j++) {
-		}
-		if (j == numServer) {
-			count += FS_AddWorkshopItem(subscribed[i]);
-		}
-	}
-
-	Q_strncpyz(fs_gamedir, savedGamedir, sizeof(fs_gamedir));
-
-	if (count > 0) {
-		Com_Printf("Added %d Steam Workshop item%s to search path.\n", count, count == 1 ? "" : "s");
+	for (i = 0; (path = Steam_WorkshopFolder(i, &item)) != NULL; i++) {
+		FS_AddWorkshopDir(path, skipPaks, item);
 	}
 }
-#endif // !DEDICATED
+
+// [QL] what an item that arrives outside a queue brings: a restart that mounts it
+void FS_WorkshopRestart(void) {
+	FS_Restart(fs_checksumFeed);
+}
 
 /*
 =====================
@@ -4589,10 +4415,7 @@ const char* FS_ReferencedSteamworksItems(void) {
 		if (strstr(info, id)) {
 			continue;
 		}
-		if (*info) {
-			Q_strcat(info, sizeof(info), " ");
-		}
-		Q_strcat(info, sizeof(info), id);
+		Q_strcat(info, sizeof(info), va("%s ", id));
 	}
 	return info;
 }

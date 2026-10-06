@@ -194,6 +194,15 @@ int trap_WebPakExcerpt(const char* name, const char* marker, char* out, int size
     return syscall(UI_WEBPAK_EXCERPT, name, marker, out, size);
 }
 
+qboolean trap_WorkshopDownloadInfo(const char* item, uint64_t* done, uint64_t* total) {
+    uint64_t out[2] = {0, 0};
+    qboolean ok = syscall(UI_WORKSHOP_DOWNLOAD_INFO, item, out);
+
+    *done = out[0];
+    *total = out[1];
+    return ok;
+}
+
 qboolean trap_SteamAvatar(const char* steamId, char* path, int size) {
     return syscall(UI_STEAM_AVATAR, steamId, path, size);
 }

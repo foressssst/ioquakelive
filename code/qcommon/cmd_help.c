@@ -172,6 +172,10 @@ static const cmdHelp_t cmdHelp[] = {
     {"steamservers", "prints the state of the server list request"},
     {"steam_downloadugc", "downloads a Workshop item by id\n"
                           "usage: steam_downloadugc <item id>"},
+    {"steam_subscribeugc", "subscribes to a Workshop item\n"
+                           "usage: steam_subscribeugc <item id>"},
+    {"steam_unsubscribeugc", "unsubscribes from a Workshop item\n"
+                             "usage: steam_unsubscribeugc <item id>"},
 
     // ----------------------------------------------------------------- demos
     {"record", "starts recording a demo\n"

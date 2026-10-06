@@ -5770,13 +5770,18 @@ static void UI_DisplayDownloadInfo(const char* downloadName, float centerPoint, 
     static char xferText[] = "Transfer rate:";
 
     int downloadSize, downloadCount, downloadTime;
+    char item[64];
+    uint64_t done, total;
     char dlSizeBuf[64], totalSizeBuf[64], xferRateBuf[64], dlTimeBuf[64];
     int xferRate;
     int leftWidth;
     const char* s;
 
-    downloadSize = trap_Cvar_VariableValue("cl_downloadSize");
-    downloadCount = trap_Cvar_VariableValue("cl_downloadCount");
+    // [QL] 0x10010902: what has come down of the item cl_downloadItem names, asked of Steam
+    trap_Cvar_VariableStringBuffer("cl_downloadItem", item, sizeof(item));
+    trap_WorkshopDownloadInfo(item, &done, &total);
+    downloadSize = (int)total;
+    downloadCount = (int)done;
     downloadTime = trap_Cvar_VariableValue("cl_downloadTime");
 
     leftWidth = 320;

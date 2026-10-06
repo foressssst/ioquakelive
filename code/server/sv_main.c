@@ -57,7 +57,7 @@ cvar_t* sv_floodProtect;
 cvar_t* sv_master;       // [QL] answer queries and show on the list
 cvar_t* sv_idleExit;     // [QL] shut down after so long with no map
 cvar_t* sv_errorExit;    // [QL] shut down on an error
-cvar_t* sv_workshopFile; // [QL] the file listing the Workshop items
+cvar_t* sv_workshopFile; // [QL] the file listing the Workshop items, the dedicated server's
 cvar_t* sv_quitOnEmpty;  // [QL] shut down once the server is left with nobody
 cvar_t* sv_fullRedirect; // [ioquakelive] where to send the ones who find the server full
 cvar_t* sv_lanForceRate;  // dedicated 1 (LAN) server forces local client rates to 99999 (bug #491)
