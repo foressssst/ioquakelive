@@ -5609,7 +5609,9 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	//
 	// Viewport.
 	//
-	if ( program_index == 0 ) {
+	// [ioquakelive] the neutral pass of the menu (8) covers the window too: with no size it
+	// drew nothing and the menu stayed black
+	if ( program_index == 0 || program_index == 8 ) {
 		// gamma correction
 		viewport.x = 0.0 + vk.blitX0;
 		viewport.y = 0.0 + vk.blitY0;
