@@ -299,7 +299,7 @@ extern cvar_t* sv_quitOnEmpty;
 extern cvar_t* sv_fullRedirect;
 extern cvar_t* sv_lanForceRate;
 
-void SV_FullRedirect(netadr_t from);
+void SV_FullRedirect(netadr_t from, int challenge);
 extern cvar_t* sv_altEntDir;
 extern cvar_t* sv_dumpEntities;
 extern cvar_t* sv_banFile;

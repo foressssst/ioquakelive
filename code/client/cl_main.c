@@ -2900,21 +2900,22 @@ Responses to broadcasts, etc
 =================
 CL_RedirectPacket
 
-[ioquakelive] A full ioqlds names another server with room (sv_fullRedirect). While
-connecting, and only from the server being connected to, the client goes there instead of
-waiting at the door. ":<port>" is a server on the same machine. An address has to be written
-in numbers, and three in a row at most, so two full servers cannot bounce it forever.
+[ioquakelive] A full ioqlds names another server with room (sv_fullRedirect). Only in the
+answer to the connect, with the challenge that server gave this client -- a packet forged
+with the server's address does not know it -- the client goes there instead of waiting at the
+door. ":<port>" is a server on the same machine. An address has to be written in numbers,
+and three in a row at most, so two full servers cannot bounce it forever.
 =================
 */
 #define CL_MAX_REDIRECTS 3
 
 static void CL_RedirectPacket(netadr_t from) {
     char server[MAX_OSPATH];
-    const char* to = Cmd_Argv(1);
+    const char* to = Cmd_Argv(2);
     netadr_t adr;
 
-    if (!cl_followRedirect->integer || (clc.state != CA_CONNECTING && clc.state != CA_CHALLENGING) ||
-        !NET_CompareAdr(from, clc.serverAddress) || !to[0] || clRedirectHops >= CL_MAX_REDIRECTS) {
+    if (!cl_followRedirect->integer || clc.state != CA_CHALLENGING || !NET_CompareAdr(from, clc.serverAddress) ||
+        Cmd_Argc() != 3 || atoi(Cmd_Argv(1)) != clc.challenge || !to[0] || clRedirectHops >= CL_MAX_REDIRECTS) {
         return;
     }
     if (to[0] == ':') {

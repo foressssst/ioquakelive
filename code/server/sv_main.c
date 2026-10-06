@@ -800,9 +800,11 @@ SV_FullRedirect
 
 Someone found no slot left: the server with room and the most players, if any answered lately.
 One on this machine goes as ":<port>", for the client to put this server's address in front.
+It carries the challenge the client was just checked with, which only the two of them know,
+so a packet forged with this server's address cannot send a player anywhere.
 =================
 */
-void SV_FullRedirect(netadr_t from) {
+void SV_FullRedirect(netadr_t from, int challenge) {
     svRedirect_t* best = NULL;
     int now = Sys_Milliseconds();
     int i;
@@ -821,9 +823,9 @@ void SV_FullRedirect(netadr_t from) {
         return;
     }
     if (best->adr.type == NA_IP && best->adr.ip[0] == 127) {
-        NET_OutOfBandPrint(NS_SERVER, from, "redirect :%i", BigShort(best->adr.port));
+        NET_OutOfBandPrint(NS_SERVER, from, "redirect %i :%i", challenge, BigShort(best->adr.port));
     } else {
-        NET_OutOfBandPrint(NS_SERVER, from, "redirect %s", NET_AdrToStringwPort(best->adr));
+        NET_OutOfBandPrint(NS_SERVER, from, "redirect %i %s", challenge, NET_AdrToStringwPort(best->adr));
     }
     Com_Printf("Server is full: %s sent to %s (%i of %i)\n", NET_AdrToString(from),
                NET_AdrToStringwPort(best->adr), best->clients, best->maxClients);
