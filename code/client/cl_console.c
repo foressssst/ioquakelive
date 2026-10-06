@@ -174,7 +174,7 @@ typedef struct {
 
 // a Quake Live palette: black, reds and ambers, and QuakeClub's green around it
 static conColor_t con_colors[CC_COUNT] = {
-    {"con_colBG", "0B0B0DEB", qtrue, "RGBA color of the background"},
+    {"con_colBG", "0B0B0DFF", qtrue, "RGBA color of the background; its alpha is multiplied by " S_COLOR_CVAR "con_opacity"},
     {"con_colBorder", "FFCC33FF", qtrue, "RGBA color of the border"},
     {"con_colArrow", "E03C3CFF", qtrue, "RGBA color of backscroll arrows"},
     {"con_colShadow", "000000FF", qtrue, "RGBA color of text shadows"},
@@ -1236,6 +1236,10 @@ void Con_Init(void) {
     if (!Q_stricmp(con_colors[CC_BORDER].cvar->string, "C01A1AFF")) {
         Cvar_Set(con_colors[CC_BORDER].name, con_colors[CC_BORDER].defaultValue);
     }
+    // [ioquakelive] up to 0.3.7 the background's alpha was its own (EB); con_opacity gives it now
+    if (!Q_stricmp(con_colors[CC_BG].cvar->string, "0B0B0DEB")) {
+        Cvar_Set(con_colors[CC_BG].name, con_colors[CC_BG].defaultValue);
+    }
     Con_UpdateColors();
 
     Cvar_SetHelp("con_style", "console style\n"
@@ -1249,14 +1253,12 @@ void Con_Init(void) {
                  "Only used by " S_COLOR_CVAR "con_style " S_COLOR_VAL "1" S_COLOR_HELP ".");
     Cvar_SetHelp("con_history", "writes the command history to consolehistory.txt");
     Cvar_SetHelp("con_background", "console background\n"
-                 S_COLOR_VAL "    0 " S_COLOR_HELP "= Black, with the " S_COLOR_CVAR "con_opacity" S_COLOR_HELP " opacity\n"
-                 S_COLOR_VAL "    1 " S_COLOR_HELP "= Console image\n"
-                 "Only used by " S_COLOR_CVAR "con_style " S_COLOR_VAL "0" S_COLOR_HELP ".");
+                 S_COLOR_VAL "    0 " S_COLOR_HELP "= A color, with the " S_COLOR_CVAR "con_opacity" S_COLOR_HELP " opacity: black, or " S_COLOR_CVAR "con_colBG" S_COLOR_HELP " with " S_COLOR_CVAR "con_style " S_COLOR_VAL "1\n"
+                 S_COLOR_VAL "    1 " S_COLOR_HELP "= Console image");
     Cvar_SetHelp("con_height", "console height, as a fraction of the screen");
     Cvar_SetHelp("con_matchlimit", "max. number of matches printed by " S_COLOR_CMD "find");
     Cvar_SetHelp("con_noprint", "disables console printing");
-    Cvar_SetHelp("con_opacity", "opacity of the black console background\n"
-                 "Only used by " S_COLOR_CVAR "con_style " S_COLOR_VAL "0" S_COLOR_HELP ".");
+    Cvar_SetHelp("con_opacity", "opacity of the console background");
     Cvar_SetHelp("con_scale", "console text scale");
     Cvar_SetHelp("con_speed", "console opening/closing speed");
     Cvar_SetHelp("con_timestamps", "prefixes new console lines with the time");
@@ -2016,7 +2018,17 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
     con.xadjust = 0;
     x0 = m.cellW;  // one cell of margin
 
-    Con_FillRectPx(0, 0, cls.glconfig.vidWidth, lines - 2, con_colors[CC_BG].color);
+    // [ioquakelive] the background follows Quake Live's con_background and con_opacity here too
+    if (con_background->value != 0) {
+        re.SetColor(NULL);
+        re.DrawStretchPic(0, 0, cls.glconfig.vidWidth, lines - 2, 0, 0, 1, 1, cls.consoleShader);
+    } else {
+        vec4_t bg;
+
+        Vector4Copy(con_colors[CC_BG].color, bg);
+        bg[3] *= con_opacity->value;
+        Con_FillRectPx(0, 0, cls.glconfig.vidWidth, lines - 2, bg);
+    }
     Con_FillRectPx(0, lines - 2, cls.glconfig.vidWidth, 2, con_colors[CC_BORDER].color);
 
     // version, where Quake Live puts it, in the colour of the edge it sits on
