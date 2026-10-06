@@ -16,7 +16,7 @@
 			"dmflags": "28",
 			"g_voteFlags": "2048",
 			"bot_nochat": "1",
-			"bot_thinktime": "50",
+			"bot_thinktime": "0",
 			"g_advancedTraining": "1",
 			"g_trainingSpawn": "808 664 -128 225",
 			"g_trainingTarget": "600 400 -190"

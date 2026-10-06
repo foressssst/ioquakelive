@@ -3904,31 +3904,102 @@ int AINode_FollowMe(bot_state_t* bs) {
 AIEnter_DodgeTrainer
 
 [ioquakelive] g_advancedTraining 1, the lightning gun room: the bot holds the gauntlet, never
-attacks, never goes down, and dodges around where it spawned as well as it can
+attacks and never goes down, and dodges the player the way a duel player does. It strafes short,
+medium and long, circles, closes in and backs off on the diagonal, jumps now and then to throw the
+aim off and turns when it is hit; the better the player tracks it, the shorter its strafes, the
+quicker its turns and the more it jumps.
 ===============
 */
 #define DODGE_HEALTH 9999
-#define DODGE_LEASH 240.0f
+#define DODGE_LEASH 300.0f
+
+#define DODGE_STRAFE 0  // across the line of sight, back and forth
+#define DODGE_CIRCLE 1  // one long run round the player
+#define DODGE_CLOSE 2   // in on the diagonal
+#define DODGE_BACK 3    // out on the diagonal
 
 void AIEnter_DodgeTrainer(bot_state_t* bs) {
+    float now = FloatTime();
+
     bs->ltgtype = LTG_DODGETRAINER;
     bs->ainode = AINode_DodgeTrainer;
     bs->enemy = -1;
     VectorCopy(bs->origin, bs->dodgeAnchor);
     bs->dodgeDir = random() < 0.5f ? 1 : -1;
-    bs->dodgeRunStart = FloatTime();
-    bs->dodgeTurnTime = FloatTime() + 0.3f;
+    bs->dodgeRunStart = now;
+    bs->dodgeTurnTime = now + 0.3f;
     bs->dodgeHitTime = 0;
-    bs->dodgeJumpTime = FloatTime() + 8.0f + random() * 8.0f;
+    bs->dodgeJumpTime = now + 3.0f + random() * 3.0f;
+    bs->dodgeMode = DODGE_STRAFE;
+    bs->dodgeModeEnd = now + 2.0f;
+    bs->dodgeRadial = 0;
+    bs->dodgeHeat = 0;
+    bs->dodgeThink = now;
+    bs->dodgeJumped = 0;
     BotRecordNodeSwitch(bs, "dodge trainer", "", "");
 }
 
-// left or right of the player, never toward or away from it, and back toward home
+// what it does next: in when the player is far, out when close, otherwise any of the four
+static void BotDodgeNextMode(bot_state_t* bs, float dist, float now) {
+    float r = random();
+
+    if (dist > 650) {
+        bs->dodgeMode = DODGE_CLOSE;
+    } else if (dist < 220) {
+        bs->dodgeMode = DODGE_BACK;
+    } else if (r < 0.45f) {
+        bs->dodgeMode = DODGE_STRAFE;
+    } else if (r < 0.70f) {
+        bs->dodgeMode = DODGE_CIRCLE;
+    } else if (r < 0.85f) {
+        bs->dodgeMode = DODGE_CLOSE;
+    } else {
+        bs->dodgeMode = DODGE_BACK;
+    }
+    switch (bs->dodgeMode) {
+        case DODGE_CIRCLE:
+            bs->dodgeRadial = 0;
+            bs->dodgeModeEnd = now + 1.0f + random();
+            break;
+        case DODGE_CLOSE:
+            bs->dodgeRadial = 0.6f;
+            bs->dodgeModeEnd = now + 0.6f + random() * 0.6f;
+            break;
+        case DODGE_BACK:
+            bs->dodgeRadial = -0.6f;
+            bs->dodgeModeEnd = now + 0.6f + random() * 0.6f;
+            break;
+        default:
+            bs->dodgeRadial = crandom() * 0.15f;
+            bs->dodgeModeEnd = now + 1.5f + random() * 2.0f;
+            break;
+    }
+}
+
+// how long it runs one way: round the player a long run; otherwise short jukes, medium and long
+// strafes, the short ones more often and the long ones shorter the better the player tracks it
+static float BotDodgeRunTime(bot_state_t* bs) {
+    float heat = bs->dodgeHeat;
+
+    if (bs->dodgeMode == DODGE_CIRCLE) {
+        return 0.8f + random() * 0.8f;
+    }
+    if (random() < 0.25f + 0.5f * heat) {
+        return 0.1f + random() * 0.18f;
+    }
+    if (random() < 0.5f) {
+        return 0.3f + random() * 0.35f;
+    }
+    return 0.7f + random() * 0.7f * (1.0f - 0.6f * heat);
+}
+
+// across the line to the player, in or out as its plan says, and back toward home
 static void BotDodgeDirection(bot_state_t* bs, const vec3_t toHuman, vec3_t dir) {
     vec3_t home;
     float away;
 
     VectorSet(dir, -toHuman[1] * bs->dodgeDir, toHuman[0] * bs->dodgeDir, 0);
+    VectorMA(dir, bs->dodgeRadial, toHuman, dir);
     VectorSubtract(bs->dodgeAnchor, bs->origin, home);
     home[2] = 0;
     away = VectorNormalize(home);
@@ -3938,7 +4009,6 @@ static void BotDodgeDirection(bot_state_t* bs, const vec3_t toHuman, vec3_t dir)
     dir[2] = 0;
     VectorNormalize(dir);
 }
-
 // a step that way stays off the walls, on its own floor, out of lava and slime, and does not
 // take it further out than its ground
 static qboolean BotDodgeClear(bot_state_t* bs, const vec3_t dir) {
@@ -3967,12 +4037,21 @@ static qboolean BotDodgeClear(bot_state_t* bs, const vec3_t dir) {
            fabs(tr.endpos[2] - bs->dodgeAnchor[2]) <= 24;
 }
 
+static void BotDodgeTurn(bot_state_t* bs, float now) {
+    bs->dodgeDir = -bs->dodgeDir;
+    bs->dodgeRunStart = now;
+    bs->dodgeTurnTime = now + BotDodgeRunTime(bs);
+    bs->dodgeHitTime = 0;
+}
+
 int AINode_DodgeTrainer(bot_state_t* bs) {
     gentity_t* ent = &g_entities[bs->client];
     int human = G_TrainingHumanClient();
     float now = FloatTime();
+    float dist, dt;
     vec3_t toHuman, dir;
     qboolean hit;
+    qboolean onGround = (qboolean)(bs->cur_ps.groundEntityNum != ENTITYNUM_NONE);
 
     if (BotIsObserver(bs)) {
         ent->flags &= ~FL_NOPICKUP;
@@ -4021,25 +4100,56 @@ int AINode_DodgeTrainer(bot_state_t* bs) {
     VectorSubtract(g_entities[human].r.currentOrigin, bs->origin, toHuman);
     vectoangles(toHuman, bs->ideal_viewangles);
     toHuman[2] = 0;
-    VectorNormalize(toHuman);
+    dist = VectorNormalize(toHuman);
 
-    // it turns on its own clock, with a short juke now and then, and a moment after a hit
+    // how well the player tracks it: every hit adds, and it fades in about two seconds. A steady
+    // track takes it to 1, half the beam on it to about 0.8
+    dt = now - bs->dodgeThink;
+    if (dt < 0 || dt > 0.25f) {
+        dt = 0.05f;
+    }
+    bs->dodgeThink = now;
+    bs->dodgeHeat -= bs->dodgeHeat * MIN(dt * 0.6f, 1.0f);
+    if (hit) {
+        bs->dodgeHeat = MIN(1.0f, bs->dodgeHeat + 0.05f);
+    }
+
+    // a new plan when this one runs out, or when the player is out of reach or on top of it
+    if (now >= bs->dodgeModeEnd || (dist > 650 && bs->dodgeMode != DODGE_CLOSE) ||
+        (dist < 220 && bs->dodgeMode != DODGE_BACK)) {
+        BotDodgeNextMode(bs, dist, now);
+    }
+
+    // it turns on its own clock and a moment after a hit, quicker the better it is tracked; round
+    // the player, a hit may break the circle into strafes
     if (hit && !bs->dodgeHitTime) {
-        bs->dodgeHitTime = now + 0.12f + random() * 0.12f;
+        bs->dodgeHitTime = now + 0.08f + random() * (0.17f - 0.08f * bs->dodgeHeat);
+        if (bs->dodgeMode == DODGE_CIRCLE && random() < bs->dodgeHeat) {
+            bs->dodgeMode = DODGE_STRAFE;
+            bs->dodgeRadial = crandom() * 0.15f;
+            bs->dodgeModeEnd = now + 1.0f + random() * 1.5f;
+        }
     }
-    if (now >= bs->dodgeTurnTime || (bs->dodgeHitTime && now >= bs->dodgeHitTime && now - bs->dodgeRunStart > 0.15f)) {
-        bs->dodgeDir = -bs->dodgeDir;
-        bs->dodgeRunStart = now;
-        bs->dodgeTurnTime = now + (random() < 0.3f ? 0.1f + random() * 0.15f : 0.25f + random() * 0.5f);
-        bs->dodgeHitTime = 0;
+    if (now >= bs->dodgeTurnTime ||
+        (bs->dodgeHitTime && now >= bs->dodgeHitTime && now - bs->dodgeRunStart > 0.12f)) {
+        BotDodgeTurn(bs, now);
+        // tracked well, it sometimes jumps as it turns
+        if (onGround && bs->dodgeHeat > 0.5f && random() < 0.3f * bs->dodgeHeat && now - bs->dodgeJumped > 1.0f) {
+            trap_EA_Jump(bs->client);
+            bs->dodgeJumped = now;
+        }
     }
 
-    // a wall or a drop that way turns it round; with both ways shut it heads home
+    // a wall or a drop that way turns it round, and going in or out against one becomes strafing;
+    // with both ways shut it heads home
     BotDodgeDirection(bs, toHuman, dir);
     if (!BotDodgeClear(bs, dir)) {
-        bs->dodgeDir = -bs->dodgeDir;
-        bs->dodgeRunStart = now;
-        bs->dodgeTurnTime = now + 0.25f + random() * 0.5f;
+        if (bs->dodgeMode == DODGE_CLOSE || bs->dodgeMode == DODGE_BACK) {
+            bs->dodgeMode = DODGE_STRAFE;
+            bs->dodgeRadial = 0;
+            bs->dodgeModeEnd = now + 1.0f + random();
+        }
+        BotDodgeTurn(bs, now);
         BotDodgeDirection(bs, toHuman, dir);
         if (!BotDodgeClear(bs, dir)) {
             VectorSubtract(bs->dodgeAnchor, bs->origin, dir);
@@ -4049,11 +4159,14 @@ int AINode_DodgeTrainer(bot_state_t* bs) {
     }
     trap_EA_Move(bs->client, dir, 400);
 
+    // and a jump now and then to throw the aim off, more often the better it is tracked: every 5 to
+    // 9 seconds untouched, every 1.5 to 3.5 tracked all the time
     if (now >= bs->dodgeJumpTime) {
-        if (bs->cur_ps.groundEntityNum != ENTITYNUM_NONE) {
+        if (onGround && now - bs->dodgeJumped > 1.0f) {
             trap_EA_Jump(bs->client);
+            bs->dodgeJumped = now;
         }
-        bs->dodgeJumpTime = now + 8.0f + random() * 8.0f;  // now and then, not as a habit
+        bs->dodgeJumpTime = now + 5.0f - 3.5f * bs->dodgeHeat + random() * (4.0f - 2.0f * bs->dodgeHeat);
     }
     return qtrue;
 }
