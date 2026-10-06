@@ -38,29 +38,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define ST_MAX_INPUT 200
 
-#define ST_PAD 25.0f         // inside a panel
-#define ST_COL_GAP 32.0f
-#define ST_HEADER_H 124.0f
-#define ST_CONTROL_W 224.0f  // what a row's control takes at its right
-
-#define ST_ROW_H 46.0f
-#define ST_ROW_TIP_H 64.0f   // a row that says what it does under its title
-#define ST_TIP_SIZE 12.5f
-#define ST_TIP_LINE_H 17.0f
-#define ST_TIP_LINES 2       // every retail tip fits two lines at this width
-#define ST_BIND_H 42.0f
-#define ST_HEAD_H 44.0f
-#define ST_CARD_PAD 10.0f   // the room the card leaves below its last row
-
-// Team's two blocks fit the shortest panel whole (773 high on a 16:9 screen), since
-// a model is drawn only while all of it shows
-#define ST_TEAM_ROW_H 41.0f
+// the Team section: its two blocks, each with its model beside the rows
 #define ST_TEAM_GAP 12.0f
-
 #define ST_TEAM_MODEL_W 360.0f
-#define ST_FIELD_H 36.0f
-#define ST_OPTION_H 34.0f
-#define ST_MENU_ROWS 8
 
 typedef enum {
     ST_TAB_INPUT,
@@ -149,7 +129,9 @@ typedef enum {
     ST_HIT_MODELCLEAR,
     ST_HIT_PREVIEW,
     ST_HIT_RESET,
-    ST_HIT_BLOCK
+    ST_HIT_BLOCK,
+    ST_HIT_RGBOK,
+    ST_HIT_RGBCANCEL
 } stHitType_t;
 
 #define ST_MAX_SKINS 10  // the most a model of retail's table offers (biker)
@@ -178,6 +160,8 @@ static struct {
     int rgb;                   // the row whose colour picker is open
     int rgbDrag;               // 0..2 while a channel is held
     smRect_t rgbPanel;
+    int rgbPick[3];            // what the colour dialog shows; the cvar takes it on OK
+    smRect_t rgbSlider[3];
 
     int model;                 // the row whose model chooser is open
     int pickModel;             // what it shows: one of stModels
@@ -946,13 +930,6 @@ static const stModel_t stModels[] = {
 #define ST_NUM_MODELS ((int)ARRAY_LEN(stModels))
 #define ST_DEFAULT_MODEL 19  // sarge, what retail's sanitizeModel falls back to
 
-// the chooser's grid and its skin row
-#define ST_CHOOSER_W 1120.0f
-#define ST_CHOOSER_H 690.0f
-#define ST_GRID_COLS 5
-#define ST_GRID_CELL 86.0f
-#define ST_SKIN_CELL 58.0f
-
 static qhandle_t stIcons[ST_NUM_MODELS][ST_MAX_SKINS];  // 0 not asked for yet, -1 not there
 
 static qhandle_t ST_IconFor(int model, const char* skin) {
@@ -973,37 +950,6 @@ static qhandle_t ST_IconFor(int model, const char* skin) {
         }
     }
     return 0;
-}
-
-// what a skin is called: the forced skin rows' names, else the skin with a capital
-static const char* ST_SkinName(const char* skin) {
-    static char name[MAX_QPATH];
-    const stCvar_t* cv = NULL;
-    int k;
-
-    if (!skin[0]) {
-        return "None";
-    }
-    if (!Q_stricmp(skin, "default")) {
-        return "Default";
-    }
-    if (!Q_stricmp(skin, "id")) {
-        return "id";
-    }
-    for (k = 0; k < ST_NUM_CVARS; k++) {
-        if (stCvars[k].cvar && !Q_stricmp(stCvars[k].cvar, "cg_forceteamskin")) {
-            cv = &stCvars[k];
-            break;
-        }
-    }
-    for (k = 0; cv && k < cv->numOptions; k++) {
-        if (!Q_stricmp(cv->options[k].value, skin)) {
-            return cv->options[k].label;
-        }
-    }
-    Q_strncpyz(name, skin, sizeof(name));
-    name[0] = (char)toupper((unsigned char)name[0]);
-    return name;
 }
 
 /*
@@ -1102,13 +1048,11 @@ static void ST_OpenChooser(int i) {
 static void ST_ConfirmChooser(void) {
     const char* model = stModels[st.pickModel].model;
 
+    // a model alone is retail's forceSkin: its skin is the row under it
     if (stCvars[st.model].widget == ST_MODELSKIN) {
         ST_Set(st.model, va("%s/%s", model, ST_PickSkinValue(st.pickSkin)));
     } else {
         ST_Set(st.model, model);
-        if (st.pickSkinRow >= 0) {
-            ST_Set(st.pickSkinRow, ST_PickSkinValue(st.pickSkin));
-        }
     }
     st.model = -1;
 }
@@ -1168,126 +1112,107 @@ static void ST_DrawChooserPreview(float x, float y, float w, float h) {
 
 /*
 ===============
+ST_DrawDialog
+
+The modal-styles module: an overlay at 80% black, and a band across the whole screen with
+the widemodal-content at 80% black in its middle 70%. Returns that content, inside its
+padding.
+===============
+*/
+static smRect_t ST_DrawDialog(float height) {
+    float top = (SM_VIEW_H - height) * 0.5f;
+    float cx = smVW * 0.15f, cw = smVW * 0.7f;
+
+    SM_Fill(-smVW, -SM_VIEW_H, 3 * smVW, 3 * SM_VIEW_H, strBlack80, NULL);
+    SM_Hit(-smVW, -SM_VIEW_H, 3 * smVW, 3 * SM_VIEW_H, ST_HIT_BLOCK, 0, NULL);
+    SM_Fill(0, top, smVW, height, strDialog, NULL);
+    SM_Fill(cx, top, cw, height, strBlack80, NULL);
+    return SM_R(cx + 15, top + 15, cw - 30, height - 30);
+}
+
+// .row.actions: skeleton's buttons at the right, in the order they come
+static void ST_DrawActions(const smRect_t* c, int count, const char* const* labels, const int* hits) {
+    float x = c->x + c->w;
+    float y = c->y + c->h - SM_WEB_BUTTON_H;
+    int k;
+
+    for (k = count - 1; k >= 0; k--) {
+        float bw = SM_WebButtonWidth(labels[k]);
+
+        x -= bw;
+        SM_WebButton(x, y, bw, labels[k], qfalse, SM_Over(hits[k], 0), NULL);
+        SM_Hit(x, y, bw, SM_WEB_BUTTON_H, hits[k], 0, NULL);
+        x -= 10;
+    }
+}
+
+/*
+===============
 ST_DrawModelChooser
 
-Retail's is a wide dialog: every model down the left, and on the right the name
-of the one picked, its skins and a picture of it. Here the picture is the model
-itself. A tile is the model's default icon; the one picked has the cream ring the
-site gives a chosen pill.
+Retail's ModelChooser: every model's icon in the left third, 62 square with the one picked
+outlined in yellow; in the rest the name of the one picked and, for a model and skin, its
+skins. Clear (a forced model may be none), Cancel and OK at the right. [ioquakelive] Under the
+skins, the model itself.
 ===============
 */
 static void ST_DrawModelChooser(void) {
-    float w = ST_CHOOSER_W, h = ST_CHOOSER_H;
-    float x = (smVW - w) * 0.5f;
-    float y = (SM_VIEW_H - h) * 0.5f;
-    float bodyTop = y + 104;
-    float footY = y + h - ST_PAD - SM_BUTTON_H;
-    float gridX = x + ST_PAD;
-    float paneX = gridX + ST_GRID_COLS * ST_GRID_CELL + 22;
-    float paneW = x + w - ST_PAD - paneX;
-    float skinY = bodyTop + 50;
-    float previewY = skinY + ST_SKIN_CELL + 18;
-    qboolean forced = st.pickSkinRow >= 0;
-    vec4_t scrim = {0.0f, 0.0f, 0.0f, 0.62f};
-    const char* skinValue = ST_PickSkinValue(st.pickSkin);
+    smRect_t c = ST_DrawDialog(600);
+    float listW = c.w * 0.306667f;
+    float paneX = c.x + listW + c.w * 0.04f;
+    float paneW = c.w * 0.653333f;
+    int perRow = (int)(listW / 62.0f);
+    float listX = c.x + (listW - (perRow > 0 ? perRow : 1) * 62.0f) * 0.5f;
+    qboolean skins = stCvars[st.model].widget == ST_MODELSKIN;
+    qboolean clear = stCvars[st.model].widget == ST_MODEL;
     const char* title = stModels[st.pickModel].name;
-    float bx;
+    float y = c.y + 8 + 38.4f + 8;
     int count = ST_PickSkinCount();
     int k;
 
-    SM_FillScreen(scrim);
-    SM_Shadow(x, y, w, h, SM_RADIUS_LG);
-    SM_Round(x, y, w, h, SM_RADIUS_LG, smPanel, NULL);
-    SM_Hit(x, y, w, h, ST_HIT_MODELPANE, 0, NULL);
-    SM_Label(x + ST_PAD, SM_Baseline(FONT_SANS, 11, y + 24, 16), 11, smGold, "Choose a model", 1.6f);
-    SM_Label(x + ST_PAD, SM_Baseline(FONT_SANS, 24, y + 44, 32), 24, smText, stCvars[st.model].title, 0.2f);
-    SM_Fill(x + ST_PAD, y + 88, w - 2 * ST_PAD, 1, smBorder, NULL);
+    if (perRow < 1) {
+        perRow = 1;
+    }
+    SM_Hit(c.x - 15, c.y - 15, c.w + 30, c.h + 30, ST_HIT_MODELPANE, 0, NULL);
 
-    // every model, in its default skin
     for (k = 0; k < ST_NUM_MODELS; k++) {
-        float cx = gridX + (k % ST_GRID_COLS) * ST_GRID_CELL;
-        float cy = bodyTop + (k / ST_GRID_COLS) * ST_GRID_CELL;
-        float cs = ST_GRID_CELL - 8;
-        qboolean chosen = k == st.pickModel;
-        qboolean over = SM_Over(ST_HIT_MODELITEM, k);
+        float cx = listX + (k % perRow) * 62.0f;
+        float cy = c.y + (k / perRow) * 66.0f;
         qhandle_t icon = ST_IconFor(k, "default");
-        const char* name = stModels[k].name;
-        float tw;
 
-        if (chosen) {
-            SM_Round(cx - 2, cy - 2, cs + 4, cs + 4, SM_RADIUS_MD + 2, smPrimary, NULL);
-        }
-        SM_Round(cx, cy, cs, cs, SM_RADIUS_MD, chosen ? smRaisedHover : over ? smRaisedHover : smRaised, NULL);
         if (icon) {
-            SM_Pic(cx + (cs - 46) * 0.5f, cy + 6, 46, 46, icon, NULL);
+            SM_Pic(cx, cy, 62, 62, icon, NULL);
         }
-        tw = SM_Advance(FONT_SANS, 11, name, -1);
-        if (tw > cs - 8) {
-            tw = cs - 8;
+        if (k == st.pickModel) {
+            SM_Border(cx - 2, cy - 2, 66, 66, 2, strYellow, NULL);
         }
-        SM_Text(cx + (cs - tw) * 0.5f, SM_Baseline(FONT_SANS, 11, cy + cs - 22, 16), FONT_SANS, 11,
-                chosen || over ? smText : smMuted, name, SM_Fit(FONT_SANS, 11, name, cs - 8), qfalse);
-        SM_Hit(cx, cy, cs, cs, ST_HIT_MODELITEM, k, NULL);
+        SM_Hit(cx, cy, 62, 62, ST_HIT_MODELITEM, k, NULL);
     }
 
-    // the one picked: its name and skin, its skins, and the model
+    SM_Text(paneX + 6.4f, SM_Baseline(FONT_DEFAULT, 32, c.y + 8, 38.4f), FONT_DEFAULT, 32, smText, title, -1, qfalse);
+    if (skins) {
+        for (k = 0; k < count; k++) {
+            const char* value = ST_PickSkinValue(k);
+            float cx = paneX + k * 62.0f;
+            qhandle_t icon = ST_IconFor(st.pickModel, value[0] ? value : "default");
+
+            if (icon) {
+                SM_Pic(cx, y, 62, 62, icon, NULL);
+            }
+            if (k == st.pickSkin) {
+                SM_Border(cx - 2, y - 2, 66, 66, 2, strYellow, NULL);
+            }
+            SM_Hit(cx, y, 62, 62, ST_HIT_SKINITEM, k, NULL);
+        }
+        y += 66;
+    }
+    ST_DrawChooserPreview(paneX, y + 15, paneW, c.y + c.h - SM_WEB_BUTTON_H - 15 - (y + 15));
+
     {
-        float nw = SM_LabelWidth(26, title, 0.2f);
-        const char* skinName = ST_SkinName(skinValue);
+        static const char* const labels[3] = {"Clear", "Cancel", "OK"};
+        static const int hits[3] = {ST_HIT_MODELCLEAR, ST_HIT_MODELCANCEL, ST_HIT_MODELOK};
 
-        SM_Label(paneX, SM_Baseline(FONT_SANS, 26, bodyTop, 34), 26, smText, title, 0.2f);
-        SM_Text(paneX + nw + 14, SM_Baseline(FONT_SANS, 15, bodyTop + 4, 34), FONT_SANS, 15, smGold, skinName, -1,
-                qfalse);
-    }
-    for (k = 0; k < count; k++) {
-        const char* value = ST_PickSkinValue(k);
-        float cx = paneX + k * ST_SKIN_CELL;
-        float cs = ST_SKIN_CELL - 6;
-        qboolean chosen = k == st.pickSkin;
-        qboolean over = SM_Over(ST_HIT_SKINITEM, k);
-        qhandle_t icon = ST_IconFor(st.pickModel, value[0] ? value : "default");
-
-        if (chosen) {
-            SM_Round(cx - 2, skinY - 2, cs + 4, cs + 4, SM_RADIUS_MD + 2, smPrimary, NULL);
-        }
-        SM_Round(cx, skinY, cs, cs, SM_RADIUS_MD, chosen || over ? smRaisedHover : smRaised, NULL);
-        if (icon && value[0]) {
-            SM_Pic(cx + 5, skinY + 5, cs - 10, cs - 10, icon, NULL);
-        } else {
-            // None (the players' own skin), or a skin pak00 has no icon for
-            const char* name = ST_SkinName(value);
-
-            SM_Text(cx + (cs - SM_Advance(FONT_SANS, 10, name, -1)) * 0.5f, SM_Baseline(FONT_SANS, 10, skinY, cs),
-                    FONT_SANS, 10, chosen || over ? smText : smMuted, name, SM_Fit(FONT_SANS, 10, name, cs - 6),
-                    qfalse);
-        }
-        SM_Hit(cx, skinY, cs, cs, ST_HIT_SKINITEM, k, NULL);
-    }
-
-    SM_Round(paneX, previewY, paneW, footY - 18 - previewY, SM_RADIUS_MD, smRaised, NULL);
-    ST_DrawChooserPreview(paneX, previewY + 10, paneW, footY - 18 - previewY - 20);
-    if (forced) {
-        const char* note = va("The skin is %s's too", stCvars[st.pickSkinRow].title);
-
-        SM_Text(paneX + 14, SM_Baseline(FONT_SANS, 12, footY - 18 - 28, 20), FONT_SANS, 12, smSubtle, note, -1,
-                qfalse);
-    }
-
-    // Clear (a forced model may be none), Cancel and OK, the way retail's ends
-    bx = x + w - ST_PAD;
-    {
-        static const char* const labels[3] = {"OK", "Cancel", "Clear"};
-        static const int hits[3] = {ST_HIT_MODELOK, ST_HIT_MODELCANCEL, ST_HIT_MODELCLEAR};
-
-        for (k = 0; k < (forced ? 3 : 2); k++) {
-            float bw = SM_ButtonWidth(labels[k], SM_BUTTON_H);
-
-            bx -= bw;
-            SM_Button(bx, footY, bw, SM_BUTTON_H, labels[k], k ? SM_BUTTON_SECONDARY : SM_BUTTON_PRIMARY,
-                      SM_Over(hits[k], 0));
-            SM_Hit(bx, footY, bw, SM_BUTTON_H, hits[k], 0, NULL);
-            bx -= 10;
-        }
+        ST_DrawActions(&c, clear ? 3 : 2, clear ? labels : labels + 1, clear ? hits : hits + 1);
     }
 }
 
@@ -1369,54 +1294,49 @@ static void ST_DrawDropdown(void) {
     }
 }
 
-// the three channels of a colour of the row's own
+/*
+===============
+ST_DrawRGBPicker
+
+Retail's ColorChooser: "Choose color" and the three channels as ranges 32 high, each in its
+own colour, with the colour in a square of 200 at the right. It takes the colour on OK.
+===============
+*/
 static void ST_DrawRGBPicker(void) {
-    static const char* const names[3] = {"Red", "Green", "Blue"};
-    float w = 300, h = 196;
-    float x = ST_ControlX(st.rgb) + ST_ControlW(st.rgb) - w;
-    float y = ST_RowY(st.rgb) + stLayout[st.rgb].h - 4;
-    int rgb[3];
+    smRect_t c = ST_DrawDialog(400);
+    float leftW = c.w * 0.653333f;
+    float y = c.y + 8 + 38.4f + 8;
     vec4_t color;
     int k;
 
-    if (y + h > smBottom - 20) {
-        y = ST_RowY(st.rgb) - h + 4;
-    }
-    ST_ParseRGB(st.values[st.rgb], rgb);
-    st.rgbPanel = SM_R(x, y, w, h);
-
-    SM_Shadow(x, y, w, h, SM_RADIUS_MD);
-    SM_Round(x, y, w, h, SM_RADIUS_MD, smRaised, NULL);
-    SM_Hit(x, y, w, h, ST_HIT_RGBPANEL, 0, NULL);
-
-    color[0] = rgb[0] / 255.0f;
-    color[1] = rgb[1] / 255.0f;
-    color[2] = rgb[2] / 255.0f;
-    color[3] = 1.0f;
-    SM_Round(x + 16, y + 16, w - 32, 44, SM_RADIUS_SM, color, NULL);
-
+    st.rgbPanel = SM_R(c.x - 15, c.y - 15, c.w + 30, c.h + 30);
+    SM_Hit(st.rgbPanel.x, st.rgbPanel.y, st.rgbPanel.w, st.rgbPanel.h, ST_HIT_RGBPANEL, 0, NULL);
+    SM_Text(c.x + 6.4f, SM_Baseline(FONT_DEFAULT, 32, c.y + 8, 38.4f), FONT_DEFAULT, 32, smText, "Choose color", -1,
+            qfalse);
     for (k = 0; k < 3; k++) {
-        float sy = y + 78 + k * 36;
-        float tx = x + 76;
-        float tw = w - 76 - 56;
-        char text[8];
+        vec4_t tint = {0, 0, 0, 1};
+        float sy = y + 5 + k * 57.0f;
 
-        SM_Label(x + 16, SM_Baseline(FONT_SANS, 11, sy, SM_SLIDER_H), 11, smMuted, names[k], 1.2f);
-        SM_SliderTrack(tx, sy, tw, rgb[k] / 255.0f, SM_Over(ST_HIT_RGBSLIDER, k) || st.rgbDrag == k);
-        SM_Hit(tx - 6, sy - 8, tw + 12, SM_SLIDER_H + 16, ST_HIT_RGBSLIDER, k, NULL);
-        Com_sprintf(text, sizeof(text), "%i", rgb[k]);
-        SM_Text(x + w - 16 - SM_Advance(FONT_SANS, 14, text, -1), SM_Baseline(FONT_SANS, 14, sy, SM_SLIDER_H),
-                FONT_SANS, 14, smText, text, -1, qfalse);
+        tint[k] = st.rgbPick[k] / 255.0f;
+        st.rgbSlider[k] = SM_R(c.x, sy, leftW, 32);
+        SM_Fill(c.x, sy, leftW, 32, tint, NULL);
+        SM_Border(c.x, sy, leftW, 32, 1, strBorder, NULL);
+        SM_Fill(c.x + 1 + st.rgbPick[k] / 255.0f * (leftW - 2 - 16), sy + 8, 16, 16, strYellow, NULL);
+        SM_Hit(c.x, sy, leftW, 32, ST_HIT_RGBSLIDER, k, NULL);
+    }
+    color[0] = st.rgbPick[0] / 255.0f;
+    color[1] = st.rgbPick[1] / 255.0f;
+    color[2] = st.rgbPick[2] / 255.0f;
+    color[3] = 1.0f;
+    SM_Fill(c.x + leftW + c.w * 0.04f, c.y + 15, 200, 200, color, NULL);
+
+    {
+        static const char* const labels[2] = {"Cancel", "OK"};
+        static const int hits[2] = {ST_HIT_RGBCANCEL, ST_HIT_RGBOK};
+
+        ST_DrawActions(&c, 2, labels, hits);
     }
 }
-
-/*
-===============================================================================
-
-THE PAGE
-
-===============================================================================
-*/
 
 /*
 ===============
@@ -1752,19 +1672,15 @@ static void ST_DragRange(int i) {
 }
 
 static void ST_DragRGB(int channel) {
-    float tx = st.rgbPanel.x + 76;
-    float tw = st.rgbPanel.w - 76 - 56;
-    float frac = (smMX - tx - SM_SLIDER_H * 0.5f) / (tw - SM_SLIDER_H);
-    int rgb[3];
+    const smRect_t* r = &st.rgbSlider[channel];
+    float frac = (smMX - r->x - 1 - 8) / (r->w - 2 - 16);
 
     if (frac < 0) {
         frac = 0;
     } else if (frac > 1) {
         frac = 1;
     }
-    ST_ParseRGB(st.values[st.rgb], rgb);
-    rgb[channel] = (int)(frac * 255.0f + 0.5f);
-    ST_SetRGB(st.rgb, rgb);
+    st.rgbPick[channel] = (int)(frac * 255.0f + 0.5f);
 }
 
 static void ST_Step(int i, int delta) {
@@ -1854,11 +1770,11 @@ static void ST_Click(void) {
         if (type == ST_HIT_RGBPANEL) {
             return;
         }
-        if (type == ST_HIT_RGB && index == st.rgb) {
-            st.rgb = -1;
-            return;
+        if (type == ST_HIT_RGBOK) {
+            ST_SetRGB(st.rgb, st.rgbPick);
         }
         st.rgb = -1;
+        return;
     }
     if (st.edit >= 0 && !(type == ST_HIT_INPUT && index == st.edit)) {
         ST_Set(st.edit, st.values[st.edit]);
@@ -1910,6 +1826,7 @@ static void ST_Click(void) {
             break;
         case ST_HIT_RGB:
             st.rgb = index;
+            ST_ParseRGB(st.values[index], st.rgbPick);
             break;
         case ST_HIT_MODEL:
             ST_OpenChooser(index);
@@ -2199,6 +2116,11 @@ qboolean UI_Settings_HandleKey(int key) {
         case K_KP_ENTER:
             if (st.model >= 0) {
                 ST_ConfirmChooser();
+                return qtrue;
+            }
+            if (st.rgb >= 0) {
+                ST_SetRGB(st.rgb, st.rgbPick);
+                st.rgb = -1;
                 return qtrue;
             }
             return qfalse;
