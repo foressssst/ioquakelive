@@ -3449,6 +3449,188 @@ void FS_Shutdown(qboolean closemfp) {
 }
 
 /*
+===================
+FS_CheckWorkshopPaks
+
+[ioquakelive] What a Workshop pk3 does to the game's own content, said in the log once per
+pk3. A file with the name of one in pak00 is not read, because pak00 comes before the
+Workshop in the search path, so a pk3 cannot cut pak00's files short. A shader of pak00
+defined again in a .shader of another name is the one every map uses: the shader text goes
+from the last search path to the first and the first definition counts. Banner packs work
+that way on purpose, so it is only said, never undone.
+===================
+*/
+#define FS_MAX_STOCK_SHADERS 16384
+#define FS_MAX_CHECKED_PAKS 512
+
+static unsigned int fsStockShaders[FS_MAX_STOCK_SHADERS];
+static int fsNumStockShaders = -1;  // -1 until pak00's have been read
+// what was found in each Workshop pk3, kept to be said again at every filesystem restart: the
+// first one comes before the log file is open
+typedef struct {
+	int checksum;
+	int same;       // files pak00 also has
+	int redefined;  // pak00's shaders defined again
+	char first[MAX_QPATH];
+} fsPakCheck_t;
+
+static fsPakCheck_t fsCheckedPaks[FS_MAX_CHECKED_PAKS];
+static int fsNumCheckedPaks;
+
+static unsigned int FS_ShaderNameHash(const char* name) {
+	unsigned int h = 2166136261u;
+
+	for (; *name; name++) {
+		h = (h ^ (unsigned char)tolower((unsigned char)*name)) * 16777619u;
+	}
+	return h;
+}
+
+static int FS_CompareShaderHashes(const void* a, const void* b) {
+	unsigned int x = *(const unsigned int*)a;
+	unsigned int y = *(const unsigned int*)b;
+
+	return (x > y) - (x < y);
+}
+
+// the shaders a .shader file of that search path defines, as the renderers parse it: added to
+// pak00's list, or counted when pak00 has them too
+static int FS_ScanShaderFile(const char* name, searchpath_t* search, qboolean stock, char* first, int firstSize) {
+	char shader[MAX_QPATH];
+	char* buf;
+	char* p;
+	char* token;
+	int count = 0;
+
+	FS_ReadFileDir(name, search, qtrue, (void**)&buf);
+	if (!buf) {
+		return 0;
+	}
+	p = buf;
+	COM_BeginParseSession(name);
+	while (p) {
+		token = COM_ParseExt(&p, qtrue);
+		if (!token[0]) {
+			break;
+		}
+		Q_strncpyz(shader, token, sizeof(shader));
+		token = COM_ParseExt(&p, qtrue);
+		if (token[0] != '{' || token[1]) {
+			if (!p) {
+				break;
+			}
+			SkipRestOfLine(&p);
+			continue;
+		}
+		if (!SkipBracedSection(&p, 1)) {
+			break;
+		}
+		if (stock) {
+			if (fsNumStockShaders < FS_MAX_STOCK_SHADERS) {
+				fsStockShaders[fsNumStockShaders++] = FS_ShaderNameHash(shader);
+			}
+		} else {
+			unsigned int h = FS_ShaderNameHash(shader);
+
+			if (bsearch(&h, fsStockShaders, fsNumStockShaders, sizeof(h), FS_CompareShaderHashes)) {
+				if (!count) {
+					Q_strncpyz(first, shader, firstSize);
+				}
+				count++;
+			}
+		}
+	}
+	FS_FreeFile(buf);
+	return count;
+}
+
+static qboolean FS_IsShaderScript(const char* name) {
+	return (!Q_stricmpn(name, "scripts/", 8) && !Q_stricmp(COM_GetExtension(name), "shader")) ? qtrue : qfalse;
+}
+
+static void FS_CheckWorkshopPak(searchpath_t* search, searchpath_t* stock, fsPakCheck_t* check) {
+	pack_t* pak = search->pack;
+	int j;
+
+	// pak00's shaders are read once, the first time there is something to compare
+	if (fsNumStockShaders < 0) {
+		fsNumStockShaders = 0;
+		for (j = 0; j < stock->pack->numfiles; j++) {
+			if (FS_IsShaderScript(stock->pack->buildBuffer[j].name)) {
+				FS_ScanShaderFile(stock->pack->buildBuffer[j].name, stock, qtrue, NULL, 0);
+			}
+		}
+		qsort(fsStockShaders, fsNumStockShaders, sizeof(fsStockShaders[0]), FS_CompareShaderHashes);
+	}
+
+	for (j = 0; j < pak->numfiles; j++) {
+		const char* name = pak->buildBuffer[j].name;
+		char shader[MAX_QPATH];
+		int n;
+
+		if (name[0] && name[strlen(name) - 1] == '/') {
+			continue;
+		}
+		if (FS_FOpenFileReadDir(name, stock, NULL, qfalse, qtrue) > 0) {
+			check->same++;
+		} else if (FS_IsShaderScript(name)) {
+			n = FS_ScanShaderFile(name, search, qfalse, shader, sizeof(shader));
+			if (n && !check->redefined) {
+				Q_strncpyz(check->first, shader, sizeof(check->first));
+			}
+			check->redefined += n;
+		}
+	}
+}
+
+static void FS_CheckWorkshopPaks(void) {
+	searchpath_t* stock = NULL;
+	searchpath_t* search;
+	int i;
+
+	for (search = fs_searchpaths; search; search = search->next) {
+		if (search->pack && !search->pack->workshopId && !Q_stricmp(search->pack->pakBasename, "pak00")) {
+			stock = search;
+			break;
+		}
+	}
+	if (!stock) {
+		return;
+	}
+
+	for (search = fs_searchpaths; search; search = search->next) {
+		pack_t* pak = search->pack;
+		fsPakCheck_t* check;
+
+		if (!pak || !pak->workshopId) {
+			continue;
+		}
+		for (i = 0; i < fsNumCheckedPaks && fsCheckedPaks[i].checksum != pak->checksum; i++) {
+		}
+		check = &fsCheckedPaks[i];
+		if (i == fsNumCheckedPaks) {
+			if (fsNumCheckedPaks == FS_MAX_CHECKED_PAKS) {
+				continue;
+			}
+			fsNumCheckedPaks++;
+			Com_Memset(check, 0, sizeof(*check));
+			check->checksum = pak->checksum;
+			FS_CheckWorkshopPak(search, stock, check);
+		}
+
+		if (check->same) {
+			Com_Printf("%s.pk3 (Workshop %llu): %i files that pak00 also has, and pak00's are the ones used\n",
+			           pak->pakBasename, (unsigned long long)pak->workshopId, check->same);
+		}
+		if (check->redefined) {
+			Com_Printf(S_COLOR_YELLOW "%s.pk3 (Workshop %llu) defines %i of pak00's shaders again (%s%s): every map "
+			           "uses its version\n", pak->pakBasename, (unsigned long long)pak->workshopId, check->redefined,
+			           check->first, check->redefined > 1 ? ", ..." : "");
+		}
+	}
+}
+
+/*
 ================
 FS_ReorderPurePaks
 NOTE TTimo: the reordering that happens here is not reflected in the cvars (\cvarlist *pak*)
@@ -3624,6 +3806,9 @@ static void FS_Startup(const char* gameName) {
 
 	// print the current search paths
 	FS_Path_f();
+
+	// [ioquakelive] and what the Workshop's pk3s do to the game's own content
+	FS_CheckWorkshopPaks();
 
 	fs_gamedirvar->modified = qfalse;  // We just loaded, it's not modified
 
