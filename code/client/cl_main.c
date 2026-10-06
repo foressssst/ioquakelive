@@ -634,13 +634,20 @@ command. Retail hands tab completion the whole map list and leaves it there
 engine.
 ==================
 */
+static int CL_PlayerNames(const char** namesPtr, char (*names)[MAX_NAME_LENGTH], qboolean numbers);
+
 static void CL_CompleteCallvote(char* args, int argNum) {
     static const char* voteNames[] = {
         "ammo", "clientkick", "cointoss", "fraglimit", "g_gametype", "kick", "loadouts",
         "map", "map_restart", "nextmap", "random", "shuffle", "teamsize", "timelimit",
         "timers", "weaprespawn"
     };
+    // [ioquakelive] the values Cmd_CallVote_f takes for each vote
+    static const char* onOff[] = {"ON", "OFF"};
+    static const char* ammo[] = {"GLOBAL", "WEAP"};
     static const char* names[MAX_COMPLETION_NAMES];
+    static char players[MAX_CLIENTS][MAX_NAME_LENGTH];
+    const char* vote = Cmd_Argv(1);
     int count;
 
     if (argNum == 2) {
@@ -648,7 +655,28 @@ static void CL_CompleteCallvote(char* args, int argNum) {
         return;
     }
 
-    if (Q_stricmp(Cmd_Argv(1), "map")) {
+    if (argNum == 3) {
+        if (!Q_stricmp(vote, "kick")) {
+            count = CL_PlayerNames(names, players, qfalse);
+            Field_CompletePlayerName(names, count);
+            return;
+        }
+        if (!Q_stricmp(vote, "clientkick")) {
+            count = CL_PlayerNames(names, players, qtrue);
+            Field_CompleteList(names, count);
+            return;
+        }
+        if (!Q_stricmp(vote, "loadouts") || !Q_stricmp(vote, "timers")) {
+            Field_CompleteList(onOff, ARRAY_LEN(onOff));
+            return;
+        }
+        if (!Q_stricmp(vote, "ammo")) {
+            Field_CompleteList(ammo, ARRAY_LEN(ammo));
+            return;
+        }
+    }
+
+    if (Q_stricmp(vote, "map")) {
         return;
     }
 
@@ -661,6 +689,92 @@ static void CL_CompleteCallvote(char* args, int argNum) {
     }
 
     Field_CompleteList(names, count);
+}
+
+/*
+==================
+CL_CompleteGameCommand
+
+[ioquakelive] The arguments of the match commands the cgame sends to the server, the values
+the game takes for them: a team (the game reads only its first letter, 0x100618b0), a vote,
+and for put a player and then a team.
+==================
+*/
+static void CL_CompleteGameCommand(char* args, int argNum) {
+    static const char* teamNames[] = {"red", "blue", "spectator", "free", "follow1", "follow2"};
+    static const char* sideNames[] = {"red", "blue", "spectator", "free"};
+    static const char* lockNames[] = {"red", "blue"};
+    static const char* voteNames[] = {"yes", "no"};
+    static const char* names[MAX_CLIENTS];
+    static char players[MAX_CLIENTS][MAX_NAME_LENGTH];
+    const char* cmd = Cmd_Argv(0);
+    int count;
+
+    if (!Q_stricmp(cmd, "team")) {
+        if (argNum == 2) {
+            Field_CompleteList(teamNames, ARRAY_LEN(teamNames));
+        }
+    } else if (!Q_stricmp(cmd, "vote")) {
+        if (argNum == 2) {
+            Field_CompleteList(voteNames, ARRAY_LEN(voteNames));
+        }
+    } else if (!Q_stricmp(cmd, "lock") || !Q_stricmp(cmd, "unlock")) {
+        if (argNum == 2) {
+            Field_CompleteList(lockNames, ARRAY_LEN(lockNames));
+        }
+    } else if (!Q_stricmp(cmd, "put")) {
+        if (argNum == 2) {
+            count = CL_PlayerNames(names, players, qfalse);
+            Field_CompletePlayerName(names, count);
+        } else if (argNum == 3) {
+            Field_CompleteList(sideNames, ARRAY_LEN(sideNames));
+        }
+    }
+}
+
+/*
+==================
+CL_CompleteAddbot
+
+[ioquakelive] addbot <name> <skill> <team>: the names of scripts/bots.txt, the five skills and
+the two sides.
+==================
+*/
+static void CL_CompleteAddbot(char* args, int argNum) {
+    static const char* skills[] = {"1", "2", "3", "4", "5"};
+    static const char* teams[] = {"red", "blue"};
+    static char botNames[MAX_COMPLETION_NAMES][MAX_NAME_LENGTH];
+    static const char* names[MAX_COMPLETION_NAMES];
+    static int count = -1;
+
+    if (argNum == 2) {
+        if (count < 0) {
+            char* buf;
+            char* p;
+            char* token;
+
+            count = 0;
+            if (FS_ReadFile("scripts/bots.txt", (void**)&buf) > 0 && buf) {
+                p = buf;
+                while ((token = COM_Parse(&p)) != NULL && token[0] && count < MAX_COMPLETION_NAMES) {
+                    if (!Q_stricmp(token, "name")) {
+                        token = COM_ParseExt(&p, qfalse);
+                        if (token[0]) {
+                            Q_strncpyz(botNames[count], token, sizeof(botNames[count]));
+                            names[count] = botNames[count];
+                            count++;
+                        }
+                    }
+                }
+                FS_FreeFile(buf);
+            }
+        }
+        Field_CompleteList(names, count);
+    } else if (argNum == 3) {
+        Field_CompleteList(skills, ARRAY_LEN(skills));
+    } else if (argNum == 4) {
+        Field_CompleteList(teams, ARRAY_LEN(teams));
+    }
 }
 
 static void CL_CompletePlayerName(char* args, int argNum);
@@ -676,13 +790,24 @@ configstrings, which is all the client has.
 */
 void CL_SetCgameCommandCompletion(const char* cmdName) {
     static const char* byPlayer[] = {
-        "addadmin", "addmod", "addscore", "ban", "demote", "follow", "mute", "put", "tell", "unmute"
+        "addadmin", "addmod", "addscore", "ban", "demote", "follow", "mute", "tell", "tempban", "unmute"
     };
+    static const char* byGame[] = {"lock", "put", "team", "unlock", "vote"};
     int i;
 
     if (!Q_stricmp(cmdName, "callvote")) {
         Cmd_SetCommandCompletionFunc(cmdName, CL_CompleteCallvote);
         return;
+    }
+    if (!Q_stricmp(cmdName, "addbot")) {
+        Cmd_SetCommandCompletionFunc(cmdName, CL_CompleteAddbot);
+        return;
+    }
+    for (i = 0; i < ARRAY_LEN(byGame); i++) {
+        if (!Q_stricmp(cmdName, byGame[i])) {
+            Cmd_SetCommandCompletionFunc(cmdName, CL_CompleteGameCommand);
+            return;
+        }
     }
     for (i = 0; i < ARRAY_LEN(byPlayer); i++) {
         if (!Q_stricmp(cmdName, byPlayer[i])) {
@@ -1949,38 +2074,50 @@ static void CL_CompleteRcon(char* args, int argNum) {
 CL_CompletePlayerName
 ==================
 */
-static void CL_CompletePlayerName(char* args, int argNum) {
-    if (argNum == 2) {
-        char names[MAX_CLIENTS][MAX_NAME_LENGTH];
-        const char* namesPtr[MAX_CLIENTS];
-        int i;
-        int clientCount;
-        int nameCount;
-        const char* info;
+/*
+==================
+CL_PlayerNames
+
+[ioquakelive] The other players' names from the configstrings, sorted, for completion; with
+numbers, their client numbers instead (clientkick takes one).
+==================
+*/
+static int CL_PlayerNames(const char** namesPtr, char (*names)[MAX_NAME_LENGTH], qboolean numbers) {
+    const char* info = cl.gameState.stringData + cl.gameState.stringOffsets[CS_SERVERINFO];
+    const int clientCount = MIN(atoi(Info_ValueForKey(info, "sv_maxclients")), MAX_CLIENTS);
+    int i, nameCount = 0;
+
+    for (i = 0; i < clientCount; i++) {
         const char* name;
 
-        // configstring
-        info = cl.gameState.stringData + cl.gameState.stringOffsets[CS_SERVERINFO];
-        clientCount = atoi(Info_ValueForKey(info, "sv_maxclients"));
-
-        nameCount = 0;
-
-        for (i = 0; i < clientCount; i++) {
-            if (i == clc.clientNum)
-                continue;
-
-            info = cl.gameState.stringData + cl.gameState.stringOffsets[CS_PLAYERS + i];
-
-            name = Info_ValueForKey(info, "n");
-            if (name[0] == '\0')
-                continue;
-            Q_strncpyz(names[nameCount], name, sizeof(names[nameCount]));
-            Q_CleanStr(names[nameCount]);
-
-            namesPtr[nameCount] = names[nameCount];
-            nameCount++;
+        if (i == clc.clientNum) {
+            continue;
         }
+        info = cl.gameState.stringData + cl.gameState.stringOffsets[CS_PLAYERS + i];
+        name = Info_ValueForKey(info, "n");
+        if (name[0] == '\0') {
+            continue;
+        }
+        if (numbers) {
+            Com_sprintf(names[nameCount], MAX_NAME_LENGTH, "%i", i);
+        } else {
+            Q_strncpyz(names[nameCount], name, MAX_NAME_LENGTH);
+            Q_CleanStr(names[nameCount]);
+        }
+        namesPtr[nameCount] = names[nameCount];
+        nameCount++;
+    }
+    if (!numbers) {
         qsort((void*)namesPtr, nameCount, sizeof(namesPtr[0]), Com_strCompare);
+    }
+    return nameCount;
+}
+
+static void CL_CompletePlayerName(char* args, int argNum) {
+    if (argNum == 2) {
+        static char names[MAX_CLIENTS][MAX_NAME_LENGTH];
+        static const char* namesPtr[MAX_CLIENTS];
+        const int nameCount = CL_PlayerNames(namesPtr, names, qfalse);
 
         Field_CompletePlayerName(namesPtr, nameCount);
     }
