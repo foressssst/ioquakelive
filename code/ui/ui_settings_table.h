@@ -4,6 +4,9 @@
 // lists them, each cvar in the order its page lists it, with the title, widget, range
 // and value list the web UI gives it. The tooltips are retail's too, from the .menu
 // pages pak00 still ships.
+//
+// [ioquakelive] The fork's own options are added by hand, each after the retail row it goes
+// with, so retail's keep their order.
 
 // clang-format off
 
@@ -57,6 +60,14 @@ static const stOption_t stOpts_cg_specteamvitals[] = {{"None", "0"}, {"On", "1"}
 static const stOption_t stOpts_cg_specteamvitalshealthcolor[] = {{"Team Colors", "0"}, {"Health Colors", "1"}};
 static const stOption_t stOpts_cg_specitemtimers[] = {{"None", "0"}, {"Power-ups", "1"}, {"Power-ups & Red Armor", "7"}, {"All", "15"}};
 static const stOption_t stOpts_cg_drawinputcmds[] = {{"Off", "0"}, {"Always On", "1"}, {"Spectate Only", "2"}};
+
+// [ioquakelive] the fork's
+static const stOption_t stOpts_cl_renderer[] = {{"OpenGL", "opengl1"}, {"Vulkan", "vulkan"}};
+static const stOption_t stOpts_r_lowlatency[] = {{"Off", "0"}, {"On", "1"}, {"On + Boost", "2"}};
+static const stOption_t stOpts_r_ext_multisample[] = {{"Off", "0"}, {"2x", "2"}, {"4x", "4"}, {"8x", "8"}};
+static const stOption_t stOpts_r_ext_max_anisotropy[] = {{"2x", "2"}, {"4x", "4"}, {"8x", "8"}, {"16x", "16"}};
+static const stOption_t stOpts_cg_drawbrightweapons[] = {{"Off", "0"}, {"Yours", "1"}, {"Enemies", "4"}, {"Yours and Enemies", "5"}, {"Everyone", "7"}};
+static const stOption_t stOpts_ch_animaterewardicons[] = {{"Still", "0"}, {"Once", "1"}, {"Loop", "2"}};
 
 static const stCvar_t stCvars[] = {
     // ---------------------------------------------------------------- INPUT
@@ -157,6 +168,7 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_GAME, "Zoom Toggle", "cg_zoomtoggle", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Choose to toggle your zoom on and off, rather than having to hold it down.", 1},
     {ST_TAB_GAME, "Zoom Scaling", "cg_zoomscaling", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Choose whether your zoom scales in & out or quickly snaps.", 1},
     {ST_TAB_GAME, "Auto Record Actions", "cg_autoaction", ST_SELECT, 0.0f, 3.0f, 0.0f, stOpts_cg_autoaction, 4, "Automated actions to archive match results.", 1},
+    {ST_TAB_GAME, "Auto Record Demos", "cl_autorecorddemo", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 1},  // [ioquakelive]
     {ST_TAB_GAME, "Recording Message", "cl_demorecordmessage", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_cl_demorecordmessage, 3, "Display the verbose demo recording message while recording.", 1},
     {ST_TAB_GAME, "Enable Console", "com_allowconsole", ST_BOOL, 0.0f, 2.0f, 0.0f, NULL, 0, "Enable the ability to easily lower the console with the ~ key", 1},
     {ST_TAB_GAME, "Allow Console Chat", "cl_allowconsolechat", ST_BOOL, 0.0f, 0.0f, 0.0f, NULL, 0, "Enable the ability to chat in the console without the use of the 'say' command.", 1},
@@ -191,6 +203,12 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_HUD, "Draw Attacker", "cg_drawattacker", ST_BOOL, 0.0f, 0.0f, 0.0f, NULL, 0, "Draw the name and head of the player who last hit you on your HUD.", 1},
     {ST_TAB_HUD, "Frag Message", "cg_drawfragmessages", ST_BOOL, 0.0f, 0.0f, 0.0f, NULL, 0, "Display large center print text upon earning a frag.", 1},
     {ST_TAB_HUD, "Power-up Indicators", "cg_poweruppois", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_cg_poweruppois, 3, NULL, 1},
+    {ST_TAB_HUD, "Game Events in Kill Feed", "ch_gameevents", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 1},  // [ioquakelive]
+    {ST_TAB_HUD, "Animated Chat", "ch_animatescroll", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 1},  // [ioquakelive]
+    {ST_TAB_HUD, "Chat Lines", "ch_chatlines", ST_RANGE, 1.0f, 10.0f, 1.0f, NULL, 0, NULL, 1},  // [ioquakelive]
+    {ST_TAB_HUD, "Animated Medals", "ch_animaterewardicons", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_ch_animaterewardicons, 3, NULL, 1},  // [ioquakelive]
+    {ST_TAB_HUD, "Typing Balloon Animation", "cg_animatechatballoon", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 1},  // [ioquakelive]
+    {ST_TAB_HUD, "Zoom Animation Time", "cg_zoomanimationtime", ST_RANGE, 0.0f, 500.0f, 10.0f, NULL, 0, NULL, 1},  // [ioquakelive]
     // ---------------------------------------------------------------- TEAM
     {ST_TAB_TEAM, "Teammates", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
     {ST_TAB_TEAM, "Enemies", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
@@ -277,6 +295,14 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_VIDEO, "Bloom Intensity", "r_bloomintensity", ST_RANGE, 0.0f, 10.0f, 0.1f, NULL, 0, "The higher bloom intensity, the brighter the bloom.", 1},
     {ST_TAB_VIDEO, "Scene Saturation", "r_bloomscenesaturation", ST_RANGE, 0.0f, 10.0f, 0.1f, NULL, 0, "The higher the scene saturation, the more colorful the non-bloomed world is.", 1},
     {ST_TAB_VIDEO, "Scene Intensity", "r_bloomsceneintensity", ST_RANGE, 0.0f, 10.0f, 0.1f, NULL, 0, "The higher the scene intensity, the brighter the non-bloomed world is.", 1},
+    {ST_TAB_VIDEO, "Renderer", "cl_renderer", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_cl_renderer, 2, NULL, 1},  // [ioquakelive]
+    {ST_TAB_VIDEO, "Low Latency (Vulkan)", "r_lowlatency", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_r_lowlatency, 3, NULL, 1},  // [ioquakelive]
+    {ST_TAB_VIDEO, "Antialiasing", "r_ext_multisample", ST_SELECT, 0.0f, 8.0f, 0.0f, stOpts_r_ext_multisample, 4, NULL, 1},  // [ioquakelive]
+    {ST_TAB_VIDEO, "Anisotropic Filtering", "r_ext_max_anisotropy", ST_SELECT, 2.0f, 16.0f, 0.0f, stOpts_r_ext_max_anisotropy, 4, NULL, 1},  // [ioquakelive]
+    {ST_TAB_VIDEO, "VRR Frame Cap", "com_maxfpsvrr", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 1},  // [ioquakelive]
+    {ST_TAB_VIDEO, "Background FPS", "com_maxfpsunfocused", ST_RANGE, 0.0f, 250.0f, 5.0f, NULL, 0, NULL, 1},  // [ioquakelive]
+    {ST_TAB_VIDEO, "Minimized FPS", "com_maxfpsminimized", ST_RANGE, 0.0f, 60.0f, 5.0f, NULL, 0, NULL, 1},  // [ioquakelive]
+    {ST_TAB_VIDEO, "Bright Weapons", "cg_drawbrightweapons", ST_SELECT, 0.0f, 7.0f, 0.0f, stOpts_cg_drawbrightweapons, 5, NULL, 1},  // [ioquakelive]
     // ---------------------------------------------------------------- SOUND
     {ST_TAB_SOUND, "Sound", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, -1},
     {ST_TAB_SOUND, "Master Volume", "s_volume", ST_RANGE, 0.0f, 2.0f, 0.1f, NULL, 0, "Adjust the master game volume.", 0},
@@ -284,11 +310,13 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_SOUND, "Announcer Volume", "s_announcervolume", ST_RANGE, 0.0f, 1.0f, 0.1f, NULL, 0, "Adjust the volume of the announcer voice overs.", 0},
     {ST_TAB_SOUND, "Voice Volume", "s_voicevolume", ST_RANGE, 0.0f, 1.0f, 0.1f, NULL, 0, "Adjust the volume of the voice chat.", 0},
     {ST_TAB_SOUND, "Kill Beep Volume", "s_killbeepvolume", ST_RANGE, 0.0f, 2.0f, 0.1f, NULL, 0, NULL, 0},
+    {ST_TAB_SOUND, "Server Sounds Volume", "s_playsoundvolume", ST_RANGE, 0.0f, 2.0f, 0.1f, NULL, 0, NULL, 0},  // [ioquakelive]
     {ST_TAB_SOUND, "Mute in Background", "s_mutebackground", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 0},
     {ST_TAB_SOUND, "Announcer Voice", "cg_announcer", ST_SELECT, 1.0f, 3.0f, 0.0f, stOpts_cg_announcer, 3, NULL, 1},
     {ST_TAB_SOUND, "Ambient Sound", "s_ambient", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Play ambient map sounds.", 1},
     {ST_TAB_SOUND, "Hit Beep Style", "cg_hitbeep", ST_SELECT, 0.0f, 3.0f, 0.0f, stOpts_cg_hitbeep, 4, "Sound played when obtaining a hit on an enemy player.", 1},
     {ST_TAB_SOUND, "Kill Beep Style", "cg_killbeep", ST_SELECT, 0.0f, 8.0f, 0.0f, stOpts_cg_killbeep, 9, "Sound played when obtaining a frag on an enemy player.", 1},
+    {ST_TAB_SOUND, "Instant Hit Beep", "ch_predicthitsounds", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 1},  // [ioquakelive]
     {ST_TAB_SOUND, "Chat Beep", "cg_chatbeep", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Play a chat beep sound when a chat message is received.", 1},
     {ST_TAB_SOUND, "Team Chat Beep", "cg_teamchatbeep", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Play a chat beep sound when a teamchat message is received.", 1},
     {ST_TAB_SOUND, "Doppler Sound", "s_doppler", ST_BOOL, 0.0f, 0.0f, 0.0f, NULL, 0, "Use doppler sound effects.", 1},
@@ -304,9 +332,10 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_SPECTATING, "Item Timers", "cg_specitemtimers", ST_SELECT, 0.0f, 15.0f, 0.0f, stOpts_cg_specitemtimers, 4, "Display the item respawn timers for major map items.", 0},
     {ST_TAB_SPECTATING, "Spec FOV", "cg_specfov", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Render the view with the spectated player's FOV.", 0},
     {ST_TAB_SPECTATING, "Draw Input", "cg_drawinputcmds", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_cg_drawinputcmds, 3, "Display the player's movement input commands.", 0},
+    {ST_TAB_SPECTATING, "Movement Keys", "ch_drawkeys", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 0},  // [ioquakelive]
 };
 
 static const char* const stTabNames[] = {"INPUT", "GAMEPAD", "BASIC", "GAME", "HUD", "TEAM", "WEAPONS", "VIDEO", "SOUND", "SPECTATING"};
 
 // clang-format on
-// 235 rows, 220 of them options
+// 235 rows of retail's, 220 of them options, and 18 of the fork's
