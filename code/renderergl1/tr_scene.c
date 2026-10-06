@@ -396,8 +396,9 @@ void RE_RenderScene( const refdef_t *fd ) {
 	}
 
 	// [ioquakelive] the frame's colour correction is the game's only when the world is in it
-	// (see RB_QLColorCorrect); a model drawn by a menu does not count
-	if ( !( fd->rdflags & RDF_NOWORLDMODEL ) ) {
+	// (see RB_QLColorCorrect); a model drawn by a menu does not count, the flash of a teleport
+	// being taken does
+	if ( !( fd->rdflags & RDF_NOWORLDMODEL ) || ( fd->rdflags & RDF_HYPERSPACE ) ) {
 		tr.frameHasWorld = qtrue;
 	}
 
