@@ -432,28 +432,51 @@ Underlines the links of one drawn row and remembers where they landed. x0 is the
 row's left edge and y its baseline, both in pixels.
 ================
 */
+/*
+================
+Con_CellColumn
+
+[ioquakelive] The console keeps a byte per cell, and a character of UTF-8 takes two to four of
+them while it is drawn in one column. This is the column the byte at x is drawn in.
+================
+*/
+static int Con_CellColumn(const short* text, int x) {
+    int i, col = 0;
+
+    for (i = 1; i <= x; i++) {
+        if (((text[i] & 0xff) & 0xc0) != 0x80) {
+            col++;
+        }
+    }
+    return col;
+}
+
 static void Con_RowLinks(const short* text, int width, float x0, float y, float adv, float asc, float cellH) {
     static const vec4_t underline = {0.86f, 0.86f, 0.90f, 0.90f};
     int x, len, i;
 
     for (x = 0; x < width; x++) {
+        float lx, lw;
+
         len = Con_LinkLength(text, width, x);
         if (!len) {
             continue;
         }
+        lx = x0 + Con_CellColumn(text, x) * adv;
+        lw = (Con_CellColumn(text, x + len - 1) - Con_CellColumn(text, x) + 1) * adv;
         if (con.numLinks < CON_MAX_LINKS) {
             conLink_t* l = &con.links[con.numLinks++];
 
-            l->x = x0 + x * adv;
+            l->x = lx;
             l->y = y - asc;
-            l->w = len * adv;
+            l->w = lw;
             l->h = cellH;
             for (i = 0; i < len && i < CON_MAX_URL - 1; i++) {
                 l->url[i] = (char)(text[x + i] & 0xff);
             }
             l->url[i] = '\0';
         }
-        Con_FillRectPx(x0 + x * adv, y + 2.0f, len * adv, 1.0f, underline);
+        Con_FillRectPx(lx, y + 2.0f, lw, 1.0f, underline);
         x += len - 1;
     }
 }
@@ -1633,8 +1656,26 @@ void Con_DrawNotify(void) {
 A row is drawn as runs of one colour, shadow first. Columns are fixed, column
 c starting at x + c * the font's advance, so the mark, the search marker and
 the completion highlight line up with the text.
+
+[ioquakelive] cols gives the column of each byte, because a UTF-8 character is several bytes in
+one column, and such a character is drawn alone in its column: the font it comes from may have
+another advance. Counting bytes as columns put each run a column further right for every accent
+before it, while the shadow of the whole row kept going, so the shadow showed as dark letters
+behind the text.
 ================
 */
+
+// the column of each byte of chars, a UTF-8 character's bytes sharing one
+static void Con_TextColumns(const char* chars, int count, short* cols) {
+    int i, col = -1;
+
+    for (i = 0; i < count; i++) {
+        if ((((byte)chars[i]) & 0xc0) != 0x80 || col < 0) {
+            col++;
+        }
+        cols[i] = (short)col;
+    }
+}
 #define CON_RUN_SHADOW 100
 #define CON_RUN_MKSHADOW 101
 #define CON_RUN_MKTEXT 102
@@ -1654,7 +1695,7 @@ static const float* Con_RunColor(int id) {
     }
 }
 
-static void Con_DrawRuns(const conMetrics_t* m, float x, float baseline, const char* chars, const short* ids, int count, qboolean shadow) {
+static void Con_DrawRuns(const conMetrics_t* m, float x, float baseline, const char* chars, const short* ids, const short* cols, int count, qboolean shadow) {
     char run[CON_MAXLINEWIDTH + 1];
     const int offset = shadow ? 1 : 0;
     int i = 0;
@@ -1663,7 +1704,7 @@ static void Con_DrawRuns(const conMetrics_t* m, float x, float baseline, const c
         const float* color;
         int start, len, id;
 
-        if (chars[i] == ' ') {
+        if (chars[i] == ' ' || (((byte)chars[i]) & 0xc0) == 0x80) {
             i++;
             continue;
         }
@@ -1671,11 +1712,17 @@ static void Con_DrawRuns(const conMetrics_t* m, float x, float baseline, const c
         id = ids[i];
         start = i;
         len = 0;
-        while (i < count && len < CON_MAXLINEWIDTH && (chars[i] == ' ' || ids[i] == id)) {
-            run[len++] = chars[i++];
-        }
-        while (len > 0 && run[len - 1] == ' ') {
-            len--;
+        if ((byte)chars[i] >= 0x80) {
+            do {
+                run[len++] = chars[i++];
+            } while (i < count && len < 4 && (((byte)chars[i]) & 0xc0) == 0x80);
+        } else {
+            while (i < count && len < CON_MAXLINEWIDTH && (byte)chars[i] < 0x80 && (chars[i] == ' ' || ids[i] == id)) {
+                run[len++] = chars[i++];
+            }
+            while (len > 0 && run[len - 1] == ' ') {
+                len--;
+            }
         }
         run[len] = '\0';
 
@@ -1684,7 +1731,7 @@ static void Con_DrawRuns(const conMetrics_t* m, float x, float baseline, const c
             continue;
         }
         re.SetColor(color);
-        re.Font_DrawString((int)(x + start * m->adv) + offset, (int)baseline + offset, run, CON_FONT_MONO, m->fontSize, -1, NULL, CON_TEXT_LITERAL);
+        re.Font_DrawString((int)(x + cols[start] * m->adv) + offset, (int)baseline + offset, run, CON_FONT_MONO, m->fontSize, -1, NULL, CON_TEXT_LITERAL);
     }
 }
 
@@ -1702,9 +1749,10 @@ static void Con_DrawInputCNQ3(const conMetrics_t* m) {
     const float baseline = con.vislines - m->cellH;
     const float promptX = m->cellW;
     const float textX = promptX + m->adv;
-    char chars[MAX_EDIT_LINE];
+    char chars[MAX_EDIT_LINE + 1];
     short ids[MAX_EDIT_LINE];
     short shadows[MAX_EDIT_LINE];
+    short cols[MAX_EDIT_LINE + 1];
     int len, drawLen, prestep, code, i;
 
     if (clc.state != CA_DISCONNECTED && !(Key_GetCatcher() & KEYCATCH_CONSOLE)) {
@@ -1734,19 +1782,27 @@ static void Con_DrawInputCNQ3(const conMetrics_t* m) {
         drawLen = MAX_EDIT_LINE;
     }
 
+    // the column of each visible byte, and of the end of the line for the cursor
+    Com_Memcpy(chars, edit->buffer + prestep, drawLen);
+    chars[drawLen] = ' ';
+    Con_TextColumns(chars, drawLen + 1, cols);
+
     if (edit->acLength > 0) {
         const int start = MAX(edit->acOffset, prestep);
         const int end = MIN(edit->acOffset + edit->acLength, prestep + drawLen);
         if (end > start) {
-            Con_FillRectPx(textX + (start - prestep) * m->adv, baseline - m->asc, (end - start) * m->adv, m->cellH, con_colors[CC_HL].color);
+            Con_FillRectPx(textX + cols[start - prestep] * m->adv, baseline - m->asc, (cols[end - prestep] - cols[start - prestep]) * m->adv, m->cellH, con_colors[CC_HL].color);
         }
     }
 
     chars[0] = ']';
     ids[0] = ColorIndex(COLOR_WHITE);
     shadows[0] = CON_RUN_SHADOW;
-    Con_DrawRuns(m, promptX, baseline, chars, shadows, 1, qtrue);
-    Con_DrawRuns(m, promptX, baseline, chars, ids, 1, qfalse);
+    {
+        static const short col0 = 0;
+        Con_DrawRuns(m, promptX, baseline, chars, shadows, &col0, 1, qtrue);
+        Con_DrawRuns(m, promptX, baseline, chars, ids, &col0, 1, qfalse);
+    }
 
     code = ColorIndex(COLOR_WHITE);
     for (i = prestep - 1; i >= 0; i--) {
@@ -1764,11 +1820,12 @@ static void Con_DrawInputCNQ3(const conMetrics_t* m) {
         ids[i] = (short)code;
         shadows[i] = CON_RUN_SHADOW;
     }
-    Con_DrawRuns(m, textX, baseline, chars, shadows, drawLen, qtrue);
-    Con_DrawRuns(m, textX, baseline, chars, ids, drawLen, qfalse);
+    Con_DrawRuns(m, textX, baseline, chars, shadows, cols, drawLen, qtrue);
+    Con_DrawRuns(m, textX, baseline, chars, ids, cols, drawLen, qfalse);
 
     if (!con.markMode && !(cls.realtime & 0x100)) {
-        float cursorX = textX + (edit->cursor - prestep) * m->adv;
+        const int at = MIN(MAX(edit->cursor - prestep, 0), drawLen);
+        float cursorX = textX + cols[at] * m->adv;
         if (!key_overstrikeMode) {
             cursorX -= m->adv / 2;
         }
@@ -1940,6 +1997,7 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
     char chars[CON_MAXLINEWIDTH];
     short ids[CON_MAXLINEWIDTH];
     short shadows[CON_MAXLINEWIDTH];
+    short cols[CON_MAXLINEWIDTH];
     conMetrics_t m;
     int i, x, row, rows, lines, count, len;
     int markStartX, markStartY, markEndX, markEndY;
@@ -2007,25 +2065,28 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
         text = con.text + (row % con.totallines) * con.linewidth;
         markRow = (drawMark && row >= markStartY && row <= markEndY) ? qtrue : qfalse;
 
-        if (markRow) {
-            Con_FillRectPx(x0 + markStartX * m.adv, y - m.asc, (markEndX - markStartX + 1) * m.adv, m.cellH, con_colors[CC_MKBG].color);
-        }
-
         for (x = 0; x < count; x++) {
             const qboolean marked = (markRow && x >= markStartX && x <= markEndX) ? qtrue : qfalse;
             chars[x] = (char)(text[x] & 0xff);
             ids[x] = marked ? CON_RUN_MKTEXT : (short)(text[x] >> 8);
             shadows[x] = marked ? CON_RUN_MKSHADOW : CON_RUN_SHADOW;
         }
+        Con_TextColumns(chars, count, cols);
 
-        Con_DrawRuns(&m, x0, y, chars, shadows, count, qtrue);
+        if (markRow) {
+            const int c0 = cols[MIN(MAX(markStartX, 0), count - 1)];
+            const int c1 = cols[MIN(MAX(markEndX, 0), count - 1)];
+            Con_FillRectPx(x0 + c0 * m.adv, y - m.asc, (c1 - c0 + 1) * m.adv, m.cellH, con_colors[CC_MKBG].color);
+        }
+
+        Con_DrawRuns(&m, x0, y, chars, shadows, cols, count, qtrue);
 
         if (con.searchStarted && row == con.searchLine) {
             re.SetColor(con_colors[CC_SEARCH].color);
             re.Font_DrawString((int)(x0 - m.cellW), (int)y, ">", CON_FONT_MONO, m.fontSize, -1, NULL, CON_TEXT_LITERAL);
         }
 
-        Con_DrawRuns(&m, x0, y, chars, ids, count, qfalse);
+        Con_DrawRuns(&m, x0, y, chars, ids, cols, count, qfalse);
 
         Con_RowLinks(text, count, x0, y, m.adv, m.asc, m.cellH);
     }
@@ -2142,8 +2203,10 @@ void Con_DrawSolidConsole(float frac) {
         markRow = (drawMark && row >= markStartY && row <= markEndY) ? qtrue : qfalse;
 
         if (haveMetrics && markRow) {
-            Con_FillRectPx(CON_CELL_WIDTH * s + con.xadjust + markStartX * m.adv, y - m.asc,
-                           (markEndX - markStartX + 1) * m.adv, m.cellH, con_colors[CC_MKBG].color);
+            const int c0 = Con_CellColumn(text, MAX(markStartX, 0));
+            const int c1 = Con_CellColumn(text, MIN(markEndX, con.linewidth - 1));
+            Con_FillRectPx(CON_CELL_WIDTH * s + con.xadjust + c0 * m.adv, y - m.asc,
+                           (c1 - c0 + 1) * m.adv, m.cellH, con_colors[CC_MKBG].color);
             re.SetColor(g_color_table[ColorIndex(COLOR_WHITE)]);
         }
         if (haveMetrics && con.searchStarted && row == con.searchLine) {
