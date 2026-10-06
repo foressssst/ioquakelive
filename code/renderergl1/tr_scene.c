@@ -49,6 +49,8 @@ void R_InitNextFrame( void ) {
 
 	backEndData->commands.used = 0;
 
+	tr.frameHasWorld = qfalse;
+
 	r_firstSceneDrawSurf = 0;
 #ifdef USE_PMLIGHT
 	r_firstSceneLitSurf = 0;
@@ -391,6 +393,12 @@ void RE_RenderScene( const refdef_t *fd ) {
 
 	if (!tr.world && !( fd->rdflags & RDF_NOWORLDMODEL ) ) {
 		ri.Error (ERR_DROP, "R_RenderScene: NULL worldmodel");
+	}
+
+	// [ioquakelive] the frame's colour correction is the game's only when the world is in it
+	// (see RB_QLColorCorrect); a model drawn by a menu does not count
+	if ( !( fd->rdflags & RDF_NOWORLDMODEL ) ) {
+		tr.frameHasWorld = qtrue;
 	}
 
 	Com_Memcpy( tr.refdef.text, fd->text, sizeof( tr.refdef.text ) );

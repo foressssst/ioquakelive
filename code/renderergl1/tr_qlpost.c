@@ -642,6 +642,12 @@ RB_QLColorCorrect
 
 [QL] render command 9 (0x436dc0): 1 / r_gamma, twice r_overBrightBits and r_contrast
 (0x43cfe0, 0x43cd60)
+
+[ioquakelive] Retail's menu is its web page, drawn apart from the frame, so its correction never
+reached the menu. Here the renderer draws the menu, and a frame with no view of the world (the
+menus, the connection screen) gets a neutral pass: no gamma, no contrast, and only the overbright
+that gives back what the 2D colours lost to tr.identityLight. The menu keeps its own colours,
+whatever the player set for the game.
 =============
 */
 qboolean RB_QLColorCorrect( GLuint dstFbo, int width, int height ) {
@@ -658,9 +664,15 @@ qboolean RB_QLColorCorrect( GLuint dstFbo, int width, int height ) {
 		return qfalse;
 	}
 
-	color[0] = r_gamma->value > 0.0f ? 1.0f / r_gamma->value : 1.0f;
-	color[1] = MAX( 2.0f * r_overBrightBits->integer, 1.0f );
-	color[2] = r_contrast->value;
+	if ( tr.frameHasWorld ) {
+		color[0] = r_gamma->value > 0.0f ? 1.0f / r_gamma->value : 1.0f;
+		color[1] = MAX( 2.0f * r_overBrightBits->integer, 1.0f );
+		color[2] = r_contrast->value;
+	} else {
+		color[0] = 1.0f;
+		color[1] = 1.0f / tr.identityLight;
+		color[2] = 1.0f;
+	}
 	color[3] = 1.0f;
 
 	qglColor4f( 1.0f, 1.0f, 1.0f, 1.0f );

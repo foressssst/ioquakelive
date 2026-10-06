@@ -587,6 +587,7 @@ typedef struct {
 	uint32_t dot_pipeline;
 
 	VkPipeline gamma_pipeline;
+	VkPipeline gamma_neutral_pipeline;	// [ioquakelive] for a frame without the world
 	VkPipeline capture_pipeline;
 	VkPipeline bloom_extract_pipeline;
 	VkPipeline blur_pipeline[VK_NUM_BLOOM_PASSES*2]; // horizontal & vertical pairs

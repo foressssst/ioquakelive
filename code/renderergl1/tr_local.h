@@ -1167,6 +1167,7 @@ typedef struct {
 
 	float					identityLight;		// 1.0 / ( 1 << overbrightBits )
 	int						identityLightByte;	// identityLight * 255
+	qboolean				frameHasWorld;		// [ioquakelive] a view of the world was drawn this frame
 	int						overbrightBits;		// r_overbrightBits->integer, but set to 0 if no hw gamma
 
 	orientationr_t			or;					// for current entity

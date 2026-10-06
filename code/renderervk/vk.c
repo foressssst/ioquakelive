@@ -3328,6 +3328,7 @@ void vk_update_post_process_pipelines( void )
 	if ( vk.fboActive ) {
 		// update gamma shader
 		vk_create_post_process_pipeline( 0, 0, 0 );
+		vk_create_post_process_pipeline( 8, 0, 0 );
 		if ( vk.capture.image ) {
 			// update capture pipeline
 			vk_create_post_process_pipeline( 3, gls.captureWidth, gls.captureHeight );
@@ -4687,6 +4688,10 @@ static void vk_destroy_pipelines( qboolean resetCounter )
 		qvkDestroyPipeline( vk.device, vk.gamma_pipeline, NULL );
 		vk.gamma_pipeline = VK_NULL_HANDLE;
 	}
+	if ( vk.gamma_neutral_pipeline ) {
+		qvkDestroyPipeline( vk.device, vk.gamma_neutral_pipeline, NULL );
+		vk.gamma_neutral_pipeline = VK_NULL_HANDLE;
+	}
 
 	if ( vk.capture_pipeline ) {
 		qvkDestroyPipeline( vk.device, vk.capture_pipeline, NULL );
@@ -5425,6 +5430,15 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 			pipeline_name = "QL bloom scratch copy pipeline";
 			blend = 0;
 			break;
+		case 8: // [ioquakelive] the neutral pass of a frame without the world (RB_QLColorCorrect)
+			pipeline = &vk.gamma_neutral_pipeline;
+			fsmodule = vk.modules.gamma_fs;
+			renderpass = vk.render_pass.gamma;
+			layout = vk.pipeline_layout_post_process;
+			samples = VK_SAMPLE_COUNT_1_BIT;
+			pipeline_name = "neutral gamma pipeline";
+			blend = qfalse;
+			break;
 		case 3: // capture buffer extraction
 			pipeline = &vk.capture_pipeline;
 			fsmodule = vk.modules.gamma_fs;
@@ -5474,6 +5488,13 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 		frag_spec_data.contrast = 1.0f;
 	}
 	frag_spec_data.greyscale = r_greyscale->value;
+	if ( program_index == 8 ) {
+		// [ioquakelive] no gamma, contrast or grey: only what the 2D colours lost to identityLight
+		frag_spec_data.gamma = 1.0f;
+		frag_spec_data.overbright = 1.0f / tr.identityLight;
+		frag_spec_data.contrast = 1.0f;
+		frag_spec_data.greyscale = 0.0f;
+	}
 	if ( r_enablePostProcess->integer && r_enableBloom->integer ) {
 		// [QL] 0x449000: the bloom takes retail's cvars
 		frag_spec_data.bloom_threshold = MAX( r_bloomBrightThreshold->value, 0.0f );
@@ -7868,7 +7889,8 @@ void vk_end_frame( void )
 			vk.renderScaleY = 1.0;
 
 			vk_begin_render_pass( vk.render_pass.gamma, vk.framebuffers.gamma[ vk.cmd->swapchain_image_index ], qfalse, vk.renderWidth, vk.renderHeight );
-			qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.gamma_pipeline );
+			qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+				( !tr.frameHasWorld && vk.gamma_neutral_pipeline ) ? vk.gamma_neutral_pipeline : vk.gamma_pipeline );
 			qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.color_descriptor, 0, NULL );
 
 			qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
