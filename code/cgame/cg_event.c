@@ -168,11 +168,6 @@ everything from that row on is cleared, so only the newest rows remain.
 skip their fade-in, as in CPMA 1.53 (cgame.qvm func 158881).
 =============
 */
-// [ioquakelive] what CG_Obituary leaves for the next line that goes in
-static const char *obitExtra = "";
-static int obitAttacker = -1;
-static int obitMod;
-
 static void CG_AddObituary(const char *victimName, const char *attackerName,
                             int victimTeam, int attackerTeam,
                             int hasAttacker, qhandle_t weaponIcon) {
@@ -201,13 +196,6 @@ static void CG_AddObituary(const char *victimName, const char *attackerName,
     cg.obituaries[idx].attackerTeam = attackerTeam;
     cg.obituaries[idx].weaponIcon = weaponIcon;
     cg.obituaries[idx].time = cg.time;
-    Q_strncpyz(cg.obituaries[idx].extra, obitExtra, sizeof(cg.obituaries[idx].extra));
-    cg.obituaries[idx].attacker = obitAttacker;
-    cg.obituaries[idx].mod = obitMod;
-    cg.obituaries[idx].shotTime = cg.time;
-    obitExtra = "";
-    obitAttacker = -1;
-    obitMod = 0;
 
     if (cgs.gametype >= GT_TEAM) {
         CG_ObitStripColors(cg.obituaries[idx].attackerName);
@@ -310,110 +298,6 @@ static qboolean CG_Watching(void) {
 
 /*
 =============
-CG_ObituaryExtra
-
-[ioquakelive] The kills the feed marks, all worked out here from what any server sends:
-- one rail through several players: "x2", "x3"... on every line of that shot
-- a telefrag
-- a mid-air, by the rule of the server's own medal (g_combat.c): a direct rocket, grenade,
-  plasma, BFG or nail on someone off the ground, out of the water, with the 96 units of
-  g_midAirMinHeight clear below
-=============
-*/
-static qboolean CG_ObituaryIsRail(int mod) {
-    return (mod == MOD_RAILGUN || mod == MOD_RAILGUN_HEADSHOT) ? qtrue : qfalse;
-}
-
-static const char *CG_ObituaryExtra(int target, int attacker, int mod) {
-    static char multi[8];
-    int i, kills;
-
-    if (mod == MOD_TELEFRAG) {
-        return "TELEFRAG";
-    }
-
-    if (CG_ObituaryIsRail(mod)) {
-        kills = 1;
-        for (i = 0; i < MAX_OBITUARIES; i++) {
-            if (cg.obituaries[i].active && cg.obituaries[i].attacker == attacker &&
-                cg.obituaries[i].shotTime == cg.time && CG_ObituaryIsRail(cg.obituaries[i].mod)) {
-                kills++;
-            }
-        }
-        if (kills < 2) {
-            return "";
-        }
-        Com_sprintf(multi, sizeof(multi), "x%d", kills);
-        for (i = 0; i < MAX_OBITUARIES; i++) {
-            if (cg.obituaries[i].active && cg.obituaries[i].attacker == attacker &&
-                cg.obituaries[i].shotTime == cg.time && CG_ObituaryIsRail(cg.obituaries[i].mod)) {
-                Q_strncpyz(cg.obituaries[i].extra, multi, sizeof(cg.obituaries[i].extra));
-            }
-        }
-        return multi;
-    }
-
-    if (mod == MOD_GRENADE || mod == MOD_ROCKET || mod == MOD_PLASMA || mod == MOD_BFG || mod == MOD_NAIL) {
-        vec3_t origin, end;
-        trace_t tr;
-        int ground;
-
-        if (target == cg.snap->ps.clientNum) {
-            VectorCopy(cg.snap->ps.origin, origin);
-            ground = cg.snap->ps.groundEntityNum;
-        } else {
-            if (!cg_entities[target].currentValid) {
-                return "";
-            }
-            VectorCopy(cg_entities[target].lerpOrigin, origin);
-            ground = cg_entities[target].currentState.groundEntityNum;
-        }
-        if (ground != ENTITYNUM_NONE || (CG_PointContents(origin, -1) & MASK_WATER)) {
-            return "";
-        }
-        VectorCopy(origin, end);
-        end[2] -= 96.0f;
-        CG_Trace(&tr, origin, NULL, NULL, end, target, MASK_SOLID);
-        if (tr.fraction == 1.0f) {
-            return "MID-AIR";
-        }
-    }
-    return "";
-}
-
-/*
-=============
-CG_ObituaryMark
-
-[ioquakelive] The mark of a kill: the ones above first, then the ones Quake Live has medals for
-and any server lets the client work out -- a rail to the head, a gauntlet kill, killing the
-one who killed you last, and a second kill within two seconds.
-=============
-*/
-static const char *CG_ObituaryMark(int target, int attacker, int mod) {
-    static int lastKiller[MAX_CLIENTS];    // who killed each player last, as client number plus one
-    static int lastKillTime[MAX_CLIENTS];  // when each player last killed someone
-    const char *mark = CG_ObituaryExtra(target, attacker, mod);
-
-    if (!mark[0]) {
-        if (mod == MOD_RAILGUN_HEADSHOT) {
-            mark = "HEADSHOT";
-        } else if (mod == MOD_GAUNTLET) {
-            mark = "HUMILIATION";
-        } else if (lastKiller[attacker] == target + 1) {
-            mark = "REVENGE";
-        } else if (lastKillTime[attacker] && cg.time >= lastKillTime[attacker] && cg.time - lastKillTime[attacker] < 2000) {
-            mark = "EXCELLENT";
-        }
-    }
-    lastKiller[target] = attacker + 1;
-    lastKiller[attacker] = (lastKiller[attacker] == target + 1) ? 0 : lastKiller[attacker];
-    lastKillTime[attacker] = cg.time;
-    return mark;
-}
-
-/*
-=============
 CG_Obituary
 =============
 */
@@ -430,8 +314,6 @@ static void CG_Obituary(entityState_t* ent) {
     clientInfo_t* ci;
     qhandle_t weaponIcon;
     int victimTeam, attackerTeam;
-    int helper;
-    qboolean pushed;
 
     target = ent->otherEntityNum;
     attacker = ent->otherEntityNum2;
@@ -474,36 +356,14 @@ static void CG_Obituary(entityState_t* ent) {
         }
     }
 
-    // [ioquakelive] the second player of the event, which only our own server sends (see
-    // G_ObituaryHelper in g_combat.c): zero everywhere else
-    helper = (ent->generic1 & 0x7f) - 1;
-    pushed = (ent->generic1 & 0x80) ? qtrue : qfalse;
-    if (helper < 0 || helper >= MAX_CLIENTS || helper == target || !cgs.clientinfo[helper].infoValid) {
-        helper = -1;
-    }
-
     // [QL] Resolve weapon icon and add to obituary display buffer
     weaponIcon = CG_ModToWeaponIcon(mod);
     victimTeam = cgs.clientinfo[target].team;
     if (attacker >= 0 && attacker < MAX_CLIENTS && attacker != target) {
         attackerTeam = cgs.clientinfo[attacker].team;
-        obitExtra = CG_ObituaryMark(target, attacker, mod);
-        obitAttacker = attacker;
-        obitMod = mod;
-        // an assist goes next to the killer's name, as "killer + helper"
-        CG_AddObituary(cgs.clientinfo[target].name,
-                       (helper >= 0 && helper != attacker && !pushed)
-                           ? va("%s ^7+ %s", cgs.clientinfo[attacker].name, cgs.clientinfo[helper].name)
-                           : cgs.clientinfo[attacker].name,
+        CG_AddObituary(cgs.clientinfo[target].name, cgs.clientinfo[attacker].name,
                        victimTeam, attackerTeam, 1, weaponIcon);
         CG_SpecFollowKiller(attacker);
-    } else if (pushed && helper >= 0) {
-        // the map did the killing and someone had just hurt them: the line names who
-        obitExtra = "PUSHED";
-        obitAttacker = helper;
-        obitMod = mod;
-        CG_AddObituary(cgs.clientinfo[target].name, cgs.clientinfo[helper].name,
-                       victimTeam, cgs.clientinfo[helper].team, 1, weaponIcon);
     } else {
         // retail's adder copies the attacker name unconditionally, so it
         // never gets a NULL

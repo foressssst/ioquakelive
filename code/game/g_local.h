@@ -418,10 +418,6 @@ struct gclient_s {
     int lasthurt_client[2];     // [QL] expanded to 2-element array
     int lasthurt_mod[2];        // [QL] expanded to 2-element array
     int lasthurt_time[2];       // [QL]
-    // [ioquakelive] who hurt this player lately and how much, for the kill feed's assists and
-    // pushes. Cleared with the rest of the client on every spawn.
-    int hurtTime[MAX_CLIENTS];
-    int hurtDamage[MAX_CLIENTS];
 
     int lastKillTime;           // for multiple kill rewards
     int lastGibTime;            // [QL]

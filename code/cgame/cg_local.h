@@ -943,15 +943,10 @@ typedef struct {
         int         time;           // cg.time when it happened
         char        victimName[40]; // resolved + color-stripped for team games
         int         victimTeam;     // 0=free, 1=red, 2=blue, 3=spec
-        char        attackerName[80];   // [ioquakelive] room for "killer + assist"
+        char        attackerName[40];
         int         attackerTeam;
         int         hasAttacker;    // 0 for world/suicide
         qhandle_t   weaponIcon;     // shader handle for weapon/skull icon
-        // [ioquakelive] what the feed adds to a kill worth a second look
-        char        extra[12];      // "x2", "MID-AIR", "TELEFRAG"; empty for a plain kill
-        int         attacker;       // client number, -1 for none
-        int         mod;
-        int         shotTime;       // cg.time of the kill, which the fades never touch
     } obituaries[MAX_OBITUARIES];
 
     // [QL] speedometer history ring buffer

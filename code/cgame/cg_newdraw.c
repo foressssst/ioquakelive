@@ -3469,15 +3469,13 @@ static const float *CG_ObitTeamColor(int team) {
 #define OBIT_ICON_SCALE 1.3f   // the weapon, over an ascender
 #define OBIT_ICON_GAP 0.7f     // the space at each side of it, the same way
 #define OBIT_BAND_ALPHA 0.45f
-// [ioquakelive] the extra ("x2", "MID-AIR", "TELEFRAG") between the weapon and the victim
-static const vec4_t obitExtraColor = {1.0f, 0.75f, 0.0f, 1.0f};
 
 static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
     static vec4_t obitColor;
     int i;
     int remaining;
     float asc, lineH, capH, padX, padY, bandH, pitch, iconSize, gapX;
-    float left, bandTop, baseline, x, iconX, iconY, iconW, iconH, attackerW, victimW, extraW;
+    float left, bandTop, baseline, x, iconX, iconY, iconW, iconH, attackerW, victimW;
     const float *team;
     int lifetime = ch_animateScroll.integer ? OBIT_FADEIN + OBIT_FADEDELAY + OBIT_FADEOUT : 2000;
     float slide = 0.0f;
@@ -3553,17 +3551,13 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
             attackerW = (float)CG_DrawTextWidth(cg.obituaries[i].attackerName, scale, 0, 0);
         }
         victimW = (float)CG_DrawTextWidth(cg.obituaries[i].victimName, scale, 0, 0);
-        extraW = 0.0f;
-        if (cg.obituaries[i].extra[0]) {
-            extraW = (float)CG_DrawTextWidth(cg.obituaries[i].extra, scale, 0, 0) + gapX;
-        }
         iconX = left + attackerW + gapX;
 
         // [CPMA] the band behind the row, which is what makes the feed read over the map. It
         // takes the row's own alpha, so it comes and goes with the line
         {
             vec4_t band = {0.0f, 0.0f, 0.0f, 0.0f};
-            float rowW = attackerW + gapX + iconSize + gapX + extraW + victimW;
+            float rowW = attackerW + gapX + iconSize + gapX + victimW;
 
             band[3] = obitColor[3] * OBIT_BAND_ALPHA;
             CG_FillRect(left - padX, bandTop, rowW + 2.0f * padX, bandH, band);
@@ -3590,14 +3584,9 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
             trap_R_SetColor(NULL);
         }
 
-        if (cg.obituaries[i].extra[0]) {
-            VectorCopy(obitExtraColor, obitColor);
-            CG_DrawText(iconX + iconSize + gapX, baseline, 0, scale, obitColor, cg.obituaries[i].extra, 0, 0, 0);
-        }
-
         team = CG_ObitTeamColor(cg.obituaries[i].victimTeam);
         VectorCopy(team, obitColor);
-        CG_DrawText(iconX + iconSize + gapX + extraW, baseline, 0, scale, obitColor, cg.obituaries[i].victimName, 0, 0, 0);
+        CG_DrawText(iconX + iconSize + gapX, baseline, 0, scale, obitColor, cg.obituaries[i].victimName, 0, 0, 0);
 
         bandTop += pitch;
     }
