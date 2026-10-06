@@ -318,7 +318,6 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_SOUND, "Ambient Sound", "s_ambient", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Play ambient map sounds.", 1},
     {ST_TAB_SOUND, "Hit Beep Style", "cg_hitbeep", ST_SELECT, 0.0f, 3.0f, 0.0f, stOpts_cg_hitbeep, 4, "Sound played when obtaining a hit on an enemy player.", 1},
     {ST_TAB_SOUND, "Kill Beep Style", "cg_killbeep", ST_SELECT, 0.0f, 8.0f, 0.0f, stOpts_cg_killbeep, 9, "Sound played when obtaining a frag on an enemy player.", 1},
-    {ST_TAB_SOUND, "Instant Hit Beep", "ch_predicthitsounds", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 1},  // [ioquakelive]
     {ST_TAB_SOUND, "Chat Beep", "cg_chatbeep", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Play a chat beep sound when a chat message is received.", 1},
     {ST_TAB_SOUND, "Team Chat Beep", "cg_teamchatbeep", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Play a chat beep sound when a teamchat message is received.", 1},
     {ST_TAB_SOUND, "Doppler Sound", "s_doppler", ST_BOOL, 0.0f, 0.0f, 0.0f, NULL, 0, "Use doppler sound effects.", 1},

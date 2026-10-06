@@ -369,7 +369,6 @@ vmCvar_t ch_followKiller;
 vmCvar_t ch_recordingDemo;
 vmCvar_t cg_ambient;
 vmCvar_t ch_gameEvents;
-vmCvar_t ch_predictHitSounds;
 vmCvar_t ch_recordMessage;
 vmCvar_t cg_demoRecording;
 vmCvar_t cg_demoName;
@@ -792,9 +791,8 @@ static cvarTable_t cvarTable[] = {
     {&ch_recordingDemo, "ch_recordingDemo", "0", CVAR_ARCHIVE},
     // [QL] the engine owns this one; the cgame only reads it to leave the map's sounds out
     {&cg_ambient, "s_ambient", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE | CVAR_LATCH},
+    // the hit sound of your own shots always goes at once; the cvar is there to be read, not set
     {&ch_gameEvents, "ch_gameEvents", "1", CVAR_ARCHIVE},
-    // [ioquakelive] CG_PredictHitSound, off as in retail
-    {&ch_predictHitSounds, "ch_predictHitSounds", "0", CVAR_ARCHIVE},
     {&ch_recordMessage, "ch_recordMessage", "1", CVAR_ARCHIVE},
     {&cg_demoRecording, "cl_demorecording", "0", CVAR_ROM},
     {&cg_demoName, "cl_demoname", "", CVAR_ROM},
