@@ -62,6 +62,9 @@ int g_console_field_width = 119;
 #define CON_MAX_LINKS 64
 #define CON_MAX_URL 512
 
+// [ioquakelive] the recent lines whose start con_animate remembers
+#define CON_ANIM_ROWS 256
+
 typedef struct {
     float x, y, w, h;
     char url[CON_MAX_URL];
@@ -121,6 +124,12 @@ typedef struct {
     char linkAsked[CON_MAX_URL];  // the link the prompt is asking about
     vec4_t promptOpen;            // x, y, w, h of each answer
     vec4_t promptCancel;
+
+    // [ioquakelive] con_animate: where the text is scrolled to, easing toward display; when the
+    // console was last drawn; and when each recent line began
+    float scrollPos;
+    int animDrawn;
+    int lineBorn[CON_ANIM_ROWS];
 } console_t;
 
 console_t con;
@@ -132,6 +141,7 @@ cvar_t* con_noprint;
 cvar_t* con_opacity;
 cvar_t* con_scale;
 cvar_t* con_speed;
+cvar_t* con_animate;
 cvar_t* con_timestamps;
 
 // [CNQ3] Console features ported from CNQ3 (code/client/cl_console.cpp).
@@ -817,6 +827,8 @@ void Con_Clear_f(void) {
     }
 
     Con_Bottom();  // go to end
+    Com_Memset(con.lineBorn, 0, sizeof(con.lineBorn));
+    con.scrollPos = con.display;
 
     // [CNQ3] nothing left to search or mark
     con.searchStarted = qfalse;
@@ -985,6 +997,8 @@ void Con_CheckResize(void) {
 
     con.current = con.totallines - 1;
     con.display = con.current;
+    Com_Memset(con.lineBorn, 0, sizeof(con.lineBorn));
+    con.scrollPos = con.display;
 
     // [CNQ3] the lines were renumbered
     con.searchStarted = qfalse;
@@ -1206,6 +1220,9 @@ void Con_Init(void) {
     con_speed = Cvar_Get("con_speed", "3", CVAR_ARCHIVE);
     Cvar_CheckRange(con_speed, 0.1f, 1000.0f, qfalse);
 
+    con_animate = Cvar_Get("con_animate", "1", CVAR_ARCHIVE);
+    Cvar_CheckRange(con_animate, 0, 1, qtrue);
+
     con_timestamps = Cvar_Get("con_timestamps", "0", CVAR_ARCHIVE);
 
     // [CNQ3] console style; 1 by default at the user's request, 0 keeps Quake Live's console
@@ -1261,6 +1278,7 @@ void Con_Init(void) {
     Cvar_SetHelp("con_opacity", "opacity of the console background");
     Cvar_SetHelp("con_scale", "console text scale");
     Cvar_SetHelp("con_speed", "console opening/closing speed");
+    Cvar_SetHelp("con_animate", "the text of con_style 1 fades in line by line and slides as it scrolls");
     Cvar_SetHelp("con_timestamps", "prefixes new console lines with the time");
 
     Field_Clear(&g_consoleField);
@@ -1404,6 +1422,9 @@ void CL_ConsolePrint(char* txt) {
 
         p = tsbuf;
         while (*p) {
+            if (con.x == 0) {
+                con.lineBorn[con.current % CON_ANIM_ROWS] = cls.realtime;  // [ioquakelive] con_animate
+            }
             y = con.current % con.totallines;
             con.text[y * con.linewidth + con.x] = (ColorIndex(COLOR_WHITE) << 8) | *p;
             con.x++;
@@ -1451,6 +1472,9 @@ void CL_ConsolePrint(char* txt) {
                 con.x = 0;
                 break;
             default:  // display character and advance
+                if (con.x == 0) {
+                    con.lineBorn[con.current % CON_ANIM_ROWS] = cls.realtime;  // [ioquakelive] con_animate
+                }
                 y = con.current % con.totallines;
                 con.text[y * con.linewidth + con.x] = (color << 8) | c;
                 con.x++;
@@ -1697,6 +1721,9 @@ static const float* Con_RunColor(int id) {
     }
 }
 
+// [ioquakelive] con_animate: how far in the row being drawn has faded
+static float conRowAlpha = 1.0f;
+
 static void Con_DrawRuns(const conMetrics_t* m, float x, float baseline, const char* chars, const short* ids, const short* cols, int count, qboolean shadow) {
     char run[CON_MAXLINEWIDTH + 1];
     const int offset = shadow ? 1 : 0;
@@ -1732,7 +1759,15 @@ static void Con_DrawRuns(const conMetrics_t* m, float x, float baseline, const c
         if (color[3] <= 0.0f) {
             continue;
         }
-        re.SetColor(color);
+        if (conRowAlpha < 1.0f) {
+            vec4_t faded;
+
+            Vector4Copy(color, faded);
+            faded[3] *= conRowAlpha;
+            re.SetColor(faded);
+        } else {
+            re.SetColor(color);
+        }
         re.Font_DrawString((int)(x + cols[start] * m->adv) + offset, (int)baseline + offset, run, CON_FONT_MONO, m->fontSize, -1, NULL, CON_TEXT_LITERAL);
     }
 }
@@ -1989,6 +2024,80 @@ static void Con_DrawHelp(const conMetrics_t* m) {
 
 /*
 ================
+Con_ScrollOffset
+
+[ioquakelive] con_animate: how far the text still is from where it is scrolled to, in pixels,
+as it slides there over a tenth of a second. A jump of more than four lines slides the last
+four; a console just opened starts where it is.
+================
+*/
+static float Con_ScrollOffset(const conMetrics_t* m) {
+    const float target = (float)con.display;
+
+    if (!con_animate->integer || cls.realtime - con.animDrawn > 100) {
+        con.scrollPos = target;
+    }
+    con.animDrawn = cls.realtime;
+    if (con.scrollPos < target - 4) {
+        con.scrollPos = target - 4;
+    } else if (con.scrollPos > target + 4) {
+        con.scrollPos = target + 4;
+    }
+    con.scrollPos += (target - con.scrollPos) * MIN(1.0f, cls.realFrametime * 0.03f);
+    if (fabs(target - con.scrollPos) < 0.01f) {
+        con.scrollPos = target;
+    }
+    return (target - con.scrollPos) * m->cellH;
+}
+
+// one row of con_style 1's text, at its baseline; with con_animate a new line fades in over
+// its first 150 ms
+static void Con_DrawRowCNQ3(const conMetrics_t* m, float x0, float y, int row, qboolean drawMark, int markStartX,
+                            int markStartY, int markEndX, int markEndY) {
+    char chars[CON_MAXLINEWIDTH];
+    short ids[CON_MAXLINEWIDTH];
+    short shadows[CON_MAXLINEWIDTH];
+    short cols[CON_MAXLINEWIDTH];
+    const int count = MIN(con.linewidth, CON_MAXLINEWIDTH);
+    const short* text = con.text + (row % con.totallines) * con.linewidth;
+    const qboolean markRow = (drawMark && row >= markStartY && row <= markEndY) ? qtrue : qfalse;
+    int x;
+
+    conRowAlpha = 1.0f;
+    if (con_animate->integer && con.current - row < CON_ANIM_ROWS && con.lineBorn[row % CON_ANIM_ROWS]) {
+        conRowAlpha = (cls.realtime - con.lineBorn[row % CON_ANIM_ROWS]) / 150.0f;
+        conRowAlpha = conRowAlpha < 0 ? 0 : conRowAlpha > 1 ? 1 : conRowAlpha;
+    }
+
+    for (x = 0; x < count; x++) {
+        const qboolean marked = (markRow && x >= markStartX && x <= markEndX) ? qtrue : qfalse;
+        chars[x] = (char)(text[x] & 0xff);
+        ids[x] = marked ? CON_RUN_MKTEXT : (short)(text[x] >> 8);
+        shadows[x] = marked ? CON_RUN_MKSHADOW : CON_RUN_SHADOW;
+    }
+    Con_TextColumns(chars, count, cols);
+
+    if (markRow) {
+        const int c0 = cols[MIN(MAX(markStartX, 0), count - 1)];
+        const int c1 = cols[MIN(MAX(markEndX, 0), count - 1)];
+        Con_FillRectPx(x0 + c0 * m->adv, y - m->asc, (c1 - c0 + 1) * m->adv, m->cellH, con_colors[CC_MKBG].color);
+    }
+
+    Con_DrawRuns(m, x0, y, chars, shadows, cols, count, qtrue);
+
+    if (con.searchStarted && row == con.searchLine) {
+        re.SetColor(con_colors[CC_SEARCH].color);
+        re.Font_DrawString((int)(x0 - m->cellW), (int)y, ">", CON_FONT_MONO, m->fontSize, -1, NULL, CON_TEXT_LITERAL);
+    }
+
+    Con_DrawRuns(m, x0, y, chars, ids, cols, count, qfalse);
+
+    Con_RowLinks(text, count, x0, y, m->adv, m->asc, m->cellH);
+    conRowAlpha = 1.0f;
+}
+
+/*
+================
 Con_DrawSolidConsoleCNQ3
 
 [CNQ3] con_style 1: the con_col* panel with shadowed text, in Quake Live's
@@ -1996,15 +2105,11 @@ font and cells, rows on the same baselines as Quake Live's console.
 ================
 */
 static void Con_DrawSolidConsoleCNQ3(float frac) {
-    char chars[CON_MAXLINEWIDTH];
-    short ids[CON_MAXLINEWIDTH];
-    short shadows[CON_MAXLINEWIDTH];
-    short cols[CON_MAXLINEWIDTH];
     conMetrics_t m;
-    int i, x, row, rows, lines, count, len;
+    int i, k, x, row, rows, lines, len;
     int markStartX, markStartY, markEndX, markEndY;
     qboolean drawMark;
-    float y, x0;
+    float y, x0, off, limit;
 
     lines = (int)(cls.glconfig.vidHeight * frac);
     if (lines <= 0) {
@@ -2056,13 +2161,22 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
     }
 
     drawMark = Con_MarkBounds(&markStartX, &markStartY, &markEndX, &markEndY);
-    count = MIN(con.linewidth, CON_MAXLINEWIDTH);
+
+    // [ioquakelive] con_animate: the text slides to where it is scrolled; a new line comes up
+    // from the empty row above the edit line, the rows a scroll down brings in from below
+    off = Con_ScrollOffset(&m);
+    limit = y + (con.display == con.current ? m.cellH : 0);
+    for (k = 1; off < 0 && k <= 4; k++) {
+        const float by = y + k * m.cellH + off;
+
+        if (row + k > con.current || (row + k == con.current && con.x == 0) || by > limit + 0.5f) {
+            break;
+        }
+        Con_DrawRowCNQ3(&m, x0, by, row + k, drawMark, markStartX, markStartY, markEndX, markEndY);
+    }
 
     con.rowsVisible = 0;
-    for (i = 0; i < rows; i++, y -= m.cellH, row--) {
-        const short* text;
-        qboolean markRow;
-
+    for (i = 0; i < rows + (off > 0 ? 1 : 0); i++, y -= m.cellH, row--) {
         if (row < 0) {
             break;
         }
@@ -2070,37 +2184,13 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
             // past scrollback wrap point
             continue;
         }
-        if (y - m.asc >= 0) {
+        if (i < rows && y - m.asc >= 0) {
             con.rowsVisible++;
         }
-
-        text = con.text + (row % con.totallines) * con.linewidth;
-        markRow = (drawMark && row >= markStartY && row <= markEndY) ? qtrue : qfalse;
-
-        for (x = 0; x < count; x++) {
-            const qboolean marked = (markRow && x >= markStartX && x <= markEndX) ? qtrue : qfalse;
-            chars[x] = (char)(text[x] & 0xff);
-            ids[x] = marked ? CON_RUN_MKTEXT : (short)(text[x] >> 8);
-            shadows[x] = marked ? CON_RUN_MKSHADOW : CON_RUN_SHADOW;
+        if (y + off > limit + 0.5f) {
+            continue;
         }
-        Con_TextColumns(chars, count, cols);
-
-        if (markRow) {
-            const int c0 = cols[MIN(MAX(markStartX, 0), count - 1)];
-            const int c1 = cols[MIN(MAX(markEndX, 0), count - 1)];
-            Con_FillRectPx(x0 + c0 * m.adv, y - m.asc, (c1 - c0 + 1) * m.adv, m.cellH, con_colors[CC_MKBG].color);
-        }
-
-        Con_DrawRuns(&m, x0, y, chars, shadows, cols, count, qtrue);
-
-        if (con.searchStarted && row == con.searchLine) {
-            re.SetColor(con_colors[CC_SEARCH].color);
-            re.Font_DrawString((int)(x0 - m.cellW), (int)y, ">", CON_FONT_MONO, m.fontSize, -1, NULL, CON_TEXT_LITERAL);
-        }
-
-        Con_DrawRuns(&m, x0, y, chars, ids, cols, count, qfalse);
-
-        Con_RowLinks(text, count, x0, y, m.adv, m.asc, m.cellH);
+        Con_DrawRowCNQ3(&m, x0, y + off, row, drawMark, markStartX, markStartY, markEndX, markEndY);
     }
 
     Con_DrawInputCNQ3(&m);
