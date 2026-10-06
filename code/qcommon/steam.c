@@ -2298,19 +2298,25 @@ for the next one
 static void Steam_WorkshopNext(void) {
     int i, j;
 
-    for (i = j = 0; i < ws.numQueued; i++) {
-        if (ws.queue[i] != ws.current) {
-            ws.queue[j++] = ws.queue[i];
+    for (;;) {
+        for (i = j = 0; i < ws.numQueued; i++) {
+            if (ws.queue[i] != ws.current) {
+                ws.queue[j++] = ws.queue[i];
+            }
         }
+        ws.numQueued = j;
+        if (!ws.numQueued) {
+            ws.current = 0;
+            return;
+        }
+        ws.current = ws.queue[0];
+        Com_Printf("Workshop item %llu: was queued, requesting download.\n", (unsigned long long)ws.current);
+        if (st.DownloadItem(st.ugc, ws.current, 1)) {
+            return;
+        }
+        // [ioquakelive] an id Steam turns down never gets an answer: retail waited for it forever
+        Com_Printf("Workshop item %llu: Steam refused the download.\n", (unsigned long long)ws.current);
     }
-    ws.numQueued = j;
-    if (!ws.numQueued) {
-        ws.current = 0;
-        return;
-    }
-    ws.current = ws.queue[0];
-    Com_Printf("Workshop item %llu: was queued, requesting download.\n", (unsigned long long)ws.current);
-    st.DownloadItem(st.ugc, ws.current, 1);
 }
 
 /*
@@ -2385,7 +2391,10 @@ qboolean Steam_WorkshopQueue(uint64_t item, qboolean queued) {
         }
         if (!(Steam_ItemState(item) & STEAM_ITEM_INSTALLED)) {
             Com_Printf("Workshop item %llu: download\n", (unsigned long long)item);
-            st.DownloadItem(st.ugc, item, 1);
+            if (!st.DownloadItem(st.ugc, item, 1)) {
+                Com_Printf("Workshop item %llu: Steam refused the download.\n", (unsigned long long)item);
+                return qfalse;
+            }
             return qtrue;
         }
     } else {
@@ -2395,7 +2404,10 @@ qboolean Steam_WorkshopQueue(uint64_t item, qboolean queued) {
                 Com_Printf("Workshop item %llu: queueing download.\n", (unsigned long long)item);
             } else {
                 Com_Printf("Workshop item %llu: requesting download.\n", (unsigned long long)item);
-                st.DownloadItem(st.ugc, item, 1);
+                if (!st.DownloadItem(st.ugc, item, 1)) {
+                    Com_Printf("Workshop item %llu: Steam refused the download.\n", (unsigned long long)item);
+                    return qfalse;
+                }
                 ws.current = item;
             }
             if (ws.numQueued < STEAM_WORKSHOP_QUEUE) {
@@ -2608,6 +2620,11 @@ void Steam_SubscribeUGC_f(void) {
         return;
     }
     sscanf(Cmd_Argv(1), "%llu", &item);
+    // [ioquakelive] the player's account, so not through rcon
+    if (Com_Redirected()) {
+        Com_Printf("steam_subscribeugc only works from the local console.\n");
+        return;
+    }
     if (!Steam_WorkshopUGC() || !st.SubscribeItem) {
         return;
     }
@@ -2625,6 +2642,10 @@ void Steam_UnsubscribeUGC_f(void) {
         return;
     }
     sscanf(Cmd_Argv(1), "%llu", &item);
+    if (Com_Redirected()) {
+        Com_Printf("steam_unsubscribeugc only works from the local console.\n");
+        return;
+    }
     if (!Steam_WorkshopUGC() || !st.UnsubscribeItem) {
         return;
     }

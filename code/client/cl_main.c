@@ -2609,6 +2609,10 @@ void CL_NextDownload(void) {
     CL_DownloadsComplete();
 }
 
+qboolean CL_Connected(void) {
+    return (qboolean)(clc.state >= CA_CONNECTED);
+}
+
 /*
 ==================
 CL_InitDownloads

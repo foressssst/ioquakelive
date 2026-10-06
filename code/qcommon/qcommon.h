@@ -1001,6 +1001,8 @@ void CL_LowLatencyWait(void);
 // [ioquakelive] the refresh rate of the display the game is on, 0 when it is not known
 int CL_DisplayFrequency(void);
 qboolean CL_GameCommand(void);
+qboolean CL_Connected(void);  // joined to a server, the local one included
+qboolean Com_Redirected(void);
 void *CL_FindAlias(const char *name);
 void CL_RunAlias(void);
 void CL_InitAliases(void);

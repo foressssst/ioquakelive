@@ -28,6 +28,10 @@ cvar_t* cl_shownet;
 void CL_Shutdown(char* finalmsg, qboolean disconnect, qboolean quit) {
 }
 
+qboolean CL_Connected(void) {
+    return qfalse;
+}
+
 void CL_Init(void) {
     cl_shownet = Cvar_Get("cl_shownet", "0", CVAR_TEMP);
 }

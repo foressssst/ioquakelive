@@ -4176,8 +4176,13 @@ static void FS_AddWorkshop(void) {
 	}
 }
 
-// [QL] what an item that arrives outside a queue brings: a restart that mounts it
+// [QL] what an item that arrives outside a queue brings: a restart that mounts it.
+// [ioquakelive] not with a map running or a server joined, whose files it would close (the
+// game's log, the demo being recorded): the next map restarts the filesystem and mounts it
 void FS_WorkshopRestart(void) {
+	if ((com_sv_running && com_sv_running->integer) || CL_Connected()) {
+		return;
+	}
 	FS_Restart(fs_checksumFeed);
 }
 

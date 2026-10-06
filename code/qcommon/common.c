@@ -134,6 +134,11 @@ void Com_BeginRedirect(char* buffer, int buffersize, void (*flush)(char*)) {
     *rd_buffer = 0;
 }
 
+// whether what runs now came through rcon
+qboolean Com_Redirected(void) {
+    return (qboolean)(rd_buffer != NULL);
+}
+
 void Com_EndRedirect(void) {
     if (rd_flush) {
         rd_flush(rd_buffer);
