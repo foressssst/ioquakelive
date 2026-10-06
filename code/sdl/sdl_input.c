@@ -29,6 +29,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../client/client.h"
 #include "../sys/sys_local.h"
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 static cvar_t* in_keyboardDebug = NULL;
 
 static SDL_Gamepad* gamepad = NULL;
@@ -1463,6 +1468,98 @@ void IN_Frame(void) {
 IN_Init
 ===============
 */
+#ifdef _WIN32
+/*
+===============
+IN_SizingWndProc
+
+[QL] quakelive_steam.exe 0x4f1350, run on WM_SIZING by its window procedure: while a window
+edge is dragged the client area stays at least 1024x768 and between 4:3 and 16:9, the side being
+dragged sets one dimension and the other follows inside those proportions. SDL's own procedure
+gets the message afterwards, as retail's DefWindowProc did.
+===============
+*/
+static HWND in_hwnd;
+static WNDPROC in_sdlWndProc;
+
+static int IN_Clamp(int lo, int hi, int v) {
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+
+static LRESULT CALLBACK IN_SizingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (msg == WM_SIZING && lParam) {
+        RECT* r = (RECT*)lParam;
+        RECT b = {0, 0, 0, 0};
+        int bw, bh, w, h;
+
+        AdjustWindowRectEx(&b, (DWORD)GetWindowLongW(hwnd, GWL_STYLE), FALSE, (DWORD)GetWindowLongW(hwnd, GWL_EXSTYLE));
+        bw = b.right - b.left;
+        bh = b.bottom - b.top;
+        w = (r->right - r->left) - bw;
+        h = (r->bottom - r->top) - bh;
+        if (w < 1024) {
+            w = 1024;
+        }
+        if (h < 768) {
+            h = 768;
+        }
+        switch (wParam) {
+            case WMSZ_LEFT:
+                r->left = r->right - bw - w;
+                r->bottom = r->top + bh + IN_Clamp(w * 9 / 16, w * 3 / 4, h);
+                break;
+            case WMSZ_RIGHT:
+                r->right = r->left + bw + w;
+                r->bottom = r->top + bh + IN_Clamp(w * 9 / 16, w * 3 / 4, h);
+                break;
+            case WMSZ_TOP:
+            case WMSZ_TOPRIGHT:
+                r->top = r->bottom - bh - h;
+                r->right = r->left + bw + IN_Clamp(h * 4 / 3, h * 16 / 9, w);
+                break;
+            case WMSZ_TOPLEFT:
+                r->top = r->bottom - bh - h;
+                r->left = r->right - bw - IN_Clamp(h * 4 / 3, h * 16 / 9, w);
+                break;
+            case WMSZ_BOTTOM:
+            case WMSZ_BOTTOMRIGHT:
+                r->bottom = r->top + bh + h;
+                r->right = r->left + bw + IN_Clamp(h * 4 / 3, h * 16 / 9, w);
+                break;
+            case WMSZ_BOTTOMLEFT:
+                r->bottom = r->top + bh + h;
+                r->left = r->right - bw - IN_Clamp(h * 4 / 3, h * 16 / 9, w);
+                break;
+            default:
+                break;
+        }
+    }
+    return CallWindowProcW(in_sdlWndProc, hwnd, msg, wParam, lParam);
+}
+
+// the window's procedure goes through IN_SizingWndProc while the input system has it
+static void IN_HookWindow(qboolean hook) {
+    if (hook) {
+        HWND hwnd = SDL_window ? (HWND)SDL_GetPointerProperty(SDL_GetWindowProperties(SDL_window),
+                                                              SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL)
+                               : NULL;
+
+        if (hwnd && !in_hwnd) {
+            in_sdlWndProc = (WNDPROC)SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)IN_SizingWndProc);
+            if (in_sdlWndProc) {
+                in_hwnd = hwnd;
+            }
+        }
+    } else if (in_hwnd) {
+        if ((WNDPROC)GetWindowLongPtrW(in_hwnd, GWLP_WNDPROC) == IN_SizingWndProc) {
+            SetWindowLongPtrW(in_hwnd, GWLP_WNDPROC, (LONG_PTR)in_sdlWndProc);
+        }
+        in_hwnd = NULL;
+        in_sdlWndProc = NULL;
+    }
+}
+#endif
+
 /*
 ===============
 IN_FocusWatch
@@ -1530,6 +1627,9 @@ void IN_Init(void* windowData) {
     SDL_StartTextInput(SDL_window);
 
     SDL_AddEventWatch(IN_FocusWatch, NULL);
+#ifdef _WIN32
+    IN_HookWindow(qtrue);
+#endif
 
     mouseAvailable = (in_mouse->value != 0);
     IN_DeactivateMouse(Cvar_VariableIntegerValue("r_fullscreen") != 0);
@@ -1573,6 +1673,9 @@ void IN_Shutdown(void) {
     Cmd_RemoveCommand("inputrate");
 
     SDL_RemoveEventWatch(IN_FocusWatch, NULL);
+#ifdef _WIN32
+    IN_HookWindow(qfalse);
+#endif
 
     SDL_StopTextInput(SDL_window);
 

@@ -562,7 +562,11 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
         flags |= SDL_WINDOW_FULLSCREEN;
         glConfig.isFullscreen = qtrue;
     } else if (fullscreen) {
-        SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "1");
+        // [QL] retail's window procedure (quakelive_steam.exe 0x4f1750) has nothing for losing
+        // focus but the cursor and the sound: full screen stays as it is, under the window in
+        // front, and goes on drawing, so the taskbar's preview of it is live. Minimizing left a
+        // frozen picture there and made every alt-tab change the display mode twice
+        SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
         // the video mode can only go on a window that exists: hidden until it is set
         flags |= SDL_WINDOW_HIDDEN;
         glConfig.isFullscreen = qtrue;
