@@ -2580,17 +2580,21 @@ static void CG_DrawVoteGameType(rectDef_t *rect, float scale, vec4_t color, int 
 }
 
 
-static void CG_DrawVoteTimer(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
-    if (cgs.voteTime) {
-        int sec = (cgs.voteTime + 20000 - cg.time) / 1000;
-        if (sec > 0) {
-            CG_OwnerDrawText(rect->x, rect->y, scale, color,
-                va("Voting ends in %d seconds.", sec), 0, 0, textStyle);
-        } else {
-            CG_OwnerDrawText(rect->x, rect->y, scale, color,
-                "Voting has ended.", 0, 0, textStyle);
-        }
+// [QL] 0x10035920: the twenty seconds of the vote, "second" for the last one, and the text on the
+// item's x the way its align asks. The end-of-match vote has it right-aligned at 610, so it ends
+// inside the frame; drawn from 610 it ran off the right of the screen.
+static void CG_DrawVoteTimer(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
+    const int sec = (cgs.voteTime - cg.time + 20000) / 1000;
+    const char *s;
+
+    if (sec < 1) {
+        s = "Voting has ended.";
+    } else if (sec == 1) {
+        s = "Voting ends in 1 second.";
+    } else {
+        s = va("Voting ends in %i seconds.", sec);
     }
+    CG_DrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
 // [QL] 0x10033530: "TO: n", the timeouts the team has left -- g_timeoutCount while its
@@ -4540,7 +4544,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             break;
         case CG_VOTETIMER:                  // 0x22
             // binary falls through to the respawn message here; kept separate.
-            CG_DrawVoteTimer(&rect, scale, color, textStyle);
+            CG_DrawVoteTimer(&rect, scale, color, textStyle, align);
             break;
         case CG_SPEC_MESSAGES:              // 0x23
             // [QL] cgamex86.dll 0x1003c05b: this ownerdraw is the ONLY way retail
