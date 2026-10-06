@@ -665,6 +665,12 @@ static void InitOpenGL( void )
 				glConfig.vidWidth = r_renderWidth->integer;
 				glConfig.vidHeight = r_renderHeight->integer;
 			}
+			else if ( R_FSRScale() < 1.0f )
+			{
+				// [ioquakelive] r_fsr's level: that share of the window, brought up by FSR
+				glConfig.vidWidth = (int)( glConfig.vidWidth * R_FSRScale() + 0.5f );
+				glConfig.vidHeight = (int)( glConfig.vidHeight * R_FSRScale() + 0.5f );
+			}
 
 			gls.captureWidth = glConfig.vidWidth;
 			gls.captureHeight = glConfig.vidHeight;
@@ -2018,10 +2024,11 @@ static qboolean RE_WindowResized( int width, int height )
 
 	if ( !r_renderScale->integer )
 	{
-		glConfig.vidWidth = width;
-		glConfig.vidHeight = height;
-		gls.captureWidth = width;
-		gls.captureHeight = height;
+		// [ioquakelive] with r_fsr, its share of the new size
+		glConfig.vidWidth = (int)( width * R_FSRScale() + 0.5f );
+		glConfig.vidHeight = (int)( height * R_FSRScale() + 0.5f );
+		gls.captureWidth = glConfig.vidWidth;
+		gls.captureHeight = glConfig.vidHeight;
 		RI_CL_SetScaling( 1.0, gls.captureWidth, gls.captureHeight );
 #ifdef USE_FBO
 		if ( r_ext_supersample->integer )

@@ -1566,6 +1566,11 @@ static void FBO_BlitToBackBuffer( int index )
 		FBO_Bind( GL_DRAW_FRAMEBUFFER, 0 );
 		qglBlitFramebuffer( 0, 0, src->width, src->height, blitX0, blitY0, blitX1, blitY1, GL_COLOR_BUFFER_BIT, blitFilter );
 	}
+	else
+	{
+		// [ioquakelive] a screenshot reads the render, as it does without FSR
+		FBO_Bind( GL_READ_FRAMEBUFFER, src->fbo );
+	}
 	fboReadIndex = index;
 }
 

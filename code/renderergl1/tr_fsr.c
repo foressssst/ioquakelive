@@ -336,15 +336,39 @@ R_FSRRegister
 */
 void R_FSRRegister( void ) {
 	r_fsr = ri.Cvar_Get( "r_fsr", "0", CVAR_ARCHIVE_ND );
-	RI_Cvar_CheckRange( r_fsr, "0", "1", CV_INTEGER );
-	ri.Cvar_SetDescription( r_fsr, "FidelityFX Super Resolution 1.0 to upscale a render smaller "
-		"than the window, set with \\r_renderScale and \\r_renderWidth / \\r_renderHeight." );
+	RI_Cvar_CheckRange( r_fsr, "0", "4", CV_INTEGER );
+	ri.Cvar_SetDescription( r_fsr, "FidelityFX Super Resolution 1.0: the game renders smaller than "
+		"the window and FSR brings it up to it\n"
+		" 0: off\n"
+		" 1: Ultra Quality, 77% of the window\n"
+		" 2: Quality, 67%\n"
+		" 3: Balanced, 59%\n"
+		" 4: Performance, 50%\n"
+		"With \\r_renderScale, the size of \\r_renderWidth / \\r_renderHeight instead." );
 	RI_Cvar_SetGroup( r_fsr, CVG_RENDERER );
 
 	r_fsrSharpness = ri.Cvar_Get( "r_fsrSharpness", "0.2", CVAR_ARCHIVE_ND );
 	RI_Cvar_CheckRange( r_fsrSharpness, "0", "2", CV_FLOAT );
 	ri.Cvar_SetDescription( r_fsrSharpness, "Sharpening of \\r_fsr, 0 the sharpest." );
 	RI_Cvar_SetGroup( r_fsrSharpness, CVG_RENDERER );
+}
+
+/*
+===============
+R_FSRScale
+
+[ioquakelive] The share of the window r_fsr renders at, AMD's four levels; 1 when it is off,
+when the size is r_renderScale's or without the frame buffer FSR needs
+===============
+*/
+float R_FSRScale( void ) {
+	static const float scales[5] = { 1.0f, 1.0f / 1.3f, 1.0f / 1.5f, 1.0f / 1.7f, 1.0f / 2.0f };
+	const int level = r_fsr ? r_fsr->integer : 0;
+
+	if ( level < 1 || level > 4 || r_renderScale->integer || !r_fbo->integer ) {
+		return 1.0f;
+	}
+	return scales[level];
 }
 
 /*

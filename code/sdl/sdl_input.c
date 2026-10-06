@@ -1065,6 +1065,28 @@ static void IN_JoyMove(void) {
 
 /*
 ===============
+IN_PointerToRender
+
+[ioquakelive] The system pointer is in window points and the menus and the console are laid out
+on the render. When the render is not the window's size (r_fsr, r_renderScale) the position
+is brought to it; otherwise it is left alone
+===============
+*/
+static void IN_PointerToRender(float* mx, float* my) {
+    int pw, ph, w, h;
+
+    if (!SDL_window || !SDL_GetWindowSizeInPixels(SDL_window, &pw, &ph) || !SDL_GetWindowSize(SDL_window, &w, &h)) {
+        return;
+    }
+    if (w <= 0 || h <= 0 || (pw == cls.glconfig.vidWidth && ph == cls.glconfig.vidHeight)) {
+        return;
+    }
+    *mx *= (float)cls.glconfig.vidWidth / w;
+    *my *= (float)cls.glconfig.vidHeight / h;
+}
+
+/*
+===============
 IN_ProcessEvents
 ===============
 */
@@ -1388,6 +1410,7 @@ void IN_Frame(void) {
             float mx, my;
 
             SDL_GetMouseState(&mx, &my);
+            IN_PointerToRender(&mx, &my);
             Com_QueueEvent(in_eventTime, SE_MOUSE_ABS, (int)mx, (int)my, 0, NULL);
         }
     } else if (Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CGAME)) {
@@ -1409,6 +1432,7 @@ void IN_Frame(void) {
             float mx, my;
 
             SDL_GetMouseState(&mx, &my);
+            IN_PointerToRender(&mx, &my);
             if ((int)mx != lastX || (int)my != lastY || catcher != lastCatcher || !menuPointerSeen) {
                 lastX = (int)mx;
                 lastY = (int)my;

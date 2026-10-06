@@ -1957,6 +1957,7 @@ qboolean R_CaptureGammaCorrect( void );
 
 // tr_fsr.c: the upscale of the final blit
 void R_FSRRegister( void );
+float R_FSRScale( void );
 void R_FSRInit( void );
 void R_FSRShutdown( void );
 qboolean RB_FSRBlit( GLuint srcTexture, int srcWidth, int srcHeight, int x0, int y0, int x1, int y1 );

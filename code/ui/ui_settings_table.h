@@ -66,6 +66,7 @@ static const stOption_t stOpts_cl_renderer[] = {{"OpenGL", "opengl1"}, {"Vulkan"
 static const stOption_t stOpts_r_lowlatency[] = {{"Off", "0"}, {"On", "1"}, {"On + Boost", "2"}};
 static const stOption_t stOpts_r_ext_multisample[] = {{"Off", "0"}, {"2x", "2"}, {"4x", "4"}, {"8x", "8"}};
 static const stOption_t stOpts_r_ext_max_anisotropy[] = {{"2x", "2"}, {"4x", "4"}, {"8x", "8"}, {"16x", "16"}};
+static const stOption_t stOpts_r_fsr[] = {{"Off", "0"}, {"Ultra Quality", "1"}, {"Quality", "2"}, {"Balanced", "3"}, {"Performance", "4"}};
 static const stOption_t stOpts_cg_drawbrightweapons[] = {{"Off", "0"}, {"Yours", "1"}, {"Enemies", "4"}, {"Yours and Enemies", "5"}, {"Everyone", "7"}};
 static const stOption_t stOpts_ch_animaterewardicons[] = {{"Still", "0"}, {"Once", "1"}, {"Loop", "2"}};
 
@@ -299,6 +300,7 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_VIDEO, "Low Latency (Vulkan)", "r_lowlatency", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_r_lowlatency, 3, NULL, 1},  // [ioquakelive]
     {ST_TAB_VIDEO, "Antialiasing", "r_ext_multisample", ST_SELECT, 0.0f, 8.0f, 0.0f, stOpts_r_ext_multisample, 4, NULL, 1},  // [ioquakelive]
     {ST_TAB_VIDEO, "Anisotropic Filtering", "r_ext_max_anisotropy", ST_SELECT, 2.0f, 16.0f, 0.0f, stOpts_r_ext_max_anisotropy, 4, NULL, 1},  // [ioquakelive]
+    {ST_TAB_VIDEO, "FidelityFX Upscaling (OpenGL)", "r_fsr", ST_SELECT, 0.0f, 4.0f, 0.0f, stOpts_r_fsr, 5, NULL, 1},  // [ioquakelive]
     {ST_TAB_VIDEO, "VRR Frame Cap", "com_maxfpsvrr", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 1},  // [ioquakelive]
     {ST_TAB_VIDEO, "Background FPS", "com_maxfpsunfocused", ST_RANGE, 0.0f, 250.0f, 5.0f, NULL, 0, NULL, 1},  // [ioquakelive]
     {ST_TAB_VIDEO, "Minimized FPS", "com_maxfpsminimized", ST_RANGE, 0.0f, 60.0f, 5.0f, NULL, 0, NULL, 1},  // [ioquakelive]
@@ -338,4 +340,4 @@ static const stCvar_t stCvars[] = {
 static const char* const stTabNames[] = {"INPUT", "GAMEPAD", "BASIC", "GAME", "HUD", "TEAM", "WEAPONS", "VIDEO", "SOUND", "SPECTATING"};
 
 // clang-format on
-// 235 rows of retail's, 220 of them options, and 18 of the fork's
+// 235 rows of retail's, 220 of them options, and 19 of the fork's
