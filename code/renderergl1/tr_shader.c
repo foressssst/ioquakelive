@@ -705,8 +705,9 @@ static qboolean ParseStage( shaderStage_t *stage, const char **text )
 		//
 		else if ( !Q_stricmp( token, "animMap" ) )
 		{
-			int	totalImages = 0;
-			int maxAnimations = s_extendedShader ? MAX_IMAGE_ANIMATIONS : MAX_IMAGE_ANIMATIONS_VQ3;
+			// [QL] 0x455fae: sixteen frames, and the rest dropped without a word. Quake 3's eight cut
+			// the animated skies of the qztourney maps (23 frames) to a third
+			int maxAnimations = s_extendedShader ? MAX_IMAGE_ANIMATIONS : MAX_IMAGE_ANIMATIONS_QL;
 
 			token = COM_ParseExt( text, qfalse );
 			if ( !token[0] )
@@ -745,12 +746,6 @@ static qboolean ParseStage( shaderStage_t *stage, const char **text )
 					}
 					stage->bundle[0].numImageAnimations++;
 				}
-				totalImages++;
-			}
-
-			if ( totalImages > maxAnimations ) {
-				ri.Printf( PRINT_WARNING, "WARNING: ignoring excess images for 'animMap' (found %d, max is %d) in shader '%s'\n",
-					totalImages, maxAnimations, shader.name );
 			}
 		}
 		else if ( !Q_stricmp( token, "videoMap" ) )

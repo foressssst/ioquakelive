@@ -335,7 +335,7 @@ typedef struct {
 
 
 #define MAX_IMAGE_ANIMATIONS		24
-#define MAX_IMAGE_ANIMATIONS_VQ3	8
+#define MAX_IMAGE_ANIMATIONS_QL	16	// [QL] quakelive_steam.exe 0x455fae: animMap keeps 16 frames
 
 #define LIGHTMAP_INDEX_NONE			0
 #define LIGHTMAP_INDEX_SHADER		1

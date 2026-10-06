@@ -1842,6 +1842,8 @@ This function may execute for a couple of minutes with a slow disk.
 static void CG_RegisterGraphics(void) {
     int i;
     char items[MAX_ITEMS + 1];
+    int gorePack;
+    char gorePackList[1024];
     static char* sb_nums[11] = {
         "gfx/2d/numbers/zero_32b",
         "gfx/2d/numbers/one_32b",
@@ -1856,6 +1858,9 @@ static void CG_RegisterGraphics(void) {
         "gfx/2d/numbers/minus_32b",
     };
     cgs.media.domShadowShader = trap_R_RegisterShader("domShadow");  // [QL] 0x10024abc
+
+    // [QL] 0x10020e70 counts the gore pack once for sounds and pictures alike
+    gorePack = trap_FS_GetFileList("dlc_gibs", "", gorePackList, sizeof(gorePackList));
 
     // clear any references to old media
     memset(&cg.refdef, 0, sizeof(cg.refdef));
@@ -1878,7 +1883,12 @@ static void CG_RegisterGraphics(void) {
     cgs.media.botSkillShaders[3] = trap_R_RegisterShader("menu/art/skill4.png");
     cgs.media.botSkillShaders[4] = trap_R_RegisterShader("menu/art/skill5.png");
 
-    cgs.media.viewBloodShader = trap_R_RegisterShader("viewBloodBlend");
+    // [QL] 0x100242cd: the blood on the screen and the sprays are the gore pack's, and like its
+    // sounds and gibs they are registered only when its dlc_gibs folder exists. Asking for them
+    // without the pack printed a warning per missing image on every map load
+    if (gorePack > 0) {
+        cgs.media.viewBloodShader = trap_R_RegisterShader("viewBloodBlend");
+    }
     // [QL] cgamex86.dll 0x100230e7 registers "viewDamageBlend" into 0x10a5f4f4, right
     // alongside viewBloodBlend (0x100242da -> 0x10a5f4f0). They are the two halves of one
     // choice, not alternatives that happen to coexist: pak00's scripts/gfx.shader points
@@ -1924,11 +1934,13 @@ static void CG_RegisterGraphics(void) {
     cgs.media.blueProxMine = trap_R_RegisterModel("models/weaphits/proxmineb.md3");
 
     cgs.media.plasmaBallShader = trap_R_RegisterShader("sprites/plasma1");
-    // [QL] blood spray shaders (translucent sprites with proper alpha blend)
-    cgs.media.bloodSprayShaders[0] = trap_R_RegisterShader("bloodSpray1");
-    cgs.media.bloodSprayShaders[1] = trap_R_RegisterShader("bloodSpray2");
-    cgs.media.bloodSprayShaders[2] = trap_R_RegisterShader("bloodSpray3");
-    cgs.media.bloodSprayShaders[3] = trap_R_RegisterShader("bloodSpray4");
+    // [QL] blood spray shaders (translucent sprites with proper alpha blend), the gore pack's
+    if (gorePack > 0) {
+        cgs.media.bloodSprayShaders[0] = trap_R_RegisterShader("bloodSpray1");
+        cgs.media.bloodSprayShaders[1] = trap_R_RegisterShader("bloodSpray2");
+        cgs.media.bloodSprayShaders[2] = trap_R_RegisterShader("bloodSpray3");
+        cgs.media.bloodSprayShaders[3] = trap_R_RegisterShader("bloodSpray4");
+    }
     cgs.media.bloodTrailShader = cgs.media.bloodSprayShaders[0];
     cgs.media.lagometerShader = trap_R_RegisterShader("lagometer");
     cgs.media.connectionShader = trap_R_RegisterShader("disconnected");
@@ -2212,7 +2224,9 @@ static void CG_RegisterGraphics(void) {
     cgs.media.doublerPowerupModel = trap_R_RegisterModel("models/powerups/doubler_player.md3");
     cgs.media.ammoRegenPowerupModel = trap_R_RegisterModel("models/powerups/ammo_player.md3");
     cgs.media.invulnerabilityImpactModel = trap_R_RegisterModel("models/powerups/shield/impact.md3");
-    cgs.media.invulnerabilityJuicedModel = trap_R_RegisterModel("dlc_gibs/juicer.md3");  // [QL] moved from models/powerups/shield/
+    if (gorePack > 0) {
+        cgs.media.invulnerabilityJuicedModel = trap_R_RegisterModel("dlc_gibs/juicer.md3");  // [QL] moved from models/powerups/shield/
+    }
     cgs.media.medkitUsageModel = trap_R_RegisterModel("models/powerups/regen.md3");
     cgs.media.heartShader = trap_R_RegisterShaderNoMip("ui/assets/statusbar/selectedhealth.tga");
     cgs.media.invulnerabilityPowerupModel = trap_R_RegisterModel("models/powerups/shield/shield.md3");
@@ -2293,16 +2307,18 @@ static void CG_RegisterGraphics(void) {
     //
     // The binary keeps sixteen slots because it holds left and right variants
     // separately, but the duplicated pairs all point at the same file.
-    cgs.media.gibSkull = trap_R_RegisterModel("dlc_gibs/skull.md3");
-    cgs.media.gibBrain = trap_R_RegisterModel("dlc_gibs/brain.md3");
-    cgs.media.gibChest = trap_R_RegisterModel("dlc_gibs/chest.md3");
-    cgs.media.gibAbdomen = trap_R_RegisterModel("dlc_gibs/abdomen.md3");
-    cgs.media.gibIntestine = trap_R_RegisterModel("dlc_gibs/intestine.md3");
-    cgs.media.gibArm = trap_R_RegisterModel("dlc_gibs/arm.md3");
-    cgs.media.gibForearm = trap_R_RegisterModel("dlc_gibs/forearm.md3");
-    cgs.media.gibFist = trap_R_RegisterModel("dlc_gibs/fist.md3");
-    cgs.media.gibLeg = trap_R_RegisterModel("dlc_gibs/leg.md3");
-    cgs.media.gibFoot = trap_R_RegisterModel("dlc_gibs/foot.md3");
+    if (gorePack > 0) {
+        cgs.media.gibSkull = trap_R_RegisterModel("dlc_gibs/skull.md3");
+        cgs.media.gibBrain = trap_R_RegisterModel("dlc_gibs/brain.md3");
+        cgs.media.gibChest = trap_R_RegisterModel("dlc_gibs/chest.md3");
+        cgs.media.gibAbdomen = trap_R_RegisterModel("dlc_gibs/abdomen.md3");
+        cgs.media.gibIntestine = trap_R_RegisterModel("dlc_gibs/intestine.md3");
+        cgs.media.gibArm = trap_R_RegisterModel("dlc_gibs/arm.md3");
+        cgs.media.gibForearm = trap_R_RegisterModel("dlc_gibs/forearm.md3");
+        cgs.media.gibFist = trap_R_RegisterModel("dlc_gibs/fist.md3");
+        cgs.media.gibLeg = trap_R_RegisterModel("dlc_gibs/leg.md3");
+        cgs.media.gibFoot = trap_R_RegisterModel("dlc_gibs/foot.md3");
+    }
 
     // [QL] freeze tag
     cgs.media.iceShardModel = trap_R_RegisterModel("models/gibs/sphere.md3");

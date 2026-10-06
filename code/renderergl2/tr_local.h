@@ -330,7 +330,7 @@ typedef struct {
 
 } texModInfo_t;
 
-#define MAX_IMAGE_ANIMATIONS 8
+#define MAX_IMAGE_ANIMATIONS 16  // [QL] quakelive_steam.exe 0x455fae: animMap keeps 16 frames
 
 typedef struct {
     image_t* image[MAX_IMAGE_ANIMATIONS];

@@ -3377,7 +3377,10 @@ void BotAimAtEnemy(bot_state_t* bs) {
     // get the weapon information
     // [QL] 0x10019fda: a bot holding no weapon the botlib knows takes the machinegun
     wi.number = -1;
-    trap_BotGetWeaponInfo(bs->ws, bs->weaponnum, &wi);
+    // [ioquakelive] the botlib answers weapon 0 with an error on the console, and nothing else
+    if (bs->weaponnum > 0) {
+        trap_BotGetWeaponInfo(bs->ws, bs->weaponnum, &wi);
+    }
     if (wi.number == -1) {
         bs->weaponnum = WP_MACHINEGUN;
         trap_EA_SelectWeapon(bs->client, WP_MACHINEGUN);
@@ -3699,7 +3702,11 @@ void BotCheckAttack(bot_state_t* bs) {
     if (bsptrace.fraction < 1 && bsptrace.ent != attackentity)
         return;
 
-    // get the weapon info
+    // get the weapon info; [ioquakelive] with no weapon yet there is nothing to fire, and the
+    // botlib left wi as it found it
+    if (bs->weaponnum <= 0) {
+        return;
+    }
     trap_BotGetWeaponInfo(bs->ws, bs->weaponnum, &wi);
     // get the start point shooting from
     VectorCopy(bs->origin, start);

@@ -220,7 +220,19 @@ void AssetCache(void) {
 
     // [QL] 0x10009fd1: retail's is a different file; sound/vo/new_high_score.ogg is Team
     // Arena's and does not exist in Quake Live, so the announcement never played
-    uiInfo.newHighScoreSound = trap_S_RegisterSound("sound/feedback/voc_newhighscore.ogg", qfalse);
+    // [ioquakelive] pak00 does not have it either, so it is asked for only when a pack brings it:
+    // retail asked anyway and printed a warning each time the UI loaded
+    {
+        fileHandle_t f;
+        const int len = trap_FS_FOpenFile("sound/feedback/voc_newhighscore.ogg", &f, FS_READ);
+
+        if (f) {
+            trap_FS_FCloseFile(f);
+        }
+        if (len > 0) {
+            uiInfo.newHighScoreSound = trap_S_RegisterSound("sound/feedback/voc_newhighscore.ogg", qfalse);
+        }
+    }
 }
 
 void _UI_DrawSides(float x, float y, float w, float h, float size) {
@@ -5121,6 +5133,19 @@ static void UI_ParseGameInfo(const char* teamFile) {
     char* p;
     char* buff = NULL;
     // int mode = 0; TTimo: unused
+
+    // [ioquakelive] gameinfo.txt is Team Arena's: Quake Live never shipped one, and retail warned
+    // on every start that it was missing. Without the file there is nothing to read, so the
+    // default menu is not parsed in its place either (it has none of these keywords)
+    {
+        fileHandle_t f;
+
+        trap_FS_FOpenFile(teamFile, &f, FS_READ);
+        if (!f) {
+            return;
+        }
+        trap_FS_FCloseFile(f);
+    }
 
     buff = GetMenuBuffer(teamFile);
     if (!buff) {
