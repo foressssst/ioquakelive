@@ -859,6 +859,13 @@ typedef struct {
     int chatSlideStart;
     int chatSlideKey;
     qboolean chatSlideIn;  // the rows rise into place (a line came in) rather than sink
+    // [ioquakelive] with ch_animateScroll the chat history, and the chat behind the scoreboard,
+    // ease in and out: whether they were up, when that changed, how far in they were then and
+    // how many lines they had
+    qboolean chatHistoryWasShown;
+    int chatHistoryToggle;
+    float chatHistoryFrom;
+    int chatHistoryRows;
 
     int weaponSelectTime;
     int weaponConfigSelect;  // [QL] 0x10a9c7b0: the weapon whose config ran last

@@ -744,6 +744,60 @@ static void CG_DrawCpmaChat(float x, float bottom, float scale) {
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
 
+// [ioquakelive] how far the chat history is in, 0 to 1: it eases in over CHAT_FADEIN as it
+// opens and out over CHAT_FADEOUT as it closes, from wherever it was
+static float CG_ChatHistoryFade(qboolean shown) {
+    float target;
+
+    if (shown != cg.chatHistoryWasShown) {
+        target = cg.chatHistoryWasShown ? 1.0f : 0.0f;
+        cg.chatHistoryFrom += (target - cg.chatHistoryFrom) *
+                              CG_CpmaSlide(cg.chatHistoryToggle, cg.chatHistoryWasShown ? CHAT_FADEIN : CHAT_FADEOUT);
+        cg.chatHistoryWasShown = shown;
+        cg.chatHistoryToggle = cg.time;
+    }
+    target = shown ? 1.0f : 0.0f;
+    return cg.chatHistoryFrom +
+           (target - cg.chatHistoryFrom) * CG_CpmaSlide(cg.chatHistoryToggle, shown ? CHAT_FADEIN : CHAT_FADEOUT);
+}
+
+/*
+[ioquakelive] The chat history, and the chat behind the scoreboard, with ch_animateScroll: the
+lines stack up from the window's bottom edge as the chat's do, the ones older than the chat
+shows ease in with the history and out with it, the chat's own keep their time, and a line
+that comes in rises from below as in the chat.
+*/
+static void CG_DrawChatHistory(float x, float bottom, float scale, int lines, float shown) {
+    vec4_t color = {1.0f, 1.0f, 1.0f, 1.0f};
+    int style = lines > 10 ? 0 : 3;
+    chatLine_t* line;
+    float slide = 0.0f;
+    int n;
+
+    if (cg.chatSlideStart && cg.chatSlideIn && cg.time < cg.chatSlideStart + CHAT_FADEOUT) {
+        slide = 1.0f - CG_CpmaSlide(cg.chatSlideStart, CHAT_FADEOUT);
+    }
+    CG_SetWidescreen(WIDESCREEN_LEFT);
+    for (n = 0; n <= lines && (line = CG_ChatLine(n)) != NULL; n++) {
+        float in = (float)(cg.time - line->startTime) / CHAT_FADEIN;
+        float alpha = shown * (in < 0.0f ? 0.0f : in > 1.0f ? 1.0f : in);
+
+        if (n < ch_chatLines.integer && CG_ChatLineShowing(line)) {
+            float chat = CG_CpmaFade(line->fadeTime, CHAT_FADEIN, CG_ChatLineHold(line), CHAT_FADEOUT);
+
+            if (chat > alpha) {
+                alpha = chat;
+            }
+        }
+        if (alpha <= 0.0f) {
+            continue;
+        }
+        color[3] = alpha;
+        CG_DrawText(x, bottom + 13.0f * (slide - n), 1, scale, color, line->text, 0, 256, n ? style : 3);
+    }
+    CG_SetWidescreen(WIDESCREEN_STRETCH);
+}
+
 // [QL] cgamex86.dll 0x10006a10. Drawn by the CG_AREA_NEW_CHAT ownerdraw with
 // the menu item's rect, and by the spectator overlay. The newest line sits on
 // the rect's bottom edge (font 1, style 3, left widescreen) until it expires
@@ -771,8 +825,19 @@ void CG_DrawChat(float x, float y, float w, float h, float scale) {
         memset(&cg.currentChatLine, 0, sizeof(cg.currentChatLine));
     }
 
-    if (ch_animateScroll.integer && !cg.chatHistoryShowing && !cg.scoreBoardShowing) {
-        CG_DrawCpmaChat(x, bottom, scale);
+    if (ch_animateScroll.integer) {
+        qboolean shown = (cg.chatHistoryShowing || cg.scoreBoardShowing) ? qtrue : qfalse;
+        float fade = CG_ChatHistoryFade(shown);
+
+        if (shown) {
+            cg.chatHistoryRows = cg.predictedPlayerState.pm_type == PM_INTERMISSION ? 4
+                                 : cg.scoreBoardShowing ? 2 : lines;
+        }
+        if (fade > 0.0f) {
+            CG_DrawChatHistory(x, bottom, scale, cg.chatHistoryRows, fade);
+        } else {
+            CG_DrawCpmaChat(x, bottom, scale);
+        }
         return;
     }
 
