@@ -834,6 +834,8 @@ typedef struct {
     int followKillerTime;
 
     // [ioquakelive] hits the client sounded on its own, and when the last one was
+    int predictedHits;
+    int predictedHitTime;
     int warmupGametype;     // [QL] gametype override from CS_WARMUP (-1 = use current)
     int warmupRound;             // [QL] CS_ROUND_WARMUP "round" (0x10ab8f58), +1 in GT_AD
     int warmupTurn;              // [QL] CS_ROUND_WARMUP "turn", GT_AD only (0x10ab8f5c)
@@ -2024,6 +2026,7 @@ extern vmCvar_t ch_followKiller;
 extern vmCvar_t ch_recordingDemo;
 extern vmCvar_t cg_ambient;
 extern vmCvar_t ch_gameEvents;
+extern vmCvar_t ch_predictHitSounds;
 extern vmCvar_t ch_recordMessage;
 extern vmCvar_t cg_demoRecording;
 extern vmCvar_t cg_demoName;
@@ -2471,6 +2474,7 @@ void CG_VoiceChatListForClient(int clientNum);
 //
 void CG_Respawn(void);
 void CG_TransitionPlayerState(playerState_t* ps, playerState_t* ops);
+sfxHandle_t CG_HitBeepTierSound(int tier);
 void CG_PushReward(sfxHandle_t sfx, qhandle_t shader, int rewardCount);
 
 //

@@ -295,6 +295,10 @@ static const cvarHelp_t cvarHelp[] = {
                    HV("1") "One pitch\n"
                    HV("2") "Pitch falling with the damage\n"
                    HV("3") "Pitch rising with the damage"},
+    {"ch_predictHitSounds", "your machinegun, heavy machinegun, chaingun, lightning gun and railgun "
+                            "hits sound as you fire instead of a ping later, only when the server is "
+                            "sure to give the hit: with Quake Live's lag compensation, a ping up to "
+                            "about 35 ms"},
     {"cg_killBeep", "sound when you frag someone\n"
                     HV("0") "Off\n"
                     HV("1") "Ting\n"

@@ -2348,6 +2348,126 @@ WEAPON EVENTS
 
 /*
 ================
+CG_PredictHitSound
+
+[ioquakelive] ch_predictHitSounds: the hit sound of your own hitscan shot as it fires, only
+when the server is sure to give that hit with that damage step
+================
+*/
+// spread and reach as g_weapon.c, damage at the g_damage_* default, CS_CUSTOM_SETTINGS bit
+static const struct {
+    int weapon;
+    float spread, range;
+    int damage, bit;
+} hitPredictWeapons[] = {
+    {WP_MACHINEGUN, 150.0f, 8192.0f * 16, 5, 0x2},
+    {WP_HMG, 350.0f, 8192.0f * 16, 8, 0},
+    {WP_CHAINGUN, 1400.0f, 8192.0f * 16, 8, 0x1000},
+    {WP_LIGHTNING, 0.0f, LIGHTNING_RANGE, 6, 0x20},
+    {WP_RAILGUN, 0.0f, 8192.0f, 80, 0x40 | 0x800000},
+};
+
+static void CG_PredictHitSound(int weapon) {
+    const playerState_t* ps = &cg.predictedPlayerState;
+    vec3_t muzzle, forward, right, up, end;
+    trace_t tr;
+    const entityState_t* target;
+    float spread, range, factor;
+    int damage, shots, hit, lag, i;
+    char buf[16];
+
+    // without prediction the shot comes in the same snapshot as its hit
+    if (!ch_predictHitSounds.integer || !cg_hitBeep.integer || cg.demoPlayback || cg_nopredict.integer ||
+        (cg.snap->ps.pm_flags & PMF_FOLLOW)) {
+        return;
+    }
+
+    for (i = 0; i < (int)ARRAY_LEN(hitPredictWeapons); i++) {
+        if (hitPredictWeapons[i].weapon == weapon) {
+            break;
+        }
+    }
+    if (i == (int)ARRAY_LEN(hitPredictWeapons) || (cgs.customSettings & hitPredictWeapons[i].bit)) {
+        return;
+    }
+    spread = hitPredictWeapons[i].spread;
+    range = hitPredictWeapons[i].range;
+    damage = hitPredictWeapons[i].damage;
+
+    // the server rewinds the others to the command time, at most g_lagHaxMs (80) and three
+    // frames back (g_unlagged.c); a snapshot's serverTime - commandTime bounds that rewind,
+    // plus the commands a packet carries before its last
+    if (!cg.nextSnap || cg_svFps.integer <= 0) {
+        return;
+    }
+    lag = MAX(cg.snap->serverTime - cg.snap->ps.commandTime, cg.nextSnap->serverTime - cg.nextSnap->ps.commandTime);
+    trap_Cvar_VariableStringBuffer("cl_maxpackets", buf, sizeof(buf));
+    if (atoi(buf) > 0) {
+        lag += MAX(0, 1000 / atoi(buf) - cg.frametime);
+    }
+    if (lag > MIN(80, 3 * (1000 / cg_svFps.integer))) {
+        return;
+    }
+
+    AngleVectors(ps->viewangles, forward, right, up);
+    VectorCopy(ps->origin, muzzle);
+    muzzle[2] += ps->viewheight;
+    VectorMA(muzzle, (ps->pm_flags & PMF_DUCKED) ? 3.0f : 5.0f, forward, muzzle);
+    if (weapon == WP_LIGHTNING && (CG_PointContents(muzzle, -1) & MASK_WATER)) {
+        return;
+    }
+
+    // the players are still where last frame drew them, the time the command carries; a
+    // spread weapon has to land its whole cone on the same one
+    hit = ENTITYNUM_NONE;
+    shots = spread > 0.0f ? 9 : 1;
+    for (i = 0; i < shots; i++) {
+        VectorMA(muzzle, range, forward, end);
+        if (i > 0) {
+            VectorMA(end, cos(i * M_PI / 4) * spread * 16, right, end);
+            VectorMA(end, sin(i * M_PI / 4) * spread * 16, up, end);
+        }
+        if (cgs.playerCylinders) {
+            CG_CapsuleTrace(&tr, muzzle, NULL, NULL, end, ps->clientNum, MASK_SHOT);
+        } else {
+            CG_Trace(&tr, muzzle, NULL, NULL, end, ps->clientNum, MASK_SHOT);
+        }
+        if (tr.entityNum >= MAX_CLIENTS || (i > 0 && tr.entityNum != hit)) {
+            return;
+        }
+        hit = tr.entityNum;
+    }
+
+    // not a teammate, a body, or damage the server scales by rules the client does not get:
+    // spawn protection (powerups[0]), the battlesuit, the ice of Freeze Tag
+    target = &cg_entities[hit].currentState;
+    if (cgs.gametype >= GT_TEAM && cgs.clientinfo[hit].team == ps->persistant[PERS_TEAM]) {
+        return;
+    }
+    if ((target->eFlags & EF_DEAD) || (target->powerups & (1 | (1 << PW_BATTLESUIT) | (1 << PW_FREEZE)))) {
+        return;
+    }
+
+    // quad or the doubler, as FireWeapon; the step as DamageTier (g_combat.c)
+    factor = 1.0f;
+    if (ps->powerups[PW_QUAD]) {
+        if (cgs.quadDamageFactor <= 0) {
+            return;
+        }
+        factor = cgs.quadDamageFactor;
+    } else if (ps->stats[STAT_RUNE] == 3) {
+        factor = 1.5f;
+    }
+    damage = (int)(damage * factor);
+
+    trap_S_StartLocalSound(CG_HitBeepTierSound(damage > 74 ? 3 : damage > 49 ? 2 : damage > 24),
+                           CHAN_LOCAL_SOUND);
+    cg.predictedHits++;
+    cg.predictedHitTime = cg.time;
+}
+
+/*
+================
 CG_FireWeapon
 
 Caused by an EV_FIRE_WEAPON event
@@ -2369,6 +2489,10 @@ void CG_FireWeapon(centity_t* cent) {
         return;
     }
     weap = &cg_weapons[ent->weapon];
+
+    if (cg.snap && ent->number == cg.snap->ps.clientNum) {
+        CG_PredictHitSound(ent->weapon);
+    }
 
     // mark the entity as muzzle flashing, so when it is added it will
     // append the flash to the weapon model

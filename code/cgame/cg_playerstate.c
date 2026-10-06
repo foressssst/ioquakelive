@@ -328,7 +328,7 @@ void CG_PushReward(sfxHandle_t sfx, qhandle_t shader, int rewardCount) {
 
 /*
 ==================
-CG_HitBeepSound
+CG_HitBeepTierSound
 
 [QL] cgamex86.dll 0x100435b0, the choice of sound for a hit. The server sends the hit's damage
 bucketed into four steps in generic1, six bits up, and each step has its own sound: hit0 is the
@@ -342,9 +342,7 @@ Watch out for 1: it plays hit1.ogg, not hit.wav. hit.wav is Quake 3's and the bi
 touches it.
 ==================
 */
-static sfxHandle_t CG_HitBeepSound(const playerState_t* ps) {
-    int tier = ps->generic1 >> 6;
-
+sfxHandle_t CG_HitBeepTierSound(int tier) {
     if (cg_hitBeep.integer == 1) {
         return cgs.media.hitSounds[1];
     }
@@ -361,6 +359,10 @@ static sfxHandle_t CG_HitBeepSound(const playerState_t* ps) {
         default:
             return cgs.media.hitSounds[0];
     }
+}
+
+static sfxHandle_t CG_HitBeepSound(const playerState_t* ps) {
+    return CG_HitBeepTierSound(ps->generic1 >> 6);
 }
 
 /*
@@ -382,6 +384,21 @@ overlaps them, triggering from the obituary.
 ==================
 */
 static void CG_CheckHitSounds(const playerState_t* ps, const playerState_t* ops) {
+    // [ioquakelive] a hit CG_PredictHitSound already sounded is not sounded again, but a kill
+    // still beeps; one the server never confirms is forgotten
+    if (cg.predictedHits > 0 && cg.time > cg.predictedHitTime + 250) {
+        cg.predictedHits = 0;
+    }
+    if (cg.predictedHits > 0 && ps->persistant[PERS_HITS] > ops->persistant[PERS_HITS]) {
+        cg.predictedHits = MAX(0, cg.predictedHits - (ps->persistant[PERS_HITS] - ops->persistant[PERS_HITS]));
+        if (cg_killBeep.integer >= 1 &&
+            ps->persistant[PERS_ATTACKEE_ARMOR] > ops->persistant[PERS_ATTACKEE_ARMOR]) {
+            trap_S_StartLocalSoundVolume(cgs.media.killBeepSounds[cg_killBeep.integer - 1],
+                                         CHAN_LOCAL_SOUND, s_killBeepVolume.value);
+        }
+        return;
+    }
+
     if (ps->persistant[PERS_HITS] > ops->persistant[PERS_HITS]) {
         if (cg_killBeep.integer >= 1 &&
             ps->persistant[PERS_ATTACKEE_ARMOR] > ops->persistant[PERS_ATTACKEE_ARMOR]) {
