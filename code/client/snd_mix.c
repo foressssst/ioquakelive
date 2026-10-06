@@ -338,10 +338,10 @@ void S_PaintChannels(int endtime) {
     int ltime, count;
     int sampleOffset;
 
-    if (s_muted->integer)
-        snd_vol = 0;
-    else
-        snd_vol = s_volume->value * 255;
+    // [ioquakelive] the background mute is applied at the device (SNDDMA_Mute), at once; muting
+    // here left what was already mixed ahead playing for s_mixahead, and what came back after the
+    // window did was that much silence first
+    snd_vol = s_volume->value * 255;
 
     // Com_Printf ("%i to %i\n", s_paintedtime, endtime);
     while (s_paintedtime < endtime) {

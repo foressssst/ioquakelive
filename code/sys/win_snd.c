@@ -47,6 +47,7 @@ static DWORD locksize;
 static LPDIRECTSOUND pDS;
 static LPDIRECTSOUNDBUFFER pDSBuf;
 static HWND dsWindow;
+static qboolean dsMuted;  // [ioquakelive] the buffer's volume is at its minimum
 
 // where the mixer paints when the buffer cannot be locked, so a lost lock is silence
 static byte dsScratch[SECONDARY_BUFFER_SIZE];
@@ -182,10 +183,9 @@ static qboolean SNDDMA_InitDS(void) {
     // focus when s_muteBackground is 0. With the mute on, the buffer belongs to the window and
     // Windows silences it the moment it loses focus, which is instant; muting it by hand while
     // the game runs slowed down behind another window left the device repeating what it had
-    dsbuf.dwFlags = DSBCAPS_LOCHARDWARE;
-    if (!Cvar_VariableIntegerValue("s_muteBackground")) {
-        dsbuf.dwFlags |= DSBCAPS_GLOBALFOCUS;
-    }
+    // [ioquakelive] global focus always, and the mute is done with the buffer's volume
+    // (SNDDMA_Mute): Windows 11 does not silence a buffer without it when the window loses focus
+    dsbuf.dwFlags = DSBCAPS_LOCHARDWARE | DSBCAPS_GLOBALFOCUS | DSBCAPS_CTRLVOLUME;
     if (use8) {
         dsbuf.dwFlags |= DSBCAPS_GETCURRENTPOSITION2;
     }
@@ -200,10 +200,7 @@ static qboolean SNDDMA_InitDS(void) {
         Com_Printf("locked hardware.  ok\n");
     } else {
         // Couldn't get hardware, fallback to software.
-        dsbuf.dwFlags = DSBCAPS_LOCSOFTWARE;
-        if (!Cvar_VariableIntegerValue("s_muteBackground")) {
-            dsbuf.dwFlags |= DSBCAPS_GLOBALFOCUS;
-        }
+        dsbuf.dwFlags = DSBCAPS_LOCSOFTWARE | DSBCAPS_GLOBALFOCUS | DSBCAPS_CTRLVOLUME;
         if (use8) {
             dsbuf.dwFlags |= DSBCAPS_GETCURRENTPOSITION2;
         }
@@ -214,6 +211,8 @@ static qboolean SNDDMA_InitDS(void) {
         }
         Com_DPrintf("forced to software.  ok\n");
     }
+
+    dsMuted = qfalse;
 
     // Make sure mixer is active
     if (DS_OK != IDirectSoundBuffer_Play(pDSBuf, 0, 0, DSBPLAY_LOOPING)) {
@@ -381,6 +380,23 @@ void SNDDMA_Submit(void) {
     // unlock the dsound buffer
     if (pDSBuf && dma.buffer && dma.buffer != dsScratch) {
         IDirectSoundBuffer_Unlock(pDSBuf, dma.buffer, locksize, NULL, 0);
+    }
+}
+
+/*
+==============
+SNDDMA_Mute
+
+[ioquakelive] The buffer's volume, at its minimum or back to full: DirectSound applies it to
+what is playing now, not to what comes next
+===============
+*/
+void SNDDMA_Mute(qboolean mute) {
+    if (!pDSBuf || mute == dsMuted) {
+        return;
+    }
+    if (SUCCEEDED(IDirectSoundBuffer_SetVolume(pDSBuf, mute ? DSBVOLUME_MIN : DSBVOLUME_MAX))) {
+        dsMuted = mute;
     }
 }
 

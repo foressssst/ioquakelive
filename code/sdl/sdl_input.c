@@ -1463,6 +1463,23 @@ void IN_Frame(void) {
 IN_Init
 ===============
 */
+/*
+===============
+IN_FocusWatch
+
+[ioquakelive] SDL calls this as each event is made, before its own handling: losing focus in
+fullscreen goes on to minimize the window and change the display mode, a stall the sound must
+not play through
+===============
+*/
+static bool SDLCALL IN_FocusWatch(void* userdata, SDL_Event* e) {
+    (void)userdata;
+    if (e->type == SDL_EVENT_WINDOW_FOCUS_LOST || e->type == SDL_EVENT_WINDOW_MINIMIZED) {
+        S_WindowFocusLost();
+    }
+    return true;
+}
+
 void IN_Init(void* windowData) {
     int appState;
 
@@ -1512,6 +1529,8 @@ void IN_Init(void* windowData) {
     // SDL3 only sends text when asked, and the console, the chat and the menus live on it
     SDL_StartTextInput(SDL_window);
 
+    SDL_AddEventWatch(IN_FocusWatch, NULL);
+
     mouseAvailable = (in_mouse->value != 0);
     IN_DeactivateMouse(Cvar_VariableIntegerValue("r_fullscreen") != 0);
 
@@ -1552,6 +1571,8 @@ IN_Shutdown
 */
 void IN_Shutdown(void) {
     Cmd_RemoveCommand("inputrate");
+
+    SDL_RemoveEventWatch(IN_FocusWatch, NULL);
 
     SDL_StopTextInput(SDL_window);
 

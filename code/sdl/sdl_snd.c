@@ -43,6 +43,9 @@ static int dmasize = 0;
 
 static SDL_AudioStream* sdlPlaybackStream;
 
+// [ioquakelive] SNDDMA_Mute: the callback sends silence instead of the ring, which goes on moving
+static SDL_AtomicInt sdlMuted;
+
 /*
 ===============
 SNDDMA_AudioCallback
@@ -72,7 +75,20 @@ static void SDLCALL SNDDMA_AudioCallback(void* userdata, SDL_AudioStream* stream
         if (chunk > additional)
             chunk = additional;
 
-        SDL_PutAudioStreamData(stream, dma.buffer + pos, chunk);
+        if (SDL_GetAtomicInt(&sdlMuted)) {
+            byte silence[1024];
+            int left = chunk;
+
+            // 8-bit samples are unsigned, so their silence is the middle
+            memset(silence, (dma.samplebits == 8) ? 0x80 : 0, sizeof(silence));
+            while (left > 0) {
+                const int n = left > (int)sizeof(silence) ? (int)sizeof(silence) : left;
+                SDL_PutAudioStreamData(stream, silence, n);
+                left -= n;
+            }
+        } else {
+            SDL_PutAudioStreamData(stream, dma.buffer + pos, chunk);
+        }
         additional -= chunk;
         pos += chunk;
 
@@ -194,6 +210,15 @@ qboolean SNDDMA_Init(void) {
     Com_Printf("SDL audio initialized.\n");
     snd_inited = qtrue;
     return qtrue;
+}
+
+/*
+===============
+SNDDMA_Mute
+===============
+*/
+void SNDDMA_Mute(qboolean mute) {
+    SDL_SetAtomicInt(&sdlMuted, mute ? 1 : 0);
 }
 
 /*

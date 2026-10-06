@@ -245,6 +245,8 @@ S_Update
 
 [QL] quakelive_steam.exe creates its DirectSound buffer without global focus unless
 s_muteBackground is 0, so the game goes silent while its window is not the active one.
+[ioquakelive] Windows 11 no longer silences such a buffer (measured: the sound went on until the
+mixer's own mute, 135 ms later), so the device is muted here instead, through si.SetMute.
 =================
 */
 void S_Update(void) {
@@ -253,10 +255,35 @@ void S_Update(void) {
     if (s_muted->integer != background) {
         s_muted->integer = background;
         s_muted->modified = qtrue;
+        if (si.SetMute) {
+            si.SetMute(background);
+        }
     }
 
     if (si.Update) {
         si.Update();
+    }
+}
+
+/*
+=================
+S_WindowFocusLost
+
+[ioquakelive] Called from the window's own focus-lost and minimized events, as they are made.
+In fullscreen SDL then minimizes the window and changes the display mode, which holds the game
+for a moment; what the device was playing kept going over it, repeated. Muting here comes first.
+=================
+*/
+void S_WindowFocusLost(void) {
+    if (!s_muteBackground || !s_muteBackground->integer || !s_muted) {
+        return;
+    }
+    if (!s_muted->integer) {
+        s_muted->integer = 1;
+        s_muted->modified = qtrue;
+        if (si.SetMute) {
+            si.SetMute(qtrue);
+        }
     }
 }
 
@@ -438,7 +465,9 @@ void S_Init(void) {
     s_testsound = Cvar_Get("s_testsound", "0", CVAR_CHEAT);
     s_volume = Cvar_Get("s_volume", "0.8", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     Cvar_CheckRange(s_volume, 0.0f, 2.0f, qfalse);
-    s_muteBackground = Cvar_Get("s_muteBackground", "1", CVAR_ARCHIVE | CVAR_LATCH);
+    // [ioquakelive] read on every frame: retail latched it because DirectSound took it when the
+    // buffer was made, and changing it did nothing until the sound restarted
+    s_muteBackground = Cvar_Get("s_muteBackground", "1", CVAR_ARCHIVE);
     // [QL] the map's own sounds: the engine keeps it and the cgame reads it (its flags in the
     // binary are 0x80821, archived, replicated and latched)
     Cvar_Get("s_ambient", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE | CVAR_REPLICATE);

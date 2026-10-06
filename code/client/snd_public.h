@@ -57,6 +57,10 @@ void S_UpdateEntityPosition(int entityNum, const vec3_t origin);
 
 void S_Update(void);
 
+// [ioquakelive] the window lost focus or was minimized: with s_muteBackground the game goes
+// quiet now, before anything else the event brings (the fullscreen mode change stalls the game)
+void S_WindowFocusLost(void);
+
 void S_DisableSounds(void);
 
 void S_BeginRegistration(void);

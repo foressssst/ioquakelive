@@ -133,6 +133,7 @@ typedef struct
     void (*ClearSoundBuffer)(void);
     void (*SoundInfo)(void);
     void (*SoundList)(void);
+    void (*SetMute)(qboolean mute);  // [ioquakelive] silences the device at once, mixing goes on
 } soundInterface_t;
 
 /*
@@ -142,6 +143,9 @@ typedef struct
 
 ====================================================================
 */
+
+// [ioquakelive] silences what reaches the device, at once, while the mixer keeps mixing
+void SNDDMA_Mute(qboolean mute);
 
 // initializes cycling through a DMA buffer and returns information on it
 qboolean SNDDMA_Init(void);

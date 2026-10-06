@@ -805,9 +805,9 @@ void S_Base_RawSamples(int stream, int samples, int rate, int width, int s_chann
 
     rawsamples = s_rawsamples[stream];
 
-    if (s_muted->integer) {
-        intVolumeLeft = intVolumeRight = 0;
-    } else {
+    // [ioquakelive] the background mute is the device's now (SNDDMA_Mute): the streams keep
+    // their volume, so they are there the moment the window is back
+    {
         int leftvol, rightvol;
 
         if (entityNum >= 0 && entityNum < MAX_GENTITIES) {
@@ -1423,6 +1423,7 @@ qboolean S_Base_Init(soundInterface_t* si) {
     si->ClearSoundBuffer = S_Base_ClearSoundBuffer;
     si->SoundInfo = S_Base_SoundInfo;
     si->SoundList = S_Base_SoundList;
+    si->SetMute = SNDDMA_Mute;
 
     return qtrue;
 }

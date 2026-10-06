@@ -43,6 +43,9 @@ void SNDDMA_BeginPainting(void) {
 void SNDDMA_Submit(void) {
 }
 
+void SNDDMA_Mute(qboolean mute) {
+}
+
 #ifdef USE_VOIP
 void SNDDMA_StartCapture(void) {
 }

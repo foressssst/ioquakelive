@@ -1084,7 +1084,7 @@ static const cvarHelp_t cvarHelp[] = {
     {"j_yaw_axis", "joystick axis that turns you"},
     {"in_raw_useWindowHandle", "the raw mouse input is tied to the game's window instead of the desktop"},
     {"s_asyncLoad", "sounds are decoded on the workers while the map loads"},
-    {"s_muteBackground", "the game goes quiet while another window is in front; read when the sound starts"},
+    {"s_muteBackground", "the game goes quiet at once while another window is in front or it is minimized"},
     {"s_ambient", "the sounds the map makes by itself, like machinery and wind"},
     {"s_muted", "set by the game: 1 while the game is quiet"},
     {"s_pvs", "only plays the sounds of what you could see from where you stand"},
