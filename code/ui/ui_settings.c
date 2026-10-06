@@ -29,8 +29,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // Everything it offers is retail's: the ten sections in its nav's order, every
 // cvar in its page's order with the title, widget, range and value list the web
 // UI gives it, generated into ui_settings_table.h out of web.pak, and the buttons
-// its pages end with. How it looks is quakeclub.com's, see ui_web.h. The Team
-// section also keeps the model preview the pre-browser pages had.
+// its pages end with. It looks as retail's does too (module 235 and css/main.css):
+// the title, the nav and the section, each row a Cvar of the Start Match page.
+// The Team section also keeps the model preview the pre-browser pages had.
 //
 
 #include "ui_web.h"
@@ -146,7 +147,9 @@ typedef enum {
     ST_HIT_MODELOK,
     ST_HIT_MODELCANCEL,
     ST_HIT_MODELCLEAR,
-    ST_HIT_PREVIEW
+    ST_HIT_PREVIEW,
+    ST_HIT_RESET,
+    ST_HIT_BLOCK
 } stHitType_t;
 
 #define ST_MAX_SKINS 10  // the most a model of retail's table offers (biker)
@@ -194,14 +197,51 @@ static struct {
     float scrollGrab;
 
     // the frame, worked out once a frame
-    float left, top;           // the content panel's
-    float panelH;
-    float colW;
-    float listTop, view, content;
+    float left, top;           // the page's left, and where it starts unscrolled
+    float colW;                // one of a section's two columns
+    float listTop, view, content;  // the rows' top, unscrolled; the frame and what scrolls in it
+    float listBottom;          // where the rows end, for the buttons after them
+    int selectFocus;           // the option under the mouse in an open list
     qboolean fromIngame;
 } st;
 
 extern const vec4_t* UI_CrosshairPalette(void);
+
+// retail's page: .game-settings and the Cvar rows, from css/main.css and react-select's
+static const vec4_t strBlack80 = {0.0f, 0.0f, 0.0f, 0.8f};
+static const vec4_t strRowOdd = SM_RGB(36, 33, 33);
+static const vec4_t strRowEven = SM_RGB(28, 25, 25);
+static const vec4_t strBindHover = SM_RGB(60, 57, 57);
+static const vec4_t strYellow = SM_RGB(247, 209, 0);
+static const vec4_t strSelect = SM_RGB(51, 51, 51);
+static const vec4_t strSelectHover = SM_RGB(68, 68, 68);
+static const vec4_t strSelectValue = SM_RGB(204, 204, 204);
+static const vec4_t strPlaceholder = SM_RGB(170, 170, 170);
+static const vec4_t strOption = SM_RGB(187, 187, 187);
+static const vec4_t strOptionFocus = SM_RGB(34, 34, 34);
+static const vec4_t strInput = SM_RGB(15, 15, 15);
+static const vec4_t strBorder = SM_RGB(51, 51, 51);
+static const vec4_t strRange = SM_RGB(34, 34, 34);
+static const vec4_t strHover = SM_RGB(68, 68, 68);
+static const vec4_t strLink = SM_RGB(30, 174, 219);
+static const vec4_t strLinkHover = SM_RGB(15, 160, 206);
+static const vec4_t strOff = SM_RGB(153, 153, 153);
+static const vec4_t strOn = SM_RGB(221, 221, 221);
+static const vec4_t strSwatchEdge = {0.0f, 0.0f, 0.0f, 0.2f};
+static const vec4_t strDialog = SM_RGB(30, 30, 30);
+static const vec4_t strThumb = SM_RGB(51, 51, 51);
+static const vec4_t strThumbHover = SM_RGB(153, 153, 153);
+
+#define STR_TITLE_H 54.4f     // h1.title: 24pt Handel Gothic, 0.25em above and below
+#define STR_NAV_H 38.0f       // nav.button-row: skeleton's buttons
+#define STR_NAV_GAP 15.0f     // and its 1em under it
+#define STR_SECTION_PAD 5.0f
+#define STR_BAR 8.0f          // .scroll-y: the bar's gutter is always there
+#define STR_OPTION_H 40.0f    // a react-select option, in a menu 198 high
+#define STR_MENU_H 198.0f
+#define STR_SWATCH_OPTION_H 37.0f
+#define STR_CROSSHAIR_OPTION_H 72.0f
+#define STR_LINE_MENU_H 300.0f  // .Select.line's menu
 
 /*
 ===============================================================================
@@ -421,6 +461,7 @@ with its model beside it.
 
 static struct {
     float x, y, w, h;
+    qboolean odd;  // nth-child(odd) of its column: #242121, else #1C1919
 } stLayout[ST_NUM_CVARS];
 
 static struct {
@@ -431,72 +472,32 @@ static qboolean ST_InTab(int i) {
     return stCvars[i].tab == st.tab;
 }
 
-// the width a row's title and tip have, left of its control
-static float ST_TitleWidth(float rowW) {
-    return rowW - 12 - ST_CONTROL_W - 36;
-}
-
-static qboolean ST_HasTip(int i) {
-    return stCvars[i].tip && stCvars[i].tab != ST_TAB_TEAM && stCvars[i].widget != ST_BIND;
-}
-
-/*
-===============
-ST_Tip
-
-A tip wraps rather than being cut mid-word. Where its lines break is measured the
-first time the row is laid out and kept, since the column never changes width.
-===============
-*/
-typedef struct {
-    float scale;  // the zoom it was measured at, 0 until then
-    int lines;
-    int starts[ST_TIP_LINES];
-    int lens[ST_TIP_LINES];
-} stTip_t;
-
-static stTip_t stTips[ST_NUM_CVARS];
-
-static const stTip_t* ST_Tip(int i) {
-    stTip_t* tip = &stTips[i];
-    int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
-    int n, k;
-
-    if (tip->scale == smScale) {
-        return tip;
-    }
-    n = SM_Wrap(FONT_SANS, ST_TIP_SIZE, stCvars[i].tip, ST_TitleWidth(st.colW), starts, lens);
-    tip->scale = smScale;
-    tip->lines = n < ST_TIP_LINES ? n : ST_TIP_LINES;
-    for (k = 0; k < tip->lines; k++) {
-        tip->starts[k] = starts[k];
-        tip->lens[k] = lens[k];
-    }
-    // anything longer runs on in the last line, cut where the width ends
-    if (n > ST_TIP_LINES) {
-        const char* last = stCvars[i].tip + tip->starts[ST_TIP_LINES - 1];
-
-        tip->lens[ST_TIP_LINES - 1] = SM_Fit(FONT_SANS, ST_TIP_SIZE, last, ST_TitleWidth(st.colW));
-    }
-    return tip;
-}
-
+// a Cvar row's height: its padding of 0.5em around the control, 50 at the least
 static float ST_RowHeight(int i) {
-    const stCvar_t* cv = &stCvars[i];
+    switch (stCvars[i].widget) {
+        case ST_BIND:
+            return 47.0f;  // .bind: 32 and its padding
+        case ST_INPUT:
+            return 53.0f;
+        case ST_SELECT:
+        case ST_BOOL:
+        case ST_PALETTE:
+            return 51.0f;
+        case ST_MODEL:
+        case ST_MODELSKIN:
+            return 63.0f;  // the chooser's button, 48 high
+        case ST_RGB:
+            return 56.0f;  // the colour's button, 3 under the top
+        case ST_CROSSHAIR:
+            return 79.0f;  // .crosshair-form's control, 64 high
+        default:
+            return 50.0f;
+    }
+}
 
-    if (cv->widget == ST_HEADING) {
-        return ST_HEAD_H;
-    }
-    if (cv->widget == ST_BIND) {
-        return ST_BIND_H;
-    }
-    if (st.tab == ST_TAB_TEAM) {
-        return ST_TEAM_ROW_H;
-    }
-    if (!ST_HasTip(i)) {
-        return ST_ROW_H;
-    }
-    return ST_ROW_TIP_H + (ST_Tip(i)->lines - 1) * ST_TIP_LINE_H;
+// an h1 in the section: 24pt in a line of 1.2, 0.75em above, or 0.25em as its first child
+static float ST_HeadingHeight(qboolean first) {
+    return (first ? 8.0f : 24.0f) + 38.4f + 8.0f;
 }
 
 /*
@@ -510,22 +511,24 @@ the heading and the rows of its own column.
 */
 static void ST_LayoutTeam(float inner) {
     float rowsW = inner - ST_TEAM_MODEL_W - 24;
+    float x = st.left + STR_SECTION_PAD;
     float y = 0;
     int block, i;
 
     for (block = 0; block < 2; block++) {
         float blockTop;
+        int n = 0;
 
         if (block) {
             y += ST_TEAM_GAP;
         }
         for (i = 0; i < ST_NUM_CVARS; i++) {
             if (ST_InTab(i) && stCvars[i].widget == ST_HEADING && stCvars[i].column == block) {
-                stLayout[i].x = st.left + ST_PAD;
+                stLayout[i].x = x;
                 stLayout[i].y = y;
                 stLayout[i].w = rowsW;
-                stLayout[i].h = ST_HEAD_H;
-                y += ST_HEAD_H;
+                stLayout[i].h = ST_HeadingHeight(y == 0);
+                y += stLayout[i].h;
             }
         }
         blockTop = y;
@@ -533,33 +536,45 @@ static void ST_LayoutTeam(float inner) {
             if (!ST_InTab(i) || stCvars[i].widget == ST_HEADING || stCvars[i].column != block) {
                 continue;
             }
-            stLayout[i].x = st.left + ST_PAD;
+            stLayout[i].x = x;
             stLayout[i].y = y;
             stLayout[i].w = rowsW;
-            stLayout[i].h = ST_TEAM_ROW_H;
-            y += ST_TEAM_ROW_H;
+            stLayout[i].h = ST_RowHeight(i);
+            stLayout[i].odd = !(n++ & 1);
+            y += stLayout[i].h;
         }
-        stModelBox[block].x = st.left + ST_PAD + rowsW + 24;
+        stModelBox[block].x = x + rowsW + 24;
         stModelBox[block].y = blockTop;
         stModelBox[block].w = ST_TEAM_MODEL_W;
         stModelBox[block].h = y - blockTop;
     }
-    st.content = y;
+    st.listBottom = y;
 }
 
+/*
+===============
+ST_Layout
+
+.row > .one-half.column: two columns of 48% with 4% between them, inside the section's
+padding. A full width heading lines both up again; a column's own heads only that column.
+===============
+*/
 static void ST_Layout(void) {
-    float inner = HM_CONTAINER_W - 2 * ST_PAD;
+    float inner = HM_CONTAINER_W - STR_BAR - 2 * STR_SECTION_PAD;
+    float x = st.left + STR_SECTION_PAD;
     float y[2];
-    float pairTop = -1;
+    int n[2];
+    float pairTop = -1, pairH = 0;
     int i;
 
-    st.colW = (inner - ST_COL_GAP) * 0.5f;
+    st.colW = inner * 0.48f;
     if (st.tab == ST_TAB_TEAM) {
         ST_LayoutTeam(inner);
         return;
     }
 
     y[0] = y[1] = 0;
+    n[0] = n[1] = 0;
     for (i = 0; i < ST_NUM_CVARS; i++) {
         int c;
 
@@ -571,30 +586,32 @@ static void ST_Layout(void) {
         } else {
             float top = y[0] > y[1] ? y[0] : y[1];
             int col = stCvars[i].column;
+            float h = ST_HeadingHeight(top == 0);
 
-            if (top > 0) {
-                top += 16.0f;
-            }
             // two column headings in a row are the two panels' titles: same line
             if (col >= 0 && pairTop >= 0) {
                 top = pairTop;
+                h = pairH;
             }
             pairTop = col >= 0 ? top : -1;
-            stLayout[i].x = st.left + ST_PAD + (col > 0 ? st.colW + ST_COL_GAP : 0);
+            pairH = h;
+            stLayout[i].x = x + (col > 0 ? st.colW + inner * 0.04f : 0);
             stLayout[i].y = top;
             stLayout[i].w = col < 0 ? inner : st.colW;
-            stLayout[i].h = ST_HEAD_H;
-            y[0] = y[1] = top + ST_HEAD_H;
+            stLayout[i].h = h;
+            y[0] = y[1] = top + h;
+            n[0] = n[1] = 0;
             continue;
         }
         c = stCvars[i].column ? 1 : 0;
-        stLayout[i].x = st.left + ST_PAD + c * (st.colW + ST_COL_GAP);
+        stLayout[i].x = x + c * (st.colW + inner * 0.04f);
         stLayout[i].y = y[c];
         stLayout[i].w = st.colW;
         stLayout[i].h = ST_RowHeight(i);
+        stLayout[i].odd = !(n[c]++ & 1);
         y[c] += stLayout[i].h;
     }
-    st.content = y[0] > y[1] ? y[0] : y[1];
+    st.listBottom = y[0] > y[1] ? y[0] : y[1];
 }
 
 static float ST_ClampScroll(float scroll) {
@@ -608,9 +625,13 @@ static float ST_RowY(int i) {
     return st.listTop + stLayout[i].y - st.scroll[st.tab];
 }
 
-// where a row's control starts
+// .val.five.columns, after .children.seven.columns, inside the row's padding
 static float ST_ControlX(int i) {
-    return stLayout[i].x + stLayout[i].w - 12 - ST_CONTROL_W;
+    return stLayout[i].x + 7.5f + (stLayout[i].w - 15) * (0.566667f + 0.04f);
+}
+
+static float ST_ControlW(int i) {
+    return (stLayout[i].w - 15) * 0.393333f;
 }
 
 /*
@@ -621,52 +642,87 @@ THE CONTROLS
 ===============================================================================
 */
 
-static void ST_DrawSelect(int i, float x, float y, const smRect_t* clip) {
+// react-select's control: the option's label in #CCC, or the placeholder in #AAA
+static void ST_DrawSelectBox(int i, float x, float y, float w, float h, const smRect_t* clip) {
     qboolean open = st.select == i;
-    qboolean over = SM_Over(ST_HIT_SELECT, i);
-    const char* label = ST_Shown(i);
 
-    SM_FieldBox(x, y, ST_CONTROL_W, ST_FIELD_H, open, over, clip);
-    SM_Text(x + 12, SM_Baseline(FONT_SANS, 15, y, ST_FIELD_H), FONT_SANS, 15, smText, label,
-            SM_Fit(FONT_SANS, 15, label, ST_CONTROL_W - 44), qfalse);
-    SM_Chevron(x + ST_CONTROL_W - 22, y + ST_FIELD_H * 0.5f - 2, open, over || open ? smText : smMuted);
-    SM_Hit(x, y, ST_CONTROL_W, ST_FIELD_H, ST_HIT_SELECT, i, clip);
+    SM_Fill(x, y, w, h, SM_Over(ST_HIT_SELECT, i) || open ? strSelectHover : strSelect, clip);
+    if (y + h * 0.5f >= clip->y && y + h * 0.5f <= clip->y + clip->h) {
+        SM_Arrow(x + w - 20, y + h * 0.5f, open);
+    }
+    SM_Hit(x, y, w, h, ST_HIT_SELECT, i, clip);
     if (open) {
-        st.selectControl = SM_R(x, y, ST_CONTROL_W, ST_FIELD_H);
+        st.selectControl = SM_R(x, y, w, h);
     }
 }
 
-static void ST_DrawBool(int i, float x, float y, const smRect_t* clip) {
-    qboolean on = atoi(st.values[i]) != 0;
-    float sx = x + ST_CONTROL_W - SM_SWITCH_W;
-    float sy = y + (ST_FIELD_H - SM_SWITCH_H) * 0.5f;
+static void ST_DrawSelect(int i, float x, float y, const smRect_t* clip) {
+    const stCvar_t* cv = &stCvars[i];
+    const char* label = "Select...";
+    qboolean chosen = qfalse;
+    float w = ST_ControlW(i);
+    float base = SM_Baseline(FONT_SANS, 15, y + 8, 24);
+    int k;
 
-    SM_Switch(sx, sy, on, SM_Over(ST_HIT_BOOL, i));
-    SM_Hit(sx - 6, y, SM_SWITCH_W + 12, ST_FIELD_H, ST_HIT_BOOL, i, clip);
+    for (k = 0; k < cv->numOptions; k++) {
+        if (!Q_stricmp(cv->options[k].value, st.values[i])) {
+            label = cv->options[k].label;
+            chosen = qtrue;
+        }
+    }
+    ST_DrawSelectBox(i, x, y, w, 36, clip);
+    if (SM_TextInside(base, 15, clip)) {
+        SM_Text(x + 10, base, FONT_SANS, 15, chosen ? strSelectValue : strPlaceholder, label,
+                SM_Fit(FONT_SANS, 15, label, w - 52), qfalse);
+    }
 }
 
+// the checkbox without its box: "Off" in #999 or "On" in bold #DDD, #444 under the mouse
+static void ST_DrawBool(int i, float x, float y, const smRect_t* clip) {
+    qboolean on = atoi(st.values[i]) != 0;
+    float base = SM_Baseline(FONT_SANS, 15, y + 9, 18);
+    float tw = SM_AdvanceBold(FONT_SANS, 15, on ? "On" : "Off", -1, on);
+
+    if (SM_Over(ST_HIT_BOOL, i)) {
+        SM_Fill(x, y, 21, 36, strHover, clip);
+    }
+    if (SM_TextInside(base, 15, clip)) {
+        SM_Text(x + 8, base, FONT_SANS, 15, on ? strOn : strOff, on ? "On" : "Off", -1, on);
+    }
+    SM_Hit(x, y, 8 + tw, 36, ST_HIT_BOOL, i, clip);
+}
+
+// .range: the value in 20% of the width, then the input: #222 with a #333 border and a yellow
+// square of a thumb
 static void ST_DrawRange(int i, float x, float y, const smRect_t* clip) {
     const stCvar_t* cv = &stCvars[i];
+    float w = ST_ControlW(i);
+    float bx = x + w * 0.2f, bw = w * 0.8f;
     float value = ST_Snap(cv, (float)atof(st.values[i]));
-    float trackX = x + 58;
-    float trackW = ST_CONTROL_W - 58;
+    float base = SM_Baseline(FONT_SANS, 15, y + 1, 16);
     char text[32];
 
     ST_FormatStep(cv, value, text, sizeof(text));
-    SM_Text(x, SM_Baseline(FONT_SANS, 15, y, ST_FIELD_H), FONT_SANS, 15, smText, text, -1, qfalse);
-    SM_SliderTrack(trackX, y + (ST_FIELD_H - SM_SLIDER_H) * 0.5f, trackW, ST_Fraction(cv, value),
-                   SM_Over(ST_HIT_RANGE, i) || st.drag == i);
-    SM_Hit(trackX - 6, y, trackW + 12, ST_FIELD_H, ST_HIT_RANGE, i, clip);
+    if (SM_TextInside(base, 15, clip)) {
+        SM_Text(x + 8, base, FONT_SANS, 15, smText, text, -1, qfalse);
+    }
+    SM_Fill(bx, y, bw, 18, SM_Over(ST_HIT_RANGE, i) || st.drag == i ? strHover : strRange, clip);
+    SM_Border(bx, y, bw, 18, 1, strBorder, clip);
+    SM_Fill(bx + 1 + ST_Fraction(cv, value) * (bw - 2 - 16), y + 1, 16, 16, strYellow, clip);
+    SM_Hit(bx, y, bw, 18, ST_HIT_RANGE, i, clip);
 }
 
 static void ST_DrawInput(int i, float x, float y, const smRect_t* clip) {
     const char* value = st.values[i];
-    float width = ST_CONTROL_W - 24;
+    float w = ST_ControlW(i), h = 38;
+    float width = w - 17;
+    float base = SM_Baseline(FONT_SANS, 15, y, h);
     int len = (int)strlen(value);
     int start = 0;
     qboolean editing = st.edit == i;
 
-    SM_FieldBox(x, y, ST_CONTROL_W, ST_FIELD_H, editing, SM_Over(ST_HIT_INPUT, i), clip);
+    SM_Fill(x, y, w, h, strInput, clip);
+    SM_Border(x, y, w, h, 1, strBorder, clip);
     if (editing) {
         if (st.editCursor > len) {
             st.editCursor = len;
@@ -680,151 +736,95 @@ static void ST_DrawInput(int i, float x, float y, const smRect_t* clip) {
         }
         start = st.editStart;
     }
-    if (!value[0] && !editing) {
-        SM_Text(x + 12, SM_Baseline(FONT_SANS, 15, y, ST_FIELD_H), FONT_SANS, 15, smSubtle, "Empty", -1, qfalse);
-    } else {
-        SM_Text(x + 12, SM_Baseline(FONT_SANS, 15, y, ST_FIELD_H), FONT_SANS, 15, smText, value + start,
-                SM_Fit(FONT_SANS, 15, value + start, width), qfalse);
+    if (SM_TextInside(base, 15, clip)) {
+        SM_TextRaw(x + 9, base, FONT_SANS, 15, smText, value + start, SM_Fit(FONT_SANS, 15, value + start, width),
+                   qfalse);
+        if (editing && ((uiInfo.uiDC.realTime - st.editTime) / 500) % 2 == 0) {
+            SM_Fill(x + 9 + SM_AdvanceRaw(FONT_SANS, 15, value + start, st.editCursor - start, qfalse), y + 10, 1,
+                    h - 20, smText, clip);
+        }
     }
-    // the caret; a steady one, since nothing on the page moves
-    if (editing) {
-        SM_Fill(x + 12 + SM_Advance(FONT_SANS, 15, value + start, st.editCursor - start), y + 9, 1.5f,
-                ST_FIELD_H - 18, smText, clip);
-    }
-    SM_Hit(x, y, ST_CONTROL_W, ST_FIELD_H, ST_HIT_INPUT, i, clip);
+    SM_Hit(x, y, w, h, ST_HIT_INPUT, i, clip);
 }
 
-// the 26 Quake Live colours in a strip with round ends, the one in use raised and ringed
-static void ST_DrawPalette(int i, float x, float y, const smRect_t* clip) {
+// a Quake Live colour's swatch: 21 high with a border of 3 at 20% black
+static void ST_DrawSwatch(float x, float y, float w, int value, const smRect_t* clip) {
     const vec4_t* palette = UI_CrosshairPalette();
-    int value = atoi(st.values[i]);
-    float h = 14.0f;
-    float sy = y + (ST_FIELD_H - h) * 0.5f;
-    float sw = (ST_CONTROL_W - h) / 26.0f;
-    int k;
 
-    SM_Pill(x, sy, h, h, palette[0], clip);
-    SM_Pill(x + ST_CONTROL_W - h, sy, h, h, palette[25], clip);
-    for (k = 0; k < 26; k++) {
-        SM_Fill(x + h * 0.5f + k * sw, sy, sw + 0.3f, h, palette[k], clip);
+    if (value < 1 || value > 26) {
+        return;
     }
-    if (value >= 1 && value <= 26) {
-        float cx = x + h * 0.5f + (value - 1) * sw;
-
-        SM_Round(cx - 3, sy - 5, sw + 6, h + 10, 5, smPrimary, clip);
-        SM_Round(cx - 1, sy - 3, sw + 2, h + 6, 4, palette[value - 1], clip);
-    }
-    SM_Hit(x, y, ST_CONTROL_W, ST_FIELD_H, ST_HIT_PALETTE, i, clip);
+    SM_Fill(x, y, w, 21, palette[value - 1], clip);
+    SM_Border(x, y, w, 21, 3, strSwatchEdge, clip);
 }
 
-// a colour of the row's own: its swatch and its channels; a click opens the picker
+// .Select.line: the swatch is the value
+static void ST_DrawPalette(int i, float x, float y, const smRect_t* clip) {
+    float w = ST_ControlW(i);
+
+    ST_DrawSelectBox(i, x, y, w, 36, clip);
+    ST_DrawSwatch(x + 10, y + 7.5f, w - 62, atoi(st.values[i]), clip);
+}
+
+// the colour's button: the colour, with a border of 5 at 20% black, 3 under the top
 static void ST_DrawRGB(int i, float x, float y, const smRect_t* clip) {
     int rgb[3];
     vec4_t color;
-    char text[32];
+    float w = ST_ControlW(i);
 
     ST_ParseRGB(st.values[i], rgb);
     color[0] = rgb[0] / 255.0f;
     color[1] = rgb[1] / 255.0f;
     color[2] = rgb[2] / 255.0f;
     color[3] = 1.0f;
-
-    SM_FieldBox(x, y, ST_CONTROL_W, ST_FIELD_H, st.rgb == i, SM_Over(ST_HIT_RGB, i), clip);
-    SM_Round(x + 7, y + 7, 22, ST_FIELD_H - 14, 5, color, clip);
-    Com_sprintf(text, sizeof(text), "#%02X%02X%02X", rgb[0], rgb[1], rgb[2]);
-    SM_Text(x + 40, SM_Baseline(FONT_SANS, 15, y, ST_FIELD_H), FONT_SANS, 15, smText, text, -1, qfalse);
-    SM_Chevron(x + ST_CONTROL_W - 22, y + ST_FIELD_H * 0.5f - 2, st.rgb == i, smMuted);
-    SM_Hit(x, y, ST_CONTROL_W, ST_FIELD_H, ST_HIT_RGB, i, clip);
+    SM_Fill(x, y + 3, w, 38, color, clip);
+    SM_Border(x, y + 3, w, 38, 5, strSwatchEdge, clip);
+    SM_Hit(x, y + 3, w, 38, ST_HIT_RGB, i, clip);
 }
 
-// a small round button with a chevron pointing left or right
-static void ST_DrawStep(float x, float y, qboolean right, qboolean over) {
-    float s = 26.0f;
-    int k;
-
-    SM_Pill(x, y, s, s, over ? smRaisedHover : smRaised, NULL);
-    for (k = 0; k < 5; k++) {
-        float xx = right ? x + 11 + k : x + 15 - k;
-
-        SM_Fill(xx, y + 8 + k, 1.6f, 1.6f, over ? smText : smMuted, NULL);
-        SM_Fill(xx, y + 16.4f - k, 1.6f, 1.6f, over ? smText : smMuted, NULL);
-    }
-}
-
+// .crosshair-form: a control 64 high with the crosshair itself as the value
 static void ST_DrawCrosshair(int i, float x, float y, const smRect_t* clip) {
-    const vec4_t* palette = UI_CrosshairPalette();
     int shape = atoi(st.values[i]);
-    int index = (int)trap_Cvar_VariableValue("cg_crosshairColor") - 1;
-    float fieldW = ST_CONTROL_W - 2 * 32;
-    vec4_t color;
-    char text[16];
+    float w = ST_ControlW(i);
 
-    SM_FieldBox(x, y, fieldW, ST_FIELD_H, qfalse, qfalse, clip);
-    Com_sprintf(text, sizeof(text), shape ? "%i" : "None", shape);
-    SM_Text(x + 12, SM_Baseline(FONT_SANS, 15, y, ST_FIELD_H), FONT_SANS, 15, smText, text, -1, qfalse);
+    ST_DrawSelectBox(i, x, y, w, 64, clip);
     if (shape > 0 && shape < NUM_CROSSHAIRS) {
-        if (index < 0 || index > 25) {
-            index = 0;
-        }
-        VectorScale(palette[index], trap_Cvar_VariableValue("cg_crosshairBrightness"), color);
-        color[3] = 1.0f;
-        trap_R_SetColor(color);
-        SM_Pic(x + fieldW - 36, y + 4, 28, 28, uiInfo.uiDC.Assets.crosshairShader[shape], clip);
-        trap_R_SetColor(NULL);
-    }
-    // the whole field opens the grid; the arrows it had before meant stepping through one by one
-    SM_Hit(x, y, fieldW, ST_FIELD_H, ST_HIT_SELECT, i, clip);
-    if (st.select == i) {
-        st.selectControl = SM_R(x, y, fieldW, ST_FIELD_H);
+        SM_Pic(x + 10 + (w - 62 - 64) * 0.5f, y, 64, 64, uiInfo.uiDC.Assets.crosshairShader[shape], clip);
+    } else if (SM_TextInside(SM_Baseline(FONT_SANS, 15, y + 20, 24), 15, clip)) {
+        SM_Text(x + 10, SM_Baseline(FONT_SANS, 15, y + 20, 24), FONT_SANS, 15, strPlaceholder, "None", -1, qfalse);
     }
 }
 
-// the keys bound to the row's command, as key caps
-static void ST_DrawBind(int i, float right, float y, const smRect_t* clip) {
-    qboolean waiting = st.binding == i;
-    qboolean over = SM_Over(ST_HIT_BIND, i);
-    char keys[2][64];
-    int count = 0;
-    float x = right;
-    float h = 24.0f;
-    float ky = y + (ST_BIND_H - h) * 0.5f;
+// .bind: the action in 60% of the row and its keys after it, #3C3939 under the mouse
+static void ST_DrawBind(int i, float y, const smRect_t* clip) {
+    float x = stLayout[i].x, w = stLayout[i].w, h = stLayout[i].h;
+    float base = SM_Baseline(FONT_SANS, 15, y + 7.5f, 32);
+    char keys[128];
     const char* p = st.values[i];
-    int k;
+    int n = 0;
 
-    if (waiting) {
-        float w = SM_LabelWidth(12, "Press a key", 0.6f) + 16;
-
-        SM_Kbd(right - w, ky, "Press a key", qtrue, clip);
-        SM_Hit(right - ST_CONTROL_W, y, ST_CONTROL_W, ST_BIND_H, ST_HIT_BIND, i, clip);
-        return;
-    }
-    while (*p && count < 2) {
+    keys[0] = '\0';
+    while (*p) {
         const char* end = strchr(p, '\n');
         int len = end ? (int)(end - p) : (int)strlen(p);
 
-        Q_strncpyz(keys[count], p, len + 1 < (int)sizeof(keys[count]) ? len + 1 : sizeof(keys[count]));
-        count++;
+        Q_strcat(keys, sizeof(keys), n++ ? ", " : "");
+        if ((int)strlen(keys) + len < (int)sizeof(keys)) {
+            strncat(keys, p, len);
+        }
         p += len;
         if (*p == '\n') {
             p++;
         }
     }
-    if (!count) {
-        float w = SM_LabelWidth(11, "Unbound", 1.2f);
-
-        SM_Label(right - w, SM_Baseline(FONT_SANS, 11, y, ST_BIND_H), 11, over ? smMuted : smSubtle, "Unbound", 1.2f);
+    SM_Fill(x, y, w, h, SM_Over(ST_HIT_BIND, i) ? strBindHover : stLayout[i].odd ? strRowOdd : strRowEven, clip);
+    if (SM_TextInside(base, 15, clip)) {
+        SM_Text(x + 7.5f, base, FONT_SANS, 15, smText, stCvars[i].title,
+                SM_Fit(FONT_SANS, 15, stCvars[i].title, (w - 15) * 0.6f), qfalse);
+        SM_Text(x + 7.5f + (w - 15) * 0.6f, base, FONT_SANS, 15, smText, n ? keys : "None",
+                SM_Fit(FONT_SANS, 15, n ? keys : "None", (w - 15) * 0.4f), qfalse);
     }
-    for (k = count - 1; k >= 0; k--) {
-        float w = SM_LabelWidth(12, keys[k], 0.6f) + 16;
-
-        if (w < h) {
-            w = h;
-        }
-        x -= w;
-        SM_Kbd(x, ky, keys[k], qfalse, clip);
-        x -= 6;
-    }
-    SM_Hit(right - ST_CONTROL_W, y, ST_CONTROL_W, ST_BIND_H, ST_HIT_BIND, i, clip);
+    SM_Hit(x, y, w, h, ST_HIT_BIND, i, clip);
 }
 
 /*
@@ -1114,27 +1114,30 @@ static void ST_ConfirmChooser(void) {
 }
 
 // the model in use with its icon; a click opens the chooser
+// .model-chooser-wrapper's button: the model's icon, 48 high, and its name
 static void ST_DrawModelButton(int i, float x, float y, const smRect_t* clip) {
     const char* value = st.values[i][0] ? st.values[i] : "None";
-    qhandle_t icon = 0;
-    float tx = x + 12;
+    float w = ST_ControlW(i);
+    float tx = x + 10;
+    float base = SM_Baseline(FONT_SANS, 15, y, 48);
 
+    if (SM_Over(ST_HIT_MODEL, i) || st.model == i) {
+        SM_Fill(x, y, w, 48, strHover, clip);
+    }
     if (st.values[i][0]) {
         char skin[MAX_QPATH];
         int model = ST_ParseModel(st.values[i], skin, sizeof(skin));
+        qhandle_t icon = ST_IconFor(model, skin[0] ? skin : "default");
 
-        icon = ST_IconFor(model, skin[0] ? skin : "default");
+        if (icon) {
+            SM_Pic(x + 10, y, 48, 48, icon, clip);
+            tx = x + 10 + 48 + SM_Advance(FONT_SANS, 15, " ", -1) + 7.5f;
+        }
     }
-
-    SM_FieldBox(x, y, ST_CONTROL_W, ST_FIELD_H, st.model == i, SM_Over(ST_HIT_MODEL, i), clip);
-    if (icon) {
-        SM_Pic(x + 5, y + 4, ST_FIELD_H - 8, ST_FIELD_H - 8, icon, clip);
-        tx = x + ST_FIELD_H + 6;
+    if (SM_TextInside(base, 15, clip)) {
+        SM_Text(tx, base, FONT_SANS, 15, smText, value, SM_Fit(FONT_SANS, 15, value, x + w - 15 - tx), qfalse);
     }
-    SM_Text(tx, SM_Baseline(FONT_SANS, 15, y, ST_FIELD_H), FONT_SANS, 15, st.values[i][0] ? smText : smTextSoft,
-            value, SM_Fit(FONT_SANS, 15, value, x + ST_CONTROL_W - 30 - tx), qfalse);
-    SM_Chevron(x + ST_CONTROL_W - 22, y + ST_FIELD_H * 0.5f - 2, qfalse, smMuted);
-    SM_Hit(x, y, ST_CONTROL_W, ST_FIELD_H, ST_HIT_MODEL, i, clip);
+    SM_Hit(x, y, w, 48, ST_HIT_MODEL, i, clip);
 }
 
 // the chooser's model, in the skin it has picked and in the colours of the row it came from
@@ -1290,121 +1293,79 @@ static void ST_DrawModelChooser(void) {
 
 /*
 ===============
-ST_DrawCrosshairGrid
+ST_DrawDropdown
 
-All thirty crosshairs on show, in a grid, over the control. Retail offers them in a dropdown
-rather than making you step through them one arrow at a time, which is what was here: reaching
-number 24 meant passing the 23 before it. In a grid you see each one's shape instead of its
-number, which is the only thing that matters when choosing.
+react-select's menu under its control: #333, the option under the mouse #222. The palette's
+and the crosshair's are .Select.line: each option its swatch or its crosshair, centred, in a
+menu up to 300 high.
 ===============
 */
-#define ST_XH_CELL 40.0f
-#define ST_XH_COLS 6
+static float ST_OptionHeight(int widget) {
+    return widget == ST_PALETTE ? STR_SWATCH_OPTION_H : widget == ST_CROSSHAIR ? STR_CROSSHAIR_OPTION_H : STR_OPTION_H;
+}
 
-static void ST_DrawCrosshairGrid(void) {
-    const vec4_t* palette = UI_CrosshairPalette();
-    int index = (int)trap_Cvar_VariableValue("cg_crosshairColor") - 1;
-    int rows = (NUM_CROSSHAIRS + ST_XH_COLS - 1) / ST_XH_COLS;
-    float pad = 8.0f;
-    float w = ST_XH_COLS * ST_XH_CELL + 2 * pad;
-    float h = rows * ST_XH_CELL + 2 * pad;
-    float x = st.selectControl.x;
-    float y = st.selectControl.y + st.selectControl.h + 6;
-    int chosen = atoi(st.values[st.select]);
-    vec4_t color;
-    int k;
-
-    if (y + h > smBottom - 20) {
-        y = st.selectControl.y - 6 - h;
-    }
-    if (index < 0 || index > 25) {
-        index = 0;
-    }
-    VectorScale(palette[index], trap_Cvar_VariableValue("cg_crosshairBrightness"), color);
-    color[3] = 1.0f;
-
-    SM_Round(x, y, w, h, SM_RADIUS_MD, smRaised, NULL);
-    SM_Hit(x, y, w, h, ST_HIT_MENU, st.select, NULL);
-
-    for (k = 0; k < NUM_CROSSHAIRS; k++) {
-        float cxx = x + pad + (k % ST_XH_COLS) * ST_XH_CELL;
-        float cyy = y + pad + (k / ST_XH_COLS) * ST_XH_CELL;
-        qboolean over = SM_Over(ST_HIT_OPTION, k);
-
-        if (k == chosen || over) {
-            SM_Round(cxx + 2, cyy + 2, ST_XH_CELL - 4, ST_XH_CELL - 4, SM_RADIUS_SM,
-                     k == chosen ? smRaisedHover : smPanel, NULL);
-        }
-        if (k == 0) {
-            // zero is "none", and has no shape to show
-            SM_Label(cxx + 6, SM_Baseline(FONT_SANS, 10, cyy, ST_XH_CELL), 10,
-                     (k == chosen || over) ? smText : smMuted, "OFF", 1.2f);
-            SM_Hit(cxx, cyy, ST_XH_CELL, ST_XH_CELL, ST_HIT_OPTION, k, NULL);
-            continue;
-        }
-        trap_R_SetColor(color);
-        SM_Pic(cxx + 6, cyy + 6, ST_XH_CELL - 12, ST_XH_CELL - 12, uiInfo.uiDC.Assets.crosshairShader[k], NULL);
-        trap_R_SetColor(NULL);
-        if (k == chosen) {
-            SM_Pill(cxx + ST_XH_CELL * 0.5f - 3, cyy + ST_XH_CELL - 7, 6, 3, smGold, NULL);
-        }
-        SM_Hit(cxx, cyy, ST_XH_CELL, ST_XH_CELL, ST_HIT_OPTION, k, NULL);
+static int ST_OptionCount(int i) {
+    switch (stCvars[i].widget) {
+        case ST_PALETTE:
+            return 26;
+        case ST_CROSSHAIR:
+            return NUM_CROSSHAIRS;
+        default:
+            return stCvars[i].numOptions;
     }
 }
 
-/*
-===============================================================================
-
-POPUPS
-
-===============================================================================
-*/
-
-// the list under a select: the site's popover, raised, with a shadow
 static void ST_DrawDropdown(void) {
     const stCvar_t* cv = &stCvars[st.select];
-    float x = st.selectControl.x;
-    float y = st.selectControl.y + st.selectControl.h + 6;
-    float pad = 6.0f;
-    int shown = cv->numOptions < ST_MENU_ROWS ? cv->numOptions : ST_MENU_ROWS;
-    float h = shown * ST_OPTION_H + 2 * pad;
-    float full = cv->numOptions * ST_OPTION_H;
+    float x = st.selectControl.x, y = st.selectControl.y + st.selectControl.h - 1;
+    float w = st.selectControl.w;
+    float oh = ST_OptionHeight(cv->widget);
+    int count = ST_OptionCount(st.select);
+    float full = count * oh;
+    float most = cv->widget == ST_SELECT ? STR_MENU_H : STR_LINE_MENU_H;
+    float view = full < most ? full : most;
     smRect_t box;
     int k;
 
-    if (y + h > smBottom - 20) {
-        y = st.selectControl.y - 6 - h;
+    if (y + view > smBottom - 30) {
+        y = st.selectControl.y - view + 1;
     }
-    if (st.selectScroll > full - shown * ST_OPTION_H) {
-        st.selectScroll = full - shown * ST_OPTION_H;
+    if (st.selectScroll > full - view) {
+        st.selectScroll = full - view;
     }
     if (st.selectScroll < 0) {
         st.selectScroll = 0;
     }
-    SM_Shadow(x, y, ST_CONTROL_W, h, SM_RADIUS_MD);
-    SM_Round(x, y, ST_CONTROL_W, h, SM_RADIUS_MD, smRaised, NULL);
-    SM_Hit(x, y, ST_CONTROL_W, h, ST_HIT_MENU, st.select, NULL);
-    box = SM_R(x, y + pad, ST_CONTROL_W, h - 2 * pad);
-    for (k = 0; k < cv->numOptions; k++) {
-        float oy = box.y + k * ST_OPTION_H - st.selectScroll;
-        qboolean chosen = !Q_stricmp(cv->options[k].value, st.values[st.select]);
-        qboolean over = SM_Over(ST_HIT_OPTION, k);
+    box = SM_R(x, y, w, view);
+    SM_Fill(x, y, w, view, strSelect, NULL);
+    SM_Hit(x, y, w, view, ST_HIT_MENU, st.select, NULL);
+    for (k = 0; k < count; k++) {
+        float oy = y + k * oh - st.selectScroll;
 
-        if (oy + ST_OPTION_H < box.y || oy > box.y + box.h) {
+        if (oy + oh < y || oy > y + view) {
             continue;
         }
-        if (over) {
-            SM_Round(x + pad, oy, ST_CONTROL_W - 2 * pad, ST_OPTION_H, SM_RADIUS_SM, smRaisedHover, &box);
+        if (SM_Over(ST_HIT_OPTION, k)) {
+            st.selectFocus = k;
         }
-        if (SM_TextInside(SM_Baseline(FONT_SANS, 14, oy, ST_OPTION_H), 14, &box)) {
-            SM_Text(x + 16, SM_Baseline(FONT_SANS, 14, oy, ST_OPTION_H), FONT_SANS, 14,
-                    chosen || over ? smText : smTextSoft, cv->options[k].label,
-                    SM_Fit(FONT_SANS, 14, cv->options[k].label, ST_CONTROL_W - 48), chosen);
-            if (chosen) {
-                SM_Pill(x + ST_CONTROL_W - 22, oy + ST_OPTION_H * 0.5f - 3, 6, 6, smGold, &box);
+        if (k == st.selectFocus) {
+            SM_Fill(x, oy, w, oh, strOptionFocus, &box);
+        }
+        if (cv->widget == ST_PALETTE) {
+            ST_DrawSwatch(x + 10, oy + 8, w - 20, k + 1, &box);
+        } else if (cv->widget == ST_CROSSHAIR) {
+            if (k > 0) {
+                SM_Pic(x + (w - 64) * 0.5f, oy, 64, 64, uiInfo.uiDC.Assets.crosshairShader[k], &box);
+            } else if (SM_TextInside(SM_Baseline(FONT_SANS, 15, oy + 8, 24), 15, &box)) {
+                SM_Text(x + (w - SM_Advance(FONT_SANS, 15, "None", -1)) * 0.5f, SM_Baseline(FONT_SANS, 15, oy + 8, 24),
+                        FONT_SANS, 15, k == st.selectFocus ? strSelectValue : strOption, "None", -1, qfalse);
             }
+        } else if (SM_TextInside(SM_Baseline(FONT_SANS, 15, oy + 8, 24), 15, &box)) {
+            SM_Text(x + 10, SM_Baseline(FONT_SANS, 15, oy + 8, 24), FONT_SANS, 15,
+                    k == st.selectFocus ? strSelectValue : strOption, cv->options[k].label,
+                    SM_Fit(FONT_SANS, 15, cv->options[k].label, w - 20), qfalse);
         }
-        SM_Hit(x + pad, oy, ST_CONTROL_W - 2 * pad, ST_OPTION_H, ST_HIT_OPTION, k, &box);
+        SM_Hit(x, oy, w, oh, ST_HIT_OPTION, k, &box);
     }
 }
 
@@ -1412,7 +1373,7 @@ static void ST_DrawDropdown(void) {
 static void ST_DrawRGBPicker(void) {
     static const char* const names[3] = {"Red", "Green", "Blue"};
     float w = 300, h = 196;
-    float x = ST_ControlX(st.rgb) + ST_CONTROL_W - w;
+    float x = ST_ControlX(st.rgb) + ST_ControlW(st.rgb) - w;
     float y = ST_RowY(st.rgb) + stLayout[st.rgb].h - 4;
     int rgb[3];
     vec4_t color;
@@ -1450,87 +1411,6 @@ static void ST_DrawRGBPicker(void) {
 }
 
 /*
-===============
-ST_GroupRect
-
-Where a whole subsection lives: from its header down to the end of the last row belonging to it.
-A full width header (column < 0) takes the rows of both columns; a single column one takes only
-its own, because headers come in pairs on the same line and each rules its own side.
-===============
-*/
-static qboolean ST_GroupRect(int head, smRect_t* out) {
-    int col = stCvars[head].column;
-    float bottom = stLayout[head].y + stLayout[head].h;
-    int i;
-
-    for (i = head + 1; i < ST_NUM_CVARS; i++) {
-        float rowBottom;
-
-        if (!ST_InTab(i)) {
-            continue;
-        }
-        if (stCvars[i].widget == ST_HEADING) {
-            // the paired header in the other column does not end this group
-            if (col >= 0 && stCvars[i].column >= 0 && stLayout[i].y == stLayout[head].y) {
-                continue;
-            }
-            break;
-        }
-        if (col >= 0 && (stCvars[i].column ? 1 : 0) != col) {
-            continue;
-        }
-        rowBottom = stLayout[i].y + stLayout[i].h;
-        if (rowBottom > bottom) {
-            bottom = rowBottom;
-        }
-    }
-
-    if (bottom <= stLayout[head].y + stLayout[head].h) {
-        return qfalse;  // a header with no rows gets no card
-    }
-    *out = SM_R(stLayout[head].x, stLayout[head].y, stLayout[head].w,
-                bottom - stLayout[head].y + ST_CARD_PAD);
-    return qtrue;
-}
-
-/*
-===============
-ST_WeaponIcon
-
-The icon of the weapon a "weapon N" row binds, or 0 when the row is not a weapon's. The names
-are pak00's; the order is the keys' order, which is the weapon bar's.
-===============
-*/
-static qhandle_t ST_WeaponIcon(int i) {
-    static const char* const names[] = {
-        NULL,                    // 0: there is no weapon 0
-        "icons/iconw_gauntlet",  // 1
-        "icons/iconw_machinegun",
-        "icons/iconw_shotgun",
-        "icons/iconw_grenade",
-        "icons/iconw_rocket",
-        "icons/iconw_lightning",
-        "icons/iconw_railgun",
-        "icons/iconw_plasma",
-        "icons/iconw_bfg",       // 9
-    };
-    const char* cvar = stCvars[i].cvar;
-    int n;
-
-    if (stCvars[i].widget != ST_BIND || !cvar || Q_strncmp(cvar, "weapon ", 7)) {
-        return 0;
-    }
-    n = atoi(cvar + 7);
-    if (n < 1 || n >= (int)ARRAY_LEN(names) || !names[n]) {
-        return 0;
-    }
-    if (!st.weaponIcon[n]) {
-        st.weaponIcon[n] = trap_R_RegisterShaderNoMip(names[n]);
-    }
-    return st.weaponIcon[n];
-}
-
-/*
 ===============================================================================
 
 THE PAGE
@@ -1538,106 +1418,88 @@ THE PAGE
 ===============================================================================
 */
 
+/*
+===============
+ST_DrawRow
+
+.row.cvar: #242121 and #1C1919 by turns down its column, the title on the left with
+"(Reset)" after it while the row is under the cursor, and the control on the right. A heading
+is an h1 of the section.
+===============
+*/
 static void ST_DrawRow(int i, float y, const smRect_t* clip) {
     const stCvar_t* cv = &stCvars[i];
     float x = stLayout[i].x;
     float w = stLayout[i].w;
     float h = stLayout[i].h;
     float cx = ST_ControlX(i);
-    float titleW = ST_TitleWidth(w);
-    // [ioquakelive] a weapon is recognised faster by its icon than by its name, so a "weapon N"
-    // row shifts its title along to make room for one
-    qhandle_t weapIcon = ST_WeaponIcon(i);
-    float titleX = x + (weapIcon ? 10 + 22 + 10 : 12);
+    float base = SM_Baseline(FONT_SANS, 15, y + 13.5f, 24);
     smRect_t row = SM_R(x, y, w, h);
     qboolean hovered;
-    float cy;
 
-    // the header is its card's title; the background was drawn before the rows
     if (cv->widget == ST_HEADING) {
-        if (SM_TextInside(SM_Baseline(FONT_SANS, 13, y + 16, 20), 13, clip)) {
-            SM_Label(x + ST_CARD_PAD + 12, SM_Baseline(FONT_SANS, 13, y + 16, 20), 13, smGold,
-                     cv->title, 0.8f);
+        float hb = SM_Baseline(FONT_DEFAULT, 32, y + h - 8 - 38.4f, 38.4f);
+
+        if (SM_TextInside(hb, 32, clip)) {
+            SM_Text(x + 6.4f, hb, FONT_DEFAULT, 32, smText, cv->title, -1, qfalse);
         }
         return;
     }
-
-    // rows are told apart by the background under the cursor
-    hovered = SM_In(&row, smMX, smMY) && st.select < 0 && st.rgb < 0 && st.model < 0 && st.drag < 0 &&
-              st.previewDrag < 0;
-    if (hovered || st.binding == i || st.edit == i) {
-        SM_Round(x, y, w, h, SM_RADIUS_SM, smRaised, clip);
-    }
-    if (weapIcon) {
-        SM_Pic(x + 10, y + (h - 22.0f) * 0.5f, 22.0f, 22.0f, weapIcon, clip);
+    if (cv->widget == ST_BIND) {
+        ST_DrawBind(i, y, clip);
+        return;
     }
 
-    if (ST_HasTip(i)) {
-        const stTip_t* tip = ST_Tip(i);
-        float tb = SM_Baseline(FONT_SANS, 15, y + 8, 24);
-        int k;
+    hovered = SM_In(&row, smMX, smMY) && SM_In(clip, smMX, smMY) && st.select < 0 && st.rgb < 0 &&
+              st.model < 0 && st.drag < 0 && st.previewDrag < 0;
+    SM_Fill(x, y, w, h, stLayout[i].odd ? strRowOdd : strRowEven, clip);
+    if (SM_TextInside(base, 15, clip)) {
+        float tw = cx - x - 7.5f - 10;
 
-        if (SM_TextInside(tb, 15, clip)) {
-            SM_Text(titleX, tb, FONT_SANS, 15, smText, cv->title,
-                    SM_Fit(FONT_SANS, 15, cv->title, titleW - (titleX - x - 12)), qfalse);
-        }
-        for (k = 0; k < tip->lines; k++) {
-            tb = SM_Baseline(FONT_SANS, ST_TIP_SIZE, y + 32 + k * ST_TIP_LINE_H, ST_TIP_LINE_H);
-            if (SM_TextInside(tb, ST_TIP_SIZE, clip)) {
-                SM_Text(x + 12, tb, FONT_SANS, ST_TIP_SIZE, smMuted, cv->tip + tip->starts[k], tip->lens[k], qfalse);
-            }
-        }
-    } else {
-        float tb = SM_Baseline(FONT_SANS, 15, y, h);
+        SM_Text(x + 7.5f, base, FONT_SANS, 15, smText, cv->title, SM_Fit(FONT_SANS, 15, cv->title, tw), qfalse);
+        // a.resetLink shows while the row is under the cursor
+        if (hovered) {
+            float after = x + 7.5f + SM_Advance(FONT_SANS, 15, va("%s ", cv->title), -1);
 
-        if (SM_TextInside(tb, 15, clip)) {
-            SM_Text(titleX, tb, FONT_SANS, 15, smText, cv->title,
-                    SM_Fit(FONT_SANS, 15, cv->title, titleW - (titleX - x - 12)), qfalse);
+            SM_Text(after, base, FONT_SANS, 15, SM_Over(ST_HIT_RESET, i) ? strLinkHover : strLink, "(Reset)", -1,
+                    qfalse);
+            SM_Hit(after, y + 13.5f, SM_Advance(FONT_SANS, 15, "(Reset)", -1), 24, ST_HIT_RESET, i, clip);
         }
     }
     SM_Hit(x, y, w, h, ST_HIT_ROW, i, clip);
 
-    // controls are drawn only while wholly in view, so none spills past the panel
-    cy = y + (h - ST_FIELD_H) * 0.5f;
-    if (cv->widget != ST_BIND && (cy < clip->y || cy + ST_FIELD_H > clip->y + clip->h)) {
-        return;
-    }
     switch (cv->widget) {
         case ST_BOOL:
-            ST_DrawBool(i, cx, cy, clip);
+            ST_DrawBool(i, cx, y + 7.5f, clip);
             break;
         case ST_SELECT:
-            ST_DrawSelect(i, cx, cy, clip);
+            ST_DrawSelect(i, cx, y + 7.5f, clip);
             break;
         case ST_RANGE:
-            ST_DrawRange(i, cx, cy, clip);
+            ST_DrawRange(i, cx, y + 16.5f, clip);
             break;
         case ST_INPUT:
-            ST_DrawInput(i, cx, cy, clip);
+            ST_DrawInput(i, cx, y + 7.5f, clip);
             break;
         case ST_PALETTE:
-            ST_DrawPalette(i, cx, cy, clip);
+            ST_DrawPalette(i, cx, y + 7.5f, clip);
             break;
         case ST_RGB:
-            ST_DrawRGB(i, cx, cy, clip);
+            ST_DrawRGB(i, cx, y + 7.5f, clip);
             break;
         case ST_MODEL:
         case ST_MODELSKIN:
-            ST_DrawModelButton(i, cx, cy, clip);
+            ST_DrawModelButton(i, cx, y + 7.5f, clip);
             break;
         case ST_CROSSHAIR:
-            ST_DrawCrosshair(i, cx, cy, clip);
-            break;
-        case ST_BIND:
-            if (y >= clip->y && y + h <= clip->y + clip->h) {
-                ST_DrawBind(i, x + w - 12, y, clip);
-            }
+            ST_DrawCrosshair(i, cx, y + 7.5f, clip);
             break;
         default:
             break;
     }
 }
 
+// .scroll-y's bar, in its gutter at the frame's right
 static void ST_DrawScrollbar(float x) {
     float thumbH = st.view * st.view / st.content;
     float thumbY;
@@ -1645,150 +1507,196 @@ static void ST_DrawScrollbar(float x) {
     if (thumbH < 28) {
         thumbH = 28;
     }
-    thumbY = st.listTop + (st.view - thumbH) * st.scroll[st.tab] / (st.content - st.view);
-    SM_Hit(x - 4, st.listTop, 14, st.view, ST_HIT_TRACK, 0, NULL);
-    SM_Pill(x, thumbY, 6, thumbH, (SM_Over(ST_HIT_THUMB, 0) || st.scrollDrag) ? smMuted : smBorder, NULL);
-    SM_Hit(x - 4, thumbY, 14, thumbH, ST_HIT_THUMB, 0, NULL);
+    thumbY = st.top + (st.view - thumbH) * st.scroll[st.tab] / (st.content - st.view);
+    SM_Hit(x, st.top, STR_BAR, st.view, ST_HIT_TRACK, 0, NULL);
+    SM_Fill(x, thumbY, STR_BAR, thumbH, SM_Over(ST_HIT_THUMB, 0) || st.scrollDrag ? strThumbHover : strThumb, NULL);
+    SM_Hit(x, thumbY, STR_BAR, thumbH, ST_HIT_THUMB, 0, NULL);
 }
 
-// the page's header: its title, the action its section ends with, and the sections
-static void ST_DrawHeader(float y) {
-    float left = UI_Home_Left();
-    float right = left + HM_CONTAINER_W - ST_PAD;
-    const char* action = ST_TabAction(st.tab);
-    float x = left + ST_PAD;
-    float pillY = y + ST_HEADER_H - 22 - SM_PILL_H;
+/*
+===============
+ST_DrawHeader
+
+h1.title "Game Settings" and the nav.button-row under it: skeleton's buttons without their
+border, the section's in yellow. Over a match the title also has Done at its right.
+===============
+*/
+static void ST_DrawHeader(float y, const smRect_t* clip) {
+    float left = st.left;
+    float x = left;
+    float navY = y + STR_TITLE_H;
     int i;
 
-    SM_Round(left, y, HM_CONTAINER_W, ST_HEADER_H, SM_RADIUS_MD, smPanel, NULL);
-    SM_Label(left + ST_PAD, SM_Baseline(FONT_SANS, 22, y + 16, 40), 22, smText, "Game Settings", 0.2f);
-
+    SM_Fill(left, y, HM_CONTAINER_W - STR_BAR, STR_TITLE_H, strBlack80, clip);
+    if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 32, y + 8, 38.4f), 32, clip)) {
+        SM_Text(left + 6.4f, SM_Baseline(FONT_DEFAULT, 32, y + 8, 38.4f), FONT_DEFAULT, 32, smText, "Game Settings", -1,
+                qfalse);
+    }
     if (st.fromIngame) {
-        float bw = SM_ButtonWidth("Done", SM_BUTTON_H);
+        float bw = SM_WebButtonWidth("Done");
+        float bx = left + HM_CONTAINER_W - STR_BAR - 12 - bw;
+        float by = y + (STR_TITLE_H - SM_WEB_BUTTON_H) * 0.5f;
 
-        SM_Button(right - bw, y + 18, bw, SM_BUTTON_H, "Done", SM_BUTTON_PRIMARY, SM_Over(ST_HIT_DONE, 0));
-        SM_Hit(right - bw, y + 18, bw, SM_BUTTON_H, ST_HIT_DONE, 0, NULL);
-        right -= bw + 10;
-    }
-    if (action) {
-        float bw = SM_ButtonWidth(action, SM_BUTTON_H);
-
-        SM_Button(right - bw, y + 18, bw, SM_BUTTON_H, action, SM_BUTTON_SECONDARY, SM_Over(ST_HIT_ACTION, 0));
-        SM_Hit(right - bw, y + 18, bw, SM_BUTTON_H, ST_HIT_ACTION, 0, NULL);
+        SM_WebButton(bx, by, bw, "Done", qfalse, SM_Over(ST_HIT_DONE, 0), clip);
+        SM_Hit(bx, by, bw, SM_WEB_BUTTON_H, ST_HIT_DONE, 0, clip);
     }
 
+    SM_Fill(left, navY, HM_CONTAINER_W - STR_BAR, STR_NAV_H, strBlack80, clip);
     for (i = 0; i < ST_NUM_TABS; i++) {
-        float w;
         qboolean on = i == st.tab;
-        qboolean over = SM_Over(ST_HIT_TAB, i);
+        float w;
 
         if (!ST_TabShown(i)) {
             continue;
         }
-        w = SM_ButtonWidth(stTabNames[i], SM_PILL_H);
-        SM_Button(x, pillY, w, SM_PILL_H, stTabNames[i], on ? SM_BUTTON_PRIMARY : SM_BUTTON_SECONDARY, over && !on);
-        SM_Hit(x, pillY, w, SM_PILL_H, ST_HIT_TAB, i, NULL);
-        x += w + 6;
+        w = SM_LabelWidth(11, stTabNames[i], 1.6f) + 60;
+        if (on) {
+            SM_Fill(x, navY, w, STR_NAV_H, strYellow, clip);
+        }
+        if (SM_TextInside(SM_Baseline(FONT_SANS, 11, navY, STR_NAV_H), 11, clip)) {
+            SM_Label(x + 30, SM_Baseline(FONT_SANS, 11, navY, STR_NAV_H), 11,
+                     on ? colorBlack : SM_Over(ST_HIT_TAB, i) ? smText : strOption, stTabNames[i], 1.6f);
+        }
+        SM_Hit(x, navY, w, STR_NAV_H, ST_HIT_TAB, i, clip);
+        x += w + SM_Advance(FONT_SANS, 15, " ", -1);
     }
 }
 
+// what the section ends with, p.button-row: 1em around skeleton's button
+static void ST_DrawAction(float y, const smRect_t* clip) {
+    const char* action = ST_TabAction(st.tab);
+    float bw;
+
+    if (!action) {
+        return;
+    }
+    bw = SM_WebButtonWidth(action);
+    SM_WebButton(st.left + STR_SECTION_PAD + 15, y + 15, bw, action, qfalse, SM_Over(ST_HIT_ACTION, 0), clip);
+    SM_Hit(st.left + STR_SECTION_PAD + 15, y + 15, bw, SM_WEB_BUTTON_H, ST_HIT_ACTION, 0, clip);
+}
+
 static void ST_DrawPage(void) {
-    float headerY;
-    float bottom;
+    float frameTop, bottom, y, sectionTop, sectionH;
     smRect_t clip;
     int i;
 
     // over a match the page lies on the match, darkened; otherwise it is the front end's
     if (st.fromIngame) {
-        vec4_t tint = {smPage[0], smPage[1], smPage[2], 0.92f};
+        vec4_t tint = {0.0f, 0.0f, 0.0f, 0.85f};
 
         SM_FillScreen(tint);
-        headerY = 40;
+        frameTop = 40;
     } else {
-        // [ioquakelive] the frame is every page's, in retail's type; only the page is Settings' own
-        SM_SetLook(SM_LOOK_RETAIL);
         UI_Home_Backdrop();
         UI_Home_PageTop(HM_NAV_SETTINGS);
-        SM_SetLook(SM_LOOK_OURS);
-        headerY = HM_NAV_H;
+        frameTop = HM_NAV_H;
     }
     if (!ST_TabShown(st.tab)) {
         st.tab = ST_TAB_BASIC;
     }
 
-    ST_DrawHeader(headerY);
-
+    // the whole page scrolls, its title and nav with the section
     st.left = UI_Home_Left();
-    st.top = headerY + ST_HEADER_H + HM_PANEL_GAP;
-    bottom = smBottom - 40 - (UI_Home_InMatch() ? 38 : 0);
-    st.panelH = bottom - st.top;
-    SM_Round(st.left, st.top, HM_CONTAINER_W, st.panelH, SM_RADIUS_MD, smPanel, NULL);
-
-    st.listTop = st.top + ST_PAD - 6;
-    st.view = st.panelH - 2 * ST_PAD + 12;
+    st.top = frameTop;
+    bottom = UI_Home_FrameBottom() - (UI_Home_InMatch() ? 38 : 0);
+    st.view = bottom - frameTop;
     ST_Layout();
+    st.listTop = frameTop + STR_TITLE_H + STR_NAV_H + STR_NAV_GAP + STR_SECTION_PAD;
+    sectionH = st.listBottom + 2 * STR_SECTION_PAD + (ST_TabAction(st.tab) ? 30 + SM_WEB_BUTTON_H : 0);
+    st.content = STR_TITLE_H + STR_NAV_H + STR_NAV_GAP + sectionH;
     st.scroll[st.tab] = ST_ClampScroll(st.scroll[st.tab]);
 
-    clip = SM_R(st.left, st.listTop, HM_CONTAINER_W, st.view);
-
-    // [ioquakelive] the subsections no longer sit in a black card inside the panel. What
-    // separates them is their gold title and a thin line above each one, except for the ones
-    // at the very top, which have nothing to separate them from.
-    if (st.tab != ST_TAB_TEAM) {
-        float firstY = -1;
-
-        for (i = 0; i < ST_NUM_CVARS; i++) {
-            if (ST_InTab(i) && stCvars[i].widget == ST_HEADING && (firstY < 0 || stLayout[i].y < firstY)) {
-                firstY = stLayout[i].y;
-            }
-        }
-        for (i = 0; i < ST_NUM_CVARS; i++) {
-            smRect_t card;
-            float y;
-
-            if (!ST_InTab(i) || stCvars[i].widget != ST_HEADING || !ST_GroupRect(i, &card)) {
-                continue;
-            }
-            if (stLayout[i].y <= firstY) {
-                continue;
-            }
-            y = ST_RowY(i);
-            if (y < st.listTop || y >= st.listTop + st.view) {
-                continue;
-            }
-            SM_Fill(card.x + 12, y, card.w - 24, 1, smBorder, &clip);
-        }
-    }
+    clip = SM_R(st.left, frameTop, HM_CONTAINER_W, st.view);
+    y = frameTop - st.scroll[st.tab];
+    ST_DrawHeader(y, &clip);
+    sectionTop = y + STR_TITLE_H + STR_NAV_H + STR_NAV_GAP;
+    SM_Fill(st.left, sectionTop, HM_CONTAINER_W - STR_BAR, sectionH, strBlack80, &clip);
 
     for (i = 0; i < ST_NUM_CVARS; i++) {
-        float y;
+        float ry;
 
         if (!ST_InTab(i)) {
             continue;
         }
-        y = ST_RowY(i);
-        if (y + stLayout[i].h <= st.listTop || y >= st.listTop + st.view) {
+        ry = ST_RowY(i);
+        if (ry + stLayout[i].h <= clip.y || ry >= clip.y + clip.h) {
             continue;
         }
-        ST_DrawRow(i, y, &clip);
+        ST_DrawRow(i, ry, &clip);
     }
+    ST_DrawAction(st.listTop + st.listBottom - st.scroll[st.tab], &clip);
 
     // the Team section's models, beside their blocks, drawn only while wholly in view
     if (st.tab == ST_TAB_TEAM) {
         int k;
 
         for (k = 0; k < 2; k++) {
-            float y = st.listTop + stModelBox[k].y - st.scroll[st.tab];
+            float my = st.listTop + stModelBox[k].y - st.scroll[st.tab];
 
-            if (stModelBox[k].h <= 0 || y < st.listTop - 1 || y + stModelBox[k].h > st.listTop + st.view + 1) {
+            if (stModelBox[k].h <= 0 || my < clip.y - 1 || my + stModelBox[k].h > clip.y + clip.h + 1) {
                 continue;
             }
-            ST_DrawTeamPreview(k, stModelBox[k].x, y, stModelBox[k].w, stModelBox[k].h);
+            ST_DrawTeamPreview(k, stModelBox[k].x, my, stModelBox[k].w, stModelBox[k].h);
         }
     }
 
     if (st.content > st.view) {
-        ST_DrawScrollbar(st.left + HM_CONTAINER_W - 12);
+        ST_DrawScrollbar(st.left + HM_CONTAINER_W - STR_BAR);
+    }
+}
+
+/*
+===============
+ST_DrawBindDialog
+
+The bind dialog of retail's page, wide and short: "Press any key to bind" and the action, the
+keys it has in yellow, and how to leave it.
+===============
+*/
+static void ST_DrawBindDialog(void) {
+    const stCvar_t* cv = &stCvars[st.binding];
+    float h = 300;
+    float top = (SM_VIEW_H - h) * 0.5f;
+    float cx = smVW * 0.15f, cw = smVW * 0.7f;
+    const char* lines[4];
+    float sizes[4] = {32, 24, 21.3333f, 21.3333f};
+    int fonts[4] = {FONT_DEFAULT, FONT_SANS, FONT_SANS, FONT_SANS};
+    const float* colors[4] = {smText, strYellow, smText, smText};
+    char keys[128];
+    const char* p = st.values[st.binding];
+    float y = top + 30;
+    int k, n = 0;
+
+    keys[0] = '\0';
+    while (*p) {
+        const char* end = strchr(p, '\n');
+        int len = end ? (int)(end - p) : (int)strlen(p);
+
+        Q_strcat(keys, sizeof(keys), n++ ? ", " : "");
+        if ((int)strlen(keys) + len < (int)sizeof(keys)) {
+            strncat(keys, p, len);
+        }
+        p += len;
+        if (*p == '\n') {
+            p++;
+        }
+    }
+    lines[0] = va("Press any key to bind %s", cv->title);
+    lines[1] = n ? keys : "None";
+    lines[2] = "ESC to exit";
+    lines[3] = "BACKSPACE to unbind";
+
+    SM_Fill(-smVW, -SM_VIEW_H, 3 * smVW, 3 * SM_VIEW_H, strBlack80, NULL);
+    SM_Hit(-smVW, -SM_VIEW_H, 3 * smVW, 3 * SM_VIEW_H, ST_HIT_BLOCK, 0, NULL);
+    SM_Fill(0, top, smVW, h, strDialog, NULL);
+    SM_Fill(cx, top, cw, h, strBlack80, NULL);
+    for (k = 0; k < 4; k++) {
+        const char* text = lines[k];
+        float lh = sizes[k] * 1.5f;
+
+        SM_Text(cx + (cw - SM_Advance(fonts[k], sizes[k], text, -1)) * 0.5f, SM_Baseline(fonts[k], sizes[k], y, lh),
+                fonts[k], sizes[k], colors[k], text, -1, qfalse);
+        y += lh + 12;
     }
 }
 
@@ -1802,23 +1710,34 @@ WHAT IT DOES
 
 static void ST_OpenSelect(int i) {
     const stCvar_t* cv = &stCvars[i];
-    int k;
+    float oh = ST_OptionHeight(cv->widget);
+    int k, chosen = -1;
 
     st.select = i;
     st.selectScroll = 0;
-    for (k = 0; k < cv->numOptions; k++) {
-        if (!Q_stricmp(cv->options[k].value, st.values[i])) {
-            // the chosen option shows, a couple of rows down if the list is long
-            st.selectScroll = (k - 2) * ST_OPTION_H;
+    if (cv->widget == ST_PALETTE) {
+        chosen = atoi(st.values[i]) - 1;
+    } else if (cv->widget == ST_CROSSHAIR) {
+        chosen = atoi(st.values[i]);
+    } else {
+        for (k = 0; k < cv->numOptions; k++) {
+            if (!Q_stricmp(cv->options[k].value, st.values[i])) {
+                chosen = k;
+            }
         }
+    }
+    st.selectFocus = chosen;
+    if (chosen > 0) {
+        // the chosen option shows, a couple of rows down if the list is long
+        st.selectScroll = (chosen - 2) * oh;
     }
 }
 
 static void ST_DragRange(int i) {
     const stCvar_t* cv = &stCvars[i];
-    float trackX = ST_ControlX(i) + 58;
-    float trackW = ST_CONTROL_W - 58;
-    float frac = (smMX - trackX - SM_SLIDER_H * 0.5f) / (trackW - SM_SLIDER_H);
+    float bx = ST_ControlX(i) + ST_ControlW(i) * 0.2f;
+    float bw = ST_ControlW(i) * 0.8f;
+    float frac = (smMX - bx - 1 - 8) / (bw - 2 - 16);
     char text[32];
 
     if (frac < 0) {
@@ -1908,7 +1827,9 @@ static void ST_Click(void) {
     if (st.select >= 0) {
         if (type == ST_HIT_OPTION) {
             if (stCvars[st.select].widget == ST_CROSSHAIR) {
-                ST_Set(st.select, va("%i", index));  // in the grid the index IS the value
+                ST_Set(st.select, va("%i", index));  // the list's index IS the value
+            } else if (stCvars[st.select].widget == ST_PALETTE) {
+                ST_Set(st.select, va("%i", index + 1));
             } else {
                 ST_Set(st.select, stCvars[st.select].options[index].value);
             }
@@ -1981,21 +1902,12 @@ static void ST_Click(void) {
             st.editStart = 0;
             st.editTime = uiInfo.uiDC.realTime;
             break;
-        case ST_HIT_PALETTE: {
-            float h = 14.0f;
-            float sw = (ST_CONTROL_W - h) / 26.0f;
-            int k = (int)((smMX - (ST_ControlX(index) + h * 0.5f)) / sw) + 1;
-            char text[16];
-
-            if (k < 1) {
-                k = 1;
-            } else if (k > 26) {
-                k = 26;
+        case ST_HIT_RESET:
+            // retail's reset: qz_instance.ResetCvar
+            if (stCvars[index].cvar) {
+                trap_Cmd_ExecuteText(EXEC_APPEND, va("reset %s\n", stCvars[index].cvar));
             }
-            Com_sprintf(text, sizeof(text), "%i", k);
-            ST_Set(index, text);
             break;
-        }
         case ST_HIT_RGB:
             st.rgb = index;
             break;
@@ -2029,7 +1941,9 @@ static void ST_Wheel(float amount) {
         return;
     }
     if (st.select >= 0) {
-        st.selectScroll += amount > 0 ? 2 * ST_OPTION_H : -2 * ST_OPTION_H;
+        float oh = ST_OptionHeight(stCvars[st.select].widget);
+
+        st.selectScroll += amount > 0 ? 2 * oh : -2 * oh;
         return;
     }
     if (st.rgb >= 0) {
@@ -2187,7 +2101,7 @@ void UI_Settings_Paint(void) {
     qboolean held;
 
     SM_BeginFrame();
-    SM_SetLook(SM_LOOK_OURS);  // the settings page keeps its own type, in retail's colours
+    SM_SetLook(SM_LOOK_RETAIL);
     if (!st.loaded) {
         UI_Settings_Open();
     }
@@ -2236,11 +2150,10 @@ void UI_Settings_Paint(void) {
 
     ST_DrawPage();
     if (st.select >= 0) {
-        if (stCvars[st.select].widget == ST_CROSSHAIR) {
-            ST_DrawCrosshairGrid();
-        } else {
-            ST_DrawDropdown();
-        }
+        ST_DrawDropdown();
+    }
+    if (st.binding >= 0) {
+        ST_DrawBindDialog();
     }
     if (st.rgb >= 0) {
         ST_DrawRGBPicker();
