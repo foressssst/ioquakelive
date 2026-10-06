@@ -1470,14 +1470,6 @@ static void ST_DrawHeader(float y, const smRect_t* clip) {
         SM_Text(left + 6.4f, SM_Baseline(FONT_DEFAULT, 32, y + 8, 38.4f), FONT_DEFAULT, 32, smText, "Game Settings", -1,
                 qfalse);
     }
-    if (st.fromIngame) {
-        float bw = SM_WebButtonWidth("Done");
-        float bx = left + HM_CONTAINER_W - STR_BAR - 12 - bw;
-        float by = y + (STR_TITLE_H - SM_WEB_BUTTON_H) * 0.5f;
-
-        SM_WebButton(bx, by, bw, "Done", qfalse, SM_Over(ST_HIT_DONE, 0), clip);
-        SM_Hit(bx, by, bw, SM_WEB_BUTTON_H, ST_HIT_DONE, 0, clip);
-    }
 
     SM_Fill(left, navY, HM_CONTAINER_W - STR_BAR, STR_NAV_H, strBlack80, clip);
     for (i = 0; i < ST_NUM_TABS; i++) {
@@ -1522,17 +1514,13 @@ static void ST_DrawPage(void) {
     smRect_t clip;
     int i;
 
-    // over a match the page lies on the match, darkened; otherwise it is the front end's
-    if (st.fromIngame) {
-        vec4_t tint = {0.0f, 0.0f, 0.0f, 0.85f};
-
-        SM_FillScreen(tint);
-        frameTop = 40;
-    } else {
+    // [QL] over a match the browser shows this same page, nav and lobby column included, and
+    // what lies behind it is the match (web.pak rendered with IsGameRunning)
+    if (!st.fromIngame) {
         UI_Home_Backdrop();
-        UI_Home_PageTop(HM_NAV_SETTINGS);
-        frameTop = HM_NAV_H;
     }
+    UI_Home_PageTop(HM_NAV_SETTINGS);
+    frameTop = HM_NAV_H;
     if (!ST_TabShown(st.tab)) {
         st.tab = ST_TAB_BASIC;
     }

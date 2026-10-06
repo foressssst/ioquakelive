@@ -1,0 +1,28 @@
+#include "ui/menudef.h"
+
+{
+    // The same page opened from inside a match. It has to be a menu of its own
+    // because it must NOT be fullscreen: a fullscreen menu tells the client to
+    // skip drawing the world, and the page is drawn over the match, tinted, the
+    // way the browser did it. Declared fullscreen, what shows through the tint is
+    // whatever was left in the buffer.
+    menuDef {
+        name "settings_ingame"
+        fullScreen 0
+        rect 0 0 640 480
+        visible MENU_FALSE
+        focusColor 1 .75 0 1
+        popup
+
+        onOpen { uiScript settingsOpen }
+        onESC { uiScript settingsClose }
+
+        itemDef {
+            name settings
+            type ITEM_TYPE_OWNERDRAW
+            ownerdraw 601 // UI_SETTINGS
+            rect -2000 -1000 4640 2480
+            visible 1
+        }
+    }
+}

@@ -5576,8 +5576,13 @@ void _UI_SetActiveMenu(uiMenuCommand_t menu) {
                 //  - out of a match, the main-menu frame is opened with a page inside it, which is
                 //    what retail's own main.menu does (`open main_options ; open ingame_controls`).
                 // An empty frame with nothing in it is what this used to open.
-                menuDef_t* ingame = Menus_FindByName("ingame");
-                qboolean inMatch = ingame && (ingame->window.flags & WINDOW_VISIBLE);
+                uiClientState_t cs;
+                qboolean inMatch;
+
+                // in a match by the connection, not by a menu: the one on screen there need not
+                // be "ingame" (a spectator in warmup has the join panel)
+                trap_GetClientState(&cs);
+                inMatch = (qboolean)(cs.connState >= CA_ACTIVE);
 
                 trap_Cvar_Set("cl_paused", "1");
                 trap_Key_SetCatcher(KEYCATCH_UI);
@@ -5586,7 +5591,11 @@ void _UI_SetActiveMenu(uiMenuCommand_t menu) {
                 uiInfo.currentCrosshair = (int)trap_Cvar_VariableValue("cg_drawCrosshair");
 
                 Menus_CloseAll();
-                // in a match the page is drawn over it and must not be fullscreen
+                // in a match the page is drawn over it and must not be fullscreen; its menu lives
+                // in a file of its own, which the menus a match loads do not bring
+                if (inMatch && !Menus_FindByName("settings_ingame")) {
+                    UI_ParseMenu("ui/ioql/settings_ingame.menu");
+                }
                 Menus_ActivateByName(inMatch ? "settings_ingame" : "settings");
                 return;
             }
