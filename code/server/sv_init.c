@@ -665,6 +665,7 @@ void SV_Init(void) {
     sv_errorExit = Cvar_Get("sv_errorExit", "1", 0);                   // [QL] 0x004e3e1f
     sv_workshopFile = Cvar_Get("sv_workshopFile", "workshop.txt", CVAR_ARCHIVE);
     sv_quitOnEmpty = Cvar_Get("sv_quitOnEmpty", "0", CVAR_ARCHIVE);  // [QL] 0x004e3e3a
+    sv_fullRedirect = Cvar_Get("sv_fullRedirect", "", CVAR_ARCHIVE);  // [ioquakelive]
 
     // [QL] the two the server publishes about itself: the Workshop items the match uses and
     // the identifier the service gives it. Retail registers both read only.

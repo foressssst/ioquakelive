@@ -296,7 +296,10 @@ extern cvar_t* sv_idleExit;
 extern cvar_t* sv_errorExit;
 extern cvar_t* sv_workshopFile;
 extern cvar_t* sv_quitOnEmpty;
+extern cvar_t* sv_fullRedirect;
 extern cvar_t* sv_lanForceRate;
+
+void SV_FullRedirect(netadr_t from);
 extern cvar_t* sv_altEntDir;
 extern cvar_t* sv_dumpEntities;
 extern cvar_t* sv_banFile;

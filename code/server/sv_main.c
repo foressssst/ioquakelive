@@ -59,6 +59,7 @@ cvar_t* sv_idleExit;     // [QL] shut down after so long with no map
 cvar_t* sv_errorExit;    // [QL] shut down on an error
 cvar_t* sv_workshopFile; // [QL] the file listing the Workshop items
 cvar_t* sv_quitOnEmpty;  // [QL] shut down once the server is left with nobody
+cvar_t* sv_fullRedirect; // [ioquakelive] where to send the ones who find the server full
 cvar_t* sv_lanForceRate;  // dedicated 1 (LAN) server forces local client rates to 99999 (bug #491)
 cvar_t* sv_banFile;
 // [QL] 0x004e3e7a and 0x004e3e90: the level's entities come from a separate file, or are
@@ -615,6 +616,220 @@ void SV_RedirectedCommand(netadr_t to, const char* text) {
 }
 
 /*
+==============================================================================
+
+[ioquakelive] THE ONES WHO FIND THE SERVER FULL GO TO ANOTHER ONE
+
+sv_fullRedirect lists other servers, an address each (127.0.0.1:<port> for one on this
+machine). The server asks each of them how full it is every few seconds, and someone who
+comes when there is no slot left is told the one with room that has the most players, so
+the servers fill one after another instead of everyone waiting at the door of the full one.
+They are asked both ways: getinfo, which ioqlds answers, and Steam's A2S_INFO, the server
+browser's query, which is the only one Quake Live's servers answer.
+Only an ioquakelive client follows it (cl_followRedirect); Quake Live's client does not know
+the packet and gets "Server is full." as always. Nobody already in is ever moved.
+
+==============================================================================
+*/
+
+#define SV_MAX_REDIRECTS 8
+#define SV_REDIRECT_ASK 5000     // how often the others are asked
+#define SV_REDIRECT_FRESH 15000  // how old an answer may be and still count
+
+typedef struct {
+    netadr_t adr;
+    int answered;  // Sys_Milliseconds of the last answer, 0 for none
+    int clients;
+    int maxClients;
+    qboolean needPass;
+} svRedirect_t;
+
+static svRedirect_t svRedirects[SV_MAX_REDIRECTS];
+static int svNumRedirects;
+static int svRedirectAsked;
+
+static void SV_ParseRedirects(void) {
+    char list[MAX_CVAR_VALUE_STRING];
+    char* p;
+
+    svNumRedirects = 0;
+    Q_strncpyz(list, sv_fullRedirect->string, sizeof(list));
+    for (p = list; *p; p++) {
+        if (*p == ',' || *p == ';' || *p == '\t') {
+            *p = ' ';
+        }
+    }
+    p = list;
+    while (*p && svNumRedirects < SV_MAX_REDIRECTS) {
+        svRedirect_t* r = &svRedirects[svNumRedirects];
+        char* address;
+
+        while (*p == ' ') {
+            p++;
+        }
+        address = p;
+        while (*p && *p != ' ') {
+            p++;
+        }
+        if (*p) {
+            *p++ = '\0';
+        }
+        if (!address[0]) {
+            break;
+        }
+        Com_Memset(r, 0, sizeof(*r));
+        if (!NET_StringToAdr(address, &r->adr, NA_UNSPEC) || r->adr.type == NA_LOOPBACK) {
+            Com_Printf("sv_fullRedirect: bad address %s\n", address);
+            continue;
+        }
+        if (!r->adr.port) {
+            r->adr.port = BigShort(PORT_SERVER);
+        }
+        svNumRedirects++;
+    }
+    svRedirectAsked = 0;
+}
+
+// Steam's A2S_INFO, with the challenge it asked for when there is one
+static void SV_RedirectAskSteam(netadr_t adr, const byte* challenge) {
+    static const char query[] = "\xff\xff\xff\xffTSource Engine Query";
+    byte packet[sizeof(query) + 4];
+
+    Com_Memcpy(packet, query, sizeof(query));  // the terminating zero goes too
+    if (challenge) {
+        Com_Memcpy(packet + sizeof(query), challenge, 4);
+    }
+    NET_SendPacket(NS_SERVER, sizeof(query) + (challenge ? 4 : 0), packet, adr);
+}
+
+// every frame: the list when it changes, and the question to the others
+static void SV_RedirectFrame(void) {
+    int now = Sys_Milliseconds();
+    int i;
+
+    if (sv_fullRedirect->modified) {
+        sv_fullRedirect->modified = qfalse;
+        SV_ParseRedirects();
+    }
+    if (!svNumRedirects || (svRedirectAsked && now - svRedirectAsked < SV_REDIRECT_ASK)) {
+        return;
+    }
+    svRedirectAsked = now;
+    for (i = 0; i < svNumRedirects; i++) {
+        NET_OutOfBandPrint(NS_SERVER, svRedirects[i].adr, "getinfo redirect");
+        SV_RedirectAskSteam(svRedirects[i].adr, NULL);
+    }
+}
+
+// skips a string of an A2S answer; NULL when the packet ends first
+static const byte* SV_SkipSteamString(const byte* p, const byte* end) {
+    while (p < end && *p) {
+        p++;
+    }
+    return (p < end) ? p + 1 : NULL;
+}
+
+/*
+=================
+SV_RedirectSteamAnswer
+
+The A2S answer of one of the servers of the list: its challenge ('A'), to ask again with it,
+or its info ('I'): protocol, name, map, folder and game, the app id, players, the most
+players, bots, kind, system and whether it has a password.
+=================
+*/
+static qboolean SV_RedirectSteamAnswer(netadr_t from, msg_t* msg) {
+    const byte* p = msg->data + 5;
+    const byte* end = msg->data + msg->cursize;
+    svRedirect_t* r = NULL;
+    int i;
+
+    if (msg->cursize < 5 || *(int*)msg->data != -1 || (msg->data[4] != 'A' && msg->data[4] != 'I')) {
+        return qfalse;
+    }
+    for (i = 0; i < svNumRedirects; i++) {
+        if (NET_CompareAdr(from, svRedirects[i].adr)) {
+            r = &svRedirects[i];
+            break;
+        }
+    }
+    if (!r) {
+        return qfalse;
+    }
+    if (msg->data[4] == 'A') {
+        if (msg->cursize >= 9) {
+            SV_RedirectAskSteam(from, msg->data + 5);
+        }
+        return qtrue;
+    }
+    p++;  // protocol
+    for (i = 0; i < 4 && p; i++) {
+        p = SV_SkipSteamString(p, end);
+    }
+    if (!p || end - p < 9) {
+        return qtrue;
+    }
+    p += 2;  // app id
+    r->clients = p[0];
+    r->maxClients = p[1];
+    r->needPass = p[5] ? qtrue : qfalse;
+    r->answered = Sys_Milliseconds();
+    return qtrue;
+}
+
+// the answer of one of them, as any Quake 3 server gives it
+static void SV_RedirectInfoResponse(netadr_t from, msg_t* msg) {
+    const char* info;
+    int i;
+
+    for (i = 0; i < svNumRedirects && !NET_CompareAdr(from, svRedirects[i].adr); i++) {
+    }
+    if (i == svNumRedirects) {
+        return;
+    }
+    info = MSG_ReadString(msg);
+    svRedirects[i].clients = atoi(Info_ValueForKey(info, "clients"));
+    svRedirects[i].maxClients = atoi(Info_ValueForKey(info, "sv_maxclients"));
+    svRedirects[i].needPass = atoi(Info_ValueForKey(info, "g_needpass")) ? qtrue : qfalse;
+    svRedirects[i].answered = Sys_Milliseconds();
+}
+
+/*
+=================
+SV_FullRedirect
+
+Someone found no slot left: the server with room and the most players, if any answered lately.
+One on this machine goes as ":<port>", for the client to put this server's address in front.
+=================
+*/
+void SV_FullRedirect(netadr_t from) {
+    svRedirect_t* best = NULL;
+    int now = Sys_Milliseconds();
+    int i;
+
+    for (i = 0; i < svNumRedirects; i++) {
+        svRedirect_t* r = &svRedirects[i];
+
+        if (!r->answered || now - r->answered > SV_REDIRECT_FRESH || r->needPass || r->clients >= r->maxClients) {
+            continue;
+        }
+        if (!best || r->clients > best->clients) {
+            best = r;
+        }
+    }
+    if (!best) {
+        return;
+    }
+    if (best->adr.type == NA_IP && best->adr.ip[0] == 127) {
+        NET_OutOfBandPrint(NS_SERVER, from, "redirect :%i", BigShort(best->adr.port));
+    } else {
+        NET_OutOfBandPrint(NS_SERVER, from, "redirect %s", NET_AdrToStringwPort(best->adr));
+    }
+    Com_Printf("Server is full: %s sent to %s (%i of %i)\n", NET_AdrToString(from),
+               NET_AdrToStringwPort(best->adr), best->clients, best->maxClients);
+}
+
+/*
 =================
 SV_ConnectionlessPacket
 
@@ -627,6 +842,11 @@ connectionless packets.
 static void SV_ConnectionlessPacket(netadr_t from, msg_t* msg) {
     char* s;
     char* c;
+
+    // [ioquakelive] Steam's answer of a server of sv_fullRedirect
+    if (svNumRedirects && SV_RedirectSteamAnswer(from, msg)) {
+        return;
+    }
 
     MSG_BeginReadingOOB(msg);
     MSG_ReadLong(msg);  // skip the -1 marker
@@ -655,6 +875,8 @@ static void SV_ConnectionlessPacket(netadr_t from, msg_t* msg) {
         // if a client starts up a local server, we may see some spurious
         // server disconnect messages when their new server sees our final
         // sequenced messages to the old client
+    } else if (!Q_stricmp(c, "infoResponse") && svNumRedirects) {
+        SV_RedirectInfoResponse(from, msg);  // [ioquakelive] sv_fullRedirect
     } else if (Steam_GS_HandlePacket(from, msg->data, msg->cursize)) {
         // [QL] qzeroded.x64 0x43e268: what the server does not know goes to Steam, whose
         // queries arrive on the game's socket (query port 0xffff). Only here: a client's packets
@@ -1096,6 +1318,9 @@ void SV_Frame(int msec) {
 
         return;
     }
+
+    // [ioquakelive] how full the servers of sv_fullRedirect are
+    SV_RedirectFrame();
 
     // allow pause if only the local client is connected
     if (SV_CheckPaused()) {

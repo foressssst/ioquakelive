@@ -383,6 +383,7 @@ void SV_DirectConnect(netadr_t from) {
                 return;
             }
         } else {
+            SV_FullRedirect(from);  // [ioquakelive] another server with room, for our client
             NET_OutOfBandPrint(NS_SERVER, from, "print\nServer is full.\n");
             Com_DPrintf("Rejected a connection.\n");
             return;

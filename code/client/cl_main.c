@@ -111,6 +111,10 @@ cvar_t* cl_rate;
 
 cvar_t* cl_steamId;
 
+cvar_t* cl_followRedirect;  // [ioquakelive] go where a full server sends you
+static int clRedirectHops;
+static qboolean clRedirecting;
+
 clientActive_t cl;
 clientConnection_t clc;
 clientStatic_t cls;
@@ -1861,6 +1865,13 @@ void CL_Connect_f(void) {
         Q_strncpyz(server, Cmd_Argv(2), sizeof(server));
     }
 
+    // [ioquakelive] a connect of your own starts the count of redirects again
+    if (clRedirecting) {
+        clRedirecting = qfalse;
+    } else {
+        clRedirectHops = 0;
+    }
+
     // save arguments for reconnect
     Q_strncpyz(cl_reconnectArgs, Cmd_Args(), sizeof(cl_reconnectArgs));
 
@@ -2885,6 +2896,46 @@ CL_ConnectionlessPacket
 Responses to broadcasts, etc
 =================
 */
+/*
+=================
+CL_RedirectPacket
+
+[ioquakelive] A full ioqlds names another server with room (sv_fullRedirect). While
+connecting, and only from the server being connected to, the client goes there instead of
+waiting at the door. ":<port>" is a server on the same machine. An address has to be written
+in numbers, and three in a row at most, so two full servers cannot bounce it forever.
+=================
+*/
+#define CL_MAX_REDIRECTS 3
+
+static void CL_RedirectPacket(netadr_t from) {
+    char server[MAX_OSPATH];
+    const char* to = Cmd_Argv(1);
+    netadr_t adr;
+
+    if (!cl_followRedirect->integer || (clc.state != CA_CONNECTING && clc.state != CA_CHALLENGING) ||
+        !NET_CompareAdr(from, clc.serverAddress) || !to[0] || clRedirectHops >= CL_MAX_REDIRECTS) {
+        return;
+    }
+    if (to[0] == ':') {
+        if (from.type == NA_IP6) {
+            Com_sprintf(server, sizeof(server), "[%s]%s", NET_AdrToString(from), to);
+        } else {
+            Com_sprintf(server, sizeof(server), "%s%s", NET_AdrToString(from), to);
+        }
+    } else {
+        Q_strncpyz(server, to, sizeof(server));
+    }
+    if (strspn(server, "0123456789abcdefABCDEF.:[]") != strlen(server) ||
+        !NET_StringToAdr(server, &adr, NA_UNSPEC) || NET_CompareAdr(adr, clc.serverAddress)) {
+        return;
+    }
+    clRedirectHops++;
+    clRedirecting = qtrue;
+    Com_Printf("Server is full: it sends you to %s\n", server);
+    Cbuf_ExecuteText(EXEC_INSERT, va("connect %s\n", server));  // ahead of whatever is waiting
+}
+
 void CL_ConnectionlessPacket(netadr_t from, msg_t* msg) {
     char* s;
     char* c;
@@ -2975,6 +3026,12 @@ void CL_ConnectionlessPacket(netadr_t from, msg_t* msg) {
     // global MOTD from id
     if (!Q_stricmp(c, "motd")) {
         CL_MotdPacket(from);
+        return;
+    }
+
+    // [ioquakelive] a full server that knows another one with room
+    if (!Q_stricmp(c, "redirect")) {
+        CL_RedirectPacket(from);
         return;
     }
 
@@ -4013,6 +4070,7 @@ void CL_Init(void) {
     Cvar_Get("cl_viewAccel", "1.7", CVAR_ARCHIVE | CVAR_USERSAVE);
 
     cl_allowDownload = Cvar_Get("cl_allowDownload", "0", CVAR_ARCHIVE);
+    cl_followRedirect = Cvar_Get("cl_followRedirect", "1", CVAR_ARCHIVE);
 #ifdef USE_CURL_DLOPEN
     cl_cURLLib = Cvar_Get("cl_cURLLib", DEFAULT_CURL_LIB, CVAR_ARCHIVE | CVAR_PROTECTED);
 #endif
