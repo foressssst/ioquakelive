@@ -96,8 +96,7 @@ extern const vec4_t smOnPrimary;   // --primary-foreground
 extern const vec4_t smGold;        // --qc-chip-border, the accent
 extern const vec4_t smRing;        // --ring, a focused field
 extern const vec4_t smDanger;      // --destructive
-extern const vec4_t smSuccess;     // --qc-success, the in-game banner
-extern const vec4_t smSuccessHover;
+extern const vec4_t smSuccess;     // the in-game banner's #20B533
 extern const vec4_t smShadow;
 
 // the names Start Match was written against, kept pointing at the same palette

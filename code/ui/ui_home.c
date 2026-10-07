@@ -587,23 +587,22 @@ UI_Home_Banner
 Retail's App draws an AlertBanner while you are in a match, on every page: a bar
 across the bottom of the screen (.banner: fixed, bottom 0, full width, text
 centred) in green that says "You are currently in-game. Click here to return to
-your match." and sends web_hideBrowser when clicked.
+your match." and sends web_hideBrowser when clicked. Its padding is 0.25em around one 24px line
+of the page's 15px, and nothing changes under the mouse
 ===============
 */
 void UI_Home_Banner(void) {
     static const char* const text = "You are currently in-game. Click here to return to your match.";
-    float h = 38.0f;
+    float h = 31.5f;
     float y = smBottom - h;
-    qboolean over;
 
     UI_Home_DrawNavMenu();
     UI_Home_DrawContext();
     if (!UI_Home_InMatch()) {
         return;
     }
-    over = SM_Over(HM_HIT_BANNER, 0);
-    SM_Fill(-1, y, smVW + 2, h, over ? smSuccessHover : smSuccess, NULL);
-    SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y, h), 15, smText, text, qtrue);
+    SM_Fill(-1, y, smVW + 2, h, smSuccess, NULL);
+    SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText, text, qfalse);
     SM_Hit(0, y, smVW, h, HM_HIT_BANNER, 0, NULL);
 }
 
@@ -1124,8 +1123,8 @@ void UI_Home_Paint(void) {
     top = -smTop / smScale;
 
     UI_Home_RetailBackdrop();
-    // .character: position fixed, bottom 0, left 24%, at its own 1350x959
-    if (hr.ranger && !UI_Home_InMatch()) {
+    // .character: position fixed, bottom 0, left 24%, at its own 1350x959, over a match too
+    if (hr.ranger) {
         SM_Pic(smVW * 0.24f, smBottom - 959.0f, 1350.0f, 959.0f, hr.ranger, NULL);
     }
     UI_Home_DrawColumn();

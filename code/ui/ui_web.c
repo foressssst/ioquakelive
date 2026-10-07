@@ -45,8 +45,7 @@ const vec4_t smOnPrimary = SM_RGB(0, 0, 0);
 const vec4_t smGold = SM_RGB(247, 209, 0);
 const vec4_t smRing = SM_RGB(247, 209, 0);
 const vec4_t smDanger = SM_RGB(204, 51, 51);
-const vec4_t smSuccess = SM_RGB(22, 163, 74);
-const vec4_t smSuccessHover = SM_RGB(21, 128, 61);
+const vec4_t smSuccess = SM_RGB(32, 181, 51);
 const vec4_t smShadow = {0.0f, 0.0f, 0.0f, 0.48f};
 
 smLook_t smLook;
