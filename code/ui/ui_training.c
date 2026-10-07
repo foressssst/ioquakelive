@@ -244,6 +244,15 @@ static float TR_Ease(float t) {
     return t * t * (3 - 2 * t);
 }
 
+// .actions button: on a screen no wider than 3:2 its padding is 0 0.25em 1em 0
+static void TR_Button(float x, float y, float w, const char* label, qboolean over, const smRect_t* clip) {
+    if (SM_Narrow()) {
+        SM_WebButtonPadded(x, y, w, 0, 2.75f, label, qfalse, over, clip);
+    } else {
+        SM_WebButton(x, y, w, label, qfalse, over, clip);
+    }
+}
+
 static void TR_DrawSection(int i, float x, float y, float w, const smRect_t* clip) {
     const trCard_t* card = &trCards[i];
     float f = TR_Ease(tr.hover[i]);
@@ -276,7 +285,7 @@ static void TR_DrawSection(int i, float x, float y, float w, const smRect_t* cli
     // the whole section launches it, and so do its buttons; Watch Video does not go on to it
     SM_Hit(x, y, w, TR_SECTION_H, TR_HIT_CARD, i, clip);
     if (card->video) {
-        SM_WebButton(bx, by, bw, "Watch Video", qfalse, SM_Over(TR_HIT_VIDEO, i), clip);
+        TR_Button(bx, by, bw, "Watch Video", SM_Over(TR_HIT_VIDEO, i), clip);
         SM_Hit(bx, by, bw, SM_WEB_BUTTON_H, TR_HIT_VIDEO, i, clip);
         bx += bw;
     }
@@ -284,7 +293,7 @@ static void TR_DrawSection(int i, float x, float y, float w, const smRect_t* cli
     if (card->video) {
         bx += w * 0.04f;
     }
-    SM_WebButton(bx, by, bw, "Start Training", qfalse, SM_Over(TR_HIT_START, i), clip);
+    TR_Button(bx, by, bw, "Start Training", SM_Over(TR_HIT_START, i), clip);
     SM_Hit(bx, by, bw, SM_WEB_BUTTON_H, TR_HIT_START, i, clip);
 }
 

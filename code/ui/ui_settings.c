@@ -1058,29 +1058,39 @@ static void ST_ConfirmChooser(void) {
     st.model = -1;
 }
 
-// the model in use with its icon; a click opens the chooser
-// .model-chooser-wrapper's button: the model's icon, 48 high, and its name
+/*
+the model in use with its icon; a click opens the chooser. .model-chooser-wrapper's button is
+one of the page's buttons without its border, 48 high, padded 0 1em 0 10px: the icon 48 high
+and the name after a space and 0.5em, in the button's capitals. On a screen no wider than 3:2
+the icon is 24 high and stands in the middle, and the name follows it after 0.1em
+*/
 static void ST_DrawModelButton(int i, float x, float y, const smRect_t* clip) {
     const char* value = st.values[i][0] ? st.values[i] : "None";
+    qboolean narrow = SM_Narrow();
+    qboolean over = SM_Over(ST_HIT_MODEL, i) || st.model == i;
     float w = ST_ControlW(i);
     float tx = x + 10;
-    float base = SM_Baseline(FONT_SANS, 15, y, 48);
+    float base = SM_Baseline(FONT_SANS, 11, y + (narrow ? 15.7f : 15.0f), 15);
+    char upper[64];
 
-    if (SM_Over(ST_HIT_MODEL, i) || st.model == i) {
-        SM_Fill(x, y, w, 48, strHover, clip);
-    }
+    SM_Fill(x, y, w, 48, over ? smWebButtonHover : smWebButton, clip);
     if (st.values[i][0]) {
         char skin[MAX_QPATH];
         int model = ST_ParseModel(st.values[i], skin, sizeof(skin));
         qhandle_t icon = ST_IconFor(model, skin[0] ? skin : "default");
 
-        if (icon) {
+        if (icon && narrow) {
+            SM_Pic(x + 10, y + 10, 24, 24, icon, clip);
+            tx = x + 10 + 24 + 5.0f;  // the space with the letter-spacing, and 0.1em
+        } else if (icon) {
             SM_Pic(x + 10, y, 48, 48, icon, clip);
-            tx = x + 10 + 48 + SM_Advance(FONT_SANS, 15, " ", -1) + 7.5f;
+            tx = x + 10 + 48 + 9.4f;  // the space with the letter-spacing, and 0.5em
         }
     }
-    if (SM_TextInside(base, 15, clip)) {
-        SM_Text(tx, base, FONT_SANS, 15, smText, value, SM_Fit(FONT_SANS, 15, value, x + w - 15 - tx), qfalse);
+    Q_strncpyz(upper, value, sizeof(upper));
+    Q_strupr(upper);
+    if (SM_TextInside(base, 11, clip)) {
+        SM_SpacedText(tx, base, FONT_SANS, 11, over ? smWebYellow : smText, upper, 1.0f, qtrue);
     }
     SM_Hit(x, y, w, 48, ST_HIT_MODEL, i, clip);
 }

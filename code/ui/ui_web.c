@@ -60,9 +60,6 @@ void SM_Frame(void) {
     float h = (float)uiInfo.uiDC.glconfig.vidHeight;
 
     smScale = h / SM_VIEW_H;
-    if (w / smScale < SM_MIN_VIEW_W) {
-        smScale = w / SM_MIN_VIEW_W;
-    }
     smVW = w / smScale;
     smTop = (h - SM_VIEW_H * smScale) * 0.5f;
     smBottom = (h - smTop) / smScale;
@@ -297,7 +294,8 @@ static struct {
     // [ioquakelive] retail's own faces, out of the player's web.pak: -1 when it is not there
     int sans, sansBold, handel, handelBold, awesome;
     int sansItalic;  // the page's em
-} smFonts = {qfalse, -1, -1, -1, -1, -1, -1, -1, -1};
+    int arial;       // [ioquakelive] Liberation Sans, for the page's sans-serif
+} smFonts = {qfalse, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
 void SM_SetLook(smLook_t look) {
     smLook = look;
@@ -336,6 +334,10 @@ void SM_LoadFonts(void) {
     // [QL] the page's italic is the bold one: css/main.css declares NotoSans italic twice, both
     // times with NotoSans-BoldItalic.ttf, so an em comes out bold as well
     smFonts.sansItalic = trap_R_Font_Register("webui/fonts/NotoSans-BoldItalic.ttf");
+    // [ioquakelive] css/main.css asks for font-family: sans-serif once, in the game info dialog's
+    // h2, and Awesomium on Windows answers with Arial. Arial cannot travel with the game; Liberation
+    // Sans (OFL) has its metrics glyph for glyph, so the line measures the same
+    smFonts.arial = trap_R_Font_Register("fonts/LiberationSans-Regular.ttf");
     if (smFonts.sans < 0 || smFonts.sansBold < 0 || smFonts.handel < 0 || smFonts.handelBold < 0) {
         Com_Printf("^3front end: no web.pak, so pak00's fonts stand in for retail's web UI\n");
         smFonts.sans = smFonts.sansBold = smFonts.handel = smFonts.handelBold = -1;
@@ -373,6 +375,9 @@ static qboolean SM_IsBarlow(int face) {
 }
 
 static float SM_FaceEm(int face) {
+    if (face >= 0 && face == smFonts.arial) {
+        return SM_ARIAL_EM;
+    }
     if (SM_IsBarlow(face)) {
         return SM_BARLOW_EM;
     }
@@ -396,7 +401,9 @@ float SM_Baseline(int font, float size, float lineTop, float lineHeight) {
     int face = SM_Face(font, qfalse);
     float base;
 
-    if (SM_IsBarlow(face)) {
+    if (face >= 0 && face == smFonts.arial) {
+        base = SM_ARIAL_BASE;
+    } else if (SM_IsBarlow(face)) {
         base = SM_BARLOW_BASE;
     } else if (SM_IsWebHandel(face)) {
         base = face == smFonts.handelBold ? SM_WEB_HANDEL_BOLD_BASE : SM_WEB_HANDEL_BASE;
@@ -498,14 +505,14 @@ border, 11 pixel semibold capitals spaced a pixel apart; under the cursor the te
 yellow over #5d5d5d and a #999 border, and a disabled one goes dark.
 ===============
 */
-static const vec4_t smWebButton = SM_RGB(61, 61, 61);
+const vec4_t smWebButton = SM_RGB(61, 61, 61);
 static const vec4_t smWebButtonBorder = SM_RGB(77, 77, 77);
-static const vec4_t smWebButtonHover = SM_RGB(93, 93, 93);
+const vec4_t smWebButtonHover = SM_RGB(93, 93, 93);
 static const vec4_t smWebButtonHoverBorder = SM_RGB(153, 153, 153);
 static const vec4_t smWebButtonOff = SM_RGB(34, 34, 34);
 static const vec4_t smWebButtonOffBorder = SM_RGB(17, 17, 17);
 static const vec4_t smWebButtonOffText = SM_RGB(51, 51, 51);
-static const vec4_t smWebYellow = SM_RGB(247, 209, 0);
+const vec4_t smWebYellow = SM_RGB(247, 209, 0);
 
 void SM_Border(float x, float y, float w, float h, float t, const float* color, const smRect_t* clip) {
     SM_Fill(x, y, w, t, color, clip);
@@ -525,8 +532,23 @@ float SM_WebButtonWidth(const char* label) {
 
 void SM_WebButton(float x, float y, float w, const char* label, qboolean disabled, qboolean over,
                   const smRect_t* clip) {
+    SM_WebButtonPadded(x, y, w, 20, 20, label, disabled, over, clip);
+}
+
+/*
+===============
+SM_WebButtonPadded
+
+A button with other paddings than its 0 20px: the label is centred between them, and one too wide
+for that space starts at the left one and runs out on the right, as a centred line does in a box
+===============
+*/
+void SM_WebButtonPadded(float x, float y, float w, float padLeft, float padRight, const char* label,
+                        qboolean disabled, qboolean over, const smRect_t* clip) {
     char upper[64];
     float baseline = SM_Baseline(FONT_SANS, 11, y, SM_WEB_BUTTON_H);
+    float room = w - 2 - padLeft - padRight;
+    float tw;
 
     Q_strncpyz(upper, label, sizeof(upper));
     Q_strupr(upper);
@@ -536,10 +558,19 @@ void SM_WebButton(float x, float y, float w, const char* label, qboolean disable
     SM_Fill(x, y, w, SM_WEB_BUTTON_H, disabled ? smWebButtonOff : over ? smWebButtonHover : smWebButton, clip);
     SM_Border(x, y, w, SM_WEB_BUTTON_H, 1,
               disabled ? smWebButtonOffBorder : over ? smWebButtonHoverBorder : smWebButtonBorder, clip);
+    tw = SM_SpacedWidth(FONT_SANS, 11, upper, 1.0f);
     if (!clip || SM_TextInside(baseline, 11, clip)) {
-        SM_SpacedText(x + (w - SM_SpacedWidth(FONT_SANS, 11, upper, 1.0f)) * 0.5f, baseline, FONT_SANS, 11,
+        SM_SpacedText(x + 1 + padLeft + (tw < room ? (room - tw) * 0.5f : 0), baseline, FONT_SANS, 11,
                       disabled ? smWebButtonOffText : over ? smWebYellow : smText, upper, 1.0f, qtrue);
     }
+}
+
+int SM_SansSerifFace(void) {
+    return smFonts.arial >= 0 ? smFonts.arial : FONT_SANS;
+}
+
+qboolean SM_Narrow(void) {
+    return (qboolean)(uiInfo.uiDC.glconfig.vidWidth * 6 <= uiInfo.uiDC.glconfig.vidHeight * 9);
 }
 
 /*

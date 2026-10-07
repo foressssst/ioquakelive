@@ -75,6 +75,7 @@ typedef enum {
     BR_HIT_DIALOG,
     BR_HIT_MODAL_CLOSE,
     BR_HIT_MODAL_JOIN,
+    BR_HIT_MODAL_PLAYERS,
     BR_HIT_PASS_FIELD,
     BR_HIT_PASS_OK,
     BR_HIT_PASS_CANCEL
@@ -175,6 +176,7 @@ static struct {
     int modalDetails;
     char modalRules[8192];
     char modalPlayers[4096];
+    float modalPlayersScroll;
     int modalRefresh;
     char password[64];
 } br;
@@ -650,6 +652,7 @@ static void BR_ShowGameInfo(const brServer_t* s) {
     br.modalDetails = UI_DETAILS_LOADING;
     br.modalRules[0] = '\0';
     br.modalPlayers[0] = '\0';
+    br.modalPlayersScroll = 0;
     br.modalRefresh = uiInfo.uiDC.realTime + 5000;
     br.detailsForModal = qtrue;
     if (!trap_LAN_SteamDetails(s->address)) {
@@ -822,6 +825,34 @@ static void BR_Scrollbar(float x, float top, float view, float content, float sc
     SM_Fill(x, thumbY, BR_SCROLLBAR, thumbH,
             (SM_Over(BR_HIT_THUMB, 0) || br.scrollDrag) ? brThumbHover : brThumb, NULL);
     SM_Hit(x, thumbY, BR_SCROLLBAR, thumbH, BR_HIT_THUMB, 0, NULL);
+}
+
+// a short list's own bar (overflow-y: auto): the same thumb, the wheel moves it
+static void BR_ListBar(float x, float top, float view, float content, float scroll) {
+    float thumbH, thumbY;
+    qboolean over;
+
+    if (content <= view) {
+        return;
+    }
+    thumbH = view * view / content;
+    if (thumbH < 16) {
+        thumbH = 16;
+    }
+    thumbY = top + (view - thumbH) * scroll / (content - view);
+    over = smMX >= x && smMX < x + BR_SCROLLBAR && smMY >= thumbY && smMY < thumbY + thumbH;
+    SM_Fill(x, thumbY, BR_SCROLLBAR, thumbH, over ? brThumbHover : brThumb, NULL);
+}
+
+// skeleton's ul: list-style circle inside, a ring 6 across, 1.7 into the item and 13.3 down
+static void BR_Circle(float x, float y, const float* color, const smRect_t* clip) {
+    int i;
+
+    for (i = 0; i < 20; i++) {
+        float a = i * (2 * M_PI / 20);
+
+        SM_Fill(x + 1.7f + cos(a) * 2.5f - 0.5f, y + 13.3f + sin(a) * 2.5f - 0.5f, 1, 1, color, clip);
+    }
 }
 
 static float BR_ClampScroll(float scroll) {
@@ -1423,11 +1454,15 @@ static void BR_DrawDetails(float x, float top, float w) {
         n = 0;
         while (p && *p) {
             const char* next = BR_NextPlayer(p, line, sizeof(line));
+            float ly = y + 15 + n * 27.75f - br.playersScroll;
 
-            BR_TextIn(x + 22.5f, y + 15 + n * 27.75f - br.playersScroll, 24, 15, brInfo, line, qfalse, &clip);
+            // ul.players keeps skeleton's marker, 21 pixels before the name
+            BR_Circle(x + 22.5f, ly, brInfo, &clip);
+            BR_TextIn(x + 43.5f, ly, 24, 15, brInfo, line, qfalse, &clip);
             n++;
             p = next;
         }
+        BR_ListBar(x + w - BR_SCROLLBAR, y, h, content, br.playersScroll);
     }
 }
 
@@ -1469,69 +1504,91 @@ static void BR_DrawMenu(void) {
 BR_DrawGameInfo
 
 The game info dialog, for a screen too narrow for the details column and for the menu's
-"View Game Info": the whole width of the screen, 600 pixels high over the arena's large
-shot, and everything the column shows plus the tags and the ping.
+"View Game Info": ModalStyles.wide, the whole width of the screen and 600 pixels high over the
+arena's large shot. Its paddings of 15% each side win over the padding of 10 that follows them,
+so .widemodal-content takes the middle 70%, and inside it everything the column shows plus the
+tags and the ping. The rules and the players are two of skeleton's half columns; the players
+scroll past 350, and the button comes after them, out of the box when a team match's score
+pushes it down, as in retail.
 ===============
 */
 static void BR_DrawGameInfo(void) {
     const brServer_t* s = &br.modalServer;
     float top = smBottom * 0.5f - 300;
-    float x = 10 + 15, y = top + 10 + 15;
-    float w = smVW - 20 - 30;
+    float left = smVW * 0.15f, width = smVW * 0.7f;
+    float x = left + 15, y = top + 15;
+    float w = width - 30;
     char text[128];
 
     SM_Fill(0, 0, smVW, smBottom, brBlack80, NULL);
     SM_Hit(0, 0, smVW, smBottom, BR_HIT_DIALOG, 0, NULL);
-    SM_Fill(0, top, smVW, 620, brDialog, NULL);
+    SM_Fill(0, top, smVW, 600, brDialog, NULL);
     if (br.modalDetails == UI_DETAILS_DONE) {
-        smRect_t box = SM_R(0, top, smVW, 620);
+        // background-size 100%, centred
+        smRect_t box = SM_R(0, top, smVW, 600);
         float shotH = smVW * 1080.0f / 1920.0f;
 
-        SM_Pic(0, top + 310 - shotH * 0.5f, smVW, shotH, BR_Shot("lg", s->map), &box);
+        SM_Pic(0, top + 300 - shotH * 0.5f, smVW, shotH, BR_Shot("lg", s->map), &box);
     }
-    SM_Fill(10, top + 10, smVW - 20, 600, brBlack80, NULL);
+    SM_Fill(left, top, width, 600, brBlack80, NULL);
 
     if (br.modalDetails != UI_DETAILS_DONE) {
-        BR_Loader(x, y);
-        BR_Button(x + 24, y, "Close", qfalse, BR_HIT_MODAL_CLOSE, 0, NULL);
+        // .centered-loader from the middle of the box, and Close where the text starts
+        BR_Loader(left + width * 0.5f, top + 300);
+        BR_Button(x, y, "Close", qfalse, BR_HIT_MODAL_CLOSE, 0, NULL);
         return;
     }
 
-    // the close cross, and the name and what is played where
+    // the close cross on the right, the name in 36pt and what is played where in 22pt
     SM_TextRaw(x + w - SM_Advance(FONT_SANS, 32, "\xc3\x97", -1), SM_Baseline(FONT_SANS, 32, y, 18.6667f), FONT_SANS,
             32, brYellow, "\xc3\x97", -1, qfalse);
     SM_Hit(x + w - 24, y - 8, 24, 32, BR_HIT_MODAL_CLOSE, 0, NULL);
     BR_TextFit(x, SM_Baseline(FONT_DEFAULT, 48, y, 57.6f), 48, smText, s->name, w - 40, qfalse, FONT_DEFAULT);
     y += 57.6f;
+    // .game-info-modal h2: 22pt in font-family sans-serif, its line 1.25
     Com_sprintf(text, sizeof(text), "%s on %s", s->gametype, BR_MapName(s->map));
-    BR_TextIn(x, y, 39.6f, 29.3333f, smText, text, qfalse, NULL);
-    y += 39.6f;
+    SM_TextRaw(x, SM_Baseline(SM_SansSerifFace(), 29.3333f, y, 36.6667f), SM_SansSerifFace(), 29.3333f, smText, text,
+            -1, qfalse);
+    y += 36.6667f;
     {
         float t = x;
         int i;
 
         for (i = 0; i < s->numTags; i++) {
-            BR_Tag(t + 3, y + 4, s->tags[i], NULL);
+            BR_Tag(t + 3, y + 4.5f, s->tags[i], NULL);
             t += BR_TagWidth(s->tags[i]) + 6;
         }
         y += 24 + 15;
     }
+    // the ping 75 wide with its 2em under it, and the players after a space
     if (s->ping > 0) {
-        SM_Pic(x, y + 4, 16, 16, BR_Quality(s->ping), NULL);
+        SM_Pic(x, y + 1, 16, 16, BR_Quality(s->ping), NULL);
         BR_TextIn(x + 16, y, 24, 15, smText, va(" %ims", s->ping), qfalse, NULL);
     }
     Com_sprintf(text, sizeof(text), "%i / %i players", s->players, s->maxPlayers);
     BR_TextIn(x + 75 + BR_Width(15, " ", qfalse), y, 24, 15, smText, text, qfalse, NULL);
-    y += 24 + 30 + 15;
+    y += 24 + 30;
+
+    // a team match's score, two plain lines: .scorebox is only styled in the column
     {
         int gametype = atoi(Info_ValueForKey(br.modalRules, "g_gametype"));
 
         if (gametype >= 0 && gametype < (int)ARRAY_LEN(brGametypes) && brGametypes[gametype].team) {
-            y += BR_Scorebox(x, y, w, br.modalRules);
+            const char* red = Info_ValueForKey(br.modalRules, "g_redScore");
+            const char* blue = Info_ValueForKey(br.modalRules, "g_blueScore");
+            float baseline = SM_Baseline(FONT_SANS, 15, y, 24);
+
+            SM_TextRaw(x, baseline, FONT_SANS, 15, smText, "Red ", -1, qfalse);
+            SM_TextRaw(x + SM_Advance(FONT_SANS, 15, "Red ", -1), baseline, FONT_SANS, 15, smText, red, -1, qtrue);
+            baseline = SM_Baseline(FONT_SANS, 15, y + 24, 24);
+            SM_TextRaw(x, baseline, FONT_SANS, 15, smText, blue, -1, qtrue);
+            SM_TextRaw(x + SM_AdvanceBold(FONT_SANS, 15, blue, -1, qtrue), baseline, FONT_SANS, 15, smText, " Blue", -1,
+                    qfalse);
+            y += 48;
         }
     }
 
-    // the rules on the left, the players on the right
+    // the rules on the left, the players on the right, 24 high and 10 apart
     {
         char lines[4][64];
         int n = BR_NiceDetails(br.modalRules, lines);
@@ -1539,6 +1596,7 @@ static void BR_DrawGameInfo(void) {
         const char* p = br.modalPlayers;
         char line[128];
         smRect_t clip = SM_R(x + w * 0.52f, y, half, 350);
+        float content;
         int i;
 
         for (i = 0; i < n; i++) {
@@ -1551,17 +1609,32 @@ static void BR_DrawGameInfo(void) {
                         smText, colon + 2, -1, qfalse);
             }
         }
+        for (n = 0; p && *p; p++) {
+            if (*p == '\n') {
+                n++;
+            }
+        }
+        // the last one's margin is inside what scrolls
+        content = n * 34;
+        if (br.modalPlayersScroll > content - 350) {
+            br.modalPlayersScroll = content - 350;
+        }
+        if (br.modalPlayersScroll < 0) {
+            br.modalPlayersScroll = 0;
+        }
+        SM_Hit(clip.x, clip.y, clip.w, clip.h, BR_HIT_MODAL_PLAYERS, 0, NULL);
+        p = br.modalPlayers;
         for (i = 0; p && *p; i++) {
             const char* next = BR_NextPlayer(p, line, sizeof(line));
 
-            BR_TextIn(clip.x, y + i * 34, 24, 15, smText, line, qfalse, &clip);
+            BR_TextIn(clip.x, y + i * 34 - br.modalPlayersScroll, 24, 15, smText, line, qfalse, &clip);
             p = next;
         }
+        BR_ListBar(clip.x + half - BR_SCROLLBAR, y, 350, content, br.modalPlayersScroll);
     }
 
-    // the one button, at the bottom right
-    BR_Button(x + w - BR_ButtonWidth("Join Match"), top + 10 + 600 - 15 - BR_BUTTON_H, "Join Match", qfalse,
-              BR_HIT_MODAL_JOIN, 0, NULL);
+    // the one button, on the right after the two columns (350 and the list's margin)
+    BR_Button(x + w - BR_ButtonWidth("Join Match"), y + 365, "Join Match", qfalse, BR_HIT_MODAL_JOIN, 0, NULL);
 }
 
 // the password dialog: a thin band in the middle of the screen with the field and its buttons
@@ -1595,7 +1668,7 @@ static void BR_DrawPassword(void) {
 
 // the details column only fits a screen wider than 3:2 (the page's max-aspect-ratio: 9/6)
 static qboolean BR_Wide(void) {
-    return (qboolean)(uiInfo.uiDC.glconfig.vidWidth * 6 > uiInfo.uiDC.glconfig.vidHeight * 9);
+    return !SM_Narrow();
 }
 
 static void BR_DrawPage(void) {
@@ -1889,6 +1962,12 @@ qboolean UI_Browser_HandleKey(int key) {
             br.modal = BR_MODAL_NONE;
         } else if (key == K_MOUSE1) {
             BR_ModalClick(SM_HitAt(smMX, smMY));
+        } else if (key == K_MWHEELUP || key == K_MWHEELDOWN) {
+            hit = SM_HitAt(smMX, smMY);
+
+            if (hit && hit->type == BR_HIT_MODAL_PLAYERS) {
+                br.modalPlayersScroll += (key == K_MWHEELUP ? -3 : 3) * BR_ROW_STEP * 0.5f;
+            }
         }
         return qtrue;
     }

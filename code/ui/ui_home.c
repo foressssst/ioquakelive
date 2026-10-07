@@ -619,12 +619,12 @@ Lobby switch and the list under it; and the legal notice the first time the menu
 ===============================================================================
 */
 
-#define HM_ITEM_FONT 32.0f    // 24pt
-#define HM_ITEM_PAD 16.0f     // padding: 0.5em
-#define HM_ITEM_LINE 51.2f    // skeleton's line-height, 1.6
+#define HM_ITEM_FONT (SM_Narrow() ? 24.0f : 32.0f)  // 24pt, 18pt on a screen no wider than 3:2
+#define HM_ITEM_PAD (HM_ITEM_FONT * 0.5f)             // padding: 0.5em
+#define HM_ITEM_LINE (HM_ITEM_FONT * 1.6f)            // skeleton's line-height
 #define HM_ITEM_H (HM_ITEM_LINE + 2.0f * HM_ITEM_PAD)
 #define HM_ITEM_BORDER 3.0f
-#define HM_BACK_GAP 32.0f     // a.back: margin-top 1em
+#define HM_BACK_GAP HM_ITEM_FONT  // a.back: margin-top 1em
 #define HM_LOGO_GAP 4.5f      // the logo is inline: its line runs 4.5px past it, measured
 #define HM_CARD_TOP 75.0f
 #define HM_CARD_H 75.0f

@@ -40,8 +40,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define SM_MAX_HITS 384
 #define SM_MAX_LINES 8
 
-#define SM_VIEW_H 1080.0f      // the page zooms by innerHeight / 1080
-#define SM_MIN_VIEW_W 1500.0f  // narrower screens scale it down to keep it whole
+#define SM_VIEW_H 1080.0f  // the page zooms by innerHeight / 1080, whatever the width
 
 // A CSS font-size is the em, and fontstash sizes a font by ascender minus
 // descender. These are that height per em and, for the baseline,
@@ -57,6 +56,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define SM_WEB_HANDEL_BASE (704.0f / 2048.0f)
 #define SM_WEB_HANDEL_BOLD_EM (2289.0f / 2048.0f)  // and bold
 #define SM_WEB_HANDEL_BOLD_BASE (694.5f / 2048.0f)
+#define SM_ARIAL_EM (2288.0f / 2048.0f)  // pak01's Liberation Sans, Arial's metrics
+#define SM_ARIAL_BASE (710.0f / 2048.0f)
 #define SM_AWESOME_EM 1.0f                 // web.pak's FontAwesome
 #define SM_AWESOME_BASE (640.0f / 1792.0f)
 
@@ -236,6 +237,15 @@ float SM_ButtonWidth(const char* text, float height);
 float SM_WebButtonWidth(const char* label);
 void SM_WebButton(float x, float y, float w, const char* label, qboolean disabled, qboolean over,
                   const smRect_t* clip);
+void SM_WebButtonPadded(float x, float y, float w, float padLeft, float padRight, const char* label,
+                        qboolean disabled, qboolean over, const smRect_t* clip);
+extern const vec4_t smWebButton;  // the button's background, and under the mouse
+extern const vec4_t smWebButtonHover;
+extern const vec4_t smWebYellow;  // a button's label under the mouse
+// [QL] the page's @media (max-aspect-ratio: 9/6): a screen no wider than 3:2
+qboolean SM_Narrow(void);
+// the page's generic sans-serif, which retail's Awesomium drew in Arial
+int SM_SansSerifFace(void);
 void SM_Border(float x, float y, float w, float h, float t, const float* color, const smRect_t* clip);
 void SM_Button(float x, float y, float w, float h, const char* text, int style, qboolean over);
 void SM_Switch(float x, float y, qboolean on, qboolean over);
