@@ -3660,25 +3660,6 @@ static void FS_ReorderPurePaks(void) {
 		p_insert_index = &(*p_insert_index)->next;
 	}
 
-	// [ioquakelive] the engine's own paks keep their place over the server's too, see
-	// FS_IsEnginePak. No server lists them, so pak00 went in front of pak01 in every pure
-	// game and its menus came back: "Main Menu" from a match opened pak00's empty main
-	p_previous = p_insert_index;
-	for (s = *p_previous; s; s = *p_previous) {
-		if (!FS_IsEnginePak(s->pack)) {
-			p_previous = &s->next;
-			continue;
-		}
-		if (p_previous != p_insert_index) {
-			*p_previous = s->next;
-			s->next = *p_insert_index;
-			*p_insert_index = s;
-		} else {
-			p_previous = &s->next;
-		}
-		p_insert_index = &s->next;
-	}
-
 	for (i = 0; i < fs_numServerPaks; i++) {
 		p_previous = p_insert_index;  // track the pointer-to-current-item
 		for (s = *p_insert_index; s; s = s->next) {

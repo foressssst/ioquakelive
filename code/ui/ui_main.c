@@ -822,6 +822,26 @@ void UI_ParseMenu(const char* menuFile) {
     trap_PC_FreeSource(handle);
 }
 
+/*
+[ioquakelive] the menus of pak00's lists that pak01 replaces. They live under their own names:
+over a pure server or in a demo pak00 is read first, and a file of the same name in pak01 lost
+to it -- "Main Menu" from a match opened pak00's empty main
+*/
+static const char* UI_MenuFile(const char* file) {
+    static const char* const replaced[][2] = {
+        {"ui/main.menu", "ui/ioql/main.menu"},
+        {"ui/demo.menu", "ui/ioql/demo.menu"},
+    };
+    int i;
+
+    for (i = 0; i < (int)ARRAY_LEN(replaced); i++) {
+        if (!Q_stricmp(file, replaced[i][0])) {
+            return replaced[i][1];
+        }
+    }
+    return file;
+}
+
 qboolean Load_Menu(int handle) {
     pc_token_t token;
 
@@ -843,7 +863,7 @@ qboolean Load_Menu(int handle) {
             return qtrue;
         }
 
-        UI_ParseMenu(token.string);
+        UI_ParseMenu(UI_MenuFile(token.string));
     }
     return qfalse;
 }
