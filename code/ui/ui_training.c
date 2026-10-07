@@ -271,13 +271,17 @@ static void TR_DrawSection(int i, float x, float y, float w, const smRect_t* cli
 
     // the h2 in Handel Gothic and yellow, the h3 under it in bold, both centred
     if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 36, ty, 45), 36, clip)) {
+        SM_SetSpacing(SM_SPACING_H1);
         SM_Text(x + (w - SM_Advance(FONT_DEFAULT, 36, card->title, -1)) * 0.5f, SM_Baseline(FONT_DEFAULT, 36, ty, 45),
                 FONT_DEFAULT, 36, trYellow, card->title, -1, qfalse);
+        SM_SetSpacing(0);
     }
     ty += 45;
     if (SM_TextInside(SM_Baseline(FONT_SANS, 18.6667f, ty, 24.3f), 18.6667f, clip)) {
+        SM_SetSpacing(SM_SPACING_H1);
         SM_Text(x + (w - SM_AdvanceBold(FONT_SANS, 18.6667f, card->subtitle, -1, qtrue)) * 0.5f,
                 SM_Baseline(FONT_SANS, 18.6667f, ty, 24.3f), FONT_SANS, 18.6667f, smText, card->subtitle, -1, qtrue);
+        SM_SetSpacing(0);
     }
     ty += 24.3f + 20;
     TR_DrawParagraph(x + 15, ty + 15, w - 30, card->text, clip);
@@ -391,8 +395,10 @@ void UI_Training_Paint(void) {
     sy = y + TR_SECTION_H + margin;
     SM_Fill(left, sy, HM_CONTAINER_W, TR_HEADING_H, trBlack80, &clip);
     if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 32.0f, sy + 8.0f, 38.4f), 32.0f, &clip)) {
+        SM_SetSpacing(SM_SPACING_H1);
         SM_Text(left + 6.4f, SM_Baseline(FONT_DEFAULT, 32.0f, sy + 8.0f, 38.4f), FONT_DEFAULT, 32.0f, smText,
                 "Advanced Training", -1, qfalse);
+        SM_SetSpacing(0);
     }
 
     UI_Home_Banner();

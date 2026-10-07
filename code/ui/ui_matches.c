@@ -860,8 +860,10 @@ static void MT_DrawWidget(const mtMatch_t* m, float x, float y, const smRect_t* 
     }
 
     // .server: the map, when and how long, the server, and why it ended
+    SM_SetSpacing(SM_SPACING_H1);
     MT_Line(sx, y, 30, FONT_DEFAULT, 24, mtYellow, MT_MapName(m->map), qfalse, clip);
     sw = SM_Advance(FONT_DEFAULT, 24, MT_MapName(m->map), -1);
+    SM_SetSpacing(0);
     MT_Date(m->timePlayed, date, sizeof(date));
     MT_Duration(m->gameLength, length, sizeof(length));
     Com_sprintf(line, sizeof(line), "%s (%s)", date, length);
@@ -884,11 +886,15 @@ static void MT_DrawWidget(const mtMatch_t* m, float x, float y, const smRect_t* 
         float mx = px, my = y + 93.5f;
         int i;
 
+        SM_SetSpacing(SM_SPACING_H1);
         MT_Line(px, y, 30, FONT_DEFAULT, 24, mtYellow, "Personal", qfalse, clip);
+        SM_SetSpacing(0);
         if (!Q_stricmp(m->gameType, "RACE")) {
             char best[32];
 
+            SM_SetSpacing(SM_SPACING_H1);
             MT_Line(px, y + 30, 20.8f, FONT_SANS, 16, mtGrey, "Best Time", qtrue, clip);
+            SM_SetSpacing(0);
             if (m->score == -1) {
                 Q_strncpyz(best, "DNF", sizeof(best));
             } else if (m->score / 60000) {
@@ -899,10 +905,14 @@ static void MT_DrawWidget(const mtMatch_t* m, float x, float y, const smRect_t* 
             MT_Line(px, y + 53.8f, 36, FONT_SANS, 26.667f, mtLight, best, qtrue, clip);
             return;
         }
+        SM_SetSpacing(SM_SPACING_H1);
         MT_Line(px, y + 30, 20.8f, FONT_SANS, 16, mtGrey, "Score", qtrue, clip);
+        SM_SetSpacing(0);
         Com_sprintf(line, sizeof(line), "%i", m->score);
         MT_Line(px, y + 53.8f, 36, FONT_SANS, 26.667f, mtLight, line, qtrue, clip);
+        SM_SetSpacing(SM_SPACING_H1);
         MT_Line(px + 75, y + 30, 20.8f, FONT_SANS, 16, mtGrey, "KDR", qtrue, clip);
+        SM_SetSpacing(0);
         Com_sprintf(line, sizeof(line), "%.2f", m->deaths ? (double)m->kills / m->deaths : (double)m->kills);
         MT_Line(px + 75, y + 53.8f, 36, FONT_SANS, 26.667f, mtLight, line, qtrue, clip);
 
@@ -934,7 +944,9 @@ static void MT_DrawList(float left, float top, float width, const smRect_t* clip
     float y;
     int i;
 
+    SM_SetSpacing(SM_SPACING_H1);
     MT_Line(left + 11.4f, top + 8, 38.4f, FONT_DEFAULT, 32, smText, "My Matches", qfalse, clip);
+    SM_SetSpacing(0);
     y = top + 54.4f;
     for (i = 0; i < mt.count; i++) {
         SM_Fill(left + 5, y, width - 10, 150, (i & 1) ? mtEven : mtOdd, clip);

@@ -231,7 +231,9 @@ void UI_Replays_Paint(void) {
         float b = SM_Baseline(FONT_DEFAULT, 32, top + 8, 38.4f);
 
         if (SM_TextInside(b, 32, &clip)) {
+            SM_SetSpacing(SM_SPACING_H1);
             SM_Text(left + 11.4f, b, FONT_DEFAULT, 32, smText, "Replays", -1, qfalse);
+            SM_SetSpacing(0);
         }
     }
     y = top + 54.4f;

@@ -1200,7 +1200,9 @@ static void ST_DrawModelChooser(void) {
         SM_Hit(cx, cy, 62, 62, ST_HIT_MODELITEM, k, NULL);
     }
 
+    SM_SetSpacing(SM_SPACING_H1);
     SM_Text(paneX + 6.4f, SM_Baseline(FONT_DEFAULT, 32, c.y + 8, 38.4f), FONT_DEFAULT, 32, smText, title, -1, qfalse);
+    SM_SetSpacing(0);
     if (skins) {
         for (k = 0; k < count; k++) {
             const char* value = ST_PickSkinValue(k);
@@ -1322,8 +1324,10 @@ static void ST_DrawRGBPicker(void) {
 
     st.rgbPanel = SM_R(c.x - 15, c.y - 15, c.w + 30, c.h + 30);
     SM_Hit(st.rgbPanel.x, st.rgbPanel.y, st.rgbPanel.w, st.rgbPanel.h, ST_HIT_RGBPANEL, 0, NULL);
+    SM_SetSpacing(SM_SPACING_H1);
     SM_Text(c.x + 6.4f, SM_Baseline(FONT_DEFAULT, 32, c.y + 8, 38.4f), FONT_DEFAULT, 32, smText, "Choose color", -1,
             qfalse);
+    SM_SetSpacing(0);
     for (k = 0; k < 3; k++) {
         vec4_t tint = {0, 0, 0, 1};
         float sy = y + 5 + k * 57.0f;
@@ -1372,7 +1376,9 @@ static void ST_DrawRow(int i, float y, const smRect_t* clip) {
         float hb = SM_Baseline(FONT_DEFAULT, 32, y + h - 8 - 38.4f, 38.4f);
 
         if (SM_TextInside(hb, 32, clip)) {
+            SM_SetSpacing(SM_SPACING_H1);
             SM_Text(x + 6.4f, hb, FONT_DEFAULT, 32, smText, cv->title, -1, qfalse);
+            SM_SetSpacing(0);
         }
         return;
     }
@@ -1477,8 +1483,10 @@ static void ST_DrawHeader(float y, const smRect_t* clip) {
 
     SM_Fill(left, y, HM_CONTAINER_W - STR_BAR, STR_TITLE_H, strBlack80, clip);
     if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 32, y + 8, 38.4f), 32, clip)) {
+        SM_SetSpacing(SM_SPACING_H1);
         SM_Text(left + 6.4f, SM_Baseline(FONT_DEFAULT, 32, y + 8, 38.4f), FONT_DEFAULT, 32, smText, "Game Settings", -1,
                 qfalse);
+        SM_SetSpacing(0);
     }
 
     SM_Fill(left, navY, HM_CONTAINER_W - STR_BAR, STR_NAV_H, strBlack80, clip);
@@ -1634,8 +1642,11 @@ static void ST_DrawBindDialog(void) {
         const char* text = lines[k];
         float lh = sizes[k] * 1.5f;
 
+        // the h1 and the h2 in skeleton's letter-spacing
+        SM_SetSpacing(k < 2 ? SM_SPACING_H1 : 0);
         SM_Text(cx + (cw - SM_Advance(fonts[k], sizes[k], text, -1)) * 0.5f, SM_Baseline(fonts[k], sizes[k], y, lh),
                 fonts[k], sizes[k], colors[k], text, -1, qfalse);
+        SM_SetSpacing(0);
         y += lh + 12;
     }
 }

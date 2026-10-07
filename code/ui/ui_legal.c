@@ -262,7 +262,7 @@ The page
 */
 
 // a paragraph's runs laid out in lines as wide as the box; returns its height
-static float LG_Paragraph(const lgBlock_t* b, float x, float y, float width, qboolean draw, const smRect_t* clip) {
+static float LG_Lines(const lgBlock_t* b, float x, float y, float width, qboolean draw, const smRect_t* clip) {
     typedef struct {
         const char* text;
         int len;
@@ -355,6 +355,16 @@ static float LG_Paragraph(const lgBlock_t* b, float x, float y, float width, qbo
         }
     }
     return lines * lineH;
+}
+
+// an h1 in skeleton's letter-spacing, measured and drawn
+static float LG_Paragraph(const lgBlock_t* b, float x, float y, float width, qboolean draw, const smRect_t* clip) {
+    float h;
+
+    SM_SetSpacing(b->type == LG_BLOCK_H1 ? SM_SPACING_H1 : 0);
+    h = LG_Lines(b, x, y, width, draw, clip);
+    SM_SetSpacing(0);
+    return h;
 }
 
 void UI_Legal_Open(void) {

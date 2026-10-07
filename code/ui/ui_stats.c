@@ -384,7 +384,10 @@ static float ST_DrawBasic(float x0, float y0, float innerW, const smRect_t* clip
         // componentDidUpdate shrinks a long number 4px a letter past ten
         int len = strlen(values[i]);
         float size = len > 10 ? 36.0f - 4.0f * (len - 10) : 36.0f;
-        float tw = SM_Advance(FONT_SANS, size, values[i], -1);
+        float tw;
+
+        SM_SetSpacing(SM_SPACING_H1);  // the h1 and the h2 of the card, both in skeleton's letter-spacing
+        tw = SM_Advance(FONT_SANS, size, values[i], -1);
 
         SM_Fill(cx, y0, ST_CARD_W, ST_CARD_H, stCard, clip);
         if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 21.333f, y0 + 5.3f, 25.6f), 21.333f, clip)) {
@@ -395,6 +398,7 @@ static float ST_DrawBasic(float x0, float y0, float innerW, const smRect_t* clip
             SM_Text(cx + (ST_CARD_W - tw) * 0.5f, SM_Baseline(FONT_SANS, size, y0 + 50.9f, 45.0f), FONT_SANS, size,
                     stYellow, values[i], SM_Fit(FONT_SANS, size, values[i], ST_CARD_W), qfalse);
         }
+        SM_SetSpacing(0);
     }
     y = y0 + ST_CARD_H + 30.0f;  // the container's margin-bottom, 2em
 
@@ -419,8 +423,10 @@ static float ST_DrawBasic(float x0, float y0, float innerW, const smRect_t* clip
     }
 
     if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 32, y + 8, 38.4f), 32, clip)) {
+        SM_SetSpacing(SM_SPACING_H1);
         SM_Text(x0 + 6.4f, SM_Baseline(FONT_DEFAULT, 32, y + 8, 38.4f), FONT_DEFAULT, 32, smText, "Weapons", -1,
                 qfalse);
+        SM_SetSpacing(0);
     }
     by = y + 54.4f;
     bx = x0;
@@ -467,8 +473,10 @@ static float ST_DrawBasic(float x0, float y0, float innerW, const smRect_t* clip
             my = y + 79.4f;
         }
         if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 32, y + 8, 38.4f), 32, clip)) {
+            SM_SetSpacing(SM_SPACING_H1);
             SM_Text(mx + 6.4f, SM_Baseline(FONT_DEFAULT, 32, y + 8, 38.4f), FONT_DEFAULT, 32, smText, "Other Deaths", -1,
                     qfalse);
+            SM_SetSpacing(0);
         }
         for (i = 0; i < ST_NUM_MODS; i++) {
             char number[16];
@@ -530,8 +538,10 @@ static float ST_DrawMedals(float x0, float y0, float innerW, const smRect_t* cli
 
         // the article: the name in yellow, 18pt, and the description wrapped beside the float
         if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 24, my + 16, 28.8f), 24, clip)) {
+            SM_SetSpacing(SM_SPACING_H1);
             SM_Text(mx + 10 + 4.8f, SM_Baseline(FONT_DEFAULT, 24, my + 16, 28.8f), FONT_DEFAULT, 24, stYellow,
                     stMedals[i].name, -1, qfalse);
+            SM_SetSpacing(0);
         }
         lines = SM_Wrap(FONT_SANS, 12, stMedals[i].desc, ST_MEDAL_W - 20 - 64 - 10, starts, lens);
         for (k = 0; k < lines; k++) {
@@ -573,10 +583,12 @@ static void ST_DrawTitle(float left, float top, float width, const smRect_t* cli
         }
     }
     ST_StripColors(st.data.name, name, sizeof(name));
+    SM_SetSpacing(SM_SPACING_H1);
     nx += SM_Advance(FONT_DEFAULT, 32, " ", -1);
     if (name[0] && SM_TextInside(baseline, 32, clip)) {
         SM_Text(nx, baseline, FONT_DEFAULT, 32, smText, name, SM_Fit(FONT_DEFAULT, 32, name, left + width - nx), qfalse);
     }
+    SM_SetSpacing(0);
 }
 
 static void ST_Request(void) {

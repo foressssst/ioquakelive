@@ -810,7 +810,9 @@ static void SM_CardCentered(float x, float w, float lineTop, float lineHeight, c
 // button.card: #2C2929, #3C3939 under the cursor, with its yellow h2
 static void SM_DrawCardBack(float x, float y, float w, const char* title, int hit) {
     SM_Fill(x, y, w, SM_CARD_H, SM_Over(hit, 0) ? smrCardHover : smrCard, NULL);
+    SM_SetSpacing(SM_SPACING_H1);
     SM_Text(x + 10.6667f, SM_Baseline(FONT_SANS, 24, y + 12, 30), FONT_SANS, 24, smrYellow, title, -1, qfalse);
+    SM_SetSpacing(0);
     SM_Hit(x, y, w, SM_CARD_H, hit, 0, NULL);
 }
 
@@ -1021,8 +1023,10 @@ static void SM_DrawPage(void) {
     SM_Layout();
 
     SM_Fill(page, top, HM_CONTAINER_W, bottom - top, smrBlack80, NULL);
+    SM_SetSpacing(SM_SPACING_H1);
     SM_Text(smL.x + 6.4f, SM_Baseline(FONT_DEFAULT, 32, top + 8, 38.4f), FONT_DEFAULT, 32, smText, "Start Match", -1,
             qfalse);
+    SM_SetSpacing(0);
     y = top + 54.4f;
 
     // the two cards

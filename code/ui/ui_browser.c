@@ -1116,7 +1116,9 @@ static void BR_DrawList(float left, float top, float width, float height) {
         float baseline = SM_Baseline(FONT_DEFAULT, 32.0f, y + 8.0f, 38.4f);
 
         if (SM_TextInside(baseline, 32, &clip)) {
+            SM_SetSpacing(SM_SPACING_H1);
             SM_TextRaw(left + 6.4f, baseline, FONT_DEFAULT, 32.0f, smText, "Match Browser", -1, qfalse);
+            SM_SetSpacing(0);
         }
     }
 
@@ -1376,11 +1378,15 @@ static void BR_DrawDetails(float x, float top, float w) {
 
             SM_Fill(x, y + BR_DETAILS_MAP_H - 93 + i, w, 3, shade, NULL);
         }
+        // the h1 and the h4, in skeleton's letter-spacing
+        SM_SetSpacing(SM_SPACING_H1);
         BR_TextFit(x + 7.5f, SM_Baseline(FONT_DEFAULT, 24, y + BR_DETAILS_MAP_H - 93 + 7.5f, 28.8f), 24, brWhite,
                    s->name, w - 15, qfalse, FONT_DEFAULT);
+        SM_SetSpacing(SM_SPACING_H4);
         Com_sprintf(text, sizeof(text), "%s: %s", s->gametype, BR_MapName(s->map));
         BR_TextFit(x + 7.5f, SM_Baseline(FONT_SANS, 18.6667f, y + BR_DETAILS_MAP_H - 93 + 36.3f, 25.2f), 18.6667f,
                    brWhite, text, w - 15, qfalse, FONT_SANS);
+        SM_SetSpacing(0);
         Com_sprintf(text, sizeof(text), "%i / %i players", s->players, s->maxPlayers);
         BR_TextIn(x + 7.5f, y + BR_DETAILS_MAP_H - 93 + 61.5f, 24, 15, brWhite, text, qfalse, NULL);
         y += BR_DETAILS_MAP_H;
@@ -1543,12 +1549,14 @@ static void BR_DrawGameInfo(void) {
     SM_TextRaw(x + w - SM_Advance(FONT_SANS, 32, "\xc3\x97", -1), SM_Baseline(FONT_SANS, 32, y, 18.6667f), FONT_SANS,
             32, brYellow, "\xc3\x97", -1, qfalse);
     SM_Hit(x + w - 24, y - 8, 24, 32, BR_HIT_MODAL_CLOSE, 0, NULL);
+    SM_SetSpacing(SM_SPACING_H1);
     BR_TextFit(x, SM_Baseline(FONT_DEFAULT, 48, y, 57.6f), 48, smText, s->name, w - 40, qfalse, FONT_DEFAULT);
     y += 57.6f;
     // .game-info-modal h2: 22pt in font-family sans-serif, its line 1.25
     Com_sprintf(text, sizeof(text), "%s on %s", s->gametype, BR_MapName(s->map));
     SM_TextRaw(x, SM_Baseline(SM_SansSerifFace(), 29.3333f, y, 36.6667f), SM_SansSerifFace(), 29.3333f, smText, text,
             -1, qfalse);
+    SM_SetSpacing(0);
     y += 36.6667f;
     {
         float t = x;
@@ -1649,8 +1657,10 @@ static void BR_DrawPassword(void) {
     SM_Hit(0, 0, smVW, smBottom, BR_HIT_DIALOG, 0, NULL);
     SM_Fill(0, top, smVW, 320, brDialog, NULL);
     SM_Fill(10, top + 10, smVW - 20, 300, brBlack80, NULL);
+    SM_SetSpacing(SM_SPACING_H1);
     SM_TextRaw(x + 6.4f, SM_Baseline(FONT_DEFAULT, 32, y + 8, 38.4f), FONT_DEFAULT, 32, smText, "Match Requires Password",
             -1, qfalse);
+    SM_SetSpacing(0);
     y += 8 + 38.4f + 8;
     BR_TextIn(x, y, 24, 15, smText, "This match is password protected. Enter password to continue.", qfalse, NULL);
     y += 24 + 15 + 24;

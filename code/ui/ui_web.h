@@ -246,6 +246,12 @@ extern const vec4_t smWebYellow;  // a button's label under the mouse
 qboolean SM_Narrow(void);
 // the page's generic sans-serif, which retail's Awesomium drew in Arial
 int SM_SansSerifFace(void);
+// [QL] skeleton.css sets its headings tighter, in letter-spacing after every character:
+// SM_SetSpacing makes the measuring and the drawing that follow keep it, until it is set to 0
+#define SM_SPACING_H1 -1.0f  // h1, h2 and h3: -0.1rem
+#define SM_SPACING_H4 -0.8f  // -0.08rem
+#define SM_SPACING_H5 -0.5f  // -0.05rem
+void SM_SetSpacing(float spacing);
 void SM_Border(float x, float y, float w, float h, float t, const float* color, const smRect_t* clip);
 void SM_Button(float x, float y, float w, float h, const char* text, int style, qboolean over);
 void SM_Switch(float x, float y, qboolean on, qboolean over);

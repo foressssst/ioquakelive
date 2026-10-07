@@ -54,11 +54,13 @@ float smTop;
 float smVW;
 float smBottom;
 float smMX, smMY;
+static float smSpacing;  // the letter-spacing in force, see SM_SetSpacing
 
 void SM_Frame(void) {
     float w = (float)uiInfo.uiDC.glconfig.vidWidth;
     float h = (float)uiInfo.uiDC.glconfig.vidHeight;
 
+    smSpacing = 0;  // whatever a page left set
     smScale = h / SM_VIEW_H;
     smVW = w / smScale;
     smTop = (h - SM_VIEW_H * smScale) * 0.5f;
@@ -418,6 +420,28 @@ qboolean SM_TextInside(float baseline, float size, const smRect_t* clip) {
     return baseline - size * 1.07f >= clip->y - 1.0f && baseline + size * 0.3f <= clip->y + clip->h + 1.0f;
 }
 
+void SM_SetSpacing(float spacing) {
+    smSpacing = spacing;
+}
+
+// the bytes of the UTF-8 character that starts here
+static int SM_CharBytes(const char* s) {
+    unsigned char c = (unsigned char)*s;
+
+    return c < 0xc0 ? 1 : c < 0xe0 ? 2 : c < 0xf0 ? 3 : 4;
+}
+
+static int SM_CountChars(const char* text, int len) {
+    int n = 0;
+    int i = 0;
+
+    while (i < len && text[i]) {
+        i += SM_CharBytes(text + i);
+        n++;
+    }
+    return n;
+}
+
 /*
 ===============
 SM_AdvanceFace
@@ -446,7 +470,58 @@ static float SM_AdvanceFace(int face, float size, const char* text, int len) {
     buf[len + 1] = '\0';
     trap_R_Font_TextExtents(buf, 0, face, px, -1, withBar);
     trap_R_Font_TextExtents("|", 0, face, px, -1, bar);
-    return (withBar[2] - bar[2]) / smScale;
+    return (withBar[2] - bar[2]) / smScale + smSpacing * SM_CountChars(text, len);
+}
+
+/*
+===============
+SM_DrawFace
+
+The drawing under SM_Text and SM_TextRaw. With a letter-spacing in force each character goes on
+its own, the spacing after it; pak00's faces without a bold get theirs from a second pass
+===============
+*/
+static void SM_DrawFace(float x, float baseline, int face, float size, const float* color, const char* text, int limit,
+                        qboolean bold, int flags) {
+    float px = size * SM_FaceEm(face) * smScale;
+    int sy = (int)(smTop + baseline * smScale + 0.5f);
+    int shift = (int)(smScale + 0.5f);
+    int len = (int)strlen(text);
+    int i = 0;
+
+    trap_R_SetColor(color);
+    if (!smSpacing) {
+        int sx = (int)(x * smScale + 0.5f);
+
+        trap_R_Font_DrawString(sx, sy, text, face, px, limit, NULL, flags);
+        // pak00 has no bold weight: a second pass a pixel to the right stands in for it
+        if (bold && !SM_HasBold(face)) {
+            trap_R_Font_DrawString(sx + (shift < 1 ? 1 : shift), sy, text, face, px, limit, NULL, flags);
+        }
+        trap_R_SetColor(NULL);
+        return;
+    }
+    if (limit >= 0 && limit < len) {
+        len = limit;
+    }
+    while (i < len) {
+        int n = SM_CharBytes(text + i);
+        int sx = (int)(x * smScale + 0.5f);
+        float spacing = smSpacing;
+
+        if (i + n > len) {
+            n = len - i;
+        }
+        trap_R_Font_DrawString(sx, sy, text + i, face, px, n, NULL, flags);
+        if (bold && !SM_HasBold(face)) {
+            trap_R_Font_DrawString(sx + (shift < 1 ? 1 : shift), sy, text + i, face, px, n, NULL, flags);
+        }
+        smSpacing = 0;
+        x += SM_AdvanceFace(face, size, text + i, n) + spacing;
+        smSpacing = spacing;
+        i += n;
+    }
+    trap_R_SetColor(NULL);
 }
 
 // the face SM_Text draws without bold: Barlow's titles are its strong weight either way, and
@@ -477,23 +552,10 @@ int SM_Fit(int font, float size, const char* text, float width) {
 
 void SM_Text(float x, float baseline, int font, float size, const float* color, const char* text, int limit,
              qboolean bold) {
-    int face = SM_Face(font, bold);
-    float px = size * SM_FaceEm(face) * smScale;
-    int sx = (int)(x * smScale + 0.5f);
-    int sy = (int)(smTop + baseline * smScale + 0.5f);
-
     if (!text || !text[0] || limit == 0) {
         return;
     }
-    trap_R_SetColor(color);
-    trap_R_Font_DrawString(sx, sy, text, face, px, limit, NULL, 0);
-    // pak00 has no bold weight: a second pass a pixel to the right stands in for it
-    if (bold && !SM_HasBold(face)) {
-        int shift = (int)(smScale + 0.5f);
-
-        trap_R_Font_DrawString(sx + (shift < 1 ? 1 : shift), sy, text, face, px, limit, NULL, 0);
-    }
-    trap_R_SetColor(NULL);
+    SM_DrawFace(x, baseline, SM_Face(font, bold), size, color, text, limit, bold, 0);
 }
 
 /*
@@ -607,22 +669,10 @@ float SM_AdvanceRaw(int font, float size, const char* text, int len, qboolean bo
 
 void SM_TextRaw(float x, float baseline, int font, float size, const float* color, const char* text, int limit,
                 qboolean bold) {
-    int face = SM_Face(font, bold);
-    float px = size * SM_FaceEm(face) * smScale;
-    int sx = (int)(x * smScale + 0.5f);
-    int sy = (int)(smTop + baseline * smScale + 0.5f);
-
     if (!text || !text[0] || limit == 0) {
         return;
     }
-    trap_R_SetColor(color);
-    trap_R_Font_DrawString(sx, sy, text, face, px, limit, NULL, TEXT_LITERAL);
-    if (bold && !SM_HasBold(face)) {
-        int shift = (int)(smScale + 0.5f);
-
-        trap_R_Font_DrawString(sx + (shift < 1 ? 1 : shift), sy, text, face, px, limit, NULL, TEXT_LITERAL);
-    }
-    trap_R_SetColor(NULL);
+    SM_DrawFace(x, baseline, SM_Face(font, bold), size, color, text, limit, bold, TEXT_LITERAL);
 }
 
 /*
