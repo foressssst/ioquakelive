@@ -3556,11 +3556,12 @@ static void UI_RunMenuScript(char** args) {
             Menus_CloseAll();
         } else if (Q_stricmp(name, "voteMap") == 0) {
             if (ui_currentNetMap.integer >= 0 && ui_currentNetMap.integer < uiInfo.mapCount) {
-                // [QL] uix86.dll UI_RunScript voteMap @0x1000b0e0 appends the gametype short
-                // name from ui_actualNetGametype (empty when -1).
+                // [QL] uix86.dll voteMap @0x1000c2f4 appends the gametype short name from
+                // ui_cvGameType (0x10741c60), the callvote menu's own choice, which opening the
+                // menu sets to -1: nothing then, and the server keeps the match's own
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("callvote map %s %s\n",
                     uiInfo.mapList[ui_currentNetMap.integer].mapLoadName,
-                    (ui_actualNetGameType.integer == -1) ? "" : UI_GetGameTypeString(ui_actualNetGameType.integer)));
+                    (ui_cvGameType.integer == -1) ? "" : UI_GetGameTypeString(ui_cvGameType.integer)));
             }
         } else if (Q_stricmp(name, "voteKick") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
