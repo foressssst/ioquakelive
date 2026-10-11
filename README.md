@@ -1,35 +1,132 @@
 # ioquakelive
 
-ioquakelive es una implementación del **Quake Live ORIGINAL** construida sobre [ioquake3](https://ioquake3.org/), un motor de código abierto. El objetivo de este proyecto es tener un cliente y un servidor de código abierto que funcionen igual que la versión final de Quake Live (build 1069), posterior a eso implementar mejoras y calidad de vida, esto puede ser el primer paso para un mod grande, para otro fork o para versiones mejores que esta a futuro.
+ioquakelive es el **Quake Live original** hecho de nuevo sobre [ioquake3](https://ioquake3.org/), un motor de código abierto. La meta es tener un cliente y un servidor abiertos que funcionen igual que la última versión de Quake Live (build 1069), y después sumarle mejoras y calidad de vida. También puede ser el primer paso para un mod grande, para otro fork o para versiones mejores a futuro.
 
-## Por qué?
+## ¿Por qué?
 
-El proyecto partio con [Thomas Jones](https://github.com/tjone270/ioquakelive), el cual logro deducir el protocolo y la estructura de los módulos, y lograr que un cliente y un servidor de Quake Live compilaran sobre ioquake3, este repositorio sigue desde ahí.
+El proyecto lo empezó [Thomas Jones](https://github.com/tjone270/ioquakelive). Él descifró el protocolo y la estructura de los módulos, y logró que un cliente y un servidor de Quake Live compilaran sobre ioquake3. Este repositorio sigue desde ahí.
 
 ## Cómo probarlo
 
-IOQUAKELIVE SOLO FUNCIONARA si tienes una copia legitima de [Quake Live](https://store.steampowered.com/app/282440) en Steam, ioquakelive tomara los archivos correspondientes de tu instalación.
+**Solo funciona si tienes Quake Live comprado en Steam.** ioquakelive no trae los archivos del juego, los saca de tu instalación.
 
-1. Abre Steam con la cuenta que tiene Quake Live. La lista de servidores, los amigos y el ingreso a los servidores pasan por Steam.
-2. Baja la última versión desde [Releases](https://github.com/foressssst/ioquakelive/releases). En Windows es `ioquakelive-windows-x64.zip`.
-3. Descomprime el zip en una carpeta cualquiera.
-4. Abre `ioquakelive.x86_64.exe`. El otro ejecutable, `ioquakelive-vulkan.x86_64.exe`, es el mismo juego dibujando con Vulkan.
+1. Abre Steam con la cuenta que tiene Quake Live. La lista de servidores, los amigos y la entrada a los servidores pasan por Steam.
+2. Baja la última versión desde [Releases](https://github.com/foressssst/ioquakelive/releases). Para Windows es `ioquakelive-windows-x64.zip`.
+3. Descomprímela en cualquier carpeta.
+4. Abre `ioquakelive.x86_64.exe`. Para jugar con Vulkan abre `ioquakelive-vulkan.x86_64.exe`, que es el mismo juego.
 
-Cosas que conviene saber:
+Para tener en cuenta:
 
-- La primera vez, en Windows, el juego busca Quake Live en tu biblioteca de Steam y copia `pak00.pk3` a su carpeta `baseq3`. Si no lo encuentra, cópialo a mano desde `steamapps\common\Quake Live\baseq3`.
-- Los ejecutables no están firmados, así que Windows Defender a veces bloquea la descarga o marca el juego con una detección terminada en `!ml`. Es un falso positivo. Se permite desde Seguridad de Windows, en Historial de protección.
-- La configuración, las demos y las capturas se guardan en la carpeta `baseq3` del juego. No se escribe nada en tu perfil de Windows.
-- El juego no se actualiza solo. Para pasar a una versión nueva, baja el zip y descomprímelo encima.
-- Las versiones marcadas como pre-release traen sólo Windows. Las releases completas traen también Linux y macOS.
+- La primera vez, en Windows, el juego busca Quake Live en tu biblioteca de Steam y copia `pak00.pk3` a su carpeta `baseq3`. Si no lo encuentra, cópialo tú desde `steamapps\common\Quake Live\baseq3`.
+- Los ejecutables no van firmados, así que Windows Defender a veces bloquea la descarga o avisa de algo terminado en `!ml`. Es un falso positivo. Se permite en Seguridad de Windows, en Historial de protección.
+- Tu configuración, tus demos y tus capturas quedan en la carpeta `baseq3` del juego, no en tu perfil de Windows.
+- No se actualiza solo. Para pasar a otra versión, baja el zip nuevo y descomprímelo encima. Tu configuración no se toca.
+- Las pre-releases traen solo Windows. Linux y macOS salen en las releases completas.
 
-Si algo falla, abre un issue en este repositorio. Sirve saber qué versión es y qué estabas haciendo. La versión aparece en la consola, que se abre con la tecla que está a la izquierda del 1.
+Si algo falla, abre un issue acá. Cuenta qué versión tienes y qué estabas haciendo. La versión sale en la consola, que se abre con la tecla que está a la izquierda del 1.
 
-## Estado
+## Lo nuevo
 
-El cliente (`ioquakelive`) y el servidor dedicado (`ioqlds`) compilan y funcionan. Con el cliente se juega en los servidores de Quake Live. Los tres módulos del juego (`qagame`, `cgame` y `ui`) están portados a partir de los binarios de la build 1069, y el motor tiene la integración con Steam: ingreso a los servidores, lista de servidores, Workshop, voz, amigos y estadísticas.
+Lo más reciente, de la 0.3.4 a la 0.3.13. El detalle de cada versión está en [Releases](https://github.com/foressssst/ioquakelive/releases).
 
-Como medida gruesa, esta tabla cuenta cuántos nombres de cvars y de archivos que usa cada módulo original aparecen también en este código:
+- **Menús iguales a los del original.** La portada, la lista de servidores, Settings y el resto se comparan contra la web de Quake Live y se ajustan al píxel. En 4:3 y 5:4 la interfaz ya escala como en el original.
+- **Settings de retail**, con las opciones nuevas de ioquakelive puestas en su lugar. Ahora también se abre bien dentro de una partida.
+- **Workshop como en Quake Live**, en el cliente y en el servidor. `ioqlds` baja lo que pide `workshop.txt` antes de arrancar.
+- **Sala de tracking en el Training Center.** Un bot que esquiva, se acerca, se aleja y cambia de ritmo según cuánto le pegas, para practicar la LG.
+- **Vulkan más estable.** Se arregló el menú en negro y el corte al pasar por un teleport.
+- **Servidor lleno.** Si el servidor tiene otros configurados, a los jugadores de ioquakelive los manda solos al que tenga lugar (`sv_fullRedirect` en el servidor, `cl_followRedirect` en el cliente).
+- **El servidor aguanta más gente** sin caerse, y los hitsounds ya no se cortan con el servidor lleno.
+- Arreglos varios: la escopeta en servidores de retail, `cl_timeNudge`, las sombras de los jugadores, el locutor, el alt-tab, el voto de mapa desde el menú y el Main Menu dentro de una partida.
+
+## Compatibilidad
+
+### Sistemas
+
+| Sistema | Estado |
+|---|---|
+| Windows de 64 bits | La versión principal y la más probada |
+| Windows de 32 bits | Funciona |
+| Linux x86_64 | Compila y sale en las releases completas |
+| Linux ARM64 | Compila; el servidor está probado en una máquina ARM |
+| Windows ARM64 y macOS con Apple Silicon | Compilan y se empaquetan, pero no se han probado en un equipo real |
+
+### Con el Quake Live original
+
+- Juegas en los mismos servidores de Quake Live, incluidos los que usan minqlx.
+- Las demos sirven para los dos lados: las del original se ven en ioquakelive y las grabadas acá se ven en el original.
+- El Workshop es el mismo. Antes de entrar a un servidor, el cliente baja los mapas que le faltan.
+- Las cvars y los binds son los de Quake Live, así que tu config sirve si la copias a `baseq3`.
+- Falta probar que el cliente del Quake Live original entre a un servidor `ioqlds`.
+
+### Video
+
+- Tres renderers: OpenGL, que viene por defecto, Vulkan y OpenGL 2 de respaldo.
+- FSR en Settings > Video, solo con OpenGL.
+- Reflex en tarjetas NVIDIA y Anti-Lag 2 en AMD, con Vulkan. Reflex está medido; Anti-Lag 2 todavía no se probó en una tarjeta AMD.
+- Para G-SYNC y FreeSync, `com_maxfpsVRR 1` deja los fps justo bajo la frecuencia del monitor.
+- Pantallas anchas, 4:3 y 5:4.
+
+## Lo que agrega sobre el original
+
+**Rendimiento y video**
+
+- Los mapas cargan más rápido, porque las imágenes y los sonidos se leen en varios hilos.
+- Pantalla completa sin bordes con `r_fullscreen 2`. La ventana cambia de tamaño sin reiniciar el video.
+- `r_picmipExplosions 1` deja las explosiones de cohete y granada con picmip, como en Quake 3.
+- Versiones para ARM64 en Windows y Linux.
+
+**HUD y juego**
+
+- Medallas y chat animados, con los cuadros de CPMA. El chat animado se apaga con `ch_animateScroll 0`.
+- `ch_rewardY`, `ch_fragMessageY` y `ch_fragMessageScale` mueven la medalla y el mensaje de frag.
+- `s_playSoundVolume`, de 0 a 2, ajusta el volumen de los sonidos que mandan los servidores.
+- Emojis a color en el chat, la consola y los nombres.
+- Los carteles de cada servidor se quedan en ese servidor. En el original quedan pegados al pasar a otro.
+- Una sala de tracking en el Training Center.
+
+**Demos y espectador**
+
+- `rewind`, `fastforward` y `seekdemo` para moverte por una demo, y `fragforward` para saltar al siguiente frag.
+- `cg_xray` muestra a los jugadores a través de las paredes, en demos y como espectador.
+
+**Consola**
+
+- `help <comando o cvar>` explica qué hace, y `searchconsole` busca texto en la consola.
+- `frametimes` mide el tiempo real entre cuadros, e `inputrate` cuántos datos manda tu mouse por segundo.
+- La consola se anima al abrirse. `con_animate 0` la deja quieta.
+- En los menús, la consola y las demos se usa la flecha del sistema.
+
+## Lo que falta
+
+- Parte de la IA de los bots no está revisada contra el original: los roles de equipo en CTF y A&D, y las órdenes por chat de voz.
+- La página escondida "???" del menú principal.
+- Las capturas de pantalla no quedan asociadas a su partida. Las demos sí.
+- Algunos mensajes de error y de sistema todavía son los de la primera versión del fork, no los del original.
+
+Reportados y en revisión:
+
+- Cortes cortos después de un shuffle en algunos servidores.
+- Una demo del mapa 13night que cierra el juego.
+
+## Servidor dedicado
+
+`ioqlds` viene en su propio zip, con un `server.cfg` y un `access.txt` de ejemplo en `baseq3`. Igual que el cliente, necesita el `pak00.pk3` de Quake Live en esa carpeta. Si actualizas descomprimiendo encima, guarda antes tu `server.cfg` y tu `access.txt`, porque el zip trae los de ejemplo.
+
+```
+ioqlds +set dedicated 2
+```
+
+`dedicated 1` es para red local y `dedicated 2` para internet. Al arrancar lee `baseq3/server.cfg`, igual que el del original.
+
+Los mapas del Workshop se piden en `baseq3/workshop.txt`, un número de ítem por línea. Las líneas que empiezan con `#` son comentarios. El servidor los baja antes de cargar el primer mapa y los anuncia a los clientes, que los bajan solos al entrar. `sv_workshopFile` cambia el nombre de ese archivo, y `steam_downloadugc <id>` baja un ítem con el servidor andando.
+
+## Para desarrolladores
+
+### Estado
+
+Los tres módulos del juego (`qagame`, `cgame` y `ui`) están portados desde los binarios de la build 1069. Cada función portada lleva anotadas las direcciones del binario contra las que se revisó en Ghidra.
+
+Para tener una idea del avance, esta tabla cuenta cuántos nombres de cvars y de archivos del módulo original aparecen también acá. No dice si se comportan igual; eso se revisa en el binario.
 
 | Módulo | Cvars | Archivos |
 |---|---|---|
@@ -37,61 +134,9 @@ Como medida gruesa, esta tabla cuenta cuántos nombres de cvars y de archivos qu
 | `cgame` | 364 de 365 | 389 de 427 |
 | `ui` | 202 de 211 | 119 de 120 |
 
-Lo que falta son, casi todos, nombres `.tga` que acá se cargan con otra extensión y cvars que quedaron de Quake 3 o que sólo cambian en las mayúsculas. La cuenta se hace con herramientas que no están en este repositorio.
+Lo que falta son casi todos archivos `.tga` que acá se cargan con otra extensión, y cvars que quedaron de Quake 3 o que solo cambian en mayúsculas. Hay además un detalle interno: `vmCvar_t` tiene un campo menos que en el original. Solo importaría para cargar un módulo original y no afecta al juego.
 
-Una comparación así no dice si el comportamiento es el mismo. Eso se comprueba leyendo los binarios en Ghidra, y las direcciones revisadas quedan anotadas en el código, al lado de cada función portada.
-
-### Qué funciona
-
-- Jugar en servidores de Quake Live con este cliente y levantar un servidor propio con `ioqlds`.
-- El protocolo de red de Quake Live.
-- Todos los modos de juego: FFA, Duel, TDM, CA, CTF, 1FCTF, Harvester, FT, DOM, A&D, Race y RR.
-- Físicas, armas, ítems, calentamiento, votaciones y compensación de lag como en el original.
-- HUD, marcadores, locutor, medallas, números de daño y mensajes de muerte.
-- Los menús de Quake Live, rehechos dentro del juego: portada, Start Match, lista de servidores, Training, Career Stats, Recent Matches, Replays y las 220 opciones de Settings.
-- Steam: ingreso a los servidores, lista de servidores, amigos, avatares, voz, descargas del Workshop y estadísticas.
-- Demos en los dos sentidos: las del original se reproducen acá y las grabadas acá se reproducen en el original.
-- Bots con la IA de Quake Live.
-- El Crash Course completo.
-- En el servidor: baneos y permisos por Steam ID, y estadísticas y rcon por ZeroMQ.
-
-### Qué agrega sobre el original
-
-- Tres renderers: OpenGL clásico, que es el que viene por defecto, Vulkan y OpenGL 2. Los dos primeros vienen de [Quake3e](https://github.com/ec-/Quake3e).
-- Los mapas cargan más rápido, porque las imágenes y los sonidos se decodifican en varios hilos.
-- Pantalla completa sin bordes, y la ventana cambia de tamaño sin reiniciar el video.
-- En Vulkan, baja latencia con Reflex (NVIDIA) y Anti-Lag 2 (AMD).
-- Versiones para Windows ARM64 y Linux ARM64, y Vulkan en macOS.
-- Emojis a color en el chat, la consola y los nombres.
-- Medallas animadas y un chat que aparece y se va con animación, tomados de CPMA. El chat animado se apaga con `ch_animateScroll 0`.
-- `cg_xray`: en demos y como espectador, muestra a los jugadores a través de las paredes.
-- Los carteles propios de cada servidor se ven sólo en ese servidor. El original los deja pegados al pasar a otro.
-
-### Qué falta
-
-- Parte de la IA de los bots no está comparada con el original: los papeles de equipo en CTF y A&D, y las órdenes por chat de voz.
-- El servidor dedicado no lee `workshop.txt`. La cvar `sv_workshopFile` existe pero no hace nada.
-- La página escondida "???" del menú principal.
-- Las capturas de pantalla no quedan asociadas a su partida. Las demos sí.
-- `vmCvar_t` tiene un campo menos que en el original. Sólo importaría para cargar un módulo original, y no afecta al juego.
-
-Y esto está hecho pero sin probar:
-
-- Que un cliente del Quake Live original entre a un servidor `ioqlds`.
-- Reflex y Anti-Lag 2 medidos en una placa que los tenga.
-- macOS y Windows ARM64 en ejecución. Compilan y se empaquetan.
-
-## Servidor dedicado
-
-`ioqlds` viene en su propio zip, con un `server.cfg` y un `access.txt` de ejemplo en `baseq3`. Igual que el cliente, necesita el `pak00.pk3` de Quake Live en esa carpeta.
-
-```
-ioqlds +set dedicated 2
-```
-
-`dedicated 1` es para red local y `dedicated 2` para internet. El servidor lee `baseq3/server.cfg` al arrancar, igual que el del original.
-
-## Diferencias contra ioquake3
+### Diferencias con ioquake3
 
 | Área | ioquake3 (Quake 3) | ioquakelive (Quake Live) |
 |------|--------------------|--------------------------|
@@ -100,17 +145,20 @@ ioqlds +set dedicated 2
 | Modos de juego | FFA, Tourney, TDM, CTF | además CA, FT, Race, DOM, A&D, Harvester, 1FCTF, RR y los de Team Arena |
 | Físicas | control de aire de Q3 | además control de aire de CPM, doble salto, deslizamiento agachado y auto-hop |
 | Texto | fuentes de mapa de bits, por escala | por índice de fuente, con tipografías TrueType dibujadas con fontstash |
-| Panorámico | sólo estirado | 4:3 con anclaje a la izquierda, al centro o a la derecha |
+| Panorámico | solo estirado | 4:3 anclado a la izquierda, al centro o a la derecha |
 | Llaves y puertas | no existen | ítems `IT_KEY` y `func_door` con llave |
 | Estadísticas | marcador básico | precisión por arma y los marcadores de Quake Live |
-| Menús | archivos `.menu` de Q3 | los menús web de Quake Live rehechos dentro del juego |
+| Menús | archivos `.menu` de Q3 | los menús web de Quake Live hechos de nuevo dentro del juego |
 | Cuenta y servidores | master server propio | Steam |
 
-## Avance por área
+### Avance por área
 
-**Hecho** quiere decir portado y revisado contra el binario. **Parcial**, que funciona con un faltante que se nombra. **No aplica**, que el original tampoco lo tiene.
+**Hecho**: portado y revisado contra el binario. **Parcial**: funciona, y lo que falta está anotado. **No aplica**: el original tampoco lo tiene.
 
-### Protocolo de red
+<details>
+<summary>Ver las tablas</summary>
+
+#### Protocolo de red
 
 | Área | Estado | Notas |
 |------|--------|-------|
@@ -119,11 +167,11 @@ ioqlds +set dedicated 2
 | entityStateFields | Hecho | 58 campos reordenados, gravedad como int32 |
 | playerStateFields | Hecho | 58 campos, `pm_flags` de 24 bits, `weaponPrimary` y 9 campos nuevos |
 | Deltas de usercmd_t | Hecho | offsets 21 a 25 reordenados y dos campos byte nuevos |
-| Configstrings | Hecho | al conectar sólo se reenvían las que cambiaron |
+| Configstrings | Hecho | al conectar solo se reenvían las que cambiaron |
 | Cifrado XOR del netchan | Hecho | la clave sale de `challenge ^ serverId ^ messageAcknowledge` |
 | Huffman fuera de banda | Hecho | los paquetes de conexión se comprimen desde el byte 12 |
 
-### Motor: cliente
+#### Motor: cliente
 
 | Área | Estado | Notas |
 |------|--------|-------|
@@ -135,15 +183,15 @@ ioqlds +set dedicated 2
 | Carga en hilos | Hecho | imágenes y sonidos en paralelo; campgrounds carga en cerca de 1 s |
 | Pantalla completa sin bordes | Hecho | `r_fullscreen 2` |
 | Demos | Hecho | compatibles con el original en los dos sentidos |
-| Descargas | Hecho | por el Workshop de Steam: el cliente baja lo que le falta antes de entrar |
-| Carteles del servidor | Hecho | los packs del Workshop que los cambian valen sólo en ese servidor |
+| Workshop | Hecho | el cliente baja lo que le falta antes de entrar, como el original |
+| Carteles del servidor | Hecho | los packs del Workshop que los cambian valen solo en ese servidor |
 | Voz | Hecho | por la red entre pares de Steam; el módulo de juego decide quién oye a quién |
 | Autocompletado de consola | Hecho | `callvote`, mapas, factories, nombres de jugadores y comandos del cgame |
 | Capturas | Hecho | la ruta y el nombre del original, levelshot incluido |
 | Modo seguro | Hecho | tras un cierre anormal ofrece arrancar con los ajustes de sistema por defecto |
 | Cliente de 64 bits | Hecho | `Release\|x64` es la compilación principal |
 
-### Motor: servidor
+#### Motor: servidor
 
 | Área | Estado | Notas |
 |------|--------|-------|
@@ -152,14 +200,16 @@ ioqlds +set dedicated 2
 | Autenticación de Steam | Hecho | valida el ticket con `BeginAuthSession`; sin Steam en el servidor se entra igual, para red local |
 | Carga del módulo de juego | Hecho | DLL nativa con la tabla `gameImport_t` |
 | Baneos | Hecho | por Steam ID desde `access.txt`; ban, tempban y unban escriben ahí |
-| Estadísticas y rcon por ZeroMQ | Hecho | las cvars `zmq_*` del original; un rcon sin contraseña sólo acepta conexiones locales |
+| Estadísticas y rcon por ZeroMQ | Hecho | las cvars `zmq_*` del original; un rcon sin contraseña solo acepta conexiones locales |
 | Lista de servidores | Hecho | la da Steam, como en el original |
 | Latido al master | Hecho | el game server de Steam; `sv_master 0` lo saca de la lista |
-| Ítems del Workshop | Parcial | anuncia los que tiene montados; no lee `workshop.txt` |
+| Workshop | Hecho | baja lo de `workshop.txt` antes de arrancar y lo anuncia a los clientes |
+| `sv_fps` | Hecho | fijo en 40, como el original |
 | Limitación de tasa | Hecho | la de `sv_floodProtect` y el contador de userinfo del módulo de juego |
+| Servidor lleno | Hecho | `sv_fullRedirect` manda a los jugadores de ioquakelive a otro servidor con lugar |
 | Linux ARM | Hecho | compilado y corriendo en aarch64 |
 
-### cgame
+#### cgame
 
 | Área | Estado | Notas |
 |------|--------|-------|
@@ -172,8 +222,9 @@ ioqlds +set dedicated 2
 | Locutor, medallas y rondas | Hecho | las seis medallas animadas usan 24 cuadros de CPMA |
 | Números de daño | Hecho | `CG_DrawDamagePlums` completo |
 | Mira | Hecho | incluida la regla de no dibujarla en los múltiplos de 30 |
-| Mensajes de muerte | Hecho | atacante, víctima e icono del arma |
+| Mensajes de muerte | Hecho | los clásicos del original: atacante, víctima e icono del arma |
 | Predicción y pmove | Hecho | el pmove reescrito desde el binario |
+| `cl_timeNudge` | Hecho | con la extrapolación de jugadores y el adelanto de proyectiles del original |
 | Clan tags | Hecho | la clave `cn` con sus 26 colores |
 | Chispas de impacto, estilos de arma, zoom y viñeta | Hecho | con sus cvars |
 | Congelación | Hecho | los tres shaders de hielo según avanza el descongelado, y los pedazos con su estela |
@@ -182,29 +233,31 @@ ioqlds +set dedicated 2
 | Cámara del intermedio | Hecho | incluido el caso de un mapa sin `info_player_intermission` |
 | Cuerpo del jugador seguido | Hecho | al morir sin desintegrarse, el espectador ve el cuerpo |
 
-### Menús (módulo ui)
+#### Menús (módulo ui)
 
 | Área | Estado | Notas |
 |------|--------|-------|
 | Exports nuevos | Hecho | `UI_REGISTER_CVARS`, `UI_CHECK_ACTIVE_MENU`, `UI_WALK_MENUS`, `UI_DRAW_ADVERTISEMENT` |
 | Fuentes por índice | Hecho | todos los puntos de dibujo pasan `item->fontIndex` |
-| Archivos de menú | Hecho | se pueden reemplazar desde `pak01.pk3` |
-| Portada | Hecho | menú en columna, arte de fondo, créditos y la lista de amigos |
+| Archivos de menú | Hecho | los de ioquakelive van en `pak01.pk3`, en `ui/ioql/`, y valen también en servidores puros |
+| Medidas | Hecho | se escala por el alto de la pantalla, como la web del original, con sus reglas para 4:3 y 5:4 |
+| Portada | Hecho | menú en columna, arte de fondo, avisos legales y la lista de amigos; dentro de una partida, con la barra verde |
 | Start Match | Hecho | factories, selector de mapa y bots |
-| Lista de servidores | Hecho | desde Steam, con columnas que ordenan, filtros y la imagen del mapa |
-| Settings | Hecho | 220 opciones en el orden del original |
-| Training | Hecho | Crash Course, Accelerate y Elevate |
+| Lista de servidores | Hecho | desde Steam, con columnas que ordenan, filtros, la imagen del mapa y la ventana de info de partida |
+| Settings | Hecho | 220 opciones en el orden del original, también dentro de una partida |
+| Training | Hecho | Crash Course, Accelerate y Elevate; aparte, la sala de tracking de ioquakelive |
 | Replays | Hecho | cada demo grabada en una partida aparece como esa partida |
 | Career Stats | Hecho | Statistics y Medals, leídas de las estadísticas de Steam |
 | Recent Matches | Hecho | el servidor manda el reporte de la partida por Steam y el cliente lo guarda |
 | Avisos legales | Hecho | el texto se lee del `web.pak` del jugador |
 | Marcadores (`.menu`) | Hecho | los de equipo y los individuales |
 | Acciones de menú | Hecho | las 13: `clientViewProfile`, `modPlayer`, `putspec`, `banPlayer` y el resto |
+| Votaciones desde el menú | Hecho | el voto de mapa usa el modo elegido en el menú, como el original |
 | Perfil del jugador | Hecho | Career Stats, avatar de Steam y el perfil en la superposición de Steam |
 | Amigos | Hecho | la lista de Steam con los colores y el menú del original: Join Match, Send Message, Send Invite y demás |
 | Voto de mapa al terminar | Hecho | necesita un `mappool.txt`, igual que en el original |
 
-### Módulo de juego (qagame)
+#### Módulo de juego (qagame)
 
 | Área | Estado | Notas |
 |------|--------|-------|
@@ -229,14 +282,15 @@ ioqlds +set dedicated 2
 | Comandos de administración | Hecho | privilegios y comandos reescritos contra el binario |
 | Entidades por archivo | Hecho | `sv_altEntDir` lee `<mapa>.ent`; `sv_dumpEntities` las escribe |
 
-### Renderer
+#### Renderer
 
 | Área | Estado | Notas |
 |------|--------|-------|
 | OpenGL clásico (`opengl1`) | Hecho | el de Quake3e con lo de QL portado; viene por defecto |
 | Vulkan | Hecho | el de Quake3e, con el bloom y la corrección de color de QL |
 | OpenGL 2 (`opengl2`) | Hecho | el de ioquake3, de respaldo |
-| Reflex y Anti-Lag 2 | Parcial | en Vulkan, con `r_lowLatency`; falta medirlos en hardware |
+| Reflex y Anti-Lag 2 | Parcial | en Vulkan, con `r_lowLatency`; Reflex medido en NVIDIA, Anti-Lag 2 sin probar en AMD |
+| FSR | Hecho | `r_fsr`, solo en OpenGL clásico |
 | Shaders de QL | Hecho | las 134 palabras del parser del original |
 | Shaders repetidos | Hecho | gana la primera definición, como en el original |
 | Carteles | Hecho | el renderer agrega la superficie de cada cartel del mapa |
@@ -246,7 +300,9 @@ ioqlds +set dedicated 2
 | Texturas en hilos | Hecho | JPEG, TGA y PNG |
 | Cuadros en cola | Hecho | `r_maxQueuedFrames`, 0 por defecto |
 
-## Compilar
+</details>
+
+### Compilar
 
 Salen dos programas: `ioquakelive`, el cliente, e `ioqlds`, el servidor dedicado. Antes de compilar hay que traer los submódulos:
 
@@ -254,7 +310,7 @@ Salen dos programas: `ioquakelive`, el cliente, e `ioqlds`, el servidor dedicado
 git submodule update --init --recursive
 ```
 
-### Windows
+#### Windows
 
 Con Visual Studio 2026 o sus Build Tools (toolset v145):
 
@@ -264,11 +320,11 @@ MSBuild ioquakelive.sln -p:Configuration=Release -p:Platform=x64
 MSBuild ioqlds.vcxproj  -p:Configuration=Release -p:Platform=x64
 ```
 
-El servidor dedicado es un proyecto aparte de la solución, por eso lleva su propia línea. Todo queda en `build\Release\x64\`.
+El servidor dedicado es un proyecto aparte de la solución, por eso va en su propia línea. Todo queda en `build\Release\x64\`.
 
-Las plataformas son `x64`, `Win32` y `ARM64`. Para ARM64 hay que correr antes `code\tools\Build-SDL3.ps1`. Después de cambiar un struct en un header conviene compilar con `-t:Rebuild`, porque la compilación incremental a veces deja objetos viejos.
+Las plataformas son `x64`, `Win32` y `ARM64`. Para ARM64 hay que correr antes `code\tools\Build-SDL3.ps1`. Si cambias un struct en un header, compila con `-t:Rebuild`: la compilación incremental a veces deja objetos viejos.
 
-### Linux y macOS
+#### Linux y macOS
 
 ```
 make release
@@ -276,9 +332,9 @@ make release
 
 Es el Makefile de ioquake3. Necesita SDL3 instalado y visible para `pkg-config`. Los binarios son `ioquakelive`, `ioquakelive-vulkan` e `ioqlds`.
 
-## Cómo se publica una versión
+### Cómo se publica una versión
 
-Las versiones las compila y las publica el CI de GitHub según el mensaje del commit:
+El CI de GitHub compila y publica según el mensaje del commit:
 
 ```
 git commit -m "release: 1.0.0"
@@ -286,11 +342,11 @@ git push origin main
 ```
 
 - `release: X` compila todas las plataformas, crea el tag `vX` y publica la release.
-- `prerelease: X` compila sólo Windows x86 y x64 y lo publica como pre-release. Es para parches chicos.
+- `prerelease: X` compila solo Windows x86 y x64 y lo publica como pre-release. Es para parches chicos.
 
-En los dos casos `PRODUCT_VERSION`, en `code/qcommon/q_shared.h`, tiene que decir la misma versión.
+En los dos casos, `PRODUCT_VERSION` en `code/qcommon/q_shared.h` tiene que decir la misma versión.
 
-El cliente y el servidor son dos descargas:
+El cliente y el servidor se bajan por separado:
 
 ```
 ioquakelive-windows-x64.zip     el cliente: motor, renderers, módulos de juego y baseq3/
@@ -309,11 +365,11 @@ ioqlds-linux-arm64.zip
 
 Ninguno trae `pak00.pk3`. GitHub adjunta a cada release el código fuente del tag, que es lo que pide la GPL.
 
-El paquete de macOS se firma y se notariza sólo si los secretos de Apple están cargados en el repositorio. Sin ellos se publica sin firmar.
+El paquete de macOS se firma y se notariza solo si los secretos de Apple están cargados en el repositorio. Si no, se publica sin firmar.
 
-`pak01.pk3` lleva además arte que este repositorio no puede incluir: la tipografía Handel Gothic Ex, los cuadros de las medallas y del globo de chat de CPMA, y el fondo y los logos del menú. El CI lo saca de un repositorio privado. Una compilación sin eso funciona, con las medallas quietas y otra tipografía en algunos textos.
+`pak01.pk3` lleva además arte que este repositorio no puede incluir: la tipografía Handel Gothic Ex, los cuadros de las medallas y del globo de chat de CPMA, y el fondo y los logos del menú. El CI lo saca de un repositorio privado. Sin eso el juego compila y funciona igual, con las medallas quietas y otra tipografía en algunos textos.
 
-## Carpetas
+### Carpetas
 
 ```
 code/
@@ -331,7 +387,7 @@ code/
   SDL3/            submódulo
   tools/           scripts de compilación y de empaquetado
 misc/msvc/         solución y proyectos de Visual Studio
-content/pak01/     lo que agrega ioquakelive a los archivos del juego → pak01.pk3
+content/pak01/     lo que agrega ioquakelive a los archivos del juego, que termina en pak01.pk3
 content/server/    server.cfg y access.txt de ejemplo, para el paquete de ioqlds
 ```
 
@@ -341,12 +397,12 @@ content/server/    server.cfg y access.txt de ejemplo, para el paquete de ioqlds
 - [ioquake3](https://github.com/ioquake/ioq3) es el motor de base.
 - [Quake3e](https://github.com/ec-/Quake3e) aporta los renderers de OpenGL clásico y de Vulkan.
 - De CPMA vienen los cuadros de las medallas animadas y del globo de chat.
-- Los emojis son las imágenes de Noto Emoji.
+- Los emojis son los de Noto Emoji, y el texto en `sans-serif` de los menús usa Liberation Sans.
 - También se usan SDL3, MoltenVK en macOS, y fontstash con stb_truetype para el texto.
 
 Quake Live y sus archivos son propiedad de id Software. Este repositorio no los incluye ni los redistribuye.
 
-El código se distribuye bajo la GPL v2, igual que ioquake3. El texto está en `COPYING.txt`. Abajo se conserva el README original de ioquake3.
+El código se distribuye bajo la GPL v2, igual que ioquake3. El texto está en `COPYING.txt`. Abajo queda el README original de ioquake3.
 
 ---
 
