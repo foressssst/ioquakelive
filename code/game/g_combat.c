@@ -397,6 +397,49 @@ void PlayerAwardEF(gentity_t* self, int persIdx, int efBit) {
     self->client->rewardTime = level.time + REWARD_SPRITE_TIME;
 }
 
+static void G_AnnouncePowerupCarrierKill(gentity_t* attacker, gentity_t* victim) {
+    gclient_t* client = victim->client;
+    const char* color = "^7";
+    const char* powerup;
+
+    if (!attacker->client || !client || attacker == victim || OnSameTeam(attacker, victim)) {
+        return;
+    }
+    if (client->ps.powerups[PW_REDFLAG] || client->ps.powerups[PW_BLUEFLAG] || client->ps.powerups[PW_NEUTRALFLAG]) {
+        return;
+    }
+    if (g_gametype.integer == GT_HARVESTER && (client->ps.generic1 & 0x3f)) {
+        return;
+    }
+    switch (g_gametype.integer) {
+        case GT_CTF:
+        case GT_1FCTF:
+        case GT_OBELISK:
+        case GT_HARVESTER:
+        case GT_DOMINATION:
+        case GT_AD:
+            break;
+        default:
+            color = "^3";
+            break;
+    }
+    if (client->ps.powerups[PW_QUAD]) {
+        powerup = "Quad Damage";
+    } else if (client->ps.powerups[PW_BATTLESUIT]) {
+        powerup = "Battle Suit";
+    } else if (client->ps.powerups[PW_REGEN]) {
+        powerup = "Regeneration";
+    } else if (client->ps.powerups[PW_HASTE]) {
+        powerup = "Haste";
+    } else if (client->ps.powerups[PW_INVIS]) {
+        powerup = "Invisibility";
+    } else {
+        return;
+    }
+    trap_SendServerCommand(-1, va("print \"%s%s killed the %s carrier!^7\n\"", attacker->client->pers.netname, color,
+                                  powerup));
+}
+
 void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int damage, int meansOfDeath) {
     gentity_t* ent;
     gentity_t* te;
@@ -484,6 +527,9 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int 
     G_LogPrintf("Kill: %i %i %i: %s killed %s by %s\n",
                 killer, self->s.number, meansOfDeath, killerName,
                 self->client->pers.netname, obit);
+    if (attacker) {
+        G_AnnouncePowerupCarrierKill(attacker, self);
+    }
 
     if (!level.scoringDisabled) {
         ent = G_TempEntity(self->r.currentOrigin, EV_OBITUARY);
@@ -1600,6 +1646,14 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
     }
 }
 
+static void G_DebugTraceShot(int entityNum) {
+    gclient_t* client = g_entities[entityNum].client;
+
+    if (client && client->ps.pm_type == PM_SPECTATOR) {
+        trap_SendServerCommand(-1, "print \"A spectator has been shot!\n\"");
+    }
+}
+
 qboolean CanDamage(gentity_t* targ, vec3_t origin) {
     vec3_t dest;
     trace_t tr;
@@ -1613,6 +1667,8 @@ qboolean CanDamage(gentity_t* targ, vec3_t origin) {
 
     if (tr.fraction == 1.0 || tr.entityNum == targ->s.number)
         return qtrue;
+    if (g_enableDebugTrace.integer)
+        G_DebugTraceShot(tr.entityNum);
 
     VectorCopy(midpoint, dest);
     dest[0] += 15;
@@ -1621,6 +1677,8 @@ qboolean CanDamage(gentity_t* targ, vec3_t origin) {
 
     if (tr.fraction == 1.0)
         return qtrue;
+    if (g_enableDebugTrace.integer)
+        G_DebugTraceShot(tr.entityNum);
 
     VectorCopy(midpoint, dest);
     dest[0] += 15;
@@ -1629,6 +1687,8 @@ qboolean CanDamage(gentity_t* targ, vec3_t origin) {
 
     if (tr.fraction == 1.0)
         return qtrue;
+    if (g_enableDebugTrace.integer)
+        G_DebugTraceShot(tr.entityNum);
 
     VectorCopy(midpoint, dest);
     dest[0] -= 15;
@@ -1637,6 +1697,8 @@ qboolean CanDamage(gentity_t* targ, vec3_t origin) {
 
     if (tr.fraction == 1.0)
         return qtrue;
+    if (g_enableDebugTrace.integer)
+        G_DebugTraceShot(tr.entityNum);
 
     VectorCopy(midpoint, dest);
     dest[0] -= 15;
@@ -1645,6 +1707,8 @@ qboolean CanDamage(gentity_t* targ, vec3_t origin) {
 
     if (tr.fraction == 1.0)
         return qtrue;
+    if (g_enableDebugTrace.integer)
+        G_DebugTraceShot(tr.entityNum);
 
     return qfalse;
 }
