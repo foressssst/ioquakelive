@@ -36,16 +36,16 @@ Si algo falla, abre un issue acá.
 
 ### Estado del fork
 
-Los tres módulos del juego (`qagame`, `cgame` y `ui`) están portados desde los binarios de la build 1069, cada función portada lleva anotadas las direcciones del binario contra las que se revisó en Ghidra.
+Los tres módulos del juego (`qagame`, `cgame` y `ui`) están portados desde los binarios de la build 1069, las direcciones del binario contra las que se revisó cada función en Ghidra quedan en los mensajes de commit.
 Para tener una idea del avance, esta tabla cuenta cuántos nombres de cvars y de archivos del módulo original aparecen también acá. No dice si se comportan igual; eso se revisa en el binario.
 
 | Módulo | Cvars | Archivos |
 |---|---|---|
-| `qagame` | 405 de 406 | 114 de 115 |
-| `cgame` | 364 de 365 | 389 de 427 |
-| `ui` | 202 de 211 | 119 de 120 |
+| `qagame` | 406 de 406 | 115 de 115 |
+| `cgame` | 365 de 365 | 427 de 427 |
+| `ui` | 210 de 211 | 120 de 120 |
 
-Lo que falta en realidad es casi nada, muy poco, algunos archivos `.tga` acá se cargan con otra extensión, y algunos cvars que quedaron de Quake 3 o que solo cambian en como se escribe. Hay además un detalle interno, `vmCvar_t` tiene un campo menos que en el original, esto solo se importaría para cargar un módulo original y no afecta al juego final.
+Lo único que falta es `ui_cdkeyvalid`, que viene de la clave de CD de Quake 3 y el original no usa. Los archivos que acá se cargan con otra extensión y las cvars que solo cambian en como se escriben cuentan como presentes, porque el motor los trata igual. Hay además un detalle interno, `vmCvar_t` tiene un campo menos que en el original, esto solo se importaría para cargar un módulo original y no afecta al juego final.
 
 #### Protocolo de red
 
@@ -158,7 +158,7 @@ Lo que falta en realidad es casi nada, muy poco, algunos archivos `.tga` acá se
 | Llaves y puertas | Hecho | llaves plateada, dorada y maestra |
 | Calentamiento | Hecho | `g_gameState`, porcentaje de listos y abandono |
 | Votaciones | Hecho | incluido el voto de mapa al terminar |
-| Cvars | Hecho | 405 de las 406 del original, con sus funciones de cambio |
+| Cvars | Hecho | las 406 del original, con sus funciones de cambio |
 | Factories | Hecho | `map` sin factory imprime el uso, como el original |
 | Race | Hecho | checkpoints, cronometraje y HUD |
 | Compensación de lag | Hecho | historial de posiciones y rebobinado |
