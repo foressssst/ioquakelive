@@ -1507,6 +1507,7 @@ Q3OBJ = \
   $(B)/client/cl_keys.o \
   $(B)/client/cl_main.o \
   $(B)/client/cl_matches.o \
+  $(B)/client/cl_update.o \
   $(B)/client/cl_net_chan.o \
   $(B)/client/cl_parse.o \
   $(B)/client/cl_scrn.o \

@@ -2626,6 +2626,7 @@ void CL_Frame(int msec) {
 
     CL_WorkshopFrame();
     CL_WarmPlayers();
+    CL_UpdateFrame();
 
     CL_MatchReportFrame();
     CL_VoiceFrame();
@@ -3196,6 +3197,7 @@ void CL_Init(void) {
 
     cl_allowDownload = Cvar_Get("cl_allowDownload", "0", CVAR_ARCHIVE);
     cl_followRedirect = Cvar_Get("cl_followRedirect", "1", CVAR_ARCHIVE);
+    CL_UpdateInit();
 #ifdef USE_CURL_DLOPEN
     cl_cURLLib = Cvar_Get("cl_cURLLib", DEFAULT_CURL_LIB, CVAR_ARCHIVE | CVAR_PROTECTED);
 #endif

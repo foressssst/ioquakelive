@@ -473,7 +473,14 @@ qboolean UI_Home_NavClick(void) {
         return qtrue;
     }
     if (hit->type == HM_HIT_BANNER) {
-        trap_Cmd_ExecuteText(EXEC_APPEND, "web_hideBrowser\n");
+        if (hit->index == 1) {
+            char url[512];
+
+            trap_Cvar_VariableStringBuffer("cl_updateURL", url, sizeof(url));
+            trap_Sys_OpenURL(url);
+        } else {
+            trap_Cmd_ExecuteText(EXEC_APPEND, "web_hideBrowser\n");
+        }
         return qtrue;
     }
     return qfalse;
@@ -483,15 +490,26 @@ void UI_Home_Banner(void) {
     static const char* const text = "You are currently in-game. Click here to return to your match.";
     float h = 31.5f;
     float y = smBottom - h;
+    char version[32];
+    int index = 0;
 
     UI_Home_DrawNavMenu();
     UI_Home_DrawContext();
-    if (!UI_Home_InMatch()) {
+    if (UI_Home_InMatch()) {
+        SM_Fill(-1, y, smVW + 2, h, smSuccess, NULL);
+        SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText, text, qfalse);
+        SM_Hit(0, y, smVW, h, HM_HIT_BANNER, index, NULL);
         return;
     }
+    trap_Cvar_VariableStringBuffer("cl_updateVersion", version, sizeof(version));
+    if (!version[0]) {
+        return;
+    }
+    index = 1;
     SM_Fill(-1, y, smVW + 2, h, smSuccess, NULL);
-    SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText, text, qfalse);
-    SM_Hit(0, y, smVW, h, HM_HIT_BANNER, 0, NULL);
+    SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText,
+                va("ioquakelive %s is available. Click here to download it.", version), qfalse);
+    SM_Hit(0, y, smVW, h, HM_HIT_BANNER, index, NULL);
 }
 
 #define HM_ITEM_FONT (SM_Narrow() ? 24.0f : 32.0f)
