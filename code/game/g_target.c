@@ -57,6 +57,26 @@ void SP_target_give(gentity_t* ent) {
     ent->use = Use_Target_Give;
 }
 
+static void Use_Target_Remove_Keys(gentity_t* ent, gentity_t* other, gentity_t* activator) {
+    if (!activator->client || !activator->client->ps.stats[STAT_KEY]) {
+        return;
+    }
+    if (activator->client->ps.stats[STAT_KEY] & KEY_SILVER) {
+        G_RespawnKey(KEY_SILVER);
+    }
+    if (activator->client->ps.stats[STAT_KEY] & KEY_GOLD) {
+        G_RespawnKey(KEY_GOLD);
+    }
+    if (activator->client->ps.stats[STAT_KEY] & KEY_MASTER) {
+        G_RespawnKey(KEY_MASTER);
+    }
+    activator->client->ps.stats[STAT_KEY] = 0;
+}
+
+void SP_target_remove_keys(gentity_t* ent) {
+    ent->use = Use_Target_Remove_Keys;
+}
+
 //==========================================================
 
 /*QUAKED target_remove_powerups (1 0 0) (-8 -8 -8) (8 8 8)

@@ -156,6 +156,7 @@ void SP_trigger_capturezone(gentity_t* ent);
 
 void SP_target_remove_powerups(gentity_t* ent);
 void SP_target_give(gentity_t* ent);
+void SP_target_remove_keys(gentity_t* ent);
 void SP_target_delay(gentity_t* ent);
 void SP_target_speaker(gentity_t* ent);
 void SP_target_print(gentity_t* ent);
@@ -251,6 +252,7 @@ spawn_t spawns[] = {
     // targets perform no action by themselves, but must be triggered
     // by another entity
     {"target_give", SP_target_give},
+    {"target_remove_keys", SP_target_remove_keys},
     {"target_remove_powerups", SP_target_remove_powerups},
     {"target_delay", SP_target_delay},
     {"target_speaker", SP_target_speaker},

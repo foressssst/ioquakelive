@@ -1851,10 +1851,9 @@ int BotInitLibrary(void) {
     trap_Cvar_VariableStringBuffer("fs_game", buf, sizeof(buf));
     if (strlen(buf))
         trap_BotLibVarSet("gamedir", buf);
-    // home directory
-    trap_Cvar_VariableStringBuffer("fs_homepath", buf, sizeof(buf));
+    trap_Cvar_VariableStringBuffer("fs_cdpath", buf, sizeof(buf));
     if (strlen(buf))
-        trap_BotLibVarSet("homedir", buf);
+        trap_BotLibVarSet("cddir", buf);
     // [QL] define MISSIONPACK for bot library - enables Team Arena weapon support
     trap_BotLibDefine("MISSIONPACK");
     // setup the bot library
