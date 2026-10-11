@@ -19,31 +19,8 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// g_utils.c -- misc utility functions for game module
-
 #include "g_local.h"
 
-// [QL] The Q3 shader-remap subsystem (shaderRemap_t / remappedShaders[] /
-// AddRemap / BuildShaderStateConfig) is absent from qagamex86.dll and
-// qagamex64.so.symbols, and G_UseTargets no longer touches
-// targetShaderName/targetShaderNewName or CS_SHADERSTATE. Removed to stay
-// byte-faithful.
-
-/*
-=========================================================================
-
-model / sound configstring indexes
-
-=========================================================================
-*/
-
-/*
-================
-G_FindConfigstringIndex
-
-================
-*/
 int G_FindConfigstringIndex(char* name, int start, int max, qboolean create) {
     int i;
     char s[MAX_STRING_CHARS];
@@ -83,15 +60,6 @@ int G_SoundIndex(char* name) {
     return G_FindConfigstringIndex(name, CS_SOUNDS, MAX_SOUNDS, qtrue);
 }
 
-//=====================================================================
-
-/*
-================
-G_TeamCommand
-
-Broadcasts a command to only a specific team
-================
-*/
 void G_TeamCommand(team_t team, char* cmd) {
     int i;
 
@@ -104,18 +72,6 @@ void G_TeamCommand(team_t team, char* cmd) {
     }
 }
 
-/*
-=============
-G_Find
-
-Searches all active entities for the next one that holds
-the matching string at fieldofs (use the FOFS() macro) in the structure.
-
-Searches beginning at the entity after from, or the beginning if NULL
-NULL will be returned if the end of the list is reached.
-
-=============
-*/
 gentity_t* G_Find(gentity_t* from, int fieldofs, const char* match) {
     char* s;
 
@@ -137,13 +93,6 @@ gentity_t* G_Find(gentity_t* from, int fieldofs, const char* match) {
     return NULL;
 }
 
-/*
-=============
-G_PickTarget
-
-Selects a random entity from among the targets
-=============
-*/
 #define MAXCHOICES 32
 
 gentity_t* G_PickTarget(char* targetname) {
@@ -173,25 +122,12 @@ gentity_t* G_PickTarget(char* targetname) {
     return choice[rand() % num_choices];
 }
 
-/*
-==============================
-G_UseTargets
-
-"activator" should be set to the entity that initiated the firing.
-
-Search for (string)targetname in all entities that
-match (string)self.target and call their .use function
-
-==============================
-*/
 void G_UseTargets(gentity_t* ent, gentity_t* activator) {
     gentity_t* t;
 
     if (!ent) {
         return;
     }
-
-    // [QL] no targetShaderName/targetShaderNewName shader-remap handling
 
     if (!ent->target) {
         return;
@@ -213,21 +149,11 @@ void G_UseTargets(gentity_t* ent, gentity_t* activator) {
     }
 }
 
-/*
-=============
-TempVector
-
-This is just a convenience function
-for making temporary vectors for function calls
-=============
-*/
 float* tv(float x, float y, float z) {
     static int index;
     static vec3_t vecs[8];
     float* v;
 
-    // use an array so that multiple tempvectors won't collide
-    // for a while
     v = vecs[index];
     index = (index + 1) & 7;
 
@@ -238,39 +164,19 @@ float* tv(float x, float y, float z) {
     return v;
 }
 
-/*
-=============
-VectorToString
-
-This is just a convenience function
-for printing vectors
-=============
-*/
 char* vtos(const vec3_t v) {
     static int index;
     static char str[8][32];
     char* s;
 
-    // use an array so that multiple vtos won't collide
     s = str[index];
     index = (index + 1) & 7;
 
-    // [QL] vtos formats components as %.2f floats (Q3 used %i integer casts)
     Com_sprintf(s, 32, "(%.2f %.2f %.2f)", v[0], v[1], v[2]);
 
     return s;
 }
 
-/*
-===============
-G_SetMovedir
-
-The editor only specifies a single value for angles (yaw),
-but we have special constants to generate an up or down direction.
-Angles will be cleared, because it is being used to represent a direction
-instead of an orientation.
-===============
-*/
 void G_SetMovedir(vec3_t angles, vec3_t movedir) {
     static vec3_t VEC_UP = {0, -1, 0};
     static vec3_t MOVEDIR_UP = {0, 0, 1};
@@ -315,42 +221,22 @@ void G_InitGentity(gentity_t* e) {
     e->r.ownerNum = ENTITYNUM_NONE;
 }
 
-/*
-=================
-G_Spawn
-
-Either finds a free entity, or allocates a new one.
-
-  The slots from 0 to MAX_CLIENTS-1 are always reserved for clients, and will
-never be used by anything else.
-
-Try to avoid reusing an entity that was recently freed, because it
-can cause the client to think the entity morphed into something else
-instead of being removed and recreated, which can cause interpolated
-angles and bad trails.
-=================
-*/
 gentity_t* G_Spawn(void) {
     int i, force;
     gentity_t* e;
 
-    e = NULL;  // shut up warning
+    e = NULL;
     for (force = 0; force < 2; force++) {
-        // if we go through all entities and can't find one to free,
-        // override the normal minimum times before use
         e = &g_entities[MAX_CLIENTS];
         for (i = MAX_CLIENTS; i < level.num_entities; i++, e++) {
             if (e->inuse) {
                 continue;
             }
 
-            // the first couple seconds of server time can involve a lot of
-            // freeing and allocating, so relax the replacement policy
             if (!force && e->freetime > level.startTime + 2000 && level.time - e->freetime < 1000) {
                 continue;
             }
 
-            // reuse this slot
             G_InitGentity(e);
             return e;
         }
@@ -365,10 +251,8 @@ gentity_t* G_Spawn(void) {
         G_Error("G_Spawn: no free entities");
     }
 
-    // open up a new slot
     level.num_entities++;
 
-    // let the server system know that there are more entities
     trap_LocateGameData(level.gentities, level.num_entities, sizeof(gentity_t),
                         &level.clients[0].ps, sizeof(level.clients[0]));
 
@@ -376,17 +260,11 @@ gentity_t* G_Spawn(void) {
     return e;
 }
 
-/*
-=================
-G_EntitiesFree
-=================
-*/
 qboolean G_EntitiesFree(void) {
     int i;
     gentity_t* e;
 
     if (level.num_entities < ENTITYNUM_MAX_NORMAL) {
-        // can open a new slot if needed
         return qtrue;
     }
 
@@ -395,23 +273,13 @@ qboolean G_EntitiesFree(void) {
         if (e->inuse) {
             continue;
         }
-        // slot available
         return qtrue;
     }
     return qfalse;
 }
 
-/*
-=================
-G_FreeEntity
-
-Marks the entity as free
-=================
-*/
 void G_FreeEntity(gentity_t* ed) {
-    // [QL] 0x1005a660. It does not start a kamikaze: that is Kamikaze_DeathActivate
-    // (0x10046f20), the kamikaze timer's think, which frees the timer afterwards.
-    trap_UnlinkEntity(ed);  // unlink from world
+    trap_UnlinkEntity(ed);
 
     if (ed->neverFree) {
         return;
@@ -423,15 +291,6 @@ void G_FreeEntity(gentity_t* ed) {
     ed->inuse = qfalse;
 }
 
-/*
-=================
-G_TempEntity
-
-Spawns an event entity that will be auto-removed
-The origin will be snapped to save net bandwidth, so care
-must be taken if the origin is right on a surface (snap towards start vector first)
-=================
-*/
 gentity_t* G_TempEntity(vec3_t origin, int event) {
     gentity_t* e;
     vec3_t snapped;
@@ -444,31 +303,14 @@ gentity_t* G_TempEntity(vec3_t origin, int event) {
     e->freeAfterEvent = qtrue;
 
     VectorCopy(origin, snapped);
-    SnapVector(snapped);  // save network bandwidth
+    SnapVector(snapped);
     G_SetOrigin(e, snapped);
 
-    // find cluster for PVS
     trap_LinkEntity(e);
 
     return e;
 }
 
-/*
-==============================================================================
-
-Kill box
-
-==============================================================================
-*/
-
-/*
-=================
-G_KillBox
-
-Kills all entities that would touch the proposed new positioning
-of ent.  Ent should be unlinked before calling this!
-=================
-*/
 void G_KillBox(gentity_t* ent) {
     int i, num;
     int touch[MAX_GENTITIES];
@@ -485,23 +327,11 @@ void G_KillBox(gentity_t* ent) {
             continue;
         }
 
-        // nail it
         G_Damage(hit, ent, ent, NULL, NULL,
                  100000, DAMAGE_NO_PROTECTION, MOD_TELEFRAG);
     }
 }
 
-//==============================================================================
-
-/*
-===============
-G_AddPredictableEvent
-
-Use for non-pmove events that would also be predicted on the
-client side: jumppads and item pickups
-Adds an event+parm and twiddles the event counter
-===============
-*/
 void G_AddPredictableEvent(gentity_t* ent, int event, int eventParm) {
     if (!ent->client) {
         return;
@@ -509,27 +339,14 @@ void G_AddPredictableEvent(gentity_t* ent, int event, int eventParm) {
     BG_AddPredictableEventToPlayerstate(event, eventParm, &ent->client->ps);
 }
 
-/*
-===============
-G_AddEvent
-
-Adds an event+parm and twiddles the event counter
-===============
-*/
 void G_AddEvent(gentity_t* ent, int event, int eventParm) {
     int bits;
 
-    // [QL] no zero-event guard: qagamex86.dll G_AddEvent (0x1006c650) has no
-    // "if (!event)" check or "zero event added" G_Printf; it goes straight to
-    // the client/entity branch.
-
-    // clients need to add the event in playerState_t instead of entityState_t
     if (ent->client) {
         bits = ent->client->ps.externalEvent & EV_EVENT_BITS;
         bits = (bits + EV_EVENT_BIT1) & EV_EVENT_BITS;
         ent->client->ps.externalEvent = event | bits;
         ent->client->ps.externalEventParm = eventParm;
-        // [QL] externalEventTime removed from playerState_t
     } else {
         bits = ent->s.event & EV_EVENT_BITS;
         bits = (bits + EV_EVENT_BIT1) & EV_EVENT_BITS;
@@ -539,11 +356,6 @@ void G_AddEvent(gentity_t* ent, int event, int eventParm) {
     ent->eventTime = level.time;
 }
 
-/*
-=============
-G_Sound
-=============
-*/
 void G_Sound(gentity_t* ent, int channel, int soundIndex) {
     gentity_t* te;
 
@@ -551,15 +363,6 @@ void G_Sound(gentity_t* ent, int channel, int soundIndex) {
     te->s.eventParm = soundIndex;
 }
 
-/*
-=============
-G_GlobalSound
-
-[QL] G_GlobalSound (binary 0x1006bf70): plays a non-positional (unattenuated)
-sound by spawning an EV_GLOBAL_SOUND temp entity at the world origin. Unlike Q3's
-version the binary does NOT set SVF_BROADCAST here.
-=============
-*/
 void G_GlobalSound(int soundIndex) {
     gentity_t* te;
 
@@ -567,15 +370,6 @@ void G_GlobalSound(int soundIndex) {
     te->s.eventParm = soundIndex;
 }
 
-//==============================================================================
-
-/*
-================
-G_SetOrigin
-
-Sets the pos trajectory for a fixed position
-================
-*/
 void G_SetOrigin(gentity_t* ent, vec3_t origin) {
     VectorCopy(origin, ent->s.pos.trBase);
     ent->s.pos.trType = TR_STATIONARY;
@@ -586,23 +380,13 @@ void G_SetOrigin(gentity_t* ent, vec3_t origin) {
     VectorCopy(origin, ent->r.currentOrigin);
 }
 
-/*
-================
-DebugLine
-
-  debug polygons only work when running a local game
-  with r_debugSurface set to 2
-================
-*/
 int DebugLine(vec3_t start, vec3_t end, int color) {
     vec3_t points[4], dir, cross, up = {0, 0, 1};
     float dot;
 
     VectorCopy(start, points[0]);
     VectorCopy(start, points[1]);
-    // points[1][2] -= 2;
     VectorCopy(end, points[2]);
-    // points[2][2] -= 2;
     VectorCopy(end, points[3]);
 
     VectorSubtract(end, start, dir);

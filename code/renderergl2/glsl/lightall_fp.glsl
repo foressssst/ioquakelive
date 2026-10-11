@@ -25,7 +25,6 @@ uniform samplerCube u_CubeMap;
 #endif
 
 #if defined(USE_NORMALMAP) || defined(USE_DELUXEMAP) || defined(USE_SPECULARMAP) || defined(USE_CUBEMAP)
-// y = deluxe, w = cube
 uniform vec4      u_EnableTextures; 
 #endif
 
@@ -68,7 +67,6 @@ varying vec4      var_LightDir;
 varying vec4      var_PrimaryLightDir;
 #endif
 
-
 #define EPSILON 0.00000001
 
 #if defined(USE_PARALLAXMAP)
@@ -86,35 +84,29 @@ float RayIntersectDisplaceMap(vec2 dp, vec2 ds, sampler2D normalMap)
 	const int linearSearchSteps = 16;
 	const int binarySearchSteps = 6;
 
-	// current size of search window
 	float size = 1.0 / float(linearSearchSteps);
 
-	// adjust position if offset above surface
 	dp -= ds * r_parallaxMapOffset;
 
-	// current depth position
 	float depth = 0.0;
 
-	// best match found (starts with last position 1.0)
 	float bestDepth = 1.0;
 
-	// texture depth at best depth
 	float texDepth = 0.0;
 
 	float prevT = SampleDepth(normalMap, dp);
 	float prevTexDepth = prevT;
 
-	// search front to back for first point inside object
 	for(int i = 0; i < linearSearchSteps - 1; ++i)
 	{
 		depth += size;
-		
+
 		float t = SampleDepth(normalMap, dp + ds * depth);
-		
-		if(bestDepth > 0.996)		// if no depth found yet
+
+		if(bestDepth > 0.996)
 			if(depth >= t)
 			{
-				bestDepth = depth;	// store best depth
+				bestDepth = depth;
 				texDepth = t;
 				prevTexDepth = prevT;
 			}
@@ -127,13 +119,12 @@ float RayIntersectDisplaceMap(vec2 dp, vec2 ds, sampler2D normalMap)
 	float div = 1.0 / (1.0 + (prevTexDepth - texDepth) * float(linearSearchSteps));
 	bestDepth -= (depth - size - prevTexDepth) * div;
 #else
-	// recurse around first point (depth) for closest match
 	for(int i = 0; i < binarySearchSteps; ++i)
 	{
 		size *= 0.5;
 
 		float t = SampleDepth(normalMap, dp + ds * depth);
-		
+
 		if(depth >= t)
 		{
 			bestDepth = depth;
@@ -151,22 +142,19 @@ float LightRay(vec2 dp, vec2 ds, sampler2D normalMap)
 {
 	const int linearSearchSteps = 16;
 
-	// current size of search window
 	float size = 1.0 / float(linearSearchSteps);
 
-	// current height from initial texel depth
 	float height = 0.0;
 
 	float startDepth = SampleDepth(normalMap, dp);
 
-	// find a collision or escape
 	for(int i = 0; i < linearSearchSteps - 1; ++i)
 	{
 		height += size;
 
 		if (startDepth < height)
 			return 1.0;
-		
+
 		float t = SampleDepth(normalMap, dp + ds * height);
 
 		if (startDepth > t + height)
@@ -180,7 +168,6 @@ float LightRay(vec2 dp, vec2 ds, sampler2D normalMap)
 vec3 CalcDiffuse(vec3 diffuseAlbedo, float NH, float EH, float roughness)
 {
 #if defined(USE_BURLEY)
-	// modified from https://disney-animation.s3.amazonaws.com/library/s2012_pbs_disney_brdf_notes_v2.pdf
 	float fd90 = -0.5 + EH * EH * roughness;
 	float burley = 1.0 + fd90 * 0.04 / NH;
 	burley *= burley;
@@ -192,7 +179,6 @@ vec3 CalcDiffuse(vec3 diffuseAlbedo, float NH, float EH, float roughness)
 
 vec3 EnvironmentBRDF(float roughness, float NE, vec3 specular)
 {
-	// from http://community.arm.com/servlet/JiveServlet/download/96891546-19496/siggraph2015-mmg-renaldas-slides.pdf
 	float v = 1.0 - max(roughness, NE);
 	v *= v * v;
 	return vec3(v) + specular;
@@ -200,7 +186,6 @@ vec3 EnvironmentBRDF(float roughness, float NE, vec3 specular)
 
 vec3 CalcSpecular(vec3 specular, float NH, float EH, float roughness)
 {
-	// from http://community.arm.com/servlet/JiveServlet/download/96891546-19496/siggraph2015-mmg-renaldas-slides.pdf
 	float rr = roughness*roughness;
 	float rrrr = rr*rr;
 	float d = (NH * NH) * (rrrr - 1.0) + 1.0;
@@ -208,14 +193,10 @@ vec3 CalcSpecular(vec3 specular, float NH, float EH, float roughness)
 	return specular * (rrrr / (4.0 * d * d * v));
 }
 
-
 float CalcLightAttenuation(float point, float normDist)
 {
-	// zero light at 1.0, approximating q3 style
-	// also don't attenuate directional light
 	float attenuation = (0.5 * normDist - 1.5) * point + 1.0;
 
-	// clamp attenuation
 	#if defined(NO_LIGHT_CLAMP)
 	attenuation = max(attenuation, 0.0);
 	#else
@@ -228,31 +209,15 @@ float CalcLightAttenuation(float point, float normDist)
 #if defined(USE_BOX_CUBEMAP_PARALLAX)
 vec4 hitCube(vec3 ray, vec3 pos, vec3 invSize, float lod, samplerCube tex)
 {
-	// find any hits on cubemap faces facing the camera
 	vec3 scale = (sign(ray) - pos) / ray;
 
-	// find the nearest hit
 	float minScale = min(min(scale.x, scale.y), scale.z);
 
-	// if the nearest hit is behind the camera, ignore
-	// should not be necessary as long as pos is inside the cube
-	//if (minScale < 0.0)
-		//return vec4(0.0);
-
-	// calculate the hit position, that's our texture coordinates
 	vec3 tc = pos + ray * minScale;
 
-	// if the texture coordinates are outside the cube, ignore
-	// necessary since we're not fading out outside the cube
 	if (any(greaterThan(abs(tc), vec3(1.00001))))
 		return vec4(0.0);
 
-	// fade out when approaching the cubemap edges
-	//vec3 fade3 = abs(pos);
-	//float fade = max(max(fade3.x, fade3.y), fade3.z);
-	//fade = clamp(1.0 - fade, 0.0, 1.0);
-			
-	//return vec4(textureCubeLod(tex, tc, lod).rgb * fade, fade);
 	return vec4(textureCubeLod(tex, tc, lod).rgb, 1.0);
 }
 #endif
@@ -294,7 +259,7 @@ void main()
 #endif
 
 	vec4 diffuse = texture2D(u_DiffuseMap, texCoords);
-	
+
 	float alpha = diffuse.a * var_Color.a;
 	if (u_AlphaTest == 1)
 	{
@@ -345,7 +310,6 @@ void main()
 	vec2 shadowTex = gl_FragCoord.xy * r_FBufScale;
 	float shadowValue = texture2D(u_ShadowMap, shadowTex).r;
 
-	// surfaces not facing the light are always shadowed
 	shadowValue *= clamp(dot(N, var_PrimaryLightDir.xyz), 0.0, 1.0);
 
     #if defined(SHADOWMAP_MODULATE)
@@ -359,20 +323,14 @@ void main()
 	lightColor *= LightRay(texCoords, offsetDir.xy, u_NormalMap);
   #endif
 
-
   #if !defined(USE_LIGHT_VECTOR)
 	ambientColor = lightColor;
 	float surfNL = clamp(dot(surfNormal, L), 0.0, 1.0);
 
-	// reserve 25% ambient to avoid black areas on normalmaps
 	lightColor *= 0.75;
 
-	// Scale the incoming light to compensate for the baked-in light angle
-	// attenuation.
 	lightColor /= max(surfNL, 0.25);
 
-	// Recover any unused light as ambient, in case attenuation is over 4x or
-	// light is below the surface
 	ambientColor = max(ambientColor - lightColor * surfNL, vec3(0.0));
   #else
 	ambientColor = var_ColorAmbient.rgb;
@@ -396,20 +354,13 @@ void main()
   #endif
 
   #if defined(USE_PBR)
-	// diffuse rgb is base color
-	// specular red is gloss
-	// specular green is metallicness
 	float gloss = specular.r;
 	float metal = specular.g;
 	specular.rgb = metal * diffuse.rgb + vec3(0.04 - 0.04 * metal);
 	diffuse.rgb *= 1.0 - metal;
   #else
-	// diffuse rgb is diffuse
-	// specular rgb is specular reflectance at normal incidence
-	// specular alpha is gloss
 	float gloss = specular.a;
 
-	// adjust diffuse by specular reflectance, to maintain energy conservation
 	diffuse.rgb *= vec3(1.0) - specular.rgb;
   #endif
 
@@ -441,8 +392,6 @@ void main()
 
 	vec3 R = reflect(E, N);
 
-	// parallax corrected cubemap (cheaper trick)
-	// from http://seblagarde.wordpress.com/2012/09/29/image-based-lighting-approaches-and-parallax-corrected-cubemap/
 	vec3 parallax = u_CubeMapInfo.xyz + u_CubeMapInfo.w * viewDir;
 
   #if defined(USE_BOX_CUBEMAP_PARALLAX)
@@ -451,18 +400,9 @@ void main()
 	vec3 cubeLightColor = textureCubeLod(u_CubeMap, R + parallax, ROUGHNESS_MIPS * roughness).rgb * u_EnableTextures.w;
   #endif
 
-	// normalize cubemap based on last roughness mip (~diffuse)
-	// multiplying cubemap values by lighting below depends on either this or the cubemap being normalized at generation
-	//vec3 cubeLightDiffuse = max(textureCubeLod(u_CubeMap, N, ROUGHNESS_MIPS).rgb, 0.5 / 255.0);
-	//cubeLightColor /= dot(cubeLightDiffuse, vec3(0.2125, 0.7154, 0.0721));
-
     #if defined(USE_PBR)
 	cubeLightColor *= cubeLightColor;
     #endif
-
-	// multiply cubemap values by lighting
-	// not technically correct, but helps make reflections look less unnatural
-	//cubeLightColor *= lightColor * (attenuation * NL) + ambientColor;
 
 	gl_FragColor.rgb += cubeLightColor * reflectance;
   #endif
@@ -473,10 +413,6 @@ void main()
 
 	L2 = var_PrimaryLightDir.xyz;
 
-	// enable when point lights are supported as primary lights
-	//sqrLightDist = dot(L2, L2);
-	//L2 /= sqrt(sqrLightDist);
-
 	NL2 = clamp(dot(N, L2), 0.0, 1.0);
 	H2 = normalize(L2 + E);
 	EH2 = clamp(dot(E, H2), 0.0, 1.0);
@@ -484,7 +420,6 @@ void main()
 
 	reflectance  = CalcSpecular(specular.rgb, NH2, EH2, roughness);
 
-	// bit of a hack, with modulated shadowmaps, ignore diffuse
     #if !defined(SHADOWMAP_MODULATE)
 	reflectance += CalcDiffuse(diffuse.rgb, NH2, EH2, roughness);
     #endif
@@ -494,9 +429,6 @@ void main()
     #if defined(USE_SHADOWMAP)
 	lightColor *= shadowValue;
     #endif
-
-	// enable when point lights are supported as primary lights
-	//lightColor *= CalcLightAttenuation(float(u_PrimaryLightDir.w > 0.0), u_PrimaryLightDir.w / sqrLightDist);
 
   #if defined(USE_PARALLAXMAP) && defined(USE_PARALLAXMAP_SHADOWS)
 	offsetDir = L2 * tangentToWorld;

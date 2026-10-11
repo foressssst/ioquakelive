@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #ifdef USE_CURL
 #include "client.h"
 
@@ -58,11 +57,6 @@ const char* (*qcurl_multi_strerror)(CURLMcode);
 
 static void* cURLLib = NULL;
 
-/*
-=================
-GPA
-=================
-*/
 static void* GPA(char* str) {
     void* rv;
 
@@ -76,13 +70,8 @@ static void* GPA(char* str) {
         return rv;
     }
 }
-#endif /* USE_CURL_DLOPEN */
+#endif
 
-/*
-=================
-CL_cURL_Init
-=================
-*/
 qboolean CL_cURL_Init() {
 #ifdef USE_CURL_DLOPEN
     if (cURLLib)
@@ -91,7 +80,6 @@ qboolean CL_cURL_Init() {
     Com_Printf("Loading \"%s\"...", cl_cURLLib->string);
     if (!(cURLLib = Sys_LoadDll(cl_cURLLib->string, qtrue))) {
 #ifdef ALTERNATE_CURL_LIB
-        // On some linux distributions there is no libcurl.so.3, but only libcurl.so.4. That one works too.
         if (!(cURLLib = Sys_LoadDll(ALTERNATE_CURL_LIB, qtrue)))
 #endif
             return qfalse;
@@ -130,14 +118,9 @@ qboolean CL_cURL_Init() {
 #else
     clc.cURLEnabled = qtrue;
     return qtrue;
-#endif /* USE_CURL_DLOPEN */
+#endif
 }
 
-/*
-=================
-CL_cURL_Shutdown
-=================
-*/
 void CL_cURL_Shutdown(void) {
     CL_cURL_Cleanup();
 #ifdef USE_CURL_DLOPEN
@@ -161,7 +144,7 @@ void CL_cURL_Shutdown(void) {
     qcurl_multi_cleanup = NULL;
     qcurl_multi_info_read = NULL;
     qcurl_multi_strerror = NULL;
-#endif /* USE_CURL_DLOPEN */
+#endif
 }
 
 void CL_cURL_Cleanup(void) {
@@ -243,13 +226,12 @@ void CL_cURL_BeginDownload(const char* localName, const char* remoteURL) {
     Com_sprintf(clc.downloadTempName, sizeof(clc.downloadTempName),
                 "%s.tmp", localName);
 
-    // Set so UI gets access to it
     Cvar_Set("cl_downloadName", localName);
     Cvar_Set("cl_downloadSize", "0");
     Cvar_Set("cl_downloadCount", "0");
     Cvar_SetValue("cl_downloadTime", cls.realtime);
 
-    clc.downloadBlock = 0;  // Starting new file
+    clc.downloadBlock = 0;
     clc.downloadCount = 0;
 
     clc.downloadCURL = qcurl_easy_init();
@@ -347,4 +329,4 @@ void CL_cURL_PerformDownload(void) {
 
     CL_NextDownload();
 }
-#endif /* USE_CURL */
+#endif

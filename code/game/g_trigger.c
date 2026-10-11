@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
 #include "g_local.h"
 
 void InitTrigger(gentity_t* self) {
@@ -27,22 +26,18 @@ void InitTrigger(gentity_t* self) {
         G_SetMovedir(self->s.angles, self->movedir);
 
     trap_SetBrushModel(self, self->model);
-    self->r.contents = CONTENTS_TRIGGER;  // replaces the -1 from trap_SetBrushModel
+    self->r.contents = CONTENTS_TRIGGER;
     self->r.svFlags = SVF_NOCLIENT;
 }
 
-// the wait time has passed, so set back up for another activation
 void multi_wait(gentity_t* ent) {
     ent->nextthink = 0;
 }
 
-// the trigger was just activated
-// ent->activator should be set to the activator so it can be held through a delay
-// so wait for the delay time before firing
 void multi_trigger(gentity_t* ent, gentity_t* activator) {
     ent->activator = activator;
     if (ent->nextthink) {
-        return;  // can't retrigger until the wait is over
+        return;
     }
 
     if (activator->client) {
@@ -62,10 +57,8 @@ void multi_trigger(gentity_t* ent, gentity_t* activator) {
         ent->think = multi_wait;
         ent->nextthink = level.time + (ent->wait + ent->random * crandom()) * 1000;
     } else {
-        // we can't just remove (self) here, because this is a touch function
-        // called while looping through area links...
         ent->touch = 0;
-        ent->nextthink = level.time + (1000 / sv_fps.integer);  // binary uses sv_fps
+        ent->nextthink = level.time + (1000 / sv_fps.integer);
         ent->think = G_FreeEntity;
     }
 }
@@ -81,19 +74,12 @@ void Touch_Multi(gentity_t* self, gentity_t* other, trace_t* trace) {
     multi_trigger(self, other);
 }
 
-/*QUAKED trigger_multiple (.5 .5 .5) ? RED_ONLY BLUE_ONLY
-"wait" : Seconds between triggerings, 0.5 default, -1 = one time only.
-"random"	wait variance, default is 0
-Variable sized repeatable trigger.  Must be targeted at one or more entities.
-so, the basic time between firing is a random time between
-(wait - random) and (wait + random)
-*/
 void SP_trigger_multiple(gentity_t* ent) {
     G_SpawnFloat("wait", "0.5", &ent->wait);
     G_SpawnFloat("random", "0", &ent->random);
 
     if (ent->random >= ent->wait && ent->wait >= 0) {
-        ent->random = ent->wait - (1000 / sv_fps.integer);  // binary uses sv_fps
+        ent->random = ent->wait - (1000 / sv_fps.integer);
         G_Printf("trigger_multiple has random >= wait\n");
     }
 
@@ -104,41 +90,20 @@ void SP_trigger_multiple(gentity_t* ent) {
     trap_LinkEntity(ent);
 }
 
-/*
-==============================================================================
-
-trigger_always
-
-==============================================================================
-*/
-
 void trigger_always_think(gentity_t* ent) {
     G_UseTargets(ent, ent);
     G_FreeEntity(ent);
 }
 
-/*QUAKED trigger_always (.5 .5 .5) (-8 -8 -8) (8 8 8)
-This trigger will always fire.  It is activated by the world.
-*/
 void SP_trigger_always(gentity_t* ent) {
-    // we must have some delay to make sure our use targets are present
     ent->nextthink = level.time + 300;
     ent->think = trigger_always_think;
 }
-
-/*
-==============================================================================
-
-trigger_push
-
-==============================================================================
-*/
 
 void trigger_push_touch(gentity_t* self, gentity_t* other, trace_t* trace) {
     if (!other->client) {
         return;
     }
-    // [QL] a player attached to the grapple hook is not affected by the jump pad
     if (other->client->hook) {
         return;
     }
@@ -146,13 +111,6 @@ void trigger_push_touch(gentity_t* self, gentity_t* other, trace_t* trace) {
     BG_TouchJumpPad(&other->client->ps, &self->s);
 }
 
-/*
-=================
-AimAtTarget
-
-Calculate origin2 so the target apogee will be hit
-=================
-*/
 void AimAtTarget(gentity_t* self) {
     gentity_t* ent;
     vec3_t origin;
@@ -176,7 +134,6 @@ void AimAtTarget(gentity_t* self) {
         return;
     }
 
-    // set s.origin2 to the push velocity
     VectorSubtract(ent->s.origin, origin, self->s.origin2);
     self->s.origin2[2] = 0;
     dist = VectorNormalize(self->s.origin2);
@@ -186,29 +143,20 @@ void AimAtTarget(gentity_t* self) {
 
     self->s.origin2[2] = time * gravity;
 
-    // [QL] truncate the push velocity components to integers
     self->s.origin2[0] = (int)self->s.origin2[0];
     self->s.origin2[1] = (int)self->s.origin2[1];
     self->s.origin2[2] = (int)self->s.origin2[2];
 }
 
-/*QUAKED trigger_push (.5 .5 .5) ?
-Must point at a target_position, which will be the apex of the leap.
-This will be client side predicted, unlike target_push
-*/
 void SP_trigger_push(gentity_t* self) {
     InitTrigger(self);
 
-    // unlike other triggers, we need to send this one to the client
     self->r.svFlags &= ~SVF_NOCLIENT;
 
-    // make sure the client precaches this sound
     G_SoundIndex("sound/world/jumppad.wav");
 
     self->s.eType = ET_PUSH_TRIGGER;
     self->touch = trigger_push_touch;
-    // [QL] AimAtTarget runs via the per-frame framethink callback (gentity+0x2fc),
-    // not the Q3 think/nextthink deferral
     self->framethink = AimAtTarget;
     trap_LinkEntity(self);
 }
@@ -224,27 +172,18 @@ void Use_target_push(gentity_t* self, gentity_t* other, gentity_t* activator) {
     if (activator->client->ps.powerups[PW_FLIGHT]) {
         return;
     }
-    // [QL] a player attached to the grapple hook is not pushed
     if (activator->client->hook) {
         return;
     }
 
     VectorCopy(self->s.origin2, activator->client->ps.velocity);
 
-    // play fly sound every 1.5 seconds
     if (activator->fly_sound_debounce_time < level.time) {
         activator->fly_sound_debounce_time = level.time + 1500;
-        // [QL] binary (Use_target_push) plays the windfly/bounce sound as a global
-        // (non-positional) sound, not a positional entity sound.
         G_GlobalSound(self->noise_index);
     }
 }
 
-/*QUAKED target_push (.5 .5 .5) (-8 -8 -8) (8 8 8) bouncepad
-Pushes the activator in the direction.of angle, or towards a target apex.
-"speed"		defaults to 1000
-if "bouncepad", play bounce noise instead of windfly
-*/
 void SP_target_push(gentity_t* self) {
     if (!self->speed) {
         self->speed = 1000;
@@ -252,7 +191,6 @@ void SP_target_push(gentity_t* self) {
     G_SetMovedir(self->s.angles, self->s.origin2);
     VectorScale(self->s.origin2, self->speed, self->s.origin2);
 
-    // [QL] only set noise_index when bouncepad flag is set; no windfly sound
     if (self->spawnflags & 1) {
         self->noise_index = G_SoundIndex("sound/world/jumppad.wav");
     }
@@ -260,18 +198,10 @@ void SP_target_push(gentity_t* self) {
         VectorCopy(self->s.origin, self->r.absmin);
         VectorCopy(self->s.origin, self->r.absmax);
         self->think = AimAtTarget;
-        self->nextthink = level.time + (1000 / sv_fps.integer);  // binary uses sv_fps
+        self->nextthink = level.time + (1000 / sv_fps.integer);
     }
     self->use = Use_target_push;
 }
-
-/*
-==============================================================================
-
-trigger_teleport
-
-==============================================================================
-*/
 
 void trigger_teleporter_touch(gentity_t* self, gentity_t* other, trace_t* trace) {
     gentity_t* dest;
@@ -282,7 +212,6 @@ void trigger_teleporter_touch(gentity_t* self, gentity_t* other, trace_t* trace)
     if (other->client->ps.pm_type == PM_DEAD) {
         return;
     }
-    // Spectators only?
     if ((self->spawnflags & 1) &&
         other->client->sess.sessionTeam != TEAM_SPECTATOR) {
         return;
@@ -297,26 +226,15 @@ void trigger_teleporter_touch(gentity_t* self, gentity_t* other, trace_t* trace)
     TeleportPlayer(other, dest->s.origin, dest->s.angles);
 }
 
-/*QUAKED trigger_teleport (.5 .5 .5) ? SPECTATOR
-Allows client side prediction of teleportation events.
-Must point at a target_position, which will be the teleport destination.
-
-If spectator is set, only spectators can use this teleport
-Spectator teleporters are not normally placed in the editor, but are created
-automatically near doors to allow spectators to move through them
-*/
 void SP_trigger_teleport(gentity_t* self) {
     InitTrigger(self);
 
-    // unlike other triggers, we need to send this one to the client
-    // unless is a spectator trigger
     if (self->spawnflags & 1) {
         self->r.svFlags |= SVF_NOCLIENT;
     } else {
         self->r.svFlags &= ~SVF_NOCLIENT;
     }
 
-    // make sure the client precaches this sound
     G_SoundIndex("sound/world/jumppad.wav");
 
     self->s.eType = ET_TELEPORT_TRIGGER;
@@ -325,26 +243,6 @@ void SP_trigger_teleport(gentity_t* self) {
     trap_LinkEntity(self);
 }
 
-/*
-==============================================================================
-
-trigger_hurt
-
-==============================================================================
-*/
-
-/*QUAKED trigger_hurt (.5 .5 .5) ? START_OFF - SILENT NO_PROTECTION SLOW
-Any entity that touches this will be hurt.
-It does dmg points of damage each server frame
-Targeting the trigger will toggle its on / off state.
-
-SILENT			suppresses playing the sound
-SLOW			changes the damage rate to once per second
-NO_PROTECTION	*nothing* stops the damage
-
-"dmg"			default 5 (whole numbers only)
-
-*/
 void hurt_use(gentity_t* self, gentity_t* other, gentity_t* activator) {
     if (self->r.linked) {
         trap_UnlinkEntity(self);
@@ -370,7 +268,6 @@ void hurt_touch(gentity_t* self, gentity_t* other, trace_t* trace) {
         self->timestamp = level.time + FRAMETIME;
     }
 
-    // play sound
     if (!(self->spawnflags & 4)) {
         G_Sound(other, CHAN_AUTO, self->noise_index);
     }
@@ -392,12 +289,10 @@ void SP_trigger_hurt(gentity_t* self) {
         self->damage = 5;
     }
 
-    // [QL] explicitly (re)assert trigger contents; InitTrigger already set it
     self->r.contents = CONTENTS_TRIGGER;
 
     self->use = hurt_use;
 
-    // link in to the world if starting active
     if (self->spawnflags & 1) {
         trap_UnlinkEntity(self);
     } else {
@@ -405,41 +300,19 @@ void SP_trigger_hurt(gentity_t* self) {
     }
 }
 
-/*
-==============================================================================
-
-timer
-
-==============================================================================
-*/
-
-/*QUAKED func_timer (0.3 0.1 0.6) (-8 -8 -8) (8 8 8) START_ON
-This should be renamed trigger_timer...
-Repeatedly fires its targets.
-Can be turned on or off by using.
-
-"wait"			base time between triggering all targets, default is 1
-"random"		wait variance, default is 0
-so, the basic time between firing is a random time between
-(wait - random) and (wait + random)
-
-*/
 void func_timer_think(gentity_t* self) {
     G_UseTargets(self, self->activator);
-    // set time before next firing
     self->nextthink = level.time + 1000 * (self->wait + crandom() * self->random);
 }
 
 void func_timer_use(gentity_t* self, gentity_t* other, gentity_t* activator) {
     self->activator = activator;
 
-    // if on, turn it off
     if (self->nextthink) {
         self->nextthink = 0;
         return;
     }
 
-    // turn it on
     func_timer_think(self);
 }
 
@@ -451,35 +324,18 @@ void SP_func_timer(gentity_t* self) {
     self->think = func_timer_think;
 
     if (self->random >= self->wait) {
-        self->random = self->wait - (1000 / sv_fps.integer);  // binary uses sv_fps
+        self->random = self->wait - (1000 / sv_fps.integer);
         G_Printf("func_timer at %s has random >= wait\n", vtos(self->s.origin));
     }
 
     if (self->spawnflags & 1) {
-        self->nextthink = level.time + (1000 / sv_fps.integer);  // binary uses sv_fps
+        self->nextthink = level.time + (1000 / sv_fps.integer);
         self->activator = self;
     }
 
     self->r.svFlags = SVF_NOCLIENT;
 }
 
-/*
-==============================================================================
-
-trigger_capturezone
-
-==============================================================================
-*/
-
-/*
-==============
-CaptureZone_Touch
-
-[QL] 0x1006bda0. A player of the other team who comes into the zone of the "red" or "blue"
-team captures on that team's flag, and so does, in CTF and 1-Flag, a flag thrown into it, for
-whoever threw it. The capture is worth the zone's count.
-==============
-*/
 void CaptureZone_Touch(gentity_t* self, gentity_t* other) {
     gentity_t* thrown = NULL;
     gentity_t* flag;
@@ -510,10 +366,6 @@ static void CaptureZone_TriggerTouch(gentity_t* self, gentity_t* other, trace_t*
     CaptureZone_Touch(self, other);
 }
 
-/*QUAKED trigger_capturezone (.5 .5 .5) ?
-[QL] 0x1006be70. Where the other team scores on this one's flag ("team" red or blue); "count" is
-what the capture is worth.
-*/
 void SP_trigger_capturezone(gentity_t* self) {
     InitTrigger(self);
     self->touch = CaptureZone_TriggerTouch;

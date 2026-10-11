@@ -19,7 +19,6 @@ along with XreaL source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// tr_glsl.c
 #include "tr_local.h"
 
 #include "tr_dsa.h"
@@ -63,7 +62,6 @@ typedef struct uniformInfo_s {
     int type;
 } uniformInfo_t;
 
-// These must be in the same order as in uniform_t in tr_local.h.
 static uniformInfo_t uniformsInfo[] =
     {
         {"u_DiffuseMap", GLSL_INT},
@@ -237,7 +235,6 @@ static void GLSL_GetShaderHeader(GLenum shaderType, const GLchar* extra, char* d
 
     dest[0] = '\0';
 
-    // HACK: abuse the GLSL preprocessor to turn GLSL 1.20 shaders into 1.30 ones
     if (glRefConfig.glslMajorVersion > 1 || (glRefConfig.glslMajorVersion == 1 && glRefConfig.glslMinorVersion >= 30)) {
         if (qglesMajorVersion >= 3 && glRefConfig.glslMajorVersion >= 3)
             Q_strcat(dest, size, "#version 300 es\n");
@@ -246,7 +243,6 @@ static void GLSL_GetShaderHeader(GLenum shaderType, const GLchar* extra, char* d
         else
             Q_strcat(dest, size, "#version 130\n");
 
-        // `extra' may contain #extension which must be directly after #version
         if (extra) {
             Q_strcat(dest, size, extra);
         }
@@ -293,17 +289,7 @@ static void GLSL_GetShaderHeader(GLenum shaderType, const GLchar* extra, char* d
         }
     }
 
-    // HACK: add some macros to avoid extra uniforms and save speed and code maintenance
-    // Q_strcat(dest, size,
-    //		 va("#ifndef r_SpecularExponent\n#define r_SpecularExponent %f\n#endif\n", r_specularExponent->value));
-    // Q_strcat(dest, size,
-    //		 va("#ifndef r_SpecularScale\n#define r_SpecularScale %f\n#endif\n", r_specularScale->value));
-    // Q_strcat(dest, size,
-    //       va("#ifndef r_NormalScale\n#define r_NormalScale %f\n#endif\n", r_normalScale->value));
-
     Q_strcat(dest, size, "#ifndef M_PI\n#define M_PI 3.14159265358979323846\n#endif\n");
-
-    // Q_strcat(dest, size, va("#ifndef MAX_SHADOWMAPS\n#define MAX_SHADOWMAPS %i\n#endif\n", MAX_SHADOWMAPS));
 
     Q_strcat(dest, size,
              va("#ifndef deformGen_t\n"
@@ -375,8 +361,6 @@ static void GLSL_GetShaderHeader(GLenum shaderType, const GLchar* extra, char* d
         Q_strcat(dest, size, va("#define ROUGHNESS_MIPS float(%d)\n", numRoughnessMips));
     }
 
-    // OK we added a lot of stuff but if we do something bad in the GLSL shaders then we want the proper line
-    // so we have to reset the line counting
     Q_strcat(dest, size, "#line 0\n");
 }
 
@@ -388,10 +372,8 @@ static int GLSL_CompileGPUShader(GLuint program, GLuint* prevShader, const GLcha
 
     qglShaderSource(shader, 1, (const GLchar**)&buffer, &size);
 
-    // compile shader
     qglCompileShader(shader);
 
-    // check if shader compiled
     qglGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
     if (!compiled) {
         GLSL_PrintLog(shader, GLSL_PRINTLOG_SHADER_SOURCE, qfalse);
@@ -405,7 +387,6 @@ static int GLSL_CompileGPUShader(GLuint program, GLuint* prevShader, const GLcha
         qglDeleteShader(*prevShader);
     }
 
-    // attach shader to program
     qglAttachShader(program, shader);
 
     *prevShader = shader;
@@ -478,10 +459,8 @@ static void GLSL_ShowProgramUniforms(GLuint program) {
     GLenum type;
     char uniformName[1000];
 
-    // query the number of active uniforms
     qglGetProgramiv(program, GL_ACTIVE_UNIFORMS, &count);
 
-    // Loop over each of the active uniforms, and set their value
     for (i = 0; i < count; i++) {
         qglGetActiveUniform(program, i, sizeof(uniformName), NULL, &size, &type, uniformName);
 
@@ -523,12 +502,6 @@ static int GLSL_InitGPUShader2(shaderProgram_t* program, const char* name, int a
 
     if (attribs & ATTR_LIGHTCOORD)
         qglBindAttribLocation(program->program, ATTR_INDEX_LIGHTCOORD, "attr_TexCoord1");
-
-    //  if(attribs & ATTR_TEXCOORD2)
-    //      qglBindAttribLocation(program->program, ATTR_INDEX_TEXCOORD2, "attr_TexCoord2");
-
-    //  if(attribs & ATTR_TEXCOORD3)
-    //      qglBindAttribLocation(program->program, ATTR_INDEX_TEXCOORD3, "attr_TexCoord3");
 
     if (attribs & ATTR_TANGENT)
         qglBindAttribLocation(program->program, ATTR_INDEX_TANGENT, "attr_Tangent");
@@ -805,7 +778,7 @@ void GLSL_SetUniformMat4(shaderProgram_t* program, int uniformNum, const mat4_t 
     qglProgramUniformMatrix4fvEXT(program->program, uniforms[uniformNum], 1, GL_FALSE, matrix);
 }
 
-void GLSL_SetUniformMat4BoneMatrix(shaderProgram_t* program, int uniformNum, /*const*/ mat4_t* matrix, int numMatricies) {
+void GLSL_SetUniformMat4BoneMatrix(shaderProgram_t* program, int uniformNum,  mat4_t* matrix, int numMatricies) {
     GLint* uniforms = program->uniforms;
     vec_t* compare = (float*)(program->uniformBuffer + program->uniformBufferOffsets[uniformNum]);
 
@@ -868,7 +841,6 @@ void GLSL_InitGPUShaders(void) {
 
     startTime = ri.Milliseconds();
 
-    // OpenGL ES may not have enough attributes to fit ones used for vertex animation
     if (glRefConfig.maxVertexAttribs > ATTR_INDEX_NORMAL2) {
         ri.Printf(PRINT_ALL, "Using GPU vertex animation\n");
         glRefConfig.gpuVertexAnimation = qtrue;
@@ -999,7 +971,6 @@ void GLSL_InitGPUShaders(void) {
         int lightType = i & LIGHTDEF_LIGHTTYPE_MASK;
         qboolean fastLight = !(r_normalMapping->integer || r_specularMapping->integer);
 
-        // skip impossible combos
         if ((i & LIGHTDEF_USE_PARALLAXMAP) && !r_parallaxMapping->integer)
             continue;
 
@@ -1238,8 +1209,6 @@ void GLSL_InitGPUShaders(void) {
 
     numEtcShaders++;
 
-    // [QL] Quake Live's post effects (tr_qlpost.c), built only when they run, like retail's
-    // scripts/*.fs (0x43cfe0, 0x4380f0)
     if (r_colorCorrectActive->integer) {
         attribs = ATTR_POSITION | ATTR_TEXCOORD;
 
@@ -1334,7 +1303,6 @@ void GLSL_InitGPUShaders(void) {
         numEtcShaders++;
     }
 
-    // GLSL 1.10+ or GL_EXT_shadow_samplers extension are required for sampler2DShadow type
     if (glRefConfig.glslMajorVersion > 1 || (glRefConfig.glslMajorVersion == 1 && glRefConfig.glslMinorVersion >= 10) || glRefConfig.shadowSamplers) {
         attribs = ATTR_POSITION | ATTR_TEXCOORD;
         extradefines[0] = '\0';
@@ -1372,7 +1340,6 @@ void GLSL_InitGPUShaders(void) {
         numEtcShaders++;
     }
 
-    // GLSL 1.10+ or GL_OES_standard_derivatives extension are required for dFdx() and dFdy() GLSL functions
     if (glRefConfig.glslMajorVersion > 1 || (glRefConfig.glslMajorVersion == 1 && glRefConfig.glslMinorVersion >= 10) || glRefConfig.standardDerivatives) {
         attribs = ATTR_POSITION | ATTR_TEXCOORD;
         extradefines[0] = '\0';
@@ -1505,7 +1472,6 @@ void GLSL_BindProgram(shaderProgram_t* program) {
     char* name = program ? program->name : "NULL";
 
     if (r_logFile->integer) {
-        // don't just call LogComment, or we will get a call to va() every frame!
         GLimp_LogComment(va("--- GLSL_BindProgram( %s ) ---\n", name));
     }
 

@@ -19,7 +19,6 @@ along with XreaL source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// tr_vbo.c
 #include "tr_local.h"
 
 void R_VaoPackTangent(int16_t* out, vec4_t v) {
@@ -59,7 +58,6 @@ void R_VaoUnpackNormal(vec3_t v, int16_t* pack) {
 void Vao_SetVertexPointers(vao_t* vao) {
     int attribIndex;
 
-    // set vertex pointers
     for (attribIndex = 0; attribIndex < ATTR_INDEX_COUNT; attribIndex++) {
         uint32_t attribBit = 1 << attribIndex;
         vaoAttrib_t* vAtb = &vao->attribs[attribIndex];
@@ -72,8 +70,6 @@ void Vao_SetVertexPointers(vao_t* vao) {
             if (!glRefConfig.vertexArrayObject || vao == tess.vao)
                 glState.vertexAttribsEnabled |= attribBit;
         } else {
-            // don't disable vertex attribs when using vertex array objects
-            // Vao_SetVertexPointers is only called during init when using VAOs, and vertex attribs start disabled anyway
             if (!glRefConfig.vertexArrayObject && (glState.vertexAttribsEnabled & attribBit))
                 qglDisableVertexAttribArray(attribIndex);
 
@@ -83,11 +79,6 @@ void Vao_SetVertexPointers(vao_t* vao) {
     }
 }
 
-/*
-============
-R_CreateVao
-============
-*/
 vao_t* R_CreateVao(const char* name, byte* vertexes, int vertexesSize, byte* indexes, int indexesSize, vaoUsage_t usage) {
     vao_t* vao;
     int glUsage;
@@ -149,11 +140,6 @@ vao_t* R_CreateVao(const char* name, byte* vertexes, int vertexesSize, byte* ind
     return vao;
 }
 
-/*
-============
-R_CreateVao2
-============
-*/
 vao_t* R_CreateVao2(const char* name, int numVertexes, srfVert_t* verts, int numIndexes, glIndex_t* indexes) {
     vao_t* vao;
     int i;
@@ -184,7 +170,6 @@ vao_t* R_CreateVao2(const char* name, int numVertexes, srfVert_t* verts, int num
 
     Q_strncpyz(vao->name, name, sizeof(vao->name));
 
-    // since these vertex attributes are never altered, interleave them
     vao->attribs[ATTR_INDEX_POSITION].enabled = 1;
     vao->attribs[ATTR_INDEX_NORMAL].enabled = 1;
     vao->attribs[ATTR_INDEX_TANGENT].enabled = 1;
@@ -245,37 +230,29 @@ vao_t* R_CreateVao2(const char* name, int numVertexes, srfVert_t* verts, int num
         qglBindVertexArray(vao->vao);
     }
 
-    // create VBO
     dataSize *= numVertexes;
     data = ri.Hunk_AllocateTempMemory(dataSize);
     dataOfs = 0;
 
     for (i = 0; i < numVertexes; i++) {
-        // xyz
         memcpy(data + dataOfs, &verts[i].xyz, sizeof(verts[i].xyz));
         dataOfs += sizeof(verts[i].xyz);
 
-        // normal
         memcpy(data + dataOfs, &verts[i].normal, sizeof(verts[i].normal));
         dataOfs += sizeof(verts[i].normal);
 
-        // tangent
         memcpy(data + dataOfs, &verts[i].tangent, sizeof(verts[i].tangent));
         dataOfs += sizeof(verts[i].tangent);
 
-        // texcoords
         memcpy(data + dataOfs, &verts[i].st, sizeof(verts[i].st));
         dataOfs += sizeof(verts[i].st);
 
-        // lightmap texcoords
         memcpy(data + dataOfs, &verts[i].lightmap, sizeof(verts[i].lightmap));
         dataOfs += sizeof(verts[i].lightmap);
 
-        // colors
         memcpy(data + dataOfs, &verts[i].color, sizeof(verts[i].color));
         dataOfs += sizeof(verts[i].color);
 
-        // light directions
         memcpy(data + dataOfs, &verts[i].lightdir, sizeof(verts[i].lightdir));
         dataOfs += sizeof(verts[i].lightdir);
     }
@@ -287,7 +264,6 @@ vao_t* R_CreateVao2(const char* name, int numVertexes, srfVert_t* verts, int num
     qglBindBuffer(GL_ARRAY_BUFFER, vao->vertexesVBO);
     qglBufferData(GL_ARRAY_BUFFER, vao->vertexesSize, data, glUsage);
 
-    // create IBO
     vao->indexesSize = numIndexes * sizeof(glIndex_t);
 
     qglGenBuffers(1, &vao->indexesIBO);
@@ -306,20 +282,13 @@ vao_t* R_CreateVao2(const char* name, int numVertexes, srfVert_t* verts, int num
     return vao;
 }
 
-/*
-============
-R_BindVao
-============
-*/
 void R_BindVao(vao_t* vao) {
     if (!vao) {
-        // R_BindNullVao();
         ri.Error(ERR_DROP, "R_BindVao: NULL vao");
         return;
     }
 
     if (r_logFile->integer) {
-        // don't just call LogComment, or we will get a call to va() every frame!
         GLimp_LogComment(va("--- R_BindVao( %s ) ---\n", vao->name));
     }
 
@@ -333,29 +302,21 @@ void R_BindVao(vao_t* vao) {
         if (glRefConfig.vertexArrayObject) {
             qglBindVertexArray(vao->vao);
 
-            // Intel Graphics doesn't save GL_ELEMENT_ARRAY_BUFFER binding with VAO binding.
             if (glRefConfig.intelGraphics || vao == tess.vao)
                 qglBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vao->indexesIBO);
 
-            // tess VAO always has buffers bound
             if (vao == tess.vao)
                 qglBindBuffer(GL_ARRAY_BUFFER, vao->vertexesVBO);
         } else {
             qglBindBuffer(GL_ARRAY_BUFFER, vao->vertexesVBO);
             qglBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vao->indexesIBO);
 
-            // tess VAO doesn't have vertex pointers set until data is uploaded
             if (vao != tess.vao)
                 Vao_SetVertexPointers(vao);
         }
     }
 }
 
-/*
-============
-R_BindNullVao
-============
-*/
 void R_BindNullVao(void) {
     GLimp_LogComment("--- R_BindNullVao ---\n");
 
@@ -363,7 +324,6 @@ void R_BindNullVao(void) {
         if (glRefConfig.vertexArrayObject) {
             qglBindVertexArray(0);
 
-            // why you no save GL_ELEMENT_ARRAY_BUFFER binding, Intel?
             if (1)
                 qglBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
         } else {
@@ -376,11 +336,6 @@ void R_BindNullVao(void) {
     GL_CheckErrors();
 }
 
-/*
-============
-R_InitVaos
-============
-*/
 void R_InitVaos(void) {
     int vertexesSize, indexesSize;
     int offset;
@@ -475,11 +430,6 @@ void R_InitVaos(void) {
     GL_CheckErrors();
 }
 
-/*
-============
-R_ShutdownVaos
-============
-*/
 void R_ShutdownVaos(void) {
     int i;
     vao_t* vao;
@@ -506,11 +456,6 @@ void R_ShutdownVaos(void) {
     tr.numVaos = 0;
 }
 
-/*
-============
-R_VaoList_f
-============
-*/
 void R_VaoList_f(void) {
     int i;
     vao_t* vao;
@@ -545,31 +490,19 @@ void R_VaoList_f(void) {
               (indexesSize % (1024 * 1024)) * 100 / (1024 * 1024));
 }
 
-/*
-==============
-RB_UpdateTessVao
-
-Adapted from Tess_UpdateVBOs from xreal
-
-Update the default VAO to replace the client side vertex arrays
-==============
-*/
 void RB_UpdateTessVao(unsigned int attribBits) {
     GLimp_LogComment("--- RB_UpdateTessVao ---\n");
 
     backEnd.pc.c_dynamicVaoDraws++;
 
-    // update the default VAO
     if (tess.numVertexes > 0 && tess.numVertexes <= SHADER_MAX_VERTEXES && tess.numIndexes > 0 && tess.numIndexes <= SHADER_MAX_INDEXES) {
         int attribIndex;
         int attribUpload;
 
         R_BindVao(tess.vao);
 
-        // orphan old vertex buffer so we don't stall on it
         qglBufferData(GL_ARRAY_BUFFER, tess.vao->vertexesSize, NULL, GL_DYNAMIC_DRAW);
 
-        // if nothing to set, set everything
         if (!(attribBits & ATTR_BITS))
             attribBits = ATTR_BITS;
 
@@ -580,7 +513,6 @@ void RB_UpdateTessVao(unsigned int attribBits) {
             vaoAttrib_t* vAtb = &tess.vao->attribs[attribIndex];
 
             if (attribUpload & attribBit) {
-                // note: tess has a VBO where stride == size
                 qglBufferSubData(GL_ARRAY_BUFFER, vAtb->offset, tess.numVertexes * vAtb->stride, tess.attribPointers[attribIndex]);
             }
 
@@ -600,15 +532,12 @@ void RB_UpdateTessVao(unsigned int attribBits) {
             }
         }
 
-        // orphan old index buffer so we don't stall on it
         qglBufferData(GL_ELEMENT_ARRAY_BUFFER, tess.vao->indexesSize, NULL, GL_DYNAMIC_DRAW);
 
         qglBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, tess.numIndexes * sizeof(tess.indexes[0]), tess.indexes);
     }
 }
 
-// FIXME: This sets a limit of 65536 verts/262144 indexes per static surface
-// This is higher than the old vq3 limits but is worth noting
 #define VAOCACHE_QUEUE_MAX_SURFACES (1 << 10)
 #define VAOCACHE_QUEUE_MAX_VERTEXES (1 << 16)
 #define VAOCACHE_QUEUE_MAX_INDEXES (VAOCACHE_QUEUE_MAX_VERTEXES * 4)
@@ -635,9 +564,6 @@ static struct
 #define VAOCACHE_MAX_SURFACES (1 << 16)
 #define VAOCACHE_MAX_BATCHES (1 << 10)
 
-// srfVert_t is 60 bytes
-// assuming each vert is referenced 4 times, need 16 bytes (4 glIndex_t) per vert
-// -> need about 4/15ths the space for indexes as vertexes
 #define VAOCACHE_VERTEX_BUFFER_SIZE (16 * 1024 * 1024)
 #define VAOCACHE_INDEX_BUFFER_SIZE (5 * 1024 * 1024)
 
@@ -667,8 +593,6 @@ void VaoCache_Commit(void) {
 
     R_BindVao(vc.vao);
 
-    // Search for a matching batch
-    // FIXME: Use faster search
     indexSet = vc.surfaceIndexSets;
     batchLength = vc.batchLengths;
     for (; batchLength < vc.batchLengths + vc.numBatches; batchLength++) {
@@ -686,14 +610,9 @@ void VaoCache_Commit(void) {
         indexSet += *batchLength;
     }
 
-    // If found, use it
     if (indexSet < vc.surfaceIndexSets + vc.numSurfaces) {
         tess.firstIndex = indexSet->bufferOffset / glRefConfig.vaoCacheGlIndexSize;
-        // ri.Printf(PRINT_ALL, "firstIndex %d numIndexes %d as %d\n", tess.firstIndex, tess.numIndexes, (int)(batchLength - vc.batchLengths));
-        // ri.Printf(PRINT_ALL, "vc.numSurfaces %d vc.numBatches %d\n", vc.numSurfaces, vc.numBatches);
     }
-    // If not, rebuffer the batch
-    // FIXME: keep track of the vertexes so we don't have to reupload them every time
     else {
         srfVert_t* dstVertex = vcq.vertexes;
         vaoCacheGlIndex_t* dstIndex = vcq.indexes;
@@ -733,8 +652,6 @@ void VaoCache_Commit(void) {
 
             vcq.indexCommitSize += indexesSize;
         }
-
-        // ri.Printf(PRINT_ALL, "committing %d to %d, %d to %d as %d\n", vcq.vertexCommitSize, vc.vertexOffset, vcq.indexCommitSize, vc.indexOffset, (int)(batchLength - vc.batchLengths));
 
         if (vcq.vertexCommitSize) {
             qglBindBuffer(GL_ARRAY_BUFFER, vc.vao->vertexesVBO);
@@ -838,42 +755,35 @@ void VaoCache_CheckAdd(qboolean* endSurface, qboolean* recycleVertexBuffer, qboo
     int indexesSize = glRefConfig.vaoCacheGlIndexSize * numIndexes;
 
     if (vc.vao->vertexesSize < vc.vertexOffset + vcq.vertexCommitSize + vertexesSize) {
-        // ri.Printf(PRINT_ALL, "out of space in vertex cache: %d < %d + %d + %d\n", vc.vao->vertexesSize, vc.vertexOffset, vcq.vertexCommitSize, vertexesSize);
         *recycleVertexBuffer = qtrue;
         *recycleIndexBuffer = qtrue;
         *endSurface = qtrue;
     }
 
     if (vc.vao->indexesSize < vc.indexOffset + vcq.indexCommitSize + indexesSize) {
-        // ri.Printf(PRINT_ALL, "out of space in index cache\n");
         *recycleIndexBuffer = qtrue;
         *endSurface = qtrue;
     }
 
     if (vc.numSurfaces + vcq.numSurfaces >= VAOCACHE_MAX_SURFACES) {
-        // ri.Printf(PRINT_ALL, "out of surfaces in index cache\n");
         *recycleIndexBuffer = qtrue;
         *endSurface = qtrue;
     }
 
     if (vc.numBatches >= VAOCACHE_MAX_BATCHES) {
-        // ri.Printf(PRINT_ALL, "out of batches in index cache\n");
         *recycleIndexBuffer = qtrue;
         *endSurface = qtrue;
     }
 
     if (vcq.numSurfaces >= VAOCACHE_QUEUE_MAX_SURFACES) {
-        // ri.Printf(PRINT_ALL, "out of queued surfaces\n");
         *endSurface = qtrue;
     }
 
     if (VAOCACHE_QUEUE_MAX_VERTEXES * sizeof(srfVert_t) < vcq.vertexCommitSize + vertexesSize) {
-        // ri.Printf(PRINT_ALL, "out of queued vertexes\n");
         *endSurface = qtrue;
     }
 
     if (VAOCACHE_QUEUE_MAX_INDEXES * glRefConfig.vaoCacheGlIndexSize < vcq.indexCommitSize + indexesSize) {
-        // ri.Printf(PRINT_ALL, "out of queued indexes\n");
         *endSurface = qtrue;
     }
 }

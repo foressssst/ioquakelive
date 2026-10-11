@@ -19,44 +19,13 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// g_training.c -- [QL] the Crash Course: the map's tour, and the match around it
-//
-// The Crash Course is qztraining with the "_training" factory (g_training 1). The
-// tour is the map's: 47 info_tour_point entities chained by tourPointTargetName and
-// tourPointTarget, each holding one line of Crash's script. Crash is the bot
-// "Trainer" of scripts/bots.txt, and walking her from stop to stop is the bot's
-// (AINode_Training, ai_dmnet.c). The cinematic it opens with is the player held in
-// PM_TUTORIAL while bot_training is 1.
-//
-// This file is what the game does around that, from qagamex86.dll:
-//   SP_info_tour_point      0x1005a1f0
-//   its think               0x10059fd0
-//   G_TrainingHumanClient   0x10024ea0
-//   G_TrainingBotClient     0x10024ee0
-//   G_TrainingForceCvar     0x10024f20
-//   G_TrainingAddTrainer    0x100378e0
-//   G_TrainingFrame         0x10024fa0, from BotAIStartFrame
-//   Cmd_SkipTraining        0x10045a80, from readyup
-//
-
 #include "g_local.h"
 
-// the tick's latches (0x100907dc, 0x100907d8, 0x100907d0, 0x100907c4): retail keeps
-// them for the life of the module, which is one map
 static qboolean trainingMusicStopped;
 static qboolean trainingTrainerAdded;
 static qboolean trainingLoopStarted;
 static qboolean trainingEndMusicPlayed;
 
-/*
-===============
-G_TrainingHumanClient
-
-0x10024ea0: the first client in use, connected, and local -- the player the
-training is for. Returns its client number or -1.
-===============
-*/
 int G_TrainingHumanClient(void) {
     int i;
 
@@ -74,13 +43,6 @@ int G_TrainingHumanClient(void) {
     return -1;
 }
 
-/*
-===============
-G_TrainingBotClient
-
-0x10024ee0: the first client in use, connected, and a bot -- Crash.
-===============
-*/
 int G_TrainingBotClient(void) {
     int i;
 
@@ -98,7 +60,6 @@ int G_TrainingBotClient(void) {
     return -1;
 }
 
-// 0x10024f20: sets a cvar only when it holds something else
 static void G_TrainingForceCvar(const char* name, const char* value) {
     char current[1024];
 
@@ -108,30 +69,11 @@ static void G_TrainingForceCvar(const char* name, const char* value) {
     }
 }
 
-// 0x100378e0: Crash comes in five seconds later, and the client loads her at once
 static void G_TrainingAddTrainer(float skill) {
     G_AddBot("Trainer", skill, "", 5000, "");
     trap_SendServerCommand(-1, "loaddeferred\n");
 }
 
-/*
-===============================================================================
-
-THE TOUR POINTS
-
-===============================================================================
-*/
-
-/*
-===============
-TourPoint_Think
-
-0x10059fd0, a few frames after the level loads. A point with spawnflag 128 hides
-what its box holds -- items, but not flags or persistant powerups -- and every item
-it targets, until the tour gets there and uses them. Then the next point of the
-chain is found once, so the bot does not have to look for it.
-===============
-*/
 static void TourPoint_Think(gentity_t* self) {
     if (self->spawnflags & 128) {
         vec3_t mins, maxs;
@@ -176,18 +118,6 @@ static void TourPoint_Think(gentity_t* self) {
     }
 }
 
-/*QUAKED info_tour_point (1 0.5 0) (-16 -16 -24) (16 16 32) START
-[QL] One stop of a training map's tour. Only a training map keeps them.
-"tourPointTargetName"  this stop's name; only the first stop (START) may lack it
-"tourPointTarget"      the stop after it
-"noise"                what the trainer says here
-"message"              the line the player reads
-"printChatTextTime"    how long the line stays up (2)
-"wait"                 how long the stop lasts
-"radius"               how near the player has to be (300)
-"ignorePlayerLocation" the stop does not wait for the player
-"cvar" "cvarValue"     a cvar set on the way (-1 sets nothing)
-*/
 void SP_info_tour_point(gentity_t* ent) {
     char* s;
 
@@ -223,30 +153,11 @@ void SP_info_tour_point(gentity_t* ent) {
     VectorSet(ent->r.mins, -16, -16, -24);
     VectorSet(ent->r.maxs, 16, 16, 32);
 
-    // the think runs four server frames in, when every point has spawned
     ent->nextthink = level.time - 4 * (int)(-1000.0 / sv_fps.integer);
     ent->think = TourPoint_Think;
     trap_LinkEntity(ent);
 }
 
-/*
-===============================================================================
-
-THE TRAINING MATCH
-
-===============================================================================
-*/
-
-/*
-===============
-Cmd_SkipTraining
-
-0x10045a80, from readyup while g_skipTrainingEnable: the tour ends where it is and
-the match starts over. Crash can pick things up again with a machinegun and 100
-bullets, nobody is invulnerable any more, everyone respawns, and the player's chat
-and sounds are cleared.
-===============
-*/
 void Cmd_SkipTraining(int clientNum) {
     int i;
 
@@ -276,19 +187,6 @@ void Cmd_SkipTraining(int clientNum) {
     trap_SendServerCommand(clientNum, "clearSounds");
 }
 
-/*
-===============
-G_TrainingFrame
-
-0x10024fa0, at the end of every BotAIStartFrame while g_training is set.
-
-Away from a training map it switches the training off; with nobody to train it
-holds the match at retail's settings. Otherwise the music stops for the warmup,
-Crash is added once the player is on a team, bot_training 3 starts the arena's loop
-and the intro's g_training 2 becomes 1 when the warmup is over. Until the player
-readies up, bot_training 1 holds them in the cinematic; readying up ends the tour.
-===============
-*/
 void G_TrainingFrame(void) {
     int human, bot;
     gclient_t* client;
@@ -348,7 +246,6 @@ void G_TrainingFrame(void) {
         if (g_training.integer == 2) {
             trap_Cvar_Set("g_training", "1");
         }
-        // a Crash below skill 3 leaves the powerups alone
         if (!level.warmupTime) {
             bot = G_TrainingBotClient();
             if (bot != -1 && BotGetSkill(bot) < 3.0f) {
@@ -393,28 +290,12 @@ void G_TrainingFrame(void) {
     }
 }
 
-/*
-===============================================================================
-
-CRASH IN SPANISH (g_trainingSpanish)
-
-[ioquakelive] Not retail's: a switch for testing the tour in Spanish. Her voice
-stays the original, there is no Spanish audio.
-
-The map's lines are keyed by the sound file that goes with them, not by their text:
-the text in qztraining.bsp carries Windows-1252 curly quotes, and matching those
-from source would be a matter of luck. The wav names are plain ASCII, one per line.
-
-===============================================================================
-*/
-
 typedef struct {
-    const char* key;  // the line's sound file, or the English text for the bot's own lines
+    const char* key;
     const char* es;
 } trainingLine_t;
 
 static const trainingLine_t trainingSpanish[] = {
-    // the tour, in order (info_tour_point message + noise)
     {"crash_new/01_02.wav", "Hola, bienvenido al juego."},
     {"crash_new/02_02.wav", "Me llamo Crash."},
     {"crash_new/03_03.wav",
@@ -467,7 +348,6 @@ static const trainingLine_t trainingSpanish[] = {
     {"crash_new/38_01.wav", "Y acuerdate: spawnear, equiparse, pelear y reponer."},
     {"crash_new/39_01.wav", "Suerte y pasalo bien."},
 
-    // what the bot says on its own, by its English text
     {"This way! No time to waste!", "Por aca! No hay tiempo que perder!"},
     {"Let's continue on to the next stop in the tour! Follow me!",
      "Sigamos a la proxima parada del recorrido! Sigueme!"},
@@ -491,14 +371,6 @@ static const trainingLine_t trainingSpanish[] = {
      "Deja de gastar municion! Estoy aqui para ayudarte!"},
 };
 
-/*
-===============
-G_TrainingText
-
-The Spanish line for a key, or the key itself when the switch is off or the line
-is not in the table.
-===============
-*/
 const char* G_TrainingText(const char* key) {
     int i;
 
@@ -513,14 +385,6 @@ const char* G_TrainingText(const char* key) {
     return key;
 }
 
-/*
-===============
-G_TrainingSay
-
-A whole chat command ("say <line>" or "botSay <line>") with its line translated,
-or the command untouched when the switch is off or the line is not in the table.
-===============
-*/
 const char* G_TrainingSay(const char* command) {
     const char* space;
     const char* text;
@@ -547,21 +411,12 @@ const char* G_TrainingSay(const char* command) {
     return va("%s %s", verb, text);
 }
 
-/*
-===============
-G_TrainingMessage
-
-A tour stop's line: the map's text, or its Spanish translation, which is found by
-the stop's sound rather than by its text.
-===============
-*/
 const char* G_TrainingMessage(const gentity_t* point) {
     const char* sound;
 
     if (!g_trainingSpanish.integer || !point->noise || !point->noise[0]) {
         return point->message;
     }
-    // the table's keys drop the "sound/vo/" the map writes in front
     sound = point->noise;
     if (!Q_stricmpn(sound, "sound/vo/", 9)) {
         sound += 9;

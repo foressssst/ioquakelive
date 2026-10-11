@@ -19,16 +19,7 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "tr_common.h"
-
-/*
-========================================================================
-
-TGA files are used for 24/32 bit images
-
-========================================================================
-*/
 
 typedef struct _TargaHeader {
     unsigned char id_length, colormap_type, image_type;
@@ -38,8 +29,6 @@ typedef struct _TargaHeader {
     unsigned char pixel_size, attributes;
 } TargaHeader;
 
-// [ioquakelive] When the file is bad: on the main thread it errors out as always, and on a
-// worker it returns empty, because ri.Error's long jump is not safe off the main thread.
 #define TGA_FAIL(...)                       \
     do {                                    \
         if (targa_rgba) {                   \
@@ -52,15 +41,6 @@ typedef struct _TargaHeader {
         return;                             \
     } while (0)
 
-/*
-=============
-R_DecodeTGA
-
-[ioquakelive] Decodes a TGA that is already in memory; see the comment on R_DecodeJPG. The
-output buffer is asked for through allocator and released through deallocator, so that a worker
-uses the system's and the main thread the engine's.
-=============
-*/
 void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int* width, int* height,
                  void* (*allocator)(size_t), void (*deallocator)(void*), qboolean silent) {
     unsigned columns, rows, numPixels;
@@ -141,7 +121,7 @@ void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int*
         if (buf_p + targa_header.id_length > end)
             TGA_FAIL("LoadTGA: header too short (%s)", name);
 
-        buf_p += targa_header.id_length;  // skip TARGA image comment
+        buf_p += targa_header.id_length;
     }
 
     if (targa_header.image_type == 2 || targa_header.image_type == 3) {
@@ -149,7 +129,6 @@ void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int*
             TGA_FAIL("LoadTGA: file truncated (%s)", name);
         }
 
-        // Uncompressed RGB or gray scale image
         for (row = rows - 1; row >= 0; row--) {
             pixbuf = targa_rgba + row * columns * 4;
             for (column = 0; column < columns; column++) {
@@ -190,7 +169,7 @@ void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int*
                 }
             }
         }
-    } else if (targa_header.image_type == 10) {  // Runlength encoded RGB images
+    } else if (targa_header.image_type == 10) {
         unsigned char red, green, blue, alphabyte, packetHeader, packetSize, j;
 
         for (row = rows - 1; row >= 0; row--) {
@@ -200,7 +179,7 @@ void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int*
                     TGA_FAIL("LoadTGA: file truncated (%s)", name);
                 packetHeader = *buf_p++;
                 packetSize = 1 + (packetHeader & 0x7f);
-                if (packetHeader & 0x80) {  // run-length packet
+                if (packetHeader & 0x80) {
                     if (buf_p + targa_header.pixel_size / 8 > end)
                         TGA_FAIL("LoadTGA: file truncated (%s)", name);
                     switch (targa_header.pixel_size) {
@@ -227,7 +206,7 @@ void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int*
                         *pixbuf++ = blue;
                         *pixbuf++ = alphabyte;
                         column++;
-                        if (column == columns) {  // run spans across rows
+                        if (column == columns) {
                             column = 0;
                             if (row > 0)
                                 row--;
@@ -236,7 +215,7 @@ void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int*
                             pixbuf = targa_rgba + row * columns * 4;
                         }
                     }
-                } else {  // non run-length packet
+                } else {
 
                     if (buf_p + targa_header.pixel_size / 8 * packetSize > end)
                         TGA_FAIL("LoadTGA: file truncated (%s)", name);
@@ -266,7 +245,7 @@ void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int*
                                 break;
                         }
                         column++;
-                        if (column == columns) {  // pixel packet run spans across rows
+                        if (column == columns) {
                             column = 0;
                             if (row > 0)
                                 row--;
@@ -282,8 +261,6 @@ void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int*
     }
 
 #if 0 
-  // TTimo: this is the chunk of code to ensure a behavior that meets TGA specs 
-  // bit 5 set => top-down
   if (targa_header.attributes & 0x20) {
     unsigned char *flip = (unsigned char*)malloc (columns*4);
     unsigned char *src, *dst;
@@ -299,7 +276,6 @@ void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int*
     free (flip);
   }
 #endif
-    // instead we just print a warning
     if ((targa_header.attributes & 0x20) && !silent) {
         ri.Printf(PRINT_WARNING, "WARNING: '%s' TGA file header declares top-down image, ignoring\n", name);
     }
@@ -311,7 +287,6 @@ void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int*
 
     *pic = targa_rgba;
 }
-// [ioquakelive] the usual path: read the file and decode it right here
 static void* R_TGAAllocEngine(size_t bytes) {
     return ri.Malloc((int)bytes);
 }
@@ -335,7 +310,6 @@ void R_LoadTGA(const char* name, byte** pic, int* width, int* height) {
     }
     R_DecodeTGA(buffer.b, length, name, pic, width, height, R_TGAAllocEngine, R_TGAFreeEngine, qfalse);
     if (*pic) {
-        // [ioquakelive] for the map's load list: the real name, extension included
         Q_strncpyz(r_lastImageName, name, sizeof(r_lastImageName));
     }
     ri.FS_FreeFile(buffer.v);

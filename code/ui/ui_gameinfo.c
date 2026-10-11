@@ -19,16 +19,7 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-//
-// gameinfo.c
-//
-
 #include "ui_local.h"
-
-//
-// arena and bot info
-//
 
 int ui_numBots;
 static char* ui_botInfos[MAX_BOTS];
@@ -36,11 +27,6 @@ static char* ui_botInfos[MAX_BOTS];
 static int ui_numArenas;
 static char* ui_arenaInfos[MAX_ARENAS];
 
-/*
-===============
-UI_ParseInfos
-===============
-*/
 int UI_ParseInfos(char* buf, int max, char* infos[]) {
     char* token;
     int count;
@@ -82,7 +68,6 @@ int UI_ParseInfos(char* buf, int max, char* infos[]) {
             }
             Info_SetValueForKey(info, key, token);
         }
-        // NOTE: extra space for arena number
         infos[count] = UI_Alloc(strlen(info) + strlen("\\num\\") + strlen(va("%d", MAX_ARENAS)) + 1);
         if (infos[count]) {
             strcpy(infos[count], info);
@@ -92,11 +77,6 @@ int UI_ParseInfos(char* buf, int max, char* infos[]) {
     return count;
 }
 
-/*
-===============
-UI_LoadArenasFromFile
-===============
-*/
 static void UI_LoadArenasFromFile(char* filename) {
     int len;
     fileHandle_t f;
@@ -120,11 +100,6 @@ static void UI_LoadArenasFromFile(char* filename) {
     ui_numArenas += UI_ParseInfos(buf, MAX_ARENAS - ui_numArenas, &ui_arenaInfos[ui_numArenas]);
 }
 
-/*
-===============
-UI_LoadArenas
-===============
-*/
 void UI_LoadArenas(void) {
     int numdirs;
     vmCvar_t arenasFile;
@@ -143,7 +118,6 @@ void UI_LoadArenas(void) {
         UI_LoadArenasFromFile("scripts/arenas.txt");
     }
 
-    // get all arenas from .arena files
     numdirs = trap_FS_GetFileList("scripts", ".arena", dirlist, 1024);
     dirptr = dirlist;
     for (i = 0; i < numdirs; i++, dirptr += dirlen + 1) {
@@ -158,13 +132,6 @@ void UI_LoadArenas(void) {
     }
 }
 
-/*
-===============
-UI_GetArenaInfoByMap
-
-A map's arena, as Quake 3's q3_ui had it; NULL when no arena names the map
-===============
-*/
 const char* UI_GetArenaInfoByMap(const char* map) {
     int n;
 
@@ -176,11 +143,6 @@ const char* UI_GetArenaInfoByMap(const char* map) {
     return NULL;
 }
 
-/*
-===============
-UI_LoadArenasIntoMapList
-===============
-*/
 void UI_LoadArenasIntoMapList(void) {
     int n;
     char* type;
@@ -196,7 +158,6 @@ void UI_LoadArenasIntoMapList(void) {
         uiInfo.mapList[uiInfo.mapCount].typeBits = 0;
 
         type = Info_ValueForKey(ui_arenaInfos[n], "type");
-        // [QL] if no type specified, default to FFA
         if (*type) {
             if (strstr(type, "ffa")) {
                 uiInfo.mapList[uiInfo.mapCount].typeBits |= (1 << GT_FFA);
@@ -254,11 +215,6 @@ void UI_LoadArenasIntoMapList(void) {
     }
 }
 
-/*
-===============
-UI_LoadBotsFromFile
-===============
-*/
 static void UI_LoadBotsFromFile(char* filename) {
     int len;
     fileHandle_t f;
@@ -284,11 +240,6 @@ static void UI_LoadBotsFromFile(char* filename) {
     ui_numBots += UI_ParseInfos(buf, MAX_BOTS - ui_numBots, &ui_botInfos[ui_numBots]);
 }
 
-/*
-===============
-UI_LoadBots
-===============
-*/
 void UI_LoadBots(void) {
     vmCvar_t botsFile;
     int numdirs;
@@ -307,7 +258,6 @@ void UI_LoadBots(void) {
         UI_LoadBotsFromFile("scripts/bots.txt");
     }
 
-    // get all bots from .bot files
     numdirs = trap_FS_GetFileList("scripts", ".bot", dirlist, 1024);
     dirptr = dirlist;
     for (i = 0; i < numdirs; i++, dirptr += dirlen + 1) {
@@ -319,11 +269,6 @@ void UI_LoadBots(void) {
     trap_Print(va("%i bots parsed\n", ui_numBots));
 }
 
-/*
-===============
-UI_GetBotInfoByNumber
-===============
-*/
 char* UI_GetBotInfoByNumber(int num) {
     if (num < 0 || num >= ui_numBots) {
         trap_Print(va(S_COLOR_RED "Invalid bot number: %i\n", num));
@@ -332,11 +277,6 @@ char* UI_GetBotInfoByNumber(int num) {
     return ui_botInfos[num];
 }
 
-/*
-===============
-UI_GetBotInfoByName
-===============
-*/
 char* UI_GetBotInfoByName(const char* name) {
     int n;
     char* value;

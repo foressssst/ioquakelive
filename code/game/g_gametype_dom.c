@@ -1,40 +1,14 @@
-/*
- * g_gametype_dom.c -- Domination (GT_DOMINATION, 10)
- *
- * Reversed from qagamex86.dll (Quake Live build 1069), Ghidra port 8193.
- *
- * Each "team_dom_point" runs a per-frame framethink that scans for nearby
- * players and drives a capture accumulator in ent->health toward -1000 (red)
- * or +1000 (blue). Reaching an extreme captures the point for that team and
- * fires GTS_DOMINATION_POINT_CAPTURE. A separate think (DOM_Think) ticks every
- * g_domScoreRate seconds and adds one point per held control point to the
- * owning team's score. DOM_CheckPlayers publishes the per-team owned-point
- * counts to configstrings 700/701 each frame.
- *
- * Binary addresses (qagamex86.dll):
- *   DOM_CheckFlagScore    0x1004aa80
- *   DOM_AddTeamScores     0x1004abf0
- *   DOM_FrameThink        0x1004ace0   (ent->framethink, per-frame capture)
- *   DOM_Think             0x1004b5d0   (ent->think, periodic scoring)
- *   DOM_FlagFirstThink    0x1004b720
- *   DOM_CheckPlayers      0x1004b900
- *   DOM_FragBonuses       0x1004b980
- *   SP_team_dom_point     0x1004bb10
- */
 #include "g_local.h"
 
 #define MAX_DOM_POINTS      5
-#define DOM_CAPTURE_LIMIT   1000    // accumulator extreme: -1000 red, +1000 blue
+#define DOM_CAPTURE_LIMIT   1000
 
-// team_dom_point registry (binary: DAT_105df534 / DAT_105df548)
 static gentity_t *domPoints[MAX_DOM_POINTS];
 static int numDomPoints;
 
-// DOM_Think cross-point scoring state (binary: DAT_105df54c / DAT_105df56c..578)
 static int domScoreTick;
-static int domPendingScores[4];   // indexed by team_t
+static int domPendingScores[4];
 
-// Forward declarations
 static void DOM_Think(gentity_t *ent);
 static void DOM_FrameThink(gentity_t *ent);
 
@@ -42,13 +16,6 @@ static void DOM_FrameThink(gentity_t *ent);
                          EF_AWARD_GAUNTLET | EF_AWARD_ASSIST | \
                          EF_AWARD_DEFEND | EF_AWARD_CAP)
 
-// ============================================================================
-// DOM_CheckFlagScore (binary: 0x1004aa80)
-//
-// Award medals when a point is captured. The capturer gets CAPTURE (+25), the
-// other players present get ASSIST (+15), and the score plums rise from the
-// point. ent->domCapturer picks the capturer.
-// ============================================================================
 static void DOM_CheckFlagScore(gentity_t *ent, gentity_t **players, int count) {
     int i;
 
@@ -78,13 +45,6 @@ static void DOM_CheckFlagScore(gentity_t *ent, gentity_t **players, int count) {
     }
 }
 
-// ============================================================================
-// DOM_AddTeamScores (binary: 0x1004abf0)
-//
-// Pick the capturer for the point from the players stood on it this frame.
-// One team present: keep the existing capturer if still on the point,
-// otherwise the first listed player. Both teams present: no capturer.
-// ============================================================================
 static void DOM_AddTeamScores(int redCount, int blueCount, gentity_t *ent,
                               gentity_t **redPlayers, gentity_t **bluePlayers) {
     gentity_t *prev;
@@ -105,7 +65,7 @@ static void DOM_AddTeamScores(int redCount, int blueCount, gentity_t *ent,
                 if (prev->client->sess.sessionTeam == TEAM_BLUE) {
                     for (j = 0; j < blueCount; j++) {
                         if (prev == bluePlayers[j])
-                            return;   // still on the point
+                            return;
                     }
                     ent->domCapturer = bluePlayers[0];
                     return;
@@ -134,18 +94,11 @@ static void DOM_AddTeamScores(int redCount, int blueCount, gentity_t *ent,
                 }
             }
         } else if (blueCount > 0) {
-            ent->domCapturer = NULL;   // contested
+            ent->domCapturer = NULL;
         }
     }
 }
 
-// ============================================================================
-// DOM_FrameThink (binary: 0x1004ace0)  ent->framethink
-//
-// Runs every frame. Scans players within ent->count units, advances the
-// capture accumulator (ent->health) and fires the capture event when it hits
-// an extreme. Red drives the accumulator to -1000, blue to +1000.
-// ============================================================================
 static void DOM_FrameThink(gentity_t *ent) {
     int i;
     int redCount = 0, blueCount = 0;
@@ -161,10 +114,6 @@ static void DOM_FrameThink(gentity_t *ent) {
 
     ent->s.weapon = 0;
 
-    // find players stood on the point
-    // Binary scans a fixed MAX_CLIENTS (64) slots (compiler unrolled the loop
-    // 4x over 16 iterations), not level.maxclients; non-client slots are
-    // filtered by the client!=NULL check below.
     radiusSq = (float)(ent->count * ent->count);
     for (i = 0; i < MAX_CLIENTS; i++) {
         gentity_t *player = &g_entities[i];
@@ -189,25 +138,20 @@ static void DOM_FrameThink(gentity_t *ent) {
 
     DOM_AddTeamScores(redCount, blueCount, ent, redPlayers, bluePlayers);
 
-    // player count shown to clients while only one team is present
     ent->s.otherEntityNum2 = 0;
     if (redCount == 0 || blueCount == 0)
         ent->s.otherEntityNum2 = redCount + blueCount;
 
-    // per-frame accumulator step: reaches 1000 over g_domCapTime seconds
     deltaBase = 0;
     if (g_domCapTime.integer > 0)
         deltaBase = level.frametime / g_domCapTime.integer;
 
-    // [QL] 0x1004b135..0x1004b1e9: the step is worked out as base + base * scale * (n - 1), in
-    // wider than float precision, and truncated
     scale = g_domTeammateCapScale.value;
     base = (float)deltaBase;
     capDelta = 0;
 
     if (g_domEnableContention.integer != 0 && g_domNeutralFlag.integer != 0 &&
         redCount != 0 && blueCount != 0) {
-        // contested with neutral flag: bleed the accumulator back toward zero
         oldAccum = ent->health;
         if (oldAccum != 0) {
             capDelta = (int)((base + base * scale) * (oldAccum > 0 ? -1.0 : 1.0));
@@ -215,7 +159,6 @@ static void DOM_FrameThink(gentity_t *ent) {
                 neutralized = qtrue;
         }
     } else {
-        // more players on a point capture it faster
         if (redCount > 0)
             capDelta = (int)(0.0 - (base + base * scale * (redCount - 1)));
         if (blueCount > 0)
@@ -231,11 +174,10 @@ static void DOM_FrameThink(gentity_t *ent) {
     ent->health = accum;
 
     progress = (accum < 0 ? -accum : accum) / 10;
-    ent->s.generic1 = progress;                     // 0..100 capture bar
+    ent->s.generic1 = progress;
     ent->s.weapon = 0;
-    ent->s.eventParm = (accum > 0) + 1;             // 1 = red side, 2 = blue side
+    ent->s.eventParm = (accum > 0) + 1;
 
-    // visual state: 2 = evenly contested, 1 = under attack / partway, 0 = idle
     if (redCount != 0 && blueCount != 0 && redCount == blueCount) {
         ent->s.weapon = 2;
     } else if (redCount != 0 && blueCount != 0) {
@@ -250,15 +192,11 @@ static void DOM_FrameThink(gentity_t *ent) {
     if (capDelta == 0)
         return;
 
-    // owner is losing the point (accumulator returning through zero) or the
-    // contested bleed reached neutral
     {
         int absOld = oldAccum < 0 ? -oldAccum : oldAccum;
         int absDelta = deltaBase < 0 ? -deltaBase : deltaBase;
         if (neutralized || (absOld < absDelta && ent->s.modelindex2 != 0)) {
-            // [QL] 0x1004b372: g_domNeutralFlag decides whether a lost point goes neutral
             if (g_domNeutralFlag.integer == 0) {
-                // no neutral flag: flip straight to the other team's extreme
                 ent->health = (ent->s.modelindex2 == TEAM_RED) ? DOM_CAPTURE_LIMIT
                                                                : -DOM_CAPTURE_LIMIT;
                 ent->s.modelindex2 = 0;
@@ -268,12 +206,11 @@ static void DOM_FrameThink(gentity_t *ent) {
                 te = G_TempEntity(ent->s.pos.trBase, EV_GLOBAL_TEAM_SOUND);
                 te->r.svFlags |= SVF_BROADCAST;
                 te->s.eventParm = GTS_DOMINATION_POINT_CAPTURE;
-                te->s.modelindex2 = ent->s.modelindex2;   // 0 = neutralised
+                te->s.modelindex2 = ent->s.modelindex2;
             }
         }
     }
 
-    // reached an extreme while neutral: capture for that team
     accum = ent->health;
     if ((accum == DOM_CAPTURE_LIMIT || accum == -DOM_CAPTURE_LIMIT) &&
         ent->s.modelindex2 == 0) {
@@ -282,15 +219,12 @@ static void DOM_FrameThink(gentity_t *ent) {
 
         ent->s.modelindex2 = team;
 
-        // Binary passes vec3_origin (DAT_104b1438) for the capture broadcast,
-        // not ent->s.pos.trBase (which the neutralise event above does use).
         te = G_TempEntity(vec3_origin, EV_GLOBAL_TEAM_SOUND);
         te->r.svFlags |= SVF_BROADCAST;
         te->s.eventParm = GTS_DOMINATION_POINT_CAPTURE;
         te->s.modelindex2 = team;
         te->s.powerups = level.warmupTime ? 0 : ent->s.powerups;
         if (level.warmupTime && ent->domCapturer && ent->domCapturer->client) {
-            // the capturer hears their own local sound, so exclude them here
             te->r.svFlags |= SVF_NOTSINGLECLIENT;
             te->r.singleClient = ent->domCapturer->client->ps.clientNum;
         }
@@ -302,13 +236,6 @@ static void DOM_FrameThink(gentity_t *ent) {
     }
 }
 
-// ============================================================================
-// DOM_Think (binary: 0x1004b5d0)  ent->think
-//
-// Fires every g_domScoreRate seconds. Each point adds one to its owner's
-// pending score; once every point has ticked, the pending totals are applied
-// to the team scores and a lead-change announcement is sent.
-// ============================================================================
 static void DOM_Think(gentity_t *ent) {
     int red, blue, newRed, newBlue;
     int announce;
@@ -325,9 +252,6 @@ static void DOM_Think(gentity_t *ent) {
     if (domScoreTick < numDomPoints)
         return;
 
-    // [QL] 0x1004b644: with three or more points held by domPoints[0]'s owner (a point not
-    // in use counts too), everybody on that team adds the tick's seconds to the time held,
-    // and at 30 gets AW_POINT_DENIED (0x29)
     {
         int owner = domPoints[0]->s.modelindex2;
         int held = 0;
@@ -373,7 +297,7 @@ static void DOM_Think(gentity_t *ent) {
         } else if (red < blue) {
             if (newRed > newBlue)
                 announce = GTS_REDTEAM_TOOK_LEAD;
-        } else {   // tied
+        } else {
             if (newRed > newBlue)
                 announce = GTS_REDTEAM_TOOK_LEAD;
             else if (newBlue > newRed)
@@ -395,11 +319,6 @@ static void DOM_Think(gentity_t *ent) {
     CalculateRanks();
 }
 
-// ============================================================================
-// DOM_FlagFirstThink (binary: 0x1004b720)
-//
-// Drop the point to the ground, then switch over to the real think/framethink.
-// ============================================================================
 static void DOM_FlagFirstThink(gentity_t *ent) {
     trace_t tr;
     vec3_t start, end;
@@ -412,7 +331,6 @@ static void DOM_FlagFirstThink(gentity_t *ent) {
 
     trap_Trace(&tr, start, mins, maxs, end, ENTITYNUM_NONE, CONTENTS_SOLID);
     if (tr.startsolid) {
-        // buried: retry from a bit higher up
         start[2] += 128.0f;
         trap_Trace(&tr, start, mins, maxs, end, ENTITYNUM_NONE, CONTENTS_SOLID);
         if (tr.startsolid)
@@ -434,12 +352,6 @@ done:
     ent->framethink = DOM_FrameThink;
 }
 
-// ============================================================================
-// DOM_CheckPlayers (binary: 0x1004b900)
-//
-// Publish the number of control points each team holds. Called every frame
-// from G_RunFrame. CS 700 = red owned, CS 701 = blue owned.
-// ============================================================================
 void DOM_CheckPlayers(void) {
     int i;
     int red = 0, blue = 0;
@@ -455,19 +367,9 @@ void DOM_CheckPlayers(void) {
     trap_SetConfigstring(701, va("%d", blue));
 }
 
-// ============================================================================
-// DOM_FragBonuses (binary: 0x1004b980)
-//
-// DEFEND (+10) for killing an enemy near a control point your team holds.
-// Needs distance < 500 and a PVS line of sight to the point. The score plum
-// rises from the victim.
-// ============================================================================
 void DOM_FragBonuses(gentity_t *attacker, gentity_t *victim) {
     int i;
 
-    // Binary has no null-guard here; the caller (player_die) only invokes this
-    // when g_gametype==GT_DOMINATION with a valid attacker->client, and a dying
-    // entity always has victim->client.
     for (i = 0; i < numDomPoints; i++) {
         gentity_t *point = domPoints[i];
 
@@ -488,15 +390,10 @@ void DOM_FragBonuses(gentity_t *attacker, gentity_t *victim) {
         attacker->client->ps.eFlags |= EF_AWARD_DEFEND;
         attacker->client->rewardTime = level.time + REWARD_SPRITE_TIME;
         STAT_AddPlayerMedalStat(attacker, "DEFENSE");
-        return;   // one bonus per kill
+        return;
     }
 }
 
-// ============================================================================
-// SP_team_dom_point (binary: 0x1004bb10)
-//
-// Spawn a control point. Only active in GT_DOMINATION.
-// ============================================================================
 void SP_team_dom_point(gentity_t *ent) {
     char *s;
 
@@ -506,13 +403,13 @@ void SP_team_dom_point(gentity_t *ent) {
     }
 
     ent->r.svFlags |= SVF_BROADCAST;
-    ent->health = 0;                              // capture accumulator
-    ent->s.groundEntityNum = ent->count;          // capture radius, for cgame
+    ent->health = 0;
+    ent->s.groundEntityNum = ent->count;
     ent->s.loopSound = G_SoundIndex("sound/ambient/loop_elec_hum_01_short.wav");
     ent->s.modelindex = G_ModelIndex("models/flag3/d_flag3.md3");
     G_SpawnString("identifier", "1", &s);
-    ent->s.powerups = atoi(s);                    // control point id
-    ent->s.modelindex2 = 0;                       // neutral
+    ent->s.powerups = atoi(s);
+    ent->s.modelindex2 = 0;
 
     ent->think = DOM_FlagFirstThink;
     ent->nextthink = level.time + 1;

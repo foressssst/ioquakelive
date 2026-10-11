@@ -1,6 +1,5 @@
 #version 450
 
-// 128 bytes
 layout(push_constant) uniform Transform {
 	mat4 mvp;
 };

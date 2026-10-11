@@ -19,9 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// g_bot.c
-
 #include "g_local.h"
 
 static int g_numBots;
@@ -48,13 +45,6 @@ extern gentity_t* podium1;
 extern gentity_t* podium2;
 extern gentity_t* podium3;
 
-// [QL] trap_Cvar_VariableValue is now provided by g_syscalls.c via imports->
-
-/*
-===============
-G_ParseInfos
-===============
-*/
 int G_ParseInfos(char* buf, int max, char* infos[]) {
     char* token;
     int count;
@@ -96,7 +86,6 @@ int G_ParseInfos(char* buf, int max, char* infos[]) {
             }
             Info_SetValueForKey(info, key, token);
         }
-        // NOTE: extra space for arena number
         infos[count] = G_Alloc(strlen(info) + strlen("\\num\\") + strlen(va("%d", MAX_ARENAS)) + 1);
         if (infos[count]) {
             strcpy(infos[count], info);
@@ -106,11 +95,6 @@ int G_ParseInfos(char* buf, int max, char* infos[]) {
     return count;
 }
 
-/*
-===============
-G_LoadArenasFromFile
-===============
-*/
 static void G_LoadArenasFromFile(char* filename) {
     int len;
     fileHandle_t f;
@@ -134,11 +118,6 @@ static void G_LoadArenasFromFile(char* filename) {
     g_numArenas += G_ParseInfos(buf, MAX_ARENAS - g_numArenas, &g_arenaInfos[g_numArenas]);
 }
 
-/*
-===============
-G_LoadArenas
-===============
-*/
 static void G_LoadArenas(void) {
     int numdirs;
     vmCvar_t arenasFile;
@@ -157,7 +136,6 @@ static void G_LoadArenas(void) {
         G_LoadArenasFromFile("scripts/arenas.txt");
     }
 
-    // get all arenas from .arena files
     numdirs = trap_FS_GetFileList("scripts", ".arena", dirlist, 1024);
     dirptr = dirlist;
     for (i = 0; i < numdirs; i++, dirptr += dirlen + 1) {
@@ -173,11 +151,6 @@ static void G_LoadArenas(void) {
     }
 }
 
-/*
-===============
-G_GetArenaInfoByNumber
-===============
-*/
 const char* G_GetArenaInfoByMap(const char* map) {
     int n;
 
@@ -190,11 +163,6 @@ const char* G_GetArenaInfoByMap(const char* map) {
     return NULL;
 }
 
-/*
-=================
-PlayerIntroSound
-=================
-*/
 static void PlayerIntroSound(const char* modelAndSkin) {
     char model[MAX_QPATH];
     char* skin;
@@ -214,15 +182,6 @@ static void PlayerIntroSound(const char* modelAndSkin) {
     trap_SendConsoleCommand(EXEC_APPEND, va("play sound/player/announce/%s.wav\n", skin));
 }
 
-/*
-===============
-G_CountBotPlayersByName
-
-Check connected and connecting (delay join) bots.
-
-Returns number of bots with name on specified team or whole server if team is -1.
-===============
-*/
 int G_CountBotPlayersByName(const char* name, int team) {
     int i, num;
     gclient_t* cl;
@@ -247,20 +206,12 @@ int G_CountBotPlayersByName(const char* name, int team) {
     return num;
 }
 
-/*
-===============
-G_SelectRandomBotInfo
-
-Get random least used bot info on team or whole server if team is -1.
-===============
-*/
 int G_SelectRandomBotInfo(int team) {
     int selection[MAX_BOTS];
     int n, num;
     int count, bestCount;
     char* value;
 
-    // don't add duplicate bots to the server if there are less bots than bot types
     if (team != -1 && G_CountBotPlayersByName(NULL, -1) < g_numBots) {
         team = -1;
     }
@@ -272,7 +223,6 @@ int G_SelectRandomBotInfo(int team) {
         if (!value[0]) {
             value = Info_ValueForKey(g_botInfos[n], "name");
         }
-        //
         count = G_CountBotPlayersByName(value, team);
 
         if (count < bestCount) {
@@ -297,15 +247,6 @@ int G_SelectRandomBotInfo(int team) {
     return -1;
 }
 
-/*
-===============
-G_AddRandomBot
-Address: 0x10036a20
-
-[QL] Q3's pick, which retail keeps: a random one of the bots.txt bots not already playing
-(on that team, when there is one), added by name with no team string for TEAM_FREE.
-===============
-*/
 void G_AddRandomBot(int team) {
     int i, n, num;
     float skill;
@@ -317,7 +258,6 @@ void G_AddRandomBot(int team) {
     num = 0;
     for (n = 0; n < g_numBots; n++) {
         value = Info_ValueForKey(g_botInfos[n], "name");
-        //
         for (i = 0; i < g_maxclients.integer; i++) {
             cl = level.clients + i;
             if (cl->pers.connected != CON_CONNECTED) {
@@ -340,7 +280,6 @@ void G_AddRandomBot(int team) {
     num = random() * num;
     for (n = 0; n < g_numBots; n++) {
         value = Info_ValueForKey(g_botInfos[n], "name");
-        //
         for (i = 0; i < g_maxclients.integer; i++) {
             cl = level.clients + i;
             if (cl->pers.connected != CON_CONNECTED) {
@@ -375,11 +314,6 @@ void G_AddRandomBot(int team) {
     }
 }
 
-/*
-===============
-G_RemoveRandomBot
-===============
-*/
 int G_RemoveRandomBot(int team) {
     int i;
     gclient_t* cl;
@@ -401,11 +335,6 @@ int G_RemoveRandomBot(int team) {
     return qfalse;
 }
 
-/*
-===============
-G_CountHumanPlayers
-===============
-*/
 int G_CountHumanPlayers(int team) {
     int i, num;
     gclient_t* cl;
@@ -427,13 +356,6 @@ int G_CountHumanPlayers(int team) {
     return num;
 }
 
-/*
-===============
-G_CountBotPlayers
-
-Check connected and connecting (delay join) bots.
-===============
-*/
 int G_CountBotPlayers(int team) {
     int i, num;
     gclient_t* cl;
@@ -455,20 +377,11 @@ int G_CountBotPlayers(int team) {
     return num;
 }
 
-/*
-===============
-G_CountBotPlayersWithQueued
-
-[QL] Like G_CountBotPlayers but also counts bots queued to spawn whose spawn
-time is already due. (binary G_CountBotPlayersWithQueued 0x10036de0)
-===============
-*/
 static int G_CountBotPlayersWithQueued(int team) {
     int i, num;
     gclient_t* cl;
 
     num = 0;
-    // connected bots
     for (i = 0; i < g_maxclients.integer; i++) {
         cl = level.clients + i;
         if (cl->pers.connected != CON_CONNECTED) {
@@ -482,7 +395,6 @@ static int G_CountBotPlayersWithQueued(int team) {
         }
         num++;
     }
-    // bots queued to spawn that are already due
     for (i = 0; i < BOT_SPAWN_QUEUE_DEPTH; i++) {
         if (botSpawnQueue[i].spawnTime && botSpawnQueue[i].spawnTime <= level.time) {
             num++;
@@ -491,18 +403,6 @@ static int G_CountBotPlayersWithQueued(int team) {
     return num;
 }
 
-/*
-===============
-G_CheckMinimumPlayers
-Address: 0x10036e80
-
-[QL] Once a second, outside intermission. The bots of an arena (g_botSpawnList) go in first,
-one per check while a human is connected. After that bot_minplayers, capped one below
-sv_maxclients, is compared with every player: in team games both teams together, a bot
-joining the team with fewer connected clients and leaving the bigger one; FFA and duel as in
-Q3. Race gets no bots.
-===============
-*/
 void G_CheckMinimumPlayers(void) {
     int minplayers;
     int humanplayers, botplayers;
@@ -512,17 +412,14 @@ void G_CheckMinimumPlayers(void) {
     float skill;
     static int checkminimumplayers_time;
 
-    // [QL] the value the last update read, so once it reads 0 the checks stop until the next map
     if (!bot_minplayers.integer || level.intermissionQueued || level.intermissionTime) {
         return;
     }
-    // only check once each second
     if (checkminimumplayers_time > level.time - 1000) {
         return;
     }
     checkminimumplayers_time = level.time;
 
-    // [QL] 0x10036ed4
     if (g_botSpawnList.string[0] && G_CountHumanPlayers(-1) > 0) {
         skill = trap_Cvar_VariableValue("g_spSkill");
         list = g_botSpawnList.string;
@@ -546,11 +443,9 @@ void G_CheckMinimumPlayers(void) {
     }
 
     if (g_gametype.integer >= GT_TEAM) {
-        // [QL] 0x10036fea
         Team_ConnectedTeamCounts(counts);
         humanplayers = G_CountHumanPlayers(TEAM_BLUE) + G_CountHumanPlayers(TEAM_RED);
         botplayers = G_CountBotPlayersWithQueued(TEAM_BLUE) + G_CountBotPlayersWithQueued(TEAM_RED);
-        //
         if (humanplayers + botplayers < minplayers) {
             G_AddRandomBot(counts[TEAM_BLUE] < counts[TEAM_RED] ? TEAM_BLUE : TEAM_RED);
         } else if (humanplayers + botplayers > minplayers && botplayers) {
@@ -563,20 +458,16 @@ void G_CheckMinimumPlayers(void) {
     } else if (g_gametype.integer == GT_DUEL) {
         humanplayers = G_CountHumanPlayers(-1);
         botplayers = G_CountBotPlayersWithQueued(-1);
-        //
         if (humanplayers + botplayers < minplayers) {
             G_AddRandomBot(TEAM_FREE);
         } else if (humanplayers + botplayers > minplayers && botplayers) {
-            // try to remove spectators first
             if (!G_RemoveRandomBot(TEAM_SPECTATOR)) {
-                // just remove the bot that is playing
                 G_RemoveRandomBot(-1);
             }
         }
     } else if (g_gametype.integer == GT_FFA) {
         humanplayers = G_CountHumanPlayers(TEAM_FREE);
         botplayers = G_CountBotPlayersWithQueued(TEAM_FREE);
-        //
         if (humanplayers + botplayers < minplayers) {
             G_AddRandomBot(TEAM_FREE);
         } else if (humanplayers + botplayers > minplayers && botplayers) {
@@ -585,11 +476,6 @@ void G_CheckMinimumPlayers(void) {
     }
 }
 
-/*
-===============
-G_CheckBotSpawn
-===============
-*/
 void G_CheckBotSpawn(void) {
     int n;
 
@@ -605,15 +491,9 @@ void G_CheckBotSpawn(void) {
         ClientBegin(botSpawnQueue[n].clientNum);
         botSpawnQueue[n].spawnTime = 0;
 
-        // [QL] No single-player intro sounds - GT_SINGLE_PLAYER doesn't exist
     }
 }
 
-/*
-===============
-AddBotToSpawnQueue
-===============
-*/
 static void AddBotToSpawnQueue(int clientNum, int delay) {
     int n;
 
@@ -629,14 +509,6 @@ static void AddBotToSpawnQueue(int clientNum, int delay) {
     ClientBegin(clientNum);
 }
 
-/*
-===============
-G_RemoveQueuedBotBegin
-
-Called on client disconnect to make sure the delayed spawn
-doesn't happen on a freed index
-===============
-*/
 void G_RemoveQueuedBotBegin(int clientNum) {
     int n;
 
@@ -648,11 +520,6 @@ void G_RemoveQueuedBotBegin(int clientNum) {
     }
 }
 
-/*
-===============
-G_BotConnect
-===============
-*/
 qboolean G_BotConnect(int clientNum, qboolean restart) {
     bot_settings_t settings;
     char userinfo[MAX_INFO_STRING];
@@ -661,9 +528,6 @@ qboolean G_BotConnect(int clientNum, qboolean restart) {
 
     Q_strncpyz(settings.characterfile, Info_ValueForKey(userinfo, "characterfile"), sizeof(settings.characterfile));
     settings.skill = atof(Info_ValueForKey(userinfo, "skill"));
-    // [QL] 0x10037447, the third key the binary reads here. G_AddBot put
-    // the resolved team into the userinfo a few lines above; this is where
-    // it comes back out, and BotDeathmatchAI is what acts on it.
     Q_strncpyz(settings.team, Info_ValueForKey(userinfo, "team"), sizeof(settings.team));
 
     if (!BotAISetupClient(clientNum, &settings, restart)) {
@@ -674,11 +538,6 @@ qboolean G_BotConnect(int clientNum, qboolean restart) {
     return qtrue;
 }
 
-/*
-===============
-G_AddBot
-===============
-*/
 void G_AddBot(const char* name, float skill, const char* team, int delay, char* altname) {
     int clientNum;
     int teamNum;
@@ -691,7 +550,6 @@ void G_AddBot(const char* name, float skill, const char* team, int delay, char* 
     char* headmodel;
     char userinfo[MAX_INFO_STRING];
 
-    // have the server allocate a client slot
     clientNum = trap_BotAllocateClient();
     if (clientNum == -1) {
         G_Printf(S_COLOR_RED "Unable to add bot. All player slots are in use.\n");
@@ -699,10 +557,6 @@ void G_AddBot(const char* name, float skill, const char* team, int delay, char* 
         return;
     }
 
-    // set default team
-    // [QL] for non-team gametypes the binary defaults the team string to "red"
-    // (not "free"); the value is inert for FFA/Duel but is written verbatim into
-    // the "team" userinfo key below. (0x10037620)
     if (!team || !*team) {
         if (g_gametype.integer >= GT_TEAM) {
             if (PickTeam(clientNum) == TEAM_RED) {
@@ -715,7 +569,6 @@ void G_AddBot(const char* name, float skill, const char* team, int delay, char* 
         }
     }
 
-    // get the botinfo from bots.txt
     if (Q_stricmp(name, "random") == 0) {
         if (Q_stricmp(team, "red") == 0 || Q_stricmp(team, "r") == 0) {
             teamNum = TEAM_RED;
@@ -746,14 +599,12 @@ void G_AddBot(const char* name, float skill, const char* team, int delay, char* 
         return;
     }
 
-    // create the bot's userinfo
     userinfo[0] = '\0';
 
     botname = Info_ValueForKey(botinfo, "funname");
     if (!botname[0]) {
         botname = Info_ValueForKey(botinfo, "name");
     }
-    // check for an alternative name
     if (altname && altname[0]) {
         botname = altname;
     }
@@ -761,7 +612,6 @@ void G_AddBot(const char* name, float skill, const char* team, int delay, char* 
     Info_SetValueForKey(userinfo, "rate", "25000");
     Info_SetValueForKey(userinfo, "skill", va("%1.2f", skill));
 
-    // [QL] handicap based on skill level
     if (skill >= 1 && skill < 2) {
         Info_SetValueForKey(userinfo, "handicap", "50");
     } else if (skill >= 2 && skill < 3) {
@@ -796,14 +646,14 @@ void G_AddBot(const char* name, float skill, const char* team, int delay, char* 
     key = "color1";
     s = Info_ValueForKey(botinfo, key);
     if (!*s) {
-        s = va("%i", 7);  // [QL] default color1 = 7
+        s = va("%i", 7);
     }
     Info_SetValueForKey(userinfo, key, s);
 
     key = "color2";
     s = Info_ValueForKey(botinfo, key);
     if (!*s) {
-        s = va("%i", 25);  // [QL] default color2 = 25
+        s = va("%i", 25);
     }
     Info_SetValueForKey(userinfo, key, s);
 
@@ -815,20 +665,14 @@ void G_AddBot(const char* name, float skill, const char* team, int delay, char* 
     }
     Info_SetValueForKey(userinfo, "characterfile", s);
 
-    // [QL] the binary rewrites "skill" here with %5.2f (this is the final value
-    // in the userinfo; it overrides the %1.2f value written earlier) and stores
-    // the resolved team in the "team" key. It does NOT set "teamoverlay". (0x10037620)
     Info_SetValueForKey(userinfo, "skill", va("%5.2f", skill));
     Info_SetValueForKey(userinfo, "team", team);
 
-    // [QL] mark entity as bot before ClientConnect
     g_entities[clientNum].r.svFlags |= SVF_BOT;
     g_entities[clientNum].inuse = qtrue;
 
-    // register the userinfo
     trap_SetUserinfo(clientNum, userinfo);
 
-    // have it connect to the game as a normal client
     if (ClientConnect(clientNum, qtrue, qtrue)) {
         return;
     }
@@ -841,11 +685,6 @@ void G_AddBot(const char* name, float skill, const char* team, int delay, char* 
     AddBotToSpawnQueue(clientNum, delay);
 }
 
-/*
-===============
-Svcmd_AddBot_f
-===============
-*/
 void Svcmd_AddBot_f(void) {
     float skill;
     int delay;
@@ -854,27 +693,21 @@ void Svcmd_AddBot_f(void) {
     char string[MAX_TOKEN_CHARS];
     char team[MAX_TOKEN_CHARS];
 
-    // are bots enabled?
     if (!trap_Cvar_VariableIntegerValue("bot_enable")) {
         return;
     }
 
-    // [QL] bots may not be added by hand during the Crash Course (0x1003794c)
     if (g_training.integer) {
         G_Printf("Addbot not allowed during training.\n");
         return;
     }
 
-    // name
     trap_Argv(1, name, sizeof(name));
     if (!name[0]) {
         trap_Print("Usage: Addbot <botname> [skill 1-5] [team] [msec delay] [altname]\n");
         return;
     }
 
-    // skill
-    // [QL] default skill comes from g_spSkill (not a hardcoded 4), and the
-    // supplied value is NOT clamped here - the binary just atof()s it. (0x10037a10)
     trap_Argv(2, string, sizeof(string));
     if (!string[0]) {
         skill = trap_Cvar_VariableValue("g_spSkill");
@@ -882,10 +715,8 @@ void Svcmd_AddBot_f(void) {
         skill = atof(string);
     }
 
-    // team
     trap_Argv(3, team, sizeof(team));
 
-    // delay
     trap_Argv(4, string, sizeof(string));
     if (!string[0]) {
         delay = 0;
@@ -893,31 +724,20 @@ void Svcmd_AddBot_f(void) {
         delay = atoi(string);
     }
 
-    // alternative name
     trap_Argv(5, altname, sizeof(altname));
 
     G_AddBot(name, skill, team, delay, altname);
 
-    // if this was issued during gameplay and we are playing locally,
-    // go ahead and load the bot's media immediately
-    // [QL] the command is spelled correctly ("loaddeferred"); QL fixed the Q3 typo.
     if (level.time - level.startTime > 1000 &&
         trap_Cvar_VariableIntegerValue("cl_running")) {
         trap_SendServerCommand(-1, "loaddeferred\n");
     }
 
-    // [QL] during the Crash Course the client reloads media now, regardless of the
-    // elapsed-time / cl_running gate above (0x10037ade)
     if (g_training.integer) {
         trap_SendServerCommand(-1, "loaddeferred\n");
     }
 }
 
-/*
-===============
-Svcmd_BotList_f
-===============
-*/
 void Svcmd_BotList_f(void) {
     int i;
     char name[MAX_TOKEN_CHARS];
@@ -947,11 +767,6 @@ void Svcmd_BotList_f(void) {
     }
 }
 
-/*
-===============
-G_SpawnBots
-===============
-*/
 static void G_SpawnBots(char* botList, int baseDelay) {
     char* bot;
     char* p;
@@ -976,7 +791,6 @@ static void G_SpawnBots(char* botList, int baseDelay) {
     p = &bots[0];
     delay = baseDelay;
     while (*p) {
-        // skip spaces
         while (*p && *p == ' ') {
             p++;
         }
@@ -984,10 +798,8 @@ static void G_SpawnBots(char* botList, int baseDelay) {
             break;
         }
 
-        // mark start of bot name
         bot = p;
 
-        // skip until space of null
         while (*p && *p != ' ') {
             p++;
         }
@@ -995,19 +807,12 @@ static void G_SpawnBots(char* botList, int baseDelay) {
             *p++ = 0;
         }
 
-        // we must add the bot this way, calling G_AddBot directly at this stage
-        // does "Bad Things"
         trap_SendConsoleCommand(EXEC_INSERT, va("addbot %s %f free %i\n", bot, skill, delay));
 
         delay += BOT_BEGIN_DELAY_INCREMENT;
     }
 }
 
-/*
-===============
-G_LoadBotsFromFile
-===============
-*/
 static void G_LoadBotsFromFile(char* filename) {
     int len;
     fileHandle_t f;
@@ -1031,11 +836,6 @@ static void G_LoadBotsFromFile(char* filename) {
     g_numBots += G_ParseInfos(buf, MAX_BOTS - g_numBots, &g_botInfos[g_numBots]);
 }
 
-/*
-===============
-G_LoadBots
-===============
-*/
 static void G_LoadBots(void) {
     vmCvar_t botsFile;
     int numdirs;
@@ -1058,7 +858,6 @@ static void G_LoadBots(void) {
         G_LoadBotsFromFile("scripts/bots.txt");
     }
 
-    // get all bots from .bot files
     numdirs = trap_FS_GetFileList("scripts", ".bot", dirlist, 1024);
     dirptr = dirlist;
     for (i = 0; i < numdirs; i++, dirptr += dirlen + 1) {
@@ -1070,11 +869,6 @@ static void G_LoadBots(void) {
     trap_Print(va("%i bots parsed\n", g_numBots));
 }
 
-/*
-===============
-G_GetBotInfoByNumber
-===============
-*/
 char* G_GetBotInfoByNumber(int num) {
     if (num < 0 || num >= g_numBots) {
         trap_Print(va(S_COLOR_RED "Invalid bot number: %i\n", num));
@@ -1083,11 +877,6 @@ char* G_GetBotInfoByNumber(int num) {
     return g_botInfos[num];
 }
 
-/*
-===============
-G_GetBotInfoByName
-===============
-*/
 char* G_GetBotInfoByName(const char* name) {
     int n;
     char* value;
@@ -1102,16 +891,10 @@ char* G_GetBotInfoByName(const char* name) {
     return NULL;
 }
 
-/*
-===============
-G_InitBots
-===============
-*/
 void G_InitBots(qboolean restart) {
     G_LoadBots();
     G_LoadArenas();
 
     trap_Cvar_Register(&bot_minplayers, "bot_minplayers", "0", CVAR_SERVERINFO);
 
-    // [QL] No single-player arena bot spawning - GT_SINGLE_PLAYER doesn't exist
 }

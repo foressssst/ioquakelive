@@ -22,7 +22,7 @@ attribute vec3 attr_LightDirection;
 #endif
 
 #if defined(USE_DELUXEMAP)
-uniform vec4   u_EnableTextures; // x = normal, y = deluxe, z = specular, w = cube
+uniform vec4   u_EnableTextures;
 #endif
 
 #if defined(USE_LIGHT) && !defined(USE_FAST_LIGHT)
@@ -145,14 +145,10 @@ vec2 ModTexCoords(vec2 st, vec3 position, vec4 texMatrix[8])
 }
 #endif
 
-
 float CalcLightAttenuation(float point, float normDist)
 {
-	// zero light at 1.0, approximating q3 style
-	// also don't attenuate directional light
 	float attenuation = (0.5 * normDist - 1.5) * point + 1.0;
 
-	// clamp attenuation
 	#if defined(NO_LIGHT_CLAMP)
 	attenuation = max(attenuation, 0.0);
 	#else
@@ -161,7 +157,6 @@ float CalcLightAttenuation(float point, float normDist)
 
 	return attenuation;
 }
-
 
 void main()
 {
@@ -247,7 +242,6 @@ void main()
 	float NL = clamp(dot(normalize(normal), L) / sqrt(sqrLightDist), 0.0, 1.0);
 	float attenuation = CalcLightAttenuation(u_LightOrigin.w, u_LightRadius * u_LightRadius / sqrLightDist);
 
-	// [QL] quakelive_steam.exe 0x454a30 (RB_CalcDiffuseColor): each channel of a vertex's light stops at full
 	var_Color.rgb *= min(u_DirectedLight * (attenuation * NL) + u_AmbientLight, vec3(1.0));
   #else
 	var_ColorAmbient.rgb = u_AmbientLight * var_Color.rgb;
@@ -280,7 +274,6 @@ void main()
 
 #if defined(USE_LIGHT) && !defined(USE_FAST_LIGHT)
 	vec3 viewDir = u_ViewOrigin - position;
-	// store view direction in tangent space to save on varyings
 	var_Normal    = vec4(normal,    viewDir.x);
 	var_Tangent   = vec4(tangent,   viewDir.y);
 	var_Bitangent = vec4(bitangent, viewDir.z);

@@ -19,56 +19,25 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// sv_factories.c -- [QL] arenas, factories and the map pool
-//
-// Quake Live's engine keeps three tables the game modes are built from
-// (quakelive_steam.exe 0x45e570..0x45fc26): the arenas, every map from
-// scripts/arenas.txt and scripts/*.arena with the gametypes its "type" key names;
-// the factories, presets from scripts/factories.txt and *.factories, a JSON array
-// with an id, a base gametype, a title and the cvars they set; and the map pool,
-// "map|factory" lines from sv_mapPoolFile.
-//
-// "map <map> <factory>" applies a factory: it restores the cvars the previous one
-// changed, saves the current value of each cvar the new one sets, sets them and
-// then g_gametype, g_factory and g_factoryTitle.
-//
-
 #include "server.h"
 
 cvar_t* sv_mapPoolFile;
 cvar_t* sv_includeCurrentMapInVote;
 
-// the base gametypes a factory names, in g_gametype order (0x55ca54)
 static const char* sv_factoryGametypes[NUM_FACTORY_GAMETYPES] = {
     "ffa", "duel", "race", "tdm", "ca", "ctf", "oneflag", "overload", "har", "ft", "dom", "ad", "rr"};
 
-static arenaInfo_t sv_arenas[MAX_ARENA_INFOS];      // 0xc1e1f8
-static int sv_numArenas;                             // 0xe2b200
+static arenaInfo_t sv_arenas[MAX_ARENA_INFOS];
+static int sv_numArenas;
 
-static factory_t sv_factories[MAX_FACTORIES];       // 0xa111f8
-static int sv_numFactories;                          // 0xe2b1fc
+static factory_t sv_factories[MAX_FACTORIES];
+static int sv_numFactories;
 
-static mapPoolEntry_t sv_mapPool[MAX_MAPPOOL];       // 0x6111f8
-static int sv_numMapPool;                            // 0xe2b1f8
-
-/*
-===============================================================================
-
-JSON READER
-
-The engine parsed these files with jsoncpp 0.x (Json::Reader, comments
-allowed, root of any type). This reader follows its rules, so the same files
-parse or fail: comments, strict separators, "true"/"false"/"null", integers
-that fit in 64 bits kept as integers, and objects kept sorted by member name
-with the last duplicate winning, as std::map does. isArray and isObject also
-accept null, as in that version (0x42a700, 0x42a720).
-
-===============================================================================
-*/
+static mapPoolEntry_t sv_mapPool[MAX_MAPPOOL];
+static int sv_numMapPool;
 
 typedef enum {
-    JV_NULL,    // same order as Json::ValueType
+    JV_NULL,
     JV_INT,
     JV_UINT,
     JV_REAL,
@@ -85,8 +54,8 @@ typedef struct jsonValue_s {
     double d;
     qboolean b;
     char* s;
-    char* key;                    // member name, when this value is an object member
-    struct jsonValue_s* first;    // array elements in order, object members sorted by key
+    char* key;
+    struct jsonValue_s* first;
     struct jsonValue_s* next;
 } jsonValue_t;
 
@@ -337,7 +306,6 @@ static unsigned int JSON_DecodeHex4(const char** current, const char* end, qbool
     return unicode;
 }
 
-// appends the UTF-8 form of a code point; returns the new length
 static int JSON_AppendUTF8(char* out, int len, unsigned int cp) {
     if (cp <= 0x7f) {
         out[len++] = (char)cp;
@@ -357,10 +325,9 @@ static int JSON_AppendUTF8(char* out, int len, unsigned int cp) {
     return len;
 }
 
-// decodes a string token without its quotes into a new Z_Malloc'd string
 static char* JSON_DecodeString(const jsonToken_t* token) {
-    const char* current = token->start + 1;   // skip '"'
-    const char* end = token->end - 1;         // do not include '"'
+    const char* current = token->start + 1;
+    const char* end = token->end - 1;
     char* out = Z_Malloc((end - current) * 2 + 1);
     int len = 0;
 
@@ -407,7 +374,6 @@ static char* JSON_DecodeString(const jsonToken_t* token) {
                 unsigned int unicode = JSON_DecodeHex4(&current, end, &ok);
 
                 if (ok && unicode >= 0xd800 && unicode <= 0xdbff) {
-                    // surrogate pair
                     if (end - current < 6 || current[0] != '\\' || current[1] != 'u') {
                         ok = qfalse;
                     } else {
@@ -508,7 +474,6 @@ static qboolean JSON_DecodeNumber(const jsonToken_t* token, jsonValue_t* value) 
     return qtrue;
 }
 
-// the member named key of an object, created as null if it is not there
 static jsonValue_t* JSON_ObjectMember(jsonValue_t* object, const char* key) {
     jsonValue_t** link = &object->first;
     jsonValue_t* member;
@@ -548,7 +513,7 @@ static qboolean JSON_ReadObject(jsonReader_t* r, jsonValue_t* value) {
             JSON_ReadToken(r, &tokenName);
         }
         if (tokenName.type == JT_OBJECT_END && nameEmpty) {
-            return qtrue;  // empty object
+            return qtrue;
         }
         if (tokenName.type != JT_STRING) {
             break;
@@ -580,7 +545,7 @@ static qboolean JSON_ReadObject(jsonReader_t* r, jsonValue_t* value) {
             return qtrue;
         }
     }
-    return qfalse;  // missing '}' or object member name
+    return qfalse;
 }
 
 static qboolean JSON_ReadArray(jsonReader_t* r, jsonValue_t* value) {
@@ -609,7 +574,7 @@ static qboolean JSON_ReadArray(jsonReader_t* r, jsonValue_t* value) {
             JSON_ReadToken(r, &token);
         }
         if (token.type != JT_ARRAY_SEPARATOR && token.type != JT_ARRAY_END) {
-            return qfalse;  // missing ',' or ']' in array declaration
+            return qfalse;
         }
         if (token.type == JT_ARRAY_END) {
             break;
@@ -650,12 +615,10 @@ static qboolean JSON_ReadValue(jsonReader_t* r, jsonValue_t* value) {
         JSON_ClearValue(value);
         return qtrue;
     default:
-        return qfalse;  // syntax error: value, object or array expected
+        return qfalse;
     }
 }
 
-// parses a whole document; anything after the root value is ignored, as the
-// engine's reader did
 static jsonValue_t* JSON_Parse(const char* text, int length) {
     jsonReader_t r;
     jsonValue_t* root = JSON_NewValue();
@@ -681,17 +644,14 @@ static qboolean JSON_IsObject(const jsonValue_t* v) {
     return v && (v->type == JV_NULL || v->type == JV_OBJECT);
 }
 
-// Json::Value::isIntegral of that version: int, uint and bool (0x42a6b0)
 static qboolean JSON_IsIntegral(const jsonValue_t* v) {
     return v && (v->type == JV_INT || v->type == JV_UINT || v->type == JV_BOOL);
 }
 
-// isNumeric: isIntegral or real (0x42a6d0)
 static qboolean JSON_IsNumeric(const jsonValue_t* v) {
     return JSON_IsIntegral(v) || (v && v->type == JV_REAL);
 }
 
-// the member of an object, or NULL (a null Value for the engine) if there is none
 static const jsonValue_t* JSON_Get(const jsonValue_t* object, const char* key) {
     const jsonValue_t* member;
 
@@ -736,22 +696,6 @@ static double JSON_AsDouble(const jsonValue_t* v) {
     }
 }
 
-/*
-===============================================================================
-
-ARENAS
-
-===============================================================================
-*/
-
-/*
-===============
-SV_ParseInfos
-
-Reads "{ key value ... }" blocks into info strings, at most max of them.
-quakelive_steam.exe 0x45e570.
-===============
-*/
 static int SV_ParseInfos(char* buf, int max, char* infos[]) {
     char* token;
     int count = 0;
@@ -796,13 +740,6 @@ static int SV_ParseInfos(char* buf, int max, char* infos[]) {
     return count;
 }
 
-/*
-===============
-SV_LoadArenasFromFile
-
-quakelive_steam.exe 0x45ea60.
-===============
-*/
 static void SV_LoadArenasFromFile(const char* filename) {
     fileHandle_t f;
     int len, count, i, gt;
@@ -835,7 +772,6 @@ static void SV_LoadArenasFromFile(const char* filename) {
             if (!arena->longname[0]) {
                 Q_strncpyz(arena->longname, arena->map, sizeof(arena->longname));
             }
-            // a gametype is supported when its name appears anywhere in "type"
             type = Info_ValueForKey(infos[i], "type");
             for (gt = 0; gt < NUM_FACTORY_GAMETYPES; gt++) {
                 arena->gametypes[gt] = strstr(type, sv_factoryGametypes[gt]) != NULL;
@@ -846,14 +782,6 @@ static void SV_LoadArenasFromFile(const char* filename) {
     }
 }
 
-/*
-===============
-SV_LoadArenas
-
-scripts/arenas.txt, then every .arena file in scripts. quakelive_steam.exe
-0x45ec80, called from SV_Init.
-===============
-*/
 void SV_LoadArenas(void) {
     int numFiles, i;
     char fileList[1024];
@@ -874,13 +802,6 @@ void SV_LoadArenas(void) {
     Com_Printf("%s", va("%i arenas parsed\n", sv_numArenas));
 }
 
-/*
-===============
-SV_FindArena
-
-quakelive_steam.exe 0x45e9f0.
-===============
-*/
 const arenaInfo_t* SV_FindArena(const char* map) {
     int i;
 
@@ -896,16 +817,6 @@ int SV_NumArenas(void) {
     return sv_numArenas;
 }
 
-/*
-===============
-SV_ArenaNameList / SV_FactoryNameList
-
-The two lists tab completion completes against, built once so that the client and the
-server console give the same answer. The factories leave out the ones starting with
-"_", which are internal templates -- the same filter the list "map" prints with no
-arguments uses.
-===============
-*/
 int SV_ArenaNameList(const char** out, int max) {
     int count = 0;
     int i;
@@ -937,15 +848,6 @@ const arenaInfo_t* SV_ArenaByNum(int num) {
     return &sv_arenas[num];
 }
 
-/*
-===============
-SV_ArenaValue
-
-An arena's "sysname" (its map), "name" (its long name) or "gametypes" (a bit
-per base gametype it supports), for the UI's Start Match. Retail's web UI got
-the same members from GetMapList (quakelive_steam.exe 0x432c2c).
-===============
-*/
 qboolean SV_ArenaValue(int num, const char* key, char* buf, int size) {
     const arenaInfo_t* arena = SV_ArenaByNum(num);
     int gt, bits;
@@ -977,13 +879,6 @@ qboolean SV_ArenaValue(int num, const char* key, char* buf, int size) {
     return qfalse;
 }
 
-/*
-===============
-SV_ReloadArenas_f
-
-quakelive_steam.exe 0x45ed90.
-===============
-*/
 void SV_ReloadArenas_f(void) {
     Com_Printf("reloading arena definitions...\n");
     memset(sv_arenas, 0, sizeof(sv_arenas));
@@ -991,21 +886,6 @@ void SV_ReloadArenas_f(void) {
     SV_LoadArenas();
 }
 
-/*
-===============================================================================
-
-FACTORIES
-
-===============================================================================
-*/
-
-/*
-===============
-SV_FindFactory
-
-Case-sensitive, over every slot. quakelive_steam.exe 0x45e760.
-===============
-*/
 factory_t* SV_FindFactory(const char* id) {
     int i;
 
@@ -1028,15 +908,6 @@ const factory_t* SV_FactoryByNum(int num) {
     return &sv_factories[num];
 }
 
-/*
-===============
-SV_FactoryValue
-
-A factory's "id", "title", "author", "description" or "basegt", for the UI's
-Start Match; qfalse for an empty slot or a member it lacks. Retail's web UI got
-the same members from GetFactoryList (quakelive_steam.exe 0x432edc).
-===============
-*/
 qboolean SV_FactoryValue(int num, const char* key, char* buf, int size) {
     const factory_t* factory = SV_FactoryByNum(num);
     const char* value = NULL;
@@ -1065,15 +936,6 @@ qboolean SV_FactoryValue(int num, const char* key, char* buf, int size) {
     return qtrue;
 }
 
-/*
-===============
-SV_FactoryCvar
-
-The index-th cvar a factory sets, its name in lower case as GetFactoryList
-gave them in "settings" (0x4331a0). Its loop ends at the first missing name;
-this also stops at a cvar left without a value, where applying it stops.
-===============
-*/
 qboolean SV_FactoryCvar(int num, int index, char* name, int nameSize, char* value, int valueSize) {
     const factory_t* factory = SV_FactoryByNum(num);
 
@@ -1095,14 +957,6 @@ qboolean SV_FactoryCvar(int num, int index, char* name, int nameSize, char* valu
     return qtrue;
 }
 
-/*
-===============
-SV_PrintValidFactories
-
-The ids of the loaded factories, but the hidden ones ("_training", "_rj",
-"_sj"). quakelive_steam.exe 0x45e7d0.
-===============
-*/
 void SV_PrintValidFactories(void) {
     int i;
 
@@ -1115,13 +969,6 @@ void SV_PrintValidFactories(void) {
     Com_Printf("\n");
 }
 
-/*
-===============
-SV_ParseFactory
-
-One factory object. quakelive_steam.exe 0x45f380.
-===============
-*/
 static void SV_ParseFactory(const jsonValue_t* object) {
     const jsonValue_t* v;
     const jsonValue_t* cvars;
@@ -1166,12 +1013,10 @@ static void SV_ParseFactory(const jsonValue_t* object) {
         return;
     }
 
-    // a repeated id is reported and still added; lookups keep finding the first
     if (SV_FindFactory(id)) {
         Com_Printf("^1Factory with id %s already exists.\n^7", id);
     }
 
-    // the first free slot from the count on; the count ends one past it
     factory = NULL;
     while (sv_numFactories < MAX_FACTORIES) {
         factory_t* slot = &sv_factories[sv_numFactories++];
@@ -1196,7 +1041,6 @@ static void SV_ParseFactory(const jsonValue_t* object) {
     }
     factory->basegt = gt;
 
-    // up to eight tags, looking at the first eight elements only
     v = JSON_Get(object, "tags");
     if (v && v->type == JV_ARRAY) {
         count = 0;
@@ -1207,8 +1051,6 @@ static void SV_ParseFactory(const jsonValue_t* object) {
         }
     }
 
-    // the cvars in member name order; a value that is not a number, a boolean
-    // or a string is left unset, which ends the list when it is applied
     if (cvars && cvars->type == JV_OBJECT) {
         for (member = cvars->first, i = 0; member && i < MAX_FACTORY_CVARS; member = member->next, i++) {
             factory->cvars[i].name = CopyString(member->key);
@@ -1223,13 +1065,6 @@ static void SV_ParseFactory(const jsonValue_t* object) {
     }
 }
 
-/*
-===============
-SV_LoadFactoriesFromFile
-
-quakelive_steam.exe 0x45f800.
-===============
-*/
 static void SV_LoadFactoriesFromFile(const char* filename) {
     fileHandle_t f;
     int len;
@@ -1243,7 +1078,6 @@ static void SV_LoadFactoriesFromFile(const char* filename) {
         return;
     }
     if (len >= 0x8000) {
-        // the limit is 32768; the message says 16384, as the engine's did
         Com_Printf("^1file too large: %s is %i, max allowed is %i^7", filename, len, 0x4000);
         FS_FCloseFile(f);
         return;
@@ -1253,7 +1087,6 @@ static void SV_LoadFactoriesFromFile(const char* filename) {
     buf[len] = '\0';
     FS_FCloseFile(f);
 
-    // the engine parsed the buffer as a C string
     root = JSON_Parse(buf, strlen(buf));
     if (!root) {
         Com_Printf("^1factories file %s was not a valid JSON document.^7", filename);
@@ -1272,14 +1105,6 @@ static void SV_LoadFactoriesFromFile(const char* filename) {
     Com_Printf("loaded factories from %s, total %i\n", filename, sv_numFactories);
 }
 
-/*
-===============
-SV_LoadFactories
-
-scripts/factories.txt, then every .factories file in scripts.
-quakelive_steam.exe 0x45fa50, called from SV_Init.
-===============
-*/
 void SV_LoadFactories(void) {
     int numFiles, i;
     char fileList[1024];
@@ -1323,14 +1148,6 @@ static void SV_FreeFactory(factory_t* factory) {
     memset(factory, 0, sizeof(*factory));
 }
 
-/*
-===============
-SV_ReloadFactories_f
-
-Frees every factory but the one in play and loads the files again.
-quakelive_steam.exe 0x45fb40.
-===============
-*/
 void SV_ReloadFactories_f(void) {
     int i;
 
@@ -1345,15 +1162,6 @@ void SV_ReloadFactories_f(void) {
     SV_LoadFactories();
 }
 
-/*
-===============
-SV_ApplyFactory
-
-Restores what the factory in play changed, then saves and sets the cvars of
-the new one, g_gametype, g_factory and g_factoryTitle. Part of the map command
-(quakelive_steam.exe 0x4ddf00..0x4ddfa0).
-===============
-*/
 void SV_ApplyFactory(factory_t* factory) {
     int i;
 
@@ -1376,13 +1184,6 @@ void SV_ApplyFactory(factory_t* factory) {
     Cvar_Set("g_factoryTitle", va("%s", factory->title));
 }
 
-/*
-===============
-SV_RestoreFactoryCvars
-
-quakelive_steam.exe 0x4ddf00 (map) and 0x4e3fbd (SV_Shutdown).
-===============
-*/
 void SV_RestoreFactoryCvars(const factory_t* factory) {
     int i;
 
@@ -1394,22 +1195,6 @@ void SV_RestoreFactoryCvars(const factory_t* factory) {
     }
 }
 
-/*
-===============================================================================
-
-MAP POOL
-
-===============================================================================
-*/
-
-/*
-===============
-SV_LoadMapPool
-
-"map|factory" lines. quakelive_steam.exe 0x45edd0, called from SV_Init with
-sv_mapPoolFile.
-===============
-*/
 void SV_LoadMapPool(const char* filename) {
     fileHandle_t f;
     int len;
@@ -1432,7 +1217,6 @@ void SV_LoadMapPool(const char* filename) {
     buf[len] = '\0';
     FS_FCloseFile(f);
 
-    // the engine allowed one line more than its table held; this stops at the table
     line = strtok(buf, "\n");
     while (line && sv_numMapPool < MAX_MAPPOOL) {
         const factory_t* factory;
@@ -1494,13 +1278,6 @@ void SV_LoadMapPool(const char* filename) {
     Com_Printf("loaded %i maps into the map pool\n", sv_numMapPool);
 }
 
-/*
-===============
-SV_ReloadMapPool_f
-
-quakelive_steam.exe 0x45f340.
-===============
-*/
 void SV_ReloadMapPool_f(void) {
     Com_Printf("reloading map pool...\n");
     memset(sv_mapPool, 0, sizeof(sv_mapPool));
@@ -1508,14 +1285,6 @@ void SV_ReloadMapPool_f(void) {
     SV_LoadMapPool(sv_mapPoolFile->string);
 }
 
-/*
-===============
-SV_RandomMapPoolEntry
-
-Campgrounds as Free For All when the pool is empty. quakelive_steam.exe
-0x45e830.
-===============
-*/
 static const mapPoolEntry_t* SV_RandomMapPoolEntry(void) {
     static const mapPoolEntry_t defaultEntry = {"campgrounds", "Campgrounds", "ffa", "Free For All"};
     int r;
@@ -1530,28 +1299,12 @@ static const mapPoolEntry_t* SV_RandomMapPoolEntry(void) {
     return &sv_mapPool[(unsigned int)(r % sv_numMapPool) % (unsigned int)sv_numMapPool];
 }
 
-/*
-===============
-SV_StartRandomMap_f
-
-quakelive_steam.exe 0x45e8b0.
-===============
-*/
 void SV_StartRandomMap_f(void) {
     mapPoolEntry_t entry = *SV_RandomMapPoolEntry();
 
     Cbuf_ExecuteText(EXEC_NOW, va("map %s %s", entry.map, entry.factory));
 }
 
-/*
-===============
-SV_SetNextMap
-
-A random pool entry, or a restart of this map without a pool.
-quakelive_steam.exe 0x45e940, called at the end of SV_SpawnServer and
-map_restart.
-===============
-*/
 void SV_SetNextMap(void) {
     mapPoolEntry_t entry;
 
@@ -1563,16 +1316,6 @@ void SV_SetNextMap(void) {
     Cvar_Set("nextmap", va("map %s %s", entry.map, entry.factory));
 }
 
-/*
-===============
-SV_SetNextMaps
-
-The maps offered at the end of a match, as map_N, title_N, cfg_N and gt_N
-keys: this map first when sv_includeCurrentMapInVote is set, then the whole
-pool when it has fewer than four maps, or three random maps from it.
-quakelive_steam.exe 0x45f050, called after SV_SetNextMap.
-===============
-*/
 void SV_SetNextMaps(void) {
     char info[1024];
     const mapPoolEntry_t* entries[MAX_MAPPOOL];
@@ -1595,8 +1338,6 @@ void SV_SetNextMaps(void) {
     }
 
     if (sv_numMapPool < 4) {
-        // the pool entry has the same index as its keys, so with this map
-        // included the first pool entry is left out
         for (i = count; i < sv_numMapPool; i++) {
             Info_SetValueForKey(info, va("map_%i", i), sv_mapPool[i].map);
             Info_SetValueForKey(info, va("title_%i", i), sv_mapPool[i].longname);

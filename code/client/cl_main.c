@@ -19,8 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// cl_main.c  -- client main loop
-
 #include "client.h"
 #include <limits.h>
 
@@ -60,10 +58,10 @@ cvar_t* cl_autoRecordDemo;
 cvar_t* cl_aviFrameRate;
 cvar_t* cl_aviMotionJpeg;
 cvar_t* cl_forceavidemo;
-static cvar_t* cl_avidemo;          // [QL] frames a second of silent screenshots
-static cvar_t* cl_avidemoLatch;     // [QL] cl_avidemo to start once past cl_avidemo_mintime
-static cvar_t* cl_avidemoMinTime;   // [QL] server time before which nothing is captured
-static cvar_t* cl_avidemoMaxTime;   // [QL] server time past which the capture disconnects
+static cvar_t* cl_avidemo;
+static cvar_t* cl_avidemoLatch;
+static cvar_t* cl_avidemoMinTime;
+static cvar_t* cl_avidemoMaxTime;
 
 cvar_t* cl_freelook;
 cvar_t* cl_sensitivity;
@@ -111,7 +109,7 @@ cvar_t* cl_rate;
 
 cvar_t* cl_steamId;
 
-cvar_t* cl_followRedirect;  // [ioquakelive] go where a full server sends you
+cvar_t* cl_followRedirect;
 static int clRedirectHops;
 static qboolean clRedirecting;
 
@@ -124,7 +122,6 @@ char cl_reconnectArgs[MAX_OSPATH];
 char cl_oldGame[MAX_QPATH];
 qboolean cl_oldGameSet;
 
-// Structure containing functions exported from refresh DLL
 refexport_t re;
 #ifdef USE_RENDERER_DLOPEN
 static void* rendererLib = NULL;
@@ -149,15 +146,12 @@ void hA3Dg_ExportRenderGeom(refexport_t* incoming_re);
 
 static int noGameRestart = qfalse;
 
-// [QL] 0x015ee388 and 0x015ee38c: the Workshop items of the server being joined are coming
-// down, and some were missing, which takes a filesystem restart
 static qboolean cl_workshopActive;
 static qboolean cl_workshopRestart;
 
-// how many servers from Steam's list have been copied into the interface's
 static int cl_steamServersTaken;
 static qboolean cl_steamServersPending;
-static int cl_steamServerSlot[MAX_GLOBAL_SERVERS];  // each of Steam's, in cls.globalServers
+static int cl_steamServerSlot[MAX_GLOBAL_SERVERS];
 
 extern void SV_BotFrame(int time);
 void CL_CheckForResend(void);
@@ -166,28 +160,8 @@ void CL_PostProcessRestart_f(void);
 void CL_Userinfo_f(void);
 void CL_ServerStatusResponse(netadr_t from, msg_t* msg);
 
-/*
-=======================================================================
-
-CLIENT RELIABLE COMMAND COMMUNICATION
-
-=======================================================================
-*/
-
-/*
-======================
-CL_AddReliableCommand
-
-The given command will be transmitted to the server, and is guaranteed to
-not have future usercmd_t executed before it is executed
-======================
-*/
 void CL_AddReliableCommand(const char* cmd, qboolean isDisconnectCmd) {
     int unacknowledged = clc.reliableSequence - clc.reliableAcknowledge;
-
-    // if we would be losing an old command that hasn't been acknowledged,
-    // we must drop the connection
-    // also leave one slot open for the disconnect command in this case.
 
     if ((isDisconnectCmd && unacknowledged > MAX_RELIABLE_COMMANDS) ||
         (!isDisconnectCmd && unacknowledged >= MAX_RELIABLE_COMMANDS)) {
@@ -201,43 +175,18 @@ void CL_AddReliableCommand(const char* cmd, qboolean isDisconnectCmd) {
                cmd, sizeof(*clc.reliableCommands));
 }
 
-/*
-=======================================================================
-
-CLIENT SIDE DEMO RECORDING
-
-=======================================================================
-*/
-
-/*
-====================
-CL_WriteDemoMessage
-
-Dumps the current net message, prefixed by the length
-====================
-*/
-
 void CL_WriteDemoMessage(msg_t* msg, int headerBytes) {
     int len, swlen;
 
-    // write the packet sequence
     len = clc.serverMessageSequence;
     swlen = LittleLong(len);
     FS_Write(&swlen, 4, clc.demofile);
-    // skip the packet sequencing information
     len = msg->cursize - headerBytes;
     swlen = LittleLong(len);
     FS_Write(&swlen, 4, clc.demofile);
     FS_Write(msg->data + headerBytes, len, clc.demofile);
 }
 
-/*
-====================
-CL_StopRecording_f
-
-stop recording a demo
-====================
-*/
 void CL_StopRecord_f(void) {
     int len;
 
@@ -246,7 +195,6 @@ void CL_StopRecord_f(void) {
         return;
     }
 
-    // finish up
     len = -1;
     FS_Write(&len, 4, clc.demofile);
     FS_Write(&len, 4, clc.demofile);
@@ -258,11 +206,6 @@ void CL_StopRecord_f(void) {
     Com_Printf("Stopped demo.\n");
 }
 
-/*
-==================
-CL_DemoFilename
-==================
-*/
 void CL_DemoFilename(int number, char* fileName, int fileNameSize) {
     int a, b, c, d;
 
@@ -280,16 +223,7 @@ void CL_DemoFilename(int number, char* fileName, int fileNameSize) {
     Com_sprintf(fileName, fileNameSize, "demo%i%i%i%i", a, b, c, d);
 }
 
-/*
-====================
-CL_Record_f
-
-record <demoname>
-
-Begins recording a demo from the current position
-====================
-*/
-static char demoName[MAX_QPATH];  // compiler bug workaround
+static char demoName[MAX_QPATH];
 void CL_Record_f(void) {
     char name[MAX_OSPATH];
     byte bufData[MAX_MSGLEN];
@@ -300,7 +234,6 @@ void CL_Record_f(void) {
     entityState_t nullstate;
     char* s;
 
-    // [QL] 0x4b8447: a recording in progress is cut and a new one starts
     if (clc.demorecording) {
         Com_Printf("Already recording.\n");
         CL_StopRecord_f();
@@ -321,27 +254,23 @@ void CL_Record_f(void) {
     } else {
         int number;
 
-        // [QL] 0x4b84e6: too many arguments only warns, and the demo gets a free name
         if (Cmd_Argc() > 2) {
             Com_Printf("Correct usage: record <demoname>\n");
         }
 
-        // scan for a free demo name
         for (number = 0; number <= 9999; number++) {
             CL_DemoFilename(number, demoName, sizeof(demoName));
             Com_sprintf(name, sizeof(name), "demos/%s.%s%d", demoName, DEMOEXT, com_protocol->integer);
 
             if (!FS_FileExists(name))
-                break;  // file doesn't exist
+                break;
         }
     }
-
-    // open the demo file
 
     Com_Printf("recording to %s.\n", name);
     clc.demofile = FS_FOpenFileWrite(name);
     if (clc.demofile) {
-        CL_MatchMedia(name);  // [QL] "game.demo"
+        CL_MatchMedia(name);
     }
     if (!clc.demofile) {
         Com_Printf("ERROR: couldn't open.\n");
@@ -353,20 +282,16 @@ void CL_Record_f(void) {
     Cvar_Set("cl_demorecording", "1");
     Cvar_Set("cl_demoname", clc.demoName);
 
-    // don't start saving messages until a non-delta compressed message is received
     clc.demowaiting = qtrue;
 
-    // write out the gamestate message
     MSG_Init(&buf, bufData, sizeof(bufData));
     MSG_Bitstream(&buf);
 
-    // NOTE, MRE: all server->client messages now acknowledge
     MSG_WriteLong(&buf, clc.reliableSequence);
 
     MSG_WriteByte(&buf, svc_gamestate);
     MSG_WriteLong(&buf, clc.serverCommandSequence);
 
-    // configstrings
     for (i = 0; i < MAX_CONFIGSTRINGS; i++) {
         if (!cl.gameState.stringOffsets[i]) {
             continue;
@@ -377,7 +302,6 @@ void CL_Record_f(void) {
         MSG_WriteBigString(&buf, s);
     }
 
-    // baselines
     Com_Memset(&nullstate, 0, sizeof(nullstate));
     for (i = 0; i < MAX_GENTITIES; i++) {
         ent = &cl.entityBaselines[i];
@@ -390,17 +314,11 @@ void CL_Record_f(void) {
 
     MSG_WriteByte(&buf, svc_EOF);
 
-    // finished writing the gamestate stuff
-
-    // write the client num
     MSG_WriteLong(&buf, clc.clientNum);
-    // write the checksum feed
     MSG_WriteLong(&buf, clc.checksumFeed);
 
-    // finished writing the client packet
     MSG_WriteByte(&buf, svc_EOF);
 
-    // write it to the demo file
     len = LittleLong(clc.serverMessageSequence - 1);
     FS_Write(&len, 4, clc.demofile);
 
@@ -408,22 +326,8 @@ void CL_Record_f(void) {
     FS_Write(&len, 4, clc.demofile);
     FS_Write(buf.data, buf.cursize, clc.demofile);
 
-    // the rest of the demo file will be copied from net messages
 }
 
-/*
-=======================================================================
-
-CLIENT SIDE DEMO PLAYBACK
-
-=======================================================================
-*/
-
-/*
-=================
-CL_DemoFrameDurationSDev
-=================
-*/
 static float CL_DemoFrameDurationSDev(void) {
     int i;
     int numFrames;
@@ -449,16 +353,9 @@ static float CL_DemoFrameDurationSDev(void) {
     return sqrt(variance);
 }
 
-/*
-=================
-CL_DemoCompleted
-=================
-*/
 void CL_DemoCompleted(void) {
     char buffer[MAX_STRING_CHARS];
 
-    // [QL] cl_quitOnDemoCompleted: quit when the demo ends, so a demo can be played back
-    // unattended and the process closes itself
     if (Cvar_VariableIntegerValue("cl_quitOnDemoCompleted")) {
         Com_Quit_f();
         return;
@@ -469,8 +366,6 @@ void CL_DemoCompleted(void) {
 
         time = Sys_Milliseconds() - clc.timeDemoStart;
         if (time > 0) {
-            // Millisecond times are frame durations:
-            // minimum/average/maximum/std deviation
             Com_sprintf(buffer, sizeof(buffer),
                         "%i frames %3.1f seconds %3.1f fps %d.0/%.1f/%d.0/%.1f ms\n",
                         clc.timeDemoFrames,
@@ -482,7 +377,6 @@ void CL_DemoCompleted(void) {
                         CL_DemoFrameDurationSDev());
             Com_Printf("%s", buffer);
 
-            // Write a log of all the frame durations
             if (cl_timedemoLog && strlen(cl_timedemoLog->string) > 0) {
                 int i;
                 int numFrames;
@@ -514,11 +408,6 @@ void CL_DemoCompleted(void) {
     CL_NextDemo();
 }
 
-/*
-=================
-CL_ReadDemoMessage
-=================
-*/
 void CL_ReadDemoMessage(void) {
     int r;
     msg_t buf;
@@ -530,7 +419,6 @@ void CL_ReadDemoMessage(void) {
         return;
     }
 
-    // get the sequence number
     r = FS_Read(&s, 4, clc.demofile);
     if (r != 4) {
         CL_DemoCompleted();
@@ -538,10 +426,8 @@ void CL_ReadDemoMessage(void) {
     }
     clc.serverMessageSequence = LittleLong(s);
 
-    // init the message
     MSG_Init(&buf, bufData, sizeof(bufData));
 
-    // get the length
     r = FS_Read(&buf.cursize, 4, clc.demofile);
     if (r != 4) {
         CL_DemoCompleted();
@@ -568,11 +454,6 @@ void CL_ReadDemoMessage(void) {
     CL_DemoSnapshotRead();
 }
 
-/*
-====================
-CL_WalkDemoExt
-====================
-*/
 static int CL_WalkDemoExt(char* arg, char* name, int* demofile) {
     int i = 0;
     *demofile = 0;
@@ -607,11 +488,6 @@ static int CL_WalkDemoExt(char* arg, char* name, int* demofile) {
     return -1;
 }
 
-/*
-====================
-CL_CompleteDemoName
-====================
-*/
 static void CL_CompleteDemoName(char* args, int argNum) {
     if (argNum == 2) {
         char demoExt[16];
@@ -621,17 +497,6 @@ static void CL_CompleteDemoName(char* args, int argNum) {
     }
 }
 
-/*
-==================
-CL_CompleteCallvote
-
-"callvote <what> [...]". The names are the ones Cmd_CallVote_f accepts
-(0x10061e40); on "map" the map and the factory complete as they do for the "map"
-command. Retail hands tab completion the whole map list and leaves it there
-(0x004b6a60); here it goes argument by argument, like everything else in this
-engine.
-==================
-*/
 static int CL_PlayerNames(const char** namesPtr, char (*names)[MAX_NAME_LENGTH], qboolean numbers);
 
 static void CL_CompleteCallvote(char* args, int argNum) {
@@ -640,7 +505,6 @@ static void CL_CompleteCallvote(char* args, int argNum) {
         "map", "map_restart", "nextmap", "random", "shuffle", "teamsize", "timelimit",
         "timers", "weaprespawn"
     };
-    // [ioquakelive] the values Cmd_CallVote_f takes for each vote
     static const char* onOff[] = {"ON", "OFF"};
     static const char* ammo[] = {"GLOBAL", "WEAP"};
     static const char* names[MAX_COMPLETION_NAMES];
@@ -689,15 +553,6 @@ static void CL_CompleteCallvote(char* args, int argNum) {
     Field_CompleteList(names, count);
 }
 
-/*
-==================
-CL_CompleteGameCommand
-
-[ioquakelive] The arguments of the match commands the cgame sends to the server, the values
-the game takes for them: a team (the game reads only its first letter, 0x100618b0), a vote,
-and for put a player and then a team.
-==================
-*/
 static void CL_CompleteGameCommand(char* args, int argNum) {
     static const char* teamNames[] = {"red", "blue", "spectator", "free", "follow1", "follow2"};
     static const char* sideNames[] = {"red", "blue", "spectator", "free"};
@@ -730,14 +585,6 @@ static void CL_CompleteGameCommand(char* args, int argNum) {
     }
 }
 
-/*
-==================
-CL_CompleteAddbot
-
-[ioquakelive] addbot <name> <skill> <team>: the names of scripts/bots.txt, the five skills and
-the two sides.
-==================
-*/
 static void CL_CompleteAddbot(char* args, int argNum) {
     static const char* skills[] = {"1", "2", "3", "4", "5"};
     static const char* teams[] = {"red", "blue"};
@@ -777,15 +624,6 @@ static void CL_CompleteAddbot(char* args, int argNum) {
 
 static void CL_CompletePlayerName(char* args, int argNum);
 
-/*
-==================
-CL_SetCgameCommandCompletion
-
-The cgame registers its commands when it starts (trap_AddCommand), so that is where tab
-completion has to be hung on them. The ones that take a player's name take it from the
-configstrings, which is all the client has.
-==================
-*/
 void CL_SetCgameCommandCompletion(const char* cmdName) {
     static const char* byPlayer[] = {
         "addadmin", "addmod", "addscore", "ban", "demote", "follow", "mute", "tell", "tempban", "unmute"
@@ -815,45 +653,19 @@ void CL_SetCgameCommandCompletion(const char* cmdName) {
     }
 }
 
-/*
-===============================================================================
-
-[ioquakelive] DEMO SEEKING
-
-A demo is a chain of deltas, so going back means playing it again from the start and
-running through it undrawn up to the time asked for, the way WolfcamQL does. Going
-forward only moves the clock, and CL_SetCGameTime reads up to it.
-
-A server that reloads the map halfway, as QuakeClub's do when the readyup starts the match,
-sends a new gamestate and starts its clock over, so a demo can hold several stretches of
-server time. Demo time runs on across them: each stretch starts where the last one ended.
-
-===============================================================================
-*/
-
 #define MAX_DEMO_STRETCHES	32
 
-static char		demoPath[MAX_OSPATH];		// the file being played, for reopening it
-static int		demoStretchStart[MAX_DEMO_STRETCHES];	// server time of its first snapshot
+static char		demoPath[MAX_OSPATH];
+static int		demoStretchStart[MAX_DEMO_STRETCHES];
 static int		demoStretchLength[MAX_DEMO_STRETCHES];
-static int		demoStretchAt[MAX_DEMO_STRETCHES];		// demo time it begins at
+static int		demoStretchAt[MAX_DEMO_STRETCHES];
 static int		demoStretches;
-static int		demoStretch;				// the one being played
-static int		demoLastSnap = -1;			// server time of the last snapshot read
-static int		demoSeekTarget = -1;		// server time to reach in demoSeekStretch, -1 for none
+static int		demoStretch;
+static int		demoLastSnap = -1;
+static int		demoSeekTarget = -1;
 static int		demoSeekStretch;
-static qboolean	demoSeekRestart;			// the next demo command is a seek going back
+static qboolean	demoSeekRestart;
 
-/*
-====================
-CL_DemoScan
-
-one pass over the file before it plays: where each stretch of server time begins and how long
-it runs, the times the match restarts, and the frags of the player being watched, which the
-timeline marks and fragforward jumps to. The snapshots are read whole, as CL_ParseSnapshot reads
-them, into a parse state of the scan's own that is thrown away at the end
-====================
-*/
 typedef struct {
 	qboolean		valid;
 	int				messageNum;
@@ -867,7 +679,7 @@ typedef struct {
 	entityState_t	parseEntities[MAX_PARSE_ENTITIES];
 	int				parseEntitiesNum;
 	demoScanFrame_t	frames[PACKET_BACKUP];
-	int				obituarySeen[MAX_GENTITIES];	// the last message whose snapshot carried it
+	int				obituarySeen[MAX_GENTITIES];
 } demoScan_t;
 
 static void CL_DemoScanGamestate(msg_t *msg, demoScan_t *scan) {
@@ -876,10 +688,9 @@ static void CL_DemoScanGamestate(msg_t *msg, demoScan_t *scan) {
 
 	Com_Memset(&nullstate, 0, sizeof(nullstate));
 	Com_Memset(scan->baselines, 0, sizeof(scan->baselines));
-	// the frames before a gamestate are no base for a delta after it
 	Com_Memset(scan->frames, 0, sizeof(scan->frames));
 
-	MSG_ReadLong(msg);	// server command sequence
+	MSG_ReadLong(msg);
 	while (msg->readcount <= msg->cursize) {
 		cmd = MSG_ReadByte(msg);
 		if (cmd == svc_configstring) {
@@ -892,14 +703,13 @@ static void CL_DemoScanGamestate(msg_t *msg, demoScan_t *scan) {
 			}
 			MSG_ReadDeltaEntity(msg, &nullstate, &scan->baselines[num], num);
 		} else {
-			break;	// svc_EOF
+			break;
 		}
 	}
-	MSG_ReadLong(msg);	// client number
-	MSG_ReadLong(msg);	// checksum feed
+	MSG_ReadLong(msg);
+	MSG_ReadLong(msg);
 }
 
-// one entity into the scan's ring, as CL_DeltaEntity puts it into cl.parseEntities
 static void CL_DemoScanDelta(msg_t *msg, demoScan_t *scan, demoScanFrame_t *frame, int num,
 	entityState_t *from, qboolean unchanged) {
 	entityState_t *state = &scan->parseEntities[scan->parseEntitiesNum & (MAX_PARSE_ENTITIES - 1)];
@@ -910,13 +720,12 @@ static void CL_DemoScanDelta(msg_t *msg, demoScan_t *scan, demoScanFrame_t *fram
 		MSG_ReadDeltaEntity(msg, from, state, num);
 	}
 	if (state->number == MAX_GENTITIES - 1) {
-		return;	// removed
+		return;
 	}
 	scan->parseEntitiesNum++;
 	frame->numEntities++;
 }
 
-// the next entity of the frame being deltaed from, 99999 past its last
 static int CL_DemoScanNextOld(demoScan_t *scan, demoScanFrame_t *old, int *index, entityState_t **state) {
 	if (!old || ++*index >= old->numEntities) {
 		return 99999;
@@ -925,7 +734,6 @@ static int CL_DemoScanNextOld(demoScan_t *scan, demoScanFrame_t *old, int *index
 	return (*state)->number;
 }
 
-// as CL_ParsePacketEntities; qfalse when the message runs out
 static qboolean CL_DemoScanEntities(msg_t *msg, demoScan_t *scan, demoScanFrame_t *old, demoScanFrame_t *frame) {
 	entityState_t	*oldstate = NULL;
 	int				oldindex = -1, oldnum, newnum;
@@ -960,7 +768,6 @@ static qboolean CL_DemoScanEntities(msg_t *msg, demoScan_t *scan, demoScanFrame_
 	return qtrue;
 }
 
-// as CL_ParseSnapshot: the frame it read, or NULL when it is no good
 static demoScanFrame_t *CL_DemoScanSnapshot(msg_t *msg, demoScan_t *scan, int seq, int *serverTime) {
 	static demoScanFrame_t	frame;
 	demoScanFrame_t			*old = NULL;
@@ -969,7 +776,7 @@ static demoScanFrame_t *CL_DemoScanSnapshot(msg_t *msg, demoScan_t *scan, int se
 
 	*serverTime = MSG_ReadLong(msg);
 	delta = MSG_ReadByte(msg);
-	MSG_ReadByte(msg);	// snapFlags
+	MSG_ReadByte(msg);
 
 	Com_Memset(&frame, 0, sizeof(frame));
 	frame.messageNum = seq;
@@ -1018,12 +825,12 @@ static void CL_DemoScan(const char *name) {
 			seq = LittleLong(seq);
 			len = LittleLong(len);
 			if (len < 0 || len > MAX_MSGLEN || FS_Read(data, len, f) != len) {
-				break;	// -1 ends the demo; anything else is a damaged tail
+				break;
 			}
 			MSG_Init(&buf, data, sizeof(data));
 			buf.cursize = len;
 			MSG_Bitstream(&buf);
-			MSG_ReadLong(&buf);	// reliable acknowledge
+			MSG_ReadLong(&buf);
 
 			while (buf.readcount <= buf.cursize) {
 				cmd = MSG_ReadByte(&buf);
@@ -1043,11 +850,10 @@ static void CL_DemoScan(const char *name) {
 					continue;
 				}
 				if (cmd != svc_snapshot) {
-					break;	// svc_EOF, or nothing the timeline needs
+					break;
 				}
 				frame = CL_DemoScanSnapshot(&buf, scan, seq, &t);
 
-				// a new stretch after a gamestate, or if the clock went back without one
 				if (!demoStretches || gamestate || t < last - 1000) {
 					if (demoStretches == MAX_DEMO_STRETCHES) {
 						break;
@@ -1068,8 +874,6 @@ static void CL_DemoScan(const char *name) {
 				mark = qfalse;
 				last = t;
 
-				// a frag: an obituary new in this snapshot, with the watched player the killer.
-				// The event entity lives on for a few snapshots and counts in the first
 				for (i = 0; frame && i < frame->numEntities; i++) {
 					es = &scan->parseEntities[(frame->parseEntitiesNum + i) & (MAX_PARSE_ENTITIES - 1)];
 					if (es->eType != ET_EVENTS + EV_OBITUARY) {
@@ -1099,7 +903,6 @@ static void CL_DemoScan(const char *name) {
 	Com_DPrintf("demo scan: %d ms\n", Sys_Milliseconds() - start);
 }
 
-// demo time of server time t in the stretch being played
 static int CL_DemoTimeAt(int t) {
 	int n = demoStretch < demoStretches ? demoStretch : demoStretches - 1;
 
@@ -1115,29 +918,9 @@ static int CL_DemoTimeAt(int t) {
 	return demoStretchAt[n] + t;
 }
 
-// demo time of what is on screen
 static int CL_DemoPos(void) {
 	return CL_DemoTimeAt(cl.serverTime);
 }
-
-/*
-===============================================================================
-
-REWIND
-
-[ioquakelive] NOT FROM RETAIL, the way WolfcamQL does it. While a demo plays, the client is
-copied every so often with its place in the file: once in each eighth of the demo, so any
-point can be reached, and every ten seconds for the last eighty, so a short step back has
-little to read. Going back restores the newest copy a second before the target and the demo
-is read on from there, undrawn, in the same frame, while the cgame starts over from the
-snapshot restored with everything it loaded. The demo is played again, with its loading
-screen, only for a point before every copy or behind a gamestate.
-
-Reading a whole demo takes some 40 milliseconds; what going back used to cost was the cgame
-loading everything again.
-
-===============================================================================
-*/
 
 #define DEMO_SPREAD_BACKUPS		8
 #define DEMO_RECENT_BACKUPS		8
@@ -1146,25 +929,18 @@ loading everything again.
 
 typedef struct {
 	qboolean			valid;
-	int					pos;			// demo time of its snapshot
-	int					filePos;		// the demo file right after it
+	int					pos;
+	int					filePos;
 	int					stretch;
 	int					lastSnap;
 	clientActive_t		cl;
 	clientConnection_t	clc;
 } demoBackup_t;
 
-static demoBackup_t*	demoBackups;		// DEMO_BACKUPS of them, while a demo plays
-static int				demoRecentNext;		// demo time the next recent copy is due
+static demoBackup_t*	demoBackups;
+static int				demoRecentNext;
 static int				demoRecentSlot;
 
-/*
-====================
-CL_DemoForgetBackups
-
-a new demo, this one again, or a gamestate halfway: none of the copies holds any more
-====================
-*/
 static void CL_DemoForgetBackups(void) {
 	int i;
 
@@ -1177,13 +953,6 @@ static void CL_DemoForgetBackups(void) {
 	demoRecentSlot = 0;
 }
 
-/*
-====================
-CL_DemoFreeBackups
-
-the demo is over; the copies are some 40 megabytes
-====================
-*/
 static void CL_DemoFreeBackups(void) {
 	free(demoBackups);
 	demoBackups = NULL;
@@ -1200,14 +969,6 @@ static void CL_DemoTakeBackup(demoBackup_t* b, int pos) {
 	memcpy(&b->clc, &clc, sizeof(clc));
 }
 
-/*
-====================
-CL_DemoBackup
-
-after each snapshot of a demo being watched: the first in each eighth of the demo, and one
-every DEMO_RECENT_SPACING into the ring of recent ones
-====================
-*/
 static void CL_DemoBackup(void) {
 	int pos, length, slot;
 
@@ -1238,30 +999,14 @@ static void CL_DemoBackup(void) {
 	}
 }
 
-/*
-====================
-CL_DemoGamestate
-
-called by CL_ParseGamestate: one arriving while the demo already runs begins its next stretch
-====================
-*/
 void CL_DemoGamestate(void) {
 	if (clc.demoplaying && clc.state == CA_ACTIVE) {
 		demoStretch++;
 		demoLastSnap = -1;
-		// [ioquakelive] the cgame starts over on it: going back past it plays the demo again
 		CL_DemoForgetBackups();
 	}
 }
 
-/*
-====================
-CL_DemoSnapshotRead
-
-called after each demo message: the server's clock starting over without a gamestate begins
-the next stretch too, as CL_DemoScan counts them
-====================
-*/
 void CL_DemoSnapshotRead(void) {
 	if (!cl.snap.valid) {
 		return;
@@ -1273,14 +1018,6 @@ void CL_DemoSnapshotRead(void) {
 	CL_DemoBackup();
 }
 
-/*
-====================
-CL_DemoSuspend / CL_DemoResume
-
-around a filesystem restart, which closes every open file: the demo is put down with its
-place kept, and taken up again there
-====================
-*/
 int CL_DemoSuspend(void) {
 	int pos;
 
@@ -1303,15 +1040,6 @@ void CL_DemoResume(int pos) {
 	}
 }
 
-/*
-====================
-CL_DemoRewind
-
-back to demo time pos from the newest copy of the client a second before it, which leaves
-snapshots behind the target to draw it from, or failing that the newest at it; qfalse when
-there is none
-====================
-*/
 static qboolean CL_DemoRewind(int pos) {
 	demoBackup_t* b = NULL;
 	fileHandle_t demofile;
@@ -1333,7 +1061,6 @@ static qboolean CL_DemoRewind(int pos) {
 
 	S_StopAllSounds();
 
-	// the file handle is the current one: a filesystem restart reopens the demo
 	demofile = clc.demofile;
 	memcpy(&cl, &b->cl, sizeof(cl));
 	memcpy(&clc, &b->clc, sizeof(clc));
@@ -1343,7 +1070,6 @@ static qboolean CL_DemoRewind(int pos) {
 	demoLastSnap = b->lastSnap;
 	demoRecentNext = b->pos + DEMO_RECENT_SPACING;
 
-	// the clock goes back with it, and CL_DemoSeekApply takes it on to the target
 	cl.serverTimeDelta = cl.snap.serverTime - cls.realtime;
 	cl.serverTime = cl.oldServerTime = cl.oldFrameServerTime = cl.snap.serverTime;
 
@@ -1351,14 +1077,6 @@ static qboolean CL_DemoRewind(int pos) {
 	return qtrue;
 }
 
-/*
-====================
-CL_DemoSeek
-
-jumps to demo time pos: ahead in the same stretch right away, anywhere else by playing the
-demo again and running through it
-====================
-*/
 static void CL_DemoSeek(int pos) {
 	int n;
 
@@ -1378,30 +1096,18 @@ static void CL_DemoSeek(int pos) {
 
 	demoSeekStretch = n;
 	demoSeekTarget = demoStretchStart[n] + pos - demoStretchAt[n];
-	// still starting, or starting over: at the top of the file, where every target is ahead
 	if (clc.state != CA_ACTIVE) {
 		return;
 	}
 	if (n != demoStretch || demoSeekTarget < cl.serverTime) {
-		// [ioquakelive] going back starts from a copy of the client when there is one
 		if (pos < CL_DemoPos() && CL_DemoRewind(pos)) {
 			return;
 		}
-		// inserted, not appended: whatever else is queued runs after the demo is back
 		demoSeekRestart = qtrue;
 		Cbuf_ExecuteText(EXEC_INSERT, va("demo \"%s\"\n", clc.demoName));
 	}
 }
 
-/*
-====================
-CL_DemoSeekApply
-
-called by CL_SetCGameTime before it reads the demo: moves the clock toward a pending seek,
-and the demo is then read up to it in one go, undrawn. A seek into a later stretch runs off
-the end of each one before it, into its gamestate, until it gets there.
-====================
-*/
 void CL_DemoSeekApply(void) {
 	int target, ahead;
 
@@ -1437,7 +1143,6 @@ static void CL_FastForward_f(void) {
 	CL_DemoSeek(CL_DemoPos() + (int)(CL_SeekSeconds(10) * 1000));
 }
 
-// fragforward [seconds]: that long before the next frag of the player being watched, as WolfcamQL
 static void CL_FragForward_f(void) {
 	char		frags[MAX_STRING_CHARS];
 	const char	*p;
@@ -1448,7 +1153,6 @@ static void CL_FragForward_f(void) {
 	Cvar_VariableStringBuffer("cl_demoFrags", frags, sizeof(frags));
 	for (p = frags; *p; ) {
 		t = atoi(p);
-		// past the one it last jumped to
 		if (t - before > now + 500) {
 			CL_DemoSeek(t - before);
 			return;
@@ -1463,7 +1167,6 @@ static void CL_FragForward_f(void) {
 	Com_Printf("no more frags\n");
 }
 
-// seekdemo <seconds> or <m:ss>, from the start of the demo
 static void CL_SeekDemo_f(void) {
 	const char *s = Cmd_Argv(1);
 	const char *colon = strchr(s, ':');
@@ -1477,14 +1180,6 @@ static void CL_SeekDemo_f(void) {
 	CL_DemoSeek((int)(seconds * 1000));
 }
 
-/*
-====================
-CL_PlayDemo_f
-
-demo <demoname>
-
-====================
-*/
 void CL_PlayDemo_f(void) {
     char name[MAX_OSPATH];
     char arg[MAX_OSPATH];
@@ -1498,16 +1193,12 @@ void CL_PlayDemo_f(void) {
         return;
     }
 
-    // make sure a local server is killed
-    // 2 means don't force disconnect of local client
     Cvar_Set("sv_killserver", "2");
 
-    // open the demo file
     Q_strncpyz(arg, Cmd_Argv(1), sizeof(arg));
 
     CL_Disconnect(qtrue);
 
-    // check for an extension .DEMOEXT_?? (?? is protocol)
     ext_test = strrchr(arg, '.');
 
     if (ext_test && !Q_stricmpn(ext_test + 1, DEMOEXT, ARRAY_LEN(DEMOEXT) - 1)) {
@@ -1543,8 +1234,6 @@ void CL_PlayDemo_f(void) {
     }
     Q_strncpyz(clc.demoName, arg, sizeof(clc.demoName));
 
-    // [ioquakelive] a seek going back keeps its target through the restart; any other demo
-    // drops it
     seekRestart = demoSeekRestart;
     if (!demoSeekRestart) {
         demoSeekTarget = -1;
@@ -1553,7 +1242,6 @@ void CL_PlayDemo_f(void) {
     demoStretch = 0;
     demoLastSnap = -1;
     CL_DemoForgetBackups();
-    // a seek going back plays the same file again: what the scan found still holds
     if (!seekRestart || Q_stricmp(demoPath, name)) {
         Q_strncpyz(demoPath, name, sizeof(demoPath));
         CL_DemoScan(name);
@@ -1565,36 +1253,17 @@ void CL_PlayDemo_f(void) {
     clc.demoplaying = qtrue;
     Q_strncpyz(clc.servername, arg, sizeof(clc.servername));
 
-    // read demo messages until connected
     while (clc.state >= CA_CONNECTED && clc.state < CA_PRIMED) {
         CL_ReadDemoMessage();
     }
-    // don't get the first snapshot this frame, to prevent the long
-    // time from the gamestate load from messing causing a time skip
     clc.firstDemoFrameSkipped = qfalse;
 }
 
-/*
-====================
-CL_StartDemoLoop
-
-Closing the main menu will restart the demo loop
-====================
-*/
 void CL_StartDemoLoop(void) {
-    // start the demo loop again
     Cbuf_AddText("d1\n");
     Key_SetCatcher(0);
 }
 
-/*
-==================
-CL_NextDemo
-
-Called when a demo or cinematic finishes
-If the "nextdemo" cvar is set, that command will be issued
-==================
-*/
 void CL_NextDemo(void) {
     char v[MAX_STRING_CHARS];
 
@@ -1611,13 +1280,6 @@ void CL_NextDemo(void) {
     Cbuf_Execute();
 }
 
-//======================================================================
-
-/*
-=====================
-CL_ShutdownAll
-=====================
-*/
 void CL_ShutdownAll(qboolean shutdownRef) {
     if (CL_VideoRecording())
         CL_CloseAVI();
@@ -1628,18 +1290,14 @@ void CL_ShutdownAll(qboolean shutdownRef) {
 #ifdef USE_CURL
     CL_cURL_Shutdown();
 #endif
-    // clear sounds
     S_DisableSounds();
-    // shutdown CGame
     CL_ShutdownCGame();
-    // shutdown UI
     CL_ShutdownUI();
 
-    // shutdown the renderer
     if (shutdownRef)
         CL_ShutdownRef();
     else if (re.Shutdown)
-        re.Shutdown(qfalse);  // don't destroy window or context
+        re.Shutdown(qfalse);
 
     cls.uiStarted = qfalse;
     cls.cgameStarted = qfalse;
@@ -1647,52 +1305,22 @@ void CL_ShutdownAll(qboolean shutdownRef) {
     cls.soundRegistered = qfalse;
 }
 
-/*
-=================
-CL_ClearMemory
-
-Called by Com_GameRestart
-=================
-*/
 void CL_ClearMemory(qboolean shutdownRef) {
-    // shutdown all the client stuff
     CL_ShutdownAll(shutdownRef);
 
-    // if not running a server clear the whole hunk
     if (!com_sv_running || !com_sv_running->integer) {
-        // clear the whole hunk
         Hunk_Clear();
-        // clear collision map data
         CM_ClearMap();
     } else {
-        // clear all the client data on the hunk
         Hunk_ClearToMark();
     }
 }
 
-/*
-=================
-CL_FlushMemory
-
-Called by CL_MapLoading, CL_Connect_f, CL_PlayDemo_f, and CL_ParseGamestate the only
-ways a client gets into a game
-Also called by Com_Error
-=================
-*/
 void CL_FlushMemory(void) {
     CL_ClearMemory(qfalse);
     CL_StartHunkUsers(qfalse);
 }
 
-/*
-=====================
-CL_MapLoading
-
-A local server is starting to load a map, so update the
-screen to let the user know about it, then dump all client
-memory on the hunk from cgame, ui, and renderer
-=====================
-*/
 void CL_MapLoading(void) {
     if (com_dedicated->integer) {
         clc.state = CA_DISCONNECTED;
@@ -1707,68 +1335,45 @@ void CL_MapLoading(void) {
     Con_Close();
     Key_SetCatcher(0);
 
-    // if we are already connected to the local host, stay connected
     if (clc.state >= CA_CONNECTED && !Q_stricmp(clc.servername, "localhost")) {
-        clc.state = CA_CONNECTED;  // so the connect screen is drawn
+        clc.state = CA_CONNECTED;
         Com_Memset(cls.updateInfoString, 0, sizeof(cls.updateInfoString));
         Com_Memset(clc.serverMessage, 0, sizeof(clc.serverMessage));
         Com_Memset(&cl.gameState, 0, sizeof(cl.gameState));
         clc.lastPacketSentTime = -9999;
         SCR_UpdateScreen();
     } else {
-        // clear nextmap so the cinematic shutdown doesn't execute it
         Cvar_Set("nextmap", "");
         CL_Disconnect(qtrue);
         Q_strncpyz(clc.servername, "localhost", sizeof(clc.servername));
-        clc.state = CA_CHALLENGING;  // so the connect screen is drawn
+        clc.state = CA_CHALLENGING;
         Key_SetCatcher(0);
         SCR_UpdateScreen();
         clc.connectTime = -RETRANSMIT_TIMEOUT;
         NET_StringToAdr(clc.servername, &clc.serverAddress, NA_UNSPEC);
-        // we don't need a challenge on the localhost
 
         CL_CheckForResend();
     }
 }
 
-/*
-=====================
-CL_ClearState
-
-Called before parsing a gamestate
-=====================
-*/
 void CL_ClearState(void) {
-    //	S_StopAllSounds();
 
     Com_Memset(&cl, 0, sizeof(cl));
 }
 
 static void CL_OldGame(void) {
     if (cl_oldGameSet) {
-        // change back to previous fs_game
         cl_oldGameSet = qfalse;
         Cvar_Set2("fs_game", cl_oldGame, qtrue);
         FS_ConditionalRestart(clc.checksumFeed, qfalse);
     }
 }
 
-/*
-=====================
-CL_Disconnect
-
-Called when a connection, demo, or cinematic is being terminated.
-Goes from a connected state to either a menu state or a console state
-Sends a disconnect message to the server
-This is also called on Com_Error and Com_Quit, so it shouldn't cause any errors
-=====================
-*/
 void CL_Disconnect(qboolean showMainMenu) {
     if (!com_cl_running || !com_cl_running->integer) {
         return;
     }
 
-    // shutting down the client so enter full screen ui mode
     Cvar_Set("r_uiFullScreen", "1");
 
     if (clc.demorecording) {
@@ -1786,7 +1391,6 @@ void CL_Disconnect(qboolean showMainMenu) {
         FS_FCloseFile(clc.demofile);
         clc.demofile = 0;
     }
-    // [ioquakelive] and the copies of the client kept for going back in it
     CL_DemoFreeBackups();
 
     if (uivm && showMainMenu) {
@@ -1796,8 +1400,6 @@ void CL_Disconnect(qboolean showMainMenu) {
     SCR_StopCinematic();
     S_ClearSoundBuffer();
 
-    // send a disconnect message to the server
-    // send it a few times in case one is dropped
     if (clc.state >= CA_CONNECTED) {
         CL_AddReliableCommand("disconnect", qtrue);
         CL_WritePacket();
@@ -1805,31 +1407,24 @@ void CL_Disconnect(qboolean showMainMenu) {
         CL_WritePacket();
     }
 
-    // Remove pure paks
     FS_PureServerSetLoadedPaks("", "");
     FS_PureServerSetReferencedPaks("", "");
 
-    // [QL] 0x004b8a26: the host's stats are stored as they leave their own game
     if (com_sv_running && com_sv_running->integer) {
         SV_SteamStatsRemoveUser(Steam_ClientSteamID());
     }
 
     CL_ClearState();
 
-    // wipe the client connection
     Com_Memset(&clc, 0, sizeof(clc));
 
     clc.state = CA_DISCONNECTED;
 
-    // allow cheats locally
     Cvar_Set("sv_cheats", "1");
 
-    // not connected to a pure server anymore
     cl_connectedToPureServer = qfalse;
 
-    // Stop recording any video
     if (CL_VideoRecording()) {
-        // Finish rendering current frame
         SCR_UpdateScreen();
         CL_CloseAVI();
     }
@@ -1840,21 +1435,11 @@ void CL_Disconnect(qboolean showMainMenu) {
         noGameRestart = qfalse;
 }
 
-/*
-===================
-CL_ForwardCommandToServer
-
-adds the current command line as a clientCommand
-things like godmode, noclip, etc, are commands directed to the server,
-so when they are typed in at the console, they will need to be forwarded.
-===================
-*/
 void CL_ForwardCommandToServer(const char* string) {
     char* cmd;
 
     cmd = Cmd_Argv(0);
 
-    // ignore key up commands
     if (cmd[0] == '-') {
         return;
     }
@@ -1871,12 +1456,6 @@ void CL_ForwardCommandToServer(const char* string) {
     }
 }
 
-/*
-===================
-CL_RequestMotd
-
-===================
-*/
 void CL_RequestMotd(void) {
 #ifdef UPDATE_SERVER_NAME
     char info[MAX_INFO_STRING];
@@ -1907,36 +1486,17 @@ void CL_RequestMotd(void) {
 #endif
 }
 
-/*
-======================================================================
-
-CONSOLE COMMANDS
-
-======================================================================
-*/
-
-/*
-==================
-CL_ForwardToServer_f
-==================
-*/
 void CL_ForwardToServer_f(void) {
     if (clc.state != CA_ACTIVE || clc.demoplaying) {
         Com_Printf("Not connected to a server.\n");
         return;
     }
 
-    // don't forward the first argument
     if (Cmd_Argc() > 1) {
         CL_AddReliableCommand(Cmd_Args(), qfalse);
     }
 }
 
-/*
-==================
-CL_Disconnect_f
-==================
-*/
 void CL_Disconnect_f(void) {
     SCR_StopCinematic();
     if (clc.state != CA_DISCONNECTED && clc.state != CA_CINEMATIC) {
@@ -1944,24 +1504,12 @@ void CL_Disconnect_f(void) {
     }
 }
 
-/*
-================
-CL_Reconnect_f
-
-================
-*/
 void CL_Reconnect_f(void) {
     if (!strlen(cl_reconnectArgs))
         return;
     Cbuf_AddText(va("connect %s\n", cl_reconnectArgs));
 }
 
-/*
-================
-CL_Connect_f
-
-================
-*/
 void CL_Connect_f(void) {
     char server[MAX_OSPATH];
     const char* serverString;
@@ -1986,28 +1534,22 @@ void CL_Connect_f(void) {
         Q_strncpyz(server, Cmd_Argv(2), sizeof(server));
     }
 
-    // [ioquakelive] a connect of your own starts the count of redirects again
     if (clRedirecting) {
         clRedirecting = qfalse;
     } else {
         clRedirectHops = 0;
     }
 
-    // save arguments for reconnect
     Q_strncpyz(cl_reconnectArgs, Cmd_Args(), sizeof(cl_reconnectArgs));
 
-    // fire a message off to the motd server
     CL_RequestMotd();
 
-    // clear any previous "server full" type messages
     clc.serverMessage[0] = 0;
 
     if (com_sv_running->integer && !strcmp(server, "localhost")) {
-        // if running a local server, kill it
         SV_Shutdown("Server quit");
     }
 
-    // make sure a local server is killed
     Cvar_Set("sv_killserver", "1");
     SV_Frame(0);
 
@@ -2030,34 +1572,25 @@ void CL_Connect_f(void) {
 
     Com_Printf("%s resolved to %s\n", clc.servername, serverString);
 
-    // if we aren't playing on a lan, we need to request a challenge
     if (NET_IsLocalAddress(clc.serverAddress))
         clc.state = CA_CHALLENGING;
     else {
         clc.state = CA_CONNECTING;
 
-        // Set a client challenge number that ideally is mirrored back by the server.
         clc.challenge = (((unsigned int)rand() << 16) ^ (unsigned int)rand()) ^ Com_Milliseconds();
     }
 
     Key_SetCatcher(0);
-    clc.connectTime = -99999;  // CL_CheckForResend() will fire immediately
+    clc.connectTime = -99999;
     clc.connectPacketCount = 0;
 
-    // server connection string
     Cvar_Set("cl_currentServerAddress", server);
 }
 
 #define MAX_RCON_MESSAGE 1024
 
-/*
-==================
-CL_CompleteRcon
-==================
-*/
 static void CL_CompleteRcon(char* args, int argNum) {
     if (argNum == 2) {
-        // Skip "rcon "
         char* p = Com_SkipTokens(args, 1, " ");
 
         if (p > args)
@@ -2065,19 +1598,6 @@ static void CL_CompleteRcon(char* args, int argNum) {
     }
 }
 
-/*
-==================
-CL_CompletePlayerName
-==================
-*/
-/*
-==================
-CL_PlayerNames
-
-[ioquakelive] The other players' names from the configstrings, sorted, for completion; with
-numbers, their client numbers instead (clientkick takes one).
-==================
-*/
 static int CL_PlayerNames(const char** namesPtr, char (*names)[MAX_NAME_LENGTH], qboolean numbers) {
     const char* info = cl.gameState.stringData + cl.gameState.stringOffsets[CS_SERVERINFO];
     const int clientCount = MIN(atoi(Info_ValueForKey(info, "sv_maxclients")), MAX_CLIENTS);
@@ -2119,21 +1639,11 @@ static void CL_CompletePlayerName(char* args, int argNum) {
     }
 }
 
-/*
-=====================
-CL_Rcon_f
-
-  Send the rest of the command line over as
-  an unconnected command.
-=====================
-*/
 void CL_Rcon_f(void) {
     char message[MAX_RCON_MESSAGE];
     netadr_t to;
 
     if (!rcon_client_password->string[0]) {
-        // [QL] retail's client has no rcon of its own: "rcon ..." goes to the server as a client
-        // command, which runs it for an admin (quakelive_steam.exe 0x4dff80)
         if (clc.state >= CA_CONNECTED) {
             CL_AddReliableCommand(Cmd_Cmd(), qfalse);
             return;
@@ -2155,7 +1665,6 @@ void CL_Rcon_f(void) {
     Q_strcat(message, MAX_RCON_MESSAGE, rcon_client_password->string);
     Q_strcat(message, MAX_RCON_MESSAGE, " ");
 
-    // https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=543
     Q_strcat(message, MAX_RCON_MESSAGE, Cmd_Cmd() + 5);
 
     if (clc.state >= CA_CONNECTED) {
@@ -2179,37 +1688,18 @@ void CL_Rcon_f(void) {
     cls.rconAddress = to;
 }
 
-/*
-=================
-CL_SendPureChecksums
-=================
-*/
 void CL_SendPureChecksums(void) {
     char cMsg[MAX_INFO_VALUE];
 
-    // if we are pure we need to send back a command with our referenced pk3 checksums
     Com_sprintf(cMsg, sizeof(cMsg), "cp %d %s", cl.serverId, FS_ReferencedPakPureChecksums());
 
     CL_AddReliableCommand(cMsg, qfalse);
 }
 
-/*
-=================
-CL_ResetPureClientAtServer
-=================
-*/
 void CL_ResetPureClientAtServer(void) {
     CL_AddReliableCommand("vdr", qfalse);
 }
 
-/*
-=================
-CL_ResolutionChanged
-
-[QL] quakelive_steam.exe 0x4bb88f: once the window has its new size the cgame is told with
-event 4, when it is running. The UI hears it from vid_resizeCount.
-=================
-*/
 void CL_ResolutionChanged(void) {
     Cvar_SetValue("vid_resizeCount", Cvar_VariableIntegerValue("vid_resizeCount") + 1);
     if (cls.cgameStarted && cgvm) {
@@ -2217,32 +1707,15 @@ void CL_ResolutionChanged(void) {
     }
 }
 
-/*
-=================
-CL_Vid_Restart_f
-
-Restart the video subsystem
-
-we also have to reload the UI and CGame because the renderer
-doesn't know what graphics to reload
-=================
-*/
 void CL_Vid_Restart_f(void) {
-    // [QL] quakelive_steam.exe 0x004bb7e0: "vid_restart fast" keeps the modules and everything
-    // loaded and only does the window over, which is what retail runs on alt+enter and after a
-    // resize. It reads r_noFastRestart first and falls back to the slow way when the window
-    // cannot take it; so does this
     if (Cmd_Argc() > 1 && !Q_stricmp(Cmd_Argv(1), "fast") && cls.rendererStarted &&
         !Cvar_VariableIntegerValue("r_noFastRestart") && re.ApplyVideoMode &&
         re.ApplyVideoMode(&cls.glconfig)) {
-        // this is how the modules hear about the new resolution
         CL_ResolutionChanged();
-        // and the mouse follows the window's new state
         IN_Restart();
         return;
     }
 
-    // Settings may have changed so stop recording now
     if (CL_VideoRecording()) {
         CL_CloseAVI();
     }
@@ -2250,105 +1723,58 @@ void CL_Vid_Restart_f(void) {
     if (clc.demorecording)
         CL_StopRecord_f();
 
-    // don't let them loop during the restart
     S_StopAllSounds();
 
     if (!FS_ConditionalRestart(clc.checksumFeed, qtrue)) {
-        // if not running a server clear the whole hunk
         if (com_sv_running->integer) {
-            // clear all the client data on the hunk
             Hunk_ClearToMark();
         } else {
-            // clear the whole hunk
             Hunk_Clear();
         }
 
-        // shutdown the UI
         CL_ShutdownUI();
-        // shutdown the CGame
         CL_ShutdownCGame();
-        // shutdown the renderer and clear the renderer interface
         CL_ShutdownRef();
-        // client is no longer pure until new checksums are sent
         CL_ResetPureClientAtServer();
-        // clear pak references
         FS_ClearPakReferences(FS_UI_REF | FS_CGAME_REF);
-        // reinitialize the filesystem if the game directory or checksum has changed
 
         cls.rendererStarted = qfalse;
         cls.uiStarted = qfalse;
         cls.cgameStarted = qfalse;
         cls.soundRegistered = qfalse;
 
-        // unpause so the cgame definitely gets a snapshot and renders a frame
         Cvar_Set("cl_paused", "0");
 
-        // initialize the renderer interface
         CL_InitRef();
 
-        // startup all the client stuff
         CL_StartHunkUsers(qfalse);
 
-        // start the cgame if connected
         if (clc.state > CA_CONNECTED && clc.state != CA_CINEMATIC) {
             cls.cgameStarted = qtrue;
             CL_InitCGame();
-            // send pure checksums
             CL_SendPureChecksums();
         }
     }
 }
 
-/*
-=================
-CL_Snd_Restart
-
-Restart the sound subsystem
-=================
-*/
 void CL_Snd_Shutdown(void) {
     S_Shutdown();
     cls.soundStarted = qfalse;
 }
 
-/*
-=================
-CL_Snd_Restart_f
-
-Restart the sound subsystem
-The cgame and game must also be forced to restart because
-handles will be invalid
-=================
-*/
 void CL_Snd_Restart_f(void) {
     CL_Snd_Shutdown();
-    // sound will be reinitialized by vid_restart
     CL_Vid_Restart_f();
 }
 
-/*
-==================
-CL_PK3List_f
-==================
-*/
 void CL_OpenedPK3List_f(void) {
     Com_Printf("Opened PK3 Names: %s\n", FS_LoadedPakNames());
 }
 
-/*
-==================
-CL_PureList_f
-==================
-*/
 void CL_ReferencedPK3List_f(void) {
     Com_Printf("Referenced PK3 Names: %s\n", FS_ReferencedPakNames());
 }
 
-/*
-==================
-CL_Configstrings_f
-==================
-*/
 void CL_Configstrings_f(void) {
     int i;
     int ofs;
@@ -2367,11 +1793,6 @@ void CL_Configstrings_f(void) {
     }
 }
 
-/*
-==============
-CL_Clientinfo_f
-==============
-*/
 void CL_Clientinfo_f(void) {
     Com_Printf("--------- Client Information ---------\n");
     Com_Printf("state: %i\n", clc.state);
@@ -2381,42 +1802,16 @@ void CL_Clientinfo_f(void) {
     Com_Printf("--------------------------------------\n");
 }
 
-/*
-==============
-CL_PostProcessRestart_f
-
-[QL] Restart post-processing pipeline.
-In the binary this calls through a renderer function pointer.
-No-op in ioquakelive since we don't have a separate post-process pipeline.
-==============
-*/
 void CL_PostProcessRestart_f(void) {
 }
 
-/*
-==============
-CL_Userinfo_f
-
-[QL] Dump current userinfo string
-==============
-*/
 void CL_Userinfo_f(void) {
     Com_Printf("User info settings:\n");
     Info_Print(Cvar_InfoString(CVAR_USERINFO));
 }
 
-//====================================================================
-
-/*
-=================
-CL_DownloadsComplete
-
-Called when all downloading has been completed
-=================
-*/
 void CL_DownloadsComplete(void) {
 #ifdef USE_CURL
-    // if we downloaded with cURL
     if (clc.cURLUsed) {
         clc.cURLUsed = qfalse;
         CL_cURL_Shutdown();
@@ -2432,46 +1827,31 @@ void CL_DownloadsComplete(void) {
     }
 #endif
 
-    // if we downloaded files we need to restart the file system
     if (clc.downloadRestart) {
         clc.downloadRestart = qfalse;
 
-        FS_Restart(clc.checksumFeed);  // We possibly downloaded a pak, restart the file system to load it
+        FS_Restart(clc.checksumFeed);
 
-        // inform the server so we get new gamestate info
         CL_AddReliableCommand("donedl", qfalse);
 
-        // by sending the donedl command we request a new gamestate
-        // so we don't want to load stuff yet
         return;
     }
 
-    // let the client game init and load data
     clc.state = CA_LOADING;
 
-    // Pump the loop, this may change gamestate!
     Com_EventLoop();
 
-    // if the gamestate was changed by calling Com_EventLoop
-    // then we loaded everything already and we don't want to do it again.
     if (clc.state != CA_LOADING) {
         return;
     }
 
-    // starting to load a map so we get out of full screen ui mode
     Cvar_Set("r_uiFullScreen", "0");
 
-    // flush client memory and start loading stuff
-    // this will also (re)load the UI
-    // if this is a local client then only the client part of the hunk
-    // will be cleared, note that this is done after the hunk mark has been set
     CL_FlushMemory();
 
-    // initialize the CGame
     cls.cgameStarted = qtrue;
     CL_InitCGame();
 
-    // set pure checksums
     CL_SendPureChecksums();
 
     CL_WritePacket();
@@ -2479,14 +1859,6 @@ void CL_DownloadsComplete(void) {
     CL_WritePacket();
 }
 
-/*
-=================
-CL_BeginDownload
-
-Requests a file to download from the server.  Stores it in the current
-game directory.
-=================
-*/
 void CL_BeginDownload(const char* localName, const char* remoteName) {
     Com_DPrintf(
         "***** CL_BeginDownload *****\n"
@@ -2498,31 +1870,22 @@ void CL_BeginDownload(const char* localName, const char* remoteName) {
     Q_strncpyz(clc.downloadName, localName, sizeof(clc.downloadName));
     Com_sprintf(clc.downloadTempName, sizeof(clc.downloadTempName), "%s.tmp", localName);
 
-    // Set so UI gets access to it
     Cvar_Set("cl_downloadName", remoteName);
     Cvar_Set("cl_downloadSize", "0");
     Cvar_Set("cl_downloadCount", "0");
     Cvar_SetValue("cl_downloadTime", cls.realtime);
 
-    clc.downloadBlock = 0;  // Starting new file
+    clc.downloadBlock = 0;
     clc.downloadCount = 0;
 
     CL_AddReliableCommand(va("download %s", remoteName), qfalse);
 }
 
-/*
-=================
-CL_NextDownload
-
-A download completed or failed
-=================
-*/
 void CL_NextDownload(void) {
     char* s;
     char *remoteName, *localName;
     qboolean useCURL = qfalse;
 
-    // A download has finished, check whether this matches a referenced checksum
     if (*clc.downloadName) {
         char* zippath = FS_BuildOSPath(Cvar_VariableString("fs_homepath"), clc.downloadName, "");
         zippath[strlen(zippath) - 1] = '\0';
@@ -2534,12 +1897,8 @@ void CL_NextDownload(void) {
     *clc.downloadTempName = *clc.downloadName = 0;
     Cvar_Set("cl_downloadName", "");
 
-    // We are looking to start a download here
     if (*clc.downloadList) {
         s = clc.downloadList;
-
-        // format is:
-        //  @remotename@localname@remotename@localname, etc.
 
         if (*s == '@')
             s++;
@@ -2555,7 +1914,7 @@ void CL_NextDownload(void) {
         if ((s = strchr(s, '@')) != NULL)
             *s++ = 0;
         else
-            s = localName + strlen(localName);  // point at the nul byte
+            s = localName + strlen(localName);
 #ifdef USE_CURL
         if (!(cl_allowDownload->integer & DLF_NO_REDIRECT)) {
             if (clc.sv_allowDownload & DLF_NO_REDIRECT) {
@@ -2585,7 +1944,7 @@ void CL_NextDownload(void) {
                 "configuration (cl_allowDownload is %d)\n",
                 cl_allowDownload->integer);
         }
-#endif /* USE_CURL */
+#endif
         if (!useCURL) {
             if ((cl_allowDownload->integer & DLF_NO_UDP)) {
                 Com_Error(ERR_DROP,
@@ -2600,7 +1959,6 @@ void CL_NextDownload(void) {
         }
         clc.downloadRestart = qtrue;
 
-        // move over the rest
         memmove(clc.downloadList, s, strlen(s) + 1);
 
         return;
@@ -2613,16 +1971,6 @@ qboolean CL_Connected(void) {
     return (qboolean)(clc.state >= CA_CONNECTED);
 }
 
-/*
-==================
-CL_InitDownloads
-
-[QL] 0x004bba30. Quake Live's maps come from the Workshop, not over HTTP: with the
-gamestate the client queues the items the server publishes in CS_STEAM_WORKSHOP_IDS
-and waits connected while Steam brings down the missing ones (CL_WorkshopFrame). The
-connection screen shows the last one it asked for. Returns qtrue when it waits.
-==================
-*/
 qboolean CL_InitDownloads(void) {
     char copy[BIG_INFO_STRING];
     const char* list;
@@ -2657,15 +2005,6 @@ qboolean CL_InitDownloads(void) {
     return qtrue;
 }
 
-/*
-==================
-CL_WorkshopFrame
-
-[QL] 0x004bc320, every frame. With the queue empty, the filesystem restarts on a frame of
-its own to mount what came down; on the next one the client enters, warning first about
-the pk3s of the server it still lacks.
-==================
-*/
 void CL_WorkshopFrame(void) {
     char missing[2048];
 
@@ -2685,7 +2024,6 @@ void CL_WorkshopFrame(void) {
                    missing);
     }
     cl_workshopActive = qfalse;
-    // [ioquakelive] retail enters even when the player left while the items came down
     if (clc.state == CA_CONNECTED) {
         CL_DownloadsComplete();
     }
@@ -2746,24 +2084,15 @@ static void CL_WarmPlayers(void) {
     }
 }
 
-/*
-=================
-CL_CheckForResend
-
-Resend a connect message if the last one has timed out
-=================
-*/
 void CL_CheckForResend(void) {
     int port;
     char info[MAX_INFO_STRING];
     char data[MAX_INFO_STRING + 10];
 
-    // don't send anything if playing back a demo
     if (clc.demoplaying) {
         return;
     }
 
-    // resend if we haven't gotten a reply yet
     if (clc.state != CA_CONNECTING && clc.state != CA_CHALLENGING) {
         return;
     }
@@ -2772,19 +2101,12 @@ void CL_CheckForResend(void) {
         return;
     }
 
-    clc.connectTime = cls.realtime;  // for retransmit requests
+    clc.connectTime = cls.realtime;
     clc.connectPacketCount++;
 
     switch (clc.state) {
         case CA_CONNECTING:
         {
-            // QL getchallenge payload: "getchallenge " (13) + steam key (8) + auth token (11-512).
-            // Can't use NET_OutOfBandPrint (stops at nulls) or NET_OutOfBandData (adds Huffman).
-            //
-            // [QL] Steam signs the ticket for this session and the server hands it to Steam
-            // to learn whether the Steam ID belongs to who it claims. With no Steam the usual
-            // filler and the fallback identifier go out instead, so a local network still
-            // plays, where there is nobody to validate anything either.
             byte payload[13 + 8 + 504];
             unsigned long long steamId = Steam_ClientSteamID();
             int ticketLen;
@@ -2796,12 +2118,12 @@ void CL_CheckForResend(void) {
                 steamId = strtoull(cl_steamId->string, NULL, 10);
 #endif
             }
-            Com_Memcpy(payload,      "getchallenge ", 13);  // command
-            Com_Memcpy(payload + 13, &steamId, 8);          // steam key
+            Com_Memcpy(payload,      "getchallenge ", 13);
+            Com_Memcpy(payload + 13, &steamId, 8);
 
             ticketLen = Steam_AuthTicket(payload + 21, sizeof(payload) - 21);
             if (ticketLen <= 0) {
-                Com_Memset(payload + 21, 0, 16);  // the server demands eleven bytes at least
+                Com_Memset(payload + 21, 0, 16);
                 ticketLen = 16;
             }
             NET_OutOfBandRaw(NS_CLIENT, clc.serverAddress, payload, 21 + ticketLen);
@@ -2809,7 +2131,6 @@ void CL_CheckForResend(void) {
         }
 
         case CA_CHALLENGING:
-            // sending back the challenge
             port = Cvar_VariableValue("net_qport");
 
             Q_strncpyz(info, Cvar_InfoString(CVAR_USERINFO), sizeof(info));
@@ -2820,8 +2141,6 @@ void CL_CheckForResend(void) {
 
             Com_sprintf(data, sizeof(data), "connect \"%s\"", info);
             NET_OutOfBandData(NS_CLIENT, clc.serverAddress, (byte*)data, strlen(data));
-            // the most current userinfo has been sent, so watch for any
-            // newer changes to userinfo variables
             cvar_modifiedFlags &= ~CVAR_USERINFO;
             break;
 
@@ -2830,25 +2149,17 @@ void CL_CheckForResend(void) {
     }
 }
 
-/*
-===================
-CL_MotdPacket
-
-===================
-*/
 void CL_MotdPacket(netadr_t from) {
 #ifdef UPDATE_SERVER_NAME
     char* challenge;
     char* info;
 
-    // if not from our server, ignore it
     if (!NET_CompareAdr(from, cls.updateServer)) {
         return;
     }
 
     info = Cmd_Argv(1);
 
-    // check challenge
     challenge = Info_ValueForKey(info, "challenge");
     if (strcmp(challenge, cls.updateChallenge)) {
         return;
@@ -2861,11 +2172,6 @@ void CL_MotdPacket(netadr_t from) {
 #endif
 }
 
-/*
-===================
-CL_InitServerInfo
-===================
-*/
 void CL_InitServerInfo(serverInfo_t* server, netadr_t* address) {
     server->adr = *address;
     server->clients = 0;
@@ -2887,11 +2193,6 @@ void CL_InitServerInfo(serverInfo_t* server, netadr_t* address) {
 
 #define MAX_SERVERSPERPACKET 256
 
-/*
-===================
-CL_ServersResponsePacket
-===================
-*/
 void CL_ServersResponsePacket(const netadr_t* from, msg_t* msg, qboolean extended) {
     int i, j, count, total;
     netadr_t addresses[MAX_SERVERSPERPACKET];
@@ -2902,17 +2203,14 @@ void CL_ServersResponsePacket(const netadr_t* from, msg_t* msg, qboolean extende
     Com_Printf("CL_ServersResponsePacket from %s\n", NET_AdrToStringwPort(*from));
 
     if (cls.numglobalservers == -1) {
-        // state to detect lack of servers or lack of response
         cls.numglobalservers = 0;
         cls.numGlobalServerAddresses = 0;
     }
 
-    // parse through server response string
     numservers = 0;
     buffptr = msg->data;
     buffend = buffptr + msg->cursize;
 
-    // advance to initial token
     do {
         if (*buffptr == '\\' || (extended && *buffptr == '/'))
             break;
@@ -2921,7 +2219,6 @@ void CL_ServersResponsePacket(const netadr_t* from, msg_t* msg, qboolean extende
     } while (buffptr < buffend);
 
     while (buffptr + 1 < buffend) {
-        // IPv4 address
         if (*buffptr == '\\') {
             buffptr++;
 
@@ -2933,7 +2230,6 @@ void CL_ServersResponsePacket(const netadr_t* from, msg_t* msg, qboolean extende
 
             addresses[numservers].type = NA_IP;
         }
-        // IPv6 address, if it's an extended response
         else if (extended && *buffptr == '/') {
             buffptr++;
 
@@ -2946,15 +2242,12 @@ void CL_ServersResponsePacket(const netadr_t* from, msg_t* msg, qboolean extende
             addresses[numservers].type = NA_IP6;
             addresses[numservers].scope_id = from->scope_id;
         } else
-            // syntax error!
             break;
 
-        // parse out port
         addresses[numservers].port = (*buffptr++) << 8;
         addresses[numservers].port += *buffptr++;
         addresses[numservers].port = BigShort(addresses[numservers].port);
 
-        // syntax check
         if (*buffptr != '\\' && *buffptr != '/')
             break;
 
@@ -2966,12 +2259,8 @@ void CL_ServersResponsePacket(const netadr_t* from, msg_t* msg, qboolean extende
     count = cls.numglobalservers;
 
     for (i = 0; i < numservers && count < MAX_GLOBAL_SERVERS; i++) {
-        // build net address
         serverInfo_t* server = &cls.globalServers[count];
 
-        // Tequila: It's possible to have sent many master server requests. Then
-        // we may receive many times the same addresses from the master server.
-        // We just avoid to add a server if it is still in the global servers list.
         for (j = 0; j < count; j++) {
             if (NET_CompareAdr(cls.globalServers[j].adr, addresses[i]))
                 break;
@@ -2981,15 +2270,11 @@ void CL_ServersResponsePacket(const netadr_t* from, msg_t* msg, qboolean extende
             continue;
 
         CL_InitServerInfo(server, &addresses[i]);
-        // advance to next slot
         count++;
     }
 
-    // if getting the global list
     if (count >= MAX_GLOBAL_SERVERS && cls.numGlobalServerAddresses < MAX_GLOBAL_SERVERS) {
-        // if we couldn't store the servers in the main list anymore
         for (; i < numservers && cls.numGlobalServerAddresses < MAX_GLOBAL_SERVERS; i++) {
-            // just store the addresses in an additional list
             cls.globalServerAddresses[cls.numGlobalServerAddresses++] = addresses[i];
         }
     }
@@ -3000,24 +2285,6 @@ void CL_ServersResponsePacket(const netadr_t* from, msg_t* msg, qboolean extende
     Com_Printf("%d servers parsed (total %d)\n", numservers, total);
 }
 
-/*
-=================
-CL_ConnectionlessPacket
-
-Responses to broadcasts, etc
-=================
-*/
-/*
-=================
-CL_RedirectPacket
-
-[ioquakelive] A full ioqlds names another server with room (sv_fullRedirect). Only in the
-answer to the connect, with the challenge that server gave this client -- a packet forged
-with the server's address does not know it -- the client goes there instead of waiting at the
-door. ":<port>" is a server on the same machine. An address has to be written in numbers,
-and three in a row at most, so two full servers cannot bounce it forever.
-=================
-*/
 #define CL_MAX_REDIRECTS 3
 
 static void CL_RedirectPacket(netadr_t from) {
@@ -3045,7 +2312,7 @@ static void CL_RedirectPacket(netadr_t from) {
     clRedirectHops++;
     clRedirecting = qtrue;
     Com_Printf("Server is full: it sends you to %s\n", server);
-    Cbuf_ExecuteText(EXEC_INSERT, va("connect %s\n", server));  // ahead of whatever is waiting
+    Cbuf_ExecuteText(EXEC_INSERT, va("connect %s\n", server));
 }
 
 void CL_ConnectionlessPacket(netadr_t from, msg_t* msg) {
@@ -3053,7 +2320,7 @@ void CL_ConnectionlessPacket(netadr_t from, msg_t* msg) {
     char* c;
 
     MSG_BeginReadingOOB(msg);
-    MSG_ReadLong(msg);  // skip the -1
+    MSG_ReadLong(msg);
 
     s = MSG_ReadStringLine(msg);
 
@@ -3069,21 +2336,16 @@ void CL_ConnectionlessPacket(netadr_t from, msg_t* msg) {
             return;
         }
 
-        // QL server sends: "challengeResponse <challenge>"
-        // No client challenge echo or protocol version in Argv(2)/Argv(3).
         clc.challenge = atoi(Cmd_Argv(1));
         clc.state = CA_CHALLENGING;
         clc.connectPacketCount = 0;
         clc.connectTime = -99999;
 
-        // take this address as the new server address.  This allows
-        // a server proxy to hand off connections to multiple servers
         clc.serverAddress = from;
         Com_DPrintf("challengeResponse: %d\n", clc.challenge);
         return;
     }
 
-    // server connection
     if (!Q_stricmp(c, "connectResponse")) {
         if (clc.state >= CA_CONNECTED) {
             Com_Printf("Dup connect received. Ignored.\n");
@@ -3098,58 +2360,46 @@ void CL_ConnectionlessPacket(netadr_t from, msg_t* msg) {
             return;
         }
 
-        // QL server sends just "connectResponse" with no challenge echo.
-        // Address check above is sufficient anti-hijack protection.
         Netchan_Setup(NS_CLIENT, &clc.netchan, from, Cvar_VariableValue("net_qport"),
                       clc.challenge);
 
         clc.state = CA_CONNECTED;
-        clc.lastPacketSentTime = -9999;  // send first packet immediately
+        clc.lastPacketSentTime = -9999;
         return;
     }
 
-    // server responding to an info broadcast
     if (!Q_stricmp(c, "infoResponse")) {
         CL_ServerInfoPacket(from, msg);
         return;
     }
 
-    // server responding to a get playerlist
     if (!Q_stricmp(c, "statusResponse")) {
         CL_ServerStatusResponse(from, msg);
         return;
     }
 
-    // echo request from server
     if (!Q_stricmp(c, "echo")) {
-        // NOTE: we may have to add exceptions for auth and update servers
         if (NET_CompareAdr(from, clc.serverAddress) || NET_CompareAdr(from, cls.rconAddress)) {
             NET_OutOfBandPrint(NS_CLIENT, from, "%s", Cmd_Argv(1));
         }
         return;
     }
 
-    // cd check
     if (!Q_stricmp(c, "keyAuthorize")) {
-        // we don't use these now, so dump them on the floor
         return;
     }
 
-    // global MOTD from id
     if (!Q_stricmp(c, "motd")) {
         CL_MotdPacket(from);
         return;
     }
 
-    // [ioquakelive] a full server that knows another one with room
     if (!Q_stricmp(c, "redirect")) {
         CL_RedirectPacket(from);
         return;
     }
 
-    // echo request from server
     if (!Q_stricmp(c, "print")) {
-        // NOTE: we may have to add exceptions for auth and update servers
         if (NET_CompareAdr(from, clc.serverAddress) || NET_CompareAdr(from, cls.rconAddress)) {
             s = MSG_ReadString(msg);
 
@@ -3159,13 +2409,11 @@ void CL_ConnectionlessPacket(netadr_t from, msg_t* msg) {
         return;
     }
 
-    // list of servers sent back by a master server (classic)
     if (!Q_strncmp(c, "getserversResponse", 18)) {
         CL_ServersResponsePacket(&from, msg, qfalse);
         return;
     }
 
-    // list of servers sent back by a master server (extended)
     if (!Q_strncmp(c, "getserversExtResponse", 21)) {
         CL_ServersResponsePacket(&from, msg, qtrue);
         return;
@@ -3174,13 +2422,6 @@ void CL_ConnectionlessPacket(netadr_t from, msg_t* msg) {
     Com_DPrintf("Unknown connectionless packet command.\n");
 }
 
-/*
-=================
-CL_PacketEvent
-
-A packet has arrived from the main event loop
-=================
-*/
 void CL_PacketEvent(netadr_t from, msg_t* msg) {
     int headerBytes;
 
@@ -3192,7 +2433,7 @@ void CL_PacketEvent(netadr_t from, msg_t* msg) {
     }
 
     if (clc.state < CA_CONNECTED) {
-        return;  // can't be a valid sequenced packet
+        return;
     }
 
     if (msg->cursize < 4) {
@@ -3200,59 +2441,35 @@ void CL_PacketEvent(netadr_t from, msg_t* msg) {
         return;
     }
 
-    //
-    // packet from server
-    //
     if (!NET_CompareAdr(from, clc.netchan.remoteAddress)) {
         Com_DPrintf("%s:sequenced packet without connection\n", NET_AdrToStringwPort(from));
-        // FIXME: send a client disconnect?
         return;
     }
 
     if (!CL_Netchan_Process(&clc.netchan, msg)) {
-        return;  // out of order, duplicated, etc
+        return;
     }
 
-    // the header is different lengths for reliable and unreliable messages
     headerBytes = msg->readcount;
 
-    // track the last message received so it can be returned in
-    // client messages, allowing the server to detect a dropped
-    // gamestate
     clc.serverMessageSequence = LittleLong(*(int*)msg->data);
 
     clc.lastPacketTime = cls.realtime;
     CL_ParseServerMessage(msg);
 
-    //
-    // we don't know if it is ok to save a demo message until
-    // after we have parsed the frame
-    //
     if (clc.demorecording && !clc.demowaiting) {
         CL_WriteDemoMessage(msg, headerBytes);
     }
 }
 
-/*
-==================
-CL_CheckTimeout
-
-==================
-*/
 void CL_CheckTimeout(void) {
-    // [ioquakelive] a demo is a file, not a connection: it has nothing to time out. The clock
-    // only moved while the demo was being read, so a demo held on pause ran out cl_timeout
-    // (40 seconds) and dropped to the menu by itself
     if (clc.demoplaying) {
         cl.timeoutcount = 0;
         return;
     }
 
-    //
-    // check timeout
-    //
     if ((!CL_CheckPaused() || !sv_paused->integer) && clc.state >= CA_CONNECTED && clc.state != CA_CINEMATIC && cls.realtime - clc.lastPacketTime > cl_timeout->value * 1000) {
-        if (++cl.timeoutcount > 5) {  // timeoutcount saves debugger
+        if (++cl.timeoutcount > 5) {
             Com_Printf("\nServer connection timed out.\n");
             CL_Disconnect(qtrue);
             return;
@@ -3262,76 +2479,36 @@ void CL_CheckTimeout(void) {
     }
 }
 
-/*
-==================
-CL_CheckPaused
-Check whether client has been paused.
-==================
-*/
 qboolean CL_CheckPaused(void) {
-    // if cl_paused->modified is set, the cvar has only been changed in
-    // this frame. Keep paused in this frame to ensure the server doesn't
-    // lag behind.
     if (cl_paused->integer || cl_paused->modified)
         return qtrue;
 
     return qfalse;
 }
 
-//============================================================================
-
-/*
-==================
-CL_CheckUserinfo
-
-==================
-*/
 void CL_CheckUserinfo(void) {
-    // don't add reliable commands when not yet connected
     if (clc.state < CA_CONNECTED)
         return;
 
-    // don't overflow the reliable command buffer when paused
     if (CL_CheckPaused())
         return;
 
-    // send a reliable userinfo update if needed
     if (cvar_modifiedFlags & CVAR_USERINFO) {
         cvar_modifiedFlags &= ~CVAR_USERINFO;
         CL_AddReliableCommand(va("userinfo \"%s\"", Cvar_InfoString(CVAR_USERINFO)), qfalse);
     }
 }
 
-/*
-==================
-CL_LowLatencyWait
-
-[ioquakelive] the renderer decides: without a low latency path this costs nothing
-==================
-*/
 void CL_LowLatencyWait(void) {
     if (cls.rendererStarted && re.LowLatencyWait) {
         re.LowLatencyWait();
     }
 }
 
-/*
-==================
-CL_DisplayFrequency
-
-[ioquakelive] for com_maxfpsVRR
-==================
-*/
 int CL_DisplayFrequency(void) {
     return cls.rendererStarted ? cls.glconfig.displayFrequency : 0;
 }
 
-/*
-==================
-CL_Frame
-
-==================
-*/
 void CL_Frame(int msec) {
     if (!com_cl_running->integer) {
         return;
@@ -3340,9 +2517,6 @@ void CL_Frame(int msec) {
 #ifdef USE_CURL
     if (clc.downloadCURLM) {
         CL_cURL_PerformDownload();
-        // we can't process frames normally when in disconnected
-        // download mode since the ui vm expects clc.state to be
-        // CA_CONNECTED
         if (clc.cURLDisconnected) {
             cls.realFrametime = msec;
             cls.frametime = msec;
@@ -3357,21 +2531,16 @@ void CL_Frame(int msec) {
 #endif
 
     if (clc.state == CA_DISCONNECTED && !(Key_GetCatcher() & KEYCATCH_UI) && !com_sv_running->integer && uivm) {
-        // if disconnected, bring up the menu
         S_StopAllSounds();
         VM_Call(uivm, UI_SET_ACTIVE_MENU, UIMENU_MAIN);
     }
 
-    // [QL] 0x4bc43c: cl_avidemo_latch starts cl_avidemo once the server time is past
-    // cl_avidemo_mintime
     if (cl_avidemoLatch->integer &&
         (!cl_avidemoMinTime->integer || cl.serverTime > cl_avidemoMinTime->integer)) {
         Cvar_Set("cl_avidemo", va("%d", cl_avidemoLatch->integer));
         Cvar_Set("cl_avidemo_latch", "");
     }
 
-    // [QL] cl_avidemo: a silent screenshot every frame and the game clock locked to it; nothing
-    // before cl_avidemo_mintime, and past cl_avidemo_maxtime the capture ends with a disconnect
     if (cl_avidemo->integer && msec) {
         if (clc.state == CA_ACTIVE || cl_forceavidemo->integer) {
             qboolean early = (qboolean)(cl_avidemoMinTime->integer && cl.serverTime < cl_avidemoMinTime->integer);
@@ -3390,9 +2559,7 @@ void CL_Frame(int msec) {
         }
     }
 
-    // if recording an avi, lock to a fixed fps
     if (CL_VideoRecording() && cl_aviFrameRate->integer && msec) {
-        // save the current screen
         if (clc.state == CA_ACTIVE || cl_forceavidemo->integer) {
             float fps = MIN(cl_aviFrameRate->value * com_timescale->value, 1000.0f);
             float frameDuration = MAX(1000.0f / fps, 1.0f) + clc.aviVideoFrameRemainder;
@@ -3406,7 +2573,6 @@ void CL_Frame(int msec) {
 
     if (cl_autoRecordDemo->integer) {
         if (clc.state == CA_ACTIVE && !clc.demorecording && !clc.demoplaying) {
-            // If not recording a demo, and we should be, start one
             qtime_t now;
             char* nowString;
             char* p;
@@ -3423,8 +2589,6 @@ void CL_Frame(int msec) {
                            now.tm_sec);
 
             Q_strncpyz(serverName, clc.servername, MAX_OSPATH);
-            // Replace the ":" in the address as it is not a valid
-            // file name character
             p = strstr(serverName, ":");
             if (p) {
                 *p = '.';
@@ -3436,15 +2600,12 @@ void CL_Frame(int msec) {
             Cbuf_ExecuteText(EXEC_NOW,
                              va("record %s-%s-%s", nowString, serverName, mapName));
         } else if (clc.state != CA_ACTIVE && clc.demorecording) {
-            // Recording, but not CA_ACTIVE, so stop recording
             CL_StopRecord_f();
         }
     }
 
-    // save the msec before checking pause
     cls.realFrametime = msec;
 
-    // decide the simulation time
     cls.frametime = msec;
 
     cls.realtime += cls.frametime;
@@ -3453,40 +2614,28 @@ void CL_Frame(int msec) {
         SCR_DebugGraph(cls.realFrametime * 0.25);
     }
 
-    // see if we need to update any userinfo
     CL_CheckUserinfo();
 
-    // if we haven't gotten a packet in a long time,
-    // drop the connection
     CL_CheckTimeout();
 
-    // send intentions now
     CL_SendCmd();
 
-    // resend a connection request if necessary
     CL_CheckForResend();
 
-    // [QL] whatever Steam keeps answering about the server list
     CL_SteamServersFrame();
 
-    // [QL] and whatever is coming down from the Workshop while joining a server
     CL_WorkshopFrame();
     CL_WarmPlayers();
 
-    // [QL] voice, which comes and goes over Steam's peer to peer network
     CL_MatchReportFrame();
     CL_VoiceFrame();
 
-    // decide on the serverTime to render
     CL_SetCGameTime();
 
-    // update the screen
     SCR_UpdateScreen();
 
-    // update audio
     S_Update();
 
-    // advance local effects for next frame
     SCR_RunCinematic();
 
     Con_RunConsole();
@@ -3494,15 +2643,6 @@ void CL_Frame(int msec) {
     cls.framecount++;
 }
 
-//============================================================================
-
-/*
-================
-CL_RefPrintf
-
-DLL glue
-================
-*/
 static __attribute__((format(printf, 2, 3))) void QDECL CL_RefPrintf(int print_level, const char* fmt, ...) {
     va_list argptr;
     char msg[MAXPRINTMSG];
@@ -3514,21 +2654,16 @@ static __attribute__((format(printf, 2, 3))) void QDECL CL_RefPrintf(int print_l
     if (print_level == PRINT_ALL) {
         Com_Printf("%s", msg);
     } else if (print_level == PRINT_WARNING) {
-        Com_Printf(S_COLOR_YELLOW "%s", msg);  // yellow
+        Com_Printf(S_COLOR_YELLOW "%s", msg);
     } else if (print_level == PRINT_ERROR) {
-        Com_Printf(S_COLOR_RED "%s", msg);  // red
+        Com_Printf(S_COLOR_RED "%s", msg);
     } else if (print_level == PRINT_DEVELOPER) {
 #if DEBUG_RENDERER
-        Com_DPrintf(S_COLOR_RED "%s", msg);  // red - developer only
+        Com_DPrintf(S_COLOR_RED "%s", msg);
 #endif
     }
 }
 
-/*
-============
-CL_ShutdownRef
-============
-*/
 void CL_ShutdownRef(void) {
     if (re.Shutdown) {
         re.Shutdown(qtrue);
@@ -3544,33 +2679,17 @@ void CL_ShutdownRef(void) {
 #endif
 }
 
-/*
-============
-CL_InitRenderer
-============
-*/
 void CL_InitRenderer(void) {
-    // this sets up the renderer and calls R_Init
     re.BeginRegistration(&cls.glconfig);
 
-    // load character sets
     cls.charSetShader = re.RegisterShader("gfx/2d/bigchars");
     cls.whiteShader = re.RegisterShader("white");
     cls.consoleShader = re.RegisterShader("console");
-    // [QL] quakelive_steam.exe 0x004b9ae6
     cls.recordShader = re.RegisterShaderNoMip("icons/record");
     g_console_field_width = cls.glconfig.vidWidth / SMALLCHAR_WIDTH - 2;
     g_consoleField.widthInChars = g_console_field_width;
 }
 
-/*
-============================
-CL_StartHunkUsers
-
-After the server has cleared the hunk, these will need to be restarted
-This is the only place that any of these functions are called from
-============================
-*/
 void CL_StartHunkUsers(qboolean rendererOnly) {
     if (!com_cl_running) {
         return;
@@ -3609,11 +2728,6 @@ void CL_StartHunkUsers(qboolean rendererOnly) {
     }
 }
 
-/*
-============
-CL_RefMalloc
-============
-*/
 void* CL_RefMalloc(int size) {
     return Z_TagMalloc(size, TAG_RENDERER);
 }
@@ -3622,11 +2736,6 @@ int CL_ScaledMilliseconds(void) {
     return Sys_Milliseconds() * com_timescale->value;
 }
 
-/*
-============
-CL_InitRef
-============
-*/
 void CL_InitRef(void) {
     refimport_t ri;
     refexport_t* ret;
@@ -3638,11 +2747,8 @@ void CL_InitRef(void) {
     Com_Printf("----- Initializing Renderer ----\n");
 
 #ifdef USE_RENDERER_DLOPEN
-    // [ioquakelive] the renderer of retail's lineage, on Quake3e's, is the default; renderergl2
-    // stays as the backup
     cl_renderer = Cvar_Get("cl_renderer", "opengl1", CVAR_ARCHIVE | CVAR_LATCH);
 
-    // [ioquakelive] a config on the old default moves to the new one; another choice is kept
     {
         cvar_t* seen = Cvar_Get("cl_rendererDefault", "opengl2", CVAR_ARCHIVE);
 
@@ -3656,9 +2762,6 @@ void CL_InitRef(void) {
 
     rendererLib = NULL;
 
-    // [ioquakelive] ioquakelive-vulkan is this same executable under another name, the way Quake3e
-    // ships its two: it asks for vulkan and leaves cl_renderer alone, so the OpenGL one keeps what
-    // the config says. Without Vulkan it goes on to the OpenGL chain below
     if (Q_stristr(Sys_BinaryName(), "-vulkan")) {
         Com_sprintf(dllName, sizeof(dllName), "vulkan" ARCH_STRING DLL_EXT);
         rendererLib = Sys_LoadDll(dllName, qfalse);
@@ -3671,8 +2774,6 @@ void CL_InitRef(void) {
         rendererLib = Sys_LoadDll(dllName, qfalse);
     }
 
-    // [ioquakelive] a renderer that doesn't load falls back to the default, and the default to
-    // renderergl2, without keeping it: the next start tries the chosen one again
     if (!rendererLib && Q_stricmp(cl_renderer->string, cl_renderer->resetString)) {
         Com_Printf("failed:\n\"%s\"\n", Sys_LibraryError());
         Cvar_ForceReset("cl_renderer");
@@ -3738,8 +2839,6 @@ void CL_InitRef(void) {
     ri.Cvar_SetDescription = Cvar_SetDescription;
     ri.Cvar_VariableIntegerValue = Cvar_VariableIntegerValue;
 
-    // cinematic stuff
-
     ri.CIN_UploadCinematic = CIN_UploadCinematic;
     ri.CIN_PlayCinematic = CIN_PlayCinematic;
     ri.CIN_RunCinematic = CIN_RunCinematic;
@@ -3764,8 +2863,6 @@ void CL_InitRef(void) {
 #endif
 
 #ifdef USE_RENDERER_DLOPEN
-    // [ioquakelive] a renderer that cannot run on this machine (Vulkan with no usable device or
-    // driver) says so here, and the default one takes over -- without keeping it, as above
     if (!ret) {
         char fallback[MAX_OSPATH];
 
@@ -3788,11 +2885,8 @@ void CL_InitRef(void) {
 
     re = *ret;
 
-    // unpause so the cgame definitely gets a snapshot and renders a frame
     Cvar_Set("cl_paused", "0");
 }
-
-//===========================================================================================
 
 void CL_SetModel_f(void) {
     char* arg;
@@ -3807,8 +2901,6 @@ void CL_SetModel_f(void) {
         Com_Printf("model is set to %s\n", name);
     }
 }
-
-//===========================================================================================
 
 void CL_Sayto_f(void) {
     char* rawname;
@@ -3858,14 +2950,6 @@ void CL_Sayto_f(void) {
     CL_AddReliableCommand(va("tell %i \"%s\"", clientNum, p), qfalse);
 }
 
-/*
-====================
-CL_Web_ChangeHash_f
-
-[QL] This would usually change the web path Awesomium is looking at, but 
-for us we're just going to hijack it and display the legacy menus.
-====================
-*/
 void CL_Web_ChangeHash_f(void) {
     char* web_path;
 
@@ -3881,16 +2965,10 @@ void CL_Web_ChangeHash_f(void) {
 
     web_path = Cmd_Argv(1);
 
-	// [QL] our glue for the binary handler Web_SetLocation_f (0x004f31d0). Strip one
-	// leading '/'. Compare against the char '/', not the string "/" (that was a
-	// char-vs-pointer bug, C4047, and always false).
 	if (web_path[0] == '/') {
 		web_path++;
 	}
-    
-    // [ioquakelive] the browser's two destinations this build has a page for: the
-    // settings, and anything else, which in retail is its home page. Retail's in-game
-    // "Main Menu" button sends "/" and used to close the menu here.
+
     if (Q_stristr(web_path, "settings")) {
         VM_Call(uivm, UI_SET_ACTIVE_MENU, UIMENU_MAIN_OPTIONS);
     } else {
@@ -3898,17 +2976,6 @@ void CL_Web_ChangeHash_f(void) {
     }
 }
 
-/*
-====================
-CL_Web_HideBrowser_f
-
-[QL] quakelive_steam.exe 0x4f24d0: hides the browser and gives the screen back to
-the game (web_browserActive 0, the browser's key catcher cleared). Its App sends it
-from the "return to your match" banner. Here the front end is the UI module, so the
-same thing is closing it -- and only over a match, since without one there is
-nothing to go back to.
-====================
-*/
 static void CL_Web_HideBrowser_f(void) {
     if (!uivm || clc.state != CA_ACTIVE) {
         return;
@@ -3916,17 +2983,6 @@ static void CL_Web_HideBrowser_f(void) {
     VM_Call(uivm, UI_SET_ACTIVE_MENU, UIMENU_NONE);
 }
 
-/*
-====================
-CL_OpenURL
-
-[ioquakelive] Opens a link outside the game. Retail handed its links to the Steam
-overlay, which opens the system browser when the overlay is off; without Steam
-that is all this build can do. Only a plain https link is opened: the address goes
-to the shell, and a server that could reach this would be handing the shell
-whatever it liked.
-====================
-*/
 void CL_OpenURL(const char* url) {
     const char* p;
 
@@ -3948,28 +3004,18 @@ void CL_OpenURL(const char* url) {
     Sys_OpenURL(url);
 }
 
-
-// =====================================================================
-// [QL] Alias system - binary-verified from quakelive_steam.exe
-// CL_FindAlias: 0x004B4F80, CL_RunAlias: 0x004B4FD0
-// CL_Alias_f: 0x004B5060, CL_Unalias_f: 0x004B5170, CL_UnaliasAll_f: 0x004B51C0
-// CL_ListAliases: 0x004B5020, Cmd_WriteAliases: 0x004B51F0
-// CL_InitAliases: 0x004B5240
-// =====================================================================
-
 #define MAX_ALIASES         100
-#define ALIAS_NAME_SIZE     32   // 0x20
-#define ALIAS_CMD_SIZE      256  // 0x100
+#define ALIAS_NAME_SIZE     32
+#define ALIAS_CMD_SIZE      256
 
 typedef struct {
-    char    name[ALIAS_NAME_SIZE];  // offset 0x00
-    char    cmd[ALIAS_CMD_SIZE];    // offset 0x20
-    int     active;                 // offset 0x120 (288)
-} alias_t;  // total: 0x124 (292) bytes
+    char    name[ALIAS_NAME_SIZE];
+    char    cmd[ALIAS_CMD_SIZE];
+    int     active;
+} alias_t;
 
 static alias_t aliases[MAX_ALIASES];
 
-// 0x004B4F80 - Search for an alias by name (case-insensitive)
 void *CL_FindAlias(const char *name) {
     int i;
     for (i = 0; i < MAX_ALIASES; i++) {
@@ -3980,7 +3026,6 @@ void *CL_FindAlias(const char *name) {
     return NULL;
 }
 
-// 0x004B4FD0 - Execute the command text of an alias looked up by Cmd_Argv(0)
 void CL_RunAlias(void) {
     const char *name;
     alias_t *a;
@@ -3994,7 +3039,6 @@ void CL_RunAlias(void) {
     Com_Printf("^1ALIAS: %s not found^7\n", Cmd_Argv(0));
 }
 
-// 0x004B5020 - List all defined aliases
 static void CL_ListAliases(void) {
     int i;
     Com_Printf("Alias List:\n");
@@ -4005,7 +3049,6 @@ static void CL_ListAliases(void) {
     }
 }
 
-// 0x004B5060 - "alias [name] [command]"
 static void CL_Alias_f(void) {
     alias_t *a;
     int i;
@@ -4017,8 +3060,6 @@ static void CL_Alias_f(void) {
     }
 
     if (Cmd_Argc() < 3) {
-        // [QL] Binary uses Cmd_Argv(0) here - looks up "alias" itself, which
-        // is never a valid alias name, so this path effectively does nothing.
         a = (alias_t *)CL_FindAlias(Cmd_Argv(0));
         if (a) {
             Com_Printf("Alias: %s \"%s\"\n", a->name, a->cmd);
@@ -4026,15 +3067,12 @@ static void CL_Alias_f(void) {
         return;
     }
 
-    // argc >= 3: create or update
     a = (alias_t *)CL_FindAlias(Cmd_Argv(1));
     if (a) {
-        // Update existing alias
         Q_strncpyz(a->cmd, Cmd_Argv(2), ALIAS_CMD_SIZE);
         return;
     }
 
-    // Find a free slot
     for (i = 0; i < MAX_ALIASES; i++) {
         if (!aliases[i].active) {
             Q_strncpyz(aliases[i].name, Cmd_Argv(1), ALIAS_NAME_SIZE);
@@ -4047,7 +3085,6 @@ static void CL_Alias_f(void) {
     Com_Printf("^1No free alias slots. Use UnAlias to remove an alias before adding this one.^7\n");
 }
 
-// 0x004B5170 - "unalias <name>"
 static void CL_Unalias_f(void) {
     alias_t *a;
 
@@ -4064,7 +3101,6 @@ static void CL_Unalias_f(void) {
     }
 }
 
-// 0x004B51C0 - "unaliasall"
 static void CL_UnaliasAll_f(void) {
     int i;
     for (i = 0; i < MAX_ALIASES; i++) {
@@ -4072,7 +3108,6 @@ static void CL_UnaliasAll_f(void) {
     }
 }
 
-// 0x004B51F0 - Write aliases to config file
 void Cmd_WriteAliases(fileHandle_t f) {
     int i;
     FS_Printf(f, "unaliasall\n");
@@ -4083,23 +3118,12 @@ void Cmd_WriteAliases(fileHandle_t f) {
     }
 }
 
-// 0x004B5240 - Initialize the alias system
 void CL_InitAliases(void) {
     memset(aliases, 0, sizeof(aliases));
     Cmd_AddCommand("alias", CL_Alias_f);
     Cmd_AddCommand("unalias", CL_Unalias_f);
     Cmd_AddCommand("unaliasall", CL_UnaliasAll_f);
 }
-
-// =====================================================================
-
-
-
-/*
-====================
-CL_Init
-====================
-*/
 
 static void CL_VoiceOn_f(void);
 static void CL_Friends_f(void);
@@ -4114,7 +3138,7 @@ void CL_Init(void) {
 
     if (!com_fullyInitialized) {
         CL_ClearState();
-        clc.state = CA_DISCONNECTED;  // no longer CA_UNINITIALIZED
+        clc.state = CA_DISCONNECTED;
         cl_oldGameSet = qfalse;
     }
 
@@ -4122,18 +3146,13 @@ void CL_Init(void) {
 
     CL_InitInput();
 
-    //
-    // register our variables
-    //
     cl_noprint = Cvar_Get("cl_noprint", "0", 0);
 #ifdef UPDATE_SERVER_NAME
     cl_motd = Cvar_Get("cl_motd", "1", 0);
 #endif
 
-    // [QL] quakelive_steam.exe 0x4bca53: 40 seconds
     cl_timeout = Cvar_Get("cl_timeout", "40", 0);
 
-    // [QL] 0x4bca3d and 0x4bc731: cl_timeNudge is -20 to 0, cl_autoTimeNudge a switch
     cl_timeNudge = Cvar_GetRange("cl_timeNudge", "0", "-20", "0", CVAR_ARCHIVE | CVAR_REPLICATE);
     cl_autoTimeNudge = Cvar_GetRange("cl_autoTimeNudge", "0", "0", "1", CVAR_ARCHIVE | CVAR_REPLICATE);
     cl_shownet = Cvar_Get("cl_shownet", "0", CVAR_TEMP);
@@ -4156,21 +3175,15 @@ void CL_Init(void) {
 
     rconAddress = Cvar_Get("rconAddress", "", 0);
 
-    // [QL] quakelive_steam.exe 0x4bc70e, 0x4bc942, 0x4bca85: turning with keys is cheat protected
     cl_yawspeed = Cvar_Get("cl_yawspeed", "140", CVAR_CHEAT);
     cl_pitchspeed = Cvar_Get("cl_pitchspeed", "140", CVAR_CHEAT);
     cl_anglespeedkey = Cvar_Get("cl_anglespeedkey", "1.5", CVAR_CHEAT);
 
-    // [QL] 0x4bc835: 125 packets a second, and cheat protected
     cl_maxpackets = Cvar_Get("cl_maxpackets", "125", CVAR_CHEAT);
     cl_packetdup = Cvar_Get("cl_packetdup", "1", CVAR_ARCHIVE | CVAR_USERSAVE);
 
     cl_run = Cvar_Get("cl_run", "1", CVAR_ARCHIVE);
 
-    // [QL] the mouse (0x4bc7be-0x4bcb1e): sensitivity 4, and retail's acceleration, which adds
-    // (cl_mouseAccel * (rate - cl_mouseAccelOffset)) ^ (cl_mouseAccelPower - 1) to the sensitivity, up
-    // to cl_mouseSensCap. With m_cpi (the mouse's counts per inch) the rate is in cm/s and the
-    // sensitivity is in degrees per cm. cl_mouseAccelDebug writes mouse.log. See CL_MouseMove.
     cl_sensitivity = Cvar_Get("sensitivity", "4", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     cl_mouseAccel = Cvar_Get("cl_mouseAccel", "0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     cl_mouseAccelOffset = Cvar_Get("cl_mouseAccelOffset", "0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
@@ -4179,7 +3192,6 @@ void CL_Init(void) {
     cl_mouseSensCap = Cvar_Get("cl_mouseSensCap", "0", CVAR_ARCHIVE | CVAR_USERSAVE);
     cl_freelook = Cvar_Get("cl_freelook", "1", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     cg_ignoreMouseInput = Cvar_Get("cg_ignoreMouseInput", "0", CVAR_ROM);
-    // [QL] view acceleration of retail's joystick code, which this engine's SDL joystick doesn't use
     Cvar_Get("cl_viewAccel", "1.7", CVAR_ARCHIVE | CVAR_USERSAVE);
 
     cl_allowDownload = Cvar_Get("cl_allowDownload", "0", CVAR_ARCHIVE);
@@ -4190,7 +3202,6 @@ void CL_Init(void) {
 
     cl_conXOffset = Cvar_Get("cl_conXOffset", "0", 0);
 #ifdef __APPLE__
-    // In game video is REALLY slow in Mac OS X right now due to driver slowness
     cl_inGameVideo = Cvar_Get("r_inGameVideo", "0", CVAR_ARCHIVE);
 #else
     cl_inGameVideo = Cvar_Get("r_inGameVideo", "1", CVAR_ARCHIVE);
@@ -4202,7 +3213,6 @@ void CL_Init(void) {
     m_yaw = Cvar_Get("m_yaw", "0.022", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     m_forward = Cvar_Get("m_forward", "0.25", CVAR_ARCHIVE | CVAR_USERSAVE);
     m_side = Cvar_Get("m_side", "0.25", CVAR_ARCHIVE | CVAR_USERSAVE);
-    // [QL] the number of frames whose view angles are averaged, up to 31 (0x4b5640)
     m_filter = Cvar_Get("m_filter", "0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     m_cpi = Cvar_Get("m_cpi", "0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
 
@@ -4230,14 +3240,11 @@ void CL_Init(void) {
 
     cl_lanForcePackets = Cvar_Get("cl_lanForcePackets", "1", CVAR_ARCHIVE);
 
-    // ~ and `, as keys and characters
     cl_consoleKeys = Cvar_Get("cl_consoleKeys", "~ ` 0x7e 0x60", CVAR_ARCHIVE);
 
     cl_steamId = Cvar_Get("cl_steamId", "0", CVAR_ARCHIVE);
-    // [QL] 0x004e3f1a: quit when a demo finishes playing back
     Cvar_Get("cl_quitOnDemoCompleted", "0", 0);
 
-    // userinfo
     Cvar_Get("name", "UnnamedPlayer", CVAR_USERINFO | CVAR_ARCHIVE);
     cl_rate = Cvar_Get("rate", "25000", CVAR_USERINFO | CVAR_ARCHIVE);
     Cvar_CheckRange(cl_rate, 8000, 25000, qtrue);
@@ -4249,10 +3256,6 @@ void CL_Init(void) {
     Cvar_Get("handicap", "100", CVAR_USERINFO | CVAR_ARCHIVE);
     Cvar_Get("teamtask", "0", CVAR_USERINFO);
     Cvar_Get("sex", "male", CVAR_USERINFO | CVAR_ARCHIVE);
-    // [QL] the country shown next to the name. It travels in the userinfo and the server
-    // publishes it under the "c" key of the player's configstring; the scoreboards draw its
-    // flag from ui/assets/flags. Retail filled it in from Steam; here the player sets it.
-    // Empty means no flag.
     Cvar_SetDescription(Cvar_Get("country", "", CVAR_USERINFO | CVAR_ARCHIVE),
                         "Your country, as its two-letter code in lower case (cl, ar, us...), for the flag\n"
                         "next to your name on the scoreboards. Empty shows no flag.");
@@ -4260,16 +3263,10 @@ void CL_Init(void) {
 
     Cvar_Get("password", "", CVAR_USERINFO);
     Cvar_Get("cg_predictItems", "1", CVAR_USERINFO | CVAR_ARCHIVE);
-    // [ioquakelive] who this client is, for an ioquakelive server: it counts the footstep cycle
-    // our way for us and retail's way for a retail client. A retail server ignores the key
     Cvar_Get("ioql", PRODUCT_VERSION, CVAR_USERINFO | CVAR_ROM);
 
-    // cgame might not be initialized before menu is used
     Cvar_Get("cg_viewsize", "100", CVAR_ARCHIVE);
 
-    //
-    // register our commands
-    //
     Cmd_AddCommand("cmd", CL_ForwardToServer_f);
     Cmd_AddCommand("configstrings", CL_Configstrings_f);
     Cmd_AddCommand("clientinfo", CL_Clientinfo_f);
@@ -4279,7 +3276,6 @@ void CL_Init(void) {
     Cmd_AddCommand("record", CL_Record_f);
     Cmd_AddCommand("demo", CL_PlayDemo_f);
     Cmd_SetCommandCompletionFunc("demo", CL_CompleteDemoName);
-    // [ioquakelive] moving through a demo, and what its timeline is drawn from
     Cmd_AddCommand("rewind", CL_Rewind_f);
     Cmd_AddCommand("fastforward", CL_FastForward_f);
     Cmd_AddCommand("seekdemo", CL_SeekDemo_f);
@@ -4288,10 +3284,7 @@ void CL_Init(void) {
     Cvar_Get("cl_demoPos", "0", CVAR_ROM);
     Cvar_Get("cl_demoMarks", "", CVAR_ROM);
     Cvar_Get("cl_demoFrags", "", CVAR_ROM);
-    // [ioquakelive] what the cgame needs to put the recording message up
     Cvar_Get("cl_demorecording", "0", CVAR_ROM);
-    // [ioquakelive] goes up every time the window changes size without a video restart, so the
-    // game and menu modules know to read the resolution again
     Cvar_Get("vid_resizeCount", "0", CVAR_ROM);
     Cvar_Get("cl_demoname", "", CVAR_ROM);
     Cmd_AddCommand("stoprecord", CL_StopRecord_f);
@@ -4304,7 +3297,7 @@ void CL_Init(void) {
     Cmd_AddCommand("friends", CL_Friends_f);
     Cmd_AddCommand("clientfriendinvite", CL_ClientFriendInvite_f);
     Cmd_AddCommand("clientviewprofile", CL_ClientViewProfile_f);
-    Cmd_AddCommand("+voice", CL_VoiceOn_f);   // [QL] 0x00461565
+    Cmd_AddCommand("+voice", CL_VoiceOn_f);
     Cmd_AddCommand("-voice", CL_VoiceOff_f);
     Cmd_AddCommand("showip", CL_ShowIP_f);
     Cmd_AddCommand("fs_openedList", CL_OpenedPK3List_f);
@@ -4312,10 +3305,8 @@ void CL_Init(void) {
     Cmd_AddCommand("model", CL_SetModel_f);
     Cmd_AddCommand("web_changeHash", CL_Web_ChangeHash_f);
     Cmd_AddCommand("web_hideBrowser", CL_Web_HideBrowser_f);
-    // [QL] additional client commands
     Cmd_AddCommand("postprocess_restart", CL_PostProcessRestart_f);
 
-    // [QL] quakelive_steam.exe 0x004bc690: the recording indicator, 2 by default
     cl_demoRecordMessage = Cvar_Get("cl_demoRecordMessage", "2", CVAR_ARCHIVE | CVAR_USERSAVE);
     Cvar_CheckRange(cl_demoRecordMessage, 0, 2, qtrue);
     Cmd_AddCommand("userinfo", CL_Userinfo_f);
@@ -4329,23 +3320,14 @@ void CL_Init(void) {
 
     SCR_Init();
 
-    //	Cbuf_Execute ();
-
     Cvar_Set("cl_running", "1");
 
     Com_Printf("----- Client Initialization Complete -----\n");
 }
 
-/*
-===============
-CL_Shutdown
-
-===============
-*/
 void CL_Shutdown(char* finalmsg, qboolean disconnect, qboolean quit) {
     static qboolean recursive = qfalse;
 
-    // check whether the client is running at all.
     if (!(com_cl_running && com_cl_running->integer))
         return;
 
@@ -4411,8 +3393,8 @@ static void CL_SetServerInfo(serverInfo_t* server, const char* info, int ping) {
             Q_strncpyz(server->game, Info_ValueForKey(info, "game"), MAX_NAME_LENGTH);
             server->gameType = atoi(Info_ValueForKey(info, "gametype"));
             server->netType = atoi(Info_ValueForKey(info, "nettype"));
-            server->minPing = atoi(Info_ValueForKey(info, "minPing"));  // [QL] binary uses camelCase
-            server->maxPing = atoi(Info_ValueForKey(info, "maxPing"));  // [QL] binary uses camelCase
+            server->minPing = atoi(Info_ValueForKey(info, "minPing"));
+            server->maxPing = atoi(Info_ValueForKey(info, "maxPing"));
             server->g_humanplayers = atoi(Info_ValueForKey(info, "g_humanplayers"));
             server->g_needpass = atoi(Info_ValueForKey(info, "g_needpass"));
             server->vac = atoi(Info_ValueForKey(info, "sv_vac"));
@@ -4445,11 +3427,6 @@ static void CL_SetServerInfoByAddress(netadr_t from, const char* info, int ping)
     }
 }
 
-/*
-===================
-CL_ServerInfoPacket
-===================
-*/
 void CL_ServerInfoPacket(netadr_t from, msg_t* msg) {
     int i, type;
     char info[MAX_INFO_STRING];
@@ -4460,7 +3437,6 @@ void CL_ServerInfoPacket(netadr_t from, msg_t* msg) {
 
     infoString = MSG_ReadString(msg);
 
-    // if this isn't the correct gamename, ignore it
     gamename = Info_ValueForKey(infoString, "gamename");
 
     gameMismatch = !*gamename || strcmp(gamename, com_gamename->string) != 0;
@@ -4470,7 +3446,6 @@ void CL_ServerInfoPacket(netadr_t from, msg_t* msg) {
         return;
     }
 
-    // if this isn't the correct protocol version, ignore it
     prot = atoi(Info_ValueForKey(infoString, "protocol"));
 
     if (prot != com_protocol->integer) {
@@ -4478,18 +3453,13 @@ void CL_ServerInfoPacket(netadr_t from, msg_t* msg) {
         return;
     }
 
-    // iterate servers waiting for ping response
     for (i = 0; i < MAX_PINGREQUESTS; i++) {
         if (cl_pinglist[i].adr.port && !cl_pinglist[i].time && NET_CompareAdr(from, cl_pinglist[i].adr)) {
-            // calc ping time
             cl_pinglist[i].time = Sys_Milliseconds() - cl_pinglist[i].start;
             Com_DPrintf("ping time %dms from %s\n", cl_pinglist[i].time, NET_AdrToString(from));
 
-            // save of info
             Q_strncpyz(cl_pinglist[i].info, infoString, sizeof(cl_pinglist[i].info));
 
-            // tack on the net type
-            // NOTE: make sure these types are in sync with the netnames strings in the UI
             switch (from.type) {
                 case NA_BROADCAST:
                 case NA_IP:
@@ -4509,18 +3479,15 @@ void CL_ServerInfoPacket(netadr_t from, msg_t* msg) {
         }
     }
 
-    // if not just sent a local broadcast or pinging local servers
     if (cls.pingUpdateSource != AS_LOCAL) {
         return;
     }
 
     for (i = 0; i < MAX_OTHER_SERVERS; i++) {
-        // empty slot
         if (cls.localServers[i].adr.port == 0) {
             break;
         }
 
-        // avoid duplicate
         if (NET_CompareAdr(from, cls.localServers[i].adr)) {
             return;
         }
@@ -4531,7 +3498,6 @@ void CL_ServerInfoPacket(netadr_t from, msg_t* msg) {
         return;
     }
 
-    // add this to the list
     cls.numlocalservers = i + 1;
     CL_InitServerInfo(&cls.localServers[i], &from);
 
@@ -4544,11 +3510,6 @@ void CL_ServerInfoPacket(netadr_t from, msg_t* msg) {
     }
 }
 
-/*
-===================
-CL_GetServerStatus
-===================
-*/
 serverStatus_t* CL_GetServerStatus(netadr_t from) {
     int i, oldest, oldestTime;
 
@@ -4573,17 +3534,11 @@ serverStatus_t* CL_GetServerStatus(netadr_t from) {
     return &cl_serverStatusList[oldest];
 }
 
-/*
-===================
-CL_ServerStatus
-===================
-*/
 int CL_ServerStatus(char* serverAddress, char* serverStatusString, int maxLen) {
     int i;
     netadr_t to;
     serverStatus_t* serverStatus;
 
-    // if no server address then reset all server status requests
     if (!serverAddress) {
         for (i = 0; i < MAX_SERVERSTATUSREQUESTS; i++) {
             cl_serverStatusList[i].address.port = 0;
@@ -4591,27 +3546,22 @@ int CL_ServerStatus(char* serverAddress, char* serverStatusString, int maxLen) {
         }
         return qfalse;
     }
-    // get the address
     if (!NET_StringToAdr(serverAddress, &to, NA_UNSPEC)) {
         return qfalse;
     }
     serverStatus = CL_GetServerStatus(to);
-    // if no server status string then reset the server status request for this address
     if (!serverStatusString) {
         serverStatus->retrieved = qtrue;
         return qfalse;
     }
 
-    // if this server status request has the same address
     if (NET_CompareAdr(to, serverStatus->address)) {
-        // if we received a response for this server status request
         if (!serverStatus->pending) {
             Q_strncpyz(serverStatusString, serverStatus->string, maxLen);
             serverStatus->retrieved = qtrue;
             serverStatus->startTime = 0;
             return qtrue;
         }
-        // resend the request regularly
         else if (serverStatus->startTime < Com_Milliseconds() - cl_serverStatusResendTime->integer) {
             serverStatus->print = qfalse;
             serverStatus->pending = qtrue;
@@ -4622,7 +3572,6 @@ int CL_ServerStatus(char* serverAddress, char* serverStatusString, int maxLen) {
             return qfalse;
         }
     }
-    // if retrieved
     else if (serverStatus->retrieved) {
         serverStatus->address = to;
         serverStatus->print = qfalse;
@@ -4636,11 +3585,6 @@ int CL_ServerStatus(char* serverAddress, char* serverStatusString, int maxLen) {
     return qfalse;
 }
 
-/*
-===================
-CL_ServerStatusResponse
-===================
-*/
 void CL_ServerStatusResponse(netadr_t from, msg_t* msg) {
     char* s;
     char info[MAX_INFO_STRING];
@@ -4655,7 +3599,6 @@ void CL_ServerStatusResponse(netadr_t from, msg_t* msg) {
             break;
         }
     }
-    // if we didn't request this server status
     if (!serverStatus) {
         return;
     }
@@ -4667,7 +3610,6 @@ void CL_ServerStatusResponse(netadr_t from, msg_t* msg) {
 
     if (serverStatus->print) {
         Com_Printf("Server settings:\n");
-        // print cvars
         while (*s) {
             for (i = 0; i < 2 && *s; i++) {
                 if (*s == '\\')
@@ -4727,17 +3669,6 @@ void CL_ServerStatusResponse(netadr_t from, msg_t* msg) {
     }
 }
 
-/*
-==================
-CL_GlobalServers_f
-
-[QL] 0x00462eb0. Quake Live has no master of its own and sends "getservers" nowhere:
-it asks Steam for the list, with a single filter ("gamedir" = "baseq3"). The first
-argument is where it wants the list from, as in retail: 0 internet, 1 LAN, 2 friends,
-3 favourites, 4 history. The remaining arguments -- protocol and keywords -- are
-accepted so as not to break anyone who sends them, but Steam does not use them.
-==================
-*/
 void CL_GlobalServers_f(void) {
     int source;
     int i;
@@ -4752,7 +3683,6 @@ void CL_GlobalServers_f(void) {
         source = 0;
     }
 
-    // the list is rebuilt: the visible flag belongs to the interface and is left alone
     for (i = 0; i < MAX_GLOBAL_SERVERS; i++) {
         qboolean visible = cls.globalServers[i].visible;
 
@@ -4772,38 +3702,9 @@ void CL_GlobalServers_f(void) {
     Com_Printf("Asking Steam for the server list...\n");
 }
 
-/*
-===============================================================================
-
-VOICE
-
-Quake Live does not send voice over its own network: it sends it over Steam's peer to
-peer network and compresses and decompresses it with Steam's voice codec. The client
-only talks to the server, which does the handing out.
-
-  0x004603f0  "+voice" starts recording (it lives in steam.c, which is where the
-              Steam interface lives).
-  0x00460d10  every frame while recording: gathers what is compressed and sends it
-              to the server's Steam ID, which comes from configstring 714.
-  0x00461a60  every frame on receive: the first byte is the speaker's number and
-              the rest is voice, which goes to the mixer at 22050 Hz.
-
-===============================================================================
-*/
-
-// the most retail gathers in one go, and the most that comes out of decompressing it
 #define CL_VOICE_MAX_COMPRESSED 0x4000
 #define CL_VOICE_MAX_PCM 0x8000
 
-/*
-===============
-The mute list
-
-It goes by Steam ID and not by client number, so muting somebody mutes them on the
-next map and the next server too. Retail keeps it in a sorted set (0x00461990 queries
-it, 0x00461c00 changes it) and offers it to the cgame as two calls: ask and toggle.
-===============
-*/
 #define CL_MAX_IGNORED 64
 
 static uint64_t cl_ignored[CL_MAX_IGNORED];
@@ -4820,7 +3721,6 @@ qboolean CL_VoiceIsIgnored(uint64_t steamId) {
     return qfalse;
 }
 
-// [QL] 0x00461c00: devuelve si quedo silenciado
 qboolean CL_VoiceToggleIgnore(uint64_t steamId) {
     int i;
 
@@ -4839,16 +3739,6 @@ qboolean CL_VoiceToggleIgnore(uint64_t steamId) {
     return qtrue;
 }
 
-/*
-===============
-CL_VoiceIgnored / CL_VoiceTalking
-
-The two bridges to the cgame, which is what knows each player's Steam ID and what
-draws who is talking.
-
-[QL] 0x00461b6a and 0x00461b80: entries 15 and 20 of the cgame table.
-===============
-*/
 static qboolean CL_VoiceIgnored(int clientNum) {
     uint64_t steamId = 0;
 
@@ -4865,14 +3755,6 @@ static void CL_VoiceTalking(int clientNum, qboolean talking) {
     }
 }
 
-/*
-===============
-CL_ServerSteamID
-
-The Steam ID of the server we are connected to, which the server publishes in
-configstring 714. Without it there is nobody to send voice to.
-===============
-*/
 static uint64_t CL_ServerSteamID(void) {
     const char* s;
 
@@ -4887,24 +3769,6 @@ static uint64_t CL_ServerSteamID(void) {
 #endif
 }
 
-/*
-===============
-CL_Friends_f
-
-"friends" prints the Steam friends list: who is online, what they are doing and,
-when they are playing this, which server they are on. In retail the list was a web
-page, so there is nothing to mirror: the data comes from Steam and the shape is
-ours.
-===============
-*/
-/*
-===============
-CL_FriendByNumber
-
-The friend in that position of the online list, which is the numbering the player has
-in front of them.
-===============
-*/
 static qboolean CL_FriendByNumber(int number, steamFriend_t* out) {
     int total = Steam_FriendCount();
     int seen = 0;
@@ -4937,7 +3801,7 @@ static void CL_FriendsList(void) {
         char where[64];
 
         if (!Steam_FriendGet(i, &fr) || fr.state == 0) {
-            continue;  // offline friends are not listed
+            continue;
         }
 
         where[0] = '\0';
@@ -4958,15 +3822,6 @@ static void CL_FriendsList(void) {
     Com_Printf("%i of %i online. ^7friends join|invite|profile <number>\n", shown, total);
 }
 
-/*
-===============
-CL_FriendDo
-
-What can be done with a friend: join their server, invite them to one's match, or open
-their profile, a chat with them or their achievements in Steam's overlay. The console command and the menu's social strip both call it,
-being two ways of asking for the same thing.
-===============
-*/
 void CL_FriendDo(const steamFriend_t* fr, int action) {
     switch (action) {
         case UI_FRIEND_JOIN:
@@ -4980,8 +3835,6 @@ void CL_FriendDo(const steamFriend_t* fr, int action) {
                             (fr->ip >> 8) & 0xff, fr->ip & 0xff, fr->port));
             return;
         case UI_FRIEND_INVITE: {
-            // [QL] 0x00432520: to the match one is in; one hosted here goes by the address
-            // Steam sees the server at
             char connect[128];
 
             if (clc.state < CA_CONNECTED) {
@@ -5047,15 +3900,6 @@ static void CL_Friends_f(void) {
     Com_Printf("usage: friends [join|invite|profile <number>]\n");
 }
 
-/*
-===============
-CL_ClientFriendInvite_f / CL_ClientViewProfile_f
-
-The Steam overlay over another player in the match, to add them or to view their
-profile. The client number is turned into a Steam ID by asking the cgame. [QL]
-both commands are in the retail engine, next to their dialogs' names (0x005327f0).
-===============
-*/
 static void CL_OverlayOnPlayer_f(const char* command, void (*action)(uint64_t)) {
     uint64_t steamId = 0;
     int clientNum;
@@ -5087,15 +3931,6 @@ static void CL_ClientViewProfile_f(void) {
     CL_OverlayOnPlayer_f("clientviewprofile", Steam_ShowProfile);
 }
 
-/*
-===============
-CL_VoiceOn_f / CL_VoiceOff_f
-
-[QL] 0x004603f0 and 0x00460490. Besides starting and stopping the recording, they tell
-the cgame that you yourself are talking, which is what lights your own indicator without
-waiting for the voice to come back from the server.
-===============
-*/
 static void CL_VoiceOn_f(void) {
     Steam_VoiceStart();
     if (Steam_VoiceRecording()) {
@@ -5112,13 +3947,6 @@ static void CL_VoiceOff_f(void) {
     }
 }
 
-/*
-===============
-CL_VoiceFrame
-
-[QL] 0x00460d10 y 0x00461a60.
-===============
-*/
 void CL_VoiceFrame(void) {
     static byte compressed[CL_VOICE_MAX_COMPRESSED];
     static byte pcm[CL_VOICE_MAX_PCM];
@@ -5135,7 +3963,6 @@ void CL_VoiceFrame(void) {
         server = CL_ServerSteamID();
     }
 
-    // what the microphone gathered goes to the server as it is
     if (Steam_VoiceRecording()) {
         bytes = Steam_VoiceCapture(compressed, sizeof(compressed));
         if (bytes > 0 && server) {
@@ -5143,15 +3970,11 @@ void CL_VoiceFrame(void) {
         }
     }
 
-    // the greeting that keeps the session open in both directions. Retail only sends it from
-    // the server side (0x004668ca); without the client's, Steam drops incoming voice until you
-    // speak for the first time.
     if (server && (cls.realtime - lastHello > 10000 || cls.realtime < lastHello)) {
         lastHello = cls.realtime;
         Steam_P2PHello(server, qfalse);
     }
 
-    // and what arrives is everyone else's voice, with the speaker's number in front
     while ((bytes = Steam_P2PReceive(compressed, sizeof(compressed), &from, qfalse)) > 1) {
         int who = compressed[0];
         int out;
@@ -5172,15 +3995,6 @@ void CL_VoiceFrame(void) {
     }
 }
 
-/*
-==================
-CL_SteamServersFrame
-
-Steam answers server by server as the search goes on. What arrives is copied into the
-list the interface watches, with the ping Steam measured, so there is no need to ask each
-server anything: ioquake3's "getinfo" does not exist in Quake Live.
-==================
-*/
 void CL_SteamServersFrame(void) {
     int count;
     int i;
@@ -5208,14 +4022,12 @@ void CL_SteamServersFrame(void) {
         adr.ip[3] = (byte)ip;
         adr.port = BigShort(port);
 
-        // the same server can arrive twice if the search is retried
         for (j = 0; j < cls.numglobalservers; j++) {
             if (NET_CompareAdr(cls.globalServers[j].adr, adr)) {
                 break;
             }
         }
         if (j < cls.numglobalservers) {
-            // already there: it takes Steam's latest word and keeps its place
             CL_SetServerInfo(&cls.globalServers[j], info, ping);
             Q_strncpyz(cls.globalServers[j].hostName, Steam_ServerListName(i), sizeof(cls.globalServers[j].hostName));
             cl_steamServerSlot[i] = j;
@@ -5226,11 +4038,9 @@ void CL_SteamServersFrame(void) {
         server = &cls.globalServers[cls.numglobalservers++];
         CL_InitServerInfo(server, &adr);
         CL_SetServerInfo(server, info, ping);
-        // the name as it is: an info string cannot carry a backslash, a quote or a semicolon
         Q_strncpyz(server->hostName, Steam_ServerListName(i), sizeof(server->hostName));
     }
 
-    // the ones that answered again, after a Quick Refresh, take the new ping in their place
     while ((i = Steam_ServerListNextUpdated()) >= 0) {
         unsigned int ip = 0;
         unsigned short port = 0;
@@ -5238,7 +4048,7 @@ void CL_SteamServersFrame(void) {
         char info[MAX_INFO_STRING];
 
         if (i >= cl_steamServersTaken || i >= MAX_GLOBAL_SERVERS) {
-            continue;  // not taken yet: the loop above will, with what is there now
+            continue;
         }
         if (Steam_ServerListGet(i, &ip, &port, &ping, info, sizeof(info))) {
             CL_SetServerInfo(&cls.globalServers[cl_steamServerSlot[i]], info, ping);
@@ -5247,18 +4057,12 @@ void CL_SteamServersFrame(void) {
         }
     }
 
-    // the closing message, once only, like the one ioquake3's master printed
     if (cl_steamServersPending && !Steam_ServerListRefreshing()) {
         cl_steamServersPending = qfalse;
         Com_Printf("%d servers parsed\n", cls.numglobalservers);
     }
 }
 
-/*
-==================
-CL_LocalServers_f
-==================
-*/
 void CL_LocalServers_f(void) {
     char* message;
     int i, j;
@@ -5266,7 +4070,6 @@ void CL_LocalServers_f(void) {
 
     Com_Printf("Scanning for servers on the local network...\n");
 
-    // reset the list, waiting for response
     cls.numlocalservers = 0;
     cls.pingUpdateSource = AS_LOCAL;
 
@@ -5277,16 +4080,9 @@ void CL_LocalServers_f(void) {
     }
     Com_Memset(&to, 0, sizeof(to));
 
-    // The 'xxx' in the message is a challenge that will be echoed back
-    // by the server.  We don't care about that here, but master servers
-    // can use that to prevent spoofed server responses from invalid ip
     message = "\377\377\377\377getinfo xxx";
 
-    // send each message twice in case one is dropped
     for (i = 0; i < 2; i++) {
-        // send a broadcast packet on each server port
-        // we support multiple server ports so a single machine
-        // can nicely run multiple servers
         for (j = 0; j < NUM_SERVER_PORTS; j++) {
             to.port = BigShort((short)(PORT_SERVER + j));
 
@@ -5298,18 +4094,12 @@ void CL_LocalServers_f(void) {
     }
 }
 
-/*
-==================
-CL_GetPing
-==================
-*/
 void CL_GetPing(int n, char* buf, int buflen, int* pingtime) {
     const char* str;
     int time;
     int maxPing;
 
     if (n < 0 || n >= MAX_PINGREQUESTS || !cl_pinglist[n].adr.port) {
-        // empty or invalid slot
         buf[0] = '\0';
         *pingtime = 0;
         return;
@@ -5320,14 +4110,12 @@ void CL_GetPing(int n, char* buf, int buflen, int* pingtime) {
 
     time = cl_pinglist[n].time;
     if (!time) {
-        // check for timeout
         time = Sys_Milliseconds() - cl_pinglist[n].start;
         maxPing = Cvar_VariableIntegerValue("cl_maxPing");
         if (maxPing < 100) {
             maxPing = 100;
         }
         if (time < maxPing) {
-            // not timed out yet
             time = 0;
         }
     }
@@ -5337,14 +4125,8 @@ void CL_GetPing(int n, char* buf, int buflen, int* pingtime) {
     *pingtime = time;
 }
 
-/*
-==================
-CL_GetPingInfo
-==================
-*/
 void CL_GetPingInfo(int n, char* buf, int buflen) {
     if (n < 0 || n >= MAX_PINGREQUESTS || !cl_pinglist[n].adr.port) {
-        // empty or invalid slot
         if (buflen)
             buf[0] = '\0';
         return;
@@ -5353,11 +4135,6 @@ void CL_GetPingInfo(int n, char* buf, int buflen) {
     Q_strncpyz(buf, cl_pinglist[n].info, buflen);
 }
 
-/*
-==================
-CL_ClearPing
-==================
-*/
 void CL_ClearPing(int n) {
     if (n < 0 || n >= MAX_PINGREQUESTS)
         return;
@@ -5365,11 +4142,6 @@ void CL_ClearPing(int n) {
     cl_pinglist[n].adr.port = 0;
 }
 
-/*
-==================
-CL_GetPingQueueCount
-==================
-*/
 int CL_GetPingQueueCount(void) {
     int i;
     int count;
@@ -5387,11 +4159,6 @@ int CL_GetPingQueueCount(void) {
     return (count);
 }
 
-/*
-==================
-CL_GetFreePing
-==================
-*/
 ping_t* CL_GetFreePing(void) {
     ping_t* pingptr;
     ping_t* best;
@@ -5401,30 +4168,24 @@ ping_t* CL_GetFreePing(void) {
 
     pingptr = cl_pinglist;
     for (i = 0; i < MAX_PINGREQUESTS; i++, pingptr++) {
-        // find free ping slot
         if (pingptr->adr.port) {
             if (!pingptr->time) {
                 if (Sys_Milliseconds() - pingptr->start < 500) {
-                    // still waiting for response
                     continue;
                 }
             } else if (pingptr->time < 500) {
-                // results have not been queried
                 continue;
             }
         }
 
-        // clear it
         pingptr->adr.port = 0;
         return (pingptr);
     }
 
-    // use oldest entry
     pingptr = cl_pinglist;
     best = cl_pinglist;
     oldest = INT_MIN;
     for (i = 0; i < MAX_PINGREQUESTS; i++, pingptr++) {
-        // scan for oldest
         time = Sys_Milliseconds() - pingptr->start;
         if (time > oldest) {
             oldest = time;
@@ -5435,11 +4196,6 @@ ping_t* CL_GetFreePing(void) {
     return (best);
 }
 
-/*
-==================
-CL_UpdateVisiblePings_f
-==================
-*/
 qboolean CL_UpdateVisiblePings_f(int source) {
     int slots, i;
     char buff[MAX_STRING_CHARS];
@@ -5486,7 +4242,6 @@ qboolean CL_UpdateVisiblePings_f(int source) {
                             continue;
                         }
                         if (NET_CompareAdr(cl_pinglist[j].adr, server[i].adr)) {
-                            // already on the list
                             break;
                         }
                     }
@@ -5504,17 +4259,11 @@ qboolean CL_UpdateVisiblePings_f(int source) {
                         slots++;
                     }
                 }
-                // if the server has a ping higher than cl_maxPing or
-                // the ping packet got lost
                 else if (server[i].ping == 0) {
-                    // if we are updating global servers
                     if (source == AS_GLOBAL) {
-                        //
                         if (cls.numGlobalServerAddresses > 0) {
-                            // overwrite this server with one from the additional global servers
                             cls.numGlobalServerAddresses--;
                             CL_InitServerInfo(&server[i], &cls.globalServerAddresses[cls.numGlobalServerAddresses]);
-                            // NOTE: the server[i].visible flag stays untouched
                         }
                     }
                 }
@@ -5539,11 +4288,6 @@ qboolean CL_UpdateVisiblePings_f(int source) {
     return status;
 }
 
-/*
-==================
-CL_ServerStatus_f
-==================
-*/
 void CL_ServerStatus_f(void) {
     netadr_t to, *toptr = NULL;
     char* server;
@@ -5592,11 +4336,6 @@ void CL_ServerStatus_f(void) {
     serverStatus->pending = qtrue;
 }
 
-/*
-==================
-CL_ShowIP_f
-==================
-*/
 void CL_ShowIP_f(void) {
     Sys_ShowIP();
 }

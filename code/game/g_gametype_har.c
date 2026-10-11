@@ -1,16 +1,4 @@
-/*
- * g_gametype_har.c -- Harvester (GT_HARVESTER, 8)
- *
- * Teams collect skulls from a central skull generator and deliver them
- * to the enemy base. Skull logic is in g_team.c.
- * Scoreboard: CaptureTheFlagScoreboardMessage (shared format) in g_cmds.c.
- */
 #include "g_local.h"
-
-// Harvester uses capturelimit/timelimit exit rules.
-// Skull generator entity and skull pickup in g_team.c.
-// Uses CaptureTheFlagScoreboardMessage format.
-// No round state.
 
 void Harvester_CheckTeamItems(void) {
     gentity_t *ent;

@@ -19,8 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
-// Use EnumProcesses() with Windows XP compatibility
 #define PSAPI_VERSION 1
 
 #include "../qcommon/q_shared.h"
@@ -46,25 +44,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define KEY_WOW64_32KEY 0x0200
 #endif
 
-// Used to determine where to store user-specific files
 static char homePath[MAX_OSPATH] = {0};
 
-// Used to store the Steam Quake Live installation path
 static char steamPath[MAX_OSPATH] = {0};
 
 #ifndef DEDICATED
 static UINT timerResolution = 0;
 #endif
 
-/*
-================
-Sys_SetFPUCW
-Set FPU control word to default value
-================
-*/
-
 #ifndef _RC_CHOP
-// mingw doesn't seem to have these defined :(
 
 #define _MCW_EM 0x0008001fU
 #define _MCW_RC 0x00000300U
@@ -78,7 +66,6 @@ unsigned int _controlfp(unsigned int new, unsigned int mask);
 #define FPUCWMASK1 (_MCW_RC | _MCW_EM)
 #define FPUCW (_RC_NEAR | _MCW_EM | _PC_53)
 
-// 64-bit Windows, x86-64 or ARM64, has no x87 precision control to set
 #ifdef _WIN64
 #define FPUCWMASK (FPUCWMASK1)
 #else
@@ -89,16 +76,6 @@ void Sys_SetFloatEnv(void) {
     _controlfp(FPUCW, FPUCWMASK);
 }
 
-/*
-================
-Sys_MoveUpstreamHomePath
-
-[ioquakelive] The player's data lives in %APPDATA%\ioquakelive. It used to share upstream's
-%APPDATA%\quakelive: the first start that finds that folder and not the new one renames it,
-so configs, screenshots, demos and fonts all come along. The launcher does the same before
-it writes anything there.
-================
-*/
 #define HOMEPATH_UPSTREAM_NAME_WIN "quakelive"
 
 static void Sys_MoveUpstreamHomePath(const char* appData) {
@@ -123,11 +100,6 @@ static void Sys_MoveUpstreamHomePath(const char* appData) {
     }
 }
 
-/*
-================
-Sys_DefaultHomePath
-================
-*/
 char* Sys_DefaultHomePath(void) {
     TCHAR szPath[MAX_PATH];
     FARPROC qSHGetFolderPath;
@@ -167,13 +139,6 @@ char* Sys_DefaultHomePath(void) {
     return homePath;
 }
 
-/*
-================
-Sys_DefaultCachePath
-
-[ioquakelive] what is kept only to load faster goes to %LOCALAPPDATA%, out of the game folder
-================
-*/
 char* Sys_DefaultCachePath(void) {
     static char cachePath[MAX_OSPATH];
     TCHAR szPath[MAX_PATH];
@@ -198,20 +163,10 @@ char* Sys_DefaultCachePath(void) {
     return cachePath[0] ? cachePath : NULL;
 }
 
-/*
-================
-Sys_RemoveDir
-================
-*/
 qboolean Sys_RemoveDir(const char* path) {
     return RemoveDirectoryA(path) ? qtrue : qfalse;
 }
 
-/*
-================
-Sys_SteamPath
-================
-*/
 char* Sys_SteamPath(void) {
 #if defined(STEAMPATH_NAME) || defined(STEAMPATH_APPID)
     HKEY steamRegKey;
@@ -219,7 +174,6 @@ char* Sys_SteamPath(void) {
     qboolean finishPath = qfalse;
 
 #ifdef STEAMPATH_APPID
-    // Assuming Steam is a 32-bit app
     if (!steamPath[0] && !RegOpenKeyEx(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App " STEAMPATH_APPID, 0, KEY_QUERY_VALUE | KEY_WOW64_32KEY, &steamRegKey)) {
         pathLen = MAX_OSPATH;
         if (RegQueryValueEx(steamRegKey, "InstallLocation", NULL, NULL, (LPBYTE)steamPath, &pathLen))
@@ -249,7 +203,6 @@ char* Sys_SteamPath(void) {
 
         steamPath[pathLen] = '\0';
 
-        // Steam stores SteamPath with forward slashes - normalize to backslashes
         {
             char *s;
             for (s = steamPath; *s; s++) {
@@ -265,11 +218,6 @@ char* Sys_SteamPath(void) {
     return steamPath;
 }
 
-/*
-================
-Sys_Milliseconds
-================
-*/
 int sys_timeBase;
 int Sys_Milliseconds(void) {
     int sys_curtime;
@@ -284,16 +232,6 @@ int Sys_Milliseconds(void) {
     return sys_curtime;
 }
 
-
-/*
-================
-Sys_Microseconds
-
-[ioquakelive] Monotonic microsecond clock, for pacing frames and for measuring the pacing.
-timeGetTime, which is what Sys_Milliseconds gives, moves a millisecond at a time: at 125 fps a
-frame lasts 8 ms and with that clock there is no way to aim at anything but 8 or 9.
-================
-*/
 int64_t Sys_Microseconds(void) {
     static LARGE_INTEGER frequency;
     static LARGE_INTEGER base;
@@ -310,8 +248,6 @@ int64_t Sys_Microseconds(void) {
     return ((now.QuadPart - base.QuadPart) * 1000000LL) / frequency.QuadPart;
 }
 
-
-// [ioquakelive] the entry point CreateThread wants, which does not have the engine's signature
 typedef struct {
     void (*function)(void*);
     void* argument;
@@ -323,17 +259,6 @@ static DWORD WINAPI Sys_ThreadEntry(LPVOID parameter) {
     start->function(start->argument);
     return 0;
 }
-
-/*
-==============================================================================
-
-THREADS   (Win32)
-
-[ioquakelive] The minimum needed to spread work across cores: create a thread, a mutex and a
-semaphore. The queue built on this lives in common.c, which is portable.
-
-==============================================================================
-*/
 
 void* Sys_ThreadCreate(void (*function)(void*), void* argument) {
     static sysThreadStart_t starts[16];
@@ -382,8 +307,6 @@ void Sys_SemaphoreWait(void* semaphore) {
     WaitForSingleObject((HANDLE)semaphore, INFINITE);
 }
 
-// [ioquakelive] gives up the rest of the slice; that is what to do while waiting on another
-// thread, rather than spinning and taking the core from it
 void Sys_ThreadYield(void) {
     SwitchToThread();
 }
@@ -395,11 +318,6 @@ int Sys_ProcessorCount(void) {
     return (int)info.dwNumberOfProcessors;
 }
 
-/*
-================
-Sys_RandomBytes
-================
-*/
 qboolean Sys_RandomBytes(byte* string, int len) {
     HCRYPTPROV prov;
 
@@ -416,11 +334,6 @@ qboolean Sys_RandomBytes(byte* string, int len) {
     return qtrue;
 }
 
-/*
-================
-Sys_GetCurrentUser
-================
-*/
 char* Sys_GetCurrentUser(void) {
     static char s_userName[1024];
     unsigned long size = sizeof(s_userName);
@@ -437,29 +350,18 @@ char* Sys_GetCurrentUser(void) {
 
 #define MEM_THRESHOLD 96 * 1024 * 1024
 
-/*
-==================
-Sys_LowPhysicalMemory
-==================
-*/
 qboolean Sys_LowPhysicalMemory(void) {
     MEMORYSTATUS stat;
     GlobalMemoryStatus(&stat);
     return (stat.dwTotalPhys <= MEM_THRESHOLD) ? qtrue : qfalse;
 }
 
-/*
-==============
-Sys_Basename
-==============
-*/
 const char* Sys_Basename(char* path) {
     static char base[MAX_OSPATH] = {0};
     int length;
 
     length = strlen(path) - 1;
 
-    // Skip trailing slashes
     while (length > 0 && path[length] == '\\')
         length--;
 
@@ -470,18 +372,12 @@ const char* Sys_Basename(char* path) {
 
     length = strlen(base) - 1;
 
-    // Strip trailing slashes
     while (length > 0 && base[length] == '\\')
         base[length--] = '\0';
 
     return base;
 }
 
-/*
-==============
-Sys_Dirname
-==============
-*/
 const char* Sys_Dirname(char* path) {
     static char dir[MAX_OSPATH] = {0};
     int length;
@@ -497,15 +393,9 @@ const char* Sys_Dirname(char* path) {
     return dir;
 }
 
-/*
-==============
-Sys_FOpen
-==============
-*/
 FILE* Sys_FOpen(const char* ospath, const char* mode) {
     size_t length;
 
-    // Windows API ignores all trailing spaces and periods which can get around Quake 3 file system restrictions.
     length = strlen(ospath);
     if (length == 0 || ospath[length - 1] == ' ' || ospath[length - 1] == '.') {
         return NULL;
@@ -514,11 +404,6 @@ FILE* Sys_FOpen(const char* ospath, const char* mode) {
     return fopen(ospath, mode);
 }
 
-/*
-==============
-Sys_Mkdir
-==============
-*/
 qboolean Sys_Mkdir(const char* path) {
     if (!CreateDirectory(path, NULL)) {
         if (GetLastError() != ERROR_ALREADY_EXISTS)
@@ -528,21 +413,10 @@ qboolean Sys_Mkdir(const char* path) {
     return qtrue;
 }
 
-/*
-==================
-Sys_Mkfifo
-Noop on windows because named pipes do not function the same way
-==================
-*/
 FILE* Sys_Mkfifo(const char* ospath) {
     return NULL;
 }
 
-/*
-==============
-Sys_Cwd
-==============
-*/
 char* Sys_Cwd(void) {
     static char cwd[MAX_OSPATH];
 
@@ -552,21 +426,8 @@ char* Sys_Cwd(void) {
     return cwd;
 }
 
-/*
-==============================================================
-
-DIRECTORY SCANNING
-
-==============================================================
-*/
-
 #define MAX_FOUND_FILES 0x1000
 
-/*
-==============
-Sys_ListFilteredFiles
-==============
-*/
 void Sys_ListFilteredFiles(const char* basedir, char* subdirs, char* filter, char** list, int* numfiles) {
     char search[MAX_OSPATH], newsubdirs[MAX_OSPATH];
     char filename[MAX_OSPATH];
@@ -616,11 +477,6 @@ void Sys_ListFilteredFiles(const char* basedir, char* subdirs, char* filter, cha
     _findclose(findhandle);
 }
 
-/*
-==============
-strgtr
-==============
-*/
 static qboolean strgtr(const char* s0, const char* s1) {
     int l0, l1, i;
 
@@ -642,11 +498,6 @@ static qboolean strgtr(const char* s0, const char* s1) {
     return qfalse;
 }
 
-/*
-==============
-Sys_ListFiles
-==============
-*/
 char** Sys_ListFiles(const char* directory, const char* extension, char* filter, int* numfiles, qboolean wantsubs) {
     char search[MAX_OSPATH];
     int nfiles;
@@ -686,7 +537,6 @@ char** Sys_ListFiles(const char* directory, const char* extension, char* filter,
         extension = "";
     }
 
-    // passing a slash as extension will find directories
     if (extension[0] == '/' && extension[1] == 0) {
         extension = "";
         flag = 0;
@@ -698,7 +548,6 @@ char** Sys_ListFiles(const char* directory, const char* extension, char* filter,
 
     Com_sprintf(search, sizeof(search), "%s\\*%s", directory, extension);
 
-    // search
     nfiles = 0;
 
     findhandle = _findfirst(search, &findinfo);
@@ -714,7 +563,7 @@ char** Sys_ListFiles(const char* directory, const char* extension, char* filter,
                     Q_stricmp(
                         findinfo.name + strlen(findinfo.name) - extLen,
                         extension)) {
-                    continue;  // didn't match
+                    continue;
                 }
             }
             if (nfiles == MAX_FOUND_FILES - 1) {
@@ -729,7 +578,6 @@ char** Sys_ListFiles(const char* directory, const char* extension, char* filter,
 
     _findclose(findhandle);
 
-    // return a copy of the list
     *numfiles = nfiles;
 
     if (!nfiles) {
@@ -757,11 +605,6 @@ char** Sys_ListFiles(const char* directory, const char* extension, char* filter,
     return listCopy;
 }
 
-/*
-==============
-Sys_FreeFileList
-==============
-*/
 void Sys_FreeFileList(char** list) {
     int i;
 
@@ -776,13 +619,6 @@ void Sys_FreeFileList(char** list) {
     Z_Free(list);
 }
 
-/*
-==============
-Sys_Sleep
-
-Block execution for msec or until input is received.
-==============
-*/
 void Sys_Sleep(int msec) {
     if (msec == 0)
         return;
@@ -793,7 +629,6 @@ void Sys_Sleep(int msec) {
     else
         WaitForSingleObject(GetStdHandle(STD_INPUT_HANDLE), msec);
 #else
-    // Client Sys_Sleep doesn't support waiting on stdin
     if (msec < 0)
         return;
 
@@ -801,13 +636,6 @@ void Sys_Sleep(int msec) {
 #endif
 }
 
-/*
-==============
-Sys_ErrorDialog
-
-Display an error message
-==============
-*/
 void Sys_ErrorDialog(const char* error) {
     Sys_Print(va("%s\n", error));
 
@@ -840,13 +668,6 @@ void Sys_ErrorDialog(const char* error) {
     }
 }
 
-/*
-==============
-Sys_Dialog
-
-Display a win32 dialog box
-==============
-*/
 dialogResult_t Sys_Dialog(dialogType_t type, const char* message, const char* title) {
     UINT uType;
 
@@ -882,34 +703,11 @@ dialogResult_t Sys_Dialog(dialogType_t type, const char* message, const char* ti
     }
 }
 
-/*
-==============
-Sys_GLimpSafeInit
-
-Windows specific "safe" GL implementation initialisation
-==============
-*/
 void Sys_GLimpSafeInit(void) {
 }
 
-/*
-==============
-Sys_GLimpInit
-
-Windows specific GL implementation initialisation
-==============
-*/
 void Sys_GLimpInit(void) {
 }
-
-/*
-==============
-Sys_PlatformInit
-
-Windows specific initialisation
-==============
-*/
-
 
 void Sys_PlatformInit(void) {
 #ifndef DEDICATED
@@ -917,7 +715,6 @@ void Sys_PlatformInit(void) {
 #endif
 
     Sys_SetFloatEnv();
-
 
 #ifndef DEDICATED
     if (timeGetDevCaps(&ptc, sizeof(ptc)) == MMSYSERR_NOERROR) {
@@ -936,13 +733,6 @@ void Sys_PlatformInit(void) {
 #endif
 }
 
-/*
-==============
-Sys_PlatformExit
-
-Windows specific initialisation
-==============
-*/
 void Sys_PlatformExit(void) {
 #ifndef DEDICATED
     if (timerResolution)
@@ -950,13 +740,6 @@ void Sys_PlatformExit(void) {
 #endif
 }
 
-/*
-==============
-Sys_SetEnv
-
-set/unset environment variables (empty value removes it)
-==============
-*/
 void Sys_SetEnv(const char* name, const char* value) {
     if (value)
         _putenv(va("%s=%s", name, value));
@@ -964,31 +747,20 @@ void Sys_SetEnv(const char* name, const char* value) {
         _putenv(va("%s=", name));
 }
 
-/*
-==============
-Sys_PID
-==============
-*/
 int Sys_PID(void) {
     return GetCurrentProcessId();
 }
 
-/*
-==============
-Sys_PIDIsRunning
-==============
-*/
 qboolean Sys_PIDIsRunning(int pid) {
     DWORD processes[1024];
     DWORD numBytes, numProcesses;
     int i;
 
     if (!EnumProcesses(processes, sizeof(processes), &numBytes))
-        return qfalse;  // Assume it's not running
+        return qfalse;
 
     numProcesses = numBytes / sizeof(DWORD);
 
-    // Search for the pid
     for (i = 0; i < numProcesses; i++) {
         if (processes[i] == pid)
             return qtrue;
@@ -997,13 +769,6 @@ qboolean Sys_PIDIsRunning(int pid) {
     return qfalse;
 }
 
-/*
-=================
-Sys_DllExtension
-
-Check if filename should be allowed to be loaded as a DLL.
-=================
-*/
 qboolean Sys_DllExtension(const char* name) {
     return COM_CompareExtension(name, DLL_EXT);
 }

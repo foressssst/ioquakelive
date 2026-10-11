@@ -19,8 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// cg_scoreboard -- draw the scoreboard on top of the game screen
 #include "cg_local.h"
 
 #define SCOREBOARD_X (0)
@@ -28,52 +26,32 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define SB_HEADER 86
 #define SB_TOP (SB_HEADER + 32)
 
-// Where the status bar starts, so we don't overwrite it
 #define SB_STATUSBAR 420
 
 #define SB_NORMAL_HEIGHT 40
-#define SB_INTER_HEIGHT 16  // interleaved height
+#define SB_INTER_HEIGHT 16
 
 #define SB_MAXCLIENTS_NORMAL ((SB_STATUSBAR - SB_TOP) / SB_NORMAL_HEIGHT)
 #define SB_MAXCLIENTS_INTER ((SB_STATUSBAR - SB_TOP) / SB_INTER_HEIGHT - 1)
-
-// Used when interleaved
 
 #define SB_LEFT_BOTICON_X (SCOREBOARD_X + 0)
 #define SB_LEFT_HEAD_X (SCOREBOARD_X + 32)
 #define SB_RIGHT_BOTICON_X (SCOREBOARD_X + 64)
 #define SB_RIGHT_HEAD_X (SCOREBOARD_X + 96)
-// Normal
 #define SB_BOTICON_X (SCOREBOARD_X + 32)
 #define SB_HEAD_X (SCOREBOARD_X + 64)
 
 #define SB_SCORELINE_X 112
 
-#define SB_RATING_WIDTH (6 * BIGCHAR_WIDTH)                  // width 6
-#define SB_SCORE_X (SB_SCORELINE_X + BIGCHAR_WIDTH)          // width 6
-#define SB_RATING_X (SB_SCORELINE_X + 6 * BIGCHAR_WIDTH)     // width 6
-#define SB_PING_X (SB_SCORELINE_X + 12 * BIGCHAR_WIDTH + 8)  // width 5
-#define SB_TIME_X (SB_SCORELINE_X + 17 * BIGCHAR_WIDTH + 8)  // width 5
-#define SB_NAME_X (SB_SCORELINE_X + 22 * BIGCHAR_WIDTH)      // width 15
+#define SB_RATING_WIDTH (6 * BIGCHAR_WIDTH)
+#define SB_SCORE_X (SB_SCORELINE_X + BIGCHAR_WIDTH)
+#define SB_RATING_X (SB_SCORELINE_X + 6 * BIGCHAR_WIDTH)
+#define SB_PING_X (SB_SCORELINE_X + 12 * BIGCHAR_WIDTH + 8)
+#define SB_TIME_X (SB_SCORELINE_X + 17 * BIGCHAR_WIDTH + 8)
+#define SB_NAME_X (SB_SCORELINE_X + 22 * BIGCHAR_WIDTH)
 
-// The new and improved score board
-//
-// In cases where the number of clients is high, the score board heads are interleaved
-// here's the layout
+static qboolean localClient;
 
-//
-//	0   32   80  112  144   240  320  400   <-- pixel position
-//  bot head bot head score ping time name
-//
-//  wins/losses are drawn on bot icon now
-
-static qboolean localClient;  // true if local client has been displayed
-
-/*
-=================
-CG_DrawScoreboard
-=================
-*/
 static void CG_DrawClientScore(int y, score_t* score, float* color, float fade, qboolean largeFormat) {
     char string[1024];
     vec3_t headAngles;
@@ -90,7 +68,6 @@ static void CG_DrawClientScore(int y, score_t* score, float* color, float fade, 
     iconx = SB_BOTICON_X + (SB_RATING_WIDTH / 2);
     headx = SB_HEAD_X + (SB_RATING_WIDTH / 2);
 
-    // draw the handicap or bot skill marker (unless player has flag)
     if (ci->powerups & (1 << PW_NEUTRALFLAG)) {
         if (largeFormat) {
             CG_DrawFlagModel(iconx, y - (32 - BIGCHAR_HEIGHT) / 2, 32, 32, TEAM_FREE, qfalse);
@@ -126,7 +103,6 @@ static void CG_DrawClientScore(int y, score_t* score, float* color, float fade, 
                 CG_DrawSmallStringColor(iconx, y, string, color);
         }
 
-        // draw the wins / losses
         if (cgs.gametype == GT_DUEL) {
             Com_sprintf(string, sizeof(string), "%i/%i", ci->wins, ci->losses);
             if (ci->handicap < 100 && !ci->botSkill) {
@@ -137,7 +113,6 @@ static void CG_DrawClientScore(int y, score_t* score, float* color, float fade, 
         }
     }
 
-    // draw the face
     VectorClear(headAngles);
     headAngles[YAW] = 180;
     if (largeFormat) {
@@ -147,7 +122,6 @@ static void CG_DrawClientScore(int y, score_t* score, float* color, float fade, 
         CG_DrawHead(headx, y, 16, 16, score->client, headAngles, NULL);
     }
 
-    // draw the team task
     if (ci->teamTask != TEAMTASK_NONE) {
         if (ci->teamTask == TEAMTASK_OFFENSE) {
             CG_DrawPic(headx + 48, y, 16, 16, cgs.media.assaultShader);
@@ -156,7 +130,6 @@ static void CG_DrawClientScore(int y, score_t* score, float* color, float fade, 
         }
     }
 
-    // draw the score line
     if (score->ping == -1) {
         Com_sprintf(string, sizeof(string),
                     " connecting    %s", ci->name);
@@ -168,7 +141,6 @@ static void CG_DrawClientScore(int y, score_t* score, float* color, float fade, 
                     "%5i %4i %4i %s", score->score, score->ping, score->time, ci->name);
     }
 
-    // highlight your position
     if (score->client == cg.snap->ps.clientNum) {
         float hcolor[4];
         int rank;
@@ -205,17 +177,11 @@ static void CG_DrawClientScore(int y, score_t* score, float* color, float fade, 
 
     CG_DrawBigString(SB_SCORELINE_X + (SB_RATING_WIDTH / 2), y, string, fade);
 
-    // add the "ready" marker for intermission exiting
     if (cg.snap->ps.stats[STAT_CLIENTS_READY] & (1 << score->client)) {
         CG_DrawBigStringColor(iconx, y, "READY", color);
     }
 }
 
-/*
-=================
-CG_TeamScoreboard
-=================
-*/
 static int CG_TeamScoreboard(int y, team_t team, float fade, int maxClients, int lineHeight) {
     int i;
     score_t* score;
@@ -243,13 +209,6 @@ static int CG_TeamScoreboard(int y, team_t team, float fade, int maxClients, int
     return count;
 }
 
-/*
-=================
-CG_DrawScoreboard
-
-Draw the normal in-game scoreboard
-=================
-*/
 qboolean CG_DrawOldScoreboard(void) {
     int x, y, w, i, n1, n2;
     float fade;
@@ -259,13 +218,11 @@ qboolean CG_DrawOldScoreboard(void) {
     int lineHeight;
     int topBorderSize, bottomBorderSize;
 
-    // don't draw amuthing if the menu or console is up
     if (cg_paused.integer) {
         cg.deferredPlayerLoading = 0;
         return qfalse;
     }
 
-    // don't draw scoreboard during death while warmup up
     if (cg.warmup && !cg.showScores) {
         return qfalse;
     }
@@ -278,7 +235,6 @@ qboolean CG_DrawOldScoreboard(void) {
         fadeColor = CG_FadeColor(cg.scoreFadeTime, FADE_TIME);
 
         if (!fadeColor) {
-            // next time scoreboard comes up, don't print killer
             cg.deferredPlayerLoading = 0;
             cg.killerName[0] = 0;
             return qfalse;
@@ -286,7 +242,6 @@ qboolean CG_DrawOldScoreboard(void) {
         fade = *fadeColor;
     }
 
-    // fragged by ... line
     if (cg.killerName[0]) {
         s = va("Fragged by %s", cg.killerName);
         w = CG_DrawStrlen(s) * BIGCHAR_WIDTH;
@@ -295,7 +250,6 @@ qboolean CG_DrawOldScoreboard(void) {
         CG_DrawBigString(x, y, s, fade);
     }
 
-    // current rank
     if (cgs.gametype < GT_TEAM) {
         if (cg.snap->ps.persistant[PERS_TEAM] != TEAM_SPECTATOR) {
             s = va("%s place with %i",
@@ -321,7 +275,6 @@ qboolean CG_DrawOldScoreboard(void) {
         CG_DrawBigString(x, y, s, fade);
     }
 
-    // scoreboard
     y = SB_HEADER;
 
     CG_DrawPic(SB_SCORE_X + (SB_RATING_WIDTH / 2), y, 64, 32, cgs.media.scoreboardScore);
@@ -331,7 +284,6 @@ qboolean CG_DrawOldScoreboard(void) {
 
     y = SB_TOP;
 
-    // If there are more than SB_MAXCLIENTS_NORMAL, use the interleaved scores
     if (cg.numScores > SB_MAXCLIENTS_NORMAL) {
         maxClients = SB_MAXCLIENTS_INTER;
         lineHeight = SB_INTER_HEIGHT;
@@ -347,9 +299,6 @@ qboolean CG_DrawOldScoreboard(void) {
     localClient = qfalse;
 
     if (cgs.gametype >= GT_TEAM) {
-        //
-        // teamplay scoreboard
-        //
         y += lineHeight / 2;
 
         if (cg.teamScores[0] >= cg.teamScores[1]) {
@@ -375,9 +324,6 @@ qboolean CG_DrawOldScoreboard(void) {
         y += (n1 * lineHeight) + BIGCHAR_HEIGHT;
 
     } else {
-        //
-        // free for all scoreboard
-        //
         n1 = CG_TeamScoreboard(y, TEAM_FREE, fade, maxClients, lineHeight);
         y += (n1 * lineHeight) + BIGCHAR_HEIGHT;
         n2 = CG_TeamScoreboard(y, TEAM_SPECTATOR, fade, maxClients - n1, lineHeight);
@@ -385,7 +331,6 @@ qboolean CG_DrawOldScoreboard(void) {
     }
 
     if (!localClient) {
-        // draw local client at the bottom
         for (i = 0; i < cg.numScores; i++) {
             if (cg.scores[i].client == cg.snap->ps.clientNum) {
                 CG_DrawClientScore(y, &cg.scores[i], fadeColor, fade, lineHeight == SB_NORMAL_HEIGHT);
@@ -394,7 +339,6 @@ qboolean CG_DrawOldScoreboard(void) {
         }
     }
 
-    // load any models that have been deferred
     if (++cg.deferredPlayerLoading > 10) {
         CG_LoadDeferredPlayers();
     }
@@ -402,13 +346,6 @@ qboolean CG_DrawOldScoreboard(void) {
     return qtrue;
 }
 
-//================================================================================
-
-/*
-================
-CG_CenterGiantLine
-================
-*/
 static void CG_CenterGiantLine(float y, const char* string) {
     float x;
     vec4_t color;
@@ -423,13 +360,6 @@ static void CG_CenterGiantLine(float y, const char* string) {
     CG_DrawStringExt(x, y, string, color, qtrue, qtrue, GIANT_WIDTH, GIANT_HEIGHT, 0);
 }
 
-/*
-=================
-CG_DrawTourneyScoreboard
-
-Draw the oversize scoreboard for tournements
-=================
-*/
 void CG_DrawTourneyScoreboard(void) {
     const char* s;
     vec4_t color;
@@ -438,13 +368,11 @@ void CG_DrawTourneyScoreboard(void) {
     int y;
     int i;
 
-    // request more scores regularly
     if (cg.scoresRequestTime + 2000 < cg.time) {
         cg.scoresRequestTime = cg.time;
         trap_SendClientCommand("score");
     }
 
-    // draw the dialog background
     color[0] = color[1] = color[2] = 0;
     color[3] = 1;
     CG_FillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, color);
@@ -454,16 +382,13 @@ void CG_DrawTourneyScoreboard(void) {
     color[2] = 1;
     color[3] = 1;
 
-    // print the mesage of the day
     s = CG_ConfigString(CS_MOTD);
     if (!s[0]) {
         s = "Scoreboard";
     }
 
-    // print optional title
     CG_CenterGiantLine(8, s);
 
-    // print server time
     ones = cg.time / 1000;
     min = ones / 60;
     ones %= 60;
@@ -473,13 +398,8 @@ void CG_DrawTourneyScoreboard(void) {
 
     CG_CenterGiantLine(64, s);
 
-    // print the two scores
-
     y = 160;
     if (cgs.gametype >= GT_TEAM) {
-        //
-        // teamplay scoreboard
-        //
         CG_DrawStringExt(8, y, "Red Team", color, qtrue, qtrue, GIANT_WIDTH, GIANT_HEIGHT, 0);
         s = va("%i", cg.teamScores[0]);
         CG_DrawStringExt(632 - GIANT_WIDTH * strlen(s), y, s, color, qtrue, qtrue, GIANT_WIDTH, GIANT_HEIGHT, 0);
@@ -490,9 +410,6 @@ void CG_DrawTourneyScoreboard(void) {
         s = va("%i", cg.teamScores[1]);
         CG_DrawStringExt(632 - GIANT_WIDTH * strlen(s), y, s, color, qtrue, qtrue, GIANT_WIDTH, GIANT_HEIGHT, 0);
     } else {
-        //
-        // free for all scoreboard
-        //
         for (i = 0; i < MAX_CLIENTS; i++) {
             ci = &cgs.clientinfo[i];
             if (!ci->infoValid) {
@@ -510,27 +427,6 @@ void CG_DrawTourneyScoreboard(void) {
     }
 }
 
-//================================================================================
-// [QL] Extended per-client team-stats parsers
-//
-// These are QL additions, separate from the main scoreboard (scores_tdm /
-// scores_ca / scores_ctf) and from the team-wide pickup counts those carry
-// (CG_ParseTeamPickups). The server emits ONE command per connected client; the
-// first argument is that client's scoreboard slot index, used verbatim as the
-// row index into cg.teamStats[] (a per-client store with a 0x268-byte /
-// 154-int stride). All values are signed decimal integers read with atoi().
-// The feeder reader (CG_FeederItemTextStats) lives in cg_main.c.
-//================================================================================
-
-/*
-=================
-CG_ParseTeamStats_TDM
-
-TDM / FT extended stats. Wire: "tdmstats <client> <selfKills> <teamKills>
-<tkDeaths> <damageDone> <damageReceived> <ra> <ya> <ga> <mh> <quad> <bs>".
-=================
-*/
-// Address: 0x10046610
 void CG_ParseTeamStats_TDM(void) {
     int slot;
     int* row;
@@ -538,32 +434,19 @@ void CG_ParseTeamStats_TDM(void) {
     slot = atoi(CG_Argv(1));
     row = cg.teamStats[slot].fields;
 
-    row[0] = atoi(CG_Argv(2));    // 0x00 selfKills
-    row[1] = atoi(CG_Argv(3));    // 0x04 teamKills
-    row[2] = atoi(CG_Argv(4));    // 0x08 teamKillDeaths
-    row[7] = atoi(CG_Argv(5));    // 0x1c damageDone
-    row[8] = atoi(CG_Argv(6));    // 0x20 damageReceived
-    row[9] = atoi(CG_Argv(7));    // 0x24 pickups: red armour
-    row[11] = atoi(CG_Argv(8));   // 0x2c pickups: yellow armour
-    row[13] = atoi(CG_Argv(9));   // 0x34 pickups: green armour
-    row[15] = atoi(CG_Argv(10));  // 0x3c pickups: mega health
-    row[17] = atoi(CG_Argv(11));  // 0x44 pickups: quad
-    row[18] = atoi(CG_Argv(12));  // 0x48 pickups: battlesuit
+    row[0] = atoi(CG_Argv(2));
+    row[1] = atoi(CG_Argv(3));
+    row[2] = atoi(CG_Argv(4));
+    row[7] = atoi(CG_Argv(5));
+    row[8] = atoi(CG_Argv(6));
+    row[9] = atoi(CG_Argv(7));
+    row[11] = atoi(CG_Argv(8));
+    row[13] = atoi(CG_Argv(9));
+    row[15] = atoi(CG_Argv(10));
+    row[17] = atoi(CG_Argv(11));
+    row[18] = atoi(CG_Argv(12));
 }
 
-/*
-=================
-CG_ParseTeamStats_CA
-
-Clan Arena extended stats. Wire: "castats <client> <damageDone>
-<damageReceived>" followed by 15 weapon pairs, each "<accuracy> <kills>" for
-weapon index k = 0..14 (0 = gauntlet .. 14 = HMG). 33 args after the verb.
-Binary quirk carried into the store: for each weapon the accuracy is
-the first arg of the pair and lands at the higher offset (0x9c + k*4), while
-the kill count is the second arg and lands at the lower offset (0x5c + k*4).
-=================
-*/
-// Address: 0x10046b00
 void CG_ParseTeamStats_CA(void) {
     int slot;
     int* row;
@@ -572,26 +455,15 @@ void CG_ParseTeamStats_CA(void) {
     slot = atoi(CG_Argv(1));
     row = cg.teamStats[slot].fields;
 
-    row[7] = atoi(CG_Argv(2));  // 0x1c damageDone
-    row[8] = atoi(CG_Argv(3));  // 0x20 damageReceived
+    row[7] = atoi(CG_Argv(2));
+    row[8] = atoi(CG_Argv(3));
 
-    // 15 weapon pairs, args 4..33
     for (k = 0; k < 15; k++) {
-        row[39 + k] = atoi(CG_Argv(4 + k * 2));  // 0x9c + k*4  accuracy
-        row[23 + k] = atoi(CG_Argv(5 + k * 2));  // 0x5c + k*4  kills
+        row[39 + k] = atoi(CG_Argv(4 + k * 2));
+        row[23 + k] = atoi(CG_Argv(5 + k * 2));
     }
 }
 
-/*
-=================
-CG_ParseTeamStats_CTF
-
-CTF / 1FCTF / Harvester / Domination / A&D extended stats. Wire: "ctfstats
-<client> <selfKills> <damageDone> <damageReceived> <ra> <ya> <ga> <mh> <quad>
-<bs> <regen> <haste> <invis>".
-=================
-*/
-// Address: 0x10047400
 void CG_ParseTeamStats_CTF(void) {
     int slot;
     int* row;
@@ -599,16 +471,16 @@ void CG_ParseTeamStats_CTF(void) {
     slot = atoi(CG_Argv(1));
     row = cg.teamStats[slot].fields;
 
-    row[0] = atoi(CG_Argv(2));    // 0x00 selfKills
-    row[7] = atoi(CG_Argv(3));    // 0x1c damageDone
-    row[8] = atoi(CG_Argv(4));    // 0x20 damageReceived
-    row[9] = atoi(CG_Argv(5));    // 0x24 pickups: red armour
-    row[11] = atoi(CG_Argv(6));   // 0x2c pickups: yellow armour
-    row[13] = atoi(CG_Argv(7));   // 0x34 pickups: green armour
-    row[15] = atoi(CG_Argv(8));   // 0x3c pickups: mega health
-    row[17] = atoi(CG_Argv(9));   // 0x44 pickups: quad
-    row[18] = atoi(CG_Argv(10));  // 0x48 pickups: battlesuit
-    row[19] = atoi(CG_Argv(11));  // 0x4c pickups: regen
-    row[20] = atoi(CG_Argv(12));  // 0x50 pickups: haste
-    row[21] = atoi(CG_Argv(13));  // 0x54 pickups: invisibility
+    row[0] = atoi(CG_Argv(2));
+    row[7] = atoi(CG_Argv(3));
+    row[8] = atoi(CG_Argv(4));
+    row[9] = atoi(CG_Argv(5));
+    row[11] = atoi(CG_Argv(6));
+    row[13] = atoi(CG_Argv(7));
+    row[15] = atoi(CG_Argv(8));
+    row[17] = atoi(CG_Argv(9));
+    row[18] = atoi(CG_Argv(10));
+    row[19] = atoi(CG_Argv(11));
+    row[20] = atoi(CG_Argv(12));
+    row[21] = atoi(CG_Argv(13));
 }

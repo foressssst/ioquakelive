@@ -1,35 +1,8 @@
-/*
-===========================================================================
-Quake Live font subsystem - OpenGL2 backend + engine entry points (tr_font_gl)
-
-renderergl2 half of the QL font system: the ~5 fontstash render callbacks
-(equivalent to QL's NanoVG-GL shim nvgl__renderCreate/Resize/Update/Draw/
-Delete) and the engine-facing entry points reached through the re. refexport
-table:
-
-  R_InitFonts / R_FontShutdown          - lifecycle (== QL R_InitFonts)
-  RE_Font_DrawString                    - draw text  (== QL RE_Font_DrawString)
-  RE_TextBounds                         - measure    (== QL RE_TextBounds)
-  RE_GetGlyphInfo                       - per-glyph metrics (UI/IME compat)
-  RE_SetCompositionFont                 - IME composition font (records state)
-  RE_RegisterFont                       - dead no-op stub (matches QL)
-
-The glyph atlas is a single-channel GL_R8 texture, read back as coverage in
-the alpha channel via a texture swizzle (1,1,1,R).  QL used GL_ALPHA, invalid
-under a GL 3.2 core context; GL_R8 + swizzle is the faithful equivalent, valid
-on core and compatibility contexts.  Glyph quads are decomposed and re-emitted
-through the engine's 2D pipeline (RE_StretchPic), as QL's nvgl__renderDraw
-re-emits RE_DrawStretchRaw quads.
-===========================================================================
-*/
 
 #include "tr_local.h"
 #include "../renderercommon/tr_fontstash.h"
 #include "../renderercommon/tr_stbtt.h"
 
-// Current 2D draw colour, shadowed from RE_SetColor (see tr_cmds.c).  QL sets
-// text colour via trap_R_SetColor before trap_R_Font_DrawString; it becomes the
-// fontstash base colour, so glyphs inherit it and '^' colour codes layer over it.
 vec4_t g_fontColor2D = {1.0f, 1.0f, 1.0f, 1.0f};
 
 #define FONT_ATLAS_INIT 512
@@ -42,18 +15,13 @@ static qhandle_t fontShader = 0;
 static int fontAtlasWidth = 0;
 static int fontAtlasHeight = 0;
 
-// index (FONT_DEFAULT=0, FONT_SANS=1, FONT_MONO=2, then fonts loaded by RE_Font_Register)
-// -> fontstash font id, and the file each index was loaded from
 #define MAX_FONT_INDICES 32
 static int fontIndexToId[MAX_FONT_INDICES];
 static char fontIndexPath[MAX_FONT_INDICES][MAX_QPATH];
 static int numFontIndices = 0;
 static int fallbackFontId = FONS_INVALID;
-// [ioquakelive] tried before it: the primaries have no latin beyond ASCII and neither does the
-// CJK fallback, so a name with a letter like U+01B6 came out as dots. Noto Sans is in pak00
 static int textFallbackFontId = FONS_INVALID;
 
-// the fallbacks of a font, in the order they are tried
 static void R_Font_AddFallbacks(int id) {
     if (id == FONS_INVALID)
         return;
@@ -63,13 +31,8 @@ static void R_Font_AddFallbacks(int id) {
         fonsAddFallbackFont(fontContext, id, fallbackFontId);
 }
 
-// IME composition font state (recorded for the IME candidate window).
 static int imeCompositionFont = 0;
 static float imeCompositionScale = 0.0f;
-
-// -------------------------------------------------------------------------
-//  colour helpers
-// -------------------------------------------------------------------------
 
 static unsigned int R_Font_PackColor(const vec4_t c) {
     int r = (int)(c[0] * 255.0f + 0.5f);
@@ -83,15 +46,6 @@ static unsigned int R_Font_PackColor(const vec4_t c) {
     return ((unsigned int)r) | ((unsigned int)g << 8) | ((unsigned int)b << 16) | ((unsigned int)a << 24);
 }
 
-// -------------------------------------------------------------------------
-//  fontstash GL backend callbacks (== QL nvgl__render*)
-// -------------------------------------------------------------------------
-
-// Read the single red channel as coverage in the alpha lane, white rgb, via a
-// texture swizzle.  Reproduces the legacy GL_ALPHA atlas so the generic 2D
-// shader (texture * vertexColor) gives antialiased coloured text.  DSA (by
-// texture name), so it works at init time; GL_BindToTMU is a per-frame backend
-// helper and must not be used here.
 static void R_Font_SetTexParams(GLuint tex) {
     qglTextureParameteriEXT(tex, GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_ONE);
     qglTextureParameteriEXT(tex, GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_ONE);
@@ -106,23 +60,16 @@ static int RB_Font_renderCreate(void *uptr, int width, int height) {
 
     (void)uptr;
 
-    // Create a managed image_t via the renderer's image manager.  Stage a zeroed
-    // RGBA buffer (the manager's upload path is RGBA-centric), then redefine the
-    // texture as single-channel GL_R8 to match QL's atlas.
     staging = (byte *)calloc((size_t)width * height, 4);
     if (staging == NULL)
         return 0;
 
-    // R_CreateImage (declared in tr_common.h) forwards to R_CreateImage2 with
-    // picFormat=GL_RGBA8, numMips=0.  Used instead of R_CreateImage2 directly,
-    // whose image_t* return would be truncated by an implicit int declaration.
     fontImage = R_CreateImage("*fontstash", staging, width, height,
                               IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE | IMGFLAG_NO_COMPRESSION | IMGFLAG_NOLIGHTSCALE, GL_RGBA8);
     free(staging);
     if (fontImage == NULL)
         return 0;
 
-    // Redefine as single-channel GL_R8 with a coverage swizzle (DSA - no bind).
     qglTextureImage2DEXT(fontImage->texnum, GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
     R_Font_SetTexParams(fontImage->texnum);
     fontImage->internalFormat = GL_R8;
@@ -142,8 +89,6 @@ static int RB_Font_renderResize(void *uptr, int width, int height) {
     if (fontImage == NULL)
         return RB_Font_renderCreate(uptr, width, height);
 
-    // Reuse the same texture object / image_t / shader, redefine storage only.
-    // fontstash re-marks all existing glyphs dirty, so content is re-uploaded.
     qglTextureImage2DEXT(fontImage->texnum, GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
     R_Font_SetTexParams(fontImage->texnum);
     fontImage->width = fontImage->uploadWidth = width;
@@ -165,8 +110,6 @@ static void RB_Font_renderUpdate(void *uptr, int *rect, const unsigned char *dat
     if (fontImage == NULL || w <= 0 || h <= 0)
         return;
 
-    // Upload the dirty sub-rect (DSA - no bind).  Pixel-unpack state is global
-    // and applies to DSA texture uploads.
     qglPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     qglPixelStorei(GL_UNPACK_ROW_LENGTH, fontAtlasWidth);
     qglPixelStorei(GL_UNPACK_SKIP_PIXELS, rect[0]);
@@ -189,9 +132,6 @@ static void RB_Font_renderDraw(void *uptr, const float *verts, const float *tcoo
     if (fontShader == 0)
         return;
 
-    // Each glyph is 6 verts (2 triangles). Vertex i is the top-left corner
-    // (x0,y0,s0,t0) and vertex i+1 the bottom-right (x1,y1,s1,t1); re-emit as a
-    // single StretchPic quad, matching QL's nvgl__renderDraw -> DrawStretchRaw.
     for (i = 0; i + 6 <= nverts; i += 6) {
         unsigned int c = colors[i];
         float x0 = verts[i * 2 + 0];
@@ -217,24 +157,17 @@ static void RB_Font_renderDraw(void *uptr, const float *verts, const float *tcoo
         RE_StretchPic(x0, y0, x1 - x0, y1 - y0, s0, t0, s1, t1, fontShader);
     }
 
-    // Restore the default 2D colour so subsequent StretchPics are unaffected.
     if (haveColor)
         RE_SetColor(NULL);
 }
 
 static void RB_Font_renderDelete(void *uptr) {
     (void)uptr;
-    // The image_t / shader are owned by the renderer's media manager and are
-    // released on R_DeleteTextures / vid_restart; nothing to free here.
     fontImage = NULL;
     fontShader = 0;
     fontAtlasWidth = 0;
     fontAtlasHeight = 0;
 }
-
-// -------------------------------------------------------------------------
-//  atlas-full error handler (== QL R_ExpandFontAtlas)
-// -------------------------------------------------------------------------
 
 static void R_Font_HandleError(void *uptr, int error, int val) {
     FONScontext *ctx = (FONScontext *)uptr;
@@ -247,8 +180,6 @@ static void R_Font_HandleError(void *uptr, int error, int val) {
 
     fonsGetAtlasSize(ctx, &w, &h);
 
-    // Grow by doubling, capped at 2048x1024 (QL's cap); at the cap, reset the
-    // atlas instead of growing further.
     if (w <= h && w < FONT_ATLAS_MAX_W)
         w *= 2;
     else if (h < FONT_ATLAS_MAX_H)
@@ -263,10 +194,6 @@ static void R_Font_HandleError(void *uptr, int error, int val) {
     fonsExpandAtlas(ctx, w, h);
 }
 
-// -------------------------------------------------------------------------
-//  font loading and lifecycle
-// -------------------------------------------------------------------------
-
 static int R_Font_LoadTTF(const char *path, const char *name) {
     void *buffer = NULL;
     unsigned char *copy;
@@ -279,8 +206,6 @@ static int R_Font_LoadTTF(const char *path, const char *name) {
         return FONS_INVALID;
     }
 
-    // fontstash keeps the font blob for the life of the context; give it its own
-    // copy (freeData=1) and release the FS buffer.
     copy = (unsigned char *)malloc(len);
     if (copy == NULL) {
         ri.FS_FreeFile(buffer);
@@ -307,7 +232,7 @@ void R_InitFonts(void) {
     Com_Memset(&params, 0, sizeof(params));
     params.width = FONT_ATLAS_INIT;
     params.height = FONT_ATLAS_INIT;
-    params.flags = FONS_ZERO_TOPLEFT; // QL uses top-left screen coordinates
+    params.flags = FONS_ZERO_TOPLEFT;
     params.userPtr = NULL;
     params.renderCreate = RB_Font_renderCreate;
     params.renderResize = RB_Font_renderResize;
@@ -322,19 +247,12 @@ void R_InitFonts(void) {
     }
     fonsSetErrorCallback(fontContext, R_Font_HandleError, fontContext);
 
-    // Load the QL fonts by name.
     normal = R_Font_LoadTTF(DEFAULT_FONT, "normal");
     sans = R_Font_LoadTTF(DEFAULT_SANS_FONT, "sans");
     mono = R_Font_LoadTTF(DEFAULT_MONO_FONT, "mono");
     fallback = R_Font_LoadTTF("fonts/droidsansfallbackfull.ttf", "sans-fallback");
     textFallbackFontId = R_Font_LoadTTF("fonts/notosans-regular.ttf", "text-fallback");
 
-    // NOTE: QL also loads an OS-host Unicode fallback (ARIALUNI.TTF / segoeui.ttf
-    // / l_10646.ttf) by reading the Windows fonts directory directly.  This loads
-    // only from the game filesystem, so that OS-host fallback is skipped;
-    // droidsansfallbackfull.ttf gives the broad Unicode/CJK coverage.
-
-    // Font index table (menudef: FONT_DEFAULT=0, FONT_SANS=1, FONT_MONO=2).
     fontIndexToId[0] = (normal != FONS_INVALID) ? normal : 0;
     fontIndexToId[1] = (sans != FONS_INVALID) ? sans : fontIndexToId[0];
     fontIndexToId[2] = (mono != FONS_INVALID) ? mono : fontIndexToId[0];
@@ -344,7 +262,6 @@ void R_InitFonts(void) {
     numFontIndices = 3;
     fallbackFontId = fallback;
 
-    // Fall back to the broad-coverage fonts for glyphs the primaries lack.
     R_Font_AddFallbacks(normal);
     R_Font_AddFallbacks(sans);
     R_Font_AddFallbacks(mono);
@@ -362,13 +279,6 @@ void R_FontShutdown(void) {
     fallbackFontId = FONS_INVALID;
 }
 
-/*
-Loads a TrueType or OpenType font from the game filesystem for RE_Font_DrawString and
-RE_TextBounds, and returns its font index, or -1. "rajdhani", "fonts/rajdhani" and
-"fonts/rajdhani.ttf" name the same file (a bare name also tries .otf). A font already loaded
-gives back its index, Quake Live's three included. Glyphs a font lacks come from
-droidsansfallbackfull, as with Quake Live's fonts.
-*/
 int RE_Font_Register(const char *name) {
     char paths[2][MAX_QPATH];
     const char *dir;
@@ -429,7 +339,6 @@ static void R_FontListFiles(const char *extension) {
     ri.FS_FreeFileList(files);
 }
 
-// fontlist: the fonts loaded, then the ones a cvar can name
 void R_FontList_f(void) {
     int i;
 
@@ -442,18 +351,12 @@ void R_FontList_f(void) {
     R_FontListFiles(".otf");
 }
 
-// -------------------------------------------------------------------------
-//  engine entry points (reached through re.*)
-// -------------------------------------------------------------------------
-
 static int R_Font_ResolveId(int fontIndex) {
     if (fontIndex < 0 || fontIndex >= numFontIndices)
         return (numFontIndices > 0) ? fontIndexToId[0] : 0;
     return fontIndexToId[fontIndex];
 }
 
-// [CPMA] cl_extendedColors, registered by the client: the colour codes the text
-// calls recognise
 static void R_Font_SetColorCodes(void) {
     static cvar_t *extendedColors;
 
@@ -470,15 +373,11 @@ void RE_Font_DrawString(int x, int y, const char *text, int fontIndex, float sca
 
     fonsSetFont(fontContext, R_Font_ResolveId(fontIndex));
     fonsSetSize(fontContext, scale);
-    // QL sets no alignment, so fontstash's default LEFT|BASELINE applies: the y
-    // is the text baseline, matching the id Tech 3 .menu 'textaligny' convention.
     fonsSetAlign(fontContext, FONS_ALIGN_LEFT | FONS_ALIGN_BASELINE);
     fonsSetSpacing(fontContext, 0.0f);
     fonsSetBlur(fontContext, 0.0f);
     fonsSetColor(fontContext, R_Font_PackColor(g_fontColor2D));
 
-    // limit is a max character count; approximate as a byte limit (exact for
-    // ASCII).
     if (limit > 0 && (int)strlen(text) > limit)
         end = text + limit;
 
@@ -486,12 +385,6 @@ void RE_Font_DrawString(int x, int y, const char *text, int fontIndex, float sca
     fonsDrawText(fontContext, (float)x, (float)y, text, end, flags, maxX);
 }
 
-// QL: quakelive_steam.exe 0x43cc50. extents[0..3] is fonsTextBounds' box at
-// the origin (minx, miny, maxx, maxy); extents[4] is the font's ascender at this
-// size: 0x43ccb8 calls fonsVertMetrics(stash, &extents[4], NULL, NULL), and
-// 0x441c50 fills its second argument from font +0x7c, the ascender (+0x80 is
-// the descender, +0x84 the line height). The game modules take a text's width
-// from maxx - minx and its height from extents[4].
 void RE_TextBounds(const char *text, int start, int fontIndex, float scale, int limit, float *extents) {
     const char *str, *end;
 
@@ -529,7 +422,6 @@ void RE_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t *out) {
     if (fontContext == NULL)
         return;
 
-    // Encode the codepoint as UTF-8 into a temporary string.
     if (cp < 0x80) {
         buf[n++] = (char)cp;
     } else if (cp < 0x800) {
@@ -550,7 +442,6 @@ void RE_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t *out) {
     fonsSetFont(fontContext, R_Font_ResolveId(fontIndex));
     fonsSetAlign(fontContext, FONS_ALIGN_LEFT | FONS_ALIGN_BASELINE);
 
-    // Advance / bounds for this single glyph at the current state size.
     out->xSkip = (int)fonsTextBounds(fontContext, 0.0f, 0.0f, buf, NULL, bounds);
     out->left = (int)bounds[0];
     out->top = (int)bounds[1];
@@ -566,9 +457,6 @@ void RE_SetCompositionFont(int fontIndex, float scale) {
     imeCompositionScale = scale;
 }
 
-// Dead stub - fonts are loaded internally by R_InitFonts (matches QL, whose
-// RE_RegisterFont is an empty return).  Kept to fill the legacy re.RegisterFont
-// slot for any callers still holding it.
 void RE_RegisterFont(const char *fontName, int pointSize, fontInfo_t *font) {
     (void)fontName;
     (void)pointSize;

@@ -19,44 +19,7 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-
-// this file holds commands that can be executed by the server console, but not remote clients
-
 #include "g_local.h"
-
-/*
-==============================================================================
-
-PACKET FILTERING
-
-
-You can add or remove addresses from the filter list with:
-
-addip <ip>
-removeip <ip>
-
-The ip address is specified in dot format, and you can use '*' to match any value
-so you can specify an entire class C network with "addip 192.246.40.*"
-
-Removeip will only remove an address specified exactly the same way.  You cannot addip a subnet, then removeip a single host.
-
-listip
-Prints the current list of filters.
-
-g_filterban <0 or 1>
-
-If 1 (the default), then ip addresses matching the current list will be prohibited from entering the game.  This is the default setting.
-
-If 0, then only addresses matching the list will be allowed.  This lets you easily set up a private game, or a game that only allows players from your local network.
-
-TTimo NOTE: for persistence, bans are stored in g_banIPs cvar MAX_CVAR_VALUE_STRING
-The size of the cvar string buffer is limiting the banning to around 20 masks
-this could be improved by putting some g_banIPs2 g_banIps3 etc. maybe
-still, you should rely on PB for banning instead
-
-==============================================================================
-*/
 
 typedef struct ipFilter_s {
     unsigned mask;
@@ -68,11 +31,6 @@ typedef struct ipFilter_s {
 static ipFilter_t ipFilters[MAX_IPFILTERS];
 static int numIPFilters;
 
-/*
-=================
-StringToFilter
-=================
-*/
 static qboolean StringToFilter(char* s, ipFilter_t* f) {
     char num[128];
     int i, j;
@@ -86,9 +44,8 @@ static qboolean StringToFilter(char* s, ipFilter_t* f) {
 
     for (i = 0; i < 4; i++) {
         if (*s < '0' || *s > '9') {
-            if (*s == '*')  // 'match any'
+            if (*s == '*')
             {
-                // b[i] and m[i] to 0
                 s++;
                 if (!*s)
                     break;
@@ -118,11 +75,6 @@ static qboolean StringToFilter(char* s, ipFilter_t* f) {
     return qtrue;
 }
 
-/*
-=================
-UpdateIPBans
-=================
-*/
 static void UpdateIPBans(void) {
     byte b[4] = {0};
     byte m[4] = {0};
@@ -156,11 +108,6 @@ static void UpdateIPBans(void) {
     trap_Cvar_Set("g_banIPs", iplist_final);
 }
 
-/*
-=================
-G_FilterPacket
-=================
-*/
 qboolean G_FilterPacket(char* from) {
     int i;
     unsigned in;
@@ -189,17 +136,12 @@ qboolean G_FilterPacket(char* from) {
     return g_filterBan.integer == 0;
 }
 
-/*
-=================
-AddIP
-=================
-*/
 static void AddIP(char* str) {
     int i;
 
     for (i = 0; i < numIPFilters; i++)
         if (ipFilters[i].compare == 0xffffffff)
-            break;  // free spot
+            break;
     if (i == numIPFilters) {
         if (numIPFilters == MAX_IPFILTERS) {
             G_Printf("IP filter list is full\n");
@@ -214,18 +156,13 @@ static void AddIP(char* str) {
     UpdateIPBans();
 }
 
-/*
-=================
-G_ProcessIPBans
-=================
-*/
 void G_ProcessIPBans(void) {
     char *s, *t;
     char str[MAX_CVAR_VALUE_STRING];
 
     Q_strncpyz(str, g_banIPs.string, sizeof(str));
 
-    for (t = s = g_banIPs.string; *t; /* */) {
+    for (t = s = g_banIPs.string; *t; ) {
         s = strchr(s, ' ');
         if (!s)
             break;
@@ -237,11 +174,6 @@ void G_ProcessIPBans(void) {
     }
 }
 
-/*
-=================
-Svcmd_AddIP_f
-=================
-*/
 void Svcmd_AddIP_f(void) {
     char str[MAX_TOKEN_CHARS];
 
@@ -255,11 +187,6 @@ void Svcmd_AddIP_f(void) {
     AddIP(str);
 }
 
-/*
-=================
-Svcmd_RemoveIP_f
-=================
-*/
 void Svcmd_RemoveIP_f(void) {
     ipFilter_t f;
     int i;
@@ -289,17 +216,7 @@ void Svcmd_RemoveIP_f(void) {
     G_Printf("Didn't find %s.\n", str);
 }
 
-/*
-===================
-Svcmd_EntityList_f
-// Address: 0x10066920
-===================
-*/
 void Svcmd_EntityList_f(void) {
-    // [QL] entity-type names indexed by s.eType (0..14). Verified byte-for-byte
-    // against the qagamex86.dll pointer/string table at 0x1008d7ec (each entry
-    // padded to 20 columns). QL's ET ordering differs from Q3: index 12 is
-    // ET_TEAM, 13 is ET_EVENT, 14 is ET_DEBUG_BOX.
     static const char* const etypeNames[15] = {
         "ET_GENERAL          ",
         "ET_PLAYER           ",
@@ -343,7 +260,6 @@ gclient_t* ClientForString(const char* s) {
     int i;
     int idnum;
 
-    // numeric values are just slot numbers
     if (s[0] >= '0' && s[0] <= '9') {
         idnum = atoi(s);
         if (idnum < 0 || idnum >= level.maxclients) {
@@ -359,7 +275,6 @@ gclient_t* ClientForString(const char* s) {
         return cl;
     }
 
-    // check for a name match
     for (i = 0; i < level.maxclients; i++) {
         cl = &level.clients[i];
         if (cl->pers.connected == CON_DISCONNECTED) {
@@ -375,62 +290,35 @@ gclient_t* ClientForString(const char* s) {
     return NULL;
 }
 
-/*
-===================
-Svcmd_ForceTeam_f
-
-forceteam <player> <team>
-===================
-*/
 void Svcmd_ForceTeam_f(void) {
     gclient_t* cl;
     char str[MAX_TOKEN_CHARS];
 
-    // [QL] The binary (0x10066b50) has no argc guard: it reads arg 1, resolves
-    // the client (printing its own error on failure), then reads arg 2.
-    // find the player
     trap_Argv(1, str, sizeof(str));
     cl = ClientForString(str);
     if (!cl) {
         return;
     }
 
-    // set the team
     trap_Argv(2, str, sizeof(str));
     SetTeam(&g_entities[cl - level.clients], str);
 }
 
-/*
-===================
-G_ShuffleTeams
-
-[QL] 0x1006a2d0. Gathers everyone in play, stirs them and deals them out one per side,
-starting from a random team; on an odd count the last one is flipped, which is how the
-binary keeps the same side from always having the extra player.
-
-The order comes from a comparator that returns -1, 0 or 1 at random (0x1006a2b0). It is
-not consistent with itself, so the result depends on the library's qsort, but it is what
-retail does and it stirs all the same.
-
-In Red Rover a player already on the team they are dealt is respawned in place, and left
-frozen if the round is counting down.
-===================
-*/
 static int QDECL G_ShuffleCompare(const void* a, const void* b) {
     (void)a;
     (void)b;
-    return (rand() % 3) - 1;  // [QL] 0x1006a2b0, tal cual
+    return (rand() % 3) - 1;
 }
 
 void G_ShuffleTeams(void) {
     int players[MAX_CLIENTS];
     int count = 0, moved = 0;
-    int team = (rand() & 1) + 1;  // [QL] TEAM_RED o TEAM_BLUE
+    int team = (rand() & 1) + 1;
     int i;
 
     level.teamShuffleActive = qtrue;
-    level.autoShuffleArmed = qfalse;  // [QL] 0x105dce84: shuffling disarms the countdown
-    level.autoShuffleStart = 0;       // [QL] 0x105dce88
+    level.autoShuffleArmed = qfalse;
+    level.autoShuffleStart = 0;
 
     if (level.numPlayingClients < g_shuffle_minplayers.integer && g_gametype.integer != GT_RR) {
         trap_SendServerCommand(-1, "print \"Unable to shuffle: Not enough players.\n\"");
@@ -458,7 +346,6 @@ void G_ShuffleTeams(void) {
     for (i = 0; i < count; i++) {
         gentity_t* target = &g_entities[players[i]];
 
-        // [QL] 0x1006a3ee: on an odd count the last one changes sides
         if (i == count - 1 && (count & 1)) {
             team = (team == TEAM_RED) ? TEAM_BLUE : TEAM_RED;
         }
@@ -494,43 +381,14 @@ void Svcmd_ForceShuffle_f(void) {
 
 char* ConcatArgs(int start);
 
-/*
-==============================================================================
-
-[QL] STEAM-ID ACCESS CONTROL LIST  (g_access.cpp in the QL source)
-
-QL replaced Q3's IP/packet ban filter with a Steam-ID keyed access list, loaded
-from the file named by the "g_accessFile" cvar (default "access.txt"). Each line
-is "<steamId>|<keyword>", keyword in { "ban" -> -1, "mod" -> 1, "admin" -> 2 };
-lines starting with '#' are comments.
-
-The binary keeps this as a std::map<uint64_t, access_s> (an RB-tree). Here it is
-a flat keyed array, which is behaviourally equivalent for lookup/insert/level.
-
-Verified against qagamex86.dll:
-  G_InitAccessList    0x100325f0  (loader; .so symbol G_InitAccessList)
-  G_GetAccess         0x10032520  (per-client lookup; .so symbol G_GetAccess)
-  G_ReloadAccessList  0x10032830  (reload + reapply; .so symbol G_ReloadAccessList)
-
-NOTE (coordination / see report): these three should live in a dedicated
-g_access.c and be declared in g_local.h so that ClientConnect() (auth/ban check)
-and the admin client-commands in g_cmds.c (Cmd_AddAdmin_f / Cmd_AddMod_f /
-Cmd_Demote_f / Cmd_Ban_f / Cmd_Unban_f) can consume them. They are placed here
-because Svcmd/ConsoleCommand's "reload_access" is the only in-scope caller. The
-existing g_client.c:G_GetAccessLevel(const char*) stub is a mis-typed invention;
-the binary's function is G_GetAccess(int clientNum) (below).
-==============================================================================
-*/
-
-// [QL] access-list API (belongs in g_local.h once promoted out of this file)
 void G_InitAccessList(void);
 int  G_GetAccess(int clientNum);
 void G_ReloadAccessList(void);
 
 typedef struct {
-    uint64_t steamId;   // key
-    int      level;     // -1 banned, 0 none, 1 mod, 2 admin
-    int      flag;      // access_s second field (Cmd_KickBan sets 1 for "kick", 0 for "ban")
+    uint64_t steamId;
+    int      level;
+    int      flag;
 } accessEntry_t;
 
 #define MAX_ACCESS_ENTRIES 8192
@@ -538,8 +396,6 @@ typedef struct {
 static accessEntry_t g_accessList[MAX_ACCESS_ENTRIES];
 static int           g_numAccessEntries;
 
-// find-or-create the entry for a steamId (mirrors std::map::operator[])
-// [QL] 0x100327d0: the listaccess command walks the list as it stands
 int G_AccessCount(void) {
     return g_numAccessEntries;
 }
@@ -562,7 +418,7 @@ static accessEntry_t* AccessList_Get(uint64_t steamId) {
         }
     }
     if (g_numAccessEntries >= MAX_ACCESS_ENTRIES) {
-        return &g_accessList[MAX_ACCESS_ENTRIES - 1];  // overflow: reuse last slot
+        return &g_accessList[MAX_ACCESS_ENTRIES - 1];
     }
     g_accessList[g_numAccessEntries].steamId = steamId;
     g_accessList[g_numAccessEntries].level = 0;
@@ -570,22 +426,6 @@ static accessEntry_t* AccessList_Get(uint64_t steamId) {
     return &g_accessList[g_numAccessEntries++];
 }
 
-/*
-=================
-G_InitAccessList
-// Address: 0x100325f0
-=================
-*/
-/*
-===============
-G_SaveAccessList
-
-[QL] qagamex86.dll 0x10032a10. Rewrites g_accessFile whole: the 228 byte header explaining
-the format and then one line per entry. Permanent entries only -- temporary ones (flag != 0,
-the match's tempban) and level 0 ones are not written -- which is why a tempban is forgotten
-on a map change and a ban is not.
-===============
-*/
 void G_SaveAccessList(void) {
     static const char* const header =
         "# Be sure to run /reload_access if editing this file while server is running.\r\n"
@@ -608,7 +448,7 @@ void G_SaveAccessList(void) {
         char line[64];
 
         if (e->flag != 0) {
-            continue;  // temporary: not written out
+            continue;
         }
         if (e->level == -1) {
             word = "ban";
@@ -625,15 +465,6 @@ void G_SaveAccessList(void) {
     trap_FS_FCloseFile(f);
 }
 
-/*
-===============
-G_SetAccess
-
-[ioquakelive] What the moderation commands move: an account's level in the list. temporary
-marks the entries that do not survive a map change, which is how the binary tells tempban
-from ban.
-===============
-*/
 void G_SetAccess(uint64_t steamId, int level, qboolean temporary) {
     accessEntry_t* e = AccessList_Get(steamId);
 
@@ -669,13 +500,13 @@ void G_InitAccessList(void) {
     }
 
     if (len >= (int)sizeof(buf)) {
-        len = sizeof(buf) - 1;  // [QL] binary malloc()s exactly; we cap to a fixed buffer
+        len = sizeof(buf) - 1;
     }
     trap_FS_Read(buf, len, f);
     buf[len] = '\0';
     trap_FS_FCloseFile(f);
 
-    g_numAccessEntries = 0;   // AccessList_RbTree_Clear()
+    g_numAccessEntries = 0;
 
     line = strtok(buf, "\n");
     while (line) {
@@ -688,9 +519,6 @@ void G_InitAccessList(void) {
             if (cr) {
                 *cr = '\0';
             }
-            // [QL] binary G_InitAccessList uses unbounded "%llu|%s"; %63s (word[64]) is a
-            // deliberate defensive cap to avoid a stack overflow on a malformed access file.
-            // Identical parse for every valid keyword (ban/mod/admin).
             if (sscanf(line, "%llu|%63s", &steamId, word) != 2) {
                 G_Printf("^1invalid admin access format, skipping: %s\n", line);
             } else if (!strcmp(word, "ban")) {
@@ -700,7 +528,6 @@ void G_InitAccessList(void) {
             } else if (!strcmp(word, "admin")) {
                 AccessList_Get(steamId)->level = 2;
             }
-            // unknown keyword: ignored, no entry created (matches binary)
         }
         line = strtok(NULL, "\n");
     }
@@ -708,16 +535,6 @@ void G_InitAccessList(void) {
     G_Printf("loaded %i steam ids into the access list\n", g_numAccessEntries);
 }
 
-/*
-=================
-G_GetAccess
-// Address: 0x10032520
-
-Returns the caller's access level: 3 for a localhost connection, otherwise the
-level recorded in the access list (0 if not listed, -1 banned, 1 mod, 2 admin).
-trap_GetSteamID is the flagged external boundary that supplies the steamId key.
-=================
-*/
 int G_GetAccess(int clientNum) {
     uint64_t steamId;
     char userinfo[MAX_INFO_STRING];
@@ -738,16 +555,6 @@ int G_GetAccess(int clientNum) {
     return 0;
 }
 
-/*
-=================
-G_ReloadAccessList
-// Address: 0x10032830
-
-[QL] "reload_access" console command: reload the access file and re-apply the
-stored privilege level to every connected client slot. (The binary iterates
-slots [0, level.numConnectedClients) exactly as written here.)
-=================
-*/
 void G_ReloadAccessList(void) {
     int i;
 
@@ -757,15 +564,6 @@ void G_ReloadAccessList(void) {
     }
 }
 
-/*
-===================
-Svcmd_DumpVars_f
-// Address: 0x10044670  (.so symbol: Svcmd_Dumpvars_f)
-
-[QL] "dumpvars" debug dump of a player's playerState. Resolves the target via
-ClientForString(arg 1) - NOT a raw slot index.
-===================
-*/
 void Svcmd_DumpVars_f(void) {
     char str[MAX_TOKEN_CHARS];
     gclient_t* cl;
@@ -788,12 +586,6 @@ void Svcmd_DumpVars_f(void) {
             cl->ps.origin[2]);
 }
 
-/*
-=================
-ConsoleCommand
-
-=================
-*/
 qboolean ConsoleCommand(void) {
     char cmd[MAX_TOKEN_CHARS];
 
@@ -808,8 +600,6 @@ qboolean ConsoleCommand(void) {
         return qtrue;
     }
     if (Q_stricmp(cmd, "game_memory") == 0) {
-        // binary inlines: G_Printf("Game memory status: %i out of %i bytes
-        // allocated\n", allocated, 0x400000). Svcmd_GameMem_f is the .so function.
         Svcmd_GameMem_f();
         return qtrue;
     }
@@ -821,7 +611,6 @@ qboolean ConsoleCommand(void) {
         Svcmd_BotList_f();
         return qtrue;
     }
-    // [QL] game_crash - developer-only intentional crash (writes 0x12345678 to NULL)
     if (Q_stricmp(cmd, "game_crash") == 0) {
         if (trap_Cvar_VariableValue("developer") == 1) {
             *(volatile int*)0 = 0x12345678;
@@ -836,7 +625,6 @@ qboolean ConsoleCommand(void) {
         Svcmd_DumpVars_f();
         return qtrue;
     }
-    // [QL] markstate - debug state snapshot, no-op in the release build
     if (Q_stricmp(cmd, "markstate") == 0) {
         return qtrue;
     }
@@ -844,7 +632,6 @@ qboolean ConsoleCommand(void) {
         G_ReloadAccessList();
         return qtrue;
     }
-    // [QL] diffstate / dumpentities / printentitystates - debug no-ops in release
     if (Q_stricmp(cmd, "diffstate") == 0) {
         return qtrue;
     }
@@ -855,7 +642,6 @@ qboolean ConsoleCommand(void) {
         return qtrue;
     }
 
-    // the following are handled only on a dedicated server
     if (g_dedicated.integer) {
         if (Q_stricmp(cmd, "say") == 0) {
             trap_SendServerCommand(-1, va("print \"server: %s\"", ConcatArgs(1)));
@@ -881,13 +667,6 @@ qboolean ConsoleCommand(void) {
             trap_SendServerCommand(slot, va("print \"server whisper: %s\"", msg));
         }
 
-        // [QL] The binary then runs any remaining console command through the
-        // privileged client-command dispatcher (ClientCommandPermissionCheck in
-        // g_cmds.c) as the server (level 3, ent == NULL), which is how the
-        // dedicated console runs admin commands (kick/addadmin/...). That
-        // dispatcher is static to g_cmds.c, so the bridge is a coordination item
-        // (see report). The command is consumed either way (returns qtrue),
-        // unlike the old Q3 path which broadcast it as a "say".
         return qtrue;
     }
 

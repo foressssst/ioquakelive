@@ -19,8 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// tr_mesh.c: triangle model functions
-
 #include "tr_local.h"
 
 static float ProjectRadius(float r, vec3_t location) {
@@ -68,21 +66,14 @@ static float ProjectRadius(float r, vec3_t location) {
     return pr;
 }
 
-/*
-=============
-R_CullModel
-=============
-*/
 static int R_CullModel(mdvModel_t* model, trRefEntity_t* ent) {
     vec3_t bounds[2];
     mdvFrame_t *oldFrame, *newFrame;
     int i;
 
-    // compute frame pointers
     newFrame = model->frames + ent->e.frame;
     oldFrame = model->frames + ent->e.oldframe;
 
-    // cull bounding sphere ONLY if this is not an upscaled entity
     if (!ent->e.nonNormalizedAxes) {
         if (ent->e.frame == ent->e.oldframe) {
             switch (R_CullLocalPointAndRadius(newFrame->localOrigin, newFrame->radius)) {
@@ -122,7 +113,6 @@ static int R_CullModel(mdvModel_t* model, trRefEntity_t* ent) {
         }
     }
 
-    // calculate a bounding box in the current coordinate system
     for (i = 0; i < 3; i++) {
         bounds[0][i] = oldFrame->bounds[0][i] < newFrame->bounds[0][i] ? oldFrame->bounds[0][i] : newFrame->bounds[0][i];
         bounds[1][i] = oldFrame->bounds[1][i] > newFrame->bounds[1][i] ? oldFrame->bounds[1][i] : newFrame->bounds[1][i];
@@ -142,12 +132,6 @@ static int R_CullModel(mdvModel_t* model, trRefEntity_t* ent) {
     }
 }
 
-/*
-=================
-R_ComputeLOD
-
-=================
-*/
 int R_ComputeLOD(trRefEntity_t* ent) {
     float radius;
     float flod, lodscale;
@@ -158,11 +142,8 @@ int R_ComputeLOD(trRefEntity_t* ent) {
     int lod;
 
     if (tr.currentModel->numLods < 2) {
-        // model has only 1 LOD level, skip computations and bias
         lod = 0;
     } else {
-        // multiple LODs exist, so compute projected bounding sphere
-        // and use that as a criteria for selecting LOD
 
         if (tr.currentModel->type == MOD_MDR) {
             int frameSize;
@@ -173,7 +154,6 @@ int R_ComputeLOD(trRefEntity_t* ent) {
 
             radius = RadiusFromBounds(mdrframe->bounds[0], mdrframe->bounds[1]);
         } else {
-            // frame = ( md3Frame_t * ) ( ( ( unsigned char * ) tr.currentModel->md3[0] ) + tr.currentModel->md3[0]->ofsFrames );
             frame = tr.currentModel->mdv[0]->frames;
 
             frame += ent->e.frame;
@@ -187,7 +167,6 @@ int R_ComputeLOD(trRefEntity_t* ent) {
                 lodscale = 20;
             flod = 1.0f - projectedRadius * lodscale;
         } else {
-            // object intersects near view plane, e.g. view weapon
             flod = 0;
         }
 
@@ -211,12 +190,6 @@ int R_ComputeLOD(trRefEntity_t* ent) {
     return lod;
 }
 
-/*
-=================
-R_ComputeFogNum
-
-=================
-*/
 int R_ComputeFogNum(mdvModel_t* model, trRefEntity_t* ent) {
     int i, j;
     fog_t* fog;
@@ -227,7 +200,6 @@ int R_ComputeFogNum(mdvModel_t* model, trRefEntity_t* ent) {
         return 0;
     }
 
-    // FIXME: non-normalized axis issues
     mdvFrame = model->frames + ent->e.frame;
     VectorAdd(ent->e.origin, mdvFrame->localOrigin, localOrigin);
     for (i = 1; i < tr.world->numfogs; i++) {
@@ -248,12 +220,6 @@ int R_ComputeFogNum(mdvModel_t* model, trRefEntity_t* ent) {
     return 0;
 }
 
-/*
-=================
-R_AddMD3Surfaces
-
-=================
-*/
 void R_AddMD3Surfaces(trRefEntity_t* ent) {
     int i;
     mdvModel_t* model;
@@ -266,7 +232,6 @@ void R_AddMD3Surfaces(trRefEntity_t* ent) {
     int cubemapIndex;
     qboolean personalModel;
 
-    // don't add third_person objects if not in a portal
     personalModel = (ent->e.renderfx & RF_THIRD_PERSON) && !(tr.viewParms.isPortal || (tr.viewParms.flags & (VPF_SHADOWMAP | VPF_DEPTHSHADOW)));
 
     if (ent->e.renderfx & RF_WRAP_FRAMES) {
@@ -274,12 +239,6 @@ void R_AddMD3Surfaces(trRefEntity_t* ent) {
         ent->e.oldframe %= tr.currentModel->mdv[0]->numFrames;
     }
 
-    //
-    // Validate the frames so there is no chance of a crash.
-    // This will write directly into the entity structure, so
-    // when the surfaces are rendered, they don't need to be
-    // range checked again.
-    //
     if ((ent->e.frame >= tr.currentModel->mdv[0]->numFrames) || (ent->e.frame < 0) || (ent->e.oldframe >= tr.currentModel->mdv[0]->numFrames) || (ent->e.oldframe < 0)) {
         ri.Printf(PRINT_DEVELOPER, "R_AddMD3Surfaces: no such frame %d to %d for '%s'\n",
                   ent->e.oldframe, ent->e.frame,
@@ -288,39 +247,23 @@ void R_AddMD3Surfaces(trRefEntity_t* ent) {
         ent->e.oldframe = 0;
     }
 
-    //
-    // compute LOD
-    //
     lod = R_ComputeLOD(ent);
 
     model = tr.currentModel->mdv[lod];
 
-    //
-    // cull the entire model if merged bounding box of both frames
-    // is outside the view frustum.
-    //
     cull = R_CullModel(model, ent);
     if (cull == CULL_OUT) {
         return;
     }
 
-    //
-    // set up lighting now that we know we aren't culled
-    //
     if (!personalModel || r_shadows->integer > 1) {
         R_SetupEntityLighting(&tr.refdef, ent);
     }
 
-    //
-    // see if we are in a fog volume
-    //
     fogNum = R_ComputeFogNum(model, ent);
 
     cubemapIndex = R_CubemapForPoint(ent->e.origin);
 
-    //
-    // draw all surfaces
-    //
     surface = model->surfaces;
     for (i = 0; i < model->numSurfaces; i++) {
         if (ent->e.customShader) {
@@ -331,10 +274,8 @@ void R_AddMD3Surfaces(trRefEntity_t* ent) {
 
             skin = R_GetSkinByHandle(ent->e.customSkin);
 
-            // match the surface name to something in the skin file
             shader = tr.defaultShader;
             for (j = 0; j < skin->numSurfaces; j++) {
-                // the names have both been lowercased
                 if (!strcmp(skin->surfaces[j].name, surface->name)) {
                     shader = skin->surfaces[j].shader;
                     break;
@@ -357,19 +298,14 @@ void R_AddMD3Surfaces(trRefEntity_t* ent) {
             drawSurf = surface;
         }
 
-        // we will add shadows even if the main object isn't visible in the view
-
-        // stencil shadows can't do personal models unless I polyhedron clip
         if (!personalModel && r_shadows->integer == 2 && fogNum == 0 && !(ent->e.renderfx & (RF_NOSHADOW | RF_DEPTHHACK)) && shader->sort == SS_OPAQUE) {
             R_AddDrawSurf(drawSurf, tr.shadowShader, 0, qfalse, qfalse, 0);
         }
 
-        // projection shadows work fine with personal models
         if (r_shadows->integer == 3 && fogNum == 0 && (ent->e.renderfx & RF_SHADOW_PLANE) && shader->sort == SS_OPAQUE) {
             R_AddDrawSurf(drawSurf, tr.projectionShadowShader, 0, qfalse, qfalse, 0);
         }
 
-        // don't add third_person objects if not viewing through a portal
         if (!personalModel) {
             R_AddDrawSurf(drawSurf, shader, fogNum, qfalse, qfalse, cubemapIndex);
         }

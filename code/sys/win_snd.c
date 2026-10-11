@@ -19,8 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// win_snd.c -- DirectSound, as quakelive_steam.exe drives it (0x4efd70)
-
 #ifdef _WIN32
 
 #include "../qcommon/q_shared.h"
@@ -47,9 +45,8 @@ static DWORD locksize;
 static LPDIRECTSOUND pDS;
 static LPDIRECTSOUNDBUFFER pDSBuf;
 static HWND dsWindow;
-static qboolean dsMuted;  // [ioquakelive] the buffer's volume is at its minimum
+static qboolean dsMuted;
 
-// where the mixer paints when the buffer cannot be locked, so a lost lock is silence
 static byte dsScratch[SECONDARY_BUFFER_SIZE];
 
 static const char* DSoundError(int error) {
@@ -67,13 +64,6 @@ static const char* DSoundError(int error) {
     return "unknown";
 }
 
-/*
-==================
-SNDDMA_Window
-
-The game window, which belongs to SDL and is made again on a vid_restart
-==================
-*/
 static HWND SNDDMA_Window(void) {
     SDL_Window** windows;
     HWND hWnd = NULL;
@@ -90,11 +80,6 @@ static HWND SNDDMA_Window(void) {
     return hWnd ? hWnd : GetDesktopWindow();
 }
 
-/*
-==================
-SNDDMA_Shutdown
-==================
-*/
 void SNDDMA_Shutdown(void) {
     Com_DPrintf("Shutting down sound system\n");
 
@@ -124,11 +109,6 @@ void SNDDMA_Shutdown(void) {
     CoUninitialize();
 }
 
-/*
-==================
-SNDDMA_InitDS
-==================
-*/
 static qboolean SNDDMA_InitDS(void) {
     DSBUFFERDESC dsbuf;
     DSBCAPS dsbcaps;
@@ -138,7 +118,6 @@ static qboolean SNDDMA_InitDS(void) {
     Com_Printf("Initializing DirectSound\n");
 
     use8 = 1;
-    // Create IDirectSound using the primary sound device
     if (FAILED(CoCreateInstance(&CLSID_DirectSound8, NULL, CLSCTX_INPROC_SERVER, &IID_IDirectSound8, (void**)&pDS))) {
         use8 = 0;
         if (FAILED(CoCreateInstance(&CLSID_DirectSound, NULL, CLSCTX_INPROC_SERVER, &IID_IDirectSound, (void**)&pDS))) {
@@ -162,7 +141,6 @@ static qboolean SNDDMA_InitDS(void) {
     }
     Com_DPrintf("ok\n");
 
-    // create the secondary buffer we'll actually work with
     dma.channels = 2;
     dma.samplebits = 16;
     dma.speed = 22050;
@@ -179,12 +157,6 @@ static qboolean SNDDMA_InitDS(void) {
     memset(&dsbuf, 0, sizeof(dsbuf));
     dsbuf.dwSize = sizeof(DSBUFFERDESC);
 
-    // take advantage of 2D hardware if available. [QL] 0x4efd70: retail only asks for global
-    // focus when s_muteBackground is 0. With the mute on, the buffer belongs to the window and
-    // Windows silences it the moment it loses focus, which is instant; muting it by hand while
-    // the game runs slowed down behind another window left the device repeating what it had
-    // [ioquakelive] global focus always, and the mute is done with the buffer's volume
-    // (SNDDMA_Mute): Windows 11 does not silence a buffer without it when the window loses focus
     dsbuf.dwFlags = DSBCAPS_LOCHARDWARE | DSBCAPS_GLOBALFOCUS | DSBCAPS_CTRLVOLUME;
     if (use8) {
         dsbuf.dwFlags |= DSBCAPS_GETCURRENTPOSITION2;
@@ -199,7 +171,6 @@ static qboolean SNDDMA_InitDS(void) {
     if (DS_OK == IDirectSound_CreateSoundBuffer(pDS, &dsbuf, &pDSBuf, NULL)) {
         Com_Printf("locked hardware.  ok\n");
     } else {
-        // Couldn't get hardware, fallback to software.
         dsbuf.dwFlags = DSBCAPS_LOCSOFTWARE | DSBCAPS_GLOBALFOCUS | DSBCAPS_CTRLVOLUME;
         if (use8) {
             dsbuf.dwFlags |= DSBCAPS_GETCURRENTPOSITION2;
@@ -214,14 +185,12 @@ static qboolean SNDDMA_InitDS(void) {
 
     dsMuted = qfalse;
 
-    // Make sure mixer is active
     if (DS_OK != IDirectSoundBuffer_Play(pDSBuf, 0, 0, DSBPLAY_LOOPING)) {
         Com_Printf("*** Looped sound play failed ***\n");
         SNDDMA_Shutdown();
         return qfalse;
     }
 
-    // get the returned buffer size
     if (DS_OK != IDirectSoundBuffer_GetCaps(pDSBuf, &dsbcaps)) {
         Com_Printf("*** GetCaps failed ***\n");
         SNDDMA_Shutdown();
@@ -237,7 +206,7 @@ static qboolean SNDDMA_InitDS(void) {
     dma.samples = gSndBufSize / (dma.samplebits / 8);
     dma.fullsamples = dma.samples / dma.channels;
     dma.submission_chunk = 1;
-    dma.buffer = NULL;  // must be locked first
+    dma.buffer = NULL;
 
     sample16 = (dma.samplebits / 8) - 1;
 
@@ -249,14 +218,6 @@ static qboolean SNDDMA_InitDS(void) {
     return qtrue;
 }
 
-/*
-==================
-SNDDMA_Init
-
-Initialize direct sound
-Returns false if failed
-==================
-*/
 qboolean SNDDMA_Init(void) {
     memset((void*)&dma, 0, sizeof(dma));
     dsound_init = qfalse;
@@ -274,15 +235,6 @@ qboolean SNDDMA_Init(void) {
     return qtrue;
 }
 
-/*
-==============
-SNDDMA_GetDMAPos
-
-return the current sample position (in mono samples read)
-inside the recirculating dma buffer, so the mixing code will know
-how many sample are required to fill it up.
-===============
-*/
 int SNDDMA_GetDMAPos(void) {
     DWORD play;
     DWORD write;
@@ -301,13 +253,6 @@ int SNDDMA_GetDMAPos(void) {
     return s;
 }
 
-/*
-==============
-SNDDMA_BeginPainting
-
-Makes sure dma.buffer is valid
-===============
-*/
 void SNDDMA_BeginPainting(void) {
     int reps;
     DWORD dwSize2;
@@ -320,7 +265,6 @@ void SNDDMA_BeginPainting(void) {
         return;
     }
 
-    // a vid_restart made the window again: the coop level follows it, as retail's does on activation
     if (!IsWindow(dsWindow)) {
         dsWindow = SNDDMA_Window();
         if (DS_OK != IDirectSound_SetCooperativeLevel(pDS, dsWindow, DSSCL_PRIORITY)) {
@@ -328,7 +272,6 @@ void SNDDMA_BeginPainting(void) {
         }
     }
 
-    // if the buffer was lost or stopped, restore it and/or restart it
     dwStatus = 0;
     if (IDirectSoundBuffer_GetStatus(pDSBuf, &dwStatus) != DS_OK) {
         Com_Printf("Couldn't get sound buffer status\n");
@@ -342,7 +285,6 @@ void SNDDMA_BeginPainting(void) {
         IDirectSoundBuffer_Play(pDSBuf, 0, 0, DSBPLAY_LOOPING);
     }
 
-    // lock the dsound buffer
     reps = 0;
     dma.buffer = NULL;
     locksize = 0;
@@ -368,29 +310,12 @@ void SNDDMA_BeginPainting(void) {
     dma.buffer = (unsigned char*)pbuf;
 }
 
-/*
-==============
-SNDDMA_Submit
-
-Send sound to device if buffer isn't really the dma buffer
-Also unlocks the dsound buffer
-===============
-*/
 void SNDDMA_Submit(void) {
-    // unlock the dsound buffer
     if (pDSBuf && dma.buffer && dma.buffer != dsScratch) {
         IDirectSoundBuffer_Unlock(pDSBuf, dma.buffer, locksize, NULL, 0);
     }
 }
 
-/*
-==============
-SNDDMA_Mute
-
-[ioquakelive] The buffer's volume, at its minimum or back to full: DirectSound applies it to
-what is playing now, not to what comes next
-===============
-*/
 void SNDDMA_Mute(qboolean mute) {
     if (!pDSBuf || mute == dsMuted) {
         return;
@@ -400,4 +325,4 @@ void SNDDMA_Mute(qboolean mute) {
     }
 }
 
-#endif  // _WIN32
+#endif

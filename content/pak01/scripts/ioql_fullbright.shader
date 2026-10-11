@@ -1,6 +1,3 @@
-// [ioquakelive] the flat skin the fb skins draw every surface with: a single pass of a neutral grey
-// in the colour the player is forced to, the way CPMA's and the Workshop's fullbright do it. Only the
-// _fb skins name it, so nothing else in the game changes.
 fullBright
 {
 	nopicmip
@@ -10,9 +7,6 @@ fullBright
 		blendFunc GL_ONE GL_ZERO
 	}
 }
-
-// The scoreboard icon of the fb skin, one per model, so CG_RegisterClientModelname finds its
-// "icon_fb.tga": the same neutral grey, without a file of its own.
 
 models/players/anarki/icon_fb
 {

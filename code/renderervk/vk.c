@@ -4,7 +4,7 @@
 #if defined (_DEBUG)
 #if defined (_WIN32)
 #define USE_VK_VALIDATION
-#include <windows.h> // for win32 debug callback
+#include <windows.h>
 #endif
 #endif
 
@@ -18,9 +18,6 @@ static VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
 VkDebugReportCallbackEXT vk_debug_callback = VK_NULL_HANDLE;
 #endif
 
-//
-// Vulkan API functions used by the renderer.
-//
 static PFN_vkCreateInstance								qvkCreateInstance;
 static PFN_vkEnumerateInstanceExtensionProperties		qvkEnumerateInstanceExtensionProperties;
 
@@ -125,10 +122,8 @@ static PFN_vkDestroySwapchainKHR						qvkDestroySwapchainKHR;
 static PFN_vkGetSwapchainImagesKHR						qvkGetSwapchainImagesKHR;
 static PFN_vkQueuePresentKHR							qvkQueuePresentKHR;
 
-// [ioquakelive] AMD's Anti-Lag 2
 static PFN_vkAntiLagUpdateAMD							qvkAntiLagUpdateAMD;
 
-// [ioquakelive] NVIDIA's Reflex
 static PFN_vkSetLatencySleepModeNV						qvkSetLatencySleepModeNV;
 static PFN_vkLatencySleepNV								qvkLatencySleepNV;
 static PFN_vkSetLatencyMarkerNV							qvkSetLatencyMarkerNV;
@@ -139,9 +134,6 @@ static PFN_vkGetImageMemoryRequirements2KHR				qvkGetImageMemoryRequirements2KHR
 
 static PFN_vkDebugMarkerSetObjectNameEXT				qvkDebugMarkerSetObjectNameEXT;
 
-////////////////////////////////////////////////////////////////////////////
-
-// forward declaration
 VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassIndex, uint32_t def_index );
 
 static uint32_t find_memory_type( uint32_t memory_type_bits, VkMemoryPropertyFlags properties ) {
@@ -159,7 +151,6 @@ static uint32_t find_memory_type( uint32_t memory_type_bits, VkMemoryPropertyFla
 	ri.Error( ERR_FATAL, "Vulkan: failed to find matching memory type with requested properties" );
 	return ~0U;
 }
-
 
 static uint32_t find_memory_type2( uint32_t memory_type_bits, VkMemoryPropertyFlags properties, VkMemoryPropertyFlags *outprops ) {
 	VkPhysicalDeviceMemoryProperties memory_properties;
@@ -179,7 +170,6 @@ static uint32_t find_memory_type2( uint32_t memory_type_bits, VkMemoryPropertyFl
 	return ~0U;
 }
 
-
 static const char *pmode_to_str( VkPresentModeKHR mode )
 {
 	static char buf[32];
@@ -194,7 +184,6 @@ static const char *pmode_to_str( VkPresentModeKHR mode )
 	};
 }
 
-
 #define CASE_STR(x) case (x): return #x
 
 const char *vk_format_string( VkFormat format )
@@ -202,7 +191,6 @@ const char *vk_format_string( VkFormat format )
 	static char buf[16];
 
 	switch ( format ) {
-		// color formats
 		CASE_STR( VK_FORMAT_R5G5B5A1_UNORM_PACK16 );
 		CASE_STR( VK_FORMAT_B5G5R5A1_UNORM_PACK16 );
 		CASE_STR( VK_FORMAT_R5G6B5_UNORM_PACK16 );
@@ -219,7 +207,6 @@ const char *vk_format_string( VkFormat format )
 		CASE_STR( VK_FORMAT_A2B10G10R10_UNORM_PACK32 );
 		CASE_STR( VK_FORMAT_A2R10G10B10_UNORM_PACK32 );
 		CASE_STR( VK_FORMAT_B10G11R11_UFLOAT_PACK32 );
-		// depth formats
 		CASE_STR( VK_FORMAT_D16_UNORM );
 		CASE_STR( VK_FORMAT_D16_UNORM_S8_UINT );
 		CASE_STR( VK_FORMAT_X8_D24_UNORM_PACK32 );
@@ -231,7 +218,6 @@ const char *vk_format_string( VkFormat format )
 		return buf;
 	}
 }
-
 
 static const char *vk_result_string( VkResult code ) {
 	static char buffer[32];
@@ -289,29 +275,6 @@ static const char *vk_result_string( VkResult code ) {
 	} \
 }
 
-
-/*
-static VkFlags get_composite_alpha( VkCompositeAlphaFlagsKHR flags )
-{
-	const VkCompositeAlphaFlagBitsKHR compositeFlags[] = {
-		VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-		VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
-		VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
-		VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR
-	};
-	int i;
-
-	for ( i = 1; i < ARRAY_LEN( compositeFlags ); i++ ) {
-		if ( flags & compositeFlags[i] ) {
-			return compositeFlags[i];
-		}
-	}
-
-	return compositeFlags[0];
-}
-*/
-
-
 static VkCommandBuffer begin_command_buffer( void )
 {
 	VkCommandBufferBeginInfo begin_info;
@@ -334,7 +297,6 @@ static VkCommandBuffer begin_command_buffer( void )
 
 	return command_buffer;
 }
-
 
 static void end_command_buffer( VkCommandBuffer command_buffer, const char *location )
 {
@@ -377,7 +339,6 @@ static void end_command_buffer( VkCommandBuffer command_buffer, const char *loca
 
 	qvkFreeCommandBuffers( vk.device, vk.command_pool, 1, cmdbuf );
 }
-
 
 static void record_image_layout_transition( VkCommandBuffer command_buffer, VkImage image, VkImageAspectFlags image_aspect_flags, 
 	VkImageLayout old_layout, VkImageLayout new_layout, uint32_t src_stage_override, uint32_t dst_stage_override ) {
@@ -447,11 +408,8 @@ static void record_image_layout_transition( VkCommandBuffer command_buffer, VkIm
 			break;
 	}
 
-
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 	barrier.pNext = NULL;
-	//barrier.srcAccessMask = src_access_flags;
-	//barrier.dstAccessMask = dst_access_flags;
 	barrier.oldLayout = old_layout;
 	barrier.newLayout = new_layout;
 	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -466,8 +424,6 @@ static void record_image_layout_transition( VkCommandBuffer command_buffer, VkIm
 	qvkCmdPipelineBarrier( command_buffer, src_stage, dst_stage, 0, 0, NULL, 0, NULL, 1, &barrier );
 }
 
-
-// debug markers
 #define SET_OBJECT_NAME(obj,objName,objType) vk_set_object_name( (uint64_t)(obj), (objName), (objType) )
 
 static void vk_set_object_name( uint64_t obj, const char *objName, VkDebugReportObjectTypeEXT objType )
@@ -483,7 +439,6 @@ static void vk_set_object_name( uint64_t obj, const char *objName, VkDebugReport
 		qvkDebugMarkerSetObjectNameEXT( vk.device, &info );
 	}
 }
-
 
 static void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice device, VkSurfaceKHR surface, VkSurfaceFormatKHR surface_format, VkSwapchainKHR *swapchain, qboolean verbose ) {
 	VkImageViewCreateInfo view;
@@ -511,18 +466,15 @@ static void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice devi
 	vk.clearAttachment = qtrue;
 
 	if ( !vk.fboActive ) {
-		// VK_IMAGE_USAGE_TRANSFER_DST_BIT is required by image clear operations.
 		if ( ( surface_caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT ) == 0 ) {
 			vk.clearAttachment = qfalse;
 			ri.Printf( PRINT_WARNING, "VK_IMAGE_USAGE_TRANSFER_DST_BIT is not supported by the swapchain, \\r_clear might not work\n" );
 		}
-		// VK_IMAGE_USAGE_TRANSFER_SRC_BIT is required in order to take screenshots.
 		if ((surface_caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) == 0) {
 			ri.Error(ERR_FATAL, "create_swapchain: VK_IMAGE_USAGE_TRANSFER_SRC_BIT is not supported by the swapchain");
 		}
 	}
 
-	// determine present mode and swapchain image count
 	VK_CHECK(qvkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &present_mode_count, NULL));
 
 	present_modes = (VkPresentModeKHR *) ri.Malloc( present_mode_count * sizeof( VkPresentModeKHR ) );
@@ -584,18 +536,15 @@ static void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice devi
 
 	if ( verbose ) {
 		ri.Printf( PRINT_ALL, "...selected presentation mode: %s, image count: %i\n", pmode_to_str( present_mode ), image_count );
-		// [ioquakelive] which low latency path the card gave, so a log answers it
 		ri.Printf( PRINT_ALL, "...low latency: %s, r_lowLatency %i\n",
 			vk.lowLatency2 ? "Reflex (VK_NV_low_latency2)" : ( vk.antiLag ? "Anti-Lag 2 (VK_AMD_anti_lag)" : "not offered by the driver" ),
 			r_lowLatency->integer );
 	}
 
-	// create swap chain
 	desc.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	desc.pNext = NULL;
 	desc.flags = 0;
 
-	// [ioquakelive] Reflex hangs off the swapchain, so a new one asks for it again
 	vk.latencyModeSet = -1;
 	if ( vk.lowLatency2 ) {
 		latency_desc.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_LATENCY_CREATE_INFO_NV;
@@ -617,7 +566,6 @@ static void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice devi
 	desc.queueFamilyIndexCount = 0;
 	desc.pQueueFamilyIndices = NULL;
 	desc.preTransform = surface_caps.currentTransform;
-	//desc.compositeAlpha = get_composite_alpha( surface_caps.supportedCompositeAlpha );
 	desc.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 	desc.presentMode = present_mode;
 	desc.clipped = VK_TRUE;
@@ -677,20 +625,16 @@ static void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice devi
 
 	for ( i = 0; i < vk.swapchain_image_count; i++ ) {
 		if ( vk.initSwapchainLayout != VK_IMAGE_LAYOUT_UNDEFINED ) {
-			// The Vulkan spec states : Use of a presentable image must occur only after the image is returned by vkAcquireNextImageKHR,
-			// and before it is released by vkQueuePresentKHR.
-			// This includes transitioning the image layout and rendering commands(https ://docs.vulkan.org/refpages/latest/refpages/source/VkSwapchainKHR.html#_description)
 			vk.swapchain_images_inited[i] = qfalse;
 		} else {
-			vk.swapchain_images_inited[i] = qtrue; // assume undefined layout
+			vk.swapchain_images_inited[i] = qtrue;
 		}
 	}
 }
 
-
 static void vk_create_render_passes( void )
 {
-	VkAttachmentDescription attachments[3]; // color | depth | msaa color
+	VkAttachmentDescription attachments[3];
 	VkAttachmentReference colorResolveRef;
 	VkAttachmentReference colorRef0;
 	VkAttachmentReference depthRef0;
@@ -706,16 +650,15 @@ static void vk_create_render_passes( void )
 
 	if ( r_fbo->integer == 0 )
 	{
-		// presentation
 		attachments[0].flags = 0;
 		attachments[0].format = vk.present_format.format;
 		attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
 #ifdef USE_BUFFER_CLEAR
 		attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 #else
-		attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;	// Assuming this will be completely overwritten
+		attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 #endif
-		attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;		// needed for presentation
+		attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		attachments[0].initialLayout = vk.initSwapchainLayout;
@@ -723,35 +666,33 @@ static void vk_create_render_passes( void )
 	}
 	else
 	{
-		// resolve/color buffer
 		attachments[0].flags = 0;
 		attachments[0].format = vk.color_format;
 		attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
 
 #ifdef USE_BUFFER_CLEAR
 		if ( vk.msaaActive )
-			attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;	// Assuming this will be completely overwritten
+			attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		else
 			attachments[ 0 ].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 #else
-		attachments[ 0 ].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;	// Assuming this will be completely overwritten
+		attachments[ 0 ].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 #endif
 
-		attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;   // needed for next render pass
+		attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		attachments[0].initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		attachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	}
 
-	// depth buffer
 	attachments[1].flags = 0;
 	attachments[1].format = depth_format;
 	attachments[1].samples = vkSamples;
-	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // Need empty depth buffer before use
+	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[1].stencilLoadOp = glConfig.stencilBits ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	if ( vk_bloom_wanted() ) {
-		attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE; // keep it for post-bloom pass
+		attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		attachments[1].stencilStoreOp = glConfig.stencilBits ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	} else {
 		attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -793,9 +734,9 @@ static void vk_create_render_passes( void )
 		attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 #endif
 		if ( vk_bloom_wanted() ) {
-			attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE; // keep it for post-bloom pass
+			attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		} else {
-			attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // Intermediate storage (not written)
+			attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		}
 		attachments[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		attachments[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -804,25 +745,23 @@ static void vk_create_render_passes( void )
 
 		desc.attachmentCount = 3;
 
-		colorRef0.attachment = 2; // msaa image attachment
+		colorRef0.attachment = 2;
 		colorRef0.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-		colorResolveRef.attachment = 0; // resolve image attachment
+		colorResolveRef.attachment = 0;
 		colorResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 		subpass.pResolveAttachments = &colorResolveRef;
 	}
 
-	// subpass dependencies
-
 	Com_Memset( &deps, 0, sizeof( deps ) );
 
 	deps[2].srcSubpass = VK_SUBPASS_EXTERNAL;
 	deps[2].dstSubpass = 0;
-	deps[2].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;	// What pipeline stage is waiting on the dependency
-	deps[2].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;	// What pipeline stage is waiting on the dependency
-	deps[2].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;			// What access scopes are influence the dependency
-	deps[2].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;			// What access scopes are waiting on the dependency
+	deps[2].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	deps[2].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	deps[2].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+	deps[2].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 	deps[2].dependencyFlags = 0;
 
 	if ( r_fbo->integer == 0 )
@@ -841,42 +780,37 @@ static void vk_create_render_passes( void )
 
 	deps[0].srcSubpass = VK_SUBPASS_EXTERNAL;
 	deps[0].dstSubpass = 0;
-	deps[0].srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;			// What pipeline stage must have completed for the dependency
-	deps[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;	// What pipeline stage is waiting on the dependency
-	deps[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;						// What access scopes are influence the dependency
-	deps[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; // What access scopes are waiting on the dependency
-	deps[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;					// Only need the current fragment (or tile) synchronized, not the whole framebuffer
+	deps[0].srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	deps[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	deps[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	deps[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	deps[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
 	deps[1].srcSubpass = 0;
 	deps[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-	deps[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;	// Fragment data has been written
-	deps[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;			// Don't start shading until data is available
-	deps[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;			// Waiting for color data to be written
-	deps[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;						// Don't read things from the shader before ready
-	deps[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;					// Only need the current fragment (or tile) synchronized, not the whole framebuffer
+	deps[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	deps[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	deps[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	deps[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	deps[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
 	VK_CHECK( qvkCreateRenderPass( device, &desc, NULL, &vk.render_pass.main ) );
 	SET_OBJECT_NAME( vk.render_pass.main, "render pass - main", VK_DEBUG_REPORT_OBJECT_TYPE_RENDER_PASS_EXT );
 
 	if ( vk_bloom_wanted() ) {
 
-		// post-bloom pass
-		// color buffer
-		attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD; // load from previous pass
-		 // depth buffer
+		attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 		attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 		attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 		attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		if ( vk.msaaActive ) {
-			// msaa render target
 			attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 			attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		}
 		VK_CHECK( qvkCreateRenderPass( device, &desc, NULL, &vk.render_pass.post_bloom ) );
 		SET_OBJECT_NAME( vk.render_pass.post_bloom, "render pass - post_bloom", VK_DEBUG_REPORT_OBJECT_TYPE_RENDER_PASS_EXT );
 
-		// bloom extraction, using resolved/main fbo as a source
 		desc.attachmentCount = 1;
 
 		colorRef0.attachment = 0;
@@ -890,8 +824,8 @@ static void vk_create_render_passes( void )
 		attachments[0].flags = 0;
 		attachments[0].format = vk.bloom_format;
 		attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
-		attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;	// Assuming this will be completely overwritten
-		attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;		// needed for next render pass
+		attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		attachments[0].initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -907,7 +841,6 @@ static void vk_create_render_passes( void )
 		}
 	}
 
-	// capture render pass
 	if ( vk.capture.image )
 	{
 		Com_Memset( &subpass, 0, sizeof( subpass ) );
@@ -915,8 +848,8 @@ static void vk_create_render_passes( void )
 		attachments[0].flags = 0;
 		attachments[0].format = vk.capture_format;
 		attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
-		attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // this will be completely overwritten
-		attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;   // needed for next render pass
+		attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -951,12 +884,11 @@ static void vk_create_render_passes( void )
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &colorRef0;
 
-	// gamma post-processing
 	attachments[0].flags = 0;
 	attachments[0].format = vk.present_format.format;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
 	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE; // needed for presentation
+	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[0].initialLayout = vk.initSwapchainLayout;
@@ -968,11 +900,9 @@ static void vk_create_render_passes( void )
 	VK_CHECK( qvkCreateRenderPass( device, &desc, NULL, &vk.render_pass.gamma ) );
 	SET_OBJECT_NAME( vk.render_pass.gamma, "render pass - gamma", VK_DEBUG_REPORT_OBJECT_TYPE_RENDER_PASS_EXT );
 
-	// screenmap
 	desc.dependencyCount = 2;
 	desc.pDependencies = &deps[0];
 
-	// screenmap resolve/color buffer
 	attachments[0].flags = 0;
 	attachments[0].format = vk.color_format;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -982,19 +912,18 @@ static void vk_create_render_passes( void )
 	else
 		attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 #else
-	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // Assuming this will be completely overwritten
+	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 #endif
-	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;   // needed for next render pass
+	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	attachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-	// screenmap depth buffer
 	attachments[1].flags = 0;
 	attachments[1].format = depth_format;
 	attachments[1].samples = vk.screenMapSamples;
-	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // Need empty depth buffer before use
+	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -1042,10 +971,10 @@ static void vk_create_render_passes( void )
 
 		desc.attachmentCount = 3;
 
-		colorRef0.attachment = 2; // screenmap msaa image attachment
+		colorRef0.attachment = 2;
 		colorRef0.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-		colorResolveRef.attachment = 0; // screenmap resolve image attachment
+		colorResolveRef.attachment = 0;
 		colorResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 		subpass.pResolveAttachments = &colorResolveRef;
@@ -1055,7 +984,6 @@ static void vk_create_render_passes( void )
 
 	SET_OBJECT_NAME( vk.render_pass.screenmap, "render pass - screenmap", VK_DEBUG_REPORT_OBJECT_TYPE_RENDER_PASS_EXT );
 }
-
 
 static void allocate_and_bind_image_memory(VkImage image) {
 	VkMemoryRequirements memory_requirements;
@@ -1072,10 +1000,8 @@ static void allocate_and_bind_image_memory(VkImage image) {
 
 	chunk = NULL;
 
-	// Try to find an existing chunk of sufficient capacity.
 	alignment = memory_requirements.alignment;
 	for ( i = 0; i < vk_world.num_image_chunks; i++ ) {
-		// ensure that memory region has proper alignment
 		VkDeviceSize offset = PAD( vk_world.image_chunks[i].used, alignment );
 
 		if ( offset + memory_requirements.size <= vk.image_chunk_size ) {
@@ -1085,7 +1011,6 @@ static void allocate_and_bind_image_memory(VkImage image) {
 		}
 	}
 
-	// Allocate a new chunk in case we couldn't find suitable existing chunk.
 	if (chunk == NULL) {
 		VkMemoryAllocateInfo alloc_info;
 		VkDeviceMemory memory;
@@ -1113,18 +1038,12 @@ static void allocate_and_bind_image_memory(VkImage image) {
 	VK_CHECK(qvkBindImageMemory(vk.device, image, chunk->memory, chunk->used - memory_requirements.size));
 }
 
-
 static void vk_clean_staging_buffer( void )
 {
 	if ( vk.staging_buffer.handle != VK_NULL_HANDLE ) {
 		qvkDestroyBuffer( vk.device, vk.staging_buffer.handle, NULL );
 		vk.staging_buffer.handle = VK_NULL_HANDLE;
 	}
-
-	//if ( vk.staging_buffer.ptr != NULL ) 
-	//	qvkUnmapMemory( vk.device, vk.staging_buffer.memory ) {
-	//	vk.staging_buffer.ptr = NULL;
-	//}
 
 	if ( vk.staging_buffer.memory != VK_NULL_HANDLE ) {
 		qvkFreeMemory( vk.device, vk.staging_buffer.memory, NULL );
@@ -1138,7 +1057,6 @@ static void vk_clean_staging_buffer( void )
 #endif
 }
 
-
 #ifdef USE_UPLOAD_QUEUE
 static qboolean vk_wait_staging_buffer( void )
 {
@@ -1149,14 +1067,13 @@ static qboolean vk_wait_staging_buffer( void )
 		}
 		qvkResetFences( vk.device, 1, &vk.aux_fence );
 		VK_CHECK( qvkResetCommandBuffer( vk.staging_command_buffer, 0 ) );
-		vk.staging_buffer.offset = 0; // FIXME: is this correct?
+		vk.staging_buffer.offset = 0;
 		vk.aux_fence_wait = qfalse;
 		return qtrue;
 	} else {
 		return qfalse;
 	}
 }
-
 
 static void vk_flush_staging_buffer( qboolean final )
 {
@@ -1169,8 +1086,6 @@ static void vk_flush_staging_buffer( qboolean final )
 		return;
 	}
 
-	//ri.Printf( PRINT_WARNING, S_COLOR_CYAN ">>> flush %i bytes (final=%i)<<<\n", (int)vk_world.staging_buffer_offset, final );
-
 	vk.staging_buffer.offset = 0;
 
 	VK_CHECK( qvkEndCommandBuffer( vk.staging_command_buffer ) );
@@ -1179,7 +1094,6 @@ static void vk_flush_staging_buffer( qboolean final )
 	submit_info.pNext = NULL;
 
 	if ( vk.rendering_finished != VK_NULL_HANDLE ) {
-		// first call after previous queue submission?
 		waits = vk.rendering_finished;
 		vk.rendering_finished = VK_NULL_HANDLE;
 		submit_info.waitSemaphoreCount = 1;
@@ -1198,14 +1112,12 @@ static void vk_flush_staging_buffer( qboolean final )
 		ri.Error( ERR_FATAL, "Vulkan: incorrect state during image upload" );
 	}
 	if ( final ) {
-		// final submission before recording
 		submit_info.signalSemaphoreCount = 1;
 		submit_info.pSignalSemaphores = &vk.image_uploaded2;
 		vk.image_uploaded = vk.image_uploaded2;
 		VK_CHECK( qvkQueueSubmit( vk.queue, 1, &submit_info, vk.aux_fence ) );
 		vk.aux_fence_wait = qtrue;
 	} else {
-		// if submission before another upload then do explicit wait
 		submit_info.signalSemaphoreCount = 0;
 		submit_info.pSignalSemaphores = NULL;
 		VK_CHECK( qvkQueueSubmit( vk.queue, 1, &submit_info, vk.aux_fence ) );
@@ -1217,8 +1129,7 @@ static void vk_flush_staging_buffer( qboolean final )
 		VK_CHECK( qvkResetCommandBuffer( vk.staging_command_buffer, 0 ) );
 	}
 }
-#endif // USE_UPLOAD_QUEUE
-
+#endif
 
 static void vk_alloc_staging_buffer( VkDeviceSize size )
 {
@@ -1264,7 +1175,6 @@ static void vk_alloc_staging_buffer( VkDeviceSize size )
 	SET_OBJECT_NAME( vk.staging_buffer.memory, "staging buffer memory", VK_DEBUG_REPORT_OBJECT_TYPE_DEVICE_MEMORY_EXT );
 }
 
-
 #ifdef USE_VK_VALIDATION
 static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT object_type, uint64_t object, size_t location,
 	int32_t message_code, const char* layer_prefix, const char* message, void* user_data) {
@@ -1278,21 +1188,18 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugReportFlagsEXT flags
 }
 #endif
 
-
-// [ioquakelive] provisional, so its name lives in vulkan_beta.h, which is not vendored
 #define VK_KHR_PORTABILITY_SUBSET_NAME "VK_KHR_portability_subset"
 
 static qboolean used_instance_extension( const char *ext )
 {
 	const char *u;
 
-	// allow all VK_*_surface extensions
 	u = strrchr( ext, '_' );
 	if ( u && Q_stricmp( u + 1, "surface" ) == 0 )
 		return qtrue;
 
 	if ( Q_stricmp( ext, VK_KHR_DISPLAY_EXTENSION_NAME ) == 0 )
-		return qtrue; // needed for KMSDRM instances/devices?
+		return qtrue;
 
 	if ( Q_stricmp( ext, VK_KHR_SWAPCHAIN_EXTENSION_NAME ) == 0 )
 		return qtrue;
@@ -1313,7 +1220,6 @@ static qboolean used_instance_extension( const char *ext )
 
 	return qfalse;
 }
-
 
 static void create_instance( void )
 {
@@ -1345,7 +1251,6 @@ static void create_instance( void )
 			continue;
 		}
 
-		// search for duplicates
 		for ( n = 0; n < extension_count; n++ ) {
 			if ( Q_stricmp( ext, extension_names[ n ] ) == 0 ) {
 				break;
@@ -1366,7 +1271,7 @@ static void create_instance( void )
 
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	appInfo.pNext = NULL;
-	appInfo.pApplicationName = NULL; // Q3_VERSION;
+	appInfo.pApplicationName = NULL;
 	appInfo.applicationVersion = 0x0;
 	appInfo.pEngineName = NULL;
 	appInfo.engineVersion = 0x0;
@@ -1376,7 +1281,6 @@ static void create_instance( void )
 	appInfo.apiVersion = VK_API_VERSION_1_0;
 #endif
 
-	// create instance
 	desc.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	desc.pNext = NULL;
 	desc.flags = flags;
@@ -1401,7 +1305,6 @@ static void create_instance( void )
 
 			ri.Printf( PRINT_WARNING, "...validation layer is not available\n" );
 
-			// try without validation layer
 			desc.enabledLayerCount = 0;
 			desc.ppEnabledLayerNames = NULL;
 
@@ -1422,7 +1325,6 @@ static void create_instance( void )
 		ri.Error( ERR_FATAL, "Vulkan: instance creation failed with %s", vk_result_string( res ) );
 	}
 }
-
 
 static VkFormat get_depth_format( VkPhysicalDevice physical_device ) {
 	VkFormatProperties props;
@@ -1445,11 +1347,9 @@ static VkFormat get_depth_format( VkPhysicalDevice physical_device ) {
 	}
 
 	ri.Error( ERR_FATAL, "get_depth_format: failed to find depth attachment format" );
-	return VK_FORMAT_UNDEFINED; // never get here
+	return VK_FORMAT_UNDEFINED;
 }
 
-
-// Check if we can use vkCmdBlitImage for the given source and destination image formats.
 static qboolean vk_blit_enabled( VkPhysicalDevice physical_device, const VkFormat srcFormat, const VkFormat dstFormat )
 {
 	VkFormatProperties formatProps;
@@ -1466,7 +1366,6 @@ static qboolean vk_blit_enabled( VkPhysicalDevice physical_device, const VkForma
 
 	return qtrue;
 }
-
 
 static VkFormat get_hdr_format( VkFormat base_format )
 {
@@ -1488,12 +1387,9 @@ typedef struct {
 } present_format_t;
 
 static const present_format_t present_formats[] = {
-	//{12, VK_FORMAT_B4G4R4A4_UNORM_PACK16, VK_FORMAT_R4G4B4A4_UNORM_PACK16},
-	//{15, VK_FORMAT_B5G5R5A1_UNORM_PACK16, VK_FORMAT_R5G5B5A1_UNORM_PACK16},
 	{16, VK_FORMAT_B5G6R5_UNORM_PACK16, VK_FORMAT_R5G6B5_UNORM_PACK16},
 	{24, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM},
 	{30, VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_FORMAT_A2R10G10B10_UNORM_PACK32},
-	//{32, VK_FORMAT_B10G11R11_UFLOAT_PACK32, VK_FORMAT_B10G11R11_UFLOAT_PACK32}
 };
 
 static void get_present_format( int present_bits, VkFormat *bgr, VkFormat *rgb ) {
@@ -1515,7 +1411,6 @@ static void get_present_format( int present_bits, VkFormat *bgr, VkFormat *rgb )
 		*rgb = sel->rgb;
 	}
 }
-
 
 static qboolean vk_select_surface_format( VkPhysicalDevice physical_device, VkSurfaceKHR surface )
 {
@@ -1550,7 +1445,6 @@ static qboolean vk_select_surface_format( VkPhysicalDevice physical_device, VkSu
 	}
 
 	if ( format_count == 1 && candidates[0].format == VK_FORMAT_UNDEFINED ) {
-		// special case that means we can choose any format
 		vk.base_format.format = base_bgr;
 		vk.base_format.colorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
 		vk.present_format.format = ext_bgr;
@@ -1587,7 +1481,6 @@ static qboolean vk_select_surface_format( VkPhysicalDevice physical_device, VkSu
 	return qtrue;
 }
 
-
 static void setup_surface_formats( VkPhysicalDevice physical_device )
 {
 	vk.depth_format = get_depth_format( physical_device );
@@ -1605,7 +1498,6 @@ static void setup_surface_formats( VkPhysicalDevice physical_device )
 		vk.capture_format = vk.color_format;
 	}
 }
-
 
 static const char *renderer_name( const VkPhysicalDeviceProperties *props ) {
 	static char buf[sizeof( props->deviceName ) + 64];
@@ -1625,7 +1517,6 @@ static const char *renderer_name( const VkPhysicalDeviceProperties *props ) {
 	return buf;
 }
 
-
 static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_index ) {
 
 	VkPhysicalDeviceAntiLagFeaturesAMD anti_lag_features;
@@ -1641,14 +1532,12 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 
 	ri.Printf( PRINT_ALL, "...selected physical device: %i\n", device_index );
 
-	// select surface format
 	if ( !vk_select_surface_format( physical_device, vk_surface ) ) {
 		return qfalse;
 	}
 
 	setup_surface_formats( physical_device );
 
-	// select queue family
 	{
 		VkQueueFamilyProperties *queue_families;
 		uint32_t queue_family_count;
@@ -1658,7 +1547,6 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 		queue_families = (VkQueueFamilyProperties*)ri.Malloc( queue_family_count * sizeof( VkQueueFamilyProperties ) );
 		qvkGetPhysicalDeviceQueueFamilyProperties( physical_device, &queue_family_count, queue_families );
 
-		// select queue family with presentation and graphics support
 		vk.queue_family_index = ~0U;
 		for (i = 0; i < queue_family_count; i++) {
 			VkBool32 presentation_supported;
@@ -1679,7 +1567,6 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 		}
 	}
 
-	// create VkDevice
 	{
 		const char *device_extension_list[16];
 		uint32_t device_extension_count;
@@ -1713,7 +1600,6 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 		extension_properties = (VkExtensionProperties*)ri.Malloc( count * sizeof( VkExtensionProperties ) );
 		VK_CHECK( qvkEnumerateDeviceExtensionProperties( physical_device, NULL, &count, extension_properties ) );
 
-		// fill glConfig.extensions_string
 		str = glConfig.extensions_string; *str = '\0';
 		end = &glConfig.extensions_string[ sizeof( glConfig.extensions_string ) - 1];
 
@@ -1746,7 +1632,6 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 				storage8bit = qtrue;
 #endif
 			}
-			// add this device extension to glConfig
 			if ( i != 0 ) {
 				if ( str + 1 >= end )
 					continue;
@@ -1788,19 +1673,15 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 			vk.debugMarkers = qtrue;
 		}
 
-		// [ioquakelive] a device that only does part of Vulkan, like MoltenVK over Metal, says so with
-		// this one, and the specification wants it enabled whenever it is there
 		if ( portabilitySubset ) {
 			device_extension_list[ device_extension_count++ ] = VK_KHR_PORTABILITY_SUBSET_NAME;
 		}
 
-		// [ioquakelive] the anti-lag needs its feature turned on, so it is decided before the device
 		if ( antiLag ) {
 			device_extension_list[ device_extension_count++ ] = VK_AMD_ANTI_LAG_EXTENSION_NAME;
 			vk.antiLag = qtrue;
 		}
 
-		// [ioquakelive] Reflex sleeps on a timeline semaphore and names each frame with a present id
 		if ( lowLatency2 && presentId && timelineSemaphore ) {
 			device_extension_list[ device_extension_count++ ] = VK_NV_LOW_LATENCY_2_EXTENSION_NAME;
 			device_extension_list[ device_extension_count++ ] = VK_KHR_PRESENT_ID_EXTENSION_NAME;
@@ -1828,7 +1709,7 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 		if ( storage8bit ) {
 			device_extension_list[ device_extension_count++ ] = VK_KHR_8BIT_STORAGE_EXTENSION_NAME;
 		}
-#endif // _DEBUG
+#endif
 		qvkGetPhysicalDeviceFeatures( physical_device, &device_features );
 
 		if ( device_features.fillModeNonSolid == VK_FALSE ) {
@@ -1851,7 +1732,7 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 			features.shaderInt64 = VK_TRUE;
 		}
 #endif
-		if ( device_features.wideLines ) { // needed for RB_SurfaceAxis
+		if ( device_features.wideLines ) {
 			features.wideLines = VK_TRUE;
 			vk.wideLines = qtrue;
 		}
@@ -1945,16 +1826,14 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 	return qtrue;
 }
 
-
 #define INIT_INSTANCE_FUNCTION(func) \
-	q##func = /*(PFN_ ## func)*/ VK_GetInstanceProcAddr(vk_instance, #func); \
+	q##func =  VK_GetInstanceProcAddr(vk_instance, #func); \
 	if (q##func == NULL) {											\
 		ri.Error(ERR_FATAL, "Failed to find entrypoint %s", #func);	\
 	}
 
 #define INIT_INSTANCE_FUNCTION_EXT(func) \
-	q##func = /*(PFN_ ## func)*/ VK_GetInstanceProcAddr(vk_instance, #func);
-
+	q##func =  VK_GetInstanceProcAddr(vk_instance, #func);
 
 #define INIT_DEVICE_FUNCTION(func) \
 	q##func = (PFN_ ## func) qvkGetDeviceProcAddr(vk.device, #func);\
@@ -1964,7 +1843,6 @@ static qboolean vk_create_device( VkPhysicalDevice physical_device, int device_i
 
 #define INIT_DEVICE_FUNCTION_EXT(func) \
 	q##func = (PFN_ ## func) qvkGetDeviceProcAddr(vk.device, #func);
-
 
 static void vk_destroy_instance( void ) {
 	if ( vk_surface != VK_NULL_HANDLE ) {
@@ -1991,7 +1869,6 @@ static void vk_destroy_instance( void ) {
 	}
 }
 
-
 static void init_vulkan_library( void )
 {
 	VkPhysicalDeviceProperties props;
@@ -2004,14 +1881,11 @@ static void init_vulkan_library( void )
 
 	if ( vk_instance == VK_NULL_HANDLE ) {
 
-		// force cleanup
 		vk_destroy_instance();
 
-		// Get functions that do not depend on VkInstance (vk_instance == nullptr at this point).
 		INIT_INSTANCE_FUNCTION( vkCreateInstance )
 		INIT_INSTANCE_FUNCTION( vkEnumerateInstanceExtensionProperties )
 
-		// Get instance level functions.
 		create_instance();
 
 		INIT_INSTANCE_FUNCTION( vkCreateDevice )
@@ -2034,7 +1908,6 @@ static void init_vulkan_library( void )
 		INIT_INSTANCE_FUNCTION_EXT( vkCreateDebugReportCallbackEXT )
 		INIT_INSTANCE_FUNCTION_EXT( vkDestroyDebugReportCallbackEXT )
 
-		// Create debug callback.
 		if ( qvkCreateDebugReportCallbackEXT && qvkDestroyDebugReportCallbackEXT ) {
 			VkDebugReportCallbackCreateInfoEXT desc;
 			desc.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
@@ -2049,12 +1922,11 @@ static void init_vulkan_library( void )
 		}
 #endif
 
-		// create surface
 		if ( !VK_CreateSurface( vk_instance, &vk_surface ) ) {
 			ri.Error( ERR_FATAL, "Error creating Vulkan surface" );
 			return;
 		}
-	} // vk_instance == VK_NULL_HANDLE
+	}
 
 	res = qvkEnumeratePhysicalDevices( vk_instance, &device_count, NULL );
 	if ( device_count == 0 ) {
@@ -2069,7 +1941,6 @@ static void init_vulkan_library( void )
 	physical_devices = (VkPhysicalDevice*)ri.Malloc( device_count * sizeof( VkPhysicalDevice ) );
 	VK_CHECK( qvkEnumeratePhysicalDevices( vk_instance, &device_count, physical_devices ) );
 
-	// initial physical device index
 	device_index = r_device->integer;
 
 	ri.Printf( PRINT_ALL, ".......................\nAvailable physical devices:\n" );
@@ -2102,9 +1973,6 @@ static void init_vulkan_library( void )
 		return;
 	}
 
-	//
-	// Get device level functions.
-	//
 	INIT_DEVICE_FUNCTION(vkAllocateCommandBuffers)
 	INIT_DEVICE_FUNCTION(vkAllocateDescriptorSets)
 	INIT_DEVICE_FUNCTION(vkAllocateMemory)
@@ -2226,7 +2094,6 @@ static void deinit_instance_functions( void )
 	qvkCreateInstance = NULL;
 	qvkEnumerateInstanceExtensionProperties = NULL;
 
-	// instance functions:
 	qvkCreateDevice = NULL;
 	qvkDestroyInstance = NULL;
 	qvkEnumerateDeviceExtensionProperties = NULL;
@@ -2248,10 +2115,8 @@ static void deinit_instance_functions( void )
 #endif
 }
 
-
 static void deinit_device_functions( void )
 {
-	// device functions:
 	qvkAllocateCommandBuffers					= NULL;
 	qvkAllocateDescriptorSets					= NULL;
 	qvkAllocateMemory							= NULL;
@@ -2347,7 +2212,6 @@ static void deinit_device_functions( void )
 	qvkWaitSemaphoresKHR						= NULL;
 }
 
-
 static VkShaderModule SHADER_MODULE(const uint8_t *bytes, const int count) {
 	VkShaderModuleCreateInfo desc;
 	VkShaderModule module;
@@ -2366,7 +2230,6 @@ static VkShaderModule SHADER_MODULE(const uint8_t *bytes, const int count) {
 
 	return module;
 }
-
 
 static void vk_create_layout_binding( int binding, VkDescriptorType type, VkShaderStageFlags flags, VkDescriptorSetLayout *layout )
 {
@@ -2387,7 +2250,6 @@ static void vk_create_layout_binding( int binding, VkDescriptorType type, VkShad
 
 	VK_CHECK( qvkCreateDescriptorSetLayout(vk.device, &desc, NULL, layout ) );
 }
-
 
 void vk_update_uniform_descriptor( VkDescriptorSet descriptor, VkBuffer buffer )
 {
@@ -2412,7 +2274,6 @@ void vk_update_uniform_descriptor( VkDescriptorSet descriptor, VkBuffer buffer )
 	qvkUpdateDescriptorSets( vk.device, 1, &desc, 0, NULL );
 }
 
-
 static VkSampler vk_find_sampler( const Vk_Sampler_Def *def ) {
 	VkSamplerAddressMode address_mode;
 	VkSamplerCreateInfo desc;
@@ -2423,7 +2284,6 @@ static VkSampler vk_find_sampler( const Vk_Sampler_Def *def ) {
 	float maxLod;
 	int i;
 
-	// Look for sampler among existing samplers.
 	for ( i = 0; i < vk.samplers.count; i++ ) {
 		const Vk_Sampler_Def *cur_def = &vk.samplers.def[i];
 		if ( memcmp( cur_def, def, sizeof( *def ) ) == 0 ) {
@@ -2431,10 +2291,8 @@ static VkSampler vk_find_sampler( const Vk_Sampler_Def *def ) {
 		}
 	}
 
-	// Create new sampler.
 	if ( vk.samplers.count >= MAX_VK_SAMPLERS ) {
 		ri.Error( ERR_DROP, "vk_find_sampler: MAX_VK_SAMPLERS hit\n" );
-		// return VK_NULL_HANDLE;
 	}
 
 	address_mode = def->address_mode;
@@ -2453,11 +2311,11 @@ static VkSampler vk_find_sampler( const Vk_Sampler_Def *def ) {
 	if (def->gl_min_filter == GL_NEAREST) {
 		min_filter = VK_FILTER_NEAREST;
 		mipmap_mode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-		maxLod = 0.25f; // used to emulate OpenGL's GL_LINEAR/GL_NEAREST minification filter
+		maxLod = 0.25f;
 	} else if (def->gl_min_filter == GL_LINEAR) {
 		min_filter = VK_FILTER_LINEAR;
 		mipmap_mode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-		maxLod = 0.25f; // used to emulate OpenGL's GL_LINEAR/GL_NEAREST minification filter
+		maxLod = 0.25f;
 	} else if (def->gl_min_filter == GL_NEAREST_MIPMAP_NEAREST) {
 		min_filter = VK_FILTER_NEAREST;
 		mipmap_mode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
@@ -2518,7 +2376,6 @@ static VkSampler vk_find_sampler( const Vk_Sampler_Def *def ) {
 	return sampler;
 }
 
-
 void vk_destroy_samplers( void )
 {
 	int i;
@@ -2531,7 +2388,6 @@ void vk_destroy_samplers( void )
 
 	vk.samplers.count = 0;
 }
-
 
 void vk_update_attachment_descriptors( void ) {
 
@@ -2563,14 +2419,12 @@ void vk_update_attachment_descriptors( void ) {
 
 		qvkUpdateDescriptorSets( vk.device, 1, &desc, 0, NULL );
 
-		// [QL] 0x436ec0 halves the scene with a point blit, so the bright pass never averages
 		sd.gl_mag_filter = sd.gl_min_filter = GL_NEAREST;
 		info.sampler = vk_find_sampler( &sd );
 		desc.dstSet = vk.color_descriptor_nearest;
 
 		qvkUpdateDescriptorSets( vk.device, 1, &desc, 0, NULL );
 
-		// screenmap
 		sd.gl_mag_filter = sd.gl_min_filter = GL_LINEAR;
 		sd.max_lod_1_0 = qfalse;
 		sd.noAnisotropy = qtrue;
@@ -2582,7 +2436,6 @@ void vk_update_attachment_descriptors( void ) {
 
 		qvkUpdateDescriptorSets( vk.device, 1, &desc, 0, NULL );
 
-		// bloom images
 		if ( vk_bloom_wanted() )
 		{
 			uint32_t i;
@@ -2596,7 +2449,6 @@ void vk_update_attachment_descriptors( void ) {
 		}
 	}
 }
-
 
 void vk_init_descriptors( void )
 {
@@ -2630,7 +2482,6 @@ void vk_init_descriptors( void )
 
 	qvkUpdateDescriptorSets( vk.device, 1, &desc, 0, NULL );
 
-	// allocated and update descriptor set
 	for ( i = 0; i < NUM_COMMAND_BUFFERS; i++ )
 	{
 		alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -2666,12 +2517,11 @@ void vk_init_descriptors( void )
 		}
 
 		alloc.descriptorSetCount = 1;
-		VK_CHECK( qvkAllocateDescriptorSets( vk.device, &alloc, &vk.screenMap.color_descriptor ) ); // screenmap
+		VK_CHECK( qvkAllocateDescriptorSets( vk.device, &alloc, &vk.screenMap.color_descriptor ) );
 
 		vk_update_attachment_descriptors();
 	}
 }
-
 
 static void vk_release_geometry_buffers( void )
 {
@@ -2685,7 +2535,6 @@ static void vk_release_geometry_buffers( void )
 	qvkFreeMemory( vk.device, vk.geometry_buffer_memory, NULL );
 	vk.geometry_buffer_memory = VK_NULL_HANDLE;
 }
-
 
 static void vk_create_geometry_buffers( VkDeviceSize size )
 {
@@ -2744,7 +2593,6 @@ static void vk_create_geometry_buffers( VkDeviceSize size )
 	Com_Memset( &vk.stats, 0, sizeof( vk.stats ) );
 }
 
-
 static void vk_create_storage_buffer( uint32_t size )
 {
 	VkMemoryRequirements memory_requirements;
@@ -2788,7 +2636,6 @@ static void vk_create_storage_buffer( uint32_t size )
 	SET_OBJECT_NAME( vk.storage.memory, "storage buffer memory", VK_DEBUG_REPORT_OBJECT_TYPE_DEVICE_MEMORY_EXT );
 }
 
-
 #ifdef USE_VBO
 void vk_release_vbo( void )
 {
@@ -2800,7 +2647,6 @@ void vk_release_vbo( void )
 		qvkFreeMemory( vk.device, vk.vbo.buffer_memory, NULL );
 	vk.vbo.buffer_memory = VK_NULL_HANDLE;
 }
-
 
 qboolean vk_alloc_vbo( const byte *vbo_data, int vbo_size )
 {
@@ -2823,12 +2669,10 @@ qboolean vk_alloc_vbo( const byte *vbo_data, int vbo_size )
 	desc.queueFamilyIndexCount = 0;
 	desc.pQueueFamilyIndices = NULL;
 
-	// device-local buffer
 	desc.size = vbo_size;
 	desc.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 	VK_CHECK( qvkCreateBuffer( vk.device, &desc, NULL, &vk.vbo.vertex_buffer ) );
 
-	// memory requirements
 	qvkGetBufferMemoryRequirements( vk.device, vk.vbo.vertex_buffer, &vb_mem_reqs );
 	vertex_buffer_offset = 0;
 	allocationSize = vertex_buffer_offset + vb_mem_reqs.size;
@@ -2841,12 +2685,9 @@ qboolean vk_alloc_vbo( const byte *vbo_data, int vbo_size )
 	VK_CHECK( qvkAllocateMemory( vk.device, &alloc_info, NULL, &vk.vbo.buffer_memory ) );
 	qvkBindBufferMemory( vk.device, vk.vbo.vertex_buffer, vk.vbo.buffer_memory, vertex_buffer_offset );
 
-	// staging buffers
-
 #ifdef USE_UPLOAD_QUEUE
 	vk_flush_staging_buffer( qfalse );
 #endif
-	// utilize existing staging buffer
 	uploadDone = 0;
 	while ( uploadDone < vbo_size ) {
 		VkDeviceSize uploadSize = vk.staging_buffer.size;
@@ -2917,11 +2758,9 @@ static void vk_create_shader_modules( void )
 		}
 	}
 
-	// specialized depth-fragment shader
 	vk.modules.frag.gen0_df = SHADER_MODULE( frag_tx0_df );
 	SET_OBJECT_NAME( vk.modules.frag.gen0_df, "single-texture df fragment module", VK_DEBUG_REPORT_OBJECT_TYPE_SHADER_MODULE_EXT );
 
-	// fixed-color (1.0) shader modules
 	vk.modules.vert.ident1[0][0][0] = SHADER_MODULE( vert_tx0_ident1 );
 	vk.modules.vert.ident1[0][0][1] = SHADER_MODULE( vert_tx0_ident1_fog );
 	vk.modules.vert.ident1[0][1][0] = SHADER_MODULE( vert_tx0_ident1_env );
@@ -2990,10 +2829,8 @@ static void vk_create_shader_modules( void )
 
 	vk.modules.frag.ent[0][0] = SHADER_MODULE( frag_tx0_ent );
 	vk.modules.frag.ent[0][1] = SHADER_MODULE( frag_tx0_ent_fog );
-	//vk.modules.frag.ent[1][0] = SHADER_MODULE( frag_tx1_ent );
-	//vk.modules.frag.ent[1][1] = SHADER_MODULE( frag_tx1_ent_fog );
 	for ( i = 0; i < 1; i++ ) {
-		const char *tx[] = { "single" /*, "double" */};
+		const char *tx[] = { "single" };
 		const char *fog[] = { "", "+fog" };
 		for ( j = 0; j < 2; j++ ) {
 			const char *s = va( "%s-texture entity-color%s fragment module", tx[i], fog[j] );
@@ -3027,7 +2864,6 @@ static void vk_create_shader_modules( void )
 			}
 		}
 	}
-
 
 	vk.modules.vert.light[0] = SHADER_MODULE( vert_light );
 	vk.modules.vert.light[1] = SHADER_MODULE( vert_light_fog );
@@ -3071,7 +2907,6 @@ static void vk_create_shader_modules( void )
 
 	vk.modules.gamma_fs = SHADER_MODULE( gamma_frag_spv );
 
-	// [QL] the bloom of Quake Live
 	vk.modules.ql_bright_fs = SHADER_MODULE( qlbright_frag_spv );
 	vk.modules.ql_blur_fs = SHADER_MODULE( qlblur_frag_spv );
 	vk.modules.ql_bloom_fs = SHADER_MODULE( qlbloom_frag_spv );
@@ -3083,13 +2918,11 @@ static void vk_create_shader_modules( void )
 	SET_OBJECT_NAME( vk.modules.gamma_vs, "gamma post-processing vertex module", VK_DEBUG_REPORT_OBJECT_TYPE_SHADER_MODULE_EXT );
 }
 
-
 static void vk_alloc_persistent_pipelines( void )
 {
 	unsigned int state_bits;
 	Vk_Pipeline_Def def;
 
-	// skybox
 	{
 		Com_Memset(&def, 0, sizeof(def));
 		def.shader_type = TYPE_SIGNLE_TEXTURE_FIXED_COLOR;
@@ -3101,7 +2934,6 @@ static void vk_alloc_persistent_pipelines( void )
 		vk.skybox_pipeline = vk_find_pipeline_ext( 0, &def, qtrue );
 	}
 
-	// stencil shadows
 	{
 		cullType_t cull_types[2] = { CT_FRONT_SIDED, CT_BACK_SIDED };
 		qboolean mirror_flags[2] = { qfalse, qtrue };
@@ -3133,15 +2965,14 @@ static void vk_alloc_persistent_pipelines( void )
 		vk.shadow_finish_pipeline = vk_find_pipeline_ext( 0, &def, r_shadows->integer ? qtrue: qfalse );
 	}
 
-	// fog and dlights
 	{
 		unsigned int fog_state_bits[2] = {
-			GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA | GLS_DEPTHFUNC_EQUAL, // fogPass == FP_EQUAL
-			GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA // fogPass == FP_LE
+			GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA | GLS_DEPTHFUNC_EQUAL,
+			GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA
 		};
 		unsigned int dlight_state_bits[2] = {
-			GLS_SRCBLEND_DST_COLOR | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL,	// modulated
-			GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL			// additive
+			GLS_SRCBLEND_DST_COLOR | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL,
+			GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL
 		};
 		qboolean polygon_offset[2] = { qfalse, qtrue };
 		int i, j, k;
@@ -3158,7 +2989,7 @@ static void vk_alloc_persistent_pipelines( void )
 			unsigned dlight_state = dlight_state_bits[ i ];
 
 			for ( j = 0; j < 3; j++ ) {
-				def.face_culling = j; // cullType_t value
+				def.face_culling = j;
 
 				for ( k = 0; k < 2; k++ ) {
 					def.polygon_offset = polygon_offset[ k ];
@@ -3185,13 +3016,12 @@ static void vk_alloc_persistent_pipelines( void )
 
 #ifdef USE_PMLIGHT
 		def.state_bits = GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL;
-		//def.shader_type = TYPE_SIGNLE_TEXTURE_LIGHTING;
-		for (i = 0; i < 3; i++) { // cullType
+		for (i = 0; i < 3; i++) {
 			def.face_culling = i;
-			for ( j = 0; j < 2; j++ ) { // polygonOffset
+			for ( j = 0; j < 2; j++ ) {
 				def.polygon_offset = polygon_offset[j];
 				for ( k = 0; k < 2; k++ ) {
-					def.fog_stage = k; // fogStage
+					def.fog_stage = k;
 					for ( l = 0; l < 2; l++ ) {
 						def.abs_light = l;
 						def.shader_type = TYPE_SIGNLE_TEXTURE_LIGHTING;
@@ -3202,10 +3032,9 @@ static void vk_alloc_persistent_pipelines( void )
 				}
 			}
 		}
-#endif // USE_PMLIGHT
+#endif
 	}
 
-	// RT_BEAM surface
 	{
 		Com_Memset(&def, 0, sizeof(def));
 		def.state_bits = GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE;
@@ -3214,7 +3043,6 @@ static void vk_alloc_persistent_pipelines( void )
 		vk.surface_beam_pipeline = vk_find_pipeline_ext( 0, &def, qfalse );
 	}
 
-	// axis for missing models
 	{
 		Com_Memset( &def, 0, sizeof( def ) );
 		def.state_bits = GLS_DEFAULT;
@@ -3226,18 +3054,15 @@ static void vk_alloc_persistent_pipelines( void )
 		vk.surface_axis_pipeline = vk_find_pipeline_ext( 0, &def, qfalse );
 	}
 
-	// flare visibility test dot
 	if ( vk.fragmentStores )
 	{
 		Com_Memset( &def, 0, sizeof( def ) );
-		//def.state_bits = GLS_DEFAULT;
 		def.face_culling = CT_TWO_SIDED;
 		def.shader_type = TYPE_DOT;
 		def.primitives = POINT_LIST;
 		vk.dot_pipeline = vk_find_pipeline_ext( 0, &def, qtrue );
 	}
 
-	// DrawTris()
 	state_bits = GLS_POLYMODE_LINE | GLS_DEPTHMASK_TRUE;
 	{
 		Com_Memset(&def, 0, sizeof(def));
@@ -3282,7 +3107,6 @@ static void vk_alloc_persistent_pipelines( void )
 		vk.tris_mirror_debug_red_pipeline = vk_find_pipeline_ext( 0, &def, qfalse );
 	}
 
-	// DrawNormals()
 	{
 		Com_Memset(&def, 0, sizeof(def));
 		def.state_bits = GLS_DEPTHMASK_TRUE;
@@ -3291,7 +3115,6 @@ static void vk_alloc_persistent_pipelines( void )
 		vk.normals_debug_pipeline = vk_find_pipeline_ext( 0, &def, qfalse );
 	}
 
-	// RB_DebugPolygon()
 	{
 		Com_Memset(&def, 0, sizeof(def));
 		def.state_bits = GLS_DEPTHMASK_TRUE | GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE;
@@ -3306,7 +3129,6 @@ static void vk_alloc_persistent_pipelines( void )
 		vk.surface_debug_pipeline_outline = vk_find_pipeline_ext( 0, &def, qfalse );
 	}
 
-	// RB_ShowImages
 	{
 		Com_Memset(&def, 0, sizeof(def));
 		def.state_bits = GLS_DEPTHTEST_DISABLE | GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
@@ -3326,32 +3148,28 @@ void vk_create_blur_pipeline( uint32_t index, uint32_t width, uint32_t height, q
 void vk_update_post_process_pipelines( void )
 {
 	if ( vk.fboActive ) {
-		// update gamma shader
 		vk_create_post_process_pipeline( 0, 0, 0 );
 		vk_create_post_process_pipeline( 8, 0, 0 );
 		if ( vk.capture.image ) {
-			// update capture pipeline
 			vk_create_post_process_pipeline( 3, gls.captureWidth, gls.captureHeight );
 			vk_create_post_process_pipeline( 9, gls.captureWidth, gls.captureHeight );
 		}
 		if ( vk_bloom_wanted() ) {
-			// update bloom shaders
 			uint32_t width = gls.captureWidth;
 			uint32_t height = gls.captureHeight;
 			uint32_t i;
 
-			vk_create_post_process_pipeline( 1, width, height ); // bloom extraction
+			vk_create_post_process_pipeline( 1, width, height );
 
 			for ( i = 0; i < ARRAY_LEN( vk.blur_pipeline ); i += 2 ) {
 				width /= 2;
 				height /= 2;
-				vk_create_blur_pipeline( i + 0, width, height, qtrue ); // horizontal
-				vk_create_blur_pipeline( i + 1, width, height, qfalse ); // vertical
+				vk_create_blur_pipeline( i + 0, width, height, qtrue );
+				vk_create_blur_pipeline( i + 1, width, height, qfalse );
 			}
 
-			vk_create_post_process_pipeline( 2, glConfig.vidWidth, glConfig.vidHeight ); // bloom blending
+			vk_create_post_process_pipeline( 2, glConfig.vidWidth, glConfig.vidHeight );
 
-			// [QL] the bright pass works at half the scene's size, the light over the whole frame
 			vk_create_post_process_pipeline( 4, gls.captureWidth / 2, gls.captureHeight / 2 );
 			vk_create_post_process_pipeline( 5, glConfig.vidWidth, glConfig.vidHeight );
 			vk_create_post_process_pipeline( 6, gls.captureWidth, gls.captureHeight );
@@ -3360,7 +3178,6 @@ void vk_update_post_process_pipelines( void )
 	}
 }
 
-
 typedef struct vk_attach_desc_s  {
 	VkImage descriptor;
 	VkImageView *image_view;
@@ -3368,7 +3185,6 @@ typedef struct vk_attach_desc_s  {
 	VkMemoryRequirements reqs;
 	uint32_t memoryTypeIndex;
 	VkDeviceSize  memory_offset;
-	// for layout transition:
 	VkImageAspectFlags aspect_flags;
 	VkImageLayout image_layout;
 	VkFormat image_format;
@@ -3377,12 +3193,10 @@ typedef struct vk_attach_desc_s  {
 static vk_attach_desc_t attachments[ MAX_ATTACHMENTS_IN_POOL ];
 static uint32_t num_attachments = 0;
 
-
 static void vk_clear_attachment_pool( void )
 {
 	num_attachments = 0;
 }
-
 
 static void vk_alloc_attachments( void )
 {
@@ -3426,7 +3240,6 @@ static void vk_alloc_attachments( void )
 	}
 
 	if ( num_attachments == 1 && attachments[ 0 ].usage & VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT ) {
-		// try lazy memory
 		memoryTypeIndex = find_memory_type2( memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT, NULL );
 		if ( memoryTypeIndex == ~0U ) {
 			memoryTypeIndex = find_memory_type( memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT );
@@ -3455,7 +3268,6 @@ static void vk_alloc_attachments( void )
 		}
 	}
 
-	// allocate and bind memory
 	VK_CHECK( qvkAllocateMemory( vk.device, &alloc_info, NULL, &memory ) );
 
 	vk.image_memory[ vk.image_memory_count++ ] = memory;
@@ -3464,7 +3276,6 @@ static void vk_alloc_attachments( void )
 
 		VK_CHECK( qvkBindImageMemory( vk.device, attachments[i].descriptor, memory, attachments[i].memory_offset ) );
 
-		// create color image view
 		view_desc.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		view_desc.pNext = NULL;
 		view_desc.flags = 0;
@@ -3484,13 +3295,12 @@ static void vk_alloc_attachments( void )
 		VK_CHECK( qvkCreateImageView( vk.device, &view_desc, NULL, attachments[ i ].image_view ) );
 	}
 
-	// perform layout transition
 	command_buffer = begin_command_buffer();
 	for ( i = 0; i < num_attachments; i++ ) {
 		record_image_layout_transition( command_buffer,
 			attachments[i].descriptor,
 			attachments[i].aspect_flags,
-			VK_IMAGE_LAYOUT_UNDEFINED, // old_layout
+			VK_IMAGE_LAYOUT_UNDEFINED,
 			attachments[i].image_layout,
 			0, 0 );
 	}
@@ -3498,7 +3308,6 @@ static void vk_alloc_attachments( void )
 
 	num_attachments = 0;
 }
-
 
 static void vk_add_attachment_desc( VkImage desc, VkImageView *image_view, VkImageUsageFlags usage, VkMemoryRequirements *reqs, VkFormat image_format, VkImageAspectFlags aspect_flags, VkImageLayout image_layout )
 {
@@ -3516,7 +3325,6 @@ static void vk_add_attachment_desc( VkImage desc, VkImageView *image_view, VkIma
 		num_attachments++;
 	}
 }
-
 
 static void vk_get_image_memory_erquirements( VkImage image, VkMemoryRequirements *memory_requirements )
 {
@@ -3544,7 +3352,6 @@ static void vk_get_image_memory_erquirements( VkImage image, VkMemoryRequirement
 	}
 }
 
-
 static void create_color_attachment( uint32_t width, uint32_t height, VkSampleCountFlagBits samples, VkFormat format,
 	VkImageUsageFlags usage, VkImage *image, VkImageView *image_view, VkImageLayout image_layout, qboolean multisample )
 {
@@ -3554,7 +3361,6 @@ static void create_color_attachment( uint32_t width, uint32_t height, VkSampleCo
 	if ( multisample && !( usage & VK_IMAGE_USAGE_SAMPLED_BIT ) )
 		usage |= VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
 
-	// create color image
 	create_desc.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	create_desc.pNext = NULL;
 	create_desc.flags = 0;
@@ -3579,14 +3385,12 @@ static void create_color_attachment( uint32_t width, uint32_t height, VkSampleCo
 	vk_add_attachment_desc( *image, image_view, usage, &memory_requirements, format, VK_IMAGE_ASPECT_COLOR_BIT, image_layout );
 }
 
-
 static void create_depth_attachment( uint32_t width, uint32_t height, VkSampleCountFlagBits samples, VkImage *image, VkImageView *image_view, qboolean allowTransient )
 {
 	VkImageCreateInfo create_desc;
 	VkMemoryRequirements memory_requirements;
 	VkImageAspectFlags image_aspect_flags;
 
-	// create depth image
 	create_desc.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	create_desc.pNext = NULL;
 	create_desc.flags = 0;
@@ -3619,24 +3423,16 @@ static void create_depth_attachment( uint32_t width, uint32_t height, VkSampleCo
 	vk_add_attachment_desc( *image, image_view, create_desc.usage, &memory_requirements, vk.depth_format, image_aspect_flags, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL );
 }
 
-
 static void vk_create_attachments( void )
 {
 	uint32_t i;
 
 	vk_clear_attachment_pool();
 
-	// It looks like resulting performance depends from order you're creating/allocating
-	// memory for attachments in vulkan i.e. similar images grouped together will provide best results
-	// so [resolve0][resolve1][msaa0][msaa1][depth0][depth1] is most optimal
-	// while cases like [resolve0][depth0][color0][...] is the worst
-
-	// TODO: preallocate first image chunk in attachment' memory pool?
 	if ( vk.fboActive ) {
 
 		VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-		// bloom
 		if ( vk_bloom_wanted() ) {
 			uint32_t width = gls.captureWidth;
 			uint32_t height = gls.captureHeight;
@@ -3655,21 +3451,17 @@ static void vk_create_attachments( void )
 			}
 		}
 
-		// post-processing/msaa-resolve
 		create_color_attachment( glConfig.vidWidth, glConfig.vidHeight, VK_SAMPLE_COUNT_1_BIT, vk.color_format,
 			usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, &vk.color_image, &vk.color_image_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, qfalse );
 
-		// screenmap-msaa
 		if ( vk.screenMapSamples > VK_SAMPLE_COUNT_1_BIT ) {
 			create_color_attachment( vk.screenMapWidth, vk.screenMapHeight, vk.screenMapSamples, vk.color_format,
 				VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &vk.screenMap.color_image_msaa, &vk.screenMap.color_image_view_msaa, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, qtrue );
 		}
 
-		// screenmap/msaa-resolve
 		create_color_attachment( vk.screenMapWidth, vk.screenMapHeight, VK_SAMPLE_COUNT_1_BIT, vk.color_format,
 			usage, &vk.screenMap.color_image, &vk.screenMap.color_image_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, qfalse );
 
-		// screenmap depth
 		create_depth_attachment( vk.screenMapWidth, vk.screenMapHeight, vk.screenMapSamples, &vk.screenMap.depth_image, &vk.screenMap.depth_image_view, qtrue );
 
 		if ( vk.msaaActive ) {
@@ -3677,16 +3469,12 @@ static void vk_create_attachments( void )
 				VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &vk.msaa_image, &vk.msaa_image_view, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, qtrue );
 		}
 
-		// [QL] 0x448550: a capture reads the corrected frame, so it needs a buffer of its own
 		if ( r_ext_supersample->integer || ( r_enablePostProcess->integer && r_enableColorCorrect->integer ) ) {
-			// capture buffer
 			usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 			create_color_attachment( gls.captureWidth, gls.captureHeight, VK_SAMPLE_COUNT_1_BIT, vk.capture_format,
 				usage, &vk.capture.image, &vk.capture.image_view, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, qfalse );
 		}
-	} // if ( vk.fboActive )
-
-	//vk_alloc_attachments();
+	}
 
 	create_depth_attachment( glConfig.vidWidth, glConfig.vidHeight, vkSamples, &vk.depth_image, &vk.depth_image_view,
 		(vk.fboActive && vk_bloom_wanted()) ? qfalse : qtrue );
@@ -3713,7 +3501,6 @@ static void vk_create_attachments( void )
 		SET_OBJECT_NAME( vk.bloom_image_view[i], va( "bloom attachment %i", i ), VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT );
 	}
 }
-
 
 static void vk_create_framebuffers( void )
 {
@@ -3743,7 +3530,6 @@ static void vk_create_framebuffers( void )
 		}
 		else
 		{
-			// same framebuffer configuration for main and post-bloom render passes
 			if ( n == 0 )
 			{
 				desc.width = glConfig.vidWidth;
@@ -3763,7 +3549,6 @@ static void vk_create_framebuffers( void )
 				vk.framebuffers.main[n] = vk.framebuffers.main[0];
 			}
 
-			// gamma correction
 			desc.renderPass = vk.render_pass.gamma;
 			desc.attachmentCount = 1;
 			desc.width = gls.windowWidth;
@@ -3777,7 +3562,6 @@ static void vk_create_framebuffers( void )
 
 	if ( vk.fboActive )
 	{
-		// screenmap
 		desc.renderPass = vk.render_pass.screenmap;
 		desc.attachmentCount = 2;
 		desc.width = vk.screenMapWidth;
@@ -3811,7 +3595,6 @@ static void vk_create_framebuffers( void )
 			uint32_t width = gls.captureWidth;
 			uint32_t height = gls.captureHeight;
 
-			// bloom color extraction
 			desc.renderPass = vk.render_pass.bloom_extract;
 			desc.width = width;
 			desc.height = height;
@@ -3847,13 +3630,11 @@ static void vk_create_framebuffers( void )
 	}
 }
 
-
 static void vk_create_sync_primitives( void ) {
 	VkSemaphoreCreateInfo desc;
 	VkFenceCreateInfo fence_desc;
 	uint32_t i;
 
-	// [ioquakelive] Reflex signals the end of its sleep on a timeline semaphore
 	if ( vk.lowLatency2 ) {
 		VkSemaphoreTypeCreateInfo type_desc;
 		VkSemaphoreCreateInfo latency_desc;
@@ -3879,24 +3660,20 @@ static void vk_create_sync_primitives( void ) {
 	VK_CHECK( qvkCreateSemaphore( vk.device, &desc, NULL, &vk.image_uploaded2 ) );
 #endif
 
-	// all commands submitted
 	for ( i = 0; i < NUM_COMMAND_BUFFERS; i++ )
 	{
 		desc.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 		desc.pNext = NULL;
 		desc.flags = 0;
 
-		// swapchain image acquired
 		VK_CHECK( qvkCreateSemaphore( vk.device, &desc, NULL, &vk.tess[i].image_acquired ) );
 
 #ifdef USE_UPLOAD_QUEUE
-		// second semaphore to synchronize additional tasks (e.g. image upload)
 		VK_CHECK( qvkCreateSemaphore( vk.device, &desc, NULL, &vk.tess[i].rendering_finished2 ) );
 #endif
 		fence_desc.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 		fence_desc.pNext = NULL;
-		//fence_desc.flags = VK_FENCE_CREATE_SIGNALED_BIT; // so it can be used to start rendering
-		fence_desc.flags = 0; // non-signalled state
+		fence_desc.flags = 0;
 
 		VK_CHECK( qvkCreateFence( vk.device, &fence_desc, NULL, &vk.tess[i].rendering_finished_fence ) );
 		vk.tess[i].waitForFence = qfalse;
@@ -3921,7 +3698,6 @@ static void vk_create_sync_primitives( void ) {
 	vk.aux_fence_wait = qfalse;
 #endif
 }
-
 
 static void vk_destroy_sync_primitives( void  ) {
 	uint32_t i;
@@ -3953,7 +3729,6 @@ static void vk_destroy_sync_primitives( void  ) {
 	vk.image_uploaded = VK_NULL_HANDLE;
 #endif
 }
-
 
 static void vk_destroy_framebuffers( void ) {
 	uint32_t n;
@@ -3993,7 +3768,6 @@ static void vk_destroy_framebuffers( void ) {
 		}
 	}
 }
-
 
 static void vk_destroy_swapchain( void ) {
 	uint32_t i;
@@ -4057,7 +3831,6 @@ static void vk_restart_swapchain( const char *funcname, VkResult res )
 	vk_update_post_process_pipelines();
 }
 
-
 static void vk_set_render_scale( void )
 {
 	if ( gls.windowWidth != glConfig.vidWidth || gls.windowHeight != glConfig.vidHeight )
@@ -4067,7 +3840,6 @@ static void vk_set_render_scale( void )
 			int scaleMode = r_renderScale->integer - 1;
 			if ( scaleMode & 1 )
 			{
-				// preserve aspect ratio (black bars on sides)
 				float windowAspect = (float) gls.windowWidth / (float) gls.windowHeight;
 				float renderAspect = (float) glConfig.vidWidth / (float) glConfig.vidHeight;
 				if ( windowAspect >= renderAspect )
@@ -4083,7 +3855,6 @@ static void vk_set_render_scale( void )
 					vk.blitY0 += bias;
 				}
 			}
-			// linear filtering
 			if ( scaleMode & 2 )
 				vk.blitFilter = GL_LINEAR;
 			else
@@ -4098,7 +3869,6 @@ static void vk_set_render_scale( void )
 		vk.blitFilter = GL_LINEAR;
 	}
 }
-
 
 void vk_initialize( void )
 {
@@ -4121,7 +3891,6 @@ void vk_initialize( void )
 	vk.uniform_alignment = props.limits.minUniformBufferOffsetAlignment;
 	vk.uniform_item_size = PAD( (uint32_t)sizeof( vkUniform_t ), vk.uniform_alignment );
 
-	// for flare visibility tests
 	vk.storage_alignment = MAX( props.limits.minStorageBufferOffsetAlignment, sizeof( uint32_t ) );
 
 	vk.maxAnisotropy = props.limits.maxSamplerAnisotropy;
@@ -4141,11 +3910,9 @@ void vk_initialize( void )
 		vk.fboActive = qfalse;
 	}
 
-	// multisampling
-
 	vkMaxSamples = MIN( props.limits.sampledImageColorSampleCounts, props.limits.sampledImageDepthSampleCounts );
 
-	if ( /*vk.fboActive &&*/ vk.msaaActive ) {
+	if (  vk.msaaActive ) {
 		VkSampleCountFlags mask = vkMaxSamples;
 		vkSamples = MAX( log2pad( r_ext_multisample->integer, 1 ), VK_SAMPLE_COUNT_2_BIT );
 		while ( vkSamples > mask )
@@ -4168,7 +3935,6 @@ void vk_initialize( void )
 	vk.defaults.geometry_size = VERTEX_BUFFER_SIZE;
 	vk.defaults.staging_size = STAGING_BUFFER_SIZE;
 
-	// get memory size & defaults
 	{
 		VkPhysicalDeviceMemoryProperties props;
 		VkDeviceSize maxDedicatedSize = 0;
@@ -4198,7 +3964,6 @@ void vk_initialize( void )
 		}
 		if ( maxBARSize != 0 ) {
 			if ( maxBARSize >= 128 * 1024 * 1024 ) {
-				// user larger buffers to avoid potential reallocations
 				vk.defaults.geometry_size = VERTEX_BUFFER_SIZE_HI;
 				vk.defaults.staging_size = STAGING_BUFFER_SIZE_HI;
 			}
@@ -4208,17 +3973,12 @@ void vk_initialize( void )
 		}
 	}
 
-	// fill glConfig information
-
-	// maxTextureSize must not exceed IMAGE_CHUNK_SIZE
 	maxSize = sqrtf( IMAGE_CHUNK_SIZE / 4 );
-	// round down to next power of 2
 	glConfig.maxTextureSize = MIN( props.limits.maxImageDimension2D, log2pad( maxSize, 0 ) );
 
 	if ( glConfig.maxTextureSize > MAX_TEXTURE_SIZE )
-		glConfig.maxTextureSize = MAX_TEXTURE_SIZE; // ResampleTexture() relies on that maximum
+		glConfig.maxTextureSize = MAX_TEXTURE_SIZE;
 
-	// default chunk size, may be doubled on demand
 	vk.image_chunk_size = IMAGE_CHUNK_SIZE;
 
 	vk.maxLod = 1 + Q_log2( glConfig.maxTextureSize );
@@ -4243,9 +4003,8 @@ void vk_initialize( void )
 	minor = VK_VERSION_MINOR(props.apiVersion);
 	patch = VK_VERSION_PATCH(props.apiVersion);
 
-	// decode driver version
 	switch ( props.vendorID ) {
-		case 0x10DE: // NVidia
+		case 0x10DE:
 			Com_sprintf( driver_version, sizeof( driver_version ), "%i.%i.%i.%i",
 				(props.driverVersion >> 22) & 0x3FF,
 				(props.driverVersion >> 14) & 0x0FF,
@@ -4253,7 +4012,7 @@ void vk_initialize( void )
 				(props.driverVersion >> 0) & 0x03F );
 			break;
 #ifdef _WIN32
-		case 0x8086: // Intel
+		case 0x8086:
 			Com_sprintf( driver_version, sizeof( driver_version ), "%i.%i",
 				(props.driverVersion >> 14),
 				(props.driverVersion >> 0) & 0x3FFF );
@@ -4270,15 +4029,11 @@ void vk_initialize( void )
 		major, minor, patch, driver_version );
 
 #ifdef _WIN32
-	// Intel iGPU drivers from 101.5333 to 101.6737 have a known bug that causes
-	// VK_ERROR_DEVICE_LOST during vkQueueSubmit, see https://github.com/ec-/Quake3e/issues/312
 	if ( props.vendorID == 0x8086 ) {
 		uint32_t drvMajor = props.driverVersion >> 14;
 		uint32_t drvMinor = props.driverVersion & 0x3FFF;
 		if ( drvMajor == 101 && drvMinor >= 5333 && drvMinor <= 6737 ) {
 #ifdef _WIN64
-			// [ioquakelive] in 64 bits these die inside vkCreateSwapchainKHR, which no fallback can
-			// catch: measured on 101.5522, where a bare Vulkan program does the same and 32 bits works
 			ri.Error( ERR_FATAL, "Intel driver %i.%i crashes Vulkan in 64 bits.\n"
 				"Update it to 101.6790 or later, or play with ioquakelive, the OpenGL one.",
 				drvMajor, drvMinor );
@@ -4298,8 +4053,6 @@ void vk_initialize( void )
 	} else if ( props.vendorID == 0x106B ) {
 		vendor_name = "Apple Inc.";
 	} else if ( props.vendorID == 0x10DE ) {
-		// https://github.com/SaschaWillems/Vulkan/issues/493
-		// we can't render to offscreen presentation surfaces on nvidia
 		vk.offscreenRender = qfalse;
 		vendor_name = "NVIDIA";
 	} else if ( props.vendorID == 0x14E4 ) {
@@ -4320,20 +4073,13 @@ void vk_initialize( void )
 
 	SET_OBJECT_NAME( (intptr_t)vk.device, glConfig.renderer_string, VK_DEBUG_REPORT_OBJECT_TYPE_DEVICE_EXT );
 
-	// do early texture mode setup to avoid redundant descriptor updates in GL_SetDefaultState()
 	vk.samplers.filter_min = -1;
 	vk.samplers.filter_max = -1;
 	GL_TextureMode( r_textureMode->string );
 	r_textureMode->modified = qfalse;
 
-	//
-	// Sync primitives.
-	//
 	vk_create_sync_primitives();
 
-	//
-	// Command pool.
-	//
 	{
 		VkCommandPoolCreateInfo desc;
 
@@ -4361,9 +4107,6 @@ void vk_initialize( void )
 	}
 #endif
 
-	//
-	// Command buffers and color attachments.
-	//
 	for ( i = 0; i < NUM_COMMAND_BUFFERS; i++ )
 	{
 		VkCommandBufferAllocateInfo alloc_info;
@@ -4376,25 +4119,18 @@ void vk_initialize( void )
 
 		VK_CHECK( qvkAllocateCommandBuffers( vk.device, &alloc_info, &vk.tess[i].command_buffer ) );
 
-		//SET_OBJECT_NAME( vk.tess[i].command_buffer, va( "command buffer %i", i ), VK_DEBUG_REPORT_OBJECT_TYPE_COMMAND_BUFFER_EXT );
 	}
 
-	//
-	// Descriptor pool.
-	//
 	{
 		VkDescriptorPoolSize pool_size[3];
 		VkDescriptorPoolCreateInfo desc;
 		uint32_t i, maxSets;
 
 		pool_size[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		pool_size[0].descriptorCount = MAX_DRAWIMAGES + 1 + 1 + 1 + VK_NUM_BLOOM_PASSES * 2; // color, screenmap, bloom descriptors
+		pool_size[0].descriptorCount = MAX_DRAWIMAGES + 1 + 1 + 1 + VK_NUM_BLOOM_PASSES * 2;
 
 		pool_size[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 		pool_size[1].descriptorCount = NUM_COMMAND_BUFFERS;
-
-		//pool_size[2].type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
-		//pool_size[2].descriptorCount = NUM_COMMAND_BUFFERS;
 
 		pool_size[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
 		pool_size[2].descriptorCount = 1;
@@ -4413,17 +4149,10 @@ void vk_initialize( void )
 		VK_CHECK( qvkCreateDescriptorPool( vk.device, &desc, NULL, &vk.descriptor_pool ) );
 	}
 
-	//
-	// Descriptor set layout.
-	//
 	vk_create_layout_binding( 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, &vk.set_layout_sampler );
 	vk_create_layout_binding( 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT, &vk.set_layout_uniform );
 	vk_create_layout_binding( 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT, &vk.set_layout_storage );
-	//vk_create_layout_binding( 0, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT, &vk.set_layout_input );
 
-	//
-	// Pipeline layouts.
-	//
 	{
 		VkDescriptorSetLayout set_layouts[6];
 		VkPipelineLayoutCreateInfo desc;
@@ -4431,14 +4160,13 @@ void vk_initialize( void )
 
 		push_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 		push_range.offset = 0;
-		push_range.size = 64; // 16 floats
+		push_range.size = 64;
 
-		// standard pipelines
-		set_layouts[0] = vk.set_layout_uniform; // fog/dlight parameters
-		set_layouts[1] = vk.set_layout_sampler; // diffuse
-		set_layouts[2] = vk.set_layout_sampler; // lightmap / fog-only
-		set_layouts[3] = vk.set_layout_sampler; // blend
-		set_layouts[4] = vk.set_layout_sampler; // collapsed fog texture
+		set_layouts[0] = vk.set_layout_uniform;
+		set_layouts[1] = vk.set_layout_sampler;
+		set_layouts[2] = vk.set_layout_sampler;
+		set_layouts[3] = vk.set_layout_sampler;
+		set_layouts[4] = vk.set_layout_sampler;
 		desc.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 		desc.pNext = NULL;
 		desc.flags = 0;
@@ -4449,8 +4177,7 @@ void vk_initialize( void )
 
 		VK_CHECK(qvkCreatePipelineLayout(vk.device, &desc, NULL, &vk.pipeline_layout));
 
-		// flare test pipeline
-		set_layouts[0] = vk.set_layout_storage; // dynamic storage buffer
+		set_layouts[0] = vk.set_layout_storage;
 
 		desc.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 		desc.pNext = NULL;
@@ -4462,11 +4189,10 @@ void vk_initialize( void )
 
 		VK_CHECK( qvkCreatePipelineLayout( vk.device, &desc, NULL, &vk.pipeline_layout_storage ) );
 
-		// post-processing pipeline
-		set_layouts[0] = vk.set_layout_sampler; // sampler
-		set_layouts[1] = vk.set_layout_sampler; // sampler
-		set_layouts[2] = vk.set_layout_sampler; // sampler
-		set_layouts[3] = vk.set_layout_sampler; // sampler
+		set_layouts[0] = vk.set_layout_sampler;
+		set_layouts[1] = vk.set_layout_sampler;
+		set_layouts[2] = vk.set_layout_sampler;
+		set_layouts[3] = vk.set_layout_sampler;
 
 		desc.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 		desc.pNext = NULL;
@@ -4502,23 +4228,17 @@ void vk_initialize( void )
 		VK_CHECK( qvkCreatePipelineCache( vk.device, &ci, NULL, &vk.pipelineCache ) );
 	}
 
-	vk.renderPassIndex = RENDER_PASS_MAIN; // default render pass
+	vk.renderPassIndex = RENDER_PASS_MAIN;
 
-	// swapchain
 	vk.initSwapchainLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-	//vk.initSwapchainLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	vk_create_swapchain( vk.physical_device, vk.device, vk_surface, vk.present_format, &vk.swapchain, qtrue );
 
-	// color/depth attachments
 	vk_create_attachments();
 
-	// renderpasses
 	vk_create_render_passes();
 
-	// framebuffers for each swapchain image
 	vk_create_framebuffers();
 
-	// preallocate staging buffer
 	if ( vk.defaults.staging_size == STAGING_BUFFER_SIZE_HI ) {
 		vk_alloc_staging_buffer( vk.defaults.staging_size );
 	}
@@ -4526,14 +4246,12 @@ void vk_initialize( void )
 	vk.active = qtrue;
 }
 
-
 void vk_create_pipelines( void )
 {
 	vk_alloc_persistent_pipelines();
 
 	vk.pipelines_world_base = vk.pipelines_count;
 }
-
 
 static void vk_destroy_attachments( void )
 {
@@ -4602,7 +4320,6 @@ static void vk_destroy_attachments( void )
 	vk.image_memory_count = 0;
 }
 
-
 static void vk_destroy_render_passes( void )
 {
 	uint32_t i;
@@ -4644,7 +4361,6 @@ static void vk_destroy_render_passes( void )
 		vk.render_pass.capture = VK_NULL_HANDLE;
 	}
 }
-
 
 static void vk_destroy_pipelines( qboolean resetCounter )
 {
@@ -4721,18 +4437,17 @@ static void vk_destroy_pipelines( qboolean resetCounter )
 	}
 }
 
-
 void vk_shutdown( refShutdownCode_t code )
 {
 	int i, j, k, l;
 
-	if ( qvkQueuePresentKHR == NULL ) { // not fully initialized
+	if ( qvkQueuePresentKHR == NULL ) {
 		goto __cleanup;
 	}
 
 	vk_destroy_framebuffers();
 
-	vk_destroy_pipelines( qtrue ); // reset counter
+	vk_destroy_pipelines( qtrue );
 
 	vk_destroy_render_passes();
 
@@ -4870,35 +4585,29 @@ __cleanup:
 
 	Com_Memset( &vk, 0, sizeof( vk ) );
 	Com_Memset( &vk_world, 0, sizeof( vk_world ) );
-	
+
 	if ( code != REF_KEEP_CONTEXT ) {
 		vk_destroy_instance();
 		deinit_instance_functions();
 	}
 }
 
-
 void vk_wait_idle( void )
 {
-	// [ioquakelive] nothing to wait on when the device never came up: an error during
-	// vk_initialize shuts the renderer down with the function pointers still empty
 	if ( qvkDeviceWaitIdle == NULL || vk.device == VK_NULL_HANDLE ) {
 		return;
 	}
 	VK_CHECK( qvkDeviceWaitIdle( vk.device ) );
 }
 
-
 void vk_queue_wait_idle( void )
 {
 	VK_CHECK( qvkQueueWaitIdle( vk.queue ) );
 }
 
-
 void vk_release_resources( void ) {
 	int i, j;
 
-	// [ioquakelive] nothing was made yet if vk_initialize did not finish
 	if ( !vk.active ) {
 		return;
 	}
@@ -4909,8 +4618,6 @@ void vk_release_resources( void ) {
 		qvkFreeMemory(vk.device, vk_world.image_chunks[i].memory, NULL);
 
 	vk_clean_staging_buffer();
-
-	// vk_destroy_samplers();
 
 	for ( i = vk.pipelines_world_base; i < vk.pipelines_count; i++ ) {
 		for ( j = 0; j < RENDER_PASS_COUNT; j++ ) {
@@ -4927,12 +4634,10 @@ void vk_release_resources( void ) {
 	VK_CHECK( qvkResetDescriptorPool( vk.device, vk.descriptor_pool, 0 ) );
 
 	if ( vk_world.num_image_chunks > 1 ) {
-		// if we allocated more than 2 image chunks - use doubled default size
 		vk.image_chunk_size = (IMAGE_CHUNK_SIZE * 2);
 	}
-#if 0 // do not reduce chunk size
+#if 0
 	else if ( vk_world.num_image_chunks == 1 ) {
-		// otherwise set to default if used less than a half
 		if ( vk_world.image_chunks[0].used < ( IMAGE_CHUNK_SIZE - (IMAGE_CHUNK_SIZE / 10) ) ) {
 			vk.image_chunk_size = IMAGE_CHUNK_SIZE;
 		}
@@ -4941,7 +4646,6 @@ void vk_release_resources( void ) {
 
 	Com_Memset( &vk_world, 0, sizeof( vk_world ) );
 
-	// Reset geometry buffers offsets
 	for ( i = 0; i < NUM_COMMAND_BUFFERS; i++ ) {
 		vk.tess[i].uniform_read_offset = 0;
 		vk.tess[i].vertex_buffer_offset = 0;
@@ -4987,7 +4691,6 @@ void vk_create_image( image_t *image, int width, int height, int mip_levels ) {
 		image->view = VK_NULL_HANDLE;
 	}
 
-	// create image
 	{
 		VkImageCreateInfo desc;
 
@@ -5014,7 +4717,6 @@ void vk_create_image( image_t *image, int width, int height, int mip_levels ) {
 		allocate_and_bind_image_memory( image->handle );
 	}
 
-	// create image view
 	{
 		VkImageViewCreateInfo desc;
 
@@ -5037,7 +4739,6 @@ void vk_create_image( image_t *image, int width, int height, int mip_levels ) {
 		VK_CHECK( qvkCreateImageView( vk.device, &desc, NULL, &image->view ) );
 	}
 
-	// create associated descriptor set
 	if ( image->descriptor == VK_NULL_HANDLE ) {
 		VkDescriptorSetAllocateInfo desc;
 
@@ -5056,7 +4757,6 @@ void vk_create_image( image_t *image, int width, int height, int mip_levels ) {
 	SET_OBJECT_NAME( image->view, image->imgName, VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT );
 	SET_OBJECT_NAME( image->descriptor, image->imgName, VK_DEBUG_REPORT_OBJECT_TYPE_DESCRIPTOR_SET_EXT );
 }
-
 
 static byte *resample_image_data( const int target_format, byte *data, const int data_size, int *bytes_per_pixel )
 {
@@ -5079,7 +4779,7 @@ static byte *resample_image_data( const int target_format, byte *data, const int
 				((uint32_t)((b / 255.0) * 15.0 + 0.5) << 12);
 		}
 		*bytes_per_pixel = 2;
-		return buffer; // must be freed after upload!
+		return buffer;
 
 	case VK_FORMAT_A1R5G5B5_UNORM_PACK16:
 		buffer = (byte*)ri.Hunk_AllocateTempMemory( data_size / 2 );
@@ -5094,7 +4794,7 @@ static byte *resample_image_data( const int target_format, byte *data, const int
 				(1 << 15);
 		}
 		*bytes_per_pixel = 2;
-		return buffer; // must be freed after upload!
+		return buffer;
 
 	case VK_FORMAT_B8G8R8A8_UNORM:
 		buffer = (byte*)ri.Hunk_AllocateTempMemory( data_size );
@@ -5124,7 +4824,6 @@ static byte *resample_image_data( const int target_format, byte *data, const int
 	}
 }
 
-
 void vk_upload_image_data( image_t *image, int x, int y, int width, int height, int mipmaps, byte *pixels, int size, qboolean update ) {
 
 	VkCommandBuffer   command_buffer;
@@ -5136,7 +4835,7 @@ void vk_upload_image_data( image_t *image, int x, int y, int width, int height, 
 	int num_regions = 0;
 	int buffer_size = 0;
 
-	buf = resample_image_data( image->internalFormat, pixels, size, &n /*bpp*/ );
+	buf = resample_image_data( image->internalFormat, pixels, size, &n  );
 
 	while (qtrue) {
 		Com_Memset(&region, 0, sizeof(region));
@@ -5174,16 +4873,13 @@ void vk_upload_image_data( image_t *image, int x, int y, int width, int height, 
 
 #ifdef USE_UPLOAD_QUEUE
 	if ( vk_wait_staging_buffer() ) {
-		// wait for vkQueueSubmit() completion before new upload
 	}
 
 	if ( vk.staging_buffer.size - vk.staging_buffer.offset < buffer_size ) {
-		// try to flush staging buffer and reset offset
 		vk_flush_staging_buffer( qfalse );
 	}
 
-	if ( vk.staging_buffer.size /* - vk_world.staging_buffer_offset */ < buffer_size ) {
-		// if still not enough - reallocate staging buffer
+	if ( vk.staging_buffer.size  < buffer_size ) {
 		vk_alloc_staging_buffer( buffer_size );
 	}
 
@@ -5202,7 +4898,6 @@ void vk_upload_image_data( image_t *image, int x, int y, int width, int height, 
 		VK_CHECK( qvkBeginCommandBuffer( vk.staging_command_buffer, &begin_info ) );
 	}
 
-	//ri.Printf( PRINT_WARNING, "batch @%6i + %i %s \n", (int)vk_world.staging_buffer_offset, (int)buffer_size, image->imgName );
 	vk.staging_buffer.offset += buffer_size;
 
 	command_buffer = vk.staging_command_buffer;
@@ -5215,7 +4910,6 @@ void vk_upload_image_data( image_t *image, int x, int y, int width, int height, 
 
 	qvkCmdCopyBufferToImage( command_buffer, vk.staging_buffer.handle, image->handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, num_regions, regions );
 
-	// final transition after upload comleted
 	record_image_layout_transition( command_buffer, image->handle, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 0 );
 #else
 	if ( vk.staging_buffer.size < buffer_size ) {
@@ -5225,7 +4919,6 @@ void vk_upload_image_data( image_t *image, int x, int y, int width, int height, 
 	Com_Memcpy( vk.staging_buffer.ptr, buf, buffer_size );
 
 	command_buffer = begin_command_buffer();
-	// record_buffer_memory_barrier( command_buffer, vk_world.staging_buffer, VK_WHOLE_SIZE, 0, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT );
 	if ( update ) {
 		record_image_layout_transition( command_buffer, image->handle, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0, 0 );
 	} else {
@@ -5240,7 +4933,6 @@ void vk_upload_image_data( image_t *image, int x, int y, int width, int height, 
 		ri.Hunk_FreeTempMemory( buf );
 	}
 }
-
 
 void vk_update_descriptor_set( image_t *image, qboolean mipmap ) {
 	Vk_Sampler_Def sampler_def;
@@ -5257,7 +4949,6 @@ void vk_update_descriptor_set( image_t *image, qboolean mipmap ) {
 	} else {
 		sampler_def.gl_mag_filter = GL_LINEAR;
 		sampler_def.gl_min_filter = GL_LINEAR;
-		// no anisotropy without mipmaps
 		sampler_def.noAnisotropy = qtrue;
 	}
 
@@ -5279,7 +4970,6 @@ void vk_update_descriptor_set( image_t *image, qboolean mipmap ) {
 	qvkUpdateDescriptorSets( vk.device, 1, &descriptor_write, 0, NULL );
 }
 
-
 void vk_destroy_image_resources( VkImage *image, VkImageView *imageView )
 {
 	if ( image != NULL ) {
@@ -5296,7 +4986,6 @@ void vk_destroy_image_resources( VkImage *image, VkImageView *imageView )
 	}
 }
 
-
 static void set_shader_stage_desc(VkPipelineShaderStageCreateInfo *desc, VkShaderStageFlagBits stage, VkShaderModule shader_module, const char *entry) {
 	desc->sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	desc->pNext = NULL;
@@ -5307,11 +4996,9 @@ static void set_shader_stage_desc(VkPipelineShaderStageCreateInfo *desc, VkShade
 	desc->pSpecializationInfo = NULL;
 }
 
-
 #define FORMAT_DEPTH(format, r_bits, g_bits, b_bits) case(VK_FORMAT_##format): *r = r_bits; *b = b_bits; *g = g_bits; return qtrue;
 static qboolean vk_surface_format_color_depth( VkFormat format, int *r, int *g, int *b ) {
 	switch (format) {
-		// Common formats from https://vulkan.gpuinfo.org/listsurfaceformats.php
 		FORMAT_DEPTH(B8G8R8A8_UNORM, 255, 255, 255)
 			FORMAT_DEPTH(B8G8R8A8_SRGB, 255, 255, 255)
 			FORMAT_DEPTH(A2B10G10R10_UNORM_PACK32, 1023, 1023, 1023)
@@ -5336,7 +5023,6 @@ static qboolean vk_surface_format_color_depth( VkFormat format, int *r, int *g, 
 		*r = 255; *g = 255; *b = 255; return qfalse;
 	}
 }
-
 
 void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_t height )
 {
@@ -5381,7 +5067,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	} frag_spec_data;
 
 	switch ( program_index ) {
-		case 1: // bloom extraction
+		case 1:
 			pipeline = &vk.bloom_extract_pipeline;
 			fsmodule = vk.modules.bloom_fs;
 			renderpass = vk.render_pass.bloom_extract;
@@ -5390,7 +5076,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 			pipeline_name = "bloom extraction pipeline";
 			blend = qfalse;
 			break;
-		case 2: // final bloom blend
+		case 2:
 			pipeline = &vk.bloom_blend_pipeline;
 			fsmodule = vk.modules.blend_fs;
 			renderpass = vk.render_pass.post_bloom;
@@ -5399,7 +5085,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 			pipeline_name = "bloom blend pipeline";
 			blend = qtrue;
 			break;
-		case 4: // [QL] the bright pass of Quake Live's bloom
+		case 4:
 			pipeline = &vk.ql_bright_pipeline;
 			fsmodule = vk.modules.ql_bright_fs;
 			renderpass = vk.render_pass.blur[0];
@@ -5408,7 +5094,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 			pipeline_name = "QL bloom bright pass pipeline";
 			blend = 0;
 			break;
-		case 5: // [QL] the light of Quake Live's bloom over the scene
+		case 5:
 			pipeline = &vk.ql_bloom_pipeline;
 			fsmodule = vk.modules.ql_bloom_fs;
 			renderpass = vk.render_pass.post_bloom;
@@ -5417,7 +5103,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 			pipeline_name = "QL bloom blend pipeline";
 			blend = 2;
 			break;
-		case 6: // [QL] the whole sum, scene included, into the scratch buffer
+		case 6:
 			pipeline = &vk.ql_combine_pipeline;
 			fsmodule = vk.modules.ql_combine_fs;
 			renderpass = vk.render_pass.bloom_extract;
@@ -5426,7 +5112,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 			pipeline_name = "QL bloom combine pipeline";
 			blend = 0;
 			break;
-		case 7: // [QL] the scratch buffer back over the scene
+		case 7:
 			pipeline = &vk.ql_copy_pipeline;
 			fsmodule = vk.modules.ql_copy_fs;
 			renderpass = vk.render_pass.post_bloom;
@@ -5435,7 +5121,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 			pipeline_name = "QL bloom scratch copy pipeline";
 			blend = 0;
 			break;
-		case 8: // [ioquakelive] the neutral pass of a frame without the world (RB_QLColorCorrect)
+		case 8:
 			pipeline = &vk.gamma_neutral_pipeline;
 			fsmodule = vk.modules.gamma_fs;
 			renderpass = vk.render_pass.gamma;
@@ -5444,7 +5130,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 			pipeline_name = "neutral gamma pipeline";
 			blend = qfalse;
 			break;
-		case 9: // [ioquakelive] the capture of a frame without the world, through the neutral pass
+		case 9:
 			pipeline = &vk.capture_neutral_pipeline;
 			fsmodule = vk.modules.gamma_fs;
 			renderpass = vk.render_pass.capture;
@@ -5453,7 +5139,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 			pipeline_name = "neutral capture buffer pipeline";
 			blend = qfalse;
 			break;
-		case 3: // capture buffer extraction
+		case 3:
 			pipeline = &vk.capture_pipeline;
 			fsmodule = vk.modules.gamma_fs;
 			renderpass = vk.render_pass.capture;
@@ -5462,7 +5148,7 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 			pipeline_name = "capture buffer pipeline";
 			blend = qfalse;
 			break;
-		default: // gamma correction
+		default:
 			pipeline = &vk.gamma_pipeline;
 			fsmodule = vk.modules.gamma_fs;
 			renderpass = vk.render_pass.gamma;
@@ -5487,13 +5173,10 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	vertex_input_state.vertexAttributeDescriptionCount = 0;
 	vertex_input_state.pVertexBindingDescriptions = NULL;
 
-	// shaders
 	set_shader_stage_desc( shader_stages+0, VK_SHADER_STAGE_VERTEX_BIT, vk.modules.gamma_vs, "main" );
 	set_shader_stage_desc( shader_stages+1, VK_SHADER_STAGE_FRAGMENT_BIT, fsmodule, "main" );
 
 	frag_spec_data.gamma = 1.0 / (r_gamma->value);
-	// [QL] 0x43cfe0: with the colour correction the overbright is twice r_overBrightBits, at
-	// least 1, and r_contrast closes the pass
 	if ( r_colorCorrectActive->integer ) {
 		frag_spec_data.overbright = MAX( 2.0f * r_overBrightBits->integer, 1.0f );
 		frag_spec_data.contrast = r_contrast->value;
@@ -5503,14 +5186,12 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	}
 	frag_spec_data.greyscale = r_greyscale->value;
 	if ( program_index == 8 || program_index == 9 ) {
-		// [ioquakelive] no gamma, contrast or grey: only what the 2D colours lost to identityLight
 		frag_spec_data.gamma = 1.0f;
 		frag_spec_data.overbright = 1.0f / tr.identityLight;
 		frag_spec_data.contrast = 1.0f;
 		frag_spec_data.greyscale = 0.0f;
 	}
 	if ( r_enablePostProcess->integer && r_enableBloom->integer ) {
-		// [QL] 0x449000: the bloom takes retail's cvars
 		frag_spec_data.bloom_threshold = MAX( r_bloomBrightThreshold->value, 0.0f );
 		frag_spec_data.bloom_intensity = MAX( r_bloomIntensity->value, 0.0f );
 		frag_spec_data.bloom_saturation = MAX( r_bloomSaturation->value, 0.0f );
@@ -5597,28 +5278,18 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 
 	shader_stages[1].pSpecializationInfo = &frag_spec_info;
 
-	//
-	// Primitive assembly.
-	//
 	input_assembly_state.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	input_assembly_state.pNext = NULL;
 	input_assembly_state.flags = 0;
 	input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 	input_assembly_state.primitiveRestartEnable = VK_FALSE;
 
-	//
-	// Viewport.
-	//
-	// [ioquakelive] the neutral pass of the menu (8) covers the window too: with no size it
-	// drew nothing and the menu stayed black
 	if ( program_index == 0 || program_index == 8 ) {
-		// gamma correction
 		viewport.x = 0.0 + vk.blitX0;
 		viewport.y = 0.0 + vk.blitY0;
 		viewport.width = gls.windowWidth - vk.blitX0 * 2;
 		viewport.height = gls.windowHeight - vk.blitY0 * 2;
 	} else {
-		// other post-processing
 		viewport.x = 0.0;
 		viewport.y = 0.0;
 		viewport.width = width;
@@ -5641,18 +5312,14 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	viewport_state.scissorCount = 1;
 	viewport_state.pScissors = &scissor;
 
-	//
-	// Rasterization.
-	//
 	rasterization_state.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 	rasterization_state.pNext = NULL;
 	rasterization_state.flags = 0;
 	rasterization_state.depthClampEnable = VK_FALSE;
 	rasterization_state.rasterizerDiscardEnable = VK_FALSE;
 	rasterization_state.polygonMode = VK_POLYGON_MODE_FILL;
-	//rasterization_state.cullMode = VK_CULL_MODE_BACK_BIT; // VK_CULL_MODE_NONE;
 	rasterization_state.cullMode = VK_CULL_MODE_NONE;
-	rasterization_state.frontFace = VK_FRONT_FACE_CLOCKWISE; // Q3 defaults to clockwise vertex order
+	rasterization_state.frontFace = VK_FRONT_FACE_CLOCKWISE;
 	rasterization_state.depthBiasEnable = VK_FALSE;
 	rasterization_state.depthBiasConstantFactor = 0.0f;
 	rasterization_state.depthBiasClamp = 0.0f;
@@ -5672,7 +5339,6 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	Com_Memset(&attachment_blend_state, 0, sizeof(attachment_blend_state));
 	attachment_blend_state.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 	if ( blend == 2 ) {
-		// [QL] the light over the scene: scene * (1 - bloom) + bloom
 		attachment_blend_state.blendEnable = VK_TRUE;
 		attachment_blend_state.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
 		attachment_blend_state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
@@ -5735,7 +5401,6 @@ void vk_create_post_process_pipeline( int program_index, uint32_t width, uint32_
 	SET_OBJECT_NAME( *pipeline, pipeline_name, VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_EXT );
 }
 
-
 void vk_create_blur_pipeline( uint32_t index, uint32_t width, uint32_t height, qboolean horizontal_pass )
 {
 	VkPipelineShaderStageCreateInfo shader_stages[2];
@@ -5749,7 +5414,7 @@ void vk_create_blur_pipeline( uint32_t index, uint32_t width, uint32_t height, q
 	VkGraphicsPipelineCreateInfo create_info;
 	VkViewport viewport;
 	VkRect2D scissor;
-	float frag_spec_data[3]; // x-offset, y-offset, correction
+	float frag_spec_data[3];
 	VkSpecializationMapEntry spec_entries[3];
 	VkSpecializationInfo frag_spec_info;
 	VkPipeline *pipeline;
@@ -5770,19 +5435,17 @@ void vk_create_blur_pipeline( uint32_t index, uint32_t width, uint32_t height, q
 	vertex_input_state.vertexAttributeDescriptionCount = 0;
 	vertex_input_state.pVertexBindingDescriptions = NULL;
 
-	// shaders
 	set_shader_stage_desc( shader_stages+0, VK_SHADER_STAGE_VERTEX_BIT, vk.modules.gamma_vs, "main" );
-	// [QL] Quake Live's blur reads its own offsets, a texel apart
 	if ( r_enablePostProcess->integer && r_enableBloom->integer ) {
 		set_shader_stage_desc( shader_stages+1, VK_SHADER_STAGE_FRAGMENT_BIT, vk.modules.ql_blur_fs, "main" );
 		frag_spec_data[0] = 1.0 / (float) width;
 		frag_spec_data[1] = 1.0 / (float) height;
 	} else {
 		set_shader_stage_desc( shader_stages+1, VK_SHADER_STAGE_FRAGMENT_BIT, vk.modules.blur_fs, "main" );
-		frag_spec_data[0] = 1.2 / (float) width; // x offset
-		frag_spec_data[1] = 1.2 / (float) height; // y offset
+		frag_spec_data[0] = 1.2 / (float) width;
+		frag_spec_data[1] = 1.2 / (float) height;
 	}
-	frag_spec_data[2] = 1.0; // intensity?
+	frag_spec_data[2] = 1.0;
 
 	if ( horizontal_pass ) {
 		frag_spec_data[1] = 0.0;
@@ -5809,18 +5472,12 @@ void vk_create_blur_pipeline( uint32_t index, uint32_t width, uint32_t height, q
 
 	shader_stages[1].pSpecializationInfo = &frag_spec_info;
 
-	//
-	// Primitive assembly.
-	//
 	input_assembly_state.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	input_assembly_state.pNext = NULL;
 	input_assembly_state.flags = 0;
 	input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 	input_assembly_state.primitiveRestartEnable = VK_FALSE;
 
-	//
-	// Viewport.
-	//
 	viewport.x = 0.0;
 	viewport.y = 0.0;
 	viewport.width = width;
@@ -5841,18 +5498,14 @@ void vk_create_blur_pipeline( uint32_t index, uint32_t width, uint32_t height, q
 	viewport_state.scissorCount = 1;
 	viewport_state.pScissors = &scissor;
 
-	//
-	// Rasterization.
-	//
 	rasterization_state.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 	rasterization_state.pNext = NULL;
 	rasterization_state.flags = 0;
 	rasterization_state.depthClampEnable = VK_FALSE;
 	rasterization_state.rasterizerDiscardEnable = VK_FALSE;
 	rasterization_state.polygonMode = VK_POLYGON_MODE_FILL;
-	//rasterization_state.cullMode = VK_CULL_MODE_BACK_BIT; // VK_CULL_MODE_NONE;
 	rasterization_state.cullMode = VK_CULL_MODE_NONE;
-	rasterization_state.frontFace = VK_FRONT_FACE_CLOCKWISE; // Q3 defaults to clockwise vertex order
+	rasterization_state.frontFace = VK_FRONT_FACE_CLOCKWISE;
 	rasterization_state.depthBiasEnable = VK_FALSE;
 	rasterization_state.depthBiasConstantFactor = 0.0f;
 	rasterization_state.depthBiasClamp = 0.0f;
@@ -5899,7 +5552,7 @@ void vk_create_blur_pipeline( uint32_t index, uint32_t width, uint32_t height, q
 	create_info.pDepthStencilState = NULL;
 	create_info.pColorBlendState = &blend_state;
 	create_info.pDynamicState = NULL;
-	create_info.layout = vk.pipeline_layout_post_process; // one input attachment
+	create_info.layout = vk.pipeline_layout_post_process;
 	create_info.renderPass = vk.render_pass.blur[ index ];
 	create_info.subpass = 0;
 	create_info.basePipelineHandle = VK_NULL_HANDLE;
@@ -5909,7 +5562,6 @@ void vk_create_blur_pipeline( uint32_t index, uint32_t width, uint32_t height, q
 
 	SET_OBJECT_NAME( *pipeline, va( "%s blur pipeline %i", horizontal_pass ? "horizontal" : "vertical", index/2 + 1 ), VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_EXT );
 }
-
 
 static VkVertexInputBindingDescription bindings[8];
 static VkVertexInputAttributeDescription attribs[8];
@@ -5933,14 +5585,11 @@ static void push_attr( uint32_t location, uint32_t binding, VkFormat format )
 	num_attrs++;
 }
 
-
 VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassIndex, uint32_t def_index ) {
 	VkShaderModule *vs_module = NULL;
 	VkShaderModule *fs_module = NULL;
-	//int32_t vert_spec_data[1]; // clippping
-	floatint_t frag_spec_data[11]; // 0:alpha-test-func, 1:alpha-test-value, 2:depth-fragment, 3:alpha-to-coverage, 4:color_mode, 5:abs_light, 6:multitexture mode, 7:discard mode, 8: ident.color, 9 - ident.alpha, 10 - acff
+	floatint_t frag_spec_data[11];
 	VkSpecializationMapEntry spec_entries[12];
-	//VkSpecializationInfo vert_spec_info;
 	VkSpecializationInfo frag_spec_info;
 	VkPipelineVertexInputStateCreateInfo vertex_input_state;
 	VkPipelineInputAssemblyStateCreateInfo input_assembly_state;
@@ -6147,7 +5796,6 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 			case TYPE_COLOR_RED:
 				break;
 			default:
-				// switch to fogged modules
 				vs_module++;
 				fs_module++;
 				break;
@@ -6157,24 +5805,20 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 	set_shader_stage_desc(shader_stages+0, VK_SHADER_STAGE_VERTEX_BIT, *vs_module, "main");
 	set_shader_stage_desc(shader_stages+1, VK_SHADER_STAGE_FRAGMENT_BIT, *fs_module, "main");
 
-	//Com_Memset( vert_spec_data, 0, sizeof( vert_spec_data ) );
 	Com_Memset( frag_spec_data, 0, sizeof( frag_spec_data ) );
 
-	//vert_spec_data[0] = def->clipping_plane ? 1 : 0;
-
-	// fragment shader specialization data
 	atest_bits = state_bits & GLS_ATEST_BITS;
 	switch ( atest_bits ) {
 		case GLS_ATEST_GT_0:
-			frag_spec_data[0].i = 1; // not equal
+			frag_spec_data[0].i = 1;
 			frag_spec_data[1].f = 0.0f;
 			break;
 		case GLS_ATEST_LT_80:
-			frag_spec_data[0].i = 2; // less than
+			frag_spec_data[0].i = 2;
 			frag_spec_data[1].f = 0.5f;
 			break;
 		case GLS_ATEST_GE_80:
-			frag_spec_data[0].i = 3; // greater or equal
+			frag_spec_data[0].i = 3;
 			frag_spec_data[1].f = 0.5f;
 			break;
 		default:
@@ -6183,7 +5827,6 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 			break;
 	};
 
-	// depth fragment threshold
 	frag_spec_data[2].f = 0.85f;
 
 #if 0
@@ -6193,7 +5836,6 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 	}
 #endif
 
-	// constant color
 	switch ( def->shader_type ) {
 		default: frag_spec_data[4].i = 0; break;
 		case TYPE_COLOR_WHITE: frag_spec_data[4].i = 1; break;
@@ -6201,7 +5843,6 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 		case TYPE_COLOR_RED:   frag_spec_data[4].i = 3; break;
 	}
 
-	// abs lighting
 	switch ( def->shader_type ) {
 		case TYPE_SIGNLE_TEXTURE_LIGHTING:
 		case TYPE_SIGNLE_TEXTURE_LIGHTING_LINEAR:
@@ -6210,7 +5851,6 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 			break;
 	}
 
-	// multutexture mode
 	switch ( def->shader_type ) {
 		case TYPE_MULTI_TEXTURE_MUL2_IDENTITY:
 		case TYPE_MULTI_TEXTURE_MUL2_IDENTITY_ENV:
@@ -6297,11 +5937,8 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 		frag_spec_data[10].i = 0;
 	}
 
-	//
-	// vertex module specialization data
-	//
 #if 0
-	spec_entries[0].constantID = 0; // clip_plane
+	spec_entries[0].constantID = 0;
 	spec_entries[0].offset = 0 * sizeof( int32_t );
 	spec_entries[0].size = sizeof( int32_t );
 
@@ -6313,51 +5950,47 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 #endif
 	shader_stages[0].pSpecializationInfo = NULL;
 
-	//
-	// fragment module specialization data
-	//
-
-	spec_entries[1].constantID = 0;  // alpha-test-function
+	spec_entries[1].constantID = 0;
 	spec_entries[1].offset = 0 * sizeof( int32_t );
 	spec_entries[1].size = sizeof( int32_t );
 
-	spec_entries[2].constantID = 1; // alpha-test-value
+	spec_entries[2].constantID = 1;
 	spec_entries[2].offset = 1 * sizeof( int32_t );
 	spec_entries[2].size = sizeof( float );
 
-	spec_entries[3].constantID = 2; // depth-fragment
+	spec_entries[3].constantID = 2;
 	spec_entries[3].offset = 2 * sizeof( int32_t );
 	spec_entries[3].size = sizeof( float );
 
-	spec_entries[4].constantID = 3; // alpha-to-coverage
+	spec_entries[4].constantID = 3;
 	spec_entries[4].offset = 3 * sizeof( int32_t );
 	spec_entries[4].size = sizeof( int32_t );
 
-	spec_entries[5].constantID = 4; // color_mode
+	spec_entries[5].constantID = 4;
 	spec_entries[5].offset = 4 * sizeof( int32_t );
 	spec_entries[5].size = sizeof( int32_t );
 
-	spec_entries[6].constantID = 5; // abs_light
+	spec_entries[6].constantID = 5;
 	spec_entries[6].offset = 5 * sizeof( int32_t );
 	spec_entries[6].size = sizeof( int32_t );
 
-	spec_entries[7].constantID = 6; // multitexture mode
+	spec_entries[7].constantID = 6;
 	spec_entries[7].offset = 6 * sizeof( int32_t );
 	spec_entries[7].size = sizeof( int32_t );
 
-	spec_entries[8].constantID = 7; // discard mode
+	spec_entries[8].constantID = 7;
 	spec_entries[8].offset = 7 * sizeof( int32_t );
 	spec_entries[8].size = sizeof( int32_t );
 
-	spec_entries[9].constantID = 8; // fixed color
+	spec_entries[9].constantID = 8;
 	spec_entries[9].offset = 8 * sizeof( int32_t );
 	spec_entries[9].size = sizeof( float );
 
-	spec_entries[10].constantID = 9; // fixed alpha
+	spec_entries[10].constantID = 9;
 	spec_entries[10].offset = 9 * sizeof( int32_t );
 	spec_entries[10].size = sizeof( float );
 
-	spec_entries[11].constantID = 10; // acff
+	spec_entries[11].constantID = 10;
 	spec_entries[11].offset = 10 * sizeof( int32_t );
 	spec_entries[11].size = sizeof( int32_t );
 
@@ -6367,15 +6000,12 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 	frag_spec_info.pData = &frag_spec_data[0];
 	shader_stages[1].pSpecializationInfo = &frag_spec_info;
 
-	//
-	// Vertex input
-	//
 	num_binds = num_attrs = 0;
 	switch ( def->shader_type ) {
 
 		case TYPE_FOG_ONLY:
 		case TYPE_DOT:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
+			push_bind( 0, sizeof( vec4_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			break;
 
@@ -6383,7 +6013,7 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 		case TYPE_COLOR_WHITE:
 		case TYPE_COLOR_GREEN:
 		case TYPE_COLOR_RED:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
+			push_bind( 0, sizeof( vec4_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			break;
 
@@ -6391,46 +6021,44 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 		case TYPE_SIGNLE_TEXTURE_IDENTITY:
 		case TYPE_SIGNLE_TEXTURE_FIXED_COLOR:
 		case TYPE_SIGNLE_TEXTURE_ENT_COLOR:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
-			push_bind( 2, sizeof( vec2_t ) );					// st0 array
+			push_bind( 0, sizeof( vec4_t ) );
+			push_bind( 2, sizeof( vec2_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			push_attr( 2, 2, VK_FORMAT_R32G32_SFLOAT );
 			break;
 
 		case TYPE_SIGNLE_TEXTURE:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
-			push_bind( 1, sizeof( color4ub_t ) );				// color array
-			push_bind( 2, sizeof( vec2_t ) );					// st0 array
+			push_bind( 0, sizeof( vec4_t ) );
+			push_bind( 1, sizeof( color4ub_t ) );
+			push_bind( 2, sizeof( vec2_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			push_attr( 1, 1, VK_FORMAT_R8G8B8A8_UNORM );
 			push_attr( 2, 2, VK_FORMAT_R32G32_SFLOAT );
 			break;
 
 		case TYPE_SIGNLE_TEXTURE_ENV:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
-			push_bind( 1, sizeof( color4ub_t ) );				// color array
-			//push_bind( 2, sizeof( vec2_t ) );					// st0 array
-			push_bind( 5, sizeof( vec4_t ) );					// normals
+			push_bind( 0, sizeof( vec4_t ) );
+			push_bind( 1, sizeof( color4ub_t ) );
+			push_bind( 5, sizeof( vec4_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			push_attr( 1, 1, VK_FORMAT_R8G8B8A8_UNORM );
-			//push_attr( 2, 2, VK_FORMAT_R8G8B8A8_UNORM );
 			push_attr( 5, 5, VK_FORMAT_R32G32B32A32_SFLOAT );
 			break;
 
 		case TYPE_SIGNLE_TEXTURE_IDENTITY_ENV:
 		case TYPE_SIGNLE_TEXTURE_FIXED_COLOR_ENV:
 		case TYPE_SIGNLE_TEXTURE_ENT_COLOR_ENV:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
-			push_bind( 5, sizeof( vec4_t ) );					// normals
+			push_bind( 0, sizeof( vec4_t ) );
+			push_bind( 5, sizeof( vec4_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			push_attr( 5, 5, VK_FORMAT_R32G32B32A32_SFLOAT );
 			break;
 
 		case TYPE_SIGNLE_TEXTURE_LIGHTING:
 		case TYPE_SIGNLE_TEXTURE_LIGHTING_LINEAR:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
-			push_bind( 1, sizeof( vec2_t ) );					// st0 array
-			push_bind( 2, sizeof( vec4_t ) );					// normals array
+			push_bind( 0, sizeof( vec4_t ) );
+			push_bind( 1, sizeof( vec2_t ) );
+			push_bind( 2, sizeof( vec4_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			push_attr( 1, 1, VK_FORMAT_R32G32_SFLOAT );
 			push_attr( 2, 2, VK_FORMAT_R32G32B32A32_SFLOAT );
@@ -6440,9 +6068,9 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 		case TYPE_MULTI_TEXTURE_ADD2_IDENTITY:
 		case TYPE_MULTI_TEXTURE_MUL2_FIXED_COLOR:
 		case TYPE_MULTI_TEXTURE_ADD2_FIXED_COLOR:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
-			push_bind( 2, sizeof( vec2_t ) );					// st0 array
-			push_bind( 3, sizeof( vec2_t ) );					// st1 array
+			push_bind( 0, sizeof( vec4_t ) );
+			push_bind( 2, sizeof( vec2_t ) );
+			push_bind( 3, sizeof( vec2_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			push_attr( 2, 2, VK_FORMAT_R32G32_SFLOAT );
 			push_attr( 3, 3, VK_FORMAT_R32G32_SFLOAT );
@@ -6452,9 +6080,9 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 		case TYPE_MULTI_TEXTURE_ADD2_IDENTITY_ENV:
 		case TYPE_MULTI_TEXTURE_MUL2_FIXED_COLOR_ENV:
 		case TYPE_MULTI_TEXTURE_ADD2_FIXED_COLOR_ENV:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
-			push_bind( 3, sizeof( vec2_t ) );					// st1 array
-			push_bind( 5, sizeof( vec4_t ) );					// normals
+			push_bind( 0, sizeof( vec4_t ) );
+			push_bind( 3, sizeof( vec2_t ) );
+			push_bind( 5, sizeof( vec4_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			push_attr( 3, 3, VK_FORMAT_R32G32_SFLOAT );
 			push_attr( 5, 5, VK_FORMAT_R32G32B32A32_SFLOAT );
@@ -6463,10 +6091,10 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 		case TYPE_MULTI_TEXTURE_MUL2:
 		case TYPE_MULTI_TEXTURE_ADD2_1_1:
 		case TYPE_MULTI_TEXTURE_ADD2:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
-			push_bind( 1, sizeof( color4ub_t ) );				// color array
-			push_bind( 2, sizeof( vec2_t ) );					// st0 array
-			push_bind( 3, sizeof( vec2_t ) );					// st1 array
+			push_bind( 0, sizeof( vec4_t ) );
+			push_bind( 1, sizeof( color4ub_t ) );
+			push_bind( 2, sizeof( vec2_t ) );
+			push_bind( 3, sizeof( vec2_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			push_attr( 1, 1, VK_FORMAT_R8G8B8A8_UNORM );
 			push_attr( 2, 2, VK_FORMAT_R32G32_SFLOAT );
@@ -6476,14 +6104,12 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 		case TYPE_MULTI_TEXTURE_MUL2_ENV:
 		case TYPE_MULTI_TEXTURE_ADD2_1_1_ENV:
 		case TYPE_MULTI_TEXTURE_ADD2_ENV:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
-			push_bind( 1, sizeof( color4ub_t ) );				// color array
-			//push_bind( 2, sizeof( vec2_t ) );					// st0 array
-			push_bind( 3, sizeof( vec2_t ) );					// st1 array
-			push_bind( 5, sizeof( vec4_t ) );					// normals
+			push_bind( 0, sizeof( vec4_t ) );
+			push_bind( 1, sizeof( color4ub_t ) );
+			push_bind( 3, sizeof( vec2_t ) );
+			push_bind( 5, sizeof( vec4_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			push_attr( 1, 1, VK_FORMAT_R8G8B8A8_UNORM );
-			//push_attr( 2, 2, VK_FORMAT_R32G32_SFLOAT );
 			push_attr( 3, 3, VK_FORMAT_R32G32_SFLOAT );
 			push_attr( 5, 5, VK_FORMAT_R32G32B32A32_SFLOAT );
 			break;
@@ -6491,11 +6117,11 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 		case TYPE_MULTI_TEXTURE_MUL3:
 		case TYPE_MULTI_TEXTURE_ADD3_1_1:
 		case TYPE_MULTI_TEXTURE_ADD3:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
-			push_bind( 1, sizeof( color4ub_t ) );				// color array
-			push_bind( 2, sizeof( vec2_t ) );					// st0 array
-			push_bind( 3, sizeof( vec2_t ) );					// st1 array
-			push_bind( 4, sizeof( vec2_t ) );					// st2 array
+			push_bind( 0, sizeof( vec4_t ) );
+			push_bind( 1, sizeof( color4ub_t ) );
+			push_bind( 2, sizeof( vec2_t ) );
+			push_bind( 3, sizeof( vec2_t ) );
+			push_bind( 4, sizeof( vec2_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			push_attr( 1, 1, VK_FORMAT_R8G8B8A8_UNORM );
 			push_attr( 2, 2, VK_FORMAT_R32G32_SFLOAT );
@@ -6506,15 +6132,13 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 		case TYPE_MULTI_TEXTURE_MUL3_ENV:
 		case TYPE_MULTI_TEXTURE_ADD3_1_1_ENV:
 		case TYPE_MULTI_TEXTURE_ADD3_ENV:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
-			push_bind( 1, sizeof( color4ub_t ) );				// color array
-			//push_bind( 2, sizeof( vec2_t ) );					// st0 array
-			push_bind( 3, sizeof( vec2_t ) );					// st1 array
-			push_bind( 4, sizeof( vec2_t ) );					// st2 array
-			push_bind( 5, sizeof( vec4_t ) );					// normals
+			push_bind( 0, sizeof( vec4_t ) );
+			push_bind( 1, sizeof( color4ub_t ) );
+			push_bind( 3, sizeof( vec2_t ) );
+			push_bind( 4, sizeof( vec2_t ) );
+			push_bind( 5, sizeof( vec4_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			push_attr( 1, 1, VK_FORMAT_R8G8B8A8_UNORM );
-			//push_attr( 2, 2, VK_FORMAT_R32G32_SFLOAT );
 			push_attr( 3, 3, VK_FORMAT_R32G32_SFLOAT );
 			push_attr( 4, 4, VK_FORMAT_R32G32_SFLOAT );
 			push_attr( 5, 5, VK_FORMAT_R32G32B32A32_SFLOAT );
@@ -6527,11 +6151,11 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 		case TYPE_BLEND2_MIX_ALPHA:
 		case TYPE_BLEND2_MIX_ONE_MINUS_ALPHA:
 		case TYPE_BLEND2_DST_COLOR_SRC_ALPHA:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
-			push_bind( 1, sizeof( color4ub_t ) );				// color0 array
-			push_bind( 2, sizeof( vec2_t ) );					// st0 array
-			push_bind( 3, sizeof( vec2_t ) );					// st1 array
-			push_bind( 6, sizeof( color4ub_t ) );				// color1 array
+			push_bind( 0, sizeof( vec4_t ) );
+			push_bind( 1, sizeof( color4ub_t ) );
+			push_bind( 2, sizeof( vec2_t ) );
+			push_bind( 3, sizeof( vec2_t ) );
+			push_bind( 6, sizeof( color4ub_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			push_attr( 1, 1, VK_FORMAT_R8G8B8A8_UNORM );
 			push_attr( 2, 2, VK_FORMAT_R32G32_SFLOAT );
@@ -6546,15 +6170,13 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 		case TYPE_BLEND2_MIX_ALPHA_ENV:
 		case TYPE_BLEND2_MIX_ONE_MINUS_ALPHA_ENV:
 		case TYPE_BLEND2_DST_COLOR_SRC_ALPHA_ENV:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
-			push_bind( 1, sizeof( color4ub_t ) );				// color0 array
-			//push_bind( 2, sizeof( vec2_t ) );					// st0 array
-			push_bind( 3, sizeof( vec2_t ) );					// st1 array
-			push_bind( 5, sizeof( vec4_t ) );					// normals
-			push_bind( 6, sizeof( color4ub_t ) );				// color1 array
+			push_bind( 0, sizeof( vec4_t ) );
+			push_bind( 1, sizeof( color4ub_t ) );
+			push_bind( 3, sizeof( vec2_t ) );
+			push_bind( 5, sizeof( vec4_t ) );
+			push_bind( 6, sizeof( color4ub_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			push_attr( 1, 1, VK_FORMAT_R8G8B8A8_UNORM );
-			//push_attr( 2, 2, VK_FORMAT_R32G32_SFLOAT );
 			push_attr( 3, 3, VK_FORMAT_R32G32_SFLOAT );
 			push_attr( 5, 5, VK_FORMAT_R32G32B32A32_SFLOAT );
 			push_attr( 6, 6, VK_FORMAT_R8G8B8A8_UNORM );
@@ -6567,13 +6189,13 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 		case TYPE_BLEND3_MIX_ALPHA:
 		case TYPE_BLEND3_MIX_ONE_MINUS_ALPHA:
 		case TYPE_BLEND3_DST_COLOR_SRC_ALPHA:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
-			push_bind( 1, sizeof( color4ub_t ) );				// color0 array
-			push_bind( 2, sizeof( vec2_t ) );					// st0 array
-			push_bind( 3, sizeof( vec2_t ) );					// st1 array
-			push_bind( 4, sizeof( vec2_t ) );					// st2 array
-			push_bind( 6, sizeof( color4ub_t ) );				// color1 array
-			push_bind( 7, sizeof( color4ub_t ) );				// color2 array
+			push_bind( 0, sizeof( vec4_t ) );
+			push_bind( 1, sizeof( color4ub_t ) );
+			push_bind( 2, sizeof( vec2_t ) );
+			push_bind( 3, sizeof( vec2_t ) );
+			push_bind( 4, sizeof( vec2_t ) );
+			push_bind( 6, sizeof( color4ub_t ) );
+			push_bind( 7, sizeof( color4ub_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			push_attr( 1, 1, VK_FORMAT_R8G8B8A8_UNORM );
 			push_attr( 2, 2, VK_FORMAT_R32G32_SFLOAT );
@@ -6590,17 +6212,15 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 		case TYPE_BLEND3_MIX_ALPHA_ENV:
 		case TYPE_BLEND3_MIX_ONE_MINUS_ALPHA_ENV:
 		case TYPE_BLEND3_DST_COLOR_SRC_ALPHA_ENV:
-			push_bind( 0, sizeof( vec4_t ) );					// xyz array
-			push_bind( 1, sizeof( color4ub_t ) );				// color0 array
-			//push_bind( 2, sizeof( vec2_t ) );					// st0 array
-			push_bind( 3, sizeof( vec2_t ) );					// st1 array
-			push_bind( 4, sizeof( vec2_t ) );					// st2 array
-			push_bind( 5, sizeof( vec4_t ) );					// normals
-			push_bind( 6, sizeof( color4ub_t ) );				// color1 array
-			push_bind( 7, sizeof( color4ub_t ) );				// color2 array
+			push_bind( 0, sizeof( vec4_t ) );
+			push_bind( 1, sizeof( color4ub_t ) );
+			push_bind( 3, sizeof( vec2_t ) );
+			push_bind( 4, sizeof( vec2_t ) );
+			push_bind( 5, sizeof( vec4_t ) );
+			push_bind( 6, sizeof( color4ub_t ) );
+			push_bind( 7, sizeof( color4ub_t ) );
 			push_attr( 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT );
 			push_attr( 1, 1, VK_FORMAT_R8G8B8A8_UNORM );
-			//push_attr( 2, 2, VK_FORMAT_R32G32_SFLOAT );
 			push_attr( 3, 3, VK_FORMAT_R32G32_SFLOAT );
 			push_attr( 4, 4, VK_FORMAT_R32G32_SFLOAT );
 			push_attr( 5, 5, VK_FORMAT_R32G32B32A32_SFLOAT );
@@ -6621,9 +6241,6 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 	vertex_input_state.vertexBindingDescriptionCount = num_binds;
 	vertex_input_state.vertexAttributeDescriptionCount = num_attrs;
 
-	//
-	// Primitive assembly.
-	//
 	input_assembly_state.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	input_assembly_state.pNext = NULL;
 	input_assembly_state.flags = 0;
@@ -6636,20 +6253,14 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 		default: input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; break;
 	}
 
-	//
-	// Viewport.
-	//
 	viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
 	viewport_state.pNext = NULL;
 	viewport_state.flags = 0;
 	viewport_state.viewportCount = 1;
-	viewport_state.pViewports = NULL; // dynamic viewport state
+	viewport_state.pViewports = NULL;
 	viewport_state.scissorCount = 1;
-	viewport_state.pScissors = NULL; // dynamic scissor state
+	viewport_state.pScissors = NULL;
 
-	//
-	// Rasterization.
-	//
 	rasterization_state.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 	rasterization_state.pNext = NULL;
 	rasterization_state.flags = 0;
@@ -6676,9 +6287,8 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 			break;
 	}
 
-	rasterization_state.frontFace = VK_FRONT_FACE_CLOCKWISE; // Q3 defaults to clockwise vertex order
+	rasterization_state.frontFace = VK_FRONT_FACE_CLOCKWISE;
 
-	 // depth bias state
 	if ( def->polygon_offset ) {
 		rasterization_state.depthBiasEnable = VK_TRUE;
 		rasterization_state.depthBiasClamp = 0.0f;
@@ -6832,7 +6442,6 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 		attachment_blend_state.alphaBlendOp = VK_BLEND_OP_ADD;
 
 		if ( def->allow_discard && vkSamples != VK_SAMPLE_COUNT_1_BIT && depth_stencil_state.depthWriteEnable == VK_FALSE ) {
-			// try to reduce pixel fillrate for transparent surfaces, this yields 1..10% fps increase when multisampling in enabled
 			if ( attachment_blend_state.srcColorBlendFactor == VK_BLEND_FACTOR_SRC_ALPHA && attachment_blend_state.dstColorBlendFactor == VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA ) {
 				frag_spec_data[7].i = 1;
 			} else if ( attachment_blend_state.srcColorBlendFactor == VK_BLEND_FACTOR_ONE && attachment_blend_state.dstColorBlendFactor == VK_BLEND_FACTOR_ONE ) {
@@ -6897,7 +6506,6 @@ VkPipeline create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPassI
 	return pipeline;
 }
 
-
 static uint32_t vk_alloc_pipeline( const Vk_Pipeline_Def *def ) {
 	VK_Pipeline_t *pipeline;
 	if ( vk.pipelines_count >= MAX_VK_PIPELINES ) {
@@ -6914,7 +6522,6 @@ static uint32_t vk_alloc_pipeline( const Vk_Pipeline_Def *def ) {
 	}
 }
 
-
 VkPipeline vk_gen_pipeline( uint32_t index ) {
 	if ( index < vk.pipelines_count ) {
 		VK_Pipeline_t *pipeline = vk.pipelines + index;
@@ -6928,7 +6535,6 @@ VkPipeline vk_gen_pipeline( uint32_t index ) {
 		return VK_NULL_HANDLE;
 	}
 }
-
 
 uint32_t vk_find_pipeline_ext( uint32_t base, const Vk_Pipeline_Def *def, qboolean use ) {
 	const Vk_Pipeline_Def *cur_def;
@@ -6950,7 +6556,6 @@ found:
 	return index;
 }
 
-
 void vk_get_pipeline_def( uint32_t pipeline, Vk_Pipeline_Def *def ) {
 	if ( pipeline >= vk.pipelines_count ) {
 		Com_Memset( def, 0, sizeof( *def ) );
@@ -6958,7 +6563,6 @@ void vk_get_pipeline_def( uint32_t pipeline, Vk_Pipeline_Def *def ) {
 		Com_Memcpy( def, &vk.pipelines[ pipeline ].def, sizeof( *def ) );
 	}
 }
-
 
 static void get_viewport_rect(VkRect2D *r)
 {
@@ -6991,7 +6595,6 @@ static void get_viewport(VkViewport *viewport, Vk_Depth_Range depth_range) {
 	switch ( depth_range ) {
 		default:
 #ifdef USE_REVERSED_DEPTH
-		//case DEPTH_RANGE_NORMAL:
 			viewport->minDepth = 0.0f;
 			viewport->maxDepth = 1.0f;
 			break;
@@ -7008,7 +6611,6 @@ static void get_viewport(VkViewport *viewport, Vk_Depth_Range depth_range) {
 			viewport->maxDepth = 1.0f;
 			break;
 #else
-		//case DEPTH_RANGE_NORMAL:
 			viewport->minDepth = 0.0f;
 			viewport->maxDepth = 1.0f;
 			break;
@@ -7053,7 +6655,6 @@ static void get_scissor_rect(VkRect2D *r) {
 	}
 }
 
-
 static void get_mvp_transform( float *mvp )
 {
 	if ( backEnd.projection2D )
@@ -7077,14 +6678,10 @@ static void get_mvp_transform( float *mvp )
 		float proj[16];
 		Com_Memcpy( proj, p, 64 );
 
-		// update q3's proj matrix (opengl) to vulkan conventions: z - [0, 1] instead of [-1, 1] and invert y direction
 		proj[5] = -p[5];
-		//proj[10] = ( p[10] - 1.0f ) / 2.0f;
-		//proj[14] = p[14] / 2.0f;
 		myGlMultMatrix( vk_world.modelview_transform, proj, mvp );
 	}
 }
-
 
 void vk_clear_color( const vec4_t color ) {
 
@@ -7107,7 +6704,6 @@ void vk_clear_color( const vec4_t color ) {
 
 	qvkCmdClearAttachments( vk.cmd->command_buffer, 1, &attachment, 1, &clear_rect );
 }
-
 
 void vk_clear_depth( qboolean clear_stencil ) {
 
@@ -7140,13 +6736,9 @@ void vk_clear_depth( qboolean clear_stencil ) {
 	qvkCmdClearAttachments( vk.cmd->command_buffer, 1, &attachment, 1, clear_rect );
 }
 
-
 void vk_update_mvp( const float *m ) {
-	float push_constants[16]; // mvp transform
+	float push_constants[16];
 
-	//
-	// Specify push constants.
-	//
 	if ( m )
 		Com_Memcpy( push_constants, m, sizeof( push_constants ) );
 	else
@@ -7156,7 +6748,6 @@ void vk_update_mvp( const float *m ) {
 
 	vk.stats.push_size += sizeof( push_constants );
 }
-
 
 static VkBuffer shade_bufs[8];
 static int bind_base;
@@ -7172,13 +6763,11 @@ static void vk_bind_index_attr( int index )
 	}
 }
 
-
 static void vk_bind_attr( int index, unsigned int item_size, const void *src ) {
 	const uint32_t offset = PAD( vk.cmd->vertex_buffer_offset, 32 );
 	const uint32_t size = tess.numVertexes * item_size;
 
 	if ( offset + size > vk.geometry_buffer_size ) {
-		// schedule geometry buffer resize
 		vk.geometry_buffer_size_new = log2pad( offset + size, 1 );
 	} else {
 		vk.cmd->buf_offset[ index ] = offset;
@@ -7189,13 +6778,11 @@ static void vk_bind_attr( int index, unsigned int item_size, const void *src ) {
 	vk_bind_index_attr( index );
 }
 
-
 uint32_t vk_tess_index( uint32_t numIndexes, const void *src ) {
 	const uint32_t offset = vk.cmd->vertex_buffer_offset;
 	const uint32_t size = numIndexes * sizeof( tess.indexes[0] );
 
 	if ( offset + size > vk.geometry_buffer_size ) {
-		// schedule geometry buffer resize
 		vk.geometry_buffer_size_new = log2pad( offset + size, 1 );
 		return ~0U;
 	} else {
@@ -7204,7 +6791,6 @@ uint32_t vk_tess_index( uint32_t numIndexes, const void *src ) {
 		return offset;
 	}
 }
-
 
 void vk_bind_index_buffer( VkBuffer buffer, uint32_t offset )
 {
@@ -7215,7 +6801,6 @@ void vk_bind_index_buffer( VkBuffer buffer, uint32_t offset )
 	vk.cmd->curr_index_offset = offset;
 }
 
-
 #ifdef USE_VBO
 void vk_draw_indexed( uint32_t indexCount, uint32_t firstIndex )
 {
@@ -7223,20 +6808,17 @@ void vk_draw_indexed( uint32_t indexCount, uint32_t firstIndex )
 }
 #endif
 
-
 void vk_bind_index( void )
 {
 #ifdef USE_VBO
 	if ( tess.vboIndex ) {
 		vk.cmd->num_indexes = 0;
-		//qvkCmdBindIndexBuffer( vk.cmd->command_buffer, vk.vbo.index_buffer, tess.shader->iboOffset, VK_INDEX_TYPE_UINT32 );
 		return;
 	}
 #endif
 
 	vk_bind_index_ext( tess.numIndexes, tess.indexes );
 }
-
 
 void vk_bind_index_ext( const int numIndexes, const uint32_t *indexes )
 {
@@ -7245,15 +6827,12 @@ void vk_bind_index_ext( const int numIndexes, const uint32_t *indexes )
 		vk_bind_index_buffer( vk.cmd->vertex_buffer, offset );
 		vk.cmd->num_indexes = numIndexes;
 	} else {
-		// overflowed
 		vk.cmd->num_indexes = 0;
 	}
 }
 
-
 void vk_bind_geometry( uint32_t flags )
 {
-	//unsigned int size;
 	bind_base = -1;
 	bind_count = 0;
 
@@ -7265,42 +6844,42 @@ void vk_bind_geometry( uint32_t flags )
 
 		shade_bufs[0] = shade_bufs[1] = shade_bufs[2] = shade_bufs[3] = shade_bufs[4] = shade_bufs[5] = shade_bufs[6] = shade_bufs[7] = vk.vbo.vertex_buffer;
 
-		if ( flags & TESS_XYZ ) {  // 0
+		if ( flags & TESS_XYZ ) {
 			vk.cmd->vbo_offset[0] = tess.shader->vboOffset + 0;
 			vk_bind_index_attr( 0 );
 		}
 
-		if ( flags & TESS_RGBA0 ) { // 1
+		if ( flags & TESS_RGBA0 ) {
 			vk.cmd->vbo_offset[1] = tess.shader->stages[ tess.vboStage ]->rgb_offset[0];
 			vk_bind_index_attr( 1 );
 		}
 
-		if ( flags & TESS_ST0 ) {  // 2
+		if ( flags & TESS_ST0 ) {
 			vk.cmd->vbo_offset[2] = tess.shader->stages[ tess.vboStage ]->tex_offset[0];
 			vk_bind_index_attr( 2 );
 		}
 
-		if ( flags & TESS_ST1 ) {  // 3
+		if ( flags & TESS_ST1 ) {
 			vk.cmd->vbo_offset[3] = tess.shader->stages[ tess.vboStage ]->tex_offset[1];
 			vk_bind_index_attr( 3 );
 		}
 
-		if ( flags & TESS_ST2 ) {  // 4
+		if ( flags & TESS_ST2 ) {
 			vk.cmd->vbo_offset[4] = tess.shader->stages[ tess.vboStage ]->tex_offset[2];
 			vk_bind_index_attr( 4 );
 		}
 
-		if ( flags & TESS_NNN ) { // 5
+		if ( flags & TESS_NNN ) {
 			vk.cmd->vbo_offset[5] = tess.shader->normalOffset;
 			vk_bind_index_attr( 5 );
 		}
 
-		if ( flags & TESS_RGBA1 ) { // 6
+		if ( flags & TESS_RGBA1 ) {
 			vk.cmd->vbo_offset[6] = tess.shader->stages[ tess.vboStage ]->rgb_offset[1];
 			vk_bind_index_attr( 6 );
 		}
 
-		if ( flags & TESS_RGBA2 ) { // 7
+		if ( flags & TESS_RGBA2 ) {
 			vk.cmd->vbo_offset[7] = tess.shader->stages[ tess.vboStage ]->rgb_offset[2];
 			vk_bind_index_attr( 7 );
 		}
@@ -7308,7 +6887,7 @@ void vk_bind_geometry( uint32_t flags )
 		qvkCmdBindVertexBuffers( vk.cmd->command_buffer, bind_base, bind_count, shade_bufs, vk.cmd->vbo_offset + bind_base );
 
 	} else
-#endif // USE_VBO
+#endif
 	{
 		shade_bufs[0] = shade_bufs[1] = shade_bufs[2] = shade_bufs[3] = shade_bufs[4] = shade_bufs[5] = shade_bufs[6] = shade_bufs[7] = vk.cmd->vertex_buffer;
 
@@ -7348,7 +6927,6 @@ void vk_bind_geometry( uint32_t flags )
 	}
 }
 
-
 void vk_bind_lighting( int stage, int bundle )
 {
 	bind_base = -1;
@@ -7367,7 +6945,7 @@ void vk_bind_lighting( int stage, int bundle )
 
 	}
 	else
-#endif // USE_VBO
+#endif
 	{
 		shade_bufs[0] = shade_bufs[1] = shade_bufs[2] = vk.cmd->vertex_buffer;
 
@@ -7379,12 +6957,10 @@ void vk_bind_lighting( int stage, int bundle )
 	}
 }
 
-
 void vk_reset_descriptor( int index )
 {
 	vk.cmd->descriptor_set.current[ index ] = VK_NULL_HANDLE;
 }
-
 
 void vk_update_descriptor( int index, VkDescriptorSet descriptor )
 {
@@ -7395,12 +6971,10 @@ void vk_update_descriptor( int index, VkDescriptorSet descriptor )
 	vk.cmd->descriptor_set.current[ index ] = descriptor;
 }
 
-
 void vk_update_descriptor_offset( int index, uint32_t offset )
 {
 	vk.cmd->descriptor_set.offset[ index ] = offset;
 }
-
 
 void vk_bind_descriptor_sets( void )
 {
@@ -7414,13 +6988,12 @@ void vk_bind_descriptor_sets( void )
 	end = vk.cmd->descriptor_set.end;
 
 	offset_count = 0;
-	if ( /*start == VK_DESC_STORAGE || */ start == VK_DESC_UNIFORM ) { // uniform offset or storage offset
+	if (  start == VK_DESC_UNIFORM ) {
 		offsets[ offset_count++ ] = vk.cmd->descriptor_set.offset[ start ];
 	}
 
 	count = end - start + 1;
 
-	// fill NULL descriptor gaps
 	for ( i = start + 1; i < end; i++ ) {
 		if ( vk.cmd->descriptor_set.current[i] == VK_NULL_HANDLE ) {
 			vk.cmd->descriptor_set.current[i] = tr.whiteImage->descriptor;
@@ -7432,7 +7005,6 @@ void vk_bind_descriptor_sets( void )
 	vk.cmd->descriptor_set.end = 0;
 	vk.cmd->descriptor_set.start = ~0U;
 }
-
 
 void vk_bind_pipeline( uint32_t pipeline ) {
 	VkPipeline vkpipe;
@@ -7467,20 +7039,16 @@ static void vk_update_depth_range( Vk_Depth_Range depth_range )
 	}
 }
 
-
 void vk_draw_geometry( Vk_Depth_Range depth_range, qboolean indexed ) {
 
 	if ( vk.geometry_buffer_size_new ) {
-		// geometry buffer overflow happened this frame
 		return;
 	}
 
 	vk_bind_descriptor_sets();
 
-	// configure pipeline's dynamic state
 	vk_update_depth_range( depth_range );
 
-	// issue draw call(s)
 #ifdef USE_VBO
 	if ( tess.vboIndex )
 		VBO_RenderIBOItems();
@@ -7493,29 +7061,23 @@ void vk_draw_geometry( Vk_Depth_Range depth_range, qboolean indexed ) {
 	}
 }
 
-
 void vk_draw_dot( uint32_t storage_offset )
 {
 	if ( vk.geometry_buffer_size_new ) {
-		// geometry buffer overflow happened this frame
 		return;
 	}
 
 	qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_storage, VK_DESC_STORAGE, 1, &vk.storage.descriptor, 1, &storage_offset );
 
-	// configure pipeline's dynamic state
 	vk_update_depth_range( DEPTH_RANGE_NORMAL );
 
 	qvkCmdDraw( vk.cmd->command_buffer, tess.numVertexes, 1, 0, 0 );
 }
 
-
 static void vk_begin_render_pass( VkRenderPass renderPass, VkFramebuffer frameBuffer, qboolean clearValues, uint32_t width, uint32_t height )
 {
 	VkRenderPassBeginInfo render_pass_begin_info;
 	VkClearValue clear_values[3];
-
-	// Begin render pass.
 
 	render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	render_pass_begin_info.pNext = NULL;
@@ -7527,10 +7089,6 @@ static void vk_begin_render_pass( VkRenderPass renderPass, VkFramebuffer frameBu
 	render_pass_begin_info.renderArea.extent.height = height;
 
 	if ( clearValues ) {
-		// attachments layout:
-		// [0] - resolve/color/presentation
-		// [1] - depth/stencil
-		// [2] - multisampled color, optional
 		Com_Memset( clear_values, 0, sizeof( clear_values ) );
 #ifndef USE_REVERSED_DEPTH
 		clear_values[1].depthStencil.depth = 1.0;
@@ -7550,7 +7108,6 @@ static void vk_begin_render_pass( VkRenderPass renderPass, VkFramebuffer frameBu
 	vk.cmd->depth_range = DEPTH_RANGE_COUNT;
 }
 
-
 void vk_begin_main_render_pass( void )
 {
 	VkFramebuffer frameBuffer = vk.framebuffers.main[ vk.cmd->swapchain_image_index ];
@@ -7560,13 +7117,10 @@ void vk_begin_main_render_pass( void )
 	vk.renderWidth = glConfig.vidWidth;
 	vk.renderHeight = glConfig.vidHeight;
 
-	//vk.renderScaleX = (float)vk.renderWidth / (float)glConfig.vidWidth;
-	//vk.renderScaleY = (float)vk.renderHeight / (float)glConfig.vidHeight;
 	vk.renderScaleX = vk.renderScaleY = 1.0f;
 
 	vk_begin_render_pass( vk.render_pass.main, frameBuffer, qtrue, vk.renderWidth, vk.renderHeight );
 }
-
 
 void vk_begin_post_bloom_render_pass( void )
 {
@@ -7577,47 +7131,34 @@ void vk_begin_post_bloom_render_pass( void )
 	vk.renderWidth = glConfig.vidWidth;
 	vk.renderHeight = glConfig.vidHeight;
 
-	//vk.renderScaleX = (float)vk.renderWidth / (float)glConfig.vidWidth;
-	//vk.renderScaleY = (float)vk.renderHeight / (float)glConfig.vidHeight;
 	vk.renderScaleX = vk.renderScaleY = 1.0f;
 
 	vk_begin_render_pass( vk.render_pass.post_bloom, frameBuffer, qfalse, vk.renderWidth, vk.renderHeight );
 }
 
-
 void vk_begin_bloom_extract_render_pass( void )
 {
 	VkFramebuffer frameBuffer = vk.framebuffers.bloom_extract;
 
-	//vk.renderPassIndex = RENDER_PASS_BLOOM_EXTRACT; // doesn't matter, we will use dedicated pipelines
-
 	vk.renderWidth = gls.captureWidth;
 	vk.renderHeight = gls.captureHeight;
 
-	//vk.renderScaleX = (float)vk.renderWidth / (float)glConfig.vidWidth;
-	//vk.renderScaleY = (float)vk.renderHeight / (float)glConfig.vidHeight;
 	vk.renderScaleX = vk.renderScaleY = 1.0f;
 
 	vk_begin_render_pass( vk.render_pass.bloom_extract, frameBuffer, qfalse, vk.renderWidth, vk.renderHeight );
 }
 
-
 void vk_begin_blur_render_pass( uint32_t index )
 {
 	VkFramebuffer frameBuffer = vk.framebuffers.blur[ index ];
 
-	//vk.renderPassIndex = RENDER_PASS_BLOOM_EXTRACT; // doesn't matter, we will use dedicated pipelines
-
 	vk.renderWidth = gls.captureWidth / ( 2 << ( index / 2 ) );
 	vk.renderHeight = gls.captureHeight / ( 2 << ( index / 2 ) );
 
-	//vk.renderScaleX = (float)vk.renderWidth / (float)glConfig.vidWidth;
-	//vk.renderScaleY = (float)vk.renderHeight / (float)glConfig.vidHeight;
 	vk.renderScaleX = vk.renderScaleY = 1.0f;
 
 	vk_begin_render_pass( vk.render_pass.blur[ index ], frameBuffer, qfalse, vk.renderWidth, vk.renderHeight );
 }
-
 
 static void vk_begin_screenmap_render_pass( void )
 {
@@ -7634,14 +7175,11 @@ static void vk_begin_screenmap_render_pass( void )
 	vk_begin_render_pass( vk.render_pass.screenmap, frameBuffer, qtrue, vk.renderWidth, vk.renderHeight );
 }
 
-
 void vk_end_render_pass( void )
 {
 	qvkCmdEndRenderPass( vk.cmd->command_buffer );
 
-//	vk.renderPassIndex = RENDER_PASS_MAIN;
 }
-
 
 static qboolean vk_find_screenmap_drawsurfs( void )
 {
@@ -7665,25 +7203,12 @@ static qboolean vk_find_screenmap_drawsurfs( void )
 	}
 }
 
-
 #ifndef UINT64_MAX
 #define UINT64_MAX 0xFFFFFFFFFFFFFFFFULL
 #endif
 
 static void vk_latency_marker( VkLatencyMarkerNV marker );
 
-
-/*
-==================
-vk_window_resized
-
-[ioquakelive] The window is another size now: everything that was made for the old one --
-swapchain, attachments, render passes, framebuffers and pipelines -- is made again. It waits
-for the device to go idle first, so it only runs between frames, which is where the engine
-calls it from. Moving the size without this left the attachments on the old one and the
-device was lost on the next frame
-==================
-*/
 void vk_window_resized( void )
 {
 	if ( !vk.device ) {
@@ -7693,16 +7218,14 @@ void vk_window_resized( void )
 	vk_restart_swapchain( __func__, VK_SUCCESS );
 }
 
-
 void vk_begin_frame( void )
 {
 	VkCommandBufferBeginInfo begin_info;
 	VkResult res;
 
-	if ( vk.frame_count++ ) // might happen during stereo rendering
+	if ( vk.frame_count++ )
 		return;
 
-	// [ioquakelive] 3.5.1.2 of NVIDIA's guide: the simulation ends where the drawing begins
 	vk_latency_marker( VK_LATENCY_MARKER_SIMULATION_END_NV );
 	vk_latency_marker( VK_LATENCY_MARKER_RENDERSUBMIT_START_NV );
 
@@ -7717,7 +7240,6 @@ void vk_begin_frame( void )
 		res = qvkWaitForFences( vk.device, 1, &vk.cmd->rendering_finished_fence, VK_FALSE, 1e10 );
 		if ( res != VK_SUCCESS ) {
 			if ( res == VK_ERROR_DEVICE_LOST ) {
-				// silently discard previous command buffer
 				ri.Printf( PRINT_WARNING, "Vulkan: %s returned %s", "vkWaitForFences", vk_result_string( res ) );
 			}
 			else {
@@ -7727,10 +7249,6 @@ void vk_begin_frame( void )
 		VK_CHECK( qvkResetFences( vk.device, 1, &vk.cmd->rendering_finished_fence ) );
 	}
 
-	// [ioquakelive] r_maxQueuedFrames as in the OpenGL renderers. The ring already waits for the
-	// frame NUM_COMMAND_BUFFERS back; a smaller cap waits for the frame that many back, and the
-	// older ones are done too because the queue runs in order. 1 keeps the CPU from ever running
-	// ahead of the GPU, which is the least latency without Reflex or Anti-Lag
 	if ( r_maxQueuedFrames->integer > 0 && r_maxQueuedFrames->integer < NUM_COMMAND_BUFFERS ) {
 		vk_tess_t *back = &vk.tess[ ( vk.cmd_index + NUM_COMMAND_BUFFERS - r_maxQueuedFrames->integer ) % NUM_COMMAND_BUFFERS ];
 
@@ -7743,11 +7261,8 @@ void vk_begin_frame( void )
 		qboolean retry = qfalse;
 _retry:
 		res = qvkAcquireNextImageKHR( vk.device, vk.swapchain, 1 * 1000000000ULL, vk.cmd->image_acquired, VK_NULL_HANDLE, &vk.cmd->swapchain_image_index );
-		// when running via RDP: "Application has already acquired the maximum number of images (0x2)"
-		// probably caused by "device lost" errors
 		if ( res < 0 ) {
 			if ( res == VK_ERROR_OUT_OF_DATE_KHR && retry == qfalse ) {
-				// swapchain re-creation needed
 				retry = qtrue;
 				vk_restart_swapchain( __func__, res );
 				goto _retry;
@@ -7766,18 +7281,13 @@ _retry:
 	VK_CHECK( qvkBeginCommandBuffer( vk.cmd->command_buffer, &begin_info ) );
 
 	if ( vk.swapchain_images_inited[ vk.cmd->swapchain_image_index ] == qfalse ) {
-		// perform initial swapchain image layout transition
 		vk.swapchain_images_inited[ vk.cmd->swapchain_image_index ] = qtrue;
 		record_image_layout_transition( vk.cmd->command_buffer, vk.swapchain_images[ vk.cmd->swapchain_image_index ],
 			VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED, vk.initSwapchainLayout,
 			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0 );
 	}
 
-	// Ensure visibility of geometry buffers writes.
-	//record_buffer_memory_barrier( vk.cmd->command_buffer, vk.cmd->vertex_buffer, vk.geometry_buffer_size, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT );
-
 #if 0
-	// add explicit layout transition dependency
 	if ( vk.fboActive ) {
 		record_image_layout_transition( vk.cmd->command_buffer, vk.color_image, VK_IMAGE_ASPECT_COLOR_BIT,
 			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 0 );
@@ -7805,7 +7315,6 @@ _retry:
 		vk_begin_main_render_pass();
 	}
 
-	// dynamic vertex buffer layout
 	vk.cmd->uniform_read_offset = 0;
 	vk.cmd->vertex_buffer_offset = 0;
 	Com_Memset( vk.cmd->buf_offset, 0, sizeof( vk.cmd->buf_offset ) );
@@ -7816,14 +7325,11 @@ _retry:
 
 	Com_Memset( &vk.cmd->descriptor_set, 0, sizeof( vk.cmd->descriptor_set ) );
 	vk.cmd->descriptor_set.start = ~0U;
-	//vk.cmd->descriptor_set.end = 0;
 
 	Com_Memset( &vk.cmd->scissor_rect, 0, sizeof( vk.cmd->scissor_rect ) );
 
-	// other stats
 	vk.stats.push_size = 0;
 }
-
 
 static void vk_resize_geometry_buffer( void )
 {
@@ -7848,7 +7354,6 @@ static void vk_resize_geometry_buffer( void )
 	ri.Printf( PRINT_DEVELOPER, "...geometry buffer resized to %iK\n", (int)( vk.geometry_buffer_size / 1024 ) );
 }
 
-
 void vk_end_frame( void )
 {
 #ifdef USE_UPLOAD_QUEUE
@@ -7868,14 +7373,12 @@ void vk_end_frame( void )
 	if ( vk.geometry_buffer_size_new )
 	{
 		vk_resize_geometry_buffer();
-		// issue: one frame may be lost during video recording
-		// solution: re-record all commands again? (might be complicated though)
 		return;
 	}
 
 	if ( vk.fboActive )
 	{
-		vk.cmd->last_pipeline = VK_NULL_HANDLE; // do not restore clobbered descriptors in vk_bloom()
+		vk.cmd->last_pipeline = VK_NULL_HANDLE;
 
 		if ( r_bloom->integer && !r_bloomActive->integer )
 		{
@@ -7886,7 +7389,6 @@ void vk_end_frame( void )
 		{
 			vk_end_render_pass();
 
-			// render to capture FBO
 			vk_begin_render_pass( vk.render_pass.capture, vk.framebuffers.capture, qfalse, gls.captureWidth, gls.captureHeight );
 			qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
 				( !tr.frameHasWorld && vk.capture_neutral_pipeline ) ? vk.capture_neutral_pipeline : vk.capture_pipeline );
@@ -7971,7 +7473,6 @@ void vk_end_frame( void )
 		submit_info.pSignalSemaphores = NULL;
 	}
 
-	// [ioquakelive] Reflex pairs the submission with the frame it belongs to
 	if ( vk.lowLatency2 && vk.latencyFrame ) {
 		latency_submit.sType = VK_STRUCTURE_TYPE_LATENCY_SUBMISSION_PRESENT_ID_NV;
 		latency_submit.pNext = NULL;
@@ -7984,14 +7485,11 @@ void vk_end_frame( void )
 
 	vk_latency_marker( VK_LATENCY_MARKER_RENDERSUBMIT_END_NV );
 
-	// presentation may take undefined time to complete, we can't measure it in a reliable way
 	backEnd.pc.msec = ri.Milliseconds() - backEnd.pc.msec;
 
 	vk.renderPassIndex = RENDER_PASS_MAIN;
 }
 
-
-// [ioquakelive] one of the two stages AMD's anti-lag wants, both carrying the same frame
 static void vk_anti_lag_stage( VkAntiLagStageAMD stage )
 {
 	VkAntiLagPresentationInfoAMD presentation;
@@ -8009,14 +7507,12 @@ static void vk_anti_lag_stage( VkAntiLagStageAMD stage )
 	data.sType = VK_STRUCTURE_TYPE_ANTI_LAG_DATA_AMD;
 	data.pNext = NULL;
 	data.mode = r_lowLatency->integer ? VK_ANTI_LAG_MODE_ON_AMD : VK_ANTI_LAG_MODE_OFF_AMD;
-	data.maxFPS = 0; // the engine has its own limiter
+	data.maxFPS = 0;
 	data.pPresentationInfo = &presentation;
 
 	qvkAntiLagUpdateAMD( vk.device, &data );
 }
 
-
-// [ioquakelive] where Reflex is told this frame stands, so it can work out when to wake it up
 static void vk_latency_marker( VkLatencyMarkerNV marker )
 {
 	VkSetLatencyMarkerInfoNV info;
@@ -8033,8 +7529,6 @@ static void vk_latency_marker( VkLatencyMarkerNV marker )
 	qvkSetLatencyMarkerNV( vk.device, vk.swapchain, &info );
 }
 
-
-// [ioquakelive] Reflex's sleep: the driver decides how long the frame waits here
 static void vk_reflex_sleep( void )
 {
 	VkLatencySleepModeInfoNV mode;
@@ -8046,9 +7540,7 @@ static void vk_reflex_sleep( void )
 		return;
 	}
 
-	// off has to mean that nothing changes, so the frame cap stays with the engine
 	maxFps = r_lowLatency->integer ? ri.Cvar_VariableIntegerValue( "com_maxfps" ) : 0;
-	// [ioquakelive] com_maxfpsVRR, as Com_FrameCap works it out: Reflex paces by the same cap
 	if ( r_lowLatency->integer && ri.Cvar_VariableIntegerValue( "com_maxfpsVRR" ) && glConfig.displayFrequency > 3 &&
 		( maxFps <= 0 || maxFps > glConfig.displayFrequency - 3 ) ) {
 		maxFps = glConfig.displayFrequency - 3;
@@ -8059,8 +7551,6 @@ static void vk_reflex_sleep( void )
 		mode.pNext = NULL;
 		mode.lowLatencyMode = r_lowLatency->integer ? VK_TRUE : VK_FALSE;
 		mode.lowLatencyBoost = r_lowLatency->integer > 1 ? VK_TRUE : VK_FALSE;
-		// the driver takes the lowest of its own limits and this one, and enforces it inside the
-		// sleep, which is the best place in the pipeline for it
 		mode.minimumIntervalUs = maxFps > 0 ? (uint32_t)( 1000000 / maxFps ) : 0;
 		if ( qvkSetLatencySleepModeNV( vk.device, vk.swapchain, &mode ) != VK_SUCCESS ) {
 			vk.lowLatency2 = qfalse;
@@ -8089,36 +7579,17 @@ static void vk_reflex_sleep( void )
 	wait.pSemaphores = &vk.latencySemaphore;
 	wait.pValues = &vk.latencyValue;
 
-	// a sleep this long is a driver that stopped answering, not a frame
 	if ( qvkWaitSemaphoresKHR( vk.device, &wait, 1000000000ULL ) != VK_SUCCESS ) {
 		ri.Printf( PRINT_WARNING, "...the low latency sleep timed out, turning it off\n" );
 		vk.lowLatency2 = qfalse;
 	}
 }
 
-
-/*
-=============
-vk_low_latency_flash
-
-[ioquakelive] 3.5.1.2.8 of NVIDIA's guide: on the left click the driver paints a shape over a few
-frames, which is what a Reflex Analyzer display looks for. It goes out on every click.
-=============
-*/
 void vk_low_latency_flash( void )
 {
 	vk_latency_marker( VK_LATENCY_MARKER_TRIGGER_FLASH_NV );
 }
 
-
-/*
-=============
-vk_low_latency_input
-
-[ioquakelive] the client is about to read input: this is where the driver holds the frame back so
-what is read is as fresh as it can be. Every stage and marker of a frame carries the same index.
-=============
-*/
 void vk_low_latency_input( void )
 {
 	if ( !vk.antiLag && !vk.lowLatency2 ) {
@@ -8134,7 +7605,6 @@ void vk_low_latency_input( void )
 	vk_anti_lag_stage( VK_ANTI_LAG_STAGE_INPUT_AMD );
 }
 
-
 void vk_present_frame( void )
 {
 	VkPresentInfoKHR present_info;
@@ -8146,7 +7616,6 @@ void vk_present_frame( void )
 	}
 
 	if ( !vk.cmd->waitForFence ) {
-		// nothing has been submitted this frame due to geometry buffer overflow?
 		return;
 	}
 
@@ -8161,7 +7630,6 @@ void vk_present_frame( void )
 
 	vk.cmd->swapchain_image_acquired = qfalse;
 
-	// [ioquakelive] the frame's number travels with it so Reflex can close the measurement
 	if ( vk.lowLatency2 && vk.latencyFrame ) {
 		present_id.sType = VK_STRUCTURE_TYPE_PRESENT_ID_KHR;
 		present_id.pNext = NULL;
@@ -8181,24 +7649,19 @@ void vk_present_frame( void )
 			break;
 		case VK_SUBOPTIMAL_KHR:
 		case VK_ERROR_OUT_OF_DATE_KHR:
-			// swapchain re-creation needed
 			vk_restart_swapchain( __func__, res );
 			return;
 		case VK_ERROR_DEVICE_LOST:
-			// we can ignore that
 			ri.Printf( PRINT_DEVELOPER, "vkQueuePresentKHR: device lost\n" );
 			break;
 		default:
-			// or we don't
 			ri.Error( ERR_FATAL, "vkQueuePresentKHR returned %s", vk_result_string( res ) );
 	}
 
-	// pickup next command buffer for rendering
 	vk.cmd_index++;
 	vk.cmd_index %= NUM_COMMAND_BUFFERS;
 	vk.cmd = &vk.tess[ vk.cmd_index ];
 }
-
 
 static qboolean is_bgr( VkFormat format ) {
 	switch ( format ) {
@@ -8213,7 +7676,6 @@ static qboolean is_bgr( VkFormat format ) {
 			return qfalse;
 	}
 }
-
 
 void vk_read_pixels( byte *buffer, uint32_t width, uint32_t height )
 {
@@ -8239,7 +7701,6 @@ void vk_read_pixels( byte *buffer, uint32_t width, uint32_t height )
 
 	if ( vk.fboActive ) {
 		if ( vk.capture.image ) {
-			// dedicated capture buffer
 			srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 			srcImage = vk.capture.image;
 		} else {
@@ -8253,7 +7714,6 @@ void vk_read_pixels( byte *buffer, uint32_t width, uint32_t height )
 
 	Com_Memset( &desc, 0, sizeof( desc ) );
 
-	// Create image in host visible memory to serve as a destination for framebuffer pixels.
 	desc.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	desc.pNext = NULL;
 	desc.flags = 0;
@@ -8280,15 +7740,12 @@ void vk_read_pixels( byte *buffer, uint32_t width, uint32_t height )
 	alloc_info.pNext = NULL;
 	alloc_info.allocationSize = memory_requirements.size;
 
-	// host_cached bit is desirable for fast reads
 	memory_reqs = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
 	alloc_info.memoryTypeIndex = find_memory_type2( memory_requirements.memoryTypeBits, memory_reqs, &memory_flags );
 	if ( alloc_info.memoryTypeIndex == ~0 ) {
-		// try less explicit flags, without host_coherent
 		memory_reqs = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
 		alloc_info.memoryTypeIndex = find_memory_type2( memory_requirements.memoryTypeBits, memory_reqs, &memory_flags );
 		if ( alloc_info.memoryTypeIndex == ~0U ) {
-			// slowest case
 			memory_reqs = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 			alloc_info.memoryTypeIndex = find_memory_type2( memory_requirements.memoryTypeBits, memory_reqs, &memory_flags );
 			if ( alloc_info.memoryTypeIndex == ~0U ) {
@@ -8300,7 +7757,6 @@ void vk_read_pixels( byte *buffer, uint32_t width, uint32_t height )
 	if ( memory_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT ) {
 		invalidate_ptr = qfalse;
 	} else {
-		 // according to specification - must be performed if host_coherent is not set
 		invalidate_ptr = qtrue;
 	}
 
@@ -8321,10 +7777,6 @@ void vk_read_pixels( byte *buffer, uint32_t width, uint32_t height )
 		VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_IMAGE_LAYOUT_UNDEFINED,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0, 0 );
-
-	// end_command_buffer( command_buffer );
-
-	// command_buffer = begin_command_buffer();
 
 	if ( vk.blitEnabled ) {
 		VkImageBlit region;
@@ -8366,7 +7818,6 @@ void vk_read_pixels( byte *buffer, uint32_t width, uint32_t height )
 
 	end_command_buffer( command_buffer, __func__ );
 
-	// Copy data from destination image to memory buffer.
 	subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	subresource.mipLevel = 0;
 	subresource.arrayLayer = 0;
@@ -8409,9 +7860,6 @@ void vk_read_pixels( byte *buffer, uint32_t width, uint32_t height )
 			case 4: {
 				for ( n = 0; n < width; n++ ) {
 					Com_Memcpy( &buffer_ptr[n*3], &data[n*4], 3 );
-					//buffer_ptr[n*3+0] = data[n*4+0];
-					//buffer_ptr[n*3+1] = data[n*4+1];
-					//buffer_ptr[n*3+2] = data[n*4+2];
 				}
 			} break;
 
@@ -8441,7 +7889,6 @@ void vk_read_pixels( byte *buffer, uint32_t width, uint32_t height )
 	qvkDestroyImage( vk.device, dstImage, NULL );
 	qvkFreeMemory( vk.device, memory, NULL );
 
-	// restore previous layout
 	if ( srcImageLayout != VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL ) {
 		command_buffer = begin_command_buffer();
 
@@ -8454,23 +7901,11 @@ void vk_read_pixels( byte *buffer, uint32_t width, uint32_t height )
 	}
 }
 
-
-/*
-=============
-vk_bloom_wanted
-
-[ioquakelive] the bloom's images and passes serve Quake3e's bloom (r_bloom) and Quake Live's
-(r_enableBloom). Neither may set the other's cvar: the config would keep it, and opengl1, which
-reads the same config, would stack Quake3e's bloom on top of retail's.
-=============
-*/
 qboolean vk_bloom_wanted( void )
 {
 	return ( r_bloom->integer || ( r_enablePostProcess->integer && r_enableBloom->integer ) ) ? qtrue : qfalse;
 }
 
-
-// [QL] one blur pass: where it lands and what it reads
 static void vk_ql_blur_pass( uint32_t index, uint32_t source )
 {
 	vk_begin_blur_render_pass( index );
@@ -8480,16 +7915,6 @@ static void vk_ql_blur_pass( uint32_t index, uint32_t source )
 	vk_end_render_pass();
 }
 
-
-/*
-=============
-vk_ql_bloom
-
-[QL] render command 10 (0x436ec0): the scene at half size, what is bright kept and stretched
-back, blurred down and across, again at a quarter with r_bloomPasses 2, and the light laid over
-the scene. The blend gives scene * (1 - bloom) + bloom, so the scene is never read.
-=============
-*/
 qboolean vk_ql_bloom( void )
 {
 	qboolean quarter = ( r_bloomPasses->value > 1.0f && vk.blur_pipeline[3] ) ? qtrue : qfalse;
@@ -8509,7 +7934,6 @@ qboolean vk_ql_bloom( void )
 
 	vk_end_render_pass();
 
-	// the scene at half size, and what is brighter than the threshold
 	vk_begin_blur_render_pass( 0 );
 	qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.ql_bright_pipeline );
 	qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.color_descriptor_nearest, 0, NULL );
@@ -8526,7 +7950,6 @@ qboolean vk_ql_bloom( void )
 
 	level = quarter ? 3 : 1;
 
-	// [QL] 0x438590: the scene as it is needs no reading, the blend adds up to the same
 	if ( r_bloomSceneSaturation->value == 1.0f && r_bloomSceneIntensity->value == 1.0f ) {
 		vk_begin_post_bloom_render_pass();
 		qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.ql_bloom_pipeline );
@@ -8539,7 +7962,6 @@ qboolean vk_ql_bloom( void )
 		dset[0] = vk.color_descriptor;
 		dset[1] = vk.bloom_image_descriptor[ level ];
 
-		// the whole sum into bloom_image[0], which is the scene's size and free while we bloom
 		vk_begin_bloom_extract_render_pass();
 		qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.ql_combine_pipeline );
 		qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_blend, 0, ARRAY_LEN( dset ), dset, 0, NULL );
@@ -8559,7 +7981,6 @@ qboolean vk_ql_bloom( void )
 	return qtrue;
 }
 
-
 qboolean vk_bloom( void )
 {
 	uint32_t i;
@@ -8574,9 +7995,8 @@ qboolean vk_bloom( void )
 		return qfalse;
 	}
 
-	vk_end_render_pass(); // end main
+	vk_end_render_pass();
 
-	// bloom extraction
 	vk_begin_bloom_extract_render_pass();
 	qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.bloom_extract_pipeline );
 	qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.color_descriptor, 0, NULL );
@@ -8584,28 +8004,24 @@ qboolean vk_bloom( void )
 	vk_end_render_pass();
 
 	for ( i = 0; i < VK_NUM_BLOOM_PASSES*2; i+=2 ) {
-		// horizontal blur
 		vk_begin_blur_render_pass( i+0 );
 		qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.blur_pipeline[i+0] );
 		qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.bloom_image_descriptor[i+0], 0, NULL );
 		qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
 		vk_end_render_pass();
 
-		// vectical blur
 		vk_begin_blur_render_pass( i+1 );
 		qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.blur_pipeline[i+1] );
 		qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.bloom_image_descriptor[i+1], 0, NULL );
 		qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
 		vk_end_render_pass();
 #if 0
-		// horizontal blur
 		vk_begin_blur_render_pass( i+0 );
 		qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.blur_pipeline[i+0] );
 		qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.bloom_image_descriptor[i+2], 0, NULL );
 		qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
 		vk_end_render_pass();
 
-		// vectical blur
 		vk_begin_blur_render_pass( i+1 );
 		qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.blur_pipeline[i+1] );
 		qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.bloom_image_descriptor[i+1], 0, NULL );
@@ -8614,7 +8030,7 @@ qboolean vk_bloom( void )
 #endif
 	}
 
-	vk_begin_post_bloom_render_pass(); // begin post-bloom
+	vk_begin_post_bloom_render_pass();
 	{
 		VkDescriptorSet dset[VK_NUM_BLOOM_PASSES];
 
@@ -8623,29 +8039,22 @@ qboolean vk_bloom( void )
 			dset[i] = vk.bloom_image_descriptor[(i+1)*2];
 		}
 
-		// blend downscaled buffers to main fbo
 		qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.bloom_blend_pipeline );
 		qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_blend, 0, ARRAY_LEN(dset), dset, 0, NULL );
 		qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
 	}
 
-	// invalidate pipeline state cache
-	//vk.cmd->last_pipeline = VK_NULL_HANDLE;
-
 	if ( vk.cmd->last_pipeline != VK_NULL_HANDLE )
 	{
-		// restore last pipeline
 		qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.cmd->last_pipeline );
 
 		vk_update_mvp( NULL );
 
-		// force depth range and viewport/scissor updates
 		vk.cmd->depth_range = DEPTH_RANGE_COUNT;
 
-		// restore clobbered descriptor sets
 		for ( i = 0; i < VK_NUM_BLOOM_PASSES; i++ ) {
 			if ( vk.cmd->descriptor_set.current[i] != VK_NULL_HANDLE ) {
-				if ( i == VK_DESC_UNIFORM /*|| i == VK_DESC_STORAGE*/ )
+				if ( i == VK_DESC_UNIFORM  )
 					qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout, i, 1, &vk.cmd->descriptor_set.current[i], 1, &vk.cmd->descriptor_set.offset[i] );
 				else
 					qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout, i, 1, &vk.cmd->descriptor_set.current[i], 0, NULL );

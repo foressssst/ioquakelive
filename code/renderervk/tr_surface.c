@@ -19,32 +19,8 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// tr_surf.c
 #include "tr_local.h"
 
-/*
-
-  THIS ENTIRE FILE IS BACK END
-
-backEnd.currentEntity will be valid.
-
-Tess_Begin has already been called for the surface's shader.
-
-The modelview matrix will be set.
-
-It is safe to actually issue drawing commands here if you don't want to
-use the shader system.
-*/
-
-
-//============================================================================
-
-
-/*
-==============
-RB_CheckOverflow
-==============
-*/
 void RB_CheckOverflow( int verts, int indexes ) {
 	if (tess.numVertexes + verts < SHADER_MAX_VERTEXES
 		&& tess.numIndexes + indexes < SHADER_MAX_INDEXES) {
@@ -64,12 +40,6 @@ void RB_CheckOverflow( int verts, int indexes ) {
 	RB_BeginSurface( tess.shader, tess.fogNum );
 }
 
-
-/*
-==============
-RB_AddQuadStampExt
-==============
-*/
 void RB_AddQuadStampExt( const vec3_t origin, const vec3_t left, const vec3_t up, color4ub_t color, float s1, float t1, float s2, float t2 ) {
 	vec3_t		normal;
 	int			ndx;
@@ -86,7 +56,6 @@ void RB_AddQuadStampExt( const vec3_t origin, const vec3_t left, const vec3_t up
 
 	ndx = tess.numVertexes;
 
-	// triangle indexes for a simple quad
 	tess.indexes[ tess.numIndexes + 0 ] = ndx + 0;
 	tess.indexes[ tess.numIndexes + 1 ] = ndx + 1;
 	tess.indexes[ tess.numIndexes + 2 ] = ndx + 3;
@@ -111,14 +80,12 @@ void RB_AddQuadStampExt( const vec3_t origin, const vec3_t left, const vec3_t up
 	tess.xyz[ndx+3][1] = origin[1] + left[1] - up[1];
 	tess.xyz[ndx+3][2] = origin[2] + left[2] - up[2];
 
-	// constant normal all the way around
 	VectorSubtract( vec3_origin, backEnd.viewParms.or.axis[0], normal );
 
 	tess.normal[ndx][0] = tess.normal[ndx+1][0] = tess.normal[ndx+2][0] = tess.normal[ndx+3][0] = normal[0];
 	tess.normal[ndx][1] = tess.normal[ndx+1][1] = tess.normal[ndx+2][1] = tess.normal[ndx+3][1] = normal[1];
 	tess.normal[ndx][2] = tess.normal[ndx+1][2] = tess.normal[ndx+2][2] = tess.normal[ndx+3][2] = normal[2];
-	
-	// standard square texture coordinates
+
 	tess.texCoords[0][ndx+0][0] = tess.texCoords[1][ndx+0][0] = s1;
 	tess.texCoords[0][ndx+0][1] = tess.texCoords[1][ndx+0][1] = t1;
 
@@ -131,8 +98,6 @@ void RB_AddQuadStampExt( const vec3_t origin, const vec3_t left, const vec3_t up
 	tess.texCoords[0][ndx+3][0] = tess.texCoords[1][ndx+3][0] = s1;
 	tess.texCoords[0][ndx+3][1] = tess.texCoords[1][ndx+3][1] = t2;
 
-	// constant color all the way around
-	// should this be identity and let the shader specify from entity?
 	tess.vertexColors[ndx + 0] =
 	tess.vertexColors[ndx + 1] =
 	tess.vertexColors[ndx + 2] =
@@ -141,7 +106,6 @@ void RB_AddQuadStampExt( const vec3_t origin, const vec3_t left, const vec3_t up
 	tess.numVertexes += 4;
 	tess.numIndexes += 6;
 }
-
 
 void RB_AddQuadStamp2( float x, float y, float w, float h, float s1, float t1, float s2, float t2, color4ub_t color ) {
 	int			numIndexes;
@@ -201,28 +165,15 @@ void RB_AddQuadStamp2( float x, float y, float w, float h, float s1, float t1, f
 	tess.texCoords[0][numVerts + 3][1] = t2;
 }
 
-
-/*
-==============
-RB_AddQuadStamp
-==============
-*/
 void RB_AddQuadStamp( const vec3_t origin, const vec3_t left, const vec3_t up, color4ub_t color ) {
 	RB_AddQuadStampExt( origin, left, up, color, 0, 0, 1, 1 );
 }
 
-
-/*
-==============
-RB_SurfaceSprite
-==============
-*/
 static void RB_SurfaceSprite( void ) {
 	vec3_t		left, up;
 	float		radius;
 	color4ub_t	color;
 
-	// calculate the xyz locations for the four corners
 	radius = backEnd.currentEntity->e.radius;
 	if ( backEnd.currentEntity->e.rotation == 0.0 ) {
 		VectorScale( backEnd.viewParms.or.axis[1], radius, left );
@@ -230,7 +181,7 @@ static void RB_SurfaceSprite( void ) {
 	} else {
 		float	s, c;
 		float	ang;
-		
+
 		ang = M_PI * backEnd.currentEntity->e.rotation / 180.0;
 		s = sin( ang );
 		c = cos( ang );
@@ -250,12 +201,6 @@ static void RB_SurfaceSprite( void ) {
 	RB_AddQuadStamp( backEnd.currentEntity->e.origin, left, up, color );
 }
 
-
-/*
-=============
-RB_SurfacePolychain
-=============
-*/
 static void RB_SurfacePolychain( const srfPoly_t *p ) {
 	int		i;
 	int		numv;
@@ -270,7 +215,6 @@ static void RB_SurfacePolychain( const srfPoly_t *p ) {
 	tess.surfType = SF_POLY;
 #endif
 
-	// fan triangles into the tess array
 	numv = tess.numVertexes;
 	for ( i = 0; i < p->numVerts; i++ ) {
 		VectorCopy( p->verts[i].xyz, tess.xyz[numv] );
@@ -281,7 +225,6 @@ static void RB_SurfacePolychain( const srfPoly_t *p ) {
 		numv++;
 	}
 
-	// generate fan indexes into the tess array
 	for ( i = 0; i < p->numVerts-2; i++ ) {
 		tess.indexes[tess.numIndexes + 0] = tess.numVertexes;
 		tess.indexes[tess.numIndexes + 1] = tess.numVertexes + i + 1;
@@ -292,12 +235,6 @@ static void RB_SurfacePolychain( const srfPoly_t *p ) {
 	tess.numVertexes = numv;
 }
 
-
-/*
-=============
-RB_SurfaceTriangles
-=============
-*/
 static void RB_SurfaceTriangles( const srfTriangles_t *srf ) {
 	int			i;
 	const drawVert_t	*dv;
@@ -315,11 +252,9 @@ static void RB_SurfaceTriangles( const srfTriangles_t *srf ) {
 #else
 	if ( tess.allowVBO && srf->vboItemIndex ) {
 #endif
-		// transition to vbo render list
 		if ( tess.vboIndex == 0 ) {
 			RB_EndSurface();
 			RB_BeginSurface( tess.shader, tess.fogNum );
-			// set some dummy parameters for RB_EndSurface
 			tess.numIndexes = 1;
 			tess.numVertexes = 0;
 			VBO_ClearQueue();
@@ -327,11 +262,11 @@ static void RB_SurfaceTriangles( const srfTriangles_t *srf ) {
 		tess.surfType = SF_TRIANGLES;
 		tess.vboIndex = srf->vboItemIndex;
 		VBO_QueueItem( srf->vboItemIndex );
-		return; // no need to tesselate anything
+		return;
 	}
 
 	VBO_Flush();
-#endif // USE_VBO
+#endif
 
 	RB_CHECKOVERFLOW( srf->numVerts, srf->numIndexes );
 
@@ -394,12 +329,6 @@ static void RB_SurfaceTriangles( const srfTriangles_t *srf ) {
 	tess.numVertexes += srf->numVerts;
 }
 
-
-/*
-==============
-RB_SurfaceBeam
-==============
-*/
 static void RB_SurfaceBeam( void )
 {
 #define NUM_BEAM_SEGS 6
@@ -475,8 +404,6 @@ static void RB_SurfaceBeam( void )
 #endif
 }
 
-//================================================================================
-
 static void DoRailCore( const vec3_t start, const vec3_t end, const vec3_t up, float len, float spanWidth )
 {
 	float		spanWidth2;
@@ -489,7 +416,6 @@ static void DoRailCore( const vec3_t start, const vec3_t end, const vec3_t up, f
 
 	spanWidth2 = -spanWidth;
 
-	// FIXME: use quad stamp?
 	VectorMA( start, spanWidth, up, tess.xyz[tess.numVertexes] );
 	tess.texCoords[0][tess.numVertexes][0] = 0;
 	tess.texCoords[0][tess.numVertexes][1] = 0;
@@ -532,7 +458,6 @@ static void DoRailCore( const vec3_t start, const vec3_t end, const vec3_t up, f
 	tess.indexes[tess.numIndexes++] = vbase + 3;
 }
 
-
 static void DoRailDiscs( int numSegs, const vec3_t start, const vec3_t dir, const vec3_t right, const vec3_t up )
 {
 	int i;
@@ -560,7 +485,6 @@ static void DoRailDiscs( int numSegs, const vec3_t start, const vec3_t dir, cons
 
 		if ( numSegs > 1 )
 		{
-			// offset by 1 segment if we're doing a long distance shot
 			VectorAdd( pos[i], dir, pos[i] );
 		}
 	}
@@ -593,10 +517,6 @@ static void DoRailDiscs( int numSegs, const vec3_t start, const vec3_t dir, cons
 	}
 }
 
-
-/*
-** RB_SurfaceRailRinges
-*/
 static void RB_SurfaceRailRings( void ) {
 	const refEntity_t *e;
 	int			numSegs;
@@ -610,7 +530,6 @@ static void RB_SurfaceRailRings( void ) {
 	VectorCopy( e->oldorigin, start );
 	VectorCopy( e->origin, end );
 
-	// compute variables
 	VectorSubtract( end, start, vec );
 	len = VectorNormalize( vec );
 	MakeNormalVectors( vec, right, up );
@@ -624,10 +543,6 @@ static void RB_SurfaceRailRings( void ) {
 	DoRailDiscs( numSegs, start, vec, right, up );
 }
 
-
-/*
-** RB_SurfaceRailCore
-*/
 static void RB_SurfaceRailCore( void ) {
 	const refEntity_t *e;
 	int			len;
@@ -644,7 +559,6 @@ static void RB_SurfaceRailCore( void ) {
 	VectorSubtract( end, start, vec );
 	len = VectorNormalize( vec );
 
-	// compute side vector
 	VectorSubtract( start, backEnd.viewParms.or.origin, v1 );
 	VectorNormalize( v1 );
 	VectorSubtract( end, backEnd.viewParms.or.origin, v2 );
@@ -655,10 +569,6 @@ static void RB_SurfaceRailCore( void ) {
 	DoRailCore( start, end, right, len, r_railCoreWidth->integer );
 }
 
-
-/*
-** RB_SurfaceLightningBolt
-*/
 static void RB_SurfaceLightningBolt( void ) {
 	const refEntity_t *e;
 	int			len;
@@ -673,11 +583,9 @@ static void RB_SurfaceLightningBolt( void ) {
 	VectorCopy( e->oldorigin, end );
 	VectorCopy( e->origin, start );
 
-	// compute variables
 	VectorSubtract( end, start, vec );
 	len = VectorNormalize( vec );
 
-	// compute side vector
 	VectorSubtract( start, backEnd.viewParms.or.origin, v1 );
 	VectorNormalize( v1 );
 	VectorSubtract( end, backEnd.viewParms.or.origin, v2 );
@@ -694,27 +602,14 @@ static void RB_SurfaceLightningBolt( void ) {
 	}
 }
 
-
-/*
-** VectorArrayNormalize
-*
-* The inputs to this routing seem to always be close to length = 1.0 (about 0.6 to 2.0)
-* This means that we don't have to worry about zero length or enormously long vectors.
-*/
 static void VectorArrayNormalize(vec4_t *normals, unsigned int count)
 {
-//    assert(count);
-	// given the input, it's safe to call VectorNormalizeFast
     while ( count-- ) {
         VectorNormalizeFast(normals[0]);
         normals++;
     }
 }
 
-
-/*
-** LerpMeshVertexes
-*/
 static void LerpMeshVertexes_scalar(md3Surface_t *surf, float backlerp)
 {
 	short	*oldXyz, *newXyz, *oldNormals, *newNormals;
@@ -738,9 +633,6 @@ static void LerpMeshVertexes_scalar(md3Surface_t *surf, float backlerp)
 	numVerts = surf->numVerts;
 
 	if ( backlerp == 0 ) {
-		//
-		// just copy the vertexes
-		//
 		for (vertNum=0 ; vertNum < numVerts ; vertNum++,
 			newXyz += 4, newNormals += 4,
 			outXyz += 4, outNormal += 4) 
@@ -755,18 +647,11 @@ static void LerpMeshVertexes_scalar(md3Surface_t *surf, float backlerp)
 			lat *= (FUNCTABLE_SIZE/256);
 			lng *= (FUNCTABLE_SIZE/256);
 
-			// decode X as cos( lat ) * sin( long )
-			// decode Y as sin( lat ) * sin( long )
-			// decode Z as cos( long )
-
 			outNormal[0] = tr.sinTable[(lat+(FUNCTABLE_SIZE/4))&FUNCTABLE_MASK] * tr.sinTable[lng];
 			outNormal[1] = tr.sinTable[lat] * tr.sinTable[lng];
 			outNormal[2] = tr.sinTable[(lng+(FUNCTABLE_SIZE/4))&FUNCTABLE_MASK];
 		}
 	} else {
-		//
-		// interpolate and copy the vertex and normal
-		//
 		oldXyz = (short *)((byte *)surf + surf->ofsXyzNormals)
 			+ (backEnd.currentEntity->e.oldframe * surf->numVerts * 4);
 		oldNormals = oldXyz + 3;
@@ -780,12 +665,10 @@ static void LerpMeshVertexes_scalar(md3Surface_t *surf, float backlerp)
 		{
 			vec3_t uncompressedOldNormal, uncompressedNewNormal;
 
-			// interpolate the xyz
 			outXyz[0] = oldXyz[0] * oldXyzScale + newXyz[0] * newXyzScale;
 			outXyz[1] = oldXyz[1] * oldXyzScale + newXyz[1] * newXyzScale;
 			outXyz[2] = oldXyz[2] * oldXyzScale + newXyz[2] * newXyzScale;
 
-			// FIXME: interpolate lat/long instead?
 			lat = ( newNormals[0] >> 8 ) & 0xff;
 			lng = ( newNormals[0] & 0xff );
 			lat *= 4;
@@ -807,24 +690,16 @@ static void LerpMeshVertexes_scalar(md3Surface_t *surf, float backlerp)
 			outNormal[1] = uncompressedOldNormal[1] * oldNormalScale + uncompressedNewNormal[1] * newNormalScale;
 			outNormal[2] = uncompressedOldNormal[2] * oldNormalScale + uncompressedNewNormal[2] * newNormalScale;
 
-//			VectorNormalize (outNormal);
 		}
     	VectorArrayNormalize((vec4_t *)tess.normal[tess.numVertexes], numVerts);
    	}
 }
-
 
 static void LerpMeshVertexes(md3Surface_t *surf, float backlerp)
 {
 	LerpMeshVertexes_scalar( surf, backlerp );
 }
 
-
-/*
-=============
-RB_SurfaceMesh
-=============
-*/
 static void RB_SurfaceMesh(md3Surface_t *surface) {
 	int				j;
 	float			backlerp;
@@ -867,19 +742,12 @@ static void RB_SurfaceMesh(md3Surface_t *surface) {
 	for ( j = 0; j < numVerts; j++ ) {
 		tess.texCoords[0][Doug + j][0] = texCoords[j*2+0];
 		tess.texCoords[0][Doug + j][1] = texCoords[j*2+1];
-		// FIXME: fill in lightmapST for completeness?
 	}
 
 	tess.numVertexes += surface->numVerts;
 
 }
 
-
-/*
-==============
-RB_SurfaceFace
-==============
-*/
 static void RB_SurfaceFace( const srfSurfaceFace_t *surf ) {
 	int			i;
 	unsigned	*indices;
@@ -899,11 +767,9 @@ static void RB_SurfaceFace( const srfSurfaceFace_t *surf ) {
 #else
 	if ( tess.allowVBO && surf->vboItemIndex ) {
 #endif
-		// transition to vbo render list
 		if ( tess.vboIndex == 0 ) {
 			RB_EndSurface();
 			RB_BeginSurface( tess.shader, tess.fogNum );
-			// set some dummy parameters for RB_EndSurface
 			tess.numIndexes = 1;
 			tess.numVertexes = 0;
 			VBO_ClearQueue();
@@ -911,11 +777,11 @@ static void RB_SurfaceFace( const srfSurfaceFace_t *surf ) {
 		tess.surfType = SF_FACE;
 		tess.vboIndex = surf->vboItemIndex;
 		VBO_QueueItem( surf->vboItemIndex );
-		return; // no need to tesselate anything
+		return;
 	}
 
 	VBO_Flush();
-#endif // USE_VBO
+#endif
 
 	RB_CHECKOVERFLOW( surf->numPoints, surf->numIndices );
 
@@ -945,7 +811,6 @@ static void RB_SurfaceFace( const srfSurfaceFace_t *surf ) {
 #endif
 	{
 		if ( surf->normals ) {
-			// per-vertex normals for non-coplanar faces
 			memcpy( &tess.normal[ tess.numVertexes ], surf->normals, numPoints * sizeof( vec4_t ) );
 		} else {
 			normal = surf->plane.normal;
@@ -975,12 +840,10 @@ static void RB_SurfaceFace( const srfSurfaceFace_t *surf ) {
 	tess.numVertexes += surf->numPoints;
 }
 
-
 static float LodErrorForVolume( vec3_t local, float radius ) {
 	vec3_t	world;
 	float	d;
 
-	// never let it go negative
 	if ( r_lodCurveError->value < 0 ) {
 		return 0;
 	}
@@ -1016,7 +879,7 @@ void RB_SurfaceGridEstimate( srfGridMesh_t *cv, int *numVertexes, int *numIndexe
 	int		nIndexes = 0;
 	int		irows, vrows;
 
-	lodError = r_lodCurveError->value; // fixed quality for VBO
+	lodError = r_lodCurveError->value;
 
 	lodWidth = 1;
 	for ( i = 1 ; i < cv->width-1 ; i++ ) {
@@ -1036,12 +899,10 @@ void RB_SurfaceGridEstimate( srfGridMesh_t *cv, int *numVertexes, int *numIndexe
 
 	used = 0;
 	while ( used < lodHeight - 1 ) {
-		// see how many rows of both verts and indexes we can add without overflowing
 		do {
 			vrows = ( SHADER_MAX_VERTEXES - tess.numVertexes ) / lodWidth;
 			irows = ( SHADER_MAX_INDEXES - tess.numIndexes ) / ( lodWidth * 6 );
 
-			// if we don't have enough space for at least one strip, flush the buffer
 			if ( vrows < 2 || irows < 1 ) {
 				nVertexes += tess.numVertexes;
 				nIndexes += tess.numIndexes;
@@ -1051,7 +912,7 @@ void RB_SurfaceGridEstimate( srfGridMesh_t *cv, int *numVertexes, int *numIndexe
 				break;
 			}
 		} while ( 1 );
-		
+
 		rows = irows;
 		if ( vrows < irows + 1 ) {
 			rows = vrows - 1;
@@ -1070,15 +931,8 @@ void RB_SurfaceGridEstimate( srfGridMesh_t *cv, int *numVertexes, int *numIndexe
 	tess.numVertexes = 0;
 	tess.numIndexes = 0;
 }
-#endif // USE_VBO_GRID
+#endif
 
-/*
-=============
-RB_SurfaceGrid
-
-Just copy the grid of points and triangulate
-=============
-*/
 static void RB_SurfaceGrid( srfGridMesh_t *cv ) {
 	int		i, j;
 	float	*xyz;
@@ -1105,11 +959,9 @@ static void RB_SurfaceGrid( srfGridMesh_t *cv ) {
 #else
 	if ( tess.allowVBO && cv->vboItemIndex ) {
 #endif
-		// transition to vbo render list
 		if ( tess.vboIndex == 0 ) {
 			RB_EndSurface();
 			RB_BeginSurface( tess.shader, tess.fogNum );
-			// set some dummy parameters for RB_EndSurface
 			tess.numIndexes = 1;
 			tess.numVertexes = 0;
 			VBO_ClearQueue();
@@ -1117,7 +969,7 @@ static void RB_SurfaceGrid( srfGridMesh_t *cv ) {
 		tess.surfType = SF_GRID;
 		tess.vboIndex = cv->vboItemIndex;
 		VBO_QueueItem( cv->vboItemIndex );
-		return; // no need to tesselate anything
+		return;
 	}
 
 	VBO_Flush();
@@ -1135,19 +987,16 @@ static void RB_SurfaceGrid( srfGridMesh_t *cv ) {
 #ifdef USE_VBO_GRID
 	tess.surfType = SF_GRID;
 
-	// determine the allowable discrepance
 #ifdef USE_PMLIGHT
 	if ( cv->vboItemIndex && ( tr.mapLoading || ( tess.dlightPass && tess.shader->isStaticShader ) ) )
 #else
 	if ( cv->vboItemIndex && tr.mapLoading )
 #endif
-		lodError = r_lodCurveError->value; // fixed quality for VBO
+		lodError = r_lodCurveError->value;
 	else
-#endif // USE_VBO_GRID
+#endif
 		lodError = LodErrorForVolume( cv->lodOrigin, cv->lodRadius );
 
-	// determine which rows and columns of the subdivision
-	// we are actually going to use
 	widthTable[0] = 0;
 	lodWidth = 1;
 	for ( i = 1 ; i < cv->width-1 ; i++ ) {
@@ -1170,27 +1019,21 @@ static void RB_SurfaceGrid( srfGridMesh_t *cv ) {
 	heightTable[lodHeight] = cv->height-1;
 	lodHeight++;
 
-	// very large grids may have more points or indexes than can be fit
-	// in the tess structure, so we may have to issue it in multiple passes
-
 	used = 0;
 	while ( used < lodHeight - 1 ) {
-		// see how many rows of both verts and indexes we can add without overflowing
 		do {
 			vrows = ( SHADER_MAX_VERTEXES - tess.numVertexes ) / lodWidth;
 			irows = ( SHADER_MAX_INDEXES - tess.numIndexes ) / ( lodWidth * 6 );
 
-			// if we don't have enough space for at least one strip, flush the buffer
 			if ( vrows < 2 || irows < 1 ) {
 				if ( tr.mapLoading ) {
-					// estimate and flush
 #ifdef USE_VBO_GRID
 					if ( cv->vboItemIndex ) {
 						VBO_PushData( cv->vboItemIndex, &tess );
 						tess.numIndexes = 0;
 						tess.numVertexes = 0;
 					} else
-#endif // USE_VBO_GRID
+#endif
 						ri.Error( ERR_DROP, "Unexpected grid flush during map loading!\n" );
 				} else {
 					RB_EndSurface();
@@ -1200,7 +1043,7 @@ static void RB_SurfaceGrid( srfGridMesh_t *cv ) {
 				break;
 			}
 		} while ( 1 );
-		
+
 		rows = irows;
 		if ( vrows < irows + 1 ) {
 			rows = vrows - 1;
@@ -1256,7 +1099,6 @@ static void RB_SurfaceGrid( srfGridMesh_t *cv ) {
 			}
 		}
 
-		// add the indexes
 		{
 			int		numIndexes;
 			int		w, h;
@@ -1267,8 +1109,7 @@ static void RB_SurfaceGrid( srfGridMesh_t *cv ) {
 			for (i = 0 ; i < h ; i++) {
 				for (j = 0 ; j < w ; j++) {
 					int		v1, v2, v3, v4;
-			
-					// vertex order to be reckognized as tristrips
+
 					v1 = numVertexes + i*lodWidth + j + 1;
 					v2 = v1 - 1;
 					v3 = v2 + lodWidth;
@@ -1277,7 +1118,7 @@ static void RB_SurfaceGrid( srfGridMesh_t *cv ) {
 					tess.indexes[numIndexes] = v2;
 					tess.indexes[numIndexes+1] = v3;
 					tess.indexes[numIndexes+2] = v1;
-					
+
 					tess.indexes[numIndexes+3] = v1;
 					tess.indexes[numIndexes+4] = v3;
 					tess.indexes[numIndexes+5] = v4;
@@ -1294,22 +1135,6 @@ static void RB_SurfaceGrid( srfGridMesh_t *cv ) {
 	}
 }
 
-
-/*
-===========================================================================
-
-NULL MODEL
-
-===========================================================================
-*/
-
-/*
-===================
-RB_SurfaceAxis
-
-Draws x/y/z lines from the origin for orientation debugging
-===================
-*/
 static void RB_SurfaceAxis( void ) {
 #ifdef USE_VULKAN
 	int i;
@@ -1336,7 +1161,6 @@ static void RB_SurfaceAxis( void ) {
 	tess.numVertexes = 6;
 
 	vk_bind_pipeline( vk.surface_axis_pipeline );
-	// TODO: use common layout and avoid ST0 binding?
 	vk_bind_geometry( TESS_XYZ | TESS_RGBA0 | TESS_ST0 );
 	vk_draw_geometry( DEPTH_RANGE_NORMAL, qfalse );
 
@@ -1381,15 +1205,6 @@ static void RB_SurfaceAxis( void ) {
 #endif
 }
 
-//===========================================================================
-
-/*
-====================
-RB_SurfaceEntity
-
-Entities that have a single procedurally generated surface
-====================
-*/
 static void RB_SurfaceEntity( const surfaceType_t *surfType ) {
 #ifdef USE_VBO
 	VBO_Flush();
@@ -1419,11 +1234,9 @@ static void RB_SurfaceEntity( const surfaceType_t *surfType ) {
 #endif
 }
 
-
 static void RB_SurfaceBad( const surfaceType_t *surfType ) {
 	ri.Printf( PRINT_ALL, "Bad surface tesselated.\n" );
 }
-
 
 static void RB_SurfaceFlare( srfFlare_t *surf ) {
 	if ( r_flares->integer ) {
@@ -1435,21 +1248,19 @@ static void RB_SurfaceFlare( srfFlare_t *surf ) {
 	}
 }
 
-
 static void RB_SurfaceSkip( void *surf ) {
 }
 
-
 void (*rb_surfaceTable[SF_NUM_SURFACE_TYPES])( void *) = {
-	(void(*)(void*))RB_SurfaceBad,			// SF_BAD, 
-	(void(*)(void*))RB_SurfaceSkip,			// SF_SKIP, 
-	(void(*)(void*))RB_SurfaceFace,			// SF_FACE,
-	(void(*)(void*))RB_SurfaceGrid,			// SF_GRID,
-	(void(*)(void*))RB_SurfaceTriangles,	// SF_TRIANGLES,
-	(void(*)(void*))RB_SurfacePolychain,	// SF_POLY,
-	(void(*)(void*))RB_SurfaceMesh,			// SF_MD3,
-	(void(*)(void*))RB_MDRSurfaceAnim,		// SF_MDR,
-	(void(*)(void*))RB_IQMSurfaceAnim,		// SF_IQM,
-	(void(*)(void*))RB_SurfaceFlare,		// SF_FLARE,
-	(void(*)(void*))RB_SurfaceEntity		// SF_ENTITY
+	(void(*)(void*))RB_SurfaceBad,
+	(void(*)(void*))RB_SurfaceSkip,
+	(void(*)(void*))RB_SurfaceFace,
+	(void(*)(void*))RB_SurfaceGrid,
+	(void(*)(void*))RB_SurfaceTriangles,
+	(void(*)(void*))RB_SurfacePolychain,
+	(void(*)(void*))RB_SurfaceMesh,
+	(void(*)(void*))RB_MDRSurfaceAnim,
+	(void(*)(void*))RB_IQMSurfaceAnim,
+	(void(*)(void*))RB_SurfaceFlare,
+	(void(*)(void*))RB_SurfaceEntity
 };

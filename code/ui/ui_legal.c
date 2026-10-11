@@ -19,20 +19,9 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// ui_legal.c -- [QL] the Legal Notices page
-//
-// Retail's is web.pak's legal_notices.js, opened by the link at the main menu's bottom
-// right: a box 960px wide in the middle of the screen, black at 0.8, with a Back to Main
-// Menu button, the title and the notices -- paragraphs with bold, underlined and centred
-// runs and line breaks, and rules between them. The notices are id's text, so nothing of
-// them travels with the game: the page reads them out of the player's web.pak, from the
-// module in bundle.js, as the web UI did.
-//
-
 #include "ui_web.h"
 
-#define LG_MAX_TEXT 0x30000   // the module's code, ~70KB
+#define LG_MAX_TEXT 0x30000
 #define LG_MAX_BLOCKS 256
 #define LG_MAX_RUNS 4096
 #define LG_WIDTH 960.0f
@@ -46,7 +35,7 @@ typedef enum {
 } lgBlockType_t;
 
 typedef struct {
-    const char* text;  // into lg.strings; NULL is a line break
+    const char* text;
     qboolean bold;
     qboolean underline;
 } lgRun_t;
@@ -79,15 +68,6 @@ static const vec4_t lgBlack80 = {0.0f, 0.0f, 0.0f, 0.8f};
 static const vec4_t lgText = SM_RGB(238, 238, 238);
 static const vec4_t lgRule = SM_RGB(225, 225, 225);
 
-/*
-===============
-Reading the module
-
-The module is React.createElement(tag, props, children...) nested: tags are quoted names,
-props null or an object (of which only textAlign: 'center' matters), and children quoted
-strings, nulls or more elements.
-===============
-*/
 static const char* lgP;
 
 static void LG_Space(void) {
@@ -96,7 +76,6 @@ static void LG_Space(void) {
     }
 }
 
-// a quoted string, unescaped into lg.strings
 static const char* LG_String(void) {
     char quote = *lgP++;
     char* out = lg.strings + lg.stringsLen;
@@ -152,7 +131,6 @@ static void LG_AddRun(const char* text, qboolean bold, qboolean underline) {
 
 static void LG_Element(qboolean bold, qboolean underline);
 
-// the children of an element, up to its closing parenthesis
 static void LG_Children(qboolean bold, qboolean underline) {
     for (;;) {
         LG_Space();
@@ -170,12 +148,11 @@ static void LG_Children(qboolean bold, qboolean underline) {
         } else if (!Q_strncmp(lgP, "null", 4)) {
             lgP += 4;
         } else {
-            lgP++;  // anything else is skipped
+            lgP++;
         }
     }
 }
 
-// an element, after "React.createElement("
 static void LG_Element(qboolean bold, qboolean underline) {
     char tag[16];
     qboolean center = qfalse;
@@ -193,7 +170,6 @@ static void LG_Element(qboolean bold, qboolean underline) {
     }
     tag[n] = '\0';
 
-    // the props
     LG_Space();
     if (*lgP == '{') {
         int depth = 0;
@@ -231,7 +207,6 @@ static void LG_Element(qboolean bold, qboolean underline) {
         }
         return;
     }
-    // the button's div and link are drawn apart; b and u only style what they hold
     if (!strcmp(tag, "a")) {
         int runs = lg.numRuns;
 
@@ -247,7 +222,6 @@ static void LG_Load(void) {
 
     lg.loaded = qtrue;
     lg.numBlocks = lg.numRuns = lg.stringsLen = 0;
-    // bundle.js is 4.5MB: the engine hands over the module only, from its page's class on
     if (trap_WebPakExcerpt("webui/bundle.js", marker, lg.code, sizeof(lg.code)) <= 0) {
         return;
     }
@@ -255,19 +229,12 @@ static void LG_Load(void) {
     LG_Children(qfalse, qfalse);
 }
 
-/*
-===============
-The page
-===============
-*/
-
-// a paragraph's runs laid out in lines as wide as the box; returns its height
 static float LG_Lines(const lgBlock_t* b, float x, float y, float width, qboolean draw, const smRect_t* clip) {
     typedef struct {
         const char* text;
         int len;
         float w;
-        qboolean bold, underline, space;  // space: a space goes before it
+        qboolean bold, underline, space;
     } lgWord_t;
     static lgWord_t words[1024];
     int numWords = 0, i, lines = 0;
@@ -277,7 +244,6 @@ static float LG_Lines(const lgBlock_t* b, float x, float y, float width, qboolea
     float spaceW = SM_Advance(font, size, " ", -1);
     qboolean pendingSpace = qfalse;
 
-    // the words, each with the run's style; a break is a word of its own
     for (i = 0; i < b->numRuns && numWords < (int)ARRAY_LEN(words); i++) {
         const lgRun_t* r = &lg.run[b->firstRun + i];
         const char* p = r->text;
@@ -310,7 +276,6 @@ static float LG_Lines(const lgBlock_t* b, float x, float y, float width, qboolea
         }
     }
 
-    // lines: as many words as fit, a break ends one
     for (i = 0; i < numWords || (i == 0 && !numWords);) {
         int first = i, last;
         float lw = 0;
@@ -326,7 +291,7 @@ static float LG_Lines(const lgBlock_t* b, float x, float y, float width, qboolea
         }
         last = i;
         if (i < numWords && !words[i].text) {
-            i++;  // the break
+            i++;
         }
         if (draw) {
             float lx = b->center ? x + (width - lw) * 0.5f : x;
@@ -357,7 +322,6 @@ static float LG_Lines(const lgBlock_t* b, float x, float y, float width, qboolea
     return lines * lineH;
 }
 
-// an h1 in skeleton's letter-spacing, measured and drawn
 static float LG_Paragraph(const lgBlock_t* b, float x, float y, float width, qboolean draw, const smRect_t* clip) {
     float h;
 
@@ -408,13 +372,11 @@ void UI_Legal_Paint(void) {
     clip = SM_R(boxX, boxY, LG_WIDTH, boxH);
     y = boxY + LG_PAD - lg.scroll;
 
-    // the button, centred
     bw = SM_WebButtonWidth("Back to Main Menu");
     SM_WebButton(boxX + (LG_WIDTH - bw) * 0.5f, y, bw, "Back to Main Menu", qfalse, SM_Over(LG_HIT_BACK, 0), &clip);
     SM_Hit(boxX + (LG_WIDTH - bw) * 0.5f, y, bw, SM_WEB_BUTTON_H, LG_HIT_BACK, 0, &clip);
     y += SM_WEB_BUTTON_H;
 
-    // h1 with 8px over and under, p with 1em under, hr with 30px over and 35px under
     for (i = 0; i < lg.numBlocks; i++) {
         const lgBlock_t* b = &lg.block[i];
 
@@ -423,7 +385,7 @@ void UI_Legal_Paint(void) {
             y += LG_Paragraph(b, x + 6.4f, y, w - 6.4f, qtrue, &clip);
             y += 8;
         } else if (b->type == LG_BLOCK_HR) {
-            y += 15;  // over the paragraph's 1em, to 30
+            y += 15;
             SM_Fill(x, y, w, 1, lgRule, &clip);
             y += 1 + 35;
         } else {
@@ -451,7 +413,7 @@ qboolean UI_Legal_HandleKey(int key) {
         return qtrue;
     }
     if (key != K_MOUSE1) {
-        return qfalse;  // Escape goes back through the menu's onESC
+        return qfalse;
     }
     hit = SM_HitAt(smMX, smMY);
     if (hit && hit->type == LG_HIT_BACK) {

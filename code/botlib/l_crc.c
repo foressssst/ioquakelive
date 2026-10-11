@@ -19,28 +19,14 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
-/*****************************************************************************
- * name:		l_crc.c
- *
- * desc:		CRC calculation
- *
- *****************************************************************************/
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "../qcommon/q_shared.h"
 #include "botlib.h"
-#include "be_interface.h"  //for botimport.Print
+#include "be_interface.h"
 #include "l_crc.h"
-
-// FIXME: byte swap?
-
-// this is a 16 bit, non-reflected CRC using the polynomial 0x1021
-// and the initial and final xor values shown below...  in other words, the
-// CCITT standard CRC used by XMODEM
 
 #define CRC_INIT_VALUE 0xffff
 #define CRC_XOR_VALUE 0x0000
@@ -80,39 +66,15 @@ unsigned short crctable[257] =
         0xef1f, 0xff3e, 0xcf5d, 0xdf7c, 0xaf9b, 0xbfba, 0x8fd9, 0x9ff8,
         0x6e17, 0x7e36, 0x4e55, 0x5e74, 0x2e93, 0x3eb2, 0x0ed1, 0x1ef0};
 
-//===========================================================================
-//
-// Parameter:				-
-// Returns:					-
-// Changes Globals:		-
-//===========================================================================
 void CRC_Init(unsigned short* crcvalue) {
     *crcvalue = CRC_INIT_VALUE;
-}  // end of the function CRC_Init
-//===========================================================================
-//
-// Parameter:				-
-// Returns:					-
-// Changes Globals:		-
-//===========================================================================
+}
 void CRC_ProcessByte(unsigned short* crcvalue, byte data) {
     *crcvalue = (*crcvalue << 8) ^ crctable[(*crcvalue >> 8) ^ data];
-}  // end of the function CRC_ProcessByte
-//===========================================================================
-//
-// Parameter:				-
-// Returns:					-
-// Changes Globals:		-
-//===========================================================================
+}
 unsigned short CRC_Value(unsigned short crcvalue) {
     return crcvalue ^ CRC_XOR_VALUE;
-}  // end of the function CRC_Value
-//===========================================================================
-//
-// Parameter:				-
-// Returns:					-
-// Changes Globals:		-
-//===========================================================================
+}
 unsigned short CRC_ProcessString(unsigned char* data, int length) {
     unsigned short crcvalue;
     int i, ind;
@@ -124,19 +86,13 @@ unsigned short CRC_ProcessString(unsigned char* data, int length) {
         if (ind < 0 || ind > 256)
             ind = 0;
         crcvalue = (crcvalue << 8) ^ crctable[ind];
-    }  // end for
+    }
     return CRC_Value(crcvalue);
-}  // end of the function CRC_ProcessString
-//===========================================================================
-//
-// Parameter:				-
-// Returns:					-
-// Changes Globals:		-
-//===========================================================================
+}
 void CRC_ContinueProcessString(unsigned short* crc, char* data, int length) {
     int i;
 
     for (i = 0; i < length; i++) {
         *crc = (*crc << 8) ^ crctable[(*crc >> 8) ^ data[i]];
-    }  // end for
-}  // end of the function CRC_ProcessString
+    }
+}

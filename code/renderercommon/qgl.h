@@ -19,19 +19,11 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-/*
-** QGL.H
-*/
-
 #ifndef __QGL_H__
 #define __QGL_H__
 
 #include <SDL3/SDL_opengl.h>
 
-// Single-channel font-atlas formats and pixel-store params for the QL font
-// backend (tr_font_gl.c). Core in modern GL and provided by SDL_opengl_glext.h,
-// but defined here defensively so the font atlas code builds whatever GL headers
-// a translation unit pulls in.
 #ifndef GL_RED
 #define GL_RED 0x1903
 #endif
@@ -72,12 +64,6 @@ extern void(APIENTRYP qglLockArraysEXT)(GLint first, GLsizei count);
 extern void(APIENTRYP qglUnlockArraysEXT)(void);
 #endif
 
-//===========================================================================
-
-// GL function loader, based on https://gist.github.com/rygorous/16796a0c876cf8a5f542caddb55bce8a
-// get missing functions from code/SDL3/include/SDL3/SDL_opengl.h
-
-// OpenGL 1.0/1.1, OpenGL ES 1.0, and OpenGL 3.2 core profile
 #define QGL_1_1_PROCS                                                                                                                                                      \
     GLE(void, BindTexture, GLenum target, GLuint texture)                                                                                                                  \
     GLE(void, BlendFunc, GLenum sfactor, GLenum dfactor)                                                                                                                   \
@@ -116,7 +102,6 @@ extern void(APIENTRYP qglUnlockArraysEXT)(void);
     GLE(void, TexSubImage2D, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid* pixels)    \
     GLE(void, Viewport, GLint x, GLint y, GLsizei width, GLsizei height)
 
-// OpenGL 1.0/1.1 and OpenGL ES 1.x but not OpenGL 3.2 core profile
 #define QGL_1_1_FIXED_FUNCTION_PROCS                                                       \
     GLE(void, AlphaFunc, GLenum func, GLclampf ref)                                        \
     GLE(void, Color4f, GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)            \
@@ -134,14 +119,12 @@ extern void(APIENTRYP qglUnlockArraysEXT)(void);
     GLE(void, Translatef, GLfloat x, GLfloat y, GLfloat z)                                 \
     GLE(void, VertexPointer, GLint size, GLenum type, GLsizei stride, const GLvoid* ptr)
 
-// OpenGL 1.0/1.1 and 3.2 core profile but not OpenGL ES 1.x
 #define QGL_DESKTOP_1_1_PROCS                                  \
     GLE(void, ClearDepth, GLclampd depth)                      \
     GLE(void, DepthRange, GLclampd near_val, GLclampd far_val) \
     GLE(void, DrawBuffer, GLenum mode)                         \
     GLE(void, PolygonMode, GLenum face, GLenum mode)
 
-// OpenGL 1.0/1.1 but not OpenGL 3.2 core profile or OpenGL ES 1.x
 #define QGL_DESKTOP_1_1_FIXED_FUNCTION_PROCS                                                                              \
     GLE(void, ArrayElement, GLint i)                                                                                      \
     GLE(void, Begin, GLenum mode)                                                                                         \
@@ -157,24 +140,20 @@ extern void(APIENTRYP qglUnlockArraysEXT)(void);
     GLE(void, Vertex3f, GLfloat x, GLfloat y, GLfloat z)                                                                  \
     GLE(void, Vertex3fv, const GLfloat* v)
 
-// OpenGL ES 1.1 and OpenGL ES 2.0 but not desktop OpenGL 1.x
 #define QGL_ES_1_1_PROCS                   \
     GLE(void, ClearDepthf, GLclampf depth) \
     GLE(void, DepthRangef, GLclampf near_val, GLclampf far_val)
 
-// OpenGL ES 1.1 but not OpenGL ES 2.0 or desktop OpenGL 1.x
 #define QGL_ES_1_1_FIXED_FUNCTION_PROCS                                                                              \
     GLE(void, ClipPlanef, GLenum plane, const GLfloat* equation)                                                     \
     GLE(void, Frustumf, GLfloat left, GLfloat right, GLfloat bottom, GLfloat top, GLfloat near_val, GLfloat far_val) \
     GLE(void, Orthof, GLfloat left, GLfloat right, GLfloat bottom, GLfloat top, GLfloat near_val, GLfloat far_val)
 
-// OpenGL 1.3, was GL_ARB_texture_compression
 #define QGL_1_3_PROCS                                                                                                                                                    \
     GLE(void, ActiveTexture, GLenum texture)                                                                                                                             \
     GLE(void, CompressedTexImage2D, GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void* data) \
     GLE(void, CompressedTexSubImage2D, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void* data)
 
-// GL_ARB_occlusion_query, built-in to OpenGL 1.5 but not OpenGL ES 2.0
 #define QGL_ARB_occlusion_query_PROCS                                   \
     GLE(void, GenQueries, GLsizei n, GLuint* ids)                       \
     GLE(void, DeleteQueries, GLsizei n, const GLuint* ids)              \
@@ -183,7 +162,6 @@ extern void(APIENTRYP qglUnlockArraysEXT)(void);
     GLE(void, GetQueryObjectiv, GLuint id, GLenum pname, GLint* params) \
     GLE(void, GetQueryObjectuiv, GLuint id, GLenum pname, GLuint* params)
 
-// OpenGL 1.5, was GL_ARB_vertex_buffer_object
 #define QGL_1_5_PROCS                                                                     \
     GLE(void, BindBuffer, GLenum target, GLuint buffer)                                   \
     GLE(void, DeleteBuffers, GLsizei n, const GLuint* buffers)                            \
@@ -191,7 +169,6 @@ extern void(APIENTRYP qglUnlockArraysEXT)(void);
     GLE(void, BufferData, GLenum target, GLsizeiptr size, const void* data, GLenum usage) \
     GLE(void, BufferSubData, GLenum target, GLintptr offset, GLsizeiptr size, const void* data)
 
-// OpenGL 2.0, was GL_ARB_shading_language_100, GL_ARB_vertex_program, GL_ARB_shader_objects, and GL_ARB_vertex_shader
 #define QGL_2_0_PROCS                                                                                                                    \
     GLE(void, AttachShader, GLuint program, GLuint shader)                                                                               \
     GLE(void, BindAttribLocation, GLuint program, GLuint index, const GLchar* name)                                                      \
@@ -223,7 +200,6 @@ extern void(APIENTRYP qglUnlockArraysEXT)(void);
     GLE(void, ValidateProgram, GLuint program)                                                                                           \
     GLE(void, VertexAttribPointer, GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void* pointer)
 
-// GL_NVX_gpu_memory_info
 #ifndef GL_NVX_gpu_memory_info
 #define GL_NVX_gpu_memory_info
 #define GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX 0x9047
@@ -233,7 +209,6 @@ extern void(APIENTRYP qglUnlockArraysEXT)(void);
 #define GL_GPU_MEMORY_INFO_EVICTED_MEMORY_NVX 0x904B
 #endif
 
-// GL_ATI_meminfo
 #ifndef GL_ATI_meminfo
 #define GL_ATI_meminfo
 #define GL_VBO_FREE_MEMORY_ATI 0x87FB
@@ -241,7 +216,6 @@ extern void(APIENTRYP qglUnlockArraysEXT)(void);
 #define GL_RENDERBUFFER_FREE_MEMORY_ATI 0x87FD
 #endif
 
-// GL_ARB_texture_float
 #ifndef GL_ARB_texture_float
 #define GL_ARB_texture_float
 #define GL_TEXTURE_RED_TYPE_ARB 0x8C10
@@ -271,18 +245,14 @@ extern void(APIENTRYP qglUnlockArraysEXT)(void);
 #define GL_HALF_FLOAT_ARB 0x140B
 #endif
 
-// OpenGL 3.0 specific
 #define QGL_3_0_PROCS \
     GLE(const GLubyte*, GetStringi, GLenum name, GLuint index)
 
-// [ioquakelive] GL_ARB_sync, part of OpenGL 3.2: it tells when the GPU has finished a frame
-// without draining the pipeline, and so caps how many are queued (see r_maxQueuedFrames)
 #define QGL_ARB_sync_PROCS                                                             \
     GLE(GLsync, FenceSync, GLenum condition, GLbitfield flags)                         \
     GLE(GLenum, ClientWaitSync, GLsync sync, GLbitfield flags, GLuint64 timeout)       \
     GLE(void, DeleteSync, GLsync sync)
 
-// GL_ARB_framebuffer_object, built-in to OpenGL 3.0
 #define QGL_ARB_framebuffer_object_PROCS                                                                                                                               \
     GLE(void, BindRenderbuffer, GLenum target, GLuint renderbuffer)                                                                                                    \
     GLE(void, DeleteRenderbuffers, GLsizei n, const GLuint* renderbuffers)                                                                                             \
@@ -298,7 +268,6 @@ extern void(APIENTRYP qglUnlockArraysEXT)(void);
     GLE(void, BlitFramebuffer, GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter) \
     GLE(void, RenderbufferStorageMultisample, GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height)
 
-// GL_ARB_vertex_array_object, built-in to OpenGL 3.0
 #define QGL_ARB_vertex_array_object_PROCS                          \
     GLE(void, BindVertexArray, GLuint array)                       \
     GLE(void, DeleteVertexArrays, GLsizei n, const GLuint* arrays) \
@@ -330,7 +299,6 @@ extern void(APIENTRYP qglUnlockArraysEXT)(void);
 #define GL_TEXTURE_CUBE_MAP_SEAMLESS 0x884F
 #endif
 
-// GL_EXT_direct_state_access
 #define QGL_EXT_direct_state_access_PROCS                                                                                                                                                                      \
     GLE(GLvoid, BindMultiTextureEXT, GLenum texunit, GLenum target, GLuint texture)                                                                                                                            \
     GLE(GLvoid, TextureParameterfEXT, GLuint texture, GLenum target, GLenum pname, GLfloat param)                                                                                                              \
@@ -365,7 +333,7 @@ QGL_1_3_PROCS;
 QGL_1_5_PROCS;
 QGL_2_0_PROCS;
 QGL_3_0_PROCS;
-QGL_ARB_sync_PROCS;  // [ioquakelive] ver r_maxQueuedFrames
+QGL_ARB_sync_PROCS;
 QGL_ARB_occlusion_query_PROCS;
 QGL_ARB_framebuffer_object_PROCS;
 QGL_ARB_vertex_array_object_PROCS;

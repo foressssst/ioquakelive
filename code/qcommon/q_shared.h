@@ -19,22 +19,13 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
 #ifndef __Q_SHARED_H
 #define __Q_SHARED_H
 
-// q_shared.h -- included first by ALL program modules.
-// A user mod should never modify this file
-
-// BEGIN Thomas changes
-// END Thomas changes
-
 #define PRODUCT_NAME            "ioquakelive"
-#define BASEGAME                "baseqz"  // [QL] protocol/game name (sent over network)
-#define BASEGAME_DIR            "baseq3"  // filesystem directory for game data
+#define BASEGAME                "baseqz"
+#define BASEGAME_DIR            "baseq3"
 #define CLIENT_WINDOW_TITLE     "ioquakelive"
-// [ioquakelive] the player's own folder, apart from upstream's "quakelive" (on Windows the
-// first start moves that one over: Sys_DefaultHomePath)
 #define HOMEPATH_NAME_UNIX      ".ioquakelive"
 #define HOMEPATH_NAME_WIN       "ioquakelive"
 #define HOMEPATH_NAME_MACOSX    HOMEPATH_NAME_WIN
@@ -42,7 +33,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define STEAMPATH_NAME			"Quake Live"
 #define STEAMPATH_APPID         "282440"
 
-// [ioquakelive] the release, raised by each "release:" commit; the CI checks the two match
 #ifndef PRODUCT_VERSION
 #define PRODUCT_VERSION "0.3.13"
 #endif
@@ -55,11 +45,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define PRODUCT_TIME __TIME__
 #endif
 
-// [QL] PRODUCT_GIT_HASH is supplied by code/qcommon/git_version.h, which is
-// regenerated before every build by code/tools/make_git_version_header.py
-// (run from Makefile and from each MSBuild project's PreBuildEvent). Falls
-// back to "unknown" when git is unavailable or the header hasn't been
-// generated yet (e.g. fresh source tarball + direct gcc -fsyntax-only).
 #if defined(__has_include)
 #  if __has_include("git_version.h")
 #    include "git_version.h"
@@ -73,35 +58,28 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define MAX_TEAMNAME 32
 
-#define DEMOEXT "dm_"  // standard demo extension
+#define DEMOEXT "dm_"
 
 #ifdef _MSC_VER
 
-#pragma warning(disable : 4018)  // signed/unsigned mismatch
+#pragma warning(disable : 4018)
 #pragma warning(disable : 4032)
 #pragma warning(disable : 4051)
-#pragma warning(disable : 4057)  // slightly different base types
-#pragma warning(disable : 4100)  // unreferenced formal parameter
+#pragma warning(disable : 4057)
+#pragma warning(disable : 4100)
 #pragma warning(disable : 4115)
-#pragma warning(disable : 4125)  // decimal digit terminates octal escape sequence
-#pragma warning(disable : 4127)  // conditional expression is constant
+#pragma warning(disable : 4125)
+#pragma warning(disable : 4127)
 #pragma warning(disable : 4136)
-#pragma warning(disable : 4152)  // nonstandard extension, function/data pointer conversion in expression
-// #pragma warning(disable : 4201)
-// #pragma warning(disable : 4214)
+#pragma warning(disable : 4152)
 #pragma warning(disable : 4244)
-#pragma warning(disable : 4142)  // benign redefinition
-// #pragma warning(disable : 4305)		// truncation from const double to float
-// #pragma warning(disable : 4310)		// cast truncates constant value
-// #pragma warning(disable:  4505) 	// unreferenced local function has been removed
+#pragma warning(disable : 4142)
 #pragma warning(disable : 4514)
-#pragma warning(disable : 4702)  // unreachable code
-#pragma warning(disable : 4711)  // selected for automatic inline expansion
-#pragma warning(disable : 4220)  // varargs matches remaining parameters
-// #pragma intrinsic( memset, memcpy )
+#pragma warning(disable : 4702)
+#pragma warning(disable : 4711)
+#pragma warning(disable : 4220)
 #endif
 
-// Ignore __attribute__ on non-gcc platforms
 #ifndef __GNUC__
 #ifndef __attribute__
 #define __attribute__(x)
@@ -123,11 +101,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #else
 #define Q_EXPORT
 #endif
-
-/**********************************************************************
-  Standard C headers used by the game modules.
-  Add needed headers HERE rather than in individual .c files.
- **********************************************************************/
 
 #include <assert.h>
 #include <math.h>
@@ -156,16 +129,12 @@ typedef unsigned __int8 uint8_t;
 #endif
 
 #ifdef _WIN32
-// vsnprintf is ISO/IEC 9899:1999
-// abstracting this to make it portable
 int Q_vsnprintf(char* str, size_t size, const char* format, va_list ap);
 #else
 #define Q_vsnprintf vsnprintf
 #endif
 
 #include "q_platform.h"
-
-//=============================================================
 
 typedef unsigned char byte;
 
@@ -199,7 +168,6 @@ typedef int clipHandle_t;
 #endif
 
 #define STRING(s) #s
-// expand constants before stringifying them
 #define XSTRING(s) STRING(s)
 
 #define MAX_QINT 0x7fffffff
@@ -208,71 +176,59 @@ typedef int clipHandle_t;
 #define ARRAY_LEN(x) (sizeof(x) / sizeof(*(x)))
 #define STRARRAY_LEN(x) (ARRAY_LEN(x) - 1)
 
-// angle indexes
-#define PITCH 0  // up / down
-#define YAW 1    // left / right
-#define ROLL 2   // fall over
+#define PITCH 0
+#define YAW 1
+#define ROLL 2
 
-// the game guarantees that no string from the network will ever
-// exceed MAX_STRING_CHARS
-#define MAX_STRING_CHARS 1024   // max length of a string passed to Cmd_TokenizeString
-#define MAX_STRING_TOKENS 1024  // max tokens resulting from Cmd_TokenizeString
-#define MAX_TOKEN_CHARS 1024    // max length of an individual token
+#define MAX_STRING_CHARS 1024
+#define MAX_STRING_TOKENS 1024
+#define MAX_TOKEN_CHARS 1024
 
 #define MAX_INFO_STRING 1024
 #define MAX_INFO_KEY 1024
 #define MAX_INFO_VALUE 1024
 
-#define BIG_INFO_STRING 8192  // used for system info key only
+#define BIG_INFO_STRING 8192
 #define BIG_INFO_KEY 8192
 #define BIG_INFO_VALUE 8192
 
-#define MAX_QPATH 64  // max length of a quake game pathname
+#define MAX_QPATH 64
 #ifdef PATH_MAX
 #define MAX_OSPATH PATH_MAX
 #else
-#define MAX_OSPATH 256  // max length of a filesystem pathname
+#define MAX_OSPATH 256
 #endif
 
-#define MAX_NAME_LENGTH 40  // [QL] max length of a client name (Q3 used 32)
+#define MAX_NAME_LENGTH 40
 
 #define MAX_SAY_TEXT 150
 
-// parameters for command buffer stuffing
 typedef enum {
-    EXEC_NOW,  // don't return until completed, a VM should NEVER use this,
-    // because some commands might cause the VM to be unloaded...
-    EXEC_INSERT,  // insert at current position, but don't run yet
-    EXEC_APPEND   // add to end of the command buffer (normal case)
+    EXEC_NOW,
+    EXEC_INSERT,
+    EXEC_APPEND
 } cbufExec_t;
 
-//
-// these aren't needed by any of the VMs.  put in another header?
-//
-#define MAX_MAP_AREA_BYTES 32  // bit vector of area visibility
+#define MAX_MAP_AREA_BYTES 32
 
-// print levels from renderer (FIXME: set up for game / cgame?)
 typedef enum {
     PRINT_ALL,
-    PRINT_DEVELOPER,  // only print when "developer 1"
+    PRINT_DEVELOPER,
     PRINT_WARNING,
     PRINT_ERROR
 } printParm_t;
 
 #ifdef ERR_FATAL
-#undef ERR_FATAL  // this is be defined in malloc.h
+#undef ERR_FATAL
 #endif
 
-// parameters to the main Error routine
 typedef enum {
-    ERR_FATAL,             // exit the entire game with a popup window
-    ERR_DROP,              // print to console and disconnect from game
-    ERR_SERVERDISCONNECT,  // don't kill server
-    ERR_DISCONNECT,        // client disconnected from the server
-    ERR_NEED_CD            // pop up the need-cd dialog
+    ERR_FATAL,
+    ERR_DROP,
+    ERR_SERVERDISCONNECT,
+    ERR_DISCONNECT,
+    ERR_NEED_CD
 } errorParm_t;
-
-// font rendering values used by ui and cgame
 
 #define PROP_GAP_WIDTH 3
 #define PROP_SPACE_WIDTH 8
@@ -282,12 +238,12 @@ typedef enum {
 #define BLINK_DIVISOR 200
 #define PULSE_DIVISOR 75
 
-#define UI_LEFT 0x00000000  // default
+#define UI_LEFT 0x00000000
 #define UI_CENTER 0x00000001
 #define UI_RIGHT 0x00000002
 #define UI_FORMATMASK 0x00000007
 #define UI_SMALLFONT 0x00000010
-#define UI_BIGFONT 0x00000020  // default
+#define UI_BIGFONT 0x00000020
 #define UI_GIANTFONT 0x00000040
 #define UI_DROPSHADOW 0x00000800
 #define UI_BLINK 0x00001000
@@ -320,14 +276,6 @@ void* Hunk_Alloc(int size, ha_pref preference);
 #define CIN_silent 8
 #define CIN_shader 16
 
-/*
-==============================================================
-
-MATHLIB
-
-==============================================================
-*/
-
 typedef float vec_t;
 typedef vec_t vec2_t[2];
 typedef vec_t vec3_t[3];
@@ -341,14 +289,12 @@ typedef int fixed8_t;
 typedef int fixed16_t;
 
 #ifndef M_PI
-#define M_PI 3.14159265358979323846f  // matches value in gcc v2 math.h
+#define M_PI 3.14159265358979323846f
 #endif
 
 #define NUMVERTEXNORMALS 162
 extern vec3_t bytedirs[NUMVERTEXNORMALS];
 
-// all drawing is done to a 640*480 virtual screen size
-// and will be automatically scaled to the real resolution
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
 
@@ -377,7 +323,7 @@ extern vec4_t colorMdGrey;
 extern vec4_t colorDkGrey;
 
 #define Q_COLOR_ESCAPE '^'
-qboolean Q_IsColorString(const char* p);  // ^[0-9a-zA-Z]
+qboolean Q_IsColorString(const char* p);
 
 #define COLOR_BLACK '0'
 #define COLOR_RED '1'
@@ -399,13 +345,6 @@ qboolean Q_IsColorString(const char* p);  // ^[0-9a-zA-Z]
 #define S_COLOR_MAGENTA "^6"
 #define S_COLOR_WHITE "^7"
 
-// [CNQ3] Console-only colour codes, ported from CNQ3 (code/qcommon/q_shared.h):
-// cvar names, command names, cvar values and help text get their own colours in
-// the console (con_style 1). They are control characters, never alphanumeric,
-// so Q_IsColorString and the renderers ignore them; only the client console
-// reads them, and Com_Printf strips them from the log file and the system
-// console. Always concatenate them as separate literals: "^\x01" "abc", never
-// "^\x01abc", which would parse as one hex escape.
 #define COLOR_CON_CVAR '\x01'
 #define COLOR_CON_CMD '\x02'
 #define COLOR_CON_VAL '\x03'
@@ -416,15 +355,10 @@ qboolean Q_IsColorString(const char* p);  // ^[0-9a-zA-Z]
 #define S_COLOR_HELP "^\x04"
 #define Q_IsConsoleColorString(p) ((p) && (p)[0] == Q_COLOR_ESCAPE && (p)[1] >= COLOR_CON_CVAR && (p)[1] <= COLOR_CON_HELP)
 
-// [QL] Colour codes when drawing text. Quake Live's engine only knows ^0-^7:
-// quakelive_steam.exe CL_ConsolePrint (0x4b3e90), the text drawer (0x44458c)
-// and the text measurer (0x443da2) draw '^' followed by anything else as text.
-// [CPMA] With cl_extendedColors 1, CPMA's ^8, ^9 and ^a-^z (either case) are
-// colour codes too. Q_IsColorString keeps stripping any ^ + alphanumeric.
 #define Q_NUM_COLOR_CODES 36
-int Q_ColorCodeIndex(int c, qboolean extended);  // 0-35, or -1 when c isn't a colour code
-int Q_ColorCodeChar(int index);                   // '0'-'9', 'a'-'z'
-const float* Q_ColorFromCodeIndex(int index);     // Quake Live's 0-7, CPMA's 8-35
+int Q_ColorCodeIndex(int c, qboolean extended);
+int Q_ColorCodeChar(int index);
+const float* Q_ColorFromCodeIndex(int index);
 
 extern vec4_t g_color_table[8];
 
@@ -481,7 +415,7 @@ static ID_INLINE float Q_fabs(float x) {
 
 #else
 float Q_fabs(float f);
-float Q_rsqrt(float f);  // reciprocal square root
+float Q_rsqrt(float f);
 #endif
 
 #define SQRTFAST(x) ((x) * Q_rsqrt(x))
@@ -489,7 +423,6 @@ float Q_rsqrt(float f);  // reciprocal square root
 signed char ClampChar(int i);
 signed short ClampShort(int i);
 
-// this isn't a real cheap function to call!
 int DirToByte(vec3_t dir);
 void ByteToDir(int b, vec3_t dir);
 
@@ -515,7 +448,6 @@ void ByteToDir(int b, vec3_t dir);
         v[1] = ((int)(v[1])); \
         v[2] = ((int)(v[2])); \
     }
-// just in case you don't want to use the macros
 vec_t _DotProduct(const vec3_t v1, const vec3_t v2);
 void _VectorSubtract(const vec3_t veca, const vec3_t vecb, vec3_t out);
 void _VectorAdd(const vec3_t veca, const vec3_t vecb, vec3_t out);
@@ -561,8 +493,6 @@ static ID_INLINE vec_t DistanceSquared(const vec3_t p1, const vec3_t p2) {
     return v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
 }
 
-// fast vector normalize routine that does not check to make sure
-// that length != 0, nor does it return length, uses rsqrt approximation
 static ID_INLINE void VectorNormalizeFast(vec3_t v) {
     float ilength;
 
@@ -585,7 +515,7 @@ static ID_INLINE void CrossProduct(const vec3_t v1, const vec3_t v2, vec3_t cros
     cross[2] = v1[0] * v2[1] - v1[1] * v2[0];
 }
 
-vec_t VectorNormalize(vec3_t v);  // returns vector length
+vec_t VectorNormalize(vec3_t v);
 vec_t VectorNormalize2(const vec3_t v, vec3_t out);
 void Vector4Scale(const vec4_t in, vec_t scale, vec4_t out);
 void VectorRotate(vec3_t in, vec3_t matrix[3], vec3_t out);
@@ -627,9 +557,6 @@ void ProjectPointOnPlane(vec3_t dst, const vec3_t p, const vec3_t normal);
 void RotatePointAroundVector(vec3_t dst, const vec3_t dir, const vec3_t point, float degrees);
 void RotateAroundDirection(vec3_t axis[3], float yaw);
 void MakeNormalVectors(const vec3_t forward, vec3_t right, vec3_t up);
-// perpendicular vector could be replaced by this
-
-// int	PlaneTypeForNormal (vec3_t normal);
 
 void MatrixMultiply(float in1[3][3], float in2[3][3], float out[3][3]);
 void AngleVectors(const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up);
@@ -642,8 +569,6 @@ void PerpendicularVector(vec3_t dst, const vec3_t src);
 #ifndef MIN
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #endif
-
-//=============================================
 
 float Com_Clamp(float min, float max, float value);
 char* COM_SkipPath(char* pathname);
@@ -659,17 +584,15 @@ char* COM_ParseExt(char** data_p, qboolean allowLineBreak);
 int COM_Compress(char* data_p);
 void COM_ParseError(char* format, ...) __attribute__((format(printf, 1, 2)));
 void COM_ParseWarning(char* format, ...) __attribute__((format(printf, 1, 2)));
-// int		COM_ParseInfos( char *buf, int max, char infos[][MAX_INFO_STRING] );
 
 #define MAX_TOKENLENGTH 1024
 
 #ifndef TT_STRING
-// token types
-#define TT_STRING 1       // string
-#define TT_LITERAL 2      // literal
-#define TT_NUMBER 3       // number
-#define TT_NAME 4         // name
-#define TT_PUNCTUATION 5  // punctuation
+#define TT_STRING 1
+#define TT_LITERAL 2
+#define TT_NUMBER 3
+#define TT_NAME 4
+#define TT_PUNCTUATION 5
 #endif
 
 typedef struct pc_token_s {
@@ -679,8 +602,6 @@ typedef struct pc_token_s {
     float floatvalue;
     char string[MAX_TOKENLENGTH];
 } pc_token_t;
-
-// data is an in/out parm, returns a parsed out token
 
 void COM_MatchToken(char** buf_p, char* match);
 
@@ -699,7 +620,6 @@ char* Com_SkipCharset(char* s, char* sep);
 
 void Com_RandomBytes(byte* string, int len);
 
-// mode parm for FS_FOpenFile
 typedef enum {
     FS_READ,
     FS_WRITE,
@@ -713,8 +633,6 @@ typedef enum {
     FS_SEEK_SET
 } fsOrigin_t;
 
-//=============================================
-
 int Q_isprint(int c);
 int Q_islower(int c);
 int Q_isupper(int c);
@@ -722,7 +640,6 @@ int Q_isalpha(int c);
 qboolean Q_isanumber(const char* s);
 qboolean Q_isintegral(float f);
 
-// portable case insensitive compare
 int Q_stricmp(const char* s1, const char* s2);
 int Q_strncmp(const char* s1, const char* s2, int n);
 int Q_stricmpn(const char* s1, const char* s2, int n);
@@ -730,28 +647,18 @@ char* Q_strlwr(char* s1);
 char* Q_strupr(char* s1);
 const char* Q_stristr(const char* s, const char* find);
 
-// string replacement
 char* Q_strreplace(char* s, const char* s1, const char* s2);
 
-// buffer size safe library replacements
 void Q_strncpyz(char* dest, const char* src, int destsize);
 void Q_strcat(char* dest, int size, const char* src);
 
-// strlen that discounts Quake color sequences
 int Q_PrintStrlen(const char* string);
-// [ioquakelive] a Unicode code point as UTF-8 bytes, and walking a string of them
 int Q_UTF8_Encode(char* out, int codepoint);
 int Q_UTF8_Start(const char* s, int pos);
 int Q_UTF8_Next(const char* s, int pos);
-// removes color sequences from string
 char* Q_CleanStr(char* string);
-// Count the number of char tocount encountered in string
 int Q_CountChar(const char* string, char tocount);
 
-//=============================================
-
-// 64-bit integers for global rankings interface
-// implemented as a struct for qvm compatibility
 typedef struct
 {
     byte b0;
@@ -764,29 +671,11 @@ typedef struct
     byte b7;
 } qint64;
 
-//=============================================
-/*
-short	BigShort(short l);
-short	LittleShort(short l);
-int		BigLong (int l);
-int		LittleLong (int l);
-qint64  BigLong64 (qint64 l);
-qint64  LittleLong64 (qint64 l);
-float	BigFloat (const float *l);
-float	LittleFloat (const float *l);
-
-void	Swap_Init (void);
-*/
 char* QDECL va(char* format, ...) __attribute__((format(printf, 1, 2)));
 
 #define TRUNCATE_LENGTH 64
 void Com_TruncateLongString(char* buffer, const char* s);
 
-//=============================================
-
-//
-// key / value info strings
-//
 char* Info_ValueForKey(const char* s, const char* key);
 void Info_RemoveKey(char* s, const char* key);
 void Info_RemoveKey_Big(char* s, const char* key);
@@ -795,87 +684,55 @@ void Info_SetValueForKey_Big(char* s, const char* key, const char* value);
 qboolean Info_Validate(const char* s);
 void Info_NextPair(const char** s, char* key, char* value);
 
-// this is only here so the functions in q_shared.c and bg_*.c can link
 void QDECL Com_Error(int level, const char* error, ...) __attribute__((noreturn, format(printf, 2, 3)));
 void QDECL Com_Printf(const char* msg, ...) __attribute__((format(printf, 1, 2)));
 
-/*
-==========================================================
+#define CVAR_ARCHIVE 0x0001
+#define CVAR_USERINFO 0x0002
+#define CVAR_SERVERINFO 0x0004
+#define CVAR_SYSTEMINFO 0x0008
+#define CVAR_INIT 0x0010
+#define CVAR_LATCH 0x0020
+#define CVAR_ROM 0x0040
+#define CVAR_USER_CREATED 0x0080
+#define CVAR_TEMP 0x0100
+#define CVAR_CHEAT 0x0200
+#define CVAR_NORESTART 0x0400
 
-CVARS (console variables)
+#define CVAR_REPLICATE 0x0800
+#define CVAR_VM_CREATED 0x1000
+#define CVAR_PROTECTED 0x2000
 
-Many variables can be used for cheating purposes, so when
-cheats is zero, force all unspecified variables to their
-default values.
-==========================================================
-*/
+#define CVAR_GAMERULE_PMOVE  0x004000
+#define CVAR_GAMERULE_WEAPON 0x008000
+#define CVAR_GAMERULE_MODEL  0x010000
+#define CVAR_GAMERULE_ARMOR  0x020000
+#define CVAR_GAMERULE_REPL   0x040000
+#define CVAR_GAMERULE        0x100000
 
-#define CVAR_ARCHIVE 0x0001  // set to cause it to be saved to vars.rc
-// used for system variables, not for player
-// specific configurations
-#define CVAR_USERINFO 0x0002      // sent to server on connect or change
-#define CVAR_SERVERINFO 0x0004    // sent in response to front end requests
-#define CVAR_SYSTEMINFO 0x0008    // these cvars will be duplicated on all clients
-#define CVAR_INIT 0x0010          // don't allow change from console at all,
-                                  // but can be set from the command line
-#define CVAR_LATCH 0x0020         // will only change when C code next does
-                                  // a Cvar_Get(), so it can't be changed
-                                  // without proper initialization.  modified
-                                  // will be set, even though the value hasn't
-                                  // changed yet
-#define CVAR_ROM 0x0040           // display only, cannot be set by user at all
-#define CVAR_USER_CREATED 0x0080  // created by a set command
-#define CVAR_TEMP 0x0100          // can be set even when cheats are disabled, but is not archived
-#define CVAR_CHEAT 0x0200         // can not be changed if cheats are disabled
-#define CVAR_NORESTART 0x0400     // do not clear when a cvar_restart is issued
-
-#define CVAR_REPLICATE 0x0800       // [QL] archived in repconfig.cfg (replicated settings)
-// [QL] QL has no CVAR_SERVER_CREATED. Stock ioquake3's server-created bit was 0x0800, which QL
-// repurposed as CVAR_REPLICATE, and the QL engine does no server-created flag handling
-// (CL_SystemInfoChanged uses a plain Cvar_Set, Cvar_Register does no flag validation). Do not
-// reintroduce the flag - it aliased CVAR_REPLICATE and got stripped off cg_enemy*Color.
-#define CVAR_VM_CREATED 0x1000      // cvar was created exclusively in one of the VMs.
-#define CVAR_PROTECTED 0x2000       // prevent modifying this var from VMs or the server
-
-// [QL] CVAR_GAMERULE family - factory/game-rules system bits, verified from QLDS qagamex86.dll cvar table.
-// CVAR_GAMERULE is the base flag (0x100000); the sub-bits indicate which engine subsystem owns the cvar.
-// In ql-decompiled: include/ql_enums_game.h:215 documents CVAR_GAMERULE = 0x100000.
-#define CVAR_GAMERULE_PMOVE  0x004000  // 33 cvars, all pmove_*
-#define CVAR_GAMERULE_WEAPON 0x008000  // 19 cvars, all weapon_* (always paired with REPL)
-#define CVAR_GAMERULE_MODEL  0x010000  // 6 cvars, player model/head customization
-#define CVAR_GAMERULE_ARMOR  0x020000  // 1 cvar (armor_tiered) - unique flag for tiered armor system
-#define CVAR_GAMERULE_REPL   0x040000  // 108 cvars, must be replicated to client (g_damage_*, weapons, etc)
-#define CVAR_GAMERULE        0x100000  // 312 cvars, factory system marker
-
-// [QL] Client-side user-save flag - verified from cgamex86.dll cvar table.
-// Set on ~200 archive cvars in cgame; always paired with CVAR_REPLICATE (and usually CVAR_VM_CREATED).
-// Exact semantics unverified, but the pattern (only on CVAR_ARCHIVE cvars, in cgame only) suggests
-// it marks cvars that get persisted to a per-user save file (Steam cloud profile, etc).
 #define CVAR_USERSAVE        0x080000
-// These flags are only returned by the Cvar_Flags() function
-#define CVAR_MODIFIED 0x40000000     // Cvar was modified
-#define CVAR_NONEXISTENT 0x80000000  // Cvar doesn't exist.
+#define CVAR_MODIFIED 0x40000000
+#define CVAR_NONEXISTENT 0x80000000
 
-// nothing outside the Cvar_*() functions should modify these fields!
 typedef struct cvar_s cvar_t;
 
 struct cvar_s {
     char* name;
     char* string;
-    char* resetString;    // cvar_restart will reset to this value
-    char* latchedString;  // for CVAR_LATCH vars
-    char* factoryString;  // [QL] value before the factory in play set it
+    char* resetString;
+    char* latchedString;
+    char* factoryString;
     int flags;
-    qboolean modified;      // set each time the cvar is changed
-    int modificationCount;  // incremented each time the cvar is changed
-    float value;            // atof( string )
-    int integer;            // atoi( string )
+    qboolean modified;
+    int modificationCount;
+    float value;
+    int integer;
     qboolean validate;
     qboolean integral;
     float min;
     float max;
     char* description;
-    char* minString;  // [QL] range given as two strings to Cvar_GetRange, NULL without one
+    char* minString;
     char* maxString;
 
     cvar_t* next;
@@ -889,8 +746,6 @@ struct cvar_s {
 
 typedef int cvarHandle_t;
 
-// the modules that run in the virtual machine can't access the cvar_t directly,
-// so they must ask for structured updates
 typedef struct {
     cvarHandle_t handle;
     int modificationCount;
@@ -899,57 +754,34 @@ typedef struct {
     char string[MAX_CVAR_VALUE_STRING];
 } vmCvar_t;
 
-/*
-==============================================================
+#include "surfaceflags.h"
 
-COLLISION DETECTION
-
-==============================================================
-*/
-
-#include "surfaceflags.h"  // shared with the q3map utility
-
-// plane types are used to speed some tests
-// 0-2 are axial planes
 #define PLANE_X 0
 #define PLANE_Y 1
 #define PLANE_Z 2
 #define PLANE_NON_AXIAL 3
 
-/*
-=================
-PlaneTypeForNormal
-=================
-*/
-
 #define PlaneTypeForNormal(x) (x[0] == 1.0 ? PLANE_X : (x[1] == 1.0 ? PLANE_Y : (x[2] == 1.0 ? PLANE_Z : PLANE_NON_AXIAL)))
 
-// plane_t structure
-// !!! if this is changed, it must be changed in asm code too !!!
 typedef struct cplane_s {
     vec3_t normal;
     float dist;
-    byte type;      // for fast side tests: 0,1,2 = axial, 3 = nonaxial
-    byte signbits;  // signx + (signy<<1) + (signz<<2), used as lookup during collision
+    byte type;
+    byte signbits;
     byte pad[2];
 } cplane_t;
 
-// a trace is returned when a box is swept through the world
 typedef struct {
-    qboolean allsolid;    // if true, plane is not valid
-    qboolean startsolid;  // if true, the initial point was in a solid area
-    float fraction;       // time completed, 1.0 = didn't hit anything
-    vec3_t endpos;        // final position
-    cplane_t plane;       // surface normal at impact, transformed to world space
-    int surfaceFlags;     // surface hit
-    int contents;         // contents on other side of surface hit
-    int entityNum;        // entity the contacted sirface is a part of
+    qboolean allsolid;
+    qboolean startsolid;
+    float fraction;
+    vec3_t endpos;
+    cplane_t plane;
+    int surfaceFlags;
+    int contents;
+    int entityNum;
 } trace_t;
 
-// trace->entityNum can also be 0 to (MAX_GENTITIES-1)
-// or ENTITYNUM_NONE, ENTITYNUM_WORLD
-
-// markfragments are returned by R_MarkFragments()
 typedef struct {
     int firstPoint;
     int numPoints;
@@ -960,71 +792,48 @@ typedef struct {
     vec3_t axis[3];
 } orientation_t;
 
-//=====================================================================
-
-// in order from highest priority to lowest
-// if none of the catchers are active, bound key strings will be executed
 #define KEYCATCH_CONSOLE 0x0001
 #define KEYCATCH_UI 0x0002
 #define KEYCATCH_MESSAGE 0x0004
 #define KEYCATCH_CGAME 0x0008
 
-// sound channels
-// channel 0 never willingly overrides
-// other channels will allways override a playing sound on that channel
 typedef enum {
     CHAN_AUTO,
-    CHAN_LOCAL,  // menu sounds, etc
+    CHAN_LOCAL,
     CHAN_WEAPON,
     CHAN_VOICE,
     CHAN_ITEM,
     CHAN_BODY,
-    CHAN_LOCAL_SOUND,  // chat messages, etc
-    CHAN_ANNOUNCER     // announcer voices, etc
+    CHAN_LOCAL_SOUND,
+    CHAN_ANNOUNCER
 } soundChannel_t;
-
-/*
-========================================================================
-
-  ELEMENTS COMMUNICATED ACROSS THE NET
-
-========================================================================
-*/
 
 #define ANGLE2SHORT(x) ((int)((x) * 65536 / 360) & 65535)
 #define SHORT2ANGLE(x) ((x) * (360.0 / 65536))
 
 #define SNAPFLAG_RATE_DELAYED 1
-#define SNAPFLAG_NOT_ACTIVE 2   // snapshot used during connection and for zombies
-#define SNAPFLAG_SERVERCOUNT 4  // toggled every map_restart so transitions can be detected
+#define SNAPFLAG_NOT_ACTIVE 2
+#define SNAPFLAG_SERVERCOUNT 4
 
-//
-// per-level limits
-//
-#define MAX_CLIENTS 64  // absolute limit
+#define MAX_CLIENTS 64
 #define MAX_LOCATIONS 64
 
-#define GENTITYNUM_BITS 10  // don't need to send any more
+#define GENTITYNUM_BITS 10
 #define MAX_GENTITIES (1 << GENTITYNUM_BITS)
 
-// entitynums are communicated with GENTITY_BITS, so any reserved
-// values that are going to be communcated over the net need to
-// also be in this range
 #define ENTITYNUM_NONE (MAX_GENTITIES - 1)
 #define ENTITYNUM_WORLD (MAX_GENTITIES - 2)
 #define ENTITYNUM_MAX_NORMAL (MAX_GENTITIES - 2)
 
-#define MAX_MODELS 256  // these are sent over the net as 8 bits
-#define MAX_SOUNDS 256  // so they cannot be blindly increased
+#define MAX_MODELS 256
+#define MAX_SOUNDS 256
 
 #define MAX_CONFIGSTRINGS 1024
 
-// these are the only configstrings that the system reserves, all the
-// other ones are strictly for servergame to clientgame communication
-#define CS_SERVERINFO 0  // an info string with all the serverinfo cvars
-#define CS_SYSTEMINFO 1  // an info string for server system to client system configuration (timescale, etc)
+#define CS_SERVERINFO 0
+#define CS_SYSTEMINFO 1
 
-#define RESERVED_CONFIGSTRINGS 2  // game can't modify below this, only the system can
+#define RESERVED_CONFIGSTRINGS 2
 
 #define MAX_GAMESTATE_CHARS 16000
 typedef struct {
@@ -1033,9 +842,6 @@ typedef struct {
     int dataCount;
 } gameState_t;
 
-//=========================================================
-
-// bit field limits
 #define MAX_STATS 16
 #define MAX_PERSISTANT 16
 #define MAX_POWERUPS 16
@@ -1045,122 +851,96 @@ typedef struct {
 
 #define PS_PMOVEFRAMECOUNTBITS 6
 
-// playerState_t is the information needed by both the client and server
-// to predict player motion and actions
-// nothing outside of pmove should modify these, or some degree of prediction error
-// will occur
-
-// you can't add anything to this without modifying the code in msg.c
-
-// playerState_t is a full superset of entityState_t as it is used by players,
-// so if a playerState_t is transmitted, the entityState_t can be fully derived
-// from it.
-// playerState_t - 592 bytes. Verified from qagamex64.so build 1069.
-// [QL] adds many fields vs Q3: weaponPrimary, fov, location, jump/crouch fields,
-// movement chars, freeze tag fields, respawnTime, localPersistant, round stats.
 typedef struct playerState_s {
-    int commandTime;          // +0   cmd->serverTime of last executed command
-    int pm_type;              // +4
-    int bobCycle;             // +8   for view bobbing and footstep generation
-    int pm_flags;             // +12  ducked, jump_held, etc
-    int pm_time;              // +16
+    int commandTime;
+    int pm_type;
+    int bobCycle;
+    int pm_flags;
+    int pm_time;
 
-    vec3_t origin;            // +20
-    vec3_t velocity;          // +32
-    int weaponTime;           // +44
-    int gravity;              // +48
-    int speed;                // +52
-    int delta_angles[3];      // +56  add to command angles to get view direction
+    vec3_t origin;
+    vec3_t velocity;
+    int weaponTime;
+    int gravity;
+    int speed;
+    int delta_angles[3];
 
-    int groundEntityNum;      // +68  ENTITYNUM_NONE = in air
+    int groundEntityNum;
 
-    int legsTimer;            // +72
-    int legsAnim;             // +76
+    int legsTimer;
+    int legsAnim;
 
-    int torsoTimer;           // +80
-    int torsoAnim;            // +84
+    int torsoTimer;
+    int torsoAnim;
 
-    int movementDir;          // +88
+    int movementDir;
 
-    vec3_t grapplePoint;      // +92  location of grapple to pull towards
+    vec3_t grapplePoint;
 
-    int eFlags;               // +104 copied to entityState_t->eFlags
+    int eFlags;
 
-    int eventSequence;        // +108 pmove generated events
-    int events[MAX_PS_EVENTS];    // +112
-    int eventParms[MAX_PS_EVENTS]; // +120
+    int eventSequence;
+    int events[MAX_PS_EVENTS];
+    int eventParms[MAX_PS_EVENTS];
 
-    int externalEvent;        // +128 events set on player from another source
-    int externalEventParm;    // +132
-    // [QL] removed: externalEventTime (was here in Q3)
+    int externalEvent;
+    int externalEventParm;
 
-    int clientNum;            // +136 ranges from 0 to MAX_CLIENTS-1
-    int location;             // +140 [QL]
-    int weapon;               // +144 copied to entityState_t->weapon
-    int weaponPrimary;        // +148 [QL]
-    int weaponstate;          // +152
+    int clientNum;
+    int location;
+    int weapon;
+    int weaponPrimary;
+    int weaponstate;
 
-    int fov;                  // +156 [QL]
-    vec3_t viewangles;        // +160 for fixed views
-    int viewheight;           // +172
+    int fov;
+    vec3_t viewangles;
+    int viewheight;
 
-    // damage feedback
-    int damageEvent;          // +176 when it changes, latch the other parms
-    int damageYaw;            // +180
-    int damagePitch;          // +184
-    int damageCount;          // +188
+    int damageEvent;
+    int damageYaw;
+    int damagePitch;
+    int damageCount;
 
-    int stats[MAX_STATS];             // +192
-    int persistant[MAX_PERSISTANT];   // +256 stats that aren't cleared on death
-    int powerups[MAX_POWERUPS];       // +320 level.time that the powerup runs out
-    int ammo[MAX_WEAPONS];            // +384
+    int stats[MAX_STATS];
+    int persistant[MAX_PERSISTANT];
+    int powerups[MAX_POWERUPS];
+    int ammo[MAX_WEAPONS];
 
-    int generic1;             // +448
-    int loopSound;            // +452
-    int jumppad_ent;          // +456 jumppad entity hit this frame
+    int generic1;
+    int loopSound;
+    int jumppad_ent;
 
-    int jumpTime;             // +460 [QL]
-    int doubleJumped;         // +464 [QL]
-    int crouchTime;           // +468 [QL]
-    int crouchSlideTime;      // +472 [QL]
-    char forwardmove;         // +476 [QL]
-    char rightmove;           // +477 [QL]
-    char upmove;              // +478 [QL]
-    char _pad;                // +479 alignment padding
+    int jumpTime;
+    int doubleJumped;
+    int crouchTime;
+    int crouchSlideTime;
+    char forwardmove;
+    char rightmove;
+    char upmove;
+    char _pad;
 
-    // not communicated over the net at all
-    int ping;                 // +480 server to game info for scoreboard
-    int pmove_framecount;     // +484
-    int jumppad_frame;        // +488
-    int entityEventSequence;  // +492
+    int ping;
+    int pmove_framecount;
+    int jumppad_frame;
+    int entityEventSequence;
 
-    int freezetime;           // +496 [QL] freeze tag
-    int thawtime;             // +500 [QL]
-    int thawClientNum_valid;  // +504 [QL]
-    int thawClientNum;        // +508 [QL]
+    int freezetime;
+    int thawtime;
+    int thawClientNum_valid;
+    int thawClientNum;
 
-    int respawnTime;          // +512 [QL]
-    int localPersistant[MAX_PERSISTANT]; // +516 [QL] (64 bytes)
-    int roundDamage;          // +580 [QL]
-    int roundShots;           // +584 [QL]
-    int roundHits;            // +588 [QL]
-} playerState_t;              // 592 bytes
+    int respawnTime;
+    int localPersistant[MAX_PERSISTANT];
+    int roundDamage;
+    int roundShots;
+    int roundHits;
+} playerState_t;
 
-//====================================================================
-
-//
-// usercmd_t->button bits, many of which are generated by the client system,
-// so they aren't game/cgame only definitions
-//
 #define BUTTON_ATTACK 1
-#define BUTTON_TALK 2  // displays talk balloon and disables actions
+#define BUTTON_TALK 2
 #define BUTTON_USE_HOLDABLE 4
 #define BUTTON_GESTURE 8
-#define BUTTON_WALKING 16  // walking can't just be inferred from MOVE_RUN
-                           // because a key pressed late in the frame will
-                           // only generate a small move value for that frame
-                           // walking will use different animations and
-                           // won't generate footsteps
+#define BUTTON_WALKING 16
 #define BUTTON_AFFIRMATIVE 32
 #define BUTTON_NEGATIVE 64
 
@@ -1169,67 +949,51 @@ typedef struct playerState_s {
 #define BUTTON_PATROL 512
 #define BUTTON_FOLLOWME 1024
 
-// [QL] quakelive_steam.exe 0x4b542f and 0x4b5bd0: Quake 3 had "any key" on 2048. In Quake Live
-// that bit is the jump key while it is held, which is what sends a follower back to flying
-// free, and "any key" moved up one
 #define BUTTON_JUMP 2048
-#define BUTTON_ANY 4096  // any key whatsoever
+#define BUTTON_ANY 4096
 
-#define MOVE_RUN 120  // if forwardmove or rightmove are >= MOVE_RUN,
-                      // then BUTTON_WALKING should be set
+#define MOVE_RUN 120
 
-// usercmd_t is sent to the server each client frame
 typedef struct usercmd_s {
     int serverTime;
     int angles[3];
     int buttons;
-    byte weapon;              // offset 20
-    byte weaponPrimary;       // [QL] offset 21 - primary weapon selection (1-14)
-    byte fov;                 // [QL] offset 22 - field of view (10-130)
-    signed char forwardmove;  // [QL] offset 23 (was 21 in Q3)
-    signed char rightmove;    // [QL] offset 24 (was 22 in Q3)
-    signed char upmove;       // [QL] offset 25 (was 23 in Q3)
+    byte weapon;
+    byte weaponPrimary;
+    byte fov;
+    signed char forwardmove;
+    signed char rightmove;
+    signed char upmove;
 } usercmd_t;
 
-//===================================================================
-
-// if entityState->solid == SOLID_BMODEL, modelindex is an inline model number
 #define SOLID_BMODEL 0xffffff
 
 typedef enum {
     TR_STATIONARY,
-    TR_INTERPOLATE,  // non-parametric, but interpolate between snapshots
+    TR_INTERPOLATE,
     TR_LINEAR,
     TR_LINEAR_STOP,
-    TR_SINE,  // value = base + sin( time / duration ) * delta
+    TR_SINE,
     TR_GRAVITY,
-    TR_CUSTOM_GRAVITY   // [QL] uses trajectory_t.gravity field
+    TR_CUSTOM_GRAVITY
 } trType_t;
 
-// trajectory_t - 40 bytes (NOT 36 as in Q3 - QL adds gravity field)
 typedef struct {
     trType_t trType;
     int trTime;
-    int trDuration;  // if non 0, trTime + trDuration = stop time
+    int trDuration;
     vec3_t trBase;
-    vec3_t trDelta;  // velocity, etc
-    float gravity;   // [QL] used by TR_CUSTOM_GRAVITY
-} trajectory_t;      // 40 bytes
-
-// entityState_t is the information conveyed from the server
-// in an update message about entities that the client will
-// need to render in some way
-// Different eTypes may use the information in different ways
-// The messages are delta compressed, so it doesn't really matter if
-// the structure size is fairly large
+    vec3_t trDelta;
+    float gravity;
+} trajectory_t;
 
 typedef struct entityState_s {
-    int number;  // entity index
-    int eType;   // entityType_t
+    int number;
+    int eType;
     int eFlags;
 
-    trajectory_t pos;   // for calculating position
-    trajectory_t apos;  // for calculating angles
+    trajectory_t pos;
+    trajectory_t apos;
 
     int time;
     int time2;
@@ -1240,98 +1004,94 @@ typedef struct entityState_s {
     vec3_t angles;
     vec3_t angles2;
 
-    int otherEntityNum;  // shotgun sources, etc
+    int otherEntityNum;
     int otherEntityNum2;
 
-    int groundEntityNum;  // ENTITYNUM_NONE = in air
+    int groundEntityNum;
 
-    int constantLight;  // r + (g<<8) + (b<<16) + (intensity<<24)
-    int loopSound;      // constantly loop this sound
+    int constantLight;
+    int loopSound;
 
     int modelindex;
     int modelindex2;
-    int clientNum;  // 0 to (MAX_CLIENTS - 1), for players and corpses
+    int clientNum;
     int frame;
 
-    int solid;  // for client side prediction, trap_linkentity sets this properly
+    int solid;
 
-    int event;  // impulse events -- muzzle flashes, footsteps, etc
+    int event;
     int eventParm;
 
-    // for players
-    int powerups;   // bit flags
-    int health;     // [QL]
-    int armor;      // [QL]
-    int weapon;     // determines weapon and flash model, etc
-    int location;   // [QL]
-    int legsAnim;   // mask off ANIM_TOGGLEBIT
-    int torsoAnim;  // mask off ANIM_TOGGLEBIT
+    int powerups;
+    int health;
+    int armor;
+    int weapon;
+    int location;
+    int legsAnim;
+    int torsoAnim;
 
     int generic1;
-    int jumpTime;       // [QL]
-    int doubleJumped;   // [QL]
+    int jumpTime;
+    int doubleJumped;
 } entityState_t;
 
 typedef enum {
     CA_UNINITIALIZED,
-    CA_DISCONNECTED,  // not talking to a server
-    CA_AUTHORIZING,   // [Q3 remnant] unused placeholder - do not remove (would shift enum values)
-    CA_CONNECTING,    // sending request packets to the server
-    CA_CHALLENGING,   // sending challenge packets to the server
-    CA_CONNECTED,     // netchan_t established, getting gamestate
-    CA_LOADING,       // only during cgame initialization, never during main loop
-    CA_PRIMED,        // got gamestate, waiting for first frame
-    CA_ACTIVE,        // game views should be displayed
-    CA_CINEMATIC      // playing a cinematic or a static pic, not connected to a server
+    CA_DISCONNECTED,
+    CA_AUTHORIZING,
+    CA_CONNECTING,
+    CA_CHALLENGING,
+    CA_CONNECTED,
+    CA_LOADING,
+    CA_PRIMED,
+    CA_ACTIVE,
+    CA_CINEMATIC
 } connstate_t;
 
-// font support
 #define DEFAULT_FONT "fonts/handelgothic.ttf"
 #define DEFAULT_SANS_FONT "fonts/notosans-regular.ttf"
 #define DEFAULT_MONO_FONT "fonts/droidsansmono.ttf"
-// [QL] Text draw flags for trap_R_Font_DrawString / re.Font_DrawString. These
-// values MUST match FONS_TEXT_* in code/renderercommon/tr_fontstash.h.
-#define TEXT_LITERAL 0x40000000   // draw '^' colour codes as literal glyphs
-#define TEXT_NORECOLOR 0x20000000 // skip '^' colour codes without changing colour
+#define TEXT_LITERAL 0x40000000
+#define TEXT_NORECOLOR 0x20000000
 #define GLYPH_START 0
 #define GLYPH_END 255
 #define GLYPH_CHARSTART 32
 #define GLYPH_CHAREND 127
 #define GLYPHS_PER_FONT GLYPH_END - GLYPH_START + 1
 typedef struct {
-    int height;       // number of scan lines
-    int top;          // top of glyph in buffer
-    int bottom;       // bottom of glyph in buffer
-    int pitch;        // width for copying
-    int left;         // left-side bearing (not in Q3 font.dat files)
-    int xSkip;        // x adjustment
-    int imageWidth;   // width of actual image
-    int imageHeight;  // height of actual image
-    float s;          // x offset in image where glyph starts
-    float t;          // y offset in image where glyph starts
+    int height;
+    int top;
+    int bottom;
+    int pitch;
+    int left;
+    int xSkip;
+    int imageWidth;
+    int imageHeight;
+    float s;
+    float t;
     float s2;
     float t2;
-    qhandle_t glyph;  // handle to the shader with the glyph
+    qhandle_t glyph;
     char shaderName[32];
 } glyphInfo_t;
 
 typedef struct extraGlyphInfo_s {
     int charValue;
 
-    int height;       // number of scan lines
-    int top;          // top of glyph in buffer
-    int bottom;       // bottom of glyph in buffer
-    int pitch;        // width for copying
-    int left;         // xMin
-    int xSkip;        // x adjustment
-    int imageWidth;   // width of actual image
-    int imageHeight;  // height of actual image
-    float s;          // x offset in image where glyph starts
-    float t;          // y offset in image where glyph starts
+    int height;
+    int top;
+    int bottom;
+    int pitch;
+    int left;
+    int xSkip;
+    int imageWidth;
+    int imageHeight;
+    float s;
+    float t;
     float s2;
     float t2;
-    qhandle_t glyph;      // handle to the shader with the glyph
-    char shaderName[32];  // FIXME waste of space
+    qhandle_t glyph;
+    char shaderName[32];
 
     struct extraGlyphInfo_s *prev, *next;
 } extraGlyphInfo_t;
@@ -1344,47 +1104,39 @@ typedef struct {
 
 #define Square(x) ((x) * (x))
 
-// real time
-//=============================================
-
 typedef struct qtime_s {
-    int tm_sec;   /* seconds after the minute - [0,59] */
-    int tm_min;   /* minutes after the hour - [0,59] */
-    int tm_hour;  /* hours since midnight - [0,23] */
-    int tm_mday;  /* day of the month - [1,31] */
-    int tm_mon;   /* months since January - [0,11] */
-    int tm_year;  /* years since 1900 */
-    int tm_wday;  /* days since Sunday - [0,6] */
-    int tm_yday;  /* days since January 1 - [0,365] */
-    int tm_isdst; /* daylight savings time flag */
+    int tm_sec;
+    int tm_min;
+    int tm_hour;
+    int tm_mday;
+    int tm_mon;
+    int tm_year;
+    int tm_wday;
+    int tm_yday;
+    int tm_isdst;
 } qtime_t;
 
-// server browser sources
-// TTimo: AS_MPLAYER is no longer used
 #define AS_LOCAL 0
 #define AS_MPLAYER 1
 #define AS_GLOBAL 2
 #define AS_FAVORITES 3
 
-// cinematic states
 typedef enum {
     FMV_IDLE,
-    FMV_PLAY,  // play
-    FMV_EOF,   // all other conditions, i.e. stop/EOF/abort
+    FMV_PLAY,
+    FMV_EOF,
     FMV_ID_BLT,
     FMV_ID_IDLE,
     FMV_LOOPED,
     FMV_ID_WAIT
 } e_status;
 
-// [QL] retail order: qagamex86.dll sets 2 for every dropped flag (0x1006893a) and 3/4 for the
-// neutral flag taken by red/blue (0x10069eb1); CS_FLAGSTATUS carries these digits
 typedef enum _flag_status {
     FLAG_ATBASE = 0,
-    FLAG_TAKEN,       // CTF
+    FLAG_TAKEN,
     FLAG_DROPPED,
-    FLAG_TAKEN_RED,   // One Flag CTF
-    FLAG_TAKEN_BLUE   // One Flag CTF
+    FLAG_TAKEN_RED,
+    FLAG_TAKEN_BLUE
 } flagStatus_t;
 
 #define MAX_GLOBAL_SERVERS 4096
@@ -1401,4 +1153,4 @@ typedef enum _flag_status {
 #define LERP(a, b, w) ((a) * (1.0f - (w)) + (b) * (w))
 #define LUMA(red, green, blue) (0.2126f * (red) + 0.7152f * (green) + 0.0722f * (blue))
 
-#endif  // __Q_SHARED_H
+#endif

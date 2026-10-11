@@ -1,27 +1,14 @@
-/*
- * g_gametype_ad.c -- Attack & Defend (GT_AD) round state machine
- *
- * Ported from ql-decompiled/game/g_ca_ad.c (Quake Live build 1069)
- *
- * AD: Two-turn rounds where teams alternate attacking/defending flags.
- * Attackers score by capturing; defenders score by preventing capture.
- */
 #include "g_local.h"
 
 #define AD_SCORE_HISTORY_SIZE 20
 
-// AD score history ring buffer
 static int ad_scoreRaw[AD_SCORE_HISTORY_SIZE];
 static int ad_scoreSorted[AD_SCORE_HISTORY_SIZE];
 static int ad_scoreHistoryIndex;
 
-// AD previous scores per turn
-static int ad_prevScore[2];  // [0]=red, [1]=blue
+static int ad_prevScore[2];
 static int ad_turnDelta[2];
 
-// ============================================================================
-// AD_UpdateScoreHistory
-// ============================================================================
 static void AD_UpdateScoreHistory(void) {
     int turn = level.roundState.turn;
     int idx, i;
@@ -68,9 +55,6 @@ static void AD_UpdateScoreHistory(void) {
             level.teamScores[TEAM_RED], level.teamScores[TEAM_BLUE]));
 }
 
-// ============================================================================
-// AD_CheckExitRules - only checks after both turns (turn == 1)
-// ============================================================================
 qboolean AD_CheckExitRules(int doExit) {
     int mercyTime;
 
@@ -127,11 +111,6 @@ qboolean AD_CheckExitRules(int doExit) {
     return qfalse;
 }
 
-// ============================================================================
-// AD_GetRoundState - advance the round state if the pending timer elapsed.
-// Returns the current state, or -1 while still waiting.
-// Address: 0x10035830
-// ============================================================================
 int AD_GetRoundState(void) {
     if (level.roundState.tNext != 0) {
         if (level.time < level.roundState.tNext)
@@ -144,12 +123,6 @@ int AD_GetRoundState(void) {
     return level.roundState.eCurrent;
 }
 
-// ============================================================================
-// AD_AttackingTeam / AD_DefendingTeam (binary: 0x100363e0 / 0x10036440)
-//
-// While a round is being played, red attacks on turn 0 and blue on turn 1; any other
-// time neither team attacks nor defends (TEAM_FREE).
-// ============================================================================
 int AD_AttackingTeam(void) {
     if (AD_GetRoundState() != RS_PLAYING)
         return TEAM_FREE;
@@ -162,17 +135,6 @@ int AD_DefendingTeam(void) {
     return level.roundState.turn ? TEAM_RED : TEAM_BLUE;
 }
 
-// ============================================================================
-// AD_AdjustDamage (.so AD_AdjustDamage, binary: 0x10035880)
-//
-// GT_AD damage adjust, called from G_Damage section 20 as
-// (targ, attacker, &take, &asave). Byte-identical to the CA adjust
-// (AccuracyMessage / CA_AdjustDamage 0x100380d0) EXCEPT:
-//   - it advances the round via AD_RoundStateTransition (not CA_*), and
-//   - it does NOT call CalculateRanks() after the +100-damage score bump.
-// Self/team suppression keys off g_dmflags (binary DAT_10597dcc). Returns
-// qfalse to abort ALL damage.
-// ============================================================================
 qboolean AD_AdjustDamage(gentity_t *target, gentity_t *attacker,
                              int *take, int *asave) {
     int flags = g_dmflags.integer;
@@ -215,7 +177,7 @@ checkRound:
         level.roundState.tNext = 0;
         level.roundState.eCurrent = level.roundState.eNext;
         level.roundState.startTime = level.time;
-        AD_RoundStateTransition();  // [QL] AD variant (vs CA_RoundStateTransition)
+        AD_RoundStateTransition();
     }
 
     if (level.roundState.eCurrent != RS_PLAYING)
@@ -223,9 +185,9 @@ checkRound:
 
     if (attacker->client != NULL && !OnSameTeam(target, attacker) &&
         target->client != NULL && target->health > 0) {
-        int takeClamp = target->client->ps.stats[STAT_HEALTH];  // @0xc0
+        int takeClamp = target->client->ps.stats[STAT_HEALTH];
         if (takeClamp > *take) takeClamp = *take;
-        int armorClamp = target->client->ps.stats[STAT_ARMOR];  // @0xd0
+        int armorClamp = target->client->ps.stats[STAT_ARMOR];
         if (armorClamp > *asave) armorClamp = *asave;
 
         *take = takeClamp;
@@ -235,18 +197,12 @@ checkRound:
         if (attacker->client->pers.teamState.dmgAccumulator >= 100) {
             attacker->client->pers.teamState.dmgAccumulator -= 100;
             attacker->client->ps.persistant[PERS_SCORE]++;
-            // [QL] AD does NOT call CalculateRanks() here (CA does).
         }
     }
 
     return qtrue;
 }
 
-// ============================================================================
-// AD_CheckRoundEnd - true if the round should end: a team wiped, the flag was
-// captured, or the round timelimit ran out.
-// Address: 0x10035ae0
-// ============================================================================
 qboolean AD_CheckRoundEnd(int redAlive, int blueAlive) {
     if (redAlive != 0 && blueAlive != 0 && level.roundState.capture != 1 &&
         (roundtimelimit.integer == 0 ||
@@ -256,16 +212,11 @@ qboolean AD_CheckRoundEnd(int redAlive, int blueAlive) {
     return qtrue;
 }
 
-// ============================================================================
-// AD_RoundStateTransition - two-turn round state machine
-// ============================================================================
 void AD_RoundStateTransition(void) {
     int i;
     int winTeam = 0;
 
     if (level.roundState.tNext != 0) {
-        // [QL] binary jumps to the invalid-state G_Error when this is reached with
-        // a pending timer that has NOT yet elapsed (all callers clear tNext first).
         if (level.time < level.roundState.tNext)
             G_Error("AD_RoundStateTransition: invalid state");
         level.roundState.tNext = 0;
@@ -320,17 +271,12 @@ void AD_RoundStateTransition(void) {
                     cl->ps.pm_type = PM_NORMAL;
                 }
                 if (g_spawnArmor.integer != 0) {
-                    // [QL] binary writes powerups[0] (client+0x140), NOT PW_QUAD
-                    // (0x150). All round gametypes (CA/FT/AD/RR) + ClientSpawn use
-                    // this powerups[0] spawn-protection timer slot.
                     cl->ps.powerups[0] =
                         (level.time / 1000) * 1000 + g_spawnArmor.integer;
                 }
             }
         }
 
-        // [QL] 0x10035d8c: the attacking side of the round is noted in the level (retail writes it
-        // and nothing reads it)
         level.attackingTeam = (AD_GetRoundState() == RS_PLAYING) ? (level.roundState.turn ? TEAM_BLUE : TEAM_RED)
                                                                 : TEAM_FREE;
 
@@ -346,12 +292,10 @@ void AD_RoundStateTransition(void) {
     {
         int redAlive, blueAlive;
 
-        // Freeze all
         for (i = 0; i < level.maxclients; i++) {
             gclient_t *cl = &level.clients[i];
             if (cl->pers.connected == CON_CONNECTED && cl->sess.sessionTeam != TEAM_SPECTATOR) {
                 cl->ps.pm_flags |= PMF_FROZEN;
-                // clear flag-carry powerups (binary clears powerups[1]/powerups[2])
                 cl->ps.powerups[PW_REDFLAG] = 0;
                 cl->ps.powerups[PW_BLUEFLAG] = 0;
             }
@@ -359,7 +303,6 @@ void AD_RoundStateTransition(void) {
 
         Team_LivingTeamCounts(&redAlive, &blueAlive);
 
-        // Determine winner
         if (level.roundState.capture == 1) {
             winTeam = (level.roundState.turn == 0) ? TEAM_RED : TEAM_BLUE;
         } else if (redAlive == 0 && blueAlive != 0) {
@@ -374,8 +317,6 @@ void AD_RoundStateTransition(void) {
             winTeam = TEAM_RED;
         }
 
-        // [QL] 0x10035ec9: AW_MISSED_OPPORTUNITY (0x1f), the attackers winning the round by
-        // elimination without having touched the flag
         if (level.roundState.capture != 1 && !level.roundState.touch && winTeam == level.roundState.turn + 1) {
             for (i = 0; i < level.maxclients; i++) {
                 gclient_t *cl = &level.clients[i];
@@ -387,15 +328,11 @@ void AD_RoundStateTransition(void) {
             }
         }
 
-        // Award medals
-        // [QL] 0x10035f84: through PlayerAwardEV like every other medal, so the client finds the
-        // player in clientNum, the medal in generic1 and the count in modelindex2
         for (i = 0; i < level.maxclients; i++) {
             gclient_t *cl = &level.clients[i];
             gentity_t *ent = &g_entities[i];
             if (cl->pers.connected != CON_CONNECTED) continue;
 
-            // Accuracy award: >50% hit rate this round
             if (cl->round_shots != 0) {
                 int acc = (cl->round_hits * 100) / cl->round_shots;
                 if ((double)acc > 50.0) {
@@ -404,28 +341,22 @@ void AD_RoundStateTransition(void) {
                 }
             }
 
-            // Perfect award: 0 damage taken this round, on either team (retail checks no team here)
             if (cl->round_damage == 0) {
                 PlayerAwardEV(ent, AWARD_PERFECT);
                 STAT_AddPlayerMedalStat(ent, "PERFECT");
             }
         }
 
-        // [QL] 0x10035f4e: the ranks are worked out again when the round had a winner, not when the
-        // time ran out with both sides standing
         if (level.roundState.capture == 1 || redAlive == 0 || blueAlive == 0) {
             CalculateRanks();
         }
         AD_UpdateScoreHistory();
 
-        // Return flags
         Team_ReturnFlag(TEAM_RED);
         Team_ReturnFlag(TEAM_BLUE);
 
         STAT_AddRoundOverStat(level.roundState.round - 1, winTeam, winTeam == 0);
 
-        // Check for game end (only after second turn). On exit, schedule
-        // RS_EXIT and return without toggling the turn or playing the sound.
         if (level.roundState.turn == 1 && level.teamScores[TEAM_RED] != level.teamScores[TEAM_BLUE]) {
             if ((g_timelimit.integer != 0 &&
                  g_timelimit.integer * 60000 <= level.time - level.startTime) ||
@@ -451,13 +382,11 @@ void AD_RoundStateTransition(void) {
             }
         }
 
-        // Round-end sound
         {
             int soundType;
-            if (winTeam == TEAM_RED) soundType = GTS_RED_WINS_ROUND;    // 0x10
-            else if (winTeam == TEAM_BLUE) soundType = GTS_BLUE_WINS_ROUND;  // 0x11
-            else soundType = GTS_DRAW_ROUND;  // 0x12
-            // [QL] binary carries the GTS index in eventParm (0xc0) and broadcasts
+            if (winTeam == TEAM_RED) soundType = GTS_RED_WINS_ROUND;
+            else if (winTeam == TEAM_BLUE) soundType = GTS_BLUE_WINS_ROUND;
+            else soundType = GTS_DRAW_ROUND;
             gentity_t *te = G_TempEntity(vec3_origin, EV_GLOBAL_TEAM_SOUND);
             te->r.svFlags |= SVF_BROADCAST;
             te->s.eventParm = soundType;
@@ -484,15 +413,6 @@ void AD_RoundStateTransition(void) {
     }
 }
 
-// ============================================================================
-// AD_PlayerKilled (binary: 0x10036300)
-//
-// Called from player_die with the victim's team. Runs a pending round-state
-// timer and, while the round is live and both teams still have someone alive,
-// warns the victim's team when it is down to its last player. The round is
-// ended by G_RunFrame through AD_CheckRoundEnd, not here. Twin of
-// CA_PlayerKilled and Freeze_AutoThaw.
-// ============================================================================
 void AD_PlayerKilled(int team) {
     int redAlive, blueAlive;
 
@@ -525,9 +445,6 @@ void AD_PlayerKilled(int team) {
     }
 }
 
-// ============================================================================
-// AD_IsInPlayState - returns attacking team (1=RED, 2=BLUE), 0 if not playing
-// ============================================================================
 int AD_IsInPlayState(void) {
     if (level.roundState.tNext != 0) {
         if (level.time < level.roundState.tNext)
@@ -542,9 +459,6 @@ int AD_IsInPlayState(void) {
     return (level.roundState.turn != 0) ? 2 : 1;
 }
 
-// ============================================================================
-// AD_CanScore - returns defending team number, 0 if not playing
-// ============================================================================
 int AD_CanScore(void) {
     if (level.roundState.tNext != 0) {
         if (level.time < level.roundState.tNext)
@@ -559,22 +473,6 @@ int AD_CanScore(void) {
     return 2 - (level.roundState.turn != 0 ? 1 : 0);
 }
 
-/*
-==================
-ADScoreboardMessage  ( .so: AD_ClearScoreHistory )
-Address: 0x100365a0
-
-Reset the AD score-history ring buffer and broadcast the initial scores_ad
-command. Called from RS_WARMUP (the binary also calls it from G_InitGame). The
-20 history slots read back as -1 because the arrays were just cleared.
-
-[QL] The binary does NOT reset ad_prevScore here (that pair is only ever
-assigned inside AD_UpdateScoreHistory), so neither does this.
-
-ent is unused: the binary takes no argument, kept only to match the
-g_local.h prototype.
-==================
-*/
 void ADScoreboardMessage(gentity_t *ent) {
     int i;
 

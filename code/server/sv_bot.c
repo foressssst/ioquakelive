@@ -19,8 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// sv_bot.c
-
 #include "server.h"
 #include "../botlib/botlib.h"
 
@@ -37,16 +35,10 @@ int bot_maxdebugpolys;
 extern botlib_export_t* botlib_export;
 int bot_enable;
 
-/*
-==================
-SV_BotAllocateClient
-==================
-*/
 int SV_BotAllocateClient(void) {
     int i;
     client_t* cl;
 
-    // find a client slot
     for (i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++) {
         if (cl->state == CS_FREE) {
             break;
@@ -67,11 +59,6 @@ int SV_BotAllocateClient(void) {
     return i;
 }
 
-/*
-==================
-SV_BotFreeClient
-==================
-*/
 void SV_BotFreeClient(int clientNum) {
     client_t* cl;
 
@@ -86,11 +73,6 @@ void SV_BotFreeClient(int clientNum) {
     }
 }
 
-/*
-==================
-BotDrawDebugPolygons
-==================
-*/
 void BotDrawDebugPolygons(void (*drawPoly)(int color, int numPoints, float* points), int value) {
     static cvar_t *bot_debug, *bot_groundonly, *bot_reachability, *bot_highlightarea;
     bot_debugpoly_t* poly;
@@ -98,21 +80,15 @@ void BotDrawDebugPolygons(void (*drawPoly)(int color, int numPoints, float* poin
 
     if (!debugpolygons)
         return;
-    // bot debugging
     if (!bot_debug)
         bot_debug = Cvar_Get("bot_debug", "0", 0);
-    //
     if (bot_enable && bot_debug->integer) {
-        // show reachabilities
         if (!bot_reachability)
             bot_reachability = Cvar_Get("bot_reachability", "0", 0);
-        // show ground faces only
         if (!bot_groundonly)
             bot_groundonly = Cvar_Get("bot_groundonly", "1", 0);
-        // get the hightlight area
         if (!bot_highlightarea)
             bot_highlightarea = Cvar_Get("bot_highlightarea", "0", 0);
-        //
         parm0 = 0;
         if (svs.clients[0].lastUsercmd.buttons & BUTTON_ATTACK)
             parm0 |= 1;
@@ -123,22 +99,15 @@ void BotDrawDebugPolygons(void (*drawPoly)(int color, int numPoints, float* poin
         botlib_export->BotLibVarSet("bot_highlightarea", bot_highlightarea->string);
         botlib_export->Test(parm0, NULL, svs.clients[0].gentity->r.currentOrigin,
                             svs.clients[0].gentity->r.currentAngles);
-    }  // end if
-    // draw all debug polys
+    }
     for (i = 0; i < bot_maxdebugpolys; i++) {
         poly = &debugpolygons[i];
         if (!poly->inuse)
             continue;
         drawPoly(poly->color, poly->numPoints, (float*)poly->points);
-        // Com_Printf("poly %i, numpoints = %d\n", i, poly->numPoints);
     }
 }
 
-/*
-==================
-BotImport_Print
-==================
-*/
 static __attribute__((format(printf, 2, 3))) void QDECL BotImport_Print(int type, char* fmt, ...) {
     char str[2048];
     va_list ap;
@@ -175,16 +144,10 @@ static __attribute__((format(printf, 2, 3))) void QDECL BotImport_Print(int type
     }
 }
 
-/*
-==================
-BotImport_Trace
-==================
-*/
 static void BotImport_Trace(bsp_trace_t* bsptrace, vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, int passent, int contentmask) {
     trace_t trace;
 
     SV_Trace(&trace, start, mins, maxs, end, passent, contentmask, qfalse);
-    // copy the trace information
     bsptrace->allsolid = trace.allsolid;
     bsptrace->startsolid = trace.startsolid;
     bsptrace->fraction = trace.fraction;
@@ -201,16 +164,10 @@ static void BotImport_Trace(bsp_trace_t* bsptrace, vec3_t start, vec3_t mins, ve
     bsptrace->contents = 0;
 }
 
-/*
-==================
-BotImport_EntityTrace
-==================
-*/
 static void BotImport_EntityTrace(bsp_trace_t* bsptrace, vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, int entnum, int contentmask) {
     trace_t trace;
 
     SV_ClipToEntity(&trace, start, mins, maxs, end, entnum, contentmask, qfalse);
-    // copy the trace information
     bsptrace->allsolid = trace.allsolid;
     bsptrace->startsolid = trace.startsolid;
     bsptrace->fraction = trace.fraction;
@@ -227,38 +184,18 @@ static void BotImport_EntityTrace(bsp_trace_t* bsptrace, vec3_t start, vec3_t mi
     bsptrace->contents = 0;
 }
 
-/*
-==================
-BotImport_PointContents
-==================
-*/
 static int BotImport_PointContents(vec3_t point) {
     return SV_PointContents(point, -1);
 }
 
-/*
-==================
-BotImport_inPVS
-==================
-*/
 static int BotImport_inPVS(vec3_t p1, vec3_t p2) {
     return SV_inPVS(p1, p2);
 }
 
-/*
-==================
-BotImport_BSPEntityData
-==================
-*/
 static char* BotImport_BSPEntityData(void) {
     return CM_EntityString();
 }
 
-/*
-==================
-BotImport_BSPModelMinsMaxsOrigin
-==================
-*/
 static void BotImport_BSPModelMinsMaxsOrigin(int modelnum, vec3_t angles, vec3_t outmins, vec3_t outmaxs, vec3_t origin) {
     clipHandle_t h;
     vec3_t mins, maxs;
@@ -267,9 +204,7 @@ static void BotImport_BSPModelMinsMaxsOrigin(int modelnum, vec3_t angles, vec3_t
 
     h = CM_InlineModel(modelnum);
     CM_ModelBounds(h, mins, maxs);
-    // if the model is rotated
     if ((angles[0] || angles[1] || angles[2])) {
-        // expand for rotation
 
         max = RadiusFromBounds(mins, maxs);
         for (i = 0; i < 3; i++) {
@@ -285,11 +220,6 @@ static void BotImport_BSPModelMinsMaxsOrigin(int modelnum, vec3_t angles, vec3_t
         VectorClear(origin);
 }
 
-/*
-==================
-BotImport_GetMemory
-==================
-*/
 static void* BotImport_GetMemory(int size) {
     void* ptr;
 
@@ -297,34 +227,17 @@ static void* BotImport_GetMemory(int size) {
     return ptr;
 }
 
-/*
-==================
-BotImport_FreeMemory
-==================
-*/
 static void BotImport_FreeMemory(void* ptr) {
     Z_Free(ptr);
 }
 
-/*
-=================
-BotImport_HunkAlloc
-=================
-*/
 static void* BotImport_HunkAlloc(int size) {
     if (Hunk_CheckMark()) {
-        // [QL] Downgraded from ERR_DROP - bot AI routinely allocates
-        // after Hunk_SetMark during QL's init sequence
         Com_DPrintf("SV_Bot_HunkAlloc: Alloc with marks already set\n");
     }
     return Hunk_Alloc(size, h_high);
 }
 
-/*
-==================
-BotImport_DebugPolygonCreate
-==================
-*/
 int BotImport_DebugPolygonCreate(int color, int numPoints, vec3_t* points) {
     bot_debugpoly_t* poly;
     int i;
@@ -343,15 +256,9 @@ int BotImport_DebugPolygonCreate(int color, int numPoints, vec3_t* points) {
     poly->color = color;
     poly->numPoints = numPoints;
     Com_Memcpy(poly->points, points, numPoints * sizeof(vec3_t));
-    //
     return i;
 }
 
-/*
-==================
-BotImport_DebugPolygonShow
-==================
-*/
 static void BotImport_DebugPolygonShow(int id, int color, int numPoints, vec3_t* points) {
     bot_debugpoly_t* poly;
 
@@ -364,50 +271,28 @@ static void BotImport_DebugPolygonShow(int id, int color, int numPoints, vec3_t*
     Com_Memcpy(poly->points, points, numPoints * sizeof(vec3_t));
 }
 
-/*
-==================
-BotImport_DebugPolygonDelete
-==================
-*/
 void BotImport_DebugPolygonDelete(int id) {
     if (!debugpolygons)
         return;
     debugpolygons[id].inuse = qfalse;
 }
 
-/*
-==================
-BotImport_DebugLineCreate
-==================
-*/
 static int BotImport_DebugLineCreate(void) {
     vec3_t points[1];
     return BotImport_DebugPolygonCreate(0, 0, points);
 }
 
-/*
-==================
-BotImport_DebugLineDelete
-==================
-*/
 static void BotImport_DebugLineDelete(int line) {
     BotImport_DebugPolygonDelete(line);
 }
 
-/*
-==================
-BotImport_DebugLineShow
-==================
-*/
 static void BotImport_DebugLineShow(int line, vec3_t start, vec3_t end, int color) {
     vec3_t points[4], dir, cross, up = {0, 0, 1};
     float dot;
 
     VectorCopy(start, points[0]);
     VectorCopy(start, points[1]);
-    // points[1][2] -= 2;
     VectorCopy(end, points[2]);
-    // points[2][2] -= 2;
     VectorCopy(end, points[3]);
 
     VectorSubtract(end, start, dir);
@@ -428,37 +313,18 @@ static void BotImport_DebugLineShow(int line, vec3_t start, vec3_t end, int colo
     BotImport_DebugPolygonShow(line, color, 4, points);
 }
 
-/*
-==================
-SV_BotClientCommand
-==================
-*/
 static void BotClientCommand(int client, char* command) {
     SV_ExecuteClientCommand(&svs.clients[client], command, qtrue);
 }
 
-/*
-==================
-SV_BotFrame
-==================
-*/
 void SV_BotFrame(int time) {
     if (!bot_enable)
         return;
-    // NOTE: maybe the game is already shutdown
     if (!sv.state)
         return;
-    // [QL] quakelive_steam.exe 0x4dd670: the bots think through the game's export +0x2c, apart
-    // from GAME_RUN_FRAME. SV_Frame and SV_SpawnServer call this; map_restart's settling frames
-    // do not, so the game runs them without bots while the clients are not back yet.
     SV_GameBotAIStartFrame(time);
 }
 
-/*
-===============
-SV_BotLibSetup
-===============
-*/
 int SV_BotLibSetup(void) {
     if (!bot_enable) {
         return 0;
@@ -474,14 +340,6 @@ int SV_BotLibSetup(void) {
     return botlib_export->BotLibSetup();
 }
 
-/*
-===============
-SV_ShutdownBotLib
-
-Called when either the entire server is being killed, or
-it is changing to a different game directory.
-===============
-*/
 int SV_BotLibShutdown(void) {
     if (!botlib_export) {
         return -1;
@@ -490,49 +348,39 @@ int SV_BotLibShutdown(void) {
     return botlib_export->BotLibShutdown();
 }
 
-/*
-==================
-SV_BotInitCvars
-==================
-*/
 void SV_BotInitCvars(void) {
-    Cvar_Get("bot_enable", "1", 0);                      // enable the bot
-    Cvar_Get("bot_developer", "0", CVAR_CHEAT);          // bot developer mode
-    Cvar_Get("bot_debug", "0", CVAR_CHEAT);              // enable bot debugging
-    Cvar_Get("bot_maxdebugpolys", "2", 0);               // maximum number of debug polys
-    Cvar_Get("bot_groundonly", "1", 0);                  // only show ground faces of areas
-    Cvar_Get("bot_reachability", "0", 0);                // show all reachabilities to other areas
-    Cvar_Get("bot_visualizejumppads", "0", CVAR_CHEAT);  // show jumppads
-    Cvar_Get("bot_forceclustering", "0", 0);             // force cluster calculations
-    Cvar_Get("bot_forcereachability", "0", 0);           // force reachability calculations
-    Cvar_Get("bot_forcewrite", "0", 0);                  // force writing aas file
-    Cvar_Get("bot_aasoptimize", "0", 0);                 // no aas file optimisation
-    Cvar_Get("bot_saveroutingcache", "0", 0);            // save routing cache
-    Cvar_Get("bot_thinktime", "100", CVAR_CHEAT);        // msec the bots thinks
-    Cvar_Get("bot_reloadcharacters", "0", 0);            // reload the bot characters each time
-    Cvar_Get("bot_testichat", "0", 0);                   // test ichats
-    Cvar_Get("bot_testrchat", "0", 0);                   // test rchats
-    Cvar_Get("bot_testsolid", "0", CVAR_CHEAT);          // test for solid areas
-    Cvar_Get("bot_testclusters", "0", CVAR_CHEAT);       // test the AAS clusters
-    Cvar_Get("bot_fastchat", "0", 0);                    // fast chatting bots
-    Cvar_Get("bot_nochat", "0", 0);                      // disable chats
-    Cvar_Get("bot_pause", "0", CVAR_CHEAT);              // pause the bots thinking
-    Cvar_Get("bot_report", "0", CVAR_CHEAT);             // get a full report in ctf
-    Cvar_Get("bot_grapple", "0", 0);                     // enable grapple
-    Cvar_Get("bot_rocketjump", "1", 0);                  // enable rocket jumping
-    Cvar_Get("bot_challenge", "0", 0);                   // challenging bot
-    Cvar_Get("bot_minplayers", "0", 0);                  // minimum players in a team or the game
-    Cvar_Get("bot_interbreedchar", "", CVAR_CHEAT);      // bot character used for interbreeding
-    Cvar_Get("bot_interbreedbots", "10", CVAR_CHEAT);    // number of bots used for interbreeding
-    Cvar_Get("bot_interbreedcycle", "20", CVAR_CHEAT);   // bot interbreeding cycle
-    Cvar_Get("bot_interbreedwrite", "", CVAR_CHEAT);     // write interbreeded bots to this file
+    Cvar_Get("bot_enable", "1", 0);
+    Cvar_Get("bot_developer", "0", CVAR_CHEAT);
+    Cvar_Get("bot_debug", "0", CVAR_CHEAT);
+    Cvar_Get("bot_maxdebugpolys", "2", 0);
+    Cvar_Get("bot_groundonly", "1", 0);
+    Cvar_Get("bot_reachability", "0", 0);
+    Cvar_Get("bot_visualizejumppads", "0", CVAR_CHEAT);
+    Cvar_Get("bot_forceclustering", "0", 0);
+    Cvar_Get("bot_forcereachability", "0", 0);
+    Cvar_Get("bot_forcewrite", "0", 0);
+    Cvar_Get("bot_aasoptimize", "0", 0);
+    Cvar_Get("bot_saveroutingcache", "0", 0);
+    Cvar_Get("bot_thinktime", "100", CVAR_CHEAT);
+    Cvar_Get("bot_reloadcharacters", "0", 0);
+    Cvar_Get("bot_testichat", "0", 0);
+    Cvar_Get("bot_testrchat", "0", 0);
+    Cvar_Get("bot_testsolid", "0", CVAR_CHEAT);
+    Cvar_Get("bot_testclusters", "0", CVAR_CHEAT);
+    Cvar_Get("bot_fastchat", "0", 0);
+    Cvar_Get("bot_nochat", "0", 0);
+    Cvar_Get("bot_pause", "0", CVAR_CHEAT);
+    Cvar_Get("bot_report", "0", CVAR_CHEAT);
+    Cvar_Get("bot_grapple", "0", 0);
+    Cvar_Get("bot_rocketjump", "1", 0);
+    Cvar_Get("bot_challenge", "0", 0);
+    Cvar_Get("bot_minplayers", "0", 0);
+    Cvar_Get("bot_interbreedchar", "", CVAR_CHEAT);
+    Cvar_Get("bot_interbreedbots", "10", CVAR_CHEAT);
+    Cvar_Get("bot_interbreedcycle", "20", CVAR_CHEAT);
+    Cvar_Get("bot_interbreedwrite", "", CVAR_CHEAT);
 }
 
-/*
-==================
-SV_BotInitBotLib
-==================
-*/
 void SV_BotInitBotLib(void) {
     botlib_import_t botlib_import;
 
@@ -550,41 +398,28 @@ void SV_BotInitBotLib(void) {
     botlib_import.BSPModelMinsMaxsOrigin = BotImport_BSPModelMinsMaxsOrigin;
     botlib_import.BotClientCommand = BotClientCommand;
 
-    // memory management
     botlib_import.GetMemory = BotImport_GetMemory;
     botlib_import.FreeMemory = BotImport_FreeMemory;
     botlib_import.AvailableMemory = Z_AvailableMemory;
     botlib_import.HunkAlloc = BotImport_HunkAlloc;
 
-    // file system access
     botlib_import.FS_FOpenFile = FS_FOpenFileByMode;
     botlib_import.FS_Read = FS_Read;
     botlib_import.FS_Write = FS_Write;
     botlib_import.FS_FCloseFile = FS_FCloseFile;
     botlib_import.FS_Seek = FS_Seek;
 
-    // debug lines
     botlib_import.DebugLineCreate = BotImport_DebugLineCreate;
     botlib_import.DebugLineDelete = BotImport_DebugLineDelete;
     botlib_import.DebugLineShow = BotImport_DebugLineShow;
 
-    // debug polygons
     botlib_import.DebugPolygonCreate = BotImport_DebugPolygonCreate;
     botlib_import.DebugPolygonDelete = BotImport_DebugPolygonDelete;
 
     botlib_export = (botlib_export_t*)GetBotLibAPI(BOTLIB_API_VERSION, &botlib_import);
-    assert(botlib_export);  // somehow we end up with a zero import.
+    assert(botlib_export);
 }
 
-//
-//  * * * BOT AI CODE IS BELOW THIS POINT * * *
-//
-
-/*
-==================
-SV_BotGetConsoleMessage
-==================
-*/
 int SV_BotGetConsoleMessage(int client, char* buf, int size) {
     client_t* cl;
     int index;
@@ -608,11 +443,6 @@ int SV_BotGetConsoleMessage(int client, char* buf, int size) {
 }
 
 #if 0
-/*
-==================
-EntityInPVS
-==================
-*/
 int EntityInPVS( int client, int entityNum ) {
 	client_t			*cl;
 	clientSnapshot_t	*frame;
@@ -629,11 +459,6 @@ int EntityInPVS( int client, int entityNum ) {
 }
 #endif
 
-/*
-==================
-SV_BotGetSnapshotEntity
-==================
-*/
 int SV_BotGetSnapshotEntity(int client, int sequence) {
     client_t* cl;
     clientSnapshot_t* frame;

@@ -28,15 +28,6 @@ static qboolean msgInit = qfalse;
 
 int pcount[256];
 
-/*
-==============================================================================
-
-            MESSAGE IO FUNCTIONS
-
-Handles byte ordering and avoids alignment errors
-==============================================================================
-*/
-
 int oldsize = 0;
 
 void MSG_initHuffman(void);
@@ -63,7 +54,7 @@ void MSG_InitOOB(msg_t* buf, byte* data, int length) {
 void MSG_Clear(msg_t* buf) {
     buf->cursize = 0;
     buf->overflowed = qfalse;
-    buf->bit = 0;  //<- in bits
+    buf->bit = 0;
 }
 
 void MSG_Bitstream(msg_t* buf) {
@@ -91,15 +82,6 @@ void MSG_Copy(msg_t* buf, byte* data, int length, msg_t* src) {
     Com_Memcpy(buf->data, src->data, src->cursize);
 }
 
-/*
-=============================================================================
-
-bit functions
-
-=============================================================================
-*/
-
-// negative bit values include signs
 void MSG_WriteBits(msg_t* msg, int value, int bits) {
     int i;
 
@@ -175,7 +157,6 @@ int MSG_ReadBits(msg_t* msg, int bits) {
     int get;
     qboolean sgn;
     int i, nbits;
-    //	FILE*	fp;
 
     if (msg->readcount > msg->cursize) {
         return 0;
@@ -227,10 +208,8 @@ int MSG_ReadBits(msg_t* msg, int bits) {
             bits = bits - nbits;
         }
         if (bits) {
-            //			fp = fopen("c:\\netchan.bin", "a");
             for (i = 0; i < bits; i += 8) {
                 Huff_offsetReceive(msgHuff.decompressor.tree, &get, msg->data, &msg->bit, msg->cursize << 3);
-                //				fwrite(&get, 1, 1, fp);
                 value = (unsigned int)value | ((unsigned int)get << (i + nbits));
 
                 if (msg->bit > msg->cursize << 3) {
@@ -238,7 +217,6 @@ int MSG_ReadBits(msg_t* msg, int bits) {
                     return 0;
                 }
             }
-            //			fclose(fp);
         }
         msg->readcount = (msg->bit >> 3) + 1;
     }
@@ -250,12 +228,6 @@ int MSG_ReadBits(msg_t* msg, int bits) {
 
     return value;
 }
-
-//================================================================================
-
-//
-// writing functions
-//
 
 void MSG_WriteChar(msg_t* sb, int c) {
 #ifdef PARANOID
@@ -316,9 +288,6 @@ void MSG_WriteString(msg_t* sb, const char* s) {
         }
         Q_strncpyz(string, s, sizeof(string));
 
-        // [ioquakelive] only '%' goes: a format spec would crash whoever printed it. The
-        // bytes over 127 stay, because that is how a name in cyrillic, greek or latin
-        // extended travels, and Quake Live carries the fonts to draw them
         for (i = 0; i < l; i++) {
             if (string[i] == '%') {
                 string[i] = '.';
@@ -344,9 +313,6 @@ void MSG_WriteBigString(msg_t* sb, const char* s) {
         }
         Q_strncpyz(string, s, sizeof(string));
 
-        // [ioquakelive] only '%' goes: a format spec would crash whoever printed it. The
-        // bytes over 127 stay, because that is how a name in cyrillic, greek or latin
-        // extended travels, and Quake Live carries the fonts to draw them
         for (i = 0; i < l; i++) {
             if (string[i] == '%') {
                 string[i] = '.';
@@ -365,13 +331,6 @@ void MSG_WriteAngle16(msg_t* sb, float f) {
     MSG_WriteShort(sb, ANGLE2SHORT(f));
 }
 
-//============================================================
-
-//
-// reading functions
-//
-
-// returns -1 if no more characters are available
 int MSG_ReadChar(msg_t* msg) {
     int c;
 
@@ -443,15 +402,13 @@ char* MSG_ReadString(msg_t* msg) {
 
     l = 0;
     do {
-        c = MSG_ReadByte(msg);  // use ReadByte so -1 is out of bounds
+        c = MSG_ReadByte(msg);
         if (c == -1 || c == 0) {
             break;
         }
-        // translate all fmt spec to avoid crash bugs
         if (c == '%') {
             c = '.';
         }
-        // break only after reading all expected data from bitstream
         if (l >= sizeof(string) - 1) {
             break;
         }
@@ -469,15 +426,13 @@ char* MSG_ReadBigString(msg_t* msg) {
 
     l = 0;
     do {
-        c = MSG_ReadByte(msg);  // use ReadByte so -1 is out of bounds
+        c = MSG_ReadByte(msg);
         if (c == -1 || c == 0) {
             break;
         }
-        // translate all fmt spec to avoid crash bugs
         if (c == '%') {
             c = '.';
         }
-        // break only after reading all expected data from bitstream
         if (l >= sizeof(string) - 1) {
             break;
         }
@@ -495,15 +450,13 @@ char* MSG_ReadStringLine(msg_t* msg) {
 
     l = 0;
     do {
-        c = MSG_ReadByte(msg);  // use ReadByte so -1 is out of bounds
+        c = MSG_ReadByte(msg);
         if (c == -1 || c == 0 || c == '\n') {
             break;
         }
-        // translate all fmt spec to avoid crash bugs
         if (c == '%') {
             c = '.';
         }
-        // break only after reading all expected data from bitstream
         if (l >= sizeof(string) - 1) {
             break;
         }
@@ -527,14 +480,6 @@ void MSG_ReadData(msg_t* msg, void* data, int len) {
     }
 }
 
-// a string hasher which gives the same hash value even if the
-// string is later modified via the legacy MSG read/write code
-// [QL] qzeroded.x64 0x422360: every byte counts as it is, as a signed char, whatever the
-// platform's char is. ioq3 also counted each byte over 127 as '.', and Quake Live sends those
-// bytes as they are (MSG_ReadString 0x430550 only turns '%' into '.'): a command with an accented
-// letter or an emoji keyed the usercmds differently on each side, and the server read them
-// garbled: the view went up to the sky and jump came out as use item. '%' still counts as the '.'
-// both ends end up with, as MSG_WriteString sends it
 int MSG_HashKey(const char* string, int maxlen) {
     int hash, i;
 
@@ -555,14 +500,6 @@ extern cvar_t* cl_shownet;
     if (cl_shownet && cl_shownet->integer == 4) { \
         Com_Printf("%s ", x);                     \
     };
-
-/*
-=============================================================================
-
-delta functions with keys
-
-=============================================================================
-*/
 
 int kbitmask[32] = {
     0x00000001,
@@ -636,19 +573,6 @@ float MSG_ReadDeltaKeyFloat(msg_t* msg, int key, float oldV) {
     return oldV;
 }
 
-/*
-============================================================================
-
-usercmd_t communication
-
-============================================================================
-*/
-
-/*
-=====================
-MSG_WriteDeltaUsercmdKey
-=====================
-*/
 void MSG_WriteDeltaUsercmdKey(msg_t* msg, int key, usercmd_t* from, usercmd_t* to) {
     if (to->serverTime - from->serverTime < 256) {
         MSG_WriteBits(msg, 1, 1);
@@ -657,9 +581,6 @@ void MSG_WriteDeltaUsercmdKey(msg_t* msg, int key, usercmd_t* from, usercmd_t* t
         MSG_WriteBits(msg, 0, 1);
         MSG_WriteBits(msg, to->serverTime, 32);
     }
-    // [QL] field order and count differs from Q3 - must match binary exactly
-    // QL moved forwardmove/rightmove/upmove to offsets 23-25 and added
-    // two QL-specific byte fields (weaponPrimary/fov) at offsets 21-22.
     if (from->angles[0] == to->angles[0] &&
         from->angles[1] == to->angles[1] &&
         from->angles[2] == to->angles[2] &&
@@ -670,7 +591,7 @@ void MSG_WriteDeltaUsercmdKey(msg_t* msg, int key, usercmd_t* from, usercmd_t* t
         from->weapon == to->weapon &&
         from->weaponPrimary == to->weaponPrimary &&
         from->fov == to->fov) {
-        MSG_WriteBits(msg, 0, 1);  // no change
+        MSG_WriteBits(msg, 0, 1);
         oldsize += 7;
         return;
     }
@@ -688,19 +609,12 @@ void MSG_WriteDeltaUsercmdKey(msg_t* msg, int key, usercmd_t* from, usercmd_t* t
     MSG_WriteDeltaKey(msg, key, from->fov, to->fov, 8);
 }
 
-/*
-=====================
-MSG_ReadDeltaUsercmdKey
-=====================
-*/
 void MSG_ReadDeltaUsercmdKey(msg_t* msg, int key, usercmd_t* from, usercmd_t* to) {
     if (MSG_ReadBits(msg, 1)) {
         to->serverTime = from->serverTime + MSG_ReadBits(msg, 8);
     } else {
         to->serverTime = MSG_ReadBits(msg, 32);
     }
-    // [QL] field order and count differs from Q3 - must match binary exactly
-    // QL order: angles, forwardmove, rightmove, upmove, buttons, weapon, weaponPrimary, fov
     if (MSG_ReadBits(msg, 1)) {
         key ^= to->serverTime;
         to->angles[0] = MSG_ReadDeltaKey(msg, key, from->angles[0], 16);
@@ -733,21 +647,6 @@ void MSG_ReadDeltaUsercmdKey(msg_t* msg, int key, usercmd_t* from, usercmd_t* to
     }
 }
 
-/*
-=============================================================================
-
-entityState_t communication
-
-=============================================================================
-*/
-
-/*
-=================
-MSG_ReportChangeVectors_f
-
-Prints out a table from the current statistics for copying to code
-=================
-*/
 void MSG_ReportChangeVectors_f(void) {
     int i;
     for (i = 0; i < 256; i++) {
@@ -760,92 +659,76 @@ void MSG_ReportChangeVectors_f(void) {
 typedef struct {
     char* name;
     int offset;
-    int bits;  // 0 = float
+    int bits;
 } netField_t;
 
-// using the stringizing operator to save typing...
 #define NETF(x) #x, (size_t)&((entityState_t*)0)->x
 
-// [QL] field order and bit counts must match the QL binary exactly -
-// delta encoding uses field indices, so any mismatch desynchronizes the bitstream
 netField_t entityStateFields[] =
     {
-        {NETF(pos.trTime), 32},         // 0
-        {NETF(pos.trBase[0]), 0},        // 1
-        {NETF(pos.trBase[1]), 0},        // 2
-        {NETF(pos.trDelta[0]), 0},       // 3
-        {NETF(pos.trDelta[1]), 0},       // 4
-        {NETF(pos.trBase[2]), 0},        // 5
-        {NETF(apos.trBase[1]), 0},       // 6
-        {NETF(pos.trDelta[2]), 0},       // 7
-        {NETF(apos.trBase[0]), 0},       // 8
-        {NETF(pos.gravity), 32},         // 9  [QL] int, not float
-        {NETF(event), 10},               // 10
-        {NETF(angles2[1]), 0},           // 11
-        {NETF(eType), 8},               // 12
-        {NETF(torsoAnim), 8},           // 13
-        {NETF(eventParm), 8},           // 14
-        {NETF(legsAnim), 8},            // 15
-        {NETF(groundEntityNum), GENTITYNUM_BITS}, // 16
-        {NETF(pos.trType), 8},          // 17
-        {NETF(eFlags), 19},             // 18
-        {NETF(otherEntityNum), GENTITYNUM_BITS},   // 19
-        {NETF(weapon), 8},              // 20
-        {NETF(clientNum), 8},           // 21
-        {NETF(angles[1]), 0},           // 22
-        {NETF(pos.trDuration), 32},     // 23
-        {NETF(apos.trType), 8},         // 24
-        {NETF(origin[0]), 0},           // 25
-        {NETF(origin[1]), 0},           // 26
-        {NETF(origin[2]), 0},           // 27
-        {NETF(solid), 24},              // 28
-        {NETF(powerups), MAX_POWERUPS}, // 29
-        {NETF(modelindex), 8},          // 30
-        {NETF(otherEntityNum2), GENTITYNUM_BITS},  // 31
-        {NETF(loopSound), 8},           // 32
-        {NETF(generic1), 8},            // 33
-        {NETF(origin2[2]), 0},          // 34
-        {NETF(origin2[0]), 0},          // 35
-        {NETF(origin2[1]), 0},          // 36
-        {NETF(modelindex2), 8},         // 37
-        {NETF(angles[0]), 0},           // 38
-        {NETF(time), 32},               // 39
-        {NETF(apos.trTime), 32},        // 40
-        {NETF(apos.trDuration), 32},    // 41
-        {NETF(apos.trBase[2]), 0},      // 42
-        {NETF(apos.trDelta[0]), 0},     // 43
-        {NETF(apos.trDelta[1]), 0},     // 44
-        {NETF(apos.trDelta[2]), 0},     // 45
-        {NETF(apos.gravity), 32},       // 46 [QL] int, not float
-        {NETF(time2), 32},              // 47
-        {NETF(angles[2]), 0},           // 48
-        {NETF(angles2[0]), 0},          // 49
-        {NETF(angles2[2]), 0},          // 50
-        {NETF(constantLight), 32},      // 51
-        {NETF(frame), 16},              // 52
-        {NETF(jumpTime), 32},           // 53 [QL]
-        {NETF(doubleJumped), 1},        // 54 [QL]
-        {NETF(health), 16},             // 55 [QL]
-        {NETF(armor), 16},              // 56 [QL]
-        {NETF(location), 8},            // 57 [QL]
+        {NETF(pos.trTime), 32},
+        {NETF(pos.trBase[0]), 0},
+        {NETF(pos.trBase[1]), 0},
+        {NETF(pos.trDelta[0]), 0},
+        {NETF(pos.trDelta[1]), 0},
+        {NETF(pos.trBase[2]), 0},
+        {NETF(apos.trBase[1]), 0},
+        {NETF(pos.trDelta[2]), 0},
+        {NETF(apos.trBase[0]), 0},
+        {NETF(pos.gravity), 32},
+        {NETF(event), 10},
+        {NETF(angles2[1]), 0},
+        {NETF(eType), 8},
+        {NETF(torsoAnim), 8},
+        {NETF(eventParm), 8},
+        {NETF(legsAnim), 8},
+        {NETF(groundEntityNum), GENTITYNUM_BITS},
+        {NETF(pos.trType), 8},
+        {NETF(eFlags), 19},
+        {NETF(otherEntityNum), GENTITYNUM_BITS},
+        {NETF(weapon), 8},
+        {NETF(clientNum), 8},
+        {NETF(angles[1]), 0},
+        {NETF(pos.trDuration), 32},
+        {NETF(apos.trType), 8},
+        {NETF(origin[0]), 0},
+        {NETF(origin[1]), 0},
+        {NETF(origin[2]), 0},
+        {NETF(solid), 24},
+        {NETF(powerups), MAX_POWERUPS},
+        {NETF(modelindex), 8},
+        {NETF(otherEntityNum2), GENTITYNUM_BITS},
+        {NETF(loopSound), 8},
+        {NETF(generic1), 8},
+        {NETF(origin2[2]), 0},
+        {NETF(origin2[0]), 0},
+        {NETF(origin2[1]), 0},
+        {NETF(modelindex2), 8},
+        {NETF(angles[0]), 0},
+        {NETF(time), 32},
+        {NETF(apos.trTime), 32},
+        {NETF(apos.trDuration), 32},
+        {NETF(apos.trBase[2]), 0},
+        {NETF(apos.trDelta[0]), 0},
+        {NETF(apos.trDelta[1]), 0},
+        {NETF(apos.trDelta[2]), 0},
+        {NETF(apos.gravity), 32},
+        {NETF(time2), 32},
+        {NETF(angles[2]), 0},
+        {NETF(angles2[0]), 0},
+        {NETF(angles2[2]), 0},
+        {NETF(constantLight), 32},
+        {NETF(frame), 16},
+        {NETF(jumpTime), 32},
+        {NETF(doubleJumped), 1},
+        {NETF(health), 16},
+        {NETF(armor), 16},
+        {NETF(location), 8},
 };
 
-// if (int)f == f and (int)f + ( 1<<(FLOAT_INT_BITS-1) ) < ( 1 << FLOAT_INT_BITS )
-// the float will be sent with FLOAT_INT_BITS, otherwise all 32 bits will be sent
 #define FLOAT_INT_BITS 13
 #define FLOAT_INT_BIAS (1 << (FLOAT_INT_BITS - 1))
 
-/*
-==================
-MSG_WriteDeltaEntity
-
-Writes part of a packetentities message, including the entity number.
-Can delta from either a baseline or a previous packet_entity
-If to is NULL, a remove entity update will be sent
-If force is not set, then nothing at all will be generated if the entity is
-identical, under the assumption that the in-order delta code will catch it.
-==================
-*/
 void MSG_WriteDeltaEntity(msg_t* msg, struct entityState_s* from, struct entityState_s* to, qboolean force) {
     int i, lc;
     int numFields;
@@ -856,13 +739,8 @@ void MSG_WriteDeltaEntity(msg_t* msg, struct entityState_s* from, struct entityS
 
     numFields = ARRAY_LEN(entityStateFields);
 
-    // all fields should be 32 bits to avoid any compiler packing issues
-    // the "number" field is not part of the field list
-    // if this assert fails, someone added a field to the entityState_t
-    // struct without updating the message fields
     assert(numFields + 1 == sizeof(*from) / 4);
 
-    // a NULL to is a delta remove message
     if (to == NULL) {
         if (from == NULL) {
             return;
@@ -877,7 +755,6 @@ void MSG_WriteDeltaEntity(msg_t* msg, struct entityState_s* from, struct entityS
     }
 
     lc = 0;
-    // build the change vector as bytes so it is endien independent
     for (i = 0, field = entityStateFields; i < numFields; i++, field++) {
         fromF = (int*)((byte*)from + field->offset);
         toF = (int*)((byte*)to + field->offset);
@@ -887,22 +764,20 @@ void MSG_WriteDeltaEntity(msg_t* msg, struct entityState_s* from, struct entityS
     }
 
     if (lc == 0) {
-        // nothing at all changed
         if (!force) {
-            return;  // nothing at all
+            return;
         }
-        // write two bits for no change
         MSG_WriteBits(msg, to->number, GENTITYNUM_BITS);
-        MSG_WriteBits(msg, 0, 1);  // not removed
-        MSG_WriteBits(msg, 0, 1);  // no delta
+        MSG_WriteBits(msg, 0, 1);
+        MSG_WriteBits(msg, 0, 1);
         return;
     }
 
     MSG_WriteBits(msg, to->number, GENTITYNUM_BITS);
-    MSG_WriteBits(msg, 0, 1);  // not removed
-    MSG_WriteBits(msg, 1, 1);  // we have a delta
+    MSG_WriteBits(msg, 0, 1);
+    MSG_WriteBits(msg, 1, 1);
 
-    MSG_WriteByte(msg, lc);  // # of changes
+    MSG_WriteByte(msg, lc);
 
     oldsize += numFields;
 
@@ -911,14 +786,13 @@ void MSG_WriteDeltaEntity(msg_t* msg, struct entityState_s* from, struct entityS
         toF = (int*)((byte*)to + field->offset);
 
         if (*fromF == *toF) {
-            MSG_WriteBits(msg, 0, 1);  // no change
+            MSG_WriteBits(msg, 0, 1);
             continue;
         }
 
-        MSG_WriteBits(msg, 1, 1);  // changed
+        MSG_WriteBits(msg, 1, 1);
 
         if (field->bits == 0) {
-            // float
             fullFloat = *(float*)toF;
             trunc = (int)fullFloat;
 
@@ -929,11 +803,9 @@ void MSG_WriteDeltaEntity(msg_t* msg, struct entityState_s* from, struct entityS
                 MSG_WriteBits(msg, 1, 1);
                 if (trunc == fullFloat && trunc + FLOAT_INT_BIAS >= 0 &&
                     trunc + FLOAT_INT_BIAS < (1 << FLOAT_INT_BITS)) {
-                    // send as small integer
                     MSG_WriteBits(msg, 0, 1);
                     MSG_WriteBits(msg, trunc + FLOAT_INT_BIAS, FLOAT_INT_BITS);
                 } else {
-                    // send as full floating point value
                     MSG_WriteBits(msg, 1, 1);
                     MSG_WriteBits(msg, *toF, 32);
                 }
@@ -943,25 +815,12 @@ void MSG_WriteDeltaEntity(msg_t* msg, struct entityState_s* from, struct entityS
                 MSG_WriteBits(msg, 0, 1);
             } else {
                 MSG_WriteBits(msg, 1, 1);
-                // integer
                 MSG_WriteBits(msg, *toF, field->bits);
             }
         }
     }
 }
 
-/*
-==================
-MSG_ReadDeltaEntity
-
-The entity number has already been read from the message, which
-is how the from state is identified.
-
-If the delta removes the entity, entityState_t->number will be set to MAX_GENTITIES-1
-
-Can go from either a baseline or a previous packet_entity
-==================
-*/
 void MSG_ReadDeltaEntity(msg_t* msg, entityState_t* from, entityState_t* to, int number) {
     int i, lc;
     int numFields;
@@ -981,7 +840,6 @@ void MSG_ReadDeltaEntity(msg_t* msg, entityState_t* from, entityState_t* to, int
         startBit = (msg->readcount - 1) * 8 + msg->bit - GENTITYNUM_BITS;
     }
 
-    // check for a remove
     if (MSG_ReadBits(msg, 1) == 1) {
         Com_Memset(to, 0, sizeof(*to));
         to->number = MAX_GENTITIES - 1;
@@ -991,7 +849,6 @@ void MSG_ReadDeltaEntity(msg_t* msg, entityState_t* from, entityState_t* to, int
         return;
     }
 
-    // check for no delta
     if (MSG_ReadBits(msg, 1) == 0) {
         *to = *from;
         to->number = number;
@@ -1005,8 +862,6 @@ void MSG_ReadDeltaEntity(msg_t* msg, entityState_t* from, entityState_t* to, int
         Com_Error(ERR_DROP, "invalid entityState field count");
     }
 
-    // shownet 2/3 will interleave with other printed info, -1 will
-    // just print the delta records`
     if (cl_shownet && (cl_shownet->integer >= 2 || cl_shownet->integer == -1)) {
         print = 1;
         Com_Printf("%3i: #%-3i ", msg->readcount, to->number);
@@ -1021,25 +876,20 @@ void MSG_ReadDeltaEntity(msg_t* msg, entityState_t* from, entityState_t* to, int
         toF = (int*)((byte*)to + field->offset);
 
         if (!MSG_ReadBits(msg, 1)) {
-            // no change
             *toF = *fromF;
         } else {
             if (field->bits == 0) {
-                // float
                 if (MSG_ReadBits(msg, 1) == 0) {
                     *(float*)toF = 0.0f;
                 } else {
                     if (MSG_ReadBits(msg, 1) == 0) {
-                        // integral float
                         trunc = MSG_ReadBits(msg, FLOAT_INT_BITS);
-                        // bias to allow equal parts positive and negative
                         trunc -= FLOAT_INT_BIAS;
                         *(float*)toF = trunc;
                         if (print) {
                             Com_Printf("%s:%i ", field->name, trunc);
                         }
                     } else {
-                        // full floating point value
                         *toF = MSG_ReadBits(msg, 32);
                         if (print) {
                             Com_Printf("%s:%f ", field->name, *(float*)toF);
@@ -1050,20 +900,17 @@ void MSG_ReadDeltaEntity(msg_t* msg, entityState_t* from, entityState_t* to, int
                 if (MSG_ReadBits(msg, 1) == 0) {
                     *toF = 0;
                 } else {
-                    // integer
                     *toF = MSG_ReadBits(msg, field->bits);
                     if (print) {
                         Com_Printf("%s:%i ", field->name, *toF);
                     }
                 }
             }
-            //			pcount[i]++;
         }
     }
     for (i = lc, field = &entityStateFields[lc]; i < numFields; i++, field++) {
         fromF = (int*)((byte*)from + field->offset);
         toF = (int*)((byte*)to + field->offset);
-        // no change
         *toF = *fromF;
     }
 
@@ -1077,87 +924,70 @@ void MSG_ReadDeltaEntity(msg_t* msg, entityState_t* from, entityState_t* to, int
     }
 }
 
-/*
-============================================================================
-
-plyer_state_t communication
-
-============================================================================
-*/
-
-// using the stringizing operator to save typing...
 #define PSF(x) #x, (size_t)&((playerState_t*)0)->x
 
-// [QL] field order and bit counts must match the QL binary exactly -
-// delta encoding uses field indices, so any mismatch desynchronizes the bitstream
 netField_t playerStateFields[] =
     {
-        {PSF(commandTime), 32},              // 0
-        {PSF(origin[0]), 0},                 // 1
-        {PSF(origin[1]), 0},                 // 2
-        {PSF(bobCycle), 8},                  // 3
-        {PSF(velocity[0]), 0},               // 4
-        {PSF(velocity[1]), 0},               // 5
-        {PSF(viewangles[1]), 0},             // 6
-        {PSF(viewangles[0]), 0},             // 7
-        {PSF(weaponTime), -16},              // 8
-        {PSF(origin[2]), 0},                 // 9
-        {PSF(velocity[2]), 0},               // 10
-        {PSF(legsTimer), 8},                 // 11
-        {PSF(pm_time), -16},                 // 12
-        {PSF(eventSequence), 16},            // 13
-        {PSF(torsoAnim), 8},                 // 14
-        {PSF(movementDir), 4},               // 15
-        {PSF(events[0]), 8},                 // 16
-        {PSF(legsAnim), 8},                  // 17
-        {PSF(events[1]), 8},                 // 18
-        {PSF(pm_flags), 24},                 // 19 [QL] 24 bits (was 16 in Q3)
-        {PSF(groundEntityNum), GENTITYNUM_BITS}, // 20
-        {PSF(weaponstate), 4},               // 21
-        {PSF(eFlags), 16},                   // 22
-        {PSF(externalEvent), 10},            // 23
-        {PSF(gravity), 16},                  // 24
-        {PSF(speed), 16},                    // 25
-        {PSF(delta_angles[1]), 16},          // 26
-        {PSF(externalEventParm), 8},         // 27
-        {PSF(viewheight), -8},               // 28
-        {PSF(damageEvent), 8},               // 29
-        {PSF(damageYaw), 8},                 // 30
-        {PSF(damagePitch), 8},               // 31
-        {PSF(damageCount), 8},               // 32
-        {PSF(generic1), 8},                  // 33
-        {PSF(pm_type), 8},                   // 34
-        {PSF(delta_angles[0]), 16},          // 35
-        {PSF(delta_angles[2]), 16},          // 36
-        {PSF(torsoTimer), 12},               // 37
-        {PSF(eventParms[0]), 8},             // 38
-        {PSF(eventParms[1]), 8},             // 39
-        {PSF(clientNum), 8},                 // 40
-        {PSF(weapon), 5},                    // 41
-        {PSF(weaponPrimary), 8},             // 42 [QL]
-        {PSF(viewangles[2]), 0},             // 43
-        {PSF(grapplePoint[0]), 0},           // 44
-        {PSF(grapplePoint[1]), 0},           // 45
-        {PSF(grapplePoint[2]), 0},           // 46
-        {PSF(jumppad_ent), GENTITYNUM_BITS}, // 47
-        {PSF(loopSound), 16},               // 48
-        {PSF(jumpTime), 32},                // 49 [QL]
-        {PSF(doubleJumped), 1},             // 50 [QL]
-        {PSF(crouchTime), 32},              // 51 [QL]
-        {PSF(crouchSlideTime), 32},         // 52 [QL]
-        {PSF(location), 8},                 // 53 [QL]
-        {PSF(fov), 8},                      // 54 [QL]
-        {PSF(forwardmove), 8},              // 55 [QL]
-        {PSF(rightmove), 8},                // 56 [QL]
-        {PSF(upmove), 8},                   // 57 [QL]
+        {PSF(commandTime), 32},
+        {PSF(origin[0]), 0},
+        {PSF(origin[1]), 0},
+        {PSF(bobCycle), 8},
+        {PSF(velocity[0]), 0},
+        {PSF(velocity[1]), 0},
+        {PSF(viewangles[1]), 0},
+        {PSF(viewangles[0]), 0},
+        {PSF(weaponTime), -16},
+        {PSF(origin[2]), 0},
+        {PSF(velocity[2]), 0},
+        {PSF(legsTimer), 8},
+        {PSF(pm_time), -16},
+        {PSF(eventSequence), 16},
+        {PSF(torsoAnim), 8},
+        {PSF(movementDir), 4},
+        {PSF(events[0]), 8},
+        {PSF(legsAnim), 8},
+        {PSF(events[1]), 8},
+        {PSF(pm_flags), 24},
+        {PSF(groundEntityNum), GENTITYNUM_BITS},
+        {PSF(weaponstate), 4},
+        {PSF(eFlags), 16},
+        {PSF(externalEvent), 10},
+        {PSF(gravity), 16},
+        {PSF(speed), 16},
+        {PSF(delta_angles[1]), 16},
+        {PSF(externalEventParm), 8},
+        {PSF(viewheight), -8},
+        {PSF(damageEvent), 8},
+        {PSF(damageYaw), 8},
+        {PSF(damagePitch), 8},
+        {PSF(damageCount), 8},
+        {PSF(generic1), 8},
+        {PSF(pm_type), 8},
+        {PSF(delta_angles[0]), 16},
+        {PSF(delta_angles[2]), 16},
+        {PSF(torsoTimer), 12},
+        {PSF(eventParms[0]), 8},
+        {PSF(eventParms[1]), 8},
+        {PSF(clientNum), 8},
+        {PSF(weapon), 5},
+        {PSF(weaponPrimary), 8},
+        {PSF(viewangles[2]), 0},
+        {PSF(grapplePoint[0]), 0},
+        {PSF(grapplePoint[1]), 0},
+        {PSF(grapplePoint[2]), 0},
+        {PSF(jumppad_ent), GENTITYNUM_BITS},
+        {PSF(loopSound), 16},
+        {PSF(jumpTime), 32},
+        {PSF(doubleJumped), 1},
+        {PSF(crouchTime), 32},
+        {PSF(crouchSlideTime), 32},
+        {PSF(location), 8},
+        {PSF(fov), 8},
+        {PSF(forwardmove), 8},
+        {PSF(rightmove), 8},
+        {PSF(upmove), 8},
 };
 
-/*
-=============
-MSG_WriteDeltaPlayerstate
-
-=============
-*/
 void MSG_WriteDeltaPlayerstate(msg_t* msg, struct playerState_s* from, struct playerState_s* to) {
     int i;
     playerState_t dummy;
@@ -1187,7 +1017,7 @@ void MSG_WriteDeltaPlayerstate(msg_t* msg, struct playerState_s* from, struct pl
         }
     }
 
-    MSG_WriteByte(msg, lc);  // # of changes
+    MSG_WriteByte(msg, lc);
 
     oldsize += numFields - lc;
 
@@ -1196,37 +1026,29 @@ void MSG_WriteDeltaPlayerstate(msg_t* msg, struct playerState_s* from, struct pl
         toF = (int*)((byte*)to + field->offset);
 
         if (*fromF == *toF) {
-            MSG_WriteBits(msg, 0, 1);  // no change
+            MSG_WriteBits(msg, 0, 1);
             continue;
         }
 
-        MSG_WriteBits(msg, 1, 1);  // changed
-                                   //		pcount[i]++;
+        MSG_WriteBits(msg, 1, 1);
 
         if (field->bits == 0) {
-            // float
             fullFloat = *(float*)toF;
             trunc = (int)fullFloat;
 
             if (trunc == fullFloat && trunc + FLOAT_INT_BIAS >= 0 &&
                 trunc + FLOAT_INT_BIAS < (1 << FLOAT_INT_BITS)) {
-                // send as small integer
                 MSG_WriteBits(msg, 0, 1);
                 MSG_WriteBits(msg, trunc + FLOAT_INT_BIAS, FLOAT_INT_BITS);
             } else {
-                // send as full floating point value
                 MSG_WriteBits(msg, 1, 1);
                 MSG_WriteBits(msg, *toF, 32);
             }
         } else {
-            // integer
             MSG_WriteBits(msg, *toF, field->bits);
         }
     }
 
-    //
-    // send the arrays
-    //
     statsbits = 0;
     for (i = 0; i < MAX_STATS; i++) {
         if (to->stats[i] != from->stats[i]) {
@@ -1253,58 +1075,53 @@ void MSG_WriteDeltaPlayerstate(msg_t* msg, struct playerState_s* from, struct pl
     }
 
     if (!statsbits && !persistantbits && !ammobits && !powerupbits) {
-        MSG_WriteBits(msg, 0, 1);  // no change
+        MSG_WriteBits(msg, 0, 1);
         oldsize += 4;
         return;
     }
-    MSG_WriteBits(msg, 1, 1);  // changed
+    MSG_WriteBits(msg, 1, 1);
 
     if (statsbits) {
-        MSG_WriteBits(msg, 1, 1);  // changed
+        MSG_WriteBits(msg, 1, 1);
         MSG_WriteBits(msg, statsbits, MAX_STATS);
         for (i = 0; i < MAX_STATS; i++)
             if (statsbits & (1 << i))
                 MSG_WriteShort(msg, to->stats[i]);
     } else {
-        MSG_WriteBits(msg, 0, 1);  // no change
+        MSG_WriteBits(msg, 0, 1);
     }
 
     if (persistantbits) {
-        MSG_WriteBits(msg, 1, 1);  // changed
+        MSG_WriteBits(msg, 1, 1);
         MSG_WriteBits(msg, persistantbits, MAX_PERSISTANT);
         for (i = 0; i < MAX_PERSISTANT; i++)
             if (persistantbits & (1 << i))
                 MSG_WriteShort(msg, to->persistant[i]);
     } else {
-        MSG_WriteBits(msg, 0, 1);  // no change
+        MSG_WriteBits(msg, 0, 1);
     }
 
     if (ammobits) {
-        MSG_WriteBits(msg, 1, 1);  // changed
+        MSG_WriteBits(msg, 1, 1);
         MSG_WriteBits(msg, ammobits, MAX_WEAPONS);
         for (i = 0; i < MAX_WEAPONS; i++)
             if (ammobits & (1 << i))
                 MSG_WriteShort(msg, to->ammo[i]);
     } else {
-        MSG_WriteBits(msg, 0, 1);  // no change
+        MSG_WriteBits(msg, 0, 1);
     }
 
     if (powerupbits) {
-        MSG_WriteBits(msg, 1, 1);  // changed
+        MSG_WriteBits(msg, 1, 1);
         MSG_WriteBits(msg, powerupbits, MAX_POWERUPS);
         for (i = 0; i < MAX_POWERUPS; i++)
             if (powerupbits & (1 << i))
                 MSG_WriteLong(msg, to->powerups[i]);
     } else {
-        MSG_WriteBits(msg, 0, 1);  // no change
+        MSG_WriteBits(msg, 0, 1);
     }
 }
 
-/*
-===================
-MSG_ReadDeltaPlayerstate
-===================
-*/
 void MSG_ReadDeltaPlayerstate(msg_t* msg, playerState_t* from, playerState_t* to) {
     int i, lc;
     int bits;
@@ -1328,8 +1145,6 @@ void MSG_ReadDeltaPlayerstate(msg_t* msg, playerState_t* from, playerState_t* to
         startBit = (msg->readcount - 1) * 8 + msg->bit - GENTITYNUM_BITS;
     }
 
-    // shownet 2/3 will interleave with other printed info, -2 will
-    // just print the delta records
     if (cl_shownet && (cl_shownet->integer >= 2 || cl_shownet->integer == -2)) {
         print = 1;
         Com_Printf("%3i: playerstate ", msg->readcount);
@@ -1349,29 +1164,23 @@ void MSG_ReadDeltaPlayerstate(msg_t* msg, playerState_t* from, playerState_t* to
         toF = (int*)((byte*)to + field->offset);
 
         if (!MSG_ReadBits(msg, 1)) {
-            // no change
             *toF = *fromF;
         } else {
             if (field->bits == 0) {
-                // float
                 if (MSG_ReadBits(msg, 1) == 0) {
-                    // integral float
                     trunc = MSG_ReadBits(msg, FLOAT_INT_BITS);
-                    // bias to allow equal parts positive and negative
                     trunc -= FLOAT_INT_BIAS;
                     *(float*)toF = trunc;
                     if (print) {
                         Com_Printf("%s:%i ", field->name, trunc);
                     }
                 } else {
-                    // full floating point value
                     *toF = MSG_ReadBits(msg, 32);
                     if (print) {
                         Com_Printf("%s:%f ", field->name, *(float*)toF);
                     }
                 }
             } else {
-                // integer
                 *toF = MSG_ReadBits(msg, field->bits);
                 if (print) {
                     Com_Printf("%s:%i ", field->name, *toF);
@@ -1382,13 +1191,10 @@ void MSG_ReadDeltaPlayerstate(msg_t* msg, playerState_t* from, playerState_t* to
     for (i = lc, field = &playerStateFields[lc]; i < numFields; i++, field++) {
         fromF = (int*)((byte*)from + field->offset);
         toF = (int*)((byte*)to + field->offset);
-        // no change
         *toF = *fromF;
     }
 
-    // read the arrays
     if (MSG_ReadBits(msg, 1)) {
-        // parse stats
         if (MSG_ReadBits(msg, 1)) {
             LOG("PS_STATS");
             bits = MSG_ReadBits(msg, MAX_STATS);
@@ -1399,7 +1205,6 @@ void MSG_ReadDeltaPlayerstate(msg_t* msg, playerState_t* from, playerState_t* to
             }
         }
 
-        // parse persistant stats
         if (MSG_ReadBits(msg, 1)) {
             LOG("PS_PERSISTANT");
             bits = MSG_ReadBits(msg, MAX_PERSISTANT);
@@ -1410,7 +1215,6 @@ void MSG_ReadDeltaPlayerstate(msg_t* msg, playerState_t* from, playerState_t* to
             }
         }
 
-        // parse ammo
         if (MSG_ReadBits(msg, 1)) {
             LOG("PS_AMMO");
             bits = MSG_ReadBits(msg, MAX_WEAPONS);
@@ -1421,7 +1225,6 @@ void MSG_ReadDeltaPlayerstate(msg_t* msg, playerState_t* from, playerState_t* to
             }
         }
 
-        // parse powerups
         if (MSG_ReadBits(msg, 1)) {
             LOG("PS_POWERUPS");
             bits = MSG_ReadBits(msg, MAX_POWERUPS);
@@ -1444,262 +1247,262 @@ void MSG_ReadDeltaPlayerstate(msg_t* msg, playerState_t* from, playerState_t* to
 }
 
 int msg_hData[256] = {
-    250315,  // 0
-    41193,   // 1
-    6292,    // 2
-    7106,    // 3
-    3730,    // 4
-    3750,    // 5
-    6110,    // 6
-    23283,   // 7
-    33317,   // 8
-    6950,    // 9
-    7838,    // 10
-    9714,    // 11
-    9257,    // 12
-    17259,   // 13
-    3949,    // 14
-    1778,    // 15
-    8288,    // 16
-    1604,    // 17
-    1590,    // 18
-    1663,    // 19
-    1100,    // 20
-    1213,    // 21
-    1238,    // 22
-    1134,    // 23
-    1749,    // 24
-    1059,    // 25
-    1246,    // 26
-    1149,    // 27
-    1273,    // 28
-    4486,    // 29
-    2805,    // 30
-    3472,    // 31
-    21819,   // 32
-    1159,    // 33
-    1670,    // 34
-    1066,    // 35
-    1043,    // 36
-    1012,    // 37
-    1053,    // 38
-    1070,    // 39
-    1726,    // 40
-    888,     // 41
-    1180,    // 42
-    850,     // 43
-    960,     // 44
-    780,     // 45
-    1752,    // 46
-    3296,    // 47
-    10630,   // 48
-    4514,    // 49
-    5881,    // 50
-    2685,    // 51
-    4650,    // 52
-    3837,    // 53
-    2093,    // 54
-    1867,    // 55
-    2584,    // 56
-    1949,    // 57
-    1972,    // 58
-    940,     // 59
-    1134,    // 60
-    1788,    // 61
-    1670,    // 62
-    1206,    // 63
-    5719,    // 64
-    6128,    // 65
-    7222,    // 66
-    6654,    // 67
-    3710,    // 68
-    3795,    // 69
-    1492,    // 70
-    1524,    // 71
-    2215,    // 72
-    1140,    // 73
-    1355,    // 74
-    971,     // 75
-    2180,    // 76
-    1248,    // 77
-    1328,    // 78
-    1195,    // 79
-    1770,    // 80
-    1078,    // 81
-    1264,    // 82
-    1266,    // 83
-    1168,    // 84
-    965,     // 85
-    1155,    // 86
-    1186,    // 87
-    1347,    // 88
-    1228,    // 89
-    1529,    // 90
-    1600,    // 91
-    2617,    // 92
-    2048,    // 93
-    2546,    // 94
-    3275,    // 95
-    2410,    // 96
-    3585,    // 97
-    2504,    // 98
-    2800,    // 99
-    2675,    // 100
-    6146,    // 101
-    3663,    // 102
-    2840,    // 103
-    14253,   // 104
-    3164,    // 105
-    2221,    // 106
-    1687,    // 107
-    3208,    // 108
-    2739,    // 109
-    3512,    // 110
-    4796,    // 111
-    4091,    // 112
-    3515,    // 113
-    5288,    // 114
-    4016,    // 115
-    7937,    // 116
-    6031,    // 117
-    5360,    // 118
-    3924,    // 119
-    4892,    // 120
-    3743,    // 121
-    4566,    // 122
-    4807,    // 123
-    5852,    // 124
-    6400,    // 125
-    6225,    // 126
-    8291,    // 127
-    23243,   // 128
-    7838,    // 129
-    7073,    // 130
-    8935,    // 131
-    5437,    // 132
-    4483,    // 133
-    3641,    // 134
-    5256,    // 135
-    5312,    // 136
-    5328,    // 137
-    5370,    // 138
-    3492,    // 139
-    2458,    // 140
-    1694,    // 141
-    1821,    // 142
-    2121,    // 143
-    1916,    // 144
-    1149,    // 145
-    1516,    // 146
-    1367,    // 147
-    1236,    // 148
-    1029,    // 149
-    1258,    // 150
-    1104,    // 151
-    1245,    // 152
-    1006,    // 153
-    1149,    // 154
-    1025,    // 155
-    1241,    // 156
-    952,     // 157
-    1287,    // 158
-    997,     // 159
-    1713,    // 160
-    1009,    // 161
-    1187,    // 162
-    879,     // 163
-    1099,    // 164
-    929,     // 165
-    1078,    // 166
-    951,     // 167
-    1656,    // 168
-    930,     // 169
-    1153,    // 170
-    1030,    // 171
-    1262,    // 172
-    1062,    // 173
-    1214,    // 174
-    1060,    // 175
-    1621,    // 176
-    930,     // 177
-    1106,    // 178
-    912,     // 179
-    1034,    // 180
-    892,     // 181
-    1158,    // 182
-    990,     // 183
-    1175,    // 184
-    850,     // 185
-    1121,    // 186
-    903,     // 187
-    1087,    // 188
-    920,     // 189
-    1144,    // 190
-    1056,    // 191
-    3462,    // 192
-    2240,    // 193
-    4397,    // 194
-    12136,   // 195
-    7758,    // 196
-    1345,    // 197
-    1307,    // 198
-    3278,    // 199
-    1950,    // 200
-    886,     // 201
-    1023,    // 202
-    1112,    // 203
-    1077,    // 204
-    1042,    // 205
-    1061,    // 206
-    1071,    // 207
-    1484,    // 208
-    1001,    // 209
-    1096,    // 210
-    915,     // 211
-    1052,    // 212
-    995,     // 213
-    1070,    // 214
-    876,     // 215
-    1111,    // 216
-    851,     // 217
-    1059,    // 218
-    805,     // 219
-    1112,    // 220
-    923,     // 221
-    1103,    // 222
-    817,     // 223
-    1899,    // 224
-    1872,    // 225
-    976,     // 226
-    841,     // 227
-    1127,    // 228
-    956,     // 229
-    1159,    // 230
-    950,     // 231
-    7791,    // 232
-    954,     // 233
-    1289,    // 234
-    933,     // 235
-    1127,    // 236
-    3207,    // 237
-    1020,    // 238
-    927,     // 239
-    1355,    // 240
-    768,     // 241
-    1040,    // 242
-    745,     // 243
-    952,     // 244
-    805,     // 245
-    1073,    // 246
-    740,     // 247
-    1013,    // 248
-    805,     // 249
-    1008,    // 250
-    796,     // 251
-    996,     // 252
-    1057,    // 253
-    11457,   // 254
-    13504,   // 255
+    250315,
+    41193,
+    6292,
+    7106,
+    3730,
+    3750,
+    6110,
+    23283,
+    33317,
+    6950,
+    7838,
+    9714,
+    9257,
+    17259,
+    3949,
+    1778,
+    8288,
+    1604,
+    1590,
+    1663,
+    1100,
+    1213,
+    1238,
+    1134,
+    1749,
+    1059,
+    1246,
+    1149,
+    1273,
+    4486,
+    2805,
+    3472,
+    21819,
+    1159,
+    1670,
+    1066,
+    1043,
+    1012,
+    1053,
+    1070,
+    1726,
+    888,
+    1180,
+    850,
+    960,
+    780,
+    1752,
+    3296,
+    10630,
+    4514,
+    5881,
+    2685,
+    4650,
+    3837,
+    2093,
+    1867,
+    2584,
+    1949,
+    1972,
+    940,
+    1134,
+    1788,
+    1670,
+    1206,
+    5719,
+    6128,
+    7222,
+    6654,
+    3710,
+    3795,
+    1492,
+    1524,
+    2215,
+    1140,
+    1355,
+    971,
+    2180,
+    1248,
+    1328,
+    1195,
+    1770,
+    1078,
+    1264,
+    1266,
+    1168,
+    965,
+    1155,
+    1186,
+    1347,
+    1228,
+    1529,
+    1600,
+    2617,
+    2048,
+    2546,
+    3275,
+    2410,
+    3585,
+    2504,
+    2800,
+    2675,
+    6146,
+    3663,
+    2840,
+    14253,
+    3164,
+    2221,
+    1687,
+    3208,
+    2739,
+    3512,
+    4796,
+    4091,
+    3515,
+    5288,
+    4016,
+    7937,
+    6031,
+    5360,
+    3924,
+    4892,
+    3743,
+    4566,
+    4807,
+    5852,
+    6400,
+    6225,
+    8291,
+    23243,
+    7838,
+    7073,
+    8935,
+    5437,
+    4483,
+    3641,
+    5256,
+    5312,
+    5328,
+    5370,
+    3492,
+    2458,
+    1694,
+    1821,
+    2121,
+    1916,
+    1149,
+    1516,
+    1367,
+    1236,
+    1029,
+    1258,
+    1104,
+    1245,
+    1006,
+    1149,
+    1025,
+    1241,
+    952,
+    1287,
+    997,
+    1713,
+    1009,
+    1187,
+    879,
+    1099,
+    929,
+    1078,
+    951,
+    1656,
+    930,
+    1153,
+    1030,
+    1262,
+    1062,
+    1214,
+    1060,
+    1621,
+    930,
+    1106,
+    912,
+    1034,
+    892,
+    1158,
+    990,
+    1175,
+    850,
+    1121,
+    903,
+    1087,
+    920,
+    1144,
+    1056,
+    3462,
+    2240,
+    4397,
+    12136,
+    7758,
+    1345,
+    1307,
+    3278,
+    1950,
+    886,
+    1023,
+    1112,
+    1077,
+    1042,
+    1061,
+    1071,
+    1484,
+    1001,
+    1096,
+    915,
+    1052,
+    995,
+    1070,
+    876,
+    1111,
+    851,
+    1059,
+    805,
+    1112,
+    923,
+    1103,
+    817,
+    1899,
+    1872,
+    976,
+    841,
+    1127,
+    956,
+    1159,
+    950,
+    7791,
+    954,
+    1289,
+    933,
+    1127,
+    3207,
+    1020,
+    927,
+    1355,
+    768,
+    1040,
+    745,
+    952,
+    805,
+    1073,
+    740,
+    1013,
+    805,
+    1008,
+    796,
+    996,
+    1057,
+    11457,
+    13504,
 };
 
 void MSG_initHuffman(void) {
@@ -1709,45 +1512,9 @@ void MSG_initHuffman(void) {
     Huff_Init(&msgHuff);
     for (i = 0; i < 256; i++) {
         for (j = 0; j < msg_hData[i]; j++) {
-            Huff_addRef(&msgHuff.compressor, (byte)i);    // Do update
-            Huff_addRef(&msgHuff.decompressor, (byte)i);  // Do update
+            Huff_addRef(&msgHuff.compressor, (byte)i);
+            Huff_addRef(&msgHuff.decompressor, (byte)i);
         }
     }
 }
 
-/*
-void MSG_NUinitHuffman() {
-    byte	*data;
-    int		size, i, ch;
-    int		array[256];
-
-    msgInit = qtrue;
-
-    Huff_Init(&msgHuff);
-    // load it in
-    size = FS_ReadFile( "netchan/netchan.bin", (void **)&data );
-
-    for(i=0;i<256;i++) {
-        array[i] = 0;
-    }
-    for(i=0;i<size;i++) {
-        ch = data[i];
-        Huff_addRef(&msgHuff.compressor,	ch);			// Do update
-        Huff_addRef(&msgHuff.decompressor,	ch);			// Do update
-        array[ch]++;
-    }
-    Com_Printf("msg_hData {\n");
-    for(i=0;i<256;i++) {
-        if (array[i] == 0) {
-            Huff_addRef(&msgHuff.compressor,	i);			// Do update
-            Huff_addRef(&msgHuff.decompressor,	i);			// Do update
-        }
-        Com_Printf("%d,			// %d\n", array[i], i);
-    }
-    Com_Printf("};\n");
-    FS_FreeFile( data );
-    Cbuf_AddText( "condump dump.txt\n" );
-}
-*/
-
-//===========================================================================

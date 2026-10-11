@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #ifndef __QCURL_H__
 #define __QCURL_H__
 
@@ -98,4 +97,4 @@ void CL_cURL_Shutdown(void);
 void CL_cURL_BeginDownload(const char* localName, const char* remoteURL);
 void CL_cURL_PerformDownload(void);
 void CL_cURL_Cleanup(void);
-#endif  // __QCURL_H__
+#endif

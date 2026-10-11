@@ -19,10 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
-// q_math_sse.c -- Q_ftol and Q_SnapVector implementations
-// SSE on x86/x86_64, generic C fallbacks on other architectures (ARM, etc.)
-
 #include "q_shared.h"
 
 #if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64)

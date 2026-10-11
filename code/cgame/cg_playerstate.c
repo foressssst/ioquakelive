@@ -19,25 +19,8 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// cg_playerstate.c -- this file acts on changes in a new playerState_t
-// With normal play, this will be done after local prediction, but when
-// following another player or playing back a demo, it will be checked
-// when the snapshot transitions like all the other entities
-
 #include "cg_local.h"
 
-/*
-==============
-CG_CheckAmmo
-
-If the ammo has gone low enough to generate the warning, play a sound
-
-[QL] cgamex86.dll 0x10042e50. Only the weapon in hand counts: it is low under
-cg_lowAmmoWarningPercentile of its ammo cap and empty at 0. Running out sounds noammo;
-running low sounds lowammo with cg_lowAmmoWarningSound 1, noammo with 2, nothing otherwise.
-==============
-*/
 void CG_CheckAmmo(void) {
     int weapon = cg.snap->ps.weapon;
     int ammo = cg.snap->ps.ammo[weapon];
@@ -62,11 +45,6 @@ void CG_CheckAmmo(void) {
     cg.lowAmmoWarning = status;
 }
 
-/*
-==============
-CG_DamageFeedback
-==============
-*/
 void CG_DamageFeedback(int yawByte, int pitchByte, int damage) {
     float left, front, up;
     float kick;
@@ -77,10 +55,8 @@ void CG_DamageFeedback(int yawByte, int pitchByte, int damage) {
     float dist;
     float yaw, pitch;
 
-    // show the attacking player's head and name in corner
     cg.attackerTime = cg.time;
 
-    // the lower on health you are, the greater the view kick will be
     health = cg.snap->ps.stats[STAT_HEALTH];
     if (health < 40) {
         scale = 1;
@@ -88,23 +64,21 @@ void CG_DamageFeedback(int yawByte, int pitchByte, int damage) {
         scale = 40.0 / health;
     }
 
-    kick = damage * scale;  // scale the kick by the damage taken
+    kick = damage * scale;
 
     if (kick < 5)
         kick = 5;
     if (kick > 10)
         kick = 10;
 
-    kick = cg_kickScale.value * kick;  // allow user to vary the kick scale
+    kick = cg_kickScale.value * kick;
 
-    // if yaw and pitch are both 255, make the damage always centered (falling, etc)
     if (yawByte == 255 && pitchByte == 255) {
         cg.damageX = 0;
         cg.damageY = 0;
         cg.v_dmg_roll = 0;
         cg.v_dmg_pitch = -kick;
     } else {
-        // positional
         pitch = pitchByte / 255.0 * 360;
         yaw = yawByte / 255.0 * 360;
 
@@ -138,7 +112,6 @@ void CG_DamageFeedback(int yawByte, int pitchByte, int damage) {
         cg.damageY = up / dist;
     }
 
-    // clamp the position
     if (cg.damageX > 1.0) {
         cg.damageX = 1.0;
     }
@@ -153,7 +126,6 @@ void CG_DamageFeedback(int yawByte, int pitchByte, int damage) {
         cg.damageY = -1.0;
     }
 
-    // don't let the screen flashes vary as much
     if (kick > 10) {
         kick = 10;
     }
@@ -161,14 +133,6 @@ void CG_DamageFeedback(int yawByte, int pitchByte, int damage) {
     cg.v_dmg_time = cg.time + DAMAGE_TIME;
 }
 
-/*
-================
-CG_SelectPreferredWeapon
-
-[QL] 0x10043300: the first weapon of cg_preferredStartingWeapons the player holds, by short
-name or number; the one the server gave when none of them
-================
-*/
 static void CG_SelectPreferredWeapon(void) {
     char* p = cg_preferredStartingWeapons.string;
     int i;
@@ -192,33 +156,21 @@ static void CG_SelectPreferredWeapon(void) {
     cg.weaponSelect = cg.snap->ps.weapon;
 }
 
-/*
-================
-CG_Respawn
-
-A respawn happened this snapshot
-================
-*/
 void CG_Respawn(void) {
-    // no error decay on player movement
     cg.thisFrameTeleport = qtrue;
 
-    // display weapons available
     cg.weaponSelectTime = cg.time;
 
-    // [QL] the ROM cvar holds the primary weapon queued in the loadout
     trap_Cvar_Set("cg_weaponPrimary", va("%i", cg.weaponPrimaryQueued));
 
     CG_SelectPreferredWeapon();
 
-    // [QL] 0x1004340f: the pickup display starts over
     cg.itemPickup = 0;
     cg.itemPickupTime = 0;
     cg.itemPickupLast = 0;
     cg.itemPickupBlendTime = 0;
     cg.itemPickupCount = 1;
 
-    // [QL] 0x10043447: a respawn drops the run, the last and best times stay
     if (cgs.gametype == GT_RACE) {
         cg.race.active = qfalse;
         cg.race.startTime = 0;
@@ -231,7 +183,6 @@ void CG_Respawn(void) {
         trap_SendClientCommand("raceinit");
     }
 
-    // [QL] Spectator item timers: request current item respawn state
     if (cg.snap->ps.eFlags & EF_SPECTATOR) {
         trap_SendClientCommand("specresp");
     }
@@ -239,11 +190,6 @@ void CG_Respawn(void) {
 
 extern char* eventnames[];
 
-/*
-==============
-CG_CheckPlayerstateEvents
-==============
-*/
 void CG_CheckPlayerstateEvents(playerState_t* ps, playerState_t* ops) {
     int i;
     int event;
@@ -256,13 +202,9 @@ void CG_CheckPlayerstateEvents(playerState_t* ps, playerState_t* ops) {
         CG_EntityEvent(cent, cent->lerpOrigin);
     }
 
-    cent = &cg.predictedPlayerEntity;  // cg_entities[ ps->clientNum ];
-    // go through the predictable events buffer
+    cent = &cg.predictedPlayerEntity;
     for (i = ps->eventSequence - MAX_PS_EVENTS; i < ps->eventSequence; i++) {
-        // if we have a new predictable event
         if (i >= ops->eventSequence
-            // or the server told us to play another event instead of a predicted event we already issued
-            // or something the server told us changed our prediction causing a different event
             || (i > ops->eventSequence - MAX_PS_EVENTS && ps->events[i & (MAX_PS_EVENTS - 1)] != ops->events[i & (MAX_PS_EVENTS - 1)])) {
             event = ps->events[i & (MAX_PS_EVENTS - 1)];
             cent->currentState.event = event;
@@ -276,11 +218,6 @@ void CG_CheckPlayerstateEvents(playerState_t* ps, playerState_t* ops) {
     }
 }
 
-/*
-==================
-CG_CheckChangedPredictableEvents
-==================
-*/
 void CG_CheckChangedPredictableEvents(playerState_t* ps) {
     int i;
     int event;
@@ -288,13 +225,10 @@ void CG_CheckChangedPredictableEvents(playerState_t* ps) {
 
     cent = &cg.predictedPlayerEntity;
     for (i = ps->eventSequence - MAX_PS_EVENTS; i < ps->eventSequence; i++) {
-        //
         if (i >= cg.eventSequence) {
             continue;
         }
-        // if this event is not further back in than the maximum predictable events we remember
         if (i > cg.eventSequence - MAX_PREDICTED_EVENTS) {
-            // if the new playerstate event is different from a previously predicted one
             if (ps->events[i & (MAX_PS_EVENTS - 1)] != cg.predictableEvents[i & (MAX_PREDICTED_EVENTS - 1)]) {
                 event = ps->events[i & (MAX_PS_EVENTS - 1)];
                 cent->currentState.event = event;
@@ -311,12 +245,6 @@ void CG_CheckChangedPredictableEvents(playerState_t* ps) {
     }
 }
 
-/*
-==================
-pushReward
-==================
-*/
-// [QL] 0x10043570; EV_AWARD pushes through here too
 void CG_PushReward(sfxHandle_t sfx, qhandle_t shader, int rewardCount) {
     if (cg.rewardStack < (MAX_REWARDSTACK - 1)) {
         cg.rewardStack++;
@@ -326,22 +254,6 @@ void CG_PushReward(sfxHandle_t sfx, qhandle_t shader, int rewardCount) {
     }
 }
 
-/*
-==================
-CG_HitBeepSound
-
-[QL] cgamex86.dll 0x100435b0, the choice of sound for a hit. The server sends the hit's damage
-bucketed into four steps in generic1, six bits up, and each step has its own sound: hit0 is the
-weakest, hit3 the strongest.
-
-  cg_hitBeep 1  always hit1, regardless of damage
-  cg_hitBeep 2  the matching step
-  cg_hitBeep 3  the same steps reversed, that is the high one for the weak hit
-
-Watch out for 1: it plays hit1.ogg, not hit.wav. hit.wav is Quake 3's and the binary never
-touches it.
-==================
-*/
 static sfxHandle_t CG_HitBeepSound(const playerState_t* ps) {
     int tier = ps->generic1 >> 6;
 
@@ -363,24 +275,6 @@ static sfxHandle_t CG_HitBeepSound(const playerState_t* ps) {
     }
 }
 
-/*
-==================
-CG_CheckHitSounds
-
-[QL] cgamex86.dll 0x100435b0, the first thing CG_CheckLocalSounds does. It is called from
-there and from nowhere else; following WolfcamQL instead meant the sound arrived late.
-
-What plays depends on whether the hit killed, and the server says so through
-PERS_ATTACKEE_ARMOR, which counts lethal hits:
-
-  lethal hit, with cg_killBeep set   the kill beep, at its own volume, INSTEAD of the hit
-  any other hit                      the hit beep cg_hitBeep selects
-  the hit counter goes DOWN          you hit a teammate: hit_teammate
-
-The kill beep replacing the hit rather than stacking with it is retail's behaviour; WolfcamQL
-overlaps them, triggering from the obituary.
-==================
-*/
 static void CG_CheckHitSounds(const playerState_t* ps, const playerState_t* ops) {
     if (ps->persistant[PERS_HITS] > ops->persistant[PERS_HITS]) {
         if (cg_killBeep.integer >= 1 &&
@@ -395,37 +289,20 @@ static void CG_CheckHitSounds(const playerState_t* ps, const playerState_t* ops)
     }
 }
 
-/*
-==================
-CG_CheckLocalSounds
-
-[QL] cgamex86.dll 0x100435b0. Nothing plays on the snapshot the spawn count changes, which a
-team change also does. The hit sound comes first (CG_CheckHitSounds), which is where the
-binary has it.
-
-Then come the medals, the player event voices and the flag pickup, which stop once the
-intermission has started, then the lead changes and the time and frag limit warnings, which
-stop during warmup. The player's own pain sound comes from EV_PAIN.
-==================
-*/
 void CG_CheckLocalSounds(playerState_t* ps, playerState_t* ops) {
     int count, bits;
     sfxHandle_t sfx;
 
-    // don't play the sounds if the player just respawned or changed teams
     if (ps->persistant[PERS_SPAWN_COUNT] != ops->persistant[PERS_SPAWN_COUNT]) {
         return;
     }
 
     CG_CheckHitSounds(ps, ops);
 
-    // if we are going into the intermission, don't start any voices
     if (cg.intermissionStarted == 1) {
         return;
     }
 
-    // medals, each only when its count moved to something other than 0; the second and
-    // later impressive, excellent and gauntlet medals pick one of three voices
     count = ps->persistant[PERS_CAPTURES];
     if (count && count != ops->persistant[PERS_CAPTURES]) {
         CG_PushReward(cgs.media.captureAwardSound, cgs.media.medalCapture, count);
@@ -454,7 +331,6 @@ void CG_CheckLocalSounds(playerState_t* ps, playerState_t* ops) {
         CG_PushReward(sfx, cgs.media.medalGauntlet, count);
     }
 
-    // if any of the player event bits changed
     bits = ps->persistant[PERS_PLAYEREVENTS] ^ ops->persistant[PERS_PLAYEREVENTS];
     if (bits & PLAYEREVENT_DENIEDREWARD) {
         CG_AddBufferedSound(cgs.media.deniedSound);
@@ -464,7 +340,6 @@ void CG_CheckLocalSounds(playerState_t* ps, playerState_t* ops) {
         CG_AddBufferedSound(cgs.media.holyShitSound);
     }
 
-    // check for flag pickup
     if ((cgs.gametype >= GT_CTF && cgs.gametype <= GT_HARVESTER) || cgs.gametype == GT_AD) {
         if ((ps->powerups[PW_REDFLAG] != ops->powerups[PW_REDFLAG] && ps->powerups[PW_REDFLAG]) ||
             (ps->powerups[PW_BLUEFLAG] != ops->powerups[PW_BLUEFLAG] && ps->powerups[PW_BLUEFLAG]) ||
@@ -473,12 +348,10 @@ void CG_CheckLocalSounds(playerState_t* ps, playerState_t* ops) {
         }
     }
 
-    // never play lead changes or limit warnings during warmup
     if (cg.warmup) {
         return;
     }
 
-    // lead changes, skipped on the snapshot that brings the first frag
     if (!((ps->persistant[PERS_PLAYEREVENTS] ^ ops->persistant[PERS_PLAYEREVENTS]) & PLAYEREVENT_FIRSTFRAG) &&
         ps->persistant[PERS_RANK] != ops->persistant[PERS_RANK] && cgs.gametype < GT_TEAM) {
         if (ps->persistant[PERS_RANK] == 0) {
@@ -496,8 +369,6 @@ void CG_CheckLocalSounds(playerState_t* ps, playerState_t* ops) {
         }
     }
 
-    // timelimit warnings, not while the game is paused and only for a limit the player had not
-    // already passed when they closed the join menu
     if (cgs.timelimit > 0 && !cgs.freezeEnd) {
         int msec = cg.time - cgs.levelStartTime;
         int oneMinute = cgs.timelimit * 60000 - 60000;
@@ -518,7 +389,6 @@ void CG_CheckLocalSounds(playerState_t* ps, playerState_t* ops) {
             cg.timelimitWarnings |= 1;
             CG_AddBufferedSound(cgs.media.fiveMinuteSound);
         } else if (!(cg.timelimitWarnings & 8) && BG_IsRoundBasedGameType(cgs.gametype) && cgs.roundStartTime > 0) {
-            // [QL] thirty seconds left in the round
             roundLeft = cgs.roundtimelimit * 1000 - cg.time + cgs.roundStartTime;
             if ((unsigned)(roundLeft - 1) <= 29998) {
                 cg.timelimitWarnings |= 8;
@@ -527,7 +397,6 @@ void CG_CheckLocalSounds(playerState_t* ps, playerState_t* ops) {
         }
     }
 
-    // fraglimit warnings, from the first score only: in team deathmatch that is red's
     if (cgs.fraglimit > 0 && cgs.gametype <= GT_TEAM) {
         if (!(cg.fraglimitWarnings & 4) && cgs.scores1 == cgs.fraglimit - 1) {
             cg.fraglimitWarnings |= 1 | 2 | 4;
@@ -542,29 +411,17 @@ void CG_CheckLocalSounds(playerState_t* ps, playerState_t* ops) {
     }
 }
 
-/*
-===============
-CG_TransitionPlayerState
-
-[QL] cgamex86.dll 0x10043b60. The damage time is the client time of the snapshot that brought
-the damage, and a map restart respawns the player once whatever the spawn count says.
-===============
-*/
 void CG_TransitionPlayerState(playerState_t* ps, playerState_t* ops) {
-    // check for changing follow mode
     if (ps->clientNum != ops->clientNum) {
         cg.thisFrameTeleport = qtrue;
-        // make sure we don't get any unwanted transition effects
         *ops = *ps;
     }
 
-    // damage events (player is getting wounded)
     if (ps->damageEvent != ops->damageEvent && ps->damageCount) {
         cg.damageTime = (float)cg.time;
         CG_DamageFeedback(ps->damageYaw, ps->damagePitch, ps->damageCount);
     }
 
-    // respawning
     if (!cg.mapRestart) {
         if (ps->persistant[PERS_SPAWN_COUNT] != ops->persistant[PERS_SPAWN_COUNT]) {
             CG_Respawn();
@@ -576,21 +433,16 @@ void CG_TransitionPlayerState(playerState_t* ps, playerState_t* ops) {
 
     if (cg.snap->ps.pm_type != PM_INTERMISSION && ps->persistant[PERS_TEAM] != TEAM_SPECTATOR) {
         CG_CheckLocalSounds(ps, ops);
-        // [QL] 0x10043c1d, right after the call: the crosshair hit effect starts on any hit,
-        // even on the snapshot the local sounds skip
         if (ps->persistant[PERS_HITS] > ops->persistant[PERS_HITS]) {
             cg.crosshairHitType = (ps->generic1 >> 6) + 1;
             cg.crosshairHitTime = cg.time;
         }
     }
 
-    // check for going low on ammo
     CG_CheckAmmo();
 
-    // run events
     CG_CheckPlayerstateEvents(ps, ops);
 
-    // smooth the ducking viewheight change
     if (ps->viewheight != ops->viewheight) {
         cg.duckChange = ps->viewheight - ops->viewheight;
         cg.duckTime = cg.time;

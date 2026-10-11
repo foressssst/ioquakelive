@@ -19,20 +19,8 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-
 #include "g_local.h"
 
-/*
-===============
-G_DamageFeedback
-
-Called just before a snapshot is sent to the given player.
-Totals up all damage and generates both the player_state_t
-damage values to that client for pain blends and kicks, and
-global pain sound events for all clients.
-===============
-*/
 void P_DamageFeedback(gentity_t* player) {
     gclient_t* client;
     float count;
@@ -43,20 +31,15 @@ void P_DamageFeedback(gentity_t* player) {
         return;
     }
 
-    // total points of damage shot at the player this frame
     count = client->damage_blood + client->damage_armor;
     if (count == 0) {
-        return;  // didn't take any damage
+        return;
     }
 
     if (count > 255) {
         count = 255;
     }
 
-    // send the information to the client
-
-    // world damage (falling, slime, etc) uses a special code
-    // to make the blend blob centered instead of positional
     if (client->damage_fromWorld) {
         client->ps.damagePitch = 255;
         client->ps.damageYaw = 255;
@@ -68,11 +51,6 @@ void P_DamageFeedback(gentity_t* player) {
         client->ps.damageYaw = angles[YAW] / 360.0 * 256;
     }
 
-    // play an appropriate pain sound
-    // [QL] binary (0x100338c0) queues EV_PAIN with a BUCKETED pain value
-    // (20/40/60/80 at health thresholds 25/50/75), not raw health. The Ghidra
-    // label "G_Sound" at 0x1006c650 is a mislabel of the event adder (G_AddEvent).
-    // damageEvent is incremented unconditionally below.
     if ((level.time > player->pain_debounce_time) && !(player->flags & FL_GODMODE)) {
         int painValue;
         player->pain_debounce_time = level.time + 700;
@@ -91,26 +69,16 @@ void P_DamageFeedback(gentity_t* player) {
     client->ps.damageEvent++;
     client->ps.damageCount = count;
 
-    //
-    // clear totals
-    //
     client->damage_blood = 0;
     client->damage_armor = 0;
 }
 
-/*
-=============
-P_WorldEffects
-
-Check for lava / slime contents and drowning
-=============
-*/
 void P_WorldEffects(gentity_t* ent) {
     qboolean envirosuit;
     int waterlevel;
 
     if (ent->client->noclip) {
-        ent->client->airOutTime = level.time + 12000;  // don't need air
+        ent->client->airOutTime = level.time + 12000;
         return;
     }
 
@@ -118,41 +86,29 @@ void P_WorldEffects(gentity_t* ent) {
 
     envirosuit = ent->client->ps.powerups[PW_BATTLESUIT] > level.time;
 
-    // [QL] 0x1003396a: nobody drowns in noclip, and the air comes back in full
     if (ent->client->noclip) {
         ent->client->airOutTime = level.time + 12000;
         return;
     }
 
-    //
-    // check for drowning
-    //
     if (waterlevel == 3) {
-        // envirosuit give air
         if (envirosuit) {
             ent->client->airOutTime = level.time + 10000;
         }
 
-        // if out of air, start drowning
         if (ent->client->airOutTime < level.time) {
-            // drown!
             ent->client->airOutTime += 1000;
             if (ent->health > 0) {
-                // take more damage the longer underwater
                 ent->damage += 2;
                 if (ent->damage > 15)
                     ent->damage = 15;
 
-                // [QL] 0x100339f8: the gurp only plays when the damage tick does not kill.
-                // When it kills, nothing plays: Quake 3's "*drown.wav" branch does not exist
-                // in the Quake Live binary, the string is not there.
                 if (ent->damage < ent->health) {
                     G_Sound(ent, CHAN_VOICE,
                             G_SoundIndex((rand() & 1) ? "sound/player/gurp1.wav"
                                                       : "sound/player/gurp2.wav"));
                 }
 
-                // don't play a normal pain sound
                 ent->pain_debounce_time = level.time + 200;
 
                 G_Damage(ent, NULL, NULL, NULL, NULL,
@@ -162,15 +118,11 @@ void P_WorldEffects(gentity_t* ent) {
     } else {
         ent->client->airOutTime = level.time + 12000;
         ent->damage = 2;
-        // [QL] 0x10033a27: out of the water there is nothing else to check
         if (waterlevel == 0) {
             return;
         }
     }
 
-    //
-    // check for sizzle damage (move to pmove?)
-    //
     if (waterlevel &&
         (ent->watertype & (CONTENTS_LAVA | CONTENTS_SLIME))) {
         if (ent->health > 0 && ent->pain_debounce_time <= level.time) {
@@ -191,11 +143,6 @@ void P_WorldEffects(gentity_t* ent) {
     }
 }
 
-/*
-===============
-G_SetClientSound
-===============
-*/
 void G_SetClientSound(gentity_t* ent) {
     if (ent->s.eFlags & EF_TICKING) {
         ent->client->ps.loopSound = G_SoundIndex("sound/weapons/proxmine/wstbtick.wav");
@@ -208,13 +155,6 @@ void G_SetClientSound(gentity_t* ent) {
     }
 }
 
-//==============================================================
-
-/*
-==============
-ClientImpacts
-==============
-*/
 void ClientImpacts(gentity_t* ent, pmove_t* pm) {
     int i, j;
     trace_t trace;
@@ -228,7 +168,7 @@ void ClientImpacts(gentity_t* ent, pmove_t* pm) {
             }
         }
         if (j != i) {
-            continue;  // duplicated
+            continue;
         }
         other = &g_entities[pm->touchents[i]];
 
@@ -244,14 +184,6 @@ void ClientImpacts(gentity_t* ent, pmove_t* pm) {
     }
 }
 
-/*
-============
-G_TouchTriggers
-
-Find all trigger entities that ent's current position touches.
-Spectators will only interact with teleporters.
-============
-*/
 void G_TouchTriggers(gentity_t* ent) {
     int i, num;
     int touch[MAX_GENTITIES];
@@ -264,7 +196,6 @@ void G_TouchTriggers(gentity_t* ent) {
         return;
     }
 
-    // dead clients don't activate triggers!
     if (ent->client->ps.stats[STAT_HEALTH] <= 0) {
         return;
     }
@@ -274,7 +205,6 @@ void G_TouchTriggers(gentity_t* ent) {
 
     num = trap_EntitiesInBox(mins, maxs, touch, MAX_GENTITIES);
 
-    // can't use ent->absmin, because that has a one unit pad
     VectorAdd(ent->client->ps.origin, ent->r.mins, mins);
     VectorAdd(ent->client->ps.origin, ent->r.maxs, maxs);
 
@@ -288,20 +218,14 @@ void G_TouchTriggers(gentity_t* ent) {
             continue;
         }
 
-        // ignore most entities if a spectator
         if (ent->client->sess.sessionTeam == TEAM_SPECTATOR) {
             if (hit->s.eType != ET_TELEPORT_TRIGGER &&
-                // this is ugly but adding a new ET_? type will
-                // most likely cause network incompatibilities
                 hit->touch != Touch_DoorTrigger) {
                 continue;
             }
         }
 
-        // use separate code for determining if an item is picked up
-        // so you don't have to actually contact its bounding box
         if (hit->s.eType == ET_ITEM) {
-            // [QL] qagamex86.dll 0x10033d79: the reach goes up to g_itemHeight
             if (!BG_PlayerTouchesItem(&ent->client->ps, &hit->s, level.time, g_itemHeight.integer)) {
                 continue;
             }
@@ -322,22 +246,15 @@ void G_TouchTriggers(gentity_t* ent) {
         }
     }
 
-    // if we didn't touch a jump pad this pmove frame
     if (ent->client->ps.jumppad_frame != ent->client->ps.pmove_framecount) {
         ent->client->ps.jumppad_frame = 0;
         ent->client->ps.jumppad_ent = 0;
     }
 }
 
-/*
-=================
-SpectatorThink
-=================
-*/
 void SpectatorThink(gentity_t* ent, usercmd_t* ucmd) {
     pmove_t pm;
     gclient_t* client;
-    // [QL] previous upmove per client, for the jump-edge test at the bottom
     static signed char oldUpmove[MAX_CLIENTS];
     int clientNum;
     qboolean jumpPressed;
@@ -345,8 +262,6 @@ void SpectatorThink(gentity_t* ent, usercmd_t* ucmd) {
     client = ent->client;
     clientNum = (int)(client - level.clients);
 
-    // [QL] 0x10033e44: a spectator is never linked, and one who was following when respawned
-    // (ClientSpawn keeps whom) follows them again, with the scoreboard of the mode
     if (ent->r.linked) {
         trap_UnlinkEntity(ent);
     }
@@ -359,25 +274,18 @@ void SpectatorThink(gentity_t* ent, usercmd_t* ucmd) {
         client->pendingFollow = qfalse;
     }
 
-    // [QL] qagamex86.dll 0x10033e30. Quake 3's version was kept verbatim; retail
-    // differs in the free-fly setup and in having a way back out of follow mode.
     if (client->sess.spectatorState != SPECTATOR_FOLLOW) {
-        // [QL] 0x10033ec9/0x10033ecc: always PM_SPECTATOR (no noclip or scoreboard
-        // freeze distinction), and 480 units of speed, not Quake 3's 400.
         client->ps.pm_type = PM_SPECTATOR;
         client->ps.speed = 480;
 
-        // set up for pmove
         memset(&pm, 0, sizeof(pm));
         pm.ps = &client->ps;
         pm.cmd = *ucmd;
-        pm.tracemask = MASK_PLAYERSOLID & ~CONTENTS_BODY;  // spectators can fly through bodies
+        pm.tracemask = MASK_PLAYERSOLID & ~CONTENTS_BODY;
         pm.trace = trap_Trace;
         pm.pointcontents = trap_PointContents;
 
-        // perform a pmove
         Pmove(&pm);
-        // save results of pmove
         VectorCopy(client->ps.origin, ent->s.origin);
 
         G_TouchTriggers(ent);
@@ -390,21 +298,11 @@ void SpectatorThink(gentity_t* ent, usercmd_t* ucmd) {
     jumpPressed = (ucmd->upmove > 0 && oldUpmove[clientNum] <= 0);
     oldUpmove[clientNum] = ucmd->upmove;
 
-    // attack button cycles through spectators
     if ((client->buttons & BUTTON_ATTACK) && !(client->oldbuttons & BUTTON_ATTACK)) {
         FollowCycle(ent, 1);
-        return;  // [QL] 0x10033f62 returns straight after the cycle
+        return;
     }
 
-    // [QL] 0x10033f82..0x10033fb1: a fresh press of button 0x800 drops a follower back
-    // to free-fly (StopFollowing, 0x10040d10), when they are a real spectator or when
-    // team spectators are allowed a free camera (g_teamSpecFreeCam 1).
-    //
-    // The test is on upmove rather than the bit because the bit meant different things
-    // in the two engines: Quake Live's sets it from the jump key (0x004b542f, in_up),
-    // while ioquake3's set it as BUTTON_ANY, "any key at all is down". Our client sends
-    // it as retail does now (BUTTON_JUMP), but one from before that would still drop out
-    // of follow on any key, so the jump key's press edge is read from upmove.
     if (jumpPressed &&
         (client->sess.sessionTeam == TEAM_SPECTATOR ||
          (g_teamSpecFreeCam.integer == 1 && client->sess.spectatorState == SPECTATOR_FOLLOW))) {
@@ -412,34 +310,6 @@ void SpectatorThink(gentity_t* ent, usercmd_t* ucmd) {
     }
 }
 
-/*
-=================
-ClientInactivityTimer
-
-[QL] Binary-rewritten from qagamex86.dll 0x10034090. Now an accumulator
-(inactivityTime += msec each frame, reset on any input). Honors:
-  g_inactivity         - kick threshold (seconds, 0 = disabled)
-  g_inactivityWarning  - seconds before kick to start warning (default 10)
-  g_dropInactive       - 1 = drop client, 0 = move to spectator + follow
-  g_debugInactivity    - log accumulator each frame
-Round-based gametypes only accumulate when pm_type == PM_NORMAL and the
-match isn't restarting.
-
-Returns qfalse if the client is dropped or moved to spectator.
-=================
-*/
-/*
-=================
-G_FloodCheck
-
-[QL] 0x100341e0. Each player's flood counter: it goes up every time they send a
-userinfo change and decays by one every g_floodprot_decay milliseconds. Past
-g_floodprot_maxcount they are kicked.
-
-With g_floodprot_maxcount at 0 nobody is kicked, which is what retail's server.cfg
-says: "Set g_floodprot_maxcount to 0 to disable completely".
-=================
-*/
 qboolean G_FloodCheck(gclient_t* client) {
     if (g_floodprot_maxcount.integer != 0 &&
         g_floodprot_maxcount.integer < client->pers.userInfoFloodInfractions) {
@@ -459,7 +329,6 @@ qboolean G_FloodCheck(gclient_t* client) {
 qboolean ClientInactivityTimer(gclient_t* client, int msec) {
     int clientNum = client - level.clients;
 
-    // Reset on: no g_inactivity, any movement/attack input, spectators, or admins
     if (g_inactivity.integer == 0 ||
         (client->pers.cmd.buttons & BUTTON_ATTACK) ||
         client->pers.cmd.forwardmove != 0 ||
@@ -470,7 +339,6 @@ qboolean ClientInactivityTimer(gclient_t* client, int msec) {
         client->pers.inactivityTime = 0;
         client->pers.inactivityWarning = qfalse;
     } else {
-        // Round-based gametypes only accumulate during active play
         qboolean isRoundBased = (g_gametype.integer == GT_CA ||
                                  g_gametype.integer == GT_FREEZE ||
                                  g_gametype.integer == GT_AD ||
@@ -502,7 +370,6 @@ qboolean ClientInactivityTimer(gclient_t* client, int msec) {
         }
     }
 
-    // Track last user input time for non-spectators (used elsewhere)
     if (client->ps.pm_type != PM_SPECTATOR) {
         if (client->pers.cmd.forwardmove != 0 ||
             client->pers.cmd.rightmove != 0 ||
@@ -519,19 +386,6 @@ qboolean ClientInactivityTimer(gclient_t* client, int msec) {
     return qtrue;
 }
 
-/*
-==============
-G_PointOfInterest
-
-[QL] qagamex86.dll 0x1004f1f5 and 0x100346f8. A marker broadcast at a player who has to be
-given away: the Quad Hog, or whoever carries the neutral flag. It goes to everyone (the
-client hides it from the player or the team it belongs to), and it lives exactly as long as
-the ping rate that produced it, so one marker lasts until the next.
-
-payload rides in generic1: the client number for the Quad Hog, since an FFA has no teams to
-tell anyone apart by, and the team for a flag.
-==============
-*/
 void G_PointOfInterest(gentity_t* ent, int duration, int payload) {
     gentity_t* te = G_TempEntity(ent->client->ps.origin, EV_POI);
 
@@ -541,27 +395,17 @@ void G_PointOfInterest(gentity_t* ent, int duration, int payload) {
     ent->client->timeResidualPingPOI = 0;
 }
 
-/*
-==================
-ClientTimerActions
-
-Actions that happen once a second
-==================
-*/
 void ClientTimerActions(gentity_t* ent, int msec) {
     gclient_t* client;
     int maxHealth;
 
     client = ent->client;
     client->timeResidual += msec;
-    // [QL] 0x100343f3: the time the flag has been carried, cleared when it is picked up
     client->pers.teamState.flagsince += msec;
 
     while (client->timeResidual >= 1000) {
         client->timeResidual -= 1000;
 
-        // [QL] 0x10034414: a second more of what this team has held, counted on the client's
-        // own team. Every team mode but clan arena, which has neither powerups nor a flag
         if (g_gametype.integer > GT_RACE && g_gametype.integer != GT_CA) {
             int team = client->sess.sessionTeam;
 
@@ -586,8 +430,6 @@ void ClientTimerActions(gentity_t* ent, int msec) {
             }
         }
 
-        // [QL] 0x100344cc: the regeneration powerup heals, and over the maximum health comes down
-        // a point a second; in the round modes only while the round is being played
         if (client->ps.powerups[PW_REGEN]) {
             maxHealth = client->ps.stats[STAT_MAX_HEALTH];
             if (ent->health < maxHealth) {
@@ -627,8 +469,6 @@ void ClientTimerActions(gentity_t* ent, int msec) {
             }
         }
 
-        // [QL] 0x100345fb: the Armor Regen rune gives 10 a second up to the maximum health (over
-        // it with tiered armour)
         if (client->ps.stats[STAT_RUNE] == 4 && client->ps.stats[STAT_ARMOR] < client->ps.stats[STAT_MAX_HEALTH]) {
             client->ps.stats[STAT_ARMOR] += 10;
             if (client->ps.stats[STAT_ARMOR] > client->ps.stats[STAT_MAX_HEALTH] && !armor_tiered.integer) {
@@ -638,8 +478,6 @@ void ClientTimerActions(gentity_t* ent, int msec) {
             G_AddEvent(ent, EV_POWERUP_ARMORREGEN, 0);
         }
 
-        // count down armor when over max. In CA only with tiered armour; elsewhere never with it,
-        // nor with the Scout rune, which has its own count below
         if (client->ps.stats[STAT_ARMOR] > client->ps.stats[STAT_MAX_HEALTH]) {
             qboolean countDown;
 
@@ -650,13 +488,11 @@ void ClientTimerActions(gentity_t* ent, int msec) {
             }
             if (countDown) {
                 client->ps.stats[STAT_ARMOR]--;
-                // [QL] 0x100346ed: in the entity too, for teammates
                 ent->s.armor = client->ps.stats[STAT_ARMOR];
             }
         }
     }
 
-    // [QL] 0x1003473b: the Quad Hog gives themselves away every g_quadHogPingRate ms
     if (g_gametype.integer == GT_FFA && g_quadHog.integer && client->ps.powerups[PW_QUAD]) {
         client->timeResidualPingPOI += msec;
         if (client->timeResidualPingPOI >= g_quadHogPingRate.integer) {
@@ -664,7 +500,6 @@ void ClientTimerActions(gentity_t* ent, int msec) {
         }
     }
 
-    // [QL] 0x10034791: so does whoever runs with the neutral flag, but by team
     if (client->ps.powerups[PW_NEUTRALFLAG]) {
         client->timeResidualPingPOI += msec;
         if (client->timeResidualPingPOI >= g_neutralFlagPingRate.integer) {
@@ -673,8 +508,6 @@ void ClientTimerActions(gentity_t* ent, int msec) {
         }
     }
 
-    // [QL] 0x100347c6: the Scout rune takes armour away, a point every half second down to 50,
-    // except in CA
     if (g_gametype.integer != GT_CA && client->ps.stats[STAT_RUNE] == 1) {
         client->timeResidualScout += msec;
         while (client->timeResidualScout >= 500) {
@@ -685,10 +518,6 @@ void ClientTimerActions(gentity_t* ent, int msec) {
         }
     }
 
-    // [QL] health regen (binary ClientTimerActions 0x10034320): once g_regenHealth ms
-    // have passed since the last hurt, drip HP back at g_regenHealthRate ms per point.
-    // G_Damage sets client->healthRegenActive; this consumes it. g_regenHealth is a
-    // delay in ms (and the enable), *Rate is ms-per-point.
     if (g_regenHealth.integer) {
         if (ent->health >= client->ps.stats[STAT_MAX_HEALTH]) {
             client->healthRegenActive = qfalse;
@@ -703,9 +532,6 @@ void ClientTimerActions(gentity_t* ent, int msec) {
         }
     }
 
-    // [QL] armor regen (binary ClientTimerActions_Powerups tail 0x100344a0): drip
-    // armour back after g_regenArmor ms, capped by the armour tier (150/100/50 when
-    // armor_tiered, else max health) and optionally gated on full HP first.
     if (g_regenArmor.integer) {
         qboolean atCap;
         if (armor_tiered.integer) {
@@ -733,43 +559,23 @@ void ClientTimerActions(gentity_t* ent, int msec) {
     }
 }
 
-/*
-====================
-ClientIntermissionThink
-====================
-*/
 void ClientIntermissionThink(gclient_t* client) {
     client->ps.eFlags &= ~EF_TALK;
     client->ps.eFlags &= ~EF_FIRING;
 
-    // the level will exit when everyone wants to or after timeouts
-
-    // swap and latch button actions
     client->oldbuttons = client->buttons;
     client->buttons = client->pers.cmd.buttons;
     if (client->buttons & (BUTTON_ATTACK | BUTTON_USE_HOLDABLE) & (client->oldbuttons ^ client->buttons)) {
-        // [QL] 0x10034d53: each press toggles client+0x2e8, which is pers.ready -- the same
-        // flag readyup sets, so whoever readied up during the match starts the intermission
-        // ready to leave
         client->pers.ready = !client->pers.ready;
     }
 }
 
-/*
-================
-ClientEvents
-
-Events will be passed on to the clients for presentation,
-but any server game effects are handled here
-================
-*/
 void ClientEvents(gentity_t* ent, int oldEventSequence) {
     int i, j;
     int event;
     gclient_t* client;
     int damage;
     vec3_t origin, angles;
-    //	qboolean	fired;
     gitem_t* item;
     gentity_t* drop;
 
@@ -785,7 +591,7 @@ void ClientEvents(gentity_t* ent, int oldEventSequence) {
             case EV_FALL_MEDIUM:
             case EV_FALL_FAR:
                 if (ent->s.eType != ET_PLAYER) {
-                    break;  // not in the player model
+                    break;
                 }
                 if (g_dmflags.integer & DF_NO_FALLING_DAMAGE) {
                     break;
@@ -795,7 +601,7 @@ void ClientEvents(gentity_t* ent, int oldEventSequence) {
                 } else {
                     damage = 5;
                 }
-                ent->pain_debounce_time = level.time + 200;  // no normal pain sound
+                ent->pain_debounce_time = level.time + 200;
                 G_Damage(ent, NULL, NULL, NULL, NULL, damage, 0, MOD_FALLING);
                 break;
 
@@ -803,8 +609,7 @@ void ClientEvents(gentity_t* ent, int oldEventSequence) {
                 FireWeapon(ent);
                 break;
 
-            case EV_USE_ITEM1:  // teleporter
-                // drop flags in CTF
+            case EV_USE_ITEM1:
                 item = NULL;
                 j = 0;
 
@@ -821,7 +626,6 @@ void ClientEvents(gentity_t* ent, int oldEventSequence) {
 
                 if (item) {
                     drop = Drop_Item(ent, item, 0);
-                    // decide how many seconds it has left
                     drop->count = (ent->client->ps.powerups[j] - level.time) / 1000;
                     if (drop->count < 1) {
                         drop->count = 1;
@@ -855,26 +659,24 @@ void ClientEvents(gentity_t* ent, int oldEventSequence) {
                 TeleportPlayer(ent, origin, angles);
                 break;
 
-            case EV_USE_ITEM2:  // medkit
+            case EV_USE_ITEM2:
                 ent->health = ent->client->ps.stats[STAT_MAX_HEALTH] + 25;
 
                 break;
 
-            case EV_USE_ITEM3:  // kamikaze
-                // make sure the invulnerability is off
+            case EV_USE_ITEM3:
                 ent->client->invulnerabilityTime = 0;
-                // start the kamikze
                 G_StartKamikaze(ent);
                 break;
 
-            case EV_USE_ITEM4:  // portal
+            case EV_USE_ITEM4:
                 if (ent->client->portalID) {
                     DropPortalSource(ent);
                 } else {
                     DropPortalDestination(ent);
                 }
                 break;
-            case EV_USE_ITEM5:  // invulnerability
+            case EV_USE_ITEM5:
                 ent->client->invulnerabilityTime = level.time + 10000;
                 break;
 
@@ -884,11 +686,6 @@ void ClientEvents(gentity_t* ent, int oldEventSequence) {
     }
 }
 
-/*
-==============
-StuckInOtherClient
-==============
-*/
 static int StuckInOtherClient(gentity_t* ent) {
     int i;
     gentity_t* ent2;
@@ -907,7 +704,6 @@ static int StuckInOtherClient(gentity_t* ent) {
         if (ent2->health <= 0) {
             continue;
         }
-        //
         if (ent2->r.absmin[0] > ent->r.absmax[0])
             continue;
         if (ent2->r.absmin[1] > ent->r.absmax[1])
@@ -927,26 +723,16 @@ static int StuckInOtherClient(gentity_t* ent) {
 
 void BotTestSolid(vec3_t origin);
 
-/*
-==============
-SendPendingPredictableEvents
-==============
-*/
 void SendPendingPredictableEvents(playerState_t* ps) {
     gentity_t* t;
     int event, seq;
     int extEvent, number;
 
-    // if there are still events pending
     if (ps->entityEventSequence < ps->eventSequence) {
-        // create a temporary entity for this event which is sent to everyone
-        // except the client who generated the event
         seq = ps->entityEventSequence & (MAX_PS_EVENTS - 1);
         event = ps->events[seq] | ((ps->entityEventSequence & 3) << 8);
-        // set external event to zero before calling BG_PlayerStateToEntityState
         extEvent = ps->externalEvent;
         ps->externalEvent = 0;
-        // create temporary entity for event
         t = G_TempEntity(ps->origin, event);
         number = t->s.number;
         BG_PlayerStateToEntityState(ps, &t->s, qtrue);
@@ -954,22 +740,11 @@ void SendPendingPredictableEvents(playerState_t* ps) {
         t->s.eType = ET_EVENTS + event;
         t->s.eFlags |= EF_PLAYER_EVENT;
         t->s.otherEntityNum = ps->clientNum;
-        // send to everyone except the client who generated the event
         t->r.svFlags |= SVF_NOTSINGLECLIENT;
         t->r.singleClient = ps->clientNum;
-        // set back external event
         ps->externalEvent = extEvent;
     }
 }
-
-/*
-==============
-ClientThink
-
-This will be called once for each client frame, which will
-usually be a couple times for each server frame on fast clients.
-==============
-*/
 
 void ClientThink_real(gentity_t* ent) {
     gclient_t* client;
@@ -980,27 +755,20 @@ void ClientThink_real(gentity_t* ent) {
 
     client = ent->client;
 
-    // don't think if the client is not yet connected (and thus not yet spawned in)
     if (client->pers.connected != CON_CONNECTED) {
         return;
     }
 
-    // mark the time, so the connection sprite can be removed
     ucmd = &ent->client->pers.cmd;
 
-    // sanity check the command time to prevent speedup cheating
     if (ucmd->serverTime > level.time + 200) {
         ucmd->serverTime = level.time + 200;
-        //		G_Printf("serverTime <<<<<\n" );
     }
     if (ucmd->serverTime < level.time - 1000) {
         ucmd->serverTime = level.time - 1000;
-        //		G_Printf("serverTime >>>>>\n" );
     }
 
     msec = ucmd->serverTime - client->ps.commandTime;
-    // following others may result in bad times, but we still want
-    // to check for follow toggles
     if (msec < 1 && client->sess.spectatorState != SPECTATOR_FOLLOW) {
         return;
     }
@@ -1009,18 +777,11 @@ void ClientThink_real(gentity_t* ent) {
         msec = 200;
     }
 
-    //
-    // check for exiting intermission
-    //
     if (level.intermissionTime) {
         ClientIntermissionThink(client);
         return;
     }
 
-    // [QL] pause/timeout: freeze the client and skip the rest of think. Binary
-    // ClientThink_real (0x10034d40) sets PMF_PAUSED + commandTime=serverTime right
-    // after the intermission block and early-returns; PMF_PAUSED is cleared on
-    // unpause. Clear-then-set each frame gives the same net effect.
     client->ps.pm_flags &= ~PMF_PAUSED;
     if (level.timePauseBegin != 0) {
         client->ps.pm_flags |= PMF_PAUSED;
@@ -1028,8 +789,6 @@ void ClientThink_real(gentity_t* ent) {
         return;
     }
 
-    // [QL] 0x10034d79: a spawn that found no spawn point is tried again through the gametype's
-    // own begin once its 600 ms are up (the rounds decide whether the player plays or watches)
     if (client->spawnRetryTime && client->spawnRetryTime < level.time) {
         client->spawnRetryTime = 0;
         client->ps.pm_type = PM_NORMAL;
@@ -1051,8 +810,6 @@ void ClientThink_real(gentity_t* ent) {
         return;
     }
 
-    // spectators don't do much
-    // [QL] 0x10034e32: by pm_type, which also covers a player sitting a round out on their team
     if (client->ps.pm_type == PM_SPECTATOR) {
         if (client->sess.spectatorState == SPECTATOR_SCOREBOARD) {
             return;
@@ -1061,8 +818,6 @@ void ClientThink_real(gentity_t* ent) {
         return;
     }
 
-    // check for inactivity timer, but never drop the local client of a non-dedicated server
-    // [QL] 0x10034e13: the flood gate sits right next to the inactivity one
     if (!G_FloodCheck(client)) {
         return;
     }
@@ -1071,7 +826,6 @@ void ClientThink_real(gentity_t* ent) {
         return;
     }
 
-    // clear the rewards if time
     if (level.time > client->rewardTime) {
         client->ps.eFlags &= ~(EF_AWARD_IMPRESSIVE | EF_AWARD_EXCELLENT | EF_AWARD_GAUNTLET | EF_AWARD_ASSIST | EF_AWARD_DEFEND | EF_AWARD_CAP);
     }
@@ -1079,39 +833,21 @@ void ClientThink_real(gentity_t* ent) {
     if (client->noclip) {
         client->ps.pm_type = PM_NOCLIP;
     } else if (client->ps.stats[STAT_HEALTH] <= 0) {
-        // [QL] frozen players (freeze tag) keep their pm_type rather than going
-        // PM_DEAD, so the statue stays put and can be thawed. Binary
-        // ClientThink_real (0x10034d40) gates PM_DEAD on ps.powerups[PW_FREEZE]
-        // (client+0x17c), not the freezePlayer flag.
         if (client->ps.powerups[PW_FREEZE] <= 0) {
             client->ps.pm_type = PM_DEAD;
         }
     } else if (client->freezePlayer) {
-        // [QL] alive but frozen: full movement lock. The binary writes pm_type 6
-        // (PM_TUTORIAL) here, not PM_FREEZE, and drops this frame's buttons, the
-        // copy kept in pers.cmd too (0x10034e97, client+0x264). The training's
-        // intro holds the player here (G_TrainingFrame).
         client->ps.pm_type = PM_TUTORIAL;
         client->pers.cmd.buttons = 0;
         ucmd->buttons = 0;
     } else if (g_gametype.integer == GT_AD && level.roundState.eCurrent == RS_COUNTDOWN) {
-        // [QL] attack & defend locks players in place during the round countdown
-        // (binary: gametype==GT_AD && roundState.eCurrent==RS_COUNTDOWN -> PM_FREEZE).
         client->ps.pm_type = PM_FREEZE;
     } else {
         client->ps.pm_type = PM_NORMAL;
     }
 
-    // [QL] PMF_PAUSED is handled above (early-return right after the intermission
-    // block, matching binary ClientThink_real 0x10034d40).
-
-    // set gravity
     client->ps.gravity = g_gravity.value;
 
-    // set speed
-    // [QL] haste goes first, the scout rune (STAT_RUNE 1) runs only 1.25 times as
-    // fast, and the gauntlet in hand scales by g_gauntletSpeedFactor
-    // (qagamex86.dll ClientThink_real 0x10034ecd..0x10034f38)
     client->ps.speed = g_speed.value;
 
     if (client->ps.powerups[PW_HASTE]) {
@@ -1124,29 +860,20 @@ void ClientThink_real(gentity_t* ent) {
         client->ps.speed = (int)((float)client->ps.speed * g_gauntletSpeedFactor.value);
     }
 
-    // [QL] RR Infection: zombie speed multiplier (binary 0x10034f88)
     if (g_gametype.integer == GT_RR && g_rrInfected.integer != 0
         && client->sess.sessionTeam == TEAM_RED) {
         client->ps.speed = (int)((float)client->ps.speed * g_rrInfectedZombieSpeed.value);
     }
 
-    // let go of the hook if we aren't firing
     if (client->ps.weapon == WP_GRAPPLING_HOOK &&
         client->hook && !(ucmd->buttons & BUTTON_ATTACK)) {
         Weapon_HookFree(client->hook);
     }
 
-    // [QL] infinite ammo (ammo == -1) is set at spawn (ClientSpawn) and, on a live cvar
-    // toggle, applied to every client by OnChangedInfiniteAmmo (g_main.c). Nothing to do
-    // per-frame here.
-
-    // set up for pmove
     oldEventSequence = client->ps.eventSequence;
 
     memset(&pm, 0, sizeof(pm));
 
-    // check for the hit-scan gauntlet, don't let the action
-    // go through as an attack unless it actually hits something
     if (client->ps.weapon == WP_GAUNTLET && !(ucmd->buttons & BUTTON_TALK) &&
         (ucmd->buttons & BUTTON_ATTACK) && client->ps.weaponTime <= 0) {
         pm.gauntletHit = CheckGauntletAttack(ent);
@@ -1157,7 +884,6 @@ void ClientThink_real(gentity_t* ent) {
         ent->client->pers.cmd.buttons |= BUTTON_GESTURE;
     }
 
-    // check for invulnerability expansion before doing the Pmove
     if (client->ps.powerups[PW_INVULNERABILITY]) {
         if (!(client->ps.pm_flags & PMF_INVULEXPAND)) {
             vec3_t mins = {-42, -42, -42};
@@ -1166,16 +892,12 @@ void ClientThink_real(gentity_t* ent) {
 
             VectorCopy(ent->r.mins, oldmins);
             VectorCopy(ent->r.maxs, oldmaxs);
-            // expand
             VectorCopy(mins, ent->r.mins);
             VectorCopy(maxs, ent->r.maxs);
             trap_LinkEntity(ent);
-            // check if this would get anyone stuck in this player
             if (!StuckInOtherClient(ent)) {
-                // set flag so the expanded size will be set in PM_CheckDuck
                 client->ps.pm_flags |= PMF_INVULEXPAND;
             }
-            // set back
             VectorCopy(oldmins, ent->r.mins);
             VectorCopy(oldmaxs, ent->r.maxs);
             trap_LinkEntity(ent);
@@ -1195,27 +917,21 @@ void ClientThink_real(gentity_t* ent) {
     pm.pointcontents = trap_PointContents;
     pm.debugLevel = g_debugMove.integer;
     pm.noFootsteps = (g_dmflags.integer & DF_NO_FOOTSTEPS) > 0;
-    // [ioquakelive] a retail client predicts its steps retail's way (see PM_Footsteps)
     pm.retailBobCycle = !client->pers.ioqlClient && !(ent->r.svFlags & SVF_BOT);
     pm.hookEnemy = (client->hook && client->hook->enemy && client->hook->enemy->client != NULL);
 
-    // [QL] pmove_fixed/pmove_msec removed from pmove_t; pmoveFixed removed from clientPersistant_t
-
     Pmove(&pm);
 
-    // save results of pmove
     if (ent->client->ps.eventSequence != oldEventSequence) {
         ent->eventTime = level.time;
     }
-    // [QL] Binary always extrapolates (no g_smoothClients escape hatch).
     BG_PlayerStateToEntityStateExtraPolate(&ent->client->ps, &ent->s, ent->client->ps.commandTime, qtrue);
     SendPendingPredictableEvents(&ent->client->ps);
 
     if (!(ent->client->ps.eFlags & EF_FIRING)) {
-        client->fireHeld = qfalse;  // for grapple
+        client->fireHeld = qfalse;
     }
 
-    // use the snapped origin for linking so it matches client predicted versions
     VectorCopy(ent->s.pos.trBase, ent->r.currentOrigin);
 
     VectorCopy(pm.mins, ent->r.mins);
@@ -1224,82 +940,55 @@ void ClientThink_real(gentity_t* ent) {
     ent->waterlevel = pm.waterlevel;
     ent->watertype = pm.watertype;
 
-    // execute client events
     ClientEvents(ent, oldEventSequence);
 
-    // link entity now, after any personal teleporters have been used
     trap_LinkEntity(ent);
     if (!ent->client->noclip) {
         G_TouchTriggers(ent);
     }
 
-    // NOTE: now copy the exact origin over otherwise clients can be snapped into solid
     VectorCopy(ent->client->ps.origin, ent->r.currentOrigin);
 
-    // test for solid areas in the AAS file
     BotTestAAS(ent->r.currentOrigin);
 
-    // touch other objects
     ClientImpacts(ent, &pm);
 
-    // save results of triggers and client events
     if (ent->client->ps.eventSequence != oldEventSequence) {
         ent->eventTime = level.time;
     }
 
-    // swap and latch button actions
     client->oldbuttons = client->buttons;
     client->buttons = ucmd->buttons;
 
-    // [QL] Freeze Tag: frozen players run the thaw check every frame instead
-    // of the normal respawn path, so they can't respawn by pressing fire.
-    // Binary ClientThink_real (0x10034d40) gates this on ps.powerups[PW_FREEZE]
-    // != 0 (client+0x17c, set by the player_die FreezeTag fork) and passes the
-    // clamped pmove frame delta (msec) that Pmove used this command.
     if (client->ps.powerups[PW_FREEZE] != 0) {
         Freeze_ClientThawCheck(ent, msec);
         return;
     }
 
-    // check for respawning
     if (client->ps.stats[STAT_HEALTH] <= 0) {
         ClientRespawn(ent);
         return;
     }
 
-    // perform once-a-second actions
     ClientTimerActions(ent, msec);
 
-    // [QL] 0x100353cb: time played and time per weapon, both carried in PLAYER_STATS
     STAT_UpdatePlayTime(ent);
 }
 
-/*
-==================
-ClientThink
-
-A new command has arrived from the client
-==================
-*/
 void ClientThink(int clientNum) {
     gentity_t* ent;
 
     ent = g_entities + clientNum;
     trap_GetUsercmd(clientNum, &ent->client->pers.cmd);
 
-    // mark the time we got info, so we can display the
-    // phone jack if they don't get any for a while
     ent->client->lastCmdTime = level.time;
 
-    // [QL] Binary always runs ClientThink async (no g_synchronousClients).
     if (!(ent->r.svFlags & SVF_BOT)) {
         ClientThink_real(ent);
     }
 }
 
 void G_RunClient(gentity_t* ent) {
-    // [QL] Bots only - humans are run from ClientThink. Binary has no
-    // g_synchronousClients escape hatch.
     if (!(ent->r.svFlags & SVF_BOT)) {
         return;
     }
@@ -1307,23 +996,10 @@ void G_RunClient(gentity_t* ent) {
     ClientThink_real(ent);
 }
 
-/*
-==================
-SpectatorClientEndFrame
-
-==================
-*/
 void SpectatorClientEndFrame(gentity_t* ent) {
     gclient_t* client;
     gclient_t* cl;
 
-    // [QL] qagamex86.dll 0x10035470. Quake 3's version was kept verbatim here, and it
-    // differs from retail in the one detail the menus depend on: after copying the
-    // followed player's playerState, retail puts pm_type back to PM_SPECTATOR
-    // (0x1003550c). cgame's cg_spectating tracks pm_type == PM_SPECTATOR, and
-    // ui/ingame_about.menu swaps "RETURN to MATCH" for "JOIN MATCH" on that cvar - so
-    // with the followed player's PM_NORMAL copied in, a spectator following somebody
-    // was shown RETURN to MATCH and could not join.
     client = ent->client;
 
     if (client->sess.spectatorState != SPECTATOR_FOLLOW) {
@@ -1333,7 +1009,6 @@ void SpectatorClientEndFrame(gentity_t* ent) {
     {
         int clientNum = client->sess.spectatorClient;
 
-        // team follow1 and team follow2 go to whatever clients are playing
         if (clientNum == -1) {
             clientNum = level.follow1;
         } else if (clientNum == -2) {
@@ -1342,28 +1017,19 @@ void SpectatorClientEndFrame(gentity_t* ent) {
 
         if (clientNum >= 0) {
             cl = &level.clients[clientNum];
-            // [QL] 0x100354cd/0x100354d9: the target must be connected and not itself
-            // in PM_SPECTATOR. Retail tests pm_type, not sessionTeam - so a dead Clan
-            // Arena player who is spectating mid-round is skipped too.
             if (cl->pers.connected == CON_CONNECTED && cl->ps.pm_type != PM_SPECTATOR) {
                 int savedPersistant[MAX_PERSISTANT];
-                int savedPing = client->ps.ping;  // [QL] 0x100354e4, ps+0x1e0
+                int savedPing = client->ps.ping;
 
                 memcpy(savedPersistant, client->ps.persistant, sizeof(savedPersistant));
                 client->ps = cl->ps;
-                client->ps.pm_type = PM_SPECTATOR;      // 0x1003550c
-                client->ps.pm_flags |= PMF_FOLLOW;      // 0x10035519
-                client->ps.ping = savedPing;            // 0x10035526
+                client->ps.pm_type = PM_SPECTATOR;
+                client->ps.pm_flags |= PMF_FOLLOW;
+                client->ps.ping = savedPing;
 
                 if (client->sess.sessionTeam == TEAM_SPECTATOR) {
-                    // [QL] 0x1003553d: a real spectator keeps the followed player's
-                    // persistant block and is marked as having voted - spectators
-                    // take no part in votes.
                     client->ps.eFlags |= EF_SPECTATOR;
                 } else {
-                    // [QL] 0x10035557: a player who is on a team but spectating (dead
-                    // in a round) keeps their OWN persistant stats, taking only the
-                    // followed player's PERS_HITS for the hit feedback.
                     memcpy(client->ps.persistant, savedPersistant, sizeof(savedPersistant));
                     client->ps.persistant[PERS_HITS] = cl->ps.persistant[PERS_HITS];
                 }
@@ -1371,10 +1037,6 @@ void SpectatorClientEndFrame(gentity_t* ent) {
             }
         }
 
-        // [QL] 0x1003558d: the follow target is gone. A player on a team, with team
-        // spectating not in free-cam, and both teams still alive, moves on to the next
-        // player (FollowCycle, 0x10041130). Anyone else stops following
-        // (StopFollowing, 0x10040d10).
         if (client->sess.spectatorClient >= 0) {
             int redAlive, blueAlive;
 
@@ -1389,36 +1051,18 @@ void SpectatorClientEndFrame(gentity_t* ent) {
     }
 }
 
-/*
-==============
-ClientEndFrame
-
-Called at the end of each server frame for each connected client
-A fast client will have multiple ClientThink for each ClientEdFrame,
-while a slow client may have multiple ClientEndFrame between ClientThink.
-==============
-*/
 void ClientEndFrame(gentity_t* ent) {
     int i;
 
-    // [QL] 0x10035606: by pm_type, so a player sitting a round out follows like a spectator
     if (ent->client->ps.pm_type == PM_SPECTATOR) {
         SpectatorClientEndFrame(ent);
         return;
     }
 
-    // [QL] Persist the latest loadout primary weapon from pmove so the next
-    // ClientSpawn (after kill/respawn) uses it. bg_pmove.c already copies
-    // cmd.weaponPrimary -> ps.weaponPrimary each frame; we snapshot it into
-    // the session struct here. Matches qagamex86.dll ClientEndFrame.
     if (ent->client->ps.weaponPrimary != 0) {
         ent->client->sess.weaponPrimary = ent->client->ps.weaponPrimary;
     }
 
-    // [QL] connection/AFK flag - evaluated before the pause gate so a lagging player's
-    // icon still updates while paused. Written to the entity state directly (as well as
-    // the playerState) because the playerState->entityState copy below is skipped during
-    // a pause; on live frames both hold the same value.
     if (level.time - ent->client->lastCmdTime > 1000) {
         ent->client->ps.eFlags |= EF_CONNECTION;
         ent->s.eFlags |= EF_CONNECTION;
@@ -1427,35 +1071,24 @@ void ClientEndFrame(gentity_t* ent) {
         ent->s.eFlags &= ~EF_CONNECTION;
     }
 
-    // [QL] paused players skip everything below (matches ClientEndFrame's PMF_PAUSED
-    // early-out): powerup timers do not expire, no world/damage effects, and the
-    // player's pose freezes because the playerState->entityState update is skipped.
     if (ent->client->ps.pm_flags & PMF_PAUSED) {
         return;
     }
 
-    // turn off any expired powerups
     for (i = 0; i < MAX_POWERUPS; i++) {
         if (ent->client->ps.powerups[i] < level.time) {
             ent->client->ps.powerups[i] = 0;
         }
     }
 
-    // set powerup for player animation (a rune's powerup is set for good when it is taken)
     if (ent->client->invulnerabilityTime > level.time) {
         ent->client->ps.powerups[PW_INVULNERABILITY] = level.time;
     }
 
-    //
-    // If the end of unit layout is displayed, don't give
-    // the player any normal movement attributes
-    //
     if (level.intermissionTime) {
         return;
     }
 
-    // [QL] 0x100356e4: in team gametypes the player's location (the nearest target_location's
-    // health) goes out in the entity and player states, where the team overlay reads it
     if (g_gametype.integer >= GT_TEAM) {
         gentity_t* loc = Team_GetLocation(ent);
 
@@ -1463,31 +1096,20 @@ void ClientEndFrame(gentity_t* ent) {
         ent->client->ps.location = ent->s.location;
     }
 
-    // burn from lava, etc
     P_WorldEffects(ent);
 
-    // apply all the damage taken this frame
     P_DamageFeedback(ent);
 
-    // (EF_CONNECTION is now set earlier, before the pause gate)
-
-    // [QL] 0x1003572f: the health also goes out in the entity, where teammates' overlays read it
     ent->s.health = ent->health;
-    ent->client->ps.stats[STAT_HEALTH] = ent->health;  // FIXME: get rid of ent->health...
+    ent->client->ps.stats[STAT_HEALTH] = ent->health;
 
     G_SetClientSound(ent);
 
-    // set the latest infor
-    // [QL] Binary always extrapolates (no g_smoothClients escape hatch).
     BG_PlayerStateToEntityStateExtraPolate(&ent->client->ps, &ent->s, ent->client->ps.commandTime, qtrue);
     SendPendingPredictableEvents(&ent->client->ps);
 
-    // [QL] Lag compensation - record this client's position for this frame
     if (g_lagHaxMs.integer != 0 && g_lagHaxHistory.integer != 0) {
         HAX_Update(ent);
     }
 
-    // set the bit for the reachability area the client is currently in
-    //	i = trap_AAS_PointReachabilityAreaIndex( ent->client->ps.origin );
-    //	ent->client->areabits[i >> 3] |= 1 << (i & 7);
 }

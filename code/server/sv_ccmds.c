@@ -19,33 +19,15 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "server.h"
 #include "../qcommon/q_steam.h"
 
-/*
-===============================================================================
-
-OPERATOR CONSOLE ONLY COMMANDS
-
-These commands can only be entered from stdin or by a remote operator datagram
-===============================================================================
-*/
-
-/*
-==================
-SV_GetPlayerByHandle
-
-Returns the player with player id or name from Cmd_Argv(1)
-==================
-*/
 static client_t* SV_GetPlayerByHandle(void) {
     client_t* cl;
     int i;
     char* s;
     char cleanName[64];
 
-    // make sure server is running
     if (!com_sv_running->integer) {
         return NULL;
     }
@@ -57,14 +39,12 @@ static client_t* SV_GetPlayerByHandle(void) {
 
     s = Cmd_Argv(1);
 
-    // Check whether this is a numeric player handle
     for (i = 0; s[i] >= '0' && s[i] <= '9'; i++)
         ;
 
     if (!s[i]) {
         int plid = atoi(s);
 
-        // Check for numeric playerid match
         if (plid >= 0 && plid < sv_maxclients->integer) {
             cl = &svs.clients[plid];
 
@@ -73,7 +53,6 @@ static client_t* SV_GetPlayerByHandle(void) {
         }
     }
 
-    // check for a name match
     for (i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++) {
         if (!cl->state) {
             continue;
@@ -94,20 +73,12 @@ static client_t* SV_GetPlayerByHandle(void) {
     return NULL;
 }
 
-/*
-==================
-SV_GetPlayerByNum
-
-Returns the player with idnum from Cmd_Argv(1)
-==================
-*/
 static client_t* SV_GetPlayerByNum(void) {
     client_t* cl;
     int i;
     int idnum;
     char* s;
 
-    // make sure server is running
     if (!com_sv_running->integer) {
         return NULL;
     }
@@ -139,15 +110,6 @@ static client_t* SV_GetPlayerByNum(void) {
     return cl;
 }
 
-//=========================================================
-
-/*
-==================
-SV_Map_f
-
-Restart the server on a different map
-==================
-*/
 static void SV_Map_f(void) {
     char cmd[1024];
     char* map;
@@ -158,8 +120,6 @@ static void SV_Map_f(void) {
     char expanded[MAX_QPATH];
     char mapname[MAX_QPATH];
 
-    // [QL] "map <map> <factory>" (quakelive_steam.exe 0x4ddce0). The factory can
-    // be left out once one is in play.
     map = Cmd_Argv(1);
     factoryName = Cmd_Argv(2);
     Q_strncpyz(cmd, Cmd_Argv(0), sizeof(cmd));
@@ -174,8 +134,6 @@ static void SV_Map_f(void) {
         return;
     }
 
-    // make sure the level exists before trying to change, so that
-    // a typo at the server console won't end the game
     Com_sprintf(expanded, sizeof(expanded), "maps/%s.bsp", map);
     if (FS_ReadFile(expanded, NULL) == -1) {
         Com_Printf("Can't find map %s\n", expanded);
@@ -190,7 +148,6 @@ static void SV_Map_f(void) {
         factory = svs.factory;
     }
 
-    // the hidden factories ("_training", "_rj", "_sj") are for offline servers
     if (svs.factory && svs.factory->id[0] == '_' && !factoryName[0]) {
         hidden = qtrue;
     } else {
@@ -207,7 +164,6 @@ static void SV_Map_f(void) {
         return;
     }
 
-    // devmap and the hidden factories skip the arena's gametypes
     arena = SV_FindArena(mapname);
     if (arena && isMap && !arena->gametypes[factory->basegt] && factoryName[0] != '_') {
         Com_Printf("Map not supported for this gametype.\n");
@@ -216,17 +172,11 @@ static void SV_Map_f(void) {
 
     SV_ApplyFactory(factory);
 
-    // force latched values to get set
     Cvar_Get("g_gametype", "0", CVAR_SERVERINFO | CVAR_LATCH);
     Cvar_Get("g_ammoPack", "0", CVAR_LATCH);
 
-    // start up the map
     SV_SpawnServer(mapname, !isMap);
 
-    // set the cheat value
-    // if the level was started with "map <levelname>", then
-    // cheats will not be allowed.  If started with "devmap <levelname>"
-    // then cheats will be allowed
     Cvar_Set("sv_cheats", isMap ? "0" : "1");
 
     if (!com_dedicated->integer) {
@@ -235,15 +185,6 @@ static void SV_Map_f(void) {
     }
 }
 
-/*
-==================
-SV_Arena_f
-
-[QL] "arena <name>": a single player match from scripts/<name>.sp_arena, with
-its map, fraglimit, timelimit, bot_skill and bots, as Free For All with cheats
-off. quakelive_steam.exe 0x4de050.
-==================
-*/
 static void SV_Arena_f(void) {
     const char* arenaName;
     char filename[MAX_QPATH];
@@ -262,7 +203,6 @@ static void SV_Arena_f(void) {
 
     arenaName = Cmd_Argv(1);
     skill = Cvar_VariableIntegerValue("g_spSkill");
-    // the engine tested the pointer, so an empty name reaches the file lookup
     if (!arenaName) {
         Com_Printf("No arena name passed\n");
         return;
@@ -381,14 +321,6 @@ static void SV_Arena_f(void) {
     }
 }
 
-/*
-================
-SV_MapRestart_f
-
-Completely restarts a level, but doesn't send a new gamestate to the clients.
-This allows fair starts with variable load times.
-================
-*/
 static void SV_MapRestart_f(void) {
     int i;
     client_t* client;
@@ -396,12 +328,10 @@ static void SV_MapRestart_f(void) {
     qboolean isBot;
     int delay;
 
-    // make sure we aren't restarting twice in the same frame
     if (com_frameTime == sv.serverId) {
         return;
     }
 
-    // make sure server is running
     if (!com_sv_running->integer) {
         Com_Printf("Server is not running.\n");
         return;
@@ -422,8 +352,6 @@ static void SV_MapRestart_f(void) {
 
         sv.restartTime = sv.time + delay * 1000;
 
-        // [QL] Build info string with time and gametype keys; the gametype is the
-        // latched one when there is one (quakelive_steam.exe 0x4de730)
         Info_SetValueForKey(warmupInfo, "time", va("%i", sv.restartTime));
         if (sv_gametype->latchedString) {
             gametype = atoi(sv_gametype->latchedString);
@@ -435,16 +363,11 @@ static void SV_MapRestart_f(void) {
         return;
     }
 
-    // [QL] Skip variable-change checks when game triggered the restart (g_restarted)
     if (!Cvar_VariableValue("g_restarted")) {
-        // check for changes in variables that can't just be restarted
-        // [QL] g_ammoPack and g_gametype respawn the map; sv_maxclients only
-        // resizes the client table (quakelive_steam.exe 0x4de800)
         if (sv_ammoPack->modified || sv_gametype->modified) {
             char mapname[MAX_QPATH];
 
             Com_Printf("variable change -- restarting.\n");
-            // restart the map the slow way
             Q_strncpyz(mapname, Cvar_VariableString("mapname"), sizeof(mapname));
 
             SV_SpawnServer(mapname, qfalse);
@@ -455,35 +378,24 @@ static void SV_MapRestart_f(void) {
         }
     }
 
-    // toggle the server bit so clients can detect that a
-    // map_restart has happened
     svs.snapFlagServerBit ^= SNAPFLAG_SERVERCOUNT;
 
-    // generate a new serverid
     sv.serverId = com_frameTime;
     Cvar_Set("sv_serverid", va("%i", sv.serverId));
 
-    // [QL] Record level start wall-clock time
     Cvar_Set("g_levelStartTime", va("%i", (int)time(NULL)));
 
-    // if a map_restart occurs while a client is changing maps, we need
-    // to give them the correct time so that when they finish loading
-    // they don't violate the backwards time check in cl_cgame.c
     for (i = 0; i < sv_maxclients->integer; i++) {
         if (svs.clients[i].state == CS_PRIMED) {
             svs.clients[i].oldServerTime = sv.restartTime;
         }
     }
 
-    // reset all the vm data in place without changing memory allocation
-    // note that we do NOT set sv.state = SS_LOADING, so configstrings that
-    // had been changed from their default values will generate broadcast updates
     sv.state = SS_LOADING;
     sv.restarting = qtrue;
 
     SV_RestartGameProgs();
 
-    // run a few frames to allow everything to settle
     for (i = 0; i < 3; i++) {
         SV_GameRunFrame(sv.time);
         sv.time += 100;
@@ -493,11 +405,9 @@ static void SV_MapRestart_f(void) {
     sv.state = SS_GAME;
     sv.restarting = qfalse;
 
-    // connect and begin all the clients
     for (i = 0; i < sv_maxclients->integer; i++) {
         client = &svs.clients[i];
 
-        // send the new gamestate to all connected clients
         if (client->state < CS_CONNECTED) {
             continue;
         }
@@ -508,14 +418,10 @@ static void SV_MapRestart_f(void) {
             isBot = qfalse;
         }
 
-        // add the map_restart command
         SV_AddServerCommand(client, "map_restart\n");
 
-        // connect the client again, without the firstTime flag
         denied = SV_GameClientConnect(i, qfalse, isBot);
         if (denied) {
-            // this generally shouldn't happen, because the client
-            // was connected before the level change
             SV_DropClient(client, denied);
             Com_Printf("SV_MapRestart_f(%d): dropped client %i - denied!\n", delay, i);
             continue;
@@ -524,41 +430,23 @@ static void SV_MapRestart_f(void) {
         if (client->state == CS_ACTIVE)
             SV_ClientEnterWorld(client, &client->lastUsercmd);
         else {
-            // If we don't reset client->lastUsercmd and are restarting during map load,
-            // the client will hang because we'll use the last Usercmd from the previous map,
-            // which is wrong obviously.
             SV_ClientEnterWorld(client, NULL);
         }
     }
 
-    // run another frame to allow things to look at all the players
     SV_GameRunFrame(sv.time);
     sv.time += 100;
     svs.time += 100;
 
-    // [QL] quakelive_steam.exe 0x4dea1a
     SV_SetNextMap();
     SV_SetNextMaps();
 }
 
-//===============================================================
-
-/*
-==================
-SV_Kick_f
-
-Kick a user off of the server
-
-[QL] 0x004dea40: a third argument is the reason the others read ("was kicked: <reason>",
-under 128 characters), and trying to kick the host tells everybody it cannot be done.
-==================
-*/
 static void SV_Kick_f(void) {
     client_t* cl;
     const char* reason;
     int i;
 
-    // make sure server is running
     if (!com_sv_running->integer) {
         Com_Printf("Server is not running.\n");
         return;
@@ -585,7 +473,7 @@ static void SV_Kick_f(void) {
                     continue;
                 }
                 SV_DropClient(cl, reason);
-                cl->lastPacketTime = svs.time;  // in case there is a funny zombie
+                cl->lastPacketTime = svs.time;
             }
         } else if (!Q_stricmp(Cmd_Argv(1), "allbots")) {
             for (i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++) {
@@ -596,7 +484,7 @@ static void SV_Kick_f(void) {
                     continue;
                 }
                 SV_DropClient(cl, reason);
-                cl->lastPacketTime = svs.time;  // in case there is a funny zombie
+                cl->lastPacketTime = svs.time;
             }
         }
         return;
@@ -607,26 +495,17 @@ static void SV_Kick_f(void) {
     }
 
     SV_DropClient(cl, reason);
-    cl->lastPacketTime = svs.time;  // in case there is a funny zombie
+    cl->lastPacketTime = svs.time;
 }
 
-/*
-==================
-SV_KickNum_f
-
-Kick a user off of the server
-==================
-*/
 static void SV_KickNum_f(void) {
     client_t* cl;
 
-    // make sure server is running
     if (!com_sv_running->integer) {
         Com_Printf("Server is not running.\n");
         return;
     }
 
-    // [QL] 0x004debe0
     if (Cmd_Argc() != 2) {
         Com_Printf("Usage: kicknum <client number>\n");
         return;
@@ -642,12 +521,9 @@ static void SV_KickNum_f(void) {
     }
 
     SV_DropClient(cl, "was kicked");
-    cl->lastPacketTime = svs.time;  // in case there is a funny zombie
+    cl->lastPacketTime = svs.time;
 }
 
-/*
-** SV_Strlen -- skips color escape codes
-*/
 static int SV_Strlen(const char* str) {
     const char* s = str;
     int count = 0;
@@ -664,11 +540,6 @@ static int SV_Strlen(const char* str) {
     return count;
 }
 
-/*
-================
-SV_Status_f
-================
-*/
 static void SV_Status_f(void) {
     int i, j, l;
     client_t* cl;
@@ -676,7 +547,6 @@ static void SV_Status_f(void) {
     const char* s;
     int ping;
 
-    // make sure server is running
     if (!com_sv_running->integer) {
         Com_Printf("Server is not running.\n");
         return;
@@ -712,7 +582,6 @@ static void SV_Status_f(void) {
             j++;
         } while (j < l);
 
-        // TTimo adding a ^7 to reset the color
         s = NET_AdrToString(cl->netchan.remoteAddress);
         Com_Printf("^7%s", s);
         l = 39 - strlen(s);
@@ -730,16 +599,10 @@ static void SV_Status_f(void) {
     Com_Printf("\n");
 }
 
-/*
-==================
-SV_ConSay_f
-==================
-*/
 static void SV_ConSay_f(void) {
     char* p;
     char text[1024];
 
-    // make sure server is running
     if (!com_sv_running->integer) {
         Com_Printf("Server is not running.\n");
         return;
@@ -763,15 +626,7 @@ static void SV_ConSay_f(void) {
     SV_SendServerCommand(NULL, "chat \"%s\"", text);
 }
 
-/*
-===========
-SV_Serverinfo_f
-
-Examine the serverinfo string
-===========
-*/
 static void SV_Serverinfo_f(void) {
-    // make sure server is running
     if (!com_sv_running->integer) {
         Com_Printf("Server is not running.\n");
         return;
@@ -781,17 +636,9 @@ static void SV_Serverinfo_f(void) {
     Info_Print(Cvar_InfoString(CVAR_SERVERINFO));
 }
 
-/*
-===========
-SV_DumpUser_f
-
-Examine all a users info strings
-===========
-*/
 static void SV_DumpUser_f(void) {
     client_t* cl;
 
-    // make sure server is running
     if (!com_sv_running->integer) {
         Com_Printf("Server is not running.\n");
         return;
@@ -812,33 +659,10 @@ static void SV_DumpUser_f(void) {
     Info_Print(cl->userinfo);
 }
 
-/*
-=================
-SV_KillServer
-=================
-*/
 static void SV_KillServer_f(void) {
     SV_Shutdown("killserver");
 }
 
-//===========================================================
-
-/*
-==================
-SV_CompleteMapName
-==================
-*/
-/*
-==================
-SV_CompleteMapName
-
-"map <map> <factory>". The map comes from the parsed arenas and not from maps/*.bsp: a
-.bsp without its .arena cannot be loaded, and there are arenas whose name is not the
-.bsp's. The factory comes from scripts/factories.txt, minus the ones starting with "_",
-which are internal templates -- the same filter the list "map" prints with no arguments
-uses.
-==================
-*/
 static void SV_CompleteMapName(char* args, int argNum) {
     static const char* names[MAX_COMPLETION_NAMES];
     int count;
@@ -854,13 +678,6 @@ static void SV_CompleteMapName(char* args, int argNum) {
     Field_CompleteList(names, count);
 }
 
-/*
-==================
-SV_CompletePlayerName
-
-For "kick", "clientkick" and "dumpuser", which take a player's name.
-==================
-*/
 static void SV_CompletePlayerName(char* args, int argNum) {
     if (argNum == 2) {
         char names[MAX_CLIENTS][MAX_NAME_LENGTH];
@@ -893,24 +710,12 @@ static void SV_CompletePlayerName(char* args, int argNum) {
     }
 }
 
-/*
-==================
-SV_CompleteArenaName
-
-"arena <name>" loads scripts/<name>.sp_arena.
-==================
-*/
 static void SV_CompleteArenaName(char* args, int argNum) {
     if (argNum == 2) {
         Field_CompleteFilename("scripts", "sp_arena", qtrue, qfalse);
     }
 }
 
-/*
-==================
-SV_AddOperatorCommands
-==================
-*/
 void SV_AddOperatorCommands(void) {
     static qboolean initialized;
 
@@ -934,7 +739,6 @@ void SV_AddOperatorCommands(void) {
     Cmd_AddCommand("devmap", SV_Map_f);
     Cmd_SetCommandCompletionFunc("devmap", SV_CompleteMapName);
     Cmd_AddCommand("killserver", SV_KillServer_f);
-    // [QL] qzeroded.x64 0x438d4e, quakelive_steam.exe 0x4df1d8: the Workshop's, after killserver
     Cmd_AddCommand("steam_downloadugc", Steam_DownloadUGC_f);
 #ifndef DEDICATED
     Cmd_AddCommand("steam_subscribeugc", Steam_SubscribeUGC_f);
@@ -944,7 +748,6 @@ void SV_AddOperatorCommands(void) {
         Cmd_AddCommand("say", SV_ConSay_f);
     }
 
-    // [QL] arenas, factories and the map pool (sv_factories.c)
     Cmd_AddCommand("arena", SV_Arena_f);
     Cmd_SetCommandCompletionFunc("arena", SV_CompleteArenaName);
     Cmd_AddCommand("startRandomMap", SV_StartRandomMap_f);
@@ -953,14 +756,8 @@ void SV_AddOperatorCommands(void) {
     Cmd_AddCommand("reload_factories", SV_ReloadFactories_f);
 }
 
-/*
-==================
-SV_RemoveOperatorCommands
-==================
-*/
 void SV_RemoveOperatorCommands(void) {
 #if 0
-	// removing these won't let the server start again
 	Cmd_RemoveCommand ("kick");
 	Cmd_RemoveCommand ("clientkick");
 	Cmd_RemoveCommand ("status");

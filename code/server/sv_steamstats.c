@@ -1,17 +1,3 @@
-/*
-===========================================================================
-ioquakelive - the players' Steam stats and achievements
-
-[QL] quakelive_steam.exe keeps an object for each player (0x00467850), in a map by
-Steam ID (0x00e30390). It is made when Steam takes the player's ticket (0x00467cd0) and
-asks Steam for the player's stats; it is stored and thrown away when the player goes
-(0x00467b10). In between, the game module adds to the stats and grants achievements
-through its imports, and every stats event the game sends (0x00468030) adds to them too.
-
-Only the stats are read back from Steam. What the player already has of the achievements
-is never asked: "has it" means granted in this session, as in retail.
-===========================================================================
-*/
 
 #include "server.h"
 #include "../qcommon/q_steam.h"
@@ -24,7 +10,6 @@ is never asked: "has it" means granted in this session, as in retail.
 
 #define STEAMSTATS_MAX_USERS (MAX_CLIENTS * 2)
 
-
 #define STEAMSTATS_NUM_STATS STEAM_NUM_STATS
 
 #define STAT_MEDAL_CAPTURE 74
@@ -36,7 +21,6 @@ is never asked: "has it" means granted in this session, as in retail.
 #define STAT_TOTAL_KILLS 86
 #define STAT_TOTAL_DEATHS 87
 
-// [QL] 0x00561c00, AW_MAX included: each player has room for 0x3b of them (0x004679b1)
 static const char* const svAchievementNames[] = {
     "AW_MIDAIR", "AW_SPEED_KILLS", "AW_TRAINING_1_1", "AW_TRAINING_1_2", "AW_TRAINING_1_3",
     "AW_TRAINING_2_1", "AW_TRAINING_2_2", "AW_TRAINING_2_3", "AW_TRAINING_3_1",
@@ -59,20 +43,17 @@ static const char* const svAchievementNames[] = {
 #define AW_WICKED 14
 #define AW_MVP 46
 
-// a name the stats events use and the stat it adds to; 0 adds to none
 typedef struct {
     const char* name;
     int stat;
 } svStatKey_t;
 
-// [QL] 0x00561a08: KILLER.WEAPON of PLAYER_KILL
 static const svStatKey_t svKillWeapons[] = {
     {"GAUNTLET", 1}, {"MACHINEGUN", 2}, {"SHOTGUN", 3}, {"GRENADE", 4}, {"ROCKET", 5},
     {"LIGHTNING", 6}, {"RAILGUN", 7}, {"PLASMA", 8}, {"BFG", 9}, {"NAILGUN", 10},
     {"PROXMINE", 11}, {"CHAINGUN", 12}, {"HMG", 13},
 };
 
-// [QL] 0x00561a70: MOD of PLAYER_DEATH
 static const svStatKey_t svDeathMods[] = {
     {"SHOTGUN", 38}, {"GAUNTLET", 39}, {"MACHINEGUN", 40}, {"GRENADE", 41}, {"GRENADE_SPLASH", 41},
     {"ROCKET", 42}, {"ROCKET_SPLASH", 42}, {"PLASMA", 43}, {"PLASMA_SPLASH", 43}, {"RAILGUN", 44},
@@ -83,7 +64,6 @@ static const svStatKey_t svDeathMods[] = {
     {"LIGHTNING_DISCHARGE", 63}, {"OTHER_DEATH", 64},
 };
 
-// [QL] 0x00561b80: MEDAL of PLAYER_MEDAL
 static const svStatKey_t svMedals[] = {
     {"FIRSTFRAG", 65}, {"GAUNTLET", 66}, {"EXCELLENT", 67}, {"REVENGE", 68}, {"COMBOKILL", 69},
     {"MIDAIR", 70}, {"PERFORATED", 71}, {"RAMPAGE", 72}, {"IMPRESSIVE", 73}, {"CAPTURE", 74},
@@ -94,7 +74,7 @@ static const svStatKey_t svMedals[] = {
 typedef struct {
     qboolean inuse;
     uint64_t steamId;
-    qboolean received;  // Steam has answered with the player's stats
+    qboolean received;
     int stats[STEAMSTATS_NUM_STATS];
     qboolean achieved[STEAMSTATS_NUM_ACHIEVEMENTS];
 } svSteamUser_t;
@@ -115,13 +95,6 @@ static svSteamUser_t* SV_SteamUser(uint64_t steamId) {
     return NULL;
 }
 
-/*
-=================
-SV_SteamStoreStats
-
-[QL] 0x004670c0. Nothing goes up until Steam has answered with what the player had.
-=================
-*/
 static void SV_SteamStoreStats(svSteamUser_t* u) {
     int i;
 
@@ -134,14 +107,6 @@ static void SV_SteamStoreStats(svSteamUser_t* u) {
     Steam_GS_StoreUserStats(u->steamId);
 }
 
-/*
-=================
-SV_SteamReadStats
-
-[QL] 0x004671d0. Each player's object answers every GSStatsReceived_t, whoever it is for,
-and reads its own stats again.
-=================
-*/
 static void SV_SteamReadStats(svSteamUser_t* u, int result) {
     int i;
 
@@ -166,7 +131,6 @@ void SV_SteamStatsReceived(int result) {
     }
 }
 
-// [QL] 0x00467360: stats Steam turned down are read back from it
 void SV_SteamStatsStored(int result) {
     int i;
 
@@ -176,7 +140,7 @@ void SV_SteamStatsStored(int result) {
         }
         if (result == 1) {
             Com_DPrintf("StoreStats - success\n");
-        } else if (result == 8) {  // k_EResultInvalidParam
+        } else if (result == 8) {
             Com_DPrintf("StoreStats - some failed to validate\n");
             SV_SteamReadStats(&svSteamUsers[i], 1);
         } else {
@@ -185,7 +149,6 @@ void SV_SteamStatsStored(int result) {
     }
 }
 
-// [QL] 0x00467190: once the server logs on, every player's stats are asked for
 void SV_SteamStatsConnected(void) {
     int i;
 
@@ -196,14 +159,6 @@ void SV_SteamStatsConnected(void) {
     }
 }
 
-/*
-=================
-SV_SteamStatsAddUser
-
-[QL] 0x00467cd0, when Steam has taken the player's ticket. A player who already has an
-object gets a new one, as the map's operator[] does in retail.
-=================
-*/
 void SV_SteamStatsAddUser(uint64_t steamId) {
     svSteamUser_t* u;
     int i;
@@ -227,7 +182,6 @@ void SV_SteamStatsAddUser(uint64_t steamId) {
     Steam_P2PHello(steamId, qtrue);
 }
 
-// [QL] 0x00467b10, from SV_DropClient (0x004df7f4) and for the host from CL_Disconnect
 void SV_SteamStatsRemoveUser(uint64_t steamId) {
     svSteamUser_t* u = SV_SteamUser(steamId);
 
@@ -238,14 +192,6 @@ void SV_SteamStatsRemoveUser(uint64_t steamId) {
     u->inuse = qfalse;
 }
 
-/*
-=================
-SV_SteamStatsIncrement
-
-[QL] 0x00467d40, the game's import +0x324. Kept here until the next time the player's
-stats are stored.
-=================
-*/
 void SV_SteamStatsIncrement(uint64_t steamId, int stat, int amount) {
     svSteamUser_t* u = SV_SteamUser(steamId);
 
@@ -256,14 +202,6 @@ void SV_SteamStatsIncrement(uint64_t steamId, int stat, int amount) {
     Com_DPrintf("%llu: %s: %i\n", (unsigned long long)steamId, steamStatNames[stat], u->stats[stat]);
 }
 
-/*
-=================
-SV_SteamStatsSetAchievement
-
-[QL] 0x00467e00, the game's import +0x32c. Only while the match is on, or in training or
-practice. A game of one's own (sv_serverType 0) grants it on the player's own Steam.
-=================
-*/
 void SV_SteamStatsSetAchievement(uint64_t steamId, int achievement) {
     svSteamUser_t* u = SV_SteamUser(steamId);
     const char* name;
@@ -287,7 +225,6 @@ void SV_SteamStatsSetAchievement(uint64_t steamId, int achievement) {
         return;
     }
 
-    // [QL] 0x004672d0
     if (!u->received) {
         return;
     }
@@ -298,7 +235,6 @@ void SV_SteamStatsSetAchievement(uint64_t steamId, int achievement) {
     }
 }
 
-// [QL] 0x00467f70, the game's import +0x330
 qboolean SV_SteamStatsHasAchievement(uint64_t steamId, int achievement) {
     const svSteamUser_t* u = SV_SteamUser(steamId);
 
@@ -308,18 +244,6 @@ qboolean SV_SteamStatsHasAchievement(uint64_t steamId, int achievement) {
     return u->achieved[achievement];
 }
 
-/*
-===============================================================================
-
-THE STATS EVENTS
-
-[QL] 0x00468030, from the game's stats event import (0x004e2640) before the event goes to
-the ZeroMQ socket. Nothing counts in warmup or in an aborted match.
-
-===============================================================================
-*/
-
-// a member of an object, or NULL
 static const char* SV_JsonMember(const char* json, const char* end, const char* name) {
     if (!json || json >= end || *json != '{') {
         return NULL;
@@ -327,7 +251,6 @@ static const char* SV_JsonMember(const char* json, const char* end, const char* 
     return JSON_ObjectGetNamedValue(json, end, name);
 }
 
-// asInt: numbers are cut to integers, true is 1, anything else 0
 static int SV_JsonInt(const char* value, const char* end) {
     if (!value) {
         return 0;
@@ -342,7 +265,6 @@ static void SV_JsonString(const char* value, const char* end, char* out, int siz
     }
 }
 
-// the stat a name adds to, or -1
 static int SV_StatForKey(const svStatKey_t* keys, int numKeys, const char* name) {
     int i;
 
@@ -354,7 +276,6 @@ static int SV_StatForKey(const svStatKey_t* keys, int numKeys, const char* name)
     return -1;
 }
 
-// one more of a stat, stored at once
 static void SV_SteamCountStat(svSteamUser_t* u, int stat, qboolean withId) {
     u->stats[stat]++;
     SV_SteamStoreStats(u);
@@ -365,22 +286,6 @@ static void SV_SteamCountStat(svSteamUser_t* u, int stat, qboolean withId) {
     }
 }
 
-/*
-===============================================================================
-
-THE MATCH REPORT FOR THE PLAYERS
-
-[QL] Besides the stats, 0x00468030 keeps what the front end's Recent Matches shows of a
-match: every PLAYER_STATS as it comes (PLYR_STATS), and each death but in Race, up to a
-thousand, cut down to its time, how it happened and the killer's and the victim's name,
-Steam ID, team and powerups (PLYR_EVENTS). A player whose stats Steam keeps goes on the
-list of who gets the report. When the game hands over the match's report (0x004e2620),
-0x00468ee0 puts both in it unless the match was training or aborted, writes it, packs it
-with zlib at its best and sends it to each of them over the peer to peer network, on
-channel 0 and reliably; then all of it is forgotten. Nothing else forgets it: a match
-that ends without a report leaves its players and deaths for the next one, as in retail.
-===============================================================================
-*/
 #define SV_REPORT_MAX_EVENTS 1000
 #define SV_REPORT_MAX_TO (MAX_CLIENTS * 2)
 
@@ -390,8 +295,8 @@ typedef struct {
     int size;
 } svText_t;
 
-static svText_t svReportStats;   // the PLAYER_STATS, one after another with commas
-static svText_t svReportEvents;  // and the deaths
+static svText_t svReportStats;
+static svText_t svReportEvents;
 static int svReportNumEvents;
 static uint64_t svReportTo[SV_REPORT_MAX_TO];
 static int svReportNumTo;
@@ -435,7 +340,6 @@ static void SV_ReportForget(void) {
     svReportNumTo = 0;
 }
 
-// a member as it is written, or nothing
 static void SV_ReportCopy(svText_t* t, const char* obj, const char* end, const char* name, const char* none) {
     const char* v = SV_JsonMember(obj, end, name);
 
@@ -446,8 +350,6 @@ static void SV_ReportCopy(svText_t* t, const char* obj, const char* end, const c
     }
 }
 
-// the killer or the victim: the name and Steam ID as strings, the team as it came and the
-// powerups when there are any, the keys in the order jsoncpp writes them
 static void SV_ReportPerson(svText_t* t, const char* who, const char* end) {
     const char* powerups = SV_JsonMember(who, end, "POWERUPS");
 
@@ -521,7 +423,6 @@ static void SV_ReportSend(const char* data, const char* end) {
         return;
     }
 
-    // the report with the players and the deaths added at its end
     close = JSON_ValueGetEnd(data, end) - 1;
     if (close <= data || *close != '}') {
         SV_ReportForget();
@@ -566,7 +467,6 @@ void SV_SteamStatsEvent(uint64_t steamId, const char* type, const char* document
     if (!data) {
         return;
     }
-    // [QL] the report comes through its own import in retail (0x004e2620)
     if (!strcmp(type, "MATCH_REPORT")) {
         SV_ReportSend(data, end);
         return;
@@ -575,7 +475,6 @@ void SV_SteamStatsEvent(uint64_t steamId, const char* type, const char* document
         SV_JsonInt(SV_JsonMember(data, end, "ABORTED"), end) == 1) {
         return;
     }
-    // the report keeps everyone's, bots' too, before it asks whose stats Steam keeps
     if (!strcmp(type, "PLAYER_STATS")) {
         SV_ReportPlayer(data, end);
     } else if (!strcmp(type, "PLAYER_DEATH")) {

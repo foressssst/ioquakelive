@@ -26,7 +26,6 @@
 
     $Id: mdfour.c,v 1.1 2002/08/23 22:03:27 abster Exp $
 */
-
 #include "q_shared.h"
 #include "qcommon.h"
 
@@ -34,11 +33,6 @@ struct mdfour {
     uint32_t A, B, C, D;
     uint32_t totalN;
 };
-
-/* NOTE: This code makes no attempt to be fast!
-
-   It assumes that an int is at least 32 bits long
-*/
 
 #define F(X, Y, Z) (((X) & (Y)) | ((~(X)) & (Z)))
 #define G(X, Y, Z) (((X) & (Y)) | ((X) & (Z)) | ((Y) & (Z)))
@@ -49,7 +43,6 @@ struct mdfour {
 #define ROUND2(a, b, c, d, k, s) a = lshift(a + G(b, c, d) + X[k] + 0x5A827999, s)
 #define ROUND3(a, b, c, d, k, s) a = lshift(a + H(b, c, d) + X[k] + 0x6ED9EBA1, s)
 
-/* this applies md4 to 64 byte chunks */
 static void mdfour64(struct mdfour *md, uint32_t* M) {
     int j;
     uint32_t AA, BB, CC, DD;
@@ -216,8 +209,6 @@ static void mdfour(byte* out, byte* in, int n) {
     mdfour_update(&md, in, n);
     mdfour_result(&md, out);
 }
-
-//===================================================================
 
 unsigned Com_BlockChecksum(const void* buffer, int length) {
     int digest[4];

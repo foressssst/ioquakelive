@@ -19,8 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// cl_parse.c  -- parse a message received from the server
-
 #include "client.h"
 
 char* svc_strings[256] = {
@@ -44,27 +42,9 @@ void SHOWNET(msg_t* msg, char* s) {
     }
 }
 
-/*
-=========================================================================
-
-MESSAGE PARSING
-
-=========================================================================
-*/
-
-/*
-==================
-CL_DeltaEntity
-
-Parses deltas from the given base and adds the resulting entity
-to the current frame
-==================
-*/
 void CL_DeltaEntity(msg_t* msg, clSnapshot_t* frame, int newnum, entityState_t* old, qboolean unchanged) {
     entityState_t* state;
 
-    // save the parsed entity state into the big circular buffer so
-    // it can be used as the source for a later delta
     state = &cl.parseEntities[cl.parseEntitiesNum & (MAX_PARSE_ENTITIES - 1)];
 
     if (unchanged) {
@@ -74,18 +54,12 @@ void CL_DeltaEntity(msg_t* msg, clSnapshot_t* frame, int newnum, entityState_t* 
     }
 
     if (state->number == (MAX_GENTITIES - 1)) {
-        return;  // entity was delta removed
+        return;
     }
     cl.parseEntitiesNum++;
     frame->numEntities++;
 }
 
-/*
-==================
-CL_ParsePacketEntities
-
-==================
-*/
 void CL_ParsePacketEntities(msg_t* msg, clSnapshot_t* oldframe, clSnapshot_t* newframe) {
     int newnum;
     entityState_t* oldstate;
@@ -94,7 +68,6 @@ void CL_ParsePacketEntities(msg_t* msg, clSnapshot_t* oldframe, clSnapshot_t* ne
     newframe->parseEntitiesNum = cl.parseEntitiesNum;
     newframe->numEntities = 0;
 
-    // delta from the entities present in oldframe
     oldindex = 0;
     oldstate = NULL;
     if (!oldframe) {
@@ -109,7 +82,6 @@ void CL_ParsePacketEntities(msg_t* msg, clSnapshot_t* oldframe, clSnapshot_t* ne
     }
 
     while (1) {
-        // read the entity index number
         newnum = MSG_ReadBits(msg, GENTITYNUM_BITS);
 
         if (newnum == (MAX_GENTITIES - 1)) {
@@ -121,7 +93,6 @@ void CL_ParsePacketEntities(msg_t* msg, clSnapshot_t* oldframe, clSnapshot_t* ne
         }
 
         while (oldnum < newnum) {
-            // one or more entities from the old packet are unchanged
             if (cl_shownet->integer == 3) {
                 Com_Printf("%3i:  unchanged: %i\n", msg->readcount, oldnum);
             }
@@ -137,7 +108,6 @@ void CL_ParsePacketEntities(msg_t* msg, clSnapshot_t* oldframe, clSnapshot_t* ne
             }
         }
         if (oldnum == newnum) {
-            // delta from previous state
             if (cl_shownet->integer == 3) {
                 Com_Printf("%3i:  delta: %i\n", msg->readcount, newnum);
             }
@@ -155,7 +125,6 @@ void CL_ParsePacketEntities(msg_t* msg, clSnapshot_t* oldframe, clSnapshot_t* ne
         }
 
         if (oldnum > newnum) {
-            // delta from baseline
             if (cl_shownet->integer == 3) {
                 Com_Printf("%3i:  baseline: %i\n", msg->readcount, newnum);
             }
@@ -164,9 +133,7 @@ void CL_ParsePacketEntities(msg_t* msg, clSnapshot_t* oldframe, clSnapshot_t* ne
         }
     }
 
-    // any remaining entities in the old frame are copied over
     while (oldnum != 99999) {
-        // one or more entities from the old packet are unchanged
         if (cl_shownet->integer == 3) {
             Com_Printf("%3i:  unchanged: %i\n", msg->readcount, oldnum);
         }
@@ -183,15 +150,6 @@ void CL_ParsePacketEntities(msg_t* msg, clSnapshot_t* oldframe, clSnapshot_t* ne
     }
 }
 
-/*
-================
-CL_ParseSnapshot
-
-If the snapshot is parsed properly, it will be copied to
-cl.snap and saved in cl.snapshots[].  If the snapshot is invalid
-for any reason, no changes to the state will be made at all.
-================
-*/
 void CL_ParseSnapshot(msg_t* msg) {
     int len;
     clSnapshot_t* old;
@@ -200,22 +158,12 @@ void CL_ParseSnapshot(msg_t* msg) {
     int oldMessageNum;
     int i, packetNum;
 
-    // get the reliable sequence acknowledge number
-    // NOTE: now sent with all server to client messages
-    // clc.reliableAcknowledge = MSG_ReadLong( msg );
-
-    // read in the new snapshot to a temporary buffer
-    // we will only copy to cl.snap if it is valid
     Com_Memset(&newSnap, 0, sizeof(newSnap));
 
-    // we will have read any new server commands in this
-    // message before we got to svc_snapshot
     newSnap.serverCommandNum = clc.serverCommandSequence;
 
     newSnap.serverTime = MSG_ReadLong(msg);
 
-    // if we were just unpaused, we can only *now* really let the
-    // change come into effect or the client hangs.
     cl_paused->modified = 0;
 
     newSnap.messageNum = clc.serverMessageSequence;
@@ -228,31 +176,23 @@ void CL_ParseSnapshot(msg_t* msg) {
     }
     newSnap.snapFlags = MSG_ReadByte(msg);
 
-    // If the frame is delta compressed from data that we
-    // no longer have available, we must suck up the rest of
-    // the frame, but not use it, then ask for a non-compressed
-    // message
     if (newSnap.deltaNum <= 0) {
-        newSnap.valid = qtrue;  // uncompressed frame
+        newSnap.valid = qtrue;
         old = NULL;
-        clc.demowaiting = qfalse;  // we can start recording now
+        clc.demowaiting = qfalse;
     } else {
         old = &cl.snapshots[newSnap.deltaNum & PACKET_MASK];
         if (!old->valid) {
-            // should never happen
             Com_Printf("Delta from invalid frame (not supposed to happen!).\n");
         } else if (old->messageNum != newSnap.deltaNum) {
-            // The frame that the server did the delta from
-            // is too old, so we can't reconstruct it properly.
             Com_Printf("Delta frame too old.\n");
         } else if (cl.parseEntitiesNum - old->parseEntitiesNum > MAX_PARSE_ENTITIES - MAX_SNAPSHOT_ENTITIES) {
             Com_Printf("Delta parseEntitiesNum too old.\n");
         } else {
-            newSnap.valid = qtrue;  // valid delta parse
+            newSnap.valid = qtrue;
         }
     }
 
-    // read areamask
     len = MSG_ReadByte(msg);
 
     if (len > sizeof(newSnap.areamask)) {
@@ -262,7 +202,6 @@ void CL_ParseSnapshot(msg_t* msg) {
 
     MSG_ReadData(msg, &newSnap.areamask, len);
 
-    // read playerinfo
     SHOWNET(msg, "playerstate");
     if (old) {
         MSG_ReadDeltaPlayerstate(msg, &old->ps, &newSnap.ps);
@@ -270,20 +209,13 @@ void CL_ParseSnapshot(msg_t* msg) {
         MSG_ReadDeltaPlayerstate(msg, NULL, &newSnap.ps);
     }
 
-    // read packet entities
     SHOWNET(msg, "packet entities");
     CL_ParsePacketEntities(msg, old, &newSnap);
 
-    // if not valid, dump the entire thing now that it has
-    // been properly read
     if (!newSnap.valid) {
         return;
     }
 
-    // clear the valid flags of any snapshots between the last
-    // received and this one, so if there was a dropped packet
-    // it won't look like something valid to delta from next
-    // time we wrap around in the buffer
     oldMessageNum = cl.snap.messageNum + 1;
 
     if (newSnap.messageNum - oldMessageNum >= PACKET_BACKUP) {
@@ -293,10 +225,8 @@ void CL_ParseSnapshot(msg_t* msg) {
         cl.snapshots[oldMessageNum & PACKET_MASK].valid = qfalse;
     }
 
-    // copy to the current good spot
     cl.snap = newSnap;
     cl.snap.ping = 999;
-    // calculate ping time
     for (i = 0; i < PACKET_BACKUP; i++) {
         packetNum = (clc.netchan.outgoingSequence - 1 - i) & PACKET_MASK;
         if (cl.snap.ps.commandTime >= cl.outPackets[packetNum].p_serverTime) {
@@ -304,7 +234,6 @@ void CL_ParseSnapshot(msg_t* msg) {
             break;
         }
     }
-    // save the frame off in the backup array for later delta comparisons
     cl.snapshots[cl.snap.messageNum & PACKET_MASK] = cl.snap;
 
     if (cl_shownet->integer == 3) {
@@ -315,20 +244,9 @@ void CL_ParseSnapshot(msg_t* msg) {
     cl.newSnapshots = qtrue;
 }
 
-//=====================================================================
-
 int cl_connectedToPureServer;
 int cl_connectedToCheatServer;
 
-/*
-==================
-CL_SystemInfoChanged
-
-The systeminfo configstring has been changed, so parse
-new information out of it.  This will happen at every
-gamestate, and possibly during gameplay.
-==================
-*/
 void CL_SystemInfoChanged(void) {
     char* systemInfo;
     const char *s, *t;
@@ -337,13 +255,8 @@ void CL_SystemInfoChanged(void) {
     qboolean gameSet;
 
     systemInfo = cl.gameState.stringData + cl.gameState.stringOffsets[CS_SYSTEMINFO];
-    // NOTE TTimo:
-    // when the serverId changes, any further messages we send to the server will use this new serverId
-    // https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=475
-    // in some cases, outdated cp commands might get sent with this news serverId
     cl.serverId = atoi(Info_ValueForKey(systemInfo, "sv_serverid"));
 
-    // don't set any vars when playing a demo
     if (clc.demoplaying) {
         return;
     }
@@ -354,7 +267,6 @@ void CL_SystemInfoChanged(void) {
         Cvar_SetCheatState();
     }
 
-    // check pure server string
     s = Info_ValueForKey(systemInfo, "sv_paks");
     t = Info_ValueForKey(systemInfo, "sv_pakNames");
     FS_PureServerSetLoadedPaks(s, t);
@@ -364,7 +276,6 @@ void CL_SystemInfoChanged(void) {
     FS_PureServerSetReferencedPaks(s, t);
 
     gameSet = qfalse;
-    // scan through all the variables in the systeminfo and locally set cvars to match
     s = systemInfo;
     while (s) {
         Info_NextPair(&s, key, value);
@@ -372,7 +283,6 @@ void CL_SystemInfoChanged(void) {
             break;
         }
 
-        // ehw!
         if (!Q_stricmp(key, "fs_game")) {
             if (FS_InvalidGameDir(value)) {
                 Com_Printf(S_COLOR_YELLOW "WARNING: Server sent invalid fs_game value %s\n", value);
@@ -382,24 +292,14 @@ void CL_SystemInfoChanged(void) {
             gameSet = qtrue;
         }
 
-        // [QL] CL_SystemInfoChanged (0x004bd620) applies every systeminfo key with a plain
-        // Cvar_Set - no cvar flag and no "server is not allowed to set" gating. QL has no
-        // CVAR_SERVER_CREATED flag. The fs_game guard above is a deliberate security exception
-        // to the raw binary behaviour.
         Cvar_Set(key, value);
     }
-    // if game folder should not be set and it is set at the client side
     if (!gameSet && *Cvar_VariableString("fs_game")) {
         Cvar_Set("fs_game", "");
     }
     cl_connectedToPureServer = Cvar_VariableValue("sv_pure");
 }
 
-/*
-==================
-CL_ParseServerInfo
-==================
-*/
 static void CL_ParseServerInfo(void) {
     const char* serverInfo;
 
@@ -412,11 +312,6 @@ static void CL_ParseServerInfo(void) {
                sizeof(clc.sv_dlURL));
 }
 
-/*
-==================
-CL_ParseGamestate
-==================
-*/
 void CL_ParseGamestate(msg_t* msg) {
     int i;
     entityState_t* es;
@@ -431,19 +326,15 @@ void CL_ParseGamestate(msg_t* msg) {
 
     Con_Close();
 
-    // [ioquakelive] a gamestate halfway through a demo begins a new stretch of server time
     CL_DemoGamestate();
 
     clc.connectPacketCount = 0;
 
-    // wipe local client state
     CL_ClearState();
 
-    // a gamestate always marks a server command sequence
     clc.serverCommandSequence = MSG_ReadLong(msg);
 
-    // parse all the configstrings and baselines
-    cl.gameState.dataCount = 1;  // leave a 0 at the beginning for uninitialized configstrings
+    cl.gameState.dataCount = 1;
     while (1) {
         cmd = MSG_ReadByte(msg);
 
@@ -465,7 +356,6 @@ void CL_ParseGamestate(msg_t* msg) {
                 Com_Error(ERR_DROP, "MAX_GAMESTATE_CHARS exceeded");
             }
 
-            // append it to the gameState string buffer
             cl.gameState.stringOffsets[i] = cl.gameState.dataCount;
             Com_Memcpy(cl.gameState.stringData + cl.gameState.dataCount, s, len + 1);
             cl.gameState.dataCount += len + 1;
@@ -483,36 +373,22 @@ void CL_ParseGamestate(msg_t* msg) {
     }
 
     clc.clientNum = MSG_ReadLong(msg);
-    // read the checksum feed
     clc.checksumFeed = MSG_ReadLong(msg);
 
-    // save old gamedir
     Cvar_VariableStringBuffer("fs_game", oldGame, sizeof(oldGame));
 
-    // parse useful values out of CS_SERVERINFO
     CL_ParseServerInfo();
 
-    // parse serverId and other cvars
     CL_SystemInfoChanged();
 
-    // stop recording now so the demo won't have an unnecessary level load at the end.
     if (cl_autoRecordDemo->integer && clc.demorecording)
         CL_StopRecord_f();
 
-    // reinitialize the filesystem if the game directory has changed
     if (!cl_oldGameSet && (Cvar_Flags("fs_game") & CVAR_MODIFIED)) {
         cl_oldGameSet = qtrue;
         Q_strncpyz(cl_oldGame, oldGame, sizeof(cl_oldGame));
     }
 
-    // Address: 0x004bd790 - reinitialise the filesystem if the game directory or checksum
-    // changed. When a restart happens QL stops and restarts the background track from the
-    // CS_MUSIC configstring (S_StopMusic + S_StartBackgroundTrack in the binary).
-    // [ioquakelive] a filesystem restart closes every open file, the demo being played too, and
-    // it ended there: a server that reloads the map when the readyup starts the match cut its
-    // demos short at that point. The demo keeps its place across the restart.
-    // [QL] 0x004bd948: the Workshop's items are queued before the filesystem restarts, so the
-    // ones Steam already has go in with this restart
     workshop = CL_InitDownloads();
 
     demoPos = CL_DemoSuspend();
@@ -533,24 +409,13 @@ void CL_ParseGamestate(msg_t* msg) {
 
     CL_WarmPlayersChanged();
 
-    // without Workshop items to wait for, straight in
     if (!workshop) {
         CL_DownloadsComplete();
     }
 
-    // make sure the game starts
     Cvar_Set("cl_paused", "0");
 }
 
-//=====================================================================
-
-/*
-=====================
-CL_ParseDownload
-
-A download message has been received from the server
-=====================
-*/
 void CL_ParseDownload(msg_t* msg) {
     int size;
     unsigned char data[MAX_MSGLEN];
@@ -562,11 +427,9 @@ void CL_ParseDownload(msg_t* msg) {
         return;
     }
 
-    // read the data
     block = MSG_ReadShort(msg);
 
     if (!block && !clc.downloadBlock) {
-        // block zero is special, contains file size
         clc.downloadSize = MSG_ReadLong(msg);
 
         Cvar_SetValue("cl_downloadSize", clc.downloadSize);
@@ -590,7 +453,6 @@ void CL_ParseDownload(msg_t* msg) {
         return;
     }
 
-    // open the file if not opened yet
     if (!clc.download) {
         clc.download = FS_SV_FOpenFileWrite(clc.downloadTempName);
 
@@ -610,39 +472,23 @@ void CL_ParseDownload(msg_t* msg) {
 
     clc.downloadCount += size;
 
-    // So UI gets access to it
     Cvar_SetValue("cl_downloadCount", clc.downloadCount);
 
-    if (!size) {  // A zero length block means EOF
+    if (!size) {
         if (clc.download) {
             FS_FCloseFile(clc.download);
             clc.download = 0;
 
-            // rename the file
             FS_SV_Rename(clc.downloadTempName, clc.downloadName, qfalse);
         }
 
-        // send intentions now
-        // We need this because without it, we would hold the last nextdl and then start
-        // loading right away.  If we take a while to load, the server is happily trying
-        // to send us that last block over and over.
-        // Write it twice to help make sure we acknowledge the download
         CL_WritePacket();
         CL_WritePacket();
 
-        // get another file if needed
         CL_NextDownload();
     }
 }
 
-/*
-=====================
-CL_ParseCommandString
-
-Command strings are just saved off until cgame asks for them
-when it transitions a snapshot
-=====================
-*/
 void CL_ParseCommandString(msg_t* msg) {
     char* s;
     int seq;
@@ -651,7 +497,6 @@ void CL_ParseCommandString(msg_t* msg) {
     seq = MSG_ReadLong(msg);
     s = MSG_ReadString(msg);
 
-    // see if we have already executed stored it off
     if (clc.serverCommandSequence >= seq) {
         return;
     }
@@ -661,11 +506,6 @@ void CL_ParseCommandString(msg_t* msg) {
     Q_strncpyz(clc.serverCommands[index], s, sizeof(clc.serverCommands[index]));
 }
 
-/*
-=====================
-CL_ParseServerMessage
-=====================
-*/
 void CL_ParseServerMessage(msg_t* msg) {
     int cmd;
 
@@ -677,16 +517,11 @@ void CL_ParseServerMessage(msg_t* msg) {
 
     MSG_Bitstream(msg);
 
-    // get the reliable sequence acknowledge number
     clc.reliableAcknowledge = MSG_ReadLong(msg);
-    //
     if (clc.reliableAcknowledge < clc.reliableSequence - MAX_RELIABLE_COMMANDS) {
         clc.reliableAcknowledge = clc.reliableSequence;
     }
 
-    //
-    // parse the message
-    //
     while (1) {
         if (msg->readcount > msg->cursize) {
             Com_Error(ERR_DROP, "CL_ParseServerMessage: read past end of server message");
@@ -708,7 +543,6 @@ void CL_ParseServerMessage(msg_t* msg) {
             }
         }
 
-        // other commands
         switch (cmd) {
             default:
                 Com_Error(ERR_DROP, "CL_ParseServerMessage: Illegible server message %d\n", cmd);

@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "client.h"
 #include "../qcommon/q_steam.h"
 
@@ -29,11 +28,6 @@ extern botlib_export_t* botlib_export;
 
 vm_t* uivm;
 
-/*
-====================
-GetClientState
-====================
-*/
 static void GetClientState(uiClientState_t* state) {
     state->connectPacketCount = clc.connectPacketCount;
     state->connState = clc.state;
@@ -43,11 +37,6 @@ static void GetClientState(uiClientState_t* state) {
     state->clientNum = cl.snap.ps.clientNum;
 }
 
-/*
-====================
-LAN_ResetPings
-====================
-*/
 static void LAN_ResetPings(int source) {
     int count, i;
     serverInfo_t* servers = NULL;
@@ -60,8 +49,6 @@ static void LAN_ResetPings(int source) {
             break;
         case AS_MPLAYER:
         case AS_GLOBAL:
-            // [QL] the global list's ping is measured by Steam, not by a getinfo of ours:
-            // clearing it would leave the list with nothing to show until the next full search
             if (Steam_ServerListCount() > 0) {
                 return;
             }
@@ -80,11 +67,6 @@ static void LAN_ResetPings(int source) {
     }
 }
 
-/*
-====================
-LAN_AddServer
-====================
-*/
 static int LAN_AddServer(int source, const char* name, const char* address) {
     int max, *count, i;
     netadr_t adr;
@@ -127,11 +109,6 @@ static int LAN_AddServer(int source, const char* name, const char* address) {
     return -1;
 }
 
-/*
-====================
-LAN_RemoveServer
-====================
-*/
 static void LAN_RemoveServer(int source, const char* addr) {
     int *count, i;
     serverInfo_t* servers = NULL;
@@ -168,11 +145,6 @@ static void LAN_RemoveServer(int source, const char* addr) {
     }
 }
 
-/*
-====================
-LAN_GetServerCount
-====================
-*/
 static int LAN_GetServerCount(int source) {
     switch (source) {
         case AS_LOCAL:
@@ -189,11 +161,6 @@ static int LAN_GetServerCount(int source) {
     return 0;
 }
 
-/*
-====================
-LAN_GetLocalServerAddressString
-====================
-*/
 static void LAN_GetServerAddressString(int source, int n, char* buf, int buflen) {
     switch (source) {
         case AS_LOCAL:
@@ -219,11 +186,6 @@ static void LAN_GetServerAddressString(int source, int n, char* buf, int buflen)
     buf[0] = '\0';
 }
 
-/*
-====================
-LAN_GetServerInfo
-====================
-*/
 static void LAN_GetServerInfo(int source, int n, char* buf, int buflen) {
     char info[MAX_STRING_CHARS];
     serverInfo_t* server = NULL;
@@ -253,8 +215,8 @@ static void LAN_GetServerInfo(int source, int n, char* buf, int buflen) {
         Info_SetValueForKey(info, "clients", va("%i", server->clients));
         Info_SetValueForKey(info, "sv_maxclients", va("%i", server->maxClients));
         Info_SetValueForKey(info, "ping", va("%i", server->ping));
-        Info_SetValueForKey(info, "minPing", va("%i", server->minPing));  // [QL] binary uses camelCase
-        Info_SetValueForKey(info, "maxPing", va("%i", server->maxPing));  // [QL] binary uses camelCase
+        Info_SetValueForKey(info, "minPing", va("%i", server->minPing));
+        Info_SetValueForKey(info, "maxPing", va("%i", server->maxPing));
         Info_SetValueForKey(info, "game", server->game);
         Info_SetValueForKey(info, "gametype", va("%i", server->gameType));
         Info_SetValueForKey(info, "nettype", va("%i", server->netType));
@@ -272,11 +234,6 @@ static void LAN_GetServerInfo(int source, int n, char* buf, int buflen) {
     }
 }
 
-/*
-====================
-LAN_GetServerPing
-====================
-*/
 static int LAN_GetServerPing(int source, int n) {
     serverInfo_t* server = NULL;
     switch (source) {
@@ -303,11 +260,6 @@ static int LAN_GetServerPing(int source, int n) {
     return -1;
 }
 
-/*
-====================
-LAN_GetServerPtr
-====================
-*/
 static serverInfo_t* LAN_GetServerPtr(int source, int n) {
     switch (source) {
         case AS_LOCAL:
@@ -330,11 +282,6 @@ static serverInfo_t* LAN_GetServerPtr(int source, int n) {
     return NULL;
 }
 
-/*
-====================
-LAN_CompareServers
-====================
-*/
 static int LAN_CompareServers(int source, int sortKey, int sortDir, int s1, int s2) {
     int res;
     serverInfo_t *server1, *server2;
@@ -356,7 +303,6 @@ static int LAN_CompareServers(int source, int sortKey, int sortDir, int s1, int 
             res = Q_stricmp(server1->mapName, server2->mapName);
             break;
         case SORT_CLIENTS:
-            // sub sort by max clients
             if (server1->clients == server2->clients) {
                 clients1 = server1->maxClients;
                 clients2 = server2->maxClients;
@@ -403,47 +349,22 @@ static int LAN_CompareServers(int source, int sortKey, int sortDir, int s1, int 
     return res;
 }
 
-/*
-====================
-LAN_GetPingQueueCount
-====================
-*/
 static int LAN_GetPingQueueCount(void) {
     return (CL_GetPingQueueCount());
 }
 
-/*
-====================
-LAN_ClearPing
-====================
-*/
 static void LAN_ClearPing(int n) {
     CL_ClearPing(n);
 }
 
-/*
-====================
-LAN_GetPing
-====================
-*/
 static void LAN_GetPing(int n, char* buf, int buflen, int* pingtime) {
     CL_GetPing(n, buf, buflen, pingtime);
 }
 
-/*
-====================
-LAN_GetPingInfo
-====================
-*/
 static void LAN_GetPingInfo(int n, char* buf, int buflen) {
     CL_GetPingInfo(n, buf, buflen);
 }
 
-/*
-====================
-LAN_MarkServerVisible
-====================
-*/
 static void LAN_MarkServerVisible(int source, int n, qboolean visible) {
     if (n == -1) {
         int count = MAX_OTHER_SERVERS;
@@ -489,11 +410,6 @@ static void LAN_MarkServerVisible(int source, int n, qboolean visible) {
     }
 }
 
-/*
-=======================
-LAN_ServerIsVisible
-=======================
-*/
 static int LAN_ServerIsVisible(int source, int n) {
     switch (source) {
         case AS_LOCAL:
@@ -516,38 +432,18 @@ static int LAN_ServerIsVisible(int source, int n) {
     return qfalse;
 }
 
-/*
-=======================
-LAN_UpdateVisiblePings
-=======================
-*/
 qboolean LAN_UpdateVisiblePings(int source) {
     return CL_UpdateVisiblePings_f(source);
 }
 
-/*
-====================
-LAN_GetServerStatus
-====================
-*/
 int LAN_GetServerStatus(char* serverAddress, char* serverStatus, int maxLen) {
     return CL_ServerStatus(serverAddress, serverStatus, maxLen);
 }
 
-/*
-====================
-CL_GetGlConfig
-====================
-*/
 static void CL_GetGlconfig(glconfig_t* config) {
     *config = cls.glconfig;
 }
 
-/*
-====================
-CL_GetClipboardData
-====================
-*/
 static void CL_GetClipboardData(char* buf, int buflen) {
     char* cbd;
 
@@ -563,20 +459,10 @@ static void CL_GetClipboardData(char* buf, int buflen) {
     Z_Free(cbd);
 }
 
-/*
-====================
-Key_KeynumToStringBuf
-====================
-*/
 static void Key_KeynumToStringBuf(int keynum, char* buf, int buflen) {
     Q_strncpyz(buf, Key_KeynumToString(keynum), buflen);
 }
 
-/*
-====================
-Key_GetBindingBuf
-====================
-*/
 static void Key_GetBindingBuf(int keynum, char* buf, int buflen) {
     char* value;
 
@@ -588,11 +474,6 @@ static void Key_GetBindingBuf(int keynum, char* buf, int buflen) {
     }
 }
 
-/*
-====================
-GetConfigString
-====================
-*/
 static int GetConfigString(int index, char* buf, int size) {
     int offset;
 
@@ -612,24 +493,12 @@ static int GetConfigString(int index, char* buf, int size) {
     return qtrue;
 }
 
-/*
-====================
-FloatAsInt
-====================
-*/
 static int FloatAsInt(float f) {
     floatint_t fi;
     fi.f = f;
     return fi.i;
 }
 
-/*
-====================
-CL_UISystemCalls
-
-The ui module is making a system call
-====================
-*/
 intptr_t CL_UISystemCalls(intptr_t* args) {
     switch (args[0]) {
         case UI_ERROR:
@@ -800,9 +669,6 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             return Key_GetCatcher();
 
         case UI_KEY_SETCATCHER:
-            // [QL] quakelive_steam.exe 0x4beeb0: the catchers are replaced as given, console bit
-            // included. ioquake3 kept the console open here; in Quake Live a menu the UI brings up
-            // (Escape's in-game menu among them) closes it.
             Key_SetCatcher(args[1]);
             return 0;
 
@@ -949,9 +815,6 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             CL_OpenURL(VMA(1));
             return 0;
 
-        // [ioquakelive] the Steam friends for the menu's social strip. The index is Steam's,
-        // not the drawn list's, so the action always lands on the same friend even if somebody
-        // comes online between the draw and the click.
         case UI_STEAM_FRIEND_COUNT:
             return Steam_FriendCount();
 
@@ -979,7 +842,6 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             return qtrue;
         }
 
-        // [ioquakelive] a player's Steam stats: "" is oneself, and a request asks Steam again
         case UI_STEAM_USER_STATS: {
             const char* id = VMA(1);
             uiUserStats_t* out = VMA(2);
@@ -1131,11 +993,6 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
     return 0;
 }
 
-/*
-====================
-CL_ShutdownUI
-====================
-*/
 void CL_ShutdownUI(void) {
     Key_SetCatcher(Key_GetCatcher() & ~KEYCATCH_UI);
     cls.uiStarted = qfalse;
@@ -1147,11 +1004,6 @@ void CL_ShutdownUI(void) {
     uivm = NULL;
 }
 
-/*
-====================
-CL_InitUI
-====================
-*/
 #define UI_OLD_API_VERSION 6
 
 void CL_InitUI(void) {
@@ -1162,32 +1014,21 @@ void CL_InitUI(void) {
         Com_Error(ERR_FATAL, "VM_Create on UI failed");
     }
 
-    // sanity check
     v = VM_Call(uivm, UI_GETAPIVERSION);
     if (v == UI_OLD_API_VERSION) {
         Com_Printf(S_COLOR_YELLOW "WARNING: loading old User Interface version %d\n", v);
-        // init for this gamestate
         VM_Call(uivm, UI_INIT, (clc.state >= CA_AUTHORIZING && clc.state < CA_ACTIVE));
     } else if (v != UI_API_VERSION) {
-        // Free uivm now, so UI_SHUTDOWN doesn't get called later.
         VM_Free(uivm);
         uivm = NULL;
 
         Com_Error(ERR_DROP, "User Interface is version %d, expected %d", v, UI_API_VERSION);
         cls.uiStarted = qfalse;
     } else {
-        // init for this gamestate
         VM_Call(uivm, UI_INIT, (clc.state >= CA_AUTHORIZING && clc.state < CA_ACTIVE));
     }
 }
 
-/*
-====================
-UI_GameCommand
-
-See if the current console command is claimed by the ui
-====================
-*/
 qboolean UI_GameCommand(void) {
     if (!uivm) {
         return qfalse;

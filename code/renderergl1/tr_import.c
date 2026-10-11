@@ -19,28 +19,12 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// tr_import.c -- [ioquakelive] what quake3e's engine gives its renderer and this one doesn't
-//
-
 #include "tr_local.h"
 
 #include <SDL3/SDL.h>
 #include <time.h>
 
 extern SDL_Window* SDL_window;
-
-/*
-===============================================================================
-
-CVAR GROUPS
-
-A group is modified when one of its cvars changed since the group was last reset. The
-engine's cvars keep a modification count, so the group only has to remember the counts it
-saw.
-
-===============================================================================
-*/
 
 #define MAX_GROUPED_CVARS 512
 
@@ -99,19 +83,10 @@ void RI_Cvar_ResetGroup( cvarGroup_t group, qboolean resetModifiedFlags ) {
 	}
 }
 
-// the renderer is unloaded and loaded again on vid_restart, and its cvars with it
 void RI_Cvar_ClearGroups( void ) {
 	numGroupedCvars = 0;
 }
 
-/*
-=================
-RI_Cvar_CheckRange
-
-Quake3e gives the range as strings, either end possibly missing, and says what kind of
-value it is; the engine takes numbers and whether they have to be whole.
-=================
-*/
 void RI_Cvar_CheckRange( cvar_t *cv, const char *minVal, const char *maxVal, cvarValidator_t type ) {
 	float lo, hi;
 
@@ -122,14 +97,6 @@ void RI_Cvar_CheckRange( cvar_t *cv, const char *minVal, const char *maxVal, cva
 	hi = maxVal ? (float)atof( maxVal ) : 1e30f;
 	ri.Cvar_CheckRange( cv, lo, hi, type == CV_INTEGER ? qtrue : qfalse );
 }
-
-/*
-===============================================================================
-
-THE REST
-
-===============================================================================
-*/
 
 int RI_Com_RealTime( qtime_t *qtime ) {
 	time_t t;
@@ -158,8 +125,6 @@ qboolean RI_CL_IsMinimized( void ) {
 	return ( SDL_window && ( SDL_GetWindowFlags( SDL_window ) & SDL_WINDOW_MINIMIZED ) ) ? qtrue : qfalse;
 }
 
-// Quake3e's client scales the pointer and the captures when the scene is drawn at another
-// size than the window; nothing here draws at another size yet
 void RI_CL_SetScaling( float factor, int captureWidth, int captureHeight ) {
 	(void)factor;
 	(void)captureWidth;

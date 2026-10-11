@@ -38,32 +38,31 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define MAX_COLOR_RANGES 10
 #define MAX_OPEN_MENUS 16
 
-#define WINDOW_MOUSEOVER 0x00000001      // mouse is over it, non exclusive
-#define WINDOW_HASFOCUS 0x00000002       // has cursor focus, exclusive
-#define WINDOW_VISIBLE 0x00000004        // is visible
-#define WINDOW_GREY 0x00000008           // is visible but grey ( non-active )
-#define WINDOW_DECORATION 0x00000010     // for decoration only, no mouse, keyboard, etc..
-#define WINDOW_FADINGOUT 0x00000020      // fading out, non-active
-#define WINDOW_FADINGIN 0x00000040       // fading in
-#define WINDOW_MOUSEOVERTEXT 0x00000080  // mouse is over it, non exclusive
-#define WINDOW_INTRANSITION 0x00000100   // window is in transition
-#define WINDOW_FORECOLORSET 0x00000200   // forecolor was explicitly set ( used to color alpha images or not )
-#define WINDOW_HORIZONTAL 0x00000400     // for list boxes and sliders, vertical is default this is set of horizontal
-#define WINDOW_LB_LEFTARROW 0x00000800   // mouse is over left/up arrow
-#define WINDOW_LB_RIGHTARROW 0x00001000  // mouse is over right/down arrow
-#define WINDOW_LB_THUMB 0x00002000       // mouse is over thumb
-#define WINDOW_LB_PGUP 0x00004000        // mouse is over page up
-#define WINDOW_LB_PGDN 0x00008000        // mouse is over page down
-#define WINDOW_ORBITING 0x00010000       // item is in orbit
-#define WINDOW_OOB_CLICK 0x00020000      // close on out of bounds click
-#define WINDOW_WRAPPED 0x00040000        // manually wrap text
-#define WINDOW_AUTOWRAPPED 0x00080000    // auto wrap text
-#define WINDOW_FORCED 0x00100000         // forced open
-#define WINDOW_POPUP 0x00200000          // popup
-#define WINDOW_BACKCOLORSET 0x00400000   // backcolor was explicitly set
-#define WINDOW_TIMEDVISIBLE 0x00800000   // visibility timing ( NOT implemented )
+#define WINDOW_MOUSEOVER 0x00000001
+#define WINDOW_HASFOCUS 0x00000002
+#define WINDOW_VISIBLE 0x00000004
+#define WINDOW_GREY 0x00000008
+#define WINDOW_DECORATION 0x00000010
+#define WINDOW_FADINGOUT 0x00000020
+#define WINDOW_FADINGIN 0x00000040
+#define WINDOW_MOUSEOVERTEXT 0x00000080
+#define WINDOW_INTRANSITION 0x00000100
+#define WINDOW_FORECOLORSET 0x00000200
+#define WINDOW_HORIZONTAL 0x00000400
+#define WINDOW_LB_LEFTARROW 0x00000800
+#define WINDOW_LB_RIGHTARROW 0x00001000
+#define WINDOW_LB_THUMB 0x00002000
+#define WINDOW_LB_PGUP 0x00004000
+#define WINDOW_LB_PGDN 0x00008000
+#define WINDOW_ORBITING 0x00010000
+#define WINDOW_OOB_CLICK 0x00020000
+#define WINDOW_WRAPPED 0x00040000
+#define WINDOW_AUTOWRAPPED 0x00080000
+#define WINDOW_FORCED 0x00100000
+#define WINDOW_POPUP 0x00200000
+#define WINDOW_BACKCOLORSET 0x00400000
+#define WINDOW_TIMEDVISIBLE 0x00800000
 
-// CGAME cursor type bits
 #define CURSOR_NONE 0x00000001
 #define CURSOR_ARROW 0x00000002
 #define CURSOR_SIZER 0x00000004
@@ -101,7 +100,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define SLIDER_HEIGHT 16.0
 #define SLIDER_THUMB_WIDTH 12.0
 #define SLIDER_THUMB_HEIGHT 20.0
-#define NUM_CROSSHAIRS 30  // [QL] uix86.dll UI_HandleCrosshair @0x1000a640 wraps at 0x1e (0..29)
+#define NUM_CROSSHAIRS 30
 
 typedef struct {
     const char* command;
@@ -109,44 +108,43 @@ typedef struct {
 } scriptDef_t;
 
 typedef struct {
-    float x;  // horiz position
-    float y;  // vert position
-    float w;  // width
-    float h;  // height;
+    float x;
+    float y;
+    float w;
+    float h;
 } rectDef_t;
 
 typedef rectDef_t Rectangle;
 
-// FIXME: do something to separate text vs window stuff
 typedef struct {
-    Rectangle rect;             // client coord rectangle
-    Rectangle rectClient;       // screen coord rectangle
-    const char* name;           //
-    const char* group;          // if it belongs to a group
-    const char* cinematicName;  // cinematic name
-    int cinematic;              // cinematic handle
-    int style;                  //
-    int border;                 //
-    int ownerDraw;              // ownerDraw style
-    int ownerDrawFlags;         // show flags for ownerdraw items
-    int ownerDrawFlags2;        // [QL] second set of ownerdraw flags
-    float borderSize;           //
-    int flags;                  // visible, focus, mouseover, cursor
-    Rectangle rectEffects;      // for various effects
-    Rectangle rectEffects2;     // for various effects
-    int offsetTime;             // time based value for various effects
-    int nextTime;               // time next effect should cycle
-    int pad_74;                 // [QL] unknown field (binary offset 0x74)
-    vec4_t foreColor;           // text color
-    vec4_t backColor;           // border color
-    vec4_t borderColor;         // border color
-    vec4_t outlineColor;        // outline color
-    vec4_t altRowColor;         // [QL] alternate row color for listboxes
-    vec4_t elementColor;        // [QL] element color
-    vec4_t selectedColor;       // [QL] selected item color
-    qhandle_t background;       // background asset
-    qhandle_t outlineImage;     // [QL] outline shader
-    Rectangle backgroundSize;   // background asset size
+    Rectangle rect;
+    Rectangle rectClient;
+    const char* name;
+    const char* group;
+    const char* cinematicName;
+    int cinematic;
+    int style;
+    int border;
+    int ownerDraw;
+    int ownerDrawFlags;
+    int ownerDrawFlags2;
+    float borderSize;
+    int flags;
+    Rectangle rectEffects;
+    Rectangle rectEffects2;
+    int offsetTime;
+    int nextTime;
+    int pad_74;
+    vec4_t foreColor;
+    vec4_t backColor;
+    vec4_t borderColor;
+    vec4_t outlineColor;
+    vec4_t altRowColor;
+    vec4_t elementColor;
+    vec4_t selectedColor;
+    qhandle_t background;
+    qhandle_t outlineImage;
+    Rectangle backgroundSize;
 } windowDef_t;
 
 typedef windowDef_t Window;
@@ -157,16 +155,6 @@ typedef struct {
     float high;
 } colorRangeDef_t;
 
-// FIXME: combine flags into bitfields to save space
-// FIXME: consolidate all of the common stuff in one structure for menus and items
-// THINKABOUTME: is there any compelling reason not to have items contain items
-// and do away with a menu per say.. major issue is not being able to dynamically allocate
-// and destroy stuff.. Another point to consider is adding an alloc free call for vm's and have
-// the engine just allocate the pool for it based on a cvar
-// many of the vars are re-used for different item types, as such they are not always named appropriately
-// the benefits of c++ in DOOM will greatly help crap like this
-// FIXME: need to put a type ptr that points to specific type info per type
-//
 #define MAX_LB_COLUMNS 32
 
 typedef struct columnInfo_s {
@@ -190,13 +178,13 @@ typedef struct listBoxDef_s {
 } listBoxDef_t;
 
 typedef struct editFieldDef_s {
-    float minVal;       //	edit field limits
-    float maxVal;       //
-    float defVal;       //
-    float range;        //
-    int maxChars;       // for edit fields
-    int maxPaintChars;  // for edit fields
-    int paintOffset;    //
+    float minVal;
+    float maxVal;
+    float defVal;
+    float range;
+    int maxChars;
+    int maxPaintChars;
+    int paintOffset;
 } editFieldDef_t;
 
 #define MAX_MULTI_CVARS 32
@@ -224,70 +212,70 @@ typedef struct modelDef_s {
 #define CVAR_HIDE 0x00000008
 
 typedef struct itemDef_s {
-    Window window;               // common positional, border, style, layout info
-    Rectangle textRect;          // rectangle the text ( if any ) consumes
-    int type;                    // text, button, radiobutton, checkbox, textfield, listbox, combo
-    int alignment;               // left center right
-    int textalignment;           // ( optional ) alignment for text within rect based on text width
-    float textalignx;            // ( optional ) text alignment x coord
-    float textaligny;            // ( optional ) text alignment x coord
-    int fontIndex;               // [QL] per-item font index (0 = default)
-    float textscale;             // scale percentage from 72pts
-    int textStyle;               // ( optional ) style, normal and shadowed are it for now
-    const char* text;            // display text
-    void* parent;                // menu owner
-    qhandle_t asset;             // handle to asset
-    const char* mouseEnterText;  // mouse enter script
-    const char* mouseExitText;   // mouse exit script
-    const char* mouseEnter;      // mouse enter script
-    const char* mouseExit;       // mouse exit script
-    const char* action;          // select script
-    const char* onFocus;         // select script
-    const char* leaveFocus;      // select script
-    const char* cvar;            // associated cvar
-    const char* cvarTest;        // associated cvar for enable actions
-    const char* cvarTest2;       // [QL] second cvar test condition (AND with primary)
-    const char* cvarTest3;       // [QL] third cvar test condition
-    const char* cvarTest4;       // [QL] fourth cvar test condition
-    const char* enableCvar;      // enable, disable, show, or hide based on value, this can contain a list
-    const char* enableCvar2;     // [QL] second enable/show/hide value list (paired with cvarTest2)
-    const char* enableCvar3;     // [QL] third enable/show/hide value list (paired with cvarTest3)
-    const char* enableCvar4;     // [QL] fourth enable/show/hide value list (paired with cvarTest4)
-    int cvarFlags;               //	what type of action to take on cvarenables
-    int precision;               // [QL] numeric precision for display
-    int cvarInt;                 // [QL] 1 = integer slider mode
+    Window window;
+    Rectangle textRect;
+    int type;
+    int alignment;
+    int textalignment;
+    float textalignx;
+    float textaligny;
+    int fontIndex;
+    float textscale;
+    int textStyle;
+    const char* text;
+    void* parent;
+    qhandle_t asset;
+    const char* mouseEnterText;
+    const char* mouseExitText;
+    const char* mouseEnter;
+    const char* mouseExit;
+    const char* action;
+    const char* onFocus;
+    const char* leaveFocus;
+    const char* cvar;
+    const char* cvarTest;
+    const char* cvarTest2;
+    const char* cvarTest3;
+    const char* cvarTest4;
+    const char* enableCvar;
+    const char* enableCvar2;
+    const char* enableCvar3;
+    const char* enableCvar4;
+    int cvarFlags;
+    int precision;
+    int cvarInt;
     sfxHandle_t focusSound;
-    qhandle_t elementImage;      // [QL] listbox/mouse-over element shader (binary offset 0x188)
-    int numColors;               // number of color ranges
+    qhandle_t elementImage;
+    int numColors;
     colorRangeDef_t colorRanges[MAX_COLOR_RANGES];
-    float special;               // used for feeder id's etc.. diff per type
-    int cursorPos;               // cursor position in characters
-    void* typeData;              // type specific data ptr's
-    int cellId;                  // [QL] advertisement cell ID
-    const char* defaultContent;  // [QL] default content string
-    int widescreen;              // [QL] widescreen mode (0-3)
-    int widescreenFlag;          // [QL] 1 if widescreen was explicitly set
+    float special;
+    int cursorPos;
+    void* typeData;
+    int cellId;
+    const char* defaultContent;
+    int widescreen;
+    int widescreenFlag;
 } itemDef_t;
 
 typedef struct {
     Window window;
-    const char* font;       // font
-    qboolean fullScreen;    // covers entire screen
-    int itemCount;          // number of items;
-    int fontIndex;          //
-    int cursorItem;         // which item as the cursor
-    int fadeCycle;          //
-    float fadeClamp;        //
-    float fadeAmount;       //
-    const char* onOpen;     // run when the menu is first opened
-    const char* onClose;    // run when the menu is closed
-    const char* onESC;      // run when the menu is closed
-    const char* soundName;  // background loop sound for menu
+    const char* font;
+    qboolean fullScreen;
+    int itemCount;
+    int fontIndex;
+    int cursorItem;
+    int fadeCycle;
+    float fadeClamp;
+    float fadeAmount;
+    const char* onOpen;
+    const char* onClose;
+    const char* onESC;
+    const char* soundName;
 
-    vec4_t focusColor;                // focus color for items
-    vec4_t disableColor;              // focus color for items
-    itemDef_t* items[MAX_MENUITEMS];  // items this menu contains
-    int widescreen;         // quake live
+    vec4_t focusColor;
+    vec4_t disableColor;
+    itemDef_t* items[MAX_MENUITEMS];
+    int widescreen;
 } menuDef_t;
 
 typedef struct {
@@ -297,7 +285,7 @@ typedef struct {
     fontInfo_t textFont;
     fontInfo_t smallFont;
     fontInfo_t bigFont;
-    fontInfo_t extraFonts[3]; // [QL] indexed fonts: 0=textFont, 1=bigFont, 2=smallFont
+    fontInfo_t extraFonts[3];
     qhandle_t cursor;
     qhandle_t gradientBar;
     qhandle_t scrollBarArrowUp;
@@ -324,7 +312,6 @@ typedef struct {
     float shadowFadeClamp;
     qboolean fontRegistered;
 
-    // player settings
     qhandle_t fxBasePic;
     qhandle_t fxPic[7];
     qhandle_t crosshairShader[NUM_CROSSHAIRS];
@@ -386,7 +373,7 @@ typedef struct {
     void (*stopCinematic)(int handle);
     void (*drawCinematic)(int handle, float x, float y, float w, float h);
     void (*runCinematicFrame)(int handle);
-    void (*setWidescreen)(int mode);             // [QL] set widescreen mode for coordinate adjustment
+    void (*setWidescreen)(int mode);
 
     float yscale;
     float xscale;

@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -37,23 +36,13 @@ cvar_t* s_sdlChannels;
 cvar_t* s_sdlDevSamps;
 cvar_t* s_sdlMixSamps;
 
-/* The audio callback. All the magic happens here. */
 static int dmapos = 0;
 static int dmasize = 0;
 
 static SDL_AudioStream* sdlPlaybackStream;
 
-// [ioquakelive] SNDDMA_Mute: the callback sends silence instead of the ring, which goes on moving
 static SDL_AtomicInt sdlMuted;
 
-/*
-===============
-SNDDMA_AudioCallback
-
-The device asks for more: what comes next in the mixer's ring goes to the stream, in two pieces
-when it wraps. SDL holds the stream's lock around this, the same one SNDDMA_BeginPainting takes.
-===============
-*/
 static void SDLCALL SNDDMA_AudioCallback(void* userdata, SDL_AudioStream* stream, int additional, int total) {
     int bytes = dma.samplebits / 8;
     int pos;
@@ -61,7 +50,6 @@ static void SDLCALL SNDDMA_AudioCallback(void* userdata, SDL_AudioStream* stream
     (void)userdata;
     (void)total;
 
-    // with nothing to play the device just starves, which is silence
     if (additional <= 0 || !snd_inited || !dma.buffer)
         return;
 
@@ -79,7 +67,6 @@ static void SDLCALL SNDDMA_AudioCallback(void* userdata, SDL_AudioStream* stream
             byte silence[1024];
             int left = chunk;
 
-            // 8-bit samples are unsigned, so their silence is the middle
             memset(silence, (dma.samplebits == 8) ? 0x80 : 0, sizeof(silence));
             while (left > 0) {
                 const int n = left > (int)sizeof(silence) ? (int)sizeof(silence) : left;
@@ -99,11 +86,6 @@ static void SDLCALL SNDDMA_AudioCallback(void* userdata, SDL_AudioStream* stream
     dmapos = pos / bytes;
 }
 
-/*
-===============
-SNDDMA_PrintAudiospec
-===============
-*/
 static void SNDDMA_PrintAudiospec(const char* str, const SDL_AudioSpec* spec, int samples) {
     Com_Printf("%s:\n", str);
     Com_Printf("  Format:   %s\n", SDL_GetAudioFormatName(spec->format));
@@ -112,11 +94,6 @@ static void SNDDMA_PrintAudiospec(const char* str, const SDL_AudioSpec* spec, in
     Com_Printf("  Channels: %d\n", spec->channels);
 }
 
-/*
-===============
-SNDDMA_Init
-===============
-*/
 qboolean SNDDMA_Init(void) {
     SDL_AudioSpec spec;
     SDL_AudioSpec device;
@@ -156,7 +133,6 @@ qboolean SNDDMA_Init(void) {
     spec.format = ((tmp == 16) ? SDL_AUDIO_S16 : SDL_AUDIO_U8);
     spec.channels = (int)s_sdlChannels->value;
 
-    // the device's own buffer: SDL3 picks one unless told, and the mixer's timing was tuned on these
     if (s_sdlDevSamps->value)
         samples = s_sdlDevSamps->value;
     else if (spec.freq <= 11025)
@@ -170,9 +146,6 @@ qboolean SNDDMA_Init(void) {
 
     SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, va("%d", samples));
 
-    // [QL] quakelive_steam.exe 0x4efd70 mixes into a 22050 Hz, 16-bit stereo DirectSound buffer
-    // and leaves any conversion to the system: SDL converts to the device instead of handing
-    // the mixer another format
     sdlPlaybackStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, SNDDMA_AudioCallback, NULL);
     if (!sdlPlaybackStream) {
         Com_Printf("SDL_OpenAudioDeviceStream() failed: %s\n", SDL_GetError());
@@ -185,12 +158,10 @@ qboolean SNDDMA_Init(void) {
     if (SDL_GetAudioDeviceFormat(SDL_GetAudioStreamDevice(sdlPlaybackStream), &device, &tmp))
         Com_Printf("  Device:   %s, %d Hz, %d channels, %d samples\n", SDL_GetAudioFormatName(device.format), device.freq, device.channels, tmp);
 
-    // [QL] the DirectSound buffer is 0x10000 bytes, 32768 16-bit samples
     tmp = s_sdlMixSamps->value;
     if (!tmp)
         tmp = 0x10000 / (SDL_AUDIO_BITSIZE(spec.format) / 8);
 
-    // samples must be divisible by number of channels
     tmp -= tmp % spec.channels;
 
     dmapos = 0;
@@ -212,29 +183,14 @@ qboolean SNDDMA_Init(void) {
     return qtrue;
 }
 
-/*
-===============
-SNDDMA_Mute
-===============
-*/
 void SNDDMA_Mute(qboolean mute) {
     SDL_SetAtomicInt(&sdlMuted, mute ? 1 : 0);
 }
 
-/*
-===============
-SNDDMA_GetDMAPos
-===============
-*/
 int SNDDMA_GetDMAPos(void) {
     return dmapos;
 }
 
-/*
-===============
-SNDDMA_Shutdown
-===============
-*/
 void SNDDMA_Shutdown(void) {
     if (sdlPlaybackStream) {
         Com_Printf("Closing SDL audio playback device...\n");
@@ -251,23 +207,11 @@ void SNDDMA_Shutdown(void) {
     Com_Printf("SDL audio shut down.\n");
 }
 
-/*
-===============
-SNDDMA_Submit
-
-Send sound to device if buffer isn't really the dma buffer
-===============
-*/
 void SNDDMA_Submit(void) {
     if (sdlPlaybackStream)
         SDL_UnlockAudioStream(sdlPlaybackStream);
 }
 
-/*
-===============
-SNDDMA_BeginPainting
-===============
-*/
 void SNDDMA_BeginPainting(void) {
     if (sdlPlaybackStream)
         SDL_LockAudioStream(sdlPlaybackStream);

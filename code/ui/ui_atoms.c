@@ -19,15 +19,9 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-/**********************************************************************
-    UI_ATOMS.C
-
-    User interface building blocks and support functions.
-**********************************************************************/
 #include "ui_local.h"
 
-qboolean m_entersound;  // after a frame, so caching won't disrupt the sound
+qboolean m_entersound;
 
 void QDECL Com_Error(int level, const char* error, ...) {
     va_list argptr;
@@ -53,11 +47,6 @@ void QDECL Com_Printf(const char* msg, ...) {
 
 qboolean newUI = qfalse;
 
-/*
-=================
-UI_ClampCvar
-=================
-*/
 float UI_ClampCvar(float min, float max, float value) {
     if (value < min)
         return min;
@@ -66,11 +55,6 @@ float UI_ClampCvar(float min, float max, float value) {
     return value;
 }
 
-/*
-=================
-UI_StartDemoLoop
-=================
-*/
 void UI_StartDemoLoop(void) {
     trap_Cmd_ExecuteText(EXEC_APPEND, "d1\n");
 }
@@ -95,11 +79,6 @@ static void UI_Cache_f(void) {
     Display_CacheAll();
 }
 
-/*
-=======================
-UI_CalcPostGameStats
-=======================
-*/
 static void UI_CalcPostGameStats(void) {
     char map[MAX_QPATH];
     char fileName[MAX_QPATH];
@@ -114,12 +93,9 @@ static void UI_CalcPostGameStats(void) {
     Q_strncpyz(map, Info_ValueForKey(info, "mapname"), sizeof(map));
     game = atoi(Info_ValueForKey(info, "g_gametype"));
 
-    // compose file name
     Com_sprintf(fileName, MAX_QPATH, "games/%s_%i.game", map, game);
-    // see if we have one already
     memset(&oldInfo, 0, sizeof(postGameInfo_t));
     if (trap_FS_FOpenFile(fileName, &f, FS_READ) >= 0) {
-        // if so load it
         size = 0;
         trap_FS_Read(&size, sizeof(int), f);
         if (size == sizeof(postGameInfo_t)) {
@@ -162,11 +138,9 @@ static void UI_CalcPostGameStats(void) {
     newInfo.score = newInfo.baseScore + newInfo.shutoutBonus + newInfo.timeBonus;
     newInfo.score *= newInfo.skillBonus;
 
-    // see if the score is higher for this one
     newHigh = (newInfo.redScore > newInfo.blueScore && newInfo.score > oldInfo.score);
 
     if (newHigh) {
-        // if so write out the new one
         uiInfo.newHighScoreTime = uiInfo.uiDC.realTime + 20000;
         if (trap_FS_FOpenFile(fileName, &f, FS_WRITE) >= 0) {
             size = sizeof(postGameInfo_t);
@@ -180,7 +154,6 @@ static void UI_CalcPostGameStats(void) {
         uiInfo.newBestTime = uiInfo.uiDC.realTime + 20000;
     }
 
-    // put back all the ui overrides
     trap_Cvar_Set("capturelimit", UI_Cvar_VariableString("ui_saveCaptureLimit"));
     trap_Cvar_Set("fraglimit", UI_Cvar_VariableString("ui_saveFragLimit"));
     trap_Cvar_Set("cg_drawTimer", UI_Cvar_VariableString("ui_drawTimer"));
@@ -192,19 +165,6 @@ static void UI_CalcPostGameStats(void) {
     UI_ShowPostGame(newHigh);
 }
 
-/*
-=================
-UI_ListPlayerModels
-
-[QL] Console command "listPlayerModels": dumps the parsed player-model list,
-one per line, as "base/name" (or only "base" when the name is empty or
-"default"). Verified from uix86.dll @ 0x1000f960.
-
-QL sizes the loop with UI_BuildPlayerModelList(), which also validates each
-model against disk and toggles its .active flag; ioquakelive has no such
-validator, so this walks the already-parsed uiInfo.characterList[] directly.
-=================
-*/
 static void UI_ListPlayerModels(void) {
     int i;
 
@@ -220,11 +180,6 @@ static void UI_ListPlayerModels(void) {
     }
 }
 
-/*
-=================
-UI_ConsoleCommand
-=================
-*/
 qboolean UI_ConsoleCommand(int realTime) {
     char* cmd;
 
@@ -232,15 +187,6 @@ qboolean UI_ConsoleCommand(int realTime) {
     uiInfo.uiDC.realTime = realTime;
 
     cmd = UI_Argv(0);
-
-    // ensure minimum menu data is available
-    // Menu_Cache();
-
-    // [QL] uix86.dll UI_ConsoleCommand @0x10002ac0 dispatches exactly these 7
-    // commands in order, else returns qfalse so the engine handles it. Q3's
-    // ui_test / remapShader / ui_teamOrders are not present in the QL binary.
-
-
 
     if (Q_stricmp(cmd, "listPlayerModels") == 0) {
         UI_ListPlayerModels();
@@ -267,9 +213,6 @@ qboolean UI_ConsoleCommand(int realTime) {
         return qtrue;
     }
 
-    // [QL] menu_close <name> / menu_open <name>: verified from uix86.dll
-    // @ 0x10002490 (Menus_CloseByName) and @ 0x10002520 -> 0x1001d4a0
-    // (Menus_ActivateByName).
     if (Q_stricmp(cmd, "menu_close") == 0) {
         Menus_CloseByName(UI_Argv(1));
         return qtrue;
@@ -283,23 +226,10 @@ qboolean UI_ConsoleCommand(int realTime) {
     return qfalse;
 }
 
-/*
-=================
-UI_Shutdown
-=================
-*/
 void UI_Shutdown(void) {
 }
 
-/*
-================
-UI_AdjustFrom640
-
-Adjusted for resolution and screen aspect ratio
-================
-*/
 void UI_AdjustFrom640(float* x, float* y, float* w, float* h) {
-    // expect valid pointers
     *x = *x * uiInfo.uiDC.xscale + uiInfo.uiDC.bias;
     *y *= uiInfo.uiDC.yscale;
     *w *= uiInfo.uiDC.xscale;
@@ -320,7 +250,7 @@ void UI_DrawHandlePic(float x, float y, float w, float h, qhandle_t hShader) {
     float t0;
     float t1;
 
-    if (w < 0) {  // flip about vertical
+    if (w < 0) {
         w = -w;
         s0 = 1;
         s1 = 0;
@@ -329,7 +259,7 @@ void UI_DrawHandlePic(float x, float y, float w, float h, qhandle_t hShader) {
         s1 = 1;
     }
 
-    if (h < 0) {  // flip about horizontal
+    if (h < 0) {
         h = -h;
         t0 = 1;
         t1 = 0;
@@ -342,13 +272,6 @@ void UI_DrawHandlePic(float x, float y, float w, float h, qhandle_t hShader) {
     trap_R_DrawStretchPic(x, y, w, h, s0, t0, s1, t1, hShader);
 }
 
-/*
-================
-UI_FillRect
-
-Coordinates are 640*480 virtual values
-=================
-*/
 void UI_FillRect(float x, float y, float width, float height, const float* color) {
     trap_R_SetColor(color);
 
@@ -369,13 +292,6 @@ void UI_DrawTopBottom(float x, float y, float w, float h) {
     trap_R_DrawStretchPic(x, y, w, 1, 0, 0, 0, 0, uiInfo.uiDC.whiteShader);
     trap_R_DrawStretchPic(x, y + h - 1, w, 1, 0, 0, 0, 0, uiInfo.uiDC.whiteShader);
 }
-/*
-================
-UI_DrawRect
-
-Coordinates are 640*480 virtual values
-=================
-*/
 void UI_DrawRect(float x, float y, float width, float height, const float* color) {
     trap_R_SetColor(color);
 

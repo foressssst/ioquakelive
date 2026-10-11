@@ -20,20 +20,11 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "client.h"
 #include "snd_codec.h"
 
 static snd_codec_t* codecs;
 
-/*
-=================
-S_CodecGetSound
-
-Opens/loads a sound, tries codec based on the sound's file extension
-then tries all supported codecs.
-=================
-*/
 static void* S_CodecGetSound(const char* filename, snd_info_t* info) {
     snd_codec_t* codec;
     snd_codec_t* orgCodec = NULL;
@@ -48,10 +39,8 @@ static void* S_CodecGetSound(const char* filename, snd_info_t* info) {
     ext = COM_GetExtension(localName);
 
     if (*ext) {
-        // Look for the correct loader and use it
         for (codec = codecs; codec; codec = codec->next) {
             if (!Q_stricmp(ext, codec->ext)) {
-                // Load
                 if (info)
                     rtn = codec->load(localName, info);
                 else
@@ -60,30 +49,23 @@ static void* S_CodecGetSound(const char* filename, snd_info_t* info) {
             }
         }
 
-        // A loader was found
         if (codec) {
             if (!rtn) {
-                // Loader failed, most likely because the file isn't there;
-                // try again without the extension
                 orgNameFailed = qtrue;
                 orgCodec = codec;
                 COM_StripExtension(filename, localName, MAX_QPATH);
             } else {
-                // Something loaded
                 return rtn;
             }
         }
     }
 
-    // Try and find a suitable match using all
-    // the sound codecs supported
     for (codec = codecs; codec; codec = codec->next) {
         if (codec == orgCodec)
             continue;
 
         Com_sprintf(altName, sizeof(altName), "%s.%s", localName, codec->ext);
 
-        // Load
         if (info)
             rtn = codec->load(altName, info);
         else
@@ -99,17 +81,11 @@ static void* S_CodecGetSound(const char* filename, snd_info_t* info) {
         }
     }
 
-    // [QL] retail warns once, from the caller: "couldn't load sound: %s"
     Com_DPrintf(S_COLOR_YELLOW "WARNING: Failed to %s sound %s!\n", info ? "load" : "open", filename);
 
     return NULL;
 }
 
-/*
-=================
-S_CodecInit
-=================
-*/
 void S_CodecInit() {
     codecs = NULL;
 
@@ -120,44 +96,23 @@ void S_CodecInit() {
     S_CodecRegister(&wav_codec);
 
 #ifdef USE_CODEC_VORBIS
-    // Register ogg codec last so that it is always tried first when a file extension was not found
     S_CodecRegister(&ogg_codec);
 #endif
 }
 
-/*
-=================
-S_CodecShutdown
-=================
-*/
 void S_CodecShutdown() {
     codecs = NULL;
 }
 
-/*
-=================
-S_CodecRegister
-=================
-*/
 void S_CodecRegister(snd_codec_t* codec) {
     codec->next = codecs;
     codecs = codec;
 }
 
-/*
-=================
-S_CodecLoad
-=================
-*/
 void* S_CodecLoad(const char* filename, snd_info_t* info) {
     return S_CodecGetSound(filename, info);
 }
 
-/*
-=================
-S_CodecOpenStream
-=================
-*/
 snd_stream_t* S_CodecOpenStream(const char* filename) {
     return S_CodecGetSound(filename, NULL);
 }
@@ -170,45 +125,29 @@ int S_CodecReadStream(snd_stream_t* stream, int bytes, void* buffer) {
     return stream->codec->read(stream, bytes, buffer);
 }
 
-//=======================================================================
-// Util functions (used by codecs)
-
-/*
-=================
-S_CodecUtilOpen
-=================
-*/
 snd_stream_t* S_CodecUtilOpen(const char* filename, snd_codec_t* codec) {
     snd_stream_t* stream;
     fileHandle_t hnd;
     int length;
 
-    // Try to open the file
     length = FS_FOpenFileRead(filename, &hnd, qtrue);
     if (!hnd) {
         Com_DPrintf("Can't read sound file %s\n", filename);
         return NULL;
     }
 
-    // Allocate a stream
     stream = Z_Malloc(sizeof(snd_stream_t));
     if (!stream) {
         FS_FCloseFile(hnd);
         return NULL;
     }
 
-    // Copy over, return
     stream->codec = codec;
     stream->file = hnd;
     stream->length = length;
     return stream;
 }
 
-/*
-=================
-S_CodecUtilClose
-=================
-*/
 void S_CodecUtilClose(snd_stream_t** stream) {
     FS_FCloseFile((*stream)->file);
     Z_Free(*stream);

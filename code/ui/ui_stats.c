@@ -19,21 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// ui_stats.c -- [QL] Career Stats, and the wins and KDR of the profile card
-//
-// Retail's page is web.pak's stats.js with stats_basic.js and stats_medals.js, reached
-// from Statistics > Career Stats and, for a friend, from the friend list: the player's
-// avatar and Steam name, a row with Statistics and Medals, and under it one or the other.
-// Everything comes from Steam. The page asks for the player's stats each time it opens
-// or changes tab (RequestUserStats), shows what it had meanwhile, and adds them up as
-// utils.js's calculateSteamStats does: every kill_ is a kill, every mod_ a death, and
-// every hits_ and shots_ goes to the accuracy.
-//
-// The profile card, in the bar of every page and on the main menu, prints the player's
-// own wins and KDR from the same stats once Steam has answered.
-//
-
 #include "ui_web.h"
 #include "../qcommon/q_steamstats.h"
 
@@ -42,7 +27,6 @@ typedef enum {
     ST_HIT_TAB
 } stHitType_t;
 
-// stats_basic.js's weaponInfo: the row's name, and the stats and picture it goes by
 typedef struct {
     const char* id;
     const char* name;
@@ -57,7 +41,6 @@ static const stWeapon_t stWeapons[] = {
 };
 #define ST_NUM_WEAPONS ((int)ARRAY_LEN(stWeapons))
 
-// its modInfo: the deaths that are no weapon's; an optional one only shows when it happened
 typedef struct {
     const char* id;
     qboolean optional;
@@ -72,7 +55,6 @@ static const stMod_t stMods[] = {
 };
 #define ST_NUM_MODS ((int)ARRAY_LEN(stMods))
 
-// stats_medals.js's medalInfo
 typedef struct {
     const char* id;
     const char* name;
@@ -99,23 +81,21 @@ static const stMedal_t stMedals[] = {
 };
 #define ST_NUM_MEDALS ((int)ARRAY_LEN(stMedals))
 
-// calculateSteamStats
 typedef struct {
     int kills, deaths, shots, hits;
     float kdr;
 } stSummary_t;
 
-// in the page's pixels, from its css (.stats and skeleton's h1 and .button)
-#define ST_TITLE_H 88.4f     // h1.title: 0.25em over and under a line the 64px avatar makes
+#define ST_TITLE_H 88.4f
 #define ST_AVATAR 64.0f
-#define ST_ROW_H 30.0f       // nav.button-row
-#define ST_ROW_GAP 15.0f     // its margin-bottom, 1em
-#define ST_PAD 5.0f          // .stats-content
-#define ST_CARD_W 169.0f     // .stats-card
+#define ST_ROW_H 30.0f
+#define ST_ROW_GAP 15.0f
+#define ST_PAD 5.0f
+#define ST_CARD_W 169.0f
 #define ST_CARD_H 125.0f
-#define ST_CARD_GAP 7.5f     // margin-right: 0.5em
+#define ST_CARD_GAP 7.5f
 #define ST_TH_H 24.0f
-#define ST_TD_H 38.0f        // a 32px icon on the line and the line's descent
+#define ST_TD_H 38.0f
 #define ST_CELL_PAD 15.0f
 #define ST_MOD_W 200.0f
 #define ST_MOD_H 45.0f
@@ -123,7 +103,7 @@ typedef struct {
 #define ST_MEDAL_W 250.0f
 #define ST_MEDAL_H 125.0f
 #define ST_MEDAL_GAP 20.0f
-#define ST_BOTTOM 30.0f      // .body stops 30px over the page's bottom
+#define ST_BOTTOM 30.0f
 
 static const vec4_t stBlack80 = {0.0f, 0.0f, 0.0f, 0.8f};
 static const vec4_t stCard = SM_RGB(44, 41, 41);
@@ -131,32 +111,24 @@ static const vec4_t stYellow = SM_RGB(247, 209, 0);
 static const vec4_t stBlack = {0.0f, 0.0f, 0.0f, 1.0f};
 
 static struct {
-    char steamId[24];  // whose page it is, "" for one's own
-    int tab;           // 0 Statistics, 1 Medals
+    char steamId[24];
+    int tab;
     uiUserStats_t data;
     qboolean loaded;
     qhandle_t weapon[ST_NUM_WEAPONS], mod[ST_NUM_MODS], medal[ST_NUM_MEDALS];
     float scroll;
-    float content;  // how tall the page is, to know how far it scrolls
+    float content;
 } st;
 
-// whose page opens next: "" is one's own
 static char stPending[24];
 
-// one's own, for the card
 static uiUserStats_t stOwn;
 static int stCardPage = -2;
 
-/*
-===============
-What the page reads of the stats
-===============
-*/
 static qboolean ST_Answered(const uiUserStats_t* d) {
     return (qboolean)(d->state == UI_DETAILS_DONE || d->state == UI_DETAILS_FAILED);
 }
 
-// a stat's place in the table, -1 when there is none of that name
 static int ST_Index(const char* name) {
     int i;
 
@@ -168,7 +140,6 @@ static int ST_Index(const char* name) {
     return -1;
 }
 
-// whether the page has the stat: not until Steam answers, and never one the table lacks
 static qboolean ST_Has(const uiUserStats_t* d, const char* name, int* value) {
     int i = ST_Index(name);
 
@@ -179,7 +150,6 @@ static qboolean ST_Has(const uiUserStats_t* d, const char* name, int* value) {
     return qtrue;
 }
 
-// a stat as the page prints it, nothing when it lacks it
 static void ST_Print(const uiUserStats_t* d, const char* name, char* out, int size) {
     int v;
 
@@ -216,17 +186,16 @@ static void ST_Summarize(const uiUserStats_t* d, stSummary_t* s) {
     s->kdr = s->deaths ? (float)s->kills / s->deaths : 0;
 }
 
-// renderWeapon's accuracy: hundredths cut, not rounded, and JavaScript's way of printing them
 static void ST_Accuracy(const uiUserStats_t* d, const char* id, char* out, int size) {
     int hits, shots, len;
 
     out[0] = '\0';
     if (!ST_Has(d, va("hits_%s", id), &hits) || !ST_Has(d, va("shots_%s", id), &shots)) {
-        return;  // undefined over undefined is NaN
+        return;
     }
     if (!shots) {
         if (hits) {
-            Q_strncpyz(out, "NaN%", size);  // parseInt of Infinity
+            Q_strncpyz(out, "NaN%", size);
         }
         return;
     }
@@ -241,7 +210,6 @@ static void ST_Accuracy(const uiUserStats_t* d, const char* id, char* out, int s
     Q_strcat(out, size, "%");
 }
 
-// utils.js's stripColors: each caret and the digit after it, and then any caret left
 static void ST_StripColors(const char* in, char* out, int size) {
     int n = 0;
 
@@ -257,13 +225,6 @@ static void ST_StripColors(const char* in, char* out, int size) {
     out[n] = '\0';
 }
 
-/*
-===============
-The profile card's line
-===============
-*/
-
-// the card asks again each time it comes up on a page other than the one it was on
 void UI_Stats_CardFor(int page) {
     if (page != stCardPage) {
         stCardPage = page;
@@ -271,7 +232,6 @@ void UI_Stats_CardFor(int page) {
     }
 }
 
-// profile_card.js's details: "Wins: <wins> KDR: <kdr>", once Steam has answered
 void UI_Stats_DrawCardLine(float x, float lineTop, float width) {
     stSummary_t s;
     char line[64];
@@ -288,11 +248,6 @@ void UI_Stats_DrawCardLine(float x, float lineTop, float width) {
             SM_Fit(FONT_SANS, 15.0f, line, width), qfalse);
 }
 
-/*
-===============
-The page
-===============
-*/
 static void ST_Load(void) {
     int i;
 
@@ -311,14 +266,12 @@ static void ST_Load(void) {
     }
 }
 
-// text with css's 2px 2px black shadow
 static void ST_Shadowed(float x, float baseline, int font, float size, const float* color, const char* text,
                         qboolean bold) {
     SM_Text(x + 2, baseline + 2, font, size, stBlack, text, -1, bold);
     SM_Text(x, baseline, font, size, color, text, -1, bold);
 }
 
-// one of the button row's: transparent and borderless, yellow when it is the one showing
 static float ST_Tab(float x, float y, const char* label, int tab, const smRect_t* clip) {
     char upper[32];
     float w;
@@ -339,7 +292,6 @@ static float ST_Tab(float x, float y, const char* label, int tab, const smRect_t
     return w;
 }
 
-// a column's width in the weapons table: the widest of its cells and its padding
 static float ST_ColumnWidth(int col, const char* head, char cells[][24], int count) {
     float w = SM_AdvanceBold(FONT_SANS, 15, head, -1, qtrue);
     int i;
@@ -366,7 +318,6 @@ static float ST_DrawBasic(float x0, float y0, float innerW, const smRect_t* clip
 
     ST_Summarize(&st.data, &s);
 
-    // the five cards: what the page has, and nothing of the record until Steam answers
     Com_sprintf(values[0], sizeof(values[0]), "%i", s.kills);
     Com_sprintf(values[1], sizeof(values[1]), "%i", s.deaths);
     Com_sprintf(values[2], sizeof(values[2]), "%.2f", s.kdr);
@@ -381,12 +332,11 @@ static float ST_DrawBasic(float x0, float y0, float innerW, const smRect_t* clip
 
     for (i = 0; i < 5; i++) {
         float cx = x0 + i * (ST_CARD_W + ST_CARD_GAP);
-        // componentDidUpdate shrinks a long number 4px a letter past ten
         int len = strlen(values[i]);
         float size = len > 10 ? 36.0f - 4.0f * (len - 10) : 36.0f;
         float tw;
 
-        SM_SetSpacing(SM_SPACING_H1);  // the h1 and the h2 of the card, both in skeleton's letter-spacing
+        SM_SetSpacing(SM_SPACING_H1);
         tw = SM_Advance(FONT_SANS, size, values[i], -1);
 
         SM_Fill(cx, y0, ST_CARD_W, ST_CARD_H, stCard, clip);
@@ -400,9 +350,8 @@ static float ST_DrawBasic(float x0, float y0, float innerW, const smRect_t* clip
         }
         SM_SetSpacing(0);
     }
-    y = y0 + ST_CARD_H + 30.0f;  // the container's margin-bottom, 2em
+    y = y0 + ST_CARD_H + 30.0f;
 
-    // Weapons: the table's columns as wide as what they hold
     for (i = 0; i < ST_NUM_WEAPONS; i++) {
         Q_strncpyz(cells[0][i], stWeapons[i].name, sizeof(cells[0][i]));
         cells[1][i][0] = '\0';
@@ -442,7 +391,7 @@ static float ST_DrawBasic(float x0, float y0, float innerW, const smRect_t* clip
     by += ST_TH_H;
     for (i = 0; i < ST_NUM_WEAPONS; i++) {
         float ry = by + i * ST_TD_H;
-        float baseline = ry + 32.0f;  // the cells' text sits on the line the icon stands on
+        float baseline = ry + 32.0f;
 
         bx = x0;
         for (c = 0; c < 7; c++) {
@@ -458,7 +407,6 @@ static float ST_DrawBasic(float x0, float y0, float innerW, const smRect_t* clip
         }
     }
 
-    // Other Deaths, beside it: inline-block after the table's 100px margin
     {
         float mx = x0 + tableW + 100.0f;
         float my = y + 79.4f;
@@ -467,7 +415,6 @@ static float ST_DrawBasic(float x0, float y0, float innerW, const smRect_t* clip
         float bottom = by + ST_NUM_WEAPONS * ST_TD_H + 30.0f;
 
         if (mx + ST_MOD_W > x0 + innerW) {
-            // no room beside it: it goes under, as an inline-block would
             mx = x0;
             y = bottom;
             my = y + 79.4f;
@@ -521,8 +468,6 @@ static float ST_DrawMedals(float x0, float y0, float innerW, const smRect_t* cli
 
         SM_Fill(mx, my, ST_MEDAL_W, ST_MEDAL_H, stBlack80, clip);
 
-        // .data, floated right: the medal and the count under it, which shrinks past three
-        // digits as componentDidUpdate has it
         SM_Pic(mx + ST_MEDAL_W - 10 - 64, my + 10, 64, 64, st.medal[i], clip);
         ST_Print(&st.data, stMedals[i].id, number, sizeof(number));
         if (number[0]) {
@@ -536,7 +481,6 @@ static float ST_DrawMedals(float x0, float y0, float innerW, const smRect_t* cli
             }
         }
 
-        // the article: the name in yellow, 18pt, and the description wrapped beside the float
         if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 24, my + 16, 28.8f), 24, clip)) {
             SM_SetSpacing(SM_SPACING_H1);
             SM_Text(mx + 10 + 4.8f, SM_Baseline(FONT_DEFAULT, 24, my + 16, 28.8f), FONT_DEFAULT, 24, stYellow,
@@ -561,8 +505,6 @@ static void ST_DrawTitle(float left, float top, float width, const smRect_t* cli
     float baseline = top + 8 + ST_AVATAR;
 
     SM_Fill(left, top, width, ST_TITLE_H, stBlack80, clip);
-    // the avatar, once Steam has it; meanwhile one's own model stands in for one's own, as on
-    // the card, and anybody else's is the initial of the name, as in the friend list
     if (!st.steamId[0]) {
         qhandle_t face = UI_Home_Face();
 
@@ -595,7 +537,6 @@ static void ST_Request(void) {
     trap_SteamUserStats(st.steamId, &st.data, qtrue);
 }
 
-// Career Stats of a player, "" for one's own
 void UI_Stats_Show(const char* steamId) {
     Q_strncpyz(stPending, steamId ? steamId : "", sizeof(stPending));
     Menus_CloseAll();
@@ -632,7 +573,6 @@ void UI_Stats_Paint(void) {
     UI_Home_Backdrop();
     UI_Home_PageTop(HM_NAV_STATS);
 
-    // .body.scroll-y: it scrolls when the page is taller than the screen
     if (st.scroll > st.content - view) {
         st.scroll = st.content - view;
     }
@@ -654,8 +594,6 @@ void UI_Stats_Paint(void) {
     }
     y += ST_ROW_H + ST_ROW_GAP;
 
-    // .stats-content: black at 0.8 around what the tab holds, 5px in; measured on the frame
-    // before, since the box goes under what it holds
     SM_Fill(left, y, width, st.content - (y - top) > 0 ? st.content - (y - top) : 0, stBlack80, &clip);
     inner = st.tab == 0 ? ST_DrawBasic(left + ST_PAD, y + ST_PAD, width - 2 * ST_PAD, &clip)
                         : ST_DrawMedals(left + ST_PAD, y + ST_PAD, width - 2 * ST_PAD, &clip);
@@ -676,14 +614,13 @@ qboolean UI_Stats_HandleKey(int key) {
         return qtrue;
     }
     if (key != K_MOUSE1) {
-        return qfalse;  // Escape goes back through the menu's onESC
+        return qfalse;
     }
     if (UI_Home_NavClick()) {
         return qtrue;
     }
     hit = SM_HitAt(smMX, smMY);
     if (hit && hit->type == ST_HIT_TAB) {
-        // each tab is a route of its own, and the page asks Steam again on the way
         st.tab = hit->index;
         st.scroll = 0;
         ST_Request();

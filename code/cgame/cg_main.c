@@ -19,16 +19,11 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// cg_main.c -- initialization and primary entry point for cgame
 #include "cg_local.h"
 
 #include "../ui/ui_shared.h"
-// display context for new ui stuff
 displayContextDef_t cgDC;
 
-// [QL] the modificationCount of the six model and skin forcing cvars as CG_UpdateCvars last saw
-// them (0x100769fc, 0x100785a8..0x100785b8, all -1 at start)
 static int cg_forceModelModCounts[6] = { -1, -1, -1, -1, -1, -1 };
 
 void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum);
@@ -40,14 +35,6 @@ static int CG_ChatFieldChars(void);
 static void CG_ClientSteamID(int clientNum, uint64_t* out);
 static void CG_SetClientTalking(int clientNum, int talking);
 
-/*
-================
-vmMain
-
-This is the only way control passes into the module.
-This must be the very first function compiled into the .q3vm file
-================
-*/
 Q_EXPORT intptr_t vmMain(int command, intptr_t arg0, intptr_t arg1, intptr_t arg2, intptr_t arg3, intptr_t arg4, intptr_t arg5, intptr_t arg6, intptr_t arg7, intptr_t arg8, intptr_t arg9, intptr_t arg10, intptr_t arg11) {
     floatint_t fi;
 
@@ -81,7 +68,6 @@ Q_EXPORT intptr_t vmMain(int command, intptr_t arg0, intptr_t arg1, intptr_t arg
         case CG_EVENT_HANDLING:
             CG_EventHandling(arg0);
             return 0;
-        // [QL] cgamex86.dll exports 21 entries (table at 0x100769a8); slots 10-14 and 17-19 below.
         case CG_LAST_CHAT_COMMAND:
             CG_LastChatCommand();
             return 0;
@@ -96,7 +82,6 @@ Q_EXPORT intptr_t vmMain(int command, intptr_t arg0, intptr_t arg1, intptr_t arg
             return 0;
         case CG_GET_ACTIVE_FRAME:
             return CG_GetActiveFrame();
-        // the chat bar's two floats travel in the return value's bits
         case CG_CHAT_BAR_Y:
             fi.f = CG_ChatBarY();
             return fi.i;
@@ -121,15 +106,6 @@ Q_EXPORT intptr_t vmMain(int command, intptr_t arg0, intptr_t arg1, intptr_t arg
     return -1;
 }
 
-/*
-================
-CG_ChatBarY, CG_ChatBarWidth, CG_ChatFieldChars
-
-[QL] cgamex86.dll 0x100209e0, 0x10020a00 and 0x10020a20, exports 17-19: where the engine's
-Con_DrawNotify puts the chat bar (quakelive_steam.exe 0x4b416b). It sits at y 413 across the 640
-width with a 73-character field, and during the intermission at y 455, 300 wide, with 30.
-================
-*/
 static float CG_ChatBarY(void) {
     qboolean intermission = (cg.predictedPlayerState.pm_type == PM_INTERMISSION);
 
@@ -148,16 +124,6 @@ static int CG_ChatFieldChars(void) {
     return intermission ? 30 : 73;
 }
 
-/*
-================
-CG_ClientSteamID
-
-The Steam ID of whoever is speaking, the only thing the engine asks the cgame for out
-of everything retail copies here. It decides with it whether that voice is muted.
-
-[QL] 0x10020910, entry 15 of the table.
-================
-*/
 static void CG_ClientSteamID(int clientNum, uint64_t* out) {
     *out = 0;
     if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
@@ -169,16 +135,6 @@ static void CG_ClientSteamID(int clientNum, uint64_t* out) {
     *out = cgs.clientinfo[clientNum].steamId;
 }
 
-/*
-================
-CG_SetClientTalking
-
-The engine calls in every time voice arrives from somebody, and the talking indicator
-comes from that.
-
-[QL] 0x10020a40, entry 20 of the table.
-================
-*/
 static void CG_SetClientTalking(int clientNum, int talking) {
     if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
         return;
@@ -223,7 +179,7 @@ vmCvar_t cg_addMarks;
 vmCvar_t cg_brassTime;
 vmCvar_t cg_viewsize;
 vmCvar_t cg_drawGun;
-vmCvar_t r_dynamicLight;  // [ioquakelive] 2 turns the effect lights off
+vmCvar_t r_dynamicLight;
 vmCvar_t cg_gun_frame;
 vmCvar_t cg_gun_x;
 vmCvar_t cg_gun_y;
@@ -233,7 +189,7 @@ vmCvar_t cg_tracerWidth;
 vmCvar_t cg_tracerLength;
 vmCvar_t cg_autoswitch;
 vmCvar_t cg_simpleItems;
-vmCvar_t cg_skipItems;  // [QL] 0x10016026: at 1, the items are not drawn
+vmCvar_t cg_skipItems;
 vmCvar_t cg_fov;
 vmCvar_t cg_zoomFov;
 vmCvar_t cg_thirdPerson;
@@ -247,7 +203,6 @@ vmCvar_t cg_stats;
 vmCvar_t cg_paused;
 vmCvar_t cg_blood;
 
-// [wolfcam] electrogib tuning - see cg_local.h
 vmCvar_t cg_gibCount;
 vmCvar_t cg_gibColor;
 vmCvar_t cg_gibJump;
@@ -295,18 +250,17 @@ vmCvar_t cg_currentSelectedPlayerName;
 vmCvar_t cg_enableDust;
 vmCvar_t cg_recordSPDemo;
 vmCvar_t cg_recordSPDemoName;
-vmCvar_t ui_singlePlayerActive;  // [QL] missing from binary parity audit
+vmCvar_t ui_singlePlayerActive;
 vmCvar_t cg_obeliskRespawnDelay;
 vmCvar_t cg_lightningStyle;
 vmCvar_t cg_screenDamage;
 vmCvar_t cg_kickScale;
 
-// [QL] additional cvars
 vmCvar_t cg_armorTiered;
 vmCvar_t cg_allowTaunt;
 vmCvar_t cg_announcer;
 vmCvar_t cg_autoHop;
-vmCvar_t cg_predictLocalRailshots;  // [QL] predicted railgun autofire
+vmCvar_t cg_predictLocalRailshots;
 vmCvar_t cg_bob;
 vmCvar_t cg_bubbleTrail;
 vmCvar_t cg_buzzerSound;
@@ -406,19 +360,16 @@ vmCvar_t cg_gametype;
 vmCvar_t cg_svFps;
 vmCvar_t cg_comMaxfps;
 
-// [QL] announcer cvars
 vmCvar_t cg_announcerLastStandingVO;
 vmCvar_t cg_announcerLeadsVO;
 vmCvar_t cg_announcerRewardsVO;
 vmCvar_t cg_announcerTiesVO;
 
-// [QL] sound cvars
 vmCvar_t s_ambient;
 vmCvar_t s_announcerVolume;
 vmCvar_t s_killBeepVolume;
 vmCvar_t s_playSoundVolume;
 
-// [QL] weapon loadout/config cvars
 vmCvar_t cg_weaponConfig;
 vmCvar_t cg_weaponConfig_g;
 vmCvar_t cg_weaponConfig_mg;
@@ -437,7 +388,6 @@ vmCvar_t cg_weaponConfig_hmg;
 vmCvar_t cg_weaponColor_grenade;
 vmCvar_t cg_weaponPrimary;
 
-// [QL] spectator/demo cvars
 vmCvar_t cg_drawDemoHUD;
 vmCvar_t cg_xray;
 vmCvar_t cg_freecam;
@@ -456,7 +406,6 @@ vmCvar_t cg_specTeamVitalsHealthColor;
 vmCvar_t cg_specTeamVitalsWidth;
 vmCvar_t cg_specTeamVitalsY;
 
-// [QL] HUD/UI cvars
 vmCvar_t cg_chatHistoryLength;
 vmCvar_t cg_complaintWarning;
 vmCvar_t cg_drawCrosshairTeamHealthSize;
@@ -476,7 +425,6 @@ vmCvar_t cg_useItemMessage;
 vmCvar_t cg_useItemWarning;
 vmCvar_t cg_voiceChatIndicator;
 
-// [QL] POI cvars
 vmCvar_t cg_flagPOIs;
 vmCvar_t cg_poiMaxWidth;
 vmCvar_t cg_poiMinWidth;
@@ -485,7 +433,6 @@ vmCvar_t cg_teammatePOIs;
 vmCvar_t cg_teammatePOIsMaxWidth;
 vmCvar_t cg_teammatePOIsMinWidth;
 
-// [QL] smoke/particle cvars
 vmCvar_t cg_smoke_SG;
 vmCvar_t cg_smokeRadius_dust;
 vmCvar_t cg_smokeRadius_flight;
@@ -494,7 +441,6 @@ vmCvar_t cg_smokeRadius_haste;
 vmCvar_t cg_smokeRadius_NG;
 vmCvar_t cg_smokeRadius_RL;
 
-// [QL] visual/rendering cvars
 vmCvar_t cg_drawDeadFriendTime;
 vmCvar_t cg_drawHitFriendTime;
 vmCvar_t cg_forceBlueTeamModel;
@@ -509,24 +455,20 @@ vmCvar_t cg_screenDamageAlpha;
 vmCvar_t cg_screenDamageAlpha_Team;
 vmCvar_t cg_scalePlayerModelsToBB;
 
-// [QL] gameplay cvars
 vmCvar_t cg_autoAction;
 vmCvar_t cg_autoProjectileNudge;
 vmCvar_t cg_predictLocalRailshots;
 
-// [QL] gameplay cvars (continued)
 vmCvar_t cg_latchedHookOffset;
 vmCvar_t cg_overheadNamesWidth;
 vmCvar_t cg_preferredStartingWeapons;
 vmCvar_t cg_projectileNudge;
 vmCvar_t cg_weaponPrimaryQueued;
 
-// [QL] camera/view cvars
 vmCvar_t cg_cameraSmartMode;
 vmCvar_t cg_cameraThirdPersonSmartMode;
 vmCvar_t cg_filter_angles;
 
-// [QL] loadout disable cvars
 vmCvar_t cg_disableLoadout_bfg;
 vmCvar_t cg_disableLoadout_cg;
 vmCvar_t cg_disableLoadout_gl;
@@ -542,7 +484,6 @@ vmCvar_t cg_disableLoadout_sg;
 vmCvar_t cg_disableLoadout_gh;
 vmCvar_t cg_disableLoadout_gt;
 
-// [QL] game info cvars (server-to-client state)
 vmCvar_t cg_gameInfo1;
 vmCvar_t cg_gameInfo2;
 vmCvar_t cg_gameInfo3;
@@ -550,16 +491,13 @@ vmCvar_t cg_gameInfo4;
 vmCvar_t cg_gameInfo5;
 vmCvar_t cg_gameInfo6;
 
-// [QL] team name cvars
 vmCvar_t cg_blueTeamName;
 vmCvar_t cg_redTeamName;
 vmCvar_t cg_playerTeam;
 
-// [QL] voice/chat cvars
 vmCvar_t cg_playVoiceChats;
 vmCvar_t cg_showVoiceText;
 
-// [QL] misc cvars
 vmCvar_t cg_debugFlags;
 vmCvar_t cg_drawProfileImages;
 vmCvar_t cg_ignoreMouseInput;
@@ -567,7 +505,6 @@ vmCvar_t cg_lastmsg;
 vmCvar_t cg_stereoSeparation;
 vmCvar_t cg_trackPlayer;
 
-// [QL] UI state cvars (shared with UI module)
 vmCvar_t ui_endMapVotingDisabled;
 vmCvar_t ui_gameTypeVotingDisabled;
 vmCvar_t ui_intermission;
@@ -577,16 +514,12 @@ vmCvar_t ui_voteactive;
 vmCvar_t ui_votestring;
 vmCvar_t ui_warmup;
 
-// [QL] g_ cvars read by cgame
 vmCvar_t g_skipTrainingEnable;
 vmCvar_t g_training;
 
-// [QL] internal/ROM cvars
 vmCvar_t cg_loadout;
 vmCvar_t cg_spectating;
 
-// [QL] Last-standing announcer gate (DAT_10b716ec). Registered below so the announcer
-// defaults on; distinct from the cg_announcerLastStandingVO voice-set cvar.
 vmCvar_t cg_announcerLastStanding;
 
 typedef struct {
@@ -594,32 +527,18 @@ typedef struct {
     char* cvarName;
     char* defaultString;
     int cvarFlags;
-    // [QL] cgamex86.dll's entries (0x10076a00, 24 bytes) end with the range as two strings; the
-    // ones whose flags carry CVAR_CG_RANGE are registered with it (0x10020bb0)
     char* minString;
     char* maxString;
 } cvarTable_t;
 
 static cvarTable_t cvarTable[] = {
-    {&cg_autoswitch, "cg_autoswitch", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},  // [QL] default 0 (was Q3 "1")
+    {&cg_autoswitch, "cg_autoswitch", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_drawGun, "cg_drawGun", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "3"},
-    // [ioquakelive] a renderer cvar; the cgame reads it to know which lights to draw. The
-    // 2 is ours: it leaves only the carriers' lights, and not your own. See CG_AddEffectLight.
     {&r_dynamicLight, "r_dynamicLight", "1", CVAR_ARCHIVE | CVAR_USERSAVE, "0", "2"},
     {&cg_zoomFov, "cg_zoomfov", "30", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "10", "130"},
     {&cg_fov, "cg_fov", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "10", "130"},
     {&cg_viewsize, "cg_viewsize", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "30", "100"},
     {&cg_shadows, "cg_shadows", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
-    // [wolfcam] The electrogib tuning set, with wolfcamql's defaults. None of
-    // these names appear anywhere in cgamex86.dll - retail hardcodes every one
-    // of them - so the whole set is an addition, and leaving it untouched
-    // reproduces retail exactly.
-    //
-    // wolfcam spells the count `cg_gibs`, which is also what Quake 3 called
-    // its on/off switch for body-part gibs. Keeping that name would have made
-    // every inherited config silently wrong - a stored 0 turns the effect off
-    // and a stored 1 throws a single sphere - so the count is spelled
-    // cg_gibCount here. It is the only name that differs from wolfcam's.
     {&cg_gibCount, "cg_gibCount", "15", CVAR_ARCHIVE},
     {&cg_gibColor, "cg_gibColor", "", CVAR_ARCHIVE},
     {&cg_gibJump, "cg_gibJump", "0", CVAR_ARCHIVE},
@@ -647,22 +566,22 @@ static cvarTable_t cvarTable[] = {
     {&cg_drawSnapshot, "cg_drawSnapshot", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
     {&cg_draw3dIcons, "cg_draw3dIcons", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_drawIcons, "cg_drawIcons", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
-    {&cg_drawAmmoWarning, "cg_drawAmmoWarning", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},  // [QL] default 2 (was Q3 "1")
+    {&cg_drawAmmoWarning, "cg_drawAmmoWarning", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
     {&cg_drawAttacker, "cg_drawAttacker", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_drawCrosshair, "cg_drawCrosshair", "2", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "29"},
     {&cg_drawRewards, "cg_drawRewards", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_drawRewardsRowSize, "cg_drawRewardsRowSize", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "9"},
     {&cg_crosshairSize, "cg_crosshairSize", "32", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "320"},
-    {&cg_crosshairHealth, "cg_crosshairHealth", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},  // [QL] default 0 (was Q3 "1")
+    {&cg_crosshairHealth, "cg_crosshairHealth", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_crosshairX, "cg_crosshairX", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-320", "320"},
     {&cg_crosshairY, "cg_crosshairY", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-240", "240"},
     {&cg_brassTime, "cg_brassTime", "2500", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "10000"},
     {&cg_simpleItems, "cg_simpleItems", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_skipItems, "cg_skipItems", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_addMarks, "cg_marks", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
-    {&cg_lagometer, "cg_lagometer", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},  // [QL] default 0 (was Q3 "1")
+    {&cg_lagometer, "cg_lagometer", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
     {&cg_railTrailTime, "cg_railTrailTime", "400", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2000"},
-    {&cg_gun_x, "cg_gunX", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-10", "10"},  // [QL] binary: CVAR_ARCHIVE (player viewmodel offset, not a cheat)
+    {&cg_gun_x, "cg_gunX", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-10", "10"},
     {&cg_gun_y, "cg_gunY", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-10", "20"},
     {&cg_gun_z, "cg_gunZ", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "-8", "0"},
     {&cg_centertime, "cg_centertime", "3", CVAR_CHEAT},
@@ -678,18 +597,16 @@ static cvarTable_t cvarTable[] = {
     {&cg_tracerChance, "cg_tracerchance", "0.4", CVAR_CHEAT},
     {&cg_tracerWidth, "cg_tracerwidth", "1", CVAR_CHEAT},
     {&cg_tracerLength, "cg_tracerlength", "100", CVAR_CHEAT},
-    {&cg_thirdPersonRange, "cg_thirdPersonRange", "80", CVAR_CHEAT},  // [QL] default 80 (was Q3 "40")
+    {&cg_thirdPersonRange, "cg_thirdPersonRange", "80", CVAR_CHEAT},
     {&cg_thirdPersonAngle, "cg_thirdPersonAngle", "0", CVAR_CHEAT},
-    {&cg_thirdPerson, "cg_thirdPerson", "0", CVAR_CHEAT},  // [QL] cheat-protected (binary: CVAR_CHEAT)
+    {&cg_thirdPerson, "cg_thirdPerson", "0", CVAR_CHEAT},
     {&cg_teamChatTime, "cg_teamChatTime", "3000", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "5000"},
     {&cg_teamChatHeight, "cg_teamChatHeight", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "8"},
-    {&cg_predictItems, "cg_predictItems", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_USERINFO | CVAR_ARCHIVE},  // [QL] binary: CVAR_ARCHIVE | CVAR_USERINFO
-    {&cg_deferPlayers, "cg_deferPlayers", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},  // [QL] default 1 (was Q3 "0")
-    {&cg_drawTeamOverlay, "cg_drawTeamOverlay", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},  // [QL] default 1 (was Q3 "0")
-    {&cg_stats, "cg_stats", "0", CVAR_CHEAT},  // [QL] binary: CVAR_CHEAT
+    {&cg_predictItems, "cg_predictItems", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_USERINFO | CVAR_ARCHIVE},
+    {&cg_deferPlayers, "cg_deferPlayers", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_drawTeamOverlay, "cg_drawTeamOverlay", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
+    {&cg_stats, "cg_stats", "0", CVAR_CHEAT},
     {&cg_teamChatsOnly, "cg_teamChatsOnly", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
-    // the following variables are created in other parts of the system,
-    // but we also reference them here
     {&cg_paused, "cl_paused", "0", CVAR_ROM},
     {&cg_blood, "com_blood", "1", CVAR_ARCHIVE},
 
@@ -698,32 +615,31 @@ static cvarTable_t cvarTable[] = {
     {&cg_enableDust, "g_enableDust", "0", CVAR_SERVERINFO},
     {&cg_recordSPDemo, "ui_recordSPDemo", "0", 0},
     {&cg_recordSPDemoName, "ui_recordSPDemoName", "", 0},
-    {&ui_singlePlayerActive, "ui_singlePlayerActive", "0", CVAR_USERINFO},  // [QL] binary: CVAR_USERINFO
+    {&ui_singlePlayerActive, "ui_singlePlayerActive", "0", CVAR_USERINFO},
     {&cg_obeliskRespawnDelay, "g_obeliskRespawnDelay", "10", 0},
     {&cg_hudFiles, "cg_hudFiles", "ui/hud.txt", CVAR_USERSAVE | CVAR_REPLICATE},
 
     {&cg_cameraOrbit, "cg_cameraOrbit", "0", CVAR_CHEAT},
-    {&cg_cameraOrbitDelay, "cg_cameraOrbitDelay", "50", CVAR_CHEAT},  // [QL] binary: CVAR_CHEAT
+    {&cg_cameraOrbitDelay, "cg_cameraOrbitDelay", "50", CVAR_CHEAT},
     {&cg_timescaleFadeEnd, "cg_timescaleFadeEnd", "1", 0},
     {&cg_timescaleFadeSpeed, "cg_timescaleFadeSpeed", "0", 0},
     {&cg_timescale, "timescale", "1", CVAR_VM_CREATED, "0.1", "10"},
-    {&cg_scorePlum, "cg_scorePlums", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},  // [QL] default 0 (was Q3 "1")
+    {&cg_scorePlum, "cg_scorePlums", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_cameraMode, "com_cameraMode", "0", CVAR_CHEAT},
 
     {&cg_smallFont, "ui_smallFont", "0.25", CVAR_ROM},
     {&cg_bigFont, "ui_bigFont", "0.4", CVAR_ROM},
 
-    {&cg_trueLightning, "cg_trueLightning", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},  // [QL] default 1 (was Q3 "0.0")
+    {&cg_trueLightning, "cg_trueLightning", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_lightningStyle, "cg_lightningStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "5"},
     {&cg_screenDamage, "cg_screenDamage", "0x700000C8", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_kickScale, "cg_kickScale", "0.25", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
 
-    // [QL] additional cvars from cgamex86.dll binary (build 1069)
     {&cg_armorTiered, "cg_armorTiered", "0", CVAR_ROM},
     {&cg_allowTaunt, "cg_allowTaunt", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_announcer, "cg_announcer", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "3"},
-    {&cg_autoHop, "cg_autoHop", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_USERINFO | CVAR_ARCHIVE},  // [QL] binary: CVAR_ARCHIVE | CVAR_USERINFO (server reads via userinfo)
-    {&cg_predictLocalRailshots, "cg_predictLocalRailshots", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},  // [QL] predicted railgun autofire trail
+    {&cg_autoHop, "cg_autoHop", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_USERINFO | CVAR_ARCHIVE},
+    {&cg_predictLocalRailshots, "cg_predictLocalRailshots", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_bob, "cg_bob", "0.25", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0.0", "1.0"},
     {&cg_bubbleTrail, "cg_bubbleTrail", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_buzzerSound, "cg_buzzerSound", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
@@ -768,20 +684,15 @@ static cvarTable_t cvarTable[] = {
     {&cg_playerLean, "cg_playerLean", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_ARCHIVE, "0", "1"},
     {&cg_plasmaStyle, "cg_plasmaStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "2"},
     {&cg_railStyle, "cg_railStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "2"},
-    // [CPMA] 1.53 animations with CPMA's defaults, except ch_animateScroll, on by default here
     {&ch_animateRewardIcons, "ch_animateRewardIcons", "1", CVAR_ARCHIVE},
-    // for tuning by eye: the values chosen get baked in and these three go
     {&ch_rewardY, "ch_rewardY", "113", CVAR_ARCHIVE},
     {&ch_fragMessageY, "ch_fragMessageY", "150", CVAR_ARCHIVE},
     {&ch_fragMessageScale, "ch_fragMessageScale", "0.15", CVAR_ARCHIVE},
     {&cg_animateChatBalloon, "cg_animateChatBalloon", "1", CVAR_ARCHIVE},
     {&ch_animateScroll, "ch_animateScroll", "1", CVAR_ARCHIVE},
     {&cg_zoomAnimationTime, "cg_zoomAnimationTime", "150", CVAR_ARCHIVE},
-    // [CPMA] weapons drawn as flat silhouettes: 1 your own gun, 2 teammates', 4 enemies', 8 the ones
-    // lying on the map, 16 anybody's while you spectate with the free camera
     {&cg_drawBrightWeapons, "cg_drawBrightWeapons", "0", CVAR_ARCHIVE},
     {&ch_chatLines, "ch_chatLines", "3", CVAR_ARCHIVE},
-    // [CPMA] the LocalTime and RecordingDemo elements of CPMA 1.53, in Quake Live's own type
     {&ch_drawLocalTime, "ch_drawLocalTime", "0", CVAR_ARCHIVE},
     {&ch_drawTargetStatus, "ch_drawTargetStatus", "1", CVAR_ARCHIVE},
     {&ch_drawKeys, "ch_drawKeys", "0", CVAR_ARCHIVE},
@@ -789,9 +700,7 @@ static cvarTable_t cvarTable[] = {
     {&cg_demoKeys, "cg_demoKeys", "0", CVAR_ARCHIVE},
     {&ch_followKiller, "ch_followKiller", "0", CVAR_ARCHIVE},
     {&ch_recordingDemo, "ch_recordingDemo", "0", CVAR_ARCHIVE},
-    // [QL] the engine owns this one; the cgame only reads it to leave the map's sounds out
     {&cg_ambient, "s_ambient", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE | CVAR_LATCH},
-    // the hit sound of your own shots always goes at once; the cvar is there to be read, not set
     {&ch_gameEvents, "ch_gameEvents", "1", CVAR_ARCHIVE},
     {&ch_recordMessage, "ch_recordMessage", "1", CVAR_ARCHIVE},
     {&cg_demoRecording, "cl_demorecording", "0", CVAR_ROM},
@@ -828,24 +737,18 @@ static cvarTable_t cvarTable[] = {
     {&cg_teamChatBeep, "cg_teamChatBeep", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_gametype, "cg_gametype", "0", CVAR_ROM},
     {&cg_svFps, "sv_fps", "40", CVAR_ROM},
-    // [QL] the cgame registers com_maxfps again with a range of its own, so the ceiling is
-    // locked in two places: raising it in the engine alone drops it back to 250 on map load
     {&cg_comMaxfps, "com_maxfps", "125", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1000"},
 
-    // [QL] announcer cvars
     {&cg_announcerLastStandingVO, "cg_announcerLastStandingVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_announcerLeadsVO, "cg_announcerLeadsVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_announcerRewardsVO, "cg_announcerRewardsVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_announcerTiesVO, "cg_announcerTiesVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
 
-    // [QL] sound cvars
     {&s_ambient, "s_ambient", "1", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_LATCH | CVAR_ARCHIVE},
     {&s_announcerVolume, "s_announcerVolume", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
     {&s_killBeepVolume, "s_killBeepVolume", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "4"},
-    // [ioquakelive] the sounds a server plays with playSound, which retail always plays in full
     {&s_playSoundVolume, "s_playSoundVolume", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_ARCHIVE, "0", "2"},
 
-    // [QL] weapon config cvars
     {&cg_weaponConfig, "cg_weaponConfig", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_weaponConfig_g, "cg_weaponConfig_g", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_weaponConfig_mg, "cg_weaponConfig_mg", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
@@ -864,9 +767,7 @@ static cvarTable_t cvarTable[] = {
     {&cg_weaponColor_grenade, "cg_weaponColor_grenade", "0x007000FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_weaponPrimary, "cg_weaponPrimary", "", CVAR_ROM},
 
-    // [QL] spectator/demo cvars
     {&cg_drawDemoHUD, "cg_drawDemoHUD", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
-    // [ioquakelive] for demos and spectators only: players through walls, and a free camera
     {&cg_xray, "cg_xray", "0", CVAR_ARCHIVE, "0", "1"},
     {&cg_freecam, "cg_freecam", "0", 0, "0", "1"},
     {&cg_followKiller, "cg_followKiller", "0", CVAR_VM_CREATED, "0", "1"},
@@ -884,7 +785,6 @@ static cvarTable_t cvarTable[] = {
     {&cg_specTeamVitalsWidth, "cg_specTeamVitalsWidth", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "60", "120"},
     {&cg_specTeamVitalsY, "cg_specTeamVitalsY", "85", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "480"},
 
-    // [QL] HUD/UI cvars
     {&cg_chatHistoryLength, "cg_chatHistoryLength", "6", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "24"},
     {&cg_complaintWarning, "cg_complaintWarning", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_drawCrosshairTeamHealthSize, "cg_drawCrosshairTeamHealthSize", "0.12", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0.10", "0.26"},
@@ -904,7 +804,6 @@ static cvarTable_t cvarTable[] = {
     {&cg_useItemWarning, "cg_useItemWarning", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
     {&cg_voiceChatIndicator, "cg_voiceChatIndicator", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "2"},
 
-    // [QL] POI cvars
     {&cg_flagPOIs, "cg_flagPOIs", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_poiMaxWidth, "cg_poiMaxWidth", "32.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "16.0", "32.0"},
     {&cg_poiMinWidth, "cg_poiMinWidth", "16.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "2.0", "16.0"},
@@ -913,7 +812,6 @@ static cvarTable_t cvarTable[] = {
     {&cg_teammatePOIsMaxWidth, "cg_teammatePOIsMaxWidth", "24.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "16.0", "32.0"},
     {&cg_teammatePOIsMinWidth, "cg_teammatePOIsMinWidth", "4.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "2.0", "16.0"},
 
-    // [QL] smoke/particle cvars
     {&cg_smoke_SG, "cg_smoke_SG", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_smokeRadius_dust, "cg_smokeRadius_dust", "24", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "32"},
     {&cg_smokeRadius_flight, "cg_smokeRadius_flight", "8", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "16"},
@@ -922,7 +820,6 @@ static cvarTable_t cvarTable[] = {
     {&cg_smokeRadius_NG, "cg_smokeRadius_NG", "16", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "16"},
     {&cg_smokeRadius_RL, "cg_smokeRadius_RL", "32", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "32"},
 
-    // [QL] visual/rendering cvars
     {&cg_blood, "cg_blood", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_drawDeadFriendTime, "cg_drawDeadFriendTime", "3000.0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0.0", "5000.0"},
     {&cg_drawHitFriendTime, "cg_drawHitFriendTime", "100", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "5000"},
@@ -936,40 +833,36 @@ static cvarTable_t cvarTable[] = {
     {&cg_lightningImpactCap, "cg_lightningImpactCap", "192", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "768"},
     {&cg_screenDamageAlpha, "cg_screenDamageAlpha", "200", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_screenDamageAlpha_Team, "cg_screenDamageAlpha_Team", "200", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
-    {&cg_scalePlayerModelsToBB, "cg_scalePlayerModelsToBB", "1", CVAR_CHEAT},  // [QL] binary: CVAR_CHEAT
+    {&cg_scalePlayerModelsToBB, "cg_scalePlayerModelsToBB", "1", CVAR_CHEAT},
 
-    // [QL] gameplay cvars
-    {&cg_autoAction, "cg_autoAction", "3", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_USERINFO | CVAR_ARCHIVE, "0", "3"},  // [QL] binary: CVAR_ARCHIVE | CVAR_USERINFO
+    {&cg_autoAction, "cg_autoAction", "3", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_USERINFO | CVAR_ARCHIVE, "0", "3"},
     {&cg_autoProjectileNudge, "cg_autoProjectileNudge", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_latchedHookOffset, "cg_latchedHookOffset", "1.0", CVAR_ROM},
     {&cg_overheadNamesWidth, "cg_overheadNamesWidth", "75", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "50", "100"},
     {&cg_preferredStartingWeapons, "cg_preferredStartingWeapons", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_predictLocalRailshots, "cg_predictLocalRailshots", "1", 0},
-    {&cg_projectileNudge, "cg_projectileNudge", "0", CVAR_CHEAT},  // [QL] binary: CVAR_CHEAT
+    {&cg_projectileNudge, "cg_projectileNudge", "0", CVAR_CHEAT},
 
-    // [QL] camera/view cvars
-    {&cg_cameraSmartMode, "cg_cameraSmartMode", "0", CVAR_CHEAT},  // [QL] binary: CVAR_CHEAT
-    {&cg_cameraThirdPersonSmartMode, "cg_cameraThirdPersonSmartMode", "1", CVAR_CHEAT},  // [QL] binary: CVAR_CHEAT
+    {&cg_cameraSmartMode, "cg_cameraSmartMode", "0", CVAR_CHEAT},
+    {&cg_cameraThirdPersonSmartMode, "cg_cameraThirdPersonSmartMode", "1", CVAR_CHEAT},
     {&cg_filter_angles, "cg_filter_angles", "0", 0},
     {&cg_stereoSeparation, "cg_stereoSeparation", "0.4", CVAR_ARCHIVE},
 
-    // [QL] loadout disable cvars - CVAR_ROM (set by server via CS_DISABLE_LOADOUT, must not persist)
     {&cg_disableLoadout_bfg, "cg_disableLoadout_bfg", "0", CVAR_ROM},
     {&cg_disableLoadout_cg, "cg_disableLoadout_cg", "0", CVAR_ROM},
     {&cg_disableLoadout_gh, "cg_disableLoadout_gh", "0", CVAR_ROM},
     {&cg_disableLoadout_gl, "cg_disableLoadout_gl", "0", CVAR_ROM},
-    {&cg_disableLoadout_gt, "cg_disableLoadout_g",  "0", CVAR_ROM},  // [QL] cvar name matches cgamex86.dll string table
+    {&cg_disableLoadout_gt, "cg_disableLoadout_g",  "0", CVAR_ROM},
     {&cg_disableLoadout_hmg, "cg_disableLoadout_hmg", "0", CVAR_ROM},
     {&cg_disableLoadout_lg, "cg_disableLoadout_lg", "0", CVAR_ROM},
     {&cg_disableLoadout_mg, "cg_disableLoadout_mg", "0", CVAR_ROM},
     {&cg_disableLoadout_ng, "cg_disableLoadout_ng", "0", CVAR_ROM},
     {&cg_disableLoadout_pg, "cg_disableLoadout_pg", "0", CVAR_ROM},
-    {&cg_disableLoadout_pm, "cg_disableLoadout_pl", "0", CVAR_ROM},  // [QL] cvar name matches cgamex86.dll string table
+    {&cg_disableLoadout_pm, "cg_disableLoadout_pl", "0", CVAR_ROM},
     {&cg_disableLoadout_rg, "cg_disableLoadout_rg", "0", CVAR_ROM},
     {&cg_disableLoadout_rl, "cg_disableLoadout_rl", "0", CVAR_ROM},
     {&cg_disableLoadout_sg, "cg_disableLoadout_sg", "0", CVAR_ROM},
 
-    // [QL] game info cvars (server-to-client state)
     {&cg_gameInfo1, "cg_gameInfo1", "0", CVAR_ROM},
     {&cg_gameInfo2, "cg_gameInfo2", "0", CVAR_ROM},
     {&cg_gameInfo3, "cg_gameInfo3", "0", CVAR_ROM},
@@ -977,24 +870,20 @@ static cvarTable_t cvarTable[] = {
     {&cg_gameInfo5, "cg_gameInfo5", "0", CVAR_ROM},
     {&cg_gameInfo6, "cg_gameInfo6", "0", CVAR_ROM},
 
-    // [QL] team name cvars
     {&cg_blueTeamName, "cg_blueTeamName", "", 0},
     {&cg_redTeamName, "cg_redTeamName", "", 0},
     {&cg_playerTeam, "cg_playerTeam", "", CVAR_ROM},
 
-    // [QL] voice/chat cvars
-    {&cg_playVoiceChats, "cg_playVoiceChats", "0", CVAR_CHEAT},  // [QL] binary: CVAR_CHEAT
-    {&cg_showVoiceText, "cg_showVoiceText", "0", CVAR_CHEAT},  // [QL] binary: CVAR_CHEAT
+    {&cg_playVoiceChats, "cg_playVoiceChats", "0", CVAR_CHEAT},
+    {&cg_showVoiceText, "cg_showVoiceText", "0", CVAR_CHEAT},
 
-    // [QL] misc cvars
-    {&cg_debugFlags, "cg_debugFlags", "0", CVAR_CHEAT},  // [QL] binary: CVAR_CHEAT
+    {&cg_debugFlags, "cg_debugFlags", "0", CVAR_CHEAT},
     {&cg_drawProfileImages, "cg_drawProfileImages", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_ignoreMouseInput, "cg_ignoreMouseInput", "0", CVAR_ROM},
     {&cg_lastmsg, "cg_lastmsg", "", 0},
-    {&cg_trackPlayer, "cg_trackPlayer", "-1", CVAR_CHEAT},  // [QL] binary: CVAR_CHEAT
-    {&cg_weaponPrimaryQueued, "cg_weaponPrimaryQueued", "", CVAR_TEMP},  // [QL] menu writes via exec; binary uses CVAR_TEMP
+    {&cg_trackPlayer, "cg_trackPlayer", "-1", CVAR_CHEAT},
+    {&cg_weaponPrimaryQueued, "cg_weaponPrimaryQueued", "", CVAR_TEMP},
 
-    // [QL] UI state cvars (shared with UI module)
     {&ui_endMapVotingDisabled, "ui_endMapVotingDisabled", "0", CVAR_ROM},
     {&ui_gameTypeVotingDisabled, "ui_gameTypeVotingDisabled", "0", CVAR_ROM},
     {&ui_intermission, "ui_intermission", "0", CVAR_ROM},
@@ -1004,33 +893,23 @@ static cvarTable_t cvarTable[] = {
     {&ui_votestring, "ui_votestring", "", CVAR_CHEAT},
     {&ui_warmup, "ui_warmup", "0", CVAR_ROM},
 
-    // [QL] g_ cvars read by cgame
     {&g_skipTrainingEnable, "g_skipTrainingEnable", "0", 0},
     {&g_training, "g_training", "0", 0},
 
-    // [QL] internal/ROM cvars
     {&cg_loadout, "cg_loadout", "0", CVAR_ROM},
     {&cg_spectating, "cg_spectating", "0", CVAR_ROM},
 
-    // [QL] last-standing announcer gate (defaults on)
     {&cg_announcerLastStanding, "cg_announcerLastStanding", "1", CVAR_ARCHIVE},
 };
 
 static int cvarTableSize = ARRAY_LEN(cvarTable);
 
-/*
-=================
-CG_RegisterCvars
-=================
-*/
 void CG_RegisterCvars(void) {
     int i;
     cvarTable_t* cv;
     char var[MAX_TOKEN_CHARS];
 
     for (i = 0, cv = cvarTable; i < cvarTableSize; i++, cv++) {
-        // [QL] 0x10020bb0: an entry flagged CVAR_CG_RANGE goes through the range import (+0x14),
-        // which keeps the value between the entry's two strings
         if (cv->cvarFlags & CVAR_CG_RANGE) {
             trap_Cvar_RegisterRange(cv->vmCvar, cv->cvarName, cv->defaultString,
                                     cv->minString, cv->maxString, cv->cvarFlags);
@@ -1039,13 +918,10 @@ void CG_RegisterCvars(void) {
         }
     }
 
-    // [QL] ROM build-version cvar reported by cgamex86.dll build 1069.
     trap_Cvar_Register(NULL, "cg_version", "1069 win-x86 May 25 2016 15:18:10", CVAR_ROM);
 
-    // [QL] clear any stale vote-active flag on (re)load.
     trap_Cvar_Set("ui_voteactive", "0");
 
-    // see if we are also running the server on this machine
     trap_Cvar_VariableStringBuffer("sv_running", var, sizeof(var));
     cgs.localServer = atoi(var);
 
@@ -1053,11 +929,6 @@ void CG_RegisterCvars(void) {
     trap_Cvar_Register(NULL, "headmodel", DEFAULT_MODEL, CVAR_USERINFO | CVAR_ARCHIVE);
 }
 
-/*
-=================
-CG_UpdateCvars
-=================
-*/
 void CG_UpdateCvars(void) {
     int i;
     cvarTable_t* cv;
@@ -1066,12 +937,6 @@ void CG_UpdateCvars(void) {
         trap_Cvar_Update(cv->vmCvar);
     }
 
-    // check for modications here
-    // [QL] no "teamoverlay" userinfo: the name is in none of retail's modules, and its server
-    // sends the team list (tinfo) whatever the client draws
-
-    // [QL] once loading is over, a change to any of the six forcing cvars reloads the local
-    // client, whose CG_NewClientInfo then reloads everybody else (0x10020cc7)
     if (!cg.loading) {
         if (cg_forceModelModCounts[0] != cg_forceTeamModel.modificationCount ||
             cg_forceModelModCounts[1] != cg_forceTeamSkin.modificationCount ||
@@ -1104,13 +969,6 @@ int CG_LastAttacker(void) {
     return cg.snap->ps.persistant[PERS_ATTACKER];
 }
 
-// ============================================================================
-// [QL] vmMain export slots 10-14 (cgamex86.dll table at 0x100769a8).
-// ============================================================================
-
-// Address: 0x10029ff0
-// Re-adds the last outgoing chat line to the chat display and arms a 3s recall
-// timer. Matches: ioquakelive (QL-only export).
 void CG_LastChatCommand(void) {
     char msg[256];
 
@@ -1119,8 +977,6 @@ void CG_LastChatCommand(void) {
     CG_AddChat(msg, 0, 0);
 }
 
-// Address: 0x1002a060
-// Same as CG_LastChatCommand but arms the second recall timer.
 void CG_LastChatCommand2(void) {
     char msg[256];
 
@@ -1129,35 +985,22 @@ void CG_LastChatCommand2(void) {
     CG_AddChat(msg, 0, 0);
 }
 
-// Address: 0x10007cd0
-// Sets the cgame key-catcher flag (global 0x10a9c9b4) if not already set.
 void CG_SetKeyCatcher(void) {
     if (cg.keyCatcherActive == 0) {
         cg.keyCatcherActive = 1;
     }
 }
 
-// Address: 0x10007cf0
-// Clears the cgame key-catcher flag if set.
 void CG_ClearKeyCatcher(void) {
     if (cg.keyCatcherActive != 0) {
         cg.keyCatcherActive = 0;
     }
 }
 
-// Address: 0x1004e4d0
-// Returns the client frame counter (dword at 0x10a9c1f4, cg.clientFrame),
-// bumped once per rendered scene in CG_DrawActiveFrame.
 int CG_GetActiveFrame(void) {
     return cg.clientFrame;
 }
 
-// ============================================================================
-// [QL] match / race / map-name helpers
-// ============================================================================
-
-// Address: 0x10001320
-// Formats a millisecond race time as "[-]M:0S.mmm".
 const char* CG_FormatRaceTime(int msec) {
     int absMsec = (msec < 0) ? -msec : msec;
     float seconds = (float)absMsec / 1000.0f;
@@ -1169,13 +1012,11 @@ const char* CG_FormatRaceTime(int msec) {
     return va("%s%d:%s%.03f", sign, minutes, pad, (double)secs);
 }
 
-// Address: 0x100253f0
-// Reads ui/country.txt and pre-caches every country flag shader.
 void CG_CacheCountryFlags(void) {
     fileHandle_t f;
     int len;
     char buf[4096];
-    char code[32 + 1024];  // code[0..31] name + code[32..] path scratch
+    char code[32 + 1024];
     char* p;
     int i;
 
@@ -1218,15 +1059,6 @@ void CG_CacheCountryFlags(void) {
     }
 }
 
-/*
-=================
-CG_CountryFlagShader
-
-[QL] 0x1002df70: the flag of a country code, ui/assets/flags/<code>, or the blank one when
-there is none. With no country at all (a bot, or nobody set one) retail looks up an empty
-name first, and the renderer warns about it; that lookup is skipped.
-=================
-*/
 qhandle_t CG_CountryFlagShader(const char* country) {
     qhandle_t h = 0;
 
@@ -1239,9 +1071,6 @@ qhandle_t CG_CountryFlagShader(const char* country) {
     return h;
 }
 
-// Address: 0x1002a4a0
-// Drops the run and tells the server so; a full reset (race_init) also forgets the last and
-// the best time. Only in GT_RACE.
 void CG_RaceInit(int fullReset) {
     if (cgs.gametype != GT_RACE) {
         return;
@@ -1263,17 +1092,10 @@ void CG_RaceInit(int fullReset) {
     trap_SendClientCommand("raceinit");
 }
 
-// Address: 0x10032240
-// The race points still ahead: the map's count less the ones passed.
 int CG_RaceCheckpointsLeft(void) {
     return atoi(CG_ConfigString(CS_RACE_POINTS)) - cg.race.checkpointsPassed;
 }
 
-// Address: 0x1002a500
-// Whether the local player holds first place. Never as a spectator. In FFA,
-// duel, race and red rover: rank 0 and not tied. In team games: the player's
-// team is ahead, red also on a tie (retail compares red with >=, blue with >).
-// Retail also copies the player's name into a local buffer it never reads.
 qboolean CG_LocalPlayerLeads(void) {
     int rank;
     int team;
@@ -1300,22 +1122,17 @@ qboolean CG_LocalPlayerLeads(void) {
     return qfalse;
 }
 
-// Address: 0x1002a5f0
-// Returns the number of overtime periods elapsed past the time limit.
 int CG_GetOvertimeCount(void) {
     int timeUsed;
     int elapsed;
     int overtimeCount;
     int i;
 
-    // [QL] 0x10a403e0: freeze/timeout end time, else current time.
     timeUsed = cgs.freezeEnd;
     if (timeUsed == 0) {
         timeUsed = cg.time;
     }
 
-    // [QL] seconds past the time limit: retail divides by -1000 (the magic -0x10624dd3), and
-    // without the minus this counted overtimes while there was still time left
     elapsed = (timeUsed - cgs.levelStartTime - cgs.timelimit * 60000) / 1000;
 
     if (elapsed <= 0) {
@@ -1324,7 +1141,6 @@ int CG_GetOvertimeCount(void) {
 
     overtimeCount = 1;
     for (i = 1; i <= elapsed; i++) {
-        // [QL] 0x10a3ffa8 = overtime period length (g_overtime == cgs.timelimit_overtime).
         if (cgs.timelimit_overtime != 0 && (i % cgs.timelimit_overtime) == 0) {
             overtimeCount++;
         }
@@ -1332,10 +1148,6 @@ int CG_GetOvertimeCount(void) {
     return overtimeCount;
 }
 
-// Address: 0x10056f90
-// Translates an internal map filename to its display name via a fixed table
-// (49 entries, extracted from cgamex86.dll 0x10075df0). Falls back to the
-// input name when no prefix match is found.
 typedef struct {
     const char* filename;
     const char* displayName;
@@ -1453,11 +1265,6 @@ void QDECL Com_Printf(const char* msg, ...) {
     trap_Print(text);
 }
 
-/*
-================
-CG_Argv
-================
-*/
 const char* CG_Argv(int arg) {
     static char buffer[MAX_STRING_CHARS];
 
@@ -1466,16 +1273,6 @@ const char* CG_Argv(int arg) {
     return buffer;
 }
 
-//========================================================================
-
-/*
-=================
-CG_AnnouncerSound
-
-[QL] cgamex86.dll 0x10020dd0. The announcer's folder follows cg_announcer: 1 vo, 2 vo_evil,
-3 vo_female. Any other value uses vo and puts the cvar back to 1.
-=================
-*/
 static const char* CG_AnnouncerSound(const char* name) {
     const char* voice;
 
@@ -1497,17 +1294,6 @@ static const char* CG_AnnouncerSound(const char* name) {
     return va("sound/%s/%s", voice, name);
 }
 
-/*
-=================
-CG_RegisterSounds
-
-called during a precache command
-
-[QL] cgamex86.dll 0x10020e70. Each mode loads only the announcements it can play, the gore
-pack's sounds load only when its dlc_gibs folder exists, and every item's pickup sound loads
-whether or not the map has the item.
-=================
-*/
 static void CG_RegisterSounds(void) {
     int i;
     int gorePack;
@@ -1659,7 +1445,6 @@ static void CG_RegisterSounds(void) {
     cgs.media.electroGibBounceSound[3] = trap_S_RegisterSound("sound/misc/electrogib_bounce_04.ogg", qfalse);
     cgs.media.electroGibBounceSound[4] = trap_S_RegisterSound("sound/misc/electrogib_bounce_05.ogg", qfalse);
 
-    // [QL] See content/optional/gore/README.md
     if (gorePack > 0) {
         cgs.media.gibSound = trap_S_RegisterSound("dlc_gibs/gibsplt1.ogg", qfalse);
         cgs.media.gibBounce1Sound = trap_S_RegisterSound("dlc_gibs/gibimp1.ogg", qfalse);
@@ -1781,7 +1566,7 @@ static void CG_RegisterSounds(void) {
             break;
         }
         if (soundName[0] == '*') {
-            continue;  // custom sound
+            continue;
         }
         cgs.gameSounds[i] = trap_S_RegisterSound(soundName, qfalse);
     }
@@ -1830,15 +1615,6 @@ static void CG_RegisterSounds(void) {
     cgs.media.timPumpSound = trap_S_RegisterSound("sound/misc/tim_pump.ogg", qfalse);
 }
 
-//===================================================================================
-
-/*
-=================
-CG_RegisterGraphics
-
-This function may execute for a couple of minutes with a slow disk.
-=================
-*/
 static void CG_RegisterGraphics(void) {
     int i;
     char items[MAX_ITEMS + 1];
@@ -1857,12 +1633,10 @@ static void CG_RegisterGraphics(void) {
         "gfx/2d/numbers/nine_32b",
         "gfx/2d/numbers/minus_32b",
     };
-    cgs.media.domShadowShader = trap_R_RegisterShader("domShadow");  // [QL] 0x10024abc
+    cgs.media.domShadowShader = trap_R_RegisterShader("domShadow");
 
-    // [QL] 0x10020e70 counts the gore pack once for sounds and pictures alike
     gorePack = trap_FS_GetFileList("dlc_gibs", "", gorePackList, sizeof(gorePackList));
 
-    // clear any references to old media
     memset(&cg.refdef, 0, sizeof(cg.refdef));
     trap_R_ClearScene();
 
@@ -1870,7 +1644,6 @@ static void CG_RegisterGraphics(void) {
 
     trap_R_LoadWorldMap(cgs.mapname);
 
-    // precache status bar pics
     CG_LoadingString("game media");
 
     for (i = 0; i < 11; i++) {
@@ -1883,19 +1656,9 @@ static void CG_RegisterGraphics(void) {
     cgs.media.botSkillShaders[3] = trap_R_RegisterShader("menu/art/skill4.png");
     cgs.media.botSkillShaders[4] = trap_R_RegisterShader("menu/art/skill5.png");
 
-    // [QL] 0x100242cd: the blood on the screen and the sprays are the gore pack's, and like its
-    // sounds and gibs they are registered only when its dlc_gibs folder exists. Asking for them
-    // without the pack printed a warning per missing image on every map load
     if (gorePack > 0) {
         cgs.media.viewBloodShader = trap_R_RegisterShader("viewBloodBlend");
     }
-    // [QL] cgamex86.dll 0x100230e7 registers "viewDamageBlend" into 0x10a5f4f4, right
-    // alongside viewBloodBlend (0x100242da -> 0x10a5f4f0). They are the two halves of one
-    // choice, not alternatives that happen to coexist: pak00's scripts/gfx.shader points
-    // viewDamageBlend at gfx/damage/damage_screen, which ships with the base game, and
-    // viewBloodBlend at dlc_gibs/blood_screen, which only the Steam Workshop gore pack
-    // brings. Registering only the blood one left a stock install drawing the default
-    // (missing-texture) shader across the screen on every hit.
     cgs.media.viewDamageShader = trap_R_RegisterShader("viewDamageBlend");
 
     cgs.media.deferShader = trap_R_RegisterShaderNoMip("gfx/2d/defer.png");
@@ -1905,7 +1668,6 @@ static void CG_RegisterGraphics(void) {
     cgs.media.scoreboardScore = trap_R_RegisterShaderNoMip("menu/tab/score.tga");
     cgs.media.scoreboardTime = trap_R_RegisterShaderNoMip("menu/tab/time.tga");
 
-    // [QL] the duel board's status plates, in duel and in the binary's order (0x100237ec..0x100238e3)
     if (cgs.gametype == GT_DUEL) {
         cgs.media.duelPlateReady[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_ready.tga");
         cgs.media.duelPlateNotReady[0] = trap_R_RegisterShader("ui/assets/score/1st_plyr_notready.tga");
@@ -1920,8 +1682,6 @@ static void CG_RegisterGraphics(void) {
     }
     if (cgs.gametype >= GT_FREEZE) {
         cgs.media.thawIconShader = trap_R_RegisterShader("icons/thaw");
-        // [QL] the base gibs, registered right here by the binary and distinct from the gore
-        // pack's (dlc_gibs): it keeps the two sets in separate globals
         cgs.media.gibBrainBase = trap_R_RegisterModel("models/gibs/brain.md3");
         cgs.media.gibAbdomenBase = trap_R_RegisterModel("models/gibs/abdomen.md3");
     }
@@ -1934,7 +1694,6 @@ static void CG_RegisterGraphics(void) {
     cgs.media.blueProxMine = trap_R_RegisterModel("models/weaphits/proxmineb.md3");
 
     cgs.media.plasmaBallShader = trap_R_RegisterShader("sprites/plasma1");
-    // [QL] blood spray shaders (translucent sprites with proper alpha blend), the gore pack's
     if (gorePack > 0) {
         cgs.media.bloodSprayShaders[0] = trap_R_RegisterShader("bloodSpray1");
         cgs.media.bloodSprayShaders[1] = trap_R_RegisterShader("bloodSpray2");
@@ -1947,7 +1706,6 @@ static void CG_RegisterGraphics(void) {
 
     cgs.media.waterBubbleShader = trap_R_RegisterShader("waterBubble");
 
-    // [QL] 0x10024d9d: the item respawn timer's faces and wedges
     cgs.media.timerIcons[TIMER_ICON_ARMOR] = trap_R_RegisterShader("gfx/2d/timer/armor");
     cgs.media.timerIcons[TIMER_ICON_BS] = trap_R_RegisterShader("gfx/2d/timer/bs");
     cgs.media.timerIcons[TIMER_ICON_HASTE] = trap_R_RegisterShader("gfx/2d/timer/haste");
@@ -1967,7 +1725,6 @@ static void CG_RegisterGraphics(void) {
     cgs.media.timerSlices[3][1] = trap_R_RegisterShader("gfx/2d/timer/slice24_current");
 
     cgs.media.tracerShader = trap_R_RegisterShader("gfx/misc/tracer");
-    // [QL] 0x1002321e: the impact sparks carry their own handle on the same shader
     cgs.media.sparkParticleShader = trap_R_RegisterShader("gfx/misc/tracer");
     cgs.media.selectShader = trap_R_RegisterShader("gfx/2d/select");
     cgs.media.weaponBarHighlightShader = trap_R_RegisterShader("ui/assets/hud/weaplit2.tga");
@@ -1983,7 +1740,6 @@ static void CG_RegisterGraphics(void) {
     cgs.media.noammoShader = trap_R_RegisterShader("icons/noammo");
     cgs.media.fragIconShader = trap_R_RegisterShader("icons/icon_frag");
 
-    // powerup shaders
     cgs.media.quadShader = trap_R_RegisterShader("powerups/quad");
     cgs.media.quadWeaponShader = trap_R_RegisterShader("powerups/quadWeapon");
     cgs.media.brightWeaponShader = trap_R_RegisterShader("ioqlBrightWeapon");
@@ -1998,8 +1754,6 @@ static void CG_RegisterGraphics(void) {
     cgs.media.gooShader = trap_R_RegisterShader("powerups/goo");
     cgs.media.xrayMaskShader = trap_R_RegisterShader("ioqlXrayMask");
     cgs.media.xrayShader = trap_R_RegisterShader("ioqlXray");
-    // [QL] 0x100236c5: the markers drawn over the powerups, in every mode but FFA, race,
-    // harvester and domination
     switch (cgs.gametype) {
         case GT_FFA:
         case GT_RACE:
@@ -2015,13 +1769,11 @@ static void CG_RegisterGraphics(void) {
             cgs.media.powerupIncomingShader = trap_R_RegisterShaderNoMip("gfx/2d/powerup/incoming");
             break;
     }
-    // [QL] 0x100237c8: Quad Hog is played in FFA
     if (cgs.gametype == GT_FFA) {
         cgs.media.quadHogPoiShader = trap_R_RegisterShaderNoMip("gfx/2d/quad_hog/quadhog");
     }
     cgs.media.hastePuffShader = trap_R_RegisterShader("hasteSmokePuff");
 
-    // [QL] gametype icons for scoreboard/HUD (from pak00: ui/assets/hud/*.png)
     cgs.media.gametypeIcon[GT_FFA]        = trap_R_RegisterShaderNoMip("ui/assets/hud/ffa");
     cgs.media.gametypeIcon[GT_DUEL]       = trap_R_RegisterShaderNoMip("ui/assets/hud/duel");
     cgs.media.gametypeIcon[GT_RACE]       = trap_R_RegisterShaderNoMip("ui/assets/hud/race");
@@ -2037,11 +1789,8 @@ static void CG_RegisterGraphics(void) {
     cgs.media.gametypeIcon[GT_RR]         = trap_R_RegisterShaderNoMip("ui/assets/hud/rr");
     cgs.media.raceNavShader = trap_R_RegisterShader("gfx/misc/racenav.jpg");
 
-    // [QL] the binary always registers the gold key, outside any conditional
     cgs.media.keyGoldModel = trap_R_RegisterModel("models/powerups/keys/key_gold.md3");
 
-    // [QL] 0x10023996: the flags, their poles and bases and the flag status icons, in the
-    // modes that have flags: race, CTF, one flag, overload, domination and A&D
     switch (cgs.gametype) {
         case GT_RACE:
         case GT_CTF:
@@ -2049,8 +1798,6 @@ static void CG_RegisterGraphics(void) {
         case GT_OBELISK:
         case GT_DOMINATION:
         case GT_AD: {
-            // indexed [icon + team*4]: team 0 neutral, 1 red, 2 blue; icon 0 at base, 1 taken,
-            // 2 dropped, 3 stolen
             static const char* flagStatusShaders[12] = {
                 "gfx/2d/flag_status/flag_at_base.tga",
                 "gfx/2d/flag_status/flag_taken.tga",
@@ -2089,7 +1836,6 @@ static void CG_RegisterGraphics(void) {
         default:
             break;
     }
-    // [QL] 0x10023c33: the neutral and the dropped flag
     if (cgs.gametype == GT_1FCTF || cgs.gametype == GT_DOMINATION || cgs.gametype == GT_AD ||
         cgs.gametype == GT_RACE) {
         cgs.media.neutralFlagModel = trap_R_RegisterModel("models/flags/n_flag.md3");
@@ -2097,7 +1843,6 @@ static void CG_RegisterGraphics(void) {
         cgs.media.raceFlagN = trap_R_RegisterModel("models/flag3/n_flag3.md3");
         cgs.media.raceFlagD = trap_R_RegisterModel("models/flag3/d_flag3.md3");
     }
-    // [QL] 0x10023cad: the harvester, which one flag also uses for the team bases
     if (cgs.gametype == GT_1FCTF || cgs.gametype == GT_HARVESTER) {
         cgs.media.harvesterModel = trap_R_RegisterModel("models/powerups/harvester/harvester.md3");
         cgs.media.harvesterRedSkin = trap_R_RegisterSkin("models/powerups/harvester/red.skin");
@@ -2117,15 +1862,12 @@ static void CG_RegisterGraphics(void) {
         cgs.media.overloadLightsModel = trap_R_RegisterModel("models/powerups/overload_lights.md3");
         cgs.media.overloadEnergyModel = trap_R_RegisterModel("models/powerups/overload_energy.md3");
     }
-    // [QL] 0x10023e11: the domination point, which race also puts up
     if (cgs.gametype == GT_DOMINATION || cgs.gametype == GT_RACE) {
         cgs.media.domPointModel = trap_R_RegisterModel("models/powerups/domination/dompoint.md3");
         cgs.media.domSkinRed = trap_R_RegisterSkin("models/powerups/domination/domred.skin");
         cgs.media.domSkinBlue = trap_R_RegisterSkin("models/powerups/domination/domblue.skin");
         cgs.media.domSkinNeutral = trap_R_RegisterSkin("models/powerups/domination/domntrl.skin");
     }
-    // [QL] 0x10023e82: the domination point markers, "capture" or "defend" and a letter each, and
-    // the same for a point being fought over
     if (cgs.gametype == GT_DOMINATION) {
         for (i = 0; i < 5; i++) {
             cgs.media.domCaptureShader[i] = trap_R_RegisterShaderNoMip(va("gfx/2d/dom_point/dom_cap_%c", 'a' + i));
@@ -2142,7 +1884,6 @@ static void CG_RegisterGraphics(void) {
                 trap_R_RegisterShaderNoMip(va("gfx/2d/dom_point/dom_def_%c_dist", 'a' + i));
         }
     }
-    // [QL] 0x1002406f: the race markers, which the objective modes use too
     switch (cgs.gametype) {
         case GT_RACE:
         case GT_CTF:
@@ -2159,26 +1900,21 @@ static void CG_RegisterGraphics(void) {
             break;
     }
 
-    // [QL] 0x1002303c: the segments of the health bars over teammates
     cgs.media.healthSegmentShader = trap_R_RegisterShader("gfx/2d/health_segment.tga");
-    // [QL] 0x100233f4: the arrows of cg_drawInputCmds
     cgs.media.cmdUpShader = trap_R_RegisterShaderNoMip("gfx/2d/race/cmd_up");
     cgs.media.cmdDownShader = trap_R_RegisterShaderNoMip("gfx/2d/race/cmd_down");
     cgs.media.cmdRightShader = trap_R_RegisterShaderNoMip("gfx/2d/race/cmd_right");
     cgs.media.cmdLeftShader = trap_R_RegisterShaderNoMip("gfx/2d/race/cmd_left");
 
-    // [QL] 0x100240d9: the bite over Red Rover's survivors, which is also their marker
     if (cgs.gametype == GT_RR) {
         cgs.media.infectedShader = trap_R_RegisterShaderNoMip("gfx/2d/infected/bite");
     }
 
     cgs.media.redKamikazeShader = trap_R_RegisterShader("models/weaphits/kamikred");
     cgs.media.dustPuffShader = trap_R_RegisterShader("hasteSmokePuff");
-    // [QL] 0x1002413b: the debris of a shot through a wall (0x10055357)
     cgs.media.debrisPuffShader = trap_R_RegisterShader("surfacePuff");
 
     if (cgs.gametype >= GT_TEAM) {
-        // [QL] 0x1002415d: the teammate markers
         cgs.media.friendShader = trap_R_RegisterShader("sprites/friend");
         cgs.media.friendHitShader = trap_R_RegisterShader("sprites/friend_hit");
         cgs.media.friendDeadShader = trap_R_RegisterShader("sprites/friend_dead");
@@ -2186,7 +1922,6 @@ static void CG_RegisterGraphics(void) {
         cgs.media.blueKamikazeShader = trap_R_RegisterShader("models/weaphits/kamikblu");
         cgs.media.frozenShader = trap_R_RegisterShader("sprites/frozen");
     }
-    // [QL] 0x100241e7: the flag carriers' markers, in the modes with flags
     if (cgs.gametype == GT_CTF || cgs.gametype == GT_1FCTF || cgs.gametype == GT_AD) {
         cgs.media.flagCarrierShader = trap_R_RegisterShader("sprites/flagcarrier");
         cgs.media.flagCarrierHitShader = trap_R_RegisterShader("sprites/flagcarrier_hit");
@@ -2202,9 +1937,7 @@ static void CG_RegisterGraphics(void) {
     cgs.media.smoke2 = trap_R_RegisterModel("models/weapons2/shells/s_shell.md3");
 
     cgs.media.balloonShader = trap_R_RegisterShader("sprites/balloon3");
-    // [QL] 0x100244f5: the followed player's frame in the team vitals
     cgs.media.voiceWindowShader = trap_R_RegisterShader("ui/assets/voiceWindow");
-    // [QL] 0x10023696: the two icons in the scoreboard's first column
     cgs.media.scoreMutedShader = trap_R_RegisterShader("ui/assets/score/muted");
     cgs.media.scoreSpeakingShader = trap_R_RegisterShader("ui/assets/score/speaking");
 
@@ -2225,13 +1958,12 @@ static void CG_RegisterGraphics(void) {
     cgs.media.ammoRegenPowerupModel = trap_R_RegisterModel("models/powerups/ammo_player.md3");
     cgs.media.invulnerabilityImpactModel = trap_R_RegisterModel("models/powerups/shield/impact.md3");
     if (gorePack > 0) {
-        cgs.media.invulnerabilityJuicedModel = trap_R_RegisterModel("dlc_gibs/juicer.md3");  // [QL] moved from models/powerups/shield/
+        cgs.media.invulnerabilityJuicedModel = trap_R_RegisterModel("dlc_gibs/juicer.md3");
     }
     cgs.media.medkitUsageModel = trap_R_RegisterModel("models/powerups/regen.md3");
     cgs.media.heartShader = trap_R_RegisterShaderNoMip("ui/assets/statusbar/selectedhealth.tga");
     cgs.media.invulnerabilityPowerupModel = trap_R_RegisterModel("models/powerups/shield/shield.md3");
 
-    // [QL] 16 medal types (verified from binary CG_RegisterGraphics)
     cgs.media.medalAccuracy = trap_R_RegisterShaderNoMip("medal_accuracy");
     cgs.media.medalAssist = trap_R_RegisterShaderNoMip("medal_assist");
     cgs.media.medalCapture = trap_R_RegisterShaderNoMip("medal_capture");
@@ -2243,8 +1975,6 @@ static void CG_RegisterGraphics(void) {
     cgs.media.medalHeadshot = trap_R_RegisterShaderNoMip("medal_headshot");
     cgs.media.medalImpressive = trap_R_RegisterShaderNoMip("medal_impressive");
 
-    // [CPMA] animation frames, CPMA 1.53's own, shipped in pak01; the checks keep a pak01
-    // built without them working
     {
         static const char* const medalNames[6] = {"assist", "capture", "defend", "excellent", "gauntlet", "impressive"};
         fileHandle_t f;
@@ -2265,8 +1995,6 @@ static void CG_RegisterGraphics(void) {
             }
         }
 
-        // [ioquakelive] Handel Gothic Ex for the frag message (CG_DrawCenterString), shipped in
-        // pak01. Without it the frag message falls back to Quake Live's Handel Gothic.
         cgs.media.fragMessageFont = 0;
         if (trap_FS_FOpenFile("fonts/handelgothicex.ttf", &f, FS_READ) > 0) {
             trap_FS_FCloseFile(f);
@@ -2283,7 +2011,6 @@ static void CG_RegisterGraphics(void) {
     cgs.media.medalRampage = trap_R_RegisterShaderNoMip("medal_rampage");
     cgs.media.medalRevenge = trap_R_RegisterShaderNoMip("medal_revenge");
 
-    // [QL] 0x10024808: the scoreboards' pickup icons, in retail's order
     cgs.media.pickupRA = trap_R_RegisterShaderNoMip("pickup_RA");
     cgs.media.pickupYA = trap_R_RegisterShaderNoMip("pickup_YA");
     cgs.media.pickupGA = trap_R_RegisterShaderNoMip("pickup_GA");
@@ -2298,15 +2025,6 @@ static void CG_RegisterGraphics(void) {
     cgs.media.pickupHaste = trap_R_RegisterShaderNoMip("pickup_HASTE");
     cgs.media.pickupInvis = trap_R_RegisterShaderNoMip("pickup_INVIS");
 
-    // [QL] 0x10024343. The Steam Workshop gore pack - the body-part gibs a
-    // player can install if they want Quake 3's look back. Retail's pak00 ships
-    // none of these files, so RE_RegisterModel hands back 0 for every one and
-    // CG_GibPlayer takes the electrogib branch. That handle being zero *is*
-    // retail's on/off switch; there is no cvar behind it. The assets sit
-    // unshipped in content/optional/gore/.
-    //
-    // The binary keeps sixteen slots because it holds left and right variants
-    // separately, but the duplicated pairs all point at the same file.
     if (gorePack > 0) {
         cgs.media.gibSkull = trap_R_RegisterModel("dlc_gibs/skull.md3");
         cgs.media.gibBrain = trap_R_RegisterModel("dlc_gibs/brain.md3");
@@ -2320,19 +2038,10 @@ static void CG_RegisterGraphics(void) {
         cgs.media.gibFoot = trap_R_RegisterModel("dlc_gibs/foot.md3");
     }
 
-    // [QL] freeze tag
     cgs.media.iceShardModel = trap_R_RegisterModel("models/gibs/sphere.md3");
-    // [QL] 0x100242b4 registers the same model separately as the no-gore
-    // gib. Retail pak00 ships models/gibs/sphere.md3; it does not ship a
-    // single dlc_gibs entry.
     cgs.media.gibSphere = cgs.media.iceShardModel;
-    // [QL] 0x10023501. An animated additive sprite (deathSpike6..11.jpg,
-    // sawtooth rgbGen) defined in retail scripts/gfx.shader - the electric
-    // discharge that goes off where the body was.
     cgs.media.deathEffectShader = trap_R_RegisterShader("deathEffect");
-    // [QL] 0x1002321e. The spark sprite that rises out of a gib.
     cgs.media.gibSparkShader = trap_R_RegisterShader("gfx/misc/tracer");
-    // [QL] 0x100231a5: the trail left by the ice shards
     cgs.media.iceTrailShader = trap_R_RegisterShader("iceTrail");
     cgs.media.iceShardShader1 = trap_R_RegisterShader("powerups/ice1");
     cgs.media.iceShardShader2 = trap_R_RegisterShader("powerups/ice2");
@@ -2342,7 +2051,6 @@ static void CG_RegisterGraphics(void) {
     memset(cg_items, 0, sizeof(cg_items));
     memset(cg_weapons, 0, sizeof(cg_weapons));
 
-    // only register the items that the server says we need
     Q_strncpyz(items, CG_ConfigString(CS_ITEMS), sizeof(items));
 
     for (i = 1; i < bg_numItems; i++) {
@@ -2352,9 +2060,7 @@ static void CG_RegisterGraphics(void) {
         }
     }
 
-    // wall marks
     cgs.media.bulletMarkShader = trap_R_RegisterShader("gfx/damage/bullet_mrk");
-    // [QL] 0x10024a99: the mark the grapple leaves
     cgs.media.crackedMarkShader = trap_R_RegisterShader("gfx/damage/cracked_mrk");
     cgs.media.burnMarkShader = trap_R_RegisterShader("gfx/damage/burn_med_mrk");
     cgs.media.holeMarkShader = trap_R_RegisterShader("gfx/damage/hole_lg_mrk");
@@ -2363,7 +2069,6 @@ static void CG_RegisterGraphics(void) {
     cgs.media.wakeMarkShader = trap_R_RegisterShader("wake");
     cgs.media.bloodMarkShader = cgs.media.bloodSprayShaders[0];
 
-    // register the inline models
     cgs.numInlineModels = trap_CM_NumInlineModels();
     for (i = 1; i < cgs.numInlineModels; i++) {
         char name[10];
@@ -2378,7 +2083,6 @@ static void CG_RegisterGraphics(void) {
         }
     }
 
-    // register all the server specified models
     for (i = 1; i < MAX_MODELS; i++) {
         const char* modelName;
 
@@ -2389,7 +2093,6 @@ static void CG_RegisterGraphics(void) {
         cgs.gameModels[i] = trap_R_RegisterModel(modelName);
     }
 
-    // new stuff
     cgs.media.patrolShader = trap_R_RegisterShaderNoMip("ui/assets/statusbar/patrol.png");
     cgs.media.assaultShader = trap_R_RegisterShaderNoMip("ui/assets/statusbar/assault.png");
     cgs.media.campShader = trap_R_RegisterShaderNoMip("ui/assets/statusbar/camp.png");
@@ -2400,18 +2103,12 @@ static void CG_RegisterGraphics(void) {
     cgs.media.escortShader = trap_R_RegisterShaderNoMip("ui/assets/statusbar/escort.png");
     cgs.media.cursor = trap_R_RegisterShaderNoMip("menu/art/3_cursor2");
     cgs.media.sizeCursor = trap_R_RegisterShaderNoMip("ui/assets/sizecursor.png");
-    // [QL] cgamex86.dll registers "ui/assets/3_cursor3.tga" at 0x10024d0c.
-    // "ui/assets/selectcursor.png" is in neither pak00 nor pak01, so this
-    // handle used to resolve to the default shader - invisible in practice.
-    // pak00 ships the file as .png; the renderer resolves the extension.
     cgs.media.selectCursor = trap_R_RegisterShaderNoMip("ui/assets/3_cursor3");
 
-    // [QL] 0x10024d30: the objective markers of A&D and CTF, in every mode
     cgs.media.adAttackShader = trap_R_RegisterShaderNoMip("gfx/2d/ad/poi_attack");
     cgs.media.adCaptureShader = trap_R_RegisterShaderNoMip("gfx/2d/ad/poi_capture");
     cgs.media.adDefendShader = trap_R_RegisterShaderNoMip("gfx/2d/ad/poi_defend");
 
-    // [QL] head models are in the player directory, not a separate heads/ directory
     trap_R_RegisterModel("models/players/james/lower.md3");
     trap_R_RegisterModel("models/players/james/upper.md3");
     trap_R_RegisterModel("models/players/james/head.md3");
@@ -2421,28 +2118,8 @@ static void CG_RegisterGraphics(void) {
     trap_R_RegisterModel("models/players/janet/head.md3");
 
     CG_ClearParticles();
-    /*
-        for (i=1; i<MAX_PARTICLES_AREAS; i++)
-        {
-            {
-                int rval;
-
-                rval = CG_NewParticleArea ( CS_PARTICLES + i);
-                if (!rval)
-                    break;
-            }
-        }
-    */
 }
 
-/*
-=======================
-CG_CompareSpectators
-
-[QL] 0x10024f90: the spectators who only watch last, the rest by their place in the play
-queue, so the ones waiting to play read in turn
-=======================
-*/
 static int QDECL CG_CompareSpectators(const void* a, const void* b) {
     const clientInfo_t* ca = &cgs.clientinfo[*(const int*)a];
     const clientInfo_t* cb = &cgs.clientinfo[*(const int*)b];
@@ -2456,17 +2133,6 @@ static int QDECL CG_CompareSpectators(const void* a, const void* b) {
     return (ca->playQueue == cb->playQueue) ? 0 : -1;
 }
 
-/*
-=======================
-CG_BuildSpectatorString
-
-[QL] 0x10024ff0, the spectator list the scoreboards scroll along their bottom: one entry per
-spectator, in the order above. In duel the entry opens with the spectator's place in the
-play queue, renumbered so the list counts from one, and with "(s)" for a spectator who only
-ever watches. Retail strips the colours from the stored name, so a spectator reads plain
-everywhere until their next configstring.
-=======================
-*/
 void CG_BuildSpectatorString(void) {
     int list[MAX_CLIENTS];
     int count = 0;
@@ -2502,7 +2168,6 @@ void CG_BuildSpectatorString(void) {
             }
         }
 
-        // the colours and the control characters go, in the name itself
         out = ci->name;
         for (in = ci->name; *in; in++) {
             if (*in == Q_COLOR_ESCAPE && in[1] && in[1] >= '0' && in[1] <= '7') {
@@ -2524,11 +2189,6 @@ void CG_BuildSpectatorString(void) {
     }
 }
 
-/*
-===================
-CG_RegisterClients
-===================
-*/
 static void CG_RegisterClients(void) {
     int i;
 
@@ -2552,13 +2212,6 @@ static void CG_RegisterClients(void) {
     CG_BuildSpectatorString();
 }
 
-//===========================================================================
-
-/*
-=================
-CG_ConfigString
-=================
-*/
 const char* CG_ConfigString(int index) {
     if (index < 0 || index >= MAX_CONFIGSTRINGS) {
         CG_Error("CG_ConfigString: bad index: %i", index);
@@ -2566,19 +2219,10 @@ const char* CG_ConfigString(int index) {
     return cgs.gameState.stringData + cgs.gameState.stringOffsets[index];
 }
 
-//==================================================================
-
-/*
-======================
-CG_StartMusic
-
-======================
-*/
 void CG_StartMusic(void) {
     char* s;
     char parm1[MAX_QPATH], parm2[MAX_QPATH];
 
-    // start the background music
     s = (char*)CG_ConfigString(CS_MUSIC);
     Q_strncpyz(parm1, COM_Parse(&s), sizeof(parm1));
     Q_strncpyz(parm2, COM_Parse(&s), sizeof(parm2));
@@ -2609,11 +2253,6 @@ char* CG_GetMenuBuffer(const char* filename) {
     return buf;
 }
 
-//
-// ==============================
-// new hud stuff ( mission pack )
-// ==============================
-//
 qboolean CG_Asset_Parse(int handle) {
     pc_token_t token;
     const char* tempStr;
@@ -2632,7 +2271,6 @@ qboolean CG_Asset_Parse(int handle) {
             return qtrue;
         }
 
-        // font - parse but skip registerFont if already registered by CG_Init
         if (Q_stricmp(token.string, "font") == 0) {
             int pointSize;
             if (!PC_String_Parse(handle, &tempStr) || !PC_Int_Parse(handle, &pointSize)) {
@@ -2644,7 +2282,6 @@ qboolean CG_Asset_Parse(int handle) {
             continue;
         }
 
-        // smallFont
         if (Q_stricmp(token.string, "smallFont") == 0) {
             int pointSize;
             if (!PC_String_Parse(handle, &tempStr) || !PC_Int_Parse(handle, &pointSize)) {
@@ -2656,7 +2293,6 @@ qboolean CG_Asset_Parse(int handle) {
             continue;
         }
 
-        // bigFont
         if (Q_stricmp(token.string, "bigfont") == 0) {
             int pointSize;
             if (!PC_String_Parse(handle, &tempStr) || !PC_Int_Parse(handle, &pointSize)) {
@@ -2668,7 +2304,6 @@ qboolean CG_Asset_Parse(int handle) {
             continue;
         }
 
-        // gradientbar
         if (Q_stricmp(token.string, "gradientbar") == 0) {
             if (!PC_String_Parse(handle, &tempStr)) {
                 return qfalse;
@@ -2677,7 +2312,6 @@ qboolean CG_Asset_Parse(int handle) {
             continue;
         }
 
-        // enterMenuSound
         if (Q_stricmp(token.string, "menuEnterSound") == 0) {
             if (!PC_String_Parse(handle, &tempStr)) {
                 return qfalse;
@@ -2686,7 +2320,6 @@ qboolean CG_Asset_Parse(int handle) {
             continue;
         }
 
-        // exitMenuSound
         if (Q_stricmp(token.string, "menuExitSound") == 0) {
             if (!PC_String_Parse(handle, &tempStr)) {
                 return qfalse;
@@ -2695,7 +2328,6 @@ qboolean CG_Asset_Parse(int handle) {
             continue;
         }
 
-        // itemFocusSound
         if (Q_stricmp(token.string, "itemFocusSound") == 0) {
             if (!PC_String_Parse(handle, &tempStr)) {
                 return qfalse;
@@ -2704,7 +2336,6 @@ qboolean CG_Asset_Parse(int handle) {
             continue;
         }
 
-        // menuBuzzSound
         if (Q_stricmp(token.string, "menuBuzzSound") == 0) {
             if (!PC_String_Parse(handle, &tempStr)) {
                 return qfalse;
@@ -2782,16 +2413,6 @@ void CG_ParseMenu(const char* menuFile) {
             break;
         }
 
-        // if ( Q_stricmp( token, "{" ) ) {
-        //	Com_Printf( "Missing { in menu file\n" );
-        //	break;
-        // }
-
-        // if ( menuCount == MAX_MENUS ) {
-        //	Com_Printf( "Too many menus!\n" );
-        //	break;
-        // }
-
         if (token.string[0] == '}') {
             break;
         }
@@ -2805,7 +2426,6 @@ void CG_ParseMenu(const char* menuFile) {
         }
 
         if (Q_stricmp(token.string, "menudef") == 0) {
-            // start a new menu
             Menu_New(handle);
         }
     }
@@ -2877,16 +2497,6 @@ void CG_LoadMenus(const char* menuFile) {
             break;
         }
 
-        // if ( Q_stricmp( token, "{" ) ) {
-        //	Com_Printf( "Missing { in menu file\n" );
-        //	break;
-        // }
-
-        // if ( menuCount == MAX_MENUS ) {
-        //	Com_Printf( "Too many menus!\n" );
-        //	break;
-        // }
-
         if (Q_stricmp(token, "}") == 0) {
             break;
         }
@@ -2923,9 +2533,6 @@ static int CG_FeederCount(float feederID) {
             }
         }
     } else if (feederID == FEEDER_SCOREBOARD || feederID == FEEDER_ENDSCOREBOARD) {
-        // [QL] the scores carry every connected client, spectators included (the server sends
-        // them in the same message, 0x1003d090), but the board lists players only: the
-        // spectators have their own row, the CG_SPECTATORS owner draw
         for (i = 0; i < cg.numScores; i++) {
             if (cg.scores[i].team != TEAM_SPECTATOR) {
                 count++;
@@ -2943,18 +2550,6 @@ static int CG_FeederCount(float feederID) {
     return count;
 }
 
-/*
-=================
-CG_SetScoreSelection
-
-[QL] 0x10025f60 (the menu arrives in edi). A spectator selects no score (-1); anyone
-else selects the score whose client is the snapshot's player, and keeps the previous
-selection while that client is missing from the scores.
-
-Team gametypes hand that score's index to the list of the player's team and -1 to
-the other list. Other gametypes select on FEEDER_SCOREBOARD.
-=================
-*/
 void CG_SetScoreSelection(void* p) {
     menuDef_t* menu = (menuDef_t*)p;
     playerState_t* ps = &cg.snap->ps;
@@ -2972,7 +2567,6 @@ void CG_SetScoreSelection(void* p) {
     }
 
     if (menu == NULL) {
-        // just interested in setting the selected score
         return;
     }
 
@@ -2980,7 +2574,6 @@ void CG_SetScoreSelection(void* p) {
         int feeder = FEEDER_REDTEAM_LIST;
         int other = FEEDER_BLUETEAM_LIST;
 
-        // retail reads cg.scores[-1] for a spectator; here no score is blue then
         if (cg.selectedScore >= 0 && cg.scores[cg.selectedScore].team == TEAM_BLUE) {
             feeder = FEEDER_BLUETEAM_LIST;
             other = FEEDER_REDTEAM_LIST;
@@ -2995,14 +2588,6 @@ void CG_SetScoreSelection(void* p) {
 extern menuDef_t* menuScoreboard;
 extern menuDef_t* menuEndScoreboard;
 
-/*
-=================
-CG_SetScoreboardSelection
-
-[QL] What every score parser in the binary ends with (0x1004541d, 0x10045d7a, ...): the
-selection goes to the end-of-match board at intermission and to the in-game board otherwise.
-=================
-*/
 void CG_SetScoreboardSelection(void) {
     if (!cg.snap) {
         return;
@@ -3010,14 +2595,11 @@ void CG_SetScoreboardSelection(void) {
     CG_SetScoreSelection(cg.snap->ps.pm_type == PM_INTERMISSION ? menuEndScoreboard : menuScoreboard);
 }
 
-// FIXME: might need to cache this info
 static clientInfo_t* CG_InfoFromScoreIndex(int index, int team, int* scoreIndex) {
     int i, count;
 
     count = 0;
     for (i = 0; i < cg.numScores; i++) {
-        // a team's list takes that team's scores; every other list takes the players, which
-        // leaves out the spectators the server sends in the same scores
         if (team != -1 ? cg.scores[i].team != team : cg.scores[i].team == TEAM_SPECTATOR) {
             continue;
         }
@@ -3032,14 +2614,12 @@ static clientInfo_t* CG_InfoFromScoreIndex(int index, int team, int* scoreIndex)
     return NULL;
 }
 
-// [QL] Format damage with "k" suffix for scoreboard display (binary-verified)
 static const char* CG_FormatDamage(int dmg) {
     if (dmg >= 10000) return va("%.0fk", (float)dmg / 1000.0f);
     if (dmg >= 1000) return va("%.1fk", (float)dmg / 1000.0f);
     return va("%d", dmg);
 }
 
-// [QL] FFA/Duel/RR scoreboard columns 6-13 (14 total, binary FUN_10026160)
 static const char* CG_FeederColumnsFfa(score_t* sp, clientInfo_t* info, int column, qhandle_t* handle) {
     switch (column) {
         case 6:
@@ -3059,7 +2639,6 @@ static const char* CG_FeederColumnsFfa(score_t* sp, clientInfo_t* info, int colu
             if (sp->damageDone > 0 && sp->bestWeapon > 0)
                 return va("%d%%", sp->bestWeaponAccuracy);
             return "";
-        // [QL] 0x10026521 and 0x1002653d: time and ping padded to four, a ping of -1 as it comes
         case 12:
             return va("%4i", sp->time);
         case 13:
@@ -3068,7 +2647,6 @@ static const char* CG_FeederColumnsFfa(score_t* sp, clientInfo_t* info, int colu
     return "";
 }
 
-// [QL] TDM columns 6-9 (10 total), FT columns 6-9 (10 total) - binary FUN_10027e30
 static const char* CG_FeederColumnsTdm(score_t* sp, clientInfo_t* info, int column, qhandle_t* handle) {
     switch (column) {
         case 6:
@@ -3082,14 +2660,12 @@ static const char* CG_FeederColumnsTdm(score_t* sp, clientInfo_t* info, int colu
             if (cgs.gametype == GT_FREEZE)
                 return va("%d", sp->thaws);
             return CG_FormatDamage(sp->damageDone);
-        // [QL] 0x100282b9: the ping as it comes, -1 included
         case 9:
             return va("%i", sp->ping);
     }
     return "";
 }
 
-// [QL] CA columns 6-11 (12 total) - binary FUN_10027240
 static const char* CG_FeederColumnsCa(score_t* sp, clientInfo_t* info, int column, qhandle_t* handle) {
     switch (column) {
         case 6:
@@ -3107,14 +2683,12 @@ static const char* CG_FeederColumnsCa(score_t* sp, clientInfo_t* info, int colum
             if (sp->damageDone > 0 && sp->bestWeapon > 0)
                 return va("%d%%", sp->bestWeaponAccuracy);
             return "";
-        // [QL] 0x100276cb: the ping as it comes, -1 included
         case 11:
             return va("%i", sp->ping);
     }
     return "";
 }
 
-// [QL] CTF/1FCTF/HAR/DOM/AD columns 6-11 (12 total) - binary FUN_100268b0
 static const char* CG_FeederColumnsCtf(score_t* sp, clientInfo_t* info, int column, qhandle_t* handle) {
     switch (column) {
         case 6:
@@ -3128,14 +2702,12 @@ static const char* CG_FeederColumnsCtf(score_t* sp, clientInfo_t* info, int colu
             return va("%d", sp->assistCount);
         case 10:
             return va("%d", sp->defendCount);
-        // [QL] 0x10026ca3: the ping as it comes, -1 included
         case 11:
             return va("%i", sp->ping);
     }
     return "";
 }
 
-// [QL] Race scoreboard columns 0-6 (7 total, different layout) - binary FUN_10027c40
 static const char* CG_FeederItemTextRace(clientInfo_t* info, score_t* sp, int column, qhandle_t* handle) {
     switch (column) {
         case 0:
@@ -3156,7 +2728,6 @@ static const char* CG_FeederItemTextRace(clientInfo_t* info, score_t* sp, int co
             if (sp->score > 0 && sp->score != 0x7FFFFFFF)
                 return va("%d:%02d.%03d", sp->score / 60000, (sp->score / 1000) % 60, sp->score % 1000);
             return "";
-        // [QL] 0x10027dc1 and 0x10027dde: time and ping padded to four, a ping of -1 as it comes
         case 5:
             return va("%4i", sp->time);
         case 6:
@@ -3165,17 +2736,6 @@ static const char* CG_FeederItemTextRace(clientInfo_t* info, score_t* sp, int co
     return "";
 }
 
-// [QL] Stats feeder - returns available data, stubs for unavailable per-weapon/item stats
-/*
-=================
-CG_ScoreboardName
-
-[QL] the name column of the team lists and of the stats lists (0x100274b4, 0x10028099,
-0x10026b15, 0x100283a6...): measured at 0.16, a name `wide` units or wider loses one character
-at a time until it measures under `fit`, then gets "...". Without it a long name runs over the
-columns to its right, since those lists take up to 117 and 99 characters there.
-=================
-*/
 static const char* CG_ScoreboardName(const char* name, int wide, int fit) {
     char full[40];
     char shortName[40];
@@ -3198,7 +2758,6 @@ static const char* CG_ScoreboardName(const char* name, int wide, int fit) {
     return va("%s", full);
 }
 
-// Binary has separate functions per gametype: FUN_10028300 (TDM/FT), CG_FeederItemText (CA), FUN_10026cf0 (CTF)
 static const char* CG_FeederItemTextStats(float feederID, int index, int column, qhandle_t* handle) {
     int scoreIndex = 0;
     int team = (feederID == FEEDER_REDTEAM_STATS) ? TEAM_RED : TEAM_BLUE;
@@ -3209,7 +2768,6 @@ static const char* CG_FeederItemTextStats(float feederID, int index, int column,
 
     switch (cgs.gametype) {
         case GT_CA:
-            // CA stats: 17 columns
             switch (column) {
                 case 0: return CG_ScoreboardName(info->name, 100, 92);
                 case 1: return va("%d", sp->score);
@@ -3223,7 +2781,6 @@ static const char* CG_FeederItemTextStats(float feederID, int index, int column,
             return "";
         case GT_TEAM:
         case GT_FREEZE:
-            // TDM/FT stats: 18 columns
             switch (column) {
                 case 0: return CG_ScoreboardName(info->name, 100, 92);
                 case 1: return va("%d", sp->score);
@@ -3240,7 +2797,6 @@ static const char* CG_FeederItemTextStats(float feederID, int index, int column,
             }
             return "";
         default:
-            // CTF/etc stats: 19 columns
             switch (column) {
                 case 0: return CG_ScoreboardName(info->name, 100, 92);
                 case 1: return va("%d", sp->score);
@@ -3257,16 +2813,6 @@ static const char* CG_FeederItemTextStats(float feederID, int index, int column,
     }
 }
 
-// [QL] Main feeder dispatcher - dispatches to per-gametype functions
-// Binary: FUN_10028830 dispatches by feederID + gametype
-/*
-=================
-CG_ScorePowerupIcon
-
-[QL] The top of every scoreboard feeder (0x10026160, 0x100265a0...): the icon of the first
-powerup the player carries, powerups 9 and 15 left out, or 0 for none.
-=================
-*/
 static qhandle_t CG_ScorePowerupIcon(const clientInfo_t* info) {
     int i;
 
@@ -3290,7 +2836,6 @@ static const char* CG_FeederItemText(float feederID, int index, int column, qhan
 
     *handle = -1;
 
-    // Stats feeders have completely separate column layouts
     if (feederID == FEEDER_REDTEAM_STATS || feederID == FEEDER_BLUETEAM_STATS) {
         return CG_FeederItemTextStats(feederID, index, column, handle);
     }
@@ -3306,17 +2851,14 @@ static const char* CG_FeederItemText(float feederID, int index, int column, qhan
 
     if (!info || !info->infoValid) return "";
 
-    // Race scoreboard has unique column layout (7 columns, name at col 3)
     if (cgs.gametype == GT_RACE && team == -1) {
         return CG_FeederItemTextRace(info, sp, column, handle);
     }
 
-    // Common icon columns 0-5 (all non-race gametypes)
     switch (column) {
         case 0:
             *handle = info->modelIcon;
             return "";
-        // [QL] 0x100262b7: muted first, and if not muted, talking
         case 1:
             if (info->steamId && trap_VoiceIsIgnored(info->steamId)) {
                 *handle = cgs.media.scoreMutedShader;
@@ -3326,9 +2868,6 @@ static const char* CG_FeederItemText(float feederID, int index, int column, qhan
             return "";
         case 2:
             return "";
-        // [QL] 0x10026a87 in the team lists, 0x10026313 in the others: warmup and intermission
-        // show who is ready; in play, the powerup the player carries, or else -- a team list of a
-        // round gametype -- the team's arrow, only while the player is alive. A dead one has none
         case 3: {
             qhandle_t powerup;
 
@@ -3350,11 +2889,9 @@ static const char* CG_FeederItemText(float feederID, int index, int column, qhan
             }
             return " ";
         }
-        // [QL] 0x10026381, and at column 4 of every scoreboard: the country flag
         case 4:
             *handle = CG_CountryFlagShader(info->country);
             return "";
-        // [QL] the free-for-all and duel lists give the name whole; their column takes 18 characters
         case 5:
             if (team != -1) {
                 switch (cgs.gametype) {
@@ -3376,7 +2913,6 @@ static const char* CG_FeederItemText(float feederID, int index, int column, qhan
             return info->name;
     }
 
-    // Gametype-specific columns 6+ for team feeders
     if (team != -1) {
         switch (cgs.gametype) {
             case GT_TEAM:
@@ -3395,30 +2931,13 @@ static const char* CG_FeederItemText(float feederID, int index, int column, qhan
         }
     }
 
-    // Non-team feeders (FEEDER_SCOREBOARD, FEEDER_ENDSCOREBOARD) use FFA layout
     return CG_FeederColumnsFfa(sp, info, column, handle);
 }
 
 static qhandle_t CG_FeederItemImage(float feederID, int index) {
-    // [QL] Return country flag or other per-player image for premium scoreboard.
-    // Standard scoreboard uses column 0 icon handle from CG_FeederItemText instead.
-    // FEEDER_ENDSCOREBOARD could show country flags here if we had the data.
     return 0;
 }
 
-/*
-=================
-CG_FeederSelection
-
-[QL] 0x10028b10. -1 is ignored, and outside the team gametypes the index is the
-score.
-
-In a team gametype FEEDER_REDTEAM_LIST means red and every other feeder blue. At
-intermission the index is a row of that team's list. Otherwise it arrives as an
-index into cg.scores and becomes the player's row on the team's list, written into
-playerlistRED / playerlistBLUE, while the end board's other team is cleared.
-=================
-*/
 static void CG_FeederSelection(float feederID, int index) {
     itemDef_t* list;
     itemDef_t* other;
@@ -3473,7 +2992,6 @@ void CG_Text_PaintWithCursor(float x, float y, float scale, vec4_t color, const 
     CG_Text_Paint(x, y, scale, color, text, 0, limit, style);
 }
 
-// [QL] cgamex86.dll 0x10028d80: the texts are measured in font 0, the font their drawers use
 static int CG_OwnerDrawWidth(int ownerDraw, float scale) {
     switch (ownerDraw) {
         case CG_GAME_TYPE:
@@ -3505,30 +3023,7 @@ static void CG_RunCinematicFrame(int handle) {
     trap_CIN_RunCinematic(handle);
 }
 
-/*
-=================
-CG_LoadHudMenu();
-
-=================
-*/
-/*
-=================
-Display-context shims for cgame
-
-ui_shared.c is compiled into both modules and calls these through DC->. The UI module
-wires them to Key_ and Cmd_ traps that cgame's syscall table does not export, so they
-used to be left out - six NULL pointers waiting for a menu script. Script_Exec found
-them: `exec` is the first command in the join menu's nav bar actions, so clicking
-Settings called DC->executeText(NULL).
-
-executeText has a real equivalent here, trap_SendConsoleCommand. The rest drive key
-binding and text-field editing, which no cgame-owned menu uses, so they are honest
-no-ops: what matters is that the pointers are never NULL.
-=================
-*/
 static void CG_DC_ExecuteText(int exec_when, const char* text) {
-    // cgame only ever gets EXEC_APPEND from ui_shared's Script_Exec, which is
-    // what trap_SendConsoleCommand does.
     (void)exec_when;
     trap_SendConsoleCommand(text);
 }
@@ -3622,11 +3117,8 @@ void CG_LoadHudMenu(void) {
         hudSet = "ui/hud.txt";
     }
 
-    // [QL] Load hud.txt first - CG_LoadMenus calls Menu_Reset() internally,
-    // so all CG_ParseMenu calls must come AFTER to avoid being wiped.
     CG_LoadMenus(hudSet);
 
-    // [QL] Static table menus (binary-verified order)
     CG_ParseMenu("ui/intro.menu");
     CG_ParseMenu("ui/ingamescoreteam.menu");
     CG_ParseMenu("ui/ingamescorenoteam.menu");
@@ -3638,7 +3130,6 @@ void CG_LoadHudMenu(void) {
     CG_ParseMenu("ui/comp_spectator_follow.menu");
     CG_ParseMenu("ui/ingamestats.menu");
 
-    // [QL] Per-gametype in-game scoreboard menus
     CG_ParseMenu("ui/ingame_scoreboard_ffa.menu");
     CG_ParseMenu("ui/ingame_scoreboard_duel.menu");
     CG_ParseMenu("ui/ingame_scoreboard_race.menu");
@@ -3652,7 +3143,6 @@ void CG_LoadHudMenu(void) {
     CG_ParseMenu("ui/ingame_scoreboard_ad.menu");
     CG_ParseMenu("ui/ingame_scoreboard_rr.menu");
 
-    // [QL] Per-gametype end-of-game scoreboard menus
     CG_ParseMenu("ui/end_scoreboard_ffa.menu");
     CG_ParseMenu("ui/end_scoreboard_duel.menu");
     CG_ParseMenu("ui/end_scoreboard_race.menu");
@@ -3666,9 +3156,6 @@ void CG_LoadHudMenu(void) {
     CG_ParseMenu("ui/end_scoreboard_ad.menu");
     CG_ParseMenu("ui/end_scoreboard_rr.menu");
 
-    // [QL] resolve every menu cgame keeps a pointer to, right after loading them, the
-    // way the binary does at 0x10006eb8. Doing it here rather than lazily on first use
-    // means a pointer can never outlive the Menus[] slot it came from.
     CG_CacheMenus();
 }
 
@@ -3692,14 +3179,6 @@ void CG_AssetCache(void) {
     cgDC.Assets.sliderThumb = trap_R_RegisterShaderNoMip(ASSET_SLIDER_THUMB);
 }
 
-/*
-=================
-CG_ReadResolution
-
-[ioquakelive] Reads the resolution and everything drawn from it. It runs at startup and again
-on CGAME_EVENT_RESOLUTION, which the engine sends when the window changes size
-=================
-*/
 void CG_ReadResolution(void) {
     float width43;
 
@@ -3707,7 +3186,6 @@ void CG_ReadResolution(void) {
     cgs.screenXScale = cgs.glconfig.vidWidth / (float)SCREEN_WIDTH;
     cgs.screenYScale = cgs.glconfig.vidHeight / (float)SCREEN_HEIGHT;
 
-    // [QL] the widescreen bias: half the extra width beyond 4:3
     width43 = 4.0f * cgs.glconfig.vidHeight / 3.0f;
     if ((float)cgs.glconfig.vidWidth > width43) {
         cgs.widescreenBias = ((float)cgs.glconfig.vidWidth - width43) * 0.5f;
@@ -3716,18 +3194,9 @@ void CG_ReadResolution(void) {
     }
 }
 
-/*
-=================
-CG_Init
-
-Called after every level change or subsystem restart
-Will perform callbacks to make the loading info screen update.
-=================
-*/
 void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
     const char* s;
 
-    // clear everything
     memset(&cgs, 0, sizeof(cgs));
     memset(&cg, 0, sizeof(cg));
     memset(cg_entities, 0, sizeof(cg_entities));
@@ -3737,46 +3206,34 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
     cg.clientNum = clientNum;
     cg.race.nextCheckpointEnt = -1;
     cg.race.nextNextCheckpointEnt = -1;
-    cg.autoFollowClient = -1;  // [QL] deferred auto-follow idle (CG_CheckAutoFollow)
+    cg.autoFollowClient = -1;
     CG_ClearChat();
 
     cgs.processedSnapshotNum = serverMessageNum;
     cgs.serverCommandSequence = serverCommandSequence;
 
-    // load a few needed things before we do any screen updates
     cgs.media.charsetShader = trap_R_RegisterShader("gfx/2d/bigchars");
     cgs.media.whiteShader = trap_R_RegisterShader("white");
-    cgs.media.modifiedShader = trap_R_RegisterShaderNoMip("icons/modified.tga");  // [QL] 0x100299a3
+    cgs.media.modifiedShader = trap_R_RegisterShaderNoMip("icons/modified.tga");
     cgs.media.charsetProp = trap_R_RegisterShaderNoMip("menu/art/font1_prop.png");
     cgs.media.charsetPropGlow = trap_R_RegisterShaderNoMip("menu/art/font1_prop_glo.png");
     cgs.media.charsetPropB = trap_R_RegisterShaderNoMip("menu/art/font2_prop.png");
 
-    // [QL] Register TTF fonts early so CG_Text_Paint works during loading screen.
-    // Register at 2x point sizes for sharper rendering at high resolutions -
-    // ioq3's font atlas is fixed at registration time; higher point size = more glyph detail.
-    // Override glyphScale so text draws at the correct visual size.
-    // CG_LoadHudMenu() later tries to re-register with abstract names like "fonts/font"
-    // which don't exist in the pk3 - RE_RegisterFont returns early on file-not-found
-    // WITHOUT modifying the output struct, so our early registration is preserved.
     trap_R_RegisterFont("fonts/notosans-regular.ttf", 48, &cgDC.Assets.textFont);
     trap_R_RegisterFont("fonts/droidsansmono.ttf", 32, &cgDC.Assets.smallFont);
     trap_R_RegisterFont("fonts/handelgothic.ttf", 96, &cgDC.Assets.bigFont);
     cgDC.Assets.fontRegistered = qtrue;
 
-    // [QL] Populate extraFonts[] for fontIndex-based selection:
-    // 0 = textFont (NotoSans), 1 = bigFont (handelgothic), 2 = smallFont (DroidSansMono)
     memcpy(&cgDC.Assets.extraFonts[0], &cgDC.Assets.textFont, sizeof(fontInfo_t));
     memcpy(&cgDC.Assets.extraFonts[1], &cgDC.Assets.bigFont, sizeof(fontInfo_t));
     memcpy(&cgDC.Assets.extraFonts[2], &cgDC.Assets.smallFont, sizeof(fontInfo_t));
 
-    // [QL] loading screen assets
     cgs.media.loadingbackShader = trap_R_RegisterShaderNoMip("levelshots/loadingback.jpg");
     cgs.media.gtBackgroundShader = trap_R_RegisterShaderNoMip("ui/assets/main_menu/gt_background.png");
     cgs.media.qlLogoShader = trap_R_RegisterShaderNoMip("ui/assets/main_menu/ql_logo.png");
     cgs.media.logoBackgroundShader = trap_R_RegisterShaderNoMip("ui/assets/main_menu/logo_background.png");
     cgs.media.backscreenSmokeShader = trap_R_RegisterShaderNoMip("ui/assets/backscreen_smoke.jpg");
 
-    // [QL] initialize speedometer bar colors (green / yellow, alpha set per-mode)
     cg.speedBarColor1[0] = 0.0f; cg.speedBarColor1[1] = 1.0f;
     cg.speedBarColor1[2] = 0.0f; cg.speedBarColor1[3] = 1.0f;
     cg.speedBarColor2[0] = 1.0f; cg.speedBarColor2[1] = 1.0f;
@@ -3785,7 +3242,6 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
     CG_RegisterCvars();
     CG_InitColorWheel();
 
-    // [QL] reset state cvars on map load
     trap_Cvar_Set("ui_mainmenu", "0");
     trap_Cvar_Set("ui_intermission", "0");
 
@@ -3793,43 +3249,30 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
 
     cg.weaponSelect = WP_MACHINEGUN;
 
-    cgs.redflag = cgs.blueflag = -1;  // For compatibily, default to unset for
-    cgs.flagStatus = -1;              // old servers
+    cgs.redflag = cgs.blueflag = -1;
+    cgs.flagStatus = -1;
 
-    // get the rendering configuration from the client system
     CG_ReadResolution();
 
-    // get the gamestate from the client system
     trap_GetGameState(&cgs.gameState);
 
-    // check version
     s = CG_ConfigString(CS_GAME_VERSION);
     if (strcmp(s, GAME_VERSION)) {
         CG_Error("Client/Server game mismatch: %s/%s", GAME_VERSION, s);
     }
 
-    // [QL] 0x10029b90: read once, it lets cg_thirdPerson work
     cgs.svCheats = (Info_ValueForKey(CG_ConfigString(CS_SYSTEMINFO), "sv_cheats")[0] == '1');
 
     s = CG_ConfigString(CS_LEVEL_START_TIME);
     cgs.levelStartTime = atoi(s);
 
-    // [QL] set before the first loading repaint (0x10029bc5, ahead of "collision map" at
-    // 0x10029c4e): the repaint runs CG_DrawActiveFrame, whose CG_UpdateCvars would otherwise
-    // build the local clientinfo with nothing loaded to copy from
-    cg.loading = qtrue;  // force players to load instead of defer
+    cg.loading = qtrue;
 
     CG_ParseServerinfo();
-    // [QL] parse player model/head overrides before clients are registered so the
-    // g_allowCustomHeadmodels / model-override rules apply on the initial load.
     CG_ParseConfigParams();
-    // [QL] 0x10029c03: and the fire intervals, for the prediction
     CG_ParseWeaponInfo();
-    // [QL] custom-settings bitmask must be set before CG_RegisterClients so the RR-infected
-    // bones model (customSettings bit 0x4000000) applies to clients on the initial load.
     cgs.customSettings = atoi(CG_ConfigString(CS_CUSTOM_SETTINGS));
 
-    // load the new map
     CG_LoadingString("collision map");
 
     trap_CM_LoadMap(cgs.mapname);
@@ -3850,11 +3293,9 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
 
     CG_LoadingString("clients");
 
-    CG_RegisterClients();  // if low on memory, some clients will be deferred
+    CG_RegisterClients();
     cg.loadingStage++;
 
-    // [QL] 0x10029da7: with com_build the client stops deferring anything -- it registers all
-    // fourteen weapons and Crash's three tutorial lines, which otherwise load only when played
     if (trap_Cvar_VariableValue("com_build") != 0) {
         int weapon;
 
@@ -3867,21 +3308,18 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
     }
 
     CG_AssetCache();
-    CG_LoadHudMenu();  // load new hud stuff
+    CG_LoadHudMenu();
 
-    cg.loading = qfalse;  // future players will be deferred
+    cg.loading = qfalse;
 
     CG_InitLocalEntities();
 
     CG_InitMarkPolys();
 
-    // remove the last loading update
     cg.infoScreenText[0] = 0;
 
-    // Make sure we have update values (scores)
     CG_SetConfigValues();
 
-    // [QL] pre-cache country flag shaders for the scoreboard/profile UI.
     CG_CacheCountryFlags();
 
     CG_StartMusic();
@@ -3894,20 +3332,8 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
 
     trap_S_ClearLoopingSounds(qtrue);
 
-    // [QL] cgamex86.dll CG_Init tail @0x10029fb2 stores 1 here as its very last
-    // action, so a fresh connection always comes up on the join menu instead of
-    // dropping straight into spectator. CG_UpdateJoinMenu takes it from here.
     cg.showJoinMenu = qtrue;
 }
 
-/*
-=================
-CG_Shutdown
-
-Called before every level change or subsystem restart
-=================
-*/
 void CG_Shutdown(void) {
-    // some mods may need to do cleanup work here,
-    // like closing files or archiving session data
 }

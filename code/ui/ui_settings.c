@@ -19,26 +19,10 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// ui_settings.c -- [QL] the Settings page
-//
-// Retail's Settings button hands the screen to the embedded browser
-// ("web_changeHash /settings", ingame.menu's navbtn6), so the real page is in
-// web.pak and there is nothing native to port. It is drawn here instead.
-//
-// Everything it offers is retail's: the ten sections in its nav's order, every
-// cvar in its page's order with the title, widget, range and value list the web
-// UI gives it, generated into ui_settings_table.h out of web.pak, and the buttons
-// its pages end with. It looks as retail's does too (module 235 and css/main.css):
-// the title, the nav and the section, each row a Cvar of the Start Match page.
-// The Team section also keeps the model preview the pre-browser pages had.
-//
-
 #include "ui_web.h"
 
 #define ST_MAX_INPUT 200
 
-// the Team section: its two blocks, each with its model beside the rows
 #define ST_TEAM_GAP 12.0f
 #define ST_TEAM_MODEL_W 360.0f
 
@@ -57,17 +41,17 @@ typedef enum {
 } stTab_t;
 
 typedef enum {
-    ST_HEADING,    // a section title, not an option
-    ST_BOOL,       // Off / On
-    ST_SELECT,     // a value out of a list
-    ST_RANGE,      // a slider
-    ST_INPUT,      // a line of text
-    ST_PALETTE,    // one of the 26 Quake Live colours
-    ST_RGB,        // a colour of its own, as 0xRRGGBBAA
-    ST_MODEL,      // a player model
-    ST_MODELSKIN,  // a player model and its skin
-    ST_CROSSHAIR,  // the crosshair itself
-    ST_BIND        // a key bound to a command
+    ST_HEADING,
+    ST_BOOL,
+    ST_SELECT,
+    ST_RANGE,
+    ST_INPUT,
+    ST_PALETTE,
+    ST_RGB,
+    ST_MODEL,
+    ST_MODELSKIN,
+    ST_CROSSHAIR,
+    ST_BIND
 } stWidget_t;
 
 typedef struct {
@@ -78,26 +62,18 @@ typedef struct {
 typedef struct {
     int tab;
     const char* title;
-    const char* cvar;   // NULL on a heading
+    const char* cvar;
     int widget;
     float min, max, step;
     const stOption_t* options;
     int numOptions;
     const char* tip;
-    int column;         // which of the page's two columns the row sits in
+    int column;
 } stCvar_t;
 
 #include "ui_settings_table.h"
 
 #define ST_NUM_CVARS ((int)ARRAY_LEN(stCvars))
-
-/*
-===============================================================================
-
-WHAT THE CURSOR IS OVER
-
-===============================================================================
-*/
 
 typedef enum {
     ST_HIT_NONE,
@@ -134,15 +110,7 @@ typedef enum {
     ST_HIT_RGBCANCEL
 } stHitType_t;
 
-#define ST_MAX_SKINS 10  // the most a model of retail's table offers (biker)
-
-/*
-===============================================================================
-
-STATE
-
-===============================================================================
-*/
+#define ST_MAX_SKINS 10
 
 static struct {
     qboolean loaded;
@@ -151,47 +119,45 @@ static struct {
 
     char values[ST_NUM_CVARS][MAX_CVAR_VALUE_STRING];
 
-    int select;                // the row whose dropdown is open
+    int select;
     smRect_t selectControl;
     float selectScroll;
-    int drag;                  // the row whose slider is held
+    int drag;
     int edit, editCursor, editStart, editTime;
-    int binding;               // the row waiting for a key
-    int rgb;                   // the row whose colour picker is open
-    int rgbDrag;               // 0..2 while a channel is held
+    int binding;
+    int rgb;
+    int rgbDrag;
     smRect_t rgbPanel;
-    int rgbPick[3];            // what the colour dialog shows; the cvar takes it on OK
+    int rgbPick[3];
     smRect_t rgbSlider[3];
 
-    int model;                 // the row whose model chooser is open
-    int pickModel;             // what it shows: one of stModels
-    int pickSkin;              // and one of its skins, or of the forced skin row's options
-    int pickSkinRow;           // that forced skin row, or -1
+    int model;
+    int pickModel;
+    int pickSkin;
+    int pickSkinRow;
     playerInfo_t modelInfo;
-    char modelShown[MAX_QPATH];     // what modelInfo was built from
+    char modelShown[MAX_QPATH];
 
-    playerInfo_t preview[2];        // the Team section's, teammates then enemies
-    qhandle_t weaponIcon[10];      // [ioquakelive] each weapon's icon, registered on first use
+    playerInfo_t preview[2];
+    qhandle_t weaponIcon[10];
     char previewShown[2][MAX_QPATH];
     float previewYaw[2];
-    int previewDrag;                // which one is being turned
+    int previewDrag;
     float previewGrab;
 
     qboolean scrollDrag;
     float scrollGrab;
 
-    // the frame, worked out once a frame
-    float left, top;           // the page's left, and where it starts unscrolled
-    float colW;                // one of a section's two columns
-    float listTop, view, content;  // the rows' top, unscrolled; the frame and what scrolls in it
-    float listBottom;          // where the rows end, for the buttons after them
-    int selectFocus;           // the option under the mouse in an open list
+    float left, top;
+    float colW;
+    float listTop, view, content;
+    float listBottom;
+    int selectFocus;
     qboolean fromIngame;
 } st;
 
 extern const vec4_t* UI_CrosshairPalette(void);
 
-// retail's page: .game-settings and the Cvar rows, from css/main.css and react-select's
 static const vec4_t strBlack80 = {0.0f, 0.0f, 0.0f, 0.8f};
 static const vec4_t strRowOdd = SM_RGB(36, 33, 33);
 static const vec4_t strRowEven = SM_RGB(28, 25, 25);
@@ -216,25 +182,17 @@ static const vec4_t strDialog = SM_RGB(30, 30, 30);
 static const vec4_t strThumb = SM_RGB(51, 51, 51);
 static const vec4_t strThumbHover = SM_RGB(153, 153, 153);
 
-#define STR_TITLE_H 54.4f     // h1.title: 24pt Handel Gothic, 0.25em above and below
-#define STR_NAV_H 30.0f       // nav.button-row: its buttons, 30 high with 20 each side (measured)
+#define STR_TITLE_H 54.4f
+#define STR_NAV_H 30.0f
 #define STR_NAV_PAD 20.0f
-#define STR_NAV_GAP 15.0f     // and its 1em under it
+#define STR_NAV_GAP 15.0f
 #define STR_SECTION_PAD 5.0f
-#define STR_BAR 8.0f          // .scroll-y: the bar's gutter is always there
-#define STR_OPTION_H 40.0f    // a react-select option, in a menu 198 high
+#define STR_BAR 8.0f
+#define STR_OPTION_H 40.0f
 #define STR_MENU_H 198.0f
 #define STR_SWATCH_OPTION_H 37.0f
 #define STR_CROSSHAIR_OPTION_H 72.0f
-#define STR_LINE_MENU_H 300.0f  // .Select.line's menu
-
-/*
-===============================================================================
-
-THE CVARS
-
-===============================================================================
-*/
+#define STR_LINE_MENU_H 300.0f
 
 static void ST_ReadBind(int i) {
     const char* command = stCvars[i].cvar;
@@ -284,7 +242,6 @@ static void ST_Set(int i, const char* value) {
     Q_strncpyz(st.values[i], value, sizeof(st.values[i]));
 }
 
-// a slider's value written the way its step implies
 static void ST_FormatStep(const stCvar_t* cv, float value, char* out, int size) {
     float step = cv->step > 0 ? cv->step : 1.0f;
 
@@ -321,7 +278,6 @@ static float ST_Fraction(const stCvar_t* cv, float value) {
     return frac < 0 ? 0 : frac > 1 ? 1 : frac;
 }
 
-// what a list shows for its value: the option's name, or the raw value
 static const char* ST_Shown(int i) {
     const stCvar_t* cv = &stCvars[i];
     int k;
@@ -334,7 +290,6 @@ static const char* ST_Shown(int i) {
     return st.values[i][0] ? st.values[i] : "Custom";
 }
 
-// 0xRRGGBBAA, the way the web UI writes a colour of its own
 static void ST_ParseRGB(const char* text, int* rgb) {
     unsigned int value = 0;
 
@@ -372,7 +327,6 @@ static void ST_SetRGB(int i, const int* rgb) {
     ST_Set(i, text);
 }
 
-// 0xRRGGBBAA into the packed int the model tint takes, the way ui_main.c reads them
 static int ST_ModelTint(const char* cvarName) {
     char buf[64];
     int rgb[3];
@@ -382,16 +336,7 @@ static int ST_ModelTint(const char* cvarName) {
     return (rgb[0] << 24) | (rgb[1] << 16) | (rgb[2] << 8) | 0xff;
 }
 
-/*
-===============================================================================
-
-THE SECTIONS
-
-===============================================================================
-*/
-
 static qboolean ST_TabShown(int tab) {
-    // retail's nav: {this.state.cvars.ui_joyavail > 0 ? Link to Gamepad : null}
     if (tab == ST_TAB_GAMEPAD) {
         return trap_Cvar_VariableValue("ui_joyavail") > 0;
     }
@@ -415,7 +360,6 @@ static const char* ST_TabAction(int tab) {
 static void ST_DoTabAction(int tab) {
     switch (tab) {
         case ST_TAB_INPUT:
-            // retail's execDefault
             trap_Cmd_ExecuteText(EXEC_APPEND, "exec default.cfg\n");
             break;
         case ST_TAB_BASIC:
@@ -430,38 +374,23 @@ static void ST_DoTabAction(int tab) {
     }
 }
 
-/*
-===============================================================================
-
-THE LIST
-
-Where every row of the open section sits, worked out once a frame, so drawing and
-clicking can never disagree about it. A heading lines both columns up again; one
-with a column of its own heads only that column, the way Weapons heads its two.
-The Team section is laid out apart: teammates, then enemies, each a block of rows
-with its model beside it.
-
-===============================================================================
-*/
-
 static struct {
     float x, y, w, h;
-    qboolean odd;  // nth-child(odd) of its column: #242121, else #1C1919
+    qboolean odd;
 } stLayout[ST_NUM_CVARS];
 
 static struct {
-    float x, y, w, h;  // relative to the list, like the rows
+    float x, y, w, h;
 } stModelBox[2];
 
 static qboolean ST_InTab(int i) {
     return stCvars[i].tab == st.tab;
 }
 
-// a Cvar row's height: its padding of 0.5em around the control, 50 at the least
 static float ST_RowHeight(int i) {
     switch (stCvars[i].widget) {
         case ST_BIND:
-            return 47.0f;  // .bind: 32 and its padding
+            return 47.0f;
         case ST_INPUT:
             return 53.0f;
         case ST_SELECT:
@@ -470,30 +399,20 @@ static float ST_RowHeight(int i) {
             return 51.0f;
         case ST_MODEL:
         case ST_MODELSKIN:
-            return 63.0f;  // the chooser's button, 48 high
+            return 63.0f;
         case ST_RGB:
-            return 56.0f;  // the colour's button, 3 under the top
+            return 56.0f;
         case ST_CROSSHAIR:
-            return 79.0f;  // .crosshair-form's control, 64 high
+            return 79.0f;
         default:
             return 50.0f;
     }
 }
 
-// an h1 in the section: 24pt in a line of 1.2, 0.75em above, or 0.25em as its first child
 static float ST_HeadingHeight(qboolean first) {
     return (first ? 8.0f : 24.0f) + 38.4f + 8.0f;
 }
 
-/*
-===============
-ST_LayoutTeam
-
-Teammates, then enemies, one block under the other. The table lists both headings
-before any row, the way retail's page gives its two panels, so each block takes
-the heading and the rows of its own column.
-===============
-*/
 static void ST_LayoutTeam(float inner) {
     float rowsW = inner - ST_TEAM_MODEL_W - 24;
     float x = st.left + STR_SECTION_PAD;
@@ -536,14 +455,6 @@ static void ST_LayoutTeam(float inner) {
     st.listBottom = y;
 }
 
-/*
-===============
-ST_Layout
-
-.row > .one-half.column: two columns of 48% with 4% between them, inside the section's
-padding. A full width heading lines both up again; a column's own heads only that column.
-===============
-*/
 static void ST_Layout(void) {
     float inner = HM_CONTAINER_W - STR_BAR - 2 * STR_SECTION_PAD;
     float x = st.left + STR_SECTION_PAD;
@@ -573,7 +484,6 @@ static void ST_Layout(void) {
             int col = stCvars[i].column;
             float h = ST_HeadingHeight(top == 0);
 
-            // two column headings in a row are the two panels' titles: same line
             if (col >= 0 && pairTop >= 0) {
                 top = pairTop;
                 h = pairH;
@@ -610,7 +520,6 @@ static float ST_RowY(int i) {
     return st.listTop + stLayout[i].y - st.scroll[st.tab];
 }
 
-// .val.five.columns, after .children.seven.columns, inside the row's padding
 static float ST_ControlX(int i) {
     return stLayout[i].x + 7.5f + (stLayout[i].w - 15) * (0.566667f + 0.04f);
 }
@@ -619,15 +528,6 @@ static float ST_ControlW(int i) {
     return (stLayout[i].w - 15) * 0.393333f;
 }
 
-/*
-===============================================================================
-
-THE CONTROLS
-
-===============================================================================
-*/
-
-// react-select's control: the option's label in #CCC, or the placeholder in #AAA
 static void ST_DrawSelectBox(int i, float x, float y, float w, float h, const smRect_t* clip) {
     qboolean open = st.select == i;
 
@@ -662,7 +562,6 @@ static void ST_DrawSelect(int i, float x, float y, const smRect_t* clip) {
     }
 }
 
-// the checkbox without its box: "Off" in #999 or "On" in bold #DDD, #444 under the mouse
 static void ST_DrawBool(int i, float x, float y, const smRect_t* clip) {
     qboolean on = atoi(st.values[i]) != 0;
     float base = SM_Baseline(FONT_SANS, 15, y + 9, 18);
@@ -677,8 +576,6 @@ static void ST_DrawBool(int i, float x, float y, const smRect_t* clip) {
     SM_Hit(x, y, 8 + tw, 36, ST_HIT_BOOL, i, clip);
 }
 
-// .range: the value in 20% of the width, then the input: #222 with a #333 border and a yellow
-// square of a thumb
 static void ST_DrawRange(int i, float x, float y, const smRect_t* clip) {
     const stCvar_t* cv = &stCvars[i];
     float w = ST_ControlW(i);
@@ -732,7 +629,6 @@ static void ST_DrawInput(int i, float x, float y, const smRect_t* clip) {
     SM_Hit(x, y, w, h, ST_HIT_INPUT, i, clip);
 }
 
-// a Quake Live colour's swatch: 21 high with a border of 3 at 20% black
 static void ST_DrawSwatch(float x, float y, float w, int value, const smRect_t* clip) {
     const vec4_t* palette = UI_CrosshairPalette();
 
@@ -743,7 +639,6 @@ static void ST_DrawSwatch(float x, float y, float w, int value, const smRect_t* 
     SM_Border(x, y, w, 21, 3, strSwatchEdge, clip);
 }
 
-// .Select.line: the swatch is the value
 static void ST_DrawPalette(int i, float x, float y, const smRect_t* clip) {
     float w = ST_ControlW(i);
 
@@ -751,7 +646,6 @@ static void ST_DrawPalette(int i, float x, float y, const smRect_t* clip) {
     ST_DrawSwatch(x + 10, y + 7.5f, w - 62, atoi(st.values[i]), clip);
 }
 
-// the colour's button: the colour, with a border of 5 at 20% black, 3 under the top
 static void ST_DrawRGB(int i, float x, float y, const smRect_t* clip) {
     int rgb[3];
     vec4_t color;
@@ -767,7 +661,6 @@ static void ST_DrawRGB(int i, float x, float y, const smRect_t* clip) {
     SM_Hit(x, y + 3, w, 38, ST_HIT_RGB, i, clip);
 }
 
-// .crosshair-form: a control 64 high with the crosshair itself as the value
 static void ST_DrawCrosshair(int i, float x, float y, const smRect_t* clip) {
     int shape = atoi(st.values[i]);
     float w = ST_ControlW(i);
@@ -780,7 +673,6 @@ static void ST_DrawCrosshair(int i, float x, float y, const smRect_t* clip) {
     }
 }
 
-// .bind: the action in 60% of the row and its keys after it, #3C3939 under the mouse
 static void ST_DrawBind(int i, float y, const smRect_t* clip) {
     float x = stLayout[i].x, w = stLayout[i].w, h = stLayout[i].h;
     float base = SM_Baseline(FONT_SANS, 15, y + 7.5f, 32);
@@ -812,16 +704,6 @@ static void ST_DrawBind(int i, float y, const smRect_t* clip) {
     SM_Hit(x, y, w, h, ST_HIT_BIND, i, clip);
 }
 
-/*
-===============
-ST_DrawTeamPreview
-
-The model teammates or enemies are forced to, in the colours the rows set. Retail
-composes "model/skin" the same way (uix86.dll UI_DrawTeamModel @0x10005850): a
-model alone takes its default skin, a skin alone falls back to sarge. Dragging it
-turns it.
-===============
-*/
 static void ST_DrawTeamPreview(int slot, float x, float y, float w, float h) {
     static const char* const models[2] = {"cg_forceTeamModel", "cg_forceEnemyModel"};
     static const char* const skins[2] = {"cg_forceTeamSkin", "cg_forceEnemySkin"};
@@ -871,26 +753,6 @@ static void ST_DrawTeamPreview(int slot, float x, float y, float w, float h) {
     SM_Hit(x, y, w, h, ST_HIT_PREVIEW, slot, NULL);
 }
 
-/*
-===============================================================================
-
-PLAYER MODELS
-
-Retail's chooser (web.pak src/modelchooser.js) lists its own table of models,
-src/models.js, not what is on disk: 26 models, the skins each one offers in that
-order, and the names it shows. A skin is shown by its icon,
-models/players/<model>/icon_<skin>, which pak00 has for every pair but two
-(ranger's sport and uriel's zael); those show their name instead.
-
-The chooser holds what it shows until OK, the way retail's does, and Enter and
-Escape are its OK and Cancel. The player's own model takes a skin with it
-(modelskin). A forced model is the model alone in retail, whose skin is the row
-under it; here the chooser offers that row's skins as well, Bright among them,
-so a forced model and its skin are picked and seen together.
-
-===============================================================================
-*/
-
 typedef struct {
     const char* model;
     const char* name;
@@ -929,9 +791,9 @@ static const stModel_t stModels[] = {
 };
 
 #define ST_NUM_MODELS ((int)ARRAY_LEN(stModels))
-#define ST_DEFAULT_MODEL 19  // sarge, what retail's sanitizeModel falls back to
+#define ST_DEFAULT_MODEL 19
 
-static qhandle_t stIcons[ST_NUM_MODELS][ST_MAX_SKINS];  // 0 not asked for yet, -1 not there
+static qhandle_t stIcons[ST_NUM_MODELS][ST_MAX_SKINS];
 
 static qhandle_t ST_IconFor(int model, const char* skin) {
     int k;
@@ -941,7 +803,6 @@ static qhandle_t ST_IconFor(int model, const char* skin) {
             qhandle_t* h = &stIcons[model][k];
 
             if (!*h) {
-                // a missing image registers as 0, and asking again costs nothing
                 *h = trap_R_RegisterShaderNoMip(va("models/players/%s/icon_%s", stModels[model].model, skin));
                 if (!*h) {
                     *h = -1;
@@ -953,15 +814,6 @@ static qhandle_t ST_IconFor(int model, const char* skin) {
     return 0;
 }
 
-/*
-===============
-ST_ParseModel
-
-Retail's sanitizeModel: "model/skin" into the table, a model it does not list
-becoming sarge and a skin its model does not offer becoming default. The skin
-comes back as the text after the slash, or "" when there is none.
-===============
-*/
 static int ST_ParseModel(const char* value, char* skin, int size) {
     char base[MAX_QPATH];
     const char* slash = strchr(value, '/');
@@ -988,7 +840,6 @@ static int ST_ParseModel(const char* value, char* skin, int size) {
     return model;
 }
 
-// the skin row that goes with a forced model row, or -1
 static int ST_SkinRowFor(int i) {
     const char* want = NULL;
     int k;
@@ -1006,7 +857,6 @@ static int ST_SkinRowFor(int i) {
     return -1;
 }
 
-// how many skins the chooser offers, and the value of each
 static int ST_PickSkinCount(void) {
     int k;
 
@@ -1033,7 +883,6 @@ static void ST_OpenChooser(int i) {
     st.pickModel = ST_ParseModel(st.values[i], skin, sizeof(skin));
     st.pickSkinRow = stCvars[i].widget == ST_MODEL ? ST_SkinRowFor(i) : -1;
     st.pickSkin = 0;
-    // a forced skin is its row's; a skin written into the model ("keel/bright") counts when that row is empty
     if (st.pickSkinRow >= 0 && st.values[st.pickSkinRow][0]) {
         Q_strncpyz(skin, st.values[st.pickSkinRow], sizeof(skin));
     }
@@ -1049,7 +898,6 @@ static void ST_OpenChooser(int i) {
 static void ST_ConfirmChooser(void) {
     const char* model = stModels[st.pickModel].model;
 
-    // a model alone is retail's forceSkin: its skin is the row under it
     if (stCvars[st.model].widget == ST_MODELSKIN) {
         ST_Set(st.model, va("%s/%s", model, ST_PickSkinValue(st.pickSkin)));
     } else {
@@ -1058,12 +906,6 @@ static void ST_ConfirmChooser(void) {
     st.model = -1;
 }
 
-/*
-the model in use with its icon; a click opens the chooser. .model-chooser-wrapper's button is
-one of the page's buttons without its border, 48 high, padded 0 1em 0 10px: the icon 48 high
-and the name after a space and 0.5em, in the button's capitals. On a screen no wider than 3:2
-the icon is 24 high and stands in the middle, and the name follows it after 0.1em
-*/
 static void ST_DrawModelButton(int i, float x, float y, const smRect_t* clip) {
     const char* value = st.values[i][0] ? st.values[i] : "None";
     qboolean narrow = SM_Narrow();
@@ -1081,10 +923,10 @@ static void ST_DrawModelButton(int i, float x, float y, const smRect_t* clip) {
 
         if (icon && narrow) {
             SM_Pic(x + 10, y + 10, 24, 24, icon, clip);
-            tx = x + 10 + 24 + 5.0f;  // the space with the letter-spacing, and 0.1em
+            tx = x + 10 + 24 + 5.0f;
         } else if (icon) {
             SM_Pic(x + 10, y, 48, 48, icon, clip);
-            tx = x + 10 + 48 + 9.4f;  // the space with the letter-spacing, and 0.5em
+            tx = x + 10 + 48 + 9.4f;
         }
     }
     Q_strncpyz(upper, value, sizeof(upper));
@@ -1095,7 +937,6 @@ static void ST_DrawModelButton(int i, float x, float y, const smRect_t* clip) {
     SM_Hit(x, y, w, 48, ST_HIT_MODEL, i, clip);
 }
 
-// the chooser's model, in the skin it has picked and in the colours of the row it came from
 static void ST_DrawChooserPreview(float x, float y, float w, float h) {
     const char* cvar = stCvars[st.model].cvar;
     const char* skin = ST_PickSkinValue(st.pickSkin);
@@ -1121,15 +962,6 @@ static void ST_DrawChooserPreview(float x, float y, float w, float h) {
     SM_DrawPlayerIn(&st.modelInfo, x, y, w, h);
 }
 
-/*
-===============
-ST_DrawDialog
-
-The modal-styles module: an overlay at 80% black, and a band across the whole screen with
-the widemodal-content at 80% black in its middle 70%. Returns that content, inside its
-padding.
-===============
-*/
 static smRect_t ST_DrawDialog(float height) {
     float top = (SM_VIEW_H - height) * 0.5f;
     float cx = smVW * 0.15f, cw = smVW * 0.7f;
@@ -1141,7 +973,6 @@ static smRect_t ST_DrawDialog(float height) {
     return SM_R(cx + 15, top + 15, cw - 30, height - 30);
 }
 
-// .row.actions: skeleton's buttons at the right, in the order they come
 static void ST_DrawActions(const smRect_t* c, int count, const char* const* labels, const int* hits) {
     float x = c->x + c->w;
     float y = c->y + c->h - SM_WEB_BUTTON_H;
@@ -1157,16 +988,6 @@ static void ST_DrawActions(const smRect_t* c, int count, const char* const* labe
     }
 }
 
-/*
-===============
-ST_DrawModelChooser
-
-Retail's ModelChooser: every model's icon in the left third, 62 square with the one picked
-outlined in yellow; in the rest the name of the one picked and, for a model and skin, its
-skins. Clear (a forced model may be none), Cancel and OK at the right. [ioquakelive] Under the
-skins, the model itself.
-===============
-*/
 static void ST_DrawModelChooser(void) {
     smRect_t c = ST_DrawDialog(600);
     float listW = c.w * 0.306667f;
@@ -1229,15 +1050,6 @@ static void ST_DrawModelChooser(void) {
     }
 }
 
-/*
-===============
-ST_DrawDropdown
-
-react-select's menu under its control: #333, the option under the mouse #222. The palette's
-and the crosshair's are .Select.line: each option its swatch or its crosshair, centred, in a
-menu up to 300 high.
-===============
-*/
 static float ST_OptionHeight(int widget) {
     return widget == ST_PALETTE ? STR_SWATCH_OPTION_H : widget == ST_CROSSHAIR ? STR_CROSSHAIR_OPTION_H : STR_OPTION_H;
 }
@@ -1307,14 +1119,6 @@ static void ST_DrawDropdown(void) {
     }
 }
 
-/*
-===============
-ST_DrawRGBPicker
-
-Retail's ColorChooser: "Choose color" and the three channels as ranges 32 high, each in its
-own colour, with the colour in a square of 200 at the right. It takes the colour on OK.
-===============
-*/
 static void ST_DrawRGBPicker(void) {
     smRect_t c = ST_DrawDialog(400);
     float leftW = c.w * 0.653333f;
@@ -1353,15 +1157,6 @@ static void ST_DrawRGBPicker(void) {
     }
 }
 
-/*
-===============
-ST_DrawRow
-
-.row.cvar: #242121 and #1C1919 by turns down its column, the title on the left with
-"(Reset)" after it while the row is under the cursor, and the control on the right. A heading
-is an h1 of the section.
-===============
-*/
 static void ST_DrawRow(int i, float y, const smRect_t* clip) {
     const stCvar_t* cv = &stCvars[i];
     float x = stLayout[i].x;
@@ -1394,7 +1189,6 @@ static void ST_DrawRow(int i, float y, const smRect_t* clip) {
         float tw = cx - x - 7.5f - 10;
 
         SM_Text(x + 7.5f, base, FONT_SANS, 15, smText, cv->title, SM_Fit(FONT_SANS, 15, cv->title, tw), qfalse);
-        // a.resetLink shows while the row is under the cursor
         if (hovered) {
             float after = x + 7.5f + SM_Advance(FONT_SANS, 15, va("%s ", cv->title), -1);
 
@@ -1436,7 +1230,6 @@ static void ST_DrawRow(int i, float y, const smRect_t* clip) {
     }
 }
 
-// .scroll-y's bar, in its gutter at the frame's right
 static void ST_DrawScrollbar(float x) {
     float thumbH = st.view * st.view / st.content;
     float thumbY;
@@ -1450,15 +1243,6 @@ static void ST_DrawScrollbar(float x) {
     SM_Hit(x, thumbY, STR_BAR, thumbH, ST_HIT_THUMB, 0, NULL);
 }
 
-/*
-===============
-ST_DrawHeader
-
-h1.title "Game Settings" and the nav.button-row under it: skeleton's buttons without their
-border, the section's in yellow. Over a match the title also has Done at its right.
-===============
-*/
-// a tab's word: the page's sans in bold, upper case, 1px apart, as retail's buttons
 static float ST_TabWidth(const char* name) {
     char upper[64];
     char c[2];
@@ -1510,11 +1294,10 @@ static void ST_DrawHeader(float y, const smRect_t* clip) {
                           on ? colorBlack : SM_Over(ST_HIT_TAB, i) ? smText : strOption, upper, 1.0f, qtrue);
         }
         SM_Hit(x, navY, w, STR_NAV_H, ST_HIT_TAB, i, clip);
-        x += w + 1.0f;  // measured off retail's nav
+        x += w + 1.0f;
     }
 }
 
-// what the section ends with, p.button-row: 1em around skeleton's button
 static void ST_DrawAction(float y, const smRect_t* clip) {
     const char* action = ST_TabAction(st.tab);
     float bw;
@@ -1532,8 +1315,6 @@ static void ST_DrawPage(void) {
     smRect_t clip;
     int i;
 
-    // [QL] over a match the browser shows this same page, nav and lobby column included, and
-    // what lies behind it is the match (web.pak rendered with IsGameRunning)
     if (!st.fromIngame) {
         UI_Home_Backdrop();
     }
@@ -1543,7 +1324,6 @@ static void ST_DrawPage(void) {
         st.tab = ST_TAB_BASIC;
     }
 
-    // the whole page scrolls, its title and nav with the section
     st.left = UI_Home_Left();
     st.top = frameTop;
     bottom = UI_Home_FrameBottom() - (UI_Home_InMatch() ? 38 : 0);
@@ -1574,7 +1354,6 @@ static void ST_DrawPage(void) {
     }
     ST_DrawAction(st.listTop + st.listBottom - st.scroll[st.tab], &clip);
 
-    // the Team section's models, beside their blocks, drawn only while wholly in view
     if (st.tab == ST_TAB_TEAM) {
         int k;
 
@@ -1593,14 +1372,6 @@ static void ST_DrawPage(void) {
     }
 }
 
-/*
-===============
-ST_DrawBindDialog
-
-The bind dialog of retail's page, wide and short: "Press any key to bind" and the action, the
-keys it has in yellow, and how to leave it.
-===============
-*/
 static void ST_DrawBindDialog(void) {
     const stCvar_t* cv = &stCvars[st.binding];
     float h = 300;
@@ -1642,7 +1413,6 @@ static void ST_DrawBindDialog(void) {
         const char* text = lines[k];
         float lh = sizes[k] * 1.5f;
 
-        // the h1 and the h2 in skeleton's letter-spacing
         SM_SetSpacing(k < 2 ? SM_SPACING_H1 : 0);
         SM_Text(cx + (cw - SM_Advance(fonts[k], sizes[k], text, -1)) * 0.5f, SM_Baseline(fonts[k], sizes[k], y, lh),
                 fonts[k], sizes[k], colors[k], text, -1, qfalse);
@@ -1650,14 +1420,6 @@ static void ST_DrawBindDialog(void) {
         y += lh + 12;
     }
 }
-
-/*
-===============================================================================
-
-WHAT IT DOES
-
-===============================================================================
-*/
 
 static void ST_OpenSelect(int i) {
     const stCvar_t* cv = &stCvars[i];
@@ -1679,7 +1441,6 @@ static void ST_OpenSelect(int i) {
     }
     st.selectFocus = chosen;
     if (chosen > 0) {
-        // the chosen option shows, a couple of rows down if the list is long
         st.selectScroll = (chosen - 2) * oh;
     }
 }
@@ -1740,12 +1501,9 @@ static void ST_Click(void) {
     int type = hit ? hit->type : ST_HIT_NONE;
     int index = hit ? hit->index : 0;
 
-    // the model chooser takes the whole screen while it is up; a click off it is Cancel
     if (st.model >= 0) {
         switch (type) {
             case ST_HIT_MODELITEM:
-                // a model starts on its default skin, as retail's changeModel has it; a forced
-                // skin is the row's and stays
                 if (st.pickSkinRow < 0) {
                     st.pickSkin = 0;
                 }
@@ -1770,11 +1528,10 @@ static void ST_Click(void) {
         return;
     }
 
-    // an open list or picker takes the click, or closes
     if (st.select >= 0) {
         if (type == ST_HIT_OPTION) {
             if (stCvars[st.select].widget == ST_CROSSHAIR) {
-                ST_Set(st.select, va("%i", index));  // the list's index IS the value
+                ST_Set(st.select, va("%i", index));
             } else if (stCvars[st.select].widget == ST_PALETTE) {
                 ST_Set(st.select, va("%i", index + 1));
             } else {
@@ -1819,7 +1576,7 @@ static void ST_Click(void) {
         return;
     }
     if (st.fromIngame && UI_Home_NavClick()) {
-        return;  // the banner
+        return;
     }
 
     switch (type) {
@@ -1850,7 +1607,6 @@ static void ST_Click(void) {
             st.editTime = uiInfo.uiDC.realTime;
             break;
         case ST_HIT_RESET:
-            // retail's reset: qz_instance.ResetCvar
             if (stCvars[index].cvar) {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("reset %s\n", stCvars[index].cvar));
             }
@@ -1900,15 +1656,6 @@ static void ST_Wheel(float amount) {
     st.scroll[st.tab] = ST_ClampScroll(st.scroll[st.tab] + amount);
 }
 
-/*
-===============
-ST_Bind
-
-Binds the key to the row's command, taking it off whatever it held before and
-dropping the older of the two the row already shows: two keys per command, the
-way the pages have always done it. Backspace clears them, as the web UI says.
-===============
-*/
 static void ST_Bind(int i, int key) {
     const char* command = stCvars[i].cvar;
     int found[2];
@@ -1935,7 +1682,7 @@ static void ST_Bind(int i, int key) {
     }
     for (k = 0; k < count && k < 2; k++) {
         if (found[k] == key) {
-            return;  // already bound here
+            return;
         }
     }
     if (count >= 2) {
@@ -1953,7 +1700,7 @@ static qboolean ST_EditKey(int key) {
     if (key & K_CHAR_FLAG) {
         int c = key & ~K_CHAR_FLAG;
 
-        if (c == 'h' - 'a' + 1) {  // ctrl-h is backspace
+        if (c == 'h' - 'a' + 1) {
             if (st.editCursor > 0) {
                 memmove(buffer + st.editCursor - 1, buffer + st.editCursor, len - st.editCursor + 1);
                 st.editCursor--;
@@ -2006,15 +1753,6 @@ static qboolean ST_EditKey(int key) {
     }
 }
 
-/*
-===============
-UI_Settings_Open
-
-Retail's Settings button gives the browser the whole screen. Opened over a match
-the page is the "settings_ingame" menu, which is not fullscreen so the match is
-still drawn under it, and closing it goes back to the match's menu.
-===============
-*/
 void UI_Settings_Open(void) {
     menuDef_t* menu;
     itemDef_t* item;
@@ -2035,7 +1773,6 @@ void UI_Settings_Open(void) {
     st.scrollDrag = qfalse;
     ST_ReadAll();
 
-    // the page takes keys before the mouse moves over it
     if (!st.fromIngame) {
         menu = Menus_FindByName("settings");
     }
@@ -2054,7 +1791,6 @@ void UI_Settings_Paint(void) {
         UI_Settings_Open();
     }
 
-    // what follows the mouse while the button is held, and lets go with it
     held = trap_Key_IsDown(K_MOUSE1);
     if (st.drag >= 0) {
         if (held) {
@@ -2115,7 +1851,6 @@ void UI_Settings_Paint(void) {
 }
 
 qboolean UI_Settings_HandleKey(int key) {
-    // a row waiting for a key takes everything but Escape
     if (st.binding >= 0) {
         if (key == K_ESCAPE) {
             st.binding = -1;
@@ -2165,13 +1900,12 @@ qboolean UI_Settings_HandleKey(int key) {
                 st.select = -1;
                 return qtrue;
             }
-            return qfalse;  // the menu's onESC closes the page
+            return qfalse;
         default:
             return qfalse;
     }
 }
 
-// Escape, or Done: back to the match's menu or to the front end
 void UI_Settings_Close(void) {
     qboolean fromIngame = st.fromIngame;
 

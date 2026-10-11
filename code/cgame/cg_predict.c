@@ -19,12 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// cg_predict.c -- this file generates cg.predictedPlayerState by either
-// interpolating between snapshots from the server or locally predicting
-// ahead the client's movement.
-// It also handles local physics interaction, like fragments bouncing off walls
-
 #include "cg_local.h"
 
 static pmove_t cg_pmove;
@@ -34,21 +28,9 @@ static centity_t* cg_solidEntities[MAX_ENTITIES_IN_SNAPSHOT];
 static int cg_numTriggerEntities;
 static centity_t* cg_triggerEntities[MAX_ENTITIES_IN_SNAPSHOT];
 
-// [QL] skip list for CG_CheckAutoFire penetration traces: entities already hit
-// are excluded from later traces, so the predicted rail passes through up to
-// 4 bodies before stopping at solid world.
 static int cg_numSkipEntities;
 static int cg_skipEntities[4];
 
-/*
-====================
-CG_BuildSolidList
-
-When a new cg.snap has been set, this function builds a sublist
-of the entities that are actually solid, to make for more
-efficient collision detection
-====================
-*/
 void CG_BuildSolidList(void) {
     int i;
     centity_t* cent;
@@ -83,12 +65,6 @@ void CG_BuildSolidList(void) {
     }
 }
 
-/*
-====================
-CG_ClipMoveToEntities
-
-====================
-*/
 static void CG_ClipMoveToEntities(const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int skipNumber, int mask, trace_t* tr, qboolean capsule) {
     int i, x, zd, zu;
     trace_t trace;
@@ -106,7 +82,6 @@ static void CG_ClipMoveToEntities(const vec3_t start, const vec3_t mins, const v
             continue;
         }
 
-        // [QL] skip entities already penetrated by an autofire trace this pass
         {
             int j;
             qboolean skip = qfalse;
@@ -122,12 +97,10 @@ static void CG_ClipMoveToEntities(const vec3_t start, const vec3_t mins, const v
         }
 
         if (ent->solid == SOLID_BMODEL) {
-            // special value for bmodel
             cmodel = trap_CM_InlineModel(ent->modelindex);
             VectorCopy(cent->lerpAngles, angles);
             BG_EvaluateTrajectory(&cent->currentState.pos, cg.physicsTime, origin);
         } else {
-            // encoded bbox
             x = (ent->solid & 255);
             zd = ((ent->solid >> 8) & 255);
             zu = ((ent->solid >> 16) & 255) - 32;
@@ -137,7 +110,6 @@ static void CG_ClipMoveToEntities(const vec3_t start, const vec3_t mins, const v
             bmins[2] = -zd;
             bmaxs[2] = zu;
 
-            // [QL] g_playerCylinders: capsule hull for player-vs-world prediction
             cmodel = capsule ? trap_CM_TempCapsuleModel(bmins, bmaxs)
                              : trap_CM_TempBoxModel(bmins, bmaxs);
             VectorCopy(vec3_origin, angles);
@@ -164,47 +136,26 @@ static void CG_ClipMoveToEntities(const vec3_t start, const vec3_t mins, const v
     }
 }
 
-/*
-================
-CG_Trace
-================
-*/
 void CG_Trace(trace_t* result, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int skipNumber, int mask) {
     trace_t t;
 
     trap_CM_BoxTrace(&t, start, end, mins, maxs, 0, mask);
     t.entityNum = t.fraction != 1.0 ? ENTITYNUM_WORLD : ENTITYNUM_NONE;
-    // check all other solid models
     CG_ClipMoveToEntities(start, mins, maxs, end, skipNumber, mask, &t, qfalse);
 
     *result = t;
 }
 
-/*
-================
-CG_CapsuleTrace
-
-[QL] As CG_Trace but with capsule (cylinder) player hulls. Used for client-side hit
-prediction (rail autofire, shotgun pellets, LG beam) when g_playerCylinders is set, so
-the prediction matches the server's capsule collision model. Address: 0x10044100.
-================
-*/
 void CG_CapsuleTrace(trace_t* result, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int skipNumber, int mask) {
     trace_t t;
 
     trap_CM_CapsuleTrace(&t, start, end, mins, maxs, 0, mask);
     t.entityNum = t.fraction != 1.0 ? ENTITYNUM_WORLD : ENTITYNUM_NONE;
-    // check all other solid models
     CG_ClipMoveToEntities(start, mins, maxs, end, skipNumber, mask, &t, qtrue);
 
     *result = t;
 }
 
-/*
-================
-CG_PointContents
-================
-*/
 int CG_PointContents(const vec3_t point, int passEntityNum) {
     int i;
     entityState_t* ent;
@@ -223,7 +174,7 @@ int CG_PointContents(const vec3_t point, int passEntityNum) {
             continue;
         }
 
-        if (ent->solid != SOLID_BMODEL) {  // special value for bmodel
+        if (ent->solid != SOLID_BMODEL) {
             continue;
         }
 
@@ -238,14 +189,6 @@ int CG_PointContents(const vec3_t point, int passEntityNum) {
     return contents;
 }
 
-/*
-========================
-CG_InterpolatePlayerState
-
-Generates cg.predictedPlayerState by interpolating between
-cg.snap->player_state and cg.nextFrame->player_state
-========================
-*/
 static void CG_InterpolatePlayerState(qboolean grabAngles) {
     float f;
     int i;
@@ -258,7 +201,6 @@ static void CG_InterpolatePlayerState(qboolean grabAngles) {
 
     *out = cg.snap->ps;
 
-    // if we are still allowing local input, short circuit the view angles
     if (grabAngles) {
         usercmd_t cmd;
         int cmdNum;
@@ -269,7 +211,6 @@ static void CG_InterpolatePlayerState(qboolean grabAngles) {
         PM_UpdateViewAngles(out, &cmd);
     }
 
-    // if the next frame is a teleport, we can't lerp to it
     if (cg.nextFrameTeleport) {
         return;
     }
@@ -282,7 +223,7 @@ static void CG_InterpolatePlayerState(qboolean grabAngles) {
 
     i = next->ps.bobCycle;
     if (i < prev->ps.bobCycle) {
-        i += 256;  // handle wraparound
+        i += 256;
     }
     out->bobCycle = prev->ps.bobCycle + f * (i - prev->ps.bobCycle);
 
@@ -297,17 +238,6 @@ static void CG_InterpolatePlayerState(qboolean grabAngles) {
     }
 }
 
-/*
-===================
-CG_TouchItem
-
-[QL] cgamex86.dll 0x100443c0. Nothing is predicted during a warmup countdown (cg.warmup
-over 0), nor the three flags, nor any item with an item timer: armours, mega health,
-medkit and powerups. The server leaves those in the snapshot while they respawn, hidden
-with EF_NODRAW, so predicting them repeated the pickup, and its sound, every frame the
-player stood on the spot.
-===================
-*/
 static void CG_TouchItem(centity_t* cent) {
     gitem_t* item;
 
@@ -318,14 +248,13 @@ static void CG_TouchItem(centity_t* cent) {
         return;
     }
 
-    // never pick an item up twice in a prediction
     if (cent->miscTime == cg.time) {
         return;
     }
 
     if (!BG_CanItemBeGrabbed(cg.time, cg.warmup, cgs.armorTiered, cgs.weaponRespawn,
                              cgs.gametype, &cent->currentState, &cg.predictedPlayerState)) {
-        return;  // can't hold it
+        return;
     }
 
     item = &bg_itemlist[cent->currentState.modelindex];
@@ -337,17 +266,12 @@ static void CG_TouchItem(centity_t* cent) {
         return;
     }
 
-    // grab it
     BG_AddPredictableEventToPlayerstate(EV_ITEM_PICKUP, cent->currentState.modelindex, &cg.predictedPlayerState);
 
-    // remove it from the frame so it won't be drawn
     cent->currentState.eFlags |= EF_NODRAW;
 
-    // don't touch it again this prediction
     cent->miscTime = cg.time;
 
-    // if it's a weapon, give them some predicted ammo so the autoswitch will work
-    // [QL] the item's own quantity, where Quake 3 gave 1
     if (item->giType == IT_WEAPON) {
         cg.predictedPlayerState.stats[STAT_WEAPONS] |= 1 << item->giTag;
         if (!cg.predictedPlayerState.ammo[item->giTag]) {
@@ -356,32 +280,6 @@ static void CG_TouchItem(centity_t* cent) {
     }
 }
 
-/*
-=========================
-CG_TouchTriggerPrediction
-
-Predict push triggers and items
-=========================
-*/
-/*
-=================
-CG_UpdateStepChange
-
-[QL] 0x10044620, called by CG_PredictPlayerState right after every Pmove
-(0x10044bee). This is what smooths the camera when climbing a step, and three things
-differ from Quake 3, all visible on a staircase.
-
-The gate is `cg.stepTime < pm.stepTime`: comparing against cmd.serverTime does not
-work, because Pmove splits the command into chunks of up to 66 ms and overwrites
-each one's serverTime. The previous change is not discarded - what is left of its
-life, decaying linearly over 100 ms, is taken and the new step added on top. And the
-total is clamped to MAX_STEP_CHANGE (0x10067224 = 32) with cg.time as the timestamp,
-because CG_StepOffset measures against the client's clock.
-
-Retail skips the smoothing in two further states that are not identified yet; the
-one that is confirmed is PMF_FOLLOW.
-=================
-*/
 void CG_UpdateStepChange(void) {
     int timeDelta;
     float oldChange;
@@ -415,7 +313,6 @@ static void CG_TouchTriggerPrediction(void) {
     centity_t* cent;
     qboolean spectator;
 
-    // dead clients don't activate triggers
     if (cg.predictedPlayerState.stats[STAT_HEALTH] <= 0) {
         return;
     }
@@ -458,23 +355,12 @@ static void CG_TouchTriggerPrediction(void) {
         }
     }
 
-    // if we didn't touch a jump pad this pmove frame
     if (cg.predictedPlayerState.jumppad_frame != cg.predictedPlayerState.pmove_framecount) {
         cg.predictedPlayerState.jumppad_frame = 0;
         cg.predictedPlayerState.jumppad_ent = 0;
     }
 }
 
-/*
-=================
-CG_CheckAutoFire
-
-[QL] Predicted railgun autofire. cgamex86.dll: CG_CheckAutoFire @ 0x10044ce0,
-gated by the cg_predictLocalRailshots cvar. Draws the rail trail locally the
-instant the client fires instead of waiting for the server, tracing through up
-to 4 penetrated bodies via the skip-list before stopping at solid world.
-=================
-*/
 static void CG_CheckAutoFire(void) {
     usercmd_t cmd;
     int cmdNum;
@@ -483,17 +369,14 @@ static void CG_CheckAutoFire(void) {
     trace_t trace;
     int clientNum;
 
-    // already voted (spectator item-timer flag), don't fire
     if (cg.predictedPlayerState.eFlags & EF_SPECTATOR) {
         return;
     }
 
-    // no firing during intermission
     if (cg.predictedPlayerState.pm_type == PM_INTERMISSION) {
         return;
     }
 
-    // [QL] if frozen, wait until we're unfreezing before firing
     if (cg.predictedPlayerState.pm_flags & PMF_FROZEN) {
         if (!cg.nextSnap || (cg.nextSnap->ps.pm_flags & PMF_FROZEN)) {
             return;
@@ -501,7 +384,6 @@ static void CG_CheckAutoFire(void) {
         cg.predictedPlayerState.weaponTime = 0;
     }
 
-    // blocks weapon fire after respawn
     if (cg.predictedPlayerState.pm_flags & PMF_RESPAWNED) {
         return;
     }
@@ -509,13 +391,10 @@ static void CG_CheckAutoFire(void) {
     cmdNum = trap_GetCurrentCmdNumber();
     trap_GetUserCmd(cmdNum, &cmd);
 
-    // don't fire while talking
     if (cmd.buttons & BUTTON_TALK) {
         return;
     }
 
-    // [QL] don't predict rails while the game is paused or in timeout
-    // (binary caches these from CS_PAUSE_START_TIME / CS_PAUSE_END_TIME)
     if (atoi(CG_ConfigString(CS_PAUSE_START_TIME)) != 0 ||
         atoi(CG_ConfigString(CS_PAUSE_END_TIME)) != 0) {
         return;
@@ -535,19 +414,15 @@ static void CG_CheckAutoFire(void) {
 
         AngleVectors(cg.predictedPlayerState.viewangles, forward, right, up);
 
-        // muzzle = eye + forward * 5
         muzzle[0] = cg.predictedPlayerState.origin[0] + forward[0] * 5.0f;
         muzzle[1] = cg.predictedPlayerState.origin[1] + forward[1] * 5.0f;
         muzzle[2] = cg.predictedPlayerState.origin[2] +
                     cg.predictedPlayerState.viewheight + forward[2] * 5.0f;
 
-        // end = muzzle + forward * 8192
         end[0] = muzzle[0] + forward[0] * 8192.0f;
         end[1] = muzzle[1] + forward[1] * 8192.0f;
         end[2] = muzzle[2] + forward[2] * 8192.0f;
 
-        // trace through up to 4 entities: record each body hit and re-trace,
-        // stopping at the world edge or on solid geometry (penetration)
         do {
             if (cgs.playerCylinders) {
                 CG_CapsuleTrace(&trace, muzzle, NULL, NULL, end,
@@ -570,7 +445,6 @@ static void CG_CheckAutoFire(void) {
 
         cg_numSkipEntities = 0;
 
-        // rail trail leaves the barrel: muzzle + right * 4 - up
         start[0] = muzzle[0] + right[0] * 4.0f - up[0];
         start[1] = muzzle[1] + right[1] * 4.0f - up[1];
         start[2] = muzzle[2] + right[2] * 4.0f - up[2];
@@ -587,32 +461,6 @@ static void CG_CheckAutoFire(void) {
     }
 }
 
-/*
-=================
-CG_PredictPlayerState
-
-Generates cg.predictedPlayerState for the current cg.time
-cg.predictedPlayerState is guaranteed to be valid after exiting.
-
-For demo playback, this will be an interpolation between two valid
-playerState_t.
-
-For normal gameplay, it will be the result of predicted usercmd_t on
-top of the most recent playerState_t received from the server.
-
-Each new snapshot will usually have one or more new usercmd over the last,
-but we simulate all unacknowledged commands each time, not just the new ones.
-This means that on an internet connection, quite a few pmoves may be issued
-each frame.
-
-OPTIMIZE: don't re-simulate unless the newly arrived snapshot playerState_t
-differs from the predicted one.  Would require saving all intermediate
-playerState_t during prediction.
-
-We detect prediction errors and allow them to be decayed off over several frames
-to ease the jerk.
-=================
-*/
 void CG_PredictPlayerState(void) {
     int cmdNum, current;
     playerState_t oldPlayerState;
@@ -621,20 +469,13 @@ void CG_PredictPlayerState(void) {
     usercmd_t latestCmd;
     int following;
 
-    cg.hyperspace = qfalse;  // will be set if touching a trigger_teleport
+    cg.hyperspace = qfalse;
 
-    // if this is the first frame we must guarantee
-    // predictedPlayerState is valid even if there is some
-    // other error condition
     if (!cg.validPPS) {
         cg.validPPS = qtrue;
         cg.predictedPlayerState = cg.snap->ps;
     }
 
-    // [QL] the other players' models depend on whose eyes we see through and on that player's
-    // team, so starting or stopping to follow, following someone else or changing team asks
-    // CG_TransitionSnapshot to reload them (0x10044748). cg_playerTeam only keeps the last team
-    // seen.
     following = (cg.predictedPlayerState.pm_flags & PMF_FOLLOW) != 0;
     if (cg.reloadFollowing != following ||
         cg_playerTeam.integer != cg.predictedPlayerState.persistant[PERS_TEAM]) {
@@ -647,19 +488,16 @@ void CG_PredictPlayerState(void) {
     }
     cg_playerTeam.integer = cg.predictedPlayerState.persistant[PERS_TEAM];
 
-    // demo playback just copies the moves
     if (cg.demoPlayback || (cg.snap->ps.pm_flags & PMF_FOLLOW)) {
         CG_InterpolatePlayerState(qfalse);
         return;
     }
 
-    // non-predicting local movement will grab the latest angles
     if (cg_nopredict.integer) {
         CG_InterpolatePlayerState(qtrue);
         return;
     }
 
-    // prepare for pmove
     cg_pmove.ps = &cg.predictedPlayerState;
     cg_pmove.trace = CG_Trace;
     cg_pmove.pointcontents = CG_PointContents;
@@ -669,47 +507,36 @@ void CG_PredictPlayerState(void) {
         cg_pmove.tracemask = MASK_PLAYERSOLID;
     }
     if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR) {
-        cg_pmove.tracemask &= ~CONTENTS_BODY;  // spectators can fly through bodies
+        cg_pmove.tracemask &= ~CONTENTS_BODY;
     }
     cg_pmove.noFootsteps = (cgs.dmflags & DF_NO_FOOTSTEPS) > 0;
-    cg_pmove.retailBobCycle = !cgs.ioqlServer;  // [ioquakelive] see PM_Footsteps
+    cg_pmove.retailBobCycle = !cgs.ioqlServer;
 
-    // [QL] set PMF_NO_AUTOHOP from client cvar for prediction
     if (cg_autoHop.integer == 0) {
         cg.predictedPlayerState.pm_flags |= PMF_NO_AUTOHOP;
     } else {
         cg.predictedPlayerState.pm_flags &= ~PMF_NO_AUTOHOP;
     }
 
-    // save the state before the pmove so we can detect transitions
     oldPlayerState = cg.predictedPlayerState;
 
     current = trap_GetCurrentCmdNumber();
 
-    // if we don't have the commands right after the snapshot, we
-    // can't accurately predict a current position, so just freeze at
-    // the last good position we had
     cmdNum = current - CMD_BACKUP + 1;
     trap_GetUserCmd(cmdNum, &oldestCmd);
-    if (oldestCmd.serverTime > cg.snap->ps.commandTime && oldestCmd.serverTime < cg.time) {  // special check for map_restart
+    if (oldestCmd.serverTime > cg.snap->ps.commandTime && oldestCmd.serverTime < cg.time) {
         if (cg_showmiss.integer) {
             CG_Printf("exceeded PACKET_BACKUP on commands\n");
         }
         return;
     }
 
-    // get the latest command so we can know which commands are from previous map_restarts
     trap_GetUserCmd(current, &latestCmd);
 
-    // [QL] predicted railgun autofire (draws the local rail trail immediately)
     if (cg_predictLocalRailshots.integer) {
         CG_CheckAutoFire();
     }
 
-    // get the most recent information we have, even if
-    // the server time is beyond our current cg.time,
-    // because predicted player positions are going to
-    // be ahead of everything else anyway
     if (cg.nextSnap && !cg.nextFrameTeleport && !cg.thisFrameTeleport) {
         cg.predictedPlayerState = cg.nextSnap->ps;
         cg.physicsTime = cg.nextSnap->serverTime;
@@ -718,33 +545,23 @@ void CG_PredictPlayerState(void) {
         cg.physicsTime = cg.snap->serverTime;
     }
 
-    // run cmds
     moved = qfalse;
     for (cmdNum = current - CMD_BACKUP + 1; cmdNum <= current; cmdNum++) {
-        // get the command
         trap_GetUserCmd(cmdNum, &cg_pmove.cmd);
 
-        // don't do anything if the time is before the snapshot player time
         if (cg_pmove.cmd.serverTime <= cg.predictedPlayerState.commandTime) {
             continue;
         }
 
-        // don't do anything if the command was from a previous map_restart
         if (cg_pmove.cmd.serverTime > latestCmd.serverTime) {
             continue;
         }
 
-        // check for a prediction error from last frame
-        // on a lan, this will often be the exact value
-        // from the snapshot, but on a wan we will have
-        // to predict several commands to get to the point
-        // we want to compare
         if (cg.predictedPlayerState.commandTime == oldPlayerState.commandTime) {
             vec3_t delta;
             float len;
 
             if (cg.thisFrameTeleport) {
-                // a teleport will not cause an error decay
                 VectorClear(cg.predictedError);
                 if (cg_showmiss.integer) {
                     CG_Printf("PredictionTeleport\n");
@@ -788,8 +605,6 @@ void CG_PredictPlayerState(void) {
             }
         }
 
-        // don't predict gauntlet firing, which is only supposed to happen
-        // when it actually inflicts damage
         cg_pmove.gauntletHit = qfalse;
 
         Pmove(&cg_pmove);
@@ -798,11 +613,8 @@ void CG_PredictPlayerState(void) {
 
         CG_UpdateStepChange();
 
-        // add push trigger movement effects
         CG_TouchTriggerPrediction();
 
-        // check for predictable events that changed from previous predictions
-        // CG_CheckChangedPredictableEvents(&cg.predictedPlayerState);
     }
 
     if (cg_showmiss.integer > 1) {
@@ -816,7 +628,6 @@ void CG_PredictPlayerState(void) {
         return;
     }
 
-    // adjust for the movement of the groundentity
     CG_AdjustPositionForMover(cg.predictedPlayerState.origin,
                               cg.predictedPlayerState.groundEntityNum,
                               cg.physicsTime, cg.time, cg.predictedPlayerState.origin, cg.predictedPlayerState.viewangles, cg.predictedPlayerState.viewangles);
@@ -827,7 +638,6 @@ void CG_PredictPlayerState(void) {
         }
     }
 
-    // fire events and other transition triggered things
     CG_TransitionPlayerState(&cg.predictedPlayerState, &oldPlayerState);
 
     if (cg_showmiss.integer) {
@@ -838,18 +648,9 @@ void CG_PredictPlayerState(void) {
     }
 }
 
-/*
-===============
-CG_SpecAutoFollow
-
-QL binary: auto-follows a player based on cg_followPowerup (vmCvar 0x10A6F420).
-Called from score events when spectating.
-===============
-*/
 void CG_SpecAutoFollow(int clientNum, int mode) {
     const char* suffix;
 
-    // must have auto-follow enabled and be a spectator
     if (!cg_followPowerup.integer) {
         return;
     }
@@ -860,8 +661,6 @@ void CG_SpecAutoFollow(int clientNum, int mode) {
         return;
     }
 
-    // cg_followPowerup 2 on a powerup pickup (mode 0) appends the "pw" flag so
-    // the server keeps us on whoever is holding the powerup
     if (cg_followPowerup.integer == 2 && mode == 0) {
         suffix = " pw";
     } else {
@@ -871,15 +670,6 @@ void CG_SpecAutoFollow(int clientNum, int mode) {
     trap_SendConsoleCommand(va("follow %d%s", clientNum, suffix));
 }
 
-/*
-===============
-CG_SpecFollowKiller
-
-[CPMA] retail jumps to whoever takes a powerup or the flag, and CPMA's spectator camera
-also jumps to whoever gets the frag. Two seconds have to pass between jumps, so a trade
-does not throw the camera about
-===============
-*/
 void CG_SpecFollowKiller(int clientNum) {
     if (!ch_followKiller.integer || clientNum < 0 || clientNum >= MAX_CLIENTS) {
         return;

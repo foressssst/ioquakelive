@@ -19,11 +19,8 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #define INVENTORY_NONE 0
-// armor
 #define INVENTORY_ARMOR 1
-// weapons
 #define INVENTORY_GAUNTLET 4
 #define INVENTORY_SHOTGUN 5
 #define INVENTORY_MACHINEGUN 6
@@ -37,7 +34,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define INVENTORY_NAILGUN 15
 #define INVENTORY_PROXLAUNCHER 16
 #define INVENTORY_CHAINGUN 17
-// ammo
 #define INVENTORY_SHELLS 18
 #define INVENTORY_BULLETS 19
 #define INVENTORY_GRENADES 20
@@ -49,7 +45,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define INVENTORY_NAILS 26
 #define INVENTORY_MINES 27
 #define INVENTORY_BELT 28
-// powerups
 #define INVENTORY_HEALTH 29
 #define INVENTORY_TELEPORTER 30
 #define INVENTORY_MEDKIT 31
@@ -72,14 +67,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define INVENTORY_NEUTRALFLAG 47
 #define INVENTORY_REDCUBE 48
 #define INVENTORY_BLUECUBE 49
-// enemy stuff
 #define ENEMY_HORIZONTAL_DIST 200
 #define ENEMY_HEIGHT 201
 #define NUM_VISIBLE_ENEMIES 202
 #define NUM_VISIBLE_TEAMMATES 203
 
-// item numbers, as botfiles/inv.h in pak00 has them: [QL] the green armour is 4 and the
-// rest come one after it (make sure they are in sync with bg_itemlist in bg_misc.c)
 #define MODELINDEX_ARMORSHARD 1
 #define MODELINDEX_ARMORCOMBAT 2
 #define MODELINDEX_ARMORBODY 3
@@ -142,7 +134,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define MODELINDEX_PROXLAUNCHER 51
 #define MODELINDEX_CHAINGUN 52
 
-//
 #define WEAPONINDEX_GAUNTLET 1
 #define WEAPONINDEX_MACHINEGUN 2
 #define WEAPONINDEX_SHOTGUN 3

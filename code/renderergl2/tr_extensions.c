@@ -19,8 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// tr_extensions.c - extensions needed by the renderer not in sdl_glimp.c
-
 #include <SDL3/SDL.h>
 
 #include "tr_local.h"
@@ -35,7 +33,6 @@ void GLimp_InitExtraExtensions(void) {
     q_gl_version_at_least_3_0 = QGL_VERSION_ATLEAST(3, 0);
     q_gl_version_at_least_3_2 = QGL_VERSION_ATLEAST(3, 2);
 
-    // Check if we need Intel graphics specific fixes.
     glRefConfig.intelGraphics = qfalse;
     if (strstr((char*)qglGetString(GL_RENDERER), "Intel"))
         glRefConfig.intelGraphics = qtrue;
@@ -48,17 +45,12 @@ void GLimp_InitExtraExtensions(void) {
         glRefConfig.vaoCacheGlIndexSize = sizeof(unsigned int);
     }
 
-    // set DSA fallbacks
 #define GLE(ret, name, ...) qgl##name = GLDSA_##name;
     QGL_EXT_direct_state_access_PROCS;
 #undef GLE
 
-    // GL function loader, based on https://gist.github.com/rygorous/16796a0c876cf8a5f542caddb55bce8a
 #define GLE(ret, name, ...) qgl##name = (name##proc*)SDL_GL_GetProcAddress("gl" #name);
 
-    //
-    // OpenGL ES extensions
-    //
     if (qglesMajorVersion) {
         if (!r_allowExtensions->integer)
             goto done;
@@ -71,7 +63,6 @@ void GLimp_InitExtraExtensions(void) {
             if (qglesMajorVersion >= 3) {
                 QGL_ARB_occlusion_query_PROCS;
             } else {
-                // GL_EXT_occlusion_query_boolean uses EXT suffix
 #undef GLE
 #define GLE(ret, name, ...) qgl##name = (name##proc*)SDL_GL_GetProcAddress("gl" #name "EXT");
 
@@ -86,7 +77,6 @@ void GLimp_InitExtraExtensions(void) {
             ri.Printf(PRINT_ALL, result[2], extension);
         }
 
-        // GL_NV_read_depth
         extension = "GL_NV_read_depth";
         if (SDL_GL_ExtensionSupported(extension)) {
             glRefConfig.readDepth = qtrue;
@@ -95,7 +85,6 @@ void GLimp_InitExtraExtensions(void) {
             ri.Printf(PRINT_ALL, result[2], extension);
         }
 
-        // GL_NV_read_stencil
         extension = "GL_NV_read_stencil";
         if (SDL_GL_ExtensionSupported(extension)) {
             glRefConfig.readStencil = qtrue;
@@ -104,7 +93,6 @@ void GLimp_InitExtraExtensions(void) {
             ri.Printf(PRINT_ALL, result[2], extension);
         }
 
-        // GL_EXT_shadow_samplers
         extension = "GL_EXT_shadow_samplers";
         if (qglesMajorVersion >= 3 || SDL_GL_ExtensionSupported(extension)) {
             glRefConfig.shadowSamplers = qtrue;
@@ -113,7 +101,6 @@ void GLimp_InitExtraExtensions(void) {
             ri.Printf(PRINT_ALL, result[2], extension);
         }
 
-        // GL_OES_standard_derivatives
         extension = "GL_OES_standard_derivatives";
         if (qglesMajorVersion >= 3 || SDL_GL_ExtensionSupported(extension)) {
             glRefConfig.standardDerivatives = qtrue;
@@ -122,7 +109,6 @@ void GLimp_InitExtraExtensions(void) {
             ri.Printf(PRINT_ALL, result[2], extension);
         }
 
-        // GL_OES_element_index_uint
         extension = "GL_OES_element_index_uint";
         if (qglesMajorVersion >= 3 || SDL_GL_ExtensionSupported(extension)) {
             glRefConfig.vaoCacheGlIndexType = GL_UNSIGNED_INT;
@@ -135,18 +121,14 @@ void GLimp_InitExtraExtensions(void) {
         goto done;
     }
 
-    // [QL] quakelive_steam.exe 0x46b792 looks for GL_ARB_texture_non_power_of_two, which
-    // OpenGL 2.0 and OpenGL ES 3.0 carry in the core
     glRefConfig.textureNonPowerOfTwo = QGL_VERSION_ATLEAST(2, 0) || QGLES_VERSION_ATLEAST(3, 0) ||
                                        SDL_GL_ExtensionSupported("GL_ARB_texture_non_power_of_two") ||
                                        SDL_GL_ExtensionSupported("GL_OES_texture_npot");
 
-    // OpenGL 1.5 - GL_ARB_occlusion_query
     glRefConfig.occlusionQuery = qtrue;
     glRefConfig.occlusionQueryTarget = GL_SAMPLES_PASSED;
     QGL_ARB_occlusion_query_PROCS;
 
-    // OpenGL 3.0 - GL_ARB_framebuffer_object
     extension = "GL_ARB_framebuffer_object";
     glRefConfig.framebufferObject = qfalse;
     glRefConfig.framebufferBlit = qfalse;
@@ -166,12 +148,10 @@ void GLimp_InitExtraExtensions(void) {
         ri.Printf(PRINT_ALL, result[2], extension);
     }
 
-    // OpenGL 3.0 - GL_ARB_vertex_array_object
     extension = "GL_ARB_vertex_array_object";
     glRefConfig.vertexArrayObject = qfalse;
     if (q_gl_version_at_least_3_0 || SDL_GL_ExtensionSupported(extension)) {
         if (q_gl_version_at_least_3_0) {
-            // force VAO, core context requires it
             glRefConfig.vertexArrayObject = qtrue;
         } else {
             glRefConfig.vertexArrayObject = !!r_arb_vertex_array_object->integer;
@@ -184,7 +164,6 @@ void GLimp_InitExtraExtensions(void) {
         ri.Printf(PRINT_ALL, result[2], extension);
     }
 
-    // OpenGL 3.0 - GL_ARB_texture_float
     extension = "GL_ARB_texture_float";
     glRefConfig.textureFloat = qfalse;
     if (q_gl_version_at_least_3_0 || SDL_GL_ExtensionSupported(extension)) {
@@ -195,7 +174,6 @@ void GLimp_InitExtraExtensions(void) {
         ri.Printf(PRINT_ALL, result[2], extension);
     }
 
-    // OpenGL 3.2 - GL_ARB_depth_clamp
     extension = "GL_ARB_depth_clamp";
     glRefConfig.depthClamp = qfalse;
     if (q_gl_version_at_least_3_2 || SDL_GL_ExtensionSupported(extension)) {
@@ -206,7 +184,6 @@ void GLimp_InitExtraExtensions(void) {
         ri.Printf(PRINT_ALL, result[2], extension);
     }
 
-    // OpenGL 3.2 - GL_ARB_seamless_cube_map
     extension = "GL_ARB_seamless_cube_map";
     glRefConfig.seamlessCubeMap = qfalse;
     if (q_gl_version_at_least_3_2 || SDL_GL_ExtensionSupported(extension)) {
@@ -219,7 +196,6 @@ void GLimp_InitExtraExtensions(void) {
 
     glRefConfig.memInfo = MI_NONE;
 
-    // GL_NVX_gpu_memory_info
     extension = "GL_NVX_gpu_memory_info";
     if (SDL_GL_ExtensionSupported(extension)) {
         glRefConfig.memInfo = MI_NVX;
@@ -229,7 +205,6 @@ void GLimp_InitExtraExtensions(void) {
         ri.Printf(PRINT_ALL, result[2], extension);
     }
 
-    // GL_ATI_meminfo
     extension = "GL_ATI_meminfo";
     if (SDL_GL_ExtensionSupported(extension)) {
         if (glRefConfig.memInfo == MI_NONE) {
@@ -245,7 +220,6 @@ void GLimp_InitExtraExtensions(void) {
 
     glRefConfig.textureCompression = TCR_NONE;
 
-    // GL_ARB_texture_compression_rgtc
     extension = "GL_ARB_texture_compression_rgtc";
     if (SDL_GL_ExtensionSupported(extension)) {
         qboolean useRgtc = r_ext_compressed_textures->integer >= 1;
@@ -260,7 +234,6 @@ void GLimp_InitExtraExtensions(void) {
 
     glRefConfig.swizzleNormalmap = r_ext_compressed_textures->integer && !(glRefConfig.textureCompression & TCR_RGTC);
 
-    // GL_ARB_texture_compression_bptc
     extension = "GL_ARB_texture_compression_bptc";
     if (SDL_GL_ExtensionSupported(extension)) {
         qboolean useBptc = r_ext_compressed_textures->integer >= 2;
@@ -273,13 +246,11 @@ void GLimp_InitExtraExtensions(void) {
         ri.Printf(PRINT_ALL, result[2], extension);
     }
 
-    // GL_EXT_direct_state_access
     extension = "GL_EXT_direct_state_access";
     glRefConfig.directStateAccess = qfalse;
     if (SDL_GL_ExtensionSupported(extension)) {
         glRefConfig.directStateAccess = !!r_ext_direct_state_access->integer;
 
-        // QGL_*_PROCS becomes several functions, do not remove {}
         if (glRefConfig.directStateAccess) {
             QGL_EXT_direct_state_access_PROCS;
         }
@@ -291,13 +262,11 @@ void GLimp_InitExtraExtensions(void) {
 
 done:
 
-    // Determine GLSL version
     if (1) {
         char version[256], *version_p;
 
         Q_strncpyz(version, (char*)qglGetString(GL_SHADING_LANGUAGE_VERSION), sizeof(version));
 
-        // Skip leading text such as "OpenGL ES GLSL ES "
         version_p = version;
         while (*version_p && !isdigit(*version_p)) {
             version_p++;

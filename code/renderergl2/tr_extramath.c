@@ -19,12 +19,7 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// tr_extramath.c - extra math needed by the renderer not in qmath.c
-
 #include "tr_local.h"
-
-// Some matrix helper functions
-// FIXME: do these already exist in ioq3 and I don't know about them?
 
 void Mat4Zero(mat4_t out) {
     out[0] = 0.0f;

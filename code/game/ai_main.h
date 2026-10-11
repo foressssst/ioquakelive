@@ -19,81 +19,59 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-
-/*****************************************************************************
- * name:		ai_main.h
- *
- * desc:		Quake3 bot AI
- *
- * $Archive: /source/code/botai/ai_chat.c $
- *
- *****************************************************************************/
-
-// #define DEBUG
 #define CTF
 
 #define MAX_ITEMS 256
-// bot flags
-#define BFL_STRAFERIGHT 1     // strafe to the right
-#define BFL_ATTACKED 2        // bot has attacked last ai frame
-#define BFL_ATTACKJUMPED 4    // bot jumped during attack last frame
-#define BFL_AIMATENEMY 8      // bot aimed at the enemy this frame
-#define BFL_AVOIDRIGHT 16     // avoid obstacles by going to the right
-#define BFL_IDEALVIEWSET 32   // bot has ideal view angles set
-#define BFL_FIGHTSUICIDAL 64  // bot is in a suicidal fight
-// long term goal types
-#define LTG_TEAMHELP 1          // help a team mate
-#define LTG_TEAMACCOMPANY 2     // accompany a team mate
-#define LTG_DEFENDKEYAREA 3     // defend a key area
-#define LTG_GETFLAG 4           // get the enemy flag
-#define LTG_RUSHBASE 5          // rush to the base
-#define LTG_RETURNFLAG 6        // return the flag
-#define LTG_CAMP 7              // camp somewhere
-#define LTG_CAMPORDER 8         // ordered to camp somewhere
-#define LTG_PATROL 9            // patrol
-#define LTG_GETITEM 10          // get an item
-#define LTG_KILL 11             // kill someone
-#define LTG_HARVEST 12          // harvest skulls
-#define LTG_ATTACKENEMYBASE 13  // attack the enemy base
+#define BFL_STRAFERIGHT 1
+#define BFL_ATTACKED 2
+#define BFL_ATTACKJUMPED 4
+#define BFL_AIMATENEMY 8
+#define BFL_AVOIDRIGHT 16
+#define BFL_IDEALVIEWSET 32
+#define BFL_FIGHTSUICIDAL 64
+#define LTG_TEAMHELP 1
+#define LTG_TEAMACCOMPANY 2
+#define LTG_DEFENDKEYAREA 3
+#define LTG_GETFLAG 4
+#define LTG_RUSHBASE 5
+#define LTG_RETURNFLAG 6
+#define LTG_CAMP 7
+#define LTG_CAMPORDER 8
+#define LTG_PATROL 9
+#define LTG_GETITEM 10
+#define LTG_KILL 11
+#define LTG_HARVEST 12
+#define LTG_ATTACKENEMYBASE 13
 #define LTG_MAKELOVE_UNDER 14
 #define LTG_MAKELOVE_ONTOP 15
-// [QL] qagamex86.dll BotDeathmatchAI (0x1001f29e) keys its extra nodes by these
-#define LTG_FOLLOWME 16      // AIEnter_FollowMe 0x1000ecc0 (bot_followMe)
-#define LTG_TRAINING 18      // AIEnter_Training 0x1000f880 (bot_training 1 or 2)
-#define LTG_DODGETRAINER 22  // [ioquakelive] AIEnter_DodgeTrainer (g_advancedTraining 1)
-// some goal dedication times
-#define TEAM_HELP_TIME 60              // 1 minute teamplay help time
-#define TEAM_ACCOMPANY_TIME 600        // 10 minutes teamplay accompany time
-#define TEAM_DEFENDKEYAREA_TIME 600    // 10 minutes ctf defend base time
-#define TEAM_CAMP_TIME 600             // 10 minutes camping time
-#define TEAM_PATROL_TIME 600           // 10 minutes patrolling time
-#define TEAM_LEAD_TIME 600             // 10 minutes taking the lead
-#define TEAM_GETITEM_TIME 60           // 1 minute
-#define TEAM_KILL_SOMEONE 180          // 3 minute to kill someone
-#define TEAM_ATTACKENEMYBASE_TIME 600  // 10 minutes
-#define TEAM_HARVEST_TIME 120          // 2 minutes
-#define CTF_GETFLAG_TIME 600           // 10 minutes ctf get flag time
-#define CTF_RUSHBASE_TIME 120          // 2 minutes ctf rush base time
-#define CTF_RETURNFLAG_TIME 180        // 3 minutes to return the flag
-#define CTF_ROAM_TIME 60               // 1 minute ctf roam time
-// patrol flags
+#define LTG_FOLLOWME 16
+#define LTG_TRAINING 18
+#define LTG_DODGETRAINER 22
+#define TEAM_HELP_TIME 60
+#define TEAM_ACCOMPANY_TIME 600
+#define TEAM_DEFENDKEYAREA_TIME 600
+#define TEAM_CAMP_TIME 600
+#define TEAM_PATROL_TIME 600
+#define TEAM_LEAD_TIME 600
+#define TEAM_GETITEM_TIME 60
+#define TEAM_KILL_SOMEONE 180
+#define TEAM_ATTACKENEMYBASE_TIME 600
+#define TEAM_HARVEST_TIME 120
+#define CTF_GETFLAG_TIME 600
+#define CTF_RUSHBASE_TIME 120
+#define CTF_RETURNFLAG_TIME 180
+#define CTF_ROAM_TIME 60
 #define PATROL_LOOP 1
 #define PATROL_REVERSE 2
 #define PATROL_BACK 4
-// teamplay task preference
 #define TEAMTP_DEFENDER 1
 #define TEAMTP_ATTACKER 2
-// CTF strategy
 #define CTFS_AGRESSIVE 1
-// copied from the aas file header
 #define PRESENCE_NONE 1
 #define PRESENCE_NORMAL 2
 #define PRESENCE_CROUCH 4
-//
 #define MAX_PROXMINES 64
 
-// check points
 typedef struct bot_waypoint_s {
     int inuse;
     char name[32];
@@ -106,239 +84,221 @@ typedef struct bot_waypoint_s {
 
 typedef struct bot_activategoal_s {
     int inuse;
-    bot_goal_t goal;                  // goal to activate (buttons etc.)
-    float time;                       // time to activate something
-    float start_time;                 // time starting to activate something
-    float justused_time;              // time the goal was used
-    int shoot;                        // true if bot has to shoot to activate
-    int weapon;                       // weapon to be used for activation
-    vec3_t target;                    // target to shoot at to activate something
-    vec3_t origin;                    // origin of the blocking entity to activate
-    int areas[MAX_ACTIVATEAREAS];     // routing areas disabled by blocking entity
-    int numareas;                     // number of disabled routing areas
-    int areasdisabled;                // true if the areas are disabled for the routing
-    struct bot_activategoal_s* next;  // next activate goal on stack
+    bot_goal_t goal;
+    float time;
+    float start_time;
+    float justused_time;
+    int shoot;
+    int weapon;
+    vec3_t target;
+    vec3_t origin;
+    int areas[MAX_ACTIVATEAREAS];
+    int numareas;
+    int areasdisabled;
+    struct bot_activategoal_s* next;
 } bot_activategoal_t;
 
-// bot state
 typedef struct bot_state_s {
-    int inuse;                           // true if this state is used by a bot client
-    int botthink_residual;               // residual for the bot thinks
-    int client;                          // client number of the bot
-    int entitynum;                       // entity number of the bot
-    playerState_t cur_ps;                // current player state
-    int last_eFlags;                     // last ps flags
-    usercmd_t lastucmd;                  // usercmd from last frame
-    int entityeventTime[MAX_GENTITIES];  // last entity event time
-    //
-    bot_settings_t settings;                // several bot settings
-    int (*ainode)(struct bot_state_s* bs);  // current AI node
-    float thinktime;                        // time the bot thinks this frame
-    vec3_t origin;                          // origin of the bot
-    vec3_t velocity;                        // velocity of the bot
-    int presencetype;                       // presence type of the bot
-    vec3_t eye;                             // eye coordinates of the bot
-    int areanum;                            // the number of the area the bot is in
-    int inventory[MAX_ITEMS];               // string with items amounts the bot has
-    int tfl;                                // the travel flags the bot uses
-    int flags;                              // several flags
-    int respawn_wait;                       // wait until respawned
-    int lasthealth;                         // health value previous frame
-    int lastkilledplayer;                   // last killed player
-    int lastkilledby;                       // player that last killed this bot
-    int botdeathtype;                       // the death type of the bot
-    int enemydeathtype;                     // the death type of the enemy
-    int botsuicide;                         // true when the bot suicides
-    int enemysuicide;                       // true when the enemy of the bot suicides
-    int setupcount;                         // true when the bot has just been setup
-    int map_restart;                        // true when the map is being restarted
-    int entergamechat;                      // true when the bot used an enter game chat
-    int num_deaths;                         // number of time this bot died
-    int num_kills;                          // number of kills of this bot
-    int revenge_enemy;                      // the revenge enemy
-    int revenge_kills;                      // number of kills the enemy made
-    int lastframe_health;                   // health value the last frame
-    int lasthitcount;                       // number of hits last frame
-    int chatto;                             // chat to all or team
-    float walker;                           // walker charactertic
-    float ltime;                            // local bot time
-    float entergame_time;                   // time the bot entered the game
-    float ltg_time;                         // long term goal time
-    float nbg_time;                         // nearby goal time
-    float respawn_time;                     // time the bot takes to respawn
-    float respawnchat_time;                 // time the bot started a chat during respawn
-    float chase_time;                       // time the bot will chase the enemy
-    float enemyvisible_time;                // time the enemy was last visible
-    float check_time;                       // time to check for nearby items
-    float stand_time;                       // time the bot is standing still
-    float lastchat_time;                    // time the bot last selected a chat
-    float kamikaze_time;                    // time to check for kamikaze usage
-    float invulnerability_time;             // time to check for invulnerability usage
-    float standfindenemy_time;              // time to find enemy while standing
-    float attackstrafe_time;                // time the bot is strafing in one dir
-    float attackcrouch_time;                // time the bot will stop crouching
-    float attackchase_time;                 // time the bot chases during actual attack
-    float attackjump_time;                  // time the bot jumped during attack
-    float enemysight_time;                  // time before reacting to enemy
-    float enemydeath_time;                  // time the enemy died
-    float enemyposition_time;               // time the position and velocity of the enemy were stored
-    float defendaway_time;                  // time away while defending
-    float defendaway_range;                 // max travel time away from defend area
-    float rushbaseaway_time;                // time away from rushing to the base
-    float attackaway_time;                  // time away from attacking the enemy base
-    float harvestaway_time;                 // time away from harvesting
-    float ctfroam_time;                     // time the bot is roaming in ctf
-    float killedenemy_time;                 // time the bot killed the enemy
-    float arrive_time;                      // time arrived (at companion)
-    float lastair_time;                     // last time the bot had air
-    float teleport_time;                    // last time the bot teleported
-    float camp_time;                        // last time camped
-    float weaponchange_time;                // time the bot started changing weapons
-    float firethrottlewait_time;            // amount of time to wait
-    float firethrottleshoot_time;           // amount of time to shoot
-    float notblocked_time;                  // last time the bot was not blocked
-    float blockedbyavoidspot_time;          // time blocked by an avoid spot
-    float predictobstacles_time;            // last time the bot predicted obstacles
-    int predictobstacles_goalareanum;       // last goal areanum the bot predicted obstacles for
+    int inuse;
+    int botthink_residual;
+    int client;
+    int entitynum;
+    playerState_t cur_ps;
+    int last_eFlags;
+    usercmd_t lastucmd;
+    int entityeventTime[MAX_GENTITIES];
+    bot_settings_t settings;
+    int (*ainode)(struct bot_state_s* bs);
+    float thinktime;
+    vec3_t origin;
+    vec3_t velocity;
+    int presencetype;
+    vec3_t eye;
+    int areanum;
+    int inventory[MAX_ITEMS];
+    int tfl;
+    int flags;
+    int respawn_wait;
+    int lasthealth;
+    int lastkilledplayer;
+    int lastkilledby;
+    int botdeathtype;
+    int enemydeathtype;
+    int botsuicide;
+    int enemysuicide;
+    int setupcount;
+    int map_restart;
+    int entergamechat;
+    int num_deaths;
+    int num_kills;
+    int revenge_enemy;
+    int revenge_kills;
+    int lastframe_health;
+    int lasthitcount;
+    int chatto;
+    float walker;
+    float ltime;
+    float entergame_time;
+    float ltg_time;
+    float nbg_time;
+    float respawn_time;
+    float respawnchat_time;
+    float chase_time;
+    float enemyvisible_time;
+    float check_time;
+    float stand_time;
+    float lastchat_time;
+    float kamikaze_time;
+    float invulnerability_time;
+    float standfindenemy_time;
+    float attackstrafe_time;
+    float attackcrouch_time;
+    float attackchase_time;
+    float attackjump_time;
+    float enemysight_time;
+    float enemydeath_time;
+    float enemyposition_time;
+    float defendaway_time;
+    float defendaway_range;
+    float rushbaseaway_time;
+    float attackaway_time;
+    float harvestaway_time;
+    float ctfroam_time;
+    float killedenemy_time;
+    float arrive_time;
+    float lastair_time;
+    float teleport_time;
+    float camp_time;
+    float weaponchange_time;
+    float firethrottlewait_time;
+    float firethrottleshoot_time;
+    float notblocked_time;
+    float blockedbyavoidspot_time;
+    float predictobstacles_time;
+    int predictobstacles_goalareanum;
     vec3_t aimtarget;
-    vec3_t enemyvelocity;  // enemy velocity 0.5 secs ago during battle
-    vec3_t enemyorigin;    // enemy origin 0.5 secs ago during battle
-    //
-    int kamikazebody;  // kamikaze body
+    vec3_t enemyvelocity;
+    vec3_t enemyorigin;
+    int kamikazebody;
     int proxmines[MAX_PROXMINES];
     int numproxmines;
-    //
-    int character;  // the bot character
-    int ms;         // move state of the bot
-    int gs;         // goal state of the bot
-    int cs;         // chat state of the bot
-    int ws;         // weapon state of the bot
-    //
-    int enemy;                // enemy entity number
-    int lastenemyareanum;     // last reachability area the enemy was in
-    vec3_t lastenemyorigin;   // last origin of the enemy in the reachability area
-    int weaponnum;            // current weapon number
-    vec3_t viewangles;        // current view angles
-    vec3_t ideal_viewangles;  // ideal view angles
+    int character;
+    int ms;
+    int gs;
+    int cs;
+    int ws;
+    int enemy;
+    int lastenemyareanum;
+    vec3_t lastenemyorigin;
+    int weaponnum;
+    vec3_t viewangles;
+    vec3_t ideal_viewangles;
     vec3_t viewanglespeed;
-    //
-    int ltgtype;  // long term goal type
-    // team goals
-    int teammate;                    // team mate involved in this team goal
-    int decisionmaker;               // player who decided to go for this goal
-    int ordered;                     // true if ordered to do something
-    float order_time;                // time ordered to do something
-    int owndecision_time;            // time the bot made its own decision
-    bot_goal_t teamgoal;             // the team goal
-    bot_goal_t altroutegoal;         // alternative route goal
-    float reachedaltroutegoal_time;  // time the bot reached the alt route goal
-    float teammessage_time;          // time to message team mates what the bot is doing
-    float teamgoal_time;             // time to stop helping team mate
-    float teammatevisible_time;      // last time the team mate was NOT visible
-    int teamtaskpreference;          // team task preference
-    // last ordered team goal
+    int ltgtype;
+    int teammate;
+    int decisionmaker;
+    int ordered;
+    float order_time;
+    int owndecision_time;
+    bot_goal_t teamgoal;
+    bot_goal_t altroutegoal;
+    float reachedaltroutegoal_time;
+    float teammessage_time;
+    float teamgoal_time;
+    float teammatevisible_time;
+    int teamtaskpreference;
     int lastgoal_decisionmaker;
     int lastgoal_ltgtype;
     int lastgoal_teammate;
     bot_goal_t lastgoal_teamgoal;
-    // for leading team mates
-    int lead_teammate;         // team mate the bot is leading
-    bot_goal_t lead_teamgoal;  // team goal while leading
-    float lead_time;           // time leading someone
-    float leadvisible_time;    // last time the team mate was visible
-    float leadmessage_time;    // last time a messaged was sent to the team mate
-    float leadbackup_time;     // time backing up towards team mate
-    //
-    char teamleader[MAX_NETNAME];  // netname of the team leader
-    float askteamleader_time;      // time asked for team leader
-    float becometeamleader_time;   // time the bot will become the team leader
-    float teamgiveorders_time;     // time to give team orders
-    float lastflagcapture_time;    // last time a flag was captured
-    int numteammates;              // number of team mates
-    int redflagstatus;             // 0 = at base, 1 = not at base
-    int blueflagstatus;            // 0 = at base, 1 = not at base
-    int neutralflagstatus;         // 0 = at base, 1 = our team has flag, 2 = enemy team has flag, 3 = enemy team dropped the flag
-    int flagstatuschanged;         // flag status changed
-    int forceorders;               // true if forced to give orders
-    int flagcarrier;               // team mate carrying the enemy flag
-    int ctfstrategy;               // ctf strategy
-    char subteam[32];              // sub team name
-    float formation_dist;          // formation team mate intervening space
+    int lead_teammate;
+    bot_goal_t lead_teamgoal;
+    float lead_time;
+    float leadvisible_time;
+    float leadmessage_time;
+    float leadbackup_time;
+    char teamleader[MAX_NETNAME];
+    float askteamleader_time;
+    float becometeamleader_time;
+    float teamgiveorders_time;
+    float lastflagcapture_time;
+    int numteammates;
+    int redflagstatus;
+    int blueflagstatus;
+    int neutralflagstatus;
+    int flagstatuschanged;
+    int forceorders;
+    int flagcarrier;
+    int ctfstrategy;
+    char subteam[32];
+    float formation_dist;
 
-    bot_activategoal_t* activatestack;                       // first activate goal on the stack
-    bot_activategoal_t activategoalheap[MAX_ACTIVATESTACK];  // activate goal heap
+    bot_activategoal_t* activatestack;
+    bot_activategoal_t activategoalheap[MAX_ACTIVATESTACK];
 
-    bot_waypoint_t* checkpoints;     // check points
-    bot_waypoint_t* patrolpoints;    // patrol points
-    bot_waypoint_t* curpatrolpoint;  // current patrol point the bot is going for
-    int patrolflags;                 // patrol flags
+    bot_waypoint_t* checkpoints;
+    bot_waypoint_t* patrolpoints;
+    bot_waypoint_t* curpatrolpoint;
+    int patrolflags;
 
-    // [QL] the training bot leading the tour (AINode_Training, ai_dmnet.c). Retail keeps
-    // these in its own bot_state_t from 0x241c; the offsets are noted to follow the port.
-    float tourFollowDist;       // 0x241c 150: how near the player keeps the tour waiting
-    int tourPoint;              // 0x2430 the info_tour_point the tour is at, -1 when over
-    int tourPrevPoint;          // 0x2480 the one before, where the next search starts
-    int tourAnnounced;          // 0x242c the point "Let's continue" was last said for
-    int tourStopReached;        // 0x2428 the current stop has fired
-    int tourNextTime;           // 0x2434 the tour waits until then, looking at the player
-    vec3_t tourGoal;            // 0x2438 the floor under the current point
-    vec3_t tourPrevGoal;        // 0x249c the goal before, or the item being shown
-    vec3_t tourLookTarget;      // 0x2474 the info_notnull the current point looks at
-    float tourLookUntil;        // 0x2444 aiming at tourPrevGoal until then
-    float tourLastNudge;        // 0x2448 the last "This way!"
-    float tourReachTime;        // 0x2450 when the current stop fired
-    float tourNextSay;          // 0x2484 no nudge before then
-    int heardClients;           // [QL] 0x2488 the client of the last event heard, a bit each
-    int enemyHeard;             // [QL] 0x248c the enemy was found by ear, not by sight
-    char ainodename[80];        // [QL] 0x23cc the node the bot last entered, for bot_hud
-    // [QL] bot_dynamicSkill (0x100247c0), 0x2504 on
-    float skillStep;            // the step being taken, 1/12 up or down a check
-    int skillBestDiff;          // the kill difference the step is measured against
-    int skillLastDiff;          // the last kill difference seen
-    int skillDiffTime;          // when it last changed, in seconds of match
+    float tourFollowDist;
+    int tourPoint;
+    int tourPrevPoint;
+    int tourAnnounced;
+    int tourStopReached;
+    int tourNextTime;
+    vec3_t tourGoal;
+    vec3_t tourPrevGoal;
+    vec3_t tourLookTarget;
+    float tourLookUntil;
+    float tourLastNudge;
+    float tourReachTime;
+    float tourNextSay;
+    int heardClients;
+    int enemyHeard;
+    char ainodename[80];
+    float skillStep;
+    int skillBestDiff;
+    int skillLastDiff;
+    int skillDiffTime;
     struct {
         int diff;
         float skill;
         int time;
-    } skillLog[32];             // the changes, for inspection (0x10024700)
+    } skillLog[32];
     int numSkillLog;
-    int tourSaidCareful;        // 0x244c "You've got to be careful in the Arena!" said
-    int tourPlayerNear;         // 0x2454 the player has caught up
-    int tourWait;               // 0x246c the last stop's wait, whole seconds
-    int tourWaitForPlayer;      // 0x2470 hold on until then: a ledge, pad or teleport ahead
-    int tourLostPlayer;         // 0x24a8 went back for the player
-    int tourReturning;          // 0x24ac walking back to tourSavedGoal
-    bot_goal_t tourSavedGoal;   // 0x24b0 where the bot was when it went back
-    vec3_t tourSavedLook;       // 0x24f0 the look target kept for a failed move
-    int tourSavedLookSet;       // 0x24fc
-    int tourGoBack;             // 0x2500 the tour may go back for the player
-    int nodeEnterTime;          // 0x23c8 (int)floattime of the last move, follow-me's idle clock
-    // [ioquakelive] AINode_DodgeTrainer
-    vec3_t dodgeAnchor;         // where it spawned, the middle of its ground
-    int dodgeDir;               // strafing left (1) or right (-1) of the player
-    float dodgeRunStart;        // when it last turned
-    float dodgeTurnTime;        // when it turns next on its own
-    float dodgeHitTime;         // when it turns because it was hit, 0 when not hit
-    float dodgeJumpTime;        // when it jumps next
-    int dodgeMode;              // DODGE_STRAFE, DODGE_CIRCLE, DODGE_CLOSE or DODGE_BACK
-    float dodgeModeEnd;         // when it picks the next one
-    float dodgeRadial;          // how much of its run goes toward (+) or away from the player
-    float dodgeHeat;            // how well the player is tracking it, 0 to 1
-    float dodgeThink;           // its last frame, to fade the heat
-    float dodgeJumped;          // its last jump
+    int tourSaidCareful;
+    int tourPlayerNear;
+    int tourWait;
+    int tourWaitForPlayer;
+    int tourLostPlayer;
+    int tourReturning;
+    bot_goal_t tourSavedGoal;
+    vec3_t tourSavedLook;
+    int tourSavedLookSet;
+    int tourGoBack;
+    int nodeEnterTime;
+    vec3_t dodgeAnchor;
+    int dodgeDir;
+    float dodgeRunStart;
+    float dodgeTurnTime;
+    float dodgeHitTime;
+    float dodgeJumpTime;
+    int dodgeMode;
+    float dodgeModeEnd;
+    float dodgeRadial;
+    float dodgeHeat;
+    float dodgeThink;
+    float dodgeJumped;
 } bot_state_t;
 
-// resets the whole bot state
 void BotResetState(bot_state_t* bs);
-// returns the number of bots in the game
 int NumBots(void);
-// returns info about the entity
 void BotEntityInfo(int entnum, aas_entityinfo_t* info);
 
 extern float floattime;
 #define FloatTime() floattime
 
-// from the game source
 void QDECL BotAI_Print(int type, char* fmt, ...) __attribute__((format(printf, 2, 3)));
 void QDECL QDECL BotAI_BotInitialChat(bot_state_t* bs, char* type, ...);
 void BotAI_Trace(bsp_trace_t* bsptrace, vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, int passent, int contentmask);

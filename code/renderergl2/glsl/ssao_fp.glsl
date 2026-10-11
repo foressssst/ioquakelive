@@ -1,6 +1,6 @@
 uniform sampler2D u_ScreenDepthMap;
 
-uniform vec4   u_ViewInfo; // zfar / znear, zfar, 1/width, 1/height
+uniform vec4   u_ViewInfo;
 
 varying vec2   var_ScreenTex;
 
@@ -16,20 +16,11 @@ vec2(0.7320465, 0.6317794)
 
 #define NUM_SAMPLES 3
 
-// Input: It uses texture coords as the random number seed.
-// Output: Random number: [0,1), that is between 0.0 and 0.999999... inclusive.
-// Author: Michael Pohoreski
-// Copyright: Copyleft 2012 :-)
-// Source: http://stackoverflow.com/questions/5149544/can-i-generate-a-random-number-inside-a-pixel-shader
-
 float random( const vec2 p )
 {
-  // We need irrationals for pseudo randomness.
-  // Most (all?) known transcendental numbers will (generally) work.
   const vec2 r = vec2(
-    23.1406926327792690,  // e^pi (Gelfond's constant)
-     2.6651441426902251); // 2^sqrt(2) (Gelfond-Schneider constant)
-  //return fract( cos( mod( 123456789., 1e-7 + 256. * dot(p,r) ) ) );
+    23.1406926327792690,
+     2.6651441426902251);
   return mod( 123456789., 1e-7 + 256. * dot(p,r) );  
 }
 

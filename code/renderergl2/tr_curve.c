@@ -19,29 +19,8 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "tr_local.h"
 
-/*
-
-This file does all of the processing necessary to turn a raw grid of points
-read from the map file into a srfBspSurface_t ready for rendering.
-
-The level of detail solution is direction independent, based only on subdivided
-distance from the true curve.
-
-Only a single entry point:
-
-srfBspSurface_t *R_SubdividePatchToGrid( int width, int height,
-                                srfVert_t points[MAX_PATCH_SIZE*MAX_PATCH_SIZE] ) {
-
-*/
-
-/*
-============
-LerpDrawVert
-============
-*/
 static void LerpDrawVert(srfVert_t* a, srfVert_t* b, srfVert_t* out) {
     out->xyz[0] = 0.5f * (a->xyz[0] + b->xyz[0]);
     out->xyz[1] = 0.5f * (a->xyz[1] + b->xyz[1]);
@@ -59,11 +38,6 @@ static void LerpDrawVert(srfVert_t* a, srfVert_t* b, srfVert_t* out) {
     out->color[3] = ((int)a->color[3] + (int)b->color[3]) >> 1;
 }
 
-/*
-============
-Transpose
-============
-*/
 static void Transpose(int width, int height, srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE]) {
     int i, j;
     srfVert_t temp;
@@ -72,12 +46,10 @@ static void Transpose(int width, int height, srfVert_t ctrl[MAX_GRID_SIZE][MAX_G
         for (i = 0; i < height; i++) {
             for (j = i + 1; j < width; j++) {
                 if (j < height) {
-                    // swap the value
                     temp = ctrl[j][i];
                     ctrl[j][i] = ctrl[i][j];
                     ctrl[i][j] = temp;
                 } else {
-                    // just copy
                     ctrl[j][i] = ctrl[i][j];
                 }
             }
@@ -86,12 +58,10 @@ static void Transpose(int width, int height, srfVert_t ctrl[MAX_GRID_SIZE][MAX_G
         for (i = 0; i < width; i++) {
             for (j = i + 1; j < height; j++) {
                 if (j < width) {
-                    // swap the value
                     temp = ctrl[i][j];
                     ctrl[i][j] = ctrl[j][i];
                     ctrl[j][i] = temp;
                 } else {
-                    // just copy
                     ctrl[i][j] = ctrl[j][i];
                 }
             }
@@ -99,13 +69,6 @@ static void Transpose(int width, int height, srfVert_t ctrl[MAX_GRID_SIZE][MAX_G
     }
 }
 
-/*
-=================
-MakeMeshNormals
-
-Handles all the complicated wrapping and degenerate cases
-=================
-*/
 static void MakeMeshNormals(int width, int height, srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE]) {
     int i, j, k, dist;
     vec3_t normal;
@@ -174,15 +137,15 @@ static void MakeMeshNormals(int width, int height, srfVert_t ctrl[MAX_GRID_SIZE]
                     }
 
                     if (x < 0 || x >= width || y < 0 || y >= height) {
-                        break;  // edge of patch
+                        break;
                     }
                     VectorSubtract(ctrl[y][x].xyz, base, temp);
                     if (VectorNormalize(temp) < 0.001f) {
-                        continue;  // degenerate edge, get more dist
+                        continue;
                     } else {
                         good[k] = qtrue;
                         VectorCopy(temp, around[k]);
-                        break;  // good edge
+                        break;
                     }
                 }
             }
@@ -190,7 +153,7 @@ static void MakeMeshNormals(int width, int height, srfVert_t ctrl[MAX_GRID_SIZE]
             VectorClear(sum);
             for (k = 0; k < 8; k++) {
                 if (!good[k] || !good[(k + 1) & 7]) {
-                    continue;  // didn't get two points
+                    continue;
                 }
                 CrossProduct(around[(k + 1) & 7], around[k], normal);
                 if (VectorNormalize(normal) < 0.001f) {
@@ -199,9 +162,6 @@ static void MakeMeshNormals(int width, int height, srfVert_t ctrl[MAX_GRID_SIZE]
                 VectorAdd(normal, sum, sum);
                 count++;
             }
-            // if ( count == 0 ) {
-            //	printf("bad normal\n");
-            // }
             {
                 vec3_t fNormal;
                 VectorNormalize2(sum, fNormal);
@@ -217,7 +177,6 @@ static void MakeMeshTangentVectors(int width, int height, srfVert_t ctrl[MAX_GRI
     static srfVert_t ctrl2[MAX_GRID_SIZE * MAX_GRID_SIZE];
     glIndex_t* tri;
 
-    // FIXME: use more elegant way
     for (i = 0; i < width; i++) {
         for (j = 0; j < height; j++) {
             dv[0] = &ctrl2[j * width + i];
@@ -255,7 +214,6 @@ static int MakeMeshIndexes(int width, int height, glIndex_t indexes[(MAX_GRID_SI
         for (j = 0; j < w; j++) {
             int v1, v2, v3, v4;
 
-            // vertex order to be reckognized as tristrips
             v1 = i * width + j + 1;
             v2 = v1 - 1;
             v3 = v2 + width;
@@ -274,11 +232,6 @@ static int MakeMeshIndexes(int width, int height, glIndex_t indexes[(MAX_GRID_SI
     return numIndexes;
 }
 
-/*
-============
-InvertCtrl
-============
-*/
 static void InvertCtrl(int width, int height, srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE]) {
     int i, j;
     srfVert_t temp;
@@ -292,11 +245,6 @@ static void InvertCtrl(int width, int height, srfVert_t ctrl[MAX_GRID_SIZE][MAX_
     }
 }
 
-/*
-=================
-InvertErrorTable
-=================
-*/
 static void InvertErrorTable(float errorTable[2][MAX_GRID_SIZE], int width, int height) {
     int i;
     float copy[2][MAX_GRID_SIZE];
@@ -304,7 +252,7 @@ static void InvertErrorTable(float errorTable[2][MAX_GRID_SIZE], int width, int 
     Com_Memcpy(copy, errorTable, sizeof(copy));
 
     for (i = 0; i < width; i++) {
-        errorTable[1][i] = copy[0][i];  //[width-1-i];
+        errorTable[1][i] = copy[0][i];
     }
 
     for (i = 0; i < height; i++) {
@@ -312,11 +260,6 @@ static void InvertErrorTable(float errorTable[2][MAX_GRID_SIZE], int width, int 
     }
 }
 
-/*
-==================
-PutPointsOnCurve
-==================
-*/
 static void PutPointsOnCurve(srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE],
                              int width,
                              int height) {
@@ -340,24 +283,18 @@ static void PutPointsOnCurve(srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE],
     }
 }
 
-/*
-=================
-R_CreateSurfaceGridMesh
-=================
-*/
 void R_CreateSurfaceGridMesh(srfBspSurface_t* grid, int width, int height, srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE], float errorTable[2][MAX_GRID_SIZE], int numIndexes, glIndex_t indexes[(MAX_GRID_SIZE - 1) * (MAX_GRID_SIZE - 1) * 2 * 3]) {
     int i, j;
     srfVert_t* vert;
     vec3_t tmpVec;
 
-    // copy the results out to a grid
     Com_Memset(grid, 0, sizeof(*grid));
 
 #ifdef PATCH_STITCHING
-    grid->widthLodError = /*ri.Hunk_Alloc*/ ri.Malloc(width * 4);
+    grid->widthLodError =  ri.Malloc(width * 4);
     Com_Memcpy(grid->widthLodError, errorTable[0], width * 4);
 
-    grid->heightLodError = /*ri.Hunk_Alloc*/ ri.Malloc(height * 4);
+    grid->heightLodError =  ri.Malloc(height * 4);
     Com_Memcpy(grid->heightLodError, errorTable[1], height * 4);
 
     grid->numIndexes = numIndexes;
@@ -393,7 +330,6 @@ void R_CreateSurfaceGridMesh(srfBspSurface_t* grid, int width, int height, srfVe
         }
     }
 
-    // compute local origin and bounds
     VectorAdd(grid->cullBounds[0], grid->cullBounds[1], grid->cullOrigin);
     VectorScale(grid->cullOrigin, 0.5f, grid->cullOrigin);
     VectorSubtract(grid->cullBounds[0], grid->cullOrigin, tmpVec);
@@ -401,14 +337,8 @@ void R_CreateSurfaceGridMesh(srfBspSurface_t* grid, int width, int height, srfVe
 
     VectorCopy(grid->cullOrigin, grid->lodOrigin);
     grid->lodRadius = grid->cullRadius;
-    //
 }
 
-/*
-=================
-R_FreeSurfaceGridMesh
-=================
-*/
 static void R_FreeSurfaceGridMeshData(srfBspSurface_t* grid) {
     ri.Free(grid->widthLodError);
     ri.Free(grid->heightLodError);
@@ -416,11 +346,6 @@ static void R_FreeSurfaceGridMeshData(srfBspSurface_t* grid) {
     ri.Free(grid->verts);
 }
 
-/*
-=================
-R_SubdividePatchToGrid
-=================
-*/
 void R_SubdividePatchToGrid(srfBspSurface_t* grid, int width, int height, srfVert_t points[MAX_PATCH_SIZE * MAX_PATCH_SIZE]) {
     int i, j, k, l;
     srfVert_t_cleared(prev);
@@ -448,12 +373,7 @@ void R_SubdividePatchToGrid(srfBspSurface_t* grid, int width, int height, srfVer
 
         consecutiveComplete = 0;
 
-        // horizontal subdivisions
         for (j = 0;; j = (j + 2) % (width - 1)) {
-            // check subdivided midpoints against control points
-
-            // FIXME: also check midpoints of adjacent patches against the control points
-            // this would basically stitch all patches in the same LOD group together.
 
             maxLen = 0;
             for (i = 0; i < height; i++) {
@@ -463,15 +383,10 @@ void R_SubdividePatchToGrid(srfBspSurface_t* grid, int width, int height, srfVer
                 vec3_t projected;
                 float d;
 
-                // calculate the point on the curve
                 for (l = 0; l < 3; l++) {
                     midxyz[l] = (ctrl[i][j].xyz[l] + ctrl[i][j + 1].xyz[l] * 2 + ctrl[i][j + 2].xyz[l]) * 0.25f;
                 }
 
-                // see how far off the line it is
-                // using dist-from-line will not account for internal
-                // texture warping, but it gives a lot less polygons than
-                // dist-from-midpoint
                 VectorSubtract(midxyz, ctrl[i][j].xyz, midxyz);
                 VectorSubtract(ctrl[i][j + 2].xyz, ctrl[i][j].xyz, dir);
                 VectorNormalize(dir);
@@ -479,7 +394,7 @@ void R_SubdividePatchToGrid(srfBspSurface_t* grid, int width, int height, srfVer
                 d = DotProduct(midxyz, dir);
                 VectorScale(dir, d, projected);
                 VectorSubtract(midxyz, projected, midxyz2);
-                len = VectorLengthSquared(midxyz2);  // we will do the sqrt later
+                len = VectorLengthSquared(midxyz2);
                 if (len > maxLen) {
                     maxLen = len;
                 }
@@ -487,34 +402,29 @@ void R_SubdividePatchToGrid(srfBspSurface_t* grid, int width, int height, srfVer
 
             maxLen = sqrt(maxLen);
 
-            // if all the points are on the lines, remove the entire columns
             if (maxLen < 0.1f) {
                 errorTable[dir][j + 1] = 999;
-                // if we go over the whole grid twice without adding any columns, stop
                 if (++consecutiveComplete >= width)
                     break;
                 continue;
             }
 
-            // see if we want to insert subdivided columns
             if (width + 2 > MAX_GRID_SIZE) {
                 errorTable[dir][j + 1] = 1.0f / maxLen;
-                break;  // can't subdivide any more
+                break;
             }
 
             if (maxLen <= r_subdivisions->value) {
                 errorTable[dir][j + 1] = 1.0f / maxLen;
-                // if we go over the whole grid twice without adding any columns, stop
                 if (++consecutiveComplete >= width)
                     break;
-                continue;  // didn't need subdivision
+                continue;
             }
 
             errorTable[dir][j + 2] = 1.0f / maxLen;
 
             consecutiveComplete = 0;
 
-            // insert two columns and replace the peak
             width += 2;
             for (i = 0; i < height; i++) {
                 LerpDrawVert(&ctrl[i][j], &ctrl[i][j + 1], &prev);
@@ -529,7 +439,6 @@ void R_SubdividePatchToGrid(srfBspSurface_t* grid, int width, int height, srfVer
                 ctrl[i][j + 3] = next;
             }
 
-            // skip the new one, we'll get it on the next pass
             j += 2;
         }
 
@@ -539,10 +448,8 @@ void R_SubdividePatchToGrid(srfBspSurface_t* grid, int width, int height, srfVer
         height = t;
     }
 
-    // put all the aproximating points on the curve
     PutPointsOnCurve(ctrl, width, height);
 
-    // cull out any rows or columns that are colinear
     for (i = 1; i < width - 1; i++) {
         if (errorTable[0][i] != 999) {
             continue;
@@ -570,9 +477,6 @@ void R_SubdividePatchToGrid(srfBspSurface_t* grid, int width, int height, srfVer
     }
 
 #if 1
-    // flip for longest tristrips as an optimization
-    // the results should be visually identical with or
-    // without this step
     if (height > width) {
         Transpose(width, height, ctrl);
         InvertErrorTable(errorTable, width, height);
@@ -583,21 +487,14 @@ void R_SubdividePatchToGrid(srfBspSurface_t* grid, int width, int height, srfVer
     }
 #endif
 
-    // calculate indexes
     numIndexes = MakeMeshIndexes(width, height, indexes);
 
-    // calculate normals
     MakeMeshNormals(width, height, ctrl);
     MakeMeshTangentVectors(width, height, ctrl, numIndexes, indexes);
 
     R_CreateSurfaceGridMesh(grid, width, height, ctrl, errorTable, numIndexes, indexes);
 }
 
-/*
-===============
-R_GridInsertColumn
-===============
-*/
 void R_GridInsertColumn(srfBspSurface_t* grid, int column, int row, vec3_t point, float loderror) {
     int i, j;
     int width, height, oldwidth;
@@ -615,7 +512,6 @@ void R_GridInsertColumn(srfBspSurface_t* grid, int column, int row, vec3_t point
     height = grid->height;
     for (i = 0; i < width; i++) {
         if (i == column) {
-            // insert new column
             for (j = 0; j < grid->height; j++) {
                 LerpDrawVert(&grid->verts[j * grid->width + i - 1], &grid->verts[j * grid->width + i], &ctrl[j][i]);
                 if (j == row)
@@ -633,31 +529,20 @@ void R_GridInsertColumn(srfBspSurface_t* grid, int column, int row, vec3_t point
     for (j = 0; j < grid->height; j++) {
         errorTable[1][j] = grid->heightLodError[j];
     }
-    // put all the aproximating points on the curve
-    // PutPointsOnCurve( ctrl, width, height );
 
-    // calculate indexes
     numIndexes = MakeMeshIndexes(width, height, indexes);
 
-    // calculate normals
     MakeMeshNormals(width, height, ctrl);
     MakeMeshTangentVectors(width, height, ctrl, numIndexes, indexes);
 
     VectorCopy(grid->lodOrigin, lodOrigin);
     lodRadius = grid->lodRadius;
-    // free the old grid
     R_FreeSurfaceGridMeshData(grid);
-    // create a new grid
     R_CreateSurfaceGridMesh(grid, width, height, ctrl, errorTable, numIndexes, indexes);
     grid->lodRadius = lodRadius;
     VectorCopy(lodOrigin, grid->lodOrigin);
 }
 
-/*
-===============
-R_GridInsertRow
-===============
-*/
 void R_GridInsertRow(srfBspSurface_t* grid, int row, int column, vec3_t point, float loderror) {
     int i, j;
     int width, height, oldheight;
@@ -675,7 +560,6 @@ void R_GridInsertRow(srfBspSurface_t* grid, int row, int column, vec3_t point, f
         return;
     for (i = 0; i < height; i++) {
         if (i == row) {
-            // insert new row
             for (j = 0; j < grid->width; j++) {
                 LerpDrawVert(&grid->verts[(i - 1) * grid->width + j], &grid->verts[i * grid->width + j], &ctrl[i][j]);
                 if (j == column)
@@ -693,21 +577,15 @@ void R_GridInsertRow(srfBspSurface_t* grid, int row, int column, vec3_t point, f
     for (j = 0; j < grid->width; j++) {
         errorTable[0][j] = grid->widthLodError[j];
     }
-    // put all the aproximating points on the curve
-    // PutPointsOnCurve( ctrl, width, height );
 
-    // calculate indexes
     numIndexes = MakeMeshIndexes(width, height, indexes);
 
-    // calculate normals
     MakeMeshNormals(width, height, ctrl);
     MakeMeshTangentVectors(width, height, ctrl, numIndexes, indexes);
 
     VectorCopy(grid->lodOrigin, lodOrigin);
     lodRadius = grid->lodRadius;
-    // free the old grid
     R_FreeSurfaceGridMeshData(grid);
-    // create a new grid
     R_CreateSurfaceGridMesh(grid, width, height, ctrl, errorTable, numIndexes, indexes);
     grid->lodRadius = lodRadius;
     VectorCopy(lodOrigin, grid->lodOrigin);

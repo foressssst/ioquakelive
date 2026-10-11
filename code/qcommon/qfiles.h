@@ -22,23 +22,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef __QFILES_H__
 #define __QFILES_H__
 
-//
-// qfiles.h: quake file formats
-// This file must be identical in the quake and utils directories
-//
-
-// Ignore __attribute__ on non-gcc platforms
 #ifndef __GNUC__
 #ifndef __attribute__
 #define __attribute__(x)
 #endif
 #endif
 
-// surface geometry should not exceed these limits
-#define SHADER_MAX_VERTEXES 4096  // [QL] raised from 1000 - QL models exceed Q3's limit (e.g. hmg.md3 has 1053 verts)
+#define SHADER_MAX_VERTEXES 4096
 #define SHADER_MAX_INDEXES (6 * SHADER_MAX_VERTEXES)
 
-// the maximum size of game relative pathnames
 #define MAX_QPATH 64
 
 #define MAX_CAMERAPOINTS 512
@@ -46,27 +38,17 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define MAX_MAP_ADVERTISEMENTS 30
 
-/*
-========================================================================
-
-.MD3 triangle model file format
-
-========================================================================
-*/
-
 #define MD3_IDENT (('3' << 24) + ('P' << 16) + ('D' << 8) + 'I')
 #define MD3_VERSION 15
 
-// limits
 #define MD3_MAX_LODS 3
-#define MD3_MAX_TRIANGLES 8192  // per surface
-#define MD3_MAX_VERTS 4096      // per surface
-#define MD3_MAX_SHADERS 256     // per surface
-#define MD3_MAX_FRAMES 1024     // per model
-#define MD3_MAX_SURFACES 32     // per model
-#define MD3_MAX_TAGS 16         // per frame
+#define MD3_MAX_TRIANGLES 8192
+#define MD3_MAX_VERTS 4096
+#define MD3_MAX_SHADERS 256
+#define MD3_MAX_FRAMES 1024
+#define MD3_MAX_SURFACES 32
+#define MD3_MAX_TAGS 16
 
-// vertex scales
 #define MD3_XYZ_SCALE (1.0 / 64)
 
 typedef struct md3Frame_s {
@@ -77,45 +59,35 @@ typedef struct md3Frame_s {
 } md3Frame_t;
 
 typedef struct md3Tag_s {
-    char name[MAX_QPATH];  // tag name
+    char name[MAX_QPATH];
     vec3_t origin;
     vec3_t axis[3];
 } md3Tag_t;
 
-/*
-** md3Surface_t
-**
-** CHUNK			SIZE
-** header			sizeof( md3Surface_t )
-** shaders			sizeof( md3Shader_t ) * numShaders
-** triangles[0]		sizeof( md3Triangle_t ) * numTriangles
-** st				sizeof( md3St_t ) * numVerts
-** XyzNormals		sizeof( md3XyzNormal_t ) * numVerts * numFrames
-*/
 typedef struct {
-    int ident;  //
+    int ident;
 
-    char name[MAX_QPATH];  // polyset name
+    char name[MAX_QPATH];
 
     int flags;
-    int numFrames;  // all surfaces in a model should have the same
+    int numFrames;
 
-    int numShaders;  // all surfaces in a model should have the same
+    int numShaders;
     int numVerts;
 
     int numTriangles;
     int ofsTriangles;
 
-    int ofsShaders;     // offset from start of md3Surface_t
-    int ofsSt;          // texture coords are common for all frames
-    int ofsXyzNormals;  // numVerts * numFrames
+    int ofsShaders;
+    int ofsSt;
+    int ofsXyzNormals;
 
-    int ofsEnd;  // next surface follows
+    int ofsEnd;
 } md3Surface_t;
 
 typedef struct {
     char name[MAX_QPATH];
-    int shaderIndex;  // for in-game use
+    int shaderIndex;
 } md3Shader_t;
 
 typedef struct {
@@ -135,7 +107,7 @@ typedef struct {
     int ident;
     int version;
 
-    char name[MAX_QPATH];  // model name
+    char name[MAX_QPATH];
 
     int flags;
 
@@ -145,43 +117,20 @@ typedef struct {
 
     int numSkins;
 
-    int ofsFrames;    // offset for first frame
-    int ofsTags;      // numFrames * numTags
-    int ofsSurfaces;  // first surface, others follow
+    int ofsFrames;
+    int ofsTags;
+    int ofsSurfaces;
 
-    int ofsEnd;  // end of file
+    int ofsEnd;
 } md3Header_t;
-
-/*
-==============================================================================
-
-MDR file format
-
-==============================================================================
-*/
-
-/*
- * Here are the definitions for Ravensoft's model format of md4. Raven stores their
- * playermodels in .mdr files, in some games, which are pretty much like the md4
- * format implemented by ID soft. It seems like ID's original md4 stuff is not used at all.
- * MDR is being used in EliteForce, JediKnight2 and Soldiers of Fortune2 (I think).
- * So this comes in handy for anyone who wants to make it possible to load player
- * models from these games.
- * This format has bone tags, which is similar to the thing you have in md3 I suppose.
- * Raven has released their version of md3view under GPL enabling me to add support
- * to this codebase. Thanks to Steven Howes aka Skinner for helping with example
- * source code.
- *
- * - Thilo Schulz (arny@ats.s.bawue.de)
- */
 
 #define MDR_IDENT (('5' << 24) + ('M' << 16) + ('D' << 8) + 'R')
 #define MDR_VERSION 2
 #define MDR_MAX_BONES 128
 
 typedef struct {
-    int boneIndex;     // these are indexes into the boneReferences,
-    float boneWeight;  // not the global per-frame bone list
+    int boneIndex;
+    float boneWeight;
     vec3_t offset;
 } mdrWeight_t;
 
@@ -189,7 +138,7 @@ typedef struct {
     vec3_t normal;
     vec2_t texCoords;
     int numWeights;
-    mdrWeight_t weights[1];  // variable sized
+    mdrWeight_t weights[1];
 } mdrVertex_t;
 
 typedef struct {
@@ -199,11 +148,11 @@ typedef struct {
 typedef struct {
     int ident;
 
-    char name[MAX_QPATH];  // polyset name
+    char name[MAX_QPATH];
     char shader[MAX_QPATH];
-    int shaderIndex;  // for in-game use
+    int shaderIndex;
 
-    int ofsHeader;  // this will be a negative number
+    int ofsHeader;
 
     int numVerts;
     int ofsVerts;
@@ -211,15 +160,10 @@ typedef struct {
     int numTriangles;
     int ofsTriangles;
 
-    // Bone references are a set of ints representing all the bones
-    // present in any vertex weights for this surface.  This is
-    // needed because a model may have surfaces that need to be
-    // drawn at different sort times, and we don't want to have
-    // to re-interpolate all the bones for each surface.
     int numBoneReferences;
     int ofsBoneReferences;
 
-    int ofsEnd;  // next surface follows
+    int ofsEnd;
 } mdrSurface_t;
 
 typedef struct {
@@ -227,28 +171,28 @@ typedef struct {
 } mdrBone_t;
 
 typedef struct {
-    vec3_t bounds[2];    // bounds of all surfaces of all LOD's for this frame
-    vec3_t localOrigin;  // midpoint of bounds, used for sphere cull
-    float radius;        // dist from localOrigin to corner
+    vec3_t bounds[2];
+    vec3_t localOrigin;
+    float radius;
     char name[16];
-    mdrBone_t bones[1];  // [numBones]
+    mdrBone_t bones[1];
 } mdrFrame_t;
 
 typedef struct {
-    unsigned char Comp[24];  // MC_COMP_BYTES is in MatComp.h, but don't want to couple
+    unsigned char Comp[24];
 } mdrCompBone_t;
 
 typedef struct {
-    vec3_t bounds[2];        // bounds of all surfaces of all LOD's for this frame
-    vec3_t localOrigin;      // midpoint of bounds, used for sphere cull
-    float radius;            // dist from localOrigin to corner
-    mdrCompBone_t bones[1];  // [numBones]
+    vec3_t bounds[2];
+    vec3_t localOrigin;
+    float radius;
+    mdrCompBone_t bones[1];
 } mdrCompFrame_t;
 
 typedef struct {
     int numSurfaces;
-    int ofsSurfaces;  // first surface, others follow
-    int ofsEnd;       // next lod follows
+    int ofsSurfaces;
+    int ofsEnd;
 } mdrLOD_t;
 
 typedef struct {
@@ -260,45 +204,32 @@ typedef struct {
     int ident;
     int version;
 
-    char name[MAX_QPATH];  // model name
+    char name[MAX_QPATH];
 
-    // frames and bones are shared by all levels of detail
     int numFrames;
     int numBones;
-    int ofsFrames;  // mdrFrame_t[numFrames]
+    int ofsFrames;
 
-    // each level of detail has completely separate sets of surfaces
     int numLODs;
     int ofsLODs;
 
     int numTags;
     int ofsTags;
 
-    int ofsEnd;  // end of file
+    int ofsEnd;
 } mdrHeader_t;
 
-/*
-==============================================================================
-
-  .BSP file format
-
-==============================================================================
-*/
-
 #define BSP_IDENT (('P' << 24) + ('S' << 16) + ('B' << 8) + 'I')
-// little-endian "IBSP"
 
-#define BSP_VERSION 47  // Quake Live BSP version
+#define BSP_VERSION 47
 
-// there shouldn't be any problem with increasing these values at the
-// expense of more memory allocation in the utilities
 #define MAX_MAP_MODELS 0x400
 #define MAX_MAP_BRUSHES 0x8000
 #define MAX_MAP_ENTITIES 0x800
 #define MAX_MAP_ENTSTRING 0x40000
 #define MAX_MAP_SHADERS 0x400
 
-#define MAX_MAP_AREAS 0x100  // MAX_MAP_AREA_BYTES in q_shared must match!
+#define MAX_MAP_AREAS 0x100
 #define MAX_MAP_FOGS 0x100
 #define MAX_MAP_PLANES 0x20000
 #define MAX_MAP_NODES 0x20000
@@ -315,11 +246,9 @@ typedef struct {
 #define MAX_MAP_DRAW_VERTS 0x80000
 #define MAX_MAP_DRAW_INDEXES 0x80000
 
-// key / value pair sizes in the entities lump
 #define MAX_KEY 32
 #define MAX_VALUE 1024
 
-// the editor uses these predefined yaw angles to orient entities up or down
 #define ANGLE_UP -1
 #define ANGLE_DOWN -2
 
@@ -329,8 +258,6 @@ typedef struct {
 #define MAX_WORLD_COORD (128 * 1024)
 #define MIN_WORLD_COORD (-128 * 1024)
 #define WORLD_SIZE (MAX_WORLD_COORD - MIN_WORLD_COORD)
-
-//=============================================================================
 
 typedef struct {
     int fileofs, filelen;
@@ -375,8 +302,6 @@ typedef struct {
     int contentFlags;
 } dshader_t;
 
-// planes x^1 is allways the opposite of plane x
-
 typedef struct {
     float normal[3];
     float dist;
@@ -384,16 +309,16 @@ typedef struct {
 
 typedef struct {
     int planeNum;
-    int children[2];  // negative numbers are -(leafs+1), not nodes
-    int mins[3];      // for frustom culling
+    int children[2];
+    int mins[3];
     int maxs[3];
 } dnode_t;
 
 typedef struct {
-    int cluster;  // -1 = opaque cluster (do I still store these?)
+    int cluster;
     int area;
 
-    int mins[3];  // for frustum culling
+    int mins[3];
     int maxs[3];
 
     int firstLeafSurface;
@@ -404,20 +329,20 @@ typedef struct {
 } dleaf_t;
 
 typedef struct {
-    int planeNum;  // positive plane side faces out of the leaf
+    int planeNum;
     int shaderNum;
 } dbrushside_t;
 
 typedef struct {
     int firstSide;
     int numSides;
-    int shaderNum;  // the shader that determines the contents flags
+    int shaderNum;
 } dbrush_t;
 
 typedef struct {
     char shader[MAX_QPATH];
     int brushNum;
-    int visibleSide;  // the brush side that ray tests need to clip against (-1 == none)
+    int visibleSide;
 } dfog_t;
 
 typedef struct {
@@ -454,7 +379,7 @@ typedef struct {
     int lightmapWidth, lightmapHeight;
 
     vec3_t lightmapOrigin;
-    vec3_t lightmapVecs[3];  // for patches, [0] and [1] are lodbounds
+    vec3_t lightmapVecs[3];
 
     int patchWidth;
     int patchHeight;

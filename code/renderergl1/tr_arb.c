@@ -2,10 +2,7 @@
 #include "tr_common.h"
 
 #define COMMON_DEPTH_STENCIL
-//#define DEPTH_RENDER_BUFFER
-//#define USE_FBO_BLIT
 
-// screenMap texture dimensions
 #define SCR_WIDTH 128
 #define SCR_HEIGHT 64
 
@@ -43,8 +40,8 @@ qboolean superSampled;
 
 typedef struct frameBuffer_s {
 	GLuint fbo;
-	GLuint color;			// renderbuffer if multisampled
-	GLuint depthStencil;	// renderbuffer if multisampled
+	GLuint color;
+	GLuint depthStencil;
 	GLint  width;
 	GLint  height;
 	qboolean multiSampled;
@@ -76,7 +73,6 @@ qboolean GL_ProgramAvailable( void )
 	return (programCompiled != 0);
 }
 
-
 static void ARB_ProgramDisable( void )
 {
 	if ( current_vp )
@@ -88,7 +84,6 @@ static void ARB_ProgramDisable( void )
 	programEnabled = 0;
 }
 
-
 void GL_ProgramDisable( void )
 {
 	if ( programEnabled )
@@ -96,7 +91,6 @@ void GL_ProgramDisable( void )
 		ARB_ProgramDisable();
 	}
 }
-
 
 void ARB_ProgramEnableExt( GLuint vertexProgram, GLuint fragmentProgram )
 {
@@ -125,18 +119,15 @@ void ARB_ProgramEnableExt( GLuint vertexProgram, GLuint fragmentProgram )
 	}
 }
 
-
 static void ARB_ProgramEnable( programNum vp, programNum fp )
 {
 	ARB_ProgramEnableExt( programs[ vp ], programs[ fp ] );
 }
 
-
 void GL_ProgramEnable( void )
 {
 	ARB_ProgramEnable( DUMMY_VERTEX, SPRITE_FRAGMENT );
 }
-
 
 #ifdef USE_PMLIGHT
 static void ARB_Lighting( const shaderStage_t* pStage )
@@ -147,7 +138,7 @@ static void ARB_Lighting( const shaderStage_t* pStage )
 	int numIndexes;
 	int clip;
 	int i;
-	
+
 	backEnd.pc.c_lit_vertices_lateculltest += tess.numVertexes;
 
 	dl = tess.light;
@@ -181,7 +172,6 @@ static void ARB_Lighting( const shaderStage_t* pStage )
 		clipBits[i] = clip;
 	}
 
-	// build a list of triangles that need light
 	numIndexes = 0;
 
 	for ( i = 0 ; i < tess.numIndexes ; i += 3 ) {
@@ -191,7 +181,7 @@ static void ARB_Lighting( const shaderStage_t* pStage )
 		b = tess.indexes[i+1];
 		c = tess.indexes[i+2];
 		if ( clipBits[a] & clipBits[b] & clipBits[c] ) {
-			continue;	// not lighted
+			continue;
 		}
 		hitIndexes[numIndexes] = a;
 		hitIndexes[numIndexes+1] = b;
@@ -214,10 +204,9 @@ static void ARB_Lighting( const shaderStage_t* pStage )
 	GL_SelectTexture( 0 );
 
 	R_BindAnimatedImage( &pStage->bundle[ tess.shader->lightingBundle ] );
-	
+
 	R_DrawElements( numIndexes, hitIndexes );
 }
-
 
 static void ARB_Lighting_Fast( const shaderStage_t* pStage )
 {
@@ -233,10 +222,9 @@ static void ARB_Lighting_Fast( const shaderStage_t* pStage )
 	GL_SelectTexture( 0 );
 
 	R_BindAnimatedImage( &pStage->bundle[ tess.shader->lightingBundle ] );
-	
+
 	R_DrawElements( tess.numIndexes, tess.indexes );
 }
-
 
 void ARB_SetupLightParams( void )
 {
@@ -276,7 +264,6 @@ void ARB_SetupLightParams( void )
 
 	if ( fogPass ) {
 		fp = RB_CalcFogProgramParms();
-		// switch to fog programs
 		if ( fp->eyeOutside ) {
 			vertexProgram += 2;
 		} else {
@@ -293,8 +280,6 @@ void ARB_SetupLightParams( void )
 	{
 		vec3_t ab;
 		VectorSubtract( dl->transformed2, dl->transformed, ab );
-		//qglProgramLocalParameter4fARB( GL_FRAGMENT_PROGRAM_ARB, 2, dl->transformed[0], dl->transformed[1], dl->transformed[2], 0 );
-		//qglProgramLocalParameter4fARB( GL_FRAGMENT_PROGRAM_ARB, 3, dl->transformed2[0], dl->transformed2[1], dl->transformed2[2], 0 );
 		qglProgramLocalParameter4fARB( GL_FRAGMENT_PROGRAM_ARB, 4, ab[0], ab[1], ab[2], 1.0f / DotProduct( ab, ab ) );
 	}
 
@@ -304,14 +289,12 @@ void ARB_SetupLightParams( void )
 	if ( fogPass )
 	{
 		GL_BindTexture( 1, tr.fogImage->texnum );
-		//qglProgramLocalParameter4fvARB( GL_FRAGMENT_PROGRAM_ARB, 5, fp->fogColor );
 		qglProgramLocalParameter4fvARB( GL_VERTEX_PROGRAM_ARB, 2, fp->fogDistanceVector );
 		qglProgramLocalParameter4fvARB( GL_VERTEX_PROGRAM_ARB, 3, fp->fogDepthVector );
 		qglProgramLocalParameter4fARB( GL_VERTEX_PROGRAM_ARB, 4, fp->eyeT, 0.0f, 0.0f, 0.0f );
 		GL_SelectTexture( 0 );
 	}
 }
-
 
 void ARB_LightingPass( void )
 {
@@ -320,7 +303,6 @@ void ARB_LightingPass( void )
 	if ( tess.shader->lightingStage < 0 )
 		return;
 
-	// we may need to update programs for fog transitions
 	if ( tess.dlightUpdateParams )
 		ARB_SetupLightParams();
 
@@ -328,7 +310,6 @@ void ARB_LightingPass( void )
 
 	GL_Cull( tess.shader->cullType );
 
-	// set polygon offset if necessary
 	if ( tess.shader->polygonOffset )
 	{
 		qglEnable( GL_POLYGON_OFFSET_FILL );
@@ -342,8 +323,6 @@ void ARB_LightingPass( void )
 	GL_ClientState( 1, CLS_NONE );
 	GL_ClientState( 0, CLS_TEXCOORD_ARRAY | CLS_NORMAL_ARRAY );
 
-	// since this is guaranteed to be a single pass, fill and lock all the arrays
-
 	qglTexCoordPointer( 2, GL_FLOAT, 0, tess.svars.texcoordPtr[0] );
 	qglNormalPointer( GL_FLOAT, sizeof( tess.normal[0] ), tess.normal );
 	qglVertexPointer( 3, GL_FLOAT, sizeof( tess.xyz[0] ), tess.xyz );
@@ -351,7 +330,6 @@ void ARB_LightingPass( void )
 	if ( qglLockArraysEXT )
 		qglLockArraysEXT( 0, tess.numVertexes );
 
-	// CPU may limit performance in following cases
 	if ( tess.light->linear || gl_version >= 40 )
 		ARB_Lighting_Fast( pStage );
 	else
@@ -360,14 +338,12 @@ void ARB_LightingPass( void )
 	if ( qglUnlockArraysEXT )
 		qglUnlockArraysEXT();
 
-	// reset polygon offset
 	if ( tess.shader->polygonOffset ) 
 	{
 		qglDisable( GL_POLYGON_OFFSET_FILL );
 	}
 }
-#endif // USE_PMLIGHT
-
+#endif
 
 const char *fogOutVPCode = {
 	"PARAM fogDistanceVector = program.local[2]; \n"
@@ -376,29 +352,24 @@ const char *fogOutVPCode = {
 	"PARAM _01_32 = 0.03125; \n"
 	"PARAM _30_32 = 0.93750; \n"
 	"TEMP st; \n"
-	
-	// s = DotProduct( v, fogDistanceVector ) + fogDistanceVector[3];
+
 	"DP3 st.x, fogDistanceVector, vertex.position; \n"	
 	"ADD st.x, st.x, fogDistanceVector.w; \n"
 
-	// t = DotProduct( v, fogDepthVector ) + fogDepthVector[3];
 	"DP3 st.y, fogDepthVector, vertex.position; \n"	
 	"ADD st.y, st.y, fogDepthVector.w; \n"
 
-	// if ( t < 1.0 ) { t = 1.0/32; } else { t = 1.0/32 + 30.0/32 * t / ( t - eyeT ); }
 	"SGE st.w, st.y, 1.0; \n"
 	"SUB st.z, st.y, eyeT.x; \n"
 	"RCP st.z, st.z; \n"
 	"MUL st.z, st.z, st.y; \n"
 	"MUL st.z, st.z, _30_32; \n"
 	"MAD st.y, st.z, st.w, _01_32; \n"
-	
-	//"MOV st.z, {1.0}; \n"
+
 	"MOV st.w, {1.0}; \n"
 
 	"MOV result.texcoord[4], st; \n"
 };
-
 
 const char *fogInVPCode = {
 
@@ -408,25 +379,20 @@ const char *fogInVPCode = {
 	"PARAM _01_32 = 0.03125; \n"
 	"PARAM _30_32 = 0.93750; \n"
 	"TEMP st; \n"
-	
-	// s = DotProduct( v, fogDistanceVector ) + fogDistanceVector[3];
+
 	"DP3 st.x, fogDistanceVector, vertex.position; \n"	
 	"ADD st.x, st.x, fogDistanceVector.w; \n"
 
-	// t = DotProduct( v, fogDepthVector ) + fogDepthVector[3];
 	"DP3 st.y, fogDepthVector, vertex.position; \n"
 	"ADD st.y, st.y, fogDepthVector.w; \n"
 
-	//if ( t < 0 ) { t = 1.0/32; } else { t = 31.0/32; }
 	"SGE st.w, st.y, 0.0; \n"
 	"MAD st.y, st.w, _30_32, _01_32; \n"
 
-	//"MOV st.z, {1.0}; \n"
 	"MOV st.w, {1.0}; \n"
 
 	"MOV result.texcoord[4], st; \n"
 };
-
 
 #ifdef USE_PMLIGHT
 static const char *dlightVP = {
@@ -434,17 +400,16 @@ static const char *dlightVP = {
 	"OPTION ARB_position_invariant; \n"
 	"PARAM posEye = program.local[0]; \n"
 	"PARAM posLight = program.local[1]; \n"
-	"OUTPUT lv = result.texcoord[1]; \n" // 1
-	"OUTPUT ev = result.texcoord[2]; \n" // 2
-	"OUTPUT n = result.texcoord[3]; \n"  // 3
-	"MOV result.texcoord[0], vertex.texcoord; \n" // 0
+	"OUTPUT lv = result.texcoord[1]; \n"
+	"OUTPUT ev = result.texcoord[2]; \n"
+	"OUTPUT n = result.texcoord[3]; \n"
+	"MOV result.texcoord[0], vertex.texcoord; \n"
 	"SUB lv, posLight, vertex.position; \n"
 	"SUB ev, posEye, vertex.position; \n"
 	"MOV n, vertex.normal; \n"
-	"%s" // fog shader if needed
+	"%s"
 	"END \n"
 };
-
 
 static const char *ARB_BuildDlightFP( char *program, int programIndex )
 {
@@ -485,8 +450,6 @@ static const char *ARB_BuildDlightFP( char *program, int programIndex )
 	"!!ARBfp1.0 \n"
 	"OPTION ARB_precision_hint_fastest; \n"
 	"PARAM lightRGB = program.local[0]; \n"
-	//"PARAM lightRange2recip = program.local[1]; \n"
-	//"PARAM fogColor = program.local[5]; \n" // fogColor
 	"TEMP base, tmp; \n"
 	"TEX base, fragment.texcoord[0], texture[0], 2D; \n" );
 
@@ -495,10 +458,8 @@ static const char *ARB_BuildDlightFP( char *program, int programIndex )
 		"PARAM lightVector = program.local[4]; \n"
 		"ATTRIB LV = fragment.texcoord[1]; \n"
 		"TEMP dnLV; \n"
-		// project fragment on light vector
 		"DP3 tmp.w, -LV, lightVector; \n"
 		"MUL_SAT tmp.x, tmp.w, lightVector.w; \n"
-		// calculate light vector from projection point
 		"MAD dnLV, lightVector, tmp.x, LV; \n"
 		);
 	} else {
@@ -506,23 +467,20 @@ static const char *ARB_BuildDlightFP( char *program, int programIndex )
 	}
 
 	strcat( program,
-	"ATTRIB dnEV = fragment.texcoord[2]; \n" // 2
-	"ATTRIB n = fragment.texcoord[3]; \n"    // 3
-	
-	// normalize light vector
+	"ATTRIB dnEV = fragment.texcoord[2]; \n"
+	"ATTRIB n = fragment.texcoord[3]; \n"
+
 	"TEMP lv; \n"
 	"DP3 tmp.w, dnLV, dnLV; \n"
 	"RSQ lv.w, tmp.w; \n"
 	"MUL lv.xyz, dnLV, lv.w; \n"
 
-	// calculate light intensity
 	"TEMP light; \n"
 	"MUL tmp.x, tmp.w, lightRGB.w; \n"
 	"SUB tmp.x, {1.0}, tmp.x; \n"
-	// discard blank fragments
 	"KIL tmp.x; \n"
 
-	"MUL light, lightRGB, tmp.x; \n" ); // light.rgb
+	"MUL light, lightRGB, tmp.x; \n" );
 
 	if ( r_dlightSpecColor->value > 0 )
 		strcat( program, va( "PARAM specRGB = %1.2f; \n", r_dlightSpecColor->value ) );
@@ -530,19 +488,16 @@ static const char *ARB_BuildDlightFP( char *program, int programIndex )
 	strcat( program, va( "PARAM specEXP = %1.2f; \n", r_dlightSpecPower->value ) );
 
 	strcat( program,
-	// normalize eye vector
 	"TEMP ev; \n"
 	"DP3 ev.w, dnEV, dnEV; \n"
 	"RSQ ev.w, ev.w; \n"
 	"MUL ev.xyz, dnEV, ev.w; \n"
 
-	// normalize (eye + light) vector
 	"ADD tmp, lv, ev; \n"
 	"DP3 tmp.w, tmp, tmp; \n"
 	"RSQ tmp.w, tmp.w; \n"
 	"MUL tmp.xyz, tmp, tmp.w; \n" );
 
-	// modulate specular strength
 	if ( abslight ) {
 		strcat( program,
 		"DP3 tmp.w, n, tmp; \n"
@@ -557,20 +512,16 @@ static const char *ARB_BuildDlightFP( char *program, int programIndex )
 	"TEMP spec; \n" );
 
 	if ( r_dlightSpecColor->value > 0 ) {
-		// by constant
 		strcat( program, "MUL spec, specRGB, tmp.w; \n" );
 	} else {
-		// by texture
 		strcat( program, va( "MUL tmp.w, tmp.w, %1.2f; \n", -r_dlightSpecColor->value ) );
 		strcat( program, "MUL spec, base, tmp.w; \n" );
 	}
 
-	// diffuse
 	if ( abslight ) {
 		strcat( program,
 		"TEMP bump; \n"
 		"DP3 bump.w, n, lv; \n"
-		// make sure that light and eye vectors are on the same plane side
 		"DP3 tmp.w, n, ev; \n"
 		"MUL tmp.w, tmp.w, bump.w; \n"
 		"KIL tmp.w; \n"
@@ -586,11 +537,7 @@ static const char *ARB_BuildDlightFP( char *program, int programIndex )
 	if ( fog ) {
 		strcat( program,
 		"TEMP fog; \n"
-		"TEX fog, fragment.texcoord[4], texture[1], 2D; \n" // fog texture
-		//"MUL fog, fog, fogColor; \n"
-		// blend with fog
-		//"LRP_SAT base, fog.a, fog, base; \n"
-		// modulate by inverted fog alpha
+		"TEX fog, fragment.texcoord[4], texture[1], 2D; \n"
 		"SUB fog.a, {1.0}, fog.a; \n"
 		"MUL base, base, fog.a; \n" );
 	}
@@ -598,15 +545,14 @@ static const char *ARB_BuildDlightFP( char *program, int programIndex )
 	strcat( program,
 	"MUL_SAT result.color, base, light; \n"
 	"END \n" );
-	
+
 	r_dlightSpecColor->modified = qfalse;
 	r_dlightSpecPower->modified = qfalse;
 
 	return program;
 }
 
-#endif // USE_PMLIGHT
-
+#endif
 
 static const char *dummyVP = {
 	"!!ARBvp1.0 \n"
@@ -614,7 +560,6 @@ static const char *dummyVP = {
 	"MOV result.texcoord[0], vertex.texcoord; \n"
 	"END \n" 
 };
-
 
 static const char *spriteFP = {
 	"!!ARBfp1.0 \n"
@@ -629,7 +574,6 @@ static const char *spriteFP = {
 	"MOV result.depth, fragment.position.z; \n"
 	"END \n"
 };
-
 
 #ifdef USE_FBO
 static char *ARB_BuildGreyscaleProgram( char *buf ) {
@@ -647,12 +591,11 @@ static char *ARB_BuildGreyscaleProgram( char *buf ) {
 	} else {
 		s = Q_stradd( s, "TEMP luma; \n" );
 		s = Q_stradd( s, "DP3 luma, base, sRGB; \n" );
-		/*s +=*/ sprintf( s, "LRP base.xyz, %1.2f, luma, base; \n", r_greyscale->value );
+		 sprintf( s, "LRP base.xyz, %1.2f, luma, base; \n", r_greyscale->value );
 	}
 
 	return buf;
 }
-
 
 static const char *gammaFP = {
 	"!!ARBfp1.0 \n"
@@ -664,7 +607,7 @@ static const char *gammaFP = {
 	"POW base.y, base.y, gamma.y; \n"
 	"POW base.z, base.z, gamma.z; \n"
 	"MUL base.xyz, base, gamma.w; \n"
-	"%s" // for greyscale shader if needed
+	"%s"
 	"MOV base.w, 1.0; \n"
 	"MOV_SAT result.color, base; \n"
 	"END \n"
@@ -683,14 +626,12 @@ static char *ARB_BuildBloomProgram( char *buf ) {
 		"TEX base, fragment.texcoord[0], texture[0], 2D; \n" );
 
 	if ( r_bloom_threshold_mode->integer == 0 ) {
-		// (r|g|b) >= threshold
 		s = Q_stradd( s,
 			"TEMP minv; \n"
 			"SGE minv, base, thres; \n"
 			"DP3_SAT minv.w, minv, minv; \n"
 			"MUL base.rgb, base, minv.w; \n" );
 	} else if ( r_bloom_threshold_mode->integer == 1 ) {
-		// (r+g+b)/3 >= threshold
 		s = Q_stradd( s,
 			"PARAM scale = { 0.3333, 0.3334, 0.3333, 1.0 }; \n"
 			"TEMP avg; \n"
@@ -698,7 +639,6 @@ static char *ARB_BuildBloomProgram( char *buf ) {
 			"SGE avg.w, avg.x, thres.x; \n"
 			"MUL base.rgb, base, avg.w; \n" );
 	} else {
-		// luma(r,g,b) >= threshold
 		s = Q_stradd( s,
 			"PARAM luma = { 0.2126, 0.7152, 0.0722, 1.0 }; \n"
 			"TEMP intensity; \n"
@@ -708,13 +648,10 @@ static char *ARB_BuildBloomProgram( char *buf ) {
 		intensityCalculated = qtrue;
 	}
 
-	// modulation
 	if ( r_bloom_modulate->integer ) {
 		if ( r_bloom_modulate->integer == 1 ) {
-			// by itself
 			s = Q_stradd( s, "MUL base, base, base; \n" );
 		} else {
-			// by intensity
 			if ( !intensityCalculated ) {
 				s = Q_stradd( s,
 					"PARAM luma = { 0.2126, 0.7152, 0.0722, 1.0 }; \n"
@@ -725,7 +662,7 @@ static char *ARB_BuildBloomProgram( char *buf ) {
 		}
 	}
 
-	/*s = */ Q_stradd( s,
+	 Q_stradd( s,
 		"MOV base.w, 1.0; \n"
 		"MOV result.color, base; \n"
 		"END \n" );
@@ -733,8 +670,6 @@ static char *ARB_BuildBloomProgram( char *buf ) {
 	return buf;
 }
 
-
-// Gaussian blur shader
 static char *ARB_BuildBlurProgram( char *buf, int taps ) {
 	int i;
 	char *s = buf;
@@ -747,11 +682,11 @@ static char *ARB_BuildBlurProgram( char *buf, int taps ) {
 		"ATTRIB tc = fragment.texcoord[0]; \n" );
 
 	for ( i = 0; i < taps; i++ ) {
-		s = Q_stradd( s, va( "PARAM p%i = program.local[%i]; \n", i, i ) ); // tex_offset_x, tex_offset_y, 0.0, weight
+		s = Q_stradd( s, va( "PARAM p%i = program.local[%i]; \n", i, i ) );
 	}
 
 	s = Q_stradd( s, "TEMP cc; \n"
-		"MOV cc, {0.0, 0.0, 0.0, 1.0};\n" ); // initialize final color
+		"MOV cc, {0.0, 0.0, 0.0, 1.0};\n" );
 
 	for ( i = 0; i < taps; i++ ) {
 		s = Q_stradd( s, va( "TEMP c%i, tc%i; \n", i, i ) );
@@ -763,17 +698,16 @@ static char *ARB_BuildBlurProgram( char *buf, int taps ) {
 
 	for ( i = 0; i < taps; i++ ) {
 		s = Q_stradd( s, va( "TEX c%i, tc%i, texture[0], 2D; \n", i, i ) );
-		s = Q_stradd( s, va( "MAD cc, c%i, p%i.w, cc; \n", i, i ) ); // cc = cc + cN + pN.w
+		s = Q_stradd( s, va( "MAD cc, c%i, p%i.w, cc; \n", i, i ) );
 	}
 
-	/*s = */ Q_stradd( s,
+	 Q_stradd( s,
 		"MOV cc.a, 1.0; \n"
 		"MOV_SAT result.color, cc; \n"
 		"END \n" );
 
 	return buf;
 }
-
 
 static char *ARB_BuildBlendProgram( char *buf, int count ) {
 	int i;
@@ -792,7 +726,7 @@ static char *ARB_BuildBlendProgram( char *buf, int count ) {
 			"ADD cc, cx, cc; \n", i ) );
 	}
 
-	/*s = */ Q_stradd( s,
+	 Q_stradd( s,
 		"MOV cc.a, 1.0; \n"
 		"MOV_SAT result.color, cc; \n"
 		"END \n" );
@@ -800,8 +734,6 @@ static char *ARB_BuildBlendProgram( char *buf, int count ) {
 	return buf;
 }
 
-
-// blend 2 texture together
 static const char *blend2FP = {
 	"!!ARBfp1.0 \n"
 	"OPTION ARB_precision_hint_fastest; \n"
@@ -811,13 +743,11 @@ static const char *blend2FP = {
 	"TEX base, fragment.texcoord[0], texture[0], 2D; \n"
 	"TEX post, fragment.texcoord[0], texture[1], 2D; \n"
 	"MAD base, post, factor.x, base; \n"
-	//"ADD base, base, post; \n"
 	"MOV base.w, 1.0; \n"
 	"MOV_SAT result.color, base; \n"
 	"END \n"
 };
 
-// combined blend + gamma correction pass
 static const char *blend2gammaFP = {
 	"!!ARBfp1.0 \n"
 	"OPTION ARB_precision_hint_fastest; \n"
@@ -827,24 +757,22 @@ static const char *blend2gammaFP = {
 	"TEMP post; \n"
 	"TEX base, fragment.texcoord[0], texture[0], 2D; \n"
 	"TEX post, fragment.texcoord[0], texture[1], 2D; \n"
-	//"ADD base, base, post; \n"
 	"MAD base, post, factor.x, base; \n"
 	"POW base.x, base.x, gamma.x; \n"
 	"POW base.y, base.y, gamma.y; \n"
 	"POW base.z, base.z, gamma.z; \n"
 	"MUL base.xyz, base, gamma.w; \n"
-	"%s" // for greyscale shader if needed
+	"%s"
 	"MOV base.w, 1.0; \n"
 	"MOV_SAT result.color, base; \n"
 	"END \n" 
 };
 
-
 static void RenderQuad( int w, int h )
 {
 	static const vec2_t t[4] = { {0.0, 1.0}, {1.0, 1.0}, {0.0, 0.0}, {1.0, 0.0} };
 	static vec3_t v[4] = { { 0 } };
-	
+
 	v[1][0] = w;
 	v[2][1] = h;
 	v[3][0] = w;
@@ -858,18 +786,15 @@ static void RenderQuad( int w, int h )
 	qglDrawArrays( GL_TRIANGLE_STRIP, 0, 4 );
 }
 
-
 static void ARB_BlurParams( int width, int height, int ksize, qboolean horizontal )
 {
 	static float weight[ MAX_FILTER_SIZE ];
 	static int old_ksize = -1;
 
 	static const float x_k[ MAX_FILTER_SIZE+1 ][ MAX_FILTER_SIZE + 1 ] = {
-		// [1/weight], coeff.1, coeff.2, [...]
 		{ 0 },
 		{ 1.0/1, 1 },
 		{ 1.0/2, 1, 1 },
-	//	{ 1/4,   1, 2, 1 },
 		{ 1.0/16,  5, 6, 5 },
 		{ 1.0/8,   1, 3, 3, 1 },
 		{ 1.0/16,  1, 4, 6, 4, 1 },
@@ -895,7 +820,6 @@ static void ARB_BlurParams( int width, int height, int ksize, qboolean horizonta
 		{ 0 },
 		{ 0.0 },
 		{ -0.5, 0.5 },
-	//	{ -1.0, 0.0, 1.0 },
 		{ -1.2f, 0.0, 1.2f },
 		{ -1.5, -0.5, 0.5, 1.5 },
 		{ -2.0, -1.0, 0.0, 1.0, 2.0 },
@@ -923,9 +847,8 @@ static void ARB_BlurParams( int width, int height, int ksize, qboolean horizonta
 	float rsum;
 	float texel_size_x;
 	float texel_size_y;
-	float offset[ MAX_FILTER_SIZE ][ 2 ]; // xy
+	float offset[ MAX_FILTER_SIZE ][ 2 ];
 
-	// texel size
 	texel_size_x = 1.0 / (float) width;
 	texel_size_y = 1.0 / (float) height;
 	rsum = x_k[ ksize ][ 0 ];
@@ -937,24 +860,20 @@ static void ARB_BlurParams( int width, int height, int ksize, qboolean horizonta
 		}
 	}
 
-	// calculate texture offsets for lookup
 	for ( i = 0; i < ksize; i++ ) {
 		offset[i][0] = texel_size_x * off[i];
 		offset[i][1] = texel_size_y * off[i];
 	}
 
 	if ( horizontal ) {
-		// horizontal pass
 		for (  i = 0; i < ksize; i++ )
 			qglProgramLocalParameter4fARB( GL_FRAGMENT_PROGRAM_ARB, i, offset[i][0], 0.0, 0.0, weight[i] );
 	} else {
-		// vertical pass
 		for (  i = 0; i < ksize; i++ )
 			qglProgramLocalParameter4fARB( GL_FRAGMENT_PROGRAM_ARB, i, 0.0, offset[i][1], 0.0, weight[i] );
 	}
 }
-#endif // USE_FBO
-
+#endif
 
 static void ARB_DeletePrograms( void )
 {
@@ -962,7 +881,6 @@ static void ARB_DeletePrograms( void )
 	Com_Memset( programs, 0, sizeof( programs ) );
 	programCompiled = 0;
 }
-
 
 qboolean ARB_CompileProgram( programType ptype, const char *text, GLuint program )
 {
@@ -980,7 +898,6 @@ qboolean ARB_CompileProgram( programType ptype, const char *text, GLuint program
 	qglGetIntegerv( GL_PROGRAM_ERROR_POSITION_ARB, &errorPos );
 	if ( (errCode = qglGetError()) != GL_NO_ERROR || errorPos != -1 )
 	{
-		// we may receive error with active FBO but compiled programs will continue to work properly
 		if ( (errCode == GL_INVALID_OPERATION && !fboEnabled) || errorPos != -1 )
 		{
 			ri.Printf( PRINT_ALL, S_COLOR_YELLOW "%s Compile Error(%i,%i): %s\n" S_COLOR_CYAN "%s\n", (ptype == Fragment) ? "FP" : "VP",
@@ -993,7 +910,6 @@ qboolean ARB_CompileProgram( programType ptype, const char *text, GLuint program
 
 	return qtrue;
 }
-
 
 qboolean ARB_UpdatePrograms( void )
 {
@@ -1008,7 +924,7 @@ qboolean ARB_UpdatePrograms( void )
 	if ( !qglGenProgramsARB )
 		return qfalse;
 
-	if ( programCompiled ) // delete old programs
+	if ( programCompiled )
 	{
 		ARB_ProgramDisable();
 		ARB_DeletePrograms();
@@ -1030,7 +946,7 @@ qboolean ARB_UpdatePrograms( void )
 			return qfalse;
 		}
 	}
-#endif // USE_PMLIGHT
+#endif
 
 	if ( !ARB_CompileProgram( Vertex, dummyVP, programs[ DUMMY_VERTEX ] ) )
 		return qfalse;
@@ -1044,8 +960,7 @@ qboolean ARB_UpdatePrograms( void )
 
 	if ( !ARB_CompileProgram( Fragment, ARB_BuildBloomProgram( buf ), programs[ BLOOM_EXTRACT_FRAGMENT ] ) )
 		return qfalse;
-	
-	// only 1, 2, 3, 6, 8, 10, 12, 14, 16, 18 and 20 produces real visual difference
+
 	fboBloomFilterSize = r_bloom_filter_size->integer;
 	if ( !ARB_CompileProgram( Fragment, ARB_BuildBlurProgram( buf, fboBloomFilterSize ), programs[ BLUR_FRAGMENT ] ) )
 		return qfalse;
@@ -1062,7 +977,7 @@ qboolean ARB_UpdatePrograms( void )
 
 	if ( !ARB_CompileProgram( Fragment, va( blend2gammaFP, ARB_BuildGreyscaleProgram( buf ) ), programs[ BLEND2_GAMMA_FRAGMENT ] ) )
 		return qfalse;
-#endif // USE_FBO
+#endif
 
 	programCompiled = 1;
 
@@ -1130,7 +1045,6 @@ void FBO_Clean( frameBuffer_t *fb )
 	Com_Memset( fb, 0, sizeof( *fb ) );
 }
 
-
 static void FBO_CleanBloom( void )
 {
 	int i;
@@ -1140,7 +1054,6 @@ static void FBO_CleanBloom( void )
 		FBO_Clean( &frameBuffers[ i * 2 + BLOOM_BASE + 1 ] );
 	}
 }
-
 
 static void FBO_CleanDepth( void )
 {
@@ -1157,7 +1070,6 @@ static void FBO_CleanDepth( void )
 	}
 #endif
 }
-
 
 static GLuint FBO_CreateDepthTextureOrBuffer( GLsizei width, GLsizei height )
 {
@@ -1184,7 +1096,6 @@ static GLuint FBO_CreateDepthTextureOrBuffer( GLsizei width, GLsizei height )
 #endif
 }
 
-
 static const char *glDefToStr( GLint define )
 {
 	#define CASE_STR(x) case (x): return #x
@@ -1194,7 +1105,6 @@ static const char *glDefToStr( GLint define )
 
 	switch ( define )
 	{
-		// texture formats
 		CASE_STR(GL_BGR);
 		CASE_STR(GL_BGRA);
 		CASE_STR(GL_RGB);
@@ -1205,7 +1115,6 @@ static const char *glDefToStr( GLint define )
 		CASE_STR(GL_RGBA16);
 		CASE_STR(GL_RGB10_A2);
 		CASE_STR(GL_R11F_G11F_B10F);
-		// data types
 		CASE_STR(GL_BYTE);
 		CASE_STR(GL_UNSIGNED_BYTE);
 		CASE_STR(GL_SHORT);
@@ -1221,7 +1130,6 @@ static const char *glDefToStr( GLint define )
 		CASE_STR(GL_UNSIGNED_INT_8_8_8_8_REV);
 		CASE_STR(GL_UNSIGNED_INT_2_10_10_10_REV);
 		CASE_STR(GL_UNSIGNED_NORMALIZED);
-		// error codes
 		CASE_STR(GL_NO_ERROR);
 		CASE_STR(GL_INVALID_ENUM);
 		CASE_STR(GL_INVALID_VALUE);
@@ -1229,7 +1137,6 @@ static const char *glDefToStr( GLint define )
 		CASE_STR(GL_STACK_OVERFLOW);
 		CASE_STR(GL_STACK_UNDERFLOW);
 		CASE_STR(GL_OUT_OF_MEMORY);
-		// fbo error codes
 		CASE_STR(GL_FRAMEBUFFER_COMPLETE);
 		CASE_STR(GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT);
 		CASE_STR(GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT);
@@ -1237,12 +1144,11 @@ static const char *glDefToStr( GLint define )
 		CASE_STR(GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER);
 		CASE_STR(GL_FRAMEBUFFER_UNSUPPORTED);
 	}
-	s = buf[ index ]; // to handle multiple invocations as function parameters
+	s = buf[ index ];
 	sprintf( s, "0x%04x", define );
 	index = ( index + 1 ) & 7;
 	return s;
 }
-
 
 static void getPreferredFormatAndType( GLint format, GLint *pFormat, GLint *pType )
 {
@@ -1250,17 +1156,17 @@ static void getPreferredFormatAndType( GLint format, GLint *pFormat, GLint *pTyp
 	GLint preferredType;
 
 	if ( qglGetInternalformativ && gl_version >= 43 ) {
-		qglGetInternalformativ( GL_TEXTURE_2D, /*GL_RGBA8*/ format, GL_TEXTURE_IMAGE_FORMAT, 1, &preferredFormat );
+		qglGetInternalformativ( GL_TEXTURE_2D,  format, GL_TEXTURE_IMAGE_FORMAT, 1, &preferredFormat );
 		if ( qglGetError() != GL_NO_ERROR ) {
 			goto __fallback;
 		}
-		qglGetInternalformativ( GL_TEXTURE_2D, /*GL_RGBA8*/ format, GL_TEXTURE_IMAGE_TYPE, 1, &preferredType );
+		qglGetInternalformativ( GL_TEXTURE_2D,  format, GL_TEXTURE_IMAGE_TYPE, 1, &preferredType );
 		if ( qglGetError() != GL_NO_ERROR ) {
 			goto __fallback;
 		}
-		if ( preferredFormat == 0 ) // nVidia ION drivers can do that
+		if ( preferredFormat == 0 )
 			preferredFormat = GL_RGBA;
-		if ( preferredType == GL_UNSIGNED_NORMALIZED ) { // Intel HD 530 drivers can do that as well
+		if ( preferredType == GL_UNSIGNED_NORMALIZED ) {
 			if ( format == GL_RGBA12 || format == GL_RGBA16 )
 				preferredType = GL_UNSIGNED_SHORT;
 			else
@@ -1281,7 +1187,6 @@ __fallback:
 	*pType = preferredType;
 }
 
-
 static qboolean FBO_Create( frameBuffer_t *fb, GLsizei width, GLsizei height, qboolean depthStencil, GLint *outFormat, GLint *outType )
 {
 	int fboStatus;
@@ -1292,7 +1197,6 @@ static qboolean FBO_Create( frameBuffer_t *fb, GLsizei width, GLsizei height, qb
 	fb->multiSampled = qfalse;
 	fb->depthStencil = 0;
 
-	// color texture
 	qglGenTextures( 1, &fb->color );
 	GL_BindTexture( 0, fb->color );
 	qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
@@ -1301,10 +1205,6 @@ static qboolean FBO_Create( frameBuffer_t *fb, GLsizei width, GLsizei height, qb
 	qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, gl_clamp_mode );
 	qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, gl_clamp_mode );
 
-	// always use GL_RGB10_A2 for bloom textures which is fast as usual GL_RGBA8
-	// (GL_R11F_G11F_B10F is a bit slower at least on AMD GPUs)
-	// but can provide better precision for blurring, also we barely need more than 10 bits for that,
-	// texture formats that doesn't fit into 32bits are just performance-killers for bloom
 	if ( fb - frameBuffers >= BLOOM_BASE )
 		internalFormat = GL_RGB10_A2;
 	else
@@ -1313,8 +1213,7 @@ static qboolean FBO_Create( frameBuffer_t *fb, GLsizei width, GLsizei height, qb
 	getPreferredFormatAndType( internalFormat, &textureFormat, &textureType );
 
 	qglTexImage2D( GL_TEXTURE_2D, 0, internalFormat, width, height, 0, textureFormat, textureType, NULL );
-	// TODO: handle GL_INVALID_OPERATION in case of unsupported internalFormat/textureFormat
-	
+
 	if ( outFormat )
 		*outFormat = textureFormat;
 	if ( outType )
@@ -1322,7 +1221,7 @@ static qboolean FBO_Create( frameBuffer_t *fb, GLsizei width, GLsizei height, qb
 
 	qglGenFramebuffers( 1, &fb->fbo );
 	FBO_Bind( GL_FRAMEBUFFER, fb->fbo );
-	
+
 	qglFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fb->color, 0 );
 
 	if ( depthStencil )
@@ -1374,12 +1273,11 @@ static qboolean FBO_Create( frameBuffer_t *fb, GLsizei width, GLsizei height, qb
 	return qtrue;
 }
 
-
 static qboolean FBO_CreateMS( frameBuffer_t *fb, int width, int height )
 {
 	GLsizei nSamples = r_ext_multisample->integer;
 	int fboStatus;
-	
+
 	fb->multiSampled = qtrue;
 
 	if ( nSamples <= 0 || !qglRenderbufferStorageMultisample )
@@ -1395,7 +1293,7 @@ static qboolean FBO_CreateMS( frameBuffer_t *fb, int width, int height )
 	qglBindRenderbuffer( GL_RENDERBUFFER, fb->color );
 	while ( nSamples > 0 ) {
 		qglRenderbufferStorageMultisample( GL_RENDERBUFFER, nSamples, fboInternalFormat, width, height );
-		if ( (int)qglGetError() == GL_INVALID_VALUE/* != GL_NO_ERROR */ ) {
+		if ( (int)qglGetError() == GL_INVALID_VALUE ) {
 			ri.Printf( PRINT_ALL, "...%ix MSAA is not available\n", nSamples );
 			nSamples -= 2;
 		} else {
@@ -1448,7 +1346,6 @@ static qboolean FBO_CreateMS( frameBuffer_t *fb, int width, int height )
 	return qtrue;
 }
 
-
 static qboolean FBO_CreateBloom( void )
 {
 	int width = glConfig.vidWidth;
@@ -1466,7 +1363,6 @@ static qboolean FBO_CreateBloom( void )
 
 	for ( i = 0; i < r_bloom_passes->integer; i++ )
 	{
-		// we may need depth/stencil buffers for first bloom buffer in \r_bloom 2 mode
 		if ( !FBO_Create( &frameBuffers[ i*2 + BLOOM_BASE + 0 ], width, height, i == 0 ? qtrue : qfalse, NULL, NULL ) ||
 			!FBO_Create( &frameBuffers[ i*2 + BLOOM_BASE + 1 ], width, height, qfalse, NULL, NULL ) ) {
 			return qfalse;
@@ -1483,12 +1379,10 @@ static qboolean FBO_CreateBloom( void )
 	return qtrue;
 }
 
-
 GLuint FBO_ScreenTexture( void )
 {
 	return frameBuffers[ 2 ].color;
 }
-
 
 static void FBO_Bind( GLuint target, GLuint buffer )
 {
@@ -1516,7 +1410,6 @@ static void FBO_Bind( GLuint target, GLuint buffer )
 #endif
 }
 
-
 void FBO_BindMain( void )
 {
 	if ( fboEnabled )
@@ -1537,14 +1430,12 @@ void FBO_BindMain( void )
 	}
 }
 
-
 static void FBO_BlitToBackBuffer( int index )
 {
 	const frameBuffer_t *src = &frameBuffers[ index ];
 
 	FBO_Bind( GL_READ_FRAMEBUFFER, src->fbo );
 	FBO_Bind( GL_DRAW_FRAMEBUFFER, 0 );
-	//qglReadBuffer( GL_COLOR_ATTACHMENT0 );
 	qglDrawBuffer( GL_BACK );
 
 	if ( windowAdjusted )
@@ -1559,7 +1450,6 @@ static void FBO_BlitToBackBuffer( int index )
 		qglScissor( blitX0, blitY0, blitX1 - blitX0, blitY1 - blitY0 );
 	}
 
-	// r_fsr upscales with its own two passes; without it, or at the same size, the blit stretches
 	if ( !RB_FSRBlit( src->color, src->width, src->height, blitX0, blitY0, blitX1, blitY1 ) )
 	{
 		FBO_Bind( GL_READ_FRAMEBUFFER, src->fbo );
@@ -1568,12 +1458,10 @@ static void FBO_BlitToBackBuffer( int index )
 	}
 	else
 	{
-		// [ioquakelive] a screenshot reads the render, as it does without FSR
 		FBO_Bind( GL_READ_FRAMEBUFFER, src->fbo );
 	}
 	fboReadIndex = index;
 }
-
 
 void FBO_BlitSS( void )
 {
@@ -1581,17 +1469,14 @@ void FBO_BlitSS( void )
 	const frameBuffer_t *dst = &frameBuffers[ 4 ];
 
 	FBO_Bind( GL_DRAW_FRAMEBUFFER, dst->fbo );
-	
+
 	qglBlitFramebuffer( 0, 0, src->width, src->height, 0, 0, dst->width, dst->height, GL_COLOR_BUFFER_BIT, GL_LINEAR );
 
 	FBO_Bind( GL_READ_FRAMEBUFFER, dst->fbo );
 }
 
-
 void FBO_BlitMS( qboolean depthOnly )
 {
-	//if ( blitMSfbo )
-	//{
 	const int w = glConfig.vidWidth;
 	const int h = glConfig.vidHeight;
 
@@ -1611,10 +1496,8 @@ void FBO_BlitMS( qboolean depthOnly )
 	}
 
 	qglBlitFramebuffer( 0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST );
-	// bind all further reads to main buffer
 	FBO_Bind( GL_READ_FRAMEBUFFER, d->fbo );
 }
-
 
 static void FBO_Blur( const frameBuffer_t *fb1, const frameBuffer_t *fb2,  const frameBuffer_t *fb3 )
 {
@@ -1623,20 +1506,17 @@ static void FBO_Blur( const frameBuffer_t *fb1, const frameBuffer_t *fb2,  const
 
 	qglViewport( 0, 0, fb1->width, fb1->height );
 
-	// apply horizontal blur - render from FBO1 to FBO2
 	FBO_Bind( GL_DRAW_FRAMEBUFFER, fb2->fbo );
 	GL_BindTexture( 0, fb1->color );
 	ARB_ProgramEnable( DUMMY_VERTEX, BLUR_FRAGMENT );
 	ARB_BlurParams( fb1->width, fb1->height, fboBloomFilterSize, qtrue );
 	RenderQuad( w, h );
 
-	// apply vectical blur - render from FBO2 to FBO3
 	FBO_Bind( GL_DRAW_FRAMEBUFFER, fb3->fbo );
 	GL_BindTexture( 0, fb2->color );
 	ARB_BlurParams( fb1->width, fb1->height, fboBloomFilterSize, qfalse );
 	RenderQuad( w, h );
 }
-
 
 static void FBO_Blur2( const frameBuffer_t *fb1, const frameBuffer_t *fb2,  const frameBuffer_t *fb3 )
 {
@@ -1645,20 +1525,17 @@ static void FBO_Blur2( const frameBuffer_t *fb1, const frameBuffer_t *fb2,  cons
 
 	qglViewport( 0, 0, fb1->width, fb1->height );
 
-	// apply horizontal blur - render from FBO1 to FBO2
 	FBO_Bind( GL_DRAW_FRAMEBUFFER, fb2->fbo );
 	GL_BindTexture( 0, fb1->color );
 	ARB_ProgramEnable( DUMMY_VERTEX, BLUR2_FRAGMENT );
 	ARB_BlurParams( fb1->width, fb1->height, 6, qtrue );
 	RenderQuad( w, h );
 
-	// apply vectical blur - render from FBO2 to FBO3
 	FBO_Bind( GL_DRAW_FRAMEBUFFER, fb3->fbo );
 	GL_BindTexture( 0, fb2->color );
 	ARB_BlurParams( fb1->width, fb1->height, 6, qfalse );
 	RenderQuad( w, h );
 }
-
 
 void FBO_CopyScreen( void )
 {
@@ -1669,7 +1546,6 @@ void FBO_CopyScreen( void )
 	qglViewport( 0, 0, glConfig.vidWidth, glConfig.vidHeight );
 	qglScissor( 0, 0, glConfig.vidWidth, glConfig.vidHeight );
 
-	// resolve multisample buffer first
 	if ( blitMSfbo )
 	{
 		src = &frameBufferMS;
@@ -1691,7 +1567,6 @@ void FBO_CopyScreen( void )
 		backEnd.viewParms.viewportHeight + backEnd.viewParms.viewportY,
 		0, 0, dst->width, dst->height, GL_COLOR_BUFFER_BIT, GL_LINEAR );
 
-	//if ( !backEnd.projection2D )
 	{
 		qglMatrixMode( GL_PROJECTION );
 		qglLoadMatrixf( GL_Ortho( 0, glConfig.vidWidth, glConfig.vidHeight, 0, 0, 1 ) );
@@ -1706,7 +1581,6 @@ void FBO_CopyScreen( void )
 	FBO_Blur2( dst, dst+1, dst );
 	ARB_ProgramDisable();
 
-	//restore viewport and scissor
 	qglViewport( backEnd.viewParms.viewportX, backEnd.viewParms.viewportY,
 		backEnd.viewParms.viewportWidth, backEnd.viewParms.viewportHeight ); 
 	qglScissor( backEnd.viewParms.scissorX, backEnd.viewParms.scissorY,
@@ -1715,7 +1589,6 @@ void FBO_CopyScreen( void )
 	FBO_BindMain();
 }
 
-
 static void R_Setup_Quad_Lens( float offset, vec4_t color, vec3_t *verts, vec2_t *coords, vec4_t *colors )
 {
 	static const vec2_t t[6] = { {1.0, 0.0}, {0.0, 0.0}, {0.0, 1.0}, {0.0, 1.0}, {1.0, 1.0}, {1.0, 0.0} };
@@ -1723,7 +1596,7 @@ static void R_Setup_Quad_Lens( float offset, vec4_t color, vec3_t *verts, vec2_t
 	const float width = (float)glConfig.vidWidth;
 	const float height = (float)glConfig.vidHeight;
 	int i;
-	
+
 	for ( i = 0; i < 6; i++ ) {
 		coords[i][0] = t[i][0];
 		coords[i][1] = t[i][1];
@@ -1750,10 +1623,8 @@ static void R_Setup_Quad_Lens( float offset, vec4_t color, vec3_t *verts, vec2_t
 	verts[5][1] = -offset;
 }
 
-
 static void R_Bloom_LensEffect( float alpha )
 {
-	// lens rainbow colors
 	static const GLfloat lc[][3] = {
 		{ 0.78f, 0.23f, 0.34f },
 		{ 0.78f, 0.39f, 0.21f },
@@ -1794,7 +1665,6 @@ static void R_Bloom_LensEffect( float alpha )
 	qglDrawArrays( GL_TRIANGLES, 0, ARRAY_LEN( verts ) );
 }
 
-
 qboolean FBO_Bloom( const float gamma, const float obScale, qboolean finalStage )
 {
 	const int w = glConfig.vidWidth;
@@ -1831,8 +1701,7 @@ qboolean FBO_Bloom( const float gamma, const float obScale, qboolean finalStage 
 		FBO_BlitMS( qfalse );
 		blitMSfbo = qfalse;
 	}
-	
-	// extract intensity from main FBO to BLOOM_BASE
+
 	src = &frameBuffers[ 0 ];
 	dst = &frameBuffers[ BLOOM_BASE ];
 	FBO_Bind( GL_FRAMEBUFFER, dst->fbo );
@@ -1843,11 +1712,9 @@ qboolean FBO_Bloom( const float gamma, const float obScale, qboolean finalStage 
 		r_bloom_threshold->value, 1.0 );
 	RenderQuad( w, h );
 
-	// downscale and blur
 	src = frameBuffers + BLOOM_BASE;
 	for ( i = 1; i < fboBloomPasses; i++, src+=2 ) {
 		dst = src + 2;
-		// copy image to next level
 #ifdef USE_FBO_BLIT
 		FBO_Bind( GL_READ_FRAMEBUFFER, src->fbo );
 		FBO_Bind( GL_DRAW_FRAMEBUFFER, dst->fbo );
@@ -1863,15 +1730,12 @@ qboolean FBO_Bloom( const float gamma, const float obScale, qboolean finalStage 
 		FBO_Blur( dst, dst+1, dst );
 	}
 
-	// restore viewport
 	qglViewport( 0, 0, w, h );
 
-	// blend all bloom buffers to BLOOM_BASE+1 texture
 	finalBloomFBO = BLOOM_BASE+1;
 	GL_State( GLS_DEPTHTEST_DISABLE | GLS_SRCBLEND_ONE | GLS_DSTBLEND_ZERO );
 	FBO_Bind( GL_FRAMEBUFFER, frameBuffers[ finalBloomFBO ].fbo );
 	ARB_ProgramEnable( DUMMY_VERTEX, BLENDX_FRAGMENT );
-	// setup all texture units
 	for ( i = 0; i < fboBloomPasses - fboBloomBlendBase; i++ ) {
 		GL_BindTexture( i, frameBuffers[ (i+fboBloomBlendBase)*2 + BLOOM_BASE ].color );
 	}
@@ -1881,48 +1745,40 @@ qboolean FBO_Bloom( const float gamma, const float obScale, qboolean finalStage 
 	{
 		ARB_ProgramDisable();
 
-		// copy final bloom image to some downscaled buffer
 		src = &frameBuffers[ finalBloomFBO ];
-		dst = &frameBuffers[ BLOOM_BASE + 2 + 2 ]; // 4x downscale
+		dst = &frameBuffers[ BLOOM_BASE + 2 + 2 ];
 		FBO_Bind( GL_DRAW_FRAMEBUFFER, dst->fbo );
 		FBO_Bind( GL_READ_FRAMEBUFFER, src->fbo );
 		qglBlitFramebuffer( 0, 0, src->width, src->height, 0, 0, dst->width, dst->height, GL_COLOR_BUFFER_BIT, GL_LINEAR );
-		
-		// set render target to paired destination buffer and draw reflections
+
 		FBO_Bind( GL_DRAW_FRAMEBUFFER, (dst+1)->fbo );
 		GL_BindTexture( 0, dst->color );
 		GL_State( GLS_DEPTHTEST_DISABLE | GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE );
 		qglViewport( 0, 0, dst->width, dst->height );
 		R_Bloom_LensEffect( fabs( r_bloom_reflection->value ) );
-		
-		// restore color and blend mode
+
 		qglColor4f( 1.0f, 1.0f, 1.0f, 1.0f );
 		GL_State( GLS_DEPTHTEST_DISABLE | GLS_SRCBLEND_ONE | GLS_DSTBLEND_ZERO );
-		
-		// blur lens effect in paired buffer
+
 		FBO_Blur( dst+1, dst, dst+1 );
 		ARB_ProgramDisable();
 
-		// add lens effect to final bloom buffer
 		FBO_Bind( GL_FRAMEBUFFER, src->fbo );
 		if ( r_bloom_reflection->value > 0 ) {
 			GL_State( GLS_DEPTHTEST_DISABLE | GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE );
 		} else {
-			// negative reflection values will replace bloom texture with just lens effect
 		}
 		qglViewport( 0, 0, w, h );
 		GL_BindTexture( 0, (dst+1)->color );
 		RenderQuad( w, h );
 
-		// restore blend mode
 		GL_State( GLS_DEPTHTEST_DISABLE | GLS_SRCBLEND_ONE | GLS_DSTBLEND_ZERO );
 	}
 
 	if ( windowAdjusted || backEnd.screenshotMask ) {
-		finalStage = qfalse; // can't blit directly into back buffer in this case
+		finalStage = qfalse;
 	}
 
-	// if we don't need to read pixels later - blend directly to back buffer
 	if ( finalStage ) {
 		if ( backEnd.screenshotMask ) {
 			FBO_Bind( GL_FRAMEBUFFER, frameBuffers[ BLOOM_BASE ].fbo );
@@ -1933,15 +1789,13 @@ qboolean FBO_Bloom( const float gamma, const float obScale, qboolean finalStage 
 		FBO_Bind( GL_FRAMEBUFFER, frameBuffers[ BLOOM_BASE ].fbo );
 	}
 
-	GL_BindTexture( 1, frameBuffers[ finalBloomFBO ].color ); // final bloom texture
-	GL_BindTexture( 0, frameBuffers[ 0 ].color ); // original image
+	GL_BindTexture( 1, frameBuffers[ finalBloomFBO ].color );
+	GL_BindTexture( 0, frameBuffers[ 0 ].color );
 	if ( finalStage ) {
-		// blend & apply gamma in one pass
 		ARB_ProgramEnable( DUMMY_VERTEX, BLEND2_GAMMA_FRAGMENT );
 		qglProgramLocalParameter4fARB( GL_FRAGMENT_PROGRAM_ARB, 0, gamma, gamma, gamma, obScale );
 		qglProgramLocalParameter4fARB( GL_FRAGMENT_PROGRAM_ARB, 1, r_bloom_intensity->value, 0, 0, 0 );
 	} else {
-		// just blend
 		ARB_ProgramEnable( DUMMY_VERTEX, BLEND2_FRAGMENT );
 		qglProgramLocalParameter4fARB( GL_FRAGMENT_PROGRAM_ARB, 1, r_bloom_intensity->value, 0, 0, 0 );
 	}
@@ -1950,24 +1804,19 @@ qboolean FBO_Bloom( const float gamma, const float obScale, qboolean finalStage 
 
 	if ( finalStage ) {
 		if ( backEnd.screenshotMask ) {
-			FBO_BlitToBackBuffer( BLOOM_BASE ); // so any further qglReadPixels() will read from BLOOM_BASE
-			 // fboReadIndex = 0;
+			FBO_BlitToBackBuffer( BLOOM_BASE );
 		} else {
-			//	already in back buffer
 			fboReadIndex = 0;
 		}
 	} else {
-		// we need depth/stencil buffers there
 		fboReadIndex = BLOOM_BASE;
 	}
 
 	return finalStage;
 }
 
-
 void R_BloomScreen( void )
 {
-	// [ioquakelive] Quake3e's own bloom never on top of Quake Live's
 	if ( r_bloom->integer == 1 && !r_bloomActive->integer && fboEnabled && qglActiveTextureARB )
 	{
 		if ( !backEnd.doneBloom && backEnd.doneSurfaces )
@@ -1979,16 +1828,6 @@ void R_BloomScreen( void )
 	}
 }
 
-
-/*
-===============================================================================
-
-[QL] WHAT THE POST EFFECTS NEED FROM HERE
-
-===============================================================================
-*/
-
-// [QL] the post binds through FBO_Bind, whose cache FBO_BindMain trusts
 void FBO_BindTarget( GLuint target, GLuint buffer ) {
 	FBO_Bind( target, buffer );
 }
@@ -2000,7 +1839,6 @@ void FBO_ResolveMultisample( void ) {
 	}
 }
 
-
 GLuint FBO_MainTexture( void ) {
 	return fboEnabled ? frameBuffers[ fboReadIndex ].color : 0;
 }
@@ -2009,7 +1847,6 @@ GLuint FBO_MainBuffer( void ) {
 	return fboEnabled ? frameBuffers[ fboReadIndex ].fbo : 0;
 }
 
-// the second buffer, where a pass that cannot read and write at once leaves its result
 GLuint FBO_ScratchBuffer( void ) {
 	return fboEnabled ? frameBuffers[ 1 ].fbo : 0;
 }
@@ -2026,11 +1863,9 @@ void FBO_CopyScratchToMain( void ) {
 	FBO_BindMain();
 }
 
-
 void FBO_PostProcess( void )
 {
 	const float obScale = 1 << tr.overbrightBits;
-	// [ioquakelive] no gamma on a frame without the world, as in RB_QLColorCorrect
 	const float gamma = tr.frameHasWorld ? 1.0f / r_gamma->value : 1.0f;
 	const float w = glConfig.vidWidth;
 	const float h = glConfig.vidHeight;
@@ -2047,7 +1882,6 @@ void FBO_PostProcess( void )
 		qglMatrixMode( GL_MODELVIEW );
 		qglLoadIdentity();
 		backEnd.projection2D = qtrue;
-		// no need to setup shader time there
 	}
 
 	if ( blitMSfbo )
@@ -2064,7 +1898,6 @@ void FBO_PostProcess( void )
 
 	minimized = RI_CL_IsMinimized();
 
-	// [QL] the colour correction is the copy to the screen (0x436dc0); a capture uses buffer 1
 	if ( r_colorCorrectActive->integer ) {
 		if ( backEnd.screenshotMask == 0 && !windowAdjusted && !minimized ) {
 			if ( RB_QLColorCorrect( 0, w, h ) ) {
@@ -2078,7 +1911,6 @@ void FBO_PostProcess( void )
 		}
 	}
 
-	// check if we can perform final draw directly into back buffer
 	if ( backEnd.screenshotMask == 0 && !windowAdjusted && !minimized ) {
 		FBO_Bind( GL_FRAMEBUFFER, 0 );
 		GL_BindTexture( 0, frameBuffers[ fboReadIndex ].color );
@@ -2089,9 +1921,8 @@ void FBO_PostProcess( void )
 		return;
 	}
 
-	// apply gamma shader
-	FBO_Bind( GL_FRAMEBUFFER, frameBuffers[ 1 ].fbo ); // destination - secondary buffer
-	GL_BindTexture( 0, frameBuffers[ fboReadIndex ].color );  // source - main color buffer
+	FBO_Bind( GL_FRAMEBUFFER, frameBuffers[ 1 ].fbo );
+	GL_BindTexture( 0, frameBuffers[ fboReadIndex ].color );
 	ARB_ProgramEnable( DUMMY_VERTEX, GAMMA_FRAGMENT );
 	qglProgramLocalParameter4fARB( GL_FRAGMENT_PROGRAM_ARB, 0, gamma, gamma, gamma, obScale );
 	RenderQuad( w, h );
@@ -2101,7 +1932,6 @@ void FBO_PostProcess( void )
 		FBO_BlitToBackBuffer( 1 );
 	}
 }
-
 
 void QGL_SetRenderScale( qboolean verbose )
 {
@@ -2130,7 +1960,7 @@ void QGL_SetRenderScale( qboolean verbose )
 	if ( r_ext_supersample->integer )
 	{
 		superSampled = qtrue;
-		blitFilter = GL_LINEAR; // default value for (r_renderScale==0) case
+		blitFilter = GL_LINEAR;
 	}
 
 	if ( gls.windowWidth != glConfig.vidWidth || gls.windowHeight != glConfig.vidHeight )
@@ -2140,7 +1970,6 @@ void QGL_SetRenderScale( qboolean verbose )
 			int scaleMode = r_renderScale->integer - 1;
 			if ( scaleMode & 1 )
 			{
-				// preserve aspect ratio (black bars on sides)
 				float windowAspect = (float) gls.windowWidth / (float) gls.windowHeight;
 				float renderAspect = (float) glConfig.vidWidth / (float) glConfig.vidHeight;
 				if ( windowAspect >= renderAspect ) 
@@ -2158,7 +1987,6 @@ void QGL_SetRenderScale( qboolean verbose )
 					blitY1 -= bias;
 				}
 			}
-			// linear filtering
 			if ( scaleMode & 2 )
 				blitFilter = GL_LINEAR;
 			else
@@ -2168,7 +1996,6 @@ void QGL_SetRenderScale( qboolean verbose )
 		windowAdjusted = qtrue;
 	}
 }
-
 
 void QGL_DoneFBO( void )
 {
@@ -2190,7 +2017,6 @@ void QGL_DoneFBO( void )
 	}
 }
 
-
 void QGL_InitFBO( void )
 {
 	int w, h;
@@ -2201,7 +2027,7 @@ void QGL_InitFBO( void )
 
 	w = glConfig.vidWidth;
 	h = glConfig.vidHeight;
-	
+
 	fboEnabled = qfalse;
 	frameBufferMultiSampling = qfalse;
 
@@ -2211,10 +2037,10 @@ void QGL_InitFBO( void )
 	if ( !r_fbo->integer || !qglGenProgramsARB || !qglGenFramebuffers )
 		return;
 
-	qglGetError(); // reset error code
+	qglGetError();
 
 	if ( windowAdjusted )
-		blitClear = 2; // front & back buffers
+		blitClear = 2;
 	else
 		blitClear = 0;
 
@@ -2225,7 +2051,6 @@ void QGL_InitFBO( void )
 		default: fboInternalFormat = GL_RGBA16; break;
 	}
 
-	// [QL] 0x4500b0: r_floatingPointFBOs gives the frame buffers 16 bits a channel
 	if ( fboInternalFormat == GL_RGBA8 && r_enablePostProcess->integer && r_floatingPointFBOs->integer ) {
 		fboInternalFormat = GL_RGBA16;
 	}
@@ -2270,8 +2095,7 @@ void QGL_InitFBO( void )
 		QGL_DoneFBO();
 	}
 }
-#endif // USE_FBO
-
+#endif
 
 void QGL_InitARB( void )
 {
@@ -2282,7 +2106,6 @@ void QGL_InitARB( void )
 #endif
 	RI_Cvar_ResetGroup( CVG_RENDERER, qtrue );
 }
-
 
 void QGL_DoneARB( void )
 {

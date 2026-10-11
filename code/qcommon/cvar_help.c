@@ -19,24 +19,10 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// cvar_help.c -- [ioquakelive] help texts for Quake Live's cvars
-//
-// The console shows a cvar's help in "help <name>", in the panel under the console
-// and next to completions. Retail has no help texts: these say what each cvar does
-// in this engine and its modules. The range and the default come from the cvar
-// itself and are printed with the text, so the texts don't repeat them.
-//
-// Cvar_Get looks the name up when it creates a cvar, which gives the modules'
-// cvars their text as they register. A cvar with no entry has no help.
-//
-
 #include "q_shared.h"
 #include "qcommon.h"
 
-// "    value = " at the start of a line that explains one value
 #define HV(value) S_COLOR_VAL "    " value " " S_COLOR_HELP "= "
-// the name of another cvar inside a text
 #define HC(name) S_COLOR_CVAR name S_COLOR_HELP
 
 typedef struct {
@@ -45,9 +31,6 @@ typedef struct {
 } cvarHelp_t;
 
 static const cvarHelp_t cvarHelp[] = {
-    //
-    // cgame: view and weapon
-    //
     {"cg_fov", "field of view, in degrees"},
     {"cg_zoomfov", "field of view while zoomed, in degrees"},
     {"cg_zoomToggle", "the zoom key toggles the zoom instead of holding it"},
@@ -93,9 +76,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"cg_weaponConfig_cg", "commands run when you switch to the chaingun"},
     {"cg_weaponConfig_hmg", "commands run when you switch to the heavy machinegun"},
 
-    //
-    // cgame: crosshair
-    //
     {"cg_drawCrosshair", "crosshair shape, 0 for none"},
     {"cg_crosshairSize", "crosshair size"},
     {"cg_crosshairX", "moves the crosshair right from the centre"},
@@ -128,9 +108,6 @@ static const cvarHelp_t cvarHelp[] = {
                                    "Shown with " HC("cg_teammateCrosshairNames") " on."},
     {"cg_drawCrosshairTeamHealthSize", "text size of a teammate's health and armor under the crosshair"},
 
-    //
-    // cgame: HUD
-    //
     {"cg_draw2D", "draws the 2D HUD"},
     {"cg_drawStatus", "draws the HUD's status: health, armor, ammo and the rest of the HUD menus"},
     {"cg_draw3dIcons", "draws 3D models instead of flat icons in the HUD"},
@@ -209,9 +186,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"cg_drawInputCmdsY", "vertical position of the movement arrows"},
     {"cg_itemTimers", "shows item respawn times when the server sends them (" HC("g_itemTimers") ")"},
 
-    //
-    // cgame: team
-    //
     {"cg_drawTeamOverlay", "your teammates' health, armor, weapon and location\n"
                            HV("0") "Off\n"
                            HV("1") "Top right\n"
@@ -239,9 +213,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"cg_drawSpriteSelf", "draws those sprites over your own player in third person"},
     {"cg_voiceChatIndicator", "shows who is talking on voice chat"},
 
-    //
-    // cgame: chat
-    //
     {"cg_chatbeep", "beeps on chat messages"},
     {"cg_teamChatBeep", "beeps on team chat messages"},
     {"cg_teamChatsOnly", "shows only team chat"},
@@ -249,9 +220,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"cg_teamChatHeight", "lines of chat kept on the screen"},
     {"cg_chatHistoryLength", "lines kept in the chat history"},
 
-    //
-    // cgame: spectating
-    //
     {"cg_specItemTimers", "spectators: item respawn timers down the left; add the values\n"
                           HV("1") "Powerups\n"
                           HV("2") "Mega health\n"
@@ -279,9 +247,6 @@ static const cvarHelp_t cvarHelp[] = {
                          HV("1") "Any powerup\n"
                          HV("2") "A flag"},
 
-    //
-    // cgame: sounds
-    //
     {"cg_announcer", "announcer voice\n"
                      HV("1") "Default\n"
                      HV("2") "Vadrigar\n"
@@ -314,9 +279,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"s_playSoundVolume", "volume of the sounds a server plays on its own, like a plugin's; 0 turns them off"},
     {"s_ambient", "the maps' ambient sounds"},
 
-    //
-    // cgame: players
-    //
     {"cg_forceEnemyModel", "model every enemy is drawn with; empty for their own"},
     {"cg_forceEnemySkin", "skin every enemy is drawn with, over " HC("cg_forceEnemyModel") " or their own model\n"
                           HV("bright") "A flat skin in your enemy colours\n"
@@ -346,9 +308,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"cg_screenDamageAlpha", "strength of the flash when an enemy hurts you"},
     {"cg_screenDamageAlpha_Team", "strength of the flash when a teammate hurts you"},
 
-    //
-    // cgame: effects and items
-    //
     {"cg_railStyle", "rail trail\n"
                      HV("1") "Beam\n"
                      HV("2") "Spiral"},
@@ -396,9 +355,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"cg_simpleItemsHeightOffset", "height of simple items over the floor"},
     {"cg_simpleItemsRadius", "size of simple items"},
 
-    //
-    // cgame: demos and camera
-    //
     {"cg_autoAction", "does at every match; add the values\n"
                       HV("1") "Records a demo\n"
                       HV("2") "Takes a screenshot at the end"},
@@ -421,9 +377,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"cg_tracerlength", "length of machinegun tracers"},
     {"cg_tracerwidth", "width of machinegun tracers"},
 
-    //
-    // ui
-    //
     {"ui_browserSortKey", "column the server browser sorts by"},
     {"ui_legalsViewed", "set once the legal notice at startup has gone by, for the rest of the session"},
     {"ui_browserShowFull", "the server browser lists full servers"},
@@ -432,9 +385,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"ui_browserGameType", "game type the server browser shows"},
     {"ui_mousePitch", "the menu's invert mouse option"},
 
-    //
-    // game: match
-    //
     {"g_gametype", "game type\n"
                    HV("0") "Free for all\n"
                    HV("1") "Duel\n"
@@ -482,9 +432,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"g_mercytime", "minutes into the match before " HC("mercylimit") " can end it"},
     {"g_customSettings", "settings changed from the factory's, as flags the scoreboard shows"},
 
-    //
-    // game: players, items and weapons
-    //
     {"g_startingHealth", "health players spawn with"},
     {"g_startingHealthBonus", "extra health players spawn with, which counts down to " HC("g_startingHealth")},
     {"g_startingArmor", "armor players spawn with"},
@@ -539,9 +486,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"g_flightThrust", "flight powerup: thrust"},
     {"armor_tiered", "tiered armor rules"},
 
-    //
-    // game: weapons
-    //
     {"g_damage_g", "damage of the gauntlet"},
     {"g_damage_mg", "damage of a machinegun bullet"},
     {"g_damage_sg", "damage of a shotgun pellet"},
@@ -608,9 +552,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"g_nailbounce", "nails bounce off walls"},
     {"g_nailbouncepercentage", "chance that a nail bounces"},
 
-    //
-    // game: modes
-    //
     {"g_adCaptureScoreBonus", "attack and defend: points for a capture"},
     {"g_adElimScoreBonus", "attack and defend: points for eliminating the other team"},
     {"g_adTouchScoreBonus", "attack and defend: points for touching the flag"},
@@ -638,9 +579,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"g_rrInfected", "red rover: infection, fragged players join the zombies"},
     {"g_quadHog", "quad hog (free for all)"},
 
-    //
-    // game: voting, admin and chat
-    //
     {"g_allowVote", "players may call votes"},
     {"g_allowVoteMidGame", "votes may be called once the match has started"},
     {"g_allowSpecVote", "spectators may call votes"},
@@ -676,9 +614,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"g_podiumDist", "distance of the podium at the end of the match"},
     {"g_podiumDrop", "height of the podium at the end of the match"},
 
-    //
-    // game: movement
-    //
     {"pmove_AirControl", "players can steer in the air"},
     {"pmove_AutoHop", "holding jump keeps jumping"},
     {"pmove_DoubleJump", "a jump soon after landing goes higher"},
@@ -706,9 +641,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"pmove_noPlayerClip", "players pass through each other"},
     {"pmove_velocity_gh", "speed at which the grappling hook pulls"},
 
-    //
-    // server
-    //
     {"sv_hostname", "name of the server"},
     {"sv_maxclients", "most players on the server"},
     {"sv_privateClients", "slots kept for players with " HC("sv_privatePassword")},
@@ -741,9 +673,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"bot_grapple", "bots use the grappling hook"},
     {"bot_rocketjump", "bots rocket jump"},
 
-    //
-    // client
-    //
     {"name", "your player name"},
     {"model", "your player model, as model/skin"},
     {"headmodel", "your head model, as model/skin"},
@@ -809,9 +738,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"cl_debugMove", "graph of the mouse movement"},
     {"r_inGameVideo", "plays videos inside maps"},
 
-    //
-    // sound
-    //
     {"s_volume", "volume of sound effects"},
     {"s_musicvolume", "volume of the music"},
     {"s_voiceVolume", "volume of voice chat"},
@@ -828,9 +754,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"s_sdlMixSamps", "size of the mixing buffer, in samples; 0 for the default"},
     {"com_soundMegs", "megabytes of memory for sounds"},
 
-    //
-    // input
-    //
     {"in_mouse", "uses the mouse"},
     {"in_nograb", "doesn't take hold of the mouse"},
     {"in_joystick", "uses a joystick or gamepad"},
@@ -839,9 +762,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"joy_threshold", "dead zone of the joystick axes"},
     {"in_keyboardDebug", "prints key events"},
 
-    //
-    // renderer
-    //
     {"r_mode", "screen mode\n"
                HV("-2") "The desktop's resolution\n"
                HV("-1") HC("r_customwidth") " by " HC("r_customheight") "\n"
@@ -942,9 +862,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"r_measureOverdraw", "measures overdraw"},
     {"r_verbose", "prints more renderer messages"},
 
-    //
-    // common
-    //
     {"com_maxfps", "most frames per second"},
     {"com_maxfpsUnfocused", "most frames per second while the window is in the background; 0 for no limit"},
     {"com_maxfpsMinimized", "most frames per second while the window is minimized; 0 for no limit"},
@@ -973,9 +890,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"fs_debug", "prints file system activity"},
     {"fs_steampath", "Quake Live's folder in Steam"},
 
-    //
-    // network
-    //
     {"net_enabled", "network protocols; add the values\n"
                     HV("1") "IPv4\n"
                     HV("2") "IPv6\n"
@@ -1019,9 +933,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"cl_demorecording", "set by the game: 1 while a demo is being recorded"},
     {"cl_demoname", "set by the game: the demo being recorded"},
 
-    //
-    // engine: more
-    //
     {"cl_anonymous", "kept from Quake 3, where it marked a player who gave no name (no effect in this build)"},
     {"cl_autoTimeNudge", "works the time nudge out from your ping instead of taking " HC("cl_timeNudge")},
     {"cl_demoFrags", "set by the game: where the frags are in the demo, for the marks on the demo bar"},
@@ -1139,9 +1050,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"zmq_stats_port", "port the statistics are published on; read when the server starts"},
     {"zmq_stats_password", "password asked of whoever reads the statistics"},
 
-    //
-    // server, movement and bots: more
-    //
     {"sv_altEntDir", "reads the level's entities from \"<dir>/<map>.ent\" instead of taking the map's own"},
     {"sv_dumpEntities", "writes the map's entities to \"ents/<map>.ent\" as the level loads"},
     {"sv_errorExit", "a dedicated server shuts itself down when it hits an error (no effect in this build)"},
@@ -1237,9 +1145,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"bot_interbreedcycle", "matches that go by between one interbreeding and the next"},
     {"bot_interbreedwrite", "file the interbred bots are written to"},
 
-    //
-    // game: more
-    //
     {"g_damage_sg_outer", "damage of the shotgun pellets that land outside the middle of the spread"},
     {"g_damage_sg_falloff", "the shotgun loses damage with distance"},
     {"g_range_sg_falloff", "units over which the shotgun loses its damage"},
@@ -1373,9 +1278,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"g_debugVampiricDamage", "prints the health leeched from each hit"},
     {"g_debugFlags", "debugging flags the server sends the clients"},
 
-    //
-    // ui: more
-    //
     {"ui_menuFiles", "file that lists the menus to load"},
     {"ui_netSource", "server list the browser shows\n"
                      HV("0") "Local network\n"
@@ -1507,9 +1409,6 @@ static const cvarHelp_t cvarHelp[] = {
     {"ui_blueteam4", "bot in blue team slot 4 of the start server menu (no effect in this build)"},
     {"ui_blueteam5", "bot in blue team slot 5 of the start server menu (no effect in this build)"},
 
-    //
-    // cgame: more
-    //
     {"cg_animateChatBalloon", "animates the balloon over a player who is typing"},
     {"ch_animateRewardIcons", "animates the medals when you earn one\n"
                               HV("0") "Still\n"
@@ -1619,15 +1518,6 @@ static int Cvar_HelpHash(const char* name) {
     return (int)(hash & (HELP_HASH_SIZE - 1));
 }
 
-/*
-============
-Cvar_BuiltInHelp
-
-The help text of a cvar, NULL if it has none. The names are hashed on the
-first call, so creating a cvar costs a lookup, not a pass over the table.
-A numbered one takes the entry of its family, with a '#' in place of the number.
-============
-*/
 static const char* Cvar_HelpLookup(const char* var_name) {
     int i;
 
@@ -1661,8 +1551,6 @@ const char* Cvar_BuiltInHelp(const char* var_name) {
         return help;
     }
 
-    // the ones the game numbers, one per client or per slot: session0 takes the
-    // entry of its family, written "session#"
     len = (int)strlen(var_name);
     if (len < 2 || len + 2 > (int)sizeof(family) || var_name[len - 1] < '0' || var_name[len - 1] > '9') {
         return NULL;

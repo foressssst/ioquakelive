@@ -21,19 +21,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "tr_local.h"
 
-
-/*
-
-  for a projection shadow:
-
-  point[x] += light vector * ( z - shadow plane )
-  point[y] +=
-  point[z] = shadow plane
-
-  1 0 light[x] / light[z]
-
-*/
-
 typedef struct {
 	int		i2;
 	int		facing;
@@ -50,14 +37,13 @@ static void R_AddEdgeDef( int i1, int i2, int f ) {
 
 	c = numEdgeDefs[ i1 ];
 	if ( c == MAX_EDGE_DEFS ) {
-		return;		// overflow
+		return;
 	}
 	edgeDefs[ i1 ][ c ].i2 = i2;
 	edgeDefs[ i1 ][ c ].facing = f;
 
 	numEdgeDefs[ i1 ]++;
 }
-
 
 static void R_CalcShadowEdges( void ) {
 	qboolean sil_edge;
@@ -69,10 +55,6 @@ static void R_CalcShadowEdges( void ) {
 
 	tess.numIndexes = 0;
 
-	// an edge is NOT a silhouette edge if its face doesn't face the light,
-	// or if it has a reverse paired edge that also faces the light.
-	// A well behaved polyhedron would have exactly two faces for each edge,
-	// but lots of models have dangling edges or overfanned edges
 	for ( i = 0; i < tess.numVertexes; i++ ) {
 		c = numEdgeDefs[ i ];
 		for ( j = 0 ; j < c ; j++ ) {
@@ -90,8 +72,6 @@ static void R_CalcShadowEdges( void ) {
 				}
 			}
 
-			// if it doesn't share the edge with another front facing
-			// triangle, it is a sil edge
 			if ( sil_edge ) {
 				if ( tess.numIndexes > ARRAY_LEN( tess.indexes ) - 6 ) {
 					i = tess.numVertexes;
@@ -120,7 +100,7 @@ static void R_CalcShadowEdges( void ) {
 #ifdef USE_VULKAN
 	tess.numVertexes *= 2;
 
-	colors = &tess.svars.colors[0][0]; // we need at least 2x SHADER_MAX_VERTEXES there
+	colors = &tess.svars.colors[0][0];
 
 	for ( i = 0; i < tess.numVertexes; i++ ) {
 		Vector4Set( colors[i].rgba, 50, 50, 50, 255 );
@@ -128,19 +108,6 @@ static void R_CalcShadowEdges( void ) {
 #endif
 }
 
-
-/*
-=================
-RB_ShadowTessEnd
-
-triangleFromEdge[ v1 ][ v2 ]
-
-
-  set triangle from edge( v1, v2, tri )
-  if ( facing[ triangleFromEdge[ v1 ][ v2 ] ] && !facing[ triangleFromEdge[ v2 ][ v1 ] ) {
-  }
-=================
-*/
 void RB_ShadowTessEnd( void ) {
 	int		i;
 	int		numTris;
@@ -162,18 +129,15 @@ void RB_ShadowTessEnd( void ) {
 #endif
 		VectorCopy( backEnd.currentEntity->lightDir, lightDir );
 
-	// clamp projection by height
 	if ( lightDir[2] > 0.1 ) {
 		float s = 0.1 / lightDir[2];
 		VectorScale( lightDir, s, lightDir );
 	}
 
-	// project vertexes away from light direction
 	for ( i = 0; i < tess.numVertexes; i++ ) {
 		VectorMA( tess.xyz[i], -512, lightDir, tess.xyz[i+tess.numVertexes] );
 	}
 
-	// decide which triangles face the light
 	Com_Memset( numEdgeDefs, 0, tess.numVertexes * sizeof( numEdgeDefs[0] ) );
 
 	numTris = tess.numIndexes / 3;
@@ -202,7 +166,6 @@ void RB_ShadowTessEnd( void ) {
 			facing[ i ] = 0;
 		}
 
-		// create the edges
 		R_AddEdgeDef( i1, i2, facing[ i ] );
 		R_AddEdgeDef( i2, i3, facing[ i ] );
 		R_AddEdgeDef( i3, i1, facing[ i ] );
@@ -210,11 +173,9 @@ void RB_ShadowTessEnd( void ) {
 
 	R_CalcShadowEdges();
 
-	// draw the silhouette edges
 #ifdef USE_VULKAN
 	GL_Bind( tr.whiteImage );
 
-	// mirrors have the culling order reversed
 	if ( backEnd.viewParms.portalView == PV_MIRROR ) {
 		pipeline[0] = vk.shadow_volume_pipelines[0][1];
 		pipeline[1] = vk.shadow_volume_pipelines[1][1];
@@ -223,11 +184,11 @@ void RB_ShadowTessEnd( void ) {
 		pipeline[1] = vk.shadow_volume_pipelines[1][0];
 
 	}
-	vk_bind_pipeline( pipeline[0] ); // back-sided
+	vk_bind_pipeline( pipeline[0] );
 	vk_bind_index();
 	vk_bind_geometry( TESS_XYZ | TESS_RGBA0 );
 	vk_draw_geometry( DEPTH_RANGE_NORMAL, qtrue );
-	vk_bind_pipeline( pipeline[1] ); // front-sided
+	vk_bind_pipeline( pipeline[1] );
 	vk_draw_geometry( DEPTH_RANGE_NORMAL, qtrue );
 
 	tess.numVertexes /= 2;
@@ -240,14 +201,10 @@ void RB_ShadowTessEnd( void ) {
 	if ( qglLockArraysEXT )
 		qglLockArraysEXT( 0, tess.numVertexes*2 );
 
-	// draw the silhouette edges
-
 	qglDisable( GL_TEXTURE_2D );
-	//GL_Bind( tr.whiteImage );
 	GL_State( GLS_SRCBLEND_ONE | GLS_DSTBLEND_ZERO );
 	qglColor4f( 0.2f, 0.2f, 0.2f, 1.0f );
 
-	// don't write to the color buffer
 	qglGetBooleanv( GL_COLOR_WRITEMASK, rgba );
 	qglColorMask( GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE );
 
@@ -267,7 +224,6 @@ void RB_ShadowTessEnd( void ) {
 	if ( qglUnlockArraysEXT )
 		qglUnlockArraysEXT();
 
-	// re-enable writing to the color buffer
 	qglColorMask(rgba[0], rgba[1], rgba[2], rgba[3]);
 
 	qglEnable( GL_TEXTURE_2D );
@@ -278,17 +234,6 @@ void RB_ShadowTessEnd( void ) {
 	tess.numIndexes = 0;
 }
 
-
-/*
-=================
-RB_ShadowFinish
-
-Darken everything that is is a shadow volume.
-We have to delay this until everything has been shadowed,
-because otherwise shadows from different body parts would
-overlap and double darken.
-=================
-*/
 void RB_ShadowFinish( void ) {
 #ifdef USE_VULKAN
 	float tmp[16];
@@ -337,7 +282,7 @@ void RB_ShadowFinish( void ) {
 
 	vk_update_mvp( NULL );
 
-	vk_bind_geometry( TESS_XYZ | TESS_RGBA0 /*| TESS_ST0 */ );
+	vk_bind_geometry( TESS_XYZ | TESS_RGBA0  );
 	vk_draw_geometry( DEPTH_RANGE_NORMAL, qfalse );
 
 	Com_Memcpy( vk_world.modelview_transform, tmp, 64 );
@@ -359,9 +304,6 @@ void RB_ShadowFinish( void ) {
 	qglColor4f( 0.6f, 0.6f, 0.6f, 1 );
 	GL_State( GLS_DEPTHMASK_TRUE | GLS_SRCBLEND_DST_COLOR | GLS_DSTBLEND_ZERO );
 
-	//qglColor4f( 1, 0, 0, 1 );
-	//GL_State( GLS_DEPTHMASK_TRUE | GLS_SRCBLEND_ONE | GLS_DSTBLEND_ZERO );
-
 	GL_ClientState( 0, CLS_NONE );
 	qglVertexPointer( 3, GL_FLOAT, 0, verts );
 	qglDrawArrays( GL_TRIANGLE_STRIP, 0, 4 );
@@ -373,13 +315,6 @@ void RB_ShadowFinish( void ) {
 #endif
 }
 
-
-/*
-=================
-RB_ProjectionShadowDeform
-
-=================
-*/
 void RB_ProjectionShadowDeform( void ) {
 	float	*xyz;
 	int		i;
@@ -406,7 +341,6 @@ void RB_ProjectionShadowDeform( void ) {
 		VectorCopy( backEnd.currentEntity->lightDir, lightDir );
 
 	d = DotProduct( lightDir, ground );
-	// don't let the shadows get too long or go negative
 	if ( d < 0.5 ) {
 		VectorMA( lightDir, (0.5 - d), ground, lightDir );
 		d = DotProduct( lightDir, ground );

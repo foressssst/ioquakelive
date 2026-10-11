@@ -1,19 +1,3 @@
-/*
-===========================================================================
-ioquakelive - a small JSON builder for the stats events
-
-The writer follows jsoncpp's StyledWriter, the only JSON writer in the retail
-engine:
-
-  - an object is "{", each member on its own line as "key" : value with a comma
-    after all but the last, then "}"; members are sorted by key
-  - an empty object is {}, an empty array is []
-  - an array goes on one line, "[ a, b ]", unless it holds a non-empty object or
-    array or the line would reach 74 characters; then one element a line
-  - three spaces of indentation, a newline at the end, and a real printed with
-    %#.16g with its trailing zeros cut, keeping one after the point
-===========================================================================
-*/
 
 #include "g_local.h"
 #include "g_json.h"
@@ -26,17 +10,17 @@ typedef enum { JN_NULL, JN_OBJECT, JN_ARRAY, JN_STRING, JN_INT, JN_BOOL, JN_REAL
 
 struct jnode_s {
     jtype_t type;
-    const char* key;   // as a member of an object
-    const char* text;  // JN_STRING
-    int integer;       // JN_INT, JN_BOOL
-    double real;       // JN_REAL
-    jnode_t* first;    // children: members in key order, or elements in order
+    const char* key;
+    const char* text;
+    int integer;
+    double real;
+    jnode_t* first;
     jnode_t* next;
 };
 
 static jnode_t jNodes[J_MAX_NODES];
 static int jNumNodes;
-static char jText[J_MAX_TEXT];  // the strings the nodes point to
+static char jText[J_MAX_TEXT];
 static int jTextLen;
 
 void J_Reset(void) {
@@ -77,7 +61,6 @@ jnode_t* J_Array(void) {
     return J_Alloc(JN_ARRAY);
 }
 
-// a member goes in key order; one with the same key takes the old one's place
 static void J_Set(jnode_t* obj, const char* key, jnode_t* value) {
     jnode_t** link;
 
@@ -178,14 +161,6 @@ void J_PushString(jnode_t* array, const char* value) {
     }
 }
 
-/*
-===============================================================================
-
-WRITING
-
-===============================================================================
-*/
-
 typedef struct {
     char* out;
     int size;
@@ -206,8 +181,6 @@ static void JW_Add(jwriter_t* w, const char* s) {
     w->out[w->len] = '\0';
 }
 
-// StyledWriter::writeIndent: a new line and the indentation, unless the line already ends in
-// a space -- which is how "key" : { keeps the brace on the key's line
 static void JW_Indent(jwriter_t* w) {
     int i;
 
@@ -262,7 +235,6 @@ static void J_Quote(const char* s, char* out, int size) {
     out[n] = '\0';
 }
 
-// jsoncpp's valueToString(double): %#.16g, then the trailing zeros go, keeping one after the point
 static void J_Real(double v, char* out, int size) {
     char* p;
     char* last;
@@ -278,7 +250,6 @@ static void J_Real(double v, char* out, int size) {
     }
 }
 
-// a scalar as text; qfalse for objects and arrays
 static qboolean J_Scalar(const jnode_t* n, char* out, int size) {
     switch (n->type) {
         case JN_NULL: Q_strncpyz(out, "null", size); return qtrue;
@@ -292,7 +263,6 @@ static qboolean J_Scalar(const jnode_t* n, char* out, int size) {
 
 static void JW_Value(jwriter_t* w, const jnode_t* n);
 
-// StyledWriter::isMultineArray
 static qboolean J_Multiline(const jnode_t* arr) {
     const jnode_t* c;
     int count = 0;
@@ -314,7 +284,7 @@ static qboolean J_Multiline(const jnode_t* arr) {
         if (J_Scalar(c, text, sizeof(text))) {
             line += (int)strlen(text);
         } else {
-            line += 2;  // an empty {} or []
+            line += 2;
         }
     }
     return (qboolean)(line >= J_RIGHT_MARGIN);

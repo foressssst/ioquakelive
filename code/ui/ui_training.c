@@ -19,39 +19,12 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// ui_training.c -- [QL] the Training Center page
-//
-// Retail's is web.pak's module 267, reached from Play > Training Center: the page's
-// title and three sections side by side, each a square picture, a yellow title, a
-// line under it, a justified paragraph and the buttons it ends with. Drawn as
-// css/main.css lays it out (.training): each section 30% of the page wide with 3% of
-// margin, 675 high, black at 80% that goes solid under the cursor while the picture
-// comes up from 40%, both over a second.
-//
-// What each one sends (bot_minplayers and sv_serverType go to 0 first):
-//
-//     Crash Course  map qztraining _training
-//     Accelerate    map qzpractice2 _sj; wait 2; team f
-//     Elevate       map qzpractice1 _rj; wait 2; team f
-//
-// [ioquakelive] Under them, the advanced room, and the page scrolls to it:
-//
-//     Tracking      map thunderstruck _lgtrack; wait 2; team f; addbot crash 5
-//
-// _lgtrack is pak01's (scripts/ioql.factories).
-//
-// The three factories are pak00's hidden ones, which set g_training 1 and, for
-// the practice maps, infinite ammo and one weapon. The pictures are the page's own,
-// read from the player's web.pak.
-//
-
 #include "ui_web.h"
 
 #define TR_SECTION_H 675.0f
-#define TR_RETAIL_CARDS 3   // retail's row; the advanced room's go under "Advanced Training"
-#define TR_HEADING_H 54.4f  // that heading, as UI_Home_Header draws the page's
-#define TR_BAR 8.0f  // the page is overflow-y: scroll, so its bar's gutter is always there
+#define TR_RETAIL_CARDS 3
+#define TR_HEADING_H 54.4f
+#define TR_BAR 8.0f
 
 typedef enum {
     TR_HIT_NONE,
@@ -62,19 +35,14 @@ typedef enum {
 
 typedef struct {
     const char* map;
-    const char* picture;   // the section's img
-    const char* title;     // its h2
-    const char* subtitle;  // its h3
-    const char* text;      // its paragraph, the em between underscores
-    const char* command;   // what launchTraining sends for it
-    const char* video;     // what its Watch Video opens, NULL when it has none
+    const char* picture;
+    const char* title;
+    const char* subtitle;
+    const char* text;
+    const char* command;
+    const char* video;
 } trCard_t;
 
-/*
-The videos are wired as retail wires them: Accelerate's button calls watchRocketVideo,
-which opens HnIeHqBk8v4, and Elevate's calls watchStrafeVideo, which opens pVs1KGK0VLY.
-The names say each opens the other section's video.
-*/
 static const trCard_t trCards[] = {
     {"qztraining", "webui/img/training/training.jpg", "Crash Course", "Welcome to the Arena",
      "Meet _Crash_, our QUAKE LIVE trainer, and get a guided tour of some of the basic items of combat.",
@@ -87,7 +55,6 @@ static const trCard_t trCards[] = {
      "Use your projectile weapons to perform _Rocket Jumps_, and access areas of the arena in entirely different "
      "ways.",
      "map qzpractice1 _rj; wait 2; team f", "https://youtu.be/pVs1KGK0VLY"},
-    // [ioquakelive] the advanced room; no picture of its own, so the map's levelshot
     {"thunderstruck", "", "Tracking", "Keeping the Beam On",
      "Keep the _Lightning Gun_ on a bot that does nothing but dodge. It never fights back and never goes "
      "down.",
@@ -98,39 +65,21 @@ static const trCard_t trCards[] = {
 static struct {
     qboolean loaded;
     qhandle_t picture[TR_NUM_CARDS];
-    float hover[TR_NUM_CARDS];  // how far each section's transition has gone, 0 to 1
+    float hover[TR_NUM_CARDS];
     int lastTime;
-    float scroll;   // [ioquakelive] how far the sections are scrolled
-    float content;  // and how tall they are
+    float scroll;
+    float content;
 } tr;
 
 static const vec4_t trYellow = SM_RGB(247, 209, 0);
 static const vec4_t trBlack80 = {0.0f, 0.0f, 0.0f, 0.8f};
 
-/*
-===============
-TR_Launch
-
-What retail's launchTraining does, in its order: the two cvars first, then the
-map. Training is an offline match, so the server type goes back to 0 and no bots
-are filled in.
-===============
-*/
 static void TR_Launch(int i) {
     trap_Cvar_Set("bot_minplayers", "0");
     trap_Cvar_Set("sv_serverType", "0");
     trap_Cmd_ExecuteText(EXEC_APPEND, va("%s\n", trCards[i].command));
 }
 
-/*
-===============
-The paragraph
-
-text-align: justify with an em inside: the words go on a line while they fit, and every
-line but the last spreads its spaces to fill the width. A word is one or more pieces, the
-em's in italics, and the underscores say where the em starts and ends.
-===============
-*/
 #define TR_MAX_WORDS 48
 #define TR_TEXT_SIZE 15.0f
 
@@ -198,7 +147,6 @@ static void TR_DrawParagraph(float x, float y, float width, const char* text, co
     int count = 0, first = 0;
     const char* p = text;
 
-    // the words, each measured with the italics it carries
     while (*p && count < TR_MAX_WORDS) {
         int n = 0;
 
@@ -215,7 +163,6 @@ static void TR_DrawParagraph(float x, float y, float width, const char* text, co
         }
     }
 
-    // the lines: as many words as fit, spread to the width unless it is the last
     while (first < count) {
         float used = words[first].width;
         float gap = space;
@@ -239,12 +186,10 @@ static void TR_DrawParagraph(float x, float y, float width, const char* text, co
     }
 }
 
-// CSS's "ease" over the second the section takes to change
 static float TR_Ease(float t) {
     return t * t * (3 - 2 * t);
 }
 
-// .actions button: on a screen no wider than 3:2 its padding is 0 0.25em 1em 0
 static void TR_Button(float x, float y, float w, const char* label, qboolean over, const smRect_t* clip) {
     if (SM_Narrow()) {
         SM_WebButtonPadded(x, y, w, 0, 2.75f, label, qfalse, over, clip);
@@ -265,11 +210,9 @@ static void TR_DrawSection(int i, float x, float y, float w, const smRect_t* cli
     float by = y + TR_SECTION_H - 15 - SM_WEB_BUTTON_H;
 
     SM_Fill(x, y, w, TR_SECTION_H, back, clip);
-    // the picture's opacity, as black over it: the shader of a plain image takes no alpha
     SM_Pic(x, y, w, w, tr.picture[i], clip);
     SM_Fill(x, y, w, w, shade, clip);
 
-    // the h2 in Handel Gothic and yellow, the h3 under it in bold, both centred
     if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 36, ty, 45), 36, clip)) {
         SM_SetSpacing(SM_SPACING_H1);
         SM_Text(x + (w - SM_Advance(FONT_DEFAULT, 36, card->title, -1)) * 0.5f, SM_Baseline(FONT_DEFAULT, 36, ty, 45),
@@ -286,14 +229,12 @@ static void TR_DrawSection(int i, float x, float y, float w, const smRect_t* cli
     ty += 24.3f + 20;
     TR_DrawParagraph(x + 15, ty + 15, w - 30, card->text, clip);
 
-    // the whole section launches it, and so do its buttons; Watch Video does not go on to it
     SM_Hit(x, y, w, TR_SECTION_H, TR_HIT_CARD, i, clip);
     if (card->video) {
         TR_Button(bx, by, bw, "Watch Video", SM_Over(TR_HIT_VIDEO, i), clip);
         SM_Hit(bx, by, bw, SM_WEB_BUTTON_H, TR_HIT_VIDEO, i, clip);
         bx += bw;
     }
-    // the first of them keeps a margin of 4% on its right
     if (card->video) {
         bx += w * 0.04f;
     }
@@ -301,7 +242,6 @@ static void TR_DrawSection(int i, float x, float y, float w, const smRect_t* cli
     SM_Hit(bx, by, bw, SM_WEB_BUTTON_H, TR_HIT_START, i, clip);
 }
 
-// [ioquakelive] retail's row first, then the advanced room's under its heading
 static void TR_SectionAt(int i, float left, float top, float w, float margin, float* x, float* y) {
     if (i < TR_RETAIL_CARDS) {
         *x = left + i * (w + margin);
@@ -332,7 +272,6 @@ void UI_Training_Open(void) {
     tr.lastTime = uiInfo.uiDC.realTime;
     tr.scroll = 0;
 
-    // the page takes keys before the mouse moves over it
     menu = Menus_FindByName("training");
     item = menu ? Menu_FindItemByName(menu, "training") : NULL;
     if (item) {
@@ -358,7 +297,6 @@ void UI_Training_Paint(void) {
 
     top = UI_Home_Header(HM_NAV_H, NULL, "Training Center");
 
-    // [ioquakelive] the sections scroll under the header
     view = UI_Home_FrameBottom() - top;
     tr.content = margin + 2 * TR_SECTION_H + TR_HEADING_H + 2 * margin;
     if (tr.scroll > tr.content - view) {
@@ -370,7 +308,6 @@ void UI_Training_Paint(void) {
     clip = SM_R(left, top, HM_CONTAINER_W, view);
     y = top + margin - tr.scroll;
 
-    // each section eases toward what the cursor says over a second
     dt = (uiInfo.uiDC.realTime - tr.lastTime) / 1000.0f;
     tr.lastTime = uiInfo.uiDC.realTime;
     for (i = 0; i < TR_NUM_CARDS; i++) {
@@ -391,7 +328,6 @@ void UI_Training_Paint(void) {
         TR_DrawSection(i, x, sy, w, &clip);
     }
 
-    // the advanced room's heading, as the page's
     sy = y + TR_SECTION_H + margin;
     SM_Fill(left, sy, HM_CONTAINER_W, TR_HEADING_H, trBlack80, &clip);
     if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 32.0f, sy + 8.0f, 38.4f), 32.0f, &clip)) {
@@ -416,7 +352,7 @@ qboolean UI_Training_HandleKey(int key) {
         return qtrue;
     }
     if (key != K_MOUSE1) {
-        return qfalse;  // Escape goes back through the menu's onESC
+        return qfalse;
     }
     if (UI_Home_NavClick()) {
         return qtrue;
@@ -431,8 +367,6 @@ qboolean UI_Training_HandleKey(int key) {
             TR_Launch(hit->index);
             break;
         case TR_HIT_VIDEO:
-            // retail opens it in the Steam overlay; without Steam it goes to the
-            // browser, which is what OpenSteamOverlayURL falls back to anyway
             trap_Sys_OpenURL(trCards[hit->index].video);
             break;
         default:

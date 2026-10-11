@@ -19,19 +19,9 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "../renderercommon/tr_common.h"
 #include "../qcommon/qcommon.h"
 
-/*
-=================
-GLimp_SetGamma
-
-[ioquakelive] SDL3 took the hardware gamma ramp away, which also ends the old trouble of a crash
-leaving the desktop with the game's gamma. The renderers do gamma in their post pass instead and
-report deviceSupportsGamma false, so this is only here for the ones that still call it.
-=================
-*/
 void GLimp_SetGamma(unsigned char red[256], unsigned char green[256], unsigned char blue[256]) {
     (void)red;
     (void)green;

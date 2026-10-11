@@ -1,12 +1,5 @@
 #include "ui/menudef.h"
 
-// [QL] Replays.
-//
-// Loaded in place of pak00's ui/demo.menu (see Load_Menu), the pre-browser list with its framed
-// box and FEEDER_DEMOS listbox. Retail's own page is /stats/demos in the web UI:
-// an h1 and a list of the files, where clicking one sends `demo "<file>"`.
-// code/ui/ui_replays.c draws and runs that, under the same bar as the rest.
-
 {
     menuDef {
         name "demo"
@@ -14,7 +7,7 @@
         rect 0 0 640 480
         visible MENU_FALSE
         focusColor 1 .75 0 1
-        popup // clicks beside the 4:3 area reach the page too
+        popup
 
         onOpen { uiScript replaysOpen }
         onESC { close demo ; open main }
@@ -22,7 +15,7 @@
         itemDef {
             name replays
             type ITEM_TYPE_OWNERDRAW
-            ownerdraw 603 // UI_REPLAYS
+            ownerdraw 603
             rect -2000 -1000 4640 2480
             visible 1
         }

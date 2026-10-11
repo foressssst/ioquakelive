@@ -1,21 +1,5 @@
-/*
- * g_gametype_ffa.c -- Free For All (GT_FFA, 0)
- *
- * FFA is the base gametype. Most logic is in g_main.c (CheckExitRules)
- * and g_combat.c (scoring). This file provides gametype-specific hooks.
- */
 #include "g_local.h"
 
-// FFA uses standard fraglimit/timelimit exit rules (in CheckExitRules).
-// No round state, no team scoring.
-// Quad Hog mode (g_quadHog) is FFA-specific - see G_QG_* in g_items.c.
-
-/*
-==================
-FreeForAllScoreboardMessage
-
-==================
-*/
 void FreeForAllScoreboardMessage(gentity_t* ent) {
     char entry[1024];
     char string[1400];
@@ -25,12 +9,10 @@ void FreeForAllScoreboardMessage(gentity_t* ent) {
     int numSorted, accuracy, perfect;
     int alive, frags, deaths, bestWeapon, bestWeaponAccuracy, damageDone;
 
-    // don't send scores to bots, they don't parse it
     if (ent->r.svFlags & SVF_BOT) {
         return;
     }
 
-    // send the latest information on all clients
     string[0] = 0;
     stringlength = 0;
 
@@ -54,15 +36,12 @@ void FreeForAllScoreboardMessage(gentity_t* ent) {
         }
         perfect = (cl->ps.persistant[PERS_RANK] == 0 && cl->ps.persistant[PERS_KILLED] == 0) ? 1 : 0;
 
-        // [QL] additional fields - binary uses pm_type==PM_NORMAL for alive check
         alive = (cl->ps.pm_type == PM_NORMAL) ? 1 : 0;
         frags = cl->expandedStats.numKills;
         deaths = cl->expandedStats.numDeaths;
         damageDone = cl->expandedStats.totalDamageDealt;
 
-        // [QL] best weapon via STAT_GetBestWeapon
         bestWeapon = STAT_GetBestWeapon(cl);
-        // [QL] best weapon accuracy percentage
         if (cl->expandedStats.shotsFired[bestWeapon] > 0) {
             bestWeaponAccuracy = cl->expandedStats.shotsHit[bestWeapon] * 100
                                 / cl->expandedStats.shotsFired[bestWeapon];
@@ -70,9 +49,6 @@ void FreeForAllScoreboardMessage(gentity_t* ent) {
             bestWeaponAccuracy = 0;
         }
 
-        // [QL] scores_ffa: 18 fields per player (binary-verified from 0x1003d280)
-        // client score ping time accuracy impressive excellent gauntlet defend assist
-        // perfect captures alive frags deaths bestWeapon bestWeaponAccuracy damageDone
         Com_sprintf(entry, sizeof(entry),
                     " %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i",
                     level.sortedClients[i],
@@ -100,15 +76,6 @@ void FreeForAllScoreboardMessage(gentity_t* ent) {
                                                 string));
 }
 
-/*
-==================
-FFAScoreboardMessage_impl
-
-Simple scoreboard for match-end stats (smscores command).
-8 fields per player: client score ping time captures alive frags deaths
-Address: 0x1003cf60
-==================
-*/
 void FFAScoreboardMessage_impl(void) {
     char entry[1024];
     char string[1024];
@@ -130,7 +97,6 @@ void FFAScoreboardMessage_impl(void) {
             ping = cl->ps.ping < 999 ? cl->ps.ping : 999;
         }
 
-        // 8 fields per player
         Com_sprintf(entry, sizeof(entry), " %i %i %i %i %i %i %i %i",
                     level.sortedClients[i],
                     cl->ps.persistant[PERS_SCORE],

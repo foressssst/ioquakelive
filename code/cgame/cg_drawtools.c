@@ -19,22 +19,14 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// cg_drawtools.c -- helper functions called by cg_draw, cg_scoreboard, cg_info, etc
 #include "cg_local.h"
 
-// [CPMA] the curve of every SuperHUD fade, 1 - (1 - x)^3 (CPMA 1.53 cgame.qvm func 42193)
 float CG_CpmaEaseOut(float x) {
     float u = 1.0f - x;
 
     return 1.0f - u * u * u;
 }
 
-/*
-[CPMA] Alpha of a SuperHUD item updated at start (cgame.qvm func 156314): it eases in over
-fadein ms, holds for fadedelay ms, then eases out to transparent over time ms. 0 once the
-item is gone, as funcs 151587 and 151707 decide.
-*/
 float CG_CpmaFade(int start, int fadein, int fadedelay, int time) {
     int elapsed = cg.time - start;
     int out;
@@ -55,20 +47,12 @@ float CG_CpmaFade(int start, int fadein, int fadedelay, int time) {
     return 1.0f - CG_CpmaEaseOut((float)out / time);
 }
 
-// [CPMA] whether an item updated at start is easing out (cgame.qvm func 151587)
 qboolean CG_CpmaFadingOut(int start, int fadein, int fadedelay, int time) {
     int out = cg.time - start - fadein - fadedelay;
 
     return (time > 0 && out > 0 && out < time) ? qtrue : qfalse;
 }
 
-/*
-[CPMA] How far a list has slid, 0 to 1. CPMA 1.53 lays its lists out from an anchor
-(cgame.qvm func 158881): when the item at the anchor starts easing out, the whole list
-slides one row towards the anchor over the element's time, on the fade curve, and the
-slide ends when that item is gone. Nothing moves when an item comes in, and an item pushed
-out of a full list goes at once while the rest skip their fade-in.
-*/
 float CG_CpmaSlide(int start, int time) {
     float t;
 
@@ -79,22 +63,12 @@ float CG_CpmaSlide(int start, int time) {
     return CG_CpmaEaseOut(t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t));
 }
 
-// [QL] widescreen rendering mode - set by DC->setWidescreen() before each item paints
-// 0=stretch, 1=left, 2=center, 3=right
 int cg_currentWidescreen = 0;
 
 void CG_SetWidescreen(int mode) {
     cg_currentWidescreen = mode;
 }
 
-/*
-================
-CG_MenuHoldsKeys
-
-[QL] a cgame menu holding the keys, the scoreboard or the join menu, lays the screen out in 4:3.
-[ioquakelive] the pointer over the demo controls holds them too, and is no menu
-================
-*/
 qboolean CG_MenuHoldsKeys(void) {
     if (!(trap_Key_GetCatcher() & KEYCATCH_CGAME)) {
         return qfalse;
@@ -103,22 +77,10 @@ qboolean CG_MenuHoldsKeys(void) {
         return qtrue;
     }
 
-    // [ioquakelive] the pointer over the demo controls is no menu, but the board, the summary at
-    // the end of the match and the join screen are, and they lay out in 4:3 even while it holds
-    // the pointer. Without this a demo drew them stretched across the whole width
     return (cg.scoreBoardShowing || cg.showJoinMenu ||
             (cg.snap && cg.snap->ps.pm_type == PM_INTERMISSION)) ? qtrue : qfalse;
 }
 
-/*
-================
-CG_AdjustFrom640
-
-Adjusted for resolution and screen aspect ratio.
-[QL] Handles widescreen modes: constrains to 4:3 aspect and
-positions left/center/right based on cg_currentWidescreen.
-================
-*/
 void CG_AdjustFrom640(float* x, float* y, float* w, float* h) {
     int useWidescreen;
     float xscale43;
@@ -127,8 +89,6 @@ void CG_AdjustFrom640(float* x, float* y, float* w, float* h) {
         goto stretch;
     }
 
-    // [QL] When widescreen mode is 0 (stretch), still use 4:3 centered
-    // scaling if the cgame key catcher is active (scoreboard, etc.)
     useWidescreen = cg_currentWidescreen;
     if (useWidescreen == 0) {
         if (!CG_MenuHoldsKeys()) {
@@ -136,7 +96,6 @@ void CG_AdjustFrom640(float* x, float* y, float* w, float* h) {
         }
     }
 
-    // widescreen: use 4:3 scaling for x/w
     xscale43 = (4.0f * cgs.glconfig.vidHeight / 3.0f) / 640.0f;
 
     if (x) {
@@ -144,7 +103,6 @@ void CG_AdjustFrom640(float* x, float* y, float* w, float* h) {
     }
     if (y) {
         *y *= cgs.screenYScale;
-        // apply x bias after y is processed (matches binary order)
         if (x) {
             if (useWidescreen == 2 || CG_MenuHoldsKeys()) {
                 *x += cgs.widescreenBias;
@@ -164,13 +122,6 @@ stretch:
     if (h) *h *= cgs.screenYScale;
 }
 
-/*
-================
-CG_FillRect
-
-Coordinates are 640*480 virtual values
-=================
-*/
 void CG_FillRect(float x, float y, float width, float height, const float* color) {
     trap_R_SetColor(color);
 
@@ -180,13 +131,6 @@ void CG_FillRect(float x, float y, float width, float height, const float* color
     trap_R_SetColor(NULL);
 }
 
-/*
-================
-CG_DrawSides
-
-Coords are virtual 640x480
-================
-*/
 void CG_DrawSides(float x, float y, float w, float h, float size) {
     CG_AdjustFrom640(&x, &y, &w, &h);
     size *= cgs.screenXScale;
@@ -200,13 +144,6 @@ void CG_DrawTopBottom(float x, float y, float w, float h, float size) {
     trap_R_DrawStretchPic(x, y, w, size, 0, 0, 0, 0, cgs.media.whiteShader);
     trap_R_DrawStretchPic(x, y + h - size, w, size, 0, 0, 0, 0, cgs.media.whiteShader);
 }
-/*
-================
-UI_DrawRect
-
-Coordinates are 640*480 virtual values
-=================
-*/
 void CG_DrawRect(float x, float y, float width, float height, float size, const float* color) {
     trap_R_SetColor(color);
 
@@ -216,25 +153,11 @@ void CG_DrawRect(float x, float y, float width, float height, float size, const 
     trap_R_SetColor(NULL);
 }
 
-/*
-================
-CG_DrawPic
-
-Coordinates are 640*480 virtual values
-=================
-*/
 void CG_DrawPic(float x, float y, float width, float height, qhandle_t hShader) {
     CG_AdjustFrom640(&x, &y, &width, &height);
     trap_R_DrawStretchPic(x, y, width, height, 0, 0, 1, 1, hShader);
 }
 
-/*
-===============
-CG_DrawChar
-
-Coordinates and size in 640*480 virtual screen size
-===============
-*/
 void CG_DrawChar(int x, int y, int width, int height, int ch) {
     int row, col;
     float frow, fcol;
@@ -266,16 +189,6 @@ void CG_DrawChar(int x, int y, int width, int height, int ch) {
                           cgs.media.charsetShader);
 }
 
-/*
-==================
-CG_DrawStringExt
-
-Draws a multi-colored string with a drop shadow, optionally forcing
-to a fixed color.
-
-Coordinates are at 640 by 480 virtual resolution
-==================
-*/
 void CG_DrawStringExt(int x, int y, const char* string, const float* setColor, qboolean forceColor, qboolean shadow, int charWidth, int charHeight, int maxChars) {
     vec4_t color;
     const char* s;
@@ -283,9 +196,8 @@ void CG_DrawStringExt(int x, int y, const char* string, const float* setColor, q
     int cnt;
 
     if (maxChars <= 0)
-        maxChars = 32767;  // do them all!
+        maxChars = 32767;
 
-    // draw the drop shadow
     if (shadow) {
         color[0] = color[1] = color[2] = 0;
         color[3] = setColor[3];
@@ -305,7 +217,6 @@ void CG_DrawStringExt(int x, int y, const char* string, const float* setColor, q
         }
     }
 
-    // draw the colored text
     s = string;
     xx = x;
     cnt = 0;
@@ -352,13 +263,6 @@ void CG_DrawSmallStringColor(int x, int y, const char* s, vec4_t color) {
     CG_DrawStringExt(x, y, s, color, qtrue, qfalse, SMALLCHAR_WIDTH, SMALLCHAR_HEIGHT, 0);
 }
 
-/*
-=================
-CG_DrawStrlen
-
-Returns character count, skiping color escape codes
-=================
-*/
 int CG_DrawStrlen(const char* str) {
     const char* s = str;
     int count = 0;
@@ -375,14 +279,6 @@ int CG_DrawStrlen(const char* str) {
     return count;
 }
 
-/*
-=============
-CG_TileClearBox
-
-This repeats a 64*64 tile graphic to fill the screen around a sized down
-refresh window.
-=============
-*/
 static void CG_TileClearBox(int x, int y, int w, int h, qhandle_t hShader) {
     float s1, t1, s2, t2;
 
@@ -393,13 +289,6 @@ static void CG_TileClearBox(int x, int y, int w, int h, qhandle_t hShader) {
     trap_R_DrawStretchPic(x, y, w, h, s1, t1, s2, t2, hShader);
 }
 
-/*
-==============
-CG_TileClear
-
-Clear around a sized down screen
-==============
-*/
 void CG_TileClear(void) {
     int top, bottom, left, right;
     int w, h;
@@ -409,7 +298,7 @@ void CG_TileClear(void) {
 
     if (cg.refdef.x == 0 && cg.refdef.y == 0 &&
         cg.refdef.width == w && cg.refdef.height == h) {
-        return;  // full screen rendering
+        return;
     }
 
     top = cg.refdef.y;
@@ -417,24 +306,15 @@ void CG_TileClear(void) {
     left = cg.refdef.x;
     right = left + cg.refdef.width - 1;
 
-    // clear above view screen
     CG_TileClearBox(0, 0, w, top, cgs.media.backTileShader);
 
-    // clear below view screen
     CG_TileClearBox(0, bottom, w, h - bottom, cgs.media.backTileShader);
 
-    // clear left of view screen
     CG_TileClearBox(0, top, left, bottom - top + 1, cgs.media.backTileShader);
 
-    // clear right of view screen
     CG_TileClearBox(right, top, w - right, bottom - top + 1, cgs.media.backTileShader);
 }
 
-/*
-================
-CG_FadeColor
-================
-*/
 float* CG_FadeColor(int startMsec, int totalMsec) {
     static vec4_t color;
     int t;
@@ -449,7 +329,6 @@ float* CG_FadeColor(int startMsec, int totalMsec) {
         return NULL;
     }
 
-    // fade out
     if (totalMsec - t < FADE_TIME) {
         color[3] = (totalMsec - t) * 1.0 / FADE_TIME;
     } else {
@@ -460,11 +339,6 @@ float* CG_FadeColor(int startMsec, int totalMsec) {
     return color;
 }
 
-/*
-================
-CG_TeamColor
-================
-*/
 float* CG_TeamColor(int team) {
     static vec4_t red = {1, 0.2f, 0.2f, 1};
     static vec4_t blue = {0.2f, 0.2f, 1, 1};
@@ -483,19 +357,12 @@ float* CG_TeamColor(int team) {
     }
 }
 
-/*
-=================
-CG_GetColorForHealth
-=================
-*/
 void CG_GetColorForHealth(int health, int armor, vec4_t hcolor) {
     int count;
     int max;
 
-    // calculate the total points of damage that can
-    // be sustained at the current health / armor level
     if (health <= 0) {
-        VectorClear(hcolor);  // black
+        VectorClear(hcolor);
         hcolor[3] = 1;
         return;
     }
@@ -506,7 +373,6 @@ void CG_GetColorForHealth(int health, int armor, vec4_t hcolor) {
     }
     health += count;
 
-    // set the color based on health
     hcolor[0] = 1.0;
     hcolor[3] = 1.0;
     if (health >= 100) {
@@ -526,21 +392,11 @@ void CG_GetColorForHealth(int health, int armor, vec4_t hcolor) {
     }
 }
 
-/*
-=================
-CG_ColorForHealth
-=================
-*/
 void CG_ColorForHealth(vec4_t hcolor) {
     CG_GetColorForHealth(cg.snap->ps.stats[STAT_HEALTH],
                          cg.snap->ps.stats[STAT_ARMOR], hcolor);
 }
 
-/*
-=================
-UI_DrawProportionalString2
-=================
-*/
 static int propMap[128][3] = {
     {0, 0, -1},
     {0, 0, -1},
@@ -576,107 +432,107 @@ static int propMap[128][3] = {
     {0, 0, -1},
     {0, 0, -1},
 
-    {0, 0, PROP_SPACE_WIDTH},  // SPACE
-    {11, 122, 7},              // !
-    {154, 181, 14},            // "
-    {55, 122, 17},             // #
-    {79, 122, 18},             // $
-    {101, 122, 23},            // %
-    {153, 122, 18},            // &
-    {9, 93, 7},                // '
-    {207, 122, 8},             // (
-    {230, 122, 9},             // )
-    {177, 122, 18},            // *
-    {30, 152, 18},             // +
-    {85, 181, 7},              // ,
-    {34, 93, 11},              // -
-    {110, 181, 6},             // .
-    {130, 152, 14},            // /
+    {0, 0, PROP_SPACE_WIDTH},
+    {11, 122, 7},
+    {154, 181, 14},
+    {55, 122, 17},
+    {79, 122, 18},
+    {101, 122, 23},
+    {153, 122, 18},
+    {9, 93, 7},
+    {207, 122, 8},
+    {230, 122, 9},
+    {177, 122, 18},
+    {30, 152, 18},
+    {85, 181, 7},
+    {34, 93, 11},
+    {110, 181, 6},
+    {130, 152, 14},
 
-    {22, 64, 17},    // 0
-    {41, 64, 12},    // 1
-    {58, 64, 17},    // 2
-    {78, 64, 18},    // 3
-    {98, 64, 19},    // 4
-    {120, 64, 18},   // 5
-    {141, 64, 18},   // 6
-    {204, 64, 16},   // 7
-    {162, 64, 17},   // 8
-    {182, 64, 18},   // 9
-    {59, 181, 7},    // :
-    {35, 181, 7},    // ;
-    {203, 152, 14},  // <
-    {56, 93, 14},    // =
-    {228, 152, 14},  // >
-    {177, 181, 18},  // ?
+    {22, 64, 17},
+    {41, 64, 12},
+    {58, 64, 17},
+    {78, 64, 18},
+    {98, 64, 19},
+    {120, 64, 18},
+    {141, 64, 18},
+    {204, 64, 16},
+    {162, 64, 17},
+    {182, 64, 18},
+    {59, 181, 7},
+    {35, 181, 7},
+    {203, 152, 14},
+    {56, 93, 14},
+    {228, 152, 14},
+    {177, 181, 18},
 
-    {28, 122, 22},  // @
-    {5, 4, 18},     // A
-    {27, 4, 18},    // B
-    {48, 4, 18},    // C
-    {69, 4, 17},    // D
-    {90, 4, 13},    // E
-    {106, 4, 13},   // F
-    {121, 4, 18},   // G
-    {143, 4, 17},   // H
-    {164, 4, 8},    // I
-    {175, 4, 16},   // J
-    {195, 4, 18},   // K
-    {216, 4, 12},   // L
-    {230, 4, 23},   // M
-    {6, 34, 18},    // N
-    {27, 34, 18},   // O
+    {28, 122, 22},
+    {5, 4, 18},
+    {27, 4, 18},
+    {48, 4, 18},
+    {69, 4, 17},
+    {90, 4, 13},
+    {106, 4, 13},
+    {121, 4, 18},
+    {143, 4, 17},
+    {164, 4, 8},
+    {175, 4, 16},
+    {195, 4, 18},
+    {216, 4, 12},
+    {230, 4, 23},
+    {6, 34, 18},
+    {27, 34, 18},
 
-    {48, 34, 18},    // P
-    {68, 34, 18},    // Q
-    {90, 34, 17},    // R
-    {110, 34, 18},   // S
-    {130, 34, 14},   // T
-    {146, 34, 18},   // U
-    {166, 34, 19},   // V
-    {185, 34, 29},   // W
-    {215, 34, 18},   // X
-    {234, 34, 18},   // Y
-    {5, 64, 14},     // Z
-    {60, 152, 7},    // [
-    {106, 151, 13},  // '\'
-    {83, 152, 7},    // ]
-    {128, 122, 17},  // ^
-    {4, 152, 21},    // _
+    {48, 34, 18},
+    {68, 34, 18},
+    {90, 34, 17},
+    {110, 34, 18},
+    {130, 34, 14},
+    {146, 34, 18},
+    {166, 34, 19},
+    {185, 34, 29},
+    {215, 34, 18},
+    {234, 34, 18},
+    {5, 64, 14},
+    {60, 152, 7},
+    {106, 151, 13},
+    {83, 152, 7},
+    {128, 122, 17},
+    {4, 152, 21},
 
-    {134, 181, 5},  // '
-    {5, 4, 18},     // A
-    {27, 4, 18},    // B
-    {48, 4, 18},    // C
-    {69, 4, 17},    // D
-    {90, 4, 13},    // E
-    {106, 4, 13},   // F
-    {121, 4, 18},   // G
-    {143, 4, 17},   // H
-    {164, 4, 8},    // I
-    {175, 4, 16},   // J
-    {195, 4, 18},   // K
-    {216, 4, 12},   // L
-    {230, 4, 23},   // M
-    {6, 34, 18},    // N
-    {27, 34, 18},   // O
+    {134, 181, 5},
+    {5, 4, 18},
+    {27, 4, 18},
+    {48, 4, 18},
+    {69, 4, 17},
+    {90, 4, 13},
+    {106, 4, 13},
+    {121, 4, 18},
+    {143, 4, 17},
+    {164, 4, 8},
+    {175, 4, 16},
+    {195, 4, 18},
+    {216, 4, 12},
+    {230, 4, 23},
+    {6, 34, 18},
+    {27, 34, 18},
 
-    {48, 34, 18},    // P
-    {68, 34, 18},    // Q
-    {90, 34, 17},    // R
-    {110, 34, 18},   // S
-    {130, 34, 14},   // T
-    {146, 34, 18},   // U
-    {166, 34, 19},   // V
-    {185, 34, 29},   // W
-    {215, 34, 18},   // X
-    {234, 34, 18},   // Y
-    {5, 64, 14},     // Z
-    {153, 152, 13},  // {
-    {11, 181, 5},    // |
-    {180, 152, 13},  // }
-    {79, 93, 17},    // ~
-    {0, 0, -1}       // DEL
+    {48, 34, 18},
+    {68, 34, 18},
+    {90, 34, 17},
+    {110, 34, 18},
+    {130, 34, 14},
+    {146, 34, 18},
+    {166, 34, 19},
+    {185, 34, 29},
+    {215, 34, 18},
+    {234, 34, 18},
+    {5, 64, 14},
+    {153, 152, 13},
+    {11, 181, 5},
+    {180, 152, 13},
+    {79, 93, 17},
+    {0, 0, -1}
 };
 
 static int propMapB[26][3] = {
@@ -715,11 +571,6 @@ static int propMapB[26][3] = {
 #define PROPB_SPACE_WIDTH 12
 #define PROPB_HEIGHT 36
 
-/*
-=================
-UI_DrawBannerString
-=================
-*/
 static void UI_DrawBannerString2(int x, int y, const char* str, vec4_t color) {
     const char* s;
     unsigned char ch;
@@ -732,7 +583,6 @@ static void UI_DrawBannerString2(int x, int y, const char* str, vec4_t color) {
     float fwidth;
     float fheight;
 
-    // draw the colored text
     trap_R_SetColor(color);
 
     ax = x * cgs.screenXScale + cgs.screenXBias;
@@ -766,7 +616,6 @@ void UI_DrawBannerString(int x, int y, const char* str, int style, vec4_t color)
     int width;
     vec4_t drawcolor;
 
-    // find the width of the drawn text
     s = str;
     width = 0;
     while (*s) {
@@ -837,7 +686,6 @@ static void UI_DrawProportionalString2(int x, int y, const char* str, vec4_t col
     float fwidth;
     float fheight;
 
-    // draw the colored text
     trap_R_SetColor(color);
 
     ax = x * cgs.screenXScale + cgs.screenXBias;
@@ -867,11 +715,6 @@ static void UI_DrawProportionalString2(int x, int y, const char* str, vec4_t col
     trap_R_SetColor(NULL);
 }
 
-/*
-=================
-UI_ProportionalSizeScale
-=================
-*/
 float UI_ProportionalSizeScale(int style) {
     if (style & UI_SMALLFONT) {
         return 0.75;
@@ -880,11 +723,6 @@ float UI_ProportionalSizeScale(int style) {
     return 1.00;
 }
 
-/*
-=================
-UI_DrawProportionalString
-=================
-*/
 void UI_DrawProportionalString(int x, int y, const char* str, int style, vec4_t color) {
     vec4_t drawcolor;
     int width;

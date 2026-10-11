@@ -19,27 +19,10 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
-/*****************************************************************************
- * name:		snd_mem.c
- *
- * desc:		sound caching
- *
- *****************************************************************************/
-
 #include "snd_local.h"
 #include "snd_codec.h"
 
-// [QL] quakelive_steam.exe 0x4dbb30 registers com_soundMegs with "16"
 #define DEF_COMSOUNDMEGS "16"
-
-/*
-===============================================================================
-
-memory management
-
-===============================================================================
-*/
 
 static sndBuffer* buffer = NULL;
 static sndBuffer* freelist = NULL;
@@ -97,15 +80,6 @@ void SND_shutdown(void) {
     free(buffer);
 }
 
-/*
-================
-ResampleSfx
-
-resample / decimate to the current source rate
-
-[QL] quakelive_steam.exe 0x4dbc00: nearest sample, no filtering
-================
-*/
 static int ResampleSfx(sfx_t* sfx, int channels, int inrate, int inwidth, int samples, byte* data) {
     int outcount;
     int srcsample;
@@ -115,7 +89,7 @@ static int ResampleSfx(sfx_t* sfx, int channels, int inrate, int inwidth, int sa
     int part;
     sndBuffer* chunk;
 
-    stepscale = (float)inrate / dma.speed;  // this is usually 0.5, 1, or 2
+    stepscale = (float)inrate / dma.speed;
 
     outcount = samples / stepscale;
 
@@ -153,41 +127,15 @@ static int ResampleSfx(sfx_t* sfx, int channels, int inrate, int inwidth, int sa
     return outcount;
 }
 
-//=============================================================================
-
-/*
-==============
-S_LoadSound
-
-The filename may be different than sfx->name in the case
-of a forced fallback of a player specific sound
-==============
-*/
-/*
-===============================================================================
-
-SOUNDS DECODED IN THE BACKGROUND
-
-[ioquakelive] Decoding an OGG is 90% of what loading a map's sounds costs. And a sound is not
-needed until it plays, so while a map loads the main thread only reads the file and hands the
-decoding to a worker; when the load ends they are all waited on together and converted to the
-mixer's format here, on the main thread, because the sound allocator is not thread safe.
-
-This only happens while a map loads. Outside that, and with s_asyncLoad 0, loading works as it
-always did.
-
-===============================================================================
-*/
-
 #define MAX_SOUND_JOBS 1024
 
 typedef struct {
     sfx_t* sfx;
-    byte* file;  // the file's bytes, copied: the engine's temporary memory is a stack
+    byte* file;
     int fileLen;
-    byte* pcm;  // what the worker leaves behind
+    byte* pcm;
     snd_info_t info;
-    volatile int state;  // 1 trabajando, 2 listo, 3 fallo
+    volatile int state;
 } soundJob_t;
 
 static soundJob_t s_soundJobs[MAX_SOUND_JOBS];
@@ -204,7 +152,6 @@ static void S_DecodeJob(void* data) {
 }
 #endif
 
-// opens the background loading window, when there are workers
 void S_AsyncLoadBegin(void) {
     if (!s_asyncLoad) {
         s_asyncLoad = Cvar_Get("s_asyncLoad", "1", CVAR_ARCHIVE);
@@ -213,7 +160,6 @@ void S_AsyncLoadBegin(void) {
     s_asyncActive = (qboolean)(Com_JobWorkers() > 0 && s_asyncLoad->integer);
 }
 
-// waits on everything handed out and leaves it ready to play
 void S_AsyncLoadFinish(void) {
     int i;
 
@@ -245,8 +191,6 @@ void S_AsyncLoadFinish(void) {
     s_asyncActive = qfalse;
 }
 
-// If the load was cut short and sound is shut down, what was handed out is thrown away: the
-// workers are waited on, so their memory is not freed under them, and nothing is converted.
 void S_AsyncLoadDiscard(void) {
     int i;
 
@@ -269,10 +213,8 @@ void S_AsyncLoadDiscard(void) {
     s_asyncActive = qfalse;
 }
 
-// when the sound is an OGG and a map is loading, hands it out and returns qtrue
 static qboolean S_LoadSoundAsync(sfx_t* sfx, const char* name) {
 #ifndef USE_CODEC_VORBIS
-    // with no Vorbis there is no OGG decoder, so everything takes the usual path
     (void)sfx;
     (void)name;
     return qfalse;
@@ -307,7 +249,6 @@ static qboolean S_LoadSoundAsync(sfx_t* sfx, const char* name) {
     job->state = 1;
     s_soundJobCount++;
 
-    // there is no data until it completes; nothing plays while the map loads
     sfx->soundData = NULL;
     sfx->soundLength = 0;
     sfx->lastTimeUsed = Com_Milliseconds();
@@ -317,8 +258,6 @@ static qboolean S_LoadSoundAsync(sfx_t* sfx, const char* name) {
 #endif
 }
 
-// [ioquakelive] where the sound loading time goes, to know what can be spread across threads;
-// /soundload prints it
 static int64_t s_loadLookupUs, s_loadCodecUs, s_loadResampleUs;
 static int s_loadWav, s_loadOgg;
 
@@ -336,8 +275,6 @@ qboolean S_LoadSound(sfx_t* sfx) {
     char name[MAX_QPATH];
     int64_t start;
 
-    // [QL] quakelive_steam.exe 0x4dbd10: when the file is missing its name loses the extension and
-    // defaults to .ogg, so "x.wav" loads "x.ogg" and a map's "x.ogg.wav" loads "x.ogg"
     start = Sys_Microseconds();
     Q_strncpyz(name, sfx->soundName, sizeof(name));
     if (FS_ReadFile(name, NULL) < 0) {
@@ -346,7 +283,6 @@ qboolean S_LoadSound(sfx_t* sfx) {
     }
     s_loadLookupUs += Sys_Microseconds() - start;
 
-    // [ioquakelive] while a map loads, an OGG is decoded in the background
     start = Sys_Microseconds();
     if (S_LoadSoundAsync(sfx, name)) {
         s_loadCodecUs += Sys_Microseconds() - start;
@@ -354,7 +290,6 @@ qboolean S_LoadSound(sfx_t* sfx) {
         return qtrue;
     }
 
-    // load it in
     start = Sys_Microseconds();
     data = S_CodecLoad(name, &info);
     s_loadCodecUs += Sys_Microseconds() - start;
@@ -387,7 +322,6 @@ qboolean S_LoadSound(sfx_t* sfx) {
     return qtrue;
 }
 
-// [QL] quakelive_steam.exe 0x4dbbe0
 void S_DisplayFreeMemory(void) {
     Com_Printf("%d bytes sound buffer memory in use, %d free \n", totalInUse, inUse);
 }

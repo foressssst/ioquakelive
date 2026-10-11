@@ -27,10 +27,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "qgl.h"
 
 typedef enum {
-    IMGTYPE_COLORALPHA,  // for color, lightmap, diffuse, and specular
+    IMGTYPE_COLORALPHA,
     IMGTYPE_NORMAL,
     IMGTYPE_NORMALHEIGHT,
-    IMGTYPE_DELUXE,  // normals are swizzled, deluxe are not
+    IMGTYPE_DELUXE,
 } imgType_t;
 
 typedef enum {
@@ -45,15 +45,15 @@ typedef enum {
 } imgFlags_t;
 
 typedef struct image_s {
-    char imgName[MAX_QPATH];        // game path, including extension
-    int width, height;              // source image
-    int uploadWidth, uploadHeight;  // after power of two and picmip but not including clamp to MAX_TEXTURE_SIZE
-    GLuint texnum;                  // gl texture binding
+    char imgName[MAX_QPATH];
+    int width, height;
+    int uploadWidth, uploadHeight;
+    GLuint texnum;
 
-    int frameUsed;  // for texture usage in frame statistics
+    int frameUsed;
 
     int internalFormat;
-    int TMU;  // only needed for voodoo2
+    int TMU;
 
     imgType_t type;
     imgFlags_t flags;
@@ -61,51 +61,37 @@ typedef struct image_s {
     struct image_s* next;
 } image_t;
 
-// any change in the LIGHTMAP_* defines here MUST be reflected in
-// R_FindShader() in tr_bsp.c
-#define LIGHTMAP_2D -4         // shader is for 2D rendering
-#define LIGHTMAP_BY_VERTEX -3  // pre-lit triangle models
+#define LIGHTMAP_2D -4
+#define LIGHTMAP_BY_VERTEX -3
 #define LIGHTMAP_WHITEIMAGE -2
 #define LIGHTMAP_NONE -1
 
 extern refimport_t ri;
-extern glconfig_t glConfig;  // outside of TR since it shouldn't be cleared during ref re-init
+extern glconfig_t glConfig;
 
-// These variables should live inside glConfig but can't because of
-// compatibility issues to the original ID vms.  If you release a stand-alone
-// game and your mod uses tr_types.h from this build you can safely move them
-// to the glconfig_t struct.
 extern qboolean textureFilterAnisotropic;
 extern int maxAnisotropy;
 extern float displayAspect;
 extern qboolean haveClampToEdge;
 
-//
-// cvars
-//
-extern cvar_t* r_stencilbits;  // number of desired stencil bits
-extern cvar_t* r_depthbits;    // number of desired depth bits
-extern cvar_t* r_colorbits;    // number of desired color bits, only relevant for fullscreen
-extern cvar_t* r_texturebits;  // number of desired texture bits
+extern cvar_t* r_stencilbits;
+extern cvar_t* r_depthbits;
+extern cvar_t* r_colorbits;
+extern cvar_t* r_texturebits;
 extern cvar_t* r_ext_multisample;
-// 0 = use framebuffer depth
-// 16 = use 16-bit textures
-// 32 = use 32-bit textures
-// all else = error
 
-extern cvar_t* r_mode;  // video mode
+extern cvar_t* r_mode;
 extern cvar_t* r_noborder;
 extern cvar_t* r_fullscreen;
-extern cvar_t* r_windowedMode;  // [QL] video mode in a window
+extern cvar_t* r_windowedMode;
 extern cvar_t* r_windowedWidth;
 extern cvar_t* r_windowedHeight;
-extern cvar_t* r_ignorehwgamma;  // overrides hardware gamma capabilities
+extern cvar_t* r_ignorehwgamma;
 extern cvar_t* r_drawBuffer;
 extern cvar_t* r_swapInterval;
 
-extern cvar_t* r_allowExtensions;          // global enable/disable of OpenGL extensions
+extern cvar_t* r_allowExtensions;
 extern cvar_t* r_ext_compressed_textures;
-// [ioquakelive] the map's textures, decoded ahead of time across the workers
 extern cvar_t* r_prefetchTextures;
 void R_PrefetchStart(const char* listName);
 void R_PrefetchFinish(void);
@@ -127,12 +113,8 @@ float R_NoiseGet4f(float x, float y, float z, double t);
 void R_NoiseInit(void);
 
 image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags);
-// [ioquakelive] where image loading time goes: decoding against uploading. r_imageReadUs is
-// the part of the decoding that is reading the file out of the pk3, which cannot leave the
-// main thread without touching the filesystem
 extern int64_t r_imageDecodeUs, r_imageUploadUs, r_imageReadUs;
 extern int r_imageCount;
-// [ioquakelive] what registering shaders costs, images aside
 extern int64_t r_shaderFindUs, r_shaderCachedUs;
 extern int r_shaderFindCount, r_shaderCachedCount;
 void R_ImageLoadStatsReset(void);
@@ -145,7 +127,6 @@ qhandle_t RE_RegisterShader(const char* name);
 qhandle_t RE_RegisterShaderNoMip(const char* name);
 qhandle_t RE_RegisterShaderFromImage(const char* name, int lightmapIndex, image_t* image, qboolean mipRawImage);
 
-// font stuff ([QL] fontstash/stb_truetype - see tr_font_gl.c)
 void R_InitFonts(void);
 void R_FontShutdown(void);
 void RE_Font_DrawString(int x, int y, const char* text, int fontIndex, float scale, int limit, float* maxX, int flags);
@@ -154,44 +135,20 @@ void RE_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t* glyph);
 void RE_SetCompositionFont(int fontIndex, float scale);
 int RE_Font_Register(const char* name);
 void R_FontList_f(void);
-// dead stub kept for the legacy re.RegisterFont slot
 void RE_RegisterFont(const char* fontName, int pointSize, fontInfo_t* font);
-
-/*
-=============================================================
-
-IMAGE LOADERS
-
-=============================================================
-*/
 
 void R_LoadBMP(const char* name, byte** pic, int* width, int* height);
 void R_LoadJPG(const char* name, byte** pic, int* width, int* height);
-// [ioquakelive] decodes a JPEG that is already in memory. It exists so that the work can be
-// spread across threads: the output buffer is asked for through allocator (the system's malloc
-// on a worker, the engine's on the main thread) and silent turns off the messages, which are
-// not safe off the main thread.
 void R_DecodeJPG(byte* fileData, int fileLen, byte** pic, int* width, int* height,
                  void* (*allocator)(size_t), qboolean silent);
-// [ioquakelive] the same for TGA, which is the format of most Quake Live textures. It also
-// takes the name, used in its messages, and how to free the memory.
 void R_DecodeTGA(byte* fileData, int fileLen, const char* name, byte** pic, int* width,
                  int* height, void* (*allocator)(size_t), void (*deallocator)(void*),
                  qboolean silent);
 extern char r_lastImageName[MAX_QPATH];
-// [ioquakelive] decodes a PNG that is already in memory; safe to call from a worker
 void R_DecodePNG(byte* fileData, int fileLen, const char* name, byte** pic, int* width, int* height);
 void R_LoadPCX(const char* name, byte** pic, int* width, int* height);
 void R_LoadPNG(const char* name, byte** pic, int* width, int* height);
 void R_LoadTGA(const char* name, byte** pic, int* width, int* height);
-
-/*
-====================================================================
-
-IMPLEMENTATION SPECIFIC FUNCTIONS
-
-====================================================================
-*/
 
 void GLimp_Init(qboolean fixedFunction);
 qboolean GLimp_ApplyVideoMode(int* width, int* height);

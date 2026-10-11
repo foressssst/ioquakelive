@@ -19,36 +19,26 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-
 #define CMD_BACKUP 64
 #define CMD_MASK (CMD_BACKUP - 1)
-// allow a lot of command backups for very fast systems
-// multiple commands may be combined into a single packet, so this
-// needs to be larger than PACKET_BACKUP
 
 #define MAX_ENTITIES_IN_SNAPSHOT 256
 
-// snapshots are a view of the server at a given time
-
-// Snapshots are generated at regular time intervals by the server,
-// but they may not be sent if a client's rate level is exceeded, or
-// they may be dropped by the network.
 typedef struct {
-    int snapFlags;  // SNAPFLAG_RATE_DELAYED, etc
+    int snapFlags;
     int ping;
 
-    int serverTime;  // server time the message is valid for (in msec)
+    int serverTime;
 
-    byte areamask[MAX_MAP_AREA_BYTES];  // portalarea visibility bits
+    byte areamask[MAX_MAP_AREA_BYTES];
 
-    playerState_t ps;  // complete information about the current player at this time
+    playerState_t ps;
 
-    int numEntities;                                   // all of the entities that need to be presented
-    entityState_t entities[MAX_ENTITIES_IN_SNAPSHOT];  // at the time of this snapshot
+    int numEntities;
+    entityState_t entities[MAX_ENTITIES_IN_SNAPSHOT];
 
-    int numServerCommands;      // text based server commands to execute when this
-    int serverCommandSequence;  // snapshot becomes current
+    int numServerCommands;
+    int serverCommandSequence;
 } snapshot_t;
 
 enum {
@@ -56,19 +46,11 @@ enum {
     CGAME_EVENT_TEAMMENU,
     CGAME_EVENT_SCOREBOARD,
     CGAME_EVENT_EDITHUD,
-    CGAME_EVENT_RESOLUTION,  // [QL] 4, sent by the engine when the resolution changes
-    CGAME_EVENT_ESCAPE   // [QL] 5, sent by the engine's Escape handler: hides the join menu
+    CGAME_EVENT_RESOLUTION,
+    CGAME_EVENT_ESCAPE
 };
 
-/*
-==================================================================
-
-functions imported from the main executable
-
-==================================================================
-*/
-
-#define CGAME_IMPORT_API_VERSION 8  // [QL] was 4 in Q3
+#define CGAME_IMPORT_API_VERSION 8
 
 typedef enum {
     CG_PRINT,
@@ -161,14 +143,7 @@ typedef enum {
     CG_GET_ENTITY_TOKEN,
     CG_R_ADDPOLYSTOSCENE,
     CG_R_INPVS,
-    // 1.32
     CG_FS_SEEK,
-
-    /*
-        CG_LOADCAMERA,
-        CG_STARTCAMERA,
-        CG_GETCAMERAINFO,
-    */
 
     CG_MEMSET = 100,
     CG_MEMCPY,
@@ -184,88 +159,59 @@ typedef enum {
     CG_ACOS,
     CG_GET_ADVERTISEMENTS,
     CG_KEY_KEYNUMTOSTRINGBUF,
-    CG_VOICE_IS_IGNORED,          // [QL] whether that Steam ID is silenced here (import +0x1f4)
-    CG_VOICE_TOGGLE_IGNORE,       // [QL] silence or unsilence that Steam ID (import +0x1f8)
+    CG_VOICE_IS_IGNORED,
+    CG_VOICE_TOGGLE_IGNORE,
 
-    CG_R_FONT_DRAWSTRING,         // [QL] fontstash/stb_truetype text rendering
+    CG_R_FONT_DRAWSTRING,
     CG_R_FONT_TEXTEXTENTS,
     CG_R_GETGLYPHINFO,
     CG_IME_SETCOMPOSITIONFONT,
 
-    CG_R_FONT_REGISTER,           // loads a TrueType font by name, returns its font index or -1
-    CG_S_STARTLOCALSOUNDVOLUME,   // [QL] S_StartLocalSound at a given volume (cgame import +0xa0)
-    CG_FS_GETFILELIST,            // [QL] FS_GetFileList (cgame import +0x4c)
-    CG_S_CLEARSOUNDBUFFER,        // [QL] S_ClearSoundBuffer (cgame import +0xa8)
-    CG_KEY_GETBINDINGBUF,         // [QL] the command bound to a key (cgame import +0x18c)
-    CG_CVAR_REGISTER_RANGE,       // [QL] Cvar_Register with a range given as two strings (cgame import +0x14)
-    CG_R_BEGINBLOOMSCENE,         // [QL] the bloom's frame buffer takes the view that follows (cgame import +0x1c8)
-    CG_R_APPLYBLOOM               // [QL] the bloom over the view just drawn (cgame import +0x1cc)
+    CG_R_FONT_REGISTER,
+    CG_S_STARTLOCALSOUNDVOLUME,
+    CG_FS_GETFILELIST,
+    CG_S_CLEARSOUNDBUFFER,
+    CG_KEY_GETBINDINGBUF,
+    CG_CVAR_REGISTER_RANGE,
+    CG_R_BEGINBLOOMSCENE,
+    CG_R_APPLYBLOOM
 } cgameImport_t;
 
-/*
-==================================================================
-
-functions exported to the main executable
-
-==================================================================
-*/
-
-// [QL] cgame exports - CG_REGISTER_CVARS inserted at index 1, shifting all others.
-// Verified from cgamex86.dll vmMain table at 0x100769a8.
 typedef enum {
     CG_INIT,
-    //	void CG_Init( int serverMessageNum, int serverCommandSequence, int clientNum )
 
-    CG_REGISTER_CVARS,  // [QL] - registers all cgame cvars (inserted, shifts everything below)
-    //	void CG_RegisterCvars( void );
+    CG_REGISTER_CVARS,
 
     CG_SHUTDOWN,
-    //	void (*CG_Shutdown)( void );
 
     CG_CONSOLE_COMMAND,
-    //	qboolean (*CG_ConsoleCommand)( void );
 
     CG_DRAW_ACTIVE_FRAME,
-    //	void (*CG_DrawActiveFrame)( int serverTime, stereoFrame_t stereoView, qboolean demoPlayback );
 
     CG_CROSSHAIR_PLAYER,
-    //	int (*CG_CrosshairPlayer)( void );
 
     CG_LAST_ATTACKER,
-    //	int (*CG_LastAttacker)( void );
 
     CG_KEY_EVENT,
-    //	void (*CG_KeyEvent)( int key, qboolean down );
 
     CG_MOUSE_EVENT,
-    //	void (*CG_MouseEvent)( int dx, int dy );
 
     CG_EVENT_HANDLING,
-    //	void (*CG_EventHandling)(int type);
-    // [QL] index 9 - handles sub-commands 0 (unknown), 4 (screen resize), 5 (unknown)
 
-    // [QL] slots 10-14 of the 21-entry table at 0x100769a8.
-    CG_LAST_CHAT_COMMAND,   // 10  void CG_LastChatCommand( void )
-    CG_LAST_CHAT_COMMAND2,  // 11  void CG_LastChatCommand2( void )
-    CG_SET_KEY_CATCHER,     // 12  void CG_SetKeyCatcher( void )
-    CG_CLEAR_KEY_CATCHER,   // 13  void CG_ClearKeyCatcher( void )
-    CG_GET_ACTIVE_FRAME,    // 14  int CG_GetActiveFrame( void )
+    CG_LAST_CHAT_COMMAND,
+    CG_LAST_CHAT_COMMAND2,
+    CG_SET_KEY_CATCHER,
+    CG_CLEAR_KEY_CATCHER,
+    CG_GET_ACTIVE_FRAME,
 
-    // [QL] slot 15 (0x10020910) fills in a client's details for the engine; of everything it
-    // copies out, the engine only reads the Steam ID, which is what it needs to know whether the
-    // player who is talking is one of the silenced ones. Slot 16 is NULL.
-    CG_CLIENT_STEAM_ID = 15,  // 15  void CG_ClientSteamID( int clientNum, uint64_t *out )
+    CG_CLIENT_STEAM_ID = 15,
 
-    // [QL] slots 17-19: the chat bar Con_DrawNotify asks for (quakelive_steam.exe 0x4b416b).
-    CG_CHAT_BAR_Y = 17,     // 17  float CG_ChatBarY( void )
-    CG_CHAT_BAR_WIDTH,      // 18  float CG_ChatBarWidth( void )
-    CG_CHAT_FIELD_CHARS,    // 19  int CG_ChatFieldChars( void )
+    CG_CHAT_BAR_Y = 17,
+    CG_CHAT_BAR_WIDTH,
+    CG_CHAT_FIELD_CHARS,
 
-    // [QL] slot 20 (0x10020a40): marks a client as talking and stamps the time on it
-    CG_SET_CLIENT_TALKING,  // 20  void CG_SetClientTalking( int clientNum, int talking )
+    CG_SET_CLIENT_TALKING,
 
-    // [ioquakelive] the engine went back in a demo, to a copy of the client it kept
-    CG_DEMO_REWIND          // 21  void CG_DemoRewind( int snapshotNum, int serverCommandSequence )
+    CG_DEMO_REWIND
 } cgameExport_t;
 
-//----------------------------------------------

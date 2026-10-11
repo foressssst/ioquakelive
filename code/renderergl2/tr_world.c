@@ -21,14 +21,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "tr_local.h"
 
-/*
-================
-R_CullSurface
-
-Tries to cull surfaces before they are lighted or
-added to the sorting list.
-================
-*/
 static qboolean R_CullSurface(msurface_t* surf) {
     if (r_nocull->integer || surf->cullinfo.type == CULLINFO_NONE) {
         return qfalse;
@@ -39,7 +31,6 @@ static qboolean R_CullSurface(msurface_t* surf) {
     }
 
     if (surf->cullinfo.type & CULLINFO_PLANE) {
-        // Only true for SF_FACE, so treat like its own function
         float d;
         cullType_t ct;
 
@@ -53,15 +44,6 @@ static qboolean R_CullSurface(msurface_t* surf) {
             return qfalse;
         }
 
-        // don't cull for depth shadow
-        /*
-        if ( tr.viewParms.flags & VPF_DEPTHSHADOW )
-        {
-            return qfalse;
-        }
-        */
-
-        // shadowmaps draw back surfaces
         if (tr.viewParms.flags & (VPF_SHADOWMAP | VPF_DEPTHSHADOW)) {
             if (ct == CT_FRONT_SIDED) {
                 ct = CT_BACK_SIDED;
@@ -70,7 +52,6 @@ static qboolean R_CullSurface(msurface_t* surf) {
             }
         }
 
-        // do proper cull for orthographic projection
         if (tr.viewParms.flags & VPF_ORTHOGRAPHIC) {
             d = DotProduct(tr.viewParms.or.axis[0], surf->cullinfo.plane.normal);
             if (ct == CT_FRONT_SIDED) {
@@ -85,9 +66,6 @@ static qboolean R_CullSurface(msurface_t* surf) {
 
         d = DotProduct(tr.or.viewOrigin, surf->cullinfo.plane.normal);
 
-        // don't cull exactly on the plane, because there are levels of rounding
-        // through the BSP, ICD, and hardware that may cause pixel gaps if an
-        // epsilon isn't allowed here
         if (ct == CT_FRONT_SIDED) {
             if (d < surf->cullinfo.plane.dist - 8) {
                 return qtrue;
@@ -132,15 +110,6 @@ static qboolean R_CullSurface(msurface_t* surf) {
     return qfalse;
 }
 
-/*
-====================
-R_DlightSurface
-
-The given surface is going to be drawn, and it touches a leaf
-that is touched by one or more dlights, so try to throw out
-more dlights if possible.
-====================
-*/
 static int R_DlightSurface(msurface_t* surf, int dlightBits) {
     float d;
     int i;
@@ -154,7 +123,6 @@ static int R_DlightSurface(msurface_t* surf, int dlightBits) {
             dl = &tr.refdef.dlights[i];
             d = DotProduct(dl->origin, surf->cullinfo.plane.normal) - surf->cullinfo.plane.dist;
             if (d < -dl->radius || d > dl->radius) {
-                // dlight doesn't reach the plane
                 dlightBits &= ~(1 << i);
             }
         }
@@ -167,7 +135,6 @@ static int R_DlightSurface(msurface_t* surf, int dlightBits) {
             }
             dl = &tr.refdef.dlights[i];
             if (dl->origin[0] - dl->radius > surf->cullinfo.bounds[1][0] || dl->origin[0] + dl->radius < surf->cullinfo.bounds[0][0] || dl->origin[1] - dl->radius > surf->cullinfo.bounds[1][1] || dl->origin[1] + dl->radius < surf->cullinfo.bounds[0][1] || dl->origin[2] - dl->radius > surf->cullinfo.bounds[1][2] || dl->origin[2] + dl->radius < surf->cullinfo.bounds[0][2]) {
-                // dlight doesn't reach the bounds
                 dlightBits &= ~(1 << i);
             }
         }
@@ -180,7 +147,6 @@ static int R_DlightSurface(msurface_t* surf, int dlightBits) {
             }
             dl = &tr.refdef.dlights[i];
             if (!SpheresIntersect(dl->origin, dl->radius, surf->cullinfo.localOrigin, surf->cullinfo.radius)) {
-                // dlight doesn't reach the bounds
                 dlightBits &= ~(1 << i);
             }
         }
@@ -207,13 +173,6 @@ static int R_DlightSurface(msurface_t* surf, int dlightBits) {
     return dlightBits;
 }
 
-/*
-====================
-R_PshadowSurface
-
-Just like R_DlightSurface, cull any we can
-====================
-*/
 static int R_PshadowSurface(msurface_t* surf, int pshadowBits) {
     float d;
     int i;
@@ -227,7 +186,6 @@ static int R_PshadowSurface(msurface_t* surf, int pshadowBits) {
             ps = &tr.refdef.pshadows[i];
             d = DotProduct(ps->lightOrigin, surf->cullinfo.plane.normal) - surf->cullinfo.plane.dist;
             if (d < -ps->lightRadius || d > ps->lightRadius) {
-                // pshadow doesn't reach the plane
                 pshadowBits &= ~(1 << i);
             }
         }
@@ -240,7 +198,6 @@ static int R_PshadowSurface(msurface_t* surf, int pshadowBits) {
             }
             ps = &tr.refdef.pshadows[i];
             if (ps->lightOrigin[0] - ps->lightRadius > surf->cullinfo.bounds[1][0] || ps->lightOrigin[0] + ps->lightRadius < surf->cullinfo.bounds[0][0] || ps->lightOrigin[1] - ps->lightRadius > surf->cullinfo.bounds[1][1] || ps->lightOrigin[1] + ps->lightRadius < surf->cullinfo.bounds[0][1] || ps->lightOrigin[2] - ps->lightRadius > surf->cullinfo.bounds[1][2] || ps->lightOrigin[2] + ps->lightRadius < surf->cullinfo.bounds[0][2] || BoxOnPlaneSide(surf->cullinfo.bounds[0], surf->cullinfo.bounds[1], &ps->cullPlane) == 2) {
-                // pshadow doesn't reach the bounds
                 pshadowBits &= ~(1 << i);
             }
         }
@@ -253,7 +210,6 @@ static int R_PshadowSurface(msurface_t* surf, int pshadowBits) {
             }
             ps = &tr.refdef.pshadows[i];
             if (!SpheresIntersect(ps->viewOrigin, ps->viewRadius, surf->cullinfo.localOrigin, surf->cullinfo.radius) || DotProduct(surf->cullinfo.localOrigin, ps->cullPlane.normal) - ps->cullPlane.dist < -surf->cullinfo.radius) {
-                // pshadow doesn't reach the bounds
                 pshadowBits &= ~(1 << i);
             }
         }
@@ -272,33 +228,23 @@ static int R_PshadowSurface(msurface_t* surf, int pshadowBits) {
     }
 
     if (pshadowBits) {
-        // tr.pc.c_dlightSurfaces++;
     }
 
     return pshadowBits;
 }
 
-/*
-======================
-R_AddWorldSurface
-======================
-*/
 static void R_AddWorldSurface(msurface_t* surf, int dlightBits, int pshadowBits) {
-    // FIXME: bmodel fog?
 
-    // try to cull before dlighting or adding
     if (R_CullSurface(surf)) {
         return;
     }
 
-    // check for dlighting
-    /*if ( dlightBits ) */ {
+     {
         dlightBits = R_DlightSurface(surf, dlightBits);
         dlightBits = (dlightBits != 0);
     }
 
-    // check for pshadows
-    /*if ( pshadowBits ) */ {
+     {
         pshadowBits = R_PshadowSurface(surf, pshadowBits);
         pshadowBits = (pshadowBits != 0);
     }
@@ -306,19 +252,6 @@ static void R_AddWorldSurface(msurface_t* surf, int dlightBits, int pshadowBits)
     R_AddDrawSurf(surf->data, surf->shader, surf->fogIndex, dlightBits, pshadowBits, surf->cubemapIndex);
 }
 
-/*
-=============================================================
-
-    BRUSH MODELS
-
-=============================================================
-*/
-
-/*
-=================
-R_AddBrushModelSurfaces
-=================
-*/
 void R_AddBrushModelSurfaces(trRefEntity_t* ent) {
     bmodel_t* bmodel;
     int clip;
@@ -347,32 +280,14 @@ void R_AddBrushModelSurfaces(trRefEntity_t* ent) {
     }
 }
 
-/*
-=============================================================
-
-    WORLD MODEL
-
-=============================================================
-*/
-
-/*
-================
-R_RecursiveWorldNode
-================
-*/
 static void R_RecursiveWorldNode(mnode_t* node, uint32_t planeBits, uint32_t dlightBits, uint32_t pshadowBits) {
     do {
         uint32_t newDlights[2];
         uint32_t newPShadows[2];
 
-        // if the node wasn't marked as potentially visible, exit
-        // pvs is skipped for depth shadows
         if (!(tr.viewParms.flags & VPF_DEPTHSHADOW) && node->visCounts[tr.visIndex] != tr.visCounts[tr.visIndex]) {
             return;
         }
-
-        // if the bounding volume is outside the frustum, nothing
-        // inside can be visible OPTIMIZE: don't do this all the way to leafs?
 
         if (!r_nocull->integer) {
             int r;
@@ -380,50 +295,50 @@ static void R_RecursiveWorldNode(mnode_t* node, uint32_t planeBits, uint32_t dli
             if (planeBits & 1) {
                 r = BoxOnPlaneSide(node->mins, node->maxs, &tr.viewParms.frustum[0]);
                 if (r == 2) {
-                    return;  // culled
+                    return;
                 }
                 if (r == 1) {
-                    planeBits &= ~1;  // all descendants will also be in front
+                    planeBits &= ~1;
                 }
             }
 
             if (planeBits & 2) {
                 r = BoxOnPlaneSide(node->mins, node->maxs, &tr.viewParms.frustum[1]);
                 if (r == 2) {
-                    return;  // culled
+                    return;
                 }
                 if (r == 1) {
-                    planeBits &= ~2;  // all descendants will also be in front
+                    planeBits &= ~2;
                 }
             }
 
             if (planeBits & 4) {
                 r = BoxOnPlaneSide(node->mins, node->maxs, &tr.viewParms.frustum[2]);
                 if (r == 2) {
-                    return;  // culled
+                    return;
                 }
                 if (r == 1) {
-                    planeBits &= ~4;  // all descendants will also be in front
+                    planeBits &= ~4;
                 }
             }
 
             if (planeBits & 8) {
                 r = BoxOnPlaneSide(node->mins, node->maxs, &tr.viewParms.frustum[3]);
                 if (r == 2) {
-                    return;  // culled
+                    return;
                 }
                 if (r == 1) {
-                    planeBits &= ~8;  // all descendants will also be in front
+                    planeBits &= ~8;
                 }
             }
 
             if (planeBits & 16) {
                 r = BoxOnPlaneSide(node->mins, node->maxs, &tr.viewParms.frustum[4]);
                 if (r == 2) {
-                    return;  // culled
+                    return;
                 }
                 if (r == 1) {
-                    planeBits &= ~16;  // all descendants will also be in front
+                    planeBits &= ~16;
                 }
             }
         }
@@ -432,10 +347,6 @@ static void R_RecursiveWorldNode(mnode_t* node, uint32_t planeBits, uint32_t dli
             break;
         }
 
-        // node is just a decision point, so go down both sides
-        // since we don't care about sort orders, just go positive to negative
-
-        // determine which dlights are needed
         newDlights[0] = 0;
         newDlights[1] = 0;
         if (dlightBits) {
@@ -482,23 +393,19 @@ static void R_RecursiveWorldNode(mnode_t* node, uint32_t planeBits, uint32_t dli
             }
         }
 
-        // recurse down the children, front side first
         R_RecursiveWorldNode(node->children[0], planeBits, newDlights[0], newPShadows[0]);
 
-        // tail recurse
         node = node->children[1];
         dlightBits = newDlights[1];
         pshadowBits = newPShadows[1];
     } while (1);
 
     {
-        // leaf node, so add mark surfaces
         int c;
         int surf, *view;
 
         tr.pc.c_leafs++;
 
-        // add to z buffer bounds
         if (node->mins[0] < tr.viewParms.visBounds[0][0]) {
             tr.viewParms.visBounds[0][0] = node->mins[0];
         }
@@ -519,12 +426,10 @@ static void R_RecursiveWorldNode(mnode_t* node, uint32_t planeBits, uint32_t dli
             tr.viewParms.visBounds[1][2] = node->maxs[2];
         }
 
-        // add surfaces
         view = tr.world->marksurfaces + node->firstmarksurface;
 
         c = node->nummarksurfaces;
         while (c--) {
-            // just mark it as visible, so we don't jump out of the cache derefencing the surface
             surf = *view;
             if (tr.world->surfacesViewCount[surf] != tr.viewCount) {
                 tr.world->surfacesViewCount[surf] = tr.viewCount;
@@ -539,11 +444,6 @@ static void R_RecursiveWorldNode(mnode_t* node, uint32_t planeBits, uint32_t dli
     }
 }
 
-/*
-===============
-R_PointInLeaf
-===============
-*/
 static mnode_t* R_PointInLeaf(const vec3_t p) {
     mnode_t* node;
     float d;
@@ -570,11 +470,6 @@ static mnode_t* R_PointInLeaf(const vec3_t p) {
     return node;
 }
 
-/*
-==============
-R_ClusterPVS
-==============
-*/
 static const byte* R_ClusterPVS(int cluster) {
     if (!tr.world->vis || cluster < 0 || cluster >= tr.world->numClusters) {
         return NULL;
@@ -583,17 +478,12 @@ static const byte* R_ClusterPVS(int cluster) {
     return tr.world->vis + cluster * tr.world->clusterBytes;
 }
 
-/*
-=================
-R_inPVS
-=================
-*/
 qboolean R_inPVS(const vec3_t p1, const vec3_t p2) {
     mnode_t* leaf;
     byte* vis;
 
     leaf = R_PointInLeaf(p1);
-    vis = ri.CM_ClusterPVS(leaf->cluster);  // why not R_ClusterPVS ??
+    vis = ri.CM_ClusterPVS(leaf->cluster);
     leaf = R_PointInLeaf(p2);
 
     if (!(vis[leaf->cluster >> 3] & (1 << (leaf->cluster & 7)))) {
@@ -602,36 +492,20 @@ qboolean R_inPVS(const vec3_t p1, const vec3_t p2) {
     return qtrue;
 }
 
-/*
-===============
-R_MarkLeaves
-
-Mark the leaves and nodes that are in the PVS for the current
-cluster
-===============
-*/
 static void R_MarkLeaves(void) {
     const byte* vis;
     mnode_t *leaf, *parent;
     int i;
     int cluster;
 
-    // lockpvs lets designers walk around to determine the
-    // extent of the current pvs
     if (r_lockpvs->integer) {
         return;
     }
 
-    // current viewcluster
     leaf = R_PointInLeaf(tr.viewParms.pvsOrigin);
     cluster = leaf->cluster;
 
-    // if the cluster is the same and the area visibility matrix
-    // hasn't changed, we don't need to mark everything again
-
     for (i = 0; i < MAX_VISCOUNTS; i++) {
-        // if the areamask or r_showcluster was modified, invalidate all visclusters
-        // this caused doors to open into undrawn areas
         if (tr.refdef.areamaskModified || r_showcluster->modified) {
             tr.visClusters[i] = -2;
         } else if (tr.visClusters[i] == cluster) {
@@ -662,14 +536,12 @@ static void R_MarkLeaves(void) {
             continue;
         }
 
-        // check general pvs
         if (vis && !(vis[cluster >> 3] & (1 << (cluster & 7)))) {
             continue;
         }
 
-        // check for door connection
         if ((tr.refdef.areamask[leaf->area >> 3] & (1 << (leaf->area & 7)))) {
-            continue;  // not visible
+            continue;
         }
 
         parent = leaf;
@@ -682,13 +554,6 @@ static void R_MarkLeaves(void) {
     }
 }
 
-/*
-=============
-R_AddAdvertisements
-
-[QL] 0x434e40: the match's advertisements, brush models no entity carries
-=============
-*/
 static void R_AddAdvertisements(uint32_t dlightBits) {
     int i, j, k;
 
@@ -704,14 +569,12 @@ static void R_AddAdvertisements(uint32_t dlightBits) {
             continue;
         }
 
-        // 0x434bc0: only from its front
         VectorSubtract(tr.viewParms.or.origin, ad->center, delta);
         if (DotProduct(ad->normal, delta) < 0.0f) {
             continue;
         }
         tr.world->surfacesViewCount[surf] = tr.viewCount;
 
-        // 0x44b130: out when one plane of the frustum has all four corners behind it
         if (!r_nocull->integer) {
             for (j = 0; j < 4; j++) {
                 const cplane_t* frust = &tr.viewParms.frustum[j];
@@ -734,11 +597,6 @@ static void R_AddAdvertisements(uint32_t dlightBits) {
     }
 }
 
-/*
-=============
-R_AddWorldSurfaces
-=============
-*/
 void R_AddWorldSurfaces(void) {
     uint32_t planeBits, dlightBits, pshadowBits;
 
@@ -753,14 +611,11 @@ void R_AddWorldSurfaces(void) {
     tr.currentEntityNum = REFENTITYNUM_WORLD;
     tr.shiftedEntityNum = tr.currentEntityNum << QSORT_REFENTITYNUM_SHIFT;
 
-    // determine which leaves are in the PVS / areamask
     if (!(tr.viewParms.flags & VPF_DEPTHSHADOW))
         R_MarkLeaves();
 
-    // clear out the visible min/max
     ClearBounds(tr.viewParms.visBounds[0], tr.viewParms.visBounds[1]);
 
-    // perform frustum culling and flag all the potentially visible surfaces
     if (tr.refdef.num_dlights > MAX_DLIGHTS) {
         tr.refdef.num_dlights = MAX_DLIGHTS;
     }
@@ -784,8 +639,6 @@ void R_AddWorldSurfaces(void) {
 
     R_RecursiveWorldNode(tr.world->nodes, planeBits, dlightBits, pshadowBits);
 
-    // now add all the potentially visible surfaces
-    // also mask invisible dlights for next frame
     {
         int i;
 
@@ -802,7 +655,6 @@ void R_AddWorldSurfaces(void) {
         tr.refdef.dlightMask = ~tr.refdef.dlightMask;
     }
 
-    // [QL] 0x44d77b: right after the world, but not in the teleport flash
     if (!(tr.refdef.rdflags & RDF_HYPERSPACE)) {
         R_AddAdvertisements(dlightBits);
     }

@@ -20,23 +20,16 @@ along with XreaL source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// tr_fbo.c
 #include "tr_local.h"
 
 #include "tr_dsa.h"
 
-/*
-=============
-R_CheckFBO
-=============
-*/
 qboolean R_CheckFBO(const FBO_t* fbo) {
     GLenum code = qglCheckNamedFramebufferStatusEXT(fbo->frameBuffer, GL_FRAMEBUFFER);
 
     if (code == GL_FRAMEBUFFER_COMPLETE)
         return qtrue;
 
-    // an error occurred
     switch (code) {
         case GL_FRAMEBUFFER_UNSUPPORTED:
             ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Unsupported framebuffer format\n", fbo->name);
@@ -70,11 +63,6 @@ qboolean R_CheckFBO(const FBO_t* fbo) {
     return qfalse;
 }
 
-/*
-============
-FBO_Create
-============
-*/
 FBO_t* FBO_Create(const char* name, int width, int height) {
     FBO_t* fbo;
 
@@ -105,11 +93,6 @@ FBO_t* FBO_Create(const char* name, int width, int height) {
     return fbo;
 }
 
-/*
-=================
-FBO_CreateBuffer
-=================
-*/
 void FBO_CreateBuffer(FBO_t* fbo, int format, int index, int multisample) {
     uint32_t* pRenderBuffer;
     GLenum attachment;
@@ -152,7 +135,7 @@ void FBO_CreateBuffer(FBO_t* fbo, int format, int index, int multisample) {
         case GL_DEPTH24_STENCIL8:
             fbo->packedDepthStencilFormat = format;
             pRenderBuffer = &fbo->packedDepthStencilBuffer;
-            attachment = 0;  // special for stencil and depth
+            attachment = 0;
             break;
 
         default:
@@ -164,7 +147,6 @@ void FBO_CreateBuffer(FBO_t* fbo, int format, int index, int multisample) {
     if (absent) {
         qglGenRenderbuffers(1, pRenderBuffer);
 
-        // workaround AMD Windows driver requiring bind to create renderbuffer
         GL_BindRenderbuffer(*pRenderBuffer);
     }
 
@@ -183,11 +165,6 @@ void FBO_CreateBuffer(FBO_t* fbo, int format, int index, int multisample) {
     }
 }
 
-/*
-=================
-FBO_AttachImage
-=================
-*/
 void FBO_AttachImage(FBO_t* fbo, image_t* image, GLenum attachment, GLuint cubemapside) {
     GLenum target = GL_TEXTURE_2D;
     int index;
@@ -201,11 +178,6 @@ void FBO_AttachImage(FBO_t* fbo, image_t* image, GLenum attachment, GLuint cubem
         fbo->colorImage[index] = image;
 }
 
-/*
-============
-FBO_Bind
-============
-*/
 void FBO_Bind(FBO_t* fbo) {
     if (!glRefConfig.framebufferObject) {
         ri.Printf(PRINT_WARNING, "FBO_Bind() called without framebuffers enabled!\n");
@@ -216,7 +188,6 @@ void FBO_Bind(FBO_t* fbo) {
         return;
 
     if (r_logFile->integer) {
-        // don't just call LogComment, or we will get a call to va() every frame!
         GLimp_LogComment(va("--- FBO_Bind( %s ) ---\n", fbo ? fbo->name : "NULL"));
     }
 
@@ -224,11 +195,6 @@ void FBO_Bind(FBO_t* fbo) {
     glState.currentFBO = fbo;
 }
 
-/*
-============
-FBO_Init
-============
-*/
 void FBO_Init(void) {
     int i;
     int hdrFormat, multisample = 0;
@@ -260,8 +226,6 @@ void FBO_Init(void) {
     if (multisample != r_ext_framebuffer_multisample->integer)
         ri.Cvar_SetValue("r_ext_framebuffer_multisample", (float)multisample);
 
-    // only create a render FBO if we need to resolve MSAA or do HDR
-    // otherwise just render straight to the screen (tr.renderFbo = NULL)
     if (multisample && glRefConfig.framebufferMultisample) {
         tr.renderFbo = FBO_Create("_render", tr.renderDepthImage->width, tr.renderDepthImage->height);
         FBO_CreateBuffer(tr.renderFbo, hdrFormat, 0, multisample);
@@ -273,7 +237,6 @@ void FBO_Init(void) {
         FBO_AttachImage(tr.msaaResolveFbo, tr.renderDepthImage, GL_DEPTH_ATTACHMENT, 0);
         R_CheckFBO(tr.msaaResolveFbo);
     } else if (r_hdr->integer || r_postProcessActive->integer) {
-        // [QL] Quake Live's post effects need the frame in a frame buffer too (tr_qlpost.c)
         tr.renderFbo = FBO_Create("_render", tr.renderDepthImage->width, tr.renderDepthImage->height);
         FBO_AttachImage(tr.renderFbo, tr.renderImage, GL_COLOR_ATTACHMENT0, 0);
         FBO_AttachImage(tr.renderFbo, tr.renderDepthImage, GL_DEPTH_ATTACHMENT, 0);
@@ -282,8 +245,6 @@ void FBO_Init(void) {
         }
     }
 
-    // clear render buffer
-    // this fixes the corrupt screen bug with r_hdr 1 on older hardware
     if (tr.renderFbo) {
         GL_BindFramebuffer(GL_FRAMEBUFFER, tr.renderFbo->frameBuffer);
         qglClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -306,7 +267,6 @@ void FBO_Init(void) {
     if (MAX_DRAWN_PSHADOWS && tr.pshadowMaps[0]) {
         for (i = 0; i < MAX_DRAWN_PSHADOWS; i++) {
             tr.pshadowFbos[i] = FBO_Create(va("_shadowmap%d", i), tr.pshadowMaps[i]->width, tr.pshadowMaps[i]->height);
-            // FIXME: this next line wastes 16mb with 16x512x512 sun shadow maps, skip if OpenGL 4.3+ or ARB_framebuffer_no_attachments
             FBO_CreateBuffer(tr.pshadowFbos[i], GL_RGBA8, 0, 0);
             FBO_AttachImage(tr.pshadowFbos[i], tr.pshadowMaps[i], GL_DEPTH_ATTACHMENT, 0);
             R_CheckFBO(tr.pshadowFbos[i]);
@@ -316,8 +276,6 @@ void FBO_Init(void) {
     if (tr.sunShadowDepthImage[0]) {
         for (i = 0; i < 4; i++) {
             tr.sunShadowFbo[i] = FBO_Create("_sunshadowmap", tr.sunShadowDepthImage[i]->width, tr.sunShadowDepthImage[i]->height);
-            // FIXME: this next line wastes 16mb with 4x1024x1024 sun shadow maps, skip if OpenGL 4.3+ or ARB_framebuffer_no_attachments
-            // This at least gets sun shadows working on older GPUs (Intel)
             FBO_CreateBuffer(tr.sunShadowFbo[i], GL_RGBA8, 0, 0);
             FBO_AttachImage(tr.sunShadowFbo[i], tr.sunShadowDepthImage[i], GL_DEPTH_ATTACHMENT, 0);
             R_CheckFBO(tr.sunShadowFbo[i]);
@@ -385,11 +343,6 @@ void FBO_Init(void) {
     glState.currentFBO = NULL;
 }
 
-/*
-============
-FBO_Shutdown
-============
-*/
 void FBO_Shutdown(void) {
     int i, j;
     FBO_t* fbo;
@@ -420,11 +373,6 @@ void FBO_Shutdown(void) {
     }
 }
 
-/*
-============
-R_FBOList_f
-============
-*/
 void R_FBOList_f(void) {
     int i;
     FBO_t* fbo;
@@ -476,7 +424,6 @@ void FBO_BlitFromTexture(struct image_s* src, vec4_t inSrcTexCorners, vec2_t inS
         VectorSet2(texCoords[3], 0.0f, 0.0f);
     }
 
-    // framebuffers are 0 bottom, Y up.
     if (inDstBox) {
         dstBox[0] = inDstBox[0];
         dstBox[1] = height - inDstBox[1] - inDstBox[3];

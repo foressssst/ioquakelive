@@ -51,7 +51,7 @@ vec3 DeformPosition(const vec3 pos, const vec3 normal, const vec2 st)
 	{
 		phase *= st.x;
 	}
-	else // if (u_DeformGen <= DGEN_WAVE_INVERSE_SAWTOOTH)
+	else
 	{
 		phase += dot(pos.xyz, vec3(spread));
 	}
@@ -79,7 +79,7 @@ vec3 DeformPosition(const vec3 pos, const vec3 normal, const vec2 st)
 	{
 		func = (1.0 - fract(value));
 	}
-	else // if (u_DeformGen == DGEN_BULGE)
+	else
 	{
 		func = sin(value);
 	}

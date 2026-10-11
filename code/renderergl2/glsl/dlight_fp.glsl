@@ -5,7 +5,6 @@ uniform int       u_AlphaTest;
 varying vec2      var_Tex1;
 varying vec4      var_Color;
 
-
 void main()
 {
 	vec4 color = texture2D(u_DiffuseMap, var_Tex1);
@@ -26,7 +25,7 @@ void main()
 		if (alpha < 0.5)
 			discard;
 	}
-	
+
 	gl_FragColor.rgb = color.rgb * var_Color.rgb;
 	gl_FragColor.a = alpha;
 }

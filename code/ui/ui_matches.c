@@ -19,22 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// ui_matches.c -- [QL] Recent Matches
-//
-// Retail's is web.pak's matches.js with recentmatchlist.js and recentmatchwidget.js for
-// the list, and matches_details.js with playertable.js for a match: "My Matches", the
-// last hundred matches newest first, each a strip with the map's picture, the mode, how
-// it went, the map, when and how long, the server and why it ended, and one's own score,
-// KDR and medals. A match opens under the same strip with a row of buttons -- back,
-// Basic, Medals, Items, Kills, Deaths, Accuracy, Damage, Events -- and a table of every
-// player for each, whose columns are only those somebody has anything in and which sorts
-// by any of them, or the list of deaths.
-//
-// The matches are the ones the client kept (client/cl_matches.c), which is what the web
-// UI kept in the browser's localStorage.
-//
-
 #include "ui_web.h"
 
 #define JSON_IMPLEMENTATION
@@ -43,7 +27,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <time.h>
 
-#define MT_MAX_MATCHES 100  // recentmatchlist.js's limit
+#define MT_MAX_MATCHES 100
 #define MT_MAX_ROWS 64
 #define MT_MAX_COLS 32
 #define MT_MAX_EVENTS 1000
@@ -75,7 +59,6 @@ typedef enum {
 static const char* const mtSectionNames[MT_NUM_SECTIONS] = {"Basic",    "Medals", "Items",  "Kills",
                                                             "Deaths",   "Accuracy", "Damage", "Events"};
 
-// recentmatchwidget.js's medalInfo: the MEDALS key and its picture
 typedef struct {
     const char* id;
     const char* img;
@@ -91,7 +74,6 @@ static const mtMedal_t mtMedals[] = {
 };
 #define MT_NUM_MEDALS ((int)ARRAY_LEN(mtMedals))
 
-// gametypes.js: the title of each short name
 typedef struct {
     const char* name;
     const char* title;
@@ -103,24 +85,18 @@ static const mtGametype_t mtGametypes[] = {
     {"ft", "Freeze Tag"},    {"dom", "Domination"},     {"ad", "Attack & Defend"}, {"rr", "Red Rover"},
 };
 
-/*
-===============
-The columns of each table: matches_details.js's generate*Table, in their order. A column
-reads a number out of a player's PLAYER_STATS; the tables but Basic leave out what is 0.
-===============
-*/
 typedef enum {
-    MT_READ_PATH,      // a member, or a member of a member
-    MT_READ_WEAPON,    // WEAPONS.<weapon>.<field>
-    MT_READ_ACCURACY,  // parseInt(H / S * 100)
-    MT_READ_RACE       // the race time, as a string
+    MT_READ_PATH,
+    MT_READ_WEAPON,
+    MT_READ_ACCURACY,
+    MT_READ_RACE
 } mtRead_t;
 
 typedef struct {
     const char* label;
     mtRead_t read;
-    const char* a;  // the member, or the weapon
-    const char* b;  // the member of it, or the weapon's field
+    const char* a;
+    const char* b;
 } mtColumn_t;
 
 static const mtColumn_t mtPlayerCols[] = {
@@ -170,7 +146,6 @@ static const mtColumn_t mtItemCols[] = {
     {NULL},
 };
 
-// the weapons of the kills, deaths, damage and accuracy tables, with their labels
 static const char* const mtWeaponLabels[] = {"BFG", "CG", "G",     "GL", "HMG", "LG", "MG",
                                              "NG",  "OTHER", "PG", "PL", "RG",  "RL", "SG"};
 static const char* const mtWeaponKeys[] = {"BFG",     "CHAINGUN", "GAUNTLET",     "GRENADE", "HMG",
@@ -178,7 +153,6 @@ static const char* const mtWeaponKeys[] = {"BFG",     "CHAINGUN", "GAUNTLET",   
                                            "PROXMINE", "RAILGUN",  "ROCKET",       "SHOTGUN"};
 #define MT_NUM_WEAPONS ((int)ARRAY_LEN(mtWeaponKeys))
 
-// matches_details.js's powerupImgs and modElements
 typedef struct {
     const char* name;
     const char* img;
@@ -194,7 +168,7 @@ static const mtIcon_t mtPowerups[] = {
 typedef struct {
     const char* mod;
     const char* img;
-    const char* img2;  // the headshot of a direct hit
+    const char* img2;
     const char* text;
 } mtMod_t;
 
@@ -236,7 +210,6 @@ static const mtMod_t mtMods[] = {
 };
 #define MT_NUM_MODS ((int)ARRAY_LEN(mtMods))
 
-// a match of the list: what the strip shows
 typedef struct {
     char guid[64];
     char map[64];
@@ -252,9 +225,8 @@ typedef struct {
     qhandle_t levelshot;
 } mtMatch_t;
 
-// a player of the tables
 typedef struct {
-    char name[80];  // with " (Quit)"
+    char name[80];
     char steamId[24];
     int team;
     qhandle_t icon;
@@ -280,9 +252,9 @@ typedef struct {
 
 typedef struct {
     int time;
-    int mod;  // into mtMods, -1 when it is none of them
+    int mod;
     qboolean killer;
-    mtWho_t who[2];  // the killer and the victim
+    mtWho_t who[2];
 } mtEvent_t;
 
 static struct {
@@ -290,17 +262,16 @@ static struct {
     int count;
     mtMatch_t match[MT_MAX_MATCHES];
 
-    // the match that is open, -1 for the list
     int open;
     int section;
     mtTable_t table[MT_SEC_EVENTS];
-    int sortCol, sortDesc;  // -1 for the players' own order
+    int sortCol, sortDesc;
     int order[MT_MAX_ROWS];
     int numEvents;
     mtEvent_t events[MT_MAX_EVENTS];
     int numMedia;
     char media[MT_MAX_MEDIA][MAX_QPATH];
-    char shot[MAX_QPATH];  // the screenshot shown over the page
+    char shot[MAX_QPATH];
     qhandle_t shotImage;
 
     float scroll;
@@ -329,11 +300,6 @@ static const vec4_t mtGametype = {181 / 255.0f, 44 / 255.0f, 23 / 255.0f, 0.5f};
 static const vec4_t mtBlack = {0.0f, 0.0f, 0.0f, 1.0f};
 static const vec4_t mtWhite = {1.0f, 1.0f, 1.0f, 1.0f};
 
-/*
-===============
-Reading what was kept
-===============
-*/
 static int MT_ReadFile(const char* name, char* buf, int size) {
     fileHandle_t f;
     int len = trap_FS_FOpenFile(name, &f, FS_READ);
@@ -368,7 +334,6 @@ static const char* MT_Member(const char* obj, const char* end, const char* name)
     return JSON_ObjectGetNamedValue(obj, end, name);
 }
 
-// a number, when the value is one
 static qboolean MT_Number(const char* v, const char* end, double* out) {
     if (!v || v >= end || !(*v == '-' || (*v >= '0' && *v <= '9'))) {
         return qfalse;
@@ -393,7 +358,6 @@ static void MT_String(const char* obj, const char* end, const char* name, char* 
     }
 }
 
-// utils.js's stripColors
 static void MT_StripColors(const char* in, char* out, int size) {
     int n = 0;
 
@@ -409,7 +373,6 @@ static void MT_StripColors(const char* in, char* out, int size) {
     out[n] = '\0';
 }
 
-// models.js's getIconImage: the model and skin, the team's skin in a team, sarge when unknown
 static qhandle_t MT_ModelIcon(const char* model, int team) {
     char base[MAX_QPATH];
     char* skin;
@@ -437,7 +400,6 @@ static qhandle_t MT_ModelIcon(const char* model, int team) {
     return h;
 }
 
-// the map's long name, from its arena as retail's GetMapList had it
 static const char* MT_MapName(const char* map) {
     const char* info = UI_GetArenaInfoByMap(map);
     const char* name = info ? Info_ValueForKey(info, "longname") : "";
@@ -456,7 +418,6 @@ static const char* MT_GametypeTitle(const char* shortName) {
     return "Unknown Gametype";
 }
 
-// utils.js's getOrdinal
 static void MT_Ordinal(int n, char* out, int size) {
     static const char* const s[4] = {"th", "st", "nd", "rd"};
     int v = n % 100;
@@ -505,7 +466,6 @@ static void MT_LoadMatch(mtMatch_t* m, const char* guid) {
     }
 }
 
-// utils.js's getRecentMatches: the index backwards, as many as the list shows
 static void MT_LoadList(void) {
     static char index[0x10000];
     char* lines[MT_MAX_MATCHES * 50];
@@ -545,13 +505,6 @@ static void MT_LoadList(void) {
     }
 }
 
-/*
-===============
-A match opened: its tables and deaths
-===============
-*/
-
-// a column's value for a player; the tables but Basic leave out 0 and what is no number
 static qboolean MT_Cell(const mtColumn_t* c, const char* p, const char* end, double* v, char* text, int size,
                         qboolean keepZero) {
     double h, s;
@@ -576,7 +529,7 @@ static qboolean MT_Cell(const mtColumn_t* c, const char* p, const char* end, dou
         case MT_READ_ACCURACY:
             w = MT_Member(MT_Member(p, end, "WEAPONS"), end, c->a);
             if (!MT_Number(MT_Member(w, end, "H"), end, &h) || !MT_Number(MT_Member(w, end, "S"), end, &s) || s == 0) {
-                return qfalse;  // NaN, or Infinity that parseInt makes NaN
+                return qfalse;
             }
             *v = (double)(int)(h / s * 100);
             break;
@@ -631,7 +584,6 @@ static void MT_BuildTable(mtTable_t* t, const mtColumn_t* cols, int numCols, con
             row->has[c] = MT_Cell(&cols[c], p, end, &row->v[c], row->text[c], sizeof(row->text[c]), keepZero);
         }
     }
-    // playertable.js: only the columns whose sum is above 0, or that have some text
     for (c = 0; c < numCols; c++) {
         double sum = 0;
         qboolean text = qfalse;
@@ -730,7 +682,7 @@ static void MT_Open(int index) {
         end = mtBuffer + len;
         list = MT_Member(mtBuffer, end, "PLYR_EVENTS");
         if (!list) {
-            list = MT_Member(mtBuffer, end, "PLYR_DEATHS");  // the older name retail still read
+            list = MT_Member(mtBuffer, end, "PLYR_DEATHS");
         }
         for (p = JSON_ArrayGetFirstValue(list, end); p && mt.numEvents < MT_MAX_EVENTS;
              p = JSON_ArrayGetNextValue(p, end)) {
@@ -755,8 +707,6 @@ static void MT_Open(int index) {
         }
     }
 
-    // what was recorded of it: the media index's files for the guid, and else the demo and
-    // the screenshot named by it, as the page looked for when a match had no MEDIA
     mt.numMedia = 0;
     len = MT_ReadFile("matches/media.txt", mtBuffer, sizeof(mtBuffer));
     for (p = len > 0 ? mtBuffer : NULL; p && *p && mt.numMedia < MT_MAX_MEDIA;) {
@@ -784,11 +734,6 @@ static void MT_Open(int index) {
     }
 }
 
-/*
-===============
-Drawing
-===============
-*/
 static void MT_Shadowed(float x, float baseline, int font, float size, const float* color, const char* text,
                         qboolean bold, const smRect_t* clip) {
     if (!SM_TextInside(baseline, size, clip)) {
@@ -807,7 +752,6 @@ static void MT_Line(float x, float lineTop, float lineH, int font, float size, c
     }
 }
 
-// moment's "MMM D YY, HH:mm", in the player's time
 static void MT_Date(double ms, char* out, int size) {
     static const char* const months[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
@@ -822,7 +766,6 @@ static void MT_Date(double ms, char* out, int size) {
                 lt->tm_min);
 }
 
-// moment-duration-format's "m[min] s[sec]": the minutes go when there are none
 static void MT_Duration(int seconds, char* out, int size) {
     if (seconds / 60) {
         Com_sprintf(out, size, "%imin %isec", seconds / 60, seconds % 60);
@@ -831,13 +774,11 @@ static void MT_Duration(int seconds, char* out, int size) {
     }
 }
 
-// recentmatchwidget.js: the strip of a match, 150 high
 static void MT_DrawWidget(const mtMatch_t* m, float x, float y, const smRect_t* clip) {
     char line[256], date[64], length[32], rank[16];
     float sx = x + 270 + 20;
     float sw, w;
 
-    // .levelshot: the map, the mode over red, and the place and the result
     SM_Pic(x, y, 270, 150, m->levelshot, clip);
     SM_Fill(x, y, 270, 25.6f, mtGametype, clip);
     {
@@ -859,7 +800,6 @@ static void MT_DrawWidget(const mtMatch_t* m, float x, float y, const smRect_t* 
                     clip);
     }
 
-    // .server: the map, when and how long, the server, and why it ended
     SM_SetSpacing(SM_SPACING_H1);
     MT_Line(sx, y, 30, FONT_DEFAULT, 24, mtYellow, MT_MapName(m->map), qfalse, clip);
     sw = SM_Advance(FONT_DEFAULT, 24, MT_MapName(m->map), -1);
@@ -880,7 +820,6 @@ static void MT_DrawWidget(const mtMatch_t* m, float x, float y, const smRect_t* 
     w = SM_AdvanceRaw(FONT_SANS, 16, m->exitMsg, -1, qfalse);
     sw = w > sw ? w : sw;
 
-    // .personal: one's score, KDR and medals
     if (m->personal) {
         float px = sx + sw + 20;
         float mx = px, my = y + 93.5f;
@@ -916,7 +855,6 @@ static void MT_DrawWidget(const mtMatch_t* m, float x, float y, const smRect_t* 
         Com_sprintf(line, sizeof(line), "%.2f", m->deaths ? (double)m->kills / m->deaths : (double)m->kills);
         MT_Line(px + 75, y + 53.8f, 36, FONT_SANS, 26.667f, mtLight, line, qtrue, clip);
 
-        // the medals, a 40px picture, a cross and how many, wrapped at 550
         for (i = 0; i < MT_NUM_MEDALS; i++) {
             char count[16];
             float cw;
@@ -957,7 +895,6 @@ static void MT_DrawList(float left, float top, float width, const smRect_t* clip
     mt.content = y - top;
 }
 
-// a button of the row: transparent, yellow when it is the one showing
 static float MT_RowButton(float x, float y, const char* label, int glyph, int type, int index, qboolean chosen,
                           const smRect_t* clip) {
     char upper[32];
@@ -998,7 +935,7 @@ static int MT_Compare(int a, int b) {
     if (c == MT_MAX_COLS) {
         r = Q_stricmp(ra->name, rb->name);
     } else if (ra->has[c] != rb->has[c]) {
-        return ra->has[c] ? -1 : 1;  // nothing goes last either way
+        return ra->has[c] ? -1 : 1;
     } else {
         r = ra->v[c] < rb->v[c] ? -1 : ra->v[c] > rb->v[c] ? 1 : 0;
     }
@@ -1010,7 +947,7 @@ static void MT_Sort(void) {
     int i, j;
 
     if (mt.section >= MT_SEC_EVENTS) {
-        return;  // the deaths are a list, not a table
+        return;
     }
     t = &mt.table[mt.section];
     for (i = 0; i < t->rows; i++) {
@@ -1029,7 +966,6 @@ static void MT_Sort(void) {
     }
 }
 
-// playertable.js over reactable: Name first, the columns as wide as they need, 44px rows
 static float MT_DrawTable(float x, float y, const smRect_t* clip) {
     const mtTable_t* t = &mt.table[mt.section];
     float colW[MT_MAX_COLS];
@@ -1055,7 +991,6 @@ static float MT_DrawTable(float x, float y, const smRect_t* clip) {
         colW[c] = w < 50 ? 50 : w;
     }
 
-    // the heads, which sort
     y += 4;
     cx = x;
     SM_Fill(cx, y, nameW, 24, mtHead, clip);
@@ -1104,7 +1039,6 @@ static float MT_DrawTable(float x, float y, const smRect_t* clip) {
     return ry - y + 4 + 15;
 }
 
-// the deaths: when, the killer and his powerups, how, and the victim with his
 static float MT_DrawEvents(float x, float y, float width, const smRect_t* clip) {
     float space = SM_Advance(FONT_SANS, 15, " ", -1);
     int i, k;
@@ -1176,12 +1110,10 @@ static void MT_DrawDetails(float left, float top, float width, const smRect_t* c
     float bx;
     int i;
 
-    // the match's strip, black at 0.8 and 10px of it under
     SM_Fill(left, y, width, 160, mtBlack80, clip);
     MT_DrawWidget(&mt.match[mt.open], left, y, clip);
     y += 160;
 
-    // nav.button-row: back, what was recorded, and the sections
     SM_Fill(left, y, width, 30, mtBlack80, clip);
     bx = left + MT_RowButton(left, y, NULL, 0xf100, MT_HIT_BACK, 0, qfalse, clip);
     if (mt.numMedia < 4) {
@@ -1194,12 +1126,10 @@ static void MT_DrawDetails(float left, float top, float width, const smRect_t* c
     }
     y += 30 + 15;
 
-    // section.row: black at 0.8, 5px in
     {
         float h = mt.section == MT_SEC_EVENTS ? MT_DrawEvents(left + 5, y + 5, width - 10, clip) + 15
                                               : MT_DrawTable(left + 5, y + 5, clip);
         SM_Fill(left, y, width, h + 10, mtBlack80, clip);
-        // drawn again over its background, which only now has its height
         if (mt.section == MT_SEC_EVENTS) {
             MT_DrawEvents(left + 5, y + 5, width - 10, clip);
         } else {
@@ -1210,11 +1140,6 @@ static void MT_DrawDetails(float left, float top, float width, const smRect_t* c
     mt.content = y - top;
 }
 
-/*
-===============
-The page
-===============
-*/
 static void MT_Load(void) {
     int i;
 
@@ -1236,10 +1161,8 @@ static void MT_Load(void) {
     }
 }
 
-// the match the page opens on, "" for the list
 static char mtPending[64];
 
-// [QL] Replays' info mark: /stats/matches/<guid>/players
 void UI_Matches_ShowMatch(const char* guid) {
     Q_strncpyz(mtPending, guid, sizeof(mtPending));
     Menus_CloseAll();
@@ -1260,7 +1183,7 @@ void UI_Matches_Open(void) {
         for (i = 0; i < mt.count && Q_stricmp(mt.match[i].guid, mtPending); i++) {
         }
         if (i == mt.count && mt.count < MT_MAX_MATCHES) {
-            MT_LoadMatch(&mt.match[i], mtPending);  // older than the list goes
+            MT_LoadMatch(&mt.match[i], mtPending);
             if (mt.match[i].guid[0]) {
                 mt.count++;
             }
@@ -1299,7 +1222,6 @@ void UI_Matches_Paint(void) {
     clip = SM_R(left, HM_NAV_H - 8, width, view + 8);
     top = HM_NAV_H - mt.scroll;
     if (mt.open < 0) {
-        // .recent-matches: the page's panel, as tall as the page at least
         SM_Fill(left, HM_NAV_H, width, view, mtBlack80, NULL);
         MT_DrawList(left, top, width, &clip);
     } else {
@@ -1307,7 +1229,6 @@ void UI_Matches_Paint(void) {
         MT_DrawDetails(left, top, width, &clip);
     }
 
-    // a screenshot over the page, as the dialog retail opened for it
     if (mt.shot[0]) {
         float sw = smVW * 0.9f * 0.95f;
         float sh = sw * 9.0f / 16.0f;
@@ -1331,7 +1252,6 @@ qboolean UI_Matches_HandleKey(int key) {
         return qtrue;
     }
     if (mt.shot[0]) {
-        // the dialog closes with Escape or a click
         if (key == K_ESCAPE || key == K_MOUSE1) {
             mt.shot[0] = '\0';
             return qtrue;
@@ -1343,7 +1263,7 @@ qboolean UI_Matches_HandleKey(int key) {
         return qtrue;
     }
     if (key != K_MOUSE1) {
-        return qfalse;  // Escape goes back through the menu's onESC
+        return qfalse;
     }
     if (UI_Home_NavClick()) {
         return qtrue;
@@ -1365,7 +1285,6 @@ qboolean UI_Matches_HandleKey(int key) {
             mt.sortCol = -1;
             break;
         case MT_HIT_SORT:
-            // reactable: a column sorts up, and again down
             if (mt.sortCol == hit->index) {
                 mt.sortDesc = !mt.sortDesc;
             } else {

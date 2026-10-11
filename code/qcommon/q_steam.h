@@ -1,17 +1,3 @@
-/*
-===========================================================================
-ioquakelive - Steam integration
-
-Quake Live talks to Steam for two things this file covers: the server announces
-itself to Steam's master servers, and the client logs in to the Steam API. Both
-are what retail does; the addresses of the functions read to write this are in
-steam.c next to each call.
-
-Nothing here links against the Steamworks SDK. The library is loaded at run time
-from the player's own Quake Live installation, so no Valve or id file is
-redistributed with this project.
-===========================================================================
-*/
 
 #ifndef Q_STEAM_H
 #define Q_STEAM_H
@@ -19,17 +5,13 @@ redistributed with this project.
 #include "q_shared.h"
 #include "../qcommon/qcommon.h"
 
-// both called from Com_Init, where retail calls them
 void Steam_Init(void);
 void Steam_GS_Init(void);
 
-// per frame, from Com_Frame
 void Steam_Frame(void);
 
-// from SV_ChangeMaxClients, where retail updates it
 void Steam_GS_SetMaxPlayers(int maxPlayers);
 
-// the server's entry in the list, kept up to date by SV_SteamFrame
 void Steam_GS_SetPassword(qboolean needPassword);
 void Steam_GS_SetName(const char* name);
 void Steam_GS_SetMap(const char* map);
@@ -39,15 +21,13 @@ void Steam_GS_SetKeyValues(const char* info);
 void Steam_GS_UpdateUser(uint64_t steamId, const char* name, int score);
 void Steam_GS_UpdateGameInfo(qboolean force, char* const* factoryTags, int numFactoryTags);
 
-// the server list, which in Quake Live comes from Steam and not from a master of its own
-qboolean Steam_RequestServerList(int source);  // 0 internet, 1 LAN, 2 friends, 3 favourites, 4 history
+qboolean Steam_RequestServerList(int source);
 void Steam_ServerList_f(void);
 qboolean Steam_ServerListRefreshing(void);
-qboolean Steam_RefreshServerList(void);  // Quick Refresh: the same servers, asked again
-int Steam_ServerListNextUpdated(void);   // one that answered again, or -1
-const char* Steam_ServerListName(int index);  // the name as it is, which an info string cannot carry
+qboolean Steam_RefreshServerList(void);
+int Steam_ServerListNextUpdated(void);
+const char* Steam_ServerListName(int index);
 
-// what the browser shows about the server it has selected
 #define STEAM_DETAILS_NONE 0
 #define STEAM_DETAILS_LOADING 1
 #define STEAM_DETAILS_DONE 2
@@ -56,7 +36,6 @@ qboolean Steam_RequestServerDetails(unsigned int ip, unsigned short port);
 int Steam_ServerDetails(char* rules, int rulesSize, char* players, int playersSize);
 qboolean Steam_SetFavorite(unsigned int ip, unsigned short port, qboolean favorite);
 
-// the Workshop, which is where Quake Live downloads its maps from: the same queue on both sides
 qboolean Steam_WorkshopUGC(void);
 qboolean Steam_WorkshopQueue(uint64_t item, qboolean queued);
 qboolean Steam_WorkshopDone(void);
@@ -78,23 +57,19 @@ int Steam_ServerListCount(void);
 qboolean Steam_ServerListGet(int index, unsigned int* ip, unsigned short* port, int* ping, char* info,
                              int infoSize);
 
-// the server shares its game socket with Steam, so the query packets Steam sends arrive here
 qboolean Steam_GS_HandlePacket(netadr_t from, const void* data, int len);
 
 void Steam_Shutdown(void);
 
 qboolean Steam_GS_Running(void);
 
-// who each player is: the client asks for a ticket signed by Steam and the server hands
-// it to Steam to say whether it is good. [QL] 0x531b38 onwards.
-#define STEAM_AUTH_BEGIN_OK 0     // EBeginAuthSessionResult
+#define STEAM_AUTH_BEGIN_OK 0
 #define STEAM_AUTH_BEGIN_DUPLICATE 2
 int Steam_AuthTicket(void* buffer, int size);
 qboolean Steam_GS_BeginAuth(uint64_t steamId, const void* ticket, int len);
 void Steam_GS_EndAuth(uint64_t steamId);
 const char* Steam_AuthResponseName(int response);
 
-// the players' stats and achievements, kept by sv_steamstats.c
 void Steam_GS_RequestUserStats(uint64_t steamId);
 qboolean Steam_GS_GetUserStat(uint64_t steamId, const char* name, int* value);
 qboolean Steam_GS_SetUserStat(uint64_t steamId, const char* name, int value);
@@ -103,15 +78,12 @@ void Steam_GS_StoreUserStats(uint64_t steamId);
 qboolean Steam_SetAchievement(const char* name);
 void Steam_StoreStats(void);
 
-// a player's stats as the front end shows them (0 is oneself): the state, and when it has
-// them the Steam name and every stat of q_steamstats.h's table
 #define STEAM_STATS_NONE 0
 #define STEAM_STATS_LOADING 1
 #define STEAM_STATS_DONE 2
 #define STEAM_STATS_FAILED 3
 int Steam_UserStats(uint64_t steamId, qboolean request, char* name, int nameSize, int* stats, int numStats);
 
-// voice, which in Quake Live travels over Steam's peer to peer network and not the game's
 qboolean Steam_VoiceReady(void);
 void Steam_VoiceStart(void);
 void Steam_VoiceStop(void);
@@ -133,21 +105,20 @@ void Steam_ShowChat(uint64_t steamId);
 void Steam_ShowAchievements(uint64_t steamId);
 qboolean Steam_InviteToGame(uint64_t steamId, const char* connect);
 unsigned int Steam_GS_PublicIP(void);
-qboolean Steam_Avatar(uint64_t steamId, char* path, int size);  // 0 is oneself
+qboolean Steam_Avatar(uint64_t steamId, char* path, int size);
 void Steam_ShowFriends(void);
 
-// a Steam friend as the list sees one
 typedef struct {
     uint64_t steamId;
     char name[64];
-    int state;           // 0 desconectado, 1 conectado, 2 ocupado, 3 ausente, ...
-    qboolean playing;    // esta jugando a algo
-    qboolean sameGame;   // and that something is this game
-    unsigned int ip;     // the server they are on, 0 for none
+    int state;
+    qboolean playing;
+    qboolean sameGame;
+    unsigned int ip;
     unsigned short port;
-    qboolean lobby;      // in a Steam lobby of their game
-    char nickname[64];   // the one this player gave them
-    char status[128];    // their game's rich presence "status"
+    qboolean lobby;
+    char nickname[64];
+    char status[128];
 } steamFriend_t;
 
 int Steam_FriendCount(void);

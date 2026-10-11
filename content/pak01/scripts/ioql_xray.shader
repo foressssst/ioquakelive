@@ -1,6 +1,3 @@
-// [ioquakelive] cg_xray: a player's outline seen through walls, as Valorant draws it. The mask
-// writes the model's depth and no colour, so the inside stays clear; the rim is the model grown a
-// little and seen from behind, in the colour cgame gives it. Both go after everything else
 ioqlXrayMask
 {
 	nopicmip

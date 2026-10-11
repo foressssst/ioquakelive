@@ -1,7 +1,5 @@
 #version 450
 
-// [QL] eleven texels with Quake Live's weights, read as seven linear samples
-
 layout(set = 0, binding = 0) uniform sampler2D texture0;
 
 layout(location = 0) in vec2 frag_tex_coord;

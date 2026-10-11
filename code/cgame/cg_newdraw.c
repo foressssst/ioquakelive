@@ -19,18 +19,13 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "cg_local.h"
 #include "../ui/ui_shared.h"
 
 extern displayContextDef_t cgDC;
 
-// [QL] Current fontIndex for owner-draw text rendering.
-// Set by CG_OwnerDraw before dispatching to individual draw functions.
 static int cg_currentFontIndex = 0;
 
-// [QL] Owner-draw text wrappers - use CG_DrawText (bulk widescreen + fontIndex)
-// instead of CG_Text_Paint (per-character widescreen, scale-based font).
 static void CG_OwnerDrawText(float x, float y, float scale, vec4_t color,
                               const char *text, float adjust, int limit, int style) {
     CG_DrawText(x, y, cg_currentFontIndex, scale, color, text, adjust, limit, style);
@@ -43,15 +38,6 @@ static int CG_OwnerDrawTextWidth(const char *text, float scale, int limit) {
 static int CG_OwnerDrawTextHeight(const char *text, float scale, int limit) {
     return CG_DrawTextHeight(text, scale, limit, cg_currentFontIndex);
 }
-
-// set in CG_ParseTeamInfo
-
-// static int sortedTeamPlayers[TEAM_MAXOVERLAY];
-// static int numSortedTeamPlayers;
-
-// static char systemChat[256];
-// static char teamChat1[256];
-// static char teamChat2[256];
 
 void CG_InitTeamChat(void) {
     memset(teamChat1, 0, sizeof(teamChat1));
@@ -73,7 +59,6 @@ void CG_CheckOrderPending(void) {
         return;
     }
     if (cgs.orderPending) {
-        // clientInfo_t *ci = cgs.clientinfo + sortedTeamPlayers[cg_currentSelectedPlayer.integer];
         const char *p1, *p2, *b;
         p1 = p2 = b = NULL;
         switch (cgs.currentOrder) {
@@ -112,16 +97,12 @@ void CG_CheckOrderPending(void) {
         }
 
         if (cg_currentSelectedPlayer.integer == numSortedTeamPlayers) {
-            // to everyone
             trap_SendConsoleCommand(va("cmd vsay_team %s\n", p2));
         } else {
-            // for the player self
             if (sortedTeamPlayers[cg_currentSelectedPlayer.integer] == cg.snap->ps.clientNum && p1) {
                 trap_SendConsoleCommand(va("teamtask %i\n", cgs.currentOrder));
-                // trap_SendConsoleCommand(va("cmd say_team %s\n", p2));
                 trap_SendConsoleCommand(va("cmd vsay_team %s\n", p1));
             } else if (p2) {
-                // trap_SendConsoleCommand(va("cmd say_team %s, %s\n", ci->name,p));
                 trap_SendConsoleCommand(va("cmd vtell %d %s\n", sortedTeamPlayers[cg_currentSelectedPlayer.integer], p2));
             }
         }
@@ -213,9 +194,6 @@ static void CG_DrawPlayerArmorValue(rectDef_t* rect, float scale, vec4_t color, 
         } else if (align == ITEM_ALIGN_RIGHT) {
             tx -= CG_OwnerDrawTextWidth(num, scale, 0);
         }
-        // [QL] y + text height, as retail does it (fiadd after the measuring call:
-        // health 0x1002ff1f, armor 0x1002e62f, ammo 0x1002e8df). The scale*48-1 used
-        // before put the number at a different height from retail's.
         ty = rect->y + CG_OwnerDrawTextHeight(num, scale, 0);
         CG_OwnerDrawText(tx, ty, scale, color, num, 0, 0, textStyle);
     }
@@ -256,7 +234,6 @@ static void CG_DrawPlayerAmmoValue(rectDef_t* rect, float scale, vec4_t color, q
     ps = &cg.snap->ps;
     weapon = cg_entities[ps->clientNum].currentState.weapon;
 
-    // Weapons with no ammo display (gauntlet, nailgun have no ammo concept)
     if (weapon == WP_NONE || weapon == WP_GAUNTLET || weapon == WP_NAILGUN) {
         return;
     }
@@ -275,14 +252,10 @@ static void CG_DrawPlayerAmmoValue(rectDef_t* rect, float scale, vec4_t color, q
             } else if (align == ITEM_ALIGN_RIGHT) {
                 tx -= CG_OwnerDrawTextWidth(num, scale, 0);
             }
-            // [QL] y + text height, as retail does it (fiadd after the measuring call:
-            // health 0x1002ff1f, armor 0x1002e62f, ammo 0x1002e8df). The scale*48-1 used
-            // before put the number at a different height from retail's.
             ty = rect->y + CG_OwnerDrawTextHeight(num, scale, 0);
             CG_OwnerDrawText(tx, ty, scale, color, num, 0, 0, textStyle);
         }
     } else if (value == -1) {
-        // Infinite ammo - draw infinity symbol icon (square, sized by rect height)
         tx = rect->x;
         if (align == ITEM_ALIGN_CENTER) {
             tx -= rect->h * 0.5f;
@@ -308,7 +281,6 @@ static void CG_DrawPlayerHead(rectDef_t* rect, qboolean draw2D) {
         size = rect->w * 1.25 * (1.5 - frac * 0.5);
 
         stretch = size - rect->w * 1.25;
-        // kick in the direction of damage
         x -= stretch * 0.5 + cg.damageX * stretch * 0.5;
 
         cg.headStartYaw = 180 + cg.damageX * 45;
@@ -320,7 +292,6 @@ static void CG_DrawPlayerHead(rectDef_t* rect, qboolean draw2D) {
         cg.headEndTime = cg.time + 100 + random() * 2000;
     } else {
         if (cg.time >= cg.headEndTime) {
-            // select a new head angle
             cg.headStartYaw = cg.headEndYaw;
             cg.headStartPitch = cg.headEndPitch;
             cg.headStartTime = cg.headEndTime;
@@ -331,7 +302,6 @@ static void CG_DrawPlayerHead(rectDef_t* rect, qboolean draw2D) {
         }
     }
 
-    // if the server was frozen for a while we may have a bad head start time
     if (cg.headStartTime > cg.time) {
         cg.headStartTime = cg.time;
     }
@@ -419,7 +389,6 @@ static void CG_DrawSelectedPlayerStatus(rectDef_t* rect) {
     if (ci) {
         qhandle_t h;
         if (cgs.orderPending) {
-            // blink the icon
             if (cg.time > cgs.orderTime - 2500 && (cg.time >> 9) & 1) {
                 return;
             }
@@ -518,7 +487,6 @@ static void CG_DrawSelectedPlayerPowerup(rectDef_t* rect, qboolean draw2D) {
         y = rect->y;
 
         for (j = 0; j < PW_NUM_POWERUPS; j++) {
-            // flight and the freeze have no item
             if ((ci->powerups & (1 << j)) && j != PW_FLIGHT && j != PW_FREEZE) {
                 gitem_t* item;
                 item = BG_FindItemForPowerup(j);
@@ -547,18 +515,14 @@ static void CG_DrawSelectedPlayerHead(rectDef_t* rect, qboolean draw2D, qboolean
                 return;
             }
 
-            // offset the origin y and z to center the head
             trap_R_ModelBounds(cm, mins, maxs);
 
             origin[2] = -0.5 * (mins[2] + maxs[2]);
             origin[1] = 0.5 * (mins[1] + maxs[1]);
 
-            // calculate distance so the head nearly fills the box
-            // assume heads are taller than wide
             len = 0.7 * (maxs[2] - mins[2]);
-            origin[0] = len / 0.268;  // len / tan( fov/2 )
+            origin[0] = len / 0.268;
 
-            // allow per-model tweaking
             VectorAdd(origin, ci->headOffset, origin);
 
             angles[PITCH] = 0;
@@ -570,7 +534,6 @@ static void CG_DrawSelectedPlayerHead(rectDef_t* rect, qboolean draw2D, qboolean
             CG_DrawPic(rect->x, rect->y, rect->w, rect->h, ci->modelIcon);
         }
 
-        // if they are deferred, draw a cross out
         if (ci->deferred) {
             CG_DrawPic(rect->x, rect->y, rect->w, rect->h, cgs.media.deferShader);
         }
@@ -599,25 +562,15 @@ static void CG_DrawPlayerHealth(rectDef_t* rect, float scale, vec4_t color, qhan
         } else if (align == ITEM_ALIGN_RIGHT) {
             tx -= CG_OwnerDrawTextWidth(num, scale, 0);
         }
-        // [QL] y + text height, as retail does it (fiadd after the measuring call:
-        // health 0x1002ff1f, armor 0x1002e62f, ammo 0x1002e8df). The scale*48-1 used
-        // before put the number at a different height from retail's.
         ty = rect->y + CG_OwnerDrawTextHeight(num, scale, 0);
         CG_OwnerDrawText(tx, ty, scale, color, num, 0, 0, textStyle);
     }
 }
 
-// [QL] The individual gametypes rank players; the rest rank teams.
-// (retail: gametype >= 0 && (gametype <= GT_RACE || gametype == GT_RR))
 static qboolean CG_PlaceIsIndividual(void) {
     return cgs.gametype >= GT_FFA && (cgs.gametype <= GT_RACE || cgs.gametype == GT_RR);
 }
 
-// [QL] One "N. name...score" line, shared by 0x10032520 and 0x100329a0. The rect
-// width left after the place, score and "..." widths bounds the name, which is
-// clipped there without text style. "..." sits at that bound and only shows
-// when the name was cut (alpha 0 otherwise); the score follows it. Retail then
-// sets the colour's alpha to 1, not back to what it was. All in font 0.
 static void CG_DrawPlaceLine(rectDef_t* rect, float scale, vec4_t color, int textStyle,
                              const char* place, const char* name, const char* score) {
     int placeW, scoreW, dotsW;
@@ -645,8 +598,6 @@ static void CG_DrawPlaceLine(rectDef_t* rect, float scale, vec4_t color, int tex
     CG_DrawText((float)(limit + dotsW), rect->y, 0, scale, color, score, 0, 0, textStyle);
 }
 
-// [QL] Team line of the place ownerdraws: "      <team name>", score right-aligned.
-// The score goes through a 4-byte buffer, so retail shows at most 3 characters.
 static void CG_DrawPlaceTeamLine(rectDef_t* rect, float scale, vec4_t color, int textStyle,
                                  const char* teamName, int score) {
     char text[64];
@@ -660,15 +611,6 @@ static void CG_DrawPlaceTeamLine(rectDef_t* rect, float scale, vec4_t color, int
                 textStyle);
 }
 
-/*
-=================
-CG_DrawFirstPlaceScore
-
-[QL] cgamex86.dll 0x10032520, CG_1ST_PLACE_SCORE. Individual gametypes:
-"1. <1st place name>...<score>" (race shows the time, "-" for none). Team
-games: the leading team's name, red on a tie, with its score.
-=================
-*/
 static void CG_DrawFirstPlaceScore(rectDef_t* rect, float scale, vec4_t color, int textStyle) {
     char scoreText[15];
     char teamName[64];
@@ -678,8 +620,6 @@ static void CG_DrawFirstPlaceScore(rectDef_t* rect, float scale, vec4_t color, i
         if (CG_PlaceIsIndividual()) {
             CG_DrawText(rect->x, rect->y, 0, scale, color, "1.", 0, 0, textStyle);
         } else {
-            // Retail tests the custom name backwards here: without cg_redTeamName
-            // it prints that empty string, with one set it prints "Red Team".
             Com_sprintf(teamName, sizeof(teamName), "      %s",
                         cg_redTeamName.string[0] ? "Red Team" : cg_redTeamName.string);
             CG_DrawText(rect->x, rect->y, 0, scale, color, teamName, 0, 0, textStyle);
@@ -718,17 +658,6 @@ static void CG_DrawFirstPlaceScore(rectDef_t* rect, float scale, vec4_t color, i
     CG_DrawPlaceTeamLine(rect, scale, color, textStyle, teamName, score);
 }
 
-/*
-=================
-CG_DrawSecondPlaceScore
-
-[QL] cgamex86.dll 0x100329a0, CG_2ND_PLACE_SCORE. Individual gametypes: a
-playing local player who is not leading sees their own rank, name and score
-(race: their clientinfo score); a leader or a spectator sees the 2nd place,
-numbered "1." when tied with the first. Nothing without a second score. Team
-games: the trailing team (blue on a tie).
-=================
-*/
 static void CG_DrawSecondPlaceScore(rectDef_t* rect, float scale, vec4_t color, int textStyle) {
     char scoreText[15];
     char placeText[5];
@@ -739,7 +668,6 @@ static void CG_DrawSecondPlaceScore(rectDef_t* rect, float scale, vec4_t color, 
 
     if (score == SCORE_NOT_PRESENT) {
         if (!CG_PlaceIsIndividual()) {
-            // Same inverted custom-name test as the first place.
             Com_sprintf(teamName, sizeof(teamName), "      %s",
                         cg_blueTeamName.string[0] ? "Blue Team" : cg_blueTeamName.string);
             CG_DrawText(rect->x, rect->y, 0, scale, color, teamName, 0, 0, textStyle);
@@ -886,15 +814,6 @@ static void CG_HarvesterSkulls(rectDef_t* rect, float scale, vec4_t color, qbool
     }
 }
 
-/*
-=================
-CG_OneFlagStatus
-
-[QL] 0x10030ff0, CG_ONEFLAG_STATUS: the neutral flag's status icon, in white. Taken by a team
-it is the "stolen" one, moved 9 units down while the carrier's team is behind (or has no
-score yet) and 9 up otherwise, beside that team's score.
-=================
-*/
 static void CG_OneFlagStatus(rectDef_t* rect) {
     static const vec4_t white = {1.0f, 1.0f, 1.0f, 1.0f};
     int icon = cgs.flagStatus;
@@ -915,14 +834,6 @@ static void CG_OneFlagStatus(rectDef_t* rect) {
     trap_R_SetColor(NULL);
 }
 
-/*
-=================
-CG_FindItemByTypeTag
-
-[QL] What cgamex86.dll 0x10001170 does for the two ownerdraws below: the bg_itemlist
-entry with the given giType and giTag, or NULL.
-=================
-*/
 static gitem_t* CG_FindItemByTypeTag(int type, int tag) {
     int i;
 
@@ -934,15 +845,6 @@ static gitem_t* CG_FindItemByTypeTag(int type, int tag) {
     return NULL;
 }
 
-/*
-=================
-CG_DrawPersistantPowerUp
-
-[QL] 0x100310f0, CG_CTF_POWERUP (60). The icon of the rune in stats[STAT_RUNE], in
-any gametype. CG_RegisterItemVisuals is an addition: retail relies on the icon
-having been registered already.
-=================
-*/
 static void CG_DrawPersistantPowerUp(rectDef_t* rect) {
     gitem_t* item;
     int index;
@@ -959,16 +861,6 @@ static void CG_DrawPersistantPowerUp(rectDef_t* rect) {
     CG_DrawPic(rect->x, rect->y, rect->w, rect->h, cg_items[index].icon);
 }
 
-/*
-=================
-CG_DrawPlayerHasKey
-
-[QL] cgamex86.dll 0x10031f90, the handler of CG_PLAYER_HASKEY (59). One icon per key the
-player holds - bits 1, 2 and 4 of stats[STAT_KEY], each the IT_KEY item with that tag -
-laid out left to right, each next one half the rect width further along. The case used
-to draw the persistant powerup instead, and only in CTF.
-=================
-*/
 static void CG_DrawPlayerHasKey(rectDef_t* rect) {
     static const int keyBits[3] = {1, 2, 4};
     float xoff = 0.0f;
@@ -1019,15 +911,12 @@ static void CG_DrawAreaPowerUp(rectDef_t* rect, int align, float special, float 
         return;
     }
 
-    // sort the list by time remaining
     active = 0;
     for (i = 0; i < MAX_POWERUPS; i++) {
         if (!ps->powerups[i] || i == PW_FLIGHT || i == PW_FREEZE) {
             continue;
         }
 
-        // ZOID--don't draw if the power up has unlimited time
-        // This is true of the CTF flags
         if (ps->powerups[i] == INT_MAX) {
             continue;
         }
@@ -1037,7 +926,6 @@ static void CG_DrawAreaPowerUp(rectDef_t* rect, int align, float special, float 
             continue;
         }
 
-        // insert into the list
         for (j = 0; j < active; j++) {
             if (sortedTime[j] >= t) {
                 for (k = active - 1; k >= j; k--) {
@@ -1052,7 +940,6 @@ static void CG_DrawAreaPowerUp(rectDef_t* rect, int align, float special, float 
         active++;
     }
 
-    // draw the icons and timers
     for (i = 0; i < active; i++) {
         item = BG_FindItemForPowerup(sorted[i]);
 
@@ -1113,7 +1000,6 @@ float CG_GetValue(int ownerDraw) {
     return -1;
 }
 
-// [QL] 0x100316b0: Attack & Defend is tested along with CTF and 1-Flag CTF
 qboolean CG_OtherTeamHasFlag(void) {
     if (cgs.gametype == GT_CTF || cgs.gametype == GT_1FCTF || cgs.gametype == GT_AD) {
         int team = cg.snap->ps.persistant[PERS_TEAM];
@@ -1138,7 +1024,6 @@ qboolean CG_OtherTeamHasFlag(void) {
     return qfalse;
 }
 
-// [QL] 0x10031720: the same three gametypes
 qboolean CG_YourTeamHasFlag(void) {
     if (cgs.gametype == GT_CTF || cgs.gametype == GT_1FCTF || cgs.gametype == GT_AD) {
         int team = cg.snap->ps.persistant[PERS_TEAM];
@@ -1163,16 +1048,6 @@ qboolean CG_YourTeamHasFlag(void) {
     return qfalse;
 }
 
-/*
-=================
-CG_PlayerIsFirstPlace
-
-[QL] cgamex86.dll 0x1002a500, behind CG_SHOW_IF_PLYR_IS_FIRST_PLACE and _NOT_FIRST_PLACE.
-A spectator is never first. FFA, Duel, Race and Red Rover want the untied first rank
-(a PERS_RANK carrying RANK_TIED_FLAG is not first); the team gametypes ask whether the
-viewed player's team leads, red keeping the lead on a tie.
-=================
-*/
 static qboolean CG_PlayerIsFirstPlace(void) {
     const playerState_t* ps;
 
@@ -1199,9 +1074,6 @@ static qboolean CG_PlayerIsFirstPlace(void) {
     }
 }
 
-// [QL] the duel board's per-weapon rows (ownerdrawflag2) and the weaponStats slot each one
-// tests, in scores_duel order (slot 0 is the gauntlet). A row shows when either duelist
-// fired the weapon (0x10031b6b..0x10031cba).
 static const struct {
     int flag;
     int slot;
@@ -1212,16 +1084,6 @@ static const struct {
     {CG_SHOW_IF_NG_FIRED, 10}, {CG_SHOW_IF_PL_FIRED, 11}, {CG_SHOW_IF_HMG_FIRED, 13},
 };
 
-/*
-=================
-CG_OwnerDrawVisible
-
-[QL] 0x10031790. The ownerdrawflag tests run first and in this order, and several settle the
-answer on their own, false included, instead of falling through; the ownerdrawflag2 tests come
-last and only ever answer true. CG_SHOW_IF_WARMUP is the warmup before the countdown
-(cg.warmup < 0) and CG_SHOW_IF_NOT_WARMUP everything else, the countdown included.
-=================
-*/
 qboolean CG_OwnerDrawVisible(int flags, int flags2) {
     const playerState_t* ps;
     int pmType;
@@ -1333,9 +1195,6 @@ qboolean CG_OwnerDrawVisible(int flags, int flags2) {
     }
 
     if (flags & CG_SHOW_IF_CHAT_VISIBLE) {
-        // [QL] 0x10031963: only while the chat history is up (+chat, togglechathistory) or
-        // behind the scoreboard. Always true, it left comp_hud's chat backdrop (hud3) as a
-        // dark band across the view.
         return (cg.chatHistoryShowing || cg.scoreBoardShowing) ? qtrue : qfalse;
     }
 
@@ -1371,7 +1230,6 @@ qboolean CG_OwnerDrawVisible(int flags, int flags2) {
         return qtrue;
     }
 
-    // ownerdrawflag2; a spectator sees both duelists and both teams
     if (ps) {
         if ((flags2 & CG_SHOW_IF_PLYR1) &&
             (ps->clientNum == cg.duelScores[0].clientNum || pmType == PM_SPECTATOR)) {
@@ -1412,8 +1270,6 @@ qboolean CG_OwnerDrawVisible(int flags, int flags2) {
         return qtrue;
     }
 
-    // "followed": the duelist's entity carries the watched client. Retail indexes cg_entities
-    // with the raw clientNum, which is -1 until a duel score arrives; that case is skipped.
     for (i = 0; i < 2; i++) {
         int duelist = cg.duelScores[i].clientNum;
 
@@ -1424,7 +1280,6 @@ qboolean CG_OwnerDrawVisible(int flags, int flags2) {
         }
     }
 
-    // the gauntlet has no attempts and is tested on damage instead
     if ((flags2 & CG_SHOW_IF_G_FIRED) &&
         (cg.duelScores[0].weaponStats[0].damage || cg.duelScores[1].weaponStats[0].damage)) {
         return qtrue;
@@ -1461,7 +1316,6 @@ static void CG_DrawAreaTeamChat(rectDef_t* rect, float scale, vec4_t color, qhan
     CG_OwnerDrawText(rect->x, rect->y, scale, color, teamChat1, 0, 0, 0);
 }
 
-
 const char* CG_GetKillerText(void) {
     const char* s = "";
     if (cg.killerName[0]) {
@@ -1470,17 +1324,6 @@ const char* CG_GetKillerText(void) {
     return s;
 }
 
-/*
-=================
-CG_DrawKiller
-
-[QL] cgamex86.dll 0x10032110, CG_KILLER (0x3f), reached only while cg.killerName is set
-(0x1003b44d). "Fragged by <name>" in font 0, placed by the item's align, with its baseline on
-the rect's bottom edge; then the killing weapon's icon, 16 square, 8 past the end of the text
-and 4 above the rect's top (0x100321e2). The fork centred the text on the rect's top edge with
-no icon, which laid it over the scoreboard's "Teams are tied" line.
-=================
-*/
 static void CG_DrawKiller(rectDef_t* rect, float scale, vec4_t color, int textStyle, int align) {
     const char* s = CG_GetKillerText();
     int w = CG_DrawTextWidth(s, scale, 0, 0);
@@ -1495,11 +1338,6 @@ static void CG_DrawKiller(rectDef_t* rect, float scale, vec4_t color, int textSt
     CG_DrawPic(x + w + 8, rect->y - 4, 16, 16, cg.killerIcon);
 }
 
-/*
-[QL] cgamex86.dll 0x10032260, CG_CAPFRAGLIMIT: the number alone, the limit of the mode (frags,
-captures, rounds or score) and in Race the points still ahead; centred or right-aligned on
-the rect's x as the item asks.
-*/
 static void CG_DrawCapFragLimit(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
     const char *s;
     int limit;
@@ -1550,22 +1388,18 @@ static void CG_Draw2ndPlace(rectDef_t* rect, float scale, vec4_t color, qhandle_
     }
 }
 
-// [QL] Binary: FUN_10034b30 - game status text for CG_GAME_STATUS ownerDraw
 const char* CG_GetGameStatusText(void) {
     const char* s = "";
 
-    // [QL] Race returns empty (binary-verified)
     if (cgs.gametype == GT_RACE) {
         return s;
     }
 
-    // [QL] FFA/Duel/RR - individual placement
     if (cgs.gametype < GT_TEAM || cgs.gametype == GT_RR) {
         if (cg.snap->ps.persistant[PERS_TEAM] != TEAM_SPECTATOR) {
             s = va("%s place with %i", CG_PlaceString(cg.snap->ps.persistant[PERS_RANK] + 1), cg.snap->ps.persistant[PERS_SCORE]);
         }
     } else {
-        // Team games
         if (cg.teamScores[0] == cg.teamScores[1]) {
             s = va("Teams are tied at %i", cg.teamScores[0]);
         } else if (cg.teamScores[0] >= cg.teamScores[1]) {
@@ -1577,8 +1411,6 @@ const char* CG_GetGameStatusText(void) {
     return s;
 }
 
-// [QL] Binary: FUN_10034a00 - match status text for CG_MATCH_STATUS ownerDraw
-// Returns "MATCH WARMUP/IN PROGRESS/SUMMARY" + score details
 const char* CG_GetMatchStatusText(void) {
     const char* prefix;
 
@@ -1594,7 +1426,6 @@ const char* CG_GetMatchStatusText(void) {
         return prefix;
     }
 
-    // FFA/Duel/RR - individual placement
     if (cgs.gametype < GT_TEAM || cgs.gametype == GT_RR) {
         if (cg.snap->ps.persistant[PERS_TEAM] != TEAM_SPECTATOR) {
             return va("%s - %s place with %i", prefix,
@@ -1604,7 +1435,6 @@ const char* CG_GetMatchStatusText(void) {
         return prefix;
     }
 
-    // Team games
     if (cg.teamScores[0] == cg.teamScores[1]) {
         return va("%s - Teams are tied at %i", prefix, cg.teamScores[0]);
     } else if (cg.teamScores[0] > cg.teamScores[1]) {
@@ -1632,10 +1462,6 @@ static void CG_DrawGameType(rectDef_t* rect, float scale, vec4_t color, qhandle_
 }
 
 static void CG_Text_Paint_Limit(float* maxX, float x, float y, float scale, vec4_t color, const char* text, float adjust, int limit) {
-    // [QL] draw text truncated to fit within *maxX (a 640-space x bound), report
-    // the resulting right edge. The old per-glyph pixel clip is now a proportional
-    // character-count fit against the engine glyph atlas, close enough for the
-    // owner-draw layout callers that read *maxX.
     int w640;
     float avail = *maxX - x;
     (void)adjust;
@@ -1670,7 +1496,6 @@ void CG_DrawNewTeamInfo(rectDef_t* rect, float text_x, float text_y, float scale
     gitem_t* item;
     qhandle_t h;
 
-    // max player name width
     pwidth = 0;
     count = (numSortedTeamPlayers > 8) ? 8 : numSortedTeamPlayers;
     for (i = 0; i < count; i++) {
@@ -1682,7 +1507,6 @@ void CG_DrawNewTeamInfo(rectDef_t* rect, float text_x, float text_y, float scale
         }
     }
 
-    // max location name width
     lwidth = 0;
     for (i = 1; i < MAX_LOCATIONS; i++) {
         p = CG_ConfigString(CS_LOCATIONS + i);
@@ -1710,22 +1534,16 @@ void CG_DrawNewTeamInfo(rectDef_t* rect, float text_x, float text_y, float scale
                 }
             }
 
-            // FIXME: max of 3 powerups shown properly
             xx = rect->x + (PIC_WIDTH * 3) + 2;
 
             CG_GetColorForHealth(ci->health, ci->armor, hcolor);
             trap_R_SetColor(hcolor);
             CG_DrawPic(xx, y + 1, PIC_WIDTH - 2, PIC_WIDTH - 2, cgs.media.heartShader);
 
-            // Com_sprintf (st, sizeof(st), "%3i %3i", ci->health,	ci->armor);
-            // CG_OwnerDrawText(xx, y + text_y, scale, hcolor, st, 0, 0);
-
-            // draw weapon icon
             xx += PIC_WIDTH + 1;
 
             trap_R_SetColor(NULL);
             if (cgs.orderPending) {
-                // blink the icon
                 if (cg.time > cgs.orderTime - 2500 && (cg.time >> 9) & 1) {
                     h = 0;
                 } else {
@@ -1825,14 +1643,10 @@ void CG_DrawMedal(int ownerDraw, rectDef_t* rect, float scale, vec4_t color, qha
     trap_R_SetColor(NULL);
 }
 
-// [QL] scoreboard owner draws
-
 static void CG_DrawMapName(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     CG_OwnerDrawText(rect->x, rect->y, scale, color, CG_ConfigString(CS_MESSAGE), 0, 0, textStyle);
 }
 
-// [QL] cgamex86.dll 0x1002e050: moves rect->x for a centred or right-aligned
-// text, measured in font 0. Other alignments leave it alone.
 static void CG_AlignRectText(rectDef_t *rect, const char *text, float scale, int align) {
     if (align == ITEM_ALIGN_CENTER) {
         rect->x -= CG_DrawTextWidth(text, scale, 0, 0) * 0.5;
@@ -1841,9 +1655,6 @@ static void CG_AlignRectText(rectDef_t *rect, const char *text, float scale, int
     }
 }
 
-// [QL] cgamex86.dll 0x10030c00, CG_LEVELTIMER. "m:ss" from CG_GetLevelTimerMsec
-// (0x10029770), which already handles countdown/count-up, overtime and pauses;
-// "0:00" when it reports no timer. Font 0, honours the item alignment.
 static void CG_DrawLevelTimer(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
     int msec = 0;
     int mins = 0, tens = 0, ones = 0;
@@ -1863,13 +1674,6 @@ static void CG_DrawLevelTimer(rectDef_t *rect, float scale, vec4_t color, int te
     CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-/*
-[QL] cgamex86.dll 0x10032f30, CG_PLAYER_COUNTS. "%d/%d Players": every connected client,
-spectators included, out of sv_maxclients; with a teamsize (and not in duel) out of the
-teamsize, or twice it in the team modes, capped at sv_maxclients. In the item's font, and
-aligned by the item: left by default, which is how the join menu keeps it clear of the
-game type icon (it used to be centred on the item's x, on top of the icon).
-*/
 static void CG_DrawPlayerCounts(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
     const char *s;
     int count = 0, maxPlayers;
@@ -1920,17 +1724,7 @@ static void CG_DrawSelectedPlayerTeamColor(rectDef_t *rect) {
     }
 }
 
-/*
-=================
-CG_DrawSelectedPlayerAccuracy
-
-[QL] cgamex86.dll 0x10034590, CG_SELECTED_PLYR_ACCURACY (0x5d): "%d%%" of the selected
-score's accuracy in the item's font. The fork sent this ownerdraw to CG_DrawFollowPlayerName,
-so the FFA board printed a player name after "Accuracy:" and ran it into "Best Weapon:".
-=================
-*/
 static void CG_DrawSelectedPlayerAccuracy(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
-    // retail reads cg.scores[-1] while a spectator selects nothing; nothing is drawn then
     if (cg.selectedScore < 0 || cg.selectedScore >= MAX_CLIENTS) {
         return;
     }
@@ -1938,15 +1732,6 @@ static void CG_DrawSelectedPlayerAccuracy(rectDef_t *rect, float scale, vec4_t c
                      textStyle);
 }
 
-/*
-=================
-CG_DrawBestWeaponName
-
-[QL] cgamex86.dll 0x100345f0, CG_PLYR_BEST_WEAPON_NAME (0x5b): the selected score's best
-weapon under retail's own names ("Grenade", "Rail Gun", "Chain Gun", ...), and nothing for the
-grappling hook or an unset weapon. The fork printed the item pickup names.
-=================
-*/
 static void CG_DrawBestWeaponName(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     static const char* names[WP_NUM_WEAPONS] = {
         NULL, "Gauntlet", "Machine Gun", "Shotgun", "Grenade", "Rocket Launcher", "Lightning Gun",
@@ -1964,11 +1749,6 @@ static void CG_DrawBestWeaponName(rectDef_t *rect, float scale, vec4_t color, in
     }
 }
 
-// [QL] Game limit display (frag/cap/round/score limit based on gametype)
-/*
-[QL] cgamex86.dll 0x10033800, CG_GAME_LIMIT: "Frag Limit: 50", or the captures, rounds or
-score of the mode; centred on the rect's x when the item asks.
-*/
 static void CG_DrawGameLimit(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
     const char *s;
     float x = rect->x;
@@ -2000,12 +1780,6 @@ static void CG_DrawGameLimit(rectDef_t *rect, float scale, vec4_t color, int tex
     CG_DrawText(x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-/*
-[QL] cgamex86.dll 0x10034420, CG_MATCH_DETAILS: "MATCH WARMUP - DUEL - Aerowalk". The state
-is MATCH SUMMARY at the intermission, MATCH WARMUP while cg.warmup is set and MATCH IN
-PROGRESS otherwise; then the short game type and the map's title (CS_MESSAGE), never its
-file. Font 0 at the rect's corner.
-*/
 static void CG_DrawMatchDetails(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     static const char *const shortNames[GT_MAX_GAME_TYPE] = {
         "FFA", "DUEL", "RACE", "TDM", "CA", "CTF", "1F", "OB", "HAR", "FT", "DOM", "AD", "RR"};
@@ -2025,12 +1799,10 @@ static void CG_DrawMatchDetails(rectDef_t *rect, float scale, vec4_t color, int 
                 0, 0, textStyle);
 }
 
-// [QL] Match status: "MATCH WARMUP/IN PROGRESS/SUMMARY" + score details (binary-verified)
 static void CG_DrawMatchStatus(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     CG_OwnerDrawText(rect->x, rect->y, scale, color, CG_GetMatchStatusText(), 0, 0, textStyle);
 }
 
-// [QL] Round number display for CA/FT
 static void CG_DrawRound(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     if (cgs.gametype == GT_CA || cgs.gametype == GT_FREEZE || cgs.gametype == GT_RR) {
         if (cg.warmup) {
@@ -2042,10 +1814,6 @@ static void CG_DrawRound(rectDef_t *rect, float scale, vec4_t color, int textSty
     }
 }
 
-// [QL] cgamex86.dll 0x10033b10, CG_ROUNDTIMER. Round-based modes only
-// (CA/FT/AD/RR): the last 30 seconds of the round, in red, whole seconds
-// truncated, from 30 down to 0 while at least 1 ms is left. Hidden during a
-// warmup and before the round start time arrives. Font 0, item alignment.
 static void CG_DrawRoundTimer(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
     int remaining;
     const char *s;
@@ -2070,10 +1838,6 @@ static void CG_DrawRoundTimer(rectDef_t *rect, float scale, vec4_t color, int te
     CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] cgamex86.dll 0x10030d20, CG_OVERTIME (the ownerdraw case skips it during
-// a warmup, 0x1003b942). Not in the round-based modes; needs a timelimit and
-// g_overtime. "Overtime", or "Overtime xN" past the first period, N from
-// CG_GetOvertimeCount (0x1002a5f0). Font 0, item alignment.
 static void CG_DrawOvertime(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
     int count;
     const char *s;
@@ -2102,17 +1866,6 @@ static void CG_DrawOvertime(rectDef_t *rect, float scale, vec4_t color, int text
     CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-/*
-=================
-CG_DrawLocalTime
-
-[QL] cgamex86.dll 0x10033d80, CG_LOCALTIME (0x10). The clock under the scoreboards reads
-"22:22 (Sep 13, 2026)": 24-hour time and the date, day zero-padded, from
-"%02d:%02d (%s %02d, %d)" (0x100708a0) and a table of three-letter month names; the fork
-drew a 12-hour "9:04 pm". It is measured and drawn in the item's font and placed by the
-item's align (0x10033e54), where the fork always right-aligned it.
-=================
-*/
 static void CG_DrawLocalTime(rectDef_t *rect, int fontIndex, float scale, vec4_t color, int textStyle, int align) {
     static const char* months[12] = {
         "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
@@ -2134,7 +1887,6 @@ static void CG_DrawLocalTime(rectDef_t *rect, int fontIndex, float scale, vec4_t
     CG_DrawText(x, rect->y, fontIndex, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] Match state: WARMUP / IN PROGRESS / SUMMARY
 static void CG_DrawMatchState(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     const char *s;
     if (cg.warmup) {
@@ -2147,7 +1899,6 @@ static void CG_DrawMatchState(rectDef_t *rect, float scale, vec4_t color, int te
     CG_OwnerDrawText(rect->x, rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] Match winner display
 static void CG_DrawMatchWinner(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     const char *s = "";
     if (cg.snap && cg.snap->ps.pm_type == PM_INTERMISSION) {
@@ -2162,17 +1913,6 @@ static void CG_DrawMatchWinner(rectDef_t *rect, float scale, vec4_t color, int t
     CG_OwnerDrawText(rect->x, rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] Follow player name
-/*
-=================
-CG_DrawFollowPlayerName
-
-[QL] 0x10033bf0, for CG_FOLLOW_PLAYER_NAME (94) and its _EX (95). The "Following - " prefix
-belongs to 94 alone (0x10033c58), so the competitive spectator HUD shows just the name. In team
-modes the colour comes from the table at 0x10078610. There is no PMF_FOLLOW test: it names
-whoever the snapshot playerState belongs to.
-=================
-*/
 static void CG_DrawFollowPlayerName(rectDef_t *rect, int ownerDraw, int align, float scale, vec4_t color, int textStyle) {
     static vec4_t followRed   = {1.0f, 0.5f, 0.5f, 1.0f};
     static vec4_t followBlue  = {0.5f, 0.75f, 1.0f, 1.0f};
@@ -2213,16 +1953,6 @@ static void CG_DrawFollowPlayerName(rectDef_t *rect, int ownerDraw, int align, f
     CG_OwnerDrawText(x, rect->y, scale, nameColor, text, 0, 0, textStyle);
 }
 
-/*
-=================
-CG_DrawTeamName
-
-[QL] 0x10030090, CG_RED_NAME and CG_BLUE_NAME. The name is cg_redTeamName or cg_blueTeamName
-cut to 39 characters, or "Red Team" / "Blue Team" while empty. The item's align places it, which
-the TDM board needs to keep the name out of its score box. Measured and drawn in font 0
-whatever the item asks for.
-=================
-*/
 static void CG_DrawTeamName(int ownerDraw, rectDef_t* rect, float scale, vec4_t color, int textStyle, int align) {
     char name[40];
     float x;
@@ -2250,8 +1980,6 @@ static void CG_DrawTeamName(int ownerDraw, rectDef_t* rect, float scale, vec4_t 
 
 static float CG_OwnerDrawAlignX(rectDef_t *rect, const char *s, float scale, int align);
 
-// [QL] cgamex86.dll 0x10039e70: the team's average ping over everyone on it, as "(%d)", in green
-// up to 40, yellow up to 80 and red above, like the duel's; the item's own colour is not used
 static void CG_DrawTeamAvgPing(rectDef_t *rect, float scale, int textStyle, int align, int team) {
     int i, count = 0, total = 0;
     const char *s;
@@ -2278,14 +2006,11 @@ static void CG_DrawTeamAvgPing(rectDef_t *rect, float scale, int textStyle, int 
     CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, c, s, 0, 0, textStyle);
 }
 
-// [QL] Configstring-based owner draw (MVP, most damage, most accurate, etc.)
-// [QL] 1st/2nd place score (numeric score value)
 static void CG_DrawPlaceScore(rectDef_t *rect, float scale, vec4_t color, int textStyle, int place) {
     CG_OwnerDrawText(rect->x, rect->y, scale, color,
         va("%d", place == 1 ? cgs.scores1 : cgs.scores2), 0, 0, textStyle);
 }
 
-// [QL] Player end-game score
 static void CG_DrawPlayerEndGameScore(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     if (cg.snap) {
         CG_OwnerDrawText(rect->x, rect->y, scale, color,
@@ -2293,7 +2018,6 @@ static void CG_DrawPlayerEndGameScore(rectDef_t *rect, float scale, vec4_t color
     }
 }
 
-// [QL] Team color for HUD bars (from binary - team-specific tinting)
 static const float *CG_HudBarTeamColor(void) {
     static vec4_t colorFree = { 1.0f, 0.8f, 0.2f, 1.0f };
     static vec4_t colorRed  = { 1.0f, 0.2f, 0.1f, 1.0f };
@@ -2310,8 +2034,6 @@ static const float *CG_HudBarTeamColor(void) {
     }
 }
 
-// [QL] Health bar 100: fills LEFT-to-RIGHT, clamped to maxHealth
-// Uses texture coordinate cropping (s2 = health/maxHealth) for shaped alpha mask
 static void CG_DrawHealthBar100(rectDef_t *rect, qhandle_t shader) {
     float health, maxHealth, scaledWidth, s2;
     float x, y, w, h;
@@ -2334,8 +2056,6 @@ static void CG_DrawHealthBar100(rectDef_t *rect, qhandle_t shader) {
     trap_R_SetColor(NULL);
 }
 
-// [QL] Health bar 200: fills BOTTOM-to-TOP for overhealth (health > maxHealth)
-// Height scaled by 0.6875 factor, texture t1 cropped from top
 static void CG_DrawHealthBar200(rectDef_t *rect, qhandle_t shader) {
     float maxHealth, overhealth, scaledHeight, t1;
     float x, y, w, h;
@@ -2358,8 +2078,6 @@ static void CG_DrawHealthBar200(rectDef_t *rect, qhandle_t shader) {
     trap_R_SetColor(NULL);
 }
 
-// [QL] Armor bar 100: fills RIGHT-to-LEFT, clamped to 100
-// Texture s1 cropped from left, position offset to right edge
 static void CG_DrawArmorBar100(rectDef_t *rect, qhandle_t shader) {
     float armor, scaledWidth, s1;
     float x, y, w, h;
@@ -2380,8 +2098,6 @@ static void CG_DrawArmorBar100(rectDef_t *rect, qhandle_t shader) {
     trap_R_SetColor(NULL);
 }
 
-// [QL] Armor bar 200: fills BOTTOM-to-TOP for overarmor (armor > 100)
-// Height scaled by 0.6875 factor, texture t1 cropped from top
 static void CG_DrawArmorBar200(rectDef_t *rect, qhandle_t shader) {
     float overarmor, scaledHeight, t1;
     float x, y, w, h;
@@ -2402,17 +2118,9 @@ static void CG_DrawArmorBar200(rectDef_t *rect, qhandle_t shader) {
     trap_R_SetColor(NULL);
 }
 
-// [QL] Race status and times
 static void CG_DrawRaceStatus(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
-    // [QL binary-verified] CG_DrawRespawnMessage case 0x34 (Address: 0x1002f1f0)
-    // Draws at rect->x, rect->y directly - menu alignment handles positioning
     const char *s;
 
-    // [QL] 0x1002f33a: the hint does not depend on a run being under way but on who is
-    // watching: it shows while you are not a spectator and not watching a demo. Showing it
-    // only with the run stopped made it appear and vanish at the start.
-    // [QL] 0x1002f372: once the kill command has been used the key is known and the hint goes;
-    // with no key bound it stays
     if (!(cg.snap->ps.eFlags & EF_SPECTATOR) && !cg.demoPlayback) {
         int keynum = trap_Key_GetKey("kill");
         const char *hint = NULL;
@@ -2426,37 +2134,28 @@ static void CG_DrawRaceStatus(rectDef_t *rect, float scale, vec4_t color, int te
             hint = "Bind 'kill' to respawn";
         }
         if (hint) {
-            // [QL] 0x1002f400: font 0, scale 0.18, half-transparent white, shadowed
             vec4_t hintColor = {1.0f, 1.0f, 1.0f, 0.5f};
             CG_DrawText(rect->x + 19.0f, rect->y + 27.0f, 0, 0.18f, hintColor, hint, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
         }
     }
 
-    // [QL] 0x1002f408: there is always a title, and there are only two. With no run and no
-    // previous time the function used to return without drawing, leaving the box empty.
     s = cg.race.active ? "CURRENT RUN" : "LAST TIME";
-    CG_DrawText(rect->x, rect->y, 0, scale, colorYellow, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);  // [QL] 0x1002f5ae
+    CG_DrawText(rect->x, rect->y, 0, scale, colorYellow, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 }
 
 static void CG_DrawRaceTimes(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
-    // [QL binary-verified] CG_DrawRespawnMessage case 0x35
-    // Draws at rect->x, rect->y directly - menu alignment handles positioning
     int ms;
     const char *s;
 
-    // [QL] 0x1002f4c0: the clock is always drawn, running during a run (held at the start of a
-    // pause) and stopped at the last time otherwise, in 0x10001320's format
     if (cg.race.active) {
         ms = (cgs.freezeEnd ? cgs.freezeEnd : cg.time) - cg.race.startTime;
     } else {
         ms = cg.race.lastTime;
     }
     s = CG_FormatRaceTime(ms);
-    CG_DrawText(rect->x, rect->y, 0, scale, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);  // [QL] 0x1002f5ae
+    CG_DrawText(rect->x, rect->y, 0, scale, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 }
 
-// [QL] Speedometer ownerdraw - text-only display from speed history
-// Used by menu system (mode 4 text-only, or any menu ownerdraw referencing CG_SPEEDOMETER)
 static void CG_DrawSpeedometer(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     int speedInt;
     const char *text;
@@ -2468,18 +2167,6 @@ static void CG_DrawSpeedometer(rectDef_t *rect, float scale, vec4_t color, int t
     CG_OwnerDrawText(rect->x, rect->y, scale, color, text, 0, 0, textStyle);
 }
 
-// [QL] Team-colorized health display
-/*
-=================
-CG_HealthGradientColor
-
-[QL] 0x1000ca90. The health tint of CG_HEALTH_COLORIZED, a gradient rather than
-steps: below max it runs red to yellow, above it yellow to white, with max =
-handicap / 100 * g_startingHealth clamped to g_startingHealth (0x1000cab7). The
-per-client value at clientInfo_t+0x130 is taken to be the handicap from how it is
-used; the fork's clientInfo_t does not share the binary's layout.
-=================
-*/
 void CG_HealthGradientColor(int clientNum, int health, vec3_t out) {
     int handicap = 100;
     int maxHealth;
@@ -2505,17 +2192,6 @@ void CG_HealthGradientColor(int clientNum, int health, vec3_t out) {
     }
 }
 
-/*
-=================
-CG_DrawHealthColorized
-
-[QL] cgamex86.dll 0x1002f6b0. Draws the item's SHADER tinted by health - the version
-kept before drew the health as a number instead. The health comes from the snapshot
-playerState, forced to 0 when the followed player's entity carries EF_DEAD
-(cg_entities[ps.clientNum], eFlags at +0x8), and the tint from CG_HealthGradientColor
-for that entity's clientNum (+0xb0). Alpha is the item's.
-=================
-*/
 static void CG_DrawHealthColorized(rectDef_t *rect, vec4_t color, qhandle_t shader) {
     centity_t* cent;
     int health;
@@ -2535,7 +2211,6 @@ static void CG_DrawHealthColorized(rectDef_t *rect, vec4_t color, qhandle_t shad
     trap_R_SetColor(NULL);
 }
 
-// [QL] Team/enemy player count
 static void CG_DrawTeamPlyrCount(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     int count = 0, i, myTeam;
     if (!cg.snap) return;
@@ -2557,10 +2232,6 @@ static void CG_DrawEnemyPlyrCount(rectDef_t *rect, float scale, vec4_t color, in
     CG_OwnerDrawText(rect->x, rect->y, scale, color, va("%d", count), 0, 0, textStyle);
 }
 
-// [QL] the map vote at the end of a match (ui/endgamevote.menu). Its three options are in
-// CS_ROTATIONMAPS as map_N, title_N and gt_N, and every text is aligned the way its item asks.
-
-// [QL] 0x10035790: the picture is the preview levelshot, "default" for a map without a name
 static void CG_DrawVoteMapShot(rectDef_t *rect, int index, qhandle_t shader) {
     const char *info = CG_ConfigString(CS_ROTATIONMAPS);
     const char *mapname;
@@ -2576,7 +2247,6 @@ static void CG_DrawVoteMapShot(rectDef_t *rect, int index, qhandle_t shader) {
     CG_DrawPic(rect->x, rect->y, rect->w, rect->h, pic);
 }
 
-// [QL] 0x10035660 (title_N) and 0x100355d0 (map_N): one value of the options, aligned
 static void CG_DrawVoteMapValue(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, const char *field, int index) {
     const char *info = CG_ConfigString(CS_ROTATIONMAPS);
     const char *value;
@@ -2585,7 +2255,6 @@ static void CG_DrawVoteMapValue(rectDef_t *rect, float scale, vec4_t color, int 
     CG_DrawText(CG_OwnerDrawAlignX(rect, value, scale, align), rect->y, 0, scale, color, value, 0, 0, textStyle);
 }
 
-// [QL] 0x100356f0: the game type sits 8 units above its item's line
 static void CG_DrawVoteGameType(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int index) {
     const char *info = CG_ConfigString(CS_ROTATIONMAPS);
     const char *gt;
@@ -2594,10 +2263,6 @@ static void CG_DrawVoteGameType(rectDef_t *rect, float scale, vec4_t color, int 
     CG_DrawText(CG_OwnerDrawAlignX(rect, gt, scale, align), rect->y - 8.0f, 0, scale, color, gt, 0, 0, textStyle);
 }
 
-
-// [QL] 0x10035920: the twenty seconds of the vote, "second" for the last one, and the text on the
-// item's x the way its align asks. The end-of-match vote has it right-aligned at 610, so it ends
-// inside the frame; drawn from 610 it ran off the right of the screen.
 static void CG_DrawVoteTimer(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
     const int sec = (cgs.voteTime - cg.time + 20000) / 1000;
     const char *s;
@@ -2612,9 +2277,6 @@ static void CG_DrawVoteTimer(rectDef_t *rect, float scale, vec4_t color, int tex
     CG_DrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] 0x10033530: "TO: n", the timeouts the team has left -- g_timeoutCount while its
-// configstring is empty (0x100495ef) -- aligned by the item. Nothing without timeouts
-// (0x1003b996).
 static void CG_DrawTimeoutCount(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int csIndex) {
     const char *s = CG_ConfigString(csIndex);
     const char *text;
@@ -2632,19 +2294,10 @@ static void CG_DrawTimeoutCount(rectDef_t *rect, float scale, vec4_t color, int 
     CG_DrawText(x, rect->y, 0, scale, color, text, 0, 0, textStyle);
 }
 
-// [QL] Duel overlay owner-draws.
-// Detailed duel scoreboard, two players side by side. 1st-player slots are ids
-// 0x67-0xc0, 2nd-player slots 0xc1-0x11a; the binary picks the player by testing
-// the id against the 2nd-player range. Per-player data comes from cg.duelScores[]
-// (filled by CG_ParseDuelScores in cg_servercmds.c). Each per-stat draw below is
-// a separate function in the binary.
-
-// which duel player an owner-draw id refers to. 2nd player = ids 0xc1..0x11a.
 static int CG_DuelPlayerIndex(int ownerDraw) {
     return (ownerDraw >= CG_2ND_PLYR && ownerDraw <= CG_2ND_PLYR_TIER) ? 1 : 0;
 }
 
-// binary guard: draw only if the slot has a valid client, or during warmup.
 static qboolean CG_DuelStatShown(const duelScore_t *ds) {
     if (!cg.duelScoresValid) {
         return qfalse;
@@ -2658,7 +2311,6 @@ static qboolean CG_DuelStatShown(const duelScore_t *ds) {
     return cgs.clientinfo[ds->clientNum].infoValid;
 }
 
-// x offset for the given align; text is measured with the owner-draw font.
 static float CG_OwnerDrawAlignX(rectDef_t *rect, const char *s, float scale, int align) {
     float x = rect->x;
     if (align == ITEM_ALIGN_CENTER) {
@@ -2669,10 +2321,6 @@ static float CG_OwnerDrawAlignX(rectDef_t *rect, const char *s, float scale, int
     return x;
 }
 
-// [QL] map an owner-draw id to the weapon slot it addresses (binary
-// CG_OwnerDrawWeaponIndex). The frags row includes the gauntlet, the other rows
-// start at the machinegun. Weapon enum order: G1 MG2 SG3 GL4 RL5 LG6 RG7 PG8 BFG9
-// NG11 PL12 CG13 HMG14 (CG/NG/PL slots are 13/11/12, not 11/12/13).
 static int CG_OwnerDrawWeaponIndex(int ownerDraw) {
     switch (ownerDraw) {
     case 0x75: case 0x9a: case 0xcf: case 0xf4:
@@ -2718,12 +2366,6 @@ static int CG_OwnerDrawWeaponIndex(int ownerDraw) {
     }
 }
 
-// [QL] cgamex86.dll 0x10035bd0, CG_1ST_PLYR (0x67) / CG_2ND_PLYR (0xc1; retail
-// takes ids 0xc1-0x11a as the second player). The name is CS_NAME1STPLAYER /
-// CS_NAME2NDPLAYER, not the scores_duel client. Wider than 140 it loses one
-// character at a time until it measures under 132, then gets "...". With the
-// intermission started and no name it shows "-". Measured and drawn in the
-// item's font, aligned.
 static void CG_DrawDuelPlayerName(int ownerDraw, rectDef_t *rect, int fontIndex, float scale, vec4_t color, int textStyle, int align) {
     char name[40];
     char shortName[40];
@@ -2759,9 +2401,6 @@ static void CG_DrawDuelPlayerName(int ownerDraw, rectDef_t *rect, int fontIndex,
     CG_DrawText(rect->x, rect->y, fontIndex, scale, color, text, 0, 0, textStyle);
 }
 
-// [QL] cgamex86.dll 0x10035f30, CG_1ST_PLYR_SCORE (0x69) / CG_2ND_PLYR_SCORE:
-// CS_SCORE1STPLAYER / CS_SCORE2NDPLAYER; nothing for -9999 or -999. Font 0,
-// aligned.
 static void CG_DrawDuelPlayerScore(int ownerDraw, rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
     int score = (ownerDraw == CG_1ST_PLYR_SCORE) ? cgs.score1stPlayer : cgs.score2ndPlayer;
     const char *s;
@@ -2774,7 +2413,6 @@ static void CG_DrawDuelPlayerScore(int ownerDraw, rectDef_t *rect, float scale, 
     CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-// 0x6a/0xc4 CG_DrawDuelPlayerFrags.
 static void CG_DrawDuelPlayerFrags(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
     int idx = CG_DuelPlayerIndex(ownerDraw);
     duelScore_t *ds = &cg.duelScores[idx];
@@ -2784,7 +2422,6 @@ static void CG_DrawDuelPlayerFrags(rectDef_t *rect, float scale, vec4_t color, i
     CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// 0x6b/0xc5 CG_DrawDuelPlayerDeaths.
 static void CG_DrawDuelPlayerDeaths(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
     int idx = CG_DuelPlayerIndex(ownerDraw);
     duelScore_t *ds = &cg.duelScores[idx];
@@ -2794,7 +2431,6 @@ static void CG_DrawDuelPlayerDeaths(rectDef_t *rect, float scale, vec4_t color, 
     CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// 0x6c/0xc6 CG_DrawDuelPlayerDmg.
 static void CG_DrawDuelPlayerDmg(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
     int idx = CG_DuelPlayerIndex(ownerDraw);
     duelScore_t *ds = &cg.duelScores[idx];
@@ -2804,7 +2440,6 @@ static void CG_DrawDuelPlayerDmg(rectDef_t *rect, float scale, vec4_t color, int
     CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// 0x6e/0xc8 CG_DrawDuelPlayerPing. Ping is colour-coded green/yellow/red.
 static void CG_DrawDuelPlayerPing(rectDef_t *rect, float scale, int textStyle, int align, int ownerDraw) {
     int idx = CG_DuelPlayerIndex(ownerDraw);
     duelScore_t *ds = &cg.duelScores[idx];
@@ -2823,7 +2458,6 @@ static void CG_DrawDuelPlayerPing(rectDef_t *rect, float scale, int textStyle, i
     CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, c, s, 0, 0, textStyle);
 }
 
-// 0x6f/0xc9 CG_DrawDuelPlayerWins. Win count comes from the client info.
 static void CG_DrawDuelPlayerWins(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
     int idx = CG_DuelPlayerIndex(ownerDraw);
     duelScore_t *ds = &cg.duelScores[idx];
@@ -2834,7 +2468,6 @@ static void CG_DrawDuelPlayerWins(rectDef_t *rect, float scale, vec4_t color, in
     CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// 0x70/0xca CG_DrawDuelPlayerAcc.
 static void CG_DrawDuelPlayerAcc(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
     int idx = CG_DuelPlayerIndex(ownerDraw);
     duelScore_t *ds = &cg.duelScores[idx];
@@ -2844,8 +2477,6 @@ static void CG_DrawDuelPlayerAcc(rectDef_t *rect, float scale, vec4_t color, int
     CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// 0x71/0xcb CG_DrawDuelPlayerFlag (0x10036720): the duelist's country flag. Retail keeps the
-// handle it looked up while reading the scores (0x10045ab8); here it comes from the clientinfo.
 static void CG_DrawDuelPlayerFlag(rectDef_t *rect, int ownerDraw) {
     duelScore_t *ds = &cg.duelScores[CG_DuelPlayerIndex(ownerDraw)];
 
@@ -2856,7 +2487,6 @@ static void CG_DrawDuelPlayerFlag(rectDef_t *rect, int ownerDraw) {
     CG_DrawPic(rect->x, rect->y, rect->w, rect->h, CG_CountryFlagShader(cgs.clientinfo[ds->clientNum].country));
 }
 
-// 0x72/0xcc CG_DrawDuelPlayerAvatar. Draws the player's head/model icon.
 static void CG_DrawDuelPlayerAvatar(rectDef_t *rect, int ownerDraw) {
     int idx = CG_DuelPlayerIndex(ownerDraw);
     duelScore_t *ds = &cg.duelScores[idx];
@@ -2869,20 +2499,6 @@ static void CG_DrawDuelPlayerAvatar(rectDef_t *rect, int ownerDraw) {
     }
 }
 
-/*
-=================
-CG_DrawDuelHealthArmorBar
-
-[QL] 0x10033040, CG_1ST_PLYR_HEALTH_ARMOR (116) and CG_2ND_PLYR_HEALTH_ARMOR (206):
-the health and armor bars of the competitive spectator HUD. Ids 193..282 are the
-second player's, the rest the first's. Nothing is drawn unless
-cg_specDuelHealthArmor is set, the eType passes the binary's `& 0xb` test
-(0x10033091) and the player is not EF_DEAD. The bars are anchored toward the middle
-and scaled to 2 * maxHealth. While the last hit is under 2 s old the health lost
-since the stored value is drawn beside the bar in red; the stored value is only
-refreshed once the hit is older than that (0x100332ec).
-=================
-*/
 static void CG_DrawDuelHealthArmorBar(rectDef_t *rect, int ownerDraw) {
     static int lastHealth[2];
     static vec4_t barGold      = {1.0f, 0.8f, 0.2f, 1.0f};
@@ -2973,10 +2589,6 @@ static void CG_DrawDuelHealthArmorBar(rectDef_t *rect, int ownerDraw) {
     trap_R_SetColor(NULL);
 }
 
-// [QL] the duel board's per-weapon numbers. Retail indexes its per-weapon arrays with the
-// weapon number less one, the order scores_duel sends them in (gauntlet first); the fork used
-// the weapon number itself, one weapon off, so the machinegun cells showed the shotgun and the
-// heavy machinegun row nothing.
 static duelWeaponStats_t *CG_DuelWeaponStats(int player, int ownerDraw) {
     int w = CG_OwnerDrawWeaponIndex(ownerDraw);
 
@@ -2986,8 +2598,6 @@ static duelWeaponStats_t *CG_DuelWeaponStats(int player, int ownerDraw) {
     return &cg.duelScores[player].weaponStats[w - 1];
 }
 
-// 0x75-0x81/0xcf-0xdb CG_DrawDuelWeaponFrags (0x100368a0). Like the hits, shots and damage
-// cells: "%d" in the item's font, placed by the item's align.
 static void CG_DrawDuelWeaponFrags(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
     duelWeaponStats_t *ws = CG_DuelWeaponStats(CG_DuelPlayerIndex(ownerDraw), ownerDraw);
     const char *s;
@@ -2996,7 +2606,6 @@ static void CG_DrawDuelWeaponFrags(rectDef_t *rect, float scale, vec4_t color, i
     CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// 0x82-0x8d/0xdc-0xe7 CG_DrawDuelWeaponHits (0x100369d0).
 static void CG_DrawDuelWeaponHits(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
     duelWeaponStats_t *ws = CG_DuelWeaponStats(CG_DuelPlayerIndex(ownerDraw), ownerDraw);
     const char *s;
@@ -3005,7 +2614,6 @@ static void CG_DrawDuelWeaponHits(rectDef_t *rect, float scale, vec4_t color, in
     CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// 0x8e-0x99/0xe8-0xf3 CG_DrawDuelWeaponShots (0x10036b00).
 static void CG_DrawDuelWeaponShots(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
     duelWeaponStats_t *ws = CG_DuelWeaponStats(CG_DuelPlayerIndex(ownerDraw), ownerDraw);
     const char *s;
@@ -3014,7 +2622,6 @@ static void CG_DrawDuelWeaponShots(rectDef_t *rect, float scale, vec4_t color, i
     CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// 0x9a-0xa6/0xf4-0x100 CG_DrawDuelWeaponDmg (0x10036c30).
 static void CG_DrawDuelWeaponDmg(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
     duelWeaponStats_t *ws = CG_DuelWeaponStats(CG_DuelPlayerIndex(ownerDraw), ownerDraw);
     const char *s;
@@ -3023,8 +2630,6 @@ static void CG_DrawDuelWeaponDmg(rectDef_t *rect, float scale, vec4_t color, int
     CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// 0xa7-0xb2/0x101-0x10c CG_DrawDuelWeaponAcc (0x10036d60): "%d%%", and the better accuracy of
-// the two duelists in white at 0.8 alpha.
 static void CG_DrawDuelWeaponAcc(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
     int player = CG_DuelPlayerIndex(ownerDraw);
     duelWeaponStats_t *mine = CG_DuelWeaponStats(player, ownerDraw);
@@ -3040,7 +2645,6 @@ static void CG_DrawDuelWeaponAcc(rectDef_t *rect, float scale, vec4_t color, int
     CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, c, s, 0, 0, textStyle);
 }
 
-// pickup slot data for CG_DrawDuelPlayerPickups / CG_DrawDuelAvgPickupTime: count + avg time.
 static void CG_DuelPickupSlot(duelScore_t *ds, int slot, int *count, float *avgTime) {
     switch (slot) {
     case 0: *count = ds->redArmorPickups;    *avgTime = ds->redArmorTime;    break;
@@ -3050,18 +2654,6 @@ static void CG_DuelPickupSlot(duelScore_t *ds, int slot, int *count, float *avgT
     }
 }
 
-/*
-=================
-CG_DrawDuelPlayerPickups
-
-[QL] 0x10036eb0, 0xb3-0xb7 and 0x10d-0x111. The first id of each block draws the duelist's
-column: for red, yellow and green armor and mega health picked up at least once, the icon at
-the item's size, and 15 lower the count and the average time between pickups, each placed by
-the item's align, the next item 15 down. The first duelist reads rightwards from the icon
-(count 15 on, time 30 on), the second leftwards (count at the icon, time 15 before it). The
-other ids draw one count, 0 included. Font 0 throughout.
-=================
-*/
 static void CG_DrawDuelPlayerPickups(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
     int player = CG_DuelPlayerIndex(ownerDraw);
     duelScore_t *ds = &cg.duelScores[player];
@@ -3117,15 +2709,6 @@ static void CG_DrawDuelPlayerPickups(rectDef_t *rect, float scale, vec4_t color,
     CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-/*
-=================
-CG_DrawDuelAvgPickupTime
-
-[QL] 0x10037730, 0xb8-0xbb and 0x112-0x115: a duelist's average time between pickups of red,
-yellow or green armor or mega health, "%3.2f", or "-" when there was none; font 0, placed by
-the item's align
-=================
-*/
 static void CG_DrawDuelAvgPickupTime(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
     int player = CG_DuelPlayerIndex(ownerDraw);
     duelScore_t *ds = &cg.duelScores[player];
@@ -3144,10 +2727,6 @@ static void CG_DrawDuelAvgPickupTime(rectDef_t *rect, float scale, vec4_t color,
     CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-// 0xbc-0xbe/0x116-0x118 CG_DrawDuelAwards (0x10037990): the duelist's excellent, impressive
-// and humiliation counts, "%d" in font 0, placed by the item's align (0x1002e050). Like the
-// status plates it needs a valid duelist, or the intermission to have started. The fork
-// ignored the align, so the second player's right-aligned counts sat on their medal icons.
 static void CG_DrawDuelAwards(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
     int player = CG_DuelPlayerIndex(ownerDraw);
     duelScore_t *ds = &cg.duelScores[player];
@@ -3175,13 +2754,6 @@ static void CG_DrawDuelAwards(rectDef_t *rect, float scale, vec4_t color, int te
     CG_DrawText(x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-/*
-=================
-CG_ClockFromSeconds
-
-[QL] 0x10057470: seconds as "m:ss"
-=================
-*/
 static const char* CG_ClockFromSeconds(int seconds) {
     int mins = seconds / 60;
 
@@ -3189,14 +2761,6 @@ static const char* CG_ClockFromSeconds(int seconds) {
     return va("%i:%i%i", mins, seconds / 10, seconds % 10);
 }
 
-/*
-=================
-CG_DrawTeamPickupItem
-
-An armor, the mega health or the medkit in a team's pickup row: the icon at the item's size
-and the count countX to its right; the next one 25 on.
-=================
-*/
 static void CG_DrawTeamPickupItem(int* x, int y, const rectDef_t* rect, qhandle_t icon, int count, int countX,
                                   float scale, vec4_t color, int textStyle) {
     if (count <= 0) {
@@ -3207,14 +2771,6 @@ static void CG_DrawTeamPickupItem(int* x, int y, const rectDef_t* rect, qhandle_
     *x += 25;
 }
 
-/*
-=================
-CG_DrawTeamPickupPowerup
-
-The flag or a powerup in a team's pickup row, never less than 75 into it: the icon 7 higher,
-the count beside it and the time held under it, "-" for none; the next one 28 on.
-=================
-*/
 static void CG_DrawTeamPickupPowerup(int* x, int y, const rectDef_t* rect, qhandle_t icon, int count, int seconds,
                                      float scale, vec4_t color, int textStyle) {
     if (count <= 0) {
@@ -3229,16 +2785,6 @@ static void CG_DrawTeamPickupPowerup(int* x, int y, const rectDef_t* rect, qhand
     *x += 28;
 }
 
-/*
-=================
-CG_DrawTeamPickups
-
-[QL] 0x10037f80, the team scoreboards' pickup counts. CG_RED_TEAM_MAP_PICKUPS and
-CG_BLUE_TEAM_MAP_PICKUPS draw the team's row: armor, mega health and medkit, then the flag
-and the powerups. The flag is the one the team takes home, the enemy's, or the neutral one in
-1-Flag CTF. Every other id draws one count, placed by the item's align.
-=================
-*/
 static void CG_DrawTeamPickups(rectDef_t* rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
     const teamPickups_t* p;
     qhandle_t flag;
@@ -3253,7 +2799,6 @@ static void CG_DrawTeamPickups(rectDef_t* rect, float scale, vec4_t color, int t
     case CG_BLUE_TEAM_MAP_PICKUPS:
         x = (int)rect->x;
         y = (int)rect->y;
-        // retail sets the red row's yellow armor count 3 closer to its icon (0x100380ad)
         CG_DrawTeamPickupItem(&x, y, rect, cgs.media.pickupRA, p->ra, 14, scale, color, textStyle);
         CG_DrawTeamPickupItem(&x, y, rect, cgs.media.pickupYA, p->ya, blue ? 14 : 11, scale, color, textStyle);
         CG_DrawTeamPickupItem(&x, y, rect, cgs.media.pickupGA, p->ga, 14, scale, color, textStyle);
@@ -3325,14 +2870,6 @@ static void CG_DrawTeamPickups(rectDef_t* rect, float scale, vec4_t color, int t
     CG_OwnerDrawText(rect->x, rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-/*
-=================
-CG_DrawTeamTimeHeld
-
-[QL] 0x10039ae0: how long a team held the flag or a powerup, "m:ss", or "-" for none; font 0,
-placed by the item's align
-=================
-*/
 static void CG_DrawTeamTimeHeld(rectDef_t* rect, float scale, vec4_t color, int textStyle, int align, int ownerDraw) {
     const teamPickups_t* p = &cg.teamPickups[ownerDraw >= CG_BLUE_TEAM_MAP_PICKUPS];
     const char* s;
@@ -3372,7 +2909,6 @@ static void CG_DrawTeamTimeHeld(rectDef_t* rect, float scale, vec4_t color, int 
     CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] Draw gametype icon for the current gametype
 static void CG_DrawGameTypeIcon(rectDef_t *rect) {
     if (cgs.gametype >= 0 && cgs.gametype < GT_MAX_GAME_TYPE) {
         qhandle_t icon = cgs.media.gametypeIcon[cgs.gametype];
@@ -3382,16 +2918,6 @@ static void CG_DrawGameTypeIcon(rectDef_t *rect) {
     }
 }
 
-// [QL] Colorize based on player's team
-/*
-=================
-CG_DrawTeamColorized
-
-[QL] 0x1002f5d0. Tints the item's shader with the colour of the local playerState's
-team, taking only the alpha from the item. The five-colour table applies in every
-gametype - there is no team-game gate - and the shader is always drawn as a pic.
-=================
-*/
 static void CG_DrawTeamColorized(rectDef_t *rect, vec4_t color, qhandle_t shader) {
     static const vec3_t teamFree = {1.0f, 0.8f, 0.2f};
     static const vec3_t teamRed  = {1.0f, 0.2f, 0.1f};
@@ -3416,17 +2942,6 @@ static void CG_DrawTeamColorized(rectDef_t *rect, vec4_t color, qhandle_t shader
     trap_R_SetColor(NULL);
 }
 
-// [QL] Colorize armor icon based on armor tier (green/yellow/red)
-/*
-=================
-CG_DrawArmorTieredColorized
-
-[QL] 0x1002f780. The tint follows the armor tier (stats[STAT_ARMORTYPE]), not the
-amount: tier 0 green, tier 1 yellow, tier 2 red, alpha from the item. Outside 0..2
-the binary takes the colour from an uninitialised local, so the item's own colour
-is used instead.
-=================
-*/
 static void CG_DrawArmorTieredColorized(rectDef_t *rect, vec4_t color, qhandle_t shader) {
     vec4_t c;
 
@@ -3443,25 +2958,14 @@ static void CG_DrawArmorTieredColorized(rectDef_t *rect, vec4_t color, qhandle_t
     trap_R_SetColor(NULL);
 }
 
-// [QL] Team colors for obituary names (binary: DAT_10078610-50)
 static vec3_t obitTeamColors[] = {
-    { 1.0f, 1.0f, 1.0f },       // TEAM_FREE - white
-    { 1.0f, 0.5f, 0.5f },       // TEAM_RED
-    { 0.5f, 0.75f, 1.0f },      // TEAM_BLUE
-    { 0.85f, 0.85f, 0.85f },    // TEAM_SPECTATOR - light grey
-    { 1.0f, 0.8f, 0.2f }        // default - orange/gold
+    { 1.0f, 1.0f, 1.0f },
+    { 1.0f, 0.5f, 0.5f },
+    { 0.5f, 0.75f, 1.0f },
+    { 0.85f, 0.85f, 0.85f },
+    { 1.0f, 0.8f, 0.2f }
 };
 
-/*
-=================
-CG_DrawPlayerObit
-
-[QL] 0x1002e9b0, CG_PLAYER_OBIT. Each of the 16 slots lives two seconds and fades
-over its last 200 ms: the attacker's name team coloured, the means-of-death icon as
-tall as the text, then the victim's name. Heights come from the victim's name, and
-the next line starts text height + 2 lower. Font 0, no text style.
-=================
-*/
 static const float *CG_ObitTeamColor(int team) {
     switch (team) {
     case TEAM_FREE:
@@ -3474,19 +2978,14 @@ static const float *CG_ObitTeamColor(int team) {
     }
 }
 
-// [CPMA] with ch_animateScroll a line lives as CPMA 1.53's GameEvents item (eases in,
-// holds, eases out), and the list slides up a row while its top line eases out
-// (CG_CpmaSlide)
-
-// [ioquakelive] the kill feed's measures, as the user picked them on screen (2026-10-02)
-#define OBIT_SCALE 0.85f       // over the type the HUD asks for
-#define OBIT_X 8.0f            // sideways from where the HUD puts the feed
-#define OBIT_Y 14.0f           // the first row's baseline under the rect's top
+#define OBIT_SCALE 0.85f
+#define OBIT_X 8.0f
+#define OBIT_Y 14.0f
 #define OBIT_ROW_GAP 6.5f
-#define OBIT_PAD_X 4.5f        // how far the band reaches past the names
-#define OBIT_PAD_Y 2.5f        // and over and under the line
-#define OBIT_ICON_SCALE 1.3f   // the weapon, over an ascender
-#define OBIT_ICON_GAP 0.7f     // the space at each side of it, the same way
+#define OBIT_PAD_X 4.5f
+#define OBIT_PAD_Y 2.5f
+#define OBIT_ICON_SCALE 1.3f
+#define OBIT_ICON_GAP 0.7f
 #define OBIT_BAND_ALPHA 0.45f
 
 static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
@@ -3499,11 +2998,8 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
     int lifetime = ch_animateScroll.integer ? OBIT_FADEIN + OBIT_FADEDELAY + OBIT_FADEOUT : 2000;
     float slide = 0.0f;
 
-    // [ioquakelive] the feed reads better a little under the type the HUD asks for
     scale *= OBIT_SCALE;
 
-    // [ioquakelive] every measure comes out of the font. The whole line box, tails included,
-    // is the band, and the capitals' height is what a row looks centred by
     asc = (float)CG_DrawTextHeight("H", scale, 0, 0);
     lineH = (float)CG_DrawTextLineHeight(scale, 0);
     capH = CG_DrawTextCapHeight(scale, 0);
@@ -3514,8 +3010,6 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
     iconSize = asc * OBIT_ICON_SCALE;
     gapX = asc * OBIT_ICON_GAP;
 
-    // 0x1002e9d7: an expired slot shifts the whole array up from slot 0 and
-    // the same index is looked at again
     for (i = 0; i < MAX_OBITUARIES; i++) {
         if (cg.obituaries[i].time > 0 && cg.time >= cg.obituaries[i].time + lifetime) {
             memmove(&cg.obituaries[0], &cg.obituaries[1], (MAX_OBITUARIES - 1) * sizeof(cg.obituaries[0]));
@@ -3535,12 +3029,10 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
             cg.obitSlideKey = cg.obituaries[0].time;
         }
         if (cg.obitSlideStart) {
-            // the list slides by the row that is leaving, which is the one drawn at the anchor
             slide = CG_CpmaSlide(cg.obitSlideStart, OBIT_FADEOUT) * pitch;
         }
     }
 
-    // the first band hangs from where the HUD puts the feed
     left = (float)(int)rect->x + OBIT_X;
     bandTop = (float)(int)rect->y + OBIT_Y - asc - padY - slide;
 
@@ -3551,8 +3043,6 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
 
         remaining = lifetime - (cg.time - cg.obituaries[i].time);
         if (!cg.obituaries[i].time || remaining <= 0) {
-            // retail would draw through a NULL colour here; the pass above
-            // makes it unreachable
             continue;
         }
         if (ch_animateScroll.integer) {
@@ -3561,7 +3051,6 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
             obitColor[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
         }
 
-        // the capitals and the icon on the band's middle line, whatever the font and the size
         baseline = bandTop + (bandH + capH) * 0.5f;
         iconY = bandTop + (bandH - iconSize) * 0.5f;
 
@@ -3572,8 +3061,6 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
         victimW = (float)CG_DrawTextWidth(cg.obituaries[i].victimName, scale, 0, 0);
         iconX = left + attackerW + gapX;
 
-        // [CPMA] the band behind the row, which is what makes the feed read over the map. It
-        // takes the row's own alpha, so it comes and goes with the line
         {
             vec4_t band = {0.0f, 0.0f, 0.0f, 0.0f};
             float rowW = attackerW + gapX + iconSize + gapX + victimW;
@@ -3611,29 +3098,24 @@ static void CG_DrawPlayerObit(rectDef_t *rect, float scale) {
     }
 }
 
-// [QL] Draw vertical weapon bar (binary-accurate: FUN_10035a10)
-// Draws weapon icons vertically. rect->w = icon size (square), rect->h = vertical spacing.
-// Skips gauntlet (WP_GAUNTLET) and BFG (WP_BFG). No selection highlight, no ammo counts.
 static void CG_DrawWeaponVertical(rectDef_t *rect, vec4_t color) {
     int i;
     int count = 0;
 
     trap_R_SetColor(color);
 
-    // iterate weapons 2 (machinegun) through WP_NUM_WEAPONS-1, skip BFG
     for (i = WP_MACHINEGUN; i < WP_NUM_WEAPONS; i++) {
         qhandle_t icon;
 
         if (i == WP_BFG) {
-            continue;  // binary skips weapon 10 (BFG)
+            continue;
         }
 
         icon = cg_weapons[i].weaponIcon;
         if (icon == 0) {
-            continue;  // skip unregistered weapons
+            continue;
         }
 
-        // draw square icon: wxw size, spaced vertically by rect->h
         CG_DrawPic(rect->x, rect->h * count + rect->y, rect->w, rect->w, icon);
         count++;
     }
@@ -3641,8 +3123,6 @@ static void CG_DrawWeaponVertical(rectDef_t *rect, vec4_t color) {
     trap_R_SetColor(NULL);
 }
 
-// [QL] CG_ACC_VERTICAL (ownerdraw 98): draw per-weapon accuracy percentages vertically
-// Binary: FUN_10035b10 - same loop as CG_WP_VERTICAL, draws "%i%%" text at each slot
 static void CG_DrawAccuracyVertical(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     int i;
     int count = 0;
@@ -3668,22 +3148,21 @@ static void CG_DrawAccuracyVertical(rectDef_t *rect, float scale, vec4_t color, 
     trap_R_SetColor(NULL);
 }
 
-// [QL] Full gametype names, indexed by cgs.gametype (binary table PTR_s_Free_For_All_10079028).
 static const char *CG_GameTypeFullName(void) {
     static const char *names[] = {
-        "Free For All",       // GT_FFA 0
-        "Duel",               // GT_DUEL 1
-        "Race",               // GT_RACE 2
-        "Team Deathmatch",    // GT_TEAM 3
-        "Clan Arena",         // GT_CA 4
-        "Capture the Flag",   // GT_CTF 5
-        "One Flag CTF",       // GT_1FCTF 6
-        "Overload",           // GT_OBELISK 7
-        "Harvester",          // GT_HARVESTER 8
-        "Freeze Tag",         // GT_FREEZE 9
-        "Domination",         // GT_DOMINATION 10
-        "Attack and Defend",  // GT_AD 11
-        "Red Rover"           // GT_RR 12
+        "Free For All",
+        "Duel",
+        "Race",
+        "Team Deathmatch",
+        "Clan Arena",
+        "Capture the Flag",
+        "One Flag CTF",
+        "Overload",
+        "Harvester",
+        "Freeze Tag",
+        "Domination",
+        "Attack and Defend",
+        "Red Rover"
     };
     if (cgs.gametype >= 0 && cgs.gametype < GT_MAX_GAME_TYPE) {
         return names[cgs.gametype];
@@ -3691,9 +3170,6 @@ static const char *CG_GameTypeFullName(void) {
     return "Unknown Gametype";
 }
 
-// [QL] CG_DrawGameTypeMap - "Free For All - Thunderstruck": the map's title from CS_MESSAGE
-// (stringOffsets[3] at 0x10a3842c), not the "maps/*.bsp" path
-// Address: 0x100344b0
 static void CG_DrawGameTypeMap(rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
     const char *s = va("%s - %s", CG_GameTypeFullName(), CG_ConfigString(CS_MESSAGE));
     float x = rect->x;
@@ -3705,8 +3181,6 @@ static void CG_DrawGameTypeMap(rectDef_t *rect, float scale, vec4_t color, int t
     CG_DrawText(x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] CG_DrawWinCondition - gametype-driven win-condition string
-// Address: 0x10034280
 static void CG_DrawWinCondition(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     const char *s;
 
@@ -3714,10 +3188,7 @@ static void CG_DrawWinCondition(rectDef_t *rect, float scale, vec4_t color, int 
         s = "Fastest race time within the time limit";
     } else if (cgs.timelimit == 0 ||
                (cg.time - cgs.levelStartTime) < cgs.timelimit * 60000) {
-        // still within regulation time
         if (cgs.gametype == GT_CTF) {
-            // binary: DAT_10a3ff38 is the capture/mercy limit; if unset or neither
-            // team has reached it the mercy rule wording is shown.
             if (cgs.capturelimit == 0 ||
                 (cgs.scores1 < cgs.capturelimit && cgs.scores2 < cgs.capturelimit)) {
                 s = "First to reach the mercy limit";
@@ -3741,15 +3212,11 @@ static void CG_DrawWinCondition(rectDef_t *rect, float scale, vec4_t color, int 
     CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] CG_DrawTeamAliveCount - per-team alive count for DOM/AD overlay
-// Address: 0x100337a0  (binary guard: gametype == GT_DOMINATION || GT_AD)
 static void CG_DrawTeamAliveCount(rectDef_t *rect, int team, float scale, vec4_t color, int textStyle) {
     const char *s = va("%d", cgs.teamAliveCount[team]);
     CG_DrawText(rect->x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] CG_DrawPlayerCount2 - team / total player count with gametype-specific wording
-// Address: 0x100333c0
 static void CG_DrawPlayerCount2(rectDef_t *rect, int team, float scale, vec4_t color, int textStyle, int align) {
     int i, count = 0;
     const char *s;
@@ -3761,12 +3228,11 @@ static void CG_DrawPlayerCount2(rectDef_t *rect, int team, float scale, vec4_t c
         }
     }
 
-    // team gametypes: TEAM, CA, CTF, 1FCTF, HARVESTER, DOM, AD (binary excludes OBELISK/FREEZE/RR)
     if (cgs.gametype == GT_TEAM || cgs.gametype == GT_CA || cgs.gametype == GT_CTF ||
         cgs.gametype == GT_1FCTF || cgs.gametype == GT_HARVESTER ||
         cgs.gametype == GT_DOMINATION || cgs.gametype == GT_AD) {
         if (cgs.teamsize < 1) {
-            s = va("(%d)", count);  // [QL] 0x10033479; the bare "%d" here read "PLAYER3"
+            s = va("(%d)", count);
         } else {
             s = va("(%d/%d)", count, cgs.teamsize);
         }
@@ -3785,8 +3251,6 @@ static void CG_DrawPlayerCount2(rectDef_t *rect, int team, float scale, vec4_t c
     CG_DrawText(x, rect->y, 0, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] CG_DrawScrollingNotify - horizontally scrolling notify (spectator) list
-// Address: 0x100351a0.  Reads the cg.notifyMessages ring; advances every 4000ms.
 static void CG_DrawScrollingNotify(rectDef_t *rect, int fontIndex, float scale, vec4_t color) {
     int i, shown = 0;
     float x, used = 0.0f;
@@ -3797,7 +3261,6 @@ static void CG_DrawScrollingNotify(rectDef_t *rect, int fontIndex, float scale, 
         count = cap;
     }
 
-    // count how many messages (from notifyScrollStart) fit within rect->w
     for (i = cg.notifyScrollStart; i < count; i++) {
         float w = (float)CG_DrawTextWidth(cg.notifyMessages[i], scale, 0, fontIndex);
         if (rect->w < used + w) {
@@ -3807,7 +3270,6 @@ static void CG_DrawScrollingNotify(rectDef_t *rect, int fontIndex, float scale, 
         shown++;
     }
 
-    // draw the visible window
     x = rect->x;
     for (i = cg.notifyScrollStart; i < cg.notifyScrollStart + shown && i < count; i++) {
         float w = (float)CG_DrawTextWidth(cg.notifyMessages[i], scale, 0, fontIndex);
@@ -3816,7 +3278,6 @@ static void CG_DrawScrollingNotify(rectDef_t *rect, int fontIndex, float scale, 
         x += w + 10.0f;
     }
 
-    // advance the scroll window on the 4000ms timer
     if (cg.notifyScrollTime < cg.time) {
         cg.notifyScrollStart += shown;
         cg.notifyScrollTime = cg.time + 4000;
@@ -3826,8 +3287,6 @@ static void CG_DrawScrollingNotify(rectDef_t *rect, int fontIndex, float scale, 
     }
 }
 
-// [QL] CG_DrawVotes - map-rotation vote tally for a vote slot
-// Address: 0x10035820.  ownerDraw is CG_VOTECOUNT1..3.
 static void CG_DrawVotes(rectDef_t *rect, int ownerDraw, int fontIndex, float scale, vec4_t color, int textStyle, int align) {
     const char *info = CG_ConfigString(CS_ROTATIONVOTES);
     const char *count;
@@ -3851,16 +3310,11 @@ static void CG_DrawVotes(rectDef_t *rect, int ownerDraw, int fontIndex, float sc
     CG_DrawText(x, rect->y, fontIndex, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] CG_DrawFlagStatus - team flag / base status icon
-// Address: 0x10030a80.  Uses cgs.media.flagStatusHandles[iconIndex + team*4].
-// NOTE: flagStatusHandles is registered in cg_main.c (CG_RegisterGraphics, not owned
-// by this area). Until registered the handles are 0 and CG_DrawPic is a no-op.
 static void CG_DrawFlagStatus(rectDef_t *rect, int ownerDraw) {
     int team, iconIndex, flagState;
     qboolean isBase;
     gitem_t *item;
 
-    // red for RED_FLAGSTATUS/RED_BASESTATUS, else blue
     team = (ownerDraw == CG_RED_FLAGSTATUS || ownerDraw == CG_RED_BASESTATUS) ? 1 : 2;
     isBase = (ownerDraw == CG_RED_BASESTATUS || ownerDraw == CG_BLUE_BASESTATUS);
 
@@ -3883,7 +3337,6 @@ static void CG_DrawFlagStatus(rectDef_t *rect, int ownerDraw) {
     flagState = (team == 1) ? cgs.redflag : cgs.blueflag;
 
     if (cgs.gametype == GT_1FCTF) {
-        // neutral-flag icon (index 3); shown only when this team carries it
         if (team == 1) {
             if (cgs.flagStatus != FLAG_TAKEN_RED) { trap_R_SetColor(NULL); return; }
         } else {
@@ -3906,18 +3359,6 @@ static void CG_DrawFlagStatus(rectDef_t *rect, int ownerDraw) {
     trap_R_SetColor(NULL);
 }
 
-/*
-=================
-CG_DrawFlagStatusBar
-
-[QL] 0x10030240, CG_FLAG_STATUS, for spectators in the modes with bases (not one flag): a bar
-from the red base (left half, red) to the blue one (right half, blue), rect->h / 8 high and
-centred on rect->x, with each flag that is away from home placed along it by how far it is
-from the base it would be captured at, relative to the distance between the two bases. The
-bases come from CS_REDTEAMBASE / CS_BLUETEAMBASE; a flag is where its carrier is, or where
-it was last seen standing. Over each flag its "stolen" or "dropped" icon, and a pointer.
-=================
-*/
 static float CG_TeamBaseDistance(const vec3_t base, const vec3_t flag, float span) {
     vec3_t delta;
     float d;
@@ -3987,7 +3428,6 @@ static void CG_DrawFlagStatusBar(rectDef_t *rect) {
     CG_FillRect(rect->x - rect->w * 0.5f, rect->y, rect->w * 0.5f, barHeight, redHalf);
     CG_FillRect(rect->x, rect->y, rect->w * 0.5f, barHeight, blueHalf);
 
-    // the red flag goes from its base on the left to the blue base on the right
     if (cgs.redflag) {
         x = rect->x - size * 0.5f + rect->w * 0.5f -
             (CG_TeamBaseDistance(blueBase, redFlag, span) / span) * rect->w;
@@ -4004,15 +3444,6 @@ static void CG_DrawFlagStatusBar(rectDef_t *rect) {
     }
 }
 
-/*
-=================
-CG_DrawPlayerModel
-
-[QL] cgamex86.dll 0x10034980, CG_PLAYERMODEL (0x25): the first score's client (as the binary
-reads it) turned to 5 / 210, torso in TORSO_ATTACK, holding the current weapon when loadouts
-are on and the selected one otherwise. No retail menu uses it.
-=================
-*/
 static void CG_DrawPlayerModel(rectDef_t *rect) {
     static const vec3_t angles = {5.0f, 210.0f, 0.0f};
     int weapon = cg_loadout.integer ? cg.snap->ps.weapon : cg.weaponSelect;
@@ -4021,16 +3452,6 @@ static void CG_DrawPlayerModel(rectDef_t *rect) {
                          angles);
 }
 
-/*
-=================
-CG_Draw1stPlacePlayerModel
-
-[QL] cgamex86.dll 0x10034900, CG_1STPLACE_PLYR_MODEL (0x55), the winner on the end-of-match
-boards: the first score's client, turned to 5 / 160, holding their best weapon in TORSO_ATTACK,
-or in TORSO_ATTACK2 when that is the gauntlet or nothing. The fork drew the first duellist or
-the local player, empty-handed and facing the camera.
-=================
-*/
 static void CG_Draw1stPlacePlayerModel(rectDef_t *rect) {
     static const vec3_t angles = {5.0f, 160.0f, 0.0f};
     int weapon = cg.scores[0].bestWeapon;
@@ -4039,19 +3460,6 @@ static void CG_Draw1stPlacePlayerModel(rectDef_t *rect) {
                          rect->x, rect->y, rect->w, rect->h, weapon, 0.0f, angles);
 }
 
-/*
-=================
-CG_DrawPlayerStatusLeft / CG_DrawPlayerStatusRight
-
-[QL] 0x10037ba0 / 0x10037d60, CG_1ST_PLYR_READY (0x68) / CG_2ND_PLYR_READY (0xc2):
-the duelist's plate from ui/assets/score, left handed for the first player and right
-handed for the second. Without a valid duelist nothing shows until the intermission
-starts, and then the empty not-ready plate. In warmup or intermission the word is
-READY or NOT READY from the duelist's STAT_CLIENTS_READY bit; in play it is LEADS,
-TRAILS or TIED from CS_SCORE1STPLAYER against CS_SCORE2NDPLAYER. White at 0.16, 16
-below the plate's top (0x10037efb).
-=================
-*/
 static void CG_DrawDuelStatusPlate(rectDef_t *rect, int player) {
     int clientNum = cg.duelScores[player].clientNum;
     int mine, theirs;
@@ -4099,13 +3507,7 @@ static void CG_DrawPlayerStatusRight(rectDef_t *rect) {
     CG_DrawDuelStatusPlate(rect, 1);
 }
 
-// [QL] CG_DrawModifiers (id 1). Binary lists active server modifiers, one per
-// line. Most lines come from a server modifier bitmask that is not parsed into
-// cgs yet, so only the gravity/quad-factor lines (read straight from the
-// serverinfo, as the binary does) are recovered here.
 static void CG_DrawModifiers(rectDef_t *rect, float scale, vec4_t color) {
-    // [QL] 0x1003a1c0: a line for each way the server's game differs from the usual one, twelve
-    // apart, and with modified weapons their icons in a row, each with the "modified" mark
     static const char *const weaponIcons[] = {
         "icons/iconw_gauntlet.tga", "icons/iconw_machinegun.tga", "icons/iconw_shotgun.tga",
         "icons/iconw_grenade.tga", "icons/iconw_rocket.tga", "icons/iconw_lightning.tga",
@@ -4178,9 +3580,6 @@ static void CG_DrawModifiers(rectDef_t *rect, float scale, vec4_t color) {
             return;
         }
         y += 12.0f;
-        // the icons sit at 445 of the 640 screen whatever the item says, and retail only
-        // starts a new row from the plasma gun on -- the prox launcher checks without
-        // counting itself and the chaingun does not check at all
         for (i = 0; i < (int)ARRAY_LEN(weaponIcons); i++) {
             if (!(cs & (1 << i))) {
                 continue;
@@ -4203,9 +3602,6 @@ static void CG_DrawModifiers(rectDef_t *rect, float scale, vec4_t color) {
     }
 }
 
-// [QL] CG_DrawWeaponHorizontal (id 2, 0x10033910). The join screen's starting weapons: an icon
-// for each bit of CS_STARTING_WEAPONS (bit 0 is the gauntlet), a width and a half apart. With
-// loadouts on, a "+" and the primary weapon queued, the heavy machinegun when none is.
 static void CG_DrawWeaponHorizontal(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     int starting = atoi(CG_ConfigString(CS_STARTING_WEAPONS));
     float x = 0.0f;
@@ -4247,8 +3643,6 @@ static void CG_DrawWeaponHorizontal(rectDef_t *rect, float scale, vec4_t color, 
     }
 }
 
-// [QL] CG_DrawScoreByOwnerDraw (0x33 player score, 0x53 1st place, 0x56 2nd place).
-// Race formats the value as a lap time; -9999 draws nothing.
 static void CG_DrawScoreByOwnerDraw(int ownerDraw, rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
     int score;
     char buf[16];
@@ -4286,24 +3680,17 @@ static void CG_DrawScoreByOwnerDraw(int ownerDraw, rectDef_t *rect, float scale,
     CG_OwnerDrawText(x, rect->y, scale, color, buf, 0, 0, textStyle);
 }
 
-// [QL] CG_DrawScoreboardPlayerHead (0x4b-0x50). Draws the head icon of each
-// end-of-match award player. The binary keeps the award clientNums in dedicated
-// globals; ioquakelive does not track them, so the client is read as a leading
-// clientNum from the award configstring. No valid client draws nothing.
 static void CG_DrawScoreboardPlayerHead(rectDef_t *rect, int ownerDraw) {
     int csIndex, clientNum;
     const char *s;
 
-    // [QL] binary CG_DrawScoreboardPlayerHead (0x1003a0d0) sources each head's
-    // clientNum from these configstrings (via DAT_10a5fdb0..c4), which don't line up
-    // with the same-named award CS constants. The values below are the binary's.
     switch (ownerDraw) {
-        case CG_MOST_VALUABLE_OFFENSIVE_PLYR: csIndex = 697; break;  // 0x4b DAT_10a5fdbc
-        case CG_MOST_VALUABLE_DEFENSIVE_PLYR: csIndex = 698; break;  // 0x4c DAT_10a5fdc0
-        case CG_MOST_VALUABLE_PLYR:           csIndex = 699; break;  // 0x4d DAT_10a5fdc4
-        case CG_BEST_ITEMCONTROL_PLYR:        csIndex = 696; break;  // 0x4e DAT_10a5fdb8
-        case CG_MOST_ACCURATE_PLYR:           csIndex = 693; break;  // 0x4f DAT_10a5fdb4
-        case CG_MOST_DAMAGEDEALT_PLYR:        csIndex = 692; break;  // 0x50 DAT_10a5fdb0
+        case CG_MOST_VALUABLE_OFFENSIVE_PLYR: csIndex = 697; break;
+        case CG_MOST_VALUABLE_DEFENSIVE_PLYR: csIndex = 698; break;
+        case CG_MOST_VALUABLE_PLYR:           csIndex = 699; break;
+        case CG_BEST_ITEMCONTROL_PLYR:        csIndex = 696; break;
+        case CG_MOST_ACCURATE_PLYR:           csIndex = 693; break;
+        case CG_MOST_DAMAGEDEALT_PLYR:        csIndex = 692; break;
         default: return;
     }
 
@@ -4320,9 +3707,6 @@ static void CG_DrawScoreboardPlayerHead(rectDef_t *rect, int ownerDraw) {
     }
 }
 
-// [QL] CG_DrawEndGameResult (0x5a). Intermission summary line for the local
-// player. Team games report captures/assists/defends before falling back to the
-// score; FFA/Duel report finishing place. Race and spectators draw nothing.
 static void CG_DrawEndGameResult(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     playerState_t *ps = &cg.snap->ps;
     int score = ps->persistant[PERS_SCORE];
@@ -4341,8 +3725,6 @@ static void CG_DrawEndGameResult(rectDef_t *rect, float scale, vec4_t color, int
         } else if (score == -999) {
             s = "You forfeited the match.";
         } else {
-            // binary uses the score value for the place string; we use rank,
-            // matching CG_GetGameStatusText.
             s = va("You finished %s with a score of %d",
                    CG_PlaceString(ps->persistant[PERS_RANK] + 1), score);
         }
@@ -4374,9 +3756,6 @@ static void CG_DrawEndGameResult(rectDef_t *rect, float scale, vec4_t color, int
     CG_OwnerDrawText(rect->x, rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] 0x100335f0, CG_RED_CLAN_PLYRS (0x122) and CG_BLUE_CLAN_PLYRS (0x13d): how many of a
-// team are still alive in the round, which the server keeps in configstrings 663 and 664.
-// A spectator's team (and free) reads the slot retail leaves at zero.
 static void CG_DrawTeamPlayersLeft(int team, rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     int left = 0;
 
@@ -4388,8 +3767,6 @@ static void CG_DrawTeamPlayersLeft(int team, rectDef_t *rect, float scale, vec4_
     CG_DrawText(rect->x, rect->y, 0, scale, color, va("%d", left), 0, 0, textStyle);
 }
 
-// [QL] 0x10033650, CG_TEAM_PLYR_COUNT (0x64) and CG_ENEMY_PLYR_COUNT (0x65): the same count
-// for the team of the player in view, or for the other one.
 static void CG_DrawOwnTeamPlayersLeft(int useOwnTeam, rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     int team = cg.snap->ps.persistant[PERS_TEAM];
 
@@ -4403,9 +3780,6 @@ static void CG_DrawOwnTeamPlayersLeft(int useOwnTeam, rectDef_t *rect, float sca
     CG_DrawTeamPlayersLeft(team, rect, scale, color, textStyle);
 }
 
-// [QL] CG_DrawTeamScore (0x1002ff50, ids 0x11c and 0x138). Numeric team score.
-// Binary shows scores1 only for id 0x11c (CG_RED_SCORE); the other selector
-// shows scores2. -9999/-999 draw nothing.
 static void CG_DrawTeamScore(int which, rectDef_t *rect, float scale, vec4_t color, int textStyle, int align) {
     int score = (which == CG_RED_SCORE) ? cgs.scores1 : cgs.scores2;
     const char *s;
@@ -4419,9 +3793,6 @@ static void CG_DrawTeamScore(int which, rectDef_t *rect, float scale, vec4_t col
     CG_OwnerDrawText(x, rect->y, scale, color, s, 0, 0, textStyle);
 }
 
-// [QL] 0x10035540, UI_ADVERT: an advertisement cell of the scoreboards and the spectator HUD,
-// whose picture is the item's defaultContent (textures/ad_content/...). Retail then tells the
-// engine how many pixels it covered, for the advertiser's count; that service is gone.
 static void CG_DrawAdvert(rectDef_t *rect, vec4_t color, qhandle_t iconShader, int ownerDrawFlags) {
     if (ownerDrawFlags && !CG_OwnerDrawVisible(ownerDrawFlags, 0)) {
         return;
@@ -4433,17 +3804,12 @@ static void CG_DrawAdvert(rectDef_t *rect, vec4_t color, qhandle_t iconShader, i
     trap_R_SetColor(NULL);
 }
 
-//
 void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y, int ownerDraw, int ownerDrawFlags, int align, float special, float scale, vec4_t color, qhandle_t shader, int textStyle, int fontIndex) {
     rectDef_t rect;
 
     if (cg_drawStatus.integer == 0) {
         return;
     }
-
-    // if (ownerDrawFlags != 0 && !CG_OwnerDrawVisible(ownerDrawFlags)) {
-    //	return;
-    // }
 
     rect.x = x;
     rect.y = y;
@@ -4452,71 +3818,67 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
 
     cg_currentFontIndex = fontIndex;
 
-    // Dispatch mirrors the binary CG_OwnerDraw switch (cgamex86.dll 0x1003b0f0).
-    // Case labels use the pak00 menudef constants; hex ids match the binary. Some
-    // menudef labels are stale (QL repurposed the slot), so the comment names the
-    // binary behaviour where they differ.
     switch (ownerDraw) {
-        case CG_SERVER_SETTINGS:            // 1  CG_DrawModifiers
+        case CG_SERVER_SETTINGS:
             CG_DrawModifiers(&rect, scale, color);
             break;
-        case CG_STARTING_WEAPONS:           // 2  CG_DrawWeaponHorizontal
+        case CG_STARTING_WEAPONS:
             CG_DrawWeaponHorizontal(&rect, scale, color, textStyle);
             break;
-        case CG_GAME_LIMIT:                 // 3  CG_DrawFragLimit
+        case CG_GAME_LIMIT:
             CG_DrawGameLimit(&rect, scale, color, textStyle, align);
             break;
-        case CG_GAME_TYPE:                  // 4
+        case CG_GAME_TYPE:
             CG_DrawGameType(&rect, scale, color, shader, textStyle);
             break;
-        case CG_GAME_TYPE_ICON:             // 5
+        case CG_GAME_TYPE_ICON:
             CG_DrawGameTypeIcon(&rect);
             break;
-        case CG_GAME_TYPE_MAP:              // 6
+        case CG_GAME_TYPE_MAP:
             CG_DrawGameTypeMap(&rect, scale, color, textStyle, align);
             break;
-        case CG_GAME_STATUS:                // 7
+        case CG_GAME_STATUS:
             CG_DrawGameStatus(&rect, scale, color, shader, textStyle);
             break;
-        case CG_MATCH_DETAILS:              // 8
+        case CG_MATCH_DETAILS:
             CG_DrawMatchDetails(&rect, scale, color, textStyle);
             break;
-        case CG_MATCH_END_CONDITION:        // 9  CG_DrawWinCondition
+        case CG_MATCH_END_CONDITION:
             CG_DrawWinCondition(&rect, scale, color, textStyle);
             break;
-        case CG_MATCH_STATUS:               // 0xa
+        case CG_MATCH_STATUS:
             CG_DrawMatchStatus(&rect, scale, color, textStyle);
             break;
-        case CG_CAPFRAGLIMIT:               // 0xb
+        case CG_CAPFRAGLIMIT:
             CG_DrawCapFragLimit(&rect, scale, color, textStyle, align);
             break;
-        case CG_LEVELTIMER:                 // 0xc  0x10030c00
+        case CG_LEVELTIMER:
             CG_DrawLevelTimer(&rect, scale, color, textStyle, align);
             break;
-        case CG_ROUND:                      // 0xd  CG_DrawWarmup (gt CA/FT/AD/RR)
+        case CG_ROUND:
             if (cgs.gametype == GT_CA || cgs.gametype == GT_FREEZE ||
                 cgs.gametype == GT_AD || cgs.gametype == GT_RR) {
                 CG_DrawRound(&rect, scale, color, textStyle);
             }
             break;
-        case CG_ROUNDTIMER:                 // 0xe  0x10033b10
+        case CG_ROUNDTIMER:
             CG_DrawRoundTimer(&rect, scale, color, textStyle, align);
             break;
-        case CG_OVERTIME:                   // 0xf  0x10030d20
+        case CG_OVERTIME:
             if (!cg.warmup) {
                 CG_DrawOvertime(&rect, scale, color, textStyle, align);
             }
             break;
-        case CG_LOCALTIME:                  // 0x10
+        case CG_LOCALTIME:
             CG_DrawLocalTime(&rect, fontIndex, scale, color, textStyle, align);
             break;
-        case CG_PLAYER_COUNTS:              // 0x11  CG_DrawPlayerCount
+        case CG_PLAYER_COUNTS:
             CG_DrawPlayerCounts(&rect, scale, color, textStyle, align);
             break;
-        case CG_MAP_NAME:                   // 0x12
+        case CG_MAP_NAME:
             CG_DrawMapName(&rect, scale, color, textStyle);
             break;
-        case CG_VOTEGAMETYPE1:              // 0x13-0x15  CG_DrawVoteGameType
+        case CG_VOTEGAMETYPE1:
             CG_DrawVoteGameType(&rect, scale, color, textStyle, align, 0);
             break;
         case CG_VOTEGAMETYPE2:
@@ -4525,7 +3887,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_VOTEGAMETYPE3:
             CG_DrawVoteGameType(&rect, scale, color, textStyle, align, 2);
             break;
-        case CG_VOTEMAP1:                   // 0x16-0x18  the option's map name
+        case CG_VOTEMAP1:
             CG_DrawVoteMapValue(&rect, scale, color, textStyle, align, "map", 0);
             break;
         case CG_VOTEMAP2:
@@ -4534,7 +3896,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_VOTEMAP3:
             CG_DrawVoteMapValue(&rect, scale, color, textStyle, align, "map", 2);
             break;
-        case CG_VOTESHOT1:                  // 0x19-0x1b  CG_DrawVoteMapShot
+        case CG_VOTESHOT1:
             CG_DrawVoteMapShot(&rect, 0, shader);
             break;
         case CG_VOTESHOT2:
@@ -4543,7 +3905,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_VOTESHOT3:
             CG_DrawVoteMapShot(&rect, 2, shader);
             break;
-        case CG_VOTENAME1:                  // 0x1c-0x1e  the option's title
+        case CG_VOTENAME1:
             CG_DrawVoteMapValue(&rect, scale, color, textStyle, align, "title", 0);
             break;
         case CG_VOTENAME2:
@@ -4552,102 +3914,98 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_VOTENAME3:
             CG_DrawVoteMapValue(&rect, scale, color, textStyle, align, "title", 2);
             break;
-        case CG_VOTECOUNT1:                 // 0x1f-0x21
+        case CG_VOTECOUNT1:
         case CG_VOTECOUNT2:
         case CG_VOTECOUNT3:
             CG_DrawVotes(&rect, ownerDraw, fontIndex, scale, color, textStyle, align);
             break;
-        case CG_VOTETIMER:                  // 0x22
-            // binary falls through to the respawn message here; kept separate.
+        case CG_VOTETIMER:
             CG_DrawVoteTimer(&rect, scale, color, textStyle, align);
             break;
-        case CG_SPEC_MESSAGES:              // 0x23
-            // [QL] cgamex86.dll 0x1003c05b: this ownerdraw is the ONLY way retail
-            // reaches CG_DrawSpectator (0x10034d70), which draws from the item's
-            // corner. CG_Draw2D does not call it.
+        case CG_SPEC_MESSAGES:
             CG_DrawSpectator(rect.x, rect.y);
             break;
-        case CG_PLAYER_HEAD:                // 0x24
+        case CG_PLAYER_HEAD:
             CG_DrawPlayerHead(&rect, ownerDrawFlags & CG_SHOW_2DONLY);
             break;
-        case CG_PLAYERMODEL:                // 0x25
+        case CG_PLAYERMODEL:
             CG_DrawPlayerModel(&rect);
             break;
-        case CG_PLAYER_ARMOR_ICON:          // 0x26
+        case CG_PLAYER_ARMOR_ICON:
             CG_DrawPlayerArmorIcon(&rect, ownerDrawFlags & CG_SHOW_2DONLY);
             break;
-        case CG_PLAYER_ARMOR_ICON2D:        // 0x27
+        case CG_PLAYER_ARMOR_ICON2D:
             CG_DrawPlayerArmorIcon(&rect, qtrue);
             break;
-        case CG_PLAYER_ARMOR_VALUE:         // 0x28  (binary symbol is CG_DrawPlayerScore
-            CG_DrawPlayerArmorValue(&rect, scale, color, shader, textStyle, align); // but it reads STAT_ARMOR)
+        case CG_PLAYER_ARMOR_VALUE:
+            CG_DrawPlayerArmorValue(&rect, scale, color, shader, textStyle, align);
             break;
-        case CG_PLAYER_ARMOR_BAR_100:       // 0x29
+        case CG_PLAYER_ARMOR_BAR_100:
             CG_DrawArmorBar100(&rect, shader);
             break;
-        case CG_PLAYER_ARMOR_BAR_200:       // 0x2a
+        case CG_PLAYER_ARMOR_BAR_200:
             CG_DrawArmorBar200(&rect, shader);
             break;
-        case CG_ARMORTIERED_COLORIZED:      // 0x2b
+        case CG_ARMORTIERED_COLORIZED:
             CG_DrawArmorTieredColorized(&rect, color, shader);
             break;
-        case CG_PLAYER_HEALTH:              // 0x2c
+        case CG_PLAYER_HEALTH:
             CG_DrawPlayerHealth(&rect, scale, color, shader, textStyle, align);
             break;
-        case CG_PLAYER_HEALTH_BAR_100:      // 0x2d
+        case CG_PLAYER_HEALTH_BAR_100:
             CG_DrawHealthBar100(&rect, shader);
             break;
-        case CG_PLAYER_HEALTH_BAR_200:      // 0x2e
+        case CG_PLAYER_HEALTH_BAR_200:
             CG_DrawHealthBar200(&rect, shader);
             break;
-        case CG_PLAYER_AMMO_ICON:           // 0x2f
+        case CG_PLAYER_AMMO_ICON:
             CG_DrawPlayerAmmoIcon(&rect, ownerDrawFlags & CG_SHOW_2DONLY);
             break;
-        case CG_PLAYER_AMMO_ICON2D:         // 0x30
+        case CG_PLAYER_AMMO_ICON2D:
             CG_DrawPlayerAmmoIcon(&rect, qtrue);
             break;
-        case CG_PLAYER_AMMO_VALUE:          // 0x31
+        case CG_PLAYER_AMMO_VALUE:
             CG_DrawPlayerAmmoValue(&rect, scale, color, shader, textStyle, align);
             break;
-        case CG_PLAYER_ITEM:                // 0x32
+        case CG_PLAYER_ITEM:
             CG_DrawPlayerItem(&rect, scale, ownerDrawFlags & CG_SHOW_2DONLY);
             break;
-        case CG_PLAYER_SCORE:               // 0x33/0x53/0x56  CG_DrawScoreByOwnerDraw
+        case CG_PLAYER_SCORE:
         case CG_1STPLACE:
         case CG_2NDPLACE:
             CG_DrawScoreByOwnerDraw(ownerDraw, &rect, scale, color, textStyle, align);
             break;
-        case CG_ONEFLAG_STATUS:             // 0x36
+        case CG_ONEFLAG_STATUS:
             CG_OneFlagStatus(&rect);
             break;
-        case CG_PLAYER_HASFLAG:             // 0x37
-        case CG_PLAYER_HASFLAG2D:           // 0x38
+        case CG_PLAYER_HASFLAG:
+        case CG_PLAYER_HASFLAG2D:
             CG_DrawPlayerHasFlag(&rect, ownerDraw == CG_PLAYER_HASFLAG2D);
             break;
-        case CG_HARVESTER_SKULLS:           // 0x39  CG_DrawDomStatus (harvester skulls, gt 8)
+        case CG_HARVESTER_SKULLS:
             CG_HarvesterSkulls(&rect, scale, color, qfalse, textStyle);
             break;
-        case CG_HARVESTER_SKULLS2D:         // 0x3a
+        case CG_HARVESTER_SKULLS2D:
             CG_HarvesterSkulls(&rect, scale, color, qtrue, textStyle);
             break;
-        case CG_PLAYER_HASKEY:              // 0x3b  -> 0x10031f90
+        case CG_PLAYER_HASKEY:
             CG_DrawPlayerHasKey(&rect);
             break;
-        case CG_CTF_POWERUP:                // 0x3c  -> 0x100310f0
+        case CG_CTF_POWERUP:
             CG_DrawPersistantPowerUp(&rect);
             break;
-        case CG_AREA_POWERUP:               // 0x3d
+        case CG_AREA_POWERUP:
             CG_DrawAreaPowerUp(&rect, align, special, scale, color);
             break;
-        case CG_TEAM_COLOR:                 // 0x3e  CG_DrawTeamBackground
+        case CG_TEAM_COLOR:
             CG_DrawTeamColor(&rect, color);
             break;
-        case CG_KILLER:                     // 0x3f
+        case CG_KILLER:
             if (cg.killerName[0]) {
                 CG_DrawKiller(&rect, scale, color, textStyle, align);
             }
             break;
-        case CG_ACCURACY:                   // 0x40-0x42,0x44-0x47,0x4a  medals
+        case CG_ACCURACY:
         case CG_ASSISTS:
         case CG_CAPTURES:
         case CG_DEFEND:
@@ -4657,7 +4015,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_PERFECT:
             CG_DrawMedal(ownerDraw, &rect, scale, color, shader);
             break;
-        case CG_MOST_VALUABLE_OFFENSIVE_PLYR: // 0x4b-0x50  CG_DrawScoreboardPlayerHead
+        case CG_MOST_VALUABLE_OFFENSIVE_PLYR:
         case CG_MOST_VALUABLE_DEFENSIVE_PLYR:
         case CG_MOST_VALUABLE_PLYR:
         case CG_BEST_ITEMCONTROL_PLYR:
@@ -4665,110 +4023,109 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_MOST_DAMAGEDEALT_PLYR:
             CG_DrawScoreboardPlayerHead(&rect, ownerDraw);
             break;
-        case CG_SPECTATORS:                 // 0x51  CG_DrawScrollingNotify
+        case CG_SPECTATORS:
             if (cg.notifyCount > 0) {
                 CG_DrawScrollingNotify(&rect, fontIndex, scale, color);
             }
             break;
-        case CG_MATCH_WINNER:               // 0x52
+        case CG_MATCH_WINNER:
             CG_DrawMatchWinner(&rect, scale, color, textStyle);
             break;
-        case CG_1ST_PLACE_SCORE:            // 0x54  0x10032520
+        case CG_1ST_PLACE_SCORE:
             CG_DrawFirstPlaceScore(&rect, scale, color, textStyle);
             break;
-        case CG_1STPLACE_PLYR_MODEL:        // 0x55  CG_Draw1stPlacePlayerModel
+        case CG_1STPLACE_PLYR_MODEL:
             CG_Draw1stPlacePlayerModel(&rect);
             break;
-        case CG_2ND_PLACE_SCORE:            // 0x57  0x100329a0
+        case CG_2ND_PLACE_SCORE:
             CG_DrawSecondPlaceScore(&rect, scale, color, textStyle);
             break;
-        case CG_PLAYER_OBIT:                // 0x58
+        case CG_PLAYER_OBIT:
             CG_DrawPlayerObit(&rect, scale);
             break;
-        case CG_AREA_NEW_CHAT:              // 0x59  0x10006a10 via 0x1003b3c6
+        case CG_AREA_NEW_CHAT:
             CG_DrawChat(rect.x, rect.y, rect.w, rect.h, scale);
             break;
-        case CG_PLYR_END_GAME_SCORE:        // 0x5a  CG_DrawEndGameResult
+        case CG_PLYR_END_GAME_SCORE:
             CG_DrawEndGameResult(&rect, scale, color, textStyle);
             break;
-        case CG_PLYR_BEST_WEAPON_NAME:      // 0x5b
+        case CG_PLYR_BEST_WEAPON_NAME:
             CG_DrawBestWeaponName(&rect, scale, color, textStyle);
             break;
-        case CG_SELECTED_PLYR_TEAM_COLOR:   // 0x5c
+        case CG_SELECTED_PLYR_TEAM_COLOR:
             CG_DrawSelectedPlayerTeamColor(&rect);
             break;
-        case CG_SELECTED_PLYR_ACCURACY:     // 0x5d  CG_DrawSelectedPlayerAccuracy
+        case CG_SELECTED_PLYR_ACCURACY:
             CG_DrawSelectedPlayerAccuracy(&rect, scale, color, textStyle);
             break;
-        case CG_FOLLOW_PLAYER_NAME:         // 0x5e/0x5f  CG_DrawFollow
+        case CG_FOLLOW_PLAYER_NAME:
         case CG_FOLLOW_PLAYER_NAME_EX:
             CG_DrawFollowPlayerName(&rect, ownerDraw, align, scale, color, textStyle);
             break;
-        case CG_SPEEDOMETER:                // 0x60
+        case CG_SPEEDOMETER:
             CG_DrawSpeedometer(&rect, scale, color, textStyle);
             break;
-        case CG_WP_VERTICAL:                // 0x61
+        case CG_WP_VERTICAL:
             CG_DrawWeaponVertical(&rect, color);
             break;
-        case CG_ACC_VERTICAL:               // 0x62
+        case CG_ACC_VERTICAL:
             CG_DrawAccuracyVertical(&rect, scale, color, textStyle);
             break;
-        case CG_TEAM_COLORIZED:             // 0x63
+        case CG_TEAM_COLORIZED:
             CG_DrawTeamColorized(&rect, color, shader);
             break;
-        case CG_TEAM_PLYR_COUNT:            // 0x64  players left on your team (round-based only)
+        case CG_TEAM_PLYR_COUNT:
             if (cgs.gametype == GT_CA || cgs.gametype == GT_FREEZE ||
                 cgs.gametype == GT_AD || cgs.gametype == GT_RR) {
                 CG_DrawOwnTeamPlayersLeft(1, &rect, scale, color, textStyle);
             }
             break;
-        case CG_ENEMY_PLYR_COUNT:           // 0x65
+        case CG_ENEMY_PLYR_COUNT:
             if (cgs.gametype == GT_CA || cgs.gametype == GT_FREEZE ||
                 cgs.gametype == GT_AD || cgs.gametype == GT_RR) {
                 CG_DrawOwnTeamPlayersLeft(0, &rect, scale, color, textStyle);
             }
             break;
-        case CG_1STPLACE_PLYR_MODEL_ACTIVE: // 0x66  no binary handler
+        case CG_1STPLACE_PLYR_MODEL_ACTIVE:
             break;
 
-        // ---- duel overlay: 1st player 0x67-0xc0, 2nd player 0xc1-0x11a ----
-        case CG_1ST_PLYR: case CG_2ND_PLYR:                       // 0x67/0xc1
+        case CG_1ST_PLYR: case CG_2ND_PLYR:
             CG_DrawDuelPlayerName(ownerDraw, &rect, fontIndex, scale, color, textStyle, align);
             break;
-        case CG_1ST_PLYR_READY:                                   // 0x68
+        case CG_1ST_PLYR_READY:
             CG_DrawPlayerStatusLeft(&rect);
             break;
-        case CG_2ND_PLYR_READY:                                   // 0xc2
+        case CG_2ND_PLYR_READY:
             CG_DrawPlayerStatusRight(&rect);
             break;
-        case CG_1ST_PLYR_SCORE: case CG_2ND_PLYR_SCORE:           // 0x69/0xc3
+        case CG_1ST_PLYR_SCORE: case CG_2ND_PLYR_SCORE:
             CG_DrawDuelPlayerScore(ownerDraw, &rect, scale, color, textStyle, align);
             break;
-        case CG_1ST_PLYR_FRAGS: case CG_2ND_PLYR_FRAGS:           // 0x6a/0xc4
+        case CG_1ST_PLYR_FRAGS: case CG_2ND_PLYR_FRAGS:
             CG_DrawDuelPlayerFrags(&rect, scale, color, textStyle, align, ownerDraw);
             break;
-        case CG_1ST_PLYR_DEATHS: case CG_2ND_PLYR_DEATHS:         // 0x6b/0xc5
+        case CG_1ST_PLYR_DEATHS: case CG_2ND_PLYR_DEATHS:
             CG_DrawDuelPlayerDeaths(&rect, scale, color, textStyle, align, ownerDraw);
             break;
-        case CG_1ST_PLYR_DMG: case CG_2ND_PLYR_DMG:               // 0x6c/0xc6
+        case CG_1ST_PLYR_DMG: case CG_2ND_PLYR_DMG:
             CG_DrawDuelPlayerDmg(&rect, scale, color, textStyle, align, ownerDraw);
             break;
-        case CG_1ST_PLYR_PING: case CG_2ND_PLYR_PING:             // 0x6e/0xc8
+        case CG_1ST_PLYR_PING: case CG_2ND_PLYR_PING:
             CG_DrawDuelPlayerPing(&rect, scale, textStyle, align, ownerDraw);
             break;
-        case CG_1ST_PLYR_WINS: case CG_2ND_PLYR_WINS:             // 0x6f/0xc9
+        case CG_1ST_PLYR_WINS: case CG_2ND_PLYR_WINS:
             CG_DrawDuelPlayerWins(&rect, scale, color, textStyle, align, ownerDraw);
             break;
-        case CG_1ST_PLYR_ACC: case CG_2ND_PLYR_ACC:               // 0x70/0xca
+        case CG_1ST_PLYR_ACC: case CG_2ND_PLYR_ACC:
             CG_DrawDuelPlayerAcc(&rect, scale, color, textStyle, align, ownerDraw);
             break;
-        case CG_1ST_PLYR_FLAG: case CG_2ND_PLYR_FLAG:             // 0x71/0xcb
+        case CG_1ST_PLYR_FLAG: case CG_2ND_PLYR_FLAG:
             CG_DrawDuelPlayerFlag(&rect, ownerDraw);
             break;
-        case CG_1ST_PLYR_AVATAR: case CG_2ND_PLYR_AVATAR:         // 0x72/0xcc
+        case CG_1ST_PLYR_AVATAR: case CG_2ND_PLYR_AVATAR:
             CG_DrawDuelPlayerAvatar(&rect, ownerDraw);
             break;
-        case CG_1ST_PLYR_HEALTH_ARMOR: case CG_2ND_PLYR_HEALTH_ARMOR: // 0x74/0xce
+        case CG_1ST_PLYR_HEALTH_ARMOR: case CG_2ND_PLYR_HEALTH_ARMOR:
             CG_DrawDuelHealthArmorBar(&rect, ownerDraw);
             break;
         case CG_1ST_PLYR_FRAGS_G: case CG_1ST_PLYR_FRAGS_MG: case CG_1ST_PLYR_FRAGS_SG:
@@ -4780,7 +4137,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_2ND_PLYR_FRAGS_GL: case CG_2ND_PLYR_FRAGS_RL: case CG_2ND_PLYR_FRAGS_LG:
         case CG_2ND_PLYR_FRAGS_RG: case CG_2ND_PLYR_FRAGS_PG: case CG_2ND_PLYR_FRAGS_BFG:
         case CG_2ND_PLYR_FRAGS_CG: case CG_2ND_PLYR_FRAGS_NG: case CG_2ND_PLYR_FRAGS_PL:
-        case CG_2ND_PLYR_FRAGS_HMG:                               // 0x75-0x81/0xcf-0xdb
+        case CG_2ND_PLYR_FRAGS_HMG:
             CG_DrawDuelWeaponFrags(&rect, scale, color, textStyle, align, ownerDraw);
             break;
         case CG_1ST_PLYR_HITS_MG: case CG_1ST_PLYR_HITS_SG: case CG_1ST_PLYR_HITS_GL:
@@ -4791,7 +4148,6 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_2ND_PLYR_HITS_RL: case CG_2ND_PLYR_HITS_LG: case CG_2ND_PLYR_HITS_RG:
         case CG_2ND_PLYR_HITS_PG: case CG_2ND_PLYR_HITS_BFG: case CG_2ND_PLYR_HITS_CG:
         case CG_2ND_PLYR_HITS_NG: case CG_2ND_PLYR_HITS_PL: case CG_2ND_PLYR_HITS_HMG:
-                                                                 // 0x82-0x8d/0xdc-0xe7
             CG_DrawDuelWeaponHits(&rect, scale, color, textStyle, align, ownerDraw);
             break;
         case CG_1ST_PLYR_SHOTS_MG: case CG_1ST_PLYR_SHOTS_SG: case CG_1ST_PLYR_SHOTS_GL:
@@ -4802,7 +4158,6 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_2ND_PLYR_SHOTS_RL: case CG_2ND_PLYR_SHOTS_LG: case CG_2ND_PLYR_SHOTS_RG:
         case CG_2ND_PLYR_SHOTS_PG: case CG_2ND_PLYR_SHOTS_BFG: case CG_2ND_PLYR_SHOTS_CG:
         case CG_2ND_PLYR_SHOTS_NG: case CG_2ND_PLYR_SHOTS_PL: case CG_2ND_PLYR_SHOTS_HMG:
-                                                                 // 0x8e-0x99/0xe8-0xf3
             CG_DrawDuelWeaponShots(&rect, scale, color, textStyle, align, ownerDraw);
             break;
         case CG_1ST_PLYR_DMG_G: case CG_1ST_PLYR_DMG_MG: case CG_1ST_PLYR_DMG_SG:
@@ -4814,7 +4169,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_2ND_PLYR_DMG_GL: case CG_2ND_PLYR_DMG_RL: case CG_2ND_PLYR_DMG_LG:
         case CG_2ND_PLYR_DMG_RG: case CG_2ND_PLYR_DMG_PG: case CG_2ND_PLYR_DMG_BFG:
         case CG_2ND_PLYR_DMG_CG: case CG_2ND_PLYR_DMG_NG: case CG_2ND_PLYR_DMG_PL:
-        case CG_2ND_PLYR_DMG_HMG:                                 // 0x9a-0xa6/0xf4-0x100
+        case CG_2ND_PLYR_DMG_HMG:
             CG_DrawDuelWeaponDmg(&rect, scale, color, textStyle, align, ownerDraw);
             break;
         case CG_1ST_PLYR_ACC_MG: case CG_1ST_PLYR_ACC_SG: case CG_1ST_PLYR_ACC_GL:
@@ -4825,86 +4180,81 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_2ND_PLYR_ACC_RL: case CG_2ND_PLYR_ACC_LG: case CG_2ND_PLYR_ACC_RG:
         case CG_2ND_PLYR_ACC_PG: case CG_2ND_PLYR_ACC_BFG: case CG_2ND_PLYR_ACC_CG:
         case CG_2ND_PLYR_ACC_NG: case CG_2ND_PLYR_ACC_PL: case CG_2ND_PLYR_ACC_HMG:
-                                                                 // 0xa7-0xb2/0x101-0x10c
             CG_DrawDuelWeaponAcc(&rect, scale, color, textStyle, align, ownerDraw);
             break;
         case CG_1ST_PLYR_PICKUPS: case CG_1ST_PLYR_PICKUPS_RA: case CG_1ST_PLYR_PICKUPS_YA:
         case CG_1ST_PLYR_PICKUPS_GA: case CG_1ST_PLYR_PICKUPS_MH:
         case CG_2ND_PLYR_PICKUPS: case CG_2ND_PLYR_PICKUPS_RA: case CG_2ND_PLYR_PICKUPS_YA:
-        case CG_2ND_PLYR_PICKUPS_GA: case CG_2ND_PLYR_PICKUPS_MH:  // 0xb3-0xb7/0x10d-0x111
+        case CG_2ND_PLYR_PICKUPS_GA: case CG_2ND_PLYR_PICKUPS_MH:
             CG_DrawDuelPlayerPickups(&rect, scale, color, textStyle, align, ownerDraw);
             break;
         case CG_1ST_PLYR_AVG_PICKUP_TIME_RA: case CG_1ST_PLYR_AVG_PICKUP_TIME_YA:
         case CG_1ST_PLYR_AVG_PICKUP_TIME_GA: case CG_1ST_PLYR_AVG_PICKUP_TIME_MH:
         case CG_2ND_PLYR_AVG_PICKUP_TIME_RA: case CG_2ND_PLYR_AVG_PICKUP_TIME_YA:
         case CG_2ND_PLYR_AVG_PICKUP_TIME_GA: case CG_2ND_PLYR_AVG_PICKUP_TIME_MH:
-                                                                 // 0xb8-0xbb/0x112-0x115
             CG_DrawDuelAvgPickupTime(&rect, scale, color, textStyle, align, ownerDraw);
             break;
         case CG_1ST_PLYR_EXCELLENT: case CG_1ST_PLYR_IMPRESSIVE: case CG_1ST_PLYR_HUMILIATION:
         case CG_2ND_PLYR_EXCELLENT: case CG_2ND_PLYR_IMPRESSIVE: case CG_2ND_PLYR_HUMILIATION:
-                                                                 // 0xbc-0xbe/0x116-0x118
             CG_DrawDuelAwards(&rect, scale, color, textStyle, align, ownerDraw);
             break;
 
-        // ---- team header / scoreboard ----
-        case CG_RED_FLAGSTATUS:             // 0x11b/0x120/0x136/0x13b  CG_DrawFlagStatus
+        case CG_RED_FLAGSTATUS:
         case CG_RED_BASESTATUS:
         case CG_BLUE_FLAGSTATUS:
         case CG_BLUE_BASESTATUS:
             CG_DrawFlagStatus(&rect, ownerDraw);
             break;
-        case CG_RED_SCORE:                  // 0x11c/0x138  CG_DrawTeamScore
+        case CG_RED_SCORE:
         case CG_BLUE_SCORE:
             CG_DrawTeamScore(ownerDraw, &rect, scale, color, textStyle, align);
             break;
-        case CG_RED_NAME:                   // 0x11d/0x137  CG_DrawTeamName
+        case CG_RED_NAME:
         case CG_BLUE_NAME:
             CG_DrawTeamName(ownerDraw, &rect, scale, color, textStyle, align);
             break;
-        case CG_RED_OWNED_FLAGS:            // 0x11e  CG_DrawTeamAliveCount (DOM/AD)
+        case CG_RED_OWNED_FLAGS:
             if (cgs.gametype == GT_DOMINATION || cgs.gametype == GT_AD) {
                 CG_DrawTeamAliveCount(&rect, TEAM_RED, scale, color, textStyle);
             }
             break;
-        case CG_BLUE_OWNED_FLAGS:           // 0x139
+        case CG_BLUE_OWNED_FLAGS:
             if (cgs.gametype == GT_DOMINATION || cgs.gametype == GT_AD) {
                 CG_DrawTeamAliveCount(&rect, TEAM_BLUE, scale, color, textStyle);
             }
             break;
-        case CG_RED_AVG_PING:               // 0x11f/0x13a
+        case CG_RED_AVG_PING:
             CG_DrawTeamAvgPing(&rect, scale, textStyle, align, TEAM_RED);
             break;
         case CG_BLUE_AVG_PING:
             CG_DrawTeamAvgPing(&rect, scale, textStyle, align, TEAM_BLUE);
             break;
-        case CG_RED_PLAYER_COUNT:           // 0x121/0x13c  CG_DrawPlayerCount2
+        case CG_RED_PLAYER_COUNT:
             CG_DrawPlayerCount2(&rect, TEAM_RED, scale, color, textStyle, align);
             break;
         case CG_BLUE_PLAYER_COUNT:
             CG_DrawPlayerCount2(&rect, TEAM_BLUE, scale, color, textStyle, align);
             break;
-        case CG_RED_CLAN_PLYRS:             // 0x122  players left on red (round-based)
+        case CG_RED_CLAN_PLYRS:
             if (cgs.gametype == GT_CA || cgs.gametype == GT_FREEZE ||
                 cgs.gametype == GT_AD || cgs.gametype == GT_RR) {
                 CG_DrawTeamPlayersLeft(TEAM_RED, &rect, scale, color, textStyle);
             }
             break;
-        case CG_BLUE_CLAN_PLYRS:            // 0x13d
+        case CG_BLUE_CLAN_PLYRS:
             if (cgs.gametype == GT_CA || cgs.gametype == GT_FREEZE ||
                 cgs.gametype == GT_AD || cgs.gametype == GT_RR) {
                 CG_DrawTeamPlayersLeft(TEAM_BLUE, &rect, scale, color, textStyle);
             }
             break;
-        case CG_RED_TIMEOUT_COUNT:          // 0x123  CG_DrawTimeoutCount
+        case CG_RED_TIMEOUT_COUNT:
             CG_DrawTimeoutCount(&rect, scale, color, textStyle, align, CS_TIMEOUTS_RED);
             break;
-        case CG_BLUE_TIMEOUT_COUNT:         // 0x13e
+        case CG_BLUE_TIMEOUT_COUNT:
             CG_DrawTimeoutCount(&rect, scale, color, textStyle, align, CS_TIMEOUTS_BLUE);
             break;
 
-        // ---- team pickup stat columns (0x124-0x135 red, 0x13f-0x150 blue) ----
-        case CG_RED_TEAM_MAP_PICKUPS:       // 0x10037f80 counts
+        case CG_RED_TEAM_MAP_PICKUPS:
         case CG_RED_TEAM_PICKUPS_RA: case CG_RED_TEAM_PICKUPS_YA:
         case CG_RED_TEAM_PICKUPS_GA: case CG_RED_TEAM_PICKUPS_MH:
         case CG_RED_TEAM_PICKUPS_QUAD: case CG_RED_TEAM_PICKUPS_BS:
@@ -4920,7 +4270,7 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
         case CG_BLUE_TEAM_PICKUPS_INVIS:
             CG_DrawTeamPickups(&rect, scale, color, textStyle, align, ownerDraw);
             break;
-        case CG_RED_TEAM_TIMEHELD_QUAD:     // 0x10039ae0 times held
+        case CG_RED_TEAM_TIMEHELD_QUAD:
         case CG_RED_TEAM_TIMEHELD_BS:
         case CG_RED_TEAM_TIMEHELD_FLAG: case CG_RED_TEAM_TIMEHELD_REGEN:
         case CG_RED_TEAM_TIMEHELD_HASTE: case CG_RED_TEAM_TIMEHELD_INVIS:
@@ -4930,27 +4280,25 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             CG_DrawTeamTimeHeld(&rect, scale, color, textStyle, align, ownerDraw);
             break;
 
-        case CG_FLAG_STATUS:                // 0x151
+        case CG_FLAG_STATUS:
             CG_DrawFlagStatusBar(&rect);
             break;
-        case CG_HEALTH_COLORIZED:           // 0x152
+        case CG_HEALTH_COLORIZED:
             CG_DrawHealthColorized(&rect, color, shader);
             break;
-        case CG_MATCH_STATE:                // 0x153
-            // [QL] force Handel Gothic (fontIndex 1), pak00 menu omits the font directive
+        case CG_MATCH_STATE:
             cg_currentFontIndex = fontIndex ? fontIndex : 1;
             CG_DrawMatchState(&rect, scale, color, textStyle);
             break;
 
-        // ---- race respawn message (0x34/0x35), split into status + times ----
-        case CG_RACE_STATUS:                // 0x34
+        case CG_RACE_STATUS:
             CG_DrawRaceStatus(&rect, scale, color, textStyle);
             break;
-        case CG_RACE_TIMES:                 // 0x35
+        case CG_RACE_TIMES:
             CG_DrawRaceTimes(&rect, scale, color, textStyle);
             break;
 
-        case UI_ADVERT:                     // 0x225
+        case UI_ADVERT:
             CG_DrawAdvert(&rect, color, shader, ownerDrawFlags);
             break;
 
@@ -4964,12 +4312,6 @@ void CG_MouseEvent(int x, int y) {
     int n;
     int bias;
 
-    // [QL] cgamex86.dll CG_MouseEvent (0x1003c4f0) has no early-out at all: the engine hands it
-    // where the pointer is, in window pixels, and it converts that into 640x480, honouring
-    // widescreenBias, and stores cursorX/cursorY. The pointer is the one the system draws, as
-    // over the UI's menus (_UI_MousePosition does the same sums); cgame draws none of its own.
-    // CG_AdjustFrom640 maps a 640 x to `x * xscale43 + widescreenBias`, so the on-screen span
-    // [0, vidWidth] is [-bias640, 640 + bias640] here.
     xscale43 = (4.0f * cgs.glconfig.vidHeight / 3.0f) / (float)SCREEN_WIDTH;
     if (xscale43 <= 0.0f || cgs.screenYScale <= 0.0f) {
         return;
@@ -4996,9 +4338,6 @@ void CG_MouseEvent(int x, int y) {
         cgs.activeCursor = cgs.media.sizeCursor;
     }
 
-    // The shared menu code hit-tests against DC->cursorx/cursory, not against the
-    // coordinates handed to Display_MouseMove - see Menu_HandleKey's
-    // Rect_ContainsWidescreenPoint call.
     cgDC.cursorx = cgs.cursorX;
     cgDC.cursory = cgs.cursorY;
 
@@ -5007,37 +4346,15 @@ void CG_MouseEvent(int x, int y) {
     }
 }
 
-/*
-==================
-CG_HideTeamMenus
-==================
-
-*/
 void CG_HideTeamMenu(void) {
     Menus_CloseByName("teamMenu");
     Menus_CloseByName("getMenu");
 }
 
-/*
-==================
-CG_ShowTeamMenus
-==================
-
-*/
 void CG_ShowTeamMenu(void) {
     Menus_OpenByName("teamMenu");
 }
 
-/*
-==================
-CG_EventHandling
-
-[QL] cgamex86.dll 0x1003c620. The event is kept in cgs.eventHandling. 0 closes Quake 3's
-team menu (0x1003c570), 5 hides the join menu (0x1000e930): the retail engine sends 5 from
-its Escape handler (quakelive_steam.exe 0x4b7c1c) and then goes on to open the in-game
-menu. 4 reads the resolution again (0x1003c643), after the window changed size.
-==================
-*/
 void CG_EventHandling(int type) {
     cgs.eventHandling = type;
     if (type == CGAME_EVENT_NONE) {
@@ -5052,17 +4369,10 @@ void CG_EventHandling(int type) {
 void CG_KeyEvent(int key, qboolean down) {
     menuDef_t* menu;
 
-    // [ioquakelive] the demo controls take the left button while their pointer is up
     if (CG_DemoHUDKey(key, down)) {
         return;
     }
 
-    // [QL] cgamex86.dll 0x1003c6f0. While a cgame menu holds the keys (the join menu, the
-    // end-of-match scoreboard) the engine runs no key-down binds, so retail forwards the
-    // presses bound to chat, screenshots, voice and the scoreboard itself: "messagemode*"
-    // and "screenshot*" go to the console as bound, "+voice*" as "+voice", and "+scores"
-    // raises the board through CG_ScoresDown_f (0x10006cf0). Without this, nobody could
-    // chat over the end-of-match board. Every other press goes to the focused menu.
     if (down) {
         char binding[32];
 
@@ -5082,31 +4392,15 @@ void CG_KeyEvent(int key, qboolean down) {
         }
     }
 
-    // The menu half is a replica of the UI module's _UI_KeyEvent, releases included:
-    // ui_shared's Item_HandleKey needs the release to close its capture, where
-    // retail's menu code hands Menu_HandleKey (0x1005cc70) only the presses. That
-    // state lives in ui_shared's itemCapture, so cgame keeps none of its own.
     if (Menu_Count() <= 0) {
         return;
     }
 
     menu = Menu_GetFocused();
     if (menu == NULL) {
-        // Do NOT drop KEYCATCH_CGAME here, even though _UI_KeyEvent drops KEYCATCH_UI
-        // in the same spot. In cgame that flag is not just an input route: per
-        // CG_AdjustFrom640 it also selects the horizontal mapping, 4:3-centred with
-        // the widescreen bias when it is set and full-width stretch when it is not.
-        // Dropping it mid-frame makes the join menu snap from the centred layout to
-        // spanning the whole window - which is exactly what it did the first time this
-        // was written the UI module's way. The catcher belongs to CG_UpdateJoinMenu,
-        // which takes it, and CG_HideJoinMenu, which gives it back.
         return;
     }
 
-    // Escape is handled by the engine before it ever reaches us: cl_keys.c sends
-    // CG_EVENT_HANDLING(CGAME_EVENT_ESCAPE) on the key-down, which hides the join menu
-    // and drops KEYCATCH_CGAME, so only the release arrives here. Passing it through is
-    // harmless and matches what the UI module does with the keys it does not special-case.
     Menu_HandleKey(menu, key, down);
 }
 

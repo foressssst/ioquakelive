@@ -21,14 +21,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "tr_local.h"
 
-/*
-=====================
-R_PerformanceCounters
-=====================
-*/
 void R_PerformanceCounters(void) {
     if (!r_speeds->integer) {
-        // clear the counters even if we aren't printing
         Com_Memset(&tr.pc, 0, sizeof(tr.pc));
         Com_Memset(&backEnd.pc, 0, sizeof(backEnd.pc));
         return;
@@ -70,40 +64,24 @@ void R_PerformanceCounters(void) {
     Com_Memset(&backEnd.pc, 0, sizeof(backEnd.pc));
 }
 
-/*
-====================
-R_IssueRenderCommands
-====================
-*/
 void R_IssueRenderCommands(qboolean runPerformanceCounters) {
     renderCommandList_t* cmdList;
 
     cmdList = &backEndData->commands;
     assert(cmdList);
-    // add an end-of-list command
     *(int*)(cmdList->cmds + cmdList->used) = RC_END_OF_LIST;
 
-    // clear it out, in case this is a sync and not a buffer flip
     cmdList->used = 0;
 
     if (runPerformanceCounters) {
         R_PerformanceCounters();
     }
 
-    // actually start the commands going
     if (!r_skipBackEnd->integer) {
-        // let it start on the new batch
         RB_ExecuteRenderCommands(cmdList->cmds);
     }
 }
 
-/*
-====================
-R_IssuePendingRenderCommands
-
-Issue any pending commands and wait for them to complete.
-====================
-*/
 void R_IssuePendingRenderCommands(void) {
     if (!tr.registered) {
         return;
@@ -111,25 +89,16 @@ void R_IssuePendingRenderCommands(void) {
     R_IssueRenderCommands(qfalse);
 }
 
-/*
-============
-R_GetCommandBufferReserved
-
-make sure there is enough command space
-============
-*/
 void* R_GetCommandBufferReserved(int bytes, int reservedBytes) {
     renderCommandList_t* cmdList;
 
     cmdList = &backEndData->commands;
     bytes = PAD(bytes, sizeof(void*));
 
-    // always leave room for the end of list command
     if (cmdList->used + bytes + sizeof(int) + reservedBytes > MAX_RENDER_COMMANDS) {
         if (bytes > MAX_RENDER_COMMANDS - sizeof(int)) {
             ri.Error(ERR_FATAL, "R_GetCommandBuffer: bad size %i", bytes);
         }
-        // if we run out of room, just start dropping commands
         return NULL;
     }
 
@@ -138,23 +107,10 @@ void* R_GetCommandBufferReserved(int bytes, int reservedBytes) {
     return cmdList->cmds + cmdList->used - bytes;
 }
 
-/*
-=============
-R_GetCommandBuffer
-
-returns NULL if there is not enough space for important commands
-=============
-*/
 void* R_GetCommandBuffer(int bytes) {
     return R_GetCommandBufferReserved(bytes, PAD(sizeof(swapBuffersCommand_t), sizeof(void*)));
 }
 
-/*
-=============
-R_AddDrawSurfCmd
-
-=============
-*/
 void R_AddDrawSurfCmd(drawSurf_t* drawSurfs, int numDrawSurfs) {
     drawSurfsCommand_t* cmd;
 
@@ -171,12 +127,6 @@ void R_AddDrawSurfCmd(drawSurf_t* drawSurfs, int numDrawSurfs) {
     cmd->viewParms = tr.viewParms;
 }
 
-/*
-=============
-R_AddCapShadowmapCmd
-
-=============
-*/
 void R_AddCapShadowmapCmd(int map, int cubeSide) {
     capShadowmapCommand_t* cmd;
 
@@ -190,12 +140,6 @@ void R_AddCapShadowmapCmd(int map, int cubeSide) {
     cmd->cubeSide = cubeSide;
 }
 
-/*
-=============
-R_AddPostProcessCmd
-
-=============
-*/
 void R_AddPostProcessCmd(void) {
     postProcessCommand_t* cmd;
 
@@ -209,13 +153,6 @@ void R_AddPostProcessCmd(void) {
     cmd->viewParms = tr.viewParms;
 }
 
-/*
-=============
-RE_SetColor
-
-Passing NULL will set the color to white
-=============
-*/
 void RE_SetColor(const float* rgba) {
     setColorCommand_t* cmd;
 
@@ -238,9 +175,6 @@ void RE_SetColor(const float* rgba) {
     cmd->color[2] = rgba[2];
     cmd->color[3] = rgba[3];
 
-    // [QL] shadow the current 2D colour so the fontstash text path can use it
-    // as the base glyph colour (text colour is set via RE_SetColor before
-    // RE_Font_DrawString). See tr_font_gl.c.
     {
         extern vec4_t g_fontColor2D;
         g_fontColor2D[0] = rgba[0];
@@ -250,11 +184,6 @@ void RE_SetColor(const float* rgba) {
     }
 }
 
-/*
-=============
-RE_StretchPic
-=============
-*/
 void RE_StretchPic(float x, float y, float w, float h, float s1, float t1, float s2, float t2, qhandle_t hShader) {
     stretchPicCommand_t* cmd;
 
@@ -314,14 +243,6 @@ void R_SetColorMode(GLboolean* rgba, stereoFrame_t stereoFrame, int colormode) {
     }
 }
 
-/*
-====================
-RE_BeginFrame
-
-If running in stereo, RE_BeginFrame will be called twice
-for each RE_EndFrame
-====================
-*/
 void RE_BeginFrame(stereoFrame_t stereoFrame) {
     drawBufferCommand_t* cmd = NULL;
     colorMaskCommand_t* colcmd = NULL;
@@ -334,9 +255,6 @@ void RE_BeginFrame(stereoFrame_t stereoFrame) {
     tr.frameCount++;
     tr.frameSceneNum = 0;
 
-    //
-    // do overdraw measurement
-    //
     if (r_measureOverdraw->integer) {
         if (qglesMajorVersion >= 1 && !glRefConfig.readStencil) {
             ri.Printf(PRINT_WARNING, "OpenGL ES needs GL_NV_read_stencil to read stencil bits to measure overdraw\n");
@@ -360,7 +278,6 @@ void RE_BeginFrame(stereoFrame_t stereoFrame) {
         }
         r_measureOverdraw->modified = qfalse;
     } else {
-        // this is only reached if it was on and is now off
         if (r_measureOverdraw->modified) {
             R_IssuePendingRenderCommands();
             qglDisable(GL_STENCIL_TEST);
@@ -368,18 +285,12 @@ void RE_BeginFrame(stereoFrame_t stereoFrame) {
         r_measureOverdraw->modified = qfalse;
     }
 
-    //
-    // texturemode stuff
-    //
     if (r_textureMode->modified) {
         R_IssuePendingRenderCommands();
         GL_TextureMode(r_textureMode->string);
         r_textureMode->modified = qfalse;
     }
 
-    //
-    // gamma stuff
-    //
     if (r_gamma->modified) {
         r_gamma->modified = qfalse;
 
@@ -387,7 +298,6 @@ void RE_BeginFrame(stereoFrame_t stereoFrame) {
         R_SetColorMappings();
     }
 
-    // check for errors
     if (!r_ignoreGLErrors->integer) {
         int err;
 
@@ -418,7 +328,6 @@ void RE_BeginFrame(stereoFrame_t stereoFrame) {
 
         if (r_anaglyphMode->integer) {
             if (r_anaglyphMode->modified) {
-                // clear both, front and backbuffer.
                 qglColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
                 backEnd.colorMask[0] = GL_FALSE;
                 backEnd.colorMask[1] = GL_FALSE;
@@ -426,7 +335,6 @@ void RE_BeginFrame(stereoFrame_t stereoFrame) {
                 backEnd.colorMask[3] = GL_FALSE;
 
                 if (glRefConfig.framebufferObject) {
-                    // clear all framebuffers
                     if (tr.msaaResolveFbo) {
                         FBO_Bind(tr.msaaResolveFbo);
                         qglClear(GL_COLOR_BUFFER_BIT);
@@ -499,13 +407,6 @@ void RE_BeginFrame(stereoFrame_t stereoFrame) {
     tr.refdef.stereoFrame = stereoFrame;
 }
 
-/*
-=============
-RE_EndFrame
-
-Returns the number of msec spent in the back end
-=============
-*/
 void RE_EndFrame(int* frontEndMsec, int* backEndMsec) {
     swapBuffersCommand_t* cmd;
 
@@ -532,11 +433,6 @@ void RE_EndFrame(int* frontEndMsec, int* backEndMsec) {
     backEnd.pc.msec = 0;
 }
 
-/*
-=============
-RE_TakeVideoFrame
-=============
-*/
 void RE_TakeVideoFrame(int width, int height, byte* captureBuffer, byte* encodeBuffer, qboolean motionJpeg) {
     videoFrameCommand_t* cmd;
 
@@ -585,8 +481,6 @@ void RE_Get_Advertisements(int* num, float* verts, char shaders[][MAX_QPATH]) {
         pts[12 + i * 16] = tr.world->ads[i].normal[0];
         pts[13 + i * 16] = tr.world->ads[i].normal[1];
         pts[14 + i * 16] = tr.world->ads[i].normal[2];
-        // FIXME hack
-        // pts[14 + i * 16] = tr.world->adsLightmap[i];
 
         pts[15 + i * 16] = (float)tr.world->ads[i].cellId;
         Q_strncpyz(&(shaders[i][0]), tr.world->adShaders[i], MAX_QPATH);

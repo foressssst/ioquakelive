@@ -20,7 +20,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "../renderercommon/tr_common.h"
 
 typedef unsigned int ui32_t;
@@ -49,14 +48,12 @@ typedef struct ddsHeader_s {
     ui32_t reserved2;
 } ddsHeader_t;
 
-// flags:
 #define _DDSFLAGS_REQUIRED 0x001007
 #define _DDSFLAGS_PITCH 0x8
 #define _DDSFLAGS_MIPMAPCOUNT 0x20000
 #define _DDSFLAGS_FIRSTMIPSIZE 0x80000
 #define _DDSFLAGS_VOLUMEDEPTH 0x800000
 
-// pixelFormatFlags:
 #define DDSPF_ALPHAPIXELS 0x1
 #define DDSPF_ALPHA 0x2
 #define DDSPF_FOURCC 0x4
@@ -64,12 +61,10 @@ typedef struct ddsHeader_s {
 #define DDSPF_YUV 0x200
 #define DDSPF_LUMINANCE 0x20000
 
-// caps:
 #define DDSCAPS_COMPLEX 0x8
 #define DDSCAPS_MIPMAP 0x400000
 #define DDSCAPS_REQUIRED 0x1000
 
-// caps2:
 #define DDSCAPS2_CUBEMAP 0xFE00
 #define DDSCAPS2_VOLUME 0x200000
 
@@ -81,8 +76,6 @@ typedef struct ddsHeaderDxt10_s {
     ui32_t miscFlags2;
 } ddsHeaderDxt10_t;
 
-// dxgiFormat
-// from http://msdn.microsoft.com/en-us/library/windows/desktop/bb173059%28v=vs.85%29.aspx
 typedef enum DXGI_FORMAT {
     DXGI_FORMAT_UNKNOWN = 0,
     DXGI_FORMAT_R32G32B32A32_TYPELESS = 1,
@@ -234,35 +227,23 @@ void R_LoadDDS(const char* filename, byte** pic, int* width, int* height, GLenum
 
     *pic = NULL;
 
-    //
-    // load the file
-    //
     len = ri.FS_ReadFile((char*)filename, &buffer.v);
     if (!buffer.b || len < 0) {
         return;
     }
 
-    //
-    // reject files that are too small to hold even a header
-    //
     if (len < 4 + sizeof(*ddsHeader)) {
         ri.Printf(PRINT_ALL, "File %s is too small to be a DDS file.\n", filename);
         ri.FS_FreeFile(buffer.v);
         return;
     }
 
-    //
-    // reject files that don't start with "DDS "
-    //
     if (*((ui32_t*)(buffer.b)) != EncodeFourCC("DDS ")) {
         ri.Printf(PRINT_ALL, "File %s is not a DDS file.\n", filename);
         ri.FS_FreeFile(buffer.v);
         return;
     }
 
-    //
-    // parse header and dx10 header if available
-    //
     ddsHeader = (ddsHeader_t*)(buffer.b + 4);
     if ((ddsHeader->pixelFormatFlags & DDSPF_FOURCC) && ddsHeader->fourCC == EncodeFourCC("DX10")) {
         if (len < 4 + sizeof(*ddsHeader) + sizeof(*ddsHeaderDxt10)) {
@@ -291,22 +272,14 @@ void R_LoadDDS(const char* filename, byte** pic, int* width, int* height, GLenum
             *numMips = 1;
     }
 
-    // FIXME: handle cube map
-    // if ((ddsHeader->caps2 & DDSCAPS2_CUBEMAP) == DDSCAPS2_CUBEMAP)
-
-    //
-    // Convert DXGI format/FourCC into OpenGL format
-    //
     if (ddsHeaderDxt10) {
         switch (ddsHeaderDxt10->dxgiFormat) {
             case DXGI_FORMAT_BC1_TYPELESS:
             case DXGI_FORMAT_BC1_UNORM:
-                // FIXME: check for GL_COMPRESSED_RGBA_S3TC_DXT1_EXT
                 *picFormat = GL_COMPRESSED_RGB_S3TC_DXT1_EXT;
                 break;
 
             case DXGI_FORMAT_BC1_UNORM_SRGB:
-                // FIXME: check for GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT
                 *picFormat = GL_COMPRESSED_SRGB_S3TC_DXT1_EXT;
                 break;
 

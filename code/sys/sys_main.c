@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include <signal.h>
 #include <stdlib.h>
 #include <limits.h>
@@ -37,8 +36,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #ifndef DEDICATED
 #include <SDL3/SDL.h>
-// SDL3 has no SDL3main library: this header, in the file with main(), is what gives Windows its
-// WinMain
 #include <SDL3/SDL_main.h>
 #endif
 
@@ -52,49 +49,22 @@ static char binaryPath[MAX_OSPATH] = {0};
 static char binaryName[MAX_OSPATH] = {0};
 static char installPath[MAX_OSPATH] = {0};
 
-/*
-=================
-Sys_SetBinaryPath
-=================
-*/
 void Sys_SetBinaryPath(const char* path) {
     Q_strncpyz(binaryPath, path, sizeof(binaryPath));
 }
 
-/*
-=================
-Sys_BinaryPath
-=================
-*/
 char* Sys_BinaryPath(void) {
     return binaryPath;
 }
 
-/*
-=================
-Sys_BinaryName
-
-[ioquakelive] the name this executable was started as, without its directory
-=================
-*/
 const char* Sys_BinaryName(void) {
     return binaryName;
 }
 
-/*
-=================
-Sys_SetDefaultInstallPath
-=================
-*/
 void Sys_SetDefaultInstallPath(const char* path) {
     Q_strncpyz(installPath, path, sizeof(installPath));
 }
 
-/*
-=================
-Sys_DefaultInstallPath
-=================
-*/
 char* Sys_DefaultInstallPath(void) {
     if (*installPath)
         return installPath;
@@ -102,24 +72,12 @@ char* Sys_DefaultInstallPath(void) {
         return Sys_Cwd();
 }
 
-/*
-=================
-Sys_DefaultAppPath
-=================
-*/
 #ifndef __APPLE__
 char* Sys_DefaultAppPath(void) {
     return Sys_BinaryPath();
 }
 #endif
 
-/*
-=================
-Sys_In_Restart_f
-
-Restart the input subsystem
-=================
-*/
 void Sys_In_Restart_f(void) {
 #ifndef DEDICATED
     if (!SDL_WasInit(SDL_INIT_VIDEO)) {
@@ -131,25 +89,10 @@ void Sys_In_Restart_f(void) {
     IN_Restart();
 }
 
-/*
-=================
-Sys_ConsoleInput
-
-Handle new console input
-=================
-*/
 char* Sys_ConsoleInput(void) {
     return CON_Input();
 }
 
-/*
-==================
-Sys_SetClipboardData
-
-[CNQ3] Puts text on the system clipboard (console mark mode, Ctrl-M then
-Ctrl-C or Enter).
-==================
-*/
 void Sys_SetClipboardData(const char* text) {
 #ifndef DEDICATED
     SDL_SetClipboardText(text);
@@ -158,15 +101,6 @@ void Sys_SetClipboardData(const char* text) {
 #endif
 }
 
-/*
-==================
-Sys_OpenURL
-
-[ioquakelive] Hands a link to whatever the system opens links with. Retail gave
-its web UI's links to the Steam overlay, which does the same when the overlay is
-not up. The caller checks the address (CL_OpenURL); nothing else may call this.
-==================
-*/
 void Sys_OpenURL(const char* url) {
 #ifndef DEDICATED
     if (!SDL_OpenURL(url)) {
@@ -177,11 +111,6 @@ void Sys_OpenURL(const char* url) {
 #endif
 }
 
-/*
-==================
-Sys_GetClipboardData
-==================
-*/
 char* Sys_GetClipboardData(void) {
 #ifdef DEDICATED
     return NULL;
@@ -196,7 +125,6 @@ char* Sys_GetClipboardData(void) {
             data = Z_Malloc(bufsize);
             Q_strncpyz(data, cliptext, bufsize);
 
-            // find first listed char and set to '\0'
             strtok(data, "\n\r\b");
         }
         SDL_free(cliptext);
@@ -208,15 +136,9 @@ char* Sys_GetClipboardData(void) {
 #ifdef DEDICATED
 #define PID_FILENAME PRODUCT_NAME "_server.pid"
 #else
-// [QL] quakelive_steam.exe 0x4c93e0: the client keeps one profile.pid, in baseq3 whatever the mod
 #define PID_FILENAME "profile.pid"
 #endif
 
-/*
-=================
-Sys_PIDFileName
-=================
-*/
 static char* Sys_PIDFileName(const char* gamedir) {
     const char* homePath = Cvar_VariableString("fs_homepath");
 
@@ -226,11 +148,6 @@ static char* Sys_PIDFileName(const char* gamedir) {
     return NULL;
 }
 
-/*
-=================
-Sys_RemovePIDFile
-=================
-*/
 void Sys_RemovePIDFile(const char* gamedir) {
     char* pidFile = Sys_PIDFileName(gamedir);
 
@@ -238,13 +155,6 @@ void Sys_RemovePIDFile(const char* gamedir) {
         remove(pidFile);
 }
 
-/*
-=================
-Sys_WritePIDFile
-
-Return qtrue if there is an existing stale PID file
-=================
-*/
 qboolean Sys_WritePIDFile(const char* gamedir) {
     char* pidFile = Sys_PIDFileName(gamedir);
     FILE* f;
@@ -253,7 +163,6 @@ qboolean Sys_WritePIDFile(const char* gamedir) {
     if (pidFile == NULL)
         return qfalse;
 
-    // First, check if the pid file is already there
     if ((f = fopen(pidFile, "r")) != NULL) {
         char pidBuffer[64] = {0};
         int pid;
@@ -282,13 +191,6 @@ qboolean Sys_WritePIDFile(const char* gamedir) {
     return stale;
 }
 
-/*
-=================
-Sys_Exit
-
-Single exit point (regular exit or in case of error)
-=================
-*/
 static __attribute__((noreturn)) void Sys_Exit(int exitCode) {
     CON_Shutdown();
 
@@ -297,7 +199,6 @@ static __attribute__((noreturn)) void Sys_Exit(int exitCode) {
 #endif
 
     if (exitCode < 2 && com_fullyInitialized) {
-        // Normal exit
 #ifdef DEDICATED
         Sys_RemovePIDFile(FS_GetCurrentGameDir());
 #else
@@ -312,26 +213,14 @@ static __attribute__((noreturn)) void Sys_Exit(int exitCode) {
     exit(exitCode);
 }
 
-/*
-=================
-Sys_Quit
-=================
-*/
 void Sys_Quit(void) {
     Sys_Exit(0);
 }
 
-/*
-=================
-Sys_GetProcessorFeatures
-=================
-*/
 cpuFeatures_t Sys_GetProcessorFeatures(void) {
     cpuFeatures_t features = 0;
 
 #ifndef DEDICATED
-    // SDL3 dropped the RDTSC and 3DNow! queries: every x86 has the first, and the second is gone
-    // from current processors
 #if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64)
     features |= CF_RDTSC;
 #endif
@@ -348,42 +237,29 @@ cpuFeatures_t Sys_GetProcessorFeatures(void) {
     return features;
 }
 
-/*
-=================
-Sys_Init
-=================
-*/
 void Sys_Init(void) {
     Cmd_AddCommand("in_restart", Sys_In_Restart_f);
     Cvar_Set("arch", OS_STRING " " ARCH_STRING);
     Cvar_Set("username", Sys_GetCurrentUser());
 }
 
-/*
-=================
-Sys_AnsiColorPrint
-
-Transform Q3 colour codes to ANSI escape sequences
-=================
-*/
 void Sys_AnsiColorPrint(const char* msg) {
     static char buffer[MAXPRINTMSG];
     int length = 0;
     static int q3ToAnsi[8] =
         {
-            30,  // COLOR_BLACK
-            31,  // COLOR_RED
-            32,  // COLOR_GREEN
-            33,  // COLOR_YELLOW
-            34,  // COLOR_BLUE
-            36,  // COLOR_CYAN
-            35,  // COLOR_MAGENTA
-            0    // COLOR_WHITE
+            30,
+            31,
+            32,
+            33,
+            34,
+            36,
+            35,
+            0
         };
 
     while (*msg) {
         if (Q_IsColorString(msg) || *msg == '\n') {
-            // First empty the buffer
             if (length > 0) {
                 buffer[length] = '\0';
                 fputs(buffer, stderr);
@@ -391,11 +267,9 @@ void Sys_AnsiColorPrint(const char* msg) {
             }
 
             if (*msg == '\n') {
-                // Issue a reset and then the newline
                 fputs("\033[0m\n", stderr);
                 msg++;
             } else {
-                // Print the color code; CPMA's extra codes take the nearest ANSI colour
                 int code = Q_ColorCodeIndex(*(msg + 1), qtrue);
                 int ansi;
 
@@ -421,28 +295,17 @@ void Sys_AnsiColorPrint(const char* msg) {
         }
     }
 
-    // Empty anything still left in the buffer
     if (length > 0) {
         buffer[length] = '\0';
         fputs(buffer, stderr);
     }
 }
 
-/*
-=================
-Sys_Print
-=================
-*/
 void Sys_Print(const char* msg) {
     CON_LogWrite(msg);
     CON_Print(msg);
 }
 
-/*
-=================
-Sys_Error
-=================
-*/
 void Sys_Error(const char* error, ...) {
     va_list argptr;
     char string[1024];
@@ -457,11 +320,6 @@ void Sys_Error(const char* error, ...) {
 }
 
 #if 0
-/*
-=================
-Sys_Warn
-=================
-*/
 static __attribute__((format(printf, 1, 2))) void Sys_Warn(char* warning, ...)
 {
 	va_list argptr;
@@ -475,13 +333,6 @@ static __attribute__((format(printf, 1, 2))) void Sys_Warn(char* warning, ...)
 }
 #endif
 
-/*
-============
-Sys_FileTime
-
-returns -1 if not present
-============
-*/
 int Sys_FileTime(char* path) {
     struct stat buf;
 
@@ -491,11 +342,6 @@ int Sys_FileTime(char* path) {
     return buf.st_mtime;
 }
 
-/*
-=================
-Sys_UnloadDll
-=================
-*/
 void Sys_UnloadDll(void* dllHandle) {
     if (!dllHandle) {
         Com_Printf("Sys_UnloadDll(NULL)\n");
@@ -505,14 +351,6 @@ void Sys_UnloadDll(void* dllHandle) {
     Sys_UnloadLibrary(dllHandle);
 }
 
-/*
-=================
-Sys_LoadDll
-
-First try to load library name from system library path,
-from executable path, then fs_basepath.
-=================
-*/
 void* Sys_LoadDll(const char* name, qboolean useSystemLib) {
     void* dllhandle = NULL;
 
@@ -568,13 +406,6 @@ void* Sys_LoadDll(const char* name, qboolean useSystemLib) {
     return dllhandle;
 }
 
-/*
-=================
-Sys_LoadGameDll
-
-Used to load a development dll instead of a virtual machine
-=================
-*/
 void* Sys_LoadGameDll(const char* name,
                       vmMainProc* entryPoint,
                       intptr_t (*systemcalls)(intptr_t, ...)) {
@@ -588,7 +419,6 @@ void* Sys_LoadGameDll(const char* name,
         return NULL;
     }
 
-    // [QL] quakelive_steam.exe: "Loading dll file %s"
     Com_Printf("Loading dll file %s\n", name);
     libHandle = Sys_LoadLibrary(name);
 
@@ -613,11 +443,6 @@ void* Sys_LoadGameDll(const char* name,
     return libHandle;
 }
 
-/*
-=================
-Sys_ParseArgs
-=================
-*/
 void Sys_ParseArgs(int argc, char** argv) {
     if (argc == 2) {
         if (!strcmp(argv[1], "--version") ||
@@ -632,18 +457,7 @@ void Sys_ParseArgs(int argc, char** argv) {
     }
 }
 
-/*
-=================
-Sys_ParseProtocolUri
-
-This parses a protocol URI, e.g. "quake3://connect/example.com:27950"
-to a string that can be run in the console, or a null pointer if the
-operation is invalid or unsupported.
-At the moment only the "connect" command is supported.
-=================
-*/
 char* Sys_ParseProtocolUri(const char* uri) {
-    // Both "quake3://" and "quake3:" can be used
     if (Q_strncmp(uri, PROTOCOL_HANDLER ":", strlen(PROTOCOL_HANDLER ":"))) {
         Com_Printf("Sys_ParseProtocolUri: unsupported protocol.\n");
         return NULL;
@@ -654,7 +468,6 @@ char* Sys_ParseProtocolUri(const char* uri) {
     }
     Com_Printf("Sys_ParseProtocolUri: %s\n", uri);
 
-    // At the moment, only "connect/hostname:port" is supported
     if (!Q_strncmp(uri, "connect/", strlen("connect/"))) {
         int i, bufsize;
         char* out;
@@ -665,13 +478,8 @@ char* Sys_ParseProtocolUri(const char* uri) {
             return NULL;
         }
 
-        // Check for any unsupported characters
-        // For safety reasons, the "hostname:port" part can only
-        // contain characters from: a-zA-Z0-9.:-[]
         for (i = 0; uri[i] != '\0'; i++) {
             if (uri[i] == '?') {
-                // For forwards compatibility, any query string parameters are ignored (e.g. "?password=abcd")
-                // However, these are not passed on macOS, so it may be a bad idea to add them.
                 break;
             }
 
@@ -700,11 +508,6 @@ char* Sys_ParseProtocolUri(const char* uri) {
 #endif
 #endif
 
-/*
-=================
-Sys_SigHandler
-=================
-*/
 void Sys_SigHandler(int signal) {
     static qboolean signalcaught = qfalse;
 
@@ -727,11 +530,6 @@ void Sys_SigHandler(int signal) {
         Sys_Exit(2);
 }
 
-/*
-=================
-main
-=================
-*/
 int main(int argc, char** argv) {
     int i;
     char commandLine[MAX_STRING_CHARS] = {0};
@@ -743,14 +541,11 @@ int main(int argc, char** argv) {
     Sys_LaunchAutoupdater(argc, argv);
 
 #ifndef DEDICATED
-    // SDL version check
 
-    // Compile time
 #if !SDL_VERSION_ATLEAST(MINSDL_MAJOR, MINSDL_MINOR, MINSDL_PATCH)
 #error A more recent version of SDL is required
 #endif
 
-    // Run time
     int ver = SDL_GetVersion();
 
 #define MINSDL_VERSION    \
@@ -770,22 +565,18 @@ int main(int argc, char** argv) {
 
     Sys_PlatformInit();
 
-    // Set the initial time base
     Sys_Milliseconds();
 
 #ifdef __APPLE__
-    // This is passed if we are launched by double-clicking
     if (argc >= 2 && Q_strncmp(argv[1], "-psn", 4) == 0)
         argc = 1;
 
-    // no resume/reopen-windows prompts for a game
     Sys_DisableStateRestoration();
 #endif
 
     Sys_ParseArgs(argc, argv);
     Sys_SetBinaryPath(Sys_Dirname(argv[0]));
 
-    // both separators: a shell on Windows may hand over either
     {
         const char* name = argv[0];
         const char* p;
@@ -798,12 +589,9 @@ int main(int argc, char** argv) {
     }
     Sys_SetDefaultInstallPath(DEFAULT_BASEDIR);
 
-    // Concatenate the command line for passing to Com_Init
     for (i = 1; i < argc; i++) {
         qboolean containsSpaces;
 
-        // For security reasons we always detect --uri, even when PROTOCOL_HANDLER is undefined
-        // Any arguments after "--uri quake3://..." is ignored
         if (!strcmp(argv[i], "--uri")) {
 #ifdef PROTOCOL_HANDLER
             if (argc > i + 1) {

@@ -19,10 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// tr_qlpost.c -- [QL] the colour correction and the bloom, retail's render commands 9 to 11
-//
-
 #include "tr_local.h"
 
 cvar_t *r_bloomActive;
@@ -54,15 +50,14 @@ typedef enum {
 
 typedef struct {
 	GLuint program;
-	GLint texture;   // u_TextureMap
-	GLint levels;    // u_LevelsMap
-	GLint color;     // u_Color
-	GLint invTexRes; // u_InvTexRes
+	GLint texture;
+	GLint levels;
+	GLint color;
+	GLint invTexRes;
 } qlPostProgram_t;
 
 static qlPostProgram_t qlPrograms[QLP_COUNT];
 
-// 1 to 4 at half the scene's size, 5 to 7 at a quarter with r_bloomPasses 2
 #define QL_BLOOM_BUFFERS 8
 
 static GLuint qlBloomFbo[QL_BLOOM_BUFFERS];
@@ -72,13 +67,6 @@ static int qlBloomHeight[QL_BLOOM_BUFFERS];
 
 static qboolean qlPostReady;
 
-/*
-===============
-R_QLPostRegister
-
-[QL] 0x449000; nothing reads r_bloomBlurFalloff, r_bloomBlurRadius or r_bloomBlurScale
-===============
-*/
 void R_QLPostRegister( void ) {
 	r_bloomActive = ri.Cvar_Get( "r_bloomActive", "0", CVAR_ROM | CVAR_TEMP | CVAR_USERSAVE );
 	r_bloomBlurFalloff = ri.Cvar_GetRange( "r_bloomBlurFalloff", "0.0", "0.75", "1.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE );
@@ -86,7 +74,6 @@ void R_QLPostRegister( void ) {
 	r_bloomBlurScale = ri.Cvar_GetRange( "r_bloomBlurScale", "0.0", "1.0", "2.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE );
 	r_bloomBrightThreshold = ri.Cvar_GetRange( "r_bloomBrightThreshold", "0.25", "0.0", "1.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE );
 	r_bloomIntensity = ri.Cvar_GetRange( "r_bloomIntensity", "0.5", "0.0", "10.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE );
-	// retail's flags also carry 0x2000, a binary range: see R_BloomPasses
 	r_bloomPasses = ri.Cvar_GetRange( "r_bloomPasses", "1", "1", "2", CVAR_ARCHIVE | CVAR_LATCH | CVAR_REPLICATE | CVAR_USERSAVE );
 	r_bloomSaturation = ri.Cvar_GetRange( "r_bloomSaturation", "0.8", "0.0", "10.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE );
 	r_bloomSceneIntensity = ri.Cvar_GetRange( "r_bloomSceneIntensity", "1.0", "0.0", "10.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE );
@@ -100,28 +87,9 @@ void R_QLPostRegister( void ) {
 	r_postProcessActive = ri.Cvar_Get( "r_postProcessActive", "0", CVAR_ROM | CVAR_TEMP );
 }
 
-/*
-===============
-R_BloomPasses
-
-[QL] flag 0x2000 makes the range binary: over the minimum counts as the maximum
-===============
-*/
 static int R_BloomPasses( void ) {
 	return r_bloomPasses->value > 1.0f ? 2 : 1;
 }
-
-/*
-===============================================================================
-
-THE PROGRAMS
-
-The same passes as the other renderer's, which were read from retail's own shaders. The vertex
-shader takes the fixed function's matrix and texture coordinates, so the quad is drawn as every
-other full screen pass here.
-
-===============================================================================
-*/
 
 static const char *qlPostVertex =
 	"varying vec2 var_TexCoords;\n"
@@ -130,7 +98,6 @@ static const char *qlPostVertex =
 	"	var_TexCoords = gl_MultiTexCoord0.st;\n"
 	"}\n";
 
-// u_Color.x 1 / r_gamma, u_Color.y the overbright factor, u_Color.z r_contrast
 static const char *qlColorCorrectFragment =
 	"uniform sampler2D u_TextureMap;\n"
 	"uniform vec4 u_Color;\n"
@@ -143,7 +110,6 @@ static const char *qlColorCorrectFragment =
 	"	gl_FragColor = vec4(color, 1.0);\n"
 	"}\n";
 
-// what is over r_bloomBrightThreshold, stretched back to the full range
 static const char *qlBrightPassFragment =
 	"uniform sampler2D u_TextureMap;\n"
 	"uniform vec4 u_Color;\n"
@@ -153,8 +119,6 @@ static const char *qlBrightPassFragment =
 	"	gl_FragColor = vec4(clamp((color - u_Color.x) / (1.0 - u_Color.x), 0.0, 1.0), 1.0);\n"
 	"}\n";
 
-// 11 texels in a row with Quake Live's weights, read as 7 linear samples; u_InvTexRes carries
-// the direction, one texel across or down
 static const char *qlBlurFragment =
 	"uniform sampler2D u_TextureMap;\n"
 	"uniform vec2 u_InvTexRes;\n"
@@ -172,7 +136,6 @@ static const char *qlBlurFragment =
 	"	gl_FragColor = result;\n"
 	"}\n";
 
-// the bloom and the scene, each with its saturation and its intensity
 static const char *qlCombineFragment =
 	"uniform sampler2D u_TextureMap;\n"
 	"uniform sampler2D u_LevelsMap;\n"
@@ -189,9 +152,6 @@ static const char *qlCombineFragment =
 	"	gl_FragColor = scene * u_Color.w + bloom;\n"
 	"}\n";
 
-// only the bloom's part, for a blend of one and one minus the source colour over the scene:
-// with the scene's saturation and intensity at 1 that is the same sum, without reading the
-// scene or copying the result back
 static const char *qlCombineBloomOnlyFragment =
 	"uniform sampler2D u_TextureMap;\n"
 	"uniform vec4 u_Color;\n"
@@ -307,20 +267,9 @@ static void R_QLPostDeletePrograms( void ) {
 	Com_Memset( qlPrograms, 0, sizeof( qlPrograms ) );
 }
 
-/*
-===============================================================================
-
-THE FRAME BUFFERS
-
-[QL] 0x437e40: four at half size, and three more at a quarter with r_bloomPasses 2
-
-===============================================================================
-*/
-
 static qboolean R_QLPostCreateBuffer( int index, int width, int height ) {
 	qglGenTextures( 1, &qlBloomTex[index] );
 	GL_BindTexture( 0, qlBloomTex[index] );
-	// [QL] 0x437e40: they take the scene's format
 	qglTexImage2D( GL_TEXTURE_2D, 0, fboInternalFormat, width, height, 0, fboTextureFormat, fboTextureType, NULL );
 	qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
 	qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
@@ -352,13 +301,6 @@ static void R_QLPostDeleteBuffers( void ) {
 	Com_Memset( qlBloomTex, 0, sizeof( qlBloomTex ) );
 }
 
-/*
-===============
-R_QLPostInit
-
-[QL] 0x450710; an effect without its frame buffers stays off (0x437e40, 0x43ce50)
-===============
-*/
 void R_QLPostInit( void ) {
 	int i, w, h;
 
@@ -421,15 +363,6 @@ void R_QLPostShutdown( void ) {
 	qlPostReady = qfalse;
 }
 
-/*
-===============================================================================
-
-THE PASSES
-
-===============================================================================
-*/
-
-// a straight copy between frame buffers, as retail's downsamples are
 static void R_QLPostBlit( GLuint srcFbo, int srcW, int srcH, GLuint dstFbo, int dstW, int dstH, GLenum filter ) {
 	FBO_BindTarget( GL_READ_FRAMEBUFFER, srcFbo );
 	FBO_BindTarget( GL_DRAW_FRAMEBUFFER, dstFbo );
@@ -437,7 +370,6 @@ static void R_QLPostBlit( GLuint srcFbo, int srcW, int srcH, GLuint dstFbo, int 
 	FBO_BindTarget( GL_FRAMEBUFFER, 0 );
 }
 
-// the quad every pass draws, in the ortho the post process set up
 static void R_QLPostQuad( int width, int height ) {
 	static const vec2_t t[4] = { { 0.0f, 1.0f }, { 1.0f, 1.0f }, { 0.0f, 0.0f }, { 1.0f, 0.0f } };
 	static vec3_t v[4];
@@ -453,7 +385,6 @@ static void R_QLPostQuad( int width, int height ) {
 	qglDrawArrays( GL_TRIANGLE_STRIP, 0, 4 );
 }
 
-// draws src into dst with one of the programs; dst 0 is the back buffer
 static void R_QLPostPass( qlProgram_t which, GLuint srcTexture, GLuint dstFbo, int dstWidth, int dstHeight,
 	const vec4_t color, const vec2_t invTexRes, GLuint levelsTexture ) {
 	const qlPostProgram_t *p = &qlPrograms[which];
@@ -494,13 +425,6 @@ static void R_QLPostPass( qlProgram_t which, GLuint srcTexture, GLuint dstFbo, i
 	}
 }
 
-/*
-=============
-RE_BeginBloomScene
-
-[QL] refexport 30 (0x43cba0), before the 3D view: queues render command 11
-=============
-*/
 void RE_BeginBloomScene( void ) {
 	bloomCommand_t *cmd;
 
@@ -514,13 +438,6 @@ void RE_BeginBloomScene( void ) {
 	cmd->commandId = RC_BLOOM_SCENE;
 }
 
-/*
-=============
-RE_ApplyBloom
-
-[QL] refexport 31 (0x4384d0), after the 3D view: queues render command 10
-=============
-*/
 void RE_ApplyBloom( void ) {
 	bloomCommand_t *cmd;
 
@@ -534,13 +451,6 @@ void RE_ApplyBloom( void ) {
 	cmd->commandId = RC_BLOOM;
 }
 
-/*
-=============
-RB_BloomScene
-
-[QL] render command 11 (0x437a50); the frame is already in our own frame buffer
-=============
-*/
 const void *RB_BloomScene( const void *data ) {
 	const bloomCommand_t *cmd = data;
 
@@ -555,13 +465,6 @@ const void *RB_BloomScene( const void *data ) {
 	return (const void *)( cmd + 1 );
 }
 
-/*
-=============
-RB_Bloom
-
-[QL] render command 10 (0x436ec0); its uniforms don't go below 0 (0x438590)
-=============
-*/
 const void *RB_Bloom( const void *data ) {
 	const bloomCommand_t *cmd = data;
 	GLuint sceneTexture, bloomTexture;
@@ -587,7 +490,6 @@ const void *RB_Bloom( const void *data ) {
 	GL_State( GLS_DEPTHTEST_DISABLE | GLS_SRCBLEND_ONE | GLS_DSTBLEND_ZERO );
 	GL_Cull( CT_TWO_SIDED );
 
-	// half size, then the bright pass, then down and across
 	R_QLPostBlit( FBO_MainBuffer(), glConfig.vidWidth, glConfig.vidHeight, qlBloomFbo[1], qlBloomWidth[1], qlBloomHeight[1], GL_NEAREST );
 	VectorSet4( color, MAX( r_bloomBrightThreshold->value, 0.0f ), 0.0f, 0.0f, 0.0f );
 	R_QLPostPass( QLP_BRIGHTPASS, qlBloomTex[1], qlBloomFbo[2], qlBloomWidth[2], qlBloomHeight[2], color, NULL, 0 );
@@ -620,7 +522,6 @@ const void *RB_Bloom( const void *data ) {
 
 	FBO_BindMain();
 	if ( color[1] == 1.0f && color[3] == 1.0f ) {
-		// the scene as it is: scene * (1 - bloom) + bloom is a blend, and nothing needs copying
 		GL_State( GLS_DEPTHTEST_DISABLE | GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE_MINUS_SRC_COLOR );
 		R_QLPostPass( QLP_COMBINE_BLOOM_ONLY, bloomTexture, FBO_MainBuffer(), glConfig.vidWidth, glConfig.vidHeight, color, NULL, 0 );
 		GL_State( GLS_DEPTHTEST_DISABLE | GLS_SRCBLEND_ONE | GLS_DSTBLEND_ZERO );
@@ -629,27 +530,12 @@ const void *RB_Bloom( const void *data ) {
 		FBO_CopyScratchToMain();
 	}
 
-	// the passes left their own viewport
 	backEnd.projection2D = qfalse;
 	backEnd.doneBloom = qtrue;
 
 	return (const void *)( cmd + 1 );
 }
 
-/*
-=============
-RB_QLColorCorrect
-
-[QL] render command 9 (0x436dc0): 1 / r_gamma, twice r_overBrightBits and r_contrast
-(0x43cfe0, 0x43cd60)
-
-[ioquakelive] Retail's menu is its web page, drawn apart from the frame, so its correction never
-reached the menu. Here the renderer draws the menu, and a frame with no view of the world (the
-menus, the connection screen) gets a neutral pass: no gamma, no contrast, and only the overbright
-that gives back what the 2D colours lost to tr.identityLight. The menu keeps its own colours,
-whatever the player set for the game.
-=============
-*/
 qboolean RB_QLColorCorrect( GLuint dstFbo, int width, int height ) {
 	GLuint sceneTexture;
 	vec4_t color;
@@ -684,13 +570,6 @@ qboolean RB_QLColorCorrect( GLuint dstFbo, int width, int height ) {
 	return qtrue;
 }
 
-/*
-=============
-R_CaptureGammaCorrect
-
-[QL] 0x4481c0: only when the ramp gave the overbright
-=============
-*/
 qboolean R_CaptureGammaCorrect( void ) {
 	return !r_colorCorrectActive->integer && tr.overbrightBits > 0 && glConfig.deviceSupportsGamma;
 }

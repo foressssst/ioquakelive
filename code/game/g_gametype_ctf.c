@@ -1,16 +1,4 @@
-/*
- * g_gametype_ctf.c -- Capture The Flag (GT_CTF, 5)
- *
- * Flag-based team mode. Flag logic is in g_team.c (Team_TouchOurFlag,
- * Team_TouchEnemyFlag, Team_ReturnFlag, Team_CaptureFlagAt).
- * Scoreboard: CaptureTheFlagScoreboardMessage, CaptureTheFlagStatisticsMessage (below).
- */
 #include "g_local.h"
-
-// CTF uses capturelimit/timelimit exit rules.
-// Flag entities: team_CTF_redflag, team_CTF_blueflag (spawned in g_team.c).
-// Flag return logic, carrier kill bonuses in g_team.c.
-// No round state.
 
 extern qboolean itemRegistered[];
 
@@ -26,23 +14,6 @@ void CTF_CheckTeamItems(void) {
     }
 }
 
-/*
-==================
-CaptureTheFlagScoreboardMessage
-
-CTF scoreboard. Includes 17 team stat categories * 2 teams = 34 header values.
-17 fields per player.
-Address: 0x1003e8c0
-
-Header (37 values):
-  Same 14 as TDM + numFlagPickups[R/B] numMedkitPickups[R/B] flagPossessionTime[R/B]
-  numPlayers teamScoreRed teamScoreBlue
-
-Fields per player (17):
-  client team score ping time frags deaths accuracy bestWeapon
-  impressive excellent gauntlet defend assist captures perfect alive
-==================
-*/
 void CaptureTheFlagScoreboardMessage(gentity_t *ent) {
     char entry[1024];
     char string[1024];
@@ -56,7 +27,6 @@ void CaptureTheFlagScoreboardMessage(gentity_t *ent) {
     string[0] = 0;
     stringlength = 0;
 
-    // 14 base categories (same as TDM) + 3 CTF-specific
     redStats[0]  = level.numRedArmorPickups[TEAM_RED];
     redStats[1]  = level.numYellowArmorPickups[TEAM_RED];
     redStats[2]  = level.numGreenArmorPickups[TEAM_RED];
@@ -116,7 +86,6 @@ void CaptureTheFlagScoreboardMessage(gentity_t *ent) {
 
         bestWeapon = STAT_GetBestWeapon(cl);
 
-        // Hide opponent team's stats
         viewerTeam = ent->client->sess.sessionTeam;
         if (viewerTeam == TEAM_RED && level.intermissionTime == 0) {
             memset(blueStats, 0, sizeof(blueStats));
@@ -124,7 +93,6 @@ void CaptureTheFlagScoreboardMessage(gentity_t *ent) {
             memset(redStats, 0, sizeof(redStats));
         }
 
-        // 17 fields per player
         Com_sprintf(entry, sizeof(entry),
                     " %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i",
                     level.sortedClients[i],
@@ -148,8 +116,6 @@ void CaptureTheFlagScoreboardMessage(gentity_t *ent) {
         listEnd[i] = stringlength;
     }
 
-    // [ioquakelive] see SCORES_LIST_ROOM. Retail gives up without sending when the list
-    // does not fit; here the last ones on it are left out until the command does
     for (;;) {
         const char *cmd = va("scores_ctf %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i "
                "%i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i%s",
@@ -173,20 +139,6 @@ void CaptureTheFlagScoreboardMessage(gentity_t *ent) {
     }
 }
 
-/*
-==================
-CaptureTheFlagStatisticsMessage
-
-[QL] CTF-family per-player detail stats sent as the "ctfstats" command (parsed
-client-side by CG_ParseTeamStats_CTF). Emitted at intermission from Cmd_Score_f for
-GT_CTF / 1FCTF / HARVESTER / DOMINATION / AD. 12 fields per player: suicides
-damageDone damageTaken redArmor yellowArmor greenArmor megaHealth quad battleSuit
-regen haste invis.
-(Ghidra mislabelled this FTScoreboardMessage_impl; it emits ctfstats, so it is the
-CTF impl - corrected here and in the Ghidra project.)
-Address: 0x1003ee30
-==================
-*/
 void CaptureTheFlagStatisticsMessage(gentity_t *ent) {
     char entry[1024];
     char string[1024];

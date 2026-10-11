@@ -19,10 +19,7 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// bg_local.h -- local definitions for the bg (both games) files
-
-#define MIN_WALK_NORMAL 0.7f  // can't walk on very steep slopes
+#define MIN_WALK_NORMAL 0.7f
 
 #define STEPSIZE 18
 
@@ -33,9 +30,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define OVERCLIP 1.001f
 
-// all of the locals will be zeroed before each
-// pmove, just to make damn sure we don't have
-// any differences when running on client or server
 typedef struct {
     vec3_t forward, right, up;
     float frametime;
@@ -52,7 +46,6 @@ typedef struct {
     vec3_t previous_velocity;
     int previous_waterlevel;
 
-    // [QL] additional local state
     qboolean ladder;
     int stepJumpFlag;
     int crouchStepJumpFlag;
@@ -61,7 +54,6 @@ typedef struct {
 extern pmove_t* pm;
 extern pml_t pml;
 
-// movement parameters
 extern float pm_stopspeed;
 extern float pm_duckScale;
 extern float pm_swimScale;
@@ -76,7 +68,6 @@ extern float pm_waterfriction;
 extern float pm_flightfriction;
 extern float pm_spectatorfriction;
 
-// [QL] configurable movement parameters (set via PM_Set* functions)
 extern float pm_jumpVelocity;
 extern float pm_jumpVelocityMax;
 extern float pm_jumpVelocityScaleAdd;
@@ -123,6 +114,5 @@ void PM_AddEvent(int newEvent);
 qboolean PM_SlideMove(qboolean gravity);
 void PM_StepSlideMove(qboolean gravity);
 
-// [QL] step-jump support - called from bg_slidemove.c
 qboolean PM_WouldJump(void);
 void PM_DoJump(void);

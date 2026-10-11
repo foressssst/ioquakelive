@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "tr_local.h"
 
 int r_firstSceneDrawSurf;
@@ -35,12 +34,6 @@ int r_firstScenePoly;
 
 int r_numpolyverts;
 
-/*
-====================
-R_InitNextFrame
-
-====================
-*/
 void R_InitNextFrame(void) {
     backEndData->commands.used = 0;
 
@@ -58,33 +51,12 @@ void R_InitNextFrame(void) {
     r_numpolyverts = 0;
 }
 
-/*
-====================
-RE_ClearScene
-
-====================
-*/
 void RE_ClearScene(void) {
     r_firstSceneDlight = r_numdlights;
     r_firstSceneEntity = r_numentities;
     r_firstScenePoly = r_numpolys;
 }
 
-/*
-===========================================================================
-
-DISCRETE POLYS
-
-===========================================================================
-*/
-
-/*
-=====================
-R_AddPolygonSurfaces
-
-Adds all the scene's polys into this view's drawsurf list
-=====================
-*/
 void R_AddPolygonSurfaces(void) {
     int i;
     shader_t* sh;
@@ -97,16 +69,10 @@ void R_AddPolygonSurfaces(void) {
 
     for (i = 0, poly = tr.refdef.polys; i < tr.refdef.numPolys; i++, poly++) {
         sh = R_GetShaderByHandle(poly->hShader);
-        R_AddDrawSurf((void*)poly, sh, poly->fogIndex & fogMask, qfalse, qfalse, 0 /*cubeMap*/);
+        R_AddDrawSurf((void*)poly, sh, poly->fogIndex & fogMask, qfalse, qfalse, 0 );
     }
 }
 
-/*
-=====================
-RE_AddPolyToScene
-
-=====================
-*/
 void RE_AddPolyToScene(qhandle_t hShader, int numVerts, const polyVert_t* verts, int numPolys) {
     srfPoly_t* poly;
     int i, j;
@@ -119,20 +85,10 @@ void RE_AddPolyToScene(qhandle_t hShader, int numVerts, const polyVert_t* verts,
     }
 
     if (!hShader) {
-        // This isn't a useful warning, and an hShader of zero isn't a null shader, it's
-        // the default shader.
-        // ri.Printf( PRINT_WARNING, "WARNING: RE_AddPolyToScene: NULL poly shader\n");
-        // return;
     }
 
     for (j = 0; j < numPolys; j++) {
         if (r_numpolyverts + numVerts > max_polyverts || r_numpolys >= max_polys) {
-            /*
-            NOTE TTimo this was initially a PRINT_WARNING
-            but it happens a lot with high fighting scenes and particles
-            since we don't plan on changing the const and making for room for those effects
-            simply cut this message to developer only
-            */
             ri.Printf(PRINT_DEVELOPER, "WARNING: RE_AddPolyToScene: r_max_polys or r_max_polyverts reached\n");
             return;
         }
@@ -151,19 +107,15 @@ void RE_AddPolyToScene(qhandle_t hShader, int numVerts, const polyVert_t* verts,
             poly->verts->modulate[2] = 255;
             poly->verts->modulate[3] = 255;
         }
-        // done.
         r_numpolys++;
         r_numpolyverts += numVerts;
 
-        // if no world is loaded
         if (tr.world == NULL) {
             fogIndex = 0;
         }
-        // see if it is in a fog volume
         else if (tr.world->numfogs == 1) {
             fogIndex = 0;
         } else {
-            // find which fog volume the poly is in
             VectorCopy(poly->verts[0].xyz, bounds[0]);
             VectorCopy(poly->verts[0].xyz, bounds[1]);
             for (i = 1; i < poly->numVerts; i++) {
@@ -183,14 +135,6 @@ void RE_AddPolyToScene(qhandle_t hShader, int numVerts, const polyVert_t* verts,
     }
 }
 
-//=================================================================================
-
-/*
-=====================
-RE_AddRefEntityToScene
-
-=====================
-*/
 void RE_AddRefEntityToScene(const refEntity_t* ent) {
     vec3_t cross;
 
@@ -222,12 +166,6 @@ void RE_AddRefEntityToScene(const refEntity_t* ent) {
     r_numentities++;
 }
 
-/*
-=====================
-RE_AddDynamicLightToScene
-
-=====================
-*/
 void RE_AddDynamicLightToScene(const vec3_t org, float intensity, float r, float g, float b, int additive) {
     dlight_t* dl;
 
@@ -240,7 +178,6 @@ void RE_AddDynamicLightToScene(const vec3_t org, float intensity, float r, float
     if (intensity <= 0) {
         return;
     }
-    // these cards don't have the correct blend mode
     if (glConfig.hardwareType == GLHW_RIVA128 || glConfig.hardwareType == GLHW_PERMEDIA2) {
         return;
     }
@@ -253,22 +190,10 @@ void RE_AddDynamicLightToScene(const vec3_t org, float intensity, float r, float
     dl->additive = additive;
 }
 
-/*
-=====================
-RE_AddLightToScene
-
-=====================
-*/
 void RE_AddLightToScene(const vec3_t org, float intensity, float r, float g, float b) {
     RE_AddDynamicLightToScene(org, intensity, r, g, b, qfalse);
 }
 
-/*
-=====================
-RE_AddAdditiveLightToScene
-
-=====================
-*/
 void RE_AddAdditiveLightToScene(const vec3_t org, float intensity, float r, float g, float b) {
     RE_AddDynamicLightToScene(org, intensity, r, g, b, qtrue);
 }
@@ -291,14 +216,11 @@ void RE_BeginScene(const refdef_t* fd) {
     tr.refdef.time = fd->time;
     tr.refdef.rdflags = fd->rdflags;
 
-    // copy the areamask data over and note if it has changed, which
-    // will force a reset of the visible leafs even if the view hasn't moved
     tr.refdef.areamaskModified = qfalse;
     if (!(tr.refdef.rdflags & RDF_NOWORLDMODEL)) {
         int areaDiff;
         int i;
 
-        // compare the area bits
         areaDiff = 0;
         for (i = 0; i < MAX_MAP_AREA_BYTES / 4; i++) {
             areaDiff |= ((int*)tr.refdef.areamask)[i] ^ ((int*)fd->areamask)[i];
@@ -306,7 +228,6 @@ void RE_BeginScene(const refdef_t* fd) {
         }
 
         if (areaDiff) {
-            // a door just opened or something
             tr.refdef.areamaskModified = qtrue;
         }
     }
@@ -357,7 +278,6 @@ void RE_BeginScene(const refdef_t* fd) {
         tr.refdef.toneMinAvgMaxLinear[2] = pow(2, tr.toneMinAvgMaxLevel[2]);
     }
 
-    // Makro - copy exta info if present
     if (fd->rdflags & RDF_EXTRA) {
         const refdefex_t* extra = (const refdefex_t*)(fd + 1);
 
@@ -371,8 +291,6 @@ void RE_BeginScene(const refdef_t* fd) {
     } else {
         tr.refdef.blurFactor = 0.0f;
     }
-
-    // derived info
 
     tr.refdef.floatTime = tr.refdef.time * 0.001;
 
@@ -391,42 +309,23 @@ void RE_BeginScene(const refdef_t* fd) {
     tr.refdef.num_pshadows = 0;
     tr.refdef.pshadows = &backEndData->pshadows[0];
 
-    // turn off dynamic lighting globally by clearing all the
-    // dlights if it needs to be disabled or if vertex lighting is enabled
     if (r_dynamiclight->integer == 0 ||
         r_vertexLight->integer == 1 ||
         glConfig.hardwareType == GLHW_PERMEDIA2) {
         tr.refdef.num_dlights = 0;
     }
 
-    // a single frame may have multiple scenes draw inside it --
-    // a 3D game view, 3D status bar renderings, 3D menus, etc.
-    // They need to be distinguished by the light flare code, because
-    // the visibility state for a given surface may be different in
-    // each scene / view.
     tr.frameSceneNum++;
     tr.sceneCount++;
 }
 
 void RE_EndScene(void) {
-    // the next scene rendered in this frame will tack on after this one
     r_firstSceneDrawSurf = tr.refdef.numDrawSurfs;
     r_firstSceneEntity = r_numentities;
     r_firstSceneDlight = r_numdlights;
     r_firstScenePoly = r_numpolys;
 }
 
-/*
-@@@@@@@@@@@@@@@@@@@@@
-RE_RenderScene
-
-Draw a 3D view into a part of the window, then return
-to 2D drawing.
-
-Rendering a scene may require multiple views to be rendered
-to handle mirrors,
-@@@@@@@@@@@@@@@@@@@@@
-*/
 void RE_RenderScene(const refdef_t* fd) {
     viewParms_t parms;
     int startTime;
@@ -448,17 +347,14 @@ void RE_RenderScene(const refdef_t* fd) {
 
     RE_BeginScene(fd);
 
-    // SmileTheory: playing with shadow mapping
     if (!(fd->rdflags & RDF_NOWORLDMODEL) && tr.refdef.num_dlights && r_dlightMode->integer >= 2) {
         R_RenderDlightCubemaps(fd);
     }
 
-    /* playing with more shadows */
     if (glRefConfig.framebufferObject && !(fd->rdflags & RDF_NOWORLDMODEL) && r_shadows->integer == 4) {
         R_RenderPshadowMaps(fd);
     }
 
-    // playing with even more shadows
     if (glRefConfig.framebufferObject && r_sunlightMode->integer && !(fd->rdflags & RDF_NOWORLDMODEL) && (r_forceSun->integer || tr.sunShadows)) {
         if (r_shadowCascadeZFar->integer != 0) {
             R_RenderSunShadowMaps(fd, 0);
@@ -470,7 +366,6 @@ void RE_RenderScene(const refdef_t* fd) {
             Mat4Zero(tr.refdef.sunShadowMvp[2]);
         }
 
-        // only rerender last cascade if sun has changed position
         if (r_forceSun->integer == 2 || !VectorCompare(tr.refdef.sunDir, tr.lastCascadeSunDirection)) {
             VectorCopy(tr.refdef.sunDir, tr.lastCascadeSunDirection);
             R_RenderSunShadowMaps(fd, 3);
@@ -480,9 +375,7 @@ void RE_RenderScene(const refdef_t* fd) {
         }
     }
 
-    // playing with cube maps
-    // this is where dynamic cubemaps would be rendered
-    if (0)  //(glRefConfig.framebufferObject && !( fd->rdflags & RDF_NOWORLDMODEL ))
+    if (0)
     {
         int i, j;
 
@@ -493,12 +386,6 @@ void RE_RenderScene(const refdef_t* fd) {
         }
     }
 
-    // setup view parms for the initial view
-    //
-    // set up viewport
-    // The refdef takes 0-at-the-top y coordinates, so
-    // convert to GL's 0-at-the-bottom space
-    //
     Com_Memset(&parms, 0, sizeof(parms));
     parms.viewportX = tr.refdef.x;
     parms.viewportY = glConfig.vidHeight - (tr.refdef.y + tr.refdef.height);

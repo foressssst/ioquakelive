@@ -19,20 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// tr_qlpost.c -- [QL] Quake Live's post effects: the colour correction and the bloom
-//
-// quakelive_steam.exe draws the 3D view into a frame buffer of its own (render
-// command 11), puts the bloom over it and copies the result to the back buffer
-// (command 10), and when the frame ends runs the colour correction over the whole
-// back buffer, HUD included (command 9). This renderer already draws the whole
-// frame into tr.renderFbo, so the bloom works in place there and the colour
-// correction is the frame's last copy, the one to the screen.
-//
-// The frame is drawn at 1 / 2^r_overBrightBits of its brightness, as for a
-// hardware gamma ramp, and the correction brings it back up.
-//
-
 #include "tr_local.h"
 
 cvar_t* r_bloomActive;
@@ -53,16 +39,6 @@ cvar_t* r_enablePostProcess;
 cvar_t* r_floatingPointFBOs;
 cvar_t* r_postProcessActive;
 
-/*
-===============
-R_QLPostRegister
-
-[QL] quakelive_steam.exe 0x449000 (R_Register). The three Active cvars are read only and say which
-effects the renderer could start. Nothing reads r_bloomBlurFalloff, r_bloomBlurRadius or
-r_bloomBlurScale; the first and the last have a default below their range, so they start at its
-minimum.
-===============
-*/
 void R_QLPostRegister(void) {
     r_bloomActive = ri.Cvar_Get("r_bloomActive", "0", CVAR_ROM | CVAR_TEMP | CVAR_USERSAVE);
     r_bloomBlurFalloff = ri.Cvar_GetRange("r_bloomBlurFalloff", "0.0", "0.75", "1.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
@@ -70,7 +46,6 @@ void R_QLPostRegister(void) {
     r_bloomBlurScale = ri.Cvar_GetRange("r_bloomBlurScale", "0.0", "1.0", "2.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     r_bloomBrightThreshold = ri.Cvar_GetRange("r_bloomBrightThreshold", "0.25", "0.0", "1.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     r_bloomIntensity = ri.Cvar_GetRange("r_bloomIntensity", "0.5", "0.0", "10.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
-    // retail's flags also carry 0x2000, a binary range: see R_BloomPasses
     r_bloomPasses = ri.Cvar_GetRange("r_bloomPasses", "1", "1", "2", CVAR_ARCHIVE | CVAR_LATCH | CVAR_REPLICATE | CVAR_USERSAVE);
     r_bloomSaturation = ri.Cvar_GetRange("r_bloomSaturation", "0.8", "0.0", "10.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     r_bloomSceneIntensity = ri.Cvar_GetRange("r_bloomSceneIntensity", "1.0", "0.0", "10.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
@@ -84,27 +59,10 @@ void R_QLPostRegister(void) {
     r_postProcessActive = ri.Cvar_Get("r_postProcessActive", "0", CVAR_ROM | CVAR_TEMP);
 }
 
-/*
-===============
-R_BloomPasses
-
-[QL] retail registers r_bloomPasses with flag 0x2000, which makes its range binary: any value over
-the minimum counts as the maximum
-===============
-*/
 static int R_BloomPasses(void) {
     return r_bloomPasses->value > 1.0f ? 2 : 1;
 }
 
-/*
-===============
-R_QLPostInit
-
-[QL] 0x450710, before the images are made: with r_enablePostProcess the renderer starts the colour
-correction (0x43cfe0) and the bloom (0x4380f0) that are enabled. Both need frame buffers, and here
-also the blit between them. R_QLPostCreateFBOs turns them back off when their frame buffers fail.
-===============
-*/
 void R_QLPostInit(void) {
     ri.Cvar_Set("r_postProcessActive", "0");
     ri.Cvar_Set("r_colorCorrectActive", "0");
@@ -125,14 +83,6 @@ void R_QLPostInit(void) {
     }
 }
 
-/*
-===============
-R_QLPostCreateImages
-
-[QL] 0x437e40: the bloom works at half the scene's size, in four frame buffers, and with
-r_bloomPasses 2 goes on at a quarter, in three more. They take the scene's format.
-===============
-*/
 void R_QLPostCreateImages(int width, int height, int format) {
     int i, w, h;
 
@@ -155,14 +105,6 @@ void R_QLPostCreateImages(int width, int height, int format) {
     }
 }
 
-/*
-===============
-R_QLPostCreateFBOs
-
-[QL] 0x437e40 and 0x43ce50: an effect whose frame buffers can't be made is turned off, with
-retail's message. The scene's frame buffer is tr.renderFbo, made in FBO_Init.
-===============
-*/
 void R_QLPostCreateFBOs(void) {
     int i;
 
@@ -181,7 +123,6 @@ void R_QLPostCreateFBOs(void) {
             ri.Cvar_Set("r_bloomActive", "0");
         }
 
-        // without the colour correction the overbright goes back to the gamma ramp
         R_SetColorMappings();
         return;
     }
@@ -202,13 +143,6 @@ void R_QLPostCreateFBOs(void) {
     }
 }
 
-/*
-===============
-RE_BeginBloomScene
-
-[QL] refexport 30 (0x43cba0), which the cgame calls right before the 3D view: queues render command 11
-===============
-*/
 void RE_BeginBloomScene(void) {
     bloomCommand_t* cmd;
 
@@ -223,14 +157,6 @@ void RE_BeginBloomScene(void) {
     cmd->commandId = RC_BLOOM_SCENE;
 }
 
-/*
-===============
-RE_ApplyBloom
-
-[QL] refexport 31 (0x4384d0), which the cgame calls right after the 3D view: queues render command 10
-when the bloom runs
-===============
-*/
 void RE_ApplyBloom(void) {
     bloomCommand_t* cmd;
 
@@ -245,18 +171,9 @@ void RE_ApplyBloom(void) {
     cmd->commandId = RC_BLOOM;
 }
 
-/*
-=============
-RB_BloomScene
-
-[QL] render command 11 (0x437a50): the view that follows goes into the bloom's frame buffer. Here the
-whole frame is already drawn into tr.renderFbo, so this only makes sure it is the one bound.
-=============
-*/
 const void* RB_BloomScene(const void* data) {
     const bloomCommand_t* cmd = data;
 
-    // finish any 2D drawing if needed
     if (tess.numIndexes) {
         RB_EndSurface();
     }
@@ -268,25 +185,11 @@ const void* RB_BloomScene(const void* data) {
     return (const void*)(cmd + 1);
 }
 
-/*
-=============
-RB_Bloom
-
-[QL] render command 10, 0x436ec0. The scene goes to half size taking one texel of every four, with no
-filtering (downsample1.fs); there, what is brighter than r_bloomBrightThreshold is kept and stretched
-back to the whole range (brightpass.fs), then blurred up and down and then across (blurvertical.fs,
-blurhoriz.fs: 11 texels with fixed weights). With r_bloomPasses 2 the blurred light goes on to a
-quarter size, four texels averaged, and is blurred again. The last pass (combine.fs) lays the light
-over the scene, each with its own saturation and intensity; retail's uniforms don't go below 0
-(0x438590).
-=============
-*/
 const void* RB_Bloom(const void* data) {
     const bloomCommand_t* cmd = data;
     FBO_t *sceneFbo, *bloomFbo;
     vec4_t color;
 
-    // finish any 2D drawing if needed
     if (tess.numIndexes) {
         RB_EndSurface();
     }
@@ -322,7 +225,6 @@ const void* RB_Bloom(const void* data) {
     color[3] = MAX(r_bloomSceneIntensity->value, 0.0f);
 
     if (color[1] == 1.0f && color[3] == 1.0f) {
-        // the scene as it is: scene * (1 - bloom) + bloom is a blend, and nothing needs copying
         FBO_Blit(bloomFbo, NULL, NULL, tr.renderFbo, NULL, &tr.qlCombineShader[1], color, GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE_MINUS_SRC_COLOR);
     } else {
         GL_BindToTMU(bloomFbo->colorImage[0], TB_LEVELSMAP);
@@ -330,22 +232,11 @@ const void* RB_Bloom(const void* data) {
         FBO_FastBlit(tr.screenScratchFbo, NULL, tr.renderFbo, NULL, GL_COLOR_BUFFER_BIT, GL_NEAREST);
     }
 
-    // the blits left their own viewport
     backEnd.projection2D = qfalse;
 
     return (const void*)(cmd + 1);
 }
 
-/*
-=============
-RB_ColorCorrect
-
-[QL] render command 9, 0x436dc0, queued by RE_EndFrame (0x43cd10): the finished frame, HUD included,
-through colorcorrect.fs into dst, the screen or a capture's frame buffer. The uniforms are
-1 / r_gamma (1 when r_gamma isn't above 0), twice r_overBrightBits (at least 1) and r_contrast
-(0x43cfe0, 0x43cd60). Returns qfalse when the colour correction is off.
-=============
-*/
 qboolean RB_ColorCorrect(FBO_t* dst) {
     FBO_t* srcFbo;
     vec4_t color;
@@ -365,7 +256,6 @@ qboolean RB_ColorCorrect(FBO_t* dst) {
     color[2] = r_contrast->value;
     color[3] = 1.0f;
 
-    // the variant without the gamma or the contrast when they would change nothing
     FBO_Blit(srcFbo, NULL, NULL, dst, NULL, &tr.qlColorCorrectShader[(color[0] != 1.0f) | ((color[2] != 1.0f) << 1)], color, 0);
 
     backEnd.projection2D = qfalse;
@@ -373,16 +263,6 @@ qboolean RB_ColorCorrect(FBO_t* dst) {
     return qtrue;
 }
 
-/*
-=============
-RB_BindCaptureFbo
-
-With the colour correction a frame is only finished on its way to the screen, so a screenshot, a
-level shot or a video frame reads a corrected copy of it. [QL] Retail reads the back buffer, after
-the correction (0x4481c0). Returns the frame buffer to put back when done, or qfalse in *bound when
-nothing was changed.
-=============
-*/
 FBO_t* RB_BindCaptureFbo(qboolean* bound) {
     FBO_t* oldFbo = glState.currentFBO;
 
@@ -398,14 +278,6 @@ FBO_t* RB_BindCaptureFbo(qboolean* bound) {
     return oldFbo;
 }
 
-/*
-=============
-R_CaptureGammaCorrect
-
-[QL] 0x4481c0: a capture only goes through the gamma table when the gamma ramp was giving the
-overbright; the colour correction's copy is already finished
-=============
-*/
 qboolean R_CaptureGammaCorrect(void) {
     return !r_colorCorrectActive->integer && tr.overbrightBits > 0 && glConfig.deviceSupportsGamma;
 }

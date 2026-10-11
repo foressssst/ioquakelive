@@ -19,10 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-/*
-** QGL.H
-*/
-
 #ifndef __QGL_H__
 #define __QGL_H__
 
@@ -48,12 +44,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define APIENTRY
 #endif
 
-//===========================================================================
-// <Timbo> I hate this section so much
-
-/*
-** multitexture extension definitions
-*/
 #if !defined(__sun)
 
 #define GL_ACTIVE_TEXTURE_ARB               0x84E0
@@ -67,9 +57,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define GL_MAX_ACTIVE_TEXTURES_ARB          0x84E2
 
-#endif /* defined(__sun) */
+#endif
 
-// anisotropic filtering constants
 #define GL_TEXTURE_MAX_ANISOTROPY_EXT       0x84FE
 #define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT   0x84FF
 
@@ -77,15 +66,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define GL_CLAMP_TO_BORDER                  0x812D
 #endif
 
-// define for skyboxes without black seams
 #ifndef GL_CLAMP_TO_EDGE
 #define GL_CLAMP_TO_EDGE                    0x812F
 #endif
 
-/*
-** extension constants
-*/
-// S3TC compression constants
 #define GL_RGB_S3TC                         0x83A0
 #define GL_RGB4_S3TC                        0x83A1
 
@@ -163,8 +147,6 @@ typedef char GLchar;
 #define GL_FRAMEBUFFER                      0x8D40
 #define GL_RENDERBUFFER                     0x8D41
 #endif
-
-//===========================================================================
 
 #define QGL_Core_PROCS \
 	GLE( void, glAlphaFunc, GLenum func, GLclampf ref ) \
@@ -254,13 +236,11 @@ typedef char GLchar;
 	GLE( void, glGetFramebufferAttachmentParameteriv, GLenum target, GLenum attachment, GLenum pname, GLint *params ) \
 	GLE( void, glBlitFramebuffer, GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter )
 
-// [QL] the post effects are GLSL, as retail's are
 #define GL_FRAGMENT_SHADER                  0x8B30
 #define GL_VERTEX_SHADER                    0x8B31
 #define GL_COMPILE_STATUS                   0x8B81
 #define GL_LINK_STATUS                      0x8B82
 
-// [ioquakelive] GL_ARB_sync (OpenGL 3.2): the fences of r_maxQueuedFrames
 #ifndef GL_ARB_sync
 typedef struct __GLsync *GLsync;
 #define GL_SYNC_GPU_COMMANDS_COMPLETE		0x9117
@@ -326,11 +306,11 @@ typedef struct __GLsync *GLsync;
 	QGL_Swp_PROCS;
 #ifdef _WIN32
 	QGL_Win32_PROCS;
-#else // assume in opposition to win32
+#else
 	QGL_LinX11_PROCS;
 #endif
 #undef GLE
 
-#endif // !__APPLE__
+#endif
 
-#endif // __QGL_H__
+#endif

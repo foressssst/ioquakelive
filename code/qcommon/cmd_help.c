@@ -19,19 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// cmd_help.c -- [ioquakelive] help texts for the engine's console commands
-//
-// "help <name>" prints these, "searchhelp <text>" searches them, and the
-// completion panel shows the first line. Cmd_AddCommand looks the name up as it
-// registers, so a command gets its text wherever it is added from; cvar_help.c
-// does the same for cvars.
-//
-// The first line is the summary and is the only part some views show. The ones the
-// modules add are here too: the engine registers them when cgame or ui asks for
-// them, so they get their text the same way, and a module cannot carry one.
-//
-
 #include "q_shared.h"
 #include "qcommon.h"
 
@@ -40,14 +27,11 @@ typedef struct {
     const char* help;
 } cmdHelp_t;
 
-// A held key, and the command that lets it go. They come in pairs and exist to
-// be bound, not typed.
 #define HELD(what) "holds " what " while the bound key is down"
 #define RELEASE(cmd) "releases " cmd
 
 static const cmdHelp_t cmdHelp[] = {
 
-    // ---------------------------------------------------------------- moving
     {"+forward", HELD("forward")},
     {"-forward", RELEASE("+forward")},
     {"+back", HELD("backward")},
@@ -78,7 +62,6 @@ static const cmdHelp_t cmdHelp[] = {
     {"-mlook", "releases +mlook, and recentres the view"},
     {"centerview", "looks straight ahead again"},
 
-    // ------------------------------------------------------------- attacking
     {"+attack", HELD("fire")},
     {"-attack", RELEASE("+attack")},
     {"+button0", "holds fire while the bound key is down, same as +attack"},
@@ -112,19 +95,16 @@ static const cmdHelp_t cmdHelp[] = {
     {"+button14", "holds a spare game button while the bound key is down"},
     {"-button14", RELEASE("+button14")},
 
-    // ----------------------------------------------------------------- voice
     {"+voice", "talks over voice chat while the bound key is down\n"
                "the voice travels over Steam, so it needs Steam running"},
     {"-voice", RELEASE("+voice")},
 
-    // ---------------------------------------------------------------- inputs
     {"ListInputDevices", "prints the game controllers SDL can see"},
     {"inputrate", "measures the real mouse rate and what servicing it costs\n"
                   "usage: inputrate [frames]\n"
                   "answers whether a 4000 or 8000 Hz mouse is costing this machine frames"},
     {"in_restart", "restarts the input system, picking up a changed device"},
 
-    // ------------------------------------------------------------------ keys
     {"bind", "binds a key to a command\n"
              "usage: bind <key> [command]\n"
              "without a command it prints what that key is bound to"},
@@ -133,7 +113,6 @@ static const cmdHelp_t cmdHelp[] = {
     {"unbindall", "clears every key binding"},
     {"bindlist", "prints every key that has a binding"},
 
-    // -------------------------------------------------------------- the game
     {"connect", "joins a server\n"
                 "usage: connect <address[:port]>"},
     {"reconnect", "rejoins the last server"},
@@ -154,7 +133,6 @@ static const cmdHelp_t cmdHelp[] = {
     {"configstrings", "prints the configstrings the server has sent"},
     {"showip", "prints this machine's network addresses"},
 
-    // ------------------------------------------------------------- the lobby
     {"globalservers", "asks Steam for the server list\n"
                       "usage: globalservers <source> [protocol] [keywords]\n"
                       "the source is 0 internet, 1 LAN, 2 friends, 3 favourites, 4 history"},
@@ -167,7 +145,6 @@ static const cmdHelp_t cmdHelp[] = {
     {"clientviewprofile", "opens a player's Steam profile\n"
                           "usage: clientviewprofile <client number>"},
 
-    // ----------------------------------------------------------------- Steam
     {"steamstatus", "prints what Steam is doing: the library, the session, VAC and the public IP"},
     {"steamservers", "prints the state of the server list request"},
     {"steam_downloadugc", "downloads a Workshop item by id\n"
@@ -177,7 +154,6 @@ static const cmdHelp_t cmdHelp[] = {
     {"steam_unsubscribeugc", "unsubscribes from a Workshop item\n"
                              "usage: steam_unsubscribeugc <item id>"},
 
-    // ----------------------------------------------------------------- demos
     {"record", "starts recording a demo\n"
                "usage: record [name]\n"
                "without a name it numbers one"},
@@ -191,7 +167,6 @@ static const cmdHelp_t cmdHelp[] = {
     {"seekdemo", "jumps to a time counted from the start of the demo\n"
                  "usage: seekdemo <seconds> or <m:ss>"},
 
-    // -------------------------------------------------------------- the host
     {"map", "loads a map and starts a match\n"
             "usage: map <map> <factory>\n"
             "the factory is required, as it is in retail; map with no factory prints the list"},
@@ -215,7 +190,6 @@ static const cmdHelp_t cmdHelp[] = {
                    "usage: clientkick <client number>"},
     {"sectorlist", "prints how the world is divided for collision, and what is in each part"},
 
-    // --------------------------------------------------------------- scripts
     {"alias", "names a list of commands\n"
               "usage: alias <name> <commands>\n"
               "without commands it prints what that name runs"},
@@ -223,7 +197,6 @@ static const cmdHelp_t cmdHelp[] = {
                 "usage: unalias <name>"},
     {"unaliasall", "forgets every alias"},
 
-    // ------------------------------------------------------------------ disk
     {"dir", "lists files in a directory of the game's filesystem\n"
             "usage: dir <directory> [extension]"},
     {"fdir", "lists files matching a pattern\n"
@@ -238,18 +211,15 @@ static const cmdHelp_t cmdHelp[] = {
     {"writeClientConfig", "writes the client's own settings to a config file\n"
                           "usage: writeClientConfig <name>"},
 
-    // --------------------------------------------------------------- restart
     {"vid_restart", "restarts the renderer, applying video settings"},
     {"snd_restart", "restarts the sound system, reloading every sound"},
     {"net_restart", "restarts the network, picking up changed net settings"},
     {"postprocess_restart", "reloads the post-processing shaders"},
 
-    // -------------------------------------------------------------- pictures
     {"screenshot", "saves a screenshot as TGA"},
     {"screenshotJPEG", "saves a screenshot as JPEG"},
     {"minimize", "minimises the window"},
 
-    // ------------------------------------------------------- what is loaded
     {"gfxinfo", "prints the video driver, the context and what it supports"},
     {"gfxmeminfo", "prints what the driver says about video memory"},
     {"modelist", "prints the video modes r_mode can name"},
@@ -260,7 +230,6 @@ static const cmdHelp_t cmdHelp[] = {
     {"fontlist", "prints the loaded fonts and the ones a cvar can name"},
     {"exportCubemaps", "writes the map's cubemaps out as files"},
 
-    // ----------------------------------------------------------------- sound
     {"play", "plays a sound file\n"
              "usage: play <file>"},
     {"music", "plays background music\n"
@@ -270,7 +239,6 @@ static const cmdHelp_t cmdHelp[] = {
     {"s_info", "prints the sound device's format and buffer"},
     {"soundload", "prints where the time went while loading this map's sounds"},
 
-    // ------------------------------------------------------------ the engine
     {"quit", "leaves the game"},
     {"meminfo", "prints how the hunk and the zone are being used"},
     {"hunklog", "writes the hunk's blocks to a log"},
@@ -290,12 +258,10 @@ static const cmdHelp_t cmdHelp[] = {
     {"freeze", "stops the engine for a while, to test the network\n"
                "usage: freeze <seconds>"},
 
-    // -------------------------------------------------- the embedded browser
     {"web_changeHash", "moves the embedded browser to another page\n"
                        "usage: web_changeHash <path>, and only while in a match"},
     {"web_hideBrowser", "closes the embedded browser"},
 
-    // ----------------------------------------- what the scoreboard keys show
     {"+scores", HELD("the scoreboard up")},
     {"-scores", RELEASE("+scores")},
     {"+acc", HELD("the accuracy sheet up")},
@@ -307,7 +273,6 @@ static const cmdHelp_t cmdHelp[] = {
     {"+zoom", HELD("the view zoomed in")},
     {"-zoom", RELEASE("+zoom")},
 
-    // ----------------------------------------------------------- the weapons
     {"weapnext", "takes the next weapon you carry"},
     {"weapprev", "takes the weapon before the one you carry"},
     {"weapon", "takes a weapon by its number\n"
@@ -317,7 +282,6 @@ static const cmdHelp_t cmdHelp[] = {
     {"droppowerup", "drops the powerup you carry"},
     {"droprune", "drops the rune you carry"},
 
-    // -------------------------------------------------------------- the view
     {"sizeup", "makes the view bigger"},
     {"sizedown", "makes the view smaller"},
     {"viewpos", "prints where you stand and where you look"},
@@ -336,7 +300,6 @@ static const cmdHelp_t cmdHelp[] = {
                     "usage: fragforward [seconds before it]"},
     {"vkinfo", "prints what the Vulkan renderer runs on"},
 
-    // ------------------------------------------------- talking to the others
     {"say_team", "says something to your team\n"
                  "usage: say_team <message>"},
     {"tell", "says something to one player\n"
@@ -359,7 +322,6 @@ static const cmdHelp_t cmdHelp[] = {
     {"clientmute", "stops you hearing a player's voice chat\n"
                    "usage: clientmute <player>"},
 
-    // --------------------------------------------------------- the team menu
     {"nextOrder", "moves on to the next order in the team menu"},
     {"confirmOrder", "takes the order you were given"},
     {"denyOrder", "turns the order you were given down"},
@@ -379,7 +341,6 @@ static const cmdHelp_t cmdHelp[] = {
     {"setenemycolor", "sets the colour your enemies are drawn in\n"
                       "usage: setenemycolor <colour>"},
 
-    // ------------------------------------------------------------- the match
     {"team", "joins a team\n"
              "usage: team <r|b|f|s|a>, and with nothing it prints the one you are on"},
     {"spec", "watches the next player that matches\n"
@@ -403,7 +364,6 @@ static const cmdHelp_t cmdHelp[] = {
     {"notarget", "the bots stop going for you, with cheats on"},
     {"noclip", "you walk through the map, with cheats on"},
 
-    // ---------------------------------------------------- running the server
     {"addbot", "adds a bot to the match\n"
                "usage: addbot <name> [skill 1-5] [team] [delay] [other name]"},
     {"allready", "readies everyone up and starts the match (referee)"},
@@ -445,14 +405,6 @@ static const cmdHelp_t cmdHelp[] = {
     {"reload_access", "reads the access file again and applies it to everyone playing"},
 };
 
-/*
-============
-Cmd_BuiltInHelp
-
-The help text of an engine command, NULL if it has none. Cmd_AddCommand calls
-this as it registers, so the order the commands are added in does not matter.
-============
-*/
 const char* Cmd_BuiltInHelp(const char* cmd_name) {
     int i;
 

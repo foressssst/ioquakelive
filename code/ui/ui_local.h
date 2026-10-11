@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
 #ifndef __UI_LOCAL_H__
 #define __UI_LOCAL_H__
 
@@ -29,8 +28,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../client/keycodes.h"
 #include "../game/bg_public.h"
 #include "ui_shared.h"
-
-// global display context
 
 extern vmCvar_t ui_ffa_fraglimit;
 extern vmCvar_t ui_ffa_timelimit;
@@ -89,7 +86,6 @@ extern vmCvar_t ui_smallFont;
 extern vmCvar_t ui_bigFont;
 extern vmCvar_t ui_serverStatusTimeOut;
 
-// [QL additions] - player 2 duel scores
 extern vmCvar_t ui_scoreAccuracy2;
 extern vmCvar_t ui_scoreImpressives2;
 extern vmCvar_t ui_scoreExcellents2;
@@ -106,7 +102,6 @@ extern vmCvar_t ui_scoreShutoutBonus2;
 extern vmCvar_t ui_scoreTime2;
 extern vmCvar_t ui_scoreCaptures2;
 
-// [QL additions] - model/skin customization
 extern vmCvar_t ui_forceTeamModel;
 extern vmCvar_t ui_forceTeamSkin;
 extern vmCvar_t ui_forceEnemyModel;
@@ -122,7 +117,6 @@ extern vmCvar_t ui_enemyHeadColor;
 extern vmCvar_t ui_enemyUpperColor;
 extern vmCvar_t ui_enemyLowerColor;
 
-// [QL additions] - game settings
 extern vmCvar_t ui_doWarmup;
 extern vmCvar_t ui_warmup;
 extern vmCvar_t ui_pure;
@@ -134,19 +128,16 @@ extern vmCvar_t ui_saveFragLimit;
 extern vmCvar_t ui_votestring;
 extern vmCvar_t ui_intermission;
 
-// [QL additions] - browser
 extern vmCvar_t ui_browserSortKey;
 extern vmCvar_t ui_browserShowFull;
 extern vmCvar_t ui_browserShowEmpty;
 extern vmCvar_t ui_browserMaster;
 extern vmCvar_t ui_browserGameType;
 
-// [QL additions] - screen effects
 extern vmCvar_t ui_screenDamage;
 extern vmCvar_t ui_screenDamage_Team;
 extern vmCvar_t ui_bloomPreset;
 
-// [QL additions] - misc
 extern vmCvar_t ui_version;
 extern vmCvar_t ui_gibs;
 extern vmCvar_t ui_announcer;
@@ -157,15 +148,9 @@ extern vmCvar_t ui_mousePitch;
 extern vmCvar_t ui_favoriteName;
 extern vmCvar_t ui_favoriteAddress;
 
-
-
-// [QL] missing UI cvars from binary parity audit
 extern vmCvar_t ui_cg_announcer;
 extern vmCvar_t ui_cdkeychecked;
 extern vmCvar_t ui_singlePlayerActive;
-//
-// ui_qmenu.c
-//
 
 #define RCOLUMN_OFFSET (BIGCHAR_WIDTH)
 #define LCOLUMN_OFFSET (-BIGCHAR_WIDTH)
@@ -174,9 +159,6 @@ extern vmCvar_t ui_singlePlayerActive;
 #define MAX_EDIT_LINE 256
 
 #define MAX_MENUDEPTH 8
-// [QL] renamed from MAX_MENUITEMS to avoid clashing with ui_shared.h's
-// MAX_MENUITEMS (2048, used by menuDef_t.items). This one sizes the legacy
-// menuframework_s.items only.
 #define MAX_MENUFRAMEWORK_ITEMS 96
 
 #define MTYPE_NULL 0
@@ -196,24 +178,23 @@ extern vmCvar_t ui_singlePlayerActive;
 #define QMF_LEFT_JUSTIFY 0x00000004
 #define QMF_CENTER_JUSTIFY 0x00000008
 #define QMF_RIGHT_JUSTIFY 0x00000010
-#define QMF_NUMBERSONLY 0x00000020  // edit field is only numbers
+#define QMF_NUMBERSONLY 0x00000020
 #define QMF_HIGHLIGHT 0x00000040
-#define QMF_HIGHLIGHT_IF_FOCUS 0x00000080  // steady focus
-#define QMF_PULSEIFFOCUS 0x00000100        // pulse if focus
+#define QMF_HIGHLIGHT_IF_FOCUS 0x00000080
+#define QMF_PULSEIFFOCUS 0x00000100
 #define QMF_HASMOUSEFOCUS 0x00000200
 #define QMF_NOONOFFTEXT 0x00000400
-#define QMF_MOUSEONLY 0x00000800      // only mouse input allowed
-#define QMF_HIDDEN 0x00001000         // skips drawing
-#define QMF_GRAYED 0x00002000         // grays and disables
-#define QMF_INACTIVE 0x00004000       // disables any input
-#define QMF_NODEFAULTINIT 0x00008000  // skip default initialization
+#define QMF_MOUSEONLY 0x00000800
+#define QMF_HIDDEN 0x00001000
+#define QMF_GRAYED 0x00002000
+#define QMF_INACTIVE 0x00004000
+#define QMF_NODEFAULTINIT 0x00008000
 #define QMF_OWNERDRAW 0x00010000
 #define QMF_PULSE 0x00020000
-#define QMF_LOWERCASE 0x00040000  // edit field is all lower case
-#define QMF_UPPERCASE 0x00080000  // edit field is all upper case
+#define QMF_LOWERCASE 0x00040000
+#define QMF_UPPERCASE 0x00080000
 #define QMF_SILENT 0x00100000
 
-// callback notifications
 #define QM_GOTFOCUS 1
 #define QM_LOSTFOCUS 2
 #define QM_ACTIVATED 3
@@ -370,9 +351,6 @@ extern char* ui_medalNames[];
 extern char* ui_medalPicNames[];
 extern char* ui_medalSounds[];
 
-//
-// ui_mfield.c
-//
 extern void MField_Clear(mfield_t* edit);
 extern void MField_KeyDownEvent(mfield_t* edit, int key);
 extern void MField_CharEvent(mfield_t* edit, int ch);
@@ -381,9 +359,6 @@ extern void MenuField_Init(menufield_s* m);
 extern void MenuField_Draw(menufield_s* f);
 extern sfxHandle_t MenuField_Key(menufield_s* m, int* key);
 
-//
-// ui_main.c
-//
 void UI_Report(void);
 void UI_Load(void);
 void UI_LoadMenus(const char* menuFile, qboolean reset);
@@ -393,125 +368,69 @@ void UI_ShowPostGame(qboolean newHigh);
 void UI_LoadArenas(void);
 void UI_LoadArenasIntoMapList(void);
 
-//
-// ui_menu.c
-//
 extern void MainMenu_Cache(void);
 extern void UI_MainMenu(void);
 extern void UI_RegisterCvars(void);
 extern void UI_UpdateCvars(void);
 
-//
-// ui_ingame.c
-//
 extern void InGame_Cache(void);
 extern void UI_InGameMenu(void);
 
-//
-// ui_confirm.c
-//
 extern void ConfirmMenu_Cache(void);
 extern void UI_ConfirmMenu(const char* question, void (*draw)(void), void (*action)(qboolean result));
 
-//
-// ui_setup.c
-//
 extern void UI_SetupMenu_Cache(void);
 extern void UI_SetupMenu(void);
 
-//
-// ui_team.c
-//
 extern void UI_TeamMainMenu(void);
 extern void TeamMain_Cache(void);
 
-//
-// ui_connect.c
-//
 extern void UI_DrawConnectScreen(qboolean overlay);
 
-//
-// ui_controls2.c
-//
 extern void UI_ControlsMenu(void);
 extern void Controls_Cache(void);
 
-//
-// ui_demo2.c
-//
 extern void UI_DemosMenu(void);
 extern void Demos_Cache(void);
 
-//
-// ui_cinematics.c
-//
 extern void UI_CinematicsMenu(void);
 extern void UI_CinematicsMenu_f(void);
 extern void UI_CinematicsMenu_Cache(void);
 
-//
-// ui_mods.c
-//
 extern void UI_ModsMenu(void);
 extern void UI_ModsMenu_Cache(void);
 
-//
-// ui_playermodel.c
-//
 extern void UI_PlayerModelMenu(void);
 extern void PlayerModel_Cache(void);
 
-//
-// ui_playersettings.c
-//
 extern void UI_PlayerSettingsMenu(void);
 extern void PlayerSettings_Cache(void);
 
-//
-// ui_preferences.c
-//
 extern void UI_PreferencesMenu(void);
 extern void Preferences_Cache(void);
 
-//
-// ui_specifyleague.c
-//
 extern void UI_SpecifyLeagueMenu(void);
 extern void SpecifyLeague_Cache(void);
 
-//
-// ui_startserver.c
-//
 extern void UI_StartServerMenu(qboolean multiplayer);
 extern void StartServer_Cache(void);
 extern void ServerOptions_Cache(void);
 extern void UI_BotSelectMenu(char* bot);
 extern void UI_BotSelectMenu_Cache(void);
 
-//
-// ui_serverinfo.c
-//
 extern void UI_ServerInfoMenu(void);
 extern void ServerInfo_Cache(void);
 
-//
-// ui_video.c
-//
 extern void UI_GraphicsOptionsMenu(void);
 extern void GraphicsOptions_Cache(void);
 extern void DriverInfo_Cache(void);
 
-//
-// ui_players.c
-//
-
-// FIXME ripped from cg_local.h
 typedef struct {
     int oldFrame;
-    int oldFrameTime;  // time when ->oldFrame was exactly on
+    int oldFrameTime;
 
     int frame;
-    int frameTime;  // time when ->frame will be exactly on
+    int frameTime;
 
     float backlerp;
 
@@ -520,13 +439,12 @@ typedef struct {
     float pitchAngle;
     qboolean pitching;
 
-    int animationNumber;  // may include ANIM_TOGGLEBIT
+    int animationNumber;
     animation_t* animation;
-    int animationTime;  // time when the first frame of the animation will be exact
+    int animationTime;
 } lerpFrame_t;
 
 typedef struct {
-    // model info
     qhandle_t legsModel;
     qhandle_t legsSkin;
     lerpFrame_t legs;
@@ -540,8 +458,8 @@ typedef struct {
 
     animation_t animations[MAX_TOTALANIMATIONS];
 
-    qboolean fixedlegs;   // true if legs yaw is always the same as torso yaw
-    qboolean fixedtorso;  // true if torso never changes yaw
+    qboolean fixedlegs;
+    qboolean fixedtorso;
 
     qhandle_t weaponModel;
     qhandle_t barrelModel;
@@ -549,14 +467,12 @@ typedef struct {
     vec3_t flashDlightColor;
     int muzzleFlashTime;
 
-    // currently in use drawing parms
     vec3_t viewAngles;
     vec3_t moveAngles;
     weapon_t currentWeapon;
     int legsAnim;
     int torsoAnim;
 
-    // animation vars
     weapon_t weapon;
     weapon_t lastWeapon;
     weapon_t pendingWeapon;
@@ -576,16 +492,10 @@ typedef struct {
 
     int realWeapon;
 
-    // [QL] Custom model tint used by the team/enemy model previews. Mirrors
-    // uix86.dll playerInfo_t: customColor gate @0x468, headColor @0x46c,
-    // torsoColor @0x470, legsColor @0x474 (each a packed 0xRRGGBBAA value).
-    // When customColor is non-zero UI_DrawPlayer runs each part's packed colour
-    // through UI_IntToColor into refEntity.shaderRGBA. ioquakelive's struct does
-    // not otherwise match the binary offsets, so these are appended.
-    qboolean customColor;  // non-zero enables the tint (binary @0x468)
-    int headColor;         // packed 0xRRGGBBAA for the head  (binary @0x46c)
-    int torsoColor;        // packed 0xRRGGBBAA for the torso (binary @0x470)
-    int legsColor;         // packed 0xRRGGBBAA for the legs  (binary @0x474)
+    qboolean customColor;
+    int headColor;
+    int torsoColor;
+    int legsColor;
 } playerInfo_t;
 
 void UI_DrawPlayer(float x, float y, float w, float h, playerInfo_t* pi, int time);
@@ -593,10 +503,6 @@ void UI_PlayerInfo_SetModel(playerInfo_t* pi, const char* model, const char* hea
 void UI_PlayerInfo_SetInfo(playerInfo_t* pi, int legsAnim, int torsoAnim, vec3_t viewAngles, vec3_t moveAngles, weapon_t weaponNum, qboolean chat);
 qboolean UI_RegisterClientModelname(playerInfo_t* pi, const char* modelSkinName, const char* headName, const char* teamName);
 
-//
-// ui_atoms.c
-//
-// this is only used in the old ui, the new ui has its own version
 typedef struct {
     int frametime;
     int realtime;
@@ -620,7 +526,6 @@ typedef struct {
     qboolean firstdraw;
 } uiStatic_t;
 
-// new ui stuff
 #define UI_NUMFX 7
 #define MAX_HEADS 256
 #define MAX_ALIASES 64
@@ -795,7 +700,7 @@ typedef struct {
     qboolean teamLeader;
     char playerNames[MAX_CLIENTS][MAX_NAME_LENGTH];
     char teamNames[MAX_CLIENTS][MAX_NAME_LENGTH];
-    int clientNums[MAX_CLIENTS];  // [QL] the client number of each entry of playerNames
+    int clientNums[MAX_CLIENTS];
     int teamClientNums[MAX_CLIENTS];
 
     int mapCount;
@@ -818,12 +723,10 @@ typedef struct {
 
     serverStatus_t serverStatus;
 
-    // for the showing the status of a server
     char serverStatusAddress[MAX_ADDRESSLENGTH];
     serverStatusInfo_t serverStatusInfo;
     int nextServerStatusRefresh;
 
-    // to retrieve the status of server to find a player
     pendingServerStatus_t pendingServerStatus;
     char findPlayerName[MAX_STRING_CHARS];
     char foundPlayerServerAddresses[MAX_FOUNDPLAYER_SERVERS][MAX_ADDRESSLENGTH];
@@ -887,9 +790,6 @@ extern void UI_StartDemoLoop(void);
 extern qboolean m_entersound;
 extern uiStatic_t uis;
 
-//
-// ui_syscalls.c
-//
 void trap_Print(const char* string);
 void trap_Error(const char* string) __attribute__((noreturn));
 int trap_Milliseconds(void);
@@ -904,13 +804,13 @@ void trap_Cvar_Create(const char* var_name, const char* var_value, int flags);
 void trap_Cvar_InfoStringBuffer(int bit, char* buffer, int bufsize);
 int trap_Argc(void);
 void trap_Argv(int n, char* buffer, int bufferLength);
-void trap_Cmd_ExecuteText(int exec_when, const char* text);  // don't use EXEC_NOW!
+void trap_Cmd_ExecuteText(int exec_when, const char* text);
 int trap_FS_FOpenFile(const char* qpath, fileHandle_t* f, fsMode_t mode);
 void trap_FS_Read(void* buffer, int len, fileHandle_t f);
 void trap_FS_Write(const void* buffer, int len, fileHandle_t f);
 void trap_FS_FCloseFile(fileHandle_t f);
 int trap_FS_GetFileList(const char* path, const char* extension, char* listbuf, int bufsize);
-int trap_FS_Seek(fileHandle_t f, long offset, int origin);  // fsOrigin_t
+int trap_FS_Seek(fileHandle_t f, long offset, int origin);
 qhandle_t trap_R_RegisterModel(const char* name);
 qhandle_t trap_R_RegisterSkin(const char* name);
 qhandle_t trap_R_RegisterShaderNoMip(const char* name);
@@ -958,10 +858,9 @@ int trap_LAN_CompareServers(int source, int sortKey, int sortDir, int s1, int s2
 int trap_MemoryRemaining(void);
 void trap_R_RegisterFont(const char* pFontname, int pointSize, fontInfo_t* font);
 void trap_R_Font_DrawString(int x, int y, const char* text, int fontIndex, float scale, int limit, float* maxX, int flags);
-void trap_R_Font_TextExtents(const char* text, int start, int fontIndex, float scale, int limit, float* extents);  // extents[5]
+void trap_R_Font_TextExtents(const char* text, int start, int fontIndex, float scale, int limit, float* extents);
 void trap_R_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t* glyph);
 void trap_IME_SetCompositionFont(int fontIndex, float scale);
-// [QL] the engine's factories and arenas, and latched cvar values, for Start Match
 int trap_Factory_Count(void);
 qboolean trap_Factory_Value(int num, const char* key, char* buf, int size);
 qboolean trap_Factory_Cvar(int num, int index, char* name, int nameSize, char* value, int valueSize);
@@ -971,9 +870,6 @@ void trap_Cvar_LatchedVariableStringBuffer(const char* var_name, char* buffer, i
 int trap_R_Font_Register(const char* name);
 void trap_Sys_OpenURL(const char* url);
 
-// [ioquakelive] the Steam friends, for the main menu's social strip. The index is Steam's
-// own and is reused to act on the friend, so the module never has to carry a 64 bit Steam
-// ID around.
 int trap_SteamFriendCount(void);
 qboolean trap_SteamFriendGet(int index, uiFriend_t* out);
 void trap_SteamFriendAction(int index, int action);
@@ -983,9 +879,6 @@ qboolean trap_SteamAvatar(const char* steamId, char* path, int size);
 int trap_WebPakExcerpt(const char* name, const char* marker, char* out, int size);
 qboolean trap_WorkshopDownloadInfo(const char* item, uint64_t* done, uint64_t* total);
 
-// [ioquakelive] the rest of what retail's browser asked Steam for: the same servers again
-// (Quick Refresh), the rules and players of one (one player per line: name, score and seconds,
-// separated by tabs) and Steam's favourites
 qboolean trap_LAN_SteamRefresh(void);
 qboolean trap_LAN_SteamRefreshing(void);
 qboolean trap_LAN_SteamDetails(const char* address);
@@ -993,25 +886,19 @@ int trap_LAN_SteamDetailsGet(char* rules, int rulesSize, char* players, int play
 qboolean trap_LAN_SteamFavorite(const char* address, qboolean favorite);
 void trap_LAN_ServerName(int source, int n, char* buf, int size);
 
-// ui_startmatch.c: retail's web Start Match page, drawn by one ownerdraw of the
-// "startmatch" menu (the number is ours: retail's menudef.h has none for it)
 #define UI_STARTMATCH 600
 void UI_StartMatch_Open(void);
-// [ioquakelive] opens Start Match with a gametype already chosen (the main menu's featured modes)
 void UI_StartMatch_Preselect(const char* factory);
-// [ioquakelive] the browser's server list, which the front page shows as well
 void UI_Home_ServerList(qboolean refresh);
 void UI_StartMatch_Paint(void);
 qboolean UI_StartMatch_HandleKey(int key);
 
-// [QL] the Settings page, drawn the same way; see ui_settings.c
 #define UI_SETTINGS 601
 void UI_Settings_Open(void);
 void UI_Settings_Paint(void);
 qboolean UI_Settings_HandleKey(int key);
 void UI_Settings_Close(void);
 
-// [QL] the main menu and the bar the pages sit under; see ui_home.c
 #define UI_HOME 602
 void UI_Home_Open(void);
 void UI_Home_Leave(void);
@@ -1025,43 +912,36 @@ void _UI_SetActiveMenu(uiMenuCommand_t menu);
 void UI_LoadDemos(void);
 void UI_BuildPlayerList(void);
 
-
-// [QL] the Replays page; see ui_replays.c
 #define UI_REPLAYS 603
 
 void UI_Replays_Open(void);
 void UI_Replays_Paint(void);
 qboolean UI_Replays_HandleKey(int key);
 
-// [QL] the Match Browser page; see ui_browser.c
 #define UI_BROWSER 605
 void UI_Browser_Open(void);
 void UI_Browser_ShowGameInfo(const char* address, const char* name);
 void UI_Browser_Paint(void);
 qboolean UI_Browser_HandleKey(int key);
 void UI_Browser_Sort(int column);
-void UI_Browser_SetSource(int source);  // Steam's list: 0 internet, 1 LAN, 2 friends, 3 favourites, 4 history
+void UI_Browser_SetSource(int source);
 void UI_Home_ServerList(qboolean refresh);
 
-// [QL] the Training Center page; see ui_training.c
 #define UI_TRAINING 604
 void UI_Training_Open(void);
 void UI_Training_Paint(void);
 qboolean UI_Training_HandleKey(int key);
 
-// [QL] Career Stats; see ui_stats.c
 #define UI_STATS 606
 void UI_Stats_Open(void);
 void UI_Stats_Paint(void);
 qboolean UI_Stats_HandleKey(int key);
 
-// [QL] the Legal Notices page; see ui_legal.c
 #define UI_LEGAL 608
 void UI_Legal_Open(void);
 void UI_Legal_Paint(void);
 qboolean UI_Legal_HandleKey(int key);
 
-// [QL] Recent Matches; see ui_matches.c
 #define UI_MATCHES 607
 void UI_Matches_Open(void);
 void UI_Matches_Paint(void);
@@ -1078,59 +958,30 @@ int trap_RealTime(qtime_t* qtime);
 void trap_R_RemapShader(const char* oldShader, const char* newShader, const char* timeOffset);
 void trap_SetPbClStatus(int status);
 
-//
-// ui_addbots.c
-//
 void UI_AddBots_Cache(void);
 void UI_AddBotsMenu(void);
 
-//
-// ui_removebots.c
-//
 void UI_RemoveBots_Cache(void);
 void UI_RemoveBotsMenu(void);
 
-//
-// ui_teamorders.c
-//
 extern void UI_TeamOrdersMenu(void);
 extern void UI_TeamOrdersMenu_f(void);
 extern void UI_TeamOrdersMenu_Cache(void);
 
-//
-// ui_loadconfig.c
-//
 void UI_LoadConfig_Cache(void);
 void UI_LoadConfigMenu(void);
 
-//
-// ui_saveconfig.c
-//
 void UI_SaveConfigMenu_Cache(void);
 void UI_SaveConfigMenu(void);
 
-//
-// ui_display.c
-//
 void UI_DisplayOptionsMenu_Cache(void);
 void UI_DisplayOptionsMenu(void);
 
-//
-// ui_sound.c
-//
 void UI_SoundOptionsMenu_Cache(void);
 void UI_SoundOptionsMenu(void);
 
-//
-// ui_network.c
-//
 void UI_NetworkOptionsMenu_Cache(void);
 void UI_NetworkOptionsMenu(void);
-
-//
-// ui_gameinfo.c
-//
-// award_t enum is now in bg_public.h with correct QL values
 
 const char* UI_GetArenaInfoByNumber(int num);
 const char* UI_GetArenaInfoByMap(const char* map);
@@ -1154,29 +1005,17 @@ void UI_SPUnlockMedals_f(void);
 
 void UI_InitGameinfo(void);
 
-//
-// ui_login.c
-//
 void Login_Cache(void);
 void UI_LoginMenu(void);
 
-//
-// ui_signup.c
-//
 void Signup_Cache(void);
 void UI_SignupMenu(void);
 
-//
-// ui_rankstatus.c
-//
 void RankStatus_Cache(void);
 void UI_RankStatusMenu(void);
 
-// new ui
-
 #define ASSET_BACKGROUND "uiBackground"
 
-// for tracking sp game info in Team Arena
 typedef struct postGameInfo_s {
     int score;
     int redScore;

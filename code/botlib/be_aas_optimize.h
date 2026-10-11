@@ -19,14 +19,4 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
-/*****************************************************************************
- * name:		be_aas_optimize.h
- *
- * desc:		AAS
- *
- * $Archive: /source/code/botlib/be_aas_optimize.h $
- *
- *****************************************************************************/
-
 void AAS_Optimize(void);

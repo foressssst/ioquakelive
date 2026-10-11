@@ -19,45 +19,20 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// ui_startmatch.c -- [QL] the Start Match page
-//
-// Retail has no native menu to start a local match: its web UI does it, with
-// web.pak's Start Match page, which reads the engine's factories and arenas
-// through GetFactoryList and GetMapList (quakelive_steam.exe 0x432edc and
-// 0x432c2c) and launches with "map <map> <factory>". This draws that page with
-// the renderer and runs it the way the page's code does, quirks included.
-//
-// Sizes are the page's CSS pixels at the 1920x1080 it was laid out for, and the
-// colours are its stylesheet's. Its own art is in web.pak, which is not shipped,
-// so pak00's gametype icons and fonts stand in.
-//
-
-// The frame, the palette and the drawing are shared with the other pages.
 #include "ui_web.h"
 
-#define SM_MAX_FACTORIES 1024  // MAX_FACTORIES in the engine
-#define SM_MAX_ARENAS 1024     // MAX_ARENA_INFOS
-#define SM_MAX_INPUT 200       // the Cvar widget's maxLength
-
-
-/*
-===============================================================================
-
-WHAT THE PAGE OFFERS
-
-===============================================================================
-*/
+#define SM_MAX_FACTORIES 1024
+#define SM_MAX_ARENAS 1024
+#define SM_MAX_INPUT 200
 
 typedef struct {
     int gametype;
     const char* title;
-    const char* factory;  // the one the page picks with the gametype
-    const char* map;      // the one it falls back on
-    const char* name;     // module 237's, which names its icons in web.pak's img/gametype
+    const char* factory;
+    const char* map;
+    const char* name;
 } smGametype_t;
 
-// module 237's gametypes, in the order the page lists them (it has no Overload)
 static const smGametype_t smGametypes[] = {
     {GT_FFA, "Free For All", "ffa", "campgrounds", "ffa"},
     {GT_DUEL, "Duel", "duel", "bloodrun", "duel"},
@@ -75,7 +50,6 @@ static const smGametype_t smGametypes[] = {
 
 #define SM_NUM_GAMETYPES ((int)ARRAY_LEN(smGametypes))
 
-// getById for anything else: "Unknown Gametype", with no factory or map of its own
 static const smGametype_t smUnknownGametype = {-1, "Unknown Gametype", NULL, NULL, "unknown"};
 
 typedef struct {
@@ -83,7 +57,6 @@ typedef struct {
     const char* value;
 } smOption_t;
 
-// module 230
 static const smOption_t smServerTypes[] = {{"Offline", "0"}, {"LAN", "1"}, {"Internet", "2"}};
 static const smOption_t smSkills[] = {
     {"I Can Win", "0"}, {"Bring it On", "1"}, {"Hurt Me Plenty", "2"}, {"Hardcore", "3"}, {"Nightmare", "4"}};
@@ -95,11 +68,11 @@ static const smOption_t smMapPools[] = {
 typedef enum { SM_INPUT, SM_SELECT, SM_RANGE } smWidget_t;
 
 typedef struct {
-    const char* cvar;   // as the page names it, in lower case
-    const char* title;  // module 229
+    const char* cvar;
+    const char* title;
     smWidget_t widget;
     float min, max, step;
-    int decimals;       // the step's
+    int decimals;
     const smOption_t* options;
     int numOptions;
 } smCvar_t;
@@ -117,7 +90,6 @@ enum {
     SM_NUM_CVARS
 };
 
-// module 263's list, in its order
 static const smCvar_t smCvars[SM_NUM_CVARS] = {
     {"sv_hostname", "Match Name", SM_INPUT, 0, 0, 0, 0, NULL, 0},
     {"sv_servertype", "Match Type", SM_SELECT, 0, 0, 0, 0, smServerTypes, (int)ARRAY_LEN(smServerTypes)},
@@ -130,40 +102,32 @@ static const smCvar_t smCvars[SM_NUM_CVARS] = {
     {"sv_mappoolfile", "Map Pool", SM_SELECT, 0, 0, 0, 0, smMapPools, (int)ARRAY_LEN(smMapPools)},
 };
 
-/*
-===============================================================================
-
-STATE
-
-===============================================================================
-*/
-
 typedef struct {
     char id[64];
     char title[64];
     char author[64];
     char description[256];
     int basegt;
-    int slot;  // the engine's, to read its cvars
+    int slot;
 } smFactory_t;
 
 typedef struct {
     char sysname[64];
     char name[64];
-    int gametypes;  // a bit per base gametype
+    int gametypes;
     qhandle_t preview;
     qboolean previewTried;
-    float nameWidth;  // in bold, at nameScale
+    float nameWidth;
     float nameScale;
 } smArena_t;
 
-static smFactory_t smFactories[SM_MAX_FACTORIES];  // by id, as the page's factories object
+static smFactory_t smFactories[SM_MAX_FACTORIES];
 static int smNumFactories;
-static smArena_t smArenas[SM_MAX_ARENAS];          // by sysname, as its mapdb object
+static smArena_t smArenas[SM_MAX_ARENAS];
 static int smNumArenas;
-static int smMapList[SM_MAX_ARENAS];               // the maps dialog's, by name
+static int smMapList[SM_MAX_ARENAS];
 static int smNumMapList;
-static qhandle_t smIcons[SM_NUM_GAMETYPES + 1][2];  // small and large, the unknown one last
+static qhandle_t smIcons[SM_NUM_GAMETYPES + 1][2];
 static qhandle_t smDefaultPreview;
 
 typedef enum { SM_DIALOG_NONE, SM_DIALOG_FACTORIES, SM_DIALOG_MAPS } smDialog_t;
@@ -171,15 +135,13 @@ typedef enum { SM_DIALOG_NONE, SM_DIALOG_FACTORIES, SM_DIALOG_MAPS } smDialog_t;
 static struct {
     qboolean loaded;
 
-    // module 262's state, which it keeps in sessionStorage between visits
     int selectedGametype;
     char selectedFactory[64];
     char selectedMap[64];
     char tempFactory[64];
     char tempMap[64];
-    char filter;  // mapStartsWithFilter: 0 for "all"
+    char filter;
 
-    // module 263's: the cvars as it last heard of them
     char values[SM_NUM_CVARS][MAX_CVAR_VALUE_STRING];
     char heard[SM_NUM_CVARS][MAX_CVAR_VALUE_STRING];
     char netPort[16];
@@ -188,7 +150,6 @@ static struct {
     char locksFor[64];
     qboolean locksValid;
 
-    // on screen
     smDialog_t dialog;
     float factoryScroll, mapScroll, optionScroll;
     int edit, editCursor, editStart, editTime;
@@ -197,7 +158,7 @@ static struct {
     int drag;
     float dragValue;
     smRect_t dragRect;
-    int held;  // a slider let go off itself keeps showing where it was left
+    int held;
     char heldValue[32];
     qboolean scrollDrag;
     float scrollGrab;
@@ -207,19 +168,8 @@ static struct {
     int mapListFilter;
 } sm;
 
-/*
-===============================================================================
-
-WHAT THE CURSOR IS OVER
-
-The page's own list of things the mouse can land on; the drawing and the hit
-list itself are in ui_web.c.
-
-===============================================================================
-*/
-
 typedef enum {
-    SM_HIT_BLOCK,  // takes the mouse off what is under it
+    SM_HIT_BLOCK,
     SM_HIT_GAMETYPE_CARD,
     SM_HIT_ARENA_CARD,
     SM_HIT_RESET,
@@ -239,15 +189,6 @@ typedef enum {
     SM_HIT_THUMB
 } smHitType_t;
 
-
-/*
-===============================================================================
-
-THE ENGINE'S FACTORIES AND ARENAS
-
-===============================================================================
-*/
-
 static void SM_LoadFactories(void) {
     char id[64], basegt[16];
     int count = trap_Factory_Count();
@@ -256,11 +197,9 @@ static void SM_LoadFactories(void) {
 
     smNumFactories = 0;
     for (i = 0; i < count; i++) {
-        // GetFactoryList leaves out the hidden ones (0x432f32)
         if (!trap_Factory_Value(i, "id", id, sizeof(id)) || id[0] == '_') {
             continue;
         }
-        // and keys the rest by id: sorted, a repeated id keeping the later one
         for (pos = 0; pos < smNumFactories && strcmp(smFactories[pos].id, id) < 0; pos++) {
         }
         if (pos == smNumFactories || strcmp(smFactories[pos].id, id)) {
@@ -293,7 +232,6 @@ static void SM_LoadArenas(void) {
         if (!trap_Arena_Value(i, "sysname", sysname, sizeof(sysname)) || !sysname[0]) {
             continue;
         }
-        // GetMapList keys them by map: sorted, a repeated map keeping the later one
         for (pos = 0; pos < smNumArenas && strcmp(smArenas[pos].sysname, sysname) < 0; pos++) {
         }
         if (pos == smNumArenas || strcmp(smArenas[pos].sysname, sysname)) {
@@ -361,14 +299,12 @@ static const smGametype_t* SM_Gametype(int gametype) {
     return &smUnknownGametype;
 }
 
-// mapdb[map].gametypes[gametype]
 static qboolean SM_Supports(const char* map, int gametype) {
     const smArena_t* arena = SM_Arena(map);
 
     return arena && gametype >= 0 && gametype < 31 && (arena->gametypes & (1 << gametype));
 }
 
-// img/gametype/sm (28 square) for the dialog's list, xl (75 square) for the card
 static qhandle_t SM_GametypeIcon(const smGametype_t* gt, qboolean large) {
     int i = (int)(gt - smGametypes);
 
@@ -381,7 +317,6 @@ static qhandle_t SM_GametypeIcon(const smGametype_t* gt, qboolean large) {
     return smIcons[i][large];
 }
 
-// url(sm/<map>.jpg) over url(sm/default.jpg): the default shows where a map has none
 static qhandle_t SM_Preview(smArena_t* arena, const char* map) {
     qhandle_t shot;
 
@@ -399,7 +334,6 @@ static qhandle_t SM_Preview(smArena_t* arena, const char* map) {
     return shot ? shot : smDefaultPreview;
 }
 
-// url(lg/<map>.jpg), with no fallback
 static qhandle_t SM_Levelshot(const char* map) {
     static char last[64];
     static qhandle_t shot;
@@ -421,16 +355,7 @@ static float SM_NameWidth(smArena_t* arena) {
     return arena->nameWidth;
 }
 
-/*
-===============================================================================
-
-THE PAGE'S STATE (module 262)
-
-===============================================================================
-*/
-
 static void SM_Defaults(void) {
-    // getInitialState
     sm.selectedGametype = GT_FFA;
     Q_strncpyz(sm.selectedFactory, "ffa", sizeof(sm.selectedFactory));
     Q_strncpyz(sm.selectedMap, "campgrounds", sizeof(sm.selectedMap));
@@ -440,7 +365,6 @@ static void SM_Defaults(void) {
     sm.mapListGametype = -1;
 }
 
-// selectGametype: the gametype takes effect at once; the dialog's factory and map follow it
 static void SM_SelectGametype(int gametype) {
     const smGametype_t* gt = SM_Gametype(gametype);
 
@@ -466,7 +390,6 @@ static void SM_SelectFactory(const char* id) {
     }
 }
 
-// confirmFactoryDialog: the map is checked against the selected one, not the dialog's
 static void SM_ConfirmFactories(void) {
     const smFactory_t* f;
 
@@ -498,12 +421,10 @@ static void SM_CancelMaps(void) {
     sm.dialog = SM_DIALOG_NONE;
 }
 
-// launchMatch: SendGameCommand("map <map> <factory>")
 static void SM_Launch(void) {
     trap_Cmd_ExecuteText(EXEC_APPEND, va("map %s %s\n", sm.selectedMap, sm.selectedFactory));
 }
 
-// the letters menu: ALL, A to Z and #
 static char SM_FilterChar(int k) {
     if (k <= 0) {
         return 0;
@@ -515,16 +436,6 @@ static char SM_Upper(char c) {
     return c >= 'a' && c <= 'z' ? c - 'a' + 'A' : c;
 }
 
-/*
-===============
-SM_BuildMapList
-
-The maps of the selected gametype whose name starts with the letter, sorted by
-name (lodash's sortBy keeps the mapdb order among equals). "#" means to take
-names that start with anything but a letter, but the page's test for it can
-never be true: it matches only a name that starts with "#".
-===============
-*/
 static void SM_BuildMapList(void) {
     int i, j;
 
@@ -543,7 +454,6 @@ static void SM_BuildMapList(void) {
         if (sm.filter && SM_Upper(a->name[0]) != sm.filter) {
             continue;
         }
-        // insertion keeps equal names in mapdb order
         for (j = smNumMapList; j > 0 && strcmp(smArenas[smMapList[j - 1]].name, a->name) > 0; j--) {
             smMapList[j] = smMapList[j - 1];
         }
@@ -552,7 +462,6 @@ static void SM_BuildMapList(void) {
     }
 }
 
-// the factories dialog's list: the gametype's in id order, its default one first
 static int SM_FactoryList(int* list) {
     const smGametype_t* gt = SM_Gametype(sm.selectedGametype);
     const smFactory_t* def = gt->factory ? SM_Factory(gt->factory) : NULL;
@@ -573,15 +482,6 @@ static int SM_FactoryList(int* list) {
     return n;
 }
 
-/*
-===============================================================================
-
-THE OPTIONS (module 263)
-
-===============================================================================
-*/
-
-// JavaScript's value == n for a string: its number, "" being 0
 static qboolean SM_Equals(const char* value, float n) {
     char* end;
     double d;
@@ -599,12 +499,10 @@ static qboolean SM_Equals(const char* value, float n) {
     return *end == '\0' && d == n;
 }
 
-// the value a row shows: a factory's own for a cvar it sets
 static const char* SM_Value(int i) {
     return sm.locked[i] ? sm.lockedValue[i] : sm.values[i];
 }
 
-// cvarChanged: the match type moves the port, and a map pool reloads
 static void SM_Heard(int i) {
     if (i == SM_SERVERTYPE) {
         trap_Cvar_Set("net_port", SM_Equals(sm.values[i], 1) ? "27015" : "27960");
@@ -614,16 +512,6 @@ static void SM_Heard(int i) {
     }
 }
 
-/*
-===============
-SM_ReadCvars
-
-The page learns a cvar's value from GetConfig when it opens and from the
-engine's event when it changes; both give the latched value while one waits.
-A change is an event: it replaces what the page shows, but for a text input
-being typed in.
-===============
-*/
 static void SM_ReadCvars(qboolean events) {
     char value[MAX_CVAR_VALUE_STRING];
     int i;
@@ -645,7 +533,6 @@ static void SM_ReadCvars(qboolean events) {
     trap_Cvar_LatchedVariableStringBuffer("net_port", sm.netPort, sizeof(sm.netPort));
 }
 
-// renderCvar: a cvar the selected factory sets is disabled
 static void SM_UpdateLocks(void) {
     char name[MAX_CVAR_VALUE_STRING], value[MAX_CVAR_VALUE_STRING];
     const smFactory_t* f;
@@ -671,7 +558,6 @@ static void SM_UpdateLocks(void) {
     }
 }
 
-// onBlurInput: what was typed goes to the cvar
 static void SM_EndEdit(void) {
     if (sm.edit < 0) {
         return;
@@ -680,7 +566,6 @@ static void SM_EndEdit(void) {
     sm.edit = -1;
 }
 
-// the gap between characters nearest to x, in the text shown from start
 static int SM_CaretAt(const char* text, int start, float x) {
     int len = (int)strlen(text);
     int n, best = start;
@@ -709,14 +594,12 @@ static void SM_OpenSelect(int i) {
             sm.selectFocus = k;
         }
     }
-    // the menu shows its focused option
     sm.optionScroll = sm.selectFocus * 40.0f + 40.0f - 198.0f;
     if (sm.optionScroll < 0) {
         sm.optionScroll = 0;
     }
 }
 
-// where a slider's thumb goes for the cursor at x: the step's nearest value
 static float SM_RangeAt(int i, float x) {
     const smCvar_t* cv = &smCvars[i];
     float frac = (x - (sm.dragRect.x + 1) - 8) / (sm.dragRect.w - 2 - 16);
@@ -736,23 +619,10 @@ static void SM_FormatRange(int i, float value, char* buf, int size) {
     Com_sprintf(buf, size, smCvars[i].decimals ? "%.2f" : "%.0f", value);
 }
 
-/*
-===============================================================================
-
-THE PAGE
-
-css/main.css's .start-match: a panel at 80% black with the page's h1, two columns of
-48% with 4% between them -- the two cards on the left, the cvar list on the right --
-and the launch button under them, half the page wide. The page is overflow-y: scroll,
-so its bar's gutter is always there.
-
-===============================================================================
-*/
-
 #define SM_BAR 8.0f
 #define SM_CARD_H 200.0f
-#define SM_CARD_FONT 21.3333f  // 16pt
-#define SM_LAN_H 39.0f         // p.lan, with its padding
+#define SM_CARD_FONT 21.3333f
+#define SM_LAN_H 39.0f
 
 static const vec4_t smrCard = SM_RGB(44, 41, 41);
 static const vec4_t smrCardHover = SM_RGB(60, 57, 57);
@@ -778,13 +648,12 @@ static const vec4_t smrBlack80 = {0, 0, 0, 0.8f};
 static const vec4_t smrThumb = SM_RGB(51, 51, 51);
 static const vec4_t smrThumbHover = SM_RGB(153, 153, 153);
 
-// the layout of the page for this frame: set by SM_DrawPage, read by the rows
 static struct {
-    float x;         // the content's left, inside the panel's padding
-    float width;     // the content's width
-    float colW;      // one of the two columns
-    float listX;     // the cvar list's left
-    float valX;      // a row's control, from the row's left
+    float x;
+    float width;
+    float colW;
+    float listX;
+    float valX;
     float valW;
 } smL;
 
@@ -795,19 +664,16 @@ static void SM_Layout(void) {
     smL.width = HM_CONTAINER_W - SM_BAR - 10;
     smL.colW = smL.width * 0.48f;
     smL.listX = smL.x + smL.colW + smL.width * 0.04f;
-    // children seven columns and val five columns, inside the row's padding
     smL.valX = 7.5f + (smL.colW - 15) * (0.566667f + 0.04f);
     smL.valW = (smL.colW - 15) * 0.393333f;
 }
 
-// centred in the card's content
 static void SM_CardCentered(float x, float w, float lineTop, float lineHeight, const char* text) {
     SM_Text(x + (w - SM_Advance(FONT_SANS, SM_CARD_FONT, text, -1)) * 0.5f,
             SM_Baseline(FONT_SANS, SM_CARD_FONT, lineTop, lineHeight), FONT_SANS, SM_CARD_FONT, smText, text, -1,
             qfalse);
 }
 
-// button.card: #2C2929, #3C3939 under the cursor, with its yellow h2
 static void SM_DrawCardBack(float x, float y, float w, const char* title, int hit) {
     SM_Fill(x, y, w, SM_CARD_H, SM_Over(hit, 0) ? smrCardHover : smrCard, NULL);
     SM_SetSpacing(SM_SPACING_H1);
@@ -824,7 +690,6 @@ static void SM_DrawGametypeCard(float x, float y, float w) {
     SM_DrawCardBack(x, y, w, "Game Type", SM_HIT_GAMETYPE_CARD);
     SM_Pic(cx + (cw - 75) * 0.5f, y + 54, 75, 75, SM_GametypeIcon(gt, qtrue), NULL);
     SM_CardCentered(cx, cw, y + 134.6f, 26.6667f, gt->title);
-    // the factory's title, or "Default" when it is the gametype's
     SM_CardCentered(cx, cw, y + 161.3f, 26.6667f,
                     factory ? (strcmp(gt->title, factory->title) ? factory->title : "Default") : "");
 }
@@ -834,7 +699,6 @@ static void SM_DrawArenaCard(float x, float y, float w) {
     float cx = x + 10.6667f, cw = w - 21.3333f;
 
     SM_DrawCardBack(x, y, w, "Current Arena", SM_HIT_ARENA_CARD);
-    // span.mapshot: 179 by 100 with the shot's width filling it
     {
         float sx = cx + (cw - 179) * 0.5f;
         smRect_t shot = SM_R(sx, y + 54.8f, 179, 100);
@@ -844,7 +708,6 @@ static void SM_DrawArenaCard(float x, float y, float w) {
     SM_CardCentered(cx, cw, y + 160.5f, 26.6667f, arena ? arena->name : sm.selectedMap);
 }
 
-// a text input: #0F0F0F with a #333 border, the text 9 pixels in, a caret while typing
 static void SM_DrawInput(int i, float x, float y) {
     const char* value = sm.values[i];
     float w = smL.valW, h = 38;
@@ -877,7 +740,6 @@ static void SM_DrawInput(int i, float x, float y) {
     SM_Hit(x, y, w, h, SM_HIT_INPUT, i, NULL);
 }
 
-// react-select's control: the option's label in #CCC, or its placeholder in #AAA
 static void SM_DrawSelect(int i, float x, float y) {
     const smCvar_t* cv = &smCvars[i];
     const char* label = "Default";
@@ -902,8 +764,6 @@ static void SM_DrawSelect(int i, float x, float y) {
     }
 }
 
-// .range: the value in 20% of the width, then the input: #222 with a #333 border and a yellow
-// square of a thumb
 static void SM_DrawRange(int i, float x, float y) {
     const smCvar_t* cv = &smCvars[i];
     float bx = x + smL.valW * 0.2f, bw = smL.valW * 0.8f;
@@ -928,18 +788,16 @@ static void SM_DrawRange(int i, float x, float y) {
     SM_Fill(bx, y, bw, 18, (SM_Over(SM_HIT_RANGE, i) || sm.drag == i) ? smrRangeHover : smrRange, NULL);
     SM_Border(bx, y, bw, 18, 1, smrInputBorder, NULL);
     SM_Fill(bx + 1 + frac * (bw - 2 - 16), y + 1, 16, 16, smrYellow, NULL);
-    // the hit is the input itself: SM_RangeAt reads the value off it
     SM_Hit(bx, y, bw, 18, SM_HIT_RANGE, i, NULL);
 }
 
 static float SM_RowHeight(int i) {
     if (sm.locked[i]) {
-        return 50;  // div.disabled holds nothing
+        return 50;
     }
     return smCvars[i].widget == SM_INPUT ? 53.0f : smCvars[i].widget == SM_SELECT ? 51.0f : 50.0f;
 }
 
-// the row itself and the dropdown it opened count as hovering it
 static qboolean SM_RowHovered(int i, float x, float y, float h) {
     smRect_t row = SM_R(x, y, smL.colW, h);
 
@@ -952,15 +810,6 @@ static qboolean SM_RowHovered(int i, float x, float y, float h) {
     return SM_In(&row, smMX, smMY);
 }
 
-/*
-===============
-SM_DrawRow
-
-.row.cvar: #242121 and #1C1919 by turns, its title on the left with "(Reset)" after it while
-the row is under the cursor -- or "(Locked)" when the factory sets that cvar -- and the
-control on the right.
-===============
-*/
 static float SM_DrawRow(int i, float x, float y, int child) {
     const smCvar_t* cv = &smCvars[i];
     float h = SM_RowHeight(i);
@@ -971,12 +820,9 @@ static float SM_DrawRow(int i, float x, float y, int child) {
     SM_Fill(x, y, smL.colW, h, child % 2 ? smrRowOdd : smrRowEven, NULL);
     SM_Text(x + 7.5f, base, FONT_SANS, 15, smText, cv->title, -1, qfalse);
     if (sm.locked[i]) {
-        // disabled: "(Locked)" and no value, as getWidget reads it from a variable
-        // declared further down, still undefined there
         SM_Text(after, base, FONT_SANS, 15, smText, "(Locked)", -1, qfalse);
         return h;
     }
-    // a.resetLink shows while the row is hovered
     if (hovered) {
         float rw = SM_Advance(FONT_SANS, 15, "(Reset)", -1);
 
@@ -997,7 +843,6 @@ static qboolean SM_ShowPortNote(void) {
     return SM_Equals(SM_Value(SM_SERVERTYPE), 2);
 }
 
-// p.launch: a button half the page wide, 16pt, without skeleton's capitals
 static void SM_DrawLaunch(float y) {
     float w = smL.width * 0.5f, h = 51.3333f;
     float x = smL.x + (smL.width - w) * 0.5f;
@@ -1017,7 +862,6 @@ static void SM_DrawPage(void) {
     int child = 0;
     int i;
 
-    // the page sits in the front end's frame, under its top row
     UI_Home_Backdrop();
     UI_Home_PageTop(HM_NAV_PLAY);
     SM_Layout();
@@ -1029,12 +873,9 @@ static void SM_DrawPage(void) {
     SM_SetSpacing(0);
     y = top + 54.4f;
 
-    // the two cards
     SM_DrawGametypeCard(smL.x, y, smL.colW);
     SM_DrawArenaCard(smL.x, y + SM_CARD_H + SM_CARD_FONT, smL.colW);
 
-    // the cvar list: p.lan follows the match type when it is Internet, one more of the rows'
-    // siblings, so the rows after it swap their shades
     listY = y;
     for (i = 0; i < SM_NUM_CVARS; i++) {
         listY += SM_DrawRow(i, smL.listX, listY, ++child);
@@ -1051,12 +892,10 @@ static void SM_DrawPage(void) {
         }
     }
 
-    // the row is as tall as its taller column; the launch paragraph comes 1em under it
     y += 2 * (SM_CARD_H + SM_CARD_FONT) > listY - y ? 2 * (SM_CARD_H + SM_CARD_FONT) : listY - y;
     SM_DrawLaunch(y + 15 + 5.3333f);
 }
 
-// .Select-menu-outer, under the control: #333, options 40 high, the focused one #222
 static void SM_DrawDropdown(void) {
     const smCvar_t* cv = &smCvars[sm.select];
     float x = sm.selectControl.x, y = sm.selectControl.y + sm.selectControl.h - 1;
@@ -1078,7 +917,6 @@ static void SM_DrawDropdown(void) {
         float oy = y + k * 40.0f - sm.optionScroll;
         float base = SM_Baseline(FONT_SANS, 15, oy + 8, 24);
 
-        // the option under the mouse takes the focus
         if (SM_Over(SM_HIT_OPTION, k)) {
             sm.selectFocus = k;
         }
@@ -1094,18 +932,6 @@ static void SM_DrawDropdown(void) {
     sm.selectMenu = SM_R(x, y, w, view);
 }
 
-/*
-===============================================================================
-
-THE DIALOGS
-
-The modal-styles module: an overlay at 80% black, and a band across the whole screen --
-600 high for the gametypes, over the chosen arena's large shot, 980 for the arenas -- with
-the widemodal-content at 80% black in its middle 70%.
-
-===============================================================================
-*/
-
 static smRect_t SM_DrawDialog(float height, qhandle_t background) {
     float top = (SM_VIEW_H - height) * 0.5f;
     float cx = smVW * 0.15f, cw = smVW * 0.7f;
@@ -1114,7 +940,6 @@ static smRect_t SM_DrawDialog(float height, qhandle_t background) {
     SM_Hit(-smVW, -SM_VIEW_H, 3 * smVW, 3 * SM_VIEW_H, SM_HIT_BLOCK, 0, NULL);
     SM_Fill(0, top, smVW, height, smrDialog, NULL);
     if (background) {
-        // background-size: 100%, centred
         smRect_t band = SM_R(0, top, smVW, height);
         float shotH = smVW * 1080.0f / 1920.0f;
 
@@ -1124,7 +949,6 @@ static smRect_t SM_DrawDialog(float height, qhandle_t background) {
     return SM_R(cx + 15, top + 15, cw - 30, height - 30);
 }
 
-// Cancel and OK at the right, skeleton's buttons with a space between them
 static void SM_DrawButtons(float right, float y) {
     float okW = SM_WebButtonWidth("OK");
     float cancelW = SM_WebButtonWidth("Cancel");
@@ -1137,7 +961,6 @@ static void SM_DrawButtons(float right, float y) {
     SM_Hit(okX, y, okW, SM_WEB_BUTTON_H, SM_HIT_OK, 0, NULL);
 }
 
-// the webkit scrollbar: an 8 pixel #333 thumb, #999 under the cursor
 static void SM_DrawScrollbar(float x, float y, float h, float content, float scroll) {
     float thumbH = h * h / content;
     float thumbY;
@@ -1158,7 +981,6 @@ static float SM_ClampScroll(float scroll, float content, float view) {
     return scroll < 0 ? 0 : scroll;
 }
 
-// the height of a factory's entry: its title, author and description, wrapped
 static float SM_FactoryHeight(const smFactory_t* f, float width) {
     int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
     float h = 7.5f;
@@ -1186,14 +1008,6 @@ static float SM_DrawLines(float x, float y, float size, float lineHeight, const 
     return y;
 }
 
-/*
-===============
-SM_DrawFactories
-
-The gametypes on the left, each its small icon and its title, the chosen one on #333;
-the factories of that gametype on the right, the chosen one on #333 in yellow.
-===============
-*/
 static void SM_DrawFactories(void) {
     smRect_t in = SM_DrawDialog(600, SM_Levelshot(sm.tempMap));
     smRect_t clip;
@@ -1202,7 +1016,6 @@ static void SM_DrawFactories(void) {
     int list[SM_MAX_FACTORIES];
     int n, k;
 
-    // menu: the gametypes, as wide as the widest with its icon and padding
     for (k = 0; k < SM_NUM_GAMETYPES; k++) {
         float w = SM_Advance(FONT_SANS, 18.6667f, smGametypes[k].title, -1);
 
@@ -1224,7 +1037,6 @@ static void SM_DrawFactories(void) {
         SM_Hit(in.x, ry, itemW, 36, SM_HIT_GAMETYPE, k, NULL);
     }
 
-    // article: the factories, scrolling when they do not fit
     ax = in.x + menuW;
     aw = in.w - menuW;
     clip = SM_R(ax, in.y, aw, ah);
@@ -1272,14 +1084,12 @@ static void SM_DrawFactories(void) {
     SM_DrawButtons(in.x + in.w, in.y + ah + 10);
 }
 
-// lays out (and draws, given a clip) the map tiles as inline blocks; returns their height
 static float SM_MapTiles(float x, float y, float width, const smRect_t* clip) {
     float cx = 0, cy = 0;
     int k;
 
     for (k = 0; k < smNumMapList; k++) {
         smArena_t* a = &smArenas[smMapList[k]];
-        // as wide as the levelshot or the name, with the padding
         float tw = SM_NameWidth(a);
 
         tw = (tw > 250 ? tw : 250) + 12;
@@ -1310,14 +1120,6 @@ static float SM_MapTiles(float x, float y, float width, const smRect_t* clip) {
     return smNumMapList ? cy + 214.4f : 0;
 }
 
-/*
-===============
-SM_DrawMaps
-
-ALL, A to Z and # down the left, the chosen one on #333, and the arenas that play the
-gametype in tiles, the chosen one on #333 with its name in yellow.
-===============
-*/
 static void SM_DrawMaps(void) {
     smRect_t in = SM_DrawDialog(980, 0);
     smRect_t clip;
@@ -1326,7 +1128,6 @@ static void SM_DrawMaps(void) {
     float ax = in.x + menuW, aw = in.w - menuW, ah = in.h * 0.95f, width, content;
     int k;
 
-    // menu: ALL, A to Z and #, one under the other
     for (k = 0; k < 28; k++) {
         const char* label = k == 0 ? "ALL" : va("%c", SM_FilterChar(k));
         float ry = in.y + k * 33.6f;
@@ -1340,7 +1141,6 @@ static void SM_DrawMaps(void) {
         SM_Hit(in.x, ry, itemW, 33.6f, SM_HIT_FILTER, k, NULL);
     }
 
-    // article: the maps, scrolling when they do not fit
     SM_BuildMapList();
     clip = SM_R(ax, in.y, aw, ah);
     width = aw;
@@ -1358,14 +1158,6 @@ static void SM_DrawMaps(void) {
     sm.articleContent = content;
     SM_DrawButtons(in.x + in.w, in.y + ah + 10);
 }
-
-/*
-===============================================================================
-
-INPUT
-
-===============================================================================
-*/
 
 static void SM_CancelDialog(void) {
     if (sm.dialog == SM_DIALOG_FACTORIES) {
@@ -1390,17 +1182,13 @@ static float* SM_DialogScroll(void) {
 static void SM_Click(void) {
     const smHit_t* hit = SM_HitAt(smMX, smMY);
 
-    // the bar above the page takes its own clicks
     if (sm.dialog == SM_DIALOG_NONE && sm.select < 0 && UI_Home_NavClick()) {
         return;
     }
-    // a click redraws the page, which lets go of a slider's leftover value
     sm.held = -1;
-    // the text input loses the focus to a click elsewhere
     if (sm.edit >= 0 && !(hit && hit->type == SM_HIT_INPUT && hit->index == sm.edit)) {
         SM_EndEdit();
     }
-    // and an open dropdown closes, unless the click is on it
     if (sm.select >= 0 && !(hit && (hit->type == SM_HIT_MENU || hit->type == SM_HIT_OPTION ||
                                     (hit->type == SM_HIT_SELECT && hit->index == sm.select)))) {
         sm.select = -1;
@@ -1410,7 +1198,6 @@ static void SM_Click(void) {
     }
     switch (hit->type) {
         case SM_HIT_GAMETYPE_CARD:
-            // the dialog opens scrolled to the top: a hidden element loses its scroll
             sm.dialog = SM_DIALOG_FACTORIES;
             sm.factoryScroll = 0;
             break;
@@ -1437,7 +1224,6 @@ static void SM_Click(void) {
             }
             break;
         case SM_HIT_OPTION:
-            // onSelectChanged: the cvar changes, and the page shows it when it hears so
             trap_Cvar_Set(smCvars[sm.select].cvar, smCvars[sm.select].options[hit->index].value);
             sm.select = -1;
             break;
@@ -1472,7 +1258,6 @@ static void SM_Click(void) {
             sm.scrollGrab = smMY - hit->r.y;
             break;
         case SM_HIT_TRACK:
-            // a click on the track pages up or down
             if (smMY < sm.article.y + sm.article.h * 0.5f) {
                 *SM_DialogScroll() -= sm.article.h * 0.875f;
             } else {
@@ -1492,14 +1277,11 @@ static void SM_Wheel(float amount) {
     }
 }
 
-// what is held down with the mouse follows it, and is let go when the button is
 static void SM_UpdateDrags(void) {
     if (sm.drag >= 0) {
         if (trap_Key_IsDown(K_MOUSE1)) {
-            // onInputRange: the value shown follows the thumb
             sm.dragValue = SM_RangeAt(sm.drag, smMX);
         } else {
-            // onMouseUp: only a release over the slider sets the cvar
             char value[32];
 
             SM_FormatRange(sm.drag, sm.dragValue, value, sizeof(value));
@@ -1527,14 +1309,13 @@ static void SM_UpdateDrags(void) {
     }
 }
 
-// typing in a text input; false for what is not for it
 static qboolean SM_EditKey(int key) {
     char* value = sm.values[sm.edit];
     int len = (int)strlen(value);
 
     if (key & K_CHAR_FLAG) {
         key &= ~K_CHAR_FLAG;
-        if (key == 'h' - 'a' + 1) {  // backspace comes as ctrl-h
+        if (key == 'h' - 'a' + 1) {
             if (sm.editCursor > 0) {
                 memmove(&value[sm.editCursor - 1], &value[sm.editCursor], len + 1 - sm.editCursor);
                 sm.editCursor--;
@@ -1581,30 +1362,19 @@ static qboolean SM_EditKey(int key) {
             break;
         case K_ESCAPE:
         case K_TAB:
-            // leaving the field: onBlur
             SM_EndEdit();
             break;
         default:
-            // Enter does nothing in the page's inputs; typed keys come again as characters
             break;
     }
     sm.editTime = uiInfo.uiDC.realTime;
     return qtrue;
 }
 
-/*
-===============================================================================
-
-ENTRY POINTS
-
-===============================================================================
-*/
-
 static void SM_Load(void) {
     if (sm.loaded) {
         return;
     }
-    // the page's factories and mapdb modules read the engine once, when the web UI loads
     SM_LoadFactories();
     SM_LoadArenas();
     SM_Defaults();
@@ -1615,14 +1385,6 @@ static void SM_Load(void) {
     sm.loaded = qtrue;
 }
 
-/*
-===============
-UI_StartMatch_Open
-
-The "startmatch" menu's onOpen: the page mounts again with the state it saved,
-its dialogs closed.
-===============
-*/
 void UI_StartMatch_Open(void) {
     menuDef_t* menu;
     itemDef_t* item;
@@ -1635,12 +1397,10 @@ void UI_StartMatch_Open(void) {
     sm.held = -1;
     sm.scrollDrag = qfalse;
     SM_ReadCvars(qfalse);
-    // StartMatchCvars' componentWillMount: the match type picks the port, and the network restarts on it
     if (sm.values[SM_SERVERTYPE][0]) {
         trap_Cvar_Set("net_port", SM_Equals(sm.values[SM_SERVERTYPE], 1) ? "27015" : "27960");
         trap_Cmd_ExecuteText(EXEC_APPEND, "net_restart\n");
     }
-    // the page takes keys before the mouse moves over it
     menu = Menus_FindByName("startmatch");
     item = menu ? Menu_FindItemByName(menu, "startmatch") : NULL;
     if (item) {
@@ -1701,11 +1461,9 @@ qboolean UI_StartMatch_HandleKey(int key) {
             return qtrue;
         case K_ENTER:
         case K_KP_ENTER:
-            // the dialogs' keydown handlers: Enter confirms
             SM_ConfirmDialog();
             return qtrue;
         case K_ESCAPE:
-            // and Escape cancels; an open dropdown closes first
             if (sm.select >= 0) {
                 sm.select = -1;
                 return qtrue;
@@ -1714,23 +1472,12 @@ qboolean UI_StartMatch_HandleKey(int key) {
                 SM_CancelDialog();
                 return qtrue;
             }
-            // the menu's onESC goes back to the main menu
             return qfalse;
         default:
             return qfalse;
     }
 }
 
-/*
-===============
-UI_StartMatch_Preselect
-
-[ioquakelive] The main menu opens Start Match with a gametype already chosen: its "featured
-modes". The choice is made the same way as from the gametype dialog -- the factory and, if the
-chosen map does not support that mode, the mode's default map -- so the page ends up as if the
-player had picked it there.
-===============
-*/
 void UI_StartMatch_Preselect(const char* factory) {
     const smFactory_t* f;
 

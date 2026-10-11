@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "tr_local.h"
 
 static int			r_firstSceneDrawSurf;
@@ -38,13 +37,6 @@ static int			r_firstScenePoly;
 
 static int			r_numpolyverts;
 
-
-/*
-====================
-R_InitNextFrame
-
-====================
-*/
 void R_InitNextFrame( void ) {
 
 	backEndData->commands.used = 0;
@@ -68,34 +60,12 @@ void R_InitNextFrame( void ) {
 	r_numpolyverts = 0;
 }
 
-
-/*
-====================
-RE_ClearScene
-
-====================
-*/
 void RE_ClearScene( void ) {
 	r_firstSceneDlight = r_numdlights;
 	r_firstSceneEntity = r_numentities;
 	r_firstScenePoly = r_numpolys;
 }
 
-/*
-===========================================================================
-
-DISCRETE POLYS
-
-===========================================================================
-*/
-
-/*
-=====================
-R_AddPolygonSurfaces
-
-Adds all the scene's polys into this view's drawsurf list
-=====================
-*/
 void R_AddPolygonSurfaces( void ) {
 	int			i;
 	shader_t	*sh;
@@ -110,12 +80,6 @@ void R_AddPolygonSurfaces( void ) {
 	}
 }
 
-/*
-=====================
-RE_AddPolyToScene
-
-=====================
-*/
 void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys ) {
 	srfPoly_t	*poly;
 	int			i, j;
@@ -134,12 +98,6 @@ void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts
 #endif
 	for ( j = 0; j < numPolys; j++ ) {
 		if ( r_numpolyverts + numVerts > max_polyverts || r_numpolys >= max_polys ) {
-      /*
-      NOTE TTimo this was initially a PRINT_WARNING
-      but it happens a lot with high fighting scenes and particles
-      since we don't plan on changing the const and making for room for those effects
-      simply cut this message to developer only
-      */
 			ri.Printf( PRINT_DEVELOPER, "WARNING: RE_AddPolyToScene: r_max_polys or r_max_polyverts reached\n");
 			return;
 		}
@@ -149,7 +107,7 @@ void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts
 		poly->hShader = hShader;
 		poly->numVerts = numVerts;
 		poly->verts = &backEndData->polyVerts[r_numpolyverts];
-		
+
 		Com_Memcpy( poly->verts, &verts[numVerts*j], numVerts * sizeof( *verts ) );
 #if 0
 		if ( glConfig.hardwareType == GLHW_RAGEPRO ) {
@@ -159,19 +117,15 @@ void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts
 			poly->verts->modulate[3] = 255;
 		}
 #endif
-		// done.
 		r_numpolys++;
 		r_numpolyverts += numVerts;
 
-		// if no world is loaded
 		if ( tr.world == NULL ) {
 			fogIndex = 0;
 		}
-		// see if it is in a fog volume
 		else if ( tr.world->numfogs == 1 ) {
 			fogIndex = 0;
 		} else {
-			// find which fog volume the poly is in
 			VectorCopy( poly->verts[0].xyz, bounds[0] );
 			VectorCopy( poly->verts[0].xyz, bounds[1] );
 			for ( i = 1 ; i < poly->numVerts ; i++ ) {
@@ -196,9 +150,6 @@ void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts
 	}
 }
 
-
-//=================================================================================
-
 static int isnan_fp( const float *f )
 {
 	uint32_t u = *( (uint32_t*) f );
@@ -206,12 +157,6 @@ static int isnan_fp( const float *f )
 	return (int)( u >> 31 );
 }
 
-
-/*
-=====================
-RE_AddRefEntityToScene
-=====================
-*/
 void RE_AddRefEntityToScene( const refEntity_t *ent ) {
 	if ( !tr.registered ) {
 		return;
@@ -238,12 +183,6 @@ void RE_AddRefEntityToScene( const refEntity_t *ent ) {
 	r_numentities++;
 }
 
-
-/*
-=====================
-RE_AddDynamicLightToScene
-=====================
-*/
 static void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float r, float g, float b, int additive ) {
 	dlight_t	*dl;
 
@@ -257,7 +196,6 @@ static void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float 
 		return;
 	}
 #ifndef USE_VULKAN
-	// these cards don't have the correct blend mode
 	if ( glConfig.hardwareType == GLHW_RIVA128 || glConfig.hardwareType == GLHW_PERMEDIA2 ) {
 		return;
 	}
@@ -292,12 +230,6 @@ static void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float 
 	dl->linear = qfalse;
 }
 
-
-/*
-=====================
-RE_AddLinearLightToScene
-=====================
-*/
 void RE_AddLinearLightToScene( const vec3_t start, const vec3_t end, float intensity, float r, float g, float b  ) {
 	dlight_t	*dl;
 	if ( VectorCompare( start, end ) ) {
@@ -344,43 +276,16 @@ void RE_AddLinearLightToScene( const vec3_t start, const vec3_t end, float inten
 	dl->linear = qtrue;
 }
 
-
-
-/*
-=====================
-RE_AddLightToScene
-
-=====================
-*/
 void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
 	RE_AddDynamicLightToScene( org, intensity, r, g, b, qfalse );
 }
 
-
-/*
-=====================
-RE_AddAdditiveLightToScene
-
-=====================
-*/
 void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
 	RE_AddDynamicLightToScene( org, intensity, r, g, b, qtrue );
 }
 
-
 void *R_GetCommandBuffer( int bytes );
 
-/*
-@@@@@@@@@@@@@@@@@@@@@
-RE_RenderScene
-
-Draw a 3D view into a part of the window, then return
-to 2D drawing.
-
-Rendering a scene may require multiple views to be rendered
-to handle mirrors,
-@@@@@@@@@@@@@@@@@@@@@
-*/
 void RE_RenderScene( const refdef_t *fd ) {
 #ifdef USE_VULKAN
 	renderCommand_t	lastRenderCommand;
@@ -402,9 +307,6 @@ void RE_RenderScene( const refdef_t *fd ) {
 		ri.Error (ERR_DROP, "R_RenderScene: NULL worldmodel");
 	}
 
-	// [ioquakelive] the frame's colour correction is the game's only when the world is in it
-	// (see RB_QLColorCorrect); a model drawn by a menu does not count, the flash of a teleport
-	// being taken does
 	if ( !( fd->rdflags & RDF_NOWORLDMODEL ) || ( fd->rdflags & RDF_HYPERSPACE ) ) {
 		tr.frameHasWorld = qtrue;
 	}
@@ -426,14 +328,11 @@ void RE_RenderScene( const refdef_t *fd ) {
 	tr.refdef.time = fd->time;
 	tr.refdef.rdflags = fd->rdflags;
 
-	// copy the areamask data over and note if it has changed, which
-	// will force a reset of the visible leafs even if the view hasn't moved
 	tr.refdef.areamaskModified = qfalse;
 	if ( ! (tr.refdef.rdflags & RDF_NOWORLDMODEL) ) {
 		int		areaDiff;
 		int		i;
 
-		// compare the area bits
 		areaDiff = 0;
 		for ( i = 0; i < MAX_MAP_AREA_BYTES/sizeof(int); i++ ) {
 			areaDiff |= ((int *)tr.refdef.areamask)[i] ^ ((int *)fd->areamask)[i];
@@ -441,15 +340,11 @@ void RE_RenderScene( const refdef_t *fd ) {
 		}
 
 		if ( areaDiff ) {
-			// a door just opened or something
 			tr.refdef.areamaskModified = qtrue;
 		}
 	}
 
-
-	// derived info
-
-	tr.refdef.floatTime = (double)tr.refdef.time * 0.001; // -EC-: cast to double
+	tr.refdef.floatTime = (double)tr.refdef.time * 0.001;
 
 	tr.refdef.numDrawSurfs = r_firstSceneDrawSurf;
 	tr.refdef.drawSurfs = backEndData->drawSurfs;
@@ -468,26 +363,13 @@ void RE_RenderScene( const refdef_t *fd ) {
 	tr.refdef.numPolys = r_numpolys - r_firstScenePoly;
 	tr.refdef.polys = &backEndData->polys[r_firstScenePoly];
 
-	// turn off dynamic lighting globally by clearing all the
-	// dlights if it needs to be disabled
 	if ( r_dynamiclight->integer == 0 || glConfig.hardwareType == GLHW_PERMEDIA2 ) {
 		tr.refdef.num_dlights = 0;
 	}
 
-	// a single frame may have multiple scenes draw inside it --
-	// a 3D game view, 3D status bar renderings, 3D menus, etc.
-	// They need to be distinguished by the light flare code, because
-	// the visibility state for a given surface may be different in
-	// each scene / view.
 	tr.frameSceneNum++;
 	tr.sceneCount++;
 
-	// setup view parms for the initial view
-	//
-	// set up viewport
-	// The refdef takes 0-at-the-top y coordinates, so
-	// convert to GL's 0-at-the-bottom space
-	//
 	Com_Memset( &parms, 0, sizeof( parms ) );
 	parms.viewportX = tr.refdef.x;
 	parms.viewportY = glConfig.vidHeight - ( tr.refdef.y + tr.refdef.height );
@@ -508,7 +390,7 @@ void RE_RenderScene( const refdef_t *fd ) {
 
 	parms.fovX = tr.refdef.fov_x;
 	parms.fovY = tr.refdef.fov_y;
-	
+
 	parms.stereoFrame = tr.refdef.stereoFrame;
 
 	VectorCopy( fd->vieworg, parms.or.origin );
@@ -531,7 +413,6 @@ void RE_RenderScene( const refdef_t *fd ) {
 	{
 		if ( lastRenderCommand == RC_DRAW_BUFFER )
 		{
-			// duplicate all views, including portals
 			drawSurfsCommand_t *cmd, *src = NULL;
 			int i;
 
@@ -551,9 +432,7 @@ void RE_RenderScene( const refdef_t *fd ) {
 
 			if ( src )
 			{
-				// first drawsurface
 				tr.drawSurfCmd[0].refdef.needScreenMap = qtrue;
-				// last drawsurface
 				src->refdef.switchRenderPass = qtrue;
 			}
 		}
@@ -562,7 +441,6 @@ void RE_RenderScene( const refdef_t *fd ) {
 	}
 #endif
 
-	// the next scene rendered in this frame will tack on after this one
 	r_firstSceneDrawSurf = tr.refdef.numDrawSurfs;
 #ifdef USE_PMLIGHT
 	r_firstSceneLitSurf = tr.refdef.numLitSurfs;

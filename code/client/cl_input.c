@@ -19,32 +19,10 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// cl.input.c  -- builds an intended movement command to send to the server
-
 #include "client.h"
 
 unsigned frame_msec;
 int old_com_frameTime;
-
-/*
-===============================================================================
-
-KEY BUTTONS
-
-Continuous button event tracking is complicated by the fact that two different
-input sources (say, mouse button 1 and the control key) can both press the
-same button, but the button should only be released when both of the
-pressing key have been released.
-
-When a key event issues a button command (+forward, +attack, etc), it appends
-its key number as argv(1) so it can be matched up with the release.
-
-argv(2) will be set to the time the event happened, which allows exact
-control even at low framerates when the down and up events may both get qued
-at the same time.
-
-===============================================================================
-*/
 
 kbutton_t in_left, in_right, in_forward, in_back;
 kbutton_t in_lookup, in_lookdown, in_moveleft, in_moveright;
@@ -74,11 +52,11 @@ void IN_KeyDown(kbutton_t* b) {
     if (c[0]) {
         k = atoi(c);
     } else {
-        k = -1;  // typed manually at the console for continuous down
+        k = -1;
     }
 
     if (k == b->down[0] || k == b->down[1]) {
-        return;  // repeating key
+        return;
     }
 
     if (!b->down[0]) {
@@ -91,10 +69,9 @@ void IN_KeyDown(kbutton_t* b) {
     }
 
     if (b->active) {
-        return;  // still down
+        return;
     }
 
-    // save timestamp for partial frame summing
     c = Cmd_Argv(2);
     b->downtime = atoi(c);
 
@@ -111,7 +88,6 @@ void IN_KeyUp(kbutton_t* b) {
     if (c[0]) {
         k = atoi(c);
     } else {
-        // typed manually at the console, assume for unsticking, so clear all
         b->down[0] = b->down[1] = 0;
         b->active = qfalse;
         return;
@@ -122,15 +98,14 @@ void IN_KeyUp(kbutton_t* b) {
     } else if (b->down[1] == k) {
         b->down[1] = 0;
     } else {
-        return;  // key up without coresponding down (menu pass through)
+        return;
     }
     if (b->down[0] || b->down[1]) {
-        return;  // some other key is still holding it down
+        return;
     }
 
     b->active = qfalse;
 
-    // save timestamp for partial frame summing
     c = Cmd_Argv(2);
     uptime = atoi(c);
     if (uptime) {
@@ -142,13 +117,6 @@ void IN_KeyUp(kbutton_t* b) {
     b->active = qfalse;
 }
 
-/*
-===============
-CL_KeyState
-
-Returns the fraction of the frame that the key was down
-===============
-*/
 float CL_KeyState(kbutton_t* key) {
     float val;
     int msec;
@@ -157,7 +125,6 @@ float CL_KeyState(kbutton_t* key) {
     key->msec = 0;
 
     if (key->active) {
-        // still down
         if (!key->downtime) {
             msec = com_frameTime;
         } else {
@@ -358,8 +325,6 @@ void IN_CenterView(void) {
     cl.viewangles[PITCH] = -SHORT2ANGLE(cl.snap.ps.delta_angles[PITCH]);
 }
 
-//==========================================================================
-
 cvar_t* cl_yawspeed;
 cvar_t* cl_pitchspeed;
 
@@ -367,13 +332,6 @@ cvar_t* cl_run;
 
 cvar_t* cl_anglespeedkey;
 
-/*
-================
-CL_AdjustAngles
-
-Moves the local angle positions
-================
-*/
 void CL_AdjustAngles(void) {
     float speed;
 
@@ -392,22 +350,10 @@ void CL_AdjustAngles(void) {
     cl.viewangles[PITCH] += speed * cl_pitchspeed->value * CL_KeyState(&in_lookdown);
 }
 
-/*
-================
-CL_KeyMove
-
-Sets the usercmd_t based on key states
-================
-*/
 void CL_KeyMove(usercmd_t* cmd) {
     int movespeed;
     int forward, side, up;
 
-    //
-    // adjust for speed key / running
-    // the walking flag is to keep animations consistent
-    // even during acceleration and develeration
-    //
     if (in_speed.active ^ cl_run->integer) {
         movespeed = 127;
         cmd->buttons &= ~BUTTON_WALKING;
@@ -427,7 +373,6 @@ void CL_KeyMove(usercmd_t* cmd) {
     side += movespeed * CL_KeyState(&in_moveright);
     side -= movespeed * CL_KeyState(&in_moveleft);
 
-    // [QL] quakelive_steam.exe 0x4b542f: the jump key is also a button, set and cleared here
     if (in_up.active) {
         cmd->buttons |= BUTTON_JUMP;
     } else {
@@ -445,35 +390,15 @@ void CL_KeyMove(usercmd_t* cmd) {
     cmd->upmove = ClampChar(up);
 }
 
-/*
-=================
-CL_MouseEvent
-
-[QL] quakelive_steam.exe 0x4b54e0: nothing while cg_ignoreMouseInput is set, and the view only takes
-the motion when no catcher is up (the console included), besides retail's bit 0x10. The motion adds
-up until CL_MouseMove takes it.
-=================
-*/
-/*
-=================
-CL_MouseAbsEvent
-
-[ioquakelive] Where the system pointer is, in window pixels. While a menu is up the
-mouse is not grabbed and the system draws the pointer itself, so the menu is told the
-position instead of a relative move: adding up moves left its cursor a little away
-from the arrow you can see, and clicks landed where the arrow was not.
-=================
-*/
 void CL_MouseAbsEvent(int x, int y) {
     if (cg_ignoreMouseInput->integer) {
         return;
     }
     if (Key_GetCatcher() & KEYCATCH_CONSOLE) {
-        Con_MousePosition(x, y);  // [ioquakelive] its links are clicked with it
+        Con_MousePosition(x, y);
     } else if (Key_GetCatcher() & KEYCATCH_UI) {
         VM_Call(uivm, UI_MOUSE_POSITION, x, y);
     } else if (Key_GetCatcher() & KEYCATCH_CGAME) {
-        // [QL] retail's cgame takes the pointer's position too (CG_MouseEvent, 0x1003c4f0)
         VM_Call(cgvm, CG_MOUSE_EVENT, x, y);
     }
 }
@@ -486,20 +411,12 @@ void CL_MouseEvent(int dx, int dy, int time) {
     if (Key_GetCatcher() & KEYCATCH_UI) {
         VM_Call(uivm, UI_MOUSE_EVENT, dx, dy);
     } else if (Key_GetCatcher() & KEYCATCH_CGAME) {
-        // cgame is told where the pointer is instead (CL_MouseAbsEvent)
     } else if (!(Key_GetCatcher() & ~0x10)) {
         cl.mouseDx[0] += dx;
         cl.mouseDy[0] += dy;
     }
 }
 
-/*
-=================
-CL_JoystickEvent
-
-Joystick values stay set until changed
-=================
-*/
 void CL_JoystickEvent(int axis, int value, int time) {
     if (axis < 0 || axis >= MAX_JOYSTICK_AXIS) {
         Com_Error(ERR_DROP, "CL_JoystickEvent: bad axis %i", axis);
@@ -507,11 +424,6 @@ void CL_JoystickEvent(int axis, int value, int time) {
     cl.joystickAxis[axis] = value;
 }
 
-/*
-=================
-CL_JoystickMove
-=================
-*/
 void CL_JoystickMove(usercmd_t* cmd) {
     float anglespeed;
 
@@ -550,15 +462,6 @@ void CL_JoystickMove(usercmd_t* cmd) {
     cmd->upmove = ClampChar(cmd->upmove + (int)up);
 }
 
-/*
-=================
-CL_MouseFilterBegin
-
-[QL] quakelive_steam.exe 0x4b5640: m_filter is the number of frames whose view angles are averaged,
-0 to 31. The view starts each frame from the angles it aimed at, not from the averaged ones it showed,
-and a change of m_filter starts the average over.
-=================
-*/
 #define MOUSE_FILTER_SIZE 32
 
 static float mouseFilterYaw[MOUSE_FILTER_SIZE];
@@ -596,14 +499,6 @@ static void CL_MouseFilterBegin(void) {
     cl.viewangles[PITCH] = mouseFilterAimPitch;
 }
 
-/*
-=================
-CL_MouseFilterEnd
-
-[QL] quakelive_steam.exe 0x4b5710: the angles aimed at this frame join the history, and the view shows
-the average of the last m_filter of them
-=================
-*/
 static void CL_MouseFilterEnd(void) {
     float yaw, pitch;
     int i, j;
@@ -637,18 +532,6 @@ static void CL_MouseFilterEnd(void) {
     mouseFilterIndex = (mouseFilterIndex + 1) % MOUSE_FILTER_SIZE;
 }
 
-/*
-=================
-CL_MouseMove
-
-[QL] quakelive_steam.exe 0x4b5800. The motion since the last frame, in centimetres when m_cpi gives the
-mouse's counts per inch, takes the sensitivity and retail's acceleration: past cl_mouseAccelOffset,
-(|cl_mouseAccel| * rate) ^ (cl_mouseAccelPower - 1) is added to the sensitivity, or taken off with a
-negative cl_mouseAccel, and cl_mouseSensCap caps the result. The rate is the motion per millisecond,
-or cm/s with m_cpi, where m_yaw and m_pitch also become degrees per cm (times 1 / 0.022).
-cl_mouseAccelDebug writes each frame's motion, time, rate and power to mouse.log in fs_homepath.
-=================
-*/
 static FILE* mouseAccelLog;
 
 void CL_MouseMove(usercmd_t* cmd) {
@@ -723,7 +606,6 @@ void CL_MouseMove(usercmd_t* cmd) {
         }
     }
 
-    // ingame FOV
     sensitivity *= cl.cgameSensitivity;
 
     if (debug) {
@@ -739,7 +621,6 @@ void CL_MouseMove(usercmd_t* cmd) {
 
     CL_MouseFilterBegin();
 
-    // add mouse X/Y movement to cmd
     if (in_strafe.active) {
         cmd->rightmove = ClampChar(cmd->rightmove + m_side->value * mx);
     } else {
@@ -763,19 +644,9 @@ void CL_MouseMove(usercmd_t* cmd) {
     CL_MouseFilterEnd();
 }
 
-/*
-==============
-CL_CmdButtons
-==============
-*/
 void CL_CmdButtons(usercmd_t* cmd) {
     int i;
 
-    //
-    // figure button bits
-    // send a button bit even if the key was pressed and released in
-    // less than a frame
-    //
     for (i = 0; i < 15; i++) {
         if (in_buttons[i].active || in_buttons[i].wasPressed) {
             cmd->buttons |= 1 << i;
@@ -783,35 +654,22 @@ void CL_CmdButtons(usercmd_t* cmd) {
         in_buttons[i].wasPressed = qfalse;
     }
 
-    // [QL] quakelive_steam.exe 0x4b5bd0: retail's catcher bit 0x10 counts for neither test
     if (Key_GetCatcher() & ~0x10) {
         cmd->buttons |= BUTTON_TALK;
     }
 
-    // allow the game to know if any key at all is
-    // currently pressed, even if it isn't bound to anything
     if (anykeydown && (Key_GetCatcher() & ~0x10) == 0) {
         cmd->buttons |= BUTTON_ANY;
     }
 }
 
-/*
-==============
-CL_FinishMove
-==============
-*/
 void CL_FinishMove(usercmd_t* cmd) {
     int i;
 
-    // copy the state that the cgame is currently sending
     cmd->weapon = cl.cgameUserCmdValue;
-    // [QL] queued loadout primary weapon (usercmd_t offset 0x15)
     cmd->weaponPrimary = (byte)cl.cgameUserCmdWeaponPrimary;
-    // [QL] effective fov (usercmd_t offset 0x16)
     cmd->fov = (byte)cl.cgameUserCmdFov;
 
-    // send the current server time so the amount of movement
-    // can be determined without allowing cheating
     cmd->serverTime = cl.serverTime;
 
     for (i = 0; i < 3; i++) {
@@ -819,44 +677,32 @@ void CL_FinishMove(usercmd_t* cmd) {
     }
 }
 
-/*
-=================
-CL_CreateCmd
-=================
-*/
 usercmd_t CL_CreateCmd(void) {
     usercmd_t cmd;
     vec3_t oldAngles;
 
     VectorCopy(cl.viewangles, oldAngles);
 
-    // keyboard angle adjustment
     CL_AdjustAngles();
 
     Com_Memset(&cmd, 0, sizeof(cmd));
 
     CL_CmdButtons(&cmd);
 
-    // get basic movement from keyboard
     CL_KeyMove(&cmd);
 
-    // get basic movement from mouse
     CL_MouseMove(&cmd);
 
-    // get basic movement from joystick
     CL_JoystickMove(&cmd);
 
-    // check to make sure the angles haven't wrapped
     if (cl.viewangles[PITCH] - oldAngles[PITCH] > 90) {
         cl.viewangles[PITCH] = oldAngles[PITCH] + 90;
     } else if (oldAngles[PITCH] - cl.viewangles[PITCH] > 90) {
         cl.viewangles[PITCH] = oldAngles[PITCH] - 90;
     }
 
-    // store out the final values
     CL_FinishMove(&cmd);
 
-    // draw debug graphs of turning for mouse testing
     if (cl_debugMove->integer) {
         if (cl_debugMove->integer == 1) {
             SCR_DebugGraph(fabs(cl.viewangles[YAW] - oldAngles[YAW]));
@@ -869,70 +715,42 @@ usercmd_t CL_CreateCmd(void) {
     return cmd;
 }
 
-/*
-=================
-CL_CreateNewCommands
-
-Create a new usercmd_t structure for this frame
-=================
-*/
 void CL_CreateNewCommands(void) {
     int cmdNum;
 
-    // no need to create usercmds until we have a gamestate
     if (clc.state < CA_PRIMED) {
         return;
     }
 
     frame_msec = com_frameTime - old_com_frameTime;
 
-    // if running over 1000fps, act as if each frame is 1ms
-    // prevents divisions by zero
     if (frame_msec < 1) {
         frame_msec = 1;
     }
 
-    // if running less than 5fps, truncate the extra time to prevent
-    // unexpected moves after a hitch
     if (frame_msec > 200) {
         frame_msec = 200;
     }
     old_com_frameTime = com_frameTime;
 
-    // generate a command for this frame
     cl.cmdNumber++;
     cmdNum = cl.cmdNumber & CMD_MASK;
     cl.cmds[cmdNum] = CL_CreateCmd();
 }
 
-/*
-=================
-CL_ReadyToSendPacket
-
-Returns qfalse if we are over the maxpackets limit
-and should choke back the bandwidth a bit by not sending
-a packet this frame.  All the commands will still get
-delivered in the next packet, but saving a header and
-getting more delta compression will reduce total bandwidth.
-=================
-*/
 qboolean CL_ReadyToSendPacket(void) {
     int oldPacketNum;
     int delta;
 
-    // don't send anything if playing back a demo
     if (clc.demoplaying || clc.state == CA_CINEMATIC) {
         return qfalse;
     }
 
-    // If we are downloading, we send no less than 50ms between packets
     if (*clc.downloadTempName &&
         cls.realtime - clc.lastPacketSentTime < 50) {
         return qfalse;
     }
 
-    // if we don't have a valid gamestate yet, only send
-    // one packet a second
     if (clc.state != CA_ACTIVE &&
         clc.state != CA_PRIMED &&
         !*clc.downloadTempName &&
@@ -940,17 +758,14 @@ qboolean CL_ReadyToSendPacket(void) {
         return qfalse;
     }
 
-    // send every frame for loopbacks
     if (clc.netchan.remoteAddress.type == NA_LOOPBACK) {
         return qtrue;
     }
 
-    // send every frame for LAN
     if (cl_lanForcePackets->integer && Sys_IsLANAddress(clc.netchan.remoteAddress)) {
         return qtrue;
     }
 
-    // check for exceeding cl_maxpackets
     if (cl_maxpackets->integer < 15) {
         Cvar_Set("cl_maxpackets", "15");
     } else if (cl_maxpackets->integer > 125) {
@@ -959,34 +774,12 @@ qboolean CL_ReadyToSendPacket(void) {
     oldPacketNum = (clc.netchan.outgoingSequence - 1) & PACKET_MASK;
     delta = cls.realtime - cl.outPackets[oldPacketNum].p_realtime;
     if (delta < 1000 / cl_maxpackets->integer) {
-        // the accumulated commands will go out in the next packet
         return qfalse;
     }
 
     return qtrue;
 }
 
-/*
-===================
-CL_WritePacket
-
-Create and send the command packet to the server
-Including both the reliable commands and the usercmds
-
-During normal gameplay, a client packet will contain something like:
-
-4	sequence number
-2	qport
-4	serverid
-4	acknowledged sequence number
-4	clc.serverCommandSequence
-<optional reliable commands>
-1	clc_move or clc_moveNoDelta
-1	command count
-<count * usercmds>
-
-===================
-*/
 void CL_WritePacket(void) {
     msg_t buf;
     byte data[MAX_MSGLEN];
@@ -997,7 +790,6 @@ void CL_WritePacket(void) {
     int oldPacketNum;
     int count, key;
 
-    // don't send anything if playing back a demo
     if (clc.demoplaying || clc.state == CA_CINEMATIC) {
         return;
     }
@@ -1008,34 +800,20 @@ void CL_WritePacket(void) {
     MSG_Init(&buf, data, sizeof(data));
 
     MSG_Bitstream(&buf);
-    // write the current serverId so the server
-    // can tell if this is from the current gameState
     MSG_WriteLong(&buf, cl.serverId);
 
-    // write the last message we received, which can
-    // be used for delta compression, and is also used
-    // to tell if we dropped a gamestate
     MSG_WriteLong(&buf, clc.serverMessageSequence);
 
-    // write the last reliable message we received
     MSG_WriteLong(&buf, clc.serverCommandSequence);
 
-    // [QL] extra header byte. The QL client writes
-    // SteamAPI_GetCallbackCount() ^ (byte)clc.serverCommandSequence here; the
-    // server reads and discards it (SV_ExecuteClientMessage). We have no Steam
-    // callback-count source and the byte is unused on the wire, so send 0.
     MSG_WriteByte(&buf, 0);
 
-    // write any unacknowledged clientCommands
     for (i = clc.reliableAcknowledge + 1; i <= clc.reliableSequence; i++) {
         MSG_WriteByte(&buf, clc_clientCommand);
         MSG_WriteLong(&buf, i);
         MSG_WriteString(&buf, clc.reliableCommands[i & (MAX_RELIABLE_COMMANDS - 1)]);
     }
 
-    // we want to send all the usercmds that were generated in the last
-    // few packet, so even if a couple packets are dropped in a row,
-    // all the cmds will make it to the server
     if (cl_packetdup->integer < 0) {
         Cvar_Set("cl_packetdup", "0");
     } else if (cl_packetdup->integer > 5) {
@@ -1053,24 +831,18 @@ void CL_WritePacket(void) {
             Com_Printf("(%i)", count);
         }
 
-        // begin a client move command
         if (cl_nodelta->integer || !cl.snap.valid || clc.demowaiting || clc.serverMessageSequence != cl.snap.messageNum) {
             MSG_WriteByte(&buf, clc_moveNoDelta);
         } else {
             MSG_WriteByte(&buf, clc_move);
         }
 
-        // write the command count
         MSG_WriteByte(&buf, count);
 
-        // use the checksum feed in the key
         key = clc.checksumFeed;
-        // also use the message acknowledge
         key ^= clc.serverMessageSequence;
-        // also use the last acknowledged server command in the key
         key ^= MSG_HashKey(clc.serverCommands[clc.serverCommandSequence & (MAX_RELIABLE_COMMANDS - 1)], 32);
 
-        // write all the commands, including the predicted command
         for (i = 0; i < count; i++) {
             j = (cl.cmdNumber - count + i + 1) & CMD_MASK;
             cmd = &cl.cmds[j];
@@ -1079,9 +851,6 @@ void CL_WritePacket(void) {
         }
     }
 
-    //
-    // deliver the message
-    //
     packetNum = clc.netchan.outgoingSequence & PACKET_MASK;
     cl.outPackets[packetNum].p_realtime = cls.realtime;
     cl.outPackets[packetNum].p_serverTime = oldcmd->serverTime;
@@ -1095,28 +864,17 @@ void CL_WritePacket(void) {
     CL_Netchan_Transmit(&clc.netchan, &buf);
 }
 
-/*
-=================
-CL_SendCmd
-
-Called every frame to builds and sends a command packet to the server.
-=================
-*/
 void CL_SendCmd(void) {
-    // don't send any message if not connected
     if (clc.state < CA_CONNECTED) {
         return;
     }
 
-    // don't send commands if paused
     if (com_sv_running->integer && sv_paused->integer && cl_paused->integer) {
         return;
     }
 
-    // we create commands even if a demo is playing,
     CL_CreateNewCommands();
 
-    // don't send a packet if the last packet was sent too recently
     if (!CL_ReadyToSendPacket()) {
         if (cl_showSend->integer) {
             Com_Printf(". ");
@@ -1127,11 +885,6 @@ void CL_SendCmd(void) {
     CL_WritePacket();
 }
 
-/*
-============
-CL_InitInput
-============
-*/
 void CL_InitInput(void) {
     Cmd_AddCommand("centerview", IN_CenterView);
 
@@ -1193,18 +946,12 @@ void CL_InitInput(void) {
     Cmd_AddCommand("-button14", IN_Button14Up);
     Cmd_AddCommand("+mlook", IN_MLookDown);
     Cmd_AddCommand("-mlook", IN_MLookUp);
-    // [QL] quakelive_steam.exe 0x4b652b
     Cmd_AddCommand("ListInputDevices", IN_ListInputDevices);
 
     cl_nodelta = Cvar_Get("cl_nodelta", "0", 0);
     cl_debugMove = Cvar_Get("cl_debugMove", "0", 0);
 }
 
-/*
-============
-CL_ShutdownInput
-============
-*/
 void CL_ShutdownInput(void) {
     Cmd_RemoveCommand("centerview");
 

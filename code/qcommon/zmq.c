@@ -1,26 +1,3 @@
-/*
-===========================================================================
-ioquakelive - ZeroMQ stats and rcon
-
-What retail does, read in quakelive_steam.exe (class idZMQ, zmq\id_zmq.cpp):
-
-  0x004f3f80  idZMQ::Init. Eight cvars, all CVAR_INIT but the two passwords,
-              which are CVAR_ARCHIVE: zmq_rcon_enable "0", zmq_stats_enable "0",
-              zmq_rcon_ip "0.0.0.0", zmq_rcon_port "28960", zmq_stats_ip "",
-              zmq_stats_port "", zmq_stats_password "", zmq_rcon_password "".
-              Above 0 it binds a ROUTER socket on tcp://zmq_rcon_ip:zmq_rcon_port,
-              PLAIN when a password is set.
-  0x004f4210  the stats socket: a PUB socket on tcp://ip:port, where an empty
-              zmq_stats_ip means net_ip and a zero zmq_stats_port means net_port.
-  0x004d2460  writes zmqpass.txt with "stats_stats=" and "rcon_rcon=": the
-              authentication domain and the user name joined by an underscore.
-
-Retail does this with libzmq and CZMQ's zauth. This file speaks only the part of
-the wire protocol those two sockets need - ZMTP 3.0, the NULL and PLAIN
-mechanisms, PUB and ROUTER - so any ZeroMQ client works against it and no library
-is added to the project.
-===========================================================================
-*/
 
 #include "q_zmq.h"
 
@@ -49,11 +26,11 @@ typedef int zsocket_t;
 #define ZMQ_OUT_SIZE (256 * 1024)
 
 typedef enum {
-    ZS_GREETING,   // waiting for the peer's 64-byte greeting
-    ZS_HELLO,      // PLAIN: waiting for HELLO
-    ZS_INITIATE,   // PLAIN: waiting for INITIATE
-    ZS_READY,      // NULL: waiting for the peer's READY
-    ZS_OPEN,       // messages flow
+    ZS_GREETING,
+    ZS_HELLO,
+    ZS_INITIATE,
+    ZS_READY,
+    ZS_OPEN,
 } zstate_t;
 
 typedef enum { ZT_PUB, ZT_ROUTER } ztype_t;
@@ -66,10 +43,8 @@ typedef struct {
     int inLen;
     byte out[ZMQ_OUT_SIZE];
     int outLen;
-    // PUB: what the subscriber asked for; an empty topic means everything
     char topics[8][64];
     int numTopics;
-    // ROUTER: a multipart message being gathered
     char message[4096];
     int messageLen;
 } zconn_t;
@@ -77,7 +52,7 @@ typedef struct {
 typedef struct {
     zsocket_t listen;
     ztype_t type;
-    const char* domain;    // the authentication domain: "stats" or "rcon"
+    const char* domain;
     cvar_t* password;
     zconn_t conns[ZMQ_MAX_CONNS];
 } zsock_t;
@@ -94,14 +69,6 @@ static cvar_t* zmq_stats_ip;
 static cvar_t* zmq_stats_port;
 static cvar_t* zmq_stats_password;
 static cvar_t* zmq_rcon_password;
-
-/*
-===============================================================================
-
-SOCKETS
-
-===============================================================================
-*/
 
 static void ZMQ_NonBlocking(zsocket_t s) {
 #ifdef _WIN32
@@ -154,7 +121,6 @@ static void ZMQ_Drop(zsock_t* zs, zconn_t* c) {
     c->s = ZINVALID;
 }
 
-// queues bytes for the peer; a peer that falls this far behind is dropped
 static qboolean ZMQ_Queue(zconn_t* c, const void* data, int len) {
     if (c->outLen + len > ZMQ_OUT_SIZE) {
         return qfalse;
@@ -180,18 +146,6 @@ static void ZMQ_Flush(zsock_t* zs, zconn_t* c) {
     }
 }
 
-/*
-===============================================================================
-
-ZMTP 3.0
-
-A greeting of 64 bytes each way, then a handshake made of commands, then frames.
-A frame is a flags byte (bit 0 more, bit 1 long size, bit 2 command), the size
-in one byte or eight big-endian bytes, and the body.
-
-===============================================================================
-*/
-
 #define ZF_MORE 0x01
 #define ZF_LONG 0x02
 #define ZF_COMMAND 0x04
@@ -214,11 +168,10 @@ static void ZMQ_SendFrame(zconn_t* c, int flags, const void* body, int len) {
         headLen = 2;
     }
     if (!ZMQ_Queue(c, head, headLen) || !ZMQ_Queue(c, body, len)) {
-        c->outLen = 0;  // the peer is too far behind; drop what it has not read
+        c->outLen = 0;
     }
 }
 
-// a command: its name, preceded by its length, then its data
 static void ZMQ_SendCommand(zconn_t* c, const char* name, const void* data, int dataLen) {
     byte body[512];
     int nameLen = (int)strlen(name);
@@ -231,7 +184,6 @@ static void ZMQ_SendCommand(zconn_t* c, const char* name, const void* data, int 
     ZMQ_SendFrame(c, ZF_COMMAND, body, 1 + nameLen + dataLen);
 }
 
-// READY carries the socket type as metadata: name length, name, value length (4), value
 static void ZMQ_SendReady(zsock_t* zs, zconn_t* c) {
     const char* type = zs->type == ZT_PUB ? "PUB" : "ROUTER";
     byte meta[64];
@@ -260,21 +212,13 @@ static void ZMQ_SendGreeting(zsock_t* zs, zconn_t* c) {
     Com_Memset(g, 0, sizeof(g));
     g[0] = 0xff;
     g[9] = 0x7f;
-    g[10] = 3;  // version 3.0
+    g[10] = 3;
     g[11] = 0;
     Q_strncpyz((char*)g + 12, ZMQ_Plain(zs) ? "PLAIN" : "NULL", 20);
-    g[32] = ZMQ_Plain(zs) ? 1 : 0;  // as-server
+    g[32] = ZMQ_Plain(zs) ? 1 : 0;
     ZMQ_Queue(c, g, sizeof(g));
 }
 
-/*
-===============
-ZMQ_CheckPlain
-
-[QL] 0x004d2460: the key is "<domain>_<user name>", so the stats socket takes
-the user name "stats" and the rcon socket "rcon", each with its own password.
-===============
-*/
 static qboolean ZMQ_CheckPlain(const zsock_t* zs, const byte* data, int len) {
     char user[256];
     char pass[256];
@@ -303,7 +247,6 @@ static qboolean ZMQ_CheckPlain(const zsock_t* zs, const byte* data, int len) {
     return (qboolean)(!strcmp(key, expected) && !strcmp(pass, zs->password->string));
 }
 
-// the rcon client the running command's output goes to
 static zconn_t* zRedirect;
 
 static void ZMQ_RconFlush(char* text) {
@@ -312,15 +255,6 @@ static void ZMQ_RconFlush(char* text) {
     }
 }
 
-/*
-===============
-ZMQ_Message
-
-A whole message from a peer. On the stats socket the only thing a subscriber
-sends is its subscriptions: a first byte of 1 to subscribe or 0 to cancel, then
-the topic. On the rcon socket it is a command.
-===============
-*/
 static void ZMQ_Message(zsock_t* zs, zconn_t* c, const byte* body, int len, qboolean more) {
     if (zs->type == ZT_PUB) {
         if (len >= 1 && body[0] == 1 && c->numTopics < (int)ARRAY_LEN(c->topics)) {
@@ -333,7 +267,6 @@ static void ZMQ_Message(zsock_t* zs, zconn_t* c, const byte* body, int len, qboo
         return;
     }
 
-    // rcon: the frames of one message are one command
     if (c->messageLen + len < (int)sizeof(c->message)) {
         Com_Memcpy(c->message + c->messageLen, body, len);
         c->messageLen += len;
@@ -360,14 +293,6 @@ static void ZMQ_Message(zsock_t* zs, zconn_t* c, const byte* body, int len, qboo
     }
 }
 
-/*
-===============
-ZMQ_Process
-
-Takes whatever the peer sent: its greeting, then the handshake commands, then
-messages.
-===============
-*/
 static void ZMQ_Process(zsock_t* zs, zconn_t* c) {
     int pos = 0;
 
@@ -429,7 +354,7 @@ static void ZMQ_Process(zsock_t* zs, zconn_t* c) {
             int dataLen = (int)size - 1 - nameLen;
 
             if (dataLen < 0) {
-                ZMQ_Drop(zs, c);  // a name longer than the frame carrying it
+                ZMQ_Drop(zs, c);
                 return;
             }
 
@@ -477,7 +402,6 @@ static void ZMQ_Poll(zsock_t* zs) {
         return;
     }
 
-    // new peers
     for (;;) {
         struct sockaddr_in from;
         socklen_t fromLen = sizeof(from);
@@ -497,9 +421,6 @@ static void ZMQ_Poll(zsock_t* zs) {
             zclose(s);
             continue;
         }
-        // [ioquakelive] Deliberate divergence: retail leaves a passwordless rcon open to
-        // anyone who reaches the port, which is unauthenticated remote execution. Here, with
-        // no password, only connections from the machine itself are accepted.
         if (zs == &zRcon && !ZMQ_Plain(zs) && ntohl(from.sin_addr.s_addr) != INADDR_LOOPBACK) {
             zclose(s);
             continue;
@@ -517,7 +438,6 @@ static void ZMQ_Poll(zsock_t* zs) {
         ZMQ_SendGreeting(zs, c);
     }
 
-    // what they sent, and what we owe them
     for (i = 0; i < ZMQ_MAX_CONNS; i++) {
         zconn_t* c = &zs->conns[i];
 
@@ -558,13 +478,6 @@ static void ZMQ_InitSocket(zsock_t* zs, ztype_t type, const char* domain, cvar_t
     }
 }
 
-/*
-===============
-ZMQ_Init
-
-[QL] 0x004f3f80, idZMQ::Init.
-===============
-*/
 void ZMQ_Init(void) {
     char endpoint[128];
 
@@ -595,15 +508,6 @@ void ZMQ_Init(void) {
     }
 }
 
-/*
-===============
-ZMQ_StatsInit
-
-[QL] 0x004f4210. An empty zmq_stats_ip means net_ip, a zero zmq_stats_port
-means net_port: the stats go out on the game's own address unless told
-otherwise.
-===============
-*/
 void ZMQ_StatsInit(void) {
     char endpoint[128];
     char ip[64];
@@ -642,15 +546,6 @@ void ZMQ_Frame(void) {
     ZMQ_Poll(&zStats);
 }
 
-/*
-===============
-ZMQ_PublishStats
-
-One frame with the JSON document, to every subscriber whose subscription is a
-prefix of it -- an empty subscription takes everything, which is what the stats
-readers do.
-===============
-*/
 void ZMQ_PublishStats(const char* json) {
     int len;
     int i;

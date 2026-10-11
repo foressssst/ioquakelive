@@ -19,19 +19,10 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "server.h"
 #include "../qcommon/q_steam.h"
 #include "../qcommon/q_zmq.h"
 
-/*
-===============
-SV_SendConfigstring
-
-Creates and sends the server command necessary to update the CS index for the
-given client
-===============
-*/
 static void SV_SendConfigstring(client_t* client, int index) {
     int maxChunkSize = MAX_STRING_CHARS - 24;
     int len;
@@ -62,34 +53,20 @@ static void SV_SendConfigstring(client_t* client, int index) {
             remaining -= (maxChunkSize - 1);
         }
     } else {
-        // standard cs, just send it
         SV_SendServerCommand(client, "cs %i \"%s\"\n", index,
                              sv.configstrings[index]);
     }
 }
 
-/*
-===============
-SV_UpdateConfigstrings
-
-Called when a client goes from CS_PRIMED to CS_ACTIVE.  Updates all
-Configstring indexes that have changed while the client was in CS_PRIMED
-===============
-*/
 void SV_UpdateConfigstrings(client_t* client) {
     int index;
 
-    // [QL] Only resend configstrings that actually changed while the client
-    // was in CS_PRIMED state. The gamestate already contained all configstrings
-    // at the time it was sent, so resending everything would overflow the
-    // 64-slot reliable command buffer.
     for (index = 0; index < MAX_CONFIGSTRINGS; index++) {
         if (!client->csUpdated[index]) {
             continue;
         }
         client->csUpdated[index] = qfalse;
 
-        // do not always send server info to all clients
         if (index == CS_SERVERINFO && client->gentity &&
             (client->gentity->r.svFlags & SVF_NOSERVERINFO)) {
             continue;
@@ -98,12 +75,6 @@ void SV_UpdateConfigstrings(client_t* client) {
     }
 }
 
-/*
-===============
-SV_SetConfigstring
-
-===============
-*/
 void SV_SetConfigstring(int index, const char* val) {
     int i;
     client_t* client;
@@ -116,39 +87,27 @@ void SV_SetConfigstring(int index, const char* val) {
         val = "";
     }
 
-    // [QL] quakelive_steam.exe 0x4e2f69: a configstring that is not there yet is checked for before
-    // it is read. Before the first map there is no sv, so every one of them is a null pointer, and
-    // the game module does set one while its cvars are registered at boot (G_RegisterCvars).
     if (!sv.configstrings[index]) {
         sv.configstrings[index] = CopyString(val);
         return;
     }
 
-    // don't bother broadcasting an update if no change
     if (!strcmp(val, sv.configstrings[index])) {
         return;
     }
 
-    // change the string in sv
     Z_Free(sv.configstrings[index]);
     sv.configstrings[index] = CopyString(val);
 
-    // send it to all the clients if we aren't
-    // spawning a new server
     if (sv.state == SS_GAME || sv.restarting) {
-        // send the data to all relevant clients
         for (i = 0, client = svs.clients; i < sv_maxclients->integer; i++, client++) {
             if (client->state < CS_PRIMED) {
                 continue;
             }
-            // do not always send server info to all clients
             if (index == CS_SERVERINFO && client->gentity && (client->gentity->r.svFlags & SVF_NOSERVERINFO)) {
                 continue;
             }
 
-            // [QL] PRIMED clients got all configstrings in the gamestate;
-            // just mark the index so SV_UpdateConfigstrings resends only
-            // the ones that actually changed during the PRIMED window.
             if (client->state == CS_PRIMED) {
                 client->csUpdated[index] = qtrue;
                 continue;
@@ -159,12 +118,6 @@ void SV_SetConfigstring(int index, const char* val) {
     }
 }
 
-/*
-===============
-SV_GetConfigstring
-
-===============
-*/
 void SV_GetConfigstring(int index, char* buffer, int bufferSize) {
     if (bufferSize < 1) {
         Com_Error(ERR_DROP, "SV_GetConfigstring: bufferSize == %i", bufferSize);
@@ -180,12 +133,6 @@ void SV_GetConfigstring(int index, char* buffer, int bufferSize) {
     Q_strncpyz(buffer, sv.configstrings[index], bufferSize);
 }
 
-/*
-===============
-SV_SetUserinfo
-
-===============
-*/
 void SV_SetUserinfo(int index, const char* val) {
     if (index < 0 || index >= sv_maxclients->integer) {
         Com_Error(ERR_DROP, "SV_SetUserinfo: bad index %i", index);
@@ -199,12 +146,6 @@ void SV_SetUserinfo(int index, const char* val) {
     Q_strncpyz(svs.clients[index].name, Info_ValueForKey(val, "name"), sizeof(svs.clients[index].name));
 }
 
-/*
-===============
-SV_GetUserinfo
-
-===============
-*/
 void SV_GetUserinfo(int index, char* buffer, int bufferSize) {
     if (bufferSize < 1) {
         Com_Error(ERR_DROP, "SV_GetUserinfo: bufferSize == %i", bufferSize);
@@ -215,15 +156,6 @@ void SV_GetUserinfo(int index, char* buffer, int bufferSize) {
     Q_strncpyz(buffer, svs.clients[index].userinfo, bufferSize);
 }
 
-/*
-================
-SV_CreateBaseline
-
-Entity baselines are used to compress non-delta messages
-to the clients -- only the fields that differ from the
-baseline will be transmitted
-================
-*/
 static void SV_CreateBaseline(void) {
     sharedEntity_t* svent;
     int entnum;
@@ -235,21 +167,11 @@ static void SV_CreateBaseline(void) {
         }
         svent->s.number = entnum;
 
-        //
-        // take current state as baseline
-        //
         sv.svEntities[entnum].baseline = svent->s;
     }
 }
 
-/*
-===============
-SV_BoundMaxClients
-
-===============
-*/
 static void SV_BoundMaxClients(int minimum) {
-    // get the current maxclients value
     Cvar_Get("sv_maxclients", "8", 0);
 
     sv_maxclients->modified = qfalse;
@@ -261,16 +183,6 @@ static void SV_BoundMaxClients(int minimum) {
     }
 }
 
-/*
-===============
-SV_Startup
-
-Called when a host starts a map when it wasn't running
-one before.  Successive map or map_restart commands will
-NOT cause this to be called, unless the game is exited to
-the menu system first.
-===============
-*/
 static void SV_Startup(void) {
     if (svs.initialized) {
         Com_Error(ERR_FATAL, "SV_Startup: svs.initialized");
@@ -281,34 +193,25 @@ static void SV_Startup(void) {
     if (com_dedicated->integer) {
         svs.numSnapshotEntities = sv_maxclients->integer * PACKET_BACKUP * MAX_SNAPSHOT_ENTITIES;
     } else {
-        // we don't need nearly as many when playing locally
         svs.numSnapshotEntities = sv_maxclients->integer * 4 * MAX_SNAPSHOT_ENTITIES;
     }
     svs.initialized = qtrue;
 
-    // Don't respect sv_killserver unless a server is actually running
     if (sv_killserver->integer) {
         Cvar_Set("sv_killserver", "0");
     }
 
     Cvar_Set("sv_running", "1");
 
-    // Join the ipv6 multicast group now that a map is running so clients can scan for us on the local network.
     NET_JoinMulticast6();
 }
 
-/*
-==================
-SV_ChangeMaxClients
-==================
-*/
 void SV_ChangeMaxClients(void) {
     int oldMaxClients;
     int i;
     client_t* oldClients;
     int count;
 
-    // get the highest client number in use
     count = 0;
     for (i = 0; i < sv_maxclients->integer; i++) {
         if (svs.clients[i].state >= CS_CONNECTED) {
@@ -319,15 +222,12 @@ void SV_ChangeMaxClients(void) {
     count++;
 
     oldMaxClients = sv_maxclients->integer;
-    // never go below the highest client number in use
     SV_BoundMaxClients(count);
-    // if still the same
     if (sv_maxclients->integer == oldMaxClients) {
         return;
     }
 
     oldClients = Hunk_AllocateTempMemory(count * sizeof(client_t));
-    // copy the clients to hunk memory
     for (i = 0; i < count; i++) {
         if (svs.clients[i].state >= CS_CONNECTED) {
             oldClients[i] = svs.clients[i];
@@ -336,41 +236,28 @@ void SV_ChangeMaxClients(void) {
         }
     }
 
-    // free old clients arrays
     Z_Free(svs.clients);
 
-    // allocate new clients
     svs.clients = Z_Malloc(sv_maxclients->integer * sizeof(client_t));
     Com_Memset(svs.clients, 0, sv_maxclients->integer * sizeof(client_t));
 
-    // copy the clients over
     for (i = 0; i < count; i++) {
         if (oldClients[i].state >= CS_CONNECTED) {
             svs.clients[i] = oldClients[i];
         }
     }
 
-    // free the old clients on the hunk
     Hunk_FreeTempMemory(oldClients);
 
-    // allocate new snapshot entities
     if (com_dedicated->integer) {
         svs.numSnapshotEntities = sv_maxclients->integer * PACKET_BACKUP * MAX_SNAPSHOT_ENTITIES;
     } else {
-        // we don't need nearly as many when playing locally
         svs.numSnapshotEntities = sv_maxclients->integer * 4 * MAX_SNAPSHOT_ENTITIES;
     }
 
-    // [ioquakelive] retail tells Steam right here (0x004e339e), after clamping
-    // sv_maxclients a 64
     Steam_GS_SetMaxPlayers(sv_maxclients->integer);
 }
 
-/*
-================
-SV_ClearServer
-================
-*/
 static void SV_ClearServer(void) {
     int i;
 
@@ -382,15 +269,6 @@ static void SV_ClearServer(void) {
     Com_Memset(&sv, 0, sizeof(sv));
 }
 
-/*
-================
-SV_SpawnServer
-
-Change the server to a new map, taking all connected
-clients along with it.
-This is NOT called for map_restart
-================
-*/
 void SV_SpawnServer(char* server, qboolean killBots) {
     int i;
     int checksum;
@@ -398,100 +276,72 @@ void SV_SpawnServer(char* server, qboolean killBots) {
     char systemInfo[16384];
     const char* p;
 
-    // shut down the existing game if it is running
     SV_ShutdownGameProgs();
 
     Com_Printf("------ Server Initialization ------\n");
     Com_Printf("Server: %s\n", server);
 
-    // if not running a dedicated server CL_MapLoading will connect the client to the server
-    // also print some status stuff
     CL_MapLoading();
 
-    // make sure all the client stuff is unloaded
     CL_ShutdownAll(qfalse);
 
-    // clear the whole hunk because we're (re)loading the server
     Hunk_Clear();
 
-    // clear collision map data
     CM_ClearMap();
 
-    // init client structures and svs.numSnapshotEntities
     if (!Cvar_VariableValue("sv_running")) {
         SV_Startup();
     } else {
-        // check for maxclients change
         if (sv_maxclients->modified) {
             SV_ChangeMaxClients();
         }
     }
 
-    // clear pak references
     FS_ClearPakReferences(0);
 
-    // allocate the snapshot entities on the hunk
     svs.snapshotEntities = Hunk_Alloc(sizeof(entityState_t) * svs.numSnapshotEntities, h_high);
     svs.nextSnapshotEntities = 0;
 
-    // toggle the server bit so clients can detect that a
-    // server has changed
     svs.snapFlagServerBit ^= SNAPFLAG_SERVERCOUNT;
 
-    // set nextmap to the same map, but it may be overriden
-    // by the game startup or another console command
     Cvar_Set("nextmap", "map_restart 0");
-    //	Cvar_Set( "nextmap", va("map %s", server) );
 
     for (i = 0; i < sv_maxclients->integer; i++) {
-        // save when the server started for each client already connected
         if (svs.clients[i].state >= CS_CONNECTED) {
             svs.clients[i].oldServerTime = sv.time;
         }
     }
 
-    // wipe the entire per-level structure
     SV_ClearServer();
     for (i = 0; i < MAX_CONFIGSTRINGS; i++) {
         sv.configstrings[i] = CopyString("");
     }
 
-    // make sure we are not paused
     Cvar_Set("cl_paused", "0");
 
-    // get a new checksum feed and restart the file system
     sv.checksumFeed = (((unsigned int)rand() << 16) ^ (unsigned int)rand()) ^ Com_Milliseconds();
     FS_Restart(sv.checksumFeed);
 
     CM_LoadMap(va("maps/%s.bsp", server), qfalse, &checksum);
 
-    // set serverinfo visible name
     Cvar_Set("mapname", server);
 
     Cvar_Set("sv_mapChecksum", va("%i", checksum));
 
-    // serverid should be different each time
     sv.serverId = com_frameTime;
-    sv.restartedServerId = sv.serverId;  // I suppose the init here is just to be safe
+    sv.restartedServerId = sv.serverId;
     sv.checksumFeedServerId = sv.serverId;
     Cvar_Set("sv_serverid", va("%i", sv.serverId));
 
-    // clear physics interaction links
     SV_ClearWorld();
 
-    // media configstring setting should be done during
-    // the loading stage, so connected clients don't have
-    // to load during actual gameplay
     sv.state = SS_LOADING;
 
-    // load and spawn all other entities
     SV_InitGameProgs();
 
-    // don't allow a map_restart if game is modified
     sv_ammoPack->modified = qfalse;
     sv_gametype->modified = qfalse;
 
-    // run a few frames to allow everything to settle
     for (i = 0; i < 3; i++) {
         SV_GameRunFrame(sv.time);
         SV_BotFrame(sv.time);
@@ -499,11 +349,9 @@ void SV_SpawnServer(char* server, qboolean killBots) {
         svs.time += 100;
     }
 
-    // create a baseline for more efficient communications
     SV_CreateBaseline();
 
     for (i = 0; i < sv_maxclients->integer; i++) {
-        // send the new gamestate to all connected clients
         if (svs.clients[i].state >= CS_CONNECTED) {
             char* denied;
 
@@ -517,16 +365,11 @@ void SV_SpawnServer(char* server, qboolean killBots) {
                 isBot = qfalse;
             }
 
-            // connect the client again
-            denied = SV_GameClientConnect(i, qfalse, isBot);  // firstTime = qfalse
+            denied = SV_GameClientConnect(i, qfalse, isBot);
             if (denied) {
-                // this generally shouldn't happen, because the client
-                // was connected before the level change
                 SV_DropClient(&svs.clients[i], denied);
             } else {
                 if (!isBot) {
-                    // when we get the next packet from a connected client,
-                    // the new gamestate will be sent
                     svs.clients[i].state = CS_CONNECTED;
                 } else {
                     client_t* client;
@@ -539,23 +382,19 @@ void SV_SpawnServer(char* server, qboolean killBots) {
                     client->gentity = ent;
 
                     client->deltaMessage = -1;
-                    client->nextSnapshotTime = 0;  // generate a snapshot immediately
-                    // [QL] 0x4e386d: a bot is begun at once
+                    client->nextSnapshotTime = 0;
                     SV_GameClientBegin(i);
                 }
             }
         }
     }
 
-    // run another frame to allow things to look at all the players
     SV_GameRunFrame(sv.time);
     SV_BotFrame(sv.time);
     sv.time += 100;
     svs.time += 100;
 
     if (sv_pure->integer) {
-        // the server sends these to the clients so they will only
-        // load pk3s also loaded at the server
         p = FS_LoadedPakChecksums();
         Cvar_Set("sv_paks", p);
         if (strlen(p) == 0) {
@@ -567,14 +406,11 @@ void SV_SpawnServer(char* server, qboolean killBots) {
         Cvar_Set("sv_paks", "");
         Cvar_Set("sv_pakNames", "");
     }
-    // the server sends these to the clients so they can figure
-    // out which pk3s should be auto-downloaded
     p = FS_ReferencedPakChecksums();
     Cvar_Set("sv_referencedPaks", p);
     p = FS_ReferencedPakNames();
     Cvar_Set("sv_referencedPakNames", p);
 
-    // save systeminfo and serverinfo strings
     Q_strncpyz(systemInfo, Cvar_InfoString_Big(CVAR_SYSTEMINFO), sizeof(systemInfo));
     cvar_modifiedFlags &= ~CVAR_SYSTEMINFO;
     SV_SetConfigstring(CS_SYSTEMINFO, systemInfo);
@@ -582,33 +418,23 @@ void SV_SpawnServer(char* server, qboolean killBots) {
     SV_SetConfigstring(CS_SERVERINFO, Cvar_InfoString(CVAR_SERVERINFO));
     cvar_modifiedFlags &= ~CVAR_SERVERINFO;
 
-    // [ioquakelive] the stats socket (0x004f4210) goes on the server's port, which is only
-    // settled here; the first call opens it, later ones do nothing
     ZMQ_StatsInit();
 
     SV_SteamIdentity();
 
-    // [QL] qzeroded.x64 0x43d01a: what Steam's list shows about this server, its rules first
     Steam_GS_SetKeyValues(Cvar_InfoString(CVAR_SERVERINFO));
     SV_SteamFrame(qtrue);
 
-    // any media configstring setting now should issue a warning
-    // and any configstring changes should be reliably transmitted
-    // to all clients
     sv.state = SS_GAME;
 
     Hunk_SetMark();
 
 #ifndef DEDICATED
     if (com_dedicated->integer) {
-        // restart renderer in order to show console for dedicated servers
-        // launched through the regular binary
         CL_StartHunkUsers(qtrue);
     }
 #endif
 
-    // [QL] the next map from the pool, and the maps the end of the match offers
-    // (quakelive_steam.exe SV_SpawnServer 0x4e3a82)
     SV_SetNextMap();
     SV_SetNextMaps();
 
@@ -616,15 +442,6 @@ void SV_SpawnServer(char* server, qboolean killBots) {
 }
 
 #ifdef DEDICATED
-/*
-================
-SV_WorkshopInit
-
-[QL] qzeroded.x64 0x44eac0, before the server starts: once logged on to Steam it queues the
-items of sv_workshopFile, one id per line and '#' for a comment, and waits for them saying
-every second how it goes. A filesystem restart mounts them at the end.
-================
-*/
 void SV_WorkshopInit(void) {
     unsigned long long item;
     uint64_t done, total;
@@ -634,7 +451,6 @@ void SV_WorkshopInit(void) {
     char* line;
     int next, now, len;
 
-    // [ioquakelive] without Steam's server side there is nothing to wait for: retail waits forever
     if (!Steam_GS_Running()) {
         return;
     }
@@ -692,21 +508,11 @@ void SV_WorkshopInit(void) {
 }
 #endif
 
-/*
-===============
-SV_Init
-
-Only called at main exe startup, not for each game
-===============
-*/
 void SV_Init(void) {
     SV_AddOperatorCommands();
 
-    // serverinfo vars
     Cvar_Get("dmflags", "0", CVAR_SERVERINFO);
 
-    // [QL] the arenas, the factories and the map pool load here, before the
-    // rest of the server cvars (quakelive_steam.exe SV_Init 0x4e3ad0)
     SV_LoadArenas();
     SV_LoadFactories();
     sv_mapPoolFile = Cvar_Get("sv_mapPoolFile", "mappool.txt", CVAR_ARCHIVE);
@@ -715,9 +521,7 @@ void SV_Init(void) {
 
     Cvar_Get("fraglimit", "20", CVAR_SERVERINFO);
     Cvar_Get("timelimit", "0", CVAR_SERVERINFO);
-    // [QL] read only: the gametype comes from the factory the map command applies
     sv_gametype = Cvar_Get("g_gametype", "0", CVAR_SERVERINFO | CVAR_ROM);
-    // [QL] registered by the engine with "1", latched, before the game adds its "0"
     sv_ammoPack = Cvar_Get("g_ammoPack", "1", CVAR_LATCH);
     Cvar_Get("sv_keywords", "", CVAR_SERVERINFO);
     sv_mapname = Cvar_Get("mapname", "nomap", CVAR_SERVERINFO | CVAR_ROM);
@@ -725,33 +529,26 @@ void SV_Init(void) {
     sv_hostname = Cvar_Get("sv_hostname", "noname", CVAR_SERVERINFO | CVAR_ARCHIVE);
     sv_maxclients = Cvar_Get("sv_maxclients", "8", CVAR_SERVERINFO | CVAR_LATCH);
 
-    // [ioquakelive] ioquake3's, which retail does not have: they stay, off, but out of the
-    // serverinfo, so what a server shows is what a retail one shows
     sv_minRate = Cvar_Get("sv_minRate", "0", CVAR_ARCHIVE);
     sv_maxRate = Cvar_Get("sv_maxRate", "0", CVAR_ARCHIVE);
     sv_dlRate = Cvar_Get("sv_dlRate", "100", CVAR_ARCHIVE);
     sv_minPing = Cvar_Get("sv_minPing", "0", CVAR_ARCHIVE);
     sv_maxPing = Cvar_Get("sv_maxPing", "0", CVAR_ARCHIVE);
-    sv_serverType = Cvar_Get("sv_serverType", "0", CVAR_ARCHIVE);  // [QL] 1 = LAN-only
-    sv_floodProtect = Cvar_Get("sv_floodProtect", "10", CVAR_ARCHIVE);  // [QL] 0x004e3c3a
+    sv_serverType = Cvar_Get("sv_serverType", "0", CVAR_ARCHIVE);
+    sv_floodProtect = Cvar_Get("sv_floodProtect", "10", CVAR_ARCHIVE);
 
-    // [QL] the engine server cvars that were missing. The engine has no cvar table -- it
-    // registers them one by one -- so these never turned up in any measurement.
-    sv_master = Cvar_Get("sv_master", "1", CVAR_ARCHIVE);              // [QL] 0x004e3b80
-    sv_idleExit = Cvar_Get("sv_idleExit", "120", CVAR_ARCHIVE);        // [QL] 0x004e3e09
-    sv_errorExit = Cvar_Get("sv_errorExit", "1", 0);                   // [QL] 0x004e3e1f
+    sv_master = Cvar_Get("sv_master", "1", CVAR_ARCHIVE);
+    sv_idleExit = Cvar_Get("sv_idleExit", "120", CVAR_ARCHIVE);
+    sv_errorExit = Cvar_Get("sv_errorExit", "1", 0);
 #ifdef DEDICATED
-    sv_workshopFile = Cvar_Get("sv_workshopFile", "workshop.txt", CVAR_ARCHIVE);  // [QL] 0x44eb1c
+    sv_workshopFile = Cvar_Get("sv_workshopFile", "workshop.txt", CVAR_ARCHIVE);
 #endif
-    sv_quitOnEmpty = Cvar_Get("sv_quitOnEmpty", "0", CVAR_ARCHIVE);  // [QL] 0x004e3e3a
-    sv_fullRedirect = Cvar_Get("sv_fullRedirect", "", CVAR_ARCHIVE);  // [ioquakelive]
+    sv_quitOnEmpty = Cvar_Get("sv_quitOnEmpty", "0", CVAR_ARCHIVE);
+    sv_fullRedirect = Cvar_Get("sv_fullRedirect", "", CVAR_ARCHIVE);
 
-    // [QL] the two the server publishes about itself: the Workshop items the match uses and
-    // the identifier the service gives it. Retail registers both read only.
     Cvar_Get("sv_referencedSteamworks", "", CVAR_ROM);
     Cvar_Get("sv_gtid", "", CVAR_SERVERINFO | CVAR_ROM);
 
-    // systeminfo
     Cvar_Get("sv_cheats", "1", CVAR_SYSTEMINFO | CVAR_ROM);
     sv_serverid = Cvar_Get("sv_serverid", "0", CVAR_SYSTEMINFO | CVAR_ROM);
     sv_pure = Cvar_Get("sv_pure", "1", CVAR_SYSTEMINFO);
@@ -761,10 +558,8 @@ void SV_Init(void) {
     Cvar_Get("sv_referencedPaks", "", CVAR_SYSTEMINFO | CVAR_ROM);
     Cvar_Get("sv_referencedPakNames", "", CVAR_SYSTEMINFO | CVAR_ROM);
 
-    // server vars
     sv_rconPassword = Cvar_Get("rconPassword", "", CVAR_TEMP);
     sv_privatePassword = Cvar_Get("sv_privatePassword", "", CVAR_TEMP);
-    // [QL] quakelive_steam.exe 0x4e3d00: read only, 40
     sv_fps = Cvar_Get("sv_fps", "40", CVAR_ROM);
     sv_timeout = Cvar_Get("sv_timeout", "40", CVAR_TEMP);
     sv_zombietime = Cvar_Get("sv_zombietime", "2", CVAR_TEMP);
@@ -780,42 +575,26 @@ void SV_Init(void) {
     sv_mapChecksum = Cvar_Get("sv_mapChecksum", "", CVAR_ROM);
     sv_lanForceRate = Cvar_Get("sv_lanForceRate", "1", CVAR_ARCHIVE);
     sv_banFile = Cvar_Get("sv_banFile", "serverbans.dat", CVAR_ARCHIVE);
-    // [QL] SV_Init registers them together, with "" and "0"
     sv_altEntDir = Cvar_Get("sv_altEntDir", "", 0);
     sv_dumpEntities = Cvar_Get("sv_dumpEntities", "0", 0);
 
-    // initialize bot cvars so they are listed and can be set before loading the botlib
     SV_BotInitCvars();
 
-    // init the botlib here because we need the pre-compiler in the UI
     SV_BotInitBotLib();
 
 }
 
-/*
-==================
-SV_FinalMessage
-
-Used by SV_Shutdown to send a final message to all
-connected clients before the server goes down.  The messages are sent immediately,
-not just stuck on the outgoing message list, because the server is going
-to totally exit after returning from this function.
-==================
-*/
 void SV_FinalMessage(char* message) {
     int i, j;
     client_t* cl;
 
-    // send it twice, ignoring rate
     for (j = 0; j < 2; j++) {
         for (i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++) {
             if (cl->state >= CS_CONNECTED) {
-                // don't send a disconnect to a local client
                 if (cl->netchan.remoteAddress.type != NA_LOOPBACK) {
                     SV_SendServerCommand(cl, "print \"%s\n\"\n", message);
                     SV_SendServerCommand(cl, "disconnect \"%s\"", message);
                 }
-                // force a snapshot to be sent
                 cl->nextSnapshotTime = 0;
                 SV_SendClientSnapshot(cl);
             }
@@ -823,14 +602,6 @@ void SV_FinalMessage(char* message) {
     }
 }
 
-/*
-================
-SV_Shutdown
-
-Called when each game quits,
-before Sys_Quit or Sys_Error
-================
-*/
 void SV_Shutdown(char* finalmsg) {
     if (!com_sv_running || !com_sv_running->integer) {
         return;
@@ -847,10 +618,8 @@ void SV_Shutdown(char* finalmsg) {
     SV_RemoveOperatorCommands();
     SV_ShutdownGameProgs();
 
-    // free current level
     SV_ClearServer();
 
-    // free server static data
     if (svs.clients) {
         int index;
 
@@ -860,8 +629,6 @@ void SV_Shutdown(char* finalmsg) {
         Z_Free(svs.clients);
     }
 
-    // [QL] put back what the factory in play changed; svs forgets the factory
-    // below (quakelive_steam.exe SV_Shutdown 0x4e3fc1)
     if (svs.factory) {
         SV_RestoreFactoryCvars(svs.factory);
     }
@@ -872,7 +639,6 @@ void SV_Shutdown(char* finalmsg) {
 
     Com_Printf("---------------------------\n");
 
-    // disconnect any local clients
     if (sv_killserver->integer != 2)
         CL_Disconnect(qfalse);
 }

@@ -19,80 +19,57 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// bg_misc.c -- both games misc functions, all completely stateless
-
 #include "../qcommon/q_shared.h"
 #include "bg_public.h"
 
-// [QL] gametype short names for entity filtering (indexed by gametype_t)
 const char *gametypeShortNames[] = {
-	"ffa",       // GT_FFA
-	"duel",      // GT_DUEL
-	"race",      // GT_RACE
-	"tdm",       // GT_TEAM
-	"ca",        // GT_CA
-	"ctf",       // GT_CTF
-	"1f",        // GT_1FCTF
-	"ob",        // GT_OBELISK
-	"har",       // GT_HARVESTER
-	"ft",        // GT_FREEZE
-	"dom",       // GT_DOMINATION
-	"ad",        // GT_AD
-	"rr"         // GT_RR
+	"ffa",
+	"duel",
+	"race",
+	"tdm",
+	"ca",
+	"ctf",
+	"1f",
+	"ob",
+	"har",
+	"ft",
+	"dom",
+	"ad",
+	"rr"
 };
 
-// [QL] gametype display names (indexed by gametype_t)
 const char *gametypeDisplayNames[] = {
-	"Free For All",       // GT_FFA
-	"Duel",               // GT_DUEL
-	"Race",               // GT_RACE
-	"Team Deathmatch",    // GT_TEAM
-	"Clan Arena",         // GT_CA
-	"Capture the Flag",   // GT_CTF
-	"One Flag CTF",       // GT_1FCTF
-	"Overload",           // GT_OBELISK
-	"Harvester",          // GT_HARVESTER
-	"Freeze Tag",         // GT_FREEZE
-	"Domination",         // GT_DOMINATION
-	"Attack and Defend",  // GT_AD
-	"Red Rover"           // GT_RR
+	"Free For All",
+	"Duel",
+	"Race",
+	"Team Deathmatch",
+	"Clan Arena",
+	"Capture the Flag",
+	"One Flag CTF",
+	"Overload",
+	"Harvester",
+	"Freeze Tag",
+	"Domination",
+	"Attack and Defend",
+	"Red Rover"
 };
 
-/*QUAKED item_***** ( 0 0 0 ) (-16 -16 -16) (16 16 16) suspended
-DO NOT USE THIS CLASS, IT JUST HOLDS GENERAL INFORMATION.
-The suspended flag will allow items to hang in the air, otherwise they are dropped to the next surface.
-
-If an item is the target of another entity, it will not spawn in until fired.
-
-An item fires all of its targets when it is picked up.  If the toucher can't carry it, the targets won't be fired.
-
-"notfree" if set to 1, don't spawn in free for all games
-"notteam" if set to 1, don't spawn in team games
-"notsingle" if set to 1, don't spawn in single player games
-"wait"	override the default wait before respawning.  -1 = never respawn automatically, which can be used with targeted spawning.
-"random" random number of plus or minus seconds varied from the respawn time
-"count" override quantity or duration on most items.
-*/
-
-// [QL] weapon reload times (fire intervals in ms), indexed by weapon_t
-// Defaults match QL's weapon_reload_* cvar defaults
 int bg_weaponReloadTime[WP_NUM_WEAPONS] = {
-    0,     // WP_NONE
-    400,   // WP_GAUNTLET (weapon_reload_gauntlet) - QL default 400, not 100
-    100,   // WP_MACHINEGUN (weapon_reload_mg)
-    1000,  // WP_SHOTGUN (weapon_reload_sg)
-    800,   // WP_GRENADE_LAUNCHER (weapon_reload_gl)
-    800,   // WP_ROCKET_LAUNCHER (weapon_reload_rl)
-    50,    // WP_LIGHTNING (weapon_reload_lg)
-    1500,  // WP_RAILGUN (weapon_reload_rg)
-    100,   // WP_PLASMAGUN (weapon_reload_pg)
-    300,   // WP_BFG (weapon_reload_bfg)
-    100,   // WP_GRAPPLING_HOOK (weapon_reload_gh)
-    1000,  // WP_NAILGUN (weapon_reload_ng)
-    800,   // WP_PROX_LAUNCHER (weapon_reload_prox)
-    50,    // WP_CHAINGUN (weapon_reload_cg)
-    75,    // WP_HMG (weapon_reload_hmg)
+    0,
+    400,
+    100,
+    1000,
+    800,
+    800,
+    50,
+    1500,
+    100,
+    300,
+    100,
+    1000,
+    800,
+    50,
+    75,
 };
 
 void BG_SetWeaponReload(int weapon, int reloadTime) {
@@ -108,971 +85,814 @@ gitem_t bg_itemlist[] =
          {NULL,
           NULL,
           NULL, NULL},
-         /* icon */ NULL,
-         /* pickup */ NULL,
+          NULL,
+          NULL,
          0,
          0,
          0,
-         /* precache */ "",
-         /* sounds */ ""},  // leave index 0 alone
+          "",
+          ""},
 
-        //
-        // ARMOR
-        //
-
-        /*QUAKED item_armor_shard (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "item_armor_shard",
             "sound/misc/ar1_pkup.wav",
             {"models/powerups/armor/shard.md3",
              "models/powerups/armor/shard_sphere.md3",
              NULL, NULL},
-            /* icon */ "icons/iconr_shard",
-            /* pickup */ "Armor Shard",
+             "icons/iconr_shard",
+             "Armor Shard",
             5,
             IT_ARMOR,
-            4,  // [QL] the armor and health tags are qagamex86.dll's (0x100809b0)
-            /* precache */ "",
-            /* sounds */ ""},
+            4,
+             "",
+             ""},
 
-        /*QUAKED item_armor_combat (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "item_armor_combat",
             "sound/misc/ar2_pkup.wav",
             {"models/powerups/armor/armor_yel.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconr_yellow",
-            /* pickup */ "Yellow Armor",
+             "icons/iconr_yellow",
+             "Yellow Armor",
             50,
             IT_ARMOR,
             2,
-            /* precache */ "",
-            /* sounds */ "",
-            /* itemTimer */ 1},
+             "",
+             "",
+             1},
 
-        /*QUAKED item_armor_body (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "item_armor_body",
             "sound/misc/ar2_pkup.wav",
             {"models/powerups/armor/armor_red.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconr_red",
-            /* pickup */ "Red Armor",
+             "icons/iconr_red",
+             "Red Armor",
             100,
             IT_ARMOR,
             1,
-            /* precache */ "",
-            /* sounds */ "",
-            /* itemTimer */ 1},
+             "",
+             "",
+             1},
 
-        // [QL] Green Armor (25 points) - bg_itemlist index 4
-        /*QUAKED item_armor_jacket (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "item_armor_jacket",
             "sound/misc/ar2_pkup.wav",
             {"models/powerups/armor/armor_grn.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconr_green",
-            /* pickup */ "Green Armor",
+             "icons/iconr_green",
+             "Green Armor",
             25,
             IT_ARMOR,
             3,
-            /* precache */ "",
-            /* sounds */ "",
-            /* itemTimer */ 1},
+             "",
+             "",
+             1},
 
-        //
-        // health
-        //
-        /*QUAKED item_health_small (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "item_health_small",
             "sound/items/s_health.wav",
             {"models/powerups/health/small_cross.md3",
              "models/powerups/health/small_sphere.md3",
              NULL, NULL},
-            /* icon */ "icons/iconh_green",
-            /* pickup */ "5 Health",
+             "icons/iconh_green",
+             "5 Health",
             5,
             IT_HEALTH,
             4,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED item_health (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "item_health",
             "sound/items/n_health.wav",
             {"models/powerups/health/medium_cross.md3",
              "models/powerups/health/medium_sphere.md3",
              NULL, NULL},
-            /* icon */ "icons/iconh_yellow",
-            /* pickup */ "25 Health",
+             "icons/iconh_yellow",
+             "25 Health",
             25,
             IT_HEALTH,
             3,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED item_health_large (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "item_health_large",
             "sound/items/l_health.wav",
             {"models/powerups/health/large_cross.md3",
              "models/powerups/health/large_sphere.md3",
              NULL, NULL},
-            /* icon */ "icons/iconh_red",
-            /* pickup */ "50 Health",
+             "icons/iconh_red",
+             "50 Health",
             50,
             IT_HEALTH,
             2,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED item_health_mega (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "item_health_mega",
             "sound/items/m_health.wav",
             {"models/powerups/health/mega_cross.md3",
              "models/powerups/health/mega_sphere.md3",
              NULL, NULL},
-            /* icon */ "icons/iconh_mega",
-            /* pickup */ "Mega Health",
+             "icons/iconh_mega",
+             "Mega Health",
             100,
             IT_HEALTH,
             1,
-            /* precache */ "",
-            /* sounds */ "",
-            /* itemTimer */ 1},
+             "",
+             "",
+             1},
 
-        //
-        // WEAPONS
-        //
-
-        /*QUAKED weapon_gauntlet (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "weapon_gauntlet",
             "sound/misc/w_pkup.wav",
             {"models/weapons2/gauntlet/gauntlet.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconw_gauntlet",
-            /* pickup */ "Gauntlet",
+             "icons/iconw_gauntlet",
+             "Gauntlet",
             0,
             IT_WEAPON,
             WP_GAUNTLET,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED weapon_shotgun (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "weapon_shotgun",
             "sound/misc/w_pkup.wav",
             {"models/weapons2/shotgun/shotgun.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconw_shotgun",
-            /* pickup */ "Shotgun",
+             "icons/iconw_shotgun",
+             "Shotgun",
             10,
             IT_WEAPON,
             WP_SHOTGUN,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED weapon_machinegun (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "weapon_machinegun",
             "sound/misc/w_pkup.wav",
             {"models/weapons2/machinegun/machinegun.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconw_machinegun",
-            /* pickup */ "Machine Gun",
+             "icons/iconw_machinegun",
+             "Machine Gun",
             100,
             IT_WEAPON,
             WP_MACHINEGUN,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED weapon_grenadelauncher (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "weapon_grenadelauncher",
             "sound/misc/w_pkup.wav",
             {"models/weapons2/grenadel/grenadel.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconw_grenade",
-            /* pickup */ "Grenade Launcher",
+             "icons/iconw_grenade",
+             "Grenade Launcher",
             10,
             IT_WEAPON,
             WP_GRENADE_LAUNCHER,
-            /* precache */ "",
-            /* sounds */ "sound/weapons/grenade/hgrenb1a.wav sound/weapons/grenade/hgrenb2a.wav"},
+             "",
+             "sound/weapons/grenade/hgrenb1a.wav sound/weapons/grenade/hgrenb2a.wav"},
 
-        /*QUAKED weapon_rocketlauncher (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "weapon_rocketlauncher",
             "sound/misc/w_pkup.wav",
             {"models/weapons2/rocketl/rocketl.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconw_rocket",
-            /* pickup */ "Rocket Launcher",
+             "icons/iconw_rocket",
+             "Rocket Launcher",
             10,
             IT_WEAPON,
             WP_ROCKET_LAUNCHER,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED weapon_lightning (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "weapon_lightning",
             "sound/misc/w_pkup.wav",
             {"models/weapons2/lightning/lightning.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconw_lightning",
-            /* pickup */ "Lightning Gun",
+             "icons/iconw_lightning",
+             "Lightning Gun",
             100,
             IT_WEAPON,
             WP_LIGHTNING,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED weapon_railgun (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "weapon_railgun",
             "sound/misc/w_pkup.wav",
             {"models/weapons2/railgun/railgun.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconw_railgun",
-            /* pickup */ "Railgun",
+             "icons/iconw_railgun",
+             "Railgun",
             10,
             IT_WEAPON,
             WP_RAILGUN,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED weapon_plasmagun (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "weapon_plasmagun",
             "sound/misc/w_pkup.wav",
             {"models/weapons2/plasma/plasma.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconw_plasma",
-            /* pickup */ "Plasma Gun",
+             "icons/iconw_plasma",
+             "Plasma Gun",
             50,
             IT_WEAPON,
             WP_PLASMAGUN,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED weapon_bfg (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "weapon_bfg",
             "sound/misc/w_pkup.wav",
             {"models/weapons2/bfg/bfg.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconw_bfg",
-            /* pickup */ "BFG10K",
+             "icons/iconw_bfg",
+             "BFG10K",
             10,
             IT_WEAPON,
             WP_BFG,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED weapon_grapplinghook (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "weapon_grapplinghook",
             "sound/misc/w_pkup.wav",
             {"models/weapons2/grapple/grapple.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconw_grapple",
-            /* pickup */ "Grappling Hook",
+             "icons/iconw_grapple",
+             "Grappling Hook",
             0,
             IT_WEAPON,
             WP_GRAPPLING_HOOK,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        //
-        // AMMO ITEMS
-        //
-
-        /*QUAKED ammo_shells (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "ammo_shells",
             "sound/misc/am_pkup.wav",
             {"models/powerups/ammo/shotgunam.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/icona_shotgun",
-            /* pickup */ "Shells",
+             "icons/icona_shotgun",
+             "Shells",
             5,
             IT_AMMO,
             WP_SHOTGUN,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED ammo_bullets (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "ammo_bullets",
             "sound/misc/am_pkup.wav",
             {"models/powerups/ammo/machinegunam.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/icona_machinegun",
-            /* pickup */ "Bullets",
+             "icons/icona_machinegun",
+             "Bullets",
             50,
             IT_AMMO,
             WP_MACHINEGUN,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED ammo_grenades (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "ammo_grenades",
             "sound/misc/am_pkup.wav",
             {"models/powerups/ammo/grenadeam.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/icona_grenade",
-            /* pickup */ "Grenades",
+             "icons/icona_grenade",
+             "Grenades",
             5,
             IT_AMMO,
             WP_GRENADE_LAUNCHER,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED ammo_cells (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "ammo_cells",
             "sound/misc/am_pkup.wav",
             {"models/powerups/ammo/plasmaam.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/icona_plasma",
-            /* pickup */ "Cells",
+             "icons/icona_plasma",
+             "Cells",
             50,
             IT_AMMO,
             WP_PLASMAGUN,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED ammo_lightning (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "ammo_lightning",
             "sound/misc/am_pkup.wav",
             {"models/powerups/ammo/lightningam.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/icona_lightning",
-            /* pickup */ "Lightning",
+             "icons/icona_lightning",
+             "Lightning",
             50,
             IT_AMMO,
             WP_LIGHTNING,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED ammo_rockets (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "ammo_rockets",
             "sound/misc/am_pkup.wav",
             {"models/powerups/ammo/rocketam.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/icona_rocket",
-            /* pickup */ "Rockets",
+             "icons/icona_rocket",
+             "Rockets",
             5,
             IT_AMMO,
             WP_ROCKET_LAUNCHER,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED ammo_slugs (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "ammo_slugs",
             "sound/misc/am_pkup.wav",
             {"models/powerups/ammo/railgunam.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/icona_railgun",
-            /* pickup */ "Slugs",
+             "icons/icona_railgun",
+             "Slugs",
             5,
             IT_AMMO,
             WP_RAILGUN,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED ammo_bfg (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "ammo_bfg",
             "sound/misc/am_pkup.wav",
             {"models/powerups/ammo/bfgam.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/icona_bfg",
-            /* pickup */ "BFG Ammo",
+             "icons/icona_bfg",
+             "BFG Ammo",
             5,
             IT_AMMO,
             WP_BFG,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        //
-        // HOLDABLE ITEMS
-        //
-        /*QUAKED holdable_teleporter (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "holdable_teleporter",
             "sound/items/holdable.wav",
             {"models/powerups/holdable/teleporter.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/teleporter",
-            /* pickup */ "Personal Teleporter",
+             "icons/teleporter",
+             "Personal Teleporter",
             60,
             IT_HOLDABLE,
             HI_TELEPORTER,
-            /* precache */ "",
-            /* sounds */ ""},
-        /*QUAKED holdable_medkit (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
+             "",
+             ""},
         {
             "holdable_medkit",
             "sound/items/holdable.wav",
             {"models/powerups/holdable/medkit.md3",
              "models/powerups/holdable/medkit_sphere.md3",
              NULL, NULL},
-            /* icon */ "icons/medkit",
-            /* pickup */ "Medkit",
+             "icons/medkit",
+             "Medkit",
             60,
             IT_HOLDABLE,
             HI_MEDKIT,
-            /* precache */ "",
-            /* sounds */ "sound/items/use_medkit.wav",
-            /* itemTimer */ 1},  // [QL] the medkit and the five powerups have timers (0x100809b0)
+             "",
+             "sound/items/use_medkit.wav",
+             1},
 
-        //
-        // POWERUP ITEMS
-        //
-        /*QUAKED item_quad (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "item_quad",
-            "sound/items/damage3.ogg",  // [QL] renamed from quaddamage.wav
+            "sound/items/damage3.ogg",
             {"models/powerups/instant/quad.md3",
              "models/powerups/instant/quad_ring.md3",
              NULL, NULL},
-            /* icon */ "icons/quad",
-            /* pickup */ "Quad Damage",
+             "icons/quad",
+             "Quad Damage",
             30,
             IT_POWERUP,
             PW_QUAD,
-            /* precache */ "",
-            /* sounds */ "sound/items/damage3.ogg",  // [QL] damage2.wav removed
-            /* itemTimer */ 1},
+             "",
+             "sound/items/damage3.ogg",
+             1},
 
-        /*QUAKED item_enviro (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "item_enviro",
             "sound/items/protect.wav",
             {"models/powerups/instant/enviro.md3",
              "models/powerups/instant/enviro_ring.md3",
              NULL, NULL},
-            /* icon */ "icons/envirosuit",
-            /* pickup */ "Battle Suit",
+             "icons/envirosuit",
+             "Battle Suit",
             30,
             IT_POWERUP,
             PW_BATTLESUIT,
-            /* precache */ "",
-            /* sounds */ "sound/items/protect3.ogg",  // [QL] airout.wav removed
-            /* itemTimer */ 1},
+             "",
+             "sound/items/protect3.ogg",
+             1},
 
-        /*QUAKED item_haste (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "item_haste",
-            "sound/items/guard.wav",  // [QL] uses guard sound for haste pickup
+            "sound/items/guard.wav",
             {"models/powerups/instant/haste.md3",
              "models/powerups/instant/haste_ring.md3",
              NULL, NULL},
-            /* icon */ "icons/haste",
-            /* pickup */ "Haste",
+             "icons/haste",
+             "Haste",
             30,
             IT_POWERUP,
             PW_HASTE,
-            /* precache */ "",
-            /* sounds */ "",
-            /* itemTimer */ 1},
+             "",
+             "",
+             1},
 
-        /*QUAKED item_invis (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "item_invis",
-            "sound/items/holdable.wav",  // [QL] uses generic holdable sound
+            "sound/items/holdable.wav",
             {"models/powerups/instant/invis.md3",
              "models/powerups/instant/invis_ring.md3",
              NULL, NULL},
-            /* icon */ "icons/invis",
-            /* pickup */ "Invisibility",
+             "icons/invis",
+             "Invisibility",
             30,
             IT_POWERUP,
             PW_INVIS,
-            /* precache */ "",
-            /* sounds */ "",
-            /* itemTimer */ 1},
+             "",
+             "",
+             1},
 
-        /*QUAKED item_regen (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "item_regen",
-            "sound/items/holdable.wav",  // [QL] uses generic holdable sound
+            "sound/items/holdable.wav",
             {"models/powerups/instant/regen.md3",
              "models/powerups/instant/regen_ring.md3",
              NULL, NULL},
-            /* icon */ "icons/regen",
-            /* pickup */ "Regeneration",
+             "icons/regen",
+             "Regeneration",
             30,
             IT_POWERUP,
             PW_REGEN,
-            /* precache */ "",
-            /* sounds */ "sound/items/regen.wav",
-            /* itemTimer */ 1},
+             "",
+             "sound/items/regen.wav",
+             1},
 
-        /*QUAKED item_flight (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "item_flight",
             "sound/items/flight.wav",
             {"models/powerups/instant/flight.md3",
              "models/powerups/instant/flight_ring.md3",
              NULL, NULL},
-            /* icon */ "icons/flight",
-            /* pickup */ "Flight",
+             "icons/flight",
+             "Flight",
             60,
-            IT_HOLDABLE,  // [QL] a holdable with fuel, not a timed powerup
+            IT_HOLDABLE,
             HI_FLIGHT,
-            /* precache */ "",
-            /* sounds */ "sound/items/flight.wav"},
+             "",
+             "sound/items/flight.wav"},
 
-        /*QUAKED team_CTF_redflag (1 0 0) (-16 -16 -16) (16 16 16)
-        Only in CTF games
-        */
         {
             "team_CTF_redflag",
             NULL,
             {"models/flags/r_flag.md3",
-             "models/flag3/r_flag3.md3",  // [QL] segundo modelo de la tabla de retail
+             "models/flag3/r_flag3.md3",
              NULL, NULL},
-            /* icon */ "gfx/2d/flag_status/red_flag_at_base",  // [QL] cgamex86.dll 0x10067c60
-            /* pickup */ "Red Flag",
+             "gfx/2d/flag_status/red_flag_at_base",
+             "Red Flag",
             0,
             IT_TEAM,
             PW_REDFLAG,
-            /* precache */ "",
-            /* sounds */ "",
-            /* itemTimer */ 0,
-            /* validGametypes */ (1 << GT_AD)},
+             "",
+             "",
+             0,
+             (1 << GT_AD)},
 
-        /*QUAKED team_CTF_blueflag (0 0 1) (-16 -16 -16) (16 16 16)
-        Only in CTF games
-        */
         {
             "team_CTF_blueflag",
             NULL,
             {"models/flags/b_flag.md3",
-             "models/flag3/b_flag3.md3",  // [QL] segundo modelo de la tabla de retail
+             "models/flag3/b_flag3.md3",
              NULL, NULL},
-            /* icon */ "gfx/2d/flag_status/blue_flag_at_base",  // [QL] cgamex86.dll 0x10067ca8
-            /* pickup */ "Blue Flag",
+             "gfx/2d/flag_status/blue_flag_at_base",
+             "Blue Flag",
             0,
             IT_TEAM,
             PW_BLUEFLAG,
-            /* precache */ "",
-            /* sounds */ "",
-            /* itemTimer */ 0,
-            /* validGametypes */ (1 << GT_AD)},
+             "",
+             "",
+             0,
+             (1 << GT_AD)},
 
-        /*QUAKED holdable_kamikaze (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "holdable_kamikaze",
             "sound/items/holdable.wav",
             {"models/powerups/kamikazi.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/kamikaze",
-            /* pickup */ "Kamikaze",
+             "icons/kamikaze",
+             "Kamikaze",
             60,
             IT_HOLDABLE,
             HI_KAMIKAZE,
-            /* precache */ "",
-            /* sounds */ "sound/items/kamikazerespawn.wav"},
+             "",
+             "sound/items/kamikazerespawn.wav"},
 
-        /*QUAKED holdable_portal (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "holdable_portal",
             "sound/items/holdable.wav",
             {"models/powerups/holdable/porter.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/portal",
-            /* pickup */ "Portal",
+             "icons/portal",
+             "Portal",
             60,
             IT_HOLDABLE,
             HI_PORTAL,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED holdable_invulnerability (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "holdable_invulnerability",
             "sound/items/holdable.wav",
             {"models/powerups/holdable/invulnerability.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/invulnerability",
-            /* pickup */ "Invulnerability",
+             "icons/invulnerability",
+             "Invulnerability",
             60,
             IT_HOLDABLE,
             HI_INVULNERABILITY,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED ammo_nails (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "ammo_nails",
             "sound/misc/am_pkup.wav",
             {"models/powerups/ammo/nailgunam.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/icona_nailgun",
-            /* pickup */ "Nails",
+             "icons/icona_nailgun",
+             "Nails",
             5,
             IT_AMMO,
             WP_NAILGUN,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED ammo_mines (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "ammo_mines",
             "sound/misc/am_pkup.wav",
             {"models/powerups/ammo/proxmineam.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/icona_proxlauncher",
-            /* pickup */ "Proximity Mines",
+             "icons/icona_proxlauncher",
+             "Proximity Mines",
             5,
             IT_AMMO,
             WP_PROX_LAUNCHER,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED ammo_belt (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "ammo_belt",
             "sound/misc/am_pkup.wav",
             {"models/powerups/ammo/chaingunam.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/icona_chaingun",
-            /* pickup */ "Chaingun Belt",
+             "icons/icona_chaingun",
+             "Chaingun Belt",
             100,
             IT_AMMO,
             WP_CHAINGUN,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        //
-        // PERSISTANT POWERUP ITEMS
-        //
-        /*QUAKED item_scout (.3 .3 1) (-16 -16 -16) (16 16 16) suspended redTeam blueTeam
-         */
         {
             "item_scout",
-            "sound/items/scout.ogg",  // [QL] the .wav does not exist in pak00
+            "sound/items/scout.ogg",
             {"models/powerups/scout.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/scout",
-            /* pickup */ "Scout",
+             "icons/scout",
+             "Scout",
             0,
             IT_PERSISTANT_POWERUP,
-            1,  // [QL] a rune carries its own number, 1-4, which is what STAT_RUNE holds
-            /* precache */ "",
-            /* sounds */ ""},
+            1,
+             "",
+             ""},
 
-        /*QUAKED item_guard (.3 .3 1) (-16 -16 -16) (16 16 16) suspended redTeam blueTeam
-         */
         {
             "item_guard",
-            "sound/items/guard.ogg",  // [QL] retail usa el .ogg
+            "sound/items/guard.ogg",
             {"models/powerups/guard.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/guard",
-            /* pickup */ "Guard",
+             "icons/guard",
+             "Guard",
             0,
             IT_PERSISTANT_POWERUP,
             2,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED item_doubler (.3 .3 1) (-16 -16 -16) (16 16 16) suspended redTeam blueTeam
-         */
         {
             "item_doubler",
-            "sound/items/damage.ogg",  // [QL] doubler.wav doesn't exist
+            "sound/items/damage.ogg",
             {"models/powerups/doubler.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/doubler",
-            /* pickup */ "Damage",
+             "icons/doubler",
+             "Damage",
             0,
             IT_PERSISTANT_POWERUP,
             3,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED item_doubler (.3 .3 1) (-16 -16 -16) (16 16 16) suspended redTeam blueTeam
-         */
         {
-            "item_armorregen",  // [QL] bg_itemlist index 46 (was item_ammoregen)
+            "item_armorregen",
             "sound/items/armorregen.ogg",
             {"models/powerups/ammo.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/armor_regen",
-            /* pickup */ "Armor Regen",
+             "icons/armor_regen",
+             "Armor Regen",
             0,
             IT_PERSISTANT_POWERUP,
             4,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED team_CTF_neutralflag (0 0 1) (-16 -16 -16) (16 16 16)
-    Only in One Flag CTF games
-    */
         {
             "team_CTF_neutralflag",
             NULL,
             {"models/flags/n_flag.md3",
-             "models/flag3/n_flag3.md3",  // [QL] segundo modelo de la tabla de retail
+             "models/flag3/n_flag3.md3",
              NULL, NULL},
-            /* icon */ "gfx/2d/flag_status/flag_at_base",  // [QL] cgamex86.dll 0x10067fc0
-            /* pickup */ "Neutral Flag",
+             "gfx/2d/flag_status/flag_at_base",
+             "Neutral Flag",
             0,
             IT_TEAM,
             PW_NEUTRALFLAG,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
         {"item_redcube",
          "sound/misc/am_pkup.wav",
          {"models/powerups/orb/r_orb.md3",
           NULL, NULL, NULL},
-         /* icon */ "icons/iconh_rorb",
-         /* pickup */ "Red Skull",
+          "icons/iconh_rorb",
+          "Red Skull",
          0,
          IT_TEAM,
          0,
-         /* precache */ "",
-         /* sounds */ ""},
+          "",
+          ""},
 
         {"item_bluecube",
          "sound/misc/am_pkup.wav",
          {"models/powerups/orb/b_orb.md3",
           NULL, NULL, NULL},
-         /* icon */ "icons/iconh_borb",
-         /* pickup */ "Blue Skull",
+          "icons/iconh_borb",
+          "Blue Skull",
          0,
          IT_TEAM,
          0,
-         /* precache */ "",
-         /* sounds */ ""},
-        /*QUAKED weapon_nailgun (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
+          "",
+          ""},
         {
             "weapon_nailgun",
             "sound/misc/w_pkup.wav",
             {"models/weapons/nailgun/nailgun.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconw_nailgun",
-            /* pickup */ "Nailgun",
+             "icons/iconw_nailgun",
+             "Nailgun",
             10,
             IT_WEAPON,
             WP_NAILGUN,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED weapon_prox_launcher (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "weapon_prox_launcher",
             "sound/misc/w_pkup.wav",
             {"models/weapons/proxmine/proxmine.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconw_proxlauncher",
-            /* pickup */ "Prox Launcher",
+             "icons/iconw_proxlauncher",
+             "Prox Launcher",
             5,
             IT_WEAPON,
             WP_PROX_LAUNCHER,
-            /* precache */ "",
-            /* sounds */ "sound/weapons/proxmine/wstbtick.wav "
+             "",
+             "sound/weapons/proxmine/wstbtick.wav "
                          "sound/weapons/proxmine/wstbactv.wav "
                          "sound/weapons/proxmine/wstbimpl.wav "
                          "sound/weapons/proxmine/wstbimpm.wav "
                          "sound/weapons/proxmine/wstbimpd.wav "
                          "sound/weapons/proxmine/wstbactv.wav"},
 
-        /*QUAKED weapon_chaingun (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "weapon_chaingun",
             "sound/misc/w_pkup.wav",
             {"models/weapons/vulcan/vulcan.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/iconw_chaingun",
-            /* pickup */ "Chaingun",
+             "icons/iconw_chaingun",
+             "Chaingun",
             100,
             IT_WEAPON,
             WP_CHAINGUN,
-            /* precache */ "",
-            /* sounds */ "sound/weapons/vulcan/wvulwind.wav"},
+             "",
+             "sound/weapons/vulcan/wvulwind.wav"},
 
-        // [QL] Spawn Armor (spawn protection, granted not picked up) - bg_itemlist index 53
-        /*QUAKED item_spawnarmor (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "item_spawnarmor",
             NULL,
             {NULL, NULL, NULL, NULL},
-            /* icon */ "icons/spawnarmor",
-            /* pickup */ "Spawn Armor",
+             "icons/spawnarmor",
+             "Spawn Armor",
             0,
             IT_POWERUP,
             0,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        // [QL] Heavy Machine Gun
-        /*QUAKED weapon_hmg (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "weapon_hmg",
             "sound/misc/w_pkup.wav",
             {"models/weapons3/hmg/hmg.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/weap_hmg",
-            /* pickup */ "Heavy Machinegun",
+             "icons/weap_hmg",
+             "Heavy Machinegun",
             100,
             IT_WEAPON,
             WP_HMG,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        // [QL] Heavy Machine Gun ammo - bg_itemlist index 55 (QL orders it after weapon_hmg)
-        /*QUAKED ammo_hmg (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-         */
         {
             "ammo_hmg",
             "sound/misc/am_pkup.wav",
             {"models/powerups/ammo/hmgam.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/ammo_hmg",
-            /* pickup */ "Heavy Bullets",
+             "icons/ammo_hmg",
+             "Heavy Bullets",
             50,
             IT_AMMO,
             WP_HMG,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        // [QL] Ammo Pack - gives a portion of all ammo types (bg_itemlist index 56)
-        // giTag=15 is a sentinel (WP_NUM_WEAPONS) meaning "all weapons"
         {
             "ammo_pack",
             "sound/misc/am_pkup.wav",
             {"models/powerups/ammo/ammopack.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/ammo_pack",
-            /* pickup */ "Ammo Pack",
+             "icons/ammo_pack",
+             "Ammo Pack",
             1,
             IT_AMMO,
             WP_NUM_WEAPONS,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        // [QL] Keys
-        /*QUAKED item_key_silver (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-        */
         {
             "item_key_silver",
             "sound/items/key_silver.wav",
             {"models/powerups/keys/key_silver.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/key_silver",
-            /* pickup */ "Silver Key",
+             "icons/key_silver",
+             "Silver Key",
             1,
             IT_KEY,
             KEY_SILVER,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED item_key_gold (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-        */
         {
             "item_key_gold",
             "sound/items/key_gold.wav",
             {"models/powerups/keys/key_gold.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/key_gold",
-            /* pickup */ "Gold Key",
+             "icons/key_gold",
+             "Gold Key",
             1,
             IT_KEY,
             KEY_GOLD,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        /*QUAKED item_key_master (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
-        */
         {
             "item_key_master",
             "sound/items/key_gold.wav",
             {"models/powerups/keys/key_master.md3",
              NULL, NULL, NULL},
-            /* icon */ "icons/key_master",
-            /* pickup */ "Master Key",
+             "icons/key_master",
+             "Master Key",
             1,
             IT_KEY,
             KEY_MASTER,
-            /* precache */ "",
-            /* sounds */ ""},
+             "",
+             ""},
 
-        // end of list marker
         {NULL}};
 
 int bg_numItems = ARRAY_LEN(bg_itemlist) - 1;
 
-/*
-==============
-BG_FindItemForPowerup
-
-[QL] 0x1002cb60 (the same in cgamex86.dll 0x100011c0). The runes, 11 to 14, are found by
-their own number among the persistant powerups, and invulnerability, 10, is the holdable;
-the rest are a powerup and then a flag. What has no item is a drop error, so flight and
-the freeze, which have none, are never asked for.
-==============
-*/
 gitem_t* BG_FindItemForPowerup(powerup_t pw) {
     int i;
 
@@ -1092,7 +912,6 @@ gitem_t* BG_FindItemForPowerup(powerup_t pw) {
                 return &bg_itemlist[i];
             }
         }
-        // retail goes on with the tag it was looking for, which is the battle suit's
         pw = (powerup_t)HI_INVULNERABILITY;
     }
 
@@ -1111,11 +930,6 @@ gitem_t* BG_FindItemForPowerup(powerup_t pw) {
     return NULL;
 }
 
-/*
-==============
-BG_FindItemForHoldable
-==============
-*/
 gitem_t* BG_FindItemForHoldable(holdable_t pw) {
     int i;
 
@@ -1130,17 +944,6 @@ gitem_t* BG_FindItemForHoldable(holdable_t pw) {
     return NULL;
 }
 
-/*
-==============
-BG_WeaponInLoadout
-
-[QL] Whether a weapon can be the one picked to start with. The binary keeps a flag per
-weapon (qagamex86.dll 0x1008ff1c, one dword every 0x30) and only these six carry it: the
-shotgun, the rocket launcher, the lightning gun, the railgun, the plasma gun and the heavy
-machinegun. GiveDefaultWeapons reads it both for the choice it validates and for the one it
-draws for a bot
-==============
-*/
 qboolean BG_WeaponInLoadout(int weapon) {
     switch (weapon) {
         case WP_SHOTGUN:
@@ -1155,12 +958,6 @@ qboolean BG_WeaponInLoadout(int weapon) {
     }
 }
 
-/*
-===============
-BG_FindItemForWeapon
-
-===============
-*/
 gitem_t* BG_FindItemForWeapon(weapon_t weapon) {
     gitem_t* it;
 
@@ -1174,12 +971,6 @@ gitem_t* BG_FindItemForWeapon(weapon_t weapon) {
     return NULL;
 }
 
-/*
-===============
-BG_FindItem
-
-===============
-*/
 gitem_t* BG_FindItem(const char* pickupName) {
     gitem_t* it;
 
@@ -1191,36 +982,21 @@ gitem_t* BG_FindItem(const char* pickupName) {
     return NULL;
 }
 
-/*
-===============
-BG_ParseWeaponStringtoFlag
-
-[QL] binary 0x1002da40: tokenises a whitespace-separated list of weapon short
-names and ORs together the matching weapon bits (weapon w -> bit 1<<w).
-SP_worldspawn uses it to turn the "disable_loadout" worldspawn key into the
-g_disableLoadout / CS_DISABLE_LOADOUT bitmask.
-
-The binary walks its 14-entry weapon table (weapons 1..14) with a bit starting at
-1<<1 and shifting left per entry, via COM_ParseExt with a 16-token cap. The name
-table below matches it exactly. Lives in bg_misc.c (shared) so it must not
-reference the qagame-only weaponShortName[] table.
-===============
-*/
 static const char* bg_weaponFlagNames[] = {
-    "g",    // 1  WP_GAUNTLET
-    "mg",   // 2  WP_MACHINEGUN
-    "sg",   // 3  WP_SHOTGUN
-    "gl",   // 4  WP_GRENADE_LAUNCHER
-    "rl",   // 5  WP_ROCKET_LAUNCHER
-    "lg",   // 6  WP_LIGHTNING
-    "rg",   // 7  WP_RAILGUN
-    "pg",   // 8  WP_PLASMAGUN
-    "bfg",  // 9  WP_BFG
-    "gh",   // 10 WP_GRAPPLING_HOOK
-    "ng",   // 11 WP_NAILGUN
-    "pl",   // 12 WP_PROX_LAUNCHER
-    "cg",   // 13 WP_CHAINGUN
-    "hmg"   // 14 WP_HMG
+    "g",
+    "mg",
+    "sg",
+    "gl",
+    "rl",
+    "lg",
+    "rg",
+    "pg",
+    "bfg",
+    "gh",
+    "ng",
+    "pl",
+    "cg",
+    "hmg"
 };
 
 int BG_ParseWeaponStringtoFlag(char* string) {
@@ -1229,7 +1005,6 @@ int BG_ParseWeaponStringtoFlag(char* string) {
     int count;
     int i;
 
-    // binary caps the parse at 16 tokens
     for (count = 0; count < 16; count++) {
         token = COM_ParseExt(&string, qtrue);
         if (!token[0]) {
@@ -1245,18 +1020,6 @@ int BG_ParseWeaponStringtoFlag(char* string) {
     return mask;
 }
 
-/*
-============
-BG_PlayerTouchesItem
-
-Items can be picked up without actually touching their physical bounds to make
-grabbing them easier.
-[QL] qagamex86.dll 0x1002cd30, cgamex86.dll 0x100013c0. Quake 3's box (x -50..44, y and
-z +-36) became +-36 on both horizontal axes, and from 50 under the item up to itemHeight
-+ 29 over it. itemHeight is g_itemHeight (35 by default), except for the three flags,
-which always use 35.
-============
-*/
 qboolean BG_PlayerTouchesItem(playerState_t* ps, entityState_t* item, int atTime, int itemHeight) {
     const gitem_t* it;
     vec3_t origin;
@@ -1268,7 +1031,6 @@ qboolean BG_PlayerTouchesItem(playerState_t* ps, entityState_t* item, int atTime
         itemHeight = 35;
     }
 
-    // we are ignoring ducked differences here
     if (ps->origin[0] - origin[0] > 36 || ps->origin[0] - origin[0] < -36 || ps->origin[1] - origin[1] > 36 || ps->origin[1] - origin[1] < -36 || ps->origin[2] - origin[2] > itemHeight + 29 || ps->origin[2] - origin[2] < -50) {
         return qfalse;
     }
@@ -1276,14 +1038,6 @@ qboolean BG_PlayerTouchesItem(playerState_t* ps, entityState_t* item, int atTime
     return qtrue;
 }
 
-/*
-================
-BG_IsRoundBasedGameType
-
-[QL] True for the round-based gametypes: CA, Freeze Tag, Attack & Defend, Red Rover.
-Address: 0x1002c9a0
-================
-*/
 qboolean BG_IsRoundBasedGameType(int gametype) {
     switch (gametype) {
     case GT_CA:
@@ -1296,63 +1050,40 @@ qboolean BG_IsRoundBasedGameType(int gametype) {
     }
 }
 
-// [QL] Per-weapon ammo cap, indexed by weapon_t. Canonical copy shared by qagame
-// (Add_Ammo) and the IT_AMMO cap check below. Declared extern in bg_public.h so
-// cgame links it too (cgame compiles bg_misc.c but not g_items.c).
-// Binary weapon-info table @0x1008ff18 (stride 0x30, maxAmmo @ +0xc); all 15 cells
-// verified byte-for-byte against qagamex86.dll.
 const int maxAmmoStandard[WP_NUM_WEAPONS] = {
-    0,    // WP_NONE
-    -1,   // WP_GAUNTLET (unlimited)
-    150,  // WP_MACHINEGUN
-    25,   // WP_SHOTGUN
-    25,   // WP_GRENADE_LAUNCHER
-    25,   // WP_ROCKET_LAUNCHER
-    150,  // WP_LIGHTNING
-    25,   // WP_RAILGUN
-    150,  // WP_PLASMAGUN
-    25,   // WP_BFG
-    -1,   // WP_GRAPPLING_HOOK (unlimited)
-    25,   // WP_NAILGUN
-    5,    // WP_PROX_LAUNCHER
-    200,  // WP_CHAINGUN
-    150,  // WP_HMG
+    0,
+    -1,
+    150,
+    25,
+    25,
+    25,
+    150,
+    25,
+    150,
+    25,
+    -1,
+    25,
+    5,
+    200,
+    150,
 };
 
-/*
-================
-BG_CanWeaponBeGrabbed
-
-[QL] .so symbol BG_CanWeaponBeGrabbed (0x53cb0), qagame binary @0x1002d1c0.
-Whether an IT_WEAPON item may be picked up. weaponRespawn = g_weaponRespawn.integer.
-Grabbable unless in loadout mode; then grab only if weapons respawn, or you don't
-own the weapon, or you own it with no ammo, or the item is a dropped weapon.
-================
-*/
 static qboolean BG_CanWeaponBeGrabbed(const entityState_t* ent, const playerState_t* ps,
                                       int weaponRespawn) {
     gitem_t* item = &bg_itemlist[ent->modelindex];
 
-    if (ps->pm_flags & PMF_LOADOUT_FORCED) {  // loadout mode: no weapon pickups
+    if (ps->pm_flags & PMF_LOADOUT_FORCED) {
         return qfalse;
     }
-    if (weaponRespawn != 0 ||                              // weapons respawn -> always grab
-        !(ps->stats[STAT_WEAPONS] & (1 << item->giTag)) || // don't own the weapon
-        ps->ammo[item->giTag] == 0 ||                      // own it but no ammo
-        ent->modelindex2 != 0) {                           // dropped weapon
+    if (weaponRespawn != 0 ||
+        !(ps->stats[STAT_WEAPONS] & (1 << item->giTag)) ||
+        ps->ammo[item->giTag] == 0 ||
+        ent->modelindex2 != 0) {
         return qtrue;
     }
     return qfalse;
 }
 
-/*
-================
-BG_CanItemBeGrabbed
-
-[QL] qagame binary @0x1002ced0. Returns false if the item should not be picked up.
-This needs to be the same for client side prediction and server use.
-================
-*/
 qboolean BG_CanItemBeGrabbed(int atTime, int warmupTime, int armorTiered, int weaponRespawn,
                              int gametype, const entityState_t* ent, const playerState_t* ps) {
     gitem_t* item;
@@ -1362,8 +1093,6 @@ qboolean BG_CanItemBeGrabbed(int atTime, int warmupTime, int armorTiered, int we
         Com_Error(ERR_DROP, "BG_CanItemBeGrabbed: index out of range");
     }
 
-    // [QL] dropped-item re-grab guard: the dropper cannot re-touch their own dropped
-    // item for 1000 ms (ent->clientNum stores the dropper; modelindex2 marks it dropped).
     if (ent->modelindex2 != 0 &&
         atTime < ent->time + 1000 &&
         ps->clientNum == ent->clientNum) {
@@ -1377,12 +1106,10 @@ qboolean BG_CanItemBeGrabbed(int atTime, int warmupTime, int armorTiered, int we
             return BG_CanWeaponBeGrabbed(ent, ps, weaponRespawn);
 
         case IT_AMMO:
-            if (gametype != GT_DOMINATION) {          // GT_DOM: always grab ammo
-                if (item->giTag != WP_NUM_WEAPONS) {  // normal ammo item
+            if (gametype != GT_DOMINATION) {
+                if (item->giTag != WP_NUM_WEAPONS) {
                     return (qboolean)(ps->ammo[item->giTag] < maxAmmoStandard[item->giTag]);
                 }
-                // [QL] giTag == WP_NUM_WEAPONS: "all ammo" pack. Grabbable if any owned
-                // weapon (index >= WP_MACHINEGUN) is below its cap.
                 for (i = WP_MACHINEGUN; i < WP_NUM_WEAPONS; i++) {
                     if ((ps->stats[STAT_WEAPONS] & (1 << i)) &&
                         maxAmmoStandard[i] >= 1 &&
@@ -1392,23 +1119,23 @@ qboolean BG_CanItemBeGrabbed(int atTime, int warmupTime, int armorTiered, int we
                 }
                 return qfalse;
             }
-            break;  // GT_DOMINATION -> qtrue
+            break;
 
         case IT_ARMOR:
-            if (armorTiered == 0) {  // tiered-armor cvar off: simple cap
+            if (armorTiered == 0) {
                 return (qboolean)(ps->stats[STAT_ARMOR] < ps->stats[STAT_MAX_HEALTH] * 2);
             }
-            if (item->quantity == 100) {  // red body armor
+            if (item->quantity == 100) {
                 return (qboolean)(ps->stats[STAT_ARMOR] < 200);
             }
-            if (item->quantity == 50) {  // yellow combat armor
+            if (item->quantity == 50) {
                 if (ps->stats[STAT_ARMORTYPE] < 2) {
                     return (qboolean)(ps->stats[STAT_ARMOR] < 150);
                 }
                 if ((double)ps->stats[STAT_ARMOR] * 0.75 > 99.0) {
                     return qfalse;
                 }
-            } else if (item->quantity == 25) {  // +25 armor
+            } else if (item->quantity == 25) {
                 if (ps->stats[STAT_ARMORTYPE] == 0) {
                     return (qboolean)(ps->stats[STAT_ARMOR] < 100);
                 }
@@ -1421,13 +1148,12 @@ qboolean BG_CanItemBeGrabbed(int atTime, int warmupTime, int armorTiered, int we
                         return qfalse;
                     }
                 }
-            } else {  // shard (5) and anything else
+            } else {
                 return (qboolean)(ps->stats[STAT_ARMOR] < ps->stats[STAT_MAX_HEALTH] * 2);
             }
             return qtrue;
 
         case IT_HEALTH:
-            // small(5) and mega(100) overheal to 2x max; everything else caps at max.
             if (item->quantity != 5 && item->quantity != 100) {
                 return (qboolean)(ps->stats[STAT_HEALTH] < ps->stats[STAT_MAX_HEALTH]);
             }
@@ -1435,13 +1161,13 @@ qboolean BG_CanItemBeGrabbed(int atTime, int warmupTime, int armorTiered, int we
 
         case IT_POWERUP:
         case IT_KEY:
-            break;  // always pick up
+            break;
 
         case IT_HOLDABLE:
             return (qboolean)(ps->stats[STAT_HOLDABLE_ITEM] == 0);
 
         case IT_PERSISTANT_POWERUP:
-            if (ps->stats[STAT_PERSISTANT_POWERUP]) {  // STAT_RUNE
+            if (ps->stats[STAT_PERSISTANT_POWERUP]) {
                 return qfalse;
             }
             if ((ent->generic1 & 2) && ps->persistant[PERS_TEAM] != TEAM_RED) {
@@ -1452,9 +1178,9 @@ qboolean BG_CanItemBeGrabbed(int atTime, int warmupTime, int armorTiered, int we
             }
             break;
 
-        case IT_TEAM:  // team items, such as flags
+        case IT_TEAM:
             if (gametype == GT_AD) {
-                if (warmupTime != 0) {  // no objective grab during warmup
+                if (warmupTime != 0) {
                     return qfalse;
                 }
                 if (ps->persistant[PERS_TEAM] == TEAM_RED) {
@@ -1478,8 +1204,6 @@ qboolean BG_CanItemBeGrabbed(int atTime, int warmupTime, int armorTiered, int we
                 return qfalse;
             }
             if (gametype == GT_CTF) {
-                // ent->modelindex2 is non-zero on items if they are dropped: we can pick
-                // up our own dropped flag (return it) but not our flag at base.
                 if (ps->persistant[PERS_TEAM] == TEAM_RED) {
                     if (item->giTag == PW_BLUEFLAG) {
                         return qtrue;
@@ -1487,10 +1211,10 @@ qboolean BG_CanItemBeGrabbed(int atTime, int warmupTime, int armorTiered, int we
                     if (item->giTag != PW_REDFLAG) {
                         return qfalse;
                     }
-                    if (ent->modelindex2) {  // our own flag, dropped -> return it
+                    if (ent->modelindex2) {
                         return qtrue;
                     }
-                    return (qboolean)(ps->powerups[PW_BLUEFLAG] != 0);  // at base -> only if capping
+                    return (qboolean)(ps->powerups[PW_BLUEFLAG] != 0);
                 }
                 if (ps->persistant[PERS_TEAM] == TEAM_BLUE) {
                     if (item->giTag == PW_REDFLAG) {
@@ -1537,14 +1261,6 @@ qboolean BG_CanItemBeGrabbed(int atTime, int warmupTime, int armorTiered, int we
     return qtrue;
 }
 
-//======================================================================
-
-/*
-================
-BG_EvaluateTrajectory
-
-================
-*/
 void BG_EvaluateTrajectory(const trajectory_t* tr, int atTime, vec3_t result) {
     float deltaTime;
     float phase;
@@ -1555,7 +1271,7 @@ void BG_EvaluateTrajectory(const trajectory_t* tr, int atTime, vec3_t result) {
             VectorCopy(tr->trBase, result);
             break;
         case TR_LINEAR:
-            deltaTime = (atTime - tr->trTime) * 0.001;  // milliseconds to seconds
+            deltaTime = (atTime - tr->trTime) * 0.001;
             VectorMA(tr->trBase, deltaTime, tr->trDelta, result);
             break;
         case TR_SINE:
@@ -1567,20 +1283,19 @@ void BG_EvaluateTrajectory(const trajectory_t* tr, int atTime, vec3_t result) {
             if (atTime > tr->trTime + tr->trDuration) {
                 atTime = tr->trTime + tr->trDuration;
             }
-            deltaTime = (atTime - tr->trTime) * 0.001;  // milliseconds to seconds
+            deltaTime = (atTime - tr->trTime) * 0.001;
             if (deltaTime < 0) {
                 deltaTime = 0;
             }
             VectorMA(tr->trBase, deltaTime, tr->trDelta, result);
             break;
         case TR_GRAVITY:
-            deltaTime = (atTime - tr->trTime) * 0.001;  // milliseconds to seconds
+            deltaTime = (atTime - tr->trTime) * 0.001;
             VectorMA(tr->trBase, deltaTime, tr->trDelta, result);
-            result[2] -= 0.5 * DEFAULT_GRAVITY * deltaTime * deltaTime;  // FIXME: local gravity...
+            result[2] -= 0.5 * DEFAULT_GRAVITY * deltaTime * deltaTime;
             break;
         case TR_CUSTOM_GRAVITY:
-            // [QL] per-trajectory gravity stored in tr->gravity (offset 0x24)
-            deltaTime = (atTime - tr->trTime) * 0.001;  // milliseconds to seconds
+            deltaTime = (atTime - tr->trTime) * 0.001;
             VectorMA(tr->trBase, deltaTime, tr->trDelta, result);
             result[2] -= 0.5 * tr->gravity * deltaTime * deltaTime;
             break;
@@ -1590,13 +1305,6 @@ void BG_EvaluateTrajectory(const trajectory_t* tr, int atTime, vec3_t result) {
     }
 }
 
-/*
-================
-BG_EvaluateTrajectoryDelta
-
-For determining velocity at a given time
-================
-*/
 void BG_EvaluateTrajectoryDelta(const trajectory_t* tr, int atTime, vec3_t result) {
     float deltaTime;
     float phase;
@@ -1611,7 +1319,7 @@ void BG_EvaluateTrajectoryDelta(const trajectory_t* tr, int atTime, vec3_t resul
             break;
         case TR_SINE:
             deltaTime = (atTime - tr->trTime) / (float)tr->trDuration;
-            phase = cos(deltaTime * M_PI * 2);  // derivative of sin = cos
+            phase = cos(deltaTime * M_PI * 2);
             phase *= 0.5;
             VectorScale(tr->trDelta, phase, result);
             break;
@@ -1623,13 +1331,12 @@ void BG_EvaluateTrajectoryDelta(const trajectory_t* tr, int atTime, vec3_t resul
             VectorCopy(tr->trDelta, result);
             break;
         case TR_GRAVITY:
-            deltaTime = (atTime - tr->trTime) * 0.001;  // milliseconds to seconds
+            deltaTime = (atTime - tr->trTime) * 0.001;
             VectorCopy(tr->trDelta, result);
-            result[2] -= DEFAULT_GRAVITY * deltaTime;  // FIXME: local gravity...
+            result[2] -= DEFAULT_GRAVITY * deltaTime;
             break;
         case TR_CUSTOM_GRAVITY:
-            // [QL] per-trajectory gravity stored in tr->gravity (offset 0x24)
-            deltaTime = (atTime - tr->trTime) * 0.001;  // milliseconds to seconds
+            deltaTime = (atTime - tr->trTime) * 0.001;
             VectorCopy(tr->trDelta, result);
             result[2] -= tr->gravity * deltaTime;
             break;
@@ -1639,117 +1346,108 @@ void BG_EvaluateTrajectoryDelta(const trajectory_t* tr, int atTime, vec3_t resul
     }
 }
 
-// [QL] Event name table - must match entity_event_t enum exactly.
 char* eventnames[] = {
-    "EV_NONE",                      // 0x00
-    "EV_FOOTSTEP",                  // 0x01
-    "EV_FOOTSTEP_METAL",            // 0x02
-    "EV_FOOTSPLASH",                // 0x03
-    "EV_FOOTWADE",                  // 0x04
-    "EV_SWIM",                      // 0x05
-    "EV_FALL_SHORT",                // 0x06
-    "EV_FALL_MEDIUM",               // 0x07
-    "EV_FALL_FAR",                  // 0x08
-    "EV_JUMP_PAD",                  // 0x09
-    "EV_JUMP",                      // 0x0A
-    "EV_WATER_TOUCH",               // 0x0B
-    "EV_WATER_LEAVE",               // 0x0C
-    "EV_WATER_UNDER",               // 0x0D
-    "EV_WATER_CLEAR",               // 0x0E
-    "EV_ITEM_PICKUP",               // 0x0F
-    "EV_GLOBAL_ITEM_PICKUP",        // 0x10
-    "EV_NOAMMO",                    // 0x11
-    "EV_CHANGE_WEAPON",             // 0x12
-    "EV_DROP_WEAPON",               // 0x13
-    "EV_FIRE_WEAPON",               // 0x14
-    "EV_USE_ITEM0",                 // 0x15
-    "EV_USE_ITEM1",                 // 0x16
-    "EV_USE_ITEM2",                 // 0x17
-    "EV_USE_ITEM3",                 // 0x18
-    "EV_USE_ITEM4",                 // 0x19
-    "EV_USE_ITEM5",                 // 0x1A
-    "EV_USE_ITEM6",                 // 0x1B
-    "EV_USE_ITEM7",                 // 0x1C
-    "EV_USE_ITEM8",                 // 0x1D
-    "EV_USE_ITEM9",                 // 0x1E
-    "EV_USE_ITEM10",                // 0x1F
-    "EV_USE_ITEM11",                // 0x20
-    "EV_USE_ITEM12",                // 0x21
-    "EV_USE_ITEM13",                // 0x22
-    "EV_USE_ITEM14",                // 0x23
-    "EV_USE_ITEM15",                // 0x24
-    "EV_ITEM_RESPAWN",              // 0x25
-    "EV_ITEM_POP",                  // 0x26
-    "EV_PLAYER_TELEPORT_IN",        // 0x27
-    "EV_PLAYER_TELEPORT_OUT",       // 0x28
-    "EV_GRENADE_BOUNCE",            // 0x29
-    "EV_GENERAL_SOUND",             // 0x2A
-    "EV_GLOBAL_SOUND",              // 0x2B
-    "EV_GLOBAL_TEAM_SOUND",         // 0x2C
-    "EV_BULLET_HIT_FLESH",          // 0x2D
-    "EV_BULLET_HIT_WALL",           // 0x2E
-    "EV_MISSILE_HIT",               // 0x2F
-    "EV_MISSILE_MISS",              // 0x30
-    "EV_MISSILE_MISS_METAL",        // 0x31
-    "EV_RAILTRAIL",                 // 0x32
-    "EV_SHOTGUN",                   // 0x33
-    "EV_BULLET",                    // 0x34
-    "EV_PAIN",                      // 0x35
-    "EV_DEATH1",                    // 0x36
-    "EV_DEATH2",                    // 0x37
-    "EV_DEATH3",                    // 0x38
-    "EV_DROWN",                     // 0x39
-    "EV_OBITUARY",                  // 0x3A
-    "EV_POWERUP_QUAD",              // 0x3B
-    "EV_POWERUP_BATTLESUIT",        // 0x3C
-    "EV_POWERUP_REGEN",             // 0x3D
-    "EV_POWERUP_ARMORREGEN",        // 0x3E
-    "EV_GIB_PLAYER",                // 0x3F
-    "EV_SCOREPLUM",                 // 0x40
-    "EV_PROXIMITY_MINE_STICK",      // 0x41
-    "EV_PROXIMITY_MINE_TRIGGER",    // 0x42
-    "EV_KAMIKAZE",                  // 0x43
-    "EV_OBELISKEXPLODE",            // 0x44
-    "EV_OBELISKPAIN",               // 0x45
-    "EV_INVUL_IMPACT",              // 0x46
-    "EV_JUICED",                    // 0x47
-    "EV_LIGHTNINGBOLT",             // 0x48
-    "EV_DEBUG_LINE",                // 0x49
-    "EV_TAUNT",                     // 0x4A
-    "EV_TAUNT_YES",                 // 0x4B
-    "EV_TAUNT_NO",                  // 0x4C
-    "EV_TAUNT_FOLLOWME",            // 0x4D
-    "EV_TAUNT_GETFLAG",             // 0x4E
-    "EV_TAUNT_GUARDBASE",           // 0x4F
-    "EV_TAUNT_PATROL",              // 0x50
-    "EV_FOOTSTEP_SNOW",             // 0x51
-    "EV_FOOTSTEP_WOOD",             // 0x52
-    "EV_ITEM_PICKUP_SPEC",          // 0x53
-    "EV_OVERTIME",                  // 0x54
-    "EV_GAMEOVER",                  // 0x55
-    "EV_MISSILE_MISS_DMGTHROUGH",   // 0x56
-    "EV_THAW_PLAYER",               // 0x57
-    "EV_THAW_TICK",                 // 0x58
-    "EV_SHOTGUN_KILL",              // 0x59
-    "EV_POI",                       // 0x5A
-    "EV_DEBUG_HITBOX",              // 0x5B
-    "EV_LIGHTNING_DISCHARGE",       // 0x5C
-    "EV_RACE_START",                // 0x5D
-    "EV_RACE_CHECKPOINT",           // 0x5E
-    "EV_RACE_FINISH",               // 0x5F
-    "EV_DAMAGEPLUM",                // 0x60
-    "EV_AWARD",                     // 0x61
-    "EV_INFECTED",                  // 0x62
-    "EV_NEW_HIGH_SCORE",            // 0x63
+    "EV_NONE",
+    "EV_FOOTSTEP",
+    "EV_FOOTSTEP_METAL",
+    "EV_FOOTSPLASH",
+    "EV_FOOTWADE",
+    "EV_SWIM",
+    "EV_FALL_SHORT",
+    "EV_FALL_MEDIUM",
+    "EV_FALL_FAR",
+    "EV_JUMP_PAD",
+    "EV_JUMP",
+    "EV_WATER_TOUCH",
+    "EV_WATER_LEAVE",
+    "EV_WATER_UNDER",
+    "EV_WATER_CLEAR",
+    "EV_ITEM_PICKUP",
+    "EV_GLOBAL_ITEM_PICKUP",
+    "EV_NOAMMO",
+    "EV_CHANGE_WEAPON",
+    "EV_DROP_WEAPON",
+    "EV_FIRE_WEAPON",
+    "EV_USE_ITEM0",
+    "EV_USE_ITEM1",
+    "EV_USE_ITEM2",
+    "EV_USE_ITEM3",
+    "EV_USE_ITEM4",
+    "EV_USE_ITEM5",
+    "EV_USE_ITEM6",
+    "EV_USE_ITEM7",
+    "EV_USE_ITEM8",
+    "EV_USE_ITEM9",
+    "EV_USE_ITEM10",
+    "EV_USE_ITEM11",
+    "EV_USE_ITEM12",
+    "EV_USE_ITEM13",
+    "EV_USE_ITEM14",
+    "EV_USE_ITEM15",
+    "EV_ITEM_RESPAWN",
+    "EV_ITEM_POP",
+    "EV_PLAYER_TELEPORT_IN",
+    "EV_PLAYER_TELEPORT_OUT",
+    "EV_GRENADE_BOUNCE",
+    "EV_GENERAL_SOUND",
+    "EV_GLOBAL_SOUND",
+    "EV_GLOBAL_TEAM_SOUND",
+    "EV_BULLET_HIT_FLESH",
+    "EV_BULLET_HIT_WALL",
+    "EV_MISSILE_HIT",
+    "EV_MISSILE_MISS",
+    "EV_MISSILE_MISS_METAL",
+    "EV_RAILTRAIL",
+    "EV_SHOTGUN",
+    "EV_BULLET",
+    "EV_PAIN",
+    "EV_DEATH1",
+    "EV_DEATH2",
+    "EV_DEATH3",
+    "EV_DROWN",
+    "EV_OBITUARY",
+    "EV_POWERUP_QUAD",
+    "EV_POWERUP_BATTLESUIT",
+    "EV_POWERUP_REGEN",
+    "EV_POWERUP_ARMORREGEN",
+    "EV_GIB_PLAYER",
+    "EV_SCOREPLUM",
+    "EV_PROXIMITY_MINE_STICK",
+    "EV_PROXIMITY_MINE_TRIGGER",
+    "EV_KAMIKAZE",
+    "EV_OBELISKEXPLODE",
+    "EV_OBELISKPAIN",
+    "EV_INVUL_IMPACT",
+    "EV_JUICED",
+    "EV_LIGHTNINGBOLT",
+    "EV_DEBUG_LINE",
+    "EV_TAUNT",
+    "EV_TAUNT_YES",
+    "EV_TAUNT_NO",
+    "EV_TAUNT_FOLLOWME",
+    "EV_TAUNT_GETFLAG",
+    "EV_TAUNT_GUARDBASE",
+    "EV_TAUNT_PATROL",
+    "EV_FOOTSTEP_SNOW",
+    "EV_FOOTSTEP_WOOD",
+    "EV_ITEM_PICKUP_SPEC",
+    "EV_OVERTIME",
+    "EV_GAMEOVER",
+    "EV_MISSILE_MISS_DMGTHROUGH",
+    "EV_THAW_PLAYER",
+    "EV_THAW_TICK",
+    "EV_SHOTGUN_KILL",
+    "EV_POI",
+    "EV_DEBUG_HITBOX",
+    "EV_LIGHTNING_DISCHARGE",
+    "EV_RACE_START",
+    "EV_RACE_CHECKPOINT",
+    "EV_RACE_FINISH",
+    "EV_DAMAGEPLUM",
+    "EV_AWARD",
+    "EV_INFECTED",
+    "EV_NEW_HIGH_SCORE",
 };
-
-/*
-===============
-BG_AddPredictableEventToPlayerstate
-
-Handles the sequence numbers
-===============
-*/
 
 void trap_Cvar_VariableStringBuffer(const char* var_name, char* buffer, int bufsize);
 
@@ -1760,9 +1458,9 @@ void BG_AddPredictableEventToPlayerstate(int newEvent, int eventParm, playerStat
         trap_Cvar_VariableStringBuffer("showevents", buf, sizeof(buf));
         if (atof(buf) != 0) {
 #ifdef QAGAME
-            Com_Printf(" game event svt %5d -> %5d: num = %20s parm %d\n", ps->pmove_framecount /*ps->commandTime*/, ps->eventSequence, eventnames[newEvent], eventParm);
+            Com_Printf(" game event svt %5d -> %5d: num = %20s parm %d\n", ps->pmove_framecount , ps->eventSequence, eventnames[newEvent], eventParm);
 #else
-            Com_Printf("Cgame event svt %5d -> %5d: num = %20s parm %d\n", ps->pmove_framecount /*ps->commandTime*/, ps->eventSequence, eventnames[newEvent], eventParm);
+            Com_Printf("Cgame event svt %5d -> %5d: num = %20s parm %d\n", ps->pmove_framecount , ps->eventSequence, eventnames[newEvent], eventParm);
 #endif
         }
     }
@@ -1772,52 +1470,26 @@ void BG_AddPredictableEventToPlayerstate(int newEvent, int eventParm, playerStat
     ps->eventSequence++;
 }
 
-/*
-========================
-BG_TouchJumpPad
-========================
-*/
 void BG_TouchJumpPad(playerState_t* ps, entityState_t* jumppad) {
-    // [QL] only PM_NORMAL and PM_FREEZE touch jump pads (spectators/dead do not)
     if (ps->pm_type != PM_NORMAL && ps->pm_type != PM_FREEZE) {
         return;
     }
 
-    // flying characters don't hit bounce pads
     if (ps->powerups[PW_FLIGHT]) {
         return;
     }
 
-    // if we didn't hit this same jumppad the previous frame then play the event.
-    // [QL] the binary inlines a ps->events add here (eventParm 0, no vectoangles/
-    // effectNum) rather than calling BG_AddPredictableEventToPlayerstate. That
-    // standalone function writes the pmove-side event array, which is not valid
-    // when BG_TouchJumpPad runs from a trigger touch or client prediction.
     if (ps->jumppad_ent != jumppad->number) {
         ps->events[ps->eventSequence & (MAX_PS_EVENTS - 1)] = EV_JUMP_PAD;
         ps->eventParms[ps->eventSequence & (MAX_PS_EVENTS - 1)] = 0;
         ps->eventSequence++;
     }
-    // remember hitting this jumppad this frame
     ps->jumppad_ent = jumppad->number;
     ps->jumppad_frame = ps->pmove_framecount;
-    ps->doubleJumped = 1;  // [QL] set on jumppad touch (ps+0x1d0)
-    // give the player the velocity from the jumppad
+    ps->doubleJumped = 1;
     VectorCopy(jumppad->origin2, ps->velocity);
 }
 
-/*
-========================
-BG_GetWeaponFromMeansOfDeath
-
-[QL] Maps a MOD_* means-of-death to its WP_* weapon index; returns WP_NONE for
-environmental / non-weapon MODs (WATER..TRIGGER_HURT, KAMIKAZE, JUICED, GRAPPLE,
-SWITCH_TEAMS, THAW, UNKNOWN). Used by the stat-accumulation code for the per-weapon
-kill/death/damage array indices and by player_die's weapon-gated award checks.
-Binary is a switch/table lookup.
-========================
-*/
-// Address: 0x1002d540
 int BG_GetWeaponFromMeansOfDeath(int mod) {
     switch (mod) {
     case MOD_SHOTGUN:
@@ -1857,14 +1529,6 @@ int BG_GetWeaponFromMeansOfDeath(int mod) {
     }
 }
 
-/*
-========================
-BG_PlayerStateToEntityState
-
-This is done after each set of usercmd_t on the server,
-and after local prediction on the client
-========================
-*/
 void BG_PlayerStateToEntityState(playerState_t* ps, entityState_t* s, qboolean snap) {
     int i;
 
@@ -1883,7 +1547,6 @@ void BG_PlayerStateToEntityState(playerState_t* ps, entityState_t* s, qboolean s
     if (snap) {
         SnapVector(s->pos.trBase);
     }
-    // set the trDelta for flag direction
     VectorCopy(ps->velocity, s->pos.trDelta);
 
     s->apos.trType = TR_INTERPOLATE;
@@ -1895,12 +1558,8 @@ void BG_PlayerStateToEntityState(playerState_t* ps, entityState_t* s, qboolean s
     s->angles2[YAW] = ps->movementDir;
     s->legsAnim = ps->legsAnim;
     s->torsoAnim = ps->torsoAnim;
-    s->clientNum = ps->clientNum;  // ET_PLAYER looks here instead of at number
-                                   // so corpses can also reference the proper config
+    s->clientNum = ps->clientNum;
     s->eFlags = ps->eFlags;
-    // [QL] a frozen player (powerups[PW_FREEZE] != 0, i.e. 0x7fffffff) reads
-    // health<=0 but must keep the else-branch so the frozen statue is not drawn
-    // as a dead corpse.
     if (ps->stats[STAT_HEALTH] <= 0 && ps->powerups[PW_FREEZE] == 0) {
         s->eFlags |= EF_DEAD;
     } else {
@@ -1933,20 +1592,9 @@ void BG_PlayerStateToEntityState(playerState_t* ps, entityState_t* s, qboolean s
     }
 
     s->loopSound = ps->loopSound;
-    // [QL] mask to low 6 bits: bits 0-1 = thaw progress, bits 2-5 =
-    // PERS_ATTACKEE_ARMOR damage-tier; the upper bits are server-only and must
-    // be stripped before networking.
     s->generic1 = ps->generic1 & 0x3f;
 }
 
-/*
-========================
-BG_PlayerStateToEntityStateExtraPolate
-
-This is done after each set of usercmd_t on the server,
-and after local prediction on the client
-========================
-*/
 void BG_PlayerStateToEntityStateExtraPolate(playerState_t* ps, entityState_t* s, int time, qboolean snap) {
     int i;
 
@@ -1965,12 +1613,9 @@ void BG_PlayerStateToEntityStateExtraPolate(playerState_t* ps, entityState_t* s,
     if (snap) {
         SnapVector(s->pos.trBase);
     }
-    // set the trDelta for flag direction and linear prediction
     VectorCopy(ps->velocity, s->pos.trDelta);
-    // set the time for linear prediction
     s->pos.trTime = time;
-    // set maximum extra polation time
-    s->pos.trDuration = 50;  // 1000 / sv_fps (default = 20)
+    s->pos.trDuration = 50;
 
     s->apos.trType = TR_INTERPOLATE;
     VectorCopy(ps->viewangles, s->apos.trBase);
@@ -1981,12 +1626,8 @@ void BG_PlayerStateToEntityStateExtraPolate(playerState_t* ps, entityState_t* s,
     s->angles2[YAW] = ps->movementDir;
     s->legsAnim = ps->legsAnim;
     s->torsoAnim = ps->torsoAnim;
-    s->clientNum = ps->clientNum;  // ET_PLAYER looks here instead of at number
-                                   // so corpses can also reference the proper config
+    s->clientNum = ps->clientNum;
     s->eFlags = ps->eFlags;
-    // [QL] a frozen player (powerups[PW_FREEZE] != 0, i.e. 0x7fffffff) reads
-    // health<=0 but must keep the else-branch so the frozen statue is not drawn
-    // as a dead corpse.
     if (ps->stats[STAT_HEALTH] <= 0 && ps->powerups[PW_FREEZE] == 0) {
         s->eFlags |= EF_DEAD;
     } else {
@@ -2019,8 +1660,5 @@ void BG_PlayerStateToEntityStateExtraPolate(playerState_t* ps, entityState_t* s,
     }
 
     s->loopSound = ps->loopSound;
-    // [QL] mask to low 6 bits: bits 0-1 = thaw progress, bits 2-5 =
-    // PERS_ATTACKEE_ARMOR damage-tier; the upper bits are server-only and must
-    // be stripped before networking.
     s->generic1 = ps->generic1 & 0x3f;
 }

@@ -19,11 +19,9 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// cl_scrn.c -- master for refresh, status bar, console, chat, notify, etc
-
 #include "client.h"
 
-qboolean scr_initialized;  // ready to draw
+qboolean scr_initialized;
 
 cvar_t* cl_timegraph;
 cvar_t* cl_debuggraph;
@@ -31,13 +29,6 @@ cvar_t* cl_graphheight;
 cvar_t* cl_graphscale;
 cvar_t* cl_graphshift;
 
-/*
-================
-SCR_DrawNamedPic
-
-Coordinates are 640*480 virtual values
-=================
-*/
 void SCR_DrawNamedPic(float x, float y, float width, float height, const char* picname) {
     qhandle_t hShader;
 
@@ -48,18 +39,10 @@ void SCR_DrawNamedPic(float x, float y, float width, float height, const char* p
     re.DrawStretchPic(x, y, width, height, 0, 0, 1, 1, hShader);
 }
 
-/*
-================
-SCR_AdjustFrom640
-
-Adjusted for resolution and screen aspect ratio
-================
-*/
 void SCR_AdjustFrom640(float* x, float* y, float* w, float* h) {
     float xscale;
     float yscale;
 
-    // scale for screen sizes
     xscale = cls.glconfig.vidWidth / (float)SCREEN_WIDTH;
     yscale = cls.glconfig.vidHeight / (float)SCREEN_HEIGHT;
     if (x) {
@@ -76,13 +59,6 @@ void SCR_AdjustFrom640(float* x, float* y, float* w, float* h) {
     }
 }
 
-/*
-================
-SCR_FillRect
-
-Coordinates are 640*480 virtual values
-=================
-*/
 void SCR_FillRect(float x, float y, float width, float height, const float* color) {
     re.SetColor(color);
 
@@ -92,22 +68,11 @@ void SCR_FillRect(float x, float y, float width, float height, const float* colo
     re.SetColor(NULL);
 }
 
-/*
-================
-SCR_DrawPic
-
-Coordinates are 640*480 virtual values
-=================
-*/
 void SCR_DrawPic(float x, float y, float width, float height, qhandle_t hShader) {
     SCR_AdjustFrom640(&x, &y, &width, &height);
     re.DrawStretchPic(x, y, width, height, 0, 0, 1, 1, hShader);
 }
 
-/*
-** SCR_DrawChar
-** chars are drawn at 640*480 virtual screen size
-*/
 static void SCR_DrawChar(int x, int y, float size, int ch) {
     int row, col;
     float frow, fcol;
@@ -142,10 +107,6 @@ static void SCR_DrawChar(int x, int y, float size, int ch) {
                       cls.charSetShader);
 }
 
-/*
-** SCR_DrawSmallChar
-** small chars are drawn at native screen resolution
-*/
 void SCR_DrawSmallChar(int x, int y, int ch) {
     int row, col;
     float frow, fcol;
@@ -174,22 +135,11 @@ void SCR_DrawSmallChar(int x, int y, int ch) {
                       cls.charSetShader);
 }
 
-/*
-==================
-SCR_DrawBigString[Color]
-
-Draws a multi-colored string with a drop shadow, optionally forcing
-to a fixed color.
-
-Coordinates are at 640 by 480 virtual resolution
-==================
-*/
 void SCR_DrawStringExt(int x, int y, float size, const char* string, float* setColor, qboolean forceColor, qboolean noColorEscape) {
     vec4_t color;
     const char* s;
     int xx;
 
-    // draw the drop shadow
     color[0] = color[1] = color[2] = 0;
     color[3] = setColor[3];
     re.SetColor(color);
@@ -205,7 +155,6 @@ void SCR_DrawStringExt(int x, int y, float size, const char* string, float* setC
         s++;
     }
 
-    // draw the colored text
     s = string;
     xx = x;
     re.SetColor(setColor);
@@ -240,20 +189,11 @@ void SCR_DrawBigStringColor(int x, int y, const char* s, vec4_t color, qboolean 
     SCR_DrawStringExt(x, y, BIGCHAR_WIDTH, s, color, qtrue, noColorEscape);
 }
 
-/*
-==================
-SCR_DrawSmallString[Color]
-
-Draws a multi-colored string with a drop shadow, optionally forcing
-to a fixed color.
-==================
-*/
 void SCR_DrawSmallStringExt(int x, int y, const char* string, float* setColor, qboolean forceColor, qboolean noColorEscape) {
     vec4_t color;
     const char* s;
     int xx;
 
-    // draw the colored text
     s = string;
     xx = x;
     re.SetColor(setColor);
@@ -276,9 +216,6 @@ void SCR_DrawSmallStringExt(int x, int y, const char* string, float* setColor, q
     re.SetColor(NULL);
 }
 
-/*
-** SCR_Strlen -- skips color escape codes
-*/
 static int SCR_Strlen(const char* str) {
     const char* s = str;
     int count = 0;
@@ -295,23 +232,10 @@ static int SCR_Strlen(const char* str) {
     return count;
 }
 
-/*
-** SCR_GetBigStringWidth
-*/
 int SCR_GetBigStringWidth(const char* str) {
     return SCR_Strlen(str) * BIGCHAR_WIDTH;
 }
 
-//===============================================================================
-
-/*
-=================
-SCR_DrawRecordText
-
-[QL] quakelive_steam.exe 0x004bddf0: text in 640x480 units, in the console's font at the size it
-is given, white
-=================
-*/
 static void SCR_DrawRecordText(float x, float y, float size, const char* text) {
     re.SetColor(colorWhite);
     re.Font_DrawString((int)(x * cls.glconfig.vidWidth / 640.0f), (int)(y * cls.glconfig.vidHeight / 480.0f), text,
@@ -319,16 +243,6 @@ static void SCR_DrawRecordText(float x, float y, float size, const char* text) {
     re.SetColor(NULL);
 }
 
-/*
-=================
-SCR_DrawDemoRecording
-
-[QL] quakelive_steam.exe 0x004bdeb0, gated by cl_demoRecordMessage (default 2, CL_Init). 1 is
-Quake 3's line -- the demo's name and how big it is -- centred low on the screen, at y 420; 2 is
-the record icon in the bottom left corner with "REC" beside it, and 0 turns it off. Retail
-also skips a single player demo, which this engine does not record
-=================
-*/
 void SCR_DrawDemoRecording(void) {
     char string[1024];
     float size;
@@ -343,7 +257,6 @@ void SCR_DrawDemoRecording(void) {
         Com_sprintf(string, sizeof(string), "RECORDING %s: %ik", clc.demoName, pos / 1024);
         SCR_DrawRecordText((float)((80 - (int)strlen(string)) * 4), 420.0f, 8.0f, string);
     } else if (cl_demoRecordMessage->integer == 2) {
-        // retail divides the height as an integer here, so the icon grows in steps of 11 pixels
         size = (float)((cls.glconfig.vidHeight / 480) * 11);
         re.SetColor(NULL);
         re.DrawStretchPic(cls.glconfig.vidWidth * 0.0015625f, cls.glconfig.vidHeight * 0.979167f, size, size, 0, 0, 1,
@@ -352,39 +265,18 @@ void SCR_DrawDemoRecording(void) {
     }
 }
 
-/*
-===============================================================================
-
-DEBUG GRAPH
-
-===============================================================================
-*/
-
 static int current;
 static float values[1024];
 
-/*
-==============
-SCR_DebugGraph
-==============
-*/
 void SCR_DebugGraph(float value) {
     values[current] = value;
     current = (current + 1) % ARRAY_LEN(values);
 }
 
-/*
-==============
-SCR_DrawDebugGraph
-==============
-*/
 void SCR_DrawDebugGraph(void) {
     int a, x, y, w, i, h;
     float v;
 
-    //
-    // draw the graph
-    //
     w = cls.glconfig.vidWidth;
     x = 0;
     y = cls.glconfig.vidHeight;
@@ -405,13 +297,6 @@ void SCR_DrawDebugGraph(void) {
     }
 }
 
-//=============================================================================
-
-/*
-==================
-SCR_Init
-==================
-*/
 void SCR_Init(void) {
     cl_timegraph = Cvar_Get("timegraph", "0", CVAR_CHEAT);
     cl_debuggraph = Cvar_Get("debuggraph", "0", CVAR_CHEAT);
@@ -422,15 +307,6 @@ void SCR_Init(void) {
     scr_initialized = qtrue;
 }
 
-//=======================================================
-
-/*
-==================
-SCR_DrawScreenField
-
-This will be called twice if rendering in stereo mode
-==================
-*/
 void SCR_DrawScreenField(stereoFrame_t stereoFrame) {
     qboolean uiFullscreen;
 
@@ -438,8 +314,6 @@ void SCR_DrawScreenField(stereoFrame_t stereoFrame) {
 
     uiFullscreen = (uivm && VM_Call(uivm, UI_IS_FULLSCREEN));
 
-    // wide aspect ratio screens need to have the sides cleared
-    // unless they are displaying game renderings
     if (uiFullscreen || clc.state < CA_LOADING) {
         if (cls.glconfig.vidWidth * SCREEN_HEIGHT > cls.glconfig.vidHeight * SCREEN_WIDTH) {
             re.SetColor(g_color_table[0]);
@@ -448,8 +322,6 @@ void SCR_DrawScreenField(stereoFrame_t stereoFrame) {
         }
     }
 
-    // if the menu is going to cover the entire screen, we
-    // don't need to render anything under it
     if (uivm && !uiFullscreen) {
         switch (clc.state) {
             default:
@@ -459,64 +331,45 @@ void SCR_DrawScreenField(stereoFrame_t stereoFrame) {
                 SCR_DrawCinematic();
                 break;
             case CA_DISCONNECTED:
-                // force menu up
                 S_StopAllSounds();
                 VM_Call(uivm, UI_SET_ACTIVE_MENU, UIMENU_MAIN);
                 break;
             case CA_CONNECTING:
             case CA_CHALLENGING:
             case CA_CONNECTED:
-                // connecting clients will only show the connection dialog
-                // refresh to update the time
                 VM_Call(uivm, UI_REFRESH, cls.realtime);
                 VM_Call(uivm, UI_DRAW_CONNECT_SCREEN, qfalse);
                 break;
             case CA_LOADING:
             case CA_PRIMED:
-                // draw the game information screen and loading progress
                 CL_CGameRendering(stereoFrame);
 
-                // also draw the connection information, so it doesn't
-                // flash away too briefly on local or lan games
-                // refresh to update the time
                 VM_Call(uivm, UI_REFRESH, cls.realtime);
                 VM_Call(uivm, UI_DRAW_CONNECT_SCREEN, qtrue);
                 break;
             case CA_ACTIVE:
-                // always supply STEREO_CENTER as vieworg offset is now done by the engine.
                 CL_CGameRendering(stereoFrame);
                 SCR_DrawDemoRecording();
                 break;
         }
     }
 
-    // the menu draws next
     if (Key_GetCatcher() & KEYCATCH_UI && uivm) {
         VM_Call(uivm, UI_REFRESH, cls.realtime);
     }
 
-    // console draws next
     Con_DrawConsole();
 
-    // debug graph can be drawn on top of anything
     if (cl_debuggraph->integer || cl_timegraph->integer || cl_debugMove->integer) {
         SCR_DrawDebugGraph();
     }
 }
 
-/*
-==================
-SCR_UpdateScreen
-
-This is called every frame, and can also be called explicitly to flush
-text to the screen.
-==================
-*/
 void SCR_UpdateScreen(void) {
     static int recursive;
 
     if (!scr_initialized) {
-        return;  // not initialized yet
+        return;
     }
 
     if (++recursive > 2) {
@@ -524,12 +377,8 @@ void SCR_UpdateScreen(void) {
     }
     recursive = 1;
 
-    // If there is no VM, there are also no rendering commands issued. Stop the renderer in
-    // that case.
     if (uivm || com_dedicated->integer) {
-        // XXX
         int in_anaglyphMode = Cvar_VariableIntegerValue("r_anaglyphMode");
-        // if running in stereo, we need to draw the frame twice
         if (cls.glconfig.stereoEnabled || in_anaglyphMode) {
             SCR_DrawScreenField(STEREO_LEFT);
             SCR_DrawScreenField(STEREO_RIGHT);

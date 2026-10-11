@@ -19,27 +19,14 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// cg_effects.c -- these functions generate localentities, usually as a result
-// of event processing
-
 #include "cg_local.h"
 
-/*
-==================
-CG_BubbleTrail
-
-Bullets shot underwater
-==================
-*/
 void CG_BubbleTrail(vec3_t start, vec3_t end, float spacing) {
     vec3_t move;
     vec3_t vec;
     float len;
     int i;
 
-    // [QL] cg_bubbleTrail controls bubble trail rendering (binary: 0x10012c53)
-    // Note: Q3 used cg_noProjectileTrail here (disable), QL uses cg_bubbleTrail (enable)
     if (!cg_bubbleTrail.integer) {
         return;
     }
@@ -48,7 +35,6 @@ void CG_BubbleTrail(vec3_t start, vec3_t end, float spacing) {
     VectorSubtract(end, start, vec);
     len = VectorNormalize(vec);
 
-    // advance a random amount first
     i = rand() % (int)spacing;
     VectorMA(move, i, vec, move);
 
@@ -90,18 +76,10 @@ void CG_BubbleTrail(vec3_t start, vec3_t end, float spacing) {
     }
 }
 
-/*
-=====================
-CG_SmokePuff
-
-Adds a smoke puff or blood trail localEntity.
-=====================
-*/
 localEntity_t* CG_SmokePuff(const vec3_t p, const vec3_t vel, float radius, float r, float g, float b, float a, float duration, int startTime, int fadeInTime, int leFlags, qhandle_t hShader) {
     static int seed = 0x92;
     localEntity_t* le;
     refEntity_t* re;
-    //	int fadeInTime = startTime + duration / 2;
 
     le = CG_AllocLocalEntity();
     le->leFlags = leFlags;
@@ -134,7 +112,6 @@ localEntity_t* CG_SmokePuff(const vec3_t p, const vec3_t vel, float radius, floa
     VectorCopy(p, re->origin);
     re->customShader = hShader;
 
-    // rage pro can't alpha fade, so use a different shader
     if (cgs.glconfig.hardwareType == GLHW_RAGEPRO) {
         re->customShader = cgs.media.smokePuffRageProShader;
         re->shaderRGBA[0] = 0xff;
@@ -154,14 +131,6 @@ localEntity_t* CG_SmokePuff(const vec3_t p, const vec3_t vel, float radius, floa
     return le;
 }
 
-/*
-==================
-CG_SmokePuff_ql
-
-[wolfcam] CG_SmokePuff without the random rotation: a 3.5 unit spark is round,
-so the rotation costs a multiply for nothing.
-==================
-*/
 localEntity_t* CG_SmokePuff_ql(const vec3_t p, const vec3_t vel, float radius, float r, float g, float b, float a, float duration, int startTime, int fadeInTime, int leFlags, qhandle_t hShader) {
     localEntity_t* le;
     refEntity_t* re;
@@ -196,7 +165,6 @@ localEntity_t* CG_SmokePuff_ql(const vec3_t p, const vec3_t vel, float radius, f
     VectorCopy(p, re->origin);
     re->customShader = hShader;
 
-    // rage pro can't alpha fade, so use a different shader
     if (cgs.glconfig.hardwareType == GLHW_RAGEPRO) {
         re->customShader = cgs.media.smokePuffRageProShader;
         re->shaderRGBA[0] = 0xff;
@@ -216,13 +184,6 @@ localEntity_t* CG_SmokePuff_ql(const vec3_t p, const vec3_t vel, float radius, f
     return le;
 }
 
-/*
-==================
-CG_SpawnEffect
-
-Player teleporting in or out
-==================
-*/
 void CG_SpawnEffect(vec3_t org) {
     localEntity_t* le;
     refEntity_t* re;
@@ -248,16 +209,6 @@ void CG_SpawnEffect(vec3_t org) {
     re->origin[2] += 16;
 }
 
-/*
-==================
-CG_SpawnIceShard
-
-[QL] 0x10014670. One ice fragment, shaped like CG_LaunchGib: LE_FRAGMENT,
-TR_GRAVITY, bounceFactor 0.6, endTime + 5000 + random() * 3000. Its
-leBounceSoundType and leMarkType are 4, the ice type, which trails through
-CG_IceTrail (0x1001d790).
-==================
-*/
 void CG_SpawnIceShard(const vec3_t origin, const vec3_t velocity, qhandle_t hModel) {
     localEntity_t* le;
     refEntity_t* re;
@@ -265,7 +216,7 @@ void CG_SpawnIceShard(const vec3_t origin, const vec3_t velocity, qhandle_t hMod
     le = CG_AllocLocalEntity();
     re = &le->refEntity;
 
-    le->leType = LE_FRAGMENT;  // 3 in binary
+    le->leType = LE_FRAGMENT;
     le->startTime = cg.time;
     le->endTime = le->startTime + 5000 + random() * 3000;
 
@@ -273,32 +224,20 @@ void CG_SpawnIceShard(const vec3_t origin, const vec3_t velocity, qhandle_t hMod
     AxisCopy(axisDefault, re->axis);
     re->hModel = hModel;
 
-    le->pos.trType = TR_GRAVITY;  // 5 in binary
+    le->pos.trType = TR_GRAVITY;
     VectorCopy(origin, le->pos.trBase);
     VectorCopy(velocity, le->pos.trDelta);
     le->pos.trTime = cg.time;
 
     le->bounceFactor = 0.6f;
 
-    // [QL] binary value 4 (LEBS_NAIL / LEMT_BULLETBURN); no ioquakelive equivalent
     le->leBounceSoundType = 4;
-    le->leMarkType = LEMT_ICE;  // [QL] 4: la estela de hielo mientras vuela
+    le->leMarkType = LEMT_ICE;
 }
 
-/*
-==================
-CG_ThawPlayer
-
-[QL] Spawns ice shards when a frozen player is thawed. Takes the thaw origin as
-a vec3_t (passed in ESI in the binary), NOT a centity_t. Spawns exactly 7 shards
-at the same origin, each with an independent random velocity (crandom()*250 per
-component). The two shard models alternate white,blue,white,... (indices 0..6).
-// Address: 0x100147d0
-==================
-*/
 void CG_ThawPlayer(const vec3_t origin) {
-    qhandle_t whiteIce = cgs.media.iceWhiteModel;  // 0x10a5f428
-    qhandle_t blueIce = cgs.media.iceBlueModel;    // 0x10a5f42c
+    qhandle_t whiteIce = cgs.media.iceWhiteModel;
+    qhandle_t blueIce = cgs.media.iceBlueModel;
     vec3_t vel;
     int i;
     qhandle_t model;
@@ -308,22 +247,11 @@ void CG_ThawPlayer(const vec3_t origin) {
         vel[1] = crandom() * 250.0f;
         vel[2] = crandom() * 250.0f;
 
-        model = (i & 1) ? blueIce : whiteIce;  // white, blue, white, ...
+        model = (i & 1) ? blueIce : whiteIce;
         CG_SpawnIceShard(origin, vel, model);
     }
 }
 
-/*
-===============
-CG_IceTrail
-
-[QL] 0x1001d790. The trail an ice shard leaves as it flies: one puff every 150 ms,
-where it passed, fading out over two seconds while drifting slowly upwards.
-
-The step is quantised to the clock, not to the frame, so the trail comes out equally
-spaced at any framerate.
-===============
-*/
 #define ICE_TRAIL_STEP 150
 
 void CG_IceTrail(localEntity_t* le) {
@@ -340,17 +268,11 @@ void CG_IceTrail(localEntity_t* le) {
         BG_EvaluateTrajectory(&le->pos, le->startTime + t, at);
         puff = CG_SmokePuff(at, vec3_origin, 20.0f, 1.0f, 1.0f, 1.0f, 1.0f, 2000.0f,
                             le->startTime + t, 0, 0, cgs.media.iceTrailShader);
-        // [QL] 0x1001d7d0: the puff fades in colour and rises 40 a second
         puff->leType = LE_FADE_RGB;
         puff->pos.trDelta[2] = 40.0f;
     }
 }
 
-/*
-===============
-CG_LightningBoltBeam
-===============
-*/
 void CG_LightningBoltBeam(vec3_t start, vec3_t end) {
     localEntity_t* le;
     refEntity_t* beam;
@@ -364,22 +286,12 @@ void CG_LightningBoltBeam(vec3_t start, vec3_t end) {
     beam = &le->refEntity;
 
     VectorCopy(start, beam->origin);
-    // this is the end point
     VectorCopy(end, beam->oldorigin);
 
     beam->reType = RT_LIGHTNING;
     beam->customShader = cgs.media.lightningShader[0];
 }
 
-/*
-==================
-CG_LightningDischargeEffect
-
-[QL] 0x10013310. The lightning gun's discharge sprite, spawned at the viewer:
-radius = (intensity * 10 + 48) >> 4, duration = intensity + 300. LE_SCALE_FADE
-reads only origin and radius, so CG_SmokePuff does the job.
-==================
-*/
 void CG_LightningDischargeEffect(int intensity) {
     qhandle_t shader;
     localEntity_t* le;
@@ -396,18 +308,13 @@ void CG_LightningDischargeEffect(int intensity) {
                       1.0f, 1.0f, 1.0f, 1.0f,
                       duration,
                       cg.time,
-                      0,   // fadeInTime
-                      0,   // leFlags
+                      0,
+                      0,
                       shader);
 
-    le->leType = LE_SCALE_FADE;  // 8 in binary (rendered by CG_AddScaleFade)
+    le->leType = LE_SCALE_FADE;
 }
 
-/*
-==================
-CG_KamikazeEffect
-==================
-*/
 void CG_KamikazeEffect(vec3_t org) {
     localEntity_t* le;
     refEntity_t* re;
@@ -416,7 +323,7 @@ void CG_KamikazeEffect(vec3_t org) {
     le->leFlags = 0;
     le->leType = LE_KAMIKAZE;
     le->startTime = cg.time;
-    le->endTime = cg.time + 3000;  // 2250;
+    le->endTime = cg.time + 3000;
     le->lifeRate = 1.0 / (le->endTime - le->startTime);
 
     le->color[0] = le->color[1] = le->color[2] = le->color[3] = 1.0;
@@ -433,16 +340,10 @@ void CG_KamikazeEffect(vec3_t org) {
     VectorCopy(org, re->origin);
 }
 
-/*
-==================
-CG_ObeliskExplode
-==================
-*/
 void CG_ObeliskExplode(vec3_t org, int entityNum) {
     localEntity_t* le;
     vec3_t origin;
 
-    // create an explosion
     VectorCopy(org, origin);
     origin[2] += 64;
     le = CG_MakeExplosion(origin, vec3_origin,
@@ -455,16 +356,10 @@ void CG_ObeliskExplode(vec3_t org, int entityNum) {
     le->lightColor[2] = 0.0;
 }
 
-/*
-==================
-CG_ObeliskPain
-==================
-*/
 void CG_ObeliskPain(vec3_t org) {
     float r;
     sfxHandle_t sfx;
 
-    // hit sound
     r = rand() & 3;
     if (r < 2) {
         sfx = cgs.media.obeliskHitSound1;
@@ -476,11 +371,6 @@ void CG_ObeliskPain(vec3_t org) {
     trap_S_StartSound(org, ENTITYNUM_NONE, CHAN_BODY, sfx);
 }
 
-/*
-==================
-CG_InvulnerabilityImpact
-==================
-*/
 void CG_InvulnerabilityImpact(vec3_t org, vec3_t angles) {
     localEntity_t* le;
     refEntity_t* re;
@@ -517,14 +407,6 @@ void CG_InvulnerabilityImpact(vec3_t org, vec3_t angles) {
     trap_S_StartSound(org, ENTITYNUM_NONE, CHAN_BODY, sfx);
 }
 
-/*
-==================
-CG_InvulnerabilityJuiced
-
-[QL] cgamex86.dll 0x10013920, unchanged from Team Arena; the model and the sound are the
-gore pack's dlc_gibs/juicer.md3 and invul_juiced.ogg. EV_JUICED calls it when the pack is loaded.
-==================
-*/
 void CG_InvulnerabilityJuiced(vec3_t org) {
     localEntity_t* le;
     refEntity_t* re;
@@ -553,18 +435,12 @@ void CG_InvulnerabilityJuiced(vec3_t org) {
     trap_S_StartSound(org, ENTITYNUM_NONE, CHAN_BODY, cgs.media.invulnerabilityJuicedSound);
 }
 
-/*
-==================
-CG_ScorePlum
-==================
-*/
 void CG_ScorePlum(int client, vec3_t org, int score) {
     localEntity_t* le;
     refEntity_t* re;
     vec3_t angles;
     static vec3_t lastPos;
 
-    // only visualize for the client that scored
     if (client != cg.predictedPlayerState.clientNum || cg_scorePlum.integer == 0) {
         return;
     }
@@ -584,7 +460,6 @@ void CG_ScorePlum(int client, vec3_t org, int score) {
         le->pos.trBase[2] -= 20;
     }
 
-    // CG_Printf( "Plum origin %i %i %i -- %i\n", (int)org[0], (int)org[1], (int)org[2], (int)Distance(org, lastPos));
     VectorCopy(org, lastPos);
 
     re = &le->refEntity;
@@ -596,29 +471,8 @@ void CG_ScorePlum(int client, vec3_t org, int score) {
     AnglesToAxis(angles, re->axis);
 }
 
-// ==========================================================================
-// [QL] Shared floating-effect pool
-//
-// cgamex86.dll keeps ONE pool of 32 screen-projected billboards (base
-// DAT_10ab9978, 0x80 bytes each) used by damage numbers, player outlines,
-// freeze/flag glows and head float-sprites. See floatingEffect_t in cg_local.h.
-// The pool is a static array here; it is zero-initialised on cgame load and
-// records self-expire in CG_UpdateFloatingEffects, so the binary keeps no
-// per-frame full reset (records with a ~1ms lifeRate live a single frame).
-// ==========================================================================
-
 static floatingEffect_t cg_floatingEffects[MAX_FLOATING_EFFECTS];
 
-/*
-==================
-CG_AllocFloatingEffect
-// Address: 0x1002a0d0
-[QL] Ghidra "CG_AllocMark" - a reused/mislabelled name; this is NOT the Q3 wall-mark
-allocator (that lives in cg_marks.c). Returns the first free pool record cleared to sane
-defaults (white, full alpha, spawnTime = cg.time, lifeRate 1ms), or NULL if all 32 slots
-are busy. In race a spectator who isn't following anybody gets none.
-==================
-*/
 floatingEffect_t* CG_AllocFloatingEffect(void) {
     int i;
     floatingEffect_t* fx;
@@ -633,7 +487,7 @@ floatingEffect_t* CG_AllocFloatingEffect(void) {
             memset(fx, 0, sizeof(*fx));
             fx->active = 1;
             fx->spawnTime = cg.time;
-            fx->lifeRate = 1.0f;  // 0x3f800000
+            fx->lifeRate = 1.0f;
             fx->color[0] = fx->color[1] = fx->color[2] = fx->color[3] = 1.0f;
             return fx;
         }
@@ -641,21 +495,12 @@ floatingEffect_t* CG_AllocFloatingEffect(void) {
     return NULL;
 }
 
-/*
-==================
-CG_ProjectFloatingEffect
-[QL] World point -> 640x480 virtual screen (top-left origin). ioquakelive stand-in
-for the engine projection pair the binary calls through its import table
-(DAT_1074cccc +0x1e0 / +0x1e4); CG_DrawText / CG_DrawPic then map 640x480 to real pixels.
-Returns qfalse when the point is behind the view (binary's forward-distance > 0 gate).
-==================
-*/
 qboolean CG_ProjectFloatingEffect(const vec3_t point, float* x, float* y) {
     vec3_t trans;
     float xc, yc, px, py, z;
 
     VectorSubtract(point, cg.refdef.vieworg, trans);
-    z = DotProduct(trans, cg.refdef.viewaxis[0]);  // forward distance
+    z = DotProduct(trans, cg.refdef.viewaxis[0]);
     if (z < 0.001f) {
         return qfalse;
     }
@@ -663,22 +508,11 @@ qboolean CG_ProjectFloatingEffect(const vec3_t point, float* x, float* y) {
     py = tan(cg.refdef.fov_y * (M_PI / 360.0f));
     xc = 640.0f * 0.5f;
     yc = 480.0f * 0.5f;
-    // viewaxis[1] is left, viewaxis[2] is up (Q3 convention)
     *x = xc - xc * DotProduct(trans, cg.refdef.viewaxis[1]) / (z * px);
     *y = yc - yc * DotProduct(trans, cg.refdef.viewaxis[2]) / (z * py);
     return qtrue;
 }
 
-/*
-==================
-CG_UpdateFloatingEffects
-// Address: 0x1002a190
-[QL] Ghidra mislabels this "CG_UpdateConfigStrings"; not a config-string updater, it
-ages the floating-effect pool. Every active record, once per frame:
-frees it when cg.time >= spawnTime + lifeRate, and (for records with doFade set) fades
-colour alpha from 1 to 0 across [spawnTime + fadeStart, spawnTime + lifeRate].
-==================
-*/
 void CG_UpdateFloatingEffects(void) {
     int i;
     floatingEffect_t* fx;
@@ -690,7 +524,7 @@ void CG_UpdateFloatingEffects(void) {
             continue;
         }
         if (cg.time >= fx->spawnTime + fx->lifeRate) {
-            fx->active = 0;  // expire
+            fx->active = 0;
             continue;
         }
         if (fx->doFade && fx->lifeRate > 0.0f) {
@@ -708,15 +542,6 @@ void CG_UpdateFloatingEffects(void) {
     }
 }
 
-/*
-==================
-CG_DrawFloatingEffects
-
-[QL] 0x10011680, which Ghidra names CG_DrawDamagePlums: it draws the whole pool,
-not only plums. A world sprite of the viewer's own team is skipped, and so is one
-of the viewer himself under custom setting 0x40000.
-==================
-*/
 void CG_DrawFloatingEffects(void) {
     int i;
     floatingEffect_t* fx;
@@ -735,7 +560,6 @@ void CG_DrawFloatingEffects(void) {
             continue;
         }
 
-        // billboard base point: world origin lifted by zOffset, in front of the view
         VectorCopy(fx->origin, base);
         base[2] += fx->zOffset;
         VectorSubtract(base, cg.refdef.vieworg, delta);
@@ -748,14 +572,12 @@ void CG_DrawFloatingEffects(void) {
 
         trap_R_SetColor(fx->color);
 
-        // on-screen size = max(minPixels, 2 * projected height of half worldSize)
         size = fx->minPixels;
         VectorMA(base, fx->worldSize * 0.5f, cg.refdef.viewaxis[2], top);
         if (CG_ProjectFloatingEffect(top, &tx, &ty) && size <= fabs(ty - sy) * 2.0f) {
             size = fabs(ty - sy) * 2.0f;
         }
 
-        // life fraction and quadratic drift (binary uses pow(life, 2))
         life = (cg.time - fx->spawnTime) / fx->lifeRate;
         arc = life * life;
         mx = fx->velX * life + fx->accX * arc;
@@ -777,43 +599,28 @@ void CG_DrawFloatingEffects(void) {
     }
 }
 
-/*
-==================
-CG_DamagePlum
-// Address: 0x10013660
-[QL] Floating damage number. Allocates a shared floating-effect record (FE_DAMAGE_NUMBER)
-carrying the damage as text; CG_DrawFloatingEffects projects and floats it. Replaces the
-old LE_DAMAGEPLUM local-entity / number-sprite path. Only the weapons cg_damagePlum lists
-show one: the binary makes the list a weapon mask (BG_ParseWeaponStringtoFlag, 0x10001e50)
-and tests the hit's weapon bit.
-==================
-*/
-
-// [QL] 0x10079080, 48 bytes a weapon: the colour each weapon's damage numbers take with
-// cg_damagePlumColorStyle 3
 static const vec4_t cg_damagePlumWeaponColors[16] = {
-    {0.0f, 0.0f, 0.0f, 1.0f},        // none
-    {0.0f, 0.847f, 1.0f, 1.0f},      // gauntlet
-    {1.0f, 1.0f, 0.0f, 1.0f},        // machinegun
-    {1.0f, 0.49f, 0.0f, 1.0f},       // shotgun
-    {0.007f, 0.564f, 0.07f, 1.0f},   // grenade launcher
-    {1.0f, 0.003f, 0.003f, 1.0f},    // rocket launcher
-    {1.0f, 1.0f, 0.729f, 1.0f},      // lightning gun
-    {0.0f, 1.0f, 0.0f, 1.0f},        // railgun
-    {0.772f, 0.0f, 1.0f, 1.0f},      // plasma gun
-    {0.003f, 0.352f, 1.0f, 1.0f},    // bfg
-    {0.317f, 0.666f, 0.862f, 1.0f},  // grappling hook
-    {0.0f, 1.0f, 0.701f, 1.0f},      // nailgun
-    {1.0f, 0.0f, 0.486f, 1.0f},      // proximity launcher
-    {0.721f, 0.721f, 0.721f, 1.0f},  // chaingun
-    {0.807f, 0.647f, 0.0f, 1.0f},    // heavy machinegun
+    {0.0f, 0.0f, 0.0f, 1.0f},
+    {0.0f, 0.847f, 1.0f, 1.0f},
+    {1.0f, 1.0f, 0.0f, 1.0f},
+    {1.0f, 0.49f, 0.0f, 1.0f},
+    {0.007f, 0.564f, 0.07f, 1.0f},
+    {1.0f, 0.003f, 0.003f, 1.0f},
+    {1.0f, 1.0f, 0.729f, 1.0f},
+    {0.0f, 1.0f, 0.0f, 1.0f},
+    {0.772f, 0.0f, 1.0f, 1.0f},
+    {0.003f, 0.352f, 1.0f, 1.0f},
+    {0.317f, 0.666f, 0.862f, 1.0f},
+    {0.0f, 1.0f, 0.701f, 1.0f},
+    {1.0f, 0.0f, 0.486f, 1.0f},
+    {0.721f, 0.721f, 0.721f, 1.0f},
+    {0.807f, 0.647f, 0.0f, 1.0f},
     {0.0f, 0.0f, 0.0f, 0.0f},
 };
 
 void CG_DamagePlum(int damage, int weapon, vec3_t org) {
     floatingEffect_t* fx;
 
-    // [QL] 0x1001366a: a weapon the list leaves out shows none
     if (weapon < 0 || weapon >= 16 || !(BG_ParseWeaponStringtoFlag(cg_damagePlum.string) & (1 << weapon))) {
         return;
     }
@@ -824,16 +631,15 @@ void CG_DamagePlum(int damage, int weapon, vec3_t org) {
     }
 
     fx->type = FE_DAMAGE_NUMBER;
-    fx->lifeRate = 1000.0f;  // 0x447a0000
-    fx->fadeStart = 600.0f;  // 0x44160000
+    fx->lifeRate = 1000.0f;
+    fx->fadeStart = 600.0f;
     fx->doFade = 1;
 
-    // colour style based on cg_damagePlumColorStyle (binary DAT_10b71fec, 0x10013698)
     switch (cg_damagePlumColorStyle.integer) {
-    case 3:  // the weapon's own colour (0x100136d5)
+    case 3:
         Vector4Copy(cg_damagePlumWeaponColors[weapon], fx->color);
         break;
-    case 2:  // damage tier colours
+    case 2:
         if (damage >= 76) {
             fx->color[0] = 1.0f; fx->color[1] = 0.0f; fx->color[2] = 0.0f;
         } else if (damage >= 51) {
@@ -845,7 +651,7 @@ void CG_DamagePlum(int damage, int weapon, vec3_t org) {
         }
         fx->color[3] = 1.0f;
         break;
-    default: {  // style 1: white to red by damage/100 (0x100136a5, the lerp at 0x10057a30)
+    default: {
         float t = damage / 100.0f;
         float gb = 1.0f - t;
 
@@ -862,24 +668,17 @@ void CG_DamagePlum(int damage, int weapon, vec3_t org) {
     }
 
     VectorCopy(org, fx->origin);
-    // random world scatter (+/-10 on each axis)
     fx->origin[0] += crandom() * 10.0f;
     fx->origin[1] += crandom() * 10.0f;
     fx->origin[2] += crandom() * 10.0f;
 
-    // screen drift: rises (screen -Y) and settles quadratically, small X jitter
-    fx->velX = crandom() * 50.0f;           // 0x19: +/-50
-    fx->velY = -120.0f - random() * 20.0f;  // 0x1a: -120 .. -140
-    fx->accY = 150.0f;                      // 0x1c: * life^2
+    fx->velX = crandom() * 50.0f;
+    fx->velY = -120.0f - random() * 20.0f;
+    fx->accY = 150.0f;
 
     Com_sprintf(fx->text, sizeof(fx->text), "%i", damage);
 }
 
-/*
-====================
-CG_MakeExplosion
-====================
-*/
 localEntity_t* CG_MakeExplosion(vec3_t origin, vec3_t dir, qhandle_t hModel, qhandle_t shader, int msec, qboolean isSprite) {
     float ang;
     localEntity_t* ex;
@@ -890,14 +689,12 @@ localEntity_t* CG_MakeExplosion(vec3_t origin, vec3_t dir, qhandle_t hModel, qha
         CG_Error("CG_MakeExplosion: msec = %i", msec);
     }
 
-    // skew the time a bit so they aren't all in sync
     offset = rand() & 63;
 
     ex = CG_AllocLocalEntity();
     if (isSprite) {
         ex->leType = LE_SPRITE_EXPLOSION;
 
-        // randomly rotate sprite orientation
         ex->refEntity.rotation = rand() % 360;
         VectorScale(dir, 16, tmpVec);
         VectorAdd(tmpVec, origin, newOrigin);
@@ -905,7 +702,6 @@ localEntity_t* CG_MakeExplosion(vec3_t origin, vec3_t dir, qhandle_t hModel, qha
         ex->leType = LE_EXPLOSION;
         VectorCopy(origin, newOrigin);
 
-        // set axis with random rotate
         if (!dir) {
             AxisClear(ex->refEntity.axis);
         } else {
@@ -918,13 +714,11 @@ localEntity_t* CG_MakeExplosion(vec3_t origin, vec3_t dir, qhandle_t hModel, qha
     ex->startTime = cg.time - offset;
     ex->endTime = ex->startTime + msec;
 
-    // bias the time so all shader effects start correctly
     ex->refEntity.shaderTime = ex->startTime / 1000.0f;
 
     ex->refEntity.hModel = hModel;
     ex->refEntity.customShader = shader;
 
-    // set origin
     VectorCopy(newOrigin, ex->refEntity.origin);
     VectorCopy(newOrigin, ex->refEntity.oldorigin);
 
@@ -933,18 +727,6 @@ localEntity_t* CG_MakeExplosion(vec3_t origin, vec3_t dir, qhandle_t hModel, qha
     return ex;
 }
 
-/*
-=================
-CG_Bleed
-
-The spurt of blood when a character gets hit.
-
-[QL] 0x10013da0. Routed through CG_SmokePuff and then overridden: radius 32,
-duration 500, shader bloodSpray[rand() & 3], trDelta[2] 40 so the puff sinks.
-The binary's leType 6 is this tree's LE_FALL_SCALE_FADE (5), QL's enum carrying
-one extra entry earlier on.
-=================
-*/
 void CG_Bleed(vec3_t origin, int entityNum) {
     localEntity_t* blood;
 
@@ -952,59 +734,31 @@ void CG_Bleed(vec3_t origin, int entityNum) {
         return;
     }
 
-    // [QL] 0x10013da0, the very first thing the function does:
-    // `cmp [bloodSpray[0]], 0; je return`. That guard is not defensive
-    // coding, it is the switch. Retail pak00 defines no bloodSpray1..4
-    // shader and ships no image by that name, so RE_RegisterShader hands
-    // back 0 and every blood path in the module turns itself off. Quake
-    // Live as sold has no blood: the gore is DLC content (dlc_gibs), and
-    // cg_blood still defaults to "1" because it never had to be the knob.
     if (!cgs.media.bloodSprayShaders[0]) {
         return;
     }
 
     blood = CG_SmokePuff(origin, vec3_origin,
-                         32,          // radius
-                         1, 1, 1, 1,  // color
-                         500,         // duration
-                         cg.time,     // startTime
-                         0,           // fadeInTime
-                         0,           // leFlags
+                         32,
+                         1, 1, 1, 1,
+                         500,
+                         cg.time,
+                         0,
+                         0,
                          cgs.media.bloodSprayShaders[rand() & 3]);
 
     blood->leType = LE_FALL_SCALE_FADE;
     blood->pos.trDelta[2] = 40;
 
-    // don't show the player's own blood in first person
     if (entityNum == cg.snap->ps.clientNum) {
         blood->refEntity.renderfx |= RF_THIRD_PERSON;
     }
 }
 
-/*
-==================
-CG_BloodSplatEffect
-
-The blood thrown off at an impact point, called twice per hit as QL does, which
-is where the heavier look comes from. The binary's own splat routine
-(0x1001da00) carries decal work that is not decoded, so only the pair of puffs
-is reproduced.
-==================
-*/
 void CG_BloodSplatEffect(vec3_t origin, int entityNum) {
     CG_Bleed(origin, entityNum);
 }
 
-/*
-==================
-CG_SpawnParticleEffect
-
-[QL] 0x10012f30. One impact spark: a gfx/misc/tracer sprite at a random rotation,
-LE_MOVE_SCALE_FADE, spawned by the four hit paths while cg_impactSparks is on
-(0x10054ced, 0x10055577, 0x10055b67, 0x1005635f). The RagePro branch is left out:
-this engine has no such hardware type.
-==================
-*/
 void CG_SpawnParticleEffect(vec3_t origin, vec3_t vel, float size, float r, float g, float b, float a,
                             float lifetime, int startTime, int flags, qhandle_t shader) {
     localEntity_t* le;
@@ -1043,30 +797,6 @@ void CG_SpawnParticleEffect(vec3_t origin, vec3_t vel, float size, float r, floa
     re->shaderRGBA[3] = 255;
 }
 
-/*
-===================
-ELECTROGIBS
-
-Quake Live's death effect, reimplemented from wolfcamql's *_ql gib functions.
-wolfcamql plays Quake Live demos on a Quake 3 engine, so those functions are a
-working reconstruction in the same local-entity vocabulary this fork speaks.
-
-There is no blood in any of it. Retail ships its gore as DLC a stock install
-does not have, and the retail code self-disables when those assets fail to
-resolve, so this is the whole of what Quake Live shows.
-
-Every number lives in a cg_gib* cvar carrying wolfcam's default. Retail
-hardcodes all of it, so the cvars are an addition. A few are clamped where
-wolfcam trusts the user: a cg_gibTime or cg_gibStepTime of 0 divides by zero,
-and a large cg_gibCount overruns MAX_LOCAL_ENTITIES and recycles the entity
-CG_AddLocalEntities is walking toward. The clamps sit far outside the useful
-range.
-===================
-*/
-
-// A cg_gib*Color cvar holds a packed 0xRRGGBB. wolfcam's own cvar layer
-// parses a leading 0x into vmCvar_t.integer; this engine's does not, so the
-// hex spelling - the only one anybody writes a colour in - is read here.
 static int CG_ElectroGibColorValue(const vmCvar_t* cvar) {
     const char* s = cvar->string;
     int value;
@@ -1091,17 +821,6 @@ static int CG_ElectroGibColorValue(const vmCvar_t* cvar) {
     return value;
 }
 
-/*
-===================
-CG_ElectroGibTracerShader
-
-[wolfcam] The coloured paths draw on "wc/tracer" and "wc/tracerHighlight", two
-shaders wolfcamql ships in its own pk3 and a Quake Live install has neither. A
-shader that cannot be found comes back as handle 0, which would draw the white
-default over every spark, so this falls back to "gfx/misc/tracer" - the shader
-the uncoloured path uses, and it takes the tint just as well.
-===================
-*/
 static qhandle_t CG_ElectroGibTracerShader(qboolean highlight) {
     qhandle_t shader;
 
@@ -1113,16 +832,6 @@ static qhandle_t CG_ElectroGibTracerShader(qboolean highlight) {
     return shader;
 }
 
-/*
-===================
-CG_ElectroGibSparkShader
-
-Picks the shader and colour every spark is drawn with. wolfcamql repeats this
-block verbatim in CG_LaunchGib_ql_floating and CG_BloodTrail_ql; it is one
-function here so the two cannot drift apart. Shared with cg_localents.c,
-which draws the trail.
-===================
-*/
 qhandle_t CG_ElectroGibSparkShader(vec4_t color) {
     int packed;
 
@@ -1140,27 +849,10 @@ qhandle_t CG_ElectroGibSparkShader(vec4_t color) {
     return CG_ElectroGibTracerShader(cg_gibSparksHighlight.integer ? qtrue : qfalse);
 }
 
-// cg_gibTime drives three lifetimes and a divisor; 0 would make lifeRate
-// infinite and the sprite never fade.
 static int CG_ElectroGibTime(void) {
     return cg_gibTime.integer < 1 ? 1 : cg_gibTime.integer;
 }
 
-/*
-===================
-CG_LaunchElectroGib
-
-One of the spheres a player breaks into. [wolfcam] CG_LaunchGib_ql. Two details
-carry the look, and both differ from Quake 3's CG_LaunchGib: the lifetime is a
-flat cg_gibTime where Quake 3 rolls 5000..8000, and leMarkType is
-LEMT_ELECTROGIB, which CG_AddFragment reads to hang a spark trail off the sphere
-while it falls.
-
-wolfcam writes pos.gravity and selects TR_GRAVITY, which in this fork ignores
-the field and uses DEFAULT_GRAVITY. TR_CUSTOM_GRAVITY reads it, so the cvar
-means what it says at every value.
-===================
-*/
 static void CG_LaunchElectroGib(vec3_t origin, vec3_t velocity) {
     localEntity_t* le;
     refEntity_t* re;
@@ -1202,17 +894,6 @@ static void CG_LaunchElectroGib(vec3_t origin, vec3_t velocity) {
     le->leMarkType = LEMT_ELECTROGIB;
 }
 
-/*
-===================
-CG_LaunchElectroGibSpark
-
-One of the sparks that drift up out of the kill. [wolfcam]
-CG_LaunchGib_ql_floating - despite the name it is a smoke puff whose type is
-rewritten afterwards, so it travels on CG_SmokePuff_ql's TR_LINEAR trajectory
-and fades instead of bouncing. The don't-scale flags keep it a hard point of
-light; without them CG_AddMoveScaleFade grows it into a smoke ball.
-===================
-*/
 static void CG_LaunchElectroGibSpark(vec3_t origin, vec3_t velocity) {
     localEntity_t* le;
     qhandle_t shader;
@@ -1221,12 +902,12 @@ static void CG_LaunchElectroGibSpark(vec3_t origin, vec3_t velocity) {
     shader = CG_ElectroGibSparkShader(color);
 
     le = CG_SmokePuff_ql(origin, vec3_origin,
-                         cg_gibSparksSize.value,                  // radius
-                         color[0], color[1], color[2], color[3],  // color
-                         CG_ElectroGibTime(),                     // duration
-                         cg.time,                                 // startTime
-                         0,                                       // fadeInTime
-                         0,                                       // flags
+                         cg_gibSparksSize.value,
+                         color[0], color[1], color[2], color[3],
+                         CG_ElectroGibTime(),
+                         cg.time,
+                         0,
+                         0,
                          shader);
 
     le->leType = LE_MOVE_SCALE_FADE;
@@ -1240,19 +921,6 @@ static void CG_LaunchElectroGibSpark(vec3_t origin, vec3_t velocity) {
     le->refEntity.rotation = 0;
 }
 
-/*
-===================
-CG_DeathEffect
-
-The flash the kill opens with. [wolfcam] CG_DeathEffect: a single
-LE_SPRITE_EXPLOSION on the "deathEffect" shader, lifted 16 units so it sits on
-the torso, and no dynamic light.
-
-The radius set here is written over every frame - CG_AddSpriteExplosion
-hardcodes `42 * (1 - c) + 30` - so the sprite swells from 30 to 72 over its life
-at a third of full alpha.
-===================
-*/
 static void CG_DeathEffect(vec3_t org) {
     localEntity_t* le;
     refEntity_t* re;
@@ -1280,21 +948,9 @@ static void CG_DeathEffect(vec3_t org) {
     re->origin[2] += 16;
 }
 
-// [QL] 0x10014ccf / 0x10014d2a, the same constants Quake 3 used.
 #define GIB_VELOCITY 250
 #define GIB_JUMP 250
 
-/*
-===================
-CG_LaunchGib
-
-One body part, for the gore branch. This is Quake 3's CG_LaunchGib
-unchanged - five to eight seconds of tumbling under world gravity, bouncing
-at 0.6, leaving blood marks and splat sounds - because that is what the
-workshop pack restores. It shares nothing with CG_LaunchElectroGib beyond
-the local-entity type.
-===================
-*/
 static void CG_LaunchGib(vec3_t origin, vec3_t velocity, qhandle_t hModel) {
     localEntity_t* le;
     refEntity_t* re;
@@ -1321,16 +977,6 @@ static void CG_LaunchGib(vec3_t origin, vec3_t velocity, qhandle_t hModel) {
     le->leMarkType = LEMT_BLOOD;
 }
 
-/*
-===================
-CG_GibPlayerBodyParts
-
-[QL] 0x10014cad, the branch taken when the gore pack is installed. Eleven pieces
-thrown from the body origin, with the head decided by a coin flip (0x10014cb9).
-That is Quake 3's CG_GibPlayer to the constant, which is the point of the pack.
-Unreachable, and so untestable, on a stock install.
-===================
-*/
 static void CG_GibPlayerBodyParts(vec3_t playerOrigin) {
     vec3_t origin, velocity;
     qhandle_t parts[10];
@@ -1357,30 +1003,17 @@ static void CG_GibPlayerBodyParts(vec3_t playerOrigin) {
     }
 }
 
-/*
-===================
-CG_GibPlayer
-
-[QL] 0x10014c80. There is no cvar: the switch is whether dlc_gibs/skull.md3
-registered (the handle at 0x10a5f430, tested at 0x10014c94). With the gore pack
-installed the body parts come out, without it the electrogibs do. The same
-handle steers the death sound (0x1001bf80), the bounce sound (0x1001ec16) and
-the juiced effect (0x1001ab39).
-===================
-*/
 void CG_GibPlayer(vec3_t playerOrigin, vec3_t dir) {
     vec3_t gibDir, origin, velocity;
     vec3_t aimedVelocity, looseVelocity;
     float gibVelocity, gibJump, mix;
     int count, i;
 
-    // [QL] 0x10014c94
     if (cgs.media.gibSkull) {
         CG_GibPlayerBodyParts(playerOrigin);
         return;
     }
 
-    // allow the sphere count to be turned down for speed
     count = cg_gibCount.integer;
     if (count < 1) {
         return;
@@ -1449,11 +1082,6 @@ void CG_GibPlayer(vec3_t playerOrigin, vec3_t dir) {
     }
 }
 
-/*
-==================
-CG_LaunchExplode
-==================
-*/
 void CG_LaunchExplode(vec3_t origin, vec3_t velocity, qhandle_t hModel) {
     localEntity_t* le;
     refEntity_t* re;
@@ -1482,13 +1110,6 @@ void CG_LaunchExplode(vec3_t origin, vec3_t velocity, qhandle_t hModel) {
 
 #define EXP_VELOCITY 100
 #define EXP_JUMP 150
-/*
-===================
-CG_BigExplode
-
-Generated a bunch of gibs launching out from the bodies location
-===================
-*/
 void CG_BigExplode(vec3_t playerOrigin) {
     vec3_t origin, velocity;
 

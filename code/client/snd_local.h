@@ -19,23 +19,19 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// snd_local.h -- private sound definations
-
 #include "../qcommon/q_shared.h"
 #include "../qcommon/qcommon.h"
 #include "snd_public.h"
 
-#define PAINTBUFFER_SIZE 8192  // this is in samples
+#define PAINTBUFFER_SIZE 8192
 
-#define SND_CHUNK_SIZE 2048  // samples
+#define SND_CHUNK_SIZE 2048
 
 typedef struct {
-    int left;  // the final values will be clamped to +/- 0x00ffff00 and shifted down
+    int left;
     int right;
 } portable_samplepair_t;
 
-// [QL] quakelive_steam.exe keeps every sound as plain 16-bit samples: its sfx_t has no
-// compression fields and nothing in the mixer decodes ADPCM, wavelet or mu-law
 typedef struct sndBuffer_s {
     short sndChunk[SND_CHUNK_SIZE];
     struct sndBuffer_s* next;
@@ -44,8 +40,8 @@ typedef struct sndBuffer_s {
 
 typedef struct sfx_s {
     sndBuffer* soundData;
-    qboolean defaultSound;  // couldn't be loaded, so use buzz
-    qboolean inMemory;      // not in Memory
+    qboolean defaultSound;
+    qboolean inMemory;
     int soundLength;
     int soundChannels;
     char soundName[MAX_QPATH];
@@ -55,9 +51,9 @@ typedef struct sfx_s {
 
 typedef struct {
     int channels;
-    int samples;           // mono samples in buffer
-    int fullsamples;       // samples with all channels in buffer (samples divided by channels)
-    int submission_chunk;  // don't mix less than this #
+    int samples;
+    int fullsamples;
+    int submission_chunk;
     int samplebits;
     int isfloat;
     int speed;
@@ -66,8 +62,6 @@ typedef struct {
 
 #define START_SAMPLE_IMMEDIATE 0x7fffffff
 
-// [QL] one looping sound per entity, re-added every frame; there is no "kill" flag and no
-// separate real (sphere) looping sound in retail
 typedef struct loopSound_s {
     vec3_t origin;
     sfx_t* sfx;
@@ -80,19 +74,17 @@ typedef struct loopSound_s {
     float oldDopplerScale;
 } loopSound_t;
 
-// [QL] retail's channel carries no master volume: the start volume goes straight into
-// leftvol/rightvol and every respatialize works from 127
 typedef struct
 {
     int allocTime;
-    int startSample;        // START_SAMPLE_IMMEDIATE = set immediately on next mix
-    int entnum;             // to allow overriding a specific sound
-    int entchannel;         // to allow overriding a specific sound
-    int leftvol;            // 0-255 volume after spatialization
-    int rightvol;           // 0-255 volume after spatialization
-    vec3_t origin;          // only use if fixed_origin is set
-    qboolean fixed_origin;  // use origin instead of fetching entnum's origin
-    sfx_t* thesfx;          // sfx structure
+    int startSample;
+    int entnum;
+    int entchannel;
+    int leftvol;
+    int rightvol;
+    vec3_t origin;
+    qboolean fixed_origin;
+    sfx_t* thesfx;
     qboolean doppler;
     float dopplerScale;
     float oldDopplerScale;
@@ -106,16 +98,15 @@ typedef struct {
     int width;
     int channels;
     int samples;
-    int dataofs;  // chunk starts this many bytes from file start
+    int dataofs;
 } wavinfo_t;
 
-// Interface between Q3 sound "api" and the sound backend
 typedef struct
 {
     void (*Shutdown)(void);
     void (*StartSound)(vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx);
     void (*StartLocalSound)(sfxHandle_t sfx, int channelNum);
-    void (*StartLocalSoundVolume)(sfxHandle_t sfx, int channelNum, float volume);  // [QL]
+    void (*StartLocalSoundVolume)(sfxHandle_t sfx, int channelNum, float volume);
     void (*StartBackgroundTrack)(const char* intro, const char* loop);
     void (*StopBackgroundTrack)(void);
     void (*RawSamples)(int stream, int samples, int rate, int width, int channels, const byte* data, float volume, int entityNum);
@@ -133,38 +124,21 @@ typedef struct
     void (*ClearSoundBuffer)(void);
     void (*SoundInfo)(void);
     void (*SoundList)(void);
-    void (*SetMute)(qboolean mute);  // [ioquakelive] silences the device at once, mixing goes on
+    void (*SetMute)(qboolean mute);
 } soundInterface_t;
 
-/*
-====================================================================
-
-  SYSTEM SPECIFIC FUNCTIONS
-
-====================================================================
-*/
-
-// [ioquakelive] silences what reaches the device, at once, while the mixer keeps mixing
 void SNDDMA_Mute(qboolean mute);
 
-// initializes cycling through a DMA buffer and returns information on it
 qboolean SNDDMA_Init(void);
 
-// gets the current DMA position
 int SNDDMA_GetDMAPos(void);
 
-// shutdown the DMA xfer.
 void SNDDMA_Shutdown(void);
 
 void SNDDMA_BeginPainting(void);
 
 void SNDDMA_Submit(void);
 
-//====================================================================
-
-// [ioquakelive] retail mixes 96 at once, and in a crowded fight they run out: a new sound then
-// takes over the oldest one of the same player, which is the lightning gun and the hit beeps
-// cutting out on a full server. Measured with 24 bots on a duel map.
 #define MAX_CHANNELS 256
 
 extern channel_t s_channels[MAX_CHANNELS];
@@ -203,5 +177,5 @@ void S_memoryLoad(sfx_t* sfx);
 void S_FreeOldestSound(void);
 
 qboolean S_Base_Init(soundInterface_t* si);
-qboolean S_Base_ReopenDevice(void);  // [ioquakelive] ver snd_dma.c
+qboolean S_Base_ReopenDevice(void);
 void S_Base_ClearBackgroundLoop(void);

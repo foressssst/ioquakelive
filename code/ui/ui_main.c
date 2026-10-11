@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "ui_local.h"
 
 uiInfo_t uiInfo;
@@ -53,7 +52,6 @@ static const char* UI_SelectedHead(int index, int* actual);
 static int UI_GetIndexFromSelection(int actual);
 static void UI_DrawCinematic(int handle, float x, float y, float w, float h);
 
-// [QL] Server-browser forward declarations (definitions live just before the feeders).
 static void UI_InsertServerIntoDisplayList(int num, int position);
 static void UI_RemoveServerFromDisplayList(int num);
 static void UI_BinaryServerInsert(int num);
@@ -64,11 +62,9 @@ static void UI_BuildServerStatus(qboolean force);
 static void UI_BuildFindPlayerList(qboolean force);
 static void UI_ServersSort(int column, qboolean force);
 static void UI_DoServerRefresh(void);
-static void UI_ServerRefreshComplete(void);  // QL name for missionpack UI_StopServerRefresh
+static void UI_ServerRefreshComplete(void);
 static void UI_StartServerRefresh(qboolean full);
 
-// [QL] Owner-draw + key-handler helpers for the skill and server-browser widgets
-// (definitions live further down). Forward-declared to satisfy the switch dispatchers.
 static void UI_DrawSkill(rectDef_t *rect, float scale, vec4_t color, int textStyle);
 static void UI_DrawNetSource(rectDef_t *rect, float scale, vec4_t color, int textStyle);
 static void UI_DrawServerFilter(rectDef_t *rect, float scale, vec4_t color, int textStyle);
@@ -77,9 +73,6 @@ static qboolean UI_Skill_HandleKey(int flags, float *special, int key);
 static qboolean UI_NetSource_HandleKey(int flags, float *special, int key);
 static qboolean UI_ServerFilter_HandleKey(int flags, float *special, int key);
 
-// [QL] Net-source names, uix86.dll table @0x1002ae38 (indexed by UI_DrawNetSource). The
-// clamp there admits index 4, one past the real sources, so entry [4] mirrors the binary's
-// adjacent-rodata spillover ("FFA"); it only shows if ui_netSource is forced to 4.
 static const char *netSourceNames[] = {
     "Local",
     "Mplayer",
@@ -88,15 +81,11 @@ static const char *netSourceNames[] = {
     "FFA"
 };
 
-// [QL] Month abbreviations for the ui_lastServerRefresh_%i timestamp cvar.
 static const char *monthAbbrev[] = {
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
 
-// [QL] Server browser "game" (mod) filter table, verified from uix86.dll @0x100239bc
-// (7 {description, basedir} pairs). .basedir is compared against the server info "game"
-// key when ui_serverFilterType > 0.
 static serverFilter_t serverFilters[] = {
     { "All",                   "" },
     { "Quake Live",            "" },
@@ -107,14 +96,6 @@ static serverFilter_t serverFilters[] = {
     { "OSP",                   "osp" }
 };
 
-/*
-================
-vmMain
-
-This is the only way control passes into the module.
-This must be the very first function compiled into the .qvm file
-================
-*/
 vmCvar_t ui_debug;
 vmCvar_t ui_initialized;
 
@@ -127,7 +108,6 @@ void _UI_Refresh(int realtime);
 qboolean _UI_IsFullscreen(void);
 qboolean UI_CheckActiveMenu(void);
 void UI_WalkMenus(void (*callback)(const char* mapLoadName));
-// [QL] uix86.dll postgame scoreboard + cvar-change callbacks (forward decls)
 static void UI_SetScoreBoardCvars(const postGameInfo_t* info, qboolean redBlue);
 static void UI_SPPostgameMenu_f(const char* mapname, int gameType);
 static void UI_CheckModelBright(const char* modelCvar, const char* skinCvar, const char* targetCvar);
@@ -174,7 +154,7 @@ Q_EXPORT intptr_t vmMain(int command, intptr_t arg0, intptr_t arg1, intptr_t arg
         case UI_DRAW_CONNECT_SCREEN:
             UI_DrawConnectScreen(arg0);
             return 0;
-        case UI_HASUNIQUECDKEY:  // [Q3 remnant] always true, QL uses Steam auth
+        case UI_HASUNIQUECDKEY:
             return qtrue;
 
         case UI_REGISTER_CVARS:
@@ -218,10 +198,6 @@ void AssetCache(void) {
         uiInfo.uiDC.Assets.crosshairShader[n] = trap_R_RegisterShaderNoMip(va("gfx/2d/crosshair%i", n));
     }
 
-    // [QL] 0x10009fd1: retail's is a different file; sound/vo/new_high_score.ogg is Team
-    // Arena's and does not exist in Quake Live, so the announcement never played
-    // [ioquakelive] pak00 does not have it either, so it is asked for only when a pack brings it:
-    // retail asked anyway and printed a warning each time the UI loaded
     {
         fileHandle_t f;
         const int len = trap_FS_FOpenFile("sound/feedback/voc_newhighscore.ogg", &f, FS_READ);
@@ -249,13 +225,6 @@ void _UI_DrawTopBottom(float x, float y, float w, float h, float size) {
     trap_R_DrawStretchPic(x, y + h - size, w, size, 0, 0, 0, 0, uiInfo.uiDC.whiteShader);
 }
 
-/*
-================
-UI_DrawRect
-
-Coordinates are 640*480 virtual values
-=================
-*/
 void _UI_DrawRect(float x, float y, float width, float height, float size, const float* color) {
     trap_R_SetColor(color);
 
@@ -265,12 +234,6 @@ void _UI_DrawRect(float x, float y, float width, float height, float size, const
     trap_R_SetColor(NULL);
 }
 
-// [QL] Text is rendered by the engine glyph atlas (fontstash/stb_truetype) via
-// trap_R_Font_DrawString / trap_R_Font_TextExtents.  The legacy per-glyph
-// fontInfo_t path (FreeType) is gone; these helpers convert the UI's 640x480
-// virtual coordinates and text scale into the screen pixels and pixel font size
-// the engine expects.  Font index: 0 = handelgothic ("normal"), 1 = notosans
-// ("sans"), 2 = droidsansmono ("mono").
 static int UI_EngineFont(int fontIndex) {
     if (fontIndex >= 0 && fontIndex < 3)
         return fontIndex;
@@ -286,22 +249,15 @@ static int UI_IndexForFontPtr(const fontInfo_t* font) {
     return 0;
 }
 
-// Pixel font size for a text scale (QL: screenFontScale = (vidHeight/768)*96).
 static float UI_FontPixelSize(float scale) {
     return (((float)uiInfo.uiDC.glconfig.vidHeight / 768.0f) * 96.0f) * scale;
 }
 
-// Convert 640x480 virtual coords to screen pixels (honours any widescreen bias
-// inside UI_AdjustFrom640).
 static void UI_TextToScreen(float* x, float* y) {
     float w = 0.0f, h = 0.0f;
     UI_AdjustFrom640(x, y, &w, &h);
 }
 
-// Core painter: virtual coords + scale -> screen pixels, engine glyph atlas.
-// [QL] uix86.dll 0x10003f24: a shadow style first draws the string 1 (shadowed) or 2
-// (shadowed more) virtual units down and right, offset before the scaling to screen
-// pixels, in opaque black whatever the text's alpha (0x1002bdb4 is 0 0 0 1).
 static void UI_PaintText(float x, float y, int fontIndex, float scale, const vec4_t color,
                          const char* text, int limit, int style) {
     float sx = x, sy = y;
@@ -327,23 +283,13 @@ static void UI_PaintText(float x, float y, int fontIndex, float scale, const vec
     trap_R_SetColor(NULL);
 }
 
-// Core measure: 640-space width/height for the given text.
 static void UI_MeasureText(const char* text, float scale, int fontIndex, int limit, int* w640, int* h640) {
     float extents[5];
-    // Convert measured screen pixels back to 640-space using the SAME scale the
-    // draw path (UI_AdjustFrom640) uses - i.e. DC->xscale/yscale, which on a
-    // widescreen display is the 4:3-preserving scale (vidHeight/480), not the
-    // stretched vidWidth/640.  Matches QL UI_GetTextDimensions (0x10003d90),
-    // which divides the engine extents by DC->xscale/DC->yscale.  Using the
-    // stretch scale here made measured widths too small on widescreen, so
-    // right-aligned/centred menu text landed too far right.
     float xscale = uiInfo.uiDC.xscale;
     float yscale = uiInfo.uiDC.yscale;
     float size = UI_FontPixelSize(scale);
     int lim = (limit > 0) ? limit : -1;
 
-    // Width from the engine box (maxx - minx), height from the engine's line
-    // extents[4], the font's ascender, as 0x10003e05-0x10003e3c does.
     trap_R_Font_TextExtents(text, 0, UI_EngineFont(fontIndex), size, lim, extents);
 
     if (xscale <= 0.0f)
@@ -382,8 +328,6 @@ void Text_Paint(float x, float y, float scale, vec4_t color, const char* text, f
 }
 
 void Text_PaintWithCursor(float x, float y, float scale, vec4_t color, const char* text, int cursorPos, char cursor, int limit, int style) {
-    // [QL] Draw the text through the engine glyph atlas, then draw the blinking
-    // cursor glyph at the measured pen position (cursorPos chars into the text).
     char cbuf[2];
 
     if (!text)
@@ -408,8 +352,6 @@ void Text_PaintWithCursor(float x, float y, float scale, vec4_t color, const cha
 }
 
 static void Text_Paint_Limit(float* maxX, float x, float y, float scale, vec4_t color, const char* text, float adjust, int limit) {
-    // [QL] Draw text truncated to fit within *maxX (a 640-space bound), then
-    // report the resulting right edge - see the cgame counterpart.
     int w640;
     float avail = *maxX - x;
     (void)adjust;
@@ -431,7 +373,6 @@ static void Text_Paint_Limit(float* maxX, float x, float y, float scale, vec4_t 
     *maxX = x + (float)w640;
 }
 
-// [QL] Font-pointer variants - delegate to the engine glyph atlas.
 static void Text_Paint_Font(float x, float y, float scale, vec4_t color, const char* text, float adjust, int limit, int style, fontInfo_t* font) {
     (void)adjust;
     UI_PaintText(x, y, UI_IndexForFontPtr(font), scale, color, text, limit, style);
@@ -449,7 +390,6 @@ static float Text_Height_Font(const char* text, float scale, int limit, fontInfo
     return (float)h;
 }
 
-// [QL] DC wrapper functions - pass the font index straight to the engine.
 static void UI_DrawText_DC(float x, float y, float scale, vec4_t color, const char* text,
                            float adjust, int limit, int style, int fontIndex) {
     (void)adjust;
@@ -489,11 +429,6 @@ void UI_ShowPostGame(qboolean newHigh) {
     uiInfo.soundHighScore = newHigh;
     _UI_SetActiveMenu(UIMENU_POSTGAME);
 }
-/*
-=================
-_UI_Refresh
-=================
-*/
 
 void UI_DrawCenteredPic(qhandle_t image, int w, int h) {
     int x, y;
@@ -502,28 +437,17 @@ void UI_DrawCenteredPic(qhandle_t image, int w, int h) {
     UI_DrawHandlePic(x, y, w, h, image);
 }
 
-/*
-=================
-UI_ReadResolution
-
-[ioquakelive] The resolution and the scales worked out from it. It runs at startup and again
-when the window is dragged to another size, which the engine counts in vid_resizeCount
-=================
-*/
 static void UI_ReadResolution(void) {
     trap_GetGlconfig(&uiInfo.uiDC.glconfig);
 
     trap_Cvar_Set("ui_videomode", va("%dx%d", uiInfo.uiDC.glconfig.vidWidth, uiInfo.uiDC.glconfig.vidHeight));
 
-    // for 640x480 virtualized screen
     uiInfo.uiDC.yscale = uiInfo.uiDC.glconfig.vidHeight * (1.0 / (float)SCREEN_HEIGHT);
     uiInfo.uiDC.xscale = uiInfo.uiDC.glconfig.vidWidth * (1.0 / (float)SCREEN_WIDTH);
     if (uiInfo.uiDC.glconfig.vidWidth * SCREEN_HEIGHT > uiInfo.uiDC.glconfig.vidHeight * SCREEN_WIDTH) {
-        // wide screen
         uiInfo.uiDC.bias = 0.5 * (uiInfo.uiDC.glconfig.vidWidth - (uiInfo.uiDC.glconfig.vidHeight * ((float)SCREEN_WIDTH / (float)SCREEN_HEIGHT)));
         uiInfo.uiDC.xscale = uiInfo.uiDC.yscale;
     } else {
-        // no wide screen
         uiInfo.uiDC.bias = 0;
     }
 }
@@ -538,7 +462,6 @@ void _UI_Refresh(int realtime) {
     static int lastResize = -1;
     int resizeCount = (int)trap_Cvar_VariableValue("vid_resizeCount");
 
-    // [ioquakelive] the window was dragged to another size: the menus are laid out again
     if (lastResize != resizeCount) {
         lastResize = resizeCount;
         UI_ReadResolution();
@@ -551,7 +474,6 @@ void _UI_Refresh(int realtime) {
     index++;
     if (index > UI_FPS_FRAMES) {
         int i, total;
-        // average multiple frames together to smooth changes out a bit
         total = 0;
         for (i = 0; i < UI_FPS_FRAMES; i++) {
             total += previousTimes[i];
@@ -565,29 +487,16 @@ void _UI_Refresh(int realtime) {
     UI_UpdateCvars();
 
     if (Menu_Count() > 0) {
-        // paint all the menus
         Menu_PaintAll();
-        // refresh server browser list
         UI_DoServerRefresh();
-        // refresh server status (QL inlines UI_BuildServerStatus(qfalse) here)
         UI_BuildServerStatus(qfalse);
-        // refresh find player list
         UI_BuildFindPlayerList(qfalse);
     }
 
-    // [ioquakelive] no cursor of our own: Quake Live lets the system draw the pointer
-    // in its menus (the engine lets the mouse go while a menu is up, sdl_input.c), and
-    // drawing a second one on top only made two.
     UI_SetColor(NULL);
 }
 
-/*
-=================
-_UI_Shutdown
-=================
-*/
 void _UI_Shutdown(void) {
-    // a map loading or a disconnect takes the home page down with the module
     UI_Home_Leave();
 }
 
@@ -612,7 +521,6 @@ char* GetMenuBuffer(const char* filename) {
     trap_FS_Read(buf, len, f);
     buf[len] = 0;
     trap_FS_FCloseFile(f);
-    // COM_Compress(buf);
     return buf;
 }
 
@@ -636,7 +544,6 @@ qboolean Asset_Parse(int handle) {
             return qtrue;
         }
 
-        // font
         if (Q_stricmp(token.string, "font") == 0) {
             int pointSize;
             if (!PC_String_Parse(handle, &tempStr) || !PC_Int_Parse(handle, &pointSize)) {
@@ -665,7 +572,6 @@ qboolean Asset_Parse(int handle) {
             continue;
         }
 
-        // gradientbar
         if (Q_stricmp(token.string, "gradientbar") == 0) {
             if (!PC_String_Parse(handle, &tempStr)) {
                 return qfalse;
@@ -674,7 +580,6 @@ qboolean Asset_Parse(int handle) {
             continue;
         }
 
-        // enterMenuSound
         if (Q_stricmp(token.string, "menuEnterSound") == 0) {
             if (!PC_String_Parse(handle, &tempStr)) {
                 return qfalse;
@@ -683,7 +588,6 @@ qboolean Asset_Parse(int handle) {
             continue;
         }
 
-        // exitMenuSound
         if (Q_stricmp(token.string, "menuExitSound") == 0) {
             if (!PC_String_Parse(handle, &tempStr)) {
                 return qfalse;
@@ -692,7 +596,6 @@ qboolean Asset_Parse(int handle) {
             continue;
         }
 
-        // itemFocusSound
         if (Q_stricmp(token.string, "itemFocusSound") == 0) {
             if (!PC_String_Parse(handle, &tempStr)) {
                 return qfalse;
@@ -701,7 +604,6 @@ qboolean Asset_Parse(int handle) {
             continue;
         }
 
-        // menuBuzzSound
         if (Q_stricmp(token.string, "menuBuzzSound") == 0) {
             if (!PC_String_Parse(handle, &tempStr)) {
                 return qfalse;
@@ -803,8 +705,6 @@ void UI_ParseMenu(const char* menuFile) {
 
         if (Q_stricmp(token.string, "assetGlobalDef") == 0) {
             if (Asset_Parse(handle)) {
-                // [QL] Populate extraFonts[] for fontIndex-based selection:
-                // 0 = textFont (NotoSans), 1 = bigFont (handelgothic), 2 = smallFont (DroidSansMono)
                 memcpy(&uiInfo.uiDC.Assets.extraFonts[0], &uiInfo.uiDC.Assets.textFont, sizeof(fontInfo_t));
                 memcpy(&uiInfo.uiDC.Assets.extraFonts[1], &uiInfo.uiDC.Assets.bigFont, sizeof(fontInfo_t));
                 memcpy(&uiInfo.uiDC.Assets.extraFonts[2], &uiInfo.uiDC.Assets.smallFont, sizeof(fontInfo_t));
@@ -815,18 +715,12 @@ void UI_ParseMenu(const char* menuFile) {
         }
 
         if (Q_stricmp(token.string, "menudef") == 0) {
-            // start a new menu
             Menu_New(handle);
         }
     }
     trap_PC_FreeSource(handle);
 }
 
-/*
-[ioquakelive] the menus of pak00's lists that pak01 replaces. They live under their own names:
-over a pure server or in a demo pak00 is read first, and a file of the same name in pak01 lost
-to it -- "Main Menu" from a match opened pak00's empty main
-*/
 static const char* UI_MenuFile(const char* file) {
     static const char* const replaced[][2] = {
         {"ui/main.menu", "ui/ioql/main.menu"},
@@ -880,7 +774,6 @@ void UI_LoadMenus(const char* menuFile, qboolean reset) {
         Com_Printf(S_COLOR_YELLOW "menu file not found: %s, using default\n", menuFile);
         handle = trap_PC_LoadSource("ui/menus.txt");
         if (!handle) {
-            // [QL] uix86.dll UI_LoadMenus @0x1000f... prints and returns rather than fatally erroring
             Com_Printf(S_COLOR_RED "default menu file not found: ui/menus.txt, unable to continue!\n");
         }
     }
@@ -962,7 +855,6 @@ static void UI_SetCapFragLimits(qboolean uiVars) {
         trap_Cvar_Set("fraglimit", va("%d", frag));
     }
 }
-// ui_gameType assumes gametype 0 is -1 ALL and will not show
 static void UI_DrawGameType(rectDef_t* rect, float scale, vec4_t color, int textStyle) {
     Text_Paint(rect->x, rect->y, scale, color, uiInfo.gameTypes[ui_gameType.integer].gameType, 0, 0, textStyle);
 }
@@ -1115,25 +1007,22 @@ static void UI_DrawMapCinematic(rectDef_t* rect, float scale, vec4_t color, qboo
 
 static qboolean updateModel = qtrue;
 
-// [QL] Loadout-selectable flag per weapon, taken from field[0] of the UI weapon
-// table at uix86.dll 0x1002c1c4 (stride 0x30). UI_DrawPlayerModel gates the WP_HMG
-// fallback on this: a weapon that is not loadout-selectable snaps to WP_HMG.
 static const int uiWeaponLoadoutSelectable[WP_NUM_WEAPONS] = {
-    0,  // WP_NONE
-    0,  // WP_GAUNTLET
-    0,  // WP_MACHINEGUN
-    1,  // WP_SHOTGUN
-    0,  // WP_GRENADE_LAUNCHER
-    1,  // WP_ROCKET_LAUNCHER
-    1,  // WP_LIGHTNING
-    1,  // WP_RAILGUN
-    1,  // WP_PLASMAGUN
-    0,  // WP_BFG
-    0,  // WP_GRAPPLING_HOOK
-    0,  // WP_NAILGUN
-    0,  // WP_PROX_LAUNCHER
-    0,  // WP_CHAINGUN
-    1,  // WP_HMG
+    0,
+    0,
+    0,
+    1,
+    0,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
 };
 
 static void UI_DrawPlayerModel(rectDef_t* rect) {
@@ -1145,16 +1034,10 @@ static void UI_DrawPlayerModel(rectDef_t* rect) {
     vec3_t moveangles;
     int weapon;
 
-    // [QL] always use model/headmodel (no team_model)
     Q_strncpyz(model, UI_Cvar_VariableString("model"), sizeof(model));
     Q_strncpyz(head, UI_Cvar_VariableString("headmodel"), sizeof(head));
     team[0] = '\0';
 
-    // [QL] The preview holds the loadout's primary weapon when the loadout is
-    // active (cg_loadout), otherwise the machinegun; a weapon that is not
-    // loadout-selectable snaps to WP_HMG. Matches uix86.dll UI_DrawPlayerModel
-    // @0x10005690, which gates the fallback on the weapon table flag at 0x1002c1c4
-    // (weapon*0x30 + [0x1002c1c4] != 1), not a plain range check.
     if (trap_Cvar_VariableValue("cg_loadout") != 0) {
         weapon = (int)trap_Cvar_VariableValue("cg_weaponPrimary");
     } else {
@@ -1172,7 +1055,6 @@ static void UI_DrawPlayerModel(rectDef_t* rect) {
         VectorClear(moveangles);
         UI_PlayerInfo_SetModel(&info, model, head, team);
         UI_PlayerInfo_SetInfo(&info, LEGS_IDLE, TORSO_STAND, viewangles, vec3_origin, weapon, qfalse);
-        //		UI_RegisterClientModelname( &info, model, head, team);
         updateModel = qfalse;
     }
 
@@ -1327,9 +1209,6 @@ static int UI_OwnerDrawWidth(int ownerDraw, float scale) {
 }
 
 static void UI_DrawBotName(rectDef_t* rect, float scale, vec4_t color, int textStyle) {
-    // [QL] uix86.dll UI_DrawBotName @0x10006b30 always draws the bot-info-list name
-    // (no g_gametype>=GT_TEAM characterList branch). UI_GetBotNameByNumber validates
-    // [0,numBots), prints "^1Invalid bot number: %i" and falls back to "Sarge".
     int value = uiInfo.botIndex;
     Text_Paint(rect->x, rect->y, scale, color, UI_GetBotNameByNumber(value), 0, 0, textStyle);
 }
@@ -1338,8 +1217,6 @@ static void UI_DrawRedBlue(rectDef_t* rect, float scale, vec4_t color, int textS
     Text_Paint(rect->x, rect->y, scale, color, (uiInfo.redBlue == 0) ? "Red" : "Blue", 0, 0, textStyle);
 }
 
-// [QL] uix86.dll 0x1002bbf0: the crosshair colours for cg_crosshairColor 1-26. Retail keeps
-// its own copy in the UI module next to cgame's (0x10075fe0); they are the same 26 entries.
 static const vec4_t ui_crosshairPalette[26] = {
     {1.0f, 0.0f, 0.0f, 1.0f},       {1.0f, 0.2734375f, 0.0f, 1.0f}, {1.0f, 0.5f, 0.0f, 1.0f},
     {1.0f, 0.734375f, 0.0f, 1.0f},  {1.0f, 1.0f, 0.0f, 1.0f},       {0.734375f, 1.0f, 0.0f, 1.0f},
@@ -1352,17 +1229,10 @@ static const vec4_t ui_crosshairPalette[26] = {
     {1.0f, 1.0f, 1.0f, 1.0f},       {0.5f, 0.5f, 0.5f, 1.0f},
 };
 
-// the Settings page draws the same 26 swatches
 const vec4_t* UI_CrosshairPalette(void) {
     return ui_crosshairPalette;
 }
 
-// [QL] uix86.dll UI_DrawCrosshair @0x10006cf0. The preview is drawn the way the crosshair
-// itself is: the palette colour for cg_crosshairColor - 1 (out of range takes the first)
-// scaled by cg_crosshairBrightness with alpha 1, in a square of cg_crosshairSize clamped
-// to 24..40, at (rect->x - 2, rect->y - rect->h + 2). The item's own width and height only
-// place it, and the owner-draw's scale and colour are unused. Drawing it at the item's
-// 100x15 instead (what this was doing) squashed it into an invisible sliver.
 static void UI_DrawCrosshair(rectDef_t* rect, float scale, vec4_t color) {
     vec4_t crosshairColor;
     float size;
@@ -1391,17 +1261,14 @@ static void UI_DrawCrosshair(rectDef_t* rect, float scale, vec4_t color) {
     trap_R_SetColor(NULL);
 }
 
-// [QL] Bot skill level display
 static void UI_DrawBotSkill(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     if (uiInfo.skillIndex >= 0 && uiInfo.skillIndex < numSkillLevels) {
         Text_Paint(rect->x, rect->y, scale, color, skillLevels[uiInfo.skillIndex], 0, 0, textStyle);
     }
 }
 
-// [QL] Vote string display
 static void UI_DrawVoteString(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     if (ui_votestring.string[0]) {
-        // [QL] centre the vote string on rect->x when it has a positive origin/width
         float x = rect->x;
         int width = Text_Width(ui_votestring.string, scale, 0);
         if (rect->x > 0 && width > 0) {
@@ -1411,9 +1278,6 @@ static void UI_DrawVoteString(rectDef_t *rect, float scale, vec4_t color, int te
     }
 }
 
-// [QL] Single-player skill display (owner-draw UI_SKILL 517). uix86.dll UI_DrawSkill
-// @0x10005350: read g_spSkill, snap out-of-range to 1, draw skillLevels[skill]. The binary
-// indexes a 1-based table @0x1002ae20; skillLevels[] here is 0-based so subtract 1.
 static void UI_DrawSkill(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     int skill = (int)trap_Cvar_VariableValue("g_spSkill");
     if (skill < 1 || skill > 5) {
@@ -1422,9 +1286,6 @@ static void UI_DrawSkill(rectDef_t *rect, float scale, vec4_t color, int textSty
     Text_Paint(rect->x, rect->y, scale, color, skillLevels[skill - 1], 0, 0, textStyle);
 }
 
-// [QL] Server-browser source display (owner-draw UI_NETSOURCE 518). uix86.dll
-// UI_DrawNetSource @0x10006550: reset ui_netSource to 0 when outside 0..4 (the > 4 bound is
-// one past the real sources), then draw "Source: <name>".
 static void UI_DrawNetSource(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     if (ui_netSource.integer < 0 || ui_netSource.integer > 4) {
         ui_netSource.integer = 0;
@@ -1433,9 +1294,6 @@ static void UI_DrawNetSource(rectDef_t *rect, float scale, vec4_t color, int tex
                va("Source: %s", netSourceNames[ui_netSource.integer]), 0, 0, textStyle);
 }
 
-// [QL] Server-browser mod filter display (owner-draw UI_NETFILTER 520). uix86.dll
-// UI_DrawServerFilter @0x100066d0: reset ui_serverFilterType to 0 when outside 0..7, then
-// draw "Filter: <description>".
 static void UI_DrawServerFilter(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     if (ui_serverFilterType.integer < 0 || ui_serverFilterType.integer > 7) {
         ui_serverFilterType.integer = 0;
@@ -1444,8 +1302,6 @@ static void UI_DrawServerFilter(rectDef_t *rect, float scale, vec4_t color, int 
                va("Filter: %s", serverFilters[ui_serverFilterType.integer].description), 0, 0, textStyle);
 }
 
-// [QL] Next-map / MOTD display (owner-draw UI_NEXTMAP 551). uix86.dll UI_DrawMOTD
-// @0x10006ea0: draw configstring CS_NEXTMAP (666) when it is set.
 static void UI_DrawMOTD(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
     char buf[1024];
     trap_GetConfigString(CS_NEXTMAP, buf, sizeof(buf));
@@ -1454,14 +1310,8 @@ static void UI_DrawMOTD(rectDef_t *rect, float scale, vec4_t color, int textStyl
     }
 }
 
-// [QL] parses a packed 0xRRGGBBAA colour cvar; defined further down (used by the model previews).
 static int UI_ParseModelColor(const char* cvarName);
 
-// [QL] Compose a "base/skin" model name from a force-model + force-skin pair the way
-// UI_DrawTeamModel/UI_DrawEnemyModel do (uix86.dll 0x10005850/0x10005c20): default the
-// model to "sarge" when only a skin is set, and when a skin is present strip any skin
-// already on the model and append the forced one. Returns qfalse when both are empty
-// (the binary draws nothing in that case).
 static qboolean UI_ComposeForcedModel(const char* modelCvar, const char* skinCvar, char* out, int outSize) {
     char model[MAX_QPATH];
     char skin[MAX_QPATH];
@@ -1489,10 +1339,6 @@ static qboolean UI_ComposeForcedModel(const char* modelCvar, const char* skinCva
     return qtrue;
 }
 
-// [QL] Team player model preview (owner-draw UI_TEAMPLAYERMODEL 553). Ported from
-// uix86.dll UI_DrawTeamModel @0x10005850: reads cg_forceTeamModel + cg_forceTeamSkin
-// (not ui_forceTeamModel), composes "base/skin" holding the machinegun (yaw 170), and
-// every frame forces the cg_team{Head,Upper,Lower}Color values into the per-part tint.
 static void UI_DrawTeamPlayerModel(rectDef_t *rect) {
     static playerInfo_t teamInfo;
     static char teamModelCached[MAX_QPATH];
@@ -1511,7 +1357,6 @@ static void UI_DrawTeamPlayerModel(rectDef_t *rect) {
         UI_PlayerInfo_SetModel(&teamInfo, composed, composed, "");
         UI_PlayerInfo_SetInfo(&teamInfo, LEGS_IDLE, TORSO_STAND, viewangles, vec3_origin, WP_MACHINEGUN, qfalse);
     }
-    // [QL] force the team colours into the tint every frame. uix86.dll @0x10005850.
     teamInfo.customColor = qtrue;
     teamInfo.headColor = UI_ParseModelColor("cg_teamHeadColor");
     teamInfo.torsoColor = UI_ParseModelColor("cg_teamUpperColor");
@@ -1519,10 +1364,6 @@ static void UI_DrawTeamPlayerModel(rectDef_t *rect) {
     UI_DrawPlayer(rect->x, rect->y, rect->w, rect->h, &teamInfo, uiInfo.uiDC.realTime / 2);
 }
 
-// [QL] Enemy player model preview (owner-draw UI_ENEMYPLAYERMODEL 554). Ported from
-// uix86.dll UI_DrawEnemyModel @0x10005c20: reads cg_forceEnemyModel + cg_forceEnemySkin
-// (default "sarge", not "keel"), composes "base/skin", and every frame forces the
-// cg_enemy{Head,Upper,Lower}Color values into the per-part tint.
 static void UI_DrawEnemyPlayerModel(rectDef_t *rect) {
     static playerInfo_t enemyInfo;
     static char enemyModelCached[MAX_QPATH];
@@ -1541,7 +1382,6 @@ static void UI_DrawEnemyPlayerModel(rectDef_t *rect) {
         UI_PlayerInfo_SetModel(&enemyInfo, composed, composed, "");
         UI_PlayerInfo_SetInfo(&enemyInfo, LEGS_IDLE, TORSO_STAND, viewangles, vec3_origin, WP_MACHINEGUN, qfalse);
     }
-    // [QL] force the enemy colours into the tint every frame. uix86.dll @0x10005c20.
     enemyInfo.customColor = qtrue;
     enemyInfo.headColor = UI_ParseModelColor("cg_enemyHeadColor");
     enemyInfo.torsoColor = UI_ParseModelColor("cg_enemyUpperColor");
@@ -1549,30 +1389,21 @@ static void UI_DrawEnemyPlayerModel(rectDef_t *rect) {
     UI_DrawPlayer(rect->x, rect->y, rect->w, rect->h, &enemyInfo, uiInfo.uiDC.realTime / 2);
 }
 
-// [QL] Server settings / rules panel (owner-draw UI_SERVER_SETTINGS 557).
-// Ported byte-for-byte from uix86.dll UI_DrawServerStatus @0x10007030. QL draws the whole
-// rules panel from this single owner-draw: the gametype name, the active limit lines, the
-// ruleset-flag lines and the "MODIFIED WEAPONS:" starting-weapon icon grid. It does NOT
-// draw sv_hostname (the first line is the gametype name), and there is no separate id-558
-// owner-draw in QL: the weapon grid lives here. Each drawn line advances y by +12; a shared
-// column counter starts at 2 and, whenever it exceeds 7, wraps to the next column
-// (col=0, x+=110, y-=84).
 static void UI_DrawServerSettings(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
-    // Gametype-name table @0x1002c0f4 (index 0..12), default "Unknown Gametype" @0x10023954.
     static const char *gametypeNames[] = {
-        "Free For All",      // 0
-        "Duel",              // 1
-        "Race",              // 2
-        "Team Deathmatch",   // 3
-        "Clan Arena",        // 4
-        "Capture the Flag",  // 5
-        "One Flag CTF",      // 6
-        "Overload",          // 7
-        "Harvester",         // 8
-        "Freeze Tag",        // 9
-        "Domination",        // 10
-        "Attack and Defend", // 11
-        "Red Rover",         // 12
+        "Free For All",
+        "Duel",
+        "Race",
+        "Team Deathmatch",
+        "Clan Arena",
+        "Capture the Flag",
+        "One Flag CTF",
+        "Overload",
+        "Harvester",
+        "Freeze Tag",
+        "Domination",
+        "Attack and Defend",
+        "Red Rover",
     };
     char serverinfo[MAX_INFO_STRING];
     char pmoveinfo[MAX_INFO_STRING];
@@ -1584,9 +1415,6 @@ static void UI_DrawServerSettings(rectDef_t *rect, float scale, vec4_t color, in
     int col;
     const char *s;
 
-    // CS reads: CS_SERVERINFO(0); CS_PMOVEINFO(0x2a9, read but unused by this panel, kept to
-    // mirror the binary); CS_ARMORINFO(0x2aa, holds the armor_tiered info key);
-    // CS_CUSTOM_SETTINGS(0x2c0, packed bitmask: bits 0..12 starting weapons, higher bits ruleset).
     trap_GetConfigString(CS_SERVERINFO, serverinfo, sizeof(serverinfo));
     trap_GetConfigString(CS_PMOVEINFO, pmoveinfo, sizeof(pmoveinfo));
     trap_GetConfigString(CS_ARMORINFO, armorinfo, sizeof(armorinfo));
@@ -1597,24 +1425,20 @@ static void UI_DrawServerSettings(rectDef_t *rect, float scale, vec4_t color, in
     x = rect->x;
     y = rect->y;
 
-    // Line 1: gametype name. @0x10007116
     s = ((unsigned int)gametype <= 12u) ? gametypeNames[gametype] : "Unknown Gametype";
     Text_Paint(x, y, scale, color, s, 0, 0, textStyle);
     y += 12.0f;
 
-    // Line 2: Time Limit. @0x1000718e
     Text_Paint(x, y, scale, color, va("Time Limit: %i", atoi(Info_ValueForKey(serverinfo, "timelimit"))), 0, 0, textStyle);
     y += 12.0f;
     col = 2;
 
-    // Frag Limit, gametype < 4. @0x100071ff
     if (gametype < 4) {
         Text_Paint(x, y, scale, color, va("Frag Limit: %i", atoi(Info_ValueForKey(serverinfo, "fraglimit"))), 0, 0, textStyle);
         y += 12.0f;
         col = 3;
     }
 
-    // Mercy Limit, value != 0 && gametype > 2. @0x1000727d
     mercy = atoi(Info_ValueForKey(serverinfo, "mercylimit"));
     if (mercy != 0 && gametype > 2) {
         Text_Paint(x, y, scale, color, va("Mercy Limit: %i", mercy), 0, 0, textStyle);
@@ -1622,7 +1446,6 @@ static void UI_DrawServerSettings(rectDef_t *rect, float scale, vec4_t color, in
         col++;
     }
 
-    // Capture Limit, gametype == 5. @0x100072ef
     if (gametype == 5) {
         Text_Paint(x, y, scale, color, va("Capture Limit: %i", atoi(Info_ValueForKey(serverinfo, "capturelimit"))), 0, 0, textStyle);
         y += 12.0f;
@@ -1630,7 +1453,6 @@ static void UI_DrawServerSettings(rectDef_t *rect, float scale, vec4_t color, in
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
 
-    // Round Limit, switch{4,9,11,12} with an inner guard (gt<10 || gt>11) => {4,9,12}. @0x100073a7
     switch (gametype) {
     case 4: case 9: case 11: case 12:
         if (gametype < 10 || gametype > 11) {
@@ -1644,7 +1466,6 @@ static void UI_DrawServerSettings(rectDef_t *rect, float scale, vec4_t color, in
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
 
-    // Score Limit, gametype in {10,11}. @0x10007445
     if (gametype > 9 && gametype < 12) {
         Text_Paint(x, y, scale, color, va("Score Limit: %i", atoi(Info_ValueForKey(serverinfo, "scorelimit"))), 0, 0, textStyle);
         y += 12.0f;
@@ -1652,181 +1473,173 @@ static void UI_DrawServerSettings(rectDef_t *rect, float scale, vec4_t color, in
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
 
-    // Ruleset-flag lines. Each is drawn when its CS_CUSTOM_SETTINGS bit is set, or, for the
-    // key-driven lines, when the serverinfo value differs from its default. Order, bits and
-    // strings are exactly as in the binary. @0x100074b3..0x10007c47
-    if (custom & 0x2000) {                                         // Air Control @0x100074b7
+    if (custom & 0x2000) {
         Text_Paint(x, y, scale, color, "Air Control", 0, 0, textStyle);
         y += 12.0f; col++;
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
-    if (custom & 0x4000) {                                         // Ramp Jumping @0x1000752d
+    if (custom & 0x4000) {
         Text_Paint(x, y, scale, color, "Ramp Jumping", 0, 0, textStyle);
         y += 12.0f; col++;
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
-    if (atoi(Info_ValueForKey(armorinfo, "armor_tiered")) != 0) {  // Tiered Armor @0x100075a3
+    if (atoi(Info_ValueForKey(armorinfo, "armor_tiered")) != 0) {
         Text_Paint(x, y, scale, color, "Tiered Armor", 0, 0, textStyle);
         y += 12.0f; col++;
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
-    if (custom & 0x10000) {                                        // Weapon Switching @0x10007630
+    if (custom & 0x10000) {
         Text_Paint(x, y, scale, color, "Weapon Switching", 0, 0, textStyle);
         y += 12.0f; col++;
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
-    quad = atoi(Info_ValueForKey(serverinfo, "g_quadDamageFactor"));  // %ix Quad, factor != 3 @0x100076a8
+    quad = atoi(Info_ValueForKey(serverinfo, "g_quadDamageFactor"));
     if (quad != 3) {
         Text_Paint(x, y, scale, color, va("%ix Quad", quad), 0, 0, textStyle);
         y += 12.0f; col++;
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
-    if (custom & 0x8000) {                                         // Physics @0x10007750
+    if (custom & 0x8000) {
         Text_Paint(x, y, scale, color, "Physics", 0, 0, textStyle);
         y += 12.0f; col++;
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
-    gravity = atoi(Info_ValueForKey(serverinfo, "g_gravity"));     // Gravity %i, value != 800 @0x100077c8
+    gravity = atoi(Info_ValueForKey(serverinfo, "g_gravity"));
     if (gravity != 800) {
         Text_Paint(x, y, scale, color, va("Gravity %i", gravity), 0, 0, textStyle);
         y += 12.0f; col++;
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
-    if (custom & 0x20000) {                                        // InstaGib @0x1000788e
+    if (custom & 0x20000) {
         Text_Paint(x, y, scale, color, "InstaGib", 0, 0, textStyle);
         y += 12.0f; col++;
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
-    if (custom & 0x40000) {                                        // Quad Hog @0x100078f7
+    if (custom & 0x40000) {
         Text_Paint(x, y, scale, color, "Quad Hog", 0, 0, textStyle);
         y += 12.0f; col++;
     }
-    if (gametype == 12 && (custom & 0x4000000)) {                  // Infected @0x10007945 (no wrap before)
+    if (gametype == 12 && (custom & 0x4000000)) {
         Text_Paint(x, y, scale, color, "Infected", 0, 0, textStyle);
         y += 12.0f; col++;
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
-    if (custom & 0x80000) {                                        // Regen Health @0x100079bd
+    if (custom & 0x80000) {
         Text_Paint(x, y, scale, color, "Regen Health", 0, 0, textStyle);
         y += 12.0f; col++;
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
-    if ((custom & 0x100000) && !(custom & 0x20000)) {             // Drop Health @0x10007a2e (only if InstaGib clear)
+    if ((custom & 0x100000) && !(custom & 0x20000)) {
         Text_Paint(x, y, scale, color, "Drop Health", 0, 0, textStyle);
         y += 12.0f; col++;
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
-    if (custom & 0x200000) {                                       // Vampiric Damage @0x10007aa6
+    if (custom & 0x200000) {
         Text_Paint(x, y, scale, color, "Vampiric Damage", 0, 0, textStyle);
         y += 12.0f; col++;
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
-    if (custom & 0x400000) {                                       // Item Spawning @0x10007b17
+    if (custom & 0x400000) {
         Text_Paint(x, y, scale, color, "Item Spawning", 0, 0, textStyle);
         y += 12.0f; col++;
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
-    if (custom & 0x800000) {                                       // Headshots @0x10007b88
+    if (custom & 0x800000) {
         Text_Paint(x, y, scale, color, "Headshots", 0, 0, textStyle);
         y += 12.0f; col++;
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
-    if (custom & 0x1000000) {                                      // Rail Jumping @0x10007bf9
+    if (custom & 0x1000000) {
         Text_Paint(x, y, scale, color, "Rail Jumping", 0, 0, textStyle);
         y += 12.0f; col++;
     }
     if (col > 7) { col = 0; x += 110.0f; y -= 84.0f; }
 
-    // "MODIFIED WEAPONS:" starting-weapon icon grid (bits 0..12 of CS_CUSTOM_SETTINGS). @0x10007c6a
-    // Each present weapon draws its 8x8 icon plus an "icons/modified.tga" overlay (4x4 at +6,+4);
-    // icons advance x by +12, and within the grid the shared counter wraps every 8 icons
-    // (col=0, x-=96, y+=12). Shotgun/grenade/rocket/railgun/plasma are hidden when the g_gravity
-    // value == 2 (the binary gates these on gravity, not gametype; reproduced verbatim).
-    if ((custom & 1) || (custom & 0xfe) || (custom & 0x1f00)) {   // any weapon bit 0..12 set
-        Text_Paint(x, y, scale, color, "MODIFIED WEAPONS:", 0, 0, textStyle);   // header @0x10007c96
-        if (col >= 9) {                                          // @0x10007cc2 (unreachable in practice; bail)
+    if ((custom & 1) || (custom & 0xfe) || (custom & 0x1f00)) {
+        Text_Paint(x, y, scale, color, "MODIFIED WEAPONS:", 0, 0, textStyle);
+        if (col >= 9) {
             return;
         }
-        y += 6.0f;                                              // @0x10007cd1
+        y += 6.0f;
         trap_R_SetColor(color);
-        if (custom & 1) {                                       // gauntlet @0x10007cdb; resets col to 1
+        if (custom & 1) {
             UI_DrawHandlePic(x, y, 8, 8, trap_R_RegisterShaderNoMip("icons/iconw_gauntlet.tga"));
             UI_DrawHandlePic(x + 6, y + 4, 4, 4, trap_R_RegisterShaderNoMip("icons/modified.tga"));
             x += 12.0f;
             col = 1;
         }
-        if (custom & 2) {                                       // machinegun @0x10007d8a
+        if (custom & 2) {
             UI_DrawHandlePic(x, y, 8, 8, trap_R_RegisterShaderNoMip("icons/iconw_machinegun.tga"));
             UI_DrawHandlePic(x + 6, y + 4, 4, 4, trap_R_RegisterShaderNoMip("icons/modified.tga"));
             x += 12.0f;
             col++;
         }
-        if ((custom & 4) && gravity != 2) {                     // shotgun @0x10007e32
+        if ((custom & 4) && gravity != 2) {
             UI_DrawHandlePic(x, y, 8, 8, trap_R_RegisterShaderNoMip("icons/iconw_shotgun.tga"));
             UI_DrawHandlePic(x + 6, y + 4, 4, 4, trap_R_RegisterShaderNoMip("icons/modified.tga"));
             x += 12.0f;
             col++;
         }
-        if ((custom & 8) && gravity != 2) {                     // grenade @0x10007ee6
+        if ((custom & 8) && gravity != 2) {
             UI_DrawHandlePic(x, y, 8, 8, trap_R_RegisterShaderNoMip("icons/iconw_grenade.tga"));
             UI_DrawHandlePic(x + 6, y + 4, 4, 4, trap_R_RegisterShaderNoMip("icons/modified.tga"));
             x += 12.0f;
             col++;
         }
-        if ((custom & 0x10) && gravity != 2) {                  // rocket @0x10007f99
+        if ((custom & 0x10) && gravity != 2) {
             UI_DrawHandlePic(x, y, 8, 8, trap_R_RegisterShaderNoMip("icons/iconw_rocket.tga"));
             UI_DrawHandlePic(x + 6, y + 4, 4, 4, trap_R_RegisterShaderNoMip("icons/modified.tga"));
             x += 12.0f;
             col++;
         }
-        if (custom & 0x20) {                                    // lightning @0x1000804c (no gravity gate)
+        if (custom & 0x20) {
             UI_DrawHandlePic(x, y, 8, 8, trap_R_RegisterShaderNoMip("icons/iconw_lightning.tga"));
             UI_DrawHandlePic(x + 6, y + 4, 4, 4, trap_R_RegisterShaderNoMip("icons/modified.tga"));
             x += 12.0f;
             col++;
         }
-        if ((custom & 0x40) && gravity != 2) {                  // railgun @0x100080f5
+        if ((custom & 0x40) && gravity != 2) {
             UI_DrawHandlePic(x, y, 8, 8, trap_R_RegisterShaderNoMip("icons/iconw_railgun.tga"));
             UI_DrawHandlePic(x + 6, y + 4, 4, 4, trap_R_RegisterShaderNoMip("icons/modified.tga"));
             x += 12.0f;
             col++;
         }
-        if ((custom & 0x80) && gravity != 2) {                  // plasma @0x100081a8; first icon with inner wrap
+        if ((custom & 0x80) && gravity != 2) {
             UI_DrawHandlePic(x, y, 8, 8, trap_R_RegisterShaderNoMip("icons/iconw_plasma.tga"));
             UI_DrawHandlePic(x + 6, y + 4, 4, 4, trap_R_RegisterShaderNoMip("icons/modified.tga"));
             col++;
             x += 12.0f;
             if (col > 7) { y += 12.0f; col = 0; x -= 96.0f; }
         }
-        if (custom & 0x100) {                                   // bfg @0x1000827f
+        if (custom & 0x100) {
             UI_DrawHandlePic(x, y, 8, 8, trap_R_RegisterShaderNoMip("icons/iconw_bfg.tga"));
             UI_DrawHandlePic(x + 6, y + 4, 4, 4, trap_R_RegisterShaderNoMip("icons/modified.tga"));
             col++;
             x += 12.0f;
             if (col > 7) { y += 12.0f; col = 0; x -= 96.0f; }
         }
-        if (custom & 0x200) {                                   // grapple @0x10008350
+        if (custom & 0x200) {
             UI_DrawHandlePic(x, y, 8, 8, trap_R_RegisterShaderNoMip("icons/iconw_grapple.tga"));
             UI_DrawHandlePic(x + 6, y + 4, 4, 4, trap_R_RegisterShaderNoMip("icons/modified.tga"));
             col++;
             x += 12.0f;
             if (col > 7) { y += 12.0f; col = 0; x -= 96.0f; }
         }
-        if (custom & 0x400) {                                   // nailgun @0x10008420
+        if (custom & 0x400) {
             UI_DrawHandlePic(x, y, 8, 8, trap_R_RegisterShaderNoMip("icons/iconw_nailgun.tga"));
             UI_DrawHandlePic(x + 6, y + 4, 4, 4, trap_R_RegisterShaderNoMip("icons/modified.tga"));
             col++;
             x += 12.0f;
             if (col > 7) { y += 12.0f; col = 0; x -= 96.0f; }
         }
-        if (custom & 0x800) {                                   // proxlauncher @0x100084f0
+        if (custom & 0x800) {
             UI_DrawHandlePic(x, y, 8, 8, trap_R_RegisterShaderNoMip("icons/iconw_proxlauncher.tga"));
             UI_DrawHandlePic(x + 6, y + 4, 4, 4, trap_R_RegisterShaderNoMip("icons/modified.tga"));
             col++;
             x += 12.0f;
             if (col > 7) { y += 12.0f; col = 0; x -= 96.0f; }
         }
-        if (custom & 0x1000) {                                  // chaingun @0x100085c1 (no col reset on wrap)
+        if (custom & 0x1000) {
             UI_DrawHandlePic(x, y, 8, 8, trap_R_RegisterShaderNoMip("icons/iconw_chaingun.tga"));
             UI_DrawHandlePic(x + 6, y + 4, 4, 4, trap_R_RegisterShaderNoMip("icons/modified.tga"));
             x += 12.0f;
@@ -1836,17 +1649,11 @@ static void UI_DrawServerSettings(rectDef_t *rect, float scale, vec4_t color, in
         trap_R_SetColor(NULL);
     }
 
-    // Fallback: if nothing above advanced y at all, show the default-rules label. @0x1000868f
     if (y == rect->y) {
         Text_Paint(x, y, scale, color, "Default Settings", 0, 0, textStyle);
     }
 }
 
-/*
-===============
-UI_BuildPlayerList
-===============
-*/
 void UI_BuildPlayerList(void) {
     uiClientState_t cs;
     int n, count, team, team2, playerTeamNumber;
@@ -1868,8 +1675,6 @@ void UI_BuildPlayerList(void) {
         if (info[0]) {
             Q_strncpyz(uiInfo.playerNames[uiInfo.playerCount], Info_ValueForKey(info, "n"), MAX_NAME_LENGTH);
             Q_CleanStr(uiInfo.playerNames[uiInfo.playerCount]);
-            // [QL] 0x10008d2e: the player list selects by this index, and the admin menu's
-            // actions need the client it stands for
             uiInfo.clientNums[uiInfo.playerCount] = n;
             uiInfo.playerCount++;
             team2 = atoi(Info_ValueForKey(info, "t"));
@@ -1938,10 +1743,8 @@ static void UI_DrawServerMOTD(rectDef_t* rect, float scale, vec4_t color) {
                     uiInfo.serverStatus.motdPaintX2 = -1;
                 }
             } else {
-                // serverStatus.motdPaintX--;
                 uiInfo.serverStatus.motdPaintX -= 2;
                 if (uiInfo.serverStatus.motdPaintX2 >= 0) {
-                    // serverStatus.motdPaintX2--;
                     uiInfo.serverStatus.motdPaintX2 -= 2;
                 }
             }
@@ -1954,7 +1757,6 @@ static void UI_DrawServerMOTD(rectDef_t* rect, float scale, vec4_t color) {
             Text_Paint_Limit(&maxX2, uiInfo.serverStatus.motdPaintX2, rect->y + rect->h - 3, scale, color, uiInfo.serverStatus.motd, 0, uiInfo.serverStatus.motdOffset);
         }
         if (uiInfo.serverStatus.motdOffset && maxX > 0) {
-            // if we have an offset ( we are skipping the first part of the string ) and we fit the string
             if (uiInfo.serverStatus.motdPaintX2 == -1) {
                 uiInfo.serverStatus.motdPaintX2 = rect->x + rect->w - 2;
             }
@@ -1965,7 +1767,6 @@ static void UI_DrawServerMOTD(rectDef_t* rect, float scale, vec4_t color) {
 }
 
 static void UI_DrawKeyBindStatus(rectDef_t* rect, float scale, vec4_t color, int textStyle) {
-    //	int ofs = 0; TTimo: unused
     if (Display_KeyBindPending()) {
         Text_Paint(rect->x, rect->y, scale, color, "Waiting for new key... Press ESCAPE to cancel", 0, 0, textStyle);
     } else {
@@ -1973,18 +1774,10 @@ static void UI_DrawKeyBindStatus(rectDef_t* rect, float scale, vec4_t color, int
     }
 }
 
-// [QL] Crosshair colour picker widget (owner-draw UI_CROSSHAIR_COLOR, id 0x226).
-// Ported from uix86.dll UI_DrawCrosshairPicker @0x10009660. Draws the "fx_base"
-// colour bar plus a swatch marker at the current cg_crosshairColor; the bar is
-// dimmed to grey when cg_crosshairHealth is enabled. The swatch shaders are the
-// standard fx_red/yel/grn/teal/blue/cyan/white set (uiInfo.uiDC.Assets.fxPic).
 static void UI_DrawCrosshairColor(rectDef_t* rect, vec4_t color) {
     qboolean health = trap_Cvar_VariableValue("cg_crosshairHealth") != 0;
     int colorIndex = (int)trap_Cvar_VariableValue("cg_crosshairColor");
 
-    // [QL] uix86.dll UI_DrawCrosshairPicker @0x10009660 clamps the index to [0,25]
-    // and indexes the fx swatch table with the raw value (higher values read the
-    // adjacent shader handles); no extra clamp to 6.
     if (colorIndex < 0 || colorIndex > 25) {
         colorIndex = 0;
     }
@@ -2000,8 +1793,6 @@ static void UI_DrawCrosshairColor(rectDef_t* rect, vec4_t color) {
     }
 }
 
-// [QL] Server-browser refresh status line (owner-draw UI_SERVERREFRESHDATE, id 0x21b).
-// Ported from uix86.dll UI_DrawServerRefreshDate @0x10008f20.
 static void UI_DrawServerRefreshDate(rectDef_t* rect, float scale, vec4_t color, int textStyle) {
     if (uiInfo.serverStatus.refreshActive) {
         vec4_t lowLight, newColor;
@@ -2020,12 +1811,7 @@ static void UI_DrawServerRefreshDate(rectDef_t* rect, float scale, vec4_t color,
     }
 }
 
-// [QL] GL info block (owner-draw UI_GLINFO, id 0x21d). Ported from uix86.dll
-// UI_DrawGLExtensions @0x100093b0 (the id-0x21d handler; Ghidra's "UI_DrawGLInfo"
-// at 0x10009340 is the advertisement owner-draw). Shows vendor/version/
-// pixelformat then word-wraps the extensions string into two columns.
 static void UI_DrawGLInfo(rectDef_t* rect, float scale, vec4_t color, int textStyle) {
-    // [QL] uix86.dll UI_DrawGLExtensions @0x100093b0: 1024-byte extension buffer, 64-line cap
     char buff[1024];
     char* eptr;
     const char* lines[64];
@@ -2036,7 +1822,6 @@ static void UI_DrawGLInfo(rectDef_t* rect, float scale, vec4_t color, int textSt
     Text_Paint(rect->x + 2, rect->y + 15, scale, color, va("VERSION: %s: %s", uiInfo.uiDC.glconfig.version_string, uiInfo.uiDC.glconfig.renderer_string), 0, 30, textStyle);
     Text_Paint(rect->x + 2, rect->y + 30, scale, color, va("PIXELFORMAT: color(%d-bits) Z(%d-bits) stencil(%d-bits)", uiInfo.uiDC.glconfig.colorBits, uiInfo.uiDC.glconfig.depthBits, uiInfo.uiDC.glconfig.stencilBits), 0, 30, textStyle);
 
-    // Build NUL-terminated extension word list.
     Q_strncpyz(buff, uiInfo.uiDC.glconfig.extensions_string, sizeof(buff));
     numLines = 0;
     eptr = buff;
@@ -2066,11 +1851,6 @@ static void UI_DrawGLInfo(rectDef_t* rect, float scale, vec4_t color, int textSt
     }
 }
 
-// [QL] Parse one of the team/enemy colour cvars used to tint the model
-// previews. Matches uix86.dll UI_DrawRedTeamModel @0x10005ff0: when the value
-// contains "0x" it is read as a packed hex colour (0xRRGGBBAA), otherwise it is
-// a plain decimal integer. (QL uses sscanf("0x%08x"); the UI QVM has no libc so
-// the hex digits are consumed by hand.)
 static int UI_ParseModelColor(const char* cvarName) {
     char buf[64];
     const char* p;
@@ -2098,11 +1878,6 @@ static int UI_ParseModelColor(const char* cvarName) {
     return atoi(buf);
 }
 
-// [QL] Red team model preview (owner-draw UI_REDTEAMMODEL, id 0x22b). Reads
-// cg_forceRedTeamModel and previews it holding the machinegun (yaw 170). Ported
-// from uix86.dll UI_DrawRedTeamModel @0x10005ff0, which also forces the
-// cg_team{Head,Upper,Lower}Color values into the model's per-part tint colours
-// (head/torso/legs) every frame before drawing.
 static void UI_DrawRedTeamModel(rectDef_t* rect) {
     static playerInfo_t redInfo;
     static char redModelCached[MAX_QPATH];
@@ -2122,8 +1897,6 @@ static void UI_DrawRedTeamModel(rectDef_t* rect) {
         UI_PlayerInfo_SetModel(&redInfo, model, model, "");
         UI_PlayerInfo_SetInfo(&redInfo, LEGS_IDLE, TORSO_STAND, viewangles, vec3_origin, WP_MACHINEGUN, qfalse);
     }
-    // [QL] force the team colours into the tint every frame (they can change
-    // without the model changing). uix86.dll @0x10005ff0.
     redInfo.customColor = qtrue;
     redInfo.headColor = UI_ParseModelColor("cg_teamHeadColor");
     redInfo.torsoColor = UI_ParseModelColor("cg_teamUpperColor");
@@ -2131,10 +1904,6 @@ static void UI_DrawRedTeamModel(rectDef_t* rect) {
     UI_DrawPlayer(rect->x, rect->y, rect->w, rect->h, &redInfo, uiInfo.uiDC.realTime / 2);
 }
 
-// [QL] Blue team model preview (owner-draw UI_BLUETEAMMODEL, id 0x22c). Reads
-// cg_forceBlueTeamModel; otherwise identical to the red variant. Ported from
-// uix86.dll UI_DrawBlueTeamModel @0x100062a0, which forces the
-// cg_enemy{Head,Upper,Lower}Color values into the per-part tint colours.
 static void UI_DrawBlueTeamModel(rectDef_t* rect) {
     static playerInfo_t blueInfo;
     static char blueModelCached[MAX_QPATH];
@@ -2154,7 +1923,6 @@ static void UI_DrawBlueTeamModel(rectDef_t* rect) {
         UI_PlayerInfo_SetModel(&blueInfo, model, model, "");
         UI_PlayerInfo_SetInfo(&blueInfo, LEGS_IDLE, TORSO_STAND, viewangles, vec3_origin, WP_MACHINEGUN, qfalse);
     }
-    // [QL] force the enemy colours into the tint every frame. uix86.dll @0x100062a0.
     blueInfo.customColor = qtrue;
     blueInfo.headColor = UI_ParseModelColor("cg_enemyHeadColor");
     blueInfo.torsoColor = UI_ParseModelColor("cg_enemyUpperColor");
@@ -2162,8 +1930,6 @@ static void UI_DrawBlueTeamModel(rectDef_t* rect) {
     UI_DrawPlayer(rect->x, rect->y, rect->w, rect->h, &blueInfo, uiInfo.uiDC.realTime / 2);
 }
 
-// FIXME: table drive
-//
 static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y, int ownerDraw, int ownerDrawFlags, int align, float special, float scale, vec4_t color, qhandle_t shader, int textStyle) {
     rectDef_t rect;
 
@@ -2273,8 +2039,6 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
             UI_DrawBlueTeamModel(&rect);
             break;
         case UI_SERVER_SETTINGS:
-            // [QL] UI_SERVER_SETTINGS (557) draws the entire rules panel including the
-            // starting-weapon grid. QL has no separate id-558 owner-draw. uix86.dll @0x10007030.
             UI_DrawServerSettings(&rect, scale, color, textStyle);
             break;
         case UI_SERVERREFRESHDATE:
@@ -2287,8 +2051,6 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
             UI_DrawCrosshairColor(&rect, color);
             break;
         case UI_ADVERT:
-            // [QL] 0x10009340: the advertisement cell's picture (its defaultContent); the pixel
-            // count retail reported to the engine went to an advertiser that is gone
             trap_R_SetColor(color);
             UI_DrawHandlePic(rect.x, rect.y, rect.w, rect.h, shader);
             trap_R_SetColor(NULL);
@@ -2344,11 +2106,9 @@ static qboolean UI_OwnerDrawVisible(int flags, int flags2) {
         }
 
         if (flags & UI_SHOW_LEADER) {
-            // these need to show when this client can give orders to a player or a group
             if (!uiInfo.teamLeader) {
                 vis = qfalse;
             } else {
-                // if showing yourself
                 if (ui_selectedPlayer.integer < uiInfo.myTeamCount && uiInfo.teamClientNums[ui_selectedPlayer.integer] == uiInfo.playerNumber) {
                     vis = qfalse;
                 }
@@ -2356,13 +2116,10 @@ static qboolean UI_OwnerDrawVisible(int flags, int flags2) {
             flags &= ~UI_SHOW_LEADER;
         }
         if (flags & UI_SHOW_NOTLEADER) {
-            // these need to show when this client is assigning their own status or they are NOT the leader
             if (uiInfo.teamLeader) {
-                // if not showing yourself
                 if (!(ui_selectedPlayer.integer < uiInfo.myTeamCount && uiInfo.teamClientNums[ui_selectedPlayer.integer] == uiInfo.playerNumber)) {
                     vis = qfalse;
                 }
-                // these need to show when this client can give orders to a player or a group
             }
             flags &= ~UI_SHOW_NOTLEADER;
         }
@@ -2396,7 +2153,6 @@ static qboolean UI_OwnerDrawVisible(int flags, int flags2) {
             } else {
                 if (uiInfo.soundHighScore) {
                     if (trap_Cvar_VariableValue("sv_killserver") == 0) {
-                        // wait on server to go down before playing sound
                         trap_S_StartLocalSound(uiInfo.newHighScoreSound, CHAN_ANNOUNCER);
                         uiInfo.soundHighScore = qfalse;
                     }
@@ -2416,9 +2172,6 @@ static qboolean UI_OwnerDrawVisible(int flags, int flags2) {
             }
             flags &= ~UI_SHOW_DEMOAVAILABLE;
         }
-        // [QL] Favourites-source visibility flags. Binary UI_OwnerDrawVisible @0x10009d30 tests
-        // ui_netSource against AS_FAVORITES (3): FAVORITESERVERS hides unless favourites are
-        // selected, NOTFAVORITESERVERS hides when they are.
         if (flags & UI_SHOW_FAVORITESERVERS) {
             if (ui_netSource.integer != AS_FAVORITES) {
                 vis = qfalse;
@@ -2431,8 +2184,6 @@ static qboolean UI_OwnerDrawVisible(int flags, int flags2) {
             }
             flags &= ~UI_SHOW_NOTFAVORITESERVERS;
         }
-        // [QL] Warmup visibility flags. Binary @0x10009d30 keys both off the ui_warmup cvar:
-        // SHOW_IF_WARMUP hides when ui_warmup >= 0, SHOW_IF_NOT_WARMUP hides when ui_warmup < 0.
         if (flags & UI_SHOW_IF_WARMUP) {
             if (trap_Cvar_VariableValue("ui_warmup") >= 0) {
                 vis = qfalse;
@@ -2445,7 +2196,6 @@ static qboolean UI_OwnerDrawVisible(int flags, int flags2) {
             }
             flags &= ~UI_SHOW_IF_NOT_WARMUP;
         }
-        // [QL] Loadout visibility flags. Binary @0x10009d30 tests cg_loadout == 1 for both.
         if (flags & UI_SHOW_IF_LOADOUT_ENABLED) {
             if (trap_Cvar_VariableValue("cg_loadout") != 1) {
                 vis = qfalse;
@@ -2458,14 +2208,12 @@ static qboolean UI_OwnerDrawVisible(int flags, int flags2) {
             }
             flags &= ~UI_SHOW_IF_LOADOUT_DISABLED;
         }
-        // [QL] Not intermission visibility flag. Binary @0x10009d30 tests the ui_intermission cvar == 1.
         if (flags & UI_SHOW_IF_NOT_INTERMISSION) {
             if (trap_Cvar_VariableValue("ui_intermission") == 1) {
                 vis = qfalse;
             }
             flags &= ~UI_SHOW_IF_NOT_INTERMISSION;
         }
-        // Clear any remaining unrecognized flags
         if (!(flags & (UI_SHOW_FFA | UI_SHOW_NOTFFA | UI_SHOW_LEADER | UI_SHOW_NOTLEADER |
                        UI_SHOW_ANYTEAMGAME | UI_SHOW_ANYNONTEAMGAME | UI_SHOW_NETANYTEAMGAME |
                        UI_SHOW_NETANYNONTEAMGAME | UI_SHOW_NEWHIGHSCORE | UI_SHOW_NEWBESTTIME |
@@ -2487,8 +2235,6 @@ static qboolean UI_Handicap_HandleKey(int flags, float* special, int key) {
         h = Com_Clamp(5, 100, trap_Cvar_VariableValue("handicap"));
         h += 5 * select;
 
-        // [QL] uix86.dll UI_HandleHandicap @0x1000a040: wrap >100 -> 5, and <0 -> 100
-        // (decrementing the clamped-to-5 value yields 0, so the low bound is 0 not 5).
         if (h > 100) {
             h = 5;
         } else if (h < 0) {
@@ -2501,14 +2247,6 @@ static qboolean UI_Handicap_HandleKey(int flags, float* special, int key) {
     return qfalse;
 }
 
-/*
-===============
-UI_SetScoreBoardCvars
-
-uix86.dll UI_SetScoreBoardCvars @0x10001f70: publish a postGameInfo_t to the ui_score* cvars.
-When redBlue != 0, the "...2" duplicate cvars are set as well.
-===============
-*/
 static void UI_SetScoreBoardCvars(const postGameInfo_t* info, qboolean redBlue) {
     trap_Cvar_Set("ui_scoreAccuracy", va("%i%%", info->accuracy));
     trap_Cvar_Set("ui_scoreImpressives", va("%i", info->impressives));
@@ -2544,14 +2282,6 @@ static void UI_SetScoreBoardCvars(const postGameInfo_t* info, qboolean redBlue) 
     }
 }
 
-/*
-===============
-UI_SPPostgameMenu_f
-
-uix86.dll UI_SPPostgameMenu_f @0x10002350: load games/<map>_<gametype>.game (if present) and
-publish it to the ui_score* cvars. Called when the menu gametype selection changes.
-===============
-*/
 static void UI_SPPostgameMenu_f(const char* mapname, int gameType) {
     postGameInfo_t info;
     char fileName[MAX_QPATH];
@@ -2593,7 +2323,6 @@ static qboolean UI_GameType_HandleKey(int flags, float* special, int key, qboole
     if (select != 0) {
         int oldCount = UI_MapCountByGameType(qtrue);
 
-        // hard coded mess here
         if (select < 0) {
             ui_gameType.integer--;
             if (ui_gameType.integer == 2) {
@@ -2612,8 +2341,6 @@ static qboolean UI_GameType_HandleKey(int flags, float* special, int key, qboole
 
         trap_Cvar_SetValue("ui_gameType", ui_gameType.integer);
         UI_SetCapFragLimits(qtrue);
-        // uix86.dll UI_HandleGameType @0x1000a110: refresh the postgame scoreboard cvars for the
-        // newly selected map/gametype. The binary sets no ui_Q3Model here.
         UI_SPPostgameMenu_f(uiInfo.mapList[ui_currentMap.integer].mapLoadName,
                             uiInfo.gameTypes[ui_gameType.integer].gtEnum);
         if (resetMap && oldCount != UI_MapCountByGameType(qtrue)) {
@@ -2630,9 +2357,6 @@ static qboolean UI_NetGameType_HandleKey(int flags, float* special, int key) {
     if (select != 0) {
         ui_netGameType.integer += select;
 
-        // [QL] uix86.dll UI_HandleNetGameType @0x1000a250: wrap, then skip past the gametype
-        // enums 6/7/8 (1FCTF/Obelisk/Harvester) which the net picker does not offer. The binary
-        // always increments on a skip (even when cycling backward), then re-wraps.
         while (1) {
             int gtEnum;
             if (ui_netGameType.integer < 0) {
@@ -2669,8 +2393,6 @@ static qboolean UI_JoinGameType_HandleKey(int flags, float* special, int key) {
         }
 
         trap_Cvar_SetValue("ui_joinGametype", ui_joinGameType.integer);
-        // [QL] uix86.dll UI_HandleJoinGameType @0x1000a300 rebuilds the display list
-        // after switching the join filter.
         UI_BuildServerDisplayList(qtrue);
         return qtrue;
     }
@@ -2713,9 +2435,6 @@ static qboolean UI_OpponentName_HandleKey(int flags, float* special, int key) {
 static qboolean UI_BotName_HandleKey(int flags, float* special, int key) {
     int select = UI_SelectForKey(key);
     if (select != 0) {
-        // [QL] uix86.dll UI_HandleBotSelection @0x1000a570: cycle botIndex against a single
-        // UI_GetNumBots() bound (the +2/+1 slack covers the two synthetic list entries), with
-        // no g_gametype>=GT_TEAM characterList branch.
         int numBots = UI_GetNumBots();
 
         uiInfo.botIndex += select;
@@ -2784,9 +2503,6 @@ static qboolean UI_SelectedPlayer_HandleKey(int flags, float* special, int key) 
     return qfalse;
 }
 
-// [QL] Crosshair colour cycle for the UI_CROSSHAIR_COLOR picker widget. Ported
-// from uix86.dll UI_HandleCrosshairColor @0x1000a790: MOUSE1/ENTER/JOY1 advance,
-// MOUSE2 goes back, wrapping over 1..26. Only reached when cg_crosshairHealth == 0.
 static qboolean UI_CrosshairColor_HandleKey(int flags, float* special, int key) {
     int select = UI_SelectForKey(key);
     if (select != 0) {
@@ -2803,9 +2519,6 @@ static qboolean UI_CrosshairColor_HandleKey(int flags, float* special, int key) 
     return qfalse;
 }
 
-// [QL] Single-player skill picker (owner-draw UI_SKILL 517). Ported from uix86.dll
-// UI_HandleSkill @0x1000a390: only MOUSE1/MOUSE2/ENTER/JOY1 respond, MOUSE2 steps down and
-// everything else up, wrapping over 1..5. Deliberately not the UI_SelectForKey path.
 static qboolean UI_Skill_HandleKey(int flags, float *special, int key) {
     int skill;
 
@@ -2827,10 +2540,6 @@ static qboolean UI_Skill_HandleKey(int flags, float *special, int key) {
     return qtrue;
 }
 
-// [QL] Server-browser source picker (owner-draw UI_NETSOURCE 518). Ported from uix86.dll
-// UI_HandleNetSource @0x1000a420: cycle ui_netSource over Local/Internet/Favorites while
-// skipping AS_MPLAYER (1) - forward past 1 jumps to 2, back past 1 drops to 0 - then rebuild
-// the display list and refresh unless the new source is AS_GLOBAL (2, the master list).
 static qboolean UI_NetSource_HandleKey(int flags, float *special, int key) {
     qboolean skipped = qfalse;
 
@@ -2866,9 +2575,6 @@ static qboolean UI_NetSource_HandleKey(int flags, float *special, int key) {
     return qtrue;
 }
 
-// [QL] Server-browser mod filter picker (owner-draw UI_NETFILTER 520). Ported from uix86.dll
-// UI_HandleServerFilter @0x1000a4f0: MOUSE1/ENTER/JOY1 forward, MOUSE2 back, wrap over 0..6,
-// rebuild the display list on every accepted key.
 static qboolean UI_ServerFilter_HandleKey(int flags, float *special, int key) {
     if (key == K_MOUSE1 || key == K_ENTER || key == K_JOY1) {
         ui_serverFilterType.integer++;
@@ -2931,7 +2637,6 @@ static qboolean UI_OwnerDrawHandleKey(int ownerDraw, int flags, float* special, 
             UI_Crosshair_HandleKey(flags, special, key);
             break;
         case UI_CROSSHAIR_COLOR:
-            // [QL] Colour cycling only when not in health-coloured mode.
             if (trap_Cvar_VariableValue("cg_crosshairHealth") == 0) {
                 return UI_CrosshairColor_HandleKey(flags, special, key);
             }
@@ -2972,11 +2677,6 @@ static float UI_GetValue(int ownerDraw) {
     return 0;
 }
 
-/*
-===============
-UI_LoadMods
-===============
-*/
 static void UI_LoadMods(void) {
     int numdirs;
     char dirlist[2048];
@@ -3001,11 +2701,6 @@ static void UI_LoadMods(void) {
     }
 }
 
-/*
-===============
-UI_LoadTeams
-===============
-*/
 static void UI_LoadTeams(void) {
     char teamList[4096];
     char* teamName;
@@ -3023,11 +2718,6 @@ static void UI_LoadTeams(void) {
     }
 }
 
-/*
-===============
-UI_LoadMovies
-===============
-*/
 static void UI_LoadMovies(void) {
     char movielist[4096];
     char* moviename;
@@ -3054,11 +2744,6 @@ static void UI_LoadMovies(void) {
 
 #define NAMEBUFSIZE (MAX_DEMOS * 32)
 
-/*
-===============
-UI_LoadDemos
-===============
-*/
 void UI_LoadDemos(void) {
     char demolist[NAMEBUFSIZE];
     char demoExt[32];
@@ -3067,9 +2752,6 @@ void UI_LoadDemos(void) {
     int i, len;
     int protocol;
 
-    // [QL] uix86.dll UI_LoadDemos @0x1000acf0: read ONLY "protocol", extension "dm_%d"
-    // (no leading dot), cap the count at 256, strip a trailing ".dm_<proto>" suffix and
-    // upper-case each demo name.
     protocol = (int)trap_Cvar_VariableValue("protocol");
 
     Com_sprintf(demoExt, sizeof(demoExt), "dm_%d", protocol);
@@ -3082,7 +2764,6 @@ void UI_LoadDemos(void) {
     demoname = demolist;
     for (i = 0; i < uiInfo.demoCount; i++) {
         len = strlen(demoname);
-        // strip a trailing ".dm_<proto>" if present
         if (len >= (int)strlen(demoSuffix)
             && Q_stricmp(demoname + len - strlen(demoSuffix), demoSuffix) == 0) {
             demoname[len - strlen(demoSuffix)] = '\0';
@@ -3104,15 +2785,6 @@ static qboolean UI_SetNextMap(int actual, int index) {
     return qfalse;
 }
 
-/*
-===============
-UI_DefaultFactory
-
-[QL] The engine starts a match from a factory, "map <map> <factory>", and
-g_gametype is read only. These menus take the factory retail's Start Match page
-picks for each gametype (web.pak, the gametypes module); Overload has none.
-===============
-*/
 static const char* UI_DefaultFactory(int gametype) {
     static const char* factories[GT_MAX_GAME_TYPE] = {
         "ffa", "duel", "race", "tdm", "ca", "ctf", "oneflag", "", "har", "ft", "dom", "ad", "rr"};
@@ -3148,7 +2820,6 @@ static void UI_StartSkirmish(qboolean next) {
 
     k = UI_TeamIndexFromName(UI_Cvar_VariableString("ui_opponentName"));
 
-    // set up sp overrides, will be replaced on postgame
     temp = trap_Cvar_VariableValue("capturelimit");
     trap_Cvar_Set("ui_saveCaptureLimit", va("%i", temp));
     temp = trap_Cvar_VariableValue("fraglimit");
@@ -3209,7 +2880,6 @@ static void UI_StartSkirmish(qboolean next) {
         }
     }
     if (g >= GT_TEAM) {
-        // send team command for vanilla q3 game qvm
         trap_Cmd_ExecuteText(EXEC_APPEND, "wait 5; team Red\n");
     }
 }
@@ -3226,16 +2896,14 @@ static void UI_Update(const char* name) {
             trap_Cvar_Set("cl_packetdup", "1");
         } else if (rate >= 4000) {
             trap_Cvar_Set("cl_maxpackets", "15");
-            trap_Cvar_Set("cl_packetdup", "2");  // favor less prediction errors when there's packet loss
+            trap_Cvar_Set("cl_packetdup", "2");
         } else {
             trap_Cvar_Set("cl_maxpackets", "15");
-            trap_Cvar_Set("cl_packetdup", "1");  // favor lower bandwidth
+            trap_Cvar_Set("cl_packetdup", "1");
         }
     } else if (Q_stricmp(name, "ui_GetName") == 0) {
         trap_Cvar_Set("ui_Name", UI_Cvar_VariableString("name"));
     } else if (Q_stricmp(name, "r_colorbits") == 0) {
-        // [QL] uix86.dll UI_RunMenuScript update @0x1000ae50: plain Cvar_Set string writes;
-        // colorbits 32 only sets r_depthbits (no r_stencilbits write).
         switch (val) {
             case 0:
                 trap_Cvar_Set("r_depthbits", "0");
@@ -3250,7 +2918,6 @@ static void UI_Update(const char* name) {
                 break;
         }
     } else if (Q_stricmp(name, "ui_mousePitch") == 0) {
-        // [QL] literal m_pitch strings, not SetValue
         if (val == 0) {
             trap_Cvar_Set("m_pitch", "0.022");
         } else {
@@ -3259,7 +2926,6 @@ static void UI_Update(const char* name) {
     }
 }
 
-// [QL] uix86.dll UI_GetGameTypeString @0x10001000: gametype enum -> short name.
 static const char* UI_GetGameTypeString(int gametype) {
     switch (gametype) {
         case 0: return "ffa";
@@ -3291,18 +2957,11 @@ static void UI_RunMenuScript(char** args) {
             trap_Cvar_Set("cg_cameraOrbit", "0");
             trap_Cvar_Set("ui_singlePlayerActive", "0");
             trap_Cvar_SetValue("dedicated", Com_Clamp(0, 2, ui_dedicated.integer));
-            // [QL] StartServer remaps the menu selection through uiInfo.gameTypes[] because the
-            // displayed list is non-contiguous (it skips the 1FCTF/Obelisk/Harvester gtEnums), then
-            // clamps to [0, GT_MAX_GAME_TYPE]. Matches UI_RunScript StartServer (uix86.dll
-            // 0x1000b0e0) and mirrors the ui_actualNetGametype lookup above.
             g = (int)Com_Clamp(0, GT_MAX_GAME_TYPE, uiInfo.gameTypes[ui_netGameType.integer].gtEnum);
             trap_Cvar_Set("g_redTeam", UI_Cvar_VariableString("ui_teamName"));
             trap_Cvar_Set("g_blueTeam", UI_Cvar_VariableString("ui_opponentName"));
             trap_Cmd_ExecuteText(EXEC_APPEND, va("wait ; wait ; map %s %s\n", uiInfo.mapList[ui_currentNetMap.integer].mapLoadName, UI_DefaultFactory(g)));
             skill = trap_Cvar_VariableValue("g_spSkill");
-            // [QL] raise sv_maxclients to fit the occupied bot slots, then addbot each one.
-            // Matches uix86.dll StartServer @0x1000b0e0: count non-empty ui_blueteam%i /
-            // ui_redteam%i slots (i=1..5), sv_maxclients = max(count|8, current).
             clients = (int)trap_Cvar_VariableValue("sv_maxclients");
             count = 0;
             for (i = 1; i <= 5; i++) {
@@ -3320,9 +2979,6 @@ static void UI_RunMenuScript(char** args) {
                 count = clients;
             }
             trap_Cvar_Set("sv_maxclients", va("%d", count));
-            // [QL] non-team gametypes take the bot from the bot-info list (Sarge fallback) with no
-            // team argument; team gametypes take characterList[slot].base with a Blue/Red team.
-            // g is the gametype chosen above: the map command that sets it is still queued.
             for (i = 1; i <= 5; i++) {
                 v = (int)trap_Cvar_VariableValue(va("ui_blueteam%i", i));
                 if (v > 1) {
@@ -3347,7 +3003,6 @@ static void UI_RunMenuScript(char** args) {
             trap_Cmd_ExecuteText(EXEC_APPEND, "exec default.cfg\n");
             trap_Cmd_ExecuteText(EXEC_APPEND, "cvar_restart\n");
             Controls_SetDefaults();
-            // [QL] uix86.dll resetDefaults @0x1000b0e0 keeps the intro suppressed
             trap_Cvar_Set("com_introPlayed", "1");
             trap_Cmd_ExecuteText(EXEC_APPEND, "vid_restart\n");
         } else if (Q_stricmp(name, "startMatchOpen") == 0) {
@@ -3365,16 +3020,12 @@ static void UI_RunMenuScript(char** args) {
         } else if (Q_stricmp(name, "legalOpen") == 0) {
             UI_Legal_Open();
         } else if (Q_stricmp(name, "homeEscape") == 0) {
-            // [ioquakelive] Escape on the front end: over a match it goes back to the
-            // match's menu, which is where "Main Menu" was pressed; otherwise it asks
-            // to quit, as retail's main.menu does.
             if (UI_Home_InMatch()) {
                 _UI_SetActiveMenu(UIMENU_INGAME);
             } else {
                 Menus_ActivateByName("quit_popmenu");
             }
         } else if (Q_stricmp(name, "homeOpen") == 0) {
-            // the page takes keys before the mouse moves over it
             menuDef_t* home = Menus_FindByName("main");
             itemDef_t* item = home ? Menu_FindItemByName(home, "home") : NULL;
 
@@ -3391,7 +3042,6 @@ static void UI_RunMenuScript(char** args) {
             UI_MapCountByGameType(qfalse);
             Menu_SetFeederSelection(NULL, FEEDER_ALLMAPS, 0, "createserver");
         } else if (Q_stricmp(name, "updateCallvoteMapPreview") == 0) {
-            // [QL] Re-filter map list by callvote gametype and reset selection
             UI_MapCountByCallvoteGameType();
             Menu_SetFeederSelection(NULL, FEEDER_CVMAPS, 0, "ingame_callvote");
         } else if (Q_stricmp(name, "saveControls") == 0) {
@@ -3415,8 +3065,7 @@ static void UI_RunMenuScript(char** args) {
             trap_Cmd_ExecuteText(EXEC_APPEND, va("demo %s\n", uiInfo.demoList[uiInfo.demoIndex]));
         } else if (Q_stricmp(name, "closeJoin") == 0) {
             if (uiInfo.serverStatus.refreshActive) {
-                // [QL] cancel an in-progress refresh instead of leaving the menu
-                UI_ServerRefreshComplete();  // == UI_StopServerRefresh
+                UI_ServerRefreshComplete();
                 uiInfo.serverStatus.nextDisplayRefresh = 0;
                 uiInfo.nextServerStatusRefresh = 0;
                 uiInfo.nextFindPlayerRefresh = 0;
@@ -3425,7 +3074,6 @@ static void UI_RunMenuScript(char** args) {
                 Menus_OpenByName("main");
             }
         } else if (Q_stricmp(name, "UpdateFilter") == 0) {
-            // [QL] rebuild the display list with the current filter, then reselect the top row
             if (ui_netSource.integer == AS_LOCAL) {
                 UI_StartServerRefresh(qtrue);
             }
@@ -3438,14 +3086,13 @@ static void UI_RunMenuScript(char** args) {
             UI_StartServerRefresh(qfalse);
             UI_BuildServerDisplayList(qtrue);
         } else if (Q_stricmp(name, "StopRefresh") == 0) {
-            UI_ServerRefreshComplete();  // == UI_StopServerRefresh
+            UI_ServerRefreshComplete();
             uiInfo.serverStatus.nextDisplayRefresh = 0;
             uiInfo.nextServerStatusRefresh = 0;
             uiInfo.nextFindPlayerRefresh = 0;
         } else if (Q_stricmp(name, "ServerSort") == 0) {
             int sortColumn;
             if (Int_Parse(args, &sortColumn)) {
-                // if sorting on the same column again, flip the direction
                 if (sortColumn == uiInfo.serverStatus.sortKey) {
                     uiInfo.serverStatus.sortDir = !uiInfo.serverStatus.sortDir;
                 }
@@ -3453,7 +3100,6 @@ static void UI_RunMenuScript(char** args) {
             }
         } else if (Q_stricmp(name, "FindPlayer") == 0) {
             UI_BuildFindPlayerList(qtrue);
-            // clear the displayed server-status info
             uiInfo.serverStatusInfo.numLines = 0;
             Menu_SetFeederSelection(NULL, FEEDER_FINDPLAYER, 0, NULL);
         } else if (Q_stricmp(name, "ServerStatus") == 0) {
@@ -3527,7 +3173,6 @@ static void UI_RunMenuScript(char** args) {
             trap_Cvar_Set("cg_cameraOrbit", "0");
             trap_Cvar_Set("ui_singlePlayerActive", "0");
             if (uiInfo.serverStatus.currentServer >= 0 && uiInfo.serverStatus.currentServer < uiInfo.serverStatus.numDisplayServers) {
-                // [QL fix] resolve the selected server's address into buff before connecting
                 trap_LAN_GetServerAddressString(ui_netSource.integer,
                     uiInfo.serverStatus.displayServers[uiInfo.serverStatus.currentServer],
                     buff, sizeof(buff));
@@ -3556,9 +3201,6 @@ static void UI_RunMenuScript(char** args) {
             Menus_CloseAll();
         } else if (Q_stricmp(name, "voteMap") == 0) {
             if (ui_currentNetMap.integer >= 0 && ui_currentNetMap.integer < uiInfo.mapCount) {
-                // [QL] uix86.dll voteMap @0x1000c2f4 appends the gametype short name from
-                // ui_cvGameType (0x10741c60), the callvote menu's own choice, which opening the
-                // menu sets to -1: nothing then, and the server keeps the match's own
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("callvote map %s %s\n",
                     uiInfo.mapList[ui_currentNetMap.integer].mapLoadName,
                     (ui_cvGameType.integer == -1) ? "" : UI_GetGameTypeString(ui_cvGameType.integer)));
@@ -3573,8 +3215,6 @@ static void UI_RunMenuScript(char** args) {
             }
         } else if (Q_stricmp(name, "addBot") == 0) {
             if (trap_Cvar_VariableValue("g_gametype") >= GT_TEAM) {
-                // [QL] .base holds the model name (see Character_Parse); .name is
-                // now the skin, so use base as the bot character identifier.
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("addbot %s %i %s\n", uiInfo.characterList[uiInfo.botIndex].base, uiInfo.skillIndex + 1, (uiInfo.redBlue == 0) ? "Red" : "Blue"));
             } else {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("addbot %s %i %s\n", UI_GetBotNameByNumber(uiInfo.botIndex), uiInfo.skillIndex + 1, (uiInfo.redBlue == 0) ? "Red" : "Blue"));
@@ -3615,7 +3255,6 @@ static void UI_RunMenuScript(char** args) {
                 trap_SetPbClStatus(stat);
         } else if (Q_stricmp(name, "clearComError") == 0) {
 			trap_Cvar_Set("com_errorMessage", "");
-        // [QL] Player action scripts - binary-verified from uix86.dll UI_RunScript
         } else if (Q_stricmp(name, "clientViewProfile") == 0) {
             if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
                 trap_Cmd_ExecuteText(EXEC_APPEND, va("clientviewprofile %i\n",
@@ -3687,18 +3326,14 @@ static void UI_RunMenuScript(char** args) {
                     uiInfo.clientNums[uiInfo.playerIndex]));
             }
         } else if (Q_stricmp(name, "teamModelChanged") == 0) {
-            // [QL] Force team model preview to refresh
             updateModel = qtrue;
         } else if (Q_stricmp(name, "enemyModelChanged") == 0) {
-            // [QL] Force enemy model preview to refresh
             updateModel = qtrue;
         } else if (Q_stricmp(name, "teamColorDefaults") == 0) {
-            // [QL] Reset team color sliders to defaults
             trap_Cvar_Set("ui_teamHeadColor", "96");
             trap_Cvar_Set("ui_teamUpperColor", "23");
             trap_Cvar_Set("ui_teamLowerColor", "23");
         } else if (Q_stricmp(name, "enemyColorDefaults") == 0) {
-            // [QL] Reset enemy color sliders to defaults
             trap_Cvar_Set("ui_enemyHeadColor", "27");
             trap_Cvar_Set("ui_enemyUpperColor", "2");
             trap_Cvar_Set("ui_enemyLowerColor", "2");
@@ -3711,18 +3346,10 @@ static void UI_RunMenuScript(char** args) {
 static void UI_GetTeamColor(vec4_t* color) {
 }
 
-/*
-==================
-UI_MapCountByGameType
-==================
-*/
 static int UI_MapCountByGameType(qboolean singlePlayer) {
     int i, c, game;
     char info[MAX_STRING_CHARS];
     c = 0;
-    // [QL] uix86.dll UI_FilterMapsEx @0x1000d3c0: source the gametype from
-    // CS_SERVERINFO (not the menu dropdown), clamp negatives to 0, no GT_TEAM->GT_FFA
-    // remap. For the MAPS feeder (singlePlayer) require the extra typeBits & 4 bit.
     game = 0;
     if (trap_GetConfigString(CS_SERVERINFO, info, sizeof(info))) {
         game = atoi(Info_ValueForKey(info, "gametype"));
@@ -3742,14 +3369,6 @@ static int UI_MapCountByGameType(qboolean singlePlayer) {
     return c;
 }
 
-/*
-==================
-UI_MapCountByCallvoteGameType
-[QL] uix86.dll UI_FilterMaps @0x1000d300: source the gametype from CS_SERVERINFO
-(clamp negatives to 0), then if the ui_actualNetGametype override is not -1 use it.
-No GT_TEAM->GT_FFA remap and no typeBits & 4 requirement.
-==================
-*/
 static int UI_MapCountByCallvoteGameType(void) {
     int i, c, game;
     char info[MAX_STRING_CHARS];
@@ -3790,11 +3409,6 @@ qboolean UI_hasSkinForBase(const char* base, const char* team) {
     return qfalse;
 }
 
-/*
-==================
-UI_MapCountByTeam
-==================
-*/
 static int UI_HeadCountByTeam(void) {
     static int init = 0;
     int i, j, k, c, tIndex;
@@ -3814,12 +3428,11 @@ static int UI_HeadCountByTeam(void) {
 
     tIndex = UI_TeamIndexFromName(UI_Cvar_VariableString("ui_teamName"));
 
-    // do names
     for (i = 0; i < uiInfo.characterCount; i++) {
         uiInfo.characterList[i].active = qfalse;
         for (j = 0; j < TEAM_MEMBERS; j++) {
             if (uiInfo.teamList[tIndex].teamMembers[j] != NULL) {
-                if (uiInfo.characterList[i].reference & (1 << tIndex)) {  // && Q_stricmp(uiInfo.teamList[tIndex].teamMembers[j], uiInfo.characterList[i].name)==0) {
+                if (uiInfo.characterList[i].reference & (1 << tIndex)) {
                     uiInfo.characterList[i].active = qtrue;
                     c++;
                     break;
@@ -3828,7 +3441,6 @@ static int UI_HeadCountByTeam(void) {
         }
     }
 
-    // and then aliases
     for (j = 0; j < TEAM_MEMBERS; j++) {
         for (k = 0; k < uiInfo.aliasCount; k++) {
             if (uiInfo.aliasList[k].name != NULL) {
@@ -3849,11 +3461,6 @@ static int UI_HeadCountByTeam(void) {
     return c;
 }
 
-/*
-==================
-stristr
-==================
-*/
 static char* stristr(char* str, char* charset) {
     int i;
 
@@ -3868,23 +3475,6 @@ static char* stristr(char* str, char* charset) {
     }
     return NULL;
 }
-
-// ============================================================================
-// [QL] Server browser
-//
-// Ported from uix86.dll (build 1069). Verified against Ghidra @ port 8195:
-//   UI_InsertServerIntoDisplayList  0x1000d630
-//   UI_RemoveServerFromDisplayList  0x1000d670
-//   UI_BinaryServerInsert           0x1000d6c0   (QL-variant search form)
-//   UI_BuildServerDisplayList       0x1000d740
-//   UI_SortServerStatusInfo         0x1000da60
-//   UI_GetServerStatusInfo          0x1000db60
-//   UI_BuildFindPlayerList          0x1000deb0
-//   UI_BuildServerStatus            0x1000e3b0   (Ghidra label "UI_FeederSelection")
-//   UI_ServerRefreshComplete        0x100118f0   (== missionpack UI_StopServerRefresh)
-//   UI_DoServerRefresh              0x10011970
-//   UI_StartServerRefresh           0x10011a30
-// ============================================================================
 
 static int QDECL UI_ServerSortCompare(const void *arg1, const void *arg2) {
     return trap_LAN_CompareServers(ui_netSource.integer, uiInfo.serverStatus.sortKey,
@@ -3928,9 +3518,6 @@ static void UI_RemoveServerFromDisplayList(int num) {
     }
 }
 
-// [QL] Binary-search insert. QL uses an alternate (functionally equivalent) form to
-// stock missionpack: unconditional 'len -= mid', 'offset += mid' inside the loop,
-// loop while 'mid > 0', then a deferred 'offset++' when the last compare was "greater".
 static void UI_BinaryServerInsert(int num) {
     int mid, offset, res, len;
 
@@ -3963,8 +3550,6 @@ static void UI_BinaryServerInsert(int num) {
     UI_InsertServerIntoDisplayList(num, offset);
 }
 
-// [QL] Builds the filtered/sorted display list. Default motd is the unchanged
-// "Welcome to Team Arena!". force==2 rebuilds without resetting the master query.
 static void UI_BuildServerDisplayList(int force) {
     int i, count, clients, maxClients, ping, game, len, visible;
     char info[MAX_STRING_CHARS];
@@ -4029,8 +3614,6 @@ static void UI_BuildServerDisplayList(int force) {
                     continue;
                 }
             }
-            // [ioquakelive] with the gametype list not loaded the table is all zeroes, and the
-            // filter let only free for all through
             if (uiInfo.numJoinGameTypes > 0 && uiInfo.joinGameTypes[ui_joinGameType.integer].gtEnum != -1) {
                 game = atoi(Info_ValueForKey(info, "gametype"));
                 if (game != uiInfo.joinGameTypes[ui_joinGameType.integer].gtEnum) {
@@ -4038,8 +3621,6 @@ static void UI_BuildServerDisplayList(int force) {
                     continue;
                 }
             }
-            // [QL] uix86.dll UI_BuildServerDisplayList @0x1000d740 guards on
-            // ui_serverFilterType > 0 only (the 7-entry table needs no upper bound)
             if (ui_serverFilterType.integer > 0) {
                 if (Q_stricmp(Info_ValueForKey(info, "game"),
                               serverFilters[ui_serverFilterType.integer].basedir) != 0) {
@@ -4047,7 +3628,6 @@ static void UI_BuildServerDisplayList(int force) {
                     continue;
                 }
             }
-            // never add a favourite twice
             if (ui_netSource.integer == AS_FAVORITES) {
                 UI_RemoveServerFromDisplayList(i);
             }
@@ -4062,8 +3642,6 @@ static void UI_BuildServerDisplayList(int force) {
     uiInfo.serverStatus.refreshtime = uiInfo.uiDC.realTime;
 }
 
-// [QL] Promote a fixed set of cvar keys to the top of the status-detail list
-// and relabel them (sortKeys/sortKeyNames verified from uix86.dll @ 0x1002af48).
 static void UI_SortServerStatusInfo(serverStatusInfo_t *info) {
     int i, j, index;
     char *tmp1, *tmp2;
@@ -4078,7 +3656,6 @@ static void UI_SortServerStatusInfo(serverStatusInfo_t *info) {
 
     index = 0;
     for (i = 0; sortKeys[i]; i++) {
-        // [QL] uix86.dll UI_SortServerStatusInfo @0x1000da60: inner scan starts at 0
         for (j = 0; j < info->numLines; j++) {
             if (info->lines[j][1] && *info->lines[j][1] == '\0'
                 && info->lines[j][0] && !Q_stricmp(info->lines[j][0], sortKeys[i])) {
@@ -4115,7 +3692,6 @@ static qboolean UI_GetServerStatusInfo(const char *serverAddress, serverStatusIn
         info->lines[info->numLines][2] = "";
         info->lines[info->numLines][3] = info->address;
         info->numLines++;
-        // cvar key/value pairs
         while (p && *p) {
             p = strchr(p, '\\');
             if (!p) break;
@@ -4131,7 +3707,6 @@ static qboolean UI_GetServerStatusInfo(const char *serverAddress, serverStatusIn
             info->numLines++;
             if (info->numLines >= MAX_SERVERSTATUS_LINES) break;
         }
-        // player list
         if (info->numLines < MAX_SERVERSTATUS_LINES - 3) {
             info->lines[info->numLines][0] = "";
             info->lines[info->numLines][1] = "";
@@ -4177,8 +3752,6 @@ static qboolean UI_GetServerStatusInfo(const char *serverAddress, serverStatusIn
     return qfalse;
 }
 
-// [QL] 0x1000e3b0 (Ghidra label "UI_FeederSelection"): really UI_BuildServerStatus.
-// _UI_Refresh calls this each frame with force==qfalse.
 static void UI_BuildServerStatus(qboolean force) {
     if (uiInfo.nextFindPlayerRefresh) {
         return;
@@ -4193,7 +3766,6 @@ static void UI_BuildServerStatus(qboolean force) {
         uiInfo.serverStatusInfo.numLines = 0;
         trap_LAN_ServerStatus(NULL, NULL, 0);
     }
-    // [QL] uix86.dll UI_BuildServerStatus @0x1000e3b0 bound: currentServer <= numDisplayServers
     if (uiInfo.serverStatus.currentServer >= 0
         && uiInfo.serverStatus.currentServer <= uiInfo.serverStatus.numDisplayServers
         && uiInfo.serverStatus.numDisplayServers != 0) {
@@ -4229,7 +3801,6 @@ static void UI_BuildFindPlayerList(qboolean force) {
             uiInfo.nextFindPlayerRefresh = 0;
             return;
         }
-        // resend at half the server-status timeout
         resend = ui_serverStatusTimeOut.integer / 2 - 10;
         if (resend < 50) {
             resend = 50;
@@ -4237,8 +3808,6 @@ static void UI_BuildFindPlayerList(qboolean force) {
         trap_Cvar_Set("cl_serverStatusResendTime", va("%d", resend));
         trap_LAN_ServerStatus(NULL, NULL, 0);
         uiInfo.numFoundPlayerServers = 1;
-        // [QL] uix86.dll UI_BuildFindPlayerList @0x1000deb0 writes at the numFoundPlayerServers
-        // slot directly (no -1).
         Com_sprintf(uiInfo.foundPlayerServerNames[uiInfo.numFoundPlayerServers],
                     sizeof(uiInfo.foundPlayerServerNames[0]), "searching %d...",
                     uiInfo.pendingServerStatus.num);
@@ -4251,7 +3820,6 @@ static void UI_BuildFindPlayerList(qboolean force) {
             if (UI_GetServerStatusInfo(pendingServer->adrstr, &info)) {
                 numFound++;
                 for (j = 0; j < info.numLines; j++) {
-                    // [QL] guard on the ping column [2], not the name column [3]
                     if (!info.lines[j][2] || !*info.lines[j][2]) {
                         continue;
                     }
@@ -4327,7 +3895,6 @@ static void UI_BuildFindPlayerList(qboolean force) {
     UI_FeederSelection(FEEDER_FINDPLAYER, uiInfo.currentFoundPlayerServer);
 }
 
-// [QL] 0x100118f0: QL name UI_ServerRefreshComplete == missionpack UI_StopServerRefresh.
 static void UI_ServerRefreshComplete(void) {
     int count;
 
@@ -4377,25 +3944,6 @@ static void UI_DoServerRefresh(void) {
     UI_BuildServerDisplayList(qfalse);
 }
 
-// [QL] AS_GLOBAL uses master index 0, AS_MPLAYER master index 1 (same as missionpack).
-// The !full path inlines missionpack's UI_UpdatePendingPings.
-/*
-===============
-UI_Home_ServerList
-
-[ioquakelive] The front page shows the servers in its bottom row, and for that it needs what
-the browser page needs: ask for the list when it opens and rebuild it as the answers arrive.
-It is exposed here so that the same sweep is not implemented twice.
-===============
-*/
-/*
-===============
-UI_Browser_Sort
-
-The same column title twice reverses the order, as retail's ServerSort
-uiScript does.
-===============
-*/
 void UI_Browser_Sort(int column) {
     if (column == uiInfo.serverStatus.sortKey) {
         uiInfo.serverStatus.sortDir = !uiInfo.serverStatus.sortDir;
@@ -4403,7 +3951,6 @@ void UI_Browser_Sort(int column) {
     UI_ServersSort(column, qtrue);
 }
 
-// which of Steam's lists the global one asks for: the browser's "Type"
 static int uiBrowserSource;
 
 void UI_Browser_SetSource(int source) {
@@ -4460,17 +4007,6 @@ static void UI_StartServerRefresh(qboolean full) {
     }
 }
 
-/*
-==================
-UI_PlayerModelExists
-
-[QL] uix86.dll @0x1000d490. A parsed character is real only when its skin file
-models/players/<base>/lower_<skin>.skin exists on disk. QL passes a NULL file
-handle to trap_FS_FOpenFile, so the engine reports the file length without
-opening it; a nonzero length means the skin is present. index >= MAX_HEADS
-returns qfalse. (base = model dir, name = skin, per Character_Parse.)
-==================
-*/
 static qboolean UI_PlayerModelExists(int index) {
     char path[1024];
 
@@ -4484,18 +4020,6 @@ static qboolean UI_PlayerModelExists(int index) {
     return (trap_FS_FOpenFile(path, NULL, FS_READ) != 0) ? qtrue : qfalse;
 }
 
-/*
-==================
-UI_BuildPlayerModelList
-
-[QL] uix86.dll @0x1000d530. Walks the single parsed character list and marks
-each model .active once its skin file is confirmed on disk. The flag is cached:
-a model already active is not re-validated. Returns the active count. Both the
-HEADS and Q3HEADS feeders draw from this one list (UI_FeederCount @0x1000e470
-passes 0 for FEEDER_HEADS, 1 for FEEDER_Q3HEADS). When excludeSkins is 1 the
-six team/sport skins are skipped so they never appear in the Q3 model picker.
-==================
-*/
 static int UI_BuildPlayerModelList(int excludeSkins) {
     int i;
     int count;
@@ -4526,15 +4050,7 @@ static int UI_BuildPlayerModelList(int excludeSkins) {
     return count;
 }
 
-/*
-==================
-UI_FeederCount
-==================
-*/
 static int UI_FeederCount(float feederID) {
-    // [QL] uix86.dll UI_FeederCount @0x1000e470: FEEDER_HEADS and FEEDER_Q3HEADS
-    // share one disk-validated player-model list; HEADS keeps every valid skin,
-    // Q3HEADS drops the team/sport skins (arg 1).
     if (feederID == FEEDER_HEADS) {
         return UI_BuildPlayerModelList(0);
     } else if (feederID == FEEDER_Q3HEADS) {
@@ -4623,15 +4139,11 @@ static const char* UI_FeederItemText(float feederID, int index, int column, qhan
     static char clientBuff[32];
     static int lastColumn = -1;
     static int lastTime = 0;
-    // [QL] browser "Game" column names, indexed by the "gametype" info value
-    // (verified from uix86.dll @ 0x1002ae48).
     static const char *browserGameTypes[8] = {
         "FFA", "TOURNAMENT", "SP", "TEAM DM", "CTF", "1FCTF", "OVERLOAD", "HARVESTER"
     };
     *handle = -1;
     if (feederID == FEEDER_HEADS || feederID == FEEDER_Q3HEADS) {
-        // [QL] uix86.dll UI_FeederItemText @0x1000e640: both head feeders walk
-        // the one active player-model list and return the skin name.
         int actual;
         return UI_SelectedHead(index, &actual);
     } else if (feederID == FEEDER_MAPS || feederID == FEEDER_ALLMAPS || feederID == FEEDER_CVMAPS) {
@@ -4703,7 +4215,7 @@ static const char* UI_FeederItemText(float feederID, int index, int column, qhan
                 return "Unknown";
             case SORT_PING:
                 if (ping <= 0) {
-                    return "...";  // [QL] deviation: stock missionpack uses "--"
+                    return "...";
                 }
                 return Info_ValueForKey(info, "ping");
             }
@@ -4719,8 +4231,6 @@ static const char* UI_FeederItemText(float feederID, int index, int column, qhan
 
 static qhandle_t UI_FeederItemImage(float feederID, int index) {
     if (feederID == FEEDER_HEADS || feederID == FEEDER_Q3HEADS) {
-        // [QL] both head feeders index the one player-model list; the head icon
-        // is lazily registered from characterList[].imageName.
         int actual;
         UI_SelectedHead(index, &actual);
         index = actual;
@@ -4751,11 +4261,6 @@ static void UI_FeederSelection(float feederID, int index) {
         UI_SelectedHead(index, &actual);
         index = actual;
         if (index >= 0 && index < uiInfo.characterCount) {
-            // [QL] uix86.dll UI_FeederSelection @0x1000eba0: both head feeders
-            // index the one player-model list. The "default" skin selects the
-            // bare model name, any other skin uses "<model>/<skin>" so
-            // UI_PlayerInfo_SetModel loads the correct skin variant. (base =
-            // model, name = skin per Character_Parse.)
             if (Q_stricmp(uiInfo.characterList[index].name, "default") == 0) {
                 trap_Cvar_Set("model", uiInfo.characterList[index].base);
                 trap_Cvar_Set("headmodel", uiInfo.characterList[index].base);
@@ -4804,12 +4309,9 @@ static void UI_FeederSelection(float feederID, int index) {
                 va("%s.roq", mapName), 0, 0, 0, 0, (CIN_loop | CIN_silent));
         }
     } else if (feederID == FEEDER_SERVERSTATUS) {
-        //
     } else if (feederID == FEEDER_FINDPLAYER) {
         uiInfo.currentFoundPlayerServer = index;
-        //
         if (index < uiInfo.numFoundPlayerServers - 1) {
-            // build a new server status for this server
             Q_strncpyz(uiInfo.serverStatusAddress, uiInfo.foundPlayerServerAddresses[uiInfo.currentFoundPlayerServer], sizeof(uiInfo.serverStatusAddress));
             Menu_SetFeederSelection(NULL, FEEDER_SERVERSTATUS, 0, NULL);
         }
@@ -4858,7 +4360,6 @@ static qboolean Team_Parse(char** p) {
                 Com_Printf("Too many teams, last team replaced!\n");
             }
 
-            // seven tokens per line, team name and icon, and 5 team member names
             if (!String_Parse(p, &uiInfo.teamList[uiInfo.teamCount].teamName) || !String_Parse(p, &tempStr)) {
                 return qfalse;
             }
@@ -4916,12 +4417,6 @@ static qboolean Character_Parse(char** p) {
                 Com_Printf("Too many characters, last character replaced!\n");
             }
 
-            // [QL] Each entry in ui/teaminfo.txt's "characters" block is a
-            // { "model" "skin" } pair (e.g. { "anarki" "sport_red" }). uix86.dll
-            // UI_ParseGameInfo @0x1000f140 stores the model in "base", the skin
-            // in "name", and builds the icon as
-            // models/players/<model>/icon_<skin>.tga. (Q3's { name sex } form is
-            // gone; the "James"/"Janet" fallbacks do not apply to QL assets.)
             if (!String_Parse(p, &uiInfo.characterList[uiInfo.characterCount].base) || !String_Parse(p, &uiInfo.characterList[uiInfo.characterCount].name)) {
                 return qfalse;
             }
@@ -4967,7 +4462,6 @@ static qboolean Alias_Parse(char** p) {
                 Com_Printf("Too many aliases, last alias replaced!\n");
             }
 
-            // three tokens per line, character name, bot alias, and preferred action a - all purpose, d - defense, o - offense
             if (!String_Parse(p, &uiInfo.aliasList[uiInfo.aliasCount].name) || !String_Parse(p, &uiInfo.aliasList[uiInfo.aliasCount].ai) || !String_Parse(p, &uiInfo.aliasList[uiInfo.aliasCount].action)) {
                 return qfalse;
             }
@@ -4985,15 +4479,10 @@ static qboolean Alias_Parse(char** p) {
     return qfalse;
 }
 
-// mode
-// 0 - high level parsing
-// 1 - team parsing
-// 2 - character parsing
 static void UI_ParseTeamInfo(const char* teamFile) {
     char* token;
     char* p;
     char* buff = NULL;
-    // static int mode = 0; TTimo: unused
 
     buff = GetMenuBuffer(teamFile);
     if (!buff) {
@@ -5057,7 +4546,6 @@ static qboolean GameType_Parse(char** p, qboolean join) {
         }
 
         if (token[0] == '{') {
-            // two tokens per line, gametype name and number
             if (join) {
                 if (!String_Parse(p, &uiInfo.joinGameTypes[uiInfo.numJoinGameTypes].gameType) || !Int_Parse(p, &uiInfo.joinGameTypes[uiInfo.numJoinGameTypes].gtEnum)) {
                     return qfalse;
@@ -5153,11 +4641,7 @@ static void UI_ParseGameInfo(const char* teamFile) {
     char* token;
     char* p;
     char* buff = NULL;
-    // int mode = 0; TTimo: unused
 
-    // [ioquakelive] gameinfo.txt is Team Arena's: Quake Live never shipped one, and retail warned
-    // on every start that it was missing. Without the file there is nothing to read, so the
-    // default menu is not parsed in its place either (it has none of these keywords)
     {
         fileHandle_t f;
 
@@ -5202,7 +4686,6 @@ static void UI_ParseGameInfo(const char* teamFile) {
         }
 
         if (Q_stricmp(token, "maps") == 0) {
-            // start a new menu
             MapList_Parse(&p);
         }
     }
@@ -5210,11 +4693,9 @@ static void UI_ParseGameInfo(const char* teamFile) {
 
 static void UI_Pause(qboolean b) {
     if (b) {
-        // pause the game and set the ui keycatcher
         trap_Cvar_Set("cl_paused", "1");
         trap_Key_SetCatcher(KEYCATCH_UI);
     } else {
-        // unpause the game and clear the ui keycatcher
         trap_Key_SetCatcher(trap_Key_GetCatcher() & ~KEYCATCH_UI);
         trap_Key_ClearStates();
         trap_Cvar_Set("cl_paused", "0");
@@ -5253,10 +4734,8 @@ static void UI_StopCinematic(int handle) {
 }
 
 static void UI_DrawCinematic(int handle, float x, float y, float w, float h) {
-    // adjust coords to get correct placement in wide screen
     UI_AdjustFrom640(&x, &y, &w, &h);
 
-    // CIN_SetExtents takes stretched 640x480 virtualized coords
     x *= SCREEN_WIDTH / (float)uiInfo.uiDC.glconfig.vidWidth;
     w *= SCREEN_WIDTH / (float)uiInfo.uiDC.glconfig.vidWidth;
     y *= SCREEN_HEIGHT / (float)uiInfo.uiDC.glconfig.vidHeight;
@@ -5270,11 +4749,6 @@ static void UI_RunCinematicFrame(int handle) {
     trap_CIN_RunCinematic(handle);
 }
 
-/*
-=================
-PlayerModel_BuildList
-=================
-*/
 static void UI_BuildQ3Model_List(void) {
     int numdirs;
     int numfiles;
@@ -5291,7 +4765,6 @@ static void UI_BuildQ3Model_List(void) {
 
     uiInfo.q3HeadCount = 0;
 
-    // iterate directory of all player models
     numdirs = trap_FS_GetFileList("models/players", "/", dirlist, 2048);
     dirptr = dirlist;
     for (i = 0; i < numdirs && uiInfo.q3HeadCount < MAX_PLAYERMODELS; i++, dirptr += dirlen + 1) {
@@ -5303,7 +4776,6 @@ static void UI_BuildQ3Model_List(void) {
         if (!strcmp(dirptr, ".") || !strcmp(dirptr, ".."))
             continue;
 
-        // iterate all skin files in directory
         numfiles = trap_FS_GetFileList(va("models/players/%s", dirptr), "tga", filelist, 2048);
         fileptr = filelist;
         for (j = 0; j < numfiles && uiInfo.q3HeadCount < MAX_PLAYERMODELS; j++, fileptr += filelen + 1) {
@@ -5311,7 +4783,6 @@ static void UI_BuildQ3Model_List(void) {
 
             COM_StripExtension(fileptr, skinname, sizeof(skinname));
 
-            // look for icon_????
             if (Q_stricmpn(skinname, "icon_", 5) == 0 && !(Q_stricmp(skinname, "icon_blue") == 0 || Q_stricmp(skinname, "icon_red") == 0)) {
                 if (Q_stricmp(skinname, "icon_default") == 0) {
                     Com_sprintf(scratch, sizeof(scratch), "%s", dirptr);
@@ -5334,31 +4805,22 @@ static void UI_BuildQ3Model_List(void) {
     }
 }
 
-/*
-=================
-UI_Init
-=================
-*/
 void _UI_Init(qboolean inGameLoad) {
     const char* menuSet;
 
     UI_RegisterCvars();
     UI_InitMemory();
 
-    // cache redundant calulations
     trap_GetGlconfig(&uiInfo.uiDC.glconfig);
 
     trap_Cvar_Set("ui_videomode", va("%dx%d", uiInfo.uiDC.glconfig.vidWidth, uiInfo.uiDC.glconfig.vidHeight));
 
-    // for 640x480 virtualized screen
     uiInfo.uiDC.yscale = uiInfo.uiDC.glconfig.vidHeight * (1.0 / (float)SCREEN_HEIGHT);
     uiInfo.uiDC.xscale = uiInfo.uiDC.glconfig.vidWidth * (1.0 / (float)SCREEN_WIDTH);
     if (uiInfo.uiDC.glconfig.vidWidth * SCREEN_HEIGHT > uiInfo.uiDC.glconfig.vidHeight * SCREEN_WIDTH) {
-        // wide screen
         uiInfo.uiDC.bias = 0.5 * (uiInfo.uiDC.glconfig.vidWidth - (uiInfo.uiDC.glconfig.vidHeight * ((float)SCREEN_WIDTH / (float)SCREEN_HEIGHT)));
         uiInfo.uiDC.xscale = uiInfo.uiDC.yscale;
     } else {
-        // no wide screen
         uiInfo.uiDC.bias = 0;
     }
 
@@ -5442,7 +4904,6 @@ void _UI_Init(qboolean inGameLoad) {
     UI_BuildQ3Model_List();
     UI_LoadBots();
 
-    // sets defaults for ui temp cvars
     uiInfo.effectsColor = gamecodetoui[(int)trap_Cvar_VariableValue("color1") - 1];
     uiInfo.currentCrosshair = (int)trap_Cvar_VariableValue("cg_drawCrosshair") % NUM_CROSSHAIRS;
     if (uiInfo.currentCrosshair < 0) {
@@ -5458,11 +4919,6 @@ void _UI_Init(qboolean inGameLoad) {
     trap_Cvar_Set("ui_actualNetGametype", va("%d", ui_netGameType.integer));
 }
 
-/*
-=================
-UI_KeyEvent
-=================
-*/
 void _UI_KeyEvent(int key, qboolean down) {
     if (Menu_Count() > 0) {
         menuDef_t* menu = Menu_GetFocused();
@@ -5480,18 +4936,11 @@ void _UI_KeyEvent(int key, qboolean down) {
     }
 }
 
-/*
-=================
-UI_MouseEvent
-=================
-*/
 void _UI_MouseEvent(int dx, int dy) {
     int bias;
 
-    // convert X bias to 640 coords
     bias = uiInfo.uiDC.bias / uiInfo.uiDC.xscale;
 
-    // update mouse screen position
     uiInfo.uiDC.cursorx += dx;
     if (uiInfo.uiDC.cursorx < -bias)
         uiInfo.uiDC.cursorx = -bias;
@@ -5509,17 +4958,6 @@ void _UI_MouseEvent(int dx, int dy) {
     }
 }
 
-/*
-=================
-UI_MousePosition
-
-[ioquakelive] Where the system pointer is, in window pixels. A menu lets the mouse go
-and the system draws the pointer, so the cursor is put where the arrow is instead of
-being walked by relative moves, which drifted away from it and left the clicks landing
-somewhere else. The window pixels come back to the 640 space the pages are laid out in
-through the same scale and bias the drawing uses.
-=================
-*/
 void _UI_MousePosition(int x, int y) {
     int bias;
 
@@ -5557,8 +4995,6 @@ void UI_LoadNonIngame(void) {
 void _UI_SetActiveMenu(uiMenuCommand_t menu) {
     char buf[256];
 
-    // this should be the ONLY way the menu system is brought up
-    // ensure minimum menu data is cached
     if (Menu_Count() > 0) {
         vec3_t v;
         v[0] = v[1] = v[2] = 0;
@@ -5572,7 +5008,6 @@ void _UI_SetActiveMenu(uiMenuCommand_t menu) {
                 return;
             case UIMENU_MAIN:
                 trap_Key_SetCatcher(KEYCATCH_UI);
-                // [QL] Update UI state from cvars (binary-verified)
                 uiInfo.effectsColor = gamecodetoui[(int)trap_Cvar_VariableValue("color1") - 1];
                 uiInfo.currentCrosshair = (int)trap_Cvar_VariableValue("cg_drawCrosshair");
                 if (uiInfo.inGameLoad) {
@@ -5581,27 +5016,15 @@ void _UI_SetActiveMenu(uiMenuCommand_t menu) {
                 Menus_CloseAll();
                 Menus_ActivateByName("main");
                 trap_Cvar_VariableStringBuffer("com_errorMessage", buf, sizeof(buf));
-                // [QL] Play menu music
                 trap_S_StartBackgroundTrack("music/fla_mp05", NULL);
                 if (strlen(buf)) {
                     Menus_ActivateByName("error_popmenu");
                 }
                 return;
             case UIMENU_MAIN_OPTIONS: {
-                // [ioquakelive] retail's Settings button runs `web_changeHash /settings`, which
-                // handed the settings over to the embedded browser; the engine reaches this case
-                // instead (CL_Web_ChangeHash_f). Two shapes, because the pages are the same but
-                // the frame around them is not:
-                //  - in a match, the nav bar is already on screen, so only the panel below it is
-                //    swapped, exactly like Current Match / Call Vote / Admin / Add Bot do;
-                //  - out of a match, the main-menu frame is opened with a page inside it, which is
-                //    what retail's own main.menu does (`open main_options ; open ingame_controls`).
-                // An empty frame with nothing in it is what this used to open.
                 uiClientState_t cs;
                 qboolean inMatch;
 
-                // in a match by the connection, not by a menu: the one on screen there need not
-                // be "ingame" (a spectator in warmup has the join panel)
                 trap_GetClientState(&cs);
                 inMatch = (qboolean)(cs.connState >= CA_ACTIVE);
 
@@ -5612,8 +5035,6 @@ void _UI_SetActiveMenu(uiMenuCommand_t menu) {
                 uiInfo.currentCrosshair = (int)trap_Cvar_VariableValue("cg_drawCrosshair");
 
                 Menus_CloseAll();
-                // in a match the page is drawn over it and must not be fullscreen; its menu lives
-                // in a file of its own, which the menus a match loads do not bring
                 if (inMatch && !Menus_FindByName("settings_ingame")) {
                     UI_ParseMenu("ui/ioql/settings_ingame.menu");
                 }
@@ -5621,15 +5042,12 @@ void _UI_SetActiveMenu(uiMenuCommand_t menu) {
                 return;
             }
             case UIMENU_HOME:
-                // [ioquakelive] the front end over a match. Unlike UIMENU_MAIN it keeps
-                // the connection's menus loaded and does not start the menu music.
                 trap_Key_SetCatcher(KEYCATCH_UI);
                 Menus_CloseAll();
                 Menus_ActivateByName("main");
                 return;
             case UIMENU_TEAM:
                 trap_Key_SetCatcher(KEYCATCH_UI);
-                // [QL] uix86.dll _UI_SetActiveMenu opens "joingame_menu", not "team"
                 Menus_ActivateByName("joingame_menu");
                 return;
             case UIMENU_POSTGAME:
@@ -5642,7 +5060,6 @@ void _UI_SetActiveMenu(uiMenuCommand_t menu) {
                 Menus_ActivateByName("endofgame");
                 return;
             case UIMENU_INGAME:
-                // [QL] Update UI state from cvars (binary-verified)
                 uiInfo.effectsColor = gamecodetoui[(int)trap_Cvar_VariableValue("color1") - 1];
                 uiInfo.currentCrosshair = (int)trap_Cvar_VariableValue("cg_drawCrosshair");
                 trap_Cvar_Set("ui_mousePitch", (trap_Cvar_VariableValue("m_pitch") >= 0) ? "0" : "1");
@@ -5662,35 +5079,10 @@ qboolean _UI_IsFullscreen(void) {
     return Menus_AnyFullScreenVisible();
 }
 
-/*
-=================
-UI_CheckActiveMenu
-
-[QL] vmMain export UI_CHECK_ACTIVE_MENU. Returns qtrue if ANY loaded menu is
-currently visible. Verified from uix86.dll @ 0x100103c0: it tests window.flags
-bit 0x4. QL's window flags match Q3/ioquakelive ordering (HASFOCUS=0x2,
-VISIBLE=0x4), proven behaviourally because QL's Menus_ActivateByName clears
-bit 0x2 from de-focused menus (i.e. WINDOW_HASFOCUS), and Menu_PostParse tests
-bit 0x4 as the visible check. So bit 0x4 here is WINDOW_VISIBLE, NOT
-WINDOW_HASFOCUS, and this is distinct from the fullscreen check the stock export
-was aliased to (which additionally requires menu->fullScreen).
-=================
-*/
 qboolean UI_CheckActiveMenu(void) {
-    // The Menus[]/menuCount array is private to ui_shared.c; the visible-scan
-    // lives there as Menus_AnyVisible() (sibling of Menus_AnyFullScreenVisible).
     return Menus_AnyVisible();
 }
 
-/*
-=================
-UI_WalkMenus
-
-[QL] vmMain export UI_WALK_MENUS. The engine passes a callback function pointer
-in arg0; the UI lazily loads the arena/map list, then invokes the callback once
-per map with that map's load name. Verified from uix86.dll @ 0x10003930.
-=================
-*/
 void UI_WalkMenus(void (*callback)(const char* mapLoadName)) {
     int i;
 
@@ -5709,30 +5101,29 @@ static connstate_t lastConnState;
 static char lastLoadingText[MAX_INFO_VALUE];
 
 static void UI_ReadableSize(char* buf, int bufsize, int value) {
-    if (value > 1024 * 1024 * 1024) {  // gigs
+    if (value > 1024 * 1024 * 1024) {
         Com_sprintf(buf, bufsize, "%d", value / (1024 * 1024 * 1024));
         Com_sprintf(buf + strlen(buf), bufsize - strlen(buf), ".%02d GB",
                     (value % (1024 * 1024 * 1024)) * 100 / (1024 * 1024 * 1024));
-    } else if (value > 1024 * 1024) {  // megs
+    } else if (value > 1024 * 1024) {
         Com_sprintf(buf, bufsize, "%d", value / (1024 * 1024));
         Com_sprintf(buf + strlen(buf), bufsize - strlen(buf), ".%02d MB",
                     (value % (1024 * 1024)) * 100 / (1024 * 1024));
-    } else if (value > 1024) {  // kilos
+    } else if (value > 1024) {
         Com_sprintf(buf, bufsize, "%d KB", value / 1024);
-    } else {  // bytes
+    } else {
         Com_sprintf(buf, bufsize, "%d bytes", value);
     }
 }
 
-// Assumes time is in msec
 static void UI_PrintTime(char* buf, int bufsize, int time) {
-    time /= 1000;  // change to seconds
+    time /= 1000;
 
-    if (time > 3600) {  // in the hours range
+    if (time > 3600) {
         Com_sprintf(buf, bufsize, "%d hr %d min", time / 3600, (time % 3600) / 60);
-    } else if (time > 60) {  // mins
+    } else if (time > 60) {
         Com_sprintf(buf, bufsize, "%d min %d sec", time / 60, time % 60);
-    } else {  // secs
+    } else {
         Com_sprintf(buf, bufsize, "%d sec", time);
     }
 }
@@ -5764,19 +5155,14 @@ void Text_PaintCenter_AutoWrapped(float x, float y, float xmax, float ystep, flo
         *s3 = c_bcp;
         if (width > xmax) {
             if (s1 == s2) {
-                // fuck, don't have a clean cut, we'll overflow
                 s2 = s3;
             }
             *s2 = '\0';
             Text_PaintCenter(x, y, scale, color, s1, adjust);
             y += ystep;
             if (c_bcp == '\0') {
-                // that was the last word
-                // we could start a new loop, but that wouldn't be much use
-                // even if the word is too long, we would overflow it (see above)
-                // so just print it now if needed
                 s2++;
-                if (*s2 != '\0')  // if we are printing an overflowing line we have s2 == s3
+                if (*s2 != '\0')
                     Text_PaintCenter(x, y, scale, color, s2, adjust);
                 break;
             }
@@ -5785,7 +5171,7 @@ void Text_PaintCenter_AutoWrapped(float x, float y, float xmax, float ystep, flo
             s3 = s2;
         } else {
             s2 = s3;
-            if (c_bcp == '\0')  // we reached the end
+            if (c_bcp == '\0')
             {
                 Text_PaintCenter(x, y, scale, color, s1, adjust);
                 break;
@@ -5807,7 +5193,6 @@ static void UI_DisplayDownloadInfo(const char* downloadName, float centerPoint, 
     int leftWidth;
     const char* s;
 
-    // [QL] 0x10010902: what has come down of the item cl_downloadItem names, asked of Steam
     trap_Cvar_VariableStringBuffer("cl_downloadItem", item, sizeof(item));
     trap_WorkshopDownloadInfo(item, &done, &total);
     downloadSize = (int)total;
@@ -5844,11 +5229,9 @@ static void UI_DisplayDownloadInfo(const char* downloadName, float centerPoint, 
         }
         UI_ReadableSize(xferRateBuf, sizeof xferRateBuf, xferRate);
 
-        // Extrapolate estimated completion time
         if (downloadSize && xferRate) {
-            int n = downloadSize / xferRate;  // estimated time for entire d/l in secs
+            int n = downloadSize / xferRate;
 
-            // We do it in K (/1024) because we'd overflow around 4MB
             UI_PrintTime(dlTimeBuf, sizeof dlTimeBuf,
                          (n - (((downloadCount / 1024) * n) / (downloadSize / 1024))) * 1000);
 
@@ -5869,14 +5252,6 @@ static void UI_DisplayDownloadInfo(const char* downloadName, float centerPoint, 
     }
 }
 
-/*
-========================
-UI_DrawConnectScreen
-
-This will also be overlaid on the cgame info screen during loading
-to prevent it from blinking away too rapidly on local or lan games.
-========================
-*/
 void UI_DrawConnectScreen(qboolean overlay) {
     char* s;
     uiClientState_t cstate;
@@ -5898,7 +5273,6 @@ void UI_DrawConnectScreen(qboolean overlay) {
         return;
     }
 
-    // see what information we should display
     trap_GetClientState(&cstate);
 
     info[0] = '\0';
@@ -5913,9 +5287,7 @@ void UI_DrawConnectScreen(qboolean overlay) {
         Text_PaintCenter(centerPoint, yStart + 48, scale, colorWhite, text, ITEM_TEXTSTYLE_SHADOWEDMORE);
     }
 
-    // display global MOTD at bottom
     Text_PaintCenter(centerPoint, 600, scale, colorWhite, Info_ValueForKey(cstate.updateInfoString, "motd"), 0);
-    // print any server info (server full, bad version, etc)
     if (cstate.connState < CA_CONNECTED) {
         Text_PaintCenter_AutoWrapped(centerPoint, yStart + 176, 630, 20, scale, colorWhite, cstate.messageString, 0);
     }
@@ -5957,26 +5329,17 @@ void UI_DrawConnectScreen(qboolean overlay) {
         Text_PaintCenter(centerPoint, yStart + 80, scale, colorWhite, s, 0);
     }
 
-    // [QL] uix86.dll 0x100111ef: the way out, for as long as it is still connecting
     if (cstate.connState <= CA_CONNECTED) {
         Text_PaintCenter(centerPoint, 440, scale, colorWhite, "Press ESC to cancel", 0);
     }
 
-    // password required / connection rejected information goes here
 }
-
-/*
-================
-cvars
-================
-*/
 
 typedef struct {
     vmCvar_t* vmCvar;
     char* cvarName;
     char* defaultString;
     int cvarFlags;
-    // uix86.dll: per-cvar change hook, invoked from UI_UpdateCvars when modificationCount changes
     void (*update)(void);
 } cvarTable_t;
 
@@ -6051,7 +5414,6 @@ vmCvar_t ui_realCaptureLimit;
 vmCvar_t ui_realWarmUp;
 vmCvar_t ui_serverStatusTimeOut;
 
-// [QL additions] - player 2 duel scores
 vmCvar_t ui_scoreAccuracy2;
 vmCvar_t ui_scoreImpressives2;
 vmCvar_t ui_scoreExcellents2;
@@ -6068,7 +5430,6 @@ vmCvar_t ui_scoreShutoutBonus2;
 vmCvar_t ui_scoreTime2;
 vmCvar_t ui_scoreCaptures2;
 
-// [QL additions] - model/skin customization
 vmCvar_t ui_forceTeamModel;
 vmCvar_t ui_forceTeamSkin;
 vmCvar_t ui_forceEnemyModel;
@@ -6084,7 +5445,6 @@ vmCvar_t ui_enemyHeadColor;
 vmCvar_t ui_enemyUpperColor;
 vmCvar_t ui_enemyLowerColor;
 
-// [QL additions] - game settings
 vmCvar_t ui_doWarmup;
 vmCvar_t ui_warmup;
 vmCvar_t ui_pure;
@@ -6096,19 +5456,16 @@ vmCvar_t ui_saveFragLimit;
 vmCvar_t ui_votestring;
 vmCvar_t ui_intermission;
 
-// [QL additions] - browser
 vmCvar_t ui_browserSortKey;
 vmCvar_t ui_browserShowFull;
 vmCvar_t ui_browserShowEmpty;
 vmCvar_t ui_browserMaster;
 vmCvar_t ui_browserGameType;
 
-// [QL additions] - screen effects
 vmCvar_t ui_screenDamage;
 vmCvar_t ui_screenDamage_Team;
 vmCvar_t ui_bloomPreset;
 
-// [QL additions] - misc
 vmCvar_t ui_version;
 vmCvar_t ui_gibs;
 vmCvar_t ui_announcer;
@@ -6119,8 +5476,6 @@ vmCvar_t ui_mousePitch;
 vmCvar_t ui_favoriteName;
 vmCvar_t ui_favoriteAddress;
 
-
-// [QL] missing UI cvars from binary parity audit (3)
 vmCvar_t ui_cg_announcer;
 vmCvar_t ui_cdkeychecked;
 vmCvar_t ui_singlePlayerActive;
@@ -6190,7 +5545,6 @@ static cvarTable_t cvarTable[] = {
     {&ui_realCaptureLimit, "capturelimit", "8", CVAR_NORESTART | CVAR_SERVERINFO | CVAR_ARCHIVE},
     {&ui_serverStatusTimeOut, "ui_serverStatusTimeOut", "7000", CVAR_ARCHIVE},
 
-    // [QL additions] - player 2 duel scores
     {&ui_scoreAccuracy2, "ui_scoreAccuracy2", "0", CVAR_ARCHIVE},
     {&ui_scoreImpressives2, "ui_scoreImpressives2", "0", CVAR_ARCHIVE},
     {&ui_scoreExcellents2, "ui_scoreExcellents2", "0", CVAR_ARCHIVE},
@@ -6207,7 +5561,6 @@ static cvarTable_t cvarTable[] = {
     {&ui_scoreTime2, "ui_scoreTime2", "00:00", CVAR_ARCHIVE},
     {&ui_scoreCaptures2, "ui_scoreCaptures2", "0", CVAR_ARCHIVE},
 
-    // [QL additions] - model/skin customization
     {&ui_forceTeamModel, "ui_forceTeamModel", "", CVAR_TEMP},
     {&ui_forceTeamSkin, "ui_forceTeamSkin", "", CVAR_TEMP},
     {&ui_forceEnemyModel, "ui_forceEnemyModel", "", CVAR_TEMP},
@@ -6223,7 +5576,6 @@ static cvarTable_t cvarTable[] = {
     {&ui_enemyUpperColor, "ui_enemyUpperColor", "27", CVAR_ARCHIVE},
     {&ui_enemyLowerColor, "ui_enemyLowerColor", "27", CVAR_ARCHIVE},
 
-    // [QL additions] - game settings
     {&ui_doWarmup, "ui_doWarmup", "0", CVAR_ARCHIVE},
     {&ui_warmup, "ui_warmup", "0", CVAR_ARCHIVE},
     {&ui_pure, "ui_pure", "1", CVAR_ARCHIVE},
@@ -6235,20 +5587,17 @@ static cvarTable_t cvarTable[] = {
     {&ui_votestring, "ui_votestring", "", CVAR_TEMP},
     {&ui_intermission, "ui_intermission", "0", CVAR_ROM},
 
-    // [QL additions] - browser
     {&ui_browserSortKey, "ui_browserSortKey", "4", CVAR_ARCHIVE},
     {&ui_browserShowFull, "ui_browserShowFull", "1", CVAR_ARCHIVE},
     {&ui_browserShowEmpty, "ui_browserShowEmpty", "1", CVAR_ARCHIVE},
     {&ui_browserMaster, "ui_browserMaster", "0", CVAR_ARCHIVE},
     {&ui_browserGameType, "ui_browserGameType", "0", CVAR_ARCHIVE},
 
-    // [QL additions] - screen effects
     {&ui_screenDamage, "ui_screenDamage", "0", CVAR_ARCHIVE},
     {&ui_screenDamage_Team, "ui_screenDamage_Team", "0", CVAR_ARCHIVE},
     {&ui_bloomPreset, "ui_bloomPreset", "Default", CVAR_ARCHIVE},
 
-    // [QL additions] - misc
-    {&ui_version, "ui_version", "1069 win-x86 May 25 2016 15:18:22", CVAR_ROM},  // [QL] _UI_Init 0x1000fab0 build banner
+    {&ui_version, "ui_version", "1069 win-x86 May 25 2016 15:18:22", CVAR_ROM},
     {&ui_gibs, "ui_gibs", "1", CVAR_ROM},
     {&ui_announcer, "ui_announcer", "1", CVAR_ARCHIVE},
     {&ui_mainmenu, "ui_mainmenu", "1", CVAR_ROM},
@@ -6258,7 +5607,6 @@ static cvarTable_t cvarTable[] = {
     {&ui_favoriteName, "ui_favoriteName", "", CVAR_ARCHIVE},
     {&ui_favoriteAddress, "ui_favoriteAddress", "", CVAR_ARCHIVE},
 
-    // [QL additions] - server favorites (16 slots)
     {NULL, "server1", "", CVAR_ARCHIVE},
     {NULL, "server2", "", CVAR_ARCHIVE},
     {NULL, "server3", "", CVAR_ARCHIVE},
@@ -6276,7 +5624,6 @@ static cvarTable_t cvarTable[] = {
     {NULL, "server15", "", CVAR_ARCHIVE},
     {NULL, "server16", "", CVAR_ARCHIVE},
 
-    // [QL additions] - team bot names
     {NULL, "ui_blueteam1", "0", CVAR_ARCHIVE},
     {NULL, "ui_blueteam2", "0", CVAR_ARCHIVE},
     {NULL, "ui_blueteam3", "0", CVAR_ARCHIVE},
@@ -6288,13 +5635,11 @@ static cvarTable_t cvarTable[] = {
     {NULL, "ui_redteam4", "0", CVAR_ARCHIVE},
     {NULL, "ui_redteam5", "0", CVAR_ARCHIVE},
 
-    // [QL additions] - server browser refresh timestamps
     {NULL, "ui_lastServerRefresh_0", "", CVAR_ARCHIVE},
     {NULL, "ui_lastServerRefresh_1", "", CVAR_ARCHIVE},
     {NULL, "ui_lastServerRefresh_2", "", CVAR_ARCHIVE},
     {NULL, "ui_lastServerRefresh_3", "", CVAR_ARCHIVE},
 
-    // [QL additions] - misc Q3 cvars in binary table
     {NULL, "ui_teamName", "Pagans", CVAR_ARCHIVE},
     {NULL, "ui_new", "0", CVAR_TEMP},
     {NULL, "ui_priv", "0", CVAR_ROM},
@@ -6309,7 +5654,6 @@ static cvarTable_t cvarTable[] = {
     {NULL, "ui_spSelection", "", CVAR_ROM},
 
     {NULL, "ui_videomode", "", CVAR_ROM},
-    // [QL] missing UI cvars from binary parity audit
     {&ui_cg_announcer, "cg_announcer", "1", CVAR_TEMP, UI_OnAnnouncerChanged},
     {&ui_cdkeychecked, "ui_cdkeychecked", "0", CVAR_ROM},
     {&ui_opponentName, "ui_opponentName", "Stroggs", CVAR_ARCHIVE},
@@ -6318,15 +5662,6 @@ static cvarTable_t cvarTable[] = {
 
 static int cvarTableSize = ARRAY_LEN(cvarTable);
 
-/*
-=================
-UI_CheckModelBright
-
-uix86.dll UI_CheckModelBright @0x10011510: seed a *Bright ROM cvar from the current model/skin.
-Lowercases the first 0x40 chars of each string, then sets targetCvar to "1" when the skin
-contains "bright", or the model contains "bright" and the skin is empty; otherwise "0".
-=================
-*/
 static void UI_CheckModelBright(const char* modelCvar, const char* skinCvar, const char* targetCvar) {
     char model[1024];
     char skin[1024];
@@ -6349,14 +5684,6 @@ static void UI_CheckModelBright(const char* modelCvar, const char* skinCvar, con
     }
 }
 
-/*
-=================
-UI_OnAnnouncerChanged
-
-uix86.dll UI_OnAnnouncerChanged @0x10011690: preview the selected announcer voice and mirror
-cg_announcer into ui_announcer.
-=================
-*/
 static void UI_OnAnnouncerChanged(void) {
     sfxHandle_t s;
 
@@ -6371,11 +5698,6 @@ static void UI_OnAnnouncerChanged(void) {
     trap_Cvar_Set("ui_announcer", va("%i", ui_cg_announcer.integer));
 }
 
-/*
-=================
-UI_RegisterCvars
-=================
-*/
 void UI_RegisterCvars(void) {
     int i;
     cvarTable_t* cv;
@@ -6384,16 +5706,10 @@ void UI_RegisterCvars(void) {
         trap_Cvar_Register(cv->vmCvar, cv->cvarName, cv->defaultString, cv->cvarFlags);
     }
 
-    // uix86.dll UI_RegisterCvars @0x10011730: seed the *Bright ROM cvars from current model/skin
     UI_CheckModelBright("cg_forceTeamModel", "cg_forceTeamSkin", "ui_forceTeamModelBright");
     UI_CheckModelBright("cg_forceEnemyModel", "cg_forceEnemySkin", "ui_forceEnemyModelBright");
 }
 
-/*
-=================
-UI_UpdateCvars
-=================
-*/
 void UI_UpdateCvars(void) {
     int i;
     cvarTable_t* cv;
@@ -6406,8 +5722,6 @@ void UI_UpdateCvars(void) {
 
         oldMod = cv->vmCvar->modificationCount;
         trap_Cvar_Update(cv->vmCvar);
-        // uix86.dll UI_UpdateCvars @: fire the change hook only when the cvar changed
-        // (oldMod != 0 skips the very first update where modificationCount was still 0).
         if (cv->update && oldMod != 0 && oldMod != cv->vmCvar->modificationCount) {
             cv->update();
         }

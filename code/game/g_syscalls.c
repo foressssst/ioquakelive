@@ -19,22 +19,8 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// g_syscalls.c -- [QL] trap wrappers using function pointer table
-//
-// In Quake Live, the engine passes a gameImport_t struct of function pointers
-// via dllEntry, replacing Q3's integer syscall dispatch.
-
 #include "g_local.h"
 
-// The global imports pointer is set by dllEntry in g_main.c
-// extern gameImport_t *imports;
-
-// ============================================================
-// Core engine traps
-// ============================================================
-
-// Q3 compatibility: trap_Print takes a simple string
 void trap_Print(const char* text) {
     imports->trap_Printf(text);
 }
@@ -55,7 +41,7 @@ void trap_Error(const char* fmt, ...) {
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
     imports->trap_Error(buf);
-    exit(1);  // shut up GCC warning, trap_Error doesn't return
+    exit(1);
 }
 
 int trap_Argc(void) {
@@ -83,14 +69,9 @@ void trap_FS_FCloseFile(fileHandle_t f) {
 }
 
 void trap_SendConsoleCommand(int exec_when, const char* text) {
-    // [QL] QL's trap takes only the text, exec_when is implicit
     (void)exec_when;
     imports->trap_SendConsoleCommand(text);
 }
-
-// ============================================================
-// Cvar traps
-// ============================================================
 
 void trap_Cvar_Register(vmCvar_t* cvar, const char* var_name, const char* value, int flags) {
     imports->trap_Cvar_Register(cvar, var_name, value, flags);
@@ -111,10 +92,6 @@ float trap_Cvar_VariableValue(const char* var_name) {
 void trap_Cvar_VariableStringBuffer(const char* var_name, char* buffer, int bufsize) {
     imports->trap_Cvar_VariableStringBuffer(var_name, buffer, bufsize);
 }
-
-// ============================================================
-// Server traps
-// ============================================================
 
 void trap_LocateGameData(gentity_t* gEnts, int numGEntities, int sizeofGEntity_t, playerState_t* clients, int sizeofGClient) {
     imports->trap_LocateGameData(gEnts, numGEntities, sizeofGEntity_t, (gclient_t*)clients, sizeofGClient);
@@ -164,10 +141,6 @@ void trap_GetUsercmd(int clientNum, usercmd_t* cmd) {
     imports->trap_GetUsercmd(clientNum, cmd);
 }
 
-// ============================================================
-// Collision traps
-// ============================================================
-
 void trap_Trace(trace_t* results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentmask) {
     imports->trap_Trace(results, start, mins, maxs, end, passEntityNum, contentmask);
 }
@@ -179,10 +152,6 @@ void trap_TraceCapsule(trace_t* results, const vec3_t start, const vec3_t mins, 
 int trap_PointContents(const vec3_t point, int passEntityNum) {
     return imports->trap_PointContents(point, passEntityNum);
 }
-
-// ============================================================
-// Entity traps
-// ============================================================
 
 void trap_AdjustAreaPortalState(gentity_t* ent, qboolean open) {
     imports->trap_AdjustAreaPortalState(ent, open);
@@ -203,10 +172,6 @@ int trap_EntitiesInBox(const vec3_t mins, const vec3_t maxs, int* list, int maxc
 qboolean trap_EntityContact(const vec3_t mins, const vec3_t maxs, const gentity_t* ent) {
     return imports->trap_EntityContact(mins, maxs, ent);
 }
-
-// ============================================================
-// Bot traps
-// ============================================================
 
 int trap_BotAllocateClient(void) {
     return imports->trap_BotAllocateClient();
@@ -247,10 +212,6 @@ int trap_BotGetSnapshotEntity(int clientNum, int sequence) {
 void trap_BotUserCommand(int clientNum, usercmd_t* ucmd) {
     imports->trap_BotUserCommand(clientNum, ucmd);
 }
-
-// ============================================================
-// Bot AI traps
-// ============================================================
 
 void trap_AAS_EntityInfo(int entnum, void* info) {
     imports->trap_AAS_EntityInfo(entnum, info);
@@ -564,10 +525,6 @@ int trap_GeneticParentsAndChildSelection(int numranks, float* ranks, int* parent
     return imports->trap_GeneticParentsAndChildSelection(numranks, ranks, parent1, parent2, child);
 }
 
-// ============================================================
-// [QL] Steam integration traps
-// ============================================================
-
 uint64_t trap_GetSteamID(int clientNum) {
     return imports->trap_GetSteamID(clientNum);
 }
@@ -596,10 +553,6 @@ void trap_StatsEvent(uint64_t steamId, const char* type, const char* document) {
     imports->trap_StatsEvent(steamId, type, document);
 }
 
-// ============================================================
-// Stubs for Q3 traps not in QL's import table
-// ============================================================
-
 int trap_Milliseconds(void) { return 0; }
 qboolean trap_InPVS(const vec3_t p1, const vec3_t p2) { (void)p1; (void)p2; return qfalse; }
 qboolean trap_InPVSIgnorePortals(const vec3_t p1, const vec3_t p2) { (void)p1; (void)p2; return qfalse; }
@@ -615,8 +568,6 @@ int trap_RealTime(qtime_t* qtime) { return imports->trap_RealTime(qtime); }
 void trap_SnapVector(float* v) { (void)v; }
 int trap_Cvar_VariableIntegerValue(const char* var_name) { return (int)imports->trap_Cvar_VariableValue(var_name); }
 qboolean trap_EntityContactCapsule(const vec3_t mins, const vec3_t maxs, const gentity_t* ent) { (void)mins; (void)maxs; (void)ent; return qfalse; }
-
-// Bot traps wired through import table
 
 void trap_BotFreeClient(int clientNum) {
     imports->trap_BotFreeClient(clientNum);

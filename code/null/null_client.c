@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "../qcommon/q_shared.h"
 #include "../qcommon/qcommon.h"
 
@@ -39,8 +38,6 @@ void CL_Init(void) {
 void CL_MouseEvent(int dx, int dy, int time) {
 }
 
-// [ioquakelive] Com_EventLoop calls this for the menu's absolute cursor; without the stub the
-// dedicated server did not link
 void CL_MouseAbsEvent(int x, int y) {
 }
 

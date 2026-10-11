@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include <SDL3/SDL.h>
 
 #include <stdarg.h>
@@ -41,7 +40,6 @@ static SDL_Joystick* stick = NULL;
 
 static qboolean mouseAvailable = qfalse;
 
-// [ioquakelive] contadores de /inputrate
 static int64_t in_rateUsTotal, in_rateUsMax, in_rateStartUs;
 static int in_rateWanted, in_rateFrames, in_rateEvents, in_rateMouse, in_rateMaxFrame;
 
@@ -64,11 +62,6 @@ static SDL_Window* SDL_window = NULL;
 
 #define CTRL(a) ((a) - 'a' + 1)
 
-/*
-===============
-IN_PrintKey
-===============
-*/
 static void IN_PrintKey(const SDL_KeyboardEvent* keysym, keyNum_t key, qboolean down) {
     if (down)
         Com_Printf("+ ");
@@ -109,14 +102,6 @@ static void IN_PrintKey(const SDL_KeyboardEvent* keysym, keyNum_t key, qboolean 
 
 #define MAX_CONSOLE_KEYS 16
 
-/*
-===============
-IN_IsConsoleKey
-
-TODO: If the SDL_Scancode situation improves, use it instead of
-      both of these methods
-===============
-*/
 static qboolean IN_IsConsoleKey(keyNum_t key, int character) {
     typedef struct consoleKey_s {
         enum {
@@ -134,7 +119,6 @@ static qboolean IN_IsConsoleKey(keyNum_t key, int character) {
     static int numConsoleKeys = 0;
     int i;
 
-    // Only parse the variable when it changes
     if (cl_consoleKeys->modified) {
         char *text_p, *token;
 
@@ -159,7 +143,6 @@ static qboolean IN_IsConsoleKey(keyNum_t key, int character) {
                 c->type = QUAKE_KEY;
                 c->u.key = Key_StringToKeynum(token);
 
-                // 0 isn't a key
                 if (c->u.key <= 0)
                     continue;
             }
@@ -168,7 +151,6 @@ static qboolean IN_IsConsoleKey(keyNum_t key, int character) {
         }
     }
 
-    // If the character is the same as the key, prefer the character
     if (key == character)
         key = 0;
 
@@ -191,25 +173,15 @@ static qboolean IN_IsConsoleKey(keyNum_t key, int character) {
     return qfalse;
 }
 
-/*
-===============
-IN_TranslateSDLToQ3Key
-===============
-*/
 static keyNum_t IN_TranslateSDLToQ3Key(const SDL_KeyboardEvent* keysym, qboolean down) {
     keyNum_t key = 0;
 
     if (keysym->scancode >= SDL_SCANCODE_1 && keysym->scancode <= SDL_SCANCODE_0) {
-        // Always map the number keys as such even if they actually map
-        // to other characters (eg, "1" is "&" on an AZERTY keyboard).
-        // This is required for SDL before 2.0.6, except on Windows
-        // which already had this behavior.
         if (keysym->scancode == SDL_SCANCODE_0)
             key = '0';
         else
             key = '1' + keysym->scancode - SDL_SCANCODE_1;
     } else if (keysym->key >= SDLK_SPACE && keysym->key < SDLK_DELETE) {
-        // These happen to match the ASCII chars
         key = (int)keysym->key;
     } else {
         switch (keysym->key) {
@@ -417,11 +389,6 @@ static keyNum_t IN_TranslateSDLToQ3Key(const SDL_KeyboardEvent* keysym, qboolean
 
             default:
                 if (!(keysym->key & SDLK_SCANCODE_MASK) && keysym->scancode <= 95) {
-                    // Map Unicode characters to 95 world keys using the key's scan code.
-                    // FIXME: There aren't enough world keys to cover all the scancodes.
-                    // Maybe create a map of scancode to quake key at start up and on
-                    // key map change; allocate world key numbers as needed similar
-                    // to SDL 1.2.
                     key = K_WORLD_0 + (int)keysym->scancode;
                 }
                 break;
@@ -431,29 +398,17 @@ static keyNum_t IN_TranslateSDLToQ3Key(const SDL_KeyboardEvent* keysym, qboolean
     if (in_keyboardDebug->integer)
         IN_PrintKey(keysym, key, down);
 
-    // [ioquakelive] The key under Escape opens the console whatever it prints. cl_consoleKeys
-    // matches by the character produced, and on a Latin American or Spanish layout that key
-    // is not ` or ~, which left those keyboards with no console at all. SDL reports the same
-    // scancode for that physical key on every layout, so that is what decides here; the cvar
-    // still works, for anyone who wants a different key as well.
     if (keysym->scancode == SDL_SCANCODE_GRAVE || IN_IsConsoleKey(key, 0)) {
-        // Console keys can't be bound or generate characters
         key = K_CONSOLE;
     }
 
     return key;
 }
 
-/*
-===============
-IN_GobbleMotionEvents
-===============
-*/
 static void IN_GobbleMotionEvents(void) {
     SDL_Event dummy[1];
     int val = 0;
 
-    // Gobble any mouse motion events
     SDL_PumpEvents();
     while ((val = SDL_PeepEvents(dummy, 1, SDL_GETEVENT,
                                  SDL_EVENT_MOUSE_MOTION, SDL_EVENT_MOUSE_MOTION)) > 0) {
@@ -463,14 +418,6 @@ static void IN_GobbleMotionEvents(void) {
         Com_Printf("IN_GobbleMotionEvents failed: %s\n", SDL_GetError());
 }
 
-
-/*
-===============
-IN_GrabMouse
-
-[ioquakelive] SDL3's relative mode reads raw input, in batches on its own thread on Windows
-===============
-*/
 static void IN_GrabMouse(void) {
     SDL_SetWindowRelativeMouseMode(SDL_window, true);
     SDL_SetWindowMouseGrab(SDL_window, true);
@@ -481,11 +428,6 @@ static void IN_ReleaseMouse(void) {
     SDL_SetWindowMouseGrab(SDL_window, false);
 }
 
-/*
-===============
-IN_ActivateMouse
-===============
-*/
 static void IN_ActivateMouse(qboolean isFullscreen) {
     if (!mouseAvailable || !SDL_WasInit(SDL_INIT_VIDEO))
         return;
@@ -496,7 +438,6 @@ static void IN_ActivateMouse(qboolean isFullscreen) {
         IN_GobbleMotionEvents();
     }
 
-    // in_nograb makes no sense in fullscreen mode
     if (!isFullscreen) {
         if (in_nograb->modified || !mouseActive) {
             if (in_nograb->integer) {
@@ -512,17 +453,10 @@ static void IN_ActivateMouse(qboolean isFullscreen) {
     mouseActive = qtrue;
 }
 
-/*
-===============
-IN_DeactivateMouse
-===============
-*/
 static void IN_DeactivateMouse(qboolean isFullscreen) {
     if (!SDL_WasInit(SDL_INIT_VIDEO))
         return;
 
-    // Always show the cursor when the mouse is disabled,
-    // but not when fullscreen
     if (!isFullscreen)
         SDL_ShowCursor();
 
@@ -534,7 +468,6 @@ static void IN_DeactivateMouse(qboolean isFullscreen) {
 
         IN_ReleaseMouse();
 
-        // Don't warp the mouse unless the cursor is within the window
         if (SDL_GetWindowFlags(SDL_window) & SDL_WINDOW_MOUSE_FOCUS)
             SDL_WarpMouseInWindow(SDL_window, cls.glconfig.vidWidth / 2.0f, cls.glconfig.vidHeight / 2.0f);
 
@@ -542,7 +475,6 @@ static void IN_DeactivateMouse(qboolean isFullscreen) {
     }
 }
 
-// We translate axes movement into keypresses
 static int joy_keys[16] = {
     K_LEFTARROW, K_RIGHTARROW,
     K_UPARROW, K_DOWNARROW,
@@ -553,8 +485,6 @@ static int joy_keys[16] = {
     K_JOY25, K_JOY26,
     K_JOY27, K_JOY28};
 
-// translate hat events into keypresses
-// the 4 highest buttons are used for the first hat ...
 static int hat_keys[16] = {
     K_JOY29, K_JOY30,
     K_JOY31, K_JOY32,
@@ -573,11 +503,6 @@ struct
     unsigned int oldhats;
 } stick_state;
 
-/*
-===============
-IN_InitJoystick
-===============
-*/
 static void IN_InitJoystick(void) {
     int i = 0;
     int total = 0;
@@ -595,15 +520,8 @@ static void IN_InitJoystick(void) {
     gamepad = NULL;
     memset(&stick_state, '\0', sizeof(stick_state));
 
-    // [QL] quakelive_steam.exe 0x4eacd0 clears ui_joyavail before looking for a
-    // device and sets it once one is open (0x4eae66); the settings page shows its
-    // Gamepad section only while it is above 0
     Cvar_Set("ui_joyavail", "0");
 
-    // SDL 2.0.4 requires SDL_INIT_JOYSTICK to be initialized separately from
-    // SDL_INIT_GAMEPAD for SDL_JoystickOpen() to work correctly,
-    // despite https://wiki.libsdl.org/SDL_Init (retrieved 2016-08-16)
-    // indicating SDL_INIT_JOYSTICK should be initialized automatically.
     if (!SDL_WasInit(SDL_INIT_JOYSTICK)) {
         Com_DPrintf("Calling SDL_Init(SDL_INIT_JOYSTICK)...\n");
         if (!SDL_Init(SDL_INIT_JOYSTICK)) {
@@ -625,7 +543,6 @@ static void IN_InitJoystick(void) {
     joysticks = SDL_GetJoysticks(&total);
     Com_DPrintf("%d possible joysticks\n", total);
 
-    // Print list and build cvar to allow ui to select joystick.
     for (i = 0; i < total; i++) {
         const char* name = SDL_GetJoystickNameForID(joysticks[i]);
 
@@ -635,7 +552,6 @@ static void IN_InitJoystick(void) {
 
     Cvar_Get("in_availableJoysticks", "", CVAR_ROM);
 
-    // Update cvar on in_restart or controller add/remove.
     Cvar_Set("in_availableJoysticks", buf);
 
     if (!in_joystick->integer || !joysticks || total <= 0) {
@@ -651,7 +567,6 @@ static void IN_InitJoystick(void) {
 
     in_joystickUseAnalog = Cvar_Get("in_joystickUseAnalog", "0", CVAR_ARCHIVE);
 
-    // in_joystickNo is still a position in the list; SDL3 opens by the device's id
     id = joysticks[in_joystickNo->integer];
     SDL_free(joysticks);
 
@@ -676,11 +591,6 @@ static void IN_InitJoystick(void) {
     Com_DPrintf("Is gamepad: %s\n", gamepad ? "Yes" : "No");
 }
 
-/*
-===============
-IN_ShutdownJoystick
-===============
-*/
 static void IN_ShutdownJoystick(void) {
     if (!SDL_WasInit(SDL_INIT_GAMEPAD))
         return;
@@ -750,11 +660,6 @@ static qboolean KeyToAxisAndSign(int keynum, int* outAxis, int* outSign) {
     return *outSign != 0;
 }
 
-/*
-===============
-IN_GamepadMove
-===============
-*/
 static void IN_GamepadMove(void) {
     int i;
     int translatedAxes[MAX_JOYSTICK_AXIS];
@@ -762,7 +667,6 @@ static void IN_GamepadMove(void) {
 
     SDL_UpdateGamepads();
 
-    // check buttons; SDL3's MISC2 to MISC6, after the touchpad, have no key of their own
     for (i = 0; i <= SDL_GAMEPAD_BUTTON_TOUCHPAD; i++) {
         qboolean pressed = SDL_GetGamepadButton(gamepad, (SDL_GamepadButton)(SDL_GAMEPAD_BUTTON_SOUTH + i)) ? qtrue : qfalse;
         if (pressed != stick_state.buttons[i]) {
@@ -775,8 +679,6 @@ static void IN_GamepadMove(void) {
         }
     }
 
-    // must defer translated axes until all real axes are processed
-    // must be done this way to prevent a later mapped axis from zeroing out a previous one
     if (in_joystickUseAnalog->integer) {
         for (i = 0; i < MAX_JOYSTICK_AXIS; i++) {
             translatedAxes[i] = 0;
@@ -784,12 +686,10 @@ static void IN_GamepadMove(void) {
         }
     }
 
-    // check axes
     for (i = 0; i < SDL_GAMEPAD_AXIS_COUNT; i++) {
         int axis = SDL_GetGamepadAxis(gamepad, (SDL_GamepadAxis)(SDL_GAMEPAD_AXIS_LEFTX + i));
         int oldAxis = stick_state.oldaaxes[i];
 
-        // Smoothly ramp from dead zone to maximum value
         float f = ((float)abs(axis) / 32767.0f - in_joystickThreshold->value) / (1.0f - in_joystickThreshold->value);
 
         if (f < 0.0f)
@@ -808,50 +708,39 @@ static void IN_GamepadMove(void) {
             if (in_joystickUseAnalog->integer) {
                 int posAxis = 0, posSign = 0, negAxis = 0, negSign = 0;
 
-                // get axes and axes signs for keys if available
                 posAnalog = KeyToAxisAndSign(posKey, &posAxis, &posSign);
                 negAnalog = KeyToAxisAndSign(negKey, &negAxis, &negSign);
 
-                // positive to negative/neutral -> keyup if axis hasn't yet been set
                 if (posAnalog && !translatedAxesSet[posAxis] && oldAxis > 0 && axis <= 0) {
                     translatedAxes[posAxis] = 0;
                     translatedAxesSet[posAxis] = qtrue;
                 }
 
-                // negative to positive/neutral -> keyup if axis hasn't yet been set
                 if (negAnalog && !translatedAxesSet[negAxis] && oldAxis < 0 && axis >= 0) {
                     translatedAxes[negAxis] = 0;
                     translatedAxesSet[negAxis] = qtrue;
                 }
 
-                // negative/neutral to positive -> keydown
                 if (posAnalog && axis > 0) {
                     translatedAxes[posAxis] = axis * posSign;
                     translatedAxesSet[posAxis] = qtrue;
                 }
 
-                // positive/neutral to negative -> keydown
                 if (negAnalog && axis < 0) {
                     translatedAxes[negAxis] = -axis * negSign;
                     translatedAxesSet[negAxis] = qtrue;
                 }
             }
 
-            // keyups first so they get overridden by keydowns later
-
-            // positive to negative/neutral -> keyup
             if (!posAnalog && posKey && oldAxis > 0 && axis <= 0)
                 Com_QueueEvent(in_eventTime, SE_KEY, posKey, qfalse, 0, NULL);
 
-            // negative to positive/neutral -> keyup
             if (!negAnalog && negKey && oldAxis < 0 && axis >= 0)
                 Com_QueueEvent(in_eventTime, SE_KEY, negKey, qfalse, 0, NULL);
 
-            // negative/neutral to positive -> keydown
             if (!posAnalog && posKey && oldAxis <= 0 && axis > 0)
                 Com_QueueEvent(in_eventTime, SE_KEY, posKey, qtrue, 0, NULL);
 
-            // positive/neutral to negative -> keydown
             if (!negAnalog && negKey && oldAxis >= 0 && axis < 0)
                 Com_QueueEvent(in_eventTime, SE_KEY, negKey, qtrue, 0, NULL);
 
@@ -859,7 +748,6 @@ static void IN_GamepadMove(void) {
         }
     }
 
-    // set translated axes
     if (in_joystickUseAnalog->integer) {
         for (i = 0; i < MAX_JOYSTICK_AXIS; i++) {
             if (translatedAxesSet[i])
@@ -868,11 +756,6 @@ static void IN_GamepadMove(void) {
     }
 }
 
-/*
-===============
-IN_JoyMove
-===============
-*/
 static void IN_JoyMove(void) {
     unsigned int axes = 0;
     unsigned int hats = 0;
@@ -889,7 +772,6 @@ static void IN_JoyMove(void) {
 
     SDL_UpdateJoysticks();
 
-    // update the ball state.
     total = SDL_GetNumJoystickBalls(stick);
     if (total > 0) {
         int balldx = 0;
@@ -902,8 +784,6 @@ static void IN_JoyMove(void) {
             balldy += dy;
         }
         if (balldx || balldy) {
-            // !!! FIXME: is this good for stick balls, or just mice?
-            // Scale like the mouse input...
             if (abs(balldx) > 1)
                 balldx *= 2;
             if (abs(balldy) > 1)
@@ -912,7 +792,6 @@ static void IN_JoyMove(void) {
         }
     }
 
-    // now query the stick buttons...
     total = SDL_GetNumJoystickButtons(stick);
     if (total > 0) {
         if (total > ARRAY_LEN(stick_state.buttons))
@@ -926,7 +805,6 @@ static void IN_JoyMove(void) {
         }
     }
 
-    // look at the hats...
     total = SDL_GetNumJoystickHats(stick);
     if (total > 0) {
         if (total > 4)
@@ -936,11 +814,9 @@ static void IN_JoyMove(void) {
         }
     }
 
-    // update hat state
     if (hats != stick_state.oldhats) {
         for (i = 0; i < 4; i++) {
             if (((Uint8*)&hats)[i] != ((Uint8*)&stick_state.oldhats)[i]) {
-                // release event
                 switch (((Uint8*)&stick_state.oldhats)[i]) {
                     case SDL_HAT_UP:
                         Com_QueueEvent(in_eventTime, SE_KEY, hat_keys[4 * i + 0], qfalse, 0, NULL);
@@ -973,7 +849,6 @@ static void IN_JoyMove(void) {
                     default:
                         break;
                 }
-                // press event
                 switch (((Uint8*)&hats)[i]) {
                     case SDL_HAT_UP:
                         Com_QueueEvent(in_eventTime, SE_KEY, hat_keys[4 * i + 0], qtrue, 0, NULL);
@@ -1010,10 +885,8 @@ static void IN_JoyMove(void) {
         }
     }
 
-    // save hat state
     stick_state.oldhats = hats;
 
-    // finally, look at the axes...
     total = SDL_GetNumJoystickAxes(stick);
     if (total > 0) {
         if (in_joystickUseAnalog->integer) {
@@ -1046,7 +919,6 @@ static void IN_JoyMove(void) {
         }
     }
 
-    /* Time to update axes state based on old vs. new. */
     if (axes != stick_state.oldaxes) {
         for (i = 0; i < 16; i++) {
             if ((axes & (1 << i)) && !(stick_state.oldaxes & (1 << i))) {
@@ -1059,19 +931,9 @@ static void IN_JoyMove(void) {
         }
     }
 
-    /* Save for future generations. */
     stick_state.oldaxes = axes;
 }
 
-/*
-===============
-IN_PointerToRender
-
-[ioquakelive] The system pointer is in window points and the menus and the console are laid out
-on the render. When the render is not the window's size (r_fsr, r_renderScale) the position
-is brought to it; otherwise it is left alone
-===============
-*/
 static void IN_PointerToRender(float* mx, float* my) {
     int pw, ph, w, h;
 
@@ -1084,21 +946,6 @@ static void IN_PointerToRender(float* mx, float* my) {
     *mx *= (float)cls.glconfig.vidWidth / w;
     *my *= (float)cls.glconfig.vidHeight / h;
 }
-
-/*
-===============
-IN_ProcessEvents
-===============
-*/
-/*
-===============
-IN_InputRate_f
-
-[ioquakelive] /inputrate [n]: measures n input frames and reports the mouse's real rate, how
-many events arrive per frame and what servicing them costs. It answers whether a high rate
-mouse -- 4000 or 8000 Hz -- is costing this machine frames, without guessing.
-===============
-*/
 
 static void IN_InputRateReport(void) {
     float seconds = (Sys_Microseconds() - in_rateStartUs) / 1000000.0f;
@@ -1144,7 +991,6 @@ static void IN_ProcessEvents(void) {
         return;
 
     while (SDL_PollEvent(&e)) {
-        // [ioquakelive] for /inputrate: how many events come in and how many are the mouse's
         if (in_rateWanted) {
             in_rateEvents++;
             if (e.type == SDL_EVENT_MOUSE_MOTION) {
@@ -1178,22 +1024,21 @@ static void IN_ProcessEvents(void) {
                 if (lastKeyDown != K_CONSOLE) {
                     const char* c = e.text.text;
 
-                    // Quick and dirty UTF-8 to UTF-32 conversion
                     while (*c) {
                         int utf32 = 0;
 
                         if ((*c & 0x80) == 0)
                             utf32 = *c++;
-                        else if ((*c & 0xE0) == 0xC0)  // 110x xxxx
+                        else if ((*c & 0xE0) == 0xC0)
                         {
                             utf32 |= (*c++ & 0x1F) << 6;
                             utf32 |= (*c++ & 0x3F);
-                        } else if ((*c & 0xF0) == 0xE0)  // 1110 xxxx
+                        } else if ((*c & 0xF0) == 0xE0)
                         {
                             utf32 |= (*c++ & 0x0F) << 12;
                             utf32 |= (*c++ & 0x3F) << 6;
                             utf32 |= (*c++ & 0x3F);
-                        } else if ((*c & 0xF8) == 0xF0)  // 1111 0xxx
+                        } else if ((*c & 0xF8) == 0xF0)
                         {
                             utf32 |= (*c++ & 0x07) << 18;
                             utf32 |= (*c++ & 0x3F) << 12;
@@ -1217,8 +1062,6 @@ static void IN_ProcessEvents(void) {
 
             case SDL_EVENT_MOUSE_MOTION:
                 if (mouseActive) {
-                    // [ioquakelive] SDL3's moves are fractional; what doesn't make a whole unit
-                    // is carried to the next one instead of being lost
                     static float restX, restY;
                     float x = e.motion.xrel + restX;
                     float y = e.motion.yrel + restY;
@@ -1232,8 +1075,6 @@ static void IN_ProcessEvents(void) {
                         break;
                     Com_QueueEvent(in_eventTime, SE_MOUSE, dx, dy, 0, NULL);
                 }
-                // [ioquakelive] while the mouse is let go the pointer is not followed by its
-                // moves but read where it is, once a frame, in IN_Frame
                 break;
 
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -1279,11 +1120,6 @@ static void IN_ProcessEvents(void) {
                     IN_InitJoystick();
                 break;
 
-            // [ioquakelive] Windows can take the audio device away from the game -- on switching
-            // windows, on an output change, or when another program grabs it exclusively. SDL
-            // closes it and reports it through this event; the engine did not listen, so the
-            // sound went away and did not come back until a restart. It is reopened here. The
-            // capture device does not count: voice handles that one itself.
             case SDL_EVENT_AUDIO_DEVICE_REMOVED:
                 if (!e.adevice.recording) {
                     S_DeviceLost();
@@ -1294,17 +1130,12 @@ static void IN_ProcessEvents(void) {
                 Cbuf_ExecuteText(EXEC_NOW, "quit Closed window\n");
                 break;
 
-            // SDL3's window events are top level ones
             case SDL_EVENT_WINDOW_RESIZED: {
                     int width, height;
 
                     width = e.window.data1;
                     height = e.window.data2;
 
-                    // [ioquakelive] only the player resizing the window counts. Going to
-                    // another window sends sizes of its own while it is minimised or without
-                    // the focus, and taking those brought the game back to the front, which is
-                    // what stopped alt-tab from working
                     {
                         SDL_WindowFlags wflags = SDL_GetWindowFlags(SDL_window);
 
@@ -1317,23 +1148,16 @@ static void IN_ProcessEvents(void) {
                         break;
                     }
 
-                    // check if size actually changed
                     if (cls.glconfig.vidWidth == width && cls.glconfig.vidHeight == height) {
                         break;
                     }
 
-                    // [QL] a window keeps its size in r_windowedWidth and r_windowedHeight. In
-                    // fullscreen they are left alone: that size is the screen's, not the window's
                     if (!Cvar_VariableIntegerValue("r_fullscreen")) {
                         Cvar_SetValue("r_windowedWidth", width);
                         Cvar_SetValue("r_windowedHeight", height);
                         Cvar_Set("r_windowedMode", "-1");
                     }
 
-                    // [ioquakelive] the renderer takes the new size where it can, so dragging
-                    // the window resizes the picture as it goes instead of restarting the video
-                    // under the player's hands. cls.glconfig is what the modules read, and
-                    // CL_ResolutionChanged is how they hear about it
                     if (re.WindowResized && re.WindowResized(width, height)) {
                         cls.glconfig.vidWidth = width;
                         cls.glconfig.vidHeight = height;
@@ -1341,8 +1165,6 @@ static void IN_ProcessEvents(void) {
                         break;
                     }
 
-                    // the renderer could not: wait until the player stops dragging for a
-                    // second, so the context is not made again on every step
                     vidRestartTime = Sys_Milliseconds() + 1000;
                 } break;
 
@@ -1364,7 +1186,6 @@ static void IN_ProcessEvents(void) {
             case SDL_EVENT_DROP_FILE: {
                 const char* filename = e.drop.data;
 
-                // Handle macOS open URL event. URL protocol scheme must be set in Info.plist.
                 if (!Q_strncmp(filename, PROTOCOL_HANDLER ":", strlen(PROTOCOL_HANDLER ":"))) {
                     char* protocolCommand = Sys_ParseProtocolUri(filename);
 
@@ -1383,27 +1204,17 @@ static void IN_ProcessEvents(void) {
     }
 }
 
-/*
-===============
-IN_Frame
-===============
-*/
 void IN_Frame(void) {
-    static qboolean menuPointerSeen;  // a menu has been told where the pointer is
+    static qboolean menuPointerSeen;
     qboolean loading;
 
     IN_JoyMove();
 
-    // If not DISCONNECTED (main menu) or ACTIVE (in game), we're loading
     loading = (clc.state != CA_DISCONNECTED && clc.state != CA_ACTIVE);
 
-    // update isFullscreen since it might of changed since the last vid_restart
     cls.glconfig.isFullscreen = Cvar_VariableIntegerValue("r_fullscreen") != 0;
 
     if (Key_GetCatcher() & KEYCATCH_CONSOLE) {
-        // [ioquakelive] The console lets go of the mouse, fullscreen included, because the
-        // arrow the system draws is the one that clicks its links, and it is told where that
-        // arrow is for the same reason the menus are.
         IN_DeactivateMouse(qfalse);
 
         if (SDL_GetMouseFocus() == SDL_window) {
@@ -1414,18 +1225,8 @@ void IN_Frame(void) {
             Com_QueueEvent(in_eventTime, SE_MOUSE_ABS, (int)mx, (int)my, 0, NULL);
         }
     } else if (Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CGAME)) {
-        // [ioquakelive] A menu is up, the UI's or cgame's (the join menu, the end-of-match
-        // board, the demo controls). Quake Live has no cursor of its own out there: it
-        // lets go of the mouse and you move the one the system draws, fullscreen included,
-        // so the pointer is passed as qfalse rather than the real mode.
         IN_DeactivateMouse(qfalse);
 
-        // The menu is told where the pointer is. Walking its cursor by relative moves left
-        // it a little away from the arrow the system draws -- clicks landed where the arrow
-        // was not -- and reading the position instead cannot drift. It is told when the
-        // pointer moves and when a menu comes up, as retail's mouse messages did, not every
-        // frame: where two items overlap the focus goes from one to the other on each
-        // report, and with the pointer at rest there the focus sound never stopped.
         if (SDL_GetMouseFocus() == SDL_window) {
             static int lastX, lastY, lastCatcher = -1;
             int catcher = Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CGAME);
@@ -1444,16 +1245,12 @@ void IN_Frame(void) {
             menuPointerSeen = qfalse;
         }
     } else if (!cls.glconfig.isFullscreen && loading) {
-        // Loading in windowed mode
         IN_DeactivateMouse(cls.glconfig.isFullscreen);
     } else if (!(SDL_GetWindowFlags(SDL_window) & SDL_WINDOW_INPUT_FOCUS)) {
-        // Window not got focus
         IN_DeactivateMouse(cls.glconfig.isFullscreen);
     } else
         IN_ActivateMouse(cls.glconfig.isFullscreen);
 
-    // [ioquakelive] /inputrate times what servicing a frame's input costs; with no measurement
-    // asked for this does nothing
     if (in_rateWanted) {
         int64_t startUs = Sys_Microseconds();
         int before = in_rateEvents;
@@ -1477,32 +1274,15 @@ void IN_Frame(void) {
         IN_ProcessEvents();
     }
 
-    // Set event time for next frame to earliest possible time an event could happen
     in_eventTime = Sys_Milliseconds();
 
-    // In case we had to delay actual restart of video system
     if ((vidRestartTime != 0) && (vidRestartTime < Sys_Milliseconds())) {
         vidRestartTime = 0;
         Cbuf_AddText("vid_restart\n");
     }
 }
 
-/*
-===============
-IN_Init
-===============
-*/
 #ifdef _WIN32
-/*
-===============
-IN_SizingWndProc
-
-[QL] quakelive_steam.exe 0x4f1350, run on WM_SIZING by its window procedure: while a window
-edge is dragged the client area stays at least 1024x768 and between 4:3 and 16:9, the side being
-dragged sets one dimension and the other follows inside those proportions. SDL's own procedure
-gets the message afterwards, as retail's DefWindowProc did.
-===============
-*/
 static HWND in_hwnd;
 static WNDPROC in_sdlWndProc;
 
@@ -1561,7 +1341,6 @@ static LRESULT CALLBACK IN_SizingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
     return CallWindowProcW(in_sdlWndProc, hwnd, msg, wParam, lParam);
 }
 
-// the window's procedure goes through IN_SizingWndProc while the input system has it
 static void IN_HookWindow(qboolean hook) {
     if (hook) {
         HWND hwnd = SDL_window ? (HWND)SDL_GetPointerProperty(SDL_GetWindowProperties(SDL_window),
@@ -1584,15 +1363,6 @@ static void IN_HookWindow(qboolean hook) {
 }
 #endif
 
-/*
-===============
-IN_FocusWatch
-
-[ioquakelive] SDL calls this as each event is made, before its own handling: losing focus in
-fullscreen goes on to minimize the window and change the display mode, a stall the sound must
-not play through
-===============
-*/
 static bool SDLCALL IN_FocusWatch(void* userdata, SDL_Event* e) {
     (void)userdata;
     if (e->type == SDL_EVENT_WINDOW_FOCUS_LOST || e->type == SDL_EVENT_WINDOW_MINIMIZED) {
@@ -1617,25 +1387,17 @@ void IN_Init(void* windowData) {
 
     in_keyboardDebug = Cvar_Get("in_keyboardDebug", "0", CVAR_ARCHIVE);
 
-    // mouse variables
-    // [QL] quakelive_steam.exe 0x4ec160-0x4ec316: in_mouse 2 is raw input, 1 DirectInput, -1 the
-    // Windows cursor and 0 no mouse; in_mouseMode says which one runs. Here 1 and 2 are SDL's relative
-    // mode, which reads raw input, and -1 warps the cursor to the centre like the cursor mode did.
     in_mouse = Cvar_Get("in_mouse", "2", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE);
     in_mouseMode = Cvar_Get("in_mouseMode", "undefined", CVAR_ROM | CVAR_TEMP | CVAR_USERSAVE);
     in_nograb = Cvar_Get("in_nograb", "0", CVAR_TEMP);
-    // [QL] which window raw input is registered to; SDL registers it itself
     Cvar_Get("in_raw_useWindowHandle", "0", CVAR_ARCHIVE);
 
     if (in_mouse->integer == 0) {
         Com_Printf("Mouse control not active.\n");
     } else if (in_mouse->integer == 2) {
-        // [ioquakelive] raw input as it comes; on Windows SDL3 reads it in batches on its own thread
         SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "0");
         Cvar_Set("in_mouseMode", "win32(Raw)");
     } else {
-        // 1 is raw too, as DirectInput was; -1 moves like the system's pointer, with its
-        // acceleration, as retail's cursor mode did
         SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, in_mouse->integer == -1 ? "1" : "0");
         Cvar_Set("in_mouseMode", "win32");
     }
@@ -1647,7 +1409,6 @@ void IN_Init(void* windowData) {
     SDL_SetEventEnabled(SDL_EVENT_DROP_FILE, true);
 #endif
 
-    // SDL3 only sends text when asked, and the console, the chat and the menus live on it
     SDL_StartTextInput(SDL_window);
 
     SDL_AddEventWatch(IN_FocusWatch, NULL);
@@ -1669,14 +1430,6 @@ void IN_Init(void* windowData) {
     Com_DPrintf("------------------------------------\n");
 }
 
-/*
-===============
-IN_ListInputDevices
-
-[QL] quakelive_steam.exe 0x4eab90: retail lists the raw input mice with their button count and sample
-rate. SDL hides the devices behind its own mouse, so this prints what it knows about it.
-===============
-*/
 void IN_ListInputDevices(void) {
     if (in_mouse->integer != 2) {
         Com_Printf("ListInputDevices is only supported for Raw Input (in_mouse 2).\n");
@@ -1688,11 +1441,6 @@ void IN_ListInputDevices(void) {
                SDL_GetWindowRelativeMouseMode(SDL_window) ? "yes" : "no");
 }
 
-/*
-===============
-IN_Shutdown
-===============
-*/
 void IN_Shutdown(void) {
     Cmd_RemoveCommand("inputrate");
 
@@ -1711,13 +1459,7 @@ void IN_Shutdown(void) {
     SDL_window = NULL;
 }
 
-/*
-===============
-IN_Restart
-===============
-*/
 void IN_Restart(void) {
-    // IN_Init adds it again, and this is called on every "vid_restart fast"
     Cmd_RemoveCommand("inputrate");
 
     IN_ShutdownJoystick();

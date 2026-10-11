@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// tr_image.c
 #include "tr_local.h"
 
 #include "tr_dsa.h"
@@ -33,9 +32,6 @@ int gl_filter_max = GL_LINEAR;
 #define FILE_HASH_SIZE 1024
 static image_t* hashTable[FILE_HASH_SIZE];
 
-/*
-** R_GammaCorrect
-*/
 void R_GammaCorrect(byte* buffer, int bufSize) {
     int i;
 
@@ -57,11 +53,6 @@ textureMode_t modes[] = {
     {"GL_NEAREST_MIPMAP_LINEAR", GL_NEAREST_MIPMAP_LINEAR, GL_NEAREST},
     {"GL_LINEAR_MIPMAP_LINEAR", GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR}};
 
-/*
-================
-return a hash value for the filename
-================
-*/
 static long generateHashValue(const char* fname) {
     int i;
     long hash;
@@ -72,9 +63,9 @@ static long generateHashValue(const char* fname) {
     while (fname[i] != '\0') {
         letter = tolower(fname[i]);
         if (letter == '.')
-            break;  // don't include extension
+            break;
         if (letter == '\\')
-            letter = '/';  // damn path names
+            letter = '/';
         hash += (long)(letter) * (i + 119);
         i++;
     }
@@ -82,11 +73,6 @@ static long generateHashValue(const char* fname) {
     return hash;
 }
 
-/*
-===============
-GL_TextureMode
-===============
-*/
 void GL_TextureMode(const char* string) {
     int i;
     image_t* glt;
@@ -97,8 +83,6 @@ void GL_TextureMode(const char* string) {
         }
     }
 
-    // hack to prevent trilinear from being set on voodoo,
-    // because their driver freaks...
     if (i == 5 && glConfig.hardwareType == GLHW_3DFX_2D3D) {
         ri.Printf(PRINT_ALL, "Refusing to set trilinear on a voodoo.\n");
         i = 3;
@@ -112,7 +96,6 @@ void GL_TextureMode(const char* string) {
     gl_filter_min = modes[i].minimize;
     gl_filter_max = modes[i].maximize;
 
-    // change all the existing mipmap texture objects
     for (i = 0; i < tr.numImages; i++) {
         glt = tr.images[i];
         if (glt->flags & IMGFLAG_MIPMAP && !(glt->flags & IMGFLAG_CUBEMAP)) {
@@ -122,11 +105,6 @@ void GL_TextureMode(const char* string) {
     }
 }
 
-/*
-===============
-R_SumOfUsedImages
-===============
-*/
 int R_SumOfUsedImages(void) {
     int total;
     int i;
@@ -141,11 +119,6 @@ int R_SumOfUsedImages(void) {
     return total;
 }
 
-/*
-===============
-R_ImageList_f
-===============
-*/
 void R_ImageList_f(void) {
     int i;
     int estTotalSize = 0;
@@ -164,121 +137,98 @@ void R_ImageList_f(void) {
         switch (image->internalFormat) {
             case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT:
                 format = "sDXT1  ";
-                // 64 bits per 16 pixels, so 4 bits per pixel
                 estSize /= 2;
                 break;
             case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT:
                 format = "sDXT5  ";
-                // 128 bits per 16 pixels, so 1 byte per pixel
                 break;
             case GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM_ARB:
                 format = "sBPTC  ";
-                // 128 bits per 16 pixels, so 1 byte per pixel
                 break;
             case GL_COMPRESSED_RG_RGTC2:
                 format = "RGTC2  ";
-                // 128 bits per 16 pixels, so 1 byte per pixel
                 break;
             case GL_COMPRESSED_RGB_S3TC_DXT1_EXT:
                 format = "DXT1   ";
-                // 64 bits per 16 pixels, so 4 bits per pixel
                 estSize /= 2;
                 break;
             case GL_COMPRESSED_RGBA_S3TC_DXT1_EXT:
                 format = "DXT1a  ";
-                // 64 bits per 16 pixels, so 4 bits per pixel
                 estSize /= 2;
                 break;
             case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
                 format = "DXT5   ";
-                // 128 bits per 16 pixels, so 1 byte per pixel
                 break;
             case GL_COMPRESSED_RGBA_BPTC_UNORM_ARB:
                 format = "BPTC   ";
-                // 128 bits per 16 pixels, so 1 byte per pixel
                 break;
             case GL_RGB4_S3TC:
                 format = "S3TC   ";
-                // same as DXT1?
                 estSize /= 2;
                 break;
             case GL_RGBA16F:
                 format = "RGBA16F";
-                // 8 bytes per pixel
                 estSize *= 8;
                 break;
             case GL_RGBA16:
                 format = "RGBA16 ";
-                // 8 bytes per pixel
                 estSize *= 8;
                 break;
             case GL_RGBA4:
             case GL_RGBA8:
             case GL_RGBA:
                 format = "RGBA   ";
-                // 4 bytes per pixel
                 estSize *= 4;
                 break;
             case GL_LUMINANCE8:
             case GL_LUMINANCE:
                 format = "L      ";
-                // 1 byte per pixel?
                 break;
             case GL_RGB5:
             case GL_RGB8:
             case GL_RGB:
                 format = "RGB    ";
-                // 3 bytes per pixel?
                 estSize *= 3;
                 break;
             case GL_LUMINANCE8_ALPHA8:
             case GL_LUMINANCE_ALPHA:
                 format = "LA     ";
-                // 2 bytes per pixel?
                 estSize *= 2;
                 break;
             case GL_SRGB_EXT:
             case GL_SRGB8_EXT:
                 format = "sRGB   ";
-                // 3 bytes per pixel?
                 estSize *= 3;
                 break;
             case GL_SRGB_ALPHA_EXT:
             case GL_SRGB8_ALPHA8_EXT:
                 format = "sRGBA  ";
-                // 4 bytes per pixel?
                 estSize *= 4;
                 break;
             case GL_SLUMINANCE_EXT:
             case GL_SLUMINANCE8_EXT:
                 format = "sL     ";
-                // 1 byte per pixel?
                 break;
             case GL_SLUMINANCE_ALPHA_EXT:
             case GL_SLUMINANCE8_ALPHA8_EXT:
                 format = "sLA    ";
-                // 2 byte per pixel?
                 estSize *= 2;
                 break;
             case GL_DEPTH_COMPONENT16:
                 format = "Depth16";
-                // 2 bytes per pixel
                 estSize *= 2;
                 break;
             case GL_DEPTH_COMPONENT24:
                 format = "Depth24";
-                // 3 bytes per pixel
                 estSize *= 3;
                 break;
             case GL_DEPTH_COMPONENT:
             case GL_DEPTH_COMPONENT32:
                 format = "Depth32";
-                // 4 bytes per pixel
                 estSize *= 4;
                 break;
         }
 
-        // mipmap adds about 50%
         if (image->flags & IMGFLAG_MIPMAP)
             estSize += estSize / 2;
 
@@ -309,21 +259,6 @@ void R_ImageList_f(void) {
     ri.Printf(PRINT_ALL, " %i total images\n\n", tr.numImages);
 }
 
-//=======================================================================
-
-/*
-================
-ResampleTexture
-
-Used to resample images in a more general than quartering fashion.
-
-This will only be filtered properly if the resampled size
-is greater than half the original size.
-
-If a larger shrinking is needed, use the mipmap function
-before or after.
-================
-*/
 static void ResampleTexture(byte* in, int inwidth, int inheight, byte* out, int outwidth, int outheight) {
     int i, j;
     byte *inrow, *inrow2;
@@ -379,9 +314,9 @@ static void RGBAtoYCoCgA(const byte* in, byte* out, int width, int height) {
             a = *inbyte++;
             rb2 = (r + b) >> 1;
 
-            *outbyte++ = (g + rb2) >> 1;        // Y  =  R/4 + G/2 + B/4
-            *outbyte++ = (r - b + 256) >> 1;    // Co =  R/2       - B/2
-            *outbyte++ = (g - rb2 + 256) >> 1;  // Cg = -R/4 + G/2 - B/4
+            *outbyte++ = (g + rb2) >> 1;
+            *outbyte++ = (r - b + 256) >> 1;
+            *outbyte++ = (g - rb2 + 256) >> 1;
             *outbyte++ = a;
         }
     }
@@ -402,20 +337,17 @@ static void YCoCgAtoRGBA(const byte* in, byte* out, int width, int height) {
             Cg = *inbyte++;
             a = *inbyte++;
 
-            *outbyte++ = CLAMP(_Y + Co - Cg, 0, 255);        // R = Y + Co - Cg
-            *outbyte++ = CLAMP(_Y + Cg - 128, 0, 255);       // G = Y + Cg
-            *outbyte++ = CLAMP(_Y - Co - Cg + 256, 0, 255);  // B = Y - Co - Cg
+            *outbyte++ = CLAMP(_Y + Co - Cg, 0, 255);
+            *outbyte++ = CLAMP(_Y + Cg - 128, 0, 255);
+            *outbyte++ = CLAMP(_Y - Co - Cg + 256, 0, 255);
             *outbyte++ = a;
         }
     }
 }
 
-// uses a sobel filter to change a texture to a normal map
 static void RGBAtoNormal(const byte* in, byte* out, int width, int height, qboolean clampToEdge) {
     int x, y, max;
 
-    // convert to heightmap, storing in alpha
-    // same as converting to Y in YCoCg
     max = 1;
     for (y = 0; y < height; y++) {
         const byte* inbyte = in + y * width * 4;
@@ -423,7 +355,7 @@ static void RGBAtoNormal(const byte* in, byte* out, int width, int height, qbool
 
         for (x = 0; x < width; x++) {
             byte result = (inbyte[0] >> 2) + (inbyte[1] >> 1) + (inbyte[2] >> 2);
-            result = result * result / 255;  // Make linear
+            result = result * result / 255;
             *outbyte = result;
             max = MAX(max, *outbyte);
             outbyte += 4;
@@ -431,7 +363,6 @@ static void RGBAtoNormal(const byte* in, byte* out, int width, int height, qbool
         }
     }
 
-    // level out heights
     if (max < 255) {
         for (y = 0; y < height; y++) {
             byte* outbyte = out + y * width * 4 + 3;
@@ -443,15 +374,10 @@ static void RGBAtoNormal(const byte* in, byte* out, int width, int height, qbool
         }
     }
 
-    // now run sobel filter over height values to generate X and Y
-    // then normalize
     for (y = 0; y < height; y++) {
         byte* outbyte = out + y * width * 4;
 
         for (x = 0; x < width; x++) {
-            // 0 1 2
-            // 3 4 5
-            // 6 7 8
 
             byte s[9];
             int x2, y2, i;
@@ -502,16 +428,10 @@ static void RGBAtoNormal(const byte* in, byte* out, int width, int height, qbool
 
 #define COPYSAMPLE(a, b) *(unsigned int*)(a) = *(unsigned int*)(b)
 
-// based on Fast Curve Based Interpolation
-// from Fast Artifacts-Free Image Interpolation (http://www.andreagiachetti.it/icbi/)
-// assumes data has a 2 pixel thick border of clamped or wrapped data
-// expects data to be a grid with even (0, 0), (2, 0), (0, 2), (2, 2) etc pixels filled
-// only performs FCBI on specified component
 static void DoFCBI(byte* in, byte* out, int width, int height, int component) {
     int x, y;
     byte *outbyte, *inbyte;
 
-    // copy in to out
     for (y = 2; y < height - 2; y += 2) {
         inbyte = in + (y * width + 2) * 4 + component;
         outbyte = out + (y * width + 2) * 4 + component;
@@ -524,64 +444,16 @@ static void DoFCBI(byte* in, byte* out, int width, int height, int component) {
     }
 
     for (y = 3; y < height - 3; y += 2) {
-        // diagonals
-        //
-        // NWp  - northwest interpolated pixel
-        // NEp  - northeast interpolated pixel
-        // NWd  - northwest first derivative
-        // NEd  - northeast first derivative
-        // NWdd - northwest second derivative
-        // NEdd - northeast second derivative
-        //
-        // Uses these samples:
-        //
-        //         0
-        //   - - a - b - -
-        //   - - - - - - -
-        //   c - d - e - f
-        // 0 - - - - - - -
-        //   g - h - i - j
-        //   - - - - - - -
-        //   - - k - l - -
-        //
-        // x+2 uses these samples:
-        //
-        //         0
-        //   - - - - a - b - -
-        //   - - - - - - - - -
-        //   - - c - d - e - f
-        // 0 - - - - - - - - -
-        //   - - g - h - i - j
-        //   - - - - - - - - -
-        //   - - - - k - l - -
-        //
-        // so we can reuse 8 of them on next iteration
-        //
-        // a=b, c=d, d=e, e=f, g=h, h=i, i=j, k=l
-        //
-        // only b, f, j, and l need to be sampled on next iteration
 
         byte sa, sb, sc, sd, se, sf, sg, sh, si, sj, sk, sl;
         byte *line1, *line2, *line3, *line4;
 
         x = 3;
 
-        // optimization one
-        //                       SAMPLE2(sa, x-1, y-3);
-        // SAMPLE2(sc, x-3, y-1); SAMPLE2(sd, x-1, y-1); SAMPLE2(se, x+1, y-1);
-        // SAMPLE2(sg, x-3, y+1); SAMPLE2(sh, x-1, y+1); SAMPLE2(si, x+1, y+1);
-        //                       SAMPLE2(sk, x-1, y+3);
-
-        // optimization two
         line1 = in + ((y - 3) * width + (x - 1)) * 4 + component;
         line2 = in + ((y - 1) * width + (x - 3)) * 4 + component;
         line3 = in + ((y + 1) * width + (x - 3)) * 4 + component;
         line4 = in + ((y + 3) * width + (x - 1)) * 4 + component;
-
-        //                                   COPYSAMPLE(sa, line1); line1 += 8;
-        // COPYSAMPLE(sc, line2); line2 += 8; COPYSAMPLE(sd, line2); line2 += 8; COPYSAMPLE(se, line2); line2 += 8;
-        // COPYSAMPLE(sg, line3); line3 += 8; COPYSAMPLE(sh, line3); line3 += 8; COPYSAMPLE(si, line3); line3 += 8;
-        //                                   COPYSAMPLE(sk, line4); line4 += 8;
 
         sa = *line1;
         line1 += 8;
@@ -605,24 +477,6 @@ static void DoFCBI(byte* in, byte* out, int width, int height, int component) {
         for (; x < width - 3; x += 2) {
             int NWd, NEd, NWp, NEp;
 
-            // original
-            //                       SAMPLE2(sa, x-1, y-3); SAMPLE2(sb, x+1, y-3);
-            // SAMPLE2(sc, x-3, y-1); SAMPLE2(sd, x-1, y-1); SAMPLE2(se, x+1, y-1); SAMPLE2(sf, x+3, y-1);
-            // SAMPLE2(sg, x-3, y+1); SAMPLE2(sh, x-1, y+1); SAMPLE2(si, x+1, y+1); SAMPLE2(sj, x+3, y+1);
-            //                       SAMPLE2(sk, x-1, y+3); SAMPLE2(sl, x+1, y+3);
-
-            // optimization one
-            // SAMPLE2(sb, x+1, y-3);
-            // SAMPLE2(sf, x+3, y-1);
-            // SAMPLE2(sj, x+3, y+1);
-            // SAMPLE2(sl, x+1, y+3);
-
-            // optimization two
-            // COPYSAMPLE(sb, line1); line1 += 8;
-            // COPYSAMPLE(sf, line2); line2 += 8;
-            // COPYSAMPLE(sj, line3); line3 += 8;
-            // COPYSAMPLE(sl, line4); line4 += 8;
-
             sb = *line1;
             line1 += 8;
             sf = *line2;
@@ -645,8 +499,6 @@ static void DoFCBI(byte* in, byte* out, int width, int height, int component) {
             } else {
                 int NWdd, NEdd;
 
-                // NEdd = abs(sg + sd + sb - 3 * (se + sh) + sk + si + sf);
-                // NWdd = abs(sa + se + sj - 3 * (sd + si) + sc + sh + sl);
                 NEdd = abs(sg + sb - 3 * NEp + sk + sf + NWp);
                 NWdd = abs(sa + sj - 3 * NWp + sc + sl + NEp);
 
@@ -657,11 +509,6 @@ static void DoFCBI(byte* in, byte* out, int width, int height, int component) {
             }
 
             outbyte += 8;
-
-            //                    COPYSAMPLE(sa, sb);
-            // COPYSAMPLE(sc, sd); COPYSAMPLE(sd, se); COPYSAMPLE(se, sf);
-            // COPYSAMPLE(sg, sh); COPYSAMPLE(sh, si); COPYSAMPLE(si, sj);
-            //                    COPYSAMPLE(sk, sl);
 
             sa = sb;
             sc = sd;
@@ -674,7 +521,6 @@ static void DoFCBI(byte* in, byte* out, int width, int height, int component) {
         }
     }
 
-    // hack: copy out to in again
     for (y = 3; y < height - 3; y += 2) {
         inbyte = out + (y * width + 3) * 4 + component;
         outbyte = in + (y * width + 3) * 4 + component;
@@ -687,62 +533,17 @@ static void DoFCBI(byte* in, byte* out, int width, int height, int component) {
     }
 
     for (y = 2; y < height - 3; y++) {
-        // horizontal & vertical
-        //
-        // hp  - horizontally interpolated pixel
-        // vp  - vertically interpolated pixel
-        // hd  - horizontal first derivative
-        // vd  - vertical first derivative
-        // hdd - horizontal second derivative
-        // vdd - vertical second derivative
-        // Uses these samples:
-        //
-        //       0
-        //   - a - b -
-        //   c - d - e
-        // 0 - f - g -
-        //   h - i - j
-        //   - k - l -
-        //
-        // x+2 uses these samples:
-        //
-        //       0
-        //   - - - a - b -
-        //   - - c - d - e
-        // 0 - - - f - g -
-        //   - - h - i - j
-        //   - - - k - l -
-        //
-        // so we can reuse 7 of them on next iteration
-        //
-        // a=b, c=d, d=e, f=g, h=i, i=j, k=l
-        //
-        // only b, e, g, j, and l need to be sampled on next iteration
 
         byte sa, sb, sc, sd, se, sf, sg, sh, si, sj, sk, sl;
         byte *line1, *line2, *line3, *line4, *line5;
 
-        // x = (y + 1) % 2;
         x = (y + 1) % 2 + 2;
-
-        // optimization one
-        //            SAMPLE2(sa, x-1, y-2);
-        // SAMPLE2(sc, x-2, y-1); SAMPLE2(sd, x,   y-1);
-        //            SAMPLE2(sf, x-1, y  );
-        // SAMPLE2(sh, x-2, y+1); SAMPLE2(si, x,   y+1);
-        //            SAMPLE2(sk, x-1, y+2);
 
         line1 = in + ((y - 2) * width + (x - 1)) * 4 + component;
         line2 = in + ((y - 1) * width + (x - 2)) * 4 + component;
         line3 = in + ((y)*width + (x - 1)) * 4 + component;
         line4 = in + ((y + 1) * width + (x - 2)) * 4 + component;
         line5 = in + ((y + 2) * width + (x - 1)) * 4 + component;
-
-        //                 COPYSAMPLE(sa, line1); line1 += 8;
-        // COPYSAMPLE(sc, line2); line2 += 8; COPYSAMPLE(sd, line2); line2 += 8;
-        //                 COPYSAMPLE(sf, line3); line3 += 8;
-        // COPYSAMPLE(sh, line4); line4 += 8; COPYSAMPLE(si, line4); line4 += 8;
-        //                 COPYSAMPLE(sk, line5); line5 += 8;
 
         sa = *line1;
         line1 += 8;
@@ -763,25 +564,6 @@ static void DoFCBI(byte* in, byte* out, int width, int height, int component) {
 
         for (; x < width - 3; x += 2) {
             int hd, vd, hp, vp;
-
-            //            SAMPLE2(sa, x-1, y-2); SAMPLE2(sb, x+1, y-2);
-            // SAMPLE2(sc, x-2, y-1); SAMPLE2(sd, x,   y-1); SAMPLE2(se, x+2, y-1);
-            //            SAMPLE2(sf, x-1, y  ); SAMPLE2(sg, x+1, y  );
-            // SAMPLE2(sh, x-2, y+1); SAMPLE2(si, x,   y+1); SAMPLE2(sj, x+2, y+1);
-            //            SAMPLE2(sk, x-1, y+2); SAMPLE2(sl, x+1, y+2);
-
-            // optimization one
-            // SAMPLE2(sb, x+1, y-2);
-            // SAMPLE2(se, x+2, y-1);
-            // SAMPLE2(sg, x+1, y  );
-            // SAMPLE2(sj, x+2, y+1);
-            // SAMPLE2(sl, x+1, y+2);
-
-            // COPYSAMPLE(sb, line1); line1 += 8;
-            // COPYSAMPLE(se, line2); line2 += 8;
-            // COPYSAMPLE(sg, line3); line3 += 8;
-            // COPYSAMPLE(sj, line4); line4 += 8;
-            // COPYSAMPLE(sl, line5); line5 += 8;
 
             sb = *line1;
             line1 += 8;
@@ -807,9 +589,6 @@ static void DoFCBI(byte* in, byte* out, int width, int height, int component) {
             } else {
                 int hdd, vdd;
 
-                // hdd = abs(sc[i] + sd[i] + se[i] - 3 * (sf[i] + sg[i]) + sh[i] + si[i] + sj[i]);
-                // vdd = abs(sa[i] + sf[i] + sk[i] - 3 * (sd[i] + si[i]) + sb[i] + sg[i] + sl[i]);
-
                 hdd = abs(sc + se - 3 * hp + sh + sj + vp);
                 vdd = abs(sa + sk - 3 * vp + sb + sl + hp);
 
@@ -821,11 +600,6 @@ static void DoFCBI(byte* in, byte* out, int width, int height, int component) {
 
             outbyte += 8;
 
-            //          COPYSAMPLE(sa, sb);
-            // COPYSAMPLE(sc, sd); COPYSAMPLE(sd, se);
-            //          COPYSAMPLE(sf, sg);
-            // COPYSAMPLE(sh, si); COPYSAMPLE(si, sj);
-            //          COPYSAMPLE(sk, sl);
             sa = sb;
             sc = sd;
             sd = se;
@@ -837,12 +611,10 @@ static void DoFCBI(byte* in, byte* out, int width, int height, int component) {
     }
 }
 
-// Similar to FCBI, but throws out the second order derivatives for speed
 static void DoFCBIQuick(byte* in, byte* out, int width, int height, int component) {
     int x, y;
     byte *outbyte, *inbyte;
 
-    // copy in to out
     for (y = 2; y < height - 2; y += 2) {
         inbyte = in + (y * width + 2) * 4 + component;
         outbyte = out + (y * width + 2) * 4 + component;
@@ -895,7 +667,6 @@ static void DoFCBIQuick(byte* in, byte* out, int width, int height, int componen
         }
     }
 
-    // hack: copy out to in again
     for (y = 3; y < height - 3; y += 2) {
         inbyte = out + (y * width + 3) * 4 + component;
         outbyte = in + (y * width + 3) * 4 + component;
@@ -949,13 +720,10 @@ static void DoFCBIQuick(byte* in, byte* out, int width, int height, int componen
     }
 }
 
-// Similar to DoFCBIQuick, but just takes the average instead of checking derivatives
-// as well, this operates on all four components
 static void DoLinear(byte* in, byte* out, int width, int height) {
     int x, y, i;
     byte *outbyte, *inbyte;
 
-    // copy in to out
     for (y = 2; y < height - 2; y += 2) {
         x = 2;
 
@@ -1002,7 +770,6 @@ static void DoLinear(byte* in, byte* out, int width, int height) {
         }
     }
 
-    // hack: copy out to in again
     for (y = 1; y < height - 1; y += 2) {
         x = 1;
 
@@ -1100,12 +867,10 @@ static void FillInNormalizedZ(const byte* in, byte* out, int width, int height) 
     }
 }
 
-// size must be even
 #define WORKBLOCK_SIZE 128
 #define WORKBLOCK_BORDER 4
 #define WORKBLOCK_REALSIZE (WORKBLOCK_SIZE + WORKBLOCK_BORDER * 2)
 
-// assumes that data has already been expanded into a 2x2 grid
 static void FCBIByBlock(byte* data, int width, int height, qboolean clampToEdge, qboolean normalized) {
     byte workdata[WORKBLOCK_REALSIZE * WORKBLOCK_REALSIZE * 4];
     byte outdata[WORKBLOCK_REALSIZE * WORKBLOCK_REALSIZE * 4];
@@ -1126,9 +891,6 @@ static void FCBIByBlock(byte* data, int width, int height, qboolean clampToEdge,
             fullworkwidth = workwidth + WORKBLOCK_BORDER * 2;
             fullworkheight = workheight + WORKBLOCK_BORDER * 2;
 
-            // memset(workdata, 0, WORKBLOCK_REALSIZE * WORKBLOCK_REALSIZE * 4);
-
-            // fill in work block
             for (y2 = 0; y2 < fullworkheight; y2 += 2) {
                 srcy = y + y2 - WORKBLOCK_BORDER;
 
@@ -1155,7 +917,6 @@ static void FCBIByBlock(byte* data, int width, int height, qboolean clampToEdge,
                 }
             }
 
-            // submit work block
             DoLinear(workdata, outdata, fullworkwidth, fullworkheight);
 
             if (!normalized) {
@@ -1186,7 +947,6 @@ static void FCBIByBlock(byte* data, int width, int height, qboolean clampToEdge,
                 }
             }
 
-            // copy back work block
             for (y2 = 0; y2 < workheight; y2++) {
                 inbyte = outdata + ((y2 + WORKBLOCK_BORDER) * fullworkwidth + WORKBLOCK_BORDER) * 4;
                 outbyte = data + ((y + y2) * width + x) * 4;
@@ -1201,17 +961,7 @@ static void FCBIByBlock(byte* data, int width, int height, qboolean clampToEdge,
 }
 #undef COPYSAMPLE
 
-/*
-================
-R_LightScaleTexture
-
-Scale up the pixel values in a texture to increase the
-lighting range
-================
-*/
 void R_LightScaleTexture(byte* in, int inwidth, int inheight, qboolean only_gamma) {
-    // [QL] quakelive_steam.exe 0x444d00: with the colour correction the textures are left as they
-    // are, neither gamma nor r_intensity
     if (r_colorCorrectActive->integer) {
         return;
     }
@@ -1254,15 +1004,6 @@ void R_LightScaleTexture(byte* in, int inwidth, int inheight, qboolean only_gamm
     }
 }
 
-/*
-================
-R_MipMap2
-
-[QL] quakelive_steam.exe 0x444e20, used when r_simpleMipMaps is 0: a 4x4 tent filter,
-weights 1 2 2 1 over 36, wrapping at the edges with a mask that only holds for power of
-two sizes. An image one pixel wide is left as it is.
-================
-*/
 static void R_MipMap2(byte* in, int inWidth, int inHeight) {
     int i, j, k, total;
     int outWidth, outHeight;
@@ -1296,14 +1037,6 @@ static void R_MipMap2(byte* in, int inWidth, int inHeight) {
     ri.Hunk_FreeTempMemory(temp);
 }
 
-/*
-================
-R_MipMap
-
-[QL] 0x4450a0. Operates in place, quartering the size of the texture. With r_simpleMipMaps,
-the default, each 2x2 block is averaged as it is, in gamma space; otherwise the tent filter.
-================
-*/
 static void R_MipMap(byte* in, int width, int height) {
     int i, j, row;
     byte* out;
@@ -1323,7 +1056,7 @@ static void R_MipMap(byte* in, int width, int height) {
     height >>= 1;
 
     if (width == 0 || height == 0) {
-        width += height;  // get largest
+        width += height;
         for (i = 0; i < width; i++, out += 4, in += 8) {
             out[0] = (in[0] + in[4]) >> 1;
             out[1] = (in[1] + in[5]) >> 1;
@@ -1379,11 +1112,6 @@ static void R_MipMapNormalHeight(const byte* in, byte* out, int width, int heigh
 
             VectorNormalizeFast(v);
 
-            // v[0] *= 0.25f;
-            // v[1] *= 0.25f;
-            // v[2] = 1.0f - v[0] * v[0] - v[1] * v[1];
-            // v[2] = sqrt(MAX(v[2], 0.0f));
-
             out[sx] = FloatToOffsetByte(v[0]);
             out[1] = FloatToOffsetByte(v[1]);
             out[2] = FloatToOffsetByte(v[2]);
@@ -1392,13 +1120,6 @@ static void R_MipMapNormalHeight(const byte* in, byte* out, int width, int heigh
     }
 }
 
-/*
-==================
-R_BlendOverTexture
-
-Apply a color blend over a set of pixels
-==================
-*/
 static void R_BlendOverTexture(byte* data, int pixelCount, byte blend[4]) {
     int i;
     int inverseAlpha;
@@ -1435,17 +1156,10 @@ byte mipBlendColors[16][4] = {
     {0, 0, 255, 128},
 };
 
-/*
-==================
-R_ConvertTextureFormat
-
-Convert RGBA unsigned byte to specified format and type
-==================
-*/
 #define ROW_PADDING(width, bpp, alignment) PAD((width) * (bpp), (alignment)) - (width) * (bpp)
 void R_ConvertTextureFormat(const byte* in, int width, int height, GLenum format, GLenum type, byte* out) {
     int x, y, rowPadding;
-    int unpackAlign = 4;  // matches GL_UNPACK_ALIGNMENT default
+    int unpackAlign = 4;
 
     if (format == GL_RGB && type == GL_UNSIGNED_BYTE) {
         rowPadding = ROW_PADDING(width, 3, unpackAlign);
@@ -1465,7 +1179,7 @@ void R_ConvertTextureFormat(const byte* in, int width, int height, GLenum format
 
         for (y = 0; y < height; y++) {
             for (x = 0; x < width; x++) {
-                *out++ = *in++;  // red
+                *out++ = *in++;
                 in += 3;
             }
 
@@ -1476,9 +1190,9 @@ void R_ConvertTextureFormat(const byte* in, int width, int height, GLenum format
 
         for (y = 0; y < height; y++) {
             for (x = 0; x < width; x++) {
-                *out++ = *in++;  // red
+                *out++ = *in++;
                 in += 2;
-                *out++ = *in++;  // alpha
+                *out++ = *in++;
             }
 
             out += rowPadding;
@@ -1513,19 +1227,12 @@ static void RawImage_SwizzleRA(byte* data, int width, int height) {
     byte *ptr = data, swap;
 
     for (i = 0; i < width * height; i++, ptr += 4) {
-        // swap red and alpha
         swap = ptr[0];
         ptr[0] = ptr[3];
         ptr[3] = swap;
     }
 }
 
-/*
-===============
-RawImage_ScaleToPower2
-
-===============
-*/
 static qboolean RawImage_ScaleToPower2(byte** data, int* inout_width, int* inout_height, imgType_t type, imgFlags_t flags, byte** resampledBuffer) {
     int width = *inout_width;
     int height = *inout_height;
@@ -1536,10 +1243,6 @@ static qboolean RawImage_ScaleToPower2(byte** data, int* inout_width, int* inout
     qboolean clampToEdge = flags & IMGFLAG_CLAMPTOEDGE;
     qboolean scaled;
 
-    //
-    // convert to exact power of 2 sizes
-    //
-    // [QL] 0x4452f0 leaves every image at its own size when the card takes any size
     if (!mipmap || glRefConfig.textureNonPowerOfTwo) {
         scaled_width = width;
         scaled_height = height;
@@ -1556,9 +1259,6 @@ static qboolean RawImage_ScaleToPower2(byte** data, int* inout_width, int* inout
     if (picmip && data && resampledBuffer && r_imageUpsample->integer &&
         scaled_width < r_imageUpsampleMaxSize->integer && scaled_height < r_imageUpsampleMaxSize->integer) {
         int finalwidth, finalheight;
-        // int startTime, endTime;
-
-        // startTime = ri.Milliseconds();
 
         finalwidth = scaled_width << r_imageUpsample->integer;
         finalheight = scaled_height << r_imageUpsample->integer;
@@ -1595,10 +1295,6 @@ static qboolean RawImage_ScaleToPower2(byte** data, int* inout_width, int* inout
         else if (type == IMGTYPE_NORMAL || type == IMGTYPE_NORMALHEIGHT)
             FillInNormalizedZ(*resampledBuffer, *resampledBuffer, scaled_width, scaled_height);
 
-        // endTime = ri.Milliseconds();
-
-        // ri.Printf(PRINT_ALL, "upsampled %dx%d to %dx%d in %dms\n", width, height, scaled_width, scaled_height, endTime - startTime);
-
         *data = *resampledBuffer;
     } else if (scaled_width != width || scaled_height != height) {
         if (data && resampledBuffer) {
@@ -1611,36 +1307,21 @@ static qboolean RawImage_ScaleToPower2(byte** data, int* inout_width, int* inout
     width = scaled_width;
     height = scaled_height;
 
-    //
-    // perform optional picmip operation
-    //
     if (picmip) {
-        // [QL] the count is masked as an x86 shift masks it
         scaled_width >>= r_picmip->integer & 31;
         scaled_height >>= r_picmip->integer & 31;
     }
 
-    //
-    // clamp to the current upper OpenGL limit
-    // scale both axis down equally so we don't have to
-    // deal with a half mip resampling
-    //
     while (scaled_width > glConfig.maxTextureSize || scaled_height > glConfig.maxTextureSize) {
         scaled_width >>= 1;
         scaled_height >>= 1;
     }
 
-    //
-    // clamp to minimum size
-    //
     scaled_width = MAX(1, scaled_width);
     scaled_height = MAX(1, scaled_height);
 
     scaled = (width != scaled_width) || (height != scaled_height);
 
-    //
-    // rescale texture to new size using existing mipmap functions
-    //
     if (data) {
         while (width > scaled_width || height > scaled_height) {
             if (type == IMGTYPE_NORMAL || type == IMGTYPE_NORMALHEIGHT)
@@ -1712,8 +1393,6 @@ static GLenum RawImage_GetFormat(const byte* data, int numPixels, GLenum picForm
             }
         }
     } else if (lightMap) {
-        // GL_LUMINANCE is not valid for OpenGL 3.2 Core context and
-        // everything becomes solid black
         if (0 && r_greyscale->integer)
             internalFormat = GL_LUMINANCE;
         else
@@ -1723,7 +1402,6 @@ static GLenum RawImage_GetFormat(const byte* data, int numPixels, GLenum picForm
             samples = 4;
         }
 
-        // select proper internal format
         if (samples == 3) {
             if (0 && r_greyscale->integer) {
                 if (r_texturebits->integer == 16 || r_texturebits->integer == 32)
@@ -1835,7 +1513,6 @@ static void RawImage_UploadToRgtc2Texture(GLuint texture, int miplevel, int x, i
                     for (ox = 0; ox < ow; ox++)
                         workingData[oy * 4 + ox] = data[((iy + oy) * width + ix + ox) * 4 + component];
 
-                // dupe data to fill
                 for (oy = 0; oy < 4; oy++)
                     for (ox = (oy < oh) ? ow : 0; ox < 4; ox++)
                         workingData[oy * 4 + ox] = workingData[(oy % oh) * 4 + ox % ow];
@@ -1846,7 +1523,6 @@ static void RawImage_UploadToRgtc2Texture(GLuint texture, int miplevel, int x, i
         }
     }
 
-    // FIXME: Won't work for x/y that aren't multiples of 4.
     qglCompressedTextureSubImage2DEXT(texture, GL_TEXTURE_2D, miplevel, x, y, width, height, GL_COMPRESSED_RG_RGTC2, size, compressedData);
 
     ri.Hunk_FreeTempMemory(compressedData);
@@ -1901,9 +1577,6 @@ static GLenum PixelDataFormatFromInternalFormat(GLenum internalFormat) {
             return GL_DEPTH_COMPONENT;
         case GL_R8:
         case GL_RED:
-            // [QL] single-channel font atlas (see tr_font_gl.c). The coverage
-            // byte is uploaded as GL_RED and read back as alpha via a texture
-            // swizzle, so R_UpdateSubImage streams the right data format.
             return GL_RED;
         default:
             return GL_RGBA;
@@ -1945,7 +1618,6 @@ static void RawImage_UploadTexture(GLuint texture, byte* data, int x, int y, int
         }
 
         if (!lastMip && numMips < 2) {
-            // [QL] 0x4452f0 builds the chain on the CPU, with the filter the picmip used
             if (rgba8 && type != IMGTYPE_NORMAL && type != IMGTYPE_NORMALHEIGHT) {
                 R_MipMap(data, width, height);
             } else if (glRefConfig.framebufferObject) {
@@ -1972,12 +1644,6 @@ static void RawImage_UploadTexture(GLuint texture, byte* data, int x, int y, int
         ri.Hunk_FreeTempMemory(formatBuffer);
 }
 
-/*
-===============
-Upload32
-
-===============
-*/
 static void Upload32(byte* data, int x, int y, int width, int height, GLenum picFormat, GLenum dataFormat, GLenum dataType, int numMips, image_t* image, qboolean scaled) {
     int i, c;
     byte* scan;
@@ -1989,7 +1655,6 @@ static void Upload32(byte* data, int x, int y, int width, int height, GLenum pic
     qboolean mipmap = !!(flags & IMGFLAG_MIPMAP) && (rgba8 || numMips > 1);
     qboolean cubemap = !!(flags & IMGFLAG_CUBEMAP);
 
-    // These operations cannot be performed on non-rgba8 images.
     if (rgba8 && !cubemap) {
         c = width * height;
         scan = data;
@@ -2011,7 +1676,6 @@ static void Upload32(byte* data, int x, int y, int width, int height, GLenum pic
                 }
             }
 
-            // This corresponds to what the OpenGL1 renderer does.
             if (!(flags & IMGFLAG_NOLIGHTSCALE) && (scaled || mipmap))
                 R_LightScaleTexture(data, width, height, !mipmap);
         }
@@ -2037,13 +1701,6 @@ static void Upload32(byte* data, int x, int y, int width, int height, GLenum pic
     GL_CheckErrors();
 }
 
-/*
-================
-R_CreateImage2
-
-This is the only way any image_t are created
-================
-*/
 image_t* R_CreateImage2(const char* name, byte* pic, int width, int height, GLenum picFormat, int numMips, imgType_t type, imgFlags_t flags, int internalFormat) {
     byte* resampledBuffer = NULL;
     image_t* image;
@@ -2091,7 +1748,6 @@ image_t* R_CreateImage2(const char* name, byte* pic, int width, int height, GLen
     dataFormat = PixelDataFormatFromInternalFormat(internalFormat);
     dataType = picFormat == GL_RGBA16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE;
 
-    // Convert image data format for OpenGL ES, data is converted for each mip level
     if (qglesMajorVersion) {
         switch (internalFormat) {
             case GL_LUMINANCE:
@@ -2130,7 +1786,6 @@ image_t* R_CreateImage2(const char* name, byte* pic, int width, int height, GLen
                 break;
             case GL_R8:
             case GL_RED:
-                // [QL] single-channel font atlas (GLES3 sized format)
                 internalFormat = GL_R8;
                 dataFormat = GL_RED;
                 dataType = GL_UNSIGNED_BYTE;
@@ -2142,8 +1797,6 @@ image_t* R_CreateImage2(const char* name, byte* pic, int width, int height, GLen
 
     image->internalFormat = internalFormat;
 
-    // Possibly scale image before uploading.
-    // if not rgba8 and uploading an image, skip picmips.
     if (!cubemap) {
         if (rgba8)
             scaled = RawImage_ScaleToPower2(&pic, &width, &height, type, flags, &resampledBuffer);
@@ -2160,7 +1813,6 @@ image_t* R_CreateImage2(const char* name, byte* pic, int width, int height, GLen
     image->uploadWidth = width;
     image->uploadHeight = height;
 
-    // Allocate texture storage so we don't have to worry about it later.
     mipWidth = width;
     mipHeight = height;
     miplevel = 0;
@@ -2180,14 +1832,12 @@ image_t* R_CreateImage2(const char* name, byte* pic, int width, int height, GLen
         miplevel++;
     } while (!lastMip);
 
-    // Upload data.
     if (pic)
         Upload32(pic, 0, 0, width, height, picFormat, dataFormat, dataType, numMips, image, scaled);
 
     if (resampledBuffer != NULL)
         ri.Hunk_FreeTempMemory(resampledBuffer);
 
-    // Set all necessary texture parameters.
     qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_WRAP_S, glWrapClampMode);
     qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_WRAP_T, glWrapClampMode);
 
@@ -2203,8 +1853,6 @@ image_t* R_CreateImage2(const char* name, byte* pic, int width, int height, GLen
         case GL_DEPTH_COMPONENT16_ARB:
         case GL_DEPTH_COMPONENT24_ARB:
         case GL_DEPTH_COMPONENT32_ARB:
-            // Fix for sampling depth buffer on old nVidia cards.
-            // from http://www.idevgames.com/forums/thread-4141-post-34844.html#pid34844
             if (!QGL_VERSION_ATLEAST(3, 0)) {
                 qglTextureParameterfEXT(image->texnum, textureTarget, GL_DEPTH_TEXTURE_MODE, GL_LUMINANCE);
             }
@@ -2226,16 +1874,7 @@ image_t* R_CreateImage2(const char* name, byte* pic, int width, int height, GLen
     return image;
 }
 
-/*
-================
-R_CreateImage
-
-Wrapper for R_CreateImage2(), for the old parameters.
-================
-*/
 image_t* R_CreateImage(const char* name, byte* pic, int width, int height, imgType_t type, imgFlags_t flags, int internalFormat) {
-    // [ioquakelive] the upload to the GPU, timed apart from the decoding: this one goes through
-    // the OpenGL context and cannot be spread across threads; decoding can
     int64_t uploadStart = ri.Microseconds();
     image_t* uploaded = R_CreateImage2(name, pic, width, height, GL_RGBA8, 0, type, flags, internalFormat);
 
@@ -2246,16 +1885,12 @@ image_t* R_CreateImage(const char* name, byte* pic, int width, int height, imgTy
 void R_UpdateSubImage(image_t* image, byte* pic, int x, int y, int width, int height, GLenum picFormat) {
     GLenum dataFormat, dataType;
 
-    // TODO: This is fine for lightmaps but (unused) general RGBA images need to store dataFormat / dataType in image_t for OpenGL ES?
     dataFormat = PixelDataFormatFromInternalFormat(image->internalFormat);
     dataType = picFormat == GL_RGBA16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE;
 
     Upload32(pic, x, y, width, height, picFormat, dataFormat, dataType, 0, image, qfalse);
 }
 
-//===================================================================
-
-// Prototype for dds loader function which isn't common to both renderers
 void R_LoadDDS(const char* filename, byte** pic, int* width, int* height, GLenum* picFormat, int* numMips);
 
 typedef struct
@@ -2264,8 +1899,6 @@ typedef struct
     void (*ImageLoader)(const char*, unsigned char**, int*, int*);
 } imageExtToLoaderMap_t;
 
-// Note that the ordering indicates the order of preference used
-// when there are multiple images of different formats available
 static imageExtToLoaderMap_t imageLoaders[] =
     {
         {"png", R_LoadPNG},
@@ -2277,14 +1910,6 @@ static imageExtToLoaderMap_t imageLoaders[] =
 
 static int numImageLoaders = ARRAY_LEN(imageLoaders);
 
-/*
-=================
-R_LoadImage
-
-Loads any of the supported image types into a canonical
-32 bit format.
-=================
-*/
 void R_LoadImage(const char* name, byte** pic, int* width, int* height, GLenum* picFormat, int* numMips) {
     qboolean orgNameFailed = qfalse;
     int orgLoader = -1;
@@ -2303,7 +1928,6 @@ void R_LoadImage(const char* name, byte** pic, int* width, int* height, GLenum* 
 
     ext = COM_GetExtension(localName);
 
-    // If compressed textures are enabled, try loading a DDS first, it'll load fastest
     if (r_ext_compressed_textures->integer) {
         char ddsName[MAX_QPATH];
 
@@ -2312,45 +1936,35 @@ void R_LoadImage(const char* name, byte** pic, int* width, int* height, GLenum* 
 
         R_LoadDDS(ddsName, pic, width, height, picFormat, numMips);
 
-        // If loaded, we're done.
         if (*pic)
             return;
     }
 
     if (*ext) {
-        // Look for the correct loader and use it
         for (i = 0; i < numImageLoaders; i++) {
             if (!Q_stricmp(ext, imageLoaders[i].ext)) {
-                // Load
                 imageLoaders[i].ImageLoader(localName, pic, width, height);
                 break;
             }
         }
 
-        // A loader was found
         if (i < numImageLoaders) {
             if (*pic == NULL) {
-                // Loader failed, most likely because the file isn't there;
-                // try again without the extension
                 orgNameFailed = qtrue;
                 orgLoader = i;
                 COM_StripExtension(name, localName, MAX_QPATH);
             } else {
-                // Something loaded
                 return;
             }
         }
     }
 
-    // Try and find a suitable match using all
-    // the image formats supported
     for (i = 0; i < numImageLoaders; i++) {
         if (i == orgLoader)
             continue;
 
         altName = va("%s.%s", localName, imageLoaders[i].ext);
 
-        // Load
         imageLoaders[i].ImageLoader(altName, pic, width, height);
 
         if (*pic) {
@@ -2364,7 +1978,6 @@ void R_LoadImage(const char* name, byte** pic, int* width, int* height, GLenum* 
     }
 }
 
-// [ioquakelive] where image loading time goes: decoding against uploading to the GPU
 int64_t r_imageDecodeUs, r_imageUploadUs, r_imageReadUs;
 int r_imageCount;
 
@@ -2391,24 +2004,6 @@ void R_ImageLoadStatsReport(void) {
               (r_imageDecodeUs - r_imageReadUs) / 1000000.0f, r_imageUploadUs / 1000000.0f);
 }
 
-/*
-==============================================================================
-
-TEXTURES DECODED AHEAD OF TIME
-
-[ioquakelive] Of what loading a map's textures costs, 94% is decoding, and that is pure
-CPU: 0.86 s out of 0.92 on campgrounds, against 0.05 s reading from the pk3 and 0.01 s
-uploading. So the main thread goes on reading the files - the filesystem is not thread
-safe - and the workers decode while it carries on registering shaders.
-
-Reading ahead means knowing what to read, which is not known until the map has been
-loaded once: at the end of every load the list of what was asked for is written out and
-the next load of that map uses it. Only JPEGs take this path, and a window caps how many
-decoded images can be held at once.
-
-==============================================================================
-*/
-
 #define R_PREFETCH_MAX 2048
 #define R_PREFETCH_AHEAD 16
 
@@ -2416,27 +2011,25 @@ typedef enum { PF_EMPTY, PF_WORKING, PF_READY, PF_FAILED } prefetchState_t;
 
 typedef struct {
     char name[MAX_QPATH];
-    void* file;  // the file's bytes, from the main thread
+    void* file;
     int fileLen;
-    byte* pixels;  // what the worker leaves behind, from the system's malloc
+    byte* pixels;
     int width, height;
     volatile int state;
 } prefetchEntry_t;
 
 static prefetchEntry_t r_prefetch[R_PREFETCH_MAX];
-static int r_prefetchCount;   // how many entries the list has
-static int r_prefetchNext;    // the next one to read and queue
-static int r_prefetchTaken;   // how far the main thread has consumed
+static int r_prefetchCount;
+static int r_prefetchNext;
+static int r_prefetchTaken;
 static qboolean r_prefetchOn;
 void R_PrefetchFinish(void);
 static int r_prefetchHits, r_prefetchMisses;
 static int64_t r_prefetchWaitUs;
 
-// this load's list, to be written out at the end
 static char r_loadedNames[R_PREFETCH_MAX][MAX_QPATH];
 static int r_loadedCount;
 static char r_prefetchList[MAX_QPATH];
-
 
 static void R_PrefetchFile(const char* list, char* out, int size) {
     char base[MAX_QPATH];
@@ -2445,9 +2038,6 @@ static void R_PrefetchFile(const char* list, char* out, int size) {
     Com_sprintf(out, size, "prefetch/%s.txt", COM_SkipPath(base));
 }
 
-// Two names are the same when the path matches, extension aside: Quake Live's shaders ask for
-// .tga and the engine ends up loading the .jpg when the tga is missing. The list stores the file
-// that was actually loaded, so the requested extension need not match.
 static qboolean R_PrefetchSameName(const char* wanted, const char* entry) {
     char a[MAX_QPATH], b[MAX_QPATH];
 
@@ -2456,8 +2046,6 @@ static qboolean R_PrefetchSameName(const char* wanted, const char* entry) {
     return (qboolean)(!Q_stricmp(a, b));
 }
 
-// the only thing that runs on a worker: decoding. No files, no printing, no
-// pedirle memoria al motor
 static void R_PrefetchDecode(void* data) {
     prefetchEntry_t* entry = (prefetchEntry_t*)data;
     byte* pixels = NULL;
@@ -2477,7 +2065,6 @@ static void R_PrefetchDecode(void* data) {
     entry->state = pixels ? PF_READY : PF_FAILED;
 }
 
-// reads and queues until the window is full. Only the main thread calls this
 static void R_PrefetchPump(void) {
     while (r_prefetchNext < r_prefetchCount && r_prefetchNext - r_prefetchTaken < R_PREFETCH_AHEAD) {
         prefetchEntry_t* entry = &r_prefetch[r_prefetchNext++];
@@ -2491,10 +2078,6 @@ static void R_PrefetchPump(void) {
             entry->state = PF_FAILED;
             continue;
         }
-        // The engine's temporary memory is a stack: it is freed in the reverse order it was
-        // asked for. Since several files are alive here at once and released in any order, each
-        // one is copied into memory of its own and the engine's is given straight back. What is
-        // copied are the compressed bytes, which are few.
         entry->file = malloc(len);
         if (entry->file) {
             Com_Memcpy(entry->file, buffer, len);
@@ -2525,14 +2108,6 @@ static void R_PrefetchRelease(prefetchEntry_t* entry) {
     }
 }
 
-/*
-=================
-R_PrefetchTake
-
-If the image was in the list, returns it already decoded. If the worker has not finished yet it
-waits, which is still less than decoding it here.
-=================
-*/
 static qboolean R_PrefetchTake(const char* name, byte** pic, int* width, int* height) {
     int i;
 
@@ -2558,11 +2133,9 @@ static qboolean R_PrefetchTake(const char* name, byte** pic, int* width, int* he
         }
         if (entry->state != PF_READY) {
             R_PrefetchRelease(entry);
-            return qfalse;  // let the usual path load it
+            return qfalse;
         }
         bytes = entry->width * entry->height * 4;
-        // [ioquakelive] what came in ahead of time is recorded too, or the list shrinks on every
-        // load until it is empty
         Q_strncpyz(r_lastImageName, entry->name, sizeof(r_lastImageName));
         r_prefetchHits++;
         *pic = (byte*)ri.Malloc(bytes);
@@ -2577,15 +2150,6 @@ static qboolean R_PrefetchTake(const char* name, byte** pic, int* width, int* he
     return qfalse;
 }
 
-/*
-=================
-R_PrefetchStart
-
-Opens a list: reads it, starts reading its files ahead, and from here on records into it
-whatever gets loaded. "common" is what the cgame registers before the world -- the HUD, which is
-the same on every map -- and the map's own follows it.
-=================
-*/
 void R_PrefetchStart(const char* listName) {
     char fileName[MAX_QPATH];
     char* text;
@@ -2625,7 +2189,6 @@ void R_PrefetchStart(const char* listName) {
     }
 }
 
-// records what was loaded, in order, for next time
 static void R_PrefetchRecord(void) {
     if (r_loadedCount < R_PREFETCH_MAX && r_lastImageName[0]) {
         Q_strncpyz(r_loadedNames[r_loadedCount++], r_lastImageName, MAX_QPATH);
@@ -2633,14 +2196,6 @@ static void R_PrefetchRecord(void) {
     r_lastImageName[0] = '\0';
 }
 
-/*
-=================
-R_PrefetchFinish
-
-Closes the list in progress: waits on whatever is half decoded, releases what is left over and
-writes out what was loaded, for next time.
-=================
-*/
 void R_PrefetchFinish(void) {
     char fileName[MAX_QPATH];
     char* text;
@@ -2684,14 +2239,6 @@ void R_PrefetchFinish(void) {
     r_prefetchList[0] = '\0';
 }
 
-/*
-===============
-R_FindImageFile
-
-Finds or loads the given image.
-Returns NULL if it fails, not a default image.
-==============
-*/
 image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags) {
     image_t* image;
     int width, height;
@@ -2707,12 +2254,8 @@ image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags) {
 
     hash = generateHashValue(name);
 
-    //
-    // see if the image is already loaded
-    //
     for (image = hashTable[hash]; image; image = image->next) {
         if (!strcmp(name, image->imgName)) {
-            // the white image can be used with any set of parms, but other mismatches are errors
             if (strcmp(name, "*white")) {
                 if (image->flags != flags) {
                     ri.Printf(PRINT_DEVELOPER, "WARNING: reused image %s with mixed flags (%i vs %i)\n", name, image->flags, flags);
@@ -2722,15 +2265,9 @@ image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags) {
         }
     }
 
-    //
-    // load the pic from disk
-    //
-    // [ioquakelive] reading and decoding are measured apart from uploading: the first is CPU and
-    // can be spread across threads, the second goes through the GL context and cannot move
     {
         int64_t start = ri.Microseconds();
 
-        // [ioquakelive] if it came in ahead of time, it is already decoded
         if (R_PrefetchTake(name, &pic, &width, &height)) {
             picFormat = GL_RGBA8;
             picNumMips = 0;
@@ -2759,10 +2296,8 @@ image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags) {
         COM_StripExtension(name, normalName, MAX_QPATH);
         Q_strcat(normalName, MAX_QPATH, "_n");
 
-        // find normalmap in case it's there
         normalImage = R_FindImageFile(normalName, IMGTYPE_NORMAL, normalFlags);
 
-        // if not, generate it
         if (normalImage == NULL) {
             byte* normalPic;
             int x, y;
@@ -2773,7 +2308,6 @@ image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags) {
             RGBAtoNormal(pic, normalPic, width, height, flags & IMGFLAG_CLAMPTOEDGE);
 
 #if 1
-            // Brighten up the original image to work with the normal map
             RGBAtoYCoCgA(pic, pic, width, height);
             for (y = 0; y < height; y++) {
                 byte* picbyte = pic + y * width * 4;
@@ -2787,7 +2321,6 @@ image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags) {
             }
             YCoCgAtoRGBA(pic, pic, width, height);
 #else
-            // Blur original image's luma to work with the normal map
             {
                 byte* blurPic;
 
@@ -2816,8 +2349,6 @@ image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags) {
                     }
                 }
 
-                // FIXME: do borders
-
                 for (y = 1; y < height - 1; y++) {
                     byte* picbyte = pic + y * width * 4;
                     byte* blurbyte = blurPic + y * width;
@@ -2843,7 +2374,6 @@ image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags) {
         }
     }
 
-    // force mipmaps off if image is compressed but doesn't have enough mips
     if ((flags & IMGFLAG_MIPMAP) && picFormat != GL_RGBA8 && picFormat != GL_SRGB8_ALPHA8_EXT) {
         int wh = MAX(width, height);
         int neededMips = 0;
@@ -2860,18 +2390,12 @@ image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags) {
     return image;
 }
 
-/*
-================
-R_CreateDlightImage
-================
-*/
 #define DLIGHT_SIZE 16
 static void R_CreateDlightImage(void) {
     int x, y;
     byte data[DLIGHT_SIZE][DLIGHT_SIZE][4];
     int b;
 
-    // make a centered inverse-square falloff blob for dynamic lighting
     for (x = 0; x < DLIGHT_SIZE; x++) {
         for (y = 0; y < DLIGHT_SIZE; y++) {
             float d;
@@ -2893,11 +2417,6 @@ static void R_CreateDlightImage(void) {
     tr.dlightImage = R_CreateImage("*dlight", (byte*)data, DLIGHT_SIZE, DLIGHT_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE, 0);
 }
 
-/*
-=================
-R_InitFogTable
-=================
-*/
 void R_InitFogTable(void) {
     int i;
     float d;
@@ -2912,15 +2431,6 @@ void R_InitFogTable(void) {
     }
 }
 
-/*
-================
-R_FogFactor
-
-Returns a 0.0 to 1.0 fog density value
-This is called for each texel of the fog texture on startup
-and for each vertex of transparent shaders in fog dynamically
-================
-*/
 float R_FogFactor(float s, float t) {
     float d;
 
@@ -2935,7 +2445,6 @@ float R_FogFactor(float s, float t) {
         s *= (t - 1.0f / 32.0f) / (30.0f / 32.0f);
     }
 
-    // we need to leave a lot of clamp range
     s *= 8;
 
     if (s > 1.0) {
@@ -2947,11 +2456,6 @@ float R_FogFactor(float s, float t) {
     return d;
 }
 
-/*
-================
-R_CreateFogImage
-================
-*/
 #define FOG_S 256
 #define FOG_T 32
 static void R_CreateFogImage(void) {
@@ -2961,7 +2465,6 @@ static void R_CreateFogImage(void) {
 
     data = ri.Hunk_AllocateTempMemory(FOG_S * FOG_T * 4);
 
-    // S is distance, T is depth
     for (x = 0; x < FOG_S; x++) {
         for (y = 0; y < FOG_T; y++) {
             d = R_FogFactor((x + 0.5f) / FOG_S, (y + 0.5f) / FOG_T);
@@ -2976,17 +2479,11 @@ static void R_CreateFogImage(void) {
     ri.Hunk_FreeTempMemory(data);
 }
 
-/*
-==================
-R_CreateDefaultImage
-==================
-*/
 #define DEFAULT_SIZE 16
 static void R_CreateDefaultImage(void) {
     int x;
     byte data[DEFAULT_SIZE][DEFAULT_SIZE][4];
 
-    // the default image will be a box, to allow you to see the mapping coordinates
     Com_Memset(data, 32, sizeof(data));
     for (x = 0; x < DEFAULT_SIZE; x++) {
         data[0][x][0] =
@@ -3012,18 +2509,12 @@ static void R_CreateDefaultImage(void) {
     tr.defaultImage = R_CreateImage("*default", (byte*)data, DEFAULT_SIZE, DEFAULT_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_MIPMAP, 0);
 }
 
-/*
-==================
-R_CreateBuiltinImages
-==================
-*/
 void R_CreateBuiltinImages(void) {
     int x, y;
     byte data[DEFAULT_SIZE][DEFAULT_SIZE][4];
 
     R_CreateDefaultImage();
 
-    // we use a solid white image instead of disabling texturing
     Com_Memset(data, 255, sizeof(data));
     tr.whiteImage = R_CreateImage("*white", (byte*)data, 8, 8, IMGTYPE_COLORALPHA, IMGFLAG_NONE, 0);
 
@@ -3033,8 +2524,6 @@ void R_CreateBuiltinImages(void) {
         }
     }
 
-    // with overbright bits active, we need an image which is some fraction of full color,
-    // for default lightmaps, etc
     for (x = 0; x < DEFAULT_SIZE; x++) {
         for (y = 0; y < DEFAULT_SIZE; y++) {
             data[y][x][0] =
@@ -3047,7 +2536,6 @@ void R_CreateBuiltinImages(void) {
     tr.identityLightImage = R_CreateImage("*identityLight", (byte*)data, 8, 8, IMGTYPE_COLORALPHA, IMGFLAG_NONE, 0);
 
     for (x = 0; x < 32; x++) {
-        // scratchimage is usually used for cinematic drawing
         tr.scratchImage[x] = R_CreateImage("*scratch", (byte*)data, DEFAULT_SIZE, DEFAULT_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_PICMIP | IMGFLAG_CLAMPTOEDGE, 0);
     }
 
@@ -3063,8 +2551,6 @@ void R_CreateBuiltinImages(void) {
         hdrFormat = GL_RGBA8;
         if (r_hdr->integer && glRefConfig.textureFloat)
             hdrFormat = GL_RGBA16F_ARB;
-        // [QL] quakelive_steam.exe 0x4500b0: r_floatingPointFBOs gives Quake Live's frame buffers
-        // 16 bits a channel
         else if (r_postProcessActive->integer && r_floatingPointFBOs->integer)
             hdrFormat = GL_RGBA16;
 
@@ -3072,7 +2558,6 @@ void R_CreateBuiltinImages(void) {
 
         tr.renderImage = R_CreateImage("_render", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
 
-        // [QL] also the post effects' scratch: the bloom's last pass and the corrected captures
         if (r_shadowBlur->integer || r_hdr->integer || r_postProcessActive->integer)
             tr.screenScratchImage = R_CreateImage("screenScratch", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, rgbFormat);
 
@@ -3114,8 +2599,6 @@ void R_CreateBuiltinImages(void) {
 
         for (x = 0; x < MAX_DRAWN_PSHADOWS; x++) {
             tr.pshadowMaps[x] = R_CreateImage(va("*shadowmap%i", x), NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
-            // qglTextureParameterfEXT(tr.pshadowMaps[x]->texnum, GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
-            // qglTextureParameterfEXT(tr.pshadowMaps[x]->texnum, GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
         }
 
         if (r_sunlightMode->integer) {
@@ -3134,27 +2617,17 @@ void R_CreateBuiltinImages(void) {
     }
 }
 
-/*
-===============
-R_SetColorMappings
-===============
-*/
 void R_SetColorMappings(void) {
     int i, j;
     float g;
     int inf;
 
-    // setup the overbright lighting
-    // [QL] quakelive_steam.exe 0x4475d0: the colour correction gives the overbright in any window;
-    // without it the overbright needs the gamma ramp and full screen, as in Quake 3. The colour bits
-    // cap it, r_mapOverBrightBits doesn't
     tr.overbrightBits = r_overBrightBits->integer;
 
     if (!r_colorCorrectActive->integer && (!glConfig.deviceSupportsGamma || !glConfig.isFullscreen)) {
         tr.overbrightBits = 0;
     }
 
-    // allow 2 overbright bits in 24 bit, but only 1 in 16 bit
     if (glConfig.colorBits > 16) {
         if (tr.overbrightBits > 2) {
             tr.overbrightBits = 2;
@@ -3191,7 +2664,6 @@ void R_SetColorMappings(void) {
             inf = 255 * pow(i / 255.0f, 1.0f / g) + 0.5f;
         }
 
-        // [QL] the ramp gives the overbright when the colour correction doesn't, as in Quake 3
         inf <<= tr.overbrightBits;
 
         if (inf < 0) {
@@ -3211,31 +2683,18 @@ void R_SetColorMappings(void) {
         s_intensitytable[i] = j;
     }
 
-    // [QL] the colour correction does the gamma itself and leaves the screen's ramp alone
     if (!r_colorCorrectActive->integer && glConfig.deviceSupportsGamma) {
         GLimp_SetGamma(s_gammatable, s_gammatable, s_gammatable);
     }
 }
 
-/*
-===============
-R_InitImages
-===============
-*/
 void R_InitImages(void) {
     Com_Memset(hashTable, 0, sizeof(hashTable));
-    // build brightness translation tables
     R_SetColorMappings();
 
-    // create default texture and white texture
     R_CreateBuiltinImages();
 }
 
-/*
-===============
-R_DeleteTextures
-===============
-*/
 void R_DeleteTextures(void) {
     int i;
 
@@ -3249,22 +2708,6 @@ void R_DeleteTextures(void) {
     GL_BindNullTextures();
 }
 
-/*
-============================================================================
-
-SKINS
-
-============================================================================
-*/
-
-/*
-==================
-CommaParse
-
-This is unfortunate, but the skin files aren't
-compatible with our normal parsing rules.
-==================
-*/
 static char* CommaParse(char** data_p) {
     int c = 0, len;
     char* data;
@@ -3274,14 +2717,12 @@ static char* CommaParse(char** data_p) {
     len = 0;
     com_token[0] = 0;
 
-    // make sure incoming data is valid
     if (!data) {
         *data_p = NULL;
         return com_token;
     }
 
     while (1) {
-        // skip whitespace
         while ((c = *data) <= ' ') {
             if (!c) {
                 break;
@@ -3291,14 +2732,12 @@ static char* CommaParse(char** data_p) {
 
         c = *data;
 
-        // skip double slash comments
         if (c == '/' && data[1] == '/') {
             data += 2;
             while (*data && *data != '\n') {
                 data++;
             }
         }
-        // skip /* */ comments
         else if (c == '/' && data[1] == '*') {
             data += 2;
             while (*data && (*data != '*' || data[1] != '/')) {
@@ -3316,7 +2755,6 @@ static char* CommaParse(char** data_p) {
         return "";
     }
 
-    // handle quoted strings
     if (c == '\"') {
         data++;
         while (1) {
@@ -3333,7 +2771,6 @@ static char* CommaParse(char** data_p) {
         }
     }
 
-    // parse a regular word
     do {
         if (len < MAX_TOKEN_CHARS - 1) {
             com_token[len] = c;
@@ -3349,12 +2786,6 @@ static char* CommaParse(char** data_p) {
     return com_token;
 }
 
-/*
-===============
-RE_RegisterSkin
-
-===============
-*/
 qhandle_t RE_RegisterSkin(const char* name) {
     skinSurface_t parseSurfaces[MAX_SKIN_SURFACES];
     qhandle_t hSkin;
@@ -3379,18 +2810,16 @@ qhandle_t RE_RegisterSkin(const char* name) {
         return 0;
     }
 
-    // see if the skin is already loaded
     for (hSkin = 1; hSkin < tr.numSkins; hSkin++) {
         skin = tr.skins[hSkin];
         if (!Q_stricmp(skin->name, name)) {
             if (skin->numSurfaces == 0) {
-                return 0;  // default skin
+                return 0;
             }
             return hSkin;
         }
     }
 
-    // allocate a new skin
     if (tr.numSkins == MAX_SKINS) {
         ri.Printf(PRINT_WARNING, "WARNING: RE_RegisterSkin( '%s' ) MAX_SKINS hit\n", name);
         return 0;
@@ -3403,7 +2832,6 @@ qhandle_t RE_RegisterSkin(const char* name) {
 
     R_IssuePendingRenderCommands();
 
-    // If not a .skin file, load as a single shader
     if (strcmp(name + strlen(name) - 5, ".skin")) {
         skin->numSurfaces = 1;
         skin->surfaces = ri.Hunk_Alloc(sizeof(skinSurface_t), h_low);
@@ -3411,7 +2839,6 @@ qhandle_t RE_RegisterSkin(const char* name) {
         return hSkin;
     }
 
-    // load and parse the skin file
     ri.FS_ReadFile(name, &text.v);
     if (!text.c) {
         return 0;
@@ -3420,14 +2847,12 @@ qhandle_t RE_RegisterSkin(const char* name) {
     totalSurfaces = 0;
     text_p = text.c;
     while (text_p && *text_p) {
-        // get surface name
         token = CommaParse(&text_p);
         Q_strncpyz(surfName, token, sizeof(surfName));
 
         if (!token[0]) {
             break;
         }
-        // lowercase the surface name so skin compares are faster
         Q_strlwr(surfName);
 
         if (*text_p == ',') {
@@ -3438,7 +2863,6 @@ qhandle_t RE_RegisterSkin(const char* name) {
             continue;
         }
 
-        // parse the shader name
         token = CommaParse(&text_p);
 
         if (skin->numSurfaces < MAX_SKIN_SURFACES) {
@@ -3458,29 +2882,21 @@ qhandle_t RE_RegisterSkin(const char* name) {
                   totalSurfaces, MAX_SKIN_SURFACES, name);
     }
 
-    // never let a skin have 0 shaders
     if (skin->numSurfaces == 0) {
-        return 0;  // use default skin
+        return 0;
     }
 
-    // copy surfaces to skin
     skin->surfaces = ri.Hunk_Alloc(skin->numSurfaces * sizeof(skinSurface_t), h_low);
     memcpy(skin->surfaces, parseSurfaces, skin->numSurfaces * sizeof(skinSurface_t));
 
     return hSkin;
 }
 
-/*
-===============
-R_InitSkins
-===============
-*/
 void R_InitSkins(void) {
     skin_t* skin;
 
     tr.numSkins = 1;
 
-    // make the default skin have all default shaders
     skin = tr.skins[0] = ri.Hunk_Alloc(sizeof(skin_t), h_low);
     Q_strncpyz(skin->name, "<default skin>", sizeof(skin->name));
     skin->numSurfaces = 1;
@@ -3488,11 +2904,6 @@ void R_InitSkins(void) {
     skin->surfaces[0].shader = tr.defaultShader;
 }
 
-/*
-===============
-R_GetSkinByHandle
-===============
-*/
 skin_t* R_GetSkinByHandle(qhandle_t hSkin) {
     if (hSkin < 1 || hSkin >= tr.numSkins) {
         return tr.skins[0];
@@ -3500,11 +2911,6 @@ skin_t* R_GetSkinByHandle(qhandle_t hSkin) {
     return tr.skins[hSkin];
 }
 
-/*
-===============
-R_SkinList_f
-===============
-*/
 void R_SkinList_f(void) {
     int i, j;
     skin_t* skin;

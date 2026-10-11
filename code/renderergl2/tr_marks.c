@@ -19,22 +19,12 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// tr_marks.c -- polygon projection on the world polygons
-
 #include "tr_local.h"
-// #include "assert.h"
 
 #define MAX_VERTS_ON_POLY 64
 
-#define MARKER_OFFSET 0  // 1
+#define MARKER_OFFSET 0
 
-/*
-=============
-R_ChopPolyBehindPlane
-
-Out must have space for two more vertexes than in
-=============
-*/
 #define SIDE_FRONT 0
 #define SIDE_BACK 1
 #define SIDE_ON 2
@@ -47,7 +37,6 @@ static void R_ChopPolyBehindPlane(int numInPoints, vec3_t inPoints[MAX_VERTS_ON_
     float *p1, *p2, *clip;
     float d;
 
-    // don't clip if it might overflow
     if (numInPoints >= MAX_VERTS_ON_POLY - 2) {
         *numOutPoints = 0;
         return;
@@ -55,7 +44,6 @@ static void R_ChopPolyBehindPlane(int numInPoints, vec3_t inPoints[MAX_VERTS_ON_
 
     counts[0] = counts[1] = counts[2] = 0;
 
-    // determine sides for each point
     for (i = 0; i < numInPoints; i++) {
         dot = DotProduct(inPoints[i], normal);
         dot -= dist;
@@ -103,7 +91,6 @@ static void R_ChopPolyBehindPlane(int numInPoints, vec3_t inPoints[MAX_VERTS_ON_
             continue;
         }
 
-        // generate a split point
         p2 = inPoints[(i + 1) % numInPoints];
 
         d = dists[i] - dists[i + 1];
@@ -113,8 +100,6 @@ static void R_ChopPolyBehindPlane(int numInPoints, vec3_t inPoints[MAX_VERTS_ON_
             dot = dists[i] / d;
         }
 
-        // clip xyz
-
         for (j = 0; j < 3; j++) {
             clip[j] = p1[j] + dot * (p2[j] - p1[j]);
         }
@@ -123,18 +108,11 @@ static void R_ChopPolyBehindPlane(int numInPoints, vec3_t inPoints[MAX_VERTS_ON_
     }
 }
 
-/*
-=================
-R_BoxSurfaces_r
-
-=================
-*/
 void R_BoxSurfaces_r(mnode_t* node, vec3_t mins, vec3_t maxs, surfaceType_t** list, int listsize, int* listlength, vec3_t dir) {
     int s, c;
     msurface_t* surf;
     int* mark;
 
-    // do the tail recursion in a loop
     while (node->contents == -1) {
         s = BoxOnPlaneSide(mins, maxs, node->plane);
         if (s == 1) {
@@ -147,36 +125,27 @@ void R_BoxSurfaces_r(mnode_t* node, vec3_t mins, vec3_t maxs, surfaceType_t** li
         }
     }
 
-    // add the individual surfaces
     mark = tr.world->marksurfaces + node->firstmarksurface;
     c = node->nummarksurfaces;
     while (c--) {
         int* surfViewCount;
-        //
         if (*listlength >= listsize)
             break;
-        //
         surfViewCount = &tr.world->surfacesViewCount[*mark];
         surf = tr.world->surfaces + *mark;
-        // check if the surface has NOIMPACT or NOMARKS set
         if ((surf->shader->surfaceFlags & (SURF_NOIMPACT | SURF_NOMARKS)) || (surf->shader->contentFlags & CONTENTS_FOG)) {
             *surfViewCount = tr.viewCount;
         }
-        // extra check for surfaces to avoid list overflows
         else if (*(surf->data) == SF_FACE) {
-            // the face plane should go through the box
             s = BoxOnPlaneSide(mins, maxs, &surf->cullinfo.plane);
             if (s == 1 || s == 2) {
                 *surfViewCount = tr.viewCount;
             } else if (DotProduct(surf->cullinfo.plane.normal, dir) > -0.5) {
-                // don't add faces that make sharp angles with the projection direction
                 *surfViewCount = tr.viewCount;
             }
         } else if (*(surf->data) != SF_GRID &&
                    *(surf->data) != SF_TRIANGLES)
             *surfViewCount = tr.viewCount;
-        // check the viewCount because the surface may have
-        // already been added if it spans multiple leafs
         if (*surfViewCount != tr.viewCount) {
             *surfViewCount = tr.viewCount;
             list[*listlength] = surf->data;
@@ -186,17 +155,10 @@ void R_BoxSurfaces_r(mnode_t* node, vec3_t mins, vec3_t maxs, surfaceType_t** li
     }
 }
 
-/*
-=================
-R_AddMarkFragments
-
-=================
-*/
 void R_AddMarkFragments(int numClipPoints, vec3_t clipPoints[2][MAX_VERTS_ON_POLY], int numPlanes, vec3_t* normals, float* dists, int maxPoints, vec3_t pointBuffer, int maxFragments, markFragment_t* fragmentBuffer, int* returnedPoints, int* returnedFragments, vec3_t mins, vec3_t maxs) {
     int pingPong, i;
     markFragment_t* mf;
 
-    // chop the surface by all the bounding planes of the to be projected polygon
     pingPong = 0;
 
     for (i = 0; i < numPlanes; i++) {
@@ -208,27 +170,13 @@ void R_AddMarkFragments(int numClipPoints, vec3_t clipPoints[2][MAX_VERTS_ON_POL
             break;
         }
     }
-    // completely clipped away?
     if (numClipPoints == 0) {
         return;
     }
 
-    // add this fragment to the returned list
     if (numClipPoints + (*returnedPoints) > maxPoints) {
-        return;  // not enough space for this polygon
+        return;
     }
-    /*
-    // all the clip points should be within the bounding box
-    for ( i = 0 ; i < numClipPoints ; i++ ) {
-        int j;
-        for ( j = 0 ; j < 3 ; j++ ) {
-            if (clipPoints[pingPong][i][j] < mins[j] - 0.5) break;
-            if (clipPoints[pingPong][i][j] > maxs[j] + 0.5) break;
-        }
-        if (j < 3) break;
-    }
-    if (i < numClipPoints) return;
-    */
 
     mf = fragmentBuffer + (*returnedFragments);
     mf->firstPoint = (*returnedPoints);
@@ -239,12 +187,6 @@ void R_AddMarkFragments(int numClipPoints, vec3_t clipPoints[2][MAX_VERTS_ON_POL
     (*returnedFragments)++;
 }
 
-/*
-=================
-R_MarkFragments
-
-=================
-*/
 int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection, int maxPoints, vec3_t pointBuffer, int maxFragments, markFragment_t* fragmentBuffer) {
     int numsurfaces, numPlanes;
     int i, j, k, m, n;
@@ -268,12 +210,9 @@ int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection
         return 0;
     }
 
-    // increment view count for double check prevention
     tr.viewCount++;
 
-    //
     VectorNormalize2(projection, projectionDir);
-    // find all the brushes that are to be considered
     ClearBounds(mins, maxs);
     for (i = 0; i < numPoints; i++) {
         vec3_t temp;
@@ -281,14 +220,12 @@ int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection
         AddPointToBounds(points[i], mins, maxs);
         VectorAdd(points[i], projection, temp);
         AddPointToBounds(temp, mins, maxs);
-        // make sure we get all the leafs (also the one(s) in front of the hit surface)
         VectorMA(points[i], -20, projectionDir, temp);
         AddPointToBounds(temp, mins, maxs);
     }
 
     if (numPoints > MAX_VERTS_ON_POLY)
         numPoints = MAX_VERTS_ON_POLY;
-    // create the bounding planes for the to be projected polygon
     for (i = 0; i < numPoints; i++) {
         VectorSubtract(points[(i + 1) % numPoints], points[i], v1);
         VectorAdd(points[i], projection, v2);
@@ -297,7 +234,6 @@ int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection
         VectorNormalizeFast(normals[i]);
         dists[i] = DotProduct(normals[i], points[i]);
     }
-    // add near and far clipping planes for projection
     VectorCopy(projectionDir, normals[numPoints]);
     dists[numPoints] = DotProduct(normals[numPoints], points[0]) - 32;
     VectorCopy(projectionDir, normals[numPoints + 1]);
@@ -307,8 +243,6 @@ int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection
 
     numsurfaces = 0;
     R_BoxSurfaces_r(tr.world->nodes, mins, maxs, surfaces, 64, &numsurfaces, projectionDir);
-    // assert(numsurfaces <= 64);
-    // assert(numsurfaces != 64);
 
     returnedPoints = 0;
     returnedFragments = 0;
@@ -318,26 +252,6 @@ int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection
             cv = (srfBspSurface_t*)surfaces[i];
             for (m = 0; m < cv->height - 1; m++) {
                 for (n = 0; n < cv->width - 1; n++) {
-                    // We triangulate the grid and chop all triangles within
-                    // the bounding planes of the to be projected polygon.
-                    // LOD is not taken into account, not such a big deal though.
-                    //
-                    // It's probably much nicer to chop the grid itself and deal
-                    // with this grid as a normal SF_GRID surface so LOD will
-                    // be applied. However the LOD of that chopped grid must
-                    // be synced with the LOD of the original curve.
-                    // One way to do this; the chopped grid shares vertices with
-                    // the original curve. When LOD is applied to the original
-                    // curve the unused vertices are flagged. Now the chopped curve
-                    // should skip the flagged vertices. This still leaves the
-                    // problems with the vertices at the chopped grid edges.
-                    //
-                    // To avoid issues when LOD applied to "hollow curves" (like
-                    // the ones around many jump pads) we now just add a 2 unit
-                    // offset to the triangle vertices.
-                    // The offset is added in the vertex normal vector direction
-                    // so all triangles will still fit together.
-                    // The 2 unit offset should avoid pretty much all LOD problems.
                     vec3_t fNormal;
 
                     numClipPoints = 3;
@@ -353,13 +267,11 @@ int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection
                     VectorCopy(dv[1].xyz, clipPoints[0][2]);
                     R_VaoUnpackNormal(fNormal, dv[1].normal);
                     VectorMA(clipPoints[0][2], MARKER_OFFSET, fNormal, clipPoints[0][2]);
-                    // check the normal of this triangle
                     VectorSubtract(clipPoints[0][0], clipPoints[0][1], v1);
                     VectorSubtract(clipPoints[0][2], clipPoints[0][1], v2);
                     CrossProduct(v1, v2, normal);
                     VectorNormalizeFast(normal);
                     if (DotProduct(normal, projectionDir) < -0.1) {
-                        // add the fragments of this triangle
                         R_AddMarkFragments(numClipPoints, clipPoints,
                                            numPlanes, normals, dists,
                                            maxPoints, pointBuffer,
@@ -367,7 +279,7 @@ int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection
                                            &returnedPoints, &returnedFragments, mins, maxs);
 
                         if (returnedFragments == maxFragments) {
-                            return returnedFragments;  // not enough space for more fragments
+                            return returnedFragments;
                         }
                     }
 
@@ -380,13 +292,11 @@ int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection
                     VectorCopy(dv[cv->width + 1].xyz, clipPoints[0][2]);
                     R_VaoUnpackNormal(fNormal, dv[cv->width + 1].normal);
                     VectorMA(clipPoints[0][2], MARKER_OFFSET, fNormal, clipPoints[0][2]);
-                    // check the normal of this triangle
                     VectorSubtract(clipPoints[0][0], clipPoints[0][1], v1);
                     VectorSubtract(clipPoints[0][2], clipPoints[0][1], v2);
                     CrossProduct(v1, v2, normal);
                     VectorNormalizeFast(normal);
                     if (DotProduct(normal, projectionDir) < -0.05) {
-                        // add the fragments of this triangle
                         R_AddMarkFragments(numClipPoints, clipPoints,
                                            numPlanes, normals, dists,
                                            maxPoints, pointBuffer,
@@ -394,7 +304,7 @@ int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection
                                            &returnedPoints, &returnedFragments, mins, maxs);
 
                         if (returnedFragments == maxFragments) {
-                            return returnedFragments;  // not enough space for more fragments
+                            return returnedFragments;
                         }
                     }
                 }
@@ -402,7 +312,6 @@ int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection
         } else if (*surfaces[i] == SF_FACE) {
             srfBspSurface_t* surf = (srfBspSurface_t*)surfaces[i];
 
-            // check the normal of this face
             if (DotProduct(surf->cullPlane.normal, projectionDir) > -0.5) {
                 continue;
             }
@@ -413,14 +322,13 @@ int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection
                     VectorMA(v, MARKER_OFFSET, surf->cullPlane.normal, clipPoints[0][j]);
                 }
 
-                // add the fragments of this face
                 R_AddMarkFragments(3, clipPoints,
                                    numPlanes, normals, dists,
                                    maxPoints, pointBuffer,
                                    maxFragments, fragmentBuffer,
                                    &returnedPoints, &returnedFragments, mins, maxs);
                 if (returnedFragments == maxFragments) {
-                    return returnedFragments;  // not enough space for more fragments
+                    return returnedFragments;
                 }
             }
         } else if (*surfaces[i] == SF_TRIANGLES && r_marksOnTriangleMeshes->integer) {
@@ -434,13 +342,12 @@ int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection
                     VectorMA(v, MARKER_OFFSET, fNormal, clipPoints[0][j]);
                 }
 
-                // add the fragments of this face
                 R_AddMarkFragments(3, clipPoints,
                                    numPlanes, normals, dists,
                                    maxPoints, pointBuffer,
                                    maxFragments, fragmentBuffer, &returnedPoints, &returnedFragments, mins, maxs);
                 if (returnedFragments == maxFragments) {
-                    return returnedFragments;  // not enough space for more fragments
+                    return returnedFragments;
                 }
             }
         }

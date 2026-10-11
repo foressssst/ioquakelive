@@ -19,7 +19,6 @@ along with Reaction source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "tr_local.h"
 
 void RB_ToneMap(FBO_t* hdrFbo, ivec4_t hdrBox, FBO_t* ldrFbo, ivec4_t ldrBox, int autoExposure) {
@@ -29,7 +28,6 @@ void RB_ToneMap(FBO_t* hdrFbo, ivec4_t hdrBox, FBO_t* ldrFbo, ivec4_t ldrBox, in
 
     if (autoExposure) {
         if (lastFrameCount == 0 || tr.frameCount < lastFrameCount || tr.frameCount - lastFrameCount > 5) {
-            // determine average log luminance
             FBO_t *srcFbo, *dstFbo, *tmp;
             int size = 256;
 
@@ -42,17 +40,14 @@ void RB_ToneMap(FBO_t* hdrFbo, ivec4_t hdrBox, FBO_t* ldrFbo, ivec4_t ldrBox, in
             srcFbo = tr.textureScratchFbo[0];
             dstFbo = tr.textureScratchFbo[1];
 
-            // downscale to 1x1 texture
             while (size > 1) {
                 VectorSet4(srcBox, 0, 0, size, size);
-                // size >>= 2;
                 size >>= 1;
                 VectorSet4(dstBox, 0, 0, size, size);
 
                 if (size == 1)
                     dstFbo = tr.targetLevelsFbo;
 
-                // FBO_Blit(targetFbo, srcBox, NULL, tr.textureScratchFbo[nextScratch], dstBox, &tr.calclevels4xShader[1], NULL, 0);
                 FBO_FastBlit(srcFbo, srcBox, dstFbo, dstBox, GL_COLOR_BUFFER_BIT, GL_LINEAR);
 
                 tmp = srcFbo;
@@ -61,7 +56,6 @@ void RB_ToneMap(FBO_t* hdrFbo, ivec4_t hdrBox, FBO_t* ldrFbo, ivec4_t ldrBox, in
             }
         }
 
-        // blend with old log luminance for gradual change
         VectorSet4(srcBox, 0, 0, 0, 0);
 
         color[0] =
@@ -75,10 +69,9 @@ void RB_ToneMap(FBO_t* hdrFbo, ivec4_t hdrBox, FBO_t* ldrFbo, ivec4_t ldrBox, in
         FBO_Blit(tr.targetLevelsFbo, srcBox, NULL, tr.calcLevelsFbo, NULL, NULL, color, GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA);
     }
 
-    // tonemap
     color[0] =
         color[1] =
-            color[2] = pow(2, r_cameraExposure->value - autoExposure);  // exp2(r_cameraExposure->value);
+            color[2] = pow(2, r_cameraExposure->value - autoExposure);
     color[3] = 1.0f;
 
     if (autoExposure)
@@ -89,18 +82,7 @@ void RB_ToneMap(FBO_t* hdrFbo, ivec4_t hdrBox, FBO_t* ldrFbo, ivec4_t ldrBox, in
     FBO_Blit(hdrFbo, hdrBox, NULL, ldrFbo, ldrBox, &tr.tonemapShader, color, 0);
 }
 
-/*
-=============
-RB_BokehBlur
-
-
-Blurs a part of one framebuffer to another.
-
-Framebuffers can be identical.
-=============
-*/
 void RB_BokehBlur(FBO_t* src, ivec4_t srcBox, FBO_t* dst, ivec4_t dstBox, float blur) {
-    //	ivec4_t srcBox, dstBox;
     vec4_t color;
 
     blur *= 10.0f;
@@ -109,7 +91,6 @@ void RB_BokehBlur(FBO_t* src, ivec4_t srcBox, FBO_t* dst, ivec4_t dstBox, float 
         return;
 
     if (glRefConfig.framebufferObject) {
-        // bokeh blur
         if (blur > 0.0f) {
             ivec4_t quarterBox;
 
@@ -118,36 +99,28 @@ void RB_BokehBlur(FBO_t* src, ivec4_t srcBox, FBO_t* dst, ivec4_t dstBox, float 
             quarterBox[2] = tr.quarterFbo[0]->width;
             quarterBox[3] = -tr.quarterFbo[0]->height;
 
-            // create a quarter texture
-            // FBO_Blit(NULL, NULL, NULL, tr.quarterFbo[0], NULL, NULL, NULL, 0);
             FBO_FastBlit(src, srcBox, tr.quarterFbo[0], quarterBox, GL_COLOR_BUFFER_BIT, GL_LINEAR);
         }
 
 #ifndef HQ_BLUR
         if (blur > 1.0f) {
-            // create a 1/16th texture
-            // FBO_Blit(tr.quarterFbo[0], NULL, NULL, tr.textureScratchFbo[0], NULL, NULL, NULL, 0);
             FBO_FastBlit(tr.quarterFbo[0], NULL, tr.textureScratchFbo[0], NULL, GL_COLOR_BUFFER_BIT, GL_LINEAR);
         }
 #endif
 
         if (blur > 0.0f && blur <= 1.0f) {
-            // Crossfade original with quarter texture
             VectorSet4(color, 1, 1, 1, blur);
 
             FBO_Blit(tr.quarterFbo[0], NULL, NULL, dst, dstBox, NULL, color, GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA);
         }
 #ifndef HQ_BLUR
-        // ok blur, but can see some pixelization
         else if (blur > 1.0f && blur <= 2.0f) {
-            // crossfade quarter texture with 1/16th texture
             FBO_Blit(tr.quarterFbo[0], NULL, NULL, dst, dstBox, NULL, NULL, 0);
 
             VectorSet4(color, 1, 1, 1, blur - 1.0f);
 
             FBO_Blit(tr.textureScratchFbo[0], NULL, NULL, dst, dstBox, NULL, color, GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA);
         } else if (blur > 2.0f) {
-            // blur 1/16th texture then replace
             int i;
 
             for (i = 0; i < 2; i++) {
@@ -172,9 +145,8 @@ void RB_BokehBlur(FBO_t* src, ivec4_t srcBox, FBO_t* dst, ivec4_t dstBox, float 
 
             FBO_Blit(tr.textureScratchFbo[1], NULL, NULL, dst, dstBox, NULL, NULL, 0);
         }
-#else  // higher quality blur, but slower
+#else
         else if (blur > 1.0f) {
-            // blur quarter texture then replace
             int i;
 
             src = tr.quarterFbo[0];
@@ -255,7 +227,6 @@ static qboolean RB_UpdateSunFlareVis(void) {
     if (!tr.sunFlareQueryActive[tr.sunFlareQueryIndex])
         return qtrue;
 
-    /* debug code */
     if (0) {
         int iter;
         for (iter = 0;; ++iter) {
@@ -268,8 +239,6 @@ static qboolean RB_UpdateSunFlareVis(void) {
         ri.Printf(PRINT_DEVELOPER, "Waited %d iterations\n", iter);
     }
 
-    // Note: On desktop OpenGL this is a sample count (glRefConfig.occlusionQueryTarget == GL_SAMPLES_PASSED)
-    // but on OpenGL ES this is a boolean (glRefConfig.occlusionQueryTarget == GL_ANY_SAMPLES_PASSED)
     qglGetQueryObjectuiv(tr.sunFlareQuery[tr.sunFlareQueryIndex], GL_QUERY_RESULT, &sampleCount);
     return sampleCount > 0;
 }
@@ -280,7 +249,6 @@ void RB_SunRays(FBO_t* srcFbo, ivec4_t srcBox, FBO_t* dstFbo, ivec4_t dstBox) {
     const float cutoff = 0.25f;
     qboolean colorize = qtrue;
 
-    //	float w, h, w2, h2;
     mat4_t mvp;
     vec4_t pos, hpos;
 
@@ -291,7 +259,6 @@ void RB_SunRays(FBO_t* srcFbo, ivec4_t srcBox, FBO_t* dstFbo, ivec4_t dstBox) {
     if (!RB_UpdateSunFlareVis())
         return;
 
-    // From RB_DrawSun()
     {
         float dist;
         mat4_t trans, model;
@@ -300,22 +267,18 @@ void RB_SunRays(FBO_t* srcFbo, ivec4_t srcBox, FBO_t* dstFbo, ivec4_t dstBox) {
         Mat4Multiply(backEnd.viewParms.world.modelMatrix, trans, model);
         Mat4Multiply(backEnd.viewParms.projectionMatrix, model, mvp);
 
-        dist = backEnd.viewParms.zFar / 1.75;  // div sqrt(3)
+        dist = backEnd.viewParms.zFar / 1.75;
 
         VectorScale(tr.sunDirection, dist, pos);
     }
 
-    // project sun point
-    // Mat4Multiply(backEnd.viewParms.projectionMatrix, backEnd.viewParms.world.modelMatrix, mvp);
     Mat4Transform(mvp, pos, hpos);
 
-    // transform to UV coords
     hpos[3] = 0.5f / hpos[3];
 
     pos[0] = 0.5f + hpos[0] * hpos[3];
     pos[1] = 0.5f + hpos[1] * hpos[3];
 
-    // initialize quarter buffers
     {
         float mul = 1.f;
         ivec4_t rayBox, quarterBox;
@@ -334,7 +297,6 @@ void RB_SunRays(FBO_t* srcFbo, ivec4_t srcBox, FBO_t* dstFbo, ivec4_t dstBox) {
         quarterBox[2] = tr.quarterFbo[0]->width;
         quarterBox[3] = -tr.quarterFbo[0]->height;
 
-        // first, downsample the framebuffer
         if (colorize) {
             FBO_FastBlit(srcFbo, srcBox, tr.quarterFbo[0], quarterBox, GL_COLOR_BUFFER_BIT, GL_LINEAR);
             FBO_Blit(tr.sunRaysFbo, rayBox, NULL, tr.quarterFbo[0], quarterBox, NULL, color, GLS_SRCBLEND_DST_COLOR | GLS_DSTBLEND_ZERO);
@@ -343,7 +305,6 @@ void RB_SunRays(FBO_t* srcFbo, ivec4_t srcBox, FBO_t* dstFbo, ivec4_t dstBox) {
         }
     }
 
-    // radial blur passes, ping-ponging between the two quarter-size buffers
     {
         const float stretch_add = 2.f / 3.f;
         float stretch = 1.f + stretch_add;
@@ -354,7 +315,6 @@ void RB_SunRays(FBO_t* srcFbo, ivec4_t srcBox, FBO_t* dstFbo, ivec4_t dstBox) {
         }
     }
 
-    // add result back on top of the main buffer
     {
         float mul = 1.f;
 
@@ -420,7 +380,6 @@ static void RB_VBlur(FBO_t* srcFbo, FBO_t* dstFbo, float strength) {
 }
 
 void RB_GaussianBlur(FBO_t* srcFbo, FBO_t* dstFbo, float blur) {
-    // float mul = 1.f;
     float factor = Com_Clamp(0.f, 1.f, blur);
 
     if (factor <= 0.f)
@@ -432,20 +391,16 @@ void RB_GaussianBlur(FBO_t* srcFbo, FBO_t* dstFbo, float blur) {
 
         VectorSet4(color, 1, 1, 1, 1);
 
-        // first, downsample the framebuffer
         FBO_FastBlit(srcFbo, NULL, tr.quarterFbo[0], NULL, GL_COLOR_BUFFER_BIT, GL_LINEAR);
         FBO_FastBlit(tr.quarterFbo[0], NULL, tr.textureScratchFbo[0], NULL, GL_COLOR_BUFFER_BIT, GL_LINEAR);
 
-        // set the alpha channel
         qglColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE);
         FBO_BlitFromTexture(tr.whiteImage, NULL, NULL, tr.textureScratchFbo[0], NULL, NULL, color, GLS_DEPTHTEST_DISABLE);
         qglColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
-        // blur the tiny buffer horizontally and vertically
         RB_HBlur(tr.textureScratchFbo[0], tr.textureScratchFbo[1], factor);
         RB_VBlur(tr.textureScratchFbo[1], tr.textureScratchFbo[0], factor);
 
-        // finally, merge back to framebuffer
         VectorSet4(srcBox, 0, 0, tr.textureScratchFbo[0]->width, tr.textureScratchFbo[0]->height);
         VectorSet4(dstBox, 0, 0, glConfig.vidWidth, glConfig.vidHeight);
         color[3] = factor;

@@ -19,8 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// snd_mix.c -- portable code to mix sounds for snd_dma.c
-
 #include "client.h"
 #include "snd_local.h"
 
@@ -31,7 +29,7 @@ int* snd_p;
 int snd_linear_count;
 short* snd_out;
 
-#if !id386  // if configured not to use asm
+#if !id386
 
 void S_WriteLinearBlastStereo16(void) {
     int i;
@@ -56,7 +54,6 @@ void S_WriteLinearBlastStereo16(void) {
     }
 }
 #elif defined(__GNUC__)
-// uses snd_mixa.s
 void S_WriteLinearBlastStereo16(void);
 #else
 
@@ -113,34 +110,26 @@ void S_TransferStereo16(unsigned long* pbuf, int endtime) {
     ls_paintedtime = s_paintedtime;
 
     while (ls_paintedtime < endtime) {
-        // handle recirculating buffer issues
         lpos = ls_paintedtime % dma.fullsamples;
 
-        snd_out = (short*)pbuf + (lpos << 1);  // lpos * dma.channels
+        snd_out = (short*)pbuf + (lpos << 1);
 
         snd_linear_count = dma.fullsamples - lpos;
         if (ls_paintedtime + snd_linear_count > endtime)
             snd_linear_count = endtime - ls_paintedtime;
 
-        snd_linear_count <<= 1;  // snd_linear_count *= dma.channels
+        snd_linear_count <<= 1;
 
-        // write a linear blast of samples
         S_WriteLinearBlastStereo16();
 
         snd_p += snd_linear_count;
-        ls_paintedtime += (snd_linear_count >> 1);  // snd_linear_count / dma.channels
+        ls_paintedtime += (snd_linear_count >> 1);
 
         if (CL_VideoRecording())
-            CL_WriteAVIAudioFrame((byte*)snd_out, snd_linear_count << 1);  // snd_linear_count * (dma.samplebits/8)
+            CL_WriteAVIAudioFrame((byte*)snd_out, snd_linear_count << 1);
     }
 }
 
-/*
-===================
-S_TransferPaintBuffer
-
-===================
-*/
 void S_TransferPaintBuffer(int endtime) {
     int out_idx;
     int count;
@@ -153,15 +142,14 @@ void S_TransferPaintBuffer(int endtime) {
     pbuf = (unsigned long*)dma.buffer;
 
     if (s_testsound->integer) {
-        // write a fixed sine wave
         count = (endtime - s_paintedtime);
         for (i = 0; i < count; i++)
             paintbuffer[i].left = paintbuffer[i].right = sin((s_paintedtime + i) * 0.1) * 20000 * 256;
     }
 
-    if (dma.samplebits == 16 && dma.channels == 2) {  // optimized case
+    if (dma.samplebits == 16 && dma.channels == 2) {
         S_TransferStereo16(pbuf, endtime);
-    } else {  // general case
+    } else {
         p = (int*)paintbuffer;
         count = (endtime - s_paintedtime) * dma.channels;
         out_idx = ((unsigned int)s_paintedtime * dma.channels) % dma.samples;
@@ -178,7 +166,7 @@ void S_TransferPaintBuffer(int endtime) {
                 }
                 if (val > 0x7fff)
                     val = 0x7fff;
-                else if (val < -32767) /* clamp to one less than max to make division max out at -1.0f. */
+                else if (val < -32767)
                     val = -32767;
                 out[out_idx] = ((float)val) / 32767.0f;
                 out_idx = (out_idx + 1) % dma.samples;
@@ -218,14 +206,6 @@ void S_TransferPaintBuffer(int endtime) {
         }
     }
 }
-
-/*
-===============================================================================
-
-CHANNEL MIXING
-
-===============================================================================
-*/
 
 static void S_PaintChannelFrom16_scalar(channel_t* ch, const sfx_t* sc, int count, int sampleOffset, int bufferOffset) {
     int data, aoff, boff;
@@ -322,13 +302,6 @@ static void S_PaintChannelFrom16(channel_t* ch, const sfx_t* sc, int count, int 
     S_PaintChannelFrom16_scalar(ch, sc, count, sampleOffset, bufferOffset);
 }
 
-/*
-===================
-S_PaintChannels
-
-[QL] quakelive_steam.exe 0x4dc350
-===================
-*/
 void S_PaintChannels(int endtime) {
     int i;
     int end;
@@ -338,25 +311,17 @@ void S_PaintChannels(int endtime) {
     int ltime, count;
     int sampleOffset;
 
-    // [ioquakelive] the background mute is applied at the device (SNDDMA_Mute), at once; muting
-    // here left what was already mixed ahead playing for s_mixahead, and what came back after the
-    // window did was that much silence first
     snd_vol = s_volume->value * 255;
 
-    // Com_Printf ("%i to %i\n", s_paintedtime, endtime);
     while (s_paintedtime < endtime) {
-        // if paintbuffer is smaller than DMA buffer
-        // we may need to fill it multiple times
         end = endtime;
         if (endtime - s_paintedtime > PAINTBUFFER_SIZE) {
             end = s_paintedtime + PAINTBUFFER_SIZE;
         }
 
-        // clear the paint buffer and mix any raw samples...
         Com_Memset(paintbuffer, 0, sizeof(paintbuffer));
         for (stream = 0; stream < MAX_RAW_STREAMS; stream++) {
             if (s_rawend[stream] >= s_paintedtime) {
-                // copy from the streaming sound source
                 const portable_samplepair_t* rawsamples = s_rawsamples[stream];
                 const int stop = (end < s_rawend[stream]) ? end : s_rawend[stream];
                 for (i = s_paintedtime; i < stop; i++) {
@@ -367,7 +332,6 @@ void S_PaintChannels(int endtime) {
             }
         }
 
-        // paint in the channels.
         ch = s_channels;
         for (i = 0; i < MAX_CHANNELS; i++, ch++) {
             if (!ch->thesfx || (ch->leftvol < 0.25 && ch->rightvol < 0.25)) {
@@ -392,7 +356,6 @@ void S_PaintChannels(int endtime) {
             }
         }
 
-        // paint in the looped channels.
         ch = loop_channels;
         for (i = 0; i < numLoopChannels; i++, ch++) {
             if (!ch->thesfx || (!ch->leftvol && !ch->rightvol)) {
@@ -405,9 +368,6 @@ void S_PaintChannels(int endtime) {
             if (sc->soundData == NULL || sc->soundLength == 0) {
                 continue;
             }
-            // we might have to make two passes if it
-            // is a looping sound effect and the end of
-            // the sample is hit
             do {
                 sampleOffset = (ltime % sc->soundLength);
 
@@ -423,7 +383,6 @@ void S_PaintChannels(int endtime) {
             } while (ltime < end);
         }
 
-        // transfer out according to DMA format
         S_TransferPaintBuffer(end);
         s_paintedtime = end;
     }

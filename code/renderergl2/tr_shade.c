@@ -19,23 +19,7 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// tr_shade.c
-
 #include "tr_local.h"
-
-/*
-
-  THIS ENTIRE FILE IS BACK END
-
-  This file deals with applying shaders to surface data in the tess struct.
-*/
-
-/*
-==================
-R_DrawElements
-
-==================
-*/
 
 void R_DrawElements(int numIndexes, int firstIndex) {
     if (tess.useCacheVao) {
@@ -45,22 +29,8 @@ void R_DrawElements(int numIndexes, int firstIndex) {
     }
 }
 
-/*
-=============================================================
-
-SURFACE SHADERS
-
-=============================================================
-*/
-
 shaderCommands_t tess;
 
-/*
-=================
-R_BindAnimatedImageToTMU
-
-=================
-*/
 static void R_BindAnimatedImageToTMU(textureBundle_t* bundle, int tmu) {
     int64_t index;
 
@@ -76,17 +46,13 @@ static void R_BindAnimatedImageToTMU(textureBundle_t* bundle, int tmu) {
         return;
     }
 
-    // it is necessary to do this messy calc to make sure animations line up
-    // exactly with waveforms of the same frequency
     index = tess.shaderTime * bundle->imageAnimationSpeed * FUNCTABLE_SIZE;
     index >>= FUNCTABLE_SIZE2;
 
     if (index < 0) {
-        index = 0;  // may happen with shader time offsets
+        index = 0;
     }
 
-    // Windows x86 doesn't load renderer DLL with 64 bit modulus
-    // index %= bundle->numImageAnimations;
     while (index >= bundle->numImageAnimations) {
         index -= bundle->numImageAnimations;
     }
@@ -94,13 +60,6 @@ static void R_BindAnimatedImageToTMU(textureBundle_t* bundle, int tmu) {
     GL_BindToTMU(bundle->image[index], tmu);
 }
 
-/*
-================
-DrawTris
-
-Draws triangle outlines for debugging
-================
-*/
 static void DrawTris(shaderCommands_t* input) {
     GL_BindToTMU(tr.whiteImage, TB_COLORMAP);
 
@@ -124,26 +83,9 @@ static void DrawTris(shaderCommands_t* input) {
     qglDepthRange(0, 1);
 }
 
-/*
-================
-DrawNormals
-
-Draws vertex normals for debugging
-================
-*/
 static void DrawNormals(shaderCommands_t* input) {
-    // FIXME: implement this
 }
 
-/*
-==============
-RB_BeginSurface
-
-We must set some things up before beginning any tesselation,
-because a surface may be forced to perform a RB_End due
-to overflow.
-==============
-*/
 void RB_BeginSurface(shader_t* shader, int fogNum, int cubemapIndex) {
     shader_t* state = (shader->remappedShader) ? shader->remappedShader : shader;
 
@@ -153,8 +95,8 @@ void RB_BeginSurface(shader_t* shader, int fogNum, int cubemapIndex) {
     tess.shader = state;
     tess.fogNum = fogNum;
     tess.cubemapIndex = cubemapIndex;
-    tess.dlightBits = 0;   // will be OR'd in by surface functions
-    tess.pshadowBits = 0;  // will be OR'd in by surface functions
+    tess.dlightBits = 0;
+    tess.pshadowBits = 0;
     tess.xstages = state->stages;
     tess.numPasses = state->numUnfoggedPasses;
     tess.currentStageIteratorFunc = state->optimalStageIteratorFunc;
@@ -291,7 +233,6 @@ static void ComputeTexMods(shaderStage_t* pStage, int bundleNum, vec4_t outMatri
         }
     }
 
-    // if turb isn't used, only one matrix is needed
     if (!hasTurb) {
         tm = 0;
 
@@ -321,12 +262,10 @@ static void ComputeTexMods(shaderStage_t* pStage, int bundleNum, vec4_t outMatri
 }
 
 static void ComputeDeformValues(int* deformGen, vec5_t deformParams) {
-    // u_DeformGen
     *deformGen = DGEN_NONE;
     if (!ShaderRequiresCPUDeforms(tess.shader)) {
         deformStage_t* ds;
 
-        // only support the first one
         ds = &tess.shader->deforms[0];
 
         switch (ds->deformation) {
@@ -344,9 +283,9 @@ static void ComputeDeformValues(int* deformGen, vec5_t deformParams) {
                 *deformGen = DGEN_BULGE;
 
                 deformParams[0] = 0;
-                deformParams[1] = ds->bulgeHeight;  // amplitude
-                deformParams[2] = ds->bulgeWidth;   // phase
-                deformParams[3] = ds->bulgeSpeed;   // frequency
+                deformParams[1] = ds->bulgeHeight;
+                deformParams[2] = ds->bulgeWidth;
+                deformParams[3] = ds->bulgeSpeed;
                 deformParams[4] = 0;
                 break;
 
@@ -376,7 +315,7 @@ static void ProjectDlightTexture(void) {
         vec4_t vector;
 
         if (!(tess.dlightBits & (1 << l))) {
-            continue;  // this surface definitely doesn't have any of this light
+            continue;
         }
 
         dl = &backEnd.refdef.dlights[l];
@@ -414,8 +353,6 @@ static void ProjectDlightTexture(void) {
 
         GL_BindToTMU(tr.dlightImage, TB_COLORMAP);
 
-        // include GLS_DEPTHFUNC_EQUAL so alpha tested surfaces don't add light
-        // where they aren't rendered
         if (dl->additive) {
             GL_State(GLS_ATEST_GT_0 | GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL);
         } else {
@@ -432,11 +369,6 @@ static void ProjectDlightTexture(void) {
     }
 }
 
-// [QL] quakelive_steam.exe 0x4521f0 (ComputeColors): Quake 3's colours. No stage gets an overbright of
-// its own; the overbright goes on the whole frame at the end, through the colour correction or the
-// gamma ramp, and tr.identityLight brings down what comes from vertices, waves (RB_CalcWaveColorSingle)
-// and identityLighting to match. Additive effects so pile up in the darker frame and come out twice as
-// bright, as in retail.
 static void ComputeShaderColors(shaderStage_t* pStage, vec4_t baseColor, vec4_t vertColor, int blend) {
     fog_t* fog;
 
@@ -450,9 +382,6 @@ static void ComputeShaderColors(shaderStage_t* pStage, vec4_t baseColor, vec4_t 
             vertColor[2] =
                 vertColor[3] = 0.0f;
 
-    //
-    // rgbGen
-    //
     switch (pStage->rgbGen) {
         case CGEN_EXACT_VERTEX:
         case CGEN_EXACT_VERTEX_LIT:
@@ -533,9 +462,6 @@ static void ComputeShaderColors(shaderStage_t* pStage, vec4_t baseColor, vec4_t 
             break;
     }
 
-    //
-    // alphaGen
-    //
     switch (pStage->alphaGen) {
         case AGEN_SKIP:
             break;
@@ -570,19 +496,16 @@ static void ComputeShaderColors(shaderStage_t* pStage, vec4_t baseColor, vec4_t 
         case AGEN_IDENTITY:
         case AGEN_LIGHTING_SPECULAR:
         case AGEN_PORTAL:
-            // Done entirely in vertex program
             baseColor[3] = 1.0f;
             vertColor[3] = 0.0f;
             break;
     }
 
-        // FIXME: find some way to implement this.
 #if 0
-	// if in greyscale rendering mode turn all color values into greyscale.
 	if(r_greyscale->integer)
 	{
 		int scale;
-		
+
 		for(i = 0; i < tess.numVertexes; i++)
 		{
 			scale = (tess.svars.colors[i][0] + tess.svars.colors[i][1] + tess.svars.colors[i][2]) / 3;
@@ -593,7 +516,6 @@ static void ComputeShaderColors(shaderStage_t* pStage, vec4_t baseColor, vec4_t 
 }
 
 static void ComputeFogValues(vec4_t fogDistanceVector, vec4_t fogDepthVector, float* eyeT) {
-    // from RB_CalcFogTexCoords()
     fog_t* fog;
     vec3_t local;
 
@@ -608,10 +530,8 @@ static void ComputeFogValues(vec4_t fogDistanceVector, vec4_t fogDepthVector, fl
     fogDistanceVector[2] = -backEnd.or.modelMatrix[10];
     fogDistanceVector[3] = DotProduct(local, backEnd.viewParms.or.axis[0]);
 
-    // scale the fog vectors based on the fog's thickness
     VectorScale4(fogDistanceVector, fog->tcScale, fogDistanceVector);
 
-    // rotate the gradient vector for this orientation
     if (fog->hasSurface) {
         fogDepthVector[0] = fog->surface[0] * backEnd.or.axis[0][0] +
                             fog->surface[1] * backEnd.or.axis[0][1] + fog->surface[2] * backEnd.or.axis[0][2];
@@ -623,7 +543,7 @@ static void ComputeFogValues(vec4_t fogDistanceVector, vec4_t fogDepthVector, fl
 
         *eyeT = DotProduct(backEnd.or.viewOrigin, fogDepthVector) + fogDepthVector[3];
     } else {
-        *eyeT = 1;  // non-surface fog always has eye inside
+        *eyeT = 1;
     }
 }
 
@@ -658,8 +578,6 @@ static void ComputeFogColorMask(shaderStage_t* pStage, vec4_t fogColorMask) {
 
 static void ForwardDlight(void) {
     int l;
-    // vec3_t	origin;
-    // float	scale;
     float radius;
 
     int deformGen;
@@ -686,15 +604,12 @@ static void ForwardDlight(void) {
         vec4_t texMatrix[8];
 
         if (!(tess.dlightBits & (1 << l))) {
-            continue;  // this surface definitely doesn't have any of this light
+            continue;
         }
 
         dl = &backEnd.refdef.dlights[l];
-        // VectorCopy( dl->transformed, origin );
         radius = dl->radius;
-        // scale = 1.0f / radius;
 
-        // if (pStage->glslShaderGroup == tr.lightallShader)
         {
             int index = pStage->glslShaderIndex;
 
@@ -763,8 +678,6 @@ static void ForwardDlight(void) {
         GLSL_SetUniformVec4(sp, UNIFORM_NORMALSCALE, pStage->normalScale);
         GLSL_SetUniformVec4(sp, UNIFORM_SPECULARSCALE, pStage->specularScale);
 
-        // include GLS_DEPTHFUNC_EQUAL so alpha tested surfaces don't add light
-        // where they aren't rendered
         GL_State(GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL);
         GLSL_SetUniformInt(sp, UNIFORM_ALPHATEST, 0);
 
@@ -772,16 +685,6 @@ static void ForwardDlight(void) {
 
         if (pStage->bundle[TB_DIFFUSEMAP].image[0])
             R_BindAnimatedImageToTMU(&pStage->bundle[TB_DIFFUSEMAP], TB_DIFFUSEMAP);
-
-        // bind textures that are sampled and used in the glsl shader, and
-        // bind whiteImage to textures that are sampled but zeroed in the glsl shader
-        //
-        // alternatives:
-        //  - use the last bound texture
-        //     -> costs more to sample a higher res texture then throw out the result
-        //  - disable texture sampling in glsl shader with #ifdefs, as before
-        //     -> increases the number of shaders that must be compiled
-        //
 
         if (pStage->bundle[TB_NORMALMAP].image[0]) {
             R_BindAnimatedImageToTMU(&pStage->bundle[TB_NORMALMAP], TB_NORMALMAP);
@@ -815,10 +718,6 @@ static void ForwardDlight(void) {
 
         GLSL_SetUniformInt(sp, UNIFORM_TCGEN0, pStage->bundle[0].tcGen);
 
-        //
-        // draw
-        //
-
         R_DrawElements(input->numIndexes, input->firstIndex);
 
         backEnd.pc.c_totalIndexes += tess.numIndexes;
@@ -849,7 +748,7 @@ static void ProjectPshadowVBOGLSL(void) {
         vec4_t vector;
 
         if (!(tess.pshadowBits & (1 << l))) {
-            continue;  // this surface definitely doesn't have any of this shadow
+            continue;
         }
 
         ps = &backEnd.refdef.pshadows[l];
@@ -877,31 +776,17 @@ static void ProjectPshadowVBOGLSL(void) {
 
         GLSL_SetUniformFloat(sp, UNIFORM_LIGHTRADIUS, radius);
 
-        // include GLS_DEPTHFUNC_EQUAL so alpha tested surfaces don't add light
-        // where they aren't rendered
         GL_State(GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA | GLS_DEPTHFUNC_EQUAL);
         GLSL_SetUniformInt(sp, UNIFORM_ALPHATEST, 0);
 
         GL_BindToTMU(tr.pshadowMaps[l], TB_DIFFUSEMAP);
 
-        //
-        // draw
-        //
-
         R_DrawElements(input->numIndexes, input->firstIndex);
 
         backEnd.pc.c_totalIndexes += tess.numIndexes;
-        // backEnd.pc.c_dlightIndexes += tess.numIndexes;
     }
 }
 
-/*
-===================
-RB_FogPass
-
-Blends a fog texture on top of everything else
-===================
-*/
 static void RB_FogPass(void) {
     fog_t* fog;
     vec4_t color;
@@ -1194,7 +1079,6 @@ static void RB_IterateStagesGeneric(shaderCommands_t* input) {
             Vector4Copy(pStage->specularScale, specularScale);
 
             if (renderToCubemap) {
-                // force specular to nonmetal if rendering cubemaps
                 if (r_pbr->integer)
                     specularScale[1] = 0.0f;
             }
@@ -1202,11 +1086,6 @@ static void RB_IterateStagesGeneric(shaderCommands_t* input) {
             GLSL_SetUniformVec4(sp, UNIFORM_SPECULARSCALE, specularScale);
         }
 
-        // GLSL_SetUniformFloat(sp, UNIFORM_MAPLIGHTSCALE, backEnd.refdef.mapLightScale);
-
-        //
-        // do multitexture
-        //
         if (backEnd.depthFill) {
             if (!(pStage->stateBits & GLS_ATEST_BITS))
                 GL_BindToTMU(tr.whiteImage, TB_COLORMAP);
@@ -1217,7 +1096,6 @@ static void RB_IterateStagesGeneric(shaderCommands_t* input) {
             vec4_t enableTextures;
 
             if (r_sunlightMode->integer && (backEnd.viewParms.flags & VPF_USESUNLIGHT) && (pStage->glslShaderIndex & LIGHTDEF_LIGHTTYPE_MASK)) {
-                // FIXME: screenShadowImage is NULL if no framebuffers
                 if (tr.screenShadowImage)
                     GL_BindToTMU(tr.screenShadowImage, TB_SHADOWMAP);
                 GLSL_SetUniformVec3(sp, UNIFORM_PRIMARYLIGHTAMBIENT, backEnd.refdef.sunAmbCol);
@@ -1259,15 +1137,6 @@ static void RB_IterateStagesGeneric(shaderCommands_t* input) {
                 if (pStage->bundle[TB_LIGHTMAP].image[0])
                     R_BindAnimatedImageToTMU(&pStage->bundle[TB_LIGHTMAP], TB_LIGHTMAP);
 
-                // bind textures that are sampled and used in the glsl shader, and
-                // bind whiteImage to textures that are sampled but zeroed in the glsl shader
-                //
-                // alternatives:
-                //  - use the last bound texture
-                //     -> costs more to sample a higher res texture then throw out the result
-                //  - disable texture sampling in glsl shader with #ifdefs, as before
-                //     -> increases the number of shaders that must be compiled
-                //
                 if (light && !fastLight) {
                     if (pStage->bundle[TB_NORMALMAP].image[0]) {
                         R_BindAnimatedImageToTMU(&pStage->bundle[TB_NORMALMAP], TB_NORMALMAP);
@@ -1296,20 +1165,13 @@ static void RB_IterateStagesGeneric(shaderCommands_t* input) {
             R_BindAnimatedImageToTMU(&pStage->bundle[0], 0);
             R_BindAnimatedImageToTMU(&pStage->bundle[1], 1);
         } else {
-            //
-            // set state
-            //
             R_BindAnimatedImageToTMU(&pStage->bundle[0], 0);
         }
 
-        //
-        // testing cube map
-        //
         if (!(tr.viewParms.flags & VPF_NOCUBEMAPS) && input->cubemapIndex && r_cubeMapping->integer) {
             vec4_t vec;
             cubemap_t* cubemap = &tr.cubemaps[input->cubemapIndex - 1];
 
-            // FIXME: cubemap image could be NULL if cubemap isn't renderer or loaded
             if (cubemap->image)
                 GL_BindToTMU(cubemap->image, TB_CUBEMAP);
 
@@ -1321,12 +1183,8 @@ static void RB_IterateStagesGeneric(shaderCommands_t* input) {
             GLSL_SetUniformVec4(sp, UNIFORM_CUBEMAPINFO, vec);
         }
 
-        //
-        // draw
-        //
         R_DrawElements(input->numIndexes, input->firstIndex);
 
-        // allow skipping out to show just lightmaps during development
         if (r_lightmap->integer && (pStage->bundle[0].isLightmap || pStage->bundle[1].isLightmap)) {
             break;
         }
@@ -1379,23 +1237,13 @@ static void RB_RenderShadowmap(shaderCommands_t* input) {
         GL_State(0);
         GLSL_SetUniformInt(sp, UNIFORM_ALPHATEST, 0);
 
-        //
-        // do multitexture
-        //
-        // if ( pStage->glslShaderGroup )
         {
-            //
-            // draw
-            //
 
             R_DrawElements(input->numIndexes, input->firstIndex);
         }
     }
 }
 
-/*
-** RB_StageIteratorGeneric
-*/
 void RB_StageIteratorGeneric(void) {
     shaderCommands_t* input;
     unsigned int vertexAttribs = 0;
@@ -1418,18 +1266,10 @@ void RB_StageIteratorGeneric(void) {
         backEnd.pc.c_staticVaoDraws++;
     }
 
-    //
-    // log this call
-    //
     if (r_logFile->integer) {
-        // don't just call LogComment, or we will get
-        // a call to va() every frame!
         GLimp_LogComment(va("--- RB_StageIteratorGeneric( %s ) ---\n", tess.shader->name));
     }
 
-    //
-    // set face culling appropriately
-    //
     if (input->shader->cullType == CT_TWO_SIDED) {
         GL_Cull(CT_TWO_SIDED);
     } else {
@@ -1450,20 +1290,13 @@ void RB_StageIteratorGeneric(void) {
             GL_Cull(CT_BACK_SIDED);
     }
 
-    // set polygon offset if necessary
     if (input->shader->polygonOffset) {
         qglEnable(GL_POLYGON_OFFSET_FILL);
     }
 
-    //
-    // render depth if in depthfill mode
-    //
     if (backEnd.depthFill) {
         RB_IterateStagesGeneric(input);
 
-        //
-        // reset polygon offset
-        //
         if (input->shader->polygonOffset) {
             qglDisable(GL_POLYGON_OFFSET_FILL);
         }
@@ -1471,16 +1304,10 @@ void RB_StageIteratorGeneric(void) {
         return;
     }
 
-    //
-    // render shadowmap if in shadowmap mode
-    //
     if (backEnd.viewParms.flags & VPF_SHADOWMAP) {
         if (input->shader->sort == SS_OPAQUE) {
             RB_RenderShadowmap(input);
         }
-        //
-        // reset polygon offset
-        //
         if (input->shader->polygonOffset) {
             qglDisable(GL_POLYGON_OFFSET_FILL);
         }
@@ -1488,22 +1315,12 @@ void RB_StageIteratorGeneric(void) {
         return;
     }
 
-    //
-    //
-    // call shader function
-    //
     RB_IterateStagesGeneric(input);
 
-    //
-    // pshadows!
-    //
     if (glRefConfig.framebufferObject && r_shadows->integer == 4 && tess.pshadowBits && tess.shader->sort <= SS_OPAQUE && !(tess.shader->surfaceFlags & (SURF_NODLIGHT | SURF_SKY))) {
         ProjectPshadowVBOGLSL();
     }
 
-    //
-    // now do any dynamic lighting needed
-    //
     if (tess.dlightBits && tess.shader->sort <= SS_OPAQUE && r_lightmap->integer == 0 && !(tess.shader->surfaceFlags & (SURF_NODLIGHT | SURF_SKY))) {
         if (tess.shader->numUnfoggedPasses == 1 && tess.xstages[0]->glslShaderGroup == tr.lightallShader && (tess.xstages[0]->glslShaderIndex & LIGHTDEF_LIGHTTYPE_MASK) && r_dlightMode->integer) {
             ForwardDlight();
@@ -1512,24 +1329,15 @@ void RB_StageIteratorGeneric(void) {
         }
     }
 
-    //
-    // now do fog
-    //
     if (tess.fogNum && tess.shader->fogPass) {
         RB_FogPass();
     }
 
-    //
-    // reset polygon offset
-    //
     if (input->shader->polygonOffset) {
         qglDisable(GL_POLYGON_OFFSET_FILL);
     }
 }
 
-/*
-** RB_EndSurface
-*/
 void RB_EndSurface(void) {
     shaderCommands_t* input;
 
@@ -1551,39 +1359,27 @@ void RB_EndSurface(void) {
         return;
     }
 
-    // for debugging of sort order issues, stop rendering after a given sort value
     if (r_debugSort->integer && r_debugSort->integer < tess.shader->sort) {
         return;
     }
 
     if (tess.useCacheVao) {
-        // upload indexes now
         VaoCache_Commit();
     }
 
-    //
-    // update performance counters
-    //
     backEnd.pc.c_shaders++;
     backEnd.pc.c_vertexes += tess.numVertexes;
     backEnd.pc.c_indexes += tess.numIndexes;
     backEnd.pc.c_totalIndexes += tess.numIndexes * tess.numPasses;
 
-    //
-    // call off to shader specific tess end function
-    //
     tess.currentStageIteratorFunc();
 
-    //
-    // draw debugging stuff
-    //
     if (r_showtris->integer) {
         DrawTris(input);
     }
     if (r_shownormals->integer) {
         DrawNormals(input);
     }
-    // clear shader so we can tell we don't have any unclosed surfaces
     tess.numIndexes = 0;
     tess.numVertexes = 0;
     tess.firstIndex = 0;

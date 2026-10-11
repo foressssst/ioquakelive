@@ -19,8 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-
 #include "g_local.h"
 
 qboolean G_SpawnString(const char* key, const char* defaultString, char** out) {
@@ -28,7 +26,6 @@ qboolean G_SpawnString(const char* key, const char* defaultString, char** out) {
 
     if (!level.spawning) {
         *out = (char*)defaultString;
-        //		G_Error( "G_SpawnString() called while not spawning" );
     }
 
     for (i = 0; i < level.numSpawnVars; i++) {
@@ -69,24 +66,17 @@ qboolean G_SpawnVector(const char* key, const char* defaultString, float* out) {
     return present;
 }
 
-//
-// fields are needed for spawning from the entity string
-//
-// [QL] Type constants match the binary switch at 0x10065e00: F_VECTOR is 4,
-// F_ANGLEHACK 5 (Q3's numbering, kept by the QL fields[] table), F_IGNORE=9 for
-// the "light" key. The gap types (3,6,7,8) are unused by QL but kept so the
-// numbering stays byte-exact.
 typedef enum {
-    F_INT,        // 0
-    F_FLOAT,      // 1
-    F_STRING,     // 2
-    F_LSTRING,    // 3  not used in QL fields table
-    F_VECTOR,     // 4
-    F_ANGLEHACK,  // 5
-    F_ENTITY,     // 6  unused
-    F_ITEM,       // 7  unused
-    F_CLIENT,     // 8  unused
-    F_IGNORE      // 9  [QL] parsed but discarded (e.g. "light")
+    F_INT,
+    F_FLOAT,
+    F_STRING,
+    F_LSTRING,
+    F_VECTOR,
+    F_ANGLEHACK,
+    F_ENTITY,
+    F_ITEM,
+    F_CLIENT,
+    F_IGNORE
 } fieldtype_t;
 
 typedef struct
@@ -96,10 +86,6 @@ typedef struct
     fieldtype_t type;
 } field_t;
 
-// [QL] Order and contents match the binary fields[] table at 0x100803d0 (24
-// entries). QL vs Q3: adds cvar, tourPointTarget, tourPointTargetName, noise
-// (as a real field rather than a manual G_SpawnString) and light (F_IGNORE).
-// QL has NO "target2" field (not parsed from the entity string).
 field_t fields[] = {
     {"classname", FOFS(classname), F_STRING},
     {"origin", FOFS(s.origin), F_VECTOR},
@@ -110,16 +96,16 @@ field_t fields[] = {
     {"target", FOFS(target), F_STRING},
     {"targetname", FOFS(targetname), F_STRING},
     {"message", FOFS(message), F_STRING},
-    {"cvar", FOFS(cvar), F_STRING},                                // [QL] target_cvar sets this cvar
-    {"tourPointTarget", FOFS(tourPointTarget), F_STRING},          // [QL]
-    {"tourPointTargetName", FOFS(tourPointTargetName), F_STRING},  // [QL]
-    {"noise", FOFS(noise), F_STRING},                              // [QL]
+    {"cvar", FOFS(cvar), F_STRING},
+    {"tourPointTarget", FOFS(tourPointTarget), F_STRING},
+    {"tourPointTargetName", FOFS(tourPointTargetName), F_STRING},
+    {"noise", FOFS(noise), F_STRING},
     {"team", FOFS(team), F_STRING},
     {"wait", FOFS(wait), F_FLOAT},
     {"random", FOFS(random), F_FLOAT},
     {"count", FOFS(count), F_INT},
     {"health", FOFS(health), F_INT},
-    {"light", 0, F_IGNORE},                                        // [QL] parsed but discarded
+    {"light", 0, F_IGNORE},
     {"dmg", FOFS(damage), F_INT},
     {"angles", FOFS(s.angles), F_VECTOR},
     {"angle", FOFS(s.angles), F_ANGLEHACK},
@@ -198,8 +184,6 @@ void SP_team_neutralobelisk(gentity_t* ent);
 
 void SP_item_botroam(gentity_t* ent) {}
 
-// [QL] 0x10059ee0: the renderer draws an advertisement from the map itself, so the entity goes;
-// a map being built (com_build) must give each one its cellId
 void SP_advertisement(gentity_t *ent) {
     char *s;
 
@@ -212,18 +196,15 @@ void SP_advertisement(gentity_t *ent) {
     G_FreeEntity(ent);
 }
 
-// defined in g_gametype_dom.c / g_gametype_race.c
 void SP_team_dom_point(gentity_t *ent);
 void SP_race_point(gentity_t *ent);
 
 spawn_t spawns[] = {
-    // info entities don't do anything at all, but provide positional
-    // information for things controlled by other processes
     {"info_player_start", SP_info_player_start},
     {"info_player_deathmatch", SP_info_player_deathmatch},
     {"info_player_intermission", SP_info_player_intermission},
     {"info_null", SP_info_null},
-    {"info_notnull", SP_info_notnull},  // use target_position instead
+    {"info_notnull", SP_info_notnull},
     {"info_camp", SP_info_camp},
 
     {"func_plat", SP_func_plat},
@@ -235,22 +216,15 @@ spawn_t spawns[] = {
     {"func_pendulum", SP_func_pendulum},
     {"func_train", SP_func_train},
     {"func_group", SP_info_null},
-    {"func_timer", SP_func_timer},  // rename trigger_timer?
+    {"func_timer", SP_func_timer},
 
-    // Triggers are brush objects that cause an effect when contacted
-    // by a living player, usually involving firing targets.
-    // While almost everything could be done with
-    // a single trigger class and different targets, triggered effects
-    // could not be client side predicted (push and teleport).
     {"trigger_always", SP_trigger_always},
     {"trigger_multiple", SP_trigger_multiple},
     {"trigger_push", SP_trigger_push},
     {"trigger_teleport", SP_trigger_teleport},
     {"trigger_hurt", SP_trigger_hurt},
-    {"trigger_capturezone", SP_trigger_capturezone},  // [QL] 0x1006be70
+    {"trigger_capturezone", SP_trigger_capturezone},
 
-    // targets perform no action by themselves, but must be triggered
-    // by another entity
     {"target_give", SP_target_give},
     {"target_remove_keys", SP_target_remove_keys},
     {"target_remove_powerups", SP_target_remove_powerups},
@@ -292,26 +266,14 @@ spawn_t spawns[] = {
 
     {"item_botroam", SP_item_botroam},
 
-    // [QL] QL-specific entity types
     {"advertisement", SP_advertisement},
     {"team_dom_point", SP_team_dom_point},
     {"race_point", SP_race_point},
 
-    // [QL] qagamex86.dll spawns[] (0x10080560) lists info_tour_point right after
-    // advertisement (0x10080710 -> SP_info_tour_point 0x1005a1f0; the 0x1005a260 an
-    // older note gave falls inside it).
     {"info_tour_point", SP_info_tour_point},
 
     {NULL, 0}};
 
-/*
-===============
-G_CallSpawn
-
-Finds the spawn function for the entity and calls it,
-returning qfalse if not found
-===============
-*/
 qboolean G_CallSpawn(gentity_t* ent) {
     spawn_t* s;
     gitem_t* item;
@@ -321,7 +283,6 @@ qboolean G_CallSpawn(gentity_t* ent) {
         return qfalse;
     }
 
-    // check item spawn functions
     for (item = bg_itemlist + 1; item->classname; item++) {
         if (!strcmp(item->classname, ent->classname)) {
             G_SpawnItem(ent, item, qfalse);
@@ -329,10 +290,8 @@ qboolean G_CallSpawn(gentity_t* ent) {
         }
     }
 
-    // check normal spawn functions
     for (s = spawns; s->name; s++) {
         if (!strcmp(s->name, ent->classname)) {
-            // found it
             s->spawn(ent);
             return qtrue;
         }
@@ -341,14 +300,6 @@ qboolean G_CallSpawn(gentity_t* ent) {
     return qfalse;
 }
 
-/*
-=============
-G_NewString
-
-Builds a copy of the string, translating \n to real linefeeds
-so message texts can be multi-line
-=============
-*/
 char* G_NewString(const char* string) {
     char *newb, *new_p;
     int i, l;
@@ -359,7 +310,6 @@ char* G_NewString(const char* string) {
 
     new_p = newb;
 
-    // turn \n into a real linefeed
     for (i = 0; i < l; i++) {
         if (string[i] == '\\' && i < l - 1) {
             i++;
@@ -376,14 +326,6 @@ char* G_NewString(const char* string) {
     return newb;
 }
 
-/*
-===============
-G_ParseField
-
-Takes a key/value pair and sets the binary values
-in a gentity
-===============
-*/
 void G_ParseField(const char* key, const char* value, gentity_t* ent) {
     field_t* f;
     byte* b;
@@ -392,7 +334,6 @@ void G_ParseField(const char* key, const char* value, gentity_t* ent) {
 
     for (f = fields; f->name; f++) {
         if (!Q_stricmp(f->name, key)) {
-            // found it
             b = (byte*)ent;
 
             switch (f->type) {
@@ -417,7 +358,7 @@ void G_ParseField(const char* key, const char* value, gentity_t* ent) {
                     ((float*)(b + f->ofs))[1] = v;
                     ((float*)(b + f->ofs))[2] = 0;
                     break;
-                case F_IGNORE:  // [QL] "light" key: parsed but discarded (binary type 9)
+                case F_IGNORE:
                     break;
                 default:
                     break;
@@ -427,18 +368,6 @@ void G_ParseField(const char* key, const char* value, gentity_t* ent) {
     }
 }
 
-/*
-====================
-G_ItemValidForGametype
-
-[QL] binary 0x10065f90: walks bg_itemlist for classname and returns
-(item->validGametypes & (1 << g_gametype)) != 0. If classname is not a
-bg_itemlist entry, GT_AD (gametype 11) also treats the objective
-obelisks team_redobelisk/team_blueobelisk (which spawn as entities, not items) as
-valid. Only team_CTF_redflag and team_CTF_blueflag carry a non-zero validGametypes
-mask in the binary (both 1<<GT_AD); every other item is 0.
-====================
-*/
 static qboolean G_ItemValidForGametype(const char* classname) {
     const gitem_t* item;
     int gt;
@@ -449,16 +378,12 @@ static qboolean G_ItemValidForGametype(const char* classname) {
 
     gt = g_gametype.integer;
 
-    // an item whose validGametypes mask has the current gametype's bit set is
-    // valid and bypasses the notteam/notfree/gametype spawn filters.
     for (item = bg_itemlist + 1; item->classname; item++) {
         if (!strcmp(item->classname, classname)) {
             return (item->validGametypes & (1 << (gt & 0x1f))) != 0;
         }
     }
 
-    // classname is not a bg_itemlist entry: in Attack & Defend the objective
-    // obelisks are valid.
     if (gt != GT_AD) {
         return qfalse;
     }
@@ -468,16 +393,6 @@ static qboolean G_ItemValidForGametype(const char* classname) {
     return qfalse;
 }
 
-/*
-====================
-G_GametypeInList
-
-[QL] Returns qtrue if the current gametype's short name is a whitespace
-separated token in list. The binary parses the list into a bitmask (bit
-1<<(gametype+1) per matched name) and tests the current gametype's bit, which
-reduces to an exact tokenised match on gametypeShortNames[g_gametype].
-====================
-*/
 qboolean G_GametypeInList(const char* list) {
     const char* name;
     const char* p;
@@ -503,36 +418,20 @@ qboolean G_GametypeInList(const char* list) {
     return qfalse;
 }
 
-/*
-===================
-G_SpawnGEntityFromSpawnVars
-
-Spawn an entity and fill in all of the level fields from
-level.spawnVars[], then call the class specific spawn function
-===================
-*/
 void G_SpawnGEntityFromSpawnVars(void) {
     int i;
     gentity_t* ent;
     char* value;
     qboolean itemValid;
 
-    // get the next free entity
     ent = G_Spawn();
 
     for (i = 0; i < level.numSpawnVars; i++) {
         G_ParseField(level.spawnVars[i][0], level.spawnVars[i][1], ent);
     }
 
-    // [QL] gametype-specific items spawn regardless, bypassing every filter below.
     itemValid = G_ItemValidForGametype(ent->classname);
 
-    // [QL] binary-verified entity filtering (from qagamex86.dll 0x10066080):
-    // 1. notteam/notfree filter based on gametype category
-    // 2. "gametype" positive filter - spawn only if current gametype is listed
-    // 3. "not_gametype" negative filter - suppress if current gametype is listed
-    // The item-valid override skips all of these. No notsingle/notta in QL, and
-    // the binary does NOT touch areaportals on a filtered-out entity.
     if (g_gametype.integer >= GT_TEAM) {
         G_SpawnInt("notteam", "0", &i);
         if (i && !itemValid) {
@@ -561,28 +460,21 @@ void G_SpawnGEntityFromSpawnVars(void) {
         }
     }
 
-    // move editor origin to pos
     VectorCopy(ent->s.origin, ent->s.pos.trBase);
     VectorCopy(ent->s.origin, ent->r.currentOrigin);
 
-    // if we didn't get a classname, don't bother spawning anything
     if (!G_CallSpawn(ent)) {
         G_FreeEntity(ent);
     }
 }
 
-/*
-====================
-G_AddSpawnVarToken
-====================
-*/
 char* G_AddSpawnVarToken(const char* string) {
     int l;
     char* dest;
 
     l = strlen(string);
     if (level.numSpawnVarChars + l + 1 > MAX_SPAWN_VARS_CHARS) {
-        G_Error("G_AddSpawnVarToken: MAX_SPAWN_CHARS");  // [QL] binary string is "MAX_SPAWN_CHARS"
+        G_Error("G_AddSpawnVarToken: MAX_SPAWN_CHARS");
     }
 
     dest = level.spawnVarChars + level.numSpawnVarChars;
@@ -593,16 +485,6 @@ char* G_AddSpawnVarToken(const char* string) {
     return dest;
 }
 
-/*
-====================
-G_ParseSpawnVars
-
-Parses a brace bounded set of key / value pairs out of the
-level's entity strings into level.spawnVars[]
-
-This does not actually spawn an entity.
-====================
-*/
 qboolean G_ParseSpawnVars(void) {
     char keyname[MAX_TOKEN_CHARS];
     char com_token[MAX_TOKEN_CHARS];
@@ -610,18 +492,14 @@ qboolean G_ParseSpawnVars(void) {
     level.numSpawnVars = 0;
     level.numSpawnVarChars = 0;
 
-    // parse the opening brace
     if (!trap_GetEntityToken(com_token, sizeof(com_token))) {
-        // end of spawn string
         return qfalse;
     }
     if (com_token[0] != '{') {
         G_Error("G_ParseSpawnVars: found %s when expecting {", com_token);
     }
 
-    // go through all the key / value pairs
     while (1) {
-        // parse key
         if (!trap_GetEntityToken(keyname, sizeof(keyname))) {
             G_Error("G_ParseSpawnVars: EOF without closing brace");
         }
@@ -630,7 +508,6 @@ qboolean G_ParseSpawnVars(void) {
             break;
         }
 
-        // parse value
         if (!trap_GetEntityToken(com_token, sizeof(com_token))) {
             G_Error("G_ParseSpawnVars: EOF without closing brace");
         }
@@ -649,13 +526,6 @@ qboolean G_ParseSpawnVars(void) {
     return qtrue;
 }
 
-/*QUAKED worldspawn (0 0 0) ?
-
-Every map should have exactly one worldspawn.
-"music"		music wav file
-"gravity"	800 is default gravity
-"message"	Text to print during connection process
-*/
 void SP_worldspawn(void) {
     char* s;
 
@@ -664,7 +534,6 @@ void SP_worldspawn(void) {
         G_Error("SP_worldspawn: The first entity isn't 'worldspawn'");
     }
 
-    // make some data visible to connecting client
     trap_SetConfigstring(CS_GAME_VERSION, GAME_VERSION);
 
     trap_SetConfigstring(CS_LEVEL_START_TIME, va("%i", level.startTime));
@@ -673,19 +542,14 @@ void SP_worldspawn(void) {
     trap_SetConfigstring(CS_MUSIC, s);
 
     G_SpawnString("message", "", &s);
-    trap_SetConfigstring(CS_MESSAGE, s);  // map specific message
+    trap_SetConfigstring(CS_MESSAGE, s);
 
-    // [QL] author configstrings read from worldspawn entity
     G_SpawnString("author", "", &s);
     trap_SetConfigstring(CS_AUTHOR, s);
 
     G_SpawnString("author2", "", &s);
     trap_SetConfigstring(CS_AUTHOR2, s);
 
-    // [QL] disable_loadout worldspawn key. Only touched when g_loadout is on;
-    // the binary never clears the cvar/configstring here. The value is a
-    // whitespace separated list of weapon short names, parsed by
-    // BG_ParseWeaponStringtoFlag (0x1002da40) into a weapon bitmask.
     if (g_loadout.integer) {
         int mask;
         G_SpawnString("disable_loadout", "", &s);
@@ -694,9 +558,8 @@ void SP_worldspawn(void) {
         trap_Cvar_Set("g_disableLoadout", va("%i", mask));
     }
 
-    trap_SetConfigstring(CS_MOTD, g_motd.string);  // message of the day
+    trap_SetConfigstring(CS_MOTD, g_motd.string);
 
-    // [QL] gravity is only overridden when the map sets it
     if (G_SpawnString("gravity", "800", &s)) {
         trap_Cvar_Set("g_gravity", s);
     }
@@ -704,22 +567,15 @@ void SP_worldspawn(void) {
     G_SpawnString("enableDust", "0", &s);
     trap_Cvar_Set("g_enableDust", s);
 
-    // [QL] enableBreath is published to the client as a configstring
     G_SpawnString("enableBreath", "0", &s);
     trap_SetConfigstring(CS_ENABLEBREATH, s);
 
-    // [QL] trainingMap worldspawn key forces g_training on
     G_SpawnString("trainingMap", "0", &s);
     if (atoi(s) == 1) {
         trap_Cvar_Set("g_training", "2");
     }
-    // [QL] any value but "0" marks a training map (0x100666cd, global 0x105dea44), which the
-    // spawn chooser reads; g_training is only forced for exactly "1"
     level.mapIsTrainingMap = strcmp(s, "0") != 0;
 
-    // [QL] "atmosphere" key: the binary (0x1006671e) publishes it to CS 0x2b3
-    // (691) - the map's value if present, "" if absent. CS_ATMOSEFFECT now sits
-    // at 691 (it was 689), so the publish is in.
     if (G_SpawnString("atmosphere", "", &s)) {
         trap_SetConfigstring(CS_ATMOSEFFECT, s);
     } else {
@@ -734,51 +590,29 @@ void SP_worldspawn(void) {
     g_entities[ENTITYNUM_NONE].r.ownerNum = ENTITYNUM_NONE;
     g_entities[ENTITYNUM_NONE].classname = "nothing";
 
-    // [QL] QL boots into PRE_GAME. Only a restart drops straight into
-    // IN_PROGRESS, everything else stays in warmup.
     SetWarmupState(-1);
     if (g_restarted.integer) {
         trap_Cvar_Set("g_restarted", "0");
         SetWarmupState(0);
     } else if (g_doWarmup.integer) {
         SetWarmupState(-1);
-        G_LogPrintf("Warmup:\n");   // [QL] binary 0x10057480 logs to the game log file, not console
+        G_LogPrintf("Warmup:\n");
     }
 
-    // [QL] The binary (0x1006687b..0x1006691e) finishes SP_worldspawn by seeding
-    // two per-level randomised spawn delays, each = base + frac(rand) * range
-    // where frac(rand) = (rand() & 0x7fff) / 32767.0 and negative cvar values
-    // clamp to 0. These write two level globals (Ghidra 0x105dea10, 0x105dea14;
-    // the first is read by FinishSpawningItem). The base/range operands are cvar
-    // values (likely g_spawnDelay_key/g_spawnDelayRandom_key and
-    // g_spawnDelay_powerup/g_spawnDelayRandom_powerup). REPORTED: needs two new
-    // level_locals_t fields + FinishSpawningItem wiring; omitted here.
 }
 
-/*
-==============
-G_SpawnEntitiesFromString
-
-Parses textual entity definitions out of an entstring and spawns gentities.
-==============
-*/
 void G_SpawnEntitiesFromString(void) {
-    // allow calls to G_Spawn*()
     level.spawning = qtrue;
     level.numSpawnVars = 0;
 
-    // the worldspawn is not an actual entity, but it still
-    // has a "spawn" function to perform any global setup
-    // needed by a level (setting configstrings or cvars, etc)
     if (!G_ParseSpawnVars()) {
         G_Error("SpawnEntities: no entities");
     }
     SP_worldspawn();
 
-    // parse ents
     while (G_ParseSpawnVars()) {
         G_SpawnGEntityFromSpawnVars();
     }
 
-    level.spawning = qfalse;  // any future calls to G_Spawn*() will be errors
+    level.spawning = qfalse;
 }

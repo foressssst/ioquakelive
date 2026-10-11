@@ -10,10 +10,8 @@ attribute vec4 attr_BoneIndexes;
 attribute vec4 attr_BoneWeights;
 #endif
 
-//#if defined(USE_DEFORM_VERTEXES)
 uniform int     u_DeformGen;
 uniform float    u_DeformParams[5];
-//#endif
 
 uniform float   u_Time;
 uniform mat4    u_ModelViewProjectionMatrix;
@@ -45,7 +43,7 @@ vec3 DeformPosition(const vec3 pos, const vec3 normal, const vec2 st)
 	{
 		phase *= st.x;
 	}
-	else // if (u_DeformGen <= DGEN_WAVE_INVERSE_SAWTOOTH)
+	else
 	{
 		phase += dot(pos.xyz, vec3(spread));
 	}
@@ -73,7 +71,7 @@ vec3 DeformPosition(const vec3 pos, const vec3 normal, const vec2 st)
 	{
 		func = (1.0 - fract(value));
 	}
-	else // if (u_DeformGen == DGEN_BULGE)
+	else
 	{
 		func = sin(value);
 	}
@@ -103,6 +101,6 @@ void main()
 	position = DeformPosition(position, normal, attr_TexCoord0.st);
 
 	gl_Position = u_ModelViewProjectionMatrix * vec4(position, 1.0);
-	
+
 	var_Position  = (u_ModelMatrix * vec4(position, 1.0)).xyz;
 }

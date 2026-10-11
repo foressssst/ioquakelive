@@ -19,20 +19,8 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "../qcommon/qcommon.h"
 
-/*
-=============
-NET_StringToAdr
-
-localhost
-idnewt
-idnewt:28000
-192.246.40.70
-192.246.40.70:28000
-=============
-*/
 qboolean NET_StringToAdr(char* s, netadr_t* a) {
     if (!strcmp(s, "localhost")) {
         memset(a, 0, sizeof(*a));
@@ -43,10 +31,5 @@ qboolean NET_StringToAdr(char* s, netadr_t* a) {
     return false;
 }
 
-/*
-==================
-Sys_SendPacket
-==================
-*/
 void Sys_SendPacket(int length, void* data, netadr_t to) {
 }

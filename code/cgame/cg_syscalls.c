@@ -19,9 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// cg_syscalls.c -- this file is only included when building a dll
-
 #include "cg_local.h"
 
 static intptr_t(QDECL* syscall)(intptr_t arg, ...) = (intptr_t(QDECL*)(intptr_t, ...)) - 1;
@@ -42,7 +39,6 @@ void trap_Print(const char* fmt) {
 
 void trap_Error(const char* fmt) {
     syscall(CG_ERROR, fmt);
-    // shut up GCC warning about returning functions, because we know better
     exit(1);
 }
 
@@ -54,7 +50,6 @@ void trap_Cvar_Register(vmCvar_t* vmCvar, const char* varName, const char* defau
     syscall(CG_CVAR_REGISTER, vmCvar, varName, defaultValue, flags);
 }
 
-// [QL] cgame import +0x14: the engine keeps the value between the two strings
 void trap_Cvar_RegisterRange(vmCvar_t* vmCvar, const char* varName, const char* defaultValue,
                              const char* minValue, const char* maxValue, int flags) {
     syscall(CG_CVAR_REGISTER_RANGE, vmCvar, varName, defaultValue, minValue, maxValue, flags);
@@ -72,8 +67,6 @@ void trap_Cvar_VariableStringBuffer(const char* var_name, char* buffer, int bufs
     syscall(CG_CVAR_VARIABLESTRINGBUFFER, var_name, buffer, bufsize);
 }
 
-// [QL] retail's cgame imports Cvar_VariableValue from the engine (import table +0x28); the
-// fork's syscall list has only the string form, which gives the same value.
 float trap_Cvar_VariableValue(const char* var_name) {
     char buffer[MAX_CVAR_VALUE_STRING];
 
@@ -305,12 +298,10 @@ void trap_R_RenderScene(const refdef_t* fd) {
     syscall(CG_R_RENDERSCENE, fd);
 }
 
-// [QL] cgame import +0x1c8
 void trap_R_BeginBloomScene(void) {
     syscall(CG_R_BEGINBLOOMSCENE);
 }
 
-// [QL] cgame import +0x1cc
 void trap_R_ApplyBloom(void) {
     syscall(CG_R_APPLYBLOOM);
 }
@@ -431,28 +422,22 @@ void trap_SnapVector(float* v) {
     syscall(CG_SNAPVECTOR, v);
 }
 
-// this returns a handle.  arg0 is the name in the format "idlogo.roq", set arg1 to NULL, alteredstates to qfalse (do not alter gamestate)
 int trap_CIN_PlayCinematic(const char* arg0, int xpos, int ypos, int width, int height, int bits) {
     return syscall(CG_CIN_PLAYCINEMATIC, arg0, xpos, ypos, width, height, bits);
 }
 
-// stops playing the cinematic and ends it.  should always return FMV_EOF
-// cinematics must be stopped in reverse order of when they are started
 e_status trap_CIN_StopCinematic(int handle) {
     return syscall(CG_CIN_STOPCINEMATIC, handle);
 }
 
-// will run a frame of the cinematic but will not draw it.  Will return FMV_EOF if the end of the cinematic has been reached.
 e_status trap_CIN_RunCinematic(int handle) {
     return syscall(CG_CIN_RUNCINEMATIC, handle);
 }
 
-// draws the current frame
 void trap_CIN_DrawCinematic(int handle) {
     syscall(CG_CIN_DRAWCINEMATIC, handle);
 }
 
-// allows you to resize the animation dynamically
 void trap_CIN_SetExtents(int handle, int x, int y, int w, int h) {
     syscall(CG_CIN_SETEXTENTS, handle, x, y, w, h);
 }
@@ -477,7 +462,6 @@ void trap_Key_GetBindingBuf(int keynum, char* buf, int buflen) {
     syscall(CG_KEY_GETBINDINGBUF, keynum, buf, buflen);
 }
 
-// [QL] the voice mute list. The Steam ID travels in two halves, as in retail.
 qboolean trap_VoiceIsIgnored(uint64_t steamId) {
     return (qboolean)syscall(CG_VOICE_IS_IGNORED, (int)(steamId & 0xffffffffu), (int)(steamId >> 32));
 }

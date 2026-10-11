@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "client.h"
 #include "snd_local.h"
 
@@ -72,31 +71,16 @@ static aviFileData_t afd;
 static byte buffer[MAX_AVI_BUFFER];
 static int bufIndex;
 
-/*
-===============
-SafeFS_Write
-===============
-*/
 static ID_INLINE void SafeFS_Write(const void* buffer, int len, fileHandle_t f) {
     if (FS_Write(buffer, len, f) < len)
         Com_Error(ERR_DROP, "Failed to write avi file");
 }
 
-/*
-===============
-WRITE_STRING
-===============
-*/
 static ID_INLINE void WRITE_STRING(const char* s) {
     Com_Memcpy(&buffer[bufIndex], s, strlen(s));
     bufIndex += strlen(s);
 }
 
-/*
-===============
-WRITE_4BYTES
-===============
-*/
 static ID_INLINE void WRITE_4BYTES(int x) {
     buffer[bufIndex + 0] = (byte)((x >> 0) & 0xFF);
     buffer[bufIndex + 1] = (byte)((x >> 8) & 0xFF);
@@ -105,22 +89,12 @@ static ID_INLINE void WRITE_4BYTES(int x) {
     bufIndex += 4;
 }
 
-/*
-===============
-WRITE_2BYTES
-===============
-*/
 static ID_INLINE void WRITE_2BYTES(int x) {
     buffer[bufIndex + 0] = (byte)((x >> 0) & 0xFF);
     buffer[bufIndex + 1] = (byte)((x >> 8) & 0xFF);
     bufIndex += 2;
 }
 
-/*
-===============
-START_CHUNK
-===============
-*/
 static ID_INLINE void START_CHUNK(const char* s) {
     if (afd.chunkStackTop == MAX_RIFF_CHUNKS) {
         Com_Error(ERR_DROP, "ERROR: Top of chunkstack breached");
@@ -132,11 +106,6 @@ static ID_INLINE void START_CHUNK(const char* s) {
     WRITE_4BYTES(0);
 }
 
-/*
-===============
-END_CHUNK
-===============
-*/
 static ID_INLINE void END_CHUNK(void) {
     int endIndex = bufIndex;
 
@@ -152,11 +121,6 @@ static ID_INLINE void END_CHUNK(void) {
     bufIndex = PAD(bufIndex, 2);
 }
 
-/*
-===============
-CL_WriteAVIHeader
-===============
-*/
 void CL_WriteAVIHeader(void) {
     bufIndex = 0;
     afd.chunkStackTop = 0;
@@ -169,80 +133,80 @@ void CL_WriteAVIHeader(void) {
             {
                 WRITE_STRING("hdrl");
                 WRITE_STRING("avih");
-                WRITE_4BYTES(56);               //"avih" "chunk" size
-                WRITE_4BYTES(afd.framePeriod);  // dwMicroSecPerFrame
+                WRITE_4BYTES(56);
+                WRITE_4BYTES(afd.framePeriod);
                 WRITE_4BYTES(afd.maxRecordSize *
-                             afd.frameRate);       // dwMaxBytesPerSec
-                WRITE_4BYTES(0);                   // dwReserved1
-                WRITE_4BYTES(0x110);               // dwFlags bits HAS_INDEX and IS_INTERLEAVED
-                WRITE_4BYTES(afd.numVideoFrames);  // dwTotalFrames
-                WRITE_4BYTES(0);                   // dwInitialFrame
+                             afd.frameRate);
+                WRITE_4BYTES(0);
+                WRITE_4BYTES(0x110);
+                WRITE_4BYTES(afd.numVideoFrames);
+                WRITE_4BYTES(0);
 
-                if (afd.audio)  // dwStreams
+                if (afd.audio)
                     WRITE_4BYTES(2);
                 else
                     WRITE_4BYTES(1);
 
-                WRITE_4BYTES(afd.maxRecordSize);  // dwSuggestedBufferSize
-                WRITE_4BYTES(afd.width);          // dwWidth
-                WRITE_4BYTES(afd.height);         // dwHeight
-                WRITE_4BYTES(0);                  // dwReserved[ 0 ]
-                WRITE_4BYTES(0);                  // dwReserved[ 1 ]
-                WRITE_4BYTES(0);                  // dwReserved[ 2 ]
-                WRITE_4BYTES(0);                  // dwReserved[ 3 ]
+                WRITE_4BYTES(afd.maxRecordSize);
+                WRITE_4BYTES(afd.width);
+                WRITE_4BYTES(afd.height);
+                WRITE_4BYTES(0);
+                WRITE_4BYTES(0);
+                WRITE_4BYTES(0);
+                WRITE_4BYTES(0);
 
                 START_CHUNK("LIST");
                 {
                     WRITE_STRING("strl");
                     WRITE_STRING("strh");
-                    WRITE_4BYTES(56);  //"strh" "chunk" size
+                    WRITE_4BYTES(56);
                     WRITE_STRING("vids");
 
                     if (afd.motionJpeg)
                         WRITE_STRING("MJPG");
                     else
-                        WRITE_4BYTES(0);  // BI_RGB
+                        WRITE_4BYTES(0);
 
-                    WRITE_4BYTES(0);  // dwFlags
-                    WRITE_4BYTES(0);  // dwPriority
-                    WRITE_4BYTES(0);  // dwInitialFrame
+                    WRITE_4BYTES(0);
+                    WRITE_4BYTES(0);
+                    WRITE_4BYTES(0);
 
-                    WRITE_4BYTES(1);                   // dwTimescale
-                    WRITE_4BYTES(afd.frameRate);       // dwDataRate
-                    WRITE_4BYTES(0);                   // dwStartTime
-                    WRITE_4BYTES(afd.numVideoFrames);  // dwDataLength
+                    WRITE_4BYTES(1);
+                    WRITE_4BYTES(afd.frameRate);
+                    WRITE_4BYTES(0);
+                    WRITE_4BYTES(afd.numVideoFrames);
 
-                    WRITE_4BYTES(afd.maxRecordSize);  // dwSuggestedBufferSize
-                    WRITE_4BYTES(-1);                 // dwQuality
-                    WRITE_4BYTES(0);                  // dwSampleSize
-                    WRITE_2BYTES(0);                  // rcFrame
-                    WRITE_2BYTES(0);                  // rcFrame
-                    WRITE_2BYTES(afd.width);          // rcFrame
-                    WRITE_2BYTES(afd.height);         // rcFrame
+                    WRITE_4BYTES(afd.maxRecordSize);
+                    WRITE_4BYTES(-1);
+                    WRITE_4BYTES(0);
+                    WRITE_2BYTES(0);
+                    WRITE_2BYTES(0);
+                    WRITE_2BYTES(afd.width);
+                    WRITE_2BYTES(afd.height);
 
                     WRITE_STRING("strf");
-                    WRITE_4BYTES(40);          //"strf" "chunk" size
-                    WRITE_4BYTES(40);          // biSize
-                    WRITE_4BYTES(afd.width);   // biWidth
-                    WRITE_4BYTES(afd.height);  // biHeight
-                    WRITE_2BYTES(1);           // biPlanes
-                    WRITE_2BYTES(24);          // biBitCount
+                    WRITE_4BYTES(40);
+                    WRITE_4BYTES(40);
+                    WRITE_4BYTES(afd.width);
+                    WRITE_4BYTES(afd.height);
+                    WRITE_2BYTES(1);
+                    WRITE_2BYTES(24);
 
-                    if (afd.motionJpeg)  // biCompression
+                    if (afd.motionJpeg)
                     {
                         WRITE_STRING("MJPG");
                         WRITE_4BYTES(afd.width *
-                                     afd.height);  // biSizeImage
+                                     afd.height);
                     } else {
-                        WRITE_4BYTES(0);  // BI_RGB
+                        WRITE_4BYTES(0);
                         WRITE_4BYTES(afd.width *
-                                     afd.height * 3);  // biSizeImage
+                                     afd.height * 3);
                     }
 
-                    WRITE_4BYTES(0);  // biXPelsPetMeter
-                    WRITE_4BYTES(0);  // biYPelsPetMeter
-                    WRITE_4BYTES(0);  // biClrUsed
-                    WRITE_4BYTES(0);  // biClrImportant
+                    WRITE_4BYTES(0);
+                    WRITE_4BYTES(0);
+                    WRITE_4BYTES(0);
+                    WRITE_4BYTES(0);
                 }
                 END_CHUNK();
 
@@ -251,38 +215,38 @@ void CL_WriteAVIHeader(void) {
                     {
                         WRITE_STRING("strl");
                         WRITE_STRING("strh");
-                        WRITE_4BYTES(56);  //"strh" "chunk" size
+                        WRITE_4BYTES(56);
                         WRITE_STRING("auds");
-                        WRITE_4BYTES(0);  // FCC
-                        WRITE_4BYTES(0);  // dwFlags
-                        WRITE_4BYTES(0);  // dwPriority
-                        WRITE_4BYTES(0);  // dwInitialFrame
+                        WRITE_4BYTES(0);
+                        WRITE_4BYTES(0);
+                        WRITE_4BYTES(0);
+                        WRITE_4BYTES(0);
 
-                        WRITE_4BYTES(afd.a.sampleSize);  // dwTimescale
+                        WRITE_4BYTES(afd.a.sampleSize);
                         WRITE_4BYTES(afd.a.sampleSize *
-                                     afd.a.rate);  // dwDataRate
-                        WRITE_4BYTES(0);           // dwStartTime
+                                     afd.a.rate);
+                        WRITE_4BYTES(0);
                         WRITE_4BYTES(afd.a.totalBytes /
-                                     afd.a.sampleSize);  // dwDataLength
+                                     afd.a.sampleSize);
 
-                        WRITE_4BYTES(0);                 // dwSuggestedBufferSize
-                        WRITE_4BYTES(-1);                // dwQuality
-                        WRITE_4BYTES(afd.a.sampleSize);  // dwSampleSize
-                        WRITE_2BYTES(0);                 // rcFrame
-                        WRITE_2BYTES(0);                 // rcFrame
-                        WRITE_2BYTES(0);                 // rcFrame
-                        WRITE_2BYTES(0);                 // rcFrame
+                        WRITE_4BYTES(0);
+                        WRITE_4BYTES(-1);
+                        WRITE_4BYTES(afd.a.sampleSize);
+                        WRITE_2BYTES(0);
+                        WRITE_2BYTES(0);
+                        WRITE_2BYTES(0);
+                        WRITE_2BYTES(0);
 
                         WRITE_STRING("strf");
-                        WRITE_4BYTES(18);              //"strf" "chunk" size
-                        WRITE_2BYTES(afd.a.format);    // wFormatTag
-                        WRITE_2BYTES(afd.a.channels);  // nChannels
-                        WRITE_4BYTES(afd.a.rate);      // nSamplesPerSec
+                        WRITE_4BYTES(18);
+                        WRITE_2BYTES(afd.a.format);
+                        WRITE_2BYTES(afd.a.channels);
+                        WRITE_4BYTES(afd.a.rate);
                         WRITE_4BYTES(afd.a.sampleSize *
-                                     afd.a.rate);        // nAvgBytesPerSec
-                        WRITE_2BYTES(afd.a.sampleSize);  // nBlockAlign
-                        WRITE_2BYTES(afd.a.bits);        // wBitsPerSample
-                        WRITE_2BYTES(0);                 // cbSize
+                                     afd.a.rate);
+                        WRITE_2BYTES(afd.a.sampleSize);
+                        WRITE_2BYTES(afd.a.bits);
+                        WRITE_2BYTES(0);
                     }
                     END_CHUNK();
                 }
@@ -299,21 +263,12 @@ void CL_WriteAVIHeader(void) {
     }
 }
 
-/*
-===============
-CL_OpenAVIForWriting
-
-Creates an AVI file and gets it into a state where
-writing the actual data can begin
-===============
-*/
 qboolean CL_OpenAVIForWriting(const char* fileName) {
     if (afd.fileOpen)
         return qfalse;
 
     Com_Memset(&afd, 0, sizeof(aviFileData_t));
 
-    // Don't start if a framerate has not been chosen
     if (cl_aviFrameRate->integer <= 0) {
         Com_Printf(S_COLOR_RED "cl_aviFrameRate must be >= 1\n");
         return qfalse;
@@ -340,21 +295,13 @@ qboolean CL_OpenAVIForWriting(const char* fileName) {
     else
         afd.motionJpeg = qfalse;
 
-// Capture buffer stores RGB pixels but OpenGL ES reads RGBA and converts to RGB in-place.
-// Encode buffer only needs to store RGB pixels.
-// Allocate a bit more space for the capture buffer to account for possible
-// padding at the end of pixel lines, and padding for alignment
 #define MAX_PACK_LEN 16
     afd.cBuffer = Z_Malloc((afd.width * 4 + MAX_PACK_LEN - 1) * afd.height + MAX_PACK_LEN - 1);
-    // raw avi files have pixel lines start on 4-byte boundaries
     afd.eBuffer = Z_Malloc(PAD(afd.width * 3, AVI_LINE_PADDING) * afd.height);
 
     afd.a.rate = dma.speed;
     afd.a.format = WAV_FORMAT_PCM;
     afd.a.channels = dma.channels;
-    /* !!! FIXME: if CL_WriteAVIAudioFrame() is ever called from somewhere other
-       !!! FIXME:  than S_TransferStereo16(), we will need to handle/convert
-       !!! FIXME:  float32 samples for AVI writing. */
     afd.a.bits = dma.samplebits;
     afd.a.sampleSize = (afd.a.bits / 8) * afd.a.channels;
 
@@ -380,8 +327,6 @@ qboolean CL_OpenAVIForWriting(const char* fileName) {
         afd.audio = qtrue;
     }
 
-    // This doesn't write a real header, but allocates the
-    // correct amount of space at the beginning of the file
     CL_WriteAVIHeader();
 
     SafeFS_Write(buffer, bufIndex, afd.f);
@@ -391,33 +336,24 @@ qboolean CL_OpenAVIForWriting(const char* fileName) {
     START_CHUNK("idx1");
     SafeFS_Write(buffer, bufIndex, afd.idxF);
 
-    afd.moviSize = 4;  // For the "movi"
+    afd.moviSize = 4;
     afd.fileOpen = qtrue;
 
     return qtrue;
 }
 
-/*
-===============
-CL_CheckFileSize
-===============
-*/
 static qboolean CL_CheckFileSize(int bytesToAdd) {
     unsigned int newFileSize;
 
     newFileSize =
-        afd.fileSize +           // Current file size
-        bytesToAdd +             // What we want to add
-        (afd.numIndices * 16) +  // The index
-        4;                       // The index size
+        afd.fileSize +
+        bytesToAdd +
+        (afd.numIndices * 16) +
+        4;
 
-    // I assume all the operating systems
-    // we target can handle a 2Gb file
     if (newFileSize > INT_MAX) {
-        // Close the current file...
         CL_CloseAVI();
 
-        // ...And open a new one
         CL_OpenAVIForWriting(va("%s_", afd.fileName));
 
         return qtrue;
@@ -426,11 +362,6 @@ static qboolean CL_CheckFileSize(int bytesToAdd) {
     return qfalse;
 }
 
-/*
-===============
-CL_WriteAVIVideoFrame
-===============
-*/
 void CL_WriteAVIVideoFrame(const byte* imageBuffer, int size) {
     int chunkOffset = afd.fileSize - afd.moviOffset - 8;
     int chunkSize = 8 + size;
@@ -440,7 +371,6 @@ void CL_WriteAVIVideoFrame(const byte* imageBuffer, int size) {
     if (!afd.fileOpen)
         return;
 
-    // Chunk header + contents + padding
     if (CL_CheckFileSize(8 + size + 2))
         return;
 
@@ -459,12 +389,11 @@ void CL_WriteAVIVideoFrame(const byte* imageBuffer, int size) {
     if (size > afd.maxRecordSize)
         afd.maxRecordSize = size;
 
-    // Index
     bufIndex = 0;
-    WRITE_STRING("00dc");       // dwIdentifier
-    WRITE_4BYTES(0x00000010);   // dwFlags (all frames are KeyFrames)
-    WRITE_4BYTES(chunkOffset);  // dwOffset
-    WRITE_4BYTES(size);         // dwLength
+    WRITE_STRING("00dc");
+    WRITE_4BYTES(0x00000010);
+    WRITE_4BYTES(chunkOffset);
+    WRITE_4BYTES(size);
     SafeFS_Write(buffer, 16, afd.idxF);
 
     afd.numIndices++;
@@ -472,11 +401,6 @@ void CL_WriteAVIVideoFrame(const byte* imageBuffer, int size) {
 
 #define PCM_BUFFER_SIZE 44100
 
-/*
-===============
-CL_WriteAVIAudioFrame
-===============
-*/
 void CL_WriteAVIAudioFrame(const byte* pcmBuffer, int size) {
     static byte pcmCaptureBuffer[PCM_BUFFER_SIZE] = {0};
     static int bytesInBuffer = 0;
@@ -487,7 +411,6 @@ void CL_WriteAVIAudioFrame(const byte* pcmBuffer, int size) {
     if (!afd.fileOpen)
         return;
 
-    // Chunk header + contents + padding
     if (CL_CheckFileSize(8 + bytesInBuffer + size + 2))
         return;
 
@@ -500,7 +423,6 @@ void CL_WriteAVIAudioFrame(const byte* pcmBuffer, int size) {
     Com_Memcpy(&pcmCaptureBuffer[bytesInBuffer], pcmBuffer, size);
     bytesInBuffer += size;
 
-    // Only write if we have a frame's worth of audio
     if (bytesInBuffer >= (int)ceil((float)afd.a.rate / (float)afd.frameRate) *
                              afd.a.sampleSize) {
         int chunkOffset = afd.fileSize - afd.moviOffset - 8;
@@ -521,12 +443,11 @@ void CL_WriteAVIAudioFrame(const byte* pcmBuffer, int size) {
         afd.moviSize += (chunkSize + paddingSize);
         afd.a.totalBytes += bytesInBuffer;
 
-        // Index
         bufIndex = 0;
-        WRITE_STRING("01wb");         // dwIdentifier
-        WRITE_4BYTES(0);              // dwFlags
-        WRITE_4BYTES(chunkOffset);    // dwOffset
-        WRITE_4BYTES(bytesInBuffer);  // dwLength
+        WRITE_STRING("01wb");
+        WRITE_4BYTES(0);
+        WRITE_4BYTES(chunkOffset);
+        WRITE_4BYTES(bytesInBuffer);
         SafeFS_Write(buffer, 16, afd.idxF);
 
         afd.numIndices++;
@@ -535,13 +456,7 @@ void CL_WriteAVIAudioFrame(const byte* pcmBuffer, int size) {
     }
 }
 
-/*
-===============
-CL_TakeVideoFrame
-===============
-*/
 void CL_TakeVideoFrame(void) {
-    // AVI file isn't open
     if (!afd.fileOpen)
         return;
 
@@ -549,19 +464,11 @@ void CL_TakeVideoFrame(void) {
                       afd.cBuffer, afd.eBuffer, afd.motionJpeg);
 }
 
-/*
-===============
-CL_CloseAVI
-
-Closes the AVI file and writes an index chunk
-===============
-*/
 qboolean CL_CloseAVI(void) {
     int indexRemainder;
     int indexSize = afd.numIndices * 16;
     const char* idxFileName = va("%s" INDEX_FILE_EXTENSION, afd.fileName);
 
-    // AVI file isn't open
     if (!afd.fileOpen)
         return qfalse;
 
@@ -573,9 +480,6 @@ qboolean CL_CloseAVI(void) {
     SafeFS_Write(buffer, bufIndex, afd.idxF);
     FS_FCloseFile(afd.idxF);
 
-    // Write index
-
-    // Open the temp index file
     if ((indexSize = FS_FOpenFileRead(idxFileName,
                                       &afd.idxF, qtrue)) <= 0) {
         FS_FCloseFile(afd.f);
@@ -584,7 +488,6 @@ qboolean CL_CloseAVI(void) {
 
     indexRemainder = indexSize;
 
-    // Append index to end of avi file
     while (indexRemainder > MAX_AVI_BUFFER) {
         FS_Read(buffer, MAX_AVI_BUFFER, afd.idxF);
         SafeFS_Write(buffer, MAX_AVI_BUFFER, afd.f);
@@ -596,17 +499,15 @@ qboolean CL_CloseAVI(void) {
     afd.fileSize += indexRemainder;
     FS_FCloseFile(afd.idxF);
 
-    // Remove temp index file
     FS_HomeRemove(idxFileName);
 
-    // Write the real header
     FS_Seek(afd.f, 0, FS_SEEK_SET);
     CL_WriteAVIHeader();
 
     bufIndex = 4;
-    WRITE_4BYTES(afd.fileSize - 8);  // "RIFF" size
+    WRITE_4BYTES(afd.fileSize - 8);
 
-    bufIndex = afd.moviOffset + 4;  // Skip "LIST"
+    bufIndex = afd.moviOffset + 4;
     WRITE_4BYTES(afd.moviSize);
 
     SafeFS_Write(buffer, bufIndex, afd.f);
@@ -620,11 +521,6 @@ qboolean CL_CloseAVI(void) {
     return qtrue;
 }
 
-/*
-===============
-CL_VideoRecording
-===============
-*/
 qboolean CL_VideoRecording(void) {
     return afd.fileOpen;
 }

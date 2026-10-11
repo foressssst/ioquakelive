@@ -19,16 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
-/*****************************************************************************
- * name:		be_aas_funcs.h
- *
- * desc:		AAS
- *
- * $Archive: /source/code/botlib/be_aas_funcs.h $
- *
- *****************************************************************************/
-
 #ifndef BSPCINCLUDE
 
 #include "be_aas_main.h"
@@ -44,4 +34,4 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "be_aas_bsp.h"
 #include "be_aas_move.h"
 
-#endif  // BSPCINCLUDE
+#endif

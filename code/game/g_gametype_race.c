@@ -1,25 +1,7 @@
-/*
- * g_gametype_race.c -- Race mode (GT_RACE) checkpoint system
- *
- * Rewritten from qagamex86.dll (Quake Live build 1069), 0x10063580..0x1006427e and 0x1003dbb0.
- *
- * Players race through checkpoint entities (race_point) chained by target/targetname: the
- * start has a target and no targetname, the finish a targetname and no target. The run is
- * timed with pers.teamState.flagsince, the same per-frame clock that times a CTF flag carry,
- * and the personal best lives in PERS_SCORE (0x7fffffff until the first finish). The server
- * never marks the next checkpoint: the client does that from the race events.
- */
 #include "g_local.h"
 
 #define MAX_RACE_POINTS      64
 
-/*
-==================
-Race_TimeString
-
-[QL] 0x1002cc40. A run's time as the finish message prints it: m:ss.mmm, in floats.
-==================
-*/
 static const char *Race_TimeString(int msec) {
     float seconds;
     int minutes;
@@ -30,18 +12,6 @@ static const char *Race_TimeString(int msec) {
     return va("%s%d:%s%.03f", msec < 0 ? "-" : "", minutes, seconds < 10.0f ? "0" : "", seconds);
 }
 
-/*
-==================
-RaceScoreboardMessage
-
-[QL] 0x1003dbb0. Four fields per connected client: clientNum, best time in ms (-1 before the
-first finish), ping (-1 while connecting, else clamped to 999) and minutes connected. Sent as
-"scores_race <numPlaying><perClient...>".
-
-QL returns the va() string and lets Cmd_Score send it; ioquakelive follows the
-sibling *ScoreboardMessage convention and sends it here directly.
-==================
-*/
 void RaceScoreboardMessage(gentity_t *ent) {
     char entry[1024];
     char string[1024];
@@ -82,15 +52,6 @@ void RaceScoreboardMessage(gentity_t *ent) {
                            va("scores_race %i%s", level.numPlayingClients, string));
 }
 
-/*
-==================
-FinishSpawningRacePoint
-
-[QL] 0x10063a60. Drops the point to the floor (unless suspended) and rounds its origin to whole
-units, one above the ground. The entity is not linked again: the trigger stays where the spawn
-linked it.
-==================
-*/
 static void FinishSpawningRacePoint(gentity_t *ent) {
     trace_t tr;
     vec3_t start, dest;
@@ -117,16 +78,6 @@ static void FinishSpawningRacePoint(gentity_t *ent) {
     G_SetOrigin(ent, ent->s.origin);
 }
 
-/*
-==================
-Touch_RaceCheckpoint
-
-[QL] 0x10063580. The start (no targetname) starts or restarts the run, at most once a second
-while racing; a checkpoint takes the split against the best run's; the finish takes the time,
-nudged a millisecond past any player's best it would tie, and keeps it when it is a personal
-best. The events carry the next point and the one after it for the client to mark.
-==================
-*/
 void Touch_RaceCheckpoint(gentity_t *self, gentity_t *other, trace_t *trace) {
     gclient_t *cl = other->client;
     raceInfo_t *ri;
@@ -139,7 +90,6 @@ void Touch_RaceCheckpoint(gentity_t *self, gentity_t *other, trace_t *trace) {
     ri = &cl->race;
 
     if (!self->targetname) {
-        // start
         if (ri->racingActive == 1 && cl->pers.teamState.flagsince <= 999) {
             return;
         }
@@ -174,7 +124,6 @@ void Touch_RaceCheckpoint(gentity_t *self, gentity_t *other, trace_t *trace) {
     }
 
     if (!self->target) {
-        // finish
         qboolean personalBest;
 
         for (i = 0; i < level.numPlayingClients; i++) {
@@ -185,7 +134,6 @@ void Touch_RaceCheckpoint(gentity_t *self, gentity_t *other, trace_t *trace) {
         }
         ri->lastTime = cl->pers.teamState.flagsince;
 
-        // [QL] 0x100637be: the PLAYER_RACECOMPLETE event, with the lap's time
         STAT_PlayerRaceComplete(other, ri->lastTime, ri->weaponUsed);
 
         if (ri->lastTime < level.clients[level.sortedClients[0]].ps.persistant[PERS_SCORE]) {
@@ -217,7 +165,6 @@ void Touch_RaceCheckpoint(gentity_t *self, gentity_t *other, trace_t *trace) {
         ri->racingActive = 0;
         CalculateRanks();
     } else {
-        // checkpoint
         int best = 0, split = 0;
 
         if (ri->currentCheckPoint < MAX_RACE_POINTS) {
@@ -245,14 +192,6 @@ void Touch_RaceCheckpoint(gentity_t *self, gentity_t *other, trace_t *trace) {
     }
 }
 
-/*
-==================
-SP_race_point
-
-[QL] 0x10063cd0. Only in Race, and only chained points. They are broadcast, carry their
-spawnflags in generic1 and all use the same flag model; modelindex2 marks the finish.
-==================
-*/
 void SP_race_point(gentity_t *ent) {
     if (g_gametype.integer != GT_RACE) {
         G_FreeEntity(ent);
@@ -283,13 +222,6 @@ void SP_race_point(gentity_t *ent) {
     G_FreeEntity(ent);
 }
 
-/*
-==================
-RACE_ClientBegin
-
-[QL] 0x100634f0. A new racer has no best run yet; the point count goes out for the HUD.
-==================
-*/
 void RACE_ClientBegin(gentity_t *ent) {
     gclient_t *client = ent->client;
 
@@ -300,35 +232,14 @@ void RACE_ClientBegin(gentity_t *ent) {
     ClientSpawn(ent);
 }
 
-/*
-==================
-Cmd_RaceInit_f
-
-[QL] 0x10063e50, the "raceinit" the client sends when it respawns: the run is dropped.
-==================
-*/
 void Cmd_RaceInit_f(gentity_t *ent) {
     ent->client->race.nextRacePoint = NULL;
     ent->client->race.nextRacePoint2 = NULL;
     ent->client->race.racingActive = 0;
 }
 
-/*
-============================================================================
-Cmd_RacePoint_f
-
-[QL] 0x10063ec0. Lays out a Race course without leaving the game: each call drops a
-point just under where the player stands and chains it to the previous one, "clear"
-deletes them all and "dump" prints their positions. Three gates first, in the binary's
-order: gametype, cheats and being alive.
-
-The chain's names are retail's (arp0, arp1, ...). The binary keeps them in a table of
-sixteen and still accepts up to sixty-four points, so from the seventeenth on it reads
-past the end; here the name is built on the spot.
-============================================================================
-*/
-static int raceAdminPoints;              // points laid so far
-static gentity_t *raceAdminLast;         // the last one, which is what points at the next
+static int raceAdminPoints;
+static gentity_t *raceAdminLast;
 
 void Cmd_RacePoint_f(gentity_t *ent) {
     char cmd[MAX_TOKEN_CHARS];
@@ -375,7 +286,6 @@ void Cmd_RacePoint_f(gentity_t *ent) {
         return;
     }
 
-    // [QL] 0x10064180: the entity is taken before the limit is checked, as retail does
     point = G_Spawn();
     if (raceAdminPoints > MAX_RACE_POINTS) {
         trap_SendServerCommand(-1, "print \"too many race points\n\"");

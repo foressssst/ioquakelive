@@ -19,15 +19,12 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// vm.c -- native DLL module loader (QVM bytecode support removed)
-
 #include "vm_local.h"
 
 vm_t* currentVM = NULL;
 vm_t* lastVM = NULL;
 int vm_debugLevel;
 
-// used by Com_Error to get rid of running vm's before longjmp
 static int forced_unload;
 
 #define MAX_VM 3
@@ -37,27 +34,12 @@ void VM_Debug(int level) {
     vm_debugLevel = level;
 }
 
-/*
-==============
-VM_Init
-==============
-*/
 void VM_Init(void) {
     Com_Memset(vmTable, 0, sizeof(vmTable));
 }
 
-/*
-============
-VM_DllSyscall
-
-Syscall dispatcher: DLL trap_* functions call this to invoke engine functions.
-Collects up to 15 varargs into an array and forwards to the module's
-registered systemCall handler.
-============
-*/
 intptr_t QDECL VM_DllSyscall(intptr_t arg, ...) {
 #if !id386 || defined __clang__
-    // rcg010206 - see commentary above
     intptr_t args[MAX_VMSYSCALL_ARGS];
     int i;
     va_list ap;
@@ -70,19 +52,11 @@ intptr_t QDECL VM_DllSyscall(intptr_t arg, ...) {
     va_end(ap);
 
     return currentVM->systemCall(args);
-#else  // original id code
+#else
     return currentVM->systemCall(&arg);
 #endif
 }
 
-/*
-=================
-VM_Restart
-
-Reload the data, but leave everything else in place
-This allows a server to do a map_restart without changing memory allocation
-=================
-*/
 vm_t* VM_Restart(vm_t* vm, qboolean unpure) {
     char name[MAX_QPATH];
     intptr_t (*systemCall)(intptr_t* parms);
@@ -96,28 +70,6 @@ vm_t* VM_Restart(vm_t* vm, qboolean unpure) {
     return vm;
 }
 
-/*
-===============
-VM_Create
-
-Creates or retrieves a virtual machine (vm_t) instance for the given module name.
-Common modules include "cgame", "ui", and "qagame".
-
-If the VM already exists, it is returned as-is. Otherwise, a free slot is
-allocated, the corresponding game module DLL is extracted from server-authorized
-pak files via FS_ExtractGamecode, and the resulting binary is loaded with
-Sys_LoadGameDll.
-
-The vmMain function and system call handler are initialized and stored in the
-vm_t structure for later execution.
-
-This function enforces pure server validation and will fail fatally if:
-- No free VM slots are available
-- The module DLL cannot be found or extracted
-- The DLL fails to load or resolve required entry points
-- The provided syscall handler is invalid
-===============
-*/
 vm_t* VM_Create(const char* module, intptr_t (*systemCalls)(intptr_t*)) {
     int i;
     int vmSlot = -1;
@@ -127,14 +79,12 @@ vm_t* VM_Create(const char* module, intptr_t (*systemCalls)(intptr_t*)) {
         Com_Error(ERR_FATAL, "VM_Create: bad parms");
     }
 
-    // Check if the VM is already loaded
     for (i = 0; i < MAX_VM; i++) {
         if (!Q_stricmp(vmTable[i].name, module)) {
             return &vmTable[i];
         }
     }
 
-    // Find a free slot
     for (i = 0; i < MAX_VM; i++) {
         if (vmTable[i].name[0] == '\0') {
             vmSlot = i;
@@ -151,16 +101,13 @@ vm_t* VM_Create(const char* module, intptr_t (*systemCalls)(intptr_t*)) {
 
     Com_Printf("VM_Create: loading module '%s'\n", module);
 
-    // Static buffer for storing extracted DLL path
     static char vm_osPaths[MAX_VM][MAX_OSPATH];
     char* dllPath = vm_osPaths[vmSlot];
 
-    // Extract the DLL (e.g., cgamex86.dll or uix86.dll) from validated pak files
     if (!FS_ExtractGamecode(module, dllPath) || dllPath[0] == '\0') {
         Com_Error(ERR_FATAL, "VM_Create: failed to extract game module '%s'", module);
     }
 
-    // Load the DLL and initialize the entry point
     vm->dllHandle = Sys_LoadGameDll(dllPath, &vm->entryPoint, VM_DllSyscall);
     if (!vm->dllHandle || !vm->entryPoint) {
         Com_Error(ERR_FATAL, "VM_Create: failed to load DLL '%s'", dllPath);
@@ -175,11 +122,6 @@ vm_t* VM_Create(const char* module, intptr_t (*systemCalls)(intptr_t*)) {
     return vm;
 }
 
-/*
-==============
-VM_Free
-==============
-*/
 void VM_Free(vm_t* vm) {
     if (!vm) {
         return;
@@ -241,12 +183,6 @@ void* VM_ExplicitArgPtr(vm_t* vm, intptr_t intValue) {
 
     return (void*)intValue;
 }
-
-/*
-==============
-VM_Call
-==============
-*/
 
 intptr_t QDECL VM_Call(vm_t* vm, int callnum, ...) {
     vm_t* oldVM;

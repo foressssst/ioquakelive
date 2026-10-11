@@ -21,17 +21,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "client.h"
 
-/*
-
-key up events are sent even if in console mode
-
-*/
-
 field_t historyEditLines[COMMAND_HISTORY];
 
-int nextHistoryLine;  // the last line in the history buffer, not masked
-int historyLine;      // the line being displayed from history buffer
-                      // will be <= nextHistoryLine
+int nextHistoryLine;
+int historyLine;
 
 field_t g_consoleField;
 field_t chatField;
@@ -49,7 +42,6 @@ typedef struct {
     int keynum;
 } keyname_t;
 
-// names not in this list can either be lowercase ascii, or '0xnn' hex sequences
 keyname_t keynames[] =
     {
         {"TAB", K_TAB},
@@ -173,7 +165,7 @@ keyname_t keynames[] =
 
         {"PAUSE", K_PAUSE},
 
-        {"SEMICOLON", ';'},  // because a raw semicolon separates commands
+        {"SEMICOLON", ';'},
 
         {"WORLD_0", K_WORLD_0},
         {"WORLD_1", K_WORLD_1},
@@ -321,22 +313,6 @@ keyname_t keynames[] =
 
         {NULL, 0}};
 
-/*
-=============================================================================
-
-EDIT FIELDS
-
-=============================================================================
-*/
-
-/*
-===================
-Field_Draw
-
-Handles horizontal scrolling and cursor blinking
-x, y, and width are in pixels
-===================
-*/
 void Field_VariableSizeDraw(field_t* edit, int x, int y, int width, int size, qboolean showCursor, qboolean noColorEscape) {
     int len;
     int drawLen;
@@ -345,10 +321,9 @@ void Field_VariableSizeDraw(field_t* edit, int x, int y, int width, int size, qb
     char str[MAX_STRING_CHARS];
     int i;
 
-    drawLen = edit->widthInChars - 1;  // - 1 so there is always a space for the cursor
+    drawLen = edit->widthInChars - 1;
     len = strlen(edit->buffer);
 
-    // guarantee that cursor will be visible
     if (len <= drawLen) {
         prestep = 0;
     } else {
@@ -365,7 +340,6 @@ void Field_VariableSizeDraw(field_t* edit, int x, int y, int width, int size, qb
         drawLen = len - prestep;
     }
 
-    // extract <drawLen> characters from the field at <prestep>
     if (drawLen >= MAX_STRING_CHARS) {
         Com_Error(ERR_DROP, "drawLen >= MAX_STRING_CHARS");
     }
@@ -373,21 +347,18 @@ void Field_VariableSizeDraw(field_t* edit, int x, int y, int width, int size, qb
     Com_Memcpy(str, edit->buffer + prestep, drawLen);
     str[drawLen] = 0;
 
-    // draw it
     if (size == SMALLCHAR_WIDTH) {
         float color[4];
 
         color[0] = color[1] = color[2] = color[3] = 1.0;
         SCR_DrawSmallStringExt(x, y, str, color, qfalse, noColorEscape);
     } else {
-        // draw big string with drop shadow
         SCR_DrawBigString(x, y, str, 1.0, noColorEscape);
     }
 
-    // draw the cursor
     if (showCursor) {
         if ((int)(cls.realtime >> 8) & 1) {
-            return;  // off blink
+            return;
         }
 
         if (key_overstrikeMode) {
@@ -416,11 +387,6 @@ void Field_BigDraw(field_t* edit, int x, int y, int width, qboolean showCursor, 
     Field_VariableSizeDraw(edit, x, y, width, BIGCHAR_WIDTH, showCursor, noColorEscape);
 }
 
-/*
-================
-Field_Paste
-================
-*/
 void Field_Paste(field_t* edit) {
     char* cbd;
     int pasteLen, i;
@@ -431,8 +397,6 @@ void Field_Paste(field_t* edit) {
         return;
     }
 
-    // send as if typed, so insert / overstrike works properly. [ioquakelive] the clipboard
-    // is UTF-8 and the field takes code points, so each character travels whole
     pasteLen = strlen(cbd);
     for (i = 0; i < pasteLen;) {
         unsigned char c = (unsigned char)cbd[i];
@@ -451,7 +415,7 @@ void Field_Paste(field_t* edit) {
             codepoint = c & 0x07;
             extra = 3;
         } else {
-            i++;  // a byte that begins nothing
+            i++;
             continue;
         }
         i++;
@@ -466,20 +430,9 @@ void Field_Paste(field_t* edit) {
     Z_Free(cbd);
 }
 
-/*
-=================
-Field_KeyDownEvent
-
-Performs the basic line editing functions for the console,
-in-game talk, and menu fields
-
-Key events are used for non-printable characters, others are gotten from char events.
-=================
-*/
 void Field_KeyDownEvent(field_t* edit, int key) {
     int len;
 
-    // shift-insert is paste
     if (((key == K_INS) || (key == K_KP_INS)) && keys[K_SHIFT].down) {
         Field_Paste(edit);
         return;
@@ -491,7 +444,6 @@ void Field_KeyDownEvent(field_t* edit, int key) {
     switch (key) {
         case K_DEL:
             if (edit->cursor < len) {
-                // [ioquakelive] the whole character, however many bytes it is
                 int next = Q_UTF8_Next(edit->buffer, edit->cursor);
 
                 memmove(edit->buffer + edit->cursor,
@@ -501,7 +453,6 @@ void Field_KeyDownEvent(field_t* edit, int key) {
 
         case K_RIGHTARROW:
             if (Con_GetStyle() == 1 && keys[K_CTRL].down) {
-                // [CNQ3] ctrl-right: start of the next word
                 const char* c = edit->buffer + edit->cursor;
                 if (*c != ' ') {
                     while (*c != '\0' && *c != ' ')
@@ -511,7 +462,6 @@ void Field_KeyDownEvent(field_t* edit, int key) {
                     c++;
                 edit->cursor = (int)(c - edit->buffer);
             } else if (Con_GetStyle() == 1 && keys[K_SHIFT].down) {
-                // [CNQ3] shift-right: start of the next argument
                 int currentArg, lastArg;
                 Cmd_TokenizeString(edit->buffer);
                 currentArg = Cmd_ArgIndexFromOffset(edit->cursor);
@@ -528,7 +478,6 @@ void Field_KeyDownEvent(field_t* edit, int key) {
 
         case K_LEFTARROW:
             if (Con_GetStyle() == 1 && keys[K_CTRL].down) {
-                // [CNQ3] ctrl-left: start of the previous word
                 const char* const s = edit->buffer;
                 const char* c = s + edit->cursor;
                 if (c > s && c[-1] == ' ') {
@@ -539,11 +488,10 @@ void Field_KeyDownEvent(field_t* edit, int key) {
                     c--;
                 edit->cursor = (int)(c - edit->buffer);
             } else if (Con_GetStyle() == 1 && keys[K_SHIFT].down) {
-                // [CNQ3] shift-left: start of this argument, or of the previous one
                 int currentArg, currentArgOff;
                 Cmd_TokenizeString(edit->buffer);
                 currentArg = Cmd_ArgIndexFromOffset(edit->cursor);
-                if (currentArg == -1) {  // past the last argument?
+                if (currentArg == -1) {
                     currentArg = Cmd_Argc() - 1;
                 }
                 currentArgOff = Cmd_ArgOffset(currentArg);
@@ -573,7 +521,6 @@ void Field_KeyDownEvent(field_t* edit, int key) {
             break;
     }
 
-    // Change scroll if cursor is no longer visible
     if (edit->cursor < edit->scroll) {
         edit->scroll = edit->cursor;
     } else if (edit->cursor >= edit->scroll + edit->widthInChars && edit->cursor <= len) {
@@ -581,29 +528,23 @@ void Field_KeyDownEvent(field_t* edit, int key) {
     }
 }
 
-/*
-==================
-Field_CharEvent
-==================
-*/
 void Field_CharEvent(field_t* edit, int ch) {
     int len;
 
-    if (ch == 'v' - 'a' + 1) {  // ctrl-v is paste
+    if (ch == 'v' - 'a' + 1) {
         Field_Paste(edit);
         return;
     }
 
-    if (ch == 'c' - 'a' + 1) {  // ctrl-c clears the field
+    if (ch == 'c' - 'a' + 1) {
         Field_Clear(edit);
         return;
     }
 
     len = strlen(edit->buffer);
 
-    if (ch == 'h' - 'a' + 1) {  // ctrl-h is backspace
+    if (ch == 'h' - 'a' + 1) {
         if (edit->cursor > 0) {
-            // [ioquakelive] a character outside ASCII is several bytes: the whole one goes
             int start = Q_UTF8_Start(edit->buffer, edit->cursor);
 
             memmove(edit->buffer + start,
@@ -616,28 +557,23 @@ void Field_CharEvent(field_t* edit, int ch) {
         return;
     }
 
-    if (ch == 'a' - 'a' + 1) {  // ctrl-a is home
+    if (ch == 'a' - 'a' + 1) {
         edit->cursor = 0;
         edit->scroll = 0;
         return;
     }
 
-    if (ch == 'e' - 'a' + 1) {  // ctrl-e is end
+    if (ch == 'e' - 'a' + 1) {
         edit->cursor = len;
         edit->scroll = edit->cursor - edit->widthInChars;
         return;
     }
 
-    //
-    // ignore any other non printable chars
-    //
     if (ch < 32) {
         return;
     }
 
     {
-        // [ioquakelive] what comes in is a Unicode code point, and the line is bytes: a letter
-        // outside ASCII takes two to four of them
         char utf8[4];
         int bytes = Q_UTF8_Encode(utf8, ch);
 
@@ -645,7 +581,6 @@ void Field_CharEvent(field_t* edit, int ch) {
             return;
         }
         if (key_overstrikeMode) {
-            // - 2 to leave room for the leading slash and trailing \0
             if (edit->cursor + bytes > MAX_EDIT_LINE - 2)
                 return;
             Com_Memcpy(edit->buffer + edit->cursor, utf8, bytes);
@@ -653,10 +588,9 @@ void Field_CharEvent(field_t* edit, int ch) {
                 edit->buffer[edit->cursor + bytes] = '\0';
             }
             edit->cursor += bytes;
-        } else {  // insert mode
-            // - 2 to leave room for the leading slash and trailing \0
+        } else {
             if (len + bytes > MAX_EDIT_LINE - 2) {
-                return;  // all full
+                return;
             }
             memmove(edit->buffer + edit->cursor + bytes,
                     edit->buffer + edit->cursor, len + 1 - edit->cursor);
@@ -674,49 +608,25 @@ void Field_CharEvent(field_t* edit, int ch) {
     }
 }
 
-/*
-=============================================================================
-
-CONSOLE LINE EDITING
-
-==============================================================================
-*/
-
-/*
-====================
-Console_Key
-
-Handles history and console scrollback
-====================
-*/
 void Console_Key(int key) {
-    // [ioquakelive] a click on a link asks before leaving the game
     if (key == K_MOUSE1 && Con_MouseClick()) {
         return;
     }
 
-    // [CNQ3] mark mode gets the keys first
     if (Con_HandleMarkMode(keys[K_CTRL].down, keys[K_SHIFT].down, key)) {
         return;
     }
 
-    // [CNQ3] any key but tab ends the completion cycle
     if (key != K_TAB) {
         Field_ResetCompletionCycle();
     }
 
-    // ctrl-L clears screen
     if (key == 'l' && keys[K_CTRL].down) {
         Cbuf_AddText("clear\n");
         return;
     }
 
-    // enter finishes the line
     if (key == K_ENTER || key == K_KP_ENTER) {
-        // [QL] quakelive_steam.exe 0x4b7885: with cl_allowConsoleChat off the console only takes
-        // commands, so a line without a leading slash gets one; with it on, a bare line is said
-        // in chat. Retail makes no distinction between being in a match and not (ioquake3 gated
-        // this on clc.state and tested the cvar the other way round).
         if (!cl_allowConsoleChat->integer &&
             g_consoleField.buffer[0] &&
             g_consoleField.buffer[0] != '\\' &&
@@ -730,24 +640,19 @@ void Console_Key(int key) {
 
         Com_Printf("]%s\n", g_consoleField.buffer);
 
-        // leading slash is an explicit command
         if (g_consoleField.buffer[0] == '\\' || g_consoleField.buffer[0] == '/') {
-            Cbuf_AddText(g_consoleField.buffer + 1);  // valid command
+            Cbuf_AddText(g_consoleField.buffer + 1);
             Cbuf_AddText("\n");
         } else {
-            // other text will be chat messages
             if (!g_consoleField.buffer[0]) {
-                return;  // empty lines just scroll the console without adding to history
+                return;
             } else {
-                // [QL] 0x4b78f7 says it with no further test: with the chat off the line
-                // already picked up a slash above and never reaches here
                 Cbuf_AddText("cmd say ");
                 Cbuf_AddText(g_consoleField.buffer);
                 Cbuf_AddText("\n");
             }
         }
 
-        // copy line to history buffer
         historyEditLines[nextHistoryLine % COMMAND_HISTORY] = g_consoleField;
         nextHistoryLine++;
         historyLine = nextHistoryLine;
@@ -756,27 +661,21 @@ void Console_Key(int key) {
 
         g_consoleField.widthInChars = g_console_field_width;
 
-        // [CNQ3] con_history 0 doesn't write consolehistory.txt
         if (!con_history || con_history->integer) {
             CL_SaveConsoleHistory();
         }
 
         if (clc.state == CA_DISCONNECTED) {
-            SCR_UpdateScreen();  // force an update, because the command
-        }  // may take some time
+            SCR_UpdateScreen();
+        }
         return;
     }
-
-    // command completion
 
     if (key == K_TAB) {
         Field_AutoComplete(&g_consoleField);
         return;
     }
 
-    // command history (ctrl-p ctrl-n for unix style)
-
-    // [CNQ3] con_style 1 uses shift-wheel for fast scrolling
     if ((key == K_MWHEELUP && keys[K_SHIFT].down && Con_GetStyle() == 0) || (key == K_UPARROW) || (key == K_KP_UPARROW) ||
         ((tolower(key) == 'p') && keys[K_CTRL].down)) {
         if (nextHistoryLine - historyLine < COMMAND_HISTORY && historyLine > 0) {
@@ -799,8 +698,6 @@ void Console_Key(int key) {
         return;
     }
 
-    // [CNQ3] con_style 1 scrolling: 2 lines per wheel step, 6 with shift or
-    // page up/down, a whole page with shift-page up/down
     if (Con_GetStyle() == 1) {
         if (key == K_MWHEELUP) {
             Con_ScrollLines(keys[K_SHIFT].down ? -6 : -2);
@@ -828,7 +725,6 @@ void Console_Key(int key) {
         }
     }
 
-    // console scrolling
     if (key == K_PGUP) {
         Con_PageUp();
         return;
@@ -839,37 +735,34 @@ void Console_Key(int key) {
         return;
     }
 
-    if (key == K_MWHEELUP) {  //----(SA)	added some mousewheel functionality to the console
+    if (key == K_MWHEELUP) {
         Con_PageUp();
-        if (keys[K_CTRL].down) {  // hold <ctrl> to accelerate scrolling
+        if (keys[K_CTRL].down) {
             Con_PageUp();
             Con_PageUp();
         }
         return;
     }
 
-    if (key == K_MWHEELDOWN) {  //----(SA)	added some mousewheel functionality to the console
+    if (key == K_MWHEELDOWN) {
         Con_PageDown();
-        if (keys[K_CTRL].down) {  // hold <ctrl> to accelerate scrolling
+        if (keys[K_CTRL].down) {
             Con_PageDown();
             Con_PageDown();
         }
         return;
     }
 
-    // ctrl-home = top of console
     if (key == K_HOME && keys[K_CTRL].down) {
         Con_Top();
         return;
     }
 
-    // ctrl-end = bottom of console
     if (key == K_END && keys[K_CTRL].down) {
         Con_Bottom();
         return;
     }
 
-    // [CNQ3] ctrl-i inserts the value of the cvar, or the command of the bind, being typed
     if (keys[K_CTRL].down && (key == 'i' || key == 'I')) {
         const char* name;
 
@@ -894,7 +787,6 @@ void Console_Key(int key) {
         return;
     }
 
-    // [CNQ3] ctrl-d inserts the default value of the cvar being typed
     if (keys[K_CTRL].down && (key == 'd' || key == 'D')) {
         const char* name;
 
@@ -912,32 +804,20 @@ void Console_Key(int key) {
         return;
     }
 
-    // [CNQ3] ctrl-f begins a new console search
     if (keys[K_CTRL].down && (key == 'f' || key == 'F')) {
         Q_strncpyz(g_consoleField.buffer, "\\searchconsole ", sizeof(g_consoleField.buffer));
         g_consoleField.cursor = strlen(g_consoleField.buffer);
         return;
     }
 
-    // [CNQ3] (shift-)F3 finds the next match going up (or down)
     if (key == K_F3) {
         Con_ContinueSearch(keys[K_SHIFT].down ? qfalse : qtrue);
         return;
     }
 
-    // pass to the normal editline routine
     Field_KeyDownEvent(&g_consoleField, key);
 }
 
-//============================================================================
-
-/*
-================
-Message_Key
-
-In game talk message
-================
-*/
 void Message_Key(int key) {
     char buffer[MAX_STRING_CHARS];
 
@@ -969,8 +849,6 @@ void Message_Key(int key) {
     Field_KeyDownEvent(&chatField, key);
 }
 
-//============================================================================
-
 qboolean Key_GetOverstrikeMode(void) {
     return key_overstrikeMode;
 }
@@ -979,11 +857,6 @@ void Key_SetOverstrikeMode(qboolean state) {
     key_overstrikeMode = state;
 }
 
-/*
-===================
-Key_IsDown
-===================
-*/
 qboolean Key_IsDown(int keynum) {
     if (keynum < 0 || keynum >= MAX_KEYS) {
         return qfalse;
@@ -992,19 +865,6 @@ qboolean Key_IsDown(int keynum) {
     return keys[keynum].down;
 }
 
-/*
-===================
-Key_StringToKeynum
-
-Returns a key number to be used to index keys[] by looking at
-the given string.  Single ascii characters return themselves, while
-the K_* names are matched up.
-
-0x11 will be interpreted as raw hex, which will allow new controlers
-
-to be configured even if they don't have defined names.
-===================
-*/
 int Key_StringToKeynum(char* str) {
     keyname_t* kn;
     int n;
@@ -1016,13 +876,11 @@ int Key_StringToKeynum(char* str) {
         return tolower(str[0]);
     }
 
-    // check for hex code
     n = Com_HexStrToInt(str);
     if (n >= 0 && n < MAX_KEYS) {
         return n;
     }
 
-    // scan for a text match
     for (kn = keynames; kn->name; kn++) {
         if (!Q_stricmp(str, kn->name))
             return kn->keynum;
@@ -1031,14 +889,6 @@ int Key_StringToKeynum(char* str) {
     return -1;
 }
 
-/*
-===================
-Key_KeynumToString
-
-Returns a string (either a single ascii char, a K_* name, or a 0x11 hex string) for the
-given keynum.
-===================
-*/
 char* Key_KeynumToString(int keynum) {
     keyname_t* kn;
     static char tinystr[5];
@@ -1052,21 +902,18 @@ char* Key_KeynumToString(int keynum) {
         return "<OUT OF RANGE>";
     }
 
-    // check for printable ascii (don't use quote)
     if (keynum > 32 && keynum < 127 && keynum != '"' && keynum != ';') {
         tinystr[0] = keynum;
         tinystr[1] = 0;
         return tinystr;
     }
 
-    // check for a key string
     for (kn = keynames; kn->name; kn++) {
         if (keynum == kn->keynum) {
             return kn->name;
         }
     }
 
-    // make a hex string
     i = keynum >> 4;
     j = keynum & 15;
 
@@ -1079,34 +926,20 @@ char* Key_KeynumToString(int keynum) {
     return tinystr;
 }
 
-/*
-===================
-Key_SetBinding
-===================
-*/
 void Key_SetBinding(int keynum, const char* binding) {
     if (keynum < 0 || keynum >= MAX_KEYS) {
         return;
     }
 
-    // free old bindings
     if (keys[keynum].binding) {
         Z_Free(keys[keynum].binding);
     }
 
-    // allocate memory for new binding
     keys[keynum].binding = CopyString(binding);
 
-    // consider this like modifying an archived cvar, so the
-    // file write will be triggered at the next opportunity
     cvar_modifiedFlags |= CVAR_ARCHIVE;
 }
 
-/*
-===================
-Key_GetBinding
-===================
-*/
 char* Key_GetBinding(int keynum) {
     if (keynum < 0 || keynum >= MAX_KEYS) {
         return "";
@@ -1114,12 +947,6 @@ char* Key_GetBinding(int keynum) {
 
     return keys[keynum].binding;
 }
-
-/*
-===================
-Key_GetKey
-===================
-*/
 
 int Key_GetKey(const char* binding) {
     int i;
@@ -1134,11 +961,6 @@ int Key_GetKey(const char* binding) {
     return -1;
 }
 
-/*
-===================
-Key_Unbind_f
-===================
-*/
 void Key_Unbind_f(void) {
     int b;
 
@@ -1156,11 +978,6 @@ void Key_Unbind_f(void) {
     Key_SetBinding(b, "");
 }
 
-/*
-===================
-Key_Unbindall_f
-===================
-*/
 void Key_Unbindall_f(void) {
     int i;
 
@@ -1169,11 +986,6 @@ void Key_Unbindall_f(void) {
             Key_SetBinding(i, "");
 }
 
-/*
-===================
-Key_Bind_f
-===================
-*/
 void Key_Bind_f(void) {
     int i, c, b;
     char cmd[1024];
@@ -1198,8 +1010,7 @@ void Key_Bind_f(void) {
         return;
     }
 
-    // copy the rest of the command line
-    cmd[0] = 0;  // start out with a null string
+    cmd[0] = 0;
     for (i = 2; i < c; i++) {
         strcat(cmd, Cmd_Argv(i));
         if (i != (c - 1))
@@ -1209,13 +1020,6 @@ void Key_Bind_f(void) {
     Key_SetBinding(b, cmd);
 }
 
-/*
-============
-Key_WriteBindings
-
-Writes lines containing "bind key value"
-============
-*/
 void Key_WriteBindings(fileHandle_t f) {
     int i;
 
@@ -1228,12 +1032,6 @@ void Key_WriteBindings(fileHandle_t f) {
     }
 }
 
-/*
-============
-Key_Bindlist_f
-
-============
-*/
 void Key_Bindlist_f(void) {
     int i;
 
@@ -1244,11 +1042,6 @@ void Key_Bindlist_f(void) {
     }
 }
 
-/*
-============
-Key_KeynameCompletion
-============
-*/
 void Key_KeynameCompletion(void (*callback)(const char* s)) {
     int i;
 
@@ -1256,14 +1049,8 @@ void Key_KeynameCompletion(void (*callback)(const char* s)) {
         callback(keynames[i].name);
 }
 
-/*
-====================
-Key_CompleteUnbind
-====================
-*/
 static void Key_CompleteUnbind(char* args, int argNum) {
     if (argNum == 2) {
-        // Skip "unbind "
         char* p = Com_SkipTokens(args, 1, " ");
 
         if (p > args)
@@ -1271,22 +1058,15 @@ static void Key_CompleteUnbind(char* args, int argNum) {
     }
 }
 
-/*
-====================
-Key_CompleteBind
-====================
-*/
 static void Key_CompleteBind(char* args, int argNum) {
     char* p;
 
     if (argNum == 2) {
-        // Skip "bind "
         p = Com_SkipTokens(args, 1, " ");
 
         if (p > args)
             Field_CompleteKeyname();
     } else if (argNum >= 3) {
-        // Skip "bind <key> "
         p = Com_SkipTokens(args, 2, " ");
 
         if (p > args)
@@ -1294,13 +1074,7 @@ static void Key_CompleteBind(char* args, int argNum) {
     }
 }
 
-/*
-===================
-CL_InitKeyCommands
-===================
-*/
 void CL_InitKeyCommands(void) {
-    // register our functions
     Cmd_AddCommand("bind", Key_Bind_f);
     Cmd_SetCommandCompletionFunc("bind", Key_CompleteBind);
     Cmd_AddCommand("unbind", Key_Unbind_f);
@@ -1309,13 +1083,6 @@ void CL_InitKeyCommands(void) {
     Cmd_AddCommand("bindlist", Key_Bindlist_f);
 }
 
-/*
-===================
-CL_BindUICommand
-
-Returns qtrue if bind command should be executed while user interface is shown
-===================
-*/
 static qboolean CL_BindUICommand(const char* cmd) {
     if (Key_GetCatcher() & KEYCATCH_CONSOLE)
         return qfalse;
@@ -1328,13 +1095,6 @@ static qboolean CL_BindUICommand(const char* cmd) {
     return qfalse;
 }
 
-/*
-===================
-CL_ParseBinding
-
-Execute the commands in the bind string
-===================
-*/
 void CL_ParseBinding(int key, qboolean down, unsigned time) {
     char buf[MAX_STRING_CHARS], *p = buf, *end;
     qboolean allCommands, allowUpCmds;
@@ -1345,10 +1105,8 @@ void CL_ParseBinding(int key, qboolean down, unsigned time) {
         return;
     Q_strncpyz(buf, keys[key].binding, sizeof(buf));
 
-    // run all bind commands if console, ui, etc aren't reading keys
     allCommands = (Key_GetCatcher() == 0);
 
-    // allow button up commands if in game even if key catcher is set
     allowUpCmds = (clc.state != CA_DISCONNECTED);
 
     while (1) {
@@ -1358,9 +1116,6 @@ void CL_ParseBinding(int key, qboolean down, unsigned time) {
         if (end)
             *end = '\0';
         if (*p == '+') {
-            // button commands add keynum and time as parameters
-            // so that multiple sources can be discriminated and
-            // subframe corrected
             if (allCommands || (allowUpCmds && !down)) {
                 char cmd[1024];
                 Com_sprintf(cmd, sizeof(cmd), "%c%s %d %d\n",
@@ -1368,7 +1123,6 @@ void CL_ParseBinding(int key, qboolean down, unsigned time) {
                 Cbuf_AddText(cmd);
             }
         } else if (down) {
-            // normal commands only execute on key press
             if (allCommands || CL_BindUICommand(p)) {
                 Cbuf_AddText(p);
                 Cbuf_AddText("\n");
@@ -1380,15 +1134,6 @@ void CL_ParseBinding(int key, qboolean down, unsigned time) {
     }
 }
 
-/*
-===================
-CL_DemoKeyCommand
-
-[QL] the switch at quakelive_steam.exe 0x4b7cea, key minus 32 into the table at 0x4b803c.
-Right and the wheel up step one frame while the demo is frozen, and speed it up otherwise.
-The jumps, the free camera and the list of keys are ioquakelive's.
-===================
-*/
 static const char *CL_DemoKeyCommand(int key) {
     switch (key) {
     case K_SPACE:
@@ -1423,13 +1168,6 @@ static const char *CL_DemoKeyCommand(int key) {
     return NULL;
 }
 
-/*
-===================
-CL_KeyDownEvent
-
-Called by CL_KeyEvent to handle a keypress
-===================
-*/
 void CL_KeyDownEvent(int key, unsigned time) {
     keys[key].down = qtrue;
     keys[key].repeats++;
@@ -1437,43 +1175,32 @@ void CL_KeyDownEvent(int key, unsigned time) {
         anykeydown++;
 
     if (keys[K_ALT].down && key == K_ENTER) {
-        // don't repeat fullscreen toggle when keys are held down
         if (keys[K_ENTER].repeats > 1) {
             return;
         }
 
-        // [QL] quakelive_steam.exe 0x004f1750, message 0x104: retail flips the cvar and runs
-        // its own "vid_restart fast". r_fullscreen is latched in both, so the restart is what
-        // applies it; ours keeps the modules and the media where the renderer can
         Cvar_SetValue("r_fullscreen",
                       !Cvar_VariableIntegerValue("r_fullscreen"));
         Cbuf_ExecuteText(EXEC_APPEND, "vid_restart fast\n");
         return;
     }
 
-    // console key is hardcoded, so the user can never unbind it
     if (key == K_CONSOLE) {
         Con_ToggleConsole_f();
         Key_ClearStates();
         return;
     }
 
-    // [ioquakelive] Shift+Escape ignores com_allowConsole, the way retail lets a held
-    // modifier through (0x4b7b7f): the console is never unreachable after being turned
-    // off in the options.
     if (keys[K_SHIFT].down && key == K_ESCAPE) {
         Con_ToggleConsole_Forced();
         Key_ClearStates();
         return;
     }
 
-    // [ioquakelive] the link prompt takes every key while it is up, Escape included
     if ((Key_GetCatcher() & KEYCATCH_CONSOLE) && Con_LinkPromptKey(key)) {
         return;
     }
 
-    // keys can still be used for bound actions
-    // [QL] a key no longer cuts a demo short: retail drives the demo with them (below)
     if ((key < 128 || key == K_MOUSE1) && clc.state == CA_CINEMATIC && Key_GetCatcher() == 0) {
         if (Cvar_VariableValue("com_cameraMode") == 0) {
             Cvar_Set("nextdemo", "");
@@ -1481,16 +1208,12 @@ void CL_KeyDownEvent(int key, unsigned time) {
         }
     }
 
-    // escape is always handled special
     if (key == K_ESCAPE) {
         if (Key_GetCatcher() & KEYCATCH_MESSAGE) {
-            // clear message mode
             Message_Key(key);
             return;
         }
 
-        // [QL] quakelive_steam.exe 0x4b7c0f: cgame gets event 5 and drops its own catcher
-        // (hiding the join menu), and Escape carries on to bring up the in-game menu
         if (Key_GetCatcher() & KEYCATCH_CGAME) {
             VM_Call(cgvm, CG_EVENT_HANDLING, CGAME_EVENT_ESCAPE);
         }
@@ -1510,9 +1233,6 @@ void CL_KeyDownEvent(int key, unsigned time) {
         return;
     }
 
-    // [QL] quakelive_steam.exe 0x4b7cbb: while a demo plays and nothing catches keys, these
-    // drive it instead of their binds, as the demo HUD shows. [ioquakelive] cgame may hold the
-    // keys for the pointer over those controls, and they still drive it then
     if (clc.demoplaying && !(Key_GetCatcher() & ~KEYCATCH_CGAME)) {
         const char *cmd = CL_DemoKeyCommand(key);
 
@@ -1522,10 +1242,8 @@ void CL_KeyDownEvent(int key, unsigned time) {
         }
     }
 
-    // send the bound action
     CL_ParseBinding(key, qtrue, time);
 
-    // distribute the key down event to the appropriate handler
     if (Key_GetCatcher() & KEYCATCH_CONSOLE) {
         Console_Key(key);
     } else if (Key_GetCatcher() & KEYCATCH_UI) {
@@ -1533,8 +1251,6 @@ void CL_KeyDownEvent(int key, unsigned time) {
             VM_Call(uivm, UI_KEY_EVENT, key, qtrue);
         }
     } else if (Key_GetCatcher() & KEYCATCH_MESSAGE) {
-        // [QL] quakelive_steam.exe 0x4b7eaa: the chat line is served before cgame, so a
-        // message opened over a cgame menu (join menu, end-of-match board) gets its keys
         Message_Key(key);
     } else if (Key_GetCatcher() & KEYCATCH_CGAME) {
         if (cgvm) {
@@ -1545,13 +1261,6 @@ void CL_KeyDownEvent(int key, unsigned time) {
     }
 }
 
-/*
-===================
-CL_KeyUpEvent
-
-Called by CL_KeyEvent to handle a keyrelease
-===================
-*/
 void CL_KeyUpEvent(int key, unsigned time) {
     keys[key].repeats = 0;
     keys[key].down = qfalse;
@@ -1561,16 +1270,9 @@ void CL_KeyUpEvent(int key, unsigned time) {
         anykeydown = 0;
     }
 
-    // don't process key-up events for the console key
     if (key == K_CONSOLE || (key == K_ESCAPE && keys[K_SHIFT].down))
         return;
 
-    //
-    // key up events only perform actions if the game key binding is
-    // a button command (leading + sign).  These will be processed even in
-    // console mode and menu mode, to keep the character from continuing
-    // an action started before a mode switch.
-    //
     CL_ParseBinding(key, qfalse, time);
 
     if (Key_GetCatcher() & KEYCATCH_UI && uivm) {
@@ -1580,15 +1282,7 @@ void CL_KeyUpEvent(int key, unsigned time) {
     }
 }
 
-/*
-===================
-CL_KeyEvent
-
-Called by the system for both key up and key down events
-===================
-*/
 void CL_KeyEvent(int key, qboolean down, unsigned time) {
-    // [ioquakelive] the renderer may want to mark the click for a latency analyzer
     if (down && key == K_MOUSE1 && cls.rendererStarted && re.LowLatencyFlash) {
         re.LowLatencyFlash();
     }
@@ -1599,23 +1293,12 @@ void CL_KeyEvent(int key, qboolean down, unsigned time) {
         CL_KeyUpEvent(key, time);
 }
 
-/*
-===================
-CL_CharEvent
-
-Normal keyboard characters, already shifted / capslocked / etc
-===================
-*/
 void CL_CharEvent(int key) {
-    // delete is not a printable character and is
-    // otherwise handled by Field_KeyDownEvent
     if (key == 127) {
         return;
     }
 
-    // distribute the key down event to the appropriate handler
     if (Key_GetCatcher() & KEYCATCH_CONSOLE) {
-        // [CNQ3] typing is blocked in mark mode
         if (!Con_SwallowCharEvent(key)) {
             Field_CharEvent(&g_consoleField, key);
         }
@@ -1628,11 +1311,6 @@ void CL_CharEvent(int key) {
     }
 }
 
-/*
-===================
-Key_ClearStates
-===================
-*/
 void Key_ClearStates(void) {
     int i;
 
@@ -1649,41 +1327,22 @@ void Key_ClearStates(void) {
 
 static int keyCatchers = 0;
 
-/*
-====================
-Key_GetCatcher
-====================
-*/
 int Key_GetCatcher(void) {
     return keyCatchers;
 }
 
-/*
-====================
-Key_SetCatcher
-====================
-*/
 void Key_SetCatcher(int catcher) {
-    // If the catcher state is changing, clear all key states
     if (catcher != keyCatchers)
         Key_ClearStates();
 
     keyCatchers = catcher;
 }
 
-// This must not exceed MAX_CMD_LINE
 #define MAX_CONSOLE_SAVE_BUFFER 1024
 #define CONSOLE_HISTORY_FILE "consolehistory.txt"
 static char consoleSaveBuffer[MAX_CONSOLE_SAVE_BUFFER];
 static int consoleSaveBufferSize = 0;
 
-/*
-================
-CL_LoadConsoleHistory
-
-Load the console history from cl_consoleHistory
-================
-*/
 void CL_LoadConsoleHistory(void) {
     char *token, *text_p;
     int i, numChars, numLines = 0;
@@ -1740,14 +1399,6 @@ void CL_LoadConsoleHistory(void) {
     FS_FCloseFile(f);
 }
 
-/*
-================
-CL_SaveConsoleHistory
-
-Save the console history into the cvar cl_consoleHistory
-so that it persists across invocations of q3
-================
-*/
 void CL_SaveConsoleHistory(void) {
     int i;
     int lineLength, saveBufferLength, additionalLength;
@@ -1761,7 +1412,6 @@ void CL_SaveConsoleHistory(void) {
             lineLength = strlen(historyEditLines[i].buffer);
             saveBufferLength = strlen(consoleSaveBuffer);
 
-            // ICK
             additionalLength = lineLength + strlen("999 999 999  ");
 
             if (saveBufferLength + additionalLength < MAX_CONSOLE_SAVE_BUFFER) {

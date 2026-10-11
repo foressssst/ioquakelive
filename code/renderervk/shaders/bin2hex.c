@@ -50,7 +50,7 @@ int main( int argc, const char* argv[] ) {
 		return -1;
 	}
 
-	if ( argv[2][0] == '+' ) // append mode
+	if ( argv[2][0] == '+' )
 		f_out = fopen( argv[2]+1, "ab" );
 	else
 		f_out = fopen( argv[2], "wb" );

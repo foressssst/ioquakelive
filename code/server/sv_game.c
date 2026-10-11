@@ -19,43 +19,21 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// sv_game.c -- interface to the game dll
-
 #include "server.h"
 #include "../qcommon/q_zmq.h"
 #include "../qcommon/q_steam.h"
 
-/*
-===============
-SV_GI_GenerateMatchGUID
-
-[QL] 0x004e27d0: a GUID from CoCreateGuid, written as
-"%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX..." and turned to lower case. That is a
-random (version 4) UUID; this makes the same kind of UUID from the engine's own
-random bytes, which works on every platform.
-===============
-*/
 static void SV_GI_GenerateMatchGUID(char* buf, int size) {
     byte b[16];
 
     Com_RandomBytes(b, sizeof(b));
-    b[6] = (byte)((b[6] & 0x0f) | 0x40);  // version 4
-    b[8] = (byte)((b[8] & 0x3f) | 0x80);  // the RFC 4122 variant
+    b[6] = (byte)((b[6] & 0x0f) | 0x40);
+    b[8] = (byte)((b[8] & 0x3f) | 0x80);
     Com_sprintf(buf, size, "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
                 b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14],
                 b[15]);
 }
 
-/*
-===============
-SV_GI_StatsEvent
-
-[QL] 0x004e2640: retail sends the event to Steam's stats (0x00468030) and to the
-ZeroMQ stats socket (0x004f4e10). The document already comes written the way
-retail's engine writes it, {"DATA": ..., "TYPE": ...} with StyledWriter, so it
-goes out as it is.
-===============
-*/
 static void SV_GI_StatsEvent(uint64_t steamId, const char* type, const char* document) {
     SV_SteamStatsEvent(steamId, type, document);
     ZMQ_PublishStats(document);
@@ -65,8 +43,6 @@ static void SV_GI_StatsEvent(uint64_t steamId, const char* type, const char* doc
 
 botlib_export_t* botlib_export;
 
-// these functions must be used instead of pointer arithmetic, because
-// the game allocates gentities with private information after the server shared part
 int SV_NumForGentity(sharedEntity_t* ent) {
     int num;
 
@@ -105,13 +81,6 @@ sharedEntity_t* SV_GEntityForSvEntity(svEntity_t* svEnt) {
     return SV_GentityNum(num);
 }
 
-/*
-===============
-SV_GameSendServerCommand
-
-Sends a command string to a client
-===============
-*/
 void SV_GameSendServerCommand(int clientNum, const char* text) {
     if (clientNum == -1) {
         SV_SendServerCommand(NULL, "%s", text);
@@ -123,13 +92,6 @@ void SV_GameSendServerCommand(int clientNum, const char* text) {
     }
 }
 
-/*
-===============
-SV_GameDropClient
-
-Disconnects the client with a message
-===============
-*/
 void SV_GameDropClient(int clientNum, const char* reason) {
     if (clientNum < 0 || clientNum >= sv_maxclients->integer) {
         return;
@@ -137,13 +99,6 @@ void SV_GameDropClient(int clientNum, const char* reason) {
     SV_DropClient(svs.clients + clientNum, reason);
 }
 
-/*
-=================
-SV_SetBrushModel
-
-sets mins and maxs for inline bmodels
-=================
-*/
 void SV_SetBrushModel(sharedEntity_t* ent, const char* name) {
     clipHandle_t h;
     vec3_t mins, maxs;
@@ -164,18 +119,11 @@ void SV_SetBrushModel(sharedEntity_t* ent, const char* name) {
     VectorCopy(maxs, ent->r.maxs);
     ent->r.bmodel = qtrue;
 
-    ent->r.contents = -1;  // we don't know exactly what is in the brushes
+    ent->r.contents = -1;
 
-    SV_LinkEntity(ent);  // FIXME: remove
+    SV_LinkEntity(ent);
 }
 
-/*
-=================
-SV_inPVS
-
-Also checks portalareas so that doors block sight
-=================
-*/
 qboolean SV_inPVS(const vec3_t p1, const vec3_t p2) {
     int leafnum;
     int cluster;
@@ -193,17 +141,10 @@ qboolean SV_inPVS(const vec3_t p1, const vec3_t p2) {
     if (mask && (!(mask[cluster >> 3] & (1 << (cluster & 7)))))
         return qfalse;
     if (!CM_AreasConnected(area1, area2))
-        return qfalse;  // a door blocks sight
+        return qfalse;
     return qtrue;
 }
 
-/*
-=================
-SV_inPVSIgnorePortals
-
-Does NOT check portalareas
-=================
-*/
 qboolean SV_inPVSIgnorePortals(const vec3_t p1, const vec3_t p2) {
     int leafnum;
     int cluster;
@@ -222,11 +163,6 @@ qboolean SV_inPVSIgnorePortals(const vec3_t p1, const vec3_t p2) {
     return qtrue;
 }
 
-/*
-========================
-SV_AdjustAreaPortalState
-========================
-*/
 void SV_AdjustAreaPortalState(sharedEntity_t* ent, qboolean open) {
     svEntity_t* svEnt;
 
@@ -237,17 +173,11 @@ void SV_AdjustAreaPortalState(sharedEntity_t* ent, qboolean open) {
     CM_AdjustAreaPortalState(svEnt->areanum, svEnt->areanum2, open);
 }
 
-/*
-==================
-SV_EntityContact
-==================
-*/
 qboolean SV_EntityContact(vec3_t mins, vec3_t maxs, const sharedEntity_t* gEnt, int capsule) {
     const float *origin, *angles;
     clipHandle_t ch;
     trace_t trace;
 
-    // check for exact collision
     origin = gEnt->r.currentOrigin;
     angles = gEnt->r.currentAngles;
 
@@ -258,12 +188,6 @@ qboolean SV_EntityContact(vec3_t mins, vec3_t maxs, const sharedEntity_t* gEnt, 
     return trace.startsolid;
 }
 
-/*
-===============
-SV_GetServerinfo
-
-===============
-*/
 void SV_GetServerinfo(char* buffer, int bufferSize) {
     if (bufferSize < 1) {
         Com_Error(ERR_DROP, "SV_GetServerinfo: bufferSize == %i", bufferSize);
@@ -271,12 +195,6 @@ void SV_GetServerinfo(char* buffer, int bufferSize) {
     Q_strncpyz(buffer, Cvar_InfoString(CVAR_SERVERINFO), bufferSize);
 }
 
-/*
-===============
-SV_LocateGameData
-
-===============
-*/
 void SV_LocateGameData(sharedEntity_t* gEnts, int numGEntities, int sizeofGEntity_t, playerState_t* clients, int sizeofGameClient) {
     sv.gentities = gEnts;
     sv.gentitySize = sizeofGEntity_t;
@@ -286,12 +204,6 @@ void SV_LocateGameData(sharedEntity_t* gEnts, int numGEntities, int sizeofGEntit
     sv.gameClientSize = sizeofGameClient;
 }
 
-/*
-===============
-SV_GetUsercmd
-
-===============
-*/
 void SV_GetUsercmd(int clientNum, usercmd_t* cmd) {
     if (clientNum < 0 || clientNum >= sv_maxclients->integer) {
         Com_Error(ERR_DROP, "SV_GetUsercmd: bad clientNum:%i", clientNum);
@@ -299,22 +211,12 @@ void SV_GetUsercmd(int clientNum, usercmd_t* cmd) {
     *cmd = svs.clients[clientNum].lastUsercmd;
 }
 
-//==============================================
-
-//==============================================
-//
-// [QL] Game import wrappers - adapt engine functions to gameImport_t signatures
-//
-
 #include "../sys/sys_loadlib.h"
 
-// Game module state
 static void *sv_gameLibHandle;
 static void *sv_vmMainTable[GAME_EXPORT_COUNT];
 static gameImport_t sv_gameImports;
 static int sv_apiVersion;
-
-// --- Core trap wrappers ---
 
 static void QDECL SV_GI_Printf(const char *fmt, ...) {
     va_list ap;
@@ -358,8 +260,6 @@ static qboolean SV_GI_GetEntityToken(char *buf, int size) {
     return (sv.entityParsePoint || s[0]) ? qtrue : qfalse;
 }
 
-// --- Bot library wrappers (runtime botlib_export check) ---
-
 static int SV_GI_BotLibVarSet(const char *n, const char *v) {
     return botlib_export ? botlib_export->BotLibVarSet((char*)n, (char*)v) : 0;
 }
@@ -399,8 +299,6 @@ static int SV_GI_AAS_PointAreaNum(const vec3_t point) {
 static int SV_GI_AAS_TraceAreas(const vec3_t start, const vec3_t end, int *areas, void *points, int maxareas) {
     return botlib_export ? botlib_export->aas.AAS_TraceAreas((float*)start, (float*)end, areas, (vec3_t*)points, maxareas) : 0;
 }
-
-// --- AAS Extended wrappers ---
 
 static void SV_GI_AAS_PresenceTypeBoundingBox(int presencetype, vec3_t mins, vec3_t maxs) {
     if (botlib_export) botlib_export->aas.AAS_PresenceTypeBoundingBox(presencetype, mins, maxs);
@@ -469,8 +367,6 @@ static int SV_GI_AAS_Swimming(vec3_t origin) {
 static int SV_GI_AAS_PredictClientMovement(void *move, int entnum, vec3_t origin, int presencetype, int onground, vec3_t velocity, vec3_t cmdmove, int cmdframes, int maxframes, float frametime, int stopevent, int stopareanum, int visualize) {
     return botlib_export ? botlib_export->aas.AAS_PredictClientMovement(move, entnum, origin, presencetype, onground, velocity, cmdmove, cmdframes, maxframes, frametime, stopevent, stopareanum, visualize) : 0;
 }
-
-// --- EA wrappers ---
 
 static void SV_GI_EA_Command(int client, char *command) {
     if (botlib_export) botlib_export->ea.EA_Command(client, command);
@@ -568,8 +464,6 @@ static void SV_GI_EA_ResetInput(int client) {
     if (botlib_export) botlib_export->ea.EA_ResetInput(client);
 }
 
-// --- Bot Character wrappers ---
-
 static int SV_GI_BotLoadCharacter(char *charfile, float skill) {
     return botlib_export ? botlib_export->ai.BotLoadCharacter(charfile, skill) : 0;
 }
@@ -597,8 +491,6 @@ static int SV_GI_Characteristic_BInteger(int character, int index, int min, int 
 static void SV_GI_Characteristic_String(int character, int index, char *buf, int size) {
     if (botlib_export) botlib_export->ai.Characteristic_String(character, index, buf, size);
 }
-
-// --- Bot Chat wrappers ---
 
 static int SV_GI_BotAllocChatState(void) {
     return botlib_export ? botlib_export->ai.BotAllocChatState() : 0;
@@ -679,8 +571,6 @@ static void SV_GI_BotSetChatName(int chatstate, char *name, int client) {
 static int SV_GI_BotLoadChatFile(int chatstate, char *chatfile, char *chatname) {
     return botlib_export ? botlib_export->ai.BotLoadChatFile(chatstate, chatfile, chatname) : 0;
 }
-
-// --- Bot Goal wrappers ---
 
 static void SV_GI_BotResetGoalState(int goalstate) {
     if (botlib_export) botlib_export->ai.BotResetGoalState(goalstate);
@@ -798,8 +688,6 @@ static void SV_GI_BotFreeGoalState(int handle) {
     if (botlib_export) botlib_export->ai.BotFreeGoalState(handle);
 }
 
-// --- Bot Movement wrappers ---
-
 static void SV_GI_BotResetMoveState(int movestate) {
     if (botlib_export) botlib_export->ai.BotResetMoveState(movestate);
 }
@@ -848,8 +736,6 @@ static void SV_GI_BotAddAvoidSpot(int movestate, vec3_t origin, float radius, in
     if (botlib_export) botlib_export->ai.BotAddAvoidSpot(movestate, origin, radius, type);
 }
 
-// --- Bot Weapon wrappers ---
-
 static int SV_GI_BotChooseBestFightWeapon(int weaponstate, int *inventory) {
     return botlib_export ? botlib_export->ai.BotChooseBestFightWeapon(weaponstate, inventory) : 0;
 }
@@ -873,8 +759,6 @@ static void SV_GI_BotFreeWeaponState(int weaponstate) {
 static void SV_GI_BotResetWeaponState(int weaponstate) {
     if (botlib_export) botlib_export->ai.BotResetWeaponState(weaponstate);
 }
-
-// --- Misc Bot wrappers ---
 
 static int SV_GI_GeneticParentsAndChildSelection(int numranks, float *ranks, int *parent1, int *parent2, int *child) {
     return botlib_export ? botlib_export->ai.GeneticParentsAndChildSelection(numranks, ranks, parent1, parent2, child) : 0;
@@ -914,9 +798,6 @@ static void SV_GI_BotUserCommand(int clientNum, usercmd_t *cmd) {
     }
 }
 
-// --- Steam ---
-
-// [QL] 0x004e2710, import +0x320: a bot has none (its userinfo carries a characterfile)
 static uint64_t SV_GI_GetSteamID(int clientNum) {
     client_t* cl;
 
@@ -930,7 +811,6 @@ static uint64_t SV_GI_GetSteamID(int clientNum) {
     return cl->steam_id;
 }
 
-// the player the stats and achievement imports are about: somebody in the game, not a bot
 static client_t* SV_GI_StatsClient(int clientNum) {
     client_t* cl;
 
@@ -944,7 +824,6 @@ static client_t* SV_GI_StatsClient(int clientNum) {
     return cl;
 }
 
-// [QL] 0x004e2770, import +0x324
 static void SV_GI_IncrementSteamStat(int clientNum, int stat, int amount) {
     client_t* cl = SV_GI_StatsClient(clientNum);
 
@@ -953,7 +832,6 @@ static void SV_GI_IncrementSteamStat(int clientNum, int stat, int amount) {
     }
 }
 
-// [QL] 0x004e2860, import +0x32c
 static void SV_GI_SetAchievement(int clientNum, int achievement) {
     client_t* cl = SV_GI_StatsClient(clientNum);
 
@@ -962,23 +840,12 @@ static void SV_GI_SetAchievement(int clientNum, int achievement) {
     }
 }
 
-// [QL] 0x004e28c0, import +0x330
 static qboolean SV_GI_HasAchievement(int clientNum, int achievement) {
     client_t* cl = SV_GI_StatsClient(clientNum);
 
     return cl ? SV_SteamStatsHasAchievement(cl->steam_id, achievement) : qfalse;
 }
 
-/*
-===============
-SV_GI_VerifySteamAuth
-
-[QL] 0x004e2920, import +0x334, from ClientConnect the first time a player joins. The
-ticket is the one that came in the player's getchallenge; the challenge is found by the
-number the client was given. There is nothing to check in a game of one's own
-(sv_serverType 0) or with com_build, and the host went through it in SV_DirectConnect.
-===============
-*/
 static qboolean SV_GI_VerifySteamAuth(int clientNum) {
     client_t* cl;
     challenge_t* challenge;
@@ -1002,8 +869,6 @@ static qboolean SV_GI_VerifySteamAuth(int clientNum) {
     if (cl->netchan.remoteAddress.type == NA_LOOPBACK) {
         return qtrue;
     }
-    // the ticket starts at 0x19 of the packet; authTokenLen counts from 0x11, so it also
-    // covers the Steam ID's eight bytes
     if (!Steam_GS_BeginAuth(cl->steam_id, challenge->authToken, challenge->authTokenLen - 8)) {
         return qfalse;
     }
@@ -1015,22 +880,11 @@ static void SV_GI_GetServerSteamID(char *buf, int size) {
     if (buf && size > 0) buf[0] = '\0';
 }
 
-
-// [QL] import slot 206: whether a factory with this id is loaded, for callvote
-// map (quakelive_steam.exe 0x4e2a20)
 static qboolean SV_GI_FactoryExists(const char* id) { return SV_FindFactory(id) != NULL; }
 
-/*
-===============
-SV_PopulateGameImports
-
-Fill in the gameImport_t function pointer table that the game module receives.
-===============
-*/
 static void SV_PopulateGameImports(void) {
     memset(&sv_gameImports, 0, sizeof(sv_gameImports));
 
-    // Core engine traps
     sv_gameImports.trap_SendConsoleCommand    = SV_GI_SendConsoleCommand;
     sv_gameImports.trap_RealTime              = Com_RealTime;
     sv_gameImports.trap_Printf                = SV_GI_Printf;
@@ -1047,7 +901,6 @@ static void SV_PopulateGameImports(void) {
     sv_gameImports.trap_Argv                  = Cmd_ArgvBuffer;
     sv_gameImports.trap_Argc                  = Cmd_Argc;
 
-    // Game data and client management
     sv_gameImports.trap_LocateGameData         = (void (*)(gentity_t*, int, int, gclient_t*, int))SV_LocateGameData;
     sv_gameImports.trap_DropClient             = SV_GameDropClient;
     sv_gameImports.trap_SendServerCommand      = SV_GameSendServerCommand;
@@ -1057,7 +910,6 @@ static void SV_PopulateGameImports(void) {
     sv_gameImports.trap_SetUserinfo            = SV_SetUserinfo;
     sv_gameImports.trap_GetServerinfo          = SV_GetServerinfo;
 
-    // Collision and world
     sv_gameImports.trap_SetBrushModel          = (void (*)(gentity_t*, const char*))SV_SetBrushModel;
     sv_gameImports.trap_Trace                  = SV_GI_Trace;
     sv_gameImports.trap_TraceCapsule           = SV_GI_TraceCapsule;
@@ -1068,13 +920,11 @@ static void SV_PopulateGameImports(void) {
     sv_gameImports.trap_EntitiesInBox          = SV_AreaEntities;
     sv_gameImports.trap_EntityContact          = SV_GI_EntityContact;
 
-    // Bot client management
     sv_gameImports.trap_BotAllocateClient      = SV_BotAllocateClient;
     sv_gameImports.trap_BotFreeClient          = SV_BotFreeClient;
     sv_gameImports.trap_GetUsercmd             = SV_GetUsercmd;
     sv_gameImports.trap_GetEntityToken         = SV_GI_GetEntityToken;
 
-    // Bot library
     sv_gameImports.trap_BotLibSetup            = SV_BotLibSetup;
     sv_gameImports.trap_BotLibShutdown         = SV_BotLibShutdown;
     sv_gameImports.trap_BotLibVarSet           = SV_GI_BotLibVarSet;
@@ -1085,14 +935,12 @@ static void SV_PopulateGameImports(void) {
     sv_gameImports.trap_BotGetSnapshotEntity   = SV_BotGetSnapshotEntity;
     sv_gameImports.trap_BotUserCommand         = SV_GI_BotUserCommand;
 
-    // AAS (base)
     sv_gameImports.trap_AAS_EntityInfo         = SV_GI_AAS_EntityInfo;
     sv_gameImports.trap_AAS_Initialized        = SV_GI_AAS_Initialized;
     sv_gameImports.trap_AAS_Time               = SV_GI_AAS_Time;
     sv_gameImports.trap_AAS_PointAreaNum       = SV_GI_AAS_PointAreaNum;
     sv_gameImports.trap_AAS_TraceAreas         = SV_GI_AAS_TraceAreas;
 
-    // AAS (extended)
     sv_gameImports.trap_AAS_PresenceTypeBoundingBox = SV_GI_AAS_PresenceTypeBoundingBox;
     sv_gameImports.trap_AAS_PointReachabilityAreaIndex = SV_GI_AAS_PointReachabilityAreaIndex;
     sv_gameImports.trap_AAS_BBoxAreas          = SV_GI_AAS_BBoxAreas;
@@ -1111,7 +959,6 @@ static void SV_PopulateGameImports(void) {
     sv_gameImports.trap_AAS_Swimming           = SV_GI_AAS_Swimming;
     sv_gameImports.trap_AAS_PredictClientMovement = SV_GI_AAS_PredictClientMovement;
 
-    // Elementary Actions
     sv_gameImports.trap_EA_Command             = SV_GI_EA_Command;
     sv_gameImports.trap_EA_Say                 = SV_GI_EA_Say;
     sv_gameImports.trap_EA_SayTeam             = SV_GI_EA_SayTeam;
@@ -1137,7 +984,6 @@ static void SV_PopulateGameImports(void) {
     sv_gameImports.trap_EA_GetInput            = SV_GI_EA_GetInput;
     sv_gameImports.trap_EA_ResetInput          = SV_GI_EA_ResetInput;
 
-    // Bot Character
     sv_gameImports.trap_BotLoadCharacter       = SV_GI_BotLoadCharacter;
     sv_gameImports.trap_BotFreeCharacter       = SV_GI_BotFreeCharacter;
     sv_gameImports.trap_Characteristic_Float   = SV_GI_Characteristic_Float;
@@ -1146,7 +992,6 @@ static void SV_PopulateGameImports(void) {
     sv_gameImports.trap_Characteristic_BInteger = SV_GI_Characteristic_BInteger;
     sv_gameImports.trap_Characteristic_String  = SV_GI_Characteristic_String;
 
-    // Bot Chat
     sv_gameImports.trap_BotAllocChatState      = SV_GI_BotAllocChatState;
     sv_gameImports.trap_BotFreeChatState       = SV_GI_BotFreeChatState;
     sv_gameImports.trap_BotQueueConsoleMessage = SV_GI_BotQueueConsoleMessage;
@@ -1168,7 +1013,6 @@ static void SV_PopulateGameImports(void) {
     sv_gameImports.trap_BotSetChatName         = SV_GI_BotSetChatName;
     sv_gameImports.trap_BotLoadChatFile        = SV_GI_BotLoadChatFile;
 
-    // Bot Goals
     sv_gameImports.trap_BotResetGoalState      = SV_GI_BotResetGoalState;
     sv_gameImports.trap_BotResetAvoidGoals     = SV_GI_BotResetAvoidGoals;
     sv_gameImports.trap_BotRemoveFromAvoidGoals = SV_GI_BotRemoveFromAvoidGoals;
@@ -1199,7 +1043,6 @@ static void SV_PopulateGameImports(void) {
     sv_gameImports.trap_BotAllocGoalState      = SV_GI_BotAllocGoalState;
     sv_gameImports.trap_BotFreeGoalState       = SV_GI_BotFreeGoalState;
 
-    // Bot Movement
     sv_gameImports.trap_BotResetMoveState      = SV_GI_BotResetMoveState;
     sv_gameImports.trap_BotMoveToGoal          = SV_GI_BotMoveToGoal;
     sv_gameImports.trap_BotMoveInDirection     = SV_GI_BotMoveInDirection;
@@ -1213,7 +1056,6 @@ static void SV_PopulateGameImports(void) {
     sv_gameImports.trap_BotInitMoveState       = SV_GI_BotInitMoveState;
     sv_gameImports.trap_BotAddAvoidSpot        = SV_GI_BotAddAvoidSpot;
 
-    // Bot Weapons
     sv_gameImports.trap_BotChooseBestFightWeapon = SV_GI_BotChooseBestFightWeapon;
     sv_gameImports.trap_BotGetWeaponInfo       = SV_GI_BotGetWeaponInfo;
     sv_gameImports.trap_BotLoadWeaponWeights   = SV_GI_BotLoadWeaponWeights;
@@ -1221,7 +1063,6 @@ static void SV_PopulateGameImports(void) {
     sv_gameImports.trap_BotFreeWeaponState     = SV_GI_BotFreeWeaponState;
     sv_gameImports.trap_BotResetWeaponState    = SV_GI_BotResetWeaponState;
 
-    // Misc Bot
     sv_gameImports.trap_GeneticParentsAndChildSelection = SV_GI_GeneticParentsAndChildSelection;
     sv_gameImports.trap_BotGetServerCommand    = SV_GI_BotGetServerCommand;
     sv_gameImports.trap_BotLibVarGet           = SV_GI_BotLibVarGet;
@@ -1231,7 +1072,6 @@ static void SV_PopulateGameImports(void) {
     sv_gameImports.trap_PC_ReadToken           = SV_GI_PC_ReadToken;
     sv_gameImports.trap_PC_SourceFileAndLine   = SV_GI_PC_SourceFileAndLine;
 
-    // QL extensions
     sv_gameImports.trap_GetSteamID             = SV_GI_GetSteamID;
     sv_gameImports.trap_GetServerSteamID       = SV_GI_GetServerSteamID;
     sv_gameImports.trap_SetAchievement         = SV_GI_SetAchievement;
@@ -1242,11 +1082,6 @@ static void SV_PopulateGameImports(void) {
     sv_gameImports.trap_GenerateMatchGUID      = SV_GI_GenerateMatchGUID;
     sv_gameImports.trap_StatsEvent             = SV_GI_StatsEvent;
 }
-
-//==============================================
-//
-// [QL] Game export call functions - typed wrappers for vmMainTable
-//
 
 void SV_GameShutdown(int restart) {
     if (sv_vmMainTable[GAME_SHUTDOWN])
@@ -1300,78 +1135,58 @@ void SV_GameClientCommand(int clientNum) {
         ((void (*)(int))sv_vmMainTable[GAME_CLIENT_COMMAND])(clientNum);
 }
 
-// [QL] retail export +0x44: whether this viewer's copy of a client entity loses its health, armor
-// and location (its enemies' do)
 qboolean SV_GameSnapshotVisibility(int viewerClientNum, int entityNum) {
     if (sv_vmMainTable[GAME_SNAPSHOT_VISIBILITY])
         return ((qboolean (*)(int, int))sv_vmMainTable[GAME_SNAPSHOT_VISIBILITY])(viewerClientNum, entityNum);
     return qfalse;
 }
 
-// [QL] retail export +0x30: whether a client entity goes to this viewer from anywhere on the map
 qboolean SV_GameSnapshotAlwaysSend(int viewerNum, int clientNum) {
     if (sv_vmMainTable[GAME_SNAPSHOT_ALWAYS_SEND])
         return ((qboolean (*)(int, int))sv_vmMainTable[GAME_SNAPSHOT_ALWAYS_SEND])(viewerNum, clientNum);
     return qfalse;
 }
 
-// [QL] retail export +0x2c: the bots' frame, which SV_BotFrame calls apart from GAME_RUN_FRAME
 void SV_GameBotAIStartFrame(int time) {
     if (sv_vmMainTable[GAME_BOT_AI_START_FRAME])
         ((int (*)(int))sv_vmMainTable[GAME_BOT_AI_START_FRAME])(time);
 }
 
-// [QL] retail export +0x3c: 0 when the listener may hear the speaker. Anything else and the
-// server does not relay that voice packet.
 int SV_GameVoiceFilter(int speaker, int listener) {
     if (sv_vmMainTable[GAME_VOICE_FILTER])
         return ((int (*)(int, int))sv_vmMainTable[GAME_VOICE_FILTER])(speaker, listener);
     return 0;
 }
 
-// [QL] retail export 16 (0x10052f40): an entity past the clients sent from anywhere on the map
 qboolean SV_GameEntityAlwaysSend(int entityNum) {
     if (sv_vmMainTable[GAME_ENTITY_ALWAYS_SEND])
         return ((qboolean (*)(int))sv_vmMainTable[GAME_ENTITY_ALWAYS_SEND])(entityNum);
     return qfalse;
 }
 
-// [QL] retail export 18 (0x100530c0): whether the game counts this client as an admin
 qboolean SV_GameClientIsAdmin(int clientNum) {
     if (sv_vmMainTable[GAME_CLIENT_IS_ADMIN])
         return ((qboolean (*)(int))sv_vmMainTable[GAME_CLIENT_IS_ADMIN])(clientNum);
     return qfalse;
 }
 
-// [QL] retail export 15 (0x10053020): an entity the game keeps out of this viewer's snapshot
 qboolean SV_GameSnapshotSkipEntity(int viewerNum, int entityNum) {
     if (sv_vmMainTable[GAME_SNAPSHOT_SKIP_ENTITY])
         return ((qboolean (*)(int, int))sv_vmMainTable[GAME_SNAPSHOT_SKIP_ENTITY])(viewerNum, entityNum);
     return qfalse;
 }
 
-// [QL] retail export 12 (0x1003b030): the game begins a client once it is in the world
 void SV_GameClientBegin(int clientNum) {
     if (sv_vmMainTable[GAME_CLIENT_BEGIN])
         ((void (*)(int))sv_vmMainTable[GAME_CLIENT_BEGIN])(clientNum);
 }
 
-// [QL] retail export +0x48: a client's score, which the server hands Steam's list
 int SV_GameClientScore(int clientNum) {
     if (sv_vmMainTable[GAME_CLIENT_SCORE])
         return ((int (*)(int))sv_vmMainTable[GAME_CLIENT_SCORE])(clientNum);
     return 0;
 }
 
-//==============================================
-
-/*
-===============
-SV_ShutdownGameProgs
-
-Called every time a map changes
-===============
-*/
 void SV_ShutdownGameProgs(void) {
     if (!sv_gameLibHandle) {
         return;
@@ -1384,23 +1199,6 @@ void SV_ShutdownGameProgs(void) {
 
 static void SV_LoadGameProgs(void);
 
-/*
-===============
-SV_RegisterGameCvars
-
-[QL] quakelive_steam.exe 0x4cc216: before the config files are read, the engine loads the game
-module just to run its cvar registration (export +0x08) and puts it away again, and then does the
-same with the cgame. That is what gives every gamerule cvar its real default before anything can
-set it.
-
-Without this, a cvar a factory sets was created by that Cvar_Set (with the factory's value as its
-default, and nothing kept to go back to), so leaving the factory left the value behind: Clan Arena
-into Duel kept g_startingHealth 200 and g_startingArmor 100 instead of Duel's 100 and 0.
-
-Retail also runs the shutdown export here. This does not: nothing was started, and our
-G_ShutdownGame would take the bot library down with it.
-===============
-*/
 void SV_RegisterGameCvars(void) {
     qboolean loadedHere = (sv_gameLibHandle == NULL);
 
@@ -1415,23 +1213,12 @@ void SV_RegisterGameCvars(void) {
     }
 }
 
-/*
-==================
-SV_InitGameVM
-
-Called for both a full init and a restart
-==================
-*/
-
 static void SV_InitGameVM(qboolean restart) {
     int i;
     const char* mapName = Cvar_VariableString("mapname");
     char* altEntities = NULL;
     int altLen = -1;
 
-    // [QL] 0x004e2a80: with sv_altEntDir, the level's entities come from "<dir>/<map>.ent"
-    // instead of the BSP; with sv_dumpEntities, the map's own are written to "ents/<map>.ent".
-    // If the read fails it carries on with the BSP's, which is the usual path.
     if (sv_altEntDir->string[0]) {
         altLen = FS_ReadFile(va("%s/%s.ent", sv_altEntDir->string, mapName), (void**)&altEntities);
         if (altLen > 0) {
@@ -1444,62 +1231,29 @@ static void SV_InitGameVM(qboolean restart) {
         FS_WriteFile(va("ents/%s.ent", mapName), entities, (int)strlen(entities));
     }
 
-    // start the entity parsing at the beginning
     sv.entityParsePoint = (altLen > 0 && altEntities) ? altEntities : CM_EntityString();
 
-    // clear all gentity pointers that might still be set from a previous level
     for (i = 0; i < sv_maxclients->integer; i++) {
         svs.clients[i].gentity = NULL;
     }
 
-    // use the current msec count for a random seed
     SV_GameInit(sv.time, Com_Milliseconds(), restart);
 }
 
-/*
-===================
-SV_RestartGameProgs
-
-Called on a map_restart, but not on a normal map change
-===================
-*/
 void SV_RestartGameProgs(void) {
     if (!sv_gameLibHandle) {
         return;
     }
     SV_GameShutdown(qtrue);
 
-    // Unload and reload the DLL
     Sys_UnloadLibrary(sv_gameLibHandle);
     sv_gameLibHandle = NULL;
     memset(sv_vmMainTable, 0, sizeof(sv_vmMainTable));
 
-    // Reload. SV_LoadGameProgs deliberately does not run GAME_INIT, so this
-    // is the only one, and it carries restart = qtrue as it should.
-    //
-    // Calling SV_InitGameProgs here instead ran GAME_INIT twice per
-    // map_restart - once with restart = qfalse from inside it, then again
-    // with qtrue - and the second one undid the first. That is not a cosmetic
-    // duplicate: the game starts a match by setting g_restarted and asking for
-    // a map_restart, and SP_worldspawn reads that cvar to decide between
-    // IN_PROGRESS and PRE_GAME, clearing it as it goes (qagamex86.dll
-    // 0x10066765). The first GAME_INIT therefore consumed the flag and entered
-    // IN_PROGRESS correctly, and the second, finding it cleared, dropped the
-    // level straight back into warmup. Every match ended where it began, which
-    // is a READY UP that never becomes FIGHT.
     SV_LoadGameProgs();
     SV_InitGameVM(qtrue);
 }
 
-/*
-===============
-SV_LoadGameProgs
-
-Loads qagame and publishes its vmMain table. Deliberately does NOT call
-SV_InitGameVM: the two callers need a different value for its restart flag,
-and calling it here as well is what made a map_restart run GAME_INIT twice.
-===============
-*/
 static void SV_LoadGameProgs(void) {
     cvar_t *var;
     extern int bot_enable;
@@ -1510,7 +1264,6 @@ static void SV_LoadGameProgs(void) {
     var = Cvar_Get("bot_enable", "1", CVAR_LATCH);
     bot_enable = var ? var->integer : 0;
 
-    // Extract qagame DLL from iobin.pk3 (same mechanism as cgame/ui via VM_Create)
     if (FS_ExtractGamecode("qagame", dllPath) && dllPath[0] != '\0') {
         Com_Printf("Loading game DLL from pk3: %s\n", dllPath);
         sv_gameLibHandle = Sys_LoadLibrary(dllPath);
@@ -1540,7 +1293,6 @@ static void SV_LoadGameProgs(void) {
         Com_Error(ERR_FATAL, "Game DLL missing dllEntry export");
     }
 
-    // Populate the import table and call dllEntry
     SV_PopulateGameImports();
     memset(sv_vmMainTable, 0, sizeof(sv_vmMainTable));
     sv_apiVersion = 0;
@@ -1549,25 +1301,11 @@ static void SV_LoadGameProgs(void) {
     Com_Printf("Game DLL loaded, API version %d\n", sv_apiVersion);
 }
 
-/*
-===============
-SV_InitGameProgs
-
-Called on a normal map change, not on a map_restart
-===============
-*/
 void SV_InitGameProgs(void) {
     SV_LoadGameProgs();
     SV_InitGameVM(qfalse);
 }
 
-/*
-====================
-SV_GameCommand
-
-See if the current console command is claimed by the game
-====================
-*/
 qboolean SV_GameCommand(void) {
     if (sv.state != SS_GAME) {
         return qfalse;

@@ -19,37 +19,13 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "q_shared.h"
 #include "qcommon.h"
 
-/*
-
-packet header
--------------
-4	outgoing sequence.  high bit will be set if this is a fragmented message
-[2	qport (only for client to server)]
-[2	fragment start byte]
-[2	fragment length. if < FRAGMENT_SIZE, this is the last fragment]
-
-if the sequence number is -1, the packet should be handled as an out-of-band
-message instead of as part of a netcon.
-
-All fragments will have the same sequence numbers.
-
-The qport field is a workaround for bad address translating routers that
-sometimes remap the client's source port on a packet during gameplay.
-
-If the base part of the net address matches and the qport matches, then the
-channel matches even if the IP port differs.  The IP port should be updated
-to the new value before sending out any replies.
-
-*/
-
-#define MAX_PACKETLEN 1400  // max size of a network packet
+#define MAX_PACKETLEN 1400
 
 #define FRAGMENT_SIZE (MAX_PACKETLEN - 100)
-#define PACKET_HEADER 10  // two ints and a short
+#define PACKET_HEADER 10
 
 #define FRAGMENT_BIT (1U << 31)
 
@@ -61,12 +37,6 @@ static char* netsrcString[2] = {
     "client",
     "server"};
 
-/*
-===============
-Netchan_Init
-
-===============
-*/
 void Netchan_Init(int port) {
     port &= 0xffff;
     showpackets = Cvar_Get("showpackets", "0", CVAR_TEMP);
@@ -74,13 +44,6 @@ void Netchan_Init(int port) {
     qport = Cvar_Get("net_qport", va("%i", port), CVAR_INIT);
 }
 
-/*
-==============
-Netchan_Setup
-
-called to open a channel to a remote system
-==============
-*/
 void Netchan_Setup(netsrc_t sock, netchan_t* chan, netadr_t adr, int qport, int challenge) {
     Com_Memset(chan, 0, sizeof(*chan));
 
@@ -92,33 +55,21 @@ void Netchan_Setup(netsrc_t sock, netchan_t* chan, netadr_t adr, int qport, int 
     chan->challenge = challenge;
 }
 
-/*
-=================
-Netchan_TransmitNextFragment
-
-Send one fragment of the current message
-=================
-*/
 void Netchan_TransmitNextFragment(netchan_t* chan) {
     msg_t send;
     byte send_buf[MAX_PACKETLEN];
     int fragmentLength;
     int outgoingSequence;
 
-    // write the packet header
-    MSG_InitOOB(&send, send_buf, sizeof(send_buf));  // <-- only do the oob here
+    MSG_InitOOB(&send, send_buf, sizeof(send_buf));
 
     outgoingSequence = chan->outgoingSequence | FRAGMENT_BIT;
     MSG_WriteLong(&send, outgoingSequence);
 
-    // send the qport if we are a client
     if (chan->sock == NS_CLIENT) {
         MSG_WriteShort(&send, qport->integer);
     }
 
-    // [QL] no GENCHECKSUM - QL protocol doesn't use netchan checksums
-
-    // copy the reliable message to the packet first
     fragmentLength = FRAGMENT_SIZE;
     if (chan->unsentFragmentStart + fragmentLength > chan->unsentLength) {
         fragmentLength = chan->unsentLength - chan->unsentFragmentStart;
@@ -128,10 +79,8 @@ void Netchan_TransmitNextFragment(netchan_t* chan) {
     MSG_WriteShort(&send, fragmentLength);
     MSG_WriteData(&send, chan->unsentBuffer + chan->unsentFragmentStart, fragmentLength);
 
-    // send the datagram
     NET_SendPacket(chan->sock, send.cursize, send.data, chan->remoteAddress);
 
-    // Store send time and size of this packet for rate control
     chan->lastSentTime = Sys_Milliseconds();
     chan->lastSentSize = send.cursize;
 
@@ -141,24 +90,12 @@ void Netchan_TransmitNextFragment(netchan_t* chan) {
 
     chan->unsentFragmentStart += fragmentLength;
 
-    // this exit condition is a little tricky, because a packet
-    // that is exactly the fragment length still needs to send
-    // a second packet of zero length so that the other side
-    // can tell there aren't more to follow
     if (chan->unsentFragmentStart == chan->unsentLength && fragmentLength != FRAGMENT_SIZE) {
         chan->outgoingSequence++;
         chan->unsentFragments = qfalse;
     }
 }
 
-/*
-===============
-Netchan_Transmit
-
-Sends a message to a connection, fragmenting if necessary
-A 0 length will still generate a packet.
-================
-*/
 void Netchan_Transmit(netchan_t* chan, int length, const byte* data) {
     msg_t send;
     byte send_buf[MAX_PACKETLEN];
@@ -168,37 +105,29 @@ void Netchan_Transmit(netchan_t* chan, int length, const byte* data) {
     }
     chan->unsentFragmentStart = 0;
 
-    // fragment large reliable messages
     if (length >= FRAGMENT_SIZE) {
         chan->unsentFragments = qtrue;
         chan->unsentLength = length;
         Com_Memcpy(chan->unsentBuffer, data, length);
 
-        // only send the first fragment now
         Netchan_TransmitNextFragment(chan);
 
         return;
     }
 
-    // write the packet header
     MSG_InitOOB(&send, send_buf, sizeof(send_buf));
 
     MSG_WriteLong(&send, chan->outgoingSequence);
 
-    // send the qport if we are a client
     if (chan->sock == NS_CLIENT)
         MSG_WriteShort(&send, qport->integer);
-
-    // [QL] no GENCHECKSUM - QL protocol doesn't use netchan checksums
 
     chan->outgoingSequence++;
 
     MSG_WriteData(&send, data, length);
 
-    // send the datagram
     NET_SendPacket(chan->sock, send.cursize, send.data, chan->remoteAddress);
 
-    // Store send time and size of this packet for rate control
     chan->lastSentTime = Sys_Milliseconds();
     chan->lastSentSize = send.cursize;
 
@@ -207,31 +136,14 @@ void Netchan_Transmit(netchan_t* chan, int length, const byte* data) {
     }
 }
 
-/*
-=================
-Netchan_Process
-
-Returns qfalse if the message should not be processed due to being
-out of order or a fragment.
-
-Msg must be large enough to hold MAX_MSGLEN, because if this is the
-final fragment of a multi-part message, the entire thing will be
-copied out.
-=================
-*/
 qboolean Netchan_Process(netchan_t* chan, msg_t* msg) {
     int sequence;
     int fragmentStart, fragmentLength;
     qboolean fragmented;
 
-    // XOR unscramble all data in the packet after the header
-    //	Netchan_UnScramblePacket( msg );
-
-    // get sequence numbers
     MSG_BeginReadingOOB(msg);
     sequence = MSG_ReadLong(msg);
 
-    // check for fragment information
     if (sequence & FRAGMENT_BIT) {
         sequence &= ~FRAGMENT_BIT;
         fragmented = qtrue;
@@ -239,19 +151,15 @@ qboolean Netchan_Process(netchan_t* chan, msg_t* msg) {
         fragmented = qfalse;
     }
 
-    // read the qport if we are a server
     if (chan->sock == NS_SERVER) {
         MSG_ReadShort(msg);
     }
 
-    // [QL] no GENCHECKSUM - QL protocol doesn't use netchan checksums
-
-    // read the fragment information
     if (fragmented) {
         fragmentStart = MSG_ReadShort(msg);
         fragmentLength = MSG_ReadShort(msg);
     } else {
-        fragmentStart = 0;  // stop warning message
+        fragmentStart = 0;
         fragmentLength = 0;
     }
 
@@ -263,9 +171,6 @@ qboolean Netchan_Process(netchan_t* chan, msg_t* msg) {
         }
     }
 
-    //
-    // discard out of order or duplicated packets
-    //
     if (sequence <= chan->incomingSequence) {
         if (showdrop->integer || showpackets->integer) {
             Com_Printf("%s:Out of order packet %i at %i\n", NET_AdrToString(chan->remoteAddress), sequence, chan->incomingSequence);
@@ -273,9 +178,6 @@ qboolean Netchan_Process(netchan_t* chan, msg_t* msg) {
         return qfalse;
     }
 
-    //
-    // dropped packets don't keep the message from being used
-    //
     chan->dropped = sequence - (chan->incomingSequence + 1);
     if (chan->dropped > 0) {
         if (showdrop->integer || showpackets->integer) {
@@ -283,32 +185,19 @@ qboolean Netchan_Process(netchan_t* chan, msg_t* msg) {
         }
     }
 
-    //
-    // if this is the final framgent of a reliable message,
-    // bump incoming_reliable_sequence
-    //
     if (fragmented) {
-        // TTimo
-        // make sure we add the fragments in correct order
-        // either a packet was dropped, or we received this one too soon
-        // we don't reconstruct the fragments. we will wait till this fragment gets to us again
-        // (NOTE: we could probably try to rebuild by out of order chunks if needed)
         if (sequence != chan->fragmentSequence) {
             chan->fragmentSequence = sequence;
             chan->fragmentLength = 0;
         }
 
-        // if we missed a fragment, dump the message
         if (fragmentStart != chan->fragmentLength) {
             if (showdrop->integer || showpackets->integer) {
                 Com_Printf("%s:Dropped a message fragment\n", NET_AdrToString(chan->remoteAddress));
             }
-            // we can still keep the part that we have so far,
-            // so we don't need to clear chan->fragmentLength
             return qfalse;
         }
 
-        // copy the fragment to the fragment buffer
         if (fragmentLength < 0 || msg->readcount + fragmentLength > msg->cursize ||
             chan->fragmentLength + fragmentLength > sizeof(chan->fragmentBuffer)) {
             if (showdrop->integer || showpackets->integer) {
@@ -322,7 +211,6 @@ qboolean Netchan_Process(netchan_t* chan, msg_t* msg) {
 
         chan->fragmentLength += fragmentLength;
 
-        // if this wasn't the last fragment, don't process anything
         if (fragmentLength == FRAGMENT_SIZE) {
             return qfalse;
         }
@@ -333,44 +221,24 @@ qboolean Netchan_Process(netchan_t* chan, msg_t* msg) {
             return qfalse;
         }
 
-        // copy the full message over the partial fragment
-
-        // make sure the sequence number is still there
         *(int*)msg->data = LittleLong(sequence);
 
         Com_Memcpy(msg->data + 4, chan->fragmentBuffer, chan->fragmentLength);
         msg->cursize = chan->fragmentLength + 4;
         chan->fragmentLength = 0;
-        msg->readcount = 4;  // past the sequence number
-        msg->bit = 32;       // past the sequence number
+        msg->readcount = 4;
+        msg->bit = 32;
 
-        // TTimo
-        // clients were not acking fragmented messages
         chan->incomingSequence = sequence;
 
         return qtrue;
     }
 
-    //
-    // the message can now be read from the current message pointer
-    //
     chan->incomingSequence = sequence;
 
     return qtrue;
 }
 
-//==============================================================================
-
-/*
-=============================================================================
-
-LOOPBACK BUFFERS FOR LOCAL PLAYER
-
-=============================================================================
-*/
-
-// there needs to be enough loopback messages to hold a complete
-// gamestate of maximum size
 #define MAX_LOOPBACK 16
 
 typedef struct {
@@ -419,8 +287,6 @@ void NET_SendLoopPacket(netsrc_t sock, int length, const void* data, netadr_t to
     Com_Memcpy(loop->msgs[i].data, data, length);
     loop->msgs[i].datalen = length;
 }
-
-//=============================================================================
 
 typedef struct packetQueue_s {
     struct packetQueue_s* next;
@@ -477,7 +343,6 @@ void NET_FlushPacketQueue(void) {
 }
 
 void NET_SendPacket(netsrc_t sock, int length, const void* data, netadr_t to) {
-    // sequenced packets are shown in netchan, so just show oob
     if (showpackets->integer && *(int*)data == -1) {
         Com_Printf("send packet %4i\n", length);
     }
@@ -502,18 +367,10 @@ void NET_SendPacket(netsrc_t sock, int length, const void* data, netadr_t to) {
     }
 }
 
-/*
-===============
-NET_OutOfBandPrint
-
-Sends a text message in an out-of-band datagram
-================
-*/
 void QDECL NET_OutOfBandPrint(netsrc_t sock, netadr_t adr, const char* format, ...) {
     va_list argptr;
     char string[MAX_MSGLEN];
 
-    // set the header
     string[0] = -1;
     string[1] = -1;
     string[2] = -1;
@@ -523,26 +380,9 @@ void QDECL NET_OutOfBandPrint(netsrc_t sock, netadr_t adr, const char* format, .
     Q_vsnprintf(string + 4, sizeof(string) - 4, format, argptr);
     va_end(argptr);
 
-    // send the datagram
     NET_SendPacket(sock, strlen(string), string, adr);
 }
 
-/*
-===============
-NET_OutOfBandPrint
-
-Sends a data message in an out-of-band datagram (only used for "connect")
-================
-*/
-/*
-===============
-NET_OutOfBandRaw
-
-Sends a binary message in an out-of-band datagram without Huffman compression.
-Used for packets that contain raw binary data (e.g. QL getchallenge with Steam auth bytes).
-NET_OutOfBandPrint stops at null bytes; NET_OutOfBandData applies Huffman compression.
-===============
-*/
 void NET_OutOfBandRaw(netsrc_t sock, netadr_t adr, const byte* data, int len) {
     byte buf[MAX_MSGLEN];
 
@@ -551,7 +391,6 @@ void NET_OutOfBandRaw(netsrc_t sock, netadr_t adr, const byte* data, int len) {
         return;
     }
 
-    // set the header
     buf[0] = 0xff;
     buf[1] = 0xff;
     buf[2] = 0xff;
@@ -567,7 +406,6 @@ void QDECL NET_OutOfBandData(netsrc_t sock, netadr_t adr, byte* format, int len)
     int i;
     msg_t mbuf;
 
-    // set the header
     string[0] = 0xff;
     string[1] = 0xff;
     string[2] = 0xff;
@@ -580,18 +418,9 @@ void QDECL NET_OutOfBandData(netsrc_t sock, netadr_t adr, byte* format, int len)
     mbuf.data = string;
     mbuf.cursize = len + 4;
     Huff_Compress(&mbuf, 12);
-    // send the datagram
     NET_SendPacket(sock, mbuf.cursize, mbuf.data, adr);
 }
 
-/*
-=============
-NET_StringToAdr
-
-Traps "localhost" for loopback, passes everything else to system
-return 0 on address not found, 1 on address found with port, 2 on address found without port.
-=============
-*/
 int NET_StringToAdr(const char* s, netadr_t* a, netadrtype_t family) {
     char base[MAX_STRING_CHARS], *search;
     char* port = NULL;
@@ -599,14 +428,12 @@ int NET_StringToAdr(const char* s, netadr_t* a, netadrtype_t family) {
     if (!strcmp(s, "localhost")) {
         Com_Memset(a, 0, sizeof(*a));
         a->type = NA_LOOPBACK;
-        // as NA_LOOPBACK doesn't require ports report port was given.
         return 1;
     }
 
     Q_strncpyz(base, s, sizeof(base));
 
     if (*base == '[' || Q_CountChar(base, ':') > 1) {
-        // This is an ipv6 address, handle it specially.
         search = strchr(base, ']');
         if (search) {
             *search = '\0';
@@ -621,7 +448,6 @@ int NET_StringToAdr(const char* s, netadr_t* a, netadrtype_t family) {
         else
             search = base;
     } else {
-        // look for a port number
         port = strchr(base, ':');
 
         if (port) {

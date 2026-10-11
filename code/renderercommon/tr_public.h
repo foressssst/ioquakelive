@@ -26,24 +26,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define REF_API_VERSION 12
 
-//
-// these are the functions exported by the refresh module
-//
 typedef struct {
-    // called before the library is unloaded
-    // if the system is just reconfiguring, pass destroyWindow = qfalse,
-    // which will keep the screen from flashing to the desktop.
     void (*Shutdown)(qboolean destroyWindow);
 
-    // All data that will be used in a level should be
-    // registered before rendering any frames to prevent disk hits,
-    // but they can still be registered at a later time
-    // if necessary.
-    //
-    // BeginRegistration makes any existing media pointers invalid
-    // and returns the current gl configuration, including screen width
-    // and height, which can be used by the client to intelligently
-    // size display elements
     void (*BeginRegistration)(glconfig_t* config);
     qhandle_t (*RegisterModel)(const char* name);
     qhandle_t (*RegisterSkin)(const char* name);
@@ -51,16 +36,10 @@ typedef struct {
     qhandle_t (*RegisterShaderNoMip)(const char* name);
     void (*LoadWorld)(const char* name);
 
-    // the vis data is a large enough block of data that we go to the trouble
-    // of sharing it with the clipmodel subsystem
     void (*SetWorldVisData)(const byte* vis);
 
-    // EndRegistration will draw a tiny polygon with each texture, forcing
-    // them to be loaded into card memory
     void (*EndRegistration)(void);
 
-    // a scene is built up by calls to R_ClearScene and the various R_Add functions.
-    // Nothing is drawn until R_RenderScene is called.
     void (*ClearScene)(void);
     void (*AddRefEntityToScene)(const refEntity_t* re);
     void (*AddPolyToScene)(qhandle_t hShader, int numVerts, const polyVert_t* verts, int num);
@@ -69,25 +48,18 @@ typedef struct {
     void (*AddAdditiveLightToScene)(const vec3_t org, float intensity, float r, float g, float b);
     void (*RenderScene)(const refdef_t* fd);
 
-    void (*SetColor)(const float* rgba);                                                                                    // NULL = 1,1,1,1
-    void (*DrawStretchPic)(float x, float y, float w, float h, float s1, float t1, float s2, float t2, qhandle_t hShader);  // 0 = white
+    void (*SetColor)(const float* rgba);
+    void (*DrawStretchPic)(float x, float y, float w, float h, float s1, float t1, float s2, float t2, qhandle_t hShader);
 
-    // Draw images for cinematic rendering, pass as 32 bit rgba
     void (*DrawStretchRaw)(int x, int y, int w, int h, int cols, int rows, const byte* data, int client, qboolean dirty);
     void (*UploadCinematic)(int w, int h, int cols, int rows, const byte* data, int client, qboolean dirty);
 
-    // [ioquakelive] the window changed size: the renderer takes the new one without being
-    // restarted, and answers qfalse when it cannot, so the caller restarts the video instead
     qboolean (*WindowResized)(int width, int height);
 
-    // [QL] the renderer half of "vid_restart fast": the mode the cvars ask for is applied on
-    // the window that is already there, and the new configuration comes back. qfalse means it
-    // could not, so the caller restarts the video the slow way
     qboolean (*ApplyVideoMode)(glconfig_t* config);
 
     void (*BeginFrame)(stereoFrame_t stereoFrame);
 
-    // if the pointers are not NULL, timing info will be returned
     void (*EndFrame)(int* frontEndMsec, int* backEndMsec);
 
     int (*MarkFragments)(int numPoints, const vec3_t* points, const vec3_t projection, int maxPoints, vec3_t pointBuffer, int maxFragments, markFragment_t* fragmentBuffer);
@@ -100,14 +72,10 @@ typedef struct {
 #endif
     void (*RegisterFont)(const char* fontName, int pointSize, fontInfo_t* font);
 
-    // [QL] TrueType (fontstash/stb_truetype) text rendering. Fonts are loaded
-    // internally by the renderer (RegisterFont is a no-op stub); these draw and
-    // measure through the engine-side glyph atlas.
     void (*Font_DrawString)(int x, int y, const char* text, int fontIndex, float scale, int limit, float* maxX, int flags);
-    void (*TextBounds)(const char* text, int start, int fontIndex, float scale, int limit, float* extents);  // extents[5]
+    void (*TextBounds)(const char* text, int start, int fontIndex, float scale, int limit, float* extents);
     void (*GetGlyphInfo)(int fontIndex, int charValue, glyphInfo_t* glyph);
     void (*SetCompositionFont)(int fontIndex, float scale);
-    // loads a TrueType font by name for the calls above and returns its font index, or -1
     int (*Font_Register)(const char* name);
 
     void (*RemapShader)(const char* oldShader, const char* newShader, const char* offsetTime);
@@ -116,45 +84,28 @@ typedef struct {
 
     void (*TakeVideoFrame)(int h, int w, byte* captureBuffer, byte* encodeBuffer, qboolean motionJpeg);
 
-    // [QL] quakelive_steam.exe's refexport 30 and 31, which the cgame calls around its 3D view: the
-    // bloom's frame buffer takes the view, and the bloom goes over it
     void (*BeginBloomScene)(void);
     void (*ApplyBloom)(void);
 
     void (*Get_Advertisements)(int* num, float* verts, char shaders[][MAX_QPATH]);
 
-    // [ioquakelive] the client is about to read input: a renderer with a low latency path uses
-    // this to hold the frame back. NULL in the renderers that have none
     void (*LowLatencyWait)(void);
 
-    // [ioquakelive] a left click just happened, for the displays that measure latency
     void (*LowLatencyFlash)(void);
 } refexport_t;
 
-//
-// these are the functions imported by the refresh module
-//
 typedef struct {
-    // print message on the local console
     void(QDECL* Printf)(int printLevel, const char* fmt, ...) __attribute__((format(printf, 2, 3)));
 
-    // abort the game
     void(QDECL* Error)(int errorLevel, const char* fmt, ...) __attribute__((noreturn, format(printf, 2, 3)));
 
-    // milliseconds should only be used for profiling, never
-    // for anything game related.  Get time from the refdef
     int (*Milliseconds)(void);
-    // [ioquakelive] fine grained clock, to measure image loading without rounding to ms
     int64_t (*Microseconds)(void);
-    // [ioquakelive] for spreading image decoding across the workers
     void (*JobsSubmit)(void (*function)(void*), void* data);
     int (*JobWorkers)(void);
     void (*Sleep)(int milliseconds);
-    // gives up the slice while waiting on a worker
     void (*ThreadYield)(void);
 
-    // stack based memory allocation for per-level things that
-    // won't be freed
 #ifdef HUNK_DEBUG
     void* (*Hunk_AllocDebug)(int size, ha_pref pref, char* label, char* file, int line);
 #else
@@ -163,7 +114,6 @@ typedef struct {
     void* (*Hunk_AllocateTempMemory)(int size);
     void (*Hunk_FreeTempMemory)(void* block);
 
-    // dynamic memory allocator for things that need to be freed
     void* (*Malloc)(int bytes);
     void (*Free)(void* buf);
 
@@ -171,7 +121,6 @@ typedef struct {
     void (*Cvar_Set)(const char* name, const char* value);
     void (*Cvar_SetValue)(const char* name, float value);
     void (*Cvar_CheckRange)(cvar_t* cv, float minVal, float maxVal, qboolean shouldBeIntegral);
-    // [QL] quakelive_steam.exe's renderer registers its ranged cvars through this one (0x4cdd30)
     cvar_t* (*Cvar_GetRange)(const char* name, const char* value, const char* minValue, const char* maxValue, int flags);
     void (*Cvar_SetDescription)(cvar_t* cv, const char* description);
 
@@ -187,11 +136,8 @@ typedef struct {
 
     byte* (*CM_ClusterPVS)(int cluster);
 
-    // visualization for debugging collision detection
     void (*CM_DrawDebugSurface)(void (*drawPoly)(int color, int numPoints, float* points));
 
-    // a -1 return means the file does not exist
-    // NULL can be passed for buf to just determine existence
     int (*FS_FileIsInPAK)(const char* name, int* pCheckSum);
     long (*FS_ReadFile)(const char* name, void** buf);
     void (*FS_FreeFile)(void* buf);
@@ -199,39 +145,31 @@ typedef struct {
     void (*FS_FreeFileList)(char** filelist);
     void (*FS_WriteFile)(const char* qpath, const void* buffer, int size);
     qboolean (*FS_FileExists)(const char* file);
-    // [ioquakelive] the system's cache, out of the game folder: what is kept only to load faster
     long (*FS_ReadCacheFile)(const char* name, void** buf);
     void (*FS_WriteCacheFile)(const char* name, const void* buffer, int size);
 
-    // cinematic stuff
     void (*CIN_UploadCinematic)(int handle);
     int (*CIN_PlayCinematic)(const char* arg0, int xpos, int ypos, int width, int height, int bits);
     e_status (*CIN_RunCinematic)(int handle);
 
     void (*CL_WriteAVIVideoFrame)(const byte* buffer, int size);
 
-    // input event handling
     void (*IN_Init)(void* windowData);
     void (*IN_Shutdown)(void);
     void (*IN_Restart)(void);
 
-    // math
     long (*ftol)(float f);
 
-    // system stuff
     void (*Sys_SetEnv)(const char* name, const char* value);
     void (*Sys_GLimpSafeInit)(void);
     void (*Sys_GLimpInit)(void);
     qboolean (*Sys_LowPhysicalMemory)(void);
 } refimport_t;
 
-// this is the only function actually exported at the linker level
-// If the module can't init to a valid rendering state, NULL will be
-// returned.
 #ifdef USE_RENDERER_DLOPEN
 typedef refexport_t*(QDECL* GetRefAPI_t)(int apiVersion, refimport_t* rimp);
 #else
 refexport_t* GetRefAPI(int apiVersion, refimport_t* rimp);
 #endif
 
-#endif  // __TR_PUBLIC_H
+#endif

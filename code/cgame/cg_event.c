@@ -19,47 +19,20 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// cg_event.c -- handle entity events at snapshot or playerstate transitions
-
 #include "cg_local.h"
 
-// for the voice chats
 #include "../../ui/menudef.h"
-//==========================================================================
 
-/*
-===================
-CG_IsTeamGametype
-
-[QL] cgamex86.dll 0x10001060: everything but FFA, duel, race and Red Rover
-===================
-*/
 static qboolean CG_IsTeamGametype(int gametype) {
     return gametype < GT_FFA || (gametype > GT_RACE && gametype != GT_RR);
 }
 
-/*
-===================
-CG_RaceBeep
-
-[QL] cgamex86.dll 0x1001ac32: race start and checkpoints beep with cg_killBeep's sounds,
-picked by cg_raceBeep 1-8
-===================
-*/
 static void CG_RaceBeep(void) {
     if (cg_raceBeep.integer >= 1 && cg_raceBeep.integer <= 8) {
         trap_S_StartLocalSound(cgs.media.killBeepSounds[cg_raceBeep.integer - 1], CHAN_LOCAL_SOUND);
     }
 }
 
-/*
-===================
-CG_PlaceString
-
-Also called by scoreboard drawing
-===================
-*/
 const char* CG_PlaceString(int rank) {
     static char str[64];
     char *s, *t;
@@ -72,11 +45,11 @@ const char* CG_PlaceString(int rank) {
     }
 
     if (rank == 1) {
-        s = S_COLOR_BLUE "1st" S_COLOR_WHITE;  // draw in blue
+        s = S_COLOR_BLUE "1st" S_COLOR_WHITE;
     } else if (rank == 2) {
-        s = S_COLOR_RED "2nd" S_COLOR_WHITE;  // draw in red
+        s = S_COLOR_RED "2nd" S_COLOR_WHITE;
     } else if (rank == 3) {
-        s = S_COLOR_YELLOW "3rd" S_COLOR_WHITE;  // draw in yellow
+        s = S_COLOR_YELLOW "3rd" S_COLOR_WHITE;
     } else if (rank == 11) {
         s = "11th";
     } else if (rank == 12) {
@@ -97,15 +70,6 @@ const char* CG_PlaceString(int rank) {
     return str;
 }
 
-/*
-=============
-CG_ModToWeaponIcon
-
-[QL] cgamex86.dll 0x10019130: the icon CG_Obituary hands the obituary list and keeps as the
-killer's icon. Weapons map to their weapon icons, the grappling hook included, a thaw to
-icons/thaw (registered from Freeze Tag on), and everything else to icons/icon_frag.
-=============
-*/
 static qhandle_t CG_ModToWeaponIcon(int mod) {
     switch (mod) {
         case MOD_SHOTGUN:                                       return cg_weapons[WP_SHOTGUN].weaponIcon;
@@ -133,13 +97,6 @@ static qhandle_t CG_ModToWeaponIcon(int mod) {
     }
 }
 
-/*
-=============
-CG_ObitStripColors
-[QL] cgamex86.dll 0x10019065: team games strip the obituary names in place,
-dropping "^0".."^7" and any character below a space.
-=============
-*/
 static void CG_ObitStripColors(char *s) {
     const char *src = s;
     char *dst = s;
@@ -157,17 +114,6 @@ static void CG_ObitStripColors(char *s) {
     *dst = '\0';
 }
 
-/*
-=============
-CG_AddObituary
-[QL] cgamex86.dll 0x10018f60. The feed is 16 fixed slots filled in order:
-the entry takes the first inactive slot (when all 16 are taken the array
-shifts up one first). Past cg_obituaryRowSize the oldest entry is dropped and
-everything from that row on is cleared, so only the newest rows remain.
-[CPMA] With ch_animateScroll a dropped entry goes at once and the ones left
-skip their fade-in, as in CPMA 1.53 (cgame.qvm func 158881).
-=============
-*/
 static void CG_AddObituary(const char *victimName, const char *attackerName,
                             int victimTeam, int attackerTeam,
                             int hasAttacker, qhandle_t weaponIcon) {
@@ -184,7 +130,6 @@ static void CG_AddObituary(const char *victimName, const char *attackerName,
         memmove(&cg.obituaries[0], &cg.obituaries[1], (MAX_OBITUARIES - 1) * sizeof(cg.obituaries[0]));
         memset(&cg.obituaries[MAX_OBITUARIES - 1], 0, sizeof(cg.obituaries[0]));
         dropped = qtrue;
-        // retail keeps idx at 16 here and writes one slot past the array
         idx = MAX_OBITUARIES - 1;
     }
 
@@ -202,8 +147,6 @@ static void CG_AddObituary(const char *victimName, const char *attackerName,
         CG_ObitStripColors(cg.obituaries[idx].victimName);
     }
 
-    // 0x100190e1. Clamped only so an out-of-range cvar cannot move memory
-    // outside the array.
     rowSize = cg_obituaryRowSize.integer;
     if (rowSize < 0) {
         rowSize = 0;
@@ -226,21 +169,6 @@ static void CG_AddObituary(const char *victimName, const char *attackerName,
     }
 }
 
-/*
-=============
-CG_ShowFragMessage
-
-[QL] cgamex86.dll 0x100195d8: the frag message, only with cg_drawFragMessages.
-Race and Red Rover: plain. FFA/duel: place and score, or "Good Job!" in a
-training warmup. Freeze Tag: thawed/froze. Team games: telefragging a teammate
-is just noted; any other teamkill adds "Watch your fire!". "Teammate" means the
-victim is on the local player's team. Centred at y 90 (144 during a warmup),
-scale 0.3, unless cg_cameraOrbit is on.
-[ioquakelive] A deliberate divergence: every frag but a teamkill or a Freeze Tag one
-reads just "You fragged <name>", on one line with no place or score.
-CG_DrawCenterString lays it out.
-=============
-*/
 static void CG_ShowFragMessage(int target, int mod, const char* targetName) {
     const char* s;
     qboolean sameTeam = cgs.gametype >= GT_TEAM &&
@@ -268,15 +196,6 @@ static void CG_ShowFragMessage(int target, int mod, const char* targetName) {
     }
 }
 
-/*
-=============
-CG_GameEventIcon / CG_AddGameEvent
-
-[CPMA] the GameEvents element of CPMA 1.53 also carries what happens with the flag and,
-while watching, what the players pick up. They go in the same feed as the kills, in the
-same shape: who, what, and the icon between them
-=============
-*/
 static qhandle_t CG_FlagIcon(int powerup) {
     gitem_t* item = BG_FindItemForPowerup((powerup_t)powerup);
 
@@ -290,17 +209,11 @@ void CG_AddGameEvent(int clientNum, qhandle_t icon, const char* what) {
     CG_AddObituary(what, cgs.clientinfo[clientNum].name, TEAM_FREE, cgs.clientinfo[clientNum].team, 1, icon);
 }
 
-// whether what is watched is watched from outside: a demo, a spectator, or following a player
 static qboolean CG_Watching(void) {
     return (cg.demoPlayback || cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR ||
             (cg.snap->ps.pm_flags & PMF_FOLLOW)) ? qtrue : qfalse;
 }
 
-/*
-=============
-CG_Obituary
-=============
-*/
 static void CG_Obituary(entityState_t* ent) {
     int mod;
     int target, attacker;
@@ -323,21 +236,17 @@ static void CG_Obituary(entityState_t* ent) {
         CG_Error("CG_Obituary: target out of range");
     }
 
-    // [QL] 0x1001917e: the local player's death clears the scoreboard's "Fragged by" line,
-    // which a killer then sets again below. Retail clears it nowhere else.
     if (target == cg.clientNum) {
         cg.killerName[0] = 0;
     }
 
-    // [QL] 0x1001924c: a red marker where a teammate died, 16 units under the event, for
-    // cg_drawDeadFriendTime; not in Red Rover or Freeze Tag
     if (cg_drawDeadFriendTime.value != 0.0f && cgs.gametype >= GT_TEAM &&
         cg.snap->ps.persistant[PERS_TEAM] == cgs.clientinfo[target].team && target != cg.clientNum &&
         cgs.gametype != GT_RR && cgs.gametype != GT_FREEZE) {
         floatingEffect_t* fx = CG_AllocFloatingEffect();
 
         if (fx) {
-            fx->type = FE_DAMAGE_NUMBER;  // retail's type 0; the record draws its shader
+            fx->type = FE_DAMAGE_NUMBER;
             VectorCopy(ent->pos.trBase, fx->origin);
             fx->origin[2] -= 16;
             fx->color[0] = 1.0f;
@@ -349,14 +258,11 @@ static void CG_Obituary(entityState_t* ent) {
             fx->minPixels = cg_teammatePOIsMinWidth.value;
             fx->shader = cgs.media.friendDeadShader;
             fx->lifeRate = cg_drawDeadFriendTime.value;
-            // [ioquakelive] retail lets it go out at once; it fades over its last quarter, the
-            // way the powerup mark of the binary fades over what is left of its own life
             fx->fadeStart = fx->lifeRate * 0.75f;
             fx->doFade = 1;
         }
     }
 
-    // [QL] Resolve weapon icon and add to obituary display buffer
     weaponIcon = CG_ModToWeaponIcon(mod);
     victimTeam = cgs.clientinfo[target].team;
     if (attacker >= 0 && attacker < MAX_CLIENTS && attacker != target) {
@@ -365,8 +271,6 @@ static void CG_Obituary(entityState_t* ent) {
                        victimTeam, attackerTeam, 1, weaponIcon);
         CG_SpecFollowKiller(attacker);
     } else {
-        // retail's adder copies the attacker name unconditionally, so it
-        // never gets a NULL
         CG_AddObituary(cgs.clientinfo[target].name, "",
                        victimTeam, 0, 0, weaponIcon);
     }
@@ -387,8 +291,6 @@ static void CG_Obituary(entityState_t* ent) {
     strcat(targetName, S_COLOR_WHITE);
 
     message2 = "";
-
-    // check for single client messages
 
     switch (mod) {
         case MOD_SUICIDE:
@@ -415,12 +317,10 @@ static void CG_Obituary(entityState_t* ent) {
         case MOD_TRIGGER_HURT:
             message = "was in the wrong place";
             break;
-        // [QL] new environment/solo means-of-death
         case MOD_SWITCH_TEAMS:
             message = "switched teams";
             break;
         case MOD_THAW:
-            // [QL] auto-thaw (no attacker) shows a solo message
             if (attacker == ENTITYNUM_WORLD || attacker < 0 || attacker >= MAX_CLIENTS) {
                 message = "was auto-thawed";
             }
@@ -472,7 +372,6 @@ static void CG_Obituary(entityState_t* ent) {
                     message = "found his prox mine";
                 }
                 break;
-            // [QL] lightning-gun water discharge self-kill
             case MOD_LIGHTNING_DISCHARGE:
                 if (gender == GENDER_FEMALE)
                     message = "discharged herself";
@@ -501,17 +400,15 @@ static void CG_Obituary(entityState_t* ent) {
         CG_ShowFragMessage(target, mod, targetName);
     }
 
-    // check for double client messages
     if (!attackerInfo) {
         attacker = ENTITYNUM_WORLD;
         strcpy(attackerName, "noname");
     } else {
         Q_strncpyz(attackerName, Info_ValueForKey(attackerInfo, "n"), sizeof(attackerName) - 2);
         strcat(attackerName, S_COLOR_WHITE);
-        // check for kill messages about the current clientNum
         if (target == cg.snap->ps.clientNum) {
             Q_strncpyz(cg.killerName, attackerName, sizeof(cg.killerName));
-            cg.killerIcon = weaponIcon;  // [QL] 0x10019824
+            cg.killerIcon = weaponIcon;
         }
     }
 
@@ -554,7 +451,7 @@ static void CG_Obituary(entityState_t* ent) {
                 message2 = "'s plasmagun";
                 break;
             case MOD_RAILGUN:
-            case MOD_RAILGUN_HEADSHOT:              // [QL]
+            case MOD_RAILGUN_HEADSHOT:
                 message = "was railed by";
                 break;
             case MOD_LIGHTNING:
@@ -587,7 +484,6 @@ static void CG_Obituary(entityState_t* ent) {
                 message = "tried to invade";
                 message2 = "'s personal space";
                 break;
-            // [QL] new means-of-death obituary lines
             case MOD_THAW:
                 message = "was thawed by";
                 break;
@@ -610,27 +506,14 @@ static void CG_Obituary(entityState_t* ent) {
         }
     }
 
-    // we don't know what it was
     CG_Printf("%s died.\n", targetName);
 
-    // QL binary: cg_followKiller.integer auto-follows the killer (vmCvar 0x10A64800)
     if (cg_followKiller.integer && target == cg.snap->ps.clientNum &&
         attacker != target && attacker >= 0 && attacker < MAX_CLIENTS) {
         trap_SendConsoleCommand(va("follow %d\n", attacker));
     }
 }
 
-//==========================================================================
-
-/*
-===============
-CG_UseItem
-
-[QL] cgamex86.dll 0x10019af0. An item number past the holdables is an error, not an empty
-use. cg_useItemWarning sizes the "No item to use" print and cg_useItemMessage the "Use %s"
-one: 1 is scale 0.5, 2 is 0.25, anything else prints nothing.
-===============
-*/
 static void CG_UseItem(centity_t* cent) {
     int itemNum, clientNum;
     gitem_t* item;
@@ -643,7 +526,6 @@ static void CG_UseItem(centity_t* cent) {
         CG_Error("CG_UseItem: invalid item %d", itemNum);
     }
 
-    // print a message if the local player
     if (es->number == cg.snap->ps.clientNum) {
         if (!itemNum) {
             if (cg_useItemWarning.integer == 1) {
@@ -680,16 +562,6 @@ static void CG_UseItem(centity_t* cent) {
     }
 }
 
-/*
-================
-CG_ItemPickup
-
-A new item was picked up this frame
-[QL] cgamex86.dll 0x10019c40. The same item as the one the pickup display drew last counts
-up, shown as "x%i"; any other starts at 1. cg_autoswitch selects every weapon picked up,
-the machinegun included, where Quake 3 skipped the machinegun.
-================
-*/
 static void CG_ItemPickup(int itemNum) {
     cg.itemPickup = itemNum;
     cg.itemPickupTime = cg.time;
@@ -699,21 +571,12 @@ static void CG_ItemPickup(int itemNum) {
     } else {
         cg.itemPickupCount = 1;
     }
-    // see if it should be the grabbed weapon
     if (bg_itemlist[itemNum].giType == IT_WEAPON && cg_autoswitch.integer) {
-        // select it immediately
         cg.weaponSelectTime = cg.time;
         cg.weaponSelect = bg_itemlist[itemNum].giTag;
     }
 }
 
-/*
-================
-CG_WaterLevel
-
-Returns waterlevel for entity origin
-================
-*/
 int CG_WaterLevel(centity_t* cent) {
     vec3_t point;
     int contents, sample1, sample2, anim, waterlevel;
@@ -727,9 +590,6 @@ int CG_WaterLevel(centity_t* cent) {
         viewheight = DEFAULT_VIEWHEIGHT;
     }
 
-    //
-    // get waterlevel, accounting for ducking
-    //
     waterlevel = 0;
 
     point[0] = cent->lerpOrigin[0];
@@ -758,20 +618,11 @@ int CG_WaterLevel(centity_t* cent) {
     return waterlevel;
 }
 
-/*
-================
-CG_PainEvent
-
-[QL] cgamex86.dll 0x10019ca0. Retail has no underwater gurp: the pain sound plays either way.
-================
-*/
 void CG_PainEvent(centity_t* cent, int health) {
     char* snd;
 
-    // [QL] 0x10019ca6: every pain event, before the throttle, for the teammate markers
     cent->pe.lastPainTime = cg.time;
 
-    // don't do more than two pain sounds a second
     if (cg.time - cent->pe.painTime < 500) {
         return;
     }
@@ -787,20 +638,10 @@ void CG_PainEvent(centity_t* cent, int health) {
     }
     trap_S_StartSound(NULL, cent->currentState.number, CHAN_VOICE, CG_CustomSound(cent->currentState.number, snd));
 
-    // save pain time for programitic twitch animation
     cent->pe.painDirection ^= 1;
     cent->pe.painTime = cg.time;
 }
 
-/*
-===============
-CG_SpecItemTimerEvent
-
-[QL] cgamex86.dll 0x10019d90, EV_ITEM_PICKUP_SPEC: the server's word on an item's timer, for a
-spectator. A known item (otherEntityNum) takes the new values, its team mark doubled when it has
-just respawned; a new one takes the first free record, up to ten.
-===============
-*/
 void CG_SpecItemTimerEvent(entityState_t* es) {
     specItemTimer_t* timer;
     int i, freeSlot = -1;
@@ -839,15 +680,6 @@ void CG_SpecItemTimerEvent(entityState_t* es) {
     cg.numSpecItemTimers++;
 }
 
-/*
-===============
-CG_CompareSpecItemTimers
-
-[QL] cgamex86.dll 0x1001ca10. In CTF by side (items with no duplicate first, then blue, then
-red), nearer the base first, then by team mark or else higher first, then by entity number;
-elsewhere higher first, then by y and by x.
-===============
-*/
 static int QDECL CG_CompareSpecItemTimers(const void* a, const void* b) {
     const specItemTimer_t* ta = (const specItemTimer_t*)a;
     const specItemTimer_t* tb = (const specItemTimer_t*)b;
@@ -883,14 +715,6 @@ static int QDECL CG_CompareSpecItemTimers(const void* a, const void* b) {
     return (int)tb->origin[0] - (int)ta->origin[0];
 }
 
-/*
-===============
-CG_UpdateSpecItemTimers
-
-[QL] cgamex86.dll 0x1001ca90, once a frame while spectating: every timer counts down by the
-frame time, held during a timeout, and the list is sorted
-===============
-*/
 void CG_UpdateSpecItemTimers(void) {
     int i;
 
@@ -909,34 +733,11 @@ void CG_UpdateSpecItemTimers(void) {
     qsort(cg.specItemTimers, cg.numSpecItemTimers, sizeof(cg.specItemTimers[0]), CG_CompareSpecItemTimers);
 }
 
-/*
-===============
-CG_ResetSpecItemTimers
-
-[QL] cgamex86.dll 0x1001c8d0, at the end of map_restart
-===============
-*/
 void CG_ResetSpecItemTimers(void) {
     memset(cg.specItemTimers, 0, sizeof(cg.specItemTimers));
     cg.numSpecItemTimers = 0;
 }
 
-/*
-==============
-CG_PointOfInterest
-
-[QL] case 0x5a of CG_EntityEvent. The server broadcasts this where a player who has to
-be given away is standing - the Quad Hog, or whoever carries the neutral flag - and it
-becomes one sprite of the floating-effect pool, which already keeps a marker on screen
-through the walls and fades it with distance.
-
-es->powerups carries how long the marker lives, and the fade starts at a quarter of
-that. es->generic1 is the client for the Quad Hog and the team for a flag, which is why
-the two go into different fields: followNum hides the marker from its own team,
-clientNum from its own player. Which of the three it is follows CS_CUSTOM_SETTINGS,
-because a match only ever emits one kind.
-==============
-*/
 static void CG_PointOfInterest(centity_t* cent) {
     entityState_t* es = &cent->currentState;
     floatingEffect_t* fx = CG_AllocFloatingEffect();
@@ -954,7 +755,6 @@ static void CG_PointOfInterest(centity_t* cent) {
     fx->color[3] = 1.0f;
 
     if (cgs.customSettings & 0x40000) {
-        // the hog is gold, and hidden from the hog
         fx->color[0] = 1.0f;
         fx->color[1] = 0.75f;
         fx->color[2] = 0.0f;
@@ -973,7 +773,6 @@ static void CG_PointOfInterest(centity_t* cent) {
         fx->worldSize = cg_poiMaxWidth.value;
         fx->minPixels = cg_poiMinWidth.value;
     } else {
-        // the neutral flag carrier: higher up and three quarters the size
         fx->color[0] = 1.0f;
         fx->color[1] = 1.0f;
         fx->color[2] = 1.0f;
@@ -985,14 +784,6 @@ static void CG_PointOfInterest(centity_t* cent) {
     }
 }
 
-/*
-==============
-CG_EntityEvent
-
-An entity has an event value
-also called by CG_CheckPlayerstateEvents
-==============
-*/
 #define DEBUGNAME(x)              \
     if (cg_debugEvents.integer) { \
         CG_Printf(x "\n");        \
@@ -1024,9 +815,6 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
     ci = &cgs.clientinfo[clientNum];
 
     switch (event) {
-        //
-        // movement generated events
-        //
         case EV_FOOTSTEP:
             DEBUGNAME("EV_FOOTSTEP");
             if (cg_footsteps.integer) {
@@ -1067,17 +855,14 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             DEBUGNAME("EV_FALL_SHORT");
             trap_S_StartSound(NULL, es->number, CHAN_AUTO, cgs.media.landSound);
             if (clientNum == cg.predictedPlayerState.clientNum) {
-                // smooth landing z changes
                 cg.landChange = -8;
                 cg.landTime = cg.time;
             }
             break;
         case EV_FALL_MEDIUM:
             DEBUGNAME("EV_FALL_MEDIUM");
-            // use normal pain sound
             trap_S_StartSound(NULL, es->number, CHAN_VOICE, CG_CustomSound(es->number, "*pain100_1.wav"));
             if (clientNum == cg.predictedPlayerState.clientNum) {
-                // smooth landing z changes
                 cg.landChange = -16;
                 cg.landTime = cg.time;
             }
@@ -1085,20 +870,15 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
         case EV_FALL_FAR:
             DEBUGNAME("EV_FALL_FAR");
             trap_S_StartSound(NULL, es->number, CHAN_AUTO, CG_CustomSound(es->number, "*fall1.wav"));
-            cent->pe.painTime = cg.time;  // don't play a pain sound right after this
+            cent->pe.painTime = cg.time;
             if (clientNum == cg.predictedPlayerState.clientNum) {
-                // smooth landing z changes
                 cg.landChange = -24;
                 cg.landTime = cg.time;
             }
             break;
 
-        // [QL] EV_STEP_4/8/12/16 removed - QL uses playerState_t for step smoothing.
-        // Step smoothing is now handled in CG_PlayerStateToEntityState or CG_TransitionPlayerState.
-
         case EV_JUMP_PAD:
             DEBUGNAME("EV_JUMP_PAD");
-            //		CG_Printf( "EV_JUMP_PAD w/effect #%i\n", es->eventParm );
             {
                 vec3_t up = {0, 0, 1};
 
@@ -1111,8 +891,6 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                              cgs.media.smokePuffShader);
             }
 
-            // boing sound at origin, jump sound on player
-            // [QL] 0x1001a1f0: the pad sound belongs to the world
             trap_S_StartSound(cent->lerpOrigin, ENTITYNUM_WORLD, CHAN_AUTO, cgs.media.jumpPadSound);
             trap_S_StartSound(NULL, es->number, CHAN_VOICE, CG_CustomSound(es->number, "*jump1.wav"));
             break;
@@ -1123,42 +901,36 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_TAUNT:
             DEBUGNAME("EV_TAUNT");
-            // [QL] cg_allowTaunt gates the taunt sound (binary tests DAT_10a68eec, exact-nonzero)
             if (cg_allowTaunt.integer) {
                 trap_S_StartSound(NULL, es->number, CHAN_VOICE, CG_CustomSound(es->number, "*taunt.wav"));
             }
             break;
 
-        // [QL] Voice-taunt events (0x4b-0x50). Each enqueues a voice chat for the
-        // taunting client via CG_VoiceChatLocal(client, token). Binary passes the
-        // client in es->number (0x0, [EBP]) NOT es->clientNum. Binary gates
-        // EV_TAUNT_YES/EV_TAUNT_NO on cg_allowTaunt; the four order taunts are
-        // never gated. Tokens are the literal voice-chat command names.
-        case EV_TAUNT_YES:                      // 0x4b
+        case EV_TAUNT_YES:
             DEBUGNAME("EV_TAUNT_YES");
             if (cg_allowTaunt.integer) {
                 CG_VoiceChatLocal(es->number, "yes");
             }
             break;
-        case EV_TAUNT_NO:                       // 0x4c
+        case EV_TAUNT_NO:
             DEBUGNAME("EV_TAUNT_NO");
             if (cg_allowTaunt.integer) {
                 CG_VoiceChatLocal(es->number, "no");
             }
             break;
-        case EV_TAUNT_FOLLOWME:                 // 0x4d
+        case EV_TAUNT_FOLLOWME:
             DEBUGNAME("EV_TAUNT_FOLLOWME");
             CG_VoiceChatLocal(es->number, "followme");
             break;
-        case EV_TAUNT_GETFLAG:                  // 0x4e
+        case EV_TAUNT_GETFLAG:
             DEBUGNAME("EV_TAUNT_GETFLAG");
             CG_VoiceChatLocal(es->number, "ongetflag");
             break;
-        case EV_TAUNT_GUARDBASE:                // 0x4f
+        case EV_TAUNT_GUARDBASE:
             DEBUGNAME("EV_TAUNT_GUARDBASE");
             CG_VoiceChatLocal(es->number, "ondefense");
             break;
-        case EV_TAUNT_PATROL:                   // 0x50
+        case EV_TAUNT_PATROL:
             DEBUGNAME("EV_TAUNT_PATROL");
             CG_VoiceChatLocal(es->number, "onpatrol");
             break;
@@ -1185,22 +957,19 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                 gitem_t* item;
                 int index;
 
-                index = es->eventParm;  // player predicted
+                index = es->eventParm;
 
                 if (index < 1 || index >= bg_numItems) {
                     CG_Error("CG_EntityEvent: invalid item index %d\n", index);
                 }
                 item = &bg_itemlist[index];
 
-                // powerups and team items will have a separate global sound, this one
-                // will be played at prediction time
                 if (item->giType == IT_POWERUP || item->giType == IT_TEAM) {
                     trap_S_StartSound(NULL, es->number, CHAN_AUTO, cgs.media.n_healthSound);
                 } else {
                     trap_S_StartSound(NULL, es->number, CHAN_AUTO, trap_S_RegisterSound(item->pickup_sound, qfalse));
                 }
 
-                // [QL] 0x1001a553: a rune's name is announced, by the rune's number
                 if (item->giType == IT_PERSISTANT_POWERUP) {
                     switch (item->giTag) {
                         case 1:
@@ -1218,9 +987,6 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                     }
                 }
 
-                // [CPMA] watching, what the others pick up goes in the feed, and only what a
-                // match turns on: the armours that are not a shard, the mega health and the
-                // powerups, runes included. The small healths and the shards stay out
                 if (es->number != cg.snap->ps.clientNum && CG_Watching() &&
                     (item->giType == IT_POWERUP || item->giType == IT_PERSISTANT_POWERUP ||
                      (item->giType == IT_ARMOR && item->giTag >= 1 && item->giTag <= 3) ||
@@ -1228,7 +994,6 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                     CG_AddGameEvent(es->number, cg_items[index].icon, "+");
                 }
 
-                // show icon and name on status bar
                 if (es->number == cg.snap->ps.clientNum) {
                     CG_ItemPickup(index);
                 }
@@ -1241,20 +1006,16 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                 gitem_t* item;
                 int index;
 
-                index = es->eventParm;  // player predicted
+                index = es->eventParm;
 
                 if (index < 1 || index >= bg_numItems) {
                     CG_Error("CG_EntityEvent: invalid item index %d\n", index);
                 }
                 item = &bg_itemlist[index];
-                // powerup pickups are global
                 if (item->pickup_sound) {
                     trap_S_StartSound(NULL, cg.snap->ps.clientNum, CHAN_AUTO, trap_S_RegisterSound(item->pickup_sound, qfalse));
                 }
 
-                // [QL] 0x1001a61d: the powerup's name is announced unless the server's custom
-                // settings turn that off, and a spectator set to follow powerups follows the
-                // player who took it
                 if (cgs.customSettings & 0x40000) {
                     break;
                 }
@@ -1279,20 +1040,15 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                     CG_SpecAutoFollow(es->otherEntityNum, 0);
                 }
 
-                // show icon and name on status bar
                 if (es->number == cg.snap->ps.clientNum) {
                     CG_ItemPickup(index);
                 }
             }
             break;
 
-        //
-        // weapon events
-        //
         case EV_NOAMMO:
             DEBUGNAME("EV_NOAMMO");
             if (es->number == cg.snap->ps.clientNum) {
-                // QL binary: cg_switchOnEmpty.integer gates auto-switch (vmCvar 0x10A673E0)
                 if (cg_switchOnEmpty.integer) {
                     CG_OutOfAmmoChange();
                 } else {
@@ -1306,7 +1062,6 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_DROP_WEAPON:
             DEBUGNAME("EV_DROP_WEAPON");
-            // [QL] 0x1001a723: eventParm is the weapon that was dropped
             if (es->clientNum == cg.clientNum) {
                 CG_DropWeaponChange(es->eventParm);
             }
@@ -1376,13 +1131,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             DEBUGNAME("EV_USE_ITEM14");
             CG_UseItem(cent);
             break;
-        // [QL] retail has no EV_USE_ITEM15 case: it lands on "Unknown event"
 
-        //=================================================================
-
-        //
-        // other events
-        //
         case EV_PLAYER_TELEPORT_IN:
             DEBUGNAME("EV_PLAYER_TELEPORT_IN");
             trap_S_StartSound(NULL, es->number, CHAN_AUTO, cgs.media.teleInSound);
@@ -1401,7 +1150,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_ITEM_RESPAWN:
             DEBUGNAME("EV_ITEM_RESPAWN");
-            cent->miscTime = cg.time;  // scale up from this
+            cent->miscTime = cg.time;
             trap_S_StartSound(NULL, es->number, CHAN_AUTO, cgs.media.respawnSound);
             break;
 
@@ -1447,9 +1196,6 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_JUICED:
             DEBUGNAME("EV_JUICED");
-            // [QL] 0x1001ab39: the gore pack's skull handle picks the effect, as in
-            // CG_GibPlayer. With the pack the player swells in the juicer model
-            // (0x10013920) and bursts after five seconds; without it they gib now.
             if (cgs.media.gibSkull) {
                 CG_InvulnerabilityJuiced(cent->lerpOrigin);
             } else {
@@ -1462,17 +1208,11 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_SCOREPLUM:
             DEBUGNAME("EV_SCOREPLUM");
-            // [QL] binary guards on the local player before spawning the plum
-            // (CG_EntityEvent 0x40: snap ps.clientNum == es->clientNum 0xb0).
-            // Score value rides es->time (0x5c).
             if (cg.snap->ps.clientNum == es->clientNum) {
                 CG_ScorePlum(cent->currentState.otherEntityNum, cent->lerpOrigin, cent->currentState.time);
             }
             break;
 
-        //
-        // missile impacts
-        //
         case EV_MISSILE_HIT:
             DEBUGNAME("EV_MISSILE_HIT");
             ByteToDir(es->eventParm, dir);
@@ -1495,9 +1235,6 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             DEBUGNAME("EV_RAILTRAIL");
             cent->currentState.weapon = WP_RAILGUN;
 
-            // [QL] 0x1001b0bd: CG_CheckAutoFire already drew the local player's own shot,
-            // trail and impact, when it was predicted; never in a demo (0x1001b0c6), where
-            // nothing predicts it
             if (!cg_nopredict.integer && !cg.demoPlayback && !cg.renderingThirdPerson &&
                 cg_predictLocalRailshots.integer &&
                 !(cg.snap && cg.snap->ps.pm_type == PM_SPECTATOR) &&
@@ -1507,7 +1244,6 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
 
             CG_RailTrail(ci, es->origin2, es->pos.trBase);
 
-            // if the end was on a nomark surface, don't make an explosion
             if (es->eventParm != 255) {
                 ByteToDir(es->eventParm, dir);
                 CG_MissileHitWall(es->weapon, es->clientNum, es->pos.trBase, dir, IMPACTSOUND_DEFAULT);
@@ -1540,7 +1276,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             }
             break;
 
-        case EV_GLOBAL_SOUND:  // play from the player's head so it never diminishes
+        case EV_GLOBAL_SOUND:
             DEBUGNAME("EV_GLOBAL_SOUND");
             if (cgs.gameSounds[es->eventParm]) {
                 trap_S_StartSound(NULL, cg.snap->ps.clientNum, CHAN_AUTO, cgs.gameSounds[es->eventParm]);
@@ -1550,27 +1286,25 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             }
             break;
 
-        case EV_GLOBAL_TEAM_SOUND:  // play from the player's head so it never diminishes
+        case EV_GLOBAL_TEAM_SOUND:
         {
-            // [QL] 0x1001b33a. "team" is the local client's team as the scoreboard knows it.
             int team = cgs.clientinfo[cg.clientNum].team;
 
             DEBUGNAME("EV_GLOBAL_TEAM_SOUND");
             switch (es->eventParm) {
-                case GTS_RED_CAPTURE:  // CTF: red team captured the blue flag, 1FCTF: red team captured the neutral flag
+                case GTS_RED_CAPTURE:
                     trap_S_StartLocalSound(team == TEAM_RED ? cgs.media.captureYourTeamSound : cgs.media.captureOpponentSound,
                                            CHAN_LOCAL_SOUND);
-                    // the number comes one up, and a zero means the server did not send it
                     CG_AddGameEvent(es->otherEntityNum - 1,
                                     CG_FlagIcon(cgs.gametype == GT_1FCTF ? PW_NEUTRALFLAG : PW_BLUEFLAG), "captured");
                     break;
-                case GTS_BLUE_CAPTURE:  // CTF: blue team captured the red flag, 1FCTF: blue team captured the neutral flag
+                case GTS_BLUE_CAPTURE:
                     trap_S_StartLocalSound(team == TEAM_BLUE ? cgs.media.captureYourTeamSound : cgs.media.captureOpponentSound,
                                            CHAN_LOCAL_SOUND);
                     CG_AddGameEvent(es->otherEntityNum - 1,
                                     CG_FlagIcon(cgs.gametype == GT_1FCTF ? PW_NEUTRALFLAG : PW_REDFLAG), "captured");
                     break;
-                case GTS_RED_RETURN:  // CTF: blue flag returned, 1FCTF: never used
+                case GTS_RED_RETURN:
                     if (team == TEAM_BLUE) {
                         trap_S_StartLocalSound(cgs.media.returnOpponentSound, CHAN_LOCAL_SOUND);
                         CG_AddBufferedSound(cgs.media.yourFlagReturnedSound);
@@ -1581,7 +1315,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                         CG_AddBufferedSound(cgs.media.blueFlagReturnedSound);
                     }
                     break;
-                case GTS_BLUE_RETURN:  // CTF red flag returned, 1FCTF: neutral flag returned
+                case GTS_BLUE_RETURN:
                     if (team == TEAM_RED) {
                         trap_S_StartLocalSound(cgs.media.returnOpponentSound, CHAN_LOCAL_SOUND);
                         CG_AddBufferedSound(cgs.media.yourFlagReturnedSound);
@@ -1593,12 +1327,11 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                     }
                     break;
 
-                case GTS_RED_TAKEN:  // CTF: red team took blue flag, 1FCTF: blue team took the neutral flag
+                case GTS_RED_TAKEN:
                     CG_SpecAutoFollow(es->otherEntityNum, 1);
                     CG_AddGameEvent(es->otherEntityNum,
                                     CG_FlagIcon(cgs.gametype == GT_1FCTF ? PW_NEUTRALFLAG : PW_BLUEFLAG),
                                     "took the flag");
-                    // if this player picked up the flag then a sound is played in CG_CheckLocalSounds
                     if (cg.snap->ps.powerups[PW_BLUEFLAG] || cg.snap->ps.powerups[PW_NEUTRALFLAG]) {
                         break;
                     }
@@ -1618,12 +1351,11 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                         CG_AddBufferedSound(cgs.media.blueFlagTakenSound);
                     }
                     break;
-                case GTS_BLUE_TAKEN:  // CTF: blue team took the red flag, 1FCTF red team took the neutral flag
+                case GTS_BLUE_TAKEN:
                     CG_SpecAutoFollow(es->otherEntityNum, 1);
                     CG_AddGameEvent(es->otherEntityNum,
                                     CG_FlagIcon(cgs.gametype == GT_1FCTF ? PW_NEUTRALFLAG : PW_REDFLAG),
                                     "took the flag");
-                    // if this player picked up the flag then a sound is played in CG_CheckLocalSounds
                     if (cg.snap->ps.powerups[PW_REDFLAG] || cg.snap->ps.powerups[PW_NEUTRALFLAG]) {
                         break;
                     }
@@ -1644,12 +1376,12 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                     }
                     break;
 
-                case GTS_REDOBELISK_ATTACKED:  // Overload: red obelisk is being attacked
+                case GTS_REDOBELISK_ATTACKED:
                     if (team == TEAM_RED) {
                         CG_AddBufferedSound(cgs.media.yourBaseIsUnderAttackSound);
                     }
                     break;
-                case GTS_BLUEOBELISK_ATTACKED:  // Overload: blue obelisk is being attacked
+                case GTS_BLUEOBELISK_ATTACKED:
                     if (team == TEAM_BLUE) {
                         CG_AddBufferedSound(cgs.media.yourBaseIsUnderAttackSound);
                     }
@@ -1718,9 +1450,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                     trap_S_StartLocalSound(cgs.media.kamikazeFarSound, CHAN_LOCAL_SOUND);
                     break;
 
-                // [QL] the match and round results. Once a match result is announced the
-                // announcer queue takes nothing more until the map restarts.
-                case GTS_REDTEAM_WON:  // 14
+                case GTS_REDTEAM_WON:
                     CG_ResetAnnouncements();
                     if (cg_buzzerSound.integer) {
                         trap_S_StartLocalSound(cgs.media.buzzerSound, CHAN_LOCAL_SOUND);
@@ -1733,7 +1463,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                     CG_AddBufferedSound(cgs.media.redWinsSound);
                     cg.soundBufferLocked = qtrue;
                     break;
-                case GTS_BLUETEAM_WON:  // 15
+                case GTS_BLUETEAM_WON:
                     CG_ResetAnnouncements();
                     if (cg_buzzerSound.integer) {
                         trap_S_StartLocalSound(cgs.media.buzzerSound, CHAN_LOCAL_SOUND);
@@ -1746,19 +1476,17 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                     CG_AddBufferedSound(cgs.media.blueWinsSound);
                     cg.soundBufferLocked = qtrue;
                     break;
-                case GTS_RED_WINS_ROUND:  // 16
+                case GTS_RED_WINS_ROUND:
                     CG_CenterPrint("Red wins the round", 90, 0.5f);
                     CG_AddBufferedSound(cgs.media.redWinsRoundSound);
                     break;
-                case GTS_BLUE_WINS_ROUND:  // 17
+                case GTS_BLUE_WINS_ROUND:
                     CG_CenterPrint("Blue wins the round", 90, 0.5f);
                     CG_AddBufferedSound(cgs.media.blueWinsRoundSound);
                     break;
-                case GTS_DRAW_ROUND:  // 18
+                case GTS_DRAW_ROUND:
                     CG_ResetAnnouncements();
                     if (cgs.gametype == GT_RR && (cgs.customSettings & 0x4000000)) {
-                        // [QL] 0x1001b999: infected Red Rover names the survivors from
-                        // CS_ROUND_WINNER
                         const char* p = CG_ConfigString(CS_ROUND_WINNER);
                         const char* token;
                         char names[1024];
@@ -1789,14 +1517,13 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                         CG_AddBufferedSound(cgs.media.roundDrawSound);
                     }
                     break;
-                case GTS_LAST_STANDING:  // 19
+                case GTS_LAST_STANDING:
                     if (cg_announcerLastStandingVO.integer && team == es->modelindex2) {
                         CG_AddBufferedSound(cgs.media.lastStandingSound);
                     }
                     break;
-                case GTS_ROUND_OVER:  // 20
+                case GTS_ROUND_OVER:
                     if (cgs.gametype == GT_RR) {
-                        // [QL] 0x1001bb7d: Red Rover names the round's winners from CS_ROUND_WINNER
                         const char* p = CG_ConfigString(CS_ROUND_WINNER);
                         const char* token;
                         char names[1024];
@@ -1829,7 +1556,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                     }
                     CG_AddBufferedSound(cgs.media.roundOverSound);
                     break;
-                case GTS_DOMINATION_POINT_CAPTURE:  // 23
+                case GTS_DOMINATION_POINT_CAPTURE:
                     if (es->modelindex2 == 0) {
                         trap_S_StartLocalSound(cgs.media.pointNeutralizedSound, CHAN_LOCAL_SOUND);
                         break;
@@ -1848,7 +1575,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                         }
                     }
                     break;
-                case GTS_SURVIVOR:  // 24
+                case GTS_SURVIVOR:
                     if (team == es->modelindex2) {
                         trap_S_StartLocalSound(cgs.media.survivorSound, CHAN_LOCAL_SOUND);
                     }
@@ -1861,7 +1588,6 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
         }
 
         case EV_PAIN:
-            // [QL] 0x1001bdb9: the local player's pain sounds come from here too
             DEBUGNAME("EV_PAIN");
             CG_PainEvent(cent, es->eventParm);
             break;
@@ -1883,9 +1609,6 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             CG_Obituary(es);
             break;
 
-        //
-        // powerup events
-        //
         case EV_POWERUP_QUAD:
             DEBUGNAME("EV_POWERUP_QUAD");
             if (es->number == cg.snap->ps.clientNum) {
@@ -1921,14 +1644,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
 
         case EV_GIB_PLAYER:
             DEBUGNAME("EV_GIB_PLAYER");
-            // don't play gib sound when using the kamikaze because it interferes
-            // with the kamikaze sound, downside is that the gib sound will also
-            // not be played when someone is gibbed while just carrying the kamikaze
             if (!(es->eFlags & EF_KAMIKAZE)) {
-                // [QL] 0x1001bf80 picks the death sound off the same gore-pack
-                // handle CG_GibPlayer branches on: the pack's single splat when
-                // it is installed, otherwise the first or the fourth electrogib
-                // sample, since retail masks rand() with 4 where it meant 3
                 if (cgs.media.gibSkull) {
                     trap_S_StartSound(NULL, es->number, CHAN_BODY,
                                       cgs.media.gibSound);
@@ -1937,24 +1653,15 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                                       cgs.media.electroGibSound[(rand() & 4) ? 3 : 0]);
                 }
             }
-            // The direction the spray leaves along. See CG_GibPlayer: the
-            // server packs the last hit's direction into eventParm like
-            // Quake Live, but retail's case does not seem to decode it, so up
-            // stays until that reading is confirmed.
             VectorSet(dir, 0, 0, 1);
             CG_GibPlayer(cent->lerpOrigin, dir);
             break;
-
-        // [QL] EV_STOPLOOPINGSOUND removed from QL event enum.
 
         case EV_DEBUG_LINE:
             DEBUGNAME("EV_DEBUG_LINE");
             CG_Beam(cent);
             break;
 
-        // ================================================================
-        // [QL] New events - ported from cgamex86.dll binary analysis
-        // ================================================================
         case EV_FOOTSTEP_SNOW:
             DEBUGNAME("EV_FOOTSTEP_SNOW");
             if (cg_footsteps.integer) {
@@ -1969,12 +1676,10 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_ITEM_PICKUP_SPEC:
             DEBUGNAME("EV_ITEM_PICKUP_SPEC");
-            CG_SpecItemTimerEvent(es);  // [QL] 0x1001c0b2
+            CG_SpecItemTimerEvent(es);
             break;
         case EV_OVERTIME:
             DEBUGNAME("EV_OVERTIME");
-            // [QL] 0x1001b2bb: the klaxon, how much time was added, and the "overtime" voice
-            // for the first period only
             trap_S_StartSound(NULL, cg.snap->ps.clientNum, CHAN_AUTO, cgs.media.klaxon2Sound);
             CG_CenterPrint(va("Overtime! %d seconds added", cgs.timelimit_overtime), 90, 0.5f);
             if (!CG_GetOvertimeCount()) {
@@ -1983,8 +1688,6 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_GAMEOVER:
             DEBUGNAME("EV_GAMEOVER");
-            // [QL] 0x1001c0cd: the buzzer, then the win or loss voice (individual modes
-            // only) and music; the announcer queue stays locked until the map restarts
             CG_ResetAnnouncements();
             if (cg_buzzerSound.integer) {
                 trap_S_StartLocalSound(cgs.media.buzzerSound, CHAN_LOCAL_SOUND);
@@ -2006,15 +1709,11 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_MISSILE_MISS_DMGTHROUGH:
             DEBUGNAME("EV_MISSILE_MISS_DMGTHROUGH");
-            // [QL] wallbang impact -> dedicated damage-through effect (binary 0x56
-            // calls CG_MissileHitWall_DmgThrough, not the plain CG_MissileHitWall)
             ByteToDir(es->eventParm, dir);
             CG_MissileHitWall_DmgThrough(position, dir, es->weapon);
             break;
         case EV_THAW_PLAYER:
             DEBUGNAME("EV_THAW_PLAYER");
-            // [QL] freeze-tag thaw complete (binary 0x57): spawn the ice-shard
-            // burst. The shard spawning lives in cg_effects.c CG_ThawPlayer.
             CG_ThawPlayer(cent->lerpOrigin);
             break;
         case EV_THAW_TICK:
@@ -2023,9 +1722,6 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_SHOTGUN_KILL:
             DEBUGNAME("EV_SHOTGUN_KILL");
-            // [QL] delayed shotgun-kill blood burst (binary 0x59). The blood-puff
-            // logic (count = es->generic1/5, at es->otherEntityNum skin) lives in
-            // cg_weapons.c CG_ShotgunKillEffect.
             CG_ShotgunKillEffect(cent);
             break;
         case EV_POI:
@@ -2034,14 +1730,10 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_LIGHTNING_DISCHARGE:
             DEBUGNAME("EV_LIGHTNING_DISCHARGE");
-            // [QL] LG water-discharge electric burst (binary 0x5c). Intensity is
-            // taken from the event parameter; the sprite effect lives in
-            // cg_effects.c CG_LightningDischargeEffect.
             CG_LightningDischargeEffect(es->eventParm);
             break;
         case EV_RACE_START:
             DEBUGNAME("EV_RACE_START");
-            // [QL] 0x1001abfd: the start counts as the first point passed
             if (cg.snap->ps.clientNum == es->clientNum) {
                 cg.race.active = qtrue;
                 cg.race.startTime = es->time;
@@ -2055,8 +1747,6 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_RACE_CHECKPOINT:
             DEBUGNAME("EV_RACE_CHECKPOINT");
-            // [QL] 0x1001ad3a: the split against the best run when there is one, and how many
-            // points are left when fewer than four
             if (cg.snap->ps.clientNum == es->clientNum) {
                 char remaining[32];
                 const char *color;
@@ -2087,8 +1777,6 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_RACE_FINISH:
             DEBUGNAME("EV_RACE_FINISH");
-            // [QL] 0x1001aee3: the run is dropped; a valid finish shows the difference with the
-            // best one and keeps the better of the two
             if (cg.snap->ps.clientNum == es->clientNum) {
                 CG_RaceInit(0);
                 if (!es->generic1) {
@@ -2111,28 +1799,17 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
                         cg.race.bestTime = cg.race.lastTime;
                     }
                 }
-                trap_S_StartLocalSound(cgs.media.klaxon1Sound, CHAN_LOCAL_SOUND);  // [QL] 0x1001af7f
+                trap_S_StartLocalSound(cgs.media.klaxon1Sound, CHAN_LOCAL_SOUND);
             }
             break;
         case EV_DAMAGEPLUM:
             DEBUGNAME("EV_DAMAGEPLUM");
-            // [QL] floating damage number - only show for the local player's hits.
-            // The server (DamagePlum 0x10046680 / the shotgun flush) packs the amount
-            // in s.time, the recipient clientNum in s.clientNum, and the weapon in
-            // s.generic1 - NOT pos.trTime/otherEntityNum/weapon.
-            // [QL] 0x1001c3db only checks whose hit it is: which weapons show is up to
-            // CG_DamagePlum and the cg_damagePlum list
             if (cg.snap->ps.clientNum == es->clientNum) {
                 CG_DamagePlum(es->time, es->generic1, cent->lerpOrigin);
             }
             break;
         case EV_AWARD:
             DEBUGNAME("EV_AWARD");
-            // [QL] award notification - 10 types, uses existing reward display system.
-            // Binary (CG_EntityEvent 0x61) guards on es->clientNum (0xb0), selects
-            // the medal from es->generic1 (0xe0) and takes the count from
-            // es->modelindex2 (0xac) - NOT otherEntityNum/weapon/generic1.
-            // [QL] 0x1001c437: combo kill, rampage, midair and revenge pick one of three voices
             if (cg.snap->ps.clientNum == es->clientNum) {
                 int count = es->modelindex2;
                 switch (es->generic1) {
@@ -2151,14 +1828,10 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
             break;
         case EV_INFECTED:
             DEBUGNAME("EV_INFECTED");
-            // [QL] 0x1001c5b7: only the announcer
             CG_AddBufferedSound(cgs.media.infectedSound);
             break;
         case EV_NEW_HIGH_SCORE:
             DEBUGNAME("EV_NEW_HIGH_SCORE");
-            // [QL] new high score announce (binary CG_EntityEvent 0x1001c5c3 queues
-            // new_high_score.ogg via CG_QueueAnnouncement; routed through the buffered
-            // announcer ring here).
             CG_AddBufferedSound(cgs.media.newHighScoreSound);
             break;
 
@@ -2169,19 +1842,11 @@ void CG_EntityEvent(centity_t* cent, vec3_t position) {
     }
 }
 
-/*
-==============
-CG_CheckEvents
-
-==============
-*/
 void CG_CheckEvents(centity_t* cent) {
-    // check for event-only entities
     if (cent->currentState.eType > ET_EVENTS) {
         if (cent->previousEvent) {
-            return;  // already fired
+            return;
         }
-        // if this is a player event set the entity number of the client entity number
         if (cent->currentState.eFlags & EF_PLAYER_EVENT) {
             cent->currentState.number = cent->currentState.otherEntityNum;
         }
@@ -2190,7 +1855,6 @@ void CG_CheckEvents(centity_t* cent) {
 
         cent->currentState.event = cent->currentState.eType - ET_EVENTS;
     } else {
-        // check for events riding with another entity
         if (cent->currentState.event == cent->previousEvent) {
             return;
         }
@@ -2200,7 +1864,6 @@ void CG_CheckEvents(centity_t* cent) {
         }
     }
 
-    // calculate the position at exactly the frame time
     BG_EvaluateTrajectory(&cent->currentState.pos, cg.snap->serverTime, cent->lerpOrigin);
     CG_SetEntitySoundPosition(cent);
 

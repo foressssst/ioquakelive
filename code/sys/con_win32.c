@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "../qcommon/q_shared.h"
 #include "../qcommon/qcommon.h"
 #include "sys_local.h"
@@ -30,17 +29,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 static WORD qconsole_attrib;
 static WORD qconsole_backgroundAttrib;
 
-// saved console status
 static DWORD qconsole_orig_mode;
 static CONSOLE_CURSOR_INFO qconsole_orig_cursorinfo;
 
-// cmd history
 static char qconsole_history[QCONSOLE_HISTORY][MAX_EDIT_LINE];
 static int qconsole_history_pos = -1;
 static int qconsole_history_lines = 0;
 static int qconsole_history_oldest = 0;
 
-// current edit buffer
 static char qconsole_line[MAX_EDIT_LINE];
 static int qconsole_linelen = 0;
 static qboolean qconsole_drawinput = qtrue;
@@ -49,57 +45,30 @@ static int qconsole_cursor;
 static HANDLE qconsole_hout;
 static HANDLE qconsole_hin;
 
-/*
-==================
-CON_ColorCharToAttrib
-
-Convert Quake color character to Windows text attrib
-==================
-*/
 static WORD CON_ColorCharToAttrib(char color) {
     WORD attrib;
 
     if (color == COLOR_WHITE) {
-        // use console's foreground and background colors
         attrib = qconsole_attrib;
     } else {
         const float* rgba = Q_ColorFromCodeIndex(Q_ColorCodeIndex(color, qtrue));
 
-        // set foreground color
         attrib = (rgba[0] >= 0.5 ? FOREGROUND_RED : 0) |
                  (rgba[1] >= 0.5 ? FOREGROUND_GREEN : 0) |
                  (rgba[2] >= 0.5 ? FOREGROUND_BLUE : 0) |
                  (rgba[3] >= 0.5 ? FOREGROUND_INTENSITY : 0);
 
-        // use console's background color
         attrib |= qconsole_backgroundAttrib;
     }
 
     return attrib;
 }
 
-/*
-==================
-CON_CtrlHandler
-
-The Windows Console doesn't use signals for terminating the application
-with Ctrl-C, logging off, window closing, etc.  Instead it uses a special
-handler routine.  Fortunately, the values for Ctrl signals don't seem to
-overlap with true signal codes that Windows provides, so calling
-Sys_SigHandler() with those numbers should be safe for generating unique
-shutdown messages.
-==================
-*/
 static BOOL WINAPI CON_CtrlHandler(DWORD sig) {
     Sys_SigHandler(sig);
     return TRUE;
 }
 
-/*
-==================
-CON_HistAdd
-==================
-*/
 static void CON_HistAdd(void) {
     Q_strncpyz(qconsole_history[qconsole_history_oldest], qconsole_line,
                sizeof(qconsole_history[qconsole_history_oldest]));
@@ -115,17 +84,11 @@ static void CON_HistAdd(void) {
     qconsole_history_pos = qconsole_history_oldest;
 }
 
-/*
-==================
-CON_HistPrev
-==================
-*/
 static void CON_HistPrev(void) {
     int pos;
 
     pos = (qconsole_history_pos < 1) ? (QCONSOLE_HISTORY - 1) : (qconsole_history_pos - 1);
 
-    // don' t allow looping through history
     if (pos == qconsole_history_oldest || pos >= qconsole_history_lines)
         return;
 
@@ -136,21 +99,14 @@ static void CON_HistPrev(void) {
     qconsole_cursor = qconsole_linelen;
 }
 
-/*
-==================
-CON_HistNext
-==================
-*/
 static void CON_HistNext(void) {
     int pos;
 
-    // don' t allow looping through history
     if (qconsole_history_pos == qconsole_history_oldest)
         return;
 
     pos = (qconsole_history_pos >= QCONSOLE_HISTORY - 1) ? 0 : (qconsole_history_pos + 1);
 
-    // clear the edit buffer if they try to advance to a future command
     if (pos == qconsole_history_oldest) {
         qconsole_history_pos = pos;
         qconsole_line[0] = '\0';
@@ -166,11 +122,6 @@ static void CON_HistNext(void) {
     qconsole_cursor = qconsole_linelen;
 }
 
-/*
-==================
-CON_Show
-==================
-*/
 static void CON_Show(void) {
     CONSOLE_SCREEN_BUFFER_INFO binfo;
     COORD writeSize = {MAX_EDIT_LINE, 1};
@@ -181,26 +132,20 @@ static void CON_Show(void) {
     CHAR_INFO line[MAX_EDIT_LINE];
     WORD attrib;
 
-    // [ioquakelive] without this check a redirected output leaves binfo full of stack
-    // garbage and what follows computes with it. This was the dedicated server's crash in
-    // Release.
     if (!GetConsoleScreenBufferInfo(qconsole_hout, &binfo)) {
         return;
     }
 
-    // if we're in the middle of printf, don't bother writing the buffer
     if (!qconsole_drawinput)
         return;
 
     writeArea.Left = 0;
     writeArea.Top = binfo.dwCursorPosition.Y;
     writeArea.Bottom = binfo.dwCursorPosition.Y;
-    writeArea.Right = MAX_EDIT_LINE - 1;  // [ioquakelive] SMALL_RECT es inclusivo
+    writeArea.Right = MAX_EDIT_LINE - 1;
 
-    // set color to white
     attrib = CON_ColorCharToAttrib(COLOR_WHITE);
 
-    // build a space-padded CHAR_INFO array
     for (i = 0; i < MAX_EDIT_LINE; i++) {
         if (i < qconsole_linelen) {
             if (i + 1 < qconsole_linelen && Q_IsColorString(qconsole_line + i))
@@ -213,9 +158,6 @@ static void CON_Show(void) {
         line[i].Attributes = attrib;
     }
 
-    // [ioquakelive] when the line does not fit, its tail is shown; the array handed to
-    // WriteConsoleOutput still has to have writeSize.X characters ahead of it, so the offset
-    // is clamped to the array.
     if (qconsole_linelen > binfo.srWindow.Right) {
         int desde = qconsole_linelen - binfo.srWindow.Right;
 
@@ -232,7 +174,6 @@ static void CON_Show(void) {
         WriteConsoleOutput(qconsole_hout, line, writeSize, writePos, &writeArea);
     }
 
-    // set curor position
     cursorPos.Y = binfo.dwCursorPosition.Y;
     cursorPos.X = qconsole_cursor < qconsole_linelen
                       ? qconsole_cursor
@@ -243,28 +184,17 @@ static void CON_Show(void) {
     SetConsoleCursorPosition(qconsole_hout, cursorPos);
 }
 
-/*
-==================
-CON_Hide
-==================
-*/
 static void CON_Hide(void) {
     int realLen;
 
     realLen = qconsole_linelen;
 
-    // remove input line from console output buffer
     qconsole_linelen = 0;
     CON_Show();
 
     qconsole_linelen = realLen;
 }
 
-/*
-==================
-CON_Shutdown
-==================
-*/
 void CON_Shutdown(void) {
     CON_Hide();
     SetConsoleMode(qconsole_hin, qconsole_orig_mode);
@@ -274,16 +204,10 @@ void CON_Shutdown(void) {
     CloseHandle(qconsole_hin);
 }
 
-/*
-==================
-CON_Init
-==================
-*/
 void CON_Init(void) {
     CONSOLE_SCREEN_BUFFER_INFO info;
     int i;
 
-    // handle Ctrl-C or other console termination
     SetConsoleCtrlHandler(CON_CtrlHandler, TRUE);
 
     qconsole_hin = GetStdHandle(STD_INPUT_HANDLE);
@@ -296,7 +220,6 @@ void CON_Init(void) {
 
     GetConsoleMode(qconsole_hin, &qconsole_orig_mode);
 
-    // allow mouse wheel scrolling
     SetConsoleMode(qconsole_hin,
                    qconsole_orig_mode & ~ENABLE_MOUSE_INPUT);
 
@@ -308,19 +231,12 @@ void CON_Init(void) {
 
     SetConsoleTitle(CLIENT_WINDOW_TITLE " Dedicated Server Console");
 
-    // initialize history
     for (i = 0; i < QCONSOLE_HISTORY; i++)
         qconsole_history[i][0] = '\0';
 
-    // set text color to white
     SetConsoleTextAttribute(qconsole_hout, CON_ColorCharToAttrib(COLOR_WHITE));
 }
 
-/*
-==================
-CON_Input
-==================
-*/
 char* CON_Input(void) {
     INPUT_RECORD buff[MAX_EDIT_LINE];
     DWORD count = 0, events = 0;
@@ -334,7 +250,6 @@ char* CON_Input(void) {
     if (events < 1)
         return NULL;
 
-    // if we have overflowed, start dropping oldest input events
     if (events >= MAX_EDIT_LINE) {
         ReadConsoleInput(qconsole_hin, buff, 1, &events);
         return NULL;
@@ -445,13 +360,6 @@ char* CON_Input(void) {
     return qconsole_line;
 }
 
-/*
-=================
-CON_WindowsColorPrint
-
-Set text colors based on Q3 color codes
-=================
-*/
 void CON_WindowsColorPrint(const char* msg) {
     static char buffer[MAXPRINTMSG];
     int length = 0;
@@ -460,7 +368,6 @@ void CON_WindowsColorPrint(const char* msg) {
         qconsole_drawinput = (*msg == '\n');
 
         if (Q_IsColorString(msg) || *msg == '\n') {
-            // First empty the buffer
             if (length > 0) {
                 buffer[length] = '\0';
                 fputs(buffer, stderr);
@@ -468,12 +375,10 @@ void CON_WindowsColorPrint(const char* msg) {
             }
 
             if (*msg == '\n') {
-                // Reset color and then add the newline
                 SetConsoleTextAttribute(qconsole_hout, CON_ColorCharToAttrib(COLOR_WHITE));
                 fputs("\n", stderr);
                 msg++;
             } else {
-                // Set the color
                 SetConsoleTextAttribute(qconsole_hout, CON_ColorCharToAttrib(*(msg + 1)));
                 msg += 2;
             }
@@ -487,18 +392,12 @@ void CON_WindowsColorPrint(const char* msg) {
         }
     }
 
-    // Empty anything still left in the buffer
     if (length > 0) {
         buffer[length] = '\0';
         fputs(buffer, stderr);
     }
 }
 
-/*
-==================
-CON_Print
-==================
-*/
 void CON_Print(const char* msg) {
     CON_Hide();
 

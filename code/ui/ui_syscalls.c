@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
 #include "ui_local.h"
 
 static intptr_t(QDECL* syscall)(intptr_t arg, ...) = (intptr_t(QDECL*)(intptr_t, ...)) - 1;
@@ -40,7 +39,6 @@ void trap_Print(const char* string) {
 
 void trap_Error(const char* string) {
     syscall(UI_ERROR, string);
-    // shut up GCC warning about returning functions, because we know better
     exit(1);
 }
 
@@ -447,28 +445,22 @@ int trap_RealTime(qtime_t* qtime) {
     return syscall(UI_REAL_TIME, qtime);
 }
 
-// this returns a handle.  arg0 is the name in the format "idlogo.roq", set arg1 to NULL, alteredstates to qfalse (do not alter gamestate)
 int trap_CIN_PlayCinematic(const char* arg0, int xpos, int ypos, int width, int height, int bits) {
     return syscall(UI_CIN_PLAYCINEMATIC, arg0, xpos, ypos, width, height, bits);
 }
 
-// stops playing the cinematic and ends it.  should always return FMV_EOF
-// cinematics must be stopped in reverse order of when they are started
 e_status trap_CIN_StopCinematic(int handle) {
     return syscall(UI_CIN_STOPCINEMATIC, handle);
 }
 
-// will run a frame of the cinematic but will not draw it.  Will return FMV_EOF if the end of the cinematic has been reached.
 e_status trap_CIN_RunCinematic(int handle) {
     return syscall(UI_CIN_RUNCINEMATIC, handle);
 }
 
-// draws the current frame
 void trap_CIN_DrawCinematic(int handle) {
     syscall(UI_CIN_DRAWCINEMATIC, handle);
 }
 
-// allows you to resize the animation dynamically
 void trap_CIN_SetExtents(int handle, int x, int y, int w, int h) {
     syscall(UI_CIN_SETEXTENTS, handle, x, y, w, h);
 }

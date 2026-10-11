@@ -19,33 +19,12 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
 #include "g_local.h"
 
-/*
-=======================================================================
-
-  SESSION DATA
-
-Session data is the only data that stays persistant across level loads
-and tournament restarts.
-=======================================================================
-*/
-
-/*
-================
-G_WriteClientSessionData
-
-Called on game shutdown
-================
-*/
 void G_WriteClientSessionData(gclient_t* client) {
     const char* s;
     const char* var;
 
-    // [QL] 13 fields. QL field order: weaponPrimary comes before
-    // wins/losses/teamLeader, and prevScore is appended. updatePlayQueue is not
-    // serialised.
     s = va("%i %ld %i %i %i %i %i %i %i %i %i %i %i",
            client->sess.sessionTeam,
            client->sess.spectatorTime,
@@ -66,13 +45,6 @@ void G_WriteClientSessionData(gclient_t* client) {
     trap_Cvar_Set(var, s);
 }
 
-/*
-================
-G_ReadSessionData
-
-Called on a reconnect
-================
-*/
 void G_ReadSessionData(gclient_t* client) {
     char s[MAX_STRING_CHARS];
     const char* var;
@@ -98,9 +70,6 @@ void G_ReadSessionData(gclient_t* client) {
            &client->sess.muted,
            &client->sess.prevScore);
 
-    // [QL] force spectator on reconnect only when g_teamSpawnAsSpec is set,
-    // this is a team game and warmup is running (binary reads the cvar's
-    // integer directly, not level.newSession)
     if (g_teamSpawnAsSpec.integer && g_gametype.integer >= GT_TEAM && level.warmupTime) {
         sessionTeam = TEAM_SPECTATOR;
     }
@@ -110,19 +79,11 @@ void G_ReadSessionData(gclient_t* client) {
     client->sess.teamLeader = (qboolean)teamLeader;
 }
 
-/*
-================
-G_InitSessionData
-
-Called on a first-time connect
-================
-*/
 void G_InitSessionData(gclient_t* client, char* userinfo) {
     clientSession_t* sess;
 
     sess = &client->sess;
 
-    // initial team determination
     if (g_gametype.integer >= GT_TEAM) {
         if (g_teamAutoJoin.integer) {
             sess->sessionTeam = PickTeam(-1);
@@ -135,9 +96,7 @@ void G_InitSessionData(gclient_t* client, char* userinfo) {
     }
 
     sess->spectatorState = SPECTATOR_FREE;
-    sess->spectatorTime = (int)time(NULL);          // [QL] wall clock, not level.time
-    // [QL] binary calls G_GetAccess(clientNum), which fetches the client's
-    // userinfo/ip and looks it up in the access list itself
+    sess->spectatorTime = (int)time(NULL);
     sess->privileges = G_GetAccess((int)(client - level.clients));
     sess->playQueue = 0;
     sess->specOnly = (g_gametype.integer == GT_DUEL) ? 1 : 0;
@@ -145,12 +104,6 @@ void G_InitSessionData(gclient_t* client, char* userinfo) {
     G_WriteClientSessionData(client);
 }
 
-/*
-==================
-G_InitWorldSession
-
-==================
-*/
 void G_InitWorldSession(void) {
     char s[MAX_STRING_CHARS];
     int gt;
@@ -158,20 +111,12 @@ void G_InitWorldSession(void) {
     trap_Cvar_VariableStringBuffer("session", s, sizeof(s));
     gt = atoi(s);
 
-    // if the gametype changed since the last session, don't use any
-    // client sessions
     if (g_gametype.integer != gt) {
         level.newSession = qtrue;
         G_Printf("Gametype changed, clearing session data.\n");
     }
 }
 
-/*
-==================
-G_WriteSessionData
-
-==================
-*/
 void G_WriteSessionData(void) {
     int i;
 

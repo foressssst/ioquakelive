@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include <SDL3/SDL.h>
 
 #include <stdarg.h>
@@ -49,12 +48,11 @@ SDL_Window* SDL_window = NULL;
 static SDL_GLContext SDL_glContext = NULL;
 
 #ifdef USE_VULKAN_API
-// [ioquakelive] a window for the Vulkan renderer, which makes its own device
 static qboolean glimp_vulkan;
 static PFN_vkGetInstanceProcAddr qvkGetInstanceProcAddr;
 #endif
 
-cvar_t* r_allowSoftwareGL;  // Don't abort out if a hardware visual can't be obtained
+cvar_t* r_allowSoftwareGL;
 cvar_t* r_centerWindow;
 cvar_t* r_sdlDriver;
 cvar_t* r_preferOpenGLES;
@@ -62,8 +60,6 @@ cvar_t* r_preferOpenGLES;
 int qglMajorVersion, qglMinorVersion;
 int qglesMajorVersion, qglesMinorVersion;
 
-// [ioquakelive] GLIMP_EXTERNAL_QGL: the renderer this is built into (renderergl1) resolves
-// OpenGL itself, so the pointers here only serve this file
 #ifdef GLIMP_EXTERNAL_QGL
 #define GLIMP_QGL static
 #else
@@ -88,48 +84,26 @@ QGL_1_3_PROCS;
 QGL_1_5_PROCS;
 QGL_2_0_PROCS;
 QGL_3_0_PROCS;
-QGL_ARB_sync_PROCS;  // [ioquakelive] ver r_maxQueuedFrames
+QGL_ARB_sync_PROCS;
 QGL_ARB_occlusion_query_PROCS;
 QGL_ARB_framebuffer_object_PROCS;
 QGL_ARB_vertex_array_object_PROCS;
 QGL_EXT_direct_state_access_PROCS;
 #undef GLE
 
-/*
-===============
-GLimp_Shutdown
-===============
-*/
 void GLimp_Shutdown(void) {
     ri.IN_Shutdown();
 
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
-/*
-===============
-GLimp_Minimize
-
-Minimize the game so that user is back at the desktop
-===============
-*/
 void GLimp_Minimize(void) {
     SDL_MinimizeWindow(SDL_window);
 }
 
-/*
-===============
-GLimp_LogComment
-===============
-*/
 void GLimp_LogComment(char* comment) {
 }
 
-/*
-===============
-GLimp_CompareModes
-===============
-*/
 static int GLimp_CompareModes(const void* a, const void* b) {
     const float ASPECT_EPSILON = 0.001f;
     SDL_Rect* modeA = (SDL_Rect*)a;
@@ -150,11 +124,6 @@ static int GLimp_CompareModes(const void* a, const void* b) {
         return areaA - areaB;
 }
 
-/*
-===============
-GLimp_DetectAvailableModes
-===============
-*/
 static void GLimp_DetectAvailableModes(void) {
     int i, j;
     char buf[MAX_STRING_CHARS] = {0};
@@ -197,8 +166,6 @@ static void GLimp_DetectAvailableModes(void) {
         if (desktopMode->format != mode->format)
             continue;
 
-        // SDL can give the same resolution with different refresh rates.
-        // Only list resolution once.
         for (j = 0; j < numModes; j++) {
             if (mode->w == modes[j].w && mode->h == modes[j].h)
                 break;
@@ -234,11 +201,6 @@ static void GLimp_DetectAvailableModes(void) {
     SDL_free(modes);
 }
 
-/*
-===============
-OpenGL ES compatibility
-===============
-*/
 static void APIENTRY GLimp_GLES_ClearDepth(GLclampd depth) {
     qglClearDepthf(depth);
 }
@@ -248,20 +210,11 @@ static void APIENTRY GLimp_GLES_DepthRange(GLclampd near_val, GLclampd far_val) 
 }
 
 static void APIENTRY GLimp_GLES_DrawBuffer(GLenum mode) {
-    // unsupported
 }
 
 static void APIENTRY GLimp_GLES_PolygonMode(GLenum face, GLenum mode) {
-    // unsupported
 }
 
-/*
-===============
-GLimp_GetProcAddresses
-
-Get addresses for OpenGL functions.
-===============
-*/
 static qboolean GLimp_GetProcAddresses(qboolean fixedFunction) {
     qboolean success = qtrue;
     const char* version;
@@ -277,7 +230,6 @@ static qboolean GLimp_GetProcAddresses(qboolean fixedFunction) {
     }
 #endif
 
-    // OpenGL 1.0 and OpenGL ES 1.0
     GLE(const GLubyte*, GetString, GLenum name)
 
     if (!qglGetString) {
@@ -291,9 +243,8 @@ static qboolean GLimp_GetProcAddresses(qboolean fixedFunction) {
     }
 
     if (Q_stricmpn("OpenGL ES", version, 9) == 0) {
-        char profile[6];  // ES, ES-CM, or ES-CL
+        char profile[6];
         sscanf(version, "OpenGL %5s %d.%d", profile, &qglesMajorVersion, &qglesMinorVersion);
-        // common lite profile (no floating point) is not supported
         if (Q_stricmp(profile, "ES-CL") == 0) {
             qglesMajorVersion = 0;
             qglesMinorVersion = 0;
@@ -309,12 +260,10 @@ static qboolean GLimp_GetProcAddresses(qboolean fixedFunction) {
             QGL_DESKTOP_1_1_PROCS;
             QGL_DESKTOP_1_1_FIXED_FUNCTION_PROCS;
         } else if (qglesMajorVersion == 1 && qglesMinorVersion >= 1) {
-            // OpenGL ES 1.1 (2.0 is not backward compatible)
             QGL_1_1_PROCS;
             QGL_1_1_FIXED_FUNCTION_PROCS;
             QGL_ES_1_1_PROCS;
             QGL_ES_1_1_FIXED_FUNCTION_PROCS;
-            // error so this doesn't segfault due to NULL desktop GL functions being used
             Com_Error(ERR_FATAL, "Unsupported OpenGL Version: %s", version);
         } else {
             Com_Error(ERR_FATAL, "Unsupported OpenGL Version (%s), OpenGL 1.1 is required", version);
@@ -346,8 +295,6 @@ static qboolean GLimp_GetProcAddresses(qboolean fixedFunction) {
         QGL_3_0_PROCS;
     }
 
-    // [ioquakelive] fences are OpenGL 3.2; when they are missing qglFenceSync stays NULL and the
-    // renderer keeps to the usual path
     if (QGL_VERSION_ATLEAST(3, 2) || QGLES_VERSION_ATLEAST(3, 0)) {
         QGL_ARB_sync_PROCS;
     }
@@ -357,13 +304,6 @@ static qboolean GLimp_GetProcAddresses(qboolean fixedFunction) {
     return success;
 }
 
-/*
-===============
-GLimp_ClearProcAddresses
-
-Clear addresses for OpenGL functions.
-===============
-*/
 static void GLimp_ClearProcAddresses(void) {
 #define GLE(ret, name, ...) qgl##name = NULL;
 
@@ -397,14 +337,6 @@ static void GLimp_ClearProcAddresses(void) {
 #undef GLE
 }
 
-/*
-===============
-GLimp_ApplyFullscreen
-
-[ioquakelive] 1 is a real video mode, 2 the desktop's own (borderless). SDL3 keeps the mode on
-the window apart from the switch, and applies both later unless it is told to wait
-===============
-*/
 static qboolean GLimp_ApplyFullscreen(int fullscreen) {
     if (fullscreen == 1) {
         SDL_DisplayMode mode;
@@ -438,11 +370,6 @@ static qboolean GLimp_ApplyFullscreen(int fullscreen) {
     return qtrue;
 }
 
-/*
-===============
-GLimp_SetMode
-===============
-*/
 static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean fixedFunction) {
     struct GLimp_ContextType {
         int profileMask;
@@ -470,13 +397,11 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
 
     ri.Printf(PRINT_ALL, "Initializing OpenGL display\n");
 
-    // [QL] a window of Quake Live takes the mouse on its edge; only fullscreen is fixed
     if (!r_fullscreen->integer) {
         flags |= SDL_WINDOW_RESIZABLE;
     }
 
 #ifdef USE_ICON
-    // the icon's bytes are R, G, B, A in memory on either endianness
     icon = SDL_CreateSurfaceFrom(
         CLIENT_WINDOW_ICON.width,
         CLIENT_WINDOW_ICON.height,
@@ -485,7 +410,6 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
         CLIENT_WINDOW_ICON.bytes_per_pixel * CLIENT_WINDOW_ICON.width);
 #endif
 
-    // If a window exists, note its display
     if (SDL_window != NULL) {
         SDL_DisplayID current = SDL_GetDisplayForWindow(SDL_window);
 
@@ -511,7 +435,6 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
     ri.Printf(PRINT_ALL, "...setting mode %d:", mode);
 
     if (mode == -2) {
-        // use desktop video resolution
         if (desktopMode.h > 0) {
             glConfig.vidWidth = desktopMode.w;
             glConfig.vidHeight = desktopMode.h;
@@ -530,16 +453,13 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
     }
     ri.Printf(PRINT_ALL, " %d %d\n", glConfig.vidWidth, glConfig.vidHeight);
 
-    // [QL] quakelive_steam.exe 0x46ab80: the UI reads the shape of the screen here
     ri.Cvar_Set("r_aspectRatio", va("%d", aspectRatio));
 
-    // Center window
     if (r_centerWindow->integer && !fullscreen) {
         x = (desktopMode.w / 2) - (glConfig.vidWidth / 2);
         y = (desktopMode.h / 2) - (glConfig.vidHeight / 2);
     }
 
-    // Destroy existing state if it exists
     if (SDL_glContext != NULL) {
         GLimp_ClearProcAddresses();
         SDL_GL_DestroyContext(SDL_glContext);
@@ -553,21 +473,12 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
         SDL_window = NULL;
     }
 
-    // [ioquakelive] 2 is BORDERLESS fullscreen: a window the size of the desktop, with no video
-    // mode change. That is what makes alt-tab immediate, and with the hint below the game no
-    // longer minimises itself when another monitor is clicked.
     if (fullscreen == 2) {
         SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
-        // with no mode set, SDL3's fullscreen is the desktop's
         flags |= SDL_WINDOW_FULLSCREEN;
         glConfig.isFullscreen = qtrue;
     } else if (fullscreen) {
-        // [QL] retail's window procedure (quakelive_steam.exe 0x4f1750) has nothing for losing
-        // focus but the cursor and the sound: full screen stays as it is, under the window in
-        // front, and goes on drawing, so the taskbar's preview of it is live. Minimizing left a
-        // frozen picture there and made every alt-tab change the display mode twice
         SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
-        // the video mode can only go on a window that exists: hidden until it is set
         flags |= SDL_WINDOW_HIDDEN;
         glConfig.isFullscreen = qtrue;
     } else {
@@ -603,7 +514,6 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
 
         if (preferOpenGLES) {
 #ifdef __EMSCRIPTEN__
-            // WebGL 2.0 isn't fully backward compatible so you have to ask for it specifically
             contexts[numContexts].profileMask = SDL_GL_CONTEXT_PROFILE_ES;
             contexts[numContexts].majorVersion = 3;
             contexts[numContexts].minorVersion = 0;
@@ -650,12 +560,7 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
         int testColorBits, testDepthBits, testStencilBits;
         int realColorBits[3];
 
-        // 0 - default
-        // 1 - minus colorBits
-        // 2 - minus depthBits
-        // 3 - minus stencil
         if ((i % 4) == 0 && i) {
-            // one pass, reduce
             switch (i / 4) {
                 case 2:
                     if (colorBits == 24)
@@ -678,19 +583,19 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
         testDepthBits = depthBits;
         testStencilBits = stencilBits;
 
-        if ((i % 4) == 3) {  // reduce colorBits
+        if ((i % 4) == 3) {
             if (testColorBits == 24)
                 testColorBits = 16;
         }
 
-        if ((i % 4) == 2) {  // reduce depthBits
+        if ((i % 4) == 2) {
             if (testDepthBits == 24)
                 testDepthBits = 16;
             else if (testDepthBits == 16)
                 testDepthBits = 8;
         }
 
-        if ((i % 4) == 1) {  // reduce stencilBits
+        if ((i % 4) == 1) {
             if (testStencilBits == 24)
                 testStencilBits = 16;
             else if (testStencilBits == 16)
@@ -704,11 +609,10 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
         else
             perChannelColorBits = 4;
 
-#ifdef __sgi /* Fix for SGIs grabbing too many bits of color */
+#ifdef __sgi
         if (perChannelColorBits == 4)
-            perChannelColorBits = 0; /* Use minimum size for 16-bit color */
+            perChannelColorBits = 0;
 
-        /* Need alpha or else SGIs choose 36+ bit RGB mode */
         SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 1);
 #endif
 
@@ -731,8 +635,7 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
 
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
-#if 0  // if multisampling is enabled on X11, this causes create window to fail.
-       // If not allowing software GL, demand accelerated
+#if 0
 		if( !r_allowSoftwareGL->integer )
 			SDL_GL_SetAttribute( SDL_GL_ACCELERATED_VISUAL, 1 );
 #endif
@@ -877,22 +780,9 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
     return RSERR_OK;
 }
 
-/*
-===============
-GLimp_StartDriverAndSetMode
-===============
-*/
 #if defined(__APPLE__) && defined(USE_VULKAN_API)
 static qboolean vkBundledLibrary;
 
-/*
-===============
-VKimp_LoadBundledLibrary
-
-[ioquakelive] MoltenVK travels inside the app, in Contents/Frameworks, where SDL's own search does
-not look. Without it there, SDL's search still runs when the window is made.
-===============
-*/
 static void VKimp_LoadBundledLibrary(void) {
     char path[MAX_OSPATH];
     char* base;
@@ -900,7 +790,6 @@ static void VKimp_LoadBundledLibrary(void) {
     if (vkBundledLibrary)
         return;
 
-    // Contents/Resources/ inside a bundle
     base = SDL_GetBasePath();
     if (!base)
         return;
@@ -939,7 +828,6 @@ static qboolean GLimp_StartDriverAndSetMode(int mode, int fullscreen, qboolean n
     }
 
 #if defined(__APPLE__) && defined(USE_VULKAN_API)
-    // before the window, which loads SDL's pick if nothing is loaded yet
     if (glimp_vulkan)
         VKimp_LoadBundledLibrary();
 #endif
@@ -961,11 +849,6 @@ static qboolean GLimp_StartDriverAndSetMode(int mode, int fullscreen, qboolean n
 }
 
 #ifndef GLIMP_EXTERNAL_QGL
-/*
-===============
-GLimp_InitExtensions
-===============
-*/
 static void GLimp_InitExtensions(qboolean fixedFunction) {
     if (!r_allowExtensions->integer) {
         ri.Printf(PRINT_ALL, "* IGNORING OPENGL EXTENSIONS *\n");
@@ -976,7 +859,6 @@ static void GLimp_InitExtensions(qboolean fixedFunction) {
 
     glConfig.textureCompression = TC_NONE;
 
-    // GL_EXT_texture_compression_s3tc
     if ((QGLES_VERSION_ATLEAST(2, 0) || SDL_GL_ExtensionSupported("GL_ARB_texture_compression")) &&
         SDL_GL_ExtensionSupported("GL_EXT_texture_compression_s3tc")) {
         if (r_ext_compressed_textures->value) {
@@ -989,7 +871,6 @@ static void GLimp_InitExtensions(qboolean fixedFunction) {
         ri.Printf(PRINT_ALL, "...GL_EXT_texture_compression_s3tc not found\n");
     }
 
-    // GL_S3_s3tc ... legacy extension before GL_EXT_texture_compression_s3tc.
     if (glConfig.textureCompression == TC_NONE) {
         if (SDL_GL_ExtensionSupported("GL_S3_s3tc")) {
             if (r_ext_compressed_textures->value) {
@@ -1003,9 +884,7 @@ static void GLimp_InitExtensions(qboolean fixedFunction) {
         }
     }
 
-    // OpenGL 1 fixed function pipeline
     if (fixedFunction) {
-        // GL_EXT_texture_env_add
         glConfig.textureEnvAddAvailable = qfalse;
         if (SDL_GL_ExtensionSupported("GL_EXT_texture_env_add")) {
             if (r_ext_texture_env_add->integer) {
@@ -1019,7 +898,6 @@ static void GLimp_InitExtensions(qboolean fixedFunction) {
             ri.Printf(PRINT_ALL, "...GL_EXT_texture_env_add not found\n");
         }
 
-        // GL_ARB_multitexture
         qglMultiTexCoord2fARB = NULL;
         qglActiveTextureARB = NULL;
         qglClientActiveTextureARB = NULL;
@@ -1049,7 +927,6 @@ static void GLimp_InitExtensions(qboolean fixedFunction) {
             ri.Printf(PRINT_ALL, "...GL_ARB_multitexture not found\n");
         }
 
-        // GL_EXT_compiled_vertex_array
         if (SDL_GL_ExtensionSupported("GL_EXT_compiled_vertex_array")) {
             if (r_ext_compiled_vertex_array->value) {
                 ri.Printf(PRINT_ALL, "...using GL_EXT_compiled_vertex_array\n");
@@ -1095,13 +972,8 @@ static void GLimp_InitExtensions(qboolean fixedFunction) {
 
 #endif
 
-#define R_MODE_FALLBACK 1  // 640 * 480
+#define R_MODE_FALLBACK 1
 
-/*
-===============
-GLimp_InitCvars
-===============
-*/
 static void GLimp_InitCvars(void) {
     r_allowSoftwareGL = ri.Cvar_Get("r_allowSoftwareGL", "0", CVAR_LATCH);
     r_sdlDriver = ri.Cvar_Get("r_sdlDriver", "", CVAR_ROM);
@@ -1110,16 +982,6 @@ static void GLimp_InitCvars(void) {
 
 }
 
-/*
-===============
-GLimp_ApplyVideoMode
-
-[QL] The window takes the mode the cvars ask for without being made again: this is the window
-half of retail's "vid_restart fast" (quakelive_steam.exe 0x004bb7e0, which its WndProc runs on
-alt+enter at 0x004f1750). The caller applies the latched cvars first, and what comes back is the
-size the window really ended with
-===============
-*/
 qboolean GLimp_ApplyVideoMode(int* width, int* height) {
     int mode, w, h, aspectRatio;
     qboolean wasFullscreen;
@@ -1131,8 +993,6 @@ qboolean GLimp_ApplyVideoMode(int* width, int* height) {
 
     wasFullscreen = glConfig.isFullscreen;
 
-    // [QL] quakelive_steam.exe 0x448110: full screen takes r_mode, a window r_windowedMode,
-    // and borderless is always the desktop's own
     if (r_fullscreen->integer == 2) {
         mode = -2;
     } else {
@@ -1157,24 +1017,18 @@ qboolean GLimp_ApplyVideoMode(int* width, int* height) {
     glConfig.vidHeight = h;
     glConfig.windowAspect = aspect;
 
-    // [QL] quakelive_steam.exe 0x46ab80: the UI reads the shape of the screen here
     ri.Cvar_Set("r_aspectRatio", va("%d", aspectRatio));
 
     if (!GLimp_ApplyFullscreen(r_fullscreen->integer)) {
         return qfalse;
     }
 
-    // [QL] quakelive_steam.exe 0x0046bc70: coming back to a window is not only leaving the mode
-    // behind. Retail gives the window its whole style again -- the caption and the sizing border
-    // among them -- and puts it back on the screen, or the player is left with a borderless slab
-    // stuck in a corner. Full screen keeps neither
     SDL_SetWindowBordered(SDL_window, (r_fullscreen->integer || r_noborder->integer) ? false : true);
     SDL_SetWindowResizable(SDL_window, r_fullscreen->integer ? false : true);
 
     if (!r_fullscreen->integer) {
         SDL_SetWindowSize(SDL_window, w, h);
 
-        // out of full screen there is no window position to go back to
         if (wasFullscreen || r_centerWindow->integer) {
             SDL_DisplayID display = SDL_GetDisplayForWindow(SDL_window);
 
@@ -1195,15 +1049,6 @@ qboolean GLimp_ApplyVideoMode(int* width, int* height) {
     return qtrue;
 }
 
-
-/*
-===============
-GLimp_Init
-
-This routine is responsible for initializing the OS specific portions
-of OpenGL
-===============
-*/
 void GLimp_Init(qboolean fixedFunction) {
     int mode;
 
@@ -1213,25 +1058,19 @@ void GLimp_Init(qboolean fixedFunction) {
 
     ri.Sys_GLimpInit();
 
-    // [QL] quakelive_steam.exe 0x448110: full screen takes r_mode, a window r_windowedMode
-    // [ioquakelive] r_fullscreen 2, borderless, always takes the desktop's resolution: that is
-    // what a borderless window the size of the screen means.
     if (r_fullscreen->integer == 2)
         mode = -2;
     else
         mode = r_fullscreen->integer ? r_mode->integer : r_windowedMode->integer;
 
-    // Create the window and set up the context
     if (GLimp_StartDriverAndSetMode(mode, r_fullscreen->integer, r_noborder->integer, fixedFunction))
         goto success;
 
-    // Try again, this time in a platform specific "safe mode"
     ri.Sys_GLimpSafeInit();
 
     if (GLimp_StartDriverAndSetMode(mode, r_fullscreen->integer, qfalse, fixedFunction))
         goto success;
 
-    // Finally, try the default screen resolution
     if (mode != R_MODE_FALLBACK) {
         ri.Printf(PRINT_ALL, "Setting r_mode %d failed, falling back on r_mode %d\n",
                   mode, R_MODE_FALLBACK);
@@ -1240,29 +1079,23 @@ void GLimp_Init(qboolean fixedFunction) {
             goto success;
     }
 
-    // Nothing worked, give up
     ri.Error(ERR_FATAL, "GLimp_Init() - could not load OpenGL subsystem");
 
 success:
-    // These values force the UI to disable driver selection
     glConfig.driverType = GLDRV_ICD;
     glConfig.hardwareType = GLHW_GENERIC;
 
-    // [ioquakelive] SDL3 has no hardware gamma: the renderers do it in their post pass
     glConfig.deviceSupportsGamma = qfalse;
 
-    // get our config strings
     Q_strncpyz(glConfig.vendor_string, (char*)qglGetString(GL_VENDOR), sizeof(glConfig.vendor_string));
     Q_strncpyz(glConfig.renderer_string, (char*)qglGetString(GL_RENDERER), sizeof(glConfig.renderer_string));
     if (*glConfig.renderer_string && glConfig.renderer_string[strlen(glConfig.renderer_string) - 1] == '\n')
         glConfig.renderer_string[strlen(glConfig.renderer_string) - 1] = 0;
     Q_strncpyz(glConfig.version_string, (char*)qglGetString(GL_VERSION), sizeof(glConfig.version_string));
 
-    // [QL] quakelive_steam.exe 0x46c2e0 keeps the card's names in read only cvars
     ri.Cvar_Set("r_gl_vendor", glConfig.vendor_string);
     ri.Cvar_Set("r_gl_renderer", glConfig.renderer_string);
 
-    // manually create extension list if using OpenGL 3
     if (qglGetStringi) {
         int i, numExtensions, extensionLength, listLength;
         const char* extension;
@@ -1289,42 +1122,24 @@ success:
         Q_strncpyz(glConfig.extensions_string, (char*)qglGetString(GL_EXTENSIONS), sizeof(glConfig.extensions_string));
     }
 
-    // initialize extensions
 #ifndef GLIMP_EXTERNAL_QGL
     GLimp_InitExtensions(fixedFunction);
 #endif
 
     ri.Cvar_Get("r_availableModes", "", CVAR_ROM);
 
-    // This depends on SDL_INIT_VIDEO, hence having it here
     ri.IN_Init(SDL_window);
 }
 
-/*
-===============
-GLimp_GetProcAddress
-
-[ioquakelive] for a renderer that resolves OpenGL itself
-===============
-*/
 void* GLimp_GetProcAddress(const char* name) {
     return (void*)SDL_GL_GetProcAddress(name);
 }
 
-/*
-===============
-GLimp_EndFrame
-
-Responsible for doing a swapbuffers
-===============
-*/
 void GLimp_EndFrame(void) {
-    // don't flip if drawing to front buffer
     if (Q_stricmp(r_drawBuffer->string, "GL_FRONT") != 0) {
         SDL_GL_SwapWindow(SDL_window);
     }
 
-    // [QL] r_swapInterval isn't latched in retail: it changes on the next frame
     if (r_swapInterval->modified) {
         r_swapInterval->modified = qfalse;
 
@@ -1338,7 +1153,6 @@ void GLimp_EndFrame(void) {
         qboolean needToToggle;
         qboolean sdlToggled = qfalse;
 
-        // Find out the current state
         fullscreen = !!(SDL_GetWindowFlags(SDL_window) & SDL_WINDOW_FULLSCREEN);
 
         if (r_fullscreen->integer && ri.Cvar_VariableIntegerValue("in_nograb")) {
@@ -1347,13 +1161,11 @@ void GLimp_EndFrame(void) {
             r_fullscreen->modified = qfalse;
         }
 
-        // Is the state we want different from the current state?
         needToToggle = !!r_fullscreen->integer != fullscreen;
 
         if (needToToggle) {
             sdlToggled = GLimp_ApplyFullscreen(r_fullscreen->integer);
 
-            // the quick switch didn't work, so do it the slow way
             if (!sdlToggled)
                 ri.Cmd_ExecuteText(EXEC_APPEND, "vid_restart\n");
 
@@ -1365,11 +1177,6 @@ void GLimp_EndFrame(void) {
 }
 
 #ifdef USE_VULKAN_API
-/*
-===============
-VKimp_Init
-===============
-*/
 void VKimp_Init(glconfig_t* config) {
     int mode;
 
@@ -1382,7 +1189,6 @@ void VKimp_Init(glconfig_t* config) {
 
     glimp_vulkan = qtrue;
 
-    // [QL] 0x448110: full screen takes r_mode, a window r_windowedMode; 2 is the desktop's
     if (r_fullscreen->integer == 2)
         mode = -2;
     else
@@ -1396,15 +1202,12 @@ void VKimp_Init(glconfig_t* config) {
     if (!qvkGetInstanceProcAddr)
         ri.Error(ERR_FATAL, "VKimp_Init() - vkGetInstanceProcAddr is NULL: %s", SDL_GetError());
 
-    // These values force the UI to disable driver selection
     glConfig.driverType = GLDRV_ICD;
     glConfig.hardwareType = GLHW_GENERIC;
-    // [ioquakelive] SDL3 has no hardware gamma: the gamma pass does it
     glConfig.deviceSupportsGamma = qfalse;
 
     ri.Cvar_Get("r_availableModes", "", CVAR_ROM);
 
-    // This depends on SDL_INIT_VIDEO, hence having it here
     ri.IN_Init(SDL_window);
 }
 
@@ -1420,7 +1223,6 @@ void VKimp_Shutdown(qboolean unloadDLL) {
     (void)unloadDLL;
 
 #ifdef __APPLE__
-    // our reference goes first: the window still holds SDL's, and the video goes down after
     if (vkBundledLibrary) {
         SDL_Vulkan_UnloadLibrary();
         vkBundledLibrary = qfalse;
@@ -1432,21 +1234,11 @@ void VKimp_Shutdown(qboolean unloadDLL) {
     GLimp_Shutdown();
 }
 
-/*
-===============
-VKimp_Probe
-
-[ioquakelive] Whether Vulkan can run on this machine at all, asked before anything is opened:
-there is a Vulkan driver, it has a device, and the device the renderer would take (vk.c, by
-r_device) is not on the list of drivers that crash it. The renderer says no from GetRefAPI when
-it cannot, and the client goes on with OpenGL instead of the game closing with an error.
-===============
-*/
 qboolean VKimp_Probe(char* reason, int reasonSize) {
 #ifdef __APPLE__
     (void)reasonSize;
     reason[0] = '\0';
-    return qtrue;  // MoltenVK travels inside the bundle: there always is a Vulkan
+    return qtrue;
 #else
     PFN_vkGetInstanceProcAddr gipa;
     PFN_vkCreateInstance createInstance;
@@ -1465,7 +1257,7 @@ qboolean VKimp_Probe(char* reason, int reasonSize) {
     reason[0] = '\0';
     if (!SDL_WasInit(SDL_INIT_VIDEO)) {
         if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
-            return qtrue;  // no video at all: the renderer's own start says why
+            return qtrue;
         }
         videoStarted = qtrue;
     }
@@ -1495,9 +1287,7 @@ qboolean VKimp_Probe(char* reason, int reasonSize) {
         goto destroy;
     }
 
-    // the device the renderer would take: the first discrete one for -1, the first integrated
-    // one for -2, that index otherwise, the first when it is out of range
-    index = ri.Cvar_Get("r_device", "-1", CVAR_ARCHIVE | CVAR_LATCH)->integer;  // as tr_init.c registers it
+    index = ri.Cvar_Get("r_device", "-1", CVAR_ARCHIVE | CVAR_LATCH)->integer;
     for (i = 0; i < count; i++) {
         getProperties(devices[i], &props);
         if (index == -1 && props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
@@ -1512,7 +1302,6 @@ qboolean VKimp_Probe(char* reason, int reasonSize) {
     getProperties(devices[index], &props);
 
 #ifdef _WIN64
-    // the same list vk.c refuses at device creation: in 64 bits these die in vkCreateSwapchainKHR
     if (props.vendorID == 0x8086 && (props.driverVersion >> 14) == 101 &&
         (props.driverVersion & 0x3FFF) >= 5333 && (props.driverVersion & 0x3FFF) <= 6737) {
         Com_sprintf(reason, reasonSize, "Intel driver 101.%u crashes Vulkan in 64 bits; 101.6790 or later does not",

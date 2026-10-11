@@ -1,44 +1,5 @@
-/*
- * g_gametype_tdm.c -- Team Deathmatch (GT_TEAM, 3)
- *
- * Team-based fraglimit/timelimit mode. Team scoring via kills.
- * Scoreboard: TeamDeathmatchScoreboardMessage, TeamDeathmatchStatisticsMessage (below).
- */
 #include "g_local.h"
 
-// TDM uses fraglimit/timelimit exit rules + mercylimit.
-// Team balance: g_teamForceBalance, g_teamSizeMin, g_teamsize.
-// No round state.
-
-/*
-==================
-TeamDeathmatchScoreboardMessage
-
-TDM scoreboard. Includes team item pickup stats (14 categories * 2 teams = 28 header values).
-Hides opponent team's item stats unless spectating or at intermission.
-15 fields per player.
-Address: 0x1003df10
-
-In the binary this is a *builder*: it returns the
-"scores_tdm" string (char *) via va() and returns NULL on overflow; the
-trap_SendServerCommand is done by the caller (Cmd_Score), which also
-applies the `strlen(msg) < 1024 && !level.scoringDisabled` gate and falls back
-to FreeForAllScoreboardMessage otherwise. ioquakelive uses a self-consistent
-send-internally model (this fn is void and sends), so that gate/fallback is not
-reproduced here.
-
-Header (31 values before player data): the 14 of red, then the 14 of blue, as retail
-reads them (cgamex86.dll 0x10045f20 fills one team's block and then the other's):
-  redArmor yellowArmor greenArmor megaHealth quad battleSuit regen haste invis
-  quadTime battleSuitTime regenTime hasteTime invisTime
-and after both blocks:
-  numPlayers teamScoreRed teamScoreBlue
-
-Fields per player (15):
-  client team score ping time frags deaths accuracy bestWeapon
-  impressive excellent gauntlet teamKills teamKilled damageDone
-==================
-*/
 void TeamDeathmatchScoreboardMessage(gentity_t *ent) {
     char entry[1024];
     char string[1024];
@@ -52,9 +13,6 @@ void TeamDeathmatchScoreboardMessage(gentity_t *ent) {
     string[0] = 0;
     stringlength = 0;
 
-    // Load team item stats (14 categories)
-    // Order: redArmor, yellowArmor, greenArmor, megaHealth, quad, battleSuit,
-    //        regen, haste, invis, quadTime, battleSuitTime, regenTime, hasteTime, invisTime
     redStats[0]  = level.numRedArmorPickups[TEAM_RED];
     redStats[1]  = level.numYellowArmorPickups[TEAM_RED];
     redStats[2]  = level.numGreenArmorPickups[TEAM_RED];
@@ -104,10 +62,6 @@ void TeamDeathmatchScoreboardMessage(gentity_t *ent) {
 
         bestWeapon = STAT_GetBestWeapon(cl);
 
-        // Hide opponent team's stats (unless spectating or intermission).
-        // NOTE (byte-faithful): the binary zeroes only 13 of the 14 categories:
-        // index 8 (numInvisibilityPickups) of the hidden team is left visible.
-        // Both the RED-viewer and BLUE-viewer branches skip [8] (original QL bug).
         viewerTeam = ent->client->sess.sessionTeam;
         if (viewerTeam == TEAM_RED && level.intermissionTime == 0) {
             for (j = 0; j < 14; j++) {
@@ -121,7 +75,6 @@ void TeamDeathmatchScoreboardMessage(gentity_t *ent) {
             }
         }
 
-        // 15 fields per player
         Com_sprintf(entry, sizeof(entry), " %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i",
                     level.sortedClients[i],
                     cl->sess.sessionTeam,
@@ -143,8 +96,6 @@ void TeamDeathmatchScoreboardMessage(gentity_t *ent) {
         listEnd[i] = stringlength;
     }
 
-    // [ioquakelive] see SCORES_LIST_ROOM. Retail gives up without sending when the list
-    // does not fit; here the last ones on it are left out until the command does
     for (;;) {
         const char *cmd = va("scores_tdm %i %i %i %i %i %i %i %i %i %i %i %i %i %i "
                "%i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i%s",
@@ -166,17 +117,6 @@ void TeamDeathmatchScoreboardMessage(gentity_t *ent) {
     }
 }
 
-/*
-==================
-TeamDeathmatchStatisticsMessage
-
-TDM detail stats sent per-player as "tdmstats" command.
-11 fields per player: suicides teamKills teamKilled damageDone damageTaken
-  redArmorPickups yellowArmorPickups greenArmorPickups megaHealthPickups
-  quadPickups battleSuitPickups
-Address: 0x1003e3a0
-==================
-*/
 void TeamDeathmatchStatisticsMessage(gentity_t *ent) {
     char entry[1024];
     char string[1024];
@@ -201,8 +141,7 @@ void TeamDeathmatchStatisticsMessage(gentity_t *ent) {
                     cl->expandedStats.numQuadDamagePickups,
                     cl->expandedStats.numBattleSuitPickups);
         if (strlen(entry) > sizeof(string) - 1)
-            break;      // byte-faithful: overflow stops the loop (no send for this
-                        // or any later player); binary breaks, does not skip-and-send.
+            break;
         strcpy(string, entry);
         trap_SendServerCommand(ent - g_entities,
             va("tdmstats %i%s", i, string));

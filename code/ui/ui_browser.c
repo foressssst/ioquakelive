@@ -19,37 +19,22 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// ui_browser.c -- [QL] the Match Browser page
-//
-// Retail's browser is a web page fed by Steam (web.pak's modules 257 to 260): the
-// client asks Steam for the servers of the app (0x00462eb0, one filter "gamedir" =
-// "baseq3") and shows what Steam answers for each (0x00462a50). The page filters and
-// sorts on its own, and asks Steam for the rules and the players of the server that is
-// clicked, which the server publishes itself (qzeroded.x64 0x4468a0).
-//
-// Drawn here the way the page lays it out at 1080 lines (css/main.css): the list takes
-// 67% of the content and the details of the selected match 32% beside it. A screen
-// narrower than 3:2 hides the details and shows them in a dialog, as the page does.
-//
-
 #include "ui_web.h"
 
-// the page's boxes, in its CSS pixels
 #define BR_TITLE_H 54.4f
 #define BR_SECTION_H 50.0f
 #define BR_FILTERS_H 154.0f
 #define BR_HEAD_H 17.1f
 #define BR_ROW_H 50.5f
 #define BR_ROW_STEP 51.4f
-#define BR_SCROLLBAR 8.0f  // *::-webkit-scrollbar, and the column is overflow-y: scroll
+#define BR_SCROLLBAR 8.0f
 #define BR_BUTTON_H 30.0f
 #define BR_SELECT_H 36.0f
 #define BR_DETAILS_MAP_H 220.0f
 
-#define BR_MAX_TAGS 12        // a server's
+#define BR_MAX_TAGS 12
 #define BR_MAX_FILTER_TAGS 16
-#define BR_MAX_TAGLIST 128    // every tag seen, for Common Tags
+#define BR_MAX_TAGLIST 128
 #define BR_TAG_LEN 32
 
 typedef enum {
@@ -81,23 +66,17 @@ typedef enum {
     BR_HIT_PASS_CANCEL
 } brHitType_t;
 
-// what the page sorts by (filters.sort)
 typedef enum { BR_SORT_NAME, BR_SORT_GAMETYPE, BR_SORT_MAP, BR_SORT_PLAYERS, BR_SORT_PING } brSort_t;
 
-// the checkboxes of the filters (filters.vac and so on)
 typedef enum { BR_CHECK_VAC, BR_CHECK_PASSWORD, BR_CHECK_EMPTY, BR_CHECK_FULL } brCheck_t;
 
-// the three react-selects
 typedef enum { BR_DROP_NONE, BR_DROP_TYPE, BR_DROP_PING, BR_DROP_TAGS } brDrop_t;
 
 typedef enum { BR_MODAL_NONE, BR_MODAL_INFO, BR_MODAL_PASSWORD } brModal_t;
 
-// the serverfilters module's options
 static const char* const brTypes[] = {"Internet", "LAN", "Friends", "Favorites", "History"};
 static const int brPings[] = {0, 25, 50, 75, 100, 150, 200};
 
-// web.pak's gametypes module (237): the team ones get a scoreboard and their limit is named
-// by the condition. Overload is not there, so it is the unknown one.
 static const struct {
     qboolean team;
     const char* condition;
@@ -108,16 +87,15 @@ static const struct {
     {qfalse, "roundlimit"},
 };
 
-// a server as the page keeps it (serverlist's server object)
 typedef struct {
-    int index;  // in the engine's list
+    int index;
     char address[MAX_ADDRESSLENGTH];
     char name[64];
     char map[64];
-    char gametype[64];  // the description the server publishes: "Clan Arena"
+    char gametype[64];
     char tags[BR_MAX_TAGS][BR_TAG_LEN];
     int numTags;
-    int players;  // without the bots, as the page counts them
+    int players;
     int maxPlayers;
     int ping;
     qboolean password;
@@ -126,12 +104,11 @@ typedef struct {
 
 static brServer_t brServers[MAX_DISPLAY_SERVERS];
 static int brNumServers;
-static int brOrder[MAX_DISPLAY_SERVERS];  // the ones that pass the filters, sorted
+static int brOrder[MAX_DISPLAY_SERVERS];
 static int brNumOrder;
 static char brTagList[BR_MAX_TAGLIST][BR_TAG_LEN];
 static int brNumTagList;
 
-// filters, which the page keeps in localStorage ("browser_filters") and here in a cvar
 static struct {
     char tags[BR_MAX_FILTER_TAGS][BR_TAG_LEN];
     int numTags;
@@ -153,14 +130,13 @@ static struct {
     int lastBuild;
     int shownRows;
 
-    // the selected match and what Steam said about it
     qboolean hasSelected;
     brServer_t selected;
-    int details;  // UI_DETAILS_*
+    int details;
     char rules[8192];
     char players[4096];
     float playersScroll;
-    qboolean detailsForModal;  // who the request going on is for
+    qboolean detailsForModal;
 
     int dropdown;
     float dropScroll;
@@ -228,18 +204,6 @@ static const vec4_t brDialog = SM_RGB(30, 30, 30);
 #define SM_FA_TIMES_CIRCLE 0xf057
 #define SM_FA_CHECK 0xf00c
 
-/*
-===============================================================================
-
-PICTURES
-
-The map shots and the ping bars come out of web.pak. Registering a shader per row per
-frame is expensive even when the engine has it cached, so the ones asked for are kept;
-a map with no shot of its own falls back to the page's default one.
-
-===============================================================================
-*/
-
 #define BR_MAX_SHOTS 128
 
 static struct {
@@ -261,7 +225,7 @@ static qhandle_t BR_Shot(const char* size, const char* map) {
     }
     if (i == brNumShots) {
         if (brNumShots == BR_MAX_SHOTS) {
-            brNumShots = 0;  // the batch on screen fits with room to spare; start over
+            brNumShots = 0;
         }
         i = brNumShots++;
         Q_strncpyz(brShots[i].path, path, sizeof(brShots[i].path));
@@ -273,7 +237,6 @@ static qhandle_t BR_Shot(const char* size, const char* map) {
     return brShots[i].shot;
 }
 
-// the ping-component: three bars up to 60, two up to 100, one above
 static qhandle_t BR_Quality(int ping) {
     static qhandle_t shots[4];
     int q = ping <= 60 ? 3 : ping <= 100 ? 2 : 1;
@@ -283,17 +246,6 @@ static qhandle_t BR_Quality(int ping) {
     }
     return shots[q];
 }
-
-/*
-===============================================================================
-
-THE MAPS' NAMES
-
-The page's mapdb: the name each arena goes by, which the engine hands the page
-(GetMapList) and the UI reads the same way Start Match does.
-
-===============================================================================
-*/
 
 #define BR_MAX_ARENAS 512
 
@@ -327,17 +279,6 @@ static const char* BR_MapName(const char* map) {
     found = (const char*)bsearch(map, brArenas, brNumArenas, sizeof(brArenas[0]), BR_ArenaCompare);
     return found && found[sizeof(brArenas[0].sysname)] ? found + sizeof(brArenas[0].sysname) : map;
 }
-
-/*
-===============================================================================
-
-THE FILTERS
-
-The page's defaults: every type of list shows the Internet's, VAC servers only, no
-passwords, sorted by ping.
-
-===============================================================================
-*/
 
 static void BR_DefaultFilters(void) {
     Com_Memset(&brf, 0, sizeof(brf));
@@ -396,7 +337,6 @@ static void BR_LoadFilters(void) {
     }
 }
 
-// the page's addTag: a union, so a tag already there is not added twice
 static void BR_AddFilterTag(const char* tag) {
     int i;
 
@@ -421,7 +361,6 @@ static void BR_RemoveFilterTag(int index) {
     BR_SaveFilters();
 }
 
-// the page's filterTests: any one that answers true takes the server out
 static qboolean BR_Filtered(const brServer_t* s) {
     int i, j;
 
@@ -440,7 +379,6 @@ static qboolean BR_Filtered(const brServer_t* s) {
     if (brf.password && s->password) {
         return qtrue;
     }
-    // every tag asked for has to be one of the server's, or its map
     for (i = 0; i < brf.numTags; i++) {
         for (j = 0; j < s->numTags; j++) {
             if (!Q_stricmp(s->tags[j], brf.tags[i])) {
@@ -454,7 +392,6 @@ static qboolean BR_Filtered(const brServer_t* s) {
     return qfalse;
 }
 
-// lodash's sortBy: stable, so equals keep the order Steam answered in
 static int BR_SortCompare(const void* a, const void* b) {
     const brServer_t* x = &brServers[*(const int*)a];
     const brServer_t* y = &brServers[*(const int*)b];
@@ -487,7 +424,6 @@ static int BR_TagCompare(const void* a, const void* b) {
     return strcmp((const char*)a, (const char*)b);
 }
 
-// a server's tags as the page splits them: by comma, trimmed, no empty ones and no repeats
 static void BR_ParseTags(brServer_t* s, const char* tags) {
     char buf[MAX_INFO_VALUE];
     char* p;
@@ -532,16 +468,6 @@ static void BR_AddToTagList(const char* tag) {
     }
 }
 
-
-/*
-===============
-BR_Collect
-
-What the page does as each server answers (updateServer) and when the filters change:
-every server of the engine's list read again, the tags gathered for Common Tags, and the
-ones that pass the filters sorted.
-===============
-*/
 static void BR_Collect(void) {
     char info[MAX_STRING_CHARS];
     int count = trap_LAN_GetServerCount(AS_GLOBAL);
@@ -594,15 +520,6 @@ static void BR_Collect(void) {
     }
 }
 
-/*
-===============================================================================
-
-ACTIONS
-
-===============================================================================
-*/
-
-// the page's requestNewList: everything forgotten, Steam asked again for this type of list
 static void BR_RequestNewList(void) {
     brNumServers = 0;
     brNumOrder = 0;
@@ -617,7 +534,6 @@ static qboolean BR_Refreshing(void) {
     return trap_LAN_SteamRefreshing();
 }
 
-// the password dialog's tryGameJoin: a match with a password asks for it first
 static void BR_Join(const brServer_t* s) {
     if (s->password) {
         br.modal = BR_MODAL_PASSWORD;
@@ -641,11 +557,9 @@ static void BR_ShowDetails(const brServer_t* s) {
     }
 }
 
-// a server whose game info the page opens with, for the friend list's Join Match
 static char brPendingInfo[MAX_ADDRESSLENGTH];
 static char brPendingName[64];
 
-// the game info dialog asks on its own, and again every five seconds while it is open
 static void BR_ShowGameInfo(const brServer_t* s) {
     br.modal = BR_MODAL_INFO;
     br.modalServer = *s;
@@ -660,7 +574,6 @@ static void BR_ShowGameInfo(const brServer_t* s) {
     }
 }
 
-// what Steam has answered so far goes to whoever asked
 static void BR_PollDetails(void) {
     static char rules[8192];
     static char players[4096];
@@ -700,14 +613,6 @@ static void BR_PollDetails(void) {
     }
 }
 
-/*
-===============================================================================
-
-DRAWING
-
-===============================================================================
-*/
-
 static float BR_Width(float size, const char* text, qboolean bold) {
     return SM_AdvanceRaw(FONT_SANS, size, text, -1, bold);
 }
@@ -722,7 +627,6 @@ static void BR_TextIn(float x, float lineTop, float lineHeight, float size, cons
     SM_TextRaw(x, baseline, FONT_SANS, size, color, text, -1, bold);
 }
 
-// text cut to a width, with the page's text-overflow: ellipsis
 static void BR_TextFit(float x, float baseline, float size, const float* color, const char* text, float width,
                        qboolean bold, int font) {
     char buf[256];
@@ -761,7 +665,6 @@ static void BR_Button(float x, float y, const char* label, qboolean disabled, in
     }
 }
 
-// i.tag: #111 behind, a black border, 8pt, three pixels of padding
 static float BR_TagWidth(const char* tag) {
     return BR_Width(10.6667f, tag, qfalse) + 6 + 2;
 }
@@ -774,7 +677,6 @@ static void BR_Tag(float x, float y, const char* tag, const smRect_t* clip) {
     BR_TextIn(x + 4, y, 16, 10.6667f, brHeadText, tag, qfalse, clip);
 }
 
-// a native checkbox, 13 square, and its label (the input's :after content)
 static void BR_Check(float x, float y, const char* label, qboolean on, int check, const smRect_t* clip) {
     if (on) {
         SM_Fill(x, y, 13, 13, brCheckOn, clip);
@@ -787,7 +689,6 @@ static void BR_Check(float x, float y, const char* label, qboolean on, int check
     SM_Hit(x, y - 3, 20 + BR_Width(15, label, qfalse), 20, BR_HIT_CHECK, check, clip);
 }
 
-// react-select's control: #333 (#444 under the cursor), the value in #aaa and its arrow
 static void BR_SelectBox(float x, float y, float w, const char* text, qboolean disabled, int drop,
                          const smRect_t* clip) {
     qboolean over = (qboolean)(!disabled && SM_Over(BR_HIT_SELECT, drop));
@@ -809,7 +710,6 @@ static void BR_SelectBox(float x, float y, float w, const char* text, qboolean d
     }
 }
 
-// the scrolling list's bar: the webkit one, a #333 thumb in an 8 pixel gutter
 static void BR_Scrollbar(float x, float top, float view, float content, float scroll) {
     float thumbH, thumbY;
 
@@ -827,7 +727,6 @@ static void BR_Scrollbar(float x, float top, float view, float content, float sc
     SM_Hit(x, thumbY, BR_SCROLLBAR, thumbH, BR_HIT_THUMB, 0, NULL);
 }
 
-// a short list's own bar (overflow-y: auto): the same thumb, the wheel moves it
 static void BR_ListBar(float x, float top, float view, float content, float scroll) {
     float thumbH, thumbY;
     qboolean over;
@@ -844,7 +743,6 @@ static void BR_ListBar(float x, float top, float view, float content, float scro
     SM_Fill(x, thumbY, BR_SCROLLBAR, thumbH, over ? brThumbHover : brThumb, NULL);
 }
 
-// skeleton's ul: list-style circle inside, a ring 6 across, 1.7 into the item and 13.3 down
 static void BR_Circle(float x, float y, const float* color, const smRect_t* clip) {
     int i;
 
@@ -862,7 +760,6 @@ static float BR_ClampScroll(float scroll) {
     return scroll < 0 ? 0 : scroll;
 }
 
-// the sort key's arrow after a column's name
 static float BR_HeadLabel(float x, float lineTop, const char* label, int sort, const smRect_t* clip) {
     float w = BR_Width(10.6667f, va("%s ", label), qfalse);
     float baseline = SM_Baseline(FONT_SANS, 10.6667f, lineTop, 14);
@@ -887,14 +784,12 @@ static void BR_DrawFilters(float left, float y, float width, const smRect_t* cli
 
     SM_Fill(left, y, width, BR_FILTERS_H, brSection, clip);
 
-    // the first half: the type of list and the two checks under it
     BR_TextIn(left + 10, y + 30, 20, 15, smText, "Type", qfalse, clip);
     BR_SelectBox(left + 10 + BR_Width(15, "Type ", qfalse), y + 10, 150, brTypes[brf.type], BR_Refreshing(),
                  BR_DROP_TYPE, clip);
     BR_Check(left + 10, y + 54, "VAC Enabled", brf.vac, BR_CHECK_VAC, clip);
     BR_Check(left + 10, y + 78, "Hide Passworded Servers", brf.password, BR_CHECK_PASSWORD, clip);
 
-    // the second: empty, full and the ping
     BR_Check(colB, y + 12, "Hide Empty Servers", brf.empty, BR_CHECK_EMPTY, clip);
     BR_Check(colB, y + 36, "Hide Full Servers", brf.full, BR_CHECK_FULL, clip);
     BR_TextIn(colB, y + 78, 20, 15, smText, "Maximum Ping", qfalse, clip);
@@ -904,7 +799,6 @@ static void BR_DrawFilters(float left, float y, float width, const smRect_t* cli
                  i < (int)ARRAY_LEN(brPings) && brPings[i] ? va("%i", brPings[i]) : "None", qfalse, BR_DROP_PING,
                  clip);
 
-    // the tags: the ones asked for, the field to add one and the list of the ones seen
     {
         float boxW = width - 20 - 200 - 3.75f;
         float boxY = y + 108;
@@ -937,7 +831,6 @@ static void BR_DrawFilters(float left, float y, float width, const smRect_t* cli
     }
 }
 
-// the dropdown of a react-select, over everything under it
 static void BR_DrawDropdown(float x, float y, float w) {
     int count, i;
     float rowH = br.dropdown == BR_DROP_TAGS ? 24.0f : 40.0f;
@@ -956,7 +849,7 @@ static void BR_DrawDropdown(float x, float y, float w) {
     if (br.dropScroll < 0) {
         br.dropScroll = 0;
     }
-    y -= 1;  // margin-top: -1px
+    y -= 1;
     SM_Fill(x, y, w, h, brSelect, NULL);
     clip = SM_R(x, y, w, h);
     for (i = 0; i < count; i++) {
@@ -978,15 +871,6 @@ static void BR_DrawDropdown(float x, float y, float w) {
     }
 }
 
-/*
-===============
-BR_DrawRow
-
-One of serverlist's rows: the map's shot, which turns into a play button under the cursor,
-the name with a lock when there is a password, the gametype and the arena, the tags, the
-players and the ping.
-===============
-*/
 static void BR_DrawRow(const brServer_t* s, int row, float x, float y, float w, const smRect_t* clip) {
     qboolean over = SM_Over(BR_HIT_ROW, row) || SM_Over(BR_HIT_PLAY, row) || SM_Over(BR_HIT_TAG, row);
     qboolean selected = (qboolean)(br.hasSelected && !strcmp(br.selected.address, s->address));
@@ -999,7 +883,6 @@ static void BR_DrawRow(const brServer_t* s, int row, float x, float y, float w, 
     SM_Fill(x, y, w, BR_ROW_H, selected ? brRowSelected : over ? brRowHover : brBlack80, clip);
     SM_Hit(x, y, w, BR_ROW_H, BR_HIT_ROW, row, clip);
 
-    // the shot, its width filling 79 pixels and cut at 40
     {
         smRect_t shot = SM_R(x + 5, y + 5, 79, 40);
 
@@ -1016,7 +899,6 @@ static void BR_DrawRow(const brServer_t* s, int row, float x, float y, float w, 
         }
     }
 
-    // the name, with the lock of a match that asks for a password
     tx = x + 89;
     if (s->password) {
         float baseline = SM_Baseline(FONT_SANS, 14.6667f, y, 23.4667f);
@@ -1034,7 +916,6 @@ static void BR_DrawRow(const brServer_t* s, int row, float x, float y, float w, 
         }
     }
 
-    // the tags, to the right of the first column and never wider than 40% of it
     tagsW = 0;
     for (i = 0; i < s->numTags; i++) {
         tagsW += BR_TagWidth(s->tags[i]) + 6;
@@ -1056,7 +937,6 @@ static void BR_DrawRow(const brServer_t* s, int row, float x, float y, float w, 
             if (t + tw <= tagsX + tagsW) {
                 BR_Tag(t, y + 32.4f, s->tags[i], &tagClip);
             } else {
-                // overflow: hidden and text-overflow: ellipsis, the tag cut where the box ends
                 float baseline = SM_Baseline(FONT_SANS, 10.6667f, y + 32.4f, 16);
 
                 SM_Fill(t, y + 32.4f, tw, 16, brHead, &tagClip);
@@ -1071,7 +951,6 @@ static void BR_DrawRow(const brServer_t* s, int row, float x, float y, float w, 
         }
     }
 
-    // the gametype and the arena, what serverdesc says under the name
     Com_sprintf(text, sizeof(text), "%s: %s", s->gametype, BR_MapName(s->map));
     {
         float baseline = SM_Baseline(FONT_SANS, 12, y + 26.4f, 19.2f);
@@ -1081,7 +960,6 @@ static void BR_DrawRow(const brServer_t* s, int row, float x, float y, float w, 
         }
     }
 
-    // players and ping, in the middle of their columns
     Com_sprintf(text, sizeof(text), "%i / %i", s->players, s->maxPlayers);
     BR_TextIn(x + mainW + (colW - BR_Width(13.3333f, text, qfalse)) * 0.5f, y + (BR_ROW_H - 21.3333f) * 0.5f,
               21.3333f, 13.3333f, brRowText, text, qfalse, clip);
@@ -1095,14 +973,6 @@ static void BR_DrawRow(const brServer_t* s, int row, float x, float y, float w, 
     }
 }
 
-/*
-===============
-BR_DrawList
-
-The left column, which scrolls as a whole: the title, the actions, the filters when they
-are shown, the table's head and the rows.
-===============
-*/
 static void BR_DrawList(float left, float top, float width, float height) {
     float inner = width - BR_SCROLLBAR;
     float y = top - br.scroll;
@@ -1110,7 +980,6 @@ static void BR_DrawList(float left, float top, float width, float height) {
     smRect_t clip = SM_R(left, top, inner, height);
     int i;
 
-    // the title
     SM_Fill(left, y, inner, BR_TITLE_H, brBlack80, &clip);
     {
         float baseline = SM_Baseline(FONT_DEFAULT, 32.0f, y + 8.0f, 38.4f);
@@ -1122,7 +991,6 @@ static void BR_DrawList(float left, float top, float width, float height) {
         }
     }
 
-    // the actions: the filters on the left, the two refreshes on the right
     sectionY = y + BR_TITLE_H + 2;
     SM_Fill(left, sectionY, inner, BR_SECTION_H, brSection, &clip);
     {
@@ -1153,7 +1021,6 @@ static void BR_DrawList(float left, float top, float width, float height) {
         tableY += BR_FILTERS_H;
     }
 
-    // the head, whose names sort
     headY = tableY + 1;
     SM_Fill(left, headY, inner, BR_HEAD_H, brHead, &clip);
     {
@@ -1179,7 +1046,6 @@ static void BR_DrawList(float left, float top, float width, float height) {
         }
     }
 
-    // the rows
     rowsY = headY + BR_HEAD_H + 1;
     br.shownRows = brNumOrder;
     for (i = 0; i < brNumOrder; i++) {
@@ -1195,7 +1061,6 @@ static void BR_DrawList(float left, float top, float width, float height) {
     br.content = (rowsY + brNumOrder * BR_ROW_STEP) - (top - br.scroll);
     BR_Scrollbar(left + inner, top, height, br.content, br.scroll);
 
-    // an open react-select goes over the rows, inside the same column
     if (br.dropdown != BR_DROP_NONE && br.showFilters) {
         float fy = sectionY + BR_SECTION_H;
         float colB = left + 10 + (inner - 20) * 0.52f;
@@ -1210,7 +1075,6 @@ static void BR_DrawList(float left, float top, float width, float height) {
     }
 }
 
-// halogen's ClipLoader: a 24 pixel ring with its bottom quarter missing, turning every 0.75s
 static void BR_Loader(float x, float y) {
     float cx = x + 12, cy = y + 12;
     float turn = (uiInfo.uiDC.realTime % 750) / 750.0f * 2 * M_PI;
@@ -1221,7 +1085,6 @@ static void BR_Loader(float x, float y) {
         float rel = a - turn;
 
         rel = rel - 2 * M_PI * floor(rel / (2 * M_PI));
-        // the transparent bottom border is the quarter around straight down
         if (rel > M_PI * 0.25f && rel < M_PI * 0.75f) {
             continue;
         }
@@ -1229,7 +1092,6 @@ static void BR_Loader(float x, float y) {
     }
 }
 
-// the page's stripColors: ^ and a digit out, then any ^ left
 static void BR_StripColors(const char* in, char* out, int size) {
     int n = 0;
 
@@ -1246,7 +1108,6 @@ static void BR_StripColors(const char* in, char* out, int size) {
     out[n] = '\0';
 }
 
-// moment-duration-format's "d[d] h:mm:ss", the zero units on the left trimmed
 static void BR_Duration(int seconds, char* out, int size) {
     int d = seconds / 86400, h = (seconds / 3600) % 24, m = (seconds / 60) % 60, s = seconds % 60;
 
@@ -1261,7 +1122,6 @@ static void BR_Duration(int seconds, char* out, int size) {
     }
 }
 
-// Utils.generateNiceServerDetails: the rules the page puts in words, in its order
 static int BR_NiceDetails(const char* rules, char out[4][64]) {
     int gametype = atoi(Info_ValueForKey(rules, "g_gametype"));
     qboolean known = (qboolean)(gametype >= 0 && gametype < (int)ARRAY_LEN(brGametypes));
@@ -1288,7 +1148,6 @@ static int BR_NiceDetails(const char* rules, char out[4][64]) {
     return n;
 }
 
-// one line of the players: the name without colours and the time on the server
 static const char* BR_NextPlayer(const char* p, char* line, int size) {
     char name[64];
     const char* tab;
@@ -1312,7 +1171,6 @@ static const char* BR_NextPlayer(const char* p, char* line, int size) {
     return p ? p + 1 : NULL;
 }
 
-// the scorebox of a team match: red on the left, aligned right, and blue on the right
 static float BR_Scorebox(float x, float y, float w, const char* rules) {
     float h = 18.6667f * 1.6f + 2 * 4.6667f;
     float baseline = SM_Baseline(FONT_DEFAULT, 18.6667f, y + 4.6667f, 18.6667f * 1.6f);
@@ -1323,7 +1181,6 @@ static float BR_Scorebox(float x, float y, float w, const char* rules) {
 
     SM_Fill(x, y, half, h, brBlack75, NULL);
     SM_Fill(x + half, y, w - half, h, brBlack75, NULL);
-    // "Red " and a 30 pixel box with the score, all against the right edge
     bx = x + half - 14 - 30;
     SM_TextRaw(bx + 30 - SM_AdvanceBold(FONT_DEFAULT, 18.6667f, red, -1, qtrue), baseline, FONT_DEFAULT, 18.6667f, brRed,
             red, -1, qtrue);
@@ -1335,14 +1192,6 @@ static float BR_Scorebox(float x, float y, float w, const char* rules) {
     return h;
 }
 
-/*
-===============
-BR_DrawDetails
-
-serverlistdetails: the match's shot with its name over a shade, the score of a team match,
-the button that joins, what the rules say and who is playing.
-===============
-*/
 static void BR_DrawDetails(float x, float top, float w) {
     const brServer_t* s = &br.selected;
     float y = top;
@@ -1360,7 +1209,6 @@ static void BR_DrawDetails(float x, float top, float w) {
         return;
     }
 
-    // the shot, covering the box from its top edge, and the shade under the name
     {
         smRect_t box = SM_R(x, y, w, BR_DETAILS_MAP_H);
         float shotW = w, shotH = w * 270.0f / 480.0f;
@@ -1378,7 +1226,6 @@ static void BR_DrawDetails(float x, float top, float w) {
 
             SM_Fill(x, y + BR_DETAILS_MAP_H - 93 + i, w, 3, shade, NULL);
         }
-        // the h1 and the h4, in skeleton's letter-spacing
         SM_SetSpacing(SM_SPACING_H1);
         BR_TextFit(x + 7.5f, SM_Baseline(FONT_DEFAULT, 24, y + BR_DETAILS_MAP_H - 93 + 7.5f, 28.8f), 24, brWhite,
                    s->name, w - 15, qfalse, FONT_DEFAULT);
@@ -1400,7 +1247,6 @@ static void BR_DrawDetails(float x, float top, float w) {
         }
     }
 
-    // >> JOIN MATCH <<
     {
         float h = 44.7f;
         qboolean over = SM_Over(BR_HIT_JOIN, 0);
@@ -1418,7 +1264,6 @@ static void BR_DrawDetails(float x, float top, float w) {
         y += h + 7.5f;
     }
 
-    // the rules in words
     {
         char lines[4][64];
         int n = BR_NiceDetails(br.rules, lines);
@@ -1432,7 +1277,6 @@ static void BR_DrawDetails(float x, float top, float w) {
         y += h + 7.5f;
     }
 
-    // who is playing, in a box of its own that scrolls past 300 pixels
     if (br.players[0]) {
         const char* p = br.players;
         char line[128];
@@ -1462,7 +1306,6 @@ static void BR_DrawDetails(float x, float top, float w) {
             const char* next = BR_NextPlayer(p, line, sizeof(line));
             float ly = y + 15 + n * 27.75f - br.playersScroll;
 
-            // ul.players keeps skeleton's marker, 21 pixels before the name
             BR_Circle(x + 22.5f, ly, brInfo, &clip);
             BR_TextIn(x + 43.5f, ly, 24, 15, brInfo, line, qfalse, &clip);
             n++;
@@ -1472,7 +1315,6 @@ static void BR_DrawDetails(float x, float top, float w) {
     }
 }
 
-// the context menu of a row (showServerContext): white, black, yellow under the cursor
 static const char* BR_MenuItem(int i) {
     if (i == 0) {
         return "View Game Info";
@@ -1505,19 +1347,6 @@ static void BR_DrawMenu(void) {
     }
 }
 
-/*
-===============
-BR_DrawGameInfo
-
-The game info dialog, for a screen too narrow for the details column and for the menu's
-"View Game Info": ModalStyles.wide, the whole width of the screen and 600 pixels high over the
-arena's large shot. Its paddings of 15% each side win over the padding of 10 that follows them,
-so .widemodal-content takes the middle 70%, and inside it everything the column shows plus the
-tags and the ping. The rules and the players are two of skeleton's half columns; the players
-scroll past 350, and the button comes after them, out of the box when a team match's score
-pushes it down, as in retail.
-===============
-*/
 static void BR_DrawGameInfo(void) {
     const brServer_t* s = &br.modalServer;
     float top = smBottom * 0.5f - 300;
@@ -1530,7 +1359,6 @@ static void BR_DrawGameInfo(void) {
     SM_Hit(0, 0, smVW, smBottom, BR_HIT_DIALOG, 0, NULL);
     SM_Fill(0, top, smVW, 600, brDialog, NULL);
     if (br.modalDetails == UI_DETAILS_DONE) {
-        // background-size 100%, centred
         smRect_t box = SM_R(0, top, smVW, 600);
         float shotH = smVW * 1080.0f / 1920.0f;
 
@@ -1539,20 +1367,17 @@ static void BR_DrawGameInfo(void) {
     SM_Fill(left, top, width, 600, brBlack80, NULL);
 
     if (br.modalDetails != UI_DETAILS_DONE) {
-        // .centered-loader from the middle of the box, and Close where the text starts
         BR_Loader(left + width * 0.5f, top + 300);
         BR_Button(x, y, "Close", qfalse, BR_HIT_MODAL_CLOSE, 0, NULL);
         return;
     }
 
-    // the close cross on the right, the name in 36pt and what is played where in 22pt
     SM_TextRaw(x + w - SM_Advance(FONT_SANS, 32, "\xc3\x97", -1), SM_Baseline(FONT_SANS, 32, y, 18.6667f), FONT_SANS,
             32, brYellow, "\xc3\x97", -1, qfalse);
     SM_Hit(x + w - 24, y - 8, 24, 32, BR_HIT_MODAL_CLOSE, 0, NULL);
     SM_SetSpacing(SM_SPACING_H1);
     BR_TextFit(x, SM_Baseline(FONT_DEFAULT, 48, y, 57.6f), 48, smText, s->name, w - 40, qfalse, FONT_DEFAULT);
     y += 57.6f;
-    // .game-info-modal h2: 22pt in font-family sans-serif, its line 1.25
     Com_sprintf(text, sizeof(text), "%s on %s", s->gametype, BR_MapName(s->map));
     SM_TextRaw(x, SM_Baseline(SM_SansSerifFace(), 29.3333f, y, 36.6667f), SM_SansSerifFace(), 29.3333f, smText, text,
             -1, qfalse);
@@ -1568,7 +1393,6 @@ static void BR_DrawGameInfo(void) {
         }
         y += 24 + 15;
     }
-    // the ping 75 wide with its 2em under it, and the players after a space
     if (s->ping > 0) {
         SM_Pic(x, y + 1, 16, 16, BR_Quality(s->ping), NULL);
         BR_TextIn(x + 16, y, 24, 15, smText, va(" %ims", s->ping), qfalse, NULL);
@@ -1577,7 +1401,6 @@ static void BR_DrawGameInfo(void) {
     BR_TextIn(x + 75 + BR_Width(15, " ", qfalse), y, 24, 15, smText, text, qfalse, NULL);
     y += 24 + 30;
 
-    // a team match's score, two plain lines: .scorebox is only styled in the column
     {
         int gametype = atoi(Info_ValueForKey(br.modalRules, "g_gametype"));
 
@@ -1596,7 +1419,6 @@ static void BR_DrawGameInfo(void) {
         }
     }
 
-    // the rules on the left, the players on the right, 24 high and 10 apart
     {
         char lines[4][64];
         int n = BR_NiceDetails(br.modalRules, lines);
@@ -1622,7 +1444,6 @@ static void BR_DrawGameInfo(void) {
                 n++;
             }
         }
-        // the last one's margin is inside what scrolls
         content = n * 34;
         if (br.modalPlayersScroll > content - 350) {
             br.modalPlayersScroll = content - 350;
@@ -1641,11 +1462,9 @@ static void BR_DrawGameInfo(void) {
         BR_ListBar(clip.x + half - BR_SCROLLBAR, y, 350, content, br.modalPlayersScroll);
     }
 
-    // the one button, on the right after the two columns (350 and the list's margin)
     BR_Button(x + w - BR_ButtonWidth("Join Match"), y + 365, "Join Match", qfalse, BR_HIT_MODAL_JOIN, 0, NULL);
 }
 
-// the password dialog: a thin band in the middle of the screen with the field and its buttons
 static void BR_DrawPassword(void) {
     float top = smBottom * 0.5f - 150;
     float x = 10 + 15, y = top + 10 + 15;
@@ -1676,7 +1495,6 @@ static void BR_DrawPassword(void) {
               BR_HIT_PASS_CANCEL, 0, NULL);
 }
 
-// the details column only fits a screen wider than 3:2 (the page's max-aspect-ratio: 9/6)
 static qboolean BR_Wide(void) {
     return !SM_Narrow();
 }
@@ -1697,7 +1515,6 @@ static void BR_DrawPage(void) {
     }
 }
 
-// [QL] friendlist.js's Join Match: window.showModalGameInfo over the Match Browser
 void UI_Browser_ShowGameInfo(const char* address, const char* name) {
     Q_strncpyz(brPendingInfo, address, sizeof(brPendingInfo));
     Q_strncpyz(brPendingName, name, sizeof(brPendingName));
@@ -1733,11 +1550,8 @@ void UI_Browser_Open(void) {
         brPendingInfo[0] = '\0';
         BR_ShowGameInfo(&s);
     }
-    // the list is the global one, which is what Steam gives. The cached value is updated by
-    // hand: UI_UpdateCvars does not run until the next frame and the refresh goes out now.
-    trap_Cvar_Set("ui_netSource", "2");  // AS_GLOBAL
+    trap_Cvar_Set("ui_netSource", "2");
     trap_Cvar_Update(&ui_netSource);
-    // the page asks for a new list only when it has none (componentDidMount)
     UI_Browser_SetSource(brf.type);
     if (trap_LAN_GetServerCount(AS_GLOBAL) <= 0) {
         BR_RequestNewList();
@@ -1749,7 +1563,6 @@ void UI_Browser_Open(void) {
 void UI_Browser_Paint(void) {
     SM_BeginFrame();
 
-    // the list grows while Steam answers; the page batches its updates every 250 ms
     if (uiInfo.uiDC.realTime - br.lastBuild > 250) {
         br.lastBuild = uiInfo.uiDC.realTime;
         UI_Home_ServerList(qfalse);
@@ -1786,14 +1599,6 @@ void UI_Browser_Paint(void) {
     SM_EndFrame();
 }
 
-/*
-===============================================================================
-
-INPUT
-
-===============================================================================
-*/
-
 static void BR_SetCheck(int check) {
     switch (check) {
         case BR_CHECK_VAC:
@@ -1818,7 +1623,7 @@ static void BR_ChooseOption(int option) {
         if (option != brf.type) {
             brf.type = option;
             BR_SaveFilters();
-            BR_RequestNewList();  // a new type is a new list (updateFilters)
+            BR_RequestNewList();
         }
     } else if (br.dropdown == BR_DROP_PING) {
         brf.ping = brPings[option];
@@ -1830,8 +1635,6 @@ static void BR_ChooseOption(int option) {
     BR_Collect();
 }
 
-// the sortClicked of the list's head: the same column again reverses it, and players go
-// from the most first
 static void BR_Sort(int sort) {
     if (sort == brf.sort) {
         brf.reverse = (qboolean)!brf.reverse;
@@ -1850,8 +1653,6 @@ static const brServer_t* BR_RowServer(int row) {
     return &brServers[brOrder[row]];
 }
 
-// react-tagsinput: Tab, Enter, space and comma add what was typed; a backspace in an empty
-// field takes the last tag away
 static qboolean BR_TagKey(int key) {
     int len = (int)strlen(br.tagInput);
 
@@ -1948,7 +1749,6 @@ static void BR_ModalClick(const smHit_t* hit) {
 qboolean UI_Browser_HandleKey(int key) {
     const smHit_t* hit;
 
-    // a dialog takes every key: Enter does what it is for, Escape closes it
     if (br.modal == BR_MODAL_PASSWORD) {
         if (BR_PasswordKey(key)) {
             return qtrue;
@@ -2027,7 +1827,7 @@ qboolean UI_Browser_HandleKey(int key) {
                 br.dropdown = BR_DROP_NONE;
                 return qtrue;
             }
-            return qfalse;  // Escape goes back through the menu's onESC
+            return qfalse;
         default:
             return qfalse;
     }
@@ -2037,7 +1837,6 @@ qboolean UI_Browser_HandleKey(int key) {
     }
     hit = SM_HitAt(smMX, smMY);
 
-    // the right button opens the row's menu, where the cursor is
     if (key == K_MOUSE2) {
         const brServer_t* s;
 
@@ -2050,7 +1849,6 @@ qboolean UI_Browser_HandleKey(int key) {
         return qtrue;
     }
 
-    // a click anywhere else closes an open select and takes the focus off the tags
     if (!hit || hit->type != BR_HIT_OPTION) {
         int wasOpen = br.dropdown;
 

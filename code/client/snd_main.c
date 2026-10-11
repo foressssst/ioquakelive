@@ -20,11 +20,10 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "client.h"
 #include "snd_codec.h"
 #include "snd_local.h"
-void S_SoundLoadReport_f(void);  // [ioquakelive] snd_mem.c
+void S_SoundLoadReport_f(void);
 
 #include "snd_public.h"
 
@@ -44,11 +43,6 @@ extern cvar_t* s_show;
 
 static soundInterface_t si;
 
-/*
-=================
-S_ValidateInterface
-=================
-*/
 static qboolean S_ValidSoundInterface(soundInterface_t* si) {
     if (!si->Shutdown)
         return qfalse;
@@ -93,162 +87,83 @@ static qboolean S_ValidSoundInterface(soundInterface_t* si) {
     return qtrue;
 }
 
-/*
-=================
-S_StartSound
-=================
-*/
 void S_StartSound(vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx) {
     if (si.StartSound) {
         si.StartSound(origin, entnum, entchannel, sfx);
     }
 }
 
-/*
-=================
-S_StartLocalSound
-=================
-*/
 void S_StartLocalSound(sfxHandle_t sfx, int channelNum) {
     if (si.StartLocalSound) {
         si.StartLocalSound(sfx, channelNum);
     }
 }
 
-/*
-=================
-S_StartLocalSoundVolume
-
-[QL] quakelive_steam.exe 0x4da380, the cgame import at +0xa0 (0x4afe50): the local sound
-path with the volume the channel starts at instead of the fixed 1. cgame's kill beep plays
-through it with s_killBeepVolume.
-=================
-*/
 void S_StartLocalSoundVolume(sfxHandle_t sfx, int channelNum, float volume) {
     if (si.StartLocalSoundVolume) {
         si.StartLocalSoundVolume(sfx, channelNum, volume);
     }
 }
 
-/*
-=================
-S_StartBackgroundTrack
-=================
-*/
 void S_StartBackgroundTrack(const char* intro, const char* loop) {
     if (si.StartBackgroundTrack) {
         si.StartBackgroundTrack(intro, loop);
     }
 }
 
-/*
-=================
-S_StopBackgroundTrack
-=================
-*/
 void S_StopBackgroundTrack(void) {
     if (si.StopBackgroundTrack) {
         si.StopBackgroundTrack();
     }
 }
 
-/*
-=================
-S_RawSamples
-=================
-*/
 void S_RawSamples(int stream, int samples, int rate, int width, int channels, const byte* data, float volume, int entityNum) {
     if (si.RawSamples)
         si.RawSamples(stream, samples, rate, width, channels, data, volume, entityNum);
 }
 
-/*
-=================
-S_StopAllSounds
-=================
-*/
 void S_StopAllSounds(void) {
     if (si.StopAllSounds) {
         si.StopAllSounds();
     }
 }
 
-/*
-=================
-S_ClearLoopingSounds
-=================
-*/
 void S_ClearLoopingSounds(qboolean killall) {
     if (si.ClearLoopingSounds) {
         si.ClearLoopingSounds(killall);
     }
 }
 
-/*
-=================
-S_AddLoopingSound
-=================
-*/
 void S_AddLoopingSound(int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfx) {
     if (si.AddLoopingSound) {
         si.AddLoopingSound(entityNum, origin, velocity, sfx);
     }
 }
 
-/*
-=================
-S_AddRealLoopingSound
-=================
-*/
 void S_AddRealLoopingSound(int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfx) {
     if (si.AddRealLoopingSound) {
         si.AddRealLoopingSound(entityNum, origin, velocity, sfx);
     }
 }
 
-/*
-=================
-S_StopLoopingSound
-=================
-*/
 void S_StopLoopingSound(int entityNum) {
     if (si.StopLoopingSound) {
         si.StopLoopingSound(entityNum);
     }
 }
 
-/*
-=================
-S_Respatialize
-=================
-*/
 void S_Respatialize(int entityNum, const vec3_t origin, vec3_t axis[3], int inwater) {
     if (si.Respatialize) {
         si.Respatialize(entityNum, origin, axis, inwater);
     }
 }
 
-/*
-=================
-S_UpdateEntityPosition
-=================
-*/
 void S_UpdateEntityPosition(int entityNum, const vec3_t origin) {
     if (si.UpdateEntityPosition) {
         si.UpdateEntityPosition(entityNum, origin);
     }
 }
 
-/*
-=================
-S_Update
-
-[QL] quakelive_steam.exe creates its DirectSound buffer without global focus unless
-s_muteBackground is 0, so the game goes silent while its window is not the active one.
-[ioquakelive] Windows 11 no longer silences such a buffer (measured: the sound went on until the
-mixer's own mute, 135 ms later), so the device is muted here instead, through si.SetMute.
-=================
-*/
 void S_Update(void) {
     qboolean background = s_muteBackground->integer && (com_unfocused->integer || com_minimized->integer);
 
@@ -265,15 +180,6 @@ void S_Update(void) {
     }
 }
 
-/*
-=================
-S_WindowFocusLost
-
-[ioquakelive] Called from the window's own focus-lost and minimized events, as they are made.
-In fullscreen SDL then minimizes the window and changes the display mode, which holds the game
-for a moment; what the device was playing kept going over it, repeated. Muting here comes first.
-=================
-*/
 void S_WindowFocusLost(void) {
     if (!s_muteBackground || !s_muteBackground->integer || !s_muted) {
         return;
@@ -287,20 +193,6 @@ void S_WindowFocusLost(void) {
     }
 }
 
-/*
-=================
-S_DeviceLost
-
-[ioquakelive] Windows can take the audio device away from the game: on an output change, on
-plugging headphones in, or when another program grabs it exclusively. SDL closes the device and
-reports it, and nothing listened for that report, so the sound went away and did not come back
-until the game was restarted.
-
-The cheap thing is tried first, which is reopening the device alone. If the new one does not
-have the same format the loaded sounds are no longer usable -- they are resampled to the
-previous rate -- and only then is a full snd_restart needed.
-=================
-*/
 void S_DeviceLost(void) {
     if (S_Base_ReopenDevice()) {
         Com_Printf("Audio device reopened.\n");
@@ -310,33 +202,18 @@ void S_DeviceLost(void) {
     Cbuf_AddText("snd_restart\n");
 }
 
-/*
-=================
-S_DisableSounds
-=================
-*/
 void S_DisableSounds(void) {
     if (si.DisableSounds) {
         si.DisableSounds();
     }
 }
 
-/*
-=================
-S_BeginRegistration
-=================
-*/
 void S_BeginRegistration(void) {
     if (si.BeginRegistration) {
         si.BeginRegistration();
     }
 }
 
-/*
-=================
-S_RegisterSound
-=================
-*/
 sfxHandle_t S_RegisterSound(const char* sample, qboolean compressed) {
     if (si.RegisterSound) {
         return si.RegisterSound(sample, compressed);
@@ -345,47 +222,24 @@ sfxHandle_t S_RegisterSound(const char* sample, qboolean compressed) {
     }
 }
 
-/*
-=================
-S_ClearSoundBuffer
-=================
-*/
 void S_ClearSoundBuffer(void) {
     if (si.ClearSoundBuffer) {
         si.ClearSoundBuffer();
     }
 }
 
-/*
-=================
-S_SoundInfo
-=================
-*/
 void S_SoundInfo(void) {
     if (si.SoundInfo) {
         si.SoundInfo();
     }
 }
 
-/*
-=================
-S_SoundList
-=================
-*/
 void S_SoundList(void) {
     if (si.SoundList) {
         si.SoundList();
     }
 }
 
-/*
-=================
-S_Play_f
-
-[QL] quakelive_steam.exe 0x4db710. A name without an extension gets ".wav" added, built from
-the first argument whatever its position, as Quake III did.
-=================
-*/
 void S_Play_f(void) {
     int i;
     sfxHandle_t h;
@@ -408,13 +262,6 @@ void S_Play_f(void) {
     }
 }
 
-/*
-=================
-S_Music_f
-
-[QL] quakelive_steam.exe 0x4db810. With one argument the track plays once.
-=================
-*/
 void S_Music_f(void) {
     int c;
 
@@ -434,18 +281,9 @@ void S_Music_f(void) {
     }
 }
 
-//=============================================================================
-
-/*
-=================
-S_Init
-=================
-*/
 void S_Init(void) {
     cvar_t* cv;
 
-    // [QL] quakelive_steam.exe 0x4db870: every sound cvar exists even with sound disabled,
-    // and the software mixer is the only one
     Com_Printf("\n------- sound initialization -------\n");
 
     s_announcerVolume = Cvar_Get("s_announcerVolume", "1.0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
@@ -465,11 +303,7 @@ void S_Init(void) {
     s_testsound = Cvar_Get("s_testsound", "0", CVAR_CHEAT);
     s_volume = Cvar_Get("s_volume", "0.8", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     Cvar_CheckRange(s_volume, 0.0f, 2.0f, qfalse);
-    // [ioquakelive] read on every frame: retail latched it because DirectSound took it when the
-    // buffer was made, and changing it did nothing until the sound restarted
     s_muteBackground = Cvar_Get("s_muteBackground", "1", CVAR_ARCHIVE);
-    // [QL] the map's own sounds: the engine keeps it and the cgame reads it (its flags in the
-    // binary are 0x80821, archived, replicated and latched)
     Cvar_Get("s_ambient", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE | CVAR_REPLICATE);
     s_muted = Cvar_Get("s_muted", "0", CVAR_ROM);
 
@@ -485,7 +319,7 @@ void S_Init(void) {
     Cmd_AddCommand("music", S_Music_f);
     Cmd_AddCommand("s_list", S_SoundList);
     Cmd_AddCommand("s_info", S_SoundInfo);
-    Cmd_AddCommand("soundload", S_SoundLoadReport_f);  // [ioquakelive]
+    Cmd_AddCommand("soundload", S_SoundLoadReport_f);
     Cmd_AddCommand("s_stop", S_StopAllSounds);
 
     if (!S_Base_Init(&si)) {
@@ -501,14 +335,7 @@ void S_Init(void) {
     S_SoundInfo();
 }
 
-/*
-=================
-S_Shutdown
-=================
-*/
 void S_Shutdown(void) {
-    // [ioquakelive] when a map load was cut short, what was handed out cannot survive the
-    // sistema de sonido
     S_AsyncLoadDiscard();
 
     if (si.Shutdown) {

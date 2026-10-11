@@ -19,16 +19,9 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #ifndef __APPLE__
 #error This file is for macOS only. You probably should not compile it.
 #endif
-
-// Please note that this file is just some Mac-specific bits. Most of the
-// Mac OS X code is shared with other Unix platforms in sys_unix.c ...
-//
-// Compiled with -fobjc-arc (see DO_OBJCC / DO_DED_OBJCC in Makefile).
-// No manual retain/release/autorelease - they are a compile error under ARC.
 
 #include "../qcommon/q_shared.h"
 #include "../qcommon/qcommon.h"
@@ -40,13 +33,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #import <Cocoa/Cocoa.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
-/*
-==============
-Sys_Dialog
-
-Display an OS X dialog box
-==============
-*/
 dialogResult_t Sys_Dialog( dialogType_t type, const char *message, const char *title )
 {
 	dialogResult_t result = DR_OK;
@@ -94,15 +80,6 @@ dialogResult_t Sys_Dialog( dialogType_t type, const char *message, const char *t
 	return result;
 }
 
-/*
-=================
-Sys_StripAppBundle
-
-Discovers if passed dir is suffixed with the directory structure of a Mac OS X
-.app bundle. If it is, the .app directory structure is stripped off the end and
-the result is returned. If not, dir is returned untouched.
-=================
-*/
 char *Sys_StripAppBundle( char *dir )
 {
 	static char cwd[MAX_OSPATH];
@@ -120,16 +97,6 @@ char *Sys_StripAppBundle( char *dir )
 	return cwd;
 }
 
-/*
-=================
-Sys_DisableStateRestoration
-
-macOS saves window state on exit and offers to reopen windows at the next
-launch, with a prompt after an unclean exit. This is very annoying and serves
-no purpose for this game, so switch the persistence machinery off through the
-app's defaults domain before AppKit initialises.
-=================
-*/
 void Sys_DisableStateRestoration( void )
 {
 	[[NSUserDefaults standardUserDefaults] registerDefaults: @{
@@ -138,15 +105,6 @@ void Sys_DisableStateRestoration( void )
 	}];
 }
 
-/*
-=================
-Sys_DefaultAppPath
-
-On macOS, return Contents/Resources so fs_apppath points to the standard
-bundle resource location. Bundled pk3s (iobin.pk3, pak01.pk3) are placed
-there at build time and are found regardless of App Translocation.
-=================
-*/
 char *Sys_DefaultAppPath( void )
 {
 	static char resourcePath[MAX_OSPATH];
@@ -159,14 +117,6 @@ char *Sys_DefaultAppPath( void )
 }
 
 #ifndef DEDICATED
-/*
-=================
-QLPak0CancelHelper
-
-Cancel flag for Sys_LocatePak0's progress window. The GCD worker polls
-->cancelled once per 256 KB chunk; the Cancel button / Escape key sets it.
-=================
-*/
 @interface QLPak0CancelHelper : NSObject
 {
 @public
@@ -183,22 +133,12 @@ Cancel flag for Sys_LocatePak0's progress window. The GCD worker polls
 }
 @end
 
-/*
-=================
-Sys_LocatePak0
-
-NSOpenPanel to locate pak00.pk3 and copy it into destDir/baseq3/.
-Copy runs on a GCD background queue; NSModalSession keeps the progress
-window live on the main thread. Returns qtrue on success.
-=================
-*/
 qboolean Sys_LocatePak0( const char *destDir )
 {
 	if (!NSApp) {
 		[NSApplication sharedApplication];
 		[NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 	}
-	// activateIgnoringOtherApps: is deprecated on macOS 14+
 	if (@available(macOS 14.0, *)) {
 		[NSApp activate];
 	} else {
@@ -228,7 +168,6 @@ qboolean Sys_LocatePak0( const char *destDir )
 	Com_sprintf(pak00Dest, sizeof(pak00Dest), "%s/%s", destDir, BASEGAME_DIR);
 	Sys_Mkdir(pak00Dest);
 	Com_sprintf(pak00Dest, sizeof(pak00Dest), "%s/%s/pak00.pk3", destDir, BASEGAME_DIR);
-	// Blocks can't capture C arrays; pointer is valid while the modal runs.
 	const char *pak00DestPath = pak00Dest;
 
 	NSDictionary *attrs = [[NSFileManager defaultManager]
@@ -240,7 +179,6 @@ qboolean Sys_LocatePak0( const char *destDir )
 	    styleMask:NSWindowStyleMaskTitled
 	    backing:NSBackingStoreBuffered
 	    defer:NO];
-	// ARC: must be NO or -close double-releases the window.
 	[progressWin setReleasedWhenClosed:NO];
 	[progressWin setTitle:@"Quake Live - First Time Setup"];
 
@@ -297,7 +235,7 @@ qboolean Sys_LocatePak0( const char *destDir )
 			return;
 		}
 
-		char buf[256 * 1024];   // 256 KB chunks
+		char buf[256 * 1024];
 		long long copied = 0;
 		int lastPct = -1;
 		qboolean ok = qtrue;
@@ -315,7 +253,6 @@ qboolean Sys_LocatePak0( const char *destDir )
 			}
 			copied += (long long)nread;
 			if (fileSize > 0) {
-				// Only dispatch when percent changes (~100 updates vs ~3600).
 				int pct = (int)((double)copied / (double)fileSize * 100.0);
 				if (pct != lastPct) {
 					lastPct = pct;
@@ -379,4 +316,4 @@ qboolean Sys_LocatePak0( const char *destDir )
 	Com_Printf("pak00.pk3 copied to %s\n", pak00Dest);
 	return qtrue;
 }
-#endif // !DEDICATED
+#endif

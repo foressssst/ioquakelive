@@ -1,13 +1,3 @@
-/*
-===========================================================================
-ioquakelive - the stats Quake Live keeps on Steam
-
-[QL] Every one an integer, and its Steam ID is its place in the table. The server adds to
-them (0x00561060) and the client reads them back for the front end's Career Stats and the
-profile card (0x0055da94): the same 88 names in the same order. Include it in one file of
-each module.
-===========================================================================
-*/
 
 #ifndef Q_STEAMSTATS_H
 #define Q_STEAMSTATS_H
@@ -37,4 +27,4 @@ static const char* const steamStatNames[] = {
 
 #define STEAM_NUM_STATS ((int)(sizeof(steamStatNames) / sizeof(steamStatNames[0])))
 
-#endif  // Q_STEAMSTATS_H
+#endif

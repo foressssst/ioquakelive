@@ -19,10 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// cg_consolecmds.c -- text commands typed in at the local console, or
-// executed by a key binding
-
 #include "cg_local.h"
 #include "../ui/ui_shared.h"
 extern menuDef_t* menuScoreboard;
@@ -41,42 +37,20 @@ void CG_TargetCommand_f(void) {
     trap_SendClientCommand(va("gc %i %i", targetNum, atoi(test)));
 }
 
-/*
-=================
-CG_SizeUp_f
-
-Keybinding command
-=================
-*/
 static void CG_SizeUp_f(void) {
     trap_Cvar_Set("cg_viewsize", va("%i", (int)(cg_viewsize.integer + 10)));
 }
 
-/*
-=================
-CG_SizeDown_f
-
-Keybinding command
-=================
-*/
 static void CG_SizeDown_f(void) {
     trap_Cvar_Set("cg_viewsize", va("%i", (int)(cg_viewsize.integer - 10)));
 }
 
-/*
-=============
-CG_Viewpos_f
-
-Debugging command to print the current position
-=============
-*/
 static void CG_Viewpos_f(void) {
     CG_Printf("(%i %i %i) : %i\n", (int)cg.refdef.vieworg[0],
               (int)cg.refdef.vieworg[1], (int)cg.refdef.vieworg[2],
               (int)cg.refdefViewAngles[YAW]);
 }
 
-// [QL] Binary-matched: simplified from Q3 version (0x10006cf0). CG_KeyEvent calls it too.
 void CG_ScoresDown_f(void) {
     CG_BuildSpectatorString();
     if (cg.scoresRequestTime + 2000 < cg.time) {
@@ -89,14 +63,13 @@ void CG_ScoresDown_f(void) {
     cg.showScores = qtrue;
 }
 
-// [QL] Binary-matched: no scoreFadeTime
 static void CG_ScoresUp_f(void) {
     if (cg.showScores) {
         cg.showScores = qfalse;
     }
 }
 
-void Menu_Reset(void);  // FIXME: add to right include file
+void Menu_Reset(void);
 
 static void CG_LoadHud_f(void) {
     char buff[1024];
@@ -114,7 +87,6 @@ static void CG_LoadHud_f(void) {
 
     CG_LoadMenus(hudSet);
 
-    // [QL] Reload extra menus from pak00 (same list as CG_RegisterGraphics)
     CG_ParseMenu("ui/intro.menu");
     CG_ParseMenu("ui/ingamescorenoteam.menu");
     CG_ParseMenu("ui/ingamescoreteam.menu");
@@ -150,11 +122,6 @@ static void CG_LoadHud_f(void) {
     CG_ParseMenu("ui/end_scoreboard_1fctf.menu");
     CG_ParseMenu("ui/end_scoreboard_race.menu");
 
-    // [QL] Menus_Reset only resets menuCount, so re-parsing refills the same Menus[]
-    // slots with different menus and every cached pointer now names the wrong one; they are
-    // all re-resolved here, the scoreboards by gametype. Without this, `loadhud` while
-    // spectating left menuJoinGame pointing at whatever had landed in its slot, and
-    // CG_UpdateJoinMenu happily activated and painted that.
     CG_CacheMenus();
 }
 
@@ -242,8 +209,6 @@ static void CG_PrevTeamMember_f(void) {
     CG_SelectPrevPlayer();
 }
 
-// ASS U ME's enumeration order as far as task specific orders, OFFENSE is zero, CAMP is last
-//
 static void CG_NextOrder_f(void) {
     clientInfo_t* ci = cgs.clientinfo + cg.snap->ps.clientNum;
     if (ci) {
@@ -384,10 +349,6 @@ static void CG_StartOrbit_f(void) {
     }
 }
 
-// =====================================================================
-// [QL] Drop commands
-// =====================================================================
-
 static void CG_DropFlag_f(void) {
     if (cgs.gametype != GT_CTF && cgs.gametype != GT_1FCTF && cgs.gametype != GT_HARVESTER) {
         CG_Printf("DropFlag is not available in non-flag gametypes.\n");
@@ -438,10 +399,6 @@ static void CG_DropWeapon_f(void) {
     trap_SendClientCommand("dropweapon");
 }
 
-// =====================================================================
-// [QL] Readyup, team, forfeit, ragequit
-// =====================================================================
-
 static void CG_Readyup_f(void) {
     if ((cg.warmup != 0 && cg.snap != NULL && cg.snap->ps.pm_type != PM_DEAD) ||
         cg.snap->ps.pm_type == PM_INTERMISSION) {
@@ -476,13 +433,6 @@ static void CG_Ragequit_f(void) {
     cg.disconnectRequest = 2;
 }
 
-// =====================================================================
-// [QL] Color commands
-// =====================================================================
-
-// [QL] Color wheel: 26 evenly-spaced hue colors for 'a'-'z'.
-// Binary has these as BSS arrays populated at runtime.
-// g_colorWheel = packed 0xRRGGBBAA, g_colorWheelNormalized = vec3_t RGB [0,1].
 unsigned int g_colorWheel[26];
 vec3_t g_colorWheelNormalized[26];
 
@@ -542,10 +492,8 @@ static void CG_SetEnemyTeamColor(const char *prefix) {
         len = 3;
     }
 
-    // Set the base color cvar
     trap_Cvar_Set(va("cg_%scolor", prefix), args);
 
-    // Set head/upper/lower colors from individual characters
     for (i = 0; i < len; i++) {
         if (args[i] != '\0') {
             int ch = (args[i] >= 'A' && args[i] <= 'Z') ? args[i] + 32 : args[i];
@@ -579,10 +527,6 @@ static void CG_SetEnemyColor_f(void) {
     CG_SetEnemyTeamColor("enemy");
 }
 
-// =====================================================================
-// [QL] Chat history toggles
-// =====================================================================
-
 static void CG_ChatDown_f(void) {
     if (!cg.chatHistoryShowing) {
         cg.chatHistoryShowing = qtrue;
@@ -597,11 +541,8 @@ static void CG_ChatUp_f(void) {
 
 static void CG_ToggleChatHistory_f(void) {
     cg.chatHistoryShowing = !cg.chatHistoryShowing;
-}// =====================================================================
-// [QL] Print, kill, clientmute
-// =====================================================================
+}
 
-// [QL] Chat system - ring buffer matching binary at 0x10006910
 void CG_ClearChat(void) {
     memset(cg.chatLines, 0, sizeof(cg.chatLines));
     memset(&cg.currentChatLine, 0, sizeof(cg.currentChatLine));
@@ -609,12 +550,6 @@ void CG_ClearChat(void) {
     cg.chatSlideStart = 0;
 }
 
-// [QL] cgamex86.dll 0x10006910. A line ending in '\n' is copied without it;
-// the copy is capped at 72 characters during the intermission, 254 otherwise.
-//
-// [ioquakelive] It does not print to the console, and that matters: it used to, and since
-// the "print" handler already printed its own, every server message came out twice. In the
-// binary each caller prints with its own format, not this function.
 void CG_AddChat(const char *text, int teamOnly, int extraTime) {
     int len;
     int size;
@@ -623,7 +558,6 @@ void CG_AddChat(const char *text, int teamOnly, int extraTime) {
     size = (cg.intermissionStarted == 1) ? 0x49 : 0xff;
 
     if (cg.currentChatLine.startTime != 0) {
-        // Push current line into ring buffer
         cg.chatIndex = (cg.chatIndex + 1) % MAX_CHAT_LINES;
         memcpy(&cg.chatLines[cg.chatIndex], &cg.currentChatLine, sizeof(cg.currentChatLine));
     }
@@ -632,7 +566,6 @@ void CG_AddChat(const char *text, int teamOnly, int extraTime) {
     cg.currentChatLine.endTime = cg.time + 2000 + extraTime;
     cg.currentChatLine.teamOnly = teamOnly;
     cg.currentChatLine.fadeTime = cg.time;
-    // [CPMA] the lines above rise into place (CG_DrawCpmaChat)
     cg.chatSlideStart = cg.time;
     cg.chatSlideKey = cg.time;
     cg.chatSlideIn = qtrue;
@@ -643,7 +576,6 @@ void CG_AddChat(const char *text, int teamOnly, int extraTime) {
     Q_strncpyz(cg.currentChatLine.text, text, size);
 }
 
-// the n-th newest stored chat line (0 is the newest), or NULL past them
 static chatLine_t* CG_ChatLine(int n) {
     chatLine_t* line;
 
@@ -660,7 +592,6 @@ static chatLine_t* CG_ChatLine(int n) {
     return line->startTime ? line : NULL;
 }
 
-// [CPMA] how long a line holds before easing out: Quake Live's extra time lengthens it
 static int CG_ChatLineHold(const chatLine_t* line) {
     int extra = line->endTime - line->startTime - 2000;
 
@@ -671,16 +602,6 @@ static qboolean CG_ChatLineShowing(const chatLine_t* line) {
     return (cg.time < line->fadeTime + CHAT_FADEIN + CG_ChatLineHold(line) + CHAT_FADEOUT) ? qtrue : qfalse;
 }
 
-/*
-[CPMA] CPMA 1.53's Chat element (hud.cfg: fadein 150, fadedelay 3000, time 100) on Quake
-Live's chat window, used with ch_animateScroll. The ch_chatLines newest lines show, each
-easing in, holding and easing out. CPMA anchors its list at the oldest line and slides it a
-row as that line leaves (CG_CpmaSlide); Quake Live's window is anchored at the newest line,
-on its bottom edge, so here the lines above rise a row when a line comes in, and the bottom
-line sinks a row as it leaves. CPMA (cgame.qvm func 158881) drops a line pushed out of the
-window at once and has the window skip its fade-in; here, the user's call (2026-10-02), that
-line fades out a row above the window while the rest come in as usual, so a burst animates too.
-*/
 static void CG_DrawCpmaChat(float x, float bottom, float scale) {
     vec4_t color = {1.0f, 1.0f, 1.0f, 1.0f};
     int lines = ch_chatLines.integer;
@@ -696,8 +617,6 @@ static void CG_DrawCpmaChat(float x, float bottom, float scale) {
         lines = MAX_CHAT_LINES;
     }
 
-    // the line just pushed out of the window starts to fade out, if it was not already;
-    // anything older goes at once
     line = CG_ChatLine(lines);
     if (line && CG_ChatLineShowing(line) &&
         cg.time - line->fadeTime - CHAT_FADEIN - CG_ChatLineHold(line) < 0) {
@@ -744,8 +663,6 @@ static void CG_DrawCpmaChat(float x, float bottom, float scale) {
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
 
-// [ioquakelive] how far the chat history is in, 0 to 1: it eases in over CHAT_FADEIN as it
-// opens and out over CHAT_FADEOUT as it closes, from wherever it was
 static float CG_ChatHistoryFade(qboolean shown) {
     float target;
 
@@ -761,12 +678,6 @@ static float CG_ChatHistoryFade(qboolean shown) {
            (target - cg.chatHistoryFrom) * CG_CpmaSlide(cg.chatHistoryToggle, shown ? CHAT_FADEIN : CHAT_FADEOUT);
 }
 
-/*
-[ioquakelive] The chat history, and the chat behind the scoreboard, with ch_animateScroll: the
-lines stack up from the window's bottom edge as the chat's do, the ones older than the chat
-shows ease in with the history and out with it, the chat's own keep their time, and a line
-that comes in rises from below as in the chat.
-*/
 static void CG_DrawChatHistory(float x, float bottom, float scale, int lines, float shown) {
     vec4_t color = {1.0f, 1.0f, 1.0f, 1.0f};
     int style = lines > 10 ? 0 : 3;
@@ -798,13 +709,6 @@ static void CG_DrawChatHistory(float x, float bottom, float scale, int lines, fl
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
 
-// [QL] cgamex86.dll 0x10006a10. Drawn by the CG_AREA_NEW_CHAT ownerdraw with
-// the menu item's rect, and by the spectator overlay. The newest line sits on
-// the rect's bottom edge (font 1, style 3, left widescreen) until it expires
-// into the ring. While the chat history is toggled on or the scoreboard is up,
-// older lines stack upwards 13 units apart: cg_chatHistoryLength of them, 4 at
-// the intermission, 2 behind the scoreboard, unstyled when more than 10. The
-// text scale is held between 0.1 and 0.22 (0 counts as 0.1).
 void CG_DrawChat(float x, float y, float w, float h, float scale) {
     float bottom = y + h;
     int lines = cg_chatHistoryLength.integer;
@@ -887,24 +791,11 @@ static void CG_Print_f(void) {
     CG_AddChat(text, 0, 0);
 }
 
-// [QL] 0x10007e70
 static void CG_Kill_f(void) {
     cg.killRequested = qtrue;
     trap_SendClientCommand("kill");
 }
 
-/*
-==============
-CG_ClientMute_f
-
-"clientmute <number>" toggles that player's mute: if they could be heard they no longer
-can, and if they were muted they come back. It goes by Steam ID, so it still holds on
-the next map.
-
-[QL] 0x10007e90. It says nothing on the console, and does not complain when the number
-does not exist: all it checks is that the player has a Steam ID.
-==============
-*/
 static void CG_ClientMute_f(void) {
     int clientNum;
     char arg[MAX_TOKEN_CHARS];
@@ -924,7 +815,6 @@ static void CG_ClientMute_f(void) {
     }
 }
 
-// [QL] Binary-matched acc/pstats handlers with spectator check and request throttling
 static void CG_AccDown_f(void) {
     if (cg.snap->ps.pm_type != PM_SPECTATOR || (cg.snap->ps.pm_flags & PMF_FOLLOW)) {
         if (cg.accRequestTime + 1000 < cg.time) {
@@ -962,7 +852,6 @@ typedef struct {
     void (*function)(void);
 } consoleCommand_t;
 
-// [QL] Command table - matches cgamex86.dll binary at 0x10078DC0 (57 entries)
 static consoleCommand_t commands[] = {
     {"viewpos", CG_Viewpos_f},
     {"+scores", CG_ScoresDown_f},
@@ -971,7 +860,6 @@ static consoleCommand_t commands[] = {
     {"-acc", CG_AccUp_f},
     {"+pstats", CG_PStatsDown_f},
     {"-pstats", CG_PStatsUp_f},
-    // [QL] cgamex86.dll 0x10078df8: the zoom, which the fork had written but never registered
     {"+zoom", CG_ZoomDown_f},
     {"-zoom", CG_ZoomUp_f},
     {"nextframe", CG_TestModelNextFrame_f},
@@ -1008,7 +896,6 @@ static consoleCommand_t commands[] = {
     {"tauntGauntlet", CG_TauntGauntlet_f},
     {"startOrbit", CG_StartOrbit_f},
     {"loaddeferred", CG_LoadDeferredPlayers},
-    // [QL] new commands
     {"dropflag", CG_DropFlag_f},
     {"droppowerup", CG_DropPowerup_f},
     {"droprune", CG_DropRune_f},
@@ -1024,17 +911,8 @@ static consoleCommand_t commands[] = {
     {"print", CG_Print_f},
     {"kill", CG_Kill_f},
     {"clientmute", CG_ClientMute_f},
-    // [ioquakelive] not in retail's table
 };
 
-/*
-=================
-CG_ConsoleCommand
-
-The string has been tokenized and can be retrieved with
-Cmd_Argc() / Cmd_Argv()
-=================
-*/
 qboolean CG_ConsoleCommand(void) {
     const char* cmd;
     int i;
@@ -1051,14 +929,6 @@ qboolean CG_ConsoleCommand(void) {
     return qfalse;
 }
 
-/*
-=================
-CG_InitConsoleCommands
-
-Let the client system know about all of our commands
-so it can perform tab completion
-=================
-*/
 void CG_InitConsoleCommands(void) {
     int i;
 
@@ -1066,7 +936,6 @@ void CG_InitConsoleCommands(void) {
         trap_AddCommand(commands[i].cmd);
     }
 
-    // Server-forwarded commands (alphabetical, matches QL binary)
     trap_AddCommand("abort");
     trap_AddCommand("addadmin");
     trap_AddCommand("addbot");

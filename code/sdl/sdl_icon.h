@@ -1,9 +1,8 @@
-/* Quake Live RGBA C-Source image dump (sdl_icon.h) */
 
 static const struct {
     unsigned int width;
     unsigned int height;
-    unsigned int bytes_per_pixel; /* 3:RGB, 4:RGBA */
+    unsigned int bytes_per_pixel;
     unsigned char pixel_data[32 * 32 * 4 + 1];
 } CLIENT_WINDOW_ICON = {
     32,

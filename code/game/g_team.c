@@ -19,16 +19,14 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-
 #include "g_local.h"
 
 typedef struct teamgame_s {
     float last_flag_capture;
     int last_capture_team;
-    flagStatus_t redStatus;   // CTF
-    flagStatus_t blueStatus;  // CTF
-    flagStatus_t flagStatus;  // One Flag CTF
+    flagStatus_t redStatus;
+    flagStatus_t blueStatus;
+    flagStatus_t flagStatus;
     int redTakenTime;
     int blueTakenTime;
     int redObeliskAttackedTime;
@@ -43,32 +41,21 @@ extern qboolean itemRegistered[];
 
 void Team_SetFlagStatus(int team, flagStatus_t status);
 
-/*
-==============
-Team_InitGame
-
-Reset flag status at game start and warn about missing team entities.
-Called from G_InitGame. Handles CTF, 1FCTF, AD, Obelisk and Harvester.
-Address: 0x1004fda0
-==============
-*/
 void Team_InitGame(void) {
     gitem_t* item;
 
     memset(&teamgame, 0, sizeof teamgame);
 
-    // binary also clears two level shuffle flags here (see manifest)
-
     switch (g_gametype.integer) {
         case GT_CTF:
         case GT_AD:
-            teamgame.redStatus = -1;  // Invalid to force update
+            teamgame.redStatus = -1;
             teamgame.blueStatus = -1;
             Team_SetFlagStatus(TEAM_RED, FLAG_ATBASE);
             Team_SetFlagStatus(TEAM_BLUE, FLAG_ATBASE);
             break;
         case GT_1FCTF:
-            teamgame.flagStatus = -1;  // Invalid to force update
+            teamgame.flagStatus = -1;
             Team_SetFlagStatus(TEAM_FREE, FLAG_ATBASE);
             break;
         default:
@@ -141,7 +128,6 @@ const char* TeamName(int team) {
     return "FREE";
 }
 
-// [QL] 0x1002cad0: spectators get white too
 const char* TeamColorString(int team) {
     if (team == TEAM_RED)
         return S_COLOR_RED;
@@ -150,8 +136,6 @@ const char* TeamColorString(int team) {
     return S_COLOR_WHITE;
 }
 
-// NULL for everyone
-// [QL] 0x10068850, also what prints a race finish
 void QDECL PrintMsg(gentity_t* ent, const char* fmt, ...) {
     char msg[1024];
     va_list argptr;
@@ -163,20 +147,12 @@ void QDECL PrintMsg(gentity_t* ent, const char* fmt, ...) {
     }
     va_end(argptr);
 
-    // double quotes are bad
     while ((p = strchr(msg, '"')) != NULL)
         *p = '\'';
 
     trap_SendServerCommand(((ent == NULL) ? -1 : ent - g_entities), va("print \"%s\"", msg));
 }
 
-/*
-==============
-FreezeTagInGame / FreezeTagInWarmup
-
-[QL] freeze-tag live/warmup predicates (binary 0x10067e00 / 0x10067e30).
-==============
-*/
 qboolean FreezeTagInGame(void) {
     return (level.intermissionTime == 0 && level.intermissionQueued == 0 &&
             level.warmupTime == 0 && g_gametype.integer == GT_FREEZE);
@@ -187,18 +163,6 @@ qboolean FreezeTagInWarmup(void) {
             level.warmupTime != 0 && g_gametype.integer == GT_FREEZE);
 }
 
-/*
-==============
-AddTeamScore
-
-[QL] byte-faithful port of binary 0x10068190. Updates level.teamScores[team]
-and broadcasts a team announcer sound (EV_GLOBAL_TEAM_SOUND) only on a tie,
-lead change, or generic team-scored event - ordinary frags emit nothing (the
-event parm stays -1). The sound is suppressed while approaching the capture
-limit (handled elsewhere), except during warmup. The temp-entity
-origin is irrelevant here (the event is broadcast to everyone).
-==============
-*/
 void AddTeamScore(vec3_t origin, int team, int score) {
     int otherTeam;
     int ev = -1;
@@ -228,24 +192,18 @@ void AddTeamScore(vec3_t origin, int team, int score) {
     if (newScore == otherScore) {
         ev = GTS_TEAMS_ARE_TIED;
     } else if (gt == GT_CTF || gt == GT_1FCTF || FreezeTagInGame() || gt == GT_AD) {
-        // generic team-scored announce
-        ev = (team != TEAM_RED) + GTS_REDTEAM_SCORED;      // RED->8, BLUE->9
+        ev = (team != TEAM_RED) + GTS_REDTEAM_SCORED;
     } else if (myScore == otherScore) {
-        // teams were level before this score - it is a lead change
         if (newScore > otherScore) {
-            ev = (team != TEAM_RED) + GTS_REDTEAM_TOOK_LEAD;   // RED->10, BLUE->11
+            ev = (team != TEAM_RED) + GTS_REDTEAM_TOOK_LEAD;
         } else if (newScore < otherScore) {
-            // fell behind, so the other team took the lead
             ev = (team == TEAM_RED) ? GTS_BLUETEAM_TOOK_LEAD : GTS_REDTEAM_TOOK_LEAD;
         }
     }
 
-    // suppress the announce when one score away from the capture limit in
-    // capture-based modes (unless in warmup); TDM and freeze always announce.
     if (gt == GT_TEAM || FreezeTagInGame() || g_capturelimit.integer == 0 ||
         myScore + 1 < g_capturelimit.integer || level.warmupTime != 0) {
         if (ev >= 0) {
-            // [QL] 0x10068283: the event goes out from vec3_origin
             gentity_t *te = G_TempEntity(vec3_origin, EV_GLOBAL_TEAM_SOUND);
             te->r.svFlags |= SVF_BROADCAST;
             te->s.eventParm = ev;
@@ -256,18 +214,6 @@ void AddTeamScore(vec3_t origin, int team, int score) {
     CalculateRanks();
 }
 
-/*
-==============
-OnSameTeam
-==============
-*/
-/*
-==============
-OnSameTeam
-
-[QL] 0x10067f30: outside the team gametypes, only two spectators share a team.
-==============
-*/
 qboolean OnSameTeam(gentity_t* ent1, gentity_t* ent2) {
     if (!ent1->client || !ent2->client) {
         return qfalse;
@@ -280,23 +226,6 @@ qboolean OnSameTeam(gentity_t* ent1, gentity_t* ent2) {
     return ent1->client->sess.sessionTeam == ent2->client->sess.sessionTeam;
 }
 
-/*
-==============
-G_VoiceFilter
-
-Who hears whom. The server asks this for every pair when handing out voice, and only
-sends it when the answer is 0.
-
-[QL] 0x10052e90, export +0x3c. The conditions in the binary's order: bots are sent
-nothing; a muted player is not relayed; nobody hears themselves; during intermission
-and while waiting for players (warmupTime < 0) everyone hears everyone; in team
-modes, and whenever the speaker is a spectator, only the same team hears; in the
-remaining modes everyone hears.
-
-Retail also has a mode variable that nothing ever writes. With its value fixed at 0
-the two branches that depend on it are the ones above, so it is not here.
-==============
-*/
 int G_VoiceFilter(int speaker, int listener) {
     gentity_t* from = &g_entities[speaker];
     gentity_t* to = &g_entities[listener];
@@ -319,14 +248,6 @@ int G_VoiceFilter(int speaker, int listener) {
     return 0;
 }
 
-/*
-==============
-Team_SetFlagStatus
-
-[QL] 0x10068770. CTF and Attack & Defend send both flags, '0' at base, '1' taken and '2' for
-anything else; the other modes send the neutral flag's status as a digit.
-==============
-*/
 void Team_SetFlagStatus(int team, flagStatus_t status) {
     char st[4];
 
@@ -378,11 +299,6 @@ void Team_CheckDroppedItem(gentity_t* dropped) {
     }
 }
 
-/*
-================
-Team_ForceGesture
-================
-*/
 void Team_ForceGesture(int team) {
     int i;
     gentity_t* ent;
@@ -395,22 +311,10 @@ void Team_ForceGesture(int team) {
             continue;
         if (ent->client->sess.sessionTeam != team)
             continue;
-        //
         ent->flags |= FL_FORCE_GESTURE;
     }
 }
 
-/*
-================
-Team_FragBonuses
-
-[QL] qagamex86.dll 0x10068970. Only CTF, One Flag, Overload, Harvester, Domination and
-Attack & Defend give frag bonuses, and Domination has its own. In importance order, and never
-more than one: fragging the flag or skull carrier, fragging someone who hurt your carrier in the
-last 8 seconds, a kill near your team's flag (or obelisk), a kill near your own carrier. Every
-defence gives the defend medal.
-================
-*/
 void Team_FragBonuses(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker) {
     int i;
     int team, otherteam;
@@ -435,7 +339,6 @@ void Team_FragBonuses(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker
             return;
     }
 
-    // no bonus for fragging yourself or team mates
     if (!targ->client || !attacker->client || targ == attacker || OnSameTeam(targ, attacker)) {
         return;
     }
@@ -443,7 +346,7 @@ void Team_FragBonuses(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker
     team = targ->client->sess.sessionTeam;
     otherteam = OtherTeam(team);
     if (otherteam < 0) {
-        return;  // whoever died isn't on a team
+        return;
     }
 
     if (g_gametype.integer == GT_DOMINATION) {
@@ -458,7 +361,6 @@ void Team_FragBonuses(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker
         flag_pw = PW_BLUEFLAG;
         enemy_flag_pw = PW_REDFLAG;
     }
-    // [QL] only the carried flag turns neutral; the carrier search below keeps the team's flag
     if (g_gametype.integer == GT_1FCTF) {
         enemy_flag_pw = PW_NEUTRALFLAG;
     }
@@ -468,7 +370,6 @@ void Team_FragBonuses(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker
         tokens = targ->client->ps.generic1 & 0x3f;
     }
 
-    // the powerup the victim held, for the message
     if (targ->client->ps.powerups[PW_QUAD]) {
         powerup = "Quad";
     } else if (targ->client->ps.powerups[PW_BATTLESUIT]) {
@@ -481,7 +382,6 @@ void Team_FragBonuses(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker
         powerup = "Invis";
     }
 
-    // did the attacker frag the flag or skull carrier?
     if (targ->client->ps.powerups[enemy_flag_pw] || tokens) {
         attacker->client->pers.teamState.lastfraggedcarrier = level.time;
         attacker->client->pers.teamState.fragcarrier++;
@@ -495,7 +395,6 @@ void Team_FragBonuses(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker
                      TeamName(team), powerup ? va("%s ", powerup) : "");
         }
 
-        // the target had the flag, clear the hurt carrier field on the other team
         for (i = 0; i < g_maxclients.integer; i++) {
             ent = g_entities + i;
             if (ent->inuse && ent->client->sess.sessionTeam == otherteam) {
@@ -505,9 +404,6 @@ void Team_FragBonuses(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker
         return;
     }
 
-    // did the attacker frag someone who hurt his carrier in the last 8 seconds?
-    // [QL] 0x10068c66: retail also asks whether the attacker holds his own flag, but both
-    // answers give the same bonus
     if (targ->client->pers.teamState.lasthurtcarrier &&
         level.time - targ->client->pers.teamState.lasthurtcarrier < CTF_CARRIER_DANGER_PROTECT_TIMEOUT) {
         attacker->client->pers.teamState.carrierdefense++;
@@ -519,7 +415,6 @@ void Team_FragBonuses(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker
         return;
     }
 
-    // flag and flag carrier area defense bonuses: find the attacker's flag (or obelisk) and carrier
     if (g_gametype.integer == GT_OBELISK) {
         switch (attacker->client->sess.sessionTeam) {
             case TEAM_RED:
@@ -559,22 +454,19 @@ void Team_FragBonuses(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker
         }
     }
     if (!flag) {
-        return;  // can't find attacker's flag
+        return;
     }
 
-    // [QL] 0x10068e26: the base counts only the victim's distance to the flag
     VectorSubtract(targ->r.currentOrigin, flag->r.currentOrigin, v);
     if (VectorLength(v) < CTF_TARGET_PROTECT_RADIUS &&
         trap_InPVS(flag->r.currentOrigin, targ->r.currentOrigin) &&
         attacker->client->sess.sessionTeam != targ->client->sess.sessionTeam) {
-        // in Attack & Defend only the defending team defends its base
         if (g_gametype.integer == GT_AD && attacker->client->sess.sessionTeam != AD_DefendingTeam()) {
             return;
         }
         attacker->client->pers.teamState.basedefense++;
         bonus = CTF_FLAG_DEFENSE_BONUS;
     } else {
-        // [QL] 0x10068f00: the carrier counts only the attacker's distance to him
         if (!carrier || carrier == attacker) {
             return;
         }
@@ -598,15 +490,6 @@ void Team_FragBonuses(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker
     STAT_AddPlayerMedalStat(attacker, "DEFENSE");
 }
 
-/*
-================
-Team_CheckHurtCarrier
-
-Check to see if attacker hurt the flag carrier.  Needed when handing out bonuses for assistance to flag
-carrier defense.
-[QL] 0x10069080: the red or blue flag (the neutral flag does not count), then the skulls.
-================
-*/
 void Team_CheckHurtCarrier(gentity_t* targ, gentity_t* attacker) {
     int flag_pw;
 
@@ -618,12 +501,10 @@ void Team_CheckHurtCarrier(gentity_t* targ, gentity_t* attacker) {
     else
         flag_pw = PW_REDFLAG;
 
-    // flags
     if (targ->client->ps.powerups[flag_pw] &&
         targ->client->sess.sessionTeam != attacker->client->sess.sessionTeam)
         attacker->client->pers.teamState.lasthurtcarrier = level.time;
 
-    // skulls
     if ((targ->client->ps.generic1 & 0x3f) &&
         targ->client->sess.sessionTeam != attacker->client->sess.sessionTeam)
         attacker->client->pers.teamState.lasthurtcarrier = level.time;
@@ -688,14 +569,6 @@ void Team_ReturnFlagSound(gentity_t* ent, int team) {
     te->r.svFlags |= SVF_BROADCAST;
 }
 
-/*
-==============
-Team_TakeFlagSound
-
-[QL] 0x100694a0: the player who took the flag travels in otherEntityNum, which the client uses to
-auto-follow the carrier
-==============
-*/
 void Team_TakeFlagSound(gentity_t* ent, int team, gentity_t* player) {
     gentity_t* te;
 
@@ -704,8 +577,6 @@ void Team_TakeFlagSound(gentity_t* ent, int team, gentity_t* player) {
         return;
     }
 
-    // only play sound when the flag was at the base
-    // or not picked up the last 2 seconds
     switch (team) {
         case TEAM_RED:
             if (teamgame.blueStatus != FLAG_ATBASE) {
@@ -715,7 +586,7 @@ void Team_TakeFlagSound(gentity_t* ent, int team, gentity_t* player) {
             teamgame.blueTakenTime = level.time;
             break;
 
-        case TEAM_BLUE:  // CTF
+        case TEAM_BLUE:
             if (teamgame.redStatus != FLAG_ATBASE) {
                 if (teamgame.redTakenTime > level.time - 2000)
                     return;
@@ -734,13 +605,6 @@ void Team_TakeFlagSound(gentity_t* ent, int team, gentity_t* player) {
     }
 }
 
-/*
-==============
-Team_CaptureFlagSound
-
-[QL] 0x10069550: everyone hears it but the player who captured
-==============
-*/
 void Team_CaptureFlagSound(gentity_t* ent, int team, gentity_t* capturer) {
     gentity_t* te;
 
@@ -751,9 +615,6 @@ void Team_CaptureFlagSound(gentity_t* ent, int team, gentity_t* capturer) {
 
     te = G_TempEntity(ent->s.pos.trBase, EV_GLOBAL_TEAM_SOUND);
     te->r.svFlags |= SVF_BROADCAST | SVF_NOTSINGLECLIENT;
-    // [ioquakelive] NOT FROM RETAIL: who captured, so the feed can name them, the way the
-    // flag taken event already carries its player. It goes as the number plus one, because a
-    // server that does not send it leaves a zero there, and zero is a player
     te->s.otherEntityNum = capturer->client->ps.clientNum + 1;
     if (team == TEAM_BLUE) {
         te->s.eventParm = GTS_BLUE_CAPTURE;
@@ -763,7 +624,6 @@ void Team_CaptureFlagSound(gentity_t* ent, int team, gentity_t* capturer) {
     te->r.singleClient = capturer->client->ps.clientNum;
 }
 
-// [QL] 0x100695b0
 void Team_ReturnFlag(int team) {
     Team_ReturnFlagSound(Team_ResetFlag(team), team);
     if (team == TEAM_FREE) {
@@ -783,15 +643,6 @@ void Team_FreeEntity(gentity_t* ent) {
     }
 }
 
-/*
-==============
-Team_CheckLostFlag
-
-[QL] 0x100692b0, run every frame in CTF for each team. A flag that is off its stand, with no dropped
-copy lying around and nobody on the other team carrying a flag, is returned with its announcement:
-it covers a carrier who is gone without dropping it.
-==============
-*/
 void Team_CheckLostFlag(int team) {
     char* classname;
     int enemyTeam;
@@ -828,16 +679,6 @@ void Team_CheckLostFlag(int team) {
     Team_ReturnFlag(team);
 }
 
-/*
-==============
-Team_DroppedFlagThink
-
-Automatically set in Launch_Item if the item is one of the flags
-
-Flags are unique in that if they are dropped, the base flag must be respawned when they time out
-[QL] 0x10069780: in Attack & Defend a dropped flag stays where it fell
-==============
-*/
 void Team_DroppedFlagThink(gentity_t* ent) {
     int team = TEAM_FREE;
 
@@ -854,22 +695,8 @@ void Team_DroppedFlagThink(gentity_t* ent) {
     }
 
     Team_ReturnFlagSound(Team_ResetFlag(team), team);
-    // Reset Flag will delete this entity
 }
 
-/*
-==============
-Team_TouchOurFlag
-
-[QL] qagamex86.dll 0x10069800. A dropped flag is returned. A capture prints how long the flag
-was carried ("captured in" when it came straight from the enemy base, "held for" when it was
-picked up off the ground on the way), gives the capture medal, and gives the assist medal to
-every teammate who returned the flag or fragged the enemy carrier in the last 10 seconds, the
-capturer included. The capture that reaches the capture limit plays no capture sound, outside
-warmup. 'score' is what the capture adds to the team score. 'thrown' is the flag a capture zone
-took in (CaptureZone_Touch, 0x1006bda0): in 1-Flag it captures for whoever threw it.
-==============
-*/
 int Team_TouchOurFlag(gentity_t* ent, gentity_t* other, int team, gentity_t* thrown, int score) {
     int i;
     int enemy_flag;
@@ -895,20 +722,16 @@ int Team_TouchOurFlag(gentity_t* ent, gentity_t* other, int team, gentity_t* thr
         enemy_flag = (cl->sess.sessionTeam == TEAM_RED) ? PW_BLUEFLAG : PW_REDFLAG;
 
         if ((ent->flags & FL_DROPPED_ITEM) && !ent->freeAfterEvent) {
-            // hey, it's not home.  return it by teleporting it back
             PrintMsg(NULL, "%s^3 returned the %s flag!\n", cl->pers.netname, TeamName(team));
             cl->pers.teamState.flagrecovery++;
             AddScore(other, ent->r.currentOrigin, CTF_RECOVERY_BONUS);
             cl->pers.teamState.lastreturnedflag = level.time;
-            // ResetFlag will remove this entity!  We must return zero
             Team_ReturnFlagSound(Team_ResetFlag(team), team);
             return 0;
         }
 
-        // the flag is at home base.  if the player has the enemy
-        // flag, he's just won!
         if (!cl->ps.powerups[enemy_flag]) {
-            return 0;  // We don't have the flag
+            return 0;
         }
     }
 
@@ -925,17 +748,14 @@ int Team_TouchOurFlag(gentity_t* ent, gentity_t* other, int team, gentity_t* thr
 
     cl->ps.powerups[enemy_flag] = 0;
     cl->pers.teamState.captures++;
-    // [QL] Team_TouchOurFlag 0x100697e0: capturer's numCaptures (+0x7f8)
     cl->expandedStats.numCaptures++;
 
-    // Increase the team's score
     AddTeamScore(ent->s.pos.trBase, cl->sess.sessionTeam, score);
     Team_ForceGesture(cl->sess.sessionTeam);
 
     PlayerAwardEF(other, PERS_CAPTURES, EF_AWARD_CAP);
     STAT_AddPlayerMedalStat(other, "CAPTURE");
 
-    // other gets another 10 frag bonus
     AddScore(other, ent->r.currentOrigin, CTF_CAPTURE_BONUS);
 
     if (!g_capturelimit.integer || level.teamScores[cl->sess.sessionTeam] < g_capturelimit.integer ||
@@ -944,7 +764,6 @@ int Team_TouchOurFlag(gentity_t* ent, gentity_t* other, int team, gentity_t* thr
     }
 
     if (g_gametype.integer == GT_AD && !trap_HasAchievement(cl->ps.clientNum, 0x1e)) {
-        // capture while every enemy is alive, against a team of three or more
         int alive[TEAM_NUM_TEAMS], total[TEAM_NUM_TEAMS];
 
         memset(alive, 0, sizeof(alive));
@@ -970,11 +789,9 @@ int Team_TouchOurFlag(gentity_t* ent, gentity_t* other, int team, gentity_t* thr
     if (g_gametype.integer == GT_CTF && !trap_HasAchievement(cl->ps.clientNum, 0x36) &&
         level.teamScores[cl->sess.sessionTeam] == g_capturelimit.integer &&
         level.teamScores[cl->sess.sessionTeam] - level.teamScores[OtherTeam(cl->sess.sessionTeam)] == 1) {
-        // win the game on the limit by a single capture
         trap_SetAchievement(cl->ps.clientNum, 0x36);
     }
 
-    // Ok, let's do the player loop, hand out the bonuses
     for (i = 0; i < g_maxclients.integer; i++) {
         player = &g_entities[i];
 
@@ -990,11 +807,9 @@ int Team_TouchOurFlag(gentity_t* ent, gentity_t* other, int team, gentity_t* thr
         if (player != other) {
             AddScore(player, ent->r.currentOrigin, CTF_TEAM_BONUS);
         }
-        // award extra points for capture assists
         if (player->client->pers.teamState.lastreturnedflag + CTF_RETURN_FLAG_ASSIST_TIMEOUT > level.time ||
             player->client->pers.teamState.lastfraggedcarrier + CTF_FRAG_CARRIER_ASSIST_TIMEOUT > level.time) {
             other->client->pers.teamState.assists++;
-            // [QL] Team_TouchOurFlag 0x100697e0: assisting teammate's numAssists (+0x7fc)
             player->client->expandedStats.numAssists++;
             AddScore(player, ent->r.currentOrigin, CTF_RETURN_FLAG_ASSIST_BONUS);
             PlayerAwardEF(player, PERS_ASSIST_COUNT, EF_AWARD_ASSIST);
@@ -1013,19 +828,9 @@ int Team_TouchOurFlag(gentity_t* ent, gentity_t* other, int team, gentity_t* thr
         Team_ResetFlag(TEAM_FREE);
     }
 
-    return 0;  // Do not respawn this automatically
+    return 0;
 }
 
-/*
-==============
-Team_TouchEnemyFlag
-
-[QL] qagamex86.dll 0x10069e30. Only a flag taken from its base scores and counts for the stats;
-one picked up off the ground scores with g_droppedFlagBonus when someone else dropped it. In
-Attack & Defend no flag is taken during warmup, and the first touch of a round adds
-g_adTouchScoreBonus to the team score.
-==============
-*/
 int Team_TouchEnemyFlag(gentity_t* ent, gentity_t* other, int team) {
     gclient_t* cl = other->client;
 
@@ -1039,20 +844,19 @@ int Team_TouchEnemyFlag(gentity_t* ent, gentity_t* other, int team) {
 
     if (g_gametype.integer == GT_1FCTF) {
         PrintMsg(NULL, "%s^3 got the flag!\n", cl->pers.netname);
-        cl->ps.powerups[PW_NEUTRALFLAG] = INT_MAX;  // flags never expire
+        cl->ps.powerups[PW_NEUTRALFLAG] = INT_MAX;
         Team_SetFlagStatus(TEAM_FREE, team == TEAM_RED ? FLAG_TAKEN_RED : FLAG_TAKEN_BLUE);
     } else {
         PrintMsg(NULL, "%s^3 got the %s flag!\n", cl->pers.netname, TeamName(team));
         if (team == TEAM_RED) {
-            cl->ps.powerups[PW_REDFLAG] = INT_MAX;  // flags never expire
+            cl->ps.powerups[PW_REDFLAG] = INT_MAX;
         } else {
-            cl->ps.powerups[PW_BLUEFLAG] = INT_MAX;  // flags never expire
+            cl->ps.powerups[PW_BLUEFLAG] = INT_MAX;
         }
         Team_SetFlagStatus(team, FLAG_TAKEN);
     }
 
     if (ent->s.modelindex2 == 0) {
-        // [QL] 0x10069f7e: taken from its base
         AddScore(other, ent->r.currentOrigin, CTF_FLAG_BONUS);
         if (g_gametype.integer == GT_1FCTF) {
             cl->expandedStats.numNeutralFlagPickups++;
@@ -1080,32 +884,22 @@ int Team_TouchEnemyFlag(gentity_t* ent, gentity_t* other, int team) {
         level.roundState.touch = qtrue;
     }
 
-    return -1;  // Do not respawn this automatically, but do delete it if it was FL_DROPPED
+    return -1;
 }
 
-/*
-==============
-Pickup_Team
-
-[QL] qagamex86.dll 0x1006a040
-==============
-*/
 int Pickup_Team(gentity_t* ent, gentity_t* other) {
     int team;
     gclient_t* cl = other->client;
 
     if (g_gametype.integer == GT_OBELISK) {
-        // there are no team items that can be picked up in obelisk
         G_FreeEntity(ent);
         return 0;
     }
 
     if (g_gametype.integer == GT_HARVESTER) {
-        // the only team items that can be picked up in harvester are the skulls
         if (ent->spawnflags != cl->sess.sessionTeam && (cl->ps.generic1 & 0x3f) < 62) {
             cl->ps.generic1++;
         }
-        // [QL] 0x1006a0df: returning 0 skips Touch_Item's pickup sound, so the skull plays its own
         if (cl->pers.predictItemPickup) {
             G_AddPredictableEvent(other, EV_ITEM_PICKUP, ent->s.modelindex);
         } else {
@@ -1115,7 +909,6 @@ int Pickup_Team(gentity_t* ent, gentity_t* other) {
         return 0;
     }
 
-    // figure out what team this flag is
     if (strcmp(ent->classname, "team_CTF_redflag") == 0) {
         team = TEAM_RED;
     } else if (strcmp(ent->classname, "team_CTF_blueflag") == 0) {
@@ -1137,7 +930,6 @@ int Pickup_Team(gentity_t* ent, gentity_t* other) {
         return 0;
     }
 
-    // in Attack & Defend only the attacking team touches the flags
     if (g_gametype.integer == GT_AD && AD_AttackingTeam() != cl->sess.sessionTeam) {
         return 0;
     }
@@ -1148,13 +940,6 @@ int Pickup_Team(gentity_t* ent, gentity_t* other) {
     return Team_TouchEnemyFlag(ent, other, team);
 }
 
-/*
-===========
-Team_GetLocation
-
-Report a location for the player. Uses placed nearby target_location entities
-============
-*/
 gentity_t* Team_GetLocation(gentity_t* ent) {
     gentity_t *eloc, *best;
     float bestlen, len;
@@ -1183,13 +968,6 @@ gentity_t* Team_GetLocation(gentity_t* ent) {
     return best;
 }
 
-/*
-===========
-Team_GetLocation
-
-Report a location for the player. Uses placed nearby target_location entities
-============
-*/
 qboolean Team_GetLocationMsg(gentity_t* ent, char* loc, int loclen) {
     gentity_t* best;
 
@@ -1198,27 +976,15 @@ qboolean Team_GetLocationMsg(gentity_t* ent, char* loc, int loclen) {
     if (!best)
         return qfalse;
 
-    // [QL] 0x1006a530: the name alone, without the target_location colour
     Com_sprintf(loc, loclen, "%s", best->message);
 
     return qtrue;
 }
 
-/*---------------------------------------------------------------------------*/
-
 static int QDECL SortClients(const void* a, const void* b) {
     return *(int*)a - *(int*)b;
 }
 
-/*
-==================
-TeamOverlayMessage
-
-[QL] qagamex86.dll 0x10068490 (Q3's TeamplayInfoMessage). "tinfo <count> <client>..." lists
-up to eight teammates by client number, leaving out anyone in PM_SPECTATOR; health, armor,
-weapon and location reach the client through the snapshots.
-==================
-*/
 void TeamOverlayMessage(gentity_t* ent) {
     char entry[1024];
     char string[8192];
@@ -1228,9 +994,6 @@ void TeamOverlayMessage(gentity_t* ent) {
     int cnt;
     int clients[TEAM_MAXOVERLAY];
 
-    // figure out what client should be on the display
-    // we are limited to 8, but we want to use the top eight players
-    // but in client order (so they don't keep changing position on the overlay)
     for (i = 0, cnt = 0; i < g_maxclients.integer && cnt < 8; i++) {
         player = g_entities + level.sortedClients[i];
         if (OnSameTeam(player, ent) && player->client->ps.pm_type != PM_SPECTATOR) {
@@ -1238,10 +1001,8 @@ void TeamOverlayMessage(gentity_t* ent) {
         }
     }
 
-    // We have the top eight players, sort them by clientNum
     qsort(clients, cnt, sizeof(clients[0]), SortClients);
 
-    // send the latest information on all clients
     string[0] = 0;
     stringlength = 0;
 
@@ -1261,14 +1022,6 @@ void TeamOverlayMessage(gentity_t* ent) {
     trap_SendServerCommand(ent - g_entities, va("tinfo %i %s", cnt, string));
 }
 
-/*
-==================
-CheckTeamStatus
-
-[QL] qagamex86.dll 0x10068670, from G_RunFrame in team gametypes. The overlay is sent once, a
-second after someone spawns or begins (level.nextTeamInfoTime), to every red and blue player.
-==================
-*/
 void CheckTeamStatus(void) {
     int i;
     gentity_t *loc, *ent;
@@ -1307,39 +1060,17 @@ void CheckTeamStatus(void) {
     }
 }
 
-/*-----------------------------------------------------------------*/
-
-/*QUAKED team_CTF_redplayer (1 0 0) (-16 -16 -16) (16 16 32)
-Only in CTF games.  Red players spawn here at game start.
-*/
 void SP_team_CTF_redplayer(gentity_t* ent) {
 }
 
-/*QUAKED team_CTF_blueplayer (0 0 1) (-16 -16 -16) (16 16 32)
-Only in CTF games.  Blue players spawn here at game start.
-*/
 void SP_team_CTF_blueplayer(gentity_t* ent) {
 }
 
-/*QUAKED team_CTF_redspawn (1 0 0) (-16 -16 -24) (16 16 32)
-potential spawning position for red team in CTF games.
-Targets will be fired when someone spawns in on them.
-*/
 void SP_team_CTF_redspawn(gentity_t* ent) {
 }
 
-/*QUAKED team_CTF_bluespawn (0 0 1) (-16 -16 -24) (16 16 32)
-potential spawning position for blue team in CTF games.
-Targets will be fired when someone spawns in on them.
-*/
 void SP_team_CTF_bluespawn(gentity_t* ent) {
 }
-
-/*
-================
-Obelisks
-================
-*/
 
 static void ObeliskRegen(gentity_t* self) {
     self->nextthink = level.time + g_obeliskRegenPeriod.integer * 1000;
@@ -1367,7 +1098,6 @@ static void ObeliskRespawn(gentity_t* self) {
     self->activator->s.frame = 0;
 }
 
-// [QL] 0x1006a6c0
 static void ObeliskDie(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int damage, int mod) {
     int otherTeam;
 
@@ -1388,7 +1118,6 @@ static void ObeliskDie(gentity_t* self, gentity_t* inflictor, gentity_t* attacke
     attacker->client->expandedStats.numCaptures++;
     AddScore(attacker, self->r.currentOrigin, CTF_CAPTURE_BONUS);
 
-    // add the sprite over the player's head
     attacker->client->ps.eFlags &= ~(EF_AWARD_IMPRESSIVE | EF_AWARD_EXCELLENT | EF_AWARD_GAUNTLET | EF_AWARD_ASSIST | EF_AWARD_DEFEND | EF_AWARD_CAP);
     attacker->client->ps.eFlags |= EF_AWARD_CAP;
     attacker->client->rewardTime = level.time + REWARD_SPRITE_TIME;
@@ -1397,7 +1126,6 @@ static void ObeliskDie(gentity_t* self, gentity_t* inflictor, gentity_t* attacke
     teamgame.blueObeliskAttackedTime = 0;
 }
 
-// [QL] 0x1006a830: a Harvester base taking a carrier's skulls
 static void ObeliskTouch(gentity_t* self, gentity_t* other, trace_t* trace) {
     int team;
     int tokens;
@@ -1426,7 +1154,6 @@ static void ObeliskTouch(gentity_t* self, gentity_t* other, trace_t* trace) {
     other->client->expandedStats.numCaptures += tokens;
     AddScore(other, self->r.currentOrigin, CTF_CAPTURE_BONUS * tokens);
 
-    // add the sprite over the player's head
     other->client->ps.eFlags &= ~(EF_AWARD_IMPRESSIVE | EF_AWARD_EXCELLENT | EF_AWARD_GAUNTLET | EF_AWARD_ASSIST | EF_AWARD_DEFEND | EF_AWARD_CAP);
     other->client->ps.eFlags |= EF_AWARD_CAP;
     other->client->rewardTime = level.time + REWARD_SPRITE_TIME;
@@ -1453,14 +1180,6 @@ static void ObeliskPain(gentity_t* self, gentity_t* attacker, int damage) {
     AddScore(attacker, self->r.currentOrigin, actualDamage);
 }
 
-/*
-================
-SpawnObelisk
-
-[QL] 0x1006aaf0. The invisible, damageable obelisk or the Harvester base trigger. It is the one
-that drops to the floor; the base model that spawns it stays where the map put it.
-================
-*/
 gentity_t* SpawnObelisk(vec3_t origin, int team, int spawnflags) {
     trace_t tr;
     vec3_t dest;
@@ -1493,14 +1212,10 @@ gentity_t* SpawnObelisk(vec3_t origin, int team, int spawnflags) {
     }
 
     if (spawnflags & 1) {
-        // suspended
         G_SetOrigin(ent, ent->s.origin);
     } else {
-        // mappers like to put them exactly on the floor, but being coplanar
-        // will sometimes show up as starting in solid, so lif it up one pixel
         ent->s.origin[2] += 1;
 
-        // drop to floor
         VectorSet(dest, ent->s.origin[0], ent->s.origin[1], ent->s.origin[2] - 4096);
         trap_Trace(&tr, ent->s.origin, ent->r.mins, ent->r.maxs, dest, ent->s.number, MASK_SOLID);
         if (tr.startsolid) {
@@ -1510,7 +1225,6 @@ gentity_t* SpawnObelisk(vec3_t origin, int team, int spawnflags) {
             ent->s.groundEntityNum = ENTITYNUM_NONE;
             G_SetOrigin(ent, ent->s.origin);
         } else {
-            // allow to ride movers
             ent->s.groundEntityNum = tr.entityNum;
             G_SetOrigin(ent, tr.endpos);
         }
@@ -1523,8 +1237,6 @@ gentity_t* SpawnObelisk(vec3_t origin, int team, int spawnflags) {
     return ent;
 }
 
-/*QUAKED team_redobelisk (1 0 0) (-16 -16 0) (16 16 8)
- */
 void SP_team_redobelisk(gentity_t* ent) {
     gentity_t* obelisk;
 
@@ -1536,7 +1248,6 @@ void SP_team_redobelisk(gentity_t* ent) {
     if (g_gametype.integer == GT_OBELISK) {
         obelisk = SpawnObelisk(ent->s.origin, TEAM_RED, ent->spawnflags);
         obelisk->activator = ent;
-        // initial obelisk health value
         ent->s.modelindex2 = 0xff;
         ent->s.frame = 0;
     }
@@ -1548,8 +1259,6 @@ void SP_team_redobelisk(gentity_t* ent) {
     trap_LinkEntity(ent);
 }
 
-/*QUAKED team_blueobelisk (0 0 1) (-16 -16 0) (16 16 88)
- */
 void SP_team_blueobelisk(gentity_t* ent) {
     gentity_t* obelisk;
 
@@ -1561,7 +1270,6 @@ void SP_team_blueobelisk(gentity_t* ent) {
     if (g_gametype.integer == GT_OBELISK) {
         obelisk = SpawnObelisk(ent->s.origin, TEAM_BLUE, ent->spawnflags);
         obelisk->activator = ent;
-        // initial obelisk health value
         ent->s.modelindex2 = 0xff;
         ent->s.frame = 0;
     }
@@ -1573,8 +1281,6 @@ void SP_team_blueobelisk(gentity_t* ent) {
     trap_LinkEntity(ent);
 }
 
-/*QUAKED team_neutralobelisk (0 0 1) (-16 -16 0) (16 16 88)
- */
 void SP_team_neutralobelisk(gentity_t* ent) {
     if (g_gametype.integer != GT_1FCTF && g_gametype.integer != GT_HARVESTER) {
         G_FreeEntity(ent);
@@ -1589,37 +1295,25 @@ void SP_team_neutralobelisk(gentity_t* ent) {
     trap_LinkEntity(ent);
 }
 
-/*
-================
-CheckObeliskAttack
-================
-*/
 qboolean CheckObeliskAttack(gentity_t* obelisk, gentity_t* attacker) {
     gentity_t* te;
 
-    // if this really is an obelisk
     if (obelisk->die != ObeliskDie) {
         return qfalse;
     }
 
-    // if the attacker is a client
     if (!attacker->client) {
         return qfalse;
     }
 
-    // if the obelisk is on the same team as the attacker then don't hurt it
     if (obelisk->spawnflags == attacker->client->sess.sessionTeam) {
         return qtrue;
     }
 
-    // obelisk may be hurt
-
-    // if not played any sounds recently
     if ((obelisk->spawnflags == TEAM_RED &&
          teamgame.redObeliskAttackedTime < level.time - OVERLOAD_ATTACK_BASE_SOUND_TIME) ||
         (obelisk->spawnflags == TEAM_BLUE &&
          teamgame.blueObeliskAttackedTime < level.time - OVERLOAD_ATTACK_BASE_SOUND_TIME)) {
-        // tell which obelisk is under attack
         te = G_TempEntity(obelisk->s.pos.trBase, EV_GLOBAL_TEAM_SOUND);
         if (obelisk->spawnflags == TEAM_RED) {
             te->s.eventParm = GTS_REDOBELISK_ATTACKED;

@@ -5,7 +5,6 @@ uniform mat4   u_ModelViewProjectionMatrix;
 
 varying vec2   var_TexCoords;
 
-// [QL] the full-screen pass every Quake Live post effect draws with
 void main()
 {
 	gl_Position = u_ModelViewProjectionMatrix * vec4(attr_Position, 1.0);

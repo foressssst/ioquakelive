@@ -19,18 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// ui_home.c -- [QL] the main menu, and the frame the other pages sit in
-//
-// Retail's main menu (web.pak src/home.js, "#main-menu") is a screen of its own,
-// outside the app frame: the logo over a vertical menu down the left, with art
-// beside it, and a menu that opens into itself. This keeps that shape and dresses
-// it in this build's own surfaces, type and gold.
-//
-// The bar the other pages carry is here too, since they share it, along with the
-// background and the banner a running match puts at the bottom of every page.
-//
-
 #include "ui_web.h"
 
 typedef enum {
@@ -38,18 +26,17 @@ typedef enum {
     HM_HIT_NAV,
     HM_HIT_BANNER,
     HM_HIT_ITEM,
-    HM_HIT_CARD,  // [ioquakelive] a card of the main menu
+    HM_HIT_CARD,
     HM_HIT_QUIT,
-    HM_HIT_TAB,   // [ioquakelive] a section of the top bar
-    HM_HIT_SOCIAL, // [ioquakelive] the social strip's background: clicks do not pass through
-    HM_HIT_FRIEND, // [ioquakelive] a row of the friends list
-    HM_HIT_CONTEXT,      // an item of a friend's context menu
-    HM_HIT_LEGAL,        // the main menu's Legal Notices link
-    HM_HIT_CONTEXT_BACK, // the screen under it, which closes it
-    HM_HIT_MENU    // [ioquakelive] a row of the PLAY dropdown
+    HM_HIT_TAB,
+    HM_HIT_SOCIAL,
+    HM_HIT_FRIEND,
+    HM_HIT_CONTEXT,
+    HM_HIT_LEGAL,
+    HM_HIT_CONTEXT_BACK,
+    HM_HIT_MENU
 } hmHitType_t;
 
-// which of the lists is showing
 #define HM_MENU_MAIN 0
 #define HM_MENU_PLAY 1
 #define HM_MENU_STATS 2
@@ -59,7 +46,7 @@ typedef enum {
 
 static struct {
     qboolean loadedMenu;
-    int menu;  // which of hmMenus is showing
+    int menu;
     qhandle_t face;
     char faceModel[MAX_QPATH];
 } hm2;
@@ -72,41 +59,17 @@ static void UI_Home_LoadMenu(void) {
     hm2.menu = HM_MENU_MAIN;
 }
 
-
-/*
-===============
-UI_Home_Backdrop
-
-[QL] What the other pages sit on: the #app's background, the same as the main menu's
-===============
-*/
 void UI_Home_RetailBackdrop(void);
 
 void UI_Home_Backdrop(void) {
     UI_Home_RetailBackdrop();
 }
 
-/*
-===============================================================================
-
-THE FRAME
-
-[QL] web.pak src/appframe.js: a 75px bar black at 0.8, with the ProfileCard at the left and the
-navItems -- the house, PLAY, STATISTICS and COMMUNITY 250px each, the power button and the gear at
-the right -- in Handel Gothic 18pt upper case; the chosen one yellow over black 0.3 with a 3px
-yellow line under it. PLAY, STATISTICS and COMMUNITY open a menu under them, as wide as they are.
-Down the left, the Lobby and under it the friends
-
-===============================================================================
-*/
-
 #define HV_MAX_FRIENDS 32
 
-// the list, re-read every so often: asking Steam for it every frame would be hundreds of calls
-// for nothing, since a friend does not change state that often
 static struct {
     uiFriend_t list[HV_MAX_FRIENDS];
-    int index[HV_MAX_FRIENDS];  // their place in Steam's list, which is what actions go by
+    int index[HV_MAX_FRIENDS];
     int count;
     int updated;
 } hvf;
@@ -120,10 +83,10 @@ static void UI_Home_DrawFriends(float x, float y, float w, float h);
 #define HF_BAR_H 75.0f
 #define HF_ITEM_W 75.0f
 #define HF_WIDE_W 250.0f
-#define HF_FIRST_X 435.0f     // after the profile card: 30 + 370 + 35
-#define HF_NAV_SIZE 24.0f     // 18pt
-#define HF_MENU_SIZE (14.0f * 4.0f / 3.0f)  // 14pt
-#define HF_MENU_ROW 48.5f     // li: 0.5em over and under a 1.6 line
+#define HF_FIRST_X 435.0f
+#define HF_NAV_SIZE 24.0f
+#define HF_MENU_SIZE (14.0f * 4.0f / 3.0f)
+#define HF_MENU_ROW 48.5f
 #define HF_COL_X 30.0f
 #define HF_COL_W 370.0f
 
@@ -137,11 +100,10 @@ static const vec4_t hfButtonBorder = {77 / 255.0f, 77 / 255.0f, 77 / 255.0f, 1.0
 
 typedef struct {
     const char* title;
-    int nav;          // the page it opens, or -1
-    const char* url;  // or what it opens where Steam's overlay would
+    int nav;
+    const char* url;
 } hfMenuItem_t;
 
-// appframe.js's playContext, statsContext and communityContext
 static const hfMenuItem_t hfMenus[3][3] = {
     {{"Match Browser", HM_NAV_BROWSER, NULL}, {"Start Match", HM_NAV_PLAY, NULL}, {"Training Center", HM_NAV_TRAINING, NULL}},
     {{"Career Stats", HM_NAV_STATS, NULL}, {"Recent Matches", HM_NAV_MATCHES, NULL}, {"Replays", HM_NAV_REPLAYS, NULL}},
@@ -150,7 +112,7 @@ static const hfMenuItem_t hfMenus[3][3] = {
 };
 static const char* const hfTabs[3] = {"Play", "Statistics", "Community"};
 
-static int hfOpen = -1;  // the menu that is down, -1 none
+static int hfOpen = -1;
 
 float UI_Home_Left(void) {
     return 430.0f;
@@ -160,7 +122,6 @@ float UI_Home_ContentW(void) {
     return smVW - 430.0f - 30.0f;
 }
 
-// a FontAwesome glyph in the middle of a navItem
 static void UI_Home_NavIcon(float x, float top, int glyph, const float* color) {
     float w = SM_IconWidth(HF_NAV_SIZE, glyph);
 
@@ -168,7 +129,6 @@ static void UI_Home_NavIcon(float x, float top, int glyph, const float* color) {
             glyph);
 }
 
-// a navItem's box: black 0.3 when it is chosen or under the cursor, and the chosen one's line
 static const float* UI_Home_NavBox(float x, float top, float w, qboolean chosen, qboolean over) {
     if (chosen || over) {
         SM_Fill(x, top, w, HF_BAR_H, hfBlack30, NULL);
@@ -179,16 +139,6 @@ static const float* UI_Home_NavBox(float x, float top, float w, qboolean chosen,
     return (chosen || over) ? smGold : hfWhite;
 }
 
-/*
-===============
-The friend's context menu
-
-[QL] friendlist.js opens web.pak's context.js on a friend: a white list at the cursor, 5px
-down and right, over the whole screen darkened to 0.2, whose item under the cursor goes
-yellow; any click closes it, and one on an item does what it says. Join Match comes first
-when the friend is on a server (it opens the server's game info); there are no lobbies.
-===============
-*/
 typedef enum {
     HC_JOIN,
     HC_MESSAGE,
@@ -204,7 +154,7 @@ static const char* const hcNames[] = {"Join Match", "Send Message", "Send Invite
 static struct {
     qboolean open;
     float x, y;
-    int index;  // the friend's place in Steam's list
+    int index;
     uiFriend_t fr;
     int items[6];
     int numItems;
@@ -265,7 +215,6 @@ static void UI_Home_ContextDo(int item) {
     }
 }
 
-// #context li: 0.25em over and under, 1em aside, the page's 15px text
 static void UI_Home_DrawContext(void) {
     float top = -smTop / smScale;
     float w = 0, rowH = 24 + 7.5f;
@@ -294,13 +243,6 @@ static void UI_Home_DrawContext(void) {
     }
 }
 
-/*
-===============
-UI_Home_PageTop
-
-[QL] The bar and the left column of every page but the main menu
-===============
-*/
 void UI_Home_PageTop(int active) {
     char name[MAX_CVAR_VALUE_STRING];
     float top = -smTop / smScale;
@@ -313,10 +255,8 @@ void UI_Home_PageTop(int active) {
     UI_Home_LoadMenu();
     UI_Home_LoadRetail();
 
-    // .nav.orow: the whole width but the 3px the scrollbar kept
     SM_Fill(0, top, smVW - 3.0f, HF_BAR_H, hfBlack80, NULL);
 
-    // the ProfileCard, 30px in: the avatar as tall as the card and the name beside it
     face = UI_Home_Face();
     x = HF_COL_X;
     if (face) {
@@ -326,18 +266,15 @@ void UI_Home_PageTop(int active) {
     trap_Cvar_VariableStringBuffer("name", name, sizeof(name));
     SM_Text(x, SM_Baseline(FONT_SANS, 15.0f, top + 5.0f, 24.0f), FONT_SANS, 15.0f, smText, name[0] ? name : "Player",
             SM_Fit(FONT_SANS, 15.0f, name, HF_COL_X + HF_COL_W - x), qfalse);
-    // and under it the wins and KDR, which the card asks Steam for each time it comes up
     UI_Stats_CardFor(active);
     UI_Stats_DrawCardLine(x, top + 29.0f, HF_COL_X + HF_COL_W - x);
 
-    // the house
     x = HF_FIRST_X;
     UI_Home_NavIcon(x, top, SM_FA_HOME,
                     UI_Home_NavBox(x, top, HF_ITEM_W, qfalse, SM_Over(HM_HIT_NAV, HM_NAV_HOME)));
     SM_Hit(x, top, HF_ITEM_W, HF_BAR_H, HM_HIT_NAV, HM_NAV_HOME, NULL);
     x += HF_ITEM_W;
 
-    // PLAY, STATISTICS, COMMUNITY
     for (i = 0; i < 3; i++) {
         char upper[32];
         const float* color = UI_Home_NavBox(x, top, HF_WIDE_W, tab == i || hfOpen == i, SM_Over(HM_HIT_TAB, i));
@@ -354,7 +291,6 @@ void UI_Home_PageTop(int active) {
         x += HF_WIDE_W;
     }
 
-    // at the right: the power button, and the gear left of it
     x = smVW - 3.0f - HF_ITEM_W;
     UI_Home_NavIcon(x, top, SM_FA_POWER, UI_Home_NavBox(x, top, HF_ITEM_W, qfalse, SM_Over(HM_HIT_NAV, HM_NAV_QUIT)));
     SM_Hit(x, top, HF_ITEM_W, HF_BAR_H, HM_HIT_NAV, HM_NAV_QUIT, NULL);
@@ -363,7 +299,6 @@ void UI_Home_PageTop(int active) {
                     UI_Home_NavBox(x, top, HF_ITEM_W, active == HM_NAV_SETTINGS, SM_Over(HM_HIT_NAV, HM_NAV_SETTINGS)));
     SM_Hit(x, top, HF_ITEM_W, HF_BAR_H, HM_HIT_NAV, HM_NAV_SETTINGS, NULL);
 
-    // the left column: the Lobby (header black 0.75, its body black 0.8 down to 51%)
     {
         float colTop = top + HM_NAV_H;
         float colH = smBottom - colTop;
@@ -376,7 +311,6 @@ void UI_Home_PageTop(int active) {
                 qfalse);
         SM_Fill(HF_COL_X, colTop + 25.6f, HF_COL_W, lobbyBottom - colTop - 25.6f, hfBlack80, NULL);
 
-        // skeleton's button: 30px high, a #4d4d4d line, 11px bold upper case spaced 1px
         SM_Fill(HF_COL_X + (HF_COL_W - bw) * 0.5f, colTop + 65.0f, bw, 1, hfButtonBorder, NULL);
         SM_Fill(HF_COL_X + (HF_COL_W - bw) * 0.5f, colTop + 94.0f, bw, 1, hfButtonBorder, NULL);
         SM_Fill(HF_COL_X + (HF_COL_W - bw) * 0.5f, colTop + 65.0f, 1, 30, hfButtonBorder, NULL);
@@ -387,7 +321,6 @@ void UI_Home_PageTop(int active) {
         SM_Centered(HF_COL_X + HF_COL_W * 0.5f, SM_Baseline(FONT_SANS, 15.0f, colTop + 105.0f, 24.0f), 15.0f, smText,
                     "Not in a lobby.", qfalse);
 
-        // the friends, from 51% down to 30px off the bottom
         UI_Home_FriendRefresh();
         if (hvf.count > 0) {
             float fTop = colTop + colH * 0.51f;
@@ -400,7 +333,6 @@ void UI_Home_PageTop(int active) {
     }
 }
 
-// the menu under PLAY, STATISTICS or COMMUNITY: drawn last, over the page
 static void UI_Home_DrawNavMenu(void) {
     float top = -smTop / smScale;
     float x = HF_FIRST_X + HF_ITEM_W + hfOpen * HF_WIDE_W;
@@ -410,7 +342,6 @@ static void UI_Home_DrawNavMenu(void) {
     if (hfOpen < 0) {
         return;
     }
-    // #context-wrapper: the whole screen at black 0.2, and a click on it closes the menu
     SM_Fill(-1, top, smVW + 2, smBottom - top + 1, hfBlack20, NULL);
     SM_Hit(0, top, smVW, smBottom - top, HM_HIT_SOCIAL, 0, NULL);
     for (i = 0; i < 3 && hfMenus[hfOpen][i].title; i++) {
@@ -424,14 +355,6 @@ static void UI_Home_DrawNavMenu(void) {
     }
 }
 
-/*
-===============
-UI_Home_Header
-
-[QL] A page's h1.title: a black 0.8 bar the column's width, the title in Handel Gothic 24pt with
-0.25em over and under it and 0.2em in, and 2px under the bar
-===============
-*/
 float UI_Home_Header(float y, const char* eyebrow, const char* title) {
     float left = UI_Home_Left();
 
@@ -444,30 +367,10 @@ float UI_Home_Header(float y, const char* eyebrow, const char* title) {
     return y + 54.4f + 2.0f;
 }
 
-/*
-===============
-UI_Home_BlockTop
-
-Where a page of that height starts so that it sits in the middle of the screen
-rather than hanging from the top, which is what the player asked for. It never
-goes over the top row, and a page taller than the screen starts right under it.
-===============
-*/
-/*
-===============
-UI_Home_FrameBottom
-
-[ioquakelive] Where a page's frame ends, the same line Settings stops its panel at, so every
-page fills the same box.
-===============
-*/
 float UI_Home_FrameBottom(void) {
-    return smBottom - 30.0f;  // .body.orow: bottom 30px
+    return smBottom - 30.0f;
 }
 
-// [ioquakelive] the block's middle is the screen's middle, not the middle of what the top row
-// leaves, which sat it lower; it still never climbs over the top row, nor under the match
-// banner
 float UI_Home_BlockTop(float blockHeight) {
     float first = HM_NAV_H;
     float screenTop = -smTop / smScale;
@@ -514,7 +417,6 @@ void UI_Home_Go(int nav) {
             Menus_ActivateByName("settings");
             break;
         case HM_NAV_QUIT:
-            // retail's power button (App's quitGame) asks nothing: it sends quit
             trap_Cmd_ExecuteText(EXEC_APPEND, "quit\n");
             break;
         default:
@@ -522,7 +424,6 @@ void UI_Home_Go(int nav) {
     }
 }
 
-// whether the front end is up over a match, which is when retail's showed its banner
 qboolean UI_Home_InMatch(void) {
     uiClientState_t cs;
 
@@ -530,11 +431,9 @@ qboolean UI_Home_InMatch(void) {
     return cs.connState == CA_ACTIVE;
 }
 
-// what the bar and the banner do, shared by every page that draws them
 qboolean UI_Home_NavClick(void) {
     const smHit_t* hit = SM_HitAt(smMX, smMY);
 
-    // a friend's menu takes the click, and closes either way
     if (hfc.open) {
         hfc.open = qfalse;
         if (hit && hit->type == HM_HIT_CONTEXT) {
@@ -547,7 +446,6 @@ qboolean UI_Home_NavClick(void) {
         return qtrue;
     }
 
-    // a menu that is down takes the click: a row of it, or anywhere else to close it
     if (hfOpen >= 0) {
         int open = hfOpen;
 
@@ -575,24 +473,12 @@ qboolean UI_Home_NavClick(void) {
         return qtrue;
     }
     if (hit->type == HM_HIT_BANNER) {
-        // retail's App.returnToGame sends exactly this
         trap_Cmd_ExecuteText(EXEC_APPEND, "web_hideBrowser\n");
         return qtrue;
     }
     return qfalse;
 }
 
-/*
-===============
-UI_Home_Banner
-
-Retail's App draws an AlertBanner while you are in a match, on every page: a bar
-across the bottom of the screen (.banner: fixed, bottom 0, full width, text
-centred) in green that says "You are currently in-game. Click here to return to
-your match." and sends web_hideBrowser when clicked. Its padding is 0.25em around one 24px line
-of the page's 15px, and nothing changes under the mouse
-===============
-*/
 void UI_Home_Banner(void) {
     static const char* const text = "You are currently in-game. Click here to return to your match.";
     float h = 31.5f;
@@ -608,50 +494,36 @@ void UI_Home_Banner(void) {
     SM_Hit(0, y, smVW, h, HM_HIT_BANNER, 0, NULL);
 }
 
-/*
-===============================================================================
-
-THE MAIN MENU
-
-[QL] Retail's #main-menu (web.pak src/home.js and css/main.css), in its page's pixels at 1920x1080:
-a column 20% wide at 4% from the left, black at 0.8, with the logo and the menu in Handel Gothic
-24pt set to the right; the Ranger standing at 24%; on the right the player's card, the Friends and
-Lobby switch and the list under it; and the legal notice the first time the menu is up.
-
-===============================================================================
-*/
-
-#define HM_ITEM_FONT (SM_Narrow() ? 24.0f : 32.0f)  // 24pt, 18pt on a screen no wider than 3:2
-#define HM_ITEM_PAD (HM_ITEM_FONT * 0.5f)             // padding: 0.5em
-#define HM_ITEM_LINE (HM_ITEM_FONT * 1.6f)            // skeleton's line-height
+#define HM_ITEM_FONT (SM_Narrow() ? 24.0f : 32.0f)
+#define HM_ITEM_PAD (HM_ITEM_FONT * 0.5f)
+#define HM_ITEM_LINE (HM_ITEM_FONT * 1.6f)
 #define HM_ITEM_H (HM_ITEM_LINE + 2.0f * HM_ITEM_PAD)
 #define HM_ITEM_BORDER 3.0f
-#define HM_BACK_GAP HM_ITEM_FONT  // a.back: margin-top 1em
-#define HM_LOGO_GAP 4.5f      // the logo is inline: its line runs 4.5px past it, measured
+#define HM_BACK_GAP HM_ITEM_FONT
+#define HM_LOGO_GAP 4.5f
 #define HM_CARD_TOP 75.0f
 #define HM_CARD_H 75.0f
-#define HM_CARD_PAD 7.5f      // padding: 0.5em
+#define HM_CARD_PAD 7.5f
 #define HM_SELECTOR_TOP 155.0f
 #define HM_SELECTOR_H 25.0f
 #define HM_LIST_TOP 183.0f
-#define HM_LEGALS_MS 5000     // setTimeout(this.skipLegals, 5000)
-#define HM_LEGALS_FADE 500    // .legals-leave: opacity .5s
+#define HM_LEGALS_MS 5000
+#define HM_LEGALS_FADE 500
 #define HM_TEXT 15.0f
 
 static const vec4_t hmBlack80 = {0.0f, 0.0f, 0.0f, 0.8f};
 static const vec4_t hmBlack30 = {0.0f, 0.0f, 0.0f, 0.3f};
 static const vec4_t hmWhite = {1.0f, 1.0f, 1.0f, 1.0f};
-static const vec4_t hmNameGrey = {106 / 255.0f, 106 / 255.0f, 106 / 255.0f, 1.0f};  // .name i
+static const vec4_t hmNameGrey = {106 / 255.0f, 106 / 255.0f, 106 / 255.0f, 1.0f};
 
 typedef struct {
     const char* title;
-    int nav;          // the page it opens, or -1
-    int submenu;      // the list it opens, or -1
-    const char* url;  // what it opens where Steam's overlay would
-    qboolean back;    // a.back, a line further down
+    int nav;
+    int submenu;
+    const char* url;
+    qboolean back;
 } hmItem_t;
 
-// src/home.js's menu
 static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
     {
         {"Play", -1, HM_MENU_PLAY, NULL, qfalse},
@@ -678,10 +550,10 @@ static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
 static struct {
     qboolean loaded;
     qhandle_t bg, vignette, logo, ranger, idLogo, bethLogo;
-    qboolean legalsViewed;  // window.legals_viewed: once a session
+    qboolean legalsViewed;
     int legalsStart;
-    int legalsLeave;        // when it started to fade, 0 while it has not
-    int panel;              // 0 friends, 1 lobby
+    int legalsLeave;
+    int panel;
 } hr;
 
 static void UI_Home_LoadRetail(void) {
@@ -696,46 +568,22 @@ static void UI_Home_LoadRetail(void) {
     hr.idLogo = trap_R_RegisterShaderNoMip("webui/img/id-logo-footer.png");
     hr.bethLogo = trap_R_RegisterShaderNoMip("webui/img/beth-logo-footer.png");
 
-    // [ioquakelive] window.legals_viewed lives as long as retail's web view, the whole session;
-    // this module is reloaded on every disconnect and map change, so the engine keeps it
     trap_Cvar_Register(NULL, "ui_legalsViewed", "0", CVAR_TEMP | CVAR_NORESTART);
     hr.legalsViewed = trap_Cvar_VariableValue("ui_legalsViewed") != 0 ||
-                      trap_Cvar_VariableValue("web_skipLegals") > 0;  // componentWillMount
+                      trap_Cvar_VariableValue("web_skipLegals") > 0;
 }
 
-/*
-===============
-UI_Home_SkipLegals
-
-[QL] skipLegals: the notice starts to go, and for this session it is seen
-===============
-*/
 static void UI_Home_SkipLegals(int now) {
     hr.legalsLeave = now ? now : 1;
     trap_Cvar_Set("ui_legalsViewed", "1");
 }
 
-/*
-===============
-UI_Home_Leave
-
-[QL] componentWillUnmount: leaving the home page counts as having seen its notice
-===============
-*/
 void UI_Home_Leave(void) {
     if (hr.legalsStart) {
         trap_Cvar_Set("ui_legalsViewed", "1");
     }
 }
 
-/*
-===============
-UI_Home_RetailBackdrop
-
-[QL] The #app's background: bg.jpg from the page's corner at its own size, repeated, under the
-radial gradient; over a match, body.ingame's rgba(19,68,92,0.7) and the game behind it
-===============
-*/
 void UI_Home_RetailBackdrop(void) {
     static const vec4_t ingame = {19 / 255.0f, 68 / 255.0f, 92 / 255.0f, 0.7f};
     float top = -smTop / smScale;
@@ -767,7 +615,6 @@ static float UI_Home_ColW(void) {
     return smVW * 0.20f;
 }
 
-// where the first entry of the list starts: under the logo and its 15% margins
 static float UI_Home_ItemsTop(void) {
     float colW = UI_Home_ColW();
 
@@ -811,7 +658,6 @@ static void UI_Home_DrawColumn(void) {
     }
 }
 
-// the model you wear stands in for the Steam avatar
 qhandle_t UI_Home_Face(void) {
     char model[MAX_QPATH];
     char* slash;
@@ -835,14 +681,6 @@ qhandle_t UI_Home_Face(void) {
     return hm2.face;
 }
 
-/*
-===============
-UI_Home_DrawCard
-
-[QL] ProfileCard (css .profile-card): the avatar as tall as the card's inside and the name beside
-it, in a black 0.8 box 75px high at 75px from the top, 20% wide at 4% from the right
-===============
-*/
 static void UI_Home_DrawCard(float x, float y, float w) {
     char name[MAX_CVAR_VALUE_STRING];
     float pic = HM_CARD_H - 2.0f * HM_CARD_PAD;
@@ -861,7 +699,6 @@ static void UI_Home_DrawCard(float x, float y, float w) {
     UI_Stats_DrawCardLine(tx, y + HM_CARD_PAD + 24.0f, x + w - tx - HM_CARD_PAD);
 }
 
-// [QL] FriendList.sortFriends: playing Quake Live, then another game, then the rest, by name
 static int UI_Home_FriendRank(const uiFriend_t* f) {
     return f->sameGame ? 0 : f->playing ? 1 : 2;
 }
@@ -875,7 +712,6 @@ static qboolean UI_Home_FriendBefore(const uiFriend_t* a, const uiFriend_t* b) {
     }
     return (qboolean)(Q_stricmp(a->name, b->name) < 0);
 }
-
 
 static void UI_Home_FriendRefresh(void) {
     int total;
@@ -911,7 +747,6 @@ static void UI_Home_FriendRefresh(void) {
     }
 }
 
-// [QL] what they are doing, as FriendList writes it under the name
 static const char* UI_Home_FriendDoing(const uiFriend_t* f) {
     if (f->server) {
         return f->status[0] ? f->status : "In a match";
@@ -938,16 +773,8 @@ static const char* UI_Home_FriendDoing(const uiFriend_t* f) {
     }
 }
 
-/*
-===============
-UI_Home_DrawFriends
-
-[QL] FriendList (css .friend-list): a section per friend in the colour of what they are doing
-===============
-*/
 static void UI_Home_DrawFriends(float x, float y, float w, float h) {
     static const vec4_t rowOver = {30 / 255.0f, 30 / 255.0f, 30 / 255.0f, 1.0f};
-    // yellow playing Quake Live, #8FB93B another game, #53A4C4 online; the nickname #6A6A6A
     static const vec4_t inQuake = {1.0f, 1.0f, 0.0f, 1.0f};
     static const vec4_t inOther = {0x8f / 255.0f, 0xb9 / 255.0f, 0x3b / 255.0f, 1.0f};
     static const vec4_t online = {0x53 / 255.0f, 0xa4 / 255.0f, 0xc4 / 255.0f, 1.0f};
@@ -963,7 +790,7 @@ static void UI_Home_DrawFriends(float x, float y, float w, float h) {
         const uiFriend_t* f = &hvf.list[i];
         const float* color = f->playing ? (f->sameGame ? inQuake : inOther) : online;
         float ry = y + i * HM_FRIEND_H;
-        float tx = x + 5 + 52 + 8;  // padding, the avatar and its border, margin-right
+        float tx = x + 5 + 52 + 8;
         float room = x + w - 5 - tx;
         qboolean over = SM_Over(HM_HIT_FRIEND, hvf.index[i]);
         int nameLen;
@@ -972,7 +799,6 @@ static void UI_Home_DrawFriends(float x, float y, float w, float h) {
         if (over) {
             SM_Fill(x, ry, w, HM_FRIEND_H, rowOver, NULL);
         }
-        // the avatar, 48 across, in a 2px border of the row's colour
         SM_Fill(x + 5, ry + 5, 52, 52, color, NULL);
         SM_Fill(x + 7, ry + 7, 48, 48, smField, NULL);
         if (SM_Avatar(f->steamId)) {
@@ -993,7 +819,6 @@ static void UI_Home_DrawFriends(float x, float y, float w, float h) {
                     SM_Baseline(FONT_SANS, HM_TEXT, ry + 7, 48), FONT_SANS, HM_TEXT, smText, initial, -1, qtrue);
         }
 
-        // the name, with the nickname after it, and what they are doing under it
         nameLen = SM_Fit(FONT_SANS, HM_TEXT, f->name, room);
         nameW = SM_Advance(FONT_SANS, HM_TEXT, f->name, nameLen);
         SM_Text(tx, SM_Baseline(FONT_SANS, HM_TEXT, ry + 5, 20.0f), FONT_SANS, HM_TEXT, color, f->name, nameLen,
@@ -1022,7 +847,6 @@ static void UI_Home_DrawSide(void) {
 
     UI_Home_DrawCard(x, top + HM_CARD_TOP, w);
 
-    // .panel-selector: the two links, 10px of padding each and 3px apart, and the space between
     SM_Fill(x, top + HM_SELECTOR_TOP, w, HM_SELECTOR_H, hmBlack80, NULL);
     for (i = 0; i < 2; i++) {
         float tw = SM_Advance(FONT_SANS, HM_TEXT, tabs[i], -1);
@@ -1033,7 +857,6 @@ static void UI_Home_DrawSide(void) {
         tx += tw + 20 + 3 + SM_Advance(FONT_SANS, HM_TEXT, " ", -1);
     }
 
-    // .friend-list and .lobby: black 0.8, half the page high
     SM_Fill(x, top + HM_LIST_TOP, w, listH, hmBlack80, NULL);
     if (hr.panel == 0) {
         UI_Home_DrawFriends(x, top + HM_LIST_TOP, w, listH);
@@ -1043,15 +866,6 @@ static void UI_Home_DrawSide(void) {
     }
 }
 
-/*
-===============
-UI_Home_DrawLegals
-
-[QL] #legals: black over everything, the logo half the page wide 20% down, and at 84% the id and
-Bethesda logos with the notice in #666 under them. A click skips it, and it goes by itself after
-five seconds, fading out in half of one
-===============
-*/
 static void UI_Home_DrawLegals(void) {
     static const char* const notice =
         "QUAKE LIVE\xe2\x84\xa2 \xc2\xa9 2007-2015, Id Software LLC, a ZeniMax Media company. All Rights Reserved.";
@@ -1080,7 +894,7 @@ static void UI_Home_DrawLegals(void) {
             hr.legalsViewed = qtrue;
             return;
         }
-        alpha = 0.99f - 0.98f * t * t;  // ease-in
+        alpha = 0.99f - 0.98f * t * t;
     }
 
     black[3] = alpha;
@@ -1092,8 +906,6 @@ static void UI_Home_DrawLegals(void) {
     if (hr.logo) {
         SM_PicColor((smVW - lw) * 0.5f, top + smVW * 0.2f, lw, lw * (485.0f / 1920.0f), hr.logo, tint, NULL);
     }
-    // the two logos sit on one line with 12px each side and 30px over them, the id one 80x80 and
-    // Bethesda's 144x46, both on the line's bottom
     if (hr.idLogo) {
         SM_PicColor(smVW * 0.5f - 138.0f + 12.0f, body + 30.0f, 80.0f, 80.0f, hr.idLogo, tint, NULL);
     }
@@ -1110,7 +922,6 @@ void UI_Home_Open(void) {
 
     UI_Home_LoadMenu();
     hm2.menu = HM_MENU_MAIN;
-    // the page takes keys before the mouse moves over it
     if (item) {
         item->window.flags |= WINDOW_HASFOCUS;
     }
@@ -1125,14 +936,12 @@ void UI_Home_Paint(void) {
     top = -smTop / smScale;
 
     UI_Home_RetailBackdrop();
-    // .character: position fixed, bottom 0, left 24%, at its own 1350x959, over a match too
     if (hr.ranger) {
         SM_Pic(smVW * 0.24f, smBottom - 959.0f, 1350.0f, 959.0f, hr.ranger, NULL);
     }
     UI_Home_DrawColumn();
     UI_Home_DrawSide();
 
-    // .legal-links: the link to the notices, over black at the bottom right
     {
         static const vec4_t link = {30 / 255.0f, 174 / 255.0f, 219 / 255.0f, 1.0f};
         float lw = SM_Advance(FONT_SANS, 15, "Legal Notices", -1);
@@ -1157,7 +966,6 @@ qboolean UI_Home_HandleKey(int key) {
     if (key & K_CHAR_FLAG) {
         return qtrue;
     }
-    // the legal notice takes the click that skips it, and nothing else goes through it
     if (!hr.legalsViewed && hr.legalsStart) {
         if (key == K_MOUSE1 && !hr.legalsLeave) {
             UI_Home_SkipLegals(uiInfo.uiDC.realTime);
@@ -1165,11 +973,11 @@ qboolean UI_Home_HandleKey(int key) {
         return qtrue;
     }
     if (key == K_ESCAPE && hm2.menu != HM_MENU_MAIN) {
-        hm2.menu = HM_MENU_MAIN;  // Back, the way the list's own Back does
+        hm2.menu = HM_MENU_MAIN;
         return qtrue;
     }
     if (key != K_MOUSE1) {
-        return qfalse;  // Escape and the rest fall through to the menu
+        return qfalse;
     }
     if (UI_Home_NavClick()) {
         return qtrue;

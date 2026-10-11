@@ -19,8 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// cl_cgame.c  -- client system interaction with client game
-
 #include "client.h"
 
 #include "../botlib/botlib.h"
@@ -31,39 +29,20 @@ extern qboolean loadCamera(const char* name);
 extern void startCamera(int time);
 extern qboolean getCameraInfo(int time, vec3_t* origin, vec3_t* angles);
 
-/*
-====================
-CL_GetGameState
-====================
-*/
 void CL_GetGameState(gameState_t* gs) {
     *gs = cl.gameState;
 }
 
-/*
-====================
-CL_GetGlconfig
-====================
-*/
 void CL_GetGlconfig(glconfig_t* glconfig) {
     *glconfig = cls.glconfig;
 }
 
-/*
-====================
-CL_GetUserCmd
-====================
-*/
 qboolean CL_GetUserCmd(int cmdNumber, usercmd_t* ucmd) {
-    // cmds[cmdNumber] is the last properly generated command
 
-    // can't return anything that we haven't created yet
     if (cmdNumber > cl.cmdNumber) {
         Com_Error(ERR_DROP, "CL_GetUserCmd: %i >= %i", cmdNumber, cl.cmdNumber);
     }
 
-    // the usercmd has been overwritten in the wrapping
-    // buffer because it is too far out of date
     if (cmdNumber <= cl.cmdNumber - CMD_BACKUP) {
         return qfalse;
     }
@@ -77,19 +56,12 @@ int CL_GetCurrentCmdNumber(void) {
     return cl.cmdNumber;
 }
 
-/*
-====================
-CL_GetParseEntityState
-====================
-*/
 qboolean CL_GetParseEntityState(int parseEntityNumber, entityState_t* state) {
-    // can't return anything that hasn't been parsed yet
     if (parseEntityNumber >= cl.parseEntitiesNum) {
         Com_Error(ERR_DROP, "CL_GetParseEntityState: %i >= %i",
                   parseEntityNumber, cl.parseEntitiesNum);
     }
 
-    // can't return anything that has been overwritten in the circular buffer
     if (parseEntityNumber <= cl.parseEntitiesNum - MAX_PARSE_ENTITIES) {
         return qfalse;
     }
@@ -98,21 +70,11 @@ qboolean CL_GetParseEntityState(int parseEntityNumber, entityState_t* state) {
     return qtrue;
 }
 
-/*
-====================
-CL_GetCurrentSnapshotNumber
-====================
-*/
 void CL_GetCurrentSnapshotNumber(int* snapshotNumber, int* serverTime) {
     *snapshotNumber = cl.snap.messageNum;
     *serverTime = cl.snap.serverTime;
 }
 
-/*
-====================
-CL_GetSnapshot
-====================
-*/
 qboolean CL_GetSnapshot(int snapshotNumber, snapshot_t* snapshot) {
     clSnapshot_t* clSnap;
     int i, count;
@@ -121,24 +83,19 @@ qboolean CL_GetSnapshot(int snapshotNumber, snapshot_t* snapshot) {
         Com_Error(ERR_DROP, "CL_GetSnapshot: snapshotNumber > cl.snapshot.messageNum");
     }
 
-    // if the frame has fallen out of the circular buffer, we can't return it
     if (cl.snap.messageNum - snapshotNumber >= PACKET_BACKUP) {
         return qfalse;
     }
 
-    // if the frame is not valid, we can't return it
     clSnap = &cl.snapshots[snapshotNumber & PACKET_MASK];
     if (!clSnap->valid) {
         return qfalse;
     }
 
-    // if the entities in the frame have fallen out of their
-    // circular buffer, we can't return it
     if (cl.parseEntitiesNum - clSnap->parseEntitiesNum >= MAX_PARSE_ENTITIES) {
         return qfalse;
     }
 
-    // write the snapshot
     snapshot->snapFlags = clSnap->snapFlags;
     snapshot->serverCommandSequence = clSnap->serverCommandNum;
     snapshot->ping = clSnap->ping;
@@ -156,16 +113,9 @@ qboolean CL_GetSnapshot(int snapshotNumber, snapshot_t* snapshot) {
             cl.parseEntities[(clSnap->parseEntitiesNum + i) & (MAX_PARSE_ENTITIES - 1)];
     }
 
-    // FIXME: configstring changes and server commands!!!
-
     return qtrue;
 }
 
-/*
-=====================
-CL_SetUserCmdValue
-=====================
-*/
 void CL_SetUserCmdValue(int userCmdValue, int weaponPrimary, float sensitivityScale, int fov) {
     cl.cgameUserCmdValue = userCmdValue;
     cl.cgameUserCmdWeaponPrimary = weaponPrimary;
@@ -173,21 +123,11 @@ void CL_SetUserCmdValue(int userCmdValue, int weaponPrimary, float sensitivitySc
     cl.cgameUserCmdFov = fov;
 }
 
-/*
-=====================
-CL_AddCgameCommand
-=====================
-*/
 void CL_AddCgameCommand(const char* cmdName) {
     Cmd_AddCommand(cmdName, NULL);
     CL_SetCgameCommandCompletion(cmdName);
 }
 
-/*
-=====================
-CL_ConfigstringModified
-=====================
-*/
 void CL_ConfigstringModified(void) {
     char *old, *s;
     int i, index;
@@ -199,20 +139,17 @@ void CL_ConfigstringModified(void) {
     if (index < 0 || index >= MAX_CONFIGSTRINGS) {
         Com_Error(ERR_DROP, "CL_ConfigstringModified: bad index %i", index);
     }
-    // get everything after "cs <num>"
     s = Cmd_ArgsFrom(2);
 
     old = cl.gameState.stringData + cl.gameState.stringOffsets[index];
     if (!strcmp(old, s)) {
-        return;  // unchanged
+        return;
     }
 
-    // build the new gameState_t
     oldGs = cl.gameState;
 
     Com_Memset(&cl.gameState, 0, sizeof(cl.gameState));
 
-    // leave the first 0 for uninitialized strings
     cl.gameState.dataCount = 1;
 
     for (i = 0; i < MAX_CONFIGSTRINGS; i++) {
@@ -222,7 +159,7 @@ void CL_ConfigstringModified(void) {
             dup = oldGs.stringData + oldGs.stringOffsets[i];
         }
         if (!dup[0]) {
-            continue;  // leave with the default empty string
+            continue;
         }
 
         len = strlen(dup);
@@ -231,14 +168,12 @@ void CL_ConfigstringModified(void) {
             Com_Error(ERR_DROP, "MAX_GAMESTATE_CHARS exceeded");
         }
 
-        // append it to the gameState string buffer
         cl.gameState.stringOffsets[i] = cl.gameState.dataCount;
         Com_Memcpy(cl.gameState.stringData + cl.gameState.dataCount, dup, len + 1);
         cl.gameState.dataCount += len + 1;
     }
 
     if (index == CS_SYSTEMINFO) {
-        // parse serverId and other cvars
         CL_SystemInfoChanged();
     }
     if (index >= CS_PLAYERS && index < CS_PLAYERS + MAX_CLIENTS) {
@@ -246,23 +181,13 @@ void CL_ConfigstringModified(void) {
     }
 }
 
-/*
-===================
-CL_GetServerCommand
-
-Set up argc/argv for the given command
-===================
-*/
 qboolean CL_GetServerCommand(int serverCommandNumber) {
     char* s;
     char* cmd;
     static char bigConfigString[BIG_INFO_STRING];
     int argc;
 
-    // if we have irretrievably lost a reliable command, drop the connection
     if (serverCommandNumber <= clc.serverCommandSequence - MAX_RELIABLE_COMMANDS) {
-        // when a demo record was started after the client got a whole bunch of
-        // reliable commands then the client never got those first reliable commands
         if (clc.demoplaying)
             return qfalse;
         Com_Error(ERR_DROP, "CL_GetServerCommand: a reliable command was cycled out");
@@ -285,8 +210,6 @@ rescan:
     argc = Cmd_Argc();
 
     if (!strcmp(cmd, "disconnect")) {
-        // https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=552
-        // allow server to indicate why they were disconnected
         if (argc >= 2)
             Com_Error(ERR_SERVERDISCONNECT, "Server disconnected - %s", Cmd_Argv(1));
         else
@@ -320,65 +243,35 @@ rescan:
 
     if (!strcmp(cmd, "cs")) {
         CL_ConfigstringModified();
-        // reparse the string, because CL_ConfigstringModified may have done another Cmd_TokenizeString()
         Cmd_TokenizeString(s);
         return qtrue;
     }
 
     if (!strcmp(cmd, "map_restart")) {
-        // clear notify lines and outgoing commands before passing
-        // the restart to the cgame
         Con_ClearNotify();
-        // reparse the string, because Con_ClearNotify() may have done another Cmd_TokenizeString()
         Cmd_TokenizeString(s);
         Com_Memset(cl.cmds, 0, sizeof(cl.cmds));
         return qtrue;
     }
 
-    // the clientLevelShot command is used during development
-    // to generate 128*128 screenshots from the intermission
-    // point of levels for the menu system to use
-    // we pass it along to the cgame to make appropriate adjustments,
-    // but we also clear the console and notify lines here
     if (!strcmp(cmd, "clientLevelShot")) {
-        // don't do it if we aren't running the server locally,
-        // otherwise malicious remote servers could overwrite
-        // the existing thumbnails
         if (!com_sv_running->integer) {
             return qfalse;
         }
-        // close the console
         Con_Close();
-        // take a special screenshot next frame
         Cbuf_AddText("wait ; wait ; wait ; wait ; screenshot levelshot\n");
         return qtrue;
     }
 
-    // we may want to put a "connect to other server" command here
-
-    // cgame can now act on the command
     return qtrue;
 }
 
-/*
-====================
-CL_CM_LoadMap
-
-Just adds default parameters that cgame doesn't need to know about
-====================
-*/
 void CL_CM_LoadMap(const char* mapname) {
     int checksum;
 
     CM_LoadMap(mapname, qtrue, &checksum);
 }
 
-/*
-====================
-CL_ShutdownCGame
-
-====================
-*/
 void CL_ShutdownCGame(void) {
     Key_SetCatcher(Key_GetCatcher() & ~KEYCATCH_CGAME);
     cls.cgameStarted = qfalse;
@@ -396,22 +289,6 @@ static int FloatAsInt(float f) {
     return fi.i;
 }
 
-/*
-====================
-CL_CgameSystemCalls
-
-The cgame module is making a system call
-====================
-*/
-/*
-=====================
-Where the load time goes
-
-[ioquakelive] Everything a map loads is asked of the engine by the cgame. During the load each
-call is timed and added to its category; at the end, CL_InitCGame prints the breakdown. It is
-what lets you say "textures are half the time" instead of assuming it.
-=====================
-*/
 typedef enum {
     CL_LOAD_SHADERS,
     CL_LOAD_MODELS,
@@ -552,24 +429,24 @@ static intptr_t CL_CgameSystemCallsInner(intptr_t* args) {
         case CG_CM_INLINEMODEL:
             return CM_InlineModel(args[1]);
         case CG_CM_TEMPBOXMODEL:
-            return CM_TempBoxModel(VMA(1), VMA(2), /*int capsule*/ qfalse);
+            return CM_TempBoxModel(VMA(1), VMA(2),  qfalse);
         case CG_CM_TEMPCAPSULEMODEL:
-            return CM_TempBoxModel(VMA(1), VMA(2), /*int capsule*/ qtrue);
+            return CM_TempBoxModel(VMA(1), VMA(2),  qtrue);
         case CG_CM_POINTCONTENTS:
             return CM_PointContents(VMA(1), args[2]);
         case CG_CM_TRANSFORMEDPOINTCONTENTS:
             return CM_TransformedPointContents(VMA(1), args[2], VMA(3), VMA(4));
         case CG_CM_BOXTRACE:
-            CM_BoxTrace(VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6], args[7], /*int capsule*/ qfalse);
+            CM_BoxTrace(VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6], args[7],  qfalse);
             return 0;
         case CG_CM_CAPSULETRACE:
-            CM_BoxTrace(VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6], args[7], /*int capsule*/ qtrue);
+            CM_BoxTrace(VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6], args[7],  qtrue);
             return 0;
         case CG_CM_TRANSFORMEDBOXTRACE:
-            CM_TransformedBoxTrace(VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6], args[7], VMA(8), VMA(9), /*int capsule*/ qfalse);
+            CM_TransformedBoxTrace(VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6], args[7], VMA(8), VMA(9),  qfalse);
             return 0;
         case CG_CM_TRANSFORMEDCAPSULETRACE:
-            CM_TransformedBoxTrace(VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6], args[7], VMA(8), VMA(9), /*int capsule*/ qtrue);
+            CM_TransformedBoxTrace(VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6], args[7], VMA(8), VMA(9),  qtrue);
             return 0;
         case CG_CM_MARKFRAGMENTS:
             return re.MarkFragments(args[1], VMA(2), VMA(3), args[4], VMA(5), args[6], VMA(7));
@@ -713,8 +590,6 @@ static intptr_t CL_CgameSystemCallsInner(intptr_t* args) {
         case CG_KEY_GETCATCHER:
             return Key_GetCatcher();
         case CG_KEY_SETCATCHER:
-            // [QL] quakelive_steam.exe 0x4beeb0 (cgame import +0x180): replaced as given, console
-            // bit included, as for the UI module
             Key_SetCatcher(args[1]);
             return 0;
         case CG_KEY_GETKEY:
@@ -724,8 +599,6 @@ static intptr_t CL_CgameSystemCallsInner(intptr_t* args) {
             Q_strncpyz(VMA(2), Key_KeynumToString(args[1]), args[3]);
             return 0;
 
-        // [QL] the voice mute list, which goes by Steam ID: the id travels split into two
-        // 32 bit halves, as in retail
         case CG_VOICE_IS_IGNORED:
             return CL_VoiceIsIgnored(((uint64_t)(unsigned int)args[2] << 32) | (unsigned int)args[1]);
         case CG_VOICE_TOGGLE_IGNORE:
@@ -797,17 +670,6 @@ static intptr_t CL_CgameSystemCallsInner(intptr_t* args) {
             re.RemapShader(VMA(1), VMA(2), VMA(3));
             return 0;
 
-            /*
-                case CG_LOADCAMERA:
-                    return loadCamera(VMA(1));
-
-                case CG_STARTCAMERA:
-                    startCamera(args[1]);
-                    return 0;
-
-                case CG_GETCAMERAINFO:
-                    return getCameraInfo(args[1], VMA(2), VMA(3));
-            */
         case CG_GET_ENTITY_TOKEN:
             return re.GetEntityToken(VMA(1), args[2]);
         case CG_R_INPVS:
@@ -820,14 +682,7 @@ static intptr_t CL_CgameSystemCallsInner(intptr_t* args) {
     return 0;
 }
 
-/*
-====================
-CL_RegisterCGameCvars
-====================
-*/
 void CL_RegisterCGameCvars(void) {
-    // [QL] quakelive_steam.exe 0x4cc240: load the cgame (0x4b0460), run its cvar registration
-    // (export +0x04) and put it away again (0x4afbf0), before the configs are read
     cgvm = VM_Create("cgame", CL_CgameSystemCalls);
     if (!cgvm) {
         Com_Printf("Couldn't load cgame VM during cvar registration.\n");
@@ -838,13 +693,6 @@ void CL_RegisterCGameCvars(void) {
     cgvm = NULL;
 }
 
-/*
-====================
-CL_InitCGame
-
-Should only be called by CL_StartHunkUsers
-====================
-*/
 void CL_InitCGame(void) {
     const char* info;
     const char* mapname;
@@ -852,19 +700,14 @@ void CL_InitCGame(void) {
 
     t1 = Sys_Milliseconds();
 
-    // [ioquakelive] the load time breakdown is measured right here: everything the map loads on
-    // the client side goes through the cgame's calls
     Com_Memset(cl_loadUs, 0, sizeof(cl_loadUs));
     Com_Memset(cl_loadCalls, 0, sizeof(cl_loadCalls));
     cl_loadProfiling = qtrue;
 
-    // [ioquakelive] the map's sounds are decoded in the background while the load carries on
     S_AsyncLoadBegin();
 
-    // put away the console
     Con_Close();
 
-    // find the current mapname
     info = cl.gameState.stringData + cl.gameState.stringOffsets[CS_SERVERINFO];
     mapname = Info_ValueForKey(info, "mapname");
     Com_sprintf(cl.mapname, sizeof(cl.mapname), "maps/%s.bsp", mapname);
@@ -875,26 +718,17 @@ void CL_InitCGame(void) {
     }
     clc.state = CA_LOADING;
 
-    // [QL] register cgame cvars before init
     VM_Call(cgvm, CG_REGISTER_CVARS);
 
-    // init for this gamestate
-    // use the lastExecutedServerCommand instead of the serverCommandSequence
-    // otherwise server commands sent just before a gamestate are dropped
     VM_Call(cgvm, CG_INIT, clc.serverMessageSequence, clc.lastExecutedServerCommand, clc.clientNum);
 
-    // reset any CVAR_CHEAT cvars registered by cgame
     if (!clc.demoplaying && !cl_connectedToCheatServer)
         Cvar_SetCheatState();
 
-    // we will send a usercmd this frame, which
-    // will cause the server to send us the first snapshot
     clc.state = CA_PRIMED;
 
     t2 = Sys_Milliseconds();
 
-    // [ioquakelive] before closing the load, the sounds handed out are made ready to play; by
-    // then the workers have finished, so this almost never waits
     S_AsyncLoadFinish();
     t2 = Sys_Milliseconds();
 
@@ -902,26 +736,15 @@ void CL_InitCGame(void) {
     Com_Printf("CL_InitCGame: %5.2f seconds\n", (t2 - t1) / 1000.0);
     CL_LoadProfileReport((t2 - t1) / 1000.0f);
 
-    // have the renderer touch all its images, so they are present
-    // on the card even if the driver does deferred loading
     re.EndRegistration();
 
-    // make sure everything is paged in
     if (!Sys_LowPhysicalMemory()) {
         Com_TouchMemory();
     }
 
-    // clear anything that got printed
     Con_ClearNotify();
 }
 
-/*
-====================
-CL_GameCommand
-
-See if the current console command is claimed by the cgame
-====================
-*/
 qboolean CL_GameCommand(void) {
     if (!cgvm) {
         return qfalse;
@@ -930,35 +753,10 @@ qboolean CL_GameCommand(void) {
     return VM_Call(cgvm, CG_CONSOLE_COMMAND);
 }
 
-/*
-=====================
-CL_CGameRendering
-=====================
-*/
 void CL_CGameRendering(stereoFrame_t stereo) {
     VM_Call(cgvm, CG_DRAW_ACTIVE_FRAME, cl.serverTime, stereo, clc.demoplaying);
     VM_Debug(0);
 }
-
-/*
-=================
-CL_AdjustTimeDelta
-
-Adjust the clients view of server time.
-
-We attempt to have cl.serverTime exactly equal the server's view
-of time plus the timeNudge, but with variable latencies over
-the internet it will often need to drift a bit to match conditions.
-
-Our ideal time would be to have the adjusted time approach, but not pass,
-the very latest snapshot.
-
-Adjustments are only made when a new snapshot arrives with a rational
-latency, which keeps the adjustment process framerate independent and
-prevents massive overadjustment during times of significant packet loss
-or bursted delayed packets.
-=================
-*/
 
 #define RESET_TIME 500
 
@@ -968,7 +766,6 @@ void CL_AdjustTimeDelta(void) {
 
     cl.newSnapshots = qfalse;
 
-    // the delta never drifts when replaying a demo
     if (clc.demoplaying) {
         return;
     }
@@ -978,29 +775,23 @@ void CL_AdjustTimeDelta(void) {
 
     if (deltaDelta > RESET_TIME) {
         cl.serverTimeDelta = newDelta;
-        cl.oldServerTime = cl.snap.serverTime;  // FIXME: is this a problem for cgame?
+        cl.oldServerTime = cl.snap.serverTime;
         cl.serverTime = cl.snap.serverTime;
         if (cl_showTimeDelta->integer) {
             Com_Printf("<RESET> ");
         }
     } else if (deltaDelta > 100) {
-        // fast adjust, cut the difference in half
         if (cl_showTimeDelta->integer) {
             Com_Printf("<FAST> ");
         }
         cl.serverTimeDelta = (cl.serverTimeDelta + newDelta) >> 1;
     } else {
-        // slow drift adjust, only move 1 or 2 msec
 
-        // if any of the frames between this and the previous snapshot
-        // had to be extrapolated, nudge our sense of time back a little
-        // the granularity of +1 / -2 is too high for timescale modified frametimes
         if (com_timescale->value == 0 || com_timescale->value == 1) {
             if (cl.extrapolatedSnapshot) {
                 cl.extrapolatedSnapshot = qfalse;
                 cl.serverTimeDelta -= 2;
             } else {
-                // otherwise, move our sense of time forward to minimize total latency
                 cl.serverTimeDelta++;
             }
         }
@@ -1011,13 +802,7 @@ void CL_AdjustTimeDelta(void) {
     }
 }
 
-/*
-==================
-CL_FirstSnapshot
-==================
-*/
 void CL_FirstSnapshot(void) {
-    // ignore snapshots that don't have entities
     if (cl.snap.snapFlags & SNAPFLAG_NOT_ACTIVE) {
         Com_DPrintf("CL_FirstSnapshot: REJECTED (SNAPFLAG_NOT_ACTIVE), state=%d\n", clc.state);
         return;
@@ -1025,29 +810,18 @@ void CL_FirstSnapshot(void) {
     Com_DPrintf("CL_FirstSnapshot: SUCCESS, transitioning to CA_ACTIVE\n");
     clc.state = CA_ACTIVE;
 
-    // set the timedelta so we are exactly on this first frame
     cl.serverTimeDelta = cl.snap.serverTime - cls.realtime;
     cl.oldServerTime = cl.snap.serverTime;
 
     clc.timeDemoBaseTime = cl.snap.serverTime;
 
-    // if this is the first frame of active play,
-    // execute the contents of activeAction now
-    // this is to allow scripting a timedemo to start right
-    // after loading
     if (cl_activeAction->string[0]) {
         Cbuf_AddText(cl_activeAction->string);
         Cvar_Set("activeAction", "");
     }
 }
 
-/*
-==================
-CL_SetCGameTime
-==================
-*/
 void CL_SetCGameTime(void) {
-    // getting a valid frame message ends the connection process
     if (clc.state != CA_ACTIVE) {
         if (clc.state != CA_PRIMED) {
             return;
@@ -1055,14 +829,10 @@ void CL_SetCGameTime(void) {
         if (clc.demoplaying) {
             int i;
 
-            // we shouldn't get the first snapshot on the same frame
-            // as the gamestate, because it causes a bad time skip
             if (!clc.firstDemoFrameSkipped) {
                 clc.firstDemoFrameSkipped = qtrue;
                 return;
             }
-            // [ioquakelive] the snapshots a recording starts with, from before its player was in
-            // the game, are read in one go up to the first that can be shown, not one a frame
             for (i = 0; i < 4096 && clc.state == CA_PRIMED && clc.demoplaying; i++) {
                 CL_ReadDemoMessage();
                 if (cl.newSnapshots) {
@@ -1080,24 +850,18 @@ void CL_SetCGameTime(void) {
         }
     }
 
-    // if we have gotten to this point, cl.snap is guaranteed to be valid
     if (!cl.snap.valid) {
         Com_Error(ERR_DROP, "CL_SetCGameTime: !cl.snap.valid");
     }
 
-    // allow pause in single player
     if (sv_paused->integer && CL_CheckPaused() && com_sv_running->integer) {
-        // paused
         return;
     }
 
     if (cl.snap.serverTime < cl.oldFrameServerTime) {
-        // [ioquakelive] a demo whose server started its clock over halfway follows it instead
-        // of ending there
         if (clc.demoplaying) {
             cl.serverTimeDelta = cl.snap.serverTime - cls.realtime;
             cl.oldServerTime = cl.snap.serverTime;
-        // [QL] only fatal if already active; otherwise just warn
         } else if (clc.state == CA_ACTIVE) {
             Com_Error(ERR_DROP, "cl.snap.serverTime < cl.oldFrameServerTime");
         } else {
@@ -1106,36 +870,24 @@ void CL_SetCGameTime(void) {
     }
     cl.oldFrameServerTime = cl.snap.serverTime;
 
-    // get our current view of time
-
     if (clc.demoplaying && cl_freezeDemo->integer) {
-        // cl_freezeDemo is used to lock a demo in place for single frame advances
-        // [ioquakelive] and the clock waits with it: it used to run on underneath, and letting
-        // the demo go jumped it ahead by the whole pause
         cl.serverTimeDelta = cl.serverTime - cls.realtime;
     } else {
-        // [QL] timeNudge: disabled for spectators and LAN connections
         static int prevTimeNudge;
         int tn;
 
-        // [ioquakelive] nor in a demo, where there is no lag to make up for and a frame
-        // advance has to be one frame
         if (clc.demoplaying || Cvar_VariableIntegerValue("cg_spectating") ||
             Sys_IsLANAddress(clc.netchan.remoteAddress)) {
             tn = 0;
         } else if (cl_autoTimeNudge->integer == 0) {
-            // Manual mode: use cl_timeNudge directly (cvar already clamped -20..0)
             tn = cl_timeNudge->integer;
         } else {
-            // Auto mode: use half the current ping as negative nudge
             tn = (int)(cl.snap.ping * -0.5);
 
-            // Smooth transitions: hold previous value unless it matches
             if (prevTimeNudge != 0 && prevTimeNudge != tn) {
                 tn = prevTimeNudge;
             }
 
-            // Clamp to -20..0
             if (tn < -20) {
                 tn = -20;
             } else if (tn > 0) {
@@ -1146,23 +898,16 @@ void CL_SetCGameTime(void) {
         cl.serverTime = cls.realtime + cl.serverTimeDelta - tn;
         prevTimeNudge = tn;
 
-        // guarantee that time will never flow backwards, even if
-        // serverTimeDelta made an adjustment or cl_timeNudge was changed
         if (cl.serverTime < cl.oldServerTime) {
             cl.serverTime = cl.oldServerTime;
         }
         cl.oldServerTime = cl.serverTime;
 
-        // note if we are almost past the latest frame (without timeNudge),
-        // so we will try and adjust back a bit when the next snapshot arrives
         if (cls.realtime + cl.serverTimeDelta >= cl.snap.serverTime - 5) {
             cl.extrapolatedSnapshot = qtrue;
         }
     }
 
-    // if we have gotten new snapshots, drift serverTimeDelta
-    // don't do this every frame, or a period of packet loss would
-    // make a huge adjustment
     if (cl.newSnapshots) {
         CL_AdjustTimeDelta();
     }
@@ -1171,14 +916,6 @@ void CL_SetCGameTime(void) {
         return;
     }
 
-    // if we are playing a demo back, we can just keep reading
-    // messages from the demo file until the cgame definitely
-    // has valid snapshots to interpolate between
-
-    // a timedemo will always use a deterministic set of time samples
-    // no matter what speed machine it is run on,
-    // while a normal demo may have different time samples
-    // each time it is played back
     if (cl_timedemo->integer) {
         int now = Sys_Milliseconds();
         int frameDuration;
@@ -1192,7 +929,6 @@ void CL_SetCGameTime(void) {
         frameDuration = now - clc.timeDemoLastFrame;
         clc.timeDemoLastFrame = now;
 
-        // Ignore the first measurement as it'll always be 0
         if (clc.timeDemoFrames > 0) {
             if (frameDuration > clc.timeDemoMaxDuration)
                 clc.timeDemoMaxDuration = frameDuration;
@@ -1200,7 +936,6 @@ void CL_SetCGameTime(void) {
             if (frameDuration < clc.timeDemoMinDuration)
                 clc.timeDemoMinDuration = frameDuration;
 
-            // 255 ms = about 4fps
             if (frameDuration > UCHAR_MAX)
                 frameDuration = UCHAR_MAX;
 
@@ -1212,20 +947,15 @@ void CL_SetCGameTime(void) {
         cl.serverTime = clc.timeDemoBaseTime + clc.timeDemoFrames * 50;
     }
 
-    // [ioquakelive] a seek moves the clock here, and the loop reads up to it
     CL_DemoSeekApply();
 
     while (cl.serverTime >= cl.snap.serverTime) {
         int before = cl.snap.serverTime;
 
-        // feed another messag, which should change
-        // the contents of cl.snap
         CL_ReadDemoMessage();
         if (clc.state != CA_ACTIVE) {
-            return;  // end of demo
+            return;
         }
-        // [ioquakelive] the server's clock went back: follow it, rather than read the rest of the
-        // demo in one go trying to catch up with the old one
         if (cl.snap.serverTime < before - 1000) {
             cl.serverTimeDelta += cl.snap.serverTime - cl.serverTime;
             cl.serverTime = cl.oldServerTime = cl.snap.serverTime;

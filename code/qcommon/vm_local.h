@@ -19,17 +19,11 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// vm_local.h -- native DLL module loader (QVM bytecode support removed)
-
 #include "q_shared.h"
 #include "qcommon.h"
 
-// Max number of arguments to pass from engine to a module's vmMain function.
-// command number + 12 arguments
 #define MAX_VMMAIN_ARGS 13
 
-// Max number of arguments to pass from a module to engine's syscall handler.
-// syscall number + 15 arguments
 #define MAX_VMSYSCALL_ARGS 16
 
 struct vm_s {
@@ -37,12 +31,11 @@ struct vm_s {
 
     char name[MAX_QPATH];
 
-    // for dynamic linked modules
     void* dllHandle;
     vmMainProc entryPoint;
     void (*destroy)(vm_t* self);
 
-    int callLevel;      // counts recursive VM_Call
+    int callLevel;
 };
 
 extern vm_t* currentVM;

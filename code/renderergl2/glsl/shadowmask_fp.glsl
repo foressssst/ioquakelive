@@ -15,29 +15,18 @@ uniform mat4      u_ShadowMvp4;
 #endif
 
 uniform vec3   u_ViewOrigin;
-uniform vec4   u_ViewInfo; // zfar / znear, zfar
+uniform vec4   u_ViewInfo;
 
 varying vec2   var_DepthTex;
 varying vec3   var_ViewDir;
 
-// depth is GL_DEPTH_COMPONENT24
-// so the maximum error is 1.0 / 2^24
 #define DEPTH_MAX_ERROR 0.000000059604644775390625
-
-// Input: It uses texture coords as the random number seed.
-// Output: Random number: [0,1), that is between 0.0 and 0.999999... inclusive.
-// Author: Michael Pohoreski
-// Copyright: Copyleft 2012 :-)
-// Source: http://stackoverflow.com/questions/5149544/can-i-generate-a-random-number-inside-a-pixel-shader
 
 float random( const vec2 p )
 {
-  // We need irrationals for pseudo randomness.
-  // Most (all?) known transcendental numbers will (generally) work.
   const vec2 r = vec2(
-    23.1406926327792690,  // e^pi (Gelfond's constant)
-     2.6651441426902251); // 2^sqrt(2) (Gelfond-Schneider constant)
-  //return fract( cos( mod( 123456789., 1e-7 + 256. * dot(p,r) ) ) );
+    23.1406926327792690,
+     2.6651441426902251);
   return mod( 123456789., 1e-7 + 256. * dot(p,r) );  
 }
 
@@ -47,16 +36,15 @@ float PCF(const sampler2DShadow shadowmap, const vec2 st, const float dist)
 	float scale = 2.0 / r_shadowMapSize;
 
 #if 0
-	// from http://http.developer.nvidia.com/GPUGems/gpugems_ch11.html
 	vec2 offset = vec2(greaterThan(fract(var_DepthTex.xy * r_FBufScale * 0.5), vec2(0.25)));
 	offset.y += offset.x;
 	if (offset.y > 1.1) offset.y = 0.0;
-	
+
 	mult = shadow2D(shadowmap, vec3(st + (offset + vec2(-1.5,  0.5)) * scale, dist))
 	     + shadow2D(shadowmap, vec3(st + (offset + vec2( 0.5,  0.5)) * scale, dist))
 	     + shadow2D(shadowmap, vec3(st + (offset + vec2(-1.5, -1.5)) * scale, dist))
 	     + shadow2D(shadowmap, vec3(st + (offset + vec2( 0.5, -1.5)) * scale, dist));
-	 
+
 	mult *= 0.25;
 #endif
 

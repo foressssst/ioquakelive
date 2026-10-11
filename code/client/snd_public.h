@@ -19,63 +19,42 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 void S_Init(void);
 void S_Shutdown(void);
 
-// [ioquakelive] the system took the audio device away from the game; reopen it
 void S_DeviceLost(void);
 
-// if origin is NULL, the sound will be dynamically sourced from the entity
 void S_StartSound(vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx);
 void S_StartLocalSound(sfxHandle_t sfx, int channelNum);
-// [QL] a local sound at a given volume, 1 being the normal one
 void S_StartLocalSoundVolume(sfxHandle_t sfx, int channelNum, float volume);
 
 void S_StartBackgroundTrack(const char* intro, const char* loop);
 void S_StopBackgroundTrack(void);
 
-// cinematics and voice-over-network will send raw samples
-// 1.0 volume will be direct output of source samples
 void S_RawSamples(int stream, int samples, int rate, int width, int channels, const byte* data, float volume, int entityNum);
 
-// stop all sounds and the background track
 void S_StopAllSounds(void);
 
-// all continuous looping sounds must be added before calling S_Update
 void S_ClearLoopingSounds(qboolean killall);
 void S_AddLoopingSound(int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfx);
 void S_AddRealLoopingSound(int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfx);
 void S_StopLoopingSound(int entityNum);
 
-// recompute the relative volumes for all running sounds
-// relative to the given entityNum / orientation
 void S_Respatialize(int entityNum, const vec3_t origin, vec3_t axis[3], int inwater);
 
-// let the sound system know where an entity currently is
 void S_UpdateEntityPosition(int entityNum, const vec3_t origin);
 
 void S_Update(void);
 
-// [ioquakelive] the window lost focus or was minimized: with s_muteBackground the game goes
-// quiet now, before anything else the event brings (the fullscreen mode change stalls the game)
 void S_WindowFocusLost(void);
 
 void S_DisableSounds(void);
 
 void S_BeginRegistration(void);
-// [ioquakelive] while a map loads the OGGs are decoded in the background; Finish waits on them
-// all and leaves them ready to play
 void S_AsyncLoadBegin(void);
 void S_AsyncLoadFinish(void);
-// when the load was cut short: throws away what was handed out without converting it
 void S_AsyncLoadDiscard(void);
 
-//
-//
-// will allways return a valid sample, even if it
-// has to create a placeholder.  This prevents continuous filesystem
-// checks for missing files
 sfxHandle_t S_RegisterSound(const char* sample, qboolean compressed);
 
 void S_DisplayFreeMemory(void);

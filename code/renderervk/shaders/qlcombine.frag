@@ -1,8 +1,5 @@
 #version 450
 
-// [QL] 0x438590: the scene with its own saturation and intensity no longer fits in a blend, so it
-// is read here and the whole sum happens in the shader
-
 layout(set = 0, binding = 0) uniform sampler2D scene_texture;
 layout(set = 1, binding = 0) uniform sampler2D bloom_texture;
 

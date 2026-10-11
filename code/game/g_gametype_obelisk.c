@@ -1,16 +1,4 @@
-/*
- * g_gametype_obelisk.c -- Overload (GT_OBELISK, 7)
- *
- * Teams attack each other's obelisk. Obelisk logic is in g_team.c
- * (ObeliskTouch, ObeliskDie, ObeliskRegen, ObeliskPain).
- * Scoreboard: FreeForAllScoreboardMessage (FFA format fallback).
- */
 #include "g_local.h"
-
-// Overload uses capturelimit/timelimit exit rules.
-// Obelisk entities: team_redobelisk, team_blueobelisk (in g_team.c).
-// Obelisk health regeneration and destruction handling in g_team.c.
-// No round state.
 
 void Obelisk_CheckTeamItems(void) {
     gentity_t *ent;

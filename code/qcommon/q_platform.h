@@ -19,11 +19,9 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #ifndef __Q_PLATFORM_H
 #define __Q_PLATFORM_H
 
-// this is for determining if we have an asm version of a C function
 #define idx64 0
 
 #if (defined _M_IX86 || defined __i386__) && !defined(C_ONLY)
@@ -38,7 +36,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define idppc 1
 #if defined(__VEC__)
 #define idppc_altivec 1
-#ifdef __APPLE__  // Apple's GCC does this differently than the FSF.
+#ifdef __APPLE__
 #define VECCONST_UINT8(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p) \
     (vector unsigned char)(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p)
 #else
@@ -61,17 +59,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define idsparc 0
 #endif
 
-#ifndef __ASM_I386__  // don't include the C bits if included from qasm.h
+#ifndef __ASM_I386__
 
-// for windows fastcall option
 #define QDECL
 #define QCALL
 
-//================================================================= WIN64/32 ===
-
 #if defined(_WIN64) || defined(__WIN64__)
 
-// [ioquakelive] ARM64 Windows is 64 bits too, but none of the x86-64 paths are for it
 #if defined(_M_X64) || defined(__x86_64__)
 #undef idx64
 #define idx64 1
@@ -133,8 +127,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #endif
 
-//============================================================== MAC OS X ===
-
 #if defined(__APPLE__) || defined(__APPLE_CC__)
 
 #define OS_STRING "macosx"
@@ -163,8 +155,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define DLL_EXT ".dylib"
 
 #endif
-
-//================================================================= LINUX ===
 
 #if defined(__linux__) || defined(__FreeBSD_kernel__) || defined(__GNU__)
 
@@ -200,8 +190,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define DLL_EXT ".so"
 
 #endif
-
-//=================================================================== BSD ===
 
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 
@@ -243,8 +231,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #endif
 
-//================================================================= SUNOS ===
-
 #ifdef __sun
 
 #include <stdint.h>
@@ -270,8 +256,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #endif
 
-//================================================================== IRIX ===
-
 #ifdef __sgi
 
 #define OS_STRING "irix"
@@ -280,13 +264,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define ARCH_STRING "mips"
 
-#define Q3_BIG_ENDIAN  // SGI's MIPS are always big endian
+#define Q3_BIG_ENDIAN
 
 #define DLL_EXT ".so"
 
 #endif
-
-//================================================================== EMSCRIPTEN ===
 
 #ifdef __EMSCRIPTEN__
 
@@ -302,9 +284,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #endif
 
-//===========================================================================
-
-// catch missing defines in above blocks
 #if !defined(OS_STRING)
 #error "Operating system not supported"
 #endif
@@ -325,7 +304,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #error "DLL_EXT not defined"
 #endif
 
-// endianness
 void CopyShortSwap(void* dest, void* src);
 void CopyLongSwap(void* dest, void* src);
 short ShortSwap(short l);
@@ -360,7 +338,6 @@ float FloatSwap(const float* f);
 #error "Endianness not defined"
 #endif
 
-// platform string
 #ifdef NDEBUG
 #define PLATFORM_STRING OS_STRING "-" ARCH_STRING
 #else

@@ -19,8 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// tr_init.c -- functions that are not called every frame
-
 #include "tr_local.h"
 
 glconfig_t	glConfig;
@@ -28,7 +26,7 @@ glconfig_t	glConfig;
 qboolean	textureFilterAnisotropic;
 int			maxAnisotropy;
 int			gl_version;
-int			gl_clamp_mode;	// GL_CLAMP or GL_CLAMP_TO_EGGE
+int			gl_clamp_mode;
 
 glstate_t	glState;
 
@@ -56,8 +54,6 @@ cvar_t	*r_zproj;
 cvar_t	*r_stereoSeparation;
 
 cvar_t	*r_skipBackEnd;
-
-//cvar_t	*r_anaglyphMode;
 
 cvar_t	*r_greyscale;
 cvar_t	*r_dither;
@@ -97,7 +93,7 @@ cvar_t	*r_renderWidth;
 cvar_t	*r_renderHeight;
 cvar_t	*r_renderScale;
 cvar_t	*r_ext_supersample;
-#endif // USE_VULKAN
+#endif
 
 cvar_t	*r_dlightBacks;
 
@@ -126,7 +122,6 @@ cvar_t	*r_ext_max_anisotropy;
 
 cvar_t	*r_ignoreGLErrors;
 
-//cvar_t	*r_stencilbits;
 cvar_t	*r_texturebits;
 cvar_t	*r_ext_multisample;
 cvar_t	*r_ext_alpha_to_coverage;
@@ -213,14 +208,6 @@ static sym_t core_procs[] = { QGL_Core_PROCS };
 static sym_t ext_procs[] = { QGL_Ext_PROCS };
 #undef GLE
 
-
-/*
-==================
-R_ResolveSymbols
-
-returns NULL on success or last failed symbol name otherwise
-==================
-*/
 static const char *R_ResolveSymbols( sym_t *syms, int count )
 {
 	int i;
@@ -235,7 +222,6 @@ static const char *R_ResolveSymbols( sym_t *syms, int count )
 	return NULL;
 }
 
-
 static void R_ClearSymbols( sym_t *syms, int count )
 {
 	int i;
@@ -245,7 +231,6 @@ static void R_ClearSymbols( sym_t *syms, int count )
 	}
 }
 
-
 static void R_ClearSymTables( void )
 {
 	R_ClearSymbols( core_procs, ARRAY_LEN( core_procs ) );
@@ -254,8 +239,6 @@ static void R_ClearSymTables( void )
 
 #endif
 
-
-// for modular renderer
 #ifdef USE_RENDERER_DLOPEN
 void QDECL Com_Error( int code, const char *fmt, ... )
 {
@@ -279,24 +262,16 @@ void QDECL Com_Printf( const char *fmt, ... )
 }
 #endif
 
-
 #ifndef USE_VULKAN
-/*
-** R_HaveExtension
-*/
 static qboolean R_HaveExtension( const char *ext )
 {
 	const char *ptr = Q_stristr( gl_extensions, ext );
 	if (ptr == NULL)
 		return qfalse;
 	ptr += strlen(ext);
-	return ((*ptr == ' ') || (*ptr == '\0'));  // verify its complete string.
+	return ((*ptr == ' ') || (*ptr == '\0'));
 }
 
-
-/*
-** R_InitExtensions
-*/
 static void R_InitExtensions( void )
 {
 	GLint max_texture_size = 0;
@@ -308,7 +283,6 @@ static void R_InitExtensions( void )
 		ri.Error( ERR_FATAL, "OpenGL installation is broken. Please fix video drivers and/or restart your system" );
 	}
 
-	// get our config strings
 	Q_strncpyz( glConfig.vendor_string, (char *)qglGetString (GL_VENDOR), sizeof( glConfig.vendor_string ) );
 	Q_strncpyz( glConfig.renderer_string, (char *)qglGetString (GL_RENDERER), sizeof( glConfig.renderer_string ) );
 	len = strlen( glConfig.renderer_string );
@@ -337,17 +311,15 @@ static void R_InitExtensions( void )
 	qglActiveTextureARB = NULL;
 	qglClientActiveTextureARB = NULL;
 
-	gl_clamp_mode = GL_CLAMP; // by default
+	gl_clamp_mode = GL_CLAMP;
 
-	// OpenGL driver constants
 	qglGetIntegerv( GL_MAX_TEXTURE_SIZE, &max_texture_size );
 	glConfig.maxTextureSize = max_texture_size;
 
-	// stubbed or broken drivers may have reported 0...
 	if ( glConfig.maxTextureSize <= 0 )
 		glConfig.maxTextureSize = 0;
 	else if ( glConfig.maxTextureSize > MAX_TEXTURE_SIZE )
-		glConfig.maxTextureSize = MAX_TEXTURE_SIZE; // ResampleTexture() relies on that maximum
+		glConfig.maxTextureSize = MAX_TEXTURE_SIZE;
 
 	if ( !r_allowExtensions->integer )
 	{
@@ -357,7 +329,6 @@ static void R_InitExtensions( void )
 
 	ri.Printf( PRINT_ALL, "Initializing OpenGL extensions\n" );
 
-	// [QL] 0x46b792: GL_ARB_texture_non_power_of_two, core since OpenGL 2.0
 	textureNonPowerOfTwo = ( atoi( glConfig.version_string ) >= 2
 		|| R_HaveExtension( "GL_ARB_texture_non_power_of_two" ) ) ? qtrue : qfalse;
 
@@ -369,7 +340,6 @@ static void R_InitExtensions( void )
 		ri.Printf( PRINT_ALL, S_COLOR_YELLOW "...Degraded texture support likely!\n" );
 	}
 
-	// GL_EXT_texture_compression_s3tc
 	if ( R_HaveExtension( "GL_ARB_texture_compression" ) &&
 		 R_HaveExtension( "GL_EXT_texture_compression_s3tc" ) )
 	{
@@ -383,7 +353,6 @@ static void R_InitExtensions( void )
 		ri.Printf( PRINT_ALL, "...GL_EXT_texture_compression_s3tc not found\n" );
 	}
 
-	// GL_S3_s3tc
 	if ( glConfig.textureCompression == TC_NONE && r_ext_compressed_textures->integer ) {
 		if ( R_HaveExtension( "GL_S3_s3tc" ) ) {
 			if ( r_ext_compressed_textures->integer ) {
@@ -398,7 +367,6 @@ static void R_InitExtensions( void )
 		}
 	}
 
-	// GL_EXT_texture_env_add
 	if ( R_HaveExtension( "EXT_texture_env_add" ) ) {
 		if ( r_ext_texture_env_add->integer ) {
 			glConfig.textureEnvAddAvailable = qtrue;
@@ -411,7 +379,6 @@ static void R_InitExtensions( void )
 		ri.Printf( PRINT_ALL, "...GL_EXT_texture_env_add not found\n" );
 	}
 
-	// GL_ARB_multitexture
 	if ( R_HaveExtension( "GL_ARB_multitexture" ) )
 	{
 		if ( r_ext_multitexture->integer )
@@ -461,7 +428,6 @@ static void R_InitExtensions( void )
 		ri.Printf( PRINT_ALL, "...GL_ARB_multitexture not found\n" );
 	}
 
-	// GL_EXT_compiled_vertex_array
 	if ( R_HaveExtension( "GL_EXT_compiled_vertex_array" ) )
 	{
 		if ( r_ext_compiled_vertex_array->integer )
@@ -510,36 +476,14 @@ static void R_InitExtensions( void )
 }
 #endif
 
-
-/*
-** InitOpenGL
-**
-** This function is responsible for initializing a valid OpenGL subsystem.  This
-** is done by calling GLimp_Init (which gives us a working OGL subsystem) then
-** setting variables, checking GL constants, and reporting the gfx system config
-** to the user.
-*/
 static void InitOpenGL( void )
 {
-	//
-	// initialize OS specific portions of the renderer
-	//
-	// GLimp_Init directly or indirectly references the following cvars:
-	//		- r_fullscreen
-	//		- r_mode
-	//		- r_(color|depth|stencil)bits
-	//		- r_ignorehwgamma
-	//		- r_gamma
-	//
 
 	if ( glConfig.vidWidth == 0 )
 	{
 #ifdef USE_VULKAN
-		// This function is responsible for initializing a valid Vulkan subsystem.
 		VKimp_Init( &glConfig );
 
-		// [QL] a Vulkan device takes images of any size, as retail does with
-		// GL_ARB_texture_non_power_of_two
 		textureNonPowerOfTwo = qtrue;
 
 		gls.windowWidth = glConfig.vidWidth;
@@ -573,7 +517,6 @@ static void InitOpenGL( void )
 
 		vk_initialize();
 
-		// [QL] the post effects know now whether they have frame buffers
 		R_QLPostInit();
 #else
 		const char *err;
@@ -589,13 +532,11 @@ static void InitOpenGL( void )
 		R_InitExtensions();
 #endif
 
-		// GLimp_Init has already looked for hardware gamma
 		gls.deviceSupportsGamma = glConfig.deviceSupportsGamma;
 
 		if ( r_ignorehwgamma->integer )
 			glConfig.deviceSupportsGamma = qfalse;
 
-		// print info
 		GfxInfo();
 
 		gls.initTime = ri.Milliseconds();
@@ -603,7 +544,6 @@ static void InitOpenGL( void )
 
 #ifdef USE_VULKAN
 	if ( !vk.active ) {
-		// might happen after REF_KEEP_WINDOW
 		vk_initialize();
 		gls.initTime = ri.Milliseconds();
 	}
@@ -614,18 +554,11 @@ static void InitOpenGL( void )
 	}
 #endif
 
-	// set default state
 	GL_SetDefaultState();
 
 	tr.inited = qtrue;
 }
 
-
-/*
-==================
-GL_CheckErrors
-==================
-*/
 void GL_CheckErrors( void ) {
 #ifdef USE_VULKAN
 #else
@@ -669,42 +602,6 @@ void GL_CheckErrors( void ) {
 #endif
 }
 
-
-/*
-==============================================================================
-
-						SCREEN SHOTS
-
-NOTE TTimo
-some thoughts about the screenshots system:
-screenshots get written in fs_homepath + fs_gamedir
-vanilla q3 .. baseq3/screenshots/ *.tga
-team arena .. missionpack/screenshots/ *.tga
-
-two commands: "screenshot" and "screenshotJPEG"
-we use statics to store a count and start writing the first screenshot/screenshot????.tga (.jpg) available
-(with FS_FileExists / FS_FOpenFileWrite calls)
-FIXME: the statics don't get a reinit between fs_game changes
-
-==============================================================================
-*/
-
-/*
-==================
-RB_ReadPixels
-
-Reads an image but takes care of alignment issues for reading RGB images.
-
-Reads a minimum offset for where the RGB data starts in the image from
-integer stored at pointer offset. When the function has returned the actual
-offset was written back to address offset. This address will always have an
-alignment of packAlign to ensure efficient copying.
-
-Stores the length of padding after a line of pixels to address padlen
-
-Return value must be freed with ri.Hunk_FreeTempMemory()
-==================
-*/
 static byte *RB_ReadPixels(int x, int y, int width, int height, size_t *offset, int *padlen, int lineAlign )
 {
 #ifdef USE_VULKAN
@@ -715,10 +612,8 @@ static byte *RB_ReadPixels(int x, int y, int width, int height, size_t *offset, 
 
 	linelen = width * 3;
 
-	bufAlign = MAX( packAlign, 16 ); // for SIMD
+	bufAlign = MAX( packAlign, 16 );
 
-	// Allocate a few more bytes so that we can choose an alignment we like
-	//buffer = ri.Hunk_AllocateTempMemory(padwidth * height + *offset + bufAlign - 1);
 	buffer = ri.Hunk_AllocateTempMemory(width * height * 4 + *offset + bufAlign - 1);
 	bufstart = PADP((intptr_t) buffer + *offset, bufAlign);
 
@@ -743,9 +638,8 @@ static byte *RB_ReadPixels(int x, int y, int width, int height, size_t *offset, 
 	else
 		padwidth = PAD(linelen, packAlign);
 
-	bufAlign = MAX( packAlign, 16 ); // for SIMD
+	bufAlign = MAX( packAlign, 16 );
 
-	// Allocate a few more bytes so that we can choose an alignment we like
 	buffer = ri.Hunk_AllocateTempMemory(padwidth * height + *offset + bufAlign - 1);
 	bufstart = PADP((intptr_t) buffer + *offset, bufAlign);
 
@@ -758,12 +652,6 @@ static byte *RB_ReadPixels(int x, int y, int width, int height, size_t *offset, 
 #endif
 }
 
-
-/*
-==================
-RB_TakeScreenshot
-==================
-*/
 void RB_TakeScreenshot( int x, int y, int width, int height, const char *fileName )
 {
 	const int header_size = 18;
@@ -779,14 +667,13 @@ void RB_TakeScreenshot( int x, int y, int width, int height, const char *fileNam
 	buffer = allbuf + offset - header_size;
 
 	Com_Memset( buffer, 0, header_size );
-	buffer[2] = 2;		// uncompressed type
+	buffer[2] = 2;
 	buffer[12] = width & 255;
 	buffer[13] = width >> 8;
 	buffer[14] = height & 255;
 	buffer[15] = height >> 8;
-	buffer[16] = 24;	// pixel size
+	buffer[16] = 24;
 
-	// swap rgb to bgr and remove padding from line endings
 	linelen = width * 3;
 
 	srcptr = destptr = allbuf + offset;
@@ -806,13 +693,11 @@ void RB_TakeScreenshot( int x, int y, int width, int height, const char *fileNam
 			srcptr += 3;
 		}
 
-		// Skip the pad
 		srcptr += padlen;
 	}
 
 	memcount = linelen * height;
 
-	// gamma correction
 	R_GammaCorrect( allbuf + offset, memcount );
 
 	ri.FS_WriteFile( fileName, buffer, memcount + header_size );
@@ -820,12 +705,6 @@ void RB_TakeScreenshot( int x, int y, int width, int height, const char *fileNam
 	ri.Hunk_FreeTempMemory( allbuf );
 }
 
-
-/*
-==================
-RB_TakeScreenshotJPEG
-==================
-*/
 void RB_TakeScreenshotJPEG( int x, int y, int width, int height, const char *fileName )
 {
 	byte *buffer;
@@ -835,20 +714,17 @@ void RB_TakeScreenshotJPEG( int x, int y, int width, int height, const char *fil
 	buffer = RB_ReadPixels(x, y, width, height, &offset, &padlen, 0);
 	memcount = (width * 3 + padlen) * height;
 
-	// gamma correction
 	R_GammaCorrect( buffer + offset, memcount );
 
 	RE_SaveJPG( (char *) fileName, r_screenshotJpegQuality->integer, width, height, buffer + offset, padlen );
 	ri.Hunk_FreeTempMemory( buffer );
 }
 
-
 static void FillBMPHeader( byte *buffer, int width, int height, int memcount, int header_size )
 {
 	int filesize;
 	Com_Memset( buffer, 0, header_size );
 
-	// bitmap file header
 	buffer[0] = 'B';
 	buffer[1] = 'M';
 	filesize = memcount + header_size;
@@ -856,10 +732,9 @@ static void FillBMPHeader( byte *buffer, int width, int height, int memcount, in
 	buffer[3] = (filesize >> 8) & 255;
 	buffer[4] = (filesize >> 16) & 255;
 	buffer[5] = (filesize >> 24) & 255;
-	buffer[10] = header_size; // data offset
+	buffer[10] = header_size;
 
-	// bitmap info header
-	buffer[14] = 40; // size of this header
+	buffer[14] = 40;
 	buffer[18] = (width >> 0) & 255;
 	buffer[19] = (width >> 8) & 255;
 	buffer[20] = (width >> 16) & 255;
@@ -869,35 +744,29 @@ static void FillBMPHeader( byte *buffer, int width, int height, int memcount, in
 	buffer[23] = (height >> 8) & 255;
 	buffer[24] = (height >> 16) & 255;
 	buffer[25] = (height >> 24) & 255;
-	buffer[26] = 1; // number of color planes
-	buffer[28] = 24; // bpp
+	buffer[26] = 1;
+	buffer[28] = 24;
 
 	buffer[34] = (memcount >> 0) & 255;
 	buffer[35] = (memcount >> 8) & 255;
 	buffer[36] = (memcount >> 16) & 255;
 	buffer[37] = (memcount >> 24) & 255;
-	buffer[38] = 0xC4; // horizontal dpi
-	buffer[39] = 0x0E; // horizontal dpi
-	buffer[42] = 0xC4; // vertical dpi
-	buffer[43] = 0x0E; // vertical dpi
+	buffer[38] = 0xC4;
+	buffer[39] = 0x0E;
+	buffer[42] = 0xC4;
+	buffer[43] = 0x0E;
 }
 
-
-/*
-==================
-RB_TakeScreenshotBMP
-==================
-*/
 void RB_TakeScreenshotBMP( int x, int y, int width, int height, const char *fileName, int clipboardOnly )
 {
 	byte *allbuf;
-	byte *buffer; // destination buffer
+	byte *buffer;
 	byte *srcptr, *srcline;
 	byte *destptr, *dstline;
 	byte *endmem;
 	byte temp[4];
 	size_t memcount, offset;
-	const int header_size = 54; // bitmapfileheader(14) + bitmapinfoheader(40)
+	const int header_size = 54;
 	int scanlen, padlen;
 	int scanpad, len;
 
@@ -906,14 +775,11 @@ void RB_TakeScreenshotBMP( int x, int y, int width, int height, const char *file
 	allbuf = RB_ReadPixels( x, y, width, height, &offset, &padlen, 4 );
 	buffer = allbuf + offset;
 
-	// scanline length
 	scanlen = PAD( width*3, 4 );
 	scanpad = scanlen - width*3;
 	memcount = scanlen * height;
 
-	// swap rgb to bgr and add line padding
 	if ( scanpad == 0 && padlen == 0 ) {
-		// fastest case
 		srcptr = destptr = allbuf + offset;
 		endmem = srcptr + scanlen * height;
 		while ( srcptr < endmem ) {
@@ -924,10 +790,8 @@ void RB_TakeScreenshotBMP( int x, int y, int width, int height, const char *file
 			srcptr += 3;
 		}
 	} else {
-		// move destination buffer forward if source padding is greater than for BMP
 		if ( padlen > scanpad )
 			buffer += (width * 3 + padlen - scanlen ) * height;
-		// point on last line
 		srcptr = allbuf + offset + (height-1) * (width * 3 + padlen);
 		destptr = buffer + (height-1) * scanlen;
 		len = (width * 3 - 3);
@@ -949,10 +813,8 @@ void RB_TakeScreenshotBMP( int x, int y, int width, int height, const char *file
 		}
 	}
 
-	// fill this last to avoid data overwrite in case when we're moving destination buffer forward
 	FillBMPHeader( buffer - header_size, width, height, memcount, header_size );
 
-	// gamma correction
 	R_GammaCorrect( buffer, memcount );
 
 	if ( clipboardOnly ) {
@@ -964,14 +826,7 @@ void RB_TakeScreenshotBMP( int x, int y, int width, int height, const char *file
 	ri.Hunk_FreeTempMemory( allbuf );
 }
 
-
-/*
-==================
-R_ScreenshotFilename
-==================
-*/
 static qboolean R_ScreenshotFilename( char *fileName, const char *fileExt ) {
-	// [QL] retail's names: the first free of shot0000 to shot9999, counted per format
 	static int	lastNumber[2] = { 0, 0 };
 	int			*last = &lastNumber[ Q_stricmp( fileExt, "jpg" ) == 0 ];
 	int			a, b, c, d;
@@ -988,7 +843,7 @@ static qboolean R_ScreenshotFilename( char *fileName, const char *fileExt ) {
 	}
 
 	if ( *last == 10000 ) {
-		ri.Printf( PRINT_ALL, "ScreenShot: Couldn't create a file\n" );	// [QL] 0x0052ea6c
+		ri.Printf( PRINT_ALL, "ScreenShot: Couldn't create a file\n" );
 		return qfalse;
 	}
 
@@ -996,17 +851,6 @@ static qboolean R_ScreenshotFilename( char *fileName, const char *fileExt ) {
 	return qtrue;
 }
 
-
-/*
-====================
-RB_TakeLevelShot
-
-[QL] 0x448550: taken at the end of the frame, from the corrected one
-
-levelshots are specialized 128*128 thumbnails for
-the menu system, sampled down from full screen distorted images
-====================
-*/
 void RB_TakeLevelShot( void ) {
 	char		checkname[MAX_OSPATH];
 	byte		*buffer;
@@ -1026,12 +870,11 @@ void RB_TakeLevelShot( void ) {
 
 	buffer = ri.Hunk_AllocateTempMemory(128 * 128*3 + 18);
 	Com_Memset (buffer, 0, 18);
-	buffer[2] = 2;		// uncompressed type
+	buffer[2] = 2;
 	buffer[12] = 128;
 	buffer[14] = 128;
-	buffer[16] = 24;	// pixel size
+	buffer[16] = 24;
 
-	// resample from source
 	xScale = glConfig.vidWidth / 512.0f;
 	yScale = glConfig.vidHeight / 384.0f;
 	for ( y = 0 ; y < 128 ; y++ ) {
@@ -1053,7 +896,6 @@ void RB_TakeLevelShot( void ) {
 		}
 	}
 
-	// gamma correction
 	R_GammaCorrect( buffer + 18, 128 * 128 * 3 );
 
 	ri.FS_WriteFile( checkname, buffer, 128 * 128*3 + 18 );
@@ -1064,19 +906,6 @@ void RB_TakeLevelShot( void ) {
 	ri.Printf( PRINT_ALL, "Wrote %s\n", checkname );
 }
 
-
-/*
-==================
-R_ScreenShot_f
-
-screenshot
-screenshot [silent]
-screenshot [levelshot]
-screenshot [filename]
-
-Doesn't print the pacifier message if there is a second arg
-==================
-*/
 static void R_ScreenShot_f( void ) {
 	char		checkname[MAX_OSPATH];
 	qboolean	silent;
@@ -1103,7 +932,6 @@ static void R_ScreenShot_f( void ) {
 		ext = "tga";
 	}
 
-	// check if already scheduled
 	if ( backEnd.screenshotMask & typeMask )
 		return;
 
@@ -1114,16 +942,13 @@ static void R_ScreenShot_f( void ) {
 	}
 
 	if ( ri.Cmd_Argc() == 2 && !silent ) {
-		// explicit filename
 		Com_sprintf( checkname, MAX_OSPATH, "screenshots/%s.%s", ri.Cmd_Argv( 1 ), ext );
 	} else {
-		// scan for a free filename
 		if ( !R_ScreenshotFilename( checkname, ext ) ) {
 			return;
 		}
 	}
 
-	// we will make screenshot right at the end of RE_EndFrame()
 	backEnd.screenshotMask |= typeMask;
 	if ( typeMask == SCREENSHOT_JPG ) {
 		backEnd.screenShotJPGsilent = silent;
@@ -1134,14 +959,6 @@ static void R_ScreenShot_f( void ) {
 	}
 }
 
-
-//============================================================================
-
-/*
-==================
-RB_TakeVideoFrameCmd
-==================
-*/
 const void *RB_TakeVideoFrameCmd( const void *data )
 {
 	const videoFrameCommand_t *cmd;
@@ -1160,10 +977,8 @@ const void *RB_TakeVideoFrameCmd( const void *data )
 
 	linelen = cmd->width * 3;
 
-	// Alignment stuff for glReadPixels
 	padwidth = PAD(linelen, packAlign);
 	padlen = padwidth - linelen;
-	// AVI line padding
 	avipadwidth = PAD(linelen, AVI_LINE_PADDING);
 	avipadlen = avipadwidth - linelen;
 
@@ -1177,7 +992,6 @@ const void *RB_TakeVideoFrameCmd( const void *data )
 
 	memcount = padwidth * cmd->height;
 
-	// gamma correction
 	R_GammaCorrect( cBuf, memcount );
 
 	if ( cmd->motionJpeg )
@@ -1196,7 +1010,6 @@ const void *RB_TakeVideoFrameCmd( const void *data )
 		destptr = cmd->encodeBuffer;
 		memend = srcptr + memcount;
 
-		// swap R and B and remove line paddings
 		while(srcptr < memend)
 		{
 			lineend = srcptr + linelen;
@@ -1220,12 +1033,6 @@ const void *RB_TakeVideoFrameCmd( const void *data )
 	return (const void *)(cmd + 1);
 }
 
-
-//============================================================================
-
-/*
-** GL_SetDefaultState
-*/
 static void GL_SetDefaultState( void )
 {
 #ifdef USE_VULKAN
@@ -1251,8 +1058,6 @@ static void GL_SetDefaultState( void )
 
 	qglColor4f( 1.0f, 1.0f, 1.0f, 1.0f );
 
-	// initialize downstream texture unit if we're running
-	// in a multitexture environment
 	if ( qglActiveTextureARB )
 	{
 		qglActiveTextureARB( GL_TEXTURE1_ARB );
@@ -1270,17 +1075,12 @@ static void GL_SetDefaultState( void )
 	qglShadeModel( GL_SMOOTH );
 	qglDepthFunc( GL_LEQUAL );
 
-	// the vertex array is always enabled, but the color and texture
-	// arrays are enabled and disabled around the compiled vertex array call
 	qglEnableClientState( GL_VERTEX_ARRAY );
 
 	qglDisableClientState( GL_TEXTURE_COORD_ARRAY );
 	qglDisableClientState( GL_COLOR_ARRAY );
 	qglDisableClientState( GL_NORMAL_ARRAY );
 
-	//
-	// make sure our GL state vector is set correctly
-	//
 	glState.glStateBits = GLS_DEPTHTEST_DISABLE | GLS_DEPTHMASK_TRUE;
 
 	qglPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
@@ -1292,14 +1092,6 @@ static void GL_SetDefaultState( void )
 #endif
 }
 
-
-/*
-================
-R_PrintLongString
-
-Workaround for ri.Printf's 1024 characters buffer limit.
-================
-*/
 static void R_PrintLongString(const char *string) {
 	char buffer[1024];
 	const char *p;
@@ -1315,18 +1107,9 @@ static void R_PrintLongString(const char *string) {
 	}
 }
 
-
-/*
-================
-GfxInfo
-
-Prints persistent rendering configuration
-================
-*/
 static void GfxInfo( void )
 {
 	const char *enablestrings[] = { "disabled", "enabled" };
-	// [ioquakelive] 2 is borderless fullscreen, so that the log says which of the two it is
 	const char *fsstrings[] = { "windowed", "fullscreen", "borderless fullscreen" };
 	const char *fs;
 	int mode;
@@ -1369,7 +1152,6 @@ static void GfxInfo( void )
 	}
 	ri.Printf( PRINT_ALL, " depth: %s\n", vk_format_string( vk.depth_format ) );
 #endif
-	// [QL] quakelive_steam.exe 0x448110: full screen takes r_mode, a window r_windowedMode
 	if ( glConfig.isFullscreen )
 	{
 		mode = ri.Cvar_VariableIntegerValue( "r_mode" );
@@ -1407,14 +1189,6 @@ static void GfxInfo( void )
 #endif
 }
 
-
-/*
-================
-VarInfo
-
-Prints info that may change every R_Init() call
-================
-*/
 static void VarInfo( void )
 {
 	if ( glConfig.deviceSupportsGamma ) {
@@ -1445,18 +1219,11 @@ static void VarInfo( void )
 	}
 }
 
-
-/*
-===============
-GfxInfo_f
-===============
-*/
 static void GfxInfo_f( void )
 {
 	GfxInfo();
 	VarInfo();
 }
-
 
 #ifdef USE_VULKAN
 static void VkInfo_f( void )
@@ -1470,12 +1237,6 @@ static void VkInfo_f( void )
 }
 #endif
 
-
-/*
-===============
-RE_SyncRender
-===============
-*/
 static void RE_SyncRender( void )
 {
 #ifdef USE_VULKAN
@@ -1487,35 +1248,21 @@ static void RE_SyncRender( void )
 #endif
 }
 
-
-/*
-===============
-R_Register
-===============
-*/
 static void R_Register( void )
 {
-	// make sure all the commands added here are also removed in R_Shutdown
-	// [ioquakelive] the map's textures decoded ahead on the workers; 0 loads them one by one
 	r_prefetchTextures = ri.Cvar_Get( "r_prefetchTextures", "1", CVAR_ARCHIVE );
 
-	// [ioquakelive] frames the GPU may have queued; 0 leaves it to the driver, as retail
 	r_maxQueuedFrames = ri.Cvar_Get( "r_maxQueuedFrames", "0", CVAR_ARCHIVE );
 
-	// [QL] the colour r_fastSky clears to, as 0xRRGGBB (0x435d90)
 	r_fastSkyColor = ri.Cvar_Get( "r_fastSkyColor", "0x000000", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE );
-	// [QL] the cloud layer also under the sky box (0x45a9d0)
 	r_drawSkyFloor = ri.Cvar_Get( "r_drawSkyFloor", "1", CVAR_ARCHIVE | CVAR_USERSAVE );
 
-	// [QL] the shape of the screen the mode gives, set by GLimp_SetMode for the UI (0x46ab80)
 	ri.Cvar_Get( "r_aspectRatio", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
 
-	// [QL] GLimp_Init puts the card's names here (0x46c2e0)
 	ri.Cvar_Get( "r_gl_vendor", "None", CVAR_ROM | CVAR_REPLICATE );
 	ri.Cvar_Get( "r_gl_renderer", "None", CVAR_ROM | CVAR_REPLICATE );
 	ri.Cvar_Get( "r_gl_reserved", "0", CVAR_ROM | CVAR_REPLICATE );
 
-	// [QL] retail's own, for features this renderer lacks; nothing reads them
 	ri.Cvar_Get( "r_debugAds", "0", CVAR_TEMP );
 	ri.Cvar_Get( "r_debugFontAtlas", "0", CVAR_TEMP );
 	ri.Cvar_Get( "r_debugShaderIndex", "0", CVAR_CHEAT );
@@ -1550,20 +1297,14 @@ static void R_Register( void )
 	ri.Cmd_AddCommand( "vkinfo", VkInfo_f );
 #endif
 
-	// [QL] the window's cvars, which sdl_glimp.c reads, and the mode table
 	R_RegisterWindowCvars();
 
-	// [QL] the colour correction and the bloom
 	R_QLPostRegister();
 
-	//
-	// temporary latched variables that can only change over a restart
-	//
 	r_fullbright = ri.Cvar_Get( "r_fullbright", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_REPLICATE | CVAR_USERSAVE );
 	ri.Cvar_SetDescription( r_fullbright, "Debugging tool to render the entire level without lighting." );
 	r_overBrightBits = ri.Cvar_Get( "r_overBrightBits", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
 	ri.Cvar_SetDescription( r_overBrightBits, "Sets the intensity of overall brightness of texture pixels." );
-	// [QL] quakelive_steam.exe 0x449800-0x449824: both archived, and the lightmap cap 255 in 0-255
 	r_mapOverBrightBits = ri.Cvar_Get( "r_mapOverBrightBits", "2", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
 	r_mapOverBrightCap = ri.Cvar_GetRange( "r_mapOverBrightCap", "255", "0", "255", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
 	ri.Cvar_SetDescription( r_mapOverBrightBits, "Sets the number of overbright bits baked into all lightmaps and map data." );
@@ -1619,9 +1360,6 @@ static void R_Register( void )
 	r_maxpolyverts = ri.Cvar_Get( "r_maxpolyverts", XSTRING( MAX_POLYVERTS ), CVAR_LATCH );
 	ri.Cvar_SetDescription( r_maxpolyverts, "Maximum number of polygon vertices to draw in a scene." );
 
-	//
-	// archived variables that can change at any time
-	//
 	r_lodCurveError = ri.Cvar_Get( "r_lodCurveError", "250", CVAR_CHEAT );
 	RI_Cvar_CheckRange( r_lodCurveError, "-1", "8192", CV_FLOAT );
 	ri.Cvar_SetDescription( r_lodCurveError, "Level of detail error on curved surface grids. Higher values result in better quality at a distance." );
@@ -1645,7 +1383,7 @@ static void R_Register( void )
 	r_dynamiclight = ri.Cvar_Get( "r_dynamicLight", "1", CVAR_ARCHIVE | CVAR_USERSAVE );
 	ri.Cvar_SetDescription( r_dynamiclight, "Enables dynamic lighting." );
 #ifdef USE_PMLIGHT
-#if arm32 || arm64 // RPi4 Vulkan driver have very poor GLSL shaders performance...
+#if arm32 || arm64
 	r_dlightMode = ri.Cvar_Get( "r_dlightMode", "0", CVAR_ARCHIVE );
 #else
 	r_dlightMode = ri.Cvar_Get( "r_dlightMode", "1", CVAR_ARCHIVE );
@@ -1658,7 +1396,7 @@ static void R_Register( void )
 	r_dlightIntensity = ri.Cvar_Get( "r_dlightIntensity", "1.0", CVAR_ARCHIVE_ND );
 	RI_Cvar_CheckRange( r_dlightIntensity, "0.1", "1", CV_FLOAT );
 	ri.Cvar_SetDescription( r_dlightIntensity, "Adjusts dynamic light intensity but not radius." );
-#endif // USE_PMLIGHT
+#endif
 
 	r_dlightSaturation = ri.Cvar_Get( "r_dlightSaturation", "1", CVAR_ARCHIVE_ND );
 	RI_Cvar_CheckRange( r_dlightSaturation, "0", "1", CV_FLOAT );
@@ -1684,14 +1422,10 @@ static void R_Register( void )
 	r_railSegmentLength = ri.Cvar_Get( "r_railSegmentLength", "32", CVAR_ARCHIVE | CVAR_USERSAVE );
 	ri.Cvar_SetDescription( r_railSegmentLength, "Length of segments in railgun trails." );
 
-	// [QL] 0x449031: 10 in 1-100; 0x44ab56 scales the grid's ambient by it
 	r_ambientScale = ri.Cvar_GetRange( "r_ambientScale", "10", "1", "100", CVAR_REPLICATE | CVAR_USERSAVE );
 	ri.Cvar_SetDescription( r_ambientScale, "Light grid ambient light scaling on entity models." );
 	r_directedScale = ri.Cvar_Get( "r_directedScale", "1", CVAR_CHEAT );
 	ri.Cvar_SetDescription( r_directedScale, "Light grid direct light scaling on entity models." );
-
-	//r_anaglyphMode = ri.Cvar_Get( "r_anaglyphMode", "0", CVAR_ARCHIVE_ND | CVAR_LATCH );
-	//ri.Cvar_SetDescription( r_anaglyphMode, "Enable rendering of anaglyph images. Valid options for 3D glasses types:\n 0: Disabled\n 1: Red-cyan\n 2: Red-blue\n 3: Red-green\n 4: Green-magenta" );
 
 	r_greyscale = ri.Cvar_Get( "r_greyscale", "0", CVAR_ARCHIVE_ND );
 	RI_Cvar_CheckRange( r_greyscale, "-1", "1", CV_FLOAT );
@@ -1707,9 +1441,6 @@ static void R_Register( void )
 	RI_Cvar_CheckRange( r_presentBits, "16", "30", CV_INTEGER );
 	ri.Cvar_SetDescription( r_presentBits, "Select color bits used for presentation surfaces\nRequires " S_COLOR_CYAN "\\r_fbo 1." );
 
-	//
-	// temporary variables that can change at any time
-	//
 	r_showImages = ri.Cvar_Get( "r_showImages", "0", CVAR_TEMP );
 	ri.Cvar_SetDescription( r_showImages, "Draw all images currently loaded into memory:\n 0: Disabled\n 1: Show images set to uniform size\n 2: Show images with scaled relative to largest image" );
 
@@ -1743,7 +1474,6 @@ static void R_Register( void )
 	r_skipBackEnd = ri.Cvar_Get ("r_skipBackEnd", "0", CVAR_CHEAT);
 	ri.Cvar_SetDescription( r_skipBackEnd, "Skips loading rendering backend." );
 
-	// [QL] 10 in 1-50, not cheat protected in retail
 	r_lodscale = ri.Cvar_GetRange( "r_lodScale", "10", "1", "50", CVAR_USERSAVE );
 	ri.Cvar_SetDescription( r_lodscale, "Set scale for level of detail adjustment." );
 	r_norefresh = ri.Cvar_Get ("r_norefresh", "0", CVAR_CHEAT);
@@ -1807,9 +1537,6 @@ static void R_Register( void )
 	if ( glConfig.vidWidth )
 		return;
 
-	//
-	// latched and archived variables that can only change over a vid_restart
-	//
 	r_allowExtensions = ri.Cvar_Get( "r_allowExtensions", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	ri.Cvar_SetDescription( r_allowExtensions, "Use all of the OpenGL extensions your card is capable of." );
 	r_ext_compressed_textures = ri.Cvar_Get( "r_ext_compressed_textures", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
@@ -1829,7 +1556,6 @@ static void R_Register( void )
 	RI_Cvar_CheckRange( r_ext_max_anisotropy, "1", NULL, CV_INTEGER );
 	ri.Cvar_SetDescription( r_ext_max_anisotropy, "Sets maximum anisotropic level for your graphics driver. Requires \\r_ext_texture_filter_anisotropic." );
 
-	//r_stencilbits = ri.Cvar_Get( "r_stencilbits", "8", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	r_ignorehwgamma = ri.Cvar_Get( "r_ignorehwgamma", "0", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	RI_Cvar_CheckRange( r_ignorehwgamma, "0", "1", CV_INTEGER );
 	ri.Cvar_SetDescription( r_ignorehwgamma, "Overrides hardware gamma capabilities." );
@@ -1839,8 +1565,6 @@ static void R_Register( void )
 	r_showsky = ri.Cvar_Get( "r_showsky", "0", CVAR_CHEAT );
 	ri.Cvar_SetDescription( r_showsky, "Forces sky in front of all surfaces." );
 #ifdef USE_VULKAN
-	// [ioquakelive] the driver holds the frame back so the input is read as late as it can be.
-	// chapter 4 of NVIDIA's guide asks for it on by default; a card without it pays nothing
 	r_lowLatency = ri.Cvar_Get( "r_lowLatency", "1", CVAR_ARCHIVE_ND );
 	RI_Cvar_CheckRange( r_lowLatency, "0", "2", CV_INTEGER );
 	ri.Cvar_SetDescription( r_lowLatency, "Low latency mode, when the driver has it:\n" \
@@ -1856,7 +1580,6 @@ static void R_Register( void )
 		" -2 - first integrated GPU" );
 	r_device->modified = qfalse;
 
-	// [QL] retail draws offscreen while the post effects are on
 	r_fbo = ri.Cvar_Get( "r_fbo", "1", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	ri.Cvar_SetDescription( r_fbo, "Use framebuffer objects, enables gamma correction in windowed mode and allows arbitrary video size and screenshot/video capture.\n Required for bloom, HDR rendering, anti-aliasing and greyscale effects." );
 	r_hdr = ri.Cvar_Get( "r_hdr", "0", CVAR_ARCHIVE | CVAR_LATCH );
@@ -1893,16 +1616,11 @@ static void R_Register( void )
 		" 2 - nearest filtering, preserve aspect ratio (black bars on sides)\n"
 		" 3 - linear filtering, stretch to full size\n"
 		" 4 - linear filtering, preserve aspect ratio (black bars on sides)\n" );
-#endif // USE_VULKAN
+#endif
 }
 
 #define EPSILON 1e-6f
 
-/*
-===============
-R_Init
-===============
-*/
 void R_Init( void ) {
 #ifndef USE_VULKAN
 	int	err;
@@ -1912,7 +1630,6 @@ void R_Init( void ) {
 
 	ri.Printf( PRINT_ALL, "----- R_Init -----\n" );
 
-	// clear all our internal state
 	Com_Memset( &tr, 0, sizeof( tr ) );
 	Com_Memset( &backEnd, 0, sizeof( backEnd ) );
 	Com_Memset( &tess, 0, sizeof( tess ) );
@@ -1926,9 +1643,6 @@ void R_Init( void ) {
 	}
 	Com_Memset( tess.constantColor255, 255, sizeof( tess.constantColor255 ) );
 
-	//
-	// init function tables
-	//
 	for ( i = 0; i < FUNCTABLE_SIZE; i++ ) {
 		tr.sinTable[i] = sin( DEG2RAD( i * 360.0f / FUNCTABLE_SIZE ) + 0.0001f );
 		tr.squareTable[i] = (i < FUNCTABLE_SIZE / 2) ? 1.0f : -1.0f;
@@ -1996,18 +1710,6 @@ void R_Init( void ) {
 	ri.Printf( PRINT_ALL, "----- finished R_Init -----\n" );
 }
 
-
-/*
-=====================
-RE_WindowResized
-
-[ioquakelive] The window was dragged to another size. Retail answers this with its own
-"vid_restart fast" (quakelive_steam.exe 0x004bb7e0), which keeps the modules and the loaded
-media and only does the window over; here the same idea is the swapchain and everything made
-from it, which vk_window_resized rebuilds. r_noFastRestart, which retail reads in that very
-place, sends it back to restarting the video instead
-=====================
-*/
 static qboolean RE_WindowResized( int width, int height )
 {
 	if ( width <= 0 || height <= 0 || ri.Cvar_VariableIntegerValue( "r_noFastRestart" ) ) {
@@ -2034,17 +1736,6 @@ static qboolean RE_WindowResized( int width, int height )
 	return qtrue;
 }
 
-
-/*
-=====================
-RE_ApplyVideoMode
-
-[QL] The window takes the mode the cvars ask for -- full screen or not, and at what size --
-without the renderer being loaded again, which is the renderer's part of retail's
-"vid_restart fast". Getting the window cvars again is what applies the latched ones, and what
-hangs off the size is made again the same way dragging the window does it
-=====================
-*/
 static qboolean RE_ApplyVideoMode( glconfig_t *config )
 {
 	int width, height;
@@ -2059,7 +1750,7 @@ static qboolean RE_ApplyVideoMode( glconfig_t *config )
 		return qfalse;
 	}
 
-	gls.windowWidth = 0;	// so the size below is taken even when the window kept it
+	gls.windowWidth = 0;
 
 	if ( !RE_WindowResized( width, height ) ) {
 		return qfalse;
@@ -2070,14 +1761,7 @@ static qboolean RE_ApplyVideoMode( glconfig_t *config )
 	return qtrue;
 }
 
-
-/*
-===============
-RE_Shutdown
-===============
-*/
 static void RE_Shutdown( qboolean destroyWindow ) {
-	// the engine only says whether the window goes; Quake3e's codes, from what that means
 	refShutdownCode_t code = destroyWindow ? REF_UNLOAD_DLL : REF_KEEP_CONTEXT;
 
 	ri.Printf( PRINT_ALL, "RE_Shutdown( %i )\n", code );
@@ -2096,16 +1780,12 @@ static void RE_Shutdown( qboolean destroyWindow ) {
 	ri.Cmd_RemoveCommand( "vkinfo" );
 #endif
 
-	//if ( tr.registered ) {
-		//R_IssuePendingRenderCommands();
 		R_DeleteTextures();
-	//}
 
 	R_FontShutdown();
 #ifdef USE_VULKAN
 	vk_release_resources();
 #endif
-
 
 #ifdef USE_VULKAN
 	if ( r_device->modified ) {
@@ -2113,7 +1793,6 @@ static void RE_Shutdown( qboolean destroyWindow ) {
 	}
 #endif
 
-	// shut down platform specific OpenGL/Vulkan stuff
 	if ( code != REF_KEEP_CONTEXT ) {
 #ifdef USE_VULKAN
 		vk_shutdown( code );
@@ -2143,21 +1822,11 @@ static void RE_Shutdown( qboolean destroyWindow ) {
 	tr.inited = qfalse;
 }
 
-
-/*
-=============
-RE_EndRegistration
-
-Touch all images to make sure they are resident
-=============
-*/
 static void RE_EndRegistration( void ) {
-	R_PrefetchFinish();			// [ioquakelive] releases what is left over and writes the list
-	R_ImageLoadStatsReport();	// [ioquakelive] see RE_BeginRegistration
+	R_PrefetchFinish();
+	R_ImageLoadStatsReport();
 #ifdef USE_VULKAN
 	vk_wait_idle();
-	// command buffer is not in recording state at this stage
-	// so we can't issue RB_ShowImages() there
 #else
 	R_IssuePendingRenderCommands();
 	if ( !ri.Sys_LowPhysicalMemory() ) {
@@ -2166,12 +1835,6 @@ static void RE_EndRegistration( void ) {
 #endif
 }
 
-
-/*
-@@@@@@@@@@@@@@@@@@@@@
-GetRefAPI
-@@@@@@@@@@@@@@@@@@@@@
-*/
 #ifdef USE_RENDERER_DLOPEN
 Q_EXPORT refexport_t* QDECL GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 #else
@@ -2190,8 +1853,6 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 		return NULL;
 	}
 
-	// [ioquakelive] a machine where Vulkan cannot run gets no Vulkan renderer: the client goes on
-	// with OpenGL rather than the game closing with an error
 	{
 		char reason[256];
 
@@ -2200,8 +1861,6 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 			return NULL;
 		}
 	}
-
-	// the RE_ functions are Renderer Entry points
 
 	re.Shutdown = RE_Shutdown;
 
@@ -2239,7 +1898,6 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 
 	re.Get_Advertisements = RE_Get_Advertisements;
 
-	// [QL] the TrueType text
 	re.RegisterFont = RE_RegisterFont;
 	re.Font_DrawString = RE_Font_DrawString;
 	re.TextBounds = RE_TextBounds;
@@ -2253,7 +1911,6 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 
 	re.TakeVideoFrame = RE_TakeVideoFrame;
 
-	// [QL] the bloom, which the cgame puts around the 3D view
 	re.BeginBloomScene = RE_BeginBloomScene;
 	re.ApplyBloom = RE_ApplyBloom;
 	re.LowLatencyWait = vk_low_latency_input;

@@ -19,15 +19,10 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// tr_font.c -- [QL] truetype text through fontstash; the atlas is RGBA here, GL_ALPHA in retail
-//
-
 #include "tr_local.h"
 #include "../renderercommon/tr_fontstash.h"
 #include "../renderercommon/tr_stbtt.h"
 
-// the 2D colour, kept by RE_SetColor: text is drawn in the colour set before it
 vec4_t g_fontColor2D = { 1.0f, 1.0f, 1.0f, 1.0f };
 
 #define FONT_ATLAS_INIT 512
@@ -40,22 +35,16 @@ static qhandle_t fontShader;
 static int fontAtlasWidth;
 static int fontAtlasHeight;
 
-// FONT_DEFAULT 0, FONT_SANS 1 and FONT_MONO 2, then the fonts RE_Font_Register loads
 #define MAX_FONT_INDICES 32
 static int fontIndexToId[MAX_FONT_INDICES];
 static char fontIndexPath[MAX_FONT_INDICES][MAX_QPATH];
 static int numFontIndices;
-// [ioquakelive] What a font falls back on, in the order it is tried. Handel Gothic has 231 glyphs
-// and Quake Live's own fallback is CJK, without so much as an accented latin letter, so a name
-// with anything out of the ordinary came out in dots -- in retail too. The first and the last ship
-// in pak00; the rest ride in pak01, and between them they draw the letters and the symbols the
-// "name style" pages hand out. A font that is not there is skipped
 static const char *fallbackFontPaths[] = {
-	"fonts/notosans-regular.ttf",					// latin extended, greek, cyrillic, currency
-	"fonts/notosans-latinext.ttf",					// what that one lacks, latin extended E among it
-	"fonts/notosanssymbols-regular.ttf",			// stars, ticks, scissors, circled numbers
-	"fonts/notosanssymbols2-regular.ttf",			// shapes, boxes, card suits, dingbats
-	"fonts/notosansmath-regular.ttf",				// the operators and the double arrows
+	"fonts/notosans-regular.ttf",
+	"fonts/notosans-latinext.ttf",
+	"fonts/notosanssymbols-regular.ttf",
+	"fonts/notosanssymbols2-regular.ttf",
+	"fonts/notosansmath-regular.ttf",
 	"fonts/notosanshebrew-regular.ttf",
 	"fonts/notosanssyriac-regular.ttf",
 	"fonts/notosansmongolian-regular.ttf",
@@ -67,7 +56,7 @@ static const char *fallbackFontPaths[] = {
 	"fonts/notosansvai-regular.ttf",
 	"fonts/notosansbatak-regular.ttf",
 	"fonts/notosansegyptianhieroglyphs-regular.ttf",
-	"fonts/notosanscanadianaboriginal-regular.ttf",		// the syllabics half of those names are made of
+	"fonts/notosanscanadianaboriginal-regular.ttf",
 	"fonts/notosanscherokee-regular.ttf",
 	"fonts/notosansrunic-regular.ttf",
 	"fonts/notosanstifinagh-regular.ttf",
@@ -87,12 +76,11 @@ static const char *fallbackFontPaths[] = {
 	"fonts/notosansbuginese-regular.ttf",
 	"fonts/notosanstagalog-regular.ttf",
 	"fonts/notosansbamum-regular.ttf",
-	"fonts/notoemoji-regular.ttf",			// the emoji, in the colour of the text around them
-	"fonts/droidsansfallbackfull.ttf",				// CJK and the kana, last: it is the biggest
+	"fonts/notoemoji-regular.ttf",
+	"fonts/droidsansfallbackfull.ttf",
 };
 static int fallbackFontIds[ARRAY_LEN( fallbackFontPaths )];
 
-// the fallbacks of a font, in the order they are tried
 static void R_Font_AddFallbacks( int id ) {
 	int i;
 
@@ -106,7 +94,6 @@ static void R_Font_AddFallbacks( int id ) {
 	}
 }
 
-// the input method's composition font
 static int imeCompositionFont;
 static float imeCompositionScale;
 
@@ -123,17 +110,6 @@ static unsigned int R_Font_PackColor( const vec4_t c ) {
 	return (unsigned int)r | ( (unsigned int)g << 8 ) | ( (unsigned int)b << 16 ) | ( (unsigned int)a << 24 );
 }
 
-/*
-===============================================================================
-
-THE ATLAS
-
-fontstash's five render calls, as retail's NanoVG shim answers them.
-
-===============================================================================
-*/
-
-// a Vulkan image cannot grow, so it takes the atlas's largest size and fontstash uses a corner
 static void R_Font_DefineAtlas( int width, int height ) {
 	fontAtlasWidth = width;
 	fontAtlasHeight = height;
@@ -166,12 +142,10 @@ static int RB_Font_renderResize( void *uptr, int width, int height ) {
 	if ( !fontImage ) {
 		return RB_Font_renderCreate( uptr, width, height );
 	}
-	// fontstash marks every glyph dirty, so they are uploaded again
 	R_Font_DefineAtlas( width, height );
 	return 1;
 }
 
-// the coverage goes into the alpha of white texels
 static void RB_Font_renderUpdate( void *uptr, int *rect, const unsigned char *data ) {
 	int w = rect[2] - rect[0];
 	int h = rect[3] - rect[1];
@@ -198,7 +172,6 @@ static void RB_Font_renderUpdate( void *uptr, int *rect, const unsigned char *da
 	ri.Hunk_FreeTempMemory( rgba );
 }
 
-// each glyph is two triangles, six vertices, whose first two are its corners
 static void RB_Font_renderDraw( void *uptr, const float *verts, const float *tcoords, const unsigned int *colors, int nverts ) {
 	unsigned int lastColor = 0;
 	qboolean haveColor = qfalse;
@@ -240,7 +213,6 @@ static void RB_Font_renderDraw( void *uptr, const float *verts, const float *tco
 	}
 }
 
-// the image and its shader belong to the image manager and go with vid_restart
 static void RB_Font_renderDelete( void *uptr ) {
 	(void)uptr;
 	fontImage = NULL;
@@ -249,7 +221,6 @@ static void RB_Font_renderDelete( void *uptr ) {
 	fontAtlasHeight = 0;
 }
 
-// a full atlas doubles, up to retail's 2048x1024, and at that size starts over
 static void R_Font_HandleError( void *uptr, int error, int val ) {
 	FONScontext *ctx = (FONScontext *)uptr;
 	int w, h;
@@ -274,14 +245,6 @@ static void R_Font_HandleError( void *uptr, int error, int val ) {
 	fonsExpandAtlas( ctx, w, h );
 }
 
-/*
-===============================================================================
-
-LOADING
-
-===============================================================================
-*/
-
 static int R_Font_LoadTTF( const char *path, const char *name ) {
 	void *buffer = NULL;
 	unsigned char *copy;
@@ -295,14 +258,12 @@ static int R_Font_LoadTTF( const char *path, const char *name ) {
 		return FONS_INVALID;
 	}
 
-	// [ioquakelive] only TrueType outlines are read: an OpenType font with CFF ones took the game down
 	if ( len >= 4 && !memcmp( buffer, "OTTO", 4 ) ) {
 		ri.FS_FreeFile( buffer );
 		ri.Printf( PRINT_WARNING, "font '%s' has CFF outlines, which are not read; a TrueType one is needed\n", path );
 		return FONS_INVALID;
 	}
 
-	// fontstash keeps the font for as long as the context lives, so it gets its own copy
 	copy = (unsigned char *)malloc( len );
 	if ( !copy ) {
 		ri.FS_FreeFile( buffer );
@@ -319,11 +280,9 @@ static int R_Font_LoadTTF( const char *path, const char *name ) {
 	return id;
 }
 
-// [ioquakelive] the colour emoji: the pictures in emoji/, named by their codepoints. fontstash
-// matches them in the text; each shader is registered the first time its emoji is drawn
 #define MAX_EMOJI_NAME 80
 static char (*emojiNames)[MAX_EMOJI_NAME];
-static qhandle_t *emojiShaders;  // 0 until drawn, -1 when the picture would not load
+static qhandle_t *emojiShaders;
 static int numEmoji;
 
 static void R_Font_LoadEmoji( void ) {
@@ -368,7 +327,6 @@ static void R_Font_FreeEmoji( void ) {
 	numEmoji = 0;
 }
 
-// in white, so the picture keeps its colours, and with the text's alpha, so it fades with it
 static void RB_Font_renderEmoji( void *uptr, float x0, float y0, float x1, float y1, unsigned int color, int emoji ) {
 	vec4_t rgba;
 
@@ -381,7 +339,7 @@ static void RB_Font_renderEmoji( void *uptr, float x0, float y0, float x1, float
 		char name[MAX_QPATH];
 
 		Com_sprintf( name, sizeof( name ), "emoji/%s.png", emojiNames[emoji] );
-		emojiShaders[emoji] = RE_RegisterShaderNoMip( name );  // a picture on the 2D layer: no picmip
+		emojiShaders[emoji] = RE_RegisterShaderNoMip( name );
 		if ( !emojiShaders[emoji] ) {
 			emojiShaders[emoji] = -1;
 		}
@@ -397,13 +355,6 @@ static void RB_Font_renderEmoji( void *uptr, float x0, float y0, float x1, float
 	RE_SetColor( NULL );
 }
 
-/*
-===============
-R_InitFonts
-
-[QL] the menus' three fonts, and droidsansfallbackfull for the glyphs they lack
-===============
-*/
 void R_InitFonts( void ) {
 	FONSparams params;
 	int normal, sans, mono, i;
@@ -472,15 +423,6 @@ void R_FontShutdown( void ) {
 	}
 }
 
-/*
-===============
-RE_Font_Register
-
-A TrueType or OpenType font from the game's files, for RE_Font_DrawString and RE_TextBounds;
-returns its index, or -1. "rajdhani", "fonts/rajdhani" and "fonts/rajdhani.ttf" name the same
-file, and a bare name also tries .otf. A font already loaded gives back its index.
-===============
-*/
 int RE_Font_Register( const char *name ) {
 	char paths[2][MAX_QPATH];
 	const char *dir;
@@ -545,7 +487,6 @@ static void R_FontListFiles( const char *extension ) {
 	ri.FS_FreeFileList( files );
 }
 
-// fontlist: the fonts loaded, then the ones a cvar can name
 void R_FontList_f( void ) {
 	int i;
 
@@ -559,14 +500,6 @@ void R_FontList_f( void ) {
 	R_FontListFiles( ".otf" );
 }
 
-/*
-===============================================================================
-
-THE ENTRY POINTS
-
-===============================================================================
-*/
-
 static int R_Font_ResolveId( int fontIndex ) {
 	if ( fontIndex < 0 || fontIndex >= numFontIndices ) {
 		return numFontIndices > 0 ? fontIndexToId[0] : 0;
@@ -574,7 +507,6 @@ static int R_Font_ResolveId( int fontIndex ) {
 	return fontIndexToId[fontIndex];
 }
 
-// [CPMA] cl_extendedColors, registered by the client
 static void R_Font_SetColorCodes( void ) {
 	static cvar_t *extendedColors;
 
@@ -584,7 +516,6 @@ static void R_Font_SetColorCodes( void ) {
 	fonsSetExtendedColors( extendedColors->integer );
 }
 
-// [QL] retail sets no alignment, so y is the baseline, as .menu's textaligny takes it
 void RE_Font_DrawString( int x, int y, const char *text, int fontIndex, float scale, int limit, float *maxX, int flags ) {
 	const char *end = NULL;
 
@@ -599,7 +530,6 @@ void RE_Font_DrawString( int x, int y, const char *text, int fontIndex, float sc
 	fonsSetBlur( fontContext, 0.0f );
 	fonsSetColor( fontContext, R_Font_PackColor( g_fontColor2D ) );
 
-	// limit counts characters, taken here as bytes, which is exact for ASCII
 	if ( limit > 0 && (int)strlen( text ) > limit ) {
 		end = text + limit;
 	}
@@ -608,13 +538,6 @@ void RE_Font_DrawString( int x, int y, const char *text, int fontIndex, float sc
 	fonsDrawText( fontContext, (float)x, (float)y, text, end, flags, maxX );
 }
 
-/*
-===============
-RE_TextBounds
-
-[QL] 0x43cc50: extents[4] is the ascender at this size, the height the game uses (0x43ccb8)
-===============
-*/
 void RE_TextBounds( const char *text, int start, int fontIndex, float scale, int limit, float *extents ) {
 	const char *str, *end;
 
@@ -656,7 +579,6 @@ void RE_GetGlyphInfo( int fontIndex, int charValue, glyphInfo_t *out ) {
 		return;
 	}
 
-	// the code point as UTF-8
 	if ( cp < 0x80 ) {
 		buf[n++] = (char)cp;
 	} else if ( cp < 0x800 ) {
@@ -692,7 +614,6 @@ void RE_SetCompositionFont( int fontIndex, float scale ) {
 	imeCompositionScale = scale;
 }
 
-// [QL] retail's RE_RegisterFont does nothing: its fonts load in R_InitFonts
 void RE_RegisterFont( const char *fontName, int pointSize, fontInfo_t *font ) {
 	(void)fontName;
 	(void)pointSize;

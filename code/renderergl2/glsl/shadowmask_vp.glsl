@@ -4,7 +4,7 @@ attribute vec4 attr_TexCoord0;
 uniform vec3   u_ViewForward;
 uniform vec3   u_ViewLeft;
 uniform vec3   u_ViewUp;
-uniform vec4   u_ViewInfo; // zfar / znear
+uniform vec4   u_ViewInfo;
 
 varying vec2   var_DepthTex;
 varying vec3   var_ViewDir;

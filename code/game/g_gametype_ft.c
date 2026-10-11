@@ -1,22 +1,5 @@
-/*
- * g_gametype_ft.c -- Freeze Tag (GT_FREEZETAG) round state machine
- *
- * Ported from ql-decompiled/game/g_freeze.c (Quake Live build 1069)
- *
- * Players are frozen (PM_FREEZE) instead of killed. Teammates can thaw
- * frozen allies by standing near them. Round ends when all members of
- * one team are frozen.
- */
 #include "g_local.h"
 
-// ============================================================================
-// Helper stubs (same as CA)
-// ============================================================================
-// [QL] byte-faithful to the shared binary TeamCount_Health (0x1006b100): for
-// every connected player whose ps.pm_type == PM_NORMAL, add the *gentity*
-// ->health (ent+0x320) to healthTotals[sessionTeam]. The binary sums ent->health
-// only, NOT ps.stats[STAT_HEALTH] + ps.stats[STAT_ARMOR]. aliveCounts is unused
-// here (the caller fills it separately via Team_LivingTeamCounts/UpdateTeamAliveCount).
 static void TeamCount_Health_FT(int *aliveCounts, int *healthTotals) {
     int i;
     (void)aliveCounts;
@@ -41,13 +24,6 @@ static const char *FT_TeamColor(int team) {
 
 void Freeze_RoundStateTransition(void);
 
-// ============================================================================
-// Freeze_GetRoundState (binary: 0x1004bdf0)
-//
-// Advance the round state if the pending timer has elapsed, then return the
-// current round state. Returns -1 while the timer is still counting down.
-// Same shape as CA_GetRoundState.
-// ============================================================================
 int Freeze_GetRoundState(void) {
     if (level.roundState.tNext != 0) {
         if (level.time < level.roundState.tNext)
@@ -60,14 +36,6 @@ int Freeze_GetRoundState(void) {
     return level.roundState.eCurrent;
 }
 
-// ============================================================================
-// Freeze_TeamFrozen (binary: 0x1004c0d0, .so Freeze_TeamFrozen)
-//
-// Returns qtrue if all players on the given team are frozen.
-// [QL] byte-faithful: the binary's "not frozen" test is ps.powerups[PW_FREEZE]
-// (ps+0x17c) == 0, NOT stats[STAT_HEALTH] > 0. A frozen player carries
-// powerups[PW_FREEZE] == 0x7fffffff; only that field distinguishes frozen.
-// ============================================================================
 qboolean Freeze_TeamFrozen(int team) {
     int i;
     for (i = 0; i < level.maxclients; i++) {
@@ -81,14 +49,7 @@ qboolean Freeze_TeamFrozen(int team) {
     return qtrue;
 }
 
-// ============================================================================
-// Freeze_GameIsOver
-//
-// Check if the freeze round is over. Uses alive counts, frozen status,
-// and optional round time limit. Sets prevRoundWinningTeam.
-// ============================================================================
 qboolean Freeze_GameIsOver(int *aliveCounts, int *healthTotals) {
-    // Round time limit check
     if (roundtimelimit.integer != 0 &&
         roundtimelimit.integer * 1000 <= level.time - level.roundState.startTime) {
         if (g_roundDrawLivingCount.integer != 0) {
@@ -115,7 +76,6 @@ qboolean Freeze_GameIsOver(int *aliveCounts, int *healthTotals) {
         return qtrue;
     }
 
-    // Check alive counts
     if (aliveCounts[TEAM_RED] == 0 && aliveCounts[TEAM_BLUE] == 0) {
         level.roundState.prevRoundWinningTeam = TEAM_FREE;
         return qtrue;
@@ -129,7 +89,6 @@ qboolean Freeze_GameIsOver(int *aliveCounts, int *healthTotals) {
         return qtrue;
     }
 
-    // Check frozen status (team frozen = all health <= 0)
     {
         qboolean redFrozen = Freeze_TeamFrozen(TEAM_RED);
         qboolean blueFrozen = Freeze_TeamFrozen(TEAM_BLUE);
@@ -151,11 +110,6 @@ qboolean Freeze_GameIsOver(int *aliveCounts, int *healthTotals) {
     return qfalse;
 }
 
-// ============================================================================
-// Freeze_RoundStateTransition
-//
-// Handle state transitions for Freeze Tag rounds.
-// ============================================================================
 void Freeze_RoundStateTransition(void) {
     int i;
 
@@ -174,9 +128,6 @@ void Freeze_RoundStateTransition(void) {
         return;
 
     case RS_COUNTDOWN:
-        // [QL] 0x1004c1b0, case 1. The frozen and the dead come back for the new round (the winners' frozen
-        // ones only with g_freezeThawWinningTeam), and the g_freezeReset*OnRound cvars start the
-        // others over; with g_freezeRoundDelay everybody waits where they stand
         for (i = 0; i < level.maxclients; i++) {
             gclient_t *cl = &level.clients[i];
             gentity_t *ent = &g_entities[i];
@@ -194,7 +145,6 @@ void Freeze_RoundStateTransition(void) {
                 ClientSpawn(ent);
             }
 
-            // the powerups held run out in three seconds (quad to invisibility, not flight)
             if (g_freezeRemovePowerupsOnRound.integer) {
                 int j;
                 for (j = PW_QUAD; j <= PW_INVIS; j++) {
@@ -234,7 +184,6 @@ void Freeze_RoundStateTransition(void) {
 
             if (g_freezeRoundDelay.integer) {
                 cl->ps.pm_flags |= PMF_FROZEN;
-                // the weapons are dealt again: dropweapon, held back since the round ended, is back
                 if (g_freezeResetWeaponsOnRound.integer && level.ftDropCmdsSuspended) {
                     level.ftDropCmdsSuspended = qfalse;
                     trap_Cvar_Set("g_dropCmds", va("%i", g_dropCmds.integer | 4));
@@ -242,7 +191,6 @@ void Freeze_RoundStateTransition(void) {
             }
         }
 
-        // the powerups left on the ground go away
         if (g_freezeRemovePowerupsOnRound.integer) {
             gentity_t *mapEnt;
             for (mapEnt = &g_entities[0]; mapEnt < &g_entities[MAX_GENTITIES]; mapEnt++) {
@@ -257,9 +205,6 @@ void Freeze_RoundStateTransition(void) {
         Team_LivingTeamCounts(NULL, NULL);
         level.roundState.round = level.teamScores[TEAM_BLUE] + 1 + level.teamScores[TEAM_RED];
 
-        // [QL] 0x1004c547: without g_freezeRoundDelay the round starts four seconds later and the
-        // players are not held; with it, after that delay (g_roundWarmupDelay for the first round),
-        // or at once if it comes to nothing
         if (!g_freezeRoundDelay.integer) {
             level.roundState.tNext = level.time + 4000;
             level.roundState.eNext = RS_PLAYING;
@@ -296,7 +241,6 @@ void Freeze_RoundStateTransition(void) {
                 cl->round_shots = 0;
                 cl->expandedStats.killStreak = 0;
                 if (g_spawnArmor.integer != 0) {
-                    // [QL] binary writes powerups[PW_NONE] (client+0x140), not PW_QUAD (+0x150)
                     cl->ps.powerups[PW_NONE] =
                         (level.time / 1000) * 1000 + g_spawnArmor.integer;
                 }
@@ -313,8 +257,6 @@ void Freeze_RoundStateTransition(void) {
         int aliveCounts[4] = {0}, healthTotals[4] = {0};
         int delay;
 
-        // [QL] 0x1004c6f4: with g_freezeRoundDelay everybody is held, and while the weapons are
-        // dealt again dropweapon is held back too
         for (i = 0; i < level.maxclients; i++) {
             gclient_t *cl = &level.clients[i];
             if (cl->pers.connected == CON_CONNECTED &&
@@ -327,7 +269,6 @@ void Freeze_RoundStateTransition(void) {
             }
         }
 
-        // Award team score
         if (winTeam == TEAM_RED) {
             level.teamScores[TEAM_RED]++;
         } else if (winTeam == TEAM_BLUE) {
@@ -337,9 +278,6 @@ void Freeze_RoundStateTransition(void) {
         Team_LivingTeamCounts(&aliveCounts[TEAM_RED], &aliveCounts[TEAM_BLUE]);
         TeamCount_Health_FT(aliveCounts, healthTotals);
 
-        // [QL] 0x1004c783: who won, with g_freezeRoundDelay. When a team is out, by the players
-        // left, or the health of the last one; when the time ran out, by the players left, or the
-        // health of both teams. A draw names no team
         if (g_freezeRoundDelay.integer) {
             const char *teamColor = FT_TeamColor(winTeam);
             const char *teamName = TeamName(winTeam);
@@ -368,15 +306,11 @@ void Freeze_RoundStateTransition(void) {
             }
         }
 
-        // Award medals
-        // [QL] 0x1004c8c1: through PlayerAwardEV like every other medal, so the client finds the
-        // player in clientNum, the medal in generic1 and the count in modelindex2
         for (i = 0; i < level.maxclients; i++) {
             gclient_t *cl = &level.clients[i];
             gentity_t *ent2 = &g_entities[i];
             if (cl->pers.connected != CON_CONNECTED) continue;
 
-            // Accuracy award: >50% hit rate this round
             if (cl->round_shots != 0) {
                 int acc = (cl->round_hits * 100) / cl->round_shots;
                 if ((double)acc > 50.0) {
@@ -385,7 +319,6 @@ void Freeze_RoundStateTransition(void) {
                 }
             }
 
-            // Perfect award: on winning team with 0 damage taken
             if (cl->sess.sessionTeam == winTeam && cl->round_damage == 0) {
                 PlayerAwardEV(ent2, AWARD_PERFECT);
                 STAT_AddPlayerMedalStat(ent2, "PERFECT");
@@ -395,16 +328,13 @@ void Freeze_RoundStateTransition(void) {
         level.roundState.round++;
         CalculateRanks();
 
-        // [QL] 0x1004c9a0: the next countdown comes after g_freezeRoundDelay, 3.5 s at most
         delay = g_freezeRoundDelay.integer;
         if (delay > 3500) {
             delay = 3500;
         }
 
-        // [QL] 0x1004c9c9: the ROUND_OVER statistics event, for the round just played
         STAT_AddRoundOverStat(level.roundState.round - 1, winTeam, winTeam == TEAM_FREE);
 
-        // Check for game end
         if (level.teamScores[TEAM_RED] != level.teamScores[TEAM_BLUE]) {
             if ((g_timelimit.integer != 0 &&
                  g_timelimit.integer * 60000 <= level.time - level.startTime) ||
@@ -428,16 +358,14 @@ void Freeze_RoundStateTransition(void) {
             }
         }
 
-        // Round-end sound
         {
             int soundType;
             gentity_t *te;
-            if (winTeam == TEAM_RED) soundType = GTS_REDTEAM_SCORED;     // 0x08
-            else if (winTeam == TEAM_BLUE) soundType = GTS_BLUETEAM_SCORED;  // 0x09
-            else soundType = GTS_DRAW_ROUND;  // 0x12
-            // [QL] binary carries the GTS index in eventParm (0xc0), not otherEntityNum2
+            if (winTeam == TEAM_RED) soundType = GTS_REDTEAM_SCORED;
+            else if (winTeam == TEAM_BLUE) soundType = GTS_BLUETEAM_SCORED;
+            else soundType = GTS_DRAW_ROUND;
             te = G_TempEntity(vec3_origin, EV_GLOBAL_TEAM_SOUND);
-            te->r.svFlags |= SVF_BROADCAST;   // binary writes r.svFlags|=0x20 (gentity+0x1e0), not s.eFlags
+            te->r.svFlags |= SVF_BROADCAST;
             te->s.eventParm = soundType;
         }
 
@@ -463,12 +391,6 @@ void Freeze_RoundStateTransition(void) {
     }
 }
 
-// ============================================================================
-// Freeze_Think
-//
-// Per-frame logic for Freeze Tag. Checks if round is over.
-// Called from G_RunFrame.
-// ============================================================================
 void Freeze_Think(void) {
     int state;
     int aliveCounts[4] = {0}, healthTotals[4] = {0};
@@ -476,14 +398,10 @@ void Freeze_Think(void) {
     if (level.intermissionQueued || level.intermissionTime || level.warmupTime)
         return;
 
-    // [QL] keep the round clock frozen during a pause/timeout: the binary bumps
-    // roundState.startTime by this frame's msec (level.frametime) while paused so
-    // elapsed time (level.time - startTime) does not advance.
     if (level.timePauseBegin != 0) {
         level.roundState.startTime += level.frametime;
     }
 
-    // Advance the pending timer and grab the current state
     state = Freeze_GetRoundState();
     if (state == RS_PLAYING) {
         Team_LivingTeamCounts(&aliveCounts[TEAM_RED], &aliveCounts[TEAM_BLUE]);
@@ -496,18 +414,6 @@ void Freeze_Think(void) {
     }
 }
 
-/*
-===============
-Freeze_InstaKill
-
-[QL] 0x1004bc80. Destroys a frozen body, or thaws it back into a respawn. Mode 1, from
-player_die and G_Damage, clears PW_FREEZE, sets GIB health and arms respawnTime, so the
-GibEntity at the end only gibs the body. Mode 0, from Freeze_ClientThawCheck, leaves
-PW_FREEZE set and that same GibEntity fires EV_THAW_PLAYER and respawns the player.
-
-DAT_105aac6c, the InstaKill respawn delay, is g_respawn_delay_min.
-===============
-*/
 void Freeze_InstaKill(gentity_t *self, int mode) {
     gclient_t *client = self->client;
     gentity_t *tent;
@@ -516,53 +422,35 @@ void Freeze_InstaKill(gentity_t *self, int mode) {
     if (mode == 1) {
         int redCount = 0, blueCount = 0;
 
-        client->ps.powerups[PW_FREEZE] = 0;                 // client+0x17c
-        // self+0xc4: clear bit15 (PW_FREEZE) in the networked s.powerups bitmask
+        client->ps.powerups[PW_FREEZE] = 0;
         self->s.powerups &= 0xffff7fff;
-        client->ps.pm_type = PM_DEAD;                       // client+0x4
-        client->respawnTime = level.time + g_respawn_delay_min.integer; // client+0x4e4
-        self->health = -40;                                 // self+0x320 (GIB_HEALTH)
+        client->ps.pm_type = PM_DEAD;
+        client->respawnTime = level.time + g_respawn_delay_min.integer;
+        self->health = -40;
 
         Team_LivingTeamCounts(&redCount, &blueCount);
-        // Last one on the team -> skip the destruction effects (goto 0x1004bf81)
         if ((redCount == 0 && client->sess.sessionTeam == TEAM_RED) ||
             (blueCount == 0 && client->sess.sessionTeam == TEAM_BLUE))
             return;
     }
 
-    client->ps.thawClientNum_valid = 0;                     // client+0x1f8
+    client->ps.thawClientNum_valid = 0;
 
-    // EV_OBITUARY: "world thawed/killed you" broadcast
     tent = G_TempEntity(self->r.currentOrigin, EV_OBITUARY);
-    tent->s.eventParm = MOD_THAW;                           // 0x1e
-    tent->s.otherEntityNum = client->ps.clientNum;          // victim
-    tent->s.otherEntityNum2 = ENTITYNUM_WORLD;              // 0x3fe attacker = world
-    tent->r.svFlags = SVF_BROADCAST;                        // plain assign 0x20
+    tent->s.eventParm = MOD_THAW;
+    tent->s.otherEntityNum = client->ps.clientNum;
+    tent->s.otherEntityNum2 = ENTITYNUM_WORLD;
+    tent->r.svFlags = SVF_BROADCAST;
 
-    // EV_GLOBAL_TEAM_SOUND: body-destroyed announce (origin = s.pos.trBase)
     team = client->sess.sessionTeam;
     tent = G_TempEntity(self->s.pos.trBase, EV_GLOBAL_TEAM_SOUND);
     tent->r.svFlags |= SVF_BROADCAST;
-    tent->s.eventParm = (team != TEAM_BLUE) + 2;            // RED->3, BLUE->2
+    tent->s.eventParm = (team != TEAM_BLUE) + 2;
 
-    // [QL] 0x1004bda9: GibEntity (0x10046d80), which respawns the player when
-    // still frozen (PW_FREEZE != 0). It used to call Kamikaze_DeathActivate,
-    // the kamikaze timer's think, which frees the entity it is given: the
-    // player's gentity lost its client and the bot frame crashed on it.
     GibEntity(self);
-    client->ps.freezetime = 0;                              // client+0x1f0
+    client->ps.freezetime = 0;
 }
 
-// ============================================================================
-// Freeze_AutoThaw (binary: 0x1004cc20)
-//
-// Called from G_Damage when a player is frozen. Advances any pending round-state
-// timer, then, while the round is live, announces "last man standing" if the
-// victim's team is now down to a single survivor. Byte-identical twin of the
-// CA_PlayerKilled body (0x100389f0). The gate global DAT_1059686c is
-// g_lastManStandingWarning; the binary's eCurrent==3 is RS_PLAYING (the round-state
-// enum has RS_SHUFFLE at 2). team is the victim's sess.sessionTeam.
-// ============================================================================
 void Freeze_AutoThaw(int team) {
     int redAlive, blueAlive;
 
@@ -595,107 +483,80 @@ void Freeze_AutoThaw(int team) {
     }
 }
 
-// ============================================================================
-// Freeze_ClientThawCheck (binary: 0x1004cdc0, .so Freeze_ClientThawCheck 0x76a40)
-//
-// Per-frame thaw scan for a frozen player. Byte-faithful rewrite of the real
-// binary body (radius teammate scan via trap_EntitiesInBox + LOS trap_Trace,
-// ps.thawtime countdown by frame msec, thaw-progress bits in ps.generic1,
-// auto-thaw timeout -> Freeze_InstaKill, thaw-tick EV_THAW_TICK, and the ASSIST
-// award on completion). Called from ClientThink_real for each frozen player.
-//
-// [QL] SIGNATURE: byte-faithful prototype
-//   void Freeze_ClientThawCheck(gentity_t *self, int msec)
-// (binary 0x1004cdc0, __thiscall ECX=self + [EBP+8]=msec). `msec` is the clamped
-// pmove frame delta passed by ClientThink_real, the same per-command delta Pmove
-// used this frame (ucmd->serverTime - ps.commandTime, clamped to <=200). The
-// ps.thawtime countdown is decremented by exactly that value, matching the binary.
-// ============================================================================
 void Freeze_ClientThawCheck(gentity_t *ent, int msec) {
     gclient_t *cl = ent->client;
-    gentity_t *thawer = NULL;               // EBX / pgVar8
-    int oldSeconds = 0;                      // EDI
-    int entityList[MAX_GENTITIES];           // local_1010[1024]
+    gentity_t *thawer = NULL;
+    int oldSeconds = 0;
+    int entityList[MAX_GENTITIES];
     int numNearby = 0;
     int i;
-    int maxThaw = g_freezeThawTime.integer;  // DAT_105a472c
+    int maxThaw = g_freezeThawTime.integer;
 
-    // --- (A) thaw-progress display bits (runs unconditionally, every frame) ---
     {
-        int t = cl->ps.thawtime;             // client+0x1f4
-        int one3 = maxThaw / 3;              // signed div
+        int t = cl->ps.thawtime;
+        int one3 = maxThaw / 3;
         if (t > one3) {
-            if (t > one3 * 2) cl->ps.generic1 &= ~3;   // >2/3 left -> bits=0
-            else              cl->ps.generic1 |=  1;   // 1/3..2/3  -> bit0
+            if (t > one3 * 2) cl->ps.generic1 &= ~3;
+            else              cl->ps.generic1 |=  1;
         } else {
-            cl->ps.generic1 |= 2;                       // <1/3 left -> bit1
+            cl->ps.generic1 |= 2;
         }
     }
 
-    // --- (B) gating ---
     if (level.intermissionQueued != 0 || level.intermissionTime != 0)
         return;
 
     if (level.warmupTime != 0 && g_gametype.integer == GT_FREEZE) {
-        // warmup FT: bleed the timer, no thaw mechanics
         cl->ps.thawtime -= msec;
         if (cl->ps.thawtime >= 1) return;
-        goto do_thaw;                        // 0x1004d19d
+        goto do_thaw;
     }
 
-    // [QL] 0x1004ce06: with g_freezeRoundDelay nobody thaws outside the round being played
     if (g_freezeRoundDelay.integer && Freeze_GetRoundState() != RS_PLAYING)
         return;
 
-    // --- (C) auto-thaw timeout -> Freeze_InstaKill(self, 0) (respawn) ---
-    if (g_freezeAutoThawTime.integer != 0 &&                            // DAT_104b26ec
+    if (g_freezeAutoThawTime.integer != 0 &&
         (level.time - cl->ps.freezetime) >= g_freezeAutoThawTime.integer) {
         Freeze_InstaKill(ent, 0);
         return;
     }
 
-    // --- (D) radius scan for a valid thawing teammate ---
     {
-        float r = (float)g_freezeThawRadius.integer;   // DAT_105a3d0c, FILD (integer!)
+        float r = (float)g_freezeThawRadius.integer;
         vec3_t mins, maxs;
         for (i = 0; i < 3; i++) {
-            mins[i] = ent->r.currentOrigin[i] - r;     // box centre = self r.currentOrigin
+            mins[i] = ent->r.currentOrigin[i] - r;
             maxs[i] = ent->r.currentOrigin[i] + r;
         }
-        numNearby = trap_EntitiesInBox(mins, maxs, entityList, MAX_GENTITIES); // trap+0xa4
+        numNearby = trap_EntitiesInBox(mins, maxs, entityList, MAX_GENTITIES);
         for (i = 0; i < numNearby; i++) {
             gentity_t *other = &g_entities[entityList[i]];
-            if (entityList[i] != 0 && other->client == NULL) continue;         // (entnum==0 || has client)
+            if (entityList[i] != 0 && other->client == NULL) continue;
             if (other == ent)                              continue;
             if (ent->client == NULL)                       continue;
             if (other->client == NULL)                     continue;
-            if (g_gametype.integer <= 2 &&                                     // FFA/Duel/Race guard (false in FT)
+            if (g_gametype.integer <= 2 &&
                 other->client->sess.sessionTeam != TEAM_SPECTATOR) continue;
             if (other->client->sess.sessionTeam != ent->client->sess.sessionTeam) continue;
-            if (other->client->ps.powerups[PW_FREEZE] != 0) continue;          // teammate also frozen
+            if (other->client->ps.powerups[PW_FREEZE] != 0) continue;
             if (other->health <= 0)                        continue;
-            if (g_freezeThawThroughSurface.integer == 0) {                     // DAT_105e1c2c
+            if (g_freezeThawThroughSurface.integer == 0) {
                 trace_t tr;
-                trap_Trace(&tr, ent->client->ps.origin, NULL, NULL,           // start = self ps.origin
-                           other->client->ps.origin,                          // end   = other ps.origin
+                trap_Trace(&tr, ent->client->ps.origin, NULL, NULL,
+                           other->client->ps.origin,
                            ENTITYNUM_NONE, CONTENTS_SOLID);
-                if (tr.fraction != 1.0f) continue;                             // require clear LOS
+                if (tr.fraction != 1.0f) continue;
             }
-            thawer = other;                               // found a thawer (0x1004d1bb)
+            thawer = other;
             break;
         }
     }
 
     if (thawer != NULL) {
-        // lock in the thawer clientNum the first frame
         if (cl->ps.thawClientNum_valid == 0) {
-            cl->ps.thawClientNum       = thawer->client->ps.clientNum;   // client+0x1fc
-            cl->ps.thawClientNum_valid = 1;                              // client+0x1f8
+            cl->ps.thawClientNum       = thawer->client->ps.clientNum;
+            cl->ps.thawClientNum_valid = 1;
         }
-        // re-resolve the locked thawer inside the current box results.
-        // [QL] byte-faithful this is Freeze_PlayerFrozen(list, count, clientNum), a
-        // LOOKUP helper (.so 0x76940). The reimpl Freeze_PlayerFrozen (g_local.h:932)
-        // is still the freeze-on-death stand-in shape, so the lookup is inlined here.
         if (cl->ps.thawClientNum_valid != 0) {
             int k;
             for (k = 0; k < numNearby; k++) {
@@ -709,71 +570,58 @@ void Freeze_ClientThawCheck(gentity_t *ent, int msec) {
         }
         oldSeconds = (cl->ps.thawtime == 0) ? 0 : cl->ps.thawtime / 1000;
         cl->ps.thawtime -= msec;
-        if (g_debugThawTime.integer != 0) {                    // DAT_10595aec
+        if (g_debugThawTime.integer != 0) {
             trap_SendServerCommand(thawer->client->ps.clientNum,
-                va("print \"Thaw time %i.\n\"", cl->ps.thawtime));   // trap+0x60
+                va("print \"Thaw time %i.\n\"", cl->ps.thawtime));
         }
         if (oldSeconds > 0 && oldSeconds != cl->ps.thawtime / 1000 &&
-            g_freezeThawTick.integer != 0) {                   // DAT_105a30ac
-            gentity_t *te = G_TempEntity(ent->r.currentOrigin, EV_THAW_TICK);   // 0x58
-            te->r.ownerNum = ent->client->ps.clientNum;        // te+0x238 (PVS-limited, not broadcast)
+            g_freezeThawTick.integer != 0) {
+            gentity_t *te = G_TempEntity(ent->r.currentOrigin, EV_THAW_TICK);
+            te->r.ownerNum = ent->client->ps.clientNum;
         }
     } else {
-        // no thawer this frame: thaw progress decays (refills toward max)
         cl->ps.thawtime += msec;
         cl->ps.thawClientNum_valid = 0;
         if (cl->ps.thawtime > maxThaw) cl->ps.thawtime = maxThaw;
     }
 
-    // check_complete (0x1004d080)
-    if (cl->ps.thawtime >= 1) return;                          // still thawing
+    if (cl->ps.thawtime >= 1) return;
 
     if (thawer != NULL) {
         cl->ps.thawClientNum_valid = 0;
-        thawer->client->pers.teamState.assists++;              // client+0x310 (thaws-given #1)
-        thawer->client->expandedStats.numAssists++;            // client+0x7fc (thaws-given #2)
-        AddScore(thawer, ent->r.currentOrigin, 2);             // ScorePlum reads thawer origin
-        thawer->client->ps.persistant[PERS_ASSIST_COUNT]++;    // client+0x12c
-        thawer->client->ps.eFlags =                            // client+0x68: clear award bits, set assist
+        thawer->client->pers.teamState.assists++;
+        thawer->client->expandedStats.numAssists++;
+        AddScore(thawer, ent->r.currentOrigin, 2);
+        thawer->client->ps.persistant[PERS_ASSIST_COUNT]++;
+        thawer->client->ps.eFlags =
             (thawer->client->ps.eFlags & 0xfffc77b7) | EF_AWARD_ASSIST;
-        thawer->client->rewardTime = level.time + REWARD_SPRITE_TIME;   // client+0x4e8 (+2000)
-        STAT_AddPlayerMedalStat(thawer, "ASSIST");             // 0x100715d0
+        thawer->client->rewardTime = level.time + REWARD_SPRITE_TIME;
+        STAT_AddPlayerMedalStat(thawer, "ASSIST");
 
-        // EV_OBITUARY: "thawer thawed you"
         {
-            gentity_t *tent = G_TempEntity(ent->r.currentOrigin, EV_OBITUARY);  // 0x3a
-            tent->s.eventParm       = MOD_THAW;                // 0x1e
-            tent->s.otherEntityNum  = ent->client->ps.clientNum;      // victim
-            tent->s.otherEntityNum2 = thawer->client->ps.clientNum;   // attacker = thawer
-            tent->r.svFlags         = SVF_BROADCAST;           // 0x20
+            gentity_t *tent = G_TempEntity(ent->r.currentOrigin, EV_OBITUARY);
+            tent->s.eventParm       = MOD_THAW;
+            tent->s.otherEntityNum  = ent->client->ps.clientNum;
+            tent->s.otherEntityNum2 = thawer->client->ps.clientNum;
+            tent->r.svFlags         = SVF_BROADCAST;
         }
     }
 
-    // EV_GLOBAL_TEAM_SOUND: thaw announce (unconditional, origin = s.pos.trBase)
     {
         int team = ent->client->sess.sessionTeam;
-        gentity_t *tent = G_TempEntity(ent->s.pos.trBase, EV_GLOBAL_TEAM_SOUND); // 0x2c
-        tent->r.svFlags  |= SVF_BROADCAST;                     // 0x20
-        tent->s.eventParm = (team != TEAM_BLUE) + 2;           // RED->3, BLUE->2
+        gentity_t *tent = G_TempEntity(ent->s.pos.trBase, EV_GLOBAL_TEAM_SOUND);
+        tent->r.svFlags  |= SVF_BROADCAST;
+        tent->s.eventParm = (team != TEAM_BLUE) + 2;
     }
 
-do_thaw:                                                       // 0x1004d19d
-    // still frozen (PW_FREEZE != 0) -> GibEntity fires EV_THAW_PLAYER + ClientSpawn.
+do_thaw:
     GibEntity(ent);
 }
 
-/*
-============
-Freeze_ClientBegin
-
-[QL] Freeze Tag begin - like RoundBased but clears freeze/dead pm_type first
-============
-*/
 void Freeze_ClientBegin(gentity_t* ent) {
     gclient_t* client = ent->client;
 
     if (level.roundState.eCurrent == 0) {
-        // pre-round (RS_WARMUP): binary clears prevRoundWinningTeam first.
         level.roundState.prevRoundWinningTeam = TEAM_FREE;
         if (client->ps.pm_type == PM_FREEZE || client->ps.pm_type == PM_DEAD) {
             client->ps.pm_type = PM_NORMAL;
@@ -781,50 +629,28 @@ void Freeze_ClientBegin(gentity_t* ent) {
         ClientSpawn(ent);
         SelectSpawnWeapon(ent);
     } else if (level.roundState.eCurrent == 1) {
-        // countdown
         if (client->ps.pm_type == PM_FREEZE || client->ps.pm_type == PM_DEAD) {
             client->ps.pm_type = PM_NORMAL;
         }
         ClientSpawn(ent);
         SelectSpawnWeapon(ent);
-        // [QL] 0x1004bea2: held still in the countdown only with g_freezeRoundDelay
         if (g_freezeRoundDelay.integer) {
             client->ps.pm_flags |= PMF_FROZEN;
         }
     } else {
-        // round active: spectator mode
         int alive[4] = {0};
         client->ps.pm_type = PM_SPECTATOR;
         ClientSpawn(ent);
         SelectSpawnWeapon(ent);
         Team_LivingTeamCounts(&alive[TEAM_RED], &alive[TEAM_BLUE]);
-        // [QL] binary Freeze_ClientBegin (0x1004bfa0) gates auto-follow on
-        // g_teamSpecFreeCam==0 (DAT_104b202c), not level.warmupTime, and requires
-        // both teams to have living players (both alive counts > 0).
         if (!g_teamSpecFreeCam.integer
             && client->sess.sessionTeam != TEAM_SPECTATOR
             && alive[TEAM_RED] > 0 && alive[TEAM_BLUE] > 0) {
-            FollowCycle(ent, 1);  // [QL] 0x1004be64: the cycle alone, which keeps the team
+            FollowCycle(ent, 1);
         }
     }
 }
 
-/*
-==================
-FreezeTagScoreboardMessage
-
-Freeze Tag scoreboard. Same team stats structure as TDM (14 categories).
-17 fields per player.
-Address: 0x1003ef80
-
-Format: "scores_ft %i %i ... %i %i %i%s"
-  28 team stats + numPlayers + teamScoreRed + teamScoreBlue + playerData
-
-Fields per player (17):
-  client team score ping time frags deaths accuracy bestWeapon
-  impressive excellent gauntlet assist teamKills teamKilled damageDone alive
-==================
-*/
 void FreezeTagScoreboardMessage(gentity_t *ent) {
     char entry[1024];
     char string[1024];
@@ -838,7 +664,6 @@ void FreezeTagScoreboardMessage(gentity_t *ent) {
     string[0] = 0;
     stringlength = 0;
 
-    // Load team item stats (same 14 categories as TDM)
     redStats[0]  = level.numRedArmorPickups[TEAM_RED];
     redStats[1]  = level.numYellowArmorPickups[TEAM_RED];
     redStats[2]  = level.numGreenArmorPickups[TEAM_RED];
@@ -891,7 +716,6 @@ void FreezeTagScoreboardMessage(gentity_t *ent) {
 
         bestWeapon = STAT_GetBestWeapon(cl);
 
-        // Hide opponent team's stats
         viewerTeam = ent->client->sess.sessionTeam;
         if (viewerTeam == TEAM_RED && level.intermissionTime == 0) {
             memset(blueStats, 0, sizeof(blueStats));
@@ -899,7 +723,6 @@ void FreezeTagScoreboardMessage(gentity_t *ent) {
             memset(redStats, 0, sizeof(redStats));
         }
 
-        // 17 fields per player
         Com_sprintf(entry, sizeof(entry),
                     " %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i",
                     level.sortedClients[i],
@@ -924,8 +747,6 @@ void FreezeTagScoreboardMessage(gentity_t *ent) {
         listEnd[i] = stringlength;
     }
 
-    // [ioquakelive] see SCORES_LIST_ROOM. Retail gives up without sending when the list
-    // does not fit; here the last ones on it are left out until the command does
     for (;;) {
         const char *cmd = va("scores_ft %i %i %i %i %i %i %i %i %i %i %i %i %i %i "
                "%i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i%s",
@@ -947,8 +768,3 @@ void FreezeTagScoreboardMessage(gentity_t *ent) {
     }
 }
 
-/*
-[QL] The Freeze Tag intermission scoreboard reuses TeamDeathmatchStatisticsMessage
-("tdmstats"). The "ctfstats" emitter that Ghidra mislabelled FTScoreboardMessage_impl
-is the CTF impl and now lives in g_gametype_ctf.c as CaptureTheFlagStatisticsMessage.
-*/

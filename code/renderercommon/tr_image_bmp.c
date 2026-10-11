@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "tr_common.h"
 
 typedef struct
@@ -65,9 +64,6 @@ void R_LoadBMP(const char* name, byte** pic, int* width, int* height) {
     if (height)
         *height = 0;
 
-    //
-    // load the file
-    //
     length = ri.FS_ReadFile((char*)name, &buffer.v);
     if (!buffer.b || length < 0) {
         return;
@@ -154,7 +150,7 @@ void R_LoadBMP(const char* name, byte** pic, int* width, int* height) {
         rows = -rows;
     numPixels = columns * rows;
 
-    if (columns <= 0 || !rows || numPixels > 0x1FFFFFFF  // 4*1FFFFFFF == 0x7FFFFFFC < 0x7FFFFFFF
+    if (columns <= 0 || !rows || numPixels > 0x1FFFFFFF
         || ((numPixels * 4) / columns) / 4 != rows) {
         ri.Error(ERR_DROP, "LoadBMP: %s has an invalid image size", name);
     }

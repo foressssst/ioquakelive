@@ -21,14 +21,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "tr_local.h"
 
-/*
-=====================
-R_PerformanceCounters
-=====================
-*/
 static void R_PerformanceCounters( void ) {
 	if ( !r_speeds->integer ) {
-		// clear the counters even if we aren't printing
 		Com_Memset( &tr.pc, 0, sizeof( tr.pc ) );
 		Com_Memset( &backEnd.pc, 0, sizeof( backEnd.pc ) );
 		return;
@@ -69,45 +63,27 @@ static void R_PerformanceCounters( void ) {
 	Com_Memset( &backEnd.pc, 0, sizeof( backEnd.pc ) );
 }
 
-
-/*
-====================
-R_IssueRenderCommands
-====================
-*/
 static void R_IssueRenderCommands( void ) {
 	renderCommandList_t	*cmdList;
 
 	cmdList = &backEndData->commands;
 
-	// add an end-of-list command
 	*(int *)(cmdList->cmds + cmdList->used) = RC_END_OF_LIST;
 
-	// clear it out, in case this is a sync and not a buffer flip
 	cmdList->used = 0;
 
 	if ( backEnd.screenshotMask == 0 ) {
 		if ( RI_CL_IsMinimized() )
-			return; // skip backend when minimized
+			return;
 		if ( backEnd.throttle )
-			return; // or throttled on demand
+			return;
 	}
 
-	// actually start the commands going
 	if ( !r_skipBackEnd->integer ) {
-		// let it start on the new batch
 		RB_ExecuteRenderCommands( cmdList->cmds );
 	}
 }
 
-
-/*
-====================
-R_IssuePendingRenderCommands
-
-Issue any pending commands and wait for them to complete.
-====================
-*/
 void R_IssuePendingRenderCommands( void ) {
 	if ( !tr.registered ) {
 		return;
@@ -115,26 +91,16 @@ void R_IssuePendingRenderCommands( void ) {
 	R_IssueRenderCommands();
 }
 
-
-/*
-============
-R_GetCommandBufferReserved
-
-make sure there is enough command space
-============
-*/
 static void *R_GetCommandBufferReserved( int bytes, int reservedBytes ) {
 	renderCommandList_t	*cmdList;
 
 	cmdList = &backEndData->commands;
 	bytes = PAD(bytes, sizeof(void *));
 
-	// always leave room for the end of list command
 	if ( cmdList->used + bytes + sizeof( int ) + reservedBytes > MAX_RENDER_COMMANDS ) {
 		if ( bytes > MAX_RENDER_COMMANDS - sizeof( int ) ) {
 			ri.Error( ERR_FATAL, "R_GetCommandBuffer: bad size %i", bytes );
 		}
-		// if we run out of room, just start dropping commands
 		return NULL;
 	}
 
@@ -143,23 +109,10 @@ static void *R_GetCommandBufferReserved( int bytes, int reservedBytes ) {
 	return cmdList->cmds + cmdList->used - bytes;
 }
 
-
-/*
-=============
-R_GetCommandBuffer
-returns NULL if there is not enough space for important commands
-=============
-*/
 void *R_GetCommandBuffer( int bytes ) {
 	return R_GetCommandBufferReserved( bytes, PAD( sizeof( swapBuffersCommand_t ), sizeof(void *) ) );
 }
 
-
-/*
-=============
-R_AddDrawSurfCmd
-=============
-*/
 void R_AddDrawSurfCmd( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 	drawSurfsCommand_t	*cmd;
 
@@ -176,14 +129,6 @@ void R_AddDrawSurfCmd( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 	cmd->viewParms = tr.viewParms;
 }
 
-
-/*
-=============
-RE_SetColor
-
-Passing NULL will set the color to white
-=============
-*/
 void RE_SetColor( const float *rgba ) {
 	setColorCommand_t	*cmd;
 
@@ -204,16 +149,9 @@ void RE_SetColor( const float *rgba ) {
 	cmd->color[2] = rgba[2];
 	cmd->color[3] = rgba[3];
 
-	// [QL] text is drawn in the colour set before it
 	Vector4Copy( rgba, g_fontColor2D );
 }
 
-
-/*
-=============
-RE_StretchPic
-=============
-*/
 void RE_StretchPic( float x, float y, float w, float h,
 					float s1, float t1, float s2, float t2, qhandle_t hShader ) {
 	stretchPicCommand_t	*cmd;
@@ -280,15 +218,6 @@ static void R_SetColorMode(GLboolean *rgba, stereoFrame_t stereoFrame, int color
 	}
 }
 
-
-/*
-====================
-RE_BeginFrame
-
-If running in stereo, RE_BeginFrame will be called twice
-for each RE_EndFrame
-====================
-*/
 void RE_BeginFrame( stereoFrame_t stereoFrame ) {
 	drawBufferCommand_t	*cmd = NULL;
 	colorMaskCommand_t *colcmd = NULL;
@@ -307,7 +236,6 @@ void RE_BeginFrame( stereoFrame_t stereoFrame ) {
 
 	backEnd.color2D.u32 = ~0U;
 
-	// check for errors
 	GL_CheckErrors();
 
 	if ( ( cmd = R_GetCommandBuffer( sizeof( *cmd ) ) ) == NULL )
@@ -346,19 +274,17 @@ void RE_BeginFrame( stereoFrame_t stereoFrame ) {
 				if ( !fboEnabled )
 #endif
 				{
-					// clear both, front and backbuffer.
 					clrcmd->frontAndBack = qtrue;
 				}
 			}
 
 			if ( stereoFrame == STEREO_LEFT )
 			{
-				// first frame
 			}
 			else if ( stereoFrame == STEREO_RIGHT )
 			{
 				clearDepthCommand_t *cldcmd;
-				
+
 				if ( (cldcmd = R_GetCommandBuffer(sizeof(*cldcmd))) == NULL )
 					return;
 
@@ -373,12 +299,11 @@ void RE_BeginFrame( stereoFrame_t stereoFrame ) {
 			R_SetColorMode( colcmd->rgba, stereoFrame, r_anaglyphMode->integer );
 			colcmd->commandId = RC_COLORMASK;
 		}
-		else // !r_anaglyphMode->integer
+		else
 		{
 			if ( stereoFrame != STEREO_CENTER )
 				ri.Error( ERR_FATAL, "RE_BeginFrame: Stereo is disabled, but stereoFrame was %i", stereoFrame );
 
-			// reset color mask
 			if ( r_anaglyphMode->modified )	{
 				if ( ( colcmd = R_GetCommandBuffer( sizeof( *colcmd ) ) ) == NULL )
 					return;
@@ -410,14 +335,6 @@ void RE_BeginFrame( stereoFrame_t stereoFrame ) {
 	tr.refdef.stereoFrame = stereoFrame;
 }
 
-
-/*
-=============
-RE_EndFrame
-
-Returns the number of msec spent in the back end
-=============
-*/
 void RE_EndFrame( int *frontEndMsec, int *backEndMsec ) {
 
 	swapBuffersCommand_t *cmd;
@@ -448,7 +365,6 @@ void RE_EndFrame( int *frontEndMsec, int *backEndMsec ) {
 	backEnd.pc.msec = 0;
 	backEnd.throttle = qfalse;
 
-	// recompile GPU shaders if needed
 	if ( RI_Cvar_CheckGroup( CVG_RENDERER ) )
 	{
 		ARB_UpdatePrograms();
@@ -468,12 +384,6 @@ void RE_EndFrame( int *frontEndMsec, int *backEndMsec ) {
 	}
 }
 
-
-/*
-=============
-RE_TakeVideoFrame
-=============
-*/
 void RE_TakeVideoFrame( int width, int height,
 		byte *captureBuffer, byte *encodeBuffer, qboolean motionJpeg )
 {
@@ -487,8 +397,6 @@ void RE_TakeVideoFrame( int width, int height,
 
 	cmd = &backEnd.vcmd;
 
-	//cmd->commandId = RC_VIDEOFRAME;
-
 	cmd->width = width;
 	cmd->height = height;
 	cmd->captureBuffer = captureBuffer;
@@ -496,12 +404,10 @@ void RE_TakeVideoFrame( int width, int height,
 	cmd->motionJpeg = motionJpeg;
 }
 
-
 void RE_ThrottleBackend( void )
 {
 	backEnd.throttle = qtrue;
 }
-
 
 void RE_FinishBloom( void )
 {
@@ -518,9 +424,8 @@ void RE_FinishBloom( void )
 	}
 
 	cmd->commandId = RC_FINISHBLOOM;
-#endif // USE_FBO
+#endif
 }
-
 
 qboolean RE_CanMinimize( void )
 {
@@ -531,12 +436,10 @@ qboolean RE_CanMinimize( void )
 #endif
 }
 
-
 const glconfig_t *RE_GetConfig( void )
 {
 	return &glConfig;
 }
-
 
 void RE_VertexLighting( qboolean allowed )
 {

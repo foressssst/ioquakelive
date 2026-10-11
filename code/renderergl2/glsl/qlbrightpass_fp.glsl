@@ -1,7 +1,5 @@
 uniform sampler2D u_TextureMap;
 
-// [QL] the bloom's bright pass: what is over r_bloomBrightThreshold (u_Color.x), stretched back
-// to the full range
 uniform vec4      u_Color;
 
 varying vec2      var_TexCoords;

@@ -6,7 +6,6 @@ varying vec2      var_DiffuseTex;
 
 varying vec4      var_Color;
 
-
 void main()
 {
 	vec4 color  = texture2D(u_DiffuseMap, var_DiffuseTex);
@@ -27,7 +26,7 @@ void main()
 		if (alpha < 0.5)
 			discard;
 	}
-	
+
 	gl_FragColor.rgb = color.rgb * var_Color.rgb;
 	gl_FragColor.a = alpha;
 }

@@ -19,30 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// tr_fsr.c -- FidelityFX Super Resolution 1.0, the upscale of the final blit
-//
-// The two passes are a port of AMD's reference, which is MIT:
-//
-//   FidelityFX Super Resolution, Copyright (c) 2021 Advanced Micro Devices, Inc.
-//   Permission is hereby granted, free of charge, to any person obtaining a copy of this
-//   software and associated documentation files (the "Software"), to deal in the Software
-//   without restriction, including without limitation the rights to use, copy, modify, merge,
-//   publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons
-//   to whom the Software is furnished to do so, subject to the following conditions:
-//   The above copyright notice and this permission notice shall be included in all copies or
-//   substantial portions of the Software.
-//   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-//   INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
-//   PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
-//   FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-//   OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-//   DEALINGS IN THE SOFTWARE.
-//
-// The reference gathers four texels at a time; this takes the twelve it uses one by one,
-// because the renderer's shaders are of a level that has no textureGather.
-//
-
 #include "tr_local.h"
 
 cvar_t *r_fsr;
@@ -68,14 +44,6 @@ static int fsrWidth;
 static int fsrHeight;
 static qboolean fsrAvailable;
 
-/*
-===============================================================================
-
-THE PROGRAMS
-
-===============================================================================
-*/
-
 static const char *fsrVertex =
 	"varying vec2 var_TexCoords;\n"
 	"void main() {\n"
@@ -83,8 +51,6 @@ static const char *fsrVertex =
 	"	var_TexCoords = gl_MultiTexCoord0.st;\n"
 	"}\n";
 
-// u_Con0 the source pixels every destination pixel walks and where the first one starts,
-// u_Con1 the destination size and the size of a source texel
 static const char *fsrEasuFragment =
 	"uniform sampler2D u_TextureMap;\n"
 	"uniform vec4 u_Con0;\n"
@@ -199,7 +165,6 @@ static const char *fsrEasuFragment =
 	"	gl_FragColor = vec4(min(max4, max(min4, aC * FsrRcp(aW))), 1.0);\n"
 	"}\n";
 
-// u_Con1.x the reference's exp2(-sharpness), u_Con1.zw the size of a destination texel
 static const char *fsrRcasFragment =
 	"uniform sampler2D u_TextureMap;\n"
 	"uniform vec4 u_Con1;\n"
@@ -302,7 +267,6 @@ static void R_FSRDeleteBuffer( void ) {
 	fsrWidth = fsrHeight = 0;
 }
 
-// the upscaled image the sharpening reads, at the size of the window
 static qboolean R_FSRCreateBuffer( int width, int height ) {
 	R_FSRDeleteBuffer();
 
@@ -329,11 +293,6 @@ static qboolean R_FSRCreateBuffer( int width, int height ) {
 	return qtrue;
 }
 
-/*
-===============
-R_FSRRegister
-===============
-*/
 void R_FSRRegister( void ) {
 	r_fsr = ri.Cvar_Get( "r_fsr", "0", CVAR_ARCHIVE_ND );
 	RI_Cvar_CheckRange( r_fsr, "0", "4", CV_INTEGER );
@@ -353,14 +312,6 @@ void R_FSRRegister( void ) {
 	RI_Cvar_SetGroup( r_fsrSharpness, CVG_RENDERER );
 }
 
-/*
-===============
-R_FSRScale
-
-[ioquakelive] The share of the window r_fsr renders at, AMD's four levels; 1 when it is off,
-when the size is r_renderScale's or without the frame buffer FSR needs
-===============
-*/
 float R_FSRScale( void ) {
 	static const float scales[5] = { 1.0f, 1.0f / 1.3f, 1.0f / 1.5f, 1.0f / 1.7f, 1.0f / 2.0f };
 	const int level = r_fsr ? r_fsr->integer : 0;
@@ -371,11 +322,6 @@ float R_FSRScale( void ) {
 	return scales[level];
 }
 
-/*
-===============
-R_FSRInit
-===============
-*/
 void R_FSRInit( void ) {
 	fsrAvailable = qfalse;
 
@@ -393,11 +339,6 @@ void R_FSRInit( void ) {
 	fsrAvailable = qtrue;
 }
 
-/*
-===============
-R_FSRShutdown
-===============
-*/
 void R_FSRShutdown( void ) {
 	int i;
 
@@ -434,14 +375,6 @@ static void R_FSRSetup( int dstWidth, int dstHeight ) {
 	qglLoadIdentity();
 }
 
-/*
-===============
-RB_FSRBlit
-
-Upscales srcTexture into the back buffer at the given rectangle. Returns false when it cannot,
-and then the caller blits as usual.
-===============
-*/
 qboolean RB_FSRBlit( GLuint srcTexture, int srcWidth, int srcHeight,
 	int x0, int y0, int x1, int y1 ) {
 	const int dstWidth = x1 - x0;
@@ -451,7 +384,6 @@ qboolean RB_FSRBlit( GLuint srcTexture, int srcWidth, int srcHeight,
 	if ( !fsrAvailable || !r_fsr->integer ) {
 		return qfalse;
 	}
-	// it is an upscale: at the same size or bigger the blit is already exact
 	if ( dstWidth <= srcWidth || dstHeight <= srcHeight ) {
 		return qfalse;
 	}
@@ -463,7 +395,6 @@ qboolean RB_FSRBlit( GLuint srcTexture, int srcWidth, int srcHeight,
 			dstWidth, dstHeight );
 	}
 
-	// the upscale, into the buffer the sharpening reads
 	p = &fsrPrograms[FSR_EASU];
 	FBO_BindTarget( GL_FRAMEBUFFER, fsrFbo );
 	qglViewport( 0, 0, dstWidth, dstHeight );
@@ -485,7 +416,6 @@ qboolean RB_FSRBlit( GLuint srcTexture, int srcWidth, int srcHeight,
 	}
 	R_FSRQuad( dstWidth, dstHeight );
 
-	// the sharpening, into the back buffer
 	p = &fsrPrograms[FSR_RCAS];
 	FBO_BindTarget( GL_FRAMEBUFFER, 0 );
 	qglDrawBuffer( GL_BACK );

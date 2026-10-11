@@ -19,28 +19,10 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// bg_slidemove.c -- part of bg_pmove functionality
-
 #include "../qcommon/q_shared.h"
 #include "bg_public.h"
 #include "bg_local.h"
 
-/*
-
-input: origin, velocity, bounds, groundPlane, trace function
-
-output: origin, velocity, impacts, stairup boolean
-
-*/
-
-/*
-==================
-PM_SlideMove
-
-Returns qtrue if the velocity was clipped in some way
-==================
-*/
 #define MAX_CLIP_PLANES 5
 qboolean PM_SlideMove(qboolean gravity) {
     int bumpcount, numbumps;
@@ -68,7 +50,6 @@ qboolean PM_SlideMove(qboolean gravity) {
         pm->ps->velocity[2] = (pm->ps->velocity[2] + endVelocity[2]) * 0.5;
         primal_velocity[2] = endVelocity[2];
         if (pml.groundPlane) {
-            // slide along the ground plane
             PM_ClipVelocity(pm->ps->velocity, pml.groundTrace.plane.normal,
                             pm->ps->velocity, OVERCLIP);
         }
@@ -76,7 +57,6 @@ qboolean PM_SlideMove(qboolean gravity) {
 
     time_left = pml.frametime;
 
-    // never turn against the ground plane
     if (pml.groundPlane) {
         numplanes = 1;
         VectorCopy(pml.groundTrace.plane.normal, planes[0]);
@@ -84,48 +64,36 @@ qboolean PM_SlideMove(qboolean gravity) {
         numplanes = 0;
     }
 
-    // never turn against original velocity
     VectorNormalize2(pm->ps->velocity, planes[numplanes]);
     numplanes++;
 
     for (bumpcount = 0; bumpcount < numbumps; bumpcount++) {
-        // calculate position we are trying to move to
         VectorMA(pm->ps->origin, time_left, pm->ps->velocity, end);
 
-        // see if we can make it there
         pm->trace(&trace, pm->ps->origin, pm->mins, pm->maxs, end, pm->ps->clientNum, pm->tracemask);
 
         if (trace.allsolid) {
-            // entity is completely trapped in another solid
-            pm->ps->velocity[2] = 0;  // don't build up falling damage, but allow sideways acceleration
+            pm->ps->velocity[2] = 0;
             return qtrue;
         }
 
         if (trace.fraction > 0) {
-            // actually covered some distance
             VectorCopy(trace.endpos, pm->ps->origin);
         }
 
         if (trace.fraction == 1) {
-            break;  // moved the entire distance
+            break;
         }
 
-        // save entity for contact
         PM_AddTouchEnt(trace.entityNum);
 
         time_left -= time_left * trace.fraction;
 
         if (numplanes >= MAX_CLIP_PLANES) {
-            // this shouldn't really happen
             VectorClear(pm->ps->velocity);
             return qtrue;
         }
 
-        //
-        // if this is the same plane we hit before, nudge velocity
-        // out along it, which fixes some epsilon issues with
-        // non-axial planes
-        //
         for (i = 0; i < numplanes; i++) {
             if (DotProduct(trace.plane.normal, planes[i]) > 0.99) {
                 VectorAdd(trace.plane.normal, pm->ps->velocity, pm->ps->velocity);
@@ -138,52 +106,40 @@ qboolean PM_SlideMove(qboolean gravity) {
         VectorCopy(trace.plane.normal, planes[numplanes]);
         numplanes++;
 
-        //
-        // modify velocity so it parallels all of the clip planes
-        //
-
-        // find a plane that it enters
         for (i = 0; i < numplanes; i++) {
             into = DotProduct(pm->ps->velocity, planes[i]);
             if (into >= 0.1) {
-                continue;  // move doesn't interact with the plane
+                continue;
             }
 
-            // see how hard we are hitting things
             if (-into > pml.impactSpeed) {
                 pml.impactSpeed = -into;
             }
 
-            // slide along the plane
             PM_ClipVelocity(pm->ps->velocity, planes[i], clipVelocity, OVERCLIP);
 
             if (gravity) {
-                // slide along the plane
                 PM_ClipVelocity(endVelocity, planes[i], endClipVelocity, OVERCLIP);
             }
 
-            // see if there is a second plane that the new move enters
             for (j = 0; j < numplanes; j++) {
                 if (j == i) {
                     continue;
                 }
                 if (DotProduct(clipVelocity, planes[j]) >= 0.1) {
-                    continue;  // move doesn't interact with the plane
+                    continue;
                 }
 
-                // try clipping the move to the plane
                 PM_ClipVelocity(clipVelocity, planes[j], clipVelocity, OVERCLIP);
 
                 if (gravity) {
                     PM_ClipVelocity(endClipVelocity, planes[j], endClipVelocity, OVERCLIP);
                 }
 
-                // see if it goes back into the first clip plane
                 if (DotProduct(clipVelocity, planes[i]) >= 0) {
                     continue;
                 }
 
-                // slide the original velocity along the crease
                 CrossProduct(planes[i], planes[j], dir);
                 VectorNormalize(dir);
                 d = DotProduct(dir, pm->ps->velocity);
@@ -196,22 +152,19 @@ qboolean PM_SlideMove(qboolean gravity) {
                     VectorScale(dir, d, endClipVelocity);
                 }
 
-                // see if there is a third plane the the new move enters
                 for (k = 0; k < numplanes; k++) {
                     if (k == i || k == j) {
                         continue;
                     }
                     if (DotProduct(clipVelocity, planes[k]) >= 0.1) {
-                        continue;  // move doesn't interact with the plane
+                        continue;
                     }
 
-                    // stop dead at a tripple plane interaction
                     VectorClear(pm->ps->velocity);
                     return qtrue;
                 }
             }
 
-            // if we have fixed all interactions, try another move
             VectorCopy(clipVelocity, pm->ps->velocity);
 
             if (gravity) {
@@ -226,7 +179,6 @@ qboolean PM_SlideMove(qboolean gravity) {
         VectorCopy(endVelocity, pm->ps->velocity);
     }
 
-    // don't change velocity if in a timer (FIXME: is this correct?)
     if (pm->ps->pm_time) {
         VectorCopy(primal_velocity, pm->ps->velocity);
     }
@@ -234,13 +186,6 @@ qboolean PM_SlideMove(qboolean gravity) {
     return (bumpcount != 0);
 }
 
-/*
-==================
-PM_WouldCrouchStepJump - [QL] pure predicate: can we do a crouch-step-jump?
-.so symbol PM_WouldCrouchStepJump (qagamex64.so 0x191f5; x86 DLL 0x1002e580).
-Does NOT call PM_DoJump.
-==================
-*/
 static qboolean PM_WouldCrouchStepJump(void) {
     if (!(pm->ps->pm_flags & PMF_DUCKED)) {
         return qfalse;
@@ -257,48 +202,34 @@ static qboolean PM_WouldCrouchStepJump(void) {
     return qtrue;
 }
 
-/*
-==================
-PM_StepSlideMove
-
-==================
-*/
 void PM_StepSlideMove(qboolean gravity) {
     vec3_t start_o, start_v;
     vec3_t pred;
     trace_t trace;
     vec3_t up, down;
     float stepSize;
-    float actualStepHeight = pm_stepHeight;  // [QL] configurable step height
+    float actualStepHeight = pm_stepHeight;
 
     VectorCopy(pm->ps->origin, start_o);
     VectorCopy(pm->ps->velocity, start_v);
 
     if (PM_SlideMove(gravity) == 0) {
-        return;  // we got exactly where we wanted to go first try
+        return;
     }
 
-    // [QL] predict position after one frame (used for ground checks and step-jump validation)
     VectorMA(start_o, pml.frametime, start_v, pred);
 
-    // [QL] pmove_AirSteps gate (binary global 0x1008feac): when air-stepping is disabled
-    // (pm_airSteps == 0) reject a step-up while still moving upward unless there is walkable
-    // ground ahead. The gate is the cvar-cached pm_airSteps, NOT pml.groundPlane.
     if (!pm_airSteps) {
         vec3_t predDown;
 
-        // trace from start to predicted position
         pm->trace(&trace, start_o, pm->mins, pm->maxs, pred, pm->ps->clientNum, pm->tracemask);
 
-        // [QL] clamp pred to the trace endpoint; the later step-jump traces reuse pred
         VectorCopy(trace.endpos, pred);
 
-        // from clamped pred, trace down by stepHeight to find ground
         VectorCopy(pred, predDown);
         predDown[2] -= actualStepHeight;
         pm->trace(&trace, pred, pm->mins, pm->maxs, predDown, pm->ps->clientNum, pm->tracemask);
 
-        // if moving upward and no walkable ground at predicted position, skip step-up
         if (start_v[2] > 0 && (trace.fraction == 1.0 ||
                                trace.plane.normal[2] < 0.7)) {
             return;
@@ -308,7 +239,6 @@ void PM_StepSlideMove(qboolean gravity) {
     VectorCopy(start_o, up);
     up[2] += actualStepHeight;
 
-    // test the player position if they were a stepheight higher
     pm->trace(&trace, start_o, pm->mins, pm->maxs, up, pm->ps->clientNum, pm->tracemask);
     if (trace.allsolid) {
         if (pm->debugLevel) {
@@ -323,7 +253,6 @@ void PM_StepSlideMove(qboolean gravity) {
 
     PM_SlideMove(gravity);
 
-    // push down the final amount
     VectorCopy(pm->ps->origin, down);
     down[2] -= stepSize;
     pm->trace(&trace, pm->ps->origin, pm->mins, pm->maxs, down, pm->ps->clientNum, pm->tracemask);
@@ -331,8 +260,6 @@ void PM_StepSlideMove(qboolean gravity) {
         VectorCopy(trace.endpos, pm->ps->origin);
     }
 
-    // [QL] only clip velocity if moving INTO the surface (dot < 0 or nearly parallel)
-    // Binary does NOT unconditionally clip - preserves speed when velocity is away from surface
     if (trace.fraction < 1.0) {
         float dot = DotProduct(pm->ps->velocity, trace.plane.normal);
         if (dot < 0.0f || (dot >= 0.0f && dot < 0.001f)) {
@@ -340,33 +267,25 @@ void PM_StepSlideMove(qboolean gravity) {
         }
     }
 
-    // [QL] validate step by tracing from start to current position
     pm->trace(&trace, start_o, pm->mins, pm->maxs, pm->ps->origin, pm->ps->clientNum, pm->tracemask);
 
     if (trace.fraction < 1.0) {
         float delta = pm->ps->origin[2] - start_o[2];
 
-        // step smoothing: store step height for cgame view smoothing
         if (delta > 2) {
             pm->stepHeight = delta;
             pm->stepTime = pm->cmd.serverTime;
         }
 
-        // air step friction: dampen X/Y velocity when stepping up while airborne
         if (!pml.groundPlane && delta > 0 && start_v[2] > 0) {
             float dampen = 1.0f - pm_airStepFriction;
             pm->ps->velocity[0] *= dampen;
             pm->ps->velocity[1] *= dampen;
         }
 
-        // [QL] step-jump: auto-jump off stairs when holding jump
         if (pm_stepJump && pm->ps->pm_type == PM_NORMAL
             && delta > 0 && pm->waterlevel < 2) {
-            // [QL] the crouch step jump is gated by pmove_CrouchStepJump (qagamex86.dll
-            // 0x1008feb4, read here and below in PM_StepSlideMove 0x1002efe0), not by
-            // pmove_DoubleJump
             if (PM_WouldJump() || (pm_crouchStepJump && PM_WouldCrouchStepJump())) {
-                // verify walkable ground at predicted position
                 vec3_t sjUp, sjDown;
                 trace_t sjTrace;
 
@@ -384,7 +303,6 @@ void PM_StepSlideMove(qboolean gravity) {
                         PM_DoJump();
                         pml.stepJumpFlag = 0;
                     } else if (pm_crouchStepJump && PM_WouldCrouchStepJump()) {
-                        // crouch step jump: verify clearance with shrunk bounding box
                         vec3_t sjMins, sjMaxs, crouchDown;
                         trace_t crouchTrace;
 

@@ -19,17 +19,8 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// ui_web.c -- [QL] what every page of the front end has in common
-//
-// See ui_web.h.
-//
-
 #include "ui_web.h"
 
-// [QL] web.pak css/main.css and skeleton.css: the panels (rgba(0,0,0,0.8), 35 rules), the fields
-// (rgba(15,15,15) on #333), a row under the cursor rgba(30,30,30), the slider's track #222, text
-// #DDD, #CCC, #999 and #666, and the yellow for what is chosen or under the cursor
 const vec4_t smPage = SM_RGB(0, 0, 0);
 const vec4_t smPanel = {0.0f, 0.0f, 0.0f, 0.8f};
 const vec4_t smRaised = SM_RGB(15, 15, 15);
@@ -54,13 +45,13 @@ float smTop;
 float smVW;
 float smBottom;
 float smMX, smMY;
-static float smSpacing;  // the letter-spacing in force, see SM_SetSpacing
+static float smSpacing;
 
 void SM_Frame(void) {
     float w = (float)uiInfo.uiDC.glconfig.vidWidth;
     float h = (float)uiInfo.uiDC.glconfig.vidHeight;
 
-    smSpacing = 0;  // whatever a page left set
+    smSpacing = 0;
     smScale = h / SM_VIEW_H;
     smVW = w / smScale;
     smTop = (h - SM_VIEW_H * smScale) * 0.5f;
@@ -116,15 +107,6 @@ void SM_Fill(float x, float y, float w, float h, const float* color, const smRec
     trap_R_SetColor(NULL);
 }
 
-/*
-===============
-SM_Round
-
-[ioquakelive] Retail's web UI has square corners, and since 2026-09-26 every page follows it,
-Settings included: the player asked for no rounded edges anywhere. The radius stays in the
-calls so the pages read as before, and is ignored.
-===============
-*/
 void SM_Round(float x, float y, float w, float h, float r, const float* color, const smRect_t* clip) {
     (void)r;
     SM_Fill(x, y, w, h, color, clip);
@@ -134,15 +116,6 @@ void SM_Pill(float x, float y, float w, float h, const float* color, const smRec
     SM_Round(x, y, w, h, h * 0.5f, color, clip);
 }
 
-/*
-===============
-SM_Shadow
-
-Nothing. What floats over a page used to carry a soft shadow, drawn as a few
-rounded plates; the player asked for the shadows to go, and this is the one place
-that decides it rather than picking the calls out of every page.
-===============
-*/
 void SM_Shadow(float x, float y, float w, float h, float r) {
     (void)x;
     (void)y;
@@ -164,13 +137,10 @@ void SM_Pic(float x, float y, float w, float h, qhandle_t shader, const smRect_t
     if (!shader || !SM_Clip(&r, clip)) {
         return;
     }
-    // what the clip leaves, in texture coordinates too
     trap_R_DrawStretchPic(r.x * smScale, smTop + r.y * smScale, r.w * smScale, r.h * smScale, (r.x - x) / w,
                           (r.y - y) / h, (r.x + r.w - x) / w, (r.y + r.h - y) / h, shader);
 }
 
-// [ioquakelive] the same picture through a colour, which is what the marks in the menu's
-// footer need: they are drawn at one quiet grey so the row reads as one thing
 void SM_PicColor(float x, float y, float w, float h, qhandle_t shader, const float* color,
                  const smRect_t* clip) {
     trap_R_SetColor(color);
@@ -178,7 +148,6 @@ void SM_PicColor(float x, float y, float w, float h, qhandle_t shader, const flo
     trap_R_SetColor(NULL);
 }
 
-// a CSS border triangle, 10 wide and 5 high (Start Match's react-select arrow)
 void SM_Arrow(float x, float y, qboolean up) {
     int k;
 
@@ -189,7 +158,6 @@ void SM_Arrow(float x, float y, qboolean up) {
     }
 }
 
-// the thin chevron of a Quake Club select, 10 wide
 void SM_Chevron(float x, float y, qboolean up, const float* color) {
     int k;
 
@@ -201,7 +169,6 @@ void SM_Chevron(float x, float y, qboolean up, const float* color) {
     }
 }
 
-// an X, for what closes
 void SM_Cross(float x, float y, float size, const float* color) {
     int n = (int)size;
     int k;
@@ -212,15 +179,6 @@ void SM_Cross(float x, float y, float size, const float* color) {
     }
 }
 
-/*
-===============
-SM_To640
-
-Turns a rectangle of the page into the 640x480 one the rest of the UI works in,
-for the few things drawn by code that expects those coordinates -- the player
-model, which UI_DrawPlayer puts through UI_AdjustFrom640 itself.
-===============
-*/
 void SM_To640(float x, float y, float w, float h, float* out) {
     float xscale = uiInfo.uiDC.xscale;
     float yscale = uiInfo.uiDC.yscale;
@@ -235,26 +193,6 @@ void SM_To640(float x, float y, float w, float h, float* out) {
     out[3] = h * smScale / yscale;
 }
 
-/*
-===============================================================================
-
-PLAYER MODELS
-
-===============================================================================
-*/
-
-/*
-===============
-SM_DrawPlayerIn
-
-Draws a player model so it fits the box. UI_DrawPlayer takes its field of view
-from the box's width alone, so a model drawn in a wide, low box comes out taller
-than the box and loses its head: the view is sized from the box's height instead
-(the whole model takes about 0.54 of the view's width) and centred on the box.
-The view can be wider than the box -- only the model's pixels are drawn, and it
-is narrow.
-===============
-*/
 void SM_DrawPlayerIn(playerInfo_t* pi, float x, float y, float w, float h) {
     float viewW = h * 0.86f / 0.54f;
     float r[4];
@@ -282,21 +220,12 @@ void SM_BuildPlayer(playerInfo_t* pi, const char* composed, float yaw, int weapo
     UI_PlayerInfo_SetInfo(pi, LEGS_IDLE, TORSO_STAND, viewangles, vec3_origin, weapon, qfalse);
 }
 
-/*
-===============================================================================
-
-TYPE
-
-===============================================================================
-*/
-
 static struct {
     qboolean tried;
-    int regular, strong;  // font indices, -1 when Barlow is not there
-    // [ioquakelive] retail's own faces, out of the player's web.pak: -1 when it is not there
+    int regular, strong;
     int sans, sansBold, handel, handelBold, awesome;
-    int sansItalic;  // the page's em
-    int arial;       // [ioquakelive] Liberation Sans, for the page's sans-serif
+    int sansItalic;
+    int arial;
 } smFonts = {qfalse, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
 void SM_SetLook(smLook_t look) {
@@ -304,20 +233,11 @@ void SM_SetLook(smLook_t look) {
 }
 
 void SM_LoadFonts(void) {
-    // [ioquakelive] Barlow, from pak01, is what every page but the front page takes: pak00 carries
-    // Handel Gothic in one weight only, so a heading had to be drawn twice to look bold and came
-    // out with the HUD's black edge around every letter, and Barlow has a real bold.
-    //
-    // Retail's own web front end does use Handel Gothic, though -- checked in web.pak, whose CSS
-    // declares @font-face HandelGothic (medium and bold) with sixteen font-family rules on it, and
-    // NotoSans for running text. The front page was drawn in those two faces for a while and the
-    // player did not like them, so every page is Barlow again.
     if (smFonts.tried) {
         return;
     }
     smFonts.tried = qtrue;
     smFonts.regular = trap_R_Font_Register("fonts/Barlow-Regular.ttf");
-    // [ioquakelive] Bold, not SemiBold: the heavier weight is the one wanted here
     smFonts.strong = trap_R_Font_Register("fonts/Barlow-Bold.ttf");
     if (smFonts.regular < 0 || smFonts.strong < 0) {
         Com_Printf("^3front end: Barlow not found in pak01, falling back to pak00's fonts\n");
@@ -325,20 +245,12 @@ void SM_LoadFonts(void) {
         smFonts.strong = -1;
     }
 
-    // [QL] the faces of retail's web UI (web.pak css/main.css @font-face): NotoSans for running
-    // text, HandelGothic for headings and the menus, in their real bold, and FontAwesome's icons.
-    // The webfonts the page itself loaded, which are TrueType: the .otf beside them are CFF
     smFonts.sans = trap_R_Font_Register("webui/fonts/NotoSans-Regular.ttf");
     smFonts.sansBold = trap_R_Font_Register("webui/fonts/NotoSans-Bold.ttf");
     smFonts.handel = trap_R_Font_Register("webui/fonts/handelgothic-medium-webfont.ttf");
     smFonts.handelBold = trap_R_Font_Register("webui/fonts/handelgothic-bold-webfont.ttf");
     smFonts.awesome = trap_R_Font_Register("webui/fonts/fontawesome-webfont.ttf");
-    // [QL] the page's italic is the bold one: css/main.css declares NotoSans italic twice, both
-    // times with NotoSans-BoldItalic.ttf, so an em comes out bold as well
     smFonts.sansItalic = trap_R_Font_Register("webui/fonts/NotoSans-BoldItalic.ttf");
-    // [ioquakelive] css/main.css asks for font-family: sans-serif once, in the game info dialog's
-    // h2, and Awesomium on Windows answers with Arial. Arial cannot travel with the game; Liberation
-    // Sans (OFL) has its metrics glyph for glyph, so the line measures the same
     smFonts.arial = trap_R_Font_Register("fonts/LiberationSans-Regular.ttf");
     if (smFonts.sans < 0 || smFonts.sansBold < 0 || smFonts.handel < 0 || smFonts.handelBold < 0) {
         Com_Printf("^3front end: no web.pak, so pak00's fonts stand in for retail's web UI\n");
@@ -346,7 +258,6 @@ void SM_LoadFonts(void) {
     }
 }
 
-// the face a page's font and weight come out in
 static int SM_Face(int font, qboolean bold) {
     if (font != FONT_SANS && font != FONT_DEFAULT) {
         return font;
@@ -363,7 +274,6 @@ static int SM_Face(int font, qboolean bold) {
     return font;
 }
 
-// whether a face has a bold of its own, or needs the second pass a pixel over
 static qboolean SM_HasBold(int face) {
     return face != FONT_SANS && face != FONT_DEFAULT;
 }
@@ -386,11 +296,9 @@ static float SM_FaceEm(int face) {
     if (SM_IsWebHandel(face)) {
         return face == smFonts.handelBold ? SM_WEB_HANDEL_BOLD_EM : SM_WEB_HANDEL_EM;
     }
-    // web.pak's Noto Sans has pak00's metrics
     return face == FONT_DEFAULT ? SM_HANDEL_EM : SM_SANS_EM;
 }
 
-// the italic the pages set their em in (bold, see SM_LoadFonts); the upright face without web.pak
 int SM_ItalicFace(void) {
     return smFonts.sansItalic >= 0 ? smFonts.sansItalic : FONT_SANS;
 }
@@ -415,7 +323,6 @@ float SM_Baseline(int font, float size, float lineTop, float lineHeight) {
     return lineTop + lineHeight * 0.5f + size * base;
 }
 
-// whether a line of text at this baseline shows whole inside the clip
 qboolean SM_TextInside(float baseline, float size, const smRect_t* clip) {
     return baseline - size * 1.07f >= clip->y - 1.0f && baseline + size * 0.3f <= clip->y + clip->h + 1.0f;
 }
@@ -424,7 +331,6 @@ void SM_SetSpacing(float spacing) {
     smSpacing = spacing;
 }
 
-// the bytes of the UTF-8 character that starts here
 static int SM_CharBytes(const char* s) {
     unsigned char c = (unsigned char)*s;
 
@@ -442,15 +348,6 @@ static int SM_CountChars(const char* text, int len) {
     return n;
 }
 
-/*
-===============
-SM_AdvanceFace
-
-A string's advance in CSS pixels. fontstash's box ends at the last glyph's ink,
-so a bar is measured after the text and taken off again: that keeps trailing
-spaces and the side bearings.
-===============
-*/
 static float SM_AdvanceFace(int face, float size, const char* text, int len) {
     char buf[MAX_STRING_CHARS];
     float withBar[5], bar[5];
@@ -473,14 +370,6 @@ static float SM_AdvanceFace(int face, float size, const char* text, int len) {
     return (withBar[2] - bar[2]) / smScale + smSpacing * SM_CountChars(text, len);
 }
 
-/*
-===============
-SM_DrawFace
-
-The drawing under SM_Text and SM_TextRaw. With a letter-spacing in force each character goes on
-its own, the spacing after it; pak00's faces without a bold get theirs from a second pass
-===============
-*/
 static void SM_DrawFace(float x, float baseline, int face, float size, const float* color, const char* text, int limit,
                         qboolean bold, int flags) {
     float px = size * SM_FaceEm(face) * smScale;
@@ -494,7 +383,6 @@ static void SM_DrawFace(float x, float baseline, int face, float size, const flo
         int sx = (int)(x * smScale + 0.5f);
 
         trap_R_Font_DrawString(sx, sy, text, face, px, limit, NULL, flags);
-        // pak00 has no bold weight: a second pass a pixel to the right stands in for it
         if (bold && !SM_HasBold(face)) {
             trap_R_Font_DrawString(sx + (shift < 1 ? 1 : shift), sy, text, face, px, limit, NULL, flags);
         }
@@ -524,8 +412,6 @@ static void SM_DrawFace(float x, float baseline, int face, float size, const flo
     trap_R_SetColor(NULL);
 }
 
-// the face SM_Text draws without bold: Barlow's titles are its strong weight either way, and
-// retail's Handel Gothic is the medium one
 float SM_Advance(int font, float size, const char* text, int len) {
     return SM_AdvanceFace(SM_Face(font, qfalse), size, text, len);
 }
@@ -534,7 +420,6 @@ float SM_AdvanceBold(int font, float size, const char* text, int len, qboolean b
     return SM_AdvanceFace(SM_Face(font, bold), size, text, len);
 }
 
-// the characters of text that fit in width
 int SM_Fit(int font, float size, const char* text, float width) {
     int len = (int)strlen(text);
     int n;
@@ -558,15 +443,6 @@ void SM_Text(float x, float baseline, int font, float size, const float* color, 
     SM_DrawFace(x, baseline, SM_Face(font, bold), size, color, text, limit, bold, 0);
 }
 
-/*
-===============
-SM_WebButton
-
-[QL] skeleton's button, which every page of retail's web UI uses: #3d3d3d with a #4d4d4d
-border, 11 pixel semibold capitals spaced a pixel apart; under the cursor the text turns
-yellow over #5d5d5d and a #999 border, and a disabled one goes dark.
-===============
-*/
 const vec4_t smWebButton = SM_RGB(61, 61, 61);
 static const vec4_t smWebButtonBorder = SM_RGB(77, 77, 77);
 const vec4_t smWebButtonHover = SM_RGB(93, 93, 93);
@@ -583,7 +459,6 @@ void SM_Border(float x, float y, float w, float h, float t, const float* color, 
     SM_Fill(x + w - t, y + t, t, h - 2 * t, color, clip);
 }
 
-// the width it takes on its own: 20 pixels of padding a side and the border
 float SM_WebButtonWidth(const char* label) {
     char upper[64];
 
@@ -597,14 +472,6 @@ void SM_WebButton(float x, float y, float w, const char* label, qboolean disable
     SM_WebButtonPadded(x, y, w, 20, 20, label, disabled, over, clip);
 }
 
-/*
-===============
-SM_WebButtonPadded
-
-A button with other paddings than its 0 20px: the label is centred between them, and one too wide
-for that space starts at the left one and runs out on the right, as a centred line does in a box
-===============
-*/
 void SM_WebButtonPadded(float x, float y, float w, float padLeft, float padRight, const char* label,
                         qboolean disabled, qboolean over, const smRect_t* clip) {
     char upper[64];
@@ -635,15 +502,6 @@ qboolean SM_Narrow(void) {
     return (qboolean)(uiInfo.uiDC.glconfig.vidWidth * 6 <= uiInfo.uiDC.glconfig.vidHeight * 9);
 }
 
-/*
-===============
-SM_TextRaw / SM_AdvanceRaw
-
-[QL] retail's pages print what they are given: a server named "^1Foo" shows the caret and
-the one. The renderer draws that way with TEXT_LITERAL; measuring has no such flag, so each
-caret is measured on its own, where it cannot start a colour.
-===============
-*/
 float SM_AdvanceRaw(int font, float size, const char* text, int len, qboolean bold) {
     int face = SM_Face(font, bold);
     float w = 0;
@@ -675,14 +533,6 @@ void SM_TextRaw(float x, float baseline, int font, float size, const float* colo
     SM_DrawFace(x, baseline, SM_Face(font, bold), size, color, text, limit, bold, TEXT_LITERAL);
 }
 
-/*
-===============
-SM_Icon
-
-[QL] FontAwesome's glyph, as retail's pages draw their <i class="fa">: sized by font-size and
-sitting on the line's baseline
-===============
-*/
 static int SM_Utf8(int cp, char* out) {
     if (cp < 0x80) {
         out[0] = (char)cp;
@@ -730,7 +580,6 @@ void SM_Centered(float middle, float baseline, float size, const float* color, c
             bold);
 }
 
-// letter-spacing comes after every character, the last one too
 float SM_SpacedWidth(int font, float size, const char* text, float spacing) {
     float w = 0;
 
@@ -752,15 +601,6 @@ void SM_SpacedText(float x, float baseline, int font, float size, const float* c
     }
 }
 
-/*
-===============
-SM_Label
-
-Quake Club's label: bold, upper case, and letter-spaced -- nav items, pills, table
-heads and the small gold line over a title. The text is upper-cased here so the
-callers can keep retail's own capitalisation.
-===============
-*/
 static void SM_Upper(const char* text, char* out, int size) {
     int i;
 
@@ -782,7 +622,7 @@ float SM_LabelWidth(float size, const char* text, float spacing) {
     c[1] = '\0';
     for (p = upper; *p; p++) {
         c[0] = *p;
-        w += SM_AdvanceBold(SM_FONT_TITLE, size, c, 1, qfalse) + spacing;  // measured as it is drawn
+        w += SM_AdvanceBold(SM_FONT_TITLE, size, c, 1, qfalse) + spacing;
     }
     return w - spacing;
 }
@@ -791,11 +631,6 @@ void SM_Label(float x, float baseline, float size, const float* color, const cha
     char upper[256];
 
     SM_Upper(text, upper, sizeof(upper));
-    // Drawn once, like SM_Button's word. The second pass a pixel over, which stands in for a bold
-    // weight the font does not carry, reads as the black edge Quake Live's HUD puts behind its
-    // text - and the front end is not the HUD. On a light block, a gold pill say, that edge is all
-    // you see. It is gone from every label, which is every heading, every eyebrow and every
-    // badge on the front end.
     if (spacing <= 0) {
         SM_Text(x, baseline, SM_FONT_TITLE, size, color, upper, -1, qfalse);
         return;
@@ -803,14 +638,6 @@ void SM_Label(float x, float baseline, float size, const float* color, const cha
     SM_SpacedText(x, baseline, SM_FONT_TITLE, size, color, upper, spacing, qfalse);
 }
 
-/*
-===============
-SM_Wrap
-
-Breaks text into the lines a block of this width shows, at spaces. Returns how
-many, with where each starts and how long it is.
-===============
-*/
 int SM_Wrap(int font, float size, const char* text, float width, int* starts, int* lens) {
     int total = (int)strlen(text);
     int pos = 0, lines = 0;
@@ -823,7 +650,6 @@ int SM_Wrap(int font, float size, const char* text, float width, int* starts, in
     while (pos < total && lines < SM_MAX_LINES) {
         int end, fit = -1;
 
-        // a line does not start with the spaces it broke at
         while (pos < total && text[pos] == ' ') {
             pos++;
         }
@@ -854,18 +680,8 @@ int SM_Wrap(int font, float size, const char* text, float width, int* starts, in
     return lines;
 }
 
-/*
-===============================================================================
-
-COMPONENTS
-
-===============================================================================
-*/
-
 #define SM_BUTTON_SPACING 1.0f
 
-// a button's label: the page's title face, upper case and spaced; a size step up only on the
-// tall buttons, so a pill's word stays the size of the pills around it
 static float SM_ButtonText(float h) {
     return h >= SM_BUTTON_H + 4.0f ? 13.0f : 12.0f;
 }
@@ -880,20 +696,7 @@ float SM_ButtonWidth(const char* text, float height) {
            (height >= SM_BUTTON_H ? 44.0f : 28.0f);
 }
 
-/*
-===============
-SM_Button
-
-Square corners and no pill: this is a game's front end, not a web page (the
-player's words). The one thing the page wants you to do is a solid block of the
-Quake Live yellow with dark text on it; the rest are the label over a 1px rule of
-the border colour, which takes the yellow with the text under the cursor.
-===============
-*/
 void SM_Button(float x, float y, float w, float h, const char* text, int style, qboolean over) {
-    // the label is the page's own: upper case, spaced, and drawn once. The pass a pixel over that
-    // stands in for a bold weight reads as a smudge at this size, which is what made a button's
-    // word grey and hard to pick out against its own block.
     float size = SM_ButtonText(h);
     char upper[256];
     const float* fg;
@@ -922,14 +725,6 @@ void SM_Button(float x, float y, float w, float h, const char* text, int style, 
                   SM_Baseline(SM_FONT_TITLE, size, y, h), SM_FONT_TITLE, size, fg, upper, SM_BUTTON_SPACING, qfalse);
 }
 
-/*
-===============
-SM_Switch
-
-shadcn's switch as Quake Club dresses it: a pill track, cream when on with a dark
-thumb, --input when off with a cream one.
-===============
-*/
 void SM_Switch(float x, float y, qboolean on, qboolean over) {
     float pad = 2.0f;
     float thumb = SM_SWITCH_H - 2 * pad;
@@ -944,15 +739,6 @@ void SM_Switch(float x, float y, qboolean on, qboolean over) {
     SM_Pill(on ? x + SM_SWITCH_W - pad - thumb : x + pad, y + pad, thumb, thumb, on ? smOnPrimary : smText, NULL);
 }
 
-/*
-===============
-SM_SliderTrack
-
-shadcn's slider: a 6px pill track, the part up to the value in the foreground
-cream, and a 16px round thumb. The track takes the field colour so it reads on a
-panel.
-===============
-*/
 void SM_SliderTrack(float x, float y, float w, float frac, qboolean over) {
     float track = 6.0f;
     float ty = y + (SM_SLIDER_H - track) * 0.5f;
@@ -977,13 +763,11 @@ void SM_SliderTrack(float x, float y, float w, float frac, qboolean over) {
     SM_Pill(tx + 1.5f, y + 1.5f, SM_SLIDER_H - 3, SM_SLIDER_H - 3, smText, NULL);
 }
 
-// a field: a rounded box on --input, its border lit when it has the focus
 void SM_FieldBox(float x, float y, float w, float h, qboolean focused, qboolean over, const smRect_t* clip) {
     SM_Round(x, y, w, h, SM_RADIUS_SM, focused ? smRing : over ? smBorder : smField, clip);
     SM_Round(x + 1, y + 1, w - 2, h - 2, SM_RADIUS_SM - 1, smRaised, clip);
 }
 
-// a key cap, as the site's kbd: returns its width
 float SM_Kbd(float x, float y, const char* text, qboolean waiting, const smRect_t* clip) {
     float size = 12.0f;
     float w = SM_LabelWidth(size, text, 0.6f) + 16;
@@ -1002,14 +786,6 @@ float SM_Kbd(float x, float y, const char* text, qboolean waiting, const smRect_
     }
     return w;
 }
-
-/*
-===============================================================================
-
-WHAT THE CURSOR IS OVER
-
-===============================================================================
-*/
 
 smHit_t smHits[SM_MAX_HITS], smLastHits[SM_MAX_HITS];
 int smNumHits, smNumLastHits;
@@ -1043,7 +819,6 @@ qboolean SM_Over(int type, int index) {
     return smHasUnder && smUnder.type == type && smUnder.index == index;
 }
 
-// what every page does before and after drawing: the frame, and the hit list swap
 void SM_BeginFrame(void) {
     const smHit_t* under;
 
@@ -1062,14 +837,6 @@ void SM_EndFrame(void) {
     smNumLastHits = smNumHits;
 }
 
-/*
-===============
-SM_Avatar
-
-[QL] A player's Steam avatar as an image, 0 until Steam has it. Each player is asked about
-once a second at most, and the image is kept once it is there.
-===============
-*/
 #define SM_MAX_AVATARS 64
 
 qhandle_t SM_Avatar(const char* steamId) {

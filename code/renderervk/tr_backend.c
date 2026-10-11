@@ -26,14 +26,11 @@ backEndState_t	backEnd;
 
 #ifndef USE_VULKAN
 static const float s_flipMatrix[16] = {
-	// convert from our coordinate system (looking down X)
-	// to OpenGL's coordinate system (looking down -Z)
 	0, 0, -1, 0,
 	-1, 0, 0, 0,
 	0, 1, 0, 0,
 	0, 0, 0, 1
 };
-
 
 const float *GL_Ortho( const float left, const float right, const float bottom, const float top, const float znear, const float zfar )
 {
@@ -51,10 +48,6 @@ const float *GL_Ortho( const float left, const float right, const float bottom, 
 }
 #endif
 
-
-/*
-** GL_Bind
-*/
 void GL_Bind( image_t *image ) {
 #ifdef USE_VULKAN
 	if ( !image ) {
@@ -62,15 +55,13 @@ void GL_Bind( image_t *image ) {
 		image = tr.defaultImage;
 	}
 
-	if ( r_nobind->integer && tr.dlightImage ) {		// performance evaluation option
+	if ( r_nobind->integer && tr.dlightImage ) {
 		image = tr.dlightImage;
 	}
 
-	//if ( glState.currenttextures[glState.currenttmu] != texnum ) {
 		image->frameUsed = tr.frameCount;
 		vk_update_descriptor( glState.currenttmu + VK_DESC_TEXTURE_BASE, image->descriptor );
 
-	//}
 #else
 	GLuint texnum;
 
@@ -81,7 +72,7 @@ void GL_Bind( image_t *image ) {
 		texnum = image->texnum;
 	}
 
-	if ( r_nobind->integer && tr.dlightImage ) {		// performance evaluation option
+	if ( r_nobind->integer && tr.dlightImage ) {
 		texnum = tr.dlightImage->texnum;
 	}
 
@@ -95,10 +86,6 @@ void GL_Bind( image_t *image ) {
 #endif
 }
 
-
-/*
-** GL_SelectTexture
-*/
 void GL_SelectTexture( int unit )
 {
 #ifndef USE_VULKAN
@@ -118,10 +105,6 @@ void GL_SelectTexture( int unit )
 	glState.currenttmu = unit;
 }
 
-
-/*
-** GL_SelectClientTexture
-*/
 #ifndef USE_VULKAN
 static void GL_SelectClientTexture( int unit )
 {
@@ -141,10 +124,6 @@ static void GL_SelectClientTexture( int unit )
 }
 #endif
 
-
-/*
-** GL_Cull
-*/
 void GL_Cull( cullType_t cullType ) {
 	if ( glState.faceCulling == cullType ) {
 		return;
@@ -172,10 +151,6 @@ void GL_Cull( cullType_t cullType ) {
 #endif
 }
 
-
-/*
-** GL_TexEnv
-*/
 void GL_TexEnv( GLint env )
 {
 #ifndef USE_VULKAN
@@ -199,13 +174,6 @@ void GL_TexEnv( GLint env )
 #endif
 }
 
-
-/*
-** GL_State
-**
-** This routine is responsible for setting the most commonly changed state
-** in Q3.
-*/
 void GL_State( unsigned stateBits )
 {
 #ifndef USE_VULKAN
@@ -216,9 +184,6 @@ void GL_State( unsigned stateBits )
 		return;
 	}
 
-	//
-	// check depthFunc bits
-	//
 	if ( diff & GLS_DEPTHFUNC_EQUAL )
 	{
 		if ( stateBits & GLS_DEPTHFUNC_EQUAL )
@@ -231,9 +196,6 @@ void GL_State( unsigned stateBits )
 		}
 	}
 
-	//
-	// check blend bits
-	//
 	if ( diff & GLS_BLEND_BITS )
 	{
 		GLenum srcFactor = GL_ONE, dstFactor = GL_ONE;
@@ -314,9 +276,6 @@ void GL_State( unsigned stateBits )
 		}
 	}
 
-	//
-	// check depthmask
-	//
 	if ( diff & GLS_DEPTHMASK_TRUE )
 	{
 		if ( stateBits & GLS_DEPTHMASK_TRUE )
@@ -329,9 +288,6 @@ void GL_State( unsigned stateBits )
 		}
 	}
 
-	//
-	// fill/line mode
-	//
 	if ( diff & GLS_POLYMODE_LINE )
 	{
 		if ( stateBits & GLS_POLYMODE_LINE )
@@ -344,9 +300,6 @@ void GL_State( unsigned stateBits )
 		}
 	}
 
-	//
-	// depthtest
-	//
 	if ( diff & GLS_DEPTHTEST_DISABLE )
 	{
 		if ( stateBits & GLS_DEPTHTEST_DISABLE )
@@ -359,9 +312,6 @@ void GL_State( unsigned stateBits )
 		}
 	}
 
-	//
-	// alpha test
-	//
 	if ( diff & GLS_ATEST_BITS )
 	{
 		switch ( stateBits & GLS_ATEST_BITS )
@@ -388,9 +338,8 @@ void GL_State( unsigned stateBits )
 	}
 
 	glState.glStateBits = stateBits;
-#endif // USE_VULKAN
+#endif
 }
-
 
 #ifndef USE_VULKAN
 void GL_ClientState( int unit, unsigned stateBits )
@@ -436,21 +385,12 @@ void GL_ClientState( int unit, unsigned stateBits )
 }
 #endif
 
-
 static void RB_SetGL2D( void );
 
-/*
-================
-RB_Hyperspace
-
-A player has predicted a teleport, but hasn't arrived yet
-================
-*/
 static void RB_Hyperspace( void ) {
 	color4ub_t c;
 
 	if ( !backEnd.isHyperspace ) {
-		// do initialization shit
 	}
 
 	if ( tess.shader != tr.whiteShader ) {
@@ -466,9 +406,9 @@ static void RB_Hyperspace( void ) {
 	RB_SetGL2D();
 
 	if ( r_teleporterFlash->integer == 0 ) {
-		c.rgba[0] = c.rgba[1] = c.rgba[2] = 0; // fade to black
+		c.rgba[0] = c.rgba[1] = c.rgba[2] = 0;
 	} else {
-		c.rgba[0] = c.rgba[1] = c.rgba[2] = (backEnd.refdef.time & 255); // fade to white
+		c.rgba[0] = c.rgba[1] = c.rgba[2] = (backEnd.refdef.time & 255);
 	}
 	c.rgba[3] = 255;
 
@@ -483,19 +423,14 @@ static void RB_Hyperspace( void ) {
 	backEnd.isHyperspace = qtrue;
 }
 
-
 static void SetViewportAndScissor( void ) {
 #ifdef USE_VULKAN
-	//Com_Memcpy( vk_world.modelview_transform, backEnd.or.modelMatrix, 64 );
-	//vk_update_mvp();
-	// force depth range and viewport/scissor updates
 	vk.cmd->depth_range = DEPTH_RANGE_COUNT;
 #else
 	qglMatrixMode(GL_PROJECTION);
 	qglLoadMatrixf( backEnd.viewParms.projectionMatrix );
 	qglMatrixMode(GL_MODELVIEW);
 
-	// set the window clipping
 	qglViewport( backEnd.viewParms.viewportX, backEnd.viewParms.viewportY,
 		backEnd.viewParms.viewportWidth, backEnd.viewParms.viewportHeight );
 	qglScissor( backEnd.viewParms.scissorX, backEnd.viewParms.scissorY,
@@ -503,21 +438,11 @@ static void SetViewportAndScissor( void ) {
 #endif
 }
 
-
-/*
-=================
-RB_BeginDrawingView
-
-Any mirrored or portaled views have already been drawn, so prepare
-to actually render the visible surfaces for this view
-=================
-*/
 static void RB_BeginDrawingView( void ) {
 #ifndef USE_VULKAN
 	int clearBits = 0;
 #endif
 
-	// sync with gl if needed
 	if ( r_finish->integer == 1 && !glState.finishCalled ) {
 #ifdef USE_VULKAN
 		vk_queue_wait_idle();
@@ -529,22 +454,15 @@ static void RB_BeginDrawingView( void ) {
 		glState.finishCalled = qtrue;
 	}
 
-	// we will need to change the projection matrix before drawing
-	// 2D images again
 	backEnd.projection2D = qfalse;
 
-	//
-	// set the modelview matrix for the viewer
-	//
 	SetViewportAndScissor();
 
 #ifdef USE_VULKAN
 	vk_clear_depth( qtrue );
 #else
-	// ensures that depth writes are enabled for the depth clear
 	GL_State( GLS_DEFAULT );
 
-	// clear relevant buffers
 	clearBits = GL_DEPTH_BUFFER_BIT;
 
 	if ( r_shadows->integer == 2 )
@@ -553,11 +471,11 @@ static void RB_BeginDrawingView( void ) {
 	}
 	if ( 0 && r_fastsky->integer && !( backEnd.refdef.rdflags & RDF_NOWORLDMODEL ) )
 	{
-		clearBits |= GL_COLOR_BUFFER_BIT;	// FIXME: only if sky shaders have been used
+		clearBits |= GL_COLOR_BUFFER_BIT;
 #ifdef _DEBUG
-		qglClearColor( 0.8f, 0.7f, 0.4f, 1.0f );	// FIXME: get color of sky
+		qglClearColor( 0.8f, 0.7f, 0.4f, 1.0f );
 #else
-		qglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );	// FIXME: get color of sky
+		qglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
 #endif
 	}
 	qglClear( clearBits );
@@ -571,9 +489,8 @@ static void RB_BeginDrawingView( void ) {
 		backEnd.isHyperspace = qfalse;
 	}
 
-	glState.faceCulling = -1;		// force face culling to set next time
+	glState.faceCulling = -1;
 
-	// we will only draw a sun if there was sky rendered in this view
 	backEnd.skyRenderedThisView = qfalse;
 }
 
@@ -581,11 +498,6 @@ static void RB_BeginDrawingView( void ) {
 static void RB_LightingPass( void );
 #endif
 
-/*
-==================
-RB_RenderDrawSurfList
-==================
-*/
 static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 	shader_t		*shader, *oldShader;
 	int				fogNum;
@@ -601,12 +513,10 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 #ifdef USE_PMLIGHT
 	float			oldShaderSort;
 #endif
-	double			originalTime; // -EC-
+	double			originalTime;
 
-	// save original time for entity shader offsets
 	originalTime = backEnd.refdef.floatTime;
 
-	// draw everything
 	oldEntityNum = -1;
 	backEnd.currentEntity = &tr.worldEntity;
 	oldShader = NULL;
@@ -624,7 +534,6 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 
 	for (i = 0, drawSurf = drawSurfs ; i < numDrawSurfs ; i++, drawSurf++) {
 		if ( drawSurf->sort == oldSort ) {
-			// fast path, same as previous sort
 			rb_surfaceTable[ *drawSurf->surface ]( drawSurf->surface );
 			continue;
 		}
@@ -635,18 +544,11 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 			continue;
 		}
 #endif
-		//
-		// change the tess parameters if needed
-		// a "entityMergable" shader is a shader that can have surfaces from separate
-		// entities merged into a single batch, like smoke and blood puff sprites
 		if ( ( (oldSort ^ drawSurf->sort ) & ~QSORT_REFENTITYNUM_MASK ) || !shader->entityMergable ) {
-			//if ( oldShader != NULL ) {
 				RB_EndSurface();
-			//}
 #ifdef USE_PMLIGHT
 			#define INSERT_POINT SS_FOG
 			if ( backEnd.refdef.numLitSurfs && oldShaderSort < INSERT_POINT && shader->sort >= INSERT_POINT ) {
-				//RB_BeginDrawingLitSurfs(); // no need, already setup in RB_BeginDrawingView()
 #ifdef USE_VULKAN
 				RB_LightingPass();
 #else
@@ -658,7 +560,7 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 					RB_LightingPass();
 				}
 #endif
-				oldEntityNum = -1; // force matrix setup
+				oldEntityNum = -1;
 			}
 			oldShaderSort = shader->sort;
 #endif
@@ -668,9 +570,6 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 
 		oldSort = drawSurf->sort;
 
-		//
-		// change the modelview matrix if needed
-		//
 		if ( entityNum != oldEntityNum ) {
 			depthRange = isCrosshair = qfalse;
 
@@ -678,9 +577,7 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 				backEnd.currentEntity = &backEnd.refdef.entities[entityNum];
 				backEnd.refdef.floatTime = originalTime - (double)backEnd.currentEntity->e.shaderTime;
 
-				// set up the transformation matrix
 				R_RotateForEntity( backEnd.currentEntity, &backEnd.viewParms, &backEnd.or );
-				// set up the dynamic lighting if needed
 #ifdef USE_LEGACY_DLIGHTS
 #ifdef USE_PMLIGHT
 				if ( !r_dlightMode->integer )
@@ -688,9 +585,8 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 				if ( backEnd.currentEntity->needDlights ) {
 					R_TransformDlights( backEnd.refdef.num_dlights, backEnd.refdef.dlights, &backEnd.or );
 				}
-#endif // USE_LEGACY_DLIGHTS
+#endif
 				if ( backEnd.currentEntity->e.renderfx & RF_DEPTHHACK ) {
-					// hack the depth range to prevent view model from poking into walls
 					depthRange = qtrue;
 
 					if(backEnd.currentEntity->e.renderfx & RF_CROSSHAIR)
@@ -705,11 +601,9 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 				if ( !r_dlightMode->integer )
 #endif
 				R_TransformDlights( backEnd.refdef.num_dlights, backEnd.refdef.dlights, &backEnd.or );
-#endif // USE_LEGACY_DLIGHTS
+#endif
 			}
 
-			// we have to reset the shaderTime as well otherwise image animations on
-			// the world (like water) continue with the wrong frame
 			tess.shaderTime = backEnd.refdef.floatTime - tess.shader->timeOffset;
 
 #ifdef USE_VULKAN
@@ -720,10 +614,6 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 			qglLoadMatrixf( backEnd.or.modelMatrix );
 #endif
 
-			//
-			// change depthrange. Also change projection matrix so first person weapon does not look like coming
-			// out of the screen.
-			//
 #ifndef USE_VULKAN
 			if (oldDepthRange != depthRange || wasCrosshair != isCrosshair)
 			{
@@ -735,7 +625,6 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 						{
 							if(oldDepthRange)
 							{
-								// was not a crosshair but now is, change back proj matrix
 								qglMatrixMode(GL_PROJECTION);
 								qglLoadMatrixf(backEnd.viewParms.projectionMatrix);
 								qglMatrixMode(GL_MODELVIEW);
@@ -775,22 +664,18 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 			oldEntityNum = entityNum;
 		}
 
-		// add the triangles for this surface
 		rb_surfaceTable[ *drawSurf->surface ]( drawSurf->surface );
 	}
 
-	// draw the contents of the last shader batch
 	if ( oldShader != NULL ) {
 		RB_EndSurface();
 	}
 
 	backEnd.refdef.floatTime = originalTime;
 
-	// go back to the world modelview matrix
 #ifdef USE_VULKAN
 	Com_Memcpy( vk_world.modelview_transform, backEnd.viewParms.world.modelMatrix, 64 );
 	tess.depthRange = DEPTH_RANGE_NORMAL;
-	//vk_update_mvp();
 #else
 	qglLoadMatrixf( backEnd.viewParms.world.modelMatrix );
 	if ( depthRange ) {
@@ -799,36 +684,18 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 #endif
 }
 
-
 #ifdef USE_PMLIGHT
-/*
-=================
-RB_BeginDrawingLitView
-=================
-*/
 static void RB_BeginDrawingLitSurfs( void )
 {
-	// we will need to change the projection matrix before drawing
-	// 2D images again
 	backEnd.projection2D = qfalse;
 
-	// we will only draw a sun if there was sky rendered in this view
 	backEnd.skyRenderedThisView = qfalse;
 
-	//
-	// set the modelview matrix for the viewer
-	//
 	SetViewportAndScissor();
 
-	glState.faceCulling = -1;		// force face culling to set next time
+	glState.faceCulling = -1;
 }
 
-
-/*
-==================
-RB_RenderLitSurfList
-==================
-*/
 static void RB_RenderLitSurfList( dlight_t* dl ) {
 	shader_t		*shader, *oldShader;
 	int				fogNum;
@@ -839,12 +706,10 @@ static void RB_RenderLitSurfList( dlight_t* dl ) {
 	qboolean		depthRange, isCrosshair;
 	const litSurf_t	*litSurf;
 	unsigned int	oldSort;
-	double			originalTime; // -EC-
+	double			originalTime;
 
-	// save original time for entity shader offsets
 	originalTime = backEnd.refdef.floatTime;
 
-	// draw everything
 	oldEntityNum = -1;
 	backEnd.currentEntity = &tr.worldEntity;
 	oldShader = NULL;
@@ -858,9 +723,7 @@ static void RB_RenderLitSurfList( dlight_t* dl ) {
 	tess.dlightUpdateParams = qtrue;
 
 	for ( litSurf = dl->head; litSurf; litSurf = litSurf->next ) {
-		//if ( litSurf->sort == sort ) {
 		if ( litSurf->sort == oldSort ) {
-			// fast path, same as previous sort
 			rb_surfaceTable[ *litSurf->surface ]( litSurf->surface );
 			continue;
 		}
@@ -871,16 +734,7 @@ static void RB_RenderLitSurfList( dlight_t* dl ) {
 			continue;
 		}
 #endif
-		// anything BEFORE opaque is sky/portal, anything AFTER it should never have been added
-		//assert( shader->sort == SS_OPAQUE );
-		// !!! but MIRRORS can trip that assert, so just do this for now
-		//if ( shader->sort < SS_OPAQUE )
-		//	continue;
 
-		//
-		// change the tess parameters if needed
-		// a "entityMergable" shader is a shader that can have surfaces from separate
-		// entities merged into a single batch, like smoke and blood puff sprites
 		if ( ( (oldSort ^ litSurf->sort) & ~QSORT_REFENTITYNUM_MASK ) || !shader->entityMergable ) {
 			if ( oldShader != NULL ) {
 				RB_EndSurface();
@@ -891,9 +745,6 @@ static void RB_RenderLitSurfList( dlight_t* dl ) {
 
 		oldSort = litSurf->sort;
 
-		//
-		// change the modelview matrix if needed
-		//
 		if ( entityNum != oldEntityNum ) {
 			depthRange = isCrosshair = qfalse;
 
@@ -902,11 +753,9 @@ static void RB_RenderLitSurfList( dlight_t* dl ) {
 
 				backEnd.refdef.floatTime = originalTime - (double)backEnd.currentEntity->e.shaderTime;
 
-				// set up the transformation matrix
 				R_RotateForEntity( backEnd.currentEntity, &backEnd.viewParms, &backEnd.or );
 
 				if ( backEnd.currentEntity->e.renderfx & RF_DEPTHHACK ) {
-					// hack the depth range to prevent view model from poking into walls
 					depthRange = qtrue;
 
 					if(backEnd.currentEntity->e.renderfx & RF_CROSSHAIR)
@@ -918,11 +767,8 @@ static void RB_RenderLitSurfList( dlight_t* dl ) {
 				backEnd.or = backEnd.viewParms.world;
 			}
 
-			// we have to reset the shaderTime as well otherwise image animations on
-			// the world (like water) continue with the wrong frame
 			tess.shaderTime = backEnd.refdef.floatTime - tess.shader->timeOffset;
 
-			// set up the dynamic lighting
 			R_TransformDlights( 1, dl, &backEnd.or );
 			tess.dlightUpdateParams = qtrue;
 
@@ -932,11 +778,6 @@ static void RB_RenderLitSurfList( dlight_t* dl ) {
 			vk_update_mvp( NULL );
 #else
 			qglLoadMatrixf( backEnd.or.modelMatrix );
-
-			//
-			// change depthrange. Also change projection matrix so first person weapon does not look like coming
-			// out of the screen.
-			//
 
 			if (oldDepthRange != depthRange || wasCrosshair != isCrosshair)
 			{
@@ -948,7 +789,6 @@ static void RB_RenderLitSurfList( dlight_t* dl ) {
 						{
 							if(oldDepthRange)
 							{
-								// was not a crosshair but now is, change back proj matrix
 								qglMatrixMode(GL_PROJECTION);
 								qglLoadMatrixf(backEnd.viewParms.projectionMatrix);
 								qglMatrixMode(GL_MODELVIEW);
@@ -988,45 +828,27 @@ static void RB_RenderLitSurfList( dlight_t* dl ) {
 			oldEntityNum = entityNum;
 		}
 
-		// add the triangles for this surface
 		rb_surfaceTable[ *litSurf->surface ]( litSurf->surface );
 	}
 
-	// draw the contents of the last shader batch
 	if ( oldShader != NULL ) {
 		RB_EndSurface();
 	}
 
 	backEnd.refdef.floatTime = originalTime;
 
-	// go back to the world modelview matrix
 #ifdef USE_VULKAN
 	Com_Memcpy( vk_world.modelview_transform, backEnd.viewParms.world.modelMatrix, 64 );
 	tess.depthRange = DEPTH_RANGE_NORMAL;
-	//vk_update_mvp();
 #else
 	qglLoadMatrixf( backEnd.viewParms.world.modelMatrix );
 	if ( depthRange ) {
 		qglDepthRange (0, 1);
 	}
-#endif // !USE_VULKAN
+#endif
 }
-#endif // USE_PMLIGHT
+#endif
 
-
-/*
-============================================================================
-
-RENDER BACK END FUNCTIONS
-
-============================================================================
-*/
-
-/*
-================
-RB_SetGL2D
-================
-*/
 static void RB_SetGL2D( void ) {
 
 	if ( backEnd.projection2D ) {
@@ -1038,10 +860,8 @@ static void RB_SetGL2D( void ) {
 #ifdef USE_VULKAN
 	vk_update_mvp( NULL );
 
-	// force depth range and viewport/scissor updates
 	vk.cmd->depth_range = DEPTH_RANGE_COUNT;
 #else
-	// set 2D virtual screen size
 	qglViewport( 0, 0, glConfig.vidWidth, glConfig.vidHeight );
 	qglScissor( 0, 0, glConfig.vidWidth, glConfig.vidHeight );
 	qglMatrixMode( GL_PROJECTION );
@@ -1057,21 +877,10 @@ static void RB_SetGL2D( void ) {
 	qglDisable( GL_CLIP_PLANE0 );
 #endif
 
-	// set time for 2D shaders
 	backEnd.refdef.time = ri.Milliseconds();
-	backEnd.refdef.floatTime = (double)backEnd.refdef.time * 0.001; // -EC-: cast to double
+	backEnd.refdef.floatTime = (double)backEnd.refdef.time * 0.001;
 }
 
-
-/*
-=============
-RE_StretchRaw
-
-FIXME: not exactly backend
-Stretches a raw 32 bit power of 2 bitmap image over the given screen rectangle.
-Used for cinematics.
-=============
-*/
 void RE_StretchRaw( int x, int y, int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty ) {
 	int			i, j;
 	int			start, end;
@@ -1085,7 +894,6 @@ void RE_StretchRaw( int x, int y, int w, int h, int cols, int rows, const byte *
 		start = ri.Milliseconds();
 	}
 
-	// make sure rows and cols are powers of 2
 	for ( i = 0 ; ( 1 << i ) < cols ; i++ ) {
 	}
 	for ( j = 0 ; ( 1 << j ) < rows ; j++ ) {
@@ -1106,7 +914,6 @@ void RE_StretchRaw( int x, int y, int w, int h, int cols, int rows, const byte *
 	RE_StretchPic( x, y, w, h, 0.5f / cols, 0.5f / rows, 1.0f - 0.5f / cols, 1.0f - 0.5 / rows, tr.cinematicShader->index );
 }
 
-
 void RE_UploadCinematic( int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty ) {
 
 	image_t *image;
@@ -1122,7 +929,6 @@ void RE_UploadCinematic( int w, int h, int cols, int rows, const byte *data, int
 	GL_Bind( image );
 #endif
 
-	// if the scratchImage isn't in the format we want, specify it as a new texture
 	if ( cols != image->width || rows != image->height ) {
 		image->width = image->uploadWidth = cols;
 		image->height = image->uploadHeight = rows;
@@ -1137,8 +943,6 @@ void RE_UploadCinematic( int w, int h, int cols, int rows, const byte *data, int
 		qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, gl_clamp_mode );
 #endif
 	} else if ( dirty ) {
-		// otherwise, just subimage upload it so that drivers can tell we are going to be changing
-		// it and don't try and do a texture compression
 #ifdef USE_VULKAN
 		vk_upload_image_data( image, 0, 0, cols, rows, 1, (byte *)data, cols * rows * 4, qtrue );
 #else
@@ -1147,12 +951,6 @@ void RE_UploadCinematic( int w, int h, int cols, int rows, const byte *data, int
 	}
 }
 
-
-/*
-=============
-RB_SetColor
-=============
-*/
 static const void *RB_SetColor( const void *data ) {
 	const setColorCommand_t	*cmd;
 
@@ -1166,12 +964,6 @@ static const void *RB_SetColor( const void *data ) {
 	return (const void *)(cmd + 1);
 }
 
-
-/*
-=============
-RB_StretchPic
-=============
-*/
 static const void *RB_StretchPic( const void *data ) {
 	const stretchPicCommand_t	*cmd;
 	shader_t *shader;
@@ -1182,7 +974,7 @@ static const void *RB_StretchPic( const void *data ) {
 	if ( shader != tess.shader ) {
 		RB_EndSurface();
 		backEnd.currentEntity = &backEnd.entity2D;
-		RB_SetGL2D(); // set correct shader time before RB_BeginSurface() on 3D->2D transition
+		RB_SetGL2D();
 		RB_BeginSurface( shader, 0 );
 	}
 
@@ -1193,7 +985,6 @@ static const void *RB_StretchPic( const void *data ) {
 	RB_SetGL2D();
 
 #ifdef USE_VULKAN
-	// [ioquakelive] Quake3e's own bloom never on top of Quake Live's
 	if ( r_bloom->integer && !r_bloomActive->integer ) {
 		vk_bloom();
 	}
@@ -1203,7 +994,6 @@ static const void *RB_StretchPic( const void *data ) {
 	return (const void *)(cmd + 1);
 }
 
-
 #ifdef USE_PMLIGHT
 static void RB_LightingPass( void )
 {
@@ -1211,8 +1001,6 @@ static void RB_LightingPass( void )
 	int	i;
 
 #ifdef USE_VBO
-	//VBO_Flush();
-	//tess.allowVBO = qfalse; // for now
 #endif
 
 	tess.dlightPass = qtrue;
@@ -1233,7 +1021,6 @@ static void RB_LightingPass( void )
 }
 #endif
 
-
 static void transform_to_eye_space( const vec3_t v, vec3_t v_eye )
 {
 	const float *m = backEnd.viewParms.world.modelMatrix;
@@ -1242,12 +1029,6 @@ static void transform_to_eye_space( const vec3_t v, vec3_t v_eye )
 	v_eye[2] = m[2]*v[0] + m[6]*v[1] + m[10]*v[2] + m[14];
 };
 
-
-/*
-================
-RB_DebugPolygon
-================
-*/
 static void RB_DebugPolygon( int color, int numPoints, float *points ) {
 	vec3_t pa;
 	vec3_t pb;
@@ -1274,11 +1055,10 @@ static void RB_DebugPolygon( int color, int numPoints, float *points ) {
 	}
 
 	if ( DotProduct( n, pa ) >= 0 ) {
-		return; // discard backfacing polygon
+		return;
 	}
 
 #ifdef USE_VULKAN
-	// Solid shade.
 	for (i = 0; i < numPoints; i++) {
 		VectorCopy(&points[3*i], tess.xyz[i]);
 
@@ -1302,7 +1082,6 @@ static void RB_DebugPolygon( int color, int numPoints, float *points ) {
 	vk_bind_geometry( TESS_XYZ | TESS_RGBA0 | TESS_ST0 );
 	vk_draw_geometry( DEPTH_RANGE_NORMAL, qtrue );
 
-	// Outline.
 	Com_Memset( tess.svars.colors[0], tr.identityLightByte, numPoints * 2 * sizeof( color4ub_t ) );
 
 	for ( i = 0; i < numPoints; i++ ) {
@@ -1323,12 +1102,10 @@ static void RB_DebugPolygon( int color, int numPoints, float *points ) {
 	GL_ClientState( 0, CLS_NONE );
 	qglVertexPointer( 3, GL_FLOAT, 0, points );
 
-	// draw solid shade
 	GL_State( GLS_DEPTHMASK_TRUE | GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE );
 	qglColor4f( color&1, (color>>1)&1, (color>>2)&1, 1 );
 	qglDrawArrays( GL_TRIANGLE_FAN, 0, numPoints );
 
-	// draw wireframe outline
 	qglDepthRange( 0, 0 );
 	qglColor4f( 1, 1, 1, 1 );
 	qglDrawArrays( GL_LINE_LOOP, 0, numPoints );
@@ -1338,14 +1115,6 @@ static void RB_DebugPolygon( int color, int numPoints, float *points ) {
 #endif
 }
 
-
-/*
-====================
-RB_DebugGraphics
-
-Visualization aid for movement clipping debugging
-====================
-*/
 static void RB_DebugGraphics( void ) {
 
 	if ( !r_debugSurface->integer ) {
@@ -1361,16 +1130,9 @@ static void RB_DebugGraphics( void ) {
 	ri.CM_DrawDebugSurface( RB_DebugPolygon );
 }
 
-
-/*
-=============
-RB_DrawSurfs
-=============
-*/
 static const void *RB_DrawSurfs( const void *data ) {
 	const drawSurfsCommand_t *cmd;
 
-	// finish any 2D drawing if needed
 	RB_EndSurface();
 
 	cmd = (const drawSurfsCommand_t *)data;
@@ -1382,7 +1144,6 @@ static const void *RB_DrawSurfs( const void *data ) {
 	VBO_UnBind();
 #endif
 
-	// clear the z buffer, set the modelview, etc
 	RB_BeginDrawingView();
 
 	RB_RenderDrawSurfList( cmd->drawSurfs, cmd->numDrawSurfs );
@@ -1395,10 +1156,8 @@ static const void *RB_DrawSurfs( const void *data ) {
 		RB_DrawSun( 0.1f, tr.sunShader );
 	}
 
-	// darken down any stencil shadows
 	RB_ShadowFinish();
 
-	// add light flares on lights that aren't obscured
 	RB_RenderFlares();
 
 #ifdef USE_PMLIGHT
@@ -1408,7 +1167,6 @@ static const void *RB_DrawSurfs( const void *data ) {
 	}
 #endif
 
-	// draw main system development information (surface outlines, etc)
 	RB_DebugGraphics();
 
 #ifdef USE_VULKAN
@@ -1419,18 +1177,11 @@ static const void *RB_DrawSurfs( const void *data ) {
 	}
 #endif
 
-	//TODO Maybe check for rdf_noworld stuff but q3mme has full 3d ui
-	backEnd.doneSurfaces = qtrue; // for bloom
+	backEnd.doneSurfaces = qtrue;
 
 	return (const void *)(cmd + 1);
 }
 
-
-/*
-=============
-RB_DrawBuffer
-=============
-*/
 static const void *RB_DrawBuffer( const void *data ) {
 	const drawBufferCommand_t	*cmd;
 
@@ -1441,19 +1192,17 @@ static const void *RB_DrawBuffer( const void *data ) {
 
 	tess.depthRange = DEPTH_RANGE_NORMAL;
 
-	// force depth range and viewport/scissor updates
 	vk.cmd->depth_range = DEPTH_RANGE_COUNT;
 
 	if ( r_clear->integer && vk.clearAttachment ) {
 		const vec4_t color = {1, 0, 0.5, 1};
-		backEnd.projection2D = qtrue; // to ensure we have viewport that occupies entire window
+		backEnd.projection2D = qtrue;
 		vk_clear_color( color );
 		backEnd.projection2D = qfalse;
 	}
 #else
 	qglDrawBuffer( cmd->buffer );
 
-	// clear screen for debugging
 	if ( r_clear->integer ) {
 		qglClearColor( 1, 0, 0.5, 1 );
 		qglClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
@@ -1463,17 +1212,6 @@ static const void *RB_DrawBuffer( const void *data ) {
 	return (const void *)(cmd + 1);
 }
 
-
-/*
-===============
-RB_ShowImages
-
-Draw all the images to the screen, on top of whatever
-was there.  This is used to test for texture thrashing.
-
-Also called by RE_EndRegistration
-===============
-*/
 #ifdef USE_VULKAN
 void RB_ShowImages( void )
 {
@@ -1481,10 +1219,9 @@ void RB_ShowImages( void )
 
 	RB_SetGL2D();
 
-	// draw full-screen quad
 	tess.numVertexes = 4;
 
-	tess.svars.colors[0][0].u32 = ~0U; // 255-255-255-255
+	tess.svars.colors[0][0].u32 = ~0U;
 	tess.svars.colors[0][1].u32 = ~0U;
 	tess.svars.colors[0][2].u32 = ~0U;
 	tess.svars.colors[0][3].u32 = ~0U;
@@ -1527,7 +1264,6 @@ void RB_ShowImages( void )
 		float x = i % 20 * w;
 		float y = i / 20 * h;
 
-		// show in proportional size in mode 2
 		if ( r_showImages->integer == 2 ) {
 			w *= image->uploadWidth / 512.0f;
 			h *= image->uploadHeight / 512.0f;
@@ -1581,7 +1317,6 @@ void RB_ShowImages( void ) {
 		x = i % 20 * w;
 		y = i / 20 * h;
 
-		// show in proportional size in mode 2
 		if ( r_showImages->integer == 2 ) {
 			w *= image->uploadWidth / 512.0f;
 			h *= image->uploadHeight / 512.0f;
@@ -1605,17 +1340,10 @@ void RB_ShowImages( void ) {
 }
 #endif
 
-
-/*
-=============
-RB_ColorMask
-=============
-*/
 static const void *RB_ColorMask( const void *data )
 {
 	const colorMaskCommand_t *cmd = data;
 #ifdef USE_VULKAN
-	// TODO: implement! ZZZZZZZZZZZ
 #else
 	qglColorMask( cmd->rgba[0], cmd->rgba[1], cmd->rgba[2], cmd->rgba[3] );
 #endif
@@ -1623,12 +1351,6 @@ static const void *RB_ColorMask( const void *data )
 	return (const void *)(cmd + 1);
 }
 
-
-/*
-=============
-RB_ClearDepth
-=============
-*/
 static const void *RB_ClearDepth( const void *data )
 {
 	const clearDepthCommand_t *cmd = data;
@@ -1644,12 +1366,6 @@ static const void *RB_ClearDepth( const void *data )
 	return (const void *)(cmd + 1);
 }
 
-
-/*
-=============
-RB_ClearColor
-=============
-*/
 static const void *RB_ClearColor( const void *data )
 {
 	const clearColorCommand_t *cmd = data;
@@ -1657,7 +1373,6 @@ static const void *RB_ClearColor( const void *data )
 #ifdef USE_VULKAN
 	backEnd.projection2D = qtrue;
 	{
-		// [QL] quakelive_steam.exe 0x435d90: the colour r_fastSky clears to, as 0xRRGGBB
 		vec4_t color = { 0.0f, 0.0f, 0.0f, 1.0f };
 
 		if ( r_fastsky->integer ) {
@@ -1678,12 +1393,6 @@ static const void *RB_ClearColor( const void *data )
 	return (const void *)(cmd + 1);
 }
 
-
-/*
-=============
-RB_FinishBloom
-=============
-*/
 static const void *RB_FinishBloom( const void *data )
 {
 	const finishBloomCommand_t *cmd = data;
@@ -1691,13 +1400,11 @@ static const void *RB_FinishBloom( const void *data )
 	RB_EndSurface();
 
 #ifdef USE_VULKAN
-	// [ioquakelive] Quake3e's own bloom never on top of Quake Live's
 	if ( r_bloom->integer && !r_bloomActive->integer ) {
 		vk_bloom();
 	}
 #endif
 
-	// texture swapping test
 	if ( r_showImages->integer ) {
 		RB_ShowImages();
 	}
@@ -1707,15 +1414,12 @@ static const void *RB_FinishBloom( const void *data )
 	return (const void *)(cmd + 1);
 }
 
-
 static const void *RB_SwapBuffers( const void *data ) {
 
 	const swapBuffersCommand_t	*cmd;
 
-	// finish any 2D drawing if needed
 	RB_EndSurface();
 
-	// texture swapping test
 	if ( r_showImages->integer && !backEnd.drawConsole ) {
 		RB_ShowImages();
 	}
@@ -1788,12 +1492,6 @@ static const void *RB_SwapBuffers( const void *data ) {
 	return (const void *)(cmd + 1);
 }
 
-
-/*
-====================
-RB_ExecuteRenderCommands
-====================
-*/
 void RB_ExecuteRenderCommands( const void *data ) {
 
 	backEnd.pc.msec = ri.Milliseconds();
@@ -1837,12 +1535,8 @@ void RB_ExecuteRenderCommands( const void *data ) {
 			break;
 		case RC_END_OF_LIST:
 		default:
-			// stop rendering
 #ifdef USE_VULKAN
 			vk_end_frame();
-//			if (com_errorEntered && (begin_frame_called && !end_frame_called)) {
-//				vk_end_frame();
-//			}
 #else
 			backEnd.pc.msec = ri.Milliseconds() - backEnd.pc.msec;
 #endif

@@ -19,8 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// console.c
-
 #include "client.h"
 
 int g_console_field_width = 119;
@@ -29,40 +27,29 @@ int g_console_field_width = 119;
 
 #define CON_TEXTSIZE 524288
 
-// [QL] Quake Live draws the console with DroidSansMono, font index 2 of the
-// TrueType renderer, in 12x24 cells scaled by con_scale: Con_CheckResize
-// (quakelive_steam.exe 0x4b3a50) writes the cell size, the text calls
-// (0x4bdd40, 0x4bdd90, 0x4b46e8) ask for a font size of cell width * 2.1597
-// (float at 0x56732c), which gives the font's advance.
 #define CON_FONT_MONO 2
 #define CON_CELL_WIDTH 12
 #define CON_CELL_HEIGHT 24
 #define CON_FONT_SCALE 2.1597f
-#define CON_TEXT_LITERAL 0x40000000  // renderer FONS_TEXT_LITERAL: '^' drawn as a glyph
-#define CON_LINEBUFFER 0x800         // retail's row buffer size
+#define CON_TEXT_LITERAL 0x40000000
+#define CON_LINEBUFFER 0x800
 
-// [CNQ3] con_style 1 line width cap, keeps the per-line scratch buffers small
 #define CON_MAXLINEWIDTH 1000
 
-// [CNQ3] text buffer codes of the console-only colours, after the 36 colour
-// codes (Quake Live's 0-7 and CPMA's 8-35)
 #define CON_COLOR_CVAR 40
 #define CON_COLOR_CMD 41
 #define CON_COLOR_VAL 42
 #define CON_COLOR_HELP 43
 
-// [CNQ3] con_drawHelp bits
 #define DRAWHELP_ENABLE_BIT 1
 #define DRAWHELP_NOTFOUND_BIT 2
 #define DRAWHELP_MODULES_BIT 4
 #define DRAWHELP_ATTRIBS_BIT 8
 #define DRAWHELP_MAX 15
 
-// [ioquakelive] a link the console drew this frame, and where it drew it
 #define CON_MAX_LINKS 64
 #define CON_MAX_URL 512
 
-// [ioquakelive] the recent lines whose start con_animate remembers
 #define CON_ANIM_ROWS 256
 
 typedef struct {
@@ -74,59 +61,52 @@ typedef struct {
     qboolean initialized;
 
     short text[CON_TEXTSIZE];
-    int current;  // line where next message will be printed
-    int x;        // offset in current line for next print
-    int display;  // bottom of console displays this line
+    int current;
+    int x;
+    int display;
 
-    int linewidth;   // characters across screen
-    int totallines;  // total lines in console scrollback
+    int linewidth;
+    int totallines;
 
-    float xadjust;  // for wide aspect screens
+    float xadjust;
 
-    float finalFrac;  // 0.0 to 1.0 lines of console to display
+    float finalFrac;
 
-    int vislines;       // in scanlines
-    float displayFrac;  // aproaches finalFrac at con_speed
+    int vislines;
+    float displayFrac;
 
-    int times[NUM_CON_TIMES];  // cls.realtime time the line was generated
-    // for transparent notify lines
+    int times[NUM_CON_TIMES];
     vec4_t color;
 
-    // [CNQ3] con_style 1
-    int rowsVisible;  // full text rows drawn by the last frame
+    int rowsVisible;
 
     char helpText[MAXPRINTMSG];
-    int helpX;           // char index in the current help line
-    float helpY;         // top of the current help line
-    int helpWidth;       // char count of the longest help line
-    int helpLines;       // help line count
-    qboolean helpDraw;   // qfalse while measuring
+    int helpX;
+    float helpY;
+    int helpWidth;
+    int helpLines;
+    qboolean helpDraw;
     float helpXAdjust;
 
-    // [CNQ3] searchconsole, both styles
     char searchPattern[256];
-    int searchLine;  // absolute line of the last match
+    int searchLine;
     qboolean searchStarted;
 
-    // [CNQ3] mark mode, both styles
     qboolean markMode;
-    int markX;       // cursor column
-    int markY;       // cursor line, absolute
-    int markStartX;  // selection start
+    int markX;
+    int markY;
+    int markStartX;
     int markStartY;
-    qboolean swallowCtrlC;  // the copy key's char event must not clear the input line
+    qboolean swallowCtrlC;
 
-    // [ioquakelive] links
     conLink_t links[CON_MAX_LINKS];
-    int numLinks;                 // filled while drawing, read by a click
-    float mouseX, mouseY;         // the system pointer, in screen pixels
+    int numLinks;
+    float mouseX, mouseY;
     qboolean mouseSeen;
-    char linkAsked[CON_MAX_URL];  // the link the prompt is asking about
-    vec4_t promptOpen;            // x, y, w, h of each answer
+    char linkAsked[CON_MAX_URL];
+    vec4_t promptOpen;
     vec4_t promptCancel;
 
-    // [ioquakelive] con_animate: where the text is scrolled to, easing toward display; when the
-    // console was last drawn; and when each recent line began
     float scrollPos;
     int animDrawn;
     int lineBorn[CON_ANIM_ROWS];
@@ -144,15 +124,11 @@ cvar_t* con_speed;
 cvar_t* con_animate;
 cvar_t* con_timestamps;
 
-// [CNQ3] Console features ported from CNQ3 (code/client/cl_console.cpp).
-// con_style 0 is Quake Live's console; con_style 1 adds CNQ3's panel look,
-// shadows, colours and help panel, drawn with Quake Live's own font and a
-// Quake Live palette. Mark mode and console search work in both.
 cvar_t* con_style;
 cvar_t* con_drawHelp;
 cvar_t* con_history;
 
-cvar_t* cl_extendedColors;  // [CPMA] ^8, ^9 and ^a-^z colour codes
+cvar_t* cl_extendedColors;
 
 typedef enum {
     CC_BG,
@@ -182,7 +158,6 @@ typedef struct {
     vec4_t color;
 } conColor_t;
 
-// a Quake Live palette: black, reds and ambers, and QuakeClub's green around it
 static conColor_t con_colors[CC_COUNT] = {
     {"con_colBG", "0B0B0DFF", qtrue, "RGBA color of the background; its alpha is multiplied by " S_COLOR_CVAR "con_opacity"},
     {"con_colBorder", "FFCC33FF", qtrue, "RGBA color of the border"},
@@ -201,25 +176,10 @@ static conColor_t con_colors[CC_COUNT] = {
                                      "This requires " S_COLOR_CVAR "con_completionStyle " S_COLOR_VAL "1" S_COLOR_HELP "."},
 };
 
-/*
-================
-Con_Scale
-
-[QL] Quake Live reads con_scale->value straight in every console call.
-================
-*/
 static float Con_Scale(void) {
     return con_scale ? con_scale->value : 1.0f;
 }
 
-/*
-================
-Con_DrawStringTTF
-
-[QL] quakelive_steam.exe 0x4bdd90: the colour when given, then DroidSansMono
-at a size of cellWidth * 2.1597, the baseline yOffset pixels below y.
-================
-*/
 static void Con_DrawStringTTF(int x, int y, const char* text, const float* color, int cellWidth, int yOffset, int flags) {
     if (!text[0]) {
         return;
@@ -230,13 +190,6 @@ static void Con_DrawStringTTF(int x, int y, const char* text, const float* color
     re.Font_DrawString(x, y + yOffset, text, CON_FONT_MONO, cellWidth * CON_FONT_SCALE, -1, NULL, flags);
 }
 
-/*
-================
-Con_DrawCharTTF
-
-[QL] quakelive_steam.exe 0x4bdd40: one character in the current colour.
-================
-*/
 static void Con_DrawCharTTF(int x, int y, int cellWidth, int yOffset, int ch) {
     char str[2];
 
@@ -245,14 +198,6 @@ static void Con_DrawCharTTF(int x, int y, int cellWidth, int yOffset, int ch) {
     re.Font_DrawString(x, y + yOffset, str, CON_FONT_MONO, cellWidth * CON_FONT_SCALE, -1, NULL, 1);
 }
 
-/*
-================
-Con_UpdateColors
-
-[CNQ3] Parses the con_col* cvars when they change. An invalid colour keeps
-the default.
-================
-*/
 static void Con_UpdateColors(void) {
     int i;
 
@@ -276,14 +221,6 @@ static void Con_UpdateColors(void) {
     }
 }
 
-/*
-================
-Con_ColorFromCode
-
-[CNQ3] Colour of a text buffer code in con_style 1: white is con_colText and
-the console-only codes have their own cvars.
-================
-*/
 static const float* Con_ColorFromCode(int code) {
     switch (code) {
         case CON_COLOR_CVAR:
@@ -304,14 +241,6 @@ static const float* Con_ColorFromCode(int code) {
     return Q_ColorFromCodeIndex(code);
 }
 
-/*
-================
-Con_ExtendedColors / Con_ColorCode
-
-[CPMA] cl_extendedColors 1 adds CPMA's ^8, ^9 and ^a-^z to Quake Live's
-^0-^7. Con_ColorCode returns the colour code index of "^x" at p, or -1.
-================
-*/
 static qboolean Con_ExtendedColors(void) {
     return (cl_extendedColors && cl_extendedColors->integer) ? qtrue : qfalse;
 }
@@ -323,14 +252,6 @@ static int Con_ColorCode(const char* p) {
     return Q_ColorCodeIndex((unsigned char)p[1], Con_ExtendedColors());
 }
 
-/*
-================
-Con_RetailColor
-
-[CNQ3] Colour index of a text buffer code in con_style 0: Quake Live has no
-console-only colours, so they are white there.
-================
-*/
 static int Con_RetailColor(int code) {
     if (code >= Q_NUM_COLOR_CODES || (code >= 8 && !Con_ExtendedColors())) {
         return ColorIndex(COLOR_WHITE);
@@ -338,33 +259,16 @@ static int Con_RetailColor(int code) {
     return code;
 }
 
-/*
-================
-Con_FillRectPx
-
-[CNQ3] Native pixel coordinates.
-================
-*/
 static void Con_FillRectPx(float x, float y, float w, float h, const float* color) {
     re.SetColor(color);
     re.DrawStretchPic(x, y, w, h, 0, 0, 0, 0, cls.whiteShader);
 }
 
-/*
-================
-Con_GetMetrics
-
-[CNQ3] Pixel metrics of the console font for the mark, the search marker,
-the completion highlight and the help panel, which need column positions:
-Quake Live's cells, plus the font's real advance and ascender measured by the
-renderer.
-================
-*/
 typedef struct {
-    float cellW, cellH;  // Quake Live's cell
-    float fontSize;      // cellW * 2.1597
-    float adv;           // pixels per column
-    float asc;           // baseline to the top of the row
+    float cellW, cellH;
+    float fontSize;
+    float adv;
+    float asc;
 } conMetrics_t;
 
 static void Con_GetMetrics(conMetrics_t* m) {
@@ -384,37 +288,10 @@ static void Con_GetMetrics(conMetrics_t* m) {
     m->asc = one[4] > 0.0f ? one[4] : m->cellH * 0.8f;
 }
 
-/*
-===============================================================================
-
-[ioquakelive] LINKS IN THE CONSOLE
-
-Retail has no links: its front end was a browser and its console was only a
-console. Here an https link printed to the console is underlined and can be
-clicked, and the click asks before leaving the game, because the address goes to
-the system's browser and the line it came from may have been written by a server.
-
-Only https is marked, which is all CL_OpenURL opens. The rows are monospace, so
-a column is one advance wide and a link's rectangle is its first column, its
-width in columns and the row's height.
-
-===============================================================================
-*/
-
-// what a link may carry once "https://" has been seen
 static qboolean Con_LinkChar(int c) {
     return (c > ' ' && c < 127 && c != '"' && c != '\'' && c != '\\' && c != '<' && c != '>') ? qtrue : qfalse;
 }
 
-/*
-================
-Con_LinkLength
-
-How many columns from the given one are a link, or 0. Trailing punctuation is
-left out, so a link at the end of a sentence keeps the full stop out of the
-address.
-================
-*/
 static int Con_LinkLength(const short* text, int width, int start) {
     static const char scheme[] = "https://";
     int i, len;
@@ -434,22 +311,6 @@ static int Con_LinkLength(const short* text, int width, int start) {
     return len > i ? len : 0;
 }
 
-/*
-================
-Con_RowLinks
-
-Underlines the links of one drawn row and remembers where they landed. x0 is the
-row's left edge and y its baseline, both in pixels.
-================
-*/
-/*
-================
-Con_CellColumn
-
-[ioquakelive] The console keeps a byte per cell, and a character of UTF-8 takes two to four of
-them while it is drawn in one column. This is the column the byte at x is drawn in.
-================
-*/
 static int Con_CellColumn(const short* text, int x) {
     int i, col = 0;
 
@@ -491,14 +352,6 @@ static void Con_RowLinks(const short* text, int width, float x0, float y, float 
     }
 }
 
-/*
-================
-Con_MousePosition
-
-Where the system pointer is while the console is down. The console does not grab
-the mouse, so the arrow on screen is the system's and this is where it is.
-================
-*/
 void Con_MousePosition(int x, int y) {
     con.mouseX = (float)x;
     con.mouseY = (float)y;
@@ -531,14 +384,6 @@ static void Con_OpenAskedLink(void) {
     CL_OpenURL(url);
 }
 
-/*
-================
-Con_LinkPromptKey
-
-The prompt takes every key while it is up: enter or a click on Open leaves the
-game, anything else closes it.
-================
-*/
 qboolean Con_LinkPromptKey(int key) {
     if (!Con_LinkPromptActive()) {
         return qfalse;
@@ -557,13 +402,6 @@ qboolean Con_LinkPromptKey(int key) {
     return qtrue;
 }
 
-/*
-================
-Con_MouseClick
-
-A click on a link raises the prompt. Nothing opens from here.
-================
-*/
 qboolean Con_MouseClick(void) {
     int i;
 
@@ -578,14 +416,6 @@ qboolean Con_MouseClick(void) {
     return qfalse;
 }
 
-/*
-================
-Con_DrawLinkPrompt
-
-The question a clicked link opens, over the console: the address, and the two
-answers. The one under the pointer is lit.
-================
-*/
 static void Con_DrawLinkPrompt(void) {
     static const vec4_t dim = {0.0f, 0.0f, 0.0f, 0.55f};
     conMetrics_t m;
@@ -626,9 +456,6 @@ static void Con_DrawLinkPrompt(void) {
         const char* label = i ? "  CANCEL" : "   OPEN";
         const qboolean lit = Con_MouseInRect(r[0], r[1], r[2], r[3]);
 
-        // [ioquakelive] a dark plate with the console's own text on it, and the one under the
-        // pointer takes the edge colour with dark letters. The mark colours were being used here,
-        // and those are a light grey with near-white text: the two buttons could not be read
         Con_FillRectPx(r[0], r[1], r[2], r[3], lit ? con_colors[CC_BORDER].color : con_colors[CC_HL].color);
         re.SetColor(lit ? con_colors[CC_MKTEXT].color : con_colors[CC_TEXT].color);
         re.Font_DrawString((int)r[0], (int)(r[1] + m.asc + (bh - m.cellH) * 0.5f), label, CON_FONT_MONO, m.fontSize,
@@ -641,11 +468,6 @@ static void Con_DrawLinkPrompt(void) {
     re.SetColor(NULL);
 }
 
-/*
-================
-Con_GetStyle / Con_GetLineWidth
-================
-*/
 int Con_GetStyle(void) {
     return (con_style && con_style->integer == 1) ? 1 : 0;
 }
@@ -654,25 +476,15 @@ int Con_GetLineWidth(void) {
     return con.linewidth;
 }
 
-/*
-================
-[CNQ3] Line helpers
-
-Lines are absolute numbers, the text buffer row of line L is L % totallines.
-================
-*/
-// oldest line still in the buffer
 static int Con_FirstLine(void) {
     const int first = con.current - con.totallines + 1;
     return first > 0 ? first : 0;
 }
 
-// line drawn at the bottom of the console
 static int Con_BottomRow(void) {
     return con.x == 0 ? con.display - 1 : con.display;
 }
 
-// text of a line without its colours and trailing spaces
 static void Con_GetLineText(int line, char* out, int outSize) {
     const short* const text = con.text + (line % con.totallines) * con.linewidth;
     int i, n;
@@ -702,38 +514,21 @@ static void Con_FixPosition(void) {
     }
 }
 
-/*
-================
-Con_ToggleConsole_Forced
-
-Opens or closes the console whatever com_allowConsole says. Shift+Escape comes through
-here so that turning the console off in the options can never lock a player out of it.
-================
-*/
 void Con_ToggleConsole_Forced(void) {
-    // Can't toggle the console when it's the only thing available
     if (clc.state == CA_DISCONNECTED && Key_GetCatcher() == KEYCATCH_CONSOLE) {
         return;
     }
 
-    Field_ResetCompletionCycle();  // [CNQ3]
+    Field_ResetCompletionCycle();
     Field_Clear(&g_consoleField);
 
     g_consoleField.widthInChars = g_console_field_width;
 
     Con_ClearNotify();
     Key_SetCatcher(Key_GetCatcher() ^ KEYCATCH_CONSOLE);
-    con.markMode = qfalse;  // [CNQ3]
+    con.markMode = qfalse;
 }
 
-/*
-================
-Con_ToggleConsole_f
-
-[QL] quakelive_steam.exe 0x4b49d0: the command only goes through with com_allowConsole
-at 1; anything else prints this line and stops.
-================
-*/
 void Con_ToggleConsole_f(void) {
     if (com_allowConsole && com_allowConsole->integer != 1) {
         Com_Printf("com_allowConsole won't allow toggleconsole command\n");
@@ -743,21 +538,11 @@ void Con_ToggleConsole_f(void) {
     Con_ToggleConsole_Forced();
 }
 
-/*
-===================
-Con_ToggleMenu_f
-===================
-*/
 void Con_ToggleMenu_f(void) {
     CL_KeyEvent(K_ESCAPE, qtrue, Sys_Milliseconds());
     CL_KeyEvent(K_ESCAPE, qfalse, Sys_Milliseconds());
 }
 
-/*
-================
-Con_MessageMode_f
-================
-*/
 void Con_MessageMode_f(void) {
     chat_playerNum = -1;
     chat_team = qfalse;
@@ -767,11 +552,6 @@ void Con_MessageMode_f(void) {
     Key_SetCatcher(Key_GetCatcher() ^ KEYCATCH_MESSAGE);
 }
 
-/*
-================
-Con_MessageMode2_f
-================
-*/
 void Con_MessageMode2_f(void) {
     chat_playerNum = -1;
     chat_team = qtrue;
@@ -780,11 +560,6 @@ void Con_MessageMode2_f(void) {
     Key_SetCatcher(Key_GetCatcher() ^ KEYCATCH_MESSAGE);
 }
 
-/*
-================
-Con_MessageMode3_f
-================
-*/
 void Con_MessageMode3_f(void) {
     chat_playerNum = VM_Call(cgvm, CG_CROSSHAIR_PLAYER);
     if (chat_playerNum < 0 || chat_playerNum >= MAX_CLIENTS) {
@@ -797,11 +572,6 @@ void Con_MessageMode3_f(void) {
     Key_SetCatcher(Key_GetCatcher() ^ KEYCATCH_MESSAGE);
 }
 
-/*
-================
-Con_MessageMode4_f
-================
-*/
 void Con_MessageMode4_f(void) {
     chat_playerNum = VM_Call(cgvm, CG_LAST_ATTACKER);
     if (chat_playerNum < 0 || chat_playerNum >= MAX_CLIENTS) {
@@ -814,11 +584,6 @@ void Con_MessageMode4_f(void) {
     Key_SetCatcher(Key_GetCatcher() ^ KEYCATCH_MESSAGE);
 }
 
-/*
-================
-Con_Clear_f
-================
-*/
 void Con_Clear_f(void) {
     int i;
 
@@ -826,22 +591,14 @@ void Con_Clear_f(void) {
         con.text[i] = (ColorIndex(COLOR_WHITE) << 8) | ' ';
     }
 
-    Con_Bottom();  // go to end
+    Con_Bottom();
     Com_Memset(con.lineBorn, 0, sizeof(con.lineBorn));
     con.scrollPos = con.display;
 
-    // [CNQ3] nothing left to search or mark
     con.searchStarted = qfalse;
     con.markMode = qfalse;
 }
 
-/*
-================
-Con_Dump_f
-
-Save the console contents out to a file
-================
-*/
 void Con_Dump_f(void) {
     int l, x, i;
     short* line;
@@ -871,7 +628,6 @@ void Con_Dump_f(void) {
 
     Com_Printf("Dumped console text to %s.\n", filename);
 
-    // skip empty lines
     for (l = con.current - con.totallines + 1; l <= con.current; l++) {
         line = con.text + (l % con.totallines) * con.linewidth;
         for (x = 0; x < con.linewidth; x++)
@@ -889,7 +645,6 @@ void Con_Dump_f(void) {
 
     buffer = Hunk_AllocateTempMemory(bufferlen);
 
-    // write the remaining lines
     buffer[bufferlen - 1] = 0;
     for (; l <= con.current; l++) {
         line = con.text + (l % con.totallines) * con.linewidth;
@@ -913,11 +668,6 @@ void Con_Dump_f(void) {
     FS_FCloseFile(f);
 }
 
-/*
-================
-Con_ClearNotify
-================
-*/
 void Con_ClearNotify(void) {
     int i;
 
@@ -926,19 +676,10 @@ void Con_ClearNotify(void) {
     }
 }
 
-/*
-================
-Con_CheckResize
-
-If the line width has changed, reformat the buffer.
-================
-*/
 void Con_CheckResize(void) {
     int i, j, width, oldwidth, oldtotallines, numlines, numchars;
     short tbuf[CON_TEXTSIZE];
 
-    // [QL] quakelive_steam.exe 0x4b3a50: 12 pixel cells scaled by con_scale,
-    // one cell of margin on each side
     con.xadjust = 0;
     if (con_scale) {
         width = (int)(cls.glconfig.vidWidth / con_scale->value / (double)CON_CELL_WIDTH - 2.0);
@@ -946,16 +687,16 @@ void Con_CheckResize(void) {
         width = cls.glconfig.vidWidth / CON_CELL_WIDTH - 2;
     }
     if (width > CON_MAXLINEWIDTH) {
-        width = CON_MAXLINEWIDTH;  // [CNQ3] scratch buffers
+        width = CON_MAXLINEWIDTH;
     }
     if (width < 1) {
-        width = 78;  // fallback before video init
+        width = 78;
     }
 
     if (width == con.linewidth)
         return;
 
-    if (width < 1)  // video hasn't been initialized yet
+    if (width < 1)
     {
         con.linewidth = width;
         con.totallines = CON_TEXTSIZE / con.linewidth;
@@ -1000,27 +741,16 @@ void Con_CheckResize(void) {
     Com_Memset(con.lineBorn, 0, sizeof(con.lineBorn));
     con.scrollPos = con.display;
 
-    // [CNQ3] the lines were renumbered
     con.searchStarted = qfalse;
     con.markMode = qfalse;
 }
 
-/*
-==================
-Cmd_CompleteTxtName
-==================
-*/
 void Cmd_CompleteTxtName(char* args, int argNum) {
     if (argNum == 2) {
         Field_CompleteFilename("", "txt", qfalse, qtrue);
     }
 }
 
-/*
-================
-[QL] Con_Find_f - search console buffer for a substring
-================
-*/
 static void Con_Find_f(void) {
     char* search;
     int l, x, i;
@@ -1042,7 +772,6 @@ static void Con_Find_f(void) {
 
     matchLimit = (con_matchlimit && con_matchlimit->integer > 0) ? con_matchlimit->integer : 16;
 
-    // skip empty lines at the start
     for (l = con.current - con.totallines + 1; l <= con.current; l++) {
         line = con.text + (l % con.totallines) * con.linewidth;
         for (x = 0; x < con.linewidth; x++) {
@@ -1056,19 +785,16 @@ static void Con_Find_f(void) {
     for (; l <= con.current; l++) {
         line = con.text + (l % con.totallines) * con.linewidth;
 
-        // Extract text from this line
         x = 0;
         for (i = 0; i < con.linewidth && x < (int)sizeof(text) - 1; i++) {
             text[x++] = line[i] & 0xff;
         }
         text[x] = '\0';
 
-        // Strip trailing spaces
         while (x > 0 && text[x - 1] == ' ') {
             text[--x] = '\0';
         }
 
-        // [QL] Search with match limiting and output filtering
         if (text[0] && strstr(text, search) &&
             !strstr(text, "\\find") && !strstr(text, "\\##")) {
             matchCount++;
@@ -1090,13 +816,6 @@ static void Con_Find_f(void) {
     }
 }
 
-/*
-================
-Con_BeginSearch_f
-
-[CNQ3] searchconsole <pattern>
-================
-*/
 static void Con_BeginSearch_f(void) {
     if (Cmd_Argc() != 2) {
         Com_Printf("usage: %s <pattern>\n", Cmd_Argv(0));
@@ -1109,15 +828,6 @@ static void Con_BeginSearch_f(void) {
     Con_ContinueSearch(qtrue);
 }
 
-/*
-================
-Con_ContinueSearch
-
-[CNQ3] Finds the next line matching the pattern, going up towards the older
-lines when forward and down otherwise, wrapping around. As with Com_Filter the
-pattern matches the start of the line and '*' matches anything.
-================
-*/
 void Con_ContinueSearch(qboolean forward) {
     char rawText[CON_MAXLINEWIDTH + 1];
     int first, count, k;
@@ -1146,7 +856,6 @@ void Con_ContinueSearch(qboolean forward) {
             continue;
         }
 
-        // ignore the searchconsole calls
         if (rawText[0] == ']' && (rawText[1] == '/' || rawText[1] == '\\') &&
             !Q_stricmpn(rawText + 2, "searchconsole ", 14)) {
             continue;
@@ -1156,7 +865,6 @@ void Con_ContinueSearch(qboolean forward) {
             const int bottom = Con_BottomRow();
 
             con.searchLine = line;
-            // scroll only when the match isn't on screen
             if (line > bottom || line <= bottom - con.rowsVisible) {
                 con.display = line + (con.x == 0 ? 1 : 0);
                 Con_FixPosition();
@@ -1166,13 +874,6 @@ void Con_ContinueSearch(qboolean forward) {
     }
 }
 
-/*
-================
-Con_ColorList_f
-
-[CPMA] colorlist: every colour code, drawn in its colour.
-================
-*/
 static void Con_ColorList_f(void) {
     const int count = Con_ExtendedColors() ? Q_NUM_COLOR_CODES : 8;
     char line[128];
@@ -1193,11 +894,6 @@ static void Con_ColorList_f(void) {
     }
 }
 
-/*
-================
-Con_Init
-================
-*/
 void Con_Init(void) {
     int i;
 
@@ -1225,7 +921,6 @@ void Con_Init(void) {
 
     con_timestamps = Cvar_Get("con_timestamps", "0", CVAR_ARCHIVE);
 
-    // [CNQ3] console style; 1 by default at the user's request, 0 keeps Quake Live's console
     con_style = Cvar_Get("con_style", "1", CVAR_ARCHIVE);
     Cvar_CheckRange(con_style, 0, 1, qtrue);
 
@@ -1235,8 +930,6 @@ void Con_Init(void) {
     con_history = Cvar_Get("con_history", "1", CVAR_ARCHIVE);
     Cvar_CheckRange(con_history, 0, 1, qtrue);
 
-    // [CPMA] extended colour codes, always on at the user's request; CVAR_ROM also
-    // overrides an archived "0" left by an older build
     cl_extendedColors = Cvar_Get("cl_extendedColors", "1", CVAR_ROM);
     Cvar_SetHelp("cl_extendedColors", "colour codes in text: Quake Live's 0 to 7 plus CPMA's 8, 9 and a to z, always on\n"
                  "The list in their colours: " S_COLOR_CMD "colorlist");
@@ -1249,11 +942,9 @@ void Con_Init(void) {
         c->modificationCount = -1;
         Cvar_SetHelp(c->name, c->help);
     }
-    // [ioquakelive] the border was red up to 0.2.1; a config that kept that default follows the new one
     if (!Q_stricmp(con_colors[CC_BORDER].cvar->string, "C01A1AFF")) {
         Cvar_Set(con_colors[CC_BORDER].name, con_colors[CC_BORDER].defaultValue);
     }
-    // [ioquakelive] up to 0.3.7 the background's alpha was its own (EB); con_opacity gives it now
     if (!Q_stricmp(con_colors[CC_BG].cvar->string, "0B0B0DEB")) {
         Cvar_Set(con_colors[CC_BG].name, con_colors[CC_BG].defaultValue);
     }
@@ -1296,13 +987,10 @@ void Con_Init(void) {
     Cmd_AddCommand("condump", Con_Dump_f);
     Cmd_SetCommandCompletionFunc("condump", Cmd_CompleteTxtName);
 
-    // [QL] console search
     Cmd_AddCommand("find", Con_Find_f);
 
-    // [CNQ3] console search with scrolling, ctrl-F and (shift-)F3
     Cmd_AddCommand("searchconsole", Con_BeginSearch_f);
 
-    // [CPMA]
     Cmd_AddCommand("colorlist", Con_ColorList_f);
     Cmd_SetHelp("colorlist", "prints every colour code in its colour\n"
                 "See " S_COLOR_CVAR "cl_extendedColors" S_COLOR_HELP ".");
@@ -1327,11 +1015,6 @@ void Con_Init(void) {
                 "Example: >*net      lines starting with '>' AND containing 'net'");
 }
 
-/*
-================
-Con_Shutdown
-================
-*/
 void Con_Shutdown(void) {
     Cmd_RemoveCommand("toggleconsole");
     Cmd_RemoveCommand("messagemode");
@@ -1343,15 +1026,9 @@ void Con_Shutdown(void) {
     Cmd_RemoveCommand("colorlist");
 }
 
-/*
-===============
-Con_Linefeed
-===============
-*/
 void Con_Linefeed(qboolean skipnotify) {
     int i;
 
-    // mark time for transparent overlay
     if (con.current >= 0) {
         if (skipnotify)
             con.times[con.current % NUM_CON_TIMES] = 0;
@@ -1367,30 +1044,18 @@ void Con_Linefeed(qboolean skipnotify) {
         con.text[(con.current % con.totallines) * con.linewidth + i] = (ColorIndex(COLOR_WHITE) << 8) | ' ';
 }
 
-/*
-================
-CL_ConsolePrint
-
-Handles cursor positioning, line wrapping, etc
-All console printing must go through this in order to be logged to disk
-If no console is visible, the text will appear at the top of the game window
-================
-*/
 void CL_ConsolePrint(char* txt) {
     int y, l;
     unsigned char c;
     unsigned short color;
-    qboolean skipnotify = qfalse;  // NERVE - SMF
-    int prev;                      // NERVE - SMF
+    qboolean skipnotify = qfalse;
+    int prev;
 
-    // TTimo - prefix for text that shows up in console but not in notify
-    // backported from RTCW
     if (!Q_strncmp(txt, "[skipnotify]", 12)) {
         skipnotify = qtrue;
         txt += 12;
     }
 
-    // [QL] con_noprint suppresses all console output
     if (con_noprint && con_noprint->integer) {
         return;
     }
@@ -1405,7 +1070,6 @@ void CL_ConsolePrint(char* txt) {
         con.initialized = qtrue;
     }
 
-    // [QL] prepend timestamp at start of line
     if (con_timestamps && con_timestamps->integer && con.x == 0) {
         char tsbuf[64];
         int time_ms;
@@ -1423,7 +1087,7 @@ void CL_ConsolePrint(char* txt) {
         p = tsbuf;
         while (*p) {
             if (con.x == 0) {
-                con.lineBorn[con.current % CON_ANIM_ROWS] = cls.realtime;  // [ioquakelive] con_animate
+                con.lineBorn[con.current % CON_ANIM_ROWS] = cls.realtime;
             }
             y = con.current % con.totallines;
             con.text[y * con.linewidth + con.x] = (ColorIndex(COLOR_WHITE) << 8) | *p;
@@ -1436,28 +1100,23 @@ void CL_ConsolePrint(char* txt) {
 
     while ((c = *((unsigned char*)txt)) != 0) {
         if (Q_IsConsoleColorString(txt)) {
-            // [CNQ3] cvar, command, value and help colours
             color = CON_COLOR_CVAR + (txt[1] - COLOR_CON_CVAR);
             txt += 2;
             continue;
         }
 
-        // [QL] only ^0-^7 are colour codes (quakelive_steam.exe 0x4b3e90), '^'
-        // before anything else is printed; [CPMA] cl_extendedColors adds more
         if (Con_ColorCode(txt) >= 0) {
             color = Con_ColorCode(txt);
             txt += 2;
             continue;
         }
 
-        // count word length
         for (l = 0; l < con.linewidth; l++) {
             if (txt[l] <= ' ') {
                 break;
             }
         }
 
-        // word wrap
         if (l != con.linewidth && (con.x + l >= con.linewidth)) {
             Con_Linefeed(skipnotify);
         }
@@ -1471,9 +1130,9 @@ void CL_ConsolePrint(char* txt) {
             case '\r':
                 con.x = 0;
                 break;
-            default:  // display character and advance
+            default:
                 if (con.x == 0) {
-                    con.lineBorn[con.current % CON_ANIM_ROWS] = cls.realtime;  // [ioquakelive] con_animate
+                    con.lineBorn[con.current % CON_ANIM_ROWS] = cls.realtime;
                 }
                 y = con.current % con.totallines;
                 con.text[y * con.linewidth + con.x] = (color << 8) | c;
@@ -1484,35 +1143,17 @@ void CL_ConsolePrint(char* txt) {
         }
     }
 
-    // mark time for transparent overlay
     if (con.current >= 0) {
-        // NERVE - SMF
         if (skipnotify) {
             prev = con.current % NUM_CON_TIMES - 1;
             if (prev < 0)
                 prev = NUM_CON_TIMES - 1;
             con.times[prev] = 0;
         } else
-            // -NERVE - SMF
             con.times[con.current % NUM_CON_TIMES] = cls.realtime;
     }
 }
 
-/*
-==============================================================================
-
-DRAWING
-
-==============================================================================
-*/
-
-/*
-================
-Con_MarkBounds
-
-[CNQ3] The selection, and whether to draw it: a lone character blinks.
-================
-*/
 static qboolean Con_MarkBounds(int* startX, int* startY, int* endX, int* endY) {
     *startX = MIN(con.markStartX, con.markX);
     *startY = MIN(con.markStartY, con.markY);
@@ -1525,16 +1166,6 @@ static qboolean Con_MarkBounds(int* startX, int* startY, int* endX, int* endY) {
     return (*endX != *startX || *endY != *startY || Sys_Milliseconds() % 1000 < 500) ? qtrue : qfalse;
 }
 
-/*
-================
-Con_DrawFieldTTF
-
-[QL] quakelive_steam.exe 0x4b6630. The visible part is found walking back from
-the end of the line one UTF-8 character at a time, dropping characters from the
-end while the cursor is left of the window. The cursor is measured on the drawn
-text: '|' half a cell left of the next character, '_' in overstrike mode.
-================
-*/
 static void Con_DrawFieldTTF(field_t* edit, int x, int y, int cellWidth, int cellHeight, qboolean showCursor, const float* color) {
     const char* const buf = edit->buffer;
     char str[MAX_EDIT_LINE];
@@ -1584,14 +1215,6 @@ static void Con_DrawFieldTTF(field_t* edit, int x, int y, int cellWidth, int cel
     }
 }
 
-/*
-================
-Con_DrawInput
-
-[QL] quakelive_steam.exe 0x4b3ff0: the ']' prompt and the edit line in
-con_scale'd cells, two cells above the bottom of the console.
-================
-*/
 void Con_DrawInput(void) {
     static const vec4_t white = {1.0f, 1.0f, 1.0f, 1.0f};
     const float s = Con_Scale();
@@ -1603,7 +1226,7 @@ void Con_DrawInput(void) {
 
     y = (int)(con.vislines - CON_CELL_HEIGHT * s * 2);
 
-    g_consoleField.widthInChars = g_console_field_width;  // [CNQ3] con_style 1 changes it
+    g_consoleField.widthInChars = g_console_field_width;
 
     re.SetColor(con.color);
     Con_DrawCharTTF((int)((CON_CELL_WIDTH + con.xadjust) * s), y, (int)(CON_CELL_WIDTH * s), (int)(CON_CELL_HEIGHT * s), ']');
@@ -1612,20 +1235,6 @@ void Con_DrawInput(void) {
                      (int)(CON_CELL_WIDTH * s), (int)(CON_CELL_HEIGHT * s), !con.markMode, white);
 }
 
-/*
-================
-Con_DrawNotify
-
-[QL] Only the chat input field. Quake Live's engine (quakelive_steam.exe 0x4b4100)
-draws the "say:" / "say team:" / "reply:" field here and nothing else: there is no loop
-over recent console lines, so console output never shows over the game.
-
-The field sits on a translucent bar near the bottom, in amber DroidSansMono at the
-console's unscaled 12x24 cells. With cgame loaded the bar's y and width and the field's
-width in characters come from cgame's exports 17 to 19 (0x4b416b): 413, 640 and 73, or
-455, 300 and 30 during the intermission, team chat taking 5 fewer.
-================
-*/
 void Con_DrawNotify(void) {
     static const vec4_t textColor = {1.0f, 0.8f, 0.0f, 1.0f};
     static const vec4_t barColor = {0.0f, 0.0f, 0.0f, 0.6f};
@@ -1675,23 +1284,6 @@ void Con_DrawNotify(void) {
                      CON_CELL_WIDTH, CON_CELL_HEIGHT, qtrue, textColor);
 }
 
-/*
-================
-[CNQ3] con_style 1 text runs
-
-A row is drawn as runs of one colour, shadow first. Columns are fixed, column
-c starting at x + c * the font's advance, so the mark, the search marker and
-the completion highlight line up with the text.
-
-[ioquakelive] cols gives the column of each byte, because a UTF-8 character is several bytes in
-one column, and such a character is drawn alone in its column: the font it comes from may have
-another advance. Counting bytes as columns put each run a column further right for every accent
-before it, while the shadow of the whole row kept going, so the shadow showed as dark letters
-behind the text.
-================
-*/
-
-// the column of each byte of chars, a UTF-8 character's bytes sharing one
 static void Con_TextColumns(const char* chars, int count, short* cols) {
     int i, col = -1;
 
@@ -1706,7 +1298,7 @@ static void Con_TextColumns(const char* chars, int count, short* cols) {
 #define CON_RUN_MKSHADOW 101
 #define CON_RUN_MKTEXT 102
 
-static const conMetrics_t* con_helpMetrics;  // metrics for Con_HelpPrintf
+static const conMetrics_t* con_helpMetrics;
 
 static const float* Con_RunColor(int id) {
     switch (id) {
@@ -1721,7 +1313,6 @@ static const float* Con_RunColor(int id) {
     }
 }
 
-// [ioquakelive] con_animate: how far in the row being drawn has faded
 static float conRowAlpha = 1.0f;
 
 static void Con_DrawRuns(const conMetrics_t* m, float x, float baseline, const char* chars, const short* ids, const short* cols, int count, qboolean shadow) {
@@ -1772,15 +1363,6 @@ static void Con_DrawRuns(const conMetrics_t* m, float x, float baseline, const c
     }
 }
 
-/*
-================
-Con_DrawInputCNQ3
-
-[CNQ3] con_style 1 edit line: shadowed, colour codes shown in their colour,
-the match cycled through by the completion highlighted, and Quake Live's
-cursor.
-================
-*/
 static void Con_DrawInputCNQ3(const conMetrics_t* m) {
     field_t* const edit = &g_consoleField;
     const float baseline = con.vislines - m->cellH;
@@ -1798,7 +1380,6 @@ static void Con_DrawInputCNQ3(const conMetrics_t* m) {
 
     edit->widthInChars = con.linewidth > 2 ? con.linewidth - 1 : 1;
 
-    // the visible part, keeping the cursor in view like Field_VariableSizeDraw
     drawLen = edit->widthInChars - 1;
     len = strlen(edit->buffer);
     if (len <= drawLen) {
@@ -1819,7 +1400,6 @@ static void Con_DrawInputCNQ3(const conMetrics_t* m) {
         drawLen = MAX_EDIT_LINE;
     }
 
-    // the column of each visible byte, and of the end of the line for the cursor
     Com_Memcpy(chars, edit->buffer + prestep, drawLen);
     chars[drawLen] = ' ';
     Con_TextColumns(chars, drawLen + 1, cols);
@@ -1871,14 +1451,6 @@ static void Con_DrawInputCNQ3(const conMetrics_t* m) {
     }
 }
 
-/*
-================
-Con_HelpPrintf
-
-[CNQ3] Com_PrintHelp output for the help panel: measures it first, then
-draws it, wrapping the words.
-================
-*/
 static void QDECL Con_HelpPrintf(const char* fmt, ...) {
     const conMetrics_t* const m = con_helpMetrics;
     const int wrap = MIN(MAX(con.linewidth - 4, 20), 100);
@@ -1942,13 +1514,6 @@ static void QDECL Con_HelpPrintf(const char* fmt, ...) {
     }
 }
 
-/*
-================
-Con_DrawHelp
-
-[CNQ3] Help panel below the console for the cvar or command being typed.
-================
-*/
 static void Con_DrawHelp(const conMetrics_t* m) {
     const float* const bg = con_colors[CC_BG].color;
     const float* const border = con_colors[CC_BORDER].color;
@@ -1986,7 +1551,6 @@ static void Con_DrawHelp(const conMetrics_t* m) {
     printModules = (con_drawHelp->integer & DRAWHELP_MODULES_BIT) ? qtrue : qfalse;
     printAttribs = (con_drawHelp->integer & DRAWHELP_ATTRIBS_BIT) ? qtrue : qfalse;
 
-    // measure
     con_helpMetrics = m;
     con.helpDraw = qfalse;
     con.helpX = 0;
@@ -2008,7 +1572,6 @@ static void Con_DrawHelp(const conMetrics_t* m) {
     con.helpY = y + 1.5f * m->cellH;
     yh = (int)(con.helpY - m->cellH / 2.0f);
 
-    // CNQ3's triangle joining the panel to the console, one strip per pixel row
     for (i = 0; i < (int)m->cellH; i++) {
         Con_FillRectPx(x, y + i, i + 1, 1, bg);
     }
@@ -2018,19 +1581,9 @@ static void Con_DrawHelp(const conMetrics_t* m) {
     Con_FillRectPx(x + w + 0, yh + 1, 1, h + 1, border);
     Con_FillRectPx(x + w + 1, yh + 2, 1, h + 0, border);
 
-    // draw
     Com_PrintHelp(name, Con_HelpPrintf, qfalse, printModules, printAttribs);
 }
 
-/*
-================
-Con_ScrollOffset
-
-[ioquakelive] con_animate: how far the text still is from where it is scrolled to, in pixels,
-as it slides there over a tenth of a second. A jump of more than four lines slides the last
-four; a console just opened starts where it is.
-================
-*/
 static float Con_ScrollOffset(const conMetrics_t* m) {
     const float target = (float)con.display;
 
@@ -2050,8 +1603,6 @@ static float Con_ScrollOffset(const conMetrics_t* m) {
     return (target - con.scrollPos) * m->cellH;
 }
 
-// one row of con_style 1's text, at its baseline; with con_animate a new line fades in over
-// its first 150 ms
 static void Con_DrawRowCNQ3(const conMetrics_t* m, float x0, float y, int row, qboolean drawMark, int markStartX,
                             int markStartY, int markEndX, int markEndY) {
     char chars[CON_MAXLINEWIDTH];
@@ -2096,14 +1647,6 @@ static void Con_DrawRowCNQ3(const conMetrics_t* m, float x0, float y, int row, q
     conRowAlpha = 1.0f;
 }
 
-/*
-================
-Con_DrawSolidConsoleCNQ3
-
-[CNQ3] con_style 1: the con_col* panel with shadowed text, in Quake Live's
-font and cells, rows on the same baselines as Quake Live's console.
-================
-*/
 static void Con_DrawSolidConsoleCNQ3(float frac) {
     conMetrics_t m;
     int i, k, x, row, rows, lines, len;
@@ -2121,9 +1664,8 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
 
     Con_GetMetrics(&m);
     con.xadjust = 0;
-    x0 = m.cellW;  // one cell of margin
+    x0 = m.cellW;
 
-    // [ioquakelive] the background follows Quake Live's con_background and con_opacity here too
     if (con_background->value != 0) {
         re.SetColor(NULL);
         re.DrawStretchPic(0, 0, cls.glconfig.vidWidth, lines - 2, 0, 0, 1, 1, cls.consoleShader);
@@ -2136,16 +1678,14 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
     }
     Con_FillRectPx(0, lines - 2, cls.glconfig.vidWidth, 2, con_colors[CC_BORDER].color);
 
-    // version, where Quake Live puts it, in the colour of the edge it sits on
     len = strlen(FULL_PRODUCT_VERSION);
     Con_DrawStringTTF(cls.glconfig.vidWidth - CON_CELL_WIDTH * len, lines - CON_CELL_HEIGHT / 2 - CON_CELL_HEIGHT,
                       FULL_PRODUCT_VERSION, con_colors[CC_BORDER].color, CON_CELL_WIDTH, CON_CELL_HEIGHT, CON_TEXT_LITERAL);
 
     con.vislines = lines;
     rows = (int)((lines - m.cellH) / m.cellH);
-    y = lines - m.cellH * 3;  // baseline of the bottom row
+    y = lines - m.cellH * 3;
 
-    // backscroll arrows, on the empty row above the edit line
     if (con.display != con.current) {
         re.SetColor(con_colors[CC_ARROW].color);
         for (x = 0; x < con.linewidth; x += 4) {
@@ -2162,8 +1702,6 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
 
     drawMark = Con_MarkBounds(&markStartX, &markStartY, &markEndX, &markEndY);
 
-    // [ioquakelive] con_animate: the text slides to where it is scrolled; a new line comes up
-    // from the empty row above the edit line, the rows a scroll down brings in from below
     off = Con_ScrollOffset(&m);
     limit = y + (con.display == con.current ? m.cellH : 0);
     for (k = 1; off < 0 && k <= 4; k++) {
@@ -2181,7 +1719,6 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
             break;
         }
         if (con.current - row >= con.totallines) {
-            // past scrollback wrap point
             continue;
         }
         if (i < rows && y - m.asc >= 0) {
@@ -2199,17 +1736,6 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
     re.SetColor(NULL);
 }
 
-/*
-================
-Con_DrawSolidConsole
-
-[QL] quakelive_steam.exe 0x4b4300. The background and its red border line
-are in 640x480 coordinates, both with the con_opacity alpha; the text is
-DroidSansMono in con_scale'd 12x24 cells, one string per row with the colours
-as '^' codes. As in retail, the row count divides by the cell width, and the
-colour of the previous row carries into the next one's codes.
-================
-*/
 void Con_DrawSolidConsole(float frac) {
     const float s = Con_Scale();
     char line[CON_LINEBUFFER];
@@ -2220,7 +1746,7 @@ void Con_DrawSolidConsole(float frac) {
     qboolean drawMark, haveMetrics = qfalse;
 
     if (Con_GetStyle() == 1) {
-        Con_DrawSolidConsoleCNQ3(frac);  // [CNQ3]
+        Con_DrawSolidConsoleCNQ3(frac);
         return;
     }
 
@@ -2232,7 +1758,6 @@ void Con_DrawSolidConsole(float frac) {
         lines = cls.glconfig.vidHeight;
     }
 
-    // background
     y = (int)(frac * SCREEN_HEIGHT - 2.0);
     if (y < 1) {
         y = 0;
@@ -2244,13 +1769,11 @@ void Con_DrawSolidConsole(float frac) {
         SCR_FillRect(0, 0, SCREEN_WIDTH, y, color);
     }
 
-    // border line
     color[0] = 1;
     color[1] = color[2] = 0;
     color[3] = con_opacity->value;
     SCR_FillRect(0, y, SCREEN_WIDTH, 2, color);
 
-    // version, in unscaled cells
     re.SetColor(g_color_table[ColorIndex(COLOR_RED)]);
     len = strlen(FULL_PRODUCT_VERSION);
     Con_DrawStringTTF(cls.glconfig.vidWidth - CON_CELL_WIDTH * len, lines - CON_CELL_HEIGHT / 2 - CON_CELL_HEIGHT,
@@ -2260,7 +1783,6 @@ void Con_DrawSolidConsole(float frac) {
     rows = (int)((lines - CON_CELL_WIDTH * s) / (CON_CELL_WIDTH * s));
     y = (int)(lines - CON_CELL_HEIGHT * s * 3);
 
-    // draw arrows to show the buffer is backscrolled
     if (con.display != con.current) {
         re.SetColor(g_color_table[ColorIndex(COLOR_RED)]);
         for (x = 0; x < con.linewidth / s; x += 4) {
@@ -2279,8 +1801,6 @@ void Con_DrawSolidConsole(float frac) {
     re.SetColor(g_color_table[ColorIndex(COLOR_WHITE)]);
     currentColor = ColorIndex(COLOR_WHITE);
 
-    // [CNQ3] mark mode and the search marker, only drawn once used
-    // [ioquakelive] the metrics are wanted for the links too, so they are always taken
     Con_GetMetrics(&m);
     haveMetrics = qtrue;
     drawMark = Con_MarkBounds(&markStartX, &markStartY, &markEndX, &markEndY);
@@ -2294,7 +1814,6 @@ void Con_DrawSolidConsole(float frac) {
             break;
         }
         if (con.current - row >= con.totallines) {
-            // past scrollback wrap point
             continue;
         }
         if (y - CON_CELL_HEIGHT * s >= 0) {
@@ -2330,7 +1849,7 @@ void Con_DrawSolidConsole(float frac) {
 
             code = Con_RetailColor(text[x] >> 8);
             if (markRow && x >= markStartX && x <= markEndX) {
-                code = 0;  // [CNQ3] black on the mark
+                code = 0;
             }
             if (code != currentColor) {
                 currentColor = code;
@@ -2351,25 +1870,16 @@ void Con_DrawSolidConsole(float frac) {
         re.SetColor(g_color_table[ColorIndex(currentColor)]);
     }
 
-    // draw the input prompt, user text, and cursor if desired
     Con_DrawInput();
 
     re.SetColor(NULL);
 }
 
-/*
-==================
-Con_DrawConsole
-==================
-*/
 void Con_DrawConsole(void) {
-    // check for console width changes from a vid mode change
     Con_CheckResize();
 
-    // [ioquakelive] the link table is this frame's
     con.numLinks = 0;
 
-    // if disconnected, render console full screen
     if (clc.state == CA_DISCONNECTED) {
         if (!(Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CGAME))) {
             Con_DrawSolidConsole(1.0);
@@ -2382,32 +1892,20 @@ void Con_DrawConsole(void) {
         Con_DrawSolidConsole(con.displayFrac);
         Con_DrawLinkPrompt();
     } else {
-        // draw notify lines
         if (clc.state == CA_ACTIVE) {
             Con_DrawNotify();
         }
     }
 }
 
-//================================================================
-
-/*
-==================
-Con_RunConsole
-
-Scroll it up or down
-==================
-*/
 void Con_RunConsole(void) {
-    // decide on the destination height of the console
     if (Key_GetCatcher() & KEYCATCH_CONSOLE) {
         con.finalFrac = con_height->value;
     } else {
         con.finalFrac = 0;
-        con.linkAsked[0] = '\0';  // [ioquakelive] a closed console asks nothing
+        con.linkAsked[0] = '\0';
     }
 
-    // scroll towards the destination height
     if (con.finalFrac < con.displayFrac) {
         con.displayFrac -= con_speed->value * cls.realFrametime * 0.001;
         if (con.finalFrac > con.displayFrac)
@@ -2419,7 +1917,7 @@ void Con_RunConsole(void) {
             con.displayFrac = con.finalFrac;
     }
 
-    Con_UpdateColors();  // [CNQ3]
+    Con_UpdateColors();
 }
 
 void Con_PageUp(void) {
@@ -2447,14 +1945,6 @@ void Con_Bottom(void) {
     con.display = con.current;
 }
 
-/*
-==================
-Con_ScrollLines / Con_ScrollPages
-
-[CNQ3] con_style 1 scrolling, negative goes up. Pages keep one line of
-overlap for readability.
-==================
-*/
 void Con_ScrollLines(int lines) {
     if (lines == 0) {
         return;
@@ -2480,36 +1970,22 @@ void Con_Close(void) {
     Field_Clear(&g_consoleField);
     Con_ClearNotify();
     Key_SetCatcher(Key_GetCatcher() & ~KEYCATCH_CONSOLE);
-    con.finalFrac = 0;  // none visible
+    con.finalFrac = 0;
     con.displayFrac = 0;
-    con.markMode = qfalse;  // [CNQ3]
+    con.markMode = qfalse;
 }
 
-/*
-==============================================================================
-
-[CNQ3] MARK MODE
-
-ctrl-M enters it, the arrows, home and end move the cursor (with shift they
-extend the selection), shift-page up/down move it 6 lines and ctrl-C or enter
-copy the selection to the clipboard.
-
-==============================================================================
-*/
-
-// last line with text
 static int Con_LastMarkLine(void) {
     const int last = con.x == 0 ? con.current - 1 : con.current;
     return last > 0 ? last : 0;
 }
 
-// keeps the mark cursor on screen
 static void Con_AutoScrollMarkPosition(void) {
     const int bottom = Con_BottomRow();
     int visible = con.rowsVisible;
 
     if (con.display == con.current) {
-        visible--;  // scrolling up brings the backscroll arrows
+        visible--;
     }
     if (visible < 1) {
         visible = 1;
@@ -2566,7 +2042,6 @@ qboolean Con_HandleMarkMode(qboolean ctrlDown, qboolean shiftDown, int key) {
     const int firstLine = Con_FirstLine();
     const int lastLine = Con_LastMarkLine();
 
-    // ctrl-m toggles mark mode
     if (ctrlDown && (key == 'm' || key == 'M')) {
         con.markMode = !con.markMode;
         if (con.markMode) {
@@ -2604,7 +2079,6 @@ qboolean Con_HandleMarkMode(qboolean ctrlDown, qboolean shiftDown, int key) {
             }
             con.markX = con.linewidth - 1;
             if (shiftDown) {
-                // avoid selecting trailing columns of whitespace
                 const int startY = MIN(con.markStartY, con.markY);
                 const int endY = MAX(con.markStartY, con.markY);
                 while (con.markX > 0) {
@@ -2623,7 +2097,6 @@ qboolean Con_HandleMarkMode(qboolean ctrlDown, qboolean shiftDown, int key) {
                     con.markX--;
                 }
             } else {
-                // avoid jumping into whitespace
                 const short* const text = con.text + (con.markY % con.totallines) * con.linewidth;
                 while (con.markX > 0 && (text[con.markX] & 0xff) == ' ') {
                     con.markX--;
@@ -2655,7 +2128,7 @@ qboolean Con_HandleMarkMode(qboolean ctrlDown, qboolean shiftDown, int key) {
         case K_PGUP:
         case K_PGDN:
             if (!shiftDown) {
-                return qfalse;  // the usual scrolling
+                return qfalse;
             }
             con.markY = key == K_PGUP ? MAX(con.markY - 6, firstLine) : MIN(con.markY + 6, lastLine);
             Con_AutoScrollMarkPosition();
@@ -2682,7 +2155,6 @@ qboolean Con_HandleMarkMode(qboolean ctrlDown, qboolean shiftDown, int key) {
         return qtrue;
     }
 
-    // block everything else
     return qtrue;
 }
 
@@ -2690,14 +2162,6 @@ qboolean Con_IsInMarkMode(void) {
     return con.markMode;
 }
 
-/*
-==================
-Con_SwallowCharEvent
-
-[CNQ3] Typing is blocked in mark mode, and the char event of the ctrl-C that
-copied the selection must not clear the edit line.
-==================
-*/
 qboolean Con_SwallowCharEvent(int ch) {
     if (con.markMode) {
         return qtrue;

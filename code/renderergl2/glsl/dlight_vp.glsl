@@ -34,7 +34,7 @@ vec3 DeformPosition(const vec3 pos, const vec3 normal, const vec2 st)
 	{
 		phase *= st.x;
 	}
-	else // if (u_DeformGen <= DGEN_WAVE_INVERSE_SAWTOOTH)
+	else
 	{
 		phase += dot(pos.xyz, vec3(spread));
 	}
@@ -62,7 +62,7 @@ vec3 DeformPosition(const vec3 pos, const vec3 normal, const vec2 st)
 	{
 		func = (1.0 - fract(value));
 	}
-	else // if (u_DeformGen == DGEN_BULGE)
+	else
 	{
 		func = sin(value);
 	}
@@ -81,12 +81,12 @@ void main()
 #endif
 
 	gl_Position = u_ModelViewProjectionMatrix * vec4(position, 1.0);
-		
+
 	vec3 dist = u_DlightInfo.xyz - position;
 
 	var_Tex1 = dist.xy * u_DlightInfo.a + vec2(0.5);
 	float dlightmod = step(0.0, dot(dist, normal));
 	dlightmod *= clamp(2.0 * (1.0 - abs(dist.z) * u_DlightInfo.a), 0.0, 1.0);
-	
+
 	var_Color = u_Color * dlightmod;
 }

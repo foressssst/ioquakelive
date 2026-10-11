@@ -19,15 +19,8 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
 #ifndef __KEYCODES_H__
 #define __KEYCODES_H__
-
-//
-// these are the key numbers that should be passed to KeyEvent
-//
-
-// normal keys should be passed as lowercased ascii
 
 typedef enum {
     K_TAB = 9,
@@ -260,9 +253,6 @@ typedef enum {
     K_EURO,
     K_UNDO,
 
-    // Gamepad controls
-    // Ordered to match SDL's gamepad buttons and axes
-    // Do not change this order without also changing IN_GamepadMove() in SDL_input.c
     K_PAD0_A,
     K_PAD0_B,
     K_PAD0_X,
@@ -290,27 +280,20 @@ typedef enum {
     K_PAD0_LEFTTRIGGER,
     K_PAD0_RIGHTTRIGGER,
 
-    K_PAD0_MISC1,    /* Xbox Series X share button, PS5 microphone button, Nintendo Switch Pro capture button, Amazon Luna microphone button */
-    K_PAD0_PADDLE1,  /* Xbox Elite paddle P1 */
-    K_PAD0_PADDLE2,  /* Xbox Elite paddle P3 */
-    K_PAD0_PADDLE3,  /* Xbox Elite paddle P2 */
-    K_PAD0_PADDLE4,  /* Xbox Elite paddle P4 */
-    K_PAD0_TOUCHPAD, /* PS4/PS5 touchpad button */
+    K_PAD0_MISC1,
+    K_PAD0_PADDLE1,
+    K_PAD0_PADDLE2,
+    K_PAD0_PADDLE3,
+    K_PAD0_PADDLE4,
+    K_PAD0_TOUCHPAD,
 
-    // Pseudo-key that brings the console down
     K_CONSOLE,
 
     MAX_KEYS
 } keyNum_t;
 
-// MAX_KEYS replaces K_LAST_KEY, however some mods may have used K_LAST_KEY
-// in detecting binds, so we leave it defined to the old hardcoded value
-// of maxiumum keys to prevent mods from crashing older versions of the engine
 #define K_LAST_KEY 256
 
-// The menu code needs to get both key and char events, but
-// to avoid duplicating the paths, the char events are just
-// distinguished by or'ing in K_CHAR_FLAG (ugly)
 #define K_CHAR_FLAG 1024
 
 #endif

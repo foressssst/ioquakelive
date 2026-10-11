@@ -20,16 +20,7 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "tr_common.h"
-
-/*
-========================================================================
-
-PCX files are used for 8 bit images
-
-========================================================================
-*/
 
 typedef struct {
     char manufacturer;
@@ -70,9 +61,6 @@ void R_LoadPCX(const char* filename, byte** pic, int* width, int* height) {
         *height = 0;
     *pic = NULL;
 
-    //
-    // load the file
-    //
     len = ri.FS_ReadFile((char*)filename, &raw.v);
     if (!raw.b || len < 0) {
         return;
@@ -84,9 +72,6 @@ void R_LoadPCX(const char* filename, byte** pic, int* width, int* height) {
         return;
     }
 
-    //
-    // parse the PCX file
-    //
     pcx = (pcx_t*)raw.b;
     end = raw.b + len;
 
@@ -102,7 +87,6 @@ void R_LoadPCX(const char* filename, byte** pic, int* width, int* height) {
     pix = pic8 = ri.Malloc(size);
 
     raw.b = pcx->data;
-    // FIXME: should use bytes_per_line but original q3 didn't do that either
     while (pix < pic8 + size) {
         if (runLength > 0) {
             *pix++ = dataByte;

@@ -1,22 +1,3 @@
-/*
-===========================================================================
-ioquakelive - the matches one has played, for the front end's Recent Matches
-
-[QL] When a match ends the server sends each player its report over Steam's peer to
-peer network (see sv_steamstats.c). 0x00461d40 reads it, inflates it into at most a
-megabyte and hands it to the web UI, whose saveMatchStats (web.pak src/mod.js) kept it
-in the browser's localStorage in three pieces: the match without its players and deaths
-(match_<guid>), the players (players_<guid>) and the deaths (events_<guid>), the guid
-last in match_index. Before that it worked out how the match went for oneself: the first
-of one's own PLAYER_STATS that did not quit says WIN or LOSE, and with none it is QUIT;
-that one is the match's PERSONAL_STATS, and TIME_PLAYED is when it was saved. Then it
-printed "Match stats saved.".
-
-Here the three pieces are files under matches/ and the index is matches/index.txt, a guid
-a line. The guid comes from the server, so a report whose guid is anything but letters,
-digits and dashes is not kept.
-===========================================================================
-*/
 
 #include "client.h"
 #include "../qcommon/q_steam.h"
@@ -27,7 +8,6 @@ digits and dashes is not kept.
 
 #define CL_REPORT_MAX 0x100000
 
-// a member of an object, or NULL
 static const char* CL_Member(const char* obj, const char* end, const char* name) {
     if (!obj || obj >= end || *obj != '{') {
         return NULL;
@@ -69,11 +49,6 @@ static void CL_WriteFile(const char* name, const char* a, int aLen, const char* 
     FS_FCloseFile(f);
 }
 
-/*
-===============
-CL_SaveMatchReport
-===============
-*/
 static void CL_SaveMatchReport(const char* report, int len) {
     const char* end = report + len;
     const char* players = CL_Member(report, end, "PLYR_STATS");
@@ -92,8 +67,6 @@ static void CL_SaveMatchReport(const char* report, int len) {
         return;
     }
 
-    // how it went for oneself: the first of one's own entries that did not quit. Without
-    // Steam there is no telling which is one's own, and a bot's Steam ID is "0"
     Com_sprintf(self, sizeof(self), "%llu", (unsigned long long)Steam_ClientSteamID());
     for (k = strcmp(self, "0") ? JSON_ArrayGetFirstValue(players, end) : NULL; k;
          k = JSON_ArrayGetNextValue(k, end)) {
@@ -113,7 +86,6 @@ static void CL_SaveMatchReport(const char* report, int len) {
         break;
     }
 
-    // the match: its members but the players and the deaths, and then what was worked out
     basics = (char*)malloc(len + 256 + (personal ? JSON_ValueGetEnd(personal, end) - personal : 0));
     if (!basics) {
         return;
@@ -176,18 +148,6 @@ static void CL_SaveMatchReport(const char* report, int len) {
     Com_Printf("Match stats saved.\n");
 }
 
-
-/*
-===============
-CL_MatchMedia
-
-[QL] What is recorded during a match belongs to it: the engine told the web UI of each demo
-it started ("game.demo") and each screenshot ("game.screenshot", 0x004f3c20) with the
-match's guid, from configstring 712, and the page kept the file against the guid in
-localStorage's media_index, which Replays and a match's page read. Here that index is
-matches/media.txt, a file and its guid a line.
-===============
-*/
 void CL_MatchMedia(const char* path) {
     const char* name = strchr(path, '/');
     const char* guid;
@@ -217,13 +177,6 @@ void CL_MatchMedia(const char* path) {
     }
 }
 
-/*
-===============
-CL_MatchReportFrame
-
-[QL] 0x00461d40, every frame the client runs Steam's callbacks, before the voice
-===============
-*/
 void CL_MatchReportFrame(void) {
     void* packed;
     int size;

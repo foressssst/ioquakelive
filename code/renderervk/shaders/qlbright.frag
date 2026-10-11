@@ -1,7 +1,5 @@
 #version 450
 
-// [QL] what is over r_bloomBrightThreshold, stretched back to the whole range
-
 layout(set = 0, binding = 0) uniform sampler2D texture0;
 
 layout(location = 0) in vec2 frag_tex_coord;

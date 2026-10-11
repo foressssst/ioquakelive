@@ -19,17 +19,12 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// server.h
-
 #include "../qcommon/q_shared.h"
 #include "../qcommon/qcommon.h"
 #include "../game/g_public.h"
 #include "../game/bg_public.h"
 
-//=============================================================================
-
-#define PERS_SCORE 0  // !!! MUST NOT CHANGE, SERVER AND
-                      // GAME BOTH REFERENCE !!!
+#define PERS_SCORE 0
 
 #define MAX_ENT_CLUSTERS 16
 
@@ -37,44 +32,41 @@ typedef struct svEntity_s {
     struct worldSector_s* worldSector;
     struct svEntity_s* nextEntityInWorldSector;
 
-    entityState_t baseline;  // for delta compression of initial sighting
-    int numClusters;         // if -1, use headnode instead
+    entityState_t baseline;
+    int numClusters;
     int clusternums[MAX_ENT_CLUSTERS];
-    int lastCluster;  // if all the clusters don't fit in clusternums
+    int lastCluster;
     int areanum, areanum2;
-    int snapshotCounter;  // used to prevent double adding from portal views
+    int snapshotCounter;
 } svEntity_t;
 
 typedef enum {
-    SS_DEAD,     // no map loaded
-    SS_LOADING,  // spawning level entities
-    SS_GAME      // actively running
+    SS_DEAD,
+    SS_LOADING,
+    SS_GAME
 } serverState_t;
 
 typedef struct {
     serverState_t state;
-    qboolean restarting;    // if true, send configstring changes during SS_LOADING
-    int serverId;           // changes each server start
-    int restartedServerId;  // serverId before a map_restart
-    int checksumFeed;       // the feed key that we use to compute the pure checksum strings
-    // https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=475
-    // the serverId associated with the current checksumFeed (always <= serverId)
+    qboolean restarting;
+    int serverId;
+    int restartedServerId;
+    int checksumFeed;
     int checksumFeedServerId;
-    int snapshotCounter;  // incremented for each snapshot built
-    int timeResidual;     // <= 1000 / sv_frame->value
-    int nextFrameTime;    // when time > nextFrameTime, process world
+    int snapshotCounter;
+    int timeResidual;
+    int nextFrameTime;
     char* configstrings[MAX_CONFIGSTRINGS];
     svEntity_t svEntities[MAX_GENTITIES];
 
-    char* entityParsePoint;  // used during game VM init
+    char* entityParsePoint;
 
-    // the game virtual machine will update these on init and changes
     sharedEntity_t* gentities;
     int gentitySize;
-    int num_entities;  // current number, <= MAX_GENTITIES
+    int num_entities;
 
     playerState_t* gameClients;
-    int gameClientSize;  // will be > sizeof(playerState_t) due to game private data
+    int gameClientSize;
 
     int restartTime;
     int time;
@@ -82,55 +74,50 @@ typedef struct {
 
 typedef struct {
     int areabytes;
-    byte areabits[MAX_MAP_AREA_BYTES];  // portalarea visibility bits
+    byte areabits[MAX_MAP_AREA_BYTES];
     playerState_t ps;
     int num_entities;
-    int first_entity;  // into the circular sv_packet_entities[]
-                       // the entities MUST be in increasing state number
-                       // order, otherwise the delta compression will fail
-    int messageSent;   // time the message was transmitted
-    int messageAcked;  // time the message was acked
-    int messageSize;   // used to rate drop packets
+    int first_entity;
+    int messageSent;
+    int messageAcked;
+    int messageSize;
 } clientSnapshot_t;
 
 typedef enum {
-    CS_FREE,    // can be reused for a new connection
-    CS_ZOMBIE,  // client has been disconnected, but don't reuse
-                // connection for a couple seconds
-    CS_CONNECTED,  // has been assigned to a client_t, but no gamestate yet
-    CS_PRIMED,     // gamestate has been sent, but client hasn't sent a usercmd
-    CS_ACTIVE      // client is fully in game
+    CS_FREE,
+    CS_ZOMBIE,
+    CS_CONNECTED,
+    CS_PRIMED,
+    CS_ACTIVE
 } clientState_t;
 
 typedef struct netchan_buffer_s {
     msg_t msg;
-    byte msgBuffer[MAX_MSGLEN]; // [QL] 32KB buffer
-    char clientCommandString[MAX_STRING_CHARS];  // valid command string for SV_Netchan_Encode
+    byte msgBuffer[MAX_MSGLEN];
+    char clientCommandString[MAX_STRING_CHARS];
     struct netchan_buffer_s* next;
 } netchan_buffer_t;
 
-// client_t - 158,328 bytes (x64). Verified from qzeroded.x64 build 1069.
 typedef struct client_s {
     clientState_t state;
-    char userinfo[MAX_INFO_STRING];  // name, etc
+    char userinfo[MAX_INFO_STRING];
 
     char reliableCommands[MAX_RELIABLE_COMMANDS][MAX_STRING_CHARS];
-    int reliableSequence;     // last added reliable message, not necessarily sent or acknowledged yet
-    int reliableAcknowledge;  // last acknowledged reliable message
-    int reliableSent;         // last sent reliable message, not necessarily acknowledged yet
+    int reliableSequence;
+    int reliableAcknowledge;
+    int reliableSent;
     int messageAcknowledge;
 
-    int gamestateMessageNum;  // netchan->outgoingSequence of gamestate
+    int gamestateMessageNum;
     int challenge;
 
     usercmd_t lastUsercmd;
-    int lastMessageNum;     // for delta compression
-    int lastClientCommand;  // reliable client message sequence
+    int lastMessageNum;
+    int lastClientCommand;
     char lastClientCommandString[MAX_STRING_CHARS];
-    sharedEntity_t* gentity;     // SV_GentityNum(clientnum)
-    char name[MAX_NAME_LENGTH];  // [QL] 40 bytes (Q3 used 32)
+    sharedEntity_t* gentity;
+    char name[MAX_NAME_LENGTH];
 
-    // downloading - vestigial in QL (UDP download system is dead code)
     char downloadName[MAX_QPATH];
     fileHandle_t download;
     int downloadSize;
@@ -143,62 +130,55 @@ typedef struct client_s {
     qboolean downloadEOF;
     int downloadSendTime;
 
-    // [QL] dead space - unreferenced region, likely remnant of removed features
     uint8_t _dead_space[3972];
 
-    int deltaMessage;                        // frame last client usercmd message
-    int nextReliableTime;                    // svs.time when another reliable command will be allowed
-    float floodScore;                        // [QL] 0x004e0180: the leaky bucket's score
-    int floodTime;                           // [QL] svs.time de la ultima orden contada
-    float floodCount;                        // [QL] token-bucket flood counter
-    int lastPacketTime;                      // svs.time when packet was last received
-    int lastConnectTime;                     // svs.time when connection started
-    int nextSnapshotTime;                    // [QL] send another snapshot when svs.time >= nextSnapshotTime
-    qboolean rateDelayed;                    // true if nextSnapshotTime was set based on rate instead of snapshotMsec
-    int timeoutCount;                        // must timeout a few frames in a row so debugging doesn't break
-    clientSnapshot_t frames[PACKET_BACKUP];  // updates can be delta'd from here
+    int deltaMessage;
+    int nextReliableTime;
+    float floodScore;
+    int floodTime;
+    float floodCount;
+    int lastPacketTime;
+    int lastConnectTime;
+    int nextSnapshotTime;
+    qboolean rateDelayed;
+    int timeoutCount;
+    clientSnapshot_t frames[PACKET_BACKUP];
     int ping;
-    int rate;          // bytes / second
-    int snapshotMsec;  // requests a snapshot every snapshotMsec unless rate choked
+    int rate;
+    int snapshotMsec;
     int pureAuthentic;
-    qboolean gotCP;  // TTimo - additional flag to distinguish between a bad pure checksum, and no cp command at all
-    qboolean csUpdated[MAX_CONFIGSTRINGS];  // [QL] track configstrings modified while client is CS_PRIMED
+    qboolean gotCP;
+    qboolean csUpdated[MAX_CONFIGSTRINGS];
     netchan_t netchan;
     netchan_buffer_t* netchan_start_queue;
     netchan_buffer_t** netchan_end_queue;
 
-    // [QL] post-netchan fields
-    uint8_t _reserved[40];    // unreferenced
-    int rageQuit;             // [QL] set by game module via syscall
-    int serverIdSequence;     // [QL] 7-bit server ID tracking
-    int oldServerTime;        // [QL] map_restart time adjustment
+    uint8_t _reserved[40];
+    int rageQuit;
+    int serverIdSequence;
+    int oldServerTime;
     int _padding;
-    uint64_t steam_id;        // [QL] Steam ID
+    uint64_t steam_id;
 } client_t;
 
-//=============================================================================
-
-// challenge_t - 696 bytes. Verified from qzeroded.x64 build 1069.
-// [QL] adds Steam authentication fields.
-#define MAX_CHALLENGES 1024   // [QL] reduced from ioquake3's 2048
+#define MAX_CHALLENGES 1024
 
 #define AUTHORIZE_TIMEOUT 5000
 
 typedef struct {
     netadr_t adr;
     int challenge;
-    int time;             // time the last packet was sent to the authorize server
-    int pingTime;         // time the challenge response was sent to client
-    int firstTime;        // time the adr was first used, for authorize timeout checks
+    int time;
+    int pingTime;
+    int firstTime;
     qboolean connected;
-    uint64_t steamKey;              // [QL] Steam session key
-    byte authToken[512];            // [QL] Steam authentication token
-    int authTokenLen;               // [QL] length of authToken
-    char wasRefused[132];           // [QL] refusal reason string
+    uint64_t steamKey;
+    byte authToken[512];
+    int authTokenLen;
+    char wasRefused[132];
 } challenge_t;
 
-// [QL] sv_factories.c: arenas, factories and the map pool
-#define NUM_FACTORY_GAMETYPES 13  // ffa duel race tdm ca ctf oneflag overload har ft dom ad rr
+#define NUM_FACTORY_GAMETYPES 13
 #define MAX_ARENA_INFOS 1024
 #define MAX_FACTORIES 1024
 #define MAX_FACTORY_TAGS 8
@@ -208,7 +188,7 @@ typedef struct {
 typedef struct {
     char map[1024];
     char longname[1024];
-    int gametypes[NUM_FACTORY_GAMETYPES];  // named in the arena's "type"
+    int gametypes[NUM_FACTORY_GAMETYPES];
 } arenaInfo_t;
 
 typedef struct factory_s {
@@ -216,7 +196,7 @@ typedef struct factory_s {
     char* title;
     char* author;
     char* description;
-    int basegt;  // g_gametype
+    int basegt;
     char* tags[MAX_FACTORY_TAGS];
     struct {
         char* name;
@@ -231,36 +211,31 @@ typedef struct {
     char factoryTitle[1024];
 } mapPoolEntry_t;
 
-// serverStatic_t - cleared only when the game dll changes.
 typedef struct {
-    qboolean initialized;                   // sv_init has completed
-    int time;                               // will be strictly increasing across level changes
-    int snapFlagServerBit;                  // ^= SNAPFLAG_SERVERCOUNT every SV_SpawnServer()
-    client_t* clients;                      // [sv_maxclients->integer]
-    int numSnapshotEntities;                // sv_maxclients->integer*PACKET_BACKUP*MAX_SNAPSHOT_ENTITIES
-    int nextSnapshotEntities;               // next snapshotEntities to use
-    entityState_t* snapshotEntities;        // [numSnapshotEntities]
-    challenge_t challenges[MAX_CHALLENGES]; // to prevent invalid IPs from connecting
-    netadr_t redirectAddress;               // for rcon return messages
-    netadr_t authorizeAddress;              // authorize server address
-    factory_t* factory;                     // [QL] the factory in play, cleared with the rest on shutdown
+    qboolean initialized;
+    int time;
+    int snapFlagServerBit;
+    client_t* clients;
+    int numSnapshotEntities;
+    int nextSnapshotEntities;
+    entityState_t* snapshotEntities;
+    challenge_t challenges[MAX_CHALLENGES];
+    netadr_t redirectAddress;
+    netadr_t authorizeAddress;
+    factory_t* factory;
 } serverStatic_t;
 
 #define SERVER_MAXBANS 1024
-// Structure for managing bans
 typedef struct
 {
     netadr_t ip;
-    // For a CIDR-Notation type suffix
     int subnet;
 
     qboolean isexception;
 } serverBan_t;
 
-//=============================================================================
-
-extern serverStatic_t svs;  // persistant server info across maps
-extern server_t sv;         // cleared each map
+extern serverStatic_t svs;
+extern server_t sv;
 
 extern cvar_t* sv_fps;
 extern cvar_t* sv_timeout;
@@ -284,9 +259,9 @@ extern cvar_t* sv_maxRate;
 extern cvar_t* sv_dlRate;
 extern cvar_t* sv_minPing;
 extern cvar_t* sv_maxPing;
-extern cvar_t* sv_serverType;  // [QL] 0 offline, 1 LAN-only, 2 internet
+extern cvar_t* sv_serverType;
 extern cvar_t* sv_gametype;
-extern cvar_t* sv_ammoPack;    // [QL] g_ammoPack
+extern cvar_t* sv_ammoPack;
 extern cvar_t* sv_mapPoolFile;
 extern cvar_t* sv_includeCurrentMapInVote;
 extern cvar_t* sv_pure;
@@ -307,11 +282,6 @@ extern cvar_t* sv_banFile;
 extern serverBan_t serverBans[SERVER_MAXBANS];
 extern int serverBansCount;
 
-//===========================================================
-
-//
-// sv_main.c
-//
 typedef struct leakyBucket_s leakyBucket_t;
 struct leakyBucket_s {
     netadrtype_t type;
@@ -342,9 +312,6 @@ void SV_RemoveOperatorCommands(void);
 
 int SV_RateMsec(client_t* client);
 
-//
-// sv_init.c
-//
 void SV_SetConfigstring(int index, const char* val);
 void SV_GetConfigstring(int index, char* buffer, int bufferSize);
 void SV_UpdateConfigstrings(client_t* client);
@@ -355,9 +322,6 @@ void SV_GetUserinfo(int index, char* buffer, int bufferSize);
 void SV_ChangeMaxClients(void);
 void SV_SpawnServer(char* server, qboolean killBots);
 
-//
-// sv_factories.c
-//
 void SV_LoadArenas(void);
 const arenaInfo_t* SV_FindArena(const char* map);
 int SV_NumArenas(void);
@@ -379,13 +343,9 @@ void SV_StartRandomMap_f(void);
 void SV_SetNextMap(void);
 void SV_SetNextMaps(void);
 
-//
-// sv_client.c
-//
 void SV_GetChallenge(netadr_t from, msg_t* msg);
 
 void SV_DirectConnect(netadr_t from);
-
 
 void SV_ExecuteClientMessage(client_t* cl, msg_t* msg);
 void SV_UserinfoChanged(client_t* cl);
@@ -401,9 +361,6 @@ int SV_WriteDownloadToClient(client_t* cl, msg_t* msg);
 int SV_SendDownloadMessages(void);
 int SV_SendQueuedMessages(void);
 
-//
-// sv_snapshot.c
-//
 void SV_AddServerCommand(client_t* client, const char* cmd);
 void SV_UpdateServerCommandsToClient(client_t* client, msg_t* msg);
 void SV_WriteFrameToClient(client_t* client, msg_t* msg);
@@ -411,9 +368,6 @@ void SV_SendMessageToClient(msg_t* msg, client_t* client);
 void SV_SendClientMessages(void);
 void SV_SendClientSnapshot(client_t* client);
 
-//
-// sv_game.c
-//
 int SV_NumForGentity(sharedEntity_t* ent);
 sharedEntity_t* SV_GentityNum(int num);
 playerState_t* SV_GameClientNum(int num);
@@ -424,7 +378,6 @@ void SV_ShutdownGameProgs(void);
 void SV_RestartGameProgs(void);
 qboolean SV_inPVS(const vec3_t p1, const vec3_t p2);
 
-// [QL] Game export call functions - replace Q3's VM_Call(gvm, ...)
 void SV_GameShutdown(int restart);
 void SV_GameRunFrame(int serverTime);
 void SV_GameInit(int levelTime, int randomSeed, int restart);
@@ -445,9 +398,6 @@ qboolean SV_GameClientIsAdmin(int clientNum);
 qboolean SV_GameEntityAlwaysSend(int entityNum);
 void SV_RedirectedCommand(netadr_t to, const char* text);
 
-//
-// sv_steamstats.c
-//
 void SV_SteamStatsAddUser(uint64_t steamId);
 void SV_SteamStatsConnected(void);
 void SV_SteamStatsIncrement(uint64_t steamId, int stat, int amount);
@@ -458,9 +408,6 @@ void SV_VoiceFrame(void);
 void SV_SteamIdentity(void);
 void SV_RegisterGameCvars(void);
 
-//
-// sv_bot.c
-//
 void SV_BotFrame(int time);
 int SV_BotAllocateClient(void);
 void SV_BotFreeClient(int clientNum);
@@ -476,57 +423,24 @@ void BotImport_DebugPolygonDelete(int id);
 
 void SV_BotInitBotLib(void);
 
-//============================================================
-//
-// high level object sorting to reduce interaction tests
-//
-
 void SV_ClearWorld(void);
-// called after the world model has been loaded, before linking any entities
 
 void SV_UnlinkEntity(sharedEntity_t* ent);
-// call before removing an entity, and before trying to move one,
-// so it doesn't clip against itself
 
 void SV_LinkEntity(sharedEntity_t* ent);
-// Needs to be called any time an entity changes origin, mins, maxs,
-// or solid.  Automatically unlinks if needed.
-// sets ent->r.absmin and ent->r.absmax
-// sets ent->leafnums[] for pvs determination even if the entity
-// is not solid
 
 clipHandle_t SV_ClipHandleForEntity(const sharedEntity_t* ent);
 
 void SV_SectorList_f(void);
 
 int SV_AreaEntities(const vec3_t mins, const vec3_t maxs, int* entityList, int maxcount);
-// fills in a table of entity numbers with entities that have bounding boxes
-// that intersect the given area.  It is possible for a non-axial bmodel
-// to be returned that doesn't actually intersect the area on an exact
-// test.
-// returns the number of pointers filled in
-// The world entity is never returned in this list.
 
 int SV_PointContents(const vec3_t p, int passEntityNum);
-// returns the CONTENTS_* value from the world and all entities at the given point.
 
 void SV_Trace(trace_t* results, const vec3_t start, vec3_t mins, vec3_t maxs, const vec3_t end, int passEntityNum, int contentmask, int capsule);
-// mins and maxs are relative
-
-// if the entire move stays in a solid volume, trace.allsolid will be set,
-// trace.startsolid will be set, and trace.fraction will be 0
-
-// if the starting point is in a solid, it will be allowed to move out
-// to an open area
-
-// passEntityNum is explicitly excluded from clipping checks (normally ENTITYNUM_NONE)
 
 void SV_ClipToEntity(trace_t* trace, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int entityNum, int contentmask, int capsule);
-// clip to a specific entity
 
-//
-// sv_net_chan.c
-//
 void SV_Netchan_Transmit(client_t* client, msg_t* msg);
 int SV_Netchan_TransmitNextFragment(client_t* client);
 qboolean SV_Netchan_Process(client_t* client, msg_t* msg);

@@ -19,7 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #ifdef DEDICATED
 #ifdef _WIN32
 #include <windows.h>
@@ -39,7 +38,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <SDL3/SDL_loadso.h>
 #define Sys_LoadLibrary(f) SDL_LoadObject(f)
 #define Sys_UnloadLibrary(h) SDL_UnloadObject(h)
-// SDL3 hands back a typed function pointer; the callers assign it to their own type
 #define Sys_LoadFunction(h, fn) ((void*)SDL_LoadFunction(h, fn))
 #define Sys_LibraryError() SDL_GetError()
 #endif

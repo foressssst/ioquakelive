@@ -19,8 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-
 #include "g_local.h"
 
 level_locals_t level;
@@ -30,14 +28,14 @@ typedef struct {
     char* cvarName;
     char* defaultString;
     int cvarFlags;
-    int modCount;           // [QL] tracks vmCvar->modificationCount (was modificationCount)
-    void (*onChanged)(void); // [QL] callback when value changes (was trackChange/teamShader)
+    int modCount;
+    void (*onChanged)(void);
 } cvarTable_t;
 
 gentity_t g_entities[MAX_GENTITIES];
 gclient_t g_clients[MAX_CLIENTS];
 
-gameImport_t *imports;   // [QL] engine syscall table
+gameImport_t *imports;
 
 vmCvar_t g_gametype;
 vmCvar_t g_dmflags;
@@ -54,9 +52,9 @@ vmCvar_t g_gravity;
 vmCvar_t g_cheats;
 vmCvar_t g_knockback;
 vmCvar_t g_inactivity;
-vmCvar_t g_inactivityWarning;  // [QL] seconds before kick to start warning
-vmCvar_t g_dropInactive;       // [QL] 1=kick, 0=move-to-spectator
-vmCvar_t g_debugInactivity;    // [QL] log inactivity accumulator each frame
+vmCvar_t g_inactivityWarning;
+vmCvar_t g_dropInactive;
+vmCvar_t g_debugInactivity;
 vmCvar_t g_debugMove;
 vmCvar_t g_debugDamage;
 vmCvar_t g_debugAlloc;
@@ -92,8 +90,6 @@ vmCvar_t g_proxMineTimeout;
 vmCvar_t g_infiniteAmmo;
 vmCvar_t g_runes;
 
-
-// [QL] missing cvars added by binary parity audit (130)
 vmCvar_t bot_breakPoint;
 vmCvar_t bot_debugVar;
 vmCvar_t bot_dynamicSkill;
@@ -220,7 +216,7 @@ vmCvar_t g_throwFlagVelocity;
 vmCvar_t g_timeoutLen;
 vmCvar_t g_vampiricDamage;
 vmCvar_t gamedate;
-vmCvar_t g_version;  // [QL] build string, CVAR_ROM; registered in G_RegisterCvars tail by binary
+vmCvar_t g_version;
 vmCvar_t practiceflags;
 vmCvar_t g_advancedTraining;
 vmCvar_t g_trainingSpawn;
@@ -229,7 +225,6 @@ vmCvar_t sv_mapname;
 vmCvar_t ui_singlePlayerActive;
 vmCvar_t weapon_reload_gauntlet;
 vmCvar_t weapon_reload_hook;
-// [QL] per-weapon damage cvars
 vmCvar_t g_damage_g;
 vmCvar_t g_damage_mg;
 vmCvar_t g_damage_sg;
@@ -245,7 +240,6 @@ vmCvar_t g_damage_cg;
 vmCvar_t g_damage_hmg;
 vmCvar_t g_damage_pl;
 
-// [QL] per-weapon knockback multiplier cvars
 vmCvar_t g_knockback_g;
 vmCvar_t g_knockback_mg;
 vmCvar_t g_knockback_sg;
@@ -263,7 +257,6 @@ vmCvar_t g_knockback_pl;
 vmCvar_t g_knockback_cg;
 vmCvar_t g_knockback_hmg;
 
-// [QL] weapon reload (fire interval) cvars
 vmCvar_t weapon_reload_mg;
 vmCvar_t weapon_reload_sg;
 vmCvar_t weapon_reload_gl;
@@ -278,7 +271,6 @@ vmCvar_t weapon_reload_prox;
 vmCvar_t weapon_reload_cg;
 vmCvar_t weapon_reload_hmg;
 
-// [QL] per-weapon splash damage cvars
 vmCvar_t g_splashdamage_gl;
 vmCvar_t g_splashdamage_rl;
 vmCvar_t g_splashdamage_pg;
@@ -287,24 +279,20 @@ vmCvar_t g_splashdamage_pl;
 vmCvar_t g_splashdamageOffset;
 vmCvar_t g_rocketsplashOffset;
 
-// [QL] knockback cap cvar
 vmCvar_t g_max_knockback;
 
-// [QL] per-weapon splash radius cvars
 vmCvar_t g_splashradius_gl;
 vmCvar_t g_splashradius_rl;
 vmCvar_t g_splashradius_pg;
 vmCvar_t g_splashradius_bfg;
 vmCvar_t g_splashradius_pl;
 
-// [QL] projectile velocity cvars
 vmCvar_t g_velocity_gl;
 vmCvar_t g_velocity_rl;
 vmCvar_t g_velocity_pg;
 vmCvar_t g_velocity_bfg;
 vmCvar_t g_velocity_gh;
 
-// [QL] projectile acceleration cvars
 vmCvar_t g_accelFactor_rl;
 vmCvar_t g_accelFactor_pg;
 vmCvar_t g_accelFactor_bfg;
@@ -312,32 +300,26 @@ vmCvar_t g_accelRate_rl;
 vmCvar_t g_accelRate_pg;
 vmCvar_t g_accelRate_bfg;
 
-// [QL] projectile gravity cvars
 vmCvar_t weapon_gravity_rl;
 vmCvar_t weapon_gravity_pg;
 vmCvar_t weapon_gravity_bfg;
 vmCvar_t weapon_gravity_ng;
 
-// [QL] nailgun cvars
 vmCvar_t g_nailspeed;
 vmCvar_t g_nailcount;
 vmCvar_t g_nailspread;
 vmCvar_t g_nailbounce;
 vmCvar_t g_nailbouncepercentage;
 
-// [QL] guided rocket cvar
 vmCvar_t g_guidedRocket;
 
-// [QL] loadout system
 vmCvar_t g_loadout;
-vmCvar_t g_disableLoadout;  // [QL] bitmask of disabled weapons (from worldspawn "disable_loadout"); binary: CVAR_GAMERULE
+vmCvar_t g_disableLoadout;
 
-// [QL] ammo system
 vmCvar_t g_ammoPack;
 vmCvar_t g_ammoRespawn;
 vmCvar_t g_spawnItemAmmo;
 
-// [QL] game state management
 vmCvar_t g_gameState;
 vmCvar_t sv_warmupReadyPercentage;
 vmCvar_t g_warmupDelay;
@@ -347,7 +329,6 @@ vmCvar_t g_lastManStandingMessage;
 vmCvar_t bot_autoReady;
 vmCvar_t g_teamForcePresent;
 
-// [QL] serverinfo cvars read by cgame
 vmCvar_t g_teamsize;
 vmCvar_t g_teamSizeMin;
 vmCvar_t g_overtime;
@@ -359,24 +340,20 @@ vmCvar_t sv_quitOnExitLevel;
 vmCvar_t g_training;
 vmCvar_t g_itemHeight;
 vmCvar_t g_itemTimers;
-vmCvar_t g_specItemTimers;  // [QL] gates spectator item-respawn notification feed (separate from g_itemTimers)
+vmCvar_t g_specItemTimers;
 vmCvar_t g_quadDamageFactor;
 vmCvar_t g_freezeRoundDelay;
 vmCvar_t g_timeoutCount;
 
-// [QL] damage-through-surface cvars
 vmCvar_t g_forceDmgThroughSurface;
 vmCvar_t g_dmgThroughSurfaceDistance;
 vmCvar_t g_dmgThroughSurfaceDampening;
 vmCvar_t g_dmgThroughSurfaceAngularThreshold;
 
-// [QL] player cylinder hitbox
 vmCvar_t g_playerCylinders;
 
-// [QL] server framerate
 vmCvar_t sv_fps;
 
-// [QL] round-based game mode cvars
 vmCvar_t roundtimelimit;
 vmCvar_t g_roundWarmupDelay;
 vmCvar_t roundlimit;
@@ -385,9 +362,8 @@ vmCvar_t g_roundDrawLivingCount;
 vmCvar_t g_roundDrawHealthCount;
 vmCvar_t g_spawnArmor;
 vmCvar_t g_adElimScoreBonus;
-vmCvar_t g_adCaptureScoreBonus;  // [QL] consumed by cgame from serverinfo
+vmCvar_t g_adCaptureScoreBonus;
 
-// [QL] freeze tag cvars
 vmCvar_t g_freezeThawTick;
 vmCvar_t g_freezeProtectedSpawnTime;
 vmCvar_t g_freezeThawTime;
@@ -400,19 +376,15 @@ vmCvar_t g_freezeResetHealthOnRound;
 vmCvar_t g_freezeResetArmorOnRound;
 vmCvar_t g_freezeResetWeaponsOnRound;
 
-// [QL] lag compensation
 vmCvar_t g_lagHaxHistory;
 vmCvar_t g_lagHaxMs;
 
-// [QL] weapon modifiers
 vmCvar_t g_ironsights_mg;
 
-// [QL] Quad Hog
 vmCvar_t g_quadHog;
 vmCvar_t g_quadHogTime;
 vmCvar_t g_damagePlums;
 
-// [QL] per-weapon advanced cvars
 vmCvar_t g_damage_sg_outer;
 vmCvar_t g_damage_sg_falloff;
 vmCvar_t g_range_sg_falloff;
@@ -421,7 +393,6 @@ vmCvar_t g_range_lg_falloff;
 vmCvar_t g_headShotDamage_rg;
 vmCvar_t g_railJump;
 
-// [QL] RR infection mode
 vmCvar_t g_rrInfected;
 vmCvar_t g_rrInfectedSpreadTime;
 vmCvar_t g_rrInfectedSpreadWarningTime;
@@ -436,10 +407,8 @@ vmCvar_t g_rrInfectedZombieFragBonus;
 vmCvar_t g_rrDamageScoreBonus;
 vmCvar_t g_rrDeathScorePenalty;
 
-// [QL] tiered armor
 vmCvar_t armor_tiered;
 
-// [QL] starting loadout cvars
 vmCvar_t g_startingWeapons;
 vmCvar_t g_startingHealth;
 vmCvar_t g_startingHealthBonus;
@@ -459,7 +428,6 @@ vmCvar_t g_startingAmmo_pl;
 vmCvar_t g_startingAmmo_cg;
 vmCvar_t g_startingAmmo_hmg;
 
-// [QL] pmove_* cvars - configurable movement physics
 vmCvar_t pmove_JumpVelocity;
 vmCvar_t pmove_JumpVelocityMax;
 vmCvar_t pmove_JumpVelocityScaleAdd;
@@ -497,22 +465,15 @@ vmCvar_t pmove_DoubleJump;
 vmCvar_t pmove_CrouchSlide;
 vmCvar_t pmove_VelocityGH;
 
-// [QL] dirty flags - set when a gamerule cvar in the matching subsystem changes, cleared
-// after the corresponding configstring is (re)published. CS_PMOVEINFO/ARMORINFO/WEAPONINFO/
-// PLAYERINFO carry the pmove_*, armor_tiered, weapon_* and player model/scale rules to clients.
 static qboolean pmoveInfoDirty = qtrue;
 static qboolean armorInfoDirty = qtrue;
 static qboolean weaponInfoDirty = qtrue;
 static qboolean playerInfoDirty = qtrue;
 
-// [QL] starting weapons callback - publish bitmask to configstring
 static void OnChangedStartingWeapons(void) {
     trap_SetConfigstring(CS_STARTING_WEAPONS, va("%i", g_startingWeapons.integer));
 }
 
-// [QL] g_playermodelOverride / g_playerheadmodelOverride onChanged: re-run
-// ClientUserinfoChanged for every connected client so the new forced model is
-// applied to each player's configstring live (OnChangedModelOverride, .so 0x17bda0).
 static void OnChangedModelOverride(void) {
     int i;
     for (i = 0; i < level.maxclients; i++) {
@@ -522,10 +483,6 @@ static void OnChangedModelOverride(void) {
     }
 }
 
-// [QL] g_infiniteAmmo onChanged: apply the new setting to every connected client at
-// once (OnChangedInfiniteAmmo -> SetInfiniteAmmo, .so 0x1842b0/0x1841f0). Infinite ammo
-// is encoded as ammo[weapon] == -1. Spawn-time setting is in ClientSpawn; this handles a
-// live toggle (e.g. via callvote), which never respawns players.
 static void OnChangedInfiniteAmmo(void) {
     int i, w;
     for (i = 0; i < level.maxclients; i++) {
@@ -534,12 +491,10 @@ static void OnChangedInfiniteAmmo(void) {
             continue;
         }
         if (g_infiniteAmmo.integer) {
-            // turned on: set all ammo to -1
             for (w = 1; w < WP_NUM_WEAPONS; w++) {
                 client->ps.ammo[w] = -1;
             }
         } else {
-            // turned off: restore default ammo quantities
             for (w = 1; w < WP_NUM_WEAPONS; w++) {
                 if (w != WP_GAUNTLET && w != WP_GRAPPLING_HOOK && client->ps.ammo[w] == -1) {
                     gitem_t* item = BG_FindItemForWeapon(w);
@@ -550,7 +505,6 @@ static void OnChangedInfiniteAmmo(void) {
     }
 }
 
-// [QL] pmove_* onChanged callbacks - update PM_Set* globals and mark configstring dirty
 static void OnChangedPmoveJumpVelocity(void)          { PM_SetJumpVelocity(pmove_JumpVelocity.value); pmoveInfoDirty = qtrue; }
 static void OnChangedPmoveJumpVelocityMax(void)        { PM_SetJumpVelocityMax(pmove_JumpVelocityMax.value); pmoveInfoDirty = qtrue; }
 static void OnChangedPmoveJumpVelocityScaleAdd(void)   { PM_SetJumpVelocityScaleAdd(pmove_JumpVelocityScaleAdd.value); pmoveInfoDirty = qtrue; }
@@ -588,7 +542,6 @@ static void OnChangedPmoveDoubleJump(void)             { PM_SetDoubleJump(pmove_
 static void OnChangedPmoveCrouchSlide(void)            { PM_SetCrouchSlide(pmove_CrouchSlide.integer); pmoveInfoDirty = qtrue; }
 static void OnChangedPmoveVelocityGH(void)             { PM_SetVelocityGH(pmove_VelocityGH.value); pmoveInfoDirty = qtrue; }
 
-// [QL] weapon_reload_* onChanged callbacks - update bg_weaponReloadTime[]
 static void OnChangedWeaponReloadMG(void)   { BG_SetWeaponReload(WP_MACHINEGUN, weapon_reload_mg.integer); }
 static void OnChangedWeaponReloadSG(void)   { BG_SetWeaponReload(WP_SHOTGUN, weapon_reload_sg.integer); }
 static void OnChangedWeaponReloadGL(void)   { BG_SetWeaponReload(WP_GRENADE_LAUNCHER, weapon_reload_gl.integer); }
@@ -597,10 +550,6 @@ static void OnChangedWeaponReloadLG(void)   { BG_SetWeaponReload(WP_LIGHTNING, w
 static void OnChangedWeaponReloadRG(void)   { BG_SetWeaponReload(WP_RAILGUN, weapon_reload_rg.integer); }
 static void OnChangedWeaponReloadPG(void)   { BG_SetWeaponReload(WP_PLASMAGUN, weapon_reload_pg.integer); }
 static void OnChangedWeaponReloadBFG(void)  { BG_SetWeaponReload(WP_BFG, weapon_reload_bfg.integer); }
-// [QL] the gauntlet has its own reload cvar (default 400); weapon_reload_gh
-// drives ONLY the grappling hook (default 100). Previously the GH callback wrote
-// both and weapon_reload_gauntlet had a NULL callback, so the gauntlet was stuck
-// at 100 (4x too fast).
 static void OnChangedWeaponReloadGauntlet(void) { BG_SetWeaponReload(WP_GAUNTLET, weapon_reload_gauntlet.integer); }
 static void OnChangedWeaponReloadGH(void)   { BG_SetWeaponReload(WP_GRAPPLING_HOOK, weapon_reload_gh.integer); }
 static void OnChangedWeaponReloadNG(void)   { BG_SetWeaponReload(WP_NAILGUN, weapon_reload_ng.integer); }
@@ -609,44 +558,35 @@ static void OnChangedWeaponReloadCG(void)   { BG_SetWeaponReload(WP_CHAINGUN, we
 static void OnChangedWeaponReloadHMG(void)  { BG_SetWeaponReload(WP_HMG, weapon_reload_hmg.integer); }
 
 static cvarTable_t gameCvarTable[] = {
-    // don't override the cheat state set by the system
     {&g_cheats, "sv_cheats", "", 0, 0, NULL},
 
-    // noset vars
-    {&gamedate, "gamedate", "May 25 2016", CVAR_ROM, 0, NULL},  // [QL] binary __DATE__
-    {&g_version, "g_version", "1069 win-x86 May 25 2016 15:18:16", CVAR_ROM, 0, NULL},  // [QL] binary build string
+    {&gamedate, "gamedate", "May 25 2016", CVAR_ROM, 0, NULL},
+    {&g_version, "g_version", "1069 win-x86 May 25 2016 15:18:16", CVAR_ROM, 0, NULL},
     {&g_restarted, "g_restarted", "0", CVAR_ROM, 0, NULL},
 
-    // latched vars
-    // [QL] read only, as in qagamex86.dll (0x64): the factory sets it
     {&g_gametype, "g_gametype", "0", CVAR_ROM | CVAR_LATCH | CVAR_SERVERINFO, 0, NULL},
 
     {&g_maxclients, "sv_maxclients", "8", CVAR_LATCH | CVAR_SERVERINFO | CVAR_ARCHIVE, 0, NULL},
 
-    // change anytime vars
     {&g_dmflags, "dmflags", "0", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
-    // [QL] flags 0x100404 = CVAR_GAMERULE | CVAR_NORESTART | CVAR_SERVERINFO (verified from binary cvar table)
     {&g_fraglimit, "fraglimit", "50", CVAR_GAMERULE | CVAR_NORESTART | CVAR_SERVERINFO, 0, NULL},
     {&g_timelimit, "timelimit", "0", CVAR_GAMERULE | CVAR_NORESTART | CVAR_SERVERINFO, 0, NULL},
     {&g_capturelimit, "capturelimit", "8", CVAR_GAMERULE | CVAR_NORESTART | CVAR_SERVERINFO, 0, NULL},
 
+    {&g_friendlyFire, "g_friendlyFire", "0", CVAR_GAMERULE, 0, NULL},
 
-    {&g_friendlyFire, "g_friendlyFire", "0", CVAR_GAMERULE, 0, NULL},  // [QL] binary: 0x100000
-
-    // [QL] g_teamAutoJoin / g_teamForceBalance registered once below (near g_tackleFlag)
-
-    {&g_warmup, "g_warmup", "10", CVAR_ARCHIVE, 0, NULL},  // [QL] binary default "10"
+    {&g_warmup, "g_warmup", "10", CVAR_ARCHIVE, 0, NULL},
     {&g_doWarmup, "g_doWarmup", "1", CVAR_ARCHIVE, 0, NULL},
-    {&g_gameState, "g_gameState", "PRE_GAME", CVAR_ROM | CVAR_SERVERINFO, 0, NULL},  // [QL] binary: 0x44
-    {&sv_warmupReadyPercentage, "sv_warmupReadyPercentage", "0.51", CVAR_LATCH | CVAR_ARCHIVE, 0, NULL},  // [QL] binary: 0x21
+    {&g_gameState, "g_gameState", "PRE_GAME", CVAR_ROM | CVAR_SERVERINFO, 0, NULL},
+    {&sv_warmupReadyPercentage, "sv_warmupReadyPercentage", "0.51", CVAR_LATCH | CVAR_ARCHIVE, 0, NULL},
     {&g_warmupDelay, "g_warmupDelay", "15", 0, 0, NULL},
     {&g_warmupReadyDelay, "g_warmupReadyDelay", "0", 0, 0, NULL},
     {&g_warmupReadyDelayAction, "g_warmupReadyDelayAction", "1", 0, 0, NULL},
     {&g_lastManStandingMessage, "g_lastManStandingMessage", "You are the last standing", 0, 0, NULL},
     {&bot_autoReady, "bot_autoReady", "1", CVAR_GAMERULE, 0, NULL},
     {&g_teamForcePresent, "g_teamForcePresent", "1", 0, 0, NULL},
-    {&g_logfile, "g_log", "", CVAR_ARCHIVE, 0, NULL},  // [QL] binary default empty string
-    {&g_logfileSync, "g_logSync", "0", CVAR_ARCHIVE, 0, NULL},  // [QL] binary name uses camelCase
+    {&g_logfile, "g_log", "", CVAR_ARCHIVE, 0, NULL},
+    {&g_logfileSync, "g_logSync", "0", CVAR_ARCHIVE, 0, NULL},
 
     {&g_password, "g_password", "", CVAR_USERINFO, 0, NULL},
 
@@ -660,11 +600,11 @@ static cvarTable_t gameCvarTable[] = {
     {&g_speed, "g_speed", "320", CVAR_GAMERULE, 0, NULL},
     {&g_gravity, "g_gravity", "800", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
     {&g_knockback, "g_knockback", "1000", CVAR_GAMERULE, 0, NULL},
-    {&g_weaponRespawn, "g_weaponRespawn", "5", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},  // [QL] note capital R; binary: 0x100004
+    {&g_weaponRespawn, "g_weaponRespawn", "5", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
     {&g_inactivity, "g_inactivity", "0", 0, 0, NULL},
-    {&g_inactivityWarning, "g_inactivityWarning", "10", 0, 0, NULL},  // [QL]
-    {&g_dropInactive, "g_dropInactive", "1", 0, 0, NULL},              // [QL] binary default "1"
-    {&g_debugInactivity, "g_debugInactivity", "0", 0, 0, NULL},        // [QL]
+    {&g_inactivityWarning, "g_inactivityWarning", "10", 0, 0, NULL},
+    {&g_dropInactive, "g_dropInactive", "1", 0, 0, NULL},
+    {&g_debugInactivity, "g_debugInactivity", "0", 0, 0, NULL},
     {&g_debugMove, "g_debugMove", "0", 0, 0, NULL},
     {&g_debugDamage, "g_debugDamage", "0", 0, 0, NULL},
     {&g_debugAlloc, "g_debugAlloc", "0", 0, 0, NULL},
@@ -673,29 +613,26 @@ static cvarTable_t gameCvarTable[] = {
     {&g_podiumDist, "g_podiumDist", "80", CVAR_GAMERULE, 0, NULL},
     {&g_podiumDrop, "g_podiumDrop", "70", CVAR_GAMERULE, 0, NULL},
 
-    {&g_allowVote, "g_allowVote", "1", CVAR_ARCHIVE, 0, NULL},  // [QL] binary: CVAR_ARCHIVE
+    {&g_allowVote, "g_allowVote", "1", CVAR_ARCHIVE, 0, NULL},
     {&g_allowVoteMidGame, "g_allowVoteMidGame", "0", 0, 0, NULL},
     {&g_allowSpecVote, "g_allowSpecVote", "0", 0, 0, NULL},
-    {&g_voteFlags, "g_voteFlags", "0", CVAR_SERVERINFO | CVAR_ARCHIVE, 0, NULL},  // [QL] binary: 0x5
+    {&g_voteFlags, "g_voteFlags", "0", CVAR_SERVERINFO | CVAR_ARCHIVE, 0, NULL},
     {&g_voteDelay, "g_voteDelay", "0", 0, 0, NULL},
     {&g_voteLimit, "g_voteLimit", "0", 0, 0, NULL},
 
     {&g_obeliskHealth, "g_obeliskHealth", "2500", CVAR_GAMERULE, 0, NULL},
     {&g_obeliskRegenPeriod, "g_obeliskRegenPeriod", "1", CVAR_GAMERULE, 0, NULL},
     {&g_obeliskRegenAmount, "g_obeliskRegenAmount", "15", CVAR_GAMERULE, 0, NULL},
-    {&g_obeliskRespawnDelay, "g_obeliskRespawnDelay", "10", CVAR_GAMERULE, 0, NULL},  // [QL] binary: CVAR_GAMERULE only
+    {&g_obeliskRespawnDelay, "g_obeliskRespawnDelay", "10", CVAR_GAMERULE, 0, NULL},
 
     {&g_cubeTimeout, "g_cubeTimeout", "30", CVAR_GAMERULE, 0, NULL},
 
-    {&g_enableDust, "g_enableDust", "0", 0, 0, NULL},  // [QL] binary: flags=0 (not SERVERINFO)
-    {&g_proxMineTimeout, "g_proxMineTimeout", "20", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},  // [QL] binary default "20" (seconds, NOT ms)
+    {&g_enableDust, "g_enableDust", "0", 0, 0, NULL},
+    {&g_proxMineTimeout, "g_proxMineTimeout", "20", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
 
+    {&g_infiniteAmmo, "g_infiniteAmmo", "0", CVAR_GAMERULE, 0, OnChangedInfiniteAmmo},
+    {&g_runes, "g_runes", "0", CVAR_GAMERULE | CVAR_LATCH, 0, NULL},
 
-
-    {&g_infiniteAmmo, "g_infiniteAmmo", "0", CVAR_GAMERULE, 0, OnChangedInfiniteAmmo},  // [QL] binary: CVAR_GAMERULE only; live toggle applies to all clients
-    {&g_runes, "g_runes", "0", CVAR_GAMERULE | CVAR_LATCH, 0, NULL},  // [QL] binary: 0x100020
-
-    // [QL] per-weapon damage cvars
     {&g_damage_g, "g_damage_g", "50", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_damage_mg, "g_damage_mg", "5", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_damage_sg, "g_damage_sg", "5", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
@@ -711,7 +648,6 @@ static cvarTable_t gameCvarTable[] = {
     {&g_damage_hmg, "g_damage_hmg", "8", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_damage_pl, "g_damage_pl", "0", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
 
-    // [QL] per-weapon knockback multiplier cvars
     {&g_knockback_g, "g_knockback_g", "1", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_knockback_mg, "g_knockback_mg", "1", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_knockback_sg, "g_knockback_sg", "1", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
@@ -732,7 +668,6 @@ static cvarTable_t gameCvarTable[] = {
     {&g_knockback_z_self, "g_knockback_z_self", "24", CVAR_GAMERULE, 0, NULL},
     {&g_knockback_cripple, "g_knockback_cripple", "0", CVAR_GAMERULE, 0, NULL},
 
-    // [QL] weapon reload (fire interval in ms) cvars - callbacks update bg_weaponReloadTime[]
     {&weapon_reload_mg, "weapon_reload_mg", "100", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_WEAPON, 0, OnChangedWeaponReloadMG},
     {&weapon_reload_sg, "weapon_reload_sg", "1000", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_WEAPON, 0, OnChangedWeaponReloadSG},
     {&weapon_reload_gl, "weapon_reload_gl", "800", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_WEAPON, 0, OnChangedWeaponReloadGL},
@@ -747,7 +682,6 @@ static cvarTable_t gameCvarTable[] = {
     {&weapon_reload_cg, "weapon_reload_cg", "50", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_WEAPON, 0, OnChangedWeaponReloadCG},
     {&weapon_reload_hmg, "weapon_reload_hmg", "75", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_WEAPON, 0, OnChangedWeaponReloadHMG},
 
-    // [QL] per-weapon splash damage cvars
     {&g_splashdamage_gl, "g_splashdamage_gl", "100", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_splashdamage_rl, "g_splashdamage_rl", "84", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_splashdamage_pg, "g_splashdamage_pg", "15", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
@@ -756,24 +690,20 @@ static cvarTable_t gameCvarTable[] = {
     {&g_splashdamageOffset, "g_splashdamageOffset", "0.05", CVAR_GAMERULE, 0, NULL},
     {&g_rocketsplashOffset, "g_rocketsplashOffset", "-10.0", CVAR_GAMERULE, 0, NULL},
 
-    // [QL] knockback cap
     {&g_max_knockback, "g_max_knockback", "120", CVAR_GAMERULE, 0, NULL},
 
-    // [QL] per-weapon splash radius cvars
     {&g_splashradius_gl, "g_splashradius_gl", "150", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_splashradius_rl, "g_splashradius_rl", "120", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_splashradius_pg, "g_splashradius_pg", "20", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_splashradius_bfg, "g_splashradius_bfg", "80", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_splashradius_pl, "g_splashradius_pl", "150", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
 
-    // [QL] projectile velocity cvars
     {&g_velocity_gl, "g_velocity_gl", "700", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_velocity_rl, "g_velocity_rl", "1000", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_velocity_pg, "g_velocity_pg", "2000", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_velocity_bfg, "g_velocity_bfg", "1800", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_velocity_gh, "g_velocity_gh", "1800", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
 
-    // [QL] projectile acceleration cvars
     {&g_accelFactor_rl, "g_accelFactor_rl", "1", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_accelFactor_pg, "g_accelFactor_pg", "1", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_accelFactor_bfg, "g_accelFactor_bfg", "1", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
@@ -781,50 +711,42 @@ static cvarTable_t gameCvarTable[] = {
     {&g_accelRate_pg, "g_accelRate_pg", "16", CVAR_GAMERULE, 0, NULL},
     {&g_accelRate_bfg, "g_accelRate_bfg", "16", CVAR_GAMERULE, 0, NULL},
 
-    // [QL] projectile gravity cvars
     {&weapon_gravity_rl, "weapon_gravity_rl", "0", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_WEAPON, 0, NULL},
     {&weapon_gravity_pg, "weapon_gravity_pg", "0", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_WEAPON, 0, NULL},
     {&weapon_gravity_bfg, "weapon_gravity_bfg", "0", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_WEAPON, 0, NULL},
     {&weapon_gravity_ng, "weapon_gravity_ng", "0", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_WEAPON, 0, NULL},
 
-    // [QL] nailgun cvars
     {&g_nailspeed, "g_nailspeed", "1000", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_nailcount, "g_nailcount", "10", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_nailspread, "g_nailspread", "400", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_nailbounce, "g_nailbounce", "1", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_nailbouncepercentage, "g_nailbouncepercentage", "65", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
 
-    // [QL] guided rocket cvar
     {&g_guidedRocket, "g_guidedRocket", "0", CVAR_GAMERULE, 0, NULL},
 
-    // [QL] loadout system
-    {&g_loadout, "g_loadout", "0", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},  // [QL] binary: 0x100004
-    {&g_disableLoadout, "g_disableLoadout", "0", CVAR_GAMERULE, 0, NULL},  // [QL] binary: 0x100000
+    {&g_loadout, "g_loadout", "0", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
+    {&g_disableLoadout, "g_disableLoadout", "0", CVAR_GAMERULE, 0, NULL},
 
-    // [QL] ammo system
-    {&g_ammoPack, "g_ammoPack", "0", CVAR_GAMERULE | CVAR_LATCH, 0, NULL},  // [QL] binary: 0x100020
+    {&g_ammoPack, "g_ammoPack", "0", CVAR_GAMERULE | CVAR_LATCH, 0, NULL},
     {&g_ammoRespawn, "g_ammoRespawn", "40", CVAR_GAMERULE, 0, NULL},
     {&g_spawnItemAmmo, "g_spawnItemAmmo", "1", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
 
-    // [QL] serverinfo cvars read by cgame (all verified with CVAR_SERVERINFO in binary)
     {&g_teamsize, "teamsize", "0", CVAR_SERVERINFO, 0, NULL},
-    {&g_teamSizeMin, "g_teamSizeMin", "1", CVAR_SERVERINFO, 0, NULL},  // [QL] binary default "1"
-    {&g_overtime, "g_overtime", "120", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},  // [QL] binary default "120"
-    // [QL] flags 0x100404 = CVAR_GAMERULE | CVAR_NORESTART | CVAR_SERVERINFO
+    {&g_teamSizeMin, "g_teamSizeMin", "1", CVAR_SERVERINFO, 0, NULL},
+    {&g_overtime, "g_overtime", "120", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
     {&g_scorelimit, "scorelimit", "150", CVAR_GAMERULE | CVAR_NORESTART | CVAR_SERVERINFO, 0, NULL},
     {&g_mercylimit, "mercylimit", "0", CVAR_GAMERULE | CVAR_NORESTART | CVAR_SERVERINFO, 0, NULL},
-    {&g_mercytime, "g_mercytime", "0", CVAR_GAMERULE | CVAR_NORESTART, 0, NULL},  // [QL] binary: 0x100400
+    {&g_mercytime, "g_mercytime", "0", CVAR_GAMERULE | CVAR_NORESTART, 0, NULL},
     {&g_rrAllowNegativeScores, "g_rrAllowNegativeScores", "0", CVAR_GAMERULE, 0, NULL},
     {&sv_quitOnExitLevel, "sv_quitOnExitLevel", "0", 0, 0, NULL},
-    {&g_training, "g_training", "0", CVAR_GAMERULE | CVAR_SYSTEMINFO, 0, NULL},  // [QL] binary: 0x100008
+    {&g_training, "g_training", "0", CVAR_GAMERULE | CVAR_SYSTEMINFO, 0, NULL},
     {&g_itemHeight, "g_itemHeight", "35", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
-    {&g_itemTimers, "g_itemTimers", "1", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},  // [QL] default "1", flags 0x100004
-    {&g_specItemTimers, "g_specItemTimers", "1", 0, 0, NULL},  // [QL] verified from QLDS qagamex86.dll cvar table at 0x1008f160
+    {&g_itemTimers, "g_itemTimers", "1", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
+    {&g_specItemTimers, "g_specItemTimers", "1", 0, 0, NULL},
     {&g_quadDamageFactor, "g_quadDamageFactor", "3", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
-    {&g_freezeRoundDelay, "g_freezeRoundDelay", "4000", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},  // [QL] binary default "4000"
+    {&g_freezeRoundDelay, "g_freezeRoundDelay", "4000", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
     {&g_timeoutCount, "g_timeoutCount", "0", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
 
-    // [QL] starting loadout cvars
     {&g_startingWeapons, "g_startingWeapons", "3", CVAR_GAMERULE, 0, OnChangedStartingWeapons},
     {&g_startingHealth, "g_startingHealth", "100", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
     {&g_startingHealthBonus, "g_startingHealthBonus", "25", CVAR_GAMERULE, 0, NULL},
@@ -844,8 +766,6 @@ static cvarTable_t gameCvarTable[] = {
     {&g_startingAmmo_cg, "g_startingAmmo_cg", "100", CVAR_GAMERULE, 0, NULL},
     {&g_startingAmmo_hmg, "g_startingAmmo_hmg", "50", CVAR_GAMERULE, 0, NULL},
 
-    // [QL] movement physics cvars - configurable via factories/rcon
-    // [QL] pmove_* defaults verified from QLDS qagamex86.dll cvar table
     {&pmove_JumpVelocity, "pmove_JumpVelocity", "275.0f", CVAR_GAMERULE | CVAR_GAMERULE_PMOVE, 0, OnChangedPmoveJumpVelocity},
     {&pmove_JumpVelocityMax, "pmove_JumpVelocityMax", "700.0f", CVAR_GAMERULE | CVAR_GAMERULE_PMOVE, 0, OnChangedPmoveJumpVelocityMax},
     {&pmove_JumpVelocityScaleAdd, "pmove_JumpVelocityScaleAdd", "0.4f", CVAR_GAMERULE | CVAR_GAMERULE_PMOVE, 0, OnChangedPmoveJumpVelocityScaleAdd},
@@ -878,35 +798,31 @@ static cvarTable_t gameCvarTable[] = {
     {&pmove_WishSpeed, "pmove_WishSpeed", "400.0f", CVAR_GAMERULE | CVAR_GAMERULE_PMOVE, 0, OnChangedPmoveWishSpeed},
     {&pmove_WeaponDropTime, "pmove_WeaponDropTime", "200", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_PMOVE, 0, OnChangedPmoveWeaponDropTime},
     {&pmove_WeaponRaiseTime, "pmove_WeaponRaiseTime", "200", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_PMOVE, 0, OnChangedPmoveWeaponRaiseTime},
-    {&pmove_NoPlayerClip, "pmove_noPlayerClip", "0", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_PMOVE, 0, OnChangedPmoveNoPlayerClip},  // [QL] lowercase 'n'; binary: 0x144000
+    {&pmove_NoPlayerClip, "pmove_noPlayerClip", "0", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_PMOVE, 0, OnChangedPmoveNoPlayerClip},
     {&pmove_DoubleJump, "pmove_DoubleJump", "0", CVAR_GAMERULE, 0, OnChangedPmoveDoubleJump},
     {&pmove_CrouchSlide, "pmove_CrouchSlide", "0", CVAR_GAMERULE, 0, OnChangedPmoveCrouchSlide},
     {&pmove_VelocityGH, "pmove_velocity_gh", "800", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_PMOVE, 0, OnChangedPmoveVelocityGH},
 
-    // [QL] damage-through-surface
     {&g_forceDmgThroughSurface, "g_forceDmgThroughSurface", "0", CVAR_GAMERULE, 0, NULL},
     {&g_dmgThroughSurfaceDistance, "g_dmgThroughSurfaceDistance", "-33.1f", CVAR_GAMERULE, 0, NULL},
     {&g_dmgThroughSurfaceDampening, "g_dmgThroughSurfaceDampening", "0.5f", CVAR_GAMERULE, 0, NULL},
     {&g_dmgThroughSurfaceAngularThreshold, "g_dmgThroughSurfaceAngularThreshold", "0.5f", CVAR_GAMERULE, 0, NULL},
 
-    // [QL] player cylinders
-    {&g_playerCylinders, "g_playerCylinders", "1", CVAR_GAMERULE, 0, NULL},  // [QL] binary: CVAR_GAMERULE only
-    {&sv_fps, "sv_fps", "40", CVAR_ROM, 0, NULL},  // [QL] binary: CVAR_ROM (engine-owned)
+    {&g_playerCylinders, "g_playerCylinders", "1", CVAR_GAMERULE, 0, NULL},
+    {&sv_fps, "sv_fps", "40", CVAR_ROM, 0, NULL},
 
-    // [QL] round-based cvars
     {&roundtimelimit, "roundtimelimit", "180", CVAR_GAMERULE | CVAR_NORESTART | CVAR_SERVERINFO, 0, NULL},
     {&g_roundWarmupDelay, "g_roundWarmupDelay", "10000", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
-    {&roundlimit, "roundlimit", "10", CVAR_GAMERULE | CVAR_NORESTART | CVAR_SERVERINFO, 0, NULL},  // [QL] default "10", flags 0x100404
-    {&g_lastManStandingWarning, "g_lastManStandingWarning", "1", 0, 0, NULL},  // [QL] binary default "1"
+    {&roundlimit, "roundlimit", "10", CVAR_GAMERULE | CVAR_NORESTART | CVAR_SERVERINFO, 0, NULL},
+    {&g_lastManStandingWarning, "g_lastManStandingWarning", "1", 0, 0, NULL},
     {&g_roundDrawLivingCount, "g_roundDrawLivingCount", "1", CVAR_GAMERULE, 0, NULL},
     {&g_roundDrawHealthCount, "g_roundDrawHealthCount", "1", CVAR_GAMERULE, 0, NULL},
     {&g_spawnArmor, "g_spawnArmor", "0", CVAR_GAMERULE, 0, NULL},
-    {&g_adElimScoreBonus, "g_adElimScoreBonus", "2", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},  // [QL] default "2", flags 0x100004
-    {&g_adCaptureScoreBonus, "g_adCaptureScoreBonus", "3", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},  // [QL] default "3", flags 0x100004
+    {&g_adElimScoreBonus, "g_adElimScoreBonus", "2", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
+    {&g_adCaptureScoreBonus, "g_adCaptureScoreBonus", "3", CVAR_GAMERULE | CVAR_SERVERINFO, 0, NULL},
 
-    // [QL] freeze tag cvars
-    {&g_freezeThawTick, "g_freezeThawTick", "1", CVAR_GAMERULE, 0, NULL},  // [QL] binary: CVAR_GAMERULE only
-    {&g_freezeProtectedSpawnTime, "g_freezeProtectedSpawnTime", "0", CVAR_GAMERULE, 0, NULL},  // [QL] binary: CVAR_GAMERULE only
+    {&g_freezeThawTick, "g_freezeThawTick", "1", CVAR_GAMERULE, 0, NULL},
+    {&g_freezeProtectedSpawnTime, "g_freezeProtectedSpawnTime", "0", CVAR_GAMERULE, 0, NULL},
     {&g_freezeThawTime, "g_freezeThawTime", "2000", CVAR_GAMERULE, 0, NULL},
     {&g_freezeAutoThawTime, "g_freezeAutoThawTime", "120000", CVAR_GAMERULE, 0, NULL},
     {&g_freezeThawRadius, "g_freezeThawRadius", "96", CVAR_GAMERULE, 0, NULL},
@@ -917,17 +833,14 @@ static cvarTable_t gameCvarTable[] = {
     {&g_freezeResetArmorOnRound, "g_freezeResetArmorOnRound", "1", CVAR_GAMERULE, 0, NULL},
     {&g_freezeResetWeaponsOnRound, "g_freezeResetWeaponsOnRound", "1", CVAR_GAMERULE, 0, NULL},
 
-    // [QL] lag compensation / weapon modifiers
     {&g_lagHaxHistory, "g_lagHaxHistory", "4", CVAR_LATCH, 0, NULL},
-    {&g_lagHaxMs, "g_lagHaxMs", "80", CVAR_LATCH, 0, NULL},  // [QL] CVAR_LATCH per QLDS qagamex86.dll cvar table (0x1008e800)
-    {&g_ironsights_mg, "g_ironsights_mg", "1.0", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_TEMP, 0, NULL},  // [QL] binary: 0x140100
+    {&g_lagHaxMs, "g_lagHaxMs", "80", CVAR_LATCH, 0, NULL},
+    {&g_ironsights_mg, "g_ironsights_mg", "1.0", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_TEMP, 0, NULL},
 
-    // [QL] Quad Hog
-    {&g_quadHog, "g_quadHog", "0", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_LATCH, 0, NULL},  // [QL] binary: 0x140020
-    {&g_quadHogTime, "g_quadHogTime", "60", CVAR_GAMERULE, 0, NULL},  // [QL] binary default "60"
-    {&g_damagePlums, "g_damagePlums", "2", CVAR_GAMERULE, 0, NULL},  // [QL] default "2", flags 0x100000
+    {&g_quadHog, "g_quadHog", "0", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_LATCH, 0, NULL},
+    {&g_quadHogTime, "g_quadHogTime", "60", CVAR_GAMERULE, 0, NULL},
+    {&g_damagePlums, "g_damagePlums", "2", CVAR_GAMERULE, 0, NULL},
 
-    // [QL] per-weapon advanced
     {&g_damage_sg_outer, "g_damage_sg_outer", "5", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_damage_sg_falloff, "g_damage_sg_falloff", "0", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_range_sg_falloff, "g_range_sg_falloff", "768", CVAR_GAMERULE, 0, NULL},
@@ -936,7 +849,6 @@ static cvarTable_t gameCvarTable[] = {
     {&g_headShotDamage_rg, "g_headShotDamage_rg", "0", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&g_railJump, "g_railJump", "0", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
 
-    // [QL] RR infection mode
     {&g_rrInfected, "g_rrInfected", "0", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_LATCH, 0, NULL},
     {&g_rrInfectedSpreadTime, "g_rrInfectedSpreadTime", "40", CVAR_GAMERULE, 0, NULL},
     {&g_rrInfectedSpreadWarningTime, "g_rrInfectedSpreadWarningTime", "10", CVAR_GAMERULE, 0, NULL},
@@ -951,9 +863,7 @@ static cvarTable_t gameCvarTable[] = {
     {&g_rrDamageScoreBonus, "g_rrDamageScoreBonus", "0", CVAR_GAMERULE, 0, NULL},
     {&g_rrDeathScorePenalty, "g_rrDeathScorePenalty", "-1", CVAR_GAMERULE, 0, NULL},
 
-    // [QL] tiered armor (binary: armor_tiered uses unique 0x20000 flag bit)
     {&armor_tiered, "armor_tiered", "0", CVAR_GAMERULE | CVAR_GAMERULE_ARMOR, 0, NULL},
-    // [QL] missing cvars added by binary parity audit (132)
     {&bot_breakPoint, "bot_breakPoint", "0", 0, 0, NULL},
     {&bot_debugVar, "bot_debugVar", "0", 0, 0, NULL},
     {&bot_dynamicSkill, "bot_dynamicSkill", "0", CVAR_GAMERULE, 0, NULL},
@@ -1051,7 +961,6 @@ static cvarTable_t gameCvarTable[] = {
     {&g_shuffle_minplayers, "g_shuffle_minplayers", "3", 0, 0, NULL},
     {&g_shuffle_timedelay, "g_shuffle_timedelay", "5000", 0, 0, NULL},
     {&g_skipTrainingEnable, "g_skipTrainingEnable", "0", CVAR_ROM | CVAR_SYSTEMINFO, 0, NULL},
-    // [ioquakelive] testing switch: Crash speaks Spanish (her voice stays the original)
     {&g_trainingSpanish, "g_trainingSpanish", "0", CVAR_ARCHIVE, 0, NULL},
     {&g_spawnArmorDmgScale, "g_spawnArmorDmgScale", "0.5", CVAR_GAMERULE, 0, NULL},
     {&g_spawnDelayRandom_key, "g_spawnDelayRandom_key", "15", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
@@ -1083,8 +992,6 @@ static cvarTable_t gameCvarTable[] = {
     {&g_timeoutLen, "g_timeoutLen", "60", CVAR_GAMERULE, 0, NULL},
     {&g_vampiricDamage, "g_vampiricDamage", "0", CVAR_GAMERULE | CVAR_GAMERULE_REPL, 0, NULL},
     {&practiceflags, "practiceflags", "0", CVAR_GAMERULE | CVAR_TEMP, 0, NULL},
-    // [ioquakelive] the Training Center's advanced room, 1 the lightning gun bot, and where the
-    // player and the bot start ("x y z yaw"); its factory sets them
     {&g_advancedTraining, "g_advancedTraining", "0", CVAR_GAMERULE | CVAR_TEMP, 0, NULL},
     {&g_trainingSpawn, "g_trainingSpawn", "", CVAR_GAMERULE | CVAR_TEMP, 0, NULL},
     {&g_trainingTarget, "g_trainingTarget", "", CVAR_GAMERULE | CVAR_TEMP, 0, NULL},
@@ -1093,8 +1000,6 @@ static cvarTable_t gameCvarTable[] = {
     {&weapon_reload_gauntlet, "weapon_reload_gauntlet", "400", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_WEAPON, 0, OnChangedWeaponReloadGauntlet},
     {&weapon_reload_hook, "weapon_reload_hook", "100", CVAR_GAMERULE | CVAR_GAMERULE_REPL | CVAR_GAMERULE_WEAPON, 0, NULL},
 
-
-    // NULL terminator
     {NULL, NULL, NULL, 0, 0, NULL}
 };
 
@@ -1106,9 +1011,6 @@ void G_ShutdownGame(int restart);
 void CheckExitRules(void);
 int G_ClientScore(int clientNum);
 
-// [QL] dllEntry - module entry point
-// The engine calls this when loading the game module.
-// QL uses a function pointer table instead of Q3's vmMain dispatcher.
 Q_EXPORT void dllEntry(void **vmMainOut, gameImport_t *syscallTable, int *apiVersion) {
     imports = syscallTable;
 
@@ -1135,14 +1037,6 @@ Q_EXPORT void dllEntry(void **vmMainOut, gameImport_t *syscallTable, int *apiVer
     *apiVersion = GAME_API_VERSION;
 }
 
-/*
-================
-G_ClientScore
-
-[QL] export 20 (retail 0x100530f0): a client's score, which the server hands Steam's
-list every few seconds.
-================
-*/
 int G_ClientScore(int clientNum) {
     if (clientNum < 0 || clientNum >= MAX_CLIENTS || !g_entities[clientNum].client) {
         return 0;
@@ -1172,17 +1066,6 @@ void QDECL G_Error(const char* fmt, ...) {
     trap_Error(text);
 }
 
-/*
-================
-G_FindTeams
-
-Chain together all entities with a matching team field.
-Entity teams are used for item groups and multi-entity mover groups.
-
-All but the first will have the FL_TEAMSLAVE flag set and teammaster field set
-All but the last will have the teamchain field set to the next one
-================
-*/
 void G_FindTeams(void) {
     gentity_t *e, *e2;
     int i, j;
@@ -1214,7 +1097,6 @@ void G_FindTeams(void) {
                 e2->teammaster = e;
                 e2->flags |= FL_TEAMSLAVE;
 
-                // make sure that targets only point at the master
                 if (e2->targetname) {
                     e->targetname = e2->targetname;
                     e2->targetname = NULL;
@@ -1226,9 +1108,6 @@ void G_FindTeams(void) {
     G_Printf("%i teams with %i entities\n", c, c2);
 }
 
-// [QL] running g_customSettings bitmask (binary global DAT_1059674c). one bit per
-// rule category; a bit is set while any cvar in that category differs from its
-// factory default. published as the g_customSettings serverinfo cvar and CS_CUSTOM_SETTINGS.
 static int g_customSettingsFlags;
 
 typedef struct {
@@ -1236,37 +1115,25 @@ typedef struct {
     int         bit;
 } customSetting_t;
 
-// [QL] cvar name -> custom-settings bit, recovered from G_ParseCustomSettings
-// (0x10053470) and cross-checked against wolfcamql's SERVER_SETTING_MODIFIED_* list.
-// each weapon gets one bit; the rest are gameplay categories. a few entries never
-// fire in practice (g_speed/pmove_BunnyHop/pmove_WalkFriction are not tagged
-// CVAR_GAMERULE_REPL, so they are never passed in; "g_spawnItemWeapon" is missing a
-// trailing 's' in the binary so it never matches the real g_spawnItemWeapons cvar) but
-// they are kept to mirror the binary chain exactly.
 static const customSetting_t customSettingsBits[] = {
-    // 0x00000001  gauntlet
     { "weapon_reload_gauntlet", 0x00000001 },
     { "g_damage_g", 0x00000001 },
     { "g_knockback_g", 0x00000001 },
-    // 0x00000002  machinegun
     { "weapon_reload_mg", 0x00000002 },
     { "g_damage_mg", 0x00000002 },
     { "g_knockback_mg", 0x00000002 },
     { "g_ironsights_mg", 0x00000002 },
-    // 0x00000004  shotgun
     { "weapon_reload_sg", 0x00000004 },
     { "g_damage_sg", 0x00000004 },
     { "g_damage_sg_outer", 0x00000004 },
     { "g_knockback_sg", 0x00000004 },
     { "g_damage_sg_falloff", 0x00000004 },
-    // 0x00000008  grenade launcher
     { "weapon_reload_gl", 0x00000008 },
     { "g_damage_gl", 0x00000008 },
     { "g_splashdamage_gl", 0x00000008 },
     { "g_splashradius_gl", 0x00000008 },
     { "g_velocity_gl", 0x00000008 },
     { "g_knockback_gl", 0x00000008 },
-    // 0x00000010  rocket launcher
     { "weapon_reload_rl", 0x00000010 },
     { "g_damage_rl", 0x00000010 },
     { "g_splashdamage_rl", 0x00000010 },
@@ -1276,16 +1143,13 @@ static const customSetting_t customSettingsBits[] = {
     { "g_knockback_rl_self", 0x00000010 },
     { "g_accelFactor_rl", 0x00000010 },
     { "weapon_gravity_rl", 0x00000010 },
-    // 0x00000020  lightning gun
     { "weapon_reload_lg", 0x00000020 },
     { "g_damage_lg", 0x00000020 },
     { "g_knockback_lg", 0x00000020 },
     { "g_damage_lg_falloff", 0x00000020 },
-    // 0x00000040  railgun
     { "weapon_reload_rg", 0x00000040 },
     { "g_damage_rg", 0x00000040 },
     { "g_knockback_rg", 0x00000040 },
-    // 0x00000080  plasma gun
     { "weapon_reload_pg", 0x00000080 },
     { "g_damage_pg", 0x00000080 },
     { "g_splashdamage_pg", 0x00000080 },
@@ -1295,7 +1159,6 @@ static const customSetting_t customSettingsBits[] = {
     { "g_knockback_pg_self", 0x00000080 },
     { "g_accelFactor_pg", 0x00000080 },
     { "weapon_gravity_pg", 0x00000080 },
-    // 0x00000100  bfg
     { "weapon_reload_bfg", 0x00000100 },
     { "g_damage_bfg", 0x00000100 },
     { "g_splashdamage_bfg", 0x00000100 },
@@ -1304,14 +1167,12 @@ static const customSetting_t customSettingsBits[] = {
     { "g_knockback_bfg", 0x00000100 },
     { "g_accelFactor_bfg", 0x00000100 },
     { "weapon_gravity_bfg", 0x00000100 },
-    // 0x00000200  grapple / gauntlet hook
     { "g_damage_gh", 0x00000200 },
     { "weapon_reload_gh", 0x00000200 },
     { "weapon_reload_hook", 0x00000200 },
     { "g_velocity_gh", 0x00000200 },
     { "g_knockback_gh", 0x00000200 },
     { "pmove_velocity_gh", 0x00000200 },
-    // 0x00000400  nailgun
     { "weapon_reload_ng", 0x00000400 },
     { "g_damage_ng", 0x00000400 },
     { "g_nailspeed", 0x00000400 },
@@ -1321,21 +1182,16 @@ static const customSetting_t customSettingsBits[] = {
     { "g_nailbounce", 0x00000400 },
     { "g_nailbouncepercentage", 0x00000400 },
     { "weapon_gravity_ng", 0x00000400 },
-    // 0x00000800  prox mine
     { "weapon_reload_prox", 0x00000800 },
     { "g_splashdamage_pl", 0x00000800 },
     { "g_splashradius_pl", 0x00000800 },
     { "g_knockback_pl", 0x00000800 },
     { "g_proxMineTimeout", 0x00000800 },
-    // 0x00001000  chaingun
     { "weapon_reload_cg", 0x00001000 },
     { "g_damage_cg", 0x00001000 },
     { "g_knockback_cg", 0x00001000 },
-    // 0x00002000  air control
     { "pmove_AirControl", 0x00002000 },
-    // 0x00004000  ramp jump
     { "pmove_RampJump", 0x00004000 },
-    // 0x00008000  modified physics
     { "g_speed", 0x00008000 },
     { "pmove_AirAccel", 0x00008000 },
     { "pmove_WalkAccel", 0x00008000 },
@@ -1344,21 +1200,14 @@ static const customSetting_t customSettingsBits[] = {
     { "pmove_BunnyHop", 0x00008000 },
     { "pmove_StepJump", 0x00008000 },
     { "pmove_StepHeight", 0x00008000 },
-    // 0x00010000  modified weapon switch
     { "pmove_WeaponRaiseTime", 0x00010000 },
     { "pmove_WeaponDropTime", 0x00010000 },
-    // 0x00020000  instagib
     { "g_instaGib", 0x00020000 },
-    // 0x00040000  quad hog
     { "g_quadHog", 0x00040000 },
-    // 0x00080000  regen
     { "g_regenHealth", 0x00080000 },
     { "g_regenArmor", 0x00080000 },
-    // 0x00100000  dropped damaged health
     { "g_dropDamagedHealth", 0x00100000 },
-    // 0x00200000  vampiric damage
     { "g_vampiricDamage", 0x00200000 },
-    // 0x00400000  modified item spawning
     { "g_spawnItemWeapon", 0x00400000 },
     { "g_spawnItemPowerup", 0x00400000 },
     { "g_spawnItemHoldable", 0x00400000 },
@@ -1369,31 +1218,13 @@ static const customSetting_t customSettingsBits[] = {
     { "g_spawnDelay_powerup", 0x00400000 },
     { "g_spawnDelayRandom_key", 0x00400000 },
     { "g_spawnDelayRandom_powerup", 0x00400000 },
-    // 0x00800000  headshots
     { "g_headShotDamage_rg", 0x00800000 },
-    // 0x01000000  rail jump
     { "g_railJump", 0x01000000 },
-    // 0x02000000  no player clip
     { "pmove_noPlayerClip", 0x02000000 },
-    // 0x04000000  infected (red rover)
     { "g_rrInfected", 0x04000000 },
-    // 0x08000000  lightning discharge
     { "g_lightningDischarge", 0x08000000 }
 };
 
-/*
-=================
-G_ParseCustomSettings
-
-Address: 0x10053470 (Ghidra mislabels this "ExecuteVoteCommand")
-
-[QL] look up the g_customSettings bit this cvar drives, then set it when the cvar
-differs from its factory default (its registered defaultString) or clear it when the
-cvar is back at default. noClear (binary EBX) is passed during registration so a
-default-valued cvar cannot wipe a bit another cvar in the same category has already
-set; runtime updates pass noClear = qfalse so a rule going back to default clears it.
-=================
-*/
 static void G_ParseCustomSettings(cvarTable_t *cv, qboolean noClear) {
     int         i;
     int         bit;
@@ -1411,10 +1242,9 @@ static void G_ParseCustomSettings(cvarTable_t *cv, qboolean noClear) {
         }
     }
     if (!bit) {
-        return;     // cvar is not one of the tracked rules
+        return;
     }
 
-    // custom when there is no factory default, or the live value differs from it
     custom = (cv->defaultString == NULL) ||
              (cv->vmCvar != NULL && Q_stricmp(cv->defaultString, cv->vmCvar->string) != 0);
 
@@ -1425,16 +1255,6 @@ static void G_ParseCustomSettings(cvarTable_t *cv, qboolean noClear) {
     }
 }
 
-/*
-=================
-G_UpdateCustomSettings
-
-Address: 0x100523a0
-
-[QL] custom settings changed: refresh every connected client's userinfo so the new
-rules propagate to them.
-=================
-*/
 void G_UpdateCustomSettings(void) {
     int         i;
     gentity_t   *ent;
@@ -1450,18 +1270,10 @@ void G_UpdateCustomSettings(void) {
 int PM_DbgStepJump(void); float PM_DbgSwim(void); float PM_DbgWade(void);
 int PM_DbgAutoHop(void); int PM_DbgChainJump(void); int PM_DbgAirSteps(void);
 
-/*
-=================
-G_RegisterCvars
-
-Address: 0x100549xx
-=================
-*/
 void G_RegisterCvars(void) {
     int i;
     cvarTable_t *cv;
 
-    // [QL] start each load with a clean bitmask (binary sets g_customSettings "0" here)
     g_customSettingsFlags = 0;
     trap_Cvar_Set("g_customSettings", "0");
 
@@ -1471,44 +1283,24 @@ void G_RegisterCvars(void) {
         if (cv->vmCvar)
             cv->modCount = cv->vmCvar->modificationCount;
 
-        // [QL] push the value into the C mirror right away. G_UpdateCvars only calls
-        // onChanged when modificationCount changes, and the current one was just stored
-        // above, so without this the callback never runs and the pm_* keep whatever
-        // bg_pmove.c initialised them to. The binary starts the same way: pm_stepJump
-        // lives in .bss (0x104b139c, that is 0) and two places write it anyway, one of
-        // them the registration pass.
         if (cv->onChanged) {
             cv->onChanged();
         }
 
-        // [QL] accumulate custom-settings bits (noClear so a default-valued cvar
-        // cannot clear a bit an earlier cvar in the same category has set)
         if (cv->cvarFlags & CVAR_GAMERULE_REPL) {
             G_ParseCustomSettings(cv, qtrue);
         }
     }
 
-    // [QL] clamp g_gametype to a valid range (binary: GT max = 12); reset to 0 if out of range
     if (g_gametype.integer < 0 || g_gametype.integer > 12) {
         G_Printf("g_gametype %i is out of range, defaulting to 0\n", g_gametype.integer);
         trap_Cvar_Set("g_gametype", "0");
     }
 
-    // [QL] publish the initial bitmask. the binary defers this to its per-config apply
-    // pass; we fold it into registration so clients get correct rules from the first snapshot
     trap_Cvar_Set("g_customSettings", va("%i", g_customSettingsFlags));
     trap_SetConfigstring(CS_CUSTOM_SETTINGS, va("%i", g_customSettingsFlags));
 }
 
-/*
-=================
-G_CvarAnnounced
-
-[QL] with cheats on, the server announces a change only for the cvars whose entry in the
-binary's table (0x1008d830) has one of its announcing callbacks, 0x10051ae0 to 0x10052d8a.
-g_gameState has none, and the model overrides have a callback that does not announce
-=================
-*/
 static const char* const g_announcedCvars[] = {
     "armor_tiered", "capturelimit", "dmflags", "fraglimit", "g_allTalk", "g_ammoPack",
     "g_ammoPackHack", "g_ammoRespawn", "g_bestStartingWeapons", "g_complaintDamageThreshold",
@@ -1582,11 +1374,6 @@ static qboolean G_CvarAnnounced(const char* name) {
                    G_CompareCvarName) ? qtrue : qfalse;
 }
 
-/*
-=================
-G_UpdateCvars
-=================
-*/
 void G_UpdateCvars(void) {
     int i;
     cvarTable_t *cv;
@@ -1599,28 +1386,19 @@ void G_UpdateCvars(void) {
             if (cv->modCount != cv->vmCvar->modificationCount) {
                 cv->modCount = cv->vmCvar->modificationCount;
 
-                // [ioquakelive] The binary skips the callback during training
-                // (0x10054e14): the tour changes cvars of its own -- g_spSkill among
-                // them -- and does not want that to fire the gametype rules.
                 if (cv->onChanged && !g_training.integer) {
                     cv->onChanged();
                 }
 
-                // [QL] 0x100529b0: with cheats on, the server announces the change, for the
-                // cvars whose callback in the binary's table does (G_CvarAnnounced)
                 if (g_cheats.integer && G_CvarAnnounced(cv->cvarName)) {
                     trap_SendServerCommand(-1, va("print \"Server: %s changed to %s\n\"",
                                                   cv->cvarName, cv->vmCvar->string));
                 }
 
-                // [QL] mark the owning gamerule configstring dirty so it is republished
                 if (cv->cvarFlags & CVAR_GAMERULE_ARMOR)  armorInfoDirty = qtrue;
                 if (cv->cvarFlags & CVAR_GAMERULE_WEAPON) weaponInfoDirty = qtrue;
                 if (cv->cvarFlags & CVAR_GAMERULE_MODEL)  playerInfoDirty = qtrue;
 
-                // [QL] a tracked rule changed: recompute its bit and push the new
-                // bitmask into the g_customSettings serverinfo cvar (noClear = qfalse
-                // so returning to default clears the bit)
                 if (cv->cvarFlags & CVAR_GAMERULE_REPL) {
                     G_ParseCustomSettings(cv, qfalse);
                     trap_Cvar_Set("g_customSettings", va("%i", g_customSettingsFlags));
@@ -1630,20 +1408,11 @@ void G_UpdateCvars(void) {
         }
     }
 
-    // [QL] republish the configstring once if any rule changed this pass
     if (customChanged) {
         trap_SetConfigstring(CS_CUSTOM_SETTINGS, va("%i", g_customSettingsFlags));
     }
 }
 
-/*
-=================
-G_SendPmoveInfo
-
-[QL] Build and send CS_PMOVEINFO configstring so the client can parse
-all pmove_* parameters for client-side prediction.
-=================
-*/
 static void G_SendPmoveInfo(void) {
     char info[MAX_INFO_STRING];
 
@@ -1689,17 +1458,6 @@ static void G_SendPmoveInfo(void) {
     trap_SetConfigstring(CS_PMOVEINFO, info);
 }
 
-/*
-=================
-G_SendArmorInfo / G_SendWeaponInfo / G_SendPlayerInfo
-
-[QL] Publish the tiered-armor, weapon and player model/scale gamerule cvars to their
-configstrings so clients parse them (CG_ParseArmorTiered / CG_ParseWeaponConfig /
-CG_ParseConfigParams). Verified byte-for-byte against a live QL server demo: values are the
-raw cvar strings, and CS_PLAYERINFO carries only the numeric model params - the model/head
-OVERRIDES are NOT published here (they are applied server-side in ClientUserinfoChanged).
-=================
-*/
 static void G_SendArmorInfo(void) {
     char info[MAX_INFO_STRING];
 
@@ -1748,12 +1506,6 @@ static void G_SendPlayerInfo(void) {
     trap_SetConfigstring(CS_PLAYERINFO, info);
 }
 
-/*
-============
-G_InitGame
-
-============
-*/
 void G_InitGame(int levelTime, int randomSeed, int restart) {
     int i;
 
@@ -1765,20 +1517,16 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
 
     G_RegisterCvars();
 
-    // [QL] load the steamId access list at boot (binary G_InitGame calls G_InitAccessList).
-    // QL has no IP-filter system, so the old G_ProcessIPBans() is dead code.
     G_InitAccessList();
 
     G_InitMemory();
 
-    // set some level globals
     memset(&level, 0, sizeof(level));
     level.time = levelTime;
     level.startTime = levelTime;
-    level.warmupTime = -1;  // PRE_GAME until warmup state machine transitions
+    level.warmupTime = -1;
 
-    level.snd_fry = G_SoundIndex("sound/player/fry.wav");  // FIXME standing in lava / slime
-    // [QL] 0x100551f1: the two drowning gurps are precached here, as in retail
+    level.snd_fry = G_SoundIndex("sound/player/fry.wav");
     G_SoundIndex("sound/player/gurp1.wav");
     G_SoundIndex("sound/player/gurp2.wav");
 
@@ -1804,61 +1552,46 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
 
     G_InitWorldSession();
 
-    // initialize all entities for this game
     memset(g_entities, 0, MAX_GENTITIES * sizeof(g_entities[0]));
     level.gentities = g_entities;
 
-    // initialize all clients for this game
     level.maxclients = g_maxclients.integer;
     memset(g_clients, 0, MAX_CLIENTS * sizeof(g_clients[0]));
     level.clients = g_clients;
 
-    // set client fields on player ents
     for (i = 0; i < level.maxclients; i++) {
         g_entities[i].client = level.clients + i;
     }
 
-    // always leave room for the max number of clients,
-    // even if they aren't all used, so numbers inside that
-    // range are NEVER anything but clients
     level.num_entities = MAX_CLIENTS;
 
     for (i = 0; i < MAX_CLIENTS; i++) {
         g_entities[i].classname = "clientslot";
     }
 
-    // let the server system know where the entites are
     trap_LocateGameData(level.gentities, level.num_entities, sizeof(gentity_t),
                         &level.clients[0].ps, sizeof(level.clients[0]));
 
-    // reserve some spots for dead player bodies
     InitBodyQue();
 
     ClearRegisteredItems();
 
-    // parse the key/value pairs and spawn gentities
     G_SpawnEntitiesFromString();
 
-    // general initialization
     G_FindTeams();
 
-    // [QL] 0x10055430: the spawn points the runes are placed with
     G_CountSpawnSpots();
 
-    // [QL] Lag compensation - allocate the per-client position-history rings
     if (g_lagHaxMs.integer != 0 && g_lagHaxHistory.integer != 0) {
         HAX_Init();
     }
 
-    // make sure we have flags for CTF, etc
     if (g_gametype.integer >= GT_TEAM) {
         G_CheckTeamItems();
     }
 
     SaveRegisteredItems();
 
-    // [QL] 0x10055386: the engine generates a GUID and it goes to CS_MATCH_GUID; it is carried by
-    // eventos de estadisticas
     G_SetMatchGUID();
     STAT_ResetMedals();
     G_ClearTeamLocks();
@@ -1873,10 +1606,6 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
 
     trap_SetConfigstring(CS_INTERMISSION, "");
 
-    // [QL] Round-based gametype initialization (0x1005545d). SP_worldspawn has already set the
-    // warmup state: after the restart that starts the match the first round counts down straight
-    // away, otherwise it waits in RS_WARMUP. The fork only did this for Red Rover, so the rounds of
-    // CA, Freeze Tag and A&D never started.
     switch (g_gametype.integer) {
     case GT_CA:
         level.roundState.tNext = 0;
@@ -1884,7 +1613,6 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
         CA_RoundStateTransition();
         break;
     case GT_CTF:
-        // [QL] 0x10055475: the bases and item counts of the spectator item timers
         G_InitItemTimerBases();
         break;
     case GT_FREEZE:
@@ -1909,40 +1637,28 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
         break;
     }
 
-    // [QL] 0x100555aa: last, the quad of the Quad Hog and the runes
     if (g_gametype.integer == GT_FFA && g_quadHog.integer) {
         QuadHog_Spawn();
     }
     G_SpawnRunes();
 
-    // [QL] publish starting weapons bitmask
     trap_SetConfigstring(CS_STARTING_WEAPONS, va("%i", g_startingWeapons.integer));
 
-    // [QL] publish survivor min speed for infection mode
     trap_SetConfigstring(CS_INFECTED_SURVIVOR_MINSPEED, va("%f", g_rrInfectedSurvivorMinSpeed.value));
 
-    // [QL] publish the remaining server-setting configstrings the client expects (verified
-    // against a live QL server demo). Formats match the QL server (%d ints, %f for the float).
     trap_SetConfigstring(CS_PRACTICE, va("%d", practiceflags.integer));
     trap_SetConfigstring(CS_FREECAM, va("%d", g_teamSpecFreeCam.integer));
     trap_SetConfigstring(CS_PLAYER_CYLINDERS, va("%d", g_playerCylinders.integer));
     trap_SetConfigstring(CS_DEBUGFLAGS, va("%d", g_debugFlags.integer));
     trap_SetConfigstring(CS_DMGTHROUGHDEPTH, va("%f", g_dmgThroughSurfaceDistance.value));
 
-    // [QL] send pmove / armor / weapon / player gamerule parameters to clients
     G_SendPmoveInfo();
     G_SendArmorInfo();
     G_SendWeaponInfo();
     G_SendPlayerInfo();
 }
 
-/*
-=================
-G_ShutdownGame
-=================
-*/
 void G_ShutdownGame(int restart) {
-    // [QL] 0x10032a10: "The server will overwrite your changes on map exit and shutdown"
     G_SaveAccessList();
     G_Printf("==== ShutdownGame ====\n");
 
@@ -1953,15 +1669,12 @@ void G_ShutdownGame(int restart) {
         level.logFile = 0;
     }
 
-    // write all the client session data so we can get it back
     G_WriteSessionData();
 
     if (trap_Cvar_VariableIntegerValue("bot_enable")) {
         BotAIShutdown(restart);
     }
 }
-
-//===================================================================
 
 void QDECL Com_Error(int level, const char* error, ...) {
     va_list argptr;
@@ -1985,21 +1698,6 @@ void QDECL Com_Printf(const char* msg, ...) {
     trap_Print(text);
 }
 
-/*
-========================================================================
-
-PLAYER COUNTING / SCORE SORTING
-
-========================================================================
-*/
-
-/*
-=======================
-RemoveTournamentLoser
-
-Make the loser a spectator at the back of the line
-=======================
-*/
 void RemoveTournamentLoser(void) {
     int clientNum;
 
@@ -2013,15 +1711,9 @@ void RemoveTournamentLoser(void) {
         return;
     }
 
-    // make them a spectator
     SetTeam(&g_entities[clientNum], "s");
 }
 
-/*
-=======================
-RemoveTournamentWinner
-=======================
-*/
 void RemoveTournamentWinner(void) {
     int clientNum;
 
@@ -2035,15 +1727,9 @@ void RemoveTournamentWinner(void) {
         return;
     }
 
-    // make them a spectator
     SetTeam(&g_entities[clientNum], "s");
 }
 
-/*
-=======================
-AdjustTournamentScores
-=======================
-*/
 void AdjustTournamentScores(void) {
     int clientNum;
 
@@ -2060,20 +1746,12 @@ void AdjustTournamentScores(void) {
     }
 }
 
-/*
-=============
-SortRanks
-
-=============
-*/
 int QDECL SortRanks(const void* a, const void* b) {
     gclient_t *ca, *cb;
 
     ca = &level.clients[*(int*)a];
     cb = &level.clients[*(int*)b];
 
-    // [QL] 0x10055eb0
-    // sort special clients last
     if (ca->sess.spectatorClient < 0) {
         return 1;
     }
@@ -2081,7 +1759,6 @@ int QDECL SortRanks(const void* a, const void* b) {
         return -1;
     }
 
-    // then connecting clients
     if (ca->pers.connected == CON_CONNECTING) {
         return 1;
     }
@@ -2089,7 +1766,6 @@ int QDECL SortRanks(const void* a, const void* b) {
         return -1;
     }
 
-    // then spectators, the one who has waited longest first
     if (ca->sess.sessionTeam == TEAM_SPECTATOR && cb->sess.sessionTeam == TEAM_SPECTATOR) {
         if (ca->sess.spectatorTime < cb->sess.spectatorTime) {
             return -1;
@@ -2106,7 +1782,6 @@ int QDECL SortRanks(const void* a, const void* b) {
         return -1;
     }
 
-    // then by score: a race is won by the lowest time
     if (g_gametype.integer == GT_RACE) {
         if (ca->ps.persistant[PERS_SCORE] > cb->ps.persistant[PERS_SCORE]) {
             return 1;
@@ -2123,7 +1798,6 @@ int QDECL SortRanks(const void* a, const void* b) {
         return 1;
     }
 
-    // Red Rover breaks a tie with the round score
     if (g_gametype.integer == GT_RR) {
         if (ca->ps.localPersistant[0] > cb->ps.localPersistant[0]) {
             return -1;
@@ -2135,25 +1809,6 @@ int QDECL SortRanks(const void* a, const void* b) {
     return 0;
 }
 
-/*
-============
-CalculateRanks
-
-Recalculates the score ranks of all players
-This will be called on every client connect, begin, disconnect, death,
-and team change.
-============
-*/
-/*
-============
-CalculateAwards
-
-[QL] 0x100559e0: the end of match awards, when the intermission starts and whenever the
-ranks change during it. Who did the most damage and who was the most accurate, then, where
-the gametype has them, who controlled the items best and the three most valuable players.
-Each goes out as the client number in its configstring, empty for nobody.
-============
-*/
 static void G_AwardConfigstring(int index, int clientNum) {
     trap_SetConfigstring(index, clientNum < 0 ? "" : va("%i", clientNum));
 }
@@ -2187,7 +1842,6 @@ void CalculateAwards(void) {
         }
         players++;
 
-        // the most accurate: the more shots settle a tie
         if (cl->accuracy_hits > 0 && cl->accuracy_shots > 0) {
             accuracy = cl->accuracy_hits * 100 / cl->accuracy_shots;
         }
@@ -2197,14 +1851,12 @@ void CalculateAwards(void) {
             mostAccurate = i;
         }
 
-        // the most damage: the fewer shots settle a tie
         if (st->totalDamageDealt == bestDamage ? cl->accuracy_shots < damageShots : st->totalDamageDealt > bestDamage) {
             bestDamage = st->totalDamageDealt;
             damageShots = cl->accuracy_shots;
             mostDamage = i;
         }
 
-        // item control: armor and mega by weight, the quad and the battle suit worth most
         if (hasItems) {
             int items = (st->numGreenArmorPickups +
                          (st->numYellowArmorPickups + (st->numRedArmorPickups + st->numMegaHealthPickups) * 2) * 2) *
@@ -2217,7 +1869,6 @@ void CalculateAwards(void) {
             }
         }
 
-        // the most valuable, offensive and defensive: the score settles a tie
         if (hasValuable) {
             int defense = (st->numDefends + st->numAssists) * 10;
             int offense = (st->numAssists + st->numCaptures * 10) * 10;
@@ -2277,7 +1928,6 @@ void CalculateRanks(void) {
             if (level.clients[i].sess.sessionTeam != TEAM_SPECTATOR) {
                 level.numNonSpectatorClients++;
 
-                // decide if this should be auto-followed
                 if (level.clients[i].pers.connected == CON_CONNECTED) {
                     level.numPlayingClients++;
                     if (level.follow1 == -1) {
@@ -2293,9 +1943,7 @@ void CalculateRanks(void) {
     qsort(level.sortedClients, level.numConnectedClients,
           sizeof(level.sortedClients[0]), SortRanks);
 
-    // set the rank value for all clients that are connected and not spectators
     if (g_gametype.integer >= GT_TEAM && g_gametype.integer != GT_RR) {
-        // [QL] team games: rank is team order, plus serverRank/teamRank tracking
         int teamLastIdx[4] = { -1, -1, -1, -1 };
         int teamLastScore[4] = { 0, 0, 0, 0 };
         int teamRankCounter[4] = { -1, -1, -1, -1 };
@@ -2306,7 +1954,6 @@ void CalculateRanks(void) {
             int ci = level.sortedClients[i];
             cl = &level.clients[ci];
 
-            // team rank (PERS_RANK): red=0, blue=1, tied=2
             if (level.teamScores[TEAM_RED] == level.teamScores[TEAM_BLUE]) {
                 cl->ps.persistant[PERS_RANK] = 2;
             } else if (level.teamScores[TEAM_RED] > level.teamScores[TEAM_BLUE]) {
@@ -2320,13 +1967,11 @@ void CalculateRanks(void) {
 
             newScore = cl->ps.persistant[PERS_SCORE];
 
-            // [QL] serverRank: overall ranking among all non-spectator players
             if (i == 0 || newScore != score) {
                 rank++;
                 cl->expandedStats.serverRank = rank;
                 cl->expandedStats.serverRankIsTied = qfalse;
             } else {
-                // tied with previous
                 if (i > 0) {
                     level.clients[level.sortedClients[i - 1]].expandedStats.serverRankIsTied = qtrue;
                 }
@@ -2334,7 +1979,6 @@ void CalculateRanks(void) {
                 cl->expandedStats.serverRankIsTied = qtrue;
             }
 
-            // [QL] teamRank: ranking within own team
             {
                 int t = cl->sess.sessionTeam;
                 if (teamLastIdx[t] == -1 || newScore != teamLastScore[t]) {
@@ -2353,7 +1997,6 @@ void CalculateRanks(void) {
             score = newScore;
         }
     } else {
-        // [QL] FFA/Duel/Race/RR: rank by score, with race sentinel
         int raceSentinel = (g_gametype.integer == GT_RACE) ? 0x7FFFFFFF : 0;
         rank = -1;
         score = raceSentinel;
@@ -2367,7 +2010,6 @@ void CalculateRanks(void) {
                 cl->expandedStats.serverRank = rank;
                 cl->expandedStats.serverRankIsTied = qfalse;
             } else {
-                // tied with previous
                 if (i > 0) {
                     level.clients[level.sortedClients[i - 1]].ps.persistant[PERS_RANK] = rank | RANK_TIED_FLAG;
                     level.clients[level.sortedClients[i - 1]].expandedStats.serverRankIsTied = qtrue;
@@ -2380,15 +2022,13 @@ void CalculateRanks(void) {
         }
     }
 
-    // [QL] lead change tracking
     if (level.lastLeadChangeTime == 0) {
         level.lastLeadChangeClient = -1;
         level.lastLeadChangeTime = level.time;
     } else if (g_gametype.integer >= GT_TEAM && g_gametype.integer != GT_RR) {
-        // team lead change
         int newLead;
         if (level.teamScores[TEAM_RED] == level.teamScores[TEAM_BLUE]) {
-            newLead = 2;  // tied
+            newLead = 2;
         } else if (level.teamScores[TEAM_RED] > level.teamScores[TEAM_BLUE]) {
             newLead = 0;
         } else {
@@ -2399,7 +2039,6 @@ void CalculateRanks(void) {
             level.lastLeadChangeElapsedTime = level.time - level.startTime;
         }
     } else {
-        // FFA/Duel lead change
         if (level.numPlayingClients > 0
             && level.lastLeadChangeClient != level.sortedClients[0]
             && level.clients[level.sortedClients[0]].expandedStats.serverRankIsTied == qfalse) {
@@ -2408,15 +2047,12 @@ void CalculateRanks(void) {
         }
     }
 
-    // set the CS_SCORES1/2 configstrings, which will be visible to everyone
     if (g_gametype.integer >= GT_TEAM && g_gametype.integer != GT_RR) {
         trap_SetConfigstring(CS_SCORES1, va("%i", level.teamScores[TEAM_RED]));
         trap_SetConfigstring(CS_SCORES2, va("%i", level.teamScores[TEAM_BLUE]));
-        // [QL] team name configstrings
         trap_SetConfigstring(CS_SCORES1PLAYER, "TEAM_RED");
         trap_SetConfigstring(CS_SCORES2PLAYER, "TEAM_BLUE");
     } else {
-        // [QL] FFA/Duel: set scores + player name configstrings
         if (level.numPlayingClients < 1) {
             trap_SetConfigstring(CS_SCORES1, va("%i", SCORE_NOT_PRESENT));
             trap_SetConfigstring(CS_SCORES1PLAYER, "");
@@ -2432,7 +2068,6 @@ void CalculateRanks(void) {
             trap_SetConfigstring(CS_SCORES2PLAYER, level.clients[level.sortedClients[1]].pers.netname);
         }
 
-        // [QL] Duel-specific: set CS for 1st/2nd player scores + clientNums
         if (g_gametype.integer == GT_DUEL && !level.intermissionQueued && !level.intermissionTime) {
             int p1, p2;
 
@@ -2444,7 +2079,6 @@ void CalculateRanks(void) {
                 trap_SetConfigstring(CS_CLIENTNUM2NDPLAYER, "-1");
                 trap_SetConfigstring(CS_NAME2NDPLAYER, "");
             } else {
-                // determine p1 (lower clientNum) and p2 (higher clientNum)
                 if (level.numPlayingClients >= 2) {
                     if (level.sortedClients[0] < level.sortedClients[1]) {
                         p1 = level.sortedClients[0];
@@ -2458,12 +2092,10 @@ void CalculateRanks(void) {
                     p2 = -1;
                 }
 
-                // 1st player slot
                 trap_SetConfigstring(CS_SCORE1STPLAYER, va("%i", level.clients[p1].ps.persistant[PERS_SCORE]));
                 trap_SetConfigstring(CS_CLIENTNUM1STPLAYER, va("%i", p1));
                 trap_SetConfigstring(CS_NAME1STPLAYER, level.clients[p1].pers.netname);
 
-                // 2nd player slot
                 if (p2 >= 0) {
                     trap_SetConfigstring(CS_SCORE2NDPLAYER, va("%i", level.clients[p2].ps.persistant[PERS_SCORE]));
                     trap_SetConfigstring(CS_CLIENTNUM2NDPLAYER, va("%i", p2));
@@ -2477,34 +2109,17 @@ void CalculateRanks(void) {
         }
     }
 
-    // if we are at the intermission, send the new info to everyone
     if (level.intermissionTime) {
         for (i = 0; i < level.maxclients; i++) {
             if (level.clients[i].pers.connected == CON_CONNECTED) {
                 MoveClientToIntermission(g_entities + i);
             }
         }
-        CalculateAwards();  // [QL] 0x10056ae9
+        CalculateAwards();
         SendScoreboardMessageToAllClients();
     }
 }
 
-/*
-========================================================================
-
-MAP CHANGING
-
-========================================================================
-*/
-
-/*
-========================
-SendScoreboardMessageToAllClients
-
-Do this at BeginIntermission time and whenever ranks are recalculated
-due to enters/exits/forced team changes
-========================
-*/
 void SendScoreboardMessageToAllClients(void) {
     int i;
 
@@ -2515,27 +2130,16 @@ void SendScoreboardMessageToAllClients(void) {
     }
 }
 
-/*
-========================
-MoveClientToIntermission
-
-When the intermission starts, this will be called for all players.
-If a new client connects, this will be called after the spawn function.
-========================
-*/
 void MoveClientToIntermission(gentity_t* ent) {
-    // take out of follow mode if needed
     if (ent->client->sess.spectatorState == SPECTATOR_FOLLOW) {
         StopFollowing(ent);
     }
 
-    // move to the spot (FindIntermissionPoint called once in BeginIntermission)
     VectorCopy(level.intermission_origin, ent->s.origin);
     VectorCopy(level.intermission_origin, ent->client->ps.origin);
     VectorCopy(level.intermission_angle, ent->client->ps.viewangles);
     ent->client->ps.pm_type = PM_INTERMISSION;
 
-    // clean up powerup info
     memset(ent->client->ps.powerups, 0, sizeof(ent->client->ps.powerups));
 
     ent->client->ps.eFlags = 0;
@@ -2547,22 +2151,12 @@ void MoveClientToIntermission(gentity_t* ent) {
     ent->r.contents = 0;
 }
 
-/*
-==================
-FindIntermissionPoint
-
-This is also used for spectator spawns
-==================
-*/
 void FindIntermissionPoint(void) {
     gentity_t *ent, *target;
     vec3_t dir;
 
-    // find the intermission spot
     ent = G_Find(NULL, FOFS(classname), "info_player_intermission");
-    if (!ent) {  // the map creator forgot to put in an intermission point...
-        // [QL] 0x10054f16 says it always; many maps lack the point and a spawn point serves, so
-        // [ioquakelive] it is said only with developer, for a clean console
+    if (!ent) {
         if (trap_Cvar_VariableIntegerValue("developer")) {
             G_Printf("WARNING: no info_player_intermission\n");
         }
@@ -2570,7 +2164,6 @@ void FindIntermissionPoint(void) {
     } else {
         VectorCopy(ent->s.origin, level.intermission_origin);
         VectorCopy(ent->s.angles, level.intermission_angle);
-        // if it has a target, look towards it
         if (ent->target) {
             target = G_PickTarget(ent->target);
             if (target) {
@@ -2581,34 +2174,25 @@ void FindIntermissionPoint(void) {
     }
 }
 
-/*
-==================
-BeginIntermission
-==================
-*/
 void BeginIntermission(void) {
     int i;
     gentity_t* ent;
     char nextmaps[MAX_STRING_CHARS];
 
     if (level.intermissionTime) {
-        return;  // already active
+        return;
     }
 
-    // [QL] set CS_INTERMISSION
     trap_SetConfigstring(CS_INTERMISSION, "1");
 
-    // if in tournement mode, change the wins / losses
     if (g_gametype.integer == GT_DUEL) {
         AdjustTournamentScores();
     }
 
     level.intermissionTime = level.time;
 
-    // [QL] find the intermission point once (not per-client)
     FindIntermissionPoint();
 
-    // [QL] Set all connected clients to vote-eligible, clear active vote
     for (i = 0; i < level.maxclients; i++) {
         if (level.clients[i].pers.connected == CON_CONNECTED) {
             level.clients[i].pers.voteState = VOTE_PENDING;
@@ -2618,7 +2202,6 @@ void BeginIntermission(void) {
     }
     ClearVote();
 
-    // [QL] Parse "nextmaps" info string for end-of-match map voting
     trap_Cvar_VariableStringBuffer("nextmaps", nextmaps, sizeof(nextmaps));
     if (nextmaps[0]) {
         char mapInfo[MAX_INFO_STRING];
@@ -2643,8 +2226,6 @@ void BeginIntermission(void) {
             level.intermissionMapVotes[i] = 0;
         }
 
-        // [QL] 0x10056e2a: what the clients show of each map -- its name, its title and its
-        // gametype -- and the votes as an infostring by slot, all at zero
         mapInfo[0] = '\0';
         votes[0] = '\0';
         for (i = 0; i < 3; i++) {
@@ -2660,7 +2241,6 @@ void BeginIntermission(void) {
         trap_SetConfigstring(CS_VOTE_TIME, va("%i", level.voteTime));
     }
 
-    // move all clients to the intermission point
     for (i = 0; i < level.maxclients; i++) {
         ent = g_entities + i;
         if (!ent->inuse || !ent->client) {
@@ -2668,21 +2248,11 @@ void BeginIntermission(void) {
         }
         MoveClientToIntermission(ent);
     }
-    CalculateAwards();  // [QL] 0x10055e9c
+    CalculateAwards();
 
-    // send the current scoring to all clients
     SendScoreboardMessageToAllClients();
 }
 
-/*
-=============
-ExitLevel
-
-When the intermission has been exited, the server is either killed
-or moved to a new level based on the "nextmap" cvar
-
-=============
-*/
 void ExitLevel(void) {
     int i;
     gclient_t* cl;
@@ -2691,26 +2261,19 @@ void ExitLevel(void) {
     char nextmaps[MAX_STRING_CHARS];
     int bestMap = 0;
 
-    // [ioquakelive] The Crash Course does not chain maps: at the end, the binary kills the
-    // servidor (0x10057069), antes incluso de mirar sv_quitOnExitLevel.
     if ( g_training.integer ) {
         trap_SendConsoleCommand( EXEC_APPEND, "killserver\n" );
         return;
     }
-    // [QL] Quit on exit level
     if ( sv_quitOnExitLevel.integer ) {
         trap_SendConsoleCommand( EXEC_APPEND, "quit\n" );
         return;
     }
 
-    // bot interbreeding
     BotInterbreedEndMatch();
 
-    // [QL] clear CS_INTERMISSION
     trap_SetConfigstring(CS_INTERMISSION, "");
 
-    // if we are running a tournement map, kick the loser to spectator status,
-    // which will automatically grab the next spectator and restart
     if (g_gametype.integer == GT_DUEL) {
         if (!level.restarted) {
             RemoveTournamentLoser();
@@ -2721,10 +2284,8 @@ void ExitLevel(void) {
         return;
     }
 
-    // [QL] resolve map voting if active
     trap_Cvar_VariableStringBuffer("nextmaps", nextmaps, sizeof(nextmaps));
     if (nextmaps[0] && !(g_voteFlags.integer & VF_ENDMAP_VOTING)) {
-        // [QL] Random tie-breaking for map votes
         {
             int tiedMaps[3];
             int numTied = 0;
@@ -2746,17 +2307,14 @@ void ExitLevel(void) {
             }
         }
 
-        // Get current map name
         trap_GetServerinfo(serverinfo, sizeof(serverinfo));
         Q_strncpyz(mapname, Info_ValueForKey(serverinfo, "mapname"), sizeof(mapname));
 
         if (level.intermissionMapNames[bestMap][0]) {
             if (Q_stricmp(mapname, level.intermissionMapNames[bestMap]) == 0) {
-                // Same map - restart
                 trap_SendConsoleCommand(EXEC_APPEND, "map_restart 0\n");
                 level.restarted = qtrue;
             } else {
-                // Different map - set nextmap and execute
                 if (level.intermissionMapConfigs[bestMap][0]) {
                     trap_Cvar_Set("nextmap", va("map %s %s",
                                   level.intermissionMapNames[bestMap],
@@ -2778,7 +2336,6 @@ void ExitLevel(void) {
 
     level.intermissionTime = 0;
 
-    // reset all the scores so we don't enter the intermission again
     level.teamScores[TEAM_RED] = 0;
     level.teamScores[TEAM_BLUE] = 0;
     level.teamScores[TEAM_FREE] = 0;
@@ -2795,11 +2352,8 @@ void ExitLevel(void) {
         cl->ps.persistant[PERS_SCORE] = 0;
     }
 
-    // we need to do this here before changing to CON_CONNECTING
     G_WriteSessionData();
 
-    // change all client states to connecting, so the early players into the
-    // next level will know the others aren't done reconnecting
     for (i = 0; i < g_maxclients.integer; i++) {
         if (level.clients[i].pers.connected == CON_CONNECTED) {
             level.clients[i].pers.connected = CON_CONNECTING;
@@ -2807,13 +2361,6 @@ void ExitLevel(void) {
     }
 }
 
-/*
-=================
-G_LogPrintf
-
-Print to the logfile with a time stamp if it is open
-=================
-*/
 void QDECL G_LogPrintf(const char* fmt, ...) {
     va_list argptr;
     char string[1024];
@@ -2843,31 +2390,16 @@ void QDECL G_LogPrintf(const char* fmt, ...) {
     trap_FS_Write(string, strlen(string), level.logFile);
 }
 
-/*
-================
-LogExit
-
-[QL] Append information about this game to the log file.
-Binary: FUN_100575a0 in qagamex86.dll
-
-Args:
-  isShutdown: if non-zero, skip setting intermissionQueued (server shutdown path)
-  restart:    if non-zero, skip game-over events (map restart, not match end)
-  string:     exit reason text
-================
-*/
 void LogExit(int isShutdown, int restart, const char* string) {
     int i, numSorted;
     gclient_t* cl;
 
     G_LogPrintf("Exit: %s\n", string);
 
-    // [QL] only queue intermission on normal game exits
     if (isShutdown == 0) {
         level.intermissionQueued = level.time;
     }
 
-    // don't send more than 32 scores (FIXME?)
     numSorted = level.numConnectedClients;
     if (numSorted > 32) {
         numSorted = 32;
@@ -2892,54 +2424,37 @@ void LogExit(int isShutdown, int restart, const char* string) {
 
         ping = cl->ps.ping < 999 ? cl->ps.ping : 999;
 
-        // [QL] 0x100575e0: and the player's stats id at the end
         G_LogPrintf("score: %i  ping: %i  client: %i %s stats: %d \n",
                     cl->ps.persistant[PERS_SCORE], ping,
                     level.sortedClients[i], cl->pers.netname, cl->expandedStats.statId);
     }
 
-    // [QL] game-over events (only on normal match end, not restart)
     if (isShutdown == 0 && restart == 0) {
         gentity_t *te;
         if (g_gametype.integer >= GT_TEAM && g_gametype.integer != GT_RR) {
-            // team game: announce winning team
             te = G_TempEntity(vec3_origin, EV_GLOBAL_TEAM_SOUND);
             te->s.eventParm = (level.teamScores[TEAM_RED] <= level.teamScores[TEAM_BLUE])
                               ? GTS_BLUETEAM_WON : GTS_REDTEAM_WON;
             te->r.svFlags |= SVF_BROADCAST;
         } else {
-            // FFA/duel: generic game-over event
             te = G_TempEntity(vec3_origin, EV_GAMEOVER);
             te->r.svFlags |= SVF_BROADCAST;
         }
     }
 
-    // [QL] Save lastScore and mark stats as reported
     for ( i = 0; i < level.numConnectedClients; i++ ) {
         cl = &level.clients[level.sortedClients[i]];
         if ( cl->sess.sessionTeam != TEAM_SPECTATOR ) {
             cl->sess.prevScore = cl->ps.persistant[PERS_SCORE];
         }
     }
-    // [QL] Publish match-end stats. It goes before raising the flag: retail (0x1005758d) looks
-    // at it so as not to report the same match twice.
     STAT_MatchEnd(isShutdown, restart, string);
 
     level.gameStatsReported = qtrue;
 
-    // [QL] Log stats line (binary format: "stats: %d")
     G_LogPrintf("stats: %d\n", level.numPlayingClients);
 }
 
-/*
-=================
-CheckIntermissionExit
-
-[QL] Binary: FUN_10057b60 in qagamex86.dll
-Uses a hard timeout model: 10s default, 20s if map voting enabled.
-After timeout + 3s minimum, unconditionally exits.
-=================
-*/
 void CheckIntermissionExit(void) {
     int i;
     gclient_t* cl;
@@ -2947,10 +2462,8 @@ void CheckIntermissionExit(void) {
     int timeout;
     char nextmaps[MAX_STRING_CHARS];
 
-    // [QL] 0x10057af7: the picture of the scores and the end of the recording
     G_AutoAction();
 
-    // [QL] Determine timeout: 20s if map voting active, 10s otherwise
     trap_Cvar_VariableStringBuffer("nextmaps", nextmaps, sizeof(nextmaps));
     if (nextmaps[0] && !(g_voteFlags.integer & VF_ENDMAP_VOTING)) {
         timeout = 20000;
@@ -2958,7 +2471,6 @@ void CheckIntermissionExit(void) {
         timeout = 10000;
     }
 
-    // Build ready mask from per-client ready state
     readyMask = 0;
     for (i = 0; i < g_maxclients.integer; i++) {
         cl = level.clients + i;
@@ -2968,14 +2480,13 @@ void CheckIntermissionExit(void) {
         if (g_entities[i].r.svFlags & SVF_BOT) {
             continue;
         }
-        if (cl->pers.ready) {  // [QL] 0x10057b6a
+        if (cl->pers.ready) {
             if (i < 16) {
                 readyMask |= 1 << i;
             }
         }
     }
 
-    // Broadcast ready mask to all connected clients
     for (i = 0; i < g_maxclients.integer; i++) {
         cl = level.clients + i;
         if (cl->pers.connected != CON_CONNECTED) {
@@ -2984,13 +2495,11 @@ void CheckIntermissionExit(void) {
         cl->ps.stats[STAT_CLIENTS_READY] = readyMask;
     }
 
-    // [QL] Mark voting ended after timeout expires
     if (!level.votingEnded &&
         level.time >= level.intermissionTime + timeout) {
         level.votingEnded = qtrue;
     }
 
-    // [QL] Hard exit after timeout + 3s minimum
     if (level.time >= level.intermissionTime + timeout + 3000) {
         level.readyToExit = qtrue;
         level.exitTime = level.time;
@@ -2998,11 +2507,6 @@ void CheckIntermissionExit(void) {
     }
 }
 
-/*
-=============
-ScoreIsTied
-=============
-*/
 qboolean ScoreIsTied(void) {
     int a, b;
 
@@ -3020,20 +2524,9 @@ qboolean ScoreIsTied(void) {
     return a == b;
 }
 
-/*
-=================
-CheckExitRules
-
-There will be a delay between the time the exit is qualified for
-and the time everyone is moved to the intermission spot, so you
-can see the last frag.
-=================
-*/
 void CheckExitRules(void) {
     int i;
     gclient_t* cl;
-    // if at the intermission, wait for all non-bots to
-    // signal ready, then go to next level
     if (level.intermissionTime) {
         CheckIntermissionExit();
         return;
@@ -3048,38 +2541,34 @@ void CheckExitRules(void) {
         return;
     }
 
-    // [QL] no exit checks during warmup
     if (level.warmupTime != 0) {
         return;
     }
 
-    // [QL] Round-based gametypes: exit rules handled by their round system
     switch ( g_gametype.integer ) {
     case GT_CA:
     case GT_AD:
     case GT_RR:
-        return;  // always handled by round logic
+        return;
     case GT_FREEZE:
         if ( level.roundState.eCurrent != 0 ) {
-            return;  // FT: only fall through during pre-round (roundState 0)
+            return;
         }
         break;
     default:
         break;
     }
 
-    // [QL] Overtime system
     if ( ScoreIsTied() ) {
         if ( !g_timelimit.integer ) {
-            return;  // no timelimit = infinite sudden death
+            return;
         }
         if ( !g_overtime.integer ) {
-            return;  // no overtime cvar = infinite sudden death
+            return;
         }
         if ( level.time - level.startTime < g_timelimit.integer * 60000 + level.timeOvertime ) {
-            return;  // overtime not expired yet
+            return;
         }
-        // Overtime expired while still tied - add another overtime period
         {
             gentity_t *te = G_TempEntity( vec3_origin, EV_OVERTIME );
             te->r.svFlags |= SVF_BROADCAST;
@@ -3143,7 +2632,6 @@ void CheckExitRules(void) {
         }
     }
 
-    // [QL] Scorelimit for Domination
     if ( g_scorelimit.integer && g_gametype.integer == GT_DOMINATION ) {
         if ( level.teamScores[TEAM_RED] >= g_scorelimit.integer ) {
             trap_SendServerCommand( -1, "print \"Red hit the scorelimit.\n\"" );
@@ -3157,7 +2645,6 @@ void CheckExitRules(void) {
         }
     }
 
-    // [QL] Mercylimit for team modes
     if ( g_mercylimit.integer && g_gametype.integer >= GT_TEAM && g_gametype.integer != GT_RR ) {
         int mercyTime = g_mercytime.integer * 60000 + level.timeOvertime;
         if ( level.time - level.startTime >= mercyTime ) {
@@ -3177,22 +2664,6 @@ void CheckExitRules(void) {
 
 }
 
-/*
-========================================================================
-
-FUNCTIONS CALLED EVERY FRAME
-
-========================================================================
-*/
-
-/*
-=============
-SetWarmupState
-
-[QL] Sets level.warmupTime, CS_WARMUP configstring, and g_gameState cvar.
-Binary: FUN_10059c80 in qagamex86.dll
-=============
-*/
 void SetWarmupState(int warmupTime) {
     const char *gameState;
 
@@ -3208,18 +2679,9 @@ void SetWarmupState(int warmupTime) {
     }
     trap_Cvar_Set("g_gameState", gameState);
 
-    // [QL] every place that sets the warmup state runs the automatic recording after it
     G_AutoAction();
 }
 
-/*
-=============
-G_AutoActionClean
-
-[QL] 0x10062ef0: a name as a file can take it: no colours, none of " ' * . / : < > ? \ |,
-nothing below a space, 39 characters at most, and "invalid" when nothing is left
-=============
-*/
 static void G_AutoActionClean(char* out, const char* in) {
     int len = 0;
 
@@ -3239,13 +2701,6 @@ static void G_AutoActionClean(char* out, const char* in) {
     }
 }
 
-/*
-=============
-G_AutoActionGameType
-
-[QL] 0x1002ca00
-=============
-*/
 static const char* G_AutoActionGameType(int gametype) {
     switch (gametype) {
         case GT_FFA: return "FFA";
@@ -3265,14 +2720,6 @@ static const char* G_AutoActionGameType(int gametype) {
     }
 }
 
-/*
-=============
-G_AutoActionName
-
-[QL] 0x10062fd0: in duel the two leaders, the client's own first with (POV), otherwise the
-gametype and the client unless a spectator; then the map and the date
-=============
-*/
 static const char* G_AutoActionName(gentity_t* ent) {
     static char name[256];
     char first[40], second[40], raw[40], info[MAX_INFO_STRING];
@@ -3310,16 +2757,8 @@ static const char* G_AutoActionName(gentity_t* ent) {
     return name;
 }
 
-// [QL] 0x1049abfc: 1 while the match is being recorded, 2 once its picture has been taken
 static int autoActionFlags;
 
-/*
-=============
-G_AutoActionStopRecording
-
-[QL] 0x100631f0
-=============
-*/
 static void G_AutoActionStopRecording(void) {
     int i;
 
@@ -3335,29 +2774,12 @@ static void G_AutoActionStopRecording(void) {
     }
 }
 
-/*
-=============
-G_AutoActionClientConnect
-
-[QL] 0x10063270: somebody who arrives while the match is being recorded starts recording too
-=============
-*/
 void G_AutoActionClientConnect(gentity_t* ent) {
     if ((autoActionFlags & 1) && (ent->client->pers.autoaction & 1)) {
         trap_SendServerCommand(ent - g_entities, va("record \"%s\"\n", G_AutoActionName(ent)));
     }
 }
 
-/*
-=============
-G_AutoAction
-
-[QL] 0x100632d0, run whenever the warmup state is set and at every frame of the intermission.
-cg_autoAction lives here and not in the cgame: 1 records the match from the countdown, 2 takes
-a picture of the scores four seconds into the intermission, when the recording also ends.
-Back in the pre-game warmup the recordings stop.
-=============
-*/
 void G_AutoAction(void) {
     int i;
 
@@ -3394,26 +2816,10 @@ void G_AutoAction(void) {
     }
 }
 
-/*
-=================
-BG_IsScoreBasedGameType
-
-[QL] 0x1002c9e0: the team games but Red Rover, whose players change sides as they fall, so an
-empty team there is no forfeit. Ready-up, friendly-fire complaints and the automatic forfeit
-all ask this.
-=================
-*/
 qboolean BG_IsScoreBasedGameType(void) {
     return g_gametype.integer < 0 || (g_gametype.integer > GT_RACE && g_gametype.integer != GT_RR);
 }
 
-/*
-=================
-G_CheckTeamBalance
-Binary: 0x100680e0
-Returns qtrue if teams are balanced (within 1 player), or g_teamForceBalance is off.
-=================
-*/
 qboolean G_CheckTeamBalance(void) {
     int redCount, blueCount;
 
@@ -3429,15 +2835,6 @@ qboolean G_CheckTeamBalance(void) {
     return qtrue;
 }
 
-/*
-=============
-TeamsPresent
-
-[QL] Small team-presence gate. Called by Cmd_ReadyUp_f. Distinct from
-CheckWarmupConditions (the reimpl previously conflated the two).
-.so symbol: TeamsPresent   Binary: 0x10068140 in qagamex86.dll
-=============
-*/
 qboolean TeamsPresent(void) {
     int redCount, blueCount;
 
@@ -3445,8 +2842,6 @@ qboolean TeamsPresent(void) {
         return qtrue;
     }
 
-    // [QL] TeamCount order matches the binary: BLUE first, RED second. The gate
-    // tests blueCount OR'd against g_rrInfected (0x10068165; the fork called it g_forfeit).
     blueCount = TeamCount(-1, TEAM_BLUE);
     redCount = TeamCount(-1, TEAM_RED);
 
@@ -3469,17 +2864,6 @@ qboolean TeamsPresent(void) {
     return qtrue;
 }
 
-/*
-=============
-CheckWarmupConditions
-
-[QL] Full warmup readiness evaluation (the inner "CheckWarmup"). Builds the
-STAT_CLIENTS_READY bitmask, counts ready players into level.numReadyClients /
-numReadyHumans, enforces g_teamForcePresent / g_teamForceBalance, and returns
-whether warmup may advance. During COUNT_DOWN it re-freezes playing clients.
-.so symbol: CheckWarmupConditions   Binary: 0x10057830 in qagamex86.dll
-=============
-*/
 static qboolean CheckWarmupConditions(void) {
     int i;
     int numPlaying = 0;
@@ -3487,19 +2871,15 @@ static qboolean CheckWarmupConditions(void) {
     int redCount, blueCount;
     gclient_t *cl;
 
-    // [QL] g_doWarmup 0: no warmup phase, match starts immediately
     if (g_doWarmup.integer == 0) {
         return qtrue;
     }
 
-    // [QL] Grace period: non-duel gametypes wait g_warmupDelay seconds from map start
-    // before allowing countdown (binary: early check in FUN_10057830)
     if (g_warmupDelay.integer != 0 && g_gametype.integer != GT_DUEL &&
         level.time - level.startTime < g_warmupDelay.integer * 1000) {
         return qfalse;
     }
 
-    // During PRE_GAME: count playing and ready clients, build readyMask
     if (level.warmupTime < 0) {
         int readyMask = 0;
 
@@ -3515,11 +2895,9 @@ static qboolean CheckWarmupConditions(void) {
             if (cl->pers.ready) {
                 numReady++;
             } else {
-                // Bots count as ready if bot_autoReady is set
                 if (!(g_entities[i].r.svFlags & SVF_BOT) || bot_autoReady.integer == 0) {
                     continue;
                 }
-                // bot with autoReady: count as effectively ready (but not in numReady)
             }
             numPlaying++;
             if (i < 16) {
@@ -3529,7 +2907,6 @@ static qboolean CheckWarmupConditions(void) {
         level.numReadyClients = numPlaying;
         level.numReadyHumans = numReady;
 
-        // Broadcast readyMask to all connected clients via STAT_CLIENTS_READY
         for (i = 0; i < level.maxclients; i++) {
             cl = level.clients + i;
             if (cl->pers.connected == CON_CONNECTED) {
@@ -3538,8 +2915,6 @@ static qboolean CheckWarmupConditions(void) {
         }
     }
 
-    // [QL] g_teamForcePresent gate (inline in 0x10057830). TeamCount order = BLUE,
-    // RED; the gate tests blueCount OR'd against g_rrInfected (was AND + redCount).
     if (g_teamForcePresent.integer != 0) {
         blueCount = TeamCount(-1, TEAM_BLUE);
         redCount = TeamCount(-1, TEAM_RED);
@@ -3561,22 +2936,16 @@ static qboolean CheckWarmupConditions(void) {
         }
     }
 
-    // Check g_teamForceBalance (teams can't differ by more than 1)
     if (!G_CheckTeamBalance()) {
         return qfalse;
     }
 
-    // Check ready requirements during PRE_GAME
     if (level.warmupTime < 0) {
         if (g_gametype.integer == GT_DUEL) {
-            // Duel: need exactly 2 playing clients
             if (level.numPlayingClients == 2 && numPlaying == 2) {
                 return qtrue;
             }
         } else {
-            // Team/FFA: at least one human readied AND the ready fraction meets the
-            // threshold. Binary numerator is numPlaying (ready humans + auto-ready
-            // bots), not numReady, and it compares threshold <= fraction.
             if ((numReady != 0 &&
                  sv_warmupReadyPercentage.value <= (float)numPlaying / (float)level.numPlayingClients) ||
                 sv_warmupReadyPercentage.value == 0.0f) {
@@ -3584,8 +2953,6 @@ static qboolean CheckWarmupConditions(void) {
             }
         }
     } else {
-        // During COUNT_DOWN: re-freeze every connected client. Binary tests only
-        // pers.connected == CON_CONNECTED (no sessionTeam check).
         if (level.warmupTime != 0) {
             for (i = 0; i < level.maxclients; i++) {
                 cl = level.clients + i;
@@ -3600,35 +2967,19 @@ static qboolean CheckWarmupConditions(void) {
     return qfalse;
 }
 
-/*
-=============
-CheckForfeitConditions
-
-[QL] Two modes (binary FUN_10057d60, .so symbol CheckForfeitConditions):
-  mode != 0  -> manual "/forfeit" command path: validates the caller may forfeit,
-               prints the appropriate rejection message, and (for a valid forfeit)
-               pre-marks the loser's PERS_SCORE, returning qtrue.
-  mode == 0  -> automatic driver check from CheckWarmupAndForfeit; ent is NULL and
-               only the "not enough players" logic runs.
-=============
-*/
 qboolean CheckForfeitConditions(gentity_t *ent, int mode) {
     int elapsed;
     int redCount, blueCount;
 
-    // [QL] level.timePauseBegin (Ghidra mislabelled the global "level_restarted"
-    // at 0x105dea08; it is the pause/timeout start time) - no forfeits while frozen.
     if (level.timePauseBegin != 0) {
         return qfalse;
     }
 
     elapsed = level.time - level.startTime;
-    // Binary computes both counts up front regardless of mode; order BLUE, RED.
     blueCount = TeamCount(-1, TEAM_BLUE);
     redCount = TeamCount(-1, TEAM_RED);
 
     if (mode != 0) {
-        // ---- manual /forfeit command path ----
         if (g_gametype.integer == GT_FFA || g_gametype.integer == GT_RACE ||
             g_gametype.integer == GT_RR) {
             const char *gtName;
@@ -3654,7 +3005,6 @@ qboolean CheckForfeitConditions(gentity_t *ent, int mode) {
         }
 
         if (g_gametype.integer == GT_DUEL) {
-            // PERS_RANK bit 0x4000 = "tied"; any other bit means "not first" (losing).
             int rank = ent->client->ps.persistant[PERS_RANK];
             if (rank != 0 && (rank & ~0x4000) != 0) {
                 ent->client->ps.persistant[PERS_SCORE] = -999;
@@ -3692,10 +3042,8 @@ qboolean CheckForfeitConditions(gentity_t *ent, int mode) {
         return qfalse;
     }
 
-    // ---- automatic driver check (mode == 0) ----
     if (elapsed / 1000 > 1 && level.intermissionQueued == 0 && level.intermissionTime == 0) {
         if (BG_IsRoundBasedGameType(g_gametype.integer)) {
-            // Round-based: only after the round is being played.
             if (level.roundState.eCurrent < RS_PLAYING) {
                 return qfalse;
             }
@@ -3705,8 +3053,6 @@ qboolean CheckForfeitConditions(gentity_t *ent, int mode) {
             }
         }
 
-        // [QL] g_training (Ghidra global 0x105dea44 "level_isTraining", set from the
-        // trainingMap worldspawn key) suppresses auto-forfeit on tour/training maps.
         if (g_training.integer == 0) {
             if (((g_gametype.integer < GT_TEAM || g_gametype.integer == GT_RR) &&
                  level.numPlayingClients < 2) ||
@@ -3719,21 +3065,10 @@ qboolean CheckForfeitConditions(gentity_t *ent, int mode) {
     return qfalse;
 }
 
-/*
-=============
-ForfeitMatch
-
-[QL] Applies the -999 forfeit penalty and ends the match.
-.so symbol: ForfeitMatch   Binary: 0x10057f90 in qagamex86.dll
-=============
-*/
 void ForfeitMatch(void) {
     int redCount, blueCount;
 
     if (g_gametype.integer == GT_DUEL) {
-        // Duel: penalise a duellist who disconnected or is no longer on TEAM_FREE.
-        // Uses the two tracked duel client indices (globals 0x105dcea4 / 0x105dcea8);
-        // binary has no idx>=0 guard and tests sessionTeam != TEAM_FREE (not == SPEC).
         gclient_t *cl;
         cl = level.clients + level.clientNum1stPlayer;
         if (cl->pers.connected == CON_DISCONNECTED || cl->sess.sessionTeam != TEAM_FREE) {
@@ -3744,7 +3079,6 @@ void ForfeitMatch(void) {
             cl->ps.persistant[PERS_SCORE] = -999;
         }
     } else if (g_gametype.integer >= GT_TEAM && g_gametype.integer != GT_RR) {
-        // Team games: set losing score on empty teams. TeamCount order = BLUE, RED.
         blueCount = TeamCount(-1, TEAM_BLUE);
         redCount = TeamCount(-1, TEAM_RED);
         if (redCount < 1) {
@@ -3762,20 +3096,6 @@ void ForfeitMatch(void) {
     LogExit(0, 0, "Players have forfeited.");
 }
 
-/*
-=============
-CheckWarmupAndForfeit
-
-[QL] Outer warmup / forfeit driver, called every frame from G_RunFrame. Binary
-FUN_10058760 (no dedicated .so symbol - GCC inlined it into G_RunFrame in the
-Linux build; this name is the Ghidra label kept for the separate MSVC function).
-
-States:
-  warmupTime == 0  -> match in progress (auto forfeit check)
-  warmupTime == -1 -> PRE_GAME (waiting for players)
-  warmupTime > 0   -> COUNT_DOWN (countdown to match start)
-=============
-*/
 static void CheckWarmupAndForfeit(void) {
     int i;
     gclient_t *cl;
@@ -3785,30 +3105,21 @@ static void CheckWarmupAndForfeit(void) {
     }
 
     if (level.warmupTime == 0) {
-        // Live match: automatic forfeit check.
         if (CheckForfeitConditions(NULL, 0)) {
             ForfeitMatch();
         }
         return;
     }
 
-    // Warmup active (PRE_GAME or COUNT_DOWN).
     if (!CheckWarmupConditions()) {
-        // Not enough ready players.
         if (level.warmupTime == -1) {
-            // Still PRE_GAME: run the duel ready-start countdown (no-op off duel).
             CheckTournament();
             return;
         }
 
-        // Countdown was running: drop back to PRE_GAME (the binary inlines the
-        // SetWarmupState(-1) transition, the automatic recording included).
         SetWarmupState(-1);
         G_LogPrintf("Warmup:\n");
 
-        // Unfreeze every connected client and clear their ready flag. Binary tests
-        // only pers.connected == CON_CONNECTED (no sessionTeam check) and operates
-        // on pers.ready (0x2E8), not sess.specOnly.
         for (i = 0; i < level.maxclients; i++) {
             cl = level.clients + i;
             if (cl->pers.connected == CON_CONNECTED) {
@@ -3822,44 +3133,27 @@ static void CheckWarmupAndForfeit(void) {
         return;
     }
 
-    // Enough players ready. If g_warmup changed, force back to PRE_GAME.
     if (g_warmup.modificationCount != level.warmupModificationCount) {
         level.warmupModificationCount = g_warmup.modificationCount;
         SetWarmupState(-1);
     }
 
-    // Start the COUNT_DOWN from PRE_GAME. Binary is unconditional:
-    // warmupTime = g_warmup.integer * 1000 + level.time (no ">1"/"-1" adjustment).
     if (level.warmupTime < 0) {
         SetWarmupState(g_warmup.integer * 1000 + level.time);
         return;
     }
 
-    // Countdown elapsed: begin the match via map_restart.
     if (level.time >= level.warmupTime) {
-        // [QL] 0x10058860: the MATCH_STARTED event, with the rules and who is present,
-        // before the map_restart that starts the match
         STAT_MatchStarted();
 
         level.warmupTime += 10000;
         trap_Cvar_Set("g_restarted", "1");
         trap_SendConsoleCommand(EXEC_APPEND, "map_restart 0\n");
-        // [QL] Binary: if (global 0x105961ac) { trap#27(5); trap#27(13); } - an
-        // engine-set cvar gating an unmapped QL syscall (_unused_1b); unresolved,
-        // omitted. See handover notes.
         level.restarted = qtrue;
         return;
     }
 }
 
-/*
-==================
-ExecuteVoteCommand
-[QL] Execute special vote types that need server-side handling
-rather than direct console command execution (binary: 0x10058b20).
-Returns qtrue if handled, qfalse if caller should execute via console.
-==================
-*/
 static qboolean ExecuteVoteCommand(const char *voteCmd) {
     char arg0[MAX_STRING_TOKENS];
     char arg1[MAX_STRING_TOKENS];
@@ -3870,7 +3164,6 @@ static qboolean ExecuteVoteCommand(const char *voteCmd) {
     if (p) {
         *p = '\0';
         Q_strncpyz(arg1, p + 1, sizeof(arg1));
-        // strip quotes
         if (arg1[0] == '"') {
             int len = strlen(arg1);
             if (len > 1 && arg1[len-1] == '"') {
@@ -3904,11 +3197,6 @@ static qboolean ExecuteVoteCommand(const char *voteCmd) {
         }
         return qtrue;
     }
-    // [QL] 0x10058d0c onwards: each of these three knows two words and says so when
-    // rejecting anything else. Treating everything that was not the first word as the
-    // second meant a vote with a nonsense word turned the option off silently. And the
-    // map restart belongs to the ammo vote alone: the other two are warmup votes, where
-    // everyone respawns anyway.
     if (!Q_stricmp(arg0, "loadouts")) {
         if (!Q_stricmp(arg1, "ON")) {
             trap_Cvar_Set("g_loadout", "1");
@@ -3926,7 +3214,6 @@ static qboolean ExecuteVoteCommand(const char *voteCmd) {
         } else if (!Q_stricmp(arg1, "WEAP")) {
             trap_Cvar_Set("g_ammoPack", "0");
         } else {
-            // [QL] 0x10058ee7: the binary says "loadout" here, not "ammo"
             trap_SendServerCommand(-1,
                 "print \"^3Valid loadout options are:    ^5GLOBAL    ^5WEAP^7\n\"");
             return qtrue;
@@ -3946,9 +3233,6 @@ static qboolean ExecuteVoteCommand(const char *voteCmd) {
         return qtrue;
     }
     if (!Q_stricmp(arg0, "shuffle")) {
-        // [QL] 0x10058e4e: the vote shuffles right here. It used to raise
-        // level.shufflePending, which nobody read, so the vote passed and nothing
-        // happened.
         G_ShuffleTeams();
         return qtrue;
     }
@@ -3965,21 +3249,6 @@ static qboolean ExecuteVoteCommand(const char *voteCmd) {
     return qfalse;
 }
 
-/*
-=================
-G_CheckAutoShuffle
-
-[QL] 0x10059936. With g_shuffle_automatic on, the server shuffles the teams by itself
-when the match runs short of players and then fills up again: while there are fewer
-than g_shuffle_automatic_minplayers it stays armed, and as soon as there are enough
-again it starts a g_shuffle_timedelay millisecond countdown, announced once a second,
-that ends in a shuffle.
-
-It only runs while waiting to start (negative warmupTime), which is where moving
-somebody breaks nothing. All three cvars had been registered here from the start and
-nobody read them.
-=================
-*/
 static void G_CheckAutoShuffle(void) {
     int fin;
 
@@ -3989,13 +3258,13 @@ static void G_CheckAutoShuffle(void) {
 
     if (!level.autoShuffleStart) {
         if (level.numPlayingClients < g_shuffle_automatic_minplayers.integer) {
-            level.autoShuffleArmed = qtrue;  // [QL] 0x10059957
+            level.autoShuffleArmed = qtrue;
             return;
         }
         if (!level.autoShuffleArmed || !level.time) {
             return;
         }
-        level.autoShuffleStart = level.time;  // [QL] 0x10059968
+        level.autoShuffleStart = level.time;
     }
 
     if (level.warmupTime >= 0) {
@@ -4004,8 +3273,6 @@ static void G_CheckAutoShuffle(void) {
 
     fin = level.autoShuffleStart + g_shuffle_timedelay.integer;
     if (level.time < fin) {
-        // [QL] 0x100599a4: one announcement per second, and only when the remaining
-        // second changes from one frame to the next
         int quedan = (fin - level.time) / 1000;
 
         if (quedan != (fin - (level.time - level.frametime)) / 1000) {
@@ -4017,22 +3284,15 @@ static void G_CheckAutoShuffle(void) {
     G_ShuffleTeams();
 }
 
-/*
-==================
-CheckVote
-==================
-*/
 void CheckVote(void) {
     int i;
     int voteYes, voteNo, voteEligible;
     gentity_t *ent;
 
-    // [QL] Don't process votes during intermission (map voting uses separate path)
     if (level.intermissionTime) {
         return;
     }
 
-    // Execute pending vote command
     if (level.voteExecuteTime && level.voteExecuteTime < level.time) {
         level.voteExecuteTime = 0;
         if (!ExecuteVoteCommand(level.voteString)) {
@@ -4044,7 +3304,6 @@ void CheckVote(void) {
         return;
     }
 
-    // [QL] Recount votes each frame from per-client voteState
     voteYes = 0;
     voteNo = 0;
     voteEligible = 0;
@@ -4065,17 +3324,14 @@ void CheckVote(void) {
                 break;
             case VOTE_NO:
                 voteNo++;
-                // fall through
             case VOTE_PENDING:
                 voteEligible++;
                 break;
             case VOTE_PASSED:
-                // [QL] Admin override - force pass
                 trap_SendServerCommand(-1, va("print \"%s" S_COLOR_WHITE " passed the vote.\n\"",
                     ent->client->pers.netname));
                 goto vote_passed;
             case VOTE_VETOED:
-                // [QL] Admin override - force veto
                 trap_SendServerCommand(-1, va("print \"%s" S_COLOR_WHITE " vetoed the vote.\n\"",
                     ent->client->pers.netname));
                 goto vote_failed;
@@ -4084,7 +3340,6 @@ void CheckVote(void) {
         }
     }
 
-    // Check vote outcome
     if ((float)voteYes > (float)voteEligible * 0.5f) {
 vote_passed:
         trap_SendServerCommand(-1, "print \"Vote passed.\n\"");
@@ -4095,7 +3350,6 @@ vote_failed:
         trap_SendServerCommand(-1, "print \"Vote failed.\n\"");
         ClearVote();
     } else {
-        // Update vote configstrings only when counts change
         if (level.voteYes != voteYes) {
             level.voteYes = voteYes;
             trap_SetConfigstring(CS_VOTE_YES, va("%i", voteYes));
@@ -4104,7 +3358,6 @@ vote_failed:
             level.voteNo = voteNo;
             trap_SetConfigstring(CS_VOTE_NO, va("%i", voteNo));
         }
-        // Vote timeout (30 seconds)
         if (level.time - level.voteTime > 29999) {
             trap_SendServerCommand(-1, "print \"Vote failed.\n\"");
             ClearVote();
@@ -4112,11 +3365,6 @@ vote_failed:
     }
 }
 
-/*
-==================
-PrintTeam
-==================
-*/
 void PrintTeam(int team, char* message) {
     int i;
 
@@ -4127,13 +3375,6 @@ void PrintTeam(int team, char* message) {
     }
 }
 
-/*
-==================
-SetLeader
-
-[QL] 0x10068310: the new leader is not announced
-==================
-*/
 void SetLeader(int team, int client) {
     int i;
 
@@ -4157,11 +3398,6 @@ void SetLeader(int team, int client) {
     ClientUserinfoChanged(client);
 }
 
-/*
-==================
-CheckTeamLeader
-==================
-*/
 void CheckTeamLeader(int team) {
     int i;
 
@@ -4192,11 +3428,6 @@ void CheckTeamLeader(int team) {
     }
 }
 
-/*
-==================
-CheckCvars
-==================
-*/
 void CheckCvars(void) {
     static int lastMod = -1;
 
@@ -4210,14 +3441,6 @@ void CheckCvars(void) {
     }
 }
 
-/*
-=============
-G_UpdateTeamCounts
-
-[QL] 0x100593e0. The team counts of the HUD in the round modes, four times a second: before
-the rounds everybody on each team, then the ones still alive.
-=============
-*/
 static void G_UpdateTeamCounts(void) {
     int red, blue;
 
@@ -4236,18 +3459,9 @@ static void G_UpdateTeamCounts(void) {
     trap_SetConfigstring(CS_TEAMCOUNT_BLUE, va("%i", blue));
 }
 
-/*
-=============
-G_RunThink
-
-Runs thinking code for this frame if necessary
-=============
-*/
 void G_RunThink(gentity_t* ent) {
     int thinktime;
 
-    // [QL] per-frame think runs every frame, before the scheduled think. Used by the
-    // domination points (DOM_FrameThink) to accumulate capture progress.
     if (ent->framethink) {
         ent->framethink(ent);
     }
@@ -4267,18 +3481,10 @@ void G_RunThink(gentity_t* ent) {
     ent->think(ent);
 }
 
-/*
-================
-G_RunFrame
-
-Advances the non-player objects in the world
-================
-*/
 void G_RunFrame(int levelTime) {
     int i;
     gentity_t* ent;
 
-    // if we are waiting for the level to restart, do nothing
     if (level.restarted) {
         return;
     }
@@ -4286,20 +3492,13 @@ void G_RunFrame(int levelTime) {
     level.frametime = levelTime - level.time;
     level.time = levelTime;
 
-    // [QL] pause/timeout: keep the match clock frozen by advancing startTime in lockstep
-    // with level.time, and run the auto-unpause countdown.
     if (level.timePauseBegin) {
         level.startTime += level.frametime;
         MP_PauseThink();
     }
 
-    // get any cvar changes
     G_UpdateCvars();
 
-    // [QL] G_RunFrame (0x100594d0, DAT_105df41c): with g_suddenDeathRespawn on, the delay
-    // player_die gives a dead player (level.forceRespawnDelay) grows in overtime, past the
-    // time limit, through the g_suddenDeathRespawn* cvars and is announced once per change;
-    // otherwise it is g_respawn_delay_min. With it off retail leaves the field alone.
     if (g_suddenDeathRespawn.integer && !level.intermissionTime && !level.intermissionQueued) {
         int overtime = level.time - level.startTime - g_timelimit.integer * 60000;
         if (g_timelimit.integer && level.warmupTime == 0 && overtime > 0) {
@@ -4322,7 +3521,6 @@ void G_RunFrame(int levelTime) {
         }
     }
 
-    // [QL] republish gamerule configstrings for clients when their cvars change
     if (pmoveInfoDirty) {
         G_SendPmoveInfo();
         pmoveInfoDirty = qfalse;
@@ -4340,11 +3538,6 @@ void G_RunFrame(int levelTime) {
         playerInfoDirty = qfalse;
     }
 
-    // [QL] Intermission map-vote UI: re-enable a client's vote UI ~2.25s after
-    // their last map vote (lastMapVoteTime). Cmd_IntermissionVote_f sends
-    // "disable_vote_ui" on each vote; this edge-triggers "enable_vote_ui" once
-    // when (level.time - lastMapVoteTime) crosses 2250ms so they can re-vote.
-    // Binary: G_RunFrame 0x10059540 (intermission branch, gclient+0x33c).
     if (level.intermissionTime) {
         for (i = 0; i < level.maxclients; i++) {
             gclient_t* cl = &level.clients[i];
@@ -4359,38 +3552,28 @@ void G_RunFrame(int levelTime) {
         }
     }
 
-    //
-    // go through all allocated objects
-    //
     ent = &g_entities[0];
     for (i = 0; i < level.num_entities; i++, ent++) {
         if (!ent->inuse) {
             continue;
         }
 
-        // clear events that are too old
         if (level.time - ent->eventTime > EVENT_VALID_MSEC) {
             if (ent->s.event) {
-                ent->s.event = 0;  // &= EV_EVENT_BITS;
+                ent->s.event = 0;
                 if (ent->client) {
                     ent->client->ps.externalEvent = 0;
-                    // predicted events should never be set to zero
-                    // ent->client->ps.events[0] = 0;
-                    // ent->client->ps.events[1] = 0;
                 }
             }
             if (ent->freeAfterEvent) {
-                // tempEntities or dropped items completely go away after their event
                 G_FreeEntity(ent);
                 continue;
             } else if (ent->unlinkAfterEvent) {
-                // items that will respawn will hide themselves after their pickup event
                 ent->unlinkAfterEvent = qfalse;
                 trap_UnlinkEntity(ent);
             }
         }
 
-        // temporary entities don't think
         if (ent->freeAfterEvent) {
             continue;
         }
@@ -4404,7 +3587,6 @@ void G_RunFrame(int levelTime) {
             continue;
         }
 
-        // [QL] 0x100597de: a hook that has latched on runs every frame
         if (ent->s.eType == ET_GRAPPLE) {
             Weapon_HookThink(ent);
             continue;
@@ -4428,7 +3610,6 @@ void G_RunFrame(int levelTime) {
         G_RunThink(ent);
     }
 
-    // perform final fixups on the players
     ent = &g_entities[0];
     for (i = 0; i < level.maxclients; i++, ent++) {
         if (ent->inuse) {
@@ -4436,41 +3617,30 @@ void G_RunFrame(int levelTime) {
         }
     }
 
-    // [QL] duel queue rotation (pull in spectators)
     AddDuelPlayer();
 
-    // [QL] 0x100598c6: a place in the duel queue that moved goes out to everyone
     G_CheckPlayQueueChanged();
 
-    // [QL] 0x100598eb: the team counts of the round modes
     if (g_gametype.integer == GT_CA || g_gametype.integer == GT_FREEZE ||
         g_gametype.integer == GT_AD || g_gametype.integer == GT_RR) {
         G_UpdateTeamCounts();
     }
 
-    // [QL] warmup / forfeit driver (all gametypes)
     CheckWarmupAndForfeit();
 
-    // [QL] per-gametype frame logic (0x100599f0)
     if (g_gametype.integer == GT_FFA) {
-        // [QL] 0x10059a05: a new quad for the Quad Hog when nobody has one
         if (g_quadHog.integer) {
             QuadHog_Check();
         }
     } else if (g_gametype.integer == GT_RR) {
-        // infection, survival bonus, round end
         RR_Think();
     } else if (g_gametype.integer == GT_CTF) {
-        // [QL] 0x10059a1c: return a flag nobody holds any more
         Team_CheckLostFlag(TEAM_RED);
         Team_CheckLostFlag(TEAM_BLUE);
     } else if (g_gametype.integer == GT_DOMINATION) {
-        // owned-point count -> team-count configstrings
         DOM_CheckPlayers();
     } else if (g_gametype.integer == GT_AD) {
-        // advance the round countdown, then end the round on timeout / objective
         if (!level.intermissionQueued && !level.intermissionTime && !level.warmupTime) {
-            // [QL] 0x10059b30: the round clock stands still while the game is paused
             if (level.timePauseBegin != 0) {
                 level.roundState.startTime += level.frametime;
             }
@@ -4485,7 +3655,6 @@ void G_RunFrame(int levelTime) {
             }
         }
     } else if (g_gametype.integer == GT_CA) {
-        // [QL] 0x10059a35: the round ends when a team is wiped out or roundtimelimit runs out
         if (!level.intermissionQueued && !level.intermissionTime && !level.warmupTime) {
             if (level.timePauseBegin != 0) {
                 level.roundState.startTime += level.frametime;
@@ -4503,28 +3672,18 @@ void G_RunFrame(int levelTime) {
             }
         }
     } else if (g_gametype.integer == GT_FREEZE) {
-        // advance the round state and end the round when a team is all frozen
         Freeze_Think();
     }
 
-    // see if it is time to end the level
     CheckExitRules();
 
-    // update to team status?
-    // [QL] 0x1005990d: team gametypes only
     if (g_gametype.integer >= GT_TEAM) {
         CheckTeamStatus();
         G_CheckAutoShuffle();
     }
 
-    // cancel vote if timed out
     CheckVote();
 
-    // for tracking changes
     CheckCvars();
 
-    // [QL] the bots do not think here: BotAIStartFrame is its own export (+0x2c), which the engine
-    // calls apart (SV_BotFrame). Running it from here also ran it in map_restart's settling frames,
-    // before the clients are back, where the training tick found no player and put the Crash
-    // Course's cinematic back on (bot_training 1) just as the match began.
 }

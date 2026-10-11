@@ -19,8 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-// cmd.c -- Quake script command processing module
-
 #include "q_shared.h"
 #include "qcommon.h"
 
@@ -37,53 +35,22 @@ int cmd_wait;
 cmd_t cmd_text;
 byte cmd_text_buf[MAX_CMD_BUFFER];
 
-//=============================================================================
-
-/*
-============
-Cmd_Wait_f
-
-Causes execution of the remainder of the command buffer to be delayed until
-next frame.  This allows commands like:
-bind g "cmd use rocket ; +attack ; wait ; -attack ; cmd use blaster"
-============
-*/
 void Cmd_Wait_f(void) {
     if (Cmd_Argc() == 2) {
         cmd_wait = atoi(Cmd_Argv(1));
         if (cmd_wait < 0)
-            cmd_wait = 1;  // ignore the argument
+            cmd_wait = 1;
     } else {
         cmd_wait = 1;
     }
 }
 
-/*
-=============================================================================
-
-                        COMMAND BUFFER
-
-=============================================================================
-*/
-
-/*
-============
-Cbuf_Init
-============
-*/
 void Cbuf_Init(void) {
     cmd_text.data = cmd_text_buf;
     cmd_text.maxsize = MAX_CMD_BUFFER;
     cmd_text.cursize = 0;
 }
 
-/*
-============
-Cbuf_AddText
-
-Adds command text at the end of the buffer, does NOT add a final \n
-============
-*/
 void Cbuf_AddText(const char* text) {
     int l;
 
@@ -97,14 +64,6 @@ void Cbuf_AddText(const char* text) {
     cmd_text.cursize += l;
 }
 
-/*
-============
-Cbuf_InsertText
-
-Adds command text immediately after the current command
-Adds a \n to the text
-============
-*/
 void Cbuf_InsertText(const char* text) {
     int len;
     int i;
@@ -115,25 +74,17 @@ void Cbuf_InsertText(const char* text) {
         return;
     }
 
-    // move the existing command text
     for (i = cmd_text.cursize - 1; i >= 0; i--) {
         cmd_text.data[i + len] = cmd_text.data[i];
     }
 
-    // copy the new text in
     Com_Memcpy(cmd_text.data, text, len - 1);
 
-    // add a \n
     cmd_text.data[len - 1] = '\n';
 
     cmd_text.cursize += len;
 }
 
-/*
-============
-Cbuf_ExecuteText
-============
-*/
 void Cbuf_ExecuteText(int exec_when, const char* text) {
     switch (exec_when) {
         case EXEC_NOW:
@@ -156,31 +107,20 @@ void Cbuf_ExecuteText(int exec_when, const char* text) {
     }
 }
 
-/*
-============
-Cbuf_Execute
-============
-*/
 void Cbuf_Execute(void) {
     int i;
     char* text;
     char line[MAX_CMD_LINE];
     int quotes;
 
-    // This will keep // style comments all on one line by not breaking on
-    // a semicolon.  It will keep /* ... */ style comments all on one line by not
-    // breaking it for semicolon or newline.
     qboolean in_star_comment = qfalse;
     qboolean in_slash_comment = qfalse;
     while (cmd_text.cursize) {
         if (cmd_wait > 0) {
-            // skip out while text still remains in buffer, leaving it
-            // for next frame
             cmd_wait--;
             break;
         }
 
-        // find a \n or ; line break or comment: // or /* */
         text = (char*)cmd_text.data;
 
         quotes = 0;
@@ -196,9 +136,6 @@ void Cbuf_Execute(void) {
                         in_star_comment = qtrue;
                     else if (in_star_comment && text[i] == '*' && text[i + 1] == '/') {
                         in_star_comment = qfalse;
-                        // If we are in a star comment, then the part after it is valid
-                        // Note: This will cause it to NUL out the terminating '/'
-                        // but ExecuteString doesn't require it anyway.
                         i++;
                         break;
                     }
@@ -219,10 +156,6 @@ void Cbuf_Execute(void) {
         Com_Memcpy(line, text, i);
         line[i] = 0;
 
-        // delete the text from the command buffer and move remaining commands down
-        // this is necessary because commands (exec) can insert data at the
-        // beginning of the text buffer
-
         if (i == cmd_text.cursize)
             cmd_text.cursize = 0;
         else {
@@ -231,25 +164,10 @@ void Cbuf_Execute(void) {
             memmove(text, text + i, cmd_text.cursize);
         }
 
-        // execute the command line
-
         Cmd_ExecuteString(line);
     }
 }
 
-/*
-==============================================================================
-
-                        SCRIPT COMMANDS
-
-==============================================================================
-*/
-
-/*
-===============
-Cmd_Exec_f
-===============
-*/
 void Cmd_Exec_f(void) {
     union {
         char* c;
@@ -276,13 +194,6 @@ void Cmd_Exec_f(void) {
     FS_FreeFile(f.v);
 }
 
-/*
-===============
-Cmd_Vstr_f
-
-Inserts the current value of a variable as command text
-===============
-*/
 void Cmd_Vstr_f(void) {
     char* v;
 
@@ -295,56 +206,31 @@ void Cmd_Vstr_f(void) {
     Cbuf_InsertText(va("%s\n", v));
 }
 
-/*
-===============
-Cmd_Echo_f
-
-Just prints the rest of the line to the console
-===============
-*/
 void Cmd_Echo_f(void) {
     Com_Printf("%s\n", Cmd_Args());
 }
 
-/*
-=============================================================================
-
-                    COMMAND EXECUTION
-
-=============================================================================
-*/
-
 typedef struct cmd_function_s {
     struct cmd_function_s* next;
     char* name;
-    char* help;  // [CNQ3] help text, first line = short description
+    char* help;
     xcommand_t function;
     completionFunc_t complete;
 } cmd_function_t;
 
 static int cmd_argc;
-static char* cmd_argv[MAX_STRING_TOKENS];                        // points into cmd_tokenized
-static int cmd_argoffsets[MAX_STRING_TOKENS];                    // [CNQ3] where each argument starts in the input
-static qboolean cmd_quoted[MAX_STRING_TOKENS];                   // [CNQ3] the argument was quoted
-static char cmd_tokenized[BIG_INFO_STRING + MAX_STRING_TOKENS];  // will have 0 bytes inserted
-static char cmd_cmd[BIG_INFO_STRING];                            // the original command we received (no token processing)
+static char* cmd_argv[MAX_STRING_TOKENS];
+static int cmd_argoffsets[MAX_STRING_TOKENS];
+static qboolean cmd_quoted[MAX_STRING_TOKENS];
+static char cmd_tokenized[BIG_INFO_STRING + MAX_STRING_TOKENS];
+static char cmd_cmd[BIG_INFO_STRING];
 
-static cmd_function_t* cmd_functions;  // possible commands to execute
+static cmd_function_t* cmd_functions;
 
-/*
-============
-Cmd_Argc
-============
-*/
 int Cmd_Argc(void) {
     return cmd_argc;
 }
 
-/*
-============
-Cmd_Argv
-============
-*/
 char* Cmd_Argv(int arg) {
     if ((unsigned)arg >= cmd_argc) {
         return "";
@@ -352,25 +238,10 @@ char* Cmd_Argv(int arg) {
     return cmd_argv[arg];
 }
 
-/*
-============
-Cmd_ArgvBuffer
-
-The interpreted versions use this because
-they can't have pointers returned to them
-============
-*/
 void Cmd_ArgvBuffer(int arg, char* buffer, int bufferLength) {
     Q_strncpyz(buffer, Cmd_Argv(arg), bufferLength);
 }
 
-/*
-============
-Cmd_Args
-
-Returns a single string containing argv(1) to argv(argc()-1)
-============
-*/
 char* Cmd_Args(void) {
     static char cmd_args[MAX_STRING_CHARS];
     int i;
@@ -386,13 +257,6 @@ char* Cmd_Args(void) {
     return cmd_args;
 }
 
-/*
-============
-Cmd_Args
-
-Returns a single string containing argv(arg) to argv(argc()-1)
-============
-*/
 char* Cmd_ArgsFrom(int arg) {
     static char cmd_args[BIG_INFO_STRING];
     int i;
@@ -410,38 +274,14 @@ char* Cmd_ArgsFrom(int arg) {
     return cmd_args;
 }
 
-/*
-============
-Cmd_ArgsBuffer
-
-The interpreted versions use this because
-they can't have pointers returned to them
-============
-*/
 void Cmd_ArgsBuffer(char* buffer, int bufferLength) {
     Q_strncpyz(buffer, Cmd_Args(), bufferLength);
 }
 
-/*
-============
-Cmd_Cmd
-
-Retrieve the unmodified command string
-For rcon use when you want to transmit without altering quoting
-https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=543
-============
-*/
 char* Cmd_Cmd(void) {
     return cmd_cmd;
 }
 
-/*
-============
-Cmd_ArgOffset / Cmd_ArgIndexFromOffset / Cmd_ArgQuoted
-
-[CNQ3] Used by the console to move the cursor by arguments.
-============
-*/
 int Cmd_ArgOffset(int arg) {
     if ((unsigned)arg >= cmd_argc) {
         return 0;
@@ -470,13 +310,6 @@ qboolean Cmd_ArgQuoted(int arg) {
     return cmd_quoted[arg];
 }
 
-/*
-   Replace command separators with space to prevent interpretation
-   This is a hack to protect buggy qvms
-   https://bugzilla.icculus.org/show_bug.cgi?id=3593
-   https://bugzilla.icculus.org/show_bug.cgi?id=4769
-*/
-
 void Cmd_Args_Sanitize(void) {
     int i;
 
@@ -493,28 +326,14 @@ void Cmd_Args_Sanitize(void) {
     }
 }
 
-/*
-============
-Cmd_TokenizeString
-
-Parses the given string into command line tokens.
-The text is copied to a separate buffer and 0 characters
-are inserted in the appropriate place, The argv array
-will point into this temporary buffer.
-============
-*/
-// NOTE TTimo define that to track tokenization issues
-// #define TKN_DBG
 static void Cmd_TokenizeString2(const char* text_in, qboolean ignoreQuotes) {
     const char* text;
     char* textOut;
 
 #ifdef TKN_DBG
-    // FIXME TTimo blunt hook to try to find the tokenization of userinfo
     Com_DPrintf("Cmd_TokenizeString: %s\n", text_in);
 #endif
 
-    // clear previous args
     cmd_argc = 0;
 
     if (!text_in) {
@@ -528,42 +347,37 @@ static void Cmd_TokenizeString2(const char* text_in, qboolean ignoreQuotes) {
 
     while (1) {
         if (cmd_argc == MAX_STRING_TOKENS) {
-            return;  // this is usually something malicious
+            return;
         }
 
         while (1) {
-            // skip whitespace
             while (*text && *text <= ' ') {
                 text++;
             }
             if (!*text) {
-                return;  // all tokens parsed
+                return;
             }
 
-            // skip // comments
             if (text[0] == '/' && text[1] == '/') {
-                return;  // all tokens parsed
+                return;
             }
 
-            // skip /* */ comments
             if (text[0] == '/' && text[1] == '*') {
                 while (*text && (text[0] != '*' || text[1] != '/')) {
                     text++;
                 }
                 if (!*text) {
-                    return;  // all tokens parsed
+                    return;
                 }
                 text += 2;
             } else {
-                break;  // we are ready to parse a token
+                break;
             }
         }
 
-        // handle quoted strings
-        // NOTE TTimo this doesn't handle \" escaping
         if (!ignoreQuotes && *text == '"') {
             cmd_argv[cmd_argc] = textOut;
-            cmd_argoffsets[cmd_argc] = (int)(text + 1 - text_in);  // [CNQ3] past the opening quote
+            cmd_argoffsets[cmd_argc] = (int)(text + 1 - text_in);
             cmd_quoted[cmd_argc] = qtrue;
             cmd_argc++;
             text++;
@@ -572,19 +386,17 @@ static void Cmd_TokenizeString2(const char* text_in, qboolean ignoreQuotes) {
             }
             *textOut++ = 0;
             if (!*text) {
-                return;  // all tokens parsed
+                return;
             }
             text++;
             continue;
         }
 
-        // regular token
         cmd_argv[cmd_argc] = textOut;
-        cmd_argoffsets[cmd_argc] = (int)(text - text_in);  // [CNQ3]
+        cmd_argoffsets[cmd_argc] = (int)(text - text_in);
         cmd_quoted[cmd_argc] = qfalse;
         cmd_argc++;
 
-        // skip until whitespace, quote, or command
         while (*text > ' ') {
             if (!ignoreQuotes && text[0] == '"') {
                 break;
@@ -594,7 +406,6 @@ static void Cmd_TokenizeString2(const char* text_in, qboolean ignoreQuotes) {
                 break;
             }
 
-            // skip /* */ comments
             if (text[0] == '/' && text[1] == '*') {
                 break;
             }
@@ -605,34 +416,19 @@ static void Cmd_TokenizeString2(const char* text_in, qboolean ignoreQuotes) {
         *textOut++ = 0;
 
         if (!*text) {
-            return;  // all tokens parsed
+            return;
         }
     }
 }
 
-/*
-============
-Cmd_TokenizeString
-============
-*/
 void Cmd_TokenizeString(const char* text_in) {
     Cmd_TokenizeString2(text_in, qfalse);
 }
 
-/*
-============
-Cmd_TokenizeStringIgnoreQuotes
-============
-*/
 void Cmd_TokenizeStringIgnoreQuotes(const char* text_in) {
     Cmd_TokenizeString2(text_in, qtrue);
 }
 
-/*
-============
-Cmd_FindCommand
-============
-*/
 cmd_function_t* Cmd_FindCommand(const char* cmd_name) {
     cmd_function_t* cmd;
     for (cmd = cmd_functions; cmd; cmd = cmd->next)
@@ -641,29 +437,19 @@ cmd_function_t* Cmd_FindCommand(const char* cmd_name) {
     return NULL;
 }
 
-/*
-============
-Cmd_AddCommand
-============
-*/
 void Cmd_AddCommand(const char* cmd_name, xcommand_t function) {
     cmd_function_t* cmd;
 
-    // fail if the command already exists
     if (Cmd_FindCommand(cmd_name)) {
-        // allow completion-only commands to be silently doubled
         if (function != NULL)
             Com_Printf("Cmd_AddCommand: %s already defined\n", cmd_name);
         return;
     }
 
-    // use a small malloc to avoid zone fragmentation
     cmd = S_Malloc(sizeof(cmd_function_t));
     cmd->name = CopyString(cmd_name);
     cmd->function = function;
     cmd->complete = NULL;
-    // [ioquakelive] a command gets its help text as it is registered, wherever it is
-    // registered from (cmd_help.c), the same way a cvar does
     {
         const char* help = Cmd_BuiltInHelp(cmd_name);
 
@@ -673,11 +459,6 @@ void Cmd_AddCommand(const char* cmd_name, xcommand_t function) {
     cmd_functions = cmd;
 }
 
-/*
-============
-Cmd_SetCommandCompletionFunc
-============
-*/
 void Cmd_SetCommandCompletionFunc(const char* command, completionFunc_t complete) {
     cmd_function_t* cmd;
 
@@ -689,13 +470,6 @@ void Cmd_SetCommandCompletionFunc(const char* command, completionFunc_t complete
     }
 }
 
-/*
-============
-Cmd_SetHelp / Cmd_GetHelp / Cmd_EnumHelp
-
-[CNQ3] Help text of a command, see qcommon.h.
-============
-*/
 void Cmd_SetHelp(const char* cmd_name, const char* help) {
     cmd_function_t* cmd = Cmd_FindCommand(cmd_name);
 
@@ -714,7 +488,6 @@ qboolean Cmd_GetHelp(const char* cmd_name, const char** name, const char** help,
 
     *name = cmd ? cmd->name : NULL;
     *help = cmd ? cmd->help : NULL;
-    // commands without a function are forwarded to cgame, game or ui
     *fromModule = (cmd && !cmd->function) ? qtrue : qfalse;
     return cmd != NULL;
 }
@@ -731,11 +504,6 @@ void Cmd_EnumHelp(helpSearchCallback_t callback, const char* pattern) {
     }
 }
 
-/*
-============
-Cmd_RemoveCommand
-============
-*/
 void Cmd_RemoveCommand(const char* cmd_name) {
     cmd_function_t *cmd, **back;
 
@@ -743,7 +511,6 @@ void Cmd_RemoveCommand(const char* cmd_name) {
     while (1) {
         cmd = *back;
         if (!cmd) {
-            // command wasn't active
             return;
         }
         if (!strcmp(cmd_name, cmd->name)) {
@@ -759,13 +526,6 @@ void Cmd_RemoveCommand(const char* cmd_name) {
     }
 }
 
-/*
-============
-Cmd_RemoveCommandSafe
-
-Only remove commands with no associated function
-============
-*/
 void Cmd_RemoveCommandSafe(const char* cmd_name) {
     cmd_function_t* cmd = Cmd_FindCommand(cmd_name);
 
@@ -782,11 +542,6 @@ void Cmd_RemoveCommandSafe(const char* cmd_name) {
     Cmd_RemoveCommand(cmd_name);
 }
 
-/*
-============
-Cmd_CommandCompletion
-============
-*/
 void Cmd_CommandCompletion(void (*callback)(const char* s)) {
     cmd_function_t* cmd;
 
@@ -795,11 +550,6 @@ void Cmd_CommandCompletion(void (*callback)(const char* s)) {
     }
 }
 
-/*
-============
-Cmd_CompleteArgument
-============
-*/
 void Cmd_CompleteArgument(const char* command, char* args, int argNum) {
     cmd_function_t* cmd;
 
@@ -813,35 +563,22 @@ void Cmd_CompleteArgument(const char* command, char* args, int argNum) {
     }
 }
 
-/*
-============
-Cmd_ExecuteString
-
-A complete command line has been parsed, so try to execute it
-============
-*/
 void Cmd_ExecuteString(const char* text) {
     cmd_function_t *cmd, **prev;
 
-    // execute the command line
     Cmd_TokenizeString(text);
     if (!Cmd_Argc()) {
-        return;  // no tokens
+        return;
     }
 
-    // check registered command functions
     for (prev = &cmd_functions; *prev; prev = &cmd->next) {
         cmd = *prev;
         if (!Q_stricmp(cmd_argv[0], cmd->name)) {
-            // rearrange the links so that the command will be
-            // near the head of the list next time it is used
             *prev = cmd->next;
             cmd->next = cmd_functions;
             cmd_functions = cmd;
 
-            // perform the action
             if (!cmd->function) {
-                // let the cgame or game handle it
                 break;
             } else {
                 cmd->function();
@@ -850,27 +587,22 @@ void Cmd_ExecuteString(const char* text) {
         }
     }
 
-    // check cvars
     if (Cvar_Command()) {
         return;
     }
 
-    // check client game commands
     if (com_cl_running && com_cl_running->integer && CL_GameCommand()) {
         return;
     }
 
-    // check server game commands
     if (com_sv_running && com_sv_running->integer && SV_GameCommand()) {
         return;
     }
 
-    // check ui commands
     if (com_cl_running && com_cl_running->integer && UI_GameCommand()) {
         return;
     }
 
-    // [QL] check aliases
     if (com_cl_running && com_cl_running->integer) {
         void *CL_FindAlias(const char *name);
         void CL_RunAlias(void);
@@ -881,16 +613,9 @@ void Cmd_ExecuteString(const char* text) {
         }
     }
 
-    // send it as a server command if we are connected
-    // this will usually result in a chat message
     CL_ForwardCommandToServer(text);
 }
 
-/*
-============
-Cmd_List_f
-============
-*/
 void Cmd_List_f(void) {
     cmd_function_t* cmd;
     int i;
@@ -908,7 +633,6 @@ void Cmd_List_f(void) {
             continue;
 
         if (Cvar_VariableIntegerValue("con_style") == 1) {
-            // [CNQ3] 'h' marks the commands with detailed help
             Com_Printf(" %c  " S_COLOR_CMD "%s\n", (cmd->help && strchr(cmd->help, '\n')) ? 'h' : ' ', cmd->name);
         } else {
             Com_Printf("%s\n", cmd->name);
@@ -918,24 +642,12 @@ void Cmd_List_f(void) {
     Com_Printf("%i commands\n", i);
 }
 
-/*
-==================
-Cmd_CompleteCfgName
-==================
-*/
 void Cmd_CompleteCfgName(char* args, int argNum) {
     if (argNum == 2) {
         Field_CompleteFilename("", "cfg", qfalse, qtrue);
     }
 }
 
-/*
-============
-Cmd_Help_f
-
-[CNQ3] help / man <cvar|command>
-============
-*/
 static void Cmd_Help_f(void) {
     if (Cmd_Argc() != 2) {
         Com_Printf("usage: %s <cvar|command>\n", Cmd_Argv(0));
@@ -950,13 +662,6 @@ static void Cmd_Help_f(void) {
     Com_PrintHelp(Cmd_Argv(1), Com_Printf, qtrue, qtrue, qtrue);
 }
 
-/*
-============
-Cmd_SearchHelp_f
-
-[CNQ3] searchhelp <text>: the cvars and commands whose name or help contain it
-============
-*/
 static void Cmd_PrintSearchResult(const char* name, const char* help, const char* pattern, qboolean isCvar) {
     const char* const color = isCvar ? S_COLOR_CVAR : S_COLOR_CMD;
     char desc[256];
@@ -990,14 +695,8 @@ static void Cmd_SearchHelp_f(void) {
     Cvar_EnumHelp(Cmd_PrintSearchResult, Cmd_Argv(1));
 }
 
-/*
-==================
-Cmd_CompleteHelp
-==================
-*/
 static void Cmd_CompleteHelp(char* args, int argNum) {
     if (argNum == 2) {
-        // skip "<cmd> "
         char* p = Com_SkipTokens(args, 1, " ");
 
         if (p > args) {
@@ -1006,11 +705,6 @@ static void Cmd_CompleteHelp(char* args, int argNum) {
     }
 }
 
-/*
-============
-Cmd_Init
-============
-*/
 void Cmd_Init(void) {
     Cmd_AddCommand("cmdlist", Cmd_List_f);
     Cmd_AddCommand("listcmds", Cmd_List_f);
@@ -1021,7 +715,6 @@ void Cmd_Init(void) {
     Cmd_AddCommand("echo", Cmd_Echo_f);
     Cmd_AddCommand("wait", Cmd_Wait_f);
 
-    // [CNQ3] console help
     Cmd_AddCommand("help", Cmd_Help_f);
     Cmd_SetCommandCompletionFunc("help", Cmd_CompleteHelp);
     Cmd_AddCommand("man", Cmd_Help_f);

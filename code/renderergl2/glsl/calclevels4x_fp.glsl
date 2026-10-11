@@ -5,7 +5,7 @@ uniform vec4      u_Color;
 uniform vec2      u_InvTexRes;
 varying vec2      var_TexCoords;
 
-const vec3  LUMINANCE_VECTOR =   vec3(0.2125, 0.7154, 0.0721); //vec3(0.299, 0.587, 0.114);
+const vec3  LUMINANCE_VECTOR =   vec3(0.2125, 0.7154, 0.0721);
 
 vec3 GetValues(vec2 offset, vec3 current)
 {
@@ -37,12 +37,12 @@ void main()
 	current = GetValues(vec2(-0.5, -1.5), current);
 	current = GetValues(vec2( 0.5, -1.5), current);
 	current = GetValues(vec2( 1.5, -1.5), current);
-	
+
 	current = GetValues(vec2(-1.5, -0.5), current);
 	current = GetValues(vec2(-0.5, -0.5), current);
 	current = GetValues(vec2( 0.5, -0.5), current);
 	current = GetValues(vec2( 1.5, -0.5), current);
-	
+
 	current = GetValues(vec2(-1.5,  0.5), current);
 	current = GetValues(vec2(-0.5,  0.5), current);
 	current = GetValues(vec2( 0.5,  0.5), current);

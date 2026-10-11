@@ -19,9 +19,6 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// q_math.c -- stateless support routines that are included in each code module
-
 #include "q_shared.h"
 
 vec3_t vec3_origin = {0, 0, 0};
@@ -51,47 +48,37 @@ vec4_t g_color_table[8] =
         {1.0, 1.0, 1.0, 1.0},
 };
 
-// [CPMA] The extended colour codes: ^8 orange, ^9 light violet and CPMA's
-// alphabet rainbow from red (^a) round to pink (^x); ^y and ^z are white.
-// Values as in CNQ3 (GPLv2, code/qcommon/q_math.c).
 static const vec4_t q_extendedColors[Q_NUM_COLOR_CODES - 8] = {
-    {1.00000f, 0.50000f, 0.00000f, 1.0f},  // 8
-    {0.60000f, 0.60000f, 1.00000f, 1.0f},  // 9
-    {1.00000f, 0.00000f, 0.00000f, 1.0f},  // a
-    {1.00000f, 0.26795f, 0.00000f, 1.0f},  // b
-    {1.00000f, 0.50000f, 0.00000f, 1.0f},  // c
-    {1.00000f, 0.73205f, 0.00000f, 1.0f},  // d
-    {1.00000f, 1.00000f, 0.00000f, 1.0f},  // e
-    {0.73205f, 1.00000f, 0.00000f, 1.0f},  // f
-    {0.50000f, 1.00000f, 0.00000f, 1.0f},  // g
-    {0.26795f, 1.00000f, 0.00000f, 1.0f},  // h
-    {0.00000f, 1.00000f, 0.00000f, 1.0f},  // i
-    {0.00000f, 1.00000f, 0.26795f, 1.0f},  // j
-    {0.00000f, 1.00000f, 0.50000f, 1.0f},  // k
-    {0.00000f, 1.00000f, 0.73205f, 1.0f},  // l
-    {0.00000f, 1.00000f, 1.00000f, 1.0f},  // m
-    {0.00000f, 0.73205f, 1.00000f, 1.0f},  // n
-    {0.00000f, 0.50000f, 1.00000f, 1.0f},  // o
-    {0.00000f, 0.26795f, 1.00000f, 1.0f},  // p
-    {0.00000f, 0.00000f, 1.00000f, 1.0f},  // q
-    {0.26795f, 0.00000f, 1.00000f, 1.0f},  // r
-    {0.50000f, 0.00000f, 1.00000f, 1.0f},  // s
-    {0.73205f, 0.00000f, 1.00000f, 1.0f},  // t
-    {1.00000f, 0.00000f, 1.00000f, 1.0f},  // u
-    {1.00000f, 0.00000f, 0.73205f, 1.0f},  // v
-    {1.00000f, 0.00000f, 0.50000f, 1.0f},  // w
-    {1.00000f, 0.00000f, 0.26795f, 1.0f},  // x
-    {1.00000f, 1.00000f, 1.00000f, 1.0f},  // y
-    {1.00000f, 1.00000f, 1.00000f, 1.0f},  // z
+    {1.00000f, 0.50000f, 0.00000f, 1.0f},
+    {0.60000f, 0.60000f, 1.00000f, 1.0f},
+    {1.00000f, 0.00000f, 0.00000f, 1.0f},
+    {1.00000f, 0.26795f, 0.00000f, 1.0f},
+    {1.00000f, 0.50000f, 0.00000f, 1.0f},
+    {1.00000f, 0.73205f, 0.00000f, 1.0f},
+    {1.00000f, 1.00000f, 0.00000f, 1.0f},
+    {0.73205f, 1.00000f, 0.00000f, 1.0f},
+    {0.50000f, 1.00000f, 0.00000f, 1.0f},
+    {0.26795f, 1.00000f, 0.00000f, 1.0f},
+    {0.00000f, 1.00000f, 0.00000f, 1.0f},
+    {0.00000f, 1.00000f, 0.26795f, 1.0f},
+    {0.00000f, 1.00000f, 0.50000f, 1.0f},
+    {0.00000f, 1.00000f, 0.73205f, 1.0f},
+    {0.00000f, 1.00000f, 1.00000f, 1.0f},
+    {0.00000f, 0.73205f, 1.00000f, 1.0f},
+    {0.00000f, 0.50000f, 1.00000f, 1.0f},
+    {0.00000f, 0.26795f, 1.00000f, 1.0f},
+    {0.00000f, 0.00000f, 1.00000f, 1.0f},
+    {0.26795f, 0.00000f, 1.00000f, 1.0f},
+    {0.50000f, 0.00000f, 1.00000f, 1.0f},
+    {0.73205f, 0.00000f, 1.00000f, 1.0f},
+    {1.00000f, 0.00000f, 1.00000f, 1.0f},
+    {1.00000f, 0.00000f, 0.73205f, 1.0f},
+    {1.00000f, 0.00000f, 0.50000f, 1.0f},
+    {1.00000f, 0.00000f, 0.26795f, 1.0f},
+    {1.00000f, 1.00000f, 1.00000f, 1.0f},
+    {1.00000f, 1.00000f, 1.00000f, 1.0f},
 };
 
-/*
-=================
-Q_ColorCodeIndex / Q_ColorCodeChar / Q_ColorFromCodeIndex
-
-See q_shared.h.
-=================
-*/
 int Q_ColorCodeIndex(int c, qboolean extended) {
     if (c >= '0' && c <= '7') {
         return c - '0';
@@ -296,8 +283,6 @@ vec3_t bytedirs[NUMVERTEXNORMALS] =
         {-0.587785f, -0.425325f, -0.688191f},
         {-0.688191f, -0.587785f, -0.425325f}};
 
-//==============================================================
-
 int Q_rand(int* seed) {
     *seed = (69069U * *seed + 1U);
     return *seed;
@@ -310,8 +295,6 @@ float Q_random(int* seed) {
 float Q_crandom(int* seed) {
     return 2.0 * (Q_random(seed) - 0.5);
 }
-
-//=======================================================
 
 signed char ClampChar(int i) {
     if (i < -128) {
@@ -333,7 +316,6 @@ signed short ClampShort(int i) {
     return i;
 }
 
-// this isn't a real cheap function to call!
 int DirToByte(vec3_t dir) {
     int i, best;
     float d, bestd;
@@ -405,14 +387,6 @@ float NormalizeColor(const vec3_t in, vec3_t out) {
     return max;
 }
 
-/*
-=====================
-PlaneFromPoints
-
-Returns false if the triangle is degenrate.
-The normal will point out of the clock for clockwise ordered points
-=====================
-*/
 qboolean PlaneFromPoints(vec4_t plane, const vec3_t a, const vec3_t b, const vec3_t c) {
     vec3_t d1, d2;
 
@@ -427,13 +401,6 @@ qboolean PlaneFromPoints(vec4_t plane, const vec3_t a, const vec3_t b, const vec
     return qtrue;
 }
 
-/*
-===============
-RotatePointAroundVector
-
-This is not implemented very well...
-===============
-*/
 void RotatePointAroundVector(vec3_t dst, const vec3_t dir, const vec3_t point, float degrees) {
     float m[3][3];
     float im[3][3];
@@ -489,16 +456,9 @@ void RotatePointAroundVector(vec3_t dst, const vec3_t dir, const vec3_t point, f
     }
 }
 
-/*
-===============
-RotateAroundDirection
-===============
-*/
 void RotateAroundDirection(vec3_t axis[3], float yaw) {
-    // create an arbitrary axis[1]
     PerpendicularVector(axis[1], axis[0]);
 
-    // rotate it around axis[0] by yaw
     if (yaw) {
         vec3_t temp;
 
@@ -506,7 +466,6 @@ void RotateAroundDirection(vec3_t axis[3], float yaw) {
         RotatePointAroundVector(axis[1], axis[0], temp, yaw);
     }
 
-    // cross to get axis[2]
     CrossProduct(axis[0], axis[1], axis[2]);
 }
 
@@ -545,15 +504,9 @@ void vectoangles(const vec3_t value1, vec3_t angles) {
     angles[ROLL] = 0;
 }
 
-/*
-=================
-AnglesToAxis
-=================
-*/
 void AnglesToAxis(const vec3_t angles, vec3_t axis[3]) {
     vec3_t right;
 
-    // angle vectors returns "right" instead of "y axis"
     AngleVectors(angles, axis[0], right, axis[2]);
     VectorSubtract(vec3_origin, right, axis[1]);
 }
@@ -582,7 +535,7 @@ void ProjectPointOnPlane(vec3_t dst, const vec3_t p, const vec3_t normal) {
     float inv_denom;
 
     inv_denom = DotProduct(normal, normal);
-    assert(Q_fabs(inv_denom) != 0.0f);  // zero vectors get here
+    assert(Q_fabs(inv_denom) != 0.0f);
     inv_denom = 1.0f / inv_denom;
 
     d = DotProduct(normal, p) * inv_denom;
@@ -596,19 +549,9 @@ void ProjectPointOnPlane(vec3_t dst, const vec3_t p, const vec3_t normal) {
     dst[2] = p[2] - d * n[2];
 }
 
-/*
-================
-MakeNormalVectors
-
-Given a normalized forward vector, create two
-other perpendicular vectors
-================
-*/
 void MakeNormalVectors(const vec3_t forward, vec3_t right, vec3_t up) {
     float d;
 
-    // this rotate and negate guarantees a vector
-    // not colinear with the original
     right[1] = -forward[0];
     right[2] = forward[1];
     right[0] = forward[2];
@@ -625,12 +568,7 @@ void VectorRotate(vec3_t in, vec3_t matrix[3], vec3_t out) {
     out[2] = DotProduct(in, matrix[2]);
 }
 
-//============================================================================
-
 #if !idppc
-/*
-** float q_rsqrt( float number )
-*/
 float Q_rsqrt(float number) {
     floatint_t t;
     float x2, y;
@@ -638,10 +576,9 @@ float Q_rsqrt(float number) {
 
     x2 = number * 0.5F;
     t.f = number;
-    t.i = 0x5f3759df - (t.i >> 1);  // what the fuck?
+    t.i = 0x5f3759df - (t.i >> 1);
     y = t.f;
-    y = y * (threehalfs - (x2 * y * y));  // 1st iteration
-                                          //	y  = y * ( threehalfs - ( x2 * y * y ) );   // 2nd iteration, this can be removed
+    y = y * (threehalfs - (x2 * y * y));
 
     return y;
 }
@@ -654,14 +591,6 @@ float Q_fabs(float f) {
 }
 #endif
 
-//============================================================
-
-/*
-===============
-LerpAngle
-
-===============
-*/
 float LerpAngle(float from, float to, float frac) {
     float a;
 
@@ -676,13 +605,6 @@ float LerpAngle(float from, float to, float frac) {
     return a;
 }
 
-/*
-=================
-AngleSubtract
-
-Always returns a value from -180 to 180
-=================
-*/
 float AngleSubtract(float a1, float a2) {
     float a;
 
@@ -707,24 +629,10 @@ float AngleMod(float a) {
     return a;
 }
 
-/*
-=================
-AngleNormalize360
-
-returns angle normalized to the range [0 <= angle < 360]
-=================
-*/
 float AngleNormalize360(float angle) {
     return (360.0 / 65536) * ((int)(angle * (65536 / 360.0)) & 65535);
 }
 
-/*
-=================
-AngleNormalize180
-
-returns angle normalized to the range [-180 < angle <= 180]
-=================
-*/
 float AngleNormalize180(float angle) {
     angle = AngleNormalize360(angle);
     if (angle > 180.0) {
@@ -733,28 +641,13 @@ float AngleNormalize180(float angle) {
     return angle;
 }
 
-/*
-=================
-AngleDelta
-
-returns the normalized delta from angle1 to angle2
-=================
-*/
 float AngleDelta(float angle1, float angle2) {
     return AngleNormalize180(angle1 - angle2);
 }
 
-//============================================================
-
-/*
-=================
-SetPlaneSignbits
-=================
-*/
 void SetPlaneSignbits(cplane_t* out) {
     int bits, j;
 
-    // for fast box on planeside test
     bits = 0;
     for (j = 0; j < 3; j++) {
         if (out->normal[j] < 0) {
@@ -764,18 +657,10 @@ void SetPlaneSignbits(cplane_t* out) {
     out->signbits = bits;
 }
 
-/*
-==================
-BoxOnPlaneSide
-
-Returns 1, 2, or 1 + 2
-==================
-*/
 int BoxOnPlaneSide(vec3_t emins, vec3_t emaxs, struct cplane_s* p) {
     float dist[2];
     int sides, b, i;
 
-    // fast axial cases
     if (p->type < 3) {
         if (p->dist <= emins[p->type])
             return 1;
@@ -784,9 +669,8 @@ int BoxOnPlaneSide(vec3_t emins, vec3_t emaxs, struct cplane_s* p) {
         return 3;
     }
 
-    // general case
     dist[0] = dist[1] = 0;
-    if (p->signbits < 8)  // >= 8: default case is original code (dist[0]=dist[1]=0)
+    if (p->signbits < 8)
     {
         for (i = 0; i < 3; i++) {
             b = (p->signbits >> i) & 1;
@@ -804,11 +688,6 @@ int BoxOnPlaneSide(vec3_t emins, vec3_t emaxs, struct cplane_s* p) {
     return sides;
 }
 
-/*
-=================
-RadiusFromBounds
-=================
-*/
 float RadiusFromBounds(const vec3_t mins, const vec3_t maxs) {
     int i;
     vec3_t corner;
@@ -891,15 +770,12 @@ qboolean BoundsIntersectPoint(const vec3_t mins, const vec3_t maxs, const vec3_t
 }
 
 vec_t VectorNormalize(vec3_t v) {
-    // NOTE: TTimo - Apple G4 altivec source uses double?
     float length, ilength;
 
     length = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
 
     if (length) {
-        /* writing it this way allows gcc to recognize that rsqrt can be used */
         ilength = 1 / (float)sqrt(length);
-        /* sqrt(length) = length * (1 / sqrt(length)) */
         length *= ilength;
         v[0] *= ilength;
         v[1] *= ilength;
@@ -915,9 +791,7 @@ vec_t VectorNormalize2(const vec3_t v, vec3_t out) {
     length = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
 
     if (length) {
-        /* writing it this way allows gcc to recognize that rsqrt can be used */
         ilength = 1 / (float)sqrt(length);
-        /* sqrt(length) = length * (1 / sqrt(length)) */
         length *= ilength;
         out[0] = v[0] * ilength;
         out[1] = v[1] * ilength;
@@ -980,29 +854,6 @@ int Q_log2(int val) {
     return answer;
 }
 
-/*
-=================
-PlaneTypeForNormal
-=================
-*/
-/*
-int	PlaneTypeForNormal (vec3_t normal) {
-    if ( normal[0] == 1.0 )
-        return PLANE_X;
-    if ( normal[1] == 1.0 )
-        return PLANE_Y;
-    if ( normal[2] == 1.0 )
-        return PLANE_Z;
-
-    return PLANE_NON_AXIAL;
-}
-*/
-
-/*
-================
-MatrixMultiply
-================
-*/
 void MatrixMultiply(float in1[3][3], float in2[3][3], float out[3][3]) {
     out[0][0] = in1[0][0] * in2[0][0] + in1[0][1] * in2[1][0] +
                 in1[0][2] * in2[2][0];
@@ -1027,7 +878,6 @@ void MatrixMultiply(float in1[3][3], float in2[3][3], float out[3][3]) {
 void AngleVectors(const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up) {
     float angle;
     static float sr, sp, sy, cr, cp, cy;
-    // static to help MS compiler fp bugs
 
     angle = angles[YAW] * (M_PI * 2 / 360);
     sy = sin(angle);
@@ -1056,18 +906,12 @@ void AngleVectors(const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up) 
     }
 }
 
-/*
-** assumes "src" is normalized
-*/
 void PerpendicularVector(vec3_t dst, const vec3_t src) {
     int pos;
     int i;
     float minelem = 1.0F;
     vec3_t tempvec;
 
-    /*
-    ** find the smallest magnitude axially aligned vector
-    */
     for (pos = 0, i = 0; i < 3; i++) {
         if (fabs(src[i]) < minelem) {
             pos = i;
@@ -1077,24 +921,11 @@ void PerpendicularVector(vec3_t dst, const vec3_t src) {
     tempvec[0] = tempvec[1] = tempvec[2] = 0.0F;
     tempvec[pos] = 1.0F;
 
-    /*
-    ** project the point onto the plane defined by src
-    */
     ProjectPointOnPlane(dst, tempvec, src);
 
-    /*
-    ** normalize the result
-    */
     VectorNormalize(dst);
 }
 
-/*
-================
-Q_isnan
-
-Don't pass doubles to this
-================
-*/
 int Q_isnan(float x) {
     floatint_t fi;
 
@@ -1104,20 +935,7 @@ int Q_isnan(float x) {
 
     return (int)((unsigned int)fi.ui >> 31);
 }
-//------------------------------------------------------------------------
 
-/*
-=====================
-Q_acos
-
-the msvc acos doesn't always return a value between -PI and PI:
-
-int i;
-i = 1065353246;
-acos(*(float*) &i) == -1.#IND0
-
-=====================
-*/
 float Q_acos(float c) {
     float angle;
 

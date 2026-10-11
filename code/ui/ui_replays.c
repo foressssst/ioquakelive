@@ -19,23 +19,13 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// ui_replays.c -- [QL] the Replays page
-//
-// Retail's is web.pak's demos.js: an h1 that says Replays and a list of the files
-// GetDemoList returns, sorted. A demo recorded during a match the player kept (the media
-// index, see client/cl_matches.c) is shown as the match -- when, the mode on the map,
-// and the server -- with an info mark in front that opens the match's page; any other
-// is its file name. Clicking a row sends `demo "<file>"`.
-//
-
 #include "ui_web.h"
 #include "../qcommon/json.h"
 
 #include <time.h>
 
 #define RP_MAX_DEMOS 256
-#define RP_ROW_H 39.0f  // 0.5em over and under a 24px line
+#define RP_ROW_H 39.0f
 
 typedef enum {
     RP_HIT_NONE,
@@ -45,9 +35,9 @@ typedef enum {
 
 typedef struct {
     char file[MAX_QPATH];
-    char guid[64];     // the match it belongs to, "" when none was kept
-    char date[64];     // "September 28th 2026, 12:28 pm"
-    char label[256];   // " FFA on Campgrounds: server"
+    char guid[64];
+    char date[64];
+    char label[256];
 } rpDemo_t;
 
 static struct {
@@ -68,7 +58,6 @@ static int RP_Compare(const void* a, const void* b) {
     return strcmp(((const rpDemo_t*)a)->file, ((const rpDemo_t*)b)->file);
 }
 
-// moment's "MMMM Do YYYY, h:mm a"
 static void RP_Date(double ms, char* out, int size) {
     static const char* const months[12] = {"January", "February", "March",     "April",   "May",      "June",
                                            "July",    "August",   "September", "October", "November", "December"};
@@ -114,7 +103,6 @@ static void RP_String(const char* obj, const char* end, const char* name, char* 
     }
 }
 
-// the match a demo belongs to, as its row shows it
 static void RP_Describe(rpDemo_t* d) {
     static char buf[0x10000];
     char map[64], type[32], server[128];
@@ -157,7 +145,6 @@ static void RP_Load(void) {
     }
     qsort(rp.demo, rp.count, sizeof(rp.demo[0]), RP_Compare);
 
-    // the media index: the last line for a file says its match
     len = RP_ReadFile("matches/media.txt", media, sizeof(media));
     for (p = len > 0 ? media : NULL; p && *p;) {
         char* eol = strchr(p, '\n');
@@ -225,7 +212,6 @@ void UI_Replays_Paint(void) {
     clip = SM_R(left, HM_NAV_H - 8, width, view + 8);
     top = HM_NAV_H - rp.scroll;
 
-    // .replays: black at 0.8 the whole height, the h1, and the list 5px in
     SM_Fill(left, HM_NAV_H, width, view, rpBlack80, NULL);
     {
         float b = SM_Baseline(FONT_DEFAULT, 32, top + 8, 38.4f);
@@ -281,7 +267,7 @@ qboolean UI_Replays_HandleKey(int key) {
         return qtrue;
     }
     if (key != K_MOUSE1) {
-        return qfalse;  // Escape goes back through the menu's onESC
+        return qfalse;
     }
     if (UI_Home_NavClick()) {
         return qtrue;
@@ -292,7 +278,6 @@ qboolean UI_Replays_HandleKey(int key) {
     }
     switch (hit->type) {
         case RP_HIT_ROW:
-            // retail sends exactly this
             trap_Cmd_ExecuteText(EXEC_APPEND, va("demo \"%s\"\n", rp.demo[hit->index].file));
             break;
         case RP_HIT_INFO:

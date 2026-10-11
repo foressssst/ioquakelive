@@ -19,20 +19,17 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
 #include "../qcommon/q_shared.h"
 #include "../qcommon/qcommon.h"
 
 #ifndef DEDICATED
 #include <SDL3/SDL_version.h>
 
-// Require a minimum version of SDL: 3.2.0 was SDL3's first stable release
 #define MINSDL_MAJOR 3
 #define MINSDL_MINOR 2
 #define MINSDL_PATCH 0
 #endif
 
-// Console
 void CON_Shutdown(void);
 void CON_Init(void);
 char* CON_Input(void);

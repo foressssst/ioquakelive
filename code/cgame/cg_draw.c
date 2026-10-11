@@ -19,32 +19,16 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// cg_draw.c -- draw all of the graphical elements during
-// active (after loading) gameplay
-
 #include "cg_local.h"
 
 #include "../ui/ui_shared.h"
 
-// used for scoreboard
 extern displayContextDef_t cgDC;
 menuDef_t* menuScoreboard = NULL;
 menuDef_t* menuEndScoreboard = NULL;
-// [QL] cgamex86.dll caches this one at menu-load time next to stats_menu and the
-// spectator huds (0x10006ecc, stored at 0x10ab9680). It lives in ui/intro.menu,
-// which cg_main.c already parses - id put the join menu in the intro file.
 menuDef_t* menuJoinGame = NULL;
-// [QL] 0x10ab967c: the accuracy panel +acc raises, "stats_menu" of ui/ingamestats.menu
 menuDef_t* menuStats = NULL;
 
-// [QL] the spectator HUD menus, cached where the binary caches them (0x10006eb8). Retail
-// looks up only the comp_ variants: "spechud_menu" and "specfollowhud_menu" are nowhere in
-// it, though both files are parsed.
-//
-//   0x10ab9684 comp_spechud_menu        0x10ab968c comp_specred_top
-//   0x10ab9688 comp_specfollowhud_menu  0x10ab9690 comp_specred_bottom
-//   0x10ab9694 comp_specblue_top        0x10ab9698 comp_specblue_bottom
 menuDef_t* menuSpecHud = NULL;
 menuDef_t* menuSpecFollowHud = NULL;
 menuDef_t* menuSpecRedTop = NULL;
@@ -52,19 +36,7 @@ menuDef_t* menuSpecRedBottom = NULL;
 menuDef_t* menuSpecBlueTop = NULL;
 menuDef_t* menuSpecBlueBottom = NULL;
 
-/*
-=================
-CG_CacheMenus
-
-[QL] 0x10006eb8. Resolves every menu pointer cgame keeps, after the initial load and after
-loadhud re-parses. Menus_Reset only zeroes menuCount, so a re-parse fills the same slots
-with different menus and a stale pointer paints the wrong one.
-=================
-*/
 void CG_CacheMenus(void) {
-    // [QL] the scoreboards first (0x10006eb3, 0x1002917b), then the rest; CG_NewClientInfo
-    // resolves them again for the local player. The fork only did that, and a player who
-    // stayed a spectator never had a scoreboard to raise.
     CG_SetEndScoreboardMenu();
     menuStats = Menus_FindByName("stats_menu");
     menuJoinGame = Menus_FindByName("joingame_menu");
@@ -76,14 +48,6 @@ void CG_CacheMenus(void) {
     menuSpecBlueBottom = Menus_FindByName("comp_specblue_bottom");
 }
 
-/*
-=================
-CG_DrawAccuracyPanel
-
-[QL] 0x1000e320. While +acc is held by somebody playing or following a player, the accuracy
-panel, asking the server for fresh numbers once a second. Forced, as it is never activated.
-=================
-*/
 static void CG_DrawAccuracyPanel(void) {
     if ((cg.predictedPlayerState.pm_type == PM_SPECTATOR && !(cg.predictedPlayerState.pm_flags & PMF_FOLLOW)) ||
         !cg.accShowing) {
@@ -96,19 +60,9 @@ static void CG_DrawAccuracyPanel(void) {
     Menu_Paint(menuStats, qtrue);
 }
 
-/*
-=================
-CG_DrawSpectatorHud
-
-[QL] 0x1000dad0. The spectator overlay: a main HUD plus four team banners. PMF_FOLLOW picks
-which main HUD (0x1000dae1); the banners follow unconditionally. Every paint is forced,
-because these menus are never activated and so never carry WINDOW_VISIBLE.
-=================
-*/
 void CG_DrawSpectatorHud(void) {
     menuDef_t* menu;
 
-    // [QL] 0x1000dad3: the scoreboard wins the frame outright.
     if (cg.scoreBoardShowing) {
         return;
     }
@@ -124,8 +78,6 @@ void CG_DrawSpectatorHud(void) {
     Menu_Paint(menuSpecBlueTop, qtrue);
     Menu_Paint(menuSpecBlueBottom, qtrue);
 
-    // [QL] 0x1000db4d: the spectator menus carry no chat window, so the overlay
-    // draws one itself in the rect the player HUD's chatWindow uses.
     if (!cg.scoreBoardShowing) {
         CG_DrawChat(5, 287, 634, 120, 1.0f);
     }
@@ -138,14 +90,6 @@ char systemChat[256];
 char teamChat1[256];
 char teamChat2[256];
 
-/*
-=================
-CG_KeyNameForCommand
-
-Resolves a command binding (e.g. "+attack") to its display key name (e.g. "MOUSE1").
-If no key is bound, writes the fallback string "???" into buf.
-=================
-*/
 void CG_KeyNameForCommand(const char* command, char* buf, int buflen) {
 	int key;
 
@@ -157,21 +101,12 @@ void CG_KeyNameForCommand(const char* command, char* buf, int buflen) {
 	}
 }
 
-// [QL] Text is rendered by the engine glyph atlas (fontstash/stb_truetype) via
-// trap_R_Font_DrawString / trap_R_Font_TextExtents.  The legacy per-glyph
-// fontInfo_t path (FreeType) is gone; these functions convert the game's
-// 640x480 virtual coordinates and text scale into the screen-pixel coordinates
-// and pixel font size the engine expects, matching the QL binary.
-
-// Font index convention (QL engine / menudef): 0 = FONT_DEFAULT (handelgothic,
-// "normal"), 1 = FONT_SANS (notosans), 2 = FONT_MONO (droidsansmono).
 static int CG_EngineFont(int fontIndex) {
 	if (fontIndex >= 0 && fontIndex < 3)
 		return fontIndex;
 	return 0;
 }
 
-// Map a legacy fontInfo_t* back to a font index for the _Font variants.
 static int CG_IndexForFontPtr(const fontInfo_t* font) {
 	int i;
 	for (i = 0; i < 3; i++) {
@@ -181,12 +116,10 @@ static int CG_IndexForFontPtr(const fontInfo_t* font) {
 	return 0;
 }
 
-// Pixel font size for a text scale (QL: screenFontScale = (vidHeight/768)*96).
 static float CG_FontPixelSize(float scale) {
 	return (((float)cgs.glconfig.vidHeight / 768.0f) * 96.0f) * scale;
 }
 
-// Horizontal scale mapping 640-space x to screen pixels, honouring widescreen.
 static float CG_TextXScale(void) {
 	int ws = cg_currentWidescreen;
 	if (cgs.widescreenBias > 0.0f && (ws != 0 || CG_MenuHoldsKeys()))
@@ -194,8 +127,6 @@ static float CG_TextXScale(void) {
 	return cgs.screenXScale;
 }
 
-// Convert 640x480 virtual coords to screen pixels with widescreen bias
-// (matches QL cg_drawtools.c CG_Text_Paint).
 static void CG_TextToScreen(float* x, float* y) {
 	float xscale = CG_TextXScale();
 	float xbias = 0.0f;
@@ -212,12 +143,6 @@ static void CG_TextToScreen(float* x, float* y) {
 		*y = *y * cgs.screenYScale;
 }
 
-// Core painter: virtual coords + scale -> screen pixels, engine glyph atlas.
-// A shadow style draws the whole string offset in solid black first.
-// [QL] cgamex86.dll 0x100084b3: the offset is 1 virtual unit for shadowed and 2 for
-// shadowed more, added before the scaling to screen pixels, so the shadow grows with
-// the resolution (4.5 pixels at 1080p for shadowed more). Black at the text's alpha,
-// with colour codes ignored (flag 1 in retail, TEXT_NORECOLOR here).
 static void CG_PaintTextEngine(float x, float y, int efont, float scale, const vec4_t color,
                                const char* text, int limit, int style) {
 	float sx = x, sy = y;
@@ -250,12 +175,10 @@ static void CG_PaintText(float x, float y, int fontIndex, float scale, const vec
 	CG_PaintTextEngine(x, y, CG_EngineFont(fontIndex), scale, color, text, limit, style);
 }
 
-// Text in an engine font, as trap_R_Font_Register returns, rather than a menu font index.
 void CG_DrawTextInFont(float x, float y, int engineFont, float scale, const vec4_t color, const char* text, int style) {
 	CG_PaintTextEngine(x, y, engineFont, scale, color, text, 0, style);
 }
 
-// 640-space width and ascender of text in an engine font, truncated as CG_MeasureText does.
 void CG_MeasureTextInFont(const char* text, int engineFont, float scale, float* w, float* h) {
 	float extents[5];
 	float xscale = CG_TextXScale();
@@ -272,10 +195,6 @@ void CG_MeasureTextInFont(const char* text, int engineFont, float scale, float* 
 		*h = (float)(int)(extents[4] / yscale);
 }
 
-// Core measure: 640-space width/height for the given text.
-// [QL] cgamex86.dll 0x100082b0: width is the engine box's maxx - minx, height is
-// the font's ascender (extents[4]), both kept as floats until the final
-// division by the 640-space scale.
 static void CG_MeasureText(const char* text, float scale, int fontIndex, int limit, int* w640, int* h640) {
 	float extents[5];
 	float xscale, yscale;
@@ -297,7 +216,6 @@ static void CG_MeasureText(const char* text, float scale, int fontIndex, int lim
 		*h640 = (int)(extents[4] / yscale);
 }
 
-// [QL] Font-pointer variants - used by DC wrappers.
 float CG_Text_Width_Font(const char* text, float scale, int limit, fontInfo_t* font) {
 	int w = 0;
 	CG_MeasureText(text, scale, CG_IndexForFontPtr(font), limit, &w, NULL);
@@ -315,7 +233,6 @@ void CG_Text_Paint_Font(float x, float y, float scale, vec4_t color, const char*
 	CG_PaintText(x, y, CG_IndexForFontPtr(font), scale, color, text, limit, style);
 }
 
-// [QL] DC wrapper functions - pass the font index straight to the engine.
 void CG_DrawText_DC(float x, float y, float scale, vec4_t color, const char* text,
 					float adjust, int limit, int style, int fontIndex) {
 	(void)adjust;
@@ -341,9 +258,6 @@ void CG_DrawTextWithCursor_DC(float x, float y, float scale, vec4_t color, const
 	CG_PaintText(x, y, fontIndex, scale, color, text, limit, style);
 }
 
-// [QL] CG_DrawText - matching binary's 0x10008440 in cgamex86.dll. Renders text
-// through the engine glyph atlas at screen coordinates with a full-string shadow
-// pass; the widescreen coordinate transform lives in CG_PaintText/CG_TextToScreen.
 void CG_DrawText(float x, float y, int fontIndex, float scale, vec4_t color,
                  const char *text, float adjust, int maxChars, int textStyle) {
 	(void)adjust;
@@ -356,31 +270,16 @@ int CG_DrawTextWidth(const char *text, float scale, int limit, int fontIndex) {
 	return w;
 }
 
-// [QL] Height counterpart of CG_DrawTextWidth. cgamex86.dll's measuring routine
-// (0x100082b0) hands back width and height through two out pointers; the numeric
-// ownerdraws use the height to drop the text onto the rect (y + height).
 int CG_DrawTextHeight(const char *text, float scale, int limit, int fontIndex) {
 	int h = 0;
 	CG_MeasureText(text, scale, fontIndex, limit, NULL, &h);
 	return h;
 }
 
-/*
-================
-CG_DrawTextLineHeight
-
-[ioquakelive] The whole box a line of text takes: the font's ascender, which is what
-CG_DrawTextHeight answers (0x100082b0 measures that way), plus how far a tail drops below the
-baseline. Measured on a string that has both, so it is the same for every name. What hangs a
-box behind a row of text needs this and not the ascender, or the tails fall outside it
-================
-*/
 float CG_DrawTextCapHeight(float scale, int fontIndex) {
 	float extents[5];
 	float yscale = cgs.screenYScale;
 
-	// [ioquakelive] how far a capital rises over the baseline: the top of the ink of an H, which
-	// is what a row of text looks centred by. The baseline is at zero and y grows downwards
 	trap_R_Font_TextExtents("H", 0, CG_EngineFont(fontIndex), CG_FontPixelSize(scale), -1, extents);
 
 	if (yscale <= 0.0f) {
@@ -401,18 +300,11 @@ int CG_DrawTextLineHeight(float scale, int fontIndex) {
 		yscale = 1.0f;
 	}
 
-	// the baseline is at zero and y grows downwards: what is under it is the tail
 	below = extents[3] > 0.0f ? extents[3] : 0.0f;
 
 	return (int)((extents[4] + below) / yscale);
 }
 
-// [QL] cgamex86.dll 0x100087c0: text that stops at *maxX (640 space), font 0,
-// no text style. The engine skips the first glyph that would end past the bound
-// and writes back where it stopped; a string that fits leaves *maxX unchanged,
-// which is how the place ownerdraws tell a cut name from a whole one. Retail
-// scales the bound to pixels but, unlike x, never adds the widescreen bias to
-// it; kept as is.
 void CG_DrawTextClipped(float *maxX, float x, float y, float scale, const vec4_t color, const char *text) {
 	float sx = x, sy = y;
 	float clip = 0.0f;
@@ -433,8 +325,6 @@ void CG_DrawTextClipped(float *maxX, float x, float y, float scale, const vec4_t
 	}
 }
 
-// Scale-based versions - used by ~90 direct call sites in cg_newdraw.c, cg_info.c,
-// etc.  These use the default font (index 0), matching QL's CG_Text_Paint.
 int CG_Text_Width(const char* text, float scale, int limit) {
 	int w = 0;
 	CG_MeasureText(text, scale, 0, limit, &w, NULL);
@@ -457,18 +347,9 @@ void CG_Text_PaintChar(float x, float y, float width, float height, float scale,
 
 void CG_Text_Paint(float x, float y, float scale, vec4_t color, const char* text, float adjust, int limit, int style) {
 	(void)adjust;
-	// QL: CG_Text_Paint uses the default font (index 0 = handelgothic).
 	CG_PaintText(x, y, 0, scale, color, text, limit, style);
 }
 
-/*
-================
-CG_Draw3DModel
-
-[QL] 0x100089f0: a colour, when there is one, goes to the model's shaderRGBA; that is how the
-attacker's head wears the team or enemy head colour.
-================
-*/
 void CG_Draw3DModel(float x, float y, float w, float h, qhandle_t model, qhandle_t skin, vec3_t origin, vec3_t angles,
 					const byte* color) {
 	refdef_t refdef;
@@ -487,7 +368,7 @@ void CG_Draw3DModel(float x, float y, float w, float h, qhandle_t model, qhandle
 	VectorCopy(origin, ent.origin);
 	ent.hModel = model;
 	ent.customSkin = skin;
-	ent.renderfx = RF_NOSHADOW;  // no stencil shadows
+	ent.renderfx = RF_NOSHADOW;
 	if (color) {
 		memcpy(ent.shaderRGBA, color, sizeof(ent.shaderRGBA));
 	}
@@ -511,17 +392,6 @@ void CG_Draw3DModel(float x, float y, float w, float h, qhandle_t model, qhandle
 	trap_R_RenderScene(&refdef);
 }
 
-/*
-================
-CG_DrawHead
-
-Used for both the status bar and the scoreboard
-
-[QL] 0x10009490: the head takes an optional colour (CG_Draw3DModel). Before the head, retail
-shows the player's Steam profile picture when cg_drawProfileImages is on and there is one; the
-fork has no Steam, so there never is.
-================
-*/
 void CG_DrawHead(float x, float y, float w, float h, int clientNum, vec3_t headAngles, const byte* color) {
 	clipHandle_t cm;
 	clientInfo_t* ci;
@@ -537,18 +407,14 @@ void CG_DrawHead(float x, float y, float w, float h, int clientNum, vec3_t headA
 			return;
 		}
 
-		// offset the origin y and z to center the head
 		trap_R_ModelBounds(cm, mins, maxs);
 
 		origin[2] = -0.5 * (mins[2] + maxs[2]);
 		origin[1] = 0.5 * (mins[1] + maxs[1]);
 
-		// calculate distance so the head nearly fills the box
-		// assume heads are taller than wide
 		len = 0.7 * (maxs[2] - mins[2]);
-		origin[0] = len / 0.268;  // len / tan( fov/2 )
+		origin[0] = len / 0.268;
 
-		// allow per-model tweaking
 		VectorAdd(origin, ci->headOffset, origin);
 
 		CG_Draw3DModel(x, y, w, h, ci->headModel, ci->headSkin, origin, headAngles, color);
@@ -556,19 +422,11 @@ void CG_DrawHead(float x, float y, float w, float h, int clientNum, vec3_t headA
 		CG_DrawPic(x, y, w, h, ci->modelIcon);
 	}
 
-	// if they are deferred, draw a cross out
 	if (ci->deferred) {
 		CG_DrawPic(x, y, w, h, cgs.media.deferShader);
 	}
 }
 
-/*
-================
-CG_DrawFlagModel
-
-Used for both the status bar and the scoreboard
-================
-*/
 void CG_DrawFlagModel(float x, float y, float w, float h, int team, qboolean force2D) {
 	qhandle_t cm;
 	float len;
@@ -581,16 +439,13 @@ void CG_DrawFlagModel(float x, float y, float w, float h, int team, qboolean for
 
 		cm = cgs.media.redFlagModel;
 
-		// offset the origin y and z to center the flag
 		trap_R_ModelBounds(cm, mins, maxs);
 
 		origin[2] = -0.5 * (mins[2] + maxs[2]);
 		origin[1] = 0.5 * (mins[1] + maxs[1]);
 
-		// calculate distance so the flag nearly fills the box
-		// assume heads are taller than wide
 		len = 0.5 * (maxs[2] - mins[2]);
-		origin[0] = len / 0.268;  // len / tan( fov/2 )
+		origin[0] = len / 0.268;
 
 		angles[YAW] = 60 * sin(cg.time / 2000.0);
 		;
@@ -623,12 +478,6 @@ void CG_DrawFlagModel(float x, float y, float w, float h, int team, qboolean for
 	}
 }
 
-/*
-================
-CG_DrawTeamBackground
-
-================
-*/
 void CG_DrawTeamBackground(int x, int y, int w, int h, float alpha, int team) {
 	vec4_t hcolor;
 
@@ -649,20 +498,6 @@ void CG_DrawTeamBackground(int x, int y, int w, int h, float alpha, int team) {
 	trap_R_SetColor(NULL);
 }
 
-/*
-===========================================================================================
-
-  UPPER RIGHT CORNER
-
-===========================================================================================
-*/
-
-/*
-================
-CG_DrawAttacker
-
-================
-*/
 static float CG_DrawAttacker(float y) {
 	int t;
 	float size;
@@ -677,8 +512,6 @@ static float CG_DrawAttacker(float y) {
 		return y;
 	}
 
-	// [QL] 0x10009943: retail keeps attackerTime once the head has gone; only a map restart
-	// clears it
 	if (!cg.attackerTime) {
 		return y;
 	}
@@ -693,9 +526,6 @@ static float CG_DrawAttacker(float y) {
 		return y;
 	}
 
-	// [QL] 0x10009998: a 36-unit head in the top-right corner, tinted with the team head colour
-	// for a teammate and the enemy one otherwise, and under it the name, right-aligned 10 units
-	// in, in font 1 at scale 0.18 with no shadow.
 	if (cgs.gametype >= GT_TEAM &&
 		cgs.clientinfo[cg.predictedPlayerState.clientNum].team == cgs.clientinfo[clientNum].team) {
 		packed = cg_teamHeadColor.integer;
@@ -723,19 +553,12 @@ static float CG_DrawAttacker(float y) {
 	return y + BIGCHAR_HEIGHT + 2;
 }
 
-/*
-==================
-CG_DrawSnapshot
-==================
-*/
 static float CG_DrawSnapshot(float y) {
 	char* s;
 	int w;
 
 	s = va("time:%i snap:%i cmd:%i", cg.snap->serverTime,
 		   cg.latestSnapshotNum, cgs.serverCommandSequence);
-	// [QL] 0x10009b10: right-aligned on 635 in font 0, scale 0.25, shadowed, with its
-	// baseline 16 below the whole-unit y + 2
 	w = CG_DrawTextWidth(s, 0.25f, 0, 0);
 
 	CG_DrawText((float)(635 - w), (float)(int)(y + 2) + 16, 0, 0.25f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
@@ -743,11 +566,6 @@ static float CG_DrawSnapshot(float y) {
 	return y + BIGCHAR_HEIGHT + 4;
 }
 
-/*
-==================
-CG_DrawFPS
-==================
-*/
 #define FPS_FRAMES 4
 static float CG_DrawFPS(float y) {
 	char* s;
@@ -760,8 +578,6 @@ static float CG_DrawFPS(float y) {
 	static int previous;
 	int t, frameTime;
 
-	// don't use serverTime, because that will be drifting to
-	// correct for internet lag changes, timescales, timedemos, etc
 	t = trap_Milliseconds();
 	frameTime = t - previous;
 	previous = t;
@@ -769,7 +585,6 @@ static float CG_DrawFPS(float y) {
 	previousTimes[index % FPS_FRAMES] = frameTime;
 	index++;
 	if (index > FPS_FRAMES) {
-		// average multiple frames together to smooth changes out a bit
 		total = 0;
 		for (i = 0; i < FPS_FRAMES; i++) {
 			total += previousTimes[i];
@@ -778,13 +593,10 @@ static float CG_DrawFPS(float y) {
 			total = 1;
 		}
 		fps = 1000 * FPS_FRAMES / total;
-		// [QL] 0x10009c97: within 1 of com_maxfps it reads com_maxfps
 		if (fps - cg_comMaxfps.integer <= 1 && cg_comMaxfps.integer - fps <= 1) {
 			fps = cg_comMaxfps.integer;
 		}
 
-		// [QL] 0x10009cc2: right-aligned on 635 in font 2 (DroidSansMono), scale 0.25,
-		// shadowed, its baseline a text height below y
 		s = va("%ifps", fps);
 		w = CG_DrawTextWidth(s, 0.25f, 0, 2);
 		h = CG_DrawTextHeight(s, 0.25f, 0, 2);
@@ -795,15 +607,6 @@ static float CG_DrawFPS(float y) {
 	return y + h;
 }
 
-/*
-=================
-CG_DrawTeamOverlay
-
-[QL] 0x10009da0. Up to eight teammates from the server's sorted list: name, health and armor,
-weapon and location. Every measure comes from the height of "O" in font 0. A dead teammate
-reads "DEAD" and a frozen one "FROZEN" with no weapon. Returns where the next element goes.
-=================
-*/
 static float CG_DrawTeamOverlay(float y, qboolean right, qboolean upper) {
 	float size, h, textY;
 	int unit, lineHeight, skipClient;
@@ -830,7 +633,6 @@ static float CG_DrawTeamOverlay(float y, qboolean right, qboolean upper) {
 	if (cg.snap->ps.persistant[PERS_TEAM] != TEAM_RED && cg.snap->ps.persistant[PERS_TEAM] != TEAM_BLUE) {
 		return y;
 	}
-	// a spectator, whom EF_SPECTATOR marks in QL, has no overlay
 	if (cg.snap->ps.eFlags & EF_SPECTATOR) {
 		return y;
 	}
@@ -921,7 +723,6 @@ static float CG_DrawTeamOverlay(float y, qboolean right, qboolean upper) {
 			Q_strncpyz(cut, name, sizeof(cut));
 			Q_strncpyz(name, va("%s%s", cut, "..."), sizeof(name));
 		}
-		// every text in the row sits on the name's height
 		textY = y + CG_DrawTextHeight(name, size, 0, 1);
 		CG_DrawText(x + unit, textY, 1, size, hcolor, name, 0, 20, ITEM_TEXTSTYLE_SHADOWED);
 
@@ -966,7 +767,6 @@ static float CG_DrawTeamOverlay(float y, qboolean right, qboolean upper) {
 			CG_DrawText(xx + unit * 2, textY, 1, size, hcolor, p, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 		}
 
-		// the powerups run outwards from the anchored edge; flight and the freeze are left out
 		if (right) {
 			xx = x;
 		} else {
@@ -993,15 +793,6 @@ static float CG_DrawTeamOverlay(float y, qboolean right, qboolean upper) {
 	return ret;
 }
 
-/*
-=====================
-CG_DrawSpeedometer
-
-[QL] Draws the speedometer bar graph and text.
-Modes: 1 = icon+bars+text (right), 2 = bars+text (center), 3 = text only (center)
-Mode 4 is handled by the menu ownerdraw (cg_newdraw.c), not here.
-=====================
-*/
 static void CG_DrawSpeedometer(void) {
 	int mode = cg_speedometer.integer;
 	int i, idx;
@@ -1017,9 +808,7 @@ static void CG_DrawSpeedometer(void) {
 	baseSpeed = cg.snap->ps.speed;
 	if (baseSpeed <= 0) baseSpeed = 320;
 
-	// set positions based on mode
 	if (mode < 2) {
-		// mode 1: right-aligned, icon + bars + text
 		rectX = 592.0f;
 		rectY = 384.0f;
 		rectW = 48.0f;
@@ -1030,7 +819,6 @@ static void CG_DrawSpeedometer(void) {
 		cg.speedBarColor2[3] = 1.0f;
 		CG_SetWidescreen(WIDESCREEN_RIGHT);
 	} else {
-		// modes 2-3: centered
 		rectX = 256.0f;
 		graphY = cg_crosshairY.integer / 2 + 241;
 		rectY = (float)graphY;
@@ -1042,20 +830,17 @@ static void CG_DrawSpeedometer(void) {
 		CG_SetWidescreen(WIDESCREEN_CENTER);
 	}
 
-	// adjust coordinates to screen space
 	CG_AdjustFrom640(&rectX, &rectY, &rectW, &rectH);
 
 	halfHeight = rectH * 0.5f;
 	barScale = (rectH - 5.0f) / ((float)baseSpeed * 3.0f);
 	barWidth = rectW / (float)SPEED_HISTORY_SIZE;
 
-	// mode 1: draw background (lagometer shader, same as binary)
 	if (mode < 2) {
 		trap_R_SetColor(NULL);
 		CG_DrawPic((float)graphX, (float)graphY, 48.0f, 48.0f, cgs.media.lagometerShader);
 	}
 
-	// modes 1-2: draw bar graph
 	if (mode < 3 && cg.speedHistoryCount > 0) {
 		idx = cg.speedHistoryIndex + 1;
 		if (idx > SPEED_HISTORY_SIZE - 1) idx = 0;
@@ -1066,14 +851,12 @@ static void CG_DrawSpeedometer(void) {
 				barHeight = barScale * speed;
 				if (barHeight > halfHeight) barHeight = halfHeight;
 
-				// lower half bar (green)
 				trap_R_SetColor(cg.speedBarColor1);
 				barX = rectX + barWidth * (float)i;
 				barY = (rectY + rectH) - barHeight;
 				trap_R_DrawStretchPic(barX, barY, barWidth, barHeight,
 									  0, 0, 0, 0, cgs.media.whiteShader);
 
-				// overflow bar (yellow) - when speed exceeds half
 				fullBarH = barScale * speed;
 				if (fullBarH > halfHeight) {
 					overflowH = fullBarH - barHeight;
@@ -1092,7 +875,6 @@ static void CG_DrawSpeedometer(void) {
 		}
 	}
 
-	// text: draw current speed value below the bar area
 	{
 		int speedInt = (int)cg.speedHistory[cg.speedHistoryIndex];
 		int textX, textY;
@@ -1102,12 +884,10 @@ static void CG_DrawSpeedometer(void) {
 		tw = CG_Text_Width(text, 0.175f, 0);
 
 		if (mode < 2) {
-			// mode 1: right-aligned, text below 48px bar area
 			CG_SetWidescreen(WIDESCREEN_RIGHT);
 			textX = graphX + 2;
 			textY = graphY + 8;
 		} else {
-			// modes 2-3: centered text below 32px bar area
 			textX = 320 - (int)(tw / 2);
 			textY = graphY + 32 + 1;
 		}
@@ -1120,14 +900,6 @@ static void CG_DrawSpeedometer(void) {
 	CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
 
-/*
-==================
-CG_DrawLocalTime
-
-[CPMA] the LocalTime element of CPMA 1.53's HUD: the clock of the machine, in the upper
-right column and in the same type as the rest of it
-==================
-*/
 static float CG_DrawLocalTime(float y) {
 	qtime_t now;
 	const char* s;
@@ -1154,16 +926,6 @@ static float CG_DrawLocalTime(float y) {
 	return y + h;
 }
 
-/*
-==================
-CG_DrawRecording
-
-[CPMA] the RecordingDemo element of CPMA 1.53's HUD: while a demo is being recorded, its
-name sits in the upper right column. The engine puts the two cvars up when it opens and
-closes the file. Off unless ch_recordingDemo asks for it: the engine already shows retail's
-own indicator (cl_demoRecordMessage), and both at once said the same thing twice
-==================
-*/
 static float CG_DrawRecording(float y) {
 	const char* s;
 	int w, h;
@@ -1180,15 +942,6 @@ static float CG_DrawRecording(float y) {
 	return y + h;
 }
 
-/*
-==================
-CG_KeysOf
-
-[CPMA] Which movement keys are down. Your own are the ones you are sending; for anybody
-else, and inside a demo, nothing carries them, so they are read back from the way the
-player moves, the same as the speed shown on the screen
-==================
-*/
 #define KEY_FORWARD 1
 #define KEY_BACK 2
 #define KEY_LEFT 4
@@ -1258,11 +1011,6 @@ static int CG_KeysOf(const playerState_t* ps) {
 	return keys;
 }
 
-/*
-==================
-CG_DrawKey
-==================
-*/
 static void CG_DrawKey(float x, float y, float size, const char* label, qboolean down) {
 	vec4_t box = {0.0f, 0.0f, 0.0f, 0.35f};
 	vec4_t text = {1.0f, 1.0f, 1.0f, 0.45f};
@@ -1279,14 +1027,6 @@ static void CG_DrawKey(float x, float y, float size, const char* label, qboolean
 				y + (size + CG_DrawTextHeight(label, scale, 0, 0)) * 0.5f, 0, scale, text, label, 0, 0, 0);
 }
 
-/*
-==================
-CG_DrawKeys
-
-[CPMA] the KeyDown element of CPMA 1.53's HUD: the keys of whoever is being watched, over
-the left of the screen. Three rows, the way a hand sits on them
-==================
-*/
 static void CG_DrawKeys(void) {
 	const float size = 16.0f;
 	const float gap = 2.0f;
@@ -1310,12 +1050,6 @@ static void CG_DrawKeys(void) {
 	CG_DrawKey(x + (size + gap) * 2.0f, y, size, "F", (keys & KEY_ATTACK) ? qtrue : qfalse);
 }
 
-/*
-=====================
-CG_DrawUpperRight
-
-=====================
-*/
 static void CG_DrawUpperRight(stereoFrame_t stereoFrame) {
 	float y;
 
@@ -1342,31 +1076,11 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame) {
 	if (cg_drawAttacker.integer) {
 		CG_DrawAttacker(y);
 	}
-	// [QL] speedometer - bar graph + text drawn for modes 1-3
-	// (mode 4 is text-only via menu ownerdraw, not drawn here)
 	if (cg_speedometer.integer > 0 && cg_speedometer.integer < 4) {
 		CG_DrawSpeedometer();
 	}
 }
 
-/*
-===========================================================================================
-
-  LOWER LEFT CORNER
-
-===========================================================================================
-*/
-
-/*
-===================
-CG_DrawPickupItem
-
-[QL] 0x1000a800. The last item picked up, for 3 s and fading over the last 200 ms: the
-pickup time, the icon, the name and, from the second of the same item, "x%i". Each bit is a
-flag in cg_drawItemPickups.
-[CPMA] ch_animateScroll fades it in over 150 ms and out on CPMA's curve; the 3 s are retail's.
-===================
-*/
 #define PICKUP_ITEM_TIME 3000
 #define PICKUP_ITEM_FADEIN 150
 #define PICKUP_ITEM_FADEOUT 200
@@ -1446,15 +1160,6 @@ static int CG_DrawPickupItem(int y) {
 	return y;
 }
 
-/*
-=====================
-CG_DrawLowerLeft
-
-[QL] cgamex86.dll 0x1000abf0. From y 408: the team overlay when cg_drawTeamOverlay is 3 in a
-team mode, then the pickup display from the overlay's top. The cvar's range stops at 2, so the
-overlay never takes this corner.
-=====================
-*/
 static void CG_DrawLowerLeft(void) {
 	float y = 408;
 
@@ -1464,24 +1169,6 @@ static void CG_DrawLowerLeft(void) {
 	CG_DrawPickupItem((int)y);
 }
 
-/*
-===========================================================================================
-
-  LOWER RIGHT CORNER
-
-===========================================================================================
-*/
-
-/*
-===================
-CG_DrawRewardIcon
-
-[CPMA] ch_animateRewardIcons: CPMA 1.53 plays 24 frames of 40 ms for assist, capture,
-defend, excellent, gauntlet and impressive, stopping on the last (1) or looping (2)
-(cgame.qvm func 165605). The frames are CPMA's, shipped in pak01; without them, and for
-every other medal, the icon stays still.
-===================
-*/
 static void CG_DrawRewardIcon(float x, float y, float size, qhandle_t shader) {
 	const qhandle_t animated[6] = {cgs.media.medalAssist, cgs.media.medalCapture, cgs.media.medalDefend,
 								   cgs.media.medalExcellent, cgs.media.medalGauntlet, cgs.media.medalImpressive};
@@ -1507,23 +1194,11 @@ static void CG_DrawRewardIcon(float x, float y, float size, qhandle_t shader) {
 	CG_DrawPic(x, y, size, size, shader);
 }
 
-/*
-===================
-CG_DrawReward
-
-[QL] 0x1000ac30. A medal shows for 2 s and fades over its last 200 ms. The next one is
-popped and its sound queued before cg_drawRewards is tested, so hidden medals still play.
-[ioquakelive] A deliberate divergence: 0.74 of retail's size, centred on 325 with its top
-at ch_rewardY, so no message runs into another. Both of retail's branches are kept.
-===================
-*/
 #define REWARD_ICON_SCALE 0.74f
 #define REWARD_ICON_SIZE (32.0f * REWARD_ICON_SCALE)
 #define REWARD_ICON_STEP (48.0f * REWARD_ICON_SCALE)
 #define REWARD_ROW_CENTER 325.0f
 #define REWARD_ICON_X (REWARD_ROW_CENTER - REWARD_ICON_STEP / 2.0f)
-// the count sits where retail puts it, at the same fraction of the icon: retail's icon is at
-// (296, 42) and its count at (336, 66) in scale 0.2
 #define REWARD_COUNT_X (REWARD_ICON_X + 40.0f * REWARD_ICON_SCALE)
 #define REWARD_COUNT_DY (24.0f * REWARD_ICON_SCALE)
 #define REWARD_COUNT_SCALE (0.2f * REWARD_ICON_SCALE)
@@ -1556,31 +1231,18 @@ static void CG_DrawReward(void) {
 
 	color[0] = color[1] = color[2] = 1.0f;
 	if (ch_animateRewardIcons.integer) {
-		// [CPMA] RewardIcons in CPMA 1.53's hud.cfg: fadedelay 1800, time 200
 		color[3] = CG_CpmaFade(cg.rewardTime, 0, REWARD_TIME - 200, 200);
 	} else {
 		color[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
 	}
 	trap_R_SetColor(color);
 	CG_DrawRewardIcon(REWARD_ICON_X, ch_rewardY.value, REWARD_ICON_SIZE, cg.rewardShader[0]);
-	// [QL] 0x1000ac96, deliberately half ported: past cg_drawRewardsRowSize medals at once, retail
-	// drops to a single icon with the count written beside it, and below that it lays them side by
-	// side. Only the count is wanted here, so the cvar is simply where it starts showing: 1 by
-	// default, which is from the second medal on, and 9 never writes it.
 	if (cg.rewardCount[0] > cg_drawRewardsRowSize.integer) {
 		CG_DrawText(REWARD_COUNT_X, ch_rewardY.value + REWARD_COUNT_DY, 0, REWARD_COUNT_SCALE, color,
 					va("%d", cg.rewardCount[0]), 0, 0, 0);
 	}
 	trap_R_SetColor(NULL);
 }
-
-/*
-===============================================================================
-
-LAGOMETER
-
-===============================================================================
-*/
 
 #define LAG_SAMPLES 128
 
@@ -1594,13 +1256,6 @@ typedef struct {
 
 lagometer_t lagometer;
 
-/*
-==============
-CG_AddLagometerFrameInfo
-
-Adds the current interpolate / extrapolate bar for this frame
-==============
-*/
 void CG_AddLagometerFrameInfo(void) {
 	int offset;
 
@@ -1609,37 +1264,18 @@ void CG_AddLagometerFrameInfo(void) {
 	lagometer.frameCount++;
 }
 
-/*
-==============
-CG_AddLagometerSnapshotInfo
-
-Each time a snapshot is received, log its ping time and
-the number of snapshots that were dropped before it.
-
-Pass NULL for a dropped packet.
-==============
-*/
 void CG_AddLagometerSnapshotInfo(snapshot_t* snap) {
-	// dropped packet
 	if (!snap) {
 		lagometer.snapshotSamples[lagometer.snapshotCount & (LAG_SAMPLES - 1)] = -1;
 		lagometer.snapshotCount++;
 		return;
 	}
 
-	// add this snapshot's info
 	lagometer.snapshotSamples[lagometer.snapshotCount & (LAG_SAMPLES - 1)] = snap->ping;
 	lagometer.snapshotFlags[lagometer.snapshotCount & (LAG_SAMPLES - 1)] = snap->snapFlags;
 	lagometer.snapshotCount++;
 }
 
-/*
-==============
-CG_DrawDisconnect
-
-Should we draw something differnet for long lag vs no packets?
-==============
-*/
 static void CG_DrawDisconnect(void) {
 	float x, y;
 	int cmdNum;
@@ -1647,53 +1283,34 @@ static void CG_DrawDisconnect(void) {
 	const char* s;
 	int w;
 
-	// [ioquakelive] never in a demo: retail's engine makes no commands while one plays, so
-	// this could not fire there; ours makes them for the free camera, and a pause looked like
-	// a dropped connection
 	if (cg.demoPlayback) {
 		return;
 	}
 
-	// draw the phone jack if we are completely past our buffers
 	cmdNum = trap_GetCurrentCmdNumber() - CMD_BACKUP + 1;
 	trap_GetUserCmd(cmdNum, &cmd);
-	if (cmd.serverTime <= cg.snap->ps.commandTime || cmd.serverTime > cg.time) {  // special check for map_restart
+	if (cmd.serverTime <= cg.snap->ps.commandTime || cmd.serverTime > cg.time) {
 		return;
 	}
 
-	// [QL] 0x1000aef0: nothing in the first 3 seconds of the level
 	if (cg.time - cgs.levelStartTime < 3000) {
 		return;
 	}
 
-	// also add text in center of screen: font 0, scale 0.25, shadowed, baseline at 116
 	s = "Connection Interrupted";
 	w = CG_DrawTextWidth(s, 0.25f, 0, 0);
 	CG_DrawText((float)(320 - w / 2), 116, 0, 0.25f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 
-	// blink the icon
 	if ((cg.time >> 9) & 1) {
 		return;
 	}
 
-	// [QL] in the bottom-right corner
 	x = SCREEN_WIDTH - 48;
 	y = SCREEN_HEIGHT - 48;
 
 	CG_DrawPic(x, y, 48, 48, trap_R_RegisterShader("gfx/2d/net.jpg"));
 }
 
-/*
-==============
-CG_DrawInputCmds
-
-[QL] cgamex86.dll 0x1000b610. Arrows for the movement being pressed around cg_drawInputCmdsX
-and cg_drawInputCmdsY, cg_drawInputCmdsSize apart: forward and back above and below, strafe to
-the sides, jump and crouch up and down to the right, each 16 units square. A free-floating
-spectator gets nothing, and at 2 only a spectator following somebody. The movement is this
-client's last command, or the followed player's (and a demo's) from the playerState.
-==============
-*/
 static void CG_DrawInputCmds(void) {
 	float size, x, y;
 	signed char forward, right, up;
@@ -1747,11 +1364,6 @@ static void CG_DrawInputCmds(void) {
 #define MAX_LAGOMETER_PING 900
 #define MAX_LAGOMETER_RANGE 300
 
-/*
-==============
-CG_DrawLagometer
-==============
-*/
 static void CG_DrawLagometer(void) {
 	int a, x, y, i;
 	float v;
@@ -1764,9 +1376,6 @@ static void CG_DrawLagometer(void) {
 		return;
 	}
 
-	//
-	// draw the graph
-	//
 	x = SCREEN_WIDTH - 48;
 	y = SCREEN_HEIGHT - 144;
 
@@ -1785,7 +1394,6 @@ static void CG_DrawLagometer(void) {
 
 	vscale = range / MAX_LAGOMETER_RANGE;
 
-	// draw the frame interpoalte / extrapolate graph
 	for (a = 0; a < aw; a++) {
 		i = (lagometer.frameCount - 1 - a) & (LAG_SAMPLES - 1);
 		v = lagometer.frameSamples[i];
@@ -1812,7 +1420,6 @@ static void CG_DrawLagometer(void) {
 		}
 	}
 
-	// draw the snapshot latency / drop graph
 	range = ah / 2;
 	vscale = range / MAX_LAGOMETER_PING;
 
@@ -1822,7 +1429,7 @@ static void CG_DrawLagometer(void) {
 		if (v > 0) {
 			if (lagometer.snapshotFlags[i] & SNAPFLAG_RATE_DELAYED) {
 				if (color != 5) {
-					color = 5;  // YELLOW for rate delay
+					color = 5;
 					trap_R_SetColor(g_color_table[ColorIndex(COLOR_YELLOW)]);
 				}
 			} else {
@@ -1838,7 +1445,7 @@ static void CG_DrawLagometer(void) {
 			trap_R_DrawStretchPic(ax + aw - a, ay + ah - v, 1, v, 0, 0, 0, 0, cgs.media.whiteShader);
 		} else if (v < 0) {
 			if (color != 4) {
-				color = 4;  // RED for dropped snapshots
+				color = 4;
 				trap_R_SetColor(g_color_table[ColorIndex(COLOR_RED)]);
 			}
 			trap_R_DrawStretchPic(ax + aw - a, ay + ah - range, 1, range, 0, 0, 0, 0, cgs.media.whiteShader);
@@ -1847,14 +1454,10 @@ static void CG_DrawLagometer(void) {
 
 	trap_R_SetColor(NULL);
 
-	// [QL] 0x1000b53f: font 0, scale 0.25, shadowed, 16 below the graph's top
 	if (cg_nopredict.integer) {
 		CG_DrawText(x, y + 16, 0, 0.25f, colorWhite, "snc", 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 	}
 
-	// [QL] 0x1000b547: with cg_lagometer 2, the last ping a snapshot brought (a 0 keeps the one
-	// before) at x 592 and y 337 plus its height measured at 0.175, in font 0 at 0.15, white and
-	// shadowed
 	if (cg_lagometer.integer == 2 && cg.snap) {
 		static int lastPing;
 		char text[16];
@@ -1870,27 +1473,9 @@ static void CG_DrawLagometer(void) {
 	CG_DrawDisconnect();
 }
 
-/*
-===============================================================================
-
-CENTER PRINTING
-
-===============================================================================
-*/
-
-/*
-==============
-CG_CenterPrint
-
-Called for important messages that should stay in the center of the screen
-for a few moments
-==============
-*/
 void CG_CenterPrint(const char* str, int y, float scale) {
 	char* s;
 
-	// [QL] cgamex86.dll 0x1000be10: a text scale, not a character width, and
-	// race prints sit 10 units lower.
 	Q_strncpyz(cg.centerPrint, str, sizeof(cg.centerPrint));
 
 	cg.centerPrintTime = cg.time;
@@ -1898,7 +1483,6 @@ void CG_CenterPrint(const char* str, int y, float scale) {
 	cg.centerPrintY = y + (cgs.gametype == GT_RACE ? 10 : 0);
 	cg.centerPrintScale = scale;
 
-	// count the number of lines for centering
 	cg.centerPrintLines = 1;
 	s = cg.centerPrint;
 	while (*s) {
@@ -1907,21 +1491,6 @@ void CG_CenterPrint(const char* str, int y, float scale) {
 		s++;
 	}
 }
-
-/*
-===================
-CG_DrawCenterString
-
-[QL] cgamex86.dll 0x1000beb0. Visible for cg_centertime seconds, fading in the
-last 200 ms. The block starts scale * 16 * lines above the print's y; each
-line (up to 50 characters) is centred on the 640 screen, drawn at y + its
-height in font 0 with the print's scale and ITEM_TEXTSTYLE_SHADOWEDMORE, and
-the next line starts 6 units below it.
-===================
-*/
-// [ioquakelive] The frag message, deliberately laid out differently from retail: smaller and
-// lower, under the medal, in Handel Gothic Ex from pak01 (cgs.media.fragMessageFont). Its height
-// and size are ch_fragMessageY and ch_fragMessageScale while they are being tuned.
 
 static void CG_DrawCenterString(void) {
 	static vec4_t color;
@@ -1936,8 +1505,6 @@ static void CG_DrawCenterString(void) {
 
 	color[0] = color[1] = color[2] = 1.0f;
 	if (cg.centerPrintFrag && ch_animateScroll.integer) {
-		// [CPMA] FragMessage and RankMessage in CPMA 1.53's hud.cfg: fadein 150,
-		// fadedelay 1200, time 200
 		color[3] = CG_CpmaFade(cg.centerPrintTime, 150, 1200, 200);
 		if (color[3] <= 0.0f) {
 			return;
@@ -1994,16 +1561,6 @@ static void CG_DrawCenterString(void) {
 	trap_R_SetColor(NULL);
 }
 
-/*
-================================================================================
-
-CROSSHAIR
-
-================================================================================
-*/
-
-// [QL] cgamex86.dll 0x10075fe0: the crosshair colours for cg_crosshairColor and
-// cg_crosshairHitColor 1-26; any other value takes the first
 static const vec4_t cg_crosshairPalette[26] = {
 	{1.0f, 0.0f, 0.0f, 1.0f},       {1.0f, 0.2734375f, 0.0f, 1.0f}, {1.0f, 0.5f, 0.0f, 1.0f},
 	{1.0f, 0.734375f, 0.0f, 1.0f},  {1.0f, 1.0f, 0.0f, 1.0f},       {0.734375f, 1.0f, 0.0f, 1.0f},
@@ -2023,16 +1580,6 @@ static const float* CG_CrosshairPaletteColor(int value) {
 	return cg_crosshairPalette[value - 1];
 }
 
-/*
-=================
-CG_CrosshairHitEffect
-
-[QL] cgamex86.dll 0x1000c0a0. For cg_crosshairHitTime ms after a hit: styles 1, 4 and 7
-colour the crosshair by hit type, 2, 5 and 8 with cg_crosshairHitColor; 3-5 grow it by
-the hit type and 6-8 by one. The growth follows the elapsed fraction and snaps back at
-the end. The colour replaces the base one, brightness not applied.
-=================
-*/
 static void CG_CrosshairHitEffect(float* w, float* h) {
 	static const vec4_t typeColors[4] = {
 		{0.25f, 0.5f, 1.0f, 1.0f}, {1.0f, 1.0f, 0.0f, 1.0f}, {1.0f, 0.5f, 0.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f},
@@ -2041,7 +1588,7 @@ static void CG_CrosshairHitEffect(float* w, float* h) {
 	int type = cg.crosshairHitType;
 	float elapsed = (float)(cg.time - cg.crosshairHitTime);
 	float t, grow = 0.0f;
-	int colorBy = 0;  // 1 = hit type, 2 = cg_crosshairHitColor
+	int colorBy = 0;
 
 	if (style < 1 || style > 8 || elapsed <= 0.0f || elapsed >= cg_crosshairHitTime.value) {
 		return;
@@ -2070,17 +1617,6 @@ static void CG_CrosshairHitEffect(float* w, float* h) {
 	}
 }
 
-/*
-=================
-CG_DrawCrosshair
-
-[QL] cgamex86.dll 0x1000c2a0. Nothing for cg_drawCrosshair <= 0 or a multiple of 30, or
-in third person. The base colour is cg_crosshairColor from the palette, or the health
-colour, times cg_crosshairBrightness. After an item pickup the cg_crosshairPulse growth
-runs, otherwise the hit effect. Size and offset scale uniformly by vidWidth / 640, so
-the crosshair stays square.
-=================
-*/
 static void CG_DrawCrosshair(void) {
 	vec4_t color;
 	float w, h, x, y, scale, f;
@@ -2123,11 +1659,6 @@ static void CG_DrawCrosshair(void) {
 	trap_R_SetColor(NULL);
 }
 
-/*
-=================
-CG_DrawCrosshair3D
-=================
-*/
 static void CG_DrawCrosshair3D(void) {
 	float w;
 	qhandle_t hShader;
@@ -2154,7 +1685,6 @@ static void CG_DrawCrosshair3D(void) {
 
 	w = cg_crosshairSize.value;
 
-	// pulse the size of the crosshair when picking up items
 	f = cg.time - cg.itemPickupBlendTime;
 	if (f > 0 && f < ITEM_BLOB_TIME) {
 		f /= ITEM_BLOB_TIME;
@@ -2167,11 +1697,6 @@ static void CG_DrawCrosshair3D(void) {
 	}
 	hShader = cgs.media.crosshairShader[ca % NUM_CROSSHAIRS];
 
-	// Use a different method rendering the crosshair so players don't see two of them when
-	// focusing their eyes at distant objects with high stereo separation
-	// We are going to trace to the next shootable object and place the crosshair in front of it.
-
-	// first get all the important renderer information
 	trap_Cvar_VariableStringBuffer("r_zProj", rendererinfos, sizeof(rendererinfos));
 	zProj = atof(rendererinfos);
 	trap_Cvar_VariableStringBuffer("r_stereoSeparation", rendererinfos, sizeof(rendererinfos));
@@ -2179,7 +1704,6 @@ static void CG_DrawCrosshair3D(void) {
 
 	xmax = zProj * tan(cg.refdef.fov_x * M_PI / 360.0f);
 
-	// let the trace run through until a change in stereo separation of the crosshair becomes less than one pixel.
 	maxdist = cgs.glconfig.vidWidth * stereoSep * zProj / (2 * xmax);
 	VectorMA(cg.refdef.vieworg, maxdist, cg.refdef.viewaxis[0], endpos);
 	CG_Trace(&trace, cg.refdef.vieworg, NULL, NULL, endpos, 0, MASK_SHOT);
@@ -2190,18 +1714,12 @@ static void CG_DrawCrosshair3D(void) {
 
 	VectorCopy(trace.endpos, ent.origin);
 
-	// scale the crosshair so it appears the same size for all distances
 	ent.radius = w / 640 * xmax * trace.fraction * maxdist / zProj;
 	ent.customShader = hShader;
 
 	trap_R_AddRefEntityToScene(&ent);
 }
 
-/*
-=================
-CG_ScanForCrosshairEntity
-=================
-*/
 static void CG_ScanForCrosshairEntity(void) {
 	trace_t trace;
 	vec3_t start, end;
@@ -2215,28 +1733,16 @@ static void CG_ScanForCrosshairEntity(void) {
 		return;
 	}
 
-	// [QL] cgamex86.dll 0x1000c570: an invisible player is not named unless he is a teammate, and
-	// there is no test for fog as there is in Quake 3
 	if ((cg_entities[trace.entityNum].currentState.powerups & (1 << PW_INVIS)) &&
 		!(cgs.gametype >= GT_TEAM &&
 		  cg.snap->ps.persistant[PERS_TEAM] == cgs.clientinfo[trace.entityNum].team)) {
 		return;
 	}
 
-	// update the fade timer
 	cg.crosshairClientNum = trace.entityNum;
 	cg.crosshairClientTime = cg.time;
 }
 
-/*
-=====================
-CG_CrosshairTeamVitalColor
-
-[QL] cgamex86.dll 0x1000c7e9 and 0x1000c979: at cg_drawCrosshairTeamHealth 2, the tint of a
-teammate's health or armor under the crosshair against the viewer's maximum health, red to yellow
-below it and yellow to white up to twice it. At 1 the colour is left as it is.
-=====================
-*/
 static void CG_CrosshairTeamVitalColor(int value, float* color) {
 	int maxHealth = cg.snap->ps.stats[STAT_MAX_HEALTH];
 	float green, blue;
@@ -2261,11 +1767,6 @@ static void CG_CrosshairTeamVitalColor(int value, float* color) {
 	}
 }
 
-/*
-=====================
-CG_DrawCrosshairNames
-=====================
-*/
 static void CG_DrawCrosshairNames(void) {
 	float* color;
 	char* name;
@@ -2276,12 +1777,6 @@ static void CG_DrawCrosshairNames(void) {
 	float size, y;
 	char text[16];
 
-	// [QL] cgamex86.dll 0x1000c670: the name under the crosshair fades over a second,
-	// centred at y 190 in font 0, scale 0.26, shadowed. Enemies need cg_enemyCrosshairNames
-	// and take cg_enemyCrosshairNamesOpacity; teammates need cg_teammateCrosshairNames
-	// without cg_teammateNames (which names them overhead) and take
-	// cg_teammateCrosshairNamesOpacity. Under a teammate's name cg_drawCrosshairTeamHealth
-	// adds the health and armor.
 	if (!cg_drawCrosshair.integer) {
 		return;
 	}
@@ -2289,10 +1784,8 @@ static void CG_DrawCrosshairNames(void) {
 		return;
 	}
 
-	// scan the known entities to see if the crosshair is sighted on one
 	CG_ScanForCrosshairEntity();
 
-	// draw the name of the player being looked at
 	color = CG_FadeColor(cg.crosshairClientTime, 1000);
 	if (!color) {
 		trap_R_SetColor(NULL);
@@ -2301,8 +1794,6 @@ static void CG_DrawCrosshairNames(void) {
 
 	teammate = cgs.gametype >= GT_TEAM &&
 			   cg.snap->ps.persistant[PERS_TEAM] == cgs.clientinfo[cg.crosshairClientNum].team;
-	// [CPMA] TargetStatus: watching a demo or spectating, the status is anybody's, because
-	// there is nothing to give away. Playing, retail's rule stands and it is your team's only
 	watching = ch_drawTargetStatus.integer &&
 			   (cg.demoPlayback || cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR);
 	if (teammate) {
@@ -2321,8 +1812,6 @@ static void CG_DrawCrosshairNames(void) {
 	color[3] *= opacity;
 	CG_DrawText(320 - CG_DrawTextWidth(name, 0.26f, 0, 0) * 0.5f, 190, 0, 0.26f, color, name, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 
-	// [QL] 0x1000c7c4: "health / armor" under a teammate's name in the name's alpha, at
-	// cg_drawCrosshairTeamHealthSize, the health ending and the armor starting at the middle
 	if (cg_drawCrosshairTeamHealth.value != 0.0f && (teammate || watching) &&
 		cg_entities[cg.crosshairClientNum].currentState.health > 0) {
 		cent = &cg_entities[cg.crosshairClientNum];
@@ -2341,13 +1830,6 @@ static void CG_DrawCrosshairNames(void) {
 	trap_R_SetColor(NULL);
 }
 
-/*
-=====================
-CG_OverheadTeamColor
-
-[QL] cgamex86.dll 0x10012b50: the name colour of each team
-=====================
-*/
 static const float* CG_OverheadTeamColor(int team) {
 	static const vec4_t freeColor = {1.0f, 1.0f, 1.0f, 1.0f};
 	static const vec4_t redColor = {1.0f, 0.5f, 0.5f, 1.0f};
@@ -2369,14 +1851,6 @@ static const float* CG_OverheadTeamColor(int team) {
 	}
 }
 
-/*
-=====================
-CG_OverheadTextWidth
-
-[QL] 0x100082b0 as retail measures: in 640 units, with the 4:3 scale whenever the screen is
-wider than 4:3, whatever the widescreen mode
-=====================
-*/
 static int CG_OverheadTextWidth(const char* text, int fontIndex, float scale, int limit) {
 	float extents[5];
 	float xscale;
@@ -2390,16 +1864,6 @@ static int CG_OverheadTextWidth(const char* text, int fontIndex, float scale, in
 	return (int)((extents[2] - extents[0]) / xscale);
 }
 
-/*
-=====================
-CG_DrawTeammateNames
-
-[QL] 0x1000cb60. A box over each living player in front of the view, 40 units up and seen
-through walls: the name, four health segments tinted like the HUD health (0x1000ca90), an
-armor line, and the powerups or a teammate marker. cg_teammateNames shows it at 1 only near
-the middle of the screen and at 2 always; cg_specNames does the same for a spectator.
-=====================
-*/
 static void CG_DrawTeammateNames(void) {
 	static const vec4_t boxColor = {0.0f, 0.0f, 0.0f, 0.5f};
 	static const vec4_t armorColor = {0.0f, 0.625f, 1.0f, 1.0f};
@@ -2418,9 +1882,6 @@ static void CG_DrawTeammateNames(void) {
 	char* in;
 	char* out;
 
-	// [ioquakelive] NOT FROM RETAIL: in a demo with the x-ray on, every outline gets its name
-	// over it too, as cg_specNames 2 gives a spectator; the bars stay as they were, since a
-	// player's demo does not carry the others' health
 	xrayNames = cg.demoPlayback && CG_XrayAllowed();
 
 	if (cg.predictedPlayerState.pm_type == PM_SPECTATOR && !(cg.predictedPlayerState.pm_flags & PMF_FOLLOW) &&
@@ -2450,7 +1911,6 @@ static void CG_DrawTeammateNames(void) {
 			continue;
 		}
 
-		// the name without colours or control characters, cut to cg_overheadNamesWidth
 		Q_strncpyz(name, ci->name, sizeof(name));
 		for (in = out = name; *in; in++) {
 			if (Q_IsColorString(in)) {
@@ -2492,7 +1952,6 @@ static void CG_DrawTeammateNames(void) {
 			textColor = CG_OverheadTeamColor(ci->team);
 		}
 
-		// window position, 0-1 from the left and from the bottom
 		CG_ProjectFloatingEffect(point, &sx, &sy);
 		nx = sx / 640.0f;
 		ny = 1.0f - sy / 480.0f;
@@ -2510,10 +1969,6 @@ static void CG_DrawTeammateNames(void) {
 		if (frozen) {
 			showBars = qfalse;
 		} else {
-			// [ioquakelive] the x-ray gets the health and the armour of the outline it names,
-			// the same bars a team mate's name carries. Both travel in the entity (0x1003572f
-			// for the health), and a demo taken from a player's own eyes carries neither for
-			// the others: with nothing to show, the bars stay away
 			showBars = (xrayNames && cent->currentState.health > 0) ||
 					   (sameTeam && cg_teammateNames.integer) ||
 					   (spectator && cg_specNames.integer);
@@ -2607,18 +2062,6 @@ static void CG_DrawTeammateNames(void) {
 	}
 }
 
-//==============================================================================
-
-/*
-=================
-CG_DrawSpectator
-
-[QL] 0x10034d70, reached only through the CG_SPEC_MESSAGES ownerdraw and nothing without
-cg_drawSpecMessages. A player out of a CA or A&D round gets "Round In Progress"; otherwise
-the spectator mode pair, unless the competitive follow HUD covers them (0x10034fbd), which
-is where the duel and team-mode lines go instead. The texts are fixed, with no key names.
-=================
-*/
 void CG_DrawSpectator(float x, float y) {
 	static const vec4_t grayColor = {0.73f, 0.73f, 0.73f, 0.7f};
 	int saved = cg_currentWidescreen;
@@ -2658,17 +2101,10 @@ void CG_DrawSpectator(float x, float y) {
 	CG_SetWidescreen(saved);
 }
 
-/*
-=================
-CG_DrawVote
-=================
-*/
 static void CG_DrawVote(void) {
 	char* s;
 	int sec;
 
-	// [QL] team-kill complaint prompt (binary CG_DrawVote 0x1000dc00). Only in team
-	// gametypes (>= GT_TEAM, excluding RR); replaces the vote line while pending.
 	if (cgs.gametype >= GT_TEAM && cgs.gametype != GT_RR &&
 	    cg_complaintWarning.integer && cg.complaintEndTime > cg.time && !cg.demoPlayback) {
 		if (cg.complaintClient >= 0 && cg.complaintClient < MAX_CLIENTS) {
@@ -2685,7 +2121,6 @@ static void CG_DrawVote(void) {
 			CG_Text_Paint(8, 312, 0.22f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 			return;
 		}
-		// negative status codes (binary strings, incl. the "Comlaints" typo)
 		s = NULL;
 		switch (cg.complaintClient) {
 			case -1: s = "Your complaint has been filed."; break;
@@ -2704,18 +2139,15 @@ static void CG_DrawVote(void) {
 		return;
 	}
 
-	// play a talk beep whenever it is modified
 	if (cgs.voteModified) {
 		cgs.voteModified = qfalse;
 		trap_S_StartLocalSound(cgs.media.talkSound, CHAN_LOCAL_SOUND);
 	}
 
-	// [QL] Vote countdown: binary uses (voteTime - cg.time + 30000) / 1000
 	sec = (cgs.voteTime - cg.time + VOTE_TIME) / 1000;
 	if (sec < 0) {
 		sec = 0;
 	}
-	// [QL] Show key bindings in vote text, Y=300/312 (binary-verified)
 	s = va("VOTE(%is):%s yes:%i no:%i", sec, cgs.voteString, cgs.voteYes, cgs.voteNo);
 	CG_Text_Paint(4, 300, 0.22f, colorYellow, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 	{
@@ -2726,11 +2158,6 @@ static void CG_DrawVote(void) {
 	CG_Text_Paint(8, 312, 0.22f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 }
 
-/*
-=================
-CG_DrawTeamVote
-=================
-*/
 static void CG_DrawTeamVote(void) {
 	char* s;
 	int sec, cs_offset;
@@ -2746,7 +2173,6 @@ static void CG_DrawTeamVote(void) {
 		return;
 	}
 
-	// play a talk beep whenever it is modified
 	if (cgs.teamVoteModified[cs_offset]) {
 		cgs.teamVoteModified[cs_offset] = qfalse;
 		trap_S_StartLocalSound(cgs.media.talkSound, CHAN_LOCAL_SOUND);
@@ -2761,7 +2187,6 @@ static void CG_DrawTeamVote(void) {
 	CG_Text_Paint(4, 324, 0.22f, colorYellow, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 }
 
-// [QL] Set both in-game and end-of-game scoreboard menus by gametype
 void CG_SetEndScoreboardMenu(void) {
 	switch (cgs.gametype) {
 	case GT_FFA:        menuScoreboard = Menus_FindByName("score_menu_ffa");         menuEndScoreboard = Menus_FindByName("endscore_menu_ffa"); break;
@@ -2780,16 +2205,6 @@ void CG_SetEndScoreboardMenu(void) {
 	}
 }
 
-/*
-=================
-CG_StartMenuCursor
-
-For a cgame menu about to take the keys. CG_Init memsets cgs, so the cursor sits at
-(0,0) until the player moves the mouse, and every click before that hit-tests
-outside the menu. Retail's engine hands cgame an absolute pointer position
-(0x1003c4f0); ioquake3's sends deltas, so the starting point is chosen here.
-=================
-*/
 static void CG_StartMenuCursor(void) {
 	if (cgs.cursorX == 0 && cgs.cursorY == 0) {
 		cgs.cursorX = SCREEN_WIDTH / 2;
@@ -2799,7 +2214,6 @@ static void CG_StartMenuCursor(void) {
 	}
 }
 
-// [QL] the scoreboard menus CG_DrawScoreboard closes by name (0x10068fd8..0x100691f4)
 static const char *cg_inGameScoreboards[] = {
 	"score_menu", "teamscore_menu", "score_menu_ffa", "score_menu_duel", "score_menu_race",
 	"score_menu_rr", "teamscore_menu_tdm", "teamscore_menu_ca", "teamscore_menu_ctf",
@@ -2813,17 +2227,6 @@ static const char *cg_endScoreboards[] = {
 	"endteamscore_menu_ft", "endteamscore_menu_dom", "endteamscore_menu_ad"
 };
 
-/*
-=================
-CG_DrawScoreboard
-
-[QL] 0x1000dfd0. Up unless the game is paused, on +scores, a dead player or the intermission
-(0x1000dff6, 0x1000e00b). There is no Quake 3 fade: it goes the frame the condition stops.
-
-The intermission board is activated rather than only painted (0x1000e02e), which is what lets
-the mouse reach its tabs and the end-of-match vote, and the keys go back when it drops.
-=================
-*/
 static qboolean CG_DrawScoreboard(void) {
 	static qboolean firstTime = qtrue;
 	menuDef_t *menu;
@@ -2837,12 +2240,10 @@ static qboolean CG_DrawScoreboard(void) {
 	if (cg_paused.integer) {
 		showing = qfalse;
 	} else if (cg.warmup) {
-		// [QL] 0x1000dff6 - dying during warmup still raises the board
 		if (!cg.showScores && pmType != PM_DEAD) {
 			showing = qfalse;
 		}
 	} else {
-		// [QL] 0x1000e00b
 		if (!cg.showScores && pmType != PM_DEAD && pmType != PM_INTERMISSION) {
 			showing = qfalse;
 		}
@@ -2881,7 +2282,6 @@ static qboolean CG_DrawScoreboard(void) {
 		Menu_Paint(menu, qtrue);
 	}
 
-	// load any models that have been deferred
 	if (++cg.deferredPlayerLoading > 10) {
 		CG_LoadDeferredPlayers();
 	}
@@ -2890,11 +2290,9 @@ static qboolean CG_DrawScoreboard(void) {
 		return qtrue;
 	}
 
-	// [QL] 0x1000e170
 	cg.deferredPlayerLoading = 0;
 	firstTime = qtrue;
 	if (cg.scoreBoardShowing) {
-		// the two generic pairs first, then the in-game boards, then the end boards
 		for (i = 0; i < 2; i++) {
 			Menus_CloseByName(cg_inGameScoreboards[i]);
 			Menus_CloseByName(cg_endScoreboards[i]);
@@ -2913,21 +2311,11 @@ static qboolean CG_DrawScoreboard(void) {
 	return qfalse;
 }
 
-/*
-=================
-CG_DrawIntermission
-=================
-*/
 static void CG_DrawIntermission(void) {
 	cg.scoreFadeTime = cg.time;
 	cg.scoreBoardShowing = CG_DrawScoreboard();
 }
 
-/*
-=================
-CG_DrawAmmoWarning
-=================
-*/
 static void CG_DrawAmmoWarning(void) {
 	const char* s;
 	float scale, y;
@@ -2945,19 +2333,12 @@ static void CG_DrawAmmoWarning(void) {
 	} else {
 		s = "LOW AMMO WARNING";
 	}
-	// [QL] 0x1000e390: cg_drawAmmoWarning 1 is scale 0.35 at y 55, 2 (the default) scale
-	// 0.24 at y 52; font 0, centred, shadowed more
 	scale = (cg_drawAmmoWarning.integer == 1) ? 0.35f : 0.24f;
 	y = (cg_drawAmmoWarning.integer == 1) ? 55.0f : 52.0f;
 	CG_DrawText((float)(320 - CG_DrawTextWidth(s, scale, 0, 0) / 2), y, 0, scale, colorWhite, s, 0, 0,
 				ITEM_TEXTSTYLE_SHADOWEDMORE);
 }
 
-/*
-=================
-CG_DrawProxWarning
-=================
-*/
 static void CG_DrawProxWarning(void) {
 	char s[32];
 	static int proxTime;
@@ -2980,34 +2361,20 @@ static void CG_DrawProxWarning(void) {
 		Com_sprintf(s, sizeof(s), "YOU HAVE BEEN MINED");
 	}
 
-	// [QL] 0x1000e480: red, centred at y 112 in font 0, scale 0.25, shadowed
 	CG_DrawText((float)(320 - CG_DrawTextWidth(s, 0.25f, 0, 0) / 2), 112, 0, 0.25f, colorRed, s, 0, 0,
 				ITEM_TEXTSTYLE_SHADOWED);
 }
 
-// [QL] a warmup line, centred on 320 in whole units as retail's 320 - width / 2
 static void CG_DrawWarmupLine(float y, int font, float scale, vec4_t color, const char* text, int style) {
 	int w = CG_DrawTextWidth(text, scale, 0, font);
 
 	CG_DrawText((float)(320 - w / 2), y, font, scale, color, text, 0, 0, style);
 }
 
-// [QL] the key bound to readyup, as the warmup messages name it ("<KEY NOT FOUND>" unbound)
 static void CG_ReadyUpKeyName(char* buf, int size) {
 	trap_Key_KeynumToStringBuf(trap_Key_GetKey("readyup"), buf, size);
 }
 
-/*
-=================
-CG_DrawWarmupTutorial
-
-[QL] cgamex86.dll 0x1000e600: a training match before the player readies up. Without
-g_skipTrainingEnable only the g_training 1 match shows it: "This match will determine" and
-"your skill placement" at y 35 and 55 (scale 0.35) over "Press <key> to start the match"
-at y 85. With it, only "Press <key> to skip the tutorial" at y 30. The key line is red at
-scale 0.25; every line is font 0, centred, with ITEM_TEXTSTYLE_SHADOWEDMORE.
-=================
-*/
 static void CG_DrawWarmupTutorial(void) {
 	char key[32];
 	const char* s;
@@ -3030,16 +2397,6 @@ static void CG_DrawWarmupTutorial(void) {
 	CG_DrawWarmupLine(y, 0, 0.25f, colorRed, s, ITEM_TEXTSTYLE_SHADOWEDMORE);
 }
 
-/*
-=================
-CG_DrawADRoundResults
-
-[QL] 0x10011a90, over the count before an Attack & Defend round: a row per team and a column
-per round, with the attacking team's row tinted. Past the tenth round the columns scroll to
-keep the current one last. Near the score limit it adds a line saying whose match point it
-is, or that the round is a last chance.
-=================
-*/
 static void CG_DrawADRoundResults(void) {
 	static const vec4_t panelColor = {0.1f, 0.1f, 0.1f, 0.8f};
 	static const vec4_t redRowColor = {0.5f, 0.0f, 0.0f, 0.5f};
@@ -3119,16 +2476,6 @@ static void CG_DrawADRoundResults(void) {
 	CG_DrawText(415 + (16 - w) * 0.5f, 194, 0, 0.25f, (float*)blueTextColor, text, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 }
 
-/*
-=================
-CG_DrawWarmupCountdown
-
-[QL] 0x1000ec00. The count before a match or a round, under a header that names what is
-starting: the duel pairing, the rule in force, whose turn it is in Attack & Defend, "Round
-Begins in" once a round has been played, "Sudden Death" in overtime, or the gametype. Rounds
-count bare; everything else says "Starts in: %i".
-=================
-*/
 static void CG_DrawWarmupCountdown(int gt) {
 	float y = (cgs.gametype == GT_RACE) ? 10.0f : 0.0f;
 	qboolean rounds = (gt == GT_CA || gt == GT_FREEZE || gt == GT_AD || gt == GT_RR) && cg.warmupRound > 0;
@@ -3179,16 +2526,6 @@ static void CG_DrawWarmupCountdown(int gt) {
 					  ITEM_TEXTSTYLE_SHADOWEDMORE);
 }
 
-/*
-=================
-CG_DrawWarmup
-
-[QL] 0x1000f090, and nothing in practice mode. The count ticks while a warmup time is set
-and once more after it clears, with the counting sounds for 1 to 3. Before the match it says
-what it is waiting for -- players, balance, the ready countdown -- and tells a player in the
-match which key readies them.
-=================
-*/
 static void CG_DrawWarmup(void) {
 	float y = (cgs.gametype == GT_RACE) ? 10.0f : 0.0f;
 	int teamCounts[TEAM_NUM_TEAMS];
@@ -3218,7 +2555,6 @@ static void CG_DrawWarmup(void) {
 		return;
 	}
 
-	// [QL] 0x1000f1b0: not over the join menu (0x10a9c9ac) or last frame's scoreboard
 	if (cg.showJoinMenu || cg.scoreBoardShowing) {
 		return;
 	}
@@ -3301,12 +2637,6 @@ static void CG_DrawWarmup(void) {
 	}
 }
 
-//==================================================================================
-/*
-=================
-CG_DrawTimedMenus
-=================
-*/
 void CG_DrawTimedMenus(void) {
 	if (cg.voiceTime) {
 		int t = cg.time - cg.voiceTime;
@@ -3318,16 +2648,6 @@ void CG_DrawTimedMenus(void) {
 	}
 }
 
-/*
-=================
-CG_PlayFightSound
-
-[QL] cgamex86.dll 0x1000ea40. The start of play, with its voice and centre print: "GO!" in Race;
-in A&D "ATTACK THE FLAG!" or "DEFEND THE FLAG!" by the player's team and the turn; in Red Rover
-the respawn chime after the first round and "BITE!" for the infected; "FIGHT!" otherwise. The
-announcer queue starts over.
-=================
-*/
 void CG_PlayFightSound(void) {
 	sfxHandle_t sfx = cgs.media.goSound;
 	const char* text = "GO!";
@@ -3372,15 +2692,6 @@ void CG_PlayFightSound(void) {
 	cg.warmupCount = -1;
 }
 
-/*
-=================
-CG_PlayCountdownSound
-
-[QL] cgamex86.dll 0x1000eb30. The voice for a countdown second: 3, 2 and 1, "fight" at 0 in the
-round modes, and at 5 "prepare to fight" while the match is paused or "round begins in" in
-the round modes (in Freeze Tag only with a round delay of at least 5 s).
-=================
-*/
 void CG_PlayCountdownSound(int count) {
 	sfxHandle_t sfx;
 
@@ -3418,16 +2729,6 @@ void CG_PlayCountdownSound(int count) {
 	trap_S_StartLocalSoundVolume(sfx, CHAN_ANNOUNCER, s_announcerVolume.value);
 }
 
-/*
-=================
-CG_DrawTimeout
-
-[QL] cgamex86.dll 0x1000ef30, drawn while a pause is on or its resume time is still set. The
-round clock stands still, a new pause sounds the klaxon, and once a second the countdown
-voice for the seconds left plays. Shows "Match Paused", or "Match resuming in ^5N^7
-seconds" while the resume countdown runs.
-=================
-*/
 static void CG_DrawTimeout(void) {
 	const char* s;
 	float w;
@@ -3459,7 +2760,7 @@ static void CG_DrawTimeout(void) {
 
 	if (sec != 0) {
 		w = CG_Text_Width(s, 0.5f, 0);
-		CG_Text_Paint(320 - w / 2, 128, 0.5f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);  // [QL] 0x1000f04e
+		CG_Text_Paint(320 - w / 2, 128, 0.5f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 	}
 
 	if (cg.time - cgs.pauseSoundTime >= 1000) {
@@ -3468,22 +2769,6 @@ static void CG_DrawTimeout(void) {
 	}
 }
 
-/*
-=================
-CG_Draw2D
-=================
-*/
-/*
-=================
-CG_UpdateJoinMenu
-
-[QL] cgamex86.dll 0x1000e9c0, single caller in CG_Draw2D at 0x10010fdd.
-
-Holds the join menu open while the player is a spectator, and tears it down
-the moment they are on a team. Quake 3 had none of this - it put you straight
-into spectator and left the team menu to a key bind.
-=================
-*/
 void CG_UpdateJoinMenu(void) {
 	menuDef_t* menu;
 
@@ -3495,8 +2780,6 @@ void CG_UpdateJoinMenu(void) {
 		return;
 	}
 
-	// [QL] 0x1000e9d0: once Escape has hidden the menu (event 5) it stays down while the
-	// in-game menu keeps the game paused, and comes back when the pause ends
 	if (!cg_paused.integer) {
 		if (cgs.eventHandling == CGAME_EVENT_ESCAPE) {
 			cgs.eventHandling = CGAME_EVENT_NONE;
@@ -3505,34 +2788,20 @@ void CG_UpdateJoinMenu(void) {
 		return;
 	}
 
-	// [QL] 0x1000e9f2: open it on the first frame it is asked for, and take the
-	// key catcher so clicks reach CG_KeyEvent/CG_MouseEvent instead of the game.
 	if (!(menu->window.flags & WINDOW_VISIBLE)) {
 		CG_StartMenuCursor();
 		trap_Key_SetCatcher(KEYCATCH_CGAME);
 		Menus_Activate(menu);
 	}
 
-	// [QL] 0x1000ea20: cmp dword ptr [cg.snap + 0x138], 3 - once the player is
-	// no longer a spectator the menu closes itself and the HUD comes back.
 	if (cg.snap->ps.persistant[PERS_TEAM] != TEAM_SPECTATOR) {
 		CG_CloseMenus();
 		return;
 	}
 
-	// [QL] 0x1000ea30: Menu_Paint(menuJoinGame, qtrue). Forced, because the
-	// normal Menu_PaintAll pass is skipped on this path.
 	Menu_Paint(menu, qtrue);
 }
 
-/*
-=====================
-CG_SpecTeamColor
-
-[QL] cgamex86.dll 0x10012b10: the strong colour of each team, for the spectator item timers and
-team vitals
-=====================
-*/
 static const float* CG_SpecTeamColor(int team) {
 	static const vec4_t freeColor = {1.0f, 0.8f, 0.2f, 1.0f};
 	static const vec4_t redColor = {1.0f, 0.2f, 0.1f, 1.0f};
@@ -3553,17 +2822,6 @@ static const float* CG_SpecTeamColor(int team) {
 	}
 }
 
-/*
-=====================
-CG_DrawSpecItemTimers
-
-[QL] 0x1000f700, for a spectator (EF_SPECTATOR) with cg_specItemTimers, a bit mask
-of what to show: 1 powerups, 2 mega health, 4 red armor, 8 yellow armor. Down from
-cg_specItemTimersX and Y, each item's icon, cg_specItemTimersSize * 100 square,
-with the seconds until it is back beside it. In CTF a band at a quarter opacity
-marks the base an item belongs to, and a random-respawn team's items go half size.
-=====================
-*/
 static void CG_DrawSpecItemTimers(void) {
 	specItemTimer_t* timer;
 	gitem_t* item;
@@ -3636,21 +2894,6 @@ static void CG_DrawSpecItemTimers(void) {
 	}
 }
 
-/*
-=====================
-CG_DrawSpecTeamVitals
-
-[QL] 0x1000fab0, for a spectator in the team modes with cg_specTeamVitals: a row per
-player from cg_specTeamVitalsY, cg_specTeamVitalsWidth wide, red down the left and
-blue down the right. A row is the client number, the first powerup or else the
-model's portrait where retail draws the weapon in use, the name cut with "..." to
-fit, and a health and an armor bar against the player's maximum health.
-
-Without cg_specTeamVitalsHealthColor the health bar fills the row behind white
-text; with it the bars go thin under the name, the health one tinted by health and
-the armor one cyan, and the text takes the team colour.
-=====================
-*/
 static void CG_DrawSpecTeamVitals(void) {
 	static const vec4_t numberColor = {1.0f, 1.0f, 1.0f, 0.25f};
 	static const vec4_t gradientBack = {0.0f, 0.0f, 0.0f, 0.25f};
@@ -3727,8 +2970,6 @@ static void CG_DrawSpecTeamVitals(void) {
 		} else if (dead) {
 			CG_DrawPic(x, y - 16.0f, 16, 16, cgs.media.friendDeadShader);
 		} else {
-			// the model's portrait where retail draws the weapon in use; the weapon stays for a player
-			// whose portrait has not loaded
 			CG_DrawPic(x, y - 16.0f, 16, 16,
 					   ci->modelIcon ? ci->modelIcon : cg_weapons[cent->currentState.weapon].weaponIcon);
 		}
@@ -3736,7 +2977,6 @@ static void CG_DrawSpecTeamVitals(void) {
 			*yp = y - step;
 		}
 
-		// the name without colours, cut with "..." to what is left of the width
 		Q_strncpyz(name, ci->name, sizeof(name));
 		Q_CleanStr(name);
 		len = strlen(name);
@@ -3813,18 +3053,6 @@ static void CG_DrawSpecTeamVitals(void) {
 	}
 }
 
-/*
-=================
-CG_DrawLetterbox
-
-[QL] 0x1000d940, drawn by CG_Draw2D in a training match (0x10010ed3): two black
-bands 640 wide at the top and the bottom. The first frame the player is held for the
-tour (PM_TUTORIAL) opens them from 1 to 84 units over 1000 ms; once pm_type leaves
-PM_TUTORIAL they close again over another 1000 ms. cg_letterboxDrawn says whether
-they were drawn this frame, and CG_AddViewWeapon (0x10052d33) leaves the gun out
-while they are.
-=================
-*/
 qboolean cg_letterboxDrawn;
 static int letterboxTime;
 static int letterboxDuration;
@@ -3873,16 +3101,6 @@ static void CG_DrawLetterbox(void) {
 	cg_letterboxDrawn = qtrue;
 }
 
-/*
-=================
-CG_DrawVoiceIndicator
-
-[QL] 0x10011200. One row per talking player, with a box in their team's colour, the
-icon and the name. cg_voiceChatIndicator turns it off at 0 and sends it left at 2.
-This also closes the "is talking" flag: the binary clears it 500 ms after the last
-packet, except your own, which "-voice" clears.
-=================
-*/
 static void CG_DrawVoiceIndicator(void) {
     static const vec4_t red = {0.5f, 0.0f, 0.0f, 0.5f};
     static const vec4_t blue = {0.0f, 0.25f, 0.5f, 0.5f};
@@ -3917,8 +3135,6 @@ static void CG_DrawVoiceIndicator(void) {
         CG_DrawSmallStringColor((int)(x + 20.0f), (int)(y + 1.0f), ci->name, (vec_t*)white);
         y += 15.0f;
 
-        // [QL] 0x1001143a: the flag clears itself half a second after the last packet;
-        // your own does not, "-voice" clears that one
         if (ci->talkingTime + 500 < cg.time && i != cg.clientNum) {
             ci->talking = qfalse;
         }
@@ -3927,33 +3143,18 @@ static void CG_DrawVoiceIndicator(void) {
     CG_SetWidescreen(0);
 }
 
-/*
-===============================================================================
-
-DEMO CONTROLS
-
-[QL] Retail draws its demo controls last in CG_Draw2D (cgamex86.dll 0x10011412) from
-0x10010450: a half-black box with the time on top and a row of buttons, each label in white
-over its key in yellow. ioquakelive draws them the same way and adds a timeline, the jumps
-and the free camera, in two boxes: the playing one in the middle, and the speed and the
-toggles apart over its right end. Retail's own box is in HALLAZGOS.md.
-
-===============================================================================
-*/
-
-#define DEMOBAR_X	140		// the playing box, centred in the 4:3
+#define DEMOBAR_X	140
 #define DEMOBAR_W	360
 #define DEMOBAR_Y	318
 #define DEMOBAR_H	56
-#define DEMOBAR_SPAN	(DEMOBAR_W - 20)	// the timeline, inside the box
+#define DEMOBAR_SPAN	(DEMOBAR_W - 20)
 #define DEMOBAR_LINE	(DEMOBAR_Y + 21)
 
-static const vec4_t demoBack = { 0, 0, 0, 0.5f };		// retail's 0x10076344
+static const vec4_t demoBack = { 0, 0, 0, 0.5f };
 static const vec4_t demoTrack = { 1, 1, 1, 0.25f };
 static const vec4_t demoRestart = { 1, 1, 1, 0.5f };
 static const vec4_t demoGhost = { 1, 1, 1, 0.7f };
 
-// what the last frame drew, for the mouse to find between frames
 #define MAX_DEMO_BUTTONS	16
 static struct {
 	float		x, y, w, h;
@@ -3961,11 +3162,9 @@ static struct {
 } demoButtons[MAX_DEMO_BUTTONS];
 static int		demoButtonCount;
 static int		demoLength;
-qboolean		cg_demoCursor;		// the cursor is ours: cgame holds the keys for it
+qboolean		cg_demoCursor;
 static qboolean	demoDragging;
 
-// a retail button: the label, yellow when it is on, over its key in yellow, both centred on x.
-// A command makes it clickable
 static void CG_DrawDemoButton(float x, float y, const char *label, const char *key, qboolean on,
 	const char *cmd) {
 	CG_DrawText(x - CG_DrawTextWidth(label, 0.25f, 0, 1) / 2, y, 1, 0.25f,
@@ -3982,7 +3181,6 @@ static void CG_DrawDemoButton(float x, float y, const char *label, const char *k
 	}
 }
 
-// marks along the timeline, from a list of demo times
 static void CG_DrawDemoMarks(const char *cvar, int length, float y, float w, float h, const float *color) {
 	char		buf[MAX_STRING_CHARS];
 	const char	*p;
@@ -4007,22 +3205,12 @@ static void CG_DemoTimeString(int ms, char *buf, int size) {
 	Com_sprintf(buf, size, "%d:%02d", ms / 60000, ms / 1000 % 60);
 }
 
-// the demo time under the cursor, on the timeline
 static int CG_DemoCursorTime(void) {
 	float f = (cgs.cursorX - (DEMOBAR_X + 10)) / (float)DEMOBAR_SPAN;
 
 	return (int)(Com_Clamp(0, 1, f) * demoLength);
 }
 
-/*
-=================
-CG_DemoCursorFrame
-
-[ioquakelive] while a demo plays with its controls up, and the free camera is not using the
-mouse, cgame holds the keys: the engine lets go of the mouse and the system's pointer works
-the controls, as over the menus
-=================
-*/
 void CG_DemoCursorFrame(void) {
 	qboolean	want = cg.demoPlayback && cg_drawDemoHUD.integer && cg_draw2D.integer &&
 		!cg_freecam.integer ? qtrue : qfalse;
@@ -4040,19 +3228,11 @@ void CG_DemoCursorFrame(void) {
 		cg_demoCursor = qfalse;
 		demoDragging = qfalse;
 	} else if (cg_demoCursor && !(catcher & KEYCATCH_CGAME)) {
-		cg_demoCursor = qfalse;	// Escape or a menu took it
+		cg_demoCursor = qfalse;
 		demoDragging = qfalse;
 	}
 }
 
-/*
-=================
-CG_DemoHUDKey
-
-the left button over the controls: a button runs its command, and on the timeline it picks up
-the playhead, which goes where it is let go
-=================
-*/
 qboolean CG_DemoHUDKey(int key, qboolean down) {
 	int i;
 
@@ -4081,14 +3261,6 @@ qboolean CG_DemoHUDKey(int key, qboolean down) {
 	return qtrue;
 }
 
-/*
-=================
-CG_DrawDemoKeys
-
-[CPMA] CPMA 1.53 lists every key of its demo player behind F1. Here the same list, in the
-type of the controls, over the box that holds them
-=================
-*/
 static void CG_DrawDemoKeys(void) {
 	static const struct {
 		const char *key, *what;
@@ -4125,18 +3297,6 @@ static void CG_DrawDemoKeys(void) {
 	CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
 
-/*
-=================
-CG_DrawDemoHUD
-
-Frozen, the middle button is Play and Advance joins it, as in retail; running, Pause.
-Advance thaws cl_freezeDemo for two frames, so it counts as frozen for the first three running
-frames instead of flickering. The time is written as retail's 0x10001320 writes it. The
-timeline comes from the engine, in demo time, which runs on when a server starts its clock over:
-cl_demoPos and cl_demoLength, the match restarts in cl_demoMarks and the watched player's frags
-in cl_demoFrags. The playhead is the yellow bar; the mouse drags it.
-=================
-*/
 static void CG_DrawDemoHUD(void) {
 	static int		running;
 	char			buf[MAX_STRING_CHARS], speed[16];
@@ -4165,7 +3325,6 @@ static void CG_DrawDemoHUD(void) {
 
 	CG_SetWidescreen(WIDESCREEN_CENTER);
 
-	// the playing box: the time, the timeline and the buttons
 	CG_FillRect(DEMOBAR_X, DEMOBAR_Y, DEMOBAR_W, DEMOBAR_H, demoBack);
 
 	seconds = now / 1000.0f;
@@ -4185,7 +3344,6 @@ static void CG_DrawDemoHUD(void) {
 		CG_FillRect(DEMOBAR_X + 10, DEMOBAR_LINE, x, 3, colorWhite);
 		CG_DrawDemoMarks("cl_demoMarks", length, DEMOBAR_LINE - 2, 1, 7, demoRestart);
 		CG_DrawDemoMarks("cl_demoFrags", length, DEMOBAR_LINE + 4, 2, 3, colorRed);
-		// the playhead
 		CG_FillRect(DEMOBAR_X + 10 + x - 1, DEMOBAR_LINE - 4, 2, 11, colorYellow);
 
 		if (demoDragging) {
@@ -4215,7 +3373,6 @@ static void CG_DrawDemoHUD(void) {
 			row[i].on, row[i].cmd);
 	}
 
-	// apart, over the playing box and centred on it: the speed and the toggles
 	Com_sprintf(speed, sizeof(speed), "%0.1fx", cg_timescale.value);
 	n = 0;
 	row[n].label = "-", row[n].key = "[LEFT]", row[n].cmd = "cvarAdd timescale -0.1\n", row[n++].on = qfalse;
@@ -4251,8 +3408,6 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 		CG_CheckOrderPending();
 	}
 
-	// [QL] 0x10010dd8: the lastmsg recall timers run out here, which ends the
-	// CG_SHOW_IF_MSG_PRESENT / CG_SHOW_IF_NOTICE_PRESENT blink
 	if (cg.time > cg.lastChatTime) {
 		cg.lastChatTime = 0;
 	}
@@ -4260,7 +3415,6 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 		cg.lastChatTime2 = 0;
 	}
 
-	// if we are taking a levelshot for the menu, don't draw anything
 	if (cg.levelShot) {
 		return;
 	}
@@ -4274,30 +3428,15 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 		return;
 	}
 
-	// [QL] shared floating-effect pool: damage numbers, player outlines, freeze/flag
-	// glows and head float-sprites, all projected to screen (binary CG_DrawDamagePlums
-	// called from CG_Draw2D @ 0x10010e9e), unless a demo is frozen (cl_freezeDemo); then
-	// the boxes over teammates (0x10010ea3)
 	CG_SetWidescreen(WIDESCREEN_STRETCH);
 	if (!cg.demoPlayback || !(int)trap_Cvar_VariableValue("cl_freezeDemo")) {
 		CG_DrawFloatingEffects();
 	}
 	CG_DrawTeammateNames();
 
-	// [QL] 0x10010ec7: a training match draws the cinema bars. While the player is held for
-	// the tour (PM_TUTORIAL) the frame is only the HUD's "chat area" menu, where Crash's lines
-	// come in, the centre print and the skip line; nothing else. The mouse is ignored then
-	// unless some menu is visible, and the first frame held opens the bars. Out of the hold
-	// the mouse comes back.
 	if (g_training.integer) {
 		CG_DrawLetterbox();
 		if (cg.snap->ps.pm_type == PM_TUTORIAL) {
-			// [ioquakelive] the chat is drawn directly, not through its menu. Menus_FindByName
-			// returns NULL for "chat area" in the cgame -- measured with a probe: menu = 0
-			// while a chat line was alive -- so Menu_Paint painted nothing, forced or not, and
-			// Crash's lines during the tour ended up in the console only. The rect is the
-			// absolute one of chatWindow in ui/hud.menu (menu at x 5, item at y 287, 634x120),
-			// the same one the spectator overlay already uses.
 			CG_DrawChat(5, 287, 634, 120, 1.0f);
 			CG_SetWidescreen(WIDESCREEN_CENTER);
 			CG_DrawCenterString();
@@ -4322,39 +3461,13 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 		}
 	}
 
-	/*
-		if (cg.cameraMode) {
-			return;
-		}
-	*/
-	// [QL] 0x10010fdd, right after the floating effects: while the join menu owns the
-	// frame it stands in for the HUD, unless last frame's scoreboard is up. The frame
-	// goes on (0x10010ff2 jumps to 0x100110c5), so the vote, the corners, the warmup
-	// text and the scoreboard still draw and +scores raises the board over the menu.
 	if (cg.showJoinMenu && !cg.scoreBoardShowing) {
 		CG_UpdateJoinMenu();
 	}
-	// [QL] cgamex86.dll 0x10010ff7..0x100110b5. Which branch runs is decided by the
-	// predicted playerState, and the test is not Quake 3's:
-	//   0x10010ff7  test [cg.predictedPlayerState.eFlags], EF_SPECTATOR
-	//   0x10011003  cmp  [cg.predictedPlayerState.pm_type], PM_SPECTATOR
-	// Both are what SpectatorClientEndFrame (qagamex86.dll 0x10035470) leaves on a
-	// follower - pm_type forced back to PM_SPECTATOR, EF_SPECTATOR on a real spectator -
-	// so a spectator following somebody gets this branch too. The old test on
-	// persistant[PERS_TEAM] saw the FOLLOWED player's team and missed them.
 	else if ((cg.predictedPlayerState.eFlags & EF_SPECTATOR) ||
 		cg.predictedPlayerState.pm_type == PM_SPECTATOR) {
-		// [QL] 0x10011081: the competitive spectator overlay.
 		CG_DrawSpectatorHud();
 
-		// [QL] 0x1001108c: crosshair, crosshair names and weapon bar are only drawn
-		// while following somebody - a free-flying spectator has no weapon to aim.
-		//
-		// Retail does NOT draw the "SPECTATOR MODE / Press MOUSE1..." text from here.
-		// CG_DrawSpectator is reached only through the CG_SPEC_MESSAGES ownerdraw
-		// (0x1003c05b), which only ui/spectator.menu and ui/spectator_follow.menu use -
-		// the two spectator HUDs retail never paints. Drawing it unconditionally here
-		// was a visible difference from the retail spectator HUD.
 		if (cg.snap->ps.pm_flags & PMF_FOLLOW) {
 			if (stereoFrame == STEREO_CENTER)
 				CG_DrawCrosshair();
@@ -4363,19 +3476,15 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 			CG_DrawCrosshairNames();
 			CG_SetWidescreen(WIDESCREEN_STRETCH);
 			CG_DrawWeaponBar();
-			// [QL] 0x100110aa: the medals, as in the playing branch. The widescreen mode
-			// retail sets around the call is not verified; this keeps the playing one.
 			CG_SetWidescreen(WIDESCREEN_CENTER);
 			CG_DrawReward();
 			CG_SetWidescreen(WIDESCREEN_STRETCH);
 		}
-		// [QL] 0x1001111a: the item timers down the left, then the team vitals
 		CG_SetWidescreen(WIDESCREEN_LEFT);
 		CG_DrawSpecItemTimers();
 		CG_SetWidescreen(WIDESCREEN_STRETCH);
 		CG_DrawSpecTeamVitals();
 	} else {
-		// don't draw any status if dead or the scoreboard is being explicitly shown
 		if (!cg.showScores && cg.snap->ps.stats[STAT_HEALTH] > 0) {
 			if (cg_drawStatus.integer) {
 				Menu_PaintAll();
@@ -4392,7 +3501,7 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 
 			CG_SetWidescreen(WIDESCREEN_CENTER);
 			CG_DrawCrosshairNames();
-			CG_DrawWeaponBar();  // [QL] handles all modes (Left/Right/Centered/Classic/No)
+			CG_DrawWeaponBar();
 			CG_DrawReward();
 			CG_SetWidescreen(WIDESCREEN_STRETCH);
 		}
@@ -4405,7 +3514,6 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	CG_DrawTeamVote();
 	CG_SetWidescreen(WIDESCREEN_RIGHT);
 	CG_DrawLagometer();
-	// [QL] 0x100110f7: the movement arrows, centred
 	CG_SetWidescreen(WIDESCREEN_CENTER);
 	CG_DrawInputCmds();
 	CG_SetWidescreen(WIDESCREEN_STRETCH);
@@ -4413,8 +3521,6 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	if (!cg_paused.integer) {
 		CG_SetWidescreen(WIDESCREEN_RIGHT);
 		CG_DrawUpperRight(stereoFrame);
-		// [QL] CG_Draw2D (0x10010d90): the team overlay in the lower right corner, then the
-		// lower left corner with the pickup display
 		if (cgs.gametype >= GT_TEAM && cg_drawTeamOverlay.integer == 2) {
 			CG_DrawTeamOverlay(408, qtrue, qfalse);
 		}
@@ -4424,26 +3530,13 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	}
 
 	CG_SetWidescreen(WIDESCREEN_CENTER);
-	// [QL] cgamex86.dll 0x10011154..0x1001115a: the warmup/centre messages are drawn
-	// unconditionally. Quake 3's `if (!CG_DrawFollow()) CG_DrawWarmup();` is gone with
-	// CG_DrawFollow itself: retail has no "following" string at all, and the followed
-	// player's name is drawn by the spectator HUD through CG_FOLLOW_PLAYER_NAME_EX.
 	CG_DrawWarmup();
 	if (cgs.freezeEnd || cgs.pauseEnd) {
-		CG_DrawTimeout();  // [QL] 0x10011165
+		CG_DrawTimeout();
 	}
 	CG_SetWidescreen(WIDESCREEN_STRETCH);
 
-	// [QL] race timer is drawn by menu system via CG_DrawRaceTimes ownerdraw
-	// (removed hardcoded duplicate here)
-
-	// [QL] no chat here: retail draws it only through the CG_AREA_NEW_CHAT
-	// ownerdraw in the HUD menus and from the spectator overlay (0x1000db98).
-
-	// don't draw center string if scoreboard is up
-	// [QL] 0x10011190: nor over the join menu or while paused
 	cg.scoreBoardShowing = CG_DrawScoreboard();
-	// [QL] 0x100111be: the accuracy panel, when the scoreboard is not up
 	if (!cg.scoreBoardShowing) {
 		CG_DrawAccuracyPanel();
 	}
@@ -4453,72 +3546,47 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 		CG_SetWidescreen(WIDESCREEN_STRETCH);
 	}
 
-	// [QL] 0x1001140a: the demo controls go last, over everything
 	if (cg.demoPlayback && cg_drawDemoHUD.integer) {
 		CG_DrawDemoHUD();
 	}
 }
 
-/*
-=====================
-CG_DrawActive
-
-CG_DrawFullScreenColor
-
-QL binary: draws a fullscreen vignette overlay when cg_vignette is enabled (vmCvar 0x10A63960)
-=====================
-*/
 static void CG_DrawFullScreenColor(void) {
 	if (cg_vignette.integer) {
 		CG_DrawPic(0, 0, 640, 480, cgs.media.vignetteShader);
 	}
 }
 
-/*
-=====================
-Perform all drawing needed to completely fill the screen
-=====================
-*/
 void CG_DrawActive(stereoFrame_t stereoView) {
-	// optionally draw the info screen instead
 	if (!cg.snap) {
-		CG_SetWidescreen(WIDESCREEN_STRETCH);  // [QL] 0x100114ab
+		CG_SetWidescreen(WIDESCREEN_STRETCH);
 		CG_DrawInformation();
 		return;
 	}
 
-	// optionally draw the tournement scoreboard instead
-	// Quake 3's scoreboard spectator test. In Quake Live bit 0x2000 is PMF_HOOKED, which a
-	// spectator never has, so this does not run; not checked against retail's CG_DrawActive.
 	if (cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR &&
 		(cg.snap->ps.pm_flags & PMF_HOOKED)) {
 		CG_DrawTourneyScoreboard();
 		return;
 	}
 
-	// QL binary: cg_zoomOutOnDeath.integer resets zoom on death/freeze/intermission (vmCvar 0x10A61200)
 	if (((cg.predictedPlayerState.pm_type == PM_DEAD ||
 	      cg.predictedPlayerState.pm_type == PM_FREEZE) && cg_zoomOutOnDeath.integer) ||
 	    cg.predictedPlayerState.pm_type == PM_INTERMISSION) {
 		cg.zoomed = qfalse;
 	}
 
-	// clear around the rendered view if sized down
 	CG_TileClear();
 
 	if (stereoView != STEREO_CENTER)
 		CG_DrawCrosshair3D();
 
-	// draw 3D view
-	// [QL] 0x10011490: between the bloom's two calls, so only the view gets the bloom
 	trap_R_BeginBloomScene();
 	trap_R_RenderScene(&cg.refdef);
 	trap_R_ApplyBloom();
 
-	// draw status bar and other floating elements
 	CG_Draw2D(stereoView);
 
-	// QL binary: vignette overlay drawn after HUD
 	if (!cg.renderingThirdPerson) {
 		CG_DrawFullScreenColor();
 	}

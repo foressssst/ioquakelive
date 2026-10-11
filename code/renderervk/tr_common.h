@@ -27,7 +27,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../qcommon/q_shared.h"
 #include "../renderercommon/tr_public.h"
 
-// [ioquakelive] what Quake3e keeps in its shared headers and this engine does not
 typedef union {
 	byte rgba[4];
 	uint32_t u32;
@@ -49,8 +48,6 @@ typedef union {
 #define CONTENTS_NODE 0xFFFFFFFF
 #endif
 
-// Quake3e keeps a cvar out of the config while it holds its default, and has a flag for what
-// only developer mode may set; here they are an archived cvar and a plain one
 #ifndef CVAR_ARCHIVE_ND
 #define CVAR_ARCHIVE_ND CVAR_ARCHIVE
 #endif
@@ -82,7 +79,6 @@ typedef union {
 #define VectorSet4( v, x, y, z, w ) ( (v)[0]=(x), (v)[1]=(y), (v)[2]=(z), (v)[3]=(w) )
 #endif
 
-// the next power of two, or the previous one when rounding down
 static ID_INLINE unsigned int log2pad( unsigned int v, int roundup ) {
 	unsigned int x = 1;
 
@@ -95,7 +91,6 @@ static ID_INLINE unsigned int log2pad( unsigned int v, int roundup ) {
 	return x;
 }
 
-// tr_window.c: the window's cvars, the mode table and what Quake3e keeps in its own engine
 extern cvar_t *r_mode;
 extern cvar_t *r_windowedMode;
 extern cvar_t *r_fullscreen;
@@ -116,18 +111,15 @@ extern cvar_t *r_uiFullScreen;
 extern float displayAspect;
 extern int64_t r_imageDecodeUs, r_imageUploadUs, r_imageReadUs;
 extern int r_imageCount;
-// [ioquakelive] what registering shaders costs, images aside
 extern int64_t r_shaderFindUs, r_shaderCachedUs;
 extern int r_shaderFindCount, r_shaderCachedCount;
 void R_ImageLoadStatsReset( void );
 void R_ImageLoadStatsReport( void );
 
-// [ioquakelive] the map's textures, decoded ahead of time across the workers
 extern cvar_t *r_prefetchTextures;
 void R_PrefetchStart( const char *listName );
 void R_PrefetchFinish( void );
 
-// the decoders in renderercommon, which can also run on a worker
 void R_DecodeJPG( byte *fileData, int fileLen, byte **pic, int *width, int *height,
 	void *(*allocator)( size_t ), qboolean silent );
 void R_DecodeTGA( byte *fileData, int fileLen, const char *name, byte **pic, int *width,
@@ -147,7 +139,6 @@ int Com_Split( char *in, char **out, int outsz, int delim );
 
 extern refimport_t ri;
 
-// what Quake3e's engine gives its renderer and this one does not, answered in tr_import.c
 typedef enum {
 	CV_NONE = 0,
 	CV_FLOAT,
@@ -157,8 +148,8 @@ typedef enum {
 } cvarValidator_t;
 
 typedef enum {
-	REF_KEEP_CONTEXT,	// just unload world and all loaded shaders/textures
-	REF_KEEP_WINDOW,	// destroy context but keep window
+	REF_KEEP_CONTEXT,
+	REF_KEEP_WINDOW,
 	REF_DESTROY_WINDOW,
 	REF_UNLOAD_DLL
 } refShutdownCode_t;
@@ -179,7 +170,6 @@ int RI_Com_RealTime( qtime_t *qtime );
 qboolean RI_CL_IsMinimized( void );
 void RI_CL_SetScaling( float factor, int captureWidth, int captureHeight );
 
-// the window, from sdl/sdl_glimp.c and sdl/sdl_gamma.c built into this renderer
 void GLimp_Init( qboolean fixedFunction );
 qboolean GLimp_ApplyVideoMode( int *width, int *height );
 void GLimp_Shutdown( void );
@@ -188,7 +178,6 @@ void GLimp_Minimize( void );
 void GLimp_SetGamma( unsigned char red[256], unsigned char green[256], unsigned char blue[256] );
 void *GLimp_GetProcAddress( const char *name );
 
-// renderercommon/tr_image_jpg.c
 void RE_SaveJPG( char *filename, int quality, int image_width, int image_height, byte *image_buffer, int padding );
 size_t RE_SaveJPGToBuffer( byte *buffer, size_t bufSize, int quality, int image_width, int image_height, byte *image_buffer, int padding );
 
@@ -217,36 +206,22 @@ typedef enum {
 
 typedef struct image_s image_t;
 
-// any change in the LIGHTMAP_* defines here MUST be reflected in
-// R_FindShader() in tr_bsp.c
-#define LIGHTMAP_2D         -4	// shader is for 2D rendering
-#define LIGHTMAP_BY_VERTEX  -3	// pre-lit triangle models
+#define LIGHTMAP_2D         -4
+#define LIGHTMAP_BY_VERTEX  -3
 #define LIGHTMAP_WHITEIMAGE -2
 #define LIGHTMAP_NONE       -1
 
-extern glconfig_t	glConfig;		// outside of TR since it shouldn't be cleared during ref re-init
+extern glconfig_t	glConfig;
 
-// These variables should live inside glConfig but can't because of
-// compatibility issues to the original ID vms.  If you release a stand-alone
-// game and your mod uses tr_types.h from this build you can safely move them
-// to the glconfig_t struct.
 extern qboolean  textureFilterAnisotropic;
 extern int       maxAnisotropy;
 
-//
-// cvars
-//
-//extern cvar_t *r_stencilbits;			// number of desired stencil bits
-extern cvar_t *r_texturebits;			// number of desired texture bits
-										// 0 = use framebuffer depth
-										// 16 = use 16-bit textures
-										// 32 = use 32-bit textures
-										// all else = error
+extern cvar_t *r_texturebits;
 
 extern cvar_t *r_drawBuffer;
 
-extern cvar_t *r_allowExtensions;				// global enable/disable of OpenGL extensions
-extern cvar_t *r_ext_compressed_textures;		// these control use of specific extensions
+extern cvar_t *r_allowExtensions;
+extern cvar_t *r_ext_compressed_textures;
 extern cvar_t *r_ext_multitexture;
 extern cvar_t *r_ext_compiled_vertex_array;
 extern cvar_t *r_ext_texture_env_add;
@@ -266,31 +241,14 @@ qhandle_t RE_RegisterShader( const char *name );
 qhandle_t RE_RegisterShaderNoMip( const char *name );
 qhandle_t RE_RegisterShaderFromImage(const char *name, int lightmapIndex, image_t *image, qboolean mipRawImage);
 
-// font stuff
 void R_InitFreeType( void );
 void R_DoneFreeType( void );
 void RE_RegisterFont(const char *fontName, int pointSize, fontInfo_t *font);
-
-/*
-=============================================================
-
-IMAGE LOADERS
-
-=============================================================
-*/
 
 void R_LoadBMP( const char *name, byte **pic, int *width, int *height );
 void R_LoadJPG( const char *name, byte **pic, int *width, int *height );
 void R_LoadPCX( const char *name, byte **pic, int *width, int *height );
 void R_LoadPNG( const char *name, byte **pic, int *width, int *height );
 void R_LoadTGA( const char *name, byte **pic, int *width, int *height );
-
-/*
-====================================================================
-
-IMPLEMENTATION SPECIFIC FUNCTIONS
-
-====================================================================
-*/
 
 #endif

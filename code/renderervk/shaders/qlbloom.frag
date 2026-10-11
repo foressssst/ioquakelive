@@ -1,8 +1,5 @@
 #version 450
 
-// [QL] the light over the scene: with the scene at its own saturation and intensity the blend
-// gives scene * (1 - bloom) + bloom, so the scene itself is never read
-
 layout(set = 0, binding = 0) uniform sampler2D texture0;
 
 layout(location = 0) in vec2 frag_tex_coord;

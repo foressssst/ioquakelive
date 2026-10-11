@@ -19,82 +19,41 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-// cg_ents.c -- present snapshot entities, happens every single frame
-
 #include "cg_local.h"
 
-/*
-======================
-CG_PositionEntityOnTag
-
-Modifies the entities position and axis by the given
-tag location
-======================
-*/
 void CG_PositionEntityOnTag(refEntity_t* entity, const refEntity_t* parent, qhandle_t parentModel, char* tagName) {
     int i;
     orientation_t lerped;
 
-    // lerp the tag
     trap_R_LerpTag(&lerped, parentModel, parent->oldframe, parent->frame,
                    1.0 - parent->backlerp, tagName);
 
-    // FIXME: allow origin offsets along tag?
     VectorCopy(parent->origin, entity->origin);
     for (i = 0; i < 3; i++) {
         VectorMA(entity->origin, lerped.origin[i], parent->axis[i], entity->origin);
     }
 
-    // had to cast away the const to avoid compiler problems...
     MatrixMultiply(lerped.axis, ((refEntity_t*)parent)->axis, entity->axis);
     entity->backlerp = parent->backlerp;
 }
 
-/*
-======================
-CG_PositionRotatedEntityOnTag
-
-Modifies the entities position and axis by the given
-tag location
-======================
-*/
 void CG_PositionRotatedEntityOnTag(refEntity_t* entity, const refEntity_t* parent, qhandle_t parentModel, char* tagName) {
     int i;
     orientation_t lerped;
     vec3_t tempAxis[3];
 
-    // AxisClear( entity->axis );
-    //  lerp the tag
     trap_R_LerpTag(&lerped, parentModel, parent->oldframe, parent->frame,
                    1.0 - parent->backlerp, tagName);
 
-    // FIXME: allow origin offsets along tag?
     VectorCopy(parent->origin, entity->origin);
     for (i = 0; i < 3; i++) {
         VectorMA(entity->origin, lerped.origin[i], parent->axis[i], entity->origin);
     }
 
-    // had to cast away the const to avoid compiler problems...
     MatrixMultiply(entity->axis, lerped.axis, tempAxis);
     MatrixMultiply(tempAxis, ((refEntity_t*)parent)->axis, entity->axis);
 }
 
-/*
-==========================================================================
-
-FUNCTIONS CALLED EACH FRAME
-
-==========================================================================
-*/
-
-/*
-======================
-CG_SetEntitySoundPosition
-
-Also called by event processing code
-======================
-*/
 void CG_SetEntitySoundPosition(centity_t* cent) {
     if (cent->currentState.solid == SOLID_BMODEL) {
         vec3_t origin;
@@ -108,18 +67,6 @@ void CG_SetEntitySoundPosition(centity_t* cent) {
     }
 }
 
-
-/*
-===============
-CG_AddEffectLight
-
-[ioquakelive] One of the lights that only decorate: the muzzle flash, a rocket, an
-explosion, an item's glow. At r_dynamicLight 2 none of them is drawn, leaving only
-the lights that tell you something - who carries a flag, who carries quad - which
-CG_PlayerPowerups adds through CG_CarrierLight, for everyone but yourself. At 1 the
-carrier's light is lost among the rockets; at 2 any light you see is a carrier.
-===============
-*/
 void CG_AddEffectLight(const vec3_t org, float intensity, float r, float g, float b) {
     if (r_dynamicLight.integer == 2) {
         return;
@@ -127,19 +74,9 @@ void CG_AddEffectLight(const vec3_t org, float intensity, float r, float g, floa
     trap_R_AddLightToScene(org, intensity, r, g, b);
 }
 
-/*
-==================
-CG_EntityEffects
-
-Add continuous entity effects, like local entity emission and lighting
-==================
-*/
 static void CG_EntityEffects(centity_t* cent) {
-    // update sound origins
     CG_SetEntitySoundPosition(cent);
 
-    // add loop sound
-    // [QL] 0x10015516: with s_ambient off the map's loops stay quiet
     if (cent->currentState.loopSound && cg_ambient.integer) {
         if (cent->currentState.eType != ET_SPEAKER) {
             trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin,
@@ -150,7 +87,6 @@ static void CG_EntityEffects(centity_t* cent) {
         }
     }
 
-    // constant light glow
     if (cent->currentState.constantLight) {
         int cl;
         float i, r, g, b;
@@ -164,11 +100,6 @@ static void CG_EntityEffects(centity_t* cent) {
     }
 }
 
-/*
-==================
-CG_General
-==================
-*/
 static void CG_General(centity_t* cent) {
     refEntity_t ent;
     entityState_t* s1;
@@ -176,7 +107,6 @@ static void CG_General(centity_t* cent) {
 
     s1 = &cent->currentState;
 
-    // if set to invisible, skip
     if (!s1->modelindex) {
         return;
     }
@@ -198,9 +128,6 @@ static void CG_General(centity_t* cent) {
 
     AnglesToAxis(cent->lerpAngles, ent.axis);
 
-    // [QL] 0x10015745: race points. The next one is marked for the racer (the finish keeps its
-    // flag, a checkpoint turns blue) and gets a floating marker; during a run the other flags
-    // are hidden, all but the one after the next, and their pedestals stay.
     if (cgs.gametype == GT_RACE) {
         qboolean following = !(cg.snap->ps.eFlags & EF_SPECTATOR) || (cg.snap->ps.pm_flags & PMF_FOLLOW);
 
@@ -247,7 +174,6 @@ static void CG_General(centity_t* cent) {
 
         if (ent.hModel == cgs.media.raceFlagD || ent.hModel == cgs.media.raceFlagB ||
             ent.hModel == cgs.media.raceFlagF || ent.hModel == cgs.media.raceFlagG) {
-            // cg_itemFx 1 bobs the flag, 2 turns it the fast way
             if (cg_itemFx.integer & 1) {
                 ent.origin[2] += sin((double)(float)(cg.time & 0x3ff) * 6.2831854820251465 * 0.0009765625) * 6.0 + 4.0;
             }
@@ -257,8 +183,6 @@ static void CG_General(centity_t* cent) {
                 AxisCopy(cg.autoAxis, ent.axis);
             }
 
-            // a point on the floor stands on a domination pedestal: red under the finish,
-            // blue under the marked checkpoint
             if (!(s1->generic1 & 1)) {
                 refEntity_t pedestal;
 
@@ -280,9 +204,6 @@ static void CG_General(centity_t* cent) {
         }
     }
 
-    // [QL] 0x10015b7c: a domination point. Over the outline it stands on a pedestal in its
-    // owner's colour, the flag takes that colour too, a light flickers over it (harder while
-    // it is contested) and a ring the size of its capture radius pulses on the floor.
     if (cgs.gametype == GT_DOMINATION && s1->modelindex >= 1 && s1->modelindex <= 3) {
         int team = s1->modelindex2;
         float flicker = s1->weapon ? (float)(rand() & 0x1f) : (float)(rand() & 3);
@@ -353,16 +274,9 @@ static void CG_General(centity_t* cent) {
     }
 }
 
-/*
-==================
-CG_Speaker
-
-Speaker entities can automatically play sounds
-==================
-*/
 static void CG_Speaker(centity_t* cent) {
-    if (!cent->currentState.clientNum) {  // FIXME: use something other than clientNum...
-        return;                           // not auto triggering
+    if (!cent->currentState.clientNum) {
+        return;
     }
 
     if (cg.time < cent->miscTime) {
@@ -371,32 +285,13 @@ static void CG_Speaker(centity_t* cent) {
 
     trap_S_StartSound(NULL, cent->currentState.number, CHAN_ITEM, cgs.gameSounds[cent->currentState.eventParm]);
 
-    //	ent->s.frame = ent->wait * 10;
-    //	ent->s.clientNum = ent->random * 10;
     cent->miscTime = cg.time + cent->currentState.frame * 100 + cent->currentState.clientNum * 100 * crandom();
 }
 
 #define ITEM_TIMER_RADIUS 16.0f
 
-/*
-[QL] The binary does not turn its sprite: it hands the angle to the view's roll (0x1002b1a4) and
-lays the quad out with the texture's t upside down (0x1002d5b0), and the two together mirror the
-art about the line at -roll/2 rather than rotating it. RT_SPRITE turns an upright texture instead,
-and comes out at the same place for 180 - angle -- which is why the binary's 180 for the item's
-face means "the right way up". Both the faces and the wedges are symmetric across that mirror, so
-the only thing the mirror would have cost us is lost anyway.
-*/
 #define ITEM_TIMER_ROTATION(angle) (180.0f - (float)(angle))
 
-/*
-=================
-CG_ItemTimerSprite
-
-One piece of a respawn timer: a camera-facing sprite of radius 16 at the item, turned by its
-angle. Every gfx/2d/timer shader takes its alpha from the vertices and the faces also take their
-colour, so both the distance fade and the item's tint ride on shaderRGBA.
-=================
-*/
 static void CG_ItemTimerSprite(const vec3_t origin, qhandle_t shader, float rotation,
                                const vec3_t color, float alpha) {
     refEntity_t re;
@@ -417,18 +312,8 @@ static void CG_ItemTimerSprite(const vec3_t origin, qhandle_t shader, float rota
     trap_R_AddRefEntityToScene(&re);
 }
 
-/*
-=================
-CG_ItemTimerFace
-
-[QL] 0x1002db22..0x1002dc5d. The face a timer wears and the colour it is tinted with, chosen by
-the item's giType and giTag. Only items with itemTimer set ever get here, so the armours are the
-red, the yellow and the green one, and the only health is the mega.
-=================
-*/
 static void CG_ItemTimerFace(const gitem_t* item, qboolean teamItem, qhandle_t* shader,
                              vec3_t color) {
-    // a team's item hides which one it is behind a blank white face
     if (teamItem) {
         *shader = cgs.media.timerIcons[TIMER_ICON_UNKNOWN];
         VectorSet(color, 1.0f, 1.0f, 1.0f);
@@ -474,16 +359,15 @@ static void CG_ItemTimerFace(const gitem_t* item, qboolean teamItem, qhandle_t* 
         return;
     }
 
-    // the armours share one face and are told apart by the tint
     *shader = cgs.media.timerIcons[TIMER_ICON_ARMOR];
     switch (item->giTag) {
-    case 1:  // body: red
+    case 1:
         VectorSet(color, 1.0f, 0.0f, 0.0f);
         break;
-    case 2:  // combat: yellow
+    case 2:
         VectorSet(color, 1.0f, 1.0f, 0.0f);
         break;
-    case 3:  // jacket: green
+    case 3:
         VectorSet(color, 0.4f, 0.6875f, 0.285f);
         break;
     default:
@@ -492,21 +376,6 @@ static void CG_ItemTimerFace(const gitem_t* item, qboolean teamItem, qhandle_t* 
     }
 }
 
-/*
-=================
-CG_DrawItemTimer
-
-[QL] 0x1002db00, called from CG_Item (0x1001600b) before the item is skipped for
-being invisible. While an item is away its face floats where it was, with a ring of
-wedges counting the wait down. The server keeps sending the entity for this: on
-pickup g_items.c clears SVF_NOCLIENT and fills s.time, s.time2 and s.generic1.
-
-A wedge is five seconds, (s.time2 - remaining) / 5000 + 1 of them lit, the last
-with the pulsing *_current shader. The art follows how many there are: up to 5
-slice5, 6 or 7 slice7, 8 to 12 slice12, more slice24. Everything is 16 units across
-at the origin lifted 8, whole up to 256 units away and gone at 768.
-=================
-*/
 static void CG_DrawItemTimer(centity_t* cent, const gitem_t* item) {
     entityState_t* es = &cent->currentState;
     qhandle_t icon, slice, current;
@@ -514,25 +383,17 @@ static void CG_DrawItemTimer(centity_t* cent, const gitem_t* item) {
     float alpha, dist;
     int total, lit, art, angle, i;
 
-    // [QL] 0x1002db1a: the gate is cg_itemTimers -- its vmCvar lives at 0x10a64fe0 and the
-    // binary reads its .integer at 0x10a64fec -- not cg_itemFx. It was the other way round
-    // here, so turning item effects off took the timers with them.
-    //
-    // The binary does not look at es->time2 either: it divides by 5000 without checking. The
-    // guard below is ours, to avoid drawing zero slices.
     if (!cg_itemTimers.integer || !item->itemTimer || cg.time >= es->time || es->time2 <= 0) {
         return;
     }
 
     total = es->time2 / 5000;
     if (total < 1) {
-        // retail divides by this without looking; a wait under five seconds would fault there
         return;
     }
 
     CG_ItemTimerFace(item, (qboolean)(es->generic1 != 0), &icon, color);
 
-    // whole up to 256 units, gone at 768
     VectorCopy(es->pos.trBase, origin);
     origin[2] += 8.0f;
     VectorSubtract(origin, cg.refdef.vieworg, delta);
@@ -553,7 +414,6 @@ static void CG_DrawItemTimer(centity_t* cent, const gitem_t* item) {
     slice = cgs.media.timerSlices[art][0];
     current = cgs.media.timerSlices[art][1];
 
-    // the wedges keep their own colour, so they go out white
     angle = -(180 / total);
     for (i = 1; i <= lit; i++) {
         angle += 360 / total;
@@ -562,15 +422,6 @@ static void CG_DrawItemTimer(centity_t* cent, const gitem_t* item) {
     }
 }
 
-/*
-=================
-CG_PowerupPoiShader
-
-The icon each powerup gets, or the "incoming" one while it respawns.
-
-[QL] 0x10a5fbec and 0x10a5fbac, two tables indexed by the item's tag.
-=================
-*/
 static qhandle_t CG_PowerupPoiShader(int giTag, qboolean volviendo) {
     switch (giTag) {
         case PW_QUAD:
@@ -594,17 +445,6 @@ static qhandle_t CG_PowerupPoiShader(int giTag, qboolean volviendo) {
     }
 }
 
-/*
-=================
-CG_DrawPowerupPoi
-
-The marker over a powerup. It shows while the powerup is on the floor, and while it
-respawns once less than ten seconds remain.
-
-[QL] 0x100168f8. cg_powerupPOIs: 0 turns it off, 1 shows it only in line of sight, 2 --
-the stock value -- shows it through walls.
-=================
-*/
 static void CG_DrawPowerupPoi(centity_t* cent, const gitem_t* item) {
     entityState_t* es = &cent->currentState;
     floatingEffect_t* fx;
@@ -618,7 +458,7 @@ static void CG_DrawPowerupPoi(centity_t* cent, const gitem_t* item) {
 
     volviendo = (qboolean)(cg.time < es->time);
     if (volviendo && cg.time < es->time - 10000) {
-        return;  // todavia falta mucho
+        return;
     }
 
     shader = CG_PowerupPoiShader(item->giTag, volviendo);
@@ -656,18 +496,6 @@ static void CG_DrawPowerupPoi(centity_t* cent, const gitem_t* item) {
     fx->doFade = 0;
 }
 
-/*
-==================
-CG_Item
-==================
-*/
-/*
-==================
-CG_FlagMarkerAt
-
-[QL] One flag marker: a billboard 64 units over the flag, in the floating-effect pool.
-==================
-*/
 static void CG_FlagMarkerAt(centity_t* cent, const vec4_t color, qhandle_t shader) {
     floatingEffect_t* fx = CG_AllocFloatingEffect();
 
@@ -684,18 +512,6 @@ static void CG_FlagMarkerAt(centity_t* cent, const vec4_t color, qhandle_t shade
     fx->shader = shader;
 }
 
-/*
-==================
-CG_FlagMarker
-
-[QL] 0x10016147, from CG_Item for the flags. In CTF a flag at home, and in A&D once the
-round is under way, is marked by what the viewer's team does with it: the enemy's "attack",
-their own "defend" (in CTF only while the viewer is not carrying the enemy's, in A&D by
-which side attacks this turn), in the flag's colour. A flag lying away from its base is
-marked for both teams, and with its "dropped" icon for a spectator. All that waits on
-cg_flagPOIs. Anything else marks only the neutral flag, with "capture", and always.
-==================
-*/
 static void CG_FlagMarker(centity_t* cent, const gitem_t* item) {
     static const vec4_t white = {1.0f, 1.0f, 1.0f, 1.0f};
     static const vec4_t red = {1.0f, 0.2f, 0.2f, 1.0f};
@@ -804,16 +620,10 @@ static void CG_Item(centity_t* cent) {
     }
     item = &bg_itemlist[es->modelindex];
 
-    // [QL] the respawn timer stands where the item was, so it is drawn before the item itself is
-    // skipped for being invisible
     CG_DrawItemTimer(cent, item);
 
-    // [QL] 0x100168f8: and the powerup marker, which stays up while the powerup is gone
     CG_DrawPowerupPoi(cent, item);
 
-    // [QL] cgamex86.dll 0x10016026: retail reads cg_skipItems here, as a string, once per item
-    // and per frame, and draws nothing when it is "1". The timer above still stands, which is
-    // what makes the cvar useful: the pickups go and the clocks stay.
     {
         char skip[32];
 
@@ -827,8 +637,6 @@ static void CG_Item(centity_t* cent) {
         return;
     }
 
-    // [QL] 0x10016086: a flag standing is where it will be looked for, by the flag status bar
-    // and the carrier's marker; one being carried is NODRAW and keeps its last place
     if (item->giType == IT_TEAM) {
         if (item->giTag == PW_REDFLAG) {
             VectorCopy(cent->lerpOrigin, cg.flagOrigin[TEAM_RED]);
@@ -840,14 +648,6 @@ static void CG_Item(centity_t* cent) {
         CG_FlagMarker(cent, item);
     }
 
-    // [QL] cgamex86.dll 0x10016cab: a simple item is its icon as a sprite, and the three cvars
-    // beside cg_simpleItems shape it. It is lifted by cg_simpleItemsHeightOffset, except a rune,
-    // which is always lifted 10. cg_simpleItemsBob floats it instead: 1 floats every item, 2 (the
-    // default) only the ones with an item timer -- the armours from green up, the mega and the
-    // powerups -- around 10 units up, six of travel, a full cycle every 1024 ms. Bigger icons are
-    // raised by whatever cg_simpleItemsRadius is over its own default, so they keep their footing.
-    // Only the height moves: the bob is on the entity's own origin, so the icon, its light and its
-    // sound go together. Quake 3 drew a fixed radius 14 sprite at the origin and read none of this.
     if (cg_simpleItems.integer && item->giType != IT_TEAM) {
         float z = cent->lerpOrigin[2];
 
@@ -879,13 +679,11 @@ static void CG_Item(centity_t* cent) {
         return;
     }
 
-    // items bob up and down continuously
     scale = 0.005 + cent->currentState.number * 0.00001;
     cent->lerpOrigin[2] += 4 + cos((cg.time + 1000) * scale) * 4;
 
     memset(&ent, 0, sizeof(ent));
 
-    // autorotate at one of two speeds
     if (item->giType == IT_HEALTH) {
         VectorCopy(cg.autoAnglesFast, cent->lerpAngles);
         AxisCopy(cg.autoAxisFast, ent.axis);
@@ -895,9 +693,6 @@ static void CG_Item(centity_t* cent) {
     }
 
     wi = NULL;
-    // the weapons have their origin where they attatch to player
-    // models, so we need to offset them or they will rotate
-    // eccentricly
     if (item->giType == IT_WEAPON) {
         wi = &cg_weapons[item->giTag];
         cent->lerpOrigin[0] -=
@@ -913,7 +708,7 @@ static void CG_Item(centity_t* cent) {
             wi->weaponMidpoint[1] * ent.axis[1][2] +
             wi->weaponMidpoint[2] * ent.axis[2][2];
 
-        cent->lerpOrigin[2] += 8;  // an extra height boost
+        cent->lerpOrigin[2] += 8;
     }
 
     if (item->giType == IT_WEAPON && item->giTag == WP_RAILGUN) {
@@ -928,7 +723,6 @@ static void CG_Item(centity_t* cent) {
 
     ent.nonNormalizedAxes = qfalse;
 
-    // if just respawned, slowly scale up
     msec = cg.time - cent->miscTime;
     if (msec >= 0 && msec < ITEM_SCALEUP_TIME) {
         frac = (float)msec / ITEM_SCALEUP_TIME;
@@ -940,11 +734,8 @@ static void CG_Item(centity_t* cent) {
         frac = 1.0;
     }
 
-    // [QL] all items get minimum light so they are always visible
-    // (Q3 only applied this to weapons and armor)
     ent.renderfx |= RF_MINLIGHT;
 
-    // increase the size of the weapons when they are presented as items
     if (item->giType == IT_WEAPON) {
         VectorScale(ent.axis[0], 1.5, ent.axis[0]);
         VectorScale(ent.axis[1], 1.5, ent.axis[1]);
@@ -960,12 +751,10 @@ static void CG_Item(centity_t* cent) {
         ent.nonNormalizedAxes = qtrue;
     }
 
-    // [CPMA] cg_drawBrightWeapons can draw the weapons lying on the map as flat silhouettes
     if (item->giType == IT_WEAPON) {
         CG_BrightWeapon(&ent, item->giTag, -1, BRIGHTWEAPON_ON_MAP);
     }
 
-    // add to refresh list
     trap_R_AddRefEntityToScene(&ent);
 
     if (item->giType == IT_WEAPON && wi && wi->barrelModel) {
@@ -993,7 +782,6 @@ static void CG_Item(centity_t* cent) {
         trap_R_AddRefEntityToScene(&barrel);
     }
 
-    // accompanying rings / spheres for powerups
     if (!cg_simpleItems.integer) {
         vec3_t spinAngles;
 
@@ -1007,7 +795,6 @@ static void CG_Item(centity_t* cent) {
                 }
                 AnglesToAxis(spinAngles, ent.axis);
 
-                // scale up if respawning
                 if (frac != 1.0) {
                     VectorScale(ent.axis[0], frac, ent.axis[0]);
                     VectorScale(ent.axis[1], frac, ent.axis[1]);
@@ -1020,17 +807,6 @@ static void CG_Item(centity_t* cent) {
     }
 }
 
-//============================================================================
-
-/*
-===============
-CG_GrenadeColor
-
-[QL] 0x10015190: a grenade wears the upper colour of its owner's side when that side's weapon
-colour is forced, and cg_weaponColor_grenade otherwise. The viewer's own grenades are never
-forced; in FFA the owner's side comes from CG_ShouldForceTeamSkin.
-===============
-*/
 static void CG_GrenadeColor(const entityState_t* es, byte* color) {
     int viewer, owner, packed;
     qboolean teammate;
@@ -1057,28 +833,6 @@ static void CG_GrenadeColor(const entityState_t* es, byte* color) {
     color[3] = packed & 0xff;
 }
 
-/*
-===============
-CG_Missile
-===============
-*/
-/*
-=================
-CG_ProjectileLeadOffset
-
-[ioquakelive] Not retail's. Quake Live's projectiles leave the muzzle 5 units ahead
-(3 ducked) and are stepped forward 25 ms on the server, against Quake 3's 14 units
-and 50 ms, so a rocket's first frame is drawn at about 27 units instead of 59: it
-comes out of your chest and its smoke sits on the camera. This draws the projectile
-and its smoke further along, and only that - the missile, its damage and where it
-explodes are the server's. The offset fades out over the first 150 ms.
-
-Only the flight the projectile was fired with is drawn ahead: a grenade gets a new
-trTime on every bounce (G_BounceMissile, qagamex86.dll 0x1005b4f0). The offset is
-never longer than the way to the wall in front, so the drawn projectile meets the
-wall when the real one does.
-=================
-*/
 #define CG_PROJECTILE_LEAD 28.0f
 #define CG_PROJECTILE_LEAD_TIME 150.0f
 
@@ -1115,7 +869,6 @@ static void CG_Missile(centity_t* cent) {
     entityState_t* s1;
     const weaponInfo_t* weapon;
     vec3_t leadOffset;
-    //	int	col;
 
     s1 = &cent->currentState;
     if (s1->weapon >= WP_NUM_WEAPONS) {
@@ -1123,37 +876,16 @@ static void CG_Missile(centity_t* cent) {
     }
     weapon = &cg_weapons[s1->weapon];
 
-    // calculate the axis
     VectorCopy(s1->angles, cent->lerpAngles);
 
-    // add trails
     if (weapon->missileTrailFunc) {
         weapon->missileTrailFunc(cent, weapon);
     }
-    /*
-        if ( cent->currentState.modelindex == TEAM_RED ) {
-            col = 1;
-        }
-        else if ( cent->currentState.modelindex == TEAM_BLUE ) {
-            col = 2;
-        }
-        else {
-            col = 0;
-        }
-
-        // add dynamic light
-        if ( weapon->missileDlight ) {
-            CG_AddEffectLight(cent->lerpOrigin, weapon->missileDlight,
-                weapon->missileDlightColor[col][0], weapon->missileDlightColor[col][1], weapon->missileDlightColor[col][2] );
-        }
-    */
-    // add dynamic light
     if (weapon->missileDlight) {
         CG_AddEffectLight(cent->lerpOrigin, weapon->missileDlight,
                                weapon->missileDlightColor[0], weapon->missileDlightColor[1], weapon->missileDlightColor[2]);
     }
 
-    // add missile sound
     if (weapon->missileSound) {
         vec3_t velocity;
 
@@ -1162,7 +894,6 @@ static void CG_Missile(centity_t* cent) {
         trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, velocity, weapon->missileSound);
     }
 
-    // create the render entity
     memset(&ent, 0, sizeof(ent));
     CG_ProjectileLeadOffset(cent, leadOffset);
     VectorAdd(cent->lerpOrigin, leadOffset, ent.origin);
@@ -1177,7 +908,6 @@ static void CG_Missile(centity_t* cent) {
         return;
     }
 
-    // flicker between two skins
     ent.skinNum = cg.clientFrame & 1;
     ent.hModel = weapon->missileModel;
     ent.renderfx = weapon->missileRenderfx | RF_NOSHADOW;
@@ -1188,8 +918,6 @@ static void CG_Missile(centity_t* cent) {
         }
     }
 
-    // [QL] grenades are tinted: by side when a weapon colour is forced, else by
-    // cg_weaponColor_grenade (0x1001779a)
     if (s1->weapon == WP_GRENADE_LAUNCHER) {
         if (cg_forceTeamWeaponColor.integer == 1 || cg_forceEnemyWeaponColor.integer == 1) {
             CG_GrenadeColor(s1, ent.shaderRGBA);
@@ -1201,12 +929,10 @@ static void CG_Missile(centity_t* cent) {
         }
     }
 
-    // convert direction of travel into axis
     if (VectorNormalize2(s1->pos.trDelta, ent.axis[0]) == 0) {
         ent.axis[0][2] = 1;
     }
 
-    // spin as it moves
     if (s1->pos.trType != TR_STATIONARY) {
         RotateAroundDirection(ent.axis, cg.time / 4);
     } else {
@@ -1217,17 +943,9 @@ static void CG_Missile(centity_t* cent) {
         }
     }
 
-    // add to refresh list, possibly with quad glow
     CG_AddRefEntityWithPowerups(&ent, s1, TEAM_FREE);
 }
 
-/*
-===============
-CG_Grapple
-
-This is called when the grapple is sitting up against the wall
-===============
-*/
 static void CG_Grapple(centity_t* cent) {
     refEntity_t ent;
     entityState_t* s1;
@@ -1239,25 +957,20 @@ static void CG_Grapple(centity_t* cent) {
     }
     weapon = &cg_weapons[s1->weapon];
 
-    // calculate the axis
     VectorCopy(s1->angles, cent->lerpAngles);
 
-    // FIXME add grapple pull sound here..?
     if (weapon->missileSound) {
         trap_S_AddLoopingSound(cent->currentState.number, cent->lerpOrigin, vec3_origin, weapon->missileSound);
     }
 
-    // create the render entity
     memset(&ent, 0, sizeof(ent));
     VectorCopy(cent->lerpOrigin, ent.origin);
     VectorCopy(cent->lerpOrigin, ent.oldorigin);
 
-    // flicker between two skins
     ent.skinNum = cg.clientFrame & 1;
     ent.hModel = weapon->missileModel;
     ent.renderfx = weapon->missileRenderfx | RF_NOSHADOW;
 
-    // convert direction of travel into axis
     if (VectorNormalize2(s1->pos.trDelta, ent.axis[0]) == 0) {
         ent.axis[0][2] = 1;
     }
@@ -1265,18 +978,12 @@ static void CG_Grapple(centity_t* cent) {
     trap_R_AddRefEntityToScene(&ent);
 }
 
-/*
-===============
-CG_Mover
-===============
-*/
 static void CG_Mover(centity_t* cent) {
     refEntity_t ent;
     entityState_t* s1;
 
     s1 = &cent->currentState;
 
-    // create the render entity
     memset(&ent, 0, sizeof(ent));
     VectorCopy(cent->lerpOrigin, ent.origin);
     VectorCopy(cent->lerpOrigin, ent.oldorigin);
@@ -1284,20 +991,16 @@ static void CG_Mover(centity_t* cent) {
 
     ent.renderfx = RF_NOSHADOW;
 
-    // flicker between two skins (FIXME?)
     ent.skinNum = (cg.time >> 6) & 1;
 
-    // get the model, either as a bmodel or a modelindex
     if (s1->solid == SOLID_BMODEL) {
         ent.hModel = cgs.inlineDrawModel[s1->modelindex];
     } else {
         ent.hModel = cgs.gameModels[s1->modelindex];
     }
 
-    // add to refresh list
     trap_R_AddRefEntityToScene(&ent);
 
-    // add the secondary model
     if (s1->modelindex2) {
         ent.skinNum = 0;
         ent.hModel = cgs.gameModels[s1->modelindex2];
@@ -1305,24 +1008,6 @@ static void CG_Mover(centity_t* cent) {
     }
 }
 
-/*
-===============
-CG_Beam
-
-Also called as an event.
-
-[QL] Where Q3 draws an immediate RT_BEAM refEntity, QL draws the target_laser beam
-(eType ET_BEAM, still emitted by SP_target_laser) as a short-lived fading rail-core
-local entity: from the entity's pos.trBase to its origin2, dark red, fading over
-500 ms.
-
-The binary stores leType 7. QL's leType_t inserts an extra LE_MOVE_SCALE_FADE_RGB at
-index 5, so its numbering is shifted one past Q3 and 7 is this tree's LE_FADE_RGB.
-The binary's handler shares the CG_SpawnEffect symbol with an unrelated RT_MODEL
-teleport-dust effect at 0x10013140; different functions.
-===============
-*/
-// Address: 0x10017c60
 void CG_Beam(centity_t* cent) {
     localEntity_t* le;
     entityState_t* s1;
@@ -1340,64 +1025,43 @@ void CG_Beam(centity_t* cent) {
     le->refEntity.shaderTime = cg.time / 1000.0f;
     le->refEntity.radius = 256.0;
 
-    // beam endpoints: pos.trBase -> origin2 (target_laser trace endpoint)
     VectorCopy(s1->pos.trBase, le->refEntity.origin);
     VectorCopy(s1->origin2, le->refEntity.oldorigin);
 
-    // dark-red beam colour, fully opaque; LE_FADE_RGB fades it out over 500 ms
     le->color[0] = 0.75;
     le->color[1] = 0.0;
     le->color[2] = 0.0;
     le->color[3] = 1.0;
 }
 
-/*
-===============
-CG_Portal
-===============
-*/
 static void CG_Portal(centity_t* cent) {
     refEntity_t ent;
     entityState_t* s1;
 
     s1 = &cent->currentState;
 
-    // create the render entity
     memset(&ent, 0, sizeof(ent));
     VectorCopy(cent->lerpOrigin, ent.origin);
     VectorCopy(s1->origin2, ent.oldorigin);
     ByteToDir(s1->eventParm, ent.axis[0]);
     PerpendicularVector(ent.axis[1], ent.axis[0]);
 
-    // negating this tends to get the directions like they want
-    // we really should have a camera roll value
     VectorSubtract(vec3_origin, ent.axis[1], ent.axis[1]);
 
     CrossProduct(ent.axis[0], ent.axis[1], ent.axis[2]);
     ent.reType = RT_PORTALSURFACE;
     ent.oldframe = s1->powerups;
-    ent.frame = s1->frame;                      // rotation speed
-    ent.skinNum = s1->clientNum / 256.0 * 360;  // roll offset
+    ent.frame = s1->frame;
+    ent.skinNum = s1->clientNum / 256.0 * 360;
 
-    // add to refresh list
     trap_R_AddRefEntityToScene(&ent);
 }
 
-/*
-================
-CG_CreateRotationMatrix
-================
-*/
 void CG_CreateRotationMatrix(vec3_t angles, vec3_t matrix[3]) {
     AngleVectors(angles, matrix[0], matrix[1], matrix[2]);
     VectorInverse(matrix[1]);
 }
 
-/*
-================
-CG_TransposeMatrix
-================
-*/
 void CG_TransposeMatrix(vec3_t matrix[3], vec3_t transpose[3]) {
     int i, j;
     for (i = 0; i < 3; i++) {
@@ -1407,11 +1071,6 @@ void CG_TransposeMatrix(vec3_t matrix[3], vec3_t transpose[3]) {
     }
 }
 
-/*
-================
-CG_RotatePoint
-================
-*/
 void CG_RotatePoint(vec3_t point, vec3_t matrix[3]) {
     vec3_t tvec;
 
@@ -1421,13 +1080,6 @@ void CG_RotatePoint(vec3_t point, vec3_t matrix[3]) {
     point[2] = DotProduct(matrix[2], tvec);
 }
 
-/*
-=========================
-CG_AdjustPositionForMover
-
-Also called by client movement prediction code
-=========================
-*/
 void CG_AdjustPositionForMover(const vec3_t in, int moverNum, int fromTime, int toTime, vec3_t out, vec3_t angles_in, vec3_t angles_out) {
     centity_t* cent;
     vec3_t oldOrigin, origin, deltaOrigin;
@@ -1457,7 +1109,6 @@ void CG_AdjustPositionForMover(const vec3_t in, int moverNum, int fromTime, int 
     VectorSubtract(origin, oldOrigin, deltaOrigin);
     VectorSubtract(angles, oldAngles, deltaAngles);
 
-    // origin change when on a rotating object
     CG_CreateRotationMatrix(deltaAngles, transpose);
     CG_TransposeMatrix(transpose, matrix);
     VectorSubtract(in, oldOrigin, org);
@@ -1470,25 +1121,16 @@ void CG_AdjustPositionForMover(const vec3_t in, int moverNum, int fromTime, int 
     VectorAdd(angles_in, deltaAngles, angles_out);
 }
 
-/*
-=============================
-CG_InterpolateEntityPosition
-=============================
-*/
 static void CG_InterpolateEntityPosition(centity_t* cent) {
     vec3_t current, next;
     float f;
 
-    // it would be an internal error to find an entity that interpolates without
-    // a snapshot ahead of the current one
     if (cg.nextSnap == NULL) {
         CG_Error("CG_InterpoateEntityPosition: cg.nextSnap == NULL");
     }
 
     f = cg.frameInterpolation;
 
-    // this will linearize a sine or parabolic curve, but it is important
-    // to not extrapolate player positions if more recent data is available
     BG_EvaluateTrajectory(&cent->currentState.pos, cg.snap->serverTime, current);
     BG_EvaluateTrajectory(&cent->nextState.pos, cg.nextSnap->serverTime, next);
 
@@ -1504,21 +1146,8 @@ static void CG_InterpolateEntityPosition(centity_t* cent) {
     cent->lerpAngles[2] = LerpAngle(current[2], next[2], f);
 }
 
-/*
-===============
-CG_CalcEntityLerpPositions
-
-[QL] cgamex86.dll 0x10018190, which is Unlagged's. There is no cg_smoothClients. A player that
-cannot be interpolated, because no snapshot is ahead of cg.time yet as under a negative
-cl_timeNudge, is carried along its velocity for one server frame instead of standing where the
-last snapshot left him. A missile is drawn ahead of where the server has it: one's own by a
-server frame, and the others' by cg_projectileNudge more, or by the ping with
-cg_autoProjectileNudge. Grenades and mines of the others are left where they are.
-===============
-*/
 static void CG_CalcEntityLerpPositions(centity_t* cent) {
-    static int lastNudge;  // 0x10abaadc
-    // sv_fps comes from the server and is never 0 there
+    static int lastNudge;
     int frameMsec = cg_svFps.integer > 0 ? (int)(1000.0f / cg_svFps.integer) : 0;
     int timeshift = 0;
 
@@ -1527,15 +1156,12 @@ static void CG_CalcEntityLerpPositions(centity_t* cent) {
         return;
     }
 
-    // first see if we can interpolate between two snaps for
-    // linear extrapolated clients
     if (cent->interpolate && cent->currentState.pos.trType == TR_LINEAR_STOP &&
         cent->currentState.number < MAX_CLIENTS) {
         CG_InterpolateEntityPosition(cent);
         return;
     }
 
-    // interpolating failed, so extrapolate
     if (cent->currentState.number < MAX_CLIENTS &&
         cent->currentState.clientNum != cg.predictedPlayerState.clientNum) {
         cent->currentState.pos.trType = TR_LINEAR_STOP;
@@ -1551,7 +1177,6 @@ static void CG_CalcEntityLerpPositions(centity_t* cent) {
             int nudge;
 
             if (cg_autoProjectileNudge.integer) {
-                // the ping, and once there is one it is kept: retail's own test never lets go of it
                 nudge = cg.snap->ping;
                 if (lastNudge != 0 && lastNudge != nudge) {
                     nudge = lastNudge;
@@ -1569,7 +1194,6 @@ static void CG_CalcEntityLerpPositions(centity_t* cent) {
         }
     }
 
-    // just use the current frame and evaluate as best we can
     BG_EvaluateTrajectory(&cent->currentState.pos, cg.time + timeshift, cent->lerpOrigin);
     BG_EvaluateTrajectory(&cent->currentState.apos, cg.time + timeshift, cent->lerpAngles);
 
@@ -1580,7 +1204,6 @@ static void CG_CalcEntityLerpPositions(centity_t* cent) {
         BG_EvaluateTrajectory(&cent->currentState.pos, cg.time, lastOrigin);
         CG_Trace(&tr, lastOrigin, vec3_origin, vec3_origin, cent->lerpOrigin, cent->currentState.number, MASK_SHOT);
 
-        // don't let the projectile go through the floor
         if (tr.fraction < 1.0f) {
             cent->lerpOrigin[0] = lastOrigin[0] + tr.fraction * (cent->lerpOrigin[0] - lastOrigin[0]);
             cent->lerpOrigin[1] = lastOrigin[1] + tr.fraction * (cent->lerpOrigin[1] - lastOrigin[1]);
@@ -1588,24 +1211,12 @@ static void CG_CalcEntityLerpPositions(centity_t* cent) {
         }
     }
 
-    // adjust for riding a mover if it wasn't rolled into the predicted
-    // player state
     if (cent != &cg.predictedPlayerEntity) {
         CG_AdjustPositionForMover(cent->lerpOrigin, cent->currentState.groundEntityNum,
                                   cg.snap->serverTime, cg.time, cent->lerpOrigin, cent->lerpAngles, cent->lerpAngles);
     }
 }
 
-/*
-===============
-CG_TeamBase
-
-[QL] 0x100183e0. CTF and A&D stand the flag bases. One flag puts the harvester in the team's
-skin on the red and blue bases and the neutral flag base in the middle. Overload has the
-obelisk, and harvester its receptacles, whose place 16 units up is kept for the carrier's
-marker and the flag status bar.
-===============
-*/
 static void CG_TeamBase(centity_t* cent) {
     refEntity_t model;
     vec3_t angles;
@@ -1613,7 +1224,6 @@ static void CG_TeamBase(centity_t* cent) {
     float c;
 
     if (cgs.gametype == GT_CTF || cgs.gametype == GT_AD) {
-        // show the flag base
         memset(&model, 0, sizeof(model));
         model.reType = RT_MODEL;
         VectorCopy(cent->lerpOrigin, model.lightingOrigin);
@@ -1644,7 +1254,6 @@ static void CG_TeamBase(centity_t* cent) {
         }
         trap_R_AddRefEntityToScene(&model);
     } else if (cgs.gametype == GT_OBELISK) {
-        // show the obelisk
         memset(&model, 0, sizeof(model));
         model.reType = RT_MODEL;
         VectorCopy(cent->lerpOrigin, model.lightingOrigin);
@@ -1653,27 +1262,21 @@ static void CG_TeamBase(centity_t* cent) {
 
         model.hModel = cgs.media.overloadBaseModel;
         trap_R_AddRefEntityToScene(&model);
-        // if hit
         if (cent->currentState.frame == 1) {
-            // show hit model
-            // modelindex2 is the health value of the obelisk
             c = cent->currentState.modelindex2;
             model.shaderRGBA[0] = 0xff;
             model.shaderRGBA[1] = c;
             model.shaderRGBA[2] = c;
             model.shaderRGBA[3] = 0xff;
-            //
             model.hModel = cgs.media.overloadEnergyModel;
             trap_R_AddRefEntityToScene(&model);
         }
-        // if respawning
         if (cent->currentState.frame == 2) {
             if (!cent->miscTime) {
                 cent->miscTime = cg.time;
             }
             t = cg.time - cent->miscTime;
             h = (cg_obeliskRespawnDelay.integer - 5) * 1000;
-            //
             if (t > h) {
                 c = (float)(t - h) / h;
                 if (c > 1)
@@ -1681,9 +1284,7 @@ static void CG_TeamBase(centity_t* cent) {
             } else {
                 c = 0;
             }
-            // show the lights
             AnglesToAxis(cent->currentState.angles, model.axis);
-            // [QL] 0x10018670: rounded, not cut
             model.shaderRGBA[0] = (byte)(int)(c * 255.0f + 0.5f);
             model.shaderRGBA[1] = model.shaderRGBA[0];
             model.shaderRGBA[2] = model.shaderRGBA[0];
@@ -1691,7 +1292,6 @@ static void CG_TeamBase(centity_t* cent) {
 
             model.hModel = cgs.media.overloadLightsModel;
             trap_R_AddRefEntityToScene(&model);
-            // show the target
             if (t > h) {
                 if (!cent->muzzleFlashTime) {
                     trap_S_StartSound(cent->lerpOrigin, ENTITYNUM_NONE, CHAN_BODY, cgs.media.obeliskRespawnSound);
@@ -1709,26 +1309,21 @@ static void CG_TeamBase(centity_t* cent) {
                 model.shaderRGBA[1] = 0xff;
                 model.shaderRGBA[2] = 0xff;
                 model.shaderRGBA[3] = 0xff;
-                //
                 model.origin[2] += 56;
                 model.hModel = cgs.media.overloadTargetModel;
                 trap_R_AddRefEntityToScene(&model);
             } else {
-                // FIXME: show animated smoke
             }
         } else {
             cent->miscTime = 0;
             cent->muzzleFlashTime = 0;
-            // modelindex2 is the health value of the obelisk
             c = cent->currentState.modelindex2;
             model.shaderRGBA[0] = 0xff;
             model.shaderRGBA[1] = c;
             model.shaderRGBA[2] = c;
             model.shaderRGBA[3] = 0xff;
-            // show the lights
             model.hModel = cgs.media.overloadLightsModel;
             trap_R_AddRefEntityToScene(&model);
-            // show the target
             model.origin[2] += 56;
             model.hModel = cgs.media.overloadTargetModel;
             trap_R_AddRefEntityToScene(&model);
@@ -1736,7 +1331,6 @@ static void CG_TeamBase(centity_t* cent) {
     } else if (cgs.gametype == GT_HARVESTER) {
         vec3_t receptacle;
 
-        // show harvester model
         memset(&model, 0, sizeof(model));
         model.reType = RT_MODEL;
         VectorCopy(cent->lerpOrigin, model.lightingOrigin);
@@ -1762,22 +1356,13 @@ static void CG_TeamBase(centity_t* cent) {
     }
 }
 
-/*
-===============
-CG_AddCEntity
-
-===============
-*/
 static void CG_AddCEntity(centity_t* cent) {
-    // event-only entities will have been dealt with already
     if (cent->currentState.eType >= ET_EVENTS) {
         return;
     }
 
-    // calculate the current origin
     CG_CalcEntityLerpPositions(cent);
 
-    // add automatic effects
     CG_EntityEffects(cent);
 
     switch (cent->currentState.eType) {
@@ -1810,7 +1395,6 @@ static void CG_AddCEntity(centity_t* cent) {
             CG_Portal(cent);
             break;
         case ET_SPEAKER:
-            // [QL] 0x10018b6e: a speaker is the map talking, so s_ambient decides
             if (cg_ambient.integer) {
                 CG_Speaker(cent);
             }
@@ -1824,18 +1408,11 @@ static void CG_AddCEntity(centity_t* cent) {
     }
 }
 
-/*
-===============
-CG_AddPacketEntities
-
-===============
-*/
 void CG_AddPacketEntities(void) {
     int num;
     centity_t* cent;
     playerState_t* ps;
 
-    // set cg.frameInterpolation
     if (cg.nextSnap) {
         int delta;
 
@@ -1846,11 +1423,9 @@ void CG_AddPacketEntities(void) {
             cg.frameInterpolation = (float)(cg.time - cg.snap->serverTime) / delta;
         }
     } else {
-        cg.frameInterpolation = 0;  // actually, it should never be used, because
-                                    // no entities should be marked as interpolating
+        cg.frameInterpolation = 0;
     }
 
-    // the auto-rotating items will all have the same axis
     cg.autoAngles[0] = 0;
     cg.autoAngles[1] = (cg.time & 2047) * 360 / 2048.0;
     cg.autoAngles[2] = 0;
@@ -1862,12 +1437,8 @@ void CG_AddPacketEntities(void) {
     AnglesToAxis(cg.autoAngles, cg.autoAxis);
     AnglesToAxis(cg.autoAnglesFast, cg.autoAxisFast);
 
-    // generate and add the entity from the playerstate
     ps = &cg.predictedPlayerState;
     BG_PlayerStateToEntityState(ps, &cg.predictedPlayerEntity.currentState, qfalse);
-    // [QL] 0x10018cf0: following, the playerState is a spectator's (the server puts
-    // PM_SPECTATOR back, qagamex86 0x1003550c) and comes out invisible, so retail draws
-    // the followed player anyway, dead body included, unless gibbed
     if ((ps->pm_flags & PMF_FOLLOW) && ps->stats[STAT_HEALTH] > GIB_HEALTH) {
         CG_CalcEntityLerpPositions(&cg.predictedPlayerEntity);
         CG_EntityEffects(&cg.predictedPlayerEntity);
@@ -1876,10 +1447,8 @@ void CG_AddPacketEntities(void) {
         CG_AddCEntity(&cg.predictedPlayerEntity);
     }
 
-    // lerp the non-predicted value for lightning gun origins
     CG_CalcEntityLerpPositions(&cg_entities[cg.snap->ps.clientNum]);
 
-    // add each entity sent over by the server
     for (num = 0; num < cg.snap->numEntities; num++) {
         cent = &cg_entities[cg.snap->entities[num].number];
         CG_AddCEntity(cent);

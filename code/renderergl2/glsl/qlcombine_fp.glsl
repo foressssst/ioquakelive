@@ -1,16 +1,6 @@
-// the scene
 uniform sampler2D u_TextureMap;
-// the blurred bright pass
 uniform sampler2D u_LevelsMap;
 
-// [QL] the bloom's last pass: the bloom and the scene, each with its saturation and intensity
-//   u_Color.x  r_bloomSaturation
-//   u_Color.y  r_bloomSceneSaturation
-//   u_Color.z  r_bloomIntensity
-//   u_Color.w  r_bloomSceneIntensity
-// With BLOOM_ONLY the shader reads the bloom from u_TextureMap and gives only its part, for a blend
-// of one and one minus the source colour over the scene: with the scene's saturation and intensity
-// at 1 that is the same sum, without reading the scene or copying the result back.
 uniform vec4      u_Color;
 
 varying vec2      var_TexCoords;

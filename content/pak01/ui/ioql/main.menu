@@ -14,13 +14,6 @@
         shadowColor     0.1 0.1 0.1 0.25
     }
 
-    // =============================================
-    // MAIN TITLE SCREEN
-    // =============================================
-    // The front end: one owner-draw, drawn by code/ui/ui_home.c the way retail's
-    // browser draws it. The items that follow are what the old menu had; they stay
-    // out of the way at negative coordinates so the bindings that name them still
-    // resolve, and nothing of them shows.
     menuDef {
         name "main"
         fullScreen MENU_TRUE
@@ -42,17 +35,13 @@
         itemDef {
             name home
             type ITEM_TYPE_OWNERDRAW
-            ownerdraw 602 // UI_HOME
+            ownerdraw 602
             rect -2000 -1000 4640 2480
             visible 1
         }
 
     }
 
-    // =============================================
-    // START MATCH
-    // retail's web page; code/ui/ui_startmatch.c draws and runs it
-    // =============================================
     menuDef {
         name "startmatch"
         background "ui/assets/backscreen_smoke"
@@ -61,7 +50,7 @@
         rect 0 0 640 480
         visible MENU_FALSE
         focusColor 1 .75 0 1
-        popup // clicks beside the 4:3 area reach the page too
+        popup
 
         onOpen { uiScript startMatchOpen }
         onESC { close startmatch ; open main }
@@ -69,23 +58,19 @@
         itemDef {
             name startmatch
             type ITEM_TYPE_OWNERDRAW
-            ownerdraw 600 // UI_STARTMATCH
+            ownerdraw 600
             rect -2000 -1000 4640 2480
             visible 1
         }
     }
 
-    // =============================================
-    // MATCH BROWSER
-    // la lista de servidores que da Steam; code/ui/ui_browser.c la dibuja
-    // =============================================
     menuDef {
         name "browser"
         fullScreen MENU_TRUE
         rect 0 0 640 480
         visible MENU_FALSE
         focusColor 1 .75 0 1
-        popup // clicks beside the 4:3 area reach the page too
+        popup
 
         onOpen { uiScript browserOpen }
         onESC { close browser ; open main }
@@ -93,23 +78,19 @@
         itemDef {
             name browser
             type ITEM_TYPE_OWNERDRAW
-            ownerdraw 605 // UI_BROWSER
+            ownerdraw 605
             rect -2000 -1000 4640 2480
             visible 1
         }
     }
 
-    // =============================================
-    // TRAINING CENTER
-    // retail's #play/training page; code/ui/ui_training.c draws and runs it
-    // =============================================
     menuDef {
         name "training"
         fullScreen MENU_TRUE
         rect 0 0 640 480
         visible MENU_FALSE
         focusColor 1 .75 0 1
-        popup // clicks beside the 4:3 area reach the page too
+        popup
 
         onOpen { uiScript trainingOpen }
         onESC { close training ; open main }
@@ -117,23 +98,19 @@
         itemDef {
             name training
             type ITEM_TYPE_OWNERDRAW
-            ownerdraw 604 // UI_TRAINING
+            ownerdraw 604
             rect -2000 -1000 4640 2480
             visible 1
         }
     }
 
-    // =============================================
-    // CAREER STATS
-    // retail's #stats/profile/<steamid> page; code/ui/ui_stats.c draws and runs it
-    // =============================================
     menuDef {
         name "stats"
         fullScreen MENU_TRUE
         rect 0 0 640 480
         visible MENU_FALSE
         focusColor 1 .75 0 1
-        popup // clicks beside the 4:3 area reach the page too
+        popup
 
         onOpen { uiScript statsOpen }
         onESC { close stats ; open main }
@@ -141,23 +118,19 @@
         itemDef {
             name stats
             type ITEM_TYPE_OWNERDRAW
-            ownerdraw 606 // UI_STATS
+            ownerdraw 606
             rect -2000 -1000 4640 2480
             visible 1
         }
     }
 
-    // =============================================
-    // LEGAL NOTICES
-    // retail's #legal-notices page; code/ui/ui_legal.c draws and runs it
-    // =============================================
     menuDef {
         name "legal"
         fullScreen MENU_TRUE
         rect 0 0 640 480
         visible MENU_FALSE
         focusColor 1 .75 0 1
-        popup // clicks beside the 4:3 area reach the page too
+        popup
 
         onOpen { uiScript legalOpen }
         onESC { close legal ; open main }
@@ -165,23 +138,19 @@
         itemDef {
             name legal
             type ITEM_TYPE_OWNERDRAW
-            ownerdraw 608 // UI_LEGAL
+            ownerdraw 608
             rect -2000 -1000 4640 2480
             visible 1
         }
     }
 
-    // =============================================
-    // RECENT MATCHES
-    // retail's #stats/matches pages; code/ui/ui_matches.c draws and runs them
-    // =============================================
     menuDef {
         name "matches"
         fullScreen MENU_TRUE
         rect 0 0 640 480
         visible MENU_FALSE
         focusColor 1 .75 0 1
-        popup // clicks beside the 4:3 area reach the page too
+        popup
 
         onOpen { uiScript matchesOpen }
         onESC { close matches ; open main }
@@ -189,23 +158,19 @@
         itemDef {
             name matches
             type ITEM_TYPE_OWNERDRAW
-            ownerdraw 607 // UI_MATCHES
+            ownerdraw 607
             rect -2000 -1000 4640 2480
             visible 1
         }
     }
 
-    // =============================================
-    // SETTINGS
-    // retail hands this to the web browser; code/ui/ui_settings.c draws and runs it
-    // =============================================
     menuDef {
         name "settings"
         fullScreen MENU_TRUE
         rect 0 0 640 480
         visible MENU_FALSE
         focusColor 1 .75 0 1
-        popup // clicks beside the 4:3 area reach the page too
+        popup
 
         onOpen { uiScript settingsOpen }
         onESC { uiScript settingsClose }
@@ -213,7 +178,7 @@
         itemDef {
             name settings
             type ITEM_TYPE_OWNERDRAW
-            ownerdraw 601 // UI_SETTINGS
+            ownerdraw 601
             rect -2000 -1000 4640 2480
             visible 1
         }

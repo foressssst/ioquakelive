@@ -19,13 +19,10 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-
-// this is only used for visualization tools in cm_ debug functions
-
 typedef struct
 {
     int numpoints;
-    vec3_t p[4];  // variable sized
+    vec3_t p[4];
 } winding_t;
 
 #define MAX_POINTS_ON_WINDING 64
@@ -39,7 +36,6 @@ typedef struct
 
 #define MAX_MAP_BOUNDS 65535
 
-// you can define on_epsilon in the makefile as tighter
 #ifndef ON_EPSILON
 #define ON_EPSILON 0.1f
 #endif
@@ -62,6 +58,5 @@ void WindingBounds(winding_t* w, vec3_t mins, vec3_t maxs);
 void AddWindingToConvexHull(winding_t* w, winding_t** hull, vec3_t normal);
 
 void ChopWindingInPlace(winding_t** w, vec3_t normal, vec_t dist, vec_t epsilon);
-// frees the original if clipped
 
 void pw(winding_t* w);

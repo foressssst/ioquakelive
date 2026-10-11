@@ -20,7 +20,6 @@ codes and sets the per-vertex colour.
 C89.  No GL, no engine dependencies beyond tr_stbtt.
 ===========================================================================
 */
-
 #ifndef __TR_FONTSTASH_H__
 #define __TR_FONTSTASH_H__
 
@@ -32,15 +31,13 @@ enum FONSflags {
 };
 
 enum FONSalign {
-    // Horizontal align
-    FONS_ALIGN_LEFT = 1 << 0, // Default
+    FONS_ALIGN_LEFT = 1 << 0,
     FONS_ALIGN_CENTER = 1 << 1,
     FONS_ALIGN_RIGHT = 1 << 2,
-    // Vertical align
     FONS_ALIGN_TOP = 1 << 3,
     FONS_ALIGN_MIDDLE = 1 << 4,
     FONS_ALIGN_BOTTOM = 1 << 5,
-    FONS_ALIGN_BASELINE = 1 << 6 // Default
+    FONS_ALIGN_BASELINE = 1 << 6
 };
 
 enum FONSglyphBitmap {
@@ -49,20 +46,14 @@ enum FONSglyphBitmap {
 };
 
 enum FONSerrorCode {
-    // Font atlas is full.
     FONS_ATLAS_FULL = 1,
-    // Scratch memory used to render glyphs is full, requested size reported in 'val', you may need to bump up FONS_SCRATCH_BUF_SIZE.
     FONS_SCRATCH_FULL = 2,
-    // Calls to fonsPushState has created too large stack, if you need deep state stack bump up FONS_MAX_STATES.
     FONS_STATES_OVERFLOW = 3,
-    // Trying to pop too many states fonsPopState().
     FONS_STATES_UNDERFLOW = 4
 };
 
-// QL: draw-time flags (last arg of RE_Font_DrawString).  These bit values must
-// match TEXT_* in code/qcommon/q_shared.h (the game-module-facing contract).
-#define FONS_TEXT_LITERAL 0x40000000   // draw '^' colour codes as literal glyphs
-#define FONS_TEXT_NORECOLOR 0x20000000 // skip '^' colour codes without recolouring
+#define FONS_TEXT_LITERAL 0x40000000
+#define FONS_TEXT_NORECOLOR 0x20000000
 
 typedef struct FONSparams {
     int width, height;
@@ -73,8 +64,6 @@ typedef struct FONSparams {
     void (*renderUpdate)(void *uptr, int *rect, const unsigned char *data);
     void (*renderDraw)(void *uptr, const float *verts, const float *tcoords, const unsigned int *colors, int nverts);
     void (*renderDelete)(void *uptr);
-    // [ioquakelive] a colour emoji, drawn in place of the glyphs of its whole sequence; color
-    // carries the text's alpha. Left NULL, emoji stay the one-colour glyphs of the fallback font
     void (*renderEmoji)(void *uptr, float x0, float y0, float x1, float y1, unsigned int color, int emoji);
 } FONSparams;
 
@@ -98,29 +87,22 @@ typedef struct FONStextIter {
 
 typedef struct FONScontext FONScontext;
 
-// Constructor and destructor.
 FONScontext *fonsCreateInternal(FONSparams *params);
 void fonsDeleteInternal(FONScontext *s);
 
 void fonsSetErrorCallback(FONScontext *s, void (*callback)(void *uptr, int error, int val), void *uptr);
-// Returns current atlas size.
 void fonsGetAtlasSize(FONScontext *s, int *width, int *height);
-// Expands the atlas size.
 int fonsExpandAtlas(FONScontext *s, int width, int height);
-// Resets the whole stash.
 int fonsResetAtlas(FONScontext *stash, int width, int height);
 
-// Add fonts
 int fonsAddFont(FONScontext *s, const char *name, unsigned char *data, int ndata, int freeData);
 int fonsGetFontByName(FONScontext *s, const char *name);
 int fonsAddFallbackFont(FONScontext *stash, int base, int fallback);
 
-// State handling
 void fonsPushState(FONScontext *s);
 void fonsPopState(FONScontext *s);
 void fonsClearState(FONScontext *s);
 
-// State setting
 void fonsSetSize(FONScontext *s, float size);
 void fonsSetColor(FONScontext *s, unsigned int color);
 void fonsSetSpacing(FONScontext *s, float spacing);
@@ -128,26 +110,18 @@ void fonsSetBlur(FONScontext *s, float blur);
 void fonsSetAlign(FONScontext *s, int align);
 void fonsSetFont(FONScontext *s, int font);
 void fonsSetExtendedColors(int extended);
-// [ioquakelive] the colour emoji there are pictures of, named by their codepoints in hex joined by
-// '-' ("1f600", "1f44d-1f3fd"); renderEmoji gets an emoji by its index here. NULL, 0 clears it
 void fonsSetEmoji(const char *const *names, int count);
 
-// Draw text.  'flags' carries the QL draw flags (colour-code control).  Returns
-// the x advance.  A non-NULL maxX is a clip bound: drawing stops before the
-// first glyph that would end past it, and *maxX receives the pen x there.
 float fonsDrawText(FONScontext *s, float x, float y, const char *string, const char *end, int flags, float *maxX);
 
-// Measure text
 float fonsTextBounds(FONScontext *s, float x, float y, const char *string, const char *end, float *bounds);
 void fonsLineBounds(FONScontext *s, float y, float *miny, float *maxy);
 void fonsVertMetrics(FONScontext *s, float *ascender, float *descender, float *lineh);
 
-// Text iterator
 int fonsTextIterInit(FONScontext *stash, FONStextIter *iter, float x, float y, const char *str, const char *end, int bitmapOption);
 int fonsTextIterNext(FONScontext *stash, FONStextIter *iter, FONSquad *quad);
 
-// Pull texture changes
 const unsigned char *fonsGetTextureData(FONScontext *stash, int *width, int *height);
 int fonsValidateTexture(FONScontext *s, int *dirty);
 
-#endif // __TR_FONTSTASH_H__
+#endif

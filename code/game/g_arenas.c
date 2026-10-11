@@ -19,22 +19,12 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
-//
-// g_arenas.c
-//
-
 #include "g_local.h"
 
 gentity_t* podium1;
 gentity_t* podium2;
 gentity_t* podium3;
 
-/*
-==================
-UpdateTournamentInfo
-==================
-*/
 void UpdateTournamentInfo(void) {
     int i;
     gentity_t* player;
@@ -45,7 +35,6 @@ void UpdateTournamentInfo(void) {
     char buf[32];
     char msg[MAX_STRING_CHARS];
 
-    // find the real player
     player = NULL;
     for (i = 0; i < level.maxclients; i++) {
         player = &g_entities[i];
@@ -56,7 +45,6 @@ void UpdateTournamentInfo(void) {
             break;
         }
     }
-    // this should never happen!
     if (!player || i == level.maxclients) {
         return;
     }
@@ -129,14 +117,14 @@ static gentity_t* SpawnModelOnVictoryPad(gentity_t* pad, vec3_t offset, gentity_
     body->classname = ent->client->pers.netname;
     body->client = ent->client;
     body->s = ent->s;
-    body->s.eType = ET_PLAYER;  // could be ET_INVISIBLE
-    body->s.eFlags = 0;         // clear EF_TALK, etc
-    body->s.powerups = 0;       // clear powerups
-    body->s.loopSound = 0;      // clear lava burning
+    body->s.eType = ET_PLAYER;
+    body->s.eFlags = 0;
+    body->s.powerups = 0;
+    body->s.loopSound = 0;
     body->s.number = body - g_entities;
     body->timestamp = level.time;
     body->physicsObject = qtrue;
-    body->physicsBounce = 0;  // don't bounce
+    body->physicsBounce = 0;
     body->s.event = 0;
     body->s.pos.trType = TR_STATIONARY;
     body->s.groundEntityNum = ENTITYNUM_WORLD;
@@ -195,11 +183,6 @@ static void CelebrateStart(gentity_t* player) {
     player->nextthink = level.time + TIMER_GESTURE;
     player->think = CelebrateStop;
 
-    /*
-    player->client->ps.events[player->client->ps.eventSequence & (MAX_PS_EVENTS-1)] = EV_TAUNT;
-    player->client->ps.eventParms[player->client->ps.eventSequence & (MAX_PS_EVENTS-1)] = 0;
-    player->client->ps.eventSequence++;
-    */
     G_AddEvent(player, EV_TAUNT, 0);
 }
 
@@ -293,11 +276,6 @@ static gentity_t* SpawnPodium(void) {
     return podium;
 }
 
-/*
-==================
-SpawnModelsOnVictoryPads
-==================
-*/
 void SpawnModelsOnVictoryPads(void) {
     gentity_t* player;
     gentity_t* podium;
@@ -331,11 +309,6 @@ void SpawnModelsOnVictoryPads(void) {
     }
 }
 
-/*
-===============
-Svcmd_AbortPodium_f
-===============
-*/
 void Svcmd_AbortPodium_f(void) {
     if (podium1) {
         podium1->nextthink = level.time;

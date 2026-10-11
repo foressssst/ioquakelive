@@ -19,162 +19,123 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
-//
+#define GAME_API_VERSION 10
 
-// g_public.h -- game module information visible to server
+#define SVF_NOCLIENT 0x00000001
 
-#define GAME_API_VERSION 10  // [QL] was 8 in Q3
-
-// entity->svFlags
-// the server does not know how to interpret most of the values
-// in entityStates (level eType), so the game must explicitly flag
-// special server behaviors
-#define SVF_NOCLIENT 0x00000001  // don't send entity to clients, even if it has effects
-
-// TTimo
-// https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=551
 #define SVF_CLIENTMASK 0x00000002
 
-#define SVF_BOT 0x00000008                 // set if the entity is a bot
-#define SVF_BROADCAST 0x00000020           // send to all connected clients
-#define SVF_PORTAL 0x00000040              // merge a second pvs at origin2 into snapshots
-#define SVF_USE_CURRENT_ORIGIN 0x00000080  // entity->r.currentOrigin instead of entity->s.origin
-                                           // for link position (missiles and movers)
-#define SVF_SINGLECLIENT 0x00000100        // only send to a single client (entityShared_t->singleClient)
-#define SVF_NOSERVERINFO 0x00000200        // don't send CS_SERVERINFO updates to this client
-                                           // so that it can be updated for ping tools without
-                                           // lagging clients
-#define SVF_CAPSULE 0x00000400             // use capsule for collision detection instead of bbox
-#define SVF_NOTSINGLECLIENT 0x00000800     // send entity to everyone but one client
-                                           // (entityShared_t->singleClient)
-
-//===============================================================
+#define SVF_BOT 0x00000008
+#define SVF_BROADCAST 0x00000020
+#define SVF_PORTAL 0x00000040
+#define SVF_USE_CURRENT_ORIGIN 0x00000080
+#define SVF_SINGLECLIENT 0x00000100
+#define SVF_NOSERVERINFO 0x00000200
+#define SVF_CAPSULE 0x00000400
+#define SVF_NOTSINGLECLIENT 0x00000800
 
 typedef struct {
-    entityState_t unused;  // apparently this field was put here accidentally
-                           //  (and is kept only for compatibility, as a struct pad)
+    entityState_t unused;
 
-    qboolean linked;  // qfalse if not in any good cluster
+    qboolean linked;
     int linkcount;
 
-    int svFlags;  // SVF_NOCLIENT, SVF_BROADCAST, etc
+    int svFlags;
 
-    // only send to this client when SVF_SINGLECLIENT is set
-    // if SVF_CLIENTMASK is set, use bitmask for clients to send to (maxclients must be <= 32, up to the mod to enforce this)
     int singleClient;
 
-    qboolean bmodel;  // if false, assume an explicit mins / maxs bounding box
-                      // only set by trap_SetBrushModel
+    qboolean bmodel;
     vec3_t mins, maxs;
-    int contents;  // CONTENTS_TRIGGER, CONTENTS_SOLID, CONTENTS_BODY, etc
-                   // a non-solid entity should set to 0
+    int contents;
 
-    vec3_t absmin, absmax;  // derived from mins/maxs and origin + rotation
+    vec3_t absmin, absmax;
 
-    // currentOrigin will be used for all collision detection and world linking.
-    // it will not necessarily be the same as the trajectory evaluation for the current
-    // time, because each entity must be moved one at a time after time is advanced
-    // to avoid simultanious collision issues
     vec3_t currentOrigin;
     vec3_t currentAngles;
 
-    // when a trace call is made and passEntityNum != ENTITYNUM_NONE,
-    // an ent will be excluded from testing if:
-    // ent->s.number == passEntityNum	(don't interact with self)
-    // ent->r.ownerNum == passEntityNum	(don't interact with your own missiles)
-    // entity[ent->r.ownerNum].r.ownerNum == passEntityNum	(don't interact with other missiles from owner)
     int ownerNum;
 } entityShared_t;
 
-// the server looks at a sharedEntity, which is the start of the game's gentity_t structure
 typedef struct {
-    entityState_t s;   // communicated by server to clients
-    entityShared_t r;  // shared by both the server system and game
+    entityState_t s;
+    entityShared_t r;
 } sharedEntity_t;
 
-// [QL] Forward declarations needed by gameImport_t function pointers
 typedef struct gentity_s gentity_t;
 typedef struct gclient_s gclient_t;
 
-//===============================================================
-
-// [QL] The engine passes a struct of function pointers instead of Q3's integer syscall IDs.
-// Each slot is an 8-byte function pointer (x86_64). Gaps exist where traps were removed/added.
-// Offsets verified from decompiled binary.
 typedef struct {
-    /* --- Core Engine Traps --- */
-    /* 0x00  */ void    (*trap_SendConsoleCommand)(const char *text);
-    /* 0x08  */ int     (*trap_RealTime)(qtime_t *qtime);  // [QL] qagamex86.dll 0x10063187
-    /* 0x10  */ void    (*trap_Printf)(const char *fmt, ...);
-    /* 0x18  */ void    *_unused_03;
-    /* 0x20  */ int     (*trap_FS_Write)(const void *buf, int len, fileHandle_t f);
-    /* 0x28  */ void    *_unused_05;
-    /* 0x30  */ int     (*trap_FS_Read)(void *buf, int len, fileHandle_t f);
-    /* 0x38  */ void    *_unused_07;
-    /* 0x40  */ int     (*trap_FS_FOpenFile)(const char *name, fileHandle_t *f, fsMode_t mode);
-    /* 0x48  */ void    (*trap_FS_FCloseFile)(fileHandle_t f);
-    /* 0x50  */ void    (*trap_Error)(const char *fmt, ...);
-    /* 0x58  */ float   (*trap_Cvar_VariableValue)(const char *name);
-    /* 0x60  */ void    (*trap_Cvar_Update)(vmCvar_t *cv);
-    /* 0x68  */ void    (*trap_Cvar_VariableStringBuffer)(const char *name, char *buf, int size);
-    /* 0x70  */ void    *_unused_0e;
-    /* 0x78  */ void    (*trap_Cvar_Set)(const char *name, const char *value);
-    /* 0x80  */ void    *_unused_10;
-    /* 0x88  */ void    (*trap_Cvar_Register)(vmCvar_t *cv, const char *name, const char *defaultValue, int flags);
-    /* 0x90  */ void    (*trap_Argv)(int n, char *buf, int size);
-    /* 0x98  */ void    *_unused_13;
-    /* 0xA0  */ int     (*trap_Argc)(void);
-    /* 0xA8  */ void    *_unused_15;
-    /* 0xB0  */ void    (*trap_LocateGameData)(gentity_t *gEnts, int numGEntities, int sizeofGEntity, gclient_t *clients, int sizeofGClient);
-    /* 0xB8  */ void    (*trap_DropClient)(int clientNum, const char *reason);
-    /* 0xC0  */ void    (*trap_SendServerCommand)(int clientNum, const char *text);
-    /* 0xC8  */ void    (*trap_SetConfigstring)(int index, const char *value);
-    /* 0xD0  */ void    (*trap_GetConfigstring)(int index, char *buf, int size);
-    /* 0xD8  */ void    *_unused_1b;
-    /* 0xE0  */ void    (*trap_GetUserinfo)(int clientNum, char *buf, int size);
-    /* 0xE8  */ void    (*trap_SetUserinfo)(int clientNum, const char *info);
-    /* 0xF0  */ void    (*trap_GetServerinfo)(char *buf, int size);
-    /* 0xF8  */ void    (*trap_SetBrushModel)(gentity_t *ent, const char *model);
-    /* 0x100 */ void    (*trap_Trace)(trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentMask);
-    /* 0x108 */ void    (*trap_TraceCapsule)(trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentMask);
-    /* 0x110 */ int     (*trap_PointContents)(const vec3_t point, int passEntityNum);
-    /* 0x118 */ void    *_unused_23;
-    /* 0x120 */ void    *_unused_24;
-    /* 0x128 */ void    (*trap_AdjustAreaPortalState)(gentity_t *ent, qboolean open);
-    /* 0x130 */ void    *_unused_26;
-    /* 0x138 */ void    (*trap_LinkEntity)(gentity_t *ent);
-    /* 0x140 */ void    (*trap_UnlinkEntity)(gentity_t *ent);
-    /* 0x148 */ int     (*trap_EntitiesInBox)(const vec3_t mins, const vec3_t maxs, int *list, int maxcount);
-    /* 0x150 */ qboolean(*trap_EntityContact)(const vec3_t mins, const vec3_t maxs, const gentity_t *ent);
-    /* 0x158 */ int     (*trap_BotAllocateClient)(void);
-    /* 0x160 */ void    (*trap_BotFreeClient)(int clientNum);
-    /* 0x168 */ void    (*trap_GetUsercmd)(int clientNum, usercmd_t *cmd);
-    /* 0x170 */ qboolean(*trap_GetEntityToken)(char *buf, int size);
-    /* 0x178 */ void    *_unused_2f;
-    /* 0x180 */ void    *_unused_30;
-    /* 0x188 */ int     (*trap_BotLibSetup)(void);
-    /* 0x190 */ int     (*trap_BotLibShutdown)(void);
-    /* 0x198 */ int     (*trap_BotLibVarSet)(const char *name, const char *value);
-    /* 0x1A0 */ void    *_unused_34;
-    /* 0x1A8 */ int     (*trap_BotLibDefine)(const char *symbol);
-    /* 0x1B0 */ int     (*trap_BotLibStartFrame)(float time);
-    /* 0x1B8 */ int     (*trap_BotLibLoadMap)(const char *mapname);
-    /* 0x1C0 */ int     (*trap_BotLibUpdateEntity)(int entNum, void *entityInfo);
-    /* 0x1C8 */ void    *_unused_39;
-    /* 0x1D0 */ int     (*trap_BotGetSnapshotEntity)(int clientNum, int sequence);
-    /* 0x1D8 */ void    *_unused_3b;
-    /* 0x1E0 */ void    (*trap_BotUserCommand)(int clientNum, usercmd_t *cmd);
-    /* 0x1E8 */ void    *_unused_3d;
-    /* 0x1F0 */ void    *_unused_3e;
-    /* 0x1F8 */ void    (*trap_AAS_EntityInfo)(int entNum, void *info);
-    /* 0x200 */ qboolean(*trap_AAS_Initialized)(void);
-    /* 0x208 */ void    *_unused_41;
-    /* 0x210 */ float   (*trap_AAS_Time)(void);
-    /* 0x218 */ int     (*trap_AAS_PointAreaNum)(const vec3_t point);
-    /* 0x220 */ void    *_unused_44;
-    /* 0x228 */ int     (*trap_AAS_TraceAreas)(const vec3_t start, const vec3_t end, int *areas, void *points, int maxareas);
+     void    (*trap_SendConsoleCommand)(const char *text);
+     int     (*trap_RealTime)(qtime_t *qtime);
+     void    (*trap_Printf)(const char *fmt, ...);
+     void    *_unused_03;
+     int     (*trap_FS_Write)(const void *buf, int len, fileHandle_t f);
+     void    *_unused_05;
+     int     (*trap_FS_Read)(void *buf, int len, fileHandle_t f);
+     void    *_unused_07;
+     int     (*trap_FS_FOpenFile)(const char *name, fileHandle_t *f, fsMode_t mode);
+     void    (*trap_FS_FCloseFile)(fileHandle_t f);
+     void    (*trap_Error)(const char *fmt, ...);
+     float   (*trap_Cvar_VariableValue)(const char *name);
+     void    (*trap_Cvar_Update)(vmCvar_t *cv);
+     void    (*trap_Cvar_VariableStringBuffer)(const char *name, char *buf, int size);
+     void    *_unused_0e;
+     void    (*trap_Cvar_Set)(const char *name, const char *value);
+     void    *_unused_10;
+     void    (*trap_Cvar_Register)(vmCvar_t *cv, const char *name, const char *defaultValue, int flags);
+     void    (*trap_Argv)(int n, char *buf, int size);
+     void    *_unused_13;
+     int     (*trap_Argc)(void);
+     void    *_unused_15;
+     void    (*trap_LocateGameData)(gentity_t *gEnts, int numGEntities, int sizeofGEntity, gclient_t *clients, int sizeofGClient);
+     void    (*trap_DropClient)(int clientNum, const char *reason);
+     void    (*trap_SendServerCommand)(int clientNum, const char *text);
+     void    (*trap_SetConfigstring)(int index, const char *value);
+     void    (*trap_GetConfigstring)(int index, char *buf, int size);
+     void    *_unused_1b;
+     void    (*trap_GetUserinfo)(int clientNum, char *buf, int size);
+     void    (*trap_SetUserinfo)(int clientNum, const char *info);
+     void    (*trap_GetServerinfo)(char *buf, int size);
+     void    (*trap_SetBrushModel)(gentity_t *ent, const char *model);
+     void    (*trap_Trace)(trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentMask);
+     void    (*trap_TraceCapsule)(trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentMask);
+     int     (*trap_PointContents)(const vec3_t point, int passEntityNum);
+     void    *_unused_23;
+     void    *_unused_24;
+     void    (*trap_AdjustAreaPortalState)(gentity_t *ent, qboolean open);
+     void    *_unused_26;
+     void    (*trap_LinkEntity)(gentity_t *ent);
+     void    (*trap_UnlinkEntity)(gentity_t *ent);
+     int     (*trap_EntitiesInBox)(const vec3_t mins, const vec3_t maxs, int *list, int maxcount);
+     qboolean(*trap_EntityContact)(const vec3_t mins, const vec3_t maxs, const gentity_t *ent);
+     int     (*trap_BotAllocateClient)(void);
+     void    (*trap_BotFreeClient)(int clientNum);
+     void    (*trap_GetUsercmd)(int clientNum, usercmd_t *cmd);
+     qboolean(*trap_GetEntityToken)(char *buf, int size);
+     void    *_unused_2f;
+     void    *_unused_30;
+     int     (*trap_BotLibSetup)(void);
+     int     (*trap_BotLibShutdown)(void);
+     int     (*trap_BotLibVarSet)(const char *name, const char *value);
+     void    *_unused_34;
+     int     (*trap_BotLibDefine)(const char *symbol);
+     int     (*trap_BotLibStartFrame)(float time);
+     int     (*trap_BotLibLoadMap)(const char *mapname);
+     int     (*trap_BotLibUpdateEntity)(int entNum, void *entityInfo);
+     void    *_unused_39;
+     int     (*trap_BotGetSnapshotEntity)(int clientNum, int sequence);
+     void    *_unused_3b;
+     void    (*trap_BotUserCommand)(int clientNum, usercmd_t *cmd);
+     void    *_unused_3d;
+     void    *_unused_3e;
+     void    (*trap_AAS_EntityInfo)(int entNum, void *info);
+     qboolean(*trap_AAS_Initialized)(void);
+     void    *_unused_41;
+     float   (*trap_AAS_Time)(void);
+     int     (*trap_AAS_PointAreaNum)(const vec3_t point);
+     void    *_unused_44;
+     int     (*trap_AAS_TraceAreas)(const vec3_t start, const vec3_t end, int *areas, void *points, int maxareas);
 
-    /* --- AAS Extended --- */
     void    (*trap_AAS_PresenceTypeBoundingBox)(int presencetype, vec3_t mins, vec3_t maxs);
     int     (*trap_AAS_PointReachabilityAreaIndex)(vec3_t point);
     int     (*trap_AAS_BBoxAreas)(vec3_t absmins, vec3_t absmaxs, int *areas, int maxareas);
@@ -193,7 +154,6 @@ typedef struct {
     int     (*trap_AAS_Swimming)(vec3_t origin);
     int     (*trap_AAS_PredictClientMovement)(void *move, int entnum, vec3_t origin, int presencetype, int onground, vec3_t velocity, vec3_t cmdmove, int cmdframes, int maxframes, float frametime, int stopevent, int stopareanum, int visualize);
 
-    /* --- Elementary Actions --- */
     void    (*trap_EA_Command)(int client, char *command);
     void    (*trap_EA_Say)(int client, char *str);
     void    (*trap_EA_SayTeam)(int client, char *str);
@@ -219,7 +179,6 @@ typedef struct {
     void    (*trap_EA_GetInput)(int client, float thinktime, void *input);
     void    (*trap_EA_ResetInput)(int client);
 
-    /* --- Bot Character --- */
     int     (*trap_BotLoadCharacter)(char *charfile, float skill);
     void    (*trap_BotFreeCharacter)(int character);
     float   (*trap_Characteristic_Float)(int character, int index);
@@ -228,7 +187,6 @@ typedef struct {
     int     (*trap_Characteristic_BInteger)(int character, int index, int min, int max);
     void    (*trap_Characteristic_String)(int character, int index, char *buf, int size);
 
-    /* --- Bot Chat --- */
     int     (*trap_BotAllocChatState)(void);
     void    (*trap_BotFreeChatState)(int handle);
     void    (*trap_BotQueueConsoleMessage)(int chatstate, int type, char *message);
@@ -250,7 +208,6 @@ typedef struct {
     void    (*trap_BotSetChatName)(int chatstate, char *name, int client);
     int     (*trap_BotLoadChatFile)(int chatstate, char *chatfile, char *chatname);
 
-    /* --- Bot Goals --- */
     void    (*trap_BotResetGoalState)(int goalstate);
     void    (*trap_BotResetAvoidGoals)(int goalstate);
     void    (*trap_BotRemoveFromAvoidGoals)(int goalstate, int number);
@@ -281,7 +238,6 @@ typedef struct {
     int     (*trap_BotAllocGoalState)(int client);
     void    (*trap_BotFreeGoalState)(int handle);
 
-    /* --- Bot Movement --- */
     void    (*trap_BotResetMoveState)(int movestate);
     void    (*trap_BotMoveToGoal)(void *result, int movestate, void *goal, int travelflags);
     int     (*trap_BotMoveInDirection)(int movestate, vec3_t dir, float speed, int type);
@@ -295,7 +251,6 @@ typedef struct {
     void    (*trap_BotInitMoveState)(int handle, void *initmove);
     void    (*trap_BotAddAvoidSpot)(int movestate, vec3_t origin, float radius, int type);
 
-    /* --- Bot Weapons --- */
     int     (*trap_BotChooseBestFightWeapon)(int weaponstate, int *inventory);
     void    (*trap_BotGetWeaponInfo)(int weaponstate, int weapon, void *weaponinfo);
     int     (*trap_BotLoadWeaponWeights)(int weaponstate, char *filename);
@@ -303,7 +258,6 @@ typedef struct {
     void    (*trap_BotFreeWeaponState)(int weaponstate);
     void    (*trap_BotResetWeaponState)(int weaponstate);
 
-    /* --- Misc Bot/Engine --- */
     int     (*trap_GeneticParentsAndChildSelection)(int numranks, float *ranks, int *parent1, int *parent2, int *child);
     int     (*trap_BotGetServerCommand)(int clientNum, char *message, int size);
     int     (*trap_BotLibVarGet)(char *var_name, char *value, int size);
@@ -313,59 +267,45 @@ typedef struct {
     int     (*trap_PC_ReadToken)(int handle, pc_token_t *pc_token);
     int     (*trap_PC_SourceFileAndLine)(int handle, char *filename, int *line);
 
-    /* --- Reserved --- */
     void    *_reserved[7];
 
-    /* --- Quake Live Extensions --- */
-    /* 0x640 */ uint64_t(*trap_GetSteamID)(int clientNum);
-    /* 0x648 */ void    *_unused_c9;
-    /* 0x650 */ void    (*trap_GetServerSteamID)(char *buf, int size);
-    /* 0x658 */ void    (*trap_SetAchievement)(int clientNum, int achievement);  // [QL] x86 +0x32c -> 0x4e2860
-    /* 0x660 */ qboolean(*trap_HasAchievement)(int clientNum, int achievement);  // [QL] x86 +0x330 -> 0x4e28c0
-    /* 0x668 */ qboolean(*trap_VerifySteamAuth)(int clientNum);
-    /* 0x670 */ qboolean(*trap_FactoryExists)(const char *id);  // [QL] slot 206, x86 table 0x56d2b8 -> 0x4e2a20
+     uint64_t(*trap_GetSteamID)(int clientNum);
+     void    *_unused_c9;
+     void    (*trap_GetServerSteamID)(char *buf, int size);
+     void    (*trap_SetAchievement)(int clientNum, int achievement);
+     qboolean(*trap_HasAchievement)(int clientNum, int achievement);
+     qboolean(*trap_VerifySteamAuth)(int clientNum);
+     qboolean(*trap_FactoryExists)(const char *id);
 
-    /* [ioquakelive] the stats events: what retail has at +0x328 and +0x2e8 */
-    /* 0x678 */ void    (*trap_GenerateMatchGUID)(char *buf, int size);  // [QL] x86 +0x328 -> 0x4e27d0
-    /* 0x680 */ void    (*trap_StatsEvent)(uint64_t steamId, const char *type, const char *document);  // [QL] x86 +0x2e8 -> 0x4e2640
+     void    (*trap_GenerateMatchGUID)(char *buf, int size);
+     void    (*trap_StatsEvent)(uint64_t steamId, const char *type, const char *document);
 
-    /* 0x688 */ void    (*trap_IncrementSteamStat)(int clientNum, int stat, int amount);  // [QL] x86 +0x324 -> 0x4e2770
+     void    (*trap_IncrementSteamStat)(int clientNum, int stat, int amount);
 
-    /* 0x690 */ /* end - total 210 slots x 8 = 1680 bytes */
 } gameImport_t;
 
-// [QL] the vmMain export table, completely reordered against Q3: QL uses a function
-// pointer table instead of Q3's dispatcher. The bots' frame
-// is still its own export (+0x2c), called apart from GAME_RUN_FRAME (SV_BotFrame,
-// quakelive_steam.exe 0x4dd670).
-//
-// The table starts at 0x1008fd00 and ends with a -1 at +0x54, so there are 21 slots.
-// Slot 1 is 0x100529b0, which announces every cvar that changes while cheats are on;
-// that is ported inside G_UpdateCvars instead of as an export. Slots with no
-// counterpart are named and left empty.
 typedef enum {
-    GAME_UNUSED_0                = 0,   // [QL] zero in the binary's table
-    GAME_CVAR_CHANGED            = 1,   // [QL] 0x100529b0, el anuncio de "Server: %s changed to %s";
-                                        //      ported inside G_UpdateCvars, not as an export
-    GAME_SHUTDOWN                = 2,   // G_ShutdownGame()
-    GAME_RUN_FRAME               = 3,   // G_RunFrame()
-    GAME_REGISTER_CVARS          = 4,   // [QL] G_RegisterCvars()
-    GAME_INIT                    = 5,   // G_InitGame()
-    GAME_CONSOLE_COMMAND         = 6,   // ConsoleCommand()
-    GAME_CLIENT_USERINFO_CHANGED = 7,   // ClientUserinfoChanged()
-    GAME_CLIENT_THINK            = 8,   // ClientThink()
-    GAME_CLIENT_DISCONNECT       = 9,   // ClientDisconnect()
-    GAME_CLIENT_CONNECT          = 10,  // ClientConnect()
-    GAME_CLIENT_COMMAND          = 11,  // ClientCommand()
-    GAME_CLIENT_BEGIN            = 12,  // [QL] ClientBegin() (retail 0x1003b030)
-    GAME_BOT_AI_START_FRAME      = 13,  // [QL] BotAIStartFrame() (retail 0x10023400)
-    GAME_SNAPSHOT_ALWAYS_SEND    = 14,  // [QL] G_ClientAlwaysInSnapshot() (retail 0x10052dc0)
-    GAME_SNAPSHOT_SKIP_ENTITY    = 15,  // [QL] G_SnapshotSkipEntity() (retail 0x10053020)
-    GAME_ENTITY_ALWAYS_SEND      = 16,  // [QL] G_EntityAlwaysInSnapshot() (retail 0x10052f40)
-    GAME_VOICE_FILTER            = 17,  // [QL] G_VoiceFilter() (retail 0x10052e90)
-    GAME_CLIENT_IS_ADMIN         = 18,  // [QL] G_ClientIsAdmin() (retail 0x100530c0)
-    GAME_SNAPSHOT_VISIBILITY     = 19,  // [QL] G_ObfuscateEnemyInfoInSnapshotCheck() (retail 0x10052e40)
-    GAME_CLIENT_SCORE            = 20,  // [QL] G_ClientScore() (retail 0x100530f0)
+    GAME_UNUSED_0                = 0,
+    GAME_CVAR_CHANGED            = 1,
+    GAME_SHUTDOWN                = 2,
+    GAME_RUN_FRAME               = 3,
+    GAME_REGISTER_CVARS          = 4,
+    GAME_INIT                    = 5,
+    GAME_CONSOLE_COMMAND         = 6,
+    GAME_CLIENT_USERINFO_CHANGED = 7,
+    GAME_CLIENT_THINK            = 8,
+    GAME_CLIENT_DISCONNECT       = 9,
+    GAME_CLIENT_CONNECT          = 10,
+    GAME_CLIENT_COMMAND          = 11,
+    GAME_CLIENT_BEGIN            = 12,
+    GAME_BOT_AI_START_FRAME      = 13,
+    GAME_SNAPSHOT_ALWAYS_SEND    = 14,
+    GAME_SNAPSHOT_SKIP_ENTITY    = 15,
+    GAME_ENTITY_ALWAYS_SEND      = 16,
+    GAME_VOICE_FILTER            = 17,
+    GAME_CLIENT_IS_ADMIN         = 18,
+    GAME_SNAPSHOT_VISIBILITY     = 19,
+    GAME_CLIENT_SCORE            = 20,
 
     GAME_EXPORT_COUNT
 } gameExport_t;
