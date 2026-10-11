@@ -1,18 +1,14 @@
 # ioquakelive
 
-ioquakelive es una implementación de **Quake Live** construida sobre [ioquake3](https://ioquake3.org/), un motor de código abierto. El objetivo es tener un cliente y un servidor de código abierto que funcionen igual que la versión final de Quake Live (build 1069).
+ioquakelive es una implementación del **Quake Live ORIGINAL** construida sobre [ioquake3](https://ioquake3.org/), un motor de código abierto. El objetivo de este proyecto es tener un cliente y un servidor de código abierto que funcionen igual que la versión final de Quake Live (build 1069), posterior a eso implementar mejoras y calidad de vida, esto puede ser el primer paso para un mod grande, para otro fork o para versiones mejores que esta a futuro.
 
-En este documento, "el original" es el Quake Live que se compra en Steam.
+## Por qué?
 
-## ¿Por qué?
-
-El proyecto lo empezó [Thomas Jones](https://github.com/tjone270/ioquakelive), que hizo la parte más difícil: leer los binarios originales, deducir el protocolo y la estructura de los módulos, y lograr que un cliente y un servidor de Quake Live compilaran sobre ioquake3. Este repositorio sigue desde ahí.
-
-La intención es la misma. Quake Live merece seguir vivo, y tener un cliente y un servidor abiertos puede ser el primer paso para un mod grande, para otro fork o para versiones mejores que esta.
+El proyecto partio con [Thomas Jones](https://github.com/tjone270/ioquakelive), el cual logro deducir el protocolo y la estructura de los módulos, y lograr que un cliente y un servidor de Quake Live compilaran sobre ioquake3, este repositorio sigue desde ahí.
 
 ## Cómo probarlo
 
-Hace falta tener [Quake Live](https://store.steampowered.com/app/282440) comprado e instalado en Steam. ioquakelive no trae los archivos del juego: los toma de tu instalación.
+IOQUAKELIVE SOLO FUNCIONARA si tienes una copia legitima de [Quake Live](https://store.steampowered.com/app/282440) en Steam, ioquakelive tomara los archivos correspondientes de tu instalación.
 
 1. Abre Steam con la cuenta que tiene Quake Live. La lista de servidores, los amigos y el ingreso a los servidores pasan por Steam.
 2. Baja la última versión desde [Releases](https://github.com/foressssst/ioquakelive/releases). En Windows es `ioquakelive-windows-x64.zip`.
