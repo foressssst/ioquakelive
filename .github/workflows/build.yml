@@ -89,10 +89,12 @@ jobs:
       with:
         name: libs-linux-${{ matrix.arch }}
         path: staging/libs/
+        retention-days: 2
     - uses: actions/upload-artifact@v4
       with:
         name: engine-linux-${{ matrix.arch }}
         path: staging/engine/
+        retention-days: 2
 
   macos-compile:
     name: macOS (compile + sign dylibs)
@@ -197,10 +199,12 @@ jobs:
       with:
         name: libs-macos-arm64
         path: staging/libs/
+        retention-days: 2
     - uses: actions/upload-artifact@v4
       with:
         name: raw-macos-engine
         path: staging/engine-raw/
+        retention-days: 2
 
   macos-bundle:
     name: macOS (bundle + notarise)
@@ -248,6 +252,7 @@ jobs:
       with:
         name: iobin-pk3
         path: shared/baseq3/iobin.pk3
+        retention-days: 2
     - name: Build deterministic pak01.pk3
       run: |
         EXTRA=""
@@ -265,6 +270,7 @@ jobs:
       with:
         name: pak01-pk3
         path: shared/baseq3/pak01.pk3
+        retention-days: 2
     - name: Download raw macOS engine binaries
       uses: actions/download-artifact@v4
       with:
@@ -463,6 +469,7 @@ jobs:
       with:
         name: engine-macos-arm64
         path: staging/engine/
+        retention-days: 2
 
   windows:
     name: Windows ${{ matrix.platform }}
@@ -523,10 +530,12 @@ jobs:
       with:
         name: libs-windows-${{ matrix.dir }}
         path: staging/libs/
+        retention-days: 2
     - uses: actions/upload-artifact@v4
       with:
         name: engine-windows-${{ matrix.dir }}
         path: staging/engine/
+        retention-days: 2
 
   package:
     name: Package release artifacts
@@ -583,6 +592,7 @@ jobs:
       with:
         name: release-zips
         path: build/*.zip
+        retention-days: 2
 
   package-windows:
     name: Package the Windows pre-release
@@ -649,6 +659,7 @@ jobs:
       with:
         name: release-zips
         path: build/*.zip
+        retention-days: 2
 
   prerelease:
     name: Create Pre-release
