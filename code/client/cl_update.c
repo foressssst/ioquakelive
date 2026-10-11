@@ -15,7 +15,10 @@
 
 enum { CLU_IDLE, CLU_RUNNING, CLU_DONE, CLU_FAILED, CLU_HANDLED };
 
+#define CL_UPDATE_SITE "https://github.com/"
+
 static char clUpdateText[1024];
+static char clUpdateURL[512];
 static volatile long clUpdateState;
 static cvar_t* cl_checkUpdates;
 
@@ -191,10 +194,16 @@ static int CL_UpdateCompare(const char* a, const char* b) {
     return 0;
 }
 
+static void CL_OpenUpdate_f(void) {
+    if (clUpdateURL[0]) {
+        CL_OpenURL(clUpdateURL);
+    }
+}
+
 void CL_UpdateInit(void) {
     cl_checkUpdates = Cvar_Get("cl_checkUpdates", "1", CVAR_ARCHIVE);
     Cvar_Get("cl_updateVersion", "", CVAR_ROM);
-    Cvar_Get("cl_updateURL", "", CVAR_ROM);
+    Cmd_AddCommand("openupdate", CL_OpenUpdate_f);
     if (!cl_checkUpdates->integer || CL_UpdateGetState() != CLU_IDLE) {
         return;
     }
@@ -226,10 +235,10 @@ void CL_UpdateFrame(void) {
             return;
         }
     }
-    if (Q_strncmp(url, "https://", 8) || CL_UpdateCompare(version, PRODUCT_VERSION) <= 0) {
+    if (Q_strncmp(url, CL_UPDATE_SITE, (int)sizeof(CL_UPDATE_SITE) - 1) || CL_UpdateCompare(version, PRODUCT_VERSION) <= 0) {
         return;
     }
+    Q_strncpyz(clUpdateURL, url, sizeof(clUpdateURL));
     Cvar_Set("cl_updateVersion", version);
-    Cvar_Set("cl_updateURL", url);
     Com_Printf("A new version of ioquakelive is available: %s\n%s\n", version, url);
 }

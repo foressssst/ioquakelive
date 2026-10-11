@@ -474,10 +474,7 @@ qboolean UI_Home_NavClick(void) {
     }
     if (hit->type == HM_HIT_BANNER) {
         if (hit->index == 1) {
-            char url[512];
-
-            trap_Cvar_VariableStringBuffer("cl_updateURL", url, sizeof(url));
-            trap_Sys_OpenURL(url);
+            trap_Cmd_ExecuteText(EXEC_APPEND, "openupdate\n");
         } else {
             trap_Cmd_ExecuteText(EXEC_APPEND, "web_hideBrowser\n");
         }

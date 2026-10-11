@@ -291,6 +291,9 @@ void CL_SystemInfoChanged(void) {
 
             gameSet = qtrue;
         }
+        if (!Q_stricmp(key, "cl_updateVersion")) {
+            continue;
+        }
 
         Cvar_Set(key, value);
     }
