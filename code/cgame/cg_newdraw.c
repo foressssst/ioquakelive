@@ -2248,17 +2248,34 @@ static void CG_DrawTeamName(int ownerDraw, rectDef_t* rect, float scale, vec4_t 
     CG_DrawText(x, rect->y, 0, scale, color, name, 0, 0, textStyle);
 }
 
-// [QL] Team average ping
-static void CG_DrawTeamAvgPing(rectDef_t *rect, float scale, vec4_t color, int textStyle, int team) {
+static float CG_OwnerDrawAlignX(rectDef_t *rect, const char *s, float scale, int align);
+
+// [QL] cgamex86.dll 0x10039e70: the team's average ping over everyone on it, as "(%d)", in green
+// up to 40, yellow up to 80 and red above, like the duel's; the item's own colour is not used
+static void CG_DrawTeamAvgPing(rectDef_t *rect, float scale, int textStyle, int align, int team) {
     int i, count = 0, total = 0;
+    const char *s;
+    vec4_t c;
+
     for (i = 0; i < cg.numScores; i++) {
-        if (cg.scores[i].team == team && cg.scores[i].ping > 0) {
+        if (cg.scores[i].team == team) {
             total += cg.scores[i].ping;
             count++;
         }
     }
-    CG_OwnerDrawText(rect->x, rect->y, scale, color,
-        va("%d", count ? total / count : 0), 0, 0, textStyle);
+    if (count > 0) {
+        total /= count;
+    }
+    if (total < 41) {
+        c[0] = 0; c[1] = 1; c[2] = 0;
+    } else if (total < 81) {
+        c[0] = 1; c[1] = 1; c[2] = 0;
+    } else {
+        c[0] = 1; c[1] = 0; c[2] = 0;
+    }
+    c[3] = 0.8f;
+    s = va("(%d)", total);
+    CG_OwnerDrawText(CG_OwnerDrawAlignX(rect, s, scale, align), rect->y, scale, c, s, 0, 0, textStyle);
 }
 
 // [QL] Configstring-based owner draw (MVP, most damage, most accurate, etc.)
@@ -2539,8 +2556,6 @@ static void CG_DrawEnemyPlyrCount(rectDef_t *rect, float scale, vec4_t color, in
     }
     CG_OwnerDrawText(rect->x, rect->y, scale, color, va("%d", count), 0, 0, textStyle);
 }
-
-static float CG_OwnerDrawAlignX(rectDef_t *rect, const char *s, float scale, int align);
 
 // [QL] the map vote at the end of a match (ui/endgamevote.menu). Its three options are in
 // CS_ROTATIONMAPS as map_N, title_N and gt_N, and every text is aligned the way its item asks.
@@ -4858,10 +4873,10 @@ void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y
             }
             break;
         case CG_RED_AVG_PING:               // 0x11f/0x13a
-            CG_DrawTeamAvgPing(&rect, scale, color, textStyle, TEAM_RED);
+            CG_DrawTeamAvgPing(&rect, scale, textStyle, align, TEAM_RED);
             break;
         case CG_BLUE_AVG_PING:
-            CG_DrawTeamAvgPing(&rect, scale, color, textStyle, TEAM_BLUE);
+            CG_DrawTeamAvgPing(&rect, scale, textStyle, align, TEAM_BLUE);
             break;
         case CG_RED_PLAYER_COUNT:           // 0x121/0x13c  CG_DrawPlayerCount2
             CG_DrawPlayerCount2(&rect, TEAM_RED, scale, color, textStyle, align);

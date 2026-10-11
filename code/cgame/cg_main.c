@@ -3059,11 +3059,11 @@ static const char* CG_FeederColumnsFfa(score_t* sp, clientInfo_t* info, int colu
             if (sp->damageDone > 0 && sp->bestWeapon > 0)
                 return va("%d%%", sp->bestWeaponAccuracy);
             return "";
+        // [QL] 0x10026521 and 0x1002653d: time and ping padded to four, a ping of -1 as it comes
         case 12:
-            return va("%d", sp->time);
+            return va("%4i", sp->time);
         case 13:
-            if (sp->ping == -1) return "connecting";
-            return va("%d", sp->ping);
+            return va("%4i", sp->ping);
     }
     return "";
 }
@@ -3082,9 +3082,9 @@ static const char* CG_FeederColumnsTdm(score_t* sp, clientInfo_t* info, int colu
             if (cgs.gametype == GT_FREEZE)
                 return va("%d", sp->thaws);
             return CG_FormatDamage(sp->damageDone);
+        // [QL] 0x100282b9: the ping as it comes, -1 included
         case 9:
-            if (sp->ping == -1) return "connecting";
-            return va("%d", sp->ping);
+            return va("%i", sp->ping);
     }
     return "";
 }
@@ -3107,9 +3107,9 @@ static const char* CG_FeederColumnsCa(score_t* sp, clientInfo_t* info, int colum
             if (sp->damageDone > 0 && sp->bestWeapon > 0)
                 return va("%d%%", sp->bestWeaponAccuracy);
             return "";
+        // [QL] 0x100276cb: the ping as it comes, -1 included
         case 11:
-            if (sp->ping == -1) return "connecting";
-            return va("%d", sp->ping);
+            return va("%i", sp->ping);
     }
     return "";
 }
@@ -3128,9 +3128,9 @@ static const char* CG_FeederColumnsCtf(score_t* sp, clientInfo_t* info, int colu
             return va("%d", sp->assistCount);
         case 10:
             return va("%d", sp->defendCount);
+        // [QL] 0x10026ca3: the ping as it comes, -1 included
         case 11:
-            if (sp->ping == -1) return "connecting";
-            return va("%d", sp->ping);
+            return va("%i", sp->ping);
     }
     return "";
 }
@@ -3156,11 +3156,11 @@ static const char* CG_FeederItemTextRace(clientInfo_t* info, score_t* sp, int co
             if (sp->score > 0 && sp->score != 0x7FFFFFFF)
                 return va("%d:%02d.%03d", sp->score / 60000, (sp->score / 1000) % 60, sp->score % 1000);
             return "";
+        // [QL] 0x10027dc1 and 0x10027dde: time and ping padded to four, a ping of -1 as it comes
         case 5:
-            return va("%d", sp->time);
+            return va("%4i", sp->time);
         case 6:
-            if (sp->ping == -1) return "connecting";
-            return va("%d", sp->ping);
+            return va("%4i", sp->ping);
     }
     return "";
 }
