@@ -187,6 +187,7 @@ extern int ZEXPORT unzGoToNextFile OF((unzFile file));
 */
 
 extern int ZEXPORT unzGetCurrentFileInfoPosition(unzFile file, unsigned long* pos);
+extern int ZEXPORT unzGetCurrentFileOffset(unzFile file, unsigned long* offset);
 /*
   Get the position of the info of the current file in the zip.
   return UNZ_OK if there is no problem

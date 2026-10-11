@@ -241,6 +241,9 @@ void CL_ConfigstringModified(void) {
         // parse serverId and other cvars
         CL_SystemInfoChanged();
     }
+    if (index >= CS_PLAYERS && index < CS_PLAYERS + MAX_CLIENTS) {
+        CL_WarmPlayersChanged();
+    }
 }
 
 /*

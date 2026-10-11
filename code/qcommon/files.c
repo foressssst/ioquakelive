@@ -178,6 +178,8 @@ typedef struct fileInPack_s {
 	char* name;                 // name of the file
 	unsigned long pos;          // file info position in zip
 	unsigned long len;          // uncompress file size
+	unsigned long offset;
+	unsigned long csize;
 	struct fileInPack_s* next;  // next file in the hash
 } fileInPack_t;
 
@@ -2341,6 +2343,10 @@ static pack_t* FS_LoadZipFile(const char* zipfile, const char* basename) {
 		// store the file position in the zip
 		buildBuffer[i].pos = unzGetOffset(uf);
 		buildBuffer[i].len = file_info.uncompressed_size;
+		buildBuffer[i].csize = file_info.compressed_size;
+		if (unzGetCurrentFileOffset(uf, &buildBuffer[i].offset) != UNZ_OK) {
+			buildBuffer[i].offset = 0;
+		}
 		buildBuffer[i].next = pack->hashTable[hash];
 		pack->hashTable[hash] = &buildBuffer[i];
 		unzGoToNextFile(uf);
@@ -4184,6 +4190,101 @@ void FS_WorkshopRestart(void) {
 		return;
 	}
 	FS_Restart(fs_checksumFeed);
+}
+
+typedef struct {
+	unsigned long offset;
+	unsigned long size;
+} fsWarmRange_t;
+
+typedef struct {
+	char pak[MAX_OSPATH];
+	int count;
+	fsWarmRange_t ranges[1];
+} fsWarm_t;
+
+static int FS_WarmCompare(const void* a, const void* b) {
+	unsigned long x = ((const fsWarmRange_t*)a)->offset;
+	unsigned long y = ((const fsWarmRange_t*)b)->offset;
+
+	return x < y ? -1 : x > y;
+}
+
+static void FS_WarmJob(void* data) {
+	fsWarm_t* w = data;
+	char discard[32768];
+	unsigned long left;
+	size_t got;
+	FILE* f;
+	int i;
+
+	f = Sys_FOpen(w->pak, "rb");
+	if (f) {
+		for (i = 0; i < w->count; i++) {
+			if (fseek(f, (long)w->ranges[i].offset, SEEK_SET) != 0) {
+				continue;
+			}
+			for (left = w->ranges[i].size + 512; left > 0; left -= (unsigned long)got) {
+				got = fread(discard, 1, left < sizeof(discard) ? left : sizeof(discard), f);
+				if (!got) {
+					break;
+				}
+			}
+		}
+		fclose(f);
+	}
+	free(w);
+}
+
+void FS_WarmPrefix(const char* prefix) {
+	searchpath_t* search;
+	int seen[64];
+	int numSeen = 0;
+	int len = (int)strlen(prefix);
+	int i, j, n;
+
+	if (!fs_searchpaths || !Com_JobWorkers()) {
+		return;
+	}
+	for (search = fs_searchpaths; search; search = search->next) {
+		pack_t* pak = search->pack;
+		fsWarm_t* w;
+
+		if (!pak) {
+			continue;
+		}
+		for (j = 0; j < numSeen && seen[j] != pak->checksum; j++) {
+		}
+		if (j < numSeen) {
+			continue;
+		}
+		if (numSeen < ARRAY_LEN(seen)) {
+			seen[numSeen++] = pak->checksum;
+		}
+		for (i = n = 0; i < pak->numfiles; i++) {
+			if (pak->buildBuffer[i].offset && !Q_stricmpn(pak->buildBuffer[i].name, prefix, len)) {
+				n++;
+			}
+		}
+		if (!n) {
+			continue;
+		}
+		w = malloc(sizeof(*w) + (n - 1) * sizeof(w->ranges[0]));
+		if (!w) {
+			return;
+		}
+		Q_strncpyz(w->pak, pak->pakFilename, sizeof(w->pak));
+		for (i = w->count = 0; i < pak->numfiles; i++) {
+			if (pak->buildBuffer[i].offset && !Q_stricmpn(pak->buildBuffer[i].name, prefix, len)) {
+				w->ranges[w->count].offset = pak->buildBuffer[i].offset;
+				w->ranges[w->count].size = pak->buildBuffer[i].csize;
+				w->count++;
+			}
+		}
+		qsort(w->ranges, w->count, sizeof(w->ranges[0]), FS_WarmCompare);
+		Com_DPrintf("FS_WarmPrefix: %s, %i files from %s\n", prefix, w->count, pak->pakBasename);
+		Com_JobsSubmit(FS_WarmJob, w);
+	}
 }
 
 /*

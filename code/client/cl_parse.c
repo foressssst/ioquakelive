@@ -531,6 +531,8 @@ void CL_ParseGamestate(msg_t* msg) {
         S_StartBackgroundTrack(track, loopTrack);
     }
 
+    CL_WarmPlayersChanged();
+
     // without Workshop items to wait for, straight in
     if (!workshop) {
         CL_DownloadsComplete();

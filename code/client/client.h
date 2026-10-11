@@ -473,6 +473,7 @@ void CL_LocalServers_f(void);
 void CL_GlobalServers_f(void);
 void CL_SteamServersFrame(void);
 void CL_WorkshopFrame(void);
+void CL_WarmPlayersChanged(void);
 void CL_VoiceFrame(void);
 void CL_MatchReportFrame(void);
 void CL_MatchMedia(const char* path);

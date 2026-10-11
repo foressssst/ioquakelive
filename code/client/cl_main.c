@@ -2691,6 +2691,61 @@ void CL_WorkshopFrame(void) {
     }
 }
 
+static qboolean cl_warmPending;
+static char cl_warmedModels[64][MAX_QPATH];
+static int cl_numWarmedModels;
+
+void CL_WarmPlayersChanged(void) {
+    cl_warmPending = qtrue;
+}
+
+static void CL_WarmModel(const char* model) {
+    char name[MAX_QPATH];
+    char* slash;
+    int i;
+
+    Q_strncpyz(name, model, sizeof(name));
+    slash = strchr(name, '/');
+    if (slash) {
+        *slash = '\0';
+    }
+    if (!name[0] || strchr(name, '.') || strchr(name, '\\')) {
+        return;
+    }
+    Q_strlwr(name);
+    for (i = 0; i < cl_numWarmedModels; i++) {
+        if (!strcmp(cl_warmedModels[i], name)) {
+            return;
+        }
+    }
+    if (cl_numWarmedModels == ARRAY_LEN(cl_warmedModels)) {
+        return;
+    }
+    Q_strncpyz(cl_warmedModels[cl_numWarmedModels++], name, MAX_QPATH);
+    FS_WarmPrefix(va("models/players/%s/", name));
+    FS_WarmPrefix(va("sound/player/%s/", name));
+}
+
+static void CL_WarmPlayers(void) {
+    const char* info;
+    int i;
+
+    if (!cl_warmPending || clc.state != CA_ACTIVE) {
+        return;
+    }
+    cl_warmPending = qfalse;
+    CL_WarmModel(Cvar_VariableString("cg_forceEnemyModel"));
+    CL_WarmModel(Cvar_VariableString("cg_forceTeamModel"));
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        info = cl.gameState.stringData + cl.gameState.stringOffsets[CS_PLAYERS + i];
+        if (!info[0]) {
+            continue;
+        }
+        CL_WarmModel(Info_ValueForKey(info, "model"));
+        CL_WarmModel(Info_ValueForKey(info, "hmodel"));
+    }
+}
+
 /*
 =================
 CL_CheckForResend
@@ -3416,6 +3471,7 @@ void CL_Frame(int msec) {
 
     // [QL] and whatever is coming down from the Workshop while joining a server
     CL_WorkshopFrame();
+    CL_WarmPlayers();
 
     // [QL] voice, which comes and goes over Steam's peer to peer network
     CL_MatchReportFrame();

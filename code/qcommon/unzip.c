@@ -795,6 +795,19 @@ extern int ZEXPORT unzGetCurrentFileInfoPosition(unzFile file, unsigned long* po
     return UNZ_OK;
 }
 
+extern int ZEXPORT unzGetCurrentFileOffset(unzFile file, unsigned long* offset) {
+    unz_s* s;
+
+    if (file == NULL)
+        return UNZ_PARAMERROR;
+    s = (unz_s*)file;
+    if (!s->current_file_ok)
+        return UNZ_END_OF_LIST_OF_FILE;
+
+    *offset = s->cur_file_info_internal.offset_curfile + s->byte_before_the_zipfile;
+    return UNZ_OK;
+}
+
 /*
   Set the position of the info of the current file in the zip.
   return UNZ_OK if there is no problem

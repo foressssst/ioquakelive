@@ -604,6 +604,7 @@ qboolean FS_ConditionalRestart(int checksumFeed, qboolean disconnect);
 void FS_Restart(int checksumFeed);
 // [QL] the restart that mounts a Workshop item downloaded outside a queue
 void FS_WorkshopRestart(void);
+void FS_WarmPrefix(const char* prefix);
 // shutdown and restart the filesystem so changes to fs_gamedir can take effect
 
 void FS_AddGameDirectory(const char* path, const char* dir);
