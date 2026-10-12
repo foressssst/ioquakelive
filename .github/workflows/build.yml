@@ -211,21 +211,8 @@ jobs:
     if: (github.event_name == 'workflow_dispatch' && !inputs.windows_only) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:'))
     needs: [linux, windows, macos-compile]
     runs-on: macos-14
-    env:
-      # pak01 carries art that cannot go in this repo (Handel Gothic Ex, CPMA 1.53's
-      # frames, the menu background). It lives in a private repo read with a deploy
-      # key: a fork has no key and builds without it, a release never does.
-      HAS_ASSETS_KEY: ${{ secrets.ASSETS_DEPLOY_KEY != '' }}
-      IS_RELEASE: ${{ github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:') }}
     steps:
     - uses: actions/checkout@v4
-    - name: Check out the art that is not in git
-      if: env.HAS_ASSETS_KEY == 'true'
-      uses: actions/checkout@v4
-      with:
-        repository: foressssst/ioquakelive-assets
-        ssh-key: ${{ secrets.ASSETS_DEPLOY_KEY }}
-        path: assets-pak01
     - uses: actions/setup-python@v5
       with:
         python-version: '3.x'
@@ -255,15 +242,8 @@ jobs:
         retention-days: 2
     - name: Build deterministic pak01.pk3
       run: |
-        EXTRA=""
-        if [ -d assets-pak01 ]; then
-          EXTRA="--input assets-pak01"
-        elif [ "$IS_RELEASE" = "true" ]; then
-          echo "::error::a release needs the art from ioquakelive-assets (secret ASSETS_DEPLOY_KEY)"
-          exit 1
-        fi
         python3 code/tools/make_deterministic_pk3.py \
-          --input content/pak01 $EXTRA \
+          --input content/pak01 \
           --output shared/baseq3/pak01.pk3
         shasum -a 256 shared/baseq3/pak01.pk3
     - uses: actions/upload-artifact@v4
@@ -601,18 +581,8 @@ jobs:
     if: ${{ (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:')) || (github.event_name == 'workflow_dispatch' && inputs.windows_only) }}
     needs: [windows]
     runs-on: ubuntu-latest
-    env:
-      HAS_ASSETS_KEY: ${{ secrets.ASSETS_DEPLOY_KEY != '' }}
-      IS_RELEASE: ${{ github.event_name == 'push' }}
     steps:
     - uses: actions/checkout@v4
-    - name: Check out the art that is not in git
-      if: env.HAS_ASSETS_KEY == 'true'
-      uses: actions/checkout@v4
-      with:
-        repository: foressssst/ioquakelive-assets
-        ssh-key: ${{ secrets.ASSETS_DEPLOY_KEY }}
-        path: assets-pak01
     - uses: actions/setup-python@v5
       with:
         python-version: '3.x'
@@ -630,15 +600,8 @@ jobs:
           --output shared/baseq3/iobin.pk3
     - name: Build deterministic pak01.pk3
       run: |
-        EXTRA=""
-        if [ -d assets-pak01 ]; then
-          EXTRA="--input assets-pak01"
-        elif [ "$IS_RELEASE" = "true" ]; then
-          echo "::error::a pre-release needs the art from ioquakelive-assets (secret ASSETS_DEPLOY_KEY)"
-          exit 1
-        fi
         python3 code/tools/make_deterministic_pk3.py \
-          --input content/pak01 $EXTRA \
+          --input content/pak01 \
           --output shared/baseq3/pak01.pk3
     - name: Download engine artifacts
       uses: actions/download-artifact@v4

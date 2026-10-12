@@ -38,28 +38,6 @@ foreach ($file in $files) {
     $entries.Add(@($file.FullName, $file.FullName.Substring($pak01Source.Length + 1).Replace('\', '/')))
 }
 
-# [ioquakelive] Files that ship in pak01 but stay out of the repo, because ioquakelive has no
-# licence to publish them: CPMA 1.53's animation frames and Handel Gothic Ex. They come from
-# assets\pak01 next to the repo when that folder exists; a path in both places stops the build.
-$extraSource = Join-Path (Split-Path -Parent $repoRoot) "assets\pak01"
-$extraCount = 0
-if (Test-Path $extraSource) {
-    $seen = @{}
-    foreach ($entry in $entries) { $seen[$entry[1].ToLowerInvariant()] = $true }
-    foreach ($file in Get-ChildItem -Path $extraSource -Recurse -File -Force) {
-        $relativePath = $file.FullName.Substring($extraSource.Length + 1).Replace('\', '/')
-        if ($relativePath -match '(^|/)\.') {
-            continue  # the folder is a git working copy: .git stays out
-        }
-        if ($seen.ContainsKey($relativePath.ToLowerInvariant())) {
-            Write-Host "error: $relativePath is both in content\pak01 and in $extraSource"
-            exit 1
-        }
-        $entries.Add(@($file.FullName, $relativePath))
-        $extraCount++
-    }
-}
-
 $pk3Path = Join-Path $baseq3 "pak01.pk3"
 
 if (Test-Path $pk3Path) { Remove-Item $pk3Path -Force }
@@ -77,4 +55,4 @@ foreach ($entry in $entries) {
 
 $zip.Dispose()
 
-Write-Host "pak01.pk3 created with $($entries.Count) file(s), $extraCount of them from $extraSource"
+Write-Host "pak01.pk3 created with $($entries.Count) file(s)"
