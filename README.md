@@ -4,6 +4,8 @@ ioquakelive es una implementacion del **Quake Live original** sobre el motor de 
 
 Este proyecto lo empezó [Thomas Jones](https://github.com/tjone270/ioquakelive), creditos totales para el, descifró el protocolo y la estructura de los módulos, logró que un cliente y un servidor de Quake Live compilaran sobre ioquake3, este repositorio sigue desde ahí y sigue activo.
 
+<sub>Desarrollado con el apoyo de [Claude Code](https://claude.com/claude-code).</sub>
+
 ## Cómo probarlo
 
 **Este fork solo funciona si tienes Quake Live comprado en Steam.** ioquakelive no trae los archivos del juego, los saca de tu instalación.
