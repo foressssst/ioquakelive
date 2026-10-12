@@ -248,9 +248,9 @@ char* Cmd_Args(void) {
 
     cmd_args[0] = 0;
     for (i = 1; i < cmd_argc; i++) {
-        strcat(cmd_args, cmd_argv[i]);
+        Q_strcat(cmd_args, sizeof(cmd_args), cmd_argv[i]);
         if (i != cmd_argc - 1) {
-            strcat(cmd_args, " ");
+            Q_strcat(cmd_args, sizeof(cmd_args), " ");
         }
     }
 
@@ -265,9 +265,9 @@ char* Cmd_ArgsFrom(int arg) {
     if (arg < 0)
         arg = 0;
     for (i = arg; i < cmd_argc; i++) {
-        strcat(cmd_args, cmd_argv[i]);
+        Q_strcat(cmd_args, sizeof(cmd_args), cmd_argv[i]);
         if (i != cmd_argc - 1) {
-            strcat(cmd_args, " ");
+            Q_strcat(cmd_args, sizeof(cmd_args), " ");
         }
     }
 
@@ -342,7 +342,7 @@ static void Cmd_TokenizeString2(const char* text_in, qboolean ignoreQuotes) {
 
     Q_strncpyz(cmd_cmd, text_in, sizeof(cmd_cmd));
 
-    text = text_in;
+    text = cmd_cmd;
     textOut = cmd_tokenized;
 
     while (1) {
@@ -377,7 +377,7 @@ static void Cmd_TokenizeString2(const char* text_in, qboolean ignoreQuotes) {
 
         if (!ignoreQuotes && *text == '"') {
             cmd_argv[cmd_argc] = textOut;
-            cmd_argoffsets[cmd_argc] = (int)(text + 1 - text_in);
+            cmd_argoffsets[cmd_argc] = (int)(text + 1 - cmd_cmd);
             cmd_quoted[cmd_argc] = qtrue;
             cmd_argc++;
             text++;
@@ -393,7 +393,7 @@ static void Cmd_TokenizeString2(const char* text_in, qboolean ignoreQuotes) {
         }
 
         cmd_argv[cmd_argc] = textOut;
-        cmd_argoffsets[cmd_argc] = (int)(text - text_in);
+        cmd_argoffsets[cmd_argc] = (int)(text - cmd_cmd);
         cmd_quoted[cmd_argc] = qfalse;
         cmd_argc++;
 
