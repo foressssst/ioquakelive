@@ -34,7 +34,9 @@ typedef enum {
     HM_HIT_CONTEXT,
     HM_HIT_LEGAL,
     HM_HIT_CONTEXT_BACK,
-    HM_HIT_MENU
+    HM_HIT_MENU,
+    HM_HIT_ERROR,
+    HM_HIT_ERROR_OK
 } hmHitType_t;
 
 #define HM_MENU_MAIN 0
@@ -1031,6 +1033,71 @@ qboolean UI_Home_HandleKey(int key) {
         } else if (item->url) {
             trap_Sys_OpenURL(item->url);
         }
+    }
+    return qtrue;
+}
+
+#define HM_ERROR_H 300.0f
+#define HM_ERROR_SIDE 0.15f
+
+static const vec4_t hmErrorDialog = SM_RGB(30, 30, 30);
+static char hmError[1024];
+
+void UI_Home_ShowError(const char* text) {
+    char* c;
+
+    Q_strncpyz(hmError, text, sizeof(hmError));
+    for (c = hmError; *c; c++) {
+        if (*c == '\n' || *c == '\r' || *c == '\t') {
+            *c = ' ';
+        }
+    }
+}
+
+qboolean UI_Home_ErrorActive(void) {
+    return (qboolean)(hmError[0] != '\0');
+}
+
+void UI_Home_ErrorPaint(void) {
+    float top = smBottom * 0.5f - HM_ERROR_H * 0.5f;
+    float x = smVW * HM_ERROR_SIDE;
+    float w = smVW * (1.0f - 2.0f * HM_ERROR_SIDE);
+    float okW = SM_WebButtonWidth("OK");
+    float okX = x + w - okW;
+    float okY = top + HM_ERROR_H - 25.0f - SM_WEB_BUTTON_H;
+    int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
+    int lines, i;
+
+    if (!hmError[0]) {
+        return;
+    }
+    SM_Fill(0, 0, smVW, smBottom, hmBlack80, NULL);
+    SM_Fill(0, top, smVW, HM_ERROR_H, hmErrorDialog, NULL);
+    SM_SetSpacing(SM_SPACING_H1);
+    SM_TextRaw(x + 6.4f, SM_Baseline(FONT_DEFAULT, 32, top + 24.0f, 38.4f), FONT_DEFAULT, 32, smText,
+               "Quake Live Error", -1, qfalse);
+    SM_SetSpacing(0);
+    lines = SM_Wrap(FONT_SANS, HM_TEXT, hmError, w, starts, lens);
+    for (i = 0; i < lines; i++) {
+        SM_TextRaw(x, SM_Baseline(FONT_SANS, HM_TEXT, top + 88.4f + i * 20.0f, 20.0f), FONT_SANS, HM_TEXT, smText,
+                   hmError + starts[i], lens[i], qfalse);
+    }
+    SM_Hit(0, 0, smVW, smBottom, HM_HIT_ERROR, 0, NULL);
+    SM_WebButton(okX, okY, okW, "OK", qfalse, SM_Over(HM_HIT_ERROR_OK, 0), NULL);
+    SM_Hit(okX, okY, okW, SM_WEB_BUTTON_H, HM_HIT_ERROR_OK, 0, NULL);
+    SM_EndFrame();
+}
+
+qboolean UI_Home_ErrorKey(int key) {
+    const smHit_t* hit;
+
+    if (key != K_MOUSE1) {
+        return qtrue;
+    }
+    hit = SM_HitAt(smMX, smMY);
+    if (hit && hit->type == HM_HIT_ERROR_OK) {
+        hmError[0] = '\0';
+        trap_Cvar_Set("com_errorMessage", "");
     }
     return qtrue;
 }

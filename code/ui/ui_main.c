@@ -1930,6 +1930,23 @@ static void UI_DrawBlueTeamModel(rectDef_t* rect) {
     UI_DrawPlayer(rect->x, rect->y, rect->w, rect->h, &blueInfo, uiInfo.uiDC.realTime / 2);
 }
 
+static qboolean UI_IsWebPage(int ownerDraw) {
+    switch (ownerDraw) {
+        case UI_STARTMATCH:
+        case UI_SETTINGS:
+        case UI_HOME:
+        case UI_REPLAYS:
+        case UI_BROWSER:
+        case UI_TRAINING:
+        case UI_STATS:
+        case UI_MATCHES:
+        case UI_LEGAL:
+            return qtrue;
+        default:
+            return qfalse;
+    }
+}
+
 static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y, int ownerDraw, int ownerDrawFlags, int align, float special, float scale, vec4_t color, qhandle_t shader, int textStyle) {
     rectDef_t rect;
 
@@ -2084,6 +2101,9 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
             break;
         default:
             break;
+    }
+    if (UI_IsWebPage(ownerDraw)) {
+        UI_Home_ErrorPaint();
     }
 }
 
@@ -2593,6 +2613,9 @@ static qboolean UI_ServerFilter_HandleKey(int flags, float *special, int key) {
 }
 
 static qboolean UI_OwnerDrawHandleKey(int ownerDraw, int flags, float* special, int key) {
+    if (UI_IsWebPage(ownerDraw) && UI_Home_ErrorActive()) {
+        return UI_Home_ErrorKey(key);
+    }
     switch (ownerDraw) {
         case UI_STARTMATCH:
             return UI_StartMatch_HandleKey(key);
@@ -5018,7 +5041,7 @@ void _UI_SetActiveMenu(uiMenuCommand_t menu) {
                 trap_Cvar_VariableStringBuffer("com_errorMessage", buf, sizeof(buf));
                 trap_S_StartBackgroundTrack("music/fla_mp05", NULL);
                 if (strlen(buf)) {
-                    Menus_ActivateByName("error_popmenu");
+                    UI_Home_ShowError(buf);
                 }
                 return;
             case UIMENU_MAIN_OPTIONS: {
