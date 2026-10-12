@@ -541,7 +541,8 @@ void Sys_SigHandler(int signal) {
 
 int main(int argc, char** argv) {
     int i;
-    char commandLine[MAX_STRING_CHARS] = {0};
+    char* commandLine;
+    int commandLineSize = MAX_STRING_CHARS;
 #ifdef PROTOCOL_HANDLER
     char* protocolCommand = NULL;
 #endif
@@ -599,6 +600,14 @@ int main(int argc, char** argv) {
     Sys_SetDefaultInstallPath(DEFAULT_BASEDIR);
 
     for (i = 1; i < argc; i++) {
+        commandLineSize += (int)strlen(argv[i]) + 3;
+    }
+    commandLine = calloc((size_t)commandLineSize, 1);
+    if (!commandLine) {
+        Sys_Error("Out of memory for the command line");
+    }
+
+    for (i = 1; i < argc; i++) {
         qboolean containsSpaces;
 
         if (!strcmp(argv[i], "--uri")) {
@@ -612,20 +621,20 @@ int main(int argc, char** argv) {
 
         containsSpaces = strchr(argv[i], ' ') != NULL;
         if (containsSpaces)
-            Q_strcat(commandLine, sizeof(commandLine), "\"");
+            Q_strcat(commandLine, commandLineSize, "\"");
 
-        Q_strcat(commandLine, sizeof(commandLine), argv[i]);
+        Q_strcat(commandLine, commandLineSize, argv[i]);
 
         if (containsSpaces)
-            Q_strcat(commandLine, sizeof(commandLine), "\"");
+            Q_strcat(commandLine, commandLineSize, "\"");
 
-        Q_strcat(commandLine, sizeof(commandLine), " ");
+        Q_strcat(commandLine, commandLineSize, " ");
     }
 
 #ifdef PROTOCOL_HANDLER
     if (protocolCommand != NULL) {
-        Q_strcat(commandLine, sizeof(commandLine), "+");
-        Q_strcat(commandLine, sizeof(commandLine), protocolCommand);
+        Q_strcat(commandLine, commandLineSize, "+");
+        Q_strcat(commandLine, commandLineSize, protocolCommand);
         free(protocolCommand);
     }
 #endif

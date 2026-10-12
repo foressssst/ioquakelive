@@ -1015,7 +1015,15 @@ static qboolean Steam_Load(void) {
 #ifdef _WIN32
     st.lib = (void*)LoadLibraryA(STEAM_LIB);
 #else
-    st.lib = dlopen("./" STEAM_LIB, RTLD_NOW);
+    st.lib = dlopen(STEAM_LIB, RTLD_NOW);
+#if defined(__x86_64__)
+    if (!st.lib) {
+        st.lib = dlopen("./linux64/" STEAM_LIB, RTLD_NOW);
+    }
+#endif
+    if (!st.lib) {
+        st.lib = dlopen("./" STEAM_LIB, RTLD_NOW);
+    }
 #endif
     if (!st.lib) {
         steamPath = Cvar_VariableString("fs_steampath");
