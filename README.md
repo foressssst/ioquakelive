@@ -39,7 +39,7 @@ Si encuentras un problema, puedes reportarlo en [Issues](https://github.com/fore
 
 ## Estado del proyecto
 
-Los tres módulos principales del juego —`qagame`, `cgame` y `ui`— se han reconstruido a partir de los binarios de Quake Live build 1069. Las direcciones de las funciones examinadas con Ghidra están documentadas en los mensajes de commit correspondientes.
+Los tres módulos principales del juego `qagame`, `cgame` y `ui` se han reconstruido a partir de los binarios de Quake Live build 1069. Las direcciones de las funciones examinadas con Ghidra están documentadas en los mensajes de commit correspondientes.
 
 La siguiente tabla compara los nombres de las cvars y los archivos presentes en el código con los del juego original. **La coincidencia de nombres no garantiza que el comportamiento sea idéntico**; esa equivalencia se comprueba por separado.
 
