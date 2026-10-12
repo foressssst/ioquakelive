@@ -171,7 +171,7 @@ static const char* Com_StripConsoleColors(const char* in, char* out, int outSize
     return out;
 }
 
-void QDECL Com_Printf(const char* fmt, ...) {
+Q_HOOKABLE void QDECL Com_Printf(const char* fmt, ...) {
     va_list argptr;
     char msg[MAXPRINTMSG];
     char plainBuffer[MAXPRINTMSG];

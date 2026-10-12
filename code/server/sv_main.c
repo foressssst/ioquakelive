@@ -110,7 +110,7 @@ void SV_AddServerCommand(client_t* client, const char* cmd) {
     Q_strncpyz(client->reliableCommands[index], cmd, sizeof(client->reliableCommands[index]));
 }
 
-void QDECL SV_SendServerCommand(client_t* cl, const char* fmt, ...) {
+Q_HOOKABLE void QDECL SV_SendServerCommand(client_t* cl, const char* fmt, ...) {
     va_list argptr;
     byte message[MAX_MSGLEN];
     client_t* client;

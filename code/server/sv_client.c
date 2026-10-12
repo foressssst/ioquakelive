@@ -365,7 +365,7 @@ void SV_FreeClient(client_t* client) {
     SV_CloseDownload(client);
 }
 
-void SV_DropClient(client_t* drop, const char* reason) {
+Q_HOOKABLE void SV_DropClient(client_t* drop, const char* reason) {
     int i;
     challenge_t* challenge;
     const qboolean isBot = drop->netchan.remoteAddress.type == NA_BOT;
@@ -475,7 +475,7 @@ static void SV_SendClientGameState(client_t* client) {
     SV_SendMessageToClient(&msg, client);
 }
 
-void SV_ClientEnterWorld(client_t* client, usercmd_t* cmd) {
+Q_HOOKABLE void SV_ClientEnterWorld(client_t* client, usercmd_t* cmd) {
     int clientNum;
     sharedEntity_t* ent;
 
@@ -995,7 +995,7 @@ static ucmd_t ucmds[] = {
 
     {NULL, NULL}};
 
-void SV_ExecuteClientCommand(client_t* cl, const char* s, qboolean clientOK) {
+Q_HOOKABLE void SV_ExecuteClientCommand(client_t* cl, const char* s, qboolean clientOK) {
     ucmd_t* u;
     qboolean bProcessed = qfalse;
 
@@ -1062,7 +1062,7 @@ static qboolean SV_ClientCommand(client_t* cl, msg_t* msg) {
     return qtrue;
 }
 
-void SV_ClientThink(client_t* cl, usercmd_t* cmd) {
+Q_HOOKABLE void SV_ClientThink(client_t* cl, usercmd_t* cmd) {
     cl->lastUsercmd = *cmd;
 
     if (cl->state != CS_ACTIVE) {

@@ -351,6 +351,15 @@ void Sys_UnloadDll(void* dllHandle) {
     Sys_UnloadLibrary(dllHandle);
 }
 
+#ifdef DEDICATED
+Q_HOOKABLE void Sys_SetModuleOffset(char* moduleName, void* offset) {
+    Com_Printf("Sys_SetModuleOffset: %s 0x%llX\n", moduleName, (unsigned long long)(intptr_t)offset);
+    if (strcmp(moduleName, "qagame") && strcmp(moduleName, "cgame") && strcmp(moduleName, "ui")) {
+        Com_Printf("Unknown module!\n");
+    }
+}
+#endif
+
 void* Sys_LoadDll(const char* name, qboolean useSystemLib) {
     void* dllhandle = NULL;
 

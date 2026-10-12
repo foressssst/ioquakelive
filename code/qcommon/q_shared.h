@@ -102,6 +102,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define Q_EXPORT
 #endif
 
+#if defined(DEDICATED) && defined(__GNUC__) && !defined(__clang__)
+#define Q_HOOKABLE __attribute__((noipa))
+#elif defined(DEDICATED) && defined(__GNUC__)
+#define Q_HOOKABLE __attribute__((noinline))
+#else
+#define Q_HOOKABLE
+#endif
+
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>

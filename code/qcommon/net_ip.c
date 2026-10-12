@@ -615,7 +615,7 @@ void Sys_SendPacket(int length, const void* data, netadr_t to) {
     }
 }
 
-qboolean Sys_IsLANAddress(netadr_t adr) {
+Q_HOOKABLE qboolean Sys_IsLANAddress(netadr_t adr) {
     int index, run, addrsize;
     qboolean differed;
     byte *compareadr, *comparemask, *compareip;

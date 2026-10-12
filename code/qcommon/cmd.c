@@ -437,7 +437,7 @@ cmd_function_t* Cmd_FindCommand(const char* cmd_name) {
     return NULL;
 }
 
-void Cmd_AddCommand(const char* cmd_name, xcommand_t function) {
+Q_HOOKABLE void Cmd_AddCommand(const char* cmd_name, xcommand_t function) {
     cmd_function_t* cmd;
 
     if (Cmd_FindCommand(cmd_name)) {

@@ -789,6 +789,9 @@ void Sys_Init(void);
 
 void* QDECL Sys_LoadGameDll(const char* name, vmMainProc* entryPoint, intptr_t(QDECL* systemcalls)(intptr_t, ...));
 void Sys_UnloadDll(void* dllHandle);
+#ifdef DEDICATED
+void Sys_SetModuleOffset(char* moduleName, void* offset);
+#endif
 
 qboolean Sys_DllExtension(const char* name);
 

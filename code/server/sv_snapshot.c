@@ -389,7 +389,7 @@ static void SV_BuildClientSnapshot(client_t* client) {
     }
 }
 
-void SV_SendMessageToClient(msg_t* msg, client_t* client) {
+Q_HOOKABLE void SV_SendMessageToClient(msg_t* msg, client_t* client) {
     client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSize = msg->cursize;
     client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSent = Sys_Milliseconds();
     client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageAcked = -1;

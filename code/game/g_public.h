@@ -19,6 +19,9 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
+#ifndef G_PUBLIC_H
+#define G_PUBLIC_H
+
 #define GAME_API_VERSION 10
 
 #define SVF_NOCLIENT 0x00000001
@@ -309,3 +312,5 @@ typedef enum {
 
     GAME_EXPORT_COUNT
 } gameExport_t;
+
+#endif

@@ -75,7 +75,7 @@ void SV_UpdateConfigstrings(client_t* client) {
     }
 }
 
-void SV_SetConfigstring(int index, const char* val) {
+Q_HOOKABLE void SV_SetConfigstring(int index, const char* val) {
     int i;
     client_t* client;
 
@@ -269,7 +269,7 @@ static void SV_ClearServer(void) {
     Com_Memset(&sv, 0, sizeof(sv));
 }
 
-void SV_SpawnServer(char* server, qboolean killBots) {
+Q_HOOKABLE void SV_SpawnServer(char* server, qboolean killBots) {
     int i;
     int checksum;
     qboolean isBot;
