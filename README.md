@@ -18,6 +18,7 @@ A tener en cuenta:
 - Los ejecutables no van firmados, así que es probable (muy poco) que Windows Defender bloquee la descarga o no te deje abrir el juego.
 - Para poder actualizar de version tendras que bajar el zip nuevo manualmente y descomprímirlo encima.
 - Las pre-releases traen solo Windows. Linux y macOS salen en las releases completas.
+- Las betas anteriores a la 1.0 (de la 0.1.0 a la 0.3.13) quedaron en [ioquakelive-betas](https://github.com/foressssst/ioquakelive-betas/releases).
 
 Si algo falla, abre un issue acá.
 
