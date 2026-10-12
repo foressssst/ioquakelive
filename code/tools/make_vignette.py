@@ -1,14 +1,3 @@
-"""
-Builds content/pak01/ui/ioql/vignette.png: the radial gradient retail's web UI lays over its
-background (web.pak src/app.js, the #app's background):
-
-    radial-gradient(center, ellipse cover, rgba(0,102,153,0.2) 0%, rgba(0,102,153,0.2) 10%,
-                    rgba(0,0,0,0.8) 100%)
-
-"ellipse cover" reaches the box's corners, so a circle through the corners of a square image
-becomes that ellipse once the image is stretched over the screen. The stops are mixed with
-their alpha premultiplied, as a browser mixes them.
-"""
 import math
 import os
 

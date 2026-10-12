@@ -1,9 +1,4 @@
 #!/bin/bash
-#
-# This script appends the text from Q3A_EULA.txt to a .dmg as a SLA resource
-#
-# usage is './SLA-dmg.sh /path/to/Q3A_EULA.txt /path/to/ioquake3.dmg'
-#
 
 if [ "x$1" = "x" ] || [ "x$2" = "x" ]; then
 	echo "usage: ./SLA-dmg.sh /path/to/Q3A_EULA.txt /path/to/ioquake3.dmg"

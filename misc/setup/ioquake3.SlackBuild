@@ -6,11 +6,9 @@ if [ "$TMP" = "" ]; then
   TMP=/tmp
 fi
 
-# clean, update
 make -C $BASE clean || exit 1
 svn up $BASE || exit 1
 
-# extract version info
 VERSION=`grep "\#define *PRODUCT_VERSION" $BASE/code/qcommon/q_shared.h | \
   sed -e 's/[^"]*"\(.*\)"/\1/'`
 
@@ -38,10 +36,8 @@ PKG=$TMP/package-$APP
 rm -rf $PKG
 mkdir -p $PKG
 
-# build
 make -C $BASE release copyfiles COPYDIR="$PKG"/usr/games/$APP|| exit 1
 
-# copy additional files
 cp $BASE/BUGS $BASE/COPYING.txt $BASE/ChangeLog $BASE/README $PKG/usr/games/$APP/
 cat $CWD/$APP.SlackBuild > $PKG/usr/games/$APP/$APP.SlackBuild
 
@@ -80,4 +76,3 @@ chown -R root:root install/ || exit 1
 chown -R root:games usr/ || exit 1
 /sbin/makepkg -l y -c n $TMP/$APP-$VERSION-$ARCH-$BUILD.tgz
 popd
-

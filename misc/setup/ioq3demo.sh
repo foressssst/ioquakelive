@@ -25,7 +25,6 @@ do
 done
 cd "`dirname $script`"
 
-
 lib=lib
 test -e lib64 && lib=lib64
 

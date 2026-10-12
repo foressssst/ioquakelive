@@ -1,7 +1,4 @@
 #!/bin/bash
-# Rev: $Id: ioquake3.sh,v 1.11 2006/01/18 13:47:42 raistlin Exp raistlin $
-# Needed to make symlinks/shortcuts work.
-# the binaries must run with correct working directory
 
 IOQ3_DIR=/usr/local/share/games/quake3
 
@@ -18,8 +15,6 @@ COMPILE_ARCH=`uname -p | sed -e 's/i.86/x86/'`
 EXEC_REL=release
 
 EXEC_BIN=ioquake3.${COMPILE_ARCH}
-# EXEC_BIN=ioquake3-smp.${COMPILE_ARCH}
-# EXEC_BIN=ioq3ded.${COMPILE_ARCH}
 
 EXEC_FLAGS="+set fs_basepath ${IOQ3_DIR} +set vm_game 1 +set vm_cgame 1 +set vm_ui 1 +set sv_pure 1 +set ttycon 0 +set com_ansiColor 0"
 
@@ -45,4 +40,3 @@ else
 	exit 1
 fi
   
-

@@ -1,9 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <!-- Late-import overrides for submodule dependency projects.
-       Imported AFTER the vcxproj, so these values take precedence
-       over any OutDir/IntDir set in the upstream project files.
-       Routes all dependency output to code/libs/win32 or win64. -->
   <PropertyGroup Condition="'$(Platform)'=='Win32'">
     <OutDir>$(MSBuildThisFileDirectory)libs\win32\</OutDir>
   </PropertyGroup>
@@ -16,7 +12,6 @@
   <PropertyGroup>
     <IntDir>$(MSBuildThisFileDirectory)..\build\deps\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
   </PropertyGroup>
-  <!-- Static CRT for Release, debug CRT for Debug -->
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release' or '$(Configuration)'=='ReleaseDLL'">
     <ClCompile>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -27,7 +22,6 @@
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
   </ItemDefinitionGroup>
-  <!-- Let dependency projects find each other's outputs -->
   <ItemDefinitionGroup>
     <Link>
       <AdditionalLibraryDirectories>$(OutDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>

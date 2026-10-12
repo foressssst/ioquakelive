@@ -1,14 +1,11 @@
 #!/bin/bash
 
-# Source directory
 MOUNT_DIR="../.."
 
-# Solaris stuff
 PLATFORM=`uname|sed -e s/_.*//|tr '[:upper:]' '[:lower:]'`
 if [ "X${PLATFORM}" != "Xsunos" ]; then
 	echo "Unsupported platform! Must run this script on Solaris host!" ; exit 127
 fi
-
 
 if [ "X`uname -m`" = "Xi86pc" ]; then
 	ARCH=x86
@@ -16,7 +13,6 @@ else
 	ARCH=sparc
 fi
 
-# Packages
 PKG_SOLARIS_NAME=ioquake3
 PKG_DATA_NAME=ioquake3d
 PKG_DEMO_NAME=ioquake3m
@@ -33,7 +29,6 @@ SOLARIS_PKGFILE="${PKG_SOLARIS_NAME}-${BUILD_VERSION}-${PKG_VERSION}-${ARCH}.pkg
 DATA_PKGFILE="${PKG_DATA_NAME}-${BUILD_VERSION}-${PKG_VERSION}.pkg"
 DEMO_PKGFILE="${PKG_DEMO_NAME}-${BUILD_VERSION}-${PKG_VERSION}.pkg"
 
-# build directories
 BUILD_DIR="${MOUNT_DIR}/build/release-${PLATFORM}-${ARCH}"
 PKG_SRC_DIR="${MOUNT_DIR}/misc/setup/pkg/${PKG_SOLARIS_NAME}"
 PKG_BUILD_DIR="/tmp/ioquake3-build/${PKG_SOLARIS_NAME}-${BUILD_VERSION}"
@@ -43,7 +38,6 @@ PKG_DATA_BUILD_DIR="/usr/local/src/quake3-data/ioquake3d/quake3"
 PKG_DEMO_SRC_DIR="${MOUNT_DIR}/misc/setup/pkg/${PKG_DEMO_NAME}"
 PKG_DEMO_BUILD_DIR="/usr/local/src/quake3-data/ioquake3m/quake3"
 
-# Tools
 RM="/usr/bin/rm"
 TOUCH="/usr/bin/touch"
 SED="/usr/bin/sed"
@@ -55,10 +49,6 @@ INSTALL_DATA="ginstall -D -m 644"
 PKGPROTO="/usr/bin/pkgproto"
 PKGMK="/usr/bin/pkgmk"
 PKGTRANS="/usr/bin/pkgtrans"
-
-#############################################################################
-# SOLARIS PACKAGE
-#############################################################################
 
 if [ -d ${BUILD_DIR} ]; then
 	if [ ! -d ${BUILD_DIR}/pkg ]; then
@@ -176,5 +166,3 @@ else
 	echo "Directory ${BUILD_DIR} not found!"
 	exit 1
 fi
-
-

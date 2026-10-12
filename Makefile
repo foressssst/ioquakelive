@@ -1,12 +1,6 @@
-#
-# ioquakelive Makefile
-#
-# GNU Make required
-#
 COMPILE_PLATFORM=$(shell uname | sed -e 's/_.*//' | tr '[:upper:]' '[:lower:]' | sed -e 's/\//_/g')
 COMPILE_ARCH=$(shell uname -m | sed -e 's/i.86/x86/' | sed -e 's/^arm.*/arm/')
 
-#arm64 hack!
 ifeq ($(shell uname -m), arm64)
   COMPILE_ARCH=arm64
 endif
@@ -15,7 +9,6 @@ ifeq ($(shell uname -m), aarch64)
 endif
 
 ifeq ($(COMPILE_PLATFORM),sunos)
-  # Solaris uname and GNU uname differ
   COMPILE_ARCH=$(shell uname -p | sed -e 's/i.86/x86/')
 endif
 
@@ -44,21 +37,12 @@ ifndef BUILD_RENDERER_VULKAN
   BUILD_RENDERER_VULKAN=
 endif
 
-#############################################################################
-#
-# If you require a different configuration from the defaults below, create a
-# new file named "Makefile.local" in the same directory as this file and define
-# your parameters there. This allows you to change configuration without
-# causing problems with keeping up to date with the repository.
-#
-#############################################################################
 -include Makefile.local
 
 ifeq ($(COMPILE_PLATFORM),cygwin)
   PLATFORM=mingw32
 endif
 
-# detect "emmake make"
 ifeq ($(findstring /emcc,$(CC)),/emcc)
   PLATFORM=emscripten
 endif
@@ -113,7 +97,6 @@ else
 endif
 export CROSS_COMPILING
 
-
 ifndef CLIENTBIN
 CLIENTBIN=ioquakelive
 endif
@@ -129,7 +112,6 @@ endif
 ifndef BASEGAME_CFLAGS
 BASEGAME_CFLAGS=
 endif
-
 
 ifndef COPYDIR
 COPYDIR="/usr/local/games/quake3"
@@ -183,9 +165,6 @@ ifndef USE_VOIP
 USE_VOIP=0
 endif
 
-# [QL] FreeType has been removed: text rendering is fontstash/stb_truetype
-# (renderercommon/tr_fontstash.c + tr_stbtt.c, renderergl2/tr_font_gl.c).
-
 ifndef USE_INTERNAL_LIBS
 USE_INTERNAL_LIBS=1
 endif
@@ -222,12 +201,9 @@ ifndef USE_YACC
 USE_YACC=0
 endif
 
-
 ifndef DEBUG_CFLAGS
 DEBUG_CFLAGS=-ggdb -O0
 endif
-
-#############################################################################
 
 BD=$(BUILD_DIR)/debug-$(PLATFORM)-$(ARCH)
 BR=$(BUILD_DIR)/release-$(PLATFORM)-$(ARCH)
@@ -258,18 +234,12 @@ LIBSDIR=$(MOUNT_DIR)/libs
 
 bin_path=$(shell which $(1) 2> /dev/null)
 
-
-# set PKG_CONFIG_PATH or PKG_CONFIG to influence this, e.g.
-# PKG_CONFIG_PATH=/opt/cross/i386-mingw32msvc/lib/pkgconfig or
-# PKG_CONFIG=arm-linux-gnueabihf-pkg-config
 ifeq ($(CROSS_COMPILING),0)
   PKG_CONFIG ?= pkg-config
 else
 ifneq ($(PKG_CONFIG_PATH),)
   PKG_CONFIG ?= pkg-config
 else
-  # Don't use host pkg-config when cross-compiling.
-  # (unknown-pkg-config is meant to be a non-existant command.)
   PKG_CONFIG ?= unknown-pkg-config
 endif
 endif
@@ -280,12 +250,9 @@ ifneq ($(call bin_path, $(PKG_CONFIG)),)
   SDL_CFLAGS ?= $(shell $(PKG_CONFIG) --silence-errors --cflags sdl3)
   SDL_LIBS ?= $(shell $(PKG_CONFIG) --silence-errors --libs sdl3)
 else
-  # assume they're in the system default paths (no -I or -L needed)
   CURL_LIBS ?= -lcurl
 endif
 
-
-# Add git version info
 USE_GIT=
 ifeq ($(wildcard .git),.git)
   GIT_REV=$(shell git show -s --pretty=format:%h-%ad --date=short)
@@ -298,11 +265,6 @@ endif
 ifndef VERSION
 VERSION=dev
 endif
-
-
-#############################################################################
-# SETUP AND BUILD -- LINUX
-#############################################################################
 
 INSTALL=install
 MKDIR=mkdir -p
@@ -348,8 +310,6 @@ ifneq (,$(findstring "$(PLATFORM)", "linux" "gnu_kfreebsd" "kfreebsd-gnu" "gnu")
     HAVE_VM_COMPILED=true
   endif
   ifeq ($(ARCH),alpha)
-    # According to http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=410555
-    # -ffast-math will cause the client to die with SIGFPE on Alpha
     OPTIMIZE = $(OPTIMIZEVM)
   endif
   endif
@@ -364,8 +324,6 @@ ifneq (,$(findstring "$(PLATFORM)", "linux" "gnu_kfreebsd" "kfreebsd-gnu" "gnu")
   CLIENT_LIBS=$(SDL_LIBS)
   RENDERER_LIBS = $(SDL_LIBS)
 
-  # [ioquakelive] SDL3 is not on every distribution yet, so it travels beside the game, and the
-  # client looks for it there first
   CLIENT_LDFLAGS += -Wl,-rpath,'$$ORIGIN'
 
   ifeq ($(USE_CURL),1)
@@ -380,18 +338,13 @@ ifneq (,$(findstring "$(PLATFORM)", "linux" "gnu_kfreebsd" "kfreebsd-gnu" "gnu")
   endif
 
   ifeq ($(ARCH),x86)
-    # linux32 make ...
     BASE_CFLAGS += -m32
   else
   ifeq ($(ARCH),ppc64)
     BASE_CFLAGS += -m64
   endif
   endif
-else # ifeq Linux
-
-#############################################################################
-# SETUP AND BUILD -- MAC OS X
-#############################################################################
+else
 
 ifeq ($(PLATFORM),darwin)
   HAVE_VM_COMPILED=true
@@ -400,7 +353,6 @@ ifeq ($(PLATFORM),darwin)
   RENDERER_LIBS=
   OPTIMIZEVM = -O3
 
-  # Default minimum Mac OS X version
   ifeq ($(MACOSX_VERSION_MIN),)
     MACOSX_VERSION_MIN=10.9
     ifneq ($(findstring $(ARCH),ppc ppc64),)
@@ -410,9 +362,6 @@ ifeq ($(PLATFORM),darwin)
       MACOSX_VERSION_MIN=10.6
     endif
     ifeq ($(ARCH),x86_64)
-      # trying to find default SDK version is hard
-      # macOS 10.15 requires -sdk macosx but 10.11 doesn't support it
-      # macOS 10.6 doesn't have -show-sdk-version
       DEFAULT_SDK=$(shell xcrun -sdk macosx -show-sdk-version 2> /dev/null)
       ifeq ($(DEFAULT_SDK),)
         DEFAULT_SDK=$(shell xcrun -show-sdk-version 2> /dev/null)
@@ -435,10 +384,8 @@ ifeq ($(PLATFORM),darwin)
   MACOSX_MAJOR=$(shell echo $(MACOSX_VERSION_MIN) | cut -d. -f1)
   MACOSX_MINOR=$(shell echo $(MACOSX_VERSION_MIN) | cut -d. -f2)
   ifeq ($(shell test $(MACOSX_MINOR) -gt 9; echo $$?),0)
-    # Multiply and then remove decimal. 10.10 -> 101000.0 -> 101000
     MAC_OS_X_VERSION_MIN_REQUIRED=$(shell echo "$(MACOSX_MAJOR) * 10000 + $(MACOSX_MINOR) * 100" | bc | cut -d. -f1)
   else
-    # Multiply by 100 and then remove decimal. 10.7 -> 1070.0 -> 1070
     MAC_OS_X_VERSION_MIN_REQUIRED=$(shell echo "$(MACOSX_VERSION_MIN) * 100" | bc | cut -d. -f1)
   endif
 
@@ -461,8 +408,6 @@ ifeq ($(PLATFORM),darwin)
   endif
   ifeq ($(ARCH),x86)
     OPTIMIZEVM += -march=prescott -mfpmath=sse
-    # x86 vm will crash without -mstackrealign since MMX instructions will be
-    # used no matter what and they corrupt the frame pointer in VM calls
     BASE_CFLAGS += -arch i386 -m32 -mstackrealign
   endif
   ifeq ($(ARCH),x86_64)
@@ -470,34 +415,25 @@ ifeq ($(PLATFORM),darwin)
     BASE_CFLAGS += -arch x86_64
   endif
   ifeq ($(ARCH),arm64)
-    # HAVE_VM_COMPILED=false # TODO: implement compiled vm
     BASE_CFLAGS += -arch arm64
   endif
 
-  # When compiling on OSX for OSX, we're not cross compiling as far as the
-  # Makefile is concerned, as target architecture is specified as a compiler
-  # argument
   ifeq ($(COMPILE_PLATFORM),darwin)
     CROSS_COMPILING=0
   endif
 
   ifeq ($(CROSS_COMPILING),1)
-    # If CC is already set to something generic, we probably want to use
-    # something more specific
     ifneq ($(findstring $(strip $(CC)),cc gcc),)
       CC=
     endif
 
     ifndef CC
       ifndef DARWIN
-        # macOS 10.9 SDK
         DARWIN=13
         ifneq ($(findstring $(ARCH),ppc ppc64),)
-          # macOS 10.5 SDK, though as of writing osxcross doesn't support ppc/ppc64
           DARWIN=9
         endif
         ifeq ($(ARCH),arm64)
-          # macOS 11.3 SDK
           DARWIN=20.4
         endif
       endif
@@ -531,7 +467,6 @@ ifeq ($(PLATFORM),darwin)
   CLIENT_LIBS += -framework UniformTypeIdentifiers
   RENDERER_LIBS += -framework OpenGL
 
-  # SDL3 through pkg-config (the CI builds it from the submodule), else the framework
   ifneq ($(SDL_CFLAGS),)
     BASE_CFLAGS += $(SDL_CFLAGS)
     CLIENT_LIBS += $(SDL_LIBS)
@@ -550,23 +485,15 @@ ifeq ($(PLATFORM),darwin)
 
   NOTSHLIBCFLAGS=-mdynamic-no-pic
 
-else # ifeq darwin
-
-
-#############################################################################
-# SETUP AND BUILD -- MINGW32
-#############################################################################
+else
 
 ifdef MINGW
 
   ifeq ($(CROSS_COMPILING),1)
-    # If CC is already set to something generic, we probably want to use
-    # something more specific
     ifneq ($(findstring $(strip $(CC)),cc gcc),)
       CC=
     endif
 
-    # We need to figure out the correct gcc and windres
     ifeq ($(ARCH),x86_64)
       MINGW_PREFIXES=x86_64-w64-mingw32 amd64-mingw32msvc
     endif
@@ -584,15 +511,12 @@ ifdef MINGW
          $(call bin_path, $(MINGW_PREFIX)-windres))))
     endif
   else
-    # Some MinGW installations define CC to cc, but don't actually provide cc,
-    # so check that CC points to a real binary and use gcc if it doesn't
     ifeq ($(call bin_path, $(CC)),)
       CC=gcc
     endif
 
   endif
 
-  # using generic windres if specific one is not present
   ifndef WINDRES
     WINDRES=windres
   endif
@@ -604,7 +528,6 @@ ifdef MINGW
   BASE_CFLAGS = -Wall -fno-strict-aliasing -Wimplicit -Wstrict-prototypes \
     -DUSE_ICON
 
-  # In the absence of wspiapi.h, require Windows XP or later
   ifeq ($(shell test -e $(CMDIR)/wspiapi.h; echo $$?),1)
     BASE_CFLAGS += -DWINVER=0x501
   endif
@@ -633,9 +556,6 @@ ifdef MINGW
   ifeq ($(COMPILE_PLATFORM),cygwin)
     TOOLS_BINEXT=.exe
 
-    # Under cygwin the default of using gcc for TOOLS_CC won't work, so
-    # we need to figure out the appropriate compiler to use, based on the
-    # host architecture that we're running under (as tools run on the host)
     ifeq ($(COMPILE_ARCH),x86_64)
       TOOLS_MINGW_PREFIXES=x86_64-w64-mingw32 amd64-mingw32msvc
     endif
@@ -649,7 +569,6 @@ ifdef MINGW
 
   LIBS= -lws2_32 -lwinmm -lpsapi
 
-  # clang 3.4 doesn't support this
   ifneq ("$(CC)", $(findstring "$(CC)", "clang" "clang++"))
     CLIENT_LDFLAGS += -mwindows
   endif
@@ -673,13 +592,11 @@ ifdef MINGW
   endif
 
   ifeq ($(ARCH),x86)
-    # build 32bit
     BASE_CFLAGS += -m32
   else
     BASE_CFLAGS += -m64
   endif
 
-  # libmingw32 must be linked before libSDLmain
   CLIENT_LIBS += -lmingw32
   RENDERER_LIBS += -lmingw32
 
@@ -703,17 +620,11 @@ ifdef MINGW
     SDLDLL=SDL3.dll
   endif
 
-else # ifdef MINGW
-
-#############################################################################
-# SETUP AND BUILD -- FREEBSD
-#############################################################################
+else
 
 ifeq ($(PLATFORM),freebsd)
-  # Use the default C compiler
   TOOLS_CC=cc
 
-  # flags
   BASE_CFLAGS = \
     -Wall -fno-strict-aliasing -Wimplicit -Wstrict-prototypes \
     -DUSE_ICON -DMAP_ANONYMOUS=MAP_ANON
@@ -728,7 +639,6 @@ ifeq ($(PLATFORM),freebsd)
   SHLIBLDFLAGS=-shared $(LDFLAGS)
 
   THREAD_LIBS=-lpthread
-  # don't need -ldl (FreeBSD)
   LIBS=-lm
 
   CLIENT_LIBS =
@@ -736,7 +646,6 @@ ifeq ($(PLATFORM),freebsd)
   CLIENT_LIBS += $(SDL_LIBS)
   RENDERER_LIBS = $(SDL_LIBS)
 
-  # optional features/libraries
   ifeq ($(USE_CURL),1)
     CLIENT_CFLAGS += $(CURL_CFLAGS)
     ifeq ($(USE_CURL_DLOPEN),1)
@@ -744,7 +653,6 @@ ifeq ($(PLATFORM),freebsd)
     endif
   endif
 
-  # cross-compiling tweaks
   ifeq ($(ARCH),x86)
     ifeq ($(CROSS_COMPILING),1)
       BASE_CFLAGS += -m32
@@ -755,11 +663,7 @@ ifeq ($(PLATFORM),freebsd)
       BASE_CFLAGS += -m64
     endif
   endif
-else # ifeq freebsd
-
-#############################################################################
-# SETUP AND BUILD -- OPENBSD
-#############################################################################
+else
 
 ifeq ($(PLATFORM),openbsd)
 
@@ -794,8 +698,6 @@ ifeq ($(PLATFORM),openbsd)
     HAVE_VM_COMPILED=true
   endif
   ifeq ($(ARCH),alpha)
-    # According to http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=410555
-    # -ffast-math will cause the client to die with SIGFPE on Alpha
     OPTIMIZE = $(OPTIMIZEVM)
   endif
   endif
@@ -806,7 +708,6 @@ ifeq ($(PLATFORM),openbsd)
     USE_CURL_DLOPEN=0
   endif
 
-  # no shm_open on OpenBSD
   USE_MUMBLE=0
 
   SHLIBEXT=so
@@ -826,11 +727,7 @@ ifeq ($(PLATFORM),openbsd)
       CLIENT_LIBS += $(CURL_LIBS)
     endif
   endif
-else # ifeq openbsd
-
-#############################################################################
-# SETUP AND BUILD -- NETBSD
-#############################################################################
+else
 
 ifeq ($(PLATFORM),netbsd)
 
@@ -847,11 +744,7 @@ ifeq ($(PLATFORM),netbsd)
   endif
 
   BUILD_CLIENT = 0
-else # ifeq netbsd
-
-#############################################################################
-# SETUP AND BUILD -- IRIX
-#############################################################################
+else
 
 ifeq ($(PLATFORM),irix64)
   LIB=lib
@@ -871,16 +764,11 @@ ifeq ($(PLATFORM),irix64)
 
   LIBS=-ldl -lm -lgen
 
-  # FIXME: The X libraries probably aren't necessary?
   CLIENT_LIBS=-L/usr/X11/$(LIB) $(SDL_LIBS) \
     -lX11 -lXext -lm
   RENDERER_LIBS = $(SDL_LIBS)
 
-else # ifeq IRIX
-
-#############################################################################
-# SETUP AND BUILD -- SunOS
-#############################################################################
+else
 
 ifeq ($(PLATFORM),sunos)
 
@@ -931,11 +819,7 @@ ifeq ($(PLATFORM),sunos)
   CLIENT_LIBS +=$(SDL_LIBS) -lX11 -lXext -liconv -lm
   RENDERER_LIBS = $(SDL_LIBS)
 
-else # ifeq sunos
-
-#############################################################################
-# SETUP AND BUILD -- emscripten
-#############################################################################
+else
 
 ifeq ($(PLATFORM),emscripten)
 
@@ -945,7 +829,6 @@ ifeq ($(PLATFORM),emscripten)
   ARCH=wasm32
   BINEXT=.js
 
-  # dlopen(), opengl1, and networking are not functional
   USE_RENDERER_DLOPEN=0
   BUILD_GAME_SO=0
   BUILD_SERVER=0
@@ -956,18 +839,11 @@ ifeq ($(PLATFORM),emscripten)
   CLIENT_LDFLAGS+=-s STACK_SIZE=5MB
   CLIENT_LDFLAGS+=-s MIN_WEBGL_VERSION=1 -s MAX_WEBGL_VERSION=2
 
-  # The HTML file can use these functions to load extra files before the game starts.
   CLIENT_LDFLAGS+=-s EXPORTED_RUNTIME_METHODS=FS,addRunDependency,removeRunDependency
   CLIENT_LDFLAGS+=-s EXIT_RUNTIME=1
   CLIENT_LDFLAGS+=-s EXPORT_ES6
   CLIENT_LDFLAGS+=-s EXPORT_NAME=quakelive
 
-  # Game data files can be packaged by emcc into a .data file that lives next to the wasm bundle
-  # and added to the virtual filesystem before the game starts. This requires the game data to be
-  # present at build time and it can't be changed afterward.
-  # For more flexibility, game data files can be loaded from a web server at runtime by listing
-  # them in client-config.json. This way they don't have to be present at build time and can be
-  # changed later.
   ifeq ($(EMSCRIPTEN_PRELOAD_FILE),1)
     ifeq ($(wildcard $(BASEGAME)/*),)
       $(error "No files in '$(BASEGAME)' directory for emscripten to preload.")
@@ -978,23 +854,17 @@ ifeq ($(PLATFORM),emscripten)
   OPTIMIZEVM = -O3
   OPTIMIZE = $(OPTIMIZEVM) -ffast-math
 
-  # These allow a warning-free build.
-  # Some of these warnings may actually be legit problems and should be fixed at some point.
   BASE_CFLAGS+=-Wno-deprecated-non-prototype -Wno-dangling-else -Wno-implicit-const-int-float-conversion -Wno-misleading-indentation -Wno-format-overflow -Wno-logical-not-parentheses -Wno-absolute-value
 
-  DEBUG_CFLAGS=-g3 -O0 # -fsanitize=address -fsanitize=undefined
-  # Emscripten needs debug compiler flags to be passed to the linker as well
+  DEBUG_CFLAGS=-g3 -O0
   DEBUG_LDFLAGS=$(DEBUG_CFLAGS)
 
   SHLIBEXT=wasm
   SHLIBCFLAGS=-fPIC
   SHLIBLDFLAGS=-s SIDE_MODULE
 
-else # ifeq emscripten
+else
 
-#############################################################################
-# SETUP AND BUILD -- GENERIC
-#############################################################################
   BASE_CFLAGS=
   OPTIMIZE = -O3
 
@@ -1002,15 +872,15 @@ else # ifeq emscripten
   SHLIBCFLAGS=-fPIC
   SHLIBLDFLAGS=-shared
 
-endif #Linux
-endif #darwin
-endif #MINGW
-endif #FreeBSD
-endif #OpenBSD
-endif #NetBSD
-endif #IRIX
-endif #SunOS
-endif #emscripten
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+endif
 
 ifndef CC
   CC=gcc
@@ -1041,18 +911,15 @@ endif
 ifneq ($(BUILD_CLIENT),0)
   ifneq ($(USE_RENDERER_DLOPEN),0)
     TARGETS += $(B)/$(CLIENTBIN)$(FULLBINEXT)
-    # [ioquakelive] the Vulkan executable is this same binary under the name it looks for
     ifneq ($(BUILD_RENDERER_VULKAN),0)
       TARGETS += $(B)/$(CLIENTBIN)-vulkan$(FULLBINEXT)
     endif
     ifneq ($(BUILD_RENDERER_OPENGL2),0)
       TARGETS += $(B)/opengl2$(SHLIBNAME)
     endif
-    # [ioquakelive] the renderer of retail's lineage, on Quake3e's; only as a library
     ifneq ($(BUILD_RENDERER_OPENGL1),0)
       TARGETS += $(B)/opengl1$(SHLIBNAME)
     endif
-    # [ioquakelive] the same one on Vulkan
     ifneq ($(BUILD_RENDERER_VULKAN),0)
       TARGETS += $(B)/vulkan$(SHLIBNAME)
     endif
@@ -1073,7 +940,6 @@ ifneq ($(BUILD_GAME_SO),0)
       $(B)/$(BASEGAME)/pak01.pk3
   endif
 endif
-
 
 ifeq ($(PLATFORM),emscripten)
   ifneq ($(BUILD_SERVER),0)
@@ -1182,14 +1048,11 @@ ifeq ($(USE_INTERNAL_JPEG),1)
   BASE_CFLAGS += -DUSE_INTERNAL_JPEG
   BASE_CFLAGS += -I$(JPDIR)
 else
-  # IJG libjpeg doesn't have pkg-config, but libjpeg-turbo uses libjpeg.pc;
-  # we fall back to hard-coded answers if libjpeg.pc is unavailable
   JPEG_CFLAGS ?= $(shell $(PKG_CONFIG) --silence-errors --cflags libjpeg || true)
   JPEG_LIBS ?= $(shell $(PKG_CONFIG) --silence-errors --libs libjpeg || echo -ljpeg)
   BASE_CFLAGS += $(JPEG_CFLAGS)
   RENDERER_LIBS += $(JPEG_LIBS)
 endif
-
 
 ifeq ("$(CC)", $(findstring "$(CC)", "clang" "clang++"))
   BASE_CFLAGS += -Qunused-arguments
@@ -1219,7 +1082,6 @@ else
   STRIP_FLAG = -s
 endif
 
-# https://reproducible-builds.org/specs/source-date-epoch/
 ifdef SOURCE_DATE_EPOCH
   BASE_CFLAGS += -DPRODUCT_DATE=\\\"$(shell date --date="@$$SOURCE_DATE_EPOCH" "+%b %_d %Y" | sed -e 's/ /\\\ /'g)\\\"
 endif
@@ -1230,10 +1092,6 @@ BASE_CFLAGS += -Wstrict-aliasing=2 -Wmissing-format-attribute
 BASE_CFLAGS += -Wdisabled-optimization
 BASE_CFLAGS += -Werror-implicit-function-declaration
 
-# [ioquakelive] no fused multiply-adds: on ARM, GCC and clang fuse a*b+c into one instruction that
-# rounds once, and the physics then comes out a hair different from an x86 build -- the server and
-# the client prediction stop agreeing. Retail only ever ran on x86, which never fuses. MSVC does not
-# fuse by default either (checked on ARM64: bg_pmove.c has none)
 BASE_CFLAGS += -ffp-contract=off
 
 ifeq ($(V),1)
@@ -1254,7 +1112,6 @@ $(echo_cmd) "REF_CC $<"
 $(Q)$(CC) $(SHLIBCFLAGS) $(CFLAGS) $(CLIENT_CFLAGS) $(OPTIMIZE) -o $@ -c $<
 endef
 
-# [ioquakelive] renderergl1 brings its own GL function pointers: sdl_glimp.c must not define them
 define DO_REF1_CC
 $(echo_cmd) "REF1_CC $<"
 $(Q)$(CC) $(SHLIBCFLAGS) $(CFLAGS) $(CLIENT_CFLAGS) $(OPTIMIZE) -DGLIMP_EXTERNAL_QGL -o $@ -c $<
@@ -1296,16 +1153,11 @@ $(echo_cmd) "UI_CC $<"
 $(Q)$(CC) $(BASEGAME_CFLAGS) -DUI $(SHLIBCFLAGS) $(CFLAGS) $(OPTIMIZEVM) -o $@ -c $<
 endef
 
-
 define DO_DED_CC
 $(echo_cmd) "DED_CC $<"
 $(Q)$(CC) $(NOTSHLIBCFLAGS) -DDEDICATED $(CFLAGS) $(SERVER_CFLAGS) $(OPTIMIZE) -o $@ -c $<
 endef
 
-# Objective-C compile with ARC enabled. Used only for sys_osx.m (the only .m
-# file in the engine). -fobjc-arc makes the compiler insert retain/release
-# automatically, so the file must not contain manual retain/release/autorelease
-# calls or it will fail to compile.
 define DO_OBJCC
 $(echo_cmd) "OBJCC $<"
 $(Q)$(CC) $(NOTSHLIBCFLAGS) $(CFLAGS) $(CLIENT_CFLAGS) $(OPTIMIZE) -fobjc-arc -o $@ -c $<
@@ -1320,11 +1172,6 @@ define DO_WINDRES
 $(echo_cmd) "WINDRES $<"
 $(Q)$(WINDRES) -i $< -o $@
 endef
-
-
-#############################################################################
-# MAIN TARGETS
-#############################################################################
 
 default: release
 all: debug release
@@ -1353,9 +1200,6 @@ $2: $1
 	@cp $1 $2
 endef
 
-# These functions allow us to generate rules for copying a list of files
-# into the base directory of the build; this is useful for bundling libs,
-# README files or whatever else
 define GENERATE_COPY_TARGETS
 $(foreach FILE,$1, \
   $(eval $(call ADD_COPY_TARGET, \
@@ -1383,18 +1227,11 @@ else
   print_wrapped=$(print_list)
 endif
 
-# [QL] Regenerate code/qcommon/git_version.h with the current short hash
-# before every build, so PRODUCT_GIT_HASH (used by FULL_PRODUCT_VERSION) is
-# always in sync with the source revision. The script is idempotent - it
-# only rewrites the header when the hash changes, so this doesn't trigger
-# spurious recompiles.
 .PHONY: git_version_header
 git_version_header:
 	@python code/tools/make_git_version_header.py code/qcommon/git_version.h \
 	  || python3 code/tools/make_git_version_header.py code/qcommon/git_version.h
 
-# Create the build directories, check libraries and print out
-# an informational message, then start building
 targets: git_version_header makedirs
 	@echo ""
 	@echo "Building in $(B):"
@@ -1470,10 +1307,6 @@ makedirs:
 	@$(MKDIR) $(B)/$(BASEGAME)/qcommon
 	@$(MKDIR) $(B)/$(BASEGAME)/vm
 
-#############################################################################
-# BUILD TOOLS
-#############################################################################
-
 ifndef TOOLS_CC
   TOOLS_CC = gcc
 endif
@@ -1493,11 +1326,6 @@ STRINGIFY   = $(B)/tools/stringify$(TOOLS_BINEXT)
 $(STRINGIFY): $(TOOLSDIR)/stringify.c
 	$(echo_cmd) "TOOLS_CC $@"
 	$(Q)$(TOOLS_CC) $(TOOLS_CFLAGS) $(TOOLS_LDFLAGS) -o $@ $(TOOLSDIR)/stringify.c $(TOOLS_LIBS)
-
-
-#############################################################################
-# CLIENT/SERVER
-#############################################################################
 
 Q3OBJ = \
   $(B)/client/cl_cgame.o \
@@ -1698,7 +1526,6 @@ Q3R2STRINGOBJ = \
   $(B)/renderergl2/glsl/qlblur_fp.o \
   $(B)/renderergl2/glsl/qlcombine_fp.o
 
-# [ioquakelive] renderergl1: Quake3e's renderer with what is Quake Live's in it (opengl1)
 Q3R1OBJ = \
   $(B)/renderergl1/tr_animation.o \
   $(B)/renderergl1/tr_arb.o \
@@ -1749,7 +1576,6 @@ ifneq ($(USE_RENDERER_DLOPEN), 0)
     $(B)/renderergl1/q_math.o
 endif
 
-# [ioquakelive] renderervk: the same renderer on Vulkan
 Q3RVKOBJ = \
   $(B)/renderervk/tr_animation.o \
   $(B)/renderervk/tr_backend.o \
@@ -1856,7 +1682,6 @@ ifneq ($(USE_INTERNAL_JPEG),0)
     $(B)/renderergl2/jquant2.o \
     $(B)/renderergl2/jutils.o
 endif
-
 
 ifeq ($(NEED_OPUS),1)
 ifeq ($(USE_INTERNAL_OPUS),1)
@@ -2057,7 +1882,6 @@ Q3OBJ += \
   $(B)/client/zutil.o
 endif
 
-
 ifdef MINGW
   Q3OBJ += \
     $(B)/client/win_resource.o \
@@ -2071,7 +1895,6 @@ ifeq ($(PLATFORM),darwin)
   Q3OBJ += \
     $(B)/client/sys_osx.o
 endif
-
 
 ifneq ($(USE_RENDERER_DLOPEN),0)
 $(B)/$(CLIENTBIN)$(FULLBINEXT): $(Q3OBJ) $(LIBSDLMAIN)
@@ -2117,11 +1940,6 @@ endif
 	$(RANLIB) $@
 endif
 endif
-
-
-#############################################################################
-# DEDICATED SERVER
-#############################################################################
 
 Q3DOBJ = \
   $(B)/ded/sv_bot.o \
@@ -2200,7 +2018,6 @@ Q3DOBJ = \
   $(B)/ded/q_math_sse.o \
   $(B)/ded/sys_main.o
 
-
 ifeq ($(USE_INTERNAL_ZLIB),1)
 Q3DOBJ += \
   $(B)/ded/adler32.o \
@@ -2214,7 +2031,6 @@ Q3DOBJ += \
   $(B)/ded/inftrees.o \
   $(B)/ded/zutil.o
 endif
-
 
 ifdef MINGW
   Q3DOBJ += \
@@ -2235,11 +2051,6 @@ endif
 $(B)/$(SERVERBIN)$(FULLBINEXT): $(Q3DOBJ)
 	$(echo_cmd) "LD $@"
 	$(Q)$(CC) $(CFLAGS) $(LDFLAGS) $(NOTSHLIBLDFLAGS) -o $@ $(Q3DOBJ) $(LIBS)
-
-
-#############################################################################
-## BASEQ3 CGAME
-#############################################################################
 
 Q3CGOBJ_ = \
   $(B)/$(BASEGAME)/cgame/cg_main.o \
@@ -2275,11 +2086,6 @@ Q3CGOBJ = $(Q3CGOBJ_) $(B)/$(BASEGAME)/cgame/cg_syscalls.o
 $(B)/$(BASEGAME)/cgame$(SHLIBNAME): $(Q3CGOBJ)
 	$(echo_cmd) "LD $@"
 	$(Q)$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(Q3CGOBJ)
-
-
-#############################################################################
-## BASEQ3 GAME
-#############################################################################
 
 Q3GOBJ_ = \
   $(B)/$(BASEGAME)/game/g_main.o \
@@ -2340,11 +2146,6 @@ $(B)/$(BASEGAME)/qagame$(SHLIBNAME): $(Q3GOBJ)
 	$(echo_cmd) "LD $@"
 	$(Q)$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(Q3GOBJ)
 
-
-#############################################################################
-## BASEQ3 UI
-#############################################################################
-
 Q3UIOBJ_ = \
   $(B)/$(BASEGAME)/ui/ui_main.o \
   $(B)/$(BASEGAME)/ui/ui_browser.o \
@@ -2372,13 +2173,6 @@ $(B)/$(BASEGAME)/ui$(SHLIBNAME): $(Q3UIOBJ)
 	$(echo_cmd) "LD $@"
 	$(Q)$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(Q3UIOBJ)
 
-#############################################################################
-## IOBIN PK3
-#############################################################################
-
-# [QL] Local dev iobin.pk3 contains only the local platform's three DLLs.
-# CI release builds produce a universal iobin.pk3 with all platforms - see
-# code/tools/make_deterministic_pk3.py and the package job in build.yml.
 IOBIN_PK3 = $(B)/$(BASEGAME)/iobin.pk3
 GAME_SO_TARGETS = \
   $(B)/$(BASEGAME)/cgame$(SHLIBNAME) \
@@ -2390,10 +2184,6 @@ $(IOBIN_PK3): $(GAME_SO_TARGETS)
 	@rm -f $@
 	$(Q)cd $(B)/$(BASEGAME) && zip -j9 iobin.pk3 cgame$(SHLIBNAME) qagame$(SHLIBNAME) ui$(SHLIBNAME)
 
-#############################################################################
-## PAK01 PK3 (content overrides)
-#############################################################################
-
 PAK01_SRCDIR=content/pak01
 PAK01_PK3 = $(B)/$(BASEGAME)/pak01.pk3
 PAK01_FILES = $(shell find $(PAK01_SRCDIR) -type f 2>/dev/null)
@@ -2402,10 +2192,6 @@ $(PAK01_PK3): $(PAK01_FILES)
 	$(echo_cmd) "PK3 $@"
 	@rm -f $@
 	$(Q)cd $(PAK01_SRCDIR) && zip -r9 $(CURDIR)/$@ .
-
-#############################################################################
-## CLIENT/SERVER RULES
-#############################################################################
 
 $(B)/client/%.o: $(CDIR)/%.c
 	$(DO_CC)
@@ -2455,7 +2241,6 @@ $(B)/client/%.o: $(SYSDIR)/%.m
 $(B)/client/win_resource.o: $(SYSDIR)/win_resource.rc $(SYSDIR)/win_manifest.xml
 	$(DO_WINDRES)
 
-
 $(B)/renderergl2/glsl/%.c: $(RGL2DIR)/glsl/%.glsl $(STRINGIFY)
 	$(DO_REF_STR)
 
@@ -2501,7 +2286,6 @@ $(B)/renderervk/%.o: $(RCOMMONDIR)/%.c
 $(B)/renderervk/%.o: $(RVKDIR)/%.c
 	$(DO_REFVK_CC)
 
-
 $(B)/ded/%.o: $(SDIR)/%.c
 	$(DO_DED_CC)
 
@@ -2526,17 +2310,11 @@ $(B)/ded/win_resource.o: $(SYSDIR)/win_resource.rc $(SYSDIR)/win_manifest.xml
 $(B)/ded/%.o: $(NDIR)/%.c
 	$(DO_DED_CC)
 
-# Extra dependencies to ensure the git version is incorporated
 ifeq ($(USE_GIT),1)
   $(B)/client/cl_console.o : .git
   $(B)/client/common.o : .git
   $(B)/ded/common.o : .git
 endif
-
-
-#############################################################################
-## GAME MODULE RULES
-#############################################################################
 
 $(B)/$(BASEGAME)/cgame/bg_%.o: $(GDIR)/bg_%.c
 	$(DO_CGAME_CC)
@@ -2544,10 +2322,8 @@ $(B)/$(BASEGAME)/cgame/bg_%.o: $(GDIR)/bg_%.c
 $(B)/$(BASEGAME)/cgame/%.o: $(CGDIR)/%.c
 	$(DO_CGAME_CC)
 
-
 $(B)/$(BASEGAME)/game/%.o: $(GDIR)/%.c
 	$(DO_GAME_CC)
-
 
 $(B)/$(BASEGAME)/ui/bg_%.o: $(GDIR)/bg_%.c
 	$(DO_UI_CC)
@@ -2555,14 +2331,8 @@ $(B)/$(BASEGAME)/ui/bg_%.o: $(GDIR)/bg_%.c
 $(B)/$(BASEGAME)/ui/%.o: $(UIDIR)/%.c
 	$(DO_UI_CC)
 
-
 $(B)/$(BASEGAME)/qcommon/%.o: $(CMDIR)/%.c
 	$(DO_SHLIB_CC)
-
-
-#############################################################################
-# EMSCRIPTEN
-#############################################################################
 
 $(B)/$(CLIENTBIN).html: $(WEBDIR)/client.html
 	$(echo_cmd) "SED $@"
@@ -2572,15 +2342,9 @@ $(B)/$(CLIENTBIN)-config.json: $(WEBDIR)/client-config.json
 	$(echo_cmd) "CP $@"
 	$(Q)cp $< $@
 
-
-#############################################################################
-# MISC
-#############################################################################
-
 OBJ = $(Q3OBJ) $(Q3R2OBJ) $(Q3R1OBJ) $(Q3RVKOBJ) $(Q3DOBJ) $(JPGOBJ) \
   $(Q3GOBJ) $(Q3CGOBJ) $(Q3UIOBJ)
 STRINGOBJ = $(Q3R2STRINGOBJ)
-
 
 copyfiles: release
 	@if [ ! -d $(COPYDIR)/$(BASEGAME) ]; then echo "You need to set COPYDIR to where your Quake Live data is!"; fi
@@ -2660,12 +2424,6 @@ toolsclean2:
 distclean: clean toolsclean
 	@rm -rf $(BUILD_DIR)
 
-
-#############################################################################
-# DEPENDENCIES
-#############################################################################
-
-# Rebuild every target if Makefile or Makefile.local changes
 ifneq ($(DEPEND_MAKEFILE),0)
 .EXTRA_PREREQS:= $(MAKEFILE_LIST)
 endif
@@ -2681,7 +2439,6 @@ endif
 	toolsclean toolsclean2 toolsclean-debug toolsclean-release \
 	$(OBJ_D_FILES)
 
-# If the target name contains "clean", don't do a parallel build
 ifneq ($(findstring clean, $(MAKECMDGOALS)),)
 .NOTPARALLEL:
 endif

@@ -5,7 +5,6 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # Lets a build be started by hand, without a dummy commit.
   workflow_dispatch:
     inputs:
       windows_only:
@@ -13,29 +12,20 @@ on:
         type: boolean
         default: false
 
-# Three ways in:
-#   "release: X"     every platform, published as the release X
-#   "prerelease: X"  Windows x86 and x64 only, published as the pre-release X: a small patch
-#                    costs a fraction of the minutes and still comes out of a clean machine
-#   by hand          everything, or the Windows pair with windows_only; nothing is published
-
 jobs:
   linux:
     name: Linux ${{ matrix.arch }}
     if: ${{ !((github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:')) || (github.event_name == 'workflow_dispatch' && inputs.windows_only)) }}
     runs-on: ${{ matrix.runner }}
     strategy:
-      # una plataforma que falla no cancela a la otra: interesa el informe de las dos
       fail-fast: false
       matrix:
         include:
         - runner: ubuntu-22.04
           arch: x86_64
-        # native arm64 machines reach private repositories since 2026-01-29
         - runner: ubuntu-22.04-arm
           arch: arm64
     env:
-      # not ARCH: make would take it from the environment
       BIN_ARCH: ${{ matrix.arch }}
     steps:
     - uses: actions/checkout@v4
@@ -44,8 +34,6 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt-get update
-        # SDL3 is built below from the submodule; these are the backends it
-        # compiles in, and it loads each one at run time only if it is there
         sudo apt-get install -y cmake ninja-build \
           libfreetype-dev libogg-dev libvorbis-dev \
           libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev \
@@ -53,8 +41,6 @@ jobs:
           libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev libdrm-dev libgbm-dev \
           libasound2-dev libpulse-dev libpipewire-0.3-dev libdbus-1-dev libudev-dev libibus-1.0-dev
     - name: Build SDL3 from submodule
-      # Ubuntu 22.04 has no SDL3, and most players' distributions do not yet:
-      # it is built here and ships beside the game
       run: |
         cmake -S code/SDL3 -B build/SDL3 -G Ninja -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/sdl3-local" -DCMAKE_INSTALL_LIBDIR=lib \
@@ -66,8 +52,6 @@ jobs:
         export PKG_CONFIG_PATH="$GITHUB_WORKSPACE/sdl3-local/lib/pkgconfig"
         make release -j$(nproc)
     - name: Start the dedicated server once
-      # the one place a binary runs on its own architecture before a player gets it: with no
-      # pak00.pk3 it stops right after printing its version and platform, which is all this wants
       run: |
         mkdir -p empty
         timeout 60 build/release-linux-$BIN_ARCH/ioqlds.$BIN_ARCH +set fs_basepath "$PWD/empty" \
@@ -80,9 +64,7 @@ jobs:
         cp build/release-linux-$BIN_ARCH/baseq3/cgame$BIN_ARCH.so  staging/libs/
         cp build/release-linux-$BIN_ARCH/baseq3/qagame$BIN_ARCH.so staging/libs/
         cp build/release-linux-$BIN_ARCH/baseq3/ui$BIN_ARCH.so     staging/libs/
-        # SDL3 beside the game: the client's rpath is $ORIGIN
         cp -L "$GITHUB_WORKSPACE/sdl3-local/lib/libSDL3.so.0" build/release-linux-$BIN_ARCH/
-        # actions/upload-artifact strips +x; tar to preserve mode bits.
         tar -C build/release-linux-$BIN_ARCH -cf staging/engine/linux-$BIN_ARCH.tar \
           ioquakelive.$BIN_ARCH ioquakelive-vulkan.$BIN_ARCH ioqlds.$BIN_ARCH opengl2$BIN_ARCH.so opengl1$BIN_ARCH.so vulkan$BIN_ARCH.so libSDL3.so.0
     - uses: actions/upload-artifact@v4
@@ -98,8 +80,6 @@ jobs:
 
   macos-compile:
     name: macOS (compile + sign dylibs)
-    # macOS counts ten times and Windows twice against the Actions minutes: they run for a release
-    # or by hand, and every other push is checked by Linux alone
     if: (github.event_name == 'workflow_dispatch' && !inputs.windows_only) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:'))
     runs-on: macos-14
     steps:
@@ -107,8 +87,6 @@ jobs:
       with:
         submodules: recursive
     - name: Install Dependencies
-      # No brew SDL: a Homebrew dylib dies on user machines without Homebrew.
-      # SDL3 is built from the code/SDL3 submodule below instead.
       run: brew install freetype libogg libvorbis
     - name: Build SDL3 from submodule
       run: |
@@ -120,16 +98,10 @@ jobs:
           -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST_LIBRARY=OFF
         cmake --build build/SDL3 -j"$(sysctl -n hw.logicalcpu)"
         cmake --install build/SDL3
-        # The engine records the dylib id at link time; force @rpath so the
-        # binary resolves it via the .app's Frameworks rpath regardless of
-        # SDL's install-name default. Re-sign ad hoc afterwards (arm64
-        # requires a valid signature; install_name_tool invalidates it).
         install_name_tool -id @rpath/libSDL3.0.dylib \
           "$GITHUB_WORKSPACE/sdl3-local/lib/libSDL3.0.dylib"
         codesign -f -s - "$GITHUB_WORKSPACE/sdl3-local/lib/libSDL3.0.dylib"
     - name: Compile
-      # pkg-config must resolve to the submodule build; losing this export
-      # fails the link loudly instead of silently picking another SDL.
       run: |
         export PKG_CONFIG_PATH="$GITHUB_WORKSPACE/sdl3-local/lib/pkgconfig"
         make release USE_LOCAL_HEADERS=0 ARCH=arm64 -j$(sysctl -n hw.logicalcpu)
@@ -170,10 +142,6 @@ jobs:
       if: env.CERT_B64 != ''
       run: |
         set -euo pipefail
-        # Sign here (not in macos-bundle) so the signed bytes are baked into
-        # the libs-macos-arm64 artifact. The downstream universal iobin.pk3
-        # is built from those bytes; signatures embed in Mach-O and survive
-        # the pk3 round-trip.
         for dylib in build/release-darwin-arm64/baseq3/cgamearm64.dylib \
                      build/release-darwin-arm64/baseq3/qagamearm64.dylib \
                      build/release-darwin-arm64/baseq3/uiarm64.dylib; do
@@ -188,11 +156,7 @@ jobs:
         cp build/release-darwin-arm64/baseq3/cgamearm64.dylib  staging/libs/
         cp build/release-darwin-arm64/baseq3/qagamearm64.dylib staging/libs/
         cp build/release-darwin-arm64/baseq3/uiarm64.dylib     staging/libs/
-        # Ship the submodule-built SDL3 beside the raw binaries so
-        # make-macosx-app.sh can bundle it into Contents/Frameworks/.
         cp "$GITHUB_WORKSPACE/sdl3-local/lib/libSDL3.0.dylib" build/release-darwin-arm64/
-        # Tar the raw engine binaries to preserve +x. These are unsigned;
-        # macos-bundle codesigns them after they're placed inside the .app.
         tar -C build/release-darwin-arm64 -cf staging/engine-raw/raw-macos-engine.tar \
           ioquakelive.arm64 ioqlds.arm64 opengl2arm64.dylib opengl1arm64.dylib vulkanarm64.dylib libSDL3.0.dylib
     - uses: actions/upload-artifact@v4
@@ -217,10 +181,6 @@ jobs:
       with:
         python-version: '3.x'
     - name: Install Dependencies
-      # Needed by make-macosx-app.sh's Homebrew dylib bundling step (otool /
-      # install_name_tool walk against the actual brew-installed dylibs).
-      # No brew SDL: the submodule-built libSDL3 arrives via the
-      # raw-macos-engine artifact.
       run: brew install freetype libogg libvorbis
     - name: Download game library artifacts
       uses: actions/download-artifact@v4
@@ -260,13 +220,9 @@ jobs:
       run: |
         mkdir -p build/release-darwin-arm64/baseq3
         tar -xf raw-macos-engine/raw-macos-engine.tar -C build/release-darwin-arm64
-        # make-macosx-app.sh picks up pak01.pk3 from this path automatically.
         cp shared/baseq3/pak01.pk3 build/release-darwin-arm64/baseq3/pak01.pk3
         ls -l build/release-darwin-arm64/
     - name: Fetch MoltenVK
-      # The Vulkan renderer runs over Metal through MoltenVK (Apache 2.0). The
-      # official universal build, pinned by version and hash; it wants macOS
-      # 12, and on 11 the engine falls back to opengl1 by itself.
       env:
         MOLTENVK_VERSION: v1.4.2
         MOLTENVK_SHA256: f95765a6229cb7b915990a2890ce12ebe36a730b021545d3d52ae69ce4c4024e
@@ -312,21 +268,12 @@ jobs:
 
     - name: Create App Bundle
       env:
-        # Tell make-macosx-app.sh to use the universal iobin.pk3 we just built
-        # (containing signed macOS dylibs + Linux .so + Windows .dll) instead
-        # of building a macOS-only one from local dylibs.
         PREBUILT_IOBIN_PK3: ${{ github.workspace }}/shared/baseq3/iobin.pk3
       run: |
         chmod +x make-macosx-app.sh
         ./make-macosx-app.sh release arm64
 
     - name: Verify bundled pk3s
-      # Hard-fail if the .app is missing iobin.pk3 / pak01.pk3 in
-      # Contents/Resources/baseq3/. Without these the engine boots into
-      # "VM_Create: failed to extract game module 'ui'" at runtime, but the
-      # rest of the pipeline (codesign, notarisation) will happily accept a
-      # signed-but-broken bundle. Catch it here so a bad build can never
-      # reach the release artifact.
       run: |
         set -euo pipefail
         APP=build/release-darwin-arm64/ioquakelive.app
@@ -342,9 +289,6 @@ jobs:
         done
         [ "$missing" -eq 0 ] || exit 1
         shasum -a 256 "$BASE/iobin.pk3" "$BASE/pak01.pk3"
-        # Log the bundled dylibs so a Frameworks regression is diagnosable
-        # from CI output alone (make-macosx-app.sh already hard-fails on a
-        # missing libSDL3).
         echo "Listing $APP/Contents/Frameworks:"
         ls -la "$APP/Contents/Frameworks"
 
@@ -356,21 +300,14 @@ jobs:
         set -euo pipefail
         echo "Signing with: $IDENTITY"
 
-        # Walk bundle contents bottom-up. --deep is unreliable with embedded
-        # frameworks. ioqlds must be signed individually -
-        # bundle signing only touches CFBundleExecutable. The game dylibs
-        # inside iobin.pk3 were already signed in macos-compile.
         APP=build/release-darwin-arm64/ioquakelive.app
 
-        # Sign nested dylibs/sos first.
         find "$APP" -type f \( -name "*.dylib" -o -name "*.so" \) -print0 \
           | while IFS= read -r -d '' lib; do
               codesign --force --options runtime --timestamp \
                 --sign "$IDENTITY" "$lib"
             done
 
-        # Sign non-main executables in Contents/MacOS/ (use `file` to detect
-        # Mach-O since extensionless binaries have no reliable name pattern).
         find "$APP/Contents/MacOS" -type f -print0 \
           | while IFS= read -r -d '' bin; do
               if file "$bin" | grep -q 'Mach-O'; then
@@ -379,7 +316,6 @@ jobs:
               fi
             done
 
-        # Finally, sign the bundle itself.
         codesign --force --options runtime --timestamp \
           --sign "$IDENTITY" "$APP"
         codesign --verify --strict --verbose=2 "$APP"
@@ -395,11 +331,8 @@ jobs:
         set -euo pipefail
         echo "$KEY_P8" | base64 -d > AuthKey.p8
         APP=build/release-darwin-arm64/ioquakelive.app
-        # ditto preserves the bundle correctly inside the submission zip.
         ditto -c -k --keepParent "$APP" ioquakelive-notarise.zip
 
-        # notarytool submit --wait returns 0 even when status is Invalid,
-        # so we have to parse the output and react ourselves.
         SUBMIT_OUT="$(xcrun notarytool submit ioquakelive-notarise.zip \
           --key AuthKey.p8 --key-id "$KEY_ID" --issuer "$KEY_ISSUER" \
           --wait 2>&1 | tee /dev/stderr)"
@@ -422,7 +355,6 @@ jobs:
           exit 1
         fi
 
-        # Staple the ticket to the on-disk .app so Gatekeeper can verify offline.
         xcrun stapler staple "$APP"
         xcrun stapler validate "$APP"
 
@@ -430,12 +362,7 @@ jobs:
       run: |
         set -euo pipefail
         mkdir -p staging/engine
-        # actions/upload-artifact strips POSIX permissions and breaks
-        # bundle symlinks, so tar the .app to preserve everything.
         tar -C build/release-darwin-arm64 -cf staging/engine/ioquakelive.app.tar ioquakelive.app
-        # Re-verify pk3s survived signing/notarisation/stapling. If something
-        # along the way silently dropped them, fail before the artifact is
-        # uploaded so we can never ship a broken release.
         BASE="ioquakelive.app/Contents/Resources/baseq3"
         for pk3 in iobin.pk3 pak01.pk3; do
           if ! tar -tf staging/engine/ioquakelive.app.tar "$BASE/$pk3" >/dev/null 2>&1; then
@@ -456,11 +383,8 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:')) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:'))
     runs-on: windows-2022
     strategy:
-      # una plataforma que falla no cancela a la otra: interesa el informe de las dos
       fail-fast: false
       matrix:
-        # Win32 is the build that loads Quake Live's own steam_api.dll, which is 32-bit. ARM64 is
-        # cross-compiled (its compiler runs on x86-64) and stays out of a Windows-only build.
         include: ${{ fromJSON(((github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:')) || (github.event_name == 'workflow_dispatch' && inputs.windows_only)) && '[{"platform":"Win32","dir":"x86","arch":"x86"},{"platform":"x64","dir":"x64","arch":"x86_64"}]' || '[{"platform":"Win32","dir":"x86","arch":"x86"},{"platform":"x64","dir":"x64","arch":"x86_64"},{"platform":"ARM64","dir":"arm64","arch":"arm64"}]') }}
     steps:
     - uses: actions/checkout@v4
@@ -480,7 +404,6 @@ jobs:
       uses: microsoft/setup-msbuild@v2
 
     - name: Build SDL3 for ARM64
-      # SDL3's Visual Studio project has no ARM64 platform; its CMake build does
       if: matrix.platform == 'ARM64'
       shell: pwsh
       run: ./code/tools/Build-SDL3.ps1
@@ -489,9 +412,6 @@ jobs:
       run: msbuild misc/msvc/ioquakelive.sln /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:PlatformToolset=v145 /m
 
     - name: Build the dedicated server
-      # A project of its own, deliberately outside the solution: it is the same
-      # engine with the client half compiled out, and it has no dependency on
-      # SDL or the renderer.
       run: msbuild misc/msvc/ioqlds.vcxproj /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:PlatformToolset=v145 /m
 
     - name: Stage build outputs
@@ -502,8 +422,6 @@ jobs:
         Copy-Item build/Release/${{ matrix.dir }}/baseq3/cgame${{ matrix.arch }}.dll  staging/libs/
         Copy-Item build/Release/${{ matrix.dir }}/baseq3/qagame${{ matrix.arch }}.dll staging/libs/
         Copy-Item build/Release/${{ matrix.dir }}/baseq3/ui${{ matrix.arch }}.dll     staging/libs/
-        # Engine binaries plus the runtime DLLs (SDL3, freetype, ...) that
-        # ship next to ioquakelive.exe
         Copy-Item build/Release/${{ matrix.dir }}/*.exe staging/engine/
         Copy-Item build/Release/${{ matrix.dir }}/*.dll staging/engine/
     - uses: actions/upload-artifact@v4
@@ -534,8 +452,6 @@ jobs:
         path: engines
     - name: Unpack tarred engine artifacts
       run: |
-        # Linux and macOS engine binaries are tarred to preserve +x and
-        # bundle structure (upload-artifact strips POSIX mode bits).
         for tar in engines/engine-linux-x86_64/linux-x86_64.tar \
                    engines/engine-linux-arm64/linux-arm64.tar \
                    engines/engine-macos-arm64/ioquakelive.app.tar; do
@@ -544,7 +460,6 @@ jobs:
             rm "$tar"
           fi
         done
-        # Sanity-check the executable bit survived.
         ls -l engines/engine-linux-x86_64/ioquakelive.x86_64
         ls -l engines/engine-linux-arm64/ioquakelive.arm64
         ls -l engines/engine-macos-arm64/ioquakelive.app/Contents/MacOS/
@@ -576,8 +491,6 @@ jobs:
 
   package-windows:
     name: Package the Windows pre-release
-    # The Windows pair alone: its own iobin.pk3 (the Windows game modules) and pak01.pk3, made
-    # here because the job that makes the universal ones is the macOS one.
     if: ${{ (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:')) || (github.event_name == 'workflow_dispatch' && inputs.windows_only) }}
     needs: [windows]
     runs-on: ubuntu-latest
@@ -616,7 +529,6 @@ jobs:
           --engines engines \
           --output build
         ls -la build/
-        # what a player can check a download against
         sha256sum build/*.zip
     - uses: actions/upload-artifact@v4
       with:
@@ -639,7 +551,6 @@ jobs:
         MSG: ${{ github.event.head_commit.message }}
       run: |
         VERSION=$(echo "$MSG" | head -1 | sed 's/^prerelease: *//')
-        # the version the console shows has to be the one being released
         CODE=$(sed -n 's/^#define PRODUCT_VERSION "\(.*\)"/\1/p' code/qcommon/q_shared.h)
         if [ "$CODE" != "$VERSION" ]; then
           echo "::error::prerelease: ${VERSION}, but PRODUCT_VERSION in code/qcommon/q_shared.h is ${CODE}"
@@ -656,7 +567,6 @@ jobs:
         name: release-zips
         path: artifacts
     - name: Create Pre-release
-      # the notes go on the page afterwards, by hand
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ steps.version.outputs.tag }}
@@ -679,7 +589,6 @@ jobs:
         MSG: ${{ github.event.head_commit.message }}
       run: |
         VERSION=$(echo "$MSG" | head -1 | sed 's/^release: *//')
-        # the version the console shows has to be the one being released
         CODE=$(sed -n 's/^#define PRODUCT_VERSION "\(.*\)"/\1/p' code/qcommon/q_shared.h)
         if [ "$CODE" != "$VERSION" ]; then
           echo "::error::release: ${VERSION}, but PRODUCT_VERSION in code/qcommon/q_shared.h is ${CODE}"

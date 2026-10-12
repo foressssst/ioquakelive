@@ -3,10 +3,8 @@ param(
     [string]$TargetDir
 )
 
-# Strip trailing quotes/backslashes that MSBuild's "$(TargetDir)" can produce
 $TargetDir = $TargetDir.Trim('"').TrimEnd('\')
 
-# Find the baseq3 directory from the target path
 if ($TargetDir -match '(?i)(.*baseq3)') {
     $baseq3 = $Matches[1]
 } else {
@@ -18,8 +16,6 @@ if (-not (Test-Path $baseq3)) {
     exit 0
 }
 
-# Serialize concurrent PostBuild runs (cgame / ui / qagame all run in parallel
-# during a parallel MSBuild and would otherwise race on iobin.zip).
 $mutex = New-Object System.Threading.Mutex($false, "Global\IobinPk3Build")
 $mutex.WaitOne() | Out-Null
 try {
@@ -32,9 +28,6 @@ try {
         exit 0
     }
 
-    # [QL] Local dev iobin.pk3 contains only the local platform's DLLs.
-    # CI release builds produce a universal iobin.pk3 with all platforms - see
-    # code/tools/make_deterministic_pk3.py and the package job in build.yml.
     $pk3Name = "iobin.pk3"
     $zipName = "iobin.zip"
 

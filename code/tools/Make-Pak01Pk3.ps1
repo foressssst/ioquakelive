@@ -3,10 +3,8 @@ param(
     [string]$TargetDir
 )
 
-# Strip trailing quotes/backslashes that MSBuild's "$(TargetDir)" can produce
 $TargetDir = $TargetDir.Trim('"').TrimEnd('\')
 
-# Find the baseq3 directory from the target path
 if ($TargetDir -match '(?i)(.*baseq3)') {
     $baseq3 = $Matches[1]
 } else {
@@ -17,7 +15,6 @@ if (-not (Test-Path $baseq3)) {
     New-Item -ItemType Directory -Path $baseq3 -Force | Out-Null
 }
 
-# content/pak01 is relative to the repo root (two levels up from misc/msvc)
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptDir "..\..")).Path
 $pak01Source = Join-Path $repoRoot "content\pak01"
@@ -42,7 +39,6 @@ $pk3Path = Join-Path $baseq3 "pak01.pk3"
 
 if (Test-Path $pk3Path) { Remove-Item $pk3Path -Force }
 
-# Use .NET ZipFile for correct forward-slash paths inside the archive
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zip = [System.IO.Compression.ZipFile]::Open($pk3Path, 'Create')
 

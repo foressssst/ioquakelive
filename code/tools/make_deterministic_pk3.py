@@ -1,33 +1,12 @@
-"""
-Build a deterministic, byte-identical .pk3 from a directory tree.
-
-Used by CI to package iobin.pk3 (flat dir of game DLLs) and pak01.pk3
-(recursive content tree of textures/models/sounds/scripts/ui), so each
-release ships the same bytes on every platform regardless of the host
-OS that the packaging job runs on.
-
-Determinism notes:
-  - File order: sorted by posix arcname.
-  - Timestamps: forced to 1980-01-01 00:00:00 (earliest legal zip stamp).
-  - External attributes: forced to 0o644 << 16 (Unix file mode).
-  - create_system: forced to 3 (Unix), so the zip header doesn't include
-    OS-specific extra fields like Windows file attributes.
-  - Compression: zlib DEFLATE level 9.
-"""
 import argparse
 import os
 import sys
 import zipfile
 
-EPOCH = (1980, 1, 1, 0, 0, 0)  # earliest legal zip timestamp
-
+EPOCH = (1980, 1, 1, 0, 0, 0)
 
 def collect(root):
-    """Walk root and return [(arcname, abs_path)] sorted by posix arcname.
 
-    Anything whose name starts with a dot is left out: an input can be a git
-    working copy, and its .git must not end up in the pk3.
-    """
     out = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = sorted(d for d in dirnames if not d.startswith('.'))
@@ -36,11 +15,10 @@ def collect(root):
                 continue
             abs_path = os.path.join(dirpath, name)
             rel = os.path.relpath(abs_path, root)
-            arcname = rel.replace(os.sep, '/')  # always posix inside the zip
+            arcname = rel.replace(os.sep, '/')
             out.append((arcname, abs_path))
     out.sort(key=lambda p: p[0])
     return out
-
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
@@ -49,8 +27,6 @@ def main():
     ap.add_argument('--output', required=True, help='output .pk3 path')
     args = ap.parse_args()
 
-    # the game looks paths up without regard to case, so two inputs may not
-    # both carry a path even when its case differs
     entries = []
     seen = {}
     for root in args.input:
@@ -86,7 +62,6 @@ def main():
     print(f'wrote {args.output} ({size} bytes, {len(entries)} entries)')
     for arcname, _ in entries:
         print(f'  {arcname}')
-
 
 if __name__ == '__main__':
     main()

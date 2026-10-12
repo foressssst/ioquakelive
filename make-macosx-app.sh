@@ -1,5 +1,4 @@
 #!/bin/bash
-# Create a macOS .app bundle for ioquakelive
 set -euo pipefail
 
 if [ $# -lt 1 ] || [ $# -gt 2 ]; then
@@ -24,7 +23,6 @@ MACOS="${CONTENTS}/MacOS"
 RESOURCES="${CONTENTS}/Resources"
 BASEDIR="baseq3"
 
-# Check for client binary
 CLIENT="${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.${ARCH}"
 if [ ! -f "${CLIENT}" ]; then
 	echo "Client binary not found: ${CLIENT}"
@@ -33,17 +31,14 @@ fi
 
 echo "Creating ${WRAPPER_NAME} for ${ARCH}..."
 
-# Create bundle structure
 mkdir -p "${MACOS}"
 mkdir -p "${RESOURCES}"
 
-# Copy executables
 cp "${CLIENT}" "${MACOS}/${PRODUCT_NAME}"
 if [ -f "${BUILT_PRODUCTS_DIR}/ioqlds.${ARCH}" ]; then
 	cp "${BUILT_PRODUCTS_DIR}/ioqlds.${ARCH}" "${MACOS}/ioqlds"
 fi
 
-# Copy renderer (engine loads cl_renderer + ARCH_STRING + DLL_EXT, e.g. opengl2arm64.dylib)
 if [ -f "${BUILT_PRODUCTS_DIR}/opengl2${ARCH}.dylib" ]; then
 	cp "${BUILT_PRODUCTS_DIR}/opengl2${ARCH}.dylib" "${MACOS}/opengl2${ARCH}.dylib"
 fi
@@ -54,22 +49,9 @@ if [ -f "${BUILT_PRODUCTS_DIR}/vulkan${ARCH}.dylib" ]; then
 	cp "${BUILT_PRODUCTS_DIR}/vulkan${ARCH}.dylib" "${MACOS}/vulkan${ARCH}.dylib"
 fi
 
-# Populate Contents/Resources/baseq3/ with our bundled pk3s.
-# fs_apppath on macOS points to Contents/Resources (via Sys_DefaultAppPath),
-# so the engine finds these regardless of where the .app lives.
 RESOURCES="${CONTENTS}/Resources"
 mkdir -p "${RESOURCES}/baseq3"
 
-# CI passes a pre-built universal iobin.pk3 via PREBUILT_IOBIN_PK3 - that
-# pk3 contains signed macOS dylibs alongside the Linux/Windows modules and
-# is the single authoritative copy shipped across all platforms. Dev builds
-# (no env var) fall back to a macOS-only pk3 from the local dylibs.
-#
-# If PREBUILT_IOBIN_PK3 is *set* but the file is missing we hard-fail
-# instead of silently dropping back to the local-dylibs branch - the latter
-# would build an incomplete pk3 (or none at all if there are no dylibs)
-# and the user wouldn't notice until the engine crashed at runtime with
-# "VM_Create: failed to extract game module 'ui'".
 DYLIB_DIR="${BUILT_PRODUCTS_DIR}/baseq3"
 if [ -n "${PREBUILT_IOBIN_PK3:-}" ]; then
 	if [ ! -f "${PREBUILT_IOBIN_PK3}" ]; then
@@ -79,8 +61,6 @@ if [ -n "${PREBUILT_IOBIN_PK3:-}" ]; then
 	cp "${PREBUILT_IOBIN_PK3}" "${RESOURCES}/baseq3/iobin.pk3"
 	echo "Bundled pre-built iobin.pk3 from ${PREBUILT_IOBIN_PK3}"
 elif [ -d "${DYLIB_DIR}" ]; then
-	# Stage to a temp dir - baseq3/ may also contain pak01.pk3 which must
-	# not end up inside iobin.pk3.
 	STAGE=$(mktemp -d)
 	dylib_count=0
 	for dylib in "${DYLIB_DIR}"/*.dylib; do
@@ -104,59 +84,36 @@ else
 	exit 1
 fi
 
-# Belt-and-braces: the iobin step above is supposed to leave a file behind.
-# Hard-fail if it didn't (e.g. cp silently mangled by something exotic).
 if [ ! -f "${RESOURCES}/baseq3/iobin.pk3" ]; then
 	echo "ERROR: ${RESOURCES}/baseq3/iobin.pk3 was not created." >&2
 	exit 1
 fi
 
-# Copy pak01.pk3 if the CI built it before this step.
 if [ -f "${BUILT_PRODUCTS_DIR}/baseq3/pak01.pk3" ]; then
 	cp "${BUILT_PRODUCTS_DIR}/baseq3/pak01.pk3" "${RESOURCES}/baseq3/"
 	echo "Bundled pak01.pk3 in Contents/Resources/baseq3/"
 fi
 
-# Bundle all Homebrew dylib dependencies into Contents/Frameworks/.
-#
-# The hardened-runtime app (signed with a Developer ID) cannot load dylibs
-# from Homebrew because their Team ID doesn't match.  The fix is to copy
-# every non-system dylib into Contents/Frameworks/, rewrite all load paths
-# to @rpath/<name>, sign them with the same certificate (done by build.yml),
-# and add an @executable_path/../Frameworks rpath to each in-bundle binary.
-#
-# This is done recursively so transitive deps (e.g. freetype -> libpng) are
-# also caught automatically. dlopen'd deps leave no load command and are
-# invisible to the walk; the submodule-built SDL3 is bundled by hand below.
 FRAMEWORKS="${CONTENTS}/Frameworks"
 mkdir -p "${FRAMEWORKS}"
 
-# bundle_dep <src_path>
-#   Copy a Homebrew dylib into Frameworks/, fix its -id, add a self-relative
-#   rpath, and recurse into its own deps.  No-op if already bundled.
 bundle_dep() {
     local src="$1"
     local name
     name=$(basename "$src")
     local dst="${FRAMEWORKS}/${name}"
-    [ -f "$dst" ] && return 0   # already bundled
+    [ -f "$dst" ] && return 0
     [ -f "$src" ] || { echo "  Warning: $src not found"; return 1; }
     cp "$src" "$dst"
     chmod 755 "$dst"
     install_name_tool -id "@rpath/${name}" "$dst"
-    # Bundled dylibs find their peers via @loader_path (= Frameworks/)
     install_name_tool -add_rpath "@loader_path/" "$dst" 2>/dev/null || true
     echo "  Bundled ${name}"
     rewrite_homebrew_deps "$dst"
 }
 
-# rewrite_homebrew_deps <binary>
-#   For every /opt/homebrew or /usr/local dep in <binary>:
-#     - rewrite the load command to @rpath/<name>
-#     - bundle the dep (which recurses)
 rewrite_homebrew_deps() {
     local bin="$1"
-    # Collect deps first (otool output can't pipe into install_name_tool safely)
     local deps
     deps=$(otool -L "$bin" 2>/dev/null | awk 'NR>1 {print $1}')
     local dep
@@ -180,24 +137,15 @@ for bin in \
     "${MACOS}/opengl1${ARCH}.dylib" \
     "${MACOS}/vulkan${ARCH}.dylib"; do
     [ -f "$bin" ] || continue
-    # Add rpath so this binary (and any dylib it dlopen's) can find Frameworks/
     install_name_tool -add_rpath "@executable_path/../Frameworks" "$bin" 2>/dev/null || true
     rewrite_homebrew_deps "$bin"
 done
 echo "Done bundling Homebrew dependencies."
 
-# SDL3 is built from the code/SDL3 submodule by CI and shipped beside the
-# raw engine binaries; its load command is @rpath/libSDL3.0.dylib, which
-# the otool walk above ignores (not a brew path), so bundle it by hand.
 if [ -f "${BUILT_PRODUCTS_DIR}/libSDL3.0.dylib" ]; then
     bundle_dep "${BUILT_PRODUCTS_DIR}/libSDL3.0.dylib"
 fi
 
-# MoltenVK, for the Vulkan renderer: the engine dlopens it by its path in
-# Frameworks/, so nothing links against it, and it is copied untouched -
-# rewriting its id would break the signature it ships with, which is all an
-# arm64 Mac has to go on when the bundle is not signed. Its licence travels
-# beside it.
 if [ -f "${BUILT_PRODUCTS_DIR}/libMoltenVK.dylib" ]; then
 	cp "${BUILT_PRODUCTS_DIR}/libMoltenVK.dylib" "${FRAMEWORKS}/libMoltenVK.dylib"
 	chmod 755 "${FRAMEWORKS}/libMoltenVK.dylib"
@@ -206,22 +154,18 @@ if [ -f "${BUILT_PRODUCTS_DIR}/libMoltenVK.dylib" ]; then
 	fi
 fi
 
-# The app must ship the SDL3 it was linked against: without it the engine
-# does not start. Refuse to package a bundle that has none.
 if [ ! -f "${FRAMEWORKS}/libSDL3.0.dylib" ]; then
     echo "ERROR: no libSDL3 dylib was bundled into ${FRAMEWORKS}." >&2
     echo "       Build the code/SDL3 submodule and place libSDL3.0.dylib in ${BUILT_PRODUCTS_DIR}." >&2
     exit 1
 fi
 
-# Generate .icns from quakelive.ico
 ICNS_NAME="quakelive.icns"
 ICO_SRC="misc/quakelive.ico"
 if [ -f "${ICO_SRC}" ] && command -v sips &>/dev/null && command -v iconutil &>/dev/null; then
 	ICONSET=$(mktemp -d)/quakelive.iconset
 	mkdir -p "${ICONSET}"
 
-	# Extract the largest image from the ico and resize to all required sizes
 	sips -s format png "${ICO_SRC}" --out "${ICONSET}/icon_512x512@2x.png" &>/dev/null
 	for SIZE in 16 32 128 256 512; do
 		sips -z ${SIZE} ${SIZE} "${ICONSET}/icon_512x512@2x.png" --out "${ICONSET}/icon_${SIZE}x${SIZE}.png" &>/dev/null
@@ -241,14 +185,11 @@ else
 	ICNS_NAME=""
 fi
 
-# PkgInfo
 echo -n "APPLQLIV" > "${CONTENTS}/PkgInfo"
 
-# Get version
 VERSION=$(grep '^VERSION=' Makefile 2>/dev/null | head -1 | sed 's/VERSION=//')
 [ -z "$VERSION" ] && VERSION=$(git describe --always 2>/dev/null || echo "dev")
 
-# Info.plist
 cat > "${CONTENTS}/Info.plist" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
