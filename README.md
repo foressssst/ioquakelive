@@ -61,34 +61,34 @@ Las siguientes tablas documentan las áreas portadas y su estado actual. Los nom
 
 | Área | Estado | Notas |
 |---|---|---|
-| Formato de `netchan` | Hecho | Sin `GENCHECKSUM`, como en la cabecera de paquetes de Quake Live. |
-| Mensaje del cliente | Hecho | Incluye el byte adicional después de los tres enteros de cabecera. |
+| Netchan format | Hecho | Sin `GENCHECKSUM`, como en la cabecera de paquetes de Quake Live. |
+| Client message parsing | Hecho | Incluye el byte adicional después de los tres enteros de cabecera. |
 | `entityStateFields` | Hecho | 58 campos reordenados; gravedad como `int32`. |
 | `playerStateFields` | Hecho | 58 campos, `pm_flags` de 24 bits, `weaponPrimary` y nueve campos nuevos. |
-| Deltas de `usercmd_t` | Hecho | Offsets 21 a 25 reordenados y dos campos adicionales de tipo byte. |
+| `usercmd_t` deltas | Hecho | Offsets 21 a 25 reordenados y dos campos adicionales de tipo byte. |
 | Configstrings | Hecho | Al conectar, solo se reenvían las que han cambiado. |
-| Cifrado XOR de `netchan` | Hecho | La clave se obtiene de `challenge ^ serverId ^ messageAcknowledge`. |
-| Huffman fuera de banda | Hecho | Los paquetes de conexión se comprimen a partir del byte 12. |
+| XOR netchan encoding | Hecho | La clave se obtiene de `challenge ^ serverId ^ messageAcknowledge`. |
+| Huffman on OOB data | Hecho | Los paquetes de conexión se comprimen a partir del byte 12. |
 
 #### Motor: cliente
 
 | Área | Estado | Notas |
 |---|---|---|
-| Cvars de `cgame` | Hecho | Se registran al iniciar, antes de leer la configuración. |
-| Conexión | Hecho | Ticket de Steam en `getchallenge` y cvar `cl_steamId`. |
-| Módulos del juego | Hecho | `iobin.pk3` contiene los módulos para cada arquitectura y funciona con servidores puros. |
-| Sonido | Hecho | Registro, canales y conjunto de sonidos de Quake Live. |
-| Temporización de cuadros | Hecho | Con `com_preciseFrameTiming`, la variación a 125 FPS baja de 0,34 a 0,01 ms. |
-| Carga en hilos | Hecho | Imágenes y sonidos se cargan en paralelo; `campgrounds` tarda cerca de un segundo. |
-| Pantalla completa sin bordes | Hecho | Disponible mediante `r_fullscreen 2`. |
+| `cgame` cvars | Hecho | Se registran al iniciar, antes de leer la configuración. |
+| Connection protocol | Hecho | Ticket de Steam en `getchallenge` y cvar `cl_steamId`. |
+| Game modules | Hecho | `iobin.pk3` contiene los módulos para cada arquitectura y funciona con servidores puros. |
+| Sound system | Hecho | Registro, canales y conjunto de sonidos de Quake Live. |
+| Frame timing | Hecho | Con `com_preciseFrameTiming`, la variación a 125 FPS baja de 0,34 a 0,01 ms. |
+| Threaded loading | Hecho | Imágenes y sonidos se cargan en paralelo; `campgrounds` tarda cerca de un segundo. |
+| Borderless fullscreen | Hecho | Disponible mediante `r_fullscreen 2`. |
 | Demos | Hecho | Compatibilidad bidireccional con el cliente original. |
 | Workshop | Hecho | Descarga los recursos que faltan antes de entrar a una partida. |
-| Carteles del servidor | Hecho | Los cambios procedentes del Workshop se aplican únicamente en el servidor correspondiente. |
-| Voz | Hecho | Comunicación entre pares mediante Steam; el módulo de juego determina quién puede escuchar a cada jugador. |
-| Autocompletado de consola | Hecho | Incluye `callvote`, mapas, factories, nombres de jugadores y comandos de `cgame`. |
-| Capturas | Hecho | Mantiene las rutas y los nombres del original, incluidos los `levelshots`. |
-| Modo seguro | Hecho | Tras un cierre anormal, ofrece iniciar con los ajustes de sistema predeterminados. |
-| Cliente de 64 bits | Hecho | `Release\\x64` es la compilación principal. |
+| Server advertisements | Hecho | Los cambios procedentes del Workshop se aplican únicamente en el servidor correspondiente. |
+| Steam voice | Hecho | Comunicación entre pares mediante Steam; el módulo de juego determina quién puede escuchar a cada jugador. |
+| Console auto-complete | Hecho | Incluye `callvote`, mapas, factories, nombres de jugadores y comandos de `cgame`. |
+| Screenshots | Hecho | Mantiene las rutas y los nombres del original, incluidos los `levelshots`. |
+| Safe mode | Hecho | Tras un cierre anormal, ofrece iniciar con los ajustes de sistema predeterminados. |
+| 64-bit client | Hecho | `Release\\x64` es la compilación principal. |
 
 #### Motor: servidor
 
@@ -96,108 +96,108 @@ Las siguientes tablas documentan las áreas portadas y su estado actual. Los nom
 |---|---|---|
 | Snapshots | Hecho | La serialización de entidades y jugadores coincide con Quake Live. |
 | Bots | Hecho | Implementación en `sv_bot.c`. |
-| Autenticación de Steam | Hecho | Valida el ticket mediante `BeginAuthSession`. Si el servidor no tiene Steam, permite conexiones de red local. |
-| Carga del módulo de juego | Hecho | DLL nativa mediante la tabla `gameImport_t`. |
-| Baneos | Hecho | Gestión por Steam ID mediante `access.txt`; `ban`, `tempban` y `unban` actualizan el archivo. |
-| Estadísticas y RCON por ZeroMQ | Hecho | Incluye las cvars `zmq_*` del original. El RCON sin contraseña solo acepta conexiones locales. |
-| Lista de servidores | Hecho | Gestionada por Steam, como en el original. |
-| Heartbeat al master | Hecho | Utiliza el game server de Steam. `sv_master 0` lo retira de la lista. |
+| Steam auth | Hecho | Valida el ticket mediante `BeginAuthSession`. Si el servidor no tiene Steam, permite conexiones de red local. |
+| Game module loading | Hecho | DLL nativa mediante la tabla `gameImport_t`. |
+| Ban system | Hecho | Gestión por Steam ID mediante `access.txt`; `ban`, `tempban` y `unban` actualizan el archivo. |
+| ZMQ stats/rcon | Hecho | Incluye las cvars `zmq_*` del original. El RCON sin contraseña solo acepta conexiones locales. |
+| Server browser | Hecho | Gestionada por Steam, como en el original. |
+| Master server heartbeat | Hecho | Utiliza el game server de Steam. `sv_master 0` lo retira de la lista. |
 | Workshop | Hecho | Descarga los recursos indicados en `workshop.txt` antes de iniciar y los anuncia a los clientes. |
 | `sv_fps` | Hecho | Fijado en 40, como en el original. |
-| Protección contra spam | Hecho | Incluye `sv_floodProtect` y el contador de `userinfo` del módulo de juego. |
-| Redirección por servidor lleno | Hecho | `sv_fullRedirect` deriva a los jugadores de ioquakelive a otro servidor con espacio. |
+| Flood protection | Hecho | Incluye `sv_floodProtect` y el contador de `userinfo` del módulo de juego. |
+| Full server redirect | Hecho | `sv_fullRedirect` deriva a los jugadores de ioquakelive a otro servidor con espacio. |
 | Linux ARM | Hecho | Compilado y ejecutándose en `aarch64`. |
 
 #### `cgame`
 
 | Área | Estado | Notas |
 |---|---|---|
-| Eventos | Hecho | 100 manejadores `EV_`, incluidos Race, infección y premios. |
-| Pantalla panorámica | Hecho | `CG_AdjustFrom640` admite los modos estirado, izquierda, centro y derecha. |
-| Texto mediante `owner-draw` | Hecho | Cerca de 70 funciones pasan por `CG_DrawText`. |
+| Event system | Hecho | 100 manejadores `EV_`, incluidos Race, infección y premios. |
+| Widescreen | Hecho | `CG_AdjustFrom640` admite los modos estirado, izquierda, centro y derecha. |
+| Owner-draw text | Hecho | Cerca de 70 funciones pasan por `CG_DrawText`. |
 | `serverinfo` | Hecho | Incluye los 29 campos de `CG_ParseServerinfo`. |
-| Marcadores | Hecho | FFA, Duel, TDM y marcador final con el modelo del ganador. |
+| Scoreboards | Hecho | FFA, Duel, TDM y marcador final con el modelo del ganador. |
 | HUD | Hecho | Disposición del original, con temporizadores de ítems y tarjeta del TAB. |
-| Locutor, medallas y rondas | Hecho | Las seis medallas animadas utilizan 24 cuadros de CPMA. |
-| Indicadores de daño | Hecho | Implementación completa de `CG_DrawDamagePlums`. |
-| Mira | Hecho | Incluye la regla de ocultarla en múltiplos de 30. |
-| Mensajes de muerte | Hecho | Mensajes del original con atacante, víctima e icono del arma. |
-| Predicción y `pmove` | Hecho | `pmove` reconstruido a partir del binario. |
+| Announcer, medals and rounds | Hecho | Las seis medallas animadas utilizan 24 cuadros de CPMA. |
+| Damage plums | Hecho | Implementación completa de `CG_DrawDamagePlums`. |
+| Crosshair | Hecho | Incluye la regla de ocultarla en múltiplos de 30. |
+| Obituary feed | Hecho | Mensajes del original con atacante, víctima e icono del arma. |
+| Prediction/pmove | Hecho | `pmove` reconstruido a partir del binario. |
 | `cl_timeNudge` | Hecho | Incluye la extrapolación de jugadores y el adelanto de proyectiles del original. |
 | Clan tags | Hecho | Clave `cn` con sus 26 colores. |
-| Efectos de armas | Hecho | Chispas de impacto, estilos de arma, zoom y viñeta mediante sus cvars. |
-| Congelación | Hecho | Tres shaders de hielo según avanza el descongelamiento; incluye fragmentos con estela. |
-| Infección | Hecho | Punto de interés, nombres de Red Rover y aspecto del jugador infectado. |
-| Avisos de chat | Hecho | `cg_chatbeep` y `cg_teamChatBeep`. |
-| Cámara de intermedio | Hecho | Incluye mapas sin `info_player_intermission`. |
-| Cuerpo del jugador seguido | Hecho | Al morir sin desintegrarse, el espectador puede ver el cuerpo. |
+| Weapon effects | Hecho | Chispas de impacto, estilos de arma, zoom y viñeta mediante sus cvars. |
+| Freeze Tag | Hecho | Tres shaders de hielo según avanza el descongelamiento; incluye fragmentos con estela. |
+| Infection | Hecho | Punto de interés, nombres de Red Rover y aspecto del jugador infectado. |
+| Chat beeps | Hecho | `cg_chatbeep` y `cg_teamChatBeep`. |
+| Intermission camera | Hecho | Incluye mapas sin `info_player_intermission`. |
+| Followed player corpse | Hecho | Al morir sin desintegrarse, el espectador puede ver el cuerpo. |
 
 #### Menús (`ui`)
 
 | Área | Estado | Notas |
 |---|---|---|
-| Nuevas funciones exportadas | Hecho | `UI_REGISTER_CVARS`, `UI_CHECK_ACTIVE_MENU`, `UI_WALK_MENUS` y `UI_DRAW_ADVERTISEMENT`. |
-| Sistema de fuentes (`fontIndex`) | Hecho | Los puntos de dibujo reciben `item->fontIndex`. |
-| Carga de menús | Hecho | Los archivos de ioquakelive se incluyen en `pak01.pk3`, dentro de `ui/ioql/`, y funcionan en servidores puros. |
-| Escalado de interfaz | Hecho | Se basa en la altura de pantalla y respeta las reglas del original para formatos 4:3 y 5:4. |
-| Portada | Hecho | Menú en columna, fondo, avisos legales y lista de amigos; dentro de una partida, incorpora la barra verde. |
+| New exports | Hecho | `UI_REGISTER_CVARS`, `UI_CHECK_ACTIVE_MENU`, `UI_WALK_MENUS` y `UI_DRAW_ADVERTISEMENT`. |
+| `fontIndex` support | Hecho | Los puntos de dibujo reciben `item->fontIndex`. |
+| Menu file loading | Hecho | Los archivos de ioquakelive se incluyen en `pak01.pk3`, dentro de `ui/ioql/`, y funcionan en servidores puros. |
+| UI scaling | Hecho | Se basa en la altura de pantalla y respeta las reglas del original para formatos 4:3 y 5:4. |
+| Home | Hecho | Menú en columna, fondo, avisos legales y lista de amigos; dentro de una partida, incorpora la barra verde. |
 | Start Match | Hecho | Factories, selección de mapa y bots. |
-| Lista de servidores | Hecho | Datos de Steam, columnas ordenables, filtros, imagen del mapa y ventana con información de la partida. |
+| Server browser | Hecho | Datos de Steam, columnas ordenables, filtros, imagen del mapa y ventana con información de la partida. |
 | Settings | Hecho | 220 opciones en el orden del original, también accesibles durante una partida. |
 | Training | Hecho | Crash Course, Accelerate y Elevate, además de la sala de tracking propia de ioquakelive. |
 | Replays | Hecho | Cada demo grabada durante una partida aparece asociada a esa partida. |
 | Career Stats | Hecho | Statistics y Medals a partir de las estadísticas de Steam. |
 | Recent Matches | Hecho | El servidor envía el reporte de la partida mediante Steam y el cliente lo guarda. |
-| Avisos legales | Hecho | El texto se obtiene del `web.pak` del jugador. |
-| Marcadores (`.menu`) | Hecho | Marcadores individuales y por equipos. |
-| Acciones de menú | Hecho | Las 13 acciones, incluidas `clientViewProfile`, `modPlayer`, `putspec` y `banPlayer`. |
-| Votaciones desde el menú | Hecho | El voto de mapa utiliza el modo elegido en el menú, como en el original. |
-| Perfil del jugador | Hecho | Career Stats, avatar de Steam y perfil en la superposición de Steam. |
-| Amigos | Hecho | Lista de Steam, colores y opciones del original, como Join Match, Send Message y Send Invite. |
-| Voto de mapa al terminar | Hecho | Requiere `mappool.txt`, como en el original. |
+| Legal notices | Hecho | El texto se obtiene del `web.pak` del jugador. |
+| Scoreboards (`.menu`) | Hecho | Marcadores individuales y por equipos. |
+| UI script actions | Hecho | Las 13 acciones, incluidas `clientViewProfile`, `modPlayer`, `putspec` y `banPlayer`. |
+| Menu voting | Hecho | El voto de mapa utiliza el modo elegido en el menú, como en el original. |
+| Player profile | Hecho | Career Stats, avatar de Steam y perfil en la superposición de Steam. |
+| Friends | Hecho | Lista de Steam, colores y opciones del original, como Join Match, Send Message y Send Invite. |
+| End-of-match map voting | Hecho | Requiere `mappool.txt`, como en el original. |
 
 #### Módulo de juego (`qagame`)
 
 | Área | Estado | Notas |
 |---|---|---|
-| Modos de juego | Hecho | FFA, Duel, TDM, CA, CTF, 1FCTF, Harvester, FT, DOM, A&D, Race y RR. |
-| Físicas | Hecho | Control de aire, doble salto, deslizamiento agachado, auto-hop y escaleras. |
-| Gancho | Hecho | Tracción hacia paredes y enemigos, frenado a corta distancia y amortiguación bajo el agua. |
-| Armas | Hecho | Todas las armas de Quake Live, con sus tiempos de recarga. |
-| Daño y salpicadura | Hecho | |
-| Llaves y puertas | Hecho | Llaves plateada, dorada y maestra. |
-| Calentamiento | Hecho | `g_gameState`, porcentaje de jugadores listos y abandono. |
-| Votaciones | Hecho | Incluye el voto de mapa al terminar la partida. |
+| Game types | Hecho | FFA, Duel, TDM, CA, CTF, 1FCTF, Harvester, FT, DOM, A&D, Race y RR. |
+| Physics | Hecho | Control de aire, doble salto, deslizamiento agachado, auto-hop y escaleras. |
+| Grapple hook | Hecho | Tracción hacia paredes y enemigos, frenado a corta distancia y amortiguación bajo el agua. |
+| Weapons | Hecho | Todas las armas de Quake Live, con sus tiempos de recarga. |
+| Damage and splash | Hecho | |
+| Key/door system | Hecho | Llaves plateada, dorada y maestra. |
+| Warmup | Hecho | `g_gameState`, porcentaje de jugadores listos y abandono. |
+| Voting system | Hecho | Incluye el voto de mapa al terminar la partida. |
 | Cvars | Hecho | Las 406 cvars del original, con sus funciones de cambio. |
 | Factories | Hecho | Ejecutar `map` sin una factory muestra el uso, como en el original. |
 | Race | Hecho | Checkpoints, cronometraje y HUD. |
-| Compensación de lag | Hecho | Historial de posiciones y rebobinado. |
-| Armadura y daño | Hecho | Armadura por niveles, perdigones en anillos y reducción del daño con la distancia. |
-| Entrenamiento | Hecho | Implementado en `g_training.c`. |
+| Unlagged (`lagHax`) | Hecho | Historial de posiciones y rebobinado. |
+| Armor and damage | Hecho | Armadura por niveles, perdigones en anillos y reducción del daño con la distancia. |
+| Training mode | Hecho | Implementado en `g_training.c`. |
 | Loadouts | Hecho | Se aplican desde el menú al aparecer en la partida, incluida la munición. |
-| Estadísticas JSON | Hecho | Genera los mismos documentos que el original mediante ZeroMQ. |
+| JSON stats | Hecho | Genera los mismos documentos que el original mediante ZeroMQ. |
 | Premium | No aplica | La build 1069 no tiene suscripciones. |
-| Permisos | Hecho | `access.txt` gestiona los permisos de ban, mod y admin por Steam ID. |
-| Comandos de administración | Hecho | Privilegios y comandos reconstruidos a partir del binario. |
-| Entidades por archivo | Hecho | `sv_altEntDir` lee `<mapa>.ent` y `sv_dumpEntities` las escribe. |
+| Access control | Hecho | `access.txt` gestiona los permisos de ban, mod y admin por Steam ID. |
+| Admin commands | Hecho | Privilegios y comandos reconstruidos a partir del binario. |
+| Map entities override | Hecho | `sv_altEntDir` lee `<mapa>.ent` y `sv_dumpEntities` las escribe. |
 
 #### Renderers
 
 | Área | Estado | Notas |
 |---|---|---|
-| OpenGL clásico (`opengl1`) | Hecho | Basado en Quake3e, con las modificaciones de Quake Live. Es el renderer predeterminado. |
+| Classic OpenGL (`opengl1`) | Hecho | Basado en Quake3e, con las modificaciones de Quake Live. Es el renderer predeterminado. |
 | Vulkan | Hecho | Basado en Quake3e, con el bloom y la corrección de color de Quake Live. |
 | OpenGL 2 (`opengl2`) | Hecho | Renderer de respaldo basado en ioquake3. |
-| Reflex y Anti-Lag 2 | Parcial | Disponibles en Vulkan mediante `r_lowLatency`. Reflex se ha medido en NVIDIA; Anti-Lag 2 aún no se ha probado en AMD. |
+| Reflex and Anti-Lag 2 | Parcial | Disponibles en Vulkan mediante `r_lowLatency`. Reflex se ha medido en NVIDIA; Anti-Lag 2 aún no se ha probado en AMD. |
 | FSR | Hecho | Disponible mediante `r_fsr`, únicamente en OpenGL clásico. |
-| Shaders de Quake Live | Hecho | Las 134 palabras del parser original. |
-| Shaders duplicados | Hecho | Prevalece la primera definición, como en el original. |
-| Carteles | Hecho | El renderer añade la superficie correspondiente a cada cartel del mapa. |
-| Cadena del gancho | Hecho | Utiliza `RT_RAIL_CORE`. |
-| Hielo | Hecho | Los tres shaders se aplican al modelo congelado. |
+| Quake Live shaders | Hecho | Las 134 palabras del parser original. |
+| Duplicate shaders | Hecho | Prevalece la primera definición, como en el original. |
+| Advertisements | Hecho | El renderer añade la superficie correspondiente a cada cartel del mapa. |
+| Grapple hook chain | Hecho | Utiliza `RT_RAIL_CORE`. |
+| Freeze/thaw effects | Hecho | Los tres shaders se aplican al modelo congelado. |
 | Bloom | Hecho | Utiliza los valores del original. |
-| Texturas en hilos | Hecho | Carga de imágenes JPEG, TGA y PNG. |
-| Cuadros en cola | Hecho | Control mediante `r_maxQueuedFrames`, con valor predeterminado de 0. |
+| Threaded textures | Hecho | Carga de imágenes JPEG, TGA y PNG. |
+| Queued frames | Hecho | Control mediante `r_maxQueuedFrames`, con valor predeterminado de 0. |
 
 ## Compilar
 
