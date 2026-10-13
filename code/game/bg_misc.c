@@ -1548,74 +1548,9 @@ void BG_PlayerStateToEntityState(playerState_t* ps, entityState_t* s, qboolean s
         SnapVector(s->pos.trBase);
     }
     VectorCopy(ps->velocity, s->pos.trDelta);
-
-    s->apos.trType = TR_INTERPOLATE;
-    VectorCopy(ps->viewangles, s->apos.trBase);
     if (snap) {
-        SnapVector(s->apos.trBase);
+        SnapVector(s->pos.trDelta);
     }
-
-    s->angles2[YAW] = ps->movementDir;
-    s->legsAnim = ps->legsAnim;
-    s->torsoAnim = ps->torsoAnim;
-    s->clientNum = ps->clientNum;
-    s->eFlags = ps->eFlags;
-    if (ps->stats[STAT_HEALTH] <= 0 && ps->powerups[PW_FREEZE] == 0) {
-        s->eFlags |= EF_DEAD;
-    } else {
-        s->eFlags &= ~EF_DEAD;
-    }
-
-    if (ps->externalEvent) {
-        s->event = ps->externalEvent;
-        s->eventParm = ps->externalEventParm;
-    } else if (ps->entityEventSequence < ps->eventSequence) {
-        int seq;
-
-        if (ps->entityEventSequence < ps->eventSequence - MAX_PS_EVENTS) {
-            ps->entityEventSequence = ps->eventSequence - MAX_PS_EVENTS;
-        }
-        seq = ps->entityEventSequence & (MAX_PS_EVENTS - 1);
-        s->event = ps->events[seq] | ((ps->entityEventSequence & 3) << 8);
-        s->eventParm = ps->eventParms[seq];
-        ps->entityEventSequence++;
-    }
-
-    s->weapon = ps->weapon;
-    s->groundEntityNum = ps->groundEntityNum;
-
-    s->powerups = 0;
-    for (i = 0; i < MAX_POWERUPS; i++) {
-        if (ps->powerups[i]) {
-            s->powerups |= 1 << i;
-        }
-    }
-
-    s->loopSound = ps->loopSound;
-    s->generic1 = ps->generic1 & 0x3f;
-}
-
-void BG_PlayerStateToEntityStateExtraPolate(playerState_t* ps, entityState_t* s, int time, qboolean snap) {
-    int i;
-
-    if (ps->pm_type == PM_INTERMISSION || ps->pm_type == PM_SPECTATOR) {
-        s->eType = ET_INVISIBLE;
-    } else if (ps->stats[STAT_HEALTH] <= GIB_HEALTH) {
-        s->eType = ET_INVISIBLE;
-    } else {
-        s->eType = ET_PLAYER;
-    }
-
-    s->number = ps->clientNum;
-
-    s->pos.trType = TR_LINEAR_STOP;
-    VectorCopy(ps->origin, s->pos.trBase);
-    if (snap) {
-        SnapVector(s->pos.trBase);
-    }
-    VectorCopy(ps->velocity, s->pos.trDelta);
-    s->pos.trTime = time;
-    s->pos.trDuration = 50;
 
     s->apos.trType = TR_INTERPOLATE;
     VectorCopy(ps->viewangles, s->apos.trBase);

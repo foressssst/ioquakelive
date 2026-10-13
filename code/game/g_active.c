@@ -925,7 +925,7 @@ void ClientThink_real(gentity_t* ent) {
     if (ent->client->ps.eventSequence != oldEventSequence) {
         ent->eventTime = level.time;
     }
-    BG_PlayerStateToEntityStateExtraPolate(&ent->client->ps, &ent->s, ent->client->ps.commandTime, qtrue);
+    BG_PlayerStateToEntityState(&ent->client->ps, &ent->s, qtrue);
     SendPendingPredictableEvents(&ent->client->ps);
 
     if (!(ent->client->ps.eFlags & EF_FIRING)) {
@@ -1105,7 +1105,7 @@ void ClientEndFrame(gentity_t* ent) {
 
     G_SetClientSound(ent);
 
-    BG_PlayerStateToEntityStateExtraPolate(&ent->client->ps, &ent->s, ent->client->ps.commandTime, qtrue);
+    BG_PlayerStateToEntityState(&ent->client->ps, &ent->s, qtrue);
     SendPendingPredictableEvents(&ent->client->ps);
 
     if (g_lagHaxMs.integer != 0 && g_lagHaxHistory.integer != 0) {
