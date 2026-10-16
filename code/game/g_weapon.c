@@ -38,56 +38,51 @@ void G_BounceProjectile(vec3_t start, vec3_t impact, vec3_t dir, vec3_t endout) 
 }
 
 void Weapon_Gauntlet(gentity_t* ent) {
+    gentity_t* traceEnt = ent->target_ent;
+    gentity_t* tent;
+    vec3_t dir;
+
+    if (!traceEnt) {
+        return;
+    }
+
+    VectorSubtract(ent->s.pos.trBase, traceEnt->s.pos.trBase, dir);
+
+    if (traceEnt->takedamage && traceEnt->client) {
+        tent = G_TempEntity(traceEnt->s.pos.trBase, EV_MISSILE_HIT);
+        tent->s.otherEntityNum = traceEnt->s.number;
+        tent->s.eventParm = DirToByte(dir);
+        tent->s.weapon = ent->s.weapon;
+    }
+
+    G_Damage(traceEnt, ent, ent, forward, dir,
+             (int)(s_quadFactor * g_damage_g.value), 0, MOD_GAUNTLET);
 }
 
 qboolean CheckGauntletAttack(gentity_t* ent) {
     trace_t tr;
     vec3_t end;
-    gentity_t* tent;
     gentity_t* traceEnt;
-    int damage;
 
     AngleVectors(ent->client->ps.viewangles, forward, right, up);
 
     CalcMuzzlePoint(ent, forward, right, up, muzzle);
 
-    VectorMA(muzzle, 32, forward, end);
+    VectorMA(muzzle, 43, forward, end);
 
-    trap_Trace(&tr, muzzle, NULL, NULL, end, ent->s.number, MASK_SHOT);
+    trap_Trace(&tr, muzzle, NULL, NULL, end, ent->s.number,
+               pmove_NoPlayerClip.integer ? CONTENTS_SOLID : MASK_SHOT);
     if (tr.surfaceFlags & SURF_NOIMPACT) {
         return qfalse;
     }
 
-    if (ent->client->noclip) {
-        return qfalse;
-    }
-
     traceEnt = &g_entities[tr.entityNum];
-
-    if (traceEnt->takedamage && traceEnt->client) {
-        tent = G_TempEntity(tr.endpos, EV_MISSILE_HIT);
-        tent->s.otherEntityNum = traceEnt->s.number;
-        tent->s.eventParm = DirToByte(tr.plane.normal);
-        tent->s.weapon = ent->s.weapon;
-    }
-
     if (!traceEnt->takedamage) {
+        ent->target_ent = NULL;
         return qfalse;
     }
 
-    if (ent->client->ps.powerups[PW_QUAD]) {
-        G_AddEvent(ent, EV_POWERUP_QUAD, 0);
-        s_quadFactor = g_quadDamageFactor.value;
-    } else if (ent->client->ps.stats[STAT_RUNE] == 3) {
-        s_quadFactor = 1.5f;
-    } else {
-        s_quadFactor = 1;
-    }
-
-    damage = g_damage_g.integer * s_quadFactor;
-    G_Damage(traceEnt, ent, ent, forward, tr.endpos,
-             damage, 0, MOD_GAUNTLET);
-
+    ent->target_ent = traceEnt;
     return qtrue;
 }
 
