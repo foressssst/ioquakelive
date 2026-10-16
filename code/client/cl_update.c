@@ -11,13 +11,15 @@
 #endif
 
 #define CL_UPDATE_URL "https://gist.githubusercontent.com/foressssst/65861cb796e4d984cfd73b384e8c2098/raw/ioquakelive-version.txt"
+#define CL_UPDATE_API "https://api.github.com/repos/foressssst/ioquakelive/releases?per_page=1"
+#define CL_UPDATE_RELEASE_TAG "https://github.com/foressssst/ioquakelive/releases/tag/"
 #define CL_UPDATE_TIMEOUT_MS 5000
 
 enum { CLU_IDLE, CLU_RUNNING, CLU_DONE, CLU_FAILED, CLU_HANDLED };
 
 #define CL_UPDATE_SITE "https://github.com/"
 
-static char clUpdateText[1024];
+static char clUpdateText[16384];
 static char clUpdateURL[512];
 static volatile long clUpdateState;
 static cvar_t* cl_checkUpdates;
@@ -39,7 +41,7 @@ static long CL_UpdateGetState(void) {
 }
 
 #ifdef _WIN32
-static qboolean CL_UpdateFetch(char* out, int size) {
+static qboolean CL_UpdateFetch(const char* address, char* out, int size) {
     URL_COMPONENTS uc;
     wchar_t url[512], host[256], path[512];
     HINTERNET session = NULL, connect = NULL, request = NULL;
@@ -48,7 +50,7 @@ static qboolean CL_UpdateFetch(char* out, int size) {
     qboolean ok = qfalse;
 
     out[0] = '\0';
-    if (!MultiByteToWideChar(CP_UTF8, 0, CL_UPDATE_URL, -1, url, ARRAY_LEN(url))) {
+    if (!MultiByteToWideChar(CP_UTF8, 0, address, -1, url, ARRAY_LEN(url))) {
         return qfalse;
     }
     memset(&uc, 0, sizeof(uc));
@@ -123,7 +125,7 @@ static size_t CL_UpdateWrite(char* data, size_t size, size_t count, void* user) 
     return size * count;
 }
 
-static qboolean CL_UpdateFetch(char* out, int size) {
+static qboolean CL_UpdateFetch(const char* address, char* out, int size) {
     static const char* const names[] = {"libcurl.so.4", "libcurl.so", "libcurl.4.dylib", "/usr/lib/libcurl.4.dylib",
                                         "libcurl.dylib"};
     void* (*easyInit)(void);
@@ -154,7 +156,7 @@ static qboolean CL_UpdateFetch(char* out, int size) {
         sink.buf = out;
         sink.size = size;
         sink.used = 0;
-        easySetopt(curl, CLU_CURLOPT_URL, CL_UPDATE_URL);
+        easySetopt(curl, CLU_CURLOPT_URL, address);
         easySetopt(curl, CLU_CURLOPT_WRITEFUNCTION, CL_UpdateWrite);
         easySetopt(curl, CLU_CURLOPT_WRITEDATA, &sink);
         easySetopt(curl, CLU_CURLOPT_TIMEOUT, (long)(CL_UPDATE_TIMEOUT_MS / 1000));
@@ -174,9 +176,59 @@ static qboolean CL_UpdateFetch(char* out, int size) {
 }
 #endif
 
+static const char* CL_UpdateJsonValue(const char* text, const char* key) {
+    const char* p = strstr(text, key);
+
+    if (!p) {
+        return NULL;
+    }
+    p += strlen(key);
+    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n' || *p == ':') {
+        p++;
+    }
+    return p;
+}
+
+static qboolean CL_UpdateFromGitHub(void) {
+    char tag[32];
+    const char* p;
+    qboolean pre;
+    int n;
+
+    if (!CL_UpdateFetch(CL_UPDATE_API, clUpdateText, sizeof(clUpdateText))) {
+        return qfalse;
+    }
+    p = CL_UpdateJsonValue(clUpdateText, "\"tag_name\"");
+    if (!p || *p++ != '"') {
+        return qfalse;
+    }
+    for (n = 0; n < (int)sizeof(tag) - 1 && p[n] && p[n] != '"'; n++) {
+        if ((p[n] < '0' || p[n] > '9') && p[n] != '.' && p[n] != 'v') {
+            return qfalse;
+        }
+        tag[n] = p[n];
+    }
+    if (p[n] != '"' || !n) {
+        return qfalse;
+    }
+    tag[n] = '\0';
+    p = CL_UpdateJsonValue(clUpdateText, "\"prerelease\"");
+    if (!p) {
+        return qfalse;
+    }
+    pre = !Q_strncmp(p, "true", 4) ? qtrue : qfalse;
+    Com_sprintf(clUpdateText, sizeof(clUpdateText), "%s %s%s%s", tag[0] == 'v' ? tag + 1 : tag,
+                CL_UPDATE_RELEASE_TAG, tag, pre ? " pre" : "");
+    return qtrue;
+}
+
 static void CL_UpdateThread(void* unused) {
     (void)unused;
-    CL_UpdateSetState(CL_UpdateFetch(clUpdateText, sizeof(clUpdateText)) ? CLU_DONE : CLU_FAILED);
+    if (CL_UpdateFromGitHub()) {
+        CL_UpdateSetState(CLU_DONE);
+        return;
+    }
+    CL_UpdateSetState(CL_UpdateFetch(CL_UPDATE_URL, clUpdateText, sizeof(clUpdateText)) ? CLU_DONE : CLU_FAILED);
 }
 
 static int CL_UpdateCompare(const char* a, const char* b) {
@@ -217,6 +269,7 @@ void CL_UpdateInit(void) {
 void CL_UpdateFrame(void) {
     char version[32];
     char url[512];
+    char kind[8];
     const char* p;
     long state = CL_UpdateGetState();
 
@@ -228,7 +281,8 @@ void CL_UpdateFrame(void) {
         Com_DPrintf("update check: no answer\n");
         return;
     }
-    if (sscanf(clUpdateText, "%31s %511s", version, url) != 2) {
+    kind[0] = '\0';
+    if (sscanf(clUpdateText, "%31s %511s %7s", version, url, kind) < 2) {
         return;
     }
     for (p = version; *p; p++) {
@@ -247,6 +301,6 @@ void CL_UpdateFrame(void) {
     }
     Q_strncpyz(clUpdateURL, url, sizeof(clUpdateURL));
     Cvar_Set("cl_updateVersion", version);
-    Cvar_Set("cl_updateStatus", "available");
+    Cvar_Set("cl_updateStatus", !Q_stricmp(kind, "pre") ? "prerelease" : "available");
     Com_Printf("A new version of ioquakelive is available: %s\n%s\n", version, url);
 }

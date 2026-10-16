@@ -542,7 +542,10 @@ void UI_Home_Banner(void) {
     index = 1;
     SM_Fill(-1, y, smVW + 2, h, fill, NULL);
     SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText,
-                va("ioquakelive %s is available. Click here to download it.", version), qfalse);
+                va(Q_stricmp(status, "prerelease") ? "ioquakelive %s is available. Click here to download it."
+                                                   : "ioquakelive %s (pre-release) is available. Click here to download it.",
+                   version),
+                qfalse);
     SM_Hit(0, y, smVW, h, HM_HIT_BANNER, index, NULL);
 }
 
