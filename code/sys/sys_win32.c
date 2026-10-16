@@ -270,6 +270,29 @@ int Sys_Milliseconds(void) {
     return sys_curtime;
 }
 
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
+
+qboolean Sys_SleepMicroseconds(int64_t usec) {
+    static HANDLE timer;
+    static qboolean tried;
+    LARGE_INTEGER due;
+
+    if (!tried) {
+        tried = qtrue;
+        timer = CreateWaitableTimerExW(NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+    }
+    if (!timer || usec <= 0) {
+        return qfalse;
+    }
+    due.QuadPart = -usec * 10;
+    if (!SetWaitableTimer(timer, &due, 0, NULL, NULL, FALSE)) {
+        return qfalse;
+    }
+    return WaitForSingleObject(timer, INFINITE) == WAIT_OBJECT_0 ? qtrue : qfalse;
+}
+
 int64_t Sys_Microseconds(void) {
     static LARGE_INTEGER frequency;
     static LARGE_INTEGER base;

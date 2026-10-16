@@ -226,6 +226,17 @@ int Sys_Milliseconds(void) {
     return curtime;
 }
 
+qboolean Sys_SleepMicroseconds(int64_t usec) {
+    struct timespec ts;
+
+    if (usec <= 0) {
+        return qfalse;
+    }
+    ts.tv_sec = (time_t)(usec / 1000000);
+    ts.tv_nsec = (long)(usec % 1000000) * 1000L;
+    return nanosleep(&ts, NULL) == 0 ? qtrue : qfalse;
+}
+
 int64_t Sys_Microseconds(void) {
     static struct timespec base;
     static qboolean initialized = qfalse;

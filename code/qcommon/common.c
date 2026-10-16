@@ -2750,6 +2750,11 @@ void Com_Frame(void) {
                 break;
             }
 
+            if (!com_busyWait->integer && !com_sv_running->integer &&
+                remainUs > 1200 && Sys_SleepMicroseconds(remainUs - 1000)) {
+                continue;
+            }
+
             sleepMs = (int)((remainUs - 1500) / 1000);
             if (com_sv_running->integer && timeValSV < sleepMs)
                 sleepMs = timeValSV;

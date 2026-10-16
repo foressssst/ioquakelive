@@ -807,6 +807,7 @@ void Sys_Print(const char* msg);
 
 int Sys_Milliseconds(void);
 int64_t Sys_Microseconds(void);
+qboolean Sys_SleepMicroseconds(int64_t usec);
 
 qboolean Sys_WebFetch(const char* url, const char* ospath, int maxBytes);
 
