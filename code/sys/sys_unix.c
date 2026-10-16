@@ -132,6 +132,57 @@ qboolean Sys_RemoveDir(const char* path) {
     return rmdir(path) == 0 ? qtrue : qfalse;
 }
 
+qboolean Sys_SteamRunning(void) {
+#ifdef __APPLE__
+    return qtrue;
+#else
+    char path[MAX_OSPATH];
+    const char* home = getenv("HOME");
+    FILE* f;
+    int pid = 0;
+
+    if (!home || !home[0]) {
+        return qtrue;
+    }
+    Com_sprintf(path, sizeof(path), "%s/.steam/steam.pid", home);
+    f = fopen(path, "r");
+    if (!f) {
+        return qfalse;
+    }
+    if (fscanf(f, "%d", &pid) != 1) {
+        pid = 0;
+    }
+    fclose(f);
+    return pid > 0 && kill((pid_t)pid, 0) == 0 ? qtrue : qfalse;
+#endif
+}
+
+qboolean Sys_SteamReady(void) {
+    return Sys_SteamRunning();
+}
+
+qboolean Sys_StartSteam(void) {
+#ifdef __APPLE__
+    return qfalse;
+#else
+    pid_t child = fork();
+    int status;
+
+    if (child < 0) {
+        return qfalse;
+    }
+    if (child == 0) {
+        if (fork() == 0) {
+            setsid();
+            execlp("steam", "steam", (char*)NULL);
+        }
+        _exit(0);
+    }
+    waitpid(child, &status, 0);
+    return qtrue;
+#endif
+}
+
 char* Sys_SteamPath(void) {
 #if 0
 	char *p;

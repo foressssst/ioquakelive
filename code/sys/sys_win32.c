@@ -172,6 +172,39 @@ qboolean Sys_RemoveDir(const char* path) {
     return RemoveDirectoryA(path) ? qtrue : qfalse;
 }
 
+qboolean Sys_SteamRunning(void) {
+    DWORD pid = 0, size = sizeof(pid), code = 0;
+    HANDLE proc;
+    qboolean alive;
+
+    if (RegGetValueA(HKEY_CURRENT_USER, "Software\\Valve\\Steam\\ActiveProcess", "pid", RRF_RT_REG_DWORD, NULL, &pid,
+                     &size) != ERROR_SUCCESS ||
+        !pid) {
+        return qfalse;
+    }
+    proc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!proc) {
+        return qfalse;
+    }
+    alive = GetExitCodeProcess(proc, &code) && code == STILL_ACTIVE ? qtrue : qfalse;
+    CloseHandle(proc);
+    return alive;
+}
+
+qboolean Sys_SteamReady(void) {
+    DWORD user = 0, size = sizeof(user);
+
+    if (RegGetValueA(HKEY_CURRENT_USER, "Software\\Valve\\Steam\\ActiveProcess", "ActiveUser", RRF_RT_REG_DWORD, NULL,
+                     &user, &size) != ERROR_SUCCESS) {
+        return qfalse;
+    }
+    return user && Sys_SteamRunning() ? qtrue : qfalse;
+}
+
+qboolean Sys_StartSteam(void) {
+    return (INT_PTR)ShellExecuteA(NULL, "open", "steam://open/main", NULL, NULL, SW_SHOWNORMAL) > 32 ? qtrue : qfalse;
+}
+
 char* Sys_SteamPath(void) {
 #if defined(STEAMPATH_NAME) || defined(STEAMPATH_APPID)
     HKEY steamRegKey;

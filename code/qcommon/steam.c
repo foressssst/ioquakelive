@@ -1092,16 +1092,48 @@ static void Steam_Status_f(void) {
                ip & 0xff);
 }
 
+static qboolean Steam_OfferToStart(void) {
+    int waited;
+
+    if (Sys_SteamRunning()) {
+        return qfalse;
+    }
+    if (Sys_Dialog(DT_YES_NO, "Steam is not running. Open Steam to play online?", "ioquakelive") != DR_YES) {
+        return qfalse;
+    }
+    if (!Sys_StartSteam()) {
+        return qfalse;
+    }
+    Com_Printf("Steam: waiting for Steam to start...\n");
+    for (waited = 0; waited < 300; waited++) {
+        Sys_Sleep(1000);
+        if (Sys_SteamReady()) {
+            return qtrue;
+        }
+        if (waited >= 30 && !Sys_SteamRunning()) {
+            return qfalse;
+        }
+    }
+    return qfalse;
+}
+
 void Steam_Init(void) {
+    qboolean started;
+    int tries;
+
     if (Cvar_VariableIntegerValue("com_build")) {
         return;
     }
+    started = Steam_OfferToStart();
     if (!Steam_Load()) {
         return;
     }
-    if (!st.API_Init()) {
-        Com_Printf("Steam API not present.\n");
-        return;
+    for (tries = 0; !st.API_Init(); tries++) {
+        if (!started || tries >= 15) {
+            Com_Printf("Steam API not present.\n");
+            return;
+        }
+        Sys_Sleep(1000);
     }
     st.clientUp = qtrue;
     if (st.Matchmaking) {

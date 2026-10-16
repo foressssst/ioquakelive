@@ -844,6 +844,9 @@ char* Sys_Cwd(void);
 void Sys_SetDefaultInstallPath(const char* path);
 char* Sys_DefaultInstallPath(void);
 char* Sys_SteamPath(void);
+qboolean Sys_SteamRunning(void);
+qboolean Sys_SteamReady(void);
+qboolean Sys_StartSteam(void);
 char* Sys_GogPath(void);
 char* Sys_MicrosoftStorePath(void);
 
