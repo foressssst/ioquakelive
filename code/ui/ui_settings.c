@@ -1489,6 +1489,22 @@ static void ST_Step(int i, int delta) {
     uiInfo.currentCrosshair = shape;
 }
 
+static int ST_CaretAt(int i, float textX, int start) {
+    const char* value = st.values[i];
+    int len = (int)strlen(value);
+    float prev = 0, adv;
+    int n;
+
+    for (n = start; n < len; n++) {
+        adv = SM_AdvanceRaw(FONT_SANS, 15, value + start, n + 1 - start, qfalse);
+        if (smMX < textX + (prev + adv) * 0.5f) {
+            return n;
+        }
+        prev = adv;
+    }
+    return len;
+}
+
 static void ST_ClosePopups(void) {
     st.select = -1;
     st.rgb = -1;
@@ -1601,9 +1617,11 @@ static void ST_Click(void) {
             ST_DragRange(index);
             break;
         case ST_HIT_INPUT:
-            st.edit = index;
-            st.editCursor = (int)strlen(st.values[index]);
-            st.editStart = 0;
+            if (st.edit != index) {
+                st.edit = index;
+                st.editStart = 0;
+            }
+            st.editCursor = ST_CaretAt(index, hit->r.x + 9, st.editStart);
             st.editTime = uiInfo.uiDC.realTime;
             break;
         case ST_HIT_RESET:
@@ -1692,6 +1710,42 @@ static void ST_Bind(int i, int key) {
     ST_Read(i);
 }
 
+static void ST_Paste(void) {
+    char clip[1024];
+    char* buffer = st.values[st.edit];
+    int len = (int)strlen(buffer);
+    int room = MIN(ST_MAX_INPUT, (int)sizeof(st.values[0]) - 1) - len;
+    int i, n = 0;
+
+    trap_GetClipboardData(clip, sizeof(clip));
+    for (i = 0; clip[i] && n < room; i++) {
+        if ((unsigned char)clip[i] >= ' ') {
+            clip[n++] = clip[i];
+        }
+    }
+    if (n <= 0) {
+        return;
+    }
+    memmove(buffer + st.editCursor + n, buffer + st.editCursor, len - st.editCursor + 1);
+    memcpy(buffer + st.editCursor, clip, n);
+    st.editCursor += n;
+}
+
+static void ST_EditNext(int dir) {
+    int i;
+
+    ST_Set(st.edit, st.values[st.edit]);
+    for (i = st.edit + dir; i >= 0 && i < ST_NUM_CVARS; i += dir) {
+        if (stCvars[i].tab == st.tab && stCvars[i].widget == ST_INPUT) {
+            st.edit = i;
+            st.editCursor = (int)strlen(st.values[i]);
+            st.editStart = 0;
+            return;
+        }
+    }
+    st.edit = -1;
+}
+
 static qboolean ST_EditKey(int key) {
     char* buffer = st.values[st.edit];
     int len = (int)strlen(buffer);
@@ -1700,6 +1754,10 @@ static qboolean ST_EditKey(int key) {
     if (key & K_CHAR_FLAG) {
         int c = key & ~K_CHAR_FLAG;
 
+        if (c == 'v' - 'a' + 1) {
+            ST_Paste();
+            return qtrue;
+        }
         if (c == 'h' - 'a' + 1) {
             if (st.editCursor > 0) {
                 memmove(buffer + st.editCursor - 1, buffer + st.editCursor, len - st.editCursor + 1);
@@ -1741,6 +1799,14 @@ static qboolean ST_EditKey(int key) {
             return qtrue;
         case K_END:
             st.editCursor = len;
+            return qtrue;
+        case K_INS:
+            if (trap_Key_IsDown(K_SHIFT)) {
+                ST_Paste();
+            }
+            return qtrue;
+        case K_TAB:
+            ST_EditNext(trap_Key_IsDown(K_SHIFT) ? -1 : 1);
             return qtrue;
         case K_ENTER:
         case K_KP_ENTER:
@@ -1909,6 +1975,10 @@ qboolean UI_Settings_HandleKey(int key) {
 void UI_Settings_Close(void) {
     qboolean fromIngame = st.fromIngame;
 
+    if (st.edit >= 0) {
+        ST_Set(st.edit, st.values[st.edit]);
+        st.edit = -1;
+    }
     Menus_CloseByName("settings");
     Menus_CloseByName("settings_ingame");
     st.fromIngame = qfalse;
