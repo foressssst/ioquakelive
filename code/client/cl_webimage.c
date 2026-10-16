@@ -22,6 +22,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "client.h"
 #include "cl_gif.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #if !defined(_WIN32) && defined(USE_CURL)
 #include "cl_curl.h"
 #endif
@@ -29,9 +33,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define WEB_IMAGE_DIR "webimages"
 #define MAX_WEB_IMAGES 24
 #define MAX_WEB_FETCHING 2
-#define MAX_GIF_FRAMES 80
+#define MAX_GIF_FRAMES 48
 #define GIF_MAX_SIDE 200
 #define REGISTER_PER_FRAME 4
+#define WEB_IMAGE_BUDGET 256
+#define WEB_IMAGE_MAX_SIDE 4096
+#define WEB_FETCH_WINDOW_MS 60000
+#define WEB_FETCH_PER_WINDOW 6
 
 typedef enum {
     WI_FREE,
@@ -49,7 +57,8 @@ typedef struct {
     webImageState_t state;
     int lastUsed;
     int maxBytes;
-    volatile int result;
+    int maxSide;
+    volatile long result;
 
     int numFrames;
     int delays[MAX_GIF_FRAMES];
@@ -61,12 +70,31 @@ typedef struct {
 static webImage_t webImages[MAX_WEB_IMAGES];
 static int numWebImages;
 static int webImagesFetching;
+static int webImagesRegistered;
+static int webFetchTimes[WEB_FETCH_PER_WINDOW];
+static int webFetchNext;
 
 cvar_t* cl_webImages;
 cvar_t* cl_webImageMaxKB;
 
+static void CL_WebImage_SetResult(webImage_t* img, long value) {
+#ifdef _MSC_VER
+    InterlockedExchange(&img->result, value);
+#else
+    __atomic_store_n(&img->result, value, __ATOMIC_RELEASE);
+#endif
+}
+
+static long CL_WebImage_GetResult(webImage_t* img) {
+#ifdef _MSC_VER
+    return InterlockedCompareExchange(&img->result, 0, 0);
+#else
+    return __atomic_load_n(&img->result, __ATOMIC_ACQUIRE);
+#endif
+}
+
 static const char* CL_WebImage_Extension(const char* url) {
-    static const char* known[] = {".png", ".jpg", ".jpeg", ".gif", ".tga", ".bmp", ".pcx"};
+    static const char* known[] = {".png", ".jpg", ".jpeg", ".gif"};
     const char* end;
     const char* p;
     size_t i, len;
@@ -427,19 +455,97 @@ static qboolean CL_WebImage_ReadIndex(webImage_t* img) {
     return FS_FileExists(name);
 }
 
+static qboolean CL_WebImage_Sane(const webImage_t* img) {
+    const char* ext = CL_WebImage_Extension(img->url);
+    FILE* f;
+    byte* data;
+    long length;
+    int w = 0, h = 0, pos, marker, seglen;
+
+    f = Sys_FOpen(img->ospath, "rb");
+    if (!f) {
+        return qfalse;
+    }
+    fseek(f, 0, SEEK_END);
+    length = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (length < 24 || length > img->maxBytes) {
+        fclose(f);
+        return qfalse;
+    }
+    data = (byte*)malloc(length);
+    if (!data || fread(data, 1, length, f) != (size_t)length) {
+        fclose(f);
+        free(data);
+        return qfalse;
+    }
+    fclose(f);
+
+    if (!Q_stricmp(ext, ".png")) {
+        if (!memcmp(data, "\x89PNG\r\n\x1a\n", 8) && !memcmp(data + 12, "IHDR", 4)) {
+            w = (data[16] << 24) | (data[17] << 16) | (data[18] << 8) | data[19];
+            h = (data[20] << 24) | (data[21] << 16) | (data[22] << 8) | data[23];
+        }
+    } else if (!Q_stricmp(ext, ".gif")) {
+        if (!memcmp(data, "GIF87a", 6) || !memcmp(data, "GIF89a", 6)) {
+            w = data[6] | (data[7] << 8);
+            h = data[8] | (data[9] << 8);
+        }
+    } else if (data[0] == 0xFF && data[1] == 0xD8) {
+        pos = 2;
+        while (pos + 9 < length && data[pos] == 0xFF) {
+            marker = data[pos + 1];
+            if (marker == 0xFF) {
+                pos++;
+                continue;
+            }
+            if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD8)) {
+                pos += 2;
+                continue;
+            }
+            if (marker == 0xD9 || marker == 0xDA) {
+                break;
+            }
+            seglen = (data[pos + 2] << 8) | data[pos + 3];
+            if (seglen < 2) {
+                break;
+            }
+            if (marker >= 0xC0 && marker <= 0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC) {
+                h = (data[pos + 5] << 8) | data[pos + 6];
+                w = (data[pos + 7] << 8) | data[pos + 8];
+                break;
+            }
+            pos += 2 + seglen;
+        }
+    }
+    free(data);
+
+    return w > 0 && h > 0 && w <= img->maxSide && h <= img->maxSide ? qtrue : qfalse;
+}
+
 #if !defined(_WIN32) && defined(USE_CURL)
+typedef struct {
+    FILE* f;
+    int written;
+    int max;
+} webSink_t;
+
 static size_t CL_WebImage_CurlWrite(void* buffer, size_t size, size_t nmemb, void* stream) {
-    return fwrite(buffer, size, nmemb, (FILE*)stream);
+    webSink_t* sink = (webSink_t*)stream;
+    size_t n = size * nmemb;
+
+    if (sink->max > 0 && (size_t)sink->written + n > (size_t)sink->max) {
+        return 0;
+    }
+    sink->written += (int)n;
+    return fwrite(buffer, 1, n, sink->f);
 }
 
 static qboolean CL_WebImage_Fetch(const char* url, const char* ospath, int maxBytes) {
     CURL* easy;
     FILE* out;
     CURLcode res;
-
-    if (!CL_cURL_Init()) {
-        return qfalse;
-    }
+    webSink_t sink;
 
     easy = qcurl_easy_init();
     if (!easy) {
@@ -455,10 +561,14 @@ static qboolean CL_WebImage_Fetch(const char* url, const char* ospath, int maxBy
     qcurl_easy_setopt_warn(easy, CURLOPT_URL, url);
     qcurl_easy_setopt_warn(easy, CURLOPT_USERAGENT, FULL_PRODUCT_VERSION);
     qcurl_easy_setopt_warn(easy, CURLOPT_WRITEFUNCTION, CL_WebImage_CurlWrite);
-    qcurl_easy_setopt_warn(easy, CURLOPT_WRITEDATA, out);
+    sink.f = out;
+    sink.written = 0;
+    sink.max = maxBytes;
+    qcurl_easy_setopt_warn(easy, CURLOPT_WRITEDATA, &sink);
     qcurl_easy_setopt_warn(easy, CURLOPT_FAILONERROR, 1);
     qcurl_easy_setopt_warn(easy, CURLOPT_FOLLOWLOCATION, 0);
     qcurl_easy_setopt_warn(easy, CURLOPT_NOPROGRESS, 1);
+    qcurl_easy_setopt_warn(easy, CURLOPT_NOSIGNAL, 1);
     qcurl_easy_setopt_warn(easy, CURLOPT_CONNECTTIMEOUT, 10);
     qcurl_easy_setopt_warn(easy, CURLOPT_TIMEOUT, 30);
     qcurl_easy_setopt_warn(easy, CURLOPT_MAXFILESIZE, (long)maxBytes);
@@ -488,15 +598,16 @@ static qboolean CL_WebImage_Fetch(const char* url, const char* ospath, int maxBy
 static void CL_WebImage_Thread(void* argument) {
     webImage_t* img = (webImage_t*)argument;
 
-    if (!CL_WebImage_Fetch(img->url, img->ospath, img->maxBytes)) {
-        img->result = -1;
+    if (!CL_WebImage_Fetch(img->url, img->ospath, img->maxBytes) || !CL_WebImage_Sane(img)) {
+        remove(img->ospath);
+        CL_WebImage_SetResult(img, -1);
         return;
     }
     if (img->gif && !CL_WebImage_DecodeGif(img)) {
-        img->result = -1;
+        CL_WebImage_SetResult(img, -1);
         return;
     }
-    img->result = 1;
+    CL_WebImage_SetResult(img, 1);
 }
 
 static void CL_WebImage_Register(webImage_t* img) {
@@ -504,6 +615,11 @@ static void CL_WebImage_Register(webImage_t* img) {
     int n = 0;
 
     if (!img->gif) {
+        if (webImagesRegistered >= WEB_IMAGE_BUDGET) {
+            img->state = WI_FAILED;
+            return;
+        }
+        webImagesRegistered++;
         img->frames[0] = re.RegisterShaderNoMip(img->local);
         img->numFrames = 1;
         img->registered = 1;
@@ -513,6 +629,11 @@ static void CL_WebImage_Register(webImage_t* img) {
 
     img->state = WI_READY;
     while (img->registered < img->numFrames && n < REGISTER_PER_FRAME) {
+        if (webImagesRegistered >= WEB_IMAGE_BUDGET) {
+            img->numFrames = img->registered;
+            break;
+        }
+        webImagesRegistered++;
         Com_sprintf(name, sizeof(name), "%s_f%02d.tga", img->base, img->registered);
         img->frames[img->registered] = re.RegisterShaderNoMip(name);
         img->registered++;
@@ -521,9 +642,10 @@ static void CL_WebImage_Register(webImage_t* img) {
     if (!img->frames[0]) {
         img->state = WI_FAILED;
     }
+    if (img->numFrames < 1) {
+        img->numFrames = 1;
+    }
 }
-
-static void CL_ImageUpload_Frame(void);
 
 void CL_WebImage_Frame(void) {
     int i;
@@ -531,9 +653,9 @@ void CL_WebImage_Frame(void) {
     for (i = 0; i < numWebImages; i++) {
         webImage_t* img = &webImages[i];
 
-        if (img->state == WI_FETCHING && img->result != 0) {
+        if (img->state == WI_FETCHING && CL_WebImage_GetResult(img) != 0) {
             webImagesFetching--;
-            if (img->result > 0) {
+            if (CL_WebImage_GetResult(img) > 0) {
                 img->registered = 0;
                 CL_WebImage_Register(img);
             } else {
@@ -583,6 +705,22 @@ qhandle_t CL_WebImage_Get(const char* url) {
     if (webImagesFetching >= MAX_WEB_FETCHING) {
         return 0;
     }
+    if (webFetchTimes[webFetchNext] && cls.realtime - webFetchTimes[webFetchNext] < WEB_FETCH_WINDOW_MS) {
+        return 0;
+    }
+#if !defined(_WIN32) && defined(USE_CURL)
+    if (!CL_cURL_Init()) {
+        return 0;
+    }
+    {
+        CURL* warm = qcurl_easy_init();
+
+        if (!warm) {
+            return 0;
+        }
+        qcurl_easy_cleanup(warm);
+    }
+#endif
 
     if (numWebImages < MAX_WEB_IMAGES) {
         img = &webImages[numWebImages++];
@@ -607,7 +745,9 @@ qhandle_t CL_WebImage_Get(const char* url) {
     CL_WebImage_LocalName(url, img->local, sizeof(img->local), img->base, sizeof(img->base));
     img->gif = !Q_stricmp(CL_WebImage_Extension(url), ".gif") ? qtrue : qfalse;
     img->lastUsed = cls.realtime;
-    img->maxBytes = cl_webImageMaxKB->integer * 1024;
+    img->maxBytes = (int)Com_Clamp(64, 16384, cl_webImageMaxKB->integer) * 1024;
+    img->maxSide = cls.glconfig.maxTextureSize > 0 ? MIN(cls.glconfig.maxTextureSize, WEB_IMAGE_MAX_SIDE)
+                                                  : WEB_IMAGE_MAX_SIDE;
 
     if (!img->gif && FS_FileExists(img->local)) {
         CL_WebImage_Register(img);
@@ -628,7 +768,9 @@ qhandle_t CL_WebImage_Get(const char* url) {
                sizeof(img->ospath));
 
     img->state = WI_FETCHING;
-    img->result = 0;
+    CL_WebImage_SetResult(img, 0);
+    webFetchTimes[webFetchNext] = cls.realtime ? cls.realtime : 1;
+    webFetchNext = (webFetchNext + 1) % WEB_FETCH_PER_WINDOW;
 
     if (!Sys_ThreadCreate(CL_WebImage_Thread, img)) {
         img->state = WI_FAILED;
@@ -648,9 +790,30 @@ qboolean CL_WebImage_Link(const char* url) {
     return qtrue;
 }
 
+qboolean CL_WebImage_Busy(void) {
+    return webImagesFetching > 0 ? qtrue : qfalse;
+}
+
+static void CL_WebImage_ClearCache(void) {
+    char dir[MAX_OSPATH];
+    char** list;
+    int i, count;
+
+    Q_strncpyz(dir, FS_BuildOSPath(Cvar_VariableString("fs_homepath"), FS_GetCurrentGameDir(), WEB_IMAGE_DIR),
+               sizeof(dir));
+    list = Sys_ListFiles(dir, NULL, NULL, &count, qfalse);
+    for (i = 0; i < count; i++) {
+        if (list[i][0] != '.') {
+            remove(va("%s%c%s", dir, PATH_SEP, list[i]));
+        }
+    }
+    Sys_FreeFileList(list);
+}
+
 void CL_WebImage_Init(void) {
     cl_webImages = Cvar_Get("cl_webImages", "1", CVAR_ARCHIVE);
     cl_webImageMaxKB = Cvar_Get("cl_webImageMaxKB", "8192", CVAR_ARCHIVE);
+    CL_WebImage_ClearCache();
 }
 
 void CL_WebImage_Shutdown(void) {
@@ -660,4 +823,5 @@ void CL_WebImage_Shutdown(void) {
         Com_Memset(webImages[i].frames, 0, sizeof(webImages[i].frames));
         webImages[i].registered = 0;
     }
+    webImagesRegistered = 0;
 }

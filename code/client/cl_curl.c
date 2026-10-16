@@ -124,6 +124,9 @@ qboolean CL_cURL_Init() {
 void CL_cURL_Shutdown(void) {
     CL_cURL_Cleanup();
 #ifdef USE_CURL_DLOPEN
+    if (CL_WebImage_Busy()) {
+        return;
+    }
     if (cURLLib) {
         Sys_UnloadLibrary(cURLLib);
         cURLLib = NULL;

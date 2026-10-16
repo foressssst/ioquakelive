@@ -720,6 +720,30 @@ qboolean FS_IsExt(const char* filename, const char* ext, int namelen) {
 	return !Q_stricmp(filename, ext);
 }
 
+static qboolean FS_IsWebImageName(const char* filename) {
+	static const char* const tails[] = {".png", ".jpg", ".jpeg", ".frames"};
+	const char* p;
+	int i;
+
+	if (Q_stricmpn(filename, "webimages/", 10)) {
+		return qfalse;
+	}
+	p = filename + 10;
+	for (i = 0; i < 8; i++) {
+		if (!isxdigit((unsigned char)p[i])) {
+			return qfalse;
+		}
+	}
+	p += 8;
+	for (i = 0; i < (int)ARRAY_LEN(tails); i++) {
+		if (!Q_stricmp(p, tails[i])) {
+			return qtrue;
+		}
+	}
+	return p[0] == '_' && p[1] == 'f' && isdigit((unsigned char)p[2]) && isdigit((unsigned char)p[3]) &&
+	       !Q_stricmp(p + 4, ".tga");
+}
+
 qboolean FS_IsDemoExt(const char* filename, int namelen) {
 	char* ext_test;
 	int index, protocol;
@@ -883,7 +907,7 @@ long FS_FOpenFileReadDir(const char* filename, searchpath_t* search, fileHandle_
 				!FS_IsExt(filename, ".game", len) &&
 				!FS_IsExt(filename, ".dat", len) &&
 				!FS_IsExt(filename, ".txt", len) &&
-				Q_stricmpn(filename, "webimages/", 10) &&
+				!FS_IsWebImageName(filename) &&
 				!FS_IsDemoExt(filename, len))
 			{
 				*file = 0;
