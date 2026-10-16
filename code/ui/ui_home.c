@@ -485,12 +485,38 @@ qboolean UI_Home_NavClick(void) {
     return qfalse;
 }
 
+static void UI_Home_VersionColor(vec4_t color) {
+    char hex[16];
+    unsigned int rgb = 0xFFCC33;
+    int i, n = 0;
+
+    trap_Cvar_VariableStringBuffer("con_colBorder", hex, sizeof(hex));
+    for (i = 0; i < 6 && hex[i]; i++) {
+        int c = tolower((unsigned char)hex[i]);
+        if (c >= '0' && c <= '9') {
+            n = n * 16 + (c - '0');
+        } else if (c >= 'a' && c <= 'f') {
+            n = n * 16 + (c - 'a' + 10);
+        } else {
+            break;
+        }
+    }
+    if (i == 6) {
+        rgb = (unsigned int)n;
+    }
+    color[0] = ((rgb >> 16) & 0xFF) / 255.0f;
+    color[1] = ((rgb >> 8) & 0xFF) / 255.0f;
+    color[2] = (rgb & 0xFF) / 255.0f;
+    color[3] = 0.45f;
+}
+
 void UI_Home_Banner(void) {
     static const char* const text = "You are currently in-game. Click here to return to your match.";
     float h = 31.5f;
     float y = smBottom - h;
     char version[32];
     char status[16];
+    vec4_t fill;
     int index = 0;
 
     UI_Home_DrawNavMenu();
@@ -506,14 +532,15 @@ void UI_Home_Banner(void) {
     if (!version[0] || !status[0]) {
         return;
     }
+    UI_Home_VersionColor(fill);
     if (!Q_stricmp(status, "latest")) {
-        SM_Fill(-1, y, smVW + 2, h, smSuccess, NULL);
+        SM_Fill(-1, y, smVW + 2, h, fill, NULL);
         SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText,
                     va("You are running the latest version of ioquakelive (%s).", version), qfalse);
         return;
     }
     index = 1;
-    SM_Fill(-1, y, smVW + 2, h, smSuccess, NULL);
+    SM_Fill(-1, y, smVW + 2, h, fill, NULL);
     SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText,
                 va("ioquakelive %s is available. Click here to download it.", version), qfalse);
     SM_Hit(0, y, smVW, h, HM_HIT_BANNER, index, NULL);

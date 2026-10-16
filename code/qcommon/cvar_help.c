@@ -713,7 +713,7 @@ static const cvarHelp_t cvarHelp[] = {
     {"cl_followRedirect", "when a full server names another one with room, connect there by yourself"},
     {"cl_checkUpdates", "1 asks at startup whether a newer stable version is out and says so in the main menu; 0 never asks"},
     {"cl_updateStatus", "set by the game: latest if this is the newest stable version, available if there is a newer one"},
-    {"cl_updateVersion", "set by the game: the newest stable version found at startup"},
+    {"cl_updateVersion", "set by the game: the version the main menu shows, yours when it is the newest, the new one when there is one"},
     {"cl_autoRecordDemo", "records a demo of every map you play"},
     {"cl_aviFrameRate", "frames per second of video capture"},
     {"cl_aviMotionJpeg", "captures video as motion JPEG"},

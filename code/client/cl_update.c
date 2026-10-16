@@ -239,13 +239,14 @@ void CL_UpdateFrame(void) {
     if (Q_strncmp(url, CL_UPDATE_SITE, (int)sizeof(CL_UPDATE_SITE) - 1)) {
         return;
     }
-    Cvar_Set("cl_updateVersion", version);
     if (CL_UpdateCompare(version, PRODUCT_VERSION) <= 0) {
+        Cvar_Set("cl_updateVersion", PRODUCT_VERSION);
         Cvar_Set("cl_updateStatus", "latest");
         Com_Printf("ioquakelive is up to date (%s)\n", PRODUCT_VERSION);
         return;
     }
     Q_strncpyz(clUpdateURL, url, sizeof(clUpdateURL));
+    Cvar_Set("cl_updateVersion", version);
     Cvar_Set("cl_updateStatus", "available");
     Com_Printf("A new version of ioquakelive is available: %s\n%s\n", version, url);
 }
