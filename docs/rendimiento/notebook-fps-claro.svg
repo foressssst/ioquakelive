@@ -1,0 +1,27 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='760' height='244' viewBox='0 0 760 244' font-family='Segoe UI, Helvetica, Arial, sans-serif'>
+<line x1='210.0' y1='12' x2='210.0' y2='196' stroke='#d1d9e0' stroke-width='1'/>
+<text x='210.0' y='214' font-size='12' fill='#59636e' text-anchor='middle'>0</text>
+<line x1='302.0' y1='12' x2='302.0' y2='196' stroke='#d1d9e0' stroke-width='1'/>
+<text x='302.0' y='214' font-size='12' fill='#59636e' text-anchor='middle'>100</text>
+<line x1='394.0' y1='12' x2='394.0' y2='196' stroke='#d1d9e0' stroke-width='1'/>
+<text x='394.0' y='214' font-size='12' fill='#59636e' text-anchor='middle'>200</text>
+<line x1='486.0' y1='12' x2='486.0' y2='196' stroke='#d1d9e0' stroke-width='1'/>
+<text x='486.0' y='214' font-size='12' fill='#59636e' text-anchor='middle'>300</text>
+<line x1='578.0' y1='12' x2='578.0' y2='196' stroke='#d1d9e0' stroke-width='1'/>
+<text x='578.0' y='214' font-size='12' fill='#59636e' text-anchor='middle'>400</text>
+<line x1='670.0' y1='12' x2='670.0' y2='196' stroke='#d1d9e0' stroke-width='1'/>
+<text x='670.0' y='214' font-size='12' fill='#59636e' text-anchor='middle'>500</text>
+<text x='198' y='36.0' font-size='15' fill='#1f2328' text-anchor='end'>Quake Live</text>
+<rect x='210' y='18' width='206.1' height='26' rx='4' fill='#8c959f'/>
+<text x='424.1' y='36.0' font-size='14' fill='#1f2328'>224 fps</text>
+<text x='198' y='78.0' font-size='15' fill='#1f2328' text-anchor='end' font-weight="600">ioquakelive OpenGL 2</text>
+<rect x='210' y='60' width='221.7' height='26' rx='4' fill='#d97a1e'/>
+<text x='439.7' y='78.0' font-size='14' fill='#1f2328'>241 fps</text>
+<text x='198' y='120.0' font-size='15' fill='#1f2328' text-anchor='end' font-weight="600">ioquakelive OpenGL</text>
+<rect x='210' y='102' width='299.9' height='26' rx='4' fill='#d97a1e'/>
+<text x='517.9' y='120.0' font-size='14' fill='#1f2328'>326 fps</text>
+<text x='198' y='162.0' font-size='15' fill='#1f2328' text-anchor='end' font-weight="600">ioquakelive Vulkan</text>
+<rect x='210' y='144' width='395.6' height='26' rx='4' fill='#d97a1e'/>
+<text x='613.6' y='162.0' font-size='14' fill='#1f2328'>430 fps</text>
+<text x='210' y='236' font-size='12' fill='#59636e'>cuadros por segundo, más es mejor</text>
+</svg>

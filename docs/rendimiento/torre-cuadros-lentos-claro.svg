@@ -1,0 +1,39 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='760' height='326' viewBox='0 0 760 326' font-family='Segoe UI, Helvetica, Arial, sans-serif'>
+<rect x='210' y='12' width='14' height='14' rx='3' fill='#d97a1e'/>
+<text x='230' y='24' font-size='14' fill='#59636e'>1 % más lento</text>
+<rect x='344' y='12' width='14' height='14' rx='3' fill='#f2b46b'/>
+<text x='364' y='24' font-size='14' fill='#59636e'>0,1 % más lento</text>
+<line x1='210.0' y1='38' x2='210.0' y2='278' stroke='#d1d9e0' stroke-width='1'/>
+<text x='210.0' y='296' font-size='12' fill='#59636e' text-anchor='middle'>0</text>
+<line x1='302.0' y1='38' x2='302.0' y2='278' stroke='#d1d9e0' stroke-width='1'/>
+<text x='302.0' y='296' font-size='12' fill='#59636e' text-anchor='middle'>25</text>
+<line x1='394.0' y1='38' x2='394.0' y2='278' stroke='#d1d9e0' stroke-width='1'/>
+<text x='394.0' y='296' font-size='12' fill='#59636e' text-anchor='middle'>50</text>
+<line x1='486.0' y1='38' x2='486.0' y2='278' stroke='#d1d9e0' stroke-width='1'/>
+<text x='486.0' y='296' font-size='12' fill='#59636e' text-anchor='middle'>75</text>
+<line x1='578.0' y1='38' x2='578.0' y2='278' stroke='#d1d9e0' stroke-width='1'/>
+<text x='578.0' y='296' font-size='12' fill='#59636e' text-anchor='middle'>100</text>
+<line x1='670.0' y1='38' x2='670.0' y2='278' stroke='#d1d9e0' stroke-width='1'/>
+<text x='670.0' y='296' font-size='12' fill='#59636e' text-anchor='middle'>125</text>
+<text x='198' y='69.0' font-size='15' fill='#1f2328' text-anchor='end'>Quake Live</text>
+<rect x='210' y='44' width='403.0' height='18' rx='4' fill='#8c959f'/>
+<text x='621.0' y='58.0' font-size='14' fill='#1f2328'>110 fps</text>
+<rect x='210' y='66' width='386.4' height='18' rx='4' fill='#c3c9cf'/>
+<text x='604.4' y='80.0' font-size='14' fill='#1f2328'>105 fps</text>
+<text x='198' y='125.0' font-size='15' fill='#1f2328' text-anchor='end' font-weight="600">ioquakelive OpenGL</text>
+<rect x='210' y='100' width='436.1' height='18' rx='4' fill='#d97a1e'/>
+<text x='654.1' y='114.0' font-size='14' fill='#1f2328'>118 fps</text>
+<rect x='210' y='122' width='417.7' height='18' rx='4' fill='#f2b46b'/>
+<text x='635.7' y='136.0' font-size='14' fill='#1f2328'>114 fps</text>
+<text x='198' y='181.0' font-size='15' fill='#1f2328' text-anchor='end' font-weight="600">ioquakelive OpenGL 2</text>
+<rect x='210' y='156' width='441.6' height='18' rx='4' fill='#d97a1e'/>
+<text x='659.6' y='170.0' font-size='14' fill='#1f2328'>120 fps</text>
+<rect x='210' y='178' width='430.6' height='18' rx='4' fill='#f2b46b'/>
+<text x='648.6' y='192.0' font-size='14' fill='#1f2328'>117 fps</text>
+<text x='198' y='237.0' font-size='15' fill='#1f2328' text-anchor='end' font-weight="600">ioquakelive Vulkan</text>
+<rect x='210' y='212' width='445.3' height='18' rx='4' fill='#d97a1e'/>
+<text x='663.3' y='226.0' font-size='14' fill='#1f2328'>121 fps</text>
+<rect x='210' y='234' width='434.2' height='18' rx='4' fill='#f2b46b'/>
+<text x='652.2' y='248.0' font-size='14' fill='#1f2328'>118 fps</text>
+<text x='210' y='318' font-size='12' fill='#59636e'>cuadros por segundo de los momentos más lentos, más es mejor (tope de 125)</text>
+</svg>

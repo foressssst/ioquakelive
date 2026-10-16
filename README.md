@@ -45,14 +45,35 @@ Mediciones del 16 de octubre de 2026 con la misma demo en Quake Live y en ioquak
 
 Notebook con Intel Core i3-1115G4, gráficos integrados Intel UHD y 8 GB de RAM, a 1920x1080 en pantalla completa. Cuadros por segundo de `timedemo` sin límite: mediana de seis pasadas, sin contar la primera de cada ronda, que incluye la carga.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/rendimiento/notebook-fps-oscuro.svg">
+  <img alt="Cuadros por segundo en la notebook: Quake Live 224, ioquakelive OpenGL 2 241, OpenGL 326 y Vulkan 430" src="docs/rendimiento/notebook-fps-claro.svg">
+</picture>
+
+<details><summary>Ver los números</summary>
+
 | | Quake Live | ioquakelive OpenGL | ioquakelive OpenGL 2 | ioquakelive Vulkan |
 |---|---:|---:|---:|---:|
 | Cuadros por segundo | 224 | 326 (+46 %) | 241 (+8 %) | 430 (+92 %) |
 | Duración de la prueba, con la carga | 48 a 57 s | 23 a 26 s | 31 a 37 s | 19 a 21 s |
 
+</details>
+
 ### Equipo de gama media
 
-AMD Ryzen 5 5600, NVIDIA GeForce RTX 3050 y monitor de 240 Hz a 2560x1440. Partida en tiempo real a 125 cuadros por segundo, el límite por defecto, medida con PresentMon en dos rondas. Cuanto más altos los cuadros de los peores momentos y más bajos los tiempos, más pareja se siente la partida.
+AMD Ryzen 5 5600, NVIDIA GeForce RTX 3050 y monitor de 240 Hz a 2560x1440. Partida en tiempo real a 125 cuadros por segundo, el límite por defecto, medida con PresentMon en dos rondas. Cuanto más altos los cuadros de los momentos más lentos y menos trabajo por cuadro, más pareja se siente la partida.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/rendimiento/torre-cuadros-lentos-oscuro.svg">
+  <img alt="Cuadros por segundo del 1 % y del 0,1 % más lento: Quake Live 110 y 105, ioquakelive OpenGL 118 y 114, OpenGL 2 120 y 117, Vulkan 121 y 118" src="docs/rendimiento/torre-cuadros-lentos-claro.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/rendimiento/torre-gpu-oscuro.svg">
+  <img alt="Milisegundos de GPU por cuadro: Quake Live 0,94, ioquakelive Vulkan 0,76, OpenGL 1,18 y OpenGL 2 2,32" src="docs/rendimiento/torre-gpu-claro.svg">
+</picture>
+
+<details><summary>Ver los números</summary>
 
 | | Quake Live | ioquakelive Vulkan | ioquakelive OpenGL | ioquakelive OpenGL 2 |
 |---|---:|---:|---:|---:|
@@ -60,6 +81,8 @@ AMD Ryzen 5 5600, NVIDIA GeForce RTX 3050 y monitor de 240 Hz a 2560x1440. Parti
 | 0,1 % de cuadros más lentos | 104 a 106 fps | 118 fps | 113 a 114 fps | 117 fps |
 | Tiempo de cuadro, percentil 99 | 9,0 ms | 8,15 ms | 8,3 ms | 8,25 ms |
 | Tiempo de GPU por cuadro | 0,94 ms | 0,76 ms | 1,18 ms | 2,32 ms |
+
+</details>
 
 Sin límite de cuadros, ioquakelive llega en ese equipo al tope de 1000 cuadros por segundo del motor tanto en Vulkan como en OpenGL.
 
@@ -282,6 +305,7 @@ code/
 misc/msvc/          Solución y proyectos de Visual Studio
 content/pak01/      Recursos propios de ioquakelive para generar pak01.pk3
 content/server/     server.cfg y access.txt de ejemplo para ioqlds
+docs/rendimiento/   Gráficos de la sección de rendimiento
 ```
 
 ## Créditos y licencia
