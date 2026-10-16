@@ -292,23 +292,112 @@ static qboolean Con_LinkChar(int c) {
     return (c > ' ' && c < 127 && c != '"' && c != '\'' && c != '\\' && c != '<' && c != '>') ? qtrue : qfalse;
 }
 
-static int Con_LinkLength(const short* text, int width, int start) {
-    static const char scheme[] = "https://";
-    int i, len;
+static const char* const conLinkTlds[] = {
+    "com", "net", "org", "info", "io", "gg", "tv", "me", "dev", "app", "xyz", "live", "link", "site", "online",
+    "club", "store", "tech", "games", "gl", "ly", "to", "edu", "gov", "cl", "ar", "br", "mx", "pe", "co", "uy",
+    "py", "bo", "ec", "ve", "es", "pt", "uk", "de", "fr", "it", "nl", "be", "se", "no", "fi", "dk", "pl", "ru",
+    "ua", "cz", "eu", "us", "ca", "au", "nz", "jp", "kr", "cn", "in", NULL
+};
 
-    for (i = 0; scheme[i]; i++) {
-        if (start + i >= width || (text[start + i] & 0xff) != scheme[i]) {
-            return 0;
+static int Con_TextChar(const short* text, int width, int i) {
+    return (i >= 0 && i < width) ? (text[i] & 0xff) : 0;
+}
+
+static qboolean Con_HostChar(int c) {
+    return (isalnum(c) || c == '-') ? qtrue : qfalse;
+}
+
+static int Con_SchemeLength(const short* text, int width, int start) {
+    static const char* const schemes[] = {"https://", "http://"};
+    int i, n;
+
+    for (n = 0; n < (int)ARRAY_LEN(schemes); n++) {
+        for (i = 0; schemes[n][i]; i++) {
+            if (tolower(Con_TextChar(text, width, start + i)) != schemes[n][i]) {
+                break;
+            }
+        }
+        if (!schemes[n][i]) {
+            return i;
         }
     }
-    len = i;
+    return 0;
+}
+
+static qboolean Con_BareHost(const short* text, int width, int start, int end) {
+    char tld[16];
+    int i, k, labelStart = start, dots = 0, tldLen;
+
+    for (i = start; i < end; i++) {
+        int c = Con_TextChar(text, width, i);
+
+        if (c == '/' || c == ':' || c == '?' || c == '#') {
+            break;
+        }
+        if (c == '.') {
+            if (i == labelStart) {
+                return qfalse;
+            }
+            dots++;
+            labelStart = i + 1;
+        } else if (!Con_HostChar(c)) {
+            return qfalse;
+        }
+    }
+    tldLen = i - labelStart;
+    if (!dots || tldLen < 2 || tldLen >= (int)sizeof(tld)) {
+        return qfalse;
+    }
+    for (k = 0; k < tldLen; k++) {
+        tld[k] = (char)tolower(Con_TextChar(text, width, labelStart + k));
+        if (!isalpha((unsigned char)tld[k])) {
+            return qfalse;
+        }
+    }
+    tld[tldLen] = '\0';
+    if (dots >= 2 && tolower(Con_TextChar(text, width, start)) == 'w' &&
+        tolower(Con_TextChar(text, width, start + 1)) == 'w' &&
+        tolower(Con_TextChar(text, width, start + 2)) == 'w' && Con_TextChar(text, width, start + 3) == '.') {
+        return qtrue;
+    }
+    for (k = 0; conLinkTlds[k]; k++) {
+        if (!strcmp(tld, conLinkTlds[k])) {
+            return qtrue;
+        }
+    }
+    return qfalse;
+}
+
+static int Con_LinkLength(const short* text, int width, int start, qboolean* bare) {
+    int prev = Con_TextChar(text, width, start - 1);
+    int scheme, len;
+
+    *bare = qfalse;
+    if (isalnum(prev) || (prev && strchr("@.-_/:%#", prev))) {
+        return 0;
+    }
+    scheme = Con_SchemeLength(text, width, start);
+    if (!scheme && !isalnum(Con_TextChar(text, width, start))) {
+        return 0;
+    }
+    len = scheme;
     while (start + len < width && Con_LinkChar(text[start + len] & 0xff)) {
         len++;
     }
-    while (len > i && strchr(".,;:!?)]}", text[start + len - 1] & 0xff) != NULL) {
+    while (len > scheme && strchr(".,;:!?)]}", text[start + len - 1] & 0xff) != NULL) {
         len--;
     }
-    return len > i ? len : 0;
+    if (len <= scheme) {
+        return 0;
+    }
+    if (scheme) {
+        return len;
+    }
+    if (!Con_BareHost(text, width, start, start + len)) {
+        return 0;
+    }
+    *bare = qtrue;
+    return len;
 }
 
 static int Con_CellColumn(const short* text, int x) {
@@ -324,12 +413,13 @@ static int Con_CellColumn(const short* text, int x) {
 
 static void Con_RowLinks(const short* text, int width, float x0, float y, float adv, float asc, float cellH) {
     static const vec4_t underline = {0.86f, 0.86f, 0.90f, 0.90f};
-    int x, len, i;
+    int x, len, i, n;
+    qboolean bare;
 
     for (x = 0; x < width; x++) {
         float lx, lw;
 
-        len = Con_LinkLength(text, width, x);
+        len = Con_LinkLength(text, width, x, &bare);
         if (!len) {
             continue;
         }
@@ -342,10 +432,15 @@ static void Con_RowLinks(const short* text, int width, float x0, float y, float 
             l->y = y - asc;
             l->w = lw;
             l->h = cellH;
-            for (i = 0; i < len && i < CON_MAX_URL - 1; i++) {
-                l->url[i] = (char)(text[x + i] & 0xff);
+            l->url[0] = '\0';
+            if (bare) {
+                Q_strncpyz(l->url, "https://", sizeof(l->url));
             }
-            l->url[i] = '\0';
+            n = (int)strlen(l->url);
+            for (i = 0; i < len && n < CON_MAX_URL - 1; i++) {
+                l->url[n++] = (char)(text[x + i] & 0xff);
+            }
+            l->url[n] = '\0';
         }
         Con_FillRectPx(lx, y + 2.0f, lw, 1.0f, underline);
         x += len - 1;

@@ -2986,8 +2986,8 @@ static void CL_Web_HideBrowser_f(void) {
 void CL_OpenURL(const char* url) {
     const char* p;
 
-    if (!url || Q_strncmp(url, "https://", 8)) {
-        Com_Printf("openURL: refused, not an https link\n");
+    if (!url || (Q_strncmp(url, "https://", 8) && Q_strncmp(url, "http://", 7))) {
+        Com_Printf("openURL: refused, not a web link\n");
         return;
     }
     for (p = url; *p; p++) {
