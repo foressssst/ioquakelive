@@ -43,7 +43,7 @@ Se hicieron mediciones el dia 16 de octubre de 2026 en Quake Live y en ioquakeli
 
 ### Equipo modesto
 
-Notebook con Intel Core i3-1115G4, gráficos integrados Intel UHD y 8 GB de RAM, a 1920x1080 en pantalla completa. Cuadros por segundo de `timedemo` sin límite: mediana de seis pasadas, sin contar la primera de cada ronda, que incluye la carga.
+Notebook con Intel Core i3-1115G4, gráficos integrados Intel UHD y 8 GB de RAM, a 1920x1080 en pantalla completa: mediana de seis pasadas, sin contar la primera de cada ronda, que incluye la carga.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/rendimiento/notebook-fps-oscuro.svg">
@@ -61,7 +61,7 @@ Notebook con Intel Core i3-1115G4, gráficos integrados Intel UHD y 8 GB de RAM,
 
 ### Equipo de gama media
 
-AMD Ryzen 5 5600, NVIDIA GeForce RTX 3050 y monitor de 240 Hz a 2560x1440. Partida en tiempo real a 125 cuadros por segundo, el límite por defecto, medida con PresentMon en dos rondas. Cuanto más altos los cuadros de los momentos más lentos y menos trabajo por cuadro, más pareja se siente la partida.
+AMD Ryzen 5 5600, NVIDIA GeForce RTX 3050 y monitor de 240 Hz a 2560x1440. Partida en tiempo real a 125 cuadros por segundo, el límite por defecto, medida con PresentMon en dos rondas. Cuanto más altos los cuadros de los momentos más lentos y menos trabajo por cuadro, más parejo se siente.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/rendimiento/torre-cuadros-lentos-oscuro.svg">
