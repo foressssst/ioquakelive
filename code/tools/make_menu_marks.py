@@ -14,7 +14,6 @@ MARCAS = [
     ("QUAKE_3.jpeg", "mark_quake3", 80),
     ("IOQUAKE_3.jpeg", "mark_ioquake3", 40),
     ("QUAKE_LIVE.jpeg", "mark_quakelive", 38),
-    ("QUAKE_CLUB.jpeg", "mark_quakeclub", 75),
 ]
 
 ZOOM = 2
