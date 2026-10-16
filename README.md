@@ -37,6 +37,32 @@ Si encuentras un problema, puedes reportarlo en [Issues](https://github.com/fore
 - **Consola animada:** `con_animate 0` desactiva la animación al abrirla.
 - **Flecha del sistema:** utilizada en los menús, la consola y el reproductor de demos.
 
+## Rendimiento
+
+Mediciones del 16 de octubre de 2026 con la misma demo en Quake Live y en ioquakelive, la configuración por defecto de cada uno y la versión en desarrollo posterior a la 1.0.1. Los resultados dependen del equipo y de los drivers.
+
+### Equipo modesto
+
+Notebook con Intel Core i3-1115G4, gráficos integrados Intel UHD y 8 GB de RAM, a 1920x1080 en pantalla completa. Cuadros por segundo de `timedemo` sin límite: mediana de seis pasadas, sin contar la primera de cada ronda, que incluye la carga.
+
+| | Quake Live | ioquakelive OpenGL | ioquakelive OpenGL 2 | ioquakelive Vulkan |
+|---|---:|---:|---:|---:|
+| Cuadros por segundo | 224 | 326 (+46 %) | 241 (+8 %) | 430 (+92 %) |
+| Duración de la prueba, con la carga | 48 a 57 s | 23 a 26 s | 31 a 37 s | 19 a 21 s |
+
+### Equipo de gama media
+
+AMD Ryzen 5 5600, NVIDIA GeForce RTX 3050 y monitor de 240 Hz a 2560x1440. Partida en tiempo real a 125 cuadros por segundo, el límite por defecto, medida con PresentMon en dos rondas. Cuanto más altos los cuadros de los peores momentos y más bajos los tiempos, más pareja se siente la partida.
+
+| | Quake Live | ioquakelive Vulkan | ioquakelive OpenGL | ioquakelive OpenGL 2 |
+|---|---:|---:|---:|---:|
+| 1 % de cuadros más lentos | 109 a 110 fps | 121 fps | 118 a 119 fps | 120 fps |
+| 0,1 % de cuadros más lentos | 104 a 106 fps | 118 fps | 113 a 114 fps | 117 fps |
+| Tiempo de cuadro, percentil 99 | 9,0 ms | 8,15 ms | 8,3 ms | 8,25 ms |
+| Tiempo de GPU por cuadro | 0,94 ms | 0,76 ms | 1,18 ms | 2,32 ms |
+
+Sin límite de cuadros, ioquakelive llega en ese equipo al tope de 1000 cuadros por segundo del motor tanto en Vulkan como en OpenGL.
+
 ## Estado del proyecto
 
 Los tres módulos principales del juego `qagame`, `cgame` y `ui` se han reconstruido a partir de los binarios de Quake Live build 1069. Las direcciones de las funciones examinadas con Ghidra están documentadas en los mensajes de commit correspondientes.
