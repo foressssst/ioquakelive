@@ -318,7 +318,6 @@ extern cvar_t* cl_inGameVideo;
 extern cvar_t* cl_lanForcePackets;
 extern cvar_t* cl_autoRecordDemo;
 
-extern cvar_t* cl_consoleKeys;
 
 void CL_Init(void);
 void CL_AddReliableCommand(const char* cmd, qboolean isDisconnectCmd);

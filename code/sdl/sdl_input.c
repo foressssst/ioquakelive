@@ -100,79 +100,6 @@ static void IN_PrintKey(const SDL_KeyboardEvent* keysym, keyNum_t key, qboolean 
     Com_Printf(" Q:0x%02x(%s)\n", key, Key_KeynumToString(key));
 }
 
-#define MAX_CONSOLE_KEYS 16
-
-static qboolean IN_IsConsoleKey(keyNum_t key, int character) {
-    typedef struct consoleKey_s {
-        enum {
-            QUAKE_KEY,
-            CHARACTER
-        } type;
-
-        union {
-            keyNum_t key;
-            int character;
-        } u;
-    } consoleKey_t;
-
-    static consoleKey_t consoleKeys[MAX_CONSOLE_KEYS];
-    static int numConsoleKeys = 0;
-    int i;
-
-    if (cl_consoleKeys->modified) {
-        char *text_p, *token;
-
-        cl_consoleKeys->modified = qfalse;
-        text_p = cl_consoleKeys->string;
-        numConsoleKeys = 0;
-
-        while (numConsoleKeys < MAX_CONSOLE_KEYS) {
-            consoleKey_t* c = &consoleKeys[numConsoleKeys];
-            int charCode = 0;
-
-            token = COM_Parse(&text_p);
-            if (!token[0])
-                break;
-
-            charCode = Com_HexStrToInt(token);
-
-            if (charCode > 0) {
-                c->type = CHARACTER;
-                c->u.character = charCode;
-            } else {
-                c->type = QUAKE_KEY;
-                c->u.key = Key_StringToKeynum(token);
-
-                if (c->u.key <= 0)
-                    continue;
-            }
-
-            numConsoleKeys++;
-        }
-    }
-
-    if (key == character)
-        key = 0;
-
-    for (i = 0; i < numConsoleKeys; i++) {
-        consoleKey_t* c = &consoleKeys[i];
-
-        switch (c->type) {
-            case QUAKE_KEY:
-                if (key && c->u.key == key)
-                    return qtrue;
-                break;
-
-            case CHARACTER:
-                if (c->u.character == character)
-                    return qtrue;
-                break;
-        }
-    }
-
-    return qfalse;
-}
-
 static keyNum_t IN_TranslateSDLToQ3Key(const SDL_KeyboardEvent* keysym, qboolean down) {
     keyNum_t key = 0;
 
@@ -398,7 +325,7 @@ static keyNum_t IN_TranslateSDLToQ3Key(const SDL_KeyboardEvent* keysym, qboolean
     if (in_keyboardDebug->integer)
         IN_PrintKey(keysym, key, down);
 
-    if (keysym->scancode == SDL_SCANCODE_GRAVE || IN_IsConsoleKey(key, 0)) {
+    if (keysym->scancode == SDL_SCANCODE_GRAVE) {
         key = K_CONSOLE;
     }
 
@@ -1050,11 +977,7 @@ static void IN_ProcessEvents(void) {
                         }
 
                         if (utf32 != 0) {
-                            if (IN_IsConsoleKey(0, utf32)) {
-                                Com_QueueEvent(in_eventTime, SE_KEY, K_CONSOLE, qtrue, 0, NULL);
-                                Com_QueueEvent(in_eventTime, SE_KEY, K_CONSOLE, qfalse, 0, NULL);
-                            } else
-                                Com_QueueEvent(in_eventTime, SE_CHAR, utf32, 0, 0, NULL);
+                            Com_QueueEvent(in_eventTime, SE_CHAR, utf32, 0, 0, NULL);
                         }
                     }
                 }

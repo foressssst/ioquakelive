@@ -103,7 +103,6 @@ cvar_t* cl_serverStatusResendTime;
 
 cvar_t* cl_lanForcePackets;
 
-cvar_t* cl_consoleKeys;
 
 cvar_t* cl_rate;
 
@@ -3242,7 +3241,6 @@ void CL_Init(void) {
 
     cl_lanForcePackets = Cvar_Get("cl_lanForcePackets", "1", CVAR_ARCHIVE);
 
-    cl_consoleKeys = Cvar_Get("cl_consoleKeys", "~ ` 0x7e 0x60", CVAR_ARCHIVE);
 
     cl_steamId = Cvar_Get("cl_steamId", "0", CVAR_ARCHIVE);
     Cvar_Get("cl_quitOnDemoCompleted", "0", 0);
