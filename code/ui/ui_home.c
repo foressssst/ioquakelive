@@ -490,6 +490,7 @@ void UI_Home_Banner(void) {
     float h = 31.5f;
     float y = smBottom - h;
     char version[32];
+    char status[16];
     int index = 0;
 
     UI_Home_DrawNavMenu();
@@ -501,7 +502,14 @@ void UI_Home_Banner(void) {
         return;
     }
     trap_Cvar_VariableStringBuffer("cl_updateVersion", version, sizeof(version));
-    if (!version[0]) {
+    trap_Cvar_VariableStringBuffer("cl_updateStatus", status, sizeof(status));
+    if (!version[0] || !status[0]) {
+        return;
+    }
+    if (!Q_stricmp(status, "latest")) {
+        SM_Fill(-1, y, smVW + 2, h, smSuccess, NULL);
+        SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText,
+                    va("You are running the latest version of ioquakelive (%s).", version), qfalse);
         return;
     }
     index = 1;

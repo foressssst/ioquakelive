@@ -203,6 +203,7 @@ static void CL_OpenUpdate_f(void) {
 void CL_UpdateInit(void) {
     cl_checkUpdates = Cvar_Get("cl_checkUpdates", "1", CVAR_ARCHIVE);
     Cvar_Get("cl_updateVersion", "", CVAR_ROM);
+    Cvar_Get("cl_updateStatus", "", CVAR_ROM);
     Cmd_AddCommand("openupdate", CL_OpenUpdate_f);
     if (!cl_checkUpdates->integer || CL_UpdateGetState() != CLU_IDLE) {
         return;
@@ -235,10 +236,16 @@ void CL_UpdateFrame(void) {
             return;
         }
     }
-    if (Q_strncmp(url, CL_UPDATE_SITE, (int)sizeof(CL_UPDATE_SITE) - 1) || CL_UpdateCompare(version, PRODUCT_VERSION) <= 0) {
+    if (Q_strncmp(url, CL_UPDATE_SITE, (int)sizeof(CL_UPDATE_SITE) - 1)) {
+        return;
+    }
+    Cvar_Set("cl_updateVersion", version);
+    if (CL_UpdateCompare(version, PRODUCT_VERSION) <= 0) {
+        Cvar_Set("cl_updateStatus", "latest");
+        Com_Printf("ioquakelive is up to date (%s)\n", PRODUCT_VERSION);
         return;
     }
     Q_strncpyz(clUpdateURL, url, sizeof(clUpdateURL));
-    Cvar_Set("cl_updateVersion", version);
+    Cvar_Set("cl_updateStatus", "available");
     Com_Printf("A new version of ioquakelive is available: %s\n%s\n", version, url);
 }
