@@ -33,6 +33,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifdef USE_VULKAN_API
 #include "../renderercommon/vulkan/vulkan.h"
 #include <SDL3/SDL_vulkan.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #endif
 
 typedef enum {
@@ -1234,6 +1237,63 @@ void VKimp_Shutdown(qboolean unloadDLL) {
     GLimp_Shutdown();
 }
 
+#ifdef _WIN32
+static void VKimp_SkipOldObsHook(void) {
+    typedef DWORD(WINAPI * sizeFn_t)(LPCWSTR, LPDWORD);
+    typedef BOOL(WINAPI * infoFn_t)(LPCWSTR, DWORD, DWORD, LPVOID);
+    typedef BOOL(WINAPI * queryFn_t)(LPCVOID, LPCWSTR, LPVOID*, PUINT);
+    wchar_t path[MAX_PATH];
+    VS_FIXEDFILEINFO* fixed;
+    sizeFn_t getSize;
+    infoFn_t getInfo;
+    queryFn_t query;
+    HMODULE lib;
+    UINT fixedLen;
+    DWORD size, unused, ms = 0, ls = 0;
+    void* data;
+
+    size = GetEnvironmentVariableW(L"ProgramData", path, MAX_PATH - 48);
+    if (size == 0 || size >= MAX_PATH - 48) {
+        return;
+    }
+#ifdef _WIN64
+    lstrcatW(path, L"\\obs-studio-hook\\graphics-hook64.dll");
+#else
+    lstrcatW(path, L"\\obs-studio-hook\\graphics-hook32.dll");
+#endif
+    if (GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES) {
+        return;
+    }
+
+    lib = LoadLibraryW(L"version.dll");
+    if (!lib) {
+        return;
+    }
+    getSize = (sizeFn_t)(void*)GetProcAddress(lib, "GetFileVersionInfoSizeW");
+    getInfo = (infoFn_t)(void*)GetProcAddress(lib, "GetFileVersionInfoW");
+    query = (queryFn_t)(void*)GetProcAddress(lib, "VerQueryValueW");
+    if (getSize && getInfo && query && (size = getSize(path, &unused)) != 0) {
+        data = malloc(size);
+        if (data && getInfo(path, 0, size, data) && query(data, L"\\", (LPVOID*)&fixed, &fixedLen) &&
+            fixedLen >= sizeof(*fixed)) {
+            ms = fixed->dwFileVersionMS;
+            ls = fixed->dwFileVersionLS;
+        }
+        free(data);
+    }
+    FreeLibrary(lib);
+
+    if (ms == 0 || ms > 0x00010001 || (ms == 0x00010001 && ls >= 0x00040000)) {
+        return;
+    }
+    SetEnvironmentVariableW(L"DISABLE_VULKAN_OBS_CAPTURE", L"1");
+    ri.Printf(PRINT_WARNING,
+              "OBS Studio's Vulkan capture %lu.%lu.%lu crashes Vulkan, so it is off for ioquakelive. "
+              "Update OBS to 25.0.4 or later to capture the game.\n",
+              (unsigned long)(ms >> 16), (unsigned long)(ms & 0xFFFF), (unsigned long)(ls >> 16));
+}
+#endif
+
 qboolean VKimp_Probe(char* reason, int reasonSize) {
 #ifdef __APPLE__
     (void)reasonSize;
@@ -1255,6 +1315,9 @@ qboolean VKimp_Probe(char* reason, int reasonSize) {
     qboolean videoStarted = qfalse, ok = qfalse;
 
     reason[0] = '\0';
+#ifdef _WIN32
+    VKimp_SkipOldObsHook();
+#endif
     if (!SDL_WasInit(SDL_INIT_VIDEO)) {
         if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
             return qtrue;
@@ -1300,15 +1363,6 @@ qboolean VKimp_Probe(char* reason, int reasonSize) {
         index = 0;
     }
     getProperties(devices[index], &props);
-
-#ifdef _WIN64
-    if (props.vendorID == 0x8086 && (props.driverVersion >> 14) == 101 &&
-        (props.driverVersion & 0x3FFF) >= 5333 && (props.driverVersion & 0x3FFF) <= 6737) {
-        Com_sprintf(reason, reasonSize, "Intel driver 101.%u crashes Vulkan in 64 bits; 101.6790 or later does not",
-                    props.driverVersion & 0x3FFF);
-        goto destroy;
-    }
-#endif
     ok = qtrue;
 
 destroy:
