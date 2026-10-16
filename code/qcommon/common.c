@@ -2776,7 +2776,7 @@ void Com_Frame(void) {
             if (com_busyWait->integer || timeVal < 1)
                 NET_Sleep(0);
             else
-                NET_Sleep(timeVal - 1);
+                NET_Sleep(com_dedicated->integer ? timeVal : timeVal - 1);
         } while (Com_TimeVal(minMsec));
     }
 
