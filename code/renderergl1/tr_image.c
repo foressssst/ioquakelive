@@ -692,8 +692,14 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 		image->flags |= IMGFLAG_NO_COMPRESSION | IMGFLAG_NOSCALE;
 	}
 
+	if ( !Q_stricmpn( image->imgName, "webui/", 6 ) ) {
+		image->flags |= IMGFLAG_NO_COMPRESSION;
+	}
+
 	if ( flags & IMGFLAG_RGB )
 		image->internalFormat = GL_RGB;
+	else if ( !Q_stricmpn( image->imgName, "webui/", 6 ) )
+		image->internalFormat = GL_RGBA8;
 	else
 		image->internalFormat = 0;
 

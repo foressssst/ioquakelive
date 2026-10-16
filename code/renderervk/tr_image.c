@@ -661,7 +661,8 @@ static void upload_vk_image( image_t *image, byte *pic ) {
 	w = upload_data.base_level_width;
 	h = upload_data.base_level_height;
 
-	if ( r_texturebits->integer > 16 || r_texturebits->integer == 0 || ( image->flags & IMGFLAG_LIGHTMAP ) ) {
+	if ( r_texturebits->integer > 16 || r_texturebits->integer == 0 || ( image->flags & IMGFLAG_LIGHTMAP ) ||
+		!Q_stricmpn( image->imgName, "webui/", 6 ) ) {
 		image->internalFormat = VK_FORMAT_R8G8B8A8_UNORM;
 	} else {
 		qboolean has_alpha = RawImage_HasAlpha( upload_data.buffer, w * h );
@@ -915,6 +916,10 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 
 	if ( namelen > 6 && Q_stristr( image->imgName, "maps/" ) == image->imgName && Q_stristr( image->imgName + 6, "/lm_" ) != NULL ) {
 		image->flags |= IMGFLAG_NO_COMPRESSION | IMGFLAG_NOSCALE;
+	}
+
+	if ( !Q_stricmpn( image->imgName, "webui/", 6 ) ) {
+		image->flags |= IMGFLAG_NO_COMPRESSION;
 	}
 
 #ifdef USE_VULKAN

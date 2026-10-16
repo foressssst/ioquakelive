@@ -1415,9 +1415,9 @@ static GLenum RawImage_GetFormat(const byte* data, int numPixels, GLenum picForm
                     internalFormat = GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
                 } else if (!forceNoCompression && glConfig.textureCompression == TC_S3TC) {
                     internalFormat = GL_RGB4_S3TC;
-                } else if (r_texturebits->integer == 16) {
+                } else if (r_texturebits->integer == 16 && !forceNoCompression) {
                     internalFormat = GL_RGB5;
-                } else if (r_texturebits->integer == 32) {
+                } else if (r_texturebits->integer == 32 || forceNoCompression) {
                     internalFormat = GL_RGB8;
                 } else {
                     internalFormat = GL_RGB;
@@ -1434,9 +1434,9 @@ static GLenum RawImage_GetFormat(const byte* data, int numPixels, GLenum picForm
                     internalFormat = GL_COMPRESSED_RGBA_BPTC_UNORM_ARB;
                 } else if (!forceNoCompression && glConfig.textureCompression == TC_S3TC_ARB) {
                     internalFormat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
-                } else if (r_texturebits->integer == 16) {
+                } else if (r_texturebits->integer == 16 && !forceNoCompression) {
                     internalFormat = GL_RGBA4;
-                } else if (r_texturebits->integer == 32) {
+                } else if (r_texturebits->integer == 32 || forceNoCompression) {
                     internalFormat = GL_RGBA8;
                 } else {
                     internalFormat = GL_RGBA;
@@ -1720,6 +1720,9 @@ image_t* R_CreateImage2(const char* name, byte* pic, int width, int height, GLen
     }
     if (!strncmp(name, "*lightmap", 9)) {
         isLightmap = qtrue;
+    }
+    if (!Q_stricmpn(name, "webui/", 6)) {
+        flags |= IMGFLAG_NO_COMPRESSION;
     }
 
     if (tr.numImages == MAX_DRAWIMAGES) {

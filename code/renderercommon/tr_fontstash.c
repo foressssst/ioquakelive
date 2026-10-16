@@ -66,6 +66,8 @@ typedef struct FONSfont {
     int lut[FONS_HASH_LUT_SIZE];
     int fallbacks[FONS_MAX_FALLBACKS];
     int nfallbacks;
+    int useContrast;
+    unsigned char contrast[256];
 } FONSfont;
 
 typedef struct FONSstate {
@@ -524,6 +526,20 @@ void fonsClearState(FONScontext *stash) {
     fons__clearState(stash);
 }
 
+void fonsSetFontContrast(FONScontext *stash, int font, float gamma, float gain) {
+    FONSfont *f;
+    int i;
+
+    if (font < 0 || font >= stash->nfonts)
+        return;
+    f = stash->fonts[font];
+    for (i = 0; i < 256; i++) {
+        float a = powf(i / 255.0f, 1.0f / gamma) * gain;
+        f->contrast[i] = (unsigned char)(a >= 1.0f ? 255 : (int)(a * 255.0f + 0.5f));
+    }
+    f->useContrast = 1;
+}
+
 int fonsAddFont(FONScontext *stash, const char *name, unsigned char *data, int dataSize, int freeData) {
     int i, ascent, descent, fh, lineGap;
     FONSfont *font;
@@ -734,6 +750,13 @@ static FONSglyph *fons__getGlyph(FONScontext *stash, FONSfont *font, unsigned in
 
     dst = &stash->texData[(glyph->x0 + pad) + (glyph->y0 + pad) * stash->params.width];
     R_MakeGlyphBitmap(&renderFont->font, dst, gw - pad * 2, gh - pad * 2, stash->params.width, scale, scale, g);
+    if (font->useContrast) {
+        for (y = 0; y < gh - pad * 2; y++) {
+            for (x = 0; x < gw - pad * 2; x++) {
+                dst[x + y * stash->params.width] = font->contrast[dst[x + y * stash->params.width]];
+            }
+        }
+    }
 
     dst = &stash->texData[glyph->x0 + glyph->y0 * stash->params.width];
     for (y = 0; y < gh; y++) {
