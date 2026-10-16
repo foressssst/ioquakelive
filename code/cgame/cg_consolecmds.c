@@ -400,8 +400,8 @@ static void CG_DropWeapon_f(void) {
 }
 
 static void CG_Readyup_f(void) {
-    if ((cg.warmup != 0 && cg.snap != NULL && cg.snap->ps.pm_type != PM_DEAD) ||
-        cg.snap->ps.pm_type == PM_INTERMISSION) {
+    if ((cg.warmup != 0 && cg.snap != NULL && cg.snap->ps.persistant[PERS_TEAM] != TEAM_SPECTATOR) ||
+        cg.predictedPlayerState.pm_type == PM_INTERMISSION) {
         trap_SendClientCommand("readyup");
     }
 }
