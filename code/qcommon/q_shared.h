@@ -34,7 +34,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define STEAMPATH_APPID         "282440"
 
 #ifndef PRODUCT_VERSION
-#define PRODUCT_VERSION "1.0.0"
+#define PRODUCT_VERSION "1.0.1"
 #endif
 
 #ifndef PRODUCT_DATE
