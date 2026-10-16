@@ -667,6 +667,7 @@ qboolean ConsoleCommand(void) {
             trap_SendServerCommand(slot, va("print \"server whisper: %s\"", msg));
         }
 
+        G_ConsolePermissionCommand(cmd);
         return qtrue;
     }
 

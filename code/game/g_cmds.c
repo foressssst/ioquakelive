@@ -543,10 +543,6 @@ void SetTeam_Execute(gentity_t* ent, int team, spectatorState_t specState, int s
     int oldTeam;
     int teamLeader;
 
-    if (G_TeamIsLocked(ent, (team_t)team)) {
-        return;
-    }
-
     oldTeam = client->sess.sessionTeam;
     if (team == oldTeam && team != TEAM_SPECTATOR) {
         return;
@@ -1949,31 +1945,33 @@ static void Cmd_Forfeit_f(gentity_t* ent) {
 
 static void Cmd_PermHelp_f(gentity_t* ent);
 
-static void Cmd_Players_f(gentity_t* ent) {
-    int i;
-    gclient_t* cl;
-    char msg[1024];
-    char line[128];
-    char* teamStr;
+static void G_AdminReply(gentity_t* ent, const char* text) {
+    if (!ent) {
+        G_Printf("%s", text);
+        return;
+    }
+    trap_SendServerCommand(ent - g_entities, text);
+}
 
-    msg[0] = '\0';
-    Q_strcat(msg, sizeof(msg), "print \"\n--- Connected Players ---\n\"");
-    trap_SendServerCommand(ent - g_entities, msg);
+static qboolean G_AdminIsServer(gentity_t* ent) {
+    return (qboolean)(!ent || ent->client->pers.localClient);
+}
+
+static void Cmd_Players_f(gentity_t* ent) {
+    static const char privChars[] = " MA*";
+    int i;
+    int priv;
+    gclient_t* cl;
 
     for (i = 0; i < level.maxclients; i++) {
         cl = &g_clients[i];
-        if (cl->pers.connected != CON_CONNECTED) continue;
+        if (!g_entities[i].inuse || cl->pers.connected != CON_CONNECTED) continue;
 
-        switch (cl->sess.sessionTeam) {
-        case TEAM_RED: teamStr = "RED"; break;
-        case TEAM_BLUE: teamStr = "BLUE"; break;
-        case TEAM_SPECTATOR: teamStr = "SPEC"; break;
-        default: teamStr = "FREE"; break;
-        }
-
-        Com_sprintf(line, sizeof(line), "print \"%2d %-4s %s\n\"",
-                   i, teamStr, cl->pers.netname);
-        trap_SendServerCommand(ent - g_entities, line);
+        priv = cl->sess.privileges;
+        if (priv < 0 || priv > 3) priv = 0;
+        G_AdminReply(ent, va("print \"%2d %llu %c %s\n\"", i,
+                             (unsigned long long)cl->pers.steamId, privChars[priv],
+                             cl->pers.netname));
     }
 }
 
@@ -2129,6 +2127,10 @@ void MP_PauseThink(void) {
 static void Cmd_Timeout_f(gentity_t* ent) {
     team_t team;
 
+    if (!ent) {
+        MP_Pause(NULL, g_timeoutLen.integer);
+        return;
+    }
     if (!ent->client) {
         return;
     }
@@ -2137,22 +2139,19 @@ static void Cmd_Timeout_f(gentity_t* ent) {
         return;
     }
     if (g_timeoutCount.integer == 0) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Timeouts are not enabled on this server.\n\"");
+        G_AdminReply(ent, "print \"Timeouts are not enabled on this server.\n\"");
         return;
     }
 
     if (g_gametype.integer < GT_TEAM) {
         if (ent->client->pers.timeouts >= g_timeoutCount.integer) {
-            trap_SendServerCommand(ent - g_entities,
-                "print \"You have no timeouts left to call\n\"");
+            G_AdminReply(ent, "print \"You have no timeouts left to call\n\"");
             return;
         }
         ent->client->pers.timeouts++;
     } else {
         if (level.teamTimeoutsUsed[team] >= g_timeoutCount.integer) {
-            trap_SendServerCommand(ent - g_entities,
-                "print \"Your team has no timeouts left to call\n\"");
+            G_AdminReply(ent, "print \"Your team has no timeouts left to call\n\"");
             return;
         }
         level.teamTimeoutsUsed[team]++;
@@ -2167,8 +2166,7 @@ static void Cmd_Timeout_f(gentity_t* ent) {
 
 static void Cmd_Timein_f(gentity_t* ent) {
     if (level.timePauseBegin == 0) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"No timeout is in progress.\n\"");
+        G_AdminReply(ent, "print \"No timeout is in progress.\n\"");
         return;
     }
     if (level.mp_unpauseTime != 0 && level.mp_unpauseTime <= level.time + 4999) {
@@ -2177,8 +2175,7 @@ static void Cmd_Timein_f(gentity_t* ent) {
     if (level.mp_pauseClient >= 0 && ent && ent->client &&
         (int)(ent - g_entities) != level.mp_pauseClient &&
         ent->client->sess.privileges == 0) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"You did not call the current timeout\n\"");
+        G_AdminReply(ent, "print \"You did not call the current timeout\n\"");
         return;
     }
 
@@ -2200,7 +2197,7 @@ static void Cmd_AllReady_f(gentity_t* ent) {
     }
 
     if (g_gametype.integer == GT_DUEL && level.numPlayingClients != 2) {
-    trap_SendServerCommand(ent - g_entities, "print \"Allready may not be used until two players are in the match.\n\"");
+        G_AdminReply(ent, "print \"Allready may not be used until two players are in the match.\n\"");
         return;
     }
 
@@ -2216,8 +2213,12 @@ static void Cmd_AllReady_f(gentity_t* ent) {
 
 static void Cmd_Pause_f(gentity_t* ent) {
     if (level.timePauseBegin != 0) {
-        int clientNum = ent - g_entities;
+        int clientNum;
 
+        if (G_AdminIsServer(ent)) {
+            return;
+        }
+        clientNum = ent - g_entities;
         if (level.mp_pauseClient != clientNum) {
             level.mp_pauseClient = clientNum;
             trap_SendServerCommand(clientNum,
@@ -2234,7 +2235,7 @@ static gentity_t* G_FindPlayerArg(gentity_t* ent) {
     int i;
 
     if (trap_Argc() <= 1) {
-        trap_SendServerCommand(ent - g_entities,
+        G_AdminReply(ent,
             "print \"Missing PlayerID (use \\players for a list)\n\"");
         return NULL;
     }
@@ -2250,7 +2251,7 @@ static gentity_t* G_FindPlayerArg(gentity_t* ent) {
     }
 
     if (id < 0 || id >= level.maxclients || !level.clients[id].pers.connected) {
-        trap_SendServerCommand(ent - g_entities,
+        G_AdminReply(ent,
             "print \"Invalid PlayerID (use \\players for a list)\n\"");
         return NULL;
     }
@@ -2263,7 +2264,7 @@ static team_t G_ParseTeamArg(gentity_t* ent, int argIndex) {
     qboolean teamGame = (qboolean)(g_gametype.integer >= GT_TEAM);
 
     if (trap_Argc() <= argIndex) {
-        trap_SendServerCommand(ent - g_entities, "print \"Missing TeamName\n\"");
+        G_AdminReply(ent, "print \"Missing TeamName\n\"");
         return TEAM_NUM_TEAMS;
     }
 
@@ -2284,11 +2285,11 @@ static team_t G_ParseTeamArg(gentity_t* ent, int argIndex) {
     }
 
     if (c == 'r' || c == 'b' || c == 'f') {
-        trap_SendServerCommand(ent - g_entities,
+        G_AdminReply(ent,
             teamGame ? "print \"Invalid TeamName (use R/B/S)\n\""
                      : "print \"Invalid TeamName (use F/S)\n\"");
     } else {
-        trap_SendServerCommand(ent - g_entities,
+        G_AdminReply(ent,
             va("print \"Team %c is not valid for this command\n\"", c ? c : ' '));
     }
     return TEAM_NUM_TEAMS;
@@ -2365,7 +2366,6 @@ static void Cmd_Unlock_f(gentity_t* ent) {
 
 static void Cmd_Put_f(gentity_t* ent) {
     gentity_t* target = G_FindPlayerArg(ent);
-    const char* dest;
     team_t team;
 
     if (!target) {
@@ -2373,34 +2373,25 @@ static void Cmd_Put_f(gentity_t* ent) {
     }
 
     team = G_ParseTeamArg(ent, 2);
-    switch (team) {
-        case TEAM_RED: dest = "red"; break;
-        case TEAM_BLUE: dest = "blue"; break;
-        case TEAM_SPECTATOR: dest = "spectator"; break;
-        case TEAM_FREE: dest = "free"; break;
-        default: return;
+    if (team == TEAM_NUM_TEAMS) {
+        return;
     }
 
     if (g_gametype.integer == GT_DUEL && team == TEAM_FREE && level.numPlayingClients >= 2) {
         if (level.warmupTime >= 0) {
-            trap_SendServerCommand(ent - g_entities,
-                "print \"A maximum of two players are allowed in the match.\n\"");
+            G_AdminReply(ent, "print \"A maximum of two players are allowed in the match.\n\"");
             return;
         }
-        trap_SendServerCommand(ent - g_entities,
-            "print \"The match cannot begin until only two players are in the match.\n\"");
+        G_AdminReply(ent, "print \"The match cannot begin until only two players are in the match.\n\"");
     }
 
     if (target->client->sess.sessionTeam == team) {
-        trap_SendServerCommand(ent - g_entities,
-            va("print \"%s is already on the %s team\n\"",
-               target->client->pers.netname, TeamName(team)));
+        G_AdminReply(ent, va("print \"%s is already on the %s team\n\"",
+                             target->client->pers.netname, TeamName(team)));
         return;
     }
 
-    SetTeam(target, dest);
-
-    if (ent->client->pers.localClient) {
+    if (G_AdminIsServer(ent)) {
         trap_SendServerCommand(target - g_entities,
             va("print \"The server has moved you to the %s team\n\"", TeamName(team)));
     } else {
@@ -2408,6 +2399,9 @@ static void Cmd_Put_f(gentity_t* ent) {
             va("print \"%s has moved you to the %s team\n\"",
                ent->client->pers.netname, TeamName(team)));
     }
+
+    SetTeam_Execute(target, team, SPECTATOR_FREE, 0);
+    CalculateRanks();
 }
 
 static void Cmd_Mute_f(gentity_t* ent) {
@@ -2417,7 +2411,7 @@ static void Cmd_Mute_f(gentity_t* ent) {
         return;
     }
 
-    if (!ent->client->pers.localClient &&
+    if (!G_AdminIsServer(ent) &&
         ent->client->sess.privileges <= target->client->sess.privileges) {
         return;
     }
@@ -2431,11 +2425,6 @@ static void Cmd_Unmute_f(gentity_t* ent) {
     gentity_t* target = G_FindPlayerArg(ent);
 
     if (!target) {
-        return;
-    }
-
-    if (!ent->client->pers.localClient &&
-        ent->client->sess.privileges <= target->client->sess.privileges) {
         return;
     }
 
@@ -2454,15 +2443,15 @@ static void Cmd_Ban_f(gentity_t* ent) {
     }
     pid = target - g_entities;
 
-    if (g_clients[pid].sess.privileges >= ent->client->sess.privileges) {
-        trap_SendServerCommand(ent - g_entities, "print \"Can not kick admins.\n\"");
+    if (g_clients[pid].sess.privileges > 0) {
+        G_AdminReply(ent, "print \"Can not kick admins.\n\"");
         return;
     }
 
     trap_Argv(0, cmd, sizeof(cmd));
-    G_SetAccess(g_clients[pid].pers.steamId, -1, (qboolean)(Q_stricmp(cmd, "tempban") == 0));
+    G_SetAccess(g_clients[pid].pers.steamId, -1, (qboolean)(Q_stricmp(cmd, "ban") != 0));
 
-    trap_DropClient(pid, "You are banned from this server.");
+    trap_DropClient(pid, "was kicked");
 }
 
 static void Cmd_Unban_f(gentity_t* ent) {
@@ -2478,8 +2467,7 @@ static void Cmd_Unban_f(gentity_t* ent) {
         return;
     }
     G_SetAccess(steamId, 0, qfalse);
-    trap_SendServerCommand(-1, va("print \"%llu has been unbanned\n\"",
-        (unsigned long long)steamId));
+    G_AdminReply(ent, va("print \"%llu has been unbanned\n\"", (unsigned long long)steamId));
 }
 
 static void Cmd_ListAccess_f(gentity_t* ent) {
@@ -2500,9 +2488,9 @@ static void Cmd_ListAccess_f(gentity_t* ent) {
         page = pages;
     }
 
-    trap_SendServerCommand(ent - g_entities,
+    G_AdminReply(ent,
         va("print \"Access List: Page %i of %i\n\"", page + 1, pages + 1));
-    trap_SendServerCommand(ent - g_entities,
+    G_AdminReply(ent,
         "print \"=============================\n\"");
 
     for (i = page * 20; i < total && i < (page + 1) * 20; i++) {
@@ -2513,7 +2501,7 @@ static void Cmd_ListAccess_f(gentity_t* ent) {
         if (!G_AccessAt(i, &steamId, &level, &temporary)) {
             break;
         }
-        trap_SendServerCommand(ent - g_entities,
+        G_AdminReply(ent,
             va("print \"%llu %s %s\n\"", (unsigned long long)steamId,
                (level >= 0 && level < 4) ? levels[level] : "BAN   ",
                temporary ? "TEMP" : "PERM"));
@@ -2528,7 +2516,7 @@ static void Cmd_OpSay_f(gentity_t* ent) {
     }
     msg = ConcatArgs(1);
     trap_SendServerCommand(-1, va("print \"<@%s^7> %s\n\"",
-        ent->client->pers.localClient ? "server" : ent->client->pers.netname, msg));
+        G_AdminIsServer(ent) ? "server" : ent->client->pers.netname, msg));
 }
 
 static void Cmd_AddAdmin_f(gentity_t* ent) {
@@ -2539,11 +2527,15 @@ static void Cmd_AddAdmin_f(gentity_t* ent) {
         return;
     }
     pid = target - g_entities;
+    if (g_clients[pid].sess.privileges >= 2) {
+        return;
+    }
 
     g_clients[pid].sess.privileges = 2;
     G_SetAccess(g_clients[pid].pers.steamId, 2, qfalse);
     trap_SendServerCommand(-1, va("print \"%s has become an administrator\n\"",
         g_clients[pid].pers.netname));
+    trap_SendServerCommand(pid, va("priv %i", g_clients[pid].sess.privileges));
 }
 
 static void Cmd_AddMod_f(gentity_t* ent) {
@@ -2554,11 +2546,15 @@ static void Cmd_AddMod_f(gentity_t* ent) {
         return;
     }
     pid = target - g_entities;
+    if (g_clients[pid].sess.privileges >= 1) {
+        return;
+    }
 
     g_clients[pid].sess.privileges = 1;
     G_SetAccess(g_clients[pid].pers.steamId, 1, qfalse);
     trap_SendServerCommand(-1, va("print \"%s has become a moderator\n\"",
         g_clients[pid].pers.netname));
+    trap_SendServerCommand(pid, va("priv %i", g_clients[pid].sess.privileges));
 }
 
 static void Cmd_Demote_f(gentity_t* ent) {
@@ -2569,10 +2565,15 @@ static void Cmd_Demote_f(gentity_t* ent) {
         return;
     }
     pid = target - g_entities;
+    if (g_clients[pid].sess.privileges == 0) {
+        return;
+    }
 
-    if (g_clients[pid].sess.privileges >= ent->client->sess.privileges) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"Can not demote someone at or above your level.\n\"");
+    if (!G_AdminIsServer(ent) && ent->client->sess.privileges <= g_clients[pid].sess.privileges) {
+        G_AdminReply(ent, "print \"Can not demote someone at or above your level.\n\"");
+        return;
+    }
+    if (g_clients[pid].sess.privileges < 0) {
         return;
     }
 
@@ -2580,6 +2581,7 @@ static void Cmd_Demote_f(gentity_t* ent) {
     G_SetAccess(g_clients[pid].pers.steamId, 0, qfalse);
     trap_SendServerCommand(-1, va("print \"%s has had their privileges removed\n\"",
         g_clients[pid].pers.netname));
+    trap_SendServerCommand(pid, va("priv %i", g_clients[pid].sess.privileges));
 }
 
 static void Cmd_Abort_f(gentity_t* ent) {
@@ -2588,11 +2590,11 @@ static void Cmd_Abort_f(gentity_t* ent) {
     }
 
     if (level.timePauseBegin) {
-    trap_SendServerCommand(ent - g_entities, "print \"Match is currently paused. You must unpause before aborting the match.\n\"");
+        G_AdminReply(ent, "print \"Match is currently paused. You must unpause before aborting the match.\n\"");
         return;
     }
 
-    if (ent->client->pers.localClient) {
+    if (G_AdminIsServer(ent)) {
     trap_SendServerCommand(-1, "pcp \"The server has aborted the match\n\"");
     } else {
     trap_SendServerCommand(-1, va("pcp \"%s has aborted the match\n\"",
@@ -2688,15 +2690,13 @@ static void Cmd_PermHelp_f(gentity_t* ent) {
     int i;
     int privLevel;
 
-    privLevel = ent->client->sess.privileges;
-    if (ent->client->pers.localClient) privLevel = 3;
+    privLevel = G_AdminIsServer(ent) ? 3 : ent->client->sess.privileges;
 
     for (i = 0; permissionCmds[i].cmd; i++) {
         if (permissionCmds[i].requiredLevel > privLevel) continue;
-        trap_SendServerCommand(ent - g_entities,
-            va("print \"%s%s\n\"",
-               permissionCmds[i].cmd,
-               permissionCmds[i].description ? permissionCmds[i].description : ""));
+        G_AdminReply(ent, va("print \"%s%s\n\"",
+                             permissionCmds[i].cmd,
+                             permissionCmds[i].description ? permissionCmds[i].description : ""));
     }
 }
 
@@ -2718,17 +2718,24 @@ static qboolean ClientCommandPermissionCheck(gentity_t* ent, const char* cmd) {
         return qfalse;
     }
 
-    privLevel = ent->client->sess.privileges;
-    if (ent->client->pers.localClient) privLevel = 2;
+    if (!ent) {
+        privLevel = 3;
+    } else {
+        privLevel = ent->client->sess.privileges;
+        if (ent->client->pers.localClient) privLevel = 2;
+    }
 
     if (privLevel < permissionCmds[i].requiredLevel) {
-        trap_SendServerCommand(ent - g_entities,
-            "print \"You do not have the privileges required to use this command\n\"");
+        G_AdminReply(ent, "print \"You do not have the privileges required to use this command\n\"");
         return qtrue;
     }
 
     permissionCmds[i].handler(ent);
     return qtrue;
+}
+
+qboolean G_ConsolePermissionCommand(const char* cmd) {
+    return ClientCommandPermissionCheck(NULL, cmd);
 }
 
 const char* G_GametypeDisplayName(void) {

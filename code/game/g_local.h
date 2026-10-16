@@ -597,6 +597,7 @@ void SetTeam(gentity_t* ent, const char* s);
 void SetTeam_Execute(gentity_t* ent, int team, spectatorState_t specState, int specClient);
 void G_ShuffleTeams(void);
 qboolean G_TeamIsLocked(gentity_t* ent, team_t team);
+qboolean G_ConsolePermissionCommand(const char* cmd);
 void G_ClearTeamLocks(void);
 void Cmd_FollowCycle_f(gentity_t* ent, int dir);
 void FollowCycle(gentity_t* ent, int dir);
