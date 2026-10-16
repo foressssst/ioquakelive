@@ -246,6 +246,10 @@ void trap_R_Font_DrawString(int x, int y, const char* text, int fontIndex, float
     syscall(CG_R_FONT_DRAWSTRING, x, y, text, fontIndex, PASSFLOAT(scale), limit, maxX, flags);
 }
 
+qboolean trap_WebImageLink(const char* url) {
+    return syscall(CG_WEBIMAGELINK, url);
+}
+
 void trap_R_Font_TextExtents(const char* text, int start, int fontIndex, float scale, int limit, float* extents) {
     syscall(CG_R_FONT_TEXTEXTENTS, text, start, fontIndex, PASSFLOAT(scale), limit, extents);
 }

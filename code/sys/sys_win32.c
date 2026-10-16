@@ -26,6 +26,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "sys_local.h"
 
 #include <windows.h>
+#include <winhttp.h>
+#include <shellapi.h>
+#ifdef _MSC_VER
+#pragma comment(lib, "winhttp.lib")
+#endif
 #include <lmerr.h>
 #include <lmcons.h>
 #include <lmwksta.h>
@@ -258,6 +263,133 @@ static DWORD WINAPI Sys_ThreadEntry(LPVOID parameter) {
 
     start->function(start->argument);
     return 0;
+}
+
+qboolean Sys_WebFetch(const char* url, const char* ospath, int maxBytes) {
+    wchar_t wideUrl[2048];
+    wchar_t host[256];
+    wchar_t path[1536];
+    URL_COMPONENTS parts;
+    HINTERNET session = NULL;
+    HINTERNET connection = NULL;
+    HINTERNET request = NULL;
+    FILE* out = NULL;
+    DWORD status = 0;
+    DWORD statusSize = sizeof(status);
+    DWORD available, read;
+    char buffer[16384];
+    int total = 0;
+    qboolean ok = qfalse;
+
+    if (!url || !ospath) {
+        return qfalse;
+    }
+
+    if (MultiByteToWideChar(CP_UTF8, 0, url, -1, wideUrl, (int)ARRAY_LEN(wideUrl)) == 0) {
+        return qfalse;
+    }
+
+    memset(&parts, 0, sizeof(parts));
+    parts.dwStructSize = sizeof(parts);
+    parts.lpszHostName = host;
+    parts.dwHostNameLength = (DWORD)ARRAY_LEN(host);
+    parts.lpszUrlPath = path;
+    parts.dwUrlPathLength = (DWORD)ARRAY_LEN(path);
+
+    if (!WinHttpCrackUrl(wideUrl, 0, 0, &parts)) {
+        return qfalse;
+    }
+    if (parts.nScheme != INTERNET_SCHEME_HTTP && parts.nScheme != INTERNET_SCHEME_HTTPS) {
+        return qfalse;
+    }
+
+    session = WinHttpOpen(L"ioquakelive", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+                          WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!session) {
+        return qfalse;
+    }
+    WinHttpSetTimeouts(session, 10000, 10000, 15000, 30000);
+
+    connection = WinHttpConnect(session, host, parts.nPort, 0);
+    if (!connection) {
+        goto done;
+    }
+
+    request = WinHttpOpenRequest(connection, L"GET", path, NULL, WINHTTP_NO_REFERER,
+                                 WINHTTP_DEFAULT_ACCEPT_TYPES,
+                                 parts.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0);
+    if (!request) {
+        goto done;
+    }
+    {
+        DWORD policy = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
+
+        if (!WinHttpSetOption(request, WINHTTP_OPTION_REDIRECT_POLICY, &policy, sizeof(policy))) {
+            goto done;
+        }
+    }
+
+    if (!WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
+        !WinHttpReceiveResponse(request, NULL)) {
+        goto done;
+    }
+
+    if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                             WINHTTP_HEADER_NAME_BY_INDEX, &status, &statusSize, WINHTTP_NO_HEADER_INDEX) ||
+        status != 200) {
+        goto done;
+    }
+
+    out = Sys_FOpen(ospath, "wb");
+    if (!out) {
+        goto done;
+    }
+
+    for (;;) {
+        available = 0;
+        if (!WinHttpQueryDataAvailable(request, &available)) {
+            goto done;
+        }
+        if (!available) {
+            break;
+        }
+        while (available > 0) {
+            DWORD want = available > sizeof(buffer) ? (DWORD)sizeof(buffer) : available;
+
+            if (!WinHttpReadData(request, buffer, want, &read) || read == 0) {
+                goto done;
+            }
+            if (maxBytes > 0 && total + (int)read > maxBytes) {
+                goto done;
+            }
+            if (fwrite(buffer, 1, read, out) != read) {
+                goto done;
+            }
+            total += (int)read;
+            available -= read;
+        }
+    }
+
+    ok = total > 0 ? qtrue : qfalse;
+
+done:
+    if (out) {
+        fclose(out);
+    }
+    if (request) {
+        WinHttpCloseHandle(request);
+    }
+    if (connection) {
+        WinHttpCloseHandle(connection);
+    }
+    if (session) {
+        WinHttpCloseHandle(session);
+    }
+    if (!ok) {
+        remove(ospath);
+    }
+
+    return ok;
 }
 
 void* Sys_ThreadCreate(void (*function)(void*), void* argument) {

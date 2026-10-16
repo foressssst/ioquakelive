@@ -546,6 +546,9 @@ static intptr_t CL_CgameSystemCallsInner(intptr_t* args) {
         case CG_R_BEGINBLOOMSCENE:
             re.BeginBloomScene();
             return 0;
+        case CG_WEBIMAGELINK:
+            return CL_WebImage_Link(VMA(1));
+
         case CG_R_APPLYBLOOM:
             re.ApplyBloom();
             return 0;

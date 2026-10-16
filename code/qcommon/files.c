@@ -883,6 +883,7 @@ long FS_FOpenFileReadDir(const char* filename, searchpath_t* search, fileHandle_
 				!FS_IsExt(filename, ".game", len) &&
 				!FS_IsExt(filename, ".dat", len) &&
 				!FS_IsExt(filename, ".txt", len) &&
+				Q_stricmpn(filename, "webimages/", 10) &&
 				!FS_IsDemoExt(filename, len))
 			{
 				*file = 0;

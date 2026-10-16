@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_types.h"
 
-#define REF_API_VERSION 12
+#define REF_API_VERSION 13
 
 typedef struct {
     void (*Shutdown)(qboolean destroyWindow);
@@ -57,6 +57,8 @@ typedef struct {
     qboolean (*WindowResized)(int width, int height);
 
     qboolean (*ApplyVideoMode)(glconfig_t* config);
+
+    qboolean (*ShaderImageSize)(qhandle_t shader, int* width, int* height);
 
     void (*BeginFrame)(stereoFrame_t stereoFrame);
 

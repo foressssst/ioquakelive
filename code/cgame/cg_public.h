@@ -174,7 +174,8 @@ typedef enum {
     CG_KEY_GETBINDINGBUF,
     CG_CVAR_REGISTER_RANGE,
     CG_R_BEGINBLOOMSCENE,
-    CG_R_APPLYBLOOM
+    CG_R_APPLYBLOOM,
+    CG_WEBIMAGELINK
 } cgameImport_t;
 
 typedef enum {

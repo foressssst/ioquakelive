@@ -706,6 +706,8 @@ static const cvarHelp_t cvarHelp[] = {
     {"in_mouseMode", "how the mouse ended up being read"},
     {"cl_freelook", "the mouse also looks up and down"},
     {"cl_run", "runs by default; +speed walks"},
+    {"cl_webImages", "1 shows in the console, under the message, the pictures and GIFs linked from Imgur, Giphy, Tenor and Discord, and the chat says the player sent an image. 0 leaves the link as text and fetches nothing"},
+    {"cl_webImageMaxKB", "the most a picture or a GIF from a link may weigh, in kilobytes"},
     {"cl_yawspeed", "turning speed with the keys, in degrees per second"},
     {"cl_pitchspeed", "looking up and down with the keys, in degrees per second"},
     {"cl_anglespeedkey", "turning speed factor while +speed is held"},

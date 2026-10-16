@@ -550,10 +550,42 @@ void CG_ClearChat(void) {
     cg.chatSlideStart = 0;
 }
 
-void CG_AddChat(const char *text, int teamOnly, int extraTime) {
+static void CG_ChatImageNotice(const char* text, char* out, int outSize) {
+    char url[256];
+    char color = 0;
+    int o = 0, n;
+
+    while (*text && o < outSize - 1) {
+        if (Q_IsColorString(text)) {
+            color = text[1];
+        } else if ((*text == 'h' || *text == 'H') &&
+                   (!Q_stricmpn(text, "http://", 7) || !Q_stricmpn(text, "https://", 8))) {
+            for (n = 0; n < (int)sizeof(url) - 1 && text[n] > ' ' && text[n] != '"' && text[n] != '^'; n++) {
+                url[n] = text[n];
+            }
+            url[n] = '\0';
+            if (trap_WebImageLink(url)) {
+                text += n;
+                Q_strncpyz(out + o, S_COLOR_WHITE "sent an image.", outSize - o);
+                o += (int)strlen(out + o);
+                if (color && *text && *text != '\n' && o < outSize - 2) {
+                    out[o++] = Q_COLOR_ESCAPE;
+                    out[o++] = color;
+                }
+                continue;
+            }
+        }
+        out[o++] = *text++;
+    }
+    out[o] = '\0';
+}
+
+void CG_AddChat(const char *rawText, int teamOnly, int extraTime) {
+    char text[MAX_SAY_TEXT + 64];
     int len;
     int size;
 
+    CG_ChatImageNotice(rawText, text, sizeof(text));
     len = strlen(text);
     size = (cg.intermissionStarted == 1) ? 0x49 : 0xff;
 

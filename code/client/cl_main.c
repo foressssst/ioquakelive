@@ -103,7 +103,6 @@ cvar_t* cl_serverStatusResendTime;
 
 cvar_t* cl_lanForcePackets;
 
-
 cvar_t* cl_rate;
 
 cvar_t* cl_steamId;
@@ -1289,6 +1288,7 @@ void CL_ShutdownAll(qboolean shutdownRef) {
 #ifdef USE_CURL
     CL_cURL_Shutdown();
 #endif
+    CL_WebImage_Shutdown();
     S_DisableSounds();
     CL_ShutdownCGame();
     CL_ShutdownUI();
@@ -2630,6 +2630,8 @@ void CL_Frame(int msec) {
     CL_MatchReportFrame();
     CL_VoiceFrame();
 
+    CL_WebImage_Frame();
+
     CL_SetCGameTime();
 
     SCR_UpdateScreen();
@@ -3241,7 +3243,6 @@ void CL_Init(void) {
 
     cl_lanForcePackets = Cvar_Get("cl_lanForcePackets", "1", CVAR_ARCHIVE);
 
-
     cl_steamId = Cvar_Get("cl_steamId", "0", CVAR_ARCHIVE);
     Cvar_Get("cl_quitOnDemoCompleted", "0", 0);
 
@@ -3309,6 +3310,8 @@ void CL_Init(void) {
 
     cl_demoRecordMessage = Cvar_Get("cl_demoRecordMessage", "2", CVAR_ARCHIVE | CVAR_USERSAVE);
     Cvar_CheckRange(cl_demoRecordMessage, 0, 2, qtrue);
+
+    CL_WebImage_Init();
     Cmd_AddCommand("userinfo", CL_Userinfo_f);
     if (!com_dedicated->integer) {
         Cmd_AddCommand("sayto", CL_Sayto_f);

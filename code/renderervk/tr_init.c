@@ -1761,6 +1761,29 @@ static qboolean RE_ApplyVideoMode( glconfig_t *config )
 	return qtrue;
 }
 
+static qboolean RE_ShaderImageSize( qhandle_t hShader, int *width, int *height )
+{
+	const shader_t *sh;
+
+	if ( !tr.registered ) {
+		return qfalse;
+	}
+
+	sh = R_GetShaderByHandle( hShader );
+	if ( !sh || sh == tr.defaultShader || !sh->stages[0] || !sh->stages[0]->bundle[0].image[0] ) {
+		return qfalse;
+	}
+
+	if ( width ) {
+		*width = sh->stages[0]->bundle[0].image[0]->width;
+	}
+	if ( height ) {
+		*height = sh->stages[0]->bundle[0].image[0]->height;
+	}
+
+	return qtrue;
+}
+
 static void RE_Shutdown( qboolean destroyWindow ) {
 	refShutdownCode_t code = destroyWindow ? REF_UNLOAD_DLL : REF_KEEP_CONTEXT;
 
@@ -1875,6 +1898,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 
 	re.WindowResized = RE_WindowResized;
 	re.ApplyVideoMode = RE_ApplyVideoMode;
+	re.ShaderImageSize = RE_ShaderImageSize;
 	re.BeginFrame = RE_BeginFrame;
 	re.EndFrame = RE_EndFrame;
 

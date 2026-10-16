@@ -1436,6 +1436,25 @@ void RE_EndRegistration(void) {
     }
 }
 
+static qboolean RE_ShaderImageSize(qhandle_t hShader, int* width, int* height) {
+    const shader_t* sh;
+
+    if (!tr.registered) {
+        return qfalse;
+    }
+    sh = R_GetShaderByHandle(hShader);
+    if (!sh || sh == tr.defaultShader || !sh->stages[0] || !sh->stages[0]->bundle[0].image[0]) {
+        return qfalse;
+    }
+    if (width) {
+        *width = sh->stages[0]->bundle[0].image[0]->width;
+    }
+    if (height) {
+        *height = sh->stages[0]->bundle[0].image[0]->height;
+    }
+    return qtrue;
+}
+
 #ifdef USE_RENDERER_DLOPEN
 Q_EXPORT refexport_t* QDECL GetRefAPI(int apiVersion, refimport_t* rimp) {
 #else
@@ -1461,6 +1480,7 @@ refexport_t* GetRefAPI(int apiVersion, refimport_t* rimp) {
     re.RegisterSkin = RE_RegisterSkin;
     re.RegisterShader = RE_RegisterShader;
     re.RegisterShaderNoMip = RE_RegisterShaderNoMip;
+    re.ShaderImageSize = RE_ShaderImageSize;
     re.LoadWorld = RE_LoadWorldMap;
     re.SetWorldVisData = RE_SetWorldVisData;
     re.EndRegistration = RE_EndRegistration;

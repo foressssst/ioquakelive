@@ -52,10 +52,19 @@ int g_console_field_width = 119;
 
 #define CON_ANIM_ROWS 256
 
+#define CON_MAX_IMAGES 32
+
 typedef struct {
     float x, y, w, h;
     char url[CON_MAX_URL];
 } conLink_t;
+
+typedef struct {
+    int line;
+    int rows;
+    int drawn;
+    char url[CON_MAX_URL];
+} conImage_t;
 
 typedef struct {
     qboolean initialized;
@@ -110,6 +119,11 @@ typedef struct {
     float scrollPos;
     int animDrawn;
     int lineBorn[CON_ANIM_ROWS];
+
+    conImage_t images[CON_MAX_IMAGES];
+    int nextImage;
+    int imageFrame;
+    char pendingImage[CON_MAX_URL];
 } console_t;
 
 console_t con;
@@ -511,6 +525,101 @@ qboolean Con_MouseClick(void) {
     return qfalse;
 }
 
+static void Con_FitImage(qhandle_t shader, float maxW, float maxH, float* w, float* h) {
+    int imgW = 0, imgH = 0;
+
+    if (!re.ShaderImageSize(shader, &imgW, &imgH) || imgW <= 0 || imgH <= 0) {
+        imgW = imgH = 64;
+    }
+
+    *w = (float)imgW;
+    *h = (float)imgH;
+    if (*h < maxH * 0.35f) {
+        *w *= (maxH * 0.35f) / *h;
+        *h = maxH * 0.35f;
+    }
+    if (*w > maxW) {
+        *h *= maxW / *w;
+        *w = maxW;
+    }
+    if (*h > maxH) {
+        *w *= maxH / *h;
+        *h = maxH;
+    }
+}
+
+static void Con_DrawRowImage(int row, float rowTop, float cellH, float x0, float clipBottom) {
+    conImage_t* img = NULL;
+    qhandle_t shader;
+    float w, h, top, y0, y1;
+    int i;
+
+    for (i = 0; i < CON_MAX_IMAGES; i++) {
+        if (con.images[i].url[0] && row >= con.images[i].line && row < con.images[i].line + con.images[i].rows) {
+            img = &con.images[i];
+            break;
+        }
+    }
+    if (!img || img->drawn == con.imageFrame) {
+        return;
+    }
+    img->drawn = con.imageFrame;
+
+    shader = CL_WebImage_Get(img->url);
+    if (!shader) {
+        return;
+    }
+    Con_FitImage(shader, cls.glconfig.vidWidth * 0.4f, img->rows * cellH - cellH * 0.5f, &w, &h);
+    top = rowTop - (row - img->line) * cellH + cellH * 0.25f;
+    y0 = MAX(top, 0.0f);
+    y1 = MIN(top + h, clipBottom);
+    if (y1 <= y0) {
+        return;
+    }
+    re.SetColor(NULL);
+    re.DrawStretchPic(x0, y0, w, y1 - y0, 0.0f, (y0 - top) / h, 1.0f, (y1 - top) / h, shader);
+}
+
+static void Con_FindImageLink(const char* txt, char* url, int size) {
+    const char* p;
+    int n;
+
+    for (p = txt; *p; p++) {
+        if ((*p != 'h' && *p != 'H') || (Q_stricmpn(p, "http://", 7) && Q_stricmpn(p, "https://", 8))) {
+            continue;
+        }
+        for (n = 0; n < size - 1 && p[n] > ' ' && p[n] != '"' && p[n] != '^'; n++) {
+            url[n] = p[n];
+        }
+        url[n] = '\0';
+        if (CL_WebImage_Link(url)) {
+            return;
+        }
+        p += n - 1;
+    }
+    url[0] = '\0';
+}
+
+static void Con_ReserveImage(void) {
+    conImage_t* img = &con.images[con.nextImage];
+    const float cellH = CON_CELL_HEIGHT * Con_Scale();
+    int i, rows;
+
+    con.nextImage = (con.nextImage + 1) % CON_MAX_IMAGES;
+    rows = cellH > 0.0f ? (int)(cls.glconfig.vidHeight * 0.2f / cellH + 0.999f) : 8;
+    rows = rows < 3 ? 3 : rows > 12 ? 12 : rows;
+
+    img->line = con.current;
+    img->rows = rows;
+    img->drawn = -1;
+    Q_strncpyz(img->url, con.pendingImage, sizeof(img->url));
+    con.pendingImage[0] = '\0';
+
+    for (i = 0; i < rows; i++) {
+        Con_Linefeed(qtrue);
+    }
+}
+
 static void Con_DrawLinkPrompt(void) {
     static const vec4_t dim = {0.0f, 0.0f, 0.0f, 0.55f};
     conMetrics_t m;
@@ -688,6 +797,8 @@ void Con_Clear_f(void) {
 
     Con_Bottom();
     Com_Memset(con.lineBorn, 0, sizeof(con.lineBorn));
+    Com_Memset(con.images, 0, sizeof(con.images));
+    con.pendingImage[0] = '\0';
     con.scrollPos = con.display;
 
     con.searchStarted = qfalse;
@@ -772,7 +883,7 @@ void Con_ClearNotify(void) {
 }
 
 void Con_CheckResize(void) {
-    int i, j, width, oldwidth, oldtotallines, numlines, numchars;
+    int i, j, width, oldwidth, oldtotallines, numlines, numchars, oldcurrent;
     short tbuf[CON_TEXTSIZE];
 
     con.xadjust = 0;
@@ -790,6 +901,8 @@ void Con_CheckResize(void) {
 
     if (width == con.linewidth)
         return;
+
+    oldcurrent = con.current;
 
     if (width < 1)
     {
@@ -833,6 +946,12 @@ void Con_CheckResize(void) {
 
     con.current = con.totallines - 1;
     con.display = con.current;
+    for (i = 0; i < CON_MAX_IMAGES; i++) {
+        con.images[i].line += con.current - oldcurrent;
+        if (con.images[i].line + con.images[i].rows <= con.current - con.totallines + 1) {
+            con.images[i].url[0] = '\0';
+        }
+    }
     Com_Memset(con.lineBorn, 0, sizeof(con.lineBorn));
     con.scrollPos = con.display;
 
@@ -1165,6 +1284,10 @@ void CL_ConsolePrint(char* txt) {
         con.initialized = qtrue;
     }
 
+    if (!con.pendingImage[0]) {
+        Con_FindImageLink(txt, con.pendingImage, sizeof(con.pendingImage));
+    }
+
     if (con_timestamps && con_timestamps->integer && con.x == 0) {
         char tsbuf[64];
         int time_ms;
@@ -1236,6 +1359,10 @@ void CL_ConsolePrint(char* txt) {
                     Con_Linefeed(skipnotify);
                 break;
         }
+    }
+
+    if (con.pendingImage[0] && con.x == 0) {
+        Con_ReserveImage();
     }
 
     if (con.current >= 0) {
@@ -1806,6 +1933,7 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
             break;
         }
         Con_DrawRowCNQ3(&m, x0, by, row + k, drawMark, markStartX, markStartY, markEndX, markEndY);
+        Con_DrawRowImage(row + k, by - m.asc, m.cellH, x0, limit - m.asc + m.cellH);
     }
 
     con.rowsVisible = 0;
@@ -1823,6 +1951,7 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
             continue;
         }
         Con_DrawRowCNQ3(&m, x0, y + off, row, drawMark, markStartX, markStartY, markEndX, markEndY);
+        Con_DrawRowImage(row, y + off - m.asc, m.cellH, x0, limit - m.asc + m.cellH);
     }
 
     Con_DrawInputCNQ3(&m);
@@ -1839,6 +1968,7 @@ void Con_DrawSolidConsole(float frac) {
     int i, x, y, lines, rows, row, n, last, currentColor, len;
     int markStartX, markStartY, markEndX, markEndY;
     qboolean drawMark, haveMetrics = qfalse;
+    float bottom;
 
     if (Con_GetStyle() == 1) {
         Con_DrawSolidConsoleCNQ3(frac);
@@ -1900,6 +2030,7 @@ void Con_DrawSolidConsole(float frac) {
     haveMetrics = qtrue;
     drawMark = Con_MarkBounds(&markStartX, &markStartY, &markEndX, &markEndY);
     con.rowsVisible = 0;
+    bottom = y - m.asc + m.cellH;
 
     for (i = 0; i < rows; i++, y = (int)(y - CON_CELL_HEIGHT * s), row--) {
         const short* text;
@@ -1962,6 +2093,7 @@ void Con_DrawSolidConsole(float frac) {
                            CON_CELL_WIDTH * s * CON_FONT_SCALE, -1, NULL, 0);
 
         Con_RowLinks(text, con.linewidth, CON_CELL_WIDTH * s + con.xadjust, (float)y, m.adv, m.asc, m.cellH);
+        Con_DrawRowImage(row, y - m.asc, m.cellH, CON_CELL_WIDTH * s + con.xadjust, bottom);
         re.SetColor(g_color_table[ColorIndex(currentColor)]);
     }
 
@@ -1974,6 +2106,7 @@ void Con_DrawConsole(void) {
     Con_CheckResize();
 
     con.numLinks = 0;
+    con.imageFrame++;
 
     if (clc.state == CA_DISCONNECTED) {
         if (!(Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CGAME))) {

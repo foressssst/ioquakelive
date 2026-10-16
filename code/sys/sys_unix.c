@@ -209,6 +209,10 @@ static void* Sys_ThreadEntry(void* parameter) {
     return NULL;
 }
 
+qboolean Sys_WebFetch(const char* url, const char* ospath, int maxBytes) {
+    return qfalse;
+}
+
 void* Sys_ThreadCreate(void (*function)(void*), void* argument) {
     static sysThreadStart_t starts[16];
     static int next;

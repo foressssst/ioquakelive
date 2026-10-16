@@ -808,6 +808,8 @@ void Sys_Print(const char* msg);
 int Sys_Milliseconds(void);
 int64_t Sys_Microseconds(void);
 
+qboolean Sys_WebFetch(const char* url, const char* ospath, int maxBytes);
+
 void* Sys_ThreadCreate(void (*function)(void*), void* argument);
 void* Sys_MutexCreate(void);
 void Sys_MutexLock(void* mutex);

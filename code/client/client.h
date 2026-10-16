@@ -318,7 +318,6 @@ extern cvar_t* cl_inGameVideo;
 extern cvar_t* cl_lanForcePackets;
 extern cvar_t* cl_autoRecordDemo;
 
-
 void CL_Init(void);
 void CL_AddReliableCommand(const char* cmd, qboolean isDisconnectCmd);
 
@@ -330,6 +329,14 @@ void CL_GetChallengePacket(void);
 void CL_Vid_Restart_f(void);
 
 extern cvar_t* cl_demoRecordMessage;
+extern cvar_t* cl_webImages;
+extern cvar_t* cl_webImageMaxKB;
+
+void CL_WebImage_Init(void);
+void CL_WebImage_Shutdown(void);
+void CL_WebImage_Frame(void);
+qhandle_t CL_WebImage_Get(const char* url);
+qboolean CL_WebImage_Link(const char* url);
 void CL_Snd_Restart_f(void);
 void CL_StartDemoLoop(void);
 void CL_NextDemo(void);
@@ -409,6 +416,7 @@ void Con_ToggleConsole_f(void);
 void Con_ToggleConsole_Forced(void);
 void Con_DrawNotify(void);
 void Con_ClearNotify(void);
+void Con_Linefeed(qboolean skipnotify);
 void Con_RunConsole(void);
 void Con_DrawConsole(void);
 
