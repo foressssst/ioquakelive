@@ -1449,6 +1449,7 @@ void CG_AddPlayerWeapon(refEntity_t* parent, playerState_t* ps, centity_t* cent,
 }
 
 void CG_AddViewWeapon(playerState_t* ps) {
+    float gunX, gunY, gunZ;
     refEntity_t hand;
     centity_t* cent;
     clientInfo_t* ci;
@@ -1534,9 +1535,17 @@ void CG_AddViewWeapon(playerState_t* ps) {
 
     CG_CalculateWeaponPosition(hand.origin, angles);
 
-    VectorMA(hand.origin, cg_gun_x.value, cg.refdef.viewaxis[0], hand.origin);
-    VectorMA(hand.origin, cg_gun_y.value, cg.refdef.viewaxis[1], hand.origin);
-    VectorMA(hand.origin, (cg_gun_z.value + fovOffset), cg.refdef.viewaxis[2], hand.origin);
+    gunX = cg_gun_x.value;
+    gunY = cg_gun_y.value;
+    gunZ = cg_gun_z.value;
+    if (ps->weapon == WP_GRAPPLING_HOOK) {
+        gunX += 8.0f;
+        gunY -= 2.0f;
+        gunZ -= 1.0f;
+    }
+    VectorMA(hand.origin, gunX, cg.refdef.viewaxis[0], hand.origin);
+    VectorMA(hand.origin, gunY, cg.refdef.viewaxis[1], hand.origin);
+    VectorMA(hand.origin, (gunZ + fovOffset), cg.refdef.viewaxis[2], hand.origin);
 
     AnglesToAxis(angles, hand.axis);
 
