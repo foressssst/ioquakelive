@@ -925,9 +925,7 @@ void RE_UploadCinematic( int w, int h, int cols, int rows, const byte *data, int
 
 	image = tr.scratchImage[ client ];
 
-#ifndef USE_VULKAN
 	GL_Bind( image );
-#endif
 
 	if ( cols != image->width || rows != image->height ) {
 		image->width = image->uploadWidth = cols;
