@@ -39,7 +39,7 @@ Si encuentras un problema, puedes reportarlo en [Issues](https://github.com/fore
 
 ## Rendimiento
 
-Mediciones del 16 de octubre de 2026 con la misma demo en Quake Live y en ioquakelive, la configuración por defecto de cada uno y la versión en desarrollo posterior a la 1.0.1. Los resultados dependen del equipo y de los drivers.
+Se hicieron mediciones el dia 16 de octubre de 2026 en Quake Live y en ioquakelive, con la configuración por defecto de cada uno y la versión en desarrollo posterior a la 1.0.1. Los resultados dependen del equipo y de los drivers.
 
 ### Equipo modesto
 
