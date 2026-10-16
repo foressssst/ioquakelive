@@ -36,10 +36,30 @@ menuDef_t* menuSpecRedBottom = NULL;
 menuDef_t* menuSpecBlueTop = NULL;
 menuDef_t* menuSpecBlueBottom = NULL;
 
+static void CG_JoinMenuTeamChoice(menuDef_t* menu) {
+    int i, kept;
+
+    if (!menu) {
+        return;
+    }
+    kept = 0;
+    for (i = 0; i < menu->itemCount; i++) {
+        itemDef_t* item = menu->items[i];
+
+        if (item->window.ownerDrawFlags & CG_SHOW_IF_NOT_WARMUP) {
+            continue;
+        }
+        item->window.ownerDrawFlags &= ~CG_SHOW_IF_WARMUP;
+        menu->items[kept++] = item;
+    }
+    menu->itemCount = kept;
+}
+
 void CG_CacheMenus(void) {
     CG_SetEndScoreboardMenu();
     menuStats = Menus_FindByName("stats_menu");
     menuJoinGame = Menus_FindByName("joingame_menu");
+    CG_JoinMenuTeamChoice(menuJoinGame);
     menuSpecHud = Menus_FindByName("comp_spechud_menu");
     menuSpecFollowHud = Menus_FindByName("comp_specfollowhud_menu");
     menuSpecRedTop = Menus_FindByName("comp_specred_top");
@@ -2774,6 +2794,7 @@ void CG_UpdateJoinMenu(void) {
 
 	if (menuJoinGame == NULL) {
 		menuJoinGame = Menus_FindByName("joingame_menu");
+		CG_JoinMenuTeamChoice(menuJoinGame);
 	}
 	menu = menuJoinGame;
 	if (menu == NULL) {
