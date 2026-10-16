@@ -721,7 +721,7 @@ qboolean FS_IsExt(const char* filename, const char* ext, int namelen) {
 }
 
 static qboolean FS_IsWebImageName(const char* filename) {
-	static const char* const tails[] = {".png", ".jpg", ".jpeg", ".frames"};
+	static const char* const tails[] = {".png", ".jpg", ".jpeg"};
 	const char* p;
 	int i;
 
