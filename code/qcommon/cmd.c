@@ -351,7 +351,7 @@ static void Cmd_TokenizeString2(const char* text_in, qboolean ignoreQuotes) {
         }
 
         while (1) {
-            while (*text && *text <= ' ') {
+            while (*text && (unsigned char)*text <= ' ') {
                 text++;
             }
             if (!*text) {
@@ -397,7 +397,7 @@ static void Cmd_TokenizeString2(const char* text_in, qboolean ignoreQuotes) {
         cmd_quoted[cmd_argc] = qfalse;
         cmd_argc++;
 
-        while (*text > ' ') {
+        while ((unsigned char)*text > ' ') {
             if (!ignoreQuotes && text[0] == '"') {
                 break;
             }

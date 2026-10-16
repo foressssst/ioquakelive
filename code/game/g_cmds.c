@@ -793,6 +793,25 @@ static void G_SayTo(gentity_t* ent, gentity_t* other, int mode, int color, const
 
 #define EC "\x19"
 
+static void G_CutUtf8Tail(char* text) {
+    int len = (int)strlen(text);
+    int i = len;
+    int need;
+    unsigned char lead;
+
+    while (i > 0 && ((unsigned char)text[i - 1] & 0xC0) == 0x80) {
+        i--;
+    }
+    if (i == 0 || !((unsigned char)text[i - 1] & 0x80)) {
+        return;
+    }
+    lead = (unsigned char)text[i - 1];
+    need = lead >= 0xF0 ? 4 : lead >= 0xE0 ? 3 : lead >= 0xC0 ? 2 : 1;
+    if (len - (i - 1) < need) {
+        text[i - 1] = '\0';
+    }
+}
+
 void G_Say(gentity_t* ent, gentity_t* target, int mode, const char* chatText) {
     int j;
     gentity_t* other;
@@ -840,6 +859,9 @@ void G_Say(gentity_t* ent, gentity_t* target, int mode, const char* chatText) {
     }
 
     Q_strncpyz(text, chatText, sizeof(text));
+    if (strlen(chatText) >= sizeof(text)) {
+        G_CutUtf8Tail(text);
+    }
 
     if (target) {
         G_SayTo(ent, target, mode, color, name, text);
