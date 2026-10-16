@@ -1413,97 +1413,105 @@ void G_UpdateCvars(void) {
     }
 }
 
-static void G_SendPmoveInfo(void) {
+typedef struct {
+    const char* name;
+    vmCvar_t* var;
+} replicatedCvar_t;
+
+static const replicatedCvar_t pmoveInfoCvars[] = {
+    {"pmove_AirAccel", &pmove_AirAccel},
+    {"pmove_AirStepFriction", &pmove_AirStepFriction},
+    {"pmove_AirSteps", &pmove_AirSteps},
+    {"pmove_AirStopAccel", &pmove_AirStopAccel},
+    {"pmove_AutoHop", &pmove_AutoHop},
+    {"pmove_BunnyHop", &pmove_BunnyHop},
+    {"pmove_ChainJump", &pmove_ChainJump},
+    {"pmove_ChainJumpVelocity", &pmove_ChainJumpVelocity},
+    {"pmove_CircleStrafeFriction", &pmove_CircleStrafeFriction},
+    {"pmove_CrouchSlideFriction", &pmove_CrouchSlideFriction},
+    {"pmove_CrouchSlideTime", &pmove_CrouchSlideTime},
+    {"pmove_CrouchStepJump", &pmove_CrouchStepJump},
+    {"pmove_JumpTimeDeltaMin", &pmove_JumpTimeDeltaMin},
+    {"pmove_JumpVelocity", &pmove_JumpVelocity},
+    {"pmove_JumpVelocityMax", &pmove_JumpVelocityMax},
+    {"pmove_JumpVelocityScaleAdd", &pmove_JumpVelocityScaleAdd},
+    {"pmove_JumpVelocityTimeThreshold", &pmove_JumpVelocityTimeThreshold},
+    {"pmove_JumpVelocityTimeThresholdOffset", &pmove_JumpVelocityTimeThresholdOffset},
+    {"pmove_noPlayerClip", &pmove_NoPlayerClip},
+    {"pmove_RampJump", &pmove_RampJump},
+    {"pmove_RampJumpScale", &pmove_RampJumpScale},
+    {"pmove_StepHeight", &pmove_StepHeight},
+    {"pmove_StepJump", &pmove_StepJump},
+    {"pmove_StepJumpVelocity", &pmove_StepJumpVelocity},
+    {"pmove_StrafeAccel", &pmove_StrafeAccel},
+    {"pmove_velocity_gh", &pmove_VelocityGH},
+    {"pmove_WalkAccel", &pmove_WalkAccel},
+    {"pmove_WalkFriction", &pmove_WalkFriction},
+    {"pmove_WaterSwimScale", &pmove_WaterSwimScale},
+    {"pmove_WaterWadeScale", &pmove_WaterWadeScale},
+    {"pmove_WeaponDropTime", &pmove_WeaponDropTime},
+    {"pmove_WeaponRaiseTime", &pmove_WeaponRaiseTime},
+    {"pmove_WishSpeed", &pmove_WishSpeed},
+};
+
+static const replicatedCvar_t weaponInfoCvars[] = {
+    {"weapon_gravity_bfg", &weapon_gravity_bfg},
+    {"weapon_gravity_ng", &weapon_gravity_ng},
+    {"weapon_gravity_pg", &weapon_gravity_pg},
+    {"weapon_gravity_rl", &weapon_gravity_rl},
+    {"weapon_reload_bfg", &weapon_reload_bfg},
+    {"weapon_reload_cg", &weapon_reload_cg},
+    {"weapon_reload_gauntlet", &weapon_reload_gauntlet},
+    {"weapon_reload_gh", &weapon_reload_gh},
+    {"weapon_reload_gl", &weapon_reload_gl},
+    {"weapon_reload_hmg", &weapon_reload_hmg},
+    {"weapon_reload_hook", &weapon_reload_hook},
+    {"weapon_reload_lg", &weapon_reload_lg},
+    {"weapon_reload_mg", &weapon_reload_mg},
+    {"weapon_reload_ng", &weapon_reload_ng},
+    {"weapon_reload_pg", &weapon_reload_pg},
+    {"weapon_reload_prox", &weapon_reload_prox},
+    {"weapon_reload_rg", &weapon_reload_rg},
+    {"weapon_reload_rl", &weapon_reload_rl},
+    {"weapon_reload_sg", &weapon_reload_sg},
+};
+
+static const replicatedCvar_t playerInfoCvars[] = {
+    {"g_allowCustomHeadmodels", &g_allowCustomHeadmodels},
+    {"g_playerheadScale", &g_playerheadScale},
+    {"g_playerheadScaleOffset", &g_playerheadScaleOffset},
+    {"g_playerModelScale", &g_playerModelScale},
+};
+
+static const replicatedCvar_t armorInfoCvars[] = {
+    {"armor_tiered", &armor_tiered},
+};
+
+static void G_SendReplicatedCvars(int index, const replicatedCvar_t* cvars, int count) {
     char info[MAX_INFO_STRING];
+    int i;
 
     info[0] = '\0';
+    for (i = 0; i < count; i++) {
+        Q_strcat(info, sizeof(info), va("\\%s\\%s", cvars[i].name, cvars[i].var->string));
+    }
+    trap_SetConfigstring(index, info);
+}
 
-    Info_SetValueForKey(info, "pmove_AirAccel", va("%g", pmove_AirAccel.value));
-    Info_SetValueForKey(info, "pmove_AirStepFriction", va("%g", pmove_AirStepFriction.value));
-    Info_SetValueForKey(info, "pmove_AirSteps", va("%i", pmove_AirSteps.integer));
-    Info_SetValueForKey(info, "pmove_AirStopAccel", va("%g", pmove_AirStopAccel.value));
-    Info_SetValueForKey(info, "pmove_AirControl", va("%g", pmove_AirControl.value));
-    Info_SetValueForKey(info, "pmove_AutoHop", va("%i", pmove_AutoHop.integer));
-    Info_SetValueForKey(info, "pmove_BunnyHop", va("%i", pmove_BunnyHop.integer));
-    Info_SetValueForKey(info, "pmove_ChainJump", va("%i", pmove_ChainJump.integer));
-    Info_SetValueForKey(info, "pmove_ChainJumpVelocity", va("%g", pmove_ChainJumpVelocity.value));
-    Info_SetValueForKey(info, "pmove_CircleStrafeFriction", va("%g", pmove_CircleStrafeFriction.value));
-    Info_SetValueForKey(info, "pmove_CrouchSlideFriction", va("%g", pmove_CrouchSlideFriction.value));
-    Info_SetValueForKey(info, "pmove_CrouchSlideTime", va("%i", pmove_CrouchSlideTime.integer));
-    Info_SetValueForKey(info, "pmove_CrouchSlide", va("%i", pmove_CrouchSlide.integer));
-    Info_SetValueForKey(info, "pmove_CrouchStepJump", va("%i", pmove_CrouchStepJump.integer));
-    Info_SetValueForKey(info, "pmove_DoubleJump", va("%i", pmove_DoubleJump.integer));
-    Info_SetValueForKey(info, "pmove_JumpTimeDeltaMin", va("%g", pmove_JumpTimeDeltaMin.value));
-    Info_SetValueForKey(info, "pmove_JumpVelocity", va("%g", pmove_JumpVelocity.value));
-    Info_SetValueForKey(info, "pmove_JumpVelocityMax", va("%g", pmove_JumpVelocityMax.value));
-    Info_SetValueForKey(info, "pmove_JumpVelocityScaleAdd", va("%g", pmove_JumpVelocityScaleAdd.value));
-    Info_SetValueForKey(info, "pmove_JumpVelocityTimeThreshold", va("%g", pmove_JumpVelocityTimeThreshold.value));
-    Info_SetValueForKey(info, "pmove_JumpVelocityTimeThresholdOffset", va("%g", pmove_JumpVelocityTimeThresholdOffset.value));
-    Info_SetValueForKey(info, "pmove_noPlayerClip", va("%i", pmove_NoPlayerClip.integer));
-    Info_SetValueForKey(info, "pmove_RampJump", va("%i", pmove_RampJump.integer));
-    Info_SetValueForKey(info, "pmove_RampJumpScale", va("%g", pmove_RampJumpScale.value));
-    Info_SetValueForKey(info, "pmove_StepHeight", va("%g", pmove_StepHeight.value));
-    Info_SetValueForKey(info, "pmove_StepJump", va("%i", pmove_StepJump.integer));
-    Info_SetValueForKey(info, "pmove_StepJumpVelocity", va("%g", pmove_StepJumpVelocity.value));
-    Info_SetValueForKey(info, "pmove_StrafeAccel", va("%g", pmove_StrafeAccel.value));
-    Info_SetValueForKey(info, "pmove_velocity_gh", va("%g", pmove_VelocityGH.value));
-    Info_SetValueForKey(info, "pmove_WalkAccel", va("%g", pmove_WalkAccel.value));
-    Info_SetValueForKey(info, "pmove_WalkFriction", va("%g", pmove_WalkFriction.value));
-    Info_SetValueForKey(info, "pmove_WaterSwimScale", va("%g", pmove_WaterSwimScale.value));
-    Info_SetValueForKey(info, "pmove_WaterWadeScale", va("%g", pmove_WaterWadeScale.value));
-    Info_SetValueForKey(info, "pmove_WeaponRaiseTime", va("%i", pmove_WeaponRaiseTime.integer));
-    Info_SetValueForKey(info, "pmove_WeaponDropTime", va("%i", pmove_WeaponDropTime.integer));
-    Info_SetValueForKey(info, "pmove_WishSpeed", va("%g", pmove_WishSpeed.value));
-
-    trap_SetConfigstring(CS_PMOVEINFO, info);
+static void G_SendPmoveInfo(void) {
+    G_SendReplicatedCvars(CS_PMOVEINFO, pmoveInfoCvars, ARRAY_LEN(pmoveInfoCvars));
 }
 
 static void G_SendArmorInfo(void) {
-    char info[MAX_INFO_STRING];
-
-    info[0] = '\0';
-    Info_SetValueForKey(info, "armor_tiered", armor_tiered.string);
-
-    trap_SetConfigstring(CS_ARMORINFO, info);
+    G_SendReplicatedCvars(CS_ARMORINFO, armorInfoCvars, ARRAY_LEN(armorInfoCvars));
 }
 
 static void G_SendWeaponInfo(void) {
-    char info[MAX_INFO_STRING];
-
-    info[0] = '\0';
-    Info_SetValueForKey(info, "weapon_gravity_bfg", weapon_gravity_bfg.string);
-    Info_SetValueForKey(info, "weapon_gravity_ng", weapon_gravity_ng.string);
-    Info_SetValueForKey(info, "weapon_gravity_pg", weapon_gravity_pg.string);
-    Info_SetValueForKey(info, "weapon_gravity_rl", weapon_gravity_rl.string);
-    Info_SetValueForKey(info, "weapon_reload_bfg", weapon_reload_bfg.string);
-    Info_SetValueForKey(info, "weapon_reload_cg", weapon_reload_cg.string);
-    Info_SetValueForKey(info, "weapon_reload_gauntlet", weapon_reload_gauntlet.string);
-    Info_SetValueForKey(info, "weapon_reload_gh", weapon_reload_gh.string);
-    Info_SetValueForKey(info, "weapon_reload_gl", weapon_reload_gl.string);
-    Info_SetValueForKey(info, "weapon_reload_hmg", weapon_reload_hmg.string);
-    Info_SetValueForKey(info, "weapon_reload_hook", weapon_reload_hook.string);
-    Info_SetValueForKey(info, "weapon_reload_lg", weapon_reload_lg.string);
-    Info_SetValueForKey(info, "weapon_reload_mg", weapon_reload_mg.string);
-    Info_SetValueForKey(info, "weapon_reload_ng", weapon_reload_ng.string);
-    Info_SetValueForKey(info, "weapon_reload_pg", weapon_reload_pg.string);
-    Info_SetValueForKey(info, "weapon_reload_prox", weapon_reload_prox.string);
-    Info_SetValueForKey(info, "weapon_reload_rg", weapon_reload_rg.string);
-    Info_SetValueForKey(info, "weapon_reload_rl", weapon_reload_rl.string);
-    Info_SetValueForKey(info, "weapon_reload_sg", weapon_reload_sg.string);
-
-    trap_SetConfigstring(CS_WEAPONINFO, info);
+    G_SendReplicatedCvars(CS_WEAPONINFO, weaponInfoCvars, ARRAY_LEN(weaponInfoCvars));
 }
 
 static void G_SendPlayerInfo(void) {
-    char info[MAX_INFO_STRING];
-
-    info[0] = '\0';
-    Info_SetValueForKey(info, "g_allowCustomHeadmodels", g_allowCustomHeadmodels.string);
-    Info_SetValueForKey(info, "g_playerheadScale", g_playerheadScale.string);
-    Info_SetValueForKey(info, "g_playerheadScaleOffset", g_playerheadScaleOffset.string);
-    Info_SetValueForKey(info, "g_playerModelScale", g_playerModelScale.string);
-
-    trap_SetConfigstring(CS_PLAYERINFO, info);
+    G_SendReplicatedCvars(CS_PLAYERINFO, playerInfoCvars, ARRAY_LEN(playerInfoCvars));
 }
 
 void G_InitGame(int levelTime, int randomSeed, int restart) {
@@ -1525,6 +1533,7 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
     level.time = levelTime;
     level.startTime = levelTime;
     level.warmupTime = -1;
+    trap_Cvar_Set("g_levelStartTime", va("%ld", (long)time(NULL)));
 
     level.snd_fry = G_SoundIndex("sound/player/fry.wav");
     G_SoundIndex("sound/player/gurp1.wav");
@@ -1597,6 +1606,7 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
     G_ClearTeamLocks();
 
     G_Printf("-----------------------------------\n");
+    G_SetPauseConfigstrings();
 
     if (trap_Cvar_VariableIntegerValue("bot_enable")) {
         BotAISetup(restart);

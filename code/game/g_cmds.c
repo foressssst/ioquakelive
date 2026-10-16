@@ -2085,6 +2085,15 @@ static qboolean G_CommandPhaseAllowed(gentity_t* ent, int allowed) {
     return qfalse;
 }
 
+void G_SetPauseConfigstrings(void) {
+    trap_SetConfigstring(CS_TIMEOUTS_RED,
+        va("%d", g_timeoutCount.integer - level.teamTimeoutsUsed[TEAM_RED]));
+    trap_SetConfigstring(CS_TIMEOUTS_BLUE,
+        va("%d", g_timeoutCount.integer - level.teamTimeoutsUsed[TEAM_BLUE]));
+    trap_SetConfigstring(CS_PAUSE_END_TIME, va("%i", level.mp_unpauseTime));
+    trap_SetConfigstring(CS_PAUSE_START_TIME, va("%i", level.timePauseBegin));
+}
+
 void MP_Pause(gentity_t* ent, int duration) {
     const char* name;
 
