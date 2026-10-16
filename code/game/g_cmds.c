@@ -1067,6 +1067,8 @@ void ClearVote(void) {
     }
 
     trap_SetConfigstring(CS_VOTE_TIME, "");
+    trap_SetConfigstring(CS_VOTE_STRING, "");
+    trap_SetConfigstring(CS_DISABLE_VOTE_UI, "");
 }
 
 void Cmd_CallVote_f(gentity_t *ent) {
