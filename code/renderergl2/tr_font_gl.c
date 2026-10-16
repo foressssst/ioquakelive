@@ -279,6 +279,11 @@ void R_FontShutdown(void) {
     fallbackFontId = FONS_INVALID;
 }
 
+static qboolean R_Font_IsWebText(const char *path) {
+    return (!Q_stricmpn(path, "webui/", 6) || !Q_stricmpn(path, "fonts/Barlow-", 13) ||
+            !Q_stricmp(path, "fonts/LiberationSans-Regular.ttf")) ? qtrue : qfalse;
+}
+
 int RE_Font_Register(const char *name) {
     char paths[2][MAX_QPATH];
     const char *dir;
@@ -315,6 +320,8 @@ int RE_Font_Register(const char *name) {
             continue;
         if (fallbackFontId != FONS_INVALID)
             fonsAddFallbackFont(fontContext, id, fallbackFontId);
+        if (R_Font_IsWebText(paths[p]))
+            fonsSetFontContrast(fontContext, id, 1.7f, 1.2f);
         fontIndexToId[numFontIndices] = id;
         Q_strncpyz(fontIndexPath[numFontIndices], paths[p], sizeof(fontIndexPath[numFontIndices]));
         return numFontIndices++;
