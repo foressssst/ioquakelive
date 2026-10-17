@@ -134,7 +134,7 @@ typedef struct client_s {
 
     int deltaMessage;
     int nextReliableTime;
-    float floodScore;
+    int floodScore;
     int floodTime;
     float floodCount;
     int lastPacketTime;

@@ -1040,15 +1040,15 @@ static qboolean SV_ClientCommand(client_t* cl, msg_t* msg) {
     }
 
     if (!com_cl_running->integer && cl->state >= CS_ACTIVE && sv_floodProtect->value > 0.0f) {
-        float score = cl->floodScore + 1.0f - (svs.time - cl->floodTime) / 1000.0f;
+        float score = (float)cl->floodScore + 1.0f - (float)(svs.time - cl->floodTime) / 1000.0f;
 
-        if (score < 0.0f) {
+        if (score <= 0.0f) {
             score = 0.0f;
         }
-        cl->floodScore = score;
+        cl->floodScore = (int)score;
         cl->floodTime = svs.time;
 
-        if (score > sv_floodProtect->value) {
+        if (sv_floodProtect->value <= score) {
             SV_DropClient(cl, "Flooding the server");
             return qfalse;
         }
