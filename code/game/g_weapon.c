@@ -1039,7 +1039,7 @@ static void KamikazeDamage(gentity_t* self) {
     VectorCopy(newangles, self->movedir);
 }
 
-void G_StartKamikaze(gentity_t* ent) {
+static void G_KamikazeExplosion(gentity_t* ent) {
     gentity_t* explosion;
     gentity_t* te;
     vec3_t snapped;
@@ -1089,4 +1089,24 @@ void G_StartKamikaze(gentity_t* ent) {
     te = G_TempEntity(snapped, EV_GLOBAL_TEAM_SOUND);
     te->r.svFlags |= SVF_BROADCAST;
     te->s.eventParm = GTS_KAMIKAZE;
+}
+
+void G_StartKamikaze(gentity_t* ent) {
+    qboolean usedOnDemand = qfalse;
+    int clientNum = -1;
+
+    if (g_minqlxHooks) {
+        if (ent->client) {
+            ent->client->ps.eFlags &= ~EF_KAMIKAZE;
+            clientNum = ent->client->ps.clientNum;
+            usedOnDemand = qtrue;
+            g_minqlxHooks->KamikazeUse(clientNum);
+        } else if (ent->activator) {
+            clientNum = ent->activator->r.ownerNum;
+        }
+    }
+    G_KamikazeExplosion(ent);
+    if (g_minqlxHooks && clientNum != -1) {
+        g_minqlxHooks->KamikazeExplode(clientNum, usedOnDemand);
+    }
 }

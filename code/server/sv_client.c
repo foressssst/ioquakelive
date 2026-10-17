@@ -370,6 +370,8 @@ Q_HOOKABLE void SV_DropClient(client_t* drop, const char* reason) {
     challenge_t* challenge;
     const qboolean isBot = drop->netchan.remoteAddress.type == NA_BOT;
 
+    SV_MinqlxClientDisconnect((int)(drop - svs.clients), reason);
+
     Com_Printf("SV_DropClient: dropping client %d (%s), state=%d, reason='%s'\n",
                (int)(drop - svs.clients), drop->name, drop->state, reason);
 
@@ -485,6 +487,7 @@ static void SV_SendClientGameState(client_t* client) {
 Q_HOOKABLE void SV_ClientEnterWorld(client_t* client, usercmd_t* cmd) {
     int clientNum;
     sharedEntity_t* ent;
+    clientState_t previous = client->state;
 
     Com_DPrintf("SV_ClientEnterWorld: client %d (%s^7) CS_PRIMED -> CS_ACTIVE\n",
                 (int)(client - svs.clients), client->name);
@@ -506,6 +509,10 @@ Q_HOOKABLE void SV_ClientEnterWorld(client_t* client, usercmd_t* cmd) {
         memset(&client->lastUsercmd, '\0', sizeof(client->lastUsercmd));
 
     SV_GameClientBegin(clientNum);
+
+    if (previous == CS_PRIMED && client->gentity) {
+        SV_MinqlxClientLoaded(clientNum);
+    }
 }
 
 static void SV_CloseDownload(client_t* cl) {
@@ -1005,6 +1012,13 @@ static ucmd_t ucmds[] = {
 Q_HOOKABLE void SV_ExecuteClientCommand(client_t* cl, const char* s, qboolean clientOK) {
     ucmd_t* u;
     qboolean bProcessed = qfalse;
+
+    if (clientOK && cl->gentity) {
+        s = SV_MinqlxClientCommand((int)(cl - svs.clients), s);
+        if (!s) {
+            return;
+        }
+    }
 
     Cmd_TokenizeString(s);
 

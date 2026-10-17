@@ -50,6 +50,7 @@
     <ClCompile Include="..\..\code\server\sv_game.c" />
     <ClCompile Include="..\..\code\server\sv_init.c" />
     <ClCompile Include="..\..\code\server\sv_main.c" />
+    <ClCompile Include="..\..\code\server\sv_minqlx.c" />
     <ClCompile Include="..\..\code\server\sv_net_chan.c" />
     <ClCompile Include="..\..\code\server\sv_snapshot.c" />
     <ClCompile Include="..\..\code\server\sv_steamstats.c" />

@@ -309,8 +309,84 @@ typedef enum {
     GAME_CLIENT_IS_ADMIN         = 18,
     GAME_SNAPSHOT_VISIBILITY     = 19,
     GAME_CLIENT_SCORE            = 20,
+    GAME_MINQLX                  = 21,
 
     GAME_EXPORT_COUNT
 } gameExport_t;
+
+#define MINQLX_WEAPONS 15
+#define MINQLX_POWERUPS 6
+
+typedef struct {
+    qboolean alive;
+    qboolean frozen;
+    qboolean noclip;
+    float origin[3];
+    float velocity[3];
+    int health;
+    int armor;
+    int weapon;
+    int weapons;
+    int ammo[MINQLX_WEAPONS];
+    int powerups[MINQLX_POWERUPS];
+    int holdable;
+    int flight[4];
+} minqlxPlayerState_t;
+
+typedef struct {
+    int score;
+    int kills;
+    int deaths;
+    int damageDealt;
+    int damageTaken;
+    int time;
+    int ping;
+} minqlxPlayerStats_t;
+
+typedef struct {
+    const char *(*ClientConnect)(int clientNum, qboolean isBot);
+    void (*ClientSpawn)(int clientNum);
+    void (*KamikazeUse)(int clientNum);
+    void (*KamikazeExplode)(int clientNum, qboolean usedOnDemand);
+} minqlxHooks_t;
+
+typedef struct {
+    qboolean (*PlayerInfo)(int clientNum, char *name, int nameSize, int *team, int *privileges);
+    qboolean (*PlayerState)(int clientNum, minqlxPlayerState_t *state);
+    qboolean (*PlayerStats)(int clientNum, minqlxPlayerStats_t *stats);
+    qboolean (*SetPosition)(int clientNum, const float *origin);
+    qboolean (*SetVelocity)(int clientNum, const float *velocity);
+    int (*NoClip)(int clientNum, qboolean activate);
+    qboolean (*SetHealth)(int clientNum, int health);
+    qboolean (*SetArmor)(int clientNum, int armor);
+    qboolean (*SetWeapons)(int clientNum, int weapons);
+    qboolean (*SetWeapon)(int clientNum, int weapon);
+    qboolean (*SetAmmo)(int clientNum, const int *ammo);
+    qboolean (*SetPowerups)(int clientNum, const int *powerups);
+    qboolean (*SetHoldable)(int clientNum, int holdable);
+    qboolean (*DropHoldable)(int clientNum);
+    qboolean (*SetFlight)(int clientNum, const int *flight);
+    qboolean (*SetInvulnerability)(int clientNum, int time);
+    qboolean (*SetScore)(int clientNum, int score);
+    qboolean (*SetPrivileges)(int clientNum, int privileges);
+    qboolean (*PlayerSpawn)(int clientNum);
+    qboolean (*ForceVote)(qboolean pass);
+    void (*Callvote)(const char *vote, const char *display, int seconds);
+    void (*AllowSinglePlayer)(qboolean allow);
+    void (*DestroyKamikazeTimers)(void);
+    int (*NumItems)(void);
+    void (*SpawnItem)(int item, int x, int y, int z);
+    void (*RemoveDroppedItems)(void);
+    qboolean (*SlayWithMod)(int clientNum, int mod);
+    int (*ReplaceItems)(int entityNum, const char *entityClassname, int item, const char *itemClassname,
+                        char *error, int errorSize);
+    void (*DevPrintItems)(void);
+    void (*ForceWeaponRespawnTime)(int respawnTime);
+    qboolean (*IsAlive)(int clientNum);
+    qboolean (*Slap)(int clientNum, int damage);
+    qboolean (*Slay)(int clientNum);
+} minqlxGame_t;
+
+typedef const minqlxGame_t *(*minqlxGameProc)(const minqlxHooks_t *hooks);
 
 #endif

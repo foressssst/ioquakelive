@@ -170,15 +170,12 @@ void SV_AddServerCommand(client_t* client, const char* cmd) {
     Q_strncpyz(client->reliableCommands[index], cmd, sizeof(client->reliableCommands[index]));
 }
 
-Q_HOOKABLE void QDECL SV_SendServerCommand(client_t* cl, const char* fmt, ...) {
-    va_list argptr;
-    byte message[MAX_MSGLEN];
+static void SV_SendServerCommandText(client_t* cl, const char* text) {
+    char message[MAX_MSGLEN];
     client_t* client;
     int j;
 
-    va_start(argptr, fmt);
-    Q_vsnprintf((char*)message, sizeof(message), fmt, argptr);
-    va_end(argptr);
+    Q_strncpyz(message, text, sizeof(message));
 
     if (strlen((char*)message) > 1022) {
         return;
@@ -196,6 +193,35 @@ Q_HOOKABLE void QDECL SV_SendServerCommand(client_t* cl, const char* fmt, ...) {
     for (j = 0, client = svs.clients; j < sv_maxclients->integer; j++, client++) {
         SV_AddServerCommand(client, (char*)message);
     }
+}
+
+Q_HOOKABLE void QDECL SV_SendServerCommand(client_t* cl, const char* fmt, ...) {
+    va_list argptr;
+    char message[MAX_MSGLEN];
+    const char* text = message;
+
+    va_start(argptr, fmt);
+    Q_vsnprintf(message, sizeof(message), fmt, argptr);
+    va_end(argptr);
+
+    if (!cl || cl->gentity) {
+        text = SV_MinqlxServerCommand(cl ? (int)(cl - svs.clients) : -1, message);
+        if (!text) {
+            return;
+        }
+    }
+    SV_SendServerCommandText(cl, text);
+}
+
+void QDECL SV_SendServerCommandRaw(client_t* cl, const char* fmt, ...) {
+    va_list argptr;
+    char message[MAX_MSGLEN];
+
+    va_start(argptr, fmt);
+    Q_vsnprintf(message, sizeof(message), fmt, argptr);
+    va_end(argptr);
+
+    SV_SendServerCommandText(cl, message);
 }
 
 #define MAX_BUCKETS 16384

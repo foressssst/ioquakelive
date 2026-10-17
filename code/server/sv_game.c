@@ -1083,12 +1083,27 @@ static void SV_PopulateGameImports(void) {
     sv_gameImports.trap_StatsEvent             = SV_GI_StatsEvent;
 }
 
+static void SV_UnloadGameLibrary(void) {
+    int gil = SV_MinqlxLock();
+
+    SV_MinqlxSetGame(NULL);
+    Sys_UnloadLibrary(sv_gameLibHandle);
+    sv_gameLibHandle = NULL;
+    memset(sv_vmMainTable, 0, sizeof(sv_vmMainTable));
+    SV_MinqlxUnlock(gil);
+}
+
+void* SV_GameMinqlxProc(void) {
+    return sv_vmMainTable[GAME_MINQLX];
+}
+
 void SV_GameShutdown(int restart) {
     if (sv_vmMainTable[GAME_SHUTDOWN])
         ((void (*)(int))sv_vmMainTable[GAME_SHUTDOWN])(restart);
 }
 
 void SV_GameRunFrame(int serverTime) {
+    SV_MinqlxFrame();
     if (sv_vmMainTable[GAME_RUN_FRAME])
         ((void (*)(int))sv_vmMainTable[GAME_RUN_FRAME])(serverTime);
 }
@@ -1101,6 +1116,7 @@ void SV_GameRegisterCvars(void) {
 void SV_GameInit(int levelTime, int randomSeed, int restart) {
     if (sv_vmMainTable[GAME_INIT])
         ((void (*)(int, int, int))sv_vmMainTable[GAME_INIT])(levelTime, randomSeed, restart);
+    SV_MinqlxGameInit(restart ? qtrue : qfalse);
 }
 
 qboolean SV_GameConsoleCommand(void) {
@@ -1192,9 +1208,7 @@ void SV_ShutdownGameProgs(void) {
         return;
     }
     SV_GameShutdown(qfalse);
-    Sys_UnloadLibrary(sv_gameLibHandle);
-    sv_gameLibHandle = NULL;
-    memset(sv_vmMainTable, 0, sizeof(sv_vmMainTable));
+    SV_UnloadGameLibrary();
 }
 
 static void SV_LoadGameProgs(void);
@@ -1207,9 +1221,7 @@ void SV_RegisterGameCvars(void) {
     }
     SV_GameRegisterCvars();
     if (loadedHere && sv_gameLibHandle) {
-        Sys_UnloadLibrary(sv_gameLibHandle);
-        sv_gameLibHandle = NULL;
-        memset(sv_vmMainTable, 0, sizeof(sv_vmMainTable));
+        SV_UnloadGameLibrary();
     }
 }
 
@@ -1246,9 +1258,7 @@ void SV_RestartGameProgs(void) {
     }
     SV_GameShutdown(qtrue);
 
-    Sys_UnloadLibrary(sv_gameLibHandle);
-    sv_gameLibHandle = NULL;
-    memset(sv_vmMainTable, 0, sizeof(sv_vmMainTable));
+    SV_UnloadGameLibrary();
 
     SV_LoadGameProgs();
     SV_InitGameVM(qtrue);
@@ -1300,6 +1310,7 @@ static void SV_LoadGameProgs(void) {
 #ifdef DEDICATED
     Sys_SetModuleOffset("qagame", (void*)dllEntry);
 #endif
+    SV_MinqlxSetGame(sv_vmMainTable[GAME_MINQLX]);
 
     Com_Printf("Game DLL loaded, API version %d\n", sv_apiVersion);
 }

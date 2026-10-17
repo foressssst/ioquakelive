@@ -714,6 +714,7 @@ void ClientRespawn(gentity_t* ent);
 void BeginIntermission(void);
 void InitBodyQue(void);
 void ClientSpawn(gentity_t* ent);
+const minqlxGame_t* G_Minqlx(const minqlxHooks_t* hooks);
 void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, int damage, int mod);
 void AddScore(gentity_t* ent, vec3_t origin, int score);
 qboolean FreezeTagInGame(void);
@@ -981,6 +982,7 @@ void BotTestAAS(vec3_t origin);
 #include "g_team.h"
 
 extern level_locals_t level;
+extern const minqlxHooks_t* g_minqlxHooks;
 extern gentity_t g_entities[MAX_GENTITIES];
 extern gclient_t g_clients[MAX_CLIENTS];
 extern gameImport_t *imports;

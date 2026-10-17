@@ -1381,6 +1381,7 @@ Q3OBJ = \
   $(B)/client/sv_game.o \
   $(B)/client/sv_init.o \
   $(B)/client/sv_main.o \
+  $(B)/client/sv_minqlx.o \
   $(B)/client/sv_net_chan.o \
   $(B)/client/sv_snapshot.o \
   $(B)/client/sv_steamstats.o \
@@ -1949,6 +1950,7 @@ Q3DOBJ = \
   $(B)/ded/sv_game.o \
   $(B)/ded/sv_init.o \
   $(B)/ded/sv_main.o \
+  $(B)/ded/sv_minqlx.o \
   $(B)/ded/sv_net_chan.o \
   $(B)/ded/sv_snapshot.o \
   $(B)/ded/sv_steamstats.o \
@@ -2089,6 +2091,7 @@ $(B)/$(BASEGAME)/cgame$(SHLIBNAME): $(Q3CGOBJ)
 
 Q3GOBJ_ = \
   $(B)/$(BASEGAME)/game/g_main.o \
+  $(B)/$(BASEGAME)/game/g_minqlx.o \
   $(B)/$(BASEGAME)/game/g_json.o \
   $(B)/$(BASEGAME)/game/g_stats.o \
   $(B)/$(BASEGAME)/game/ai_chat.o \

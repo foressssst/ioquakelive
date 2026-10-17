@@ -1033,6 +1033,7 @@ Q_EXPORT void dllEntry(void **vmMainOut, gameImport_t *syscallTable, int *apiVer
     vmMainOut[GAME_BOT_AI_START_FRAME]      = (void *)BotAIStartFrame;
     vmMainOut[GAME_VOICE_FILTER]            = (void *)G_VoiceFilter;
     vmMainOut[GAME_CLIENT_SCORE]            = (void *)G_ClientScore;
+    vmMainOut[GAME_MINQLX]                  = (void *)G_Minqlx;
 
     *apiVersion = GAME_API_VERSION;
 }

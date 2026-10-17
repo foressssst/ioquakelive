@@ -953,6 +953,14 @@ char* ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
     char userinfo[MAX_INFO_STRING];
     gentity_t* ent;
 
+    if (firstTime && g_minqlxHooks) {
+        const char* denied = g_minqlxHooks->ClientConnect(clientNum, isBot);
+
+        if (denied && !isBot) {
+            return (char*)denied;
+        }
+    }
+
     ent = &g_entities[clientNum];
 
     trap_GetUserinfo(clientNum, userinfo, sizeof(userinfo));
@@ -1333,7 +1341,7 @@ static void G_SpawnLoadout(gentity_t* ent, gentity_t* spawnPoint) {
     SelectSpawnWeapon(ent);
 }
 
-void ClientSpawn(gentity_t* ent) {
+static void G_ClientSpawn(gentity_t* ent) {
     int index;
     vec3_t spawn_origin, spawn_angles;
     gclient_t* client;
@@ -1587,6 +1595,13 @@ void ClientSpawn(gentity_t* ent) {
     }
 
     BG_PlayerStateToEntityState(&client->ps, &ent->s, qtrue);
+}
+
+void ClientSpawn(gentity_t* ent) {
+    G_ClientSpawn(ent);
+    if (g_minqlxHooks) {
+        g_minqlxHooks->ClientSpawn((int)(ent - g_entities));
+    }
 }
 
 void ClientDisconnect(int clientNum) {

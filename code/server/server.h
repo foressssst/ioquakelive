@@ -371,6 +371,23 @@ int SV_SendQueuedMessages(void);
 
 void SV_AddServerCommand(client_t* client, const char* cmd);
 void SV_FlushDeferredCommands(client_t* client);
+
+void QDECL SV_SendServerCommandRaw(client_t* cl, const char* fmt, ...) __attribute__((format(printf, 2, 3)));
+void* SV_GameMinqlxProc(void);
+
+extern qboolean sv_minqlxSkipFrame;
+void SV_MinqlxInit(void);
+const char* SV_MinqlxClientCommand(int clientNum, const char* cmd);
+const char* SV_MinqlxServerCommand(int clientNum, const char* cmd);
+const char* SV_MinqlxSetConfigstring(int index, const char* value);
+void SV_MinqlxFrame(void);
+void SV_MinqlxNewGame(qboolean restart);
+void SV_MinqlxGameInit(qboolean restart);
+void SV_MinqlxClientLoaded(int clientNum);
+void SV_MinqlxClientDisconnect(int clientNum, const char* reason);
+int SV_MinqlxLock(void);
+void SV_MinqlxUnlock(int state);
+void SV_MinqlxSetGame(void* proc);
 void SV_UpdateServerCommandsToClient(client_t* client, msg_t* msg);
 void SV_WriteFrameToClient(client_t* client, msg_t* msg);
 void SV_SendMessageToClient(msg_t* msg, client_t* client);

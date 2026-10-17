@@ -171,6 +171,8 @@ static const char* Com_StripConsoleColors(const char* in, char* out, int outSize
     return out;
 }
 
+qboolean (*com_printFilter)(const char* text);
+
 Q_HOOKABLE void QDECL Com_Printf(const char* fmt, ...) {
     va_list argptr;
     char msg[MAXPRINTMSG];
@@ -181,6 +183,10 @@ Q_HOOKABLE void QDECL Com_Printf(const char* fmt, ...) {
     va_start(argptr, fmt);
     Q_vsnprintf(msg, sizeof(msg), fmt, argptr);
     va_end(argptr);
+
+    if (com_printFilter && !com_printFilter(msg)) {
+        return;
+    }
 
     plain = Com_StripConsoleColors(msg, plainBuffer, sizeof(plainBuffer));
 

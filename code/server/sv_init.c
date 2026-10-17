@@ -108,6 +108,11 @@ Q_HOOKABLE void SV_SetConfigstring(int index, const char* val) {
         val = "";
     }
 
+    val = SV_MinqlxSetConfigstring(index, val);
+    if (!val) {
+        return;
+    }
+
     if (!sv.configstrings[index]) {
         sv.configstrings[index] = CopyString(val);
         return;
@@ -304,6 +309,8 @@ Q_HOOKABLE void SV_SpawnServer(char* server, qboolean killBots) {
     char systemInfo[16384];
     const char* p;
 
+    sv_minqlxSkipFrame = qtrue;
+
     SV_ShutdownGameProgs();
 
     Com_Printf("------ Server Initialization ------\n");
@@ -467,6 +474,9 @@ Q_HOOKABLE void SV_SpawnServer(char* server, qboolean killBots) {
     SV_SetNextMaps();
 
     Com_Printf("-----------------------------------\n");
+
+    sv_minqlxSkipFrame = qfalse;
+    SV_MinqlxNewGame(qfalse);
 }
 
 #ifdef DEDICATED
@@ -610,6 +620,7 @@ void SV_Init(void) {
 
     SV_BotInitBotLib();
 
+    SV_MinqlxInit();
 }
 
 void SV_FinalMessage(char* message) {
