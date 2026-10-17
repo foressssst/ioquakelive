@@ -585,9 +585,9 @@ int main(int argc, char** argv) {
 #endif
 
     Sys_ParseArgs(argc, argv);
-    Sys_SetBinaryPath(Sys_Dirname(argv[0]));
 
     {
+        static char path[MAX_OSPATH];
         const char* name = argv[0];
         const char* p;
 
@@ -596,6 +596,8 @@ int main(int argc, char** argv) {
                 name = p + 1;
         }
         Q_strncpyz(binaryName, name, sizeof(binaryName));
+        Q_strncpyz(path, argv[0], sizeof(path));
+        Sys_SetBinaryPath(Sys_Dirname(path));
     }
     Sys_SetDefaultInstallPath(DEFAULT_BASEDIR);
 
