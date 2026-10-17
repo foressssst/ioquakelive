@@ -3147,13 +3147,13 @@ static void CG_DrawVoiceIndicator(void) {
         }
 
         trap_R_SetColor(NULL);
-        width = (float)(CG_DrawStrlen(ci->name) * SMALLCHAR_WIDTH) + 25.0f;
+        width = (float)CG_OverheadTextWidth(ci->name, 0, 0.25f, 0) + 25.0f;
         x = (cg_voiceChatIndicator.integer == 2) ? 0.0f : 640.0f - width;
         color = (ci->team == TEAM_RED) ? red : (ci->team == TEAM_BLUE) ? blue : neutral;
 
         CG_FillRect(x, y - 10.0f, width, 15.0f, color);
         CG_DrawPic(x + 5.0f, y - 8.0f, 10.0f, 10.0f, cgs.media.scoreSpeakingShader);
-        CG_DrawSmallStringColor((int)(x + 20.0f), (int)(y + 1.0f), ci->name, (vec_t*)white);
+        CG_DrawText(x + 20.0f, y + 1.0f, 0, 0.25f, (vec_t*)white, ci->name, 0, 0, 0);
         y += 15.0f;
 
         if (ci->talkingTime + 500 < cg.time && i != cg.clientNum) {
