@@ -219,9 +219,9 @@ static void SV_Startup(void) {
 
     svs.clients = Z_Malloc(sizeof(client_t) * sv_maxclients->integer);
     if (com_dedicated->integer) {
-        svs.numSnapshotEntities = sv_maxclients->integer * PACKET_BACKUP * MAX_SNAPSHOT_ENTITIES;
+        svs.numSnapshotEntities = sv_maxclients->integer * PACKET_BACKUP * 64;
     } else {
-        svs.numSnapshotEntities = sv_maxclients->integer * 4 * MAX_SNAPSHOT_ENTITIES;
+        svs.numSnapshotEntities = sv_maxclients->integer * 4 * 64;
     }
     svs.initialized = qtrue;
 
@@ -278,9 +278,9 @@ void SV_ChangeMaxClients(void) {
     Hunk_FreeTempMemory(oldClients);
 
     if (com_dedicated->integer) {
-        svs.numSnapshotEntities = sv_maxclients->integer * PACKET_BACKUP * MAX_SNAPSHOT_ENTITIES;
+        svs.numSnapshotEntities = sv_maxclients->integer * PACKET_BACKUP * 64;
     } else {
-        svs.numSnapshotEntities = sv_maxclients->integer * 4 * MAX_SNAPSHOT_ENTITIES;
+        svs.numSnapshotEntities = sv_maxclients->integer * 4 * 64;
     }
 
     Steam_GS_SetMaxPlayers(sv_maxclients->integer);
