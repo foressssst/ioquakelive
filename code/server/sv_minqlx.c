@@ -856,7 +856,21 @@ static mqObject* MQ_SetPrivileges(mqObject* self, mqObject* args) {
 }
 
 static mqObject* MQ_SetHoldable(mqObject* self, mqObject* args) {
-    return MQ_SetInt(args, "ii:set_holdable", mqGame ? mqGame->SetHoldable : NULL);
+    int clientNum, holdable;
+
+    if (!py.PyArg_ParseTuple(args, "ii:set_holdable", &clientNum, &holdable)) {
+        return NULL;
+    }
+    if (!MQ_ValidClient(clientNum)) {
+        return MQ_BadClient();
+    }
+    if (!mqGame) {
+        return MQ_Bool(qfalse);
+    }
+    if (holdable < 0 || holdable >= mqGame->NumItems()) {
+        return py.PyErr_Format(*py.ValueError, "holdable needs to be a number from 0 to %d.", mqGame->NumItems() - 1);
+    }
+    return MQ_Bool(mqGame->SetHoldable(clientNum, holdable));
 }
 
 static mqObject* MQ_SetWeapon(mqObject* self, mqObject* args) {
@@ -1656,7 +1670,8 @@ static qboolean MQ_OtherPythonRunning(void) {
     }
     return qfalse;
 #else
-    int (*initialized)(void) = (int (*)(void))dlsym(RTLD_DEFAULT, "Py_IsInitialized");
+    void* self = dlopen(NULL, RTLD_NOW);
+    int (*initialized)(void) = self ? (int (*)(void))dlsym(self, "Py_IsInitialized") : NULL;
 
     return initialized && initialized();
 #endif

@@ -200,7 +200,7 @@ static qboolean MQ_IsKamikaze(int item) {
 static qboolean MQ_SetHoldable(int clientNum, int holdable) {
     gclient_t* client = MQ_Client(clientNum);
 
-    if (!client) {
+    if (!client || holdable < 0 || holdable >= bg_numItems) {
         return qfalse;
     }
     if (MQ_IsKamikaze(holdable)) {
