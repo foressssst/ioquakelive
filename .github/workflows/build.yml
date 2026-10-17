@@ -8,14 +8,14 @@ on:
   workflow_dispatch:
     inputs:
       windows_only:
-        description: 'Only the Windows build of a pre-release (x86 and x64): no Linux, no macOS, no ARM64'
+        description: 'Only the Windows build (x86 and x64), without publishing: no Linux, no macOS, no ARM64'
         type: boolean
         default: false
 
 jobs:
   linux:
     name: Linux ${{ matrix.arch }}
-    if: ${{ !((github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:')) || (github.event_name == 'workflow_dispatch' && inputs.windows_only)) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.windows_only) }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -80,7 +80,7 @@ jobs:
 
   macos-compile:
     name: macOS (compile + sign dylibs)
-    if: (github.event_name == 'workflow_dispatch' && !inputs.windows_only) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:'))
+    if: (github.event_name == 'workflow_dispatch' && !inputs.windows_only) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:')) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:'))
     runs-on: macos-14
     steps:
     - uses: actions/checkout@v4
@@ -172,7 +172,7 @@ jobs:
 
   macos-bundle:
     name: macOS (bundle + notarise)
-    if: (github.event_name == 'workflow_dispatch' && !inputs.windows_only) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:'))
+    if: (github.event_name == 'workflow_dispatch' && !inputs.windows_only) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:')) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:'))
     needs: [linux, windows, macos-compile]
     runs-on: macos-14
     steps:
@@ -386,7 +386,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(((github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:')) || (github.event_name == 'workflow_dispatch' && inputs.windows_only)) && '[{"platform":"Win32","dir":"x86","arch":"x86"},{"platform":"x64","dir":"x64","arch":"x86_64"}]' || '[{"platform":"Win32","dir":"x86","arch":"x86"},{"platform":"x64","dir":"x64","arch":"x86_64"},{"platform":"ARM64","dir":"arm64","arch":"arm64"}]') }}
+        include: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.windows_only) && '[{"platform":"Win32","dir":"x86","arch":"x86"},{"platform":"x64","dir":"x64","arch":"x86_64"}]' || '[{"platform":"Win32","dir":"x86","arch":"x86"},{"platform":"x64","dir":"x64","arch":"x86_64"},{"platform":"ARM64","dir":"arm64","arch":"arm64"}]') }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -438,7 +438,7 @@ jobs:
 
   package:
     name: Package release artifacts
-    if: (github.event_name == 'workflow_dispatch' && !inputs.windows_only) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:'))
+    if: (github.event_name == 'workflow_dispatch' && !inputs.windows_only) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:')) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:'))
     needs: [linux, macos-bundle, windows]
     runs-on: ubuntu-latest
     steps:
@@ -492,7 +492,7 @@ jobs:
 
   package-windows:
     name: Package the Windows pre-release
-    if: ${{ (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:')) || (github.event_name == 'workflow_dispatch' && inputs.windows_only) }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.windows_only }}
     needs: [windows]
     runs-on: ubuntu-latest
     steps:
@@ -539,7 +539,7 @@ jobs:
 
   prerelease:
     name: Create Pre-release
-    needs: [package-windows]
+    needs: [package]
     if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:')
     runs-on: ubuntu-latest
     permissions:
