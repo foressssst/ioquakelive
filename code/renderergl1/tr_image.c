@@ -97,7 +97,7 @@ void GL_TextureMode( const char *string ) {
 
 	for ( i = 0; i < tr.numImages; i++ ) {
 		img = tr.images[ i ];
-		if ( img->flags & IMGFLAG_MIPMAP ) {
+		if ( ( img->flags & IMGFLAG_MIPMAP ) && !( img->flags & IMGFLAG_UI ) ) {
 			GL_Bind( img );
 			qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter_min );
 			qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max );
@@ -362,6 +362,33 @@ static void R_MipMap2( unsigned * const out, unsigned * const in, int inWidth, i
 	}
 }
 
+static void R_MipMapUI( byte *out, const byte *in, int width, int height ) {
+	const int outWidth = MAX( 1, width >> 1 );
+	const int outHeight = MAX( 1, height >> 1 );
+	const int stepX = width > 1 ? 4 : 0;
+	const int stepY = height > 1 ? width * 4 : 0;
+	int x, y, k, a, c;
+
+	if ( in == NULL )
+		return;
+
+	for ( y = 0; y < outHeight; y++ ) {
+		for ( x = 0; x < outWidth; x++, out += 4 ) {
+			const byte *p = in + ( y * 2 * width + x * 2 ) * 4;
+			const byte *q = p + stepX;
+			const byte *r = p + stepY;
+			const byte *s = r + stepX;
+
+			a = p[3] + q[3] + r[3] + s[3];
+			for ( k = 0; k < 3; k++ ) {
+				c = p[k] * p[3] + q[k] * q[3] + r[k] * r[3] + s[k] * s[3];
+				out[k] = a ? ( c + a / 2 ) / a : 0;
+			}
+			out[3] = ( a + 2 ) >> 2;
+		}
+	}
+}
+
 static void R_MipMap( byte *out, byte *in, int width, int height ) {
 	int		i, j;
 	int		row;
@@ -613,7 +640,10 @@ static void Upload32( byte *data, int x, int y, int width, int height, image_t *
 		int	miplevel = 0;
 		while (scaled_width > 1 || scaled_height > 1)
 		{
-			R_MipMap( data, data, scaled_width, scaled_height );
+			if ( image->flags & IMGFLAG_UI )
+				R_MipMapUI( data, data, scaled_width, scaled_height );
+			else
+				R_MipMap( data, data, scaled_width, scaled_height );
 			scaled_width = MAX( 1, scaled_width >> 1 );
 			scaled_height = MAX( 1, scaled_height >> 1 );
 			x >>= 1;
@@ -692,13 +722,14 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 		image->flags |= IMGFLAG_NO_COMPRESSION | IMGFLAG_NOSCALE;
 	}
 
-	if ( !Q_stricmpn( image->imgName, "webui/", 6 ) ) {
-		image->flags |= IMGFLAG_NO_COMPRESSION;
+	if ( !Q_stricmpn( image->imgName, "webui/", 6 ) || !Q_stricmpn( image->imgName, "ui/ioql/", 8 ) ) {
+		image->flags = ( image->flags & ~IMGFLAG_PICMIP ) | IMGFLAG_UI | IMGFLAG_MIPMAP | IMGFLAG_NOSCALE |
+			IMGFLAG_NOLIGHTSCALE | IMGFLAG_NO_COMPRESSION;
 	}
 
 	if ( flags & IMGFLAG_RGB )
 		image->internalFormat = GL_RGB;
-	else if ( !Q_stricmpn( image->imgName, "webui/", 6 ) )
+	else if ( image->flags & IMGFLAG_UI )
 		image->internalFormat = GL_RGBA8;
 	else
 		image->internalFormat = 0;
@@ -733,7 +764,16 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 		r_imageUploadUs += ri.Microseconds() - uploadStart;
 	}
 
-	if ( image->flags & IMGFLAG_MIPMAP )
+	if ( image->flags & IMGFLAG_UI )
+	{
+		if ( textureFilterAnisotropic )
+			qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 1 );
+
+		qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR );
+		qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, -0.5f );
+	}
+	else if ( image->flags & IMGFLAG_MIPMAP )
 	{
 		if ( textureFilterAnisotropic ) {
 			qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (GLint) maxAnisotropy );

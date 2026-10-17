@@ -2159,6 +2159,7 @@ void Com_Init(char* commandLine) {
 
 #ifndef DEDICATED
     cl_allowConsoleChat = Cvar_Get("cl_allowConsoleChat", "0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
+    Cvar_Get("web_browserActive", "0", CVAR_ROM);
     com_allowConsole = Cvar_Get("com_allowConsole", "1", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
 #endif
 

@@ -38,6 +38,7 @@ cvar_t *r_enableColorCorrect;
 cvar_t *r_enablePostProcess;
 cvar_t *r_floatingPointFBOs;
 cvar_t *r_postProcessActive;
+cvar_t *web_browserActive;
 
 typedef enum {
 	QLP_COLORCORRECT,
@@ -85,6 +86,7 @@ void R_QLPostRegister( void ) {
 	r_enablePostProcess = ri.Cvar_Get( "r_enablePostProcess", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
 	r_floatingPointFBOs = ri.Cvar_Get( "r_floatingPointFBOs", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_postProcessActive = ri.Cvar_Get( "r_postProcessActive", "0", CVAR_ROM | CVAR_TEMP );
+	web_browserActive = ri.Cvar_Get( "web_browserActive", "0", CVAR_ROM );
 }
 
 static int R_BloomPasses( void ) {
@@ -550,14 +552,14 @@ qboolean RB_QLColorCorrect( GLuint dstFbo, int width, int height ) {
 		return qfalse;
 	}
 
-	if ( tr.frameHasWorld ) {
-		color[0] = r_gamma->value > 0.0f ? 1.0f / r_gamma->value : 1.0f;
-		color[1] = MAX( 2.0f * r_overBrightBits->integer, 1.0f );
-		color[2] = r_contrast->value;
-	} else {
+	if ( web_browserActive->integer ) {
 		color[0] = 1.0f;
 		color[1] = 1.0f / tr.identityLight;
 		color[2] = 1.0f;
+	} else {
+		color[0] = r_gamma->value > 0.0f ? 1.0f / r_gamma->value : 1.0f;
+		color[1] = MAX( 2.0f * r_overBrightBits->integer, 1.0f );
+		color[2] = r_contrast->value;
 	}
 	color[3] = 1.0f;
 

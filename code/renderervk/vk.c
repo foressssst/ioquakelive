@@ -2346,7 +2346,7 @@ static VkSampler vk_find_sampler( const Vk_Sampler_Def *def ) {
 	desc.addressModeU = address_mode;
 	desc.addressModeV = address_mode;
 	desc.addressModeW = address_mode;
-	desc.mipLodBias = 0.0f;
+	desc.mipLodBias = def->ui ? -0.5f : 0.0f;
 
 	if ( def->noAnisotropy || mipmap_mode == VK_SAMPLER_MIPMAP_MODE_NEAREST || mag_filter == VK_FILTER_NEAREST ) {
 		desc.anisotropyEnable = VK_FALSE;
@@ -4938,7 +4938,12 @@ void vk_update_descriptor_set( image_t *image, qboolean mipmap ) {
 
 	sampler_def.address_mode = image->wrapClampMode;
 
-	if ( mipmap ) {
+	if ( image->flags & IMGFLAG_UI ) {
+		sampler_def.gl_mag_filter = GL_LINEAR;
+		sampler_def.gl_min_filter = GL_LINEAR_MIPMAP_LINEAR;
+		sampler_def.noAnisotropy = qtrue;
+		sampler_def.ui = qtrue;
+	} else if ( mipmap ) {
 		sampler_def.gl_mag_filter = gl_filter_max;
 		sampler_def.gl_min_filter = gl_filter_min;
 	} else {
@@ -7349,6 +7354,14 @@ static void vk_resize_geometry_buffer( void )
 	ri.Printf( PRINT_DEVELOPER, "...geometry buffer resized to %iK\n", (int)( vk.geometry_buffer_size / 1024 ) );
 }
 
+static qboolean vk_ui_neutral( void )
+{
+	if ( web_browserActive->integer )
+		return qtrue;
+
+	return ( !r_colorCorrectActive->integer && !tr.frameHasWorld ) ? qtrue : qfalse;
+}
+
 void vk_end_frame( void )
 {
 #ifdef USE_UPLOAD_QUEUE
@@ -7386,7 +7399,7 @@ void vk_end_frame( void )
 
 			vk_begin_render_pass( vk.render_pass.capture, vk.framebuffers.capture, qfalse, gls.captureWidth, gls.captureHeight );
 			qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-				( !tr.frameHasWorld && vk.capture_neutral_pipeline ) ? vk.capture_neutral_pipeline : vk.capture_pipeline );
+				( vk_ui_neutral() && vk.capture_neutral_pipeline ) ? vk.capture_neutral_pipeline : vk.capture_pipeline );
 			qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.color_descriptor, 0, NULL );
 
 			qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
@@ -7404,7 +7417,7 @@ void vk_end_frame( void )
 
 			vk_begin_render_pass( vk.render_pass.gamma, vk.framebuffers.gamma[ vk.cmd->swapchain_image_index ], qfalse, vk.renderWidth, vk.renderHeight );
 			qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-				( !tr.frameHasWorld && vk.gamma_neutral_pipeline ) ? vk.gamma_neutral_pipeline : vk.gamma_pipeline );
+				( vk_ui_neutral() && vk.gamma_neutral_pipeline ) ? vk.gamma_neutral_pipeline : vk.gamma_pipeline );
 			qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.color_descriptor, 0, NULL );
 
 			qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );

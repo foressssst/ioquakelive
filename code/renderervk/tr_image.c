@@ -402,6 +402,33 @@ static void R_MipMap2( unsigned * const out, unsigned * const in, int inWidth, i
 	}
 }
 
+static void R_MipMapUI( byte *out, const byte *in, int width, int height ) {
+	const int outWidth = MAX( 1, width >> 1 );
+	const int outHeight = MAX( 1, height >> 1 );
+	const int stepX = width > 1 ? 4 : 0;
+	const int stepY = height > 1 ? width * 4 : 0;
+	int x, y, k, a, c;
+
+	if ( in == NULL )
+		return;
+
+	for ( y = 0; y < outHeight; y++ ) {
+		for ( x = 0; x < outWidth; x++, out += 4 ) {
+			const byte *p = in + ( y * 2 * width + x * 2 ) * 4;
+			const byte *q = p + stepX;
+			const byte *r = p + stepY;
+			const byte *s = r + stepX;
+
+			a = p[3] + q[3] + r[3] + s[3];
+			for ( k = 0; k < 3; k++ ) {
+				c = p[k] * p[3] + q[k] * q[3] + r[k] * r[3] + s[k] * s[3];
+				out[k] = a ? ( c + a / 2 ) / a : 0;
+			}
+			out[3] = ( a + 2 ) >> 2;
+		}
+	}
+}
+
 static void R_MipMap( byte *out, byte *in, int width, int height ) {
 	int		i, j;
 	int		row;
@@ -623,7 +650,10 @@ static void generate_image_upload_data( image_t *image, byte *data, Image_Upload
 
 	if ( mipmap ) {
 		while (scaled_width > 1 && scaled_height > 1) {
-			R_MipMap((byte *)scaled_buffer, (byte *)scaled_buffer, scaled_width, scaled_height);
+			if ( image->flags & IMGFLAG_UI )
+				R_MipMapUI((byte *)scaled_buffer, (byte *)scaled_buffer, scaled_width, scaled_height);
+			else
+				R_MipMap((byte *)scaled_buffer, (byte *)scaled_buffer, scaled_width, scaled_height);
 
 			scaled_width >>= 1;
 			if (scaled_width < 1) scaled_width = 1;
@@ -661,8 +691,7 @@ static void upload_vk_image( image_t *image, byte *pic ) {
 	w = upload_data.base_level_width;
 	h = upload_data.base_level_height;
 
-	if ( r_texturebits->integer > 16 || r_texturebits->integer == 0 || ( image->flags & IMGFLAG_LIGHTMAP ) ||
-		!Q_stricmpn( image->imgName, "webui/", 6 ) ) {
+	if ( r_texturebits->integer > 16 || r_texturebits->integer == 0 || ( image->flags & ( IMGFLAG_LIGHTMAP | IMGFLAG_UI ) ) ) {
 		image->internalFormat = VK_FORMAT_R8G8B8A8_UNORM;
 	} else {
 		qboolean has_alpha = RawImage_HasAlpha( upload_data.buffer, w * h );
@@ -918,8 +947,9 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 		image->flags |= IMGFLAG_NO_COMPRESSION | IMGFLAG_NOSCALE;
 	}
 
-	if ( !Q_stricmpn( image->imgName, "webui/", 6 ) ) {
-		image->flags |= IMGFLAG_NO_COMPRESSION;
+	if ( !Q_stricmpn( image->imgName, "webui/", 6 ) || !Q_stricmpn( image->imgName, "ui/ioql/", 8 ) ) {
+		image->flags = ( image->flags & ~IMGFLAG_PICMIP ) | IMGFLAG_UI | IMGFLAG_MIPMAP | IMGFLAG_NOSCALE |
+			IMGFLAG_NOLIGHTSCALE | IMGFLAG_NO_COMPRESSION;
 	}
 
 #ifdef USE_VULKAN

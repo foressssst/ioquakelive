@@ -1335,6 +1335,9 @@ void Key_SetCatcher(int catcher) {
     if (catcher != keyCatchers)
         Key_ClearStates();
 
+    if ((catcher ^ keyCatchers) & KEYCATCH_UI)
+        Cvar_Set("web_browserActive", (catcher & KEYCATCH_UI) ? "1" : "0");
+
     keyCatchers = catcher;
 }
 

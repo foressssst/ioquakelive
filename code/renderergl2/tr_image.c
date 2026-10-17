@@ -98,7 +98,7 @@ void GL_TextureMode(const char* string) {
 
     for (i = 0; i < tr.numImages; i++) {
         glt = tr.images[i];
-        if (glt->flags & IMGFLAG_MIPMAP && !(glt->flags & IMGFLAG_CUBEMAP)) {
+        if (glt->flags & IMGFLAG_MIPMAP && !(glt->flags & (IMGFLAG_CUBEMAP | IMGFLAG_UI))) {
             qglTextureParameterfEXT(glt->texnum, GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter_min);
             qglTextureParameterfEXT(glt->texnum, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
         }
@@ -1037,6 +1037,31 @@ static void R_MipMap2(byte* in, int inWidth, int inHeight) {
     ri.Hunk_FreeTempMemory(temp);
 }
 
+static void R_MipMapUI(byte* in, int width, int height) {
+    const int outWidth = MAX(1, width >> 1);
+    const int outHeight = MAX(1, height >> 1);
+    const int stepX = width > 1 ? 4 : 0;
+    const int stepY = height > 1 ? width * 4 : 0;
+    byte* out = in;
+    int x, y, k, a, c;
+
+    for (y = 0; y < outHeight; y++) {
+        for (x = 0; x < outWidth; x++, out += 4) {
+            const byte* p = in + (y * 2 * width + x * 2) * 4;
+            const byte* q = p + stepX;
+            const byte* r = p + stepY;
+            const byte* s = r + stepX;
+
+            a = p[3] + q[3] + r[3] + s[3];
+            for (k = 0; k < 3; k++) {
+                c = p[k] * p[3] + q[k] * q[3] + r[k] * r[3] + s[k] * s[3];
+                out[k] = a ? (c + a / 2) / a : 0;
+            }
+            out[3] = (a + 2) >> 2;
+        }
+    }
+}
+
 static void R_MipMap(byte* in, int width, int height) {
     int i, j, row;
     byte* out;
@@ -1618,7 +1643,9 @@ static void RawImage_UploadTexture(GLuint texture, byte* data, int x, int y, int
         }
 
         if (!lastMip && numMips < 2) {
-            if (rgba8 && type != IMGTYPE_NORMAL && type != IMGTYPE_NORMALHEIGHT) {
+            if (rgba8 && (flags & IMGFLAG_UI)) {
+                R_MipMapUI(data, width, height);
+            } else if (rgba8 && type != IMGTYPE_NORMAL && type != IMGTYPE_NORMALHEIGHT) {
                 R_MipMap(data, width, height);
             } else if (glRefConfig.framebufferObject) {
                 qglGenerateTextureMipmapEXT(texture, target);
@@ -1659,7 +1686,7 @@ static void Upload32(byte* data, int x, int y, int width, int height, GLenum pic
         c = width * height;
         scan = data;
 
-        if (type == IMGTYPE_COLORALPHA) {
+        if (type == IMGTYPE_COLORALPHA && !(flags & IMGFLAG_UI)) {
             if (r_greyscale->integer) {
                 for (i = 0; i < c; i++) {
                     byte luma = LUMA(scan[i * 4], scan[i * 4 + 1], scan[i * 4 + 2]);
@@ -1721,8 +1748,12 @@ image_t* R_CreateImage2(const char* name, byte* pic, int width, int height, GLen
     if (!strncmp(name, "*lightmap", 9)) {
         isLightmap = qtrue;
     }
-    if (!Q_stricmpn(name, "webui/", 6)) {
-        flags |= IMGFLAG_NO_COMPRESSION;
+    if (!Q_stricmpn(name, "webui/", 6) || !Q_stricmpn(name, "ui/ioql/", 8)) {
+        flags = (flags & ~IMGFLAG_PICMIP) | IMGFLAG_UI | IMGFLAG_MIPMAP | IMGFLAG_NOLIGHTSCALE | IMGFLAG_NO_COMPRESSION;
+        mipmap = qtrue;
+        picmip = qfalse;
+        if (!internalFormat)
+            internalFormat = GL_RGBA8;
     }
 
     if (tr.numImages == MAX_DRAWIMAGES) {
@@ -1849,7 +1880,7 @@ image_t* R_CreateImage2(const char* name, byte* pic, int width, int height, GLen
 
     if (textureFilterAnisotropic && !cubemap)
         qglTextureParameteriEXT(image->texnum, textureTarget, GL_TEXTURE_MAX_ANISOTROPY_EXT,
-                                mipmap ? (GLint)Com_Clamp(1, maxAnisotropy, r_ext_max_anisotropy->integer) : 1);
+                                mipmap && !(flags & IMGFLAG_UI) ? (GLint)Com_Clamp(1, maxAnisotropy, r_ext_max_anisotropy->integer) : 1);
 
     switch (internalFormat) {
         case GL_DEPTH_COMPONENT:
@@ -1863,8 +1894,15 @@ image_t* R_CreateImage2(const char* name, byte* pic, int width, int height, GLen
             qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             break;
         default:
-            qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_MIN_FILTER, mipmap ? gl_filter_min : GL_LINEAR);
-            qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_MAG_FILTER, mipmap ? gl_filter_max : GL_LINEAR);
+            if (flags & IMGFLAG_UI) {
+                qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+                qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                if (!qglesMajorVersion)
+                    qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_LOD_BIAS, -0.5f);
+            } else {
+                qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_MIN_FILTER, mipmap ? gl_filter_min : GL_LINEAR);
+                qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_MAG_FILTER, mipmap ? gl_filter_max : GL_LINEAR);
+            }
             break;
     }
 

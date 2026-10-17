@@ -164,6 +164,7 @@ typedef struct {
 	int gl_min_filter;
 	qboolean max_lod_1_0;
 	qboolean noAnisotropy;
+	qboolean ui;
 } Vk_Sampler_Def;
 
 typedef enum {

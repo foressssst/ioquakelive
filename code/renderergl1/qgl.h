@@ -62,6 +62,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define GL_TEXTURE_MAX_ANISOTROPY_EXT       0x84FE
 #define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT   0x84FF
 
+#ifndef GL_TEXTURE_LOD_BIAS
+#define GL_TEXTURE_LOD_BIAS                 0x8501
+#endif
+
 #ifndef GL_CLAMP_TO_BORDER
 #define GL_CLAMP_TO_BORDER                  0x812D
 #endif
@@ -194,6 +198,7 @@ typedef char GLchar;
 	GLE( void, glTexCoordPointer, GLint size, GLenum type, GLsizei stride, const GLvoid *pointer ) \
 	GLE( void, glTexEnvi, GLenum target, GLenum pname, GLint param ) \
 	GLE( void, glTexImage2D, GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const GLvoid *pixels ) \
+	GLE( void, glTexParameterf, GLenum target, GLenum pname, GLfloat param ) \
 	GLE( void, glTexParameteri, GLenum target, GLenum pname, GLint param ) \
 	GLE( void, glTexSubImage2D, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid *pixels ) \
 	GLE( void, glVertexPointer, GLint size, GLenum type, GLsizei stride, const GLvoid *pointer ) \

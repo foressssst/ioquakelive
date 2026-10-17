@@ -38,6 +38,7 @@ cvar_t *r_enableColorCorrect;
 cvar_t *r_enablePostProcess;
 cvar_t *r_floatingPointFBOs;
 cvar_t *r_postProcessActive;
+cvar_t *web_browserActive;
 
 typedef enum {
 	QLP_COLORCORRECT,
@@ -83,6 +84,7 @@ void R_QLPostRegister( void ) {
 	r_enablePostProcess = ri.Cvar_Get( "r_enablePostProcess", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
 	r_floatingPointFBOs = ri.Cvar_Get( "r_floatingPointFBOs", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_postProcessActive = ri.Cvar_Get( "r_postProcessActive", "0", CVAR_ROM | CVAR_TEMP );
+	web_browserActive = ri.Cvar_Get( "web_browserActive", "0", CVAR_ROM );
 
 	RI_Cvar_SetGroup( r_contrast, CVG_RENDERER );
 	RI_Cvar_SetGroup( r_bloomBrightThreshold, CVG_RENDERER );
