@@ -4262,7 +4262,7 @@ void Menu_Paint(menuDef_t* menu, qboolean forcePaint) {
         DC->setWidescreen(currentWidescreen);
     }
 
-    if (menu->fullScreen) {
+    if (menu->fullScreen && menu->window.background) {
         float bgW = menu->window.backgroundSize.w;
         if (bgW <= 0.0f) {
             DC->drawHandlePic(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, menu->window.background);

@@ -5099,6 +5099,9 @@ void _UI_SetActiveMenu(uiMenuCommand_t menu) {
 }
 
 qboolean _UI_IsFullscreen(void) {
+    if (UI_Home_InMatch()) {
+        return qfalse;
+    }
     return Menus_AnyFullScreenVisible();
 }
 
