@@ -398,6 +398,10 @@ Q_HOOKABLE void SV_DropClient(client_t* drop, const char* reason) {
 
     drop->reliableSequence = drop->reliableAcknowledge;
     drop->gamestateMessageNum = -1;
+    drop->deferredFirst = 0;
+    drop->deferredCount = 0;
+    drop->csPending = qfalse;
+    drop->overflowDrop = qfalse;
 
     SV_SendServerCommand(NULL, "print \"%s" S_COLOR_WHITE " %s\n\"", drop->name, reason);
 

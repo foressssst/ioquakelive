@@ -155,6 +155,7 @@ typedef struct client_s {
     char deferredCommands[MAX_DEFERRED_COMMANDS][MAX_STRING_CHARS];
     int deferredFirst;
     int deferredCount;
+    qboolean overflowDrop;
     netchan_t netchan;
     netchan_buffer_t* netchan_start_queue;
     netchan_buffer_t** netchan_end_queue;

@@ -118,10 +118,30 @@ void SV_FlushDeferredCommands(client_t* client) {
     }
 }
 
+static void SV_MarkOverflow(client_t* client, const char* cmd) {
+    if (client->overflowDrop) {
+        return;
+    }
+    SV_DumpPendingCommands(client, cmd);
+    client->overflowDrop = qtrue;
+}
+
+static void SV_DropOverflowedClients(void) {
+    client_t* cl;
+    int i;
+
+    for (i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++) {
+        if (cl->overflowDrop) {
+            cl->overflowDrop = qfalse;
+            SV_DropClient(cl, "Server command overflow");
+        }
+    }
+}
+
 void SV_AddServerCommand(client_t* client, const char* cmd) {
     int index, i;
 
-    if (client->state < CS_PRIMED)
+    if (client->state < CS_PRIMED || client->overflowDrop)
         return;
 
     if (client->state == CS_ACTIVE && Q_strncmp(cmd, "disconnect", 10) &&
@@ -132,8 +152,7 @@ void SV_AddServerCommand(client_t* client, const char* cmd) {
             client->deferredCount++;
             return;
         }
-        SV_DumpPendingCommands(client, cmd);
-        SV_DropClient(client, "Server command overflow");
+        SV_MarkOverflow(client, cmd);
         return;
     }
 
@@ -143,12 +162,8 @@ void SV_AddServerCommand(client_t* client, const char* cmd) {
             return;
         }
 
-        Com_Printf("===== pending server commands =====\n");
-        for (i = client->reliableAcknowledge + 1; i <= client->reliableSequence; i++) {
-            Com_Printf("cmd %5d: %s\n", i, client->reliableCommands[i & (MAX_RELIABLE_COMMANDS - 1)]);
-        }
-        Com_Printf("cmd %5d: %s\n", i, cmd);
-        SV_DropClient(client, "Server command overflow");
+        client->reliableSequence--;
+        SV_MarkOverflow(client, cmd);
         return;
     }
     index = client->reliableSequence & (MAX_RELIABLE_COMMANDS - 1);
@@ -1111,6 +1126,8 @@ void SV_Frame(int msec) {
     if (com_speeds->integer) {
         time_game = Sys_Milliseconds() - startTime;
     }
+
+    SV_DropOverflowedClients();
 
     SV_CheckTimeouts();
 
