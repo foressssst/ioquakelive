@@ -34,6 +34,7 @@ const char* Steam_ServerListName(int index);
 #define STEAM_DETAILS_FAILED 3
 qboolean Steam_RequestServerDetails(unsigned int ip, unsigned short port);
 int Steam_ServerDetails(char* rules, int rulesSize, char* players, int playersSize);
+qboolean Steam_ServerDetailsInfo(char* info, int infoSize);
 qboolean Steam_SetFavorite(unsigned int ip, unsigned short port, qboolean favorite);
 
 qboolean Steam_WorkshopUGC(void);

@@ -149,6 +149,7 @@ static struct {
 
     int modal;
     brServer_t modalServer;
+    qboolean modalInfo;
     int modalDetails;
     char modalRules[8192];
     char modalPlayers[4096];
@@ -563,6 +564,7 @@ static char brPendingName[64];
 static void BR_ShowGameInfo(const brServer_t* s) {
     br.modal = BR_MODAL_INFO;
     br.modalServer = *s;
+    br.modalInfo = qfalse;
     br.modalDetails = UI_DETAILS_LOADING;
     br.modalRules[0] = '\0';
     br.modalPlayers[0] = '\0';
@@ -574,14 +576,35 @@ static void BR_ShowGameInfo(const brServer_t* s) {
     }
 }
 
+static void BR_ApplyDetails(brServer_t* s, const char* info) {
+    Q_strncpyz(s->name, Info_ValueForKey(info, "hostname"), sizeof(s->name));
+    Q_strncpyz(s->map, Info_ValueForKey(info, "mapname"), sizeof(s->map));
+    Q_strncpyz(s->gametype, Info_ValueForKey(info, "gamedesc"), sizeof(s->gametype));
+    s->players = atoi(Info_ValueForKey(info, "clients"));
+    s->maxPlayers = atoi(Info_ValueForKey(info, "sv_maxclients"));
+    s->ping = atoi(Info_ValueForKey(info, "ping"));
+    s->password = (qboolean)(atoi(Info_ValueForKey(info, "g_needpass")) != 0);
+    s->vac = (qboolean)(atoi(Info_ValueForKey(info, "sv_vac")) != 0);
+    BR_ParseTags(s, Info_ValueForKey(info, "tags"));
+}
+
+static qboolean BR_ModalReady(void) {
+    return br.modalInfo || br.modalDetails == UI_DETAILS_DONE;
+}
+
 static void BR_PollDetails(void) {
     static char rules[8192];
     static char players[4096];
+    static char info[MAX_INFO_STRING];
     int state = trap_LAN_SteamDetailsGet(rules, sizeof(rules), players, sizeof(players));
 
     if (br.detailsForModal) {
         if (br.modal != BR_MODAL_INFO) {
             return;
+        }
+        if (trap_LAN_SteamDetailsInfo(info, sizeof(info))) {
+            BR_ApplyDetails(&br.modalServer, info);
+            br.modalInfo = qtrue;
         }
         if (state == UI_DETAILS_DONE) {
             Q_strncpyz(br.modalRules, rules, sizeof(br.modalRules));
@@ -1358,7 +1381,7 @@ static void BR_DrawGameInfo(void) {
     SM_Fill(0, 0, smVW, smBottom, brBlack80, NULL);
     SM_Hit(0, 0, smVW, smBottom, BR_HIT_DIALOG, 0, NULL);
     SM_Fill(0, top, smVW, 600, brDialog, NULL);
-    if (br.modalDetails == UI_DETAILS_DONE) {
+    if (BR_ModalReady()) {
         smRect_t box = SM_R(0, top, smVW, 600);
         float shotH = smVW * 1080.0f / 1920.0f;
 
@@ -1366,7 +1389,7 @@ static void BR_DrawGameInfo(void) {
     }
     SM_Fill(left, top, width, 600, brBlack80, NULL);
 
-    if (br.modalDetails != UI_DETAILS_DONE) {
+    if (!BR_ModalReady()) {
         BR_Loader(left + width * 0.5f, top + 300);
         BR_Button(x, y, "Close", qfalse, BR_HIT_MODAL_CLOSE, 0, NULL);
         return;

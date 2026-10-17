@@ -156,6 +156,7 @@ typedef struct {
     void(QDECL* RefreshQuery)(void* self, void* request);
     int(QDECL* ServerRules)(void* self, unsigned int ip, unsigned short port, void* response);
     int(QDECL* PlayerDetails)(void* self, unsigned int ip, unsigned short port, void* response);
+    int(QDECL* PingServer)(void* self, unsigned int ip, unsigned short port, void* response);
     void(QDECL* CancelServerQuery)(void* self, int query);
     void*(QDECL* Lobbies)(void);
     int(QDECL* AddFavoriteGame)(void* self, unsigned int appId, unsigned int ip, unsigned short connPort,
@@ -276,8 +277,12 @@ typedef struct {
 
     steamListResponse_t rulesResponse;
     steamListResponse_t playersResponse;
+    steamListResponse_t pingResponse;
     int rulesQuery;
     int playersQuery;
+    int pingQuery;
+    qboolean infoDone;
+    steamServer_t info;
     int detailsState;
     qboolean playersDone;
     int rulesLen;
@@ -401,6 +406,7 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND_OPT(RefreshQuery, "SteamAPI_ISteamMatchmakingServers_RefreshQuery");
     STEAM_BIND_OPT(ServerRules, "SteamAPI_ISteamMatchmakingServers_ServerRules");
     STEAM_BIND_OPT(PlayerDetails, "SteamAPI_ISteamMatchmakingServers_PlayerDetails");
+    STEAM_BIND_OPT(PingServer, "SteamAPI_ISteamMatchmakingServers_PingServer");
     STEAM_BIND_OPT(CancelServerQuery, "SteamAPI_ISteamMatchmakingServers_CancelServerQuery");
     STEAM_BIND_OPT(Lobbies, "SteamMatchmaking");
     STEAM_BIND_OPT(AddFavoriteGame, "SteamAPI_ISteamMatchmaking_AddFavoriteGame");
@@ -581,6 +587,7 @@ SD_VOID(CancelQuery, 8, (void* self, void* a), (self, a))
 SD_VOID(RefreshQuery, 9, (void* self, void* a), (self, a))
 SD_RET(steamBool_t, IsRefreshing, 10, (void* self, void* a), (self, a))
 SD_RET(int, GetServerCount, 11, (void* self, void* a), (self, a))
+SD_RET(int, PingServer, 13, (void* self, unsigned int a, unsigned short b, void* c), (self, a, b, c))
 SD_RET(int, PlayerDetails, 14, (void* self, unsigned int a, unsigned short b, void* c), (self, a, b, c))
 SD_RET(int, ServerRules, 15, (void* self, unsigned int a, unsigned short b, void* c), (self, a, b, c))
 SD_VOID(CancelServerQuery, 16, (void* self, int a), (self, a))
@@ -918,6 +925,7 @@ static void SD_Bind(void) {
     SD_SET(CancelQuery);
     SD_SET(RefreshQuery);
     SD_SET(ServerRules);
+    SD_SET(PingServer);
     SD_SET(PlayerDetails);
     SD_SET(CancelServerQuery);
     SD_SET(Lobbies);
@@ -1558,6 +1566,22 @@ static void Steam_ServerListReset(void) {
     st.listRefreshing = qfalse;
 }
 
+static void Steam_CopyServer(steamServer_t* out, const steamServerItem_t* item) {
+    out->ip = item->ip;
+    out->port = item->connectionPort;
+    out->ping = item->ping;
+    out->players = item->players;
+    out->maxPlayers = item->maxPlayers;
+    out->bots = item->botPlayers;
+    out->password = (qboolean)(item->password != 0);
+    out->secure = (qboolean)(item->secure != 0);
+    Q_strncpyz(out->name, item->serverName, sizeof(out->name));
+    Q_strncpyz(out->map, item->map, sizeof(out->map));
+    Q_strncpyz(out->gameDir, item->gameDir, sizeof(out->gameDir));
+    Q_strncpyz(out->description, item->gameDescription, sizeof(out->description));
+    Q_strncpyz(out->tags, item->gameTags, sizeof(out->tags));
+}
+
 static void Steam_ServerListAdd(void* request, int index) {
     steamServerItem_t* item;
     steamServer_t* out;
@@ -1585,19 +1609,7 @@ static void Steam_ServerListAdd(void* request, int index) {
         out = &st.servers[st.numServers++];
         out->queued = qfalse;
     }
-    out->ip = item->ip;
-    out->port = item->connectionPort;
-    out->ping = item->ping;
-    out->players = item->players;
-    out->maxPlayers = item->maxPlayers;
-    out->bots = item->botPlayers;
-    out->password = (qboolean)(item->password != 0);
-    out->secure = (qboolean)(item->secure != 0);
-    Q_strncpyz(out->name, item->serverName, sizeof(out->name));
-    Q_strncpyz(out->map, item->map, sizeof(out->map));
-    Q_strncpyz(out->gameDir, item->gameDir, sizeof(out->gameDir));
-    Q_strncpyz(out->description, item->gameDescription, sizeof(out->description));
-    Q_strncpyz(out->tags, item->gameTags, sizeof(out->tags));
+    Steam_CopyServer(out, item);
 }
 
 static void STEAM_CB Steam_CB_ServerResponded(STEAM_CB_SELF, void* request, int index) {
@@ -1784,6 +1796,21 @@ static void STEAM_CB Steam_CB_PlayersComplete(STEAM_CB_SELF) {
     st.playersDone = qtrue;
 }
 
+static void STEAM_CB Steam_CB_PingResponded(STEAM_CB_SELF, const steamServerItem_t* item) {
+    (void)self;
+    st.pingQuery = 0;
+    if (item) {
+        Steam_CopyServer(&st.info, item);
+        st.infoDone = qtrue;
+    }
+}
+
+static void STEAM_CB Steam_CB_PingFailed(STEAM_CB_SELF) {
+    (void)self;
+    st.pingQuery = 0;
+}
+
+static void* steamPingVTable[2];
 static void* steamRulesVTable[3];
 static void* steamPlayersVTable[3];
 
@@ -1794,8 +1821,12 @@ static void Steam_CancelDetails(void) {
     if (st.playersQuery && st.CancelServerQuery) {
         st.CancelServerQuery(st.matchmaking, st.playersQuery);
     }
+    if (st.pingQuery && st.CancelServerQuery) {
+        st.CancelServerQuery(st.matchmaking, st.pingQuery);
+    }
     st.rulesQuery = 0;
     st.playersQuery = 0;
+    st.pingQuery = 0;
 }
 
 qboolean Steam_RequestServerDetails(unsigned int ip, unsigned short port) {
@@ -1812,13 +1843,21 @@ qboolean Steam_RequestServerDetails(unsigned int ip, unsigned short port) {
     steamPlayersVTable[1] = (void*)Steam_CB_PlayersFailed;
     steamPlayersVTable[2] = (void*)Steam_CB_PlayersComplete;
     st.playersResponse.vtable = steamPlayersVTable;
+    steamPingVTable[0] = (void*)Steam_CB_PingResponded;
+    steamPingVTable[1] = (void*)Steam_CB_PingFailed;
+    st.pingResponse.vtable = steamPingVTable;
 
     st.rulesLen = 0;
     st.rules[0] = '\0';
     st.playersLen = 0;
     st.players[0] = '\0';
     st.playersDone = qfalse;
+    st.infoDone = qfalse;
     st.detailsState = STEAM_DETAILS_LOADING;
+
+    if (st.PingServer) {
+        st.pingQuery = st.PingServer(st.matchmaking, ip, port, &st.pingResponse);
+    }
 
     st.rulesQuery = st.ServerRules(st.matchmaking, ip, port, &st.rulesResponse);
     st.playersQuery = st.PlayerDetails(st.matchmaking, ip, port, &st.playersResponse);
@@ -1870,22 +1909,12 @@ const char* Steam_ServerListName(int index) {
     return st.servers[index].name;
 }
 
-qboolean Steam_ServerListGet(int index, unsigned int* ip, unsigned short* port, int* ping, char* info,
-                             int infoSize) {
-    const steamServer_t* s;
+static void Steam_ServerInfoString(const steamServer_t* s, char* info, int infoSize) {
     char firstTag[32];
     char name[64], map[32], desc[64], tags[128];
     const char* comma;
     int gametype;
     int i;
-
-    if (index < 0 || index >= st.numServers) {
-        return qfalse;
-    }
-    s = &st.servers[index];
-    *ip = s->ip;
-    *port = s->port;
-    *ping = s->ping;
 
     Q_strncpyz(firstTag, s->tags, sizeof(firstTag));
     comma = strchr(firstTag, ',');
@@ -1908,6 +1937,33 @@ qboolean Steam_ServerListGet(int index, unsigned int* ip, unsigned short* port, 
                 s->players, s->players - s->bots, s->maxPlayers, s->gameDir, gametype, s->password ? 1 : 0,
                 s->secure ? 1 : 0, Steam_InfoValue(s->tags, tags, sizeof(tags)),
                 Steam_InfoValue(s->description, desc, sizeof(desc)));
+}
+
+qboolean Steam_ServerListGet(int index, unsigned int* ip, unsigned short* port, int* ping, char* info,
+                             int infoSize) {
+    const steamServer_t* s;
+
+    if (index < 0 || index >= st.numServers) {
+        return qfalse;
+    }
+    s = &st.servers[index];
+    *ip = s->ip;
+    *port = s->port;
+    *ping = s->ping;
+    Steam_ServerInfoString(s, info, infoSize);
+    return qtrue;
+}
+
+qboolean Steam_ServerDetailsInfo(char* info, int infoSize) {
+    if (!info || infoSize <= 0) {
+        return qfalse;
+    }
+    info[0] = '\0';
+    if (!st.infoDone) {
+        return qfalse;
+    }
+    Steam_ServerInfoString(&st.info, info, infoSize);
+    Q_strcat(info, infoSize, va("\\ping\\%i", st.info.ping));
     return qtrue;
 }
 

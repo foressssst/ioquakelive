@@ -229,6 +229,10 @@ int trap_LAN_SteamDetailsGet(char* rules, int rulesSize, char* players, int play
     return syscall(UI_LAN_STEAM_DETAILS_GET, rules, rulesSize, players, playersSize);
 }
 
+qboolean trap_LAN_SteamDetailsInfo(char* info, int infoSize) {
+    return syscall(UI_LAN_STEAM_DETAILS_INFO, info, infoSize);
+}
+
 qboolean trap_LAN_SteamFavorite(const char* address, qboolean favorite) {
     return syscall(UI_LAN_STEAM_FAVORITE, address, favorite);
 }
