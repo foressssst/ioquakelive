@@ -561,7 +561,7 @@ static cvarTable_t gameCvarTable[] = {
     {&g_cheats, "sv_cheats", "", 0, 0, NULL},
 
     {&gamedate, "gamedate", "May 25 2016", CVAR_ROM, 0, NULL},
-    {&g_version, "g_version", "1069 win-x86 May 25 2016 15:18:16", CVAR_ROM, 0, NULL},
+    {&g_version, "g_version", G_RETAIL_VERSION, CVAR_ROM, 0, NULL},
     {&g_restarted, "g_restarted", "0", CVAR_ROM, 0, NULL},
 
     {&g_gametype, "g_gametype", "0", CVAR_ROM | CVAR_LATCH | CVAR_SERVERINFO, 0, NULL},

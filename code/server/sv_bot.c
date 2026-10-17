@@ -349,7 +349,7 @@ int SV_BotLibShutdown(void) {
 }
 
 void SV_BotInitCvars(void) {
-    Cvar_Get("bot_enable", "1", 0);
+    Cvar_Get("bot_enable", SV_BOT_ENABLE, CVAR_LATCH);
     Cvar_Get("bot_developer", "0", CVAR_CHEAT);
     Cvar_Get("bot_debug", "0", CVAR_CHEAT);
     Cvar_Get("bot_maxdebugpolys", "2", 0);
@@ -361,7 +361,7 @@ void SV_BotInitCvars(void) {
     Cvar_Get("bot_forcewrite", "0", 0);
     Cvar_Get("bot_aasoptimize", "0", 0);
     Cvar_Get("bot_saveroutingcache", "0", 0);
-    Cvar_Get("bot_thinktime", "100", CVAR_CHEAT);
+    Cvar_Get("bot_thinktime", "100", 0);
     Cvar_Get("bot_reloadcharacters", "0", 0);
     Cvar_Get("bot_testichat", "0", 0);
     Cvar_Get("bot_testrchat", "0", 0);
@@ -371,7 +371,7 @@ void SV_BotInitCvars(void) {
     Cvar_Get("bot_nochat", "0", 0);
     Cvar_Get("bot_pause", "0", CVAR_CHEAT);
     Cvar_Get("bot_report", "0", CVAR_CHEAT);
-    Cvar_Get("bot_grapple", "0", 0);
+    Cvar_Get("bot_grapple", "1", 0);
     Cvar_Get("bot_rocketjump", "1", 0);
     Cvar_Get("bot_challenge", "0", 0);
     Cvar_Get("bot_minplayers", "0", 0);

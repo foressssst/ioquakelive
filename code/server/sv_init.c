@@ -572,16 +572,21 @@ void SV_Init(void) {
     sv_dlRate = Cvar_Get("sv_dlRate", "100", CVAR_ARCHIVE);
     sv_minPing = Cvar_Get("sv_minPing", "0", CVAR_ARCHIVE);
     sv_maxPing = Cvar_Get("sv_maxPing", "0", CVAR_ARCHIVE);
+#ifdef DEDICATED
+    sv_serverType = Cvar_Get("sv_serverType", "2", CVAR_ARCHIVE);
+#else
     sv_serverType = Cvar_Get("sv_serverType", "0", CVAR_ARCHIVE);
+#endif
     sv_floodProtect = Cvar_Get("sv_floodProtect", "10", CVAR_ARCHIVE);
 
     sv_master = Cvar_Get("sv_master", "1", CVAR_ARCHIVE);
-    sv_idleExit = Cvar_Get("sv_idleExit", "120", CVAR_ARCHIVE);
+    sv_idleExit = Cvar_Get("sv_idleExit", "120", 0);
     sv_errorExit = Cvar_Get("sv_errorExit", "1", 0);
 #ifdef DEDICATED
     sv_workshopFile = Cvar_Get("sv_workshopFile", "workshop.txt", CVAR_ARCHIVE);
 #endif
-    sv_quitOnEmpty = Cvar_Get("sv_quitOnEmpty", "0", CVAR_ARCHIVE);
+    sv_quitOnEmpty = Cvar_Get("sv_quitOnEmpty", "0", 0);
+    Cvar_Get("sv_cylinderScale", "1.1f", 0);
     sv_fullRedirect = Cvar_Get("sv_fullRedirect", "", CVAR_ARCHIVE);
 
     Cvar_Get("sv_referencedSteamworks", "", CVAR_ROM);
@@ -615,6 +620,8 @@ void SV_Init(void) {
     sv_banFile = Cvar_Get("sv_banFile", "serverbans.dat", CVAR_ARCHIVE);
     sv_altEntDir = Cvar_Get("sv_altEntDir", "", 0);
     sv_dumpEntities = Cvar_Get("sv_dumpEntities", "0", 0);
+
+    Cvar_Get("sv_tags", "", CVAR_ARCHIVE);
 
     SV_BotInitCvars();
 

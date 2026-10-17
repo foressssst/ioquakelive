@@ -520,7 +520,8 @@ void ZMQ_StatsInit(void) {
     if (!ip[0]) {
         netadr_t adr;
 
-        if (NET_StringToAdr(Cvar_VariableString("net_ip"), &adr, NA_IP)) {
+        if (Q_stricmp(Cvar_VariableString("net_ip"), "localhost") &&
+            NET_StringToAdr(Cvar_VariableString("net_ip"), &adr, NA_IP)) {
             Com_sprintf(ip, sizeof(ip), "%i.%i.%i.%i", adr.ip[0], adr.ip[1], adr.ip[2], adr.ip[3]);
         } else {
             Q_strncpyz(ip, "0.0.0.0", sizeof(ip));

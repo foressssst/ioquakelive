@@ -1197,7 +1197,8 @@ void Steam_GS_Init(void) {
     sv_vac = Cvar_Get("sv_vac", "1", CVAR_INIT);
     sv_setSteamAccount = Cvar_Get("sv_setSteamAccount", "", CVAR_ARCHIVE);
 
-    if (Cvar_VariableString("net_ip")[0] && NET_StringToAdr(Cvar_VariableString("net_ip"), &adr, NA_IP)) {
+    if (Cvar_VariableString("net_ip")[0] && Q_stricmp(Cvar_VariableString("net_ip"), "localhost") &&
+        NET_StringToAdr(Cvar_VariableString("net_ip"), &adr, NA_IP)) {
         ip = (adr.ip[0] << 24) | (adr.ip[1] << 16) | (adr.ip[2] << 8) | adr.ip[3];
     }
     port = Cvar_VariableIntegerValue("net_port");

@@ -64,6 +64,7 @@ cvar_t* com_timedemo;
 cvar_t* com_sv_running;
 cvar_t* com_cl_running;
 cvar_t* com_logfile;
+static cvar_t* com_appendLogfile;
 cvar_t* com_pipefile;
 cvar_t* com_showtrace;
 cvar_t* com_version;
@@ -215,7 +216,8 @@ Q_HOOKABLE void QDECL Com_Printf(const char* fmt, ...) {
             time(&aclock);
             newtime = localtime(&aclock);
 
-            logfile = FS_FOpenFileWrite("qconsole.log");
+            logfile = com_appendLogfile && com_appendLogfile->integer ? FS_FOpenFileAppend("qconsole.log")
+                                                                       : FS_FOpenFileWrite("qconsole.log");
 
             if (logfile) {
                 Com_Printf("logfile opened on %s\n", asctime(newtime));
@@ -2105,6 +2107,8 @@ void Com_Init(char* commandLine) {
     com_blood = Cvar_Get("com_blood", "1", CVAR_ARCHIVE);
 
     com_logfile = Cvar_Get("logfile", "0", CVAR_TEMP);
+    com_appendLogfile = Cvar_Get("appendlogfile", "0", CVAR_TEMP);
+    Cvar_Get("com_build", "0", 0);
 
     com_timescale = Cvar_Get("timescale", "1", CVAR_CHEAT | CVAR_SYSTEMINFO);
     com_fixedtime = Cvar_Get("fixedtime", "0", CVAR_CHEAT);

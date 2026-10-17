@@ -1271,7 +1271,7 @@ static void SV_LoadGameProgs(void) {
     dllEntryProc dllEntry;
     char dllPath[MAX_OSPATH];
 
-    var = Cvar_Get("bot_enable", "1", CVAR_LATCH);
+    var = Cvar_Get("bot_enable", SV_BOT_ENABLE, CVAR_LATCH);
     bot_enable = var ? var->integer : 0;
 
     if (FS_ExtractGamecode("qagame", dllPath) && dllPath[0] != '\0') {

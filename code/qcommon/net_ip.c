@@ -718,7 +718,7 @@ SOCKET NET_IPSocket(char* net_interface, int port, int* err) {
         Com_Printf("WARNING: NET_IPSocket: setsockopt SO_BROADCAST: %s\n", NET_ErrorString());
     }
 
-    if (!net_interface || !net_interface[0]) {
+    if (!net_interface || !net_interface[0] || !Q_stricmp(net_interface, "localhost")) {
         address.sin_family = AF_INET;
         address.sin_addr.s_addr = INADDR_ANY;
     } else {
@@ -1156,7 +1156,9 @@ void NET_OpenIP(void) {
     }
 
     if (net_enabled->integer & NET_ENABLEV4) {
-        for (i = 0; i < 10; i++) {
+        int tries = Cvar_VariableIntegerValue("net_strict") ? 1 : 10;
+
+        for (i = 0; i < tries; i++) {
             ip_socket = NET_IPSocket(net_ip->string, port + i, &err);
             if (ip_socket != INVALID_SOCKET) {
                 Cvar_SetValue("net_port", port + i);
@@ -1174,8 +1176,7 @@ void NET_OpenIP(void) {
         if (ip_socket == INVALID_SOCKET) {
             Com_Printf("WARNING: Couldn't bind to a v4 ip address.\n");
             if (Cvar_VariableIntegerValue("net_strict")) {
-                Com_Error(ERR_FATAL, "net_strict: couldn't bind to %s:%i",
-                          net_ip->string[0] ? net_ip->string : "0.0.0.0", port);
+                Com_Error(ERR_FATAL, "net_strict enabled: couldn't allocate %s:%i", net_ip->string, port);
             }
         }
     }
@@ -1188,13 +1189,13 @@ static qboolean NET_GetCvars(void) {
     net_enabled = Cvar_Get("net_enabled", "1", CVAR_LATCH | CVAR_ARCHIVE);
 #else
     net_enabled = Cvar_Get("net_enabled", "3", CVAR_LATCH | CVAR_ARCHIVE);
-    Cvar_Get("net_strict", "0", CVAR_LATCH | CVAR_ARCHIVE);
     Cvar_Get("net_noudp", "0", CVAR_LATCH);
 #endif
+    Cvar_Get("net_strict", "0", 0);
     modified = net_enabled->modified;
     net_enabled->modified = qfalse;
 
-    net_ip = Cvar_Get("net_ip", "0.0.0.0", CVAR_LATCH);
+    net_ip = Cvar_Get("net_ip", "localhost", CVAR_LATCH);
     modified += net_ip->modified;
     net_ip->modified = qfalse;
 

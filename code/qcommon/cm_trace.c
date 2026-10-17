@@ -616,7 +616,7 @@ void CM_TraceThroughVerticalCylinder(traceWork_t* tw, vec3_t origin, float radiu
     vec3_t v1, dir, start2d, end2d, org2d, intersection;
 
     if (!sv_cylinderScale) {
-        sv_cylinderScale = Cvar_Get("sv_cylinderScale", "1.1", 0);
+        sv_cylinderScale = Cvar_Get("sv_cylinderScale", "1.1f", 0);
     }
     radius *= sv_cylinderScale->value;
 

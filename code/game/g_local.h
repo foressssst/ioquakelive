@@ -981,6 +981,12 @@ void BotTestAAS(vec3_t origin);
 
 #include "g_team.h"
 
+#if defined(__linux__) && defined(__x86_64__)
+#define G_RETAIL_VERSION "1069 linux-x64 May 25 2016 20:02:46"
+#else
+#define G_RETAIL_VERSION "1069 win-x86 May 25 2016 15:18:16"
+#endif
+
 extern level_locals_t level;
 extern const minqlxHooks_t* g_minqlxHooks;
 extern gentity_t g_entities[MAX_GENTITIES];
