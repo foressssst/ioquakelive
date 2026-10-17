@@ -67,7 +67,7 @@ qboolean SpotWouldTelefrag(gentity_t* spot) {
     return qfalse;
 }
 
-#define MAX_SPAWN_POINTS 128
+#define MAX_SPAWN_POINTS 256
 gentity_t* SelectNearestDeathmatchSpawnPoint(vec3_t from) {
     gentity_t* spot;
     vec3_t delta;
@@ -90,7 +90,7 @@ gentity_t* SelectNearestDeathmatchSpawnPoint(vec3_t from) {
     return nearestSpot;
 }
 
-#define MAX_SPAWN_POINTS 128
+#define MAX_SPAWN_POINTS 256
 gentity_t* SelectRandomDeathmatchSpawnPoint(qboolean isbot) {
     gentity_t* spot;
     int count;

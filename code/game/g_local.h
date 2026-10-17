@@ -431,8 +431,8 @@ struct gclient_s {
     int queuedSpectatorClient;
 };
 
-#define MAX_SPAWN_VARS 64
-#define MAX_SPAWN_VARS_CHARS 4096
+#define MAX_SPAWN_VARS 256
+#define MAX_SPAWN_VARS_CHARS 16384
 
 typedef struct {
     roundStateState_t   eCurrent;
@@ -485,9 +485,9 @@ typedef struct {
     int             pendingVoteCaller;
     qboolean        spawning;
     int             numSpawnVars;
-    char            *spawnVars[64][2];
+    char            *spawnVars[MAX_SPAWN_VARS][2];
     int             numSpawnVarChars;
-    char            spawnVarChars[4096];
+    char            spawnVarChars[MAX_SPAWN_VARS_CHARS];
     int             intermissionQueued;
     int             intermissionTime;
     qboolean        readyToExit;

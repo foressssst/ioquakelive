@@ -1974,8 +1974,8 @@ qboolean Steam_ServerDetailsInfo(char* info, int infoSize) {
 #define STEAM_CB_DOWNLOAD_RESULT 3406
 #define STEAM_CB_FLAG_GAMESERVER 0x02
 
-#define STEAM_WORKSHOP_FOLDERS 256
-#define STEAM_WORKSHOP_QUEUE 256
+#define STEAM_WORKSHOP_FOLDERS 1024
+#define STEAM_WORKSHOP_QUEUE 1024
 
 #ifdef _WIN32
 #pragma pack(push, 8)
