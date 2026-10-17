@@ -1705,6 +1705,7 @@ static void CG_RegisterGraphics(void) {
     cgs.media.connectionShader = trap_R_RegisterShader("disconnected");
 
     cgs.media.waterBubbleShader = trap_R_RegisterShader("waterBubble");
+    cgs.media.vignetteShader = trap_R_RegisterShader("gfx/misc/vignette");
 
     cgs.media.timerIcons[TIMER_ICON_ARMOR] = trap_R_RegisterShader("gfx/2d/timer/armor");
     cgs.media.timerIcons[TIMER_ICON_BS] = trap_R_RegisterShader("gfx/2d/timer/bs");
