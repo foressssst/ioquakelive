@@ -98,6 +98,8 @@ typedef struct netchan_buffer_s {
     struct netchan_buffer_s* next;
 } netchan_buffer_t;
 
+#define MAX_DEFERRED_COMMANDS 128
+
 typedef struct client_s {
     clientState_t state;
     char userinfo[MAX_INFO_STRING];
@@ -149,6 +151,10 @@ typedef struct client_s {
     int pureAuthentic;
     qboolean gotCP;
     qboolean csUpdated[MAX_CONFIGSTRINGS];
+    qboolean csPending;
+    char deferredCommands[MAX_DEFERRED_COMMANDS][MAX_STRING_CHARS];
+    int deferredFirst;
+    int deferredCount;
     netchan_t netchan;
     netchan_buffer_t* netchan_start_queue;
     netchan_buffer_t** netchan_end_queue;
@@ -315,6 +321,7 @@ int SV_RateMsec(client_t* client);
 void SV_SetConfigstring(int index, const char* val);
 void SV_GetConfigstring(int index, char* buffer, int bufferSize);
 void SV_UpdateConfigstrings(client_t* client);
+void SV_FlushPendingConfigstrings(client_t* client);
 
 void SV_SetUserinfo(int index, const char* val);
 void SV_GetUserinfo(int index, char* buffer, int bufferSize);
@@ -362,6 +369,7 @@ int SV_SendDownloadMessages(void);
 int SV_SendQueuedMessages(void);
 
 void SV_AddServerCommand(client_t* client, const char* cmd);
+void SV_FlushDeferredCommands(client_t* client);
 void SV_UpdateServerCommandsToClient(client_t* client, msg_t* msg);
 void SV_WriteFrameToClient(client_t* client, msg_t* msg);
 void SV_SendMessageToClient(msg_t* msg, client_t* client);

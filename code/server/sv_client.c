@@ -436,6 +436,9 @@ static void SV_SendClientGameState(client_t* client) {
     client->gotCP = qfalse;
 
     Com_Memset(client->csUpdated, 0, sizeof(client->csUpdated));
+    client->csPending = qfalse;
+    client->deferredFirst = 0;
+    client->deferredCount = 0;
 
     client->gamestateMessageNum = client->netchan.outgoingSequence;
 

@@ -86,11 +86,56 @@ static char* SV_ExpandNewlines(char* in) {
     return string;
 }
 
+#define SV_RELIABLE_ROOM (MAX_RELIABLE_COMMANDS - 4)
+
+static void SV_DumpPendingCommands(client_t* client, const char* cmd) {
+    int i;
+
+    Com_Printf("===== pending server commands =====\n");
+    for (i = client->reliableAcknowledge + 1; i <= client->reliableSequence; i++) {
+        Com_Printf("cmd %5d: %s\n", i, client->reliableCommands[i & (MAX_RELIABLE_COMMANDS - 1)]);
+    }
+    for (i = 0; i < client->deferredCount; i++) {
+        Com_Printf("deferred %3d: %s\n", i,
+                   client->deferredCommands[(client->deferredFirst + i) % MAX_DEFERRED_COMMANDS]);
+    }
+    Com_Printf("cmd %5d: %s\n", client->reliableSequence + 1, cmd);
+}
+
+void SV_FlushDeferredCommands(client_t* client) {
+    int index;
+
+    while (client->deferredCount > 0 && client->reliableSequence - client->reliableAcknowledge < SV_RELIABLE_ROOM) {
+        client->reliableSequence++;
+        index = client->reliableSequence & (MAX_RELIABLE_COMMANDS - 1);
+        Q_strncpyz(client->reliableCommands[index], client->deferredCommands[client->deferredFirst],
+                   sizeof(client->reliableCommands[index]));
+        client->deferredFirst = (client->deferredFirst + 1) % MAX_DEFERRED_COMMANDS;
+        client->deferredCount--;
+    }
+    if (client->csPending && client->deferredCount == 0) {
+        SV_FlushPendingConfigstrings(client);
+    }
+}
+
 void SV_AddServerCommand(client_t* client, const char* cmd) {
     int index, i;
 
     if (client->state < CS_PRIMED)
         return;
+
+    if (client->state == CS_ACTIVE && Q_strncmp(cmd, "disconnect", 10) &&
+        (client->deferredCount > 0 || client->reliableSequence - client->reliableAcknowledge >= SV_RELIABLE_ROOM)) {
+        if (client->deferredCount < MAX_DEFERRED_COMMANDS) {
+            i = (client->deferredFirst + client->deferredCount) % MAX_DEFERRED_COMMANDS;
+            Q_strncpyz(client->deferredCommands[i], cmd, sizeof(client->deferredCommands[i]));
+            client->deferredCount++;
+            return;
+        }
+        SV_DumpPendingCommands(client, cmd);
+        SV_DropClient(client, "Server command overflow");
+        return;
+    }
 
     client->reliableSequence++;
     if (client->reliableSequence - client->reliableAcknowledge == MAX_RELIABLE_COMMANDS + 1) {

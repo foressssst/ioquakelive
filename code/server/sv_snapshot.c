@@ -453,6 +453,9 @@ void SV_SendClientMessages(void) {
             }
         }
 
+        if (c->state == CS_ACTIVE && (c->deferredCount > 0 || c->csPending)) {
+            SV_FlushDeferredCommands(c);
+        }
         SV_SendClientSnapshot(c);
         c->nextSnapshotTime = svs.time;
         c->rateDelayed = qfalse;

@@ -58,6 +58,27 @@ static void SV_SendConfigstring(client_t* client, int index) {
     }
 }
 
+void SV_FlushPendingConfigstrings(client_t* client) {
+    int index;
+
+    client->csPending = qfalse;
+    for (index = 0; index < MAX_CONFIGSTRINGS; index++) {
+        if (!client->csUpdated[index]) {
+            continue;
+        }
+        if (client->deferredCount > 0 ||
+            client->reliableSequence - client->reliableAcknowledge >= MAX_RELIABLE_COMMANDS / 2) {
+            client->csPending = qtrue;
+            return;
+        }
+        client->csUpdated[index] = qfalse;
+        if (index == CS_SERVERINFO && client->gentity && (client->gentity->r.svFlags & SVF_NOSERVERINFO)) {
+            continue;
+        }
+        SV_SendConfigstring(client, index);
+    }
+}
+
 void SV_UpdateConfigstrings(client_t* client) {
     int index;
 
@@ -110,6 +131,13 @@ Q_HOOKABLE void SV_SetConfigstring(int index, const char* val) {
 
             if (client->state == CS_PRIMED) {
                 client->csUpdated[index] = qtrue;
+                continue;
+            }
+
+            if (client->csPending || client->deferredCount > 0 ||
+                client->reliableSequence - client->reliableAcknowledge >= MAX_RELIABLE_COMMANDS / 2) {
+                client->csUpdated[index] = qtrue;
+                client->csPending = qtrue;
                 continue;
             }
 
