@@ -2930,6 +2930,8 @@ static void CG_DrawSpecTeamVitals(void) {
 	clientInfo_t* ci;
 	gitem_t* item;
 	char name[40], cut[40];
+	char* in;
+	char* out;
 
 	if (!cg_specTeamVitals.integer || cg.showJoinMenu || cgs.gametype < GT_TEAM) {
 		return;
@@ -2999,12 +3001,20 @@ static void CG_DrawSpecTeamVitals(void) {
 		}
 
 		Q_strncpyz(name, ci->name, sizeof(name));
-		Q_CleanStr(name);
+		for (in = out = name; *in; in++) {
+			if ((unsigned char)*in >= ' ') {
+				*out++ = *in;
+			}
+		}
+		*out = 0;
 		len = strlen(name);
 		if (CG_OverheadTextWidth(name, 0, 0.18f, len) > width - numberWidth) {
 			do {
 				len--;
 			} while (len > 1 && CG_OverheadTextWidth(name, 0, 0.18f, len) > width - numberWidth);
+			while (len > 2 && ((name[len - 1] & 0xc0) == 0x80 || name[len - 2] == Q_COLOR_ESCAPE)) {
+				len--;
+			}
 			Q_strncpyz(cut, name, len);
 			len += 3;
 			Q_strncpyz(name, va("%s%s", cut, "..."), sizeof(name));

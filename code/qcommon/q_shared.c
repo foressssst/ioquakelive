@@ -791,7 +791,7 @@ char* Q_CleanStr(char* string) {
     while ((c = *s) != 0) {
         if (Q_IsColorString(s)) {
             s++;
-        } else if (c >= 0x20 && c <= 0x7E) {
+        } else if ((unsigned char)c >= 0x20) {
             *d++ = c;
         }
         s++;
