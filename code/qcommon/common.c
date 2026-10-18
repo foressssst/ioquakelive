@@ -3209,6 +3209,35 @@ void Field_CompleteFilename(const char* dir,
         FS_FilenameCompletion(dir, ext, stripExt, PrintMatches, allowNonPureFilesOnDisk);
 }
 
+static void Field_CompleteAnyArgument(const char* baseCmd, char* args, int argNum) {
+#ifndef DEDICATED
+    if (CL_CompleteArgumentAlias(baseCmd, args, argNum))
+        return;
+#endif
+
+    if (completionString[0] == '\\' || completionString[0] == '/')
+        completionString++;
+
+    Field_BeginMatches();
+
+    if (!completionString[0])
+        return;
+
+    Cmd_CommandCompletion(FindMatches);
+    Cvar_CommandCompletion(FindMatches);
+#ifndef DEDICATED
+    CL_ArgumentCompletion(FindMatches);
+#endif
+
+    if (!Field_Complete()) {
+        Cmd_CommandCompletion(PrintMatches);
+        Cvar_CommandCompletion(PrintCvarMatches);
+#ifndef DEDICATED
+        CL_ArgumentCompletion(PrintMatches);
+#endif
+    }
+}
+
 void Field_CompleteCommand(char* cmd,
                            qboolean doCommands,
                            qboolean doCvars) {
@@ -3254,8 +3283,8 @@ void Field_CompleteCommand(char* cmd,
 
         if ((p = Field_FindFirstSeparator(cmd)))
             Field_CompleteCommand(p + 1, qtrue, qtrue);
-        else
-            Cmd_CompleteArgument(baseCmd, cmd, completionArgument);
+        else if (!Cmd_CompleteArgument(baseCmd, cmd, completionArgument))
+            Field_CompleteAnyArgument(baseCmd, cmd, completionArgument);
     } else {
         if (completionString[0] == '\\' || completionString[0] == '/')
             completionString++;

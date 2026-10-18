@@ -296,7 +296,7 @@ void Cmd_RemoveCommandSafe(const char* cmd_name);
 void Cmd_CommandCompletion(void (*callback)(const char* s));
 void Cmd_SetCommandCompletionFunc(const char* command,
                                   completionFunc_t complete);
-void Cmd_CompleteArgument(const char* command, char* args, int argNum);
+qboolean Cmd_CompleteArgument(const char* command, char* args, int argNum);
 void Cmd_CompleteCfgName(char* args, int argNum);
 
 int Cmd_Argc(void);
@@ -740,6 +740,8 @@ void CL_StartHunkUsers(qboolean rendererOnly);
 void CL_Snd_Shutdown(void);
 
 void Key_KeynameCompletion(void (*callback)(const char* s));
+qboolean CL_CompleteArgumentAlias(const char* cmd, char* args, int argNum);
+void CL_ArgumentCompletion(void (*callback)(const char* s));
 
 void Key_WriteBindings(fileHandle_t f);
 

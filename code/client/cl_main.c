@@ -551,6 +551,24 @@ static void CL_CompleteCallvote(char* args, int argNum) {
     Field_CompleteList(names, count);
 }
 
+qboolean CL_CompleteArgumentAlias(const char* cmd, char* args, int argNum) {
+    if (!Q_stricmp(cmd, "cv")) {
+        CL_CompleteCallvote(args, argNum);
+        return qtrue;
+    }
+    return qfalse;
+}
+
+void CL_ArgumentCompletion(void (*callback)(const char* s)) {
+    static const char* names[MAX_COMPLETION_NAMES];
+    int count = SV_ArenaNameList(names, ARRAY_LEN(names));
+    int i;
+
+    for (i = 0; i < count; i++) {
+        callback(names[i]);
+    }
+}
+
 static void CL_CompleteGameCommand(char* args, int argNum) {
     static const char* teamNames[] = {"red", "blue", "spectator", "free", "follow1", "follow2"};
     static const char* sideNames[] = {"red", "blue", "spectator", "free"};
