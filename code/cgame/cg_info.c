@@ -290,12 +290,14 @@ static void CG_DrawLoadingCard(qhandle_t levelshot, float s1, float s2) {
 
 static void CG_DrawLoadingPoster(qhandle_t levelshot, float s1, float s2) {
     const char* info = CG_ConfigString(CS_SERVERINFO);
-    char title[MAX_QPATH], host[MAX_QPATH], mode[MAX_QPATH], map[MAX_QPATH];
+    char title[MAX_QPATH], host[MAX_QPATH], mode[MAX_QPATH], map[MAX_QPATH], line[MAX_QPATH], more[16];
     vec4_t dim = {0.45f, 0.45f, 0.45f, 1.0f};
-    vec4_t band = {0.0f, 0.0f, 0.0f, 0.6f};
+    vec4_t band = {0.0f, 0.0f, 0.0f, 0.7f};
     qhandle_t blurred, pics[16];
-    float cx = 176.0f, cw = 288.0f, ch = 162.0f, top, cy, x, y, w, h;
-    int count, i;
+    float cx = 176.0f, cw = 288.0f, ch = 162.0f, top = 126.0f, cy = top + 40.0f, row = cy + ch + 10.0f;
+    float x = 276.0f, y = top, w = 88.0f, h = 22.0f, hostW = 0.0f, moreW = 0.0f;
+    int count, shown, fit, i, n;
+    unsigned char cut;
 
     Q_strncpyz(title, CG_ConfigString(CS_MESSAGE)[0] ? CG_ConfigString(CS_MESSAGE) : cgs.mapname, sizeof(title));
     Q_strncpyz(host, Info_ValueForKey(info, "sv_hostname"), sizeof(host));
@@ -308,37 +310,56 @@ static void CG_DrawLoadingPoster(qhandle_t levelshot, float s1, float s2) {
     Q_strncpyz(map, Info_ValueForKey(info, "mapname"), sizeof(map));
     blurred = trap_R_RegisterShaderNoMip(va("levelshots/%s@blur", map));
     count = CG_LoadingPictures(pics, ARRAY_LEN(pics));
-    top = 240.0f - (44.0f + ch + (host[0] ? 25.0f : 0.0f) + (count ? 28.0f : 0.0f)) * 0.5f;
-    cy = top + 44.0f;
+
+    CG_SetWidescreen(WIDESCREEN_CENTER);
+    CG_MeasureTextInFont(host, CG_LoadingFont(), 0.2f, &hostW, NULL);
+    if (hostW > cw * 0.6f) {
+        n = (int)strlen(host);
+        while (n > 0 && hostW > cw * 0.6f) {
+            do {
+                cut = (unsigned char)host[--n];
+                host[n] = '\0';
+            } while (n > 0 && (cut & 0xC0) == 0x80);
+            Com_sprintf(line, sizeof(line), "%s...", host);
+            CG_MeasureTextInFont(line, CG_LoadingFont(), 0.2f, &hostW, NULL);
+        }
+        Q_strncpyz(host, line, sizeof(host));
+    }
+    fit = (int)((cw - (host[0] ? hostW + 12.0f : 0.0f) + 4.0f) / 20.0f);
+    shown = count <= fit ? count : fit - 1;
+    if (shown < 0) {
+        shown = 0;
+    }
+    more[0] = '\0';
+    if (shown < count) {
+        Com_sprintf(more, sizeof(more), "+%i", count - shown);
+        CG_MeasureTextInFont(more, CG_LoadingFont(), 0.17f, &moreW, NULL);
+    }
 
     trap_R_SetColor(dim);
     trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight, s1, 0, s2, 1.0f,
                           blurred ? blurred : levelshot);
     trap_R_SetColor(NULL);
 
-    CG_SetWidescreen(WIDESCREEN_CENTER);
-    x = 268.0f;
-    y = top;
-    w = 104.0f;
-    h = 26.0f;
     CG_AdjustFrom640(&x, &y, &w, &h);
     trap_R_DrawStretchPic(x, y, w, h, 56.0f / 512.0f, 16.0f / 128.0f, 449.0f / 512.0f, 114.0f / 128.0f,
                           trap_R_RegisterShaderNoMip("ui/assets/main_menu/ql_logo.png"));
     CG_LoadingCard(cx, cy, cw, ch, 8.0f, 3, levelshot, 0.0f, 0.0f, 1.0f, 1.0f);
     trap_R_SetColor(band);
-    CG_LoadingCard(cx, cy + ch - 50.0f, cw, 50.0f, 8.0f, 2, cgs.media.whiteShader, 0.0f, 0.0f, 1.0f, 1.0f);
+    CG_LoadingCard(cx, cy + ch - 48.0f, cw, 48.0f, 8.0f, 2, cgs.media.whiteShader, 0.0f, 0.0f, 1.0f, 1.0f);
     trap_R_SetColor(NULL);
-    CG_LoadingText(cx + 14.0f, cy + ch - 33.0f, CG_LoadingFont(), 0.15f, loadAccent, mode, 1.5f, 0);
-    CG_LoadingText(cx + 13.0f, cy + ch - 12.0f, 0, 0.3f, colorWhite, title, 0.0f, 0);
-    y = cy + ch;
+    CG_LoadingText(cx + 14.0f, cy + ch - 30.5f, CG_LoadingFont(), 0.15f, loadAccent, mode, 1.5f, 0);
+    CG_LoadingText(cx + 13.0f, cy + ch - 11.0f, 0, 0.3f, colorWhite, title, 0.0f, 0);
+
     if (host[0]) {
-        y += 25.0f;
-        CG_LoadingText(320.0f, y, CG_LoadingFont(), 0.2f, loadMuted, host, 0.0f, 1);
+        CG_LoadingText(cx, row + 12.2f, CG_LoadingFont(), 0.2f, loadMuted, host, 0.0f, 0);
     }
-    w = count * 16.0f + (count - 1) * 5.0f;
-    for (i = 0; i < count; i++) {
-        CG_LoadingCard(320.0f - w * 0.5f + i * 21.0f, y + 12.0f, 16.0f, 16.0f, 3.0f, 3, pics[i], 0.0f, 0.0f, 1.0f,
-                       1.0f);
+    x = cx + cw - (shown * 20.0f - (shown ? 4.0f : 0.0f) + (more[0] ? (shown ? 5.0f : 0.0f) + moreW : 0.0f));
+    for (i = 0; i < shown; i++, x += 20.0f) {
+        CG_LoadingCard(x, row, 16.0f, 16.0f, 3.0f, 3, pics[i], 0.0f, 0.0f, 1.0f, 1.0f);
+    }
+    if (more[0]) {
+        CG_LoadingText(x + (shown ? 1.0f : 0.0f), row + 11.7f, CG_LoadingFont(), 0.17f, loadMuted, more, 0.0f, 0);
     }
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
