@@ -28,6 +28,7 @@ cvar_t* cl_debuggraph;
 cvar_t* cl_graphheight;
 cvar_t* cl_graphscale;
 cvar_t* cl_graphshift;
+static cvar_t* scr_browserActive;
 
 void SCR_DrawNamedPic(float x, float y, float width, float height, const char* picname) {
     qhandle_t hShader;
@@ -303,6 +304,7 @@ void SCR_Init(void) {
     cl_graphheight = Cvar_Get("graphheight", "32", CVAR_CHEAT);
     cl_graphscale = Cvar_Get("graphscale", "1", CVAR_CHEAT);
     cl_graphshift = Cvar_Get("graphshift", "0", CVAR_CHEAT);
+    scr_browserActive = Cvar_Get("web_browserActive", "0", CVAR_ROM);
 
     scr_initialized = qtrue;
 }
@@ -365,6 +367,15 @@ void SCR_DrawScreenField(stereoFrame_t stereoFrame) {
     }
 }
 
+static void SCR_UpdateBrowserActive(void) {
+    qboolean active = uivm && (Key_GetCatcher() & KEYCATCH_UI) &&
+                      (clc.state == CA_DISCONNECTED || clc.state == CA_ACTIVE) && VM_Call(uivm, UI_WEB_ACTIVE);
+
+    if (active != (scr_browserActive->integer != 0)) {
+        Cvar_Set("web_browserActive", active ? "1" : "0");
+    }
+}
+
 void SCR_UpdateScreen(void) {
     static int recursive;
 
@@ -376,6 +387,8 @@ void SCR_UpdateScreen(void) {
         Com_Error(ERR_FATAL, "SCR_UpdateScreen: recursively called");
     }
     recursive = 1;
+
+    SCR_UpdateBrowserActive();
 
     if (uivm || com_dedicated->integer) {
         int in_anaglyphMode = Cvar_VariableIntegerValue("r_anaglyphMode");

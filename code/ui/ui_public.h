@@ -240,6 +240,8 @@ typedef enum {
 
     UI_MOUSE_POSITION,
 
+    UI_WEB_ACTIVE,
+
 } uiExport_t;
 
 #endif

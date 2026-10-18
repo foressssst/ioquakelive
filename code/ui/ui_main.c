@@ -107,6 +107,7 @@ void _UI_MousePosition(int x, int y);
 void _UI_Refresh(int realtime);
 qboolean _UI_IsFullscreen(void);
 qboolean UI_CheckActiveMenu(void);
+qboolean UI_WebActive(void);
 void UI_WalkMenus(void (*callback)(const char* mapLoadName));
 static void UI_SetScoreBoardCvars(const postGameInfo_t* info, qboolean redBlue);
 static void UI_SPPostgameMenu_f(const char* mapname, int gameType);
@@ -170,6 +171,9 @@ Q_EXPORT intptr_t vmMain(int command, intptr_t arg0, intptr_t arg1, intptr_t arg
 
         case UI_DRAW_ADVERTISEMENT:
             return 0;
+
+        case UI_WEB_ACTIVE:
+            return UI_WebActive();
     }
 
     return -1;
@@ -5107,6 +5111,15 @@ qboolean _UI_IsFullscreen(void) {
 
 qboolean UI_CheckActiveMenu(void) {
     return Menus_AnyVisible();
+}
+
+qboolean UI_WebActive(void) {
+    menuDef_t* settings = Menus_FindByName("settings_ingame");
+
+    if (settings && (settings->window.flags & WINDOW_VISIBLE)) {
+        return qtrue;
+    }
+    return Menus_AnyFullScreenVisible();
 }
 
 void UI_WalkMenus(void (*callback)(const char* mapLoadName)) {
