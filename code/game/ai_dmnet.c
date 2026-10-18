@@ -3036,6 +3036,7 @@ int AINode_FollowMe(bot_state_t* bs) {
 
 #define DODGE_HEALTH 9999
 #define DODGE_LEASH 300.0f
+#define DODGE_HITBOX 22.0f
 
 #define DODGE_STRAFE 0
 #define DODGE_CIRCLE 1
@@ -3053,13 +3054,16 @@ void AIEnter_DodgeTrainer(bot_state_t* bs) {
     bs->dodgeRunStart = now;
     bs->dodgeTurnTime = now + 0.3f;
     bs->dodgeHitTime = 0;
-    bs->dodgeJumpTime = now + 3.0f + random() * 3.0f;
     bs->dodgeMode = DODGE_STRAFE;
     bs->dodgeModeEnd = now + 2.0f;
     bs->dodgeRadial = 0;
     bs->dodgeHeat = 0;
     bs->dodgeThink = now;
-    bs->dodgeJumped = 0;
+    bs->dodgeReact = 0.22f;
+    bs->dodgeAimRate = 0;
+    bs->dodgeLockStart = 0;
+    bs->dodgeWaiting = qfalse;
+    VectorClear(bs->dodgeMoveDir);
     BotRecordNodeSwitch(bs, "dodge trainer", "", "");
 }
 
@@ -3070,11 +3074,11 @@ static void BotDodgeNextMode(bot_state_t* bs, float dist, float now) {
         bs->dodgeMode = DODGE_CLOSE;
     } else if (dist < 220) {
         bs->dodgeMode = DODGE_BACK;
-    } else if (r < 0.45f) {
+    } else if (r < 0.55f) {
         bs->dodgeMode = DODGE_STRAFE;
-    } else if (r < 0.70f) {
+    } else if (r < 0.75f) {
         bs->dodgeMode = DODGE_CIRCLE;
-    } else if (r < 0.85f) {
+    } else if (r < 0.88f) {
         bs->dodgeMode = DODGE_CLOSE;
     } else {
         bs->dodgeMode = DODGE_BACK;
@@ -3082,15 +3086,15 @@ static void BotDodgeNextMode(bot_state_t* bs, float dist, float now) {
     switch (bs->dodgeMode) {
         case DODGE_CIRCLE:
             bs->dodgeRadial = 0;
-            bs->dodgeModeEnd = now + 1.0f + random();
+            bs->dodgeModeEnd = now + 0.8f + random() * 0.8f;
             break;
         case DODGE_CLOSE:
             bs->dodgeRadial = 0.6f;
-            bs->dodgeModeEnd = now + 0.6f + random() * 0.6f;
+            bs->dodgeModeEnd = now + 0.5f + random() * 0.5f;
             break;
         case DODGE_BACK:
             bs->dodgeRadial = -0.6f;
-            bs->dodgeModeEnd = now + 0.6f + random() * 0.6f;
+            bs->dodgeModeEnd = now + 0.5f + random() * 0.5f;
             break;
         default:
             bs->dodgeRadial = crandom() * 0.15f;
@@ -3100,18 +3104,20 @@ static void BotDodgeNextMode(bot_state_t* bs, float dist, float now) {
 }
 
 static float BotDodgeRunTime(bot_state_t* bs) {
-    float heat = bs->dodgeHeat;
+    float react = bs->dodgeReact;
+    float pressure = MAX(bs->dodgeAimRate, bs->dodgeHeat);
+    float r = random();
 
     if (bs->dodgeMode == DODGE_CIRCLE) {
-        return 0.8f + random() * 0.8f;
+        return 0.5f + random() * 0.6f;
     }
-    if (random() < 0.25f + 0.5f * heat) {
-        return 0.1f + random() * 0.18f;
+    if (r < 0.35f + 0.35f * pressure) {
+        return MAX(0.1f, react * (0.55f + random() * 0.45f));
     }
-    if (random() < 0.5f) {
-        return 0.3f + random() * 0.35f;
+    if (r < 0.85f) {
+        return react * (1.1f + random() * 0.9f);
     }
-    return 0.7f + random() * 0.7f * (1.0f - 0.6f * heat);
+    return 0.55f + random() * (0.6f - 0.3f * pressure);
 }
 
 static void BotDodgeDirection(bot_state_t* bs, const vec3_t toHuman, vec3_t dir) {
@@ -3129,6 +3135,7 @@ static void BotDodgeDirection(bot_state_t* bs, const vec3_t toHuman, vec3_t dir)
     dir[2] = 0;
     VectorNormalize(dir);
 }
+
 static qboolean BotDodgeClear(bot_state_t* bs, const vec3_t dir) {
     gentity_t* ent = &g_entities[bs->client];
     vec3_t end, down;
@@ -3155,21 +3162,43 @@ static qboolean BotDodgeClear(bot_state_t* bs, const vec3_t dir) {
            fabs(tr.endpos[2] - bs->dodgeAnchor[2]) <= 24;
 }
 
+static qboolean BotDodgeAimed(bot_state_t* bs, int human, float* lead) {
+    gclient_t* client = g_entities[human].client;
+    vec3_t eye, forward, toBot, closest, offset;
+    float along;
+
+    *lead = 0;
+    VectorCopy(client->ps.origin, eye);
+    eye[2] += client->ps.viewheight;
+    AngleVectors(client->ps.viewangles, forward, NULL, NULL);
+    VectorSubtract(bs->origin, eye, toBot);
+    along = DotProduct(toBot, forward);
+    if (along <= 0) {
+        return qfalse;
+    }
+    VectorMA(eye, along, forward, closest);
+    VectorSubtract(closest, bs->origin, offset);
+    *lead = DotProduct(offset, bs->dodgeMoveDir);
+    offset[2] = 0;
+    return (qboolean)(VectorLength(offset) < DODGE_HITBOX);
+}
+
 static void BotDodgeTurn(bot_state_t* bs, float now) {
     bs->dodgeDir = -bs->dodgeDir;
     bs->dodgeRunStart = now;
     bs->dodgeTurnTime = now + BotDodgeRunTime(bs);
     bs->dodgeHitTime = 0;
+    bs->dodgeWaiting = qtrue;
+    bs->dodgeLockStart = 0;
 }
 
 int AINode_DodgeTrainer(bot_state_t* bs) {
     gentity_t* ent = &g_entities[bs->client];
     int human = G_TrainingHumanClient();
     float now = FloatTime();
-    float dist, dt;
+    float dist, dt, lead, pressure;
     vec3_t toHuman, dir;
-    qboolean hit;
-    qboolean onGround = (qboolean)(bs->cur_ps.groundEntityNum != ENTITYNUM_NONE);
+    qboolean hit, aimed;
 
     if (BotIsObserver(bs)) {
         ent->flags &= ~FL_NOPICKUP;
@@ -3227,26 +3256,41 @@ int AINode_DodgeTrainer(bot_state_t* bs) {
         bs->dodgeHeat = MIN(1.0f, bs->dodgeHeat + 0.05f);
     }
 
+    aimed = BotDodgeAimed(bs, human, &lead) || hit;
+    bs->dodgeAimRate += ((aimed ? 1.0f : 0.0f) - bs->dodgeAimRate) * MIN(dt * 1.5f, 1.0f);
+    pressure = MAX(bs->dodgeAimRate, bs->dodgeHeat);
+    if (aimed) {
+        if (bs->dodgeWaiting && now - bs->dodgeRunStart > 0.05f) {
+            float sample = Com_Clamp(0.08f, 0.6f, now - bs->dodgeRunStart);
+
+            bs->dodgeReact += (sample - bs->dodgeReact) * 0.2f;
+            bs->dodgeWaiting = qfalse;
+        }
+        if (!bs->dodgeLockStart) {
+            bs->dodgeLockStart = now;
+            bs->dodgeHitTime = now + 0.03f + random() * (0.05f - 0.03f * pressure);
+        }
+    } else {
+        bs->dodgeLockStart = 0;
+        bs->dodgeHitTime = 0;
+    }
+
     if (now >= bs->dodgeModeEnd || (dist > 650 && bs->dodgeMode != DODGE_CLOSE) ||
         (dist < 220 && bs->dodgeMode != DODGE_BACK)) {
         BotDodgeNextMode(bs, dist, now);
     }
 
-    if (hit && !bs->dodgeHitTime) {
-        bs->dodgeHitTime = now + 0.08f + random() * (0.17f - 0.08f * bs->dodgeHeat);
-        if (bs->dodgeMode == DODGE_CIRCLE && random() < bs->dodgeHeat) {
+    if (bs->dodgeHitTime && now >= bs->dodgeHitTime && now - bs->dodgeRunStart > 0.1f) {
+        if (bs->dodgeMode == DODGE_CIRCLE) {
             bs->dodgeMode = DODGE_STRAFE;
             bs->dodgeRadial = crandom() * 0.15f;
             bs->dodgeModeEnd = now + 1.0f + random() * 1.5f;
         }
-    }
-    if (now >= bs->dodgeTurnTime ||
-        (bs->dodgeHitTime && now >= bs->dodgeHitTime && now - bs->dodgeRunStart > 0.12f)) {
         BotDodgeTurn(bs, now);
-        if (onGround && bs->dodgeHeat > 0.5f && random() < 0.3f * bs->dodgeHeat && now - bs->dodgeJumped > 1.0f) {
-            trap_EA_Jump(bs->client);
-            bs->dodgeJumped = now;
-        }
+    } else if (!aimed && lead > 8.0f && lead < 96.0f && now - bs->dodgeRunStart > 0.12f && random() < 0.6f) {
+        BotDodgeTurn(bs, now);
+    } else if (now >= bs->dodgeTurnTime && !(!aimed && lead < -8.0f && now - bs->dodgeRunStart < 1.2f)) {
+        BotDodgeTurn(bs, now);
     }
 
     BotDodgeDirection(bs, toHuman, dir);
@@ -3264,14 +3308,7 @@ int AINode_DodgeTrainer(bot_state_t* bs) {
             VectorNormalize(dir);
         }
     }
+    VectorCopy(dir, bs->dodgeMoveDir);
     trap_EA_Move(bs->client, dir, 400);
-
-    if (now >= bs->dodgeJumpTime) {
-        if (onGround && now - bs->dodgeJumped > 1.0f) {
-            trap_EA_Jump(bs->client);
-            bs->dodgeJumped = now;
-        }
-        bs->dodgeJumpTime = now + 5.0f - 3.5f * bs->dodgeHeat + random() * (4.0f - 2.0f * bs->dodgeHeat);
-    }
     return qtrue;
 }

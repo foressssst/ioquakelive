@@ -283,13 +283,16 @@ typedef struct bot_state_s {
     float dodgeRunStart;
     float dodgeTurnTime;
     float dodgeHitTime;
-    float dodgeJumpTime;
     int dodgeMode;
     float dodgeModeEnd;
     float dodgeRadial;
     float dodgeHeat;
     float dodgeThink;
-    float dodgeJumped;
+    float dodgeReact;
+    float dodgeAimRate;
+    float dodgeLockStart;
+    qboolean dodgeWaiting;
+    vec3_t dodgeMoveDir;
 } bot_state_t;
 
 void BotResetState(bot_state_t* bs);
