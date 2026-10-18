@@ -1689,6 +1689,8 @@ extern vmCvar_t cg_specItemTimersSize;
 extern vmCvar_t cg_specItemTimersX;
 extern vmCvar_t cg_specItemTimersY;
 extern vmCvar_t cg_drawProfileImages;
+extern vmCvar_t cg_remaster;
+extern vmCvar_t cg_loadingPreview;
 extern vmCvar_t cg_specTeamVitals;
 extern vmCvar_t cg_specTeamVitalsHealthColor;
 extern vmCvar_t cg_specTeamVitalsWidth;

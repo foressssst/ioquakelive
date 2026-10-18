@@ -1073,7 +1073,7 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
 
     CG_UpdateCvars();
 
-    if (cg.infoScreenText[0] != 0) {
+    if (cg.infoScreenText[0] != 0 || cg_loadingPreview.integer) {
         CG_DrawInformation();
         return;
     }
