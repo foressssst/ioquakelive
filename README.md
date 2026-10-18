@@ -19,7 +19,7 @@ Necesitas una copia legítima de **Quake Live en Steam**. Este proyecto no inclu
 - En Windows, el juego intenta localizar Quake Live en tu biblioteca de Steam y copiar `pak00.pk3` a la carpeta `baseq3`. Si no lo encuentra, tendrás que copiar ese archivo manualmente desde tu instalación original.
 - Los ejecutables no están firmados digitalmente. Windows Defender podría mostrar una advertencia o bloquear su ejecución.
 - Las actualizaciones se instalan manualmente: descarga la nueva versión y extrae su contenido sobre la carpeta existente.
-- Las pre-releases están disponibles solo para Windows. Las versiones completas incluyen Linux y macOS.
+- Las versiones experimentales (las que GitHub marca como pre-release) salen para Windows, Linux y macOS, igual que las estables.
 - Las versiones beta anteriores a la 1.0, desde la 0.1.0 hasta la 0.3.13, están disponibles en [ioquakelive-betas](https://github.com/foressssst/ioquakelive-betas/releases).
 
 Si encuentras un problema, puedes reportarlo en [Issues](https://github.com/foressssst/ioquakelive/issues).
