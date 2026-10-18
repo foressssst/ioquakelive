@@ -485,7 +485,7 @@ static void CG_DrawLoadingSplit(qhandle_t levelshot, float s1, float s2, float c
     qhandle_t pics[16];
     vec4_t c;
     float cw = 288.0f, ch = 162.0f, gap = 32.0f, maxCol = 240.0f, cy = 240.0f - ch * 0.5f;
-    float titleScale = 0.46f, titleW, colW = 96.0f, w, cx, tx, top, colH, a[6], dy[6], leave, y;
+    float titleScale = 0.5f, titleW, colW = 0.0f, w, cx, tx, top, colH, a[6], dy[6], leave, y;
     int count, shown, i;
 
     CG_LoadingStrings(title, host, mode, map);
@@ -494,8 +494,7 @@ static void CG_DrawLoadingSplit(qhandle_t levelshot, float s1, float s2, float c
     leave = leave > 1.0f ? 1.0f : leave * leave * leave;
     w = (outro * 400.0f - 100.0f) / 300.0f;
     w = w < 0.0f ? 0.0f : w > 1.0f ? 1.0f : w;
-    CG_LoadingBackdrop(levelshot, map, s1, s2, 0.38f * CG_LoadingEase((float)loadingClock, 0.0f, 300.0f),
-                       1.0f - w * w * (3.0f - 2.0f * w));
+    CG_LoadingBackdrop(levelshot, map, s1, s2, 0.38f, 1.0f - w * w * (3.0f - 2.0f * w));
 
     CG_SetWidescreen(WIDESCREEN_CENTER);
     titleW = CG_LoadingTextWidth(0, titleScale, title, 0.0f);
@@ -514,7 +513,7 @@ static void CG_DrawLoadingSplit(qhandle_t levelshot, float s1, float s2, float c
     colW = w > colW ? w : colW;
     cx = 320.0f - (cw + gap + colW) * 0.5f;
     tx = cx + cw + gap;
-    colH = 74.4f + (host[0] ? 18.2f : 0.0f) + (count ? 36.0f : 0.0f);
+    colH = 37.1f + (host[0] ? 19.2f : 0.0f) + (count ? 36.0f : 0.0f);
     top = cy + (ch - colH) * 0.5f;
 
     for (i = 0; i < 6; i++) {
@@ -529,21 +528,21 @@ static void CG_DrawLoadingSplit(qhandle_t levelshot, float s1, float s2, float c
     trap_R_SetColor(c);
     CG_LoadingCard(cx, cy + dy[0], cw, ch, 10.0f, 3, levelshot, 0.0f, 0.0f, 1.0f, 1.0f);
     trap_R_SetColor(NULL);
-    CG_LoadingLogo(tx, top + dy[1], 96.0f, 24.0f, a[1]);
+    c[3] = a[1];
+    CG_LoadingText(tx + 1.0f, top + 7.1f + dy[1], CG_LoadingFont(), 0.17f, c, mode, 1.7f, 0);
     c[3] = a[2];
-    CG_LoadingText(tx + 1.0f, top + 47.1f + dy[2], CG_LoadingFont(), 0.17f, c, mode, 1.7f, 0);
-    c[3] = a[3];
-    CG_LoadingText(tx, top + 74.4f + dy[3], 0, titleScale, c, title, 0.0f, 0);
-    y = top + 74.4f;
+    CG_LoadingText(tx, top + 37.1f + dy[2], 0, titleScale, c, title, 0.0f, 0);
+    y = top + 37.1f;
     if (host[0]) {
-        y += 18.2f;
+        y += 19.2f;
         Vector4Copy(loadMuted, c);
-        c[3] *= a[4];
-        CG_LoadingText(tx + 1.0f, y + dy[4], CG_LoadingFont(), 0.22f, c, host, 0.0f, 0);
+        c[3] *= a[3];
+        CG_LoadingText(tx + 1.0f, y + dy[3], CG_LoadingFont(), 0.22f, c, host, 0.0f, 0);
     }
     if (count) {
-        CG_LoadingAvatars(tx + 1.0f, y + 16.0f + dy[5], 0, maxCol, 20.0f, a[5], pics, count);
+        CG_LoadingAvatars(tx + 1.0f, y + 16.0f + dy[4], 0, maxCol, 20.0f, a[4], pics, count);
     }
+    CG_LoadingLogo(272.0f, 426.0f + dy[5], 96.0f, 24.0f, a[5]);
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
 
@@ -700,7 +699,7 @@ void CG_DrawInformation(void) {
     }
     trap_R_SetColor(NULL);
 
-    if (cg_remaster.integer) {
+    if (cg_remaster.integer && (cg.infoScreenText[0] || !cg.snap || cg_loadingPreview.integer)) {
         CG_DrawLoadingRemaster(levelshot, s1, s2);
         return;
     }
