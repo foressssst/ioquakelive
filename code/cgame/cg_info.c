@@ -178,148 +178,123 @@ static const char* CG_LoadingStageName(void) {
     return names[stage < 0 ? 0 : stage > NUM_LOADING_STAGES ? NUM_LOADING_STAGES : stage];
 }
 
-#define OSU(u) ((u) * 0.625f)
+static int loadFont = -2;
 
-static const vec4_t osuShade = {0.0f, 0.0f, 0.0f, 0.3f};
-static const vec4_t osuBox = {0.0f, 0.0f, 0.0f, 0.7f};
-
-static int osuFonts[2] = {-2, -2};
-static float osuK = 1.0f, osuAlpha = 1.0f;
-
-static int CG_OsuFont(int bold) {
-    if (osuFonts[0] == -2) {
-        osuFonts[0] = trap_R_Font_Register("fonts/Barlow-Regular.ttf");
-        osuFonts[1] = trap_R_Font_Register("fonts/Barlow-Bold.ttf");
+static int CG_LoadingFont(void) {
+    if (loadFont == -2) {
+        loadFont = trap_R_Font_Register("fonts/Barlow-Regular.ttf");
     }
-    return osuFonts[bold] >= 0 ? osuFonts[bold] : 1;
+    return loadFont >= 0 ? loadFont : 1;
 }
 
-static float CG_OsuEase(float t, float delay, float duration) {
-    t = (t - delay) / duration;
-    t = 1.0f - (t < 0.0f ? 0.0f : t > 1.0f ? 1.0f : t);
-    return 1.0f - t * t * t * t * t;
-}
+static void CG_LoadingCentered(float y, float scale, const float* color, const char* text, float spacing) {
+    char c[2];
+    const char* p;
+    float w = 0.0f, cw = 0.0f, x;
 
-static float CG_OsuInOutExpo(float t) {
-    t = t < 0.0f ? 0.0f : t > 1.0f ? 1.0f : t;
-    if (t == 0.0f || t == 1.0f) {
-        return t;
-    }
-    return t < 0.5f ? 0.5f * (float)pow(2.0, 20.0 * t - 10.0) : 1.0f - 0.5f * (float)pow(2.0, -20.0 * t + 10.0);
-}
-
-static void CG_OsuPoint(float* x, float* y) {
-    *x = 320.0f + (*x - 320.0f) * osuK;
-    *y = 240.0f + (*y - 240.0f) * osuK;
-}
-
-static void CG_OsuText(float x, float y, float size, const char* text) {
-    vec4_t c = {1.0f, 1.0f, 1.0f, 1.0f};
-    float w = 0;
-
-    CG_MeasureTextInFont(text, CG_OsuFont(0), size / 96.0f, &w, NULL);
-    x -= w * 0.5f;
-    CG_OsuPoint(&x, &y);
-    c[3] = osuAlpha;
-    CG_DrawTextInFont(x, y, CG_OsuFont(0), size * osuK / 96.0f, c, text, ITEM_TEXTSTYLE_NORMAL);
-}
-
-static void CG_OsuQuad(const float* box, float x, float y, float w, float h, qhandle_t shader) {
-    if (w <= 0.0f || h <= 0.0f) {
+    if (spacing <= 0.0f) {
+        CG_MeasureTextInFont(text, CG_LoadingFont(), scale, &w, NULL);
+        CG_DrawTextInFont(320.0f - w * 0.5f, y, CG_LoadingFont(), scale, color, text, ITEM_TEXTSTYLE_NORMAL);
         return;
     }
-    trap_R_DrawStretchPic(x, y, w, h, box[4] + (x - box[0]) / box[2] * (box[6] - box[4]),
-                          box[5] + (y - box[1]) / box[3] * (box[7] - box[5]),
-                          box[4] + (x + w - box[0]) / box[2] * (box[6] - box[4]),
-                          box[5] + (y + h - box[1]) / box[3] * (box[7] - box[5]), shader);
-}
-
-static void CG_OsuRow(const float* box, float y, float h, float e, float radius, qhandle_t shader) {
-    float in = 0.0f;
-
-    if (e < radius) {
-        in = radius - (float)sqrt(radius * radius - (radius - e) * (radius - e));
+    c[1] = '\0';
+    for (p = text; *p; p++) {
+        c[0] = *p;
+        CG_MeasureTextInFont(c, CG_LoadingFont(), scale, &cw, NULL);
+        w += cw + spacing;
     }
-    CG_OsuQuad(box, box[0] + in, y, box[2] - in * 2.0f, h, shader);
+    x = 320.0f - (w - spacing) * 0.5f;
+    for (p = text; *p; p++) {
+        c[0] = *p;
+        CG_DrawTextInFont(x, y, CG_LoadingFont(), scale, color, c, ITEM_TEXTSTYLE_NORMAL);
+        CG_MeasureTextInFont(c, CG_LoadingFont(), scale, &cw, NULL);
+        x += cw + spacing;
+    }
 }
 
-static void CG_OsuShape(float x, float y, float w, float h, float radius, const float* color, qhandle_t shader,
-                        float s1, float t1, float s2, float t2) {
-    float box[8];
-    vec4_t c;
+static void CG_LoadingDisc(float cx, float cy, float radius, qhandle_t shader, float s1, float t1, float s2,
+                           float t2) {
+    float x = cx - radius, y = cy - radius, w = radius * 2.0f, h = radius * 2.0f, r, dy, half, rh;
     int i, rows;
 
-    CG_OsuPoint(&x, &y);
-    w *= osuK;
-    h *= osuK;
-    radius *= osuK;
-    CG_AdjustFrom640(&x, &y, &w, &h);
-    radius *= cgs.screenYScale;
-    if (radius > h * 0.5f) {
-        radius = h * 0.5f;
-    }
-    if (radius > w * 0.5f) {
-        radius = w * 0.5f;
-    }
-    box[0] = x;
-    box[1] = y;
-    box[2] = w;
-    box[3] = h;
-    box[4] = s1;
-    box[5] = t1;
-    box[6] = s2;
-    box[7] = t2;
-    Vector4Copy(color, c);
-    c[3] *= osuAlpha;
-    trap_R_SetColor(c);
-    rows = (int)ceil(radius);
-    if (rows > (int)(h * 0.5f)) {
-        rows = (int)(h * 0.5f);
-    }
-    for (i = 0; i < rows; i++) {
-        CG_OsuRow(box, y + i, 1.0f, i + 0.5f, radius, shader);
-        CG_OsuRow(box, y + h - i - 1.0f, 1.0f, i + 0.5f, radius, shader);
-    }
-    if (h - rows * 2 > 0.0f) {
-        CG_OsuRow(box, y + rows, h - rows * 2, h, radius, shader);
-    }
-    trap_R_SetColor(NULL);
-}
-
-static void CG_OsuSpinner(float cx, float cy, float size, int time) {
-    float x = cx, y = cy, w = size * osuK, h = size * osuK, r, th, a, base = time * (360.0f / 3150.0f);
-    vec4_t c = {1.0f, 1.0f, 1.0f, 1.0f};
-    int i;
-
-    CG_OsuPoint(&x, &y);
     CG_AdjustFrom640(&x, &y, &w, &h);
     r = h * 0.5f;
-    th = r * 0.24f;
-    c[3] = osuAlpha;
-    trap_R_SetColor(c);
-    for (i = 0; i < 64; i++) {
-        a = DEG2RAD(base + i * (290.0f / 63.0f));
-        trap_R_DrawStretchPic(x + (float)cos(a) * (r - th * 0.5f) - th * 0.5f,
-                              y + (float)sin(a) * (r - th * 0.5f) - th * 0.5f, th, th, 0, 0, 1, 1,
-                              cgs.media.whiteShader);
+    rows = (int)ceil(h);
+    for (i = 0; i < rows; i++) {
+        rh = h - i < 1.0f ? h - i : 1.0f;
+        dy = i + rh * 0.5f - r;
+        half = r * r - dy * dy > 0.0f ? (float)sqrt(r * r - dy * dy) : 0.0f;
+        if (half <= 0.0f) {
+            continue;
+        }
+        trap_R_DrawStretchPic(x + r - half, y + i, half * 2.0f, rh, s1 + (s2 - s1) * (r - half) / w,
+                              t1 + (t2 - t1) * i / h, s1 + (s2 - s1) * (r + half) / w, t1 + (t2 - t1) * (i + rh) / h,
+                              shader);
+    }
+}
+
+static void CG_LoadingArcSpan(float cx, float cy, float y, float h, float x0, float x1, float to) {
+    float x, a, run = -1.0f;
+
+    for (x = x0; x < x1; x += 1.0f) {
+        a = (float)atan2(x + 0.5f - cx, cy - (y + h * 0.5f)) / (2.0f * (float)M_PI);
+        if (a < 0.0f) {
+            a += 1.0f;
+        }
+        if (a <= to) {
+            if (run < 0.0f) {
+                run = x;
+            }
+        } else if (run >= 0.0f) {
+            trap_R_DrawStretchPic(run, y, x - run, h, 0, 0, 1, 1, cgs.media.whiteShader);
+            run = -1.0f;
+        }
+    }
+    if (run >= 0.0f) {
+        trap_R_DrawStretchPic(run, y, x1 - run, h, 0, 0, 1, 1, cgs.media.whiteShader);
+    }
+}
+
+static void CG_LoadingRing(float cx, float cy, float radius, float thickness, float to, const float* color) {
+    float x = cx, y = cy, w = radius, h = radius, outer, inner, row, dy, xo, xi;
+
+    if (to <= 0.0f) {
+        return;
+    }
+    CG_AdjustFrom640(&x, &y, &w, &h);
+    outer = h;
+    inner = h - thickness * cgs.screenYScale;
+    trap_R_SetColor(color);
+    for (row = (float)floor(y - outer); row < y + outer; row += 1.0f) {
+        dy = row + 0.5f - y;
+        if (dy * dy >= outer * outer) {
+            continue;
+        }
+        xo = (float)sqrt(outer * outer - dy * dy);
+        xi = dy * dy < inner * inner ? (float)sqrt(inner * inner - dy * dy) : 0.0f;
+        if (to >= 1.0f) {
+            if (xi > 0.0f) {
+                trap_R_DrawStretchPic(x - xo, row, xo - xi, 1, 0, 0, 1, 1, cgs.media.whiteShader);
+                trap_R_DrawStretchPic(x + xi, row, xo - xi, 1, 0, 0, 1, 1, cgs.media.whiteShader);
+            } else {
+                trap_R_DrawStretchPic(x - xo, row, xo * 2.0f, 1, 0, 0, 1, 1, cgs.media.whiteShader);
+            }
+        } else if (xi > 0.0f) {
+            CG_LoadingArcSpan(x, y, row, 1.0f, x - xo, x - xi, to);
+            CG_LoadingArcSpan(x, y, row, 1.0f, x + xi, x + xo, to);
+        } else {
+            CG_LoadingArcSpan(x, y, row, 1.0f, x - xo, x + xo, to);
+        }
     }
     trap_R_SetColor(NULL);
 }
 
-static void CG_DrawLoadingOsu(qhandle_t levelshot, float s1, float s2) {
-    static int start, last;
+static void CG_DrawLoadingCircle(qhandle_t levelshot, float s1, float s2) {
     const char* info = CG_ConfigString(CS_SERVERINFO);
     char title[MAX_QPATH], host[MAX_QPATH], mode[MAX_QPATH], map[MAX_QPATH];
-    vec4_t dim = {0.55f, 0.55f, 0.55f, 1.0f};
-    qhandle_t blurred, logo;
-    float top, fx, fy, p, ls;
-    int now = trap_Milliseconds(), t;
-
-    if (!start || (cg_loadingPreview.integer && now - last > 1000)) {
-        start = now;
-    }
-    last = now;
-    t = now - start;
+    vec4_t dim = {0.5f, 0.5f, 0.5f, 1.0f};
+    qhandle_t blurred;
+    float top = 119.0f, cy = top + 115.0f, x = 260.0f, y = top, w = 120.0f, h = 30.0f;
 
     Q_strncpyz(title, CG_ConfigString(CS_MESSAGE)[0] ? CG_ConfigString(CS_MESSAGE) : cgs.mapname, sizeof(title));
     Q_strncpyz(host, Info_ValueForKey(info, "sv_hostname"), sizeof(host));
@@ -328,6 +303,7 @@ static void CG_DrawLoadingOsu(qhandle_t levelshot, float s1, float s2) {
     if (!mode[0] && cgs.gametype >= 0 && cgs.gametype < GT_MAX_GAME_TYPE) {
         Q_strncpyz(mode, gametypeDisplayNames[cgs.gametype], sizeof(mode));
     }
+    Q_strupr(mode);
     Q_strncpyz(map, Info_ValueForKey(info, "mapname"), sizeof(map));
     blurred = trap_R_RegisterShaderNoMip(va("levelshots/%s@blur", map));
 
@@ -337,36 +313,17 @@ static void CG_DrawLoadingOsu(qhandle_t levelshot, float s1, float s2) {
     trap_R_SetColor(NULL);
 
     CG_SetWidescreen(WIDESCREEN_CENTER);
-    top = 240.0f - OSU(395) * 0.5f;
-    osuK = 0.7f + 0.3f * CG_OsuEase((float)t, 0, 650);
-    osuAlpha = CG_OsuEase((float)t, 500, 500);
-
-    CG_OsuText(320, top + OSU(154), 36, title);
+    CG_AdjustFrom640(&x, &y, &w, &h);
+    trap_R_DrawStretchPic(x, y, w, h, 56.0f / 512.0f, 16.0f / 128.0f, 449.0f / 512.0f, 114.0f / 128.0f,
+                          trap_R_RegisterShaderNoMip("ui/assets/main_menu/ql_logo.png"));
+    CG_LoadingDisc(320.0f, cy, 52.0f, levelshot, 0.21875f, 0.0f, 0.78125f, 1.0f);
+    CG_LoadingRing(320.0f, cy, 59.0f, 2.0f, 1.0f, loadTrack);
+    CG_LoadingRing(320.0f, cy, 59.0f, 2.0f, CG_LoadingProgress(), loadAccent);
+    CG_LoadingCentered(top + 207.0f, 0.32f, colorWhite, title, 0.0f);
     if (host[0]) {
-        CG_OsuText(320, top + OSU(188), 26, host);
+        CG_LoadingCentered(top + 223.5f, 0.2f, loadMuted, host, 0.0f);
     }
-    CG_OsuShape(320 - OSU(210), top + OSU(204), OSU(420), OSU(150), OSU(10), colorWhite, levelshot, 0.0f, 0.1825f,
-                1.0f, 0.8175f);
-    CG_OsuShape(320 - OSU(210), top + OSU(204), OSU(420), OSU(150), OSU(10), osuShade, cgs.media.whiteShader, 0.0f,
-                0.0f, 1.0f, 1.0f);
-    CG_OsuShape(320 - OSU(18.75f), top + OSU(260.25f), OSU(37.5f), OSU(37.5f), OSU(9.4f), osuBox,
-                cgs.media.whiteShader, 0.0f, 0.0f, 1.0f, 1.0f);
-    CG_OsuSpinner(320, top + OSU(279), OSU(22.5f), t);
-    CG_OsuText(320, top + OSU(389), 26, mode);
-
-    fx = 320.0f;
-    fy = top + OSU(52.5f);
-    CG_OsuPoint(&fx, &fy);
-    p = CG_OsuInOutExpo(t / 500.0f);
-    ls = (1.5f - 0.5f * CG_OsuEase((float)t, 0, 300)) * osuK;
-    fx = 320.0f + (fx - 320.0f) * p;
-    fy = 240.0f + (fy - 240.0f) * p;
-    osuK = 1.0f;
-    osuAlpha = t >= 350 ? 1.0f : t / 350.0f;
-    logo = trap_R_RegisterShaderNoMip("ui/assets/main_menu/ql_logo.png");
-    CG_OsuShape(fx - OSU(210) * ls, fy - OSU(52.5f) * ls, OSU(420) * ls, OSU(105) * ls, 0.0f, colorWhite, logo,
-                56.0f / 512.0f, 16.0f / 128.0f, 449.0f / 512.0f, 114.0f / 128.0f);
-    osuAlpha = 1.0f;
+    CG_LoadingCentered(top + 239.0f, 0.16f, loadAccent, mode, 1.5f);
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
 
@@ -382,7 +339,7 @@ static void CG_DrawLoadingRemaster(qhandle_t levelshot, float s1, float s2) {
     int count, i;
 
     if (cg_remaster.integer == 3) {
-        CG_DrawLoadingOsu(levelshot, s1, s2);
+        CG_DrawLoadingCircle(levelshot, s1, s2);
         return;
     }
 
