@@ -1183,6 +1183,58 @@ static const char* BR_NextPlayer(const char* p, char* name, int nameSize, char* 
     return p ? p + 1 : NULL;
 }
 
+#define BR_MAX_PLAYER_AVATARS 64
+
+static qhandle_t BR_PlayerAvatar(const char* name) {
+    static struct {
+        char name[64];
+        char steamId[24];
+        int time;
+    } cache[BR_MAX_PLAYER_AVATARS];
+    static int next;
+    char clean[64], other[64], enabled[16];
+    uiFriend_t f;
+    int i, n;
+
+    trap_Cvar_VariableStringBuffer("cg_drawProfileImages", enabled, sizeof(enabled));
+    if (enabled[0] && !atoi(enabled)) {
+        return 0;
+    }
+    for (i = 0; i < BR_MAX_PLAYER_AVATARS; i++) {
+        if (cache[i].time && !strcmp(cache[i].name, name) && uiInfo.uiDC.realTime - cache[i].time < 10000) {
+            break;
+        }
+    }
+    if (i == BR_MAX_PLAYER_AVATARS) {
+        i = next;
+        next = (next + 1) % BR_MAX_PLAYER_AVATARS;
+        Q_strncpyz(cache[i].name, name, sizeof(cache[i].name));
+        cache[i].steamId[0] = '\0';
+        cache[i].time = uiInfo.uiDC.realTime ? uiInfo.uiDC.realTime : 1;
+        Q_strncpyz(clean, name, sizeof(clean));
+        Q_CleanStr(clean);
+        trap_Cvar_VariableStringBuffer("name", other, sizeof(other));
+        Q_CleanStr(other);
+        if (clean[0] && !Q_stricmp(clean, other)) {
+            Q_strncpyz(cache[i].steamId, "self", sizeof(cache[i].steamId));
+        }
+        n = trap_SteamFriendCount();
+        for (; !cache[i].steamId[0] && n > 0; n--) {
+            if (trap_SteamFriendGet(n - 1, &f) && f.steamId[0]) {
+                Q_strncpyz(other, f.name, sizeof(other));
+                Q_CleanStr(other);
+                if (clean[0] && !Q_stricmp(clean, other)) {
+                    Q_strncpyz(cache[i].steamId, f.steamId, sizeof(cache[i].steamId));
+                }
+            }
+        }
+    }
+    if (!cache[i].steamId[0]) {
+        return 0;
+    }
+    return SM_Avatar(strcmp(cache[i].steamId, "self") ? cache[i].steamId : "");
+}
+
 static void BR_PlayerIn(float x, float lineTop, float lineHeight, float size, const float* color, const char* name,
                         const char* time, const smRect_t* clip) {
     float baseline = SM_Baseline(FONT_SANS, size, lineTop, lineHeight);
@@ -1329,7 +1381,11 @@ static void BR_DrawDetails(float x, float top, float w) {
             const char* next = BR_NextPlayer(p, name, sizeof(name), line, sizeof(line));
             float ly = y + 15 + n * 27.75f - br.playersScroll;
 
-            BR_Circle(x + 22.5f, ly, brInfo, &clip);
+            if (BR_PlayerAvatar(name)) {
+                SM_Pic(x + 22.5f + 1.7f - 8, ly + 13.3f - 8, 16, 16, BR_PlayerAvatar(name), &clip);
+            } else {
+                BR_Circle(x + 22.5f, ly, brInfo, &clip);
+            }
             BR_PlayerIn(x + 43.5f, ly, 24, 15, brInfo, name, line, &clip);
             n++;
             p = next;
@@ -1479,7 +1535,12 @@ static void BR_DrawGameInfo(void) {
         for (i = 0; p && *p; i++) {
             const char* next = BR_NextPlayer(p, name, sizeof(name), line, sizeof(line));
 
-            BR_PlayerIn(clip.x, y + i * 34 - br.modalPlayersScroll, 24, 15, smText, name, line, &clip);
+            if (BR_PlayerAvatar(name)) {
+                SM_Pic(clip.x, y + i * 34 - br.modalPlayersScroll + 4, 16, 16, BR_PlayerAvatar(name), &clip);
+                BR_PlayerIn(clip.x + 22, y + i * 34 - br.modalPlayersScroll, 24, 15, smText, name, line, &clip);
+            } else {
+                BR_PlayerIn(clip.x, y + i * 34 - br.modalPlayersScroll, 24, 15, smText, name, line, &clip);
+            }
             p = next;
         }
         BR_ListBar(clip.x + half - BR_SCROLLBAR, y, 350, content, br.modalPlayersScroll);
