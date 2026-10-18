@@ -233,6 +233,10 @@ qboolean trap_LAN_SteamDetailsInfo(char* info, int infoSize) {
     return syscall(UI_LAN_STEAM_DETAILS_INFO, info, infoSize);
 }
 
+qboolean trap_DemoInfo(const char* file, char* info, int infoSize) {
+    return syscall(UI_DEMO_INFO, file, info, infoSize);
+}
+
 qboolean trap_LAN_SteamFavorite(const char* address, qboolean favorite) {
     return syscall(UI_LAN_STEAM_FAVORITE, address, favorite);
 }

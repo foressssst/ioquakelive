@@ -486,6 +486,89 @@ static int CL_WalkDemoExt(char* arg, char* name, int* demofile) {
     return -1;
 }
 
+static void CL_DemoInfoAdd(char* info, int size, const char* key, const char* value) {
+    char clean[MAX_STRING_CHARS];
+    int i;
+
+    for (i = 0; value[i] && i < (int)sizeof(clean) - 1; i++) {
+        clean[i] = value[i] == '\\' ? ' ' : value[i];
+    }
+    clean[i] = '\0';
+    Q_strcat(info, size, va("\\%s\\%s", key, clean));
+}
+
+qboolean CL_DemoInfo(const char* file, char* info, int infoSize) {
+    static byte data[MAX_MSGLEN];
+    char players[MAX_STRING_CHARS];
+    char serverinfo[BIG_INFO_STRING];
+    fileHandle_t f;
+    msg_t msg;
+    int len, cmd, index;
+    char path[MAX_QPATH];
+
+    Com_sprintf(path, sizeof(path), "demos/%s", file);
+    info[0] = '\0';
+    players[0] = '\0';
+    serverinfo[0] = '\0';
+    CL_DemoInfoAdd(info, infoSize, "time", va("%i", FS_FileTime(path)));
+
+    FS_FOpenFileRead(path, &f, qtrue);
+    if (!f) {
+        return qfalse;
+    }
+    if (FS_Read(&len, 4, f) != 4 || FS_Read(&len, 4, f) != 4) {
+        FS_FCloseFile(f);
+        return qfalse;
+    }
+    len = LittleLong(len);
+    if (len <= 0 || len > (int)sizeof(data) || FS_Read(data, len, f) != len) {
+        FS_FCloseFile(f);
+        return qfalse;
+    }
+    FS_FCloseFile(f);
+
+    MSG_Init(&msg, data, sizeof(data));
+    msg.cursize = len;
+    MSG_Bitstream(&msg);
+    MSG_ReadLong(&msg);
+    while (msg.readcount < msg.cursize) {
+        cmd = MSG_ReadByte(&msg);
+        if (cmd == svc_serverCommand) {
+            MSG_ReadLong(&msg);
+            MSG_ReadString(&msg);
+            continue;
+        }
+        if (cmd != svc_gamestate) {
+            break;
+        }
+        MSG_ReadLong(&msg);
+        while (msg.readcount < msg.cursize && MSG_ReadByte(&msg) == svc_configstring) {
+            const char* s;
+
+            index = MSG_ReadShort(&msg);
+            s = MSG_ReadBigString(&msg);
+            if (index == CS_SERVERINFO) {
+                Q_strncpyz(serverinfo, s, sizeof(serverinfo));
+            } else if (index >= CS_PLAYERS && index < CS_PLAYERS + MAX_CLIENTS && Info_ValueForKey(s, "n")[0]) {
+                if (players[0]) {
+                    Q_strcat(players, sizeof(players), "\n");
+                }
+                Q_strcat(players, sizeof(players), Info_ValueForKey(s, "n"));
+            }
+        }
+        break;
+    }
+    if (!serverinfo[0]) {
+        return qfalse;
+    }
+    CL_DemoInfoAdd(info, infoSize, "map", Info_ValueForKey(serverinfo, "mapname"));
+    CL_DemoInfoAdd(info, infoSize, "gametype", Info_ValueForKey(serverinfo, "g_gametype"));
+    CL_DemoInfoAdd(info, infoSize, "factory", Info_ValueForKey(serverinfo, "g_factoryTitle"));
+    CL_DemoInfoAdd(info, infoSize, "host", Info_ValueForKey(serverinfo, "sv_hostname"));
+    CL_DemoInfoAdd(info, infoSize, "players", players);
+    return qtrue;
+}
+
 static void CL_CompleteDemoName(char* args, int argNum) {
     if (argNum == 2) {
         char demoExt[16];

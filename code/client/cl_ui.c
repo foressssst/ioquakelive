@@ -758,6 +758,9 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
         case UI_LAN_STEAM_DETAILS_INFO:
             return Steam_ServerDetailsInfo(VMA(1), args[2]);
 
+        case UI_DEMO_INFO:
+            return CL_DemoInfo(VMA(1), VMA(2), args[3]);
+
         case UI_LAN_SERVER_NAME: {
             char* buf = VMA(3);
 

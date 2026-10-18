@@ -24,6 +24,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "q_steam.h"
 #include "unzip.h"
 
+#include <sys/stat.h>
+
 #define MAX_ZPATH 256
 #define MAX_SEARCH_PATHS 4096
 #define MAX_FILEHASH_SIZE 1024
@@ -365,6 +367,18 @@ qboolean FS_FileInPathExists(const char* testpath) {
 
 qboolean FS_FileExists(const char* file) {
 	return FS_FileInPathExists(FS_BuildOSPath(fs_homepath->string, fs_gamedir, file));
+}
+
+int FS_FileTime(const char* qpath) {
+	searchpath_t* search;
+	struct stat st;
+
+	for (search = fs_searchpaths; search; search = search->next) {
+		if (search->dir && !stat(FS_BuildOSPath(search->dir->path, search->dir->gamedir, qpath), &st)) {
+			return (int)st.st_mtime;
+		}
+	}
+	return 0;
 }
 
 qboolean FS_SV_FileExists(const char* file) {
