@@ -1115,22 +1115,6 @@ static void BR_Loader(float x, float y) {
     }
 }
 
-static void BR_StripColors(const char* in, char* out, int size) {
-    int n = 0;
-
-    for (; *in && n < size - 1; in++) {
-        if (in[0] == '^' && in[1] >= '0' && in[1] <= '9') {
-            in++;
-            continue;
-        }
-        if (*in == '^') {
-            continue;
-        }
-        out[n++] = *in;
-    }
-    out[n] = '\0';
-}
-
 static void BR_Duration(int seconds, char* out, int size) {
     int d = seconds / 86400, h = (seconds / 3600) % 24, m = (seconds / 60) % 60, s = seconds % 60;
 
@@ -1171,11 +1155,11 @@ static int BR_NiceDetails(const char* rules, char out[4][64]) {
     return n;
 }
 
-static const char* BR_NextPlayer(const char* p, char* line, int size) {
-    char name[64];
+static const char* BR_NextPlayer(const char* p, char* name, int nameSize, char* line, int size) {
     const char* tab;
     int seconds;
     char time[32];
+    int i, n;
 
     if (!p || !*p) {
         return NULL;
@@ -1184,14 +1168,30 @@ static const char* BR_NextPlayer(const char* p, char* line, int size) {
     if (!tab) {
         return NULL;
     }
-    Q_strncpyz(name, p, (int)(tab - p) + 1 < (int)sizeof(name) ? (int)(tab - p) + 1 : (int)sizeof(name));
+    Q_strncpyz(name, p, (int)(tab - p) + 1 < nameSize ? (int)(tab - p) + 1 : nameSize);
+    for (i = n = 0; name[i]; i++) {
+        if ((unsigned char)name[i] >= ' ') {
+            name[n++] = name[i];
+        }
+    }
+    name[n] = '\0';
     tab = strchr(tab + 1, '\t');
     seconds = tab ? atoi(tab + 1) : 0;
-    BR_StripColors(name, name, sizeof(name));
     BR_Duration(seconds, time, sizeof(time));
-    Com_sprintf(line, size, "%s (Time: %s)", name, time);
+    Com_sprintf(line, size, " (Time: %s)", time);
     p = strchr(p, '\n');
     return p ? p + 1 : NULL;
+}
+
+static void BR_PlayerIn(float x, float lineTop, float lineHeight, float size, const float* color, const char* name,
+                        const char* time, const smRect_t* clip) {
+    float baseline = SM_Baseline(FONT_SANS, size, lineTop, lineHeight);
+
+    if (clip && !SM_TextInside(baseline, size, clip)) {
+        return;
+    }
+    SM_Text(x, baseline, FONT_SANS, size, color, name, -1, qfalse);
+    SM_TextRaw(x + SM_Advance(FONT_SANS, size, name, -1), baseline, FONT_SANS, size, color, time, -1, qfalse);
 }
 
 static float BR_Scorebox(float x, float y, float w, const char* rules) {
@@ -1302,7 +1302,7 @@ static void BR_DrawDetails(float x, float top, float w) {
 
     if (br.players[0]) {
         const char* p = br.players;
-        char line[128];
+        char name[64], line[128];
         float content, h;
         smRect_t clip;
         int n = 0;
@@ -1326,11 +1326,11 @@ static void BR_DrawDetails(float x, float top, float w) {
         p = br.players;
         n = 0;
         while (p && *p) {
-            const char* next = BR_NextPlayer(p, line, sizeof(line));
+            const char* next = BR_NextPlayer(p, name, sizeof(name), line, sizeof(line));
             float ly = y + 15 + n * 27.75f - br.playersScroll;
 
             BR_Circle(x + 22.5f, ly, brInfo, &clip);
-            BR_TextIn(x + 43.5f, ly, 24, 15, brInfo, line, qfalse, &clip);
+            BR_PlayerIn(x + 43.5f, ly, 24, 15, brInfo, name, line, &clip);
             n++;
             p = next;
         }
@@ -1447,7 +1447,7 @@ static void BR_DrawGameInfo(void) {
         int n = BR_NiceDetails(br.modalRules, lines);
         float half = w * 0.48f;
         const char* p = br.modalPlayers;
-        char line[128];
+        char name[64], line[128];
         smRect_t clip = SM_R(x + w * 0.52f, y, half, 350);
         float content;
         int i;
@@ -1477,9 +1477,9 @@ static void BR_DrawGameInfo(void) {
         SM_Hit(clip.x, clip.y, clip.w, clip.h, BR_HIT_MODAL_PLAYERS, 0, NULL);
         p = br.modalPlayers;
         for (i = 0; p && *p; i++) {
-            const char* next = BR_NextPlayer(p, line, sizeof(line));
+            const char* next = BR_NextPlayer(p, name, sizeof(name), line, sizeof(line));
 
-            BR_TextIn(clip.x, y + i * 34 - br.modalPlayersScroll, 24, 15, smText, line, qfalse, &clip);
+            BR_PlayerIn(clip.x, y + i * 34 - br.modalPlayersScroll, 24, 15, smText, name, line, &clip);
             p = next;
         }
         BR_ListBar(clip.x + half - BR_SCROLLBAR, y, 350, content, br.modalPlayersScroll);
