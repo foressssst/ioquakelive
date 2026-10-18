@@ -283,6 +283,44 @@ void CL_ShutdownCGame(void) {
     cgvm = NULL;
 }
 
+#define CL_MAX_AVATARS 256
+
+static struct {
+    uint64_t steamId;
+    qhandle_t shader;
+} clAvatars[CL_MAX_AVATARS];
+static int clNumAvatars;
+
+void CL_ClearAvatars(void) {
+    clNumAvatars = 0;
+}
+
+static qhandle_t CL_SteamAvatar(uint64_t steamId) {
+    qhandle_t shader;
+    byte* rgba;
+    int w, h, i;
+
+    if (!steamId || !re.RegisterShaderFromRaw) {
+        return 0;
+    }
+    for (i = 0; i < clNumAvatars; i++) {
+        if (clAvatars[i].steamId == steamId) {
+            return clAvatars[i].shader;
+        }
+    }
+    if (clNumAvatars >= CL_MAX_AVATARS || !Steam_AvatarImage(steamId, &rgba, &w, &h)) {
+        return 0;
+    }
+    shader = re.RegisterShaderFromRaw(va("steam_%llu", (unsigned long long)steamId), rgba, w, h);
+    Z_Free(rgba);
+    if (shader) {
+        clAvatars[clNumAvatars].steamId = steamId;
+        clAvatars[clNumAvatars].shader = shader;
+        clNumAvatars++;
+    }
+    return shader;
+}
+
 static int FloatAsInt(float f) {
     floatint_t fi;
     fi.f = f;
@@ -548,6 +586,9 @@ static intptr_t CL_CgameSystemCallsInner(intptr_t* args) {
             return 0;
         case CG_WEBIMAGELINK:
             return CL_WebImage_Link(VMA(1));
+
+        case CG_STEAM_AVATAR:
+            return CL_SteamAvatar(((uint64_t)(unsigned int)args[2] << 32) | (unsigned int)args[1]);
 
         case CG_R_APPLYBLOOM:
             re.ApplyBloom();

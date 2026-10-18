@@ -2494,7 +2494,9 @@ static void CG_DrawDuelPlayerAvatar(rectDef_t *rect, int ownerDraw) {
     if (!cg.duelScoresValid) return;
     clientNum = ds->clientNum;
     if (clientNum < 0 || clientNum >= MAX_CLIENTS || !cgs.clientinfo[clientNum].infoValid) return;
-    if (cgs.clientinfo[clientNum].modelIcon) {
+    if (CG_PlayerAvatar(&cgs.clientinfo[clientNum])) {
+        CG_DrawPic(rect->x, rect->y, rect->w, rect->h, cgs.clientinfo[clientNum].avatar);
+    } else if (cgs.clientinfo[clientNum].modelIcon) {
         CG_DrawPic(rect->x, rect->y, rect->w, rect->h, cgs.clientinfo[clientNum].modelIcon);
     }
 }

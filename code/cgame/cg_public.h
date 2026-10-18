@@ -175,7 +175,8 @@ typedef enum {
     CG_CVAR_REGISTER_RANGE,
     CG_R_BEGINBLOOMSCENE,
     CG_R_APPLYBLOOM,
-    CG_WEBIMAGELINK
+    CG_WEBIMAGELINK,
+    CG_STEAM_AVATAR
 } cgameImport_t;
 
 typedef enum {

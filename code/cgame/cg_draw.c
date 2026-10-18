@@ -421,7 +421,9 @@ void CG_DrawHead(float x, float y, float w, float h, int clientNum, vec3_t headA
 
 	ci = &cgs.clientinfo[clientNum];
 
-	if (cg_draw3dIcons.integer) {
+	if (CG_PlayerAvatar(ci)) {
+		CG_DrawPic(x, y, w, h, ci->avatar);
+	} else if (cg_draw3dIcons.integer) {
 		cm = ci->headModel;
 		if (!cm) {
 			return;
@@ -2994,7 +2996,8 @@ static void CG_DrawSpecTeamVitals(void) {
 			CG_DrawPic(x, y - 16.0f, 16, 16, cgs.media.friendDeadShader);
 		} else {
 			CG_DrawPic(x, y - 16.0f, 16, 16,
-					   ci->modelIcon ? ci->modelIcon : cg_weapons[cent->currentState.weapon].weaponIcon);
+					   CG_PlayerAvatar(ci) ? ci->avatar
+					   : ci->modelIcon ? ci->modelIcon : cg_weapons[cent->currentState.weapon].weaponIcon);
 		}
 		if (gradient) {
 			*yp = y - step;

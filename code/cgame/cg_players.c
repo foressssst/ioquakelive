@@ -928,6 +928,29 @@ void CG_LoadDeferredPlayers(void) {
             }
             CG_LoadClientInfo(i, ci);
         }
+        if (!ci->avatar && ci->steamId) {
+            ci->avatar = trap_SteamAvatar(ci->steamId);
+        }
+    }
+}
+
+qhandle_t CG_PlayerAvatar(const clientInfo_t* ci) {
+    return (cg_drawProfileImages.integer && ci->steamId) ? ci->avatar : 0;
+}
+
+void CG_LoadAvatars(void) {
+    static int next;
+    int i;
+    clientInfo_t* ci;
+
+    if (cg.time < next && next - cg.time <= 1000) {
+        return;
+    }
+    next = cg.time + 1000;
+    for (i = 0, ci = cgs.clientinfo; i < cgs.maxclients; i++, ci++) {
+        if (ci->infoValid && !ci->avatar && ci->steamId) {
+            ci->avatar = trap_SteamAvatar(ci->steamId);
+        }
     }
 }
 

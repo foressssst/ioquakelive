@@ -2784,6 +2784,7 @@ void CL_ShutdownRef(void) {
 
 void CL_InitRenderer(void) {
     re.BeginRegistration(&cls.glconfig);
+    CL_ClearAvatars();
 
     cls.charSetShader = re.RegisterShader("gfx/2d/bigchars");
     cls.whiteShader = re.RegisterShader("white");

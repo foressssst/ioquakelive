@@ -1096,6 +1096,8 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
 
     cg.clientFrame++;
 
+    CG_LoadAvatars();
+
     CG_PredictPlayerState();
 
     {

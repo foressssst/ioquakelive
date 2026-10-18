@@ -1939,6 +1939,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.ApplyBloom = RE_ApplyBloom;
 	re.LowLatencyWait = vk_low_latency_input;
 	re.LowLatencyFlash = vk_low_latency_flash;
+	re.RegisterShaderFromRaw = RE_RegisterShaderFromRaw;
 
 	return &re;
 }

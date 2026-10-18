@@ -171,6 +171,8 @@ typedef struct {
     uint64_t(QDECL* UnsubscribeItem)(void* self, uint64_t item);
     void*(QDECL* Utils)(void);
     int(QDECL* GetMediumFriendAvatar)(void* self, uint64_t steamId);
+    int(QDECL* GetLargeFriendAvatar)(void* self, uint64_t steamId);
+    steamBool_t(QDECL* RequestUserInformation)(void* self, uint64_t steamId, steamBool_t nameOnly);
     steamBool_t(QDECL* GetImageSize)(void* self, int image, unsigned int* width, unsigned int* height);
     steamBool_t(QDECL* GetImageRGBA)(void* self, int image, unsigned char* dest, int size);
     void* utils;
@@ -351,6 +353,8 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND_OPT(UnsubscribeItem, "SteamAPI_ISteamUGC_UnsubscribeItem");
     STEAM_BIND_OPT(Utils, "SteamUtils");
     STEAM_BIND_OPT(GetMediumFriendAvatar, "SteamAPI_ISteamFriends_GetMediumFriendAvatar");
+    STEAM_BIND_OPT(GetLargeFriendAvatar, "SteamAPI_ISteamFriends_GetLargeFriendAvatar");
+    STEAM_BIND_OPT(RequestUserInformation, "SteamAPI_ISteamFriends_RequestUserInformation");
     STEAM_BIND_OPT(GetImageSize, "SteamAPI_ISteamUtils_GetImageSize");
     STEAM_BIND_OPT(GetImageRGBA, "SteamAPI_ISteamUtils_GetImageRGBA");
     STEAM_BIND_OPT(Networking, "SteamNetworking");
@@ -634,6 +638,8 @@ SD_RET(int, GetFriendCount, 3, (void* self, int a), (self, a))
 SD_RET(int, GetFriendPersonaState, 6, (void* self, uint64_t a), (self, a))
 SD_RET(const char*, GetFriendPersonaName, 7, (void* self, uint64_t a), (self, a))
 SD_RET(int, GetMediumFriendAvatar, 35, (void* self, uint64_t a), (self, a))
+SD_RET(int, GetLargeFriendAvatar, 36, (void* self, uint64_t a), (self, a))
+SD_RET(steamBool_t, RequestUserInformation, 37, (void* self, uint64_t a, steamBool_t b), (self, a, b))
 
 SD_RET(steamBool_t, GetImageSize, 5, (void* self, int a, unsigned int* b, unsigned int* c), (self, a, b, c))
 SD_RET(steamBool_t, GetImageRGBA, 6, (void* self, int a, unsigned char* b, int c), (self, a, b, c))
@@ -937,6 +943,8 @@ static void SD_Bind(void) {
     SD_SET(UnsubscribeItem);
     SD_SET(Utils);
     SD_SET(GetMediumFriendAvatar);
+    SD_SET(GetLargeFriendAvatar);
+    SD_SET(RequestUserInformation);
     SD_SET(GetImageSize);
     SD_SET(GetImageRGBA);
     SD_SET(GetItemState);
@@ -3109,6 +3117,39 @@ qboolean Steam_Avatar(uint64_t steamId, char* path, int size) {
     if (numWritten < STEAM_MAX_AVATARS) {
         written[numWritten++] = steamId;
     }
+    return qtrue;
+}
+
+qboolean Steam_AvatarImage(uint64_t steamId, byte** rgba, int* width, int* height) {
+    static uint64_t asked[STEAM_MAX_AVATARS];
+    static int numAsked;
+    unsigned int w = 0, h = 0;
+    int image, i;
+
+    if (!steamId || !st.clientUp || !st.friends || !st.utils || !st.GetLargeFriendAvatar || !st.GetImageSize ||
+        !st.GetImageRGBA) {
+        return qfalse;
+    }
+    image = st.GetLargeFriendAvatar(st.friends, steamId);
+    if (image == 0 && st.RequestUserInformation) {
+        for (i = 0; i < numAsked && asked[i] != steamId; i++) {
+        }
+        if (i == numAsked && numAsked < STEAM_MAX_AVATARS) {
+            asked[numAsked++] = steamId;
+            st.RequestUserInformation(st.friends, steamId, qfalse);
+        }
+    }
+    if (image <= 0 || !st.GetImageSize(st.utils, image, &w, &h) || !w || !h || w > 512 || h > 512) {
+        return qfalse;
+    }
+    *rgba = (byte*)Z_Malloc(w * h * 4);
+    if (!st.GetImageRGBA(st.utils, image, *rgba, (int)(w * h * 4))) {
+        Z_Free(*rgba);
+        *rgba = NULL;
+        return qfalse;
+    }
+    *width = (int)w;
+    *height = (int)h;
     return qtrue;
 }
 

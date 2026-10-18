@@ -3202,6 +3202,20 @@ qhandle_t RE_RegisterShaderFromImage(const char *name, int lightmapIndex, image_
 	return sh->index;
 }
 
+qhandle_t RE_RegisterShaderFromRaw( const char *name, const byte *rgba, int width, int height ) {
+	image_t *image;
+
+	if ( !name || !rgba || width <= 0 || height <= 0 ) {
+		return 0;
+	}
+	image = R_CreateImage( name, NULL, (byte *)rgba, width, height, IMGFLAG_MIPMAP | IMGFLAG_UI | IMGFLAG_CLAMPTOEDGE |
+		IMGFLAG_NOLIGHTSCALE | IMGFLAG_NOSCALE | IMGFLAG_NO_COMPRESSION );
+	if ( !image ) {
+		return 0;
+	}
+	return RE_RegisterShaderFromImage( name, LIGHTMAP_2D, image, qfalse );
+}
+
 qhandle_t RE_RegisterShaderLightMap( const char *name, int lightmapIndex ) {
 	shader_t	*sh;
 

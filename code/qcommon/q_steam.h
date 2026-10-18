@@ -107,6 +107,7 @@ void Steam_ShowAchievements(uint64_t steamId);
 qboolean Steam_InviteToGame(uint64_t steamId, const char* connect);
 unsigned int Steam_GS_PublicIP(void);
 qboolean Steam_Avatar(uint64_t steamId, char* path, int size);
+qboolean Steam_AvatarImage(uint64_t steamId, byte** rgba, int* width, int* height);
 void Steam_ShowFriends(void);
 
 typedef struct {

@@ -2712,7 +2712,7 @@ static const char* CG_FeederColumnsCtf(score_t* sp, clientInfo_t* info, int colu
 static const char* CG_FeederItemTextRace(clientInfo_t* info, score_t* sp, int column, qhandle_t* handle) {
     switch (column) {
         case 0:
-            *handle = info->modelIcon;
+            *handle = CG_PlayerAvatar(info) ? info->avatar : info->modelIcon;
             return "";
         case 1:
             return "";
@@ -2858,7 +2858,7 @@ static const char* CG_FeederItemText(float feederID, int index, int column, qhan
 
     switch (column) {
         case 0:
-            *handle = info->modelIcon;
+            *handle = CG_PlayerAvatar(info) ? info->avatar : info->modelIcon;
             return "";
         case 1:
             if (info->steamId && trap_VoiceIsIgnored(info->steamId)) {

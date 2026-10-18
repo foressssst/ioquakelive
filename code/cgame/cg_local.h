@@ -382,6 +382,7 @@ typedef struct {
     char country[MAX_QPATH];
     team_t team;
     uint64_t steamId;
+    qhandle_t avatar;
 
     qboolean talking;
     int talkingTime;
@@ -1684,6 +1685,7 @@ extern vmCvar_t cg_specItemTimers;
 extern vmCvar_t cg_specItemTimersSize;
 extern vmCvar_t cg_specItemTimersX;
 extern vmCvar_t cg_specItemTimersY;
+extern vmCvar_t cg_drawProfileImages;
 extern vmCvar_t cg_specTeamVitals;
 extern vmCvar_t cg_specTeamVitalsHealthColor;
 extern vmCvar_t cg_specTeamVitalsWidth;
@@ -1957,6 +1959,8 @@ void CG_Trace(trace_t* result, const vec3_t start, const vec3_t mins, const vec3
 void CG_CapsuleTrace(trace_t* result, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int skipNumber, int mask);
 void CG_PredictPlayerState(void);
 void CG_LoadDeferredPlayers(void);
+void CG_LoadAvatars(void);
+qhandle_t CG_PlayerAvatar(const clientInfo_t* ci);
 void CG_ReloadOtherClients(void);
 void CG_SetEndScoreboardMenu(void);
 
@@ -2253,6 +2257,7 @@ void trap_R_RegisterFont(const char* fontName, int pointSize, fontInfo_t* font);
 void trap_R_Font_DrawString(int x, int y, const char* text, int fontIndex, float scale, int limit, float* maxX, int flags);
 void trap_R_Font_TextExtents(const char* text, int start, int fontIndex, float scale, int limit, float* extents);
 qboolean trap_WebImageLink(const char* url);
+qhandle_t trap_SteamAvatar(uint64_t steamId);
 void trap_R_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t* glyph);
 void trap_IME_SetCompositionFont(int fontIndex, float scale);
 int trap_R_Font_Register(const char* name);
