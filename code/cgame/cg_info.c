@@ -212,89 +212,50 @@ static void CG_LoadingCentered(float y, float scale, const float* color, const c
     }
 }
 
-static void CG_LoadingDisc(float cx, float cy, float radius, qhandle_t shader, float s1, float t1, float s2,
-                           float t2) {
-    float x = cx - radius, y = cy - radius, w = radius * 2.0f, h = radius * 2.0f, r, dy, half, rh;
+static void CG_LoadingSpan(const float* box, float x, float y, float w, float h, qhandle_t shader) {
+    if (w <= 0.0f || h <= 0.0f) {
+        return;
+    }
+    trap_R_DrawStretchPic(x, y, w, h, box[4] + (x - box[0]) / box[2] * (box[6] - box[4]),
+                          box[5] + (y - box[1]) / box[3] * (box[7] - box[5]),
+                          box[4] + (x + w - box[0]) / box[2] * (box[6] - box[4]),
+                          box[5] + (y + h - box[1]) / box[3] * (box[7] - box[5]), shader);
+}
+
+static void CG_LoadingCard(float x, float y, float w, float h, float radius, qhandle_t shader, float s1, float t1,
+                           float s2, float t2) {
+    float box[8], r, e, in;
     int i, rows;
 
     CG_AdjustFrom640(&x, &y, &w, &h);
-    r = h * 0.5f;
-    rows = (int)ceil(h);
+    r = radius * cgs.screenYScale;
+    box[0] = x;
+    box[1] = y;
+    box[2] = w;
+    box[3] = h;
+    box[4] = s1;
+    box[5] = t1;
+    box[6] = s2;
+    box[7] = t2;
+    rows = (int)ceil(r);
+    if (rows > (int)(h * 0.5f)) {
+        rows = (int)(h * 0.5f);
+    }
     for (i = 0; i < rows; i++) {
-        rh = h - i < 1.0f ? h - i : 1.0f;
-        dy = i + rh * 0.5f - r;
-        half = r * r - dy * dy > 0.0f ? (float)sqrt(r * r - dy * dy) : 0.0f;
-        if (half <= 0.0f) {
-            continue;
-        }
-        trap_R_DrawStretchPic(x + r - half, y + i, half * 2.0f, rh, s1 + (s2 - s1) * (r - half) / w,
-                              t1 + (t2 - t1) * i / h, s1 + (s2 - s1) * (r + half) / w, t1 + (t2 - t1) * (i + rh) / h,
-                              shader);
+        e = i + 0.5f;
+        in = e < r ? r - (float)sqrt(r * r - (r - e) * (r - e)) : 0.0f;
+        CG_LoadingSpan(box, x + in, y + i, w - in * 2.0f, 1.0f, shader);
+        CG_LoadingSpan(box, x + in, y + h - i - 1.0f, w - in * 2.0f, 1.0f, shader);
     }
+    CG_LoadingSpan(box, x, y + rows, w, h - rows * 2, shader);
 }
 
-static void CG_LoadingArcSpan(float cx, float cy, float y, float h, float x0, float x1, float to) {
-    float x, a, run = -1.0f;
-
-    for (x = x0; x < x1; x += 1.0f) {
-        a = (float)atan2(x + 0.5f - cx, cy - (y + h * 0.5f)) / (2.0f * (float)M_PI);
-        if (a < 0.0f) {
-            a += 1.0f;
-        }
-        if (a <= to) {
-            if (run < 0.0f) {
-                run = x;
-            }
-        } else if (run >= 0.0f) {
-            trap_R_DrawStretchPic(run, y, x - run, h, 0, 0, 1, 1, cgs.media.whiteShader);
-            run = -1.0f;
-        }
-    }
-    if (run >= 0.0f) {
-        trap_R_DrawStretchPic(run, y, x1 - run, h, 0, 0, 1, 1, cgs.media.whiteShader);
-    }
-}
-
-static void CG_LoadingRing(float cx, float cy, float radius, float thickness, float to, const float* color) {
-    float x = cx, y = cy, w = radius, h = radius, outer, inner, row, dy, xo, xi;
-
-    if (to <= 0.0f) {
-        return;
-    }
-    CG_AdjustFrom640(&x, &y, &w, &h);
-    outer = h;
-    inner = h - thickness * cgs.screenYScale;
-    trap_R_SetColor(color);
-    for (row = (float)floor(y - outer); row < y + outer; row += 1.0f) {
-        dy = row + 0.5f - y;
-        if (dy * dy >= outer * outer) {
-            continue;
-        }
-        xo = (float)sqrt(outer * outer - dy * dy);
-        xi = dy * dy < inner * inner ? (float)sqrt(inner * inner - dy * dy) : 0.0f;
-        if (to >= 1.0f) {
-            if (xi > 0.0f) {
-                trap_R_DrawStretchPic(x - xo, row, xo - xi, 1, 0, 0, 1, 1, cgs.media.whiteShader);
-                trap_R_DrawStretchPic(x + xi, row, xo - xi, 1, 0, 0, 1, 1, cgs.media.whiteShader);
-            } else {
-                trap_R_DrawStretchPic(x - xo, row, xo * 2.0f, 1, 0, 0, 1, 1, cgs.media.whiteShader);
-            }
-        } else if (xi > 0.0f) {
-            CG_LoadingArcSpan(x, y, row, 1.0f, x - xo, x - xi, to);
-            CG_LoadingArcSpan(x, y, row, 1.0f, x + xi, x + xo, to);
-        } else {
-            CG_LoadingArcSpan(x, y, row, 1.0f, x - xo, x + xo, to);
-        }
-    }
-    trap_R_SetColor(NULL);
-}
-
-static void CG_DrawLoadingCircle(qhandle_t levelshot, float s1, float s2) {
+static void CG_DrawLoadingCard(qhandle_t levelshot, float s1, float s2) {
     const char* info = CG_ConfigString(CS_SERVERINFO);
     char title[MAX_QPATH], host[MAX_QPATH], mode[MAX_QPATH], map[MAX_QPATH];
     vec4_t dim = {0.5f, 0.5f, 0.5f, 1.0f};
     qhandle_t blurred;
-    float top = 119.0f, cy = top + 115.0f, x = 260.0f, y = top, w = 120.0f, h = 30.0f;
+    float top = 142.0f, x = 260.0f, y = top, w = 120.0f, h = 30.0f;
 
     Q_strncpyz(title, CG_ConfigString(CS_MESSAGE)[0] ? CG_ConfigString(CS_MESSAGE) : cgs.mapname, sizeof(title));
     Q_strncpyz(host, Info_ValueForKey(info, "sv_hostname"), sizeof(host));
@@ -316,14 +277,14 @@ static void CG_DrawLoadingCircle(qhandle_t levelshot, float s1, float s2) {
     CG_AdjustFrom640(&x, &y, &w, &h);
     trap_R_DrawStretchPic(x, y, w, h, 56.0f / 512.0f, 16.0f / 128.0f, 449.0f / 512.0f, 114.0f / 128.0f,
                           trap_R_RegisterShaderNoMip("ui/assets/main_menu/ql_logo.png"));
-    CG_LoadingDisc(320.0f, cy, 52.0f, levelshot, 0.21875f, 0.0f, 0.78125f, 1.0f);
-    CG_LoadingRing(320.0f, cy, 59.0f, 2.0f, 1.0f, loadTrack);
-    CG_LoadingRing(320.0f, cy, 59.0f, 2.0f, CG_LoadingProgress(), loadAccent);
-    CG_LoadingCentered(top + 207.0f, 0.32f, colorWhite, title, 0.0f);
+    CG_LoadingCentered(top + 61.5f, 0.32f, colorWhite, title, 0.0f);
     if (host[0]) {
-        CG_LoadingCentered(top + 223.5f, 0.2f, loadMuted, host, 0.0f);
+        CG_LoadingCentered(top + 78.0f, 0.2f, loadMuted, host, 0.0f);
     }
-    CG_LoadingCentered(top + 239.0f, 0.16f, loadAccent, mode, 1.5f);
+    CG_LoadingCard(212.0f, top + 94.0f, 216.0f, 72.0f, 6.0f, levelshot, 0.0f, 0.2037f, 1.0f, 0.7963f);
+    CG_FillRect(212.0f, top + 174.0f, 216.0f, 1.5f, loadTrack);
+    CG_FillRect(212.0f, top + 174.0f, 216.0f * CG_LoadingProgress(), 1.5f, loadAccent);
+    CG_LoadingCentered(top + 195.0f, 0.16f, loadAccent, mode, 1.5f);
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
 
@@ -339,7 +300,7 @@ static void CG_DrawLoadingRemaster(qhandle_t levelshot, float s1, float s2) {
     int count, i;
 
     if (cg_remaster.integer == 3) {
-        CG_DrawLoadingCircle(levelshot, s1, s2);
+        CG_DrawLoadingCard(levelshot, s1, s2);
         return;
     }
 
