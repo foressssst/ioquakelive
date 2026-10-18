@@ -609,7 +609,7 @@ static intptr_t CL_CgameSystemCallsInner(intptr_t* args) {
             return CL_SteamAvatarShader(((uint64_t)(unsigned int)args[2] << 32) | (unsigned int)args[1]);
 
         case CG_CONSOLE_AVATAR:
-            Con_SetPendingAvatar(((uint64_t)(unsigned int)args[2] << 32) | (unsigned int)args[1]);
+            Con_SetPendingAvatar(((uint64_t)(unsigned int)args[2] << 32) | (unsigned int)args[1], VMA(3));
             return 0;
 
         case CG_R_APPLYBLOOM:

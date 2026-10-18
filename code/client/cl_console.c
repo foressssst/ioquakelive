@@ -72,6 +72,7 @@ typedef struct {
     int line;
     int col;
     uint64_t steamId;
+    char icon[MAX_QPATH];
 } conAvatar_t;
 
 typedef struct {
@@ -136,6 +137,7 @@ typedef struct {
     conAvatar_t avatars[CON_MAX_AVATARS];
     int nextAvatar;
     uint64_t pendingAvatar;
+    char pendingIcon[MAX_QPATH];
 } console_t;
 
 console_t con;
@@ -592,8 +594,9 @@ static void Con_DrawRowImage(int row, float rowTop, float cellH, float x0, float
     re.DrawStretchPic(x0, y0, w, y1 - y0, 0.0f, (y0 - top) / h, 1.0f, (y1 - top) / h, shader);
 }
 
-void Con_SetPendingAvatar(uint64_t steamId) {
+void Con_SetPendingAvatar(uint64_t steamId, const char* icon) {
     con.pendingAvatar = steamId;
+    Q_strncpyz(con.pendingIcon, icon ? icon : "", sizeof(con.pendingIcon));
 }
 
 static void Con_DrawRowAvatar(int row, float rowTop, float cellH, float x0, float adv) {
@@ -602,11 +605,18 @@ static void Con_DrawRowAvatar(int row, float rowTop, float cellH, float x0, floa
     int i;
 
     for (i = 0; i < CON_MAX_AVATARS; i++) {
-        if (con.avatars[i].steamId && con.avatars[i].line == row) {
+        if ((con.avatars[i].steamId || con.avatars[i].icon[0]) && con.avatars[i].line == row) {
             break;
         }
     }
-    if (i == CON_MAX_AVATARS || !(shader = CL_SteamAvatarShader(con.avatars[i].steamId))) {
+    if (i == CON_MAX_AVATARS) {
+        return;
+    }
+    shader = con.avatars[i].steamId ? CL_SteamAvatarShader(con.avatars[i].steamId) : 0;
+    if (!shader && con.avatars[i].icon[0]) {
+        shader = re.RegisterShaderNoMip(con.avatars[i].icon);
+    }
+    if (!shader) {
         return;
     }
     size = cellH * 0.85f;
@@ -836,6 +846,7 @@ void Con_Clear_f(void) {
     con.pendingImage[0] = '\0';
     Com_Memset(con.avatars, 0, sizeof(con.avatars));
     con.pendingAvatar = 0;
+    con.pendingIcon[0] = 0;
     con.scrollPos = con.display;
 
     con.searchStarted = qfalse;
@@ -993,6 +1004,7 @@ void Con_CheckResize(void) {
         con.avatars[i].line += con.current - oldcurrent;
         if (con.avatars[i].line <= con.current - con.totallines) {
             con.avatars[i].steamId = 0;
+            con.avatars[i].icon[0] = 0;
         }
     }
     Com_Memset(con.lineBorn, 0, sizeof(con.lineBorn));
@@ -1357,14 +1369,16 @@ void CL_ConsolePrint(char* txt) {
         }
     }
 
-    if (con.pendingAvatar) {
+    if (con.pendingAvatar || con.pendingIcon[0]) {
         conAvatar_t* av = &con.avatars[con.nextAvatar];
 
         con.nextAvatar = (con.nextAvatar + 1) % CON_MAX_AVATARS;
         av->line = con.current;
         av->col = con.x;
         av->steamId = con.pendingAvatar;
+        Q_strncpyz(av->icon, con.pendingIcon, sizeof(av->icon));
         con.pendingAvatar = 0;
+        con.pendingIcon[0] = 0;
         for (l = 0; l < CON_AVATAR_CELLS && con.x < con.linewidth - 1; l++) {
             if (con.x == 0) {
                 con.lineBorn[con.current % CON_ANIM_ROWS] = cls.realtime;

@@ -518,6 +518,7 @@ typedef struct {
     int fadeTime;
     int sender;
     uint64_t steamId;
+    qhandle_t icon;
     char text[CHAT_LINE_TEXT];
 } chatLine_t;
 
@@ -2261,7 +2262,7 @@ void trap_R_Font_DrawString(int x, int y, const char* text, int fontIndex, float
 void trap_R_Font_TextExtents(const char* text, int start, int fontIndex, float scale, int limit, float* extents);
 qboolean trap_WebImageLink(const char* url);
 qhandle_t trap_SteamAvatar(uint64_t steamId);
-void trap_ConsoleAvatar(uint64_t steamId);
+void trap_ConsoleAvatar(uint64_t steamId, const char* icon);
 void trap_R_GetGlyphInfo(int fontIndex, int charValue, glyphInfo_t* glyph);
 void trap_IME_SetCompositionFont(int fontIndex, float scale);
 int trap_R_Font_Register(const char* name);

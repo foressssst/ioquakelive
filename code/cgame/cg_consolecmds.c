@@ -604,6 +604,7 @@ void CG_AddChatFrom(const char *rawText, int teamOnly, int extraTime, int sender
     cg.currentChatLine.fadeTime = cg.time;
     cg.currentChatLine.sender = sender;
     cg.currentChatLine.steamId = (sender >= 0 && sender < MAX_CLIENTS) ? cgs.clientinfo[sender].steamId : 0;
+    cg.currentChatLine.icon = (sender >= 0 && sender < MAX_CLIENTS) ? cgs.clientinfo[sender].modelIcon : 0;
     cg.chatSlideStart = cg.time;
     cg.chatSlideKey = cg.time;
     cg.chatSlideIn = qtrue;
@@ -642,17 +643,23 @@ static qboolean CG_ChatLineShowing(const chatLine_t* line) {
 
 static float CG_DrawChatLine(float x, float y, float scale, float* color, const chatLine_t* line, int style) {
     const clientInfo_t* ci;
+    qhandle_t pic = 0;
     float size;
 
-    if (line->sender >= 0 && line->sender < MAX_CLIENTS && line->steamId) {
+    if (line->sender >= 0 && line->sender < MAX_CLIENTS) {
         ci = &cgs.clientinfo[line->sender];
-        if (ci->steamId == line->steamId && CG_PlayerAvatar(ci)) {
-            size = CG_DrawTextCapHeight(scale, 1) + 3.0f;
-            trap_R_SetColor(color);
-            CG_DrawPic(x, y - size + 1.5f, size, size, ci->avatar);
-            trap_R_SetColor(NULL);
-            x += size + 3.0f;
+        if (line->steamId && ci->steamId == line->steamId && CG_PlayerAvatar(ci)) {
+            pic = ci->avatar;
+        } else {
+            pic = line->icon;
         }
+    }
+    if (pic) {
+        size = CG_DrawTextCapHeight(scale, 1) + 3.0f;
+        trap_R_SetColor(color);
+        CG_DrawPic(x, y - size + 1.5f, size, size, pic);
+        trap_R_SetColor(NULL);
+        x += size + 3.0f;
     }
     CG_DrawText(x, y, 1, scale, color, line->text, 0, 256, style);
     return x;

@@ -1397,9 +1397,14 @@ static int CG_ChatSender(const char* arg) {
 }
 
 static void CG_ChatConsoleAvatar(int sender) {
-    if (sender >= 0 && sender < MAX_CLIENTS && cg_drawProfileImages.integer && cgs.clientinfo[sender].steamId) {
-        trap_ConsoleAvatar(cgs.clientinfo[sender].steamId);
+    const clientInfo_t* ci;
+
+    if (sender < 0 || sender >= MAX_CLIENTS || !cgs.clientinfo[sender].infoValid) {
+        return;
     }
+    ci = &cgs.clientinfo[sender];
+    trap_ConsoleAvatar(cg_drawProfileImages.integer ? ci->steamId : 0,
+                       va("models/players/%s/icon_%s.tga", ci->headModelName, ci->headSkinName));
 }
 
 static void CG_RemoveChatEscapeChar(char* text) {
