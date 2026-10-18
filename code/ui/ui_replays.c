@@ -252,12 +252,18 @@ static void RP_Load(void) {
     rp.count = 0;
     Com_sprintf(ext, sizeof(ext), "dm_%d", (int)trap_Cvar_VariableValue("protocol"));
     n = trap_FS_GetFileList("demos", ext, list, sizeof(list));
-    for (p = list, i = 0; i < n && rp.count < RP_MAX_DEMOS; i++) {
+    for (p = list, i = 0; i < n && rp.count < RP_MAX_DEMOS; i++, p += strlen(p) + 1) {
+        const char* c;
+
+        for (c = p; *c && *c != '"' && (unsigned char)*c >= ' '; c++) {
+        }
+        if (*c) {
+            continue;
+        }
         Com_Memset(&rp.demo[rp.count], 0, sizeof(rp.demo[0]));
         Q_strncpyz(rp.demo[rp.count].file, p, sizeof(rp.demo[0].file));
         RP_ReadDemo(&rp.demo[rp.count]);
         rp.count++;
-        p += strlen(p) + 1;
     }
 
     len = RP_ReadFile("matches/media.txt", media, sizeof(media));
