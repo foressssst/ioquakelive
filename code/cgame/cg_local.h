@@ -516,6 +516,8 @@ typedef struct {
     int endTime;
     int teamOnly;
     int fadeTime;
+    int sender;
+    uint64_t steamId;
     char text[CHAT_LINE_TEXT];
 } chatLine_t;
 
@@ -2108,6 +2110,7 @@ void CG_InitConsoleCommands(void);
 void CG_ScoresDown_f(void);
 void CG_ClearChat(void);
 void CG_AddChat(const char *text, int teamOnly, int extraTime);
+void CG_AddChatFrom(const char *text, int teamOnly, int extraTime, int sender);
 void CG_DrawChat(float x, float y, float w, float h, float scale);
 void CG_InitColorWheel(void);
 

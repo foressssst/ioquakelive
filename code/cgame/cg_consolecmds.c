@@ -581,6 +581,10 @@ static void CG_ChatImageNotice(const char* text, char* out, int outSize) {
 }
 
 void CG_AddChat(const char *rawText, int teamOnly, int extraTime) {
+    CG_AddChatFrom(rawText, teamOnly, extraTime, -1);
+}
+
+void CG_AddChatFrom(const char *rawText, int teamOnly, int extraTime, int sender) {
     char text[MAX_SAY_TEXT + 64];
     int len;
     int size;
@@ -598,6 +602,8 @@ void CG_AddChat(const char *rawText, int teamOnly, int extraTime) {
     cg.currentChatLine.endTime = cg.time + 2000 + extraTime;
     cg.currentChatLine.teamOnly = teamOnly;
     cg.currentChatLine.fadeTime = cg.time;
+    cg.currentChatLine.sender = sender;
+    cg.currentChatLine.steamId = (sender >= 0 && sender < MAX_CLIENTS) ? cgs.clientinfo[sender].steamId : 0;
     cg.chatSlideStart = cg.time;
     cg.chatSlideKey = cg.time;
     cg.chatSlideIn = qtrue;
@@ -632,6 +638,24 @@ static int CG_ChatLineHold(const chatLine_t* line) {
 
 static qboolean CG_ChatLineShowing(const chatLine_t* line) {
     return (cg.time < line->fadeTime + CHAT_FADEIN + CG_ChatLineHold(line) + CHAT_FADEOUT) ? qtrue : qfalse;
+}
+
+static float CG_DrawChatLine(float x, float y, float scale, float* color, const chatLine_t* line, int style) {
+    const clientInfo_t* ci;
+    float size;
+
+    if (line->sender >= 0 && line->sender < MAX_CLIENTS && line->steamId) {
+        ci = &cgs.clientinfo[line->sender];
+        if (ci->steamId == line->steamId && CG_PlayerAvatar(ci)) {
+            size = CG_DrawTextCapHeight(scale, 1) + 3.0f;
+            trap_R_SetColor(color);
+            CG_DrawPic(x, y - size + 1.5f, size, size, ci->avatar);
+            trap_R_SetColor(NULL);
+            x += size + 3.0f;
+        }
+    }
+    CG_DrawText(x, y, 1, scale, color, line->text, 0, 256, style);
+    return x;
 }
 
 static void CG_DrawCpmaChat(float x, float bottom, float scale) {
@@ -689,7 +713,7 @@ static void CG_DrawCpmaChat(float x, float bottom, float scale) {
             continue;
         }
         color[3] = CG_CpmaFade(line->fadeTime, CHAT_FADEIN, CG_ChatLineHold(line), CHAT_FADEOUT);
-        CG_DrawText(x, bottom + 13.0f * (slide - row), 1, scale, color, line->text, 0, 256, 3);
+        CG_DrawChatLine(x, bottom + 13.0f * (slide - row), scale, color, line, 3);
         row++;
     }
     CG_SetWidescreen(WIDESCREEN_STRETCH);
@@ -736,7 +760,7 @@ static void CG_DrawChatHistory(float x, float bottom, float scale, int lines, fl
             continue;
         }
         color[3] = alpha;
-        CG_DrawText(x, bottom + 13.0f * (slide - n), 1, scale, color, line->text, 0, 256, n ? style : 3);
+        CG_DrawChatLine(x, bottom + 13.0f * (slide - n), scale, color, line, n ? style : 3);
     }
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
@@ -779,7 +803,7 @@ void CG_DrawChat(float x, float y, float w, float h, float scale) {
 
     if (cg.currentChatLine.startTime != 0) {
         CG_SetWidescreen(WIDESCREEN_LEFT);
-        CG_DrawText(x, bottom, 1, scale, colorWhite, cg.currentChatLine.text, 0, 256, 3);
+        CG_DrawChatLine(x, bottom, scale, colorWhite, &cg.currentChatLine, 3);
         CG_SetWidescreen(WIDESCREEN_STRETCH);
     }
 
@@ -795,7 +819,7 @@ void CG_DrawChat(float x, float y, float w, float h, float scale) {
         do {
             bottom -= 13.0f;
             CG_SetWidescreen(WIDESCREEN_LEFT);
-            CG_DrawText(x, bottom, 1, scale, colorWhite, cg.chatLines[i].text, 0, 256, style);
+            CG_DrawChatLine(x, bottom, scale, colorWhite, &cg.chatLines[i], style);
             CG_SetWidescreen(WIDESCREEN_STRETCH);
             if (--i < 0) {
                 i = MAX_CHAT_LINES - 1;
