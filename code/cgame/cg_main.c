@@ -881,7 +881,7 @@ static cvarTable_t cvarTable[] = {
 
     {&cg_debugFlags, "cg_debugFlags", "0", CVAR_CHEAT},
     {&cg_drawProfileImages, "cg_drawProfileImages", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
-    {&cg_remaster, "cg_remaster", "1", CVAR_ARCHIVE, "0", "4"},
+    {&cg_remaster, "cg_remaster", "1", CVAR_ARCHIVE, "0", "5"},
     {&cg_loadingPreview, "cg_loadingPreview", "0", 0, "0", "100"},
     {&cg_ignoreMouseInput, "cg_ignoreMouseInput", "0", CVAR_ROM},
     {&cg_lastmsg, "cg_lastmsg", "", 0},
