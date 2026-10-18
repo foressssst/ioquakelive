@@ -2103,6 +2103,7 @@ void CG_DemoRewind(int snapshotNum, int serverCommandSequence);
 void CG_LoadingString(const char* s);
 void CG_LoadingTick(void);
 void CG_DrawLoadingOutro(void);
+void CG_LoadingWorldLoaded(void);
 void CG_LoadingItem(int itemNum);
 void CG_LoadingClient(int clientNum);
 void CG_DrawInformation(void);

@@ -1647,6 +1647,7 @@ static void CG_RegisterGraphics(void) {
     CG_LoadingString(cgs.mapname);
 
     trap_R_LoadWorldMap(cgs.mapname);
+    CG_LoadingWorldLoaded();
 
     CG_LoadingString("game media");
 
