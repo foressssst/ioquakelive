@@ -1396,6 +1396,12 @@ static int CG_ChatSender(const char* arg) {
     return (p > arg && *p == ' ') ? atoi(arg) : -1;
 }
 
+static void CG_ChatConsoleAvatar(int sender) {
+    if (sender >= 0 && sender < MAX_CLIENTS && cg_drawProfileImages.integer && cgs.clientinfo[sender].steamId) {
+        trap_ConsoleAvatar(cgs.clientinfo[sender].steamId);
+    }
+}
+
 static void CG_RemoveChatEscapeChar(char* text) {
     int i, l;
 
@@ -1596,6 +1602,7 @@ static void CG_ServerCommand(void) {
             Q_strncpyz(text, p, MAX_SAY_TEXT);
         }
         CG_RemoveChatEscapeChar(text);
+        CG_ChatConsoleAvatar(CG_ChatSender(CG_Argv(1)));
         CG_Printf("%s\n", text);
         CG_AddChatFrom(text, 0, 0, CG_ChatSender(CG_Argv(1)));
         return;
@@ -1652,6 +1659,7 @@ static void CG_ServerCommand(void) {
             Q_strncpyz(text, p, MAX_SAY_TEXT);
         }
         CG_RemoveChatEscapeChar(text);
+        CG_ChatConsoleAvatar(CG_ChatSender(CG_Argv(1)));
         CG_Printf("%s\n", text);
         CG_AddToTeamChat(text);
         CG_AddChatFrom(text, 1, 0, CG_ChatSender(CG_Argv(1)));

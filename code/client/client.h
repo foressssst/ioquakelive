@@ -402,6 +402,8 @@ void CL_MatchMedia(const char* path);
 void CL_SetCgameCommandCompletion(const char* cmdName);
 qboolean CL_DemoInfo(const char* file, char* info, int infoSize);
 void CL_ClearAvatars(void);
+qhandle_t CL_SteamAvatarShader(uint64_t steamId);
+void Con_SetPendingAvatar(uint64_t steamId);
 qboolean CL_VoiceIsIgnored(uint64_t steamId);
 qboolean CL_VoiceToggleIgnore(uint64_t steamId);
 void CL_FriendDo(const steamFriend_t* fr, int action);

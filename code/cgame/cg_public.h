@@ -176,7 +176,8 @@ typedef enum {
     CG_R_BEGINBLOOMSCENE,
     CG_R_APPLYBLOOM,
     CG_WEBIMAGELINK,
-    CG_STEAM_AVATAR
+    CG_STEAM_AVATAR,
+    CG_CONSOLE_AVATAR
 } cgameImport_t;
 
 typedef enum {

@@ -291,11 +291,20 @@ static struct {
 } clAvatars[CL_MAX_AVATARS];
 static int clNumAvatars;
 
+#define CL_AVATAR_MISSES 16
+
+static struct {
+    uint64_t steamId;
+    int retry;
+} clAvatarMisses[CL_AVATAR_MISSES];
+static int clNextMiss;
+
 void CL_ClearAvatars(void) {
     clNumAvatars = 0;
+    Com_Memset(clAvatarMisses, 0, sizeof(clAvatarMisses));
 }
 
-static qhandle_t CL_SteamAvatar(uint64_t steamId) {
+qhandle_t CL_SteamAvatarShader(uint64_t steamId) {
     qhandle_t shader;
     byte* rgba;
     int w, h, i;
@@ -308,7 +317,16 @@ static qhandle_t CL_SteamAvatar(uint64_t steamId) {
             return clAvatars[i].shader;
         }
     }
+    for (i = 0; i < CL_AVATAR_MISSES; i++) {
+        if (clAvatarMisses[i].steamId == steamId && cls.realtime < clAvatarMisses[i].retry &&
+            clAvatarMisses[i].retry - cls.realtime <= 1000) {
+            return 0;
+        }
+    }
     if (clNumAvatars >= CL_MAX_AVATARS || !Steam_AvatarImage(steamId, &rgba, &w, &h)) {
+        clAvatarMisses[clNextMiss].steamId = steamId;
+        clAvatarMisses[clNextMiss].retry = cls.realtime + 1000;
+        clNextMiss = (clNextMiss + 1) % CL_AVATAR_MISSES;
         return 0;
     }
     shader = re.RegisterShaderFromRaw(va("steam_%llu", (unsigned long long)steamId), rgba, w, h);
@@ -588,7 +606,11 @@ static intptr_t CL_CgameSystemCallsInner(intptr_t* args) {
             return CL_WebImage_Link(VMA(1));
 
         case CG_STEAM_AVATAR:
-            return CL_SteamAvatar(((uint64_t)(unsigned int)args[2] << 32) | (unsigned int)args[1]);
+            return CL_SteamAvatarShader(((uint64_t)(unsigned int)args[2] << 32) | (unsigned int)args[1]);
+
+        case CG_CONSOLE_AVATAR:
+            Con_SetPendingAvatar(((uint64_t)(unsigned int)args[2] << 32) | (unsigned int)args[1]);
+            return 0;
 
         case CG_R_APPLYBLOOM:
             re.ApplyBloom();

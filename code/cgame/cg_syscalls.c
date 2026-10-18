@@ -254,6 +254,10 @@ qhandle_t trap_SteamAvatar(uint64_t steamId) {
     return (qhandle_t)syscall(CG_STEAM_AVATAR, (int)(steamId & 0xffffffffu), (int)(steamId >> 32));
 }
 
+void trap_ConsoleAvatar(uint64_t steamId) {
+    syscall(CG_CONSOLE_AVATAR, (int)(steamId & 0xffffffffu), (int)(steamId >> 32));
+}
+
 void trap_R_Font_TextExtents(const char* text, int start, int fontIndex, float scale, int limit, float* extents) {
     syscall(CG_R_FONT_TEXTEXTENTS, text, start, fontIndex, PASSFLOAT(scale), limit, extents);
 }

@@ -53,6 +53,8 @@ int g_console_field_width = 119;
 #define CON_ANIM_ROWS 256
 
 #define CON_MAX_IMAGES 32
+#define CON_MAX_AVATARS 64
+#define CON_AVATAR_CELLS 3
 
 typedef struct {
     float x, y, w, h;
@@ -65,6 +67,12 @@ typedef struct {
     int drawn;
     char url[CON_MAX_URL];
 } conImage_t;
+
+typedef struct {
+    int line;
+    int col;
+    uint64_t steamId;
+} conAvatar_t;
 
 typedef struct {
     qboolean initialized;
@@ -124,6 +132,10 @@ typedef struct {
     int nextImage;
     int imageFrame;
     char pendingImage[CON_MAX_URL];
+
+    conAvatar_t avatars[CON_MAX_AVATARS];
+    int nextAvatar;
+    uint64_t pendingAvatar;
 } console_t;
 
 console_t con;
@@ -580,6 +592,29 @@ static void Con_DrawRowImage(int row, float rowTop, float cellH, float x0, float
     re.DrawStretchPic(x0, y0, w, y1 - y0, 0.0f, (y0 - top) / h, 1.0f, (y1 - top) / h, shader);
 }
 
+void Con_SetPendingAvatar(uint64_t steamId) {
+    con.pendingAvatar = steamId;
+}
+
+static void Con_DrawRowAvatar(int row, float rowTop, float cellH, float x0, float adv) {
+    qhandle_t shader;
+    float size;
+    int i;
+
+    for (i = 0; i < CON_MAX_AVATARS; i++) {
+        if (con.avatars[i].steamId && con.avatars[i].line == row) {
+            break;
+        }
+    }
+    if (i == CON_MAX_AVATARS || !(shader = CL_SteamAvatarShader(con.avatars[i].steamId))) {
+        return;
+    }
+    size = cellH * 0.85f;
+    re.SetColor(NULL);
+    re.DrawStretchPic(x0 + con.avatars[i].col * adv + (CON_AVATAR_CELLS * adv - size) * 0.5f,
+                      rowTop + (cellH - size) * 0.5f, size, size, 0.0f, 0.0f, 1.0f, 1.0f, shader);
+}
+
 static void Con_FindImageLink(const char* txt, char* url, int size) {
     const char* p;
     int n;
@@ -799,6 +834,8 @@ void Con_Clear_f(void) {
     Com_Memset(con.lineBorn, 0, sizeof(con.lineBorn));
     Com_Memset(con.images, 0, sizeof(con.images));
     con.pendingImage[0] = '\0';
+    Com_Memset(con.avatars, 0, sizeof(con.avatars));
+    con.pendingAvatar = 0;
     con.scrollPos = con.display;
 
     con.searchStarted = qfalse;
@@ -950,6 +987,12 @@ void Con_CheckResize(void) {
         con.images[i].line += con.current - oldcurrent;
         if (con.images[i].line + con.images[i].rows <= con.current - con.totallines + 1) {
             con.images[i].url[0] = '\0';
+        }
+    }
+    for (i = 0; i < CON_MAX_AVATARS; i++) {
+        con.avatars[i].line += con.current - oldcurrent;
+        if (con.avatars[i].line <= con.current - con.totallines) {
+            con.avatars[i].steamId = 0;
         }
     }
     Com_Memset(con.lineBorn, 0, sizeof(con.lineBorn));
@@ -1311,6 +1354,24 @@ void CL_ConsolePrint(char* txt) {
             con.text[y * con.linewidth + con.x] = (ColorIndex(COLOR_WHITE) << 8) | *p;
             con.x++;
             p++;
+        }
+    }
+
+    if (con.pendingAvatar) {
+        conAvatar_t* av = &con.avatars[con.nextAvatar];
+
+        con.nextAvatar = (con.nextAvatar + 1) % CON_MAX_AVATARS;
+        av->line = con.current;
+        av->col = con.x;
+        av->steamId = con.pendingAvatar;
+        con.pendingAvatar = 0;
+        for (l = 0; l < CON_AVATAR_CELLS && con.x < con.linewidth - 1; l++) {
+            if (con.x == 0) {
+                con.lineBorn[con.current % CON_ANIM_ROWS] = cls.realtime;
+            }
+            y = con.current % con.totallines;
+            con.text[y * con.linewidth + con.x] = (ColorIndex(COLOR_WHITE) << 8) | ' ';
+            con.x++;
         }
     }
 
@@ -1934,6 +1995,7 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
         }
         Con_DrawRowCNQ3(&m, x0, by, row + k, drawMark, markStartX, markStartY, markEndX, markEndY);
         Con_DrawRowImage(row + k, by - m.asc, m.cellH, x0, limit - m.asc + m.cellH);
+        Con_DrawRowAvatar(row + k, by - m.asc, m.cellH, x0, m.adv);
     }
 
     con.rowsVisible = 0;
@@ -1952,6 +2014,7 @@ static void Con_DrawSolidConsoleCNQ3(float frac) {
         }
         Con_DrawRowCNQ3(&m, x0, y + off, row, drawMark, markStartX, markStartY, markEndX, markEndY);
         Con_DrawRowImage(row, y + off - m.asc, m.cellH, x0, limit - m.asc + m.cellH);
+        Con_DrawRowAvatar(row, y + off - m.asc, m.cellH, x0, m.adv);
     }
 
     Con_DrawInputCNQ3(&m);
@@ -2094,6 +2157,7 @@ void Con_DrawSolidConsole(float frac) {
 
         Con_RowLinks(text, con.linewidth, CON_CELL_WIDTH * s + con.xadjust, (float)y, m.adv, m.asc, m.cellH);
         Con_DrawRowImage(row, y - m.asc, m.cellH, CON_CELL_WIDTH * s + con.xadjust, bottom);
+        Con_DrawRowAvatar(row, y - m.asc, m.cellH, CON_CELL_WIDTH * s + con.xadjust, m.adv);
         re.SetColor(g_color_table[ColorIndex(currentColor)]);
     }
 
