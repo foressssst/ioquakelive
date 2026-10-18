@@ -3248,6 +3248,7 @@ void CG_Init(int serverMessageNum, int serverCommandSequence, int clientNum) {
 
     trap_Cvar_Set("ui_mainmenu", "0");
     trap_Cvar_Set("ui_intermission", "0");
+    trap_Cvar_Set("ui_warmup", "0");
 
     CG_InitConsoleCommands();
 

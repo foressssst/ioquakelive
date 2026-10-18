@@ -830,13 +830,7 @@ void CG_SetConfigValues(void) {
         s = CG_ConfigString(CS_FLAGSTATUS);
         cgs.flagStatus = s[0] - '0';
     }
-    cg.warmup = atoi(Info_ValueForKey(CG_ConfigString(CS_WARMUP), "time"));
-
-    {
-        const char* gt = Info_ValueForKey(CG_ConfigString(CS_WARMUP), "g_gametype");
-
-        cg.warmupGametype = *gt ? atoi(gt) : -1;
-    }
+    CG_ParseWarmup();
     CG_UpdateDisableLoadout(atoi(Info_ValueForKey(CG_ConfigString(CS_SERVERINFO), "g_loadout")));
 }
 
