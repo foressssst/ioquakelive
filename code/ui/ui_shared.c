@@ -483,6 +483,46 @@ void Fade(int* flags, float* f, float clamp, int* nextTime, int offsetTime, qboo
 static qboolean menuTheme;
 static qhandle_t themeHeader = -1, themeContent = -1;
 
+typedef struct {
+    const itemDef_t* item;
+    vec4_t color;
+    int time;
+} themeTint_t;
+
+static themeTint_t themeTints[64];
+
+static void Theme_Smooth(const itemDef_t* item, float* color) {
+    themeTint_t* tint = NULL;
+    float k;
+    int i, oldest = 0;
+
+    for (i = 0; i < (int)ARRAY_LEN(themeTints); i++) {
+        if (themeTints[i].item == item) {
+            tint = &themeTints[i];
+            break;
+        }
+        if (themeTints[i].time < themeTints[oldest].time) {
+            oldest = i;
+        }
+    }
+    if (!tint || DC->realTime - tint->time > 250) {
+        tint = tint ? tint : &themeTints[oldest];
+        tint->item = item;
+        Vector4Copy(color, tint->color);
+    } else {
+        k = 1.0f - (float)exp(-(DC->realTime - tint->time) / 70.0f);
+        for (i = 0; i < 4; i++) {
+            tint->color[i] += (color[i] - tint->color[i]) * k;
+        }
+        Vector4Copy(tint->color, color);
+    }
+    tint->time = DC->realTime;
+}
+
+static qboolean Theme_Accent(const float* c) {
+    return c[0] > 0.9f && c[1] > 0.75f && c[2] < 0.1f;
+}
+
 static qboolean Theme_Flat(const Window* w, const rectDef_t* r) {
     vec4_t color = {0.302f, 0.109f, 0.105f, 1.0f};
 
@@ -538,6 +578,12 @@ void Window_Paint(Window* w, float fadeAmount, float fadeClamp, float fadeCycle)
                 DC->drawHandlePic(fillRect.x, fillRect.y, fillRect.w, fillRect.h, w->background);
                 DC->setColor(NULL);
             }
+        } else if (menuTheme && fillRect.h <= 1.5f && Theme_Accent(w->backColor)) {
+            DC->fillRect(fillRect.x, fillRect.y - 1.0f, fillRect.w, 2.0f, w->backColor);
+        } else if (menuTheme && fillRect.h <= 1.5f && fabs(w->backColor[0] - 0.525f) < 0.02f) {
+            Vector4Copy(w->backColor, color);
+            color[3] *= 0.45f;
+            DC->fillRect(fillRect.x, fillRect.y, fillRect.w, fillRect.h, color);
         } else {
             DC->fillRect(fillRect.x, fillRect.y, fillRect.w, fillRect.h, w->backColor);
         }
@@ -579,6 +625,8 @@ void Window_Paint(Window* w, float fadeAmount, float fadeClamp, float fadeCycle)
             }
             color[3] = 1;
             DC->drawRect(w->rect.x, w->rect.y, w->rect.w, w->rect.h, w->borderSize, color);
+        } else if (menuTheme && Theme_Accent(w->borderColor)) {
+            DC->fillRect(w->rect.x, w->rect.y + w->rect.h - 3.0f, w->rect.w, 3.0f, w->borderColor);
         } else {
             DC->drawRect(w->rect.x, w->rect.y, w->rect.w, w->rect.h, w->borderSize, w->borderColor);
         }
@@ -2512,6 +2560,7 @@ static void Display_CloseCinematics(void) {
 
 void Menus_Activate(menuDef_t* menu) {
     menu->window.flags |= (WINDOW_HASFOCUS | WINDOW_VISIBLE);
+    menu->openTime = DC->realTime;
     if (menu->onOpen) {
         itemDef_t item;
         item.parent = menu;
@@ -2974,8 +3023,12 @@ void Item_Text_Paint(itemDef_t* item) {
     }
 
     Item_TextColor(item, &color);
+    if (menuTheme) {
+        Theme_Smooth(item, color);
+    }
 
-    DC->drawText(item->textRect.x, item->textRect.y, item->textscale, color, textPtr, 0, 0, item->textStyle, item->fontIndex);
+    DC->drawText(item->textRect.x, item->textRect.y, item->textscale, color, textPtr, 0, 0,
+                 menuTheme ? ITEM_TEXTSTYLE_NORMAL : item->textStyle, item->fontIndex);
 }
 
 void Item_TextField_Paint(itemDef_t* item) {
@@ -4288,6 +4341,13 @@ void Menu_Paint(menuDef_t* menu, qboolean forcePaint) {
         DC->setWidescreen(currentWidescreen);
     }
     menuTheme = DC->remaster && menu->window.name && !Q_stricmpn(menu->window.name, "ingame", 6);
+    if (menuTheme && DC->paintFade) {
+        float e = (DC->realTime - menu->openTime) / 220.0f;
+
+        e = 1.0f - (e < 0.0f ? 0.0f : e > 1.0f ? 1.0f : e);
+        e = 1.0f - e * e * e;
+        DC->paintFade(e, (1.0f - e) * 6.0f);
+    }
 
     if (menu->fullScreen && menu->window.background) {
         float bgW = menu->window.backgroundSize.w;
@@ -4309,6 +4369,9 @@ void Menu_Paint(menuDef_t* menu, qboolean forcePaint) {
 
     for (i = 0; i < menu->itemCount; i++) {
         Item_Paint(menu->items[i]);
+    }
+    if (menuTheme && DC->paintFade) {
+        DC->paintFade(1.0f, 0.0f);
     }
     menuTheme = qfalse;
 

@@ -274,6 +274,16 @@ void trap_R_RenderScene(const refdef_t* fd) {
 }
 
 void trap_R_SetColor(const float* rgba) {
+    vec4_t faded = {1.0f, 1.0f, 1.0f, 1.0f};
+
+    if (uiFadeAlpha < 1.0f) {
+        if (rgba) {
+            Vector4Copy(rgba, faded);
+        }
+        faded[3] *= uiFadeAlpha;
+        syscall(UI_R_SETCOLOR, faded);
+        return;
+    }
     syscall(UI_R_SETCOLOR, rgba);
 }
 
