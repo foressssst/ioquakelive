@@ -186,6 +186,20 @@ static void LAN_GetServerAddressString(int source, int n, char* buf, int buflen)
     buf[0] = '\0';
 }
 
+static void LAN_AddInfo(char* info, int size, const char* key, const char* value) {
+    char clean[MAX_STRING_CHARS];
+    int i;
+
+    if (!value[0]) {
+        return;
+    }
+    for (i = 0; value[i] && i < (int)sizeof(clean) - 1; i++) {
+        clean[i] = value[i] == '\\' ? ' ' : value[i];
+    }
+    clean[i] = '\0';
+    Q_strcat(info, size, va("\\%s\\%s", key, clean));
+}
+
 static void LAN_GetServerInfo(int source, int n, char* buf, int buflen) {
     char info[MAX_STRING_CHARS];
     serverInfo_t* server = NULL;
@@ -210,22 +224,22 @@ static void LAN_GetServerInfo(int source, int n, char* buf, int buflen) {
     }
     if (server && buf) {
         buf[0] = '\0';
-        Info_SetValueForKey(info, "hostname", server->hostName);
-        Info_SetValueForKey(info, "mapname", server->mapName);
-        Info_SetValueForKey(info, "clients", va("%i", server->clients));
-        Info_SetValueForKey(info, "sv_maxclients", va("%i", server->maxClients));
-        Info_SetValueForKey(info, "ping", va("%i", server->ping));
-        Info_SetValueForKey(info, "minPing", va("%i", server->minPing));
-        Info_SetValueForKey(info, "maxPing", va("%i", server->maxPing));
-        Info_SetValueForKey(info, "game", server->game);
-        Info_SetValueForKey(info, "gametype", va("%i", server->gameType));
-        Info_SetValueForKey(info, "nettype", va("%i", server->netType));
-        Info_SetValueForKey(info, "addr", NET_AdrToStringwPort(server->adr));
-        Info_SetValueForKey(info, "g_needpass", va("%i", server->g_needpass));
-        Info_SetValueForKey(info, "g_humanplayers", va("%i", server->g_humanplayers));
-        Info_SetValueForKey(info, "sv_vac", va("%i", server->vac));
-        Info_SetValueForKey(info, "gamedesc", server->description);
-        Info_SetValueForKey(info, "tags", server->tags);
+        LAN_AddInfo(info, sizeof(info), "hostname", server->hostName);
+        LAN_AddInfo(info, sizeof(info), "mapname", server->mapName);
+        LAN_AddInfo(info, sizeof(info), "clients", va("%i", server->clients));
+        LAN_AddInfo(info, sizeof(info), "sv_maxclients", va("%i", server->maxClients));
+        LAN_AddInfo(info, sizeof(info), "ping", va("%i", server->ping));
+        LAN_AddInfo(info, sizeof(info), "minPing", va("%i", server->minPing));
+        LAN_AddInfo(info, sizeof(info), "maxPing", va("%i", server->maxPing));
+        LAN_AddInfo(info, sizeof(info), "game", server->game);
+        LAN_AddInfo(info, sizeof(info), "gametype", va("%i", server->gameType));
+        LAN_AddInfo(info, sizeof(info), "nettype", va("%i", server->netType));
+        LAN_AddInfo(info, sizeof(info), "addr", NET_AdrToStringwPort(server->adr));
+        LAN_AddInfo(info, sizeof(info), "g_needpass", va("%i", server->g_needpass));
+        LAN_AddInfo(info, sizeof(info), "g_humanplayers", va("%i", server->g_humanplayers));
+        LAN_AddInfo(info, sizeof(info), "sv_vac", va("%i", server->vac));
+        LAN_AddInfo(info, sizeof(info), "gamedesc", server->description);
+        LAN_AddInfo(info, sizeof(info), "tags", server->tags);
         Q_strncpyz(buf, info, buflen);
     } else {
         if (buf) {
