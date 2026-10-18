@@ -2769,6 +2769,8 @@ void CL_InitRef(void) {
         rendererLib = Sys_LoadDll(dllName, qfalse);
         if (!rendererLib)
             Com_Printf("failed:\n\"%s\"\n", Sys_LibraryError());
+    } else if (!Q_stricmp(cl_renderer->string, "vulkan")) {
+        Cvar_ForceReset("cl_renderer");
     }
 
     if (!rendererLib) {

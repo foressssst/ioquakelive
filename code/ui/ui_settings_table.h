@@ -50,7 +50,6 @@ static const stOption_t stOpts_cg_specteamvitalshealthcolor[] = {{"Team Colors",
 static const stOption_t stOpts_cg_specitemtimers[] = {{"None", "0"}, {"Power-ups", "1"}, {"Power-ups & Red Armor", "7"}, {"All", "15"}};
 static const stOption_t stOpts_cg_drawinputcmds[] = {{"Off", "0"}, {"Always On", "1"}, {"Spectate Only", "2"}};
 
-static const stOption_t stOpts_cl_renderer[] = {{"OpenGL", "opengl1"}, {"Vulkan", "vulkan"}};
 static const stOption_t stOpts_r_lowlatency[] = {{"Off", "0"}, {"On", "1"}, {"On + Boost", "2"}};
 static const stOption_t stOpts_r_ext_multisample[] = {{"Off", "0"}, {"2x", "2"}, {"4x", "4"}, {"8x", "8"}};
 static const stOption_t stOpts_r_ext_max_anisotropy[] = {{"2x", "2"}, {"4x", "4"}, {"8x", "8"}, {"16x", "16"}};
@@ -276,7 +275,6 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_VIDEO, "Bloom Intensity", "r_bloomintensity", ST_RANGE, 0.0f, 10.0f, 0.1f, NULL, 0, "The higher bloom intensity, the brighter the bloom.", 1},
     {ST_TAB_VIDEO, "Scene Saturation", "r_bloomscenesaturation", ST_RANGE, 0.0f, 10.0f, 0.1f, NULL, 0, "The higher the scene saturation, the more colorful the non-bloomed world is.", 1},
     {ST_TAB_VIDEO, "Scene Intensity", "r_bloomsceneintensity", ST_RANGE, 0.0f, 10.0f, 0.1f, NULL, 0, "The higher the scene intensity, the brighter the non-bloomed world is.", 1},
-    {ST_TAB_VIDEO, "Renderer", "cl_renderer", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_cl_renderer, 2, NULL, 1},
     {ST_TAB_VIDEO, "Low Latency (Vulkan)", "r_lowlatency", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_r_lowlatency, 3, NULL, 1},
     {ST_TAB_VIDEO, "Antialiasing", "r_ext_multisample", ST_SELECT, 0.0f, 8.0f, 0.0f, stOpts_r_ext_multisample, 4, NULL, 1},
     {ST_TAB_VIDEO, "Anisotropic Filtering", "r_ext_max_anisotropy", ST_SELECT, 2.0f, 16.0f, 0.0f, stOpts_r_ext_max_anisotropy, 4, NULL, 1},
