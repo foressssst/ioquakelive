@@ -354,6 +354,9 @@ void Com_Quit_f(void) {
         VM_Forced_Unload_Done();
         Com_Shutdown();
         FS_Shutdown(qtrue);
+#ifndef DEDICATED
+        CL_UpdateApplyOnExit();
+#endif
     }
     Sys_Quit();
 }

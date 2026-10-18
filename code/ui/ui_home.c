@@ -476,6 +476,10 @@ qboolean UI_Home_NavClick(void) {
     }
     if (hit->type == HM_HIT_BANNER) {
         if (hit->index == 1) {
+            trap_Cmd_ExecuteText(EXEC_APPEND, trap_Cvar_VariableValue("cl_updateAuto") ? "updatedownload\n" : "openupdate\n");
+        } else if (hit->index == 2) {
+            trap_Cmd_ExecuteText(EXEC_APPEND, "updaterestart\n");
+        } else if (hit->index == 3) {
             trap_Cmd_ExecuteText(EXEC_APPEND, "openupdate\n");
         } else {
             trap_Cmd_ExecuteText(EXEC_APPEND, "web_hideBrowser\n");
@@ -539,13 +543,36 @@ void UI_Home_Banner(void) {
                     va("You are running the latest version of ioquakelive (%s).", version), qfalse);
         return;
     }
-    index = 1;
+    if (!Q_stricmp(status, "downloading") || !Q_stricmp(status, "installing")) {
+        static const vec4_t grey = {0.5f, 0.5f, 0.5f, 0.45f};
+        int percent = (int)trap_Cvar_VariableValue("cl_updateProgress");
+
+        percent = percent < 0 ? 0 : percent > 100 ? 100 : percent;
+        SM_Fill(-1, y, smVW + 2, h, grey, NULL);
+        SM_Fill(-1, y, (smVW + 2) * percent / 100.0f, h, fill, NULL);
+        SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText,
+                    Q_stricmp(status, "installing") ? va("Downloading ioquakelive %s... %i%%", version, percent)
+                                                    : va("Installing ioquakelive %s...", version),
+                    qfalse);
+        return;
+    }
     SM_Fill(-1, y, smVW + 2, h, fill, NULL);
-    SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText,
-                va(Q_stricmp(status, "prerelease") ? "ioquakelive %s is available. Click here to download it."
-                                                   : "ioquakelive %s (experimental) is available. Click here to download it.",
-                   version),
-                qfalse);
+    if (!Q_stricmp(status, "ready")) {
+        index = 2;
+        SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText,
+                    va("ioquakelive %s is installed. Click here to restart the game.", version), qfalse);
+    } else if (!Q_stricmp(status, "failed")) {
+        index = 3;
+        SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText,
+                    "The update could not be installed. Click here to download it.", qfalse);
+    } else {
+        index = 1;
+        SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText,
+                    va(Q_stricmp(status, "prerelease") ? "ioquakelive %s is available. Click here to %s."
+                                                       : "ioquakelive %s (experimental) is available. Click here to %s.",
+                       version, trap_Cvar_VariableValue("cl_updateAuto") ? "update" : "download it"),
+                    qfalse);
+    }
     SM_Hit(0, y, smVW, h, HM_HIT_BANNER, index, NULL);
 }
 

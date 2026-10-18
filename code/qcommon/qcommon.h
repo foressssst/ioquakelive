@@ -702,6 +702,7 @@ void CL_Init(void);
 void CL_RegisterCGameCvars(void);
 void CL_Disconnect(qboolean showMainMenu);
 void CL_Shutdown(char* finalmsg, qboolean disconnect, qboolean quit);
+void CL_UpdateApplyOnExit(void);
 void CL_Frame(int msec);
 void CL_LowLatencyWait(void);
 int CL_DisplayFrequency(void);
