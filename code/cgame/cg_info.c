@@ -187,27 +187,28 @@ static int CG_LoadingFont(void) {
     return loadFont >= 0 ? loadFont : 1;
 }
 
-static void CG_LoadingCentered(float y, float scale, const float* color, const char* text, float spacing) {
+static void CG_LoadingCentered(float y, int font, float scale, const float* color, const char* text,
+                               float spacing) {
     char c[2];
     const char* p;
     float w = 0.0f, cw = 0.0f, x;
 
     if (spacing <= 0.0f) {
-        CG_MeasureTextInFont(text, CG_LoadingFont(), scale, &w, NULL);
-        CG_DrawTextInFont(320.0f - w * 0.5f, y, CG_LoadingFont(), scale, color, text, ITEM_TEXTSTYLE_NORMAL);
+        CG_MeasureTextInFont(text, font, scale, &w, NULL);
+        CG_DrawTextInFont(320.0f - w * 0.5f, y, font, scale, color, text, ITEM_TEXTSTYLE_NORMAL);
         return;
     }
     c[1] = '\0';
     for (p = text; *p; p++) {
         c[0] = *p;
-        CG_MeasureTextInFont(c, CG_LoadingFont(), scale, &cw, NULL);
+        CG_MeasureTextInFont(c, font, scale, &cw, NULL);
         w += cw + spacing;
     }
     x = 320.0f - (w - spacing) * 0.5f;
     for (p = text; *p; p++) {
         c[0] = *p;
-        CG_DrawTextInFont(x, y, CG_LoadingFont(), scale, color, c, ITEM_TEXTSTYLE_NORMAL);
-        CG_MeasureTextInFont(c, CG_LoadingFont(), scale, &cw, NULL);
+        CG_DrawTextInFont(x, y, font, scale, color, c, ITEM_TEXTSTYLE_NORMAL);
+        CG_MeasureTextInFont(c, font, scale, &cw, NULL);
         x += cw + spacing;
     }
 }
@@ -255,7 +256,7 @@ static void CG_DrawLoadingCard(qhandle_t levelshot, float s1, float s2) {
     char title[MAX_QPATH], host[MAX_QPATH], mode[MAX_QPATH], map[MAX_QPATH];
     vec4_t dim = {0.5f, 0.5f, 0.5f, 1.0f};
     qhandle_t blurred;
-    float top = 142.0f, x = 260.0f, y = top, w = 120.0f, h = 30.0f;
+    float top = 146.0f, x = 260.0f, y = top, w = 120.0f, h = 30.0f;
 
     Q_strncpyz(title, CG_ConfigString(CS_MESSAGE)[0] ? CG_ConfigString(CS_MESSAGE) : cgs.mapname, sizeof(title));
     Q_strncpyz(host, Info_ValueForKey(info, "sv_hostname"), sizeof(host));
@@ -277,14 +278,12 @@ static void CG_DrawLoadingCard(qhandle_t levelshot, float s1, float s2) {
     CG_AdjustFrom640(&x, &y, &w, &h);
     trap_R_DrawStretchPic(x, y, w, h, 56.0f / 512.0f, 16.0f / 128.0f, 449.0f / 512.0f, 114.0f / 128.0f,
                           trap_R_RegisterShaderNoMip("ui/assets/main_menu/ql_logo.png"));
-    CG_LoadingCentered(top + 61.5f, 0.32f, colorWhite, title, 0.0f);
+    CG_LoadingCentered(top + 61.5f, 0, 0.3f, colorWhite, title, 0.0f);
     if (host[0]) {
-        CG_LoadingCentered(top + 78.0f, 0.2f, loadMuted, host, 0.0f);
+        CG_LoadingCentered(top + 78.0f, CG_LoadingFont(), 0.2f, loadMuted, host, 0.0f);
     }
     CG_LoadingCard(212.0f, top + 94.0f, 216.0f, 72.0f, 6.0f, levelshot, 0.0f, 0.2037f, 1.0f, 0.7963f);
-    CG_FillRect(212.0f, top + 174.0f, 216.0f, 1.5f, loadTrack);
-    CG_FillRect(212.0f, top + 174.0f, 216.0f * CG_LoadingProgress(), 1.5f, loadAccent);
-    CG_LoadingCentered(top + 195.0f, 0.16f, loadAccent, mode, 1.5f);
+    CG_LoadingCentered(top + 187.0f, CG_LoadingFont(), 0.16f, loadAccent, mode, 1.5f);
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
 
