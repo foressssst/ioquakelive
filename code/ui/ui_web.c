@@ -299,6 +299,11 @@ static float SM_FaceEm(int face) {
     return face == FONT_DEFAULT ? SM_HANDEL_EM : SM_SANS_EM;
 }
 
+int SM_BarlowFace(qboolean bold) {
+    SM_LoadFonts();
+    return bold ? smFonts.strong : smFonts.regular;
+}
+
 int SM_ItalicFace(void) {
     return smFonts.sansItalic >= 0 ? smFonts.sansItalic : FONT_SANS;
 }

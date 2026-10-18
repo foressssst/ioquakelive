@@ -383,6 +383,7 @@ typedef struct {
     int cursorx;
     int cursory;
     qboolean debug;
+    qboolean remaster;
 
     cachedAssets_t Assets;
 
@@ -429,6 +430,7 @@ void Menus_Activate(menuDef_t* menu);
 
 int UI_SelectForKey(int key);
 displayContextDef_t* Display_GetContext(void);
+qboolean Menu_Themed(void);
 void* Display_CaptureItem(int x, int y);
 qboolean Display_MouseMove(void* p, int x, int y);
 int Display_CursorType(int x, int y);
