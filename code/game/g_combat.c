@@ -1223,6 +1223,10 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
     if (level.intermissionTime) {
         return;
     }
+    if (g_advancedTraining.integer == 1 && client && !(targ->r.svFlags & SVF_BOT) && attacker && attacker->client &&
+        (attacker->r.svFlags & SVF_BOT)) {
+        return;
+    }
 
     if (client) {
         if (mod != MOD_JUICED && client->invulnerabilityTime > level.time) {

@@ -3042,6 +3042,12 @@ int AINode_FollowMe(bot_state_t* bs) {
 #define DODGE_CIRCLE 1
 #define DODGE_CLOSE 2
 #define DODGE_BACK 3
+#define DODGE_PRESS 4
+#define DODGE_RANGE 5
+#define DODGE_ORBIT 6
+#define DODGE_JITTER 7
+#define DODGE_SWING 8
+#define DODGE_TACTICS 5
 
 void AIEnter_DodgeTrainer(bot_state_t* bs) {
     float now = FloatTime();
@@ -3064,6 +3070,10 @@ void AIEnter_DodgeTrainer(bot_state_t* bs) {
     bs->dodgeLockStart = 0;
     bs->dodgeWaiting = qfalse;
     VectorClear(bs->dodgeMoveDir);
+    bs->aimReact = 0.2f;
+    bs->aimReactUntil = 0;
+    bs->aimSeenSet = qfalse;
+    bs->aimOnRate = 0;
     BotRecordNodeSwitch(bs, "dodge trainer", "", "");
 }
 
@@ -3111,6 +3121,21 @@ static float BotDodgeRunTime(bot_state_t* bs) {
     if (bs->dodgeMode == DODGE_CIRCLE) {
         return 0.5f + random() * 0.6f;
     }
+    if (bs->dodgeMode == DODGE_PRESS) {
+        return 0.5f + random() * 0.7f;
+    }
+    if (bs->dodgeMode == DODGE_RANGE) {
+        return 0.6f + random() * 0.8f;
+    }
+    if (bs->dodgeMode == DODGE_ORBIT) {
+        return 1.4f + random() * 1.2f;
+    }
+    if (bs->dodgeMode == DODGE_JITTER) {
+        return 0.15f + random() * 0.2f;
+    }
+    if (bs->dodgeMode == DODGE_SWING) {
+        return 0.45f + random() * 0.35f;
+    }
     if (r < 0.35f + 0.35f * pressure) {
         return MAX(0.1f, react * (0.55f + random() * 0.45f));
     }
@@ -3118,6 +3143,56 @@ static float BotDodgeRunTime(bot_state_t* bs) {
         return react * (1.1f + random() * 0.9f);
     }
     return 0.55f + random() * (0.6f - 0.3f * pressure);
+}
+
+static void BotTrainerTactic(bot_state_t* bs, float dist, float now) {
+    float pressure = MAX(bs->dodgeAimRate, bs->dodgeHeat);
+    float w[DODGE_TACTICS], total = 0, r;
+    int i;
+
+    w[0] = 1.0f - 0.5f * pressure + (dist < 350.0f ? 0.5f : 0.0f);
+    w[1] = 0.6f + 0.8f * pressure + (dist > 550.0f ? 0.8f : 0.0f);
+    w[2] = 0.9f - 0.3f * pressure;
+    w[3] = 0.5f + 0.6f * pressure;
+    w[4] = 0.6f;
+    if (bs->dodgeMode >= DODGE_PRESS) {
+        w[bs->dodgeMode - DODGE_PRESS] = 0;
+    }
+    for (i = 0; i < DODGE_TACTICS; i++) {
+        total += w[i];
+    }
+    r = random() * total;
+    for (i = 0; i < DODGE_TACTICS - 1 && r >= w[i]; i++) {
+        r -= w[i];
+    }
+    bs->dodgeMode = DODGE_PRESS + i;
+    if (bs->dodgeMode == DODGE_JITTER) {
+        bs->dodgeModeEnd = now + 1.5f + random();
+    } else {
+        bs->dodgeModeEnd = now + 2.5f + random() * 2.5f;
+    }
+    bs->dodgeTurnTime = now + BotDodgeRunTime(bs);
+}
+
+static float BotTrainerRadial(bot_state_t* bs, float dist) {
+    switch (bs->dodgeMode) {
+        case DODGE_RANGE:
+            return Com_Clamp(-0.8f, 0.6f, (dist - 600.0f) / 180.0f);
+        case DODGE_ORBIT:
+            return Com_Clamp(-0.5f, 0.6f, (dist - 360.0f) / 200.0f);
+        case DODGE_JITTER:
+            return Com_Clamp(-0.5f, 0.5f, (dist - 420.0f) / 250.0f);
+        case DODGE_SWING:
+            if (dist < 200.0f) {
+                return -0.7f;
+            }
+            if (dist > 680.0f) {
+                return 0.9f;
+            }
+            return bs->dodgeDir > 0 ? 0.9f : -0.7f;
+        default:
+            return Com_Clamp(-0.5f, 0.9f, (dist - 200.0f) / 200.0f);
+    }
 }
 
 static void BotDodgeDirection(bot_state_t* bs, const vec3_t toHuman, vec3_t dir) {
@@ -3192,13 +3267,53 @@ static void BotDodgeTurn(bot_state_t* bs, float now) {
     bs->dodgeLockStart = 0;
 }
 
+static qboolean BotTrainerAim(bot_state_t* bs, int human, float dt, float now) {
+    gentity_t* target = &g_entities[human];
+    vec3_t aim, dir, forward;
+    trace_t tr;
+    float k, dist;
+    int i;
+
+    if (now >= bs->aimReactUntil) {
+        bs->aimReact = 0.16f + random() * 0.1f;
+        bs->aimReactUntil = now + 1.5f + random() * 2.0f;
+    }
+    if (!bs->aimSeenSet) {
+        VectorCopy(target->r.currentOrigin, bs->aimSeen);
+        bs->aimSeenSet = qtrue;
+    }
+    k = 1.0f - (float)exp(-dt / bs->aimReact);
+    for (i = 0; i < 3; i++) {
+        bs->aimSeen[i] += (target->r.currentOrigin[i] - bs->aimSeen[i]) * k;
+    }
+    VectorMA(bs->aimSeen, bs->aimReact * 0.5f, target->client->ps.velocity, aim);
+    aim[2] += 8.0f;
+    VectorSubtract(aim, bs->eye, dir);
+    vectoangles(dir, bs->ideal_viewangles);
+    bs->ideal_viewangles[YAW] += 2.2f * (float)sin(now * 8.2f + bs->client) + 1.1f * (float)sin(now * 19.5f);
+    bs->ideal_viewangles[PITCH] += 1.0f * (float)sin(now * 6.1f + 1.7f);
+
+    VectorSubtract(target->r.currentOrigin, bs->eye, dir);
+    dist = VectorNormalize(dir);
+    AngleVectors(bs->viewangles, forward, NULL, NULL);
+    if (dist > 768.0f || DotProduct(forward, dir) < 0.99f) {
+        return qfalse;
+    }
+    trap_Trace(&tr, bs->eye, NULL, NULL, target->r.currentOrigin, bs->client, MASK_SHOT);
+    if (tr.fraction < 1.0f && tr.entityNum != human) {
+        return qfalse;
+    }
+    trap_EA_Attack(bs->client);
+    return qtrue;
+}
+
 int AINode_DodgeTrainer(bot_state_t* bs) {
     gentity_t* ent = &g_entities[bs->client];
     int human = G_TrainingHumanClient();
     float now = FloatTime();
     float dist, dt, lead, pressure;
     vec3_t toHuman, dir;
-    qboolean hit, aimed;
+    qboolean hit, aimed, firing, engaged;
 
     if (BotIsObserver(bs)) {
         ent->flags &= ~FL_NOPICKUP;
@@ -3231,10 +3346,11 @@ int AINode_DodgeTrainer(bot_state_t* bs) {
     hit = 2 * DODGE_HEALTH - ent->health - ent->client->ps.stats[STAT_ARMOR] > 3;
     ent->health = ent->client->ps.stats[STAT_HEALTH] = DODGE_HEALTH;
     ent->client->ps.stats[STAT_ARMOR] = DODGE_HEALTH;
-    ent->client->ps.stats[STAT_WEAPONS] = 1 << WP_GAUNTLET;
+    ent->client->ps.stats[STAT_WEAPONS] = (1 << WP_GAUNTLET) | (1 << WP_LIGHTNING);
+    ent->client->ps.ammo[WP_LIGHTNING] = 150;
     ent->flags |= FL_NOPICKUP;
-    bs->weaponnum = WP_GAUNTLET;
-    trap_EA_SelectWeapon(bs->client, WP_GAUNTLET);
+    bs->weaponnum = WP_LIGHTNING;
+    trap_EA_SelectWeapon(bs->client, WP_LIGHTNING);
     bs->enemy = -1;
 
     if (human == -1) {
@@ -3242,7 +3358,6 @@ int AINode_DodgeTrainer(bot_state_t* bs) {
     }
 
     VectorSubtract(g_entities[human].r.currentOrigin, bs->origin, toHuman);
-    vectoangles(toHuman, bs->ideal_viewangles);
     toHuman[2] = 0;
     dist = VectorNormalize(toHuman);
 
@@ -3251,6 +3366,8 @@ int AINode_DodgeTrainer(bot_state_t* bs) {
         dt = 0.05f;
     }
     bs->dodgeThink = now;
+    firing = BotTrainerAim(bs, human, dt, now);
+    bs->aimOnRate += ((firing ? 1.0f : 0.0f) - bs->aimOnRate) * MIN(dt * 2.0f, 1.0f);
     bs->dodgeHeat -= bs->dodgeHeat * MIN(dt * 0.6f, 1.0f);
     if (hit) {
         bs->dodgeHeat = MIN(1.0f, bs->dodgeHeat + 0.05f);
@@ -3275,12 +3392,22 @@ int AINode_DodgeTrainer(bot_state_t* bs) {
         bs->dodgeHitTime = 0;
     }
 
-    if (now >= bs->dodgeModeEnd || (dist > 650 && bs->dodgeMode != DODGE_CLOSE) ||
-        (dist < 220 && bs->dodgeMode != DODGE_BACK)) {
+    engaged = bs->dodgeMode >= DODGE_PRESS;
+    if (bs->aimOnRate > 0.35f || (engaged && bs->aimOnRate > 0.1f)) {
+        if (!engaged || now >= bs->dodgeModeEnd) {
+            BotTrainerTactic(bs, dist, now);
+        }
+        bs->dodgeRadial = BotTrainerRadial(bs, dist);
+        if (bs->cur_ps.groundEntityNum != ENTITYNUM_NONE) {
+            VectorCopy(bs->origin, bs->dodgeAnchor);
+        }
+    } else if (engaged || now >= bs->dodgeModeEnd || (dist > 650 && bs->dodgeMode != DODGE_CLOSE) ||
+               (dist < 220 && bs->dodgeMode != DODGE_BACK)) {
         BotDodgeNextMode(bs, dist, now);
     }
 
-    if (bs->dodgeHitTime && now >= bs->dodgeHitTime && now - bs->dodgeRunStart > 0.1f) {
+    if (bs->dodgeHitTime && now >= bs->dodgeHitTime &&
+        now - bs->dodgeRunStart > (bs->dodgeMode == DODGE_ORBIT ? 0.4f : 0.1f)) {
         if (bs->dodgeMode == DODGE_CIRCLE) {
             bs->dodgeMode = DODGE_STRAFE;
             bs->dodgeRadial = crandom() * 0.15f;
@@ -3305,7 +3432,9 @@ int AINode_DodgeTrainer(bot_state_t* bs) {
         if (!BotDodgeClear(bs, dir)) {
             VectorSubtract(bs->dodgeAnchor, bs->origin, dir);
             dir[2] = 0;
-            VectorNormalize(dir);
+            if (VectorNormalize(dir) < 1.0f) {
+                VectorCopy(toHuman, dir);
+            }
         }
     }
     VectorCopy(dir, bs->dodgeMoveDir);
