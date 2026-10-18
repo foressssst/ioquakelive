@@ -180,25 +180,11 @@ static const char* CG_LoadingStageName(void) {
 
 #define OSU(u) ((u) * 0.625f)
 
-static const vec4_t osuGray = {0.8f, 0.8f, 0.8f, 1.0f};
-static const vec4_t osuYellow = {1.0f, 0.8f, 0.133f, 1.0f};
-static const vec4_t osuTrack = {1.0f, 1.0f, 1.0f, 0.25f};
-static const vec4_t osuPanel = {0.0f, 0.0f, 0.0f, 0.1f};
-static const vec4_t osuStar = {0.98f, 0.76f, 0.37f, 1.0f};
-static const vec4_t osuStarText = {0.0f, 0.0f, 0.0f, 0.75f};
-static const vec4_t osuFooter = {0.11f, 0.13f, 0.14f, 1.0f};
-static const vec4_t osuBack = {0.92f, 0.2f, 0.6f, 1.0f};
-static const vec4_t osuShade = {0.0f, 0.0f, 0.0f, 0.5f};
+static const vec4_t osuShade = {0.0f, 0.0f, 0.0f, 0.3f};
 static const vec4_t osuBox = {0.0f, 0.0f, 0.0f, 0.7f};
 
-typedef struct {
-    const char* label;
-    float value;
-    qboolean slider;
-} osuSetting_t;
-
 static int osuFonts[2] = {-2, -2};
-static float osuK = 1.0f, osuDX, osuAlpha = 1.0f;
+static float osuK = 1.0f, osuAlpha = 1.0f;
 
 static int CG_OsuFont(int bold) {
     if (osuFonts[0] == -2) {
@@ -208,10 +194,10 @@ static int CG_OsuFont(int bold) {
     return osuFonts[bold] >= 0 ? osuFonts[bold] : 1;
 }
 
-static float CG_OsuEase(float t, float delay, float duration, qboolean quint) {
+static float CG_OsuEase(float t, float delay, float duration) {
     t = (t - delay) / duration;
     t = 1.0f - (t < 0.0f ? 0.0f : t > 1.0f ? 1.0f : t);
-    return quint ? 1.0f - t * t * t * t * t : 1.0f - t * t;
+    return 1.0f - t * t * t * t * t;
 }
 
 static float CG_OsuInOutExpo(float t) {
@@ -223,27 +209,19 @@ static float CG_OsuInOutExpo(float t) {
 }
 
 static void CG_OsuPoint(float* x, float* y) {
-    *x = 320.0f + (*x - 320.0f) * osuK + osuDX;
+    *x = 320.0f + (*x - 320.0f) * osuK;
     *y = 240.0f + (*y - 240.0f) * osuK;
 }
 
-static float CG_OsuTextWidth(const char* text, float size, int bold) {
+static void CG_OsuText(float x, float y, float size, const char* text) {
+    vec4_t c = {1.0f, 1.0f, 1.0f, 1.0f};
     float w = 0;
 
-    CG_MeasureTextInFont(text, CG_OsuFont(bold), size / 96.0f, &w, NULL);
-    return w;
-}
-
-static void CG_OsuText(float x, float y, float size, int bold, const float* color, const char* text, int align) {
-    vec4_t c;
-
-    if (align) {
-        x -= CG_OsuTextWidth(text, size, bold) * (align == 1 ? 0.5f : 1.0f);
-    }
+    CG_MeasureTextInFont(text, CG_OsuFont(0), size / 96.0f, &w, NULL);
+    x -= w * 0.5f;
     CG_OsuPoint(&x, &y);
-    Vector4Copy(color, c);
-    c[3] *= osuAlpha;
-    CG_DrawTextInFont(x, y, CG_OsuFont(bold), size * osuK / 96.0f, c, text, ITEM_TEXTSTYLE_NORMAL);
+    c[3] = osuAlpha;
+    CG_DrawTextInFont(x, y, CG_OsuFont(0), size * osuK / 96.0f, c, text, ITEM_TEXTSTYLE_NORMAL);
 }
 
 static void CG_OsuQuad(const float* box, float x, float y, float w, float h, qhandle_t shader) {
@@ -256,29 +234,18 @@ static void CG_OsuQuad(const float* box, float x, float y, float w, float h, qha
                           box[5] + (y + h - box[1]) / box[3] * (box[7] - box[5]), shader);
 }
 
-static void CG_OsuRow(const float* box, float y, float h, float e, float radius, float border, float slant,
-                      qhandle_t shader) {
-    float x = box[0] + slant, w = box[2], in = 0.0f, inner = 0.0f, ri, ei;
+static void CG_OsuRow(const float* box, float y, float h, float e, float radius, qhandle_t shader) {
+    float in = 0.0f;
 
     if (e < radius) {
         in = radius - (float)sqrt(radius * radius - (radius - e) * (radius - e));
     }
-    if (border <= 0.0f || e < border) {
-        CG_OsuQuad(box, x + in, y, w - in * 2.0f, h, shader);
-        return;
-    }
-    ri = radius - border;
-    ei = e - border;
-    if (ri > 0.0f && ei < ri) {
-        inner = ri - (float)sqrt(ri * ri - (ri - ei) * (ri - ei));
-    }
-    CG_OsuQuad(box, x + in, y, border + inner - in, h, shader);
-    CG_OsuQuad(box, x + w - border - inner, y, border + inner - in, h, shader);
+    CG_OsuQuad(box, box[0] + in, y, box[2] - in * 2.0f, h, shader);
 }
 
-static void CG_OsuShape(float x, float y, float w, float h, float radius, float border, float skew,
-                        const float* color, qhandle_t shader, float s1, float t1, float s2, float t2) {
-    float box[8], e;
+static void CG_OsuShape(float x, float y, float w, float h, float radius, const float* color, qhandle_t shader,
+                        float s1, float t1, float s2, float t2) {
+    float box[8];
     vec4_t c;
     int i, rows;
 
@@ -286,10 +253,8 @@ static void CG_OsuShape(float x, float y, float w, float h, float radius, float 
     w *= osuK;
     h *= osuK;
     radius *= osuK;
-    border *= osuK;
     CG_AdjustFrom640(&x, &y, &w, &h);
     radius *= cgs.screenYScale;
-    border *= cgs.screenYScale;
     if (radius > h * 0.5f) {
         radius = h * 0.5f;
     }
@@ -307,23 +272,18 @@ static void CG_OsuShape(float x, float y, float w, float h, float radius, float 
     Vector4Copy(color, c);
     c[3] *= osuAlpha;
     trap_R_SetColor(c);
-    rows = (int)ceil(skew != 0.0f ? h * 0.5f : (radius > border ? radius : border));
+    rows = (int)ceil(radius);
     if (rows > (int)(h * 0.5f)) {
         rows = (int)(h * 0.5f);
     }
     for (i = 0; i < rows; i++) {
-        e = i + 0.5f;
-        CG_OsuRow(box, y + i, 1.0f, e, radius, border, skew * (h - e), shader);
-        CG_OsuRow(box, y + h - i - 1.0f, 1.0f, e, radius, border, skew * e, shader);
+        CG_OsuRow(box, y + i, 1.0f, i + 0.5f, radius, shader);
+        CG_OsuRow(box, y + h - i - 1.0f, 1.0f, i + 0.5f, radius, shader);
     }
     if (h - rows * 2 > 0.0f) {
-        CG_OsuRow(box, y + rows, h - rows * 2, h, radius, border, skew * h * 0.5f, shader);
+        CG_OsuRow(box, y + rows, h - rows * 2, h, radius, shader);
     }
     trap_R_SetColor(NULL);
-}
-
-static void CG_OsuFill(float x, float y, float w, float h, float radius, const float* color) {
-    CG_OsuShape(x, y, w, h, radius, 0.0f, 0.0f, color, cgs.media.whiteShader, 0.0f, 0.0f, 1.0f, 1.0f);
 }
 
 static void CG_OsuSpinner(float cx, float cy, float size, int time) {
@@ -346,68 +306,14 @@ static void CG_OsuSpinner(float cx, float cy, float size, int time) {
     trap_R_SetColor(NULL);
 }
 
-static void CG_OsuBackground(qhandle_t shot, float s1, float s2) {
-    float w = (float)cgs.glconfig.vidWidth, h = (float)cgs.glconfig.vidHeight, r = h * 0.026f, a, d;
-    vec4_t c = {0.55f, 0.55f, 0.55f, 1.0f};
-    int i, taps = 32;
-
-    for (i = 0; i < taps; i++) {
-        a = i * 2.39996f;
-        d = r * (float)sqrt((i + 0.5f) / taps);
-        c[3] = 1.0f / (i + 1);
-        trap_R_SetColor(c);
-        trap_R_DrawStretchPic((float)cos(a) * d - r, (float)sin(a) * d - r, w + r * 2.0f, h + r * 2.0f, s1, 0, s2, 1,
-                              shot);
-    }
-    trap_R_SetColor(NULL);
-}
-
-static float CG_OsuGroup(float x, float y, const char* title, const osuSetting_t* items, int count) {
-    float h = 0.0f, nx, by, iy;
-    int i;
-
-    for (i = 0; i < count; i++) {
-        h += (items[i].slider ? 36.0f : 20.0f) + (i ? 15.0f : 0.0f);
-    }
-    CG_OsuFill(x, y, OSU(270), OSU(45 + h), OSU(5), osuPanel);
-    CG_OsuText(x + OSU(10), y + OSU(21), 17, 1, colorWhite, title, 0);
-    x += OSU(10);
-    iy = y + OSU(35);
-    for (i = 0; i < count; i++) {
-        float v = items[i].value < 0.0f ? 0.0f : items[i].value > 1.0f ? 1.0f : items[i].value;
-
-        if (items[i].slider) {
-            CG_OsuText(x, iy + OSU(11), 14, 0, colorWhite, items[i].label, 0);
-            by = iy + OSU(19);
-            nx = x + (OSU(250) - OSU(40)) * v;
-            CG_OsuFill(x, by + OSU(5), nx + OSU(20) - x, OSU(5), OSU(2.5f), osuYellow);
-            CG_OsuFill(nx + OSU(20), by + OSU(5), x + OSU(250) - nx - OSU(20), OSU(5), OSU(2.5f), osuTrack);
-            CG_OsuFill(nx, by, OSU(40), OSU(15), OSU(7.5f), osuYellow);
-            iy += OSU(36 + 15);
-        } else {
-            CG_OsuText(x, iy + OSU(14), 14, 0, colorWhite, items[i].label, 0);
-            if (v > 0.0f) {
-                CG_OsuFill(x + OSU(210), iy + OSU(3), OSU(40), OSU(15), OSU(7.5f), osuYellow);
-            } else {
-                CG_OsuShape(x + OSU(210), iy + OSU(3), OSU(40), OSU(15), OSU(7.5f), OSU(2), 0.0f, osuYellow,
-                            cgs.media.whiteShader, 0.0f, 0.0f, 1.0f, 1.0f);
-            }
-            iy += OSU(20 + 15);
-        }
-    }
-    return y + OSU(45 + h + 20);
-}
-
 static void CG_DrawLoadingOsu(qhandle_t levelshot, float s1, float s2) {
     static int start, last;
     const char* info = CG_ConfigString(CS_SERVERINFO);
-    const char* star = "\xe2\x98\x85";
-    char title[MAX_QPATH], artist[MAX_QPATH], mode[MAX_QPATH], host[MAX_QPATH], map[MAX_QPATH], players[32];
-    char forced[MAX_QPATH];
-    qhandle_t pics[MAX_CLIENTS], logo;
-    osuSetting_t visual[6], audio[3], input[1];
-    float top, y, w, lw, vw, gx, fx, fy, p, ls;
-    int now = trap_Milliseconds(), t, maxClients, count;
+    char title[MAX_QPATH], host[MAX_QPATH], mode[MAX_QPATH], map[MAX_QPATH];
+    vec4_t dim = {0.55f, 0.55f, 0.55f, 1.0f};
+    qhandle_t blurred, logo;
+    float top, fx, fy, p, ls;
+    int now = trap_Milliseconds(), t;
 
     if (!start || (cg_loadingPreview.integer && now - last > 1000)) {
         start = now;
@@ -416,119 +322,51 @@ static void CG_DrawLoadingOsu(qhandle_t levelshot, float s1, float s2) {
     t = now - start;
 
     Q_strncpyz(title, CG_ConfigString(CS_MESSAGE)[0] ? CG_ConfigString(CS_MESSAGE) : cgs.mapname, sizeof(title));
-    Q_strncpyz(map, Info_ValueForKey(info, "mapname"), sizeof(map));
-    Q_strncpyz(artist, CG_ConfigString(CS_AUTHOR)[0] ? CG_ConfigString(CS_AUTHOR) : map, sizeof(artist));
+    Q_strncpyz(host, Info_ValueForKey(info, "sv_hostname"), sizeof(host));
+    Q_CleanStr(host);
     Q_strncpyz(mode, Info_ValueForKey(info, "g_factoryTitle"), sizeof(mode));
     if (!mode[0] && cgs.gametype >= 0 && cgs.gametype < GT_MAX_GAME_TYPE) {
         Q_strncpyz(mode, gametypeDisplayNames[cgs.gametype], sizeof(mode));
     }
-    Q_strncpyz(host, Info_ValueForKey(info, "sv_hostname"), sizeof(host));
-    Q_CleanStr(host);
-    maxClients = atoi(Info_ValueForKey(info, "sv_maxclients"));
-    count = CG_LoadingPictures(pics, ARRAY_LEN(pics));
-    Com_sprintf(players, sizeof(players), "%i / %i", count, maxClients);
-    trap_Cvar_VariableStringBuffer("cg_forceEnemyModel", forced, sizeof(forced));
+    Q_strncpyz(map, Info_ValueForKey(info, "mapname"), sizeof(map));
+    blurred = trap_R_RegisterShaderNoMip(va("levelshots/%s@blur", map));
 
-    visual[0].label = "Brightness";
-    visual[0].value = (trap_Cvar_VariableValue("r_gamma") - 0.5f) / 1.5f;
-    visual[0].slider = qtrue;
-    visual[1].label = "Field of view";
-    visual[1].value = (trap_Cvar_VariableValue("cg_fov") - 75.0f) / 55.0f;
-    visual[1].slider = qtrue;
-    visual[2].label = "Draw gun";
-    visual[2].value = trap_Cvar_VariableValue("cg_drawGun") != 0.0f;
-    visual[2].slider = qfalse;
-    visual[3].label = "Simple items";
-    visual[3].value = trap_Cvar_VariableValue("cg_simpleItems") != 0.0f;
-    visual[3].slider = qfalse;
-    visual[4].label = "Force enemy model";
-    visual[4].value = forced[0] != '\0';
-    visual[4].slider = qfalse;
-    visual[5].label = "Crosshair size";
-    visual[5].value = trap_Cvar_VariableValue("cg_crosshairSize") / 100.0f;
-    visual[5].slider = qtrue;
-    audio[0].label = "Hit beeps";
-    audio[0].value = trap_Cvar_VariableValue("cg_hitBeep") != 0.0f;
-    audio[0].slider = qfalse;
-    audio[1].label = "Volume";
-    audio[1].value = trap_Cvar_VariableValue("s_volume");
-    audio[1].slider = qtrue;
-    audio[2].label = "Music volume";
-    audio[2].value = trap_Cvar_VariableValue("s_musicVolume");
-    audio[2].slider = qtrue;
-    input[0].label = "Mouse acceleration";
-    input[0].value = trap_Cvar_VariableValue("cl_mouseAccel") != 0.0f;
-    input[0].slider = qfalse;
-
-    CG_OsuBackground(levelshot, s1, s2);
+    trap_R_SetColor(dim);
+    trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight, s1, 0, s2, 1.0f,
+                          blurred ? blurred : levelshot);
+    trap_R_SetColor(NULL);
 
     CG_SetWidescreen(WIDESCREEN_CENTER);
-    top = 240.0f - OSU(398) * 0.5f;
-    osuDX = 0.0f;
-    osuK = 0.7f + 0.3f * CG_OsuEase((float)t, 0, 650, qtrue);
-    osuAlpha = CG_OsuEase((float)t, 500, 500, qtrue);
+    top = 240.0f - OSU(395) * 0.5f;
+    osuK = 0.7f + 0.3f * CG_OsuEase((float)t, 0, 650);
+    osuAlpha = CG_OsuEase((float)t, 500, 500);
 
-    CG_OsuText(320, top + OSU(124), 36, 0, colorWhite, title, 1);
-    CG_OsuText(320, top + OSU(158), 26, 0, colorWhite, artist, 1);
-    CG_OsuShape(320 - OSU(150), top + OSU(174), OSU(300), OSU(60), OSU(10), 0.0f, 0.0f, colorWhite, levelshot,
-                0.0f, 0.3667f, 1.0f, 0.6333f);
-    CG_OsuFill(320 - OSU(150), top + OSU(174), OSU(300), OSU(60), OSU(10), osuShade);
-    CG_OsuFill(320 - OSU(15), top + OSU(189), OSU(30), OSU(30), OSU(7.5f), osuBox);
-    CG_OsuSpinner(320, top + OSU(204), OSU(18), t);
-    CG_OsuText(320, top + OSU(269), 26, 0, colorWhite, mode, 1);
-
-    w = CG_OsuTextWidth(players, 14.4f, 1);
-    if (w < OSU(25)) {
-        w = OSU(25);
+    CG_OsuText(320, top + OSU(154), 36, title);
+    if (host[0]) {
+        CG_OsuText(320, top + OSU(188), 26, host);
     }
-    w += OSU(8 + 8 + 3 + 8);
-    CG_OsuFill(320 - w * 0.5f, top + OSU(280), w, OSU(20), OSU(10), osuStar);
-    CG_OsuText(320 - w * 0.5f + OSU(7), top + OSU(295.5f), 13, 1, osuStarText, star, 0);
-    CG_OsuText(320 - w * 0.5f + OSU(19), top + OSU(295), 14.4f, 1, osuStarText, players, 0);
-
-    lw = CG_OsuTextWidth("Server", 16, 0);
-    vw = CG_OsuTextWidth(host, 16, 0);
-    if (CG_OsuTextWidth(map, 16, 0) > vw) {
-        vw = CG_OsuTextWidth(map, 16, 0);
-    }
-    gx = 320 - (lw + vw + OSU(10)) * 0.5f;
-    CG_OsuText(gx + lw, top + OSU(355), 16, 0, osuGray, "Server", 2);
-    CG_OsuText(gx + lw + OSU(10), top + OSU(355), 16, 0, colorWhite, host[0] ? host : "-", 0);
-    CG_OsuText(gx + lw, top + OSU(374), 16, 0, osuGray, "Map", 2);
-    CG_OsuText(gx + lw + OSU(10), top + OSU(374), 16, 0, colorWhite, map[0] ? map : "-", 0);
+    CG_OsuShape(320 - OSU(210), top + OSU(204), OSU(420), OSU(150), OSU(10), colorWhite, levelshot, 0.0f, 0.1825f,
+                1.0f, 0.8175f);
+    CG_OsuShape(320 - OSU(210), top + OSU(204), OSU(420), OSU(150), OSU(10), osuShade, cgs.media.whiteShader, 0.0f,
+                0.0f, 1.0f, 1.0f);
+    CG_OsuShape(320 - OSU(18.75f), top + OSU(260.25f), OSU(37.5f), OSU(37.5f), OSU(9.4f), osuBox,
+                cgs.media.whiteShader, 0.0f, 0.0f, 1.0f, 1.0f);
+    CG_OsuSpinner(320, top + OSU(279), OSU(22.5f), t);
+    CG_OsuText(320, top + OSU(389), 26, mode);
 
     fx = 320.0f;
-    fy = top + OSU(37.5f);
+    fy = top + OSU(52.5f);
     CG_OsuPoint(&fx, &fy);
     p = CG_OsuInOutExpo(t / 500.0f);
-    ls = (1.5f - 0.5f * CG_OsuEase((float)t, 0, 300, qtrue)) * osuK;
+    ls = (1.5f - 0.5f * CG_OsuEase((float)t, 0, 300)) * osuK;
     fx = 320.0f + (fx - 320.0f) * p;
     fy = 240.0f + (fy - 240.0f) * p;
     osuK = 1.0f;
     osuAlpha = t >= 350 ? 1.0f : t / 350.0f;
     logo = trap_R_RegisterShaderNoMip("ui/assets/main_menu/ql_logo.png");
-    CG_OsuShape(fx - OSU(150) * ls, fy - OSU(37.5f) * ls, OSU(300) * ls, OSU(75) * ls, 0.0f, 0.0f, 0.0f, colorWhite,
-                logo, 56.0f / 512.0f, 16.0f / 128.0f, 449.0f / 512.0f, 114.0f / 128.0f);
-
-    CG_SetWidescreen(WIDESCREEN_RIGHT);
-    osuAlpha = CG_OsuEase((float)t, 750, 500, qfalse);
-    osuDX = OSU(320) * (1.0f - CG_OsuEase((float)t, 750, 500, qtrue));
-    y = OSU(25);
-    y = CG_OsuGroup(640 - OSU(25 + 270), y, "VISUAL SETTINGS", visual, ARRAY_LEN(visual));
-    y = CG_OsuGroup(640 - OSU(25 + 270), y, "AUDIO SETTINGS", audio, ARRAY_LEN(audio));
-    CG_OsuGroup(640 - OSU(25 + 270), y, "INPUT SETTINGS", input, ARRAY_LEN(input));
-    osuDX = 0.0f;
+    CG_OsuShape(fx - OSU(210) * ls, fy - OSU(52.5f) * ls, OSU(420) * ls, OSU(105) * ls, 0.0f, colorWhite, logo,
+                56.0f / 512.0f, 16.0f / 128.0f, 449.0f / 512.0f, 114.0f / 128.0f);
     osuAlpha = 1.0f;
-
-    trap_R_SetColor(osuFooter);
-    trap_R_DrawStretchPic(0, cgs.glconfig.vidHeight - OSU(60) * cgs.screenYScale, (float)cgs.glconfig.vidWidth,
-                          OSU(60) * cgs.screenYScale, 0, 0, 1, 1, cgs.media.whiteShader);
-    trap_R_SetColor(NULL);
-    CG_SetWidescreen(WIDESCREEN_LEFT);
-    CG_OsuShape(OSU(14), 480 - OSU(71), OSU(278), OSU(55), 0.0f, 0.0f, 0.2f, osuBack, cgs.media.whiteShader, 0.0f,
-                0.0f, 1.0f, 1.0f);
-    CG_OsuText(OSU(110), 480 - OSU(38), 15, 1, colorWhite, "<", 0);
-    CG_OsuText(OSU(145), 480 - OSU(38), 15, 1, colorWhite, "Back", 0);
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
 

@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 #include "tr_local.h"
+#include "../renderercommon/tr_image_blur.h"
 
 static byte	s_intensitytable[256];
 qboolean	textureNonPowerOfTwo;
@@ -1146,7 +1147,9 @@ image_t	*R_FindImageFile( const char *name, imgFlags_t flags )
 {
 	image_t	*image;
 	const char *localName;
+	const char *blur;
 	char	strippedName[ MAX_QPATH ];
+	char	baseName[ MAX_QPATH ];
 	int		width, height;
 	byte	*pic;
 	int		hash;
@@ -1180,16 +1183,24 @@ image_t	*R_FindImageFile( const char *name, imgFlags_t flags )
 		}
 	}
 
+	blur = strstr( name, "@blur" );
 	{
 		int64_t start = ri.Microseconds();
 
-		if ( !R_PrefetchTake( name, &pic, &width, &height, &localName ) ) {
+		if ( blur ) {
+			Q_strncpyz( baseName, name, MIN( (int)sizeof( baseName ), (int)( blur - name ) + 1 ) );
+			localName = R_LoadImage( baseName, &pic, &width, &height );
+		} else if ( !R_PrefetchTake( name, &pic, &width, &height, &localName ) ) {
 			localName = R_LoadImage( name, &pic, &width, &height );
 		}
 		r_imageDecodeUs += ri.Microseconds() - start;
 	}
 	if ( pic == NULL ) {
 		return NULL;
+	}
+	if ( blur ) {
+		R_BlurImage( pic, &width, &height );
+		r_lastImageName[0] = '\0';
 	}
 	R_PrefetchRecord();
 	r_imageCount++;

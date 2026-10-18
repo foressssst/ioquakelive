@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 #include "tr_local.h"
+#include "../renderercommon/tr_image_blur.h"
 
 #include "tr_dsa.h"
 
@@ -2288,6 +2289,8 @@ image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags) {
     int picNumMips;
     long hash;
     imgFlags_t checkFlagsTrue, checkFlagsFalse;
+    const char* blur;
+    char baseName[MAX_QPATH];
 
     if (!name) {
         return NULL;
@@ -2306,10 +2309,14 @@ image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags) {
         }
     }
 
+    blur = strstr(name, "@blur");
     {
         int64_t start = ri.Microseconds();
 
-        if (R_PrefetchTake(name, &pic, &width, &height)) {
+        if (blur) {
+            Q_strncpyz(baseName, name, MIN((int)sizeof(baseName), (int)(blur - name) + 1));
+            R_LoadImage(baseName, &pic, &width, &height, &picFormat, &picNumMips);
+        } else if (R_PrefetchTake(name, &pic, &width, &height)) {
             picFormat = GL_RGBA8;
             picNumMips = 0;
         } else {
@@ -2319,6 +2326,11 @@ image_t* R_FindImageFile(const char* name, imgType_t type, imgFlags_t flags) {
     }
     if (pic == NULL) {
         return NULL;
+    }
+    if (blur && picFormat == GL_RGBA8) {
+        R_BlurImage(pic, &width, &height);
+        picNumMips = 0;
+        r_lastImageName[0] = '\0';
     }
     R_PrefetchRecord();
     r_imageCount++;
