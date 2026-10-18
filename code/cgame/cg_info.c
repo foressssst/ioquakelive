@@ -293,7 +293,6 @@ static void CG_DrawLoadingPoster(qhandle_t levelshot, float s1, float s2) {
     char title[MAX_QPATH], host[MAX_QPATH], mode[MAX_QPATH], map[MAX_QPATH], line[MAX_QPATH], more[16];
     vec4_t dim = {0.45f, 0.45f, 0.45f, 1.0f};
     vec4_t band = {0.0f, 0.0f, 0.0f, 0.72f};
-    vec4_t edge = {1.0f, 1.0f, 1.0f, 0.14f};
     qhandle_t blurred, pics[16];
     float cx = 144.0f, cw = 352.0f, ch = 198.0f, cy = 126.0f, bt = cy + ch - 56.0f, row = cy + ch + 12.0f;
     float x = cx + cw - 88.0f, y = bt + 19.0f, w = 72.0f, h = 18.0f, hostW = 0.0f, moreW = 0.0f, titleW = 0.0f;
@@ -345,8 +344,6 @@ static void CG_DrawLoadingPoster(qhandle_t levelshot, float s1, float s2) {
     trap_R_SetColor(dim);
     trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight, s1, 0, s2, 1.0f,
                           blurred ? blurred : levelshot);
-    trap_R_SetColor(edge);
-    CG_LoadingCard(cx - 0.6f, cy - 0.6f, cw + 1.2f, ch + 1.2f, 10.6f, 3, cgs.media.whiteShader, 0.0f, 0.0f, 1.0f, 1.0f);
     trap_R_SetColor(NULL);
     CG_LoadingCard(cx, cy, cw, ch, 10.0f, 3, levelshot, 0.0f, 0.0f, 1.0f, 1.0f);
     trap_R_SetColor(band);
