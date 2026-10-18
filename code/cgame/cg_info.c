@@ -455,7 +455,8 @@ static void CG_DrawLoadingPoster(qhandle_t levelshot, float s1, float s2) {
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
 
-static int loadingShownAt, loadingClock, loadingLast, loadingContentAt = -1, loadingGameAt;
+static int loadingShownAt, loadingClock, loadingLast, loadingContentAt = -1, loadingGameAt, loadingStable;
+static int loadingOutroAt = -1;
 
 static float CG_LoadingEase(float t, float delay, float duration) {
     t = (t - delay) / duration;
@@ -492,8 +493,8 @@ static void CG_DrawLoadingSplit(qhandle_t levelshot, float s1, float s2, float c
     char title[MAX_QPATH], host[MAX_QPATH], mode[MAX_QPATH], map[MAX_QPATH], more[16];
     qhandle_t pics[16];
     vec4_t c;
-    float cw = 224.0f, ch = 112.0f, gap = 26.0f, maxCol = 220.0f, cy = 240.0f - ch * 0.5f;
-    float titleScale = 0.38f, titleW, colW = 0.0f, w, cx, tx, top, colH, a[6], dy[6], leave, y;
+    float cw = 208.0f, ch = 104.0f, gap = 24.0f, maxCol = 220.0f, cy = 240.0f - ch * 0.5f;
+    float titleScale = 0.34f, titleW, colW = 0.0f, w, cx, tx, top, colH, a[6], dy[6], leave, y;
     int count, shown, i;
 
     CG_LoadingStrings(title, host, mode, map);
@@ -521,11 +522,11 @@ static void CG_DrawLoadingSplit(qhandle_t levelshot, float s1, float s2, float c
     colW = w > colW ? w : colW;
     cx = 320.0f - (cw + gap + colW) * 0.5f;
     tx = cx + cw + gap;
-    colH = 31.1f + (host[0] ? 18.0f : 0.0f) + (count ? 32.0f : 0.0f);
+    colH = 29.0f + (host[0] ? 18.0f : 0.0f) + (count ? 32.0f : 0.0f);
     top = cy + (ch - colH) * 0.5f;
 
     for (i = 0; i < 6; i++) {
-        float in = content < 0.0f ? 0.0f : CG_LoadingEase(content, 35.0f * i, 320.0f);
+        float in = content < 0.0f ? 0.0f : CG_LoadingEase(content, 20.0f * i, 200.0f);
 
         a[i] = in * (1.0f - leave);
         dy[i] = 14.0f * (1.0f - in) - 14.0f * leave;
@@ -539,8 +540,8 @@ static void CG_DrawLoadingSplit(qhandle_t levelshot, float s1, float s2, float c
     c[3] = a[1];
     CG_LoadingText(tx + 1.0f, top + 6.7f + dy[1], CG_LoadingFont(), 0.16f, c, mode, 1.6f, 0);
     c[3] = a[2];
-    CG_LoadingText(tx, top + 31.1f + dy[2], 0, titleScale, c, title, 0.0f, 0);
-    y = top + 31.1f;
+    CG_LoadingText(tx, top + 29.0f + dy[2], 0, titleScale, c, title, 0.0f, 0);
+    y = top + 29.0f;
     if (host[0]) {
         y += 18.0f;
         Vector4Copy(loadMuted, c);
@@ -566,14 +567,20 @@ void CG_DrawLoadingOutro(void) {
     if (loadingShownAt > loadingGameAt) {
         loadingGameAt = now;
         loadingLast = now;
+        loadingStable = 0;
+        loadingOutroAt = -1;
     }
+    loadingStable = now - loadingLast <= 50 ? loadingStable + 1 : 0;
     CG_LoadingAdvance(now);
     if (loadingContentAt < 0) {
         loadingContentAt = loadingClock;
     }
     content = (float)(loadingClock - loadingContentAt);
-    if (content > 580.0f) {
-        outro = (content - 580.0f) / 400.0f;
+    if (loadingOutroAt < 0 && content >= 450.0f && (loadingStable >= 6 || now - loadingGameAt > 1500)) {
+        loadingOutroAt = loadingClock;
+    }
+    if (loadingOutroAt >= 0) {
+        outro = (loadingClock - loadingOutroAt) / 400.0f;
         if (outro >= 1.0f) {
             return;
         }
