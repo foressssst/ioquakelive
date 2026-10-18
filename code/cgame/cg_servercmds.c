@@ -831,6 +831,16 @@ void CG_SetConfigValues(void) {
         cgs.flagStatus = s[0] - '0';
     }
     CG_ParseWarmup();
+    switch (cgs.gametype) {
+    case GT_CA:
+    case GT_FREEZE:
+    case GT_AD:
+    case GT_RR:
+        CG_ParseWarmupInfo();
+        break;
+    default:
+        break;
+    }
     CG_UpdateDisableLoadout(atoi(Info_ValueForKey(CG_ConfigString(CS_SERVERINFO), "g_loadout")));
 }
 
