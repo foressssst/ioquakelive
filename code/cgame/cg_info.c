@@ -484,8 +484,8 @@ static void CG_DrawLoadingSplit(qhandle_t levelshot, float s1, float s2, float c
     char title[MAX_QPATH], host[MAX_QPATH], mode[MAX_QPATH], map[MAX_QPATH], more[16];
     qhandle_t pics[16];
     vec4_t c;
-    float cw = 288.0f, ch = 162.0f, gap = 32.0f, maxCol = 240.0f, cy = 240.0f - ch * 0.5f;
-    float titleScale = 0.5f, titleW, colW = 0.0f, w, cx, tx, top, colH, a[6], dy[6], leave, y;
+    float cw = 256.0f, ch = 144.0f, cx = 320.0f - cw * 0.5f, cy = 144.0f, row = cy + ch + 14.0f;
+    float titleScale = 0.4f, titleW, avatarsW = 0.0f, a[6], dy[6], leave, w;
     int count, shown, i;
 
     CG_LoadingStrings(title, host, mode, map);
@@ -497,24 +497,17 @@ static void CG_DrawLoadingSplit(qhandle_t levelshot, float s1, float s2, float c
     CG_LoadingBackdrop(levelshot, map, s1, s2, 0.38f, 1.0f - w * w * (3.0f - 2.0f * w));
 
     CG_SetWidescreen(WIDESCREEN_CENTER);
-    titleW = CG_LoadingTextWidth(0, titleScale, title, 0.0f);
-    if (titleW > maxCol) {
-        titleScale *= maxCol / titleW;
-        titleW = maxCol;
-    }
-    colW = titleW > colW ? titleW : colW;
-    w = CG_LoadingTextWidth(CG_LoadingFont(), 0.17f, mode, 1.7f);
-    colW = w > colW ? w : colW;
     if (host[0]) {
-        w = CG_LoadingClip(host, 0.22f, maxCol);
-        colW = w > colW ? w : colW;
+        CG_LoadingClip(host, 0.2f, cw * 0.5f);
     }
-    w = CG_LoadingAvatarsWidth(count, maxCol, 20.0f, &shown, more, sizeof(more));
-    colW = w > colW ? w : colW;
-    cx = 320.0f - (cw + gap + colW) * 0.5f;
-    tx = cx + cw + gap;
-    colH = 37.1f + (host[0] ? 19.2f : 0.0f) + (count ? 36.0f : 0.0f);
-    top = cy + (ch - colH) * 0.5f;
+    if (count) {
+        avatarsW = CG_LoadingAvatarsWidth(count, cw * 0.5f, 16.0f, &shown, more, sizeof(more));
+    }
+    titleW = CG_LoadingTextWidth(0, titleScale, title, 0.0f);
+    w = cw - (avatarsW > 0.0f ? avatarsW + 16.0f : 0.0f);
+    if (titleW > w) {
+        titleScale *= w / titleW;
+    }
 
     for (i = 0; i < 6; i++) {
         float in = content < 0.0f ? 0.0f : CG_LoadingEase(content, 35.0f * i, 320.0f);
@@ -529,18 +522,16 @@ static void CG_DrawLoadingSplit(qhandle_t levelshot, float s1, float s2, float c
     CG_LoadingCard(cx, cy + dy[0], cw, ch, 10.0f, 3, levelshot, 0.0f, 0.0f, 1.0f, 1.0f);
     trap_R_SetColor(NULL);
     c[3] = a[1];
-    CG_LoadingText(tx + 1.0f, top + 7.1f + dy[1], CG_LoadingFont(), 0.17f, c, mode, 1.7f, 0);
+    CG_LoadingText(cx + 1.0f, row + 6.7f + dy[1], CG_LoadingFont(), 0.16f, c, mode, 1.6f, 0);
     c[3] = a[2];
-    CG_LoadingText(tx, top + 37.1f + dy[2], 0, titleScale, c, title, 0.0f, 0);
-    y = top + 37.1f;
+    CG_LoadingText(cx, row + 32.7f + dy[2], 0, titleScale, c, title, 0.0f, 0);
     if (host[0]) {
-        y += 19.2f;
         Vector4Copy(loadMuted, c);
         c[3] *= a[3];
-        CG_LoadingText(tx + 1.0f, y + dy[3], CG_LoadingFont(), 0.22f, c, host, 0.0f, 0);
+        CG_LoadingText(cx + cw, row + 6.7f + dy[3], CG_LoadingFont(), 0.2f, c, host, 0.0f, 2);
     }
     if (count) {
-        CG_LoadingAvatars(tx + 1.0f, y + 16.0f + dy[4], 0, maxCol, 20.0f, a[4], pics, count);
+        CG_LoadingAvatars(cx + cw, row + 16.7f + dy[4], 2, cw * 0.5f, 16.0f, a[4], pics, count);
     }
     CG_LoadingLogo(272.0f, 426.0f + dy[5], 96.0f, 24.0f, a[5]);
     CG_SetWidescreen(WIDESCREEN_STRETCH);
