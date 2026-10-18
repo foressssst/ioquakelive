@@ -483,65 +483,25 @@ void Fade(int* flags, float* f, float clamp, int* nextTime, int offsetTime, qboo
 static qboolean menuTheme;
 static qhandle_t themeHeader = -1, themeContent = -1;
 
-qboolean Menu_Themed(void) {
-    return menuTheme;
-}
+static qboolean Theme_Flat(const Window* w, const rectDef_t* r) {
+    vec4_t color = {0.302f, 0.109f, 0.105f, 1.0f};
 
-static qboolean Theme_Near(const float* c, float r, float g, float b) {
-    return fabs(c[0] - r) < 0.02f && fabs(c[1] - g) < 0.02f && fabs(c[2] - b) < 0.02f;
-}
-
-static void Theme_Color(const float* in, float* out) {
-    Vector4Copy(in, out);
-    if (Theme_Near(in, 0.375f, 0.125f, 0.125f)) {
-        VectorSet(out, 0.62f, 0.12f, 0.12f);
-        out[3] = 0.94f;
-    } else if (Theme_Near(in, 0.333f, 0.133f, 0.133f)) {
-        VectorSet(out, 0.56f, 0.14f, 0.14f);
-        out[3] = 0.92f;
-    } else if (Theme_Near(in, 0.133f, 0.133f, 0.333f)) {
-        VectorSet(out, 0.14f, 0.26f, 0.56f);
-        out[3] = 0.92f;
-    } else if (Theme_Near(in, 0.133f, 0.133f, 0.133f)) {
-        VectorSet(out, 0.16f, 0.17f, 0.19f);
-        out[3] = 0.92f;
-    } else if (Theme_Near(in, 0.525f, 0.525f, 0.525f)) {
-        VectorSet(out, 1.0f, 1.0f, 1.0f);
-        out[3] = 0.12f;
-    } else if (Theme_Near(in, 0.0f, 0.0f, 0.0f) && in[3] > 0.85f) {
-        VectorSet(out, 1.0f, 1.0f, 1.0f);
-        out[3] = 0.06f;
-    } else if (Theme_Near(in, 0.0f, 0.0f, 0.0f) && in[3] > 0.5f) {
-        VectorSet(out, 0.055f, 0.06f, 0.07f);
-        out[3] = 0.97f;
+    if (!menuTheme || !w->background) {
+        return qfalse;
     }
-}
-
-static void Theme_Fill(const Window* w, const rectDef_t* r) {
-    static const vec4_t header = {0.055f, 0.06f, 0.07f, 0.97f};
-    static const vec4_t panel = {0.035f, 0.04f, 0.045f, 0.9f};
-    vec4_t color;
-
     if (themeHeader == -1) {
         themeHeader = DC->registerShaderNoMip("ui/assets/main_menu/header.tga");
         themeContent = DC->registerShaderNoMip("ui/assets/main_menu/content_background.tga");
     }
-    if (w->background && w->background == themeHeader) {
-        DC->fillRect(r->x, r->y, r->w, r->h, header);
-    } else if (w->background && w->background == themeContent) {
-        DC->fillRect(r->x, r->y, r->w, r->h, panel);
-    } else if (w->background) {
-        DC->setColor(w->backColor);
-        DC->drawHandlePic(r->x, r->y, r->w, r->h, w->background);
-        DC->setColor(NULL);
-    } else {
-        Theme_Color(w->backColor, color);
-        if (color[0] > 0.9f && color[1] > 0.75f && color[2] < 0.1f && r->h <= 1.5f) {
-            DC->fillRect(r->x, r->y - 1.0f, r->w, 2.0f, color);
-        } else {
-            DC->fillRect(r->x, r->y, r->w, r->h, color);
-        }
+    if (w->background == themeContent) {
+        color[0] = color[1] = color[2] = 0.018f;
+        color[3] = 0.827f;
+    } else if (w->background != themeHeader) {
+        return qfalse;
     }
+    color[3] *= w->backColor[3];
+    DC->fillRect(r->x, r->y, r->w, r->h, color);
+    return qtrue;
 }
 
 void Window_Paint(Window* w, float fadeAmount, float fadeClamp, float fadeCycle) {
@@ -563,12 +523,6 @@ void Window_Paint(Window* w, float fadeAmount, float fadeClamp, float fadeCycle)
 
     fillRect = w->rect;
 
-    if (menuTheme && w->style == WINDOW_STYLE_FILLED) {
-        Fade(&w->flags, &w->backColor[3], fadeClamp, &w->nextTime, fadeCycle, qtrue, fadeAmount);
-        Theme_Fill(w, &fillRect);
-        return;
-    }
-
     if (w->border != 0) {
         fillRect.x += w->borderSize;
         fillRect.y += w->borderSize;
@@ -579,9 +533,11 @@ void Window_Paint(Window* w, float fadeAmount, float fadeClamp, float fadeCycle)
     if (w->style == WINDOW_STYLE_FILLED) {
         if (w->background) {
             Fade(&w->flags, &w->backColor[3], fadeClamp, &w->nextTime, fadeCycle, qtrue, fadeAmount);
-            DC->setColor(w->backColor);
-            DC->drawHandlePic(fillRect.x, fillRect.y, fillRect.w, fillRect.h, w->background);
-            DC->setColor(NULL);
+            if (!Theme_Flat(w, &fillRect)) {
+                DC->setColor(w->backColor);
+                DC->drawHandlePic(fillRect.x, fillRect.y, fillRect.w, fillRect.h, w->background);
+                DC->setColor(NULL);
+            }
         } else {
             DC->fillRect(fillRect.x, fillRect.y, fillRect.w, fillRect.h, w->backColor);
         }

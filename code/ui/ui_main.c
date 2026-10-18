@@ -20,7 +20,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 #include "ui_local.h"
-#include "ui_web.h"
 
 uiInfo_t uiInfo;
 
@@ -263,44 +262,15 @@ static void UI_TextToScreen(float* x, float* y) {
     UI_AdjustFrom640(x, y, &w, &h);
 }
 
-static int UI_ThemeFont(int efont, float* size) {
-    int face = Menu_Themed() ? SM_BarlowFace(qfalse) : -1;
-
-    if (face < 0) {
-        return efont;
-    }
-    *size *= 1.12f;
-    return face;
-}
-
-static void UI_ThemeTextColor(const float* in, float* out) {
-    Vector4Copy(in, out);
-    if (!Menu_Themed() || fabs(in[0] - in[1]) > 0.02f || fabs(in[1] - in[2]) > 0.02f) {
-        return;
-    }
-    if (in[0] < 0.6f) {
-        VectorSet(out, 0.62f, 0.64f, 0.68f);
-    } else if (in[0] < 0.95f) {
-        VectorSet(out, 0.9f, 0.91f, 0.93f);
-    }
-}
-
 static void UI_PaintText(float x, float y, int fontIndex, float scale, const vec4_t color,
                          const char* text, int limit, int style) {
     float sx = x, sy = y;
     float size = UI_FontPixelSize(scale);
-    int efont = UI_ThemeFont(UI_EngineFont(fontIndex), &size);
+    int efont = UI_EngineFont(fontIndex);
     int lim = (limit > 0) ? limit : -1;
-    vec4_t themed;
 
     if (!text || !*text)
         return;
-
-    if (Menu_Themed() && color) {
-        UI_ThemeTextColor(color, themed);
-        color = themed;
-        style = ITEM_TEXTSTYLE_NORMAL;
-    }
 
     UI_TextToScreen(&sx, &sy);
 
@@ -323,9 +293,8 @@ static void UI_MeasureText(const char* text, float scale, int fontIndex, int lim
     float yscale = uiInfo.uiDC.yscale;
     float size = UI_FontPixelSize(scale);
     int lim = (limit > 0) ? limit : -1;
-    int efont = UI_ThemeFont(UI_EngineFont(fontIndex), &size);
 
-    trap_R_Font_TextExtents(text, 0, efont, size, lim, extents);
+    trap_R_Font_TextExtents(text, 0, UI_EngineFont(fontIndex), size, lim, extents);
 
     if (xscale <= 0.0f)
         xscale = 1.0f;

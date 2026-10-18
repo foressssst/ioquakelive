@@ -159,7 +159,6 @@ void SM_Text(float x, float baseline, int font, float size, const float* color, 
              qboolean bold);
 void SM_Centered(float middle, float baseline, float size, const float* color, const char* text, qboolean bold);
 int SM_ItalicFace(void);
-int SM_BarlowFace(qboolean bold);
 float SM_AdvanceRaw(int font, float size, const char* text, int len, qboolean bold);
 void SM_TextRaw(float x, float baseline, int font, float size, const float* color, const char* text, int limit,
                 qboolean bold);
