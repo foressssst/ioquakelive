@@ -473,9 +473,6 @@ void _UI_Refresh(int realtime) {
 
     uiInfo.uiDC.frameTime = realtime - uiInfo.uiDC.realTime;
     uiInfo.uiDC.realTime = realtime;
-    uiInfo.uiDC.remaster = trap_Cvar_VariableValue("cg_remaster") != 0.0f;
-    uiFadeAlpha = 1.0f;
-    uiFadeDY = 0.0f;
 
     previousTimes[index % UI_FPS_FRAMES] = uiInfo.uiDC.frameTime;
     index++;
@@ -2112,11 +2109,6 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
     if (UI_IsWebPage(ownerDraw)) {
         UI_Home_ErrorPaint();
     }
-}
-
-static void UI_PaintFade(float alpha, float dy) {
-    uiFadeAlpha = alpha;
-    uiFadeDY = dy;
 }
 
 static qboolean UI_OwnerDrawVisible(int flags, int flags2) {
@@ -4879,7 +4871,6 @@ void _UI_Init(qboolean inGameLoad) {
     uiInfo.uiDC.ownerDrawItem = &UI_OwnerDraw_DC;
     uiInfo.uiDC.getValue = &UI_GetValue;
     uiInfo.uiDC.ownerDrawVisible = &UI_OwnerDrawVisible;
-    uiInfo.uiDC.paintFade = &UI_PaintFade;
     uiInfo.uiDC.runScript = &UI_RunMenuScript;
     uiInfo.uiDC.getTeamColor = &UI_GetTeamColor;
     uiInfo.uiDC.setCVar = trap_Cvar_Set;

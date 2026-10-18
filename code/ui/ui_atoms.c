@@ -229,11 +229,9 @@ qboolean UI_ConsoleCommand(int realTime) {
 void UI_Shutdown(void) {
 }
 
-float uiFadeAlpha = 1.0f, uiFadeDY;
-
 void UI_AdjustFrom640(float* x, float* y, float* w, float* h) {
     *x = *x * uiInfo.uiDC.xscale + uiInfo.uiDC.bias;
-    *y = (*y + uiFadeDY) * uiInfo.uiDC.yscale;
+    *y *= uiInfo.uiDC.yscale;
     *w *= uiInfo.uiDC.xscale;
     *h *= uiInfo.uiDC.yscale;
 }

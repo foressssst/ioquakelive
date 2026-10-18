@@ -776,7 +776,6 @@ extern void UI_DrawString(int x, int y, const char* str, int style, vec4_t color
 extern void UI_DrawChar(int x, int y, int ch, int style, vec4_t color);
 extern qboolean UI_CursorInRect(int x, int y, int width, int height);
 extern void UI_AdjustFrom640(float* x, float* y, float* w, float* h);
-extern float uiFadeAlpha, uiFadeDY;
 extern void UI_DrawTextBox(int x, int y, int width, int lines);
 extern qboolean UI_IsFullscreen(void);
 extern void UI_SetActiveMenu(uiMenuCommand_t menu);

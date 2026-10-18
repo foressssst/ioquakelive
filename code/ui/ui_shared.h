@@ -276,7 +276,6 @@ typedef struct {
     vec4_t disableColor;
     itemDef_t* items[MAX_MENUITEMS];
     int widescreen;
-    int openTime;
 } menuDef_t;
 
 typedef struct {
@@ -375,7 +374,6 @@ typedef struct {
     void (*drawCinematic)(int handle, float x, float y, float w, float h);
     void (*runCinematicFrame)(int handle);
     void (*setWidescreen)(int mode);
-    void (*paintFade)(float alpha, float dy);
 
     float yscale;
     float xscale;
@@ -385,7 +383,6 @@ typedef struct {
     int cursorx;
     int cursory;
     qboolean debug;
-    qboolean remaster;
 
     cachedAssets_t Assets;
 
