@@ -355,23 +355,27 @@ static float CG_LoadingClip(char* text, float scale, float maxW) {
     return w;
 }
 
-static void CG_LoadingBackdrop(qhandle_t levelshot, const char* map, float s1, float s2, float bright, float zoom) {
+static void CG_LoadingBackdrop(qhandle_t levelshot, const char* map, float s1, float s2, float bright, float alpha) {
     vec4_t dim;
     qhandle_t blurred = trap_R_RegisterShaderNoMip(va("levelshots/%s@blur", map));
-    float half = (s2 - s1) * 0.5f / zoom;
 
     dim[0] = dim[1] = dim[2] = bright;
-    dim[3] = 1.0f;
+    dim[3] = alpha;
     trap_R_SetColor(dim);
-    trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight, 0.5f - half,
-                          0.5f - 0.5f / zoom, 0.5f + half, 0.5f + 0.5f / zoom, blurred ? blurred : levelshot);
+    trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight, s1, 0, s2, 1.0f,
+                          blurred ? blurred : levelshot);
     trap_R_SetColor(NULL);
 }
 
-static void CG_LoadingLogo(float x, float y, float w, float h) {
+static void CG_LoadingLogo(float x, float y, float w, float h, float alpha) {
+    vec4_t c = {1.0f, 1.0f, 1.0f, 1.0f};
+
+    c[3] = alpha;
     CG_AdjustFrom640(&x, &y, &w, &h);
+    trap_R_SetColor(c);
     trap_R_DrawStretchPic(x, y, w, h, 56.0f / 512.0f, 16.0f / 128.0f, 449.0f / 512.0f, 114.0f / 128.0f,
                           trap_R_RegisterShaderNoMip("ui/assets/main_menu/ql_logo.png"));
+    trap_R_SetColor(NULL);
 }
 
 static float CG_LoadingAvatarsWidth(int count, float maxW, float size, int* shown, char* more, int moreSize) {
@@ -389,17 +393,23 @@ static float CG_LoadingAvatarsWidth(int count, float maxW, float size, int* show
            (more[0] ? (*shown ? 6.0f : 0.0f) + CG_LoadingTextWidth(CG_LoadingFont(), 0.18f, more, 0.0f) : 0.0f);
 }
 
-static void CG_LoadingAvatars(float x, float y, int align, float maxW, float size, const qhandle_t* pics, int count) {
+static void CG_LoadingAvatars(float x, float y, int align, float maxW, float size, float alpha, const qhandle_t* pics,
+                              int count) {
     char more[16];
+    vec4_t c = {1.0f, 1.0f, 1.0f, 1.0f};
     int shown, i;
 
     x -= CG_LoadingAvatarsWidth(count, maxW, size, &shown, more, sizeof(more)) * align * 0.5f;
+    c[3] = alpha;
+    trap_R_SetColor(c);
     for (i = 0; i < shown; i++, x += size + 5.0f) {
         CG_LoadingCard(x, y, size, size, size * 0.22f, 3, pics[i], 0.0f, 0.0f, 1.0f, 1.0f);
     }
+    trap_R_SetColor(NULL);
     if (more[0]) {
-        CG_LoadingText(x + (shown ? 1.0f : 0.0f), y + size * 0.72f, CG_LoadingFont(), 0.18f, loadMuted, more, 0.0f,
-                       0);
+        Vector4Copy(loadMuted, c);
+        c[3] *= alpha;
+        CG_LoadingText(x + (shown ? 1.0f : 0.0f), y + size * 0.72f, CG_LoadingFont(), 0.18f, c, more, 0.0f, 0);
     }
 }
 
@@ -423,7 +433,7 @@ static void CG_DrawLoadingPoster(qhandle_t levelshot, float s1, float s2) {
     if (host[0]) {
         hostW = CG_LoadingClip(host, 0.21f, cw * 0.6f);
     }
-    CG_LoadingLogo(276.0f, top, 88.0f, 22.0f);
+    CG_LoadingLogo(276.0f, top, 88.0f, 22.0f, 1.0f);
     CG_LoadingCard(cx, cy, cw, ch, 10.0f, 3, levelshot, 0.0f, 0.0f, 1.0f, 1.0f);
     trap_R_SetColor(band);
     CG_LoadingCard(cx, bt, cw, 56.0f, 10.0f, 2, cgs.media.whiteShader, 0.0f, 0.0f, 1.0f, 1.0f);
@@ -433,31 +443,45 @@ static void CG_DrawLoadingPoster(qhandle_t levelshot, float s1, float s2) {
     if (host[0]) {
         CG_LoadingText(cx + 1.0f, row + 13.4f, CG_LoadingFont(), 0.21f, loadMuted, host, 0.0f, 0);
     }
-    CG_LoadingAvatars(cx + cw, row, 2, cw - (host[0] ? hostW + 14.0f : 0.0f), 18.0f, pics, count);
+    CG_LoadingAvatars(cx + cw, row, 2, cw - (host[0] ? hostW + 14.0f : 0.0f), 18.0f, 1.0f, pics, count);
     CG_SetWidescreen(WIDESCREEN_STRETCH);
 }
 
-static float CG_LoadingDrift(void) {
-    static int start, last;
-    int now = trap_Milliseconds();
+static int loadingShownAt, loadingIntroClock, loadingIntroLast, loadingOutroAt;
 
-    if (!start || (cg_loadingPreview.integer && now - last > 1000)) {
-        start = now;
-    }
-    last = now;
-    return now - start >= 3000 ? 1.0f : (now - start) / 3000.0f;
+static float CG_LoadingEase(float t, float delay, float duration) {
+    t = (t - delay) / duration;
+    t = 1.0f - (t < 0.0f ? 0.0f : t > 1.0f ? 1.0f : t);
+    return 1.0f - t * t * t;
 }
 
-static void CG_DrawLoadingSplit(qhandle_t levelshot, float s1, float s2) {
+static float CG_LoadingIntro(void) {
+    int now = trap_Milliseconds(), dt;
+
+    if (!loadingShownAt || (cg_loadingPreview.integer && now - loadingShownAt > 500)) {
+        loadingIntroClock = 0;
+        loadingIntroLast = now;
+    }
+    dt = now - loadingIntroLast;
+    loadingIntroClock += dt < 0 ? 0 : dt > 40 ? 40 : dt;
+    loadingIntroLast = now;
+    loadingShownAt = now;
+    return (float)loadingIntroClock;
+}
+
+static void CG_DrawLoadingSplit(qhandle_t levelshot, float s1, float s2, float intro, float outro) {
     char title[MAX_QPATH], host[MAX_QPATH], mode[MAX_QPATH], map[MAX_QPATH], more[16];
     qhandle_t pics[16];
+    vec4_t c;
     float cw = 288.0f, ch = 162.0f, gap = 28.0f, maxCol = 240.0f, cy = 240.0f - ch * 0.5f;
-    float titleScale = 0.46f, titleW, colW = 96.0f, w, cx, tx, drift = CG_LoadingDrift(), zoom = 1.0f + 0.1f * drift;
-    int count, shown;
+    float titleScale = 0.46f, titleW, colW = 96.0f, w, cx, tx, in, a[5], dx[5];
+    float out = outro * outro, fade = 1.0f - out;
+    int count, shown, i;
 
     CG_LoadingStrings(title, host, mode, map);
     count = CG_LoadingPictures(pics, ARRAY_LEN(pics));
-    CG_LoadingBackdrop(levelshot, map, s1, s2, 0.38f, 1.12f - 0.12f * drift);
+    CG_LoadingBackdrop(levelshot, map, s1, s2, 0.38f * CG_LoadingEase(intro, 0.0f, 250.0f),
+                       1.0f - outro * outro * (3.0f - 2.0f * outro));
 
     CG_SetWidescreen(WIDESCREEN_CENTER);
     titleW = CG_LoadingTextWidth(0, titleScale, title, 0.0f);
@@ -477,16 +501,54 @@ static void CG_DrawLoadingSplit(qhandle_t levelshot, float s1, float s2) {
     cx = 320.0f - (cw + gap + colW) * 0.5f;
     tx = cx + cw + gap;
 
-    CG_LoadingCard(cx, cy, cw, ch, 10.0f, 3, levelshot, 0.5f - 0.5f / zoom, 0.5f - 0.5f / zoom, 0.5f + 0.5f / zoom,
-                   0.5f + 0.5f / zoom);
-    CG_LoadingLogo(tx, cy, 96.0f, 24.0f);
-    CG_LoadingText(tx + 1.0f, cy + 62.3f, CG_LoadingFont(), 0.17f, colorWhite, mode, 1.7f, 0);
-    CG_LoadingText(tx, cy + 91.6f, 0, titleScale, colorWhite, title, 0.0f, 0);
-    if (host[0]) {
-        CG_LoadingText(tx + 1.0f, cy + 110.8f, CG_LoadingFont(), 0.22f, loadMuted, host, 0.0f, 0);
+    in = CG_LoadingEase(intro, 0.0f, 380.0f);
+    c[0] = c[1] = c[2] = 1.0f;
+    c[3] = in * fade;
+    trap_R_SetColor(c);
+    CG_LoadingCard(cx - 32.0f * (1.0f - in) - 40.0f * out, cy, cw, ch, 10.0f, 3, levelshot, 0.0f, 0.0f, 1.0f, 1.0f);
+    trap_R_SetColor(NULL);
+    for (i = 0; i < 5; i++) {
+        in = CG_LoadingEase(intro, 100.0f + 40.0f * i, 340.0f);
+        a[i] = in * fade;
+        dx[i] = 24.0f * (1.0f - in) + 40.0f * out;
     }
-    CG_LoadingAvatars(tx + 1.0f, cy + ch - 20.0f, 0, maxCol, 20.0f, pics, count);
+    CG_LoadingLogo(tx + dx[0], cy, 96.0f, 24.0f, a[0]);
+    c[3] = a[1];
+    CG_LoadingText(tx + 1.0f + dx[1], cy + 62.3f, CG_LoadingFont(), 0.17f, c, mode, 1.7f, 0);
+    c[3] = a[2];
+    CG_LoadingText(tx + dx[2], cy + 91.6f, 0, titleScale, c, title, 0.0f, 0);
+    if (host[0]) {
+        Vector4Copy(loadMuted, c);
+        c[3] *= a[3];
+        CG_LoadingText(tx + 1.0f + dx[3], cy + 110.8f, CG_LoadingFont(), 0.22f, c, host, 0.0f, 0);
+    }
+    CG_LoadingAvatars(tx + 1.0f + dx[4], cy + ch - 20.0f, 0, maxCol, 20.0f, a[4], pics, count);
     CG_SetWidescreen(WIDESCREEN_STRETCH);
+}
+
+void CG_DrawLoadingOutro(void) {
+    char map[MAX_QPATH];
+    qhandle_t levelshot;
+    float s1, outro;
+    int now = trap_Milliseconds();
+
+    if (cg_remaster.integer != 5 || !loadingShownAt) {
+        return;
+    }
+    if (loadingShownAt > loadingOutroAt) {
+        loadingOutroAt = now;
+    }
+    outro = (now - loadingOutroAt) / 450.0f;
+    if (outro >= 1.0f) {
+        return;
+    }
+    Q_strncpyz(map, Info_ValueForKey(CG_ConfigString(CS_SERVERINFO), "mapname"), sizeof(map));
+    levelshot = trap_R_RegisterShaderNoMip(va("levelshots/%s.tga", map));
+    if (!levelshot) {
+        levelshot = trap_R_RegisterShaderNoMip("menu/art/unknownmap");
+    }
+    s1 = ((1920.0f - (1080.0f / (float)cgs.glconfig.vidHeight) * (float)cgs.glconfig.vidWidth) / 1920.0f) * 0.5f;
+    CG_DrawLoadingSplit(levelshot, s1, 1.0f - s1, (float)loadingIntroClock, outro);
 }
 
 static void CG_DrawLoadingRemaster(qhandle_t levelshot, float s1, float s2) {
@@ -509,7 +571,7 @@ static void CG_DrawLoadingRemaster(qhandle_t levelshot, float s1, float s2) {
         return;
     }
     if (cg_remaster.integer == 5) {
-        CG_DrawLoadingSplit(levelshot, s1, s2);
+        CG_DrawLoadingSplit(levelshot, s1, s2, CG_LoadingIntro(), 0.0f);
         return;
     }
 
@@ -607,7 +669,7 @@ void CG_DrawInformation(void) {
     }
     trap_R_SetColor(NULL);
 
-    if (cg_remaster.integer && (cg.infoScreenText[0] || cg_loadingPreview.integer)) {
+    if (cg_remaster.integer) {
         CG_DrawLoadingRemaster(levelshot, s1, s2);
         return;
     }

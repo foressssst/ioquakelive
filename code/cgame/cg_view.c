@@ -1181,6 +1181,8 @@ void CG_DrawActiveFrame(int serverTime, stereoFrame_t stereoView, qboolean demoP
 
     CG_DrawBotHud();
 
+    CG_DrawLoadingOutro();
+
     CG_DemoCursorFrame();
 
     if (cg_stats.integer) {
