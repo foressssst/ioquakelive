@@ -86,14 +86,9 @@ void CG_LoadingClient(int clientNum) {
 }
 
 static const vec4_t loadAccent = {0.97f, 0.82f, 0.0f, 1.0f};
-static const vec4_t loadDim = {0.03f, 0.035f, 0.045f, 0.62f};
-static const vec4_t loadPanel = {0.05f, 0.055f, 0.063f, 0.88f};
-static const vec4_t loadChip = {0.08f, 0.086f, 0.1f, 0.86f};
-static const vec4_t loadLine = {0.16f, 0.17f, 0.2f, 1.0f};
-static const vec4_t loadEdge = {1.0f, 1.0f, 1.0f, 0.18f};
-static const vec4_t loadStrip = {0.03f, 0.035f, 0.045f, 0.72f};
-static const vec4_t loadSoft = {0.79f, 0.8f, 0.82f, 1.0f};
-static const vec4_t loadMuted = {0.56f, 0.57f, 0.6f, 1.0f};
+static const vec4_t loadTrack = {1.0f, 1.0f, 1.0f, 0.16f};
+static const vec4_t loadSoft = {0.86f, 0.87f, 0.89f, 1.0f};
+static const vec4_t loadMuted = {0.62f, 0.63f, 0.66f, 1.0f};
 
 static float CG_LoadingProgress(void) {
     static int lastStage = -1;
@@ -117,81 +112,49 @@ static float CG_LoadingProgress(void) {
     return f > 1.0f ? 1.0f : f;
 }
 
-static void CG_LoadingPicST(float x, float y, float w, float h, float s0, float t0, float s1, float t1, qhandle_t shader) {
-    CG_AdjustFrom640(&x, &y, &w, &h);
-    trap_R_DrawStretchPic(x, y, w, h, s0, t0, s1, t1, shader);
-}
+static float CG_LoadingSpacedWidth(const char* text, int font, float scale, float spacing) {
+    char c[2];
+    float w = 0;
 
-static void CG_LoadingFrame(float x, float y, float w, float h, const float* color) {
-    CG_FillRect(x, y, w, 0.5f, (float*)color);
-    CG_FillRect(x, y + h - 0.5f, w, 0.5f, (float*)color);
-    CG_FillRect(x, y, 0.5f, h, (float*)color);
-    CG_FillRect(x + w - 0.5f, y, 0.5f, h, (float*)color);
-}
-
-static void CG_LoadingCentered(float y, int font, float scale, const float* color, const char* text) {
-    CG_DrawText(320 - CG_DrawTextWidth(text, scale, 0, font) * 0.5f, y, font, scale, (float*)color, text, 0, 0,
-                ITEM_TEXTSTYLE_NORMAL);
-}
-
-static float CG_LoadingChip(float x, float y, const char* text) {
-    float w = CG_DrawTextWidth(text, 0.16f, 0, 0) + 12;
-
-    CG_FillRect(x, y, w, 15, (float*)loadChip);
-    CG_LoadingFrame(x, y, w, 15, loadLine);
-    CG_DrawText(x + 6, y + 11, 0, 0.16f, colorWhite, text, 0, 0, ITEM_TEXTSTYLE_NORMAL);
-    return w;
-}
-
-static float CG_LoadingInfoLine(float y, const char* label, const char* value) {
-    if (!value[0]) {
-        return y;
+    c[1] = '\0';
+    for (; *text; text++) {
+        c[0] = *text;
+        w += CG_DrawTextWidth(c, scale, 0, font) + spacing;
     }
-    CG_DrawText(316 - CG_DrawTextWidth(label, 0.18f, 0, 1), y, 1, 0.18f, (float*)loadMuted, label, 0, 0,
-                ITEM_TEXTSTYLE_NORMAL);
-    CG_DrawText(324, y, 1, 0.18f, colorWhite, value, 0, 0, ITEM_TEXTSTYLE_NORMAL);
-    return y + 14;
+    return w > 0 ? w - spacing : 0;
 }
 
-static int CG_LoadingPlayerCount(void) {
-    const char* info;
-    int i, n = 0;
+static void CG_LoadingSpaced(float x, float y, int font, float scale, const float* color, const char* text,
+                             float spacing) {
+    char c[2];
 
-    for (i = 0; i < MAX_CLIENTS; i++) {
-        info = CG_ConfigString(CS_PLAYERS + i);
-        if (info[0] && Info_ValueForKey(info, "n")[0] && atoi(Info_ValueForKey(info, "t")) != TEAM_SPECTATOR) {
-            n++;
-        }
+    c[1] = '\0';
+    for (; *text; text++) {
+        c[0] = *text;
+        CG_DrawText(x, y, font, scale, (float*)color, c, 0, 0, ITEM_TEXTSTYLE_NORMAL);
+        x += CG_DrawTextWidth(c, scale, 0, font) + spacing;
     }
-    return n;
 }
 
-static void CG_LoadingPlayers(void) {
-    char model[MAX_QPATH], name[MAX_QPATH];
+static int CG_LoadingPictures(qhandle_t* pics, int max) {
+    char model[MAX_QPATH];
     const char* info;
     const char* v;
     char* skin;
     uint64_t steamId;
-    qhandle_t pic;
-    float y = 48;
-    int i, shown = 0;
+    int i, n = 0;
 
-    CG_SetWidescreen(WIDESCREEN_RIGHT);
-    CG_FillRect(475, -10, 200, 500, (float*)loadPanel);
-    CG_FillRect(475, -10, 0.5f, 500, (float*)loadLine);
-    CG_DrawText(488, 30, 0, 0.16f, (float*)loadAccent, "IN THIS MATCH", 0, 0, ITEM_TEXTSTYLE_NORMAL);
-    for (i = 0; i < MAX_CLIENTS && shown < 20; i++) {
+    for (i = 0; i < MAX_CLIENTS && n < max; i++) {
         info = CG_ConfigString(CS_PLAYERS + i);
-        if (!info[0] || !Info_ValueForKey(info, "n")[0]) {
+        if (!info[0] || !Info_ValueForKey(info, "n")[0] || atoi(Info_ValueForKey(info, "t")) == TEAM_SPECTATOR) {
             continue;
         }
-        Q_strncpyz(name, Info_ValueForKey(info, "n"), sizeof(name));
         steamId = 0;
         for (v = Info_ValueForKey(info, "st"); *v >= '0' && *v <= '9'; v++) {
             steamId = steamId * 10 + (uint64_t)(*v - '0');
         }
-        pic = (cg_drawProfileImages.integer && steamId) ? trap_SteamAvatar(steamId) : 0;
-        if (!pic) {
+        pics[n] = (cg_drawProfileImages.integer && steamId) ? trap_SteamAvatar(steamId) : 0;
+        if (!pics[n]) {
             Q_strncpyz(model, Info_ValueForKey(info, "model"), sizeof(model));
             skin = strrchr(model, '/');
             if (skin) {
@@ -199,105 +162,92 @@ static void CG_LoadingPlayers(void) {
             } else {
                 skin = "default";
             }
-            pic = trap_R_RegisterShaderNoMip(va("models/players/%s/icon_%s.tga", model, skin));
+            pics[n] = trap_R_RegisterShaderNoMip(va("models/players/%s/icon_%s.tga", model, skin));
         }
-        if (pic) {
-            CG_DrawPic(488, y, 16, 16, pic);
+        if (pics[n]) {
+            n++;
         }
-        CG_DrawText(510, y + 12, 1, 0.19f, colorWhite, name, 0, 0, ITEM_TEXTSTYLE_NORMAL);
-        if (atoi(Info_ValueForKey(info, "t")) == TEAM_SPECTATOR) {
-            CG_DrawText(610, y + 12, 1, 0.15f, (float*)loadMuted, "spec", 0, 0, ITEM_TEXTSTYLE_NORMAL);
-        } else if (Info_ValueForKey(info, "skill")[0]) {
-            CG_DrawText(610, y + 12, 1, 0.15f, (float*)loadMuted, "bot", 0, 0, ITEM_TEXTSTYLE_NORMAL);
-        }
-        y += 21;
-        shown++;
     }
+    return n;
+}
+
+static const char* CG_LoadingStageName(void) {
+    static const char* const names[NUM_LOADING_STAGES + 1] = {"MAP", "SOUNDS", "GRAPHICS", "PLAYERS", "MATCH"};
+    int stage = cg_loadingPreview.integer ? 2 : cg.loadingStage;
+
+    return names[stage < 0 ? 0 : stage > NUM_LOADING_STAGES ? NUM_LOADING_STAGES : stage];
 }
 
 static void CG_DrawLoadingRemaster(qhandle_t levelshot, float s1, float s2) {
     const char* info = CG_ConfigString(CS_SERVERINFO);
-    const char* gametypeName;
-    const char* item;
-    char title[MAX_QPATH];
-    char chip[64];
+    const char* mode;
+    char title[MAX_QPATH], line[MAX_STRING_CHARS], pct[16];
+    qhandle_t pics[16];
     float progress = CG_LoadingProgress();
-    float x, y, w, h;
-    int limit;
+    float x, w, total;
+    vec4_t dim = {0.02f, 0.025f, 0.03f, 0.0f};
+    int maxClients = atoi(Info_ValueForKey(info, "sv_maxclients"));
+    int count, i;
 
+    Q_strncpyz(title, CG_ConfigString(CS_MESSAGE)[0] ? CG_ConfigString(CS_MESSAGE) : cgs.mapname, sizeof(title));
+    Q_strupr(title);
+    mode = Info_ValueForKey(info, "g_factoryTitle");
+    if (!mode[0]) {
+        mode = (cgs.gametype >= 0 && cgs.gametype < GT_MAX_GAME_TYPE) ? gametypeDisplayNames[cgs.gametype] : "";
+    }
+    Q_strncpyz(line, mode, sizeof(line));
+    Q_strupr(line);
+    count = CG_LoadingPictures(pics, ARRAY_LEN(pics));
+    Com_sprintf(pct, sizeof(pct), "%i%%", (int)(progress * 100));
+
+    dim[3] = cg_remaster.integer == 2 ? 0.58f : 0.42f;
     trap_R_SetColor(NULL);
     trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight, s1, 0, s2, 1.0f, levelshot);
-    trap_R_SetColor(loadDim);
+    trap_R_SetColor(dim);
     trap_R_DrawStretchPic(0, 0, (float)cgs.glconfig.vidWidth, (float)cgs.glconfig.vidHeight, 0, 0, 1, 1,
                           cgs.media.whiteShader);
     trap_R_SetColor(NULL);
 
-    CG_SetWidescreen(WIDESCREEN_CENTER);
-    if (cgs.media.qlLogoShader) {
-        CG_DrawPic(256, 46, 128, 32, cgs.media.qlLogoShader);
+    if (cg_remaster.integer == 2) {
+        CG_SetWidescreen(WIDESCREEN_CENTER);
+        w = CG_LoadingSpacedWidth(line, 1, 0.19f, 2.5f);
+        CG_LoadingSpaced(320 - w * 0.5f, 196, 1, 0.19f, loadAccent, line, 2.5f);
+        w = CG_DrawTextWidth(title, 0.82f, 0, 0);
+        CG_DrawText(320 - w * 0.5f, 238, 0, 0.82f, colorWhite, title, 0, 0, ITEM_TEXTSTYLE_NORMAL);
+        Q_strncpyz(line, Info_ValueForKey(info, "sv_hostname"), sizeof(line));
+        w = CG_DrawTextWidth(line, 0.19f, 0, 1);
+        CG_DrawText(320 - w * 0.5f, 257, 1, 0.19f, (float*)loadMuted, line, 0, 0, ITEM_TEXTSTYLE_NORMAL);
+        CG_FillRect(220, 274, 200, 1, (float*)loadTrack);
+        CG_FillRect(220, 274, 200 * progress, 1, (float*)loadAccent);
+        w = CG_DrawTextWidth(pct, 0.17f, 0, 0);
+        CG_DrawText(320 - w * 0.5f, 290, 0, 0.17f, (float*)loadSoft, pct, 0, 0, ITEM_TEXTSTYLE_NORMAL);
+        total = count * 18 - (count ? 4 : 0);
+        for (i = 0, x = 320 - total * 0.5f; i < count; i++, x += 18) {
+            CG_DrawPic(x, 430, 14, 14, pics[i]);
+        }
+        CG_SetWidescreen(WIDESCREEN_STRETCH);
+        return;
     }
 
-    Q_strncpyz(title, CG_ConfigString(CS_MESSAGE)[0] ? CG_ConfigString(CS_MESSAGE) : cgs.mapname, sizeof(title));
-    Q_strupr(title);
-    CG_LoadingCentered(120, 0, 0.46f, colorWhite, title);
+    CG_SetWidescreen(WIDESCREEN_LEFT);
+    CG_LoadingSpaced(26, 378, 1, 0.19f, loadAccent, line, 2.5f);
+    CG_DrawText(24, 420, 0, 0.9f, colorWhite, title, 0, 0, ITEM_TEXTSTYLE_NORMAL);
+    Com_sprintf(line, sizeof(line), "%s   %i / %i", Info_ValueForKey(info, "sv_hostname"), count, maxClients);
+    CG_DrawText(26, 441, 1, 0.19f, (float*)loadMuted, line, 0, 0, ITEM_TEXTSTYLE_NORMAL);
 
-    gametypeName = Info_ValueForKey(info, "g_factoryTitle");
-    if (!gametypeName[0]) {
-        gametypeName = (cgs.gametype >= 0 && cgs.gametype < GT_MAX_GAME_TYPE) ? gametypeDisplayNames[cgs.gametype]
-                                                                               : "Unknown Gametype";
+    CG_SetWidescreen(WIDESCREEN_RIGHT);
+    w = CG_DrawTextWidth(pct, 0.3f, 0, 0);
+    CG_DrawText(614 - w, 441, 0, 0.3f, colorWhite, pct, 0, 0, ITEM_TEXTSTYLE_NORMAL);
+    w = CG_LoadingSpacedWidth(CG_LoadingStageName(), 1, 0.15f, 2.0f);
+    CG_LoadingSpaced(614 - w, 414, 1, 0.15f, loadMuted, CG_LoadingStageName(), 2.0f);
+    for (i = 0, x = 614 - 14; i < count; i++, x -= 18) {
+        CG_DrawPic(x, 382, 14, 14, pics[i]);
     }
-    CG_LoadingCentered(139, 1, 0.22f, loadSoft, gametypeName);
-
-    x = 190;
-    y = 150;
-    w = 260;
-    h = 98;
-    CG_LoadingPicST(x, y, w, h, 0.0f, 0.25f, 1.0f, 0.75f, levelshot);
-    CG_LoadingFrame(x, y, w, h, loadEdge);
-    CG_FillRect(x, y + h - 22, w, 22, (float*)loadStrip);
-    item = cg_loadingPreview.integer ? "models/players/sarge" : cg.infoScreenText;
-    CG_DrawText(x + 7, y + h - 7.5f, 1, 0.17f, (float*)loadSoft, va("Loading %s", item), 0, 0, ITEM_TEXTSTYLE_NORMAL);
-    Com_sprintf(chip, sizeof(chip), "%i%%", (int)(progress * 100));
-    CG_DrawText(x + w - 7 - CG_DrawTextWidth(chip, 0.2f, 0, 0), y + h - 7, 0, 0.2f, (float*)loadAccent, chip, 0, 0,
-                ITEM_TEXTSTYLE_NORMAL);
-    CG_FillRect(x, y + h - 1.5f, w * progress, 1.5f, (float*)loadAccent);
-
-    {
-        char chips[3][32];
-        int n = 0, i;
-        float total = 0;
-
-        limit = atoi(Info_ValueForKey(info, "fraglimit"));
-        if (cgs.gametype == GT_CTF || cgs.gametype == GT_1FCTF) {
-            limit = atoi(Info_ValueForKey(info, "capturelimit"));
-            Com_sprintf(chips[n++], sizeof(chips[0]), "CAPTURE %i", limit);
-        } else if (cgs.gametype == GT_CA || cgs.gametype == GT_FREEZE || cgs.gametype == GT_AD) {
-            Com_sprintf(chips[n++], sizeof(chips[0]), "ROUNDS %i", atoi(Info_ValueForKey(info, "roundlimit")));
-        } else if (limit > 0) {
-            Com_sprintf(chips[n++], sizeof(chips[0]), "FRAG %i", limit);
-        }
-        if (atoi(Info_ValueForKey(info, "timelimit")) > 0) {
-            Com_sprintf(chips[n++], sizeof(chips[0]), "TIME %i", atoi(Info_ValueForKey(info, "timelimit")));
-        }
-        limit = atoi(Info_ValueForKey(info, "sv_maxclients"));
-        Com_sprintf(chips[n++], sizeof(chips[0]), "%i / %i PLAYERS", CG_LoadingPlayerCount(), limit);
-        for (i = 0; i < n; i++) {
-            total += CG_DrawTextWidth(chips[i], 0.16f, 0, 0) + 12 + (i ? 4 : 0);
-        }
-        x = 320 - total * 0.5f;
-        for (i = 0; i < n; i++) {
-            x += CG_LoadingChip(x, 258, chips[i]) + 4;
-        }
-    }
-
-    y = CG_LoadingInfoLine(296, "Server", Info_ValueForKey(info, "sv_hostname"));
-    y = CG_LoadingInfoLine(y, "Author", CG_ConfigString(CS_AUTHOR));
-    Q_strncpyz(title, Info_ValueForKey(CG_ConfigString(CS_SERVERINFO), "mapname"), sizeof(title));
-    CG_LoadingInfoLine(y, "Map", title);
-
-    CG_LoadingPlayers();
 
     CG_SetWidescreen(WIDESCREEN_STRETCH);
+    trap_R_SetColor(loadTrack);
+    trap_R_DrawStretchPic(0, (float)cgs.glconfig.vidHeight - 3, (float)cgs.glconfig.vidWidth, 3, 0, 0, 1, 1,
+                          cgs.media.whiteShader);
     trap_R_SetColor(loadAccent);
     trap_R_DrawStretchPic(0, (float)cgs.glconfig.vidHeight - 3, cgs.glconfig.vidWidth * progress, 3, 0, 0, 1, 1,
                           cgs.media.whiteShader);
