@@ -1,28 +1,29 @@
 # ioquakelive
 
-`ioquakelive` es una implementación de **Quake Live** basada en el motor de código abierto [ioquake3](https://ioquake3.org/). El objetivo es reproducir el comportamiento del cliente y del servidor de la última versión original, **build 1069**, y desarrollar mejoras propias sin perder compatibilidad con el juego.
+`ioquakelive` es una implementación del juego **Quake Live** basada en el motor de código abierto [ioquake3](https://ioquake3.org/). El objetivo de este proyecto es reproducir el comportamiento del cliente y del servidor de la última versión original **v1069**, y desarrollar mejoras propias sin perder compatibilidad con el juego.
 
-El proyecto parte del trabajo de [Thomas Jones](https://github.com/tjone270/ioquakelive), quien reconstruyó partes del protocolo de red y de los módulos del juego, y consiguió compilar el cliente y el servidor sobre ioquake3. Este repositorio continúa ese trabajo.
+El proyecto parte del gran trabajo de [Thomas Jones](https://github.com/tjone270/ioquakelive), quien reconstruyó partes del protocolo de red y de los módulos del juego, y consiguió compilar el cliente y el servidor sobre ioquake3, este repositorio continúa ese trabajo.
 
 <sub>Desarrollado con apoyo de [Claude Code](https://claude.com/claude-code).</sub>
 
-## Cómo probarlo
+## Cómo lo pruebo?
 
-Necesitas una copia legítima de **Quake Live en Steam**. Este proyecto no incluye los archivos originales del juego: utiliza los recursos de tu propia instalación.
+Para probar ioquakelive necesitaras una copia legítima de **Quake Live en Steam**, ya que este proyecto no incluye los archivos originales, sino que utiliza los recursos de tu propia instalación.
 
-1. Descarga la última versión desde [Releases](https://github.com/foressssst/ioquakelive/releases).
-2. Extrae el archivo en una carpeta.
-3. Ejecuta `ioquakelive.x86_64.exe`. Para usar Vulkan, ejecuta `ioquakelive-vulkan.x86_64.exe`.
+Pasos:
+
+1. Descarga la última versión de ioquakelive desde [Releases](https://github.com/foressssst/ioquakelive/releases).
+2. Extrae el archivo en una carpeta cualquiera.
+3. Y ejecuta `ioquakelive.x86_64.exe`, para usar la versión de vulkan ejecuta `ioquakelive-vulkan.x86_64.exe`.
 
 ### Antes de empezar
 
-- En Windows, el juego intenta localizar Quake Live en tu biblioteca de Steam y copiar `pak00.pk3` a la carpeta `baseq3`. Si no lo encuentra, tendrás que copiar ese archivo manualmente desde tu instalación original.
-- Los ejecutables no están firmados digitalmente. Windows Defender podría mostrar una advertencia o bloquear su ejecución.
-- En Windows y Linux, cuando sale una versión nueva, la franja inferior del menú la descarga e instala con un clic y reinicia el juego. En macOS, o si prefieres hacerlo a mano, descarga la nueva versión y extrae su contenido sobre la carpeta existente.
-- Las versiones experimentales (las que GitHub marca como pre-release) salen para Windows, Linux y macOS, igual que las estables.
-- Las versiones beta anteriores a la 1.0, desde la 0.1.0 hasta la 0.3.13, están disponibles en [ioquakelive-betas](https://github.com/foressssst/ioquakelive-betas/releases).
+- En Windows, el juego intentara localizar Quake Live en tu biblioteca de Steam y copiar el archivo `pak00.pk3` a la carpeta `baseq3`, en caso de que no lo encuentre, tendrás que copiar ese archivo manualmente desde tu instalación.
+- Los ejecutables no están firmados digitalmente, asi que es probable (poco probable en realidad) que Windows Defender muestre una advertencia o bloquee su ejecución.
+- Desde parches recientes cuando se publica una versión nueva en la franja inferior del menú la descarga e instala con un clic y reinicia el juego. En macOS, o si prefieres hacerlo a mano, descarga la nueva versión y extrae su contenido sobre la carpeta existente.
+- Las versiones experimentales (pre-releases) también tendran versiones para Windows, Linux y macOS.
+- De igual forma si quieres usar o probar alguna version BETA anterior a la 1.0, desde la 0.1.0 hasta la 0.3.13, estaran disponibles en [ioquakelive-betas](https://github.com/foressssst/ioquakelive-betas/releases).
 
-Si encuentras un problema, puedes reportarlo en [Issues](https://github.com/foressssst/ioquakelive/issues).
 
 ## Novedades
 
