@@ -68,6 +68,7 @@ typedef struct FONSfont {
     int nfallbacks;
     int useContrast;
     unsigned char contrast[256];
+    int emSize;
 } FONSfont;
 
 typedef struct FONSstate {
@@ -540,6 +541,27 @@ void fonsSetFontContrast(FONScontext *stash, int font, float gamma, float gain) 
     f->useContrast = 1;
 }
 
+void fonsSetFontEmSize(FONScontext *stash, int font) {
+    FONSfont *f;
+    int ascent, descent, lineGap, em;
+
+    if (font < 0 || font >= stash->nfonts)
+        return;
+    f = stash->fonts[font];
+    R_GetFontLineMetrics(&f->font, &ascent, &descent, &lineGap);
+    em = R_GetFontUnitsPerEm(&f->font);
+    if (em <= 0)
+        return;
+    f->ascender = (float)ascent / (float)em;
+    f->descender = (float)descent / (float)em;
+    f->lineh = (float)(ascent - descent + lineGap) / (float)em;
+    f->emSize = 1;
+}
+
+static float fons__scale(const FONSfont *font, const stbtt_fontinfo *info, float size) {
+    return font->emSize ? R_ScaleForMappingEmToPixels(info, size) : R_ScaleForPixelHeight(info, size);
+}
+
 int fonsAddFont(FONScontext *stash, const char *name, unsigned char *data, int dataSize, int freeData) {
     int i, ascent, descent, fh, lineGap;
     FONSfont *font;
@@ -706,7 +728,7 @@ static FONSglyph *fons__getGlyph(FONScontext *stash, FONSfont *font, unsigned in
             }
         }
     }
-    scale = R_ScaleForPixelHeight(&renderFont->font, size);
+    scale = fons__scale(font, &renderFont->font, size);
     R_GetGlyphHMetrics(&renderFont->font, g, &advance, &lsb);
     R_GetGlyphBitmapBox(&renderFont->font, g, scale, scale, &x0, &y0, &x1, &y1);
     gw = x1 - x0 + pad * 2;
@@ -895,7 +917,7 @@ int fonsTextIterInit(FONScontext *stash, FONStextIter *iter, float x, float y, c
 
     iter->isize = (short)(state->size * 10.0f);
     iter->iblur = (short)state->blur;
-    iter->scale = R_ScaleForPixelHeight(&iter->font->font, (float)iter->isize / 10.0f);
+    iter->scale = fons__scale(iter->font, &iter->font->font, (float)iter->isize / 10.0f);
 
     if (state->align & FONS_ALIGN_LEFT) {
     } else if (state->align & FONS_ALIGN_RIGHT) {
@@ -1168,7 +1190,7 @@ float fonsDrawText(FONScontext *stash, float x, float y, const char *str, const 
     if (font->data == NULL)
         return x;
 
-    scale = R_ScaleForPixelHeight(&font->font, (float)isize / 10.0f);
+    scale = fons__scale(font, &font->font, (float)isize / 10.0f);
 
     if (end == NULL)
         end = str + strlen(str);
@@ -1278,7 +1300,7 @@ float fonsTextBounds(FONScontext *stash, float x, float y, const char *str, cons
     if (font->data == NULL)
         return 0;
 
-    scale = R_ScaleForPixelHeight(&font->font, (float)isize / 10.0f);
+    scale = fons__scale(font, &font->font, (float)isize / 10.0f);
 
     y += fons__getVertAlign(stash, font, state->align, isize);
 

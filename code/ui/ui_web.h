@@ -120,6 +120,14 @@ void SM_SetLook(smLook_t look);
 void SM_Icon(float x, float baseline, float size, const float* color, int codepoint);
 float SM_IconWidth(float size, int codepoint);
 
+float SM_Len(float css);
+float SM_LenBorder(float css);
+float SM_LetterSpacing(float css);
+float SM_LineHeight(float size, float ratio);
+#define SM_H1_PAD SM_Len(8.0f)
+#define SM_H1_LINE SM_LineHeight(32.0f, 1.2f)
+#define SM_TITLE_H (2 * SM_H1_PAD + SM_H1_LINE)
+#define SM_LINE_NORMAL 0.0f
 smRect_t SM_R(float x, float y, float w, float h);
 qboolean SM_In(const smRect_t* r, float x, float y);
 qboolean SM_Clip(smRect_t* r, const smRect_t* clip);
@@ -151,6 +159,9 @@ void SM_BuildPlayer(playerInfo_t* pi, const char* composed, float yaw, int weapo
 void SM_LoadFonts(void);
 float SM_Em(int font);
 float SM_Baseline(int font, float size, float lineTop, float lineHeight);
+float SM_NormalLine(int font, float size);
+float SM_IconBaseline(float size, float lineTop, float lineHeight);
+float SM_Center(float room, float width);
 qboolean SM_TextInside(float baseline, float size, const smRect_t* clip);
 float SM_Advance(int font, float size, const char* text, int len);
 float SM_AdvanceBold(int font, float size, const char* text, int len, qboolean bold);
@@ -180,7 +191,7 @@ typedef enum {
 #define SM_PILL_H 28.0f
 
 float SM_ButtonWidth(const char* text, float height);
-#define SM_WEB_BUTTON_H 30.0f
+#define SM_WEB_BUTTON_H SM_Len(30.0f)
 float SM_WebButtonWidth(const char* label);
 void SM_WebButton(float x, float y, float w, const char* label, qboolean disabled, qboolean over,
                   const smRect_t* clip);
@@ -238,7 +249,7 @@ typedef enum {
 } hmNav_t;
 
 #define HM_CONTAINER_W (UI_Home_ContentW())
-#define HM_NAV_H 110.0f
+#define HM_NAV_H SM_Len(110.0f)
 #define HM_PANEL_GAP 17.0f
 
 float UI_Home_Left(void);

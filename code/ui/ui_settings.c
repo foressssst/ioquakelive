@@ -182,11 +182,12 @@ static const vec4_t strDialog = SM_RGB(30, 30, 30);
 static const vec4_t strThumb = SM_RGB(51, 51, 51);
 static const vec4_t strThumbHover = SM_RGB(153, 153, 153);
 
-#define STR_TITLE_H 54.4f
-#define STR_NAV_H 30.0f
-#define STR_NAV_PAD 20.0f
-#define STR_NAV_GAP 15.0f
-#define STR_SECTION_PAD 5.0f
+#define STR_TITLE_H SM_TITLE_H
+#define STR_NAV_H SM_Len(30.0f)
+#define STR_NAV_PAD SM_Len(20.0f)
+#define STR_NAV_GAP SM_Len(15.0f)
+#define STR_SECTION_PAD SM_Len(5.0f)
+#define STR_ROW_PAD SM_Len(7.5f)
 #define STR_BAR 8.0f
 #define STR_OPTION_H 40.0f
 #define STR_MENU_H 198.0f
@@ -414,30 +415,38 @@ static qboolean ST_InTab(int i) {
     return stCvars[i].tab == st.tab;
 }
 
-static float ST_RowHeight(int i) {
-    switch (stCvars[i].widget) {
+static float ST_ContentHeight(int widget) {
+    switch (widget) {
         case ST_BIND:
-            return 47.0f;
+            return SM_Len(32.0f);
         case ST_INPUT:
-            return 53.0f;
+            return SM_Len(38.0f);
         case ST_SELECT:
         case ST_BOOL:
         case ST_PALETTE:
-            return 51.0f;
+            return SM_Len(36.0f);
         case ST_MODEL:
         case ST_MODELSKIN:
-            return 63.0f;
+            return SM_Len(48.0f);
         case ST_RGB:
-            return 56.0f;
+            return SM_Len(3.0f) + SM_Len(38.0f);
         case ST_CROSSHAIR:
-            return 79.0f;
+            return SM_Len(64.0f);
         default:
-            return 50.0f;
+            return 0;
     }
 }
 
+static float ST_RowHeight(int i) {
+    int widget = stCvars[i].widget;
+    float minH = SM_Len(widget == ST_BIND ? 32.0f : 50.0f);
+    float h = 2 * STR_ROW_PAD + ST_ContentHeight(widget);
+
+    return h > minH ? h : minH;
+}
+
 static float ST_HeadingHeight(qboolean first) {
-    return (first ? 8.0f : 24.0f) + 38.4f + 8.0f;
+    return SM_Len(first ? 8.0f : 24.0f) + SM_H1_LINE + SM_H1_PAD;
 }
 
 static void ST_LayoutTeam(float inner) {
@@ -548,11 +557,11 @@ static float ST_RowY(int i) {
 }
 
 static float ST_ControlX(int i) {
-    return stLayout[i].x + 7.5f + (stLayout[i].w - 15) * (0.566667f + 0.04f);
+    return stLayout[i].x + STR_ROW_PAD + (stLayout[i].w - 2 * STR_ROW_PAD) * (0.566667f + 0.04f);
 }
 
 static float ST_ControlW(int i) {
-    return (stLayout[i].w - 15) * 0.393333f;
+    return (stLayout[i].w - 2 * STR_ROW_PAD) * 0.393333f;
 }
 
 static void ST_DrawSelectBox(int i, float x, float y, float w, float h, const smRect_t* clip) {
@@ -670,7 +679,7 @@ static void ST_DrawPalette(int i, float x, float y, const smRect_t* clip) {
     float w = ST_ControlW(i);
 
     ST_DrawSelectBox(i, x, y, w, 36, clip);
-    ST_DrawSwatch(x + 10, y + 7.5f, w - 62, atoi(st.values[i]), clip);
+    ST_DrawSwatch(x + 10, y + STR_ROW_PAD, w - 62, atoi(st.values[i]), clip);
 }
 
 static void ST_DrawRGB(int i, float x, float y, const smRect_t* clip) {
@@ -702,7 +711,7 @@ static void ST_DrawCrosshair(int i, float x, float y, const smRect_t* clip) {
 
 static void ST_DrawBind(int i, float y, const smRect_t* clip) {
     float x = stLayout[i].x, w = stLayout[i].w, h = stLayout[i].h;
-    float base = SM_Baseline(FONT_SANS, 15, y + 7.5f, 32);
+    float base = SM_Baseline(FONT_SANS, 15, y + STR_ROW_PAD, SM_Len(32.0f));
     char keys[128];
     const char* p = st.values[i];
     int n = 0;
@@ -723,10 +732,10 @@ static void ST_DrawBind(int i, float y, const smRect_t* clip) {
     }
     SM_Fill(x, y, w, h, SM_Over(ST_HIT_BIND, i) ? strBindHover : stLayout[i].odd ? strRowOdd : strRowEven, clip);
     if (SM_TextInside(base, 15, clip)) {
-        SM_Text(x + 7.5f, base, FONT_SANS, 15, smText, stCvars[i].title,
-                SM_Fit(FONT_SANS, 15, stCvars[i].title, (w - 15) * 0.6f), qfalse);
-        SM_Text(x + 7.5f + (w - 15) * 0.6f, base, FONT_SANS, 15, smText, n ? keys : "None",
-                SM_Fit(FONT_SANS, 15, n ? keys : "None", (w - 15) * 0.4f), qfalse);
+        SM_Text(x + STR_ROW_PAD, base, FONT_SANS, 15, smText, stCvars[i].title,
+                SM_Fit(FONT_SANS, 15, stCvars[i].title, (w - 2 * STR_ROW_PAD) * 0.6f), qfalse);
+        SM_Text(x + STR_ROW_PAD + (w - 2 * STR_ROW_PAD) * 0.6f, base, FONT_SANS, 15, smText, n ? keys : "None",
+                SM_Fit(FONT_SANS, 15, n ? keys : "None", (w - 2 * STR_ROW_PAD) * 0.4f), qfalse);
     }
     SM_Hit(x, y, w, h, ST_HIT_BIND, i, clip);
 }
@@ -1025,7 +1034,7 @@ static void ST_DrawModelChooser(void) {
     qboolean skins = stCvars[st.model].widget == ST_MODELSKIN;
     qboolean clear = stCvars[st.model].widget == ST_MODEL;
     const char* title = stModels[st.pickModel].name;
-    float y = c.y + 8 + 38.4f + 8;
+    float y = c.y + SM_TITLE_H;
     int count = ST_PickSkinCount();
     int k;
 
@@ -1049,7 +1058,8 @@ static void ST_DrawModelChooser(void) {
     }
 
     SM_SetSpacing(SM_SPACING_H1);
-    SM_Text(paneX + 6.4f, SM_Baseline(FONT_DEFAULT, 32, c.y + 8, 38.4f), FONT_DEFAULT, 32, smText, title, -1, qfalse);
+    SM_Text(paneX + 6.4f, SM_Baseline(FONT_DEFAULT, 32, c.y + SM_H1_PAD, SM_H1_LINE), FONT_DEFAULT, 32, smText, title,
+            -1, qfalse);
     SM_SetSpacing(0);
     if (skins) {
         for (k = 0; k < count; k++) {
@@ -1149,15 +1159,15 @@ static void ST_DrawDropdown(void) {
 static void ST_DrawRGBPicker(void) {
     smRect_t c = ST_DrawDialog(400);
     float leftW = c.w * 0.653333f;
-    float y = c.y + 8 + 38.4f + 8;
+    float y = c.y + SM_TITLE_H;
     vec4_t color;
     int k;
 
     st.rgbPanel = SM_R(c.x - 15, c.y - 15, c.w + 30, c.h + 30);
     SM_Hit(st.rgbPanel.x, st.rgbPanel.y, st.rgbPanel.w, st.rgbPanel.h, ST_HIT_RGBPANEL, 0, NULL);
     SM_SetSpacing(SM_SPACING_H1);
-    SM_Text(c.x + 6.4f, SM_Baseline(FONT_DEFAULT, 32, c.y + 8, 38.4f), FONT_DEFAULT, 32, smText, "Choose color", -1,
-            qfalse);
+    SM_Text(c.x + 6.4f, SM_Baseline(FONT_DEFAULT, 32, c.y + SM_H1_PAD, SM_H1_LINE), FONT_DEFAULT, 32, smText,
+            "Choose color", -1, qfalse);
     SM_SetSpacing(0);
     for (k = 0; k < 3; k++) {
         vec4_t tint = {0, 0, 0, 1};
@@ -1190,12 +1200,12 @@ static void ST_DrawRow(int i, float y, const smRect_t* clip) {
     float w = stLayout[i].w;
     float h = stLayout[i].h;
     float cx = ST_ControlX(i);
-    float base = SM_Baseline(FONT_SANS, 15, y + 13.5f, 24);
+    float base = SM_Baseline(FONT_SANS, 15, y + STR_ROW_PAD + SM_Len(6.0f), SM_Len(24.0f));
     smRect_t row = SM_R(x, y, w, h);
     qboolean hovered;
 
     if (cv->widget == ST_HEADING) {
-        float hb = SM_Baseline(FONT_DEFAULT, 32, y + h - 8 - 38.4f, 38.4f);
+        float hb = SM_Baseline(FONT_DEFAULT, 32, y + h - SM_H1_PAD - SM_H1_LINE, SM_H1_LINE);
 
         if (SM_TextInside(hb, 32, clip)) {
             SM_SetSpacing(SM_SPACING_H1);
@@ -1213,44 +1223,45 @@ static void ST_DrawRow(int i, float y, const smRect_t* clip) {
               st.model < 0 && st.drag < 0 && st.previewDrag < 0;
     SM_Fill(x, y, w, h, stLayout[i].odd ? strRowOdd : strRowEven, clip);
     if (SM_TextInside(base, 15, clip)) {
-        float tw = cx - x - 7.5f - 10;
+        float tw = cx - x - STR_ROW_PAD - 10;
 
-        SM_Text(x + 7.5f, base, FONT_SANS, 15, smText, cv->title, SM_Fit(FONT_SANS, 15, cv->title, tw), qfalse);
+        SM_Text(x + STR_ROW_PAD, base, FONT_SANS, 15, smText, cv->title, SM_Fit(FONT_SANS, 15, cv->title, tw), qfalse);
         if (hovered) {
-            float after = x + 7.5f + SM_Advance(FONT_SANS, 15, va("%s ", cv->title), -1);
+            float after = x + STR_ROW_PAD + SM_Advance(FONT_SANS, 15, va("%s ", cv->title), -1);
 
             SM_Text(after, base, FONT_SANS, 15, SM_Over(ST_HIT_RESET, i) ? strLinkHover : strLink, "(Reset)", -1,
                     qfalse);
-            SM_Hit(after, y + 13.5f, SM_Advance(FONT_SANS, 15, "(Reset)", -1), 24, ST_HIT_RESET, i, clip);
+            SM_Hit(after, y + STR_ROW_PAD + SM_Len(6.0f), SM_Advance(FONT_SANS, 15, "(Reset)", -1), SM_Len(24.0f),
+                   ST_HIT_RESET, i, clip);
         }
     }
     SM_Hit(x, y, w, h, ST_HIT_ROW, i, clip);
 
     switch (cv->widget) {
         case ST_BOOL:
-            ST_DrawBool(i, cx, y + 7.5f, clip);
+            ST_DrawBool(i, cx, y + STR_ROW_PAD, clip);
             break;
         case ST_SELECT:
-            ST_DrawSelect(i, cx, y + 7.5f, clip);
+            ST_DrawSelect(i, cx, y + STR_ROW_PAD, clip);
             break;
         case ST_RANGE:
-            ST_DrawRange(i, cx, y + 16.5f, clip);
+            ST_DrawRange(i, cx, y + STR_ROW_PAD + SM_Len(9.0f), clip);
             break;
         case ST_INPUT:
-            ST_DrawInput(i, cx, y + 7.5f, clip);
+            ST_DrawInput(i, cx, y + STR_ROW_PAD, clip);
             break;
         case ST_PALETTE:
-            ST_DrawPalette(i, cx, y + 7.5f, clip);
+            ST_DrawPalette(i, cx, y + STR_ROW_PAD, clip);
             break;
         case ST_RGB:
-            ST_DrawRGB(i, cx, y + 7.5f, clip);
+            ST_DrawRGB(i, cx, y + STR_ROW_PAD, clip);
             break;
         case ST_MODEL:
         case ST_MODELSKIN:
-            ST_DrawModelButton(i, cx, y + 7.5f, clip);
+            ST_DrawModelButton(i, cx, y + STR_ROW_PAD, clip);
             break;
         case ST_CROSSHAIR:
-            ST_DrawCrosshair(i, cx, y + 7.5f, clip);
+            ST_DrawCrosshair(i, cx, y + STR_ROW_PAD, clip);
             break;
         default:
             break;
@@ -1281,9 +1292,9 @@ static float ST_TabWidth(const char* name) {
     c[1] = '\0';
     for (p = upper; *p; p++) {
         c[0] = *p;
-        w += SM_AdvanceBold(FONT_SANS, 11, c, 1, qtrue) + 1.0f;
+        w += SM_AdvanceBold(FONT_SANS, 11, c, 1, qtrue) + SM_LetterSpacing(1.0f);
     }
-    return w - 1.0f;
+    return ceilf(w * smScale - 0.01f) / smScale;
 }
 
 static void ST_DrawHeader(float y, const smRect_t* clip) {
@@ -1293,10 +1304,10 @@ static void ST_DrawHeader(float y, const smRect_t* clip) {
     int i;
 
     SM_Fill(left, y, HM_CONTAINER_W - STR_BAR, STR_TITLE_H, strBlack80, clip);
-    if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 32, y + 8, 38.4f), 32, clip)) {
+    if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 32, y + SM_H1_PAD, SM_H1_LINE), 32, clip)) {
         SM_SetSpacing(SM_SPACING_H1);
-        SM_Text(left + 6.4f, SM_Baseline(FONT_DEFAULT, 32, y + 8, 38.4f), FONT_DEFAULT, 32, smText, "Game Settings", -1,
-                qfalse);
+        SM_Text(left + 6.4f, SM_Baseline(FONT_DEFAULT, 32, y + SM_H1_PAD, SM_H1_LINE), FONT_DEFAULT, 32, smText,
+                "Game Settings", -1, qfalse);
         SM_SetSpacing(0);
     }
 
@@ -1321,7 +1332,7 @@ static void ST_DrawHeader(float y, const smRect_t* clip) {
                           on ? colorBlack : SM_Over(ST_HIT_TAB, i) ? smText : strOption, upper, 1.0f, qtrue);
         }
         SM_Hit(x, navY, w, STR_NAV_H, ST_HIT_TAB, i, clip);
-        x += w + 1.0f;
+        x += w;
     }
 }
 
@@ -1333,8 +1344,10 @@ static void ST_DrawAction(float y, const smRect_t* clip) {
         return;
     }
     bw = SM_WebButtonWidth(action);
-    SM_WebButton(st.left + STR_SECTION_PAD + 15, y + 15, bw, action, qfalse, SM_Over(ST_HIT_ACTION, 0), clip);
-    SM_Hit(st.left + STR_SECTION_PAD + 15, y + 15, bw, SM_WEB_BUTTON_H, ST_HIT_ACTION, 0, clip);
+    SM_WebButton(st.left + STR_SECTION_PAD + SM_Len(15.0f), y + SM_Len(15.0f), bw, action, qfalse,
+                 SM_Over(ST_HIT_ACTION, 0), clip);
+    SM_Hit(st.left + STR_SECTION_PAD + SM_Len(15.0f), y + SM_Len(15.0f), bw, SM_WEB_BUTTON_H, ST_HIT_ACTION, 0,
+           clip);
 }
 
 static void ST_DrawPage(void) {
@@ -1357,7 +1370,7 @@ static void ST_DrawPage(void) {
     st.view = bottom - frameTop;
     ST_Layout();
     st.listTop = frameTop + STR_TITLE_H + STR_NAV_H + STR_NAV_GAP + STR_SECTION_PAD;
-    sectionH = st.listBottom + 2 * STR_SECTION_PAD + (ST_TabAction(st.tab) ? 30 + SM_WEB_BUTTON_H : 0);
+    sectionH = st.listBottom + 2 * STR_SECTION_PAD + (ST_TabAction(st.tab) ? 2 * SM_Len(15.0f) + SM_WEB_BUTTON_H : 0);
     st.content = STR_TITLE_H + STR_NAV_H + STR_NAV_GAP + sectionH;
     st.scroll[st.tab] = ST_ClampScroll(st.scroll[st.tab]);
 

@@ -76,21 +76,24 @@ static struct {
     int updated;
 } hvf;
 
-#define HM_FRIEND_H 62.0f
+#define HM_FRIEND_PAD SM_Len(5.0f)
+#define HM_FRIEND_EDGE SM_LenBorder(2.0f)
+#define HM_FRIEND_PIC SM_Len(48.0f)
+#define HM_FRIEND_H (2 * HM_FRIEND_PAD + 2 * HM_FRIEND_EDGE + HM_FRIEND_PIC)
 
 static void UI_Home_LoadRetail(void);
 static void UI_Home_FriendRefresh(void);
 static void UI_Home_DrawFriends(float x, float y, float w, float h);
 
-#define HF_BAR_H 75.0f
-#define HF_ITEM_W 75.0f
-#define HF_WIDE_W 250.0f
-#define HF_FIRST_X 435.0f
+#define HF_BAR_H SM_Len(75.0f)
+#define HF_ITEM_W SM_Len(75.0f)
+#define HF_WIDE_W SM_Len(250.0f)
+#define HF_FIRST_X (HF_COL_X + HF_COL_W + SM_Len(35.0f))
 #define HF_NAV_SIZE 24.0f
 #define HF_MENU_SIZE (14.0f * 4.0f / 3.0f)
 #define HF_MENU_ROW 48.5f
-#define HF_COL_X 30.0f
-#define HF_COL_W 370.0f
+#define HF_COL_X SM_Len(30.0f)
+#define HF_COL_W SM_Len(370.0f)
 
 static const vec4_t hfBlack80 = {0.0f, 0.0f, 0.0f, 0.8f};
 static const vec4_t hfBlack75 = {0.0f, 0.0f, 0.0f, 0.75f};
@@ -117,18 +120,17 @@ static const char* const hfTabs[3] = {"Play", "Statistics", "Community"};
 static int hfOpen = -1;
 
 float UI_Home_Left(void) {
-    return 430.0f;
+    return SM_Len(430.0f);
 }
 
 float UI_Home_ContentW(void) {
-    return smVW - 430.0f - 30.0f;
+    return smVW - SM_Len(430.0f) - SM_Len(30.0f);
 }
 
 static void UI_Home_NavIcon(float x, float top, int glyph, const float* color) {
     float w = SM_IconWidth(HF_NAV_SIZE, glyph);
 
-    SM_Icon(x + (HF_ITEM_W - w) * 0.5f, top + HF_BAR_H * 0.5f + HF_NAV_SIZE * SM_AWESOME_BASE, HF_NAV_SIZE, color,
-            glyph);
+    SM_Icon(x + SM_Center(HF_ITEM_W, w), SM_IconBaseline(HF_NAV_SIZE, top, HF_BAR_H), HF_NAV_SIZE, color, glyph);
 }
 
 static const float* UI_Home_NavBox(float x, float top, float w, qboolean chosen, qboolean over) {
@@ -136,7 +138,7 @@ static const float* UI_Home_NavBox(float x, float top, float w, qboolean chosen,
         SM_Fill(x, top, w, HF_BAR_H, hfBlack30, NULL);
     }
     if (chosen) {
-        SM_Fill(x, top + HF_BAR_H - 3.0f, w, 3.0f, smGold, NULL);
+        SM_Fill(x, top + HF_BAR_H - SM_LenBorder(3.0f), w, SM_LenBorder(3.0f), smGold, NULL);
     }
     return (chosen || over) ? smGold : hfWhite;
 }
@@ -257,7 +259,7 @@ void UI_Home_PageTop(int active) {
     UI_Home_LoadMenu();
     UI_Home_LoadRetail();
 
-    SM_Fill(0, top, smVW - 3.0f, HF_BAR_H, hfBlack80, NULL);
+    SM_Fill(0, top, smVW - SM_Len(3.0f), HF_BAR_H, hfBlack80, NULL);
 
     face = UI_Home_Face();
     x = HF_COL_X;
@@ -286,14 +288,14 @@ void UI_Home_PageTop(int active) {
             upper[k] = (char)toupper((unsigned char)hfTabs[i][k]);
         }
         upper[k] = '\0';
-        SM_Text(x + (HF_WIDE_W - SM_Advance(FONT_DEFAULT, HF_NAV_SIZE, upper, -1)) * 0.5f,
+        SM_Text(x + SM_Center(HF_WIDE_W, SM_Advance(FONT_DEFAULT, HF_NAV_SIZE, upper, -1)),
                 SM_Baseline(FONT_DEFAULT, HF_NAV_SIZE, top, HF_BAR_H), FONT_DEFAULT, HF_NAV_SIZE, color, upper, -1,
                 qfalse);
         SM_Hit(x, top, HF_WIDE_W, HF_BAR_H, HM_HIT_TAB, i, NULL);
         x += HF_WIDE_W;
     }
 
-    x = smVW - 3.0f - HF_ITEM_W;
+    x = smVW - SM_Len(3.0f) - HF_ITEM_W;
     UI_Home_NavIcon(x, top, SM_FA_POWER, UI_Home_NavBox(x, top, HF_ITEM_W, qfalse, SM_Over(HM_HIT_NAV, HM_NAV_QUIT)));
     SM_Hit(x, top, HF_ITEM_W, HF_BAR_H, HM_HIT_NAV, HM_NAV_QUIT, NULL);
     x -= HF_ITEM_W;
@@ -361,12 +363,12 @@ float UI_Home_Header(float y, const char* eyebrow, const char* title) {
     float left = UI_Home_Left();
 
     (void)eyebrow;
-    SM_Fill(left, y, HM_CONTAINER_W, 54.4f, hfBlack80, NULL);
+    SM_Fill(left, y, HM_CONTAINER_W, SM_TITLE_H, hfBlack80, NULL);
     SM_SetSpacing(SM_SPACING_H1);
-    SM_Text(left + 6.4f, SM_Baseline(FONT_DEFAULT, 32.0f, y + 8.0f, 38.4f), FONT_DEFAULT, 32.0f, smText, title, -1,
-            qfalse);
+    SM_Text(left + 6.4f, SM_Baseline(FONT_DEFAULT, 32.0f, y + SM_H1_PAD, SM_H1_LINE), FONT_DEFAULT, 32.0f, smText,
+            title, -1, qfalse);
     SM_SetSpacing(0);
-    return y + 54.4f + 2.0f;
+    return y + SM_TITLE_H + SM_Len(2.0f);
 }
 
 float UI_Home_FrameBottom(void) {
@@ -577,18 +579,18 @@ void UI_Home_Banner(void) {
 }
 
 #define HM_ITEM_FONT (SM_Narrow() ? 24.0f : 32.0f)
-#define HM_ITEM_PAD (HM_ITEM_FONT * 0.5f)
-#define HM_ITEM_LINE (HM_ITEM_FONT * 1.6f)
+#define HM_ITEM_PAD SM_Len(HM_ITEM_FONT * 0.5f)
+#define HM_ITEM_LINE SM_LineHeight(HM_ITEM_FONT, 1.6f)
 #define HM_ITEM_H (HM_ITEM_LINE + 2.0f * HM_ITEM_PAD)
-#define HM_ITEM_BORDER 3.0f
-#define HM_BACK_GAP HM_ITEM_FONT
-#define HM_LOGO_GAP 4.5f
-#define HM_CARD_TOP 75.0f
-#define HM_CARD_H 75.0f
-#define HM_CARD_PAD 7.5f
-#define HM_SELECTOR_TOP 155.0f
-#define HM_SELECTOR_H 25.0f
-#define HM_LIST_TOP 183.0f
+#define HM_ITEM_BORDER SM_LenBorder(3.0f)
+#define HM_BACK_GAP SM_Len(HM_ITEM_FONT)
+#define HM_LOGO_GAP SM_Len(6.0f)
+#define HM_CARD_TOP SM_Len(75.0f)
+#define HM_CARD_H SM_Len(75.0f)
+#define HM_CARD_PAD SM_Len(7.5f)
+#define HM_SELECTOR_TOP SM_Len(155.0f)
+#define HM_SELECTOR_H SM_Len(25.0f)
+#define HM_LIST_TOP SM_Len(183.0f)
 #define HM_LEGALS_MS 5000
 #define HM_LEGALS_FADE 500
 #define HM_TEXT 15.0f
@@ -794,17 +796,25 @@ void UI_Home_RetailBackdrop(void) {
 }
 
 static float UI_Home_ColX(void) {
-    return smVW * 0.04f;
+    return SM_Len(smVW * 0.04f);
 }
 
 static float UI_Home_ColW(void) {
-    return smVW * 0.20f;
+    return SM_Len(smVW * 0.20f);
+}
+
+static float UI_Home_LogoW(void) {
+    return SM_Len(UI_Home_ColW() * 0.9f);
+}
+
+static float UI_Home_LogoH(void) {
+    return SM_Len(UI_Home_LogoW() * (485.0f / 1920.0f));
 }
 
 static float UI_Home_ItemsTop(void) {
-    float colW = UI_Home_ColW();
+    float margin = SM_Len(UI_Home_ColW() * 0.15f);
 
-    return -smTop / smScale + colW * 0.15f + colW * 0.9f * (485.0f / 1920.0f) + colW * 0.15f + HM_LOGO_GAP;
+    return -smTop / smScale + margin + UI_Home_LogoH() + margin + HM_LOGO_GAP;
 }
 
 static void UI_Home_DrawColumn(void) {
@@ -817,7 +827,8 @@ static void UI_Home_DrawColumn(void) {
 
     SM_Fill(colX, top, colW, smBottom - top + 1, hmBlack80, NULL);
     if (hr.logo) {
-        SM_Pic(colX + colW * 0.05f, top + colW * 0.15f, colW * 0.9f, colW * 0.9f * (485.0f / 1920.0f), hr.logo, NULL);
+        SM_Pic(colX + SM_Len(colW * 0.05f), top + SM_Len(colW * 0.15f), UI_Home_LogoW(), UI_Home_LogoH(), hr.logo,
+               NULL);
     }
 
     for (i = 0; i < HM_MAX_ITEMS; i++) {
@@ -976,8 +987,10 @@ static void UI_Home_DrawFriends(float x, float y, float w, float h) {
         const uiFriend_t* f = &hvf.list[i];
         const float* color = f->playing ? (f->sameGame ? inQuake : inOther) : online;
         float ry = y + i * HM_FRIEND_H;
-        float tx = x + 5 + 52 + 8;
-        float room = x + w - 5 - tx;
+        float pic = x + HM_FRIEND_PAD + HM_FRIEND_EDGE;
+        float picY = ry + HM_FRIEND_PAD + HM_FRIEND_EDGE;
+        float tx = pic + HM_FRIEND_PIC + HM_FRIEND_EDGE + SM_Len(8.0f);
+        float room = x + w - HM_FRIEND_PAD - tx;
         qboolean over = SM_Over(HM_HIT_FRIEND, hvf.index[i]);
         int nameLen;
         float nameW;
@@ -985,10 +998,11 @@ static void UI_Home_DrawFriends(float x, float y, float w, float h) {
         if (over) {
             SM_Fill(x, ry, w, HM_FRIEND_H, rowOver, NULL);
         }
-        SM_Fill(x + 5, ry + 5, 52, 52, color, NULL);
-        SM_Fill(x + 7, ry + 7, 48, 48, smField, NULL);
+        SM_Fill(x + HM_FRIEND_PAD, ry + HM_FRIEND_PAD, HM_FRIEND_PIC + 2 * HM_FRIEND_EDGE,
+                HM_FRIEND_PIC + 2 * HM_FRIEND_EDGE, color, NULL);
+        SM_Fill(pic, picY, HM_FRIEND_PIC, HM_FRIEND_PIC, smField, NULL);
         if (SM_Avatar(f->steamId)) {
-            SM_Pic(x + 7, ry + 7, 48, 48, SM_Avatar(f->steamId), NULL);
+            SM_Pic(pic, picY, HM_FRIEND_PIC, HM_FRIEND_PIC, SM_Avatar(f->steamId), NULL);
         } else {
             char initial[8];
             int len = 1;
@@ -1001,22 +1015,25 @@ static void UI_Home_DrawFriends(float x, float y, float w, float h) {
                 len = 2;
             }
             Q_strncpyz(initial, f->name[0] ? f->name : "?", len + 1);
-            SM_Text(x + 7 + (48 - SM_Advance(FONT_SANS, HM_TEXT, initial, -1)) * 0.5f,
-                    SM_Baseline(FONT_SANS, HM_TEXT, ry + 7, 48), FONT_SANS, HM_TEXT, smText, initial, -1, qtrue);
+            SM_Text(pic + (HM_FRIEND_PIC - SM_Advance(FONT_SANS, HM_TEXT, initial, -1)) * 0.5f,
+                    SM_Baseline(FONT_SANS, HM_TEXT, picY, HM_FRIEND_PIC), FONT_SANS, HM_TEXT, smText, initial, -1,
+                    qtrue);
         }
 
         nameLen = SM_Fit(FONT_SANS, HM_TEXT, f->name, room);
         nameW = SM_Advance(FONT_SANS, HM_TEXT, f->name, nameLen);
-        SM_Text(tx, SM_Baseline(FONT_SANS, HM_TEXT, ry + 5, 20.0f), FONT_SANS, HM_TEXT, color, f->name, nameLen,
-                qfalse);
+        SM_Text(tx, SM_Baseline(FONT_SANS, HM_TEXT, ry + HM_FRIEND_PAD, SM_LINE_NORMAL), FONT_SANS, HM_TEXT, color,
+                f->name, nameLen, qfalse);
         if (f->nickname[0]) {
             const char* nick = va(" (%s)", f->nickname);
             float nx = tx + nameW;
 
-            SM_Text(nx, SM_Baseline(FONT_SANS, HM_TEXT, ry + 5, 20.0f), FONT_SANS, HM_TEXT, nickGrey, nick,
-                    SM_Fit(FONT_SANS, HM_TEXT, nick, x + w - 5 - nx), qfalse);
+            SM_Text(nx, SM_Baseline(FONT_SANS, HM_TEXT, ry + HM_FRIEND_PAD, SM_LINE_NORMAL), FONT_SANS, HM_TEXT,
+                    nickGrey, nick, SM_Fit(FONT_SANS, HM_TEXT, nick, x + w - HM_FRIEND_PAD - nx), qfalse);
         }
-        SM_Text(tx, SM_Baseline(FONT_SANS, HM_TEXT, ry + 25, 20.0f), FONT_SANS, HM_TEXT, color,
+        SM_Text(tx,
+                SM_Baseline(FONT_SANS, HM_TEXT, ry + HM_FRIEND_PAD + SM_NormalLine(FONT_SANS, HM_TEXT), SM_LINE_NORMAL),
+                FONT_SANS, HM_TEXT, color,
                 UI_Home_FriendDoing(f), SM_Fit(FONT_SANS, HM_TEXT, UI_Home_FriendDoing(f), room), qfalse);
         SM_Hit(x, ry, w, HM_FRIEND_H, HM_HIT_FRIEND, hvf.index[i], NULL);
     }
@@ -1025,10 +1042,10 @@ static void UI_Home_DrawFriends(float x, float y, float w, float h) {
 static void UI_Home_DrawSide(void) {
     static const char* const tabs[2] = {"Friends", "Lobby"};
     float top = -smTop / smScale;
-    float w = smVW * 0.20f;
-    float x = smVW - smVW * 0.04f - w;
+    float w = SM_Len(smVW * 0.20f);
+    float x = smVW - SM_Len(smVW * 0.04f) - w;
     float tx = x;
-    float listH = (smBottom - top) * 0.5f;
+    float listH = SM_Len((smBottom - top) * 0.5f);
     int i;
 
     UI_Home_DrawCard(x, top + HM_CARD_TOP, w);
@@ -1037,8 +1054,8 @@ static void UI_Home_DrawSide(void) {
     for (i = 0; i < 2; i++) {
         float tw = SM_Advance(FONT_SANS, HM_TEXT, tabs[i], -1);
 
-        SM_Text(tx + 10, SM_Baseline(FONT_SANS, HM_TEXT, top + HM_SELECTOR_TOP + 2, 20.0f), FONT_SANS, HM_TEXT, smGold,
-                tabs[i], -1, qfalse);
+        SM_Text(tx + 10, SM_Baseline(FONT_SANS, HM_TEXT, top + HM_SELECTOR_TOP + 1.0f / smScale, SM_LINE_NORMAL),
+                FONT_SANS, HM_TEXT, smGold, tabs[i], -1, qfalse);
         SM_Hit(tx, top + HM_SELECTOR_TOP, tw + 20, HM_SELECTOR_H, HM_HIT_TAB, i, NULL);
         tx += tw + 20 + 3 + SM_Advance(FONT_SANS, HM_TEXT, " ", -1);
     }

@@ -61,6 +61,28 @@ void SM_Frame(void) {
     SM_LoadFonts();
 }
 
+float SM_Len(float css) {
+    return floorf(css * smScale + 0.01f) / smScale;
+}
+
+float SM_LenBorder(float css) {
+    float len = SM_Len(css);
+
+    return len * smScale < 1.0f ? 1.0f / smScale : len;
+}
+
+float SM_LetterSpacing(float css) {
+    return floorf(css * smScale + 0.5f) / smScale;
+}
+
+static float SM_FontPx(float size) {
+    return floorf(size * smScale + 0.5f);
+}
+
+float SM_LineHeight(float size, float ratio) {
+    return floorf(SM_FontPx(size) * ratio + 0.01f) / smScale;
+}
+
 smRect_t SM_R(float x, float y, float w, float h) {
     smRect_t r;
 
@@ -287,6 +309,9 @@ static qboolean SM_IsBarlow(int face) {
 }
 
 static float SM_FaceEm(int face) {
+    if (face >= 0 && face == smFonts.awesome) {
+        return SM_AWESOME_EM;
+    }
     if (face >= 0 && face == smFonts.arial) {
         return SM_ARIAL_EM;
     }
@@ -299,6 +324,15 @@ static float SM_FaceEm(int face) {
     return face == FONT_DEFAULT ? SM_HANDEL_EM : SM_SANS_EM;
 }
 
+static qboolean SM_EmSized(int face) {
+    return face >= 0 && (face == smFonts.sans || face == smFonts.sansBold || face == smFonts.sansItalic ||
+                         SM_IsWebHandel(face) || face == smFonts.awesome || face == smFonts.arial);
+}
+
+static float SM_FacePx(int face, float size) {
+    return SM_EmSized(face) ? SM_FontPx(size) : SM_FontPx(size) * SM_FaceEm(face);
+}
+
 int SM_ItalicFace(void) {
     return smFonts.sansItalic >= 0 ? smFonts.sansItalic : FONT_SANS;
 }
@@ -307,11 +341,14 @@ float SM_Em(int font) {
     return SM_FaceEm(SM_Face(font, qfalse));
 }
 
-float SM_Baseline(int font, float size, float lineTop, float lineHeight) {
-    int face = SM_Face(font, qfalse);
+static void SM_FaceMetrics(int face, float size, int* ascent, int* descent) {
+    float em = SM_FaceEm(face);
+    float px = SM_FontPx(size);
     float base;
 
-    if (face >= 0 && face == smFonts.arial) {
+    if (face >= 0 && face == smFonts.awesome) {
+        base = SM_AWESOME_BASE;
+    } else if (face >= 0 && face == smFonts.arial) {
         base = SM_ARIAL_BASE;
     } else if (SM_IsBarlow(face)) {
         base = SM_BARLOW_BASE;
@@ -320,7 +357,39 @@ float SM_Baseline(int font, float size, float lineTop, float lineHeight) {
     } else {
         base = face == FONT_DEFAULT ? SM_HANDEL_BASE : SM_SANS_BASE;
     }
-    return lineTop + lineHeight * 0.5f + size * base;
+    *ascent = (int)floorf((em * 0.5f + base) * px + 0.5f);
+    *descent = face >= 0 && face == smFonts.awesome ? (int)ceilf((em * 0.5f - base) * px - 0.01f)
+                                                    : (int)floorf((em * 0.5f - base) * px + 0.5f);
+}
+
+float SM_NormalLine(int font, float size) {
+    int ascent, descent;
+
+    SM_FaceMetrics(SM_Face(font, qfalse), size, &ascent, &descent);
+    return (ascent + descent) / smScale;
+}
+
+static float SM_FaceBaseline(int face, float size, float lineTop, float lineHeight) {
+    int ascent, descent, line, top;
+
+    SM_FaceMetrics(face, size, &ascent, &descent);
+    line = lineHeight > 0 ? (int)floorf(lineHeight * smScale + 0.5f) : ascent + descent;
+    top = (int)floorf(lineTop * smScale + 0.5f);
+    return (top + (line - ascent - descent) / 2 + ascent) / smScale;
+}
+
+float SM_Baseline(int font, float size, float lineTop, float lineHeight) {
+    return SM_FaceBaseline(SM_Face(font, qfalse), size, lineTop, lineHeight);
+}
+
+float SM_IconBaseline(float size, float lineTop, float lineHeight) {
+    return SM_FaceBaseline(smFonts.awesome, size, lineTop, lineHeight);
+}
+
+float SM_Center(float room, float width) {
+    int space = (int)floorf(room * smScale + 0.5f) - (int)floorf(width * smScale + 0.5f);
+
+    return space > 0 ? ((space + 1) / 2) / smScale : 0.0f;
 }
 
 qboolean SM_TextInside(float baseline, float size, const smRect_t* clip) {
@@ -328,7 +397,7 @@ qboolean SM_TextInside(float baseline, float size, const smRect_t* clip) {
 }
 
 void SM_SetSpacing(float spacing) {
-    smSpacing = spacing;
+    smSpacing = SM_LetterSpacing(spacing);
 }
 
 static int SM_CharBytes(const char* s) {
@@ -351,7 +420,7 @@ static int SM_CountChars(const char* text, int len) {
 static float SM_AdvanceFace(int face, float size, const char* text, int len) {
     char buf[MAX_STRING_CHARS];
     float withBar[5], bar[5];
-    float px = size * SM_FaceEm(face) * smScale;
+    float px = SM_FacePx(face, size);
 
     if (len < 0) {
         len = (int)strlen(text);
@@ -372,7 +441,7 @@ static float SM_AdvanceFace(int face, float size, const char* text, int len) {
 
 static void SM_DrawFace(float x, float baseline, int face, float size, const float* color, const char* text, int limit,
                         qboolean bold, int flags) {
-    float px = size * SM_FaceEm(face) * smScale;
+    float px = SM_FacePx(face, size);
     int sy = (int)(smTop + baseline * smScale + 0.5f);
     int shift = (int)(smScale + 0.5f);
     int len = (int)strlen(text);
@@ -453,6 +522,7 @@ static const vec4_t smWebButtonOffText = SM_RGB(51, 51, 51);
 const vec4_t smWebYellow = SM_RGB(247, 209, 0);
 
 void SM_Border(float x, float y, float w, float h, float t, const float* color, const smRect_t* clip) {
+    t = SM_LenBorder(t);
     SM_Fill(x, y, w, t, color, clip);
     SM_Fill(x, y + h - t, w, t, color, clip);
     SM_Fill(x, y + t, t, h - 2 * t, color, clip);
@@ -561,7 +631,7 @@ void SM_Icon(float x, float baseline, float size, const float* color, int codepo
     SM_Utf8(codepoint, glyph);
     trap_R_SetColor(color);
     trap_R_Font_DrawString((int)(x * smScale + 0.5f), (int)(smTop + baseline * smScale + 0.5f), glyph,
-                           smFonts.awesome, size * SM_AWESOME_EM * smScale, -1, NULL, 0);
+                           smFonts.awesome, SM_FacePx(smFonts.awesome, size), -1, NULL, 0);
     trap_R_SetColor(NULL);
 }
 
@@ -572,7 +642,7 @@ float SM_IconWidth(float size, int codepoint) {
         return 0;
     }
     SM_Utf8(codepoint, glyph);
-    return SM_AdvanceFace(smFonts.awesome, size * SM_AWESOME_EM / SM_FaceEm(smFonts.awesome), glyph, -1);
+    return SM_AdvanceFace(smFonts.awesome, size, glyph, -1);
 }
 
 void SM_Centered(float middle, float baseline, float size, const float* color, const char* text, qboolean bold) {
@@ -584,7 +654,7 @@ float SM_SpacedWidth(int font, float size, const char* text, float spacing) {
     float w = 0;
 
     for (; *text; text++) {
-        w += SM_Advance(font, size, text, 1) + spacing;
+        w += SM_Advance(font, size, text, 1) + SM_LetterSpacing(spacing);
     }
     return w;
 }
@@ -597,7 +667,7 @@ void SM_SpacedText(float x, float baseline, int font, float size, const float* c
     for (; *text; text++) {
         c[0] = *text;
         SM_Text(x, baseline, font, size, color, c, -1, bold);
-        x += SM_AdvanceBold(font, size, c, 1, bold) + spacing;
+        x += SM_AdvanceBold(font, size, c, 1, bold) + SM_LetterSpacing(spacing);
     }
 }
 

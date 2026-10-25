@@ -99,6 +99,7 @@ int fonsAddFont(FONScontext *s, const char *name, unsigned char *data, int ndata
 int fonsGetFontByName(FONScontext *s, const char *name);
 int fonsAddFallbackFont(FONScontext *stash, int base, int fallback);
 void fonsSetFontContrast(FONScontext *stash, int font, float gamma, float gain);
+void fonsSetFontEmSize(FONScontext *stash, int font);
 
 void fonsPushState(FONScontext *s);
 void fonsPopState(FONScontext *s);

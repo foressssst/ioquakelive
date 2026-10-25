@@ -434,6 +434,12 @@ static void R_Font_SetContrast( int id, const char *path ) {
 	}
 }
 
+static void R_Font_SetSizing( int id, const char *path ) {
+	if ( !Q_stricmpn( path, "webui/fonts/", 12 ) || !Q_stricmp( path, "fonts/LiberationSans-Regular.ttf" ) ) {
+		fonsSetFontEmSize( fontContext, id );
+	}
+}
+
 int RE_Font_Register( const char *name ) {
 	char paths[2][MAX_QPATH];
 	const char *dir;
@@ -473,6 +479,7 @@ int RE_Font_Register( const char *name ) {
 		}
 		R_Font_AddFallbacks( id );
 		R_Font_SetContrast( id, paths[p] );
+		R_Font_SetSizing( id, paths[p] );
 		fontIndexToId[numFontIndices] = id;
 		Q_strncpyz( fontIndexPath[numFontIndices], paths[p], sizeof( fontIndexPath[numFontIndices] ) );
 		return numFontIndices++;
