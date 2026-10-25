@@ -1211,7 +1211,7 @@ static void CG_PlayerAngles(centity_t* cent, vec3_t legs[3], vec3_t torso[3], ve
     }
 
     VectorCopy(cent->currentState.pos.trDelta, velocity);
-    speed = VectorNormalize(velocity);
+    speed = (cent->currentState.powerups & (1 << PW_FREEZE)) ? 0.0f : VectorNormalize(velocity) * cg_playerLean.value;
     if (speed) {
         vec3_t axis[3];
         float side;
