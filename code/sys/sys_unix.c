@@ -184,19 +184,25 @@ qboolean Sys_StartSteam(void) {
 }
 
 char* Sys_SteamPath(void) {
-#if 0
-	char *p;
-
-	if( ( p = getenv( "HOME" ) ) != NULL )
-	{
+    static const char* const places[] = {
 #ifdef __APPLE__
-		char *steamPathEnd = "/Library/Application Support/Steam/SteamApps/common/" STEAMPATH_NAME;
+        "/Library/Application Support/Steam/steamapps/common/" STEAMPATH_NAME,
 #else
-		char *steamPathEnd = "/.steam/steam/SteamApps/common/" STEAMPATH_NAME;
+        "/.steam/steam/steamapps/common/" STEAMPATH_NAME,
+        "/.local/share/Steam/steamapps/common/" STEAMPATH_NAME,
+        "/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common/" STEAMPATH_NAME,
 #endif
-		Com_sprintf(steamPath, sizeof(steamPath), "%s%s", p, steamPathEnd);
-	}
-#endif
+    };
+    const char* home = getenv("HOME");
+    struct stat st;
+    int i;
+
+    for (i = 0; !steamPath[0] && home && home[0] && i < ARRAY_LEN(places); i++) {
+        Com_sprintf(steamPath, sizeof(steamPath), "%s%s", home, places[i]);
+        if (stat(steamPath, &st) || !S_ISDIR(st.st_mode)) {
+            steamPath[0] = '\0';
+        }
+    }
 
     return steamPath;
 }

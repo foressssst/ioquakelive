@@ -18,6 +18,28 @@
 
 typedef unsigned char steamBool_t;
 
+#if (defined(_WIN32) && defined(_WIN64)) || (!defined(DEDICATED) && (defined(__linux__) || defined(__APPLE__)))
+#define STEAM_DIRECT
+#endif
+
+#ifdef _WIN32
+#define SD_LIB_NAME "steamclient64.dll"
+#elif defined(__APPLE__)
+#define SD_LIB_NAME "steamclient.dylib"
+#else
+#define SD_LIB_NAME "steamclient.so"
+#endif
+
+#ifdef _MSC_VER
+#define SD_SLOT_GS_GETUSERSTAT 2
+#define SD_SLOT_GS_SETUSERSTAT 5
+#define SD_SLOT_GETUSERSTAT 18
+#else
+#define SD_SLOT_GS_GETUSERSTAT 1
+#define SD_SLOT_GS_SETUSERSTAT 4
+#define SD_SLOT_GETUSERSTAT 17
+#endif
+
 #if defined(_WIN32) && !defined(_WIN64)
 #define STEAM_CB __fastcall
 #define STEAM_CB_SELF void* self, void* unusedEdx
@@ -433,7 +455,7 @@ static qboolean Steam_Bind(void) {
     return qtrue;
 }
 
-#if defined(_WIN32) && defined(_WIN64)
+#ifdef STEAM_DIRECT
 
 typedef struct {
     int user;
@@ -449,7 +471,7 @@ typedef struct {
 #define SD_CB_GAMESERVER 0x02
 
 static struct {
-    HMODULE lib;
+    void* lib;
     void* client;
     void*(QDECL* CreateInterface)(const char* version, int* returnCode);
     steamBool_t(QDECL* BGetCallback)(int pipe, steamCallbackMsg_t* msg, int* call);
@@ -555,6 +577,7 @@ static int QDECL SD_HandleIncomingPacket(void* self, const void* data, int len, 
                : 0;
 }
 
+#ifdef _MSC_VER
 static uint64_t QDECL SD_GetSteamID(void* self) {
     uint64_t id = 0;
 
@@ -575,6 +598,19 @@ static uint64_t QDECL SD_GetFriendByIndex(void* self, int index, int flags) {
     ((void* (*)(void*, uint64_t*, int, int))SD_VT(self, 4))(self, &id, index, flags);
     return id;
 }
+#else
+static uint64_t SD_GetSteamID(void* self) {
+    return ((uint64_t(*)(void*))SD_VT(self, 10))(self);
+}
+
+static uint64_t SD_GetUserSteamID(void* self) {
+    return ((uint64_t(*)(void*))SD_VT(self, 2))(self);
+}
+
+static uint64_t SD_GetFriendByIndex(void* self, int index, int flags) {
+    return ((uint64_t(*)(void*, int, int))SD_VT(self, 4))(self, index, flags);
+}
+#endif
 
 SD_RET(void*, RequestInternetServerList, 0,
        (void* self, unsigned int a, steamKeyValue_t** b, unsigned int c, void* d), (self, a, b, c, d))
@@ -653,8 +689,8 @@ SD_RET(steamBool_t, InviteUserToGame, 49, (void* self, uint64_t a, const char* b
 SD_VOID(SetRichPresence, 43, (void* self, const char* a, const char* b), (self, a, b))
 
 SD_RET(uint64_t, RequestUserStats, 0, (void* self, uint64_t a), (self, a))
-SD_RET(steamBool_t, GetUserStat, 2, (void* self, uint64_t a, const char* b, int* c), (self, a, b, c))
-SD_RET(steamBool_t, SetUserStat, 5, (void* self, uint64_t a, const char* b, int c), (self, a, b, c))
+SD_RET(steamBool_t, GetUserStat, SD_SLOT_GS_GETUSERSTAT, (void* self, uint64_t a, const char* b, int* c), (self, a, b, c))
+SD_RET(steamBool_t, SetUserStat, SD_SLOT_GS_SETUSERSTAT, (void* self, uint64_t a, const char* b, int c), (self, a, b, c))
 SD_RET(steamBool_t, SetUserAchievement, 7, (void* self, uint64_t a, const char* b), (self, a, b))
 SD_RET(uint64_t, StoreUserStats, 9, (void* self, uint64_t a), (self, a))
 
@@ -662,7 +698,7 @@ SD_RET(steamBool_t, RequestCurrentStats, 0, (void* self), (self))
 SD_RET(steamBool_t, SetAchievement, 7, (void* self, const char* a), (self, a))
 SD_RET(steamBool_t, StoreStats, 10, (void* self), (self))
 SD_RET(uint64_t, UserRequestUserStats, 16, (void* self, uint64_t a), (self, a))
-SD_RET(steamBool_t, UserGetUserStat, 18, (void* self, uint64_t a, const char* b, int* c), (self, a, b, c))
+SD_RET(steamBool_t, UserGetUserStat, SD_SLOT_GETUSERSTAT, (void* self, uint64_t a, const char* b, int* c), (self, a, b, c))
 
 static void* QDECL SD_GameServer(void) {
     return sd.gameServer;
@@ -841,6 +877,7 @@ static void QDECL SD_GameServer_RunCallbacks(void) {
     SD_Dispatch(sd.serverPipe, qtrue);
 }
 
+#ifdef _WIN32
 static qboolean SD_RegistryString(const char* subkey, const char* value, char* out, DWORD size) {
     HKEY key;
     DWORD type = 0;
@@ -855,34 +892,84 @@ static qboolean SD_RegistryString(const char* subkey, const char* value, char* o
     return (qboolean)(r == ERROR_SUCCESS && type == REG_SZ && out[0]);
 }
 
-static qboolean SD_Load(void) {
+static void* SD_Symbol(const char* name) {
+    return (void*)GetProcAddress((HMODULE)sd.lib, name);
+}
+
+static void SD_Close(void) {
+    FreeLibrary((HMODULE)sd.lib);
+}
+
+static void* SD_Open(void) {
     char path[MAX_OSPATH];
     char dir[MAX_OSPATH];
+    void* lib = (void*)LoadLibraryA(SD_LIB_NAME);
 
+    if (!lib && SD_RegistryString("Software\\Valve\\Steam\\ActiveProcess", "SteamClientDll64", path,
+                                  sizeof(path))) {
+        lib = (void*)LoadLibraryExA(path, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+    }
+    if (!lib && SD_RegistryString("Software\\Valve\\Steam", "SteamPath", dir, sizeof(dir))) {
+        Com_sprintf(path, sizeof(path), "%s\\" SD_LIB_NAME, dir);
+        lib = (void*)LoadLibraryExA(path, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+    }
+    return lib;
+}
+#else
+static void* SD_Symbol(const char* name) {
+    return dlsym(sd.lib, name);
+}
+
+static void SD_Close(void) {
+    dlclose(sd.lib);
+}
+
+static void* SD_Open(void) {
+    static const char* const places[] = {
+#ifdef __APPLE__
+        "/Library/Application Support/Steam/Steam.AppBundle/Steam/Contents/MacOS/" SD_LIB_NAME,
+#else
+        "/.steam/sdk64/" SD_LIB_NAME,
+        "/.steam/steam/linux64/" SD_LIB_NAME,
+        "/.local/share/Steam/linux64/" SD_LIB_NAME,
+        "/.var/app/com.valvesoftware.Steam/.local/share/Steam/linux64/" SD_LIB_NAME,
+#endif
+    };
+    char path[MAX_OSPATH];
+    const char* home = getenv("HOME");
+    void* lib = dlopen(SD_LIB_NAME, RTLD_NOW);
+    int i;
+
+    for (i = 0; !lib && home && home[0] && i < ARRAY_LEN(places); i++) {
+        Com_sprintf(path, sizeof(path), "%s%s", home, places[i]);
+        lib = dlopen(path, RTLD_NOW);
+    }
+#ifdef __APPLE__
+    if (!lib) {
+        lib = dlopen("/Applications/Steam.app/Contents/MacOS/" SD_LIB_NAME, RTLD_NOW);
+    }
+#endif
+    return lib;
+}
+#endif
+
+static qboolean SD_Load(void) {
     if (sd.client) {
         return qtrue;
     }
-    sd.lib = LoadLibraryA("steamclient64.dll");
-    if (!sd.lib && SD_RegistryString("Software\\Valve\\Steam\\ActiveProcess", "SteamClientDll64", path,
-                                     sizeof(path))) {
-        sd.lib = LoadLibraryExA(path, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
-    }
-    if (!sd.lib && SD_RegistryString("Software\\Valve\\Steam", "SteamPath", dir, sizeof(dir))) {
-        Com_sprintf(path, sizeof(path), "%s\\steamclient64.dll", dir);
-        sd.lib = LoadLibraryExA(path, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
-    }
+    sd.lib = SD_Open();
     if (!sd.lib) {
         return qfalse;
     }
-    *(void**)&sd.CreateInterface = (void*)GetProcAddress(sd.lib, "CreateInterface");
-    *(void**)&sd.BGetCallback = (void*)GetProcAddress(sd.lib, "Steam_BGetCallback");
-    *(void**)&sd.FreeLastCallback = (void*)GetProcAddress(sd.lib, "Steam_FreeLastCallback");
+    *(void**)&sd.CreateInterface = SD_Symbol("CreateInterface");
+    *(void**)&sd.BGetCallback = SD_Symbol("Steam_BGetCallback");
+    *(void**)&sd.FreeLastCallback = SD_Symbol("Steam_FreeLastCallback");
     if (sd.CreateInterface && sd.BGetCallback && sd.FreeLastCallback) {
         sd.client = sd.CreateInterface("SteamClient017", NULL);
     }
     if (!sd.client) {
-        Com_Printf("Steam: steamclient64.dll does not offer SteamClient017\n");
-        FreeLibrary(sd.lib);
+        Com_Printf("Steam: " SD_LIB_NAME " does not offer SteamClient017\n");
+        SD_Close();
         Com_Memset(&sd, 0, sizeof(sd));
         return qfalse;
     }
@@ -1003,7 +1090,7 @@ static void SD_Bind(void) {
 #endif
 
 static qboolean Steam_Load(void) {
-#if !defined(_WIN32) || !defined(_WIN64)
+#ifndef STEAM_DIRECT
     const char* steamPath;
     char path[MAX_OSPATH];
 #endif
@@ -1019,9 +1106,9 @@ static qboolean Steam_Load(void) {
     setenv("SteamAppId", STEAM_APP_ID, 1);
     setenv("SteamGameId", STEAM_APP_ID, 1);
 #endif
-#if defined(_WIN32) && defined(_WIN64)
+#ifdef STEAM_DIRECT
     if (!SD_Load()) {
-        Com_Printf("Steam: steamclient64.dll not found; running without Steam\n");
+        Com_Printf("Steam: " SD_LIB_NAME " not found; running without Steam\n");
         return qfalse;
     }
     st.lib = (void*)sd.lib;
