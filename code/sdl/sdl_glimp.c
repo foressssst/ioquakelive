@@ -30,12 +30,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../sys/sys_local.h"
 #include "sdl_icon.h"
 
-#ifdef USE_VULKAN_API
-#include "../renderercommon/vulkan/vulkan.h"
-#include <SDL3/SDL_vulkan.h>
 #ifdef _WIN32
 #include <windows.h>
 #endif
+
+#ifdef USE_VULKAN_API
+#include "../renderercommon/vulkan/vulkan.h"
+#include <SDL3/SDL_vulkan.h>
 #endif
 
 typedef enum {
@@ -373,6 +374,28 @@ static qboolean GLimp_ApplyFullscreen(int fullscreen) {
     return qtrue;
 }
 
+#ifdef _WIN32
+static qboolean GLimp_SoftwarePixelFormat(void) {
+    PIXELFORMATDESCRIPTOR pfd;
+    HDC hdc;
+    int format;
+
+    hdc = (HDC)SDL_GetPointerProperty(SDL_GetWindowProperties(SDL_window), SDL_PROP_WINDOW_WIN32_HDC_POINTER, NULL);
+    if (!hdc)
+        return qfalse;
+
+    format = GetPixelFormat(hdc);
+    if (format <= 0 || !DescribePixelFormat(hdc, format, sizeof(pfd), &pfd))
+        return qfalse;
+
+    if (!(pfd.dwFlags & PFD_GENERIC_FORMAT))
+        return qfalse;
+
+    ri.Printf(PRINT_ALL, "...PFD %d rejected, software acceleration\n", format);
+    return qtrue;
+}
+#endif
+
 static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean fixedFunction) {
     struct GLimp_ContextType {
         int profileMask;
@@ -570,7 +593,9 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
                         colorBits = 16;
                     break;
                 case 1:
-                    if (depthBits == 24)
+                    if (depthBits > 24)
+                        depthBits = 24;
+                    else if (depthBits == 24)
                         depthBits = 16;
                     else if (depthBits == 16)
                         depthBits = 8;
@@ -592,7 +617,9 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
         }
 
         if ((i % 4) == 2) {
-            if (testDepthBits == 24)
+            if (testDepthBits > 24)
+                testDepthBits = 24;
+            else if (testDepthBits == 24)
                 testDepthBits = 16;
             else if (testDepthBits == 16)
                 testDepthBits = 8;
@@ -638,11 +665,6 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
 
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
-#if 0
-		if( !r_allowSoftwareGL->integer )
-			SDL_GL_SetAttribute( SDL_GL_ACCELERATED_VISUAL, 1 );
-#endif
-
         {
             SDL_PropertiesID props = SDL_CreateProperties();
 
@@ -660,6 +682,14 @@ static int GLimp_SetMode(int mode, int fullscreen, qboolean noborder, qboolean f
             ri.Printf(PRINT_DEVELOPER, "SDL_CreateWindow failed: %s\n", SDL_GetError());
             continue;
         }
+
+#ifdef _WIN32
+        if (!r_allowSoftwareGL->integer && GLimp_SoftwarePixelFormat()) {
+            SDL_DestroyWindow(SDL_window);
+            SDL_window = NULL;
+            continue;
+        }
+#endif
 
         if (fullscreen == 1) {
             if (!GLimp_ApplyFullscreen(1)) {
