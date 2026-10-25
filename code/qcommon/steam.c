@@ -236,6 +236,7 @@ typedef struct {
     void(QDECL* ActivateGameOverlayToUser)(void* self, const char* dialog, uint64_t steamId);
     void(QDECL* ActivateGameOverlay)(void* self, const char* dialog);
     steamBool_t(QDECL* InviteUserToGame)(void* self, uint64_t steamId, const char* connect);
+    const char*(QDECL* GetPersonaName)(void* self);
     int(QDECL* GetFriendCount)(void* self, int flags);
     uint64_t(QDECL* GetFriendByIndex)(void* self, int index, int flags);
     const char*(QDECL* GetFriendPersonaName)(void* self, uint64_t steamId);
@@ -397,6 +398,7 @@ static qboolean Steam_Bind(void) {
                    "SteamAPI_ISteamFriends_ActivateGameOverlayToUser");
     STEAM_BIND_OPT(ActivateGameOverlay, "SteamAPI_ISteamFriends_ActivateGameOverlay");
     STEAM_BIND_OPT(InviteUserToGame, "SteamAPI_ISteamFriends_InviteUserToGame");
+    STEAM_BIND_OPT(GetPersonaName, "SteamAPI_ISteamFriends_GetPersonaName");
     STEAM_BIND_OPT(GetFriendCount, "SteamAPI_ISteamFriends_GetFriendCount");
     STEAM_BIND_OPT(GetFriendByIndex, "SteamAPI_ISteamFriends_GetFriendByIndex");
     STEAM_BIND_OPT(GetFriendPersonaName, "SteamAPI_ISteamFriends_GetFriendPersonaName");
@@ -668,6 +670,7 @@ SD_RET(unsigned int, GetVoiceOptimalSampleRate, 12, (void* self), (self))
 SD_RET(unsigned int, GetAuthSessionTicket, 13, (void* self, void* a, int b, unsigned int* c), (self, a, b, c))
 SD_VOID(CancelAuthTicket, 16, (void* self, unsigned int a), (self, a))
 
+SD_RET(const char*, GetPersonaName, 0, (void* self), (self))
 SD_RET(int, GetFriendCount, 3, (void* self, int a), (self, a))
 SD_RET(int, GetFriendPersonaState, 6, (void* self, uint64_t a), (self, a))
 SD_RET(const char*, GetFriendPersonaName, 7, (void* self, uint64_t a), (self, a))
@@ -1060,6 +1063,7 @@ static void SD_Bind(void) {
     SD_SET(ActivateGameOverlayToUser);
     SD_SET(ActivateGameOverlay);
     SD_SET(InviteUserToGame);
+    SD_SET(GetPersonaName);
     SD_SET(GetFriendCount);
     SD_SET(GetFriendByIndex);
     SD_SET(GetFriendPersonaName);
@@ -3049,6 +3053,13 @@ static void Steam_StripColors(char* s) {
         *d++ = *s++;
     }
     *d = '\0';
+}
+
+const char* Steam_PersonaName(void) {
+    if (!st.clientUp || !st.friends || !st.GetPersonaName) {
+        return NULL;
+    }
+    return st.GetPersonaName(st.friends);
 }
 
 int Steam_FriendCount(void) {

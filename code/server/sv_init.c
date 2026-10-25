@@ -564,6 +564,13 @@ void SV_Init(void) {
     Cvar_Get("sv_keywords", "", CVAR_SERVERINFO);
     sv_mapname = Cvar_Get("mapname", "nomap", CVAR_SERVERINFO | CVAR_ROM);
     sv_privateClients = Cvar_Get("sv_privateClients", "0", CVAR_SERVERINFO);
+#ifndef DEDICATED
+    if (!Cvar_VariableIntegerValue("com_build")) {
+        const char* persona = Steam_PersonaName();
+
+        Cvar_Get("sv_hostname", va("%s's Match", persona ? persona : "anon"), CVAR_SERVERINFO | CVAR_ARCHIVE);
+    }
+#endif
     sv_hostname = Cvar_Get("sv_hostname", "noname", CVAR_SERVERINFO | CVAR_ARCHIVE);
     sv_maxclients = Cvar_Get("sv_maxclients", "8", CVAR_SERVERINFO | CVAR_LATCH);
 
