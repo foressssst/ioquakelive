@@ -761,12 +761,16 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
         case UI_DEMO_INFO:
             return CL_DemoInfo(VMA(1), VMA(2), args[3]);
 
-        case UI_R_REGISTERSHADERFROMRAW:
-            if (!re.RegisterShaderFromRaw || !VMA(1) || !VMA(2) || strlen(VMA(1)) >= MAX_QPATH || args[3] <= 0 ||
-                args[3] > 1024 || args[4] <= 0 || args[4] > 1024) {
+        case UI_R_REGISTERSHADERFROMRAW: {
+            int width = args[3];
+            int height = args[4];
+
+            if (!re.RegisterShaderFromRaw || !VMA(1) || !VMA(2) || strlen(VMA(1)) >= MAX_QPATH || width <= 0 ||
+                width > 1024 || height <= 0 || height > 1024) {
                 return 0;
             }
-            return re.RegisterShaderFromRaw(VMA(1), VMA(2), args[3], args[4]);
+            return re.RegisterShaderFromRaw(VMA(1), VMA(2), width, height);
+        }
 
         case UI_LAN_SERVER_NAME: {
             char* buf = VMA(3);
