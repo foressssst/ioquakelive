@@ -2615,6 +2615,7 @@ void FS_Shutdown(qboolean closemfp) {
 #endif
 }
 
+#ifdef DEDICATED
 #define FS_MAX_STOCK_SHADERS 16384
 #define FS_MAX_CHECKED_PAKS 512
 
@@ -2779,6 +2780,7 @@ static void FS_CheckWorkshopPaks(void) {
 		}
 	}
 }
+#endif
 
 static void FS_ReorderPurePaks(void) {
 	searchpath_t* s;
@@ -2908,7 +2910,9 @@ static void FS_Startup(const char* gameName) {
 
 	FS_Path_f();
 
+#ifdef DEDICATED
 	FS_CheckWorkshopPaks();
+#endif
 
 	fs_gamedirvar->modified = qfalse;
 
