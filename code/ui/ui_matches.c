@@ -761,65 +761,120 @@ static void MT_Duration(int seconds, char* out, int size) {
     }
 }
 
+#define MT_SHOT_W SM_Len(270.0f)
+#define MT_SHOT_H SM_Len(150.0f)
+#define MT_GAP SM_Len(20.0f)
+#define MT_INSET SM_Len(5.0f)
+#define MT_H2_LINE SM_LineHeight(24.0f, 1.25f)
+#define MT_P_LINE SM_LineHeight(16.0f, 1.6f)
+#define MT_H3_LINE SM_LineHeight(16.0f, 1.3f)
+#define MT_BIG_LINE SM_LineHeight(26.667f, 1.6f)
+#define MT_MEDAL_W SM_Len(40.0f)
+#define MT_MEDAL_ROW (MT_MEDAL_W + SM_StrutBelow(18.667f, SM_LineHeight(18.667f, 1.6f)))
+
+static float MT_TextBox(float width) {
+    return ceilf(width * smScale - 0.01f) / smScale;
+}
+
+static float MT_MedalWidth(int count) {
+    return MT_MEDAL_W + SM_IconWidth(14.933f, 0xf00d) + SM_Advance(FONT_SANS, 18.667f, va("%i", count), -1);
+}
+
+static float MT_WidgetHeight(const mtMatch_t* m) {
+    float h = MT_H2_LINE + MT_H3_LINE + MT_BIG_LINE;
+    float mx = 0;
+    int rows = 0;
+    int i;
+
+    if (!m->personal) {
+        return MT_SHOT_H;
+    }
+    if (Q_stricmp(m->gameType, "RACE")) {
+        for (i = 0; i < MT_NUM_MEDALS; i++) {
+            float cw;
+
+            if (!m->medals[i]) {
+                continue;
+            }
+            cw = MT_MedalWidth(m->medals[i]);
+            if (!rows || (mx > 0 && mx + cw > SM_Len(550.0f))) {
+                rows++;
+                mx = 0;
+            }
+            mx += cw;
+        }
+    }
+    h += rows * MT_MEDAL_ROW;
+    return h > MT_SHOT_H ? h : MT_SHOT_H;
+}
+
 static void MT_DrawWidget(const mtMatch_t* m, float x, float y, const smRect_t* clip) {
     char line[256], date[64], length[32], rank[16];
-    float sx = x + 270 + 20;
+    float sx = x + MT_SHOT_W + MT_GAP;
+    float gtLine = SM_LineHeight(16.0f, 1.6f);
+    float headerY = y + gtLine + SM_Len(15.0f), headerLine = SM_LineHeight(32.0f, 1.6f);
     float sw, w;
 
-    SM_Pic(x, y, 270, 150, m->levelshot, clip);
-    SM_Fill(x, y, 270, 25.6f, mtGametype, clip);
+    SM_Pic(x, y, MT_SHOT_W, MT_SHOT_H, m->levelshot, clip);
+    SM_Fill(x, y, MT_SHOT_W, gtLine, mtGametype, clip);
     {
         const char* title = MT_GametypeTitle(m->gameType);
 
-        MT_Shadowed(x + 270 - 5 - SM_AdvanceBold(FONT_DEFAULT, 16, title, -1, qtrue),
-                    SM_Baseline(FONT_DEFAULT, 16, y, 25.6f), FONT_DEFAULT, 16, mtWhite, title, qtrue, clip);
+        MT_Shadowed(x + MT_SHOT_W - SM_Len(5.0f) - SM_AdvanceBold(FONT_DEFAULT, 16, title, -1, qtrue),
+                    SM_Baseline(FONT_DEFAULT, 16, y, gtLine), FONT_DEFAULT, 16, mtWhite, title, qtrue, clip);
     }
     if (m->personal) {
         MT_Ordinal(m->rank, rank, sizeof(rank));
-        MT_Shadowed(x + (270 - SM_Advance(FONT_DEFAULT, 32, rank, -1)) * 0.5f, SM_Baseline(FONT_DEFAULT, 32, y + 40.6f, 51.2f),
-                    FONT_DEFAULT, 32, mtYellow, rank, qfalse, clip);
+        MT_Shadowed(x + SM_Center(MT_SHOT_W, SM_Advance(FONT_DEFAULT, 32, rank, -1)),
+                    SM_Baseline(FONT_DEFAULT, 32, headerY, headerLine), FONT_DEFAULT, 32, mtYellow, rank, qfalse, clip);
     }
     {
         const char* result = !strcmp(m->status, "WIN") ? "Win" : !strcmp(m->status, "LOSE") ? "Loss" : "Quit";
 
-        MT_Shadowed(x + (270 - SM_Advance(FONT_DEFAULT, 18.667f, result, -1)) * 0.5f,
-                    SM_Baseline(FONT_DEFAULT, 18.667f, y + 91.8f, 29.9f), FONT_DEFAULT, 18.667f, mtLight, result, qfalse,
-                    clip);
+        MT_Shadowed(x + SM_Center(MT_SHOT_W, SM_Advance(FONT_DEFAULT, 18.667f, result, -1)),
+                    SM_Baseline(FONT_DEFAULT, 18.667f, headerY + headerLine, SM_LineHeight(18.667f, 1.6f)),
+                    FONT_DEFAULT, 18.667f, mtLight, result, qfalse, clip);
     }
 
     SM_SetSpacing(SM_SPACING_H1);
-    MT_Line(sx, y, 30, FONT_DEFAULT, 24, mtYellow, MT_MapName(m->map), qfalse, clip);
+    MT_Line(sx, y, MT_H2_LINE, FONT_DEFAULT, 24, mtYellow, MT_MapName(m->map), qfalse, clip);
     sw = SM_Advance(FONT_DEFAULT, 24, MT_MapName(m->map), -1);
     SM_SetSpacing(0);
     MT_Date(m->timePlayed, date, sizeof(date));
     MT_Duration(m->gameLength, length, sizeof(length));
     Com_sprintf(line, sizeof(line), "%s (%s)", date, length);
-    MT_Line(sx, y + 30, 25.6f, FONT_SANS, 16, mtLight, line, qfalse, clip);
+    MT_Line(sx, y + MT_H2_LINE, MT_P_LINE, FONT_SANS, 16, mtLight, line, qfalse, clip);
     w = SM_Advance(FONT_SANS, 16, line, -1);
     sw = w > sw ? w : sw;
     MT_StripColors(m->server, line, sizeof(line));
-    MT_Line(sx, y + 55.6f, 25.6f, FONT_SANS, 16, mtLight, line, qfalse, clip);
+    MT_Line(sx, y + MT_H2_LINE + MT_P_LINE, MT_P_LINE, FONT_SANS, 16, mtLight, line, qfalse, clip);
     w = SM_Advance(FONT_SANS, 16, line, -1);
     sw = w > sw ? w : sw;
-    if (SM_TextInside(SM_Baseline(FONT_SANS, 16, y + 81.2f, 25.6f), 16, clip)) {
-        SM_TextRaw(sx, SM_Baseline(FONT_SANS, 16, y + 81.2f, 25.6f), FONT_SANS, 16, mtLight, m->exitMsg, -1, qfalse);
+    {
+        float baseline = SM_Baseline(FONT_SANS, 16, y + MT_H2_LINE + 2 * MT_P_LINE, MT_P_LINE);
+
+        if (SM_TextInside(baseline, 16, clip)) {
+            SM_TextRaw(sx, baseline, FONT_SANS, 16, mtLight, m->exitMsg, -1, qfalse);
+        }
     }
     w = SM_AdvanceRaw(FONT_SANS, 16, m->exitMsg, -1, qfalse);
     sw = w > sw ? w : sw;
 
     if (m->personal) {
-        float px = sx + sw + 20;
-        float mx = px, my = y + 93.5f;
+        float px = sx + MT_TextBox(sw) + MT_GAP;
+        float numY = y + MT_H2_LINE + MT_H3_LINE;
+        float mx = px, my = numY + MT_BIG_LINE;
+        float big = SM_Len(75.0f);
         int i;
 
         SM_SetSpacing(SM_SPACING_H1);
-        MT_Line(px, y, 30, FONT_DEFAULT, 24, mtYellow, "Personal", qfalse, clip);
+        MT_Line(px, y, MT_H2_LINE, FONT_DEFAULT, 24, mtYellow, "Personal", qfalse, clip);
         SM_SetSpacing(0);
         if (!Q_stricmp(m->gameType, "RACE")) {
             char best[32];
 
             SM_SetSpacing(SM_SPACING_H1);
-            MT_Line(px, y + 30, 20.8f, FONT_SANS, 16, mtGrey, "Best Time", qtrue, clip);
+            MT_Line(px, y + MT_H2_LINE, MT_H3_LINE, FONT_SANS, 16, mtGrey, "Best Time", qtrue, clip);
             SM_SetSpacing(0);
             if (m->score == -1) {
                 Q_strncpyz(best, "DNF", sizeof(best));
@@ -828,19 +883,19 @@ static void MT_DrawWidget(const mtMatch_t* m, float x, float y, const smRect_t* 
             } else {
                 Com_sprintf(best, sizeof(best), "%02i.%02i", (m->score / 1000) % 60, (m->score % 1000) / 10);
             }
-            MT_Line(px, y + 53.8f, 36, FONT_SANS, 26.667f, mtLight, best, qtrue, clip);
+            MT_Line(px, numY, MT_BIG_LINE, FONT_SANS, 26.667f, mtLight, best, qtrue, clip);
             return;
         }
         SM_SetSpacing(SM_SPACING_H1);
-        MT_Line(px, y + 30, 20.8f, FONT_SANS, 16, mtGrey, "Score", qtrue, clip);
+        MT_Line(px, y + MT_H2_LINE, MT_H3_LINE, FONT_SANS, 16, mtGrey, "Score", qtrue, clip);
         SM_SetSpacing(0);
         Com_sprintf(line, sizeof(line), "%i", m->score);
-        MT_Line(px, y + 53.8f, 36, FONT_SANS, 26.667f, mtLight, line, qtrue, clip);
+        MT_Line(px, numY, MT_BIG_LINE, FONT_SANS, 26.667f, mtLight, line, qtrue, clip);
         SM_SetSpacing(SM_SPACING_H1);
-        MT_Line(px + 75, y + 30, 20.8f, FONT_SANS, 16, mtGrey, "KDR", qtrue, clip);
+        MT_Line(px + big, y + MT_H2_LINE, MT_H3_LINE, FONT_SANS, 16, mtGrey, "KDR", qtrue, clip);
         SM_SetSpacing(0);
         Com_sprintf(line, sizeof(line), "%.2f", m->deaths ? (double)m->kills / m->deaths : (double)m->kills);
-        MT_Line(px + 75, y + 53.8f, 36, FONT_SANS, 26.667f, mtLight, line, qtrue, clip);
+        MT_Line(px + big, numY, MT_BIG_LINE, FONT_SANS, 26.667f, mtLight, line, qtrue, clip);
 
         for (i = 0; i < MT_NUM_MEDALS; i++) {
             char count[16];
@@ -850,15 +905,16 @@ static void MT_DrawWidget(const mtMatch_t* m, float x, float y, const smRect_t* 
                 continue;
             }
             Com_sprintf(count, sizeof(count), "%i", m->medals[i]);
-            cw = 40 + 11.7f + SM_Advance(FONT_SANS, 18.667f, count, -1);
-            if (mx > px && mx + cw > px + 550) {
+            cw = MT_MedalWidth(m->medals[i]);
+            if (mx > px && mx + cw > px + SM_Len(550.0f)) {
                 mx = px;
-                my += 47.9f;
+                my += MT_MEDAL_ROW;
             }
-            SM_Pic(mx, my, 40, 40, mt.medal[i], clip);
-            if (SM_TextInside(my + 40, 18.667f, clip)) {
-                SM_Icon(mx + 40, my + 40, 14.933f, mtMedalGrey, 0xf00d);
-                SM_Text(mx + 51.7f, my + 40, FONT_SANS, 18.667f, mtMedalGrey, count, -1, qfalse);
+            SM_Pic(mx, my, MT_MEDAL_W, MT_MEDAL_W, mt.medal[i], clip);
+            if (SM_TextInside(my + MT_MEDAL_W, 18.667f, clip)) {
+                SM_Icon(mx + MT_MEDAL_W, my + MT_MEDAL_W, 14.933f, mtMedalGrey, 0xf00d);
+                SM_Text(mx + MT_MEDAL_W + SM_IconWidth(14.933f, 0xf00d), my + MT_MEDAL_W, FONT_SANS, 18.667f, mtMedalGrey,
+                        count, -1, qfalse);
             }
             mx += cw;
         }
@@ -870,16 +926,19 @@ static void MT_DrawList(float left, float top, float width, const smRect_t* clip
     int i;
 
     SM_SetSpacing(SM_SPACING_H1);
-    MT_Line(left + 11.4f, top + 8, 38.4f, FONT_DEFAULT, 32, smText, "My Matches", qfalse, clip);
+    MT_Line(left + MT_INSET + SM_Len(6.4f), top + SM_H1_PAD, SM_H1_LINE, FONT_DEFAULT, 32, smText, "My Matches", qfalse,
+            clip);
     SM_SetSpacing(0);
-    y = top + 54.4f;
+    y = top + SM_TITLE_H;
     for (i = 0; i < mt.count; i++) {
-        SM_Fill(left + 5, y, width - 10, 150, (i & 1) ? mtEven : mtOdd, clip);
-        MT_DrawWidget(&mt.match[i], left + 5, y, clip);
-        SM_Hit(left + 5, y, width - 10, 150, MT_HIT_MATCH, i, clip);
-        y += 160;
+        float h = MT_WidgetHeight(&mt.match[i]);
+
+        SM_Fill(left + MT_INSET, y, width - 2 * MT_INSET, h, (i & 1) ? mtEven : mtOdd, clip);
+        MT_DrawWidget(&mt.match[i], left + MT_INSET, y, clip);
+        SM_Hit(left + MT_INSET, y, width - 2 * MT_INSET, h, MT_HIT_MATCH, i, clip);
+        y += h + SM_Len(10.0f);
     }
-    mt.content = y - top;
+    mt.content = y - top + MT_INSET;
 }
 
 static float MT_RowButton(float x, float y, const char* label, int glyph, int type, int index, qboolean chosen,
