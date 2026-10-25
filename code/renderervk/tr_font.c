@@ -423,9 +423,14 @@ void R_FontShutdown( void ) {
 	}
 }
 
-static qboolean R_Font_IsWebText( const char *path ) {
-	return ( !Q_stricmpn( path, "webui/", 6 ) || !Q_stricmpn( path, "fonts/Barlow-", 13 ) ||
-		!Q_stricmp( path, "fonts/LiberationSans-Regular.ttf" ) ) ? qtrue : qfalse;
+static void R_Font_SetContrast( int id, const char *path ) {
+	if ( !Q_stricmpn( path, "webui/fonts/NotoSans", 20 ) ) {
+		fonsSetFontContrast( fontContext, id, 1.45f, 1.0f );
+	} else if ( !Q_stricmpn( path, "webui/fonts/fontawesome", 23 ) ) {
+		fonsSetFontContrast( fontContext, id, 1.25f, 1.0f );
+	} else if ( !Q_stricmpn( path, "fonts/Barlow-", 13 ) || !Q_stricmp( path, "fonts/LiberationSans-Regular.ttf" ) ) {
+		fonsSetFontContrast( fontContext, id, 1.7f, 1.2f );
+	}
 }
 
 int RE_Font_Register( const char *name ) {
@@ -466,9 +471,7 @@ int RE_Font_Register( const char *name ) {
 			continue;
 		}
 		R_Font_AddFallbacks( id );
-		if ( R_Font_IsWebText( paths[p] ) ) {
-			fonsSetFontContrast( fontContext, id, 1.7f, 1.2f );
-		}
+		R_Font_SetContrast( id, paths[p] );
 		fontIndexToId[numFontIndices] = id;
 		Q_strncpyz( fontIndexPath[numFontIndices], paths[p], sizeof( fontIndexPath[numFontIndices] ) );
 		return numFontIndices++;
