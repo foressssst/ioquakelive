@@ -317,6 +317,7 @@ vmCvar_t cg_zoomAnimationTime;
 vmCvar_t cg_drawBrightWeapons;
 vmCvar_t ch_chatLines;
 vmCvar_t ch_drawLocalTime;
+vmCvar_t ch_drawSpectators;
 vmCvar_t ch_drawTargetStatus;
 vmCvar_t ch_drawKeys;
 vmCvar_t ch_autoStats;
@@ -698,6 +699,7 @@ static cvarTable_t cvarTable[] = {
     {&cg_drawBrightWeapons, "cg_drawBrightWeapons", "0", CVAR_ARCHIVE},
     {&ch_chatLines, "ch_chatLines", "3", CVAR_ARCHIVE},
     {&ch_drawLocalTime, "ch_drawLocalTime", "0", CVAR_ARCHIVE},
+    {&ch_drawSpectators, "ch_drawSpectators", "0", CVAR_ARCHIVE | CVAR_USERINFO},
     {&ch_drawTargetStatus, "ch_drawTargetStatus", "1", CVAR_ARCHIVE},
     {&ch_drawKeys, "ch_drawKeys", "0", CVAR_ARCHIVE},
     {&ch_autoStats, "ch_autoStats", "0", CVAR_ARCHIVE},
@@ -1666,6 +1668,7 @@ static void CG_RegisterGraphics(void) {
     cgs.media.viewDamageShader = trap_R_RegisterShader("viewDamageBlend");
 
     cgs.media.deferShader = trap_R_RegisterShaderNoMip("gfx/2d/defer.png");
+    cgs.media.spectatorsShader = trap_R_RegisterShaderNoMip("gfx/2d/ioql_eye");
 
     cgs.media.scoreboardName = trap_R_RegisterShaderNoMip("menu/tab/name.tga");
     cgs.media.scoreboardPing = trap_R_RegisterShaderNoMip("menu/tab/ping.tga");

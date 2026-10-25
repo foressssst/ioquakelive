@@ -942,6 +942,7 @@ typedef struct {
     qhandle_t tracerShader;
     qhandle_t crosshairShader[NUM_CROSSHAIRS];
     qhandle_t lagometerShader;
+    qhandle_t spectatorsShader;
     qhandle_t backTileShader;
     qhandle_t noammoShader;
 
@@ -1763,6 +1764,7 @@ extern vmCvar_t cg_zoomAnimationTime;
 extern vmCvar_t cg_drawBrightWeapons;
 extern vmCvar_t ch_chatLines;
 extern vmCvar_t ch_drawLocalTime;
+extern vmCvar_t ch_drawSpectators;
 extern vmCvar_t ch_drawTargetStatus;
 extern vmCvar_t ch_drawKeys;
 extern vmCvar_t cg_autoAction;

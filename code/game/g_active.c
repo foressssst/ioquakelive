@@ -1003,6 +1003,7 @@ void SpectatorClientEndFrame(gentity_t* ent) {
     client = ent->client;
 
     if (client->sess.spectatorState != SPECTATOR_FOLLOW) {
+        client->ps.persistant[PERS_FOLLOWERS] = 0;
         return;
     }
 
@@ -1032,6 +1033,7 @@ void SpectatorClientEndFrame(gentity_t* ent) {
                 } else {
                     memcpy(client->ps.persistant, savedPersistant, sizeof(savedPersistant));
                     client->ps.persistant[PERS_HITS] = cl->ps.persistant[PERS_HITS];
+                    client->ps.persistant[PERS_FOLLOWERS] = cl->ps.persistant[PERS_FOLLOWERS];
                 }
                 return;
             }
@@ -1051,6 +1053,29 @@ void SpectatorClientEndFrame(gentity_t* ent) {
     }
 }
 
+static void G_SetFollowers(gentity_t* ent) {
+    gclient_t* cl;
+    qboolean wanted;
+    int i, count;
+
+    wanted = g_drawSpectators[ent->s.number];
+    count = 0;
+    for (i = 0; i < level.maxclients; i++) {
+        cl = &level.clients[i];
+        if (cl == ent->client || cl->pers.connected != CON_CONNECTED) {
+            continue;
+        }
+        if (!(cl->ps.pm_flags & PMF_FOLLOW) || cl->ps.clientNum != ent->s.number) {
+            continue;
+        }
+        count++;
+        if (g_drawSpectators[i]) {
+            wanted = qtrue;
+        }
+    }
+    ent->client->ps.persistant[PERS_FOLLOWERS] = wanted ? count : 0;
+}
+
 void ClientEndFrame(gentity_t* ent) {
     int i;
 
@@ -1058,6 +1083,8 @@ void ClientEndFrame(gentity_t* ent) {
         SpectatorClientEndFrame(ent);
         return;
     }
+
+    G_SetFollowers(ent);
 
     if (ent->client->ps.weaponPrimary != 0) {
         ent->client->sess.weaponPrimary = ent->client->ps.weaponPrimary;

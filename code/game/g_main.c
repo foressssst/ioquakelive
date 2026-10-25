@@ -34,6 +34,7 @@ typedef struct {
 
 gentity_t g_entities[MAX_GENTITIES];
 gclient_t g_clients[MAX_CLIENTS];
+qboolean g_drawSpectators[MAX_CLIENTS];
 
 gameImport_t *imports;
 

@@ -860,6 +860,7 @@ void ClientUserinfoChanged(int clientNum) {
     }
 
     client->pers.ioqlClient = (qboolean)(Info_ValueForKey(userinfo, "ioql")[0] != '\0');
+    g_drawSpectators[clientNum] = (qboolean)(atoi(Info_ValueForKey(userinfo, "ch_drawSpectators")) != 0);
 
     client->pers.autoaction = atoi(Info_ValueForKey(userinfo, "cg_autoAction")) | g_autoAction.integer;
 

@@ -198,6 +198,7 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_HUD, "Zoom Animation Time", "cg_zoomanimationtime", ST_RANGE, 0.0f, 500.0f, 10.0f, NULL, 0, NULL, 1},
     {ST_TAB_HUD, "Local Time", "ch_drawlocaltime", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_ch_drawlocaltime, 3, "Display the clock of your computer.", 1},
     {ST_TAB_HUD, "Demo Recording Name", "ch_recordmessage", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Display the name of the demo while it is being recorded.", 1},
+    {ST_TAB_HUD, "Spectator Count", "ch_drawspectators", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Show an eye with the number of players watching you. The server has to send it (ioqlds does).", 1},
     {ST_TAB_TEAM, "Teammates", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
     {ST_TAB_TEAM, "Enemies", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
     {ST_TAB_TEAM, "Force Team Model", "cg_forceteammodel", ST_MODEL, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},

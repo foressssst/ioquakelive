@@ -948,6 +948,33 @@ static float CG_DrawLocalTime(float y) {
 	return y + h;
 }
 
+static float CG_DrawSpectators(float y) {
+	static const vec4_t shadow = {0.0f, 0.0f, 0.0f, 0.75f};
+	const char* s;
+	float w, h, eyeW, eyeH, x;
+	int count;
+
+	count = cg.snap->ps.persistant[PERS_FOLLOWERS];
+	if (count <= 0) {
+		return y;
+	}
+	s = va("%i", count);
+	w = CG_DrawTextWidth(s, 0.25f, 0, 2);
+	h = CG_DrawTextHeight(s, 0.25f, 0, 2);
+	eyeH = h;
+	eyeW = eyeH * 2.0f;
+	x = 635 - w - 3 - eyeW;
+
+	CG_DrawText((float)(635 - w), y + h, 2, 0.25f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
+	trap_R_SetColor(shadow);
+	CG_DrawPic(x + 1, y + 1, eyeW, eyeH, cgs.media.spectatorsShader);
+	trap_R_SetColor(colorWhite);
+	CG_DrawPic(x, y, eyeW, eyeH, cgs.media.spectatorsShader);
+	trap_R_SetColor(NULL);
+
+	return y + h;
+}
+
 static float CG_DrawRecording(float y) {
 	const char* s;
 	int w, h;
@@ -1094,6 +1121,9 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame) {
 	}
 	if (ch_drawLocalTime.integer) {
 		y = CG_DrawLocalTime(y);
+	}
+	if (ch_drawSpectators.integer) {
+		y = CG_DrawSpectators(y);
 	}
 	if (cg_drawAttacker.integer) {
 		CG_DrawAttacker(y);

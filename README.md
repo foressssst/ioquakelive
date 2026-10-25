@@ -180,6 +180,7 @@ Las siguientes tablas documentan las áreas portadas y su estado actual. Los nom
 | Chat beeps | Hecho | `cg_chatbeep` y `cg_teamChatBeep`. |
 | Intermission camera | Hecho | Incluye mapas sin `info_player_intermission`. |
 | Followed player corpse | Hecho | Al morir sin desintegrarse, el espectador puede ver el cuerpo. |
+| Spectator count | Hecho | Novedad de ioquakelive: con `ch_drawSpectators 1`, un ojo arriba a la derecha muestra cuántos te están mirando, contando a los compañeros muertos de Clan Arena. El número lo manda ioqlds solo a quien lo pide, así que a un cliente de retail le llega lo mismo de siempre. Apagado por defecto. |
 
 #### Menús (`ui`)
 
