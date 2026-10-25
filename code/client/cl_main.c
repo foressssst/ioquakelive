@@ -3239,6 +3239,8 @@ static void CL_ClientViewProfile_f(void);
 static void CL_VoiceOff_f(void);
 
 void CL_Init(void) {
+    const char* steamName;
+
     Com_Printf("----- Client Initialization -----\n");
 
     Con_Init();
@@ -3351,7 +3353,11 @@ void CL_Init(void) {
     cl_steamId = Cvar_Get("cl_steamId", "0", CVAR_ARCHIVE);
     Cvar_Get("cl_quitOnDemoCompleted", "0", 0);
 
-    Cvar_Get("name", "UnnamedPlayer", CVAR_USERINFO | CVAR_ARCHIVE);
+    steamName = Steam_PlayerName();
+    Cvar_Get("name", steamName ? steamName : "UnnamedPlayer", CVAR_USERINFO | CVAR_ARCHIVE);
+    if (steamName) {
+        Cvar_Set("name", steamName);
+    }
     cl_rate = Cvar_Get("rate", "25000", CVAR_USERINFO | CVAR_ARCHIVE);
     Cvar_CheckRange(cl_rate, 8000, 25000, qtrue);
     Cvar_Get("model", "sarge", CVAR_USERINFO | CVAR_ARCHIVE);

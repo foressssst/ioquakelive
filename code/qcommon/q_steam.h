@@ -123,6 +123,7 @@ typedef struct {
 } steamFriend_t;
 
 const char* Steam_PersonaName(void);
+const char* Steam_PlayerName(void);
 int Steam_FriendCount(void);
 qboolean Steam_FriendGet(int index, steamFriend_t* out);
 const char* Steam_FriendStateName(int state);

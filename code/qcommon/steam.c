@@ -115,6 +115,7 @@ static void Steam_AuthListen(void);
 static void Steam_ServersListen(void);
 static void Steam_StatsListen(void);
 static void Steam_UserStatsListen(void);
+static void Steam_PersonaListen(void);
 
 typedef struct {
     void** vtable;
@@ -281,6 +282,7 @@ typedef struct {
     uint64_t(QDECL* UserRequestUserStats)(void* self, uint64_t steamId);
     steamBool_t(QDECL* UserGetUserStat)(void* self, uint64_t steamId, const char* name, int* value);
     steamCallback_t userStatsReceived;
+    steamCallback_t personaChange;
 
     uint64_t tracked[STEAM_MAX_TRACKED];
     int numTracked;
@@ -1269,6 +1271,7 @@ void Steam_Init(void) {
     }
     Steam_P2PListen(qfalse);
     Steam_UserStatsListen();
+    Steam_PersonaListen();
     Steam_SetRichPresence("At the main menu");
     Cmd_AddCommand("steamservers", Steam_ServerList_f);
     Cmd_AddCommand("steamstatus", Steam_Status_f);
@@ -1484,6 +1487,10 @@ void Steam_Shutdown(void) {
         if (st.userStatsReceived.vtable) {
             st.UnregisterCallback(&st.userStatsReceived);
             st.userStatsReceived.vtable = NULL;
+        }
+        if (st.personaChange.vtable) {
+            st.UnregisterCallback(&st.personaChange);
+            st.personaChange.vtable = NULL;
         }
         if (st.statsReceived.vtable) {
             st.UnregisterCallback(&st.statsReceived);
@@ -3060,6 +3067,65 @@ const char* Steam_PersonaName(void) {
         return NULL;
     }
     return st.GetPersonaName(st.friends);
+}
+
+const char* Steam_PlayerName(void) {
+    const char* persona;
+
+    if (Cvar_VariableIntegerValue("com_build")) {
+        return NULL;
+    }
+    persona = Steam_PersonaName();
+    return (persona && *persona) ? persona : NULL;
+}
+
+#define STEAM_CB_PERSONA_STATE_CHANGE 304
+#ifdef _WIN32
+#define STEAM_PERSONA_CHANGE_SIZE 16
+#else
+#define STEAM_PERSONA_CHANGE_SIZE 12
+#endif
+
+static void STEAM_CB Steam_CB_PersonaChange(STEAM_CB_SELF, void* param) {
+    const byte* data = (const byte*)param;
+    uint64_t steamId;
+    int flags;
+
+    Com_Memcpy(&steamId, data, sizeof(steamId));
+    Com_Memcpy(&flags, data + 8, sizeof(flags));
+    if (steamId && steamId == Steam_ClientSteamID() && (flags & 1)) {
+        const char* name = Steam_PlayerName();
+
+        if (name) {
+            Cvar_Set("name", name);
+        }
+    }
+}
+
+static void STEAM_CB Steam_CB_PersonaChangeIO(STEAM_CB_SELF, void* param, unsigned char failed, uint64_t call) {
+    (void)failed;
+    (void)call;
+    Steam_CB_PersonaChange(STEAM_CB_PASS, param);
+}
+
+static int STEAM_CB Steam_CB_PersonaChangeSize(STEAM_CB_SELF) {
+    return STEAM_PERSONA_CHANGE_SIZE;
+}
+
+static void* steamPersonaVTable[3];
+
+static void Steam_PersonaListen(void) {
+    if (!st.RegisterCallback || !st.friends || st.personaChange.vtable) {
+        return;
+    }
+    steamPersonaVTable[0] = (void*)Steam_CB_PersonaChangeIO;
+    steamPersonaVTable[1] = (void*)Steam_CB_PersonaChange;
+    steamPersonaVTable[2] = (void*)Steam_CB_PersonaChangeSize;
+
+    st.personaChange.vtable = steamPersonaVTable;
+    st.personaChange.flags = 0;
+    st.personaChange.id = STEAM_CB_PERSONA_STATE_CHANGE;
+    st.RegisterCallback(&st.personaChange, STEAM_CB_PERSONA_STATE_CHANGE);
 }
 
 int Steam_FriendCount(void) {
