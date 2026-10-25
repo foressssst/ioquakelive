@@ -1857,7 +1857,7 @@ void FBO_CopyScratchToMain( void ) {
 void FBO_PostProcess( void )
 {
 	const float obScale = 1 << tr.overbrightBits;
-	const float gamma = ( tr.frameHasWorld && !web_browserActive->integer ) ? 1.0f / r_gamma->value : 1.0f;
+	const float gamma = ( backEnd.frameHasWorld && !web_browserActive->integer ) ? 1.0f / r_gamma->value : 1.0f;
 	const float w = glConfig.vidWidth;
 	const float h = glConfig.vidHeight;
 	qboolean minimized;

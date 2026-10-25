@@ -156,6 +156,14 @@ void GLimp_Init(qboolean fixedFunction);
 qboolean GLimp_ApplyVideoMode(int* width, int* height);
 void GLimp_Shutdown(void);
 void GLimp_EndFrame(void);
+void GLimp_UpdateFullscreen(void);
+qboolean GLimp_SpawnRenderThread(void (*function)(void));
+void GLimp_ShutdownRenderThread(void);
+qboolean GLimp_IsRenderThread(void);
+void* GLimp_RendererSleep(void);
+qboolean GLimp_FrontEndSleep(void);
+void GLimp_FrontEndAcquire(void);
+void GLimp_WakeRenderer(void* data);
 
 void GLimp_LogComment(char* comment);
 void GLimp_Minimize(void);

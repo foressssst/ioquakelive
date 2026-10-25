@@ -69,6 +69,8 @@ void RE_RemapShader(const char *shaderName, const char *newShaderName, const cha
 		return;
 	}
 
+	R_WaitRenderThread();
+
 	COM_StripExtension(shaderName, strippedName, sizeof(strippedName));
 	hash = generateHashValue(strippedName, FILE_HASH_SIZE);
 	for (sh = hashTable[hash]; sh; sh = sh->next) {
@@ -2568,6 +2570,8 @@ static shader_t *R_FindShaderInner( const char *name, int lightmapIndex, qboolea
 		}
 	}
 
+	R_SyncRenderThread();
+
 	InitShader( strippedName, lightmapIndex );
 
 	shaderText = FindShaderInShaderText( strippedName );
@@ -2625,6 +2629,8 @@ qhandle_t RE_RegisterShaderFromImage(const char *name, int lightmapIndex, image_
 			return sh->index;
 		}
 	}
+
+	R_SyncRenderThread();
 
 	InitShader( name, lightmapIndex );
 

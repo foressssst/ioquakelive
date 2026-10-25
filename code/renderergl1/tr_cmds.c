@@ -21,6 +21,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "tr_local.h"
 
+#include <setjmp.h>
+
 static void R_PerformanceCounters( void ) {
 	if ( !r_speeds->integer ) {
 		Com_Memset( &tr.pc, 0, sizeof( tr.pc ) );
@@ -63,8 +65,155 @@ static void R_PerformanceCounters( void ) {
 	Com_Memset( &backEnd.pc, 0, sizeof( backEnd.pc ) );
 }
 
+static void (QDECL *smpPrintf)( int printLevel, const char *fmt, ... );
+static void (QDECL *smpError)( int errorLevel, const char *fmt, ... ) __attribute__ ((noreturn, format (printf, 2, 3)));
+static jmp_buf smpAbort;
+static char smpPrints[16384];
+static int smpPrintsLen;
+static int smpErrorLevel;
+static char smpErrorText[MAXPRINTMSG];
+static int smpBackEndMsec;
+
+static void QDECL R_SmpPrintf( int printLevel, const char *fmt, ... ) {
+	char text[MAXPRINTMSG];
+	va_list argptr;
+	int len;
+
+	va_start( argptr, fmt );
+	Q_vsnprintf( text, sizeof( text ), fmt, argptr );
+	va_end( argptr );
+
+	if ( !GLimp_IsRenderThread() ) {
+		smpPrintf( printLevel, "%s", text );
+		return;
+	}
+
+	len = (int)strlen( text ) + 1;
+	if ( smpPrintsLen + (int)sizeof( int ) + len > (int)sizeof( smpPrints ) ) {
+		return;
+	}
+	Com_Memcpy( smpPrints + smpPrintsLen, &printLevel, sizeof( int ) );
+	Com_Memcpy( smpPrints + smpPrintsLen + sizeof( int ), text, len );
+	smpPrintsLen += sizeof( int ) + len;
+}
+
+static void QDECL R_SmpError( int errorLevel, const char *fmt, ... ) __attribute__ ((noreturn, format (printf, 2, 3)));
+static void QDECL R_SmpError( int errorLevel, const char *fmt, ... ) {
+	char text[MAXPRINTMSG];
+	va_list argptr;
+
+	va_start( argptr, fmt );
+	Q_vsnprintf( text, sizeof( text ), fmt, argptr );
+	va_end( argptr );
+
+	if ( !GLimp_IsRenderThread() ) {
+		smpError( errorLevel, "%s", text );
+	}
+
+	if ( smpErrorLevel < 0 ) {
+		smpErrorLevel = errorLevel;
+		Q_strncpyz( smpErrorText, text, sizeof( smpErrorText ) );
+	}
+	longjmp( smpAbort, 1 );
+}
+
+static void R_SmpFlush( void ) {
+	int pos, level;
+
+	for ( pos = 0; pos < smpPrintsLen; pos += (int)strlen( smpPrints + pos ) + 1 ) {
+		Com_Memcpy( &level, smpPrints + pos, sizeof( int ) );
+		pos += sizeof( int );
+		smpPrintf( level, "%s", smpPrints + pos );
+	}
+	smpPrintsLen = 0;
+}
+
+static void R_SmpRaise( void ) {
+	int level;
+
+	if ( smpErrorLevel < 0 ) {
+		return;
+	}
+	level = smpErrorLevel;
+	smpErrorLevel = -1;
+	smpError( level, "%s", smpErrorText );
+}
+
+static void RB_RenderThread( void ) {
+	const backEndData_t *data;
+
+	setjmp( smpAbort );
+
+	while ( ( data = GLimp_RendererSleep() ) != NULL ) {
+		RB_ExecuteRenderCommands( data );
+	}
+}
+
+void R_InitCommandBuffers( void ) {
+	glConfig.smpActive = qfalse;
+
+	if ( !r_smp->integer || !backEndDatas[1] ) {
+		return;
+	}
+
+	ri.Printf( PRINT_ALL, "Trying SMP acceleration...\n" );
+
+	smpPrintsLen = 0;
+	smpErrorLevel = -1;
+
+	if ( !GLimp_SpawnRenderThread( RB_RenderThread ) ) {
+		ri.Printf( PRINT_ALL, "...failed.\n" );
+		return;
+	}
+
+	ri.Printf( PRINT_ALL, "...succeeded.\n" );
+
+	smpPrintf = ri.Printf;
+	smpError = ri.Error;
+	ri.Printf = R_SmpPrintf;
+	ri.Error = R_SmpError;
+
+	glConfig.smpActive = qtrue;
+}
+
+void R_ShutdownCommandBuffers( void ) {
+	if ( !glConfig.smpActive ) {
+		return;
+	}
+
+	GLimp_ShutdownRenderThread();
+
+	glConfig.smpActive = qfalse;
+
+	R_SmpFlush();
+	if ( smpErrorLevel >= 0 ) {
+		smpPrintf( PRINT_WARNING, "%s\n", smpErrorText );
+		smpErrorLevel = -1;
+	}
+
+	ri.Printf = smpPrintf;
+	ri.Error = smpError;
+}
+
+void R_SyncRenderThread( void ) {
+	if ( !glConfig.smpActive || GLimp_IsRenderThread() ) {
+		return;
+	}
+	GLimp_FrontEndAcquire();
+	R_SmpFlush();
+}
+
+void R_WaitRenderThread( void ) {
+	if ( !glConfig.smpActive || GLimp_IsRenderThread() ) {
+		return;
+	}
+	GLimp_FrontEndSleep();
+	R_SmpFlush();
+}
+
 static void R_IssueRenderCommands( void ) {
 	renderCommandList_t	*cmdList;
+	qboolean screenshot;
 
 	cmdList = &backEndData->commands;
 
@@ -72,7 +221,30 @@ static void R_IssueRenderCommands( void ) {
 
 	cmdList->used = 0;
 
-	if ( backEnd.screenshotMask == 0 ) {
+	backEndData->smpFrame = tr.smpFrame;
+	backEndData->frameCount = tr.frameCount;
+	backEndData->frameSceneNum = tr.frameSceneNum;
+	backEndData->frameHasWorld = tr.frameHasWorld;
+
+	if ( glConfig.smpActive ) {
+		if ( GLimp_FrontEndSleep() ) {
+			if ( r_showSmp->integer ) {
+				ri.Printf( PRINT_ALL, "R" );
+			}
+		} else if ( r_showSmp->integer ) {
+			ri.Printf( PRINT_ALL, "." );
+		}
+
+		R_SmpFlush();
+		R_SmpRaise();
+
+		smpBackEndMsec = backEnd.pc.msec;
+		R_PerformanceCounters();
+	}
+
+	screenshot = backEnd.screenshotMask ? qtrue : qfalse;
+
+	if ( !screenshot ) {
 		if ( RI_CL_IsMinimized() )
 			return;
 		if ( backEnd.throttle )
@@ -80,7 +252,15 @@ static void R_IssueRenderCommands( void ) {
 	}
 
 	if ( !r_skipBackEnd->integer ) {
-		RB_ExecuteRenderCommands( cmdList->cmds );
+		if ( glConfig.smpActive ) {
+			GLimp_UpdateFullscreen();
+			GLimp_WakeRenderer( backEndData );
+			if ( screenshot ) {
+				R_WaitRenderThread();
+			}
+		} else {
+			RB_ExecuteRenderCommands( backEndData );
+		}
 	}
 }
 
@@ -89,6 +269,7 @@ void R_IssuePendingRenderCommands( void ) {
 		return;
 	}
 	R_IssueRenderCommands();
+	R_WaitRenderThread();
 }
 
 static void *R_GetCommandBufferReserved( int bytes, int reservedBytes ) {
@@ -227,16 +408,8 @@ void RE_BeginFrame( stereoFrame_t stereoFrame ) {
 		return;
 	}
 
-	glState.finishCalled = qfalse;
-
 	tr.frameCount++;
 	tr.frameSceneNum = 0;
-
-	backEnd.doneBloom = qfalse;
-
-	backEnd.color2D.u32 = ~0U;
-
-	GL_CheckErrors();
 
 	if ( ( cmd = R_GetCommandBuffer( sizeof( *cmd ) ) ) == NULL )
 		return;
@@ -351,7 +524,9 @@ void RE_EndFrame( int *frontEndMsec, int *backEndMsec ) {
 
 	R_IssueRenderCommands();
 
-	R_PerformanceCounters();
+	if ( !glConfig.smpActive ) {
+		R_PerformanceCounters();
+	}
 
 	R_InitNextFrame();
 
@@ -360,13 +535,17 @@ void RE_EndFrame( int *frontEndMsec, int *backEndMsec ) {
 	}
 	tr.frontEndMsec = 0;
 	if ( backEndMsec ) {
-		*backEndMsec = backEnd.pc.msec;
+		*backEndMsec = glConfig.smpActive ? smpBackEndMsec : backEnd.pc.msec;
 	}
-	backEnd.pc.msec = 0;
+	if ( !glConfig.smpActive ) {
+		backEnd.pc.msec = 0;
+	}
 	backEnd.throttle = qfalse;
 
 	if ( RI_Cvar_CheckGroup( CVG_RENDERER ) )
 	{
+		R_SyncRenderThread();
+
 		ARB_UpdatePrograms();
 
 #ifdef USE_FBO
@@ -392,6 +571,8 @@ void RE_TakeVideoFrame( int width, int height,
 	if( !tr.registered ) {
 		return;
 	}
+
+	R_WaitRenderThread();
 
 	backEnd.screenshotMask |= SCREENSHOT_AVI;
 

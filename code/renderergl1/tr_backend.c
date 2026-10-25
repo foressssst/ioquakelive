@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tr_local.h"
 
 backEndData_t	*backEndData;
+backEndData_t	*backEndDatas[SMP_FRAMES];
 backEndState_t	backEnd;
 
 const float *GL_Ortho( const float left, const float right, const float bottom, const float top, const float znear, const float zfar )
@@ -811,6 +812,8 @@ void RE_StretchRaw( int x, int y, int w, int h, int cols, int rows, const byte *
 		return;
 	}
 
+	R_SyncRenderThread();
+
 	start = 0;
 	if ( r_speeds->integer ) {
 		start = ri.Milliseconds();
@@ -838,6 +841,8 @@ void RE_StretchRaw( int x, int y, int w, int h, int cols, int rows, const byte *
 void RE_UploadCinematic( int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty ) {
 
 	image_t *image;
+
+	R_SyncRenderThread();
 
 	if ( !tr.scratchImage[ client ] ) {
 		tr.scratchImage[ client ] = R_CreateImage( va( "*scratch%i", client ), NULL, (byte *)data, cols, rows, IMGFLAG_CLAMPTOEDGE | IMGFLAG_RGB | IMGFLAG_NOSCALE );
@@ -1189,7 +1194,7 @@ static const void *RB_FinishBloom( const void *data )
 
 	if ( fboEnabled )
 	{
-		if ( blitMSfbo && tr.frameSceneNum == 1 )
+		if ( blitMSfbo && backEnd.frameSceneNum == 1 )
 		{
 			FBO_BlitMS( qfalse );
 			blitMSfbo = qfalse;
@@ -1244,7 +1249,7 @@ static const void *RB_SwapBuffers( const void *data ) {
 
 	backEnd.pc.msec = ri.Milliseconds() - backEnd.pc.msec;
 
-	if ( backEnd.screenshotMask && tr.frameCount > 1 ) {
+	if ( backEnd.screenshotMask && backEnd.frameCount > 1 ) {
 #ifdef USE_FBO
 		if ( superSampled ) {
 			qglScissor( 0, 0, gls.captureWidth, gls.captureHeight );
@@ -1315,9 +1320,23 @@ static const void *RB_SwapBuffers( const void *data ) {
 	return (const void *)(cmd + 1);
 }
 
-void RB_ExecuteRenderCommands( const void *data ) {
+void RB_ExecuteRenderCommands( const backEndData_t *frame ) {
+	const void *data;
+
+	backEnd.smpFrame = frame->smpFrame;
+	backEnd.frameCount = frame->frameCount;
+	backEnd.frameSceneNum = frame->frameSceneNum;
+	backEnd.frameHasWorld = frame->frameHasWorld;
+
+	glState.finishCalled = qfalse;
+	backEnd.doneBloom = qfalse;
+	backEnd.color2D.u32 = ~0U;
+
+	GL_CheckErrors();
 
 	backEnd.pc.msec = ri.Milliseconds();
+
+	data = frame->commands.cmds;
 
 	while ( 1 ) {
 		data = PADP(data, sizeof(void *));

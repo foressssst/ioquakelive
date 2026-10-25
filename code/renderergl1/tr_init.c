@@ -52,6 +52,8 @@ cvar_t	*r_zproj;
 cvar_t	*r_stereoSeparation;
 
 cvar_t	*r_skipBackEnd;
+cvar_t	*r_smp;
+cvar_t	*r_showSmp;
 
 cvar_t	*r_anaglyphMode;
 
@@ -996,6 +998,8 @@ static void R_ScreenShot_f( void ) {
 		return;
 	}
 
+	R_WaitRenderThread();
+
 	if ( !strcmp( ri.Cmd_Argv(1), "levelshot" ) ) {
 		if ( tr.world ) {
 			backEnd.screenshotMask |= SCREENSHOT_LEVELSHOT;
@@ -1256,6 +1260,10 @@ static void VarInfo( void )
 	if ( r_finish->integer ) {
 		ri.Printf( PRINT_ALL, "Forcing glFinish\n" );
 	}
+
+	if ( glConfig.smpActive ) {
+		ri.Printf( PRINT_ALL, "Using dual processor acceleration\n" );
+	}
 }
 
 static void GfxInfo_f( void )
@@ -1293,10 +1301,11 @@ static void R_Register( void )
 	ri.Cvar_Get( "r_measureOverdraw", "0", CVAR_CHEAT );
 	ri.Cvar_Get( "r_noFastRestart", "0", CVAR_ARCHIVE );
 	ri.Cvar_Get( "r_primitives", "0", CVAR_ARCHIVE );
-	ri.Cvar_Get( "r_showSmp", "0", CVAR_CHEAT );
+	r_showSmp = ri.Cvar_Get( "r_showSmp", "0", CVAR_CHEAT );
 	ri.Cvar_Get( "r_skipLargeBatches", "0", CVAR_CHEAT );
 	ri.Cvar_Get( "r_skipSmallBatches", "0", CVAR_CHEAT );
-	ri.Cvar_Get( "r_smp", "0", CVAR_ROM );
+	r_smp = ri.Cvar_Get( "r_smp", "0", CVAR_ARCHIVE | CVAR_LATCH );
+	ri.Cvar_SetDescription( r_smp, "Multithreaded rendering: the previous frame is drawn on its own thread while the next one is prepared. Adds one frame of latency. Requires vid_restart." );
 	ri.Cvar_Get( "r_stereo", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	ri.Cvar_Get( "r_verbose", "0", CVAR_CHEAT );
 
@@ -1638,6 +1647,8 @@ void R_Init( void ) {
 
 	ri.Printf( PRINT_ALL, "----- R_Init -----\n" );
 
+	R_ShutdownCommandBuffers();
+
 	Com_Memset( &tr, 0, sizeof( tr ) );
 	Com_Memset( &backEnd, 0, sizeof( backEnd ) );
 	Com_Memset( &tess, 0, sizeof( tess ) );
@@ -1684,14 +1695,19 @@ void R_Init( void ) {
 	max_polys = r_maxpolys->integer;
 	max_polyverts = r_maxpolyverts->integer;
 
-	ptr = ri.Hunk_Alloc( sizeof( *backEndData ) + sizeof(srfPoly_t) * max_polys + sizeof(polyVert_t) * max_polyverts, h_low);
-	backEndData = (backEndData_t *) ptr;
-	backEndData->polys = (srfPoly_t *) ((char *) ptr + sizeof( *backEndData ));
-	backEndData->polyVerts = (polyVert_t *) ((char *) ptr + sizeof( *backEndData ) + sizeof(srfPoly_t) * max_polys);
+	Com_Memset( backEndDatas, 0, sizeof( backEndDatas ) );
+	for ( i = 0; i < ( r_smp->integer ? SMP_FRAMES : 1 ); i++ ) {
+		ptr = ri.Hunk_Alloc( sizeof( *backEndData ) + sizeof(srfPoly_t) * max_polys + sizeof(polyVert_t) * max_polyverts, h_low);
+		backEndDatas[i] = (backEndData_t *) ptr;
+		backEndDatas[i]->polys = (srfPoly_t *) ((char *) ptr + sizeof( *backEndData ));
+		backEndDatas[i]->polyVerts = (polyVert_t *) ((char *) ptr + sizeof( *backEndData ) + sizeof(srfPoly_t) * max_polys);
+	}
 
 	R_InitNextFrame();
 
 	InitOpenGL();
+
+	R_InitCommandBuffers();
 
 	R_InitImages();
 
@@ -1719,6 +1735,8 @@ static qboolean RE_WindowResized( int width, int height )
 
 	if ( gls.windowWidth == width && gls.windowHeight == height )
 		return qtrue;
+
+	R_SyncRenderThread();
 
 	gls.windowWidth = width;
 	gls.windowHeight = height;
@@ -1758,6 +1776,8 @@ static qboolean RE_ApplyVideoMode( glconfig_t *config )
 	}
 
 	R_RegisterWindowCvars();
+
+	R_SyncRenderThread();
 
 	if ( !GLimp_ApplyVideoMode( &width, &height ) ) {
 		return qfalse;
@@ -1801,6 +1821,8 @@ static void RE_Shutdown( qboolean destroyWindow ) {
 	refShutdownCode_t code = destroyWindow ? REF_UNLOAD_DLL : REF_KEEP_CONTEXT;
 
 	ri.Printf( PRINT_ALL, "RE_Shutdown( %i )\n", code );
+
+	R_ShutdownCommandBuffers();
 
 	ri.Cmd_RemoveCommand( "modellist" );
 	ri.Cmd_RemoveCommand( "modelist" );

@@ -111,6 +111,7 @@ static unsigned int R_Font_PackColor( const vec4_t c ) {
 }
 
 static void R_Font_DefineAtlas( int width, int height ) {
+	R_SyncRenderThread();
 	GL_Bind( fontImage );
 	qglTexImage2D( GL_TEXTURE_2D, 0, GL_ALPHA8, width, height, 0, GL_ALPHA, GL_UNSIGNED_BYTE, NULL );
 	qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
@@ -161,6 +162,7 @@ static void RB_Font_renderUpdate( void *uptr, int *rect, const unsigned char *da
 		return;
 	}
 
+	R_SyncRenderThread();
 	GL_Bind( fontImage );
 	qglPixelStorei( GL_UNPACK_ALIGNMENT, 1 );
 	qglPixelStorei( GL_UNPACK_ROW_LENGTH, fontAtlasWidth );

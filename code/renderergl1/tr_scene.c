@@ -39,6 +39,13 @@ static int			r_numpolyverts;
 
 void R_InitNextFrame( void ) {
 
+	if ( glConfig.smpActive ) {
+		tr.smpFrame ^= 1;
+	} else {
+		tr.smpFrame = 0;
+	}
+	backEndData = backEndDatas[ tr.smpFrame ];
+
 	backEndData->commands.used = 0;
 
 	tr.frameHasWorld = qfalse;

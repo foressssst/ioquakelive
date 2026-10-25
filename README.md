@@ -246,6 +246,7 @@ Las siguientes tablas documentan las áreas portadas y su estado actual. Los nom
 | Bloom | Hecho | Utiliza los valores del original. |
 | Threaded textures | Hecho | Carga de imágenes JPEG, TGA y PNG. |
 | Queued frames | Hecho | Control mediante `r_maxQueuedFrames`, con valor predeterminado de 0. |
+| Multithreaded rendering | Hecho | `r_smp 1` en OpenGL dibuja cada cuadro en un hilo propio mientras se prepara el siguiente: más FPS a cambio de un cuadro de latencia. Apagado por defecto; no disponible en macOS. |
 
 ## Compilar
 

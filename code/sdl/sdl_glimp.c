@@ -1138,19 +1138,192 @@ void* GLimp_GetProcAddress(const char* name) {
     return (void*)SDL_GL_GetProcAddress(name);
 }
 
-void GLimp_EndFrame(void) {
-    if (Q_stricmp(r_drawBuffer->string, "GL_FRONT") != 0) {
-        SDL_GL_SwapWindow(SDL_window);
+enum { SMP_NOBODY, SMP_FRONTEND, SMP_RENDERER };
+
+static SDL_Thread* smpThread = NULL;
+static SDL_ThreadID smpThreadId;
+static SDL_Mutex* smpMutex = NULL;
+static SDL_Condition* smpCond = NULL;
+static void (*smpFunction)(void);
+static void* volatile smpData;
+static qboolean smpBusy;
+static qboolean smpQuit;
+static qboolean smpRelease;
+static int smpOwner;
+
+static void GLimp_DestroyRenderSync(void) {
+    if (smpCond) {
+        SDL_DestroyCondition(smpCond);
+        smpCond = NULL;
+    }
+    if (smpMutex) {
+        SDL_DestroyMutex(smpMutex);
+        smpMutex = NULL;
+    }
+}
+
+static int SDLCALL GLimp_RenderThreadMain(void* arg) {
+    (void)arg;
+    smpFunction();
+    return 0;
+}
+
+qboolean GLimp_SpawnRenderThread(void (*function)(void)) {
+#ifdef __APPLE__
+    (void)function;
+    return qfalse;
+#else
+    if (smpThread) {
+        return qtrue;
     }
 
-    if (r_swapInterval->modified) {
-        r_swapInterval->modified = qfalse;
+    smpMutex = SDL_CreateMutex();
+    smpCond = SDL_CreateCondition();
+    if (!smpMutex || !smpCond) {
+        GLimp_DestroyRenderSync();
+        return qfalse;
+    }
 
-        if (!SDL_GL_SetSwapInterval(r_swapInterval->integer)) {
-            ri.Printf(PRINT_DEVELOPER, "SDL_GL_SetSwapInterval failed: %s\n", SDL_GetError());
+    smpFunction = function;
+    smpData = NULL;
+    smpBusy = qfalse;
+    smpQuit = qfalse;
+    smpRelease = qfalse;
+    smpOwner = SMP_FRONTEND;
+
+    smpThread = SDL_CreateThread(GLimp_RenderThreadMain, "render", NULL);
+    if (!smpThread) {
+        ri.Printf(PRINT_DEVELOPER, "SDL_CreateThread failed: %s\n", SDL_GetError());
+        GLimp_DestroyRenderSync();
+        return qfalse;
+    }
+    smpThreadId = SDL_GetThreadID(smpThread);
+
+    return qtrue;
+#endif
+}
+
+void GLimp_ShutdownRenderThread(void) {
+    if (!smpThread) {
+        return;
+    }
+
+    SDL_LockMutex(smpMutex);
+    while (smpData || smpBusy) {
+        SDL_WaitCondition(smpCond, smpMutex);
+    }
+    smpQuit = qtrue;
+    SDL_BroadcastCondition(smpCond);
+    SDL_UnlockMutex(smpMutex);
+
+    SDL_WaitThread(smpThread, NULL);
+    smpThread = NULL;
+
+    if (smpOwner != SMP_FRONTEND) {
+        SDL_GL_MakeCurrent(SDL_window, SDL_glContext);
+        smpOwner = SMP_FRONTEND;
+    }
+
+    GLimp_DestroyRenderSync();
+}
+
+qboolean GLimp_IsRenderThread(void) {
+    return (smpThread && SDL_GetCurrentThreadID() == smpThreadId) ? qtrue : qfalse;
+}
+
+void* GLimp_RendererSleep(void) {
+    void* data;
+
+    SDL_LockMutex(smpMutex);
+
+    smpBusy = qfalse;
+    SDL_BroadcastCondition(smpCond);
+
+    for (;;) {
+        if (smpRelease) {
+            if (smpOwner == SMP_RENDERER) {
+                SDL_GL_MakeCurrent(SDL_window, NULL);
+                smpOwner = SMP_NOBODY;
+            }
+            smpRelease = qfalse;
+            SDL_BroadcastCondition(smpCond);
+        }
+        if (smpData || smpQuit) {
+            break;
+        }
+        SDL_WaitCondition(smpCond, smpMutex);
+    }
+
+    if (smpQuit) {
+        if (smpOwner == SMP_RENDERER) {
+            SDL_GL_MakeCurrent(SDL_window, NULL);
+            smpOwner = SMP_NOBODY;
+        }
+        SDL_BroadcastCondition(smpCond);
+        SDL_UnlockMutex(smpMutex);
+        return NULL;
+    }
+
+    data = smpData;
+    smpData = NULL;
+    smpBusy = qtrue;
+
+    if (smpOwner != SMP_RENDERER) {
+        SDL_GL_MakeCurrent(SDL_window, SDL_glContext);
+        smpOwner = SMP_RENDERER;
+    }
+
+    SDL_UnlockMutex(smpMutex);
+
+    return data;
+}
+
+qboolean GLimp_FrontEndSleep(void) {
+    qboolean waited;
+
+    SDL_LockMutex(smpMutex);
+    waited = (smpData || smpBusy) ? qtrue : qfalse;
+    while (smpData || smpBusy) {
+        SDL_WaitCondition(smpCond, smpMutex);
+    }
+    SDL_UnlockMutex(smpMutex);
+
+    return waited;
+}
+
+void GLimp_FrontEndAcquire(void) {
+    if (smpOwner == SMP_FRONTEND) {
+        return;
+    }
+
+    SDL_LockMutex(smpMutex);
+    while (smpData || smpBusy) {
+        SDL_WaitCondition(smpCond, smpMutex);
+    }
+    if (smpOwner == SMP_RENDERER) {
+        smpRelease = qtrue;
+        SDL_BroadcastCondition(smpCond);
+        while (smpOwner == SMP_RENDERER) {
+            SDL_WaitCondition(smpCond, smpMutex);
         }
     }
+    SDL_GL_MakeCurrent(SDL_window, SDL_glContext);
+    smpOwner = SMP_FRONTEND;
+    SDL_UnlockMutex(smpMutex);
+}
 
+void GLimp_WakeRenderer(void* data) {
+    SDL_LockMutex(smpMutex);
+    if (smpOwner == SMP_FRONTEND) {
+        SDL_GL_MakeCurrent(SDL_window, NULL);
+        smpOwner = SMP_NOBODY;
+    }
+    smpData = data;
+    SDL_BroadcastCondition(smpCond);
+    SDL_UnlockMutex(smpMutex);
+}
+
+void GLimp_UpdateFullscreen(void) {
     if (r_fullscreen->modified) {
         int fullscreen;
         qboolean needToToggle;
@@ -1176,6 +1349,24 @@ void GLimp_EndFrame(void) {
         }
 
         r_fullscreen->modified = qfalse;
+    }
+}
+
+void GLimp_EndFrame(void) {
+    if (Q_stricmp(r_drawBuffer->string, "GL_FRONT") != 0) {
+        SDL_GL_SwapWindow(SDL_window);
+    }
+
+    if (r_swapInterval->modified) {
+        r_swapInterval->modified = qfalse;
+
+        if (!SDL_GL_SetSwapInterval(r_swapInterval->integer)) {
+            ri.Printf(PRINT_DEVELOPER, "SDL_GL_SetSwapInterval failed: %s\n", SDL_GetError());
+        }
+    }
+
+    if (!smpThread) {
+        GLimp_UpdateFullscreen();
     }
 }
 

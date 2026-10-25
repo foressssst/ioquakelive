@@ -669,6 +669,7 @@ void R_UploadSubImage( byte *data, int x, int y, int width, int height, image_t 
 {
 	if ( image )
 	{
+		R_SyncRenderThread();
 		GL_Bind( image );
 		Upload32( data, x, y, width, height, image, qtrue );
 	}
@@ -682,6 +683,8 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 	int			currTMU;
 	int			namelen, namelen2;
 	const char	*slash;
+
+	R_SyncRenderThread();
 
 	namelen = (int)strlen( name ) + 1;
 	if ( namelen > MAX_QPATH ) {

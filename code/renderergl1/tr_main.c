@@ -890,6 +890,8 @@ static qboolean R_MirrorViewBySurface( const drawSurf_t *drawSurf, int entityNum
 		return qfalse;
 	}
 
+	R_WaitRenderThread();
+
 	if ( SurfIsOffscreen( drawSurf, &isMirror ) ) {
 		return qfalse;
 	}
