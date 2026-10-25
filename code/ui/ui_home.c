@@ -629,14 +629,118 @@ static const hmItem_t hmMenus[HM_NUM_MENUS][HM_MAX_ITEMS] = {
     },
 };
 
+#define HM_GRADIENT_SIDE 256
+#define HM_GRADIENT_CACHE 16
+
 static struct {
     qboolean loaded;
-    qhandle_t bg, vignette, logo, ranger, idLogo, bethLogo;
+    qhandle_t bg, gradient, logo, ranger, idLogo, bethLogo;
+    char bgColor[MAX_CVAR_VALUE_STRING];
+    int numGradients;
+    byte gradientColor[HM_GRADIENT_CACHE][4];
+    qhandle_t gradients[HM_GRADIENT_CACHE];
     qboolean legalsViewed;
     int legalsStart;
     int legalsLeave;
     int panel;
 } hr;
+
+static qboolean UI_Home_ParseBgColor(const char* s, byte* out) {
+    float v[4];
+    char* end;
+    int i;
+
+    for (i = 0; i < 4; i++) {
+        while (*s == ' ') {
+            s++;
+        }
+        v[i] = (float)strtod(s, &end);
+        if (end == s) {
+            return qfalse;
+        }
+        s = end;
+        while (*s == ' ') {
+            s++;
+        }
+        if (i < 3 && *s == '%') {
+            v[i] *= 2.55f;
+            s++;
+            while (*s == ' ') {
+                s++;
+            }
+        }
+        if (i < 3) {
+            if (*s != ',') {
+                return qfalse;
+            }
+            s++;
+        }
+    }
+    if (*s) {
+        return qfalse;
+    }
+    for (i = 0; i < 3; i++) {
+        out[i] = (byte)Com_Clamp(0, 255, floorf(v[i] + 0.5f));
+    }
+    out[3] = (byte)floorf(Com_Clamp(0, 1, v[3]) * 255.0f + 0.5f);
+    return qtrue;
+}
+
+static qhandle_t UI_Home_Gradient(const byte* inner) {
+    static byte rgba[HM_GRADIENT_SIDE * HM_GRADIENT_SIDE * 4];
+    const float outerAlpha = 0.8f;
+    float innerAlpha = inner[3] / 255.0f;
+    int i, x, y;
+
+    for (i = 0; i < hr.numGradients; i++) {
+        if (!memcmp(hr.gradientColor[i], inner, 4)) {
+            return hr.gradients[i];
+        }
+    }
+    if (hr.numGradients == HM_GRADIENT_CACHE) {
+        return hr.gradient;
+    }
+
+    for (y = 0; y < HM_GRADIENT_SIDE; y++) {
+        for (x = 0; x < HM_GRADIENT_SIDE; x++) {
+            float u = ((x + 0.5f) / HM_GRADIENT_SIDE * 2.0f - 1.0f) / 1.41421356f;
+            float v = ((y + 0.5f) / HM_GRADIENT_SIDE * 2.0f - 1.0f) / 1.41421356f;
+            float t = sqrtf(u * u + v * v);
+            float f = t <= 0.1f ? 0.0f : MIN(1.0f, (t - 0.1f) / 0.9f);
+            byte* p = &rgba[(y * HM_GRADIENT_SIDE + x) * 4];
+
+            p[0] = (byte)(inner[0] * (1.0f - f) + 0.5f);
+            p[1] = (byte)(inner[1] * (1.0f - f) + 0.5f);
+            p[2] = (byte)(inner[2] * (1.0f - f) + 0.5f);
+            p[3] = (byte)((innerAlpha + (outerAlpha - innerAlpha) * f) * 255.0f + 0.5f);
+        }
+    }
+
+    i = hr.numGradients++;
+    memcpy(hr.gradientColor[i], inner, 4);
+    hr.gradients[i] = trap_R_RegisterShaderFromRaw(va("*uibg_%d_%d_%d_%d", inner[0], inner[1], inner[2], inner[3]), rgba,
+                                                   HM_GRADIENT_SIDE, HM_GRADIENT_SIDE);
+    return hr.gradients[i];
+}
+
+static void UI_Home_UpdateGradient(void) {
+    static const byte retail[4] = {0, 102, 153, 51};
+    char color[MAX_CVAR_VALUE_STRING];
+    byte inner[4];
+
+    trap_Cvar_VariableStringBuffer("ui_bgcolor", color, sizeof(color));
+    if (hr.gradient && !strcmp(color, hr.bgColor)) {
+        return;
+    }
+    Q_strncpyz(hr.bgColor, color, sizeof(hr.bgColor));
+    if (!color[0]) {
+        hr.gradient = UI_Home_Gradient(retail);
+    } else if (UI_Home_ParseBgColor(color, inner)) {
+        hr.gradient = UI_Home_Gradient(inner);
+    } else if (!hr.gradient) {
+        hr.gradient = UI_Home_Gradient(retail);
+    }
+}
 
 static void UI_Home_LoadRetail(void) {
     if (hr.loaded) {
@@ -644,7 +748,6 @@ static void UI_Home_LoadRetail(void) {
     }
     hr.loaded = qtrue;
     hr.bg = trap_R_RegisterShaderNoMip("webui/img/bg.jpg");
-    hr.vignette = trap_R_RegisterShaderNoMip("ui/ioql/vignette.png");
     hr.logo = trap_R_RegisterShaderNoMip("webui/img/logo.png");
     hr.ranger = trap_R_RegisterShaderNoMip("webui/img/characters/ranger.png");
     hr.idLogo = trap_R_RegisterShaderNoMip("webui/img/id-logo-footer.png");
@@ -684,8 +787,9 @@ void UI_Home_RetailBackdrop(void) {
             }
         }
     }
-    if (hr.vignette) {
-        SM_Pic(0, top, smVW, smBottom - top, hr.vignette, NULL);
+    UI_Home_UpdateGradient();
+    if (hr.gradient) {
+        SM_Pic(0, top, smVW, smBottom - top, hr.gradient, NULL);
     }
 }
 

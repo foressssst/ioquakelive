@@ -761,6 +761,9 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
         case UI_DEMO_INFO:
             return CL_DemoInfo(VMA(1), VMA(2), args[3]);
 
+        case UI_R_REGISTERSHADERFROMRAW:
+            return re.RegisterShaderFromRaw ? re.RegisterShaderFromRaw(VMA(1), VMA(2), args[3], args[4]) : 0;
+
         case UI_LAN_SERVER_NAME: {
             char* buf = VMA(3);
 

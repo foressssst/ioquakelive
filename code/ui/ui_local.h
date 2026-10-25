@@ -885,6 +885,7 @@ qboolean trap_LAN_SteamDetails(const char* address);
 int trap_LAN_SteamDetailsGet(char* rules, int rulesSize, char* players, int playersSize);
 qboolean trap_LAN_SteamDetailsInfo(char* info, int infoSize);
 qboolean trap_DemoInfo(const char* file, char* info, int infoSize);
+qhandle_t trap_R_RegisterShaderFromRaw(const char* name, const byte* rgba, int width, int height);
 qboolean trap_LAN_SteamFavorite(const char* address, qboolean favorite);
 void trap_LAN_ServerName(int source, int n, char* buf, int size);
 

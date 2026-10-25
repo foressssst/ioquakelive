@@ -237,6 +237,10 @@ qboolean trap_DemoInfo(const char* file, char* info, int infoSize) {
     return syscall(UI_DEMO_INFO, file, info, infoSize);
 }
 
+qhandle_t trap_R_RegisterShaderFromRaw(const char* name, const byte* rgba, int width, int height) {
+    return syscall(UI_R_REGISTERSHADERFROMRAW, name, rgba, width, height);
+}
+
 qboolean trap_LAN_SteamFavorite(const char* address, qboolean favorite) {
     return syscall(UI_LAN_STEAM_FAVORITE, address, favorite);
 }
