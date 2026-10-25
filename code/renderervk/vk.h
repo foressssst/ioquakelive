@@ -257,6 +257,7 @@ void vk_create_pipelines( void );
 void vk_clear_color( const vec4_t color );
 void vk_clear_depth( qboolean clear_stencil );
 void vk_window_resized( void );
+qboolean vk_swapchain_ready( void );
 void vk_begin_frame( void );
 void vk_end_frame( void );
 void vk_present_frame( void );
@@ -565,6 +566,8 @@ typedef struct {
 	uint64_t latencyValue;
 	int latencyModeSet;
 	int latencyMaxFps;
+	qboolean latencyLive;
+	qboolean swapchainPending;
 
 	float maxAnisotropy;
 	float maxLod;

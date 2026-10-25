@@ -85,6 +85,12 @@ static void R_IssueRenderCommands( void ) {
 #endif
 	}
 
+#ifdef USE_VULKAN
+	if ( !vk_swapchain_ready() ) {
+		return;
+	}
+#endif
+
 	if ( !r_skipBackEnd->integer ) {
 		RB_ExecuteRenderCommands( cmdList->cmds );
 	}

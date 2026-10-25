@@ -463,6 +463,11 @@ static void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice devi
 		image_extent.height = MIN( surface_caps.maxImageExtent.height, MAX( surface_caps.minImageExtent.height, (uint32_t) glConfig.vidHeight ) );
 	}
 
+	if ( image_extent.width && image_extent.height ) {
+		gls.windowWidth = image_extent.width;
+		gls.windowHeight = image_extent.height;
+	}
+
 	vk.clearAttachment = qtrue;
 
 	if ( !vk.fboActive ) {
@@ -3635,7 +3640,7 @@ static void vk_create_sync_primitives( void ) {
 	VkFenceCreateInfo fence_desc;
 	uint32_t i;
 
-	if ( vk.lowLatency2 ) {
+	if ( vk.lowLatency2 && vk.latencySemaphore == VK_NULL_HANDLE ) {
 		VkSemaphoreTypeCreateInfo type_desc;
 		VkSemaphoreCreateInfo latency_desc;
 
@@ -3699,14 +3704,16 @@ static void vk_create_sync_primitives( void ) {
 #endif
 }
 
-static void vk_destroy_sync_primitives( void  ) {
-	uint32_t i;
-
+static void vk_destroy_latency_semaphore( void ) {
 	if ( vk.latencySemaphore != VK_NULL_HANDLE ) {
 		qvkDestroySemaphore( vk.device, vk.latencySemaphore, NULL );
 		vk.latencySemaphore = VK_NULL_HANDLE;
 		vk.latencyValue = 0;
 	}
+}
+
+static void vk_destroy_sync_primitives( void  ) {
+	uint32_t i;
 
 #ifdef USE_UPLOAD_QUEUE
 	qvkDestroySemaphore( vk.device, vk.image_uploaded2, NULL );
@@ -3787,12 +3794,30 @@ static void vk_destroy_swapchain( void ) {
 }
 
 static void vk_destroy_attachments( void );
+static void vk_set_render_scale( void );
 static void vk_destroy_render_passes( void );
 static void vk_destroy_pipelines( qboolean resetCount );
+
+static qboolean vk_surface_has_extent( void )
+{
+	VkSurfaceCapabilitiesKHR caps;
+
+	if ( qvkGetPhysicalDeviceSurfaceCapabilitiesKHR( vk.physical_device, vk_surface, &caps ) != VK_SUCCESS ) {
+		return qfalse;
+	}
+
+	return ( caps.currentExtent.width != 0 && caps.currentExtent.height != 0 ) ? qtrue : qfalse;
+}
 
 static void vk_restart_swapchain( const char *funcname, VkResult res )
 {
 	uint32_t i;
+
+	if ( !vk_surface_has_extent() ) {
+		vk.swapchainPending = qtrue;
+		return;
+	}
+	vk.swapchainPending = qfalse;
 
 #ifdef _DEBUG
 	ri.Printf( PRINT_WARNING, "%s(%s): restarting swapchain...\n", funcname, vk_result_string( res ) );
@@ -3804,6 +3829,7 @@ static void vk_restart_swapchain( const char *funcname, VkResult res )
 
 	for ( i = 0; i < NUM_COMMAND_BUFFERS; i++ ) {
 		qvkResetCommandBuffer( vk.tess[i].command_buffer, 0 );
+		vk.tess[i].swapchain_image_acquired = qfalse;
 	}
 
 #ifdef USE_UPLOAD_QUEUE
@@ -3825,6 +3851,11 @@ static void vk_restart_swapchain( const char *funcname, VkResult res )
 	vk_create_attachments();
 	vk_create_render_passes();
 	vk_create_framebuffers();
+
+	vk.blitFilter = GL_NEAREST;
+	vk.windowAdjusted = qfalse;
+	vk.blitX0 = vk.blitY0 = 0;
+	vk_set_render_scale();
 
 	vk_update_attachment_descriptors();
 
@@ -4479,6 +4510,7 @@ void vk_shutdown( refShutdownCode_t code )
 	vk_destroy_samplers();
 
 	vk_destroy_sync_primitives();
+	vk_destroy_latency_semaphore();
 
 	qvkDestroyBuffer( vk.device, vk.storage.buffer, NULL );
 	qvkFreeMemory( vk.device, vk.storage.memory, NULL );
@@ -7218,6 +7250,15 @@ void vk_window_resized( void )
 	vk_restart_swapchain( __func__, VK_SUCCESS );
 }
 
+qboolean vk_swapchain_ready( void )
+{
+	if ( vk.swapchainPending && !RI_CL_IsMinimized() ) {
+		vk_restart_swapchain( __func__, VK_SUCCESS );
+	}
+
+	return ( vk.fboActive || !vk.swapchainPending ) ? qtrue : qfalse;
+}
+
 void vk_begin_frame( void )
 {
 	VkCommandBufferBeginInfo begin_info;
@@ -7257,7 +7298,11 @@ void vk_begin_frame( void )
 		}
 	}
 
-	if ( !RI_CL_IsMinimized() && !vk.cmd->swapchain_image_acquired ) {
+	if ( vk.swapchainPending && !RI_CL_IsMinimized() ) {
+		vk_restart_swapchain( __func__, VK_SUCCESS );
+	}
+
+	if ( !RI_CL_IsMinimized() && !vk.swapchainPending && !vk.cmd->swapchain_image_acquired ) {
 		qboolean retry = qfalse;
 _retry:
 		res = qvkAcquireNextImageKHR( vk.device, vk.swapchain, 1 * 1000000000ULL, vk.cmd->image_acquired, VK_NULL_HANDLE, &vk.cmd->swapchain_image_index );
@@ -7265,12 +7310,15 @@ _retry:
 			if ( res == VK_ERROR_OUT_OF_DATE_KHR && retry == qfalse ) {
 				retry = qtrue;
 				vk_restart_swapchain( __func__, res );
-				goto _retry;
+				if ( !vk.swapchainPending ) {
+					goto _retry;
+				}
 			} else {
 				ri.Error( ERR_FATAL, "vkAcquireNextImageKHR returned %s", vk_result_string( res ) );
 			}
+		} else {
+			vk.cmd->swapchain_image_acquired = qtrue;
 		}
-		vk.cmd->swapchain_image_acquired = qtrue;
 	}
 
 	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -7405,7 +7453,7 @@ void vk_end_frame( void )
 			qvkCmdDraw( vk.cmd->command_buffer, 4, 1, 0, 0 );
 		}
 
-		if ( !RI_CL_IsMinimized() )
+		if ( vk.cmd->swapchain_image_acquired )
 		{
 			vk_end_render_pass();
 
@@ -7432,7 +7480,7 @@ void vk_end_frame( void )
 	submit_info.pNext = NULL;
 	submit_info.commandBufferCount = 1;
 	submit_info.pCommandBuffers = &vk.cmd->command_buffer;
-	if ( !RI_CL_IsMinimized() ) {
+	if ( vk.cmd->swapchain_image_acquired ) {
 #ifdef USE_UPLOAD_QUEUE
 		if ( vk.image_uploaded != VK_NULL_HANDLE ) {
 			waits[0] = vk.cmd->image_acquired;
@@ -7481,7 +7529,7 @@ void vk_end_frame( void )
 		submit_info.pSignalSemaphores = NULL;
 	}
 
-	if ( vk.lowLatency2 && vk.latencyFrame ) {
+	if ( vk.lowLatency2 && vk.latencyFrame && vk.latencyLive && vk.cmd->swapchain_image_acquired ) {
 		latency_submit.sType = VK_STRUCTURE_TYPE_LATENCY_SUBMISSION_PRESENT_ID_NV;
 		latency_submit.pNext = NULL;
 		latency_submit.presentID = vk.latencyFrame;
@@ -7503,7 +7551,7 @@ static void vk_anti_lag_stage( VkAntiLagStageAMD stage )
 	VkAntiLagPresentationInfoAMD presentation;
 	VkAntiLagDataAMD data;
 
-	if ( !vk.antiLag || qvkAntiLagUpdateAMD == NULL ) {
+	if ( !vk.antiLag || qvkAntiLagUpdateAMD == NULL || !vk.latencyLive ) {
 		return;
 	}
 
@@ -7525,7 +7573,7 @@ static void vk_latency_marker( VkLatencyMarkerNV marker )
 {
 	VkSetLatencyMarkerInfoNV info;
 
-	if ( !vk.lowLatency2 || vk.swapchain == VK_NULL_HANDLE ) {
+	if ( !vk.lowLatency2 || vk.swapchain == VK_NULL_HANDLE || !vk.latencyLive ) {
 		return;
 	}
 
@@ -7604,6 +7652,11 @@ void vk_low_latency_input( void )
 		return;
 	}
 
+	vk.latencyLive = ( !RI_CL_IsMinimized() && !vk.swapchainPending ) ? qtrue : qfalse;
+	if ( !vk.latencyLive ) {
+		return;
+	}
+
 	vk.latencyFrame++;
 
 	vk_reflex_sleep();
@@ -7619,7 +7672,7 @@ void vk_present_frame( void )
 	VkPresentIdKHR present_id;
 	VkResult res;
 
-	if ( RI_CL_IsMinimized() || !vk.cmd->swapchain_image_acquired ) {
+	if ( !vk.cmd->swapchain_image_acquired ) {
 		return;
 	}
 
@@ -7638,7 +7691,7 @@ void vk_present_frame( void )
 
 	vk.cmd->swapchain_image_acquired = qfalse;
 
-	if ( vk.lowLatency2 && vk.latencyFrame ) {
+	if ( vk.lowLatency2 && vk.latencyFrame && vk.latencyLive ) {
 		present_id.sType = VK_STRUCTURE_TYPE_PRESENT_ID_KHR;
 		present_id.pNext = NULL;
 		present_id.swapchainCount = 1;
