@@ -369,6 +369,20 @@ float SM_NormalLine(int font, float size) {
     return (ascent + descent) / smScale;
 }
 
+float SM_Ascent(int font, float size) {
+    int ascent, descent;
+
+    SM_FaceMetrics(SM_Face(font, qfalse), size, &ascent, &descent);
+    return ascent / smScale;
+}
+
+float SM_Descent(int font, float size) {
+    int ascent, descent;
+
+    SM_FaceMetrics(SM_Face(font, qfalse), size, &ascent, &descent);
+    return descent / smScale;
+}
+
 static float SM_FaceBaseline(int face, float size, float lineTop, float lineHeight) {
     int ascent, descent, line, top;
 
@@ -529,12 +543,22 @@ void SM_Border(float x, float y, float w, float h, float t, const float* color, 
     SM_Fill(x + w - t, y + t, t, h - 2 * t, color, clip);
 }
 
+static float SM_WebButtonText(const char* upper) {
+    float spacing = SM_LetterSpacing(1.0f);
+    float w = 0;
+
+    for (; *upper; upper++) {
+        w += SM_AdvanceBold(FONT_SANS, 11, upper, 1, qtrue) + spacing;
+    }
+    return w;
+}
+
 float SM_WebButtonWidth(const char* label) {
     char upper[64];
 
     Q_strncpyz(upper, label, sizeof(upper));
     Q_strupr(upper);
-    return SM_SpacedWidth(FONT_SANS, 11, upper, 1.0f) + 40 + 2;
+    return SM_WebButtonText(upper) + 2 * SM_Len(20.0f) + 2 * SM_LenBorder(1.0f);
 }
 
 void SM_WebButton(float x, float y, float w, const char* label, qboolean disabled, qboolean over,
@@ -545,8 +569,9 @@ void SM_WebButton(float x, float y, float w, const char* label, qboolean disable
 void SM_WebButtonPadded(float x, float y, float w, float padLeft, float padRight, const char* label,
                         qboolean disabled, qboolean over, const smRect_t* clip) {
     char upper[64];
-    float baseline = SM_Baseline(FONT_SANS, 11, y, SM_WEB_BUTTON_H);
-    float room = w - 2 - padLeft - padRight;
+    float border = SM_LenBorder(1.0f);
+    float baseline = SM_Baseline(FONT_SANS, 11, y + border, SM_WEB_BUTTON_H);
+    float room = w - 2 * border - SM_Len(padLeft) - SM_Len(padRight);
     float tw;
 
     Q_strncpyz(upper, label, sizeof(upper));
@@ -557,9 +582,9 @@ void SM_WebButtonPadded(float x, float y, float w, float padLeft, float padRight
     SM_Fill(x, y, w, SM_WEB_BUTTON_H, disabled ? smWebButtonOff : over ? smWebButtonHover : smWebButton, clip);
     SM_Border(x, y, w, SM_WEB_BUTTON_H, 1,
               disabled ? smWebButtonOffBorder : over ? smWebButtonHoverBorder : smWebButtonBorder, clip);
-    tw = SM_SpacedWidth(FONT_SANS, 11, upper, 1.0f);
+    tw = SM_WebButtonText(upper);
     if (!clip || SM_TextInside(baseline, 11, clip)) {
-        SM_SpacedText(x + 1 + padLeft + (tw < room ? (room - tw) * 0.5f : 0), baseline, FONT_SANS, 11,
+        SM_SpacedText(x + border + SM_Len(padLeft) + SM_Center(room, tw), baseline, FONT_SANS, 11,
                       disabled ? smWebButtonOffText : over ? smWebYellow : smText, upper, 1.0f, qtrue);
     }
 }

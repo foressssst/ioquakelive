@@ -21,21 +21,22 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "ui_web.h"
 
-#define BR_TITLE_H 54.4f
-#define BR_SECTION_H 50.0f
+#define BR_TITLE_H SM_TITLE_H
+#define BR_SECTION_H (2 * SM_Len(10.0f) + SM_WEB_BUTTON_H)
 #define BR_FILTERS_H 154.0f
-#define BR_HEAD_H 17.1f
-#define BR_ROW_H 50.5f
-#define BR_ROW_STEP 51.4f
-#define BR_SCROLLBAR 8.0f
+#define BR_SPACING SM_LenBorder(1.0f)
+#define BR_HEAD_H SM_LineHeight(10.6667f, 1.6f)
+#define BR_ROW_H BR_RowHeight()
+#define BR_ROW_STEP (BR_RowHeight() + BR_SPACING)
+#define BR_SCROLLBAR SM_Len(8.0f)
 #define BR_BUTTON_H 30.0f
 #define BR_SELECT_H 36.0f
-#define BR_DETAILS_MAP_H 220.0f
 
-#define BR_MAX_TAGS 12
+#define BR_MAX_TAGS 32
 #define BR_MAX_FILTER_TAGS 16
 #define BR_MAX_TAGLIST 128
 #define BR_TAG_LEN 32
+#define BR_ELLIPSIS "\xe2\x80\xa6"
 
 typedef enum {
     BR_HIT_NONE,
@@ -100,7 +101,13 @@ typedef struct {
     int ping;
     qboolean password;
     qboolean vac;
+    int mins[3];
+    float minsScale;
 } brServer_t;
+
+typedef struct {
+    float main, players, ping, width;
+} brCols_t;
 
 static brServer_t brServers[MAX_DISPLAY_SERVERS];
 static int brNumServers;
@@ -425,34 +432,46 @@ static int BR_TagCompare(const void* a, const void* b) {
     return strcmp((const char*)a, (const char*)b);
 }
 
+static qboolean BR_Space(char c) {
+    return (qboolean)(c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f');
+}
+
 static void BR_ParseTags(brServer_t* s, const char* tags) {
-    char buf[MAX_INFO_VALUE];
-    char* p;
+    const char* raw[BR_MAX_TAGS];
+    int rawLen[BR_MAX_TAGS];
+    const char* p = tags;
     int i;
 
     s->numTags = 0;
-    Q_strncpyz(buf, tags, sizeof(buf));
-    for (p = strtok(buf, ","); p && s->numTags < BR_MAX_TAGS; p = strtok(NULL, ",")) {
-        char* end;
+    while (s->numTags < BR_MAX_TAGS) {
+        const char* end = strchr(p, ',');
+        int len = end ? (int)(end - p) : (int)strlen(p);
 
-        while (*p == ' ') {
-            p++;
-        }
-        end = p + strlen(p);
-        while (end > p && end[-1] == ' ') {
-            *--end = '\0';
-        }
-        if (!p[0]) {
-            continue;
-        }
-        for (i = 0; i < s->numTags; i++) {
-            if (!strcmp(s->tags[i], p)) {
-                break;
+        if (len > 0) {
+            for (i = 0; i < s->numTags; i++) {
+                if (rawLen[i] == len && !strncmp(raw[i], p, len)) {
+                    break;
+                }
+            }
+            if (i == s->numTags) {
+                const char* a = p;
+                const char* b = p + len;
+
+                while (a < b && BR_Space(*a)) {
+                    a++;
+                }
+                while (b > a && BR_Space(b[-1])) {
+                    b--;
+                }
+                raw[s->numTags] = p;
+                rawLen[s->numTags] = len;
+                Q_strncpyz(s->tags[s->numTags++], a, (int)(b - a) + 1 < BR_TAG_LEN ? (int)(b - a) + 1 : BR_TAG_LEN);
             }
         }
-        if (i == s->numTags) {
-            Q_strncpyz(s->tags[s->numTags++], p, BR_TAG_LEN);
+        if (!end) {
+            break;
         }
+        p = end + 1;
     }
 }
 
@@ -497,6 +516,7 @@ static void BR_Collect(void) {
         s->password = (qboolean)(atoi(Info_ValueForKey(info, "g_needpass")) != 0);
         s->vac = (qboolean)(atoi(Info_ValueForKey(info, "sv_vac")) != 0);
         BR_ParseTags(s, Info_ValueForKey(info, "tags"));
+        s->minsScale = 0;
         for (j = 0; j < s->numTags; j++) {
             BR_AddToTagList(s->tags[j]);
         }
@@ -689,15 +709,161 @@ static void BR_Button(float x, float y, const char* label, qboolean disabled, in
 }
 
 static float BR_TagWidth(const char* tag) {
-    return BR_Width(10.6667f, tag, qfalse) + 6 + 2;
+    return BR_Width(10.6667f, tag, qfalse) + 2 * SM_Len(3.0f) + 2 * SM_LenBorder(1.0f);
+}
+
+static float BR_TagHeight(void) {
+    return SM_NormalLine(FONT_SANS, 10.6667f) + 2 * SM_LenBorder(1.0f);
 }
 
 static void BR_Tag(float x, float y, const char* tag, const smRect_t* clip) {
     float w = BR_TagWidth(tag);
+    float edge = SM_LenBorder(1.0f);
+    float baseline = y + edge + SM_Ascent(FONT_SANS, 10.6667f);
 
-    SM_Fill(x, y, w, 16, brHead, clip);
-    BR_Border(x, y, w, 16, 1, brBlack, clip);
-    BR_TextIn(x + 4, y, 16, 10.6667f, brHeadText, tag, qfalse, clip);
+    SM_Fill(x, y, w, BR_TagHeight(), brHead, clip);
+    BR_Border(x, y, w, BR_TagHeight(), edge, brBlack, clip);
+    if (!clip || SM_TextInside(baseline, 10.6667f, clip)) {
+        SM_TextRaw(x + edge + SM_Len(3.0f), baseline, FONT_SANS, 10.6667f, brHeadText, tag, -1, qfalse);
+    }
+}
+
+static int BR_Px(float v) {
+    return (int)floorf(v * smScale + 0.5f);
+}
+
+static float BR_Middle(float room, float height) {
+    return (float)((BR_Px(room) - BR_Px(height)) / 2) / smScale;
+}
+
+static int BR_WordsMin(float size, const char* text, qboolean bold) {
+    char word[256];
+    int best = 0;
+
+    while (*text) {
+        int n = 0;
+
+        while (*text == ' ') {
+            text++;
+        }
+        while (text[n] && text[n] != ' ') {
+            n++;
+        }
+        if (n) {
+            int w;
+
+            Q_strncpyz(word, text, n + 1 < (int)sizeof(word) ? n + 1 : (int)sizeof(word));
+            w = BR_Px(BR_Width(size, word, bold));
+            best = w > best ? w : best;
+        }
+        text += n;
+    }
+    return best;
+}
+
+static const int* BR_Mins(brServer_t* s) {
+    char text[160];
+    int tags, w, i;
+
+    if (s->minsScale == smScale) {
+        return s->mins;
+    }
+    s->mins[0] = BR_Px(2 * SM_Len(5.0f) + SM_Len(79.0f));
+    tags = BR_Px(SM_Len(5.0f));
+    for (i = 0; i < s->numTags; i++) {
+        tags += BR_Px(BR_TagWidth(s->tags[i]) + 2 * SM_Len(3.0f));
+    }
+    s->mins[0] = tags > s->mins[0] ? tags : s->mins[0];
+    w = BR_WordsMin(14.6667f, s->name, qtrue);
+    s->mins[0] = w > s->mins[0] ? w : s->mins[0];
+    if (s->password) {
+        w = BR_Px(SM_IconWidth(14.6667f, SM_FA_LOCK));
+        s->mins[0] = w > s->mins[0] ? w : s->mins[0];
+    }
+    Com_sprintf(text, sizeof(text), "%s: %s", s->gametype, BR_MapName(s->map));
+    w = BR_WordsMin(12.0f, text, qfalse);
+    s->mins[0] = w > s->mins[0] ? w : s->mins[0];
+
+    Com_sprintf(text, sizeof(text), "%i / %i", s->players, s->maxPlayers);
+    s->mins[1] = BR_WordsMin(13.3333f, text, qfalse);
+
+    s->mins[2] = 0;
+    if (s->ping > 0) {
+        s->mins[2] = BR_Px(SM_Len(16.0f));
+        w = BR_Px(BR_Width(13.3333f, va("%i", s->ping), qfalse));
+        s->mins[2] = w > s->mins[2] ? w : s->mins[2];
+    }
+    s->minsScale = smScale;
+    return s->mins;
+}
+
+static brCols_t BR_Columns(float inner) {
+    static const float pct[3] = {80.0f, 10.0f, 10.0f};
+    int tw = BR_Px(inner);
+    int indent = BR_Px(SM_Len(3.0f));
+    int mins[3], w[3];
+    int avail, i, k;
+    brCols_t c;
+
+    mins[0] = 0;
+    mins[1] = indent + BR_Px(BR_Width(10.6667f, "Players", qfalse));
+    mins[2] = indent + BR_Px(BR_Width(10.6667f, "Ping", qfalse));
+    for (i = 0; i < brNumOrder; i++) {
+        const int* m = BR_Mins(&brServers[brOrder[i]]);
+
+        for (k = 0; k < 3; k++) {
+            mins[k] = m[k] > mins[k] ? m[k] : mins[k];
+        }
+    }
+
+    avail = tw;
+    for (k = 0; k < 3; k++) {
+        w[k] = mins[k];
+        avail -= w[k];
+    }
+    if (avail > 0) {
+        for (k = 0; k < 3; k++) {
+            int p = (int)((float)tw * pct[k] / 100.0f);
+            int cw = mins[k] > p ? mins[k] : p;
+
+            avail += w[k] - cw;
+            w[k] = cw;
+        }
+    }
+    if (avail > 0) {
+        int total = 3;
+
+        for (k = 2; k >= 0; k--) {
+            int add = avail / total;
+
+            avail -= add;
+            total--;
+            w[k] += add;
+        }
+    } else if (avail < 0) {
+        int beyond = 0;
+
+        for (k = 2; k >= 0; k--) {
+            beyond += w[k] - mins[k];
+        }
+        for (k = 2; k >= 0 && beyond > 0; k--) {
+            int diff = w[k] - mins[k];
+            int reduce = avail * diff / beyond;
+
+            w[k] += reduce;
+            avail -= reduce;
+            beyond -= diff;
+            if (avail >= 0) {
+                break;
+            }
+        }
+    }
+
+    c.main = w[0] / smScale;
+    c.players = w[1] / smScale;
+    c.ping = w[2] / smScale;
+    c.width = (w[0] + w[1] + w[2]) / smScale;
+    return c;
 }
 
 static void BR_Check(float x, float y, const char* label, qboolean on, int check, const smRect_t* clip) {
@@ -766,13 +932,14 @@ static void BR_ListBar(float x, float top, float view, float content, float scro
     SM_Fill(x, thumbY, BR_SCROLLBAR, thumbH, over ? brThumbHover : brThumb, NULL);
 }
 
-static void BR_Circle(float x, float y, const float* color, const smRect_t* clip) {
+static void BR_Circle(float cx, float cy, float radius, const float* color, const smRect_t* clip) {
+    float dot = 1.0f / smScale;
     int i;
 
-    for (i = 0; i < 20; i++) {
-        float a = i * (2 * M_PI / 20);
+    for (i = 0; i < 24; i++) {
+        float a = i * (2 * M_PI / 24);
 
-        SM_Fill(x + 1.7f + cos(a) * 2.5f - 0.5f, y + 13.3f + sin(a) * 2.5f - 0.5f, 1, 1, color, clip);
+        SM_Fill(cx + cos(a) * radius - dot * 0.5f, cy + sin(a) * radius - dot * 0.5f, dot, dot, color, clip);
     }
 }
 
@@ -783,21 +950,63 @@ static float BR_ClampScroll(float scroll) {
     return scroll < 0 ? 0 : scroll;
 }
 
+static float BR_SortBlock(void) {
+    return SM_Len(3.0f) + SM_IconWidth(10.6667f, SM_FA_SORT_ASC);
+}
+
 static float BR_HeadLabel(float x, float lineTop, const char* label, int sort, const smRect_t* clip) {
     float w = BR_Width(10.6667f, va("%s ", label), qfalse);
-    float baseline = SM_Baseline(FONT_SANS, 10.6667f, lineTop, 14);
+    float baseline = SM_Baseline(FONT_SANS, 10.6667f, lineTop, BR_HEAD_H);
 
     if (SM_TextInside(baseline, 10.6667f, clip)) {
         SM_TextRaw(x, baseline, FONT_SANS, 10.6667f, brHeadText, label, -1, qfalse);
         if (brf.sort == sort) {
-            SM_Icon(x + w, baseline, 10.6667f, brHeadText, brf.reverse ? SM_FA_SORT_DESC : SM_FA_SORT_ASC);
+            SM_Icon(x + w + SM_Len(3.0f), baseline, 10.6667f, brHeadText,
+                    brf.reverse ? SM_FA_SORT_DESC : SM_FA_SORT_ASC);
         }
     }
     if (brf.sort == sort) {
-        w += SM_IconWidth(10.6667f, SM_FA_SORT_ASC);
+        w += BR_SortBlock();
     }
-    SM_Hit(x, lineTop, w, 14, BR_HIT_SORT, sort, clip);
+    SM_Hit(x, lineTop, w, BR_HEAD_H, BR_HIT_SORT, sort, clip);
     return w;
+}
+
+static qboolean BR_HeadWraps(float w, const char* label, int sort) {
+    float full = BR_Width(10.6667f, va("%s ", label), qfalse) + BR_SortBlock();
+
+    return (qboolean)(brf.sort == sort && BR_Px(full) > BR_Px(w - SM_Len(3.0f)));
+}
+
+static void BR_HeadCell(float x, float w, float top, float height, const char* label, int sort,
+                        const smRect_t* clip) {
+    float indent = SM_Len(3.0f);
+    float line = BR_HEAD_H;
+    float textW = BR_Width(10.6667f, label, qfalse);
+    float spaced = BR_Width(10.6667f, va("%s ", label), qfalse);
+    qboolean sorted = (qboolean)(brf.sort == sort);
+    qboolean wrap = BR_HeadWraps(w, label, sort);
+    float lineTop = top + (wrap ? 0 : BR_Middle(height, line));
+    float tx = x + indent + SM_Center(w - indent, wrap ? spaced : sorted ? spaced + BR_SortBlock() : textW);
+    float baseline = SM_Baseline(FONT_SANS, 10.6667f, lineTop, line);
+    float bx = tx + spaced;
+    float ibase = baseline;
+    float left, right;
+
+    if (wrap) {
+        bx = x + SM_Center(w, BR_SortBlock());
+        ibase = SM_Baseline(FONT_SANS, 10.6667f, lineTop + line, line);
+    }
+    if (SM_TextInside(baseline, 10.6667f, clip)) {
+        SM_TextRaw(tx, baseline, FONT_SANS, 10.6667f, brHeadText, label, -1, qfalse);
+    }
+    if (sorted && SM_TextInside(ibase, 10.6667f, clip)) {
+        SM_Icon(bx + indent, ibase, 10.6667f, brHeadText, brf.reverse ? SM_FA_SORT_DESC : SM_FA_SORT_ASC);
+    }
+    left = sorted && bx < tx ? bx : tx;
+    right = sorted ? bx + BR_SortBlock() : tx + spaced;
+    right = tx + spaced > right ? tx + spaced : right;
+    SM_Hit(left, lineTop, right - left, wrap ? 2 * line : line, BR_HIT_SORT, sort, clip);
 }
 
 static void BR_DrawFilters(float left, float y, float width, const smRect_t* clip) {
@@ -894,148 +1103,216 @@ static void BR_DrawDropdown(float x, float y, float w) {
     }
 }
 
-static void BR_DrawRow(const brServer_t* s, int row, float x, float y, float w, const smRect_t* clip) {
+static float BR_RowHeight(void) {
+    float shot = 2 * SM_Len(5.0f) + SM_Len(40.0f);
+    float text = SM_LineHeight(14.6667f, 1.6f) + SM_Len(3.0f) + SM_LineHeight(15.0f, 1.6f);
+
+    return shot > text ? shot : text;
+}
+
+static void BR_DrawRow(const brServer_t* s, int row, float x, float y, const brCols_t* cols, const smRect_t* clip) {
     qboolean over = SM_Over(BR_HIT_ROW, row) || SM_Over(BR_HIT_PLAY, row) || SM_Over(BR_HIT_TAG, row);
     qboolean selected = (qboolean)(br.hasSelected && !strcmp(br.selected.address, s->address));
-    float mainW = w * 0.8f;
-    float colW = w * 0.1f;
-    float tx, tagsW, tagsX;
+    float rowH = BR_RowHeight();
+    float w = cols->width;
+    float mainW = cols->main;
+    float colW = cols->players;
+    float pingW = cols->ping;
+    float pad = SM_Len(5.0f);
+    float margin = SM_Len(3.0f);
+    float edge = SM_LenBorder(1.0f);
+    float shotW = SM_Len(79.0f);
+    float shotH = SM_Len(40.0f);
+    float titleLine = SM_LineHeight(14.6667f, 1.6f);
+    float lowTop = y + titleLine + margin;
+    float tagBase = SM_Baseline(FONT_SANS, 15.0f, lowTop, SM_LineHeight(15.0f, 1.6f));
+    float tagTop = tagBase - SM_Ascent(FONT_SANS, 10.6667f) - edge;
+    float textX = x + 2 * pad + shotW;
+    float cellLine = SM_LineHeight(13.3333f, 1.6f);
+    float tx, tagsW, tagsMax, tagsX;
     char text[64];
-    int i;
+    int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
+    int i, lines;
 
-    SM_Fill(x, y, w, BR_ROW_H, selected ? brRowSelected : over ? brRowHover : brBlack80, clip);
-    SM_Hit(x, y, w, BR_ROW_H, BR_HIT_ROW, row, clip);
+    SM_Fill(x, y, w, rowH, selected ? brRowSelected : over ? brRowHover : brBlack80, clip);
+    SM_Hit(x, y, w, rowH, BR_HIT_ROW, row, clip);
 
     {
-        smRect_t shot = SM_R(x + 5, y + 5, 79, 40);
+        smRect_t shot = SM_R(x + pad, y + pad, shotW, shotH);
 
         if (clip) {
             SM_Clip(&shot, clip);
         }
-        SM_Pic(x + 5, y + 5, 79, 79 * 270.0f / 480.0f, BR_Shot("sm", s->map), &shot);
+        SM_Pic(x + pad, y + pad, shotW, shotW * 270.0f / 480.0f, BR_Shot("sm", s->map), &shot);
         if (over) {
-            SM_Fill(x + 5, y + 5, 79, 40, SM_Over(BR_HIT_PLAY, row) ? brPlayHover : brBlack80, &shot);
-            if (SM_TextInside(y + 35, 28, clip)) {
-                SM_Icon(x + 5 + 28, y + 35, 28, brYellow, SM_FA_CHEVRON_CIRCLE_RIGHT);
+            float iconBase = SM_IconBaseline(28.0f, y + pad + SM_Len(6.0f), SM_LineHeight(28.0f, 1.0f));
+
+            SM_Fill(x + pad, y + pad, shotW, shotH, SM_Over(BR_HIT_PLAY, row) ? brPlayHover : brBlack80, &shot);
+            if (SM_TextInside(iconBase, 28, clip)) {
+                SM_Icon(x + pad + SM_Len(28.0f), iconBase, 28, brYellow, SM_FA_CHEVRON_CIRCLE_RIGHT);
             }
-            SM_Hit(x + 5, y + 5, 79, 40, BR_HIT_PLAY, row, &shot);
+            SM_Hit(x + pad, y + pad, shotW, shotH, BR_HIT_PLAY, row, &shot);
         }
     }
 
-    tx = x + 89;
-    if (s->password) {
-        float baseline = SM_Baseline(FONT_SANS, 14.6667f, y, 23.4667f);
-
-        if (SM_TextInside(baseline, 14.6667f, clip)) {
-            SM_Icon(tx, baseline, 14.6667f, brYellow, SM_FA_LOCK);
-        }
-        tx += SM_IconWidth(14.6667f, SM_FA_LOCK) + BR_Width(14.6667f, " ", qtrue);
-    }
+    tx = textX;
     {
-        float baseline = SM_Baseline(FONT_SANS, 14.6667f, y, 23.4667f);
+        float baseline = SM_Baseline(FONT_SANS, 14.6667f, y, titleLine);
 
+        if (s->password) {
+            if (SM_TextInside(baseline, 14.6667f, clip)) {
+                SM_Icon(tx, baseline, 14.6667f, brYellow, SM_FA_LOCK);
+            }
+            tx += SM_IconWidth(14.6667f, SM_FA_LOCK) + BR_Width(14.6667f, " ", qtrue);
+        }
         if (SM_TextInside(baseline, 14.6667f, clip)) {
-            BR_TextFit(tx, baseline, 14.6667f, brRowText, s->name, x + mainW - tx - 5, qtrue, FONT_SANS);
+            BR_TextFit(tx, baseline, 14.6667f, brRowText, s->name, x + mainW - tx - pad, qtrue, FONT_SANS);
         }
     }
 
     tagsW = 0;
     for (i = 0; i < s->numTags; i++) {
-        tagsW += BR_TagWidth(s->tags[i]) + 6;
+        tagsW += BR_TagWidth(s->tags[i]) + 2 * margin;
     }
-    if (tagsW > mainW * 0.4f) {
-        tagsW = mainW * 0.4f;
-    }
-    tagsX = x + mainW - 5 - tagsW;
+    tagsMax = (float)(int)(BR_Px(mainW) * 40.0f / 100.0f) / smScale - pad;
+    tagsX = x + mainW - pad - (tagsW > tagsMax ? tagsMax : tagsW);
     {
-        smRect_t tagClip = SM_R(tagsX, y, tagsW, BR_ROW_H);
-        float t = tagsX + 3;
+        smRect_t tagClip = SM_R(tagsX, y, x + mainW - tagsX, rowH);
+        float ellipsisX = x + mainW - pad - BR_Width(15.0f, BR_ELLIPSIS, qfalse);
+        float ellipsisAt = ellipsisX;
+        qboolean overflow = (qboolean)(tagsW > tagsMax);
+        qboolean found = qfalse;
+        float t = tagsX + margin;
 
         if (clip) {
             SM_Clip(&tagClip, clip);
         }
-        for (i = 0; i < s->numTags && t < tagsX + tagsW; i++) {
-            float tw = BR_TagWidth(s->tags[i]);
+        for (i = 0; i < s->numTags && t < x + mainW; i++) {
+            const char* tag = s->tags[i];
+            float tw = BR_TagWidth(tag);
+            float textX = t + edge + margin;
+            int len = (int)strlen(tag);
+            int shown = len;
 
-            if (t + tw <= tagsX + tagsW) {
-                BR_Tag(t, y + 32.4f, s->tags[i], &tagClip);
-            } else {
-                float baseline = SM_Baseline(FONT_SANS, 10.6667f, y + 32.4f, 16);
-
-                SM_Fill(t, y + 32.4f, tw, 16, brHead, &tagClip);
-                BR_Border(t, y + 32.4f, tw, 16, 1, brBlack, &tagClip);
-                if (SM_TextInside(baseline, 10.6667f, clip)) {
-                    BR_TextFit(t + 4, baseline, 10.6667f, brHeadText, s->tags[i], tagsX + tagsW - t - 4, qfalse,
-                               FONT_SANS);
+            if (overflow && found) {
+                shown = 0;
+            } else if (overflow && ellipsisX <= textX) {
+                shown = 0;
+                found = qtrue;
+            } else if (overflow && ellipsisX < textX + BR_Width(10.6667f, tag, qfalse)) {
+                found = qtrue;
+                for (shown = 0; shown < len && textX + SM_AdvanceRaw(FONT_SANS, 10.6667f, tag, shown + 1, qfalse) <=
+                                                   ellipsisX;
+                     shown++) {
                 }
+                ellipsisAt = shown ? textX + SM_AdvanceRaw(FONT_SANS, 10.6667f, tag, shown, qfalse)
+                                   : (ellipsisX < textX ? ellipsisX : textX);
             }
-            SM_Hit(t, y + 32.4f, tw, 16, BR_HIT_TAG, row * BR_MAX_TAGS + i, &tagClip);
-            t += tw + 6;
+            SM_Fill(t, tagTop, tw, BR_TagHeight(), brHead, &tagClip);
+            BR_Border(t, tagTop, tw, BR_TagHeight(), edge, brBlack, &tagClip);
+            if (shown && SM_TextInside(tagBase, 10.6667f, clip)) {
+                SM_TextRaw(textX, tagBase, FONT_SANS, 10.6667f, brHeadText, tag, shown, qfalse);
+            }
+            SM_Hit(t, tagTop, tw, BR_TagHeight(), BR_HIT_TAG, row * BR_MAX_TAGS + i, &tagClip);
+            t += tw + 2 * margin;
+        }
+        if (found && SM_TextInside(tagBase, 15.0f, clip)) {
+            SM_TextRaw(ellipsisAt, tagBase, FONT_SANS, 15.0f, brRowText, BR_ELLIPSIS, -1, qfalse);
         }
     }
 
     Com_sprintf(text, sizeof(text), "%s: %s", s->gametype, BR_MapName(s->map));
     {
-        float baseline = SM_Baseline(FONT_SANS, 12, y + 26.4f, 19.2f);
+        float baseline = SM_Baseline(FONT_SANS, 12, lowTop, SM_LineHeight(12.0f, 1.6f));
 
         if (SM_TextInside(baseline, 12, clip)) {
-            BR_TextFit(x + 89, baseline, 12, brDesc, text, tagsX - x - 89 - 4, qfalse, FONT_SANS);
+            BR_TextFit(textX, baseline, 12, brDesc, text, tagsX - textX, qfalse, FONT_SANS);
         }
     }
 
     Com_sprintf(text, sizeof(text), "%i / %i", s->players, s->maxPlayers);
-    BR_TextIn(x + mainW + (colW - BR_Width(13.3333f, text, qfalse)) * 0.5f, y + (BR_ROW_H - 21.3333f) * 0.5f,
-              21.3333f, 13.3333f, brRowText, text, qfalse, clip);
-    if (s->ping > 0) {
-        float pw = 16 + BR_Width(13.3333f, va(" %i", s->ping), qfalse);
-        float px = x + mainW + colW + (colW - pw) * 0.5f;
+    lines = SM_Wrap(FONT_SANS, 13.3333f, text, colW, starts, lens);
+    {
+        float top = y + BR_Middle(rowH, lines * cellLine);
 
-        SM_Pic(px, y + 17.5f, 16, 16, BR_Quality(s->ping), clip);
-        BR_TextIn(px + 16, y + (BR_ROW_H - 21.3333f) * 0.5f, 21.3333f, 13.3333f, brPingText, va(" %i", s->ping),
-                  qfalse, clip);
+        for (i = 0; i < lines; i++) {
+            char part[64];
+
+            Q_strncpyz(part, text + starts[i], lens[i] + 1 < (int)sizeof(part) ? lens[i] + 1 : (int)sizeof(part));
+            BR_TextIn(x + mainW + SM_Center(colW, BR_Width(13.3333f, part, qfalse)), top + i * cellLine, cellLine,
+                      13.3333f, brRowText, part, qfalse, clip);
+        }
+    }
+    if (s->ping > 0) {
+        float icon = SM_Len(16.0f);
+        float px = x + mainW + colW;
+        float valueW, top, baseline;
+        qboolean wrap;
+
+        Com_sprintf(text, sizeof(text), "%i", s->ping);
+        valueW = BR_Width(13.3333f, text, qfalse);
+        wrap = (qboolean)(BR_Px(icon + BR_Width(13.3333f, " ", qfalse) + valueW) > BR_Px(pingW));
+        top = y + BR_Middle(rowH, (wrap ? 2 : 1) * cellLine);
+        baseline = SM_Baseline(FONT_SANS, 13.3333f, top, cellLine);
+        if (wrap) {
+            SM_Pic(px + SM_Center(pingW, icon), baseline + SM_Descent(FONT_SANS, 13.3333f) - icon, icon, icon,
+                   BR_Quality(s->ping), clip);
+            BR_TextIn(px + SM_Center(pingW, valueW), top + cellLine, cellLine, 13.3333f, brPingText, text, qfalse,
+                      clip);
+        } else {
+            Com_sprintf(text, sizeof(text), " %i", s->ping);
+            px += SM_Center(pingW, icon + BR_Width(13.3333f, text, qfalse));
+            SM_Pic(px, baseline + SM_Descent(FONT_SANS, 13.3333f) - icon, icon, icon, BR_Quality(s->ping), clip);
+            BR_TextIn(px + icon, top, cellLine, 13.3333f, brPingText, text, qfalse, clip);
+        }
     }
 }
 
 static void BR_DrawList(float left, float top, float width, float height) {
     float inner = width - BR_SCROLLBAR;
     float y = top - br.scroll;
-    float sectionY, tableY, headY, rowsY;
+    float sectionY, tableY, headY, headH, rowsY;
+    brCols_t cols;
     smRect_t clip = SM_R(left, top, inner, height);
     int i;
 
     SM_Fill(left, y, inner, BR_TITLE_H, brBlack80, &clip);
     {
-        float baseline = SM_Baseline(FONT_DEFAULT, 32.0f, y + 8.0f, 38.4f);
+        float baseline = SM_Baseline(FONT_DEFAULT, 32.0f, y + SM_H1_PAD, SM_H1_LINE);
 
         if (SM_TextInside(baseline, 32, &clip)) {
             SM_SetSpacing(SM_SPACING_H1);
-            SM_TextRaw(left + 6.4f, baseline, FONT_DEFAULT, 32.0f, smText, "Match Browser", -1, qfalse);
+            SM_TextRaw(left + SM_Len(6.4f), baseline, FONT_DEFAULT, 32.0f, smText, "Match Browser", -1, qfalse);
             SM_SetSpacing(0);
         }
     }
 
-    sectionY = y + BR_TITLE_H + 2;
+    sectionY = y + BR_TITLE_H + SM_Len(2.0f);
     SM_Fill(left, sectionY, inner, BR_SECTION_H, brSection, &clip);
     {
         qboolean over = SM_Over(BR_HIT_TOGGLE, 0);
-        float baseline = SM_Baseline(FONT_SANS, 15, sectionY + 10, 24);
+        float pad = SM_Len(10.0f);
+        float line = SM_LineHeight(15.0f, 1.6f);
+        float baseline = SM_Baseline(FONT_SANS, 15, sectionY + pad, line);
+        float lx = left + pad + SM_Len(5.0f);
         float tw = SM_IconWidth(15, SM_FA_FILTER_ICON) + BR_Width(15, " Change Filters", qfalse);
 
         if (SM_TextInside(baseline, 15, &clip)) {
-            SM_Icon(left + 15, baseline, 15, over ? brLinkHover : brLink, SM_FA_FILTER_ICON);
-            SM_TextRaw(left + 15 + SM_IconWidth(15, SM_FA_FILTER_ICON), baseline, FONT_SANS, 15,
+            SM_Icon(lx, baseline, 15, over ? brLinkHover : brLink, SM_FA_FILTER_ICON);
+            SM_TextRaw(lx + SM_IconWidth(15, SM_FA_FILTER_ICON), baseline, FONT_SANS, 15,
                     over ? brLinkHover : brLink, " Change Filters", -1, qfalse);
         }
-        SM_Hit(left + 10, sectionY + 10, tw + 10, 24, BR_HIT_TOGGLE, 0, &clip);
+        SM_Hit(left + pad, sectionY + pad, tw + 2 * SM_Len(5.0f), line, BR_HIT_TOGGLE, 0, &clip);
     }
     {
         float quickW = BR_ButtonWidth("Quick Refresh");
         float allW = BR_ButtonWidth("Refresh All");
-        float quickX = left + inner - 20 - quickW;
+        float quickX = left + inner - 2 * SM_Len(10.0f) - quickW;
         qboolean busy = BR_Refreshing();
 
-        BR_Button(quickX - 10 - allW, sectionY + 10, "Refresh All", busy, BR_HIT_REFRESH_ALL, 0, &clip);
-        BR_Button(quickX, sectionY + 10, "Quick Refresh", busy, BR_HIT_QUICK_REFRESH, 0, &clip);
+        BR_Button(quickX - SM_Len(10.0f) - allW, sectionY + SM_Len(10.0f), "Refresh All", busy, BR_HIT_REFRESH_ALL, 0,
+                  &clip);
+        BR_Button(quickX, sectionY + SM_Len(10.0f), "Quick Refresh", busy, BR_HIT_QUICK_REFRESH, 0, &clip);
     }
 
     tableY = sectionY + BR_SECTION_H;
@@ -1044,32 +1321,30 @@ static void BR_DrawList(float left, float top, float width, float height) {
         tableY += BR_FILTERS_H;
     }
 
-    headY = tableY + 1;
-    SM_Fill(left, headY, inner, BR_HEAD_H, brHead, &clip);
+    cols = BR_Columns(inner);
+    headH = BR_HEAD_H;
+    if (BR_HeadWraps(cols.players, "Players", BR_SORT_PLAYERS) || BR_HeadWraps(cols.ping, "Ping", BR_SORT_PING)) {
+        headH *= 2;
+    }
+    headY = tableY + BR_SPACING;
+    SM_Fill(left, headY, cols.width, headH, brHead, &clip);
     {
-        float x = left + 3;
-        float lineTop = headY + 1;
+        float x = left + SM_Len(3.0f);
+        float lineTop = headY + BR_Middle(headH, BR_HEAD_H);
 
         x += BR_HeadLabel(x, lineTop, "Match Name", BR_SORT_NAME, &clip);
-        BR_TextIn(x, lineTop, 14, 10.6667f, brHeadText, ",", qfalse, &clip);
-        x += BR_Width(10.6667f, ",", qfalse) + 8;
+        BR_TextIn(x, lineTop, BR_HEAD_H, 10.6667f, brHeadText, ",", qfalse, &clip);
+        x += BR_Width(10.6667f, ",", qfalse) + SM_Len(8.0f);
         x += BR_HeadLabel(x, lineTop, "Gametype", BR_SORT_GAMETYPE, &clip);
-        BR_TextIn(x, lineTop, 14, 10.6667f, brHeadText, ",", qfalse, &clip);
-        x += BR_Width(10.6667f, ",", qfalse) + 8;
+        BR_TextIn(x, lineTop, BR_HEAD_H, 10.6667f, brHeadText, ",", qfalse, &clip);
+        x += BR_Width(10.6667f, ",", qfalse) + SM_Len(8.0f);
         BR_HeadLabel(x, lineTop, "Arena", BR_SORT_MAP, &clip);
 
-        for (i = 0; i < 2; i++) {
-            const char* label = i ? "Ping" : "Players";
-            int sort = i ? BR_SORT_PING : BR_SORT_PLAYERS;
-            float colX = left + inner * (i ? 0.9f : 0.8f);
-            float w = BR_Width(10.6667f, va("%s ", label), qfalse) +
-                      (brf.sort == sort ? SM_IconWidth(10.6667f, SM_FA_SORT_ASC) : 0);
-
-            BR_HeadLabel(colX + 3 + (inner * 0.1f - 3 - w) * 0.5f, lineTop, label, sort, &clip);
-        }
+        BR_HeadCell(left + cols.main, cols.players, headY, headH, "Players", BR_SORT_PLAYERS, &clip);
+        BR_HeadCell(left + cols.main + cols.players, cols.ping, headY, headH, "Ping", BR_SORT_PING, &clip);
     }
 
-    rowsY = headY + BR_HEAD_H + 1;
+    rowsY = headY + headH + 2 * BR_SPACING;
     br.shownRows = brNumOrder;
     for (i = 0; i < brNumOrder; i++) {
         float ry = rowsY + i * BR_ROW_STEP;
@@ -1077,7 +1352,7 @@ static void BR_DrawList(float left, float top, float width, float height) {
         if (ry + BR_ROW_H < top || ry > top + height) {
             continue;
         }
-        BR_DrawRow(&brServers[brOrder[i]], i, left, ry, inner, &clip);
+        BR_DrawRow(&brServers[brOrder[i]], i, left, ry, &cols, &clip);
     }
 
     br.view = height;
@@ -1099,7 +1374,9 @@ static void BR_DrawList(float left, float top, float width, float height) {
 }
 
 static void BR_Loader(float x, float y) {
-    float cx = x + 12, cy = y + 12;
+    float size = SM_Len(24.0f), thick = SM_LenBorder(4.0f);
+    float r = (size - thick) * 0.5f;
+    float cx = x + size * 0.5f, cy = y + size * 0.5f;
     float turn = (uiInfo.uiDC.realTime % 750) / 750.0f * 2 * M_PI;
     int i;
 
@@ -1111,7 +1388,7 @@ static void BR_Loader(float x, float y) {
         if (rel > M_PI * 0.25f && rel < M_PI * 0.75f) {
             continue;
         }
-        SM_Fill(cx + cos(a) * 10 - 2, cy + sin(a) * 10 - 2, 4, 4, brYellow, NULL);
+        SM_Fill(cx + cos(a) * r - thick * 0.5f, cy + sin(a) * r - thick * 0.5f, thick, thick, brYellow, NULL);
     }
 }
 
@@ -1247,28 +1524,67 @@ static void BR_PlayerIn(float x, float lineTop, float lineHeight, float size, co
 }
 
 static float BR_Scorebox(float x, float y, float w, const char* rules) {
-    float h = 18.6667f * 1.6f + 2 * 4.6667f;
-    float baseline = SM_Baseline(FONT_DEFAULT, 18.6667f, y + 4.6667f, 18.6667f * 1.6f);
+    float size = 18.6667f;
+    float padV = SM_Len(4.6667f), padH = SM_Len(14.0f), line = SM_LineHeight(size, 1.6f), b = SM_Len(30.0f);
+    float h = 2 * padV + line;
+    float half = (float)(int)(BR_Px(w) * 50.0f / 100.0f) / smScale;
+    float baseline = SM_Baseline(FONT_DEFAULT, size, y + padV, line);
     const char* red = Info_ValueForKey(rules, "g_redScore");
     const char* blue = Info_ValueForKey(rules, "g_blueScore");
-    float half = w * 0.5f;
     float bx;
 
     SM_Fill(x, y, half, h, brBlack75, NULL);
-    SM_Fill(x + half, y, w - half, h, brBlack75, NULL);
-    bx = x + half - 14 - 30;
-    SM_TextRaw(bx + 30 - SM_AdvanceBold(FONT_DEFAULT, 18.6667f, red, -1, qtrue), baseline, FONT_DEFAULT, 18.6667f, brRed,
-            red, -1, qtrue);
-    SM_TextRaw(bx - SM_Advance(FONT_DEFAULT, 18.6667f, "Red ", -1), baseline, FONT_DEFAULT, 18.6667f, brRed, "Red ", -1,
-            qfalse);
-    bx = x + half + 14;
-    SM_TextRaw(bx, baseline, FONT_DEFAULT, 18.6667f, brBlue, blue, -1, qtrue);
-    SM_TextRaw(bx + 30, baseline, FONT_DEFAULT, 18.6667f, brBlue, " Blue", -1, qfalse);
+    SM_Fill(x + half, y, half, h, brBlack75, NULL);
+    bx = x + half - padH - b;
+    SM_TextRaw(bx - SM_Advance(FONT_DEFAULT, size, "Red ", -1), baseline, FONT_DEFAULT, size, brRed, "Red ", -1,
+               qfalse);
+    SM_TextRaw(bx + b - SM_AdvanceBold(FONT_DEFAULT, size, red, -1, qtrue), baseline, FONT_DEFAULT, size, brRed, red,
+               -1, qtrue);
+    bx = x + half + padH;
+    SM_TextRaw(bx, baseline, FONT_DEFAULT, size, brBlue, blue, -1, qtrue);
+    SM_TextRaw(bx + b, baseline, FONT_DEFAULT, size, brBlue, " Blue", -1, qfalse);
     return h;
 }
 
-static void BR_DrawDetails(float x, float top, float w) {
+static void BR_ShadowLine(float x, float baseline, int font, float size, const char* text, int len, float width) {
+    char buf[256];
+    float off = SM_Len(2.0f);
+
+    if (len < 0 || len > (int)sizeof(buf) - 4) {
+        len = len < 0 ? (int)strlen(text) : (int)sizeof(buf) - 4;
+        if (len > (int)sizeof(buf) - 4) {
+            len = sizeof(buf) - 4;
+        }
+    }
+    memcpy(buf, text, len);
+    buf[len] = '\0';
+    if (SM_AdvanceRaw(font, size, buf, -1, qfalse) > width) {
+        float room = width - SM_AdvanceRaw(font, size, BR_ELLIPSIS, -1, qfalse);
+
+        while (len > 0 && SM_AdvanceRaw(font, size, buf, len, qfalse) > room) {
+            len--;
+            while (len > 0 && ((unsigned char)buf[len] & 0xc0) == 0x80) {
+                len--;
+            }
+        }
+        Q_strncpyz(buf + len, BR_ELLIPSIS, (int)sizeof(buf) - len);
+    }
+    SM_TextRaw(x + off, baseline + off, font, size, brBlack, buf, -1, qfalse);
+    SM_TextRaw(x, baseline, font, size, brWhite, buf, -1, qfalse);
+}
+
+static float BR_SpacedBold(float size, const char* text, float spacing) {
+    float w = 0;
+
+    for (; *text; text++) {
+        w += SM_AdvanceBold(FONT_DEFAULT, size, text, 1, qtrue) + spacing;
+    }
+    return w;
+}
+
+static void BR_DrawDetails(float x, float top, float w, float height) {
     const brServer_t* s = &br.selected;
+    float lineB = SM_LineHeight(15.0f, 1.6f);
     float y = top;
     char text[128];
 
@@ -1276,42 +1592,60 @@ static void BR_DrawDetails(float x, float top, float w) {
         return;
     }
     if (br.details == UI_DETAILS_FAILED) {
-        BR_TextIn(x, top, 24, 15, smText, "Failed to retrieve server details.", qfalse, NULL);
+        BR_TextIn(x, top, lineB, 15, smText, "Failed to retrieve server details.", qfalse, NULL);
         return;
     }
     if (br.details == UI_DETAILS_LOADING) {
-        BR_Loader(x, top);
+        BR_Loader(x + (float)(int)(BR_Px(w) * 50.0f / 100.0f) / smScale,
+                  top + (float)(int)(BR_Px(height) * 15.0f / 100.0f) / smScale);
         return;
     }
 
     {
-        smRect_t box = SM_R(x, y, w, BR_DETAILS_MAP_H);
-        float shotW = w, shotH = w * 270.0f / 480.0f;
-        int i;
+        float mapH = SM_Len(220.0f), pad = SM_Len(7.5f);
+        float line1 = SM_LineHeight(24.0f, 1.2f), line4 = SM_LineHeight(18.6667f, 1.35f);
+        float inner = w - 2 * pad;
+        float scale = 1.0f, infoH, infoY, ly;
+        int starts1[SM_MAX_LINES], lens1[SM_MAX_LINES], starts4[SM_MAX_LINES], lens4[SM_MAX_LINES];
+        int n1, n4, rows, i;
+        smRect_t box = SM_R(x, y, w, mapH);
+        qhandle_t shot = BR_Shot("sm", s->map);
 
-        if (shotH < BR_DETAILS_MAP_H) {
-            shotH = BR_DETAILS_MAP_H;
-            shotW = shotH * 480.0f / 270.0f;
-        }
-        SM_Fill(x, y, w, BR_DETAILS_MAP_H, brHead, NULL);
-        SM_Pic(x, y, shotW, shotH, BR_Shot("sm", s->map), &box);
-        for (i = 0; i < 93; i += 3) {
-            float f = (i + 1.5f) / 93.0f;
-            vec4_t shade = {0, 0, 0, f < 0.45f ? 0.8f * f / 0.45f : 0.8f};
-
-            SM_Fill(x, y + BR_DETAILS_MAP_H - 93 + i, w, 3, shade, NULL);
+        SM_Fill(x, y, w, mapH, brHead, NULL);
+        if (shot) {
+            scale = BR_Px(w) / 480.0f > BR_Px(mapH) / 270.0f ? BR_Px(w) / 480.0f : BR_Px(mapH) / 270.0f;
+            SM_Pic(x, y, (float)(int)(480.0f * scale) / smScale, (float)(int)(270.0f * scale) / smScale, shot, &box);
         }
         SM_SetSpacing(SM_SPACING_H1);
-        BR_TextFit(x + 7.5f, SM_Baseline(FONT_DEFAULT, 24, y + BR_DETAILS_MAP_H - 93 + 7.5f, 28.8f), 24, brWhite,
-                   s->name, w - 15, qfalse, FONT_DEFAULT);
+        n1 = SM_Wrap(FONT_DEFAULT, 24.0f, s->name, inner, starts1, lens1);
         SM_SetSpacing(SM_SPACING_H4);
         Com_sprintf(text, sizeof(text), "%s: %s", s->gametype, BR_MapName(s->map));
-        BR_TextFit(x + 7.5f, SM_Baseline(FONT_SANS, 18.6667f, y + BR_DETAILS_MAP_H - 93 + 36.3f, 25.2f), 18.6667f,
-                   brWhite, text, w - 15, qfalse, FONT_SANS);
+        n4 = SM_Wrap(FONT_SANS, 18.6667f, text, inner, starts4, lens4);
+        SM_SetSpacing(0);
+        infoH = 2 * pad + n1 * line1 + n4 * line4 + lineB;
+        infoY = y + mapH - infoH;
+        rows = BR_Px(infoH);
+        for (i = 0; i < rows; i++) {
+            float t = (i + 0.5f) / rows;
+            vec4_t shade = {0, 0, 0, t < 0.45f ? 0.8f * t / 0.45f : 0.8f};
+
+            SM_Fill(x, infoY + i / smScale, w, 1.0f / smScale, shade, &box);
+        }
+        ly = infoY + pad;
+        SM_SetSpacing(SM_SPACING_H1);
+        for (i = 0; i < n1; i++, ly += line1) {
+            BR_ShadowLine(x + pad, SM_Baseline(FONT_DEFAULT, 24.0f, ly, line1), FONT_DEFAULT, 24.0f,
+                          s->name + starts1[i], lens1[i], inner);
+        }
+        SM_SetSpacing(SM_SPACING_H4);
+        for (i = 0; i < n4; i++, ly += line4) {
+            BR_ShadowLine(x + pad, SM_Baseline(FONT_SANS, 18.6667f, ly, line4), FONT_SANS, 18.6667f, text + starts4[i],
+                          lens4[i], inner);
+        }
         SM_SetSpacing(0);
         Com_sprintf(text, sizeof(text), "%i / %i players", s->players, s->maxPlayers);
-        BR_TextIn(x + 7.5f, y + BR_DETAILS_MAP_H - 93 + 61.5f, 24, 15, brWhite, text, qfalse, NULL);
-        y += BR_DETAILS_MAP_H;
+        BR_ShadowLine(x + pad, SM_Baseline(FONT_SANS, 15.0f, ly, lineB), FONT_SANS, 15.0f, text, -1, inner);
+        y += mapH;
     }
 
     {
@@ -1323,36 +1657,56 @@ static void BR_DrawDetails(float x, float top, float w) {
     }
 
     {
-        float h = 44.7f;
+        float size = 21.3333f;
+        float border = SM_LenBorder(2.0f), pad = SM_Len(5.3333f), line = SM_Len(30.0f);
+        float h = 2 * (border + pad) + line;
+        float spacing = SM_LetterSpacing(1.0f);
+        float iw = SM_IconWidth(size, SM_FA_ANGLE_DOUBLE_RIGHT) + spacing;
+        float tw = BR_SpacedBold(size, " JOIN MATCH ", spacing);
+        float bx = x + border + pad + SM_Center(w - 2 * (border + pad), 2 * iw + tw);
+        float baseline = SM_Baseline(FONT_DEFAULT, size, y + border + pad, line);
         qboolean over = SM_Over(BR_HIT_JOIN, 0);
-        float iw = SM_IconWidth(21.3333f, SM_FA_ANGLE_DOUBLE_RIGHT);
-        float tw = SM_SpacedWidth(FONT_DEFAULT, 21.3333f, " JOIN MATCH ", 1.0f);
-        float bx = x + (w - (iw * 2 + tw)) * 0.5f;
-        float baseline = SM_Baseline(FONT_DEFAULT, 21.3333f, y, h);
 
         SM_Fill(x, y, w, h, over ? brPlayHover : brBlack80, NULL);
-        BR_Border(x, y, w, h, 2, brYellow, NULL);
-        SM_Icon(bx, baseline, 21.3333f, brYellow, SM_FA_ANGLE_DOUBLE_RIGHT);
-        SM_SpacedText(bx + iw, baseline, FONT_DEFAULT, 21.3333f, brYellow, " JOIN MATCH ", 1.0f, qfalse);
-        SM_Icon(bx + iw + tw, baseline, 21.3333f, brYellow, SM_FA_ANGLE_DOUBLE_LEFT);
+        BR_Border(x, y, w, h, border, brYellow, NULL);
+        SM_Icon(bx, baseline, size, brYellow, SM_FA_ANGLE_DOUBLE_RIGHT);
+        SM_SpacedText(bx + iw, baseline, FONT_DEFAULT, size, brYellow, " JOIN MATCH ", 1.0f, qtrue);
+        SM_Icon(bx + iw + tw, baseline, size, brYellow, SM_FA_ANGLE_DOUBLE_LEFT);
         SM_Hit(x, y, w, h, BR_HIT_JOIN, 0, NULL);
-        y += h + 7.5f;
+        y += h;
     }
 
     {
+        float margin = SM_Len(7.5f), padV = SM_Len(15.0f), padH = SM_Len(22.5f);
         char lines[4][64];
         int n = BR_NiceDetails(br.rules, lines);
-        float h = 30 + n * 24;
-        int i;
+        int starts[4][SM_MAX_LINES], lens[4][SM_MAX_LINES], count[4];
+        float h = 2 * padV, ly;
+        int i, j;
 
-        SM_Fill(x, y, w, h, brBlack75, NULL);
         for (i = 0; i < n; i++) {
-            BR_TextIn(x + 22.5f, y + 15 + i * 24, 24, 15, brInfo, lines[i], qfalse, NULL);
+            count[i] = SM_Wrap(FONT_SANS, 15.0f, lines[i], w - 2 * padH, starts[i], lens[i]);
+            h += count[i] * lineB;
         }
-        y += h + 7.5f;
+        y += margin;
+        SM_Fill(x, y, w, h, brBlack75, NULL);
+        ly = y + padV;
+        for (i = 0; i < n; i++) {
+            for (j = 0; j < count[i]; j++, ly += lineB) {
+                SM_TextRaw(x + padH, SM_Baseline(FONT_SANS, 15.0f, ly, lineB), FONT_SANS, 15.0f, brInfo,
+                           lines[i] + starts[i][j], lens[i][j], qfalse);
+            }
+        }
+        y += h + margin;
     }
 
     if (br.players[0]) {
+        float padV = SM_Len(15.0f), padH = SM_Len(22.5f), step = lineB + SM_Len(3.75f);
+        int ascent = BR_Px(SM_Ascent(FONT_SANS, 15.0f));
+        int bullet = (ascent * 2 / 3 + 1) / 2;
+        float bulletY = (float)(3 * (ascent - ascent * 2 / 3) / 2) / smScale;
+        float radius = bullet * 0.5f / smScale;
+        float avatar = SM_Len(16.0f);
         const char* p = br.players;
         char name[64], line[128];
         float content, h;
@@ -1364,8 +1718,8 @@ static void BR_DrawDetails(float x, float top, float w) {
                 n++;
             }
         }
-        content = 30 + n * 27.75f;
-        h = content < 300 ? content : 300;
+        content = 2 * padV + n * step;
+        h = content < SM_Len(300.0f) ? content : SM_Len(300.0f);
         if (br.playersScroll > content - h) {
             br.playersScroll = content - h;
         }
@@ -1379,14 +1733,16 @@ static void BR_DrawDetails(float x, float top, float w) {
         n = 0;
         while (p && *p) {
             const char* next = BR_NextPlayer(p, name, sizeof(name), line, sizeof(line));
-            float ly = y + 15 + n * 27.75f - br.playersScroll;
+            float lt = y + padV + n * step - br.playersScroll;
+            float cx = x + padH + radius, cy = lt + bulletY + radius;
+            qhandle_t face = BR_PlayerAvatar(name);
 
-            if (BR_PlayerAvatar(name)) {
-                SM_Pic(x + 22.5f + 1.7f - 8, ly + 13.3f - 8, 16, 16, BR_PlayerAvatar(name), &clip);
+            if (face) {
+                SM_Pic(cx - avatar * 0.5f, cy - avatar * 0.5f, avatar, avatar, face, &clip);
             } else {
-                BR_Circle(x + 22.5f, ly, brInfo, &clip);
+                BR_Circle(cx, cy, radius, brInfo, &clip);
             }
-            BR_PlayerIn(x + 43.5f, ly, 24, 15, brInfo, name, line, &clip);
+            BR_PlayerIn(x + padH + ascent / smScale, lt, lineB, 15, brInfo, name, line, &clip);
             n++;
             p = next;
         }
@@ -1593,9 +1949,14 @@ static void BR_DrawPage(void) {
     UI_Home_Backdrop();
     UI_Home_PageTop(HM_NAV_BROWSER);
 
-    BR_DrawList(left, top, wide ? width * 0.67f : width, bottom - top);
     if (wide) {
-        BR_DrawDetails(left + width * 0.68f, top, width * 0.32f);
+        float px = floorf(width * smScale + 0.5f);
+        float detailsX = (float)(int)(px * 68.0f / 100.0f) / smScale;
+
+        BR_DrawList(left, top, (px - (float)(int)(px * 33.0f / 100.0f)) / smScale, bottom - top);
+        BR_DrawDetails(left + detailsX, top, width - detailsX, bottom - top);
+    } else {
+        BR_DrawList(left, top, width, bottom - top);
     }
 }
 

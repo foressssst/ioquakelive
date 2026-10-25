@@ -160,6 +160,8 @@ void SM_LoadFonts(void);
 float SM_Em(int font);
 float SM_Baseline(int font, float size, float lineTop, float lineHeight);
 float SM_NormalLine(int font, float size);
+float SM_Ascent(int font, float size);
+float SM_Descent(int font, float size);
 float SM_IconBaseline(float size, float lineTop, float lineHeight);
 float SM_Center(float room, float width);
 qboolean SM_TextInside(float baseline, float size, const smRect_t* clip);
