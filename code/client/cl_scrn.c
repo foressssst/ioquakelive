@@ -266,6 +266,18 @@ void SCR_DrawDemoRecording(void) {
     }
 }
 
+static void SCR_DrawLatencyStats(void) {
+    const char* report;
+
+    if (!Cvar_VariableIntegerValue("r_latencyStats")) {
+        return;
+    }
+    report = Cvar_VariableString("r_latencyReport");
+    if (report[0]) {
+        SCR_DrawRecordText((float)((80 - (int)strlen(report)) * 4), 12.0f, 8.0f, report);
+    }
+}
+
 static int current;
 static float values[1024];
 
@@ -352,6 +364,7 @@ void SCR_DrawScreenField(stereoFrame_t stereoFrame) {
             case CA_ACTIVE:
                 CL_CGameRendering(stereoFrame);
                 SCR_DrawDemoRecording();
+                SCR_DrawLatencyStats();
                 break;
         }
     }

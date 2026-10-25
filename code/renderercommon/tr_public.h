@@ -168,6 +168,7 @@ typedef struct {
     void (*Sys_GLimpSafeInit)(void);
     void (*Sys_GLimpInit)(void);
     qboolean (*Sys_LowPhysicalMemory)(void);
+    qboolean (*SleepMicroseconds)(int64_t usec);
 } refimport_t;
 
 #ifdef USE_RENDERER_DLOPEN

@@ -1184,6 +1184,7 @@ extern cvar_t	*r_dlightSaturation;
 #ifdef USE_VULKAN
 extern cvar_t	*r_device;
 extern cvar_t	*r_lowLatency;
+extern cvar_t	*r_latencyStats;
 #ifdef USE_VBO
 extern cvar_t	*r_vbo;
 #endif

@@ -79,6 +79,7 @@ cvar_t	*r_dlightSaturation;
 #ifdef USE_VULKAN
 cvar_t	*r_device;
 cvar_t	*r_lowLatency;
+cvar_t	*r_latencyStats;
 #ifdef USE_VBO
 cvar_t	*r_vbo;
 #endif
@@ -1567,10 +1568,13 @@ static void R_Register( void )
 #ifdef USE_VULKAN
 	r_lowLatency = ri.Cvar_Get( "r_lowLatency", "1", CVAR_ARCHIVE_ND );
 	RI_Cvar_CheckRange( r_lowLatency, "0", "2", CV_INTEGER );
-	ri.Cvar_SetDescription( r_lowLatency, "Low latency mode, when the driver has it:\n" \
+	ri.Cvar_SetDescription( r_lowLatency, "Low latency mode:\n" \
 		" 0: off\n" \
-		" 1: on\n" \
-		" 2: on, asking the card for its highest clocks\n" );
+		" 1: on: NVIDIA Reflex or AMD Anti-Lag 2 when the driver has them, otherwise the game waits for the card before reading input\n" \
+		" 2: on, asking the card for its highest clocks, and the game always waits for the card before reading input\n" );
+	r_latencyStats = ri.Cvar_Get( "r_latencyStats", "0", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetDescription( r_latencyStats, "Show the latency the driver measures (NVIDIA Reflex) at the top of the screen." );
+	ri.Cvar_Get( "r_latencyReport", "", CVAR_ROM );
 
 	r_device = ri.Cvar_Get( "r_device", "-1", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	RI_Cvar_CheckRange( r_device, "-2", NULL, CV_INTEGER );

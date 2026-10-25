@@ -567,6 +567,7 @@ typedef struct {
 	int latencyModeSet;
 	int latencyMaxFps;
 	qboolean latencyLive;
+	float pacingDelay;
 	qboolean swapchainPending;
 
 	float maxAnisotropy;

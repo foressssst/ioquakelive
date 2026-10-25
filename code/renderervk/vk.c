@@ -116,6 +116,7 @@ static PFN_vkResetFences								qvkResetFences;
 static PFN_vkUnmapMemory								qvkUnmapMemory;
 static PFN_vkUpdateDescriptorSets						qvkUpdateDescriptorSets;
 static PFN_vkWaitForFences								qvkWaitForFences;
+static PFN_vkGetFenceStatus								qvkGetFenceStatus;
 static PFN_vkAcquireNextImageKHR						qvkAcquireNextImageKHR;
 static PFN_vkCreateSwapchainKHR							qvkCreateSwapchainKHR;
 static PFN_vkDestroySwapchainKHR						qvkDestroySwapchainKHR;
@@ -127,6 +128,7 @@ static PFN_vkAntiLagUpdateAMD							qvkAntiLagUpdateAMD;
 static PFN_vkSetLatencySleepModeNV						qvkSetLatencySleepModeNV;
 static PFN_vkLatencySleepNV								qvkLatencySleepNV;
 static PFN_vkSetLatencyMarkerNV							qvkSetLatencyMarkerNV;
+static PFN_vkGetLatencyTimingsNV						qvkGetLatencyTimingsNV;
 static PFN_vkWaitSemaphoresKHR							qvkWaitSemaphoresKHR;
 
 static PFN_vkGetBufferMemoryRequirements2KHR			qvkGetBufferMemoryRequirements2KHR;
@@ -2054,6 +2056,7 @@ static void init_vulkan_library( void )
 	INIT_DEVICE_FUNCTION(vkUnmapMemory)
 	INIT_DEVICE_FUNCTION(vkUpdateDescriptorSets)
 	INIT_DEVICE_FUNCTION(vkWaitForFences)
+	INIT_DEVICE_FUNCTION(vkGetFenceStatus)
 	INIT_DEVICE_FUNCTION(vkAcquireNextImageKHR)
 	INIT_DEVICE_FUNCTION(vkCreateSwapchainKHR)
 	INIT_DEVICE_FUNCTION(vkDestroySwapchainKHR)
@@ -2083,6 +2086,7 @@ static void init_vulkan_library( void )
 		INIT_DEVICE_FUNCTION_EXT(vkSetLatencySleepModeNV)
 		INIT_DEVICE_FUNCTION_EXT(vkLatencySleepNV)
 		INIT_DEVICE_FUNCTION_EXT(vkSetLatencyMarkerNV)
+		INIT_DEVICE_FUNCTION_EXT(vkGetLatencyTimingsNV)
 		INIT_DEVICE_FUNCTION_EXT(vkWaitSemaphoresKHR)
 		if ( !qvkSetLatencySleepModeNV || !qvkLatencySleepNV || !qvkSetLatencyMarkerNV || !qvkWaitSemaphoresKHR ) {
 			vk.lowLatency2 = qfalse;
@@ -2198,6 +2202,7 @@ static void deinit_device_functions( void )
 	qvkUnmapMemory								= NULL;
 	qvkUpdateDescriptorSets						= NULL;
 	qvkWaitForFences							= NULL;
+	qvkGetFenceStatus							= NULL;
 	qvkAcquireNextImageKHR						= NULL;
 	qvkCreateSwapchainKHR						= NULL;
 	qvkDestroySwapchainKHR						= NULL;
@@ -2214,6 +2219,7 @@ static void deinit_device_functions( void )
 	qvkSetLatencySleepModeNV					= NULL;
 	qvkLatencySleepNV							= NULL;
 	qvkSetLatencyMarkerNV						= NULL;
+	qvkGetLatencyTimingsNV						= NULL;
 	qvkWaitSemaphoresKHR						= NULL;
 }
 
@@ -7240,6 +7246,7 @@ static qboolean vk_find_screenmap_drawsurfs( void )
 #endif
 
 static void vk_latency_marker( VkLatencyMarkerNV marker );
+static void vk_pacing_update( void );
 
 void vk_window_resized( void )
 {
@@ -7536,6 +7543,8 @@ void vk_end_frame( void )
 		submit_info.pNext = &latency_submit;
 	}
 
+	vk_pacing_update();
+
 	VK_CHECK( qvkQueueSubmit( vk.queue, 1, &submit_info, vk.cmd->rendering_finished_fence ) );
 	vk.cmd->waitForFence = qtrue;
 
@@ -7646,8 +7655,50 @@ void vk_low_latency_flash( void )
 	vk_latency_marker( VK_LATENCY_MARKER_TRIGGER_FLASH_NV );
 }
 
+static qboolean vk_pacing_enabled( void )
+{
+	return ( r_lowLatency->integer > 1 || ( r_lowLatency->integer == 1 && !vk.antiLag && !vk.lowLatency2 ) ) ? qtrue : qfalse;
+}
+
+static void vk_pacing_wait( void )
+{
+	int64_t end;
+
+	if ( vk.pacingDelay < 50.0f || RI_CL_IsMinimized() ) {
+		return;
+	}
+
+	end = ri.Microseconds() + (int64_t)vk.pacingDelay;
+	if ( vk.pacingDelay > 1500.0f && ri.SleepMicroseconds ) {
+		ri.SleepMicroseconds( (int64_t)vk.pacingDelay - 1000 );
+	}
+	while ( ri.Microseconds() < end ) {
+	}
+}
+
+static void vk_pacing_update( void )
+{
+	const vk_tess_t *prev;
+
+	if ( !vk_pacing_enabled() ) {
+		vk.pacingDelay = 0.0f;
+		return;
+	}
+
+	prev = &vk.tess[ ( vk.cmd_index + NUM_COMMAND_BUFFERS - 1 ) % NUM_COMMAND_BUFFERS ];
+	if ( prev->waitForFence && qvkGetFenceStatus( vk.device, prev->rendering_finished_fence ) == VK_NOT_READY ) {
+		vk.pacingDelay = MIN( vk.pacingDelay + 30.0f, 10000.0f );
+	} else {
+		vk.pacingDelay = MAX( vk.pacingDelay - 15.0f, 0.0f );
+	}
+}
+
 void vk_low_latency_input( void )
 {
+	if ( vk_pacing_enabled() ) {
+		vk_pacing_wait();
+	}
+
 	if ( !vk.antiLag && !vk.lowLatency2 ) {
 		return;
 	}
@@ -7662,8 +7713,67 @@ void vk_low_latency_input( void )
 	vk_reflex_sleep();
 
 	vk_latency_marker( VK_LATENCY_MARKER_SIMULATION_START_NV );
+	vk_latency_marker( VK_LATENCY_MARKER_INPUT_SAMPLE_NV );
 
 	vk_anti_lag_stage( VK_ANTI_LAG_STAGE_INPUT_AMD );
+}
+
+static void vk_latency_report( void )
+{
+	static VkLatencyTimingsFrameReportNV reports[ 64 ];
+	static int lastReport;
+	VkGetLatencyMarkerInfoNV info;
+	double pc = 0, gpu = 0, queue = 0;
+	uint32_t i;
+	int n = 0, now;
+
+	if ( !r_latencyStats->integer ) {
+		return;
+	}
+
+	now = ri.Milliseconds();
+	if ( now - lastReport < 500 && now >= lastReport ) {
+		return;
+	}
+	lastReport = now;
+
+	if ( !vk.lowLatency2 || !qvkGetLatencyTimingsNV || vk.swapchain == VK_NULL_HANDLE ) {
+		ri.Cvar_Set( "r_latencyReport", vk.antiLag ? "Anti-Lag 2 on (the driver gives no timings)" : "no driver latency data" );
+		return;
+	}
+
+	for ( i = 0; i < ARRAY_LEN( reports ); i++ ) {
+		reports[ i ].sType = VK_STRUCTURE_TYPE_LATENCY_TIMINGS_FRAME_REPORT_NV;
+		reports[ i ].pNext = NULL;
+	}
+	info.sType = VK_STRUCTURE_TYPE_GET_LATENCY_MARKER_INFO_NV;
+	info.pNext = NULL;
+	info.timingCount = ARRAY_LEN( reports );
+	info.pTimings = reports;
+	qvkGetLatencyTimingsNV( vk.device, vk.swapchain, &info );
+
+	for ( i = 0; i < info.timingCount && i < ARRAY_LEN( reports ); i++ ) {
+		const VkLatencyTimingsFrameReportNV *r = &reports[ i ];
+
+		if ( !r->inputSampleTimeUs || !r->gpuRenderEndTimeUs || r->gpuRenderEndTimeUs < r->inputSampleTimeUs ) {
+			continue;
+		}
+		pc += (double)( r->gpuRenderEndTimeUs - r->inputSampleTimeUs );
+		if ( r->gpuRenderEndTimeUs >= r->gpuRenderStartTimeUs ) {
+			gpu += (double)( r->gpuRenderEndTimeUs - r->gpuRenderStartTimeUs );
+		}
+		if ( r->gpuRenderStartTimeUs >= r->renderSubmitEndTimeUs ) {
+			queue += (double)( r->gpuRenderStartTimeUs - r->renderSubmitEndTimeUs );
+		}
+		n++;
+	}
+
+	if ( !n ) {
+		ri.Cvar_Set( "r_latencyReport", "Reflex on, waiting for driver timings" );
+		return;
+	}
+	ri.Cvar_Set( "r_latencyReport", va( "PC latency %.1f ms | GPU %.1f ms | queue %.1f ms | Reflex %s",
+		pc / n / 1000.0, gpu / n / 1000.0, queue / n / 1000.0, r_lowLatency->integer > 1 ? "boost" : r_lowLatency->integer ? "on" : "off" ) );
 }
 
 void vk_present_frame( void )
@@ -7705,6 +7815,7 @@ void vk_present_frame( void )
 	res = qvkQueuePresentKHR( vk.queue, &present_info );
 
 	vk_latency_marker( VK_LATENCY_MARKER_PRESENT_END_NV );
+	vk_latency_report();
 	switch ( res ) {
 		case VK_SUCCESS:
 			break;

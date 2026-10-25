@@ -2911,6 +2911,7 @@ void CL_InitRef(void) {
     ri.Error = Com_Error;
     ri.Milliseconds = CL_ScaledMilliseconds;
     ri.Microseconds = Sys_Microseconds;
+    ri.SleepMicroseconds = Sys_SleepMicroseconds;
     ri.JobsSubmit = Com_JobsSubmit;
     ri.JobWorkers = Com_JobWorkers;
     ri.Sleep = Sys_Sleep;
