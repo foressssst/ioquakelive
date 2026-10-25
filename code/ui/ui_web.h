@@ -124,6 +124,7 @@ int SM_Px(float v);
 float SM_Percent(float length, float percent);
 float SM_Len(float css);
 float SM_LenBorder(float css);
+float SM_Rem(float css);
 float SM_LetterSpacing(float css);
 float SM_LineHeight(float size, float ratio);
 #define SM_H1_PAD SM_Len(8.0f)
@@ -165,6 +166,7 @@ float SM_NormalLine(int font, float size);
 float SM_Ascent(int font, float size);
 float SM_Descent(int font, float size);
 float SM_IconBaseline(float size, float lineTop, float lineHeight);
+float SM_StrutBelow(float size, float lineHeight);
 float SM_Center(float room, float width);
 float SM_CenterLine(float room, float width);
 qboolean SM_TextInside(float baseline, float size, const smRect_t* clip);

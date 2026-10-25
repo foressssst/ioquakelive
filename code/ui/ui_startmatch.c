@@ -673,14 +673,6 @@ static void SM_Layout(void) {
     smL.valW = SM_Percent(inner, 39.3333333333f);
 }
 
-static float SM_StrutBelow(float size, float lineHeight) {
-    int ascent = SM_Px(SM_Ascent(FONT_SANS, size));
-    int descent = SM_Px(SM_Descent(FONT_SANS, size));
-    int line = SM_Px(lineHeight);
-
-    return (float)(line - ascent - (line - ascent - descent) / 2) / smScale;
-}
-
 static void SM_CardCentered(float x, float w, float lineTop, const char* text) {
     SM_Text(x + SM_Center(w, SM_Advance(FONT_SANS, SM_CARD_FONT, text, -1)),
             SM_Baseline(FONT_SANS, SM_CARD_FONT, lineTop, SM_LineHeight(SM_CARD_FONT, 1.25f)), FONT_SANS,

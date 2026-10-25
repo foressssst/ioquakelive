@@ -65,6 +65,10 @@ float SM_Len(float css) {
     return floorf(css * smScale + 0.01f) / smScale;
 }
 
+float SM_Rem(float css) {
+    return floorf(css + 0.01f) / smScale;
+}
+
 float SM_LenBorder(float css) {
     float len = SM_Len(css);
 
@@ -402,6 +406,14 @@ static float SM_FaceBaseline(int face, float size, float lineTop, float lineHeig
 
 float SM_Baseline(int font, float size, float lineTop, float lineHeight) {
     return SM_FaceBaseline(SM_Face(font, qfalse), size, lineTop, lineHeight);
+}
+
+float SM_StrutBelow(float size, float lineHeight) {
+    int ascent = SM_Px(SM_Ascent(FONT_SANS, size));
+    int descent = SM_Px(SM_Descent(FONT_SANS, size));
+    int line = SM_Px(lineHeight);
+
+    return (float)(line - ascent - (line - ascent - descent) / 2) / smScale;
 }
 
 float SM_IconBaseline(float size, float lineTop, float lineHeight) {

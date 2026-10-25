@@ -21,10 +21,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "ui_web.h"
 
-#define TR_SECTION_H 675.0f
+#define TR_SECTION_H SM_Len(675.0f)
 #define TR_RETAIL_CARDS 3
-#define TR_HEADING_H 54.4f
 #define TR_BAR 8.0f
+#define TR_LINE SM_LineHeight(TR_TEXT_SIZE, 1.6f)
 
 typedef enum {
     TR_HIT_NONE,
@@ -178,10 +178,10 @@ static void TR_DrawParagraph(float x, float y, float width, const char* text, co
             gap = space + (width - used) / (last - first);
         }
         for (i = first; i <= last; i++) {
-            TR_DrawWord(cx, SM_Baseline(FONT_SANS, TR_TEXT_SIZE, y, 24), words[i].text, &drawItalic, clip);
+            TR_DrawWord(cx, SM_Baseline(FONT_SANS, TR_TEXT_SIZE, y, TR_LINE), words[i].text, &drawItalic, clip);
             cx += words[i].width + gap;
         }
-        y += 24;
+        y += TR_LINE;
         first = last + 1;
     }
 }
@@ -203,40 +203,39 @@ static void TR_DrawSection(int i, float x, float y, float w, const smRect_t* cli
     float f = TR_Ease(tr.hover[i]);
     vec4_t back = {0, 0, 0, 0.8f + 0.2f * f};
     vec4_t shade = {0, 0, 0, 0.6f * (1 - f)};
-    float ty = y + w + 6;
+    float titleLine = SM_LineHeight(36.0f, 1.25f), subLine = SM_LineHeight(18.6667f, 1.3f);
+    float ty = y + w + SM_StrutBelow(TR_TEXT_SIZE, TR_LINE);
+    float pad = SM_Len(15.0f);
     int buttons = card->video ? 2 : 1;
-    float bw = w * 0.45f;
-    float bx = x + (w - (buttons * bw + w * 0.04f)) * 0.5f;
-    float by = y + TR_SECTION_H - 15 - SM_WEB_BUTTON_H;
+    float bw = SM_Percent(w, 45.0f), gap = SM_Percent(w, 4.0f);
+    float bx = x + SM_Center(w, buttons * bw + gap);
+    float by = y + TR_SECTION_H - pad - SM_WEB_BUTTON_H;
 
     SM_Fill(x, y, w, TR_SECTION_H, back, clip);
     SM_Pic(x, y, w, w, tr.picture[i], clip);
     SM_Fill(x, y, w, w, shade, clip);
 
-    if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 36, ty, 45), 36, clip)) {
+    if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 36, ty, titleLine), 36, clip)) {
         SM_SetSpacing(SM_SPACING_H1);
-        SM_Text(x + (w - SM_Advance(FONT_DEFAULT, 36, card->title, -1)) * 0.5f, SM_Baseline(FONT_DEFAULT, 36, ty, 45),
-                FONT_DEFAULT, 36, trYellow, card->title, -1, qfalse);
+        SM_Text(x + SM_Center(w, SM_Advance(FONT_DEFAULT, 36, card->title, -1)),
+                SM_Baseline(FONT_DEFAULT, 36, ty, titleLine), FONT_DEFAULT, 36, trYellow, card->title, -1, qfalse);
         SM_SetSpacing(0);
     }
-    ty += 45;
-    if (SM_TextInside(SM_Baseline(FONT_SANS, 18.6667f, ty, 24.3f), 18.6667f, clip)) {
+    ty += titleLine;
+    if (SM_TextInside(SM_Baseline(FONT_SANS, 18.6667f, ty, subLine), 18.6667f, clip)) {
         SM_SetSpacing(SM_SPACING_H1);
-        SM_Text(x + (w - SM_AdvanceBold(FONT_SANS, 18.6667f, card->subtitle, -1, qtrue)) * 0.5f,
-                SM_Baseline(FONT_SANS, 18.6667f, ty, 24.3f), FONT_SANS, 18.6667f, smText, card->subtitle, -1, qtrue);
+        SM_Text(x + SM_Center(w, SM_AdvanceBold(FONT_SANS, 18.6667f, card->subtitle, -1, qtrue)),
+                SM_Baseline(FONT_SANS, 18.6667f, ty, subLine), FONT_SANS, 18.6667f, smText, card->subtitle, -1, qtrue);
         SM_SetSpacing(0);
     }
-    ty += 24.3f + 20;
-    TR_DrawParagraph(x + 15, ty + 15, w - 30, card->text, clip);
+    ty += subLine + SM_Rem(20.0f);
+    TR_DrawParagraph(x + pad, ty + pad, w - 2 * pad, card->text, clip);
 
     SM_Hit(x, y, w, TR_SECTION_H, TR_HIT_CARD, i, clip);
     if (card->video) {
         TR_Button(bx, by, bw, "Watch Video", SM_Over(TR_HIT_VIDEO, i), clip);
         SM_Hit(bx, by, bw, SM_WEB_BUTTON_H, TR_HIT_VIDEO, i, clip);
-        bx += bw;
-    }
-    if (card->video) {
-        bx += w * 0.04f;
+        bx += bw + gap;
     }
     TR_Button(bx, by, bw, "Start Training", SM_Over(TR_HIT_START, i), clip);
     SM_Hit(bx, by, bw, SM_WEB_BUTTON_H, TR_HIT_START, i, clip);
@@ -248,7 +247,7 @@ static void TR_SectionAt(int i, float left, float top, float w, float margin, fl
         *y = top;
     } else {
         *x = left + (i - TR_RETAIL_CARDS) * (w + margin);
-        *y = top + TR_SECTION_H + margin + TR_HEADING_H + margin;
+        *y = top + TR_SECTION_H + margin + SM_TITLE_H + margin;
     }
 }
 
@@ -281,9 +280,9 @@ void UI_Training_Open(void) {
 
 void UI_Training_Paint(void) {
     float left = UI_Home_Left();
-    float width = HM_CONTAINER_W - TR_BAR;
-    float w = width * 0.3f;
-    float margin = width * 0.03f;
+    float width = HM_CONTAINER_W - SM_Len(TR_BAR);
+    float w = SM_Percent(width, 30.0f);
+    float margin = SM_Percent(width, 3.0f);
     float top, view, y, x, sy, dt;
     smRect_t clip;
     int i;
@@ -298,7 +297,7 @@ void UI_Training_Paint(void) {
     top = UI_Home_Header(HM_NAV_H, NULL, "Training Center");
 
     view = UI_Home_FrameBottom() - top;
-    tr.content = margin + 2 * TR_SECTION_H + TR_HEADING_H + 2 * margin;
+    tr.content = margin + 2 * TR_SECTION_H + SM_TITLE_H + 2 * margin;
     if (tr.scroll > tr.content - view) {
         tr.scroll = tr.content - view;
     }
@@ -329,11 +328,11 @@ void UI_Training_Paint(void) {
     }
 
     sy = y + TR_SECTION_H + margin;
-    SM_Fill(left, sy, HM_CONTAINER_W, TR_HEADING_H, trBlack80, &clip);
-    if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 32.0f, sy + 8.0f, 38.4f), 32.0f, &clip)) {
+    SM_Fill(left, sy, HM_CONTAINER_W, SM_TITLE_H, trBlack80, &clip);
+    if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 32.0f, sy + SM_H1_PAD, SM_H1_LINE), 32.0f, &clip)) {
         SM_SetSpacing(SM_SPACING_H1);
-        SM_Text(left + 6.4f, SM_Baseline(FONT_DEFAULT, 32.0f, sy + 8.0f, 38.4f), FONT_DEFAULT, 32.0f, smText,
-                "Advanced Training", -1, qfalse);
+        SM_Text(left + SM_Len(6.4f), SM_Baseline(FONT_DEFAULT, 32.0f, sy + SM_H1_PAD, SM_H1_LINE), FONT_DEFAULT, 32.0f,
+                smText, "Advanced Training", -1, qfalse);
         SM_SetSpacing(0);
     }
 

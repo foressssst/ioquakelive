@@ -365,8 +365,8 @@ float UI_Home_Header(float y, const char* eyebrow, const char* title) {
     (void)eyebrow;
     SM_Fill(left, y, HM_CONTAINER_W, SM_TITLE_H, hfBlack80, NULL);
     SM_SetSpacing(SM_SPACING_H1);
-    SM_Text(left + 6.4f, SM_Baseline(FONT_DEFAULT, 32.0f, y + SM_H1_PAD, SM_H1_LINE), FONT_DEFAULT, 32.0f, smText,
-            title, -1, qfalse);
+    SM_Text(left + SM_Len(6.4f), SM_Baseline(FONT_DEFAULT, 32.0f, y + SM_H1_PAD, SM_H1_LINE), FONT_DEFAULT, 32.0f,
+            smText, title, -1, qfalse);
     SM_SetSpacing(0);
     return y + SM_TITLE_H + SM_Len(2.0f);
 }
