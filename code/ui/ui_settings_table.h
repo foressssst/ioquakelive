@@ -57,6 +57,8 @@ static const stOption_t stOpts_r_ext_max_anisotropy[] = {{"2x", "2"}, {"4x", "4"
 static const stOption_t stOpts_r_fsr[] = {{"Off", "0"}, {"Ultra Quality", "1"}, {"Quality", "2"}, {"Balanced", "3"}, {"Performance", "4"}};
 static const stOption_t stOpts_cg_drawbrightweapons[] = {{"Off", "0"}, {"Yours", "1"}, {"Enemies", "4"}, {"Yours and Enemies", "5"}, {"Everyone", "7"}};
 static const stOption_t stOpts_ch_animaterewardicons[] = {{"Still", "0"}, {"Once", "1"}, {"Loop", "2"}};
+static const stOption_t stOpts_ch_drawlocaltime[] = {{"Off", "0"}, {"24 Hours", "1"}, {"12 Hours", "2"}};
+static const stOption_t stOpts_r_maxqueuedframes[] = {{"Driver", "0"}, {"1 Frame", "1"}, {"2 Frames", "2"}};
 
 static const stCvar_t stCvars[] = {
     {ST_TAB_INPUT, "Mouse", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, -1},
@@ -159,6 +161,8 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_GAME, "Allow Console Chat", "cl_allowconsolechat", ST_BOOL, 0.0f, 0.0f, 0.0f, NULL, 0, "Enable the ability to chat in the console without the use of the 'say' command.", 1},
     {ST_TAB_GAME, "Teammate Indicators", "cg_teammatenames", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_cg_teammatenames, 3, NULL, 1},
     {ST_TAB_GAME, "Teammate POIs", "cg_teammatepois", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 1},
+    {ST_TAB_GAME, "Auto Stats", "ch_autostats", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Save the console with the final scores to a file under stats/ when a match ends.", 1},
+    {ST_TAB_GAME, "Check for Updates", "cl_checkupdates", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Ask at startup whether a newer version is out and say so in the main menu.", 1},
     {ST_TAB_HUD, "HUD", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, -1},
     {ST_TAB_HUD, "HUD Style", "cg_hudfiles", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_cg_hudfiles, 3, "Choose between small, medium and large sized HUD icons.", 0},
     {ST_TAB_HUD, "Level Timer Direction", "cg_leveltimerdirection", ST_SELECT, 0.0f, 1.0f, 0.0f, stOpts_cg_leveltimerdirection, 2, "Direction in which the match timer counts.", 0},
@@ -193,6 +197,8 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_HUD, "Animated Medals", "ch_animaterewardicons", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_ch_animaterewardicons, 3, NULL, 1},
     {ST_TAB_HUD, "Typing Balloon Animation", "cg_animatechatballoon", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 1},
     {ST_TAB_HUD, "Zoom Animation Time", "cg_zoomanimationtime", ST_RANGE, 0.0f, 500.0f, 10.0f, NULL, 0, NULL, 1},
+    {ST_TAB_HUD, "Local Time", "ch_drawlocaltime", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_ch_drawlocaltime, 3, "Display the clock of your computer.", 1},
+    {ST_TAB_HUD, "Demo Recording Name", "ch_recordmessage", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Display the name of the demo while it is being recorded.", 1},
     {ST_TAB_TEAM, "Teammates", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
     {ST_TAB_TEAM, "Enemies", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
     {ST_TAB_TEAM, "Force Team Model", "cg_forceteammodel", ST_MODEL, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
@@ -279,6 +285,9 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_VIDEO, "Scene Saturation", "r_bloomscenesaturation", ST_RANGE, 0.0f, 10.0f, 0.1f, NULL, 0, "The higher the scene saturation, the more colorful the non-bloomed world is.", 1},
     {ST_TAB_VIDEO, "Scene Intensity", "r_bloomsceneintensity", ST_RANGE, 0.0f, 10.0f, 0.1f, NULL, 0, "The higher the scene intensity, the brighter the non-bloomed world is.", 1},
     {ST_TAB_VIDEO, "Low Latency (Vulkan)", "r_lowlatency", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_r_lowlatency, 3, NULL, 1},
+    {ST_TAB_VIDEO, "Latency Stats (Vulkan)", "r_latencystats", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Display the latency measured by the NVIDIA driver at the top of the screen.", 1},
+    {ST_TAB_VIDEO, "Max Queued Frames", "r_maxqueuedframes", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_r_maxqueuedframes, 3, "Frames the graphics card may have queued. Fewer frames lower the input lag and can cost FPS.", 1},
+    {ST_TAB_VIDEO, "Busy Wait", "com_busywait", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Wait for the next frame by spinning instead of sleeping. Steadier frame times, more CPU use.", 1},
     {ST_TAB_VIDEO, "Antialiasing", "r_ext_multisample", ST_SELECT, 0.0f, 8.0f, 0.0f, stOpts_r_ext_multisample, 4, NULL, 1},
     {ST_TAB_VIDEO, "Anisotropic Filtering", "r_ext_max_anisotropy", ST_SELECT, 2.0f, 16.0f, 0.0f, stOpts_r_ext_max_anisotropy, 4, NULL, 1},
     {ST_TAB_VIDEO, "FidelityFX Upscaling (OpenGL)", "r_fsr", ST_SELECT, 0.0f, 4.0f, 0.0f, stOpts_r_fsr, 5, NULL, 1},
@@ -313,6 +322,9 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_SPECTATING, "Spec FOV", "cg_specfov", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Render the view with the spectated player's FOV.", 0},
     {ST_TAB_SPECTATING, "Draw Input", "cg_drawinputcmds", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_cg_drawinputcmds, 3, "Display the player's movement input commands.", 0},
     {ST_TAB_SPECTATING, "Movement Keys", "ch_drawkeys", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 0},
+    {ST_TAB_SPECTATING, "Target Status", "ch_drawtargetstatus", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Show the health and armor of any player under the crosshair, not only teammates.", 0},
+    {ST_TAB_SPECTATING, "Follow Frags", "ch_followkiller", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Switch to whoever gets a frag, at most once every two seconds.", 0},
+    {ST_TAB_SPECTATING, "X-Ray", "cg_xray", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Show players through walls in their team color. Only in demos and as a spectator.", 0},
 };
 
 static const char* const stTabNames[] = {"INPUT", "GAMEPAD", "BASIC", "GAME", "HUD", "TEAM", "WEAPONS", "VIDEO", "SOUND", "SPECTATING"};
