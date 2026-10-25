@@ -280,7 +280,7 @@ static float ST_Tab(float x, float y, const char* label, int tab, const smRect_t
 
     Q_strncpyz(upper, label, sizeof(upper));
     Q_strupr(upper);
-    w = SM_SpacedWidth(FONT_SANS, 11, upper, 1.0f) + 40;
+    w = SM_SpacedWidth(FONT_SANS, 11, upper, 1.0f, qtrue) + 40;
     if (chosen) {
         SM_Fill(x, y, w, ST_ROW_H, stYellow, clip);
     }

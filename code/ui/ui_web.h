@@ -120,6 +120,8 @@ void SM_SetLook(smLook_t look);
 void SM_Icon(float x, float baseline, float size, const float* color, int codepoint);
 float SM_IconWidth(float size, int codepoint);
 
+int SM_Px(float v);
+float SM_Percent(float length, float percent);
 float SM_Len(float css);
 float SM_LenBorder(float css);
 float SM_LetterSpacing(float css);
@@ -164,6 +166,7 @@ float SM_Ascent(int font, float size);
 float SM_Descent(int font, float size);
 float SM_IconBaseline(float size, float lineTop, float lineHeight);
 float SM_Center(float room, float width);
+float SM_CenterLine(float room, float width);
 qboolean SM_TextInside(float baseline, float size, const smRect_t* clip);
 float SM_Advance(int font, float size, const char* text, int len);
 float SM_AdvanceBold(int font, float size, const char* text, int len, qboolean bold);
@@ -175,7 +178,7 @@ int SM_ItalicFace(void);
 float SM_AdvanceRaw(int font, float size, const char* text, int len, qboolean bold);
 void SM_TextRaw(float x, float baseline, int font, float size, const float* color, const char* text, int limit,
                 qboolean bold);
-float SM_SpacedWidth(int font, float size, const char* text, float spacing);
+float SM_SpacedWidth(int font, float size, const char* text, float spacing, qboolean bold);
 void SM_SpacedText(float x, float baseline, int font, float size, const float* color, const char* text, float spacing,
                    qboolean bold);
 int SM_Wrap(int font, float size, const char* text, float width, int* starts, int* lens);

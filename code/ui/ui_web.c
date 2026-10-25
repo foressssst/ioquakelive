@@ -71,6 +71,14 @@ float SM_LenBorder(float css) {
     return len * smScale < 1.0f ? 1.0f / smScale : len;
 }
 
+int SM_Px(float v) {
+    return (int)floorf(v * smScale + 0.5f);
+}
+
+float SM_Percent(float length, float percent) {
+    return (float)(int)(SM_Px(length) * percent / 100.0f) / smScale;
+}
+
 float SM_LetterSpacing(float css) {
     return floorf(css * smScale + 0.5f) / smScale;
 }
@@ -406,6 +414,12 @@ float SM_Center(float room, float width) {
     return space > 0 ? ((space + 1) / 2) / smScale : 0.0f;
 }
 
+float SM_CenterLine(float room, float width) {
+    int space = (int)floorf(room * smScale + 0.5f) - (int)floorf(width * smScale + 0.5f);
+
+    return space > 0 ? (space / 2) / smScale : 0.0f;
+}
+
 qboolean SM_TextInside(float baseline, float size, const smRect_t* clip) {
     return baseline - size * 1.07f >= clip->y - 1.0f && baseline + size * 0.3f <= clip->y + clip->h + 1.0f;
 }
@@ -467,6 +481,7 @@ static void SM_DrawFace(float x, float baseline, int face, float size, const flo
 
         trap_R_Font_DrawString(sx, sy, text, face, px, limit, NULL, flags);
         if (bold && !SM_HasBold(face)) {
+            trap_R_SetColor(color);
             trap_R_Font_DrawString(sx + (shift < 1 ? 1 : shift), sy, text, face, px, limit, NULL, flags);
         }
         trap_R_SetColor(NULL);
@@ -483,8 +498,10 @@ static void SM_DrawFace(float x, float baseline, int face, float size, const flo
         if (i + n > len) {
             n = len - i;
         }
+        trap_R_SetColor(color);
         trap_R_Font_DrawString(sx, sy, text + i, face, px, n, NULL, flags);
         if (bold && !SM_HasBold(face)) {
+            trap_R_SetColor(color);
             trap_R_Font_DrawString(sx + (shift < 1 ? 1 : shift), sy, text + i, face, px, n, NULL, flags);
         }
         smSpacing = 0;
@@ -675,11 +692,11 @@ void SM_Centered(float middle, float baseline, float size, const float* color, c
             bold);
 }
 
-float SM_SpacedWidth(int font, float size, const char* text, float spacing) {
+float SM_SpacedWidth(int font, float size, const char* text, float spacing, qboolean bold) {
     float w = 0;
 
     for (; *text; text++) {
-        w += SM_Advance(font, size, text, 1) + SM_LetterSpacing(spacing);
+        w += SM_AdvanceBold(font, size, text, 1, bold) + SM_LetterSpacing(spacing);
     }
     return w;
 }
@@ -787,7 +804,7 @@ float SM_ButtonWidth(const char* text, float height) {
     char upper[256];
 
     SM_Upper(text, upper, sizeof(upper));
-    return SM_SpacedWidth(SM_FONT_TITLE, SM_ButtonText(height), upper, SM_BUTTON_SPACING) +
+    return SM_SpacedWidth(SM_FONT_TITLE, SM_ButtonText(height), upper, SM_BUTTON_SPACING, qfalse) +
            (height >= SM_BUTTON_H ? 44.0f : 28.0f);
 }
 
@@ -816,7 +833,7 @@ void SM_Button(float x, float y, float w, float h, const char* text, int style, 
             fg = over ? smGold : smText;
             break;
     }
-    SM_SpacedText(x + w * 0.5f - SM_SpacedWidth(SM_FONT_TITLE, size, upper, SM_BUTTON_SPACING) * 0.5f,
+    SM_SpacedText(x + w * 0.5f - SM_SpacedWidth(SM_FONT_TITLE, size, upper, SM_BUTTON_SPACING, qfalse) * 0.5f,
                   SM_Baseline(SM_FONT_TITLE, size, y, h), SM_FONT_TITLE, size, fg, upper, SM_BUTTON_SPACING, qfalse);
 }
 

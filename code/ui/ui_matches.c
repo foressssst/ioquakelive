@@ -894,7 +894,7 @@ static float MT_RowButton(float x, float y, const char* label, int glyph, int ty
     } else {
         Q_strncpyz(upper, label, sizeof(upper));
         Q_strupr(upper);
-        w = SM_SpacedWidth(FONT_SANS, 11, upper, 1.0f) + 40;
+        w = SM_SpacedWidth(FONT_SANS, 11, upper, 1.0f, qtrue) + 40;
     }
     if (chosen) {
         SM_Fill(x, y, w, 30, mtYellow, clip);

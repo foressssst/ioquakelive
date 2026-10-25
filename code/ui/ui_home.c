@@ -319,7 +319,7 @@ void UI_Home_PageTop(int active) {
         SM_Fill(HF_COL_X + (HF_COL_W - bw) * 0.5f, colTop + 94.0f, bw, 1, hfButtonBorder, NULL);
         SM_Fill(HF_COL_X + (HF_COL_W - bw) * 0.5f, colTop + 65.0f, 1, 30, hfButtonBorder, NULL);
         SM_Fill(HF_COL_X + (HF_COL_W + bw) * 0.5f - 1, colTop + 65.0f, 1, 30, hfButtonBorder, NULL);
-        SM_SpacedText(HF_COL_X + (HF_COL_W - SM_SpacedWidth(FONT_SANS, 11.0f, create, 1.0f) + 1.0f) * 0.5f,
+        SM_SpacedText(HF_COL_X + (HF_COL_W - SM_SpacedWidth(FONT_SANS, 11.0f, create, 1.0f, qtrue) + 1.0f) * 0.5f,
                       SM_Baseline(FONT_SANS, 11.0f, colTop + 65.0f, 30.0f), FONT_SANS, 11.0f, smText, create, 1.0f,
                       qtrue);
         SM_Centered(HF_COL_X + HF_COL_W * 0.5f, SM_Baseline(FONT_SANS, 15.0f, colTop + 105.0f, 24.0f), 15.0f, smText,

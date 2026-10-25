@@ -602,7 +602,8 @@ static void SM_OpenSelect(int i) {
 
 static float SM_RangeAt(int i, float x) {
     const smCvar_t* cv = &smCvars[i];
-    float frac = (x - (sm.dragRect.x + 1) - 8) / (sm.dragRect.w - 2 - 16);
+    float border = SM_LenBorder(1.0f), thumb = SM_Len(16.0f);
+    float frac = (x - (sm.dragRect.x + border) - thumb * 0.5f) / (sm.dragRect.w - 2 * border - thumb);
     float value;
 
     if (frac < 0) {
@@ -622,7 +623,9 @@ static void SM_FormatRange(int i, float value, char* buf, int size) {
 #define SM_BAR 8.0f
 #define SM_CARD_H 200.0f
 #define SM_CARD_FONT 21.3333f
-#define SM_LAN_H 39.0f
+#define SM_CARD_PAD SM_Len(10.6667f)
+#define SM_ROW_PAD SM_Len(7.5f)
+#define SM_TEXT_LINE SM_LineHeight(15.0f, 1.6f)
 
 static const vec4_t smrCard = SM_RGB(44, 41, 41);
 static const vec4_t smrCardHover = SM_RGB(60, 57, 57);
@@ -658,60 +661,96 @@ static struct {
 } smL;
 
 static void SM_Layout(void) {
-    float page = UI_Home_Left();
+    float pad = SM_Len(5.0f);
+    float inner;
 
-    smL.x = page + 5;
-    smL.width = HM_CONTAINER_W - SM_BAR - 10;
-    smL.colW = smL.width * 0.48f;
-    smL.listX = smL.x + smL.colW + smL.width * 0.04f;
-    smL.valX = 7.5f + (smL.colW - 15) * (0.566667f + 0.04f);
-    smL.valW = (smL.colW - 15) * 0.393333f;
+    smL.x = UI_Home_Left() + pad;
+    smL.width = HM_CONTAINER_W - 2 * pad - SM_Len(SM_BAR);
+    smL.colW = SM_Percent(smL.width, 48.0f);
+    smL.listX = smL.x + smL.colW + SM_Percent(smL.width, 4.0f);
+    inner = smL.colW - 2 * SM_ROW_PAD;
+    smL.valX = SM_ROW_PAD + SM_Percent(inner, 56.6666666667f) + SM_Percent(inner, 4.0f);
+    smL.valW = SM_Percent(inner, 39.3333333333f);
 }
 
-static void SM_CardCentered(float x, float w, float lineTop, float lineHeight, const char* text) {
-    SM_Text(x + (w - SM_Advance(FONT_SANS, SM_CARD_FONT, text, -1)) * 0.5f,
-            SM_Baseline(FONT_SANS, SM_CARD_FONT, lineTop, lineHeight), FONT_SANS, SM_CARD_FONT, smText, text, -1,
-            qfalse);
+static float SM_StrutBelow(float size, float lineHeight) {
+    int ascent = SM_Px(SM_Ascent(FONT_SANS, size));
+    int descent = SM_Px(SM_Descent(FONT_SANS, size));
+    int line = SM_Px(lineHeight);
+
+    return (float)(line - ascent - (line - ascent - descent) / 2) / smScale;
 }
 
-static void SM_DrawCardBack(float x, float y, float w, const char* title, int hit) {
-    SM_Fill(x, y, w, SM_CARD_H, SM_Over(hit, 0) ? smrCardHover : smrCard, NULL);
+static void SM_CardCentered(float x, float w, float lineTop, const char* text) {
+    SM_Text(x + SM_Center(w, SM_Advance(FONT_SANS, SM_CARD_FONT, text, -1)),
+            SM_Baseline(FONT_SANS, SM_CARD_FONT, lineTop, SM_LineHeight(SM_CARD_FONT, 1.25f)), FONT_SANS,
+            SM_CARD_FONT, smText, text, -1, qfalse);
+}
+
+static float SM_DrawCardBack(float x, float y, float w, const char* title, float content, int hit) {
+    float h = SM_Len(SM_CARD_H);
+    float line = SM_LineHeight(24.0f, 1.25f);
+    float gap = SM_Len(12.0f);
+    int room = SM_Px(h - 2 * SM_CARD_PAD) - SM_Px(line + gap + content);
+    float top = y + SM_CARD_PAD + (room > 0 ? room / 2 : 0) / smScale;
+
+    SM_Fill(x, y, w, h, SM_Over(hit, 0) ? smrCardHover : smrCard, NULL);
     SM_SetSpacing(SM_SPACING_H1);
-    SM_Text(x + 10.6667f, SM_Baseline(FONT_SANS, 24, y + 12, 30), FONT_SANS, 24, smrYellow, title, -1, qfalse);
+    SM_Text(x + SM_CARD_PAD, SM_Baseline(FONT_SANS, 24, top, line), FONT_SANS, 24, smrYellow, title, -1, qfalse);
     SM_SetSpacing(0);
-    SM_Hit(x, y, w, SM_CARD_H, hit, 0, NULL);
+    SM_Hit(x, y, w, h, hit, 0, NULL);
+    return top + line + gap;
 }
 
 static void SM_DrawGametypeCard(float x, float y, float w) {
     const smFactory_t* factory = SM_Factory(sm.selectedFactory);
     const smGametype_t* gt = SM_Gametype(factory ? factory->basegt : -1);
-    float cx = x + 10.6667f, cw = w - 21.3333f;
+    float cx = x + SM_CARD_PAD, cw = w - 2 * SM_CARD_PAD;
+    float line = SM_LineHeight(SM_CARD_FONT, 1.25f);
+    float icon = SM_Len(75.0f);
+    float below = SM_StrutBelow(SM_CARD_FONT, line);
+    float top = SM_DrawCardBack(x, y, w, "Game Type", icon + below + 2 * line, SM_HIT_GAMETYPE_CARD);
 
-    SM_DrawCardBack(x, y, w, "Game Type", SM_HIT_GAMETYPE_CARD);
-    SM_Pic(cx + (cw - 75) * 0.5f, y + 54, 75, 75, SM_GametypeIcon(gt, qtrue), NULL);
-    SM_CardCentered(cx, cw, y + 134.6f, 26.6667f, gt->title);
-    SM_CardCentered(cx, cw, y + 161.3f, 26.6667f,
+    SM_Pic(cx + SM_Center(cw, icon), top, icon, icon, SM_GametypeIcon(gt, qtrue), NULL);
+    top += icon + below;
+    SM_CardCentered(cx, cw, top, gt->title);
+    SM_CardCentered(cx, cw, top + line,
                     factory ? (strcmp(gt->title, factory->title) ? factory->title : "Default") : "");
 }
 
 static void SM_DrawArenaCard(float x, float y, float w) {
     smArena_t* arena = SM_Arena(sm.selectedMap);
-    float cx = x + 10.6667f, cw = w - 21.3333f;
+    float cx = x + SM_CARD_PAD, cw = w - 2 * SM_CARD_PAD;
+    float line = SM_LineHeight(SM_CARD_FONT, 1.25f);
+    float shotW = SM_Len(179.0f), shotH = SM_Len(100.0f);
+    float below = SM_StrutBelow(SM_CARD_FONT, line);
+    float top = SM_DrawCardBack(x, y, w, "Current Arena", shotH + below + line, SM_HIT_ARENA_CARD);
+    float sx = cx + SM_Center(cw, shotW);
+    smRect_t shot = SM_R(sx, top, shotW, shotH);
 
-    SM_DrawCardBack(x, y, w, "Current Arena", SM_HIT_ARENA_CARD);
-    {
-        float sx = cx + (cw - 179) * 0.5f;
-        smRect_t shot = SM_R(sx, y + 54.8f, 179, 100);
+    SM_Pic(sx, top, shotW, shotW * 270.0f / 480.0f, SM_Preview(arena, sm.selectedMap), &shot);
+    SM_CardCentered(cx, cw, top + shotH + below, arena ? arena->name : sm.selectedMap);
+}
 
-        SM_Pic(sx, y + 54.8f, 179, 179 * 270.0f / 480.0f, SM_Preview(arena, sm.selectedMap), &shot);
-    }
-    SM_CardCentered(cx, cw, y + 160.5f, 26.6667f, arena ? arena->name : sm.selectedMap);
+static float SM_InputHeight(void) {
+    return 2 * SM_Len(8.0f) + 2 * SM_LenBorder(1.0f) + SM_NormalLine(FONT_SANS, 15);
+}
+
+static float SM_SelectHeight(void) {
+    return 2 * SM_Len(6.0f) + SM_TEXT_LINE;
+}
+
+static float SM_RangeHeight(void) {
+    return SM_Len(16.0f) + 2 * SM_Len(9.0f);
 }
 
 static void SM_DrawInput(int i, float x, float y) {
     const char* value = sm.values[i];
-    float w = smL.valW, h = 38;
-    float width = w - 17;
+    float w = smL.valW, h = SM_InputHeight();
+    float border = SM_LenBorder(1.0f), pad = SM_Len(8.0f);
+    float inner = 1.0f / smScale;
+    float tx = x + border + pad + inner, ty = y + border + pad;
+    float width = w - 2 * border - pad - 2 * inner;
     int len = (int)strlen(value);
     int start = 0;
     qboolean editing = sm.edit == i;
@@ -731,13 +770,26 @@ static void SM_DrawInput(int i, float x, float y) {
         }
         start = sm.editStart;
     }
-    SM_TextRaw(x + 9, SM_Baseline(FONT_SANS, 15, y, h), FONT_SANS, 15, smText, value + start,
+    SM_TextRaw(tx, ty + SM_Ascent(FONT_SANS, 15), FONT_SANS, 15, smText, value + start,
                SM_Fit(FONT_SANS, 15, value + start, width), qfalse);
     if (editing && ((uiInfo.uiDC.realTime - sm.editTime) / 500) % 2 == 0) {
-        SM_Fill(x + 9 + SM_AdvanceRaw(FONT_SANS, 15, value + start, sm.editCursor - start, qfalse), y + 10, 1, h - 20,
-                smText, NULL);
+        SM_Fill(tx + SM_AdvanceRaw(FONT_SANS, 15, value + start, sm.editCursor - start, qfalse), ty, 1.0f / smScale,
+                SM_NormalLine(FONT_SANS, 15), smText, NULL);
     }
     SM_Hit(x, y, w, h, SM_HIT_INPUT, i, NULL);
+}
+
+static void SM_SelectArrow(float right, float y, qboolean up) {
+    int n = SM_Px(SM_LenBorder(5.0f));
+    float px = 1.0f / smScale;
+    float x = right - SM_Len(10.0f) - 2 * n * px;
+    int k;
+
+    for (k = 0; k < n; k++) {
+        int inset = up ? n - 1 - k : k;
+
+        SM_Fill(x + (inset + 1) * px, y + k * px, (2 * n - 2 * inset - 1) * px, px, smMuted, NULL);
+    }
 }
 
 static void SM_DrawSelect(int i, float x, float y) {
@@ -745,7 +797,8 @@ static void SM_DrawSelect(int i, float x, float y) {
     const char* label = "Default";
     qboolean chosen = qfalse;
     qboolean open = sm.select == i;
-    float w = smL.valW, h = 36;
+    float w = smL.valW, h = SM_SelectHeight();
+    float room = w + SM_Len(15.0f) - SM_Len(10.0f) - SM_Len(52.0f);
     int k;
 
     for (k = 0; k < cv->numOptions; k++) {
@@ -755,9 +808,9 @@ static void SM_DrawSelect(int i, float x, float y) {
         }
     }
     SM_Fill(x, y, w, h, SM_Over(SM_HIT_SELECT, i) ? smrSelectHover : smrSelect, NULL);
-    SM_Text(x + 10, SM_Baseline(FONT_SANS, 15, y + 8, 24), FONT_SANS, 15, chosen ? smrSelectValue : smrPlaceholder,
-            label, SM_Fit(FONT_SANS, 15, label, w - 52), qfalse);
-    SM_Arrow(x + w - 20, y + 18, open);
+    SM_Text(x + SM_Len(10.0f), SM_Baseline(FONT_SANS, 15, y + SM_Len(8.0f), SM_TEXT_LINE), FONT_SANS, 15,
+            chosen ? smrSelectValue : smrPlaceholder, label, SM_Fit(FONT_SANS, 15, label, room), qfalse);
+    SM_SelectArrow(x + w, y + SM_Len(18.0f), open);
     SM_Hit(x, y, w, h, SM_HIT_SELECT, i, NULL);
     if (open) {
         sm.selectControl = SM_R(x, y, w, h);
@@ -766,7 +819,8 @@ static void SM_DrawSelect(int i, float x, float y) {
 
 static void SM_DrawRange(int i, float x, float y) {
     const smCvar_t* cv = &smCvars[i];
-    float bx = x + smL.valW * 0.2f, bw = smL.valW * 0.8f;
+    float border = SM_LenBorder(1.0f), thumb = SM_Len(16.0f);
+    float bx = x + SM_Percent(smL.valW, 20.0f), bw = SM_Percent(smL.valW, 80.0f), bh = thumb + 2 * border;
     float value, frac;
     char text[32];
 
@@ -778,24 +832,37 @@ static void SM_DrawRange(int i, float x, float y) {
         value = (float)atof(sm.values[i]);
     }
     SM_FormatRange(i, value, text, sizeof(text));
-    SM_Text(x + 8, SM_Baseline(FONT_SANS, 15, y + 1, 16), FONT_SANS, 15, smText, text, -1, qfalse);
+    SM_Text(x + SM_Len(8.0f), SM_Baseline(FONT_SANS, 15, y + SM_Len(1.0f), SM_Len(16.0f)), FONT_SANS, 15, smText,
+            text, -1, qfalse);
     frac = (value - cv->min) / (cv->max - cv->min);
     if (frac < 0) {
         frac = 0;
     } else if (frac > 1) {
         frac = 1;
     }
-    SM_Fill(bx, y, bw, 18, (SM_Over(SM_HIT_RANGE, i) || sm.drag == i) ? smrRangeHover : smrRange, NULL);
-    SM_Border(bx, y, bw, 18, 1, smrInputBorder, NULL);
-    SM_Fill(bx + 1 + frac * (bw - 2 - 16), y + 1, 16, 16, smrYellow, NULL);
-    SM_Hit(bx, y, bw, 18, SM_HIT_RANGE, i, NULL);
+    SM_Fill(bx, y, bw, bh, (SM_Over(SM_HIT_RANGE, i) || sm.drag == i) ? smrRangeHover : smrRange, NULL);
+    SM_Border(bx, y, bw, bh, 1, smrInputBorder, NULL);
+    SM_Fill(bx + border + (float)(int)(frac * SM_Px(bw - 2 * border - thumb)) / smScale, y + border, thumb, thumb,
+            smrYellow, NULL);
+    SM_Hit(bx, y, bw, bh, SM_HIT_RANGE, i, NULL);
 }
 
 static float SM_RowHeight(int i) {
+    float content = SM_Len(24.0f);
+    float widget;
+    float h;
+
     if (sm.locked[i]) {
-        return 50;
+        widget = SM_Len(5.0f);
+    } else if (smCvars[i].widget == SM_INPUT) {
+        widget = SM_InputHeight();
+    } else if (smCvars[i].widget == SM_SELECT) {
+        widget = SM_SelectHeight();
+    } else {
+        widget = SM_RangeHeight();
     }
-    return smCvars[i].widget == SM_INPUT ? 53.0f : smCvars[i].widget == SM_SELECT ? 51.0f : 50.0f;
+    h = 2 * SM_ROW_PAD + (widget > content ? widget : content);
+    return h > SM_Len(50.0f) ? h : SM_Len(50.0f);
 }
 
 static qboolean SM_RowHovered(int i, float x, float y, float h) {
@@ -813,12 +880,13 @@ static qboolean SM_RowHovered(int i, float x, float y, float h) {
 static float SM_DrawRow(int i, float x, float y, int child) {
     const smCvar_t* cv = &smCvars[i];
     float h = SM_RowHeight(i);
-    float base = SM_Baseline(FONT_SANS, 15, y + 13.5f, 24);
-    float after = x + 7.5f + SM_Advance(FONT_SANS, 15, va("%s ", cv->title), -1);
+    float lineTop = y + SM_ROW_PAD + SM_Len(6.0f);
+    float base = SM_Baseline(FONT_SANS, 15, lineTop, SM_TEXT_LINE);
+    float after = x + SM_ROW_PAD + SM_Advance(FONT_SANS, 15, va("%s ", cv->title), -1);
     qboolean hovered = SM_RowHovered(i, x, y, h);
 
     SM_Fill(x, y, smL.colW, h, child % 2 ? smrRowOdd : smrRowEven, NULL);
-    SM_Text(x + 7.5f, base, FONT_SANS, 15, smText, cv->title, -1, qfalse);
+    SM_Text(x + SM_ROW_PAD, base, FONT_SANS, 15, smText, cv->title, -1, qfalse);
     if (sm.locked[i]) {
         SM_Text(after, base, FONT_SANS, 15, smText, "(Locked)", -1, qfalse);
         return h;
@@ -827,14 +895,14 @@ static float SM_DrawRow(int i, float x, float y, int child) {
         float rw = SM_Advance(FONT_SANS, 15, "(Reset)", -1);
 
         SM_Text(after, base, FONT_SANS, 15, SM_Over(SM_HIT_RESET, i) ? smrLinkHover : smrLink, "(Reset)", -1, qfalse);
-        SM_Hit(after, y + 13.5f, rw, 24, SM_HIT_RESET, i, NULL);
+        SM_Hit(after, lineTop, rw, SM_TEXT_LINE, SM_HIT_RESET, i, NULL);
     }
     if (cv->widget == SM_INPUT) {
-        SM_DrawInput(i, x + smL.valX, y + 7.5f);
+        SM_DrawInput(i, x + smL.valX, y + SM_ROW_PAD);
     } else if (cv->widget == SM_SELECT) {
-        SM_DrawSelect(i, x + smL.valX, y + 7.5f);
+        SM_DrawSelect(i, x + smL.valX, y + SM_ROW_PAD);
     } else {
-        SM_DrawRange(i, x + smL.valX, y + 16.5f);
+        SM_DrawRange(i, x + smL.valX, y + SM_ROW_PAD + SM_Len(9.0f));
     }
     return h;
 }
@@ -843,21 +911,40 @@ static qboolean SM_ShowPortNote(void) {
     return SM_Equals(SM_Value(SM_SERVERTYPE), 2);
 }
 
+static float SM_DrawPortNote(float x, float y) {
+    float padV = SM_Len(7.5f), padL = SM_Len(11.25f);
+    int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
+    char note[128];
+    int lines, k;
+
+    Com_sprintf(note, sizeof(note), "To host public Internet servers, you will need to forward UDP port %s to your machine.",
+                sm.netPort);
+    lines = SM_Wrap(FONT_SANS, 15, note, smL.colW - padL, starts, lens);
+    for (k = 0; k < lines; k++) {
+        SM_TextRaw(x + padL, SM_Baseline(FONT_SANS, 15, y + padV + k * SM_TEXT_LINE, SM_TEXT_LINE), FONT_SANS, 15,
+                   smText, note + starts[k], lens[k], qfalse);
+    }
+    return 2 * padV + lines * SM_TEXT_LINE;
+}
+
 static void SM_DrawLaunch(float y) {
-    float w = smL.width * 0.5f, h = 51.3333f;
-    float x = smL.x + (smL.width - w) * 0.5f;
+    float w = SM_Percent(smL.width, 50.0f);
+    float pad = SM_CARD_PAD, line = SM_Len(30.0f);
+    float h = 2 * pad + line;
+    float x = smL.x + SM_Center(smL.width, w);
     qboolean over = SM_Over(SM_HIT_LAUNCH, 0);
-    float tw = SM_SpacedWidth(FONT_SANS, SM_CARD_FONT, "Launch Match", 1.0f);
+    float tw = SM_SpacedWidth(FONT_SANS, SM_CARD_FONT, "Launch Match", 1.0f, qtrue);
 
     SM_Fill(x, y, w, h, over ? smrLaunchHover : smrLaunch, NULL);
-    SM_SpacedText(x + (w - tw) * 0.5f, SM_Baseline(FONT_SANS, SM_CARD_FONT, y, h), FONT_SANS, SM_CARD_FONT,
-                  over ? smrYellow : smText, "Launch Match", 1.0f, qtrue);
+    SM_SpacedText(x + pad + SM_Center(w - 2 * pad, tw), SM_Baseline(FONT_SANS, SM_CARD_FONT, y + pad, line), FONT_SANS,
+                  SM_CARD_FONT, over ? smrYellow : smText, "Launch Match", 1.0f, qtrue);
     SM_Hit(x, y, w, h, SM_HIT_LAUNCH, 0, NULL);
 }
 
 static void SM_DrawPage(void) {
     float page = UI_Home_Left();
     float top = HM_NAV_H, bottom = UI_Home_FrameBottom();
+    float step = SM_Len(SM_CARD_H) + SM_Len(SM_CARD_FONT);
     float y, listY;
     int child = 0;
     int i;
@@ -868,32 +955,25 @@ static void SM_DrawPage(void) {
 
     SM_Fill(page, top, HM_CONTAINER_W, bottom - top, smrBlack80, NULL);
     SM_SetSpacing(SM_SPACING_H1);
-    SM_Text(smL.x + 6.4f, SM_Baseline(FONT_DEFAULT, 32, top + 8, 38.4f), FONT_DEFAULT, 32, smText, "Start Match", -1,
-            qfalse);
+    SM_Text(smL.x + SM_Len(6.4f), SM_Baseline(FONT_DEFAULT, 32, top + SM_H1_PAD, SM_H1_LINE), FONT_DEFAULT, 32, smText,
+            "Start Match", -1, qfalse);
     SM_SetSpacing(0);
-    y = top + 54.4f;
+    y = top + SM_TITLE_H;
 
     SM_DrawGametypeCard(smL.x, y, smL.colW);
-    SM_DrawArenaCard(smL.x, y + SM_CARD_H + SM_CARD_FONT, smL.colW);
+    SM_DrawArenaCard(smL.x, y + step, smL.colW);
 
     listY = y;
     for (i = 0; i < SM_NUM_CVARS; i++) {
         listY += SM_DrawRow(i, smL.listX, listY, ++child);
         if (i == SM_SERVERTYPE && SM_ShowPortNote()) {
-            char note[128];
-
-            Com_sprintf(note, sizeof(note),
-                        "To host public Internet servers, you will need to forward UDP port %s to your machine.",
-                        sm.netPort);
-            SM_Text(smL.listX + 11.25f, SM_Baseline(FONT_SANS, 15, listY + 7.5f, 24), FONT_SANS, 15, smText, note,
-                    SM_Fit(FONT_SANS, 15, note, smL.colW - 11.25f), qfalse);
-            listY += SM_LAN_H;
+            listY += SM_DrawPortNote(smL.listX, listY);
             child++;
         }
     }
 
-    y += 2 * (SM_CARD_H + SM_CARD_FONT) > listY - y ? 2 * (SM_CARD_H + SM_CARD_FONT) : listY - y;
-    SM_DrawLaunch(y + 15 + 5.3333f);
+    y += 2 * step > listY - y ? 2 * step : listY - y;
+    SM_DrawLaunch(y + SM_Len(15.0f) + SM_Len(5.3333f));
 }
 
 static void SM_DrawDropdown(void) {
@@ -1213,7 +1293,7 @@ static void SM_Click(void) {
                 sm.edit = hit->index;
                 sm.editStart = 0;
             }
-            sm.editCursor = SM_CaretAt(sm.values[sm.edit], sm.editStart, smMX - (hit->r.x + 9));
+            sm.editCursor = SM_CaretAt(sm.values[sm.edit], sm.editStart, smMX - (hit->r.x + SM_LenBorder(1.0f) + SM_Len(8.0f) + 1.0f / smScale));
             sm.editTime = uiInfo.uiDC.realTime;
             break;
         case SM_HIT_SELECT:
