@@ -945,29 +945,30 @@ static float MT_RowButton(float x, float y, const char* label, int glyph, int ty
                           const smRect_t* clip) {
     char upper[32];
     float w;
+    float pad = SM_Len(20.0f);
     qboolean over = SM_Over(type, index);
-    float baseline = SM_Baseline(FONT_SANS, 11, y, 30);
+    float baseline = SM_Baseline(FONT_SANS, 11, y, SM_WEB_BUTTON_H);
 
     if (glyph) {
-        w = SM_IconWidth(18.667f, glyph) + 40;
+        w = SM_IconWidth(18.667f, glyph) + 2 * pad;
     } else {
         Q_strncpyz(upper, label, sizeof(upper));
         Q_strupr(upper);
-        w = SM_SpacedWidth(FONT_SANS, 11, upper, 1.0f, qtrue) + 40;
+        w = SM_WebButtonWidth(upper) - 2 * SM_LenBorder(1.0f);
     }
     if (chosen) {
-        SM_Fill(x, y, w, 30, mtYellow, clip);
+        SM_Fill(x, y, w, SM_WEB_BUTTON_H, mtYellow, clip);
     }
     if (SM_TextInside(baseline, 11, clip)) {
         const float* color = chosen ? mtBlack : over ? mtYellow : smText;
 
         if (glyph) {
-            SM_Icon(x + 20, y + 15 + 18.667f * SM_AWESOME_BASE, 18.667f, color, glyph);
+            SM_Icon(x + pad, y + SM_WEB_BUTTON_H * 0.5f + 18.667f * SM_AWESOME_BASE, 18.667f, color, glyph);
         } else {
-            SM_SpacedText(x + 20, baseline, FONT_SANS, 11, color, upper, 1.0f, qtrue);
+            SM_SpacedText(x + pad, baseline, FONT_SANS, 11, color, upper, 1.0f, qtrue);
         }
     }
-    SM_Hit(x, y, w, 30, type, index, clip);
+    SM_Hit(x, y, w, SM_WEB_BUTTON_H, type, index, clip);
     return w;
 }
 
@@ -1014,75 +1015,94 @@ static void MT_Sort(void) {
 
 static float MT_DrawTable(float x, float y, const smRect_t* clip) {
     const mtTable_t* t = &mt.table[mt.section];
-    float colW[MT_MAX_COLS];
-    float nameW = 300;
-    float cx, ry;
-    int c, r;
+    float colX[MT_MAX_COLS + 1];
+    float spacing = SM_Len(4.0f), pad = SM_Len(6.0f), headPad = SM_Len(15.0f);
+    float line = SM_LineHeight(15.0f, 1.6f);
+    float border = SM_LenBorder(6.0f), icon = SM_Len(32.0f);
+    float space = SM_Advance(FONT_SANS, 15, " ", -1);
+    float nameW = 300.0f, pos, right, rowH, ry;
+    int ascent = SM_Px(SM_Ascent(FONT_SANS, 15)), descent = SM_Px(SM_Descent(FONT_SANS, 15));
+    int linePx = SM_Px(line), iconPx = SM_Px(icon);
+    int above = (linePx - ascent - descent) / 2 + ascent;
+    int iconAbove = iconPx / 2 + (int)floorf(SM_Px(15.0f) * 0.535f + 0.5f) / 2;
+    int boxAbove = MAX(above, iconAbove), boxBelow = MAX(linePx - above, iconPx - iconAbove);
+    int lineShift = (boxAbove + boxBelow - linePx) / 2;
+    int c, r, n = 0;
 
     for (r = 0; r < t->rows; r++) {
-        float w = 12 + 6 + 32 + SM_Advance(FONT_SANS, 15, " ", -1) + SM_Advance(FONT_SANS, 15, t->row[r].name, -1);
+        float w = border + 2 * pad + icon + space + MT_TextBox(SM_Advance(FONT_SANS, 15, t->row[r].name, -1));
 
         nameW = w > nameW ? w : nameW;
     }
+    pos = x;
+    colX[n++] = x;
+    pos += nameW;
     for (c = 0; c < t->numCols; c++) {
-        float w = SM_AdvanceBold(FONT_SANS, 15, t->labels[c], -1, qtrue) + 12;
+        float w = MT_TextBox(SM_AdvanceBold(FONT_SANS, 15, t->labels[c], -1, qtrue)) + headPad;
 
+        if (!t->shown[c]) {
+            continue;
+        }
         for (r = 0; r < t->rows; r++) {
             if (t->row[r].has[c]) {
-                float cw = SM_Advance(FONT_SANS, 15, t->row[r].text[c], -1) + 12;
+                float cw = MT_TextBox(SM_Advance(FONT_SANS, 15, t->row[r].text[c], -1)) + 2 * pad;
 
                 w = cw > w ? cw : w;
             }
         }
-        colW[c] = w < 50 ? 50 : w;
+        colX[n++] = SM_Len(pos - x) + x;
+        pos += w < 50.0f ? 50.0f : w;
     }
+    right = SM_Len(pos - x) + x;
+    colX[n] = right;
+    rowH = 2 * pad + (boxAbove + boxBelow) / smScale;
 
-    y += 4;
-    cx = x;
-    SM_Fill(cx, y, nameW, 24, mtHead, clip);
-    MT_Line(cx + (nameW - SM_AdvanceBold(FONT_SANS, 15, "Name", -1, qtrue)) * 0.5f, y, 24, FONT_SANS, 15, mtYellow, "Name",
-            qtrue, clip);
-    SM_Hit(cx, y, nameW, 24, MT_HIT_SORT, MT_MAX_COLS, clip);
-    cx += nameW;
-    for (c = 0; c < t->numCols; c++) {
-        if (!t->shown[c]) {
+    y += spacing;
+    for (c = 0, n = 0; c <= t->numCols; c++) {
+        const char* label = c ? t->labels[c - 1] : "Name";
+        float w;
+
+        if (c && !t->shown[c - 1]) {
             continue;
         }
-        SM_Fill(cx, y, colW[c], 24, mtHead, clip);
-        MT_Line(cx + (colW[c] - SM_AdvanceBold(FONT_SANS, 15, t->labels[c], -1, qtrue)) * 0.5f, y, 24, FONT_SANS, 15,
-                mtYellow, t->labels[c], qtrue, clip);
-        SM_Hit(cx, y, colW[c], 24, MT_HIT_SORT, c, clip);
-        cx += colW[c];
+        w = colX[n + 1] - colX[n];
+        SM_Fill(colX[n], y, w, line, mtHead, clip);
+        MT_Line(colX[n] + SM_Center(w - headPad, SM_AdvanceBold(FONT_SANS, 15, label, -1, qtrue)), y, line, FONT_SANS, 15,
+                mtYellow, label, qtrue, clip);
+        SM_Hit(colX[n], y, w, line, MT_HIT_SORT, c ? c - 1 : MT_MAX_COLS, clip);
+        n++;
     }
 
-    ry = y + 24 + 4;
+    ry = y + line + 2 * spacing;
     for (r = 0; r < t->rows; r++) {
         const mtRow_t* row = &t->row[mt.order[r]];
         qboolean link = (qboolean)(row->steamId[0] && strcmp(row->steamId, "0"));
-        float lw;
+        float base = ry + pad + boxAbove / smScale;
+        float textBase = ry + pad + (lineShift + above) / smScale;
+        float nx = x + border + pad;
 
-        SM_Fill(x, ry, cx - x, 44, (r & 1) ? mtEven : mtOdd, clip);
-        SM_Fill(x, ry, 6, 44, row->team == 1 ? mtRed : row->team == 2 ? mtBlue : mtNoTeam, clip);
-        SM_Pic(x + 12, ry + 6, 32, 32, row->icon, clip);
-        MT_Line(x + 12 + 32 + SM_Advance(FONT_SANS, 15, " ", -1), ry + 10, 20, FONT_SANS, 15, link ? mtLink : smText,
-                row->name, qfalse, clip);
-        if (link) {
-            lw = 32 + SM_Advance(FONT_SANS, 15, " ", -1) + SM_Advance(FONT_SANS, 15, row->name, -1);
-            SM_Hit(x + 12, ry + 6, lw, 32, MT_HIT_PROFILE, mt.order[r], clip);
+        SM_Fill(x, ry, right - x, rowH, (r & 1) ? mtEven : mtOdd, clip);
+        SM_Fill(x, ry, border, rowH, row->team == 1 ? mtRed : row->team == 2 ? mtBlue : mtNoTeam, clip);
+        SM_Pic(nx, base - iconAbove / smScale, icon, icon, row->icon, clip);
+        if (SM_TextInside(base, 15, clip)) {
+            SM_Text(nx + icon + space, base, FONT_SANS, 15, link ? mtLink : smText, row->name, -1, qfalse);
         }
-        cx = x + nameW;
-        for (c = 0; c < t->numCols; c++) {
+        if (link) {
+            SM_Hit(nx, ry + pad, icon + space + SM_Advance(FONT_SANS, 15, row->name, -1), rowH - 2 * pad, MT_HIT_PROFILE,
+                   mt.order[r], clip);
+        }
+        for (c = 0, n = 1; c < t->numCols; c++) {
             if (!t->shown[c]) {
                 continue;
             }
-            if (row->has[c]) {
-                MT_Line(cx + 6, ry + 10, 20, FONT_SANS, 15, smText, row->text[c], qfalse, clip);
+            if (row->has[c] && SM_TextInside(textBase, 15, clip)) {
+                SM_Text(colX[n] + pad, textBase, FONT_SANS, 15, smText, row->text[c], -1, qfalse);
             }
-            cx += colW[c];
+            n++;
         }
-        ry += 48;
+        ry += rowH + spacing;
     }
-    return ry - y + 4 + 15;
+    return ry - y + spacing + SM_Len(15.0f);
 }
 
 static float MT_DrawEvents(float x, float y, float width, const smRect_t* clip) {
@@ -1153,36 +1173,43 @@ static float MT_DrawEvents(float x, float y, float width, const smRect_t* clip) 
 
 static void MT_DrawDetails(float left, float top, float width, const smRect_t* clip) {
     float y = top;
-    float bx;
+    float bx, h;
+    float pad = MT_INSET;
+    smRect_t none = SM_R(0, -100000.0f, 0, 0);
+    qboolean mediaRow = (qboolean)(mt.numMedia >= 4);
     int i;
 
-    SM_Fill(left, y, width, 160, mtBlack80, clip);
+    h = MT_WidgetHeight(&mt.match[mt.open]) + SM_Len(10.0f);
+    SM_Fill(left, y, width, h, mtBlack80, clip);
     MT_DrawWidget(&mt.match[mt.open], left, y, clip);
-    y += 160;
+    y += h;
 
-    SM_Fill(left, y, width, 30, mtBlack80, clip);
+    SM_Fill(left, y, width, (mediaRow ? 2 : 1) * SM_WEB_BUTTON_H, mtBlack80, clip);
     bx = left + MT_RowButton(left, y, NULL, 0xf100, MT_HIT_BACK, 0, qfalse, clip);
-    if (mt.numMedia < 4) {
-        for (i = 0; i < mt.numMedia; i++) {
-            bx += MT_RowButton(bx, y, NULL, strstr(mt.media[i], ".dm_91") ? 0xf03d : 0xf03e, MT_HIT_MEDIA, i, qfalse, clip);
-        }
+    for (i = 0; !mediaRow && i < mt.numMedia; i++) {
+        bx += MT_RowButton(bx, y, NULL, strstr(mt.media[i], ".dm_91") ? 0xf03d : 0xf03e, MT_HIT_MEDIA, i, qfalse, clip);
     }
     for (i = 0; i < MT_NUM_SECTIONS; i++) {
         bx += MT_RowButton(bx, y, mtSectionNames[i], 0, MT_HIT_SECTION, i, (qboolean)(mt.section == i), clip);
     }
-    y += 30 + 15;
-
-    {
-        float h = mt.section == MT_SEC_EVENTS ? MT_DrawEvents(left + 5, y + 5, width - 10, clip) + 15
-                                              : MT_DrawTable(left + 5, y + 5, clip);
-        SM_Fill(left, y, width, h + 10, mtBlack80, clip);
-        if (mt.section == MT_SEC_EVENTS) {
-            MT_DrawEvents(left + 5, y + 5, width - 10, clip);
-        } else {
-            MT_DrawTable(left + 5, y + 5, clip);
+    if (mediaRow) {
+        y += SM_WEB_BUTTON_H;
+        for (i = 0, bx = left; i < mt.numMedia; i++) {
+            bx += MT_RowButton(bx, y, NULL, strstr(mt.media[i], ".dm_91") ? 0xf03d : 0xf03e, MT_HIT_MEDIA, i, qfalse,
+                               clip);
         }
-        y += h + 10;
     }
+    y += SM_WEB_BUTTON_H + SM_Len(15.0f);
+
+    h = mt.section == MT_SEC_EVENTS ? MT_DrawEvents(left + pad, y + pad, width - 2 * pad, &none) + SM_Len(15.0f)
+                                    : MT_DrawTable(left + pad, y + pad, &none);
+    SM_Fill(left, y, width, h + 2 * pad, mtBlack80, clip);
+    if (mt.section == MT_SEC_EVENTS) {
+        MT_DrawEvents(left + pad, y + pad, width - 2 * pad, clip);
+    } else {
+        MT_DrawTable(left + pad, y + pad, clip);
+    }
+    y += h + 2 * pad;
     mt.content = y - top;
 }
 
