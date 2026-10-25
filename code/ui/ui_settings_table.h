@@ -288,7 +288,7 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_VIDEO, "Max Queued Frames", "r_maxqueuedframes", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_r_maxqueuedframes, 3, "Frames the graphics card may have queued. Fewer frames lower the input lag and can cost FPS.", 1},
     {ST_TAB_VIDEO, "Busy Wait", "com_busywait", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Wait for the next frame by spinning instead of sleeping. Steadier frame times, more CPU use.", 1},
 #ifndef __APPLE__
-    {ST_TAB_VIDEO, "Multithreaded Rendering (OpenGL)", "r_smp", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Draw each frame on its own thread while the next one is prepared. More FPS on CPUs with several cores, one extra frame of latency. Applied with Apply Video Settings.", 1},
+    {ST_TAB_VIDEO, "Multithreaded Rendering", "r_smp", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Draw each frame on its own thread while the next one is prepared. More FPS on CPUs with several cores, one extra frame of latency. With Low Latency on (Vulkan) the game waits for that thread before reading input. Applied with Apply Video Settings.", 1},
 #endif
     {ST_TAB_VIDEO, "Antialiasing", "r_ext_multisample", ST_SELECT, 0.0f, 8.0f, 0.0f, stOpts_r_ext_multisample, 4, NULL, 1},
     {ST_TAB_VIDEO, "Anisotropic Filtering", "r_ext_max_anisotropy", ST_SELECT, 2.0f, 16.0f, 0.0f, stOpts_r_ext_max_anisotropy, 4, NULL, 1},

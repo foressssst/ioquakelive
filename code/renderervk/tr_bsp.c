@@ -2046,6 +2046,8 @@ void RE_LoadWorldMap( const char *name ) {
 		ri.Error( ERR_DROP, "ERROR: attempted to redundantly load world map" );
 	}
 
+	R_SyncRenderThread();
+
 	R_PrefetchStart( name );
 
 	tr.sunDirection[0] = 0.45f;

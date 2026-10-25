@@ -158,6 +158,8 @@ static void RB_Font_renderUpdate( void *uptr, int *rect, const unsigned char *da
 		return;
 	}
 
+	R_SyncRenderThread();
+
 	rgba = ri.Hunk_AllocateTempMemory( w * h * 4 );
 	dst = rgba;
 	for ( y = 0; y < h; y++ ) {

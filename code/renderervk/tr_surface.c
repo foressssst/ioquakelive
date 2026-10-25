@@ -248,7 +248,7 @@ static void RB_SurfaceTriangles( const srfTriangles_t *srf ) {
 
 #ifdef USE_VBO
 #ifdef USE_LEGACY_DLIGHTS
-	if ( tess.allowVBO && srf->vboItemIndex && !srf->dlightBits ) {
+	if ( tess.allowVBO && srf->vboItemIndex && !srf->dlightBits[ backEnd.smpFrame ] ) {
 #else
 	if ( tess.allowVBO && srf->vboItemIndex ) {
 #endif
@@ -271,7 +271,7 @@ static void RB_SurfaceTriangles( const srfTriangles_t *srf ) {
 	RB_CHECKOVERFLOW( srf->numVerts, srf->numIndexes );
 
 #ifdef USE_LEGACY_DLIGHTS
-	dlightBits = srf->dlightBits;
+	dlightBits = srf->dlightBits[ backEnd.smpFrame ];
 	tess.dlightBits |= dlightBits;
 #endif
 
@@ -763,7 +763,7 @@ static void RB_SurfaceFace( const srfSurfaceFace_t *surf ) {
 
 #ifdef USE_VBO
 #ifdef USE_LEGACY_DLIGHTS
-	if ( tess.allowVBO && surf->vboItemIndex && !surf->dlightBits ) {
+	if ( tess.allowVBO && surf->vboItemIndex && !surf->dlightBits[ backEnd.smpFrame ] ) {
 #else
 	if ( tess.allowVBO && surf->vboItemIndex ) {
 #endif
@@ -790,7 +790,7 @@ static void RB_SurfaceFace( const srfSurfaceFace_t *surf ) {
 #endif
 
 #ifdef USE_LEGACY_DLIGHTS
-	dlightBits = surf->dlightBits;
+	dlightBits = surf->dlightBits[ backEnd.smpFrame ];
 	tess.dlightBits |= dlightBits;
 #endif
 
@@ -955,7 +955,7 @@ static void RB_SurfaceGrid( srfGridMesh_t *cv ) {
 
 #ifdef USE_VBO_GRID
 #ifdef USE_LEGACY_DLIGHTS
-	if ( tess.allowVBO && cv->vboItemIndex && !cv->dlightBits ) {
+	if ( tess.allowVBO && cv->vboItemIndex && !cv->dlightBits[ backEnd.smpFrame ] ) {
 #else
 	if ( tess.allowVBO && cv->vboItemIndex ) {
 #endif
@@ -980,7 +980,7 @@ static void RB_SurfaceGrid( srfGridMesh_t *cv ) {
 #endif
 
 #ifdef USE_LEGACY_DLIGHTS
-	dlightBits = cv->dlightBits;
+	dlightBits = cv->dlightBits[ backEnd.smpFrame ];
 	tess.dlightBits |= dlightBits;
 #endif
 

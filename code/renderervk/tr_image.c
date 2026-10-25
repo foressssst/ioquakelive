@@ -908,6 +908,8 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 	int			namelen, namelen2;
 	const char	*slash;
 
+	R_SyncRenderThread();
+
 	namelen = (int)strlen( name ) + 1;
 	if ( namelen > MAX_QPATH ) {
 		ri.Error( ERR_DROP, "R_CreateImage: \"%s\" is too long", name );

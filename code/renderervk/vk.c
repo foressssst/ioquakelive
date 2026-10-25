@@ -7414,7 +7414,7 @@ static qboolean vk_ui_neutral( void )
 	if ( web_browserActive->integer )
 		return qtrue;
 
-	return ( !r_colorCorrectActive->integer && !tr.frameHasWorld ) ? qtrue : qfalse;
+	return ( !r_colorCorrectActive->integer && !backEnd.frameHasWorld ) ? qtrue : qfalse;
 }
 
 void vk_end_frame( void )
@@ -7652,6 +7652,12 @@ static void vk_reflex_sleep( void )
 
 void vk_low_latency_flash( void )
 {
+	if ( !vk.lowLatency2 || ( glConfig.smpActive && !r_lowLatency->integer ) ) {
+		return;
+	}
+
+	R_WaitRenderThread();
+
 	vk_latency_marker( VK_LATENCY_MARKER_TRIGGER_FLASH_NV );
 }
 
@@ -7695,6 +7701,14 @@ static void vk_pacing_update( void )
 
 void vk_low_latency_input( void )
 {
+	if ( glConfig.smpActive ) {
+		if ( !r_lowLatency->integer ) {
+			vk.latencyLive = qfalse;
+			return;
+		}
+		R_WaitRenderThread();
+	}
+
 	if ( vk_pacing_enabled() ) {
 		vk_pacing_wait();
 	}

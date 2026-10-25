@@ -1220,7 +1220,9 @@ void GLimp_ShutdownRenderThread(void) {
     smpThread = NULL;
 
     if (smpOwner != SMP_FRONTEND) {
-        SDL_GL_MakeCurrent(SDL_window, SDL_glContext);
+        if (SDL_glContext) {
+            SDL_GL_MakeCurrent(SDL_window, SDL_glContext);
+        }
         smpOwner = SMP_FRONTEND;
     }
 
@@ -1242,7 +1244,9 @@ void* GLimp_RendererSleep(void) {
     for (;;) {
         if (smpRelease) {
             if (smpOwner == SMP_RENDERER) {
-                SDL_GL_MakeCurrent(SDL_window, NULL);
+                if (SDL_glContext) {
+                    SDL_GL_MakeCurrent(SDL_window, NULL);
+                }
                 smpOwner = SMP_NOBODY;
             }
             smpRelease = qfalse;
@@ -1256,7 +1260,9 @@ void* GLimp_RendererSleep(void) {
 
     if (smpQuit) {
         if (smpOwner == SMP_RENDERER) {
-            SDL_GL_MakeCurrent(SDL_window, NULL);
+            if (SDL_glContext) {
+                SDL_GL_MakeCurrent(SDL_window, NULL);
+            }
             smpOwner = SMP_NOBODY;
         }
         SDL_BroadcastCondition(smpCond);
@@ -1269,7 +1275,9 @@ void* GLimp_RendererSleep(void) {
     smpBusy = qtrue;
 
     if (smpOwner != SMP_RENDERER) {
-        SDL_GL_MakeCurrent(SDL_window, SDL_glContext);
+        if (SDL_glContext) {
+            SDL_GL_MakeCurrent(SDL_window, SDL_glContext);
+        }
         smpOwner = SMP_RENDERER;
     }
 
@@ -1300,14 +1308,16 @@ void GLimp_FrontEndAcquire(void) {
     while (smpData || smpBusy) {
         SDL_WaitCondition(smpCond, smpMutex);
     }
-    if (smpOwner == SMP_RENDERER) {
-        smpRelease = qtrue;
-        SDL_BroadcastCondition(smpCond);
-        while (smpOwner == SMP_RENDERER) {
-            SDL_WaitCondition(smpCond, smpMutex);
+    if (SDL_glContext) {
+        if (smpOwner == SMP_RENDERER) {
+            smpRelease = qtrue;
+            SDL_BroadcastCondition(smpCond);
+            while (smpOwner == SMP_RENDERER) {
+                SDL_WaitCondition(smpCond, smpMutex);
+            }
         }
+        SDL_GL_MakeCurrent(SDL_window, SDL_glContext);
     }
-    SDL_GL_MakeCurrent(SDL_window, SDL_glContext);
     smpOwner = SMP_FRONTEND;
     SDL_UnlockMutex(smpMutex);
 }
@@ -1315,7 +1325,9 @@ void GLimp_FrontEndAcquire(void) {
 void GLimp_WakeRenderer(void* data) {
     SDL_LockMutex(smpMutex);
     if (smpOwner == SMP_FRONTEND) {
-        SDL_GL_MakeCurrent(SDL_window, NULL);
+        if (SDL_glContext) {
+            SDL_GL_MakeCurrent(SDL_window, NULL);
+        }
         smpOwner = SMP_NOBODY;
     }
     smpData = data;

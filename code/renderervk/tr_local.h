@@ -36,6 +36,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define MAX_TEXTURE_SIZE	2048
 
+#define SMP_FRAMES			2
+
 #define USE_BUFFER_CLEAR
 
 #ifdef USE_VBO
@@ -651,7 +653,7 @@ typedef struct srfFlare_s {
 typedef struct srfGridMesh_s {
 	surfaceType_t	surfaceType;
 
-	int				dlightBits;
+	int				dlightBits[SMP_FRAMES];
 
 	vec3_t			meshBounds[2];
 	vec3_t			localOrigin;
@@ -678,7 +680,7 @@ typedef struct {
 	cplane_t	plane;
 
 #ifdef USE_LEGACY_DLIGHTS
-	int			dlightBits;
+	int			dlightBits[SMP_FRAMES];
 #endif
 #ifdef USE_VBO
 	int			vboItemIndex;
@@ -695,7 +697,7 @@ typedef struct {
 	surfaceType_t	surfaceType;
 
 #ifdef USE_LEGACY_DLIGHTS
-	int				dlightBits;
+	int				dlightBits[SMP_FRAMES];
 #endif
 #ifdef USE_VBO
 	int				vboItemIndex;
@@ -1026,6 +1028,11 @@ typedef struct {
 	qboolean screenMapDone;
 	qboolean doneBloom;
 
+	int		smpFrame;
+	int		frameCount;
+	int		frameSceneNum;
+	qboolean	frameHasWorld;
+
 } backEndState_t;
 
 typedef struct drawSurfsCommand_s drawSurfsCommand_t;
@@ -1043,6 +1050,7 @@ typedef struct {
 #endif
 
 	int						frameSceneNum;
+	int						smpFrame;
 
 	qboolean				worldMapLoaded;
 	world_t					*world;
@@ -1269,6 +1277,8 @@ extern	cvar_t	*r_portalOnly;
 extern	cvar_t	*r_subdivisions;
 extern	cvar_t	*r_lodCurveError;
 extern	cvar_t	*r_skipBackEnd;
+extern	cvar_t	*r_smp;
+extern	cvar_t	*r_showSmp;
 
 extern	cvar_t	*r_greyscale;
 extern	cvar_t	*r_dither;
@@ -1609,7 +1619,6 @@ void	RB_CalcColorFromOneMinusEntity( unsigned char *dstColors );
 void	RB_CalcSpecularAlpha( unsigned char *alphas );
 void	RB_CalcDiffuseColor( unsigned char *colors );
 
-void RB_ExecuteRenderCommands( const void *data );
 
 #define	MAX_RENDER_COMMANDS	0x80000
 
@@ -1753,14 +1762,23 @@ typedef struct {
 	srfPoly_t	*polys;
 	polyVert_t	*polyVerts;
 	renderCommandList_t	commands;
+	int		smpFrame;
+	int		frameCount;
+	int		frameSceneNum;
+	qboolean	frameHasWorld;
 } backEndData_t;
 
 extern	int		max_polys;
 extern	int		max_polyverts;
 
 extern	backEndData_t	*backEndData;
+extern	backEndData_t	*backEndDatas[SMP_FRAMES];
 
-void RB_ExecuteRenderCommands( const void *data );
+void RB_ExecuteRenderCommands( const backEndData_t *data );
+void R_InitCommandBuffers( void );
+void R_ShutdownCommandBuffers( void );
+void R_SyncRenderThread( void );
+void R_WaitRenderThread( void );
 void RB_TakeScreenshot( int x, int y, int width, int height, const char *fileName );
 void RB_TakeScreenshotJPEG( int x, int y, int width, int height, const char *fileName );
 void RB_TakeScreenshotBMP( int x, int y, int width, int height, const char *fileName, int clipboard );
