@@ -783,7 +783,7 @@ void Cvar_WriteVariables(fileHandle_t f_hw, fileHandle_t f_rep, int clientOnly) 
         if (!((var->flags & CVAR_ARCHIVE) || (var->flags & CVAR_REPLICATE)))
             continue;
 
-        value = var->latchedString ? var->latchedString : var->string;
+        value = var->factoryString ? var->factoryString : var->latchedString ? var->latchedString : var->string;
 
         if (strlen(var->name) + strlen(value) + 10 > sizeof(buffer)) {
             Com_Printf(S_COLOR_YELLOW

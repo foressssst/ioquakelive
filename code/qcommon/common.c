@@ -1833,7 +1833,7 @@ void Com_Setenv_f(void) {
     }
 }
 
-#define COM_CONFIG_VERSION 4
+#define COM_CONFIG_VERSION 5
 
 static void Com_MigrateConfig(void) {
     cvar_t* version = Cvar_Get("com_configVersion", "0", CVAR_ARCHIVE);
@@ -1908,6 +1908,13 @@ static void Com_MigrateConfig(void) {
             if (Cvar_Flags(defaults[i].name) != CVAR_NONEXISTENT &&
                 !strcmp(Cvar_VariableString(defaults[i].name), defaults[i].oldValue))
                 Cvar_Set(defaults[i].name, defaults[i].newValue);
+        }
+    }
+
+    if (version->integer < 5) {
+        if (!strcmp(Cvar_VariableString("g_doWarmup"), "0") && !strcmp(Cvar_VariableString("g_voteFlags"), "2048")) {
+            Cvar_Set("g_doWarmup", "1");
+            Cvar_Set("g_voteFlags", "0");
         }
     }
 
