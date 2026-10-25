@@ -60,7 +60,7 @@ static const stOption_t stOpts_ch_drawlocaltime[] = {{"Off", "0"}, {"24 Hours", 
 static const stOption_t stOpts_r_maxqueuedframes[] = {{"Driver", "0"}, {"1 Frame", "1"}, {"2 Frames", "2"}};
 
 static const stCvar_t stCvars[] = {
-    {ST_TAB_INPUT, "Mouse", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, -1},
+    {ST_TAB_INPUT, "Mouse Settings", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, -1},
     {ST_TAB_INPUT, "Invert Mouse", "m_pitch", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_m_pitch, 2, NULL, 0},
     {ST_TAB_INPUT, "Mouse Sensitivity", "sensitivity", ST_RANGE, 0.0f, 25.0f, 0.25f, NULL, 0, NULL, 0},
     {ST_TAB_INPUT, "Mouse DPI", "m_cpi", ST_INPUT, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
@@ -88,6 +88,7 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_INPUT, "Drop Power-up", "droppowerup", ST_BIND, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
     {ST_TAB_INPUT, "Drop Rune", "droprune", ST_BIND, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
     {ST_TAB_INPUT, "Self Kill", "kill", ST_BIND, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
+    {ST_TAB_INPUT, NULL, NULL, ST_BREAK, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, -1},
     {ST_TAB_INPUT, "Scoreboard", "+scores", ST_BIND, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
     {ST_TAB_INPUT, "Vote Yes", "vote yes", ST_BIND, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
     {ST_TAB_INPUT, "Vote No", "vote no", ST_BIND, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
@@ -221,6 +222,8 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_TEAM, "Enemy Damage Indicator Alpha", "cg_screendamagealpha", ST_RANGE, 0.0f, 255.0f, 5.0f, NULL, 0, NULL, 1},
     {ST_TAB_WEAPONS, "Weapons", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 0},
     {ST_TAB_WEAPONS, "Per Weapon Configuration", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
+    {ST_TAB_WEAPONS, "Enter multiple console commands, separated by semicolons.", NULL, ST_TEXT, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
+    {ST_TAB_WEAPONS, NULL, NULL, ST_BREAK, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
     {ST_TAB_WEAPONS, "Gun Model", "cg_drawgun", ST_SELECT, 0.0f, 3.0f, 0.0f, stOpts_cg_drawgun, 4, "Alter the display of your currently held weapon.", 0},
     {ST_TAB_WEAPONS, "Gun Position", "cg_guny", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_cg_guny, 4, "The screen alignment of your held weapon.", 0},
     {ST_TAB_WEAPONS, "Muzzle Flash", "cg_muzzleflash", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Toggle the display of your weapons' muzzle flash.", 0},

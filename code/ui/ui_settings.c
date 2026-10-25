@@ -42,6 +42,8 @@ typedef enum {
 
 typedef enum {
     ST_HEADING,
+    ST_TEXT,
+    ST_BREAK,
     ST_BOOL,
     ST_SELECT,
     ST_RANGE,
@@ -188,6 +190,7 @@ static const vec4_t strThumbHover = SM_RGB(153, 153, 153);
 #define STR_NAV_GAP SM_Len(15.0f)
 #define STR_SECTION_PAD SM_Len(5.0f)
 #define STR_ROW_PAD SM_Len(7.5f)
+#define STR_TEXT_LINE SM_LineHeight(15.0f, 1.6f)
 #define STR_BAR 8.0f
 #define STR_OPTION_H 40.0f
 #define STR_MENU_H 198.0f
@@ -201,7 +204,7 @@ static void ST_ReadBind(int i) {
     int k;
 
     st.values[i][0] = '\0';
-    for (k = 0; k < K_LAST_KEY && count < 2; k++) {
+    for (k = 0; k < K_LAST_KEY; k++) {
         char buf[MAX_STRING_CHARS];
         char name[32];
 
@@ -210,7 +213,6 @@ static void ST_ReadBind(int i) {
             continue;
         }
         trap_Key_KeynumToStringBuf(k, name, sizeof(name));
-        Q_strupr(name);
         if (count) {
             Q_strcat(st.values[i], sizeof(st.values[i]), "\n");
         }
@@ -415,13 +417,22 @@ static qboolean ST_InTab(int i) {
     return stCvars[i].tab == st.tab;
 }
 
+static float ST_InputHeight(void) {
+    return 2 * SM_Len(8.0f) + 2 * SM_LenBorder(1.0f) + SM_NormalLine(FONT_SANS, 15);
+}
+
+static float ST_SelectHeight(void) {
+    return 2 * SM_Len(6.0f) + STR_TEXT_LINE;
+}
+
 static float ST_ContentHeight(int widget) {
     switch (widget) {
         case ST_BIND:
-            return SM_Len(32.0f);
+            return STR_TEXT_LINE;
         case ST_INPUT:
-            return SM_Len(38.0f);
+            return ST_InputHeight();
         case ST_SELECT:
+            return ST_SelectHeight();
         case ST_BOOL:
         case ST_PALETTE:
             return SM_Len(36.0f);
@@ -443,6 +454,15 @@ static float ST_RowHeight(int i) {
     float h = 2 * STR_ROW_PAD + ST_ContentHeight(widget);
 
     return h > minH ? h : minH;
+}
+
+static float ST_TextHeight(int i, float w) {
+    int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
+
+    if (stCvars[i].widget == ST_BREAK) {
+        return STR_TEXT_LINE;
+    }
+    return SM_Wrap(FONT_SANS, 15, stCvars[i].title, w, starts, lens) * STR_TEXT_LINE;
 }
 
 static float ST_HeadingHeight(qboolean first) {
@@ -492,14 +512,15 @@ static void ST_LayoutTeam(float inner) {
 }
 
 static void ST_Layout(void) {
-    float inner = HM_CONTAINER_W - STR_BAR - 2 * STR_SECTION_PAD;
+    float inner = HM_CONTAINER_W - SM_Len(STR_BAR) - 2 * STR_SECTION_PAD;
     float x = st.left + STR_SECTION_PAD;
+    float gap = SM_Percent(inner, 4.0f);
     float y[2];
     int n[2];
     float pairTop = -1, pairH = 0;
     int i;
 
-    st.colW = inner * 0.48f;
+    st.colW = SM_Percent(inner, 48.0f);
     if (st.tab == ST_TAB_TEAM) {
         ST_LayoutTeam(inner);
         return;
@@ -511,6 +532,18 @@ static void ST_Layout(void) {
         int c;
 
         if (!ST_InTab(i)) {
+            continue;
+        }
+        if (stCvars[i].widget == ST_BREAK && stCvars[i].column < 0) {
+            float top = y[0] > y[1] ? y[0] : y[1];
+
+            stLayout[i].x = x;
+            stLayout[i].y = top;
+            stLayout[i].w = inner;
+            stLayout[i].h = STR_TEXT_LINE;
+            y[0] = y[1] = top + STR_TEXT_LINE;
+            n[0] = n[1] = 0;
+            pairTop = -1;
             continue;
         }
         if (stCvars[i].widget != ST_HEADING) {
@@ -526,20 +559,25 @@ static void ST_Layout(void) {
             }
             pairTop = col >= 0 ? top : -1;
             pairH = h;
-            stLayout[i].x = x + (col > 0 ? st.colW + inner * 0.04f : 0);
+            stLayout[i].x = x + (col > 0 ? st.colW + gap : 0);
             stLayout[i].y = top;
             stLayout[i].w = col < 0 ? inner : st.colW;
             stLayout[i].h = h;
             y[0] = y[1] = top + h;
-            n[0] = n[1] = 0;
+            n[0] = n[1] = col >= 0 ? 1 : 0;
             continue;
         }
         c = stCvars[i].column ? 1 : 0;
-        stLayout[i].x = x + c * (st.colW + inner * 0.04f);
+        stLayout[i].x = x + c * (st.colW + gap);
         stLayout[i].y = y[c];
         stLayout[i].w = st.colW;
-        stLayout[i].h = ST_RowHeight(i);
-        stLayout[i].odd = !(n[c]++ & 1);
+        if (stCvars[i].widget == ST_TEXT || stCvars[i].widget == ST_BREAK) {
+            stLayout[i].h = ST_TextHeight(i, st.colW);
+            n[c]++;
+        } else {
+            stLayout[i].h = ST_RowHeight(i);
+            stLayout[i].odd = !(n[c]++ & 1);
+        }
         y[c] += stLayout[i].h;
     }
     st.listBottom = y[0] > y[1] ? y[0] : y[1];
@@ -557,20 +595,33 @@ static float ST_RowY(int i) {
 }
 
 static float ST_ControlX(int i) {
-    return stLayout[i].x + STR_ROW_PAD + (stLayout[i].w - 2 * STR_ROW_PAD) * (0.566667f + 0.04f);
+    float inner = stLayout[i].w - 2 * STR_ROW_PAD;
+
+    return stLayout[i].x + STR_ROW_PAD + SM_Percent(inner, 56.6666666667f) + SM_Percent(inner, 4.0f);
 }
 
 static float ST_ControlW(int i) {
-    return (stLayout[i].w - 2 * STR_ROW_PAD) * 0.393333f;
+    return SM_Percent(stLayout[i].w - 2 * STR_ROW_PAD, 39.3333333333f);
+}
+
+static void ST_SelectArrow(float right, float y, qboolean up, const smRect_t* clip) {
+    int n = SM_Px(SM_LenBorder(5.0f));
+    float px = 1.0f / smScale;
+    float x = right - SM_Len(10.0f) - 2 * n * px;
+    int k;
+
+    for (k = 0; k < n; k++) {
+        int inset = up ? n - 1 - k : k;
+
+        SM_Fill(x + (inset + 1) * px, y + k * px, (2 * n - 2 * inset - 1) * px, px, smMuted, clip);
+    }
 }
 
 static void ST_DrawSelectBox(int i, float x, float y, float w, float h, const smRect_t* clip) {
     qboolean open = st.select == i;
 
     SM_Fill(x, y, w, h, SM_Over(ST_HIT_SELECT, i) || open ? strSelectHover : strSelect, clip);
-    if (y + h * 0.5f >= clip->y && y + h * 0.5f <= clip->y + clip->h) {
-        SM_Arrow(x + w - 20, y + h * 0.5f, open);
-    }
+    ST_SelectArrow(x + w, y + SM_Len(18.0f), open, clip);
     SM_Hit(x, y, w, h, ST_HIT_SELECT, i, clip);
     if (open) {
         st.selectControl = SM_R(x, y, w, h);
@@ -582,7 +633,7 @@ static void ST_DrawSelect(int i, float x, float y, const smRect_t* clip) {
     const char* label = "Select...";
     qboolean chosen = qfalse;
     float w = ST_ControlW(i);
-    float base = SM_Baseline(FONT_SANS, 15, y + 8, 24);
+    float base = SM_Baseline(FONT_SANS, 15, y + SM_Len(8.0f), STR_TEXT_LINE);
     int k;
 
     for (k = 0; k < cv->numOptions; k++) {
@@ -591,50 +642,56 @@ static void ST_DrawSelect(int i, float x, float y, const smRect_t* clip) {
             chosen = qtrue;
         }
     }
-    ST_DrawSelectBox(i, x, y, w, 36, clip);
+    ST_DrawSelectBox(i, x, y, w, ST_SelectHeight(), clip);
     if (SM_TextInside(base, 15, clip)) {
-        SM_Text(x + 10, base, FONT_SANS, 15, chosen ? strSelectValue : strPlaceholder, label,
-                SM_Fit(FONT_SANS, 15, label, w - 52), qfalse);
+        SM_Text(x + SM_Len(10.0f), base, FONT_SANS, 15, chosen ? strSelectValue : strPlaceholder, label,
+                SM_Fit(FONT_SANS, 15, label, w + SM_Len(15.0f) - SM_Len(10.0f) - SM_Len(52.0f)), qfalse);
     }
 }
 
 static void ST_DrawBool(int i, float x, float y, const smRect_t* clip) {
     qboolean on = atoi(st.values[i]) != 0;
-    float base = SM_Baseline(FONT_SANS, 15, y + 9, 18);
+    float pad = SM_Len(8.0f), h = SM_Len(36.0f);
+    float base = y + SM_Len(9.0f) + SM_Ascent(FONT_SANS, 15);
     float tw = SM_AdvanceBold(FONT_SANS, 15, on ? "On" : "Off", -1, on);
 
     if (SM_Over(ST_HIT_BOOL, i)) {
-        SM_Fill(x, y, 21, 36, strHover, clip);
+        SM_Fill(x, y, pad + SM_Len(13.0f), h, strHover, clip);
     }
     if (SM_TextInside(base, 15, clip)) {
-        SM_Text(x + 8, base, FONT_SANS, 15, on ? strOn : strOff, on ? "On" : "Off", -1, on);
+        SM_Text(x + pad, base, FONT_SANS, 15, on ? strOn : strOff, on ? "On" : "Off", -1, on);
     }
-    SM_Hit(x, y, 8 + tw, 36, ST_HIT_BOOL, i, clip);
+    SM_Hit(x, y, pad + tw, h, ST_HIT_BOOL, i, clip);
 }
 
 static void ST_DrawRange(int i, float x, float y, const smRect_t* clip) {
     const stCvar_t* cv = &stCvars[i];
     float w = ST_ControlW(i);
-    float bx = x + w * 0.2f, bw = w * 0.8f;
+    float border = SM_LenBorder(1.0f), thumb = SM_Len(16.0f);
+    float bx = x + SM_Percent(w, 20.0f), bw = SM_Percent(w, 80.0f), bh = thumb + 2 * border;
     float value = ST_Snap(cv, (float)atof(st.values[i]));
-    float base = SM_Baseline(FONT_SANS, 15, y + 1, 16);
+    float base = SM_Baseline(FONT_SANS, 15, y + SM_Len(1.0f), SM_Len(16.0f));
     char text[32];
 
     ST_FormatShown(cv, (float)atof(st.values[i]), text, sizeof(text));
     if (SM_TextInside(base, 15, clip)) {
-        SM_Text(x + 8, base, FONT_SANS, 15, smText, text, -1, qfalse);
+        SM_Text(x + SM_Len(8.0f), base, FONT_SANS, 15, smText, text, -1, qfalse);
     }
-    SM_Fill(bx, y, bw, 18, SM_Over(ST_HIT_RANGE, i) || st.drag == i ? strHover : strRange, clip);
-    SM_Border(bx, y, bw, 18, 1, strBorder, clip);
-    SM_Fill(bx + 1 + ST_Fraction(cv, value) * (bw - 2 - 16), y + 1, 16, 16, strYellow, clip);
-    SM_Hit(bx, y, bw, 18, ST_HIT_RANGE, i, clip);
+    SM_Fill(bx, y, bw, bh, SM_Over(ST_HIT_RANGE, i) || st.drag == i ? strHover : strRange, clip);
+    SM_Border(bx, y, bw, bh, 1, strBorder, clip);
+    SM_Fill(bx + border + (float)(int)(ST_Fraction(cv, value) * SM_Px(bw - 2 * border - thumb)) / smScale,
+            y + border, thumb, thumb, strYellow, clip);
+    SM_Hit(bx, y, bw, bh, ST_HIT_RANGE, i, clip);
 }
 
 static void ST_DrawInput(int i, float x, float y, const smRect_t* clip) {
     const char* value = st.values[i];
-    float w = ST_ControlW(i), h = 38;
-    float width = w - 17;
-    float base = SM_Baseline(FONT_SANS, 15, y, h);
+    float w = ST_ControlW(i), h = ST_InputHeight();
+    float border = SM_LenBorder(1.0f), pad = SM_Len(8.0f);
+    float inner = 1.0f / smScale;
+    float tx = x + border + pad + inner, ty = y + border + pad;
+    float width = w - 2 * border - pad - 2 * inner;
+    float base = ty + SM_Ascent(FONT_SANS, 15);
     int len = (int)strlen(value);
     int start = 0;
     qboolean editing = st.edit == i;
@@ -655,11 +712,11 @@ static void ST_DrawInput(int i, float x, float y, const smRect_t* clip) {
         start = st.editStart;
     }
     if (SM_TextInside(base, 15, clip)) {
-        SM_TextRaw(x + 9, base, FONT_SANS, 15, smText, value + start, SM_Fit(FONT_SANS, 15, value + start, width),
+        SM_TextRaw(tx, base, FONT_SANS, 15, smText, value + start, SM_Fit(FONT_SANS, 15, value + start, width),
                    qfalse);
         if (editing && ((uiInfo.uiDC.realTime - st.editTime) / 500) % 2 == 0) {
-            SM_Fill(x + 9 + SM_AdvanceRaw(FONT_SANS, 15, value + start, st.editCursor - start, qfalse), y + 10, 1,
-                    h - 20, smText, clip);
+            SM_Fill(tx + SM_AdvanceRaw(FONT_SANS, 15, value + start, st.editCursor - start, qfalse), ty,
+                    1.0f / smScale, SM_NormalLine(FONT_SANS, 15), smText, clip);
         }
     }
     SM_Hit(x, y, w, h, ST_HIT_INPUT, i, clip);
@@ -671,47 +728,80 @@ static void ST_DrawSwatch(float x, float y, float w, int value, const smRect_t* 
     if (value < 1 || value > 26) {
         return;
     }
-    SM_Fill(x, y, w, 21, palette[value - 1], clip);
-    SM_Border(x, y, w, 21, 3, strSwatchEdge, clip);
+    SM_Fill(x, y, w, SM_Len(21.0f), palette[value - 1], clip);
+    SM_Border(x, y, w, SM_Len(21.0f), 3, strSwatchEdge, clip);
+}
+
+static float ST_LineRoom(float w) {
+    return w + SM_Len(15.0f) - SM_Len(10.0f) - SM_Len(52.0f);
 }
 
 static void ST_DrawPalette(int i, float x, float y, const smRect_t* clip) {
     float w = ST_ControlW(i);
+    float sw = w - SM_Len(10.0f) - SM_Len(52.0f);
 
-    ST_DrawSelectBox(i, x, y, w, 36, clip);
-    ST_DrawSwatch(x + 10, y + STR_ROW_PAD, w - 62, atoi(st.values[i]), clip);
+    ST_DrawSelectBox(i, x, y, w, SM_Len(36.0f), clip);
+    ST_DrawSwatch(x + SM_Len(10.0f) + SM_CenterLine(ST_LineRoom(w), sw), y + SM_Len(8.0f), sw, atoi(st.values[i]),
+                  clip);
 }
 
 static void ST_DrawRGB(int i, float x, float y, const smRect_t* clip) {
     int rgb[3];
     vec4_t color;
-    float w = ST_ControlW(i);
+    float w = ST_ControlW(i), top = y + SM_Len(3.0f), h = SM_Len(38.0f);
 
     ST_ParseRGB(st.values[i], rgb);
     color[0] = rgb[0] / 255.0f;
     color[1] = rgb[1] / 255.0f;
     color[2] = rgb[2] / 255.0f;
     color[3] = 1.0f;
-    SM_Fill(x, y + 3, w, 38, color, clip);
-    SM_Border(x, y + 3, w, 38, 5, strSwatchEdge, clip);
-    SM_Hit(x, y + 3, w, 38, ST_HIT_RGB, i, clip);
+    SM_Fill(x, top, w, h, color, clip);
+    SM_Border(x, top, w, h, 5, strSwatchEdge, clip);
+    SM_Hit(x, top, w, h, ST_HIT_RGB, i, clip);
 }
 
 static void ST_DrawCrosshair(int i, float x, float y, const smRect_t* clip) {
     int shape = atoi(st.values[i]);
-    float w = ST_ControlW(i);
+    float w = ST_ControlW(i), size = SM_Len(64.0f);
+    float base = SM_Baseline(FONT_SANS, 15, y + SM_Len(8.0f), STR_TEXT_LINE);
 
-    ST_DrawSelectBox(i, x, y, w, 64, clip);
+    ST_DrawSelectBox(i, x, y, w, size, clip);
     if (shape > 0 && shape < NUM_CROSSHAIRS) {
-        SM_Pic(x + 10 + (w - 62 - 64) * 0.5f, y, 64, 64, uiInfo.uiDC.Assets.crosshairShader[shape], clip);
-    } else if (SM_TextInside(SM_Baseline(FONT_SANS, 15, y + 20, 24), 15, clip)) {
-        SM_Text(x + 10, SM_Baseline(FONT_SANS, 15, y + 20, 24), FONT_SANS, 15, strPlaceholder, "None", -1, qfalse);
+        SM_Pic(x + SM_Len(10.0f) + SM_CenterLine(ST_LineRoom(w), size), y, size, size,
+               uiInfo.uiDC.Assets.crosshairShader[shape], clip);
+    } else if (SM_TextInside(base, 15, clip)) {
+        SM_Text(x + SM_Len(10.0f), base, FONT_SANS, 15, strPlaceholder, "None", -1, qfalse);
+    }
+}
+
+static void ST_WordSpaced(float x, float base, const char* text, float width) {
+    float right = x + width, gap = SM_Advance(FONT_SANS, 15, " ", 1) + SM_LetterSpacing(5.0f);
+
+    while (*text) {
+        const char* end = strchr(text, ' ');
+        int len = end ? (int)(end - text) : (int)strlen(text);
+        float advance = SM_Advance(FONT_SANS, 15, text, len);
+
+        if (x + advance > right) {
+            char word[MAX_CVAR_VALUE_STRING];
+
+            Q_strncpyz(word, text, MIN(len + 1, (int)sizeof(word)));
+            SM_Text(x, base, FONT_SANS, 15, smText, word, SM_Fit(FONT_SANS, 15, word, right - x), qfalse);
+            return;
+        }
+        SM_Text(x, base, FONT_SANS, 15, smText, text, len, qfalse);
+        x += advance + gap;
+        text += len;
+        while (*text == ' ') {
+            text++;
+        }
     }
 }
 
 static void ST_DrawBind(int i, float y, const smRect_t* clip) {
     float x = stLayout[i].x, w = stLayout[i].w, h = stLayout[i].h;
-    float base = SM_Baseline(FONT_SANS, 15, y + STR_ROW_PAD, SM_Len(32.0f));
+    float base = SM_Baseline(FONT_SANS, 15, y + STR_ROW_PAD, STR_TEXT_LINE);
+    float nameW = SM_Percent(w - 2 * STR_ROW_PAD, 60.0f);
     char keys[128];
     const char* p = st.values[i];
     int n = 0;
@@ -733,9 +823,8 @@ static void ST_DrawBind(int i, float y, const smRect_t* clip) {
     SM_Fill(x, y, w, h, SM_Over(ST_HIT_BIND, i) ? strBindHover : stLayout[i].odd ? strRowOdd : strRowEven, clip);
     if (SM_TextInside(base, 15, clip)) {
         SM_Text(x + STR_ROW_PAD, base, FONT_SANS, 15, smText, stCvars[i].title,
-                SM_Fit(FONT_SANS, 15, stCvars[i].title, (w - 2 * STR_ROW_PAD) * 0.6f), qfalse);
-        SM_Text(x + STR_ROW_PAD + (w - 2 * STR_ROW_PAD) * 0.6f, base, FONT_SANS, 15, smText, n ? keys : "None",
-                SM_Fit(FONT_SANS, 15, n ? keys : "None", (w - 2 * STR_ROW_PAD) * 0.4f), qfalse);
+                SM_Fit(FONT_SANS, 15, stCvars[i].title, nameW), qfalse);
+        ST_WordSpaced(x + STR_ROW_PAD + nameW, base, n ? keys : "None", SM_Percent(w - 2 * STR_ROW_PAD, 40.0f));
     }
     SM_Hit(x, y, w, h, ST_HIT_BIND, i, clip);
 }
@@ -839,7 +928,10 @@ static qhandle_t ST_IconFor(int model, const char* skin) {
             qhandle_t* h = &stIcons[model][k];
 
             if (!*h) {
-                *h = trap_R_RegisterShaderNoMip(va("models/players/%s/icon_%s", stModels[model].model, skin));
+                *h = trap_R_RegisterShaderNoMip(va("webui/img/models/icon/%s_%s.png", stModels[model].model, skin));
+                if (!*h) {
+                    *h = trap_R_RegisterShaderNoMip(va("models/players/%s/icon_%s", stModels[model].model, skin));
+                }
                 if (!*h) {
                     *h = -1;
                 }
@@ -946,31 +1038,47 @@ static void ST_DrawModelButton(int i, float x, float y, const smRect_t* clip) {
     const char* value = st.values[i][0] ? st.values[i] : "None";
     qboolean narrow = SM_Narrow();
     qboolean over = SM_Over(ST_HIT_MODEL, i) || st.model == i;
-    float w = ST_ControlW(i);
-    float tx = x + 10;
-    float base = SM_Baseline(FONT_SANS, 11, y + (narrow ? 15.7f : 15.0f), 15);
+    float w = ST_ControlW(i), h = SM_Len(48.0f);
+    float pad = SM_Len(narrow ? 1.1f : 5.5f);
+    float tx = x + SM_Len(10.0f), base;
+    int lead = SM_Px(SM_Len(38.0f));
+    int ascent = SM_Px(SM_Ascent(FONT_SANS, 11)), descent = SM_Px(SM_Descent(FONT_SANS, 11));
+    int above = (lead - ascent - descent) / 2 + ascent, below = lead - above;
+    int iconH = 0, iconAbove = 0;
+    qhandle_t icon = 0;
     char upper[64];
 
-    SM_Fill(x, y, w, 48, over ? smWebButtonHover : smWebButton, clip);
     if (st.values[i][0]) {
         char skin[MAX_QPATH];
         int model = ST_ParseModel(st.values[i], skin, sizeof(skin));
-        qhandle_t icon = ST_IconFor(model, skin[0] ? skin : "default");
 
-        if (icon && narrow) {
-            SM_Pic(x + 10, y + 10, 24, 24, icon, clip);
-            tx = x + 10 + 24 + 5.0f;
-        } else if (icon) {
-            SM_Pic(x + 10, y, 48, 48, icon, clip);
-            tx = x + 10 + 48 + 9.4f;
-        }
+        icon = ST_IconFor(model, skin[0] ? skin : "default");
     }
+    if (icon) {
+        int box;
+
+        iconH = SM_Px(SM_Len(narrow ? 24.0f : 48.0f));
+        box = iconH + (narrow ? SM_Px(SM_Len(4.0f)) : 0);
+        iconAbove = box / 2 + (int)floorf(SM_Px(11.0f) * 0.535f + 0.5f) / 2;
+        above = MAX(above, iconAbove);
+        below = MAX(below, box - iconAbove);
+    }
+    base = y + ((SM_Px(h) - above - below) / 2 + above) / smScale;
+
+    SM_Fill(x, y, w, h, over ? smWebButtonHover : smWebButton, clip);
+    if (icon) {
+        SM_Pic(tx, base - iconAbove / smScale, iconH / smScale, iconH / smScale, icon, clip);
+        tx += iconH / smScale;
+    } else {
+        tx += pad;
+    }
+    tx += 2 * pad + SM_AdvanceBold(FONT_SANS, 11, " ", 1, qtrue) + SM_LetterSpacing(1.0f);
     Q_strncpyz(upper, value, sizeof(upper));
     Q_strupr(upper);
     if (SM_TextInside(base, 11, clip)) {
         SM_SpacedText(tx, base, FONT_SANS, 11, over ? smWebYellow : smText, upper, 1.0f, qtrue);
     }
-    SM_Hit(x, y, w, 48, ST_HIT_MODEL, i, clip);
+    SM_Hit(x, y, w, h, ST_HIT_MODEL, i, clip);
 }
 
 static void ST_DrawChooserPreview(float x, float y, float w, float h) {
@@ -1200,16 +1308,33 @@ static void ST_DrawRow(int i, float y, const smRect_t* clip) {
     float w = stLayout[i].w;
     float h = stLayout[i].h;
     float cx = ST_ControlX(i);
-    float base = SM_Baseline(FONT_SANS, 15, y + STR_ROW_PAD + SM_Len(6.0f), SM_Len(24.0f));
+    float base = SM_Baseline(FONT_SANS, 15, y + STR_ROW_PAD + SM_Len(6.0f), STR_TEXT_LINE);
     smRect_t row = SM_R(x, y, w, h);
     qboolean hovered;
 
+    if (cv->widget == ST_BREAK) {
+        return;
+    }
+    if (cv->widget == ST_TEXT) {
+        int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
+        int lines = SM_Wrap(FONT_SANS, 15, cv->title, w, starts, lens);
+        int k;
+
+        for (k = 0; k < lines; k++) {
+            float tb = SM_Baseline(FONT_SANS, 15, y + k * STR_TEXT_LINE, STR_TEXT_LINE);
+
+            if (SM_TextInside(tb, 15, clip)) {
+                SM_TextRaw(x, tb, FONT_SANS, 15, smText, cv->title + starts[k], lens[k], qfalse);
+            }
+        }
+        return;
+    }
     if (cv->widget == ST_HEADING) {
         float hb = SM_Baseline(FONT_DEFAULT, 32, y + h - SM_H1_PAD - SM_H1_LINE, SM_H1_LINE);
 
         if (SM_TextInside(hb, 32, clip)) {
             SM_SetSpacing(SM_SPACING_H1);
-            SM_Text(x + 6.4f, hb, FONT_DEFAULT, 32, smText, cv->title, -1, qfalse);
+            SM_Text(x + SM_Len(6.4f), hb, FONT_DEFAULT, 32, smText, cv->title, -1, qfalse);
             SM_SetSpacing(0);
         }
         return;
@@ -1231,7 +1356,7 @@ static void ST_DrawRow(int i, float y, const smRect_t* clip) {
 
             SM_Text(after, base, FONT_SANS, 15, SM_Over(ST_HIT_RESET, i) ? strLinkHover : strLink, "(Reset)", -1,
                     qfalse);
-            SM_Hit(after, y + STR_ROW_PAD + SM_Len(6.0f), SM_Advance(FONT_SANS, 15, "(Reset)", -1), SM_Len(24.0f),
+            SM_Hit(after, y + STR_ROW_PAD + SM_Len(6.0f), SM_Advance(FONT_SANS, 15, "(Reset)", -1), STR_TEXT_LINE,
                    ST_HIT_RESET, i, clip);
         }
     }
@@ -1661,7 +1786,7 @@ static void ST_Click(void) {
                 st.edit = index;
                 st.editStart = 0;
             }
-            st.editCursor = ST_CaretAt(index, hit->r.x + 9, st.editStart);
+            st.editCursor = ST_CaretAt(index, hit->r.x + SM_LenBorder(1.0f) + SM_Len(8.0f) + 1.0f / smScale, st.editStart);
             st.editTime = uiInfo.uiDC.realTime;
             break;
         case ST_HIT_RESET:
@@ -1716,37 +1841,20 @@ static void ST_Wheel(float amount) {
 
 static void ST_Bind(int i, int key) {
     const char* command = stCvars[i].cvar;
-    int found[2];
-    int count = 0;
     int k;
 
-    for (k = 0; k < K_LAST_KEY; k++) {
-        char buf[MAX_STRING_CHARS];
-
-        trap_Key_GetBindingBuf(k, buf, sizeof(buf));
-        if (buf[0] && !Q_stricmp(buf, command)) {
-            if (count < 2) {
-                found[count] = k;
-            }
-            count++;
-        }
-    }
     if (key == K_BACKSPACE) {
-        for (k = 0; k < count && k < 2; k++) {
-            trap_Key_SetBinding(found[k], "");
+        for (k = 0; k < K_LAST_KEY; k++) {
+            char buf[MAX_STRING_CHARS];
+
+            trap_Key_GetBindingBuf(k, buf, sizeof(buf));
+            if (buf[0] && !Q_stricmp(buf, command)) {
+                trap_Key_SetBinding(k, "");
+            }
         }
-        ST_Read(i);
-        return;
+    } else {
+        trap_Key_SetBinding(key, command);
     }
-    for (k = 0; k < count && k < 2; k++) {
-        if (found[k] == key) {
-            return;
-        }
-    }
-    if (count >= 2) {
-        trap_Key_SetBinding(found[0], "");
-    }
-    trap_Key_SetBinding(key, command);
     ST_Read(i);
 }
 
