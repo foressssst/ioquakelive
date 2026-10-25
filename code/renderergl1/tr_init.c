@@ -609,11 +609,6 @@ static void InitOpenGL( void )
 				glConfig.vidWidth = r_renderWidth->integer;
 				glConfig.vidHeight = r_renderHeight->integer;
 			}
-			else if ( R_FSRScale() < 1.0f )
-			{
-				glConfig.vidWidth = (int)( glConfig.vidWidth * R_FSRScale() + 0.5f );
-				glConfig.vidHeight = (int)( glConfig.vidHeight * R_FSRScale() + 0.5f );
-			}
 
 			gls.captureWidth = glConfig.vidWidth;
 			gls.captureHeight = glConfig.vidHeight;
@@ -1319,8 +1314,6 @@ static void R_Register( void )
 
 	R_QLPostRegister();
 
-	R_FSRRegister();
-
 	r_fullbright = ri.Cvar_Get( "r_fullbright", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_REPLICATE | CVAR_USERSAVE );
 	ri.Cvar_SetDescription( r_fullbright, "Debugging tool to render the entire level without lighting." );
 	r_overBrightBits = ri.Cvar_Get( "r_overBrightBits", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_USERSAVE );
@@ -1732,10 +1725,10 @@ static qboolean RE_WindowResized( int width, int height )
 
 	if ( !r_renderScale->integer )
 	{
-		glConfig.vidWidth = (int)( width * R_FSRScale() + 0.5f );
-		glConfig.vidHeight = (int)( height * R_FSRScale() + 0.5f );
-		gls.captureWidth = glConfig.vidWidth;
-		gls.captureHeight = glConfig.vidHeight;
+		glConfig.vidWidth = width;
+		glConfig.vidHeight = height;
+		gls.captureWidth = width;
+		gls.captureHeight = height;
 		RI_CL_SetScaling( 1.0, gls.captureWidth, gls.captureHeight );
 #ifdef USE_FBO
 		if ( r_ext_supersample->integer )

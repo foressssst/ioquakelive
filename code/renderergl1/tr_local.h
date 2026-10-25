@@ -1669,11 +1669,6 @@ const void *RB_Bloom( const void *data );
 qboolean RB_QLColorCorrect( GLuint dstFbo, int width, int height );
 qboolean R_CaptureGammaCorrect( void );
 
-void R_FSRRegister( void );
-float R_FSRScale( void );
-void R_FSRInit( void );
-void R_FSRShutdown( void );
-qboolean RB_FSRBlit( GLuint srcTexture, int srcWidth, int srcHeight, int x0, int y0, int x1, int y1 );
 void RB_TakeLevelShot( void );
 void *R_GetCommandBuffer( int bytes );
 

@@ -28,7 +28,6 @@ Pasos:
 ## Novedades
 
 - **Tres renderers:** OpenGL clásico, OpenGL 2 y Vulkan.
-- **AMD FSR:** escalado de imagen mediante `r_fsr`.
 - **NVIDIA Reflex y AMD Anti-Lag 2:** opciones de baja latencia en Vulkan, con el estado de compatibilidad indicado en la sección de renderizado.
 - **Carga en paralelo:** imágenes y sonidos se procesan en varios hilos para reducir los tiempos de carga.
 - **Demo Player renovado:** interfaz y reproducción de demos actualizadas.
@@ -239,7 +238,6 @@ Las siguientes tablas documentan las áreas portadas y su estado actual. Los nom
 | Vulkan | Hecho | Basado en Quake3e, con el bloom y la corrección de color de Quake Live. |
 | OpenGL 2 (`opengl2`) | Hecho | Renderer de respaldo basado en ioquake3. |
 | Reflex and Anti-Lag 2 | Parcial | Disponibles en Vulkan mediante `r_lowLatency`. Reflex se ha medido en NVIDIA; Anti-Lag 2 aún no se ha probado en AMD. |
-| FSR | Hecho | Disponible mediante `r_fsr`, únicamente en OpenGL clásico. |
 | Quake Live shaders | Hecho | Las 134 palabras del parser original. |
 | Duplicate shaders | Hecho | Prevalece la primera definición, como en el original. |
 | Advertisements | Hecho | El renderer añade la superficie correspondiente a cada cartel del mapa. |
