@@ -290,6 +290,8 @@ static const cvarHelp_t cvarHelp[] = {
     {"cg_forceBlueTeamModel", "model the blue team is drawn with, for spectators"},
     {"cg_enemyHeadColor", "colour of the forced enemy model's head, as 0xRRGGBBAA"},
     {"cg_enemyUpperColor", "colour of the forced enemy model's torso, as 0xRRGGBBAA"},
+    {"cg_enemyOutline", "thin outline around enemy models, only where they can be seen: 0 off, 1 thin, 2 medium"},
+    {"cg_enemyOutlineColor", "colour of the enemy outline, as 0xRRGGBBAA"},
     {"cg_enemyLowerColor", "colour of the forced enemy model's legs, as 0xRRGGBBAA"},
     {"cg_teamHeadColor", "colour of the forced teammate model's head, as 0xRRGGBBAA"},
     {"cg_teamUpperColor", "colour of the forced teammate model's torso, as 0xRRGGBBAA"},

@@ -2313,6 +2313,36 @@ static void CG_AddXray(const refEntity_t* part, const byte* color) {
     trap_R_AddRefEntityToScene(&ent);
 }
 
+static void CG_AddEnemyOutline(const refEntity_t* part, const centity_t* cent, qboolean enemy) {
+    static const float widths[] = {0.4f, 0.6f, 0.9f, 1.3f, 1.8f, 2.5f, 3.5f, 5.0f};
+    refEntity_t outline;
+    float perUnit, want;
+    int packed, i;
+
+    if (!cg_enemyOutline.integer || !enemy || !part->hModel || cent->currentState.number == cg.snap->ps.clientNum ||
+        (cent->currentState.eFlags & EF_DEAD) || (cent->currentState.powerups & (1 << PW_INVIS))) {
+        return;
+    }
+
+    perUnit = cg.refdef.height * 0.5f / tan(DEG2RAD(cg.refdef.fov_y * 0.5f));
+    want = (cg_enemyOutline.integer > 1 ? 2.2f : 1.4f) * Distance(cg.refdef.vieworg, part->origin) / perUnit;
+    i = 0;
+    while (i < (int)ARRAY_LEN(widths) - 1 && widths[i] < want) {
+        i++;
+    }
+
+    outline = *part;
+    outline.customShader = cgs.media.enemyOutlineShader[i];
+    outline.customSkin = 0;
+    outline.renderfx = (outline.renderfx & ~RF_SHADOW_PLANE) | RF_NOSHADOW;
+    packed = cg_enemyOutlineColor.integer;
+    outline.shaderRGBA[0] = (packed >> 24) & 0xff;
+    outline.shaderRGBA[1] = (packed >> 16) & 0xff;
+    outline.shaderRGBA[2] = (packed >> 8) & 0xff;
+    outline.shaderRGBA[3] = packed & 0xff;
+    trap_R_AddRefEntityToScene(&outline);
+}
+
 void CG_Player(centity_t* cent) {
     clientInfo_t* ci;
     refEntity_t legs;
@@ -2400,6 +2430,7 @@ void CG_Player(centity_t* cent) {
     VectorCopy(legs.origin, legs.oldorigin);
 
     CG_AddRefEntityWithPowerups(&legs, &cent->currentState, ci->team);
+    CG_AddEnemyOutline(&legs, cent, enemy);
 
     if (!legs.hModel) {
         return;
@@ -2420,6 +2451,7 @@ void CG_Player(centity_t* cent) {
     torso.renderfx = renderfx;
 
     CG_AddRefEntityWithPowerups(&torso, &cent->currentState, ci->team);
+    CG_AddEnemyOutline(&torso, cent, enemy);
 
     if (cent->currentState.eFlags & EF_KAMIKAZE) {
         memset(&skull, 0, sizeof(skull));
@@ -2612,6 +2644,7 @@ void CG_Player(centity_t* cent) {
     head.renderfx = renderfx;
 
     CG_AddRefEntityWithPowerups(&head, &cent->currentState, ci->team);
+    CG_AddEnemyOutline(&head, cent, enemy);
 
     CG_DustTrail(cent);
 

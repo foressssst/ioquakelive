@@ -25,6 +25,7 @@ static const stOption_t stOpts_cg_crosshairhitstyle[] = {{"None", "0"}, {"Damage
 static const stOption_t stOpts_cg_crosshairhittime[] = {{"Short", "100"}, {"Normal", "200.0"}, {"Long", "500"}};
 static const stOption_t stOpts_cg_poweruppois[] = {{"Off", "0"}, {"Through Walls", "1"}, {"Always On", "2"}};
 static const stOption_t stOpts_cg_forceteamskin[] = {{"None", ""}, {"Red", "red"}, {"Blue", "blue"}, {"Bright", "bright"}, {"Sport", "sport"}, {"Sport (Red)", "sport_red"}, {"Sport (Blue)", "sport_blue"}, {"Fullbright", "fb"}};
+static const stOption_t stOpts_cg_enemyoutline[] = {{"Off", "0"}, {"Thin", "1"}, {"Medium", "2"}};
 static const stOption_t stOpts_cg_forceenemyskin[] = {{"None", ""}, {"Red", "red"}, {"Blue", "blue"}, {"Bright", "bright"}, {"Sport", "sport"}, {"Sport (Red)", "sport_red"}, {"Sport (Blue)", "sport_blue"}, {"Fullbright", "fb"}};
 static const stOption_t stOpts_cg_drawgun[] = {{"Hidden", "0"}, {"Normal", "1"}, {"Still", "2"}, {"Transparent", "3"}};
 static const stOption_t stOpts_cg_guny[] = {{"Default", "0"}, {"Left", "18"}, {"Center", "3"}, {"Right", "-10"}};
@@ -207,6 +208,8 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_TEAM, "Enemy Head Color", "cg_enemyheadcolor", ST_RGB, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
     {ST_TAB_TEAM, "Enemy Upper Color", "cg_enemyuppercolor", ST_RGB, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
     {ST_TAB_TEAM, "Enemy Lower Color", "cg_enemylowercolor", ST_RGB, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
+    {ST_TAB_TEAM, "Enemy Outline", "cg_enemyoutline", ST_SELECT, 0.0f, 2.0f, 0.0f, stOpts_cg_enemyoutline, 3, "Draw a thin outline around enemies, only where they can be seen.", 1},
+    {ST_TAB_TEAM, "Enemy Outline Color", "cg_enemyoutlinecolor", ST_RGB, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, 1},
     {ST_TAB_TEAM, "Force Enemy Weapon Color", "cg_forceenemyweaponcolor", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Force enemies' grenades and rails to use 'Enemy Upper' color.", 1},
     {ST_TAB_TEAM, "Enemy Damage Indicator", "cg_screendamage", ST_RGB, 0.0f, 0.0f, 0.0f, NULL, 0, "Choose the color in which enemy hits are indicated on your screen.", 1},
     {ST_TAB_TEAM, "Enemy Damage Indicator Alpha", "cg_screendamagealpha", ST_RANGE, 0.0f, 255.0f, 5.0f, NULL, 0, NULL, 1},

@@ -979,6 +979,7 @@ typedef struct {
     qhandle_t energyMarkShader;
 
     qhandle_t quadShader;
+    qhandle_t enemyOutlineShader[8];
     qhandle_t spawnArmorShader;
     qhandle_t spawnArmor2Shader;
     qhandle_t noPlayerClipShader;
@@ -1738,6 +1739,8 @@ extern vmCvar_t g_training;
 extern vmCvar_t cg_enemyHeadColor;
 extern vmCvar_t cg_enemyLowerColor;
 extern vmCvar_t cg_enemyUpperColor;
+extern vmCvar_t cg_enemyOutline;
+extern vmCvar_t cg_enemyOutlineColor;
 extern vmCvar_t cg_followKiller;
 extern vmCvar_t cg_followPowerup;
 extern vmCvar_t cg_impactMarkTime;

@@ -285,6 +285,8 @@ vmCvar_t cg_drawTieredArmorAvailability;
 vmCvar_t cg_enemyHeadColor;
 vmCvar_t cg_enemyLowerColor;
 vmCvar_t cg_enemyUpperColor;
+vmCvar_t cg_enemyOutline;
+vmCvar_t cg_enemyOutlineColor;
 vmCvar_t cg_flagStyle;
 vmCvar_t cg_forceEnemyModel;
 vmCvar_t cg_forceTeamModel;
@@ -665,6 +667,8 @@ static cvarTable_t cvarTable[] = {
     {&cg_enemyHeadColor, "cg_enemyHeadColor", "0x2a8000FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_enemyLowerColor, "cg_enemyLowerColor", "0x2a8000FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_enemyUpperColor, "cg_enemyUpperColor", "0x2a8000FF", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
+    {&cg_enemyOutline, "cg_enemyOutline", "0", CVAR_USERSAVE | CVAR_ARCHIVE, "0", "2"},
+    {&cg_enemyOutlineColor, "cg_enemyOutlineColor", "0xFF3030FF", CVAR_USERSAVE | CVAR_ARCHIVE},
     {&cg_flagStyle, "cg_flagStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "2"},
     {&cg_forceEnemyModel, "cg_forceEnemyModel", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
     {&cg_forceTeamModel, "cg_forceTeamModel", "", CVAR_USERSAVE | CVAR_REPLICATE | CVAR_ARCHIVE},
@@ -1745,6 +1749,9 @@ static void CG_RegisterGraphics(void) {
     cgs.media.fragIconShader = trap_R_RegisterShader("icons/icon_frag");
 
     cgs.media.quadShader = trap_R_RegisterShader("powerups/quad");
+    for (i = 0; i < ARRAY_LEN(cgs.media.enemyOutlineShader); i++) {
+        cgs.media.enemyOutlineShader[i] = trap_R_RegisterShader(va("ioqlOutline%i", i));
+    }
     cgs.media.quadWeaponShader = trap_R_RegisterShader("powerups/quadWeapon");
     cgs.media.brightWeaponShader = trap_R_RegisterShader("ioqlBrightWeapon");
     cgs.media.battleSuitShader = trap_R_RegisterShader("powerups/battleSuit");
