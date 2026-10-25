@@ -164,20 +164,7 @@ static void RP_Date(int seconds, char* out, int size) {
 }
 
 static int RP_ReadFile(const char* name, char* buf, int size) {
-    fileHandle_t f;
-    int len = trap_FS_FOpenFile(name, &f, FS_READ);
-
-    if (!f) {
-        return -1;
-    }
-    if (len <= 0 || len >= size) {
-        trap_FS_FCloseFile(f);
-        return -1;
-    }
-    trap_FS_Read(buf, len, f);
-    buf[len] = '\0';
-    trap_FS_FCloseFile(f);
-    return len;
+    return trap_MatchFile(name, buf, size);
 }
 
 static void RP_String(const char* obj, const char* end, const char* name, char* out, int size) {
@@ -200,7 +187,7 @@ static void RP_Describe(rpDemo_t* d) {
     static char buf[0x10000];
     char map[64], type[32], server[128];
     const char* end;
-    int len = RP_ReadFile(va("matches/%s.json", d->guid), buf, sizeof(buf));
+    int len = RP_ReadFile(va("%s.json", d->guid), buf, sizeof(buf));
 
     if (len <= 0) {
         d->guid[0] = '\0';
@@ -266,7 +253,7 @@ static void RP_Load(void) {
         rp.count++;
     }
 
-    len = RP_ReadFile("matches/media.txt", media, sizeof(media));
+    len = RP_ReadFile("media.txt", media, sizeof(media));
     for (p = len > 0 ? media : NULL; p && *p;) {
         char* eol = strchr(p, '\n');
         char* space;

@@ -201,8 +201,12 @@ qboolean trap_WorkshopDownloadInfo(const char* item, uint64_t* done, uint64_t* t
     return ok;
 }
 
-qboolean trap_SteamAvatar(const char* steamId, char* path, int size) {
-    return syscall(UI_STEAM_AVATAR, steamId, path, size);
+qhandle_t trap_SteamAvatar(const char* steamId) {
+    return syscall(UI_STEAM_AVATAR, steamId);
+}
+
+int trap_MatchFile(const char* name, char* buf, int size) {
+    return syscall(UI_MATCH_FILE, name, buf, size);
 }
 
 void trap_SteamShowProfile(const char* steamId) {

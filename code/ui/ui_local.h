@@ -875,7 +875,8 @@ qboolean trap_SteamFriendGet(int index, uiFriend_t* out);
 void trap_SteamFriendAction(int index, int action);
 int trap_SteamUserStats(const char* steamId, uiUserStats_t* out, qboolean request);
 void trap_SteamShowProfile(const char* steamId);
-qboolean trap_SteamAvatar(const char* steamId, char* path, int size);
+qhandle_t trap_SteamAvatar(const char* steamId);
+int trap_MatchFile(const char* name, char* buf, int size);
 int trap_WebPakExcerpt(const char* name, const char* marker, char* out, int size);
 qboolean trap_WorkshopDownloadInfo(const char* item, uint64_t* done, uint64_t* total);
 

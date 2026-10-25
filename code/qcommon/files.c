@@ -1636,23 +1636,103 @@ long FS_ReadCacheFile(const char* name, void** buffer) {
 	return len;
 }
 
-void FS_WriteCacheFile(const char* name, const void* buffer, int size) {
+static qboolean FS_PutCacheFile(const char* name, const void* buffer, int size, qboolean append) {
 	char path[MAX_OSPATH];
 	FILE* f;
+	qboolean ok;
 
 	if (!FS_CacheFilePath(name, path, sizeof(path)) || FS_CreatePath(path)) {
-		return;
+		return qfalse;
 	}
-	f = Sys_FOpen(path, "wb");
+	f = Sys_FOpen(path, append ? "ab" : "wb");
 	if (!f) {
 		Com_DPrintf("FS_WriteCacheFile: couldn't write %s\n", path);
-		return;
+		return qfalse;
 	}
-	fwrite(buffer, 1, size, f);
-	fclose(f);
+	ok = (qboolean)(fwrite(buffer, 1, size, f) == (size_t)size);
+	if (fclose(f)) {
+		ok = qfalse;
+	}
+	return ok;
+}
+
+void FS_WriteCacheFile(const char* name, const void* buffer, int size) {
+	FS_PutCacheFile(name, buffer, size, qfalse);
+}
+
+void FS_AppendCacheFile(const char* name, const void* buffer, int size) {
+	FS_PutCacheFile(name, buffer, size, qtrue);
 }
 
 #ifndef DEDICATED
+static void FS_MoveOldMatches(const char* gameName) {
+	char dir[MAX_OSPATH];
+	char path[MAX_OSPATH];
+	char** list;
+	int count;
+	int i;
+
+	if (!fs_homepath || !fs_homepath->string[0]) {
+		return;
+	}
+	Q_strncpyz(dir, FS_BuildOSPath(fs_homepath->string, gameName, "matches"), sizeof(dir));
+	list = Sys_ListFiles(dir, NULL, NULL, &count, qfalse);
+	if (!list) {
+		return;
+	}
+	for (i = 0; i < count; i++) {
+		FILE* f;
+		byte* buf;
+		long len;
+		qboolean moved = qfalse;
+
+		Com_sprintf(path, sizeof(path), "%s%c%s", dir, PATH_SEP, list[i]);
+		f = Sys_FOpen(path, "rb");
+		if (!f) {
+			continue;
+		}
+		fseek(f, 0, SEEK_END);
+		len = ftell(f);
+		fseek(f, 0, SEEK_SET);
+		buf = len > 0 ? (byte*)malloc(len) : NULL;
+		if (buf && fread(buf, 1, len, f) == (size_t)len) {
+			qboolean append = (qboolean)!Q_stricmp(COM_GetExtension(list[i]), "txt");
+
+			moved = FS_PutCacheFile(va("matches/%s", list[i]), buf, (int)len, append);
+		} else if (len == 0) {
+			moved = qtrue;
+		}
+		free(buf);
+		fclose(f);
+		if (moved) {
+			remove(path);
+		}
+	}
+	Sys_FreeFileList(list);
+	Sys_RemoveDir(dir);
+}
+
+static void FS_RemoveOldAvatars(const char* gameName) {
+	char dir[MAX_OSPATH];
+	char** list;
+	int count;
+	int i;
+
+	if (!fs_homepath || !fs_homepath->string[0]) {
+		return;
+	}
+	Q_strncpyz(dir, FS_BuildOSPath(fs_homepath->string, gameName, "avatars"), sizeof(dir));
+	list = Sys_ListFiles(dir, ".tga", NULL, &count, qfalse);
+	if (!list) {
+		return;
+	}
+	for (i = 0; i < count; i++) {
+		remove(va("%s%c%s", dir, PATH_SEP, list[i]));
+	}
+	Sys_FreeFileList(list);
+	Sys_RemoveDir(dir);
+}
+
 static void FS_RemoveOldPrefetch(const char* gameName) {
 	char dir[MAX_OSPATH];
 	char** list;
@@ -2836,6 +2916,8 @@ static void FS_Startup(const char* gameName) {
 	fs_gamedirvar = Cvar_Get("fs_game", "", CVAR_INIT | CVAR_SYSTEMINFO);
 #ifndef DEDICATED
 	FS_RemoveOldPrefetch(gameName);
+	FS_RemoveOldAvatars(gameName);
+	FS_MoveOldMatches(gameName);
 #endif
 
 	if (!gameName[0]) {

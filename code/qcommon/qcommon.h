@@ -501,6 +501,7 @@ void FS_Remove(const char* osPath);
 void FS_HomeRemove(const char* homePath);
 long FS_ReadCacheFile(const char* name, void** buffer);
 void FS_WriteCacheFile(const char* name, const void* buffer, int size);
+void FS_AppendCacheFile(const char* name, const void* buffer, int size);
 
 void FS_FilenameCompletion(const char* dir, const char* ext, qboolean stripExt, void (*callback)(const char* s), qboolean allowNonPureFilesOnDisk);
 

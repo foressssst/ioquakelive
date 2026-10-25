@@ -34,19 +34,54 @@ static qboolean CL_MatchGuid(const char* report, const char* end, char* guid, in
 
 static void CL_WriteFile(const char* name, const char* a, int aLen, const char* b, int bLen, const char* c,
                          int cLen) {
-    fileHandle_t f = FS_FOpenFileWrite(name);
+    char* buf = (char*)malloc(aLen + (b ? bLen : 0) + (c ? cLen : 0));
+    int n = 0;
 
-    if (!f) {
+    if (!buf) {
         return;
     }
-    FS_Write(a, aLen, f);
+    Com_Memcpy(buf, a, aLen);
+    n += aLen;
     if (b) {
-        FS_Write(b, bLen, f);
+        Com_Memcpy(buf + n, b, bLen);
+        n += bLen;
     }
     if (c) {
-        FS_Write(c, cLen, f);
+        Com_Memcpy(buf + n, c, cLen);
+        n += cLen;
     }
-    FS_FCloseFile(f);
+    FS_WriteCacheFile(name, buf, n);
+    free(buf);
+}
+
+int CL_ReadMatchFile(const char* name, char* buf, int size) {
+    void* data;
+    long len;
+    int i;
+
+    if (!name || !buf || size <= 0 || name[0] == '.') {
+        return -1;
+    }
+    for (i = 0; name[i]; i++) {
+        if (!isalnum((unsigned char)name[i]) && name[i] != '-' && name[i] != '.') {
+            return -1;
+        }
+    }
+    if (!i) {
+        return -1;
+    }
+    len = FS_ReadCacheFile(va("matches/%s", name), &data);
+    if (len <= 0 || !data) {
+        return -1;
+    }
+    if (len >= size) {
+        FS_FreeFile(data);
+        return -1;
+    }
+    Com_Memcpy(buf, data, len);
+    buf[len] = '\0';
+    FS_FreeFile(data);
+    return (int)len;
 }
 
 static void CL_SaveMatchReport(const char* report, int len) {
@@ -58,7 +93,6 @@ static void CL_SaveMatchReport(const char* report, int len) {
     char guid[128];
     char self[32];
     char extra[128];
-    fileHandle_t f;
     const char* k;
     char* basics;
     int n = 0;
@@ -139,19 +173,15 @@ static void CL_SaveMatchReport(const char* report, int len) {
                      (int)(JSON_ValueGetEnd(events, end) - events), "}", 1);
     }
 
-    f = FS_FOpenFileAppendQuiet("matches/index.txt");
-    if (f) {
-        FS_Write(guid, (int)strlen(guid), f);
-        FS_Write("\n", 1, f);
-        FS_FCloseFile(f);
-    }
+    Q_strcat(guid, sizeof(guid), "\n");
+    FS_AppendCacheFile("matches/index.txt", guid, (int)strlen(guid));
     Com_Printf("Match stats saved.\n");
 }
 
 void CL_MatchMedia(const char* path) {
     const char* name = strchr(path, '/');
     const char* guid;
-    fileHandle_t f;
+    char line[MAX_OSPATH];
     int i;
 
     if (clc.state < CA_CONNECTED || !name || !name[1]) {
@@ -167,14 +197,8 @@ void CL_MatchMedia(const char* path) {
     if (!i) {
         return;
     }
-    f = FS_FOpenFileAppendQuiet("matches/media.txt");
-    if (f) {
-        FS_Write(name, (int)strlen(name), f);
-        FS_Write(" ", 1, f);
-        FS_Write(guid, i, f);
-        FS_Write("\n", 1, f);
-        FS_FCloseFile(f);
-    }
+    Com_sprintf(line, sizeof(line), "%s %s\n", name, guid);
+    FS_AppendCacheFile("matches/media.txt", line, (int)strlen(line));
 }
 
 void CL_MatchReportFrame(void) {

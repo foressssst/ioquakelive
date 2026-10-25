@@ -846,7 +846,6 @@ qhandle_t SM_Avatar(const char* steamId) {
         int asked;
     } cache[SM_MAX_AVATARS];
     static int next;
-    char path[MAX_QPATH];
     int i;
 
     for (i = 0; i < SM_MAX_AVATARS; i++) {
@@ -863,9 +862,7 @@ qhandle_t SM_Avatar(const char* steamId) {
     }
     if (!cache[i].image && uiInfo.uiDC.realTime - cache[i].asked >= 1000) {
         cache[i].asked = uiInfo.uiDC.realTime;
-        if (trap_SteamAvatar(steamId, path, sizeof(path))) {
-            cache[i].image = trap_R_RegisterShaderNoMip(path);
-        }
+        cache[i].image = trap_SteamAvatar(steamId);
     }
     return cache[i].image;
 }

@@ -772,6 +772,9 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             return re.RegisterShaderFromRaw(VMA(1), VMA(2), width, height);
         }
 
+        case UI_MATCH_FILE:
+            return CL_ReadMatchFile(VMA(1), VMA(2), (int)args[3]);
+
         case UI_LAN_SERVER_NAME: {
             char* buf = VMA(3);
 
@@ -923,7 +926,7 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
         case UI_STEAM_AVATAR: {
             const char* id = VMA(1);
 
-            return Steam_Avatar(id[0] ? strtoull(id, NULL, 10) : 0, VMA(2), args[3]);
+            return CL_SteamAvatarShader(id[0] ? strtoull(id, NULL, 10) : Steam_ClientSteamID());
         }
 
         case UI_STEAM_SHOW_PROFILE: {

@@ -301,20 +301,7 @@ static const vec4_t mtBlack = {0.0f, 0.0f, 0.0f, 1.0f};
 static const vec4_t mtWhite = {1.0f, 1.0f, 1.0f, 1.0f};
 
 static int MT_ReadFile(const char* name, char* buf, int size) {
-    fileHandle_t f;
-    int len = trap_FS_FOpenFile(name, &f, FS_READ);
-
-    if (!f) {
-        return -1;
-    }
-    if (len <= 0 || len >= size) {
-        trap_FS_FCloseFile(f);
-        return -1;
-    }
-    trap_FS_Read(buf, len, f);
-    buf[len] = '\0';
-    trap_FS_FCloseFile(f);
-    return len;
+    return trap_MatchFile(name, buf, size);
 }
 
 static qboolean MT_Exists(const char* name) {
@@ -434,7 +421,7 @@ static void MT_LoadMatch(mtMatch_t* m, const char* guid) {
     int i;
 
     Com_Memset(m, 0, sizeof(*m));
-    len = MT_ReadFile(va("matches/%s.json", guid), mtBuffer, sizeof(mtBuffer));
+    len = MT_ReadFile(va("%s.json", guid), mtBuffer, sizeof(mtBuffer));
     if (len <= 0) {
         return;
     }
@@ -474,7 +461,7 @@ static void MT_LoadList(void) {
     int len, i;
 
     mt.count = 0;
-    len = MT_ReadFile("matches/index.txt", index, sizeof(index));
+    len = MT_ReadFile("index.txt", index, sizeof(index));
     if (len <= 0) {
         return;
     }
@@ -656,7 +643,7 @@ static void MT_Open(int index) {
     Com_Memset(mt.table, 0, sizeof(mt.table));
     mt.numEvents = 0;
 
-    len = MT_ReadFile(va("matches/%s.players.json", m->guid), mtBuffer, sizeof(mtBuffer));
+    len = MT_ReadFile(va("%s.players.json", m->guid), mtBuffer, sizeof(mtBuffer));
     if (len > 0) {
         end = mtBuffer + len;
         list = MT_Member(mtBuffer, end, "PLYR_STATS");
@@ -677,7 +664,7 @@ static void MT_Open(int index) {
         MT_BuildTable(&mt.table[MT_SEC_DAMAGE], cols, MT_NUM_WEAPONS, list, end, qfalse);
     }
 
-    len = MT_ReadFile(va("matches/%s.events.json", m->guid), mtBuffer, sizeof(mtBuffer));
+    len = MT_ReadFile(va("%s.events.json", m->guid), mtBuffer, sizeof(mtBuffer));
     if (len > 0) {
         end = mtBuffer + len;
         list = MT_Member(mtBuffer, end, "PLYR_EVENTS");
@@ -708,7 +695,7 @@ static void MT_Open(int index) {
     }
 
     mt.numMedia = 0;
-    len = MT_ReadFile("matches/media.txt", mtBuffer, sizeof(mtBuffer));
+    len = MT_ReadFile("media.txt", mtBuffer, sizeof(mtBuffer));
     for (p = len > 0 ? mtBuffer : NULL; p && *p && mt.numMedia < MT_MAX_MEDIA;) {
         char* eol = strchr((char*)p, '\n');
         char* space;

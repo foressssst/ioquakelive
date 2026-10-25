@@ -402,6 +402,7 @@ void CL_UpdateFrame(void);
 void CL_VoiceFrame(void);
 void CL_MatchReportFrame(void);
 void CL_MatchMedia(const char* path);
+int CL_ReadMatchFile(const char* name, char* buf, int size);
 void CL_SetCgameCommandCompletion(const char* cmdName);
 qboolean CL_DemoInfo(const char* file, char* info, int infoSize);
 void CL_ClearAvatars(void);

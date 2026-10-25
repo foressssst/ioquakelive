@@ -192,7 +192,6 @@ typedef struct {
     uint64_t(QDECL* SubscribeItem)(void* self, uint64_t item);
     uint64_t(QDECL* UnsubscribeItem)(void* self, uint64_t item);
     void*(QDECL* Utils)(void);
-    int(QDECL* GetMediumFriendAvatar)(void* self, uint64_t steamId);
     int(QDECL* GetLargeFriendAvatar)(void* self, uint64_t steamId);
     steamBool_t(QDECL* RequestUserInformation)(void* self, uint64_t steamId, steamBool_t nameOnly);
     steamBool_t(QDECL* GetImageSize)(void* self, int image, unsigned int* width, unsigned int* height);
@@ -374,7 +373,6 @@ static qboolean Steam_Bind(void) {
     STEAM_BIND_OPT(SubscribeItem, "SteamAPI_ISteamUGC_SubscribeItem");
     STEAM_BIND_OPT(UnsubscribeItem, "SteamAPI_ISteamUGC_UnsubscribeItem");
     STEAM_BIND_OPT(Utils, "SteamUtils");
-    STEAM_BIND_OPT(GetMediumFriendAvatar, "SteamAPI_ISteamFriends_GetMediumFriendAvatar");
     STEAM_BIND_OPT(GetLargeFriendAvatar, "SteamAPI_ISteamFriends_GetLargeFriendAvatar");
     STEAM_BIND_OPT(RequestUserInformation, "SteamAPI_ISteamFriends_RequestUserInformation");
     STEAM_BIND_OPT(GetImageSize, "SteamAPI_ISteamUtils_GetImageSize");
@@ -673,7 +671,6 @@ SD_VOID(CancelAuthTicket, 16, (void* self, unsigned int a), (self, a))
 SD_RET(int, GetFriendCount, 3, (void* self, int a), (self, a))
 SD_RET(int, GetFriendPersonaState, 6, (void* self, uint64_t a), (self, a))
 SD_RET(const char*, GetFriendPersonaName, 7, (void* self, uint64_t a), (self, a))
-SD_RET(int, GetMediumFriendAvatar, 35, (void* self, uint64_t a), (self, a))
 SD_RET(int, GetLargeFriendAvatar, 36, (void* self, uint64_t a), (self, a))
 SD_RET(steamBool_t, RequestUserInformation, 37, (void* self, uint64_t a, steamBool_t b), (self, a, b))
 
@@ -1029,7 +1026,6 @@ static void SD_Bind(void) {
     SD_SET(SubscribeItem);
     SD_SET(UnsubscribeItem);
     SD_SET(Utils);
-    SD_SET(GetMediumFriendAvatar);
     SD_SET(GetLargeFriendAvatar);
     SD_SET(RequestUserInformation);
     SD_SET(GetImageSize);
@@ -3140,72 +3136,6 @@ qboolean Steam_InviteToGame(uint64_t steamId, const char* connect) {
 }
 
 #define STEAM_MAX_AVATARS 128
-
-qboolean Steam_Avatar(uint64_t steamId, char* path, int size) {
-    static uint64_t written[STEAM_MAX_AVATARS];
-    static int numWritten;
-    unsigned int w = 0, h = 0, i;
-    byte header[18];
-    byte* pixels;
-    fileHandle_t f;
-    int image;
-
-    if (!steamId) {
-        steamId = Steam_ClientSteamID();
-    }
-    if (!steamId) {
-        return qfalse;
-    }
-    Com_sprintf(path, size, "avatars/%llu.tga", (unsigned long long)steamId);
-    for (i = 0; i < (unsigned int)numWritten; i++) {
-        if (written[i] == steamId) {
-            return qtrue;
-        }
-    }
-    if (!st.clientUp || !st.friends || !st.utils || !st.GetMediumFriendAvatar || !st.GetImageSize ||
-        !st.GetImageRGBA) {
-        return qfalse;
-    }
-    image = st.GetMediumFriendAvatar(st.friends, steamId);
-    if (image <= 0 || !st.GetImageSize(st.utils, image, &w, &h) || !w || !h || w > 512 || h > 512) {
-        return qfalse;
-    }
-    pixels = (byte*)Z_Malloc(w * h * 4);
-    if (!st.GetImageRGBA(st.utils, image, pixels, (int)(w * h * 4))) {
-        Z_Free(pixels);
-        return qfalse;
-    }
-    for (i = 0; i < w * h; i++) {
-        byte r = pixels[i * 4];
-
-        pixels[i * 4] = pixels[i * 4 + 2];
-        pixels[i * 4 + 2] = r;
-    }
-    Com_Memset(header, 0, sizeof(header));
-    header[2] = 2;
-    header[12] = (byte)(w & 0xff);
-    header[13] = (byte)(w >> 8);
-    header[14] = (byte)(h & 0xff);
-    header[15] = (byte)(h >> 8);
-    header[16] = 32;
-    header[17] = 0x08;
-    f = FS_FOpenFileWrite(path);
-    if (f) {
-        FS_Write(header, sizeof(header), f);
-        for (i = h; i > 0; i--) {
-            FS_Write(pixels + (i - 1) * w * 4, (int)(w * 4), f);
-        }
-        FS_FCloseFile(f);
-    }
-    Z_Free(pixels);
-    if (!f) {
-        return qfalse;
-    }
-    if (numWritten < STEAM_MAX_AVATARS) {
-        written[numWritten++] = steamId;
-    }
-    return qtrue;
-}
 
 qboolean Steam_AvatarImage(uint64_t steamId, byte** rgba, int* width, int* height) {
     static uint64_t asked[STEAM_MAX_AVATARS];
