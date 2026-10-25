@@ -1107,68 +1107,80 @@ static float MT_DrawTable(float x, float y, const smRect_t* clip) {
 
 static float MT_DrawEvents(float x, float y, float width, const smRect_t* clip) {
     float space = SM_Advance(FONT_SANS, 15, " ", -1);
+    float pad = SM_Len(4.5f), gap = SM_Len(3.0f), icon = SM_Len(24.0f);
+    float line = SM_LineHeight(15.0f, 1.6f);
+    int ascent = SM_Px(SM_Ascent(FONT_SANS, 15)), descent = SM_Px(SM_Descent(FONT_SANS, 15));
+    int linePx = SM_Px(line), iconPx = SM_Px(icon);
+    int above = (linePx - ascent - descent) / 2 + ascent;
+    int iconAbove = iconPx / 2 + (int)floorf(SM_Px(15.0f) * 0.535f + 0.5f) / 2;
+    int boxAbove = MAX(above, iconAbove), boxBelow = MAX(linePx - above, iconPx - iconAbove);
+    float rowH = 2 * pad + (boxAbove + boxBelow) / smScale;
     int i, k;
 
     for (i = 0; i < mt.numEvents; i++) {
         const mtEvent_t* ev = &mt.events[i];
-        float ly = y + i * 37.9f;
-        float baseline = SM_Baseline(FONT_SANS, 15, ly + 6.5f, 20);
+        float ly = y + i * (rowH + gap);
+        float baseline = ly + pad + boxAbove / smScale;
+        float iy = baseline - iconAbove / smScale;
         char time[32];
-        float lx;
+        float lx, tw;
 
-        if (ly + 34.9f < clip->y || ly > clip->y + clip->h) {
+        if (ly + rowH < clip->y || ly > clip->y + clip->h) {
             continue;
         }
-        SM_Fill(x, ly, width, 34.9f, mtBlack80, clip);
+        SM_Fill(x, ly, width, rowH, mtBlack80, clip);
         Com_sprintf(time, sizeof(time), "%i:%02i:", ev->time / 60, ev->time % 60);
         if (!SM_TextInside(baseline, 15, clip)) {
             continue;
         }
-        SM_Text(x + 4.5f + 50 - SM_Advance(FONT_SANS, 15, time, -1), baseline, FONT_SANS, 15, mtYellow, time, -1, qfalse);
-        lx = x + 4.5f + 50 + space;
+        tw = SM_Advance(FONT_SANS, 15, time, -1);
+        lx = x + pad + MAX(SM_Len(50.0f), MT_TextBox(tw));
+        SM_Text(lx - tw, baseline, FONT_SANS, 15, mtYellow, time, -1, qfalse);
+        lx += space;
         if (ev->killer) {
             const mtWho_t* w = &ev->who[0];
 
             for (k = 0; k < w->numPowerups; k++) {
-                SM_Pic(lx, ly + 6.4f, 24, 24, w->powerups[k], clip);
-                lx += 24;
+                SM_Pic(lx, iy, icon, icon, w->powerups[k], clip);
+                lx += icon;
             }
-            lx += space;
+            if (w->numPowerups) {
+                lx += space;
+            }
             SM_TextRaw(lx, baseline, FONT_SANS, 15, w->team == 1 ? mtRed : w->team == 2 ? mtBlue : smText, w->name, -1,
                        qfalse);
-            lx += SM_AdvanceRaw(FONT_SANS, 15, w->name, -1, qfalse);
-        } else {
-            lx += space;
+            lx += SM_AdvanceRaw(FONT_SANS, 15, w->name, -1, qfalse) + space;
         }
-        lx += space;
         if (ev->mod >= 0) {
             const mtMod_t* mod = &mtMods[ev->mod];
 
-            SM_Pic(lx, ly + 6.4f, 24, 24, mt.modIcon[ev->mod][0], clip);
-            lx += 24;
+            SM_Pic(lx, iy, icon, icon, mt.modIcon[ev->mod][0], clip);
+            lx += icon;
             if (mod->img2) {
-                SM_Pic(lx, ly + 6.4f, 24, 24, mt.modIcon[ev->mod][1], clip);
-                lx += 24;
+                SM_Pic(lx, iy, icon, icon, mt.modIcon[ev->mod][1], clip);
+                lx += icon;
             }
             if (mod->text) {
                 SM_Text(lx, baseline, SM_ItalicFace(), 15, mtGrey, mod->text, -1, qfalse);
                 lx += SM_Advance(SM_ItalicFace(), 15, mod->text, -1);
             }
+            lx += space;
         }
-        lx += space;
         {
             const mtWho_t* w = &ev->who[1];
 
             for (k = 0; k < w->numPowerups; k++) {
-                SM_Pic(lx, ly + 6.4f, 24, 24, w->powerups[k], clip);
-                lx += 24;
+                SM_Pic(lx, iy, icon, icon, w->powerups[k], clip);
+                lx += icon;
             }
-            lx += space;
+            if (w->numPowerups) {
+                lx += space;
+            }
             SM_TextRaw(lx, baseline, FONT_SANS, 15, w->team == 1 ? mtRed : w->team == 2 ? mtBlue : smText, w->name, -1,
                        qfalse);
         }
     }
-    return mt.numEvents * 37.9f;
+    return mt.numEvents ? mt.numEvents * (rowH + gap) - gap : 0;
 }
 
 static void MT_DrawDetails(float left, float top, float width, const smRect_t* clip) {
