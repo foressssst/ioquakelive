@@ -377,6 +377,10 @@ int trap_GetCurrentCmdNumber(void) {
     return syscall(CG_GETCURRENTCMDNUMBER);
 }
 
+qboolean trap_GetPendingCmd(usercmd_t* ucmd) {
+    return syscall(CG_GETPENDINGCMD, ucmd);
+}
+
 qboolean trap_GetUserCmd(int cmdNumber, usercmd_t* ucmd) {
     return syscall(CG_GETUSERCMD, cmdNumber, ucmd);
 }

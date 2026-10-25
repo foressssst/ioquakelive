@@ -205,8 +205,10 @@ static void CG_InterpolatePlayerState(qboolean grabAngles) {
         usercmd_t cmd;
         int cmdNum;
 
-        cmdNum = trap_GetCurrentCmdNumber();
-        trap_GetUserCmd(cmdNum, &cmd);
+        if (!trap_GetPendingCmd(&cmd)) {
+            cmdNum = trap_GetCurrentCmdNumber();
+            trap_GetUserCmd(cmdNum, &cmd);
+        }
 
         PM_UpdateViewAngles(out, &cmd);
     }
@@ -468,6 +470,7 @@ void CG_PredictPlayerState(void) {
     usercmd_t oldestCmd;
     usercmd_t latestCmd;
     int following;
+    const playerState_t* base;
 
     cg.hyperspace = qfalse;
 
@@ -519,6 +522,7 @@ void CG_PredictPlayerState(void) {
     }
 
     oldPlayerState = cg.predictedPlayerState;
+    base = cg.realPredictedValid ? &cg.realPredictedPlayerState : &oldPlayerState;
 
     current = trap_GetCurrentCmdNumber();
 
@@ -557,7 +561,7 @@ void CG_PredictPlayerState(void) {
             continue;
         }
 
-        if (cg.predictedPlayerState.commandTime == oldPlayerState.commandTime) {
+        if (cg.predictedPlayerState.commandTime == base->commandTime) {
             vec3_t delta;
             float len;
 
@@ -573,11 +577,11 @@ void CG_PredictPlayerState(void) {
                                           cg.predictedPlayerState.groundEntityNum, cg.physicsTime, cg.oldTime, adjusted, cg.predictedPlayerState.viewangles, new_angles);
 
                 if (cg_showmiss.integer) {
-                    if (!VectorCompare(oldPlayerState.origin, adjusted)) {
+                    if (!VectorCompare(base->origin, adjusted)) {
                         CG_Printf("prediction error\n");
                     }
                 }
-                VectorSubtract(oldPlayerState.origin, adjusted, delta);
+                VectorSubtract(base->origin, adjusted, delta);
                 len = VectorLength(delta);
                 if (len > 0.1) {
                     if (cg_showmiss.integer) {
@@ -615,6 +619,26 @@ void CG_PredictPlayerState(void) {
 
         CG_TouchTriggerPrediction();
 
+    }
+
+    if (moved) {
+        cg.realPredictedPlayerState = cg.predictedPlayerState;
+        CG_AdjustPositionForMover(cg.realPredictedPlayerState.origin, cg.realPredictedPlayerState.groundEntityNum,
+                                  cg.physicsTime, cg.time, cg.realPredictedPlayerState.origin,
+                                  cg.realPredictedPlayerState.viewangles, cg.realPredictedPlayerState.viewangles);
+        cg.realPredictedValid = qtrue;
+    }
+
+    if (trap_GetPendingCmd(&cg_pmove.cmd) && cg_pmove.cmd.serverTime > cg.predictedPlayerState.commandTime) {
+        cg_pmove.gauntletHit = qfalse;
+
+        Pmove(&cg_pmove);
+
+        moved = qtrue;
+
+        CG_UpdateStepChange();
+
+        CG_TouchTriggerPrediction();
     }
 
     if (cg_showmiss.integer > 1) {

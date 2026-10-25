@@ -715,10 +715,25 @@ usercmd_t CL_CreateCmd(void) {
     return cmd;
 }
 
+static usercmd_t cl_pendingCmd;
+static qboolean cl_pendingValid;
+static int cl_pendingButtons;
+
+qboolean CL_GetPendingCmd(usercmd_t* ucmd) {
+    if (!cl_pendingValid) {
+        return qfalse;
+    }
+    *ucmd = cl_pendingCmd;
+    return qtrue;
+}
+
 void CL_CreateNewCommands(void) {
+    usercmd_t cmd;
     int cmdNum;
 
     if (clc.state < CA_PRIMED) {
+        cl_pendingValid = qfalse;
+        cl_pendingButtons = 0;
         return;
     }
 
@@ -733,9 +748,25 @@ void CL_CreateNewCommands(void) {
     }
     old_com_frameTime = com_frameTime;
 
+    cmd = CL_CreateCmd();
+    if (clc.state == CA_ACTIVE && cl.cmdNumber > 0) {
+        int last = cl.cmds[cl.cmdNumber & CMD_MASK].serverTime;
+
+        if (cmd.serverTime >= last && cmd.serverTime - last < CL_MIN_CMD_MSEC) {
+            cl_pendingButtons |= cmd.buttons;
+            cl_pendingCmd = cmd;
+            cl_pendingCmd.buttons = cl_pendingButtons;
+            cl_pendingValid = qtrue;
+            return;
+        }
+    }
+    cmd.buttons |= cl_pendingButtons;
+    cl_pendingButtons = 0;
+    cl_pendingValid = qfalse;
+
     cl.cmdNumber++;
     cmdNum = cl.cmdNumber & CMD_MASK;
-    cl.cmds[cmdNum] = CL_CreateCmd();
+    cl.cmds[cmdNum] = cmd;
 }
 
 qboolean CL_ReadyToSendPacket(void) {

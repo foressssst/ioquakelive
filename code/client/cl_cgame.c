@@ -644,6 +644,8 @@ static intptr_t CL_CgameSystemCallsInner(intptr_t* args) {
             return CL_GetServerCommand(args[1]);
         case CG_GETCURRENTCMDNUMBER:
             return CL_GetCurrentCmdNumber();
+        case CG_GETPENDINGCMD:
+            return CL_GetPendingCmd(VMA(1));
         case CG_GETUSERCMD:
             return CL_GetUserCmd(args[1], VMA(2));
         case CG_SETUSERCMDVALUE:

@@ -583,6 +583,8 @@ typedef struct {
 
     qboolean hyperspace;
     playerState_t predictedPlayerState;
+    playerState_t realPredictedPlayerState;
+    qboolean realPredictedValid;
     centity_t predictedPlayerEntity;
     qboolean validPPS;
     int predictedErrorTime;
@@ -2254,6 +2256,7 @@ qboolean trap_GetServerCommand(int serverCommandNumber);
 
 int trap_GetCurrentCmdNumber(void);
 
+qboolean trap_GetPendingCmd(usercmd_t* ucmd);
 qboolean trap_GetUserCmd(int cmdNumber, usercmd_t* ucmd);
 
 void trap_SetUserCmdValue(int stateValue, int weaponPrimary, float sensitivityScale, int fov);
