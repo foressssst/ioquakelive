@@ -1693,7 +1693,6 @@ extern vmCvar_t cg_specItemTimersSize;
 extern vmCvar_t cg_specItemTimersX;
 extern vmCvar_t cg_specItemTimersY;
 extern vmCvar_t cg_drawProfileImages;
-extern vmCvar_t cg_remaster;
 extern vmCvar_t cg_specTeamVitals;
 extern vmCvar_t cg_specTeamVitalsHealthColor;
 extern vmCvar_t cg_specTeamVitalsWidth;
@@ -2106,9 +2105,6 @@ void CG_ProcessSnapshots(void);
 void CG_DemoRewind(int snapshotNum, int serverCommandSequence);
 
 void CG_LoadingString(const char* s);
-void CG_LoadingTick(void);
-void CG_DrawLoadingOutro(void);
-void CG_LoadingWorldLoaded(void);
 void CG_LoadingItem(int itemNum);
 void CG_LoadingClient(int clientNum);
 void CG_DrawInformation(void);

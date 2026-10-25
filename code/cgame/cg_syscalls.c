@@ -211,10 +211,7 @@ void trap_S_Respatialize(int entityNum, const vec3_t origin, vec3_t axis[3], int
 }
 
 sfxHandle_t trap_S_RegisterSound(const char* sample, qboolean compressed) {
-    sfxHandle_t h = syscall(CG_S_REGISTERSOUND, sample, compressed);
-
-    CG_LoadingTick();
-    return h;
+    return syscall(CG_S_REGISTERSOUND, sample, compressed);
 }
 
 void trap_S_StartBackgroundTrack(const char* intro, const char* loop) {
@@ -226,31 +223,19 @@ void trap_R_LoadWorldMap(const char* mapname) {
 }
 
 qhandle_t trap_R_RegisterModel(const char* name) {
-    qhandle_t h = syscall(CG_R_REGISTERMODEL, name);
-
-    CG_LoadingTick();
-    return h;
+    return syscall(CG_R_REGISTERMODEL, name);
 }
 
 qhandle_t trap_R_RegisterSkin(const char* name) {
-    qhandle_t h = syscall(CG_R_REGISTERSKIN, name);
-
-    CG_LoadingTick();
-    return h;
+    return syscall(CG_R_REGISTERSKIN, name);
 }
 
 qhandle_t trap_R_RegisterShader(const char* name) {
-    qhandle_t h = syscall(CG_R_REGISTERSHADER, name);
-
-    CG_LoadingTick();
-    return h;
+    return syscall(CG_R_REGISTERSHADER, name);
 }
 
 qhandle_t trap_R_RegisterShaderNoMip(const char* name) {
-    qhandle_t h = syscall(CG_R_REGISTERSHADERNOMIP, name);
-
-    CG_LoadingTick();
-    return h;
+    return syscall(CG_R_REGISTERSHADERNOMIP, name);
 }
 
 void trap_R_RegisterFont(const char* fontName, int pointSize, fontInfo_t* font) {

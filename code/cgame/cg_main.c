@@ -502,7 +502,6 @@ vmCvar_t cg_showVoiceText;
 
 vmCvar_t cg_debugFlags;
 vmCvar_t cg_drawProfileImages;
-vmCvar_t cg_remaster;
 vmCvar_t cg_ignoreMouseInput;
 vmCvar_t cg_lastmsg;
 vmCvar_t cg_stereoSeparation;
@@ -884,7 +883,6 @@ static cvarTable_t cvarTable[] = {
 
     {&cg_debugFlags, "cg_debugFlags", "0", CVAR_CHEAT},
     {&cg_drawProfileImages, "cg_drawProfileImages", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
-    {&cg_remaster, "cg_remaster", "0", CVAR_ARCHIVE, "0", "1"},
     {&cg_ignoreMouseInput, "cg_ignoreMouseInput", "0", CVAR_ROM},
     {&cg_lastmsg, "cg_lastmsg", "", 0},
     {&cg_trackPlayer, "cg_trackPlayer", "-1", CVAR_CHEAT},
@@ -1649,7 +1647,6 @@ static void CG_RegisterGraphics(void) {
     CG_LoadingString(cgs.mapname);
 
     trap_R_LoadWorldMap(cgs.mapname);
-    CG_LoadingWorldLoaded();
 
     CG_LoadingString("game media");
 
