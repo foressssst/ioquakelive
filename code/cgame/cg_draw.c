@@ -948,15 +948,15 @@ static float CG_DrawLocalTime(float y) {
 	return y + h;
 }
 
-static float CG_DrawSpectators(float y) {
+static void CG_DrawSpectators(void) {
 	static const vec4_t shadow = {0.0f, 0.0f, 0.0f, 0.75f};
 	const char* s;
-	float w, h, eyeW, eyeH, x;
+	float w, h, eyeW, eyeH, x, y;
 	int count;
 
 	count = cg.snap->ps.persistant[PERS_FOLLOWERS];
 	if (count <= 0) {
-		return y;
+		return;
 	}
 	s = va("%i", count);
 	w = CG_DrawTextWidth(s, 0.25f, 0, 2);
@@ -964,6 +964,7 @@ static float CG_DrawSpectators(float y) {
 	eyeH = h;
 	eyeW = eyeH * 2.0f;
 	x = 635 - w - 3 - eyeW;
+	y = SCREEN_HEIGHT - 5 - h;
 
 	CG_DrawText((float)(635 - w), y + h, 2, 0.25f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWED);
 	trap_R_SetColor(shadow);
@@ -971,8 +972,6 @@ static float CG_DrawSpectators(float y) {
 	trap_R_SetColor(colorWhite);
 	CG_DrawPic(x, y, eyeW, eyeH, cgs.media.spectatorsShader);
 	trap_R_SetColor(NULL);
-
-	return y + h;
 }
 
 static float CG_DrawRecording(float y) {
@@ -1121,9 +1120,6 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame) {
 	}
 	if (ch_drawLocalTime.integer) {
 		y = CG_DrawLocalTime(y);
-	}
-	if (ch_drawSpectators.integer) {
-		y = CG_DrawSpectators(y);
 	}
 	if (cg_drawAttacker.integer) {
 		CG_DrawAttacker(y);
@@ -3587,6 +3583,9 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 		CG_DrawUpperRight(stereoFrame);
 		if (cgs.gametype >= GT_TEAM && cg_drawTeamOverlay.integer == 2) {
 			CG_DrawTeamOverlay(408, qtrue, qfalse);
+		}
+		if (ch_drawSpectators.integer) {
+			CG_DrawSpectators();
 		}
 		CG_SetWidescreen(WIDESCREEN_LEFT);
 		CG_DrawLowerLeft();
