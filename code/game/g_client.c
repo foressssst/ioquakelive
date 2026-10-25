@@ -831,6 +831,8 @@ void G_UpdatePlayQueue(void) {
     }
 }
 
+static qboolean clientBadUserinfo;
+
 void ClientUserinfoChanged(int clientNum) {
     gentity_t* ent;
     int teamTask, teamLeader, health;
@@ -924,6 +926,19 @@ void ClientUserinfoChanged(int clientNum) {
     Q_strncpyz(c1, Info_ValueForKey(userinfo, "color1"), sizeof(c1));
     Q_strncpyz(c2, Info_ValueForKey(userinfo, "color2"), sizeof(c2));
 
+    if (!strcmp(client->pers.netname, "UnnamedPlayer") && !c1[0] && !c2[0] && !client->pers.steamId) {
+        if (!g_kickBadUserinfo.integer) {
+            G_LogPrintf("Found client %i with deformed userinfo, but cowardly refusing to kick: %s\n", clientNum, userinfo);
+        } else {
+            G_LogPrintf("Dropping client %i for a deformed userinfo: %s\n", clientNum, userinfo);
+            if (client->pers.connected == CON_CONNECTED) {
+                trap_DropClient(clientNum, "Detected bad userinfo.");
+                return;
+            }
+            clientBadUserinfo = qtrue;
+        }
+    }
+
     Q_strncpyz(client->pers.country, Info_ValueForKey(userinfo, "country"), sizeof(client->pers.country));
 
     G_UpdatePlayQueue();
@@ -1014,7 +1029,13 @@ char* ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
     }
 
     G_LogPrintf("ClientConnect: %i\n", clientNum);
+    clientBadUserinfo = qfalse;
     ClientUserinfoChanged(clientNum);
+    if (clientBadUserinfo) {
+        trap_SetConfigstring(CS_PLAYERS + clientNum, "");
+        client->pers.connected = CON_DISCONNECTED;
+        return "Detected bad userinfo.";
+    }
 
     if (firstTime && !g_training.integer) {
         trap_SendServerCommand(clientNum, va("priv %i", client->sess.privileges));
