@@ -25,8 +25,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <time.h>
 
 #define RP_MAX_DEMOS 1024
-#define RP_ROW_H 39.0f
-#define RP_BAR_H 32.0f
+#define RP_PAD SM_Len(7.5f)
+#define RP_LINE SM_LineHeight(15.0f, 1.6f)
+#define RP_ROW_H (2 * RP_PAD + RP_LINE)
+#define RP_BAR_H SM_Len(32.0f)
+#define RP_INSET SM_Len(5.0f)
 #define RP_SEARCH_LEN 64
 
 typedef enum {
@@ -331,10 +334,12 @@ void UI_Replays_Open(void) {
 static void RP_DrawToolbar(float left, float y, float width, const smRect_t* clip) {
     const char* sort = va("Sort: %s", rpSorts[rp.sort]);
     float sortW = SM_WebButtonWidth(sort);
-    float baseline = SM_Baseline(FONT_SANS, 15, y + 6, 20);
-    float x = left + 11.4f;
-    float right = left + width - 10;
-    float fieldX, fieldW;
+    float baseline = SM_Baseline(FONT_SANS, 15, y, RP_BAR_H);
+    float x = left + RP_INSET + SM_Len(6.4f);
+    float right = left + width - SM_Len(10.0f);
+    float buttonY = y + SM_Center(RP_BAR_H, SM_WEB_BUTTON_H);
+    float border = SM_LenBorder(1.0f);
+    float fieldX, fieldW, textX;
     int i;
 
     for (i = 0; i < RP_NUM_RANGES; i++) {
@@ -345,37 +350,37 @@ static void RP_DrawToolbar(float left, float y, float width, const smRect_t* cli
             SM_TextRaw(x, baseline, FONT_SANS, 15, on ? rpYellow : SM_Over(RP_HIT_RANGE, i) ? smText : rpGrey,
                        rpRanges[i], -1, qfalse);
             if (on) {
-                SM_Fill(x, y + RP_BAR_H - 5, tw, 2, rpYellow, clip);
+                SM_Fill(x, y + RP_BAR_H - SM_Len(5.0f), tw, SM_LenBorder(2.0f), rpYellow, clip);
             }
         }
-        SM_Hit(x - 6, y, tw + 12, RP_BAR_H, RP_HIT_RANGE, i, clip);
-        x += tw + 24;
+        SM_Hit(x - SM_Len(6.0f), y, tw + SM_Len(12.0f), RP_BAR_H, RP_HIT_RANGE, i, clip);
+        x += tw + SM_Len(24.0f);
     }
 
-    SM_WebButton(right - sortW, y + (RP_BAR_H - SM_WEB_BUTTON_H) * 0.5f, sortW, sort, qfalse, SM_Over(RP_HIT_SORT, 0),
-                 clip);
-    SM_Hit(right - sortW, y + (RP_BAR_H - SM_WEB_BUTTON_H) * 0.5f, sortW, SM_WEB_BUTTON_H, RP_HIT_SORT, 0, clip);
+    SM_WebButton(right - sortW, buttonY, sortW, sort, qfalse, SM_Over(RP_HIT_SORT, 0), clip);
+    SM_Hit(right - sortW, buttonY, sortW, SM_WEB_BUTTON_H, RP_HIT_SORT, 0, clip);
 
-    fieldX = x + 6;
-    fieldW = right - sortW - 10 - fieldX;
+    fieldX = x + SM_Len(6.0f);
+    fieldW = right - sortW - SM_Len(10.0f) - fieldX;
     if (fieldW < 120) {
         return;
     }
+    textX = fieldX + border + SM_Len(8.0f);
     SM_Fill(fieldX, y, fieldW, RP_BAR_H, rpField, clip);
-    SM_Fill(fieldX, y, fieldW, 1, rpFieldBorder, clip);
-    SM_Fill(fieldX, y + RP_BAR_H - 1, fieldW, 1, rpFieldBorder, clip);
-    SM_Fill(fieldX, y + 1, 1, RP_BAR_H - 2, rpFieldBorder, clip);
-    SM_Fill(fieldX + fieldW - 1, y + 1, 1, RP_BAR_H - 2, rpFieldBorder, clip);
+    SM_Fill(fieldX, y, fieldW, border, rpFieldBorder, clip);
+    SM_Fill(fieldX, y + RP_BAR_H - border, fieldW, border, rpFieldBorder, clip);
+    SM_Fill(fieldX, y + border, border, RP_BAR_H - 2 * border, rpFieldBorder, clip);
+    SM_Fill(fieldX + fieldW - border, y + border, border, RP_BAR_H - 2 * border, rpFieldBorder, clip);
     SM_Hit(fieldX, y, fieldW, RP_BAR_H, RP_HIT_SEARCH, 0, clip);
     if (SM_TextInside(baseline, 15, clip)) {
         if (rp.search[0] || rp.searchFocus) {
-            SM_TextRaw(fieldX + 8, baseline, FONT_SANS, 15, smText, rp.search, -1, qfalse);
+            SM_TextRaw(textX, baseline, FONT_SANS, 15, smText, rp.search, -1, qfalse);
             if (rp.searchFocus && (uiInfo.uiDC.realTime / 500) % 2 == 0) {
-                SM_Fill(fieldX + 8 + SM_AdvanceRaw(FONT_SANS, 15, rp.search, -1, qfalse) + 1, y + 8, 1, 16, smText,
-                        clip);
+                SM_Fill(textX + SM_AdvanceRaw(FONT_SANS, 15, rp.search, -1, qfalse) + 1.0f / smScale,
+                        y + SM_Len(8.0f), border, RP_BAR_H - 2 * SM_Len(8.0f), smText, clip);
             }
         } else {
-            SM_TextRaw(fieldX + 8, baseline, FONT_SANS, 15, rpPlaceholder, "Search map, mode, server or player", -1,
+            SM_TextRaw(textX, baseline, FONT_SANS, 15, rpPlaceholder, "Search map, mode, server or player", -1,
                        qfalse);
         }
     }
@@ -385,8 +390,8 @@ void UI_Replays_Paint(void) {
     float left = UI_Home_Left();
     float width = HM_CONTAINER_W;
     float view = smBottom - 30 - HM_NAV_H;
-    float x0 = left + 5, w0 = width - 10;
-    float infoW = w0 * 0.03f;
+    float x0 = left + RP_INSET, w0 = width - 2 * RP_INSET;
+    float infoW = SM_Percent(w0, 3.0f);
     float top, y;
     smRect_t clip;
     int i;
@@ -406,24 +411,24 @@ void UI_Replays_Paint(void) {
 
     SM_Fill(left, HM_NAV_H, width, view, rpBlack80, NULL);
     {
-        float b = SM_Baseline(FONT_DEFAULT, 32, top + 8, 38.4f);
+        float b = SM_Baseline(FONT_DEFAULT, 32.0f, top + SM_H1_PAD, SM_H1_LINE);
 
         if (SM_TextInside(b, 32, &clip)) {
-            float tx = left + 11.4f;
+            float tx = left + RP_INSET + SM_Len(6.4f);
 
             SM_SetSpacing(SM_SPACING_H1);
             SM_Text(tx, b, FONT_DEFAULT, 32, smText, "Replays", -1, qfalse);
             tx += SM_Advance(FONT_DEFAULT, 32, "Replays", -1);
             SM_SetSpacing(0);
-            SM_TextRaw(tx + 14, b, FONT_SANS, 15, rpGrey,
+            SM_TextRaw(tx + SM_Len(14.0f), b, FONT_SANS, 15, rpGrey,
                        rp.shown == rp.count ? va("%i", rp.count) : va("%i of %i", rp.shown, rp.count), -1, qfalse);
         }
     }
-    RP_DrawToolbar(left, top + 54.4f, width, &clip);
-    y = top + 54.4f + RP_BAR_H + 10;
+    RP_DrawToolbar(left, top + SM_TITLE_H, width, &clip);
+    y = top + SM_TITLE_H + RP_BAR_H + SM_Len(10.0f);
     for (i = 0; i < rp.shown; i++) {
         const rpDemo_t* d = &rp.demo[rp.order[i]];
-        float baseline = SM_Baseline(FONT_SANS, 15, y + 9.5f, 20);
+        float baseline = SM_Baseline(FONT_SANS, 15, y + RP_PAD, RP_LINE);
         qboolean over = SM_Over(RP_HIT_ROW, i) || SM_Over(RP_HIT_INFO, i);
 
         if (y + RP_ROW_H >= clip.y && y <= clip.y + clip.h) {
@@ -434,7 +439,7 @@ void UI_Replays_Paint(void) {
 
                 if (d->guid[0]) {
                     float iw = SM_IconWidth(15, 0xf05a) + SM_Advance(FONT_SANS, 15, "  ", -1);
-                    float ix = x0 + (infoW - iw) * 0.5f;
+                    float ix = x0 + SM_Center(infoW, iw);
 
                     SM_Icon(ix, baseline, 15, rpYellow, 0xf05a);
                     SM_Hit(ix, y, SM_IconWidth(15, 0xf05a), RP_ROW_H, RP_HIT_INFO, i, &clip);
@@ -445,8 +450,8 @@ void UI_Replays_Paint(void) {
                         nx += SM_AdvanceRaw(FONT_SANS, 15, va("%s:", d->date), -1, qfalse);
                     }
                     SM_TextRaw(nx, baseline, FONT_SANS, 15, smText, d->label, -1, qfalse);
-                    SM_TextRaw(x0 + w0 - 10 - SM_AdvanceRaw(FONT_SANS, 15, d->file, -1, qfalse), baseline, FONT_SANS,
-                               15, rpGrey, d->file, -1, qfalse);
+                    SM_TextRaw(x0 + w0 - SM_Len(10.0f) - SM_AdvanceRaw(FONT_SANS, 15, d->file, -1, qfalse), baseline,
+                               FONT_SANS, 15, rpGrey, d->file, -1, qfalse);
                 } else {
                     SM_TextRaw(nx, baseline, FONT_SANS, 15, smText, d->file, -1, qfalse);
                 }
@@ -454,7 +459,7 @@ void UI_Replays_Paint(void) {
         }
         y += RP_ROW_H;
     }
-    rp.content = y - top + 5;
+    rp.content = y - top + SM_Len(15.0f) + RP_INSET;
 
     UI_Home_Banner();
     SM_EndFrame();
