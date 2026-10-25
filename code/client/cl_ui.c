@@ -762,7 +762,11 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
             return CL_DemoInfo(VMA(1), VMA(2), args[3]);
 
         case UI_R_REGISTERSHADERFROMRAW:
-            return re.RegisterShaderFromRaw ? re.RegisterShaderFromRaw(VMA(1), VMA(2), args[3], args[4]) : 0;
+            if (!re.RegisterShaderFromRaw || !VMA(1) || !VMA(2) || strlen(VMA(1)) >= MAX_QPATH || args[3] <= 0 ||
+                args[3] > 1024 || args[4] <= 0 || args[4] > 1024) {
+                return 0;
+            }
+            return re.RegisterShaderFromRaw(VMA(1), VMA(2), args[3], args[4]);
 
         case UI_LAN_SERVER_NAME: {
             char* buf = VMA(3);
