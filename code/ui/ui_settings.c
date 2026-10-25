@@ -242,15 +242,42 @@ static void ST_Set(int i, const char* value) {
     Q_strncpyz(st.values[i], value, sizeof(st.values[i]));
 }
 
-static void ST_FormatStep(const stCvar_t* cv, float value, char* out, int size) {
-    float step = cv->step > 0 ? cv->step : 1.0f;
+static int ST_StepDecimals(const stCvar_t* cv) {
+    double scaled = cv->step;
+    int decimals;
 
-    if (step >= 1.0f) {
-        Com_sprintf(out, size, "%i", (int)(value + (value < 0 ? -0.5f : 0.5f)));
-    } else if (step >= 0.1f) {
-        Com_sprintf(out, size, "%.2f", value);
-    } else {
-        Com_sprintf(out, size, "%.3f", value);
+    if (cv->step <= 0) {
+        return 0;
+    }
+    for (decimals = 0; decimals < 4; decimals++) {
+        if (fabs(scaled - floor(scaled + 0.5)) < 0.0001) {
+            break;
+        }
+        scaled *= 10.0;
+    }
+    return decimals;
+}
+
+static void ST_FormatShown(const stCvar_t* cv, float value, char* out, int size) {
+    Com_sprintf(out, size, "%.*f", ST_StepDecimals(cv), value);
+}
+
+static void ST_FormatStep(const stCvar_t* cv, float value, char* out, int size) {
+    int len;
+
+    ST_FormatShown(cv, value, out, size);
+    if (!strchr(out, '.')) {
+        return;
+    }
+    len = (int)strlen(out);
+    while (len > 0 && out[len - 1] == '0') {
+        out[--len] = '\0';
+    }
+    if (len > 0 && out[len - 1] == '.') {
+        out[--len] = '\0';
+    }
+    if (!strcmp(out, "-0")) {
+        Q_strncpyz(out, "0", size);
     }
 }
 
@@ -584,7 +611,7 @@ static void ST_DrawRange(int i, float x, float y, const smRect_t* clip) {
     float base = SM_Baseline(FONT_SANS, 15, y + 1, 16);
     char text[32];
 
-    ST_FormatStep(cv, value, text, sizeof(text));
+    ST_FormatShown(cv, (float)atof(st.values[i]), text, sizeof(text));
     if (SM_TextInside(base, 15, clip)) {
         SM_Text(x + 8, base, FONT_SANS, 15, smText, text, -1, qfalse);
     }
