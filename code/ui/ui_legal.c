@@ -356,16 +356,21 @@ static float LG_Lines(const lgBlock_t* b, float x, float y, float width, qboolea
         float lw = lead;
 
         while (i < numWords && lg.word[i].text) {
+            int end = i + 1;
             float add = lg.word[i].w;
 
             if (i > first && lg.word[i].space) {
                 add += lg.word[i].spaceBold ? spaceBoldW : spaceW;
             }
+            while (end < numWords && lg.word[end].text && !lg.word[end].space) {
+                add += lg.word[end].w;
+                end++;
+            }
             if (i > first && lw + add > width) {
                 break;
             }
             lw += add;
-            i++;
+            i = end;
         }
         last = i;
         if (i < numWords && !lg.word[i].text) {
