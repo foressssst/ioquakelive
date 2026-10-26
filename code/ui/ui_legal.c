@@ -338,10 +338,9 @@ static float LG_Lines(const lgBlock_t* b, float x, float y, float width, qboolea
     float size = h1 ? 32.0f : 15.0f;
     float lineH = h1 ? SM_H1_LINE : LG_LINE;
     int font = h1 ? FONT_DEFAULT : FONT_SANS;
-    float spaceW = SM_AdvanceBold(font, size, " ", 1, qfalse);
-    float spaceBoldW = SM_AdvanceBold(font, size, " ", 1, qtrue);
     int ascent = SM_Px(SM_Ascent(font, size));
     float marker = b->type == LG_BLOCK_LI ? ascent / smScale : 0;
+    float spaceW, spaceBoldW;
     int numWords, i = 0, lines = 0;
 
     if (h1) {
@@ -349,6 +348,8 @@ static float LG_Lines(const lgBlock_t* b, float x, float y, float width, qboolea
         width -= LG_H1_LEFT;
     }
     SM_SetSpacing(h1 ? SM_SPACING_H1 : 0);
+    spaceW = SM_AdvanceBold(font, size, " ", 1, qfalse);
+    spaceBoldW = SM_AdvanceBold(font, size, " ", 1, qtrue);
     numWords = LG_Words(b, font, size);
     while (i < numWords) {
         int first = i, last, k;
