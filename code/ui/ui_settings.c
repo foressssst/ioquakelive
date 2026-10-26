@@ -129,7 +129,6 @@ static struct {
     int binding;
     int rgb;
     int rgbDrag;
-    smRect_t rgbPanel;
     int rgbPick[3];
     smRect_t rgbSlider[3];
 
@@ -139,6 +138,9 @@ static struct {
     int pickSkinRow;
     playerInfo_t modelInfo;
     char modelShown[MAX_QPATH];
+    char bodyShown[MAX_QPATH];
+    qhandle_t body;
+    int bodyW, bodyH;
 
     playerInfo_t preview[2];
     qhandle_t weaponIcon[10];
@@ -183,6 +185,7 @@ static const vec4_t strSwatchEdge = {0.0f, 0.0f, 0.0f, 0.2f};
 static const vec4_t strDialog = SM_RGB(30, 30, 30);
 static const vec4_t strThumb = SM_RGB(51, 51, 51);
 static const vec4_t strThumbHover = SM_RGB(153, 153, 153);
+static const vec4_t strMenuThumb = SM_RGB(17, 17, 17);
 
 #define STR_TITLE_H SM_TITLE_H
 #define STR_NAV_H SM_Len(30.0f)
@@ -194,9 +197,6 @@ static const vec4_t strThumbHover = SM_RGB(153, 153, 153);
 #define STR_BAR 8.0f
 #define STR_OPTION_H 40.0f
 #define STR_MENU_H 198.0f
-#define STR_SWATCH_OPTION_H 37.0f
-#define STR_CROSSHAIR_OPTION_H 72.0f
-#define STR_LINE_MENU_H 300.0f
 
 static void ST_ReadBind(int i) {
     const char* command = stCvars[i].cvar;
@@ -796,7 +796,7 @@ static void ST_DrawSwatch(float x, float y, float w, int value, const smRect_t* 
         return;
     }
     SM_Fill(x, y, w, SM_Len(21.0f), palette[value - 1], clip);
-    SM_Border(x, y, w, SM_Len(21.0f), 3, strSwatchEdge, clip);
+    SM_Border(x, y, w, SM_Len(21.0f), SM_LenBorder(3.0f), strSwatchEdge, clip);
 }
 
 static float ST_LineRoom(float w) {
@@ -1137,20 +1137,25 @@ static void ST_DrawChooserPreview(float x, float y, float w, float h) {
     SM_DrawPlayerIn(&st.modelInfo, x, y, w, h);
 }
 
-static smRect_t ST_DrawDialog(float height) {
-    float top = (SM_VIEW_H - height) * 0.5f;
-    float cx = smVW * 0.15f, cw = smVW * 0.7f;
+static smRect_t ST_DrawDialog(float height, float side, int panel) {
+    float h = SM_Len(height);
+    float top = SM_Percent(smBottom, 50.0f) - SM_Len(height * 0.5f);
+    float x = SM_Percent(smVW, side);
+    float w = (float)(SM_Px(smVW) - 2 * SM_Px(x)) / smScale;
+    float pad = SM_Len(15.0f);
 
     SM_Fill(-smVW, -SM_VIEW_H, 3 * smVW, 3 * SM_VIEW_H, strBlack80, NULL);
     SM_Hit(-smVW, -SM_VIEW_H, 3 * smVW, 3 * SM_VIEW_H, ST_HIT_BLOCK, 0, NULL);
-    SM_Fill(0, top, smVW, height, strDialog, NULL);
-    SM_Fill(cx, top, cw, height, strBlack80, NULL);
-    return SM_R(cx + 15, top + 15, cw - 30, height - 30);
+    SM_Fill(0, top, smVW, h, strDialog, NULL);
+    SM_Fill(x, top, w, h, strBlack80, NULL);
+    SM_Hit(0, top, smVW, h, panel, 0, NULL);
+    return SM_R(x + pad, top + pad, w - 2 * pad, h - 2 * pad);
 }
 
 static void ST_DrawActions(const smRect_t* c, int count, const char* const* labels, const int* hits) {
     float x = c->x + c->w;
     float y = c->y + c->h - SM_WEB_BUTTON_H;
+    float space = SM_Advance(FONT_SANS, 15, " ", 1);
     int k;
 
     for (k = count - 1; k >= 0; k--) {
@@ -1159,64 +1164,114 @@ static void ST_DrawActions(const smRect_t* c, int count, const char* const* labe
         x -= bw;
         SM_WebButton(x, y, bw, labels[k], qfalse, SM_Over(hits[k], 0), NULL);
         SM_Hit(x, y, bw, SM_WEB_BUTTON_H, hits[k], 0, NULL);
-        x -= 10;
+        x -= space;
     }
 }
 
-static void ST_DrawModelChooser(void) {
-    smRect_t c = ST_DrawDialog(600);
-    float listW = c.w * 0.306667f;
-    float paneX = c.x + listW + c.w * 0.04f;
-    float paneW = c.w * 0.653333f;
-    int perRow = (int)(listW / 62.0f);
-    float listX = c.x + (listW - (perRow > 0 ? perRow : 1) * 62.0f) * 0.5f;
-    qboolean skins = stCvars[st.model].widget == ST_MODELSKIN;
-    qboolean clear = stCvars[st.model].widget == ST_MODEL;
-    const char* title = stModels[st.pickModel].name;
-    float y = c.y + SM_TITLE_H;
-    int count = ST_PickSkinCount();
+static void ST_DialogTitle(float x, float y, float w, const char* title, qboolean center) {
+    float indent = SM_Len(6.4f);
+
+    SM_SetSpacing(SM_SPACING_H1);
+    if (center) {
+        x += SM_Center(w - indent, SM_Advance(FONT_DEFAULT, 32, title, -1));
+    }
+    SM_Text(x + indent, SM_Baseline(FONT_DEFAULT, 32, y + SM_H1_PAD, SM_H1_LINE), FONT_DEFAULT, 32, smText, title, -1,
+            qfalse);
+    SM_SetSpacing(0);
+}
+
+static qhandle_t ST_BodyFor(const char* model, const char* skin) {
+    char path[MAX_QPATH];
+    char head[16];
+
+    Com_sprintf(path, sizeof(path), "webui/img/models/body/%s_%s.png", model, skin);
+    if (Q_stricmp(path, st.bodyShown)) {
+        Q_strncpyz(st.bodyShown, path, sizeof(st.bodyShown));
+        st.body = 0;
+        st.bodyW = st.bodyH = 0;
+        if (trap_WebPakExcerpt(path, "IHDR", head, sizeof(head)) >= 12) {
+            const byte* b = (const byte*)head + 4;
+
+            st.bodyW = (b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3];
+            st.bodyH = (b[4] << 24) | (b[5] << 16) | (b[6] << 8) | b[7];
+            if (st.bodyW > 0 && st.bodyH > 0) {
+                st.body = trap_R_RegisterShaderNoMip(path);
+            }
+        }
+    }
+    return st.body;
+}
+
+static float ST_DrawIcons(float x, float y, float w, int count, int selected, qboolean center, int model, int hit) {
+    float icon = SM_Len(62.0f);
+    float line = icon + SM_StrutBelow(15, STR_TEXT_LINE);
+    float outline = SM_LenBorder(2.0f);
+    float selX = 0, selY = 0;
+    int perRow = SM_Px(w) / SM_Px(icon);
     int k;
 
     if (perRow < 1) {
         perRow = 1;
     }
-    SM_Hit(c.x - 15, c.y - 15, c.w + 30, c.h + 30, ST_HIT_MODELPANE, 0, NULL);
+    for (k = 0; k < count; k++) {
+        int inRow = MIN(perRow, count - k / perRow * perRow);
+        float rowX = center ? x + SM_Center(w, inRow * icon) : x;
+        float cx = rowX + (k % perRow) * icon;
+        float cy = y + (k / perRow) * line;
+        qhandle_t pic;
 
-    for (k = 0; k < ST_NUM_MODELS; k++) {
-        float cx = listX + (k % perRow) * 62.0f;
-        float cy = c.y + (k / perRow) * 66.0f;
-        qhandle_t icon = ST_IconFor(k, "default");
-
-        if (icon) {
-            SM_Pic(cx, cy, 62, 62, icon, NULL);
-        }
-        if (k == st.pickModel) {
-            SM_Border(cx - 2, cy - 2, 66, 66, 2, strYellow, NULL);
-        }
-        SM_Hit(cx, cy, 62, 62, ST_HIT_MODELITEM, k, NULL);
-    }
-
-    SM_SetSpacing(SM_SPACING_H1);
-    SM_Text(paneX + 6.4f, SM_Baseline(FONT_DEFAULT, 32, c.y + SM_H1_PAD, SM_H1_LINE), FONT_DEFAULT, 32, smText, title,
-            -1, qfalse);
-    SM_SetSpacing(0);
-    if (skins) {
-        for (k = 0; k < count; k++) {
+        if (model < 0) {
+            pic = ST_IconFor(k, "default");
+        } else {
             const char* value = ST_PickSkinValue(k);
-            float cx = paneX + k * 62.0f;
-            qhandle_t icon = ST_IconFor(st.pickModel, value[0] ? value : "default");
 
-            if (icon) {
-                SM_Pic(cx, y, 62, 62, icon, NULL);
-            }
-            if (k == st.pickSkin) {
-                SM_Border(cx - 2, y - 2, 66, 66, 2, strYellow, NULL);
-            }
-            SM_Hit(cx, y, 62, 62, ST_HIT_SKINITEM, k, NULL);
+            pic = ST_IconFor(model, value[0] ? value : "default");
         }
-        y += 66;
+        if (pic) {
+            SM_Pic(cx, cy, icon, icon, pic, NULL);
+        }
+        if (k == selected) {
+            selX = cx;
+            selY = cy;
+        }
+        SM_Hit(cx, cy, icon, icon, hit, k, NULL);
     }
-    ST_DrawChooserPreview(paneX, y + 15, paneW, c.y + c.h - SM_WEB_BUTTON_H - 15 - (y + 15));
+    if (selected >= 0 && selected < count) {
+        SM_Border(selX - outline, selY - outline, icon + 2 * outline, icon + 2 * outline, outline, strYellow, NULL);
+    }
+    return count > 0 ? ((count + perRow - 1) / perRow) * line : 0;
+}
+
+static void ST_DrawModelChooser(void) {
+    smRect_t c = ST_DrawDialog(600, 15, ST_HIT_MODELPANE);
+    float listW = SM_Percent(c.w, 30.6666667f);
+    float paneX = c.x + listW + SM_Percent(c.w, 4.0f);
+    float paneW = SM_Percent(c.w, 65.3333333f);
+    qboolean skins = stCvars[st.model].widget == ST_MODELSKIN;
+    qboolean clear = stCvars[st.model].widget == ST_MODEL;
+    const stModel_t* picked = &stModels[st.pickModel];
+    float y = c.y + SM_TITLE_H;
+    float bodyH = SM_Len(425.0f);
+    const char* skin = "default";
+    qhandle_t body;
+
+    ST_DrawIcons(c.x, c.y, listW, ST_NUM_MODELS, st.pickModel, qtrue, -1, ST_HIT_MODELITEM);
+    ST_DialogTitle(paneX, c.y, paneW, picked->name, qfalse);
+    if (skins) {
+        y += ST_DrawIcons(paneX, y, paneW, ST_PickSkinCount(), st.pickSkin, qfalse, st.pickModel, ST_HIT_SKINITEM);
+        if (ST_PickSkinValue(st.pickSkin)[0]) {
+            skin = ST_PickSkinValue(st.pickSkin);
+        }
+    }
+    body = ST_BodyFor(picked->model, skin);
+    if (body) {
+        int hPx = SM_Px(bodyH);
+        int wPx = (int)floorf((float)st.bodyW * hPx / st.bodyH + 0.5f);
+
+        SM_Pic(paneX, y, wPx / smScale, hPx / smScale, body, NULL);
+    } else {
+        ST_DrawChooserPreview(paneX, y, paneW, bodyH);
+    }
 
     {
         static const char* const labels[3] = {"Clear", "Cancel", "OK"};
@@ -1226,8 +1281,36 @@ static void ST_DrawModelChooser(void) {
     }
 }
 
-static float ST_OptionHeight(int widget) {
-    return widget == ST_PALETTE ? STR_SWATCH_OPTION_H : widget == ST_CROSSHAIR ? STR_CROSSHAIR_OPTION_H : STR_OPTION_H;
+static int ST_OptionCount(int i);
+
+static float ST_MenuLayout(int i, float w, float* cellW, float* cellH, int* perRow, float* view) {
+    int widget = stCvars[i].widget, count = ST_OptionCount(i);
+    float most = widget == ST_SELECT ? STR_MENU_H : SM_Len(300.0f);
+    float strut = SM_StrutBelow(15, STR_TEXT_LINE);
+    float full = 0;
+    int pass;
+
+    for (pass = 0; pass < 2; pass++) {
+        float room = pass ? w - SM_Len(STR_BAR) : w;
+
+        if (widget == ST_PALETTE) {
+            *cellW = SM_Len(32.0f);
+            *cellH = 2 * SM_Len(4.0f) + SM_Len(21.0f) + strut;
+        } else if (widget == ST_CROSSHAIR) {
+            *cellW = 2 * SM_Len(10.0f) + SM_Len(64.0f);
+            *cellH = SM_Len(8.0f) + SM_Len(64.0f) + strut + SM_Len(8.0f);
+        } else {
+            *cellW = room;
+            *cellH = STR_OPTION_H;
+        }
+        *perRow = MAX(1, SM_Px(room) / MAX(1, SM_Px(*cellW)));
+        full = ((count + *perRow - 1) / *perRow) * *cellH;
+        if (full <= most) {
+            break;
+        }
+    }
+    *view = MIN(full, most);
+    return full;
 }
 
 static int ST_OptionCount(int i) {
@@ -1243,18 +1326,19 @@ static int ST_OptionCount(int i) {
 
 static void ST_DrawDropdown(void) {
     const stCvar_t* cv = &stCvars[st.select];
-    float x = st.selectControl.x, y = st.selectControl.y + st.selectControl.h - 1;
+    float x = st.selectControl.x, y = st.selectControl.y + st.selectControl.h - SM_LenBorder(1.0f);
     float w = st.selectControl.w;
-    float oh = ST_OptionHeight(cv->widget);
+    float cellW, cellH, view;
+    int perRow;
+    float full = ST_MenuLayout(st.select, w, &cellW, &cellH, &perRow, &view);
+    float room = full > view ? w - SM_Len(STR_BAR) : w;
+    float pad = SM_Len(4.0f);
     int count = ST_OptionCount(st.select);
-    float full = count * oh;
-    float most = cv->widget == ST_SELECT ? STR_MENU_H : STR_LINE_MENU_H;
-    float view = full < most ? full : most;
     smRect_t box;
     int k;
 
     if (y + view > smBottom - 30) {
-        y = st.selectControl.y - view + 1;
+        y = st.selectControl.y - view + SM_LenBorder(1.0f);
     }
     if (st.selectScroll > full - view) {
         st.selectScroll = full - view;
@@ -1266,64 +1350,72 @@ static void ST_DrawDropdown(void) {
     SM_Fill(x, y, w, view, strSelect, NULL);
     SM_Hit(x, y, w, view, ST_HIT_MENU, st.select, NULL);
     for (k = 0; k < count; k++) {
-        float oy = y + k * oh - st.selectScroll;
+        int row = k / perRow, inRow = MIN(perRow, count - row * perRow);
+        float ox = x + (k % perRow) * cellW + (cv->widget == ST_SELECT ? 0 : SM_Center(room, inRow * cellW));
+        float oy = y + row * cellH - st.selectScroll;
 
-        if (oy + oh < y || oy > y + view) {
+        if (oy + cellH < y || oy > y + view) {
             continue;
         }
         if (SM_Over(ST_HIT_OPTION, k)) {
             st.selectFocus = k;
         }
         if (k == st.selectFocus) {
-            SM_Fill(x, oy, w, oh, strOptionFocus, &box);
+            SM_Fill(ox, oy, cellW, cellH, strOptionFocus, &box);
         }
         if (cv->widget == ST_PALETTE) {
-            ST_DrawSwatch(x + 10, oy + 8, w - 20, k + 1, &box);
+            ST_DrawSwatch(ox + pad, oy + pad, cellW - 2 * pad, k + 1, &box);
         } else if (cv->widget == ST_CROSSHAIR) {
             if (k > 0) {
-                SM_Pic(x + (w - 64) * 0.5f, oy, 64, 64, uiInfo.uiDC.Assets.crosshairShader[k], &box);
-            } else if (SM_TextInside(SM_Baseline(FONT_SANS, 15, oy + 8, 24), 15, &box)) {
-                SM_Text(x + (w - SM_Advance(FONT_SANS, 15, "None", -1)) * 0.5f, SM_Baseline(FONT_SANS, 15, oy + 8, 24),
-                        FONT_SANS, 15, k == st.selectFocus ? strSelectValue : strOption, "None", -1, qfalse);
+                SM_Pic(ox + SM_Len(10.0f), oy, SM_Len(64.0f), SM_Len(64.0f), uiInfo.uiDC.Assets.crosshairShader[k],
+                       &box);
             }
         } else if (SM_TextInside(SM_Baseline(FONT_SANS, 15, oy + 8, 24), 15, &box)) {
             SM_Text(x + 10, SM_Baseline(FONT_SANS, 15, oy + 8, 24), FONT_SANS, 15,
                     k == st.selectFocus ? strSelectValue : strOption, cv->options[k].label,
-                    SM_Fit(FONT_SANS, 15, cv->options[k].label, w - 20), qfalse);
+                    SM_Fit(FONT_SANS, 15, cv->options[k].label, room - 20), qfalse);
         }
-        SM_Hit(x, oy, w, oh, ST_HIT_OPTION, k, &box);
+        SM_Hit(ox, oy, cellW, cellH, ST_HIT_OPTION, k, &box);
+    }
+    if (full > view) {
+        float len = view * view / full;
+
+        SM_Fill(x + room, y + st.selectScroll * (view - len) / (full - view), SM_Len(STR_BAR), len, strMenuThumb,
+                NULL);
     }
 }
 
 static void ST_DrawRGBPicker(void) {
-    smRect_t c = ST_DrawDialog(400);
-    float leftW = c.w * 0.653333f;
+    smRect_t c = ST_DrawDialog(300, 30, ST_HIT_RGBPANEL);
+    float leftW = SM_Percent(c.w, 65.3333333f);
+    float margin = SM_Len(5.0f), h = SM_Len(32.0f);
+    float border = SM_LenBorder(1.0f);
+    float thumbW = SM_Len(16.0f);
     float y = c.y + SM_TITLE_H;
+    int innerW = SM_Px(leftW) - 2 * SM_Px(border), innerH = SM_Px(h) - 2 * SM_Px(border);
     vec4_t color;
     int k;
 
-    st.rgbPanel = SM_R(c.x - 15, c.y - 15, c.w + 30, c.h + 30);
-    SM_Hit(st.rgbPanel.x, st.rgbPanel.y, st.rgbPanel.w, st.rgbPanel.h, ST_HIT_RGBPANEL, 0, NULL);
-    SM_SetSpacing(SM_SPACING_H1);
-    SM_Text(c.x + 6.4f, SM_Baseline(FONT_DEFAULT, 32, c.y + SM_H1_PAD, SM_H1_LINE), FONT_DEFAULT, 32, smText,
-            "Choose color", -1, qfalse);
-    SM_SetSpacing(0);
+    ST_DialogTitle(c.x, c.y, leftW, "Choose color", qfalse);
     for (k = 0; k < 3; k++) {
         vec4_t tint = {0, 0, 0, 1};
-        float sy = y + 5 + k * 57.0f;
+        float sy = y + margin;
+        int tx = (int)(st.rgbPick[k] / 255.0f * (innerW - SM_Px(thumbW)));
+        int ty = (innerH - SM_Px(h)) / 2;
 
         tint[k] = st.rgbPick[k] / 255.0f;
-        st.rgbSlider[k] = SM_R(c.x, sy, leftW, 32);
-        SM_Fill(c.x, sy, leftW, 32, tint, NULL);
-        SM_Border(c.x, sy, leftW, 32, 1, strBorder, NULL);
-        SM_Fill(c.x + 1 + st.rgbPick[k] / 255.0f * (leftW - 2 - 16), sy + 8, 16, 16, strYellow, NULL);
-        SM_Hit(c.x, sy, leftW, 32, ST_HIT_RGBSLIDER, k, NULL);
+        st.rgbSlider[k] = SM_R(c.x, sy, leftW, h);
+        SM_Fill(c.x, sy, leftW, h, tint, NULL);
+        SM_Border(c.x, sy, leftW, h, border, strBorder, NULL);
+        SM_Fill(c.x + border + tx / smScale, sy + border + ty / smScale, thumbW, h, strYellow, NULL);
+        SM_Hit(c.x, sy, leftW, h, ST_HIT_RGBSLIDER, k, NULL);
+        y += margin + h + SM_StrutBelow(15, STR_TEXT_LINE);
     }
     color[0] = st.rgbPick[0] / 255.0f;
     color[1] = st.rgbPick[1] / 255.0f;
     color[2] = st.rgbPick[2] / 255.0f;
     color[3] = 1.0f;
-    SM_Fill(c.x + leftW + c.w * 0.04f, c.y + 15, 200, 200, color, NULL);
+    SM_Fill(c.x + leftW + SM_Percent(c.w, 4.0f), c.y + SM_Len(15.0f), SM_Len(200.0f), SM_Len(200.0f), color, NULL);
 
     {
         static const char* const labels[2] = {"Cancel", "OK"};
@@ -1553,57 +1645,48 @@ static void ST_DrawPage(void) {
 }
 
 static void ST_DrawBindDialog(void) {
-    const stCvar_t* cv = &stCvars[st.binding];
-    float h = 300;
-    float top = (SM_VIEW_H - h) * 0.5f;
-    float cx = smVW * 0.15f, cw = smVW * 0.7f;
-    const char* lines[4];
-    float sizes[4] = {32, 24, 21.3333f, 21.3333f};
-    int fonts[4] = {FONT_DEFAULT, FONT_SANS, FONT_SANS, FONT_SANS};
-    const float* colors[4] = {smText, strYellow, smText, smText};
+    static const char* const notes[2] = {"ESC to exit", "BACKSPACE to unbind"};
+    smRect_t c = ST_DrawDialog(300, 15, ST_HIT_BLOCK);
+    float keyLine = SM_LineHeight(24, 1.25f), noteLine = SM_LineHeight(21.3333f, 1.6f);
+    float y = c.y + SM_TITLE_H;
+    float gap, width = 0, x;
     char keys[128];
-    const char* p = st.values[st.binding];
-    float y = top + 30;
-    int k, n = 0;
+    const char* p;
+    int k;
 
-    keys[0] = '\0';
-    while (*p) {
-        const char* end = strchr(p, '\n');
+    ST_DialogTitle(c.x, c.y, c.w, va("Press any key to bind %s", stCvars[st.binding].title), qtrue);
+    ST_BindKeys(st.binding, keys, sizeof(keys));
+
+    SM_SetSpacing(SM_SPACING_H1);
+    gap = SM_Advance(FONT_SANS, 24, " ", 1) + SM_LetterSpacing(8.0f);
+    for (p = keys; *p;) {
+        const char* end = strchr(p, ' ');
         int len = end ? (int)(end - p) : (int)strlen(p);
 
-        Q_strcat(keys, sizeof(keys), n++ ? ", " : "");
-        if ((int)strlen(keys) + len < (int)sizeof(keys)) {
-            strncat(keys, p, len);
-        }
-        p += len;
-        if (*p == '\n') {
-            p++;
-        }
+        width += SM_Advance(FONT_SANS, 24, p, len) + (end ? gap : 0);
+        p += len + (end ? 1 : 0);
     }
-    lines[0] = va("Press any key to bind %s", cv->title);
-    lines[1] = n ? keys : "None";
-    lines[2] = "ESC to exit";
-    lines[3] = "BACKSPACE to unbind";
+    x = c.x + SM_Center(c.w, width);
+    for (p = keys; *p;) {
+        const char* end = strchr(p, ' ');
+        int len = end ? (int)(end - p) : (int)strlen(p);
 
-    SM_Fill(-smVW, -SM_VIEW_H, 3 * smVW, 3 * SM_VIEW_H, strBlack80, NULL);
-    SM_Hit(-smVW, -SM_VIEW_H, 3 * smVW, 3 * SM_VIEW_H, ST_HIT_BLOCK, 0, NULL);
-    SM_Fill(0, top, smVW, h, strDialog, NULL);
-    SM_Fill(cx, top, cw, h, strBlack80, NULL);
-    for (k = 0; k < 4; k++) {
-        const char* text = lines[k];
-        float lh = sizes[k] * 1.5f;
+        SM_Text(x, SM_Baseline(FONT_SANS, 24, y, keyLine), FONT_SANS, 24, strYellow, p, len, qfalse);
+        x += SM_Advance(FONT_SANS, 24, p, len) + gap;
+        p += len + (end ? 1 : 0);
+    }
+    SM_SetSpacing(0);
+    y += keyLine + SM_Rem(20.0f);
 
-        SM_SetSpacing(k < 2 ? SM_SPACING_H1 : 0);
-        SM_Text(cx + (cw - SM_Advance(fonts[k], sizes[k], text, -1)) * 0.5f, SM_Baseline(fonts[k], sizes[k], y, lh),
-                fonts[k], sizes[k], colors[k], text, -1, qfalse);
-        SM_SetSpacing(0);
-        y += lh + 12;
+    for (k = 0; k < 2; k++) {
+        SM_Text(c.x + SM_Center(c.w, SM_Advance(FONT_SANS, 21.3333f, notes[k], -1)),
+                SM_Baseline(FONT_SANS, 21.3333f, y, noteLine), FONT_SANS, 21.3333f, smText, notes[k], -1, qfalse);
+        y += noteLine;
     }
 }
 
 static void ST_OpenSelect(int i) {
     const stCvar_t* cv = &stCvars[i];
-    float oh = ST_OptionHeight(cv->widget);
     int k, chosen = -1;
 
     st.select = i;
@@ -1619,10 +1702,7 @@ static void ST_OpenSelect(int i) {
             }
         }
     }
-    st.selectFocus = chosen;
-    if (chosen > 0) {
-        st.selectScroll = (chosen - 2) * oh;
-    }
+    st.selectFocus = chosen >= 0 && chosen < ST_OptionCount(i) ? chosen : 0;
 }
 
 static void ST_DragRange(int i) {
@@ -1645,7 +1725,8 @@ static void ST_DragRange(int i) {
 
 static void ST_DragRGB(int channel) {
     const smRect_t* r = &st.rgbSlider[channel];
-    float frac = (smMX - r->x - 1 - 8) / (r->w - 2 - 16);
+    float border = SM_LenBorder(1.0f), thumbW = SM_Len(16.0f);
+    float frac = (smMX - r->x - border - thumbW * 0.5f) / (r->w - 2 * border - thumbW);
 
     if (frac < 0) {
         frac = 0;
@@ -1843,9 +1924,11 @@ static void ST_Wheel(float amount) {
         return;
     }
     if (st.select >= 0) {
-        float oh = ST_OptionHeight(stCvars[st.select].widget);
+        float cellW, cellH, view;
+        int perRow;
 
-        st.selectScroll += amount > 0 ? 2 * oh : -2 * oh;
+        ST_MenuLayout(st.select, st.selectControl.w, &cellW, &cellH, &perRow, &view);
+        st.selectScroll += amount > 0 ? 2 * cellH : -2 * cellH;
         return;
     }
     if (st.rgb >= 0) {
