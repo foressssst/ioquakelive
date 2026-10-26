@@ -176,6 +176,22 @@ static qboolean CL_WebImage_HostAllowed(const char* url) {
     return qfalse;
 }
 
+static qboolean CL_WebImage_CachePath(const char* name, char* path, int size) {
+    const char* base = Sys_DefaultCachePath();
+    char* p;
+
+    if (!base || !base[0]) {
+        return qfalse;
+    }
+    Com_sprintf(path, size, "%s%c%s", base, PATH_SEP, name);
+    for (p = path; *p; p++) {
+        if (*p == '/' || *p == '\\') {
+            *p = PATH_SEP;
+        }
+    }
+    return qtrue;
+}
+
 static void CL_WebImage_LocalName(const char* url, char* local, int localSize, char* base, int baseSize) {
     Com_sprintf(base, baseSize, "%s/%08x", WEB_IMAGE_DIR, ++webImageSerial);
     Com_sprintf(local, localSize, "%s%s", base, CL_WebImage_Extension(url));
@@ -637,7 +653,6 @@ void CL_WebImage_Frame(void) {
 
 qhandle_t CL_WebImage_Get(const char* url) {
     webImage_t* img;
-    fileHandle_t f;
     char tmpLocal[MAX_QPATH];
     int i, oldest, t, frame;
 
@@ -719,16 +734,11 @@ qhandle_t CL_WebImage_Get(const char* url) {
                                                   : WEB_IMAGE_MAX_SIDE;
 
     Com_sprintf(tmpLocal, sizeof(tmpLocal), "%s.tmp", img->base);
-    f = FS_FOpenFileWrite(tmpLocal);
-    if (!f) {
+    if (!CL_WebImage_CachePath(img->local, img->ospath, sizeof(img->ospath)) ||
+        !CL_WebImage_CachePath(tmpLocal, img->tmppath, sizeof(img->tmppath)) || FS_CreatePath(img->tmppath)) {
         img->state = WI_FAILED;
         return 0;
     }
-    FS_FCloseFile(f);
-    Q_strncpyz(img->ospath, FS_BuildOSPath(Cvar_VariableString("fs_homepath"), FS_GetCurrentGameDir(), img->local),
-               sizeof(img->ospath));
-    Q_strncpyz(img->tmppath, FS_BuildOSPath(Cvar_VariableString("fs_homepath"), FS_GetCurrentGameDir(), tmpLocal),
-               sizeof(img->tmppath));
 
     img->state = WI_FETCHING;
     CL_WebImage_SetResult(img, 0);
@@ -762,8 +772,9 @@ static void CL_WebImage_ClearCache(void) {
     char** list;
     int i, count;
 
-    Q_strncpyz(dir, FS_BuildOSPath(Cvar_VariableString("fs_homepath"), FS_GetCurrentGameDir(), WEB_IMAGE_DIR),
-               sizeof(dir));
+    if (!CL_WebImage_CachePath(WEB_IMAGE_DIR, dir, sizeof(dir))) {
+        return;
+    }
     list = Sys_ListFiles(dir, NULL, NULL, &count, qfalse);
     for (i = 0; i < count; i++) {
         if (list[i][0] != '.') {

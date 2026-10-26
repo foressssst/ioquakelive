@@ -734,6 +734,7 @@ qboolean FS_IsExt(const char* filename, const char* ext, int namelen) {
 	return !Q_stricmp(filename, ext);
 }
 
+#ifndef DEDICATED
 static qboolean FS_IsWebImageName(const char* filename) {
 	static const char* const tails[] = {".png", ".jpg", ".jpeg"};
 	const char* p;
@@ -757,6 +758,7 @@ static qboolean FS_IsWebImageName(const char* filename) {
 	return p[0] == '_' && p[1] == 'f' && isdigit((unsigned char)p[2]) && isdigit((unsigned char)p[3]) &&
 	       !Q_stricmp(p + 4, ".tga");
 }
+#endif
 
 qboolean FS_IsDemoExt(const char* filename, int namelen) {
 	char* ext_test;
@@ -921,7 +923,6 @@ long FS_FOpenFileReadDir(const char* filename, searchpath_t* search, fileHandle_
 				!FS_IsExt(filename, ".game", len) &&
 				!FS_IsExt(filename, ".dat", len) &&
 				!FS_IsExt(filename, ".txt", len) &&
-				!FS_IsWebImageName(filename) &&
 				!FS_IsDemoExt(filename, len))
 			{
 				*file = 0;
@@ -1305,6 +1306,17 @@ long FS_ReadFileDir(const char* qpath, void* searchPath, qboolean unpure, void**
 #ifndef DEDICATED
 	if (!Q_stricmpn(qpath, "webui/", 6)) {
 		return FS_WebPak_ReadFile(qpath + 6, buffer);
+	}
+	if (FS_IsWebImageName(qpath)) {
+		void* data;
+
+		len = FS_ReadCacheFile(qpath, &data);
+		if (buffer) {
+			*buffer = data;
+		} else if (data) {
+			FS_FreeFile(data);
+		}
+		return len;
 	}
 #endif
 
@@ -1749,6 +1761,29 @@ static void FS_RemoveOldPrefetch(const char* gameName) {
 	}
 	for (i = 0; i < count; i++) {
 		remove(va("%s%c%s", dir, PATH_SEP, list[i]));
+	}
+	Sys_FreeFileList(list);
+	Sys_RemoveDir(dir);
+}
+
+static void FS_RemoveOldWebImages(const char* gameName) {
+	char dir[MAX_OSPATH];
+	char** list;
+	int count;
+	int i;
+
+	if (!fs_homepath || !fs_homepath->string[0]) {
+		return;
+	}
+	Q_strncpyz(dir, FS_BuildOSPath(fs_homepath->string, gameName, "webimages"), sizeof(dir));
+	list = Sys_ListFiles(dir, NULL, NULL, &count, qfalse);
+	if (!list) {
+		return;
+	}
+	for (i = 0; i < count; i++) {
+		if (list[i][0] != '.') {
+			remove(va("%s%c%s", dir, PATH_SEP, list[i]));
+		}
 	}
 	Sys_FreeFileList(list);
 	Sys_RemoveDir(dir);
@@ -2917,6 +2952,7 @@ static void FS_Startup(const char* gameName) {
 #ifndef DEDICATED
 	FS_RemoveOldPrefetch(gameName);
 	FS_RemoveOldAvatars(gameName);
+	FS_RemoveOldWebImages(gameName);
 	FS_MoveOldMatches(gameName);
 #endif
 
