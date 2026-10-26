@@ -448,11 +448,78 @@ static float ST_ContentHeight(int widget) {
     }
 }
 
+static int ST_BindKeys(int i, char* keys, int size) {
+    const char* p = st.values[i];
+    int n = 0;
+
+    keys[0] = '\0';
+    while (*p) {
+        const char* end = strchr(p, '\n');
+        int len = end ? (int)(end - p) : (int)strlen(p);
+
+        Q_strcat(keys, size, n++ ? ", " : "");
+        if ((int)strlen(keys) + len < size) {
+            strncat(keys, p, len);
+        }
+        p += len;
+        if (*p == '\n') {
+            p++;
+        }
+    }
+    if (!n) {
+        Q_strncpyz(keys, "None", size);
+    }
+    return n;
+}
+
+static int ST_WordSpaced(float x, float base, const char* text, float width, const smRect_t* clip, qboolean draw) {
+    float left = x, right = x + width, gap = SM_Advance(FONT_SANS, 15, " ", 1) + SM_LetterSpacing(5.0f);
+    int lines = 1;
+
+    while (*text) {
+        const char* end = strchr(text, ' ');
+        int len = end ? (int)(end - text) : (int)strlen(text);
+        float advance = SM_Advance(FONT_SANS, 15, text, len);
+
+        if (x > left && x + advance > right) {
+            x = left;
+            base += STR_TEXT_LINE;
+            lines++;
+        }
+        if (draw && SM_TextInside(base, 15, clip)) {
+            if (x + advance > right) {
+                char word[MAX_CVAR_VALUE_STRING];
+
+                Q_strncpyz(word, text, MIN(len + 1, (int)sizeof(word)));
+                SM_Text(x, base, FONT_SANS, 15, smText, word, SM_Fit(FONT_SANS, 15, word, right - x), qfalse);
+            } else {
+                SM_Text(x, base, FONT_SANS, 15, smText, text, len, qfalse);
+            }
+        }
+        x += advance + gap;
+        text += len;
+        while (*text == ' ') {
+            text++;
+        }
+    }
+    return lines;
+}
+
+static float ST_BindWidth(int i) {
+    return SM_Percent(stLayout[i].w - 2 * STR_ROW_PAD, 40.0f);
+}
+
 static float ST_RowHeight(int i) {
     int widget = stCvars[i].widget;
     float minH = SM_Len(widget == ST_BIND ? 32.0f : 50.0f);
     float h = 2 * STR_ROW_PAD + ST_ContentHeight(widget);
 
+    if (widget == ST_BIND) {
+        char keys[128];
+
+        ST_BindKeys(i, keys, sizeof(keys));
+        h += (ST_WordSpaced(0, 0, keys, ST_BindWidth(i), NULL, qfalse) - 1) * STR_TEXT_LINE;
+    }
     return h > minH ? h : minH;
 }
 
@@ -774,57 +841,21 @@ static void ST_DrawCrosshair(int i, float x, float y, const smRect_t* clip) {
     }
 }
 
-static void ST_WordSpaced(float x, float base, const char* text, float width) {
-    float right = x + width, gap = SM_Advance(FONT_SANS, 15, " ", 1) + SM_LetterSpacing(5.0f);
-
-    while (*text) {
-        const char* end = strchr(text, ' ');
-        int len = end ? (int)(end - text) : (int)strlen(text);
-        float advance = SM_Advance(FONT_SANS, 15, text, len);
-
-        if (x + advance > right) {
-            char word[MAX_CVAR_VALUE_STRING];
-
-            Q_strncpyz(word, text, MIN(len + 1, (int)sizeof(word)));
-            SM_Text(x, base, FONT_SANS, 15, smText, word, SM_Fit(FONT_SANS, 15, word, right - x), qfalse);
-            return;
-        }
-        SM_Text(x, base, FONT_SANS, 15, smText, text, len, qfalse);
-        x += advance + gap;
-        text += len;
-        while (*text == ' ') {
-            text++;
-        }
-    }
-}
-
 static void ST_DrawBind(int i, float y, const smRect_t* clip) {
     float x = stLayout[i].x, w = stLayout[i].w, h = stLayout[i].h;
     float base = SM_Baseline(FONT_SANS, 15, y + STR_ROW_PAD, STR_TEXT_LINE);
     float nameW = SM_Percent(w - 2 * STR_ROW_PAD, 60.0f);
+    float nameBase;
     char keys[128];
-    const char* p = st.values[i];
-    int n = 0;
+    int lines;
 
-    keys[0] = '\0';
-    while (*p) {
-        const char* end = strchr(p, '\n');
-        int len = end ? (int)(end - p) : (int)strlen(p);
-
-        Q_strcat(keys, sizeof(keys), n++ ? ", " : "");
-        if ((int)strlen(keys) + len < (int)sizeof(keys)) {
-            strncat(keys, p, len);
-        }
-        p += len;
-        if (*p == '\n') {
-            p++;
-        }
-    }
+    ST_BindKeys(i, keys, sizeof(keys));
     SM_Fill(x, y, w, h, SM_Over(ST_HIT_BIND, i) ? strBindHover : stLayout[i].odd ? strRowOdd : strRowEven, clip);
-    if (SM_TextInside(base, 15, clip)) {
-        SM_Text(x + STR_ROW_PAD, base, FONT_SANS, 15, smText, stCvars[i].title,
+    lines = ST_WordSpaced(x + STR_ROW_PAD + nameW, base, keys, ST_BindWidth(i), clip, qtrue);
+    nameBase = base + (lines - 1) * STR_TEXT_LINE;
+    if (SM_TextInside(nameBase, 15, clip)) {
+        SM_Text(x + STR_ROW_PAD, nameBase, FONT_SANS, 15, smText, stCvars[i].title,
                 SM_Fit(FONT_SANS, 15, stCvars[i].title, nameW), qfalse);
-        ST_WordSpaced(x + STR_ROW_PAD + nameW, base, n ? keys : "None", SM_Percent(w - 2 * STR_ROW_PAD, 40.0f));
     }
     SM_Hit(x, y, w, h, ST_HIT_BIND, i, clip);
 }
