@@ -1040,7 +1040,7 @@ static const cvarHelp_t cvarHelp[] = {
     {"r_showSmp", "retail registers it for its own renderer, which this one does not have (no effect in this build)"},
     {"r_skipLargeBatches", "retail registers it for its own renderer, which this one does not have (no effect in this build)"},
     {"r_skipSmallBatches", "retail registers it for its own renderer, which this one does not have (no effect in this build)"},
-    {"r_smp", "retail registers it for its own renderer, which this one does not have (no effect in this build)"},
+    {"r_smp", "multithreaded rendering: the previous frame is drawn on its own thread while the next one is prepared. Adds one frame of latency. Requires vid_restart."},
     {"r_stereo", "retail registers it for its own renderer, which this one does not have (no effect in this build)"},
     {"debuggraph", "draws the debugging graph"},
     {"timegraph", "the debugging graph shows how long each frame takes"},
