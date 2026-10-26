@@ -992,6 +992,10 @@ static void CG_ConfigStringModified(void) {
         CG_ParseWeaponInfo();
     } else if (num == CS_CUSTOM_SETTINGS) {
         cgs.customSettings = atoi(str);
+    } else if (num == CS_DISABLE_VOTE_UI) {
+        if (atoi(str)) {
+            trap_Cvar_Set("ui_voteactive", "0");
+        }
     } else if (num == CS_DMGTHROUGHDEPTH) {
         cgs.dmgThroughDepth = atof(str);
     } else if (num == CS_PLAYER_CYLINDERS) {

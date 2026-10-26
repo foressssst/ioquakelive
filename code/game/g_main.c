@@ -2507,8 +2507,9 @@ void CheckIntermissionExit(void) {
         cl->ps.stats[STAT_CLIENTS_READY] = readyMask;
     }
 
-    if (!level.votingEnded &&
-        level.time >= level.intermissionTime + timeout) {
+    if ((g_voteFlags.integer & VF_ENDMAP_VOTING) ||
+        (!level.votingEnded && level.time > level.intermissionTime + timeout)) {
+        trap_SetConfigstring(CS_DISABLE_VOTE_UI, "1");
         level.votingEnded = qtrue;
     }
 
