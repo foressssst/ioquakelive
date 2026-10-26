@@ -1437,22 +1437,6 @@ static void ST_DrawScrollbar(float x) {
     SM_Hit(x, thumbY, STR_BAR, thumbH, ST_HIT_THUMB, 0, NULL);
 }
 
-static float ST_TabWidth(const char* name) {
-    char upper[64];
-    char c[2];
-    const char* p;
-    float w = 0;
-
-    Q_strncpyz(upper, name, sizeof(upper));
-    Q_strupr(upper);
-    c[1] = '\0';
-    for (p = upper; *p; p++) {
-        c[0] = *p;
-        w += SM_AdvanceBold(FONT_SANS, 11, c, 1, qtrue) + SM_LetterSpacing(1.0f);
-    }
-    return ceilf(w * smScale - 0.01f) / smScale;
-}
-
 static void ST_DrawHeader(float y, const smRect_t* clip) {
     float left = st.left;
     float x = left;
@@ -1475,7 +1459,7 @@ static void ST_DrawHeader(float y, const smRect_t* clip) {
         if (!ST_TabShown(i)) {
             continue;
         }
-        w = ST_TabWidth(stTabNames[i]) + 2 * STR_NAV_PAD;
+        w = SM_NavTabWidth(stTabNames[i]);
         if (on) {
             SM_Fill(x, navY, w, STR_NAV_H, strYellow, clip);
         }

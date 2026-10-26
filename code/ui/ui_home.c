@@ -94,6 +94,8 @@ static void UI_Home_DrawFriends(float x, float y, float w, float h);
 #define HF_MENU_ROW 48.5f
 #define HF_COL_X SM_Len(30.0f)
 #define HF_COL_W SM_Len(370.0f)
+#define HF_SCROLL_W SM_Len(8.0f)
+#define HF_LIST_W (HF_COL_W - HF_SCROLL_W)
 
 static const vec4_t hfBlack80 = {0.0f, 0.0f, 0.0f, 0.8f};
 static const vec4_t hfBlack75 = {0.0f, 0.0f, 0.0f, 0.75f};
@@ -310,19 +312,19 @@ void UI_Home_PageTop(int active) {
         float bw = 88.2f;
         const char* create = "CREATE";
 
-        SM_Fill(HF_COL_X, colTop, HF_COL_W, 25.6f, hfBlack75, NULL);
+        SM_Fill(HF_COL_X, colTop, HF_LIST_W, 25.6f, hfBlack75, NULL);
         SM_Text(HF_COL_X + 10.0f, SM_Baseline(FONT_DEFAULT, 16.0f, colTop, 25.6f), FONT_DEFAULT, 16.0f, smGold, "Lobby", -1,
                 qfalse);
-        SM_Fill(HF_COL_X, colTop + 25.6f, HF_COL_W, lobbyBottom - colTop - 25.6f, hfBlack80, NULL);
+        SM_Fill(HF_COL_X, colTop + 25.6f, HF_LIST_W, lobbyBottom - colTop - 25.6f, hfBlack80, NULL);
 
-        SM_Fill(HF_COL_X + (HF_COL_W - bw) * 0.5f, colTop + 65.0f, bw, 1, hfButtonBorder, NULL);
-        SM_Fill(HF_COL_X + (HF_COL_W - bw) * 0.5f, colTop + 94.0f, bw, 1, hfButtonBorder, NULL);
-        SM_Fill(HF_COL_X + (HF_COL_W - bw) * 0.5f, colTop + 65.0f, 1, 30, hfButtonBorder, NULL);
-        SM_Fill(HF_COL_X + (HF_COL_W + bw) * 0.5f - 1, colTop + 65.0f, 1, 30, hfButtonBorder, NULL);
-        SM_SpacedText(HF_COL_X + (HF_COL_W - SM_SpacedWidth(FONT_SANS, 11.0f, create, 1.0f, qtrue) + 1.0f) * 0.5f,
+        SM_Fill(HF_COL_X + (HF_LIST_W - bw) * 0.5f, colTop + 65.0f, bw, 1, hfButtonBorder, NULL);
+        SM_Fill(HF_COL_X + (HF_LIST_W - bw) * 0.5f, colTop + 94.0f, bw, 1, hfButtonBorder, NULL);
+        SM_Fill(HF_COL_X + (HF_LIST_W - bw) * 0.5f, colTop + 65.0f, 1, 30, hfButtonBorder, NULL);
+        SM_Fill(HF_COL_X + (HF_LIST_W + bw) * 0.5f - 1, colTop + 65.0f, 1, 30, hfButtonBorder, NULL);
+        SM_SpacedText(HF_COL_X + (HF_LIST_W - SM_SpacedWidth(FONT_SANS, 11.0f, create, 1.0f, qtrue) + 1.0f) * 0.5f,
                       SM_Baseline(FONT_SANS, 11.0f, colTop + 65.0f, 30.0f), FONT_SANS, 11.0f, smText, create, 1.0f,
                       qtrue);
-        SM_Centered(HF_COL_X + HF_COL_W * 0.5f, SM_Baseline(FONT_SANS, 15.0f, colTop + 105.0f, 24.0f), 15.0f, smText,
+        SM_Centered(HF_COL_X + HF_LIST_W * 0.5f, SM_Baseline(FONT_SANS, 15.0f, colTop + 105.0f, 24.0f), 15.0f, smText,
                     "Not in a lobby.", qfalse);
 
         UI_Home_FriendRefresh();
@@ -331,8 +333,8 @@ void UI_Home_PageTop(int active) {
             float fH = smBottom - 30.0f - fTop;
             float rows = hvf.count * HM_FRIEND_H;
 
-            SM_Fill(HF_COL_X, fTop, HF_COL_W, rows < fH ? rows : fH, hfBlack80, NULL);
-            UI_Home_DrawFriends(HF_COL_X, fTop, HF_COL_W, fH);
+            SM_Fill(HF_COL_X, fTop, HF_LIST_W, rows < fH ? rows : fH, hfBlack80, NULL);
+            UI_Home_DrawFriends(HF_COL_X, fTop, HF_LIST_W, fH);
         }
     }
 }
@@ -1062,7 +1064,7 @@ static void UI_Home_DrawSide(void) {
 
     SM_Fill(x, top + HM_LIST_TOP, w, listH, hmBlack80, NULL);
     if (hr.panel == 0) {
-        UI_Home_DrawFriends(x, top + HM_LIST_TOP, w, listH);
+        UI_Home_DrawFriends(x, top + HM_LIST_TOP, w - HF_SCROLL_W, listH);
     } else {
         SM_Centered(x + w * 0.5f, SM_Baseline(FONT_SANS, HM_TEXT, top + HM_LIST_TOP + 44.0f, 24.0f), HM_TEXT, smText,
                     "Not in a lobby.", qfalse);

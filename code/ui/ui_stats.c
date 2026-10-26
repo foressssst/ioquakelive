@@ -86,24 +86,40 @@ typedef struct {
     float kdr;
 } stSummary_t;
 
-#define ST_TITLE_H 88.4f
-#define ST_AVATAR 64.0f
-#define ST_ROW_H 30.0f
-#define ST_ROW_GAP 15.0f
-#define ST_PAD 5.0f
-#define ST_CARD_W 169.0f
-#define ST_CARD_H 125.0f
-#define ST_CARD_GAP 7.5f
-#define ST_TH_H 24.0f
-#define ST_TD_H 38.0f
-#define ST_CELL_PAD 15.0f
-#define ST_MOD_W 200.0f
-#define ST_MOD_H 45.0f
-#define ST_MOD_GAP 8.0f
-#define ST_MEDAL_W 250.0f
-#define ST_MEDAL_H 125.0f
-#define ST_MEDAL_GAP 20.0f
-#define ST_BOTTOM 30.0f
+#define ST_AVATAR SM_Len(64.0f)
+#define ST_H1_LEFT SM_Len(6.4f)
+#define ST_BAR SM_Len(8.0f)
+#define ST_NAV_H SM_Len(30.0f)
+#define ST_NAV_PAD SM_Len(20.0f)
+#define ST_NAV_GAP SM_Len(15.0f)
+#define ST_PAD SM_Len(5.0f)
+#define ST_SHADOW SM_Len(2.0f)
+#define ST_CARD_W SM_Len(169.0f)
+#define ST_CARD_H SM_Len(125.0f)
+#define ST_CARD_GAP SM_Len(7.5f)
+#define ST_CARD_SIZE 21.333f
+#define ST_CARD_LINE SM_LineHeight(ST_CARD_SIZE, 1.2f)
+#define ST_BLOCK_GAP SM_Len(30.0f)
+#define ST_CELL_PAD SM_Len(15.0f)
+#define ST_ICON SM_Len(32.0f)
+#define ST_LINE SM_LineHeight(15.0f, 1.6f)
+#define ST_WEAPONS_GAP SM_Len(100.0f)
+#define ST_MODS_GAP SM_Len(50.0f)
+#define ST_MOD_W SM_Len(200.0f)
+#define ST_MOD_H SM_Len(45.0f)
+#define ST_MOD_TOP SM_Len(15.0f)
+#define ST_MOD_GAP SM_Len(8.0f)
+#define ST_MOD_NUMBER SM_Len(40.0f)
+#define ST_MOD_SIZE 21.333f
+#define ST_MOD_LINE SM_LineHeight(ST_MOD_SIZE, 1.6f)
+#define ST_MEDAL_W SM_Len(250.0f)
+#define ST_MEDAL_H SM_Len(125.0f)
+#define ST_MEDAL_GAP SM_Len(20.0f)
+#define ST_MEDAL_PAD SM_Len(10.0f)
+#define ST_MEDAL_PIC SM_Len(64.0f)
+#define ST_MEDAL_LINE SM_Len(30.0f)
+#define ST_MEDAL_TITLE_LINE SM_LineHeight(24.0f, 1.2f)
+#define ST_MEDAL_TEXT_LINE SM_LineHeight(12.0f, 1.6f)
 
 static const vec4_t stBlack80 = {0.0f, 0.0f, 0.0f, 0.8f};
 static const vec4_t stCard = SM_RGB(44, 41, 41);
@@ -143,7 +159,7 @@ static int ST_Index(const char* name) {
 static qboolean ST_Has(const uiUserStats_t* d, const char* name, int* value) {
     int i = ST_Index(name);
 
-    if (i < 0 || !ST_Answered(d)) {
+    if (i < 0 || d->state != UI_DETAILS_DONE) {
         return qfalse;
     }
     *value = d->stats[i];
@@ -266,58 +282,70 @@ static void ST_Load(void) {
     }
 }
 
+static float ST_TextBox(float width) {
+    return ceilf(width * smScale - 0.01f) / smScale;
+}
+
+static float ST_Max(float a, float b) {
+    return a > b ? a : b;
+}
+
 static void ST_Shadowed(float x, float baseline, int font, float size, const float* color, const char* text,
                         qboolean bold) {
-    SM_Text(x + 2, baseline + 2, font, size, stBlack, text, -1, bold);
+    SM_Text(x + ST_SHADOW, baseline + ST_SHADOW, font, size, stBlack, text, -1, bold);
     SM_Text(x, baseline, font, size, color, text, -1, bold);
+}
+
+static void ST_Heading(float x, float top, const char* text, const smRect_t* clip) {
+    float baseline = SM_Baseline(FONT_DEFAULT, 32.0f, top + SM_H1_PAD, SM_H1_LINE);
+
+    if (!SM_TextInside(baseline, 32.0f, clip)) {
+        return;
+    }
+    SM_SetSpacing(SM_SPACING_H1);
+    SM_Text(x + ST_H1_LEFT, baseline, FONT_DEFAULT, 32.0f, smText, text, -1, qfalse);
+    SM_SetSpacing(0);
 }
 
 static float ST_Tab(float x, float y, const char* label, int tab, const smRect_t* clip) {
     char upper[32];
-    float w;
+    float w = SM_NavTabWidth(label);
+    float baseline = SM_Baseline(FONT_SANS, 11, y, ST_NAV_H);
     qboolean chosen = (qboolean)(st.tab == tab);
     qboolean over = SM_Over(ST_HIT_TAB, tab);
 
     Q_strncpyz(upper, label, sizeof(upper));
     Q_strupr(upper);
-    w = SM_SpacedWidth(FONT_SANS, 11, upper, 1.0f, qtrue) + 40;
     if (chosen) {
-        SM_Fill(x, y, w, ST_ROW_H, stYellow, clip);
+        SM_Fill(x, y, w, ST_NAV_H, stYellow, clip);
     }
-    if (SM_TextInside(SM_Baseline(FONT_SANS, 11, y, ST_ROW_H), 11, clip)) {
-        SM_SpacedText(x + 20, SM_Baseline(FONT_SANS, 11, y, ST_ROW_H), FONT_SANS, 11,
-                      chosen ? stBlack : over ? stYellow : smText, upper, 1.0f, qtrue);
+    if (SM_TextInside(baseline, 11, clip)) {
+        SM_SpacedText(x + ST_NAV_PAD, baseline, FONT_SANS, 11, chosen ? stBlack : over ? stYellow : smText, upper, 1.0f,
+                      qtrue);
     }
-    SM_Hit(x, y, w, ST_ROW_H, ST_HIT_TAB, tab, clip);
+    SM_Hit(x, y, w, ST_NAV_H, ST_HIT_TAB, tab, clip);
     return w;
 }
 
 static float ST_ColumnWidth(int col, const char* head, char cells[][24], int count) {
-    float w = SM_AdvanceBold(FONT_SANS, 15, head, -1, qtrue);
+    float w = ST_TextBox(SM_AdvanceBold(FONT_SANS, 15, head, -1, qtrue));
     int i;
 
     for (i = 0; i < count; i++) {
-        float cw = SM_Advance(FONT_SANS, 15, cells[i], -1);
-
-        if (cw > w) {
-            w = cw;
-        }
+        w = ST_Max(w, ST_TextBox(SM_Advance(FONT_SANS, 15, cells[i], -1)));
     }
     return w + (col == 0 ? 0 : ST_CELL_PAD) + (col == 6 ? 0 : ST_CELL_PAD);
 }
 
-static float ST_DrawBasic(float x0, float y0, float innerW, const smRect_t* clip) {
+static void ST_DrawCards(float x0, float y0, const smRect_t* clip) {
     static const char* const cardTitles[5] = {"Kills", "Deaths", "KDR", "Record", "Played"};
-    static const char* const heads[7] = {"", "", "Kills", "Deaths", "Hits", "Shots", "Accuracy"};
-    char cells[7][ST_NUM_WEAPONS][24];
     char values[5][32];
-    float colW[7];
     stSummary_t s;
-    float y, tableW, bx, by;
-    int i, c;
+    float titleTop = y0 + SM_Len(ST_CARD_SIZE * 0.25f);
+    float valueTop = titleTop + ST_CARD_LINE + ST_Max(SM_Len(ST_CARD_SIZE * 0.25f), SM_Len(20.0f));
+    int i;
 
     ST_Summarize(&st.data, &s);
-
     Com_sprintf(values[0], sizeof(values[0]), "%i", s.kills);
     Com_sprintf(values[1], sizeof(values[1]), "%i", s.deaths);
     Com_sprintf(values[2], sizeof(values[2]), "%.2f", s.kdr);
@@ -330,27 +358,37 @@ static float ST_DrawBasic(float x0, float y0, float innerW, const smRect_t* clip
     }
     ST_Print(&st.data, "played", values[4], sizeof(values[4]));
 
+    SM_SetSpacing(SM_SPACING_H1);
     for (i = 0; i < 5; i++) {
         float cx = x0 + i * (ST_CARD_W + ST_CARD_GAP);
         int len = strlen(values[i]);
         float size = len > 10 ? 36.0f - 4.0f * (len - 10) : 36.0f;
-        float tw;
-
-        SM_SetSpacing(SM_SPACING_H1);
-        tw = SM_Advance(FONT_SANS, size, values[i], -1);
+        float tb = SM_Baseline(FONT_DEFAULT, ST_CARD_SIZE, titleTop, ST_CARD_LINE);
+        float vb = SM_Baseline(FONT_SANS, size, valueTop, SM_LineHeight(size, 1.25f));
 
         SM_Fill(cx, y0, ST_CARD_W, ST_CARD_H, stCard, clip);
-        if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 21.333f, y0 + 5.3f, 25.6f), 21.333f, clip)) {
-            SM_Text(cx + 4.27f, SM_Baseline(FONT_DEFAULT, 21.333f, y0 + 5.3f, 25.6f), FONT_DEFAULT, 21.333f, smText,
-                    cardTitles[i], -1, qfalse);
+        if (SM_TextInside(tb, ST_CARD_SIZE, clip)) {
+            SM_Text(cx + SM_Len(ST_CARD_SIZE * 0.2f), tb, FONT_DEFAULT, ST_CARD_SIZE, smText, cardTitles[i], -1, qfalse);
         }
-        if (SM_TextInside(SM_Baseline(FONT_SANS, size, y0 + 50.9f, 45.0f), size, clip)) {
-            SM_Text(cx + (ST_CARD_W - tw) * 0.5f, SM_Baseline(FONT_SANS, size, y0 + 50.9f, 45.0f), FONT_SANS, size,
-                    stYellow, values[i], SM_Fit(FONT_SANS, size, values[i], ST_CARD_W), qfalse);
+        if (SM_TextInside(vb, size, clip)) {
+            SM_Text(cx + SM_Center(ST_CARD_W, SM_Advance(FONT_SANS, size, values[i], -1)), vb, FONT_SANS, size, stYellow,
+                    values[i], SM_Fit(FONT_SANS, size, values[i], ST_CARD_W), qfalse);
         }
-        SM_SetSpacing(0);
     }
-    y = y0 + ST_CARD_H + 30.0f;
+    SM_SetSpacing(0);
+}
+
+static float ST_DrawBasic(float x0, float y0, float innerW, qboolean draw, const smRect_t* clip) {
+    static const char* const heads[7] = {"", "", "Kills", "Deaths", "Hits", "Shots", "Accuracy"};
+    char cells[7][ST_NUM_WEAPONS][24];
+    float colW[7];
+    float strut = SM_LineAbove(FONT_SANS, 15, ST_LINE, qfalse);
+    float rowH = ST_Max(ST_ICON, strut) + ST_LINE - strut;
+    float textTop = (float)((SM_Px(rowH) - SM_Px(ST_LINE)) / 2) / smScale;
+    float y = y0 + ST_CARD_H + ST_BLOCK_GAP;
+    float weaponsH = SM_TITLE_H + ST_LINE + ST_NUM_WEAPONS * rowH + ST_BLOCK_GAP;
+    float modsW, modsH, mx, my, tableW, tableTop, bx;
+    int i, c, mods = 0;
 
     for (i = 0; i < ST_NUM_WEAPONS; i++) {
         Q_strncpyz(cells[0][i], stWeapons[i].name, sizeof(cells[0][i]));
@@ -367,38 +405,56 @@ static float ST_DrawBasic(float x0, float y0, float innerW, const smRect_t* clip
     }
     tableW = 0;
     for (c = 0; c < 7; c++) {
-        colW[c] = c == 1 ? 32.0f + 2 * ST_CELL_PAD : ST_ColumnWidth(c, heads[c], cells[c], ST_NUM_WEAPONS);
+        colW[c] = c == 1 ? ST_ICON + 2 * ST_CELL_PAD : ST_ColumnWidth(c, heads[c], cells[c], ST_NUM_WEAPONS);
         tableW += colW[c];
     }
+    for (i = 0; i < ST_NUM_MODS; i++) {
+        int v = 0;
 
-    if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 32, y + 8, 38.4f), 32, clip)) {
-        SM_SetSpacing(SM_SPACING_H1);
-        SM_Text(x0 + 6.4f, SM_Baseline(FONT_DEFAULT, 32, y + 8, 38.4f), FONT_DEFAULT, 32, smText, "Weapons", -1,
-                qfalse);
-        SM_SetSpacing(0);
+        if (!stMods[i].optional || (ST_Has(&st.data, stMods[i].id, &v) && v)) {
+            mods++;
+        }
     }
-    by = y + 54.4f;
+    SM_SetSpacing(SM_SPACING_H1);
+    modsW = ST_Max(ST_MOD_W, ST_H1_LEFT + ST_TextBox(SM_Advance(FONT_DEFAULT, 32.0f, "Other Deaths", -1)));
+    SM_SetSpacing(0);
+    modsH = SM_TITLE_H + SM_Len(25.0f) + mods * (ST_MOD_H + ST_MOD_GAP);
+    mx = x0 + ST_Max(tableW, ST_H1_LEFT) + ST_WEAPONS_GAP;
+    my = y;
+    if (mx + modsW + ST_MODS_GAP > x0 + innerW) {
+        mx = x0;
+        my = y + ST_Max(weaponsH, ST_LINE);
+    }
+
+    if (!draw) {
+        return my - y0 + (my == y ? ST_Max(ST_Max(weaponsH, modsH), ST_LINE) : ST_Max(modsH, ST_LINE));
+    }
+
+    ST_DrawCards(x0, y0, clip);
+
+    ST_Heading(x0, y, "Weapons", clip);
+    tableTop = y + SM_TITLE_H;
     bx = x0;
     for (c = 0; c < 7; c++) {
         float right = bx + colW[c] - (c == 6 ? 0 : ST_CELL_PAD);
+        float hb = SM_Baseline(FONT_SANS, 15, tableTop, ST_LINE);
 
-        if (heads[c][0] && SM_TextInside(SM_Baseline(FONT_SANS, 15, by, ST_TH_H), 15, clip)) {
-            SM_Text(right - SM_AdvanceBold(FONT_SANS, 15, heads[c], -1, qtrue), SM_Baseline(FONT_SANS, 15, by, ST_TH_H),
-                    FONT_SANS, 15, smText, heads[c], -1, qtrue);
+        if (heads[c][0] && SM_TextInside(hb, 15, clip)) {
+            SM_Text(right - SM_AdvanceBold(FONT_SANS, 15, heads[c], -1, qtrue), hb, FONT_SANS, 15, smText, heads[c], -1,
+                    qtrue);
         }
         bx += colW[c];
     }
-    by += ST_TH_H;
     for (i = 0; i < ST_NUM_WEAPONS; i++) {
-        float ry = by + i * ST_TD_H;
-        float baseline = ry + 32.0f;
+        float ry = tableTop + ST_LINE + i * rowH;
+        float baseline = SM_Baseline(FONT_SANS, 15, ry + textTop, ST_LINE);
 
         bx = x0;
         for (c = 0; c < 7; c++) {
             float right = bx + colW[c] - (c == 6 ? 0 : ST_CELL_PAD);
 
             if (c == 1) {
-                SM_Pic(bx + ST_CELL_PAD, ry, 32, 32, st.weapon[i], clip);
+                SM_Pic(bx + ST_CELL_PAD, ry + ST_Max(0, strut - ST_ICON), ST_ICON, ST_ICON, st.weapon[i], clip);
             } else if (cells[c][i][0] && SM_TextInside(baseline, 15, clip)) {
                 SM_Text(right - SM_Advance(FONT_SANS, 15, cells[c][i], -1), baseline, FONT_SANS, 15, smText,
                         cells[c][i], -1, qfalse);
@@ -407,126 +463,148 @@ static float ST_DrawBasic(float x0, float y0, float innerW, const smRect_t* clip
         }
     }
 
+    ST_Heading(mx, my, "Other Deaths", clip);
+    my += SM_TITLE_H + SM_Len(25.0f);
     {
-        float mx = x0 + tableW + 100.0f;
-        float my = y + 79.4f;
-        float nameSize = 21.333f;
-        float space = SM_Advance(FONT_DEFAULT, nameSize, " ", -1);
-        float bottom = by + ST_NUM_WEAPONS * ST_TD_H + 30.0f;
+        float space = SM_Advance(FONT_SANS, 15, " ", -1);
+        float above = ST_Max(strut, ST_Max(SM_LineAbove(FONT_DEFAULT, ST_MOD_SIZE, ST_MOD_LINE, qfalse),
+                                           SM_LineAbove(FONT_DEFAULT, ST_MOD_SIZE, ST_MOD_LINE, qtrue)));
 
-        if (mx + ST_MOD_W > x0 + innerW) {
-            mx = x0;
-            y = bottom;
-            my = y + 79.4f;
-        }
-        if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 32, y + 8, 38.4f), 32, clip)) {
-            SM_SetSpacing(SM_SPACING_H1);
-            SM_Text(mx + 6.4f, SM_Baseline(FONT_DEFAULT, 32, y + 8, 38.4f), FONT_DEFAULT, 32, smText, "Other Deaths", -1,
-                    qfalse);
-            SM_SetSpacing(0);
-        }
         for (i = 0; i < ST_NUM_MODS; i++) {
             char number[16];
             int v = 0;
-            float nb;
+            float nb = my + ST_MOD_TOP + above;
+            float box = mx + ST_MOD_W - ST_MOD_NUMBER;
 
             if (stMods[i].optional && (!ST_Has(&st.data, stMods[i].id, &v) || !v)) {
                 continue;
             }
             ST_Print(&st.data, stMods[i].id, number, sizeof(number));
             SM_Pic(mx, my, ST_MOD_W, ST_MOD_H, st.mod[i], clip);
-            nb = SM_Baseline(FONT_DEFAULT, nameSize, my + 20.0f, 24.0f);
-            if (SM_TextInside(nb, nameSize, clip)) {
-                float numberW = SM_AdvanceBold(FONT_DEFAULT, nameSize, number, -1, qtrue);
-
-                ST_Shadowed(mx + ST_MOD_W - 40 - space - SM_Advance(FONT_DEFAULT, nameSize, stMods[i].name, -1), nb,
-                            FONT_DEFAULT, nameSize, smText, stMods[i].name, qfalse);
-                ST_Shadowed(mx + ST_MOD_W - 20 - numberW * 0.5f, nb, FONT_DEFAULT, nameSize, smText, number, qtrue);
+            if (SM_TextInside(nb, ST_MOD_SIZE, clip)) {
+                ST_Shadowed(box - space - SM_Advance(FONT_DEFAULT, ST_MOD_SIZE, stMods[i].name, -1), nb, FONT_DEFAULT,
+                            ST_MOD_SIZE, smText, stMods[i].name, qfalse);
+                if (number[0]) {
+                    ST_Shadowed(box + SM_Center(ST_MOD_NUMBER, SM_AdvanceBold(FONT_DEFAULT, ST_MOD_SIZE, number, -1,
+                                                                              qtrue)),
+                                nb, FONT_DEFAULT, ST_MOD_SIZE, smText, number, qtrue);
+                }
             }
             my += ST_MOD_H + ST_MOD_GAP;
         }
-        if (my > bottom) {
-            bottom = my;
-        }
-        return bottom - y0;
     }
+    return 0;
 }
 
-static float ST_DrawMedals(float x0, float y0, float innerW, const smRect_t* clip) {
-    int cols = (int)((innerW + ST_MEDAL_GAP) / (ST_MEDAL_W + ST_MEDAL_GAP));
+static float ST_DrawMedals(float x0, float y0, float innerW, qboolean draw, const smRect_t* clip) {
+    float stepX = ST_MEDAL_W + ST_MEDAL_GAP;
+    float stepY = ST_MEDAL_H + ST_MEDAL_GAP;
+    float fullW = ST_MEDAL_W - 2 * ST_MEDAL_PAD;
+    float wrapW = fullW - ST_MEDAL_PIC - SM_Len(10.0f);
+    float strut = SM_LineAbove(FONT_DEFAULT, 36.0f, ST_MEDAL_LINE, qtrue);
+    float picLine = ST_Max(ST_MEDAL_PIC, strut) + ST_MEDAL_LINE - strut;
+    int cols = SM_Px(stepX) > 0 ? SM_Px(innerW) / SM_Px(stepX) : 1;
     int i;
 
     if (cols < 1) {
         cols = 1;
     }
+    if (!draw) {
+        return ((ST_NUM_MEDALS + cols - 1) / cols) * stepY;
+    }
     for (i = 0; i < ST_NUM_MEDALS; i++) {
-        float mx = x0 + (i % cols) * (ST_MEDAL_W + ST_MEDAL_GAP);
-        float my = y0 + (i / cols) * (ST_MEDAL_H + ST_MEDAL_GAP);
+        float mx = x0 + (i % cols) * stepX;
+        float my = y0 + (i / cols) * stepY;
+        float dx = mx + ST_MEDAL_W - ST_MEDAL_PAD - ST_MEDAL_PIC;
+        float dy = my + ST_MEDAL_PAD;
+        float titleTop = dy + SM_Len(6.0f);
+        float textTop = titleTop + ST_MEDAL_TITLE_LINE + SM_Len(5.0f);
+        float tb = SM_Baseline(FONT_DEFAULT, 24, titleTop, ST_MEDAL_TITLE_LINE);
         char number[16];
         int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
-        int lines, k;
+        int pos, k;
+        float floatBottom;
 
         SM_Fill(mx, my, ST_MEDAL_W, ST_MEDAL_H, stBlack80, clip);
-
-        SM_Pic(mx + ST_MEDAL_W - 10 - 64, my + 10, 64, 64, st.medal[i], clip);
+        SM_Pic(dx, dy + ST_Max(ST_MEDAL_PIC, strut) - ST_MEDAL_PIC, ST_MEDAL_PIC, ST_MEDAL_PIC, st.medal[i], clip);
         ST_Print(&st.data, stMedals[i].id, number, sizeof(number));
         if (number[0]) {
             int len = strlen(number);
             float size = len > 3 ? 24.0f - 4.0f * (len - 3) : 36.0f;
-            float nb = SM_Baseline(FONT_DEFAULT, size, my + 77, 30);
+            float nb = dy + picLine + SM_LineAbove(FONT_DEFAULT, size, ST_MEDAL_LINE, qtrue);
 
             if (SM_TextInside(nb, size, clip)) {
-                ST_Shadowed(mx + ST_MEDAL_W - 10 - 32 - SM_AdvanceBold(FONT_DEFAULT, size, number, -1, qtrue) * 0.5f, nb,
+                ST_Shadowed(dx + SM_Center(ST_MEDAL_PIC, SM_AdvanceBold(FONT_DEFAULT, size, number, -1, qtrue)), nb,
                             FONT_DEFAULT, size, smText, number, qtrue);
             }
         }
 
-        if (SM_TextInside(SM_Baseline(FONT_DEFAULT, 24, my + 16, 28.8f), 24, clip)) {
+        if (SM_TextInside(tb, 24, clip)) {
             SM_SetSpacing(SM_SPACING_H1);
-            SM_Text(mx + 10 + 4.8f, SM_Baseline(FONT_DEFAULT, 24, my + 16, 28.8f), FONT_DEFAULT, 24, stYellow,
-                    stMedals[i].name, -1, qfalse);
+            SM_Text(mx + ST_MEDAL_PAD + SM_Len(4.8f), tb, FONT_DEFAULT, 24, stYellow, stMedals[i].name, -1, qfalse);
             SM_SetSpacing(0);
         }
-        lines = SM_Wrap(FONT_SANS, 12, stMedals[i].desc, ST_MEDAL_W - 20 - 64 - 10, starts, lens);
-        for (k = 0; k < lines; k++) {
-            float lb = SM_Baseline(FONT_SANS, 12, my + 50.8f + k * 19.2f, 19.2f);
+        floatBottom = dy + picLine + (number[0] ? ST_MEDAL_LINE : 0);
+        for (pos = 0, k = 0; stMedals[i].desc[pos] && k < SM_MAX_LINES; k++) {
+            float lineTop = textTop + k * ST_MEDAL_TEXT_LINE;
+            float lb = SM_Baseline(FONT_SANS, 12, lineTop, ST_MEDAL_TEXT_LINE);
+            const char* rest;
 
-            if (SM_TextInside(lb, 12, clip)) {
-                SM_Text(mx + 10, lb, FONT_SANS, 12, smText, stMedals[i].desc + starts[k], lens[k], qfalse);
+            while (stMedals[i].desc[pos] == ' ') {
+                pos++;
             }
+            rest = stMedals[i].desc + pos;
+            if (!SM_Wrap(FONT_SANS, 12, rest, lineTop < floatBottom ? wrapW : fullW, starts, lens)) {
+                break;
+            }
+            if (SM_TextInside(lb, 12, clip)) {
+                SM_Text(mx + ST_MEDAL_PAD, lb, FONT_SANS, 12, smText, rest + starts[0], lens[0], qfalse);
+            }
+            pos += starts[0] + lens[0];
         }
     }
-    return ((ST_NUM_MEDALS + cols - 1) / cols) * (ST_MEDAL_H + ST_MEDAL_GAP);
+    return 0;
+}
+
+static float ST_TitleAbove(void) {
+    return ST_Max(ST_AVATAR, SM_LineAbove(FONT_DEFAULT, 32.0f, SM_H1_LINE, qfalse));
+}
+
+static float ST_TitleHeight(void) {
+    return 2 * SM_H1_PAD + ST_TitleAbove() + SM_H1_LINE - SM_LineAbove(FONT_DEFAULT, 32.0f, SM_H1_LINE, qfalse);
 }
 
 static void ST_DrawTitle(float left, float top, float width, const smRect_t* clip) {
     char name[64];
-    float nx = left + 6.4f + ST_AVATAR;
-    float baseline = top + 8 + ST_AVATAR;
+    float baseline = top + SM_H1_PAD + ST_TitleAbove();
+    float px = left + ST_H1_LEFT;
+    float py = baseline - ST_AVATAR;
+    float nx;
 
-    SM_Fill(left, top, width, ST_TITLE_H, stBlack80, clip);
+    SM_Fill(left, top, width, ST_TitleHeight(), stBlack80, clip);
     if (!st.steamId[0]) {
         qhandle_t face = UI_Home_Face();
 
         if (face) {
-            SM_Pic(left + 6.4f, top + 8, ST_AVATAR, ST_AVATAR, face, clip);
+            SM_Pic(px, py, ST_AVATAR, ST_AVATAR, face, clip);
         }
     } else if (SM_Avatar(st.steamId)) {
-        SM_Pic(left + 6.4f, top + 8, ST_AVATAR, ST_AVATAR, SM_Avatar(st.steamId), clip);
+        SM_Pic(px, py, ST_AVATAR, ST_AVATAR, SM_Avatar(st.steamId), clip);
     } else {
         char initial[8];
+        float edge = SM_LenBorder(2.0f);
 
-        SM_Fill(left + 6.4f, top + 8, ST_AVATAR, ST_AVATAR, smPage, clip);
-        SM_Fill(left + 8.4f, top + 10, ST_AVATAR - 4, ST_AVATAR - 4, smField, clip);
+        SM_Fill(px, py, ST_AVATAR, ST_AVATAR, smPage, clip);
+        SM_Fill(px + edge, py + edge, ST_AVATAR - 2 * edge, ST_AVATAR - 2 * edge, smField, clip);
         ST_StripColors(st.data.name, initial, 2);
-        if (initial[0] && SM_TextInside(SM_Baseline(FONT_DEFAULT, 32, top + 8, ST_AVATAR), 32, clip)) {
-            SM_Text(left + 6.4f + (ST_AVATAR - SM_Advance(FONT_DEFAULT, 32, initial, -1)) * 0.5f,
-                    SM_Baseline(FONT_DEFAULT, 32, top + 8, ST_AVATAR), FONT_DEFAULT, 32, smText, initial, -1, qfalse);
+        if (initial[0] && SM_TextInside(SM_Baseline(FONT_DEFAULT, 32, py, ST_AVATAR), 32, clip)) {
+            SM_Text(px + SM_Center(ST_AVATAR, SM_Advance(FONT_DEFAULT, 32, initial, -1)),
+                    SM_Baseline(FONT_DEFAULT, 32, py, ST_AVATAR), FONT_DEFAULT, 32, smText, initial, -1, qfalse);
         }
     }
     ST_StripColors(st.data.name, name, sizeof(name));
     SM_SetSpacing(SM_SPACING_H1);
-    nx += SM_Advance(FONT_DEFAULT, 32, " ", -1);
+    nx = px + ST_AVATAR + SM_Advance(FONT_DEFAULT, 32, " ", -1);
     if (name[0] && SM_TextInside(baseline, 32, clip)) {
         SM_Text(nx, baseline, FONT_DEFAULT, 32, smText, name, SM_Fit(FONT_DEFAULT, 32, name, left + width - nx), qfalse);
     }
@@ -562,9 +640,9 @@ void UI_Stats_Open(void) {
 
 void UI_Stats_Paint(void) {
     float left = UI_Home_Left();
-    float width = HM_CONTAINER_W;
-    float view = smBottom - ST_BOTTOM - HM_NAV_H;
-    float top, y, inner;
+    float width = HM_CONTAINER_W - ST_BAR;
+    float view = UI_Home_FrameBottom() - HM_NAV_H;
+    float top, navY, y, inner;
     smRect_t clip;
 
     SM_BeginFrame();
@@ -573,31 +651,30 @@ void UI_Stats_Paint(void) {
     UI_Home_Backdrop();
     UI_Home_PageTop(HM_NAV_STATS);
 
+    inner = st.tab == 0 ? ST_DrawBasic(left + ST_PAD, 0, width - 2 * ST_PAD, qfalse, NULL)
+                        : ST_DrawMedals(left + ST_PAD, 0, width - 2 * ST_PAD, qfalse, NULL);
+    st.content = ST_TitleHeight() + ST_NAV_H + ST_NAV_GAP + 2 * ST_PAD + inner;
     if (st.scroll > st.content - view) {
         st.scroll = st.content - view;
     }
     if (st.scroll < 0) {
         st.scroll = 0;
     }
-    clip = SM_R(left, HM_NAV_H, width, view);
+    clip = SM_R(left, HM_NAV_H, HM_CONTAINER_W, view);
     top = HM_NAV_H - st.scroll;
 
     ST_DrawTitle(left, top, width, &clip);
+    navY = top + ST_TitleHeight();
+    SM_Fill(left, navY, width, ST_NAV_H, stBlack80, &clip);
+    ST_Tab(left + ST_Tab(left, navY, "Statistics", 0, &clip), navY, "Medals", 1, &clip);
 
-    y = top + ST_TITLE_H;
-    SM_Fill(left, y, width, ST_ROW_H, stBlack80, &clip);
-    {
-        float bx = left;
-
-        bx += ST_Tab(bx, y, "Statistics", 0, &clip);
-        ST_Tab(bx, y, "Medals", 1, &clip);
+    y = navY + ST_NAV_H + ST_NAV_GAP;
+    SM_Fill(left, y, width, inner + 2 * ST_PAD, stBlack80, &clip);
+    if (st.tab == 0) {
+        ST_DrawBasic(left + ST_PAD, y + ST_PAD, width - 2 * ST_PAD, qtrue, &clip);
+    } else {
+        ST_DrawMedals(left + ST_PAD, y + ST_PAD, width - 2 * ST_PAD, qtrue, &clip);
     }
-    y += ST_ROW_H + ST_ROW_GAP;
-
-    SM_Fill(left, y, width, st.content - (y - top) > 0 ? st.content - (y - top) : 0, stBlack80, &clip);
-    inner = st.tab == 0 ? ST_DrawBasic(left + ST_PAD, y + ST_PAD, width - 2 * ST_PAD, &clip)
-                        : ST_DrawMedals(left + ST_PAD, y + ST_PAD, width - 2 * ST_PAD, &clip);
-    st.content = (y - top) + inner + 2 * ST_PAD;
 
     UI_Home_Banner();
     SM_EndFrame();

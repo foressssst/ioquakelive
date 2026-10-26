@@ -416,6 +416,14 @@ float SM_StrutBelow(float size, float lineHeight) {
     return (float)(line - ascent - (line - ascent - descent) / 2) / smScale;
 }
 
+float SM_LineAbove(int font, float size, float lineHeight, qboolean bold) {
+    int ascent, descent, line;
+
+    SM_FaceMetrics(SM_Face(font, bold), size, &ascent, &descent);
+    line = SM_Px(lineHeight);
+    return (float)(ascent + (line - ascent - descent) / 2) / smScale;
+}
+
 float SM_IconBaseline(float size, float lineTop, float lineHeight) {
     return SM_FaceBaseline(smFonts.awesome, size, lineTop, lineHeight);
 }
@@ -580,6 +588,14 @@ static float SM_WebButtonText(const char* upper) {
         w += SM_AdvanceBold(FONT_SANS, 11, upper, 1, qtrue) + spacing;
     }
     return w;
+}
+
+float SM_NavTabWidth(const char* label) {
+    char upper[64];
+
+    Q_strncpyz(upper, label, sizeof(upper));
+    Q_strupr(upper);
+    return ceilf(SM_WebButtonText(upper) * smScale - 0.01f) / smScale + 2 * SM_Len(20.0f);
 }
 
 float SM_WebButtonWidth(const char* label) {

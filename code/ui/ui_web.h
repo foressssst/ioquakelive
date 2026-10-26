@@ -167,6 +167,7 @@ float SM_Ascent(int font, float size);
 float SM_Descent(int font, float size);
 float SM_IconBaseline(float size, float lineTop, float lineHeight);
 float SM_StrutBelow(float size, float lineHeight);
+float SM_LineAbove(int font, float size, float lineHeight, qboolean bold);
 float SM_Center(float room, float width);
 float SM_CenterLine(float room, float width);
 qboolean SM_TextInside(float baseline, float size, const smRect_t* clip);
@@ -200,6 +201,7 @@ typedef enum {
 float SM_ButtonWidth(const char* text, float height);
 #define SM_WEB_BUTTON_H SM_Len(30.0f)
 float SM_WebButtonWidth(const char* label);
+float SM_NavTabWidth(const char* label);
 void SM_WebButton(float x, float y, float w, const char* label, qboolean disabled, qboolean over,
                   const smRect_t* clip);
 void SM_WebButtonPadded(float x, float y, float w, float padLeft, float padRight, const char* label,
