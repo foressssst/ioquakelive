@@ -213,6 +213,17 @@ void SM_Cross(float x, float y, float size, const float* color) {
     }
 }
 
+void SM_Circle(float cx, float cy, float radius, const float* color, const smRect_t* clip) {
+    float dot = 1.0f / smScale;
+    int i;
+
+    for (i = 0; i < 24; i++) {
+        float a = i * (2 * M_PI / 24);
+
+        SM_Fill(cx + cos(a) * radius - dot * 0.5f, cy + sin(a) * radius - dot * 0.5f, dot, dot, color, clip);
+    }
+}
+
 void SM_To640(float x, float y, float w, float h, float* out) {
     float xscale = uiInfo.uiDC.xscale;
     float yscale = uiInfo.uiDC.yscale;

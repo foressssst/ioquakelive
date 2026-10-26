@@ -149,6 +149,7 @@ void SM_PicColor(float x, float y, float w, float h, qhandle_t shader, const flo
 void SM_Arrow(float x, float y, qboolean up);
 void SM_Chevron(float x, float y, qboolean up, const float* color);
 void SM_Cross(float x, float y, float size, const float* color);
+void SM_Circle(float cx, float cy, float radius, const float* color, const smRect_t* clip);
 void SM_To640(float x, float y, float w, float h, float* out);
 
 void SM_DrawPlayerIn(playerInfo_t* pi, float x, float y, float w, float h);

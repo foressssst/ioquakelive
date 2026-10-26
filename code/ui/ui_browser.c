@@ -932,17 +932,6 @@ static void BR_ListBar(float x, float top, float view, float content, float scro
     SM_Fill(x, thumbY, BR_SCROLLBAR, thumbH, over ? brThumbHover : brThumb, NULL);
 }
 
-static void BR_Circle(float cx, float cy, float radius, const float* color, const smRect_t* clip) {
-    float dot = 1.0f / smScale;
-    int i;
-
-    for (i = 0; i < 24; i++) {
-        float a = i * (2 * M_PI / 24);
-
-        SM_Fill(cx + cos(a) * radius - dot * 0.5f, cy + sin(a) * radius - dot * 0.5f, dot, dot, color, clip);
-    }
-}
-
 static float BR_ClampScroll(float scroll) {
     if (scroll > br.content - br.view) {
         scroll = br.content - br.view;
@@ -1740,7 +1729,7 @@ static void BR_DrawDetails(float x, float top, float w, float height) {
             if (face) {
                 SM_Pic(cx - avatar * 0.5f, cy - avatar * 0.5f, avatar, avatar, face, &clip);
             } else {
-                BR_Circle(cx, cy, radius, brInfo, &clip);
+                SM_Circle(cx, cy, radius, brInfo, &clip);
             }
             BR_PlayerIn(x + padH + ascent / smScale, lt, lineB, 15, brInfo, name, line, &clip);
             n++;
