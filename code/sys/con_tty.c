@@ -23,9 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../qcommon/qcommon.h"
 #include "sys_local.h"
 
-#ifndef DEDICATED
 #include "../client/client.h"
-#endif
 
 #include <unistd.h>
 #include <signal.h>
@@ -50,11 +48,7 @@ static field_t TTY_con;
 static field_t ttyEditLines[CON_HISTORY];
 static int hist_current = -1, hist_count = 0;
 
-#ifndef DEDICATED
 #define TTY_CONSOLE_PROMPT "tty]"
-#else
-#define TTY_CONSOLE_PROMPT "]"
-#endif
 
 static void CON_Back(void) {
     char key;
@@ -220,7 +214,6 @@ char* CON_Input(void) {
             }
             if ((key) && (key) < ' ') {
                 if (key == '\n') {
-#ifndef DEDICATED
                     if (!cl_allowConsoleChat->integer && TTY_con.cursor &&
                         TTY_con.buffer[0] != '/' && TTY_con.buffer[0] != '\\') {
                         memmove(TTY_con.buffer + 1, TTY_con.buffer, sizeof(TTY_con.buffer) - 1);
@@ -245,14 +238,6 @@ char* CON_Input(void) {
                     Com_Printf("%s%s\n", TTY_CONSOLE_PROMPT, TTY_con.buffer);
                     Field_Clear(&TTY_con);
                     CON_Show();
-#else
-                    Hist_Add(&TTY_con);
-                    Q_strncpyz(text, TTY_con.buffer, sizeof(text));
-                    Field_Clear(&TTY_con);
-                    key = '\n';
-                    size = write(STDOUT_FILENO, &key, 1);
-                    size = write(STDOUT_FILENO, TTY_CONSOLE_PROMPT, strlen(TTY_CONSOLE_PROMPT));
-#endif
                     return text;
                 }
                 if (key == '\t') {

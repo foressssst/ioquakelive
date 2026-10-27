@@ -34,10 +34,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <emscripten/emscripten.h>
 #endif
 
-#ifndef DEDICATED
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
-#endif
 
 #include "sys_local.h"
 #include "sys_loadlib.h"
@@ -79,12 +77,10 @@ char* Sys_DefaultAppPath(void) {
 #endif
 
 void Sys_In_Restart_f(void) {
-#ifndef DEDICATED
     if (!SDL_WasInit(SDL_INIT_VIDEO)) {
         Com_Printf("in_restart: Cannot restart input while video is shutdown\n");
         return;
     }
-#endif
 
     IN_Restart();
 }
@@ -94,27 +90,16 @@ char* Sys_ConsoleInput(void) {
 }
 
 void Sys_SetClipboardData(const char* text) {
-#ifndef DEDICATED
     SDL_SetClipboardText(text);
-#else
-    (void)text;
-#endif
 }
 
 void Sys_OpenURL(const char* url) {
-#ifndef DEDICATED
     if (!SDL_OpenURL(url)) {
         Com_Printf("^3could not open %s: %s\n", url, SDL_GetError());
     }
-#else
-    (void)url;
-#endif
 }
 
 char* Sys_GetClipboardData(void) {
-#ifdef DEDICATED
-    return NULL;
-#else
     char* data = NULL;
     char* cliptext;
 
@@ -130,14 +115,9 @@ char* Sys_GetClipboardData(void) {
         SDL_free(cliptext);
     }
     return data;
-#endif
 }
 
-#ifdef DEDICATED
-#define PID_FILENAME PRODUCT_NAME "_server.pid"
-#else
 #define PID_FILENAME "profile.pid"
-#endif
 
 static char* Sys_PIDFileName(const char* gamedir) {
     const char* homePath = Cvar_VariableString("fs_homepath");
@@ -194,16 +174,10 @@ qboolean Sys_WritePIDFile(const char* gamedir) {
 static __attribute__((noreturn)) void Sys_Exit(int exitCode) {
     CON_Shutdown();
 
-#ifndef DEDICATED
     SDL_Quit();
-#endif
 
     if (exitCode < 2 && com_fullyInitialized) {
-#ifdef DEDICATED
-        Sys_RemovePIDFile(FS_GetCurrentGameDir());
-#else
         Sys_RemovePIDFile(BASEGAME_DIR);
-#endif
     }
 
     NET_Shutdown();
@@ -220,7 +194,6 @@ void Sys_Quit(void) {
 cpuFeatures_t Sys_GetProcessorFeatures(void) {
     cpuFeatures_t features = 0;
 
-#ifndef DEDICATED
 #if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64)
     features |= CF_RDTSC;
 #endif
@@ -232,7 +205,6 @@ cpuFeatures_t Sys_GetProcessorFeatures(void) {
         features |= CF_SSE2;
     if (SDL_HasAltiVec())
         features |= CF_ALTIVEC;
-#endif
 
     return features;
 }
@@ -351,15 +323,6 @@ void Sys_UnloadDll(void* dllHandle) {
     Sys_UnloadLibrary(dllHandle);
 }
 
-#ifdef DEDICATED
-Q_HOOKABLE void Sys_SetModuleOffset(char* moduleName, void* offset) {
-    Com_Printf("Sys_SetModuleOffset: %s 0x%llX\n", moduleName, (unsigned long long)(intptr_t)offset);
-    if (strcmp(moduleName, "qagame") && strcmp(moduleName, "cgame") && strcmp(moduleName, "ui")) {
-        Com_Printf("Unknown module!\n");
-    }
-}
-#endif
-
 void* Sys_LoadDll(const char* name, qboolean useSystemLib) {
     void* dllhandle = NULL;
 
@@ -456,11 +419,7 @@ void Sys_ParseArgs(int argc, char** argv) {
     if (argc == 2) {
         if (!strcmp(argv[1], "--version") ||
             !strcmp(argv[1], "-v")) {
-#ifdef DEDICATED
-            fprintf(stdout, FULL_PRODUCT_VERSION " dedicated server\n");
-#else
             fprintf(stdout, FULL_PRODUCT_VERSION " client\n");
-#endif
             Sys_Exit(0);
         }
     }
@@ -526,9 +485,7 @@ void Sys_SigHandler(int signal) {
     } else {
         signalcaught = qtrue;
         VM_Forced_Unload_Start();
-#ifndef DEDICATED
         CL_Shutdown(va("Received signal %d", signal), qtrue, qtrue);
-#endif
         SV_Shutdown(va("Received signal %d", signal));
         VM_Forced_Unload_Done();
     }
@@ -550,8 +507,6 @@ int main(int argc, char** argv) {
     extern void Sys_LaunchAutoupdater(int argc, char** argv);
     Sys_LaunchAutoupdater(argc, argv);
 
-#ifndef DEDICATED
-
 #if !SDL_VERSION_ATLEAST(MINSDL_MAJOR, MINSDL_MINOR, MINSDL_PATCH)
 #error A more recent version of SDL is required
 #endif
@@ -571,7 +526,6 @@ int main(int argc, char** argv) {
 
         Sys_Exit(1);
     }
-#endif
 
     Sys_PlatformInit();
 

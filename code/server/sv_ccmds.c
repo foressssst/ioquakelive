@@ -740,10 +740,8 @@ void SV_AddOperatorCommands(void) {
     Cmd_SetCommandCompletionFunc("devmap", SV_CompleteMapName);
     Cmd_AddCommand("killserver", SV_KillServer_f);
     Cmd_AddCommand("steam_downloadugc", Steam_DownloadUGC_f);
-#ifndef DEDICATED
     Cmd_AddCommand("steam_subscribeugc", Steam_SubscribeUGC_f);
     Cmd_AddCommand("steam_unsubscribeugc", Steam_UnsubscribeUGC_f);
-#endif
     if (com_dedicated->integer) {
         Cmd_AddCommand("say", SV_ConSay_f);
     }

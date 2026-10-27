@@ -1307,9 +1307,6 @@ static void SV_LoadGameProgs(void) {
     memset(sv_vmMainTable, 0, sizeof(sv_vmMainTable));
     sv_apiVersion = 0;
     dllEntry(sv_vmMainTable, &sv_gameImports, &sv_apiVersion);
-#ifdef DEDICATED
-    Sys_SetModuleOffset("qagame", (void*)dllEntry);
-#endif
     SV_MinqlxSetGame(sv_vmMainTable[GAME_MINQLX]);
 
     Com_Printf("Game DLL loaded, API version %d\n", sv_apiVersion);

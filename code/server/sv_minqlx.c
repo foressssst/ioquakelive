@@ -1222,7 +1222,7 @@ static mqObject* MQ_InitModule(void) {
     if (!module) {
         return NULL;
     }
-    py.PyModule_AddStringConstant(module, "__version__", "ioqlds-" PRODUCT_VERSION);
+    py.PyModule_AddStringConstant(module, "__version__", "ioquakelive-" PRODUCT_VERSION);
     py.PyModule_AddObject(module, "DEBUG", MQ_Bool(qfalse));
     for (i = 0; i < (int)ARRAY_LEN(mqConstants); i++) {
         py.PyModule_AddIntConstant(module, mqConstants[i].name, mqConstants[i].value);

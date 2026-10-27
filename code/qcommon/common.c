@@ -90,10 +90,8 @@ static void Com_JobTest_f(void);
 cvar_t* com_preciseFrameTiming;
 static int64_t com_frameTargetUs;
 static void Com_FrameTimes_f(void);
-#ifndef DEDICATED
 cvar_t* cl_allowConsoleChat;
 cvar_t* com_allowConsole;
-#endif
 
 int time_game;
 int time_frontend;
@@ -141,10 +139,8 @@ void Com_EndRedirect(void) {
     rd_flush = NULL;
 }
 
-#ifndef DEDICATED
 static cvar_t* com_ignoreCrash;
 static cvar_t* com_crashed;
-#endif
 static cvar_t* con_completionStyle;
 
 static const char* Com_StripConsoleColors(const char* in, char* out, int outSize) {
@@ -200,9 +196,7 @@ Q_HOOKABLE void QDECL Com_Printf(const char* fmt, ...) {
         return;
     }
 
-#ifndef DEDICATED
     CL_ConsolePrint(msg);
-#endif
 
     Sys_Print((char*)plain);
 
@@ -354,9 +348,7 @@ void Com_Quit_f(void) {
         VM_Forced_Unload_Done();
         Com_Shutdown();
         FS_Shutdown(qtrue);
-#ifndef DEDICATED
         CL_UpdateApplyOnExit();
-#endif
     }
     Sys_Quit();
 }
@@ -402,11 +394,9 @@ void Com_ParseCommandLine(char* commandLine) {
 qboolean Com_SafeMode(void) {
     int i;
 
-#ifndef DEDICATED
     if (com_crashed && com_crashed->integer && !com_ignoreCrash->integer) {
         return qtrue;
     }
-#endif
     for (i = 0; i < com_numConsoleLines; i++) {
         Cmd_TokenizeString(com_consoleLines[i]);
         if (!Q_stricmp(Cmd_Argv(0), "safe") || !Q_stricmp(Cmd_Argv(0), "cvar_restart")) {
@@ -1320,14 +1310,10 @@ void CL_ShutdownUI(void);
 void SV_ShutdownGameProgs(void);
 
 void Hunk_Clear(void) {
-#ifndef DEDICATED
     CL_ShutdownCGame();
     CL_ShutdownUI();
-#endif
     SV_ShutdownGameProgs();
-#ifndef DEDICATED
     CIN_CloseAllVideos();
-#endif
     hunk_low.mark = 0;
     hunk_low.permanent = 0;
     hunk_low.temp = 0;
@@ -1922,7 +1908,6 @@ static void Com_MigrateConfig(void) {
         Cvar_Set("com_configVersion", va("%i", COM_CONFIG_VERSION));
 }
 
-#ifndef DEDICATED
 static void Com_CheckCrash(void) {
     com_ignoreCrash = Cvar_Get("com_ignoreCrash", "0", 0);
     com_crashed = Cvar_Get("com_crashed", "0", CVAR_ROM);
@@ -1944,7 +1929,6 @@ static void Com_CheckCrash(void) {
         Cvar_Set("com_ignoreCrash", "1");
     }
 }
-#endif
 
 void Com_ExecuteCfg(void) {
     const qboolean safe = Com_SafeMode();
@@ -1954,11 +1938,7 @@ void Com_ExecuteCfg(void) {
     Cbuf_Execute();
 
     {
-#ifdef DEDICATED
-        const qboolean dedicated = qtrue;
-#else
         const qboolean dedicated = (qboolean)(Cvar_VariableIntegerValue("dedicated") != 0);
-#endif
 
         if (dedicated) {
             Cbuf_ExecuteText(EXEC_NOW, "exec server.cfg\n");
@@ -2064,11 +2044,9 @@ void Com_Init(char* commandLine) {
     com_basegame = Cvar_Get("com_basegame", BASEGAME_DIR, CVAR_INIT);
     com_homepath = Cvar_Get("com_homepath", "", CVAR_INIT | CVAR_PROTECTED);
 
-#ifndef DEDICATED
     if (!Cvar_VariableIntegerValue("dedicated")) {
         Steam_Init();
     }
-#endif
     FS_InitFilesystem();
 
     Com_InitJournaling();
@@ -2087,9 +2065,7 @@ void Com_Init(char* commandLine) {
     Cmd_SetCommandCompletionFunc("writeconfig", Cmd_CompleteCfgName);
     Cmd_AddCommand("writeClientConfig", Com_WriteClientConfig_f);
 
-#ifndef DEDICATED
     Com_CheckCrash();
-#endif
 
     SV_RegisterGameCvars();
     CL_RegisterCGameCvars();
@@ -2098,13 +2074,8 @@ void Com_Init(char* commandLine) {
 
     Com_StartupVariable(NULL);
 
-#ifdef DEDICATED
-    com_dedicated = Cvar_Get("dedicated", "1", CVAR_INIT);
-    Cvar_CheckRange(com_dedicated, 1, 2, qtrue);
-#else
     com_dedicated = Cvar_Get("dedicated", "0", CVAR_LATCH);
     Cvar_CheckRange(com_dedicated, 0, 2, qtrue);
-#endif
     Com_InitHunkMemory();
 
     cvar_modifiedFlags &= ~CVAR_ARCHIVE;
@@ -2147,14 +2118,12 @@ void Com_Init(char* commandLine) {
     Cvar_Get("sv_idleRestart", "1", 0);
     Cvar_Get("fs_copyfiles", "0", CVAR_INIT);
     Cvar_Get("fs_restrict", "", CVAR_INIT);
-#ifndef DEDICATED
     Cvar_Get("cl_platform", "1", CVAR_ROM);
     Cvar_Get("in_joyBallScale", "1.0", CVAR_ARCHIVE);
     Cvar_Get("in_mididevice", "0", CVAR_ARCHIVE);
     Cvar_Get("in_midiport", "1", CVAR_ARCHIVE);
     Cvar_Get("r_lastValidRenderer", "(uninitialized)", CVAR_ARCHIVE);
     Cvar_Get("r_maskMinidriver", "0", CVAR_LATCH);
-#endif
     com_workers = Cvar_Get("com_workers", "-1", CVAR_ARCHIVE | CVAR_LATCH);
     com_preciseFrameTiming = Cvar_Get("com_preciseFrameTiming", "1", CVAR_ARCHIVE);
 
@@ -2167,11 +2136,9 @@ void Com_Init(char* commandLine) {
     com_protocol = Cvar_Get("com_protocol", va("%i", PROTOCOL_VERSION), CVAR_INIT);
     Cvar_Get("protocol", com_protocol->string, CVAR_SERVERINFO | CVAR_ROM);
 
-#ifndef DEDICATED
     cl_allowConsoleChat = Cvar_Get("cl_allowConsoleChat", "0", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
     Cvar_Get("web_browserActive", "0", CVAR_ROM);
     com_allowConsole = Cvar_Get("com_allowConsole", "1", CVAR_ARCHIVE | CVAR_REPLICATE | CVAR_USERSAVE);
-#endif
 
     con_completionStyle = Cvar_Get("con_completionStyle", "0", CVAR_ARCHIVE);
     Cvar_CheckRange(con_completionStyle, 0, 1, qtrue);
@@ -2181,10 +2148,6 @@ void Com_Init(char* commandLine) {
 
     Sys_Init();
 
-#ifdef DEDICATED
-    Sys_WritePIDFile(FS_GetCurrentGameDir());
-#endif
-
     Com_RandomBytes((byte*)&qport, sizeof(int));
     Netchan_Init(qport & 0xffff);
 
@@ -2192,16 +2155,11 @@ void Com_Init(char* commandLine) {
     SV_Init();
 
     Steam_GS_Init();
-#ifdef DEDICATED
-    SV_WorkshopInit();
-#endif
 
     ZMQ_Init();
 
     com_dedicated->modified = qfalse;
-#ifndef DEDICATED
     CL_Init();
-#endif
 
     com_frameTime = Com_Milliseconds();
 
@@ -2320,9 +2278,7 @@ void Com_WriteConfiguration(void) {
         return;
     }
 
-#ifndef DEDICATED
     Com_WriteSplitConfig(QZCONFIG_CFG, REPCONFIG_CFG);
-#endif
 }
 
 void Com_WriteConfig_f(void) {
@@ -2656,7 +2612,6 @@ static void Com_JobTest_f(void) {
 static int Com_FrameCap(void) {
     int cap = com_maxfps->integer;
 
-#ifndef DEDICATED
     if (com_maxfpsVRR->integer) {
         int hz = CL_DisplayFrequency();
 
@@ -2664,7 +2619,6 @@ static int Com_FrameCap(void) {
             cap = hz - 3;
         }
     }
-#endif
     return cap;
 }
 
@@ -2808,11 +2762,9 @@ void Com_Frame(void) {
 
     Com_FrameTimeSample();
 
-#ifndef DEDICATED
     if (!com_dedicated->integer) {
         CL_LowLatencyWait();
     }
-#endif
 
     IN_Frame();
 
@@ -2840,7 +2792,6 @@ void Com_Frame(void) {
         }
     }
 
-#ifndef DEDICATED
     if (com_speeds->integer) {
         timeBeforeEvents = Sys_Milliseconds();
     }
@@ -2856,13 +2807,6 @@ void Com_Frame(void) {
     if (com_speeds->integer) {
         timeAfter = Sys_Milliseconds();
     }
-#else
-    if (com_speeds->integer) {
-        timeAfter = Sys_Milliseconds();
-        timeBeforeEvents = timeAfter;
-        timeBeforeClient = timeAfter;
-    }
-#endif
 
     NET_FlushPacketQueue();
 
@@ -3007,12 +2951,10 @@ static int Field_ListStyle(void) {
 }
 
 static int Field_ListWidth(void) {
-#ifndef DEDICATED
     const int width = Con_GetLineWidth();
     if (width > 16) {
         return width;
     }
-#endif
     return 78;
 }
 
@@ -3176,7 +3118,6 @@ static qboolean Field_Complete(void) {
     return qfalse;
 }
 
-#ifndef DEDICATED
 void Field_CompleteKeyname(void) {
     Field_BeginMatches();
 
@@ -3185,7 +3126,6 @@ void Field_CompleteKeyname(void) {
     if (!Field_Complete())
         Key_KeynameCompletion(PrintMatches);
 }
-#endif
 
 void Field_CompleteList(const char* const* list, int count) {
     int i;
@@ -3220,10 +3160,8 @@ void Field_CompleteFilename(const char* dir,
 }
 
 static void Field_CompleteAnyArgument(const char* baseCmd, char* args, int argNum) {
-#ifndef DEDICATED
     if (CL_CompleteArgumentAlias(baseCmd, args, argNum))
         return;
-#endif
 
     if (completionString[0] == '\\' || completionString[0] == '/')
         completionString++;
@@ -3235,16 +3173,12 @@ static void Field_CompleteAnyArgument(const char* baseCmd, char* args, int argNu
 
     Cmd_CommandCompletion(FindMatches);
     Cvar_CommandCompletion(FindMatches);
-#ifndef DEDICATED
     CL_ArgumentCompletion(FindMatches);
-#endif
 
     if (!Field_Complete()) {
         Cmd_CommandCompletion(PrintMatches);
         Cvar_CommandCompletion(PrintCvarMatches);
-#ifndef DEDICATED
         CL_ArgumentCompletion(PrintMatches);
-#endif
     }
 }
 
@@ -3264,7 +3198,6 @@ void Field_CompleteCommand(char* cmd,
     } else
         completionString = Cmd_Argv(completionArgument - 1);
 
-#ifndef DEDICATED
     if (cl_allowConsoleChat->integer && completionField->buffer[0] &&
         completionField->buffer[0] != '\\') {
         if (completionField->buffer[0] != '/') {
@@ -3280,16 +3213,13 @@ void Field_CompleteCommand(char* cmd,
 
         completionField->buffer[0] = '\\';
     }
-#endif
 
     if (completionArgument > 1) {
         const char* baseCmd = Cmd_Argv(0);
         char* p;
 
-#ifndef DEDICATED
         if (baseCmd[0] == '\\' || baseCmd[0] == '/')
             baseCmd++;
-#endif
 
         if ((p = Field_FindFirstSeparator(cmd)))
             Field_CompleteCommand(p + 1, qtrue, qtrue);

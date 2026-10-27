@@ -1185,12 +1185,8 @@ void NET_OpenIP(void) {
 static qboolean NET_GetCvars(void) {
     int modified;
 
-#ifdef DEDICATED
-    net_enabled = Cvar_Get("net_enabled", "1", CVAR_LATCH | CVAR_ARCHIVE);
-#else
     net_enabled = Cvar_Get("net_enabled", "3", CVAR_LATCH | CVAR_ARCHIVE);
     Cvar_Get("net_noudp", "0", CVAR_LATCH);
-#endif
     Cvar_Get("net_strict", "0", 0);
     modified = net_enabled->modified;
     net_enabled->modified = qfalse;

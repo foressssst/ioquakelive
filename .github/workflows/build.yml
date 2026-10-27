@@ -51,13 +51,6 @@ jobs:
       run: |
         export PKG_CONFIG_PATH="$GITHUB_WORKSPACE/sdl3-local/lib/pkgconfig"
         make release -j$(nproc)
-    - name: Start the dedicated server once
-      run: |
-        mkdir -p empty
-        timeout 60 build/release-linux-$BIN_ARCH/ioqlds.$BIN_ARCH +set fs_basepath "$PWD/empty" \
-          +set fs_homepath "$PWD/empty" +quit > ded.log 2>&1 || true
-        cat ded.log
-        grep -q "linux-$BIN_ARCH" ded.log
     - name: Stage build outputs
       run: |
         mkdir -p staging/libs staging/engine
@@ -66,7 +59,7 @@ jobs:
         cp build/release-linux-$BIN_ARCH/baseq3/ui$BIN_ARCH.so     staging/libs/
         cp -L "$GITHUB_WORKSPACE/sdl3-local/lib/libSDL3.so.0" build/release-linux-$BIN_ARCH/
         tar -C build/release-linux-$BIN_ARCH -cf staging/engine/linux-$BIN_ARCH.tar \
-          ioquakelive.$BIN_ARCH ioquakelive-vulkan.$BIN_ARCH ioqlds.$BIN_ARCH opengl2$BIN_ARCH.so opengl1$BIN_ARCH.so vulkan$BIN_ARCH.so libSDL3.so.0
+          ioquakelive.$BIN_ARCH ioquakelive-vulkan.$BIN_ARCH opengl2$BIN_ARCH.so opengl1$BIN_ARCH.so vulkan$BIN_ARCH.so libSDL3.so.0
     - uses: actions/upload-artifact@v4
       with:
         name: libs-linux-${{ matrix.arch }}
@@ -158,7 +151,7 @@ jobs:
         cp build/release-darwin-arm64/baseq3/uiarm64.dylib     staging/libs/
         cp "$GITHUB_WORKSPACE/sdl3-local/lib/libSDL3.0.dylib" build/release-darwin-arm64/
         tar -C build/release-darwin-arm64 -cf staging/engine-raw/raw-macos-engine.tar \
-          ioquakelive.arm64 ioqlds.arm64 opengl2arm64.dylib opengl1arm64.dylib vulkanarm64.dylib libSDL3.0.dylib
+          ioquakelive.arm64 opengl2arm64.dylib opengl1arm64.dylib vulkanarm64.dylib libSDL3.0.dylib
     - uses: actions/upload-artifact@v4
       with:
         name: libs-macos-arm64
@@ -412,9 +405,6 @@ jobs:
     - name: Build Solution
       run: msbuild misc/msvc/ioquakelive.sln /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:PlatformToolset=v145 /m
 
-    - name: Build the dedicated server
-      run: msbuild misc/msvc/ioqlds.vcxproj /p:Configuration=Release /p:Platform=${{ matrix.platform }} /p:PlatformToolset=v145 /m
-
     - name: Stage build outputs
       shell: pwsh
       run: |
@@ -480,7 +470,6 @@ jobs:
       run: |
         python code/tools/build_release_zips.py \
           --shared shared \
-          --server content/server \
           --engines engines \
           --output build
         ls -la build/
@@ -526,7 +515,6 @@ jobs:
       run: |
         python code/tools/build_release_zips.py \
           --shared shared \
-          --server content/server \
           --engines engines \
           --output build
         ls -la build/

@@ -464,11 +464,9 @@ Q_HOOKABLE void SV_SpawnServer(char* server, qboolean killBots) {
 
     Hunk_SetMark();
 
-#ifndef DEDICATED
     if (com_dedicated->integer) {
         CL_StartHunkUsers(qtrue);
     }
-#endif
 
     SV_SetNextMap();
     SV_SetNextMaps();
@@ -478,73 +476,6 @@ Q_HOOKABLE void SV_SpawnServer(char* server, qboolean killBots) {
     sv_minqlxSkipFrame = qfalse;
     SV_MinqlxNewGame(qfalse);
 }
-
-#ifdef DEDICATED
-void SV_WorkshopInit(void) {
-    unsigned long long item;
-    uint64_t done, total;
-    fileHandle_t f;
-    qboolean any = qfalse;
-    char* buf;
-    char* line;
-    int next, now, len;
-
-    if (!Steam_GS_Running()) {
-        return;
-    }
-    next = Sys_Milliseconds() + 1000;
-    while (!Steam_GS_LoggedOn()) {
-        Steam_GS_RunCallbacks();
-        now = Sys_Milliseconds();
-        if (now > next) {
-            next = now + 1000;
-            Com_Printf("Waiting for steam servers\n");
-        }
-        Sys_Sleep(10);
-    }
-
-    len = FS_FOpenFileRead(sv_workshopFile->string, &f, qfalse);
-    if (!f) {
-        Com_Printf("No workshop items file: %s\n", sv_workshopFile->string);
-        return;
-    }
-    buf = Z_Malloc(len + 1);
-    FS_Read(buf, len, f);
-    buf[len] = '\0';
-    FS_FCloseFile(f);
-
-    for (line = strtok(buf, "\n"); line; line = strtok(NULL, "\n")) {
-        if (line[0] == '#') {
-            continue;
-        }
-        if (sscanf(line, "%llu", &item) < 1) {
-            Com_Printf("Parse fail, skip line: \"%s\"\n", line);
-            continue;
-        }
-        any = qtrue;
-        Steam_WorkshopQueue((uint64_t)item, qtrue);
-    }
-    Z_Free(buf);
-    if (!any) {
-        return;
-    }
-
-    Steam_WorkshopDone();
-    next = Sys_Milliseconds() + 1000;
-    while (!Steam_WorkshopDone()) {
-        now = Sys_Milliseconds();
-        if (now > next) {
-            Steam_WorkshopProgress(Steam_WorkshopCurrent(), &done, &total);
-            Com_Printf("Waiting on %i Workshop downloads: %0.2f%% (%llu bytes remain)\n", Steam_WorkshopPending(),
-                       total ? (double)done / (double)total * 100.0 : 0.0, (unsigned long long)(total - done));
-            next = now + 1000;
-        }
-        Steam_GS_RunCallbacks();
-        Sys_Sleep(10);
-    }
-    FS_Restart(0);
-}
-#endif
 
 void SV_Init(void) {
     SV_AddOperatorCommands();
@@ -564,13 +495,11 @@ void SV_Init(void) {
     Cvar_Get("sv_keywords", "", CVAR_SERVERINFO);
     sv_mapname = Cvar_Get("mapname", "nomap", CVAR_SERVERINFO | CVAR_ROM);
     sv_privateClients = Cvar_Get("sv_privateClients", "0", CVAR_SERVERINFO);
-#ifndef DEDICATED
     if (!Cvar_VariableIntegerValue("com_build")) {
         const char* persona = Steam_PersonaName();
 
         Cvar_Get("sv_hostname", va("%s's Match", persona ? persona : "anon"), CVAR_SERVERINFO | CVAR_ARCHIVE);
     }
-#endif
     sv_hostname = Cvar_Get("sv_hostname", "noname", CVAR_SERVERINFO | CVAR_ARCHIVE);
     sv_maxclients = Cvar_Get("sv_maxclients", "8", CVAR_SERVERINFO | CVAR_LATCH);
 
@@ -579,19 +508,12 @@ void SV_Init(void) {
     sv_dlRate = Cvar_Get("sv_dlRate", "100", CVAR_ARCHIVE);
     sv_minPing = Cvar_Get("sv_minPing", "0", CVAR_ARCHIVE);
     sv_maxPing = Cvar_Get("sv_maxPing", "0", CVAR_ARCHIVE);
-#ifdef DEDICATED
-    sv_serverType = Cvar_Get("sv_serverType", "2", CVAR_ARCHIVE);
-#else
     sv_serverType = Cvar_Get("sv_serverType", "0", CVAR_ARCHIVE);
-#endif
     sv_floodProtect = Cvar_Get("sv_floodProtect", "10", CVAR_ARCHIVE);
 
     sv_master = Cvar_Get("sv_master", "1", CVAR_ARCHIVE);
     sv_idleExit = Cvar_Get("sv_idleExit", "120", 0);
     sv_errorExit = Cvar_Get("sv_errorExit", "1", 0);
-#ifdef DEDICATED
-    sv_workshopFile = Cvar_Get("sv_workshopFile", "workshop.txt", CVAR_ARCHIVE);
-#endif
     sv_quitOnEmpty = Cvar_Get("sv_quitOnEmpty", "0", 0);
     Cvar_Get("sv_cylinderScale", "1.1f", 0);
     sv_fullRedirect = Cvar_Get("sv_fullRedirect", "", CVAR_ARCHIVE);

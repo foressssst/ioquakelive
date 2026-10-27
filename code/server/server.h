@@ -100,11 +100,7 @@ typedef struct netchan_buffer_s {
 
 #define MAX_DEFERRED_COMMANDS 128
 
-#ifdef DEDICATED
-#define SV_BOT_ENABLE "0"
-#else
 #define SV_BOT_ENABLE "1"
-#endif
 
 typedef struct client_s {
     clientState_t state;

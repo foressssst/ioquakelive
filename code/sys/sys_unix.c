@@ -658,9 +658,7 @@ void Sys_ErrorDialog(const char* error) {
 
     Sys_Print(va("%s\n", error));
 
-#ifndef DEDICATED
     Sys_Dialog(DT_ERROR, va("%s. See \"%s\" for details.", error, ospath), "Error");
-#endif
 
     if (!Sys_Mkdir(homepath)) {
         Com_Printf("ERROR: couldn't create path '%s' for crash log.\n", homepath);

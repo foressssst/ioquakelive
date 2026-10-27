@@ -18,7 +18,7 @@
 
 typedef unsigned char steamBool_t;
 
-#if (defined(_WIN32) && defined(_WIN64)) || (!defined(DEDICATED) && (defined(__linux__) || defined(__APPLE__)))
+#if (defined(_WIN32) && defined(_WIN64)) || defined(__linux__) || defined(__APPLE__)
 #define STEAM_DIRECT
 #endif
 
@@ -2365,7 +2365,6 @@ void Steam_DownloadUGC_f(void) {
     Steam_WorkshopQueue((uint64_t)item, qfalse);
 }
 
-#ifndef DEDICATED
 void Steam_SubscribeUGC_f(void) {
     unsigned long long item = 0;
 
@@ -2404,7 +2403,6 @@ void Steam_UnsubscribeUGC_f(void) {
     }
     st.UnsubscribeItem(st.ugc, (uint64_t)item);
 }
-#endif
 
 qboolean Steam_GS_LoggedOn(void) {
     return (qboolean)(st.serverUp && st.loggedOn);

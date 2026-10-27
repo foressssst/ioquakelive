@@ -22,13 +22,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../qcommon/q_shared.h"
 #include "../qcommon/qcommon.h"
 
-#ifndef DEDICATED
 #include <SDL3/SDL_version.h>
 
 #define MINSDL_MAJOR 3
 #define MINSDL_MINOR 2
 #define MINSDL_PATCH 0
-#endif
 
 void CON_Shutdown(void);
 void CON_Init(void);

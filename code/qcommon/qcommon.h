@@ -397,9 +397,7 @@ extern int cvar_modifiedFlags;
 #define MAX_FILE_HANDLES 64
 
 #define QZCONFIG_CFG "qzconfig.cfg"
-#ifndef DEDICATED
 #define REPCONFIG_CFG "repconfig.cfg"
-#endif
 
 qboolean FS_Initialized(void);
 
@@ -634,10 +632,8 @@ extern cvar_t* sv_packetdelay;
 
 extern cvar_t* com_gamename;
 extern cvar_t* com_protocol;
-#ifndef DEDICATED
 extern cvar_t* cl_allowConsoleChat;
 extern cvar_t* com_allowConsole;
-#endif
 
 extern int time_game;
 extern int time_frontend;
@@ -755,9 +751,6 @@ void SCR_DebugGraph(float value);
 #define AVI_LINE_PADDING 4
 
 void SV_Init(void);
-#ifdef DEDICATED
-void SV_WorkshopInit(void);
-#endif
 void SV_RegisterGameCvars(void);
 void SV_Shutdown(char* finalmsg);
 void SV_Frame(int msec);
@@ -795,9 +788,6 @@ void Sys_Init(void);
 
 void* QDECL Sys_LoadGameDll(const char* name, vmMainProc* entryPoint, intptr_t(QDECL* systemcalls)(intptr_t, ...));
 void Sys_UnloadDll(void* dllHandle);
-#ifdef DEDICATED
-void Sys_SetModuleOffset(char* moduleName, void* offset);
-#endif
 
 qboolean Sys_DllExtension(const char* name);
 
@@ -859,9 +849,7 @@ char* Sys_MicrosoftStorePath(void);
 
 #ifdef __APPLE__
 char* Sys_DefaultAppPath(void);
-#ifndef DEDICATED
 qboolean Sys_LocatePak0(const char *destDir);
-#endif
 #endif
 
 void Sys_SetDefaultHomePath(const char* path);

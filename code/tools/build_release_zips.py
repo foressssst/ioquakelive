@@ -3,15 +3,13 @@ import os
 import sys
 import zipfile
 
-SERVER_PREFIX = 'ioqlds'
-
 PLATFORM_OUT = {
-    'engine-linux-x86_64':  ('ioquakelive-linux-x86_64.zip',  'ioqlds-linux-x86_64.zip'),
-    'engine-linux-arm64':   ('ioquakelive-linux-arm64.zip',   'ioqlds-linux-arm64.zip'),
-    'engine-windows-x86':   ('ioquakelive-windows-x86.zip',   'ioqlds-windows-x86.zip'),
-    'engine-windows-x64':   ('ioquakelive-windows-x64.zip',   'ioqlds-windows-x64.zip'),
-    'engine-windows-arm64': ('ioquakelive-windows-arm64.zip', 'ioqlds-windows-arm64.zip'),
-    'engine-macos-arm64':   ('ioquakelive-macos-arm64.zip',   None),
+    'engine-linux-x86_64':  'ioquakelive-linux-x86_64.zip',
+    'engine-linux-arm64':   'ioquakelive-linux-arm64.zip',
+    'engine-windows-x86':   'ioquakelive-windows-x86.zip',
+    'engine-windows-x64':   'ioquakelive-windows-x64.zip',
+    'engine-windows-arm64': 'ioquakelive-windows-arm64.zip',
+    'engine-macos-arm64':   'ioquakelive-macos-arm64.zip',
 }
 
 LAYER_SHARED = {
@@ -42,26 +40,19 @@ def add_tree(zf, root, dest_prefix, keep=None):
             zi.create_system = 3
             zf.writestr(zi, data)
 
-def is_server_file(rel):
-    return os.path.basename(rel).startswith(SERVER_PREFIX)
-
-def build_one(engine_dir, shared_dir, server_dir, out_path, layer_shared, want_server):
+def build_one(engine_dir, shared_dir, out_path, layer_shared):
     print(f'building {out_path}')
-    keep = is_server_file if want_server else (lambda rel: not is_server_file(rel))
     with zipfile.ZipFile(out_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
-        add_tree(zf, engine_dir, '', keep)
+        add_tree(zf, engine_dir, '')
         if layer_shared:
             add_tree(zf, shared_dir, '')
         else:
             print(f'  skipping shared/ layering for {os.path.basename(engine_dir)} '
                   '(pk3s already inside bundle)')
-        if want_server and server_dir:
-            add_tree(zf, server_dir, 'baseq3')
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--shared', required=True, help='dir to inline into every zip (contains baseq3/)')
-    ap.add_argument('--server', help='dir to inline into baseq3/ of the dedicated server zip')
     ap.add_argument('--engines', required=True, help='parent dir containing engine-<platform>/ subdirs')
     ap.add_argument('--output', required=True, help='dir to write release zips into')
     args = ap.parse_args()
@@ -70,8 +61,6 @@ def main():
         sys.exit(f'shared dir not found: {args.shared}')
     if not os.path.isdir(args.engines):
         sys.exit(f'engines dir not found: {args.engines}')
-    if args.server and not os.path.isdir(args.server):
-        sys.exit(f'server dir not found: {args.server}')
     os.makedirs(args.output, exist_ok=True)
 
     found_any = False
@@ -79,19 +68,14 @@ def main():
         engine_dir = os.path.join(args.engines, entry)
         if not os.path.isdir(engine_dir):
             continue
-        names = PLATFORM_OUT.get(entry)
-        if not names:
+        out_basename = PLATFORM_OUT.get(entry)
+        if not out_basename:
             print(f'  skipping unknown engine artifact dir: {entry}')
             continue
-        client_name, server_name = names
-        for out_basename, want_server in ((client_name, False), (server_name, True)):
-            if not out_basename:
-                continue
-            out_path = os.path.join(args.output, out_basename)
-            build_one(engine_dir, args.shared, args.server, out_path,
-                      LAYER_SHARED[entry], want_server)
-            size = os.path.getsize(out_path)
-            print(f'  wrote {out_path} ({size} bytes)')
+        out_path = os.path.join(args.output, out_basename)
+        build_one(engine_dir, args.shared, out_path, LAYER_SHARED[entry])
+        size = os.path.getsize(out_path)
+        print(f'  wrote {out_path} ({size} bytes)')
         found_any = True
 
     if not found_any:

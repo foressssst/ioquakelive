@@ -151,7 +151,6 @@ Las siguientes tablas documentan las áreas portadas y su estado actual. Los nom
 | ZMQ stats/rcon | Hecho | Incluye las cvars `zmq_*` del original. El RCON sin contraseña solo acepta conexiones locales. |
 | Server browser | Hecho | Gestionada por Steam, como en el original. |
 | Master server heartbeat | Hecho | Utiliza el game server de Steam. `sv_master 0` lo retira de la lista. |
-| Workshop | Hecho | Descarga los recursos indicados en `workshop.txt` antes de iniciar y los anuncia a los clientes. |
 | `sv_fps` | Hecho | Fijado en 40, como en el original. |
 | Flood protection | Hecho | Incluye `sv_floodProtect` y el contador de `userinfo` del módulo de juego. |
 | Full server redirect | Hecho | `sv_fullRedirect` deriva a los jugadores de ioquakelive a otro servidor con espacio. |
@@ -180,7 +179,7 @@ Las siguientes tablas documentan las áreas portadas y su estado actual. Los nom
 | Chat beeps | Hecho | `cg_chatbeep` y `cg_teamChatBeep`. |
 | Intermission camera | Hecho | Incluye mapas sin `info_player_intermission`. |
 | Followed player corpse | Hecho | Al morir sin desintegrarse, el espectador puede ver el cuerpo. |
-| Spectator count | Hecho | Novedad de ioquakelive: con `ch_drawSpectators 1`, un ojo abajo a la derecha muestra cuántos te están mirando, contando a los compañeros muertos de Clan Arena. El número lo manda ioqlds solo a quien lo pide, así que a un cliente de retail le llega lo mismo de siempre. Apagado por defecto. |
+| Spectator count | Hecho | Novedad de ioquakelive: con `ch_drawSpectators 1`, un ojo abajo a la derecha muestra cuántos te están mirando, contando a los compañeros muertos de Clan Arena. El número lo manda el servidor solo a quien lo pide, así que a un cliente de retail le llega lo mismo de siempre. Apagado por defecto. |
 
 #### Menús (`ui`)
 
@@ -252,7 +251,7 @@ Las siguientes tablas documentan las áreas portadas y su estado actual. Los nom
 
 ## Compilar
 
-El proyecto genera dos programas principales: `ioquakelive`, el cliente, e `ioqlds`, el servidor dedicado.
+El proyecto genera el cliente `ioquakelive`.
 
 Antes de compilar, inicializa los submódulos:
 
@@ -267,10 +266,9 @@ Se requiere Visual Studio 2026 o sus Build Tools, con el toolset v145.
 ```bat
 cd misc\msvc
 MSBuild ioquakelive.sln -p:Configuration=Release -p:Platform=x64
-MSBuild ioqlds.vcxproj -p:Configuration=Release -p:Platform=x64
 ```
 
-El servidor dedicado tiene un proyecto independiente de la solución, por lo que se compila por separado. Los binarios se generan en `build\Release\x64\`.
+Los binarios se generan en `build\Release\x64\`.
 
 Las plataformas disponibles son `x64`, `Win32` y `ARM64`. Para compilar en ARM64, ejecuta antes `code\tools\Build-SDL3.ps1`.
 
@@ -284,7 +282,7 @@ make release
 
 Se utiliza el Makefile de ioquake3. SDL3 debe estar instalado y disponible mediante `pkg-config`.
 
-Los binarios generados son `ioquakelive`, `ioquakelive-vulkan` e `ioqlds`.
+Los binarios generados son `ioquakelive` e `ioquakelive-vulkan`.
 
 ## Estructura del repositorio
 
@@ -306,7 +304,6 @@ code/
 
 misc/msvc/          Solución y proyectos de Visual Studio
 content/pak01/      Recursos propios de ioquakelive para generar pak01.pk3
-content/server/     server.cfg y access.txt de ejemplo para ioqlds
 docs/rendimiento/   Gráficos de la sección de rendimiento
 ```
 

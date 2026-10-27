@@ -1073,9 +1073,6 @@ void SV_Frame(int msec) {
     }
 
     if (!com_sv_running->integer) {
-#ifdef DEDICATED
-        Sys_Sleep(-1);
-#endif
 
         return;
     }

@@ -734,7 +734,6 @@ qboolean FS_IsExt(const char* filename, const char* ext, int namelen) {
 	return !Q_stricmp(filename, ext);
 }
 
-#ifndef DEDICATED
 static qboolean FS_IsWebImageName(const char* filename) {
 	static const char* const tails[] = {".png", ".jpg", ".jpeg"};
 	const char* p;
@@ -758,7 +757,6 @@ static qboolean FS_IsWebImageName(const char* filename) {
 	return p[0] == '_' && p[1] == 'f' && isdigit((unsigned char)p[2]) && isdigit((unsigned char)p[3]) &&
 	       !Q_stricmp(p + 4, ".tga");
 }
-#endif
 
 qboolean FS_IsDemoExt(const char* filename, int namelen) {
 	char* ext_test;
@@ -1284,9 +1282,7 @@ int FS_FileIsInPAK(const char* filename, int* pChecksum) {
 	return -1;
 }
 
-#ifndef DEDICATED
 static long FS_WebPak_ReadFile(const char* name, void** buffer);
-#endif
 
 long FS_ReadFileDir(const char* qpath, void* searchPath, qboolean unpure, void** buffer) {
 	fileHandle_t h;
@@ -1303,7 +1299,6 @@ long FS_ReadFileDir(const char* qpath, void* searchPath, qboolean unpure, void**
 		Com_Error(ERR_FATAL, "FS_ReadFile with empty name");
 	}
 
-#ifndef DEDICATED
 	if (!Q_stricmpn(qpath, "webui/", 6)) {
 		return FS_WebPak_ReadFile(qpath + 6, buffer);
 	}
@@ -1318,7 +1313,6 @@ long FS_ReadFileDir(const char* qpath, void* searchPath, qboolean unpure, void**
 		}
 		return len;
 	}
-#endif
 
 	buf = NULL;
 
@@ -1414,8 +1408,6 @@ long FS_ReadFileDir(const char* qpath, void* searchPath, qboolean unpure, void**
 	}
 	return len;
 }
-
-#ifndef DEDICATED
 
 typedef struct {
 	char name[MAX_QPATH];
@@ -1580,8 +1572,6 @@ static long FS_WebPak_ReadFile(const char* name, void** buffer) {
 	return w->length;
 }
 
-#endif
-
 long FS_ReadFile(const char* qpath, void** buffer) {
 	return FS_ReadFileDir(qpath, NULL, qfalse, buffer);
 }
@@ -1676,7 +1666,6 @@ void FS_AppendCacheFile(const char* name, const void* buffer, int size) {
 	FS_PutCacheFile(name, buffer, size, qtrue);
 }
 
-#ifndef DEDICATED
 static void FS_MoveOldMatches(const char* gameName) {
 	char dir[MAX_OSPATH];
 	char path[MAX_OSPATH];
@@ -1788,7 +1777,6 @@ static void FS_RemoveOldWebImages(const char* gameName) {
 	Sys_FreeFileList(list);
 	Sys_RemoveDir(dir);
 }
-#endif
 
 void FS_WriteFile(const char* qpath, const void* buffer, int size) {
 	fileHandle_t f;
@@ -2730,173 +2718,6 @@ void FS_Shutdown(qboolean closemfp) {
 #endif
 }
 
-#ifdef DEDICATED
-#define FS_MAX_STOCK_SHADERS 16384
-#define FS_MAX_CHECKED_PAKS 512
-
-static unsigned int fsStockShaders[FS_MAX_STOCK_SHADERS];
-static int fsNumStockShaders = -1;
-typedef struct {
-	int checksum;
-	int same;
-	int redefined;
-	char first[MAX_QPATH];
-} fsPakCheck_t;
-
-static fsPakCheck_t fsCheckedPaks[FS_MAX_CHECKED_PAKS];
-static int fsNumCheckedPaks;
-
-static unsigned int FS_ShaderNameHash(const char* name) {
-	unsigned int h = 2166136261u;
-
-	for (; *name; name++) {
-		h = (h ^ (unsigned char)tolower((unsigned char)*name)) * 16777619u;
-	}
-	return h;
-}
-
-static int FS_CompareShaderHashes(const void* a, const void* b) {
-	unsigned int x = *(const unsigned int*)a;
-	unsigned int y = *(const unsigned int*)b;
-
-	return (x > y) - (x < y);
-}
-
-static int FS_ScanShaderFile(const char* name, searchpath_t* search, qboolean stock, char* first, int firstSize) {
-	char shader[MAX_QPATH];
-	char* buf;
-	char* p;
-	char* token;
-	int count = 0;
-
-	FS_ReadFileDir(name, search, qtrue, (void**)&buf);
-	if (!buf) {
-		return 0;
-	}
-	p = buf;
-	COM_BeginParseSession(name);
-	while (p) {
-		token = COM_ParseExt(&p, qtrue);
-		if (!token[0]) {
-			break;
-		}
-		Q_strncpyz(shader, token, sizeof(shader));
-		token = COM_ParseExt(&p, qtrue);
-		if (token[0] != '{' || token[1]) {
-			if (!p) {
-				break;
-			}
-			SkipRestOfLine(&p);
-			continue;
-		}
-		if (!SkipBracedSection(&p, 1)) {
-			break;
-		}
-		if (stock) {
-			if (fsNumStockShaders < FS_MAX_STOCK_SHADERS) {
-				fsStockShaders[fsNumStockShaders++] = FS_ShaderNameHash(shader);
-			}
-		} else {
-			unsigned int h = FS_ShaderNameHash(shader);
-
-			if (bsearch(&h, fsStockShaders, fsNumStockShaders, sizeof(h), FS_CompareShaderHashes)) {
-				if (!count) {
-					Q_strncpyz(first, shader, firstSize);
-				}
-				count++;
-			}
-		}
-	}
-	FS_FreeFile(buf);
-	return count;
-}
-
-static qboolean FS_IsShaderScript(const char* name) {
-	return (!Q_stricmpn(name, "scripts/", 8) && !Q_stricmp(COM_GetExtension(name), "shader")) ? qtrue : qfalse;
-}
-
-static void FS_CheckWorkshopPak(searchpath_t* search, searchpath_t* stock, fsPakCheck_t* check) {
-	pack_t* pak = search->pack;
-	int j;
-
-	if (fsNumStockShaders < 0) {
-		fsNumStockShaders = 0;
-		for (j = 0; j < stock->pack->numfiles; j++) {
-			if (FS_IsShaderScript(stock->pack->buildBuffer[j].name)) {
-				FS_ScanShaderFile(stock->pack->buildBuffer[j].name, stock, qtrue, NULL, 0);
-			}
-		}
-		qsort(fsStockShaders, fsNumStockShaders, sizeof(fsStockShaders[0]), FS_CompareShaderHashes);
-	}
-
-	for (j = 0; j < pak->numfiles; j++) {
-		const char* name = pak->buildBuffer[j].name;
-		char shader[MAX_QPATH];
-		int n;
-
-		if (name[0] && name[strlen(name) - 1] == '/') {
-			continue;
-		}
-		if (FS_FOpenFileReadDir(name, stock, NULL, qfalse, qtrue) > 0) {
-			check->same++;
-		} else if (FS_IsShaderScript(name)) {
-			n = FS_ScanShaderFile(name, search, qfalse, shader, sizeof(shader));
-			if (n && !check->redefined) {
-				Q_strncpyz(check->first, shader, sizeof(check->first));
-			}
-			check->redefined += n;
-		}
-	}
-}
-
-static void FS_CheckWorkshopPaks(void) {
-	searchpath_t* stock = NULL;
-	searchpath_t* search;
-	int i;
-
-	for (search = fs_searchpaths; search; search = search->next) {
-		if (search->pack && !search->pack->workshopId && !Q_stricmp(search->pack->pakBasename, "pak00")) {
-			stock = search;
-			break;
-		}
-	}
-	if (!stock) {
-		return;
-	}
-
-	for (search = fs_searchpaths; search; search = search->next) {
-		pack_t* pak = search->pack;
-		fsPakCheck_t* check;
-
-		if (!pak || !pak->workshopId) {
-			continue;
-		}
-		for (i = 0; i < fsNumCheckedPaks && fsCheckedPaks[i].checksum != pak->checksum; i++) {
-		}
-		check = &fsCheckedPaks[i];
-		if (i == fsNumCheckedPaks) {
-			if (fsNumCheckedPaks == FS_MAX_CHECKED_PAKS) {
-				continue;
-			}
-			fsNumCheckedPaks++;
-			Com_Memset(check, 0, sizeof(*check));
-			check->checksum = pak->checksum;
-			FS_CheckWorkshopPak(search, stock, check);
-		}
-
-		if (check->same) {
-			Com_Printf("%s.pk3 (Workshop %llu): %i files that pak00 also has, and pak00's are the ones used\n",
-			           pak->pakBasename, (unsigned long long)pak->workshopId, check->same);
-		}
-		if (check->redefined) {
-			Com_Printf(S_COLOR_YELLOW "%s.pk3 (Workshop %llu) defines %i of pak00's shaders again (%s%s): every map "
-			           "uses its version\n", pak->pakBasename, (unsigned long long)pak->workshopId, check->redefined,
-			           check->first, check->redefined > 1 ? ", ..." : "");
-		}
-	}
-}
-#endif
-
 static void FS_ReorderPurePaks(void) {
 	searchpath_t* s;
 	int i;
@@ -2949,12 +2770,10 @@ static void FS_Startup(const char* gameName) {
 	}
 	fs_homepath = Cvar_Get("fs_homepath", homePath, CVAR_INIT | CVAR_PROTECTED);
 	fs_gamedirvar = Cvar_Get("fs_game", "", CVAR_INIT | CVAR_SYSTEMINFO);
-#ifndef DEDICATED
 	FS_RemoveOldPrefetch(gameName);
 	FS_RemoveOldAvatars(gameName);
 	FS_RemoveOldWebImages(gameName);
 	FS_MoveOldMatches(gameName);
-#endif
 
 	if (!gameName[0]) {
 		Cvar_ForceReset("com_basegame");
@@ -3027,10 +2846,6 @@ static void FS_Startup(const char* gameName) {
 	FS_ReorderPurePaks();
 
 	FS_Path_f();
-
-#ifdef DEDICATED
-	FS_CheckWorkshopPaks();
-#endif
 
 	fs_gamedirvar->modified = qfalse;
 
@@ -3888,7 +3703,6 @@ void FS_InitFilesystem(void) {
 
 	FS_Startup(com_basegame->string);
 
-#ifndef DEDICATED
 #ifdef _WIN32
 	{
 		char pak00Path[MAX_OSPATH];
@@ -3928,36 +3742,6 @@ void FS_InitFilesystem(void) {
 		}
 	}
 
-#endif
-#else
-	{
-		char pak00Base[MAX_OSPATH];
-		char pak00Home[MAX_OSPATH];
-
-		Com_sprintf(pak00Base, sizeof(pak00Base), "%s%c%s%cpak00.pk3",
-		            fs_basepath->string, PATH_SEP, BASEGAME_DIR, PATH_SEP);
-		Com_sprintf(pak00Home, sizeof(pak00Home), "%s%c%s%cpak00.pk3",
-		            fs_homepath->string, PATH_SEP, BASEGAME_DIR, PATH_SEP);
-
-		if (!FS_FileInPathExists(pak00Base) && !FS_FileInPathExists(pak00Home)) {
-			Com_Printf(
-			    "\n"
-			    "********************************************************\n"
-			    "WARNING: pak00.pk3 not found.\n"
-			    "\n"
-			    "The dedicated server requires pak00.pk3 to load game data.\n"
-			    "Place the file in one of the following locations and\n"
-			    "restart the server:\n"
-			    "\n"
-			    "  %s\n"
-			    "  %s\n"
-			    "\n"
-			    "The server will fail to load default.cfg without it.\n"
-			    "********************************************************\n"
-			    "\n",
-			    pak00Base, pak00Home);
-		}
-	}
 #endif
 
 	if (FS_ReadFile("default.cfg", NULL) <= 0) {
@@ -4002,10 +3786,6 @@ void FS_Restart(int checksumFeed) {
 	lastGameDir = (lastValidGame[0]) ? lastValidGame : lastValidComBaseGame;
 
 	if (Q_stricmp(FS_GetCurrentGameDir(), lastGameDir)) {
-#ifdef DEDICATED
-		Sys_RemovePIDFile(lastGameDir);
-		Sys_WritePIDFile(FS_GetCurrentGameDir());
-#endif
 
 		if (!Com_SafeMode()) {
 			Cbuf_AddText("exec " QZCONFIG_CFG "\n");

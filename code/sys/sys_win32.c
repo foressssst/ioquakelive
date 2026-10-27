@@ -53,9 +53,7 @@ static char homePath[MAX_OSPATH] = {0};
 
 static char steamPath[MAX_OSPATH] = {0};
 
-#ifndef DEDICATED
 static UINT timerResolution = 0;
-#endif
 
 #ifndef _RC_CHOP
 
@@ -811,17 +809,10 @@ void Sys_Sleep(int msec) {
     if (msec == 0)
         return;
 
-#ifdef DEDICATED
-    if (msec < 0)
-        WaitForSingleObject(GetStdHandle(STD_INPUT_HANDLE), INFINITE);
-    else
-        WaitForSingleObject(GetStdHandle(STD_INPUT_HANDLE), msec);
-#else
     if (msec < 0)
         return;
 
     Sleep(msec);
-#endif
 }
 
 void Sys_ErrorDialog(const char* error) {
@@ -898,13 +889,10 @@ void Sys_GLimpInit(void) {
 }
 
 void Sys_PlatformInit(void) {
-#ifndef DEDICATED
     TIMECAPS ptc;
-#endif
 
     Sys_SetFloatEnv();
 
-#ifndef DEDICATED
     if (timeGetDevCaps(&ptc, sizeof(ptc)) == MMSYSERR_NOERROR) {
         timerResolution = ptc.wPeriodMin;
 
@@ -918,14 +906,11 @@ void Sys_PlatformInit(void) {
         timeBeginPeriod(timerResolution);
     } else
         timerResolution = 0;
-#endif
 }
 
 void Sys_PlatformExit(void) {
-#ifndef DEDICATED
     if (timerResolution)
         timeEndPeriod(timerResolution);
-#endif
 }
 
 void Sys_SetEnv(const char* name, const char* value) {

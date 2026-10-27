@@ -116,7 +116,6 @@ char *Sys_DefaultAppPath( void )
 	return Sys_BinaryPath();
 }
 
-#ifndef DEDICATED
 @interface QLPak0CancelHelper : NSObject
 {
 @public
@@ -316,4 +315,3 @@ qboolean Sys_LocatePak0( const char *destDir )
 	Com_Printf("pak00.pk3 copied to %s\n", pak00Dest);
 	return qtrue;
 }
-#endif

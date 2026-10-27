@@ -18,9 +18,6 @@ endif
 ifndef BUILD_CLIENT
   BUILD_CLIENT     =
 endif
-ifndef BUILD_SERVER
-  BUILD_SERVER     =
-endif
 ifndef BUILD_GAME_SO
   BUILD_GAME_SO    =
 endif
@@ -99,10 +96,6 @@ export CROSS_COMPILING
 
 ifndef CLIENTBIN
 CLIENTBIN=ioquakelive
-endif
-
-ifndef SERVERBIN
-SERVERBIN=ioqlds
 endif
 
 ifndef BASEGAME
@@ -830,7 +823,6 @@ ifeq ($(PLATFORM),emscripten)
 
   USE_RENDERER_DLOPEN=0
   BUILD_GAME_SO=0
-  BUILD_SERVER=0
 
   CLIENT_CFLAGS+=-s USE_SDL=3
 
@@ -903,10 +895,6 @@ ifndef SHLIBNAME
   SHLIBNAME=$(ARCH).$(SHLIBEXT)
 endif
 
-ifneq ($(BUILD_SERVER),0)
-  TARGETS += $(B)/$(SERVERBIN)$(FULLBINEXT)
-endif
-
 ifneq ($(BUILD_CLIENT),0)
   ifneq ($(USE_RENDERER_DLOPEN),0)
     TARGETS += $(B)/$(CLIENTBIN)$(FULLBINEXT)
@@ -941,13 +929,6 @@ ifneq ($(BUILD_GAME_SO),0)
 endif
 
 ifeq ($(PLATFORM),emscripten)
-  ifneq ($(BUILD_SERVER),0)
-    GENERATEDTARGETS += $(B)/$(SERVERBIN).$(ARCH).wasm
-    ifeq ($(EMSCRIPTEN_PRELOAD_FILE),1)
-      GENERATEDTARGETS += $(B)/$(SERVERBIN).$(ARCH).data
-    endif
-  endif
-
   ifneq ($(BUILD_CLIENT),0)
     TARGETS += $(B)/$(CLIENTBIN).html
     ifneq ($(EMSCRIPTEN_PRELOAD_FILE),1)
@@ -979,7 +960,6 @@ endif
 
 ifeq ($(USE_VOIP),1)
   CLIENT_CFLAGS += -DUSE_VOIP
-  SERVER_CFLAGS += -DUSE_VOIP
   NEED_OPUS=1
 endif
 
@@ -1151,19 +1131,9 @@ $(echo_cmd) "UI_CC $<"
 $(Q)$(CC) $(BASEGAME_CFLAGS) -DUI $(SHLIBCFLAGS) $(CFLAGS) $(OPTIMIZEVM) -o $@ -c $<
 endef
 
-define DO_DED_CC
-$(echo_cmd) "DED_CC $<"
-$(Q)$(CC) $(NOTSHLIBCFLAGS) -DDEDICATED $(CFLAGS) $(SERVER_CFLAGS) $(OPTIMIZE) -o $@ -c $<
-endef
-
 define DO_OBJCC
 $(echo_cmd) "OBJCC $<"
 $(Q)$(CC) $(NOTSHLIBCFLAGS) $(CFLAGS) $(CLIENT_CFLAGS) $(OPTIMIZE) -fobjc-arc -o $@ -c $<
-endef
-
-define DO_DED_OBJCC
-$(echo_cmd) "DED_OBJCC $<"
-$(Q)$(CC) $(NOTSHLIBCFLAGS) -DDEDICATED $(CFLAGS) $(SERVER_CFLAGS) $(OPTIMIZE) -fobjc-arc -o $@ -c $<
 endef
 
 define DO_WINDRES
@@ -1177,13 +1147,13 @@ all: debug release
 debug:
 	@$(MAKE) targets B=$(BD) CFLAGS="$(CFLAGS) $(BASE_CFLAGS) $(DEPEND_CFLAGS)" \
 	  OPTIMIZE="$(DEBUG_CFLAGS)" OPTIMIZEVM="$(DEBUG_CFLAGS)" \
-	  CLIENT_CFLAGS="$(CLIENT_CFLAGS)" SERVER_CFLAGS="$(SERVER_CFLAGS)" V=$(V) \
+	  CLIENT_CFLAGS="$(CLIENT_CFLAGS)" V=$(V) \
 	  LDFLAGS="$(LDFLAGS) $(DEBUG_LDFLAGS)"
 
 release:
 	@$(MAKE) targets B=$(BR) CFLAGS="$(CFLAGS) $(BASE_CFLAGS) $(DEPEND_CFLAGS)" \
 	  OPTIMIZE="-DNDEBUG $(OPTIMIZE)" OPTIMIZEVM="-DNDEBUG $(OPTIMIZEVM)" \
-	  CLIENT_CFLAGS="$(CLIENT_CFLAGS)" SERVER_CFLAGS="$(SERVER_CFLAGS)" V=$(V)
+	  CLIENT_CFLAGS="$(CLIENT_CFLAGS)" V=$(V)
 
 ifneq ($(call bin_path, tput),)
   TERM_COLUMNS=$(shell if c=`tput cols`; then echo $$(($$c-4)); else echo 76; fi)
@@ -1251,9 +1221,6 @@ endif
 	@echo "  CLIENT_CFLAGS:"
 	$(call print_wrapped, $(CLIENT_CFLAGS))
 	@echo ""
-	@echo "  SERVER_CFLAGS:"
-	$(call print_wrapped, $(SERVER_CFLAGS))
-	@echo ""
 	@echo "  TOOLS_CFLAGS:"
 	$(call print_wrapped, $(TOOLS_CFLAGS))
 	@echo ""
@@ -1298,7 +1265,6 @@ makedirs:
 	@$(MKDIR) $(B)/renderergl1
 	@$(MKDIR) $(B)/renderervk
 	@$(MKDIR) $(B)/tools
-	@$(MKDIR) $(B)/ded
 	@$(MKDIR) $(B)/$(BASEGAME)/cgame
 	@$(MKDIR) $(B)/$(BASEGAME)/game
 	@$(MKDIR) $(B)/$(BASEGAME)/ui
@@ -1941,118 +1907,6 @@ endif
 endif
 endif
 
-Q3DOBJ = \
-  $(B)/ded/sv_bot.o \
-  $(B)/ded/sv_client.o \
-  $(B)/ded/sv_ccmds.o \
-  $(B)/ded/sv_factories.o \
-  $(B)/ded/sv_game.o \
-  $(B)/ded/sv_init.o \
-  $(B)/ded/sv_main.o \
-  $(B)/ded/sv_minqlx.o \
-  $(B)/ded/sv_net_chan.o \
-  $(B)/ded/sv_snapshot.o \
-  $(B)/ded/sv_steamstats.o \
-  $(B)/ded/sv_world.o \
-  \
-  $(B)/ded/cm_load.o \
-  $(B)/ded/cm_patch.o \
-  $(B)/ded/cm_polylib.o \
-  $(B)/ded/cm_test.o \
-  $(B)/ded/cm_trace.o \
-  $(B)/ded/cmd.o \
-  $(B)/ded/common.o \
-  $(B)/ded/cvar.o \
-  $(B)/ded/cmd_help.o \
-  $(B)/ded/cvar_help.o \
-  $(B)/ded/files.o \
-  $(B)/ded/md4.o \
-  $(B)/ded/msg.o \
-  $(B)/ded/net_chan.o \
-  $(B)/ded/net_ip.o \
-  $(B)/ded/steam.o \
-  $(B)/ded/zmq.o \
-  $(B)/ded/huffman.o \
-  \
-  $(B)/ded/q_math.o \
-  $(B)/ded/q_shared.o \
-  \
-  $(B)/ded/unzip.o \
-  $(B)/ded/ioapi.o \
-  $(B)/ded/vm.o \
-  \
-  $(B)/ded/be_aas_bspq3.o \
-  $(B)/ded/be_aas_cluster.o \
-  $(B)/ded/be_aas_debug.o \
-  $(B)/ded/be_aas_entity.o \
-  $(B)/ded/be_aas_file.o \
-  $(B)/ded/be_aas_main.o \
-  $(B)/ded/be_aas_move.o \
-  $(B)/ded/be_aas_optimize.o \
-  $(B)/ded/be_aas_reach.o \
-  $(B)/ded/be_aas_route.o \
-  $(B)/ded/be_aas_routealt.o \
-  $(B)/ded/be_aas_sample.o \
-  $(B)/ded/be_ai_char.o \
-  $(B)/ded/be_ai_chat.o \
-  $(B)/ded/be_ai_gen.o \
-  $(B)/ded/be_ai_goal.o \
-  $(B)/ded/be_ai_move.o \
-  $(B)/ded/be_ai_weap.o \
-  $(B)/ded/be_ai_weight.o \
-  $(B)/ded/be_ea.o \
-  $(B)/ded/be_interface.o \
-  $(B)/ded/l_crc.o \
-  $(B)/ded/l_libvar.o \
-  $(B)/ded/l_log.o \
-  $(B)/ded/l_memory.o \
-  $(B)/ded/l_precomp.o \
-  $(B)/ded/l_script.o \
-  $(B)/ded/l_struct.o \
-  \
-  $(B)/ded/null_client.o \
-  $(B)/ded/null_input.o \
-  $(B)/ded/null_snddma.o \
-  \
-  $(B)/ded/con_log.o \
-  $(B)/ded/sys_autoupdater.o \
-  $(B)/ded/q_math_sse.o \
-  $(B)/ded/sys_main.o
-
-ifeq ($(USE_INTERNAL_ZLIB),1)
-Q3DOBJ += \
-  $(B)/ded/adler32.o \
-  $(B)/ded/crc32.o \
-  $(B)/ded/inffast.o \
-  $(B)/ded/inflate.o \
-  $(B)/ded/compress.o \
-  $(B)/ded/deflate.o \
-  $(B)/ded/trees.o \
-  $(B)/ded/uncompr.o \
-  $(B)/ded/inftrees.o \
-  $(B)/ded/zutil.o
-endif
-
-ifdef MINGW
-  Q3DOBJ += \
-    $(B)/ded/win_resource.o \
-    $(B)/ded/sys_win32.o \
-    $(B)/ded/con_win32.o
-else
-  Q3DOBJ += \
-    $(B)/ded/sys_unix.o \
-    $(B)/ded/con_tty.o
-endif
-
-ifeq ($(PLATFORM),darwin)
-  Q3DOBJ += \
-    $(B)/ded/sys_osx.o
-endif
-
-$(B)/$(SERVERBIN)$(FULLBINEXT): $(Q3DOBJ)
-	$(echo_cmd) "LD $@"
-	$(Q)$(CC) $(CFLAGS) $(LDFLAGS) $(NOTSHLIBLDFLAGS) -o $@ $(Q3DOBJ) $(LIBS)
-
 Q3CGOBJ_ = \
   $(B)/$(BASEGAME)/cgame/cg_main.o \
   $(B)/$(BASEGAME)/cgame/bg_misc.o \
@@ -2288,34 +2142,9 @@ $(B)/renderervk/%.o: $(RCOMMONDIR)/%.c
 $(B)/renderervk/%.o: $(RVKDIR)/%.c
 	$(DO_REFVK_CC)
 
-$(B)/ded/%.o: $(SDIR)/%.c
-	$(DO_DED_CC)
-
-$(B)/ded/%.o: $(CMDIR)/%.c
-	$(DO_DED_CC)
-
-$(B)/ded/%.o: $(ZDIR)/%.c
-	$(DO_DED_CC)
-
-$(B)/ded/%.o: $(BLIBDIR)/%.c
-	$(DO_BOT_CC)
-
-$(B)/ded/%.o: $(SYSDIR)/%.c
-	$(DO_DED_CC)
-
-$(B)/ded/%.o: $(SYSDIR)/%.m
-	$(DO_DED_OBJCC)
-
-$(B)/ded/win_resource.o: $(SYSDIR)/win_resource.rc $(SYSDIR)/win_manifest.xml
-	$(DO_WINDRES)
-
-$(B)/ded/%.o: $(NDIR)/%.c
-	$(DO_DED_CC)
-
 ifeq ($(USE_GIT),1)
   $(B)/client/cl_console.o : .git
   $(B)/client/common.o : .git
-  $(B)/ded/common.o : .git
 endif
 
 $(B)/$(BASEGAME)/cgame/bg_%.o: $(GDIR)/bg_%.c
@@ -2344,7 +2173,7 @@ $(B)/$(CLIENTBIN)-config.json: $(WEBDIR)/client-config.json
 	$(echo_cmd) "CP $@"
 	$(Q)cp $< $@
 
-OBJ = $(Q3OBJ) $(Q3R2OBJ) $(Q3R1OBJ) $(Q3RVKOBJ) $(Q3DOBJ) $(JPGOBJ) \
+OBJ = $(Q3OBJ) $(Q3R2OBJ) $(Q3R1OBJ) $(Q3RVKOBJ) $(JPGOBJ) \
   $(Q3GOBJ) $(Q3CGOBJ) $(Q3UIOBJ)
 STRINGOBJ = $(Q3R2STRINGOBJ)
 
@@ -2376,12 +2205,6 @@ ifneq ($(BUILD_CLIENT),0)
 	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/$(CLIENTBIN)_opengl2$(FULLBINEXT) $(COPYBINDIR)/$(CLIENTBIN)_opengl2$(FULLBINEXT)
     endif
   endif
-endif
-
-ifneq ($(BUILD_SERVER),0)
-	@if [ -f $(BR)/$(SERVERBIN)$(FULLBINEXT) ]; then \
-		$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/$(SERVERBIN)$(FULLBINEXT) $(COPYBINDIR)/$(SERVERBIN)$(FULLBINEXT); \
-	fi
 endif
 
 ifneq ($(BUILD_GAME_SO),0)

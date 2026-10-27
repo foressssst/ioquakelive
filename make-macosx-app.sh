@@ -35,9 +35,6 @@ mkdir -p "${MACOS}"
 mkdir -p "${RESOURCES}"
 
 cp "${CLIENT}" "${MACOS}/${PRODUCT_NAME}"
-if [ -f "${BUILT_PRODUCTS_DIR}/ioqlds.${ARCH}" ]; then
-	cp "${BUILT_PRODUCTS_DIR}/ioqlds.${ARCH}" "${MACOS}/ioqlds"
-fi
 
 if [ -f "${BUILT_PRODUCTS_DIR}/opengl2${ARCH}.dylib" ]; then
 	cp "${BUILT_PRODUCTS_DIR}/opengl2${ARCH}.dylib" "${MACOS}/opengl2${ARCH}.dylib"
@@ -132,7 +129,6 @@ rewrite_homebrew_deps() {
 echo "Bundling Homebrew dependencies..."
 for bin in \
     "${MACOS}/${PRODUCT_NAME}" \
-    "${MACOS}/ioqlds" \
     "${MACOS}/opengl2${ARCH}.dylib" \
     "${MACOS}/opengl1${ARCH}.dylib" \
     "${MACOS}/vulkan${ARCH}.dylib"; do

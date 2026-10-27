@@ -47,10 +47,8 @@ qboolean Steam_WorkshopPath(uint64_t item, char* buf, int size);
 int Steam_WorkshopSubscribed(uint64_t* items, int max);
 const char* Steam_WorkshopFolder(int index, uint64_t* item);
 void Steam_DownloadUGC_f(void);
-#ifndef DEDICATED
 void Steam_SubscribeUGC_f(void);
 void Steam_UnsubscribeUGC_f(void);
-#endif
 qboolean Steam_GS_LoggedOn(void);
 void Steam_GS_RunCallbacks(void);
 uint64_t Steam_GS_SteamID(void);
