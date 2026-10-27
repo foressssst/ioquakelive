@@ -1574,6 +1574,10 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
         g_entities[i].client = level.clients + i;
     }
 
+    if (!trap_Cvar_VariableIntegerValue("g_restarted")) {
+        G_SetMatchGUID();
+    }
+
     level.num_entities = MAX_CLIENTS;
 
     for (i = 0; i < MAX_CLIENTS; i++) {
@@ -1603,7 +1607,6 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
 
     SaveRegisteredItems();
 
-    G_SetMatchGUID();
     STAT_ResetMedals();
     G_ClearTeamLocks();
 
@@ -1671,8 +1674,18 @@ void G_InitGame(int levelTime, int randomSeed, int restart) {
 }
 
 void G_ShutdownGame(int restart) {
+    char exitMsg[1024];
+
     G_SaveAccessList();
     G_Printf("==== ShutdownGame ====\n");
+
+    trap_Cvar_VariableStringBuffer("com_errorMessage", exitMsg, sizeof(exitMsg));
+    if (!exitMsg[0]) {
+        Q_strncpyz(exitMsg, "Shutdown", sizeof(exitMsg));
+    }
+    if (level.time) {
+        LogExit(1, restart, exitMsg);
+    }
 
     if (level.logFile) {
         G_LogPrintf("ShutdownGame:\n");
