@@ -181,7 +181,7 @@ qboolean SV_EntityContact(vec3_t mins, vec3_t maxs, const sharedEntity_t* gEnt, 
     origin = gEnt->r.currentOrigin;
     angles = gEnt->r.currentAngles;
 
-    ch = SV_ClipHandleForEntity(gEnt);
+    ch = SV_ClipHandleForEntity(gEnt, capsule);
     CM_TransformedBoxTrace(&trace, vec3_origin, vec3_origin, mins, maxs,
                            ch, -1, origin, angles, capsule);
 

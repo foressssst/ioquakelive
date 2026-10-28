@@ -608,12 +608,32 @@ void CM_TraceThroughSphere(traceWork_t* tw, vec3_t origin, float radius, vec3_t 
     }
 }
 
+static qboolean CM_TraceThroughCylinderCap(traceWork_t* tw, float side, float radius, vec3_t cap, vec3_t start, vec3_t end, vec3_t hit) {
+    float d1, d2, fraction;
+
+    d1 = (cap[2] - start[2]) * side;
+    d2 = (end[2] - start[2]) * side;
+    if (d2 > -0.001f || d1 > 0.001f || fabs(d2) < 0.001f) {
+        return qfalse;
+    }
+    fraction = d1 / d2;
+    hit[0] = start[0] + (end[0] - start[0]) * fraction;
+    hit[1] = start[1] + (end[1] - start[1]) * fraction;
+    hit[2] = 0;
+    if (Square(vec3_origin[0] - hit[0]) + Square(vec3_origin[1] - hit[1]) + Square(vec3_origin[2]) > Square(radius)) {
+        return qfalse;
+    }
+    hit[2] = cap[2];
+    tw->trace.fraction = fraction;
+    return qtrue;
+}
+
 void CM_TraceThroughVerticalCylinder(traceWork_t* tw, vec3_t origin, float radius, float halfheight, vec3_t start, vec3_t end) {
     static cvar_t* sv_cylinderScale;
 
     float length, scale, fraction, l1, l2;
     float b, c, d, sqrtd;
-    vec3_t v1, dir, start2d, end2d, org2d, intersection;
+    vec3_t v1, dir, start2d, end2d, org2d, intersection, cap;
 
     if (!sv_cylinderScale) {
         sv_cylinderScale = Cvar_Get("sv_cylinderScale", "1.1f", 0);
@@ -648,81 +668,69 @@ void CM_TraceThroughVerticalCylinder(traceWork_t* tw, vec3_t origin, float radiu
     }
     VectorSubtract(start, origin, v1);
     b = 2.0f * (v1[0] * dir[0] + v1[1] * dir[1]);
-    c = v1[0] * v1[0] + v1[1] * v1[1] - (radius + RADIUS_EPSILON) * (radius + RADIUS_EPSILON);
+    c = v1[0] * v1[0] + v1[1] * v1[1] - radius * radius;
 
     d = b * b - 4.0f * c;
-    if (d > 0) {
-        sqrtd = SquareRootFloat(d);
-        fraction = (-b - sqrtd) * 0.5f;
-        if (fraction < 0) {
-            fraction = 0;
-        } else {
-            fraction /= length;
-        }
-        if (fraction < tw->trace.fraction) {
-            VectorSubtract(end, start, dir);
-            VectorMA(start, fraction, dir, intersection);
-            if (intersection[2] <= origin[2] + halfheight &&
-                intersection[2] >= origin[2] - halfheight) {
-                tw->trace.fraction = fraction;
-                VectorSubtract(intersection, origin, dir);
-                dir[2] = 0;
-#ifdef CAPSULE_DEBUG
-                l2 = VectorLength(dir);
-                if (l2 <= radius) {
-                    int bah = 1;
-                }
-#endif
-                scale = 1 / (radius + RADIUS_EPSILON);
-                VectorScale(dir, scale, dir);
-                VectorCopy(dir, tw->trace.plane.normal);
-                VectorAdd(tw->modelOrigin, intersection, intersection);
-                tw->trace.plane.dist = DotProduct(tw->trace.plane.normal, intersection);
-                tw->trace.contents = CONTENTS_BODY;
+    if (d <= 0) {
+        return;
+    }
+    sqrtd = SquareRootFloat(d);
+    fraction = (-b - sqrtd) * 0.5f;
+    if (fraction < 0) {
+        fraction = 0;
+    } else {
+        fraction /= length;
+    }
+    if (fraction >= tw->trace.fraction) {
+        return;
+    }
+    VectorSubtract(end, start, dir);
+    VectorMA(start, fraction, dir, intersection);
+    if (intersection[2] > origin[2] + halfheight ||
+        intersection[2] < origin[2] - halfheight) {
+        VectorSet(cap, origin[0], origin[1], origin[2] + halfheight);
+        if (!CM_TraceThroughCylinderCap(tw, 1.0f, radius, cap, start, end, intersection)) {
+            cap[2] = origin[2] - halfheight;
+            if (!CM_TraceThroughCylinderCap(tw, -1.0f, radius, cap, start, end, intersection)) {
+                return;
             }
         }
-    } else if (d == 0) {
+    } else {
+        tw->trace.fraction = fraction;
     }
+    VectorSubtract(intersection, origin, dir);
+    dir[2] = 0;
+    scale = 1 / (radius + RADIUS_EPSILON);
+    VectorScale(dir, scale, dir);
+    VectorCopy(dir, tw->trace.plane.normal);
+    VectorAdd(tw->modelOrigin, intersection, intersection);
+    tw->trace.plane.dist = DotProduct(tw->trace.plane.normal, intersection);
+    tw->trace.contents = CONTENTS_BODY;
 }
 
 void CM_TraceCapsuleThroughCapsule(traceWork_t* tw, clipHandle_t model) {
     int i;
     vec3_t mins, maxs;
-    vec3_t top, bottom, starttop, startbottom, endtop, endbottom;
-    vec3_t offset, symetricSize[2];
-    float radius, halfwidth, halfheight, offs, h;
+    vec3_t offset, halfsize, head;
+    float radius, before, after;
 
     CM_ModelBounds(model, mins, maxs);
     if (tw->bounds[0][0] > maxs[0] + RADIUS_EPSILON || tw->bounds[0][1] > maxs[1] + RADIUS_EPSILON || tw->bounds[0][2] > maxs[2] + RADIUS_EPSILON || tw->bounds[1][0] < mins[0] - RADIUS_EPSILON || tw->bounds[1][1] < mins[1] - RADIUS_EPSILON || tw->bounds[1][2] < mins[2] - RADIUS_EPSILON) {
         return;
     }
-    VectorAdd(tw->start, tw->sphere.offset, starttop);
-    VectorSubtract(tw->start, tw->sphere.offset, startbottom);
-    VectorAdd(tw->end, tw->sphere.offset, endtop);
-    VectorSubtract(tw->end, tw->sphere.offset, endbottom);
-
     for (i = 0; i < 3; i++) {
         offset[i] = (mins[i] + maxs[i]) * 0.5;
-        symetricSize[0][i] = mins[i] - offset[i];
-        symetricSize[1][i] = maxs[i] - offset[i];
+        halfsize[i] = maxs[i] - offset[i];
     }
-    halfwidth = symetricSize[1][0];
-    halfheight = symetricSize[1][2];
-    radius = (halfwidth > halfheight) ? halfheight : halfwidth;
-    offs = halfheight - radius;
-    VectorCopy(offset, top);
-    top[2] += offs;
-    VectorCopy(offset, bottom);
-    bottom[2] -= offs;
-    radius += tw->sphere.radius;
-    if (tw->start[0] != tw->end[0] || tw->start[1] != tw->end[1]) {
-        h = halfheight + tw->sphere.halfheight - radius;
-        if (h > 0) {
-            CM_TraceThroughVerticalCylinder(tw, offset, radius, h, tw->start, tw->end);
-        }
+    radius = ((halfsize[2] <= halfsize[0]) ? halfsize[2] : halfsize[0]) + tw->sphere.radius;
+    CM_TraceThroughVerticalCylinder(tw, offset, radius, halfsize[2], tw->start, tw->end);
+    before = (tw->trace.contents & CONTENTS_BODY) ? tw->trace.fraction : 1.0f;
+    VectorSet(head, offset[0], offset[1], offset[2] + halfsize[2]);
+    CM_TraceThroughSphere(tw, head, radius * 0.7f, tw->start, tw->end);
+    after = (tw->trace.contents & CONTENTS_BODY) ? tw->trace.fraction : 1.0f;
+    if (after < before) {
+        tw->trace.contents |= 0x400;
     }
-    CM_TraceThroughSphere(tw, top, radius, startbottom, endbottom);
-    CM_TraceThroughSphere(tw, bottom, radius, starttop, endtop);
 }
 
 void CM_TraceBoundingBoxThroughCapsule(traceWork_t* tw, clipHandle_t model) {
@@ -1015,9 +1023,6 @@ void CM_Trace(trace_t* results, const vec3_t start, const vec3_t end, vec3_t min
         }
     }
 
-    assert(tw.trace.allsolid ||
-           tw.trace.fraction == 1.0 ||
-           VectorLengthSquared(tw.trace.plane.normal) > 0.9999);
     *results = tw.trace;
 }
 

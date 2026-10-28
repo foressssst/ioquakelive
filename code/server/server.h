@@ -457,7 +457,7 @@ void SV_UnlinkEntity(sharedEntity_t* ent);
 
 void SV_LinkEntity(sharedEntity_t* ent);
 
-clipHandle_t SV_ClipHandleForEntity(const sharedEntity_t* ent);
+clipHandle_t SV_ClipHandleForEntity(const sharedEntity_t* ent, int capsule);
 
 void SV_SectorList_f(void);
 

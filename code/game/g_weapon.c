@@ -444,7 +444,7 @@ void weapon_railgun_fire(gentity_t* ent) {
                 {
                     int rgDamage = damage;
                     int rgMod = MOD_RAILGUN;
-                    if (trace.surfaceFlags & 0x400) {
+                    if (trace.contents & 0x400) {
                         rgDamage += g_headShotDamage_rg.integer;
                         rgMod = MOD_RAILGUN_HEADSHOT;
                     }

@@ -21,11 +21,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "server.h"
 
-clipHandle_t SV_ClipHandleForEntity(const sharedEntity_t* ent) {
+clipHandle_t SV_ClipHandleForEntity(const sharedEntity_t* ent, int capsule) {
     if (ent->r.bmodel) {
         return CM_InlineModel(ent->s.modelindex);
     }
-    if (ent->r.svFlags & SVF_CAPSULE) {
+    if (capsule && (ent->r.svFlags & SVF_CAPSULE)) {
         return CM_TempBoxModel(ent->r.mins, ent->r.maxs, qtrue);
     }
 
@@ -350,7 +350,7 @@ void SV_ClipToEntity(trace_t* trace, const vec3_t start, const vec3_t mins, cons
         return;
     }
 
-    clipHandle = SV_ClipHandleForEntity(touch);
+    clipHandle = SV_ClipHandleForEntity(touch, capsule);
 
     origin = touch->r.currentOrigin;
     angles = touch->r.currentAngles;
@@ -410,7 +410,7 @@ static void SV_ClipMoveToEntities(moveclip_t* clip) {
             continue;
         }
 
-        clipHandle = SV_ClipHandleForEntity(touch);
+        clipHandle = SV_ClipHandleForEntity(touch, clip->capsule);
 
         origin = touch->r.currentOrigin;
         angles = touch->r.currentAngles;
@@ -503,7 +503,7 @@ int SV_PointContents(const vec3_t p, int passEntityNum) {
             continue;
         }
         hit = SV_GentityNum(touch[i]);
-        clipHandle = SV_ClipHandleForEntity(hit);
+        clipHandle = SV_ClipHandleForEntity(hit, qfalse);
         angles = hit->r.currentAngles;
         if (!hit->r.bmodel) {
             angles = vec3_origin;
