@@ -1,6 +1,7 @@
 #include "client.h"
 #include "../qcommon/json.h"
 #include "../qcommon/unzip.h"
+#include "tweetnacl.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -20,6 +21,9 @@
 #define CL_UPDATE_TIMEOUT_MS 5000
 #define CL_UPDATE_DOWNLOAD_TIMEOUT_MS 30000
 #define CL_UPDATE_PROMPT_WAIT_MS 1500
+#define CL_VERIFIED_URL "https://gist.githubusercontent.com/foressssst/65861cb796e4d984cfd73b384e8c2098/raw/ioquakelive-verified.txt"
+#define CL_VERIFIED_MAX 64
+#define CL_VERIFIED_TEXT 8192
 #define CL_UPDATE_ZIP "ioquakelive-update.zip"
 #define CL_UPDATE_STAGE "ioquakelive-update"
 #define CL_UPDATE_MAX_FILES 64
@@ -60,6 +64,17 @@ static int clUpdateShownPercent = -1;
 static qboolean clUpdateRestart;
 static qboolean clUpdateAutoRestart;
 static int clUpdateStartTime;
+static volatile long clVerifiedState;
+static char clVerifiedText[CL_VERIFIED_TEXT];
+static unsigned char clVerifiedSigned[CL_VERIFIED_TEXT + crypto_sign_BYTES];
+static unsigned char clVerifiedOpened[CL_VERIFIED_TEXT + crypto_sign_BYTES];
+static byte clVerifiedIP[CL_VERIFIED_MAX][4];
+static unsigned short clVerifiedPort[CL_VERIFIED_MAX];
+static int clVerifiedCount;
+static const unsigned char clVerifiedKey[crypto_sign_PUBLICKEYBYTES] = {
+    0x54, 0x31, 0x1a, 0xf6, 0xdd, 0x5a, 0x2e, 0xe0, 0xc5, 0x43, 0xd5, 0xd5, 0xa8, 0x8b, 0x11, 0x25,
+    0xf1, 0xb7, 0x96, 0xdc, 0xbf, 0xd9, 0xe8, 0xaf, 0x59, 0xe8, 0x44, 0xd2, 0x92, 0xba, 0x05, 0x89,
+};
 
 static void CL_UpdateSet(volatile long* v, long state) {
 #ifdef _MSC_VER
@@ -421,14 +436,100 @@ static qboolean CL_UpdateFromGitHub(void) {
     return qtrue;
 }
 
+void randombytes(unsigned char* out, unsigned long long len) {
+    while (len > 0) {
+        int n = len > 1024 ? 1024 : (int)len;
+
+        Com_RandomBytes(out, n);
+        out += n;
+        len -= (unsigned long long)n;
+    }
+}
+
+static int CL_VerifiedHex(char c) {
+    if (c >= '0' && c <= '9') {
+        return c - '0';
+    }
+    if (c >= 'a' && c <= 'f') {
+        return c - 'a' + 10;
+    }
+    if (c >= 'A' && c <= 'F') {
+        return c - 'A' + 10;
+    }
+    return -1;
+}
+
+static qboolean CL_VerifiedLoad(void) {
+    const char* body;
+    const char* line;
+    unsigned long long opened;
+    unsigned int a, b, c, d, port;
+    int i, hi, lo, len;
+
+    if (!CL_UpdateFetch(CL_VERIFIED_URL, clVerifiedText, sizeof(clVerifiedText))) {
+        return qfalse;
+    }
+    body = strchr(clVerifiedText, '\n');
+    if (!body || body - clVerifiedText != crypto_sign_BYTES * 2) {
+        return qfalse;
+    }
+    for (i = 0; i < crypto_sign_BYTES; i++) {
+        hi = CL_VerifiedHex(clVerifiedText[i * 2]);
+        lo = CL_VerifiedHex(clVerifiedText[i * 2 + 1]);
+        if (hi < 0 || lo < 0) {
+            return qfalse;
+        }
+        clVerifiedSigned[i] = (unsigned char)(hi << 4 | lo);
+    }
+    body++;
+    len = (int)strlen(body);
+    Com_Memcpy(clVerifiedSigned + crypto_sign_BYTES, body, len);
+    if (crypto_sign_open(clVerifiedOpened, &opened, clVerifiedSigned, (unsigned long long)(crypto_sign_BYTES + len),
+                         clVerifiedKey) != 0) {
+        return qfalse;
+    }
+    for (line = body; line && *line && clVerifiedCount < CL_VERIFIED_MAX; line = strchr(line, '\n')) {
+        if (*line == '\n') {
+            line++;
+        }
+        if (sscanf(line, "%u.%u.%u.%u:%u", &a, &b, &c, &d, &port) == 5 && a < 256 && b < 256 && c < 256 && d < 256 &&
+            port > 0 && port < 65536) {
+            clVerifiedIP[clVerifiedCount][0] = (byte)a;
+            clVerifiedIP[clVerifiedCount][1] = (byte)b;
+            clVerifiedIP[clVerifiedCount][2] = (byte)c;
+            clVerifiedIP[clVerifiedCount][3] = (byte)d;
+            clVerifiedPort[clVerifiedCount] = (unsigned short)port;
+            clVerifiedCount++;
+        }
+    }
+    return qtrue;
+}
+
+qboolean CL_ServerVerified(const netadr_t* adr) {
+    int i;
+
+    if (adr->type != NA_IP || CL_UpdateGet(&clVerifiedState) != CLU_DONE) {
+        return qfalse;
+    }
+    for (i = 0; i < clVerifiedCount; i++) {
+        if (!memcmp(adr->ip, clVerifiedIP[i], 4) && (unsigned short)BigShort(adr->port) == clVerifiedPort[i]) {
+            return qtrue;
+        }
+    }
+    return qfalse;
+}
+
 static void CL_UpdateThread(void* unused) {
     (void)unused;
-    if (CL_UpdateFromGitHub()) {
-        CL_UpdateSet(&clUpdateState, CLU_DONE);
-        return;
+    if (CL_UpdateGet(&clUpdateState) == CLU_RUNNING) {
+        if (CL_UpdateFromGitHub()) {
+            CL_UpdateSet(&clUpdateState, CLU_DONE);
+        } else {
+            CL_UpdateSet(&clUpdateState,
+                         CL_UpdateFetch(CL_UPDATE_URL, clUpdateText, sizeof(clUpdateText)) ? CLU_DONE : CLU_FAILED);
+        }
     }
-    CL_UpdateSet(&clUpdateState,
-                 CL_UpdateFetch(CL_UPDATE_URL, clUpdateText, sizeof(clUpdateText)) ? CLU_DONE : CLU_FAILED);
+    CL_UpdateSet(&clVerifiedState, CL_VerifiedLoad() ? CLU_DONE : CLU_FAILED);
 }
 
 static int CL_UpdateCompare(const char* a, const char* b) {
@@ -707,13 +808,19 @@ void CL_UpdateInit(void) {
             CL_UpdateCleanup();
         }
     }
-    if (!cl_checkUpdates->integer || CL_UpdateGet(&clUpdateState) != CLU_IDLE) {
+    if (CL_UpdateGet(&clVerifiedState) != CLU_IDLE) {
         return;
     }
-    CL_UpdateSet(&clUpdateState, CLU_RUNNING);
-    clUpdateStartTime = Sys_Milliseconds();
+    CL_UpdateSet(&clVerifiedState, CLU_RUNNING);
+    if (cl_checkUpdates->integer && CL_UpdateGet(&clUpdateState) == CLU_IDLE) {
+        CL_UpdateSet(&clUpdateState, CLU_RUNNING);
+        clUpdateStartTime = Sys_Milliseconds();
+    }
     if (!Sys_ThreadCreate(CL_UpdateThread, NULL)) {
-        CL_UpdateSet(&clUpdateState, CLU_FAILED);
+        if (CL_UpdateGet(&clUpdateState) == CLU_RUNNING) {
+            CL_UpdateSet(&clUpdateState, CLU_FAILED);
+        }
+        CL_UpdateSet(&clVerifiedState, CLU_FAILED);
     }
 }
 

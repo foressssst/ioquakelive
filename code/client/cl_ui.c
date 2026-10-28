@@ -240,6 +240,9 @@ static void LAN_GetServerInfo(int source, int n, char* buf, int buflen) {
         LAN_AddInfo(info, sizeof(info), "sv_vac", va("%i", server->vac));
         LAN_AddInfo(info, sizeof(info), "gamedesc", server->description);
         LAN_AddInfo(info, sizeof(info), "tags", server->tags);
+        if (CL_ServerVerified(&server->adr)) {
+            LAN_AddInfo(info, sizeof(info), "verified", "1");
+        }
         Q_strncpyz(buf, info, buflen);
     } else {
         if (buf) {
