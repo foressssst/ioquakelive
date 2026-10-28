@@ -57,8 +57,9 @@ typedef struct {
     zconn_t conns[ZMQ_MAX_CONNS];
 } zsock_t;
 
-static zsock_t zStats = {ZINVALID};
-static zsock_t zRcon = {ZINVALID};
+static zsock_t zStats;
+static zsock_t zRcon;
+static qboolean zReady;
 static qboolean zNetUp;
 
 static cvar_t* zmq_rcon_enable;
@@ -492,6 +493,7 @@ void ZMQ_Init(void) {
 
     ZMQ_InitSocket(&zStats, ZT_PUB, "stats", zmq_stats_password);
     ZMQ_InitSocket(&zRcon, ZT_ROUTER, "rcon", zmq_rcon_password);
+    zReady = qtrue;
 
     if (zmq_rcon_enable->integer <= 0) {
         return;
@@ -543,6 +545,9 @@ void ZMQ_StatsInit(void) {
 }
 
 void ZMQ_Frame(void) {
+    if (!zReady) {
+        return;
+    }
     ZMQ_Poll(&zRcon);
     ZMQ_Poll(&zStats);
 }
@@ -551,7 +556,7 @@ void ZMQ_PublishStats(const char* json) {
     int len;
     int i;
 
-    if (zStats.listen == ZINVALID || !json) {
+    if (!zReady || zStats.listen == ZINVALID || !json) {
         return;
     }
     len = (int)strlen(json);
@@ -590,6 +595,10 @@ static void ZMQ_CloseSocket(zsock_t* zs) {
 }
 
 void ZMQ_Shutdown(void) {
+    if (!zReady) {
+        return;
+    }
     ZMQ_CloseSocket(&zStats);
     ZMQ_CloseSocket(&zRcon);
+    zReady = qfalse;
 }
