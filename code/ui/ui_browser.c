@@ -183,7 +183,6 @@ static const vec4_t brLinkHover = SM_RGB(15, 160, 206);
 static const vec4_t brDisabled = SM_RGB(34, 34, 34);
 static const vec4_t brDisabledText = SM_RGB(51, 51, 51);
 static const vec4_t brYellow = SM_RGB(247, 209, 0);
-static const vec4_t brVerified = SM_RGB(29, 155, 240);
 static const vec4_t brPlayHover = {75 / 255.0f, 75 / 255.0f, 75 / 255.0f, 0.8f};
 static const vec4_t brSelect = SM_RGB(51, 51, 51);
 static const vec4_t brSelectHover = SM_RGB(68, 68, 68);
@@ -213,7 +212,6 @@ static const vec4_t brDialog = SM_RGB(30, 30, 30);
 #define SM_FA_ANGLE_DOUBLE_LEFT 0xf100
 #define SM_FA_TIMES_CIRCLE 0xf057
 #define SM_FA_CHECK 0xf00c
-#define SM_FA_CERTIFICATE 0xf0a3
 
 #define BR_MAX_SHOTS 128
 
@@ -691,13 +689,13 @@ static void BR_TextFit(float x, float baseline, float size, const float* color, 
     SM_TextRaw(x, baseline, font, size, color, buf, -1, bold);
 }
 
-static void BR_Verified(float x, float baseline, float size) {
-    float check = size * 0.55f;
-    float w = SM_IconWidth(size, SM_FA_CERTIFICATE);
+static void BR_Verified(float x, float baseline, float size, const smRect_t* clip) {
+    static qhandle_t badge;
 
-    SM_Icon(x, baseline, size, brVerified, SM_FA_CERTIFICATE);
-    SM_Icon(x + (w - SM_IconWidth(check, SM_FA_CHECK)) * 0.5f, baseline - SM_AWESOME_BASE * (size - check), check,
-            brWhite, SM_FA_CHECK);
+    if (!badge) {
+        badge = trap_R_RegisterShaderNoMip("gfx/2d/ioql_verified");
+    }
+    SM_Pic(x, baseline + SM_Descent(FONT_SANS, size) - size, size, size, badge, clip);
 }
 
 static void BR_Border(float x, float y, float w, float h, float t, const float* color, const smRect_t* clip) {
@@ -1171,13 +1169,12 @@ static void BR_DrawRow(const brServer_t* s, int row, float x, float y, const brC
             float room = x + mainW - tx - pad;
 
             if (s->verified) {
-                float badgeW = SM_IconWidth(14.6667f, SM_FA_CERTIFICATE);
                 float gap = BR_Width(14.6667f, " ", qtrue);
                 float nameW = BR_Width(14.6667f, s->name, qtrue);
 
-                room -= badgeW + gap;
+                room -= 14.6667f + gap;
                 BR_TextFit(tx, baseline, 14.6667f, brYellow, s->name, room, qtrue, FONT_SANS);
-                BR_Verified(tx + (nameW < room ? nameW : room) + gap, baseline, 14.6667f);
+                BR_Verified(tx + (nameW < room ? nameW : room) + gap, baseline, 14.6667f, clip);
             } else {
                 BR_TextFit(tx, baseline, 14.6667f, brRowText, s->name, room, qtrue, FONT_SANS);
             }
