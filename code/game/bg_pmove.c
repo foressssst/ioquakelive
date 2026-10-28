@@ -1449,16 +1449,22 @@ static void PM_Footsteps(void) {
         footstep = (pm->ps->stats[STAT_RUNE] != 1);
     }
 
-    old = pm->ps->bobCycle;
+    old = pm->ps->bobCycle & 255;
     if (pm->retailBobCycle) {
         pm->ps->bobCycle = (int)(old + bobmove * pml.msec) & 255;
+    } else if (pm->legacyBobCycle) {
+        int carry = (pm->ps->bobCycle >> 8) & 255;
+        int units = (int)(bobmove * pml.msec * 256.0f) + carry;
+        int cycle = (old + (units >> 8)) & 255;
+
+        pm->ps->bobCycle = cycle | ((units & 255) << 8);
     } else {
         int steps = (pm->ps->commandTime >> 2) - ((pm->ps->commandTime - pml.msec) >> 2);
 
         pm->ps->bobCycle = (old + steps * (int)(bobmove * 4)) & 255;
     }
 
-    if (((old + 64) ^ (pm->ps->bobCycle + 64)) & 128) {
+    if (((old + 64) ^ ((pm->ps->bobCycle & 255) + 64)) & 128) {
         if (pm->waterlevel == 0) {
             if (footstep) {
                 PM_AddEvent(PM_FootstepForSurface());

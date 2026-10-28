@@ -263,6 +263,7 @@ typedef struct {
     qboolean hookEnemy;
 
     qboolean retailBobCycle;
+    qboolean legacyBobCycle;
 } pmove_t;
 
 void PM_UpdateViewAngles(playerState_t* ps, const usercmd_t* cmd);
@@ -833,6 +834,10 @@ void BG_AddPredictableEventToPlayerstate(int newEvent, int eventParm, playerStat
 void BG_TouchJumpPad(playerState_t* ps, entityState_t* jumppad);
 
 void BG_PlayerStateToEntityState(playerState_t* ps, entityState_t* s, qboolean snap);
+
+#define IOQL_STEPS_VERSION 10007
+
+int BG_IoqlVersion(const char* s);
 
 qboolean BG_PlayerTouchesItem(playerState_t* ps, entityState_t* item, int atTime, int itemHeight);
 

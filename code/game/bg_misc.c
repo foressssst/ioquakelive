@@ -1490,6 +1490,23 @@ void BG_TouchJumpPad(playerState_t* ps, entityState_t* jumppad) {
     VectorCopy(jumppad->origin2, ps->velocity);
 }
 
+int BG_IoqlVersion(const char* s) {
+    int v[3] = {0, 0, 0};
+    int i;
+
+    for (i = 0; i < 3 && *s >= '0' && *s <= '9'; i++) {
+        v[i] = atoi(s);
+        while (*s >= '0' && *s <= '9') {
+            s++;
+        }
+        if (*s != '.') {
+            break;
+        }
+        s++;
+    }
+    return v[0] * 10000 + v[1] * 100 + v[2];
+}
+
 int BG_GetWeaponFromMeansOfDeath(int mod) {
     switch (mod) {
     case MOD_SHOTGUN:

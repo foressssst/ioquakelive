@@ -1349,6 +1349,7 @@ typedef struct {
 
     qboolean localServer;
     qboolean ioqlServer;
+    int ioqlVersion;
 
     gametype_t gametype;
     int teamsize;

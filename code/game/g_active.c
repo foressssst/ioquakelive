@@ -918,6 +918,7 @@ void ClientThink_real(gentity_t* ent) {
     pm.debugLevel = g_debugMove.integer;
     pm.noFootsteps = (g_dmflags.integer & DF_NO_FOOTSTEPS) > 0;
     pm.retailBobCycle = !client->pers.ioqlClient && !(ent->r.svFlags & SVF_BOT);
+    pm.legacyBobCycle = client->pers.ioqlClient && g_ioqlVersion[ent->s.number] < IOQL_STEPS_VERSION;
     pm.hookEnemy = (client->hook && client->hook->enemy && client->hook->enemy->client != NULL);
 
     Pmove(&pm);

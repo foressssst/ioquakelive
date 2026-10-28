@@ -514,6 +514,7 @@ void CG_PredictPlayerState(void) {
     }
     cg_pmove.noFootsteps = (cgs.dmflags & DF_NO_FOOTSTEPS) > 0;
     cg_pmove.retailBobCycle = !cgs.ioqlServer;
+    cg_pmove.legacyBobCycle = cgs.ioqlServer && cgs.ioqlVersion < IOQL_STEPS_VERSION;
 
     if (cg_autoHop.integer == 0) {
         cg.predictedPlayerState.pm_flags |= PMF_NO_AUTOHOP;

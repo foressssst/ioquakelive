@@ -992,6 +992,7 @@ extern const minqlxHooks_t* g_minqlxHooks;
 extern gentity_t g_entities[MAX_GENTITIES];
 extern gclient_t g_clients[MAX_CLIENTS];
 extern qboolean g_drawSpectators[MAX_CLIENTS];
+extern int g_ioqlVersion[MAX_CLIENTS];
 extern gameImport_t *imports;
 
 #define FOFS(x) ((size_t)&(((gentity_t*)0)->x))

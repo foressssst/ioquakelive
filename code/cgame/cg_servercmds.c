@@ -507,11 +507,14 @@ static void CG_ParseTeamInfo(void) {
 void CG_ParseServerinfo(void) {
     const char* info;
     const char* mapname;
+    const char* version;
 
     info = CG_ConfigString(CS_SERVERINFO);
 
     cgs.gametype = atoi(Info_ValueForKey(info, "g_gametype"));
     cgs.ioqlServer = !Q_stricmp(Info_ValueForKey(info, "com_gamename"), "ioquakelive");
+    version = Info_ValueForKey(info, "version");
+    cgs.ioqlVersion = Q_stricmpn(version, "ioquakelive v", 13) ? 0 : BG_IoqlVersion(version + 13);
     trap_Cvar_Set("cg_gametype", va("%i", cgs.gametype));
     cgs.teamsize = atoi(Info_ValueForKey(info, "teamsize"));
     cgs.teamSizeMin = atoi(Info_ValueForKey(info, "g_teamSizeMin"));
