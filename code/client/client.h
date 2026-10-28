@@ -399,6 +399,7 @@ void CL_WorkshopFrame(void);
 void CL_WarmPlayersChanged(void);
 void CL_UpdateInit(void);
 void CL_UpdateFrame(void);
+void CL_UpdatePrompt(void);
 void CL_VoiceFrame(void);
 void CL_MatchReportFrame(void);
 void CL_MatchMedia(const char* path);

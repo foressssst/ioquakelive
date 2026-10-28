@@ -2804,6 +2804,7 @@ void CL_StartHunkUsers(qboolean rendererOnly) {
     }
 
     if (!cls.rendererStarted) {
+        CL_UpdatePrompt();
         cls.rendererStarted = qtrue;
         CL_InitRenderer();
     }
