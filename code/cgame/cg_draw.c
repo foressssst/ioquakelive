@@ -3461,6 +3461,21 @@ static void CG_DrawDemoHUD(void) {
 	}
 }
 
+static void CG_DrawVersion(void) {
+	static vec4_t faint = {1.0f, 1.0f, 1.0f, 0.18f};
+	char version[32];
+	char* s;
+
+	trap_Cvar_VariableStringBuffer("ioql", version, sizeof(version));
+	if (!version[0]) {
+		return;
+	}
+	s = va("ioquakelive %s", version);
+	CG_SetWidescreen(WIDESCREEN_RIGHT);
+	CG_DrawText(638.0f - CG_DrawTextWidth(s, 0.16f, 0, 2), 478.0f, 2, 0.16f, faint, s, 0, 0, 0);
+	CG_SetWidescreen(WIDESCREEN_STRETCH);
+}
+
 static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	static qboolean tutorialStarted;
 
@@ -3611,6 +3626,10 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 
 	if (cg.demoPlayback && cg_drawDemoHUD.integer) {
 		CG_DrawDemoHUD();
+	}
+
+	if (cg_drawVersion.integer) {
+		CG_DrawVersion();
 	}
 }
 

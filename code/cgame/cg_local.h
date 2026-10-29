@@ -1524,6 +1524,7 @@ extern vmCvar_t cg_crosshairHitTime;
 extern vmCvar_t cg_drawStatus;
 extern vmCvar_t cg_draw2D;
 extern vmCvar_t cg_drawDemoHUD;
+extern vmCvar_t cg_drawVersion;
 extern vmCvar_t cg_xray;
 extern vmCvar_t cg_freecam;
 qboolean CG_XrayAllowed(void);

@@ -392,6 +392,7 @@ vmCvar_t cg_weaponColor_grenade;
 vmCvar_t cg_weaponPrimary;
 
 vmCvar_t cg_drawDemoHUD;
+vmCvar_t cg_drawVersion;
 vmCvar_t cg_xray;
 vmCvar_t cg_freecam;
 vmCvar_t cg_followKiller;
@@ -774,6 +775,7 @@ static cvarTable_t cvarTable[] = {
     {&cg_weaponPrimary, "cg_weaponPrimary", "", CVAR_ROM},
 
     {&cg_drawDemoHUD, "cg_drawDemoHUD", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
+    {&cg_drawVersion, "cg_drawVersion", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_xray, "cg_xray", "0", CVAR_ARCHIVE, "0", "1"},
     {&cg_freecam, "cg_freecam", "0", 0, "0", "1"},
     {&cg_followKiller, "cg_followKiller", "0", CVAR_VM_CREATED, "0", "1"},

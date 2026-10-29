@@ -164,6 +164,7 @@ static const cvarHelp_t cvarHelp[] = {
     {"cg_drawPregameMessages", "shows what the warmup is waiting for"},
     {"cg_drawSpecMessages", "shows the spectator messages"},
     {"cg_drawDemoHUD", "draws the HUD while playing demos"},
+    {"cg_drawVersion", "draws the ioquakelive version, faint, in the lower right corner"},
     {"cg_drawProfileImages", "shows players' Steam profile pictures where the HUD has them"},
     {"cg_drawCheckpointRemaining", "race: shows how many checkpoints are left once three or fewer are"},
     {"cg_drawTieredArmorAvailability", "shows the tiered armor state in the HUD"},
