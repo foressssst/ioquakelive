@@ -308,9 +308,6 @@ vmCvar_t cg_playerLean;
 vmCvar_t cg_plasmaStyle;
 vmCvar_t cg_railStyle;
 vmCvar_t ch_animateRewardIcons;
-vmCvar_t ch_rewardY;
-vmCvar_t ch_fragMessageY;
-vmCvar_t ch_fragMessageScale;
 vmCvar_t cg_animateChatBalloon;
 vmCvar_t ch_animateScroll;
 vmCvar_t cg_zoomAnimationTime;
@@ -691,9 +688,6 @@ static cvarTable_t cvarTable[] = {
     {&cg_plasmaStyle, "cg_plasmaStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "2"},
     {&cg_railStyle, "cg_railStyle", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "1", "2"},
     {&ch_animateRewardIcons, "ch_animateRewardIcons", "1", CVAR_ARCHIVE},
-    {&ch_rewardY, "ch_rewardY", "113", CVAR_ARCHIVE},
-    {&ch_fragMessageY, "ch_fragMessageY", "150", CVAR_ARCHIVE},
-    {&ch_fragMessageScale, "ch_fragMessageScale", "0.15", CVAR_ARCHIVE},
     {&cg_animateChatBalloon, "cg_animateChatBalloon", "1", CVAR_ARCHIVE},
     {&ch_animateScroll, "ch_animateScroll", "1", CVAR_ARCHIVE},
     {&cg_zoomAnimationTime, "cg_zoomAnimationTime", "150", CVAR_ARCHIVE},
@@ -2008,14 +2002,6 @@ static void CG_RegisterGraphics(void) {
             }
         }
 
-        cgs.media.fragMessageFont = 0;
-        if (trap_FS_FOpenFile("fonts/handelgothicex.ttf", &f, FS_READ) > 0) {
-            trap_FS_FCloseFile(f);
-            cgs.media.fragMessageFont = trap_R_Font_Register("fonts/handelgothicex.ttf");
-            if (cgs.media.fragMessageFont < 0) {
-                cgs.media.fragMessageFont = 0;
-            }
-        }
     }
     cgs.media.medalMidair = trap_R_RegisterShaderNoMip("medal_midair");
     cgs.media.medalPerfect = trap_R_RegisterShaderNoMip("medal_perfect");

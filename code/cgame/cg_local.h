@@ -929,7 +929,6 @@ typedef struct {
 
     qhandle_t balloonShader;
     qhandle_t medalFrames[6][24];
-    int fragMessageFont;
     qhandle_t chatBalloonFrames[16];
     qhandle_t connectionShader;
 
@@ -1757,9 +1756,6 @@ extern vmCvar_t cg_svFps;
 extern vmCvar_t cg_projectileNudge;
 extern vmCvar_t cg_autoProjectileNudge;
 extern vmCvar_t ch_animateRewardIcons;
-extern vmCvar_t ch_rewardY;
-extern vmCvar_t ch_fragMessageY;
-extern vmCvar_t ch_fragMessageScale;
 extern vmCvar_t cg_animateChatBalloon;
 extern vmCvar_t ch_animateScroll;
 extern vmCvar_t cg_zoomAnimationTime;

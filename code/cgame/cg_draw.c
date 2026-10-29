@@ -1250,6 +1250,7 @@ static void CG_DrawRewardIcon(float x, float y, float size, qhandle_t shader) {
 #define REWARD_COUNT_X (REWARD_ICON_X + 40.0f * REWARD_ICON_SCALE)
 #define REWARD_COUNT_DY (24.0f * REWARD_ICON_SCALE)
 #define REWARD_COUNT_SCALE (0.2f * REWARD_ICON_SCALE)
+#define REWARD_Y (cg.warmup ? 113.0f : 90.0f)
 
 static void CG_DrawReward(void) {
 	vec4_t color;
@@ -1284,9 +1285,9 @@ static void CG_DrawReward(void) {
 		color[3] = (remaining < 200) ? remaining / 200.0f : 1.0f;
 	}
 	trap_R_SetColor(color);
-	CG_DrawRewardIcon(REWARD_ICON_X, ch_rewardY.value, REWARD_ICON_SIZE, cg.rewardShader[0]);
+	CG_DrawRewardIcon(REWARD_ICON_X, REWARD_Y, REWARD_ICON_SIZE, cg.rewardShader[0]);
 	if (cg.rewardCount[0] > cg_drawRewardsRowSize.integer) {
-		CG_DrawText(REWARD_COUNT_X, ch_rewardY.value + REWARD_COUNT_DY, 0, REWARD_COUNT_SCALE, color,
+		CG_DrawText(REWARD_COUNT_X, REWARD_Y + REWARD_COUNT_DY, 0, REWARD_COUNT_SCALE, color,
 					va("%d", cg.rewardCount[0]), 0, 0, 0);
 	}
 	trap_R_SetColor(NULL);
@@ -1567,15 +1568,9 @@ static void CG_DrawCenterString(void) {
 	}
 	trap_R_SetColor(color);
 
-	if (cg.centerPrintFrag) {
-		y = ch_fragMessageY.value;
-		scale = ch_fragMessageScale.value;
-		font = cgs.media.fragMessageFont;
-	} else {
-		y = (float)cg.centerPrintY;
-		scale = cg.centerPrintScale;
-		font = 0;
-	}
+	y = (float)cg.centerPrintY;
+	scale = cg.centerPrintScale;
+	font = 0;
 
 	start = cg.centerPrint;
 

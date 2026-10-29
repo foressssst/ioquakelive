@@ -187,11 +187,11 @@ static void CG_ShowFragMessage(int target, int mod, const char* targetName) {
         s = (mod == MOD_TELEFRAG) ? va("You fragged %s, your teammate.", targetName)
                                   : va("You fragged %s, your teammate.\n\n^1Watch your fire!^7", targetName);
     } else {
-        s = va("You fragged %s", targetName);
+        s = va("You fragged %s.", targetName);
     }
 
     if (!cg_cameraOrbit.integer) {
-        CG_CenterPrint(s, cg.warmup ? 144 : 90, 0.3f);
+        CG_CenterPrint(s, cg.warmup ? 144 : 125, 0.3f);
         cg.centerPrintFrag = qtrue;
     }
 }

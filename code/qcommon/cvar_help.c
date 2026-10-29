@@ -1424,9 +1424,6 @@ static const cvarHelp_t cvarHelp[] = {
                               HV("2") "Loops"},
     {"ch_animateScroll", "the chat and the item pickups fade in, slide as lines come and go, and fade out; "
                          "the chat history and the chat behind the scoreboard come and go the same way"},
-    {"ch_rewardY", "height of the medal on the 480 screen, from the top (for tuning)"},
-    {"ch_fragMessageY", "height of the frag message on the 480 screen, from the top (for tuning)"},
-    {"ch_fragMessageScale", "size of the frag message (for tuning)"},
     {"ch_chatLines", "lines of chat shown with " HC("ch_animateScroll")},
     {"cg_zoomAnimationTime", "milliseconds the zoom takes to go in or out, up to 500"},
     {"cg_drawBrightWeapons", "draws weapons as flat, bright shapes; add the values\n"
