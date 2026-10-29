@@ -163,6 +163,7 @@ static const stCvar_t stCvars[] = {
     {ST_TAB_GAME, "Teammate POIs", "cg_teammatepois", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 1},
     {ST_TAB_GAME, "Auto Stats", "ch_autostats", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Save the console with the final scores to a file under stats/ when a match ends.", 1},
     {ST_TAB_GAME, "Check for Updates", "cl_checkupdates", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "Ask at startup whether a newer version is out and say so in the main menu.", 1},
+    {ST_TAB_GAME, "Ask to Open Steam", "com_steamprompt", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, "At startup, offer to open Steam when it is not running.", 1},
     {ST_TAB_HUD, "HUD", NULL, ST_HEADING, 0.0f, 0.0f, 0.0f, NULL, 0, NULL, -1},
     {ST_TAB_HUD, "HUD Style", "cg_hudfiles", ST_SELECT, 0.0f, 0.0f, 0.0f, stOpts_cg_hudfiles, 3, "Choose between small, medium and large sized HUD icons.", 0},
     {ST_TAB_HUD, "Level Timer Direction", "cg_leveltimerdirection", ST_SELECT, 0.0f, 1.0f, 0.0f, stOpts_cg_leveltimerdirection, 2, "Direction in which the match timer counts.", 0},

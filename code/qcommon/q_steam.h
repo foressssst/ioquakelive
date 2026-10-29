@@ -6,6 +6,7 @@
 #include "../qcommon/qcommon.h"
 
 void Steam_Init(void);
+void Steam_PromptToStart(void);
 void Steam_GS_Init(void);
 
 void Steam_Frame(void);

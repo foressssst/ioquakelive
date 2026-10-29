@@ -2074,6 +2074,10 @@ void Com_Init(char* commandLine) {
 
     Com_StartupVariable(NULL);
 
+    if (!Cvar_VariableIntegerValue("dedicated")) {
+        Steam_PromptToStart();
+    }
+
     com_dedicated = Cvar_Get("dedicated", "0", CVAR_LATCH);
     Cvar_CheckRange(com_dedicated, 0, 2, qtrue);
     Com_InitHunkMemory();

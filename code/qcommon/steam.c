@@ -1222,14 +1222,12 @@ static qboolean Steam_OfferToStart(void) {
     return qfalse;
 }
 
-void Steam_Init(void) {
-    qboolean started;
+static void Steam_Start(qboolean started) {
     int tries;
 
-    if (Cvar_VariableIntegerValue("com_build")) {
+    if (st.clientUp || Cvar_VariableIntegerValue("com_build")) {
         return;
     }
-    started = Steam_OfferToStart();
     if (!Steam_Load()) {
         return;
     }
@@ -1276,6 +1274,21 @@ void Steam_Init(void) {
     Cmd_AddCommand("steamservers", Steam_ServerList_f);
     Cmd_AddCommand("steamstatus", Steam_Status_f);
     Com_Printf("Steam API initialized.\n");
+}
+
+void Steam_Init(void) {
+    Steam_Start(qfalse);
+}
+
+void Steam_PromptToStart(void) {
+    cvar_t* prompt = Cvar_Get("com_steamPrompt", "0", CVAR_ARCHIVE);
+
+    if (st.clientUp || !prompt->integer || Cvar_VariableIntegerValue("com_build")) {
+        return;
+    }
+    if (Steam_OfferToStart()) {
+        Steam_Start(qtrue);
+    }
 }
 
 void Steam_GS_Init(void) {
