@@ -543,7 +543,7 @@ void UI_Home_Banner(void) {
     UI_Home_VersionColor(fill);
     if (!Q_stricmp(status, "latest")) {
         SM_Fill(-1, y, smVW + 2, h, fill, NULL);
-        SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText,
+        SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 18, y + 3.75f, 24.0f), 18, smText,
                     va("You are running the latest version of ioquakelive (%s).", version), qfalse);
         return;
     }
@@ -554,7 +554,7 @@ void UI_Home_Banner(void) {
         percent = percent < 0 ? 0 : percent > 100 ? 100 : percent;
         SM_Fill(-1, y, smVW + 2, h, grey, NULL);
         SM_Fill(-1, y, (smVW + 2) * percent / 100.0f, h, fill, NULL);
-        SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText,
+        SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 18, y + 3.75f, 24.0f), 18, smText,
                     Q_stricmp(status, "installing") ? va("Downloading ioquakelive %s... %i%%", version, percent)
                                                     : va("Installing ioquakelive %s...", version),
                     qfalse);
@@ -563,15 +563,15 @@ void UI_Home_Banner(void) {
     SM_Fill(-1, y, smVW + 2, h, fill, NULL);
     if (!Q_stricmp(status, "ready")) {
         index = 2;
-        SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText,
+        SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 18, y + 3.75f, 24.0f), 18, smText,
                     va("ioquakelive %s is installed. Click here to restart the game.", version), qfalse);
     } else if (!Q_stricmp(status, "failed")) {
         index = 3;
-        SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText,
+        SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 18, y + 3.75f, 24.0f), 18, smText,
                     "The update could not be installed. Click here to download it.", qfalse);
     } else {
         index = 1;
-        SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 15, y + 3.75f, 24.0f), 15, smText,
+        SM_Centered(smVW * 0.5f, SM_Baseline(FONT_SANS, 18, y + 3.75f, 24.0f), 18, smText,
                     va(Q_stricmp(status, "prerelease") ? "ioquakelive %s is available. Click here to %s."
                                                        : "ioquakelive %s (experimental) is available. Click here to %s.",
                        version, trap_Cvar_VariableValue("cl_updateAuto") ? "update" : "download it"),

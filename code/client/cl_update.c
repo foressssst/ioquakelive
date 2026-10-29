@@ -20,7 +20,6 @@
 #define CL_UPDATE_DOWNLOAD "https://github.com/foressssst/ioquakelive/releases/download/"
 #define CL_UPDATE_TIMEOUT_MS 5000
 #define CL_UPDATE_DOWNLOAD_TIMEOUT_MS 30000
-#define CL_UPDATE_PROMPT_WAIT_MS 1500
 #define CL_VERIFIED_URL "https://gist.githubusercontent.com/foressssst/65861cb796e4d984cfd73b384e8c2098/raw/ioquakelive-verified.txt"
 #define CL_VERIFIED_MAX 64
 #define CL_VERIFIED_TEXT 8192
@@ -63,7 +62,6 @@ static int clUpdateNumFiles;
 static int clUpdateShownPercent = -1;
 static qboolean clUpdateRestart;
 static qboolean clUpdateAutoRestart;
-static int clUpdateStartTime;
 static volatile long clVerifiedState;
 static char clVerifiedText[CL_VERIFIED_TEXT];
 static unsigned char clVerifiedSigned[CL_VERIFIED_TEXT + crypto_sign_BYTES];
@@ -726,6 +724,7 @@ static void CL_UpdateDownload_f(void) {
     if (state != CLD_IDLE) {
         return;
     }
+    clUpdateAutoRestart = qtrue;
     CL_UpdateSet(&clDownloadBytes, 0);
     CL_UpdateSet(&clDownloadState, CLD_RUNNING);
     Cvar_Set("cl_updateStatus", "downloading");
@@ -814,7 +813,6 @@ void CL_UpdateInit(void) {
     CL_UpdateSet(&clVerifiedState, CLU_RUNNING);
     if (cl_checkUpdates->integer && CL_UpdateGet(&clUpdateState) == CLU_IDLE) {
         CL_UpdateSet(&clUpdateState, CLU_RUNNING);
-        clUpdateStartTime = Sys_Milliseconds();
     }
     if (!Sys_ThreadCreate(CL_UpdateThread, NULL)) {
         if (CL_UpdateGet(&clUpdateState) == CLU_RUNNING) {
@@ -843,12 +841,13 @@ static void CL_UpdateDownloadFrame(void) {
             CL_UpdateSet(&clDownloadState, CLD_READY);
             Cvar_Set("cl_updateStatus", "ready");
             Com_Printf("The ioquakelive update is ready; it is installed when the game restarts.\n");
-            if (clUpdateAutoRestart && clc.state == CA_DISCONNECTED) {
-                CL_UpdateRestart_f();
-            }
         } else {
             CL_UpdateSet(&clDownloadState, CLD_FAILED);
             Cvar_Set("cl_updateStatus", "failed");
+        }
+    } else if (state == CLD_READY) {
+        if (clUpdateAutoRestart && !clUpdateRestart && clc.state == CA_DISCONNECTED) {
+            CL_UpdateRestart_f();
         }
     } else if (state == CLD_FAILED && Q_stricmp(Cvar_VariableString("cl_updateStatus"), "failed")) {
         Cvar_Set("cl_updateStatus", "failed");
@@ -896,28 +895,4 @@ void CL_UpdateFrame(void) {
     Cvar_Set("cl_updateStatus", !Q_stricmp(kind, "pre") ? "prerelease" : "available");
     Cvar_Set("cl_updateAuto", clUpdateAsset[0] && clUpdateDir[0] ? "1" : "0");
     Com_Printf("A new version of ioquakelive is available: %s\n%s\n", version, url);
-}
-
-void CL_UpdatePrompt(void) {
-    static qboolean asked;
-
-    if (asked) {
-        return;
-    }
-    asked = qtrue;
-    while (CL_UpdateGet(&clUpdateState) == CLU_RUNNING && Sys_Milliseconds() - clUpdateStartTime < CL_UPDATE_PROMPT_WAIT_MS) {
-        Sys_Sleep(10);
-    }
-    CL_UpdateFrame();
-    if (Q_stricmp(Cvar_VariableString("cl_updateStatus"), "available") || !Cvar_VariableIntegerValue("cl_updateAuto")) {
-        return;
-    }
-    if (Sys_Dialog(DT_YES_NO,
-                   va("There is an update from ioquakelive %s to %s.\nDo you want to download it?", PRODUCT_VERSION,
-                      Cvar_VariableString("cl_updateVersion")),
-                   "ioquakelive") != DR_YES) {
-        return;
-    }
-    clUpdateAutoRestart = qtrue;
-    CL_UpdateDownload_f();
 }
