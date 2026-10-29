@@ -7606,10 +7606,6 @@ static void vk_reflex_sleep( void )
 	}
 
 	maxFps = r_lowLatency->integer ? ri.Cvar_VariableIntegerValue( "com_maxfps" ) : 0;
-	if ( r_lowLatency->integer && ri.Cvar_VariableIntegerValue( "com_maxfpsVRR" ) && glConfig.displayFrequency > 3 &&
-		( maxFps <= 0 || maxFps > glConfig.displayFrequency - 3 ) ) {
-		maxFps = glConfig.displayFrequency - 3;
-	}
 
 	if ( vk.latencyModeSet != r_lowLatency->integer || vk.latencyMaxFps != maxFps ) {
 		mode.sType = VK_STRUCTURE_TYPE_LATENCY_SLEEP_MODE_INFO_NV;

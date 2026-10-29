@@ -84,7 +84,6 @@ cvar_t* com_protocol;
 cvar_t* com_basegame;
 cvar_t* com_homepath;
 cvar_t* com_busyWait;
-cvar_t* com_maxfpsVRR;
 cvar_t* com_workers;
 static void Com_JobTest_f(void);
 cvar_t* com_preciseFrameTiming;
@@ -2115,7 +2114,6 @@ void Com_Init(char* commandLine) {
     com_minimized = Cvar_Get("com_minimized", "0", CVAR_ROM);
     com_maxfpsMinimized = Cvar_Get("com_maxfpsMinimized", "10", CVAR_ARCHIVE);
     com_busyWait = Cvar_Get("com_busyWait", "0", CVAR_ARCHIVE);
-    com_maxfpsVRR = Cvar_Get("com_maxfpsVRR", "0", CVAR_ARCHIVE);
 
     Cvar_Get("com_pid", va("%d", Sys_PID()), CVAR_ROM);
     Cvar_Get("com_idleSleep", "1", CVAR_ARCHIVE | CVAR_USERSAVE);
@@ -2613,19 +2611,6 @@ static void Com_JobTest_f(void) {
     Com_Printf("  results %s\n", parallel == single ? "match" : "DO NOT MATCH");
 }
 
-static int Com_FrameCap(void) {
-    int cap = com_maxfps->integer;
-
-    if (com_maxfpsVRR->integer) {
-        int hz = CL_DisplayFrequency();
-
-        if (hz > 3 && (cap <= 0 || cap > hz - 3)) {
-            cap = hz - 3;
-        }
-    }
-    return cap;
-}
-
 static void Com_IdleExit(void) {
     static int idleSince = 0;
     int limit = Cvar_VariableIntegerValue("sv_idleExit");
@@ -2689,10 +2674,9 @@ void Com_Frame(void) {
                 minMsec = 1000 / com_maxfpsMinimized->integer;
             } else if (com_unfocused->integer && com_maxfpsUnfocused->integer > 0) {
                 minMsec = 1000 / com_maxfpsUnfocused->integer;
-            } else if (Com_FrameCap() > 0) {
-                minMsec = 1000 / Com_FrameCap();
-                if (Com_FrameCap() != com_maxfps->integer)
-                    capUs = 1000000 / Com_FrameCap();
+            } else if (com_maxfps->integer > 0) {
+                minMsec = 1000 / com_maxfps->integer;
+                capUs = 1000000 / com_maxfps->integer;
             } else
                 minMsec = 1;
             if (minMsec < 1)

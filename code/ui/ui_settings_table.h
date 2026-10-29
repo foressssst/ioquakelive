@@ -297,7 +297,6 @@ static const stCvar_t stCvars[] = {
 #endif
     {ST_TAB_VIDEO, "Antialiasing", "r_ext_multisample", ST_SELECT, 0.0f, 8.0f, 0.0f, stOpts_r_ext_multisample, 4, NULL, 1},
     {ST_TAB_VIDEO, "Anisotropic Filtering", "r_ext_max_anisotropy", ST_SELECT, 2.0f, 16.0f, 0.0f, stOpts_r_ext_max_anisotropy, 4, NULL, 1},
-    {ST_TAB_VIDEO, "VRR Frame Cap", "com_maxfpsvrr", ST_BOOL, 0.0f, 1.0f, 0.0f, NULL, 0, NULL, 1},
     {ST_TAB_VIDEO, "Background FPS", "com_maxfpsunfocused", ST_RANGE, 0.0f, 250.0f, 5.0f, NULL, 0, NULL, 1},
     {ST_TAB_VIDEO, "Minimized FPS", "com_maxfpsminimized", ST_RANGE, 0.0f, 60.0f, 5.0f, NULL, 0, NULL, 1},
     {ST_TAB_VIDEO, "Bright Weapons", "cg_drawbrightweapons", ST_SELECT, 0.0f, 7.0f, 0.0f, stOpts_cg_drawbrightweapons, 5, NULL, 1},

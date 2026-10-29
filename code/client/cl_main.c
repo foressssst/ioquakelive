@@ -2605,10 +2605,6 @@ void CL_LowLatencyWait(void) {
     }
 }
 
-int CL_DisplayFrequency(void) {
-    return cls.rendererStarted ? cls.glconfig.displayFrequency : 0;
-}
-
 void CL_Frame(int msec) {
     if (!com_cl_running->integer) {
         return;
