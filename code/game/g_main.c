@@ -3264,9 +3264,20 @@ static qboolean ExecuteVoteCommand(const char *voteCmd) {
         return qtrue;
     }
     if (!Q_stricmp(arg0, "teamsize")) {
-        trap_Cvar_Set("teamsize", arg1);
-        trap_SendConsoleCommand(EXEC_APPEND, "map_restart 0\n");
-        return qtrue;
+        int ts = atoi(arg1);
+        int red, blue;
+
+        if (!ts) {
+            return qfalse;
+        }
+        Team_LivingTeamCounts(&red, &blue);
+        if (ts < red || ts < blue) {
+            trap_SendServerCommand(-1,
+                va("print \"^1%s has more than %d players. Players must leave the team before this teamsize can be set.^7\"",
+                   (ts < red) ? "Red Team" : "Blue Team", ts));
+            return qtrue;
+        }
+        return qfalse;
     }
     if (!Q_stricmp(arg0, "weaprespawn")) {
         trap_Cvar_Set("g_weaponRespawn", arg1);
