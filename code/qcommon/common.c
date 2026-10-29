@@ -2083,7 +2083,7 @@ void Com_Init(char* commandLine) {
 #ifdef __EMSCRIPTEN__
     com_maxfps = Cvar_Get("com_maxfps", "0", CVAR_ARCHIVE);
 #else
-    com_maxfps = Cvar_GetRange("com_maxfps", "125", "0", "1000", CVAR_ARCHIVE | CVAR_USERSAVE);
+    com_maxfps = Cvar_GetRange("com_maxfps", "250", "30", "250", CVAR_ARCHIVE | CVAR_USERSAVE);
 #endif
     com_blood = Cvar_Get("com_blood", "1", CVAR_ARCHIVE);
 
@@ -2683,15 +2683,18 @@ void Com_Frame(void) {
         else {
             if (com_minimized->integer && com_maxfpsMinimized->integer > 0) {
                 minMsec = 1000 / com_maxfpsMinimized->integer;
-                capUs = 1000000 / com_maxfpsMinimized->integer;
             } else if (com_unfocused->integer && com_maxfpsUnfocused->integer > 0) {
                 minMsec = 1000 / com_maxfpsUnfocused->integer;
-                capUs = 1000000 / com_maxfpsUnfocused->integer;
             } else if (Com_FrameCap() > 0) {
                 minMsec = 1000 / Com_FrameCap();
-                capUs = 1000000 / Com_FrameCap();
+                if (Com_FrameCap() != com_maxfps->integer)
+                    capUs = 1000000 / Com_FrameCap();
             } else
                 minMsec = 1;
+            if (minMsec < 1)
+                minMsec = 1;
+            if (!capUs)
+                capUs = minMsec * 1000;
 
             timeVal = com_frameTime - lastTime;
             bias += timeVal - minMsec;
