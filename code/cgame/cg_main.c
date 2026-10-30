@@ -738,7 +738,7 @@ static cvarTable_t cvarTable[] = {
     {&cg_teamChatBeep, "cg_teamChatBeep", "0", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_gametype, "cg_gametype", "0", CVAR_ROM},
     {&cg_svFps, "sv_fps", "40", CVAR_ROM},
-    {&cg_comMaxfps, "com_maxfps", "250", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "30", "250"},
+    {&cg_comMaxfps, "com_maxfps", "250", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "250"},
 
     {&cg_announcerLastStandingVO, "cg_announcerLastStandingVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},
     {&cg_announcerLeadsVO, "cg_announcerLeadsVO", "1", CVAR_USERSAVE | CVAR_VM_CREATED | CVAR_REPLICATE | CVAR_ARCHIVE, "0", "1"},

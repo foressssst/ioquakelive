@@ -2086,7 +2086,7 @@ void Com_Init(char* commandLine) {
 #ifdef __EMSCRIPTEN__
     com_maxfps = Cvar_Get("com_maxfps", "0", CVAR_ARCHIVE);
 #else
-    com_maxfps = Cvar_GetRange("com_maxfps", "250", "30", "250", CVAR_ARCHIVE | CVAR_USERSAVE);
+    com_maxfps = Cvar_GetRange("com_maxfps", "250", "0", "250", CVAR_ARCHIVE | CVAR_USERSAVE);
 #endif
     com_blood = Cvar_Get("com_blood", "1", CVAR_ARCHIVE);
 

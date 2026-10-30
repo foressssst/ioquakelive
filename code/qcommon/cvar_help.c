@@ -869,7 +869,7 @@ static const cvarHelp_t cvarHelp[] = {
     {"r_measureOverdraw", "measures overdraw"},
     {"r_verbose", "prints more renderer messages"},
 
-    {"com_maxfps", "most frames per second"},
+    {"com_maxfps", "most frames per second; 0 for no limit"},
     {"com_maxfpsUnfocused", "most frames per second while the window is in the background; 0 for no limit"},
     {"com_maxfpsMinimized", "most frames per second while the window is minimized; 0 for no limit"},
     {"com_busyWait", "waits for the next frame by spinning instead of sleeping"},
