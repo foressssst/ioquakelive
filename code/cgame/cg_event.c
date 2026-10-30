@@ -400,6 +400,12 @@ static void CG_Obituary(entityState_t* ent) {
         CG_ShowFragMessage(target, mod, targetName);
     }
 
+    if (cg_followKiller.integer && (cg.snap->ps.pm_flags & PMF_FOLLOW) &&
+        target == cg.snap->ps.clientNum && (cg.snap->ps.eFlags & EF_SPECTATOR)) {
+        cg.autoFollowClient = attacker;
+        cg.autoFollowTime = cg.time + 400;
+    }
+
     if (!attackerInfo) {
         attacker = ENTITYNUM_WORLD;
         strcpy(attackerName, "noname");
@@ -507,11 +513,6 @@ static void CG_Obituary(entityState_t* ent) {
     }
 
     CG_Printf("%s died.\n", targetName);
-
-    if (cg_followKiller.integer && target == cg.snap->ps.clientNum &&
-        attacker != target && attacker >= 0 && attacker < MAX_CLIENTS) {
-        trap_SendConsoleCommand(va("follow %d\n", attacker));
-    }
 }
 
 static void CG_UseItem(centity_t* cent) {

@@ -755,7 +755,7 @@ static void CG_CheckAutoFollow(void) {
     }
 
     if (cg.snap->ps.pm_flags & PMF_FOLLOW) {
-        trap_SendConsoleCommand(va("follow %d", cg.autoFollowClient));
+        trap_SendClientCommand(va("follow %d", cg.autoFollowClient));
     }
 
     cg.autoFollowClient = -1;

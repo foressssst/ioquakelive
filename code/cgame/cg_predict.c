@@ -703,7 +703,7 @@ void CG_SpecAutoFollow(int clientNum, int mode) {
         suffix = "";
     }
 
-    trap_SendConsoleCommand(va("follow %d%s", clientNum, suffix));
+    trap_SendClientCommand(va("follow %d%s", clientNum, suffix));
 }
 
 void CG_SpecFollowKiller(int clientNum) {

@@ -665,9 +665,17 @@ void Cmd_Follow_f(gentity_t* ent) {
     int i;
     char arg[MAX_TOKEN_CHARS];
 
-    if (trap_Argc() != 2) {
+    if (trap_Argc() < 2) {
         if (ent->client->sess.spectatorState == SPECTATOR_FOLLOW) {
-            StopFollowing(ent);
+            int redAlive, blueAlive;
+
+            Team_LivingTeamCounts(&redAlive, &blueAlive);
+            if (ent->client->sess.sessionTeam != TEAM_SPECTATOR && !g_teamSpecFreeCam.integer &&
+                redAlive > 0 && blueAlive > 0) {
+                FollowCycle(ent, 1);
+            } else {
+                StopFollowing(ent);
+            }
         }
         return;
     }
@@ -678,15 +686,26 @@ void Cmd_Follow_f(gentity_t* ent) {
         return;
     }
 
+    if (ent->client->sess.spectatorState == SPECTATOR_FOLLOW && ent->client->sess.spectatorClient >= 0 &&
+        trap_Argc() >= 3) {
+        const gclient_t* followed = &level.clients[ent->client->sess.spectatorClient];
+
+        trap_Argv(2, arg, sizeof(arg));
+        if (!strcmp(arg, "pw") && (followed->ps.powerups[PW_REDFLAG] || followed->ps.powerups[PW_BLUEFLAG] ||
+                                   followed->ps.powerups[PW_NEUTRALFLAG])) {
+            return;
+        }
+    }
+
     if (&level.clients[i] == ent->client) {
         return;
     }
 
-    if (level.clients[i].sess.sessionTeam == TEAM_SPECTATOR) {
+    if (level.clients[i].ps.pm_type == PM_SPECTATOR) {
         return;
     }
 
-    if ((g_gametype.integer == GT_DUEL) && ent->client->sess.sessionTeam == TEAM_FREE) {
+    if (!level.warmupTime && g_gametype.integer == GT_DUEL && ent->client->sess.sessionTeam == TEAM_FREE) {
         ent->client->sess.losses++;
     }
 
