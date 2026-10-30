@@ -391,8 +391,10 @@ static void CG_CheckAutoFire(void) {
         return;
     }
 
-    cmdNum = trap_GetCurrentCmdNumber();
-    trap_GetUserCmd(cmdNum, &cmd);
+    if (!trap_GetPendingCmd(&cmd)) {
+        cmdNum = trap_GetCurrentCmdNumber();
+        trap_GetUserCmd(cmdNum, &cmd);
+    }
 
     if (cmd.buttons & BUTTON_TALK) {
         return;
