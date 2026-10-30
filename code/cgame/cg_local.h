@@ -143,6 +143,7 @@ typedef struct centity_s {
     int pickupFrame;
 
     int snapShotTime;
+    int stuckAxes;
 
     playerEntity_t pe;
 

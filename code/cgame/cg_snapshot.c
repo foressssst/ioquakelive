@@ -37,6 +37,22 @@ static void CG_ResetEntity(centity_t* cent) {
 }
 
 static void CG_TransitionEntity(centity_t* cent) {
+    int i;
+
+    cent->stuckAxes = 0;
+    if (cent->interpolate && cent->nextState.number < MAX_CLIENTS && cg.snap->serverTime > cent->snapShotTime) {
+        float dt = (cg.snap->serverTime - cent->snapShotTime) * 0.001f;
+
+        for (i = 0; i < 3; i++) {
+            float expected = cent->currentState.pos.trDelta[i] * dt;
+            float moved = cent->nextState.pos.trBase[i] - cent->currentState.pos.trBase[i];
+
+            if (expected * expected > 4.0f && moved * expected < 0.25f * expected * expected) {
+                cent->stuckAxes |= 1 << i;
+            }
+        }
+    }
+
     cent->currentState = cent->nextState;
     cent->currentValid = qtrue;
 

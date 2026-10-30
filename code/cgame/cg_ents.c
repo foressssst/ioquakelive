@@ -1197,6 +1197,16 @@ static void CG_CalcEntityLerpPositions(centity_t* cent) {
     BG_EvaluateTrajectory(&cent->currentState.pos, cg.time + timeshift, cent->lerpOrigin);
     BG_EvaluateTrajectory(&cent->currentState.apos, cg.time + timeshift, cent->lerpAngles);
 
+    if (cent->stuckAxes && cent->currentState.number < MAX_CLIENTS) {
+        int i;
+
+        for (i = 0; i < 3; i++) {
+            if (cent->stuckAxes & (1 << i)) {
+                cent->lerpOrigin[i] = cent->currentState.pos.trBase[i];
+            }
+        }
+    }
+
     if (timeshift != 0) {
         trace_t tr;
         vec3_t lastOrigin;
