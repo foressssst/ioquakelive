@@ -140,6 +140,7 @@ typedef struct centity_s {
     int leadTrTime;
     int dustTrailTime;
     int miscTime;
+    int pickupFrame;
 
     int snapShotTime;
 

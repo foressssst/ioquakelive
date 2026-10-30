@@ -250,7 +250,7 @@ static void CG_TouchItem(centity_t* cent) {
         return;
     }
 
-    if (cent->miscTime == cg.time) {
+    if (cent->pickupFrame == cg.clientFrame) {
         return;
     }
 
@@ -273,6 +273,7 @@ static void CG_TouchItem(centity_t* cent) {
     cent->currentState.eFlags |= EF_NODRAW;
 
     cent->miscTime = cg.time;
+    cent->pickupFrame = cg.clientFrame;
 
     if (item->giType == IT_WEAPON) {
         cg.predictedPlayerState.stats[STAT_WEAPONS] |= 1 << item->giTag;
