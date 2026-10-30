@@ -74,7 +74,7 @@ jobs:
   macos-compile:
     name: macOS (compile + sign dylibs)
     if: (github.event_name == 'workflow_dispatch' && !inputs.windows_only) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:')) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:'))
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
     - uses: actions/checkout@v4
       with:
@@ -167,7 +167,7 @@ jobs:
     name: macOS (bundle + notarise)
     if: (github.event_name == 'workflow_dispatch' && !inputs.windows_only) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:')) || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'prerelease:'))
     needs: [linux, windows, macos-compile]
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5
