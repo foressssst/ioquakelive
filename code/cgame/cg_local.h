@@ -595,6 +595,7 @@ typedef struct {
 
     float stepChange;
     int stepTime;
+    int pendingStepBase;
 
     float duckChange;
     int duckTime;

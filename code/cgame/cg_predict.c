@@ -470,6 +470,7 @@ void CG_PredictPlayerState(void) {
     usercmd_t oldestCmd;
     usercmd_t latestCmd;
     int following;
+    int stepBase;
     const playerState_t* base;
 
     cg.hyperspace = qfalse;
@@ -612,11 +613,14 @@ void CG_PredictPlayerState(void) {
 
         cg_pmove.gauntletHit = qfalse;
 
+        stepBase = cg.predictedPlayerState.commandTime;
         Pmove(&cg_pmove);
 
         moved = qtrue;
 
-        CG_UpdateStepChange();
+        if (cg_pmove.stepTime == cg_pmove.cmd.serverTime && stepBase != cg.pendingStepBase) {
+            CG_UpdateStepChange();
+        }
 
         CG_TouchTriggerPrediction();
 
@@ -633,11 +637,15 @@ void CG_PredictPlayerState(void) {
     if (trap_GetPendingCmd(&cg_pmove.cmd) && cg_pmove.cmd.serverTime > cg.predictedPlayerState.commandTime) {
         cg_pmove.gauntletHit = qfalse;
 
+        stepBase = cg.predictedPlayerState.commandTime;
         Pmove(&cg_pmove);
 
         moved = qtrue;
 
-        CG_UpdateStepChange();
+        if (cg_pmove.stepTime == cg_pmove.cmd.serverTime && stepBase != cg.pendingStepBase) {
+            CG_UpdateStepChange();
+            cg.pendingStepBase = stepBase;
+        }
 
         CG_TouchTriggerPrediction();
     }
