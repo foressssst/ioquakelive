@@ -1087,6 +1087,7 @@ static const cvarHelp_t cvarHelp[] = {
     {"sv_vac", "the server runs with VAC; read when the game starts"},
     {"sv_workshopFile", "file that lists the Workshop items the server downloads before it starts, one id per line"},
     {"sv_fullRedirect", "other servers (ip:port, separated by spaces) where an ioquakelive player who finds this one full is sent; the one with room and the most players"},
+    {"sv_fullRedirectMessage", "what an ioquakelive player sent elsewhere by sv_fullRedirect reads during the countdown; {server} is the name of the server they go to; empty for the default English text"},
     {"pmove_AirStepFriction", "speed lost when stepping up in the air"},
     {"pmove_BunnyHop", "hopping forward keeps accelerating past the running speed"},
     {"pmove_CircleStrafeFriction", "friction while running forward and strafing at once"},

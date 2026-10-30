@@ -59,6 +59,7 @@ cvar_t* sv_errorExit;
 cvar_t* sv_workshopFile;
 cvar_t* sv_quitOnEmpty;
 cvar_t* sv_fullRedirect;
+cvar_t* sv_fullRedirectMessage;
 cvar_t* sv_lanForceRate;
 cvar_t* sv_banFile;
 cvar_t* sv_altEntDir;
@@ -558,6 +559,7 @@ typedef struct {
     int clients;
     int maxClients;
     qboolean needPass;
+    char name[64];
 } svRedirect_t;
 
 static svRedirect_t svRedirects[SV_MAX_REDIRECTS];
@@ -635,6 +637,17 @@ static void SV_RedirectFrame(void) {
     }
 }
 
+static void SV_RedirectSetName(svRedirect_t* r, const char* s) {
+    int l = 0;
+
+    for (; *s && l < (int)sizeof(r->name) - 1; s++) {
+        if (*s >= ' ' && *s <= '~') {
+            r->name[l++] = *s;
+        }
+    }
+    r->name[l] = '\0';
+}
+
 static const byte* SV_SkipSteamString(const byte* p, const byte* end) {
     while (p < end && *p) {
         p++;
@@ -645,6 +658,7 @@ static const byte* SV_SkipSteamString(const byte* p, const byte* end) {
 static qboolean SV_RedirectSteamAnswer(netadr_t from, msg_t* msg) {
     const byte* p = msg->data + 5;
     const byte* end = msg->data + msg->cursize;
+    const byte* name;
     svRedirect_t* r = NULL;
     int i;
 
@@ -667,12 +681,14 @@ static qboolean SV_RedirectSteamAnswer(netadr_t from, msg_t* msg) {
         return qtrue;
     }
     p++;
+    name = p;
     for (i = 0; i < 4 && p; i++) {
         p = SV_SkipSteamString(p, end);
     }
     if (!p || end - p < 9) {
         return qtrue;
     }
+    SV_RedirectSetName(r, (const char*)name);
     p += 2;
     r->clients = p[0];
     r->maxClients = p[1];
@@ -694,11 +710,13 @@ static void SV_RedirectInfoResponse(netadr_t from, msg_t* msg) {
     svRedirects[i].clients = atoi(Info_ValueForKey(info, "clients"));
     svRedirects[i].maxClients = atoi(Info_ValueForKey(info, "sv_maxclients"));
     svRedirects[i].needPass = atoi(Info_ValueForKey(info, "g_needpass")) ? qtrue : qfalse;
+    SV_RedirectSetName(&svRedirects[i], Info_ValueForKey(info, "hostname"));
     svRedirects[i].answered = Sys_Milliseconds();
 }
 
 void SV_FullRedirect(netadr_t from, int challenge) {
     svRedirect_t* best = NULL;
+    char to[MAX_OSPATH];
     int now = Sys_Milliseconds();
     int i;
 
@@ -716,10 +734,12 @@ void SV_FullRedirect(netadr_t from, int challenge) {
         return;
     }
     if (best->adr.type == NA_IP && best->adr.ip[0] == 127) {
-        NET_OutOfBandPrint(NS_SERVER, from, "redirect %i :%i", challenge, BigShort(best->adr.port));
+        Com_sprintf(to, sizeof(to), ":%i", BigShort(best->adr.port));
     } else {
-        NET_OutOfBandPrint(NS_SERVER, from, "redirect %i %s", challenge, NET_AdrToStringwPort(best->adr));
+        Q_strncpyz(to, NET_AdrToStringwPort(best->adr), sizeof(to));
     }
+    NET_OutOfBandPrint(NS_SERVER, from, "redirect %i %s\n%s\n%s", challenge, to, best->name,
+                       sv_fullRedirectMessage->string);
     Com_Printf("Server is full: %s sent to %s (%i of %i)\n", NET_AdrToString(from),
                NET_AdrToStringwPort(best->adr), best->clients, best->maxClients);
 }

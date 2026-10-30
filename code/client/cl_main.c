@@ -110,6 +110,7 @@ cvar_t* cl_steamId;
 cvar_t* cl_followRedirect;
 static int clRedirectHops;
 static qboolean clRedirecting;
+static qboolean clRedirectPending;
 
 clientActive_t cl;
 clientConnection_t clc;
@@ -1639,6 +1640,7 @@ void CL_Connect_f(void) {
     } else {
         clRedirectHops = 0;
     }
+    clRedirectPending = qfalse;
 
     Q_strncpyz(cl_reconnectArgs, Cmd_Args(), sizeof(cl_reconnectArgs));
 
@@ -2386,14 +2388,75 @@ void CL_ServersResponsePacket(const netadr_t* from, msg_t* msg, qboolean extende
 }
 
 #define CL_MAX_REDIRECTS 3
+#define CL_REDIRECT_DELAY 5000
 
-static void CL_RedirectPacket(netadr_t from) {
+static int clRedirectStart;
+static netadr_t clRedirectFrom;
+static char clRedirectServer[MAX_OSPATH];
+static char clRedirectText[MAX_STRING_CHARS];
+
+static void CL_RedirectSetText(const char* name, const char* text) {
+    const char* s = text[0] ? text : "This server is full, so you will be sent to {server} in";
+    int l = 0;
+
+    while (*s && l < (int)sizeof(clRedirectText) - 1) {
+        if (!Q_strncmp(s, "{server}", 8)) {
+            const char* n = name;
+
+            for (; *n && l < (int)sizeof(clRedirectText) - 3; n++) {
+                if (*n >= ' ' && *n <= '~') {
+                    clRedirectText[l++] = *n;
+                }
+            }
+            if (l < (int)sizeof(clRedirectText) - 3) {
+                clRedirectText[l++] = Q_COLOR_ESCAPE;
+                clRedirectText[l++] = COLOR_WHITE;
+            }
+            s += 8;
+            continue;
+        }
+        if (*s >= ' ' && *s <= '~') {
+            clRedirectText[l++] = *s;
+        }
+        s++;
+    }
+    clRedirectText[l] = '\0';
+}
+
+static void CL_RedirectFrame(void) {
+    int left;
+    int i;
+
+    if (!clRedirectPending) {
+        return;
+    }
+    if (clc.state != CA_CHALLENGING || !NET_CompareAdr(clc.serverAddress, clRedirectFrom)) {
+        clRedirectPending = qfalse;
+        return;
+    }
+    left = (CL_REDIRECT_DELAY - (cls.realtime - clRedirectStart) + 999) / 1000;
+    if (left <= 0) {
+        clRedirectPending = qfalse;
+        clRedirectHops++;
+        clRedirecting = qtrue;
+        Cbuf_ExecuteText(EXEC_INSERT, va("connect %s\n", clRedirectServer));
+        return;
+    }
+    Q_strncpyz(clc.serverMessage, clRedirectText, sizeof(clc.serverMessage));
+    for (i = CL_REDIRECT_DELAY / 1000; i >= left; i--) {
+        Q_strcat(clc.serverMessage, sizeof(clc.serverMessage), va(" %i...", i));
+    }
+}
+
+static void CL_RedirectPacket(netadr_t from, msg_t* msg) {
     char server[MAX_OSPATH];
+    char name[64];
     const char* to = Cmd_Argv(2);
     netadr_t adr;
 
     if (!cl_followRedirect->integer || clc.state != CA_CHALLENGING || !NET_CompareAdr(from, clc.serverAddress) ||
-        Cmd_Argc() != 3 || atoi(Cmd_Argv(1)) != clc.challenge || !to[0] || clRedirectHops >= CL_MAX_REDIRECTS) {
+        Cmd_Argc() != 3 || atoi(Cmd_Argv(1)) != clc.challenge || !to[0] || clRedirectHops >= CL_MAX_REDIRECTS ||
+        clRedirectPending) {
         return;
     }
     if (to[0] == ':') {
@@ -2409,10 +2472,14 @@ static void CL_RedirectPacket(netadr_t from) {
         !NET_StringToAdr(server, &adr, NA_UNSPEC) || NET_CompareAdr(adr, clc.serverAddress)) {
         return;
     }
-    clRedirectHops++;
-    clRedirecting = qtrue;
+    Q_strncpyz(name, MSG_ReadStringLine(msg), sizeof(name));
+    CL_RedirectSetText(name[0] ? name : server, MSG_ReadStringLine(msg));
+    Q_strncpyz(clRedirectServer, server, sizeof(clRedirectServer));
+    clRedirectFrom = from;
+    clRedirectStart = cls.realtime;
+    clRedirectPending = qtrue;
     Com_Printf("Server is full: it sends you to %s\n", server);
-    Cbuf_ExecuteText(EXEC_INSERT, va("connect %s\n", server));
+    CL_RedirectFrame();
 }
 
 void CL_ConnectionlessPacket(netadr_t from, msg_t* msg) {
@@ -2495,7 +2562,7 @@ void CL_ConnectionlessPacket(netadr_t from, msg_t* msg) {
     }
 
     if (!Q_stricmp(c, "redirect")) {
-        CL_RedirectPacket(from);
+        CL_RedirectPacket(from, msg);
         return;
     }
 
@@ -2717,6 +2784,7 @@ void CL_Frame(int msec) {
     CL_SendCmd();
 
     CL_CheckForResend();
+    CL_RedirectFrame();
 
     CL_SteamServersFrame();
 

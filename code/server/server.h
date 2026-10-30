@@ -281,6 +281,7 @@ extern cvar_t* sv_errorExit;
 extern cvar_t* sv_workshopFile;
 extern cvar_t* sv_quitOnEmpty;
 extern cvar_t* sv_fullRedirect;
+extern cvar_t* sv_fullRedirectMessage;
 extern cvar_t* sv_lanForceRate;
 
 void SV_FullRedirect(netadr_t from, int challenge);
