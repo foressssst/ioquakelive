@@ -589,13 +589,15 @@ static float CG_DrawSnapshot(float y) {
 }
 
 #define FPS_FRAMES 4
+#define FPS_HISTORY 1024
+#define FPS_WINDOW 250
 static float CG_DrawFPS(float y) {
 	char* s;
 	int w;
 	int h = 0;
-	static int previousTimes[FPS_FRAMES];
+	static int previousTimes[FPS_HISTORY];
 	static int index;
-	int i, total;
+	int frames, total;
 	int fps;
 	static int previous;
 	int t, frameTime;
@@ -604,17 +606,17 @@ static float CG_DrawFPS(float y) {
 	frameTime = t - previous;
 	previous = t;
 
-	previousTimes[index % FPS_FRAMES] = frameTime;
+	previousTimes[index % FPS_HISTORY] = frameTime;
 	index++;
 	if (index > FPS_FRAMES) {
 		total = 0;
-		for (i = 0; i < FPS_FRAMES; i++) {
-			total += previousTimes[i];
+		for (frames = 0; frames < FPS_HISTORY && frames < index - 1 && total < FPS_WINDOW; frames++) {
+			total += previousTimes[(index - 1 - frames) % FPS_HISTORY];
 		}
 		if (!total) {
 			total = 1;
 		}
-		fps = 1000 * FPS_FRAMES / total;
+		fps = (1000 * frames + total / 2) / total;
 		if (fps - cg_comMaxfps.integer <= 1 && cg_comMaxfps.integer - fps <= 1) {
 			fps = cg_comMaxfps.integer;
 		}
