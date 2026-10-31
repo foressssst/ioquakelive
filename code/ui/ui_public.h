@@ -180,7 +180,8 @@ typedef enum {
     UI_DEMO_INFO,
     UI_R_REGISTERSHADERFROMRAW,
     UI_MATCH_FILE,
-    UI_UPDATE_NOTES
+    UI_UPDATE_NOTES,
+    UI_CLUB_NEWS
 } uiImport_t;
 
 #define UI_STEAM_NUM_STATS 88

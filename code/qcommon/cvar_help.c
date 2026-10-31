@@ -719,6 +719,7 @@ static const cvarHelp_t cvarHelp[] = {
     {"cl_discordPresence", "1 shows in Discord what you are playing (mode, map, server and players) with a link to quakeclub.com, through the Discord app running on this computer; 0 shows nothing"},
     {"cl_redirectButtons", "the buttons the connect screen shows while a full server offers another one (wait|go); set by the game"},
     {"cl_checkUpdates", "1 asks at startup whether a newer stable version is out and says so in the main menu; 0 never asks"},
+    {"cl_clubNews", "1 reads the latest news from quakeclub.com at startup and lists them in the main menu; 0 never asks"},
     {"cl_updateStatus", "set by the game: latest if this is the newest stable version, available if there is a newer one"},
     {"cl_updateVersion", "set by the game: the version the main menu shows, yours when it is the newest, the new one when there is one"},
     {"cl_autoRecordDemo", "records a demo of every map you play"},

@@ -19,6 +19,8 @@
 #define CL_UPDATE_RELEASE_TAG "https://github.com/foressssst/ioquakelive/releases/tag/"
 #define CL_UPDATE_DOWNLOAD "https://github.com/foressssst/ioquakelive/releases/download/"
 #define CL_UPDATE_TIMEOUT_MS 5000
+#define CL_NEWS_API "https://quakeclub.com/api/news"
+#define CL_NEWS_MAX 6
 #define CL_UPDATE_DOWNLOAD_TIMEOUT_MS 30000
 #define CL_VERIFIED_URL "https://gist.githubusercontent.com/foressssst/65861cb796e4d984cfd73b384e8c2098/raw/ioquakelive-verified.txt"
 #define CL_VERIFIED_MAX 64
@@ -47,6 +49,10 @@ enum { CLD_IDLE, CLD_RUNNING, CLD_DOWNLOADED, CLD_EXTRACT, CLD_READY, CLD_FAILED
 static char clUpdateText[0x40000];
 static char clUpdateURL[512];
 static char clUpdateNotes[8192];
+static char clNewsRaw[0x10000];
+static char clNewsText[4096];
+static volatile long clNewsState;
+static cvar_t* cl_clubNews;
 static volatile long clUpdateState;
 static cvar_t* cl_checkUpdates;
 
@@ -512,6 +518,62 @@ int CL_UpdateNotes(char* buf, int size) {
     return (int)strlen(buf);
 }
 
+static qboolean CL_NewsLoad(void) {
+    const char* end;
+    const char* list;
+    const char* item;
+    int count = 0;
+    int n = 0;
+
+    if (!CL_UpdateFetch(CL_NEWS_API, clNewsRaw, sizeof(clNewsRaw))) {
+        return qfalse;
+    }
+    end = clNewsRaw + strlen(clNewsRaw);
+    list = JSON_ObjectGetNamedValue(clNewsRaw, end, "news");
+    for (item = list ? JSON_ArrayGetFirstValue(list, end) : NULL; item && count < CL_NEWS_MAX;
+         item = JSON_ArrayGetNextValue(item, end)) {
+        char title[256];
+        char date[16];
+        char slug[128];
+        char* c;
+        int len;
+
+        CL_UpdateJsonText(JSON_ObjectGetNamedValue(item, end, "title"), end, title, sizeof(title));
+        CL_UpdateJsonText(JSON_ObjectGetNamedValue(item, end, "date"), end, date, sizeof(date));
+        CL_UpdateJsonText(JSON_ObjectGetNamedValue(item, end, "slug"), end, slug, sizeof(slug));
+        for (c = title; *c; c++) {
+            if (*c == '\t' || *c == '\n') {
+                *c = ' ';
+            }
+        }
+        for (c = slug; *c && ((*c >= 'a' && *c <= 'z') || (*c >= '0' && *c <= '9') || *c == '-'); c++) {
+        }
+        if (!title[0] || !slug[0] || *c || strlen(date) != 10 || date[4] != '-' || date[7] != '-') {
+            continue;
+        }
+        len = (int)(strlen(date) + strlen(title) + strlen(slug) + 3);
+        if (n + len >= (int)sizeof(clNewsText)) {
+            break;
+        }
+        Com_sprintf(clNewsText + n, sizeof(clNewsText) - n, "%s\t%s\t%s\n", date, title, slug);
+        n += len;
+        count++;
+    }
+    return (qboolean)(count > 0);
+}
+
+int CL_ClubNews(char* buf, int size) {
+    if (size <= 0) {
+        return 0;
+    }
+    buf[0] = '\0';
+    if (CL_UpdateGet(&clNewsState) != CLU_DONE) {
+        return 0;
+    }
+    Q_strncpyz(buf, clNewsText, size);
+    return (int)strlen(buf);
+}
+
 static qboolean CL_UpdateFromGitHub(void) {
     char tag[32];
     const char* p;
@@ -641,6 +703,9 @@ static void CL_UpdateThread(void* unused) {
         }
     }
     CL_UpdateSet(&clVerifiedState, CL_VerifiedLoad() ? CLU_DONE : CLU_FAILED);
+    if (CL_UpdateGet(&clNewsState) == CLU_RUNNING) {
+        CL_UpdateSet(&clNewsState, CL_NewsLoad() ? CLU_DONE : CLU_FAILED);
+    }
 }
 
 static int CL_UpdateCompare(const char* a, const char* b) {
@@ -906,6 +971,7 @@ void CL_UpdateApplyOnExit(void) {
 
 void CL_UpdateInit(void) {
     cl_checkUpdates = Cvar_Get("cl_checkUpdates", "1", CVAR_ARCHIVE);
+    cl_clubNews = Cvar_Get("cl_clubNews", "1", CVAR_ARCHIVE);
     Cvar_Get("cl_updateVersion", "", CVAR_ROM);
     Cvar_Get("cl_updateStatus", "", CVAR_ROM);
     Cvar_Get("cl_updateProgress", "0", CVAR_ROM);
@@ -927,11 +993,15 @@ void CL_UpdateInit(void) {
     if (cl_checkUpdates->integer && CL_UpdateGet(&clUpdateState) == CLU_IDLE) {
         CL_UpdateSet(&clUpdateState, CLU_RUNNING);
     }
+    if (cl_clubNews->integer) {
+        CL_UpdateSet(&clNewsState, CLU_RUNNING);
+    }
     if (!Sys_ThreadCreate(CL_UpdateThread, NULL)) {
         if (CL_UpdateGet(&clUpdateState) == CLU_RUNNING) {
             CL_UpdateSet(&clUpdateState, CLU_FAILED);
         }
         CL_UpdateSet(&clVerifiedState, CLU_FAILED);
+        CL_UpdateSet(&clNewsState, CLU_FAILED);
     }
 }
 

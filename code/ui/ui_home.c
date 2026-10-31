@@ -39,7 +39,8 @@ typedef enum {
     HM_HIT_ERROR_OK,
     HM_HIT_NOTES,
     HM_HIT_NOTES_LATER,
-    HM_HIT_NOTES_UPDATE
+    HM_HIT_NOTES_UPDATE,
+    HM_HIT_NEWS
 } hmHitType_t;
 
 #define HM_MENU_MAIN 0
@@ -1045,6 +1046,108 @@ static void UI_Home_DrawFriends(float x, float y, float w, float h) {
     }
 }
 
+#define HW_MAX 6
+
+static struct {
+    int checked;
+    int count;
+    char date[HW_MAX][16];
+    char title[HW_MAX][256];
+    char slug[HW_MAX][128];
+} hw;
+
+static void UI_Home_NewsRefresh(void) {
+    static char buf[4096];
+    char* p;
+
+    if (hw.count || (hw.checked && uiInfo.uiDC.realTime - hw.checked < 1000)) {
+        return;
+    }
+    hw.checked = uiInfo.uiDC.realTime ? uiInfo.uiDC.realTime : 1;
+    if (trap_ClubNews(buf, sizeof(buf)) <= 0) {
+        return;
+    }
+    for (p = buf; *p && hw.count < HW_MAX;) {
+        char* date = p;
+        char* eol = strchr(p, '\n');
+        char* title;
+        char* slug;
+
+        if (!eol) {
+            break;
+        }
+        *eol = '\0';
+        p = eol + 1;
+        title = strchr(date, '\t');
+        slug = title ? strchr(title + 1, '\t') : NULL;
+        if (!slug || strlen(date) < 10) {
+            continue;
+        }
+        *title++ = '\0';
+        *slug++ = '\0';
+        Com_sprintf(hw.date[hw.count], sizeof(hw.date[0]), "%.2s/%.2s/%.4s", date + 8, date + 5, date);
+        Q_strncpyz(hw.title[hw.count], title, sizeof(hw.title[0]));
+        Q_strncpyz(hw.slug[hw.count], slug, sizeof(hw.slug[0]));
+        hw.count++;
+    }
+}
+
+static void UI_Home_NewsLine(float x, float base, float room, const float* color, const char* text) {
+    char cut[256];
+    int n = SM_Fit(FONT_SANS, HM_TEXT, text, room);
+
+    if (text[n]) {
+        n = SM_Fit(FONT_SANS, HM_TEXT, text, room - SM_Advance(FONT_SANS, HM_TEXT, "...", -1));
+        while (n > 0 && ((unsigned char)text[n] & 0xc0) == 0x80) {
+            n--;
+        }
+        while (n > 0 && text[n - 1] == ' ') {
+            n--;
+        }
+        if (n > (int)sizeof(cut) - 4) {
+            n = (int)sizeof(cut) - 4;
+        }
+        memcpy(cut, text, n);
+        memcpy(cut + n, "...", 4);
+        text = cut;
+    }
+    SM_Text(x, base, FONT_SANS, HM_TEXT, color, text, -1, qfalse);
+}
+
+static void UI_Home_DrawNews(float x, float y, float w, float bottom) {
+    static const vec4_t rowOver = {30 / 255.0f, 30 / 255.0f, 30 / 255.0f, 1.0f};
+    float line = SM_NormalLine(FONT_SANS, HM_TEXT);
+    float rowH = 2 * HM_FRIEND_PAD + 2 * line;
+    float listTop = y + HM_SELECTOR_H + SM_Len(3.0f);
+    int rows, i;
+
+    UI_Home_NewsRefresh();
+    rows = (int)((bottom - listTop) / rowH);
+    if (rows > hw.count) {
+        rows = hw.count;
+    }
+    if (rows <= 0) {
+        return;
+    }
+    SM_Fill(x, y, w, HM_SELECTOR_H, hmBlack80, NULL);
+    SM_Text(x + 10, SM_Baseline(FONT_SANS, HM_TEXT, y + 1.0f / smScale, SM_LINE_NORMAL), FONT_SANS, HM_TEXT, smGold,
+            "Quake Club News", -1, qfalse);
+    SM_Fill(x, listTop, w, rows * rowH, hmBlack80, NULL);
+    for (i = 0; i < rows; i++) {
+        float ry = listTop + i * rowH;
+        qboolean over = SM_Over(HM_HIT_NEWS, i);
+
+        if (over) {
+            SM_Fill(x, ry, w, rowH, rowOver, NULL);
+        }
+        UI_Home_NewsLine(x + 10, SM_Baseline(FONT_SANS, HM_TEXT, ry + HM_FRIEND_PAD, SM_LINE_NORMAL), w - 20,
+                         over ? smGold : smText, hw.title[i]);
+        SM_Text(x + 10, SM_Baseline(FONT_SANS, HM_TEXT, ry + HM_FRIEND_PAD + line, SM_LINE_NORMAL), FONT_SANS,
+                HM_TEXT, hmNameGrey, hw.date[i], -1, qfalse);
+        SM_Hit(x, ry, w, rowH, HM_HIT_NEWS, i, NULL);
+    }
+}
+
 static void UI_Home_DrawSide(void) {
     static const char* const tabs[2] = {"Friends", "Lobby"};
     float top = -smTop / smScale;
@@ -1073,6 +1176,7 @@ static void UI_Home_DrawSide(void) {
         SM_Centered(x + w * 0.5f, SM_Baseline(FONT_SANS, HM_TEXT, top + HM_LIST_TOP + 44.0f, 24.0f), HM_TEXT, smText,
                     "Not in a lobby.", qfalse);
     }
+    UI_Home_DrawNews(x, top + HM_LIST_TOP + listH + SM_Len(5.0f), w, smBottom - 31.5f - SM_Len(5.0f));
 }
 
 static void UI_Home_DrawLegals(void) {
@@ -1216,6 +1320,12 @@ qboolean UI_Home_HandleKey(int key) {
     }
     if (hit->type == HM_HIT_TAB) {
         hr.panel = hit->index;
+        return qtrue;
+    }
+    if (hit->type == HM_HIT_NEWS) {
+        if (hit->index >= 0 && hit->index < hw.count) {
+            trap_Sys_OpenURL(va("https://quakeclub.com/noticias/%s", hw.slug[hit->index]));
+        }
         return qtrue;
     }
     if (hit->type == HM_HIT_LEGAL) {

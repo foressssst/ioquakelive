@@ -209,6 +209,10 @@ int trap_UpdateNotes(char* buf, int size) {
     return syscall(UI_UPDATE_NOTES, buf, size);
 }
 
+int trap_ClubNews(char* buf, int size) {
+    return syscall(UI_CLUB_NEWS, buf, size);
+}
+
 int trap_MatchFile(const char* name, char* buf, int size) {
     return syscall(UI_MATCH_FILE, name, buf, size);
 }
