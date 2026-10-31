@@ -2136,12 +2136,6 @@ void CalculateRanks(void) {
     }
 
     if (level.intermissionTime) {
-        for (i = 0; i < level.maxclients; i++) {
-            if (level.clients[i].pers.connected == CON_CONNECTED) {
-                MoveClientToIntermission(g_entities + i);
-            }
-        }
-        CalculateAwards();
         SendScoreboardMessageToAllClients();
     }
 }
@@ -2151,9 +2145,10 @@ void SendScoreboardMessageToAllClients(void) {
 
     for (i = 0; i < level.maxclients; i++) {
         if (level.clients[i].pers.connected == CON_CONNECTED) {
-            FreeForAllScoreboardMessage(g_entities + i);
+            Cmd_Score_f(g_entities + i);
         }
     }
+    CalculateAwards();
 }
 
 void MoveClientToIntermission(gentity_t* ent) {
@@ -2274,7 +2269,6 @@ void BeginIntermission(void) {
         }
         MoveClientToIntermission(ent);
     }
-    CalculateAwards();
 
     SendScoreboardMessageToAllClients();
 }

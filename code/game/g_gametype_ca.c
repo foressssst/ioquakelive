@@ -443,7 +443,7 @@ void ClanArenaStatisticsMessage(gentity_t *ent) {
             strcpy(string, entry);
         }
 
-        for (w = 0; w < 15; w++) {
+        for (w = 1; w < 16; w++) {
             int j, weapAcc = 0;
 
             if (cl->expandedStats.shotsHit[w] && cl->expandedStats.shotsFired[w]) {
