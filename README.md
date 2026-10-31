@@ -4,6 +4,8 @@
 
 El proyecto parte del gran trabajo de [Thomas Jones](https://github.com/tjone270/ioquakelive), quien reconstruyó partes del protocolo de red y de los módulos del juego, y consiguió compilar el cliente y el servidor sobre ioquake3, este repositorio continúa ese trabajo.
 
+ioquakelive se desarrolla en [Quake Club](https://quakeclub.com), la comunidad donde se juega y se pone a prueba cada versión. Si quieres jugar, encontrar partidas o contarnos algo, ahí nos encuentras.
+
 <sub>Desarrollado con apoyo de [Claude Code](https://claude.com/claude-code).</sub>
 
 ## Cómo lo pruebo?
@@ -308,6 +310,8 @@ docs/rendimiento/   Gráficos de la sección de rendimiento
 ```
 
 ## Créditos y licencia
+
+Desarrollado por [Quake Club](https://quakeclub.com) y su comunidad.
 
 Este proyecto se apoya en el trabajo de:
 
