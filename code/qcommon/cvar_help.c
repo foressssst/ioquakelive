@@ -716,6 +716,7 @@ static const cvarHelp_t cvarHelp[] = {
     {"cl_anglespeedkey", "turning speed factor while +speed is held"},
     {"cl_allowDownload", "downloads missing files from servers that offer them"},
     {"cl_followRedirect", "when a full server names another one with room, connect there by yourself"},
+    {"cl_discordPresence", "1 shows in Discord what you are playing (mode, map, server and players) with a link to quakeclub.com, through the Discord app running on this computer; 0 shows nothing"},
     {"cl_redirectButtons", "the buttons the connect screen shows while a full server offers another one (wait|go); set by the game"},
     {"cl_checkUpdates", "1 asks at startup whether a newer stable version is out and says so in the main menu; 0 never asks"},
     {"cl_updateStatus", "set by the game: latest if this is the newest stable version, available if there is a newer one"},

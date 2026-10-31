@@ -332,6 +332,9 @@ extern cvar_t* cl_demoRecordMessage;
 extern cvar_t* cl_webImages;
 extern cvar_t* cl_webImageMaxKB;
 
+void CL_Discord_Init(void);
+void CL_Discord_Shutdown(void);
+void CL_Discord_Frame(void);
 void CL_WebImage_Init(void);
 void CL_WebImage_Shutdown(void);
 void CL_WebImage_Frame(void);

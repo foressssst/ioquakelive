@@ -2881,6 +2881,7 @@ void CL_Frame(int msec) {
     CL_VoiceFrame();
 
     CL_WebImage_Frame();
+    CL_Discord_Frame();
 
     SCR_UpdateScreen();
 
@@ -3572,6 +3573,7 @@ void CL_Init(void) {
     Cvar_CheckRange(cl_demoRecordMessage, 0, 2, qtrue);
 
     CL_WebImage_Init();
+    CL_Discord_Init();
     Cmd_AddCommand("userinfo", CL_Userinfo_f);
     if (!com_dedicated->integer) {
         Cmd_AddCommand("sayto", CL_Sayto_f);
@@ -3603,6 +3605,8 @@ void CL_Shutdown(char* finalmsg, qboolean disconnect, qboolean quit) {
     recursive = qtrue;
 
     noGameRestart = quit;
+
+    CL_Discord_Shutdown();
 
     if (disconnect)
         CL_Disconnect(qtrue);
