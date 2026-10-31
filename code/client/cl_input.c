@@ -718,6 +718,8 @@ usercmd_t CL_CreateCmd(void) {
 static usercmd_t cl_pendingCmd;
 static qboolean cl_pendingValid;
 static int cl_pendingButtons;
+static int cl_cmdCredit;
+static int cl_cmdRealtime;
 
 qboolean CL_GetPendingCmd(usercmd_t* ucmd) {
     if (!cl_pendingValid) {
@@ -730,6 +732,7 @@ qboolean CL_GetPendingCmd(usercmd_t* ucmd) {
 void CL_CreateNewCommands(void) {
     usercmd_t cmd;
     int cmdNum;
+    int credit;
 
     if (clc.state < CA_PRIMED) {
         cl_pendingValid = qfalse;
@@ -749,10 +752,16 @@ void CL_CreateNewCommands(void) {
     old_com_frameTime = com_frameTime;
 
     cmd = CL_CreateCmd();
+    credit = cl_cmdCredit + cls.realtime - cl_cmdRealtime;
+    cl_cmdRealtime = cls.realtime;
+    if (credit > CL_CMD_CREDIT_MAX || credit < -CL_CMD_CREDIT_MAX) {
+        credit = CL_CMD_CREDIT_MAX;
+    }
+    cl_cmdCredit = credit;
     if (clc.state == CA_ACTIVE && cl.cmdNumber > 0) {
         int last = cl.cmds[cl.cmdNumber & CMD_MASK].serverTime;
 
-        if (cmd.serverTime >= last && cmd.serverTime - last < CL_MIN_CMD_MSEC) {
+        if (cmd.serverTime >= last && (cmd.serverTime == last || credit < CL_CMD_MSEC_MIN)) {
             cl_pendingButtons |= cmd.buttons;
             cl_pendingCmd = cmd;
             cl_pendingCmd.buttons = cl_pendingButtons;
@@ -763,6 +772,7 @@ void CL_CreateNewCommands(void) {
     cmd.buttons |= cl_pendingButtons;
     cl_pendingButtons = 0;
     cl_pendingValid = qfalse;
+    cl_cmdCredit = credit - CL_CMD_MSEC;
 
     cl.cmdNumber++;
     cmdNum = cl.cmdNumber & CMD_MASK;

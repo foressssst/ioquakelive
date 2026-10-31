@@ -372,7 +372,9 @@ void CL_ShutdownInput(void);
 void CL_SendCmd(void);
 qboolean CL_GetPendingCmd(usercmd_t* ucmd);
 
-#define CL_MIN_CMD_MSEC 4
+#define CL_CMD_MSEC 4
+#define CL_CMD_MSEC_MIN 3
+#define CL_CMD_CREDIT_MAX 6
 void CL_ClearState(void);
 void CL_ReadPackets(void);
 
