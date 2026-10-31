@@ -75,7 +75,9 @@ typedef enum { BR_DROP_NONE, BR_DROP_TYPE, BR_DROP_PING, BR_DROP_TAGS } brDrop_t
 
 typedef enum { BR_MODAL_NONE, BR_MODAL_INFO, BR_MODAL_PASSWORD } brModal_t;
 
-static const char* const brTypes[] = {"Internet", "LAN", "Friends", "Favorites", "History"};
+static const char* const brTypes[] = {"Internet", "LAN", "Friends", "Favorites", "History", "Quake Club"};
+static const int brTypeOrder[] = {5, 0, 1, 2, 3, 4};
+#define BR_TYPE_CLUB 5
 static const int brPings[] = {0, 25, 50, 75, 100, 150, 200};
 
 static const struct {
@@ -332,7 +334,7 @@ static void BR_LoadFilters(void) {
     if (!info[0]) {
         return;
     }
-    brf.type = (int)Com_Clamp(0, 4, atoi(Info_ValueForKey(info, "type")));
+    brf.type = (int)Com_Clamp(0, BR_TYPE_CLUB, atoi(Info_ValueForKey(info, "type")));
     brf.empty = (qboolean)(atoi(Info_ValueForKey(info, "empty")) != 0);
     brf.full = (qboolean)(atoi(Info_ValueForKey(info, "full")) != 0);
     brf.vac = (qboolean)(atoi(Info_ValueForKey(info, "vac")) != 0);
@@ -373,6 +375,9 @@ static void BR_RemoveFilterTag(int index) {
 static qboolean BR_Filtered(const brServer_t* s) {
     int i, j;
 
+    if (brf.type == BR_TYPE_CLUB && !s->verified) {
+        return qtrue;
+    }
     if (brf.empty && s->players == 0) {
         return qtrue;
     }
@@ -549,7 +554,7 @@ static void BR_RequestNewList(void) {
     br.hasSelected = qfalse;
     br.details = UI_DETAILS_NONE;
     br.scroll = 0;
-    UI_Browser_SetSource(brf.type);
+    UI_Browser_SetSource(brf.type == BR_TYPE_CLUB ? 0 : brf.type);
     UI_Home_ServerList(qtrue);
 }
 
@@ -1066,7 +1071,7 @@ static void BR_DrawFilters(float left, float y, float width, const smRect_t* cli
 static void BR_DrawDropdown(float x, float y, float w) {
     int count, i;
     float rowH = br.dropdown == BR_DROP_TAGS ? 24.0f : 40.0f;
-    float maxH = br.dropdown == BR_DROP_TAGS ? 400.0f : 200.0f;
+    float maxH = br.dropdown == BR_DROP_TAGS ? 400.0f : br.dropdown == BR_DROP_TYPE ? 240.0f : 200.0f;
     float h, content;
     smRect_t clip;
 
@@ -1091,7 +1096,7 @@ static void BR_DrawDropdown(float x, float y, float w) {
         if (ry + rowH < y || ry > y + h) {
             continue;
         }
-        label = br.dropdown == BR_DROP_TYPE ? brTypes[i]
+        label = br.dropdown == BR_DROP_TYPE ? brTypes[brTypeOrder[i]]
                 : br.dropdown == BR_DROP_PING ? (brPings[i] ? va("%i", brPings[i]) : "None")
                                                : brTagList[i];
         if (SM_Over(BR_HIT_OPTION, i)) {
@@ -2008,7 +2013,7 @@ void UI_Browser_Open(void) {
     }
     trap_Cvar_Set("ui_netSource", "2");
     trap_Cvar_Update(&ui_netSource);
-    UI_Browser_SetSource(brf.type);
+    UI_Browser_SetSource(brf.type == BR_TYPE_CLUB ? 0 : brf.type);
     if (trap_LAN_GetServerCount(AS_GLOBAL) <= 0) {
         BR_RequestNewList();
     } else {
@@ -2076,6 +2081,7 @@ static void BR_SetCheck(int check) {
 
 static void BR_ChooseOption(int option) {
     if (br.dropdown == BR_DROP_TYPE) {
+        option = brTypeOrder[option];
         if (option != brf.type) {
             brf.type = option;
             BR_SaveFilters();
