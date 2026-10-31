@@ -28,6 +28,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
 #endif
@@ -101,12 +102,16 @@ static void Discord_Close(void) {
 #ifndef _WIN32
 static qboolean Discord_OpenPath(const char* dir, const char* sub, int n) {
     struct sockaddr_un addr;
+    struct stat st;
     int s;
 
     Com_Memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
     if (Com_sprintf(addr.sun_path, sizeof(addr.sun_path), "%s/%sdiscord-ipc-%i", dir, sub, n) >=
         (int)sizeof(addr.sun_path) - 1) {
+        return qfalse;
+    }
+    if (lstat(addr.sun_path, &st) < 0 || !S_ISSOCK(st.st_mode) || st.st_uid != getuid()) {
         return qfalse;
     }
     s = socket(AF_UNIX, SOCK_STREAM, 0);
