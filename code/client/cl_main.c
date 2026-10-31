@@ -2781,6 +2781,8 @@ void CL_Frame(int msec) {
 
     CL_CheckTimeout();
 
+    CL_SetCGameTime();
+
     CL_SendCmd();
 
     CL_CheckForResend();
@@ -2796,8 +2798,6 @@ void CL_Frame(int msec) {
     CL_VoiceFrame();
 
     CL_WebImage_Frame();
-
-    CL_SetCGameTime();
 
     SCR_UpdateScreen();
 
