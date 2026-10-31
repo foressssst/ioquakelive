@@ -111,6 +111,8 @@ cvar_t* cl_followRedirect;
 static int clRedirectHops;
 static qboolean clRedirecting;
 static qboolean clRedirectPending;
+static qboolean clRedirectWaiting;
+static qboolean clRedirectCatcher;
 
 clientActive_t cl;
 clientConnection_t clc;
@@ -1641,6 +1643,9 @@ void CL_Connect_f(void) {
         clRedirectHops = 0;
     }
     clRedirectPending = qfalse;
+    clRedirectWaiting = qfalse;
+    clRedirectCatcher = qfalse;
+    Cvar_Set("cl_redirectButtons", "");
 
     Q_strncpyz(cl_reconnectArgs, Cmd_Args(), sizeof(cl_reconnectArgs));
 
@@ -2390,10 +2395,58 @@ void CL_ServersResponsePacket(const netadr_t* from, msg_t* msg, qboolean extende
 #define CL_MAX_REDIRECTS 3
 #define CL_REDIRECT_DELAY 5000
 
+#define CL_REDIRECT_OFFER_FRESH 10000
+
 static int clRedirectStart;
+static int clRedirectOffered;
 static netadr_t clRedirectFrom;
 static char clRedirectServer[MAX_OSPATH];
 static char clRedirectText[MAX_STRING_CHARS];
+static char clRedirectWaitLabel[64];
+static char clRedirectGoLabel[64];
+static char clRedirectWaitText[MAX_STRING_CHARS];
+
+static void CL_RedirectCopyLine(char* dst, int size, const char* src, const char* fallback) {
+    int l = 0;
+
+    if (!src[0]) {
+        src = fallback;
+    }
+    for (; *src && l < size - 1; src++) {
+        if (*src >= ' ' && *src <= '~' && *src != '|') {
+            dst[l++] = *src;
+        }
+    }
+    dst[l] = '\0';
+}
+
+static void CL_RedirectButtons(const char* labels) {
+    Cvar_Set("cl_redirectButtons", labels);
+    if (labels[0]) {
+        if (!(Key_GetCatcher() & KEYCATCH_UI)) {
+            Key_SetCatcher(Key_GetCatcher() | KEYCATCH_UI);
+            clRedirectCatcher = qtrue;
+        }
+    } else if (clRedirectCatcher) {
+        clRedirectCatcher = qfalse;
+        if (clc.state != CA_DISCONNECTED) {
+            Key_SetCatcher(Key_GetCatcher() & ~KEYCATCH_UI);
+        }
+    }
+}
+
+static void CL_RedirectEnd(void) {
+    clRedirectPending = qfalse;
+    clRedirectWaiting = qfalse;
+    CL_RedirectButtons("");
+}
+
+static void CL_RedirectGo(void) {
+    CL_RedirectEnd();
+    clRedirectHops++;
+    clRedirecting = qtrue;
+    Cbuf_ExecuteText(EXEC_INSERT, va("connect %s\n", clRedirectServer));
+}
 
 static void CL_RedirectSetText(const char* name, const char* text) {
     const char* s = text[0] ? text : "This server is full, so you will be sent to {server} in";
@@ -2427,19 +2480,24 @@ static void CL_RedirectFrame(void) {
     int left;
     int i;
 
-    if (!clRedirectPending) {
+    if (!clRedirectPending && !clRedirectWaiting) {
         return;
     }
     if (clc.state != CA_CHALLENGING || !NET_CompareAdr(clc.serverAddress, clRedirectFrom)) {
-        clRedirectPending = qfalse;
+        CL_RedirectEnd();
+        return;
+    }
+    if (clRedirectWaiting) {
+        int waited = (cls.realtime - clRedirectStart) / 1000;
+
+        CL_RedirectButtons(cls.realtime - clRedirectOffered < CL_REDIRECT_OFFER_FRESH ? va("|%s", clRedirectGoLabel) : "");
+        Com_sprintf(clc.serverMessage, sizeof(clc.serverMessage), "%s %i:%02i", clRedirectWaitText, waited / 60,
+                    waited % 60);
         return;
     }
     left = (CL_REDIRECT_DELAY - (cls.realtime - clRedirectStart) + 999) / 1000;
     if (left <= 0) {
-        clRedirectPending = qfalse;
-        clRedirectHops++;
-        clRedirecting = qtrue;
-        Cbuf_ExecuteText(EXEC_INSERT, va("connect %s\n", clRedirectServer));
+        CL_RedirectGo();
         return;
     }
     Q_strncpyz(clc.serverMessage, clRedirectText, sizeof(clc.serverMessage));
@@ -2456,7 +2514,7 @@ static void CL_RedirectPacket(netadr_t from, msg_t* msg) {
 
     if (!cl_followRedirect->integer || clc.state != CA_CHALLENGING || !NET_CompareAdr(from, clc.serverAddress) ||
         Cmd_Argc() != 3 || atoi(Cmd_Argv(1)) != clc.challenge || !to[0] || clRedirectHops >= CL_MAX_REDIRECTS ||
-        clRedirectPending) {
+        (clRedirectPending && !clRedirectWaiting)) {
         return;
     }
     if (to[0] == ':') {
@@ -2472,14 +2530,39 @@ static void CL_RedirectPacket(netadr_t from, msg_t* msg) {
         !NET_StringToAdr(server, &adr, NA_UNSPEC) || NET_CompareAdr(adr, clc.serverAddress)) {
         return;
     }
+    Q_strncpyz(clRedirectServer, server, sizeof(clRedirectServer));
+    clRedirectOffered = cls.realtime;
+    if (clRedirectWaiting) {
+        return;
+    }
     Q_strncpyz(name, MSG_ReadStringLine(msg), sizeof(name));
     CL_RedirectSetText(name[0] ? name : server, MSG_ReadStringLine(msg));
-    Q_strncpyz(clRedirectServer, server, sizeof(clRedirectServer));
+    CL_RedirectCopyLine(clRedirectWaitLabel, sizeof(clRedirectWaitLabel), MSG_ReadStringLine(msg), "Wait for a slot");
+    CL_RedirectCopyLine(clRedirectGoLabel, sizeof(clRedirectGoLabel), MSG_ReadStringLine(msg), "Go now");
+    CL_RedirectCopyLine(clRedirectWaitText, sizeof(clRedirectWaitText), MSG_ReadStringLine(msg),
+                        "Server is full. Waiting for a slot");
     clRedirectFrom = from;
     clRedirectStart = cls.realtime;
     clRedirectPending = qtrue;
+    CL_RedirectButtons(va("%s|%s", clRedirectWaitLabel, clRedirectGoLabel));
     Com_Printf("Server is full: it sends you to %s\n", server);
     CL_RedirectFrame();
+}
+
+static void CL_FullRedirect_f(void) {
+    const char* choice = Cmd_Argv(1);
+
+    if (!clRedirectPending && !clRedirectWaiting) {
+        return;
+    }
+    if (!Q_stricmp(choice, "go")) {
+        CL_RedirectGo();
+    } else if (!Q_stricmp(choice, "wait") && !clRedirectWaiting) {
+        clRedirectWaiting = qtrue;
+        clRedirectStart = cls.realtime;
+        Com_Printf("Waiting for a slot on %s\n", clc.servername);
+        CL_RedirectFrame();
+    }
 }
 
 void CL_ConnectionlessPacket(netadr_t from, msg_t* msg) {
@@ -3369,6 +3452,7 @@ void CL_Init(void) {
 
     cl_allowDownload = Cvar_Get("cl_allowDownload", "0", CVAR_ARCHIVE);
     cl_followRedirect = Cvar_Get("cl_followRedirect", "1", CVAR_ARCHIVE);
+    Cvar_Get("cl_redirectButtons", "", CVAR_ROM);
     CL_UpdateInit();
 #ifdef USE_CURL_DLOPEN
     cl_cURLLib = Cvar_Get("cl_cURLLib", DEFAULT_CURL_LIB, CVAR_ARCHIVE | CVAR_PROTECTED);
@@ -3466,6 +3550,7 @@ void CL_Init(void) {
     Cmd_AddCommand("stoprecord", CL_StopRecord_f);
     Cmd_AddCommand("connect", CL_Connect_f);
     Cmd_AddCommand("reconnect", CL_Reconnect_f);
+    Cmd_AddCommand("fullredirect", CL_FullRedirect_f);
     Cmd_AddCommand("rcon", CL_Rcon_f);
     Cmd_SetCommandCompletionFunc("rcon", CL_CompleteRcon);
     Cmd_AddCommand("localservers", CL_LocalServers_f);
@@ -3540,6 +3625,7 @@ void CL_Shutdown(char* finalmsg, qboolean disconnect, qboolean quit) {
     Cmd_RemoveCommand("stoprecord");
     Cmd_RemoveCommand("connect");
     Cmd_RemoveCommand("reconnect");
+    Cmd_RemoveCommand("fullredirect");
     Cmd_RemoveCommand("rcon");
     Cmd_RemoveCommand("showip");
     Cmd_RemoveCommand("fs_openedList");

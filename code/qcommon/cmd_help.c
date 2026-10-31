@@ -116,6 +116,8 @@ static const cmdHelp_t cmdHelp[] = {
     {"connect", "joins a server\n"
                 "usage: connect <address[:port]>"},
     {"reconnect", "rejoins the last server"},
+    {"fullredirect", "answers a full server that offers another one: wait here for a slot, or go there now\n"
+                     "usage: fullredirect <wait|go>"},
     {"disconnect", "leaves the server"},
     {"cmd", "sends a command to the server as it is\n"
             "usage: cmd <command> [arguments]"},

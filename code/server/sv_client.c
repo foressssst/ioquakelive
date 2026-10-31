@@ -225,7 +225,9 @@ void SV_DirectConnect(netadr_t from) {
 
         ping = svs.time - challengeptr->pingTime;
 
-        if (!Sys_IsLANAddress(from)) {
+        if (challengeptr->pingTime == SV_PING_CHECKED) {
+            ping = 0;
+        } else if (!Sys_IsLANAddress(from)) {
             if (sv_minPing->value && ping < sv_minPing->value) {
                 NET_OutOfBandPrint(NS_SERVER, from, "print\nServer is for high pings only\n");
                 Com_DPrintf("Client %i rejected on a too low ping\n", i);
@@ -240,7 +242,9 @@ void SV_DirectConnect(netadr_t from) {
             }
         }
 
-        Com_Printf("Client %i connecting with %i challenge ping\n", i, ping);
+        if (challengeptr->pingTime != SV_PING_CHECKED) {
+            Com_Printf("Client %i connecting with %i challenge ping\n", i, ping);
+        }
         challengeptr->connected = qtrue;
     }
 
@@ -292,7 +296,12 @@ void SV_DirectConnect(netadr_t from) {
                 return;
             }
         } else {
-            SV_FullRedirect(from, challenge);
+            qboolean retry = challengeNum >= 0 && svs.challenges[challengeNum].pingTime == SV_PING_CHECKED;
+
+            SV_FullRedirect(from, challenge, retry);
+            if (challengeNum >= 0) {
+                svs.challenges[challengeNum].pingTime = SV_PING_CHECKED;
+            }
             NET_OutOfBandPrint(NS_SERVER, from, "print\nServer is full.\n");
             Com_DPrintf("Rejected a connection.\n");
             return;

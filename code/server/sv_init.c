@@ -518,6 +518,7 @@ void SV_Init(void) {
     Cvar_Get("sv_cylinderScale", "1.1f", 0);
     sv_fullRedirect = Cvar_Get("sv_fullRedirect", "", CVAR_ARCHIVE);
     sv_fullRedirectMessage = Cvar_Get("sv_fullRedirectMessage", "", CVAR_ARCHIVE);
+    sv_fullRedirectButtons = Cvar_Get("sv_fullRedirectButtons", "", CVAR_ARCHIVE);
 
     Cvar_Get("sv_referencedSteamworks", "", CVAR_ROM);
     Cvar_Get("sv_gtid", "", CVAR_SERVERINFO | CVAR_ROM);

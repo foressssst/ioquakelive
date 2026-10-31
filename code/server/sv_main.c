@@ -60,6 +60,7 @@ cvar_t* sv_workshopFile;
 cvar_t* sv_quitOnEmpty;
 cvar_t* sv_fullRedirect;
 cvar_t* sv_fullRedirectMessage;
+cvar_t* sv_fullRedirectButtons;
 cvar_t* sv_lanForceRate;
 cvar_t* sv_banFile;
 cvar_t* sv_altEntDir;
@@ -714,9 +715,11 @@ static void SV_RedirectInfoResponse(netadr_t from, msg_t* msg) {
     svRedirects[i].answered = Sys_Milliseconds();
 }
 
-void SV_FullRedirect(netadr_t from, int challenge) {
+void SV_FullRedirect(netadr_t from, int challenge, qboolean retry) {
     svRedirect_t* best = NULL;
     char to[MAX_OSPATH];
+    char buttons[MAX_CVAR_VALUE_STRING];
+    char* p;
     int now = Sys_Milliseconds();
     int i;
 
@@ -738,10 +741,18 @@ void SV_FullRedirect(netadr_t from, int challenge) {
     } else {
         Q_strncpyz(to, NET_AdrToStringwPort(best->adr), sizeof(to));
     }
-    NET_OutOfBandPrint(NS_SERVER, from, "redirect %i %s\n%s\n%s", challenge, to, best->name,
-                       sv_fullRedirectMessage->string);
-    Com_Printf("Server is full: %s sent to %s (%i of %i)\n", NET_AdrToString(from),
-               NET_AdrToStringwPort(best->adr), best->clients, best->maxClients);
+    Q_strncpyz(buttons, sv_fullRedirectButtons->string, sizeof(buttons));
+    for (p = buttons; *p; p++) {
+        if (*p == '|') {
+            *p = '\n';
+        }
+    }
+    NET_OutOfBandPrint(NS_SERVER, from, "redirect %i %s\n%s\n%s\n%s", challenge, to, best->name,
+                       sv_fullRedirectMessage->string, buttons);
+    if (!retry) {
+        Com_Printf("Server is full: %s sent to %s (%i of %i)\n", NET_AdrToString(from),
+                   NET_AdrToStringwPort(best->adr), best->clients, best->maxClients);
+    }
 }
 
 static void SV_ConnectionlessPacket(netadr_t from, msg_t* msg) {

@@ -282,9 +282,12 @@ extern cvar_t* sv_workshopFile;
 extern cvar_t* sv_quitOnEmpty;
 extern cvar_t* sv_fullRedirect;
 extern cvar_t* sv_fullRedirectMessage;
+extern cvar_t* sv_fullRedirectButtons;
 extern cvar_t* sv_lanForceRate;
 
-void SV_FullRedirect(netadr_t from, int challenge);
+#define SV_PING_CHECKED -1
+
+void SV_FullRedirect(netadr_t from, int challenge, qboolean retry);
 extern cvar_t* sv_altEntDir;
 extern cvar_t* sv_dumpEntities;
 extern cvar_t* sv_banFile;

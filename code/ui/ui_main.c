@@ -4946,7 +4946,12 @@ void _UI_Init(qboolean inGameLoad) {
     trap_Cvar_Set("ui_actualNetGametype", va("%d", ui_netGameType.integer));
 }
 
+static qboolean UI_RedirectKey(int key, qboolean down);
+
 void _UI_KeyEvent(int key, qboolean down) {
+    if (UI_RedirectKey(key, down)) {
+        return;
+    }
     if (Menu_Count() > 0) {
         menuDef_t* menu = Menu_GetFocused();
         if (menu) {
@@ -5291,6 +5296,94 @@ static void UI_DisplayDownloadInfo(const char* downloadName, float centerPoint, 
     }
 }
 
+#define UI_REDIRECT_Y 362
+#define UI_REDIRECT_W 170
+#define UI_REDIRECT_H 30
+#define UI_REDIRECT_GAP 12
+
+static qboolean UI_RedirectLayout(char* wait, char* go, int size, rectDef_t* waitRect, rectDef_t* goRect) {
+    char labels[MAX_CVAR_VALUE_STRING];
+    char* bar;
+
+    trap_Cvar_VariableStringBuffer("cl_redirectButtons", labels, sizeof(labels));
+    bar = strchr(labels, '|');
+    if (!bar || !bar[1]) {
+        return qfalse;
+    }
+    *bar = '\0';
+    Q_strncpyz(wait, labels, size);
+    Q_strncpyz(go, bar + 1, size);
+    waitRect->y = goRect->y = UI_REDIRECT_Y;
+    waitRect->h = goRect->h = UI_REDIRECT_H;
+    goRect->w = UI_REDIRECT_W;
+    if (wait[0]) {
+        waitRect->w = UI_REDIRECT_W;
+        waitRect->x = 320 - UI_REDIRECT_GAP / 2 - UI_REDIRECT_W;
+        goRect->x = 320 + UI_REDIRECT_GAP / 2;
+    } else {
+        waitRect->w = 0;
+        waitRect->x = 0;
+        goRect->x = 320 - UI_REDIRECT_W / 2;
+    }
+    return qtrue;
+}
+
+static qboolean UI_RedirectOver(const rectDef_t* r) {
+    float x = uiInfo.uiDC.cursorx;
+    float y = uiInfo.uiDC.cursory;
+
+    return r->w > 0 && x >= r->x && x <= r->x + r->w && y >= r->y && y <= r->y + r->h;
+}
+
+static void UI_RedirectLabel(const rectDef_t* r, const char* text, float scale, vec4_t color) {
+    Text_Paint(r->x + (r->w - Text_Width(text, scale, 0)) / 2, r->y + (r->h + Text_Height(text, scale, 0)) / 2, scale,
+               color, text, 0, 0, ITEM_TEXTSTYLE_NORMAL);
+}
+
+static void UI_DrawRedirectButtons(void) {
+    vec4_t waitBack = {0.133f, 0.133f, 0.133f, 0.8f};
+    vec4_t goBack = {0.375f, 0.125f, 0.125f, 0.8f};
+    vec4_t focus = {0.964f, 0.815f, 0.0f, 1.0f};
+    vec4_t waitText = {0.525f, 0.525f, 0.525f, 1.0f};
+    vec4_t goText = {0.9f, 0.9f, 0.9f, 1.0f};
+    char wait[64], go[64];
+    rectDef_t waitRect, goRect;
+
+    if (!UI_RedirectLayout(wait, go, sizeof(wait), &waitRect, &goRect)) {
+        return;
+    }
+    if (waitRect.w > 0) {
+        UI_FillRect(waitRect.x, waitRect.y, waitRect.w, waitRect.h, waitBack);
+        UI_RedirectLabel(&waitRect, wait, 0.24f, UI_RedirectOver(&waitRect) ? focus : waitText);
+    }
+    UI_FillRect(goRect.x, goRect.y, goRect.w, goRect.h, goBack);
+    UI_FillRect(goRect.x, goRect.y, goRect.w, 2, focus);
+    UI_FillRect(goRect.x, goRect.y + goRect.h - 2, goRect.w, 2, focus);
+    UI_FillRect(goRect.x, goRect.y, 2, goRect.h, focus);
+    UI_FillRect(goRect.x + goRect.w - 2, goRect.y, 2, goRect.h, focus);
+    UI_RedirectLabel(&goRect, go, 0.30f, UI_RedirectOver(&goRect) ? focus : goText);
+}
+
+static qboolean UI_RedirectKey(int key, qboolean down) {
+    char wait[64], go[64];
+    rectDef_t waitRect, goRect;
+
+    if (!UI_RedirectLayout(wait, go, sizeof(wait), &waitRect, &goRect)) {
+        return qfalse;
+    }
+    if (!down || (key & K_CHAR_FLAG)) {
+        return qtrue;
+    }
+    if (key == K_ESCAPE) {
+        trap_Cmd_ExecuteText(EXEC_APPEND, "disconnect\n");
+    } else if (key == K_ENTER || key == K_KP_ENTER || (key == K_MOUSE1 && UI_RedirectOver(&goRect))) {
+        trap_Cmd_ExecuteText(EXEC_APPEND, "fullredirect go\n");
+    } else if (key == K_MOUSE1 && UI_RedirectOver(&waitRect)) {
+        trap_Cmd_ExecuteText(EXEC_APPEND, "fullredirect wait\n");
+    }
+    return qtrue;
+}
+
 void UI_DrawConnectScreen(qboolean overlay) {
     char* s;
     uiClientState_t cstate;
@@ -5328,7 +5421,7 @@ void UI_DrawConnectScreen(qboolean overlay) {
 
     Text_PaintCenter(centerPoint, 600, scale, colorWhite, Info_ValueForKey(cstate.updateInfoString, "motd"), 0);
     if (cstate.connState < CA_CONNECTED) {
-        Text_PaintCenter_AutoWrapped(centerPoint, yStart + 176, 630, 20, scale, colorWhite, cstate.messageString, 0);
+        Text_PaintCenter_AutoWrapped(centerPoint, yStart + 176, 630, 26, scale, colorWhite, cstate.messageString, 0);
     }
 
     if (lastConnState > cstate.connState) {
@@ -5366,6 +5459,10 @@ void UI_DrawConnectScreen(qboolean overlay) {
 
     if (Q_stricmp(cstate.servername, "localhost")) {
         Text_PaintCenter(centerPoint, yStart + 80, scale, colorWhite, s, 0);
+    }
+
+    if (cstate.connState == CA_CHALLENGING) {
+        UI_DrawRedirectButtons();
     }
 
     if (cstate.connState <= CA_CONNECTED) {
