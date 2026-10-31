@@ -746,6 +746,28 @@ void SendPendingPredictableEvents(playerState_t* ps) {
     }
 }
 
+static qboolean ClientTouchesOtherBody(gentity_t* ent) {
+    const float* o = ent->client->ps.origin;
+    int i;
+
+    if (!(ent->r.contents & CONTENTS_BODY)) {
+        return qfalse;
+    }
+    for (i = 0; i < level.maxclients; i++) {
+        gentity_t* other = &g_entities[i];
+        const float* p;
+
+        if (other == ent || !other->inuse || !other->client || !(other->r.contents & CONTENTS_BODY)) {
+            continue;
+        }
+        p = other->client->ps.origin;
+        if (fabs(p[0] - o[0]) < 96 && fabs(p[1] - o[1]) < 96 && fabs(p[2] - o[2]) < 160) {
+            return qtrue;
+        }
+    }
+    return qfalse;
+}
+
 void ClientThink_real(gentity_t* ent) {
     gclient_t* client;
     pmove_t pm;
@@ -949,6 +971,9 @@ void ClientThink_real(gentity_t* ent) {
     }
 
     VectorCopy(ent->client->ps.origin, ent->r.currentOrigin);
+    if (ClientTouchesOtherBody(ent)) {
+        VectorCopy(ent->client->ps.origin, ent->s.pos.trBase);
+    }
 
     BotTestAAS(ent->r.currentOrigin);
 
@@ -1134,6 +1159,9 @@ void ClientEndFrame(gentity_t* ent) {
     G_SetClientSound(ent);
 
     BG_PlayerStateToEntityState(&ent->client->ps, &ent->s, qtrue);
+    if (ClientTouchesOtherBody(ent)) {
+        VectorCopy(ent->client->ps.origin, ent->s.pos.trBase);
+    }
     SendPendingPredictableEvents(&ent->client->ps);
 
     if (g_lagHaxMs.integer != 0 && g_lagHaxHistory.integer != 0) {
