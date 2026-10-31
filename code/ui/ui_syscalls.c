@@ -205,6 +205,10 @@ qhandle_t trap_SteamAvatar(const char* steamId) {
     return syscall(UI_STEAM_AVATAR, steamId);
 }
 
+int trap_UpdateNotes(char* buf, int size) {
+    return syscall(UI_UPDATE_NOTES, buf, size);
+}
+
 int trap_MatchFile(const char* name, char* buf, int size) {
     return syscall(UI_MATCH_FILE, name, buf, size);
 }

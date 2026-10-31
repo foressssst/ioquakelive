@@ -778,6 +778,9 @@ intptr_t CL_UISystemCalls(intptr_t* args) {
         case UI_MATCH_FILE:
             return CL_ReadMatchFile(VMA(1), VMA(2), (int)args[3]);
 
+        case UI_UPDATE_NOTES:
+            return CL_UpdateNotes(VMA(1), (int)args[2]);
+
         case UI_LAN_SERVER_NAME: {
             char* buf = VMA(3);
 

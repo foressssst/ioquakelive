@@ -46,6 +46,7 @@ enum { CLD_IDLE, CLD_RUNNING, CLD_DOWNLOADED, CLD_EXTRACT, CLD_READY, CLD_FAILED
 
 static char clUpdateText[0x40000];
 static char clUpdateURL[512];
+static char clUpdateNotes[8192];
 static volatile long clUpdateState;
 static cvar_t* cl_checkUpdates;
 
@@ -400,6 +401,117 @@ static void CL_UpdateFindAsset(const char* text) {
 #endif
 }
 
+static int CL_UpdateHex4(const char* p, const char* end) {
+    int v = 0;
+    int i;
+
+    if (end - p < 4) {
+        return -1;
+    }
+    for (i = 0; i < 4; i++) {
+        int c = (unsigned char)p[i];
+
+        v <<= 4;
+        if (c >= '0' && c <= '9') {
+            v |= c - '0';
+        } else if (c >= 'a' && c <= 'f') {
+            v |= c - 'a' + 10;
+        } else if (c >= 'A' && c <= 'F') {
+            v |= c - 'A' + 10;
+        } else {
+            return -1;
+        }
+    }
+    return v;
+}
+
+static void CL_UpdateJsonText(const char* p, const char* end, char* out, int size) {
+    int n = 0;
+
+    out[0] = '\0';
+    if (!p || p >= end || *p != '"') {
+        return;
+    }
+    for (p++; p < end && *p != '"' && n < size - 4; p++) {
+        int c = (unsigned char)*p;
+        int cp;
+
+        if (c != '\\') {
+            if (c >= 0x20) {
+                out[n++] = (char)c;
+            }
+            continue;
+        }
+        if (++p >= end) {
+            break;
+        }
+        switch (*p) {
+            case 'n':
+                out[n++] = '\n';
+                break;
+            case 't':
+                out[n++] = ' ';
+                break;
+            case 'r':
+            case 'b':
+            case 'f':
+                break;
+            case 'u':
+                cp = CL_UpdateHex4(p + 1, end);
+                if (cp < 0) {
+                    break;
+                }
+                p += 4;
+                if (cp < 0x20 || (cp >= 0xd800 && cp <= 0xdfff)) {
+                    break;
+                }
+                if (cp < 0x80) {
+                    out[n++] = (char)cp;
+                } else if (cp < 0x800) {
+                    out[n++] = (char)(0xc0 | (cp >> 6));
+                    out[n++] = (char)(0x80 | (cp & 0x3f));
+                } else {
+                    out[n++] = (char)(0xe0 | (cp >> 12));
+                    out[n++] = (char)(0x80 | ((cp >> 6) & 0x3f));
+                    out[n++] = (char)(0x80 | (cp & 0x3f));
+                }
+                break;
+            default:
+                out[n++] = *p;
+                break;
+        }
+    }
+    if (p < end && *p != '"') {
+        while (n > 0 && ((unsigned char)out[n - 1] & 0xc0) == 0x80) {
+            n--;
+        }
+        if (n > 0 && (unsigned char)out[n - 1] >= 0xc0) {
+            n--;
+        }
+    }
+    out[n] = '\0';
+}
+
+static void CL_UpdateFindNotes(const char* text) {
+    const char* end = text + strlen(text);
+    const char* release = JSON_ArrayGetFirstValue(text, end);
+
+    CL_UpdateJsonText(release ? JSON_ObjectGetNamedValue(release, end, "body") : NULL, end, clUpdateNotes,
+                      sizeof(clUpdateNotes));
+}
+
+int CL_UpdateNotes(char* buf, int size) {
+    if (size <= 0) {
+        return 0;
+    }
+    buf[0] = '\0';
+    if (!clUpdateURL[0] || !clUpdateNotes[0]) {
+        return 0;
+    }
+    Q_strncpyz(buf, clUpdateNotes, size);
+    return (int)strlen(buf);
+}
+
 static qboolean CL_UpdateFromGitHub(void) {
     char tag[32];
     const char* p;
@@ -429,6 +541,7 @@ static qboolean CL_UpdateFromGitHub(void) {
     }
     pre = !Q_strncmp(p, "true", 4) ? qtrue : qfalse;
     CL_UpdateFindAsset(clUpdateText);
+    CL_UpdateFindNotes(clUpdateText);
     Com_sprintf(clUpdateText, sizeof(clUpdateText), "%s %s%s%s", tag[0] == 'v' ? tag + 1 : tag,
                 CL_UPDATE_RELEASE_TAG, tag, pre ? " pre" : "");
     return qtrue;

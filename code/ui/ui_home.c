@@ -36,7 +36,10 @@ typedef enum {
     HM_HIT_CONTEXT_BACK,
     HM_HIT_MENU,
     HM_HIT_ERROR,
-    HM_HIT_ERROR_OK
+    HM_HIT_ERROR_OK,
+    HM_HIT_NOTES,
+    HM_HIT_NOTES_LATER,
+    HM_HIT_NOTES_UPDATE
 } hmHitType_t;
 
 #define HM_MENU_MAIN 0
@@ -758,6 +761,7 @@ static void UI_Home_LoadRetail(void) {
     hr.bethLogo = trap_R_RegisterShaderNoMip("webui/img/beth-logo-footer.png");
 
     trap_Cvar_Register(NULL, "ui_legalsViewed", "0", CVAR_TEMP | CVAR_NORESTART);
+    trap_Cvar_Register(NULL, "ui_updateNotesSeen", "", CVAR_TEMP | CVAR_NORESTART);
     hr.legalsViewed = trap_Cvar_VariableValue("ui_legalsViewed") != 0 ||
                       trap_Cvar_VariableValue("web_skipLegals") > 0;
 }
@@ -1132,6 +1136,10 @@ void UI_Home_Open(void) {
     }
 }
 
+static void UI_Home_NotesPaint(void);
+static qboolean UI_Home_NotesWanted(void);
+static qboolean UI_Home_NotesKey(int key);
+
 void UI_Home_Paint(void) {
     float top;
 
@@ -1162,6 +1170,7 @@ void UI_Home_Paint(void) {
 
     UI_Home_Banner();
     UI_Home_DrawLegals();
+    UI_Home_NotesPaint();
     SM_EndFrame();
 }
 
@@ -1176,6 +1185,9 @@ qboolean UI_Home_HandleKey(int key) {
             UI_Home_SkipLegals(uiInfo.uiDC.realTime);
         }
         return qtrue;
+    }
+    if (UI_Home_NotesWanted()) {
+        return UI_Home_NotesKey(key);
     }
     if (key == K_ESCAPE && hm2.menu != HM_MENU_MAIN) {
         hm2.menu = HM_MENU_MAIN;
@@ -1286,6 +1298,335 @@ qboolean UI_Home_ErrorKey(int key) {
     if (hit && hit->type == HM_HIT_ERROR_OK) {
         hmError[0] = '\0';
         trap_Cvar_Set("com_errorMessage", "");
+    }
+    return qtrue;
+}
+
+#define HN_TEXT 8192
+#define HN_PARAS 128
+#define HN_ROWS 384
+#define HN_LINE 20.0f
+#define HN_HEAD 18.0f
+#define HN_HEAD_LINE 28.0f
+#define HN_GAP 10.0f
+#define HN_INDENT 18.0f
+#define HN_BODY_MAX 0.55f
+
+enum { HN_PLAIN, HN_HEADING, HN_BULLET };
+
+static struct {
+    char version[32];
+    char text[HN_TEXT];
+    int numParas;
+    int paraStart[HN_PARAS];
+    byte paraKind[HN_PARAS];
+    byte paraGap[HN_PARAS];
+    float width;
+    int numRows;
+    int rowStart[HN_ROWS];
+    int rowLen[HN_ROWS];
+    byte rowKind[HN_ROWS];
+    byte rowMark[HN_ROWS];
+    float rowY[HN_ROWS];
+    float height;
+    float scroll;
+} hn;
+
+static int UI_Home_NotesInline(const char* in, int len, char* out, int size) {
+    int i, n = 0;
+
+    for (i = 0; i < len && n < size - 1; i++) {
+        char c = in[i];
+
+        if (c == '`') {
+            continue;
+        }
+        if ((c == '*' || c == '_') && i + 1 < len && in[i + 1] == c) {
+            i++;
+            continue;
+        }
+        if (c == '\\' && i + 1 < len && strchr("\\`*_[]()#+-.!", in[i + 1])) {
+            out[n++] = in[++i];
+            continue;
+        }
+        if (c == '!' && i + 1 < len && in[i + 1] == '[') {
+            int j = i + 2;
+
+            while (j < len && in[j] != ']') {
+                j++;
+            }
+            if (j + 1 < len && in[j + 1] == '(') {
+                while (j < len && in[j] != ')') {
+                    j++;
+                }
+                i = j;
+                continue;
+            }
+        }
+        if (c == '[') {
+            int j = i + 1;
+
+            while (j < len && in[j] != ']') {
+                j++;
+            }
+            if (j + 1 < len && in[j + 1] == '(') {
+                int k = j + 2;
+
+                while (k < len && in[k] != ')') {
+                    k++;
+                }
+                if (k < len) {
+                    n += UI_Home_NotesInline(in + i + 1, j - i - 1, out + n, size - n);
+                    i = k;
+                    continue;
+                }
+            }
+        }
+        out[n++] = c;
+    }
+    out[n] = '\0';
+    return n;
+}
+
+static qboolean UI_Home_NotesRule(const char* s, int len) {
+    int i;
+
+    if (len < 3) {
+        return qfalse;
+    }
+    for (i = 0; i < len; i++) {
+        if (s[i] != '-' && s[i] != '*' && s[i] != '_' && s[i] != ' ') {
+            return qfalse;
+        }
+    }
+    return qtrue;
+}
+
+static void UI_Home_NotesLoad(void) {
+    static char raw[HN_TEXT];
+    const char* p;
+    qboolean gap = qfalse;
+    int n = 0;
+
+    hn.numParas = 0;
+    hn.width = -1.0f;
+    hn.scroll = 0.0f;
+    if (trap_UpdateNotes(raw, sizeof(raw)) <= 0) {
+        return;
+    }
+    for (p = raw; *p;) {
+        const char* eol = strchr(p, '\n');
+        const char* s = p;
+        int len = eol ? (int)(eol - p) : (int)strlen(p);
+        int kind = HN_PLAIN;
+
+        p += len + (eol ? 1 : 0);
+        while (len > 0 && *s == ' ') {
+            s++;
+            len--;
+        }
+        while (len > 0 && s[len - 1] == ' ') {
+            len--;
+        }
+        if (!len || UI_Home_NotesRule(s, len)) {
+            gap = (qboolean)(hn.numParas > 0);
+            continue;
+        }
+        if (*s == '#') {
+            while (len > 0 && *s == '#') {
+                s++;
+                len--;
+            }
+            while (len > 0 && *s == ' ') {
+                s++;
+                len--;
+            }
+            kind = HN_HEADING;
+        } else if (len >= 2 && (*s == '-' || *s == '*' || *s == '+') && s[1] == ' ') {
+            s += 2;
+            len -= 2;
+            kind = HN_BULLET;
+        } else if (!gap && hn.numParas > 0 && hn.paraKind[hn.numParas - 1] != HN_HEADING && n < HN_TEXT - 2) {
+            hn.text[n - 1] = ' ';
+            n += UI_Home_NotesInline(s, len, hn.text + n, HN_TEXT - n) + 1;
+            continue;
+        }
+        if (!len || hn.numParas == HN_PARAS || n >= HN_TEXT - 2) {
+            continue;
+        }
+        hn.paraStart[hn.numParas] = n;
+        hn.paraKind[hn.numParas] = (byte)kind;
+        hn.paraGap[hn.numParas] = (byte)gap;
+        hn.numParas++;
+        gap = qfalse;
+        n += UI_Home_NotesInline(s, len, hn.text + n, HN_TEXT - n) + 1;
+    }
+}
+
+static void UI_Home_NotesLayout(float width) {
+    float y = 0.0f;
+    int i, j;
+
+    if (width == hn.width) {
+        return;
+    }
+    hn.width = width;
+    hn.numRows = 0;
+    for (i = 0; i < hn.numParas; i++) {
+        const char* text = hn.text + hn.paraStart[i];
+        int kind = hn.paraKind[i];
+        float size = kind == HN_HEADING ? HN_HEAD : HM_TEXT;
+        float line = kind == HN_HEADING ? HN_HEAD_LINE : HN_LINE;
+        int starts[SM_MAX_LINES], lens[SM_MAX_LINES];
+        int lines = SM_Wrap(FONT_SANS, size, text, width - (kind == HN_BULLET ? HN_INDENT : 0.0f), starts, lens);
+
+        if (hn.paraGap[i]) {
+            y += HN_GAP;
+        }
+        for (j = 0; j < lines && hn.numRows < HN_ROWS; j++) {
+            hn.rowStart[hn.numRows] = hn.paraStart[i] + starts[j];
+            hn.rowLen[hn.numRows] = lens[j];
+            hn.rowKind[hn.numRows] = (byte)kind;
+            hn.rowMark[hn.numRows] = (byte)(kind == HN_BULLET && j == 0);
+            hn.rowY[hn.numRows] = y;
+            hn.numRows++;
+            y += line;
+        }
+    }
+    hn.height = y;
+}
+
+static qboolean UI_Home_NotesWanted(void) {
+    char status[16];
+    char version[32];
+    char seen[32];
+
+    if (!hr.legalsViewed || UI_Home_InMatch() || UI_Home_ErrorActive()) {
+        return qfalse;
+    }
+    trap_Cvar_VariableStringBuffer("cl_updateStatus", status, sizeof(status));
+    if (Q_stricmp(status, "available") && Q_stricmp(status, "prerelease")) {
+        return qfalse;
+    }
+    trap_Cvar_VariableStringBuffer("cl_updateVersion", version, sizeof(version));
+    trap_Cvar_VariableStringBuffer("ui_updateNotesSeen", seen, sizeof(seen));
+    if (!version[0] || !Q_stricmp(seen, version)) {
+        return qfalse;
+    }
+    if (strcmp(hn.version, version)) {
+        Q_strncpyz(hn.version, version, sizeof(hn.version));
+        UI_Home_NotesLoad();
+    }
+    return (qboolean)(hn.numParas > 0);
+}
+
+static void UI_Home_NotesClose(qboolean update) {
+    trap_Cvar_Set("ui_updateNotesSeen", hn.version);
+    if (update) {
+        trap_Cmd_ExecuteText(EXEC_APPEND,
+                             trap_Cvar_VariableValue("cl_updateAuto") ? "updatedownload\n" : "openupdate\n");
+    }
+}
+
+static float UI_Home_NotesBodyH(void) {
+    float top = -smTop / smScale;
+    float room = (smBottom - top) * HN_BODY_MAX;
+
+    return hn.height < room ? hn.height : room;
+}
+
+static void UI_Home_NotesPaint(void) {
+    static const char* const later = "Update later";
+    static const char* const update = "Update";
+    float top = -smTop / smScale;
+    float x = smVW * HM_ERROR_SIDE;
+    float w = smVW * (1.0f - 2.0f * HM_ERROR_SIDE);
+    float bodyH, h, band, bodyTop, by, updW, laterW, updX, laterX;
+    char status[16];
+    int i;
+
+    if (!UI_Home_NotesWanted()) {
+        return;
+    }
+    UI_Home_NotesLayout(w - SM_Len(16.0f));
+    bodyH = UI_Home_NotesBodyH();
+    if (hn.scroll > hn.height - bodyH) {
+        hn.scroll = hn.height - bodyH;
+    }
+    if (hn.scroll < 0.0f) {
+        hn.scroll = 0.0f;
+    }
+    h = 88.4f + bodyH + 25.0f + SM_WEB_BUTTON_H + 25.0f;
+    band = top + (smBottom - top - h) * 0.5f;
+    bodyTop = band + 88.4f;
+
+    SM_Fill(-1, top, smVW + 2, smBottom - top + 1, hmBlack80, NULL);
+    SM_Fill(-1, band, smVW + 2, h, hmErrorDialog, NULL);
+    SM_Hit(0, top, smVW, smBottom - top, HM_HIT_NOTES, 0, NULL);
+
+    trap_Cvar_VariableStringBuffer("cl_updateStatus", status, sizeof(status));
+    SM_SetSpacing(SM_SPACING_H1);
+    SM_TextRaw(x + 6.4f, SM_Baseline(FONT_DEFAULT, 32, band + 24.0f, 38.4f), FONT_DEFAULT, 32, smText,
+               va(Q_stricmp(status, "prerelease") ? "A new version is out: %s" : "A new version is out: %s (experimental)",
+                  hn.version),
+               -1, qfalse);
+    SM_SetSpacing(0);
+
+    for (i = 0; i < hn.numRows; i++) {
+        int kind = hn.rowKind[i];
+        float size = kind == HN_HEADING ? HN_HEAD : HM_TEXT;
+        float line = kind == HN_HEADING ? HN_HEAD_LINE : HN_LINE;
+        float ry = bodyTop + hn.rowY[i] - hn.scroll;
+        float base = SM_Baseline(FONT_SANS, size, ry, line);
+        float tx = x + (kind == HN_BULLET ? HN_INDENT : 0.0f);
+
+        if (ry < bodyTop - 0.5f || ry + line > bodyTop + bodyH + 0.5f) {
+            continue;
+        }
+        if (hn.rowMark[i]) {
+            SM_Fill(x + 5.0f, base - 6.0f, 4.0f, 4.0f, smText, NULL);
+        }
+        SM_Text(tx, base, FONT_SANS, size, kind == HN_HEADING ? smGold : smText, hn.text + hn.rowStart[i],
+                hn.rowLen[i], qfalse);
+    }
+    if (hn.height > bodyH) {
+        float thumb = bodyH * bodyH / hn.height;
+        float pos = (bodyH - thumb) * hn.scroll / (hn.height - bodyH);
+
+        SM_Fill(x + w - SM_Len(4.0f), bodyTop, SM_Len(4.0f), bodyH, smWebButton, NULL);
+        SM_Fill(x + w - SM_Len(4.0f), bodyTop + pos, SM_Len(4.0f), thumb, smWebButtonHover, NULL);
+    }
+
+    by = band + h - 25.0f - SM_WEB_BUTTON_H;
+    updW = SM_WebButtonWidth(update);
+    laterW = SM_WebButtonWidth(later);
+    updX = x + w - updW;
+    laterX = updX - SM_Len(10.0f) - laterW;
+    SM_WebButton(laterX, by, laterW, later, qfalse, SM_Over(HM_HIT_NOTES_LATER, 0), NULL);
+    SM_Hit(laterX, by, laterW, SM_WEB_BUTTON_H, HM_HIT_NOTES_LATER, 0, NULL);
+    SM_WebButton(updX, by, updW, update, qfalse, SM_Over(HM_HIT_NOTES_UPDATE, 0), NULL);
+    SM_Hit(updX, by, updW, SM_WEB_BUTTON_H, HM_HIT_NOTES_UPDATE, 0, NULL);
+}
+
+static qboolean UI_Home_NotesKey(int key) {
+    const smHit_t* hit;
+
+    if (key == K_ESCAPE) {
+        UI_Home_NotesClose(qfalse);
+        return qtrue;
+    }
+    if (key == K_MWHEELUP || key == K_MWHEELDOWN) {
+        hn.scroll += (key == K_MWHEELUP ? -3.0f : 3.0f) * HN_LINE;
+        return qtrue;
+    }
+    if (key != K_MOUSE1) {
+        return qtrue;
+    }
+    hit = SM_HitAt(smMX, smMY);
+    if (hit && hit->type == HM_HIT_NOTES_LATER) {
+        UI_Home_NotesClose(qfalse);
+    } else if (hit && hit->type == HM_HIT_NOTES_UPDATE) {
+        UI_Home_NotesClose(qtrue);
     }
     return qtrue;
 }

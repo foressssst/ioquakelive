@@ -404,6 +404,7 @@ void CL_WorkshopFrame(void);
 void CL_WarmPlayersChanged(void);
 void CL_UpdateInit(void);
 void CL_UpdateFrame(void);
+int CL_UpdateNotes(char* buf, int size);
 qboolean CL_ServerVerified(const netadr_t* adr);
 void CL_VoiceFrame(void);
 void CL_MatchReportFrame(void);
