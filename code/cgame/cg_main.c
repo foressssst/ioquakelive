@@ -2761,55 +2761,91 @@ static const char* CG_FeederItemTextStats(float feederID, int index, int column,
     int scoreIndex = 0;
     int team = (feederID == FEEDER_REDTEAM_STATS) ? TEAM_RED : TEAM_BLUE;
     clientInfo_t* info = CG_InfoFromScoreIndex(index, team, &scoreIndex);
-    score_t* sp = &cg.scores[scoreIndex];
+    const score_t* sp = &cg.scores[scoreIndex];
+    const int* st = cg.teamStats[scoreIndex].fields;
 
-    if (!info || !info->infoValid) return "";
+    if (!info || !info->infoValid || info->team == TEAM_SPECTATOR) {
+        return "";
+    }
+
+    switch (column) {
+        case 0:
+            return CG_ScoreboardName(info->name, 100, 92);
+        case 1:
+            if (sp->score == -9999 || sp->score == -999) {
+                return "";
+            }
+            return va("^3%i", sp->score);
+        case 2:
+            return va("%i", sp->frags);
+        case 3:
+            return va("%i", sp->deaths - st[2] - st[0]);
+    }
 
     switch (cgs.gametype) {
-        case GT_CA:
-            switch (column) {
-                case 0: return CG_ScoreboardName(info->name, 100, 92);
-                case 1: return va("%d", sp->score);
-                case 2: return va("%d", sp->frags);
-                case 3: return va("%d", sp->deaths);
-                case 4: return CG_FormatDamage(sp->damageDone);
-                case 5: return "";
-                case 6: return va("%d%%", sp->accuracy);
-                case 16: return va("%d", sp->time);
-            }
-            return "";
         case GT_TEAM:
         case GT_FREEZE:
             switch (column) {
-                case 0: return CG_ScoreboardName(info->name, 100, 92);
-                case 1: return va("%d", sp->score);
-                case 2: return va("%d", sp->frags);
-                case 3: return va("%d", sp->deaths);
-                case 4: return "";
-                case 5: return va("%d", sp->tks);
-                case 6: return va("%d", sp->tkd);
-                case 7: return va("%d", sp->net);
-                case 8: return CG_FormatDamage(sp->damageDone);
-                case 9: return "";
-                case 10: return va("%d%%", sp->accuracy);
-                case 17: return va("%d", sp->time);
+                case 4: return va("%i", st[0]);
+                case 5: return va("%i", st[1]);
+                case 6: return va("%i", st[2]);
+                case 7: return va("%i", sp->frags - sp->deaths - st[1] + st[2]);
+                case 8: return va("%i", st[7]);
+                case 9: return va("%i", st[8]);
+                case 10: return va("%i%%", sp->accuracy);
+                case 11: return va("%i", st[9]);
+                case 12: return va("%i", st[11]);
+                case 13: return va("%i", st[13]);
+                case 14: return va("%i", st[15]);
+                case 15: return va("%i", st[17]);
+                case 16: return va("%i", st[18]);
+                case 17: return va("%4i", sp->time);
             }
-            return "";
-        default:
+            break;
+        case GT_CA:
             switch (column) {
-                case 0: return CG_ScoreboardName(info->name, 100, 92);
-                case 1: return va("%d", sp->score);
-                case 2: return va("%d", sp->frags);
-                case 3: return va("%d", sp->deaths);
-                case 4: return "";
-                case 5: return va("%d", sp->net);
-                case 6: return CG_FormatDamage(sp->damageDone);
-                case 7: return "";
-                case 8: return va("%d%%", sp->accuracy);
-                case 18: return va("%d", sp->time);
+                case 4: return va("%i", st[7]);
+                case 5: return va("%i", st[8]);
+                case 6: return va("%i%%", sp->accuracy);
+                case 7: return va("%i", st[23]);
+                case 8:
+                case 9:
+                case 10:
+                case 11:
+                case 12:
+                case 13:
+                case 14: return va("^3%i ^7%i%%", st[16 + column], st[32 + column]);
+                case 15: return va("^3%i ^7%i%%", st[36], st[52]);
+                case 16: return va("%4i", sp->time);
             }
-            return "";
+            break;
+        case GT_CTF:
+        case GT_1FCTF:
+        case GT_HARVESTER:
+        case GT_DOMINATION:
+        case GT_AD:
+            switch (column) {
+                case 4: return va("%i", st[0]);
+                case 5: return va("%i", sp->frags - sp->deaths);
+                case 6: return va("%i", st[7]);
+                case 7: return va("%i", st[8]);
+                case 8: return va("%i%%", sp->accuracy);
+                case 9: return va("%i", st[9]);
+                case 10: return va("%i", st[11]);
+                case 11: return va("%i", st[13]);
+                case 12: return va("%i", st[15]);
+                case 13: return va("%i", st[17]);
+                case 14: return va("%i", st[18]);
+                case 15: return va("%i", st[19]);
+                case 16: return va("%i", st[20]);
+                case 17: return va("%i", st[21]);
+                case 18: return va("%4i", sp->time);
+            }
+            break;
+        default:
+            break;
     }
+    return "";
 }
 
 static qhandle_t CG_ScorePowerupIcon(const clientInfo_t* info) {
