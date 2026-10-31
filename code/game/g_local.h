@@ -742,7 +742,7 @@ void G_StartKamikaze(gentity_t* ent);
 
 void FreeForAllScoreboardMessage(gentity_t* ent);
 int STAT_GetBestWeapon(gclient_t *cl);
-void FFAScoreboardMessage_impl(void);
+void SmallScoreboardMessage(int clientNum);
 void DuelScoreboardMessage_impl(void);
 void DuelScoreboardMessage(gentity_t *ent);
 void RaceScoreboardMessage(gentity_t *ent);

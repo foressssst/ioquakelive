@@ -65,8 +65,10 @@ void FreeForAllScoreboardMessage(gentity_t* ent) {
                     bestWeaponAccuracy,
                     damageDone);
         j = strlen(entry);
-        if (stringlength + j > SCORES_LIST_ROOM)
-            break;
+        if (stringlength + j > SCORES_LIST_ROOM) {
+            SmallScoreboardMessage(ent - g_entities);
+            return;
+        }
         strcpy(string + stringlength, entry);
         stringlength += j;
     }
@@ -76,7 +78,7 @@ void FreeForAllScoreboardMessage(gentity_t* ent) {
                                                 string));
 }
 
-void FFAScoreboardMessage_impl(void) {
+void SmallScoreboardMessage(int clientNum) {
     char entry[1024];
     char string[1024];
     int stringlength;
@@ -113,7 +115,7 @@ void FFAScoreboardMessage_impl(void) {
         stringlength += j;
     }
 
-    trap_SendServerCommand(-1, va("smscores %i %i %i%s", i,
+    trap_SendServerCommand(clientNum, va("smscores %i %i %i%s", i,
                                    level.teamScores[TEAM_RED], level.teamScores[TEAM_BLUE],
                                    string));
 }
