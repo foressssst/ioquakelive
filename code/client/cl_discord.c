@@ -408,7 +408,7 @@ static void Discord_Send(const char* activity) {
 }
 
 void CL_Discord_Init(void) {
-    cl_discordPresence = Cvar_Get("cl_discordPresence", "0", CVAR_ARCHIVE);
+    cl_discordPresence = Cvar_Get("cl_discordPresence", "1", CVAR_ARCHIVE);
     Cvar_CheckRange(cl_discordPresence, 0, 1, qtrue);
 }
 
