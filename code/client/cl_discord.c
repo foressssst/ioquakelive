@@ -19,6 +19,9 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
 #include "client.h"
 #include <time.h>
 
@@ -28,7 +31,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
 #endif
@@ -100,9 +103,22 @@ static void Discord_Close(void) {
 }
 
 #ifndef _WIN32
+static qboolean Discord_PeerIsUser(int s) {
+#if defined(__linux__)
+    struct ucred cred;
+    socklen_t len = sizeof(cred);
+
+    return (qboolean)(getsockopt(s, SOL_SOCKET, SO_PEERCRED, &cred, &len) == 0 && cred.uid == getuid());
+#else
+    uid_t uid;
+    gid_t gid;
+
+    return (qboolean)(getpeereid(s, &uid, &gid) == 0 && uid == getuid());
+#endif
+}
+
 static qboolean Discord_OpenPath(const char* dir, const char* sub, int n) {
     struct sockaddr_un addr;
-    struct stat st;
     int s;
 
     Com_Memset(&addr, 0, sizeof(addr));
@@ -111,14 +127,11 @@ static qboolean Discord_OpenPath(const char* dir, const char* sub, int n) {
         (int)sizeof(addr.sun_path) - 1) {
         return qfalse;
     }
-    if (lstat(addr.sun_path, &st) < 0 || !S_ISSOCK(st.st_mode) || st.st_uid != getuid()) {
-        return qfalse;
-    }
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s < 0) {
         return qfalse;
     }
-    if (connect(s, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+    if (connect(s, (struct sockaddr*)&addr, sizeof(addr)) < 0 || !Discord_PeerIsUser(s)) {
         close(s);
         return qfalse;
     }
@@ -329,6 +342,9 @@ static const char* Discord_ConfigString(int index) {
 static void Discord_Activity(char* json, int size) {
     char details[DISCORD_TEXT];
     char where[MAX_OSPATH];
+    char factory[64];
+    char map[MAX_QPATH];
+    char host[DISCORD_TEXT];
     const char* state = "";
     const char* info;
     int players = 0;
@@ -337,25 +353,25 @@ static void Discord_Activity(char* json, int size) {
 
     where[0] = '\0';
     if (clc.state == CA_ACTIVE) {
-        const char* factory;
         int gametype;
 
         info = Discord_ConfigString(CS_SERVERINFO);
-        factory = Info_ValueForKey(info, "g_factoryTitle");
+        Q_strncpyz(factory, Info_ValueForKey(info, "g_factoryTitle"), sizeof(factory));
+        Q_strncpyz(map, Info_ValueForKey(info, "mapname"), sizeof(map));
+        Q_strncpyz(host, Info_ValueForKey(info, "sv_hostname"), sizeof(host));
         gametype = atoi(Info_ValueForKey(info, "g_gametype"));
         if (!factory[0] && gametype >= 0 && gametype < (int)ARRAY_LEN(discordGametypes)) {
-            factory = discordGametypes[gametype];
+            Q_strncpyz(factory, discordGametypes[gametype], sizeof(factory));
         }
         if (clc.demoplaying) {
             Com_sprintf(details, sizeof(details), "Watching a demo");
-            state = Info_ValueForKey(info, "mapname");
+            state = map;
         } else {
-            Com_sprintf(details, sizeof(details), "%s on %s", factory[0] ? factory : "Playing",
-                        Info_ValueForKey(info, "mapname"));
+            Com_sprintf(details, sizeof(details), "%s on %s", factory[0] ? factory : "Playing", map);
             if (!Q_stricmp(clc.servername, "localhost")) {
                 state = "Local match";
             } else {
-                state = Info_ValueForKey(info, "sv_hostname");
+                state = host;
                 for (i = 0; i < MAX_CLIENTS; i++) {
                     if (Discord_ConfigString(CS_PLAYERS + i)[0]) {
                         players++;
