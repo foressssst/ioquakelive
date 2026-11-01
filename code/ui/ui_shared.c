@@ -3696,8 +3696,11 @@ void Item_ListBox_Paint(itemDef_t* item) {
                             qhandle_t prefix = DC->feederItemPrefix ? DC->feederItemPrefix(item->special, i, j) : 0;
 
                             if (prefix) {
-                                DC->drawHandlePic(tx, y + listPtr->elementHeight - FEEDER_PREFIX_H + 0.5f, FEEDER_PREFIX_H * 2.0f, FEEDER_PREFIX_H, prefix);
-                                tx += FEEDER_PREFIX_W;
+                                float side = j > 0 ? listPtr->columnInfo[j - 1].width : listPtr->elementHeight - 1;
+                                float fh = side * FEEDER_FLAG_H;
+
+                                DC->drawHandlePic(tx, y - 2 + listPtr->elementHeight * 0.5f + side * FEEDER_FLAG_TOP, fh * 2.0f, fh, prefix);
+                                tx += fh * 2.0f + 2.0f;
                             }
                             DC->drawText(tx, y + listPtr->elementHeight, item->textscale,
                                          (i == item->cursorPos) ? item->window.selectedColor : item->window.elementColor,

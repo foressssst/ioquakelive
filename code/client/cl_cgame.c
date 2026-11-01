@@ -288,7 +288,6 @@ void CL_ShutdownCGame(void) {
 
 static struct {
     uint64_t steamId;
-    qboolean round;
     qhandle_t shader;
 } clAvatars[CL_MAX_AVATARS];
 static int clNumAvatars;
@@ -307,44 +306,23 @@ void CL_ClearAvatars(void) {
     CL_ClubClearShaders();
 }
 
-static void CL_RoundAvatar(byte* rgba, int w, int h) {
-    const float r = w * 0.25f;
-    float dx, dy, a;
-    int x, y;
-
-    for (y = 0; y < h; y++) {
-        for (x = 0; x < w; x++) {
-            dx = x + 0.5f < r ? r - x - 0.5f : x + 0.5f > w - r ? x + 0.5f - (w - r) : 0.0f;
-            dy = y + 0.5f < r ? r - y - 0.5f : y + 0.5f > h - r ? y + 0.5f - (h - r) : 0.0f;
-            if (dx <= 0.0f || dy <= 0.0f) {
-                continue;
-            }
-            a = r + 0.5f - sqrtf(dx * dx + dy * dy);
-            if (a < 1.0f) {
-                rgba[(y * w + x) * 4 + 3] = (byte)(rgba[(y * w + x) * 4 + 3] * (a > 0.0f ? a : 0.0f));
-            }
-        }
-    }
-}
-
 qhandle_t CL_SteamAvatarShader(uint64_t steamId) {
     qhandle_t shader;
-    qboolean round, wait;
+    qboolean wait;
     byte* rgba;
     int w, h, i;
 
     if (!steamId || !re.RegisterShaderFromRaw) {
         return 0;
     }
-    round = CL_ClubActive();
-    if (round) {
+    if (CL_ClubActive()) {
         shader = CL_ClubAvatar(steamId, &wait);
         if (shader || wait) {
             return shader;
         }
     }
     for (i = 0; i < clNumAvatars; i++) {
-        if (clAvatars[i].steamId == steamId && clAvatars[i].round == round) {
+        if (clAvatars[i].steamId == steamId) {
             return clAvatars[i].shader;
         }
     }
@@ -360,14 +338,10 @@ qhandle_t CL_SteamAvatarShader(uint64_t steamId) {
         clNextMiss = (clNextMiss + 1) % CL_AVATAR_MISSES;
         return 0;
     }
-    if (round) {
-        CL_RoundAvatar(rgba, w, h);
-    }
-    shader = re.RegisterShaderFromRaw(va("%s_%llu", round ? "club" : "steam", (unsigned long long)steamId), rgba, w, h);
+    shader = re.RegisterShaderFromRaw(va("steam_%llu", (unsigned long long)steamId), rgba, w, h);
     Z_Free(rgba);
     if (shader) {
         clAvatars[clNumAvatars].steamId = steamId;
-        clAvatars[clNumAvatars].round = round;
         clAvatars[clNumAvatars].shader = shader;
         clNumAvatars++;
     }

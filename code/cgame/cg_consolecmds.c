@@ -644,6 +644,7 @@ static qboolean CG_ChatLineShowing(const chatLine_t* line) {
 static float CG_DrawChatLine(float x, float y, float scale, float* color, const chatLine_t* line, int style) {
     const clientInfo_t* ci;
     qhandle_t pic = 0;
+    qhandle_t flag = 0;
     float size;
 
     if (line->sender >= 0 && line->sender < MAX_CLIENTS) {
@@ -653,13 +654,22 @@ static float CG_DrawChatLine(float x, float y, float scale, float* color, const 
         } else {
             pic = line->icon;
         }
+        if (line->steamId && ci->steamId == line->steamId) {
+            flag = CG_ClubFlag(ci);
+        }
     }
-    if (pic) {
+    if (pic || flag) {
         size = CG_DrawTextCapHeight(scale, 1) + 3.0f;
         trap_R_SetColor(color);
-        CG_DrawPic(x, y - size + 1.5f, size, size, pic);
+        if (pic) {
+            CG_DrawPic(x, y - size + 1.5f, size, size, pic);
+            x += size + 3.0f;
+        }
+        if (flag) {
+            CG_DrawPic(x, y - size + 1.5f, size * 2.0f, size, flag);
+            x += size * 2.0f + 3.0f;
+        }
         trap_R_SetColor(NULL);
-        x += size + 3.0f;
     }
     CG_DrawText(x, y, 1, scale, color, line->text, 0, 256, style);
     return x;

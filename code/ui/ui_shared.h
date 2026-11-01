@@ -102,8 +102,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define SLIDER_THUMB_HEIGHT 20.0
 #define NUM_CROSSHAIRS 30
 
-#define FEEDER_PREFIX_H 8.0f
-#define FEEDER_PREFIX_W (FEEDER_PREFIX_H * 2.0f + 2.0f)
+#define FEEDER_FLAG_TOP (4.0f / 32.0f)
+#define FEEDER_FLAG_H (25.0f / 32.0f)
+#define FEEDER_PREFIX_W 27.0f
 
 typedef struct {
     const char* command;
