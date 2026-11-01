@@ -2826,6 +2826,13 @@ void CG_UpdateJoinMenu(void) {
 		return;
 	}
 
+	if (trap_Key_GetCatcher() & KEYCATCH_UI) {
+		if (menu->window.flags & WINDOW_VISIBLE) {
+			CG_HideJoinMenu();
+		}
+		return;
+	}
+
 	if (!cg_paused.integer) {
 		if (cgs.eventHandling == CGAME_EVENT_ESCAPE) {
 			cgs.eventHandling = CGAME_EVENT_NONE;
