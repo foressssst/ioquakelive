@@ -61,6 +61,7 @@
     <ClCompile Include="..\..\code\sys\sys_autoupdater.c" />
     <ClCompile Include="..\..\code\sys\sys_main.c" />
     <ClCompile Include="..\..\code\sys\sys_win32.c" />
+    <ClCompile Include="..\..\code\sys\sys_win32_video.c" />
     <ClCompile Include="..\..\code\sys\win_snd.c" />
     <ClCompile Include="..\..\code\botlib\be_aas_bspq3.c">
       <Filter>botlib</Filter>

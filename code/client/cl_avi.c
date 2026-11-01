@@ -50,6 +50,12 @@ typedef struct aviFileData_s {
     void* pipe;
     qboolean pipeFailed;
 
+    void* encoder;
+    qboolean encoderFailed;
+    int encoderRate;
+    double resamplePos;
+    short resampleLast[2];
+
     int frameRate;
     int framePeriod;
     int width, height;
@@ -279,6 +285,24 @@ void CL_WriteAVIHeader(void) {
     }
 }
 
+static void CL_VideoAudioFormat(void) {
+    afd.a.rate = dma.speed;
+    afd.a.format = WAV_FORMAT_PCM;
+    afd.a.channels = dma.channels;
+    afd.a.bits = dma.samplebits;
+    afd.a.sampleSize = (afd.a.bits / 8) * afd.a.channels;
+
+    if (!Cvar_VariableIntegerValue("s_initsound")) {
+        afd.audio = qfalse;
+    } else if (afd.a.bits != 16 || afd.a.channels != 2) {
+        Com_Printf(S_COLOR_YELLOW "WARNING: Audio format of %d bit/%d channels not supported",
+                   afd.a.bits, afd.a.channels);
+        afd.audio = qfalse;
+    } else {
+        afd.audio = qtrue;
+    }
+}
+
 static qboolean CL_OpenAVIForWriting(const char* fileName, void* pipe) {
     if (afd.fileOpen)
         return qfalse;
@@ -318,22 +342,7 @@ static qboolean CL_OpenAVIForWriting(const char* fileName, void* pipe) {
     afd.cBuffer = Z_Malloc((afd.width * 4 + MAX_PACK_LEN - 1) * afd.height + MAX_PACK_LEN - 1);
     afd.eBuffer = Z_Malloc(PAD(afd.width * 3, AVI_LINE_PADDING) * afd.height);
 
-    afd.a.rate = dma.speed;
-    afd.a.format = WAV_FORMAT_PCM;
-    afd.a.channels = dma.channels;
-    afd.a.bits = dma.samplebits;
-    afd.a.sampleSize = (afd.a.bits / 8) * afd.a.channels;
-
-
-    if (!Cvar_VariableIntegerValue("s_initsound")) {
-        afd.audio = qfalse;
-    } else if (afd.a.bits != 16 || afd.a.channels != 2) {
-        Com_Printf(S_COLOR_YELLOW "WARNING: Audio format of %d bit/%d channels not supported",
-                   afd.a.bits, afd.a.channels);
-        afd.audio = qfalse;
-    } else {
-        afd.audio = qtrue;
-    }
+    CL_VideoAudioFormat();
 
     CL_WriteAVIHeader();
 
@@ -389,6 +398,18 @@ void CL_WriteAVIVideoFrame(const byte* imageBuffer, int size) {
     if (!afd.fileOpen)
         return;
 
+    if (afd.encoder) {
+        int stride = PAD(afd.width * 3, AVI_LINE_PADDING);
+
+        if (!afd.encoderFailed &&
+            (size < stride * afd.height || !Sys_VideoFrame(afd.encoder, imageBuffer, stride, afd.height))) {
+            afd.encoderFailed = qtrue;
+            Cbuf_AddText("stopvideo\n");
+        }
+        afd.numVideoFrames++;
+        return;
+    }
+
     if (CL_CheckFileSize(8 + size + 2))
         return;
 
@@ -423,6 +444,46 @@ void CL_WriteAVIVideoFrame(const byte* imageBuffer, int size) {
 }
 
 #define PCM_BUFFER_SIZE 44100
+#define RESAMPLE_BLOCK 2048
+
+static void CL_VideoAudioOut(const short* pcm, int count) {
+    if (!afd.encoderFailed && !Sys_VideoAudio(afd.encoder, pcm, count)) {
+        afd.encoderFailed = qtrue;
+        Cbuf_AddText("stopvideo\n");
+    }
+}
+
+static void CL_VideoResample(const short* in, int count) {
+    static short out[RESAMPLE_BLOCK * 2];
+    double step = (double)afd.a.rate / afd.encoderRate;
+    int n = 0;
+
+    while (afd.resamplePos < count) {
+        int i = (int)afd.resamplePos;
+        float t = (float)(afd.resamplePos - i);
+        int c;
+
+        for (c = 0; c < 2; c++) {
+            float a = i ? in[(i - 1) * 2 + c] : afd.resampleLast[c];
+
+            out[n * 2 + c] = (short)(a + (in[i * 2 + c] - a) * t);
+        }
+        afd.resamplePos += step;
+        if (++n == RESAMPLE_BLOCK) {
+            CL_VideoAudioOut(out, n);
+            n = 0;
+        }
+    }
+    if (n) {
+        CL_VideoAudioOut(out, n);
+    }
+    if (count > 0) {
+        afd.resampleLast[0] = in[(count - 1) * 2];
+        afd.resampleLast[1] = in[(count - 1) * 2 + 1];
+        afd.resamplePos -= count;
+    }
+    afd.numAudioFrames++;
+}
 
 void CL_WriteAVIAudioFrame(const byte* pcmBuffer, int size) {
     static byte pcmCaptureBuffer[PCM_BUFFER_SIZE] = {0};
@@ -433,6 +494,11 @@ void CL_WriteAVIAudioFrame(const byte* pcmBuffer, int size) {
 
     if (!afd.fileOpen)
         return;
+
+    if (afd.encoder) {
+        CL_VideoResample((const short*)pcmBuffer, size / afd.a.sampleSize);
+        return;
+    }
 
     if (CL_CheckFileSize(8 + bytesInBuffer + size + 2))
         return;
@@ -504,6 +570,21 @@ qboolean CL_CloseAVI(void) {
     afd.fileOpen = qfalse;
     com_uncappedFrames = qfalse;
     Cvar_Set("cl_videoRecording", "0");
+
+    if (afd.encoder) {
+        int code;
+
+        Z_Free(afd.cBuffer);
+        Z_Free(afd.eBuffer);
+        code = Sys_VideoClose(afd.encoder);
+        afd.encoder = NULL;
+        if (code) {
+            Com_Printf(S_COLOR_RED "The video encoder could not finish %s (code 0x%08x)\n", afd.fileName, code);
+            return qfalse;
+        }
+        Com_Printf("Wrote %d:%d frames to %s\n", afd.numVideoFrames, afd.numAudioFrames, afd.fileName);
+        return qtrue;
+    }
 
     if (afd.pipe) {
         char log[MAX_OSPATH];
@@ -672,6 +753,39 @@ static void* CL_VideoOpenFfmpeg(const char* file) {
     return Sys_PipeOpen(argv, log);
 }
 
+static qboolean CL_VideoOpenEncoder(const char* file) {
+    char out[MAX_OSPATH];
+    void* encoder;
+    int rate;
+
+    if (cl_videoFrameRate->integer <= 0) {
+        return qfalse;
+    }
+    Com_Memset(&afd, 0, sizeof(aviFileData_t));
+    afd.frameRate = cl_videoFrameRate->integer;
+    afd.width = cls.glconfig.vidWidth;
+    afd.height = cls.glconfig.vidHeight;
+    CL_VideoAudioFormat();
+    rate = afd.audio ? (afd.a.rate % 8000 ? 44100 : 48000) : 0;
+    Q_strncpyz(out, FS_BuildOSPath(cl_videoHome, FS_GetCurrentGameDir(), file), sizeof(out));
+    FS_CreatePath(out);
+    encoder = Sys_VideoOpen(out, afd.width, afd.height, afd.frameRate, rate);
+    if (!encoder) {
+        return qfalse;
+    }
+    Q_strncpyz(afd.fileName, file, MAX_QPATH);
+    afd.encoder = encoder;
+    afd.encoderRate = rate;
+    afd.resamplePos = 1.0;
+    afd.framePeriod = (int)(1000000.0f / afd.frameRate);
+    afd.cBuffer = Z_Malloc((afd.width * 4 + MAX_PACK_LEN - 1) * afd.height + MAX_PACK_LEN - 1);
+    afd.eBuffer = Z_Malloc(PAD(afd.width * 3, AVI_LINE_PADDING) * afd.height);
+    afd.fileOpen = qtrue;
+    com_uncappedFrames = qtrue;
+    Cvar_Set("cl_videoRecording", "1");
+    return qtrue;
+}
+
 void CL_VideoInit(void) {
     Q_strncpyz(cl_videoHome, Cvar_VariableString("fs_homepath"), sizeof(cl_videoHome));
 }
@@ -689,6 +803,11 @@ void CL_Video_f(void) {
         return;
     }
     CL_VideoFileName(file, sizeof(file), Cmd_Argc() > 1 ? Cmd_Argv(1) : "", "mp4");
+    if (CL_VideoOpenEncoder(file)) {
+        Com_Printf("Recording %s at %i fps. stopvideo ends it, and so does the end of the demo.\n", file,
+                   afd.frameRate);
+        return;
+    }
     pipe = CL_VideoOpenFfmpeg(file);
     if (!pipe) {
         Com_Printf(S_COLOR_YELLOW "ffmpeg not found: recording a large .avi instead. Put ffmpeg next to the game for .mp4\n");

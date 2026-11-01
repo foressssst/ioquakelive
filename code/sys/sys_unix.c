@@ -1091,6 +1091,22 @@ qboolean Sys_ProcessExited(int pid) {
     return (qboolean)(kill(pid, 0) != 0 && errno == ESRCH);
 }
 
+void* Sys_VideoOpen(const char* path, int width, int height, int fps, int rate) {
+    return NULL;
+}
+
+qboolean Sys_VideoFrame(void* video, const byte* bgr, int stride, int rows) {
+    return qfalse;
+}
+
+qboolean Sys_VideoAudio(void* video, const short* pcm, int count) {
+    return qfalse;
+}
+
+int Sys_VideoClose(void* video) {
+    return 0;
+}
+
 qboolean Sys_DllExtension(const char* name) {
     const char* p;
     char c = 0;

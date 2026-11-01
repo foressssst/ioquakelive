@@ -791,6 +791,7 @@ powershell.exe -NoLogo -ExecutionPolicy Bypass -File "..\..\code\tools\Make-Pak0
     <ClCompile Include="..\..\code\sys\sys_autoupdater.c" />
     <ClCompile Include="..\..\code\sys\sys_main.c" />
     <ClCompile Include="..\..\code\sys\sys_win32.c" />
+    <ClCompile Include="..\..\code\sys\sys_win32_video.c" />
     <ClCompile Include="..\..\code\sys\win_snd.c" />
     <ClCompile Include="..\..\code\zlib\adler32.c" />
     <ClCompile Include="..\..\code\zlib\crc32.c" />
