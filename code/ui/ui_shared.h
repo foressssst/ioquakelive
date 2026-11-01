@@ -453,15 +453,15 @@ void Display_CacheAll(void);
 void* UI_Alloc(int size);
 void UI_InitMemory(void);
 qboolean UI_OutOfMemory(void);
-int UI_MemUsed(void);
-
 typedef struct {
     int alloc;
     int strings;
+    qboolean outOfMemory;
 } uiMemMark_t;
 
-void UI_MemMark(uiMemMark_t* mark);
-void UI_MemRelease(const uiMemMark_t* mark);
+void UI_MemBeginPrivate(uiMemMark_t* start);
+void UI_MemEndPrivate(uiMemMark_t* end);
+qboolean UI_MemRelease(const uiMemMark_t* start, const uiMemMark_t* end);
 qboolean Menu_NewInto(int handle, menuDef_t* menu);
 
 void Controls_GetConfig(void);

@@ -105,10 +105,6 @@ qboolean UI_OutOfMemory(void) {
     return outOfMemory;
 }
 
-int UI_MemUsed(void) {
-    return allocPoint;
-}
-
 #define HASH_TABLE_SIZE 2048
 static unsigned hashForString(const char* str) {
     int i;
@@ -136,11 +132,14 @@ static char strPool[STRING_POOL_SIZE];
 
 static int strHandleCount = 0;
 static stringDef_t* strHandle[HASH_TABLE_SIZE];
+static stringDef_t* strPrivate[HASH_TABLE_SIZE];
+static qboolean strPrivateOn = qfalse;
 
 const char* String_Alloc(const char* p) {
     int len;
     unsigned hash;
     stringDef_t *str, *last;
+    stringDef_t** table;
     static const char* staticNULL = "";
 
     if (p == NULL) {
@@ -161,13 +160,22 @@ const char* String_Alloc(const char* p) {
         str = str->next;
     }
 
+    table = strPrivateOn ? strPrivate : strHandle;
+    if (strPrivateOn) {
+        for (str = strPrivate[hash]; str; str = str->next) {
+            if (strcmp(p, str->str) == 0) {
+                return str->str;
+            }
+        }
+    }
+
     len = strlen(p);
     if (len + strPoolIndex + 1 < STRING_POOL_SIZE) {
         int ph = strPoolIndex;
         strcpy(&strPool[strPoolIndex], p);
         strPoolIndex += len + 1;
 
-        str = strHandle[hash];
+        str = table[hash];
         last = str;
         while (str && str->next) {
             last = str;
@@ -183,42 +191,42 @@ const char* String_Alloc(const char* p) {
         if (last) {
             last->next = str;
         } else {
-            strHandle[hash] = str;
+            table[hash] = str;
         }
         return &strPool[ph];
     }
     return NULL;
 }
 
-void UI_MemMark(uiMemMark_t* mark) {
+static void UI_MemMark(uiMemMark_t* mark) {
     mark->alloc = allocPoint;
     mark->strings = strPoolIndex;
+    mark->outOfMemory = outOfMemory;
 }
 
-void UI_MemRelease(const uiMemMark_t* mark) {
-    const char* cut = &memoryPool[mark->alloc];
-    int i;
+void UI_MemBeginPrivate(uiMemMark_t* start) {
+    UI_MemMark(start);
+    memset(strPrivate, 0, sizeof(strPrivate));
+    strPrivateOn = qtrue;
+}
 
-    if (mark->alloc > allocPoint || mark->strings > strPoolIndex) {
-        return;
-    }
-    for (i = 0; i < HASH_TABLE_SIZE; i++) {
-        stringDef_t* prev = NULL;
-        stringDef_t* str = strHandle[i];
+void UI_MemEndPrivate(uiMemMark_t* end) {
+    strPrivateOn = qfalse;
+    memset(strPrivate, 0, sizeof(strPrivate));
+    UI_MemMark(end);
+}
 
-        while (str && (const char*)str < cut) {
-            prev = str;
-            str = str->next;
-        }
-        if (prev) {
-            prev->next = NULL;
-        } else {
-            strHandle[i] = NULL;
-        }
+qboolean UI_MemRelease(const uiMemMark_t* start, const uiMemMark_t* end) {
+    if (end->alloc != allocPoint || end->strings != strPoolIndex) {
+        return qfalse;
     }
-    allocPoint = mark->alloc;
-    strPoolIndex = mark->strings;
-    outOfMemory = qfalse;
+    if (start->alloc > end->alloc || start->strings > end->strings) {
+        return qfalse;
+    }
+    allocPoint = start->alloc;
+    strPoolIndex = start->strings;
+    outOfMemory = start->outOfMemory;
+    return qtrue;
 }
 
 void String_Report(void) {
@@ -239,7 +247,9 @@ void String_Init(void) {
     int i;
     for (i = 0; i < HASH_TABLE_SIZE; i++) {
         strHandle[i] = NULL;
+        strPrivate[i] = NULL;
     }
+    strPrivateOn = qfalse;
     strHandleCount = 0;
     strPoolIndex = 0;
     menuCount = 0;

@@ -29,7 +29,7 @@ static menuDef_t hvMenu[HV_MAX_MENUS];
 static int hvCount;
 static qboolean hvLoaded;
 static uiMemMark_t hvMark;
-static int hvEnd;
+static uiMemMark_t hvEnd;
 static displayContextDef_t hvDC;
 static cachedAssets_t hvAssets;
 static float hvX, hvY, hvW = 640.0f, hvH = 480.0f;
@@ -1313,8 +1313,8 @@ static int HV_ParseFile(const char* file) {
 }
 
 void HV_Unload(void) {
-    if (hvLoaded && UI_MemUsed() == hvEnd) {
-        UI_MemRelease(&hvMark);
+    if (hvLoaded) {
+        UI_MemRelease(&hvMark, &hvEnd);
     }
     hvLoaded = qfalse;
     hvCount = 0;
@@ -1324,7 +1324,7 @@ qboolean HV_Load(char (*files)[MAX_QPATH], int numFiles, int* menusPerFile) {
     int i;
 
     HV_Unload();
-    UI_MemMark(&hvMark);
+    UI_MemBeginPrivate(&hvMark);
     memset(&hvAssets, 0, sizeof(hvAssets));
     hvAssets.fadeClamp = 1.0f;
     hvAssets.fadeCycle = 1;
@@ -1341,7 +1341,7 @@ qboolean HV_Load(char (*files)[MAX_QPATH], int numFiles, int* menusPerFile) {
         }
     }
     HV_End();
-    hvEnd = UI_MemUsed();
+    UI_MemEndPrivate(&hvEnd);
     hvLoaded = qtrue;
     return hvCount > 0;
 }
