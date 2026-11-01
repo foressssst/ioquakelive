@@ -60,6 +60,21 @@ void Item_UpdatePosition(itemDef_t* item);
 #define HE_FA_MINUS 0xf068
 #define HE_FA_PLUS 0xf067
 #define HE_FA_MAP 0xf108
+#define HE_FA_CHEVRON 0xf078
+#define HE_FA_IMPORT 0xf093
+#define HE_FA_EXPORT 0xf019
+#define HE_FA_SLIDERS 0xf1de
+#define HE_FA_LAYERS 0xf0c9
+#define HE_FA_CROSSHAIR 0xf05b
+#define HE_FA_CHART 0xf201
+#define HE_FA_CHAT 0xf0e5
+#define HE_FA_BOLT 0xf0e7
+#define HE_FA_FOLDER 0xf07c
+#define HE_FA_TRASH 0xf1f8
+#define HE_FA_COPY 0xf0c5
+#define HE_FA_FILE 0xf15b
+
+#define HE_MAX_HUDS 48
 
 typedef enum {
     HEK_RECT,
@@ -119,7 +134,9 @@ typedef enum {
     HE_HIT_ALPHA,
     HE_HIT_SCALE,
     HE_HIT_POPUP,
-    HE_HIT_CONFIRM
+    HE_HIT_CONFIRM,
+    HE_HIT_HUD,
+    HE_HIT_HUDITEM
 } heHit_t;
 
 typedef enum {
@@ -141,6 +158,11 @@ static const heMode_t heModes[] = {
     {GT_FFA, "FFA"}, {GT_DUEL, "Duel"}, {GT_TEAM, "TDM"}, {GT_CA, "CA"}, {GT_CTF, "CTF"}, {GT_FREEZE, "FT"},
 };
 
+static const struct {
+    const char* label;
+    const char* list;
+} heRetailHuds[] = {{"Normal", "ui/hud.txt"}, {"Small", "ui/hud2.txt"}, {"Large", "ui/hud3.txt"}};
+
 static const char* heMaps[] = {"campgrounds", "bloodrun", "aerowalk", "toxicity", "furiousheights", "lostworld", "sinister", "almostlost"};
 static const char* heMapNames[] = {"Campgrounds", "Blood Run", "Aerowalk", "Toxicity", "Furious Heights", "Lost World", "Sinister", "Almost Lost"};
 
@@ -160,6 +182,9 @@ static struct {
     int handle;
     float grabX, grabY;
     float start[4];
+    float boxOff[4];
+    float startScale;
+    float startBox[4];
     float offX, offY;
     qboolean moved;
     float guideX, guideY;
@@ -179,6 +204,11 @@ static struct {
     float popup[4];
     float track[2];
     qboolean confirm;
+    char pending[MAX_QPATH];
+    qboolean hudMenu;
+    float hudMenuX;
+    char huds[HE_MAX_HUDS][MAX_QPATH];
+    int numHuds;
     char status[160];
     int statusTime;
     float cv[4];
@@ -383,6 +413,52 @@ static qboolean HE_Load(const char* listFile) {
         base += he.menusPerFile[f];
     }
     return qtrue;
+}
+
+static const char* HE_HudName(const char* list) {
+    static char name[MAX_QPATH];
+    const char* s;
+    int i;
+
+    for (i = 0; i < (int)ARRAY_LEN(heRetailHuds); i++) {
+        if (!Q_stricmp(list, heRetailHuds[i].list)) {
+            return heRetailHuds[i].label;
+        }
+    }
+    s = strrchr(list, '/');
+    Q_strncpyz(name, s ? s + 1 : list, sizeof(name));
+    COM_StripExtension(name, name, sizeof(name));
+    return name;
+}
+
+static void HE_ScanHuds(void) {
+    static char buf[8192];
+    const char* p;
+    int i, n;
+
+    he.numHuds = 0;
+    for (i = 0; i < (int)ARRAY_LEN(heRetailHuds); i++) {
+        Q_strncpyz(he.huds[he.numHuds++], heRetailHuds[i].list, MAX_QPATH);
+    }
+    n = trap_FS_GetFileList("hud", ".txt", buf, sizeof(buf));
+    for (p = buf, i = 0; i < n && he.numHuds < HE_MAX_HUDS; i++, p += strlen(p) + 1) {
+        if (p[0]) {
+            Com_sprintf(he.huds[he.numHuds++], MAX_QPATH, "hud/%s", p);
+        }
+    }
+}
+
+static void HE_SwitchHud(const char* list) {
+    he.hudMenu = qfalse;
+    if (!Q_stricmp(list, he.list)) {
+        return;
+    }
+    if (he.dirty && he.numDocs > 0) {
+        Q_strncpyz(he.pending, list, sizeof(he.pending));
+        he.confirm = qtrue;
+        return;
+    }
+    HE_Load(list);
 }
 
 static float* HE_Field(itemDef_t* it, int key) {
@@ -711,6 +787,21 @@ static qboolean HE_InCanvas(float px, float py) {
            py < HE_PxY(he.cv[1] + he.cv[3]);
 }
 
+static int HE_ItemIcon(const itemDef_t* it);
+
+static qboolean HE_TextLike(int i) {
+    return HE_ItemIcon(he.items[i].item) == HE_FA_TEXT;
+}
+
+static void HE_ItemBox(int i, float* out) {
+    itemDef_t* it = he.items[i].item;
+
+    if (HE_TextLike(i) && HV_ItemPaintRect(it, out) && out[2] > 0.0f && out[3] > 0.0f) {
+        return;
+    }
+    HV_ItemHitRect(it, out);
+}
+
 static float HE_HandlePx(void) {
     float s = 9.0f * smScale;
 
@@ -732,7 +823,7 @@ static int HE_HandleAt(float px, float py) {
     if (!HE_Editable(he.selected)) {
         return -1;
     }
-    HV_ItemScreenRect(he.items[he.selected].item, r);
+    HE_ItemBox(he.selected, r);
     for (h = 0; h < 8; h++) {
         float hx, hy;
 
@@ -749,7 +840,7 @@ static int HE_PickAt(float px, float py) {
     int i;
 
     if (he.selected >= 0 && HE_ItemPickable(he.selected)) {
-        HV_ItemHitRect(he.items[he.selected].item, r);
+        HE_ItemBox(he.selected, r);
         if (px >= r[0] && px < r[0] + r[2] && py >= r[1] && py < r[1] + r[3]) {
             int best = -1;
             float bestArea = r[2] * r[3];
@@ -760,7 +851,7 @@ static int HE_PickAt(float px, float py) {
                 if (i == he.selected || !HE_ItemPickable(i)) {
                     continue;
                 }
-                HV_ItemHitRect(he.items[i].item, q);
+                HE_ItemBox(i, q);
                 if (px >= q[0] && px < q[0] + q[2] && py >= q[1] && py < q[1] + q[3] && q[2] * q[3] < bestArea * 0.5f) {
                     best = i;
                     bestArea = q[2] * q[3];
@@ -776,7 +867,7 @@ static int HE_PickAt(float px, float py) {
         if (!HE_ItemPickable(i)) {
             continue;
         }
-        HV_ItemHitRect(he.items[i].item, r);
+        HE_ItemBox(i, r);
         if (!(px >= r[0] && px < r[0] + r[2] && py >= r[1] && py < r[1] + r[3])) {
             continue;
         }
@@ -788,7 +879,7 @@ static int HE_PickAt(float px, float py) {
             if (!HE_ItemPickable(j)) {
                 continue;
             }
-            HV_ItemHitRect(he.items[j].item, q);
+            HE_ItemBox(j, q);
             if (px >= q[0] && px < q[0] + q[2] && py >= q[1] && py < q[1] + q[3] && q[2] * q[3] < area * 0.5f) {
                 best = j;
                 area = q[2] * q[3];
@@ -831,7 +922,7 @@ static float HE_SnapAxis(const float* edges, int numEdges, qboolean vertical, fl
         if (i == he.selected || !HE_ItemPickable(i) || !HV_ItemShown(he.items[i].item)) {
             continue;
         }
-        HV_ItemScreenRect(he.items[i].item, r);
+        HE_ItemBox(i, r);
         px = vertical ? r[1] : r[0];
         py = vertical ? r[3] : r[2];
         lines[0] = px;
@@ -873,6 +964,31 @@ static void HE_DragUpdate(void) {
     r[2] = he.start[2];
     r[3] = he.start[3];
     he.guideX = he.guideY = -1.0f;
+    if (he.drag == HE_DRAG_SIZE && HE_TextLike(he.selected)) {
+        float sx, sy, size, grow, scale;
+        int h = he.handle;
+
+        HE_MousePx(&sx, &sy);
+        sx -= he.startBox[0];
+        sy -= he.startBox[1];
+        if (h == 3 || h == 7) {
+            size = he.startBox[2];
+            grow = h == 3 ? sx - size : -sx;
+        } else {
+            size = he.startBox[3];
+            grow = (h == 4 || h == 5 || h == 6) ? sy - size : -sy;
+        }
+        scale = size > 1.0f ? he.startScale * (size + grow) / size : he.startScale;
+        scale = (float)floor(scale * 100.0f + 0.5f) / 100.0f;
+        if (scale < 0.05f) {
+            scale = 0.05f;
+        }
+        if (scale > 3.0f) {
+            scale = 3.0f;
+        }
+        HE_Set(he.selected, HEK_TEXTSCALE, &scale);
+        return;
+    }
     if (he.drag == HE_DRAG_MOVE) {
         r[0] += dx;
         r[1] += dy;
@@ -932,8 +1048,12 @@ static void HE_DragUpdate(void) {
     HE_Set(he.selected, HEK_RECT, r);
     if (he.drag == HE_DRAG_MOVE && snap && !he.grid) {
         float pr[4], edges[3], d;
+        int k;
 
         HV_ItemScreenRect(e->item, pr);
+        for (k = 0; k < 4; k++) {
+            pr[k] += he.boxOff[k];
+        }
         edges[0] = pr[0];
         edges[1] = pr[0] + pr[2] * 0.5f;
         edges[2] = pr[0] + pr[2];
@@ -966,7 +1086,22 @@ static void HE_StartDrag(int mode, int handle) {
     he.drag = mode;
     he.handle = handle;
     he.moved = qfalse;
+    {
+        float sr[4];
+        int k;
+
+        HV_ItemScreenRect(e->item, sr);
+        HE_ItemBox(he.selected, he.startBox);
+        for (k = 0; k < 4; k++) {
+            he.boxOff[k] = he.startBox[k] - sr[k];
+        }
+    }
     HE_BeginUndo();
+    if (mode == HE_DRAG_SIZE && HE_TextLike(he.selected)) {
+        HE_Get(he.selected, HEK_TEXTSCALE, &he.startScale);
+        HE_PushUndo(he.selected, HEK_TEXTSCALE);
+        return;
+    }
     HE_PushUndo(he.selected, HEK_RECT);
 }
 
@@ -1287,7 +1422,6 @@ static void HE_Segment(float x, float y, float w, float h, const char** labels, 
 static void HE_PaintTop(void) {
     static const char* modes[ARRAY_LEN(heModes)];
     float y = (HE_BAR - HE_CTRL_H) * 0.5f, x, right, gw;
-    const char* file = he.numFiles > 0 ? he.files[0] : "";
     int i, sel = 0;
 
     for (i = 0; i < (int)ARRAY_LEN(heModes); i++) {
@@ -1299,11 +1433,19 @@ static void HE_PaintTop(void) {
     x = HE_G + 6.0f;
     HE_Caps(x, 0, HE_BAR, 15.0f, heHi, "HUD Editor");
     x += HE_CapsW("HUD Editor", 15.0f) + 14.0f;
+    he.hudMenuX = x;
     {
-        int fit = SM_Fit(HE_FONT, 13.0f, file, HE_G + HE_LEFT_W - x - 24.0f);
+        const char* name = HE_HudName(he.list);
+        float pw = HE_TextW(name, 14.0f, qtrue) + 54.0f;
 
-        SM_Text(x, HE_Base(13.0f, 0, HE_BAR), HE_FONT, 13.0f, heLo, file, fit, qfalse);
-        x += SM_Advance(HE_FONT, 13.0f, file, fit) + 8.0f;
+        HE_Round(x, y, pw, HE_CTRL_H, HE_CTRL_H * 0.5f, SM_Over(HE_HIT_HUD, 0) || he.hudMenu ? heRowHover : heCard);
+        HE_Text(x + 16.0f, y, HE_CTRL_H, 14.0f, heHi, name, qtrue);
+        HE_Icon(x + pw - 28.0f, y, HE_CTRL_H, 11.0f, heMd, HE_FA_CHEVRON);
+        SM_Hit(x, y, pw, HE_CTRL_H, HE_HIT_HUD, 0, NULL);
+        if (SM_Over(HE_HIT_HUD, 0) && !he.hudMenu) {
+            HE_Tip(x, y, pw, HE_CTRL_H, "Choose a HUD");
+        }
+        x += pw + 8.0f;
     }
     if (he.dirty) {
         HE_Round(x, HE_BAR * 0.5f - 4.0f, 8.0f, 8.0f, 4.0f, heGold);
@@ -1394,6 +1536,31 @@ static float HE_ListH(void) {
     return HE_PanelH() - HE_HEAD_H - 8.0f;
 }
 
+static void HE_Thumb(float x, float y, float size, const itemDef_t* it, qboolean selected) {
+    const char* text;
+    qhandle_t shader = HV_ItemThumb(it, &text);
+
+    HE_Round(x, y, size, size, 6.0f, selected ? heEdge : heCard);
+    if (shader) {
+        float pad = 3.0f;
+
+        trap_R_SetColor(NULL);
+        trap_R_DrawStretchPic(HE_PxX(x + pad), HE_PxY(y + pad), (size - pad * 2.0f) * smScale,
+                              (size - pad * 2.0f) * smScale, 0, 0, 1, 1, shader);
+        return;
+    }
+    if (text && text[0] && strlen(text) <= 5) {
+        float ts = 13.0f;
+
+        while (ts > 7.0f && HE_TextW(text, ts, qtrue) > size - 4.0f) {
+            ts -= 1.0f;
+        }
+        HE_TextCenter(x, y, size, size, ts, selected ? heHi : heMd, text, qtrue);
+        return;
+    }
+    HE_IconCenter(x, y, size, size, 12.0f, selected ? heGold : heLo, HE_ItemIcon(it));
+}
+
 static void HE_PaintLayers(void) {
     float px = HE_G, py = HE_BAR, pw = HE_LEFT_W, ph = HE_PanelH();
     float top = HE_ListTop(), bottom = top + HE_ListH(), y;
@@ -1443,9 +1610,11 @@ static void HE_PaintLayers(void) {
                     HE_Icon(rightX, y, HE_ROW_H, 12.0f, heGhost, HE_FA_EYE_OFF);
                     rightX -= 8.0f;
                 }
-                HE_IconCenter(rx + 6.0f, y, 22.0f, HE_ROW_H, 12.0f, selected ? heGold : heLo, HE_ItemIcon(e->item));
-                fit = SM_Fit(HE_FONT, 14.0f, HV_ItemLabel(e->item), rightX - (rx + 36.0f) - 4.0f);
-                SM_Text(rx + 36.0f, base, HE_FONT, 14.0f, fg, HV_ItemLabel(e->item), fit, selected);
+                if (y >= top && y + HE_ROW_H <= bottom) {
+                    HE_Thumb(rx + 5.0f, y + 4.0f, HE_ROW_H - 8.0f, e->item, selected);
+                }
+                fit = SM_Fit(HE_FONT, 14.0f, HV_ItemLabel(e->item), rightX - (rx + 44.0f) - 4.0f);
+                SM_Text(rx + 44.0f, base, HE_FONT, 14.0f, fg, HV_ItemLabel(e->item), fit, selected);
             }
             SM_Hit(rx, y, rw, HE_ROW_H, HE_HIT_LAYER, i, &clip);
         }
@@ -1685,13 +1854,16 @@ static void HE_PaintProps(void) {
     it = e->item;
     editable = !e->locked;
     {
-        int fit = SM_Fit(HE_FONT, 20.0f, HV_ItemLabel(it), w);
+        float tx = x + 56.0f, tw = w - 56.0f;
+        int fit = SM_Fit(HE_FONT, 18.0f, HV_ItemLabel(it), tw);
+        int fit2 = SM_Fit(HE_FONT, 13.0f, va("%s  -  %s", HV_ItemKind(it), HV_MenuLabel(e->menu)), tw);
 
-        SM_Text(x, HE_Base(20.0f, y - 6.0f, 30.0f), HE_FONT, 20.0f, heHi, HV_ItemLabel(it), fit, qtrue);
+        HE_Thumb(x, y - 4.0f, 46.0f, it, qtrue);
+        SM_Text(tx, HE_Base(18.0f, y - 6.0f, 30.0f), HE_FONT, 18.0f, heHi, HV_ItemLabel(it), fit, qtrue);
+        SM_Text(tx, HE_Base(13.0f, y + 20.0f, 22.0f), HE_FONT, 13.0f, heLo,
+                va("%s  -  %s", HV_ItemKind(it), HV_MenuLabel(e->menu)), fit2, qfalse);
     }
-    y += 24.0f;
-    HE_Text(x, y, 22.0f, 13.0f, heLo, va("%s  -  %s", HV_ItemKind(it), HV_MenuLabel(e->menu)), qfalse);
-    y += 34.0f;
+    y += 58.0f;
     if (!editable) {
         HE_Round(x, y, w, 60.0f, 12.0f, heCard);
         HE_Icon(x + 14.0f, y, 60.0f, 15.0f, heWarn, HE_FA_LOCK);
@@ -1796,6 +1968,51 @@ static void HE_PaintPopup(void) {
     }
 }
 
+static void HE_PaintHudMenu(void) {
+    float w = 300.0f, row = 36.0f, head = 30.0f, pad = 8.0f, x = he.hudMenuX, y = HE_BAR + 2.0f, h, ry;
+    int retail = (int)ARRAY_LEN(heRetailHuds), i;
+
+    if (!he.hudMenu) {
+        return;
+    }
+    h = pad * 2.0f + head * 2.0f + row * (float)retail + row * (float)(he.numHuds > retail ? he.numHuds - retail : 1);
+    if (y + h > smBottom - 8.0f) {
+        h = smBottom - 8.0f - y;
+    }
+    SM_Hit(0, 0, smVW, smBottom, HE_HIT_POPUP, 1, NULL);
+    HE_Floating(x, y, w, h, 14.0f, heCard);
+    SM_Hit(x, y, w, h, HE_HIT_POPUP, 0, NULL);
+    ry = y + pad;
+    for (i = 0; i < he.numHuds; i++) {
+        qboolean current = !Q_stricmp(he.huds[i], he.list);
+
+        if (i == 0 || i == retail) {
+            HE_Caps(x + 16.0f, ry, head, 11.0f, heLo, i == 0 ? "Quake Live" : "Your HUDs");
+            ry += head;
+        }
+        if (ry + row > y + h - pad) {
+            break;
+        }
+        if (SM_Over(HE_HIT_HUDITEM, i)) {
+            HE_Round(x + 6.0f, ry, w - 12.0f, row, 9.0f, heRowHover);
+        }
+        HE_Icon(x + 18.0f, ry, row, 13.0f, current ? heGold : heLo, i < retail ? HE_FA_FILE : HE_FA_FOLDER);
+        HE_Text(x + 44.0f, ry, row, 14.0f, current ? heHi : heMd, HE_HudName(he.huds[i]), current);
+        if (current) {
+            HE_Icon(x + w - 34.0f, ry, row, 12.0f, heGold, HE_FA_CHECK);
+        }
+        SM_Hit(x + 6.0f, ry, w - 12.0f, row, HE_HIT_HUDITEM, i, NULL);
+        ry += row;
+    }
+    if (he.numHuds <= retail) {
+        if (retail == he.numHuds) {
+            HE_Caps(x + 16.0f, ry, head, 11.0f, heLo, "Your HUDs");
+            ry += head;
+        }
+        HE_Text(x + 18.0f, ry, row, 13.0f, heGhost, "HUDs you save appear here.", qfalse);
+    }
+}
+
 static void HE_PaintConfirm(void) {
     float w = 500.0f, h = 196.0f, x = (smVW - w) * 0.5f, y = (smBottom - h) * 0.5f, bx, by;
 
@@ -1836,6 +2053,23 @@ static void HE_PaintGrid(void) {
     }
 }
 
+static void HE_CanvasLabel(const float* r, const char* text, qboolean selected) {
+    float size = 12.0f, h = 22.0f, w = HE_TextW(text, size, qtrue) + 16.0f;
+    float x = r[0] / smScale, y = (r[1] - smTop) / smScale - h - 6.0f;
+
+    if (y < he.cv[1] + 4.0f) {
+        y = (r[1] + r[3] - smTop) / smScale + 6.0f;
+    }
+    if (x + w > he.cv[0] + he.cv[2] - 4.0f) {
+        x = he.cv[0] + he.cv[2] - 4.0f - w;
+    }
+    if (x < he.cv[0] + 4.0f) {
+        x = he.cv[0] + 4.0f;
+    }
+    HE_Round(x, y, w, h, 6.0f, selected ? heGold : heCard);
+    HE_Text(x + 8.0f, y, h, size, selected ? heGoldText : heHi, text, qtrue);
+}
+
 static void HE_PaintCanvas(void) {
     float x = HE_PxX(he.cv[0]), y = HE_PxY(he.cv[1]), w = he.cv[2] * smScale, h = he.cv[3] * smScale;
     float aspect = w / h, s1 = 0, t1 = 0, s2 = 1, t2 = 1, mx, my;
@@ -1870,34 +2104,42 @@ static void HE_PaintCanvas(void) {
     HE_Corners(x, y, w, h, 16.0f * smScale, heBg);
 
     HE_MousePx(&mx, &my);
-    if (!he.confirm && he.colorKey < 0 && he.drag == HE_DRAG_NONE && HE_InCanvas(mx, my) && !smHasUnder) {
+    if (!he.confirm && !he.hudMenu && he.colorKey < 0 && he.drag == HE_DRAG_NONE && HE_InCanvas(mx, my) &&
+        !smHasUnder) {
         hover = HE_PickAt(mx, my);
     }
     if (hover >= 0 && hover != he.selected) {
         float r[4];
 
-        HV_ItemHitRect(he.items[hover].item, r);
-        HE_PxFrame(r[0], r[1], r[2], r[3], 1.0f, heHoverLine);
+        HE_ItemBox(hover, r);
+        HE_PxFrame(r[0] - 1.0f, r[1] - 1.0f, r[2] + 2.0f, r[3] + 2.0f, 1.0f, heHoverLine);
+        HE_CanvasLabel(r, HV_ItemLabel(he.items[hover].item), qfalse);
     }
     if (he.selected >= 0) {
-        float r[4], p[4], s = HE_HandlePx();
+        float r[4], s = HE_HandlePx();
         qboolean editable = HE_Editable(he.selected);
 
-        if (HV_ItemPaintRect(he.items[he.selected].item, p)) {
-            HE_PxFrame(p[0], p[1], p[2], p[3], 1.0f, heHoverLine);
-        }
-        HV_ItemScreenRect(he.items[he.selected].item, r);
-        HE_PxFrame(r[0], r[1], r[2], r[3], 2.0f, editable ? heGold : heHiddenLine);
+        HE_ItemBox(he.selected, r);
+        HE_PxFrame(r[0] - 1.0f, r[1] - 1.0f, r[2] + 2.0f, r[3] + 2.0f, 1.0f, editable ? heGold : heHiddenLine);
         if (editable) {
             int hnd;
 
             for (hnd = 0; hnd < 8; hnd++) {
                 float hx, hy;
 
+                if ((hnd == 1 || hnd == 5) && r[2] < s * 4.0f) {
+                    continue;
+                }
+                if ((hnd == 3 || hnd == 7) && r[3] < s * 4.0f) {
+                    continue;
+                }
                 HE_HandlePos(r, hnd, &hx, &hy);
-                HE_PxFill(hx - s * 0.5f - 1.0f, hy - s * 0.5f - 1.0f, s + 2.0f, s + 2.0f, heGold);
+                HE_PxFill(hx - s * 0.5f, hy - s * 0.5f, s, s, heGold);
                 HE_PxFill(hx - s * 0.5f + 1.0f, hy - s * 0.5f + 1.0f, s - 2.0f, s - 2.0f, heHi);
             }
+        }
+        if (he.drag == HE_DRAG_NONE) {
+            HE_CanvasLabel(r, HV_ItemLabel(he.items[he.selected].item), qtrue);
         }
     }
     if (he.guideX >= 0.0f) {
@@ -2034,6 +2276,7 @@ void UI_HudEditor_Paint(void) {
     HE_PaintTop();
     HE_PaintStatus();
     HE_PaintPopup();
+    HE_PaintHudMenu();
     HE_PaintTip();
     HE_PaintConfirm();
     SM_EndFrame();
@@ -2050,15 +2293,29 @@ static void HE_Select(int i) {
     }
 }
 
+static void HE_AfterConfirm(void) {
+    he.confirm = qfalse;
+    if (he.pending[0]) {
+        char list[MAX_QPATH];
+
+        Q_strncpyz(list, he.pending, sizeof(list));
+        he.pending[0] = 0;
+        HE_Load(list);
+        return;
+    }
+    HE_Close();
+}
+
 static void HE_ClickConfirm(int index) {
     if (index == 0) {
         if (HE_Save()) {
-            HE_Close();
+            HE_AfterConfirm();
         }
     } else if (index == 1) {
-        HE_Close();
+        HE_AfterConfirm();
     } else {
         he.confirm = qfalse;
+        he.pending[0] = 0;
     }
 }
 
@@ -2070,6 +2327,14 @@ static qboolean HE_Click(void) {
     if (he.confirm) {
         if (hit && hit->type == HE_HIT_CONFIRM) {
             HE_ClickConfirm(hit->index);
+        }
+        return qtrue;
+    }
+    if (he.hudMenu) {
+        if (hit && hit->type == HE_HIT_HUDITEM && hit->index < he.numHuds) {
+            HE_SwitchHud(he.huds[hit->index]);
+        } else if (!(hit && hit->type == HE_HIT_POPUP && hit->index == 0)) {
+            he.hudMenu = qfalse;
         }
         return qtrue;
     }
@@ -2112,6 +2377,11 @@ static qboolean HE_Click(void) {
                 return qtrue;
             case HE_HIT_MAP:
                 he.map = (he.map + 1) % (int)ARRAY_LEN(heMaps);
+                return qtrue;
+            case HE_HIT_HUD:
+                HE_ScanHuds();
+                he.colorKey = -1;
+                he.hudMenu = qtrue;
                 return qtrue;
             case HE_HIT_UNDO:
                 HE_Undo();
@@ -2240,6 +2510,9 @@ qboolean UI_HudEditor_HandleKey(int key) {
         case K_ESCAPE:
             if (he.confirm) {
                 he.confirm = qfalse;
+                he.pending[0] = 0;
+            } else if (he.hudMenu) {
+                he.hudMenu = qfalse;
             } else if (he.colorKey >= 0) {
                 he.colorKey = -1;
             } else if (he.selected >= 0) {

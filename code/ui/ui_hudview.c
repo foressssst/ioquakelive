@@ -41,9 +41,24 @@ static displayContextDef_t* hvSaved;
 static struct {
     const itemDef_t* item;
     float b[4];
+    qhandle_t shader;
+    char text[16];
 } hvBounds[HV_MAX_BOUNDS];
 static int hvNumBounds;
 static int hvCur = -1;
+
+static void HV_NoteShader(qhandle_t shader) {
+    if (hvCur >= 0 && !hvBounds[hvCur].shader && shader && shader != uiInfo.uiDC.whiteShader) {
+        hvBounds[hvCur].shader = shader;
+    }
+}
+
+static void HV_NoteText(const char* text) {
+    if (hvCur >= 0 && !hvBounds[hvCur].text[0] && text) {
+        Q_strncpyz(hvBounds[hvCur].text, text, sizeof(hvBounds[hvCur].text));
+        Q_CleanStr(hvBounds[hvCur].text);
+    }
+}
 
 static void HV_Extend(float x, float y, float w, float h) {
     float* b;
@@ -97,10 +112,30 @@ static void HV_TrackBegin(int ownerDraw, float y, float w, float h) {
                 hvCur = hvNumBounds++;
                 hvBounds[hvCur].item = it;
                 hvBounds[hvCur].b[0] = hvBounds[hvCur].b[1] = hvBounds[hvCur].b[2] = hvBounds[hvCur].b[3] = 0.0f;
+                hvBounds[hvCur].shader = 0;
+                hvBounds[hvCur].text[0] = 0;
                 return;
             }
         }
     }
+}
+
+qhandle_t HV_ItemThumb(const itemDef_t* item, const char** text) {
+    int k;
+
+    *text = NULL;
+    if (item->window.background && !item->window.ownerDraw) {
+        return item->window.background;
+    }
+    for (k = 0; k < hvNumBounds; k++) {
+        if (hvBounds[k].item == item) {
+            if (hvBounds[k].text[0]) {
+                *text = hvBounds[k].text;
+            }
+            return hvBounds[k].shader ? hvBounds[k].shader : item->window.background;
+        }
+    }
+    return item->window.background;
 }
 
 static qboolean HV_PaintedRect(const itemDef_t* item, float* out) {
@@ -255,6 +290,7 @@ void HV_SetCanvas(float x, float y, float w, float h) {
 static void HV_DrawPic(float x, float y, float w, float h, qhandle_t asset) {
     HV_ToScreen(hvAnchor, &x, &y, &w, &h);
     HV_Extend(x, y, w, h);
+    HV_NoteShader(asset);
     trap_R_DrawStretchPic(x, y, w, h, 0, 0, 1, 1, asset);
 }
 
@@ -264,6 +300,7 @@ static void HV_DrawStretchPic(float x, float y, float w, float h, float s1, floa
     float sy = hvH / (float)uiInfo.uiDC.glconfig.vidHeight;
 
     HV_Extend(hvX + x * sx, hvY + y * sy, w * sx, h * sy);
+    HV_NoteShader(shader);
     trap_R_DrawStretchPic(hvX + x * sx, hvY + y * sy, w * sx, h * sy, s1, t1, s2, t2, shader);
 }
 
@@ -318,6 +355,7 @@ static void HV_PaintText(float x, float y, int font, float scale, const float* c
     if (hvCur >= 0) {
         float ext[5];
 
+        HV_NoteText(text);
         trap_R_Font_TextExtents(text, 0, font, size, lim, ext);
         HV_Extend(sx + ext[0], sy + ext[1], ext[2] - ext[0], ext[3] - ext[1]);
     }

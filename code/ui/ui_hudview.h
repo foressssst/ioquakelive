@@ -59,6 +59,7 @@ qboolean HV_ItemShown(const itemDef_t* item);
 const char* HV_OwnerDrawName(int ownerDraw);
 const char* HV_ItemLabel(const itemDef_t* item);
 const char* HV_ItemKind(const itemDef_t* item);
+qhandle_t HV_ItemThumb(const itemDef_t* item, const char** text);
 const char* HV_MenuLabel(const menuDef_t* menu);
 
 #endif
